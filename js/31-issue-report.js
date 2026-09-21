@@ -13,7 +13,7 @@
     var RECENT_DAYS = 14;
     var LOAD_MONTHS = 3;
     var REACTION_KINDS = { user_flag: 1, user_thumbs_down: 1, reask: 1, interrupt: 1 };
-    var LEARN_KINDS = { sap_unsupported: 1, sap_feature_request: 1, route_wrong: 1, reroute: 1 };   // Phase 11 — 학습 적립 탭이 다루는 종류(이슈 군집에서는 제외)
+    var LEARN_KINDS = { sap_unsupported: 1, sap_feature_request: 1, feature_request: 1, chain_unsupported: 1, route_wrong: 1, reroute: 1 };   // Phase 11 — 학습 적립 탭이 다루는 종류(이슈 군집에서는 제외)
     var _state = { events: [], clusters: [], resolved: {}, resolvedFileId: null, folderId: null, loadedAt: null, ledger: {}, learn: [], view: 'issues' };
 
     function t(ko, en) { return window._t ? window._t(ko, en) : ko; }
@@ -273,6 +273,11 @@
 
     function learnVerdict(c) {
         if (c.group === 'route') return { id: 'route', label: t('🧭 라우팅 교정', '🧭 Routing correction'), tip: t('질문 분류 규칙(33번 라우터)을 보강할 후보', 'Candidate to improve routing rules') };
+        if (c.group === 'feature') {
+            if (c.topScore >= 0.6) return { id: 'variant', label: t('🔁 기존 앱 기능의 변형/연결', '🔁 Variant/link of existing app feature'), tip: t('이미 있는 앱 기능을 이어 붙이면 되는 요청', 'Can be built by linking existing app features') };
+            if (c.topScore >= 0.3) return { id: 'similar', label: t('🔀 기존 앱 기능과 유사', '🔀 Similar to existing app feature'), tip: t('기존 기능을 확장하면 될 수 있음', 'May extend an existing feature') };
+            return { id: 'new', label: t('🧩 새 기능/연결 후보', '🧩 New feature/link candidate'), tip: t('앱에 없는 새 기능이나 기능 간 연결 요청', 'A feature or link the app does not have') };
+        }
         if (c.topScore >= 0.6) return { id: 'variant', label: t('🔁 기존 기능의 변형', '🔁 Variant of existing'), tip: t('이미 있는 기능이지만 표현/파라미터를 못 알아들었을 가능성 — 트리거·라우팅 보강', 'Existing capability, maybe wording/params not recognized') };
         if (c.topScore >= 0.3) return { id: 'similar', label: t('🔀 기존 기능과 유사', '🔀 Similar to existing'), tip: t('기존 기능을 확장하면 될 수 있음', 'May be an extension of an existing capability') };
         return { id: 'new', label: t('🆕 신규 기능 후보', '🆕 New capability candidate'), tip: t('카탈로그에 없는 새 요청', 'Not in the catalog') };
@@ -285,13 +290,13 @@
         (events || []).forEach(function (e) {
             if (!LEARN_KINDS[e.kind]) return;
             var p = e.params || {};
-            var group = (e.kind === 'reroute' || e.kind === 'route_wrong') ? 'route' : 'sap';
+            var group = (e.kind === 'reroute' || e.kind === 'route_wrong') ? 'route' : ((e.kind === 'feature_request' || e.kind === 'chain_unsupported') ? 'feature' : 'sap');
             var sig = p.sig || '(sig 없음)';
             var key = group + '|' + sig + (group === 'route' ? '|' + (p.from || p.routeCls || '') + '>' + (p.to || '') : '');
             var c = map[key];
             if (!c) c = map[key] = { key: key, group: group, sig: sig, count: 0, requests: 0, users: {}, first: e.ts, last: e.ts, kinds: {}, tsList: [], samples: [], notes: [], capVotes: {}, capTitles: {} };
             c.count++;
-            if (e.kind === 'sap_feature_request') c.requests++;
+            if (e.kind === 'sap_feature_request' || e.kind === 'feature_request') c.requests++;
             c.users[e.user || '?'] = 1;
             c.kinds[e.kind] = (c.kinds[e.kind] || 0) + 1;
             c.tsList.push(e.ts);
@@ -324,7 +329,21 @@
         });
     }
 
+    function buildFeatureInferPrompt(c) {
+        var samples = c.samples.map(function (s, i) { return (i + 1) + ') ' + s.q; }).join('\n');
+        var notes = c.notes.length ? c.notes.join(' / ') : '(없음)';
+        return '당신은 웹앱 기능 설계 전문가입니다. 대상 앱은 KORTEK 사내 간트차트 웹앱(순수 JavaScript 정적 페이지 + 로컬 Flask 백엔드 + SAP GUI 브릿지, 프로젝트 데이터는 Google Drive JSON)입니다.\n' +
+            '아래는 사용자가 "새 기능/기능 간 연결"로 요청했거나 자동으로 감지된(로컬 명령의 뒷부분이 처리되지 않은) 같은 종류의 요청들과, 현재 앱이 가진 기능 목록입니다.\n' +
+            '이 요청이 (a) 기존 기능의 변형/연결(기존 기능을 이어 붙이면 되는 것)인지 (b) 신규 기능인지 판정하고, 구현 방식을 추론하세요. 추측은 추측이라고 표시하세요. 되돌리기 어렵거나 외부로 발송/저장되는 동작이면 risk를 높게, 사람 확인 단계가 필요하다고 적으세요.\n\n' +
+            '[현재 앱 기능(JSON)]\n' + (window._qaAppCapabilityCompactJson ? window._qaAppCapabilityCompactJson() : '[]') + '\n' +
+            '[현재 SAP 기능(JSON)]\n' + (window._qaCapabilityCompactJson ? window._qaCapabilityCompactJson() : '[]') + '\n\n' +
+            '[적립된 요청 — ' + c.count + '건, ' + c.userCount + '명, 직접 신고 ' + c.requests + '건]\n' + samples + '\n[사용자 메모] ' + notes + '\n' +
+            '[결정론적 유사도] 가장 비슷한 기존 앱 기능: ' + (c.topCapTitle || '없음') + ' (' + c.topScore + ')\n\n' +
+            '반드시 JSON 하나로만 답하세요(설명 문장 금지):\n' +
+            '{"kind":"variant 또는 new","similarTo":["기존 기능 id"],"approach":"구현 방식 요약(어떤 기존 기능을 어떻게 이어 붙이는지)","needsFromUser":["구현 전에 사용자에게 확인할 것"],"steps":["구현 단계 추정"],"risk":"낮음 또는 중간 또는 높음","confidence":"상 또는 중 또는 하","summary":"한 문장 요약"}';
+    }
     function buildInferPrompt(c) {
+        if (c.group === 'feature') return buildFeatureInferPrompt(c);
         var samples = c.samples.map(function (s, i) { return (i + 1) + ') ' + s.q; }).join('\n');
         var notes = c.notes.length ? c.notes.join(' / ') : '(없음)';
         return '당신은 SAP GUI Scripting 자동화 전문가입니다. 아래는 사내 AI 문답에서 "지원하지 않는 SAP 요청"으로 적립된 같은 종류의 요청들과, 현재 이 앱이 지원하는 SAP 기능 목록입니다.\n' +
@@ -388,6 +407,7 @@
                 return '<div style="margin-top:6px; padding:6px 8px; background:#f3f9ff; border:1px solid #cfe2f6; border-radius:6px; font-size:11.5px; line-height:1.55;">' +
                     '<b>🤖 ' + esc(t('AI 추론', 'AI inference')) + '</b> (' + esc(h.confidence || '?') + ') — ' + esc(h.summary || '') +
                     '<div>' + esc(t('종류', 'Kind')) + ': ' + esc(h.kind || '') + ' · ' + esc(t('모드', 'Mode')) + ': ' + esc(h.mode || '') + ' · ' + esc(t('위험', 'Risk')) + ': ' + esc(h.risk || '') + '</div>' +
+                    (h.approach ? '<div>' + esc(t('구현 방식', 'Approach')) + ': ' + esc(h.approach) + '</div>' : '') +
                     (h.tcodeCandidates && h.tcodeCandidates.length ? '<div>tcode: ' + esc(h.tcodeCandidates.join(', ')) + '</div>' : '') +
                     (h.similarTo && h.similarTo.length ? '<div>' + esc(t('유사 기능', 'Similar')) + ': ' + esc(h.similarTo.join(', ')) + '</div>' : '') +
                     (h.neededFromUser && h.neededFromUser.length ? '<div>' + esc(t('필요한 정보', 'Needed')) + ': ' + esc(h.neededFromUser.join(' / ')) + '</div>' : '') +
@@ -400,7 +420,7 @@
                 '<td style="padding:6px; word-break:break-all;">' + samples + notes + hyp + '</td>' +
                 '<td style="padding:6px; font-size:11.5px;" title="' + esc(c.verdict.tip) + '">' + esc(c.verdict.label) + reBadge + (c.topCapTitle ? '<div style="color:#888;">' + esc(t('가장 비슷: ', 'Closest: ')) + esc(c.topCapTitle) + ' (' + Math.round(c.topScore * 100) + '%)</div>' : '') + '</td>' +
                 '<td style="padding:6px; white-space:nowrap;"><select onchange="window._issueLearnSetStatus(' + i + ', this.value)" style="font-size:11px; padding:2px 4px;">' + opts + '</select> ' +
-                (c.group === 'sap' ? '<button id="issue-learn-infer-' + i + '" onclick="window._issueLearnInfer(' + i + ')" style="font-size:11px; padding:2px 8px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:5px; cursor:pointer;">' + esc(t('🤖 AI 추론', '🤖 Infer')) + '</button>' : '') + '</td></tr>';
+                (c.group !== 'route' ? '<button id="issue-learn-infer-' + i + '" onclick="window._issueLearnInfer(' + i + ')" style="font-size:11px; padding:2px 8px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:5px; cursor:pointer;">' + esc(t('🤖 AI 추론', '🤖 Infer')) + '</button>' : '') + '</td></tr>';
         }).join('');
         body.innerHTML = head + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; color:#7a5210; background:#fff8e6;">' +
             '<th style="padding:6px;">#</th><th style="padding:6px;">' + esc(t('수요', 'Demand')) + '</th><th style="padding:6px;">' + esc(t('요청 · 추론', 'Requests · inference')) + '</th><th style="padding:6px;">' + esc(t('판정', 'Verdict')) + '</th><th style="padding:6px;">' + esc(t('상태', 'Status')) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';

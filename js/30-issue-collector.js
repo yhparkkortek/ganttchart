@@ -247,7 +247,7 @@
         var cut = Date.now() - (minutes || 10) * 60000;
         return (window._issueRecentSap || []).filter(function (x) { return x.ts >= cut; }).map(function (x) { return x.rid; });
     }
-    var LEARN_KINDS = { sap_feature_request: 1, route_wrong: 1, sap_unsupported: 1, reroute: 1 };   // Phase 11 — 리포트의 "SAP 학습 적립"이 다루는 종류
+    var LEARN_KINDS = { sap_feature_request: 1, feature_request: 1, chain_unsupported: 1, route_wrong: 1, sap_unsupported: 1, reroute: 1 };   // Phase 11 — 리포트의 "SAP 학습 적립"이 다루는 종류
     function msgOf(uid) {
         try { var h = window._ganttQaHistory || []; for (var k = 0; k < h.length; k++) { if (h[k].uid === uid) return h[k]; } } catch (e) { /* ignore */ }
         return null;
@@ -264,7 +264,9 @@
             if (msg && msg.route) params.routeCls = msg.route.cls;
             if (LEARN_KINDS[kind]) {   // 같은 종류의 요청끼리 묶고(sig) 기존 SAP 기능과의 유사도(caps)를 남긴다 — 학습 적립용
                 params.sig = window._qaIntentSig ? window._qaIntentSig(params.q) : '';
-                params.caps = window._qaMatchCapabilities ? window._qaMatchCapabilities(q).slice(0, 3) : [];
+                var _capFn = (kind === 'feature_request') ? window._qaMatchAppCapabilities : window._qaMatchCapabilities;   // SAP 외 요청은 앱 기능 카탈로그와 비교
+                params.caps = _capFn ? _capFn(q).slice(0, 3) : [];
+                if ((kind === 'feature_request' || kind === 'sap_feature_request') && window._qaSigFor) params.sig = window._qaSigFor(params.q, params.caps);   // 사람 이름·자재번호에 흔들리지 않는 시그니처
             }
             return window._issueLog({
                 domain: (kind === 'sap_feature_request' || rids.length) ? 'sap' : 'qa', kind: kind, rid: rids.length ? rids[rids.length - 1] : '', route: '',
@@ -338,15 +340,16 @@
             var catEl = document.getElementById('issue-report-cat'), noteEl = document.getElementById('issue-report-note');
             catEl.innerHTML = '<option value="flag">' + t('답변이 틀렸거나 이상함', 'The answer was wrong or odd') + '</option>' +
                 '<option value="route">' + t('질문을 잘못 이해함 (SAP/프로젝트/추론 분류)', 'Misunderstood the question type (SAP/project/general)') + '</option>' +
-                '<option value="feature">' + t('🏭 SAP에서 이것도 해줬으면 (새 기능 요청)', '🏭 Please add this SAP capability (feature request)') + '</option>';
-            var setPh = function () { noteEl.placeholder = catEl.value === 'feature' ? t('어느 화면(tcode)에서 어떻게 하시는지 적어주세요 — 예: MB51에서 자재번호로 이동내역 조회', 'Which screen (tcode) and steps? e.g. MB51 material movements by material') : ''; };
+                '<option value="feature">' + t('🏭 SAP에서 이것도 해줬으면 (새 기능 요청)', '🏭 Please add this SAP capability (feature request)') + '</option>' +
+                '<option value="app">' + t('🧩 SAP 외 새 기능 / 연결 요청 (예: 조회 결과를 메일·프로젝트·Gantt로 연결)', '🧩 New non-SAP feature / linking request (e.g. send lookup results by email, register to a project/Gantt)') + '</option>';
+            var setPh = function () { noteEl.placeholder = catEl.value === 'app' ? t('어떤 기능을 어떻게 연결하고 싶은지 적어주세요 — 예: SAP 조회 결과를 엑셀로 만들어 담당자에게 메일 발송, 조회한 자재를 Gantt 업무로 등록', 'What feature or link do you want? e.g. email the lookup Excel to a teammate, register looked-up materials as Gantt tasks') : catEl.value === 'feature' ? t('어느 화면(tcode)에서 어떻게 하시는지 적어주세요 — 예: MB51에서 자재번호로 이동내역 조회', 'Which screen (tcode) and steps? e.g. MB51 material movements by material') : ''; };
             catEl.onchange = setPh; setPh();
             document.getElementById('issue-report-cancel').textContent = t('취소', 'Cancel');
             document.getElementById('issue-report-submit').textContent = t('신고', 'Report');
             document.getElementById('issue-report-cancel').onclick = function () { modal.style.display = 'none'; };
             document.getElementById('issue-report-submit').onclick = function () {
                 var note = document.getElementById('issue-report-note').value || '';
-                var kindMap = { flag: 'user_flag', route: 'route_wrong', feature: 'sap_feature_request' };
+                var kindMap = { flag: 'user_flag', route: 'route_wrong', feature: 'sap_feature_request', app: 'feature_request' };
                 window._issueLogQa(kindMap[catEl.value] || 'user_flag', { uid: uid, note: note, cat: catEl.value });
                 modal.style.display = 'none';
                 scheduleFlush(3000);

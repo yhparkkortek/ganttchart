@@ -60,6 +60,7 @@
 
 **이벤트**(Phase 10 수집기로 Drive 샤드에 쌓임, 학습 이벤트는 `params.sig`+`params.caps` 포함): `sap_unsupported`(미지원 자동 적립) · `sap_feature_request`(🚩 "SAP에서 이것도 해줬으면") · `route_wrong`(🚩 "질문을 잘못 이해함") · `reroute`(다시 분류 클릭).
 **🚩 신고 모달**에 분류 선택(답이 이상함 / 질문을 잘못 이해함 / 🏭 새 SAP 기능 요청)과 "어느 화면(tcode)에서 어떻게 하시는지" 메모.
+**SAP 외 새 기능/연결 요청 (2026-09-21, 사용자 요청)**: 🚩 신고 분류에 4번째 `🧩 SAP 외 새 기능 / 연결 요청 (예: 조회 결과를 메일·프로젝트·Gantt로 연결)` 추가 → `feature_request` 이벤트(앱 기능 카탈로그 `APP_CAPABILITIES`와 유사도 비교). **연결(chain) 요청 자동 감지**: "엑셀로 출력해서 박용훈한테 메일로 보내줘"처럼 로컬 명령(엑셀 저장·SAP 패턴 조회 등)이 앞부분만 처리하고 뒷부분(메일/등록/알람 연결)을 조용히 무시한 경우, 답변 끝에 "📌 …연결은 아직 지원하지 않아 앞부분만 처리했습니다"를 붙이고 `chain_unsupported`로 적립(`_qaAfterSend`가 `sendGanttQaMessage`를 래핑). AI가 직접 답한 경로(route가 있고 `local`이 아님)와 여러 턴 draft 진행 중에는 붙이지 않는다. 연결 종류는 `QA_CHAIN_INTENTS` 표(데이터), 앱 기능 목록은 `APP_CAPABILITIES`(데이터) — **새 앱 기능을 구현하면 `APP_CAPABILITIES`에 한 줄 추가**. 같은 종류 묶기: 단어 기반 시그니처는 받는 사람 이름·자재번호가 다르면 다른 요청으로 갈라져서, 연결/기능 신고는 **`_qaSigFor` = 연결 종류 + 매칭된 기능 id**(`chain:mail|excel+mail_draft`, `cap:bom`)로 만든다(매칭이 없을 때만 단어 기반 폴백). 리포트 학습 탭의 그룹 `feature`: 판정 `🔁 기존 앱 기능의 변형/연결`·`🔀 유사`·`🧩 새 기능/연결 후보`, 🤖 AI 추론은 앱 기능 목록+SAP 목록을 주고 `approach`(어떤 기존 기능을 어떻게 이어 붙일지)를 받아 원장에 적립.
 **리포트 "🧠 SAP 학습 적립" 탭**(관리자): 같은 sig끼리 묶어 수요순(`사용자 수 × (건수 + 새 기능 요청×2)`)으로 표시, 결정론적 판정:
 `🔁 기존 기능의 변형`(유사도 ≥ 0.6 — 트리거·라우팅 보강) · `🔀 유사`(≥ 0.3 — 확장) · `🆕 신규 후보`(< 0.3) · `🧭 라우팅 교정`.
 **🤖 AI 추론**(버튼 눌렀을 때만 1회): 카탈로그 + 요청 샘플(마스킹됨)을 주고 `{kind, similarTo, tcodeCandidates, mode, neededFromUser, steps, risk, confidence, summary}` JSON을 받아 원장에 **적립**.

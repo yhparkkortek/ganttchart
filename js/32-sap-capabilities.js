@@ -81,4 +81,51 @@
     window._qaCapabilityCompactJson = function () {
         return JSON.stringify(window.SAP_CAPABILITIES.map(function (c) { return { id: c.id, title: c.title, tcode: c.tcode, needs: c.needs, mode: c.mode, verified: c.verified }; }));
     };
+
+    // ── 앱 전체(SAP 외) 기능 카탈로그 + 연결(chain) 의도 표 — 2026-09-21, 사용자 요청 ────────────────────────
+    // 🚩 신고의 "SAP 외 새 기능/연결 요청"과 자동 감지된 연결 요청(chain_unsupported)이 "이미 있는 앱 기능과 얼마나 비슷한가"를
+    // 판정할 때 쓰는 비교 대상. 기능을 새로 만들면 여기에 한 줄 추가한다(→ 이후 재요청이 추적됨). SAP 기능은 SAP_CAPABILITIES 참고.
+    window.APP_CAPABILITIES = window.APP_CAPABILITIES || [
+        { id: 'mail_draft',  title: '메일 작성/발송(AI 문답 초안 → 확인 → 발송)', kw: ['메일 보내', '메일로 보내', '메일 작성', '메일 발송', '이메일 보내'], how: 'AI 문답 [[ACTION:MAIL_DRAFT]] → SEND_MAIL' },
+        { id: 'gantt_add',   title: 'Gantt 업무 추가(초안 → 확인)',              kw: ['간트에 추가', '간트에 등록', '업무 추가', '업무 등록', 'gantt에 추가'], how: 'AI 문답 GANTT_ADD_DRAFT → APPLY_GANTT_ADD' },
+        { id: 'gantt_edit',  title: 'Gantt 업무 수정(초안 → 확인)',              kw: ['업무 수정', '일정 변경', '담당자 변경', '상태 변경', '마감일 변경'], how: 'AI 문답 GANTT_EDIT_DRAFT → APPLY_GANTT_EDIT' },
+        { id: 'alarm',       title: '알람 설정/해제(업무별)',                    kw: ['알람 설정', '알람 켜', '알람 꺼', '알람 해제'], how: 'AI 문답 SET_ALARM / CLEAR_ALARM' },
+        { id: 'notice',      title: '공지 등록',                                 kw: ['공지 등록', '공지 올려', '공지사항'], how: 'AI 문답 NOTICE_DRAFT → REGISTER_NOTICE' },
+        { id: 'project_open',title: '다른 프로젝트 조회/열기',                    kw: ['다른 프로젝트', '프로젝트 열어', '프로젝트 전환'], how: 'AI 문답 질문 대상 선택 / OPEN_PROJECT_TO_EDIT' },
+        { id: 'inbox',       title: '업무 보관함 → 프로젝트 배분(다중 선택)',      kw: ['보관함', '다른 프로젝트로 전송', '배분'], how: 'AI 업무 보관함 [다른 프로젝트로 전송]' },
+        { id: 'excel_save',  title: '조회 결과 엑셀 저장(C:\\SAP_DMS\\SAP조회)',   kw: ['엑셀로 저장', '엑셀 출력', '엑셀로 출력'], how: 'AI 문답 SAP 엑셀 내보내기(로컬 명령)' }
+    ];
+    window._qaMatchAppCapabilities = function (text) {
+        var q = String(text || '').toLowerCase(), out = [];
+        window.APP_CAPABILITIES.forEach(function (c) {
+            var m = 0; c.kw.forEach(function (k) { if (q.indexOf(k) >= 0) m++; });
+            if (m > 0) out.push({ id: c.id, title: c.title, score: Math.min(1, Math.round(m / 2 * 100) / 100) });
+        });
+        return out.sort(function (a, b) { return b.score - a.score; });
+    };
+    window._qaAppCapabilityCompactJson = function () {
+        return JSON.stringify(window.APP_CAPABILITIES.map(function (c) { return { id: c.id, title: c.title, how: c.how }; }));
+    };
+
+    // 연결(chain) 의도 — "SAP 조회한 결과를 메일로/프로젝트에 등록" 같이 로컬 명령의 결과를 다른 기능으로 이어 달라는 표현.
+    // 로컬 명령(엑셀 저장·패턴 조회 등)은 앞부분만 처리하고 뒷부분을 조용히 무시했다 — 그 뒷부분을 감지해 적립하는 데 쓴다.
+    window.QA_CHAIN_INTENTS = window.QA_CHAIN_INTENTS || [
+        { id: 'mail',     label: '메일로 보내기',            labelEn: 'Send by email',        re: /(메일|이메일|e-?mail)\s*(로|을|를)?\s*(좀\s*)?(보내|전송|발송|첨부)|(보내|전송|발송).{0,6}(메일|이메일)|메일로/i },
+        { id: 'register', label: '프로젝트/Gantt에 등록',    labelEn: 'Register to project/Gantt', re: /(프로젝트|간트|gantt|업무\s*보관함).{0,10}(등록|추가|반영|올려|넣어)/i },
+        { id: 'notify',   label: '알람/공지로 연결',          labelEn: 'Link to alarm/notice', re: /(알람|공지|텔레그램|telegram).{0,8}(등록|설정|보내|올려|알려\s*줘)/i }
+    ];
+    window._qaDetectChain = function (text) {
+        var q = String(text || '');
+        return window.QA_CHAIN_INTENTS.filter(function (c) { return c.re.test(q); }).map(function (c) { return { id: c.id, label: c.label, labelEn: c.labelEn }; });
+    };
+
+    /** 같은 종류의 요청 시그니처 — 받는 사람·자재번호처럼 요청마다 달라지는 값에 흔들리지 않게, 가능하면 "연결 종류 + 매칭된 기능 id"로 만든다.
+     *  (단어 기반 시그니처는 "박용훈에게 메일"과 "김철수에게 메일"을 다른 요청으로 갈랐다.) 매칭이 없으면 단어 기반으로 폴백. */
+    window._qaSigFor = function (maskedQ, caps, chainIds) {
+        var ids = (caps || []).filter(function (c) { return c.score >= 0.3; }).slice().sort(function (a, b) { return b.score - a.score || (a.id < b.id ? -1 : 1); })
+            .slice(0, 2).map(function (c) { return c.id; }).sort().join('+');
+        if (chainIds && chainIds.length) return 'chain:' + chainIds.slice().sort().join('+') + (ids ? '|' + ids : '');
+        if (ids) return 'cap:' + ids;
+        return window._qaIntentSig ? window._qaIntentSig(maskedQ) : '';
+    };
 })();

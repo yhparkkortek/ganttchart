@@ -292,6 +292,53 @@
         finish(input);
     }
 
+    // ── 연결(chain) 요청 자동 감지 — 2026-09-21, 사용자 요청 ─────────────────────────────────────────
+    // 사례: "엑셀로 출력해서 박용훈 한테 메일로 보내줘" → 엑셀 저장(로컬 명령)만 하고 "메일로 보내기"는 조용히 무시됐다.
+    // 로컬 명령(엑셀 저장/SAP 패턴 조회/문서 다운로드 등)이 끝난 답변에 뒷부분(메일/등록/알람 연결)이 요청돼 있었는데 처리되지
+    // 않았으면, 그 사실을 답변에 알리고 "새 기능/연결 요청(chain_unsupported)"으로 적립한다(리포트 학습 탭에서 수요순으로 보임).
+    // AI가 직접 답한 경로(route가 있고 local이 아님)는 대상이 아니다 — 그쪽은 AI가 메일 초안 등을 스스로 처리할 수 있다.
+    function localFlowDone() {
+        return !(window._ganttQaPoDraft || window._ganttQaBomDraft || window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
+            window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons);
+    }
+    window._qaAfterSend = function (rawQuestion, histLenBefore) {
+        var pf = window._qaParsePrefix(rawQuestion), q = pf ? pf.question : String(rawQuestion || '');
+        var chain = window._qaDetectChain ? window._qaDetectChain(q) : [];
+        if (!chain.length) return false;
+        var h = window._ganttQaHistory || [], m = null;
+        for (var i = h.length - 1; i >= histLenBefore; i--) { if (h[i].role === 'ai' && !h[i].pending && !h[i].error) { m = h[i]; break; } }
+        if (!m || m.chainNoted) return false;
+        if (m.route && !m.route.local) return false;      // AI가 직접 답한 경로
+        if (!localFlowDone()) return false;               // 여러 턴 draft가 아직 진행 중
+        var en = window._currentLang === 'en';
+        var labels = chain.map(function (c) { return en ? c.labelEn : c.label; }).join(', ');
+        m.text += '\n\n📌 ' + T('요청하신 "' + labels + '" 연결은 아직 지원하지 않아 앞부분만 처리했습니다. 이 연결 요청을 "새 기능 요청"으로 적립했습니다 — 같은 요청이 쌓이면 우선순위로 반영됩니다.',
+            'The follow-up "' + labels + '" is not supported yet, so only the first part was done. It was logged as a new feature request and will be prioritized if it repeats.');
+        m.chainNoted = true;
+        try {
+            if (window._issueLog) {
+                var mq = window._issueMask ? window._issueMask(q, 160) : '';
+                window._issueLog({ domain: 'qa', kind: 'chain_unsupported', rid: '', route: '',
+                    params: { q: mq, qLen: q.length, sig: window._qaSigFor(mq, (window._qaMatchCapabilities ? window._qaMatchCapabilities(q) : []).concat(window._qaMatchAppCapabilities ? window._qaMatchAppCapabilities(q) : []), chain.map(function (c) { return c.id; })), chain: chain.map(function (c) { return c.id; }),
+                        caps: window._qaMatchAppCapabilities ? window._qaMatchAppCapabilities(q).slice(0, 3) : [], prevRoute: m.route ? m.route.cls : 'local' } });
+            }
+        } catch (e) { /* 수집 실패는 무시 */ }
+        window._renderGanttQaMessages();
+        return true;
+    };
+    (function wrapSend(tries) {
+        if (typeof window.sendGanttQaMessage === 'function' && !window.sendGanttQaMessage._chainWrapped) {
+            var orig = window.sendGanttQaMessage;
+            window.sendGanttQaMessage = async function () {
+                var inp = document.getElementById('gantt-qa-input'), q = inp ? inp.value.trim() : '', n = (window._ganttQaHistory || []).length;
+                var r = await orig.apply(this, arguments);
+                try { window._qaAfterSend(q, n); } catch (e) { /* 라우터 부가 기능 실패는 무시 */ }
+                return r;
+            };
+            window.sendGanttQaMessage._chainWrapped = true;
+        } else if (tries < 20) { setTimeout(function () { wrapSend(tries + 1); }, 500); }
+    })(0);
+
     // ── 일반 추론용 가벼운 프롬프트(프로젝트 JSON을 싣지 않음) ────────────
     window._qaBuildGeneralPrompt = function (question, hist) {
         var en = window._currentLang === 'en';
@@ -312,8 +359,9 @@
         var route = { cls: cls, forced: !!forced, conf: res.confident, scores: res.scores, reasons: (res.reasons[cls] || []).slice(0, 4) };
         window._qaLastRoute = route;
         if (cls === 'sap') {
+            route.local = true;                                   // 라우터가 직접 처리(로컬 명령) — 연결 요청 감지 대상
             if (res.patterns.length) { await runPatternLookup(question, res.patterns[0], input, route); return { handled: true, route: route }; }
-            if (res.materials.length || ((/sap/i.test(question) || res.tcodes.length) && SCREEN_RE.test(question))) { route.useSapContext = true; return { handled: false, route: route }; }
+            if (res.materials.length || ((/sap/i.test(question) || res.tcodes.length) && SCREEN_RE.test(question))) { route.local = false; route.useSapContext = true; return { handled: false, route: route }; }
             runUnsupported(question, input, route, cls);
             return { handled: true, route: route };
         }
