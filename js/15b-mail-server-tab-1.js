@@ -12,11 +12,34 @@ window._msCurrentIdx = -1;
 const MS_QUEUE_STORAGE_KEY     = 'ms_pending_queue';
 const MS_LAST_AUTO_FETCH_KEY   = 'ms_last_auto_fetch_at';
 
+// 💡 [2026-09-21 버그수정] 이 목록은 unshift로 "최신이 앞"인데 예전엔 slice(-300)(=뒤쪽=가장 오래된 300건)을 저장해서,
+//    300건이 넘으면 새로 온 메일이 저장에서 빠지고 오래된 것만 남았다. 또 이미 등록 완료된 메일도 본문 전체를 계속 들고 있어
+//    브라우저 저장소(약 5MB)의 절반(2.4MB)을 이 큐 하나가 차지했다("업무 보관함 저장 공간이 가득" 경고의 실제 원인).
+//    → 최신 300건을 앞에서부터 남기고, 등록 완료(registered) 건은 본문을 1500자로 줄이며(중복 수신 방지에는 fileName만 필요),
+//    전체가 예산(약 1.2MB)을 넘으면 가장 오래된 것부터 뺀다. 미등록(검토 대기) 건의 본문은 그대로 보존.
+window._msSlimQueue = function(list, opts) {
+    opts = opts || {};
+    const maxItems = opts.maxItems || 300, bodyMax = opts.bodyMax || 1500, budget = opts.budget || 1200 * 1024;
+    let out = (list || []).slice(0, maxItems).map(function(r) {
+        if (r && r.registered && typeof r.body === 'string' && r.body.length > bodyMax) {
+            return Object.assign({}, r, { body: r.body.slice(0, bodyMax) + ' …(저장 공간 절약을 위해 등록 완료된 메일의 본문은 일부만 보관)' });
+        }
+        return r;
+    });
+    const sizes = out.map(function(r) { return JSON.stringify(r).length + 1; });
+    let total = sizes.reduce(function(a, b) { return a + b; }, 2);
+    while (total > budget && out.length > 30) {   // 등록 완료 건 중 가장 오래된 것부터, 없으면 맨 뒤(가장 오래된 검토 대기 건)
+        let di = -1;
+        for (let i = out.length - 1; i >= 0; i--) { if (out[i] && out[i].registered) { di = i; break; } }
+        if (di < 0) di = out.length - 1;
+        total -= sizes[di]; out.splice(di, 1); sizes.splice(di, 1);
+    }
+    const json = JSON.stringify(out);
+    return { list: out, json: json };
+};
 window._msSaveQueueToStorage = function() {
     try {
-        // task/AI분석 실패 없이 원문만 있는 것도 포함, 최대 300건만 보관(용량 방어)
-        const trimmed = (window._msResults || []).slice(-300);
-        localStorage.setItem(MS_QUEUE_STORAGE_KEY, JSON.stringify(trimmed));
+        localStorage.setItem(MS_QUEUE_STORAGE_KEY, window._msSlimQueue(window._msResults || []).json);
     } catch(e) { console.warn('큐 저장 실패:', e); }
 };
 

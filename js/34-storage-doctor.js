@@ -18,14 +18,16 @@
 
     // ── 레지스트리(데이터) ──────────────────────────────────────────────
     // cls: cache(다시 만들 수 있음 — 자동 정리 가능) | log(학습/이력 — 확인 후에만)
-    // strategy: {type:'drop'} | {type:'array', keep, order:'newest-first'|'newest-last'} | {type:'byProject', perProject, maxProjects}
+    // strategy: {type:'drop'} | {type:'fn', fn:'전역함수명'} | {type:'array', keep, order:'newest-first'|'newest-last'} | {type:'byProject', perProject, maxProjects}
     window.STORAGE_REGISTRY = window.STORAGE_REGISTRY || [
         { key: 'gantt_folder_cache_v1',           label: 'Drive 폴더 캐시',                 labelEn: 'Drive folder cache',      cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_qa_cluster_cache_v1',       label: '자주 묻는 질문 묶기 캐시',        labelEn: 'FAQ grouping cache',      cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_ai_learning_v1',            label: 'AI 학습 로그(프로젝트별)',         labelEn: 'AI learning log',         cls: 'log',   strategy: { type: 'byProject', perProject: 60, maxProjects: 30 } },
         { key: 'gantt_qa_feedback',               label: 'AI 문답 피드백(질문·답변 포함)',   labelEn: 'AI Q&A feedback',         cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },
         { key: 'gantt_project_summary_feedback',  label: 'AI 요약 피드백',                   labelEn: 'AI summary feedback',     cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },
-        { key: 'ms_discard_queue',                label: '자동 폐기된 메일 목록',            labelEn: 'Auto-discarded mails',    cls: 'log',   strategy: { type: 'array', keep: 50, order: 'newest-first' } }
+        { key: 'ms_discard_queue',                label: '자동 폐기된 메일 목록',            labelEn: 'Auto-discarded mails',    cls: 'log',   strategy: { type: 'array', keep: 50, order: 'newest-first' } },
+        // 메일 서버 검토 큐 — 등록 완료 건의 본문을 줄이고 예산 초과분(오래된 것부터)을 뺀다(js/15b _msSlimQueue). 검토 대기 건 본문은 보존.
+        { key: 'ms_pending_queue',                label: '메일 검토 큐(등록 완료 메일 본문 축소)', labelEn: 'Mail review queue (shrink done mails)', cls: 'log', strategy: { type: 'fn', fn: '_msSlimQueue' } }
     ];
 
     function sizeOf(key) { try { return (localStorage.getItem(key) || '').length; } catch (e) { return 0; } }
@@ -64,6 +66,10 @@
     function shrunk(raw, st) {
         if (st.type === 'drop') return '';
         var data; try { data = JSON.parse(raw); } catch (e) { return null; }
+        if (st.type === 'fn') {   // 데이터 전용 축소 함수(window[fn](배열) → {json}) — 항목 구조를 아는 쪽이 정의한다
+            if (!Array.isArray(data) || typeof window[st.fn] !== 'function') return null;
+            try { return window[st.fn](data).json; } catch (e) { return null; }
+        }
         if (st.type === 'array') {
             if (!Array.isArray(data) || data.length <= st.keep) return null;
             return JSON.stringify(st.order === 'newest-last' ? data.slice(-st.keep) : data.slice(0, st.keep));
