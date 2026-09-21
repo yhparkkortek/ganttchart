@@ -36,6 +36,7 @@
         var n = c.errorNorm || '';
         // 사용자 환경 문제(SAP 미실행/미로그인/스크립팅 미설정/32비트 런타임) — 코드 버그가 아니므로 따로 표시하고 점수도 낮춘다
         if (ENV_RE.test(n)) return t('환경: SAP 미실행/미로그인/설정(코드 문제 아님)', 'Env: SAP not running/logged in/configured (not a code bug)');
+        if (c.kind === 'storage_full' || c.kind === 'storage_report') return t('환경: 브라우저 저장소 가득(어느 키가 큰지는 샘플의 top 참고)', 'Env: browser storage full (see top keys in samples)');
         if (c.kind === 'fe_stale_backend') return t('배포: 구버전/꺼진 백엔드', 'Deploy: stale/offline backend');
         if (c.kind === 'fe_network_fail') return t('환경/타임아웃(③ 코드 or 환경)', 'Env/timeout');
         if (c.kind === 'degraded_layout') return t('③ 코드·지식: 레이아웃 카탈로그', '③ code/knowledge: layout catalog');

@@ -30,8 +30,18 @@ window.TaskInbox = {
             try {
                 localStorage.setItem(this.KEY, JSON.stringify(list));
             } catch (e2) {
-                if (window.showToast) window.showToast(window._t('⚠️ 업무 보관함 저장 공간이 가득 찼습니다. [업무 보관함] 헤더의 🧹 저장공간 정리 버튼을 눌러주세요.', '⚠️ Task Inbox storage is full. Please click the 🧹 Clean up storage button in the [Task Inbox] header.'), 'error');
-                throw e2; // 자동 정리로도 부족하면 호출자에게 계속 알림 (기존 동작 유지)
+                // 🩺 [2026-09-21] 저장소 닥터(js/34): 다시 만들 수 있는 캐시(Drive 폴더 캐시 등)만 자동으로 비우고 한 번 더 시도한다.
+                //    그래도 안 되면 "어느 키가 공간을 차지하는지"까지 알려준다(보관함이 아니라 다른 저장 데이터가 원인인 경우가 있음 —
+                //    예전엔 이 경우 🧹 버튼이 "정리할 항목 없음"만 반복했다).
+                let recovered = false;
+                try {
+                    if (window._storageDoctorAuto && window._storageDoctorAuto()) { localStorage.setItem(this.KEY, JSON.stringify(list)); recovered = true; }
+                } catch (e3) { /* 그래도 부족 */ }
+                if (!recovered) {
+                    const _why = window._storageDoctorWarnText && window._storageDoctorWarnText();
+                    if (window.showToast) window.showToast(_why || window._t('⚠️ 업무 보관함 저장 공간이 가득 찼습니다. [업무 보관함] 헤더의 🧹 저장공간 정리 버튼을 눌러주세요.', '⚠️ Task Inbox storage is full. Please click the 🧹 Clean up storage button in the [Task Inbox] header.'), 'error');
+                    throw e2; // 자동 정리로도 부족하면 호출자에게 계속 알림 (기존 동작 유지)
+                }
             }
         }
         window.updateInboxBadge();

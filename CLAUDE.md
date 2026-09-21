@@ -169,6 +169,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - "AI에게 판정까지 맡기는" 기능은 로컬 정규식으로 먼저 걸러 AI 호출 대상 자체를 줄일 것(번역: 한국어만 있는 블록은 호출 생략, 청크가 0개인 정상 케이스를 실패로 처리하지 말 것).
 - **지금 열려있지 않은 프로젝트를 Drive에 직접 PATCH하는 헤드리스 경로**를 새로 추가하면, 같은 PATCH 직전에 `_tpMaybeAutoRegen(fileId, rows, colIdx, projectMeta)`를 호출해 `saveData.topicProfile`에 얹을 것(별도 Drive 왕복 금지). `_generateTopicProfile`을 열려있지 않은 프로젝트에 쓸 땐 `rows/colIdx/projectMeta`를 반드시 명시(안 하면 지금 열린 엉뚱한 프로젝트를 읽음).
 
+- **localStorage에 무한히 쌓이는 새 저장소를 만들면 `window.STORAGE_REGISTRY`(`js/34-storage-doctor.js`)에 정리 규칙 한 줄 추가** — 브라우저 저장소(~5MB)는 앱 전체가 공유해서, 한 곳이 가득 차면 업무 보관함 저장이 막힌다("저장 공간이 가득" 경고 + 🧹 버튼이 "정리할 항목 없음" 반복했던 사고, `docs/mail-pipeline.md` 저장소 닥터 절).
+
 ### `docs/gantt-internals.md` — 일정 계산/탭 복원/표 오버레이/AI 검색 일괄삭제
 - **읽을 때**: 날짜순 정렬·`recalculateSchedules`·`_calcStartTs`, 페이지 로드 시 1회 계산, `.no-td` 열 오버레이, AI 검색 체크박스 일괄 작업.
 - 그룹행(자식 있는 행)의 `_calcStartTs`는 배열 순서의 부산물 — 날짜순 정렬은 하위 전체의 **재귀 최솟값**(`effectiveTs`)으로. Forced가 아닌 리프도 waterfall이라 셀 값이 무시될 수 있음.
