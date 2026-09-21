@@ -238,7 +238,7 @@
                 modal.id = 'issue-rpt-modal';
                 modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
                 modal.innerHTML =
-                    '<div id="issue-rpt-box" style="pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%); width:min(980px,96vw); height:78vh; min-width:420px; min-height:300px; resize:both; overflow:hidden; background:#fff; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,0.25); display:flex; flex-direction:column;">' +
+                    '<div id="issue-rpt-box" style="pointer-events:all; position:fixed; top:8vh; left:calc(50vw - min(490px,48vw)); width:min(980px,96vw); height:78vh; min-width:420px; min-height:300px; resize:both; overflow:hidden; background:#fff; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,0.25); display:flex; flex-direction:column;">' +
                     '<div id="issue-rpt-handle" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; display:flex; justify-content:space-between; align-items:center; cursor:grab; user-select:none;">' +
                     '<span id="issue-rpt-title"></span><span style="display:flex; gap:6px; align-items:center;">' +
                     '<button id="issue-rpt-reload" onclick="window._issueRptReload()" style="font-size:11.5px; padding:4px 10px; border:1px solid #ffe08a; background:#fff; color:#7a5210; border-radius:6px; cursor:pointer;"></button>' +

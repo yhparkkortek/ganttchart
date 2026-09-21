@@ -301,9 +301,9 @@
             if (!modal) {
                 modal = document.createElement('div');
                 modal.id = 'issue-report-modal';
-                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9350; background:rgba(255,218,185,0.22);';
+                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9350; pointer-events:none; background:none;'; // 투명 래퍼 — 배경 조작/복사·붙여넣기 가능(모달 컨벤션)
                 modal.innerHTML =
-                    '<div id="issue-report-box" onclick="event.stopPropagation()" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:min(440px,92vw); box-shadow:0 8px 30px rgba(0,0,0,0.25); overflow:hidden; font-family:inherit;">' +
+                    '<div id="issue-report-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:20vh; left:calc(50vw - min(220px,46vw)); background:#fff; border-radius:10px; width:min(440px,92vw); box-shadow:0 8px 30px rgba(0,0,0,0.25); overflow:hidden; font-family:inherit;">' +
                     '<div id="issue-report-handle" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; display:flex; justify-content:space-between; align-items:center; cursor:grab; user-select:none;">' +
                     '<span id="issue-report-title"></span>' +
                     '<button onclick="event.stopPropagation(); document.getElementById(\'issue-report-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>' +
@@ -315,7 +315,6 @@
                     '<button id="issue-report-submit" style="padding:7px 16px; background:#fff8e6; color:#7a5210; border:1px solid #ffe08a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;"></button>' +
                     '</div></div></div>';
                 document.body.appendChild(modal);
-                modal.onclick = function () { modal.style.display = 'none'; };
                 if (window._makeDraggable) { try { window._makeDraggable('issue-report-box', 'issue-report-handle'); } catch (e) { /* ignore */ } }
             }
             document.getElementById('issue-report-title').textContent = t('🚩 문제 신고', '🚩 Report a problem');
