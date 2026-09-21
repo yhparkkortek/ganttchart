@@ -30,7 +30,7 @@
         var r = e.result || {};
         return [e.domain || '', e.kind || '', e.route || '', e.stage || '', String(r.errorNorm || '').slice(0, 80), (e.snapshot && e.snapshot.tcode) || ''].join('|');
     }
-    var ENV_RE = /SAP GUI Scripting|SAP GUI가 켜져|로그인해주세요|열려 있는 SAP 연결|32비트 Python|pywin32/;
+    var ENV_RE = /SAP GUI Scripting|SAP GUI가 켜져|SAP GUI가 실행 중|로그인해주세요|열려 있는 SAP 연결|32비트 Python|pywin32/;
     function layerHint(c) {
         var n = c.errorNorm || '';
         // 사용자 환경 문제(SAP 미실행/미로그인/스크립팅 미설정/32비트 런타임) — 코드 버그가 아니므로 따로 표시하고 점수도 낮춘다

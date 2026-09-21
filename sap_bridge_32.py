@@ -65,6 +65,20 @@ def _stage(name):
     _CUR_STAGE[0] = name
 
 
+def _sap_gui_process_running():
+    """SAP GUI(SAP Logon)가 실행 중인지 프로세스 목록으로 확인한다. 확인이 불가능하면 True(=모름, 기존 안내 유지).
+    COM 오류 -2147221020은 "SAP GUI가 안 켜져 있음"과 "켜져 있지만 스크립팅이 꺼져 있음" 둘 다에서 똑같이
+    나오므로, 이걸 구분해야 사용자를 올바른 조치(로그인 vs 스크립팅 설정)로 안내할 수 있다(Phase 10 첫 실데이터)."""
+    try:
+        import subprocess
+        out = subprocess.run(['tasklist', '/NH'], capture_output=True, text=True, timeout=5, errors='replace').stdout.lower()
+        if not out.strip():
+            return True
+        return any(n in out for n in ('saplogon.exe', 'sapgui.exe', 'saplgpad.exe'))
+    except Exception:
+        return True
+
+
 def _get_sap_session():
     """이미 로그인돼 열려 있는 SAP GUI의 첫 번째 연결/세션을 가져온다."""
     import win32com.client
@@ -77,6 +91,8 @@ def _get_sap_session():
         except Exception:
             pass
         if hresult == -2147221020:
+            if not _sap_gui_process_running():
+                raise RuntimeError('SAP GUI가 실행 중이 아닙니다 — SAP Logon을 실행해 로그인해주세요. 로그인한 뒤 다시 시도하면 됩니다.')
             raise RuntimeError('SAP GUI Scripting이 아직 켜져 있지 않습니다(COM 오류 -2147221020/MK_E_SYNTAX — "SAPGUI" 항목을 찾을 수 없음). 확인해주세요: ① SAP GUI가 켜져 있고 로그인돼 있는지 ② SAP GUI 세션 안에서 Alt+F12 → 옵션(Options) → Accessibility & Scripting → Scripting → "스크립트 사용(Enable Scripting)" 체크 후 세션을 다시 열었는지. 그래도 안 되면 SAP 서버 쪽 파라미터(sapgui/user_scripting) 문제일 수 있어 사내 SAP 담당자(Basis) 확인이 필요합니다.')
         raise RuntimeError('SAP GUI Scripting 엔진을 찾지 못했습니다. SAP GUI가 켜져 있는지 확인하세요. (원본 오류: ' + str(e) + ')')
     application = sap_gui_auto.GetScriptingEngine
