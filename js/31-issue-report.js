@@ -15,6 +15,10 @@
     var REACTION_KINDS = { user_flag: 1, user_thumbs_down: 1, reask: 1, interrupt: 1 };
     var LEARN_KINDS = { sap_unsupported: 1, sap_feature_request: 1, feature_request: 1, chain_unsupported: 1, route_wrong: 1, reroute: 1 };   // Phase 11 — 학습 적립 탭이 다루는 종류(이슈 군집에서는 제외)
     var _state = { events: [], clusters: [], resolved: {}, resolvedFileId: null, folderId: null, loadedAt: null, ledger: {}, learn: [], view: 'issues' };
+    // 💡 [2026-09-22 성능] 리포트 캐시 — fileId별 modifiedTime을 기억해두고, 다시 열었을 때 안 바뀐 샤드는
+    //    다시 받지 않는다(이벤트가 쌓일수록 매번 전체 재다운로드하던 게 느려지므로). 페이지를 새로고침하면
+    //    비워지는 세션 캐시로 충분 — Drive가 진실의 원천이고 이건 "최근에 읽은 걸 또 안 받기" 용도일 뿐.
+    var _shardCache = {};   // fileId -> { modifiedTime, json }
 
     function t(ko, en) { return window._t ? window._t(ko, en) : ko; }
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -109,12 +113,21 @@
 
     // ── Drive 로드/저장 ────────────────────────────────────────────────
     async function driveList(token, q) {
-        var r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=200&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + token } });
+        var r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=200&fields=files(id,name,modifiedTime)', { headers: { Authorization: 'Bearer ' + token } });
         var d = await r.json(); return d.files || [];
     }
     async function driveJson(token, id) {
         var r = await fetch('https://www.googleapis.com/drive/v3/files/' + id + '?alt=media&supportsAllDrives=true', { headers: { Authorization: 'Bearer ' + token } });
         if (!r.ok) return null; try { return await r.json(); } catch (e) { return null; }
+    }
+    /** driveJson + 세션 캐시 — 파일의 modifiedTime이 마지막으로 읽었을 때와 같으면 다시 받지 않고 캐시를 그대로 쓴다. */
+    async function cachedDriveJson(token, file) {
+        if (!file) return null;
+        var hit = _shardCache[file.id];
+        if (hit && hit.modifiedTime === file.modifiedTime) return hit.json;
+        var json = await driveJson(token, file.id);
+        _shardCache[file.id] = { modifiedTime: file.modifiedTime, json: json };
+        return json;
     }
     async function loadAll() {
         var token = getToken();
@@ -126,14 +139,19 @@
         var minYm = cut.getFullYear() * 100 + (cut.getMonth() + 1);
         var shards = files.filter(function (f) { var m = /^issues_.+_(\d{6})\.json$/.exec(f.name); return m && parseInt(m[1], 10) >= minYm; });
         var resFile = files.filter(function (f) { return f.name === '_resolved.json'; })[0] || null;
-        var parts = await Promise.all(shards.map(function (f) { return driveJson(token, f.id); }));
+        var t0 = performance.now();
+        // 🐛 [2026-09-22] 재사용 건수는 fetch 전(캐시가 아직 새 modifiedTime으로 덮이기 전)에 세야 한다 —
+        //    fetch 후에 세면 방금 받은 것도 "캐시에 있으니 재사용"으로 잘못 잡혀 항상 100%로 보였다.
+        var reused = shards.filter(function (f) { var h = _shardCache[f.id]; return h && h.modifiedTime === f.modifiedTime; }).length;
+        var parts = await Promise.all(shards.map(function (f) { return cachedDriveJson(token, f); }));
+        console.info('[이슈 리포트] 샤드 ' + shards.length + '개 중 ' + reused + '개 캐시 재사용, ' + Math.round(performance.now() - t0) + 'ms');
         var seen = {}, events = [];
         parts.forEach(function (arr) { (Array.isArray(arr) ? arr : []).forEach(function (e) { if (e && e.id && !seen[e.id]) { seen[e.id] = 1; events.push(e); } }); });
         _state.events = events;
         _state.resolvedFileId = resFile ? resFile.id : null;
-        _state.resolved = resFile ? (await driveJson(token, resFile.id)) || {} : {};
+        _state.resolved = resFile ? (await cachedDriveJson(token, resFile)) || {} : {};
         var learnFile = files.filter(function (f) { return f.name === 'sap_learning.json'; })[0] || null;
-        _state.ledger = learnFile ? (await driveJson(token, learnFile.id)) || {} : {};
+        _state.ledger = learnFile ? (await cachedDriveJson(token, learnFile)) || {} : {};
         _state.loadedAt = new Date().toISOString();
         _state.shardCount = shards.length;
         _state.clusters = window._issueCluster(events, _state.resolved);
