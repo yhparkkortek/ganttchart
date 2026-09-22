@@ -154,6 +154,16 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
                cursor:pointer; width:28px; height:28px;">✕</button>
 ```
 
+#### 헤더의 보조 액션 버튼(새로고침·내보내기 등) — hover 필수 (2026-09-22 추가)
+**닫기(✕) 버튼뿐 아니라 헤더에 두는 다른 버튼도 전부 hover 시 배경이 한 단계 진해져야 한다** —
+이 규칙이 "닫기 버튼 스타일" 절에만 있고 일반화돼 있지 않아서, 새 모달 헤더 버튼에 hover가
+누락되는 사고가 반복됐다(이슈 리포트 모달의 🔄새로고침/📤내보내기 버튼, 2026-09-22 발견).
+기본 배경색과 같은 계열로 한 단계만 진하게(`onmouseover`/`onmouseout` 쌍, `transition:background .15s, border-color .15s;`) —
+살구색 헤더는 `background:#fff8e6` → hover `#ffefc0`(테두리 `#ffe08a` → `#e0b64a`), 하늘색(AI)
+헤더는 `background:#e8f4fd` → hover `#cfe6fa`(테두리 `#a5c8f0` → `#7fb0dd`), 초록(확인) 계열은
+`#e6f6ea` → `#c9ecd3`, 빨강(삭제/위험) 계열은 `#fdecec` → `#f8d4d4` — 코드베이스 전체에 이미
+이 4계열이 반복해서 쓰이고 있으니 새 버튼도 그중 하나를 그대로 재사용할 것(새 색 만들지 말 것).
+
 #### 모달 크기 조절 / 이동 / 배경 조작
 - 위 구조(투명 래퍼 + `resize:both`)를 따르면 자동으로 적용됨
 - 헤더에 `cursor:grab; user-select:none;` 추가 권장
