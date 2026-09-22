@@ -233,6 +233,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### 백엔드
 | 파일 | 역할 |
 |---|---|
+| `gas/Code.gs` | **[2026-09-22 신규]** AI 프록시(Google Apps Script 웹앱) 소스 사본 — `callAiBackend`가 호출하는 GAS. 외부 배포라 수정 후 Apps Script 편집기에 붙여넣고 **기존 배포 편집 → 새 버전**으로 배포(새 배포 만들면 URL 바뀜). 인증 없는 공개 URL이므로 키 대체 사용·메일 조회 같은 기능을 다시 넣지 말 것 |
 | `kortek_backend.py` | Flask 서버. 메일 SMTP/POP3, Telegram 알람, 설정 암복호화, 예약 발송 스케줄러 (`/schedule` API) |
 | `sap_bridge_32.py` | **[2026-09-14 신규]** SAP GUI Scripting 32비트 브릿지 — `/sap-fetch`가 `py -3-32`로 이 파일을 서브프로세스 실행해서 실제 COM 작업을 시킨다(이유: 위 "🏭 SAP 조회 연동" 절의 "⚠️⚠️ 32비트 브릿지" 항목 참고). `kortek_backend.zip`에도 반드시 포함돼야 함(안 그러면 다른 팀원 PC에서 SAP 기능이 동작 안 함) — `.claude/settings.json`의 PostToolUse 훅이 이 파일 수정 시에도 자동으로 재포함해서 재생성함 |
 | `kortek_backend.bat` | 로컬에서 백엔드 실행하는 배치 스크립트. SAP 조회용 32비트 Python(`py install 3-32`)·pywin32도 최초 1회 자동 설치 |

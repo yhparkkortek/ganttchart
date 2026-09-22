@@ -337,7 +337,9 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
                 const isTooLarge = window._AI_REQUEST_TOO_LARGE_RE.test(err.message || '');
                 if (isTooLarge) window._aiLearnSizeLimit(providerKey, model, err.message, (prompt || '').length);
                 const isInternal = window._AI_INTERNAL_ERROR_RE.test(err.message || '');
-                if (isDeprecated || isQuota || isTooLarge || isInternal) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
+                // 💡 [2026-09-22] gas/Code.gs가 답변 텍스트가 비면 "빈 응답 (finish_reason=…)" 오류를 준다 — 그 모델 사정이므로 다음 후보로
+                const isEmpty = /빈 응답|empty response/i.test(err.message || '');
+                if (isDeprecated || isQuota || isTooLarge || isInternal || isEmpty) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
                 // 💡 [2026-09-22] 키 오류(401/403)는 몇 번을 다시 보내도 같다 — 재시도 없이 즉시 실패(다른 제공사 폴백은 그대로)
                 if (/HTTP 40[13]\b|invalid api key|api key not valid|unauthorized|permission denied/i.test(err.message || '')) break;
                 if (attempt < maxRetryPerModel && !(opts.isCancelled && opts.isCancelled())) {
