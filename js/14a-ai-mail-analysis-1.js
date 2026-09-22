@@ -186,7 +186,13 @@ window._AI_QUOTA_HINT = '\n\n💡 무료 등급의 요청 한도(quota)는 API �
 //    많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을 넘어 매번
 //    실패한다 — 위 quota(하루/분당 "횟수") 문제와 달리 시간을 둬도 소용없고, 요청 자체를 줄여야
 //    해결됨. ⚙️ AI 분석 설정에 새로 생긴 "최대 참고 업무 건수" 설정으로 유도한다.
-window._AI_REQUEST_TOO_LARGE_RE = /request too large|tokens per minute|context length exceeded|maximum context length|too many tokens|context_length_exceeded/i;
+// 🐛 [2026-09-22 실사용 버그수정] "Request Entity Too Large"(표준 HTTP 413 문구 — 모델별 상세
+//    설명 없이 훨씬 더 큰 페이로드가 Groq 쪽 앞단(로드밸런서 등)에서 거부될 때 나옴)가 기존
+//    "request too large"(중간에 "Entity" 없음, Groq가 모델별로 주는 상세 TPM 초과 메시지)와
+//    안 걸려서 isTooLarge=false → skipRemainingRetries 안 걸리고 allCandidatesFailed도 안 남아
+//    쿨다운 등록 자체가 안 되고 있었다 — 그 결과 이 실패 유형만 겪은 제공사는 매번 계속
+//    두드려져서 "쿨다운을 도입했는데도 여전히 너무 빨리 소진된다"는 제보로 이어짐.
+window._AI_REQUEST_TOO_LARGE_RE = /request too large|request entity too large|payload too large|\b413\b|tokens per minute|context length exceeded|maximum context length|too many tokens|context_length_exceeded/i;
 window._AI_REQUEST_TOO_LARGE_HINT = '\n\n💡 무료 등급은 보통 "요청 1건의 토큰 수" 자체에도 낮은 상한이 걸려 있습니다(예: Groq 무료 등급의 분당 토큰(TPM) 한도). 업무가 많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을 넘어버려서, 시간을 두고 재시도해도 소용없고 요청 크기 자체를 줄여야 합니다.\n→ ① ⚙️ AI 분석 설정 → 📉 요청 크기 제한에서 "최대 참고 업무 건수"·"최대 글자 수"를 줄이기 ② 요청 크기 제한이 더 넉넉한 제공사(Gemini 등)로 임시 전환 ③ 유료 등급으로 전환';
 // 🐛 [2026-09-10] "⚠️ 오류: Error: Internal error encountered." 문의 대응. 이건 구글 Gemini API
 //    자체의 일시적 5xx 백엔드 오류라 우리 프롬프트/코드와 무관하게 터질 수 있는데, 기존엔 이 패턴이
