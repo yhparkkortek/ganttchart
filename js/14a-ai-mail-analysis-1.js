@@ -198,9 +198,17 @@ window._aiExtractRetrySeconds = function(errMessage) {
     const sec = Math.ceil(parseFloat(m[1]));
     return (sec > 0 && sec <= 180) ? sec : null;
 };
-window._aiBuildQuotaHint = function(errMessage) {
+window._aiBuildQuotaHint = function(errMessage, quotaKind) {
+    // 💡 [2026-09-22] 일일 한도로 판정된 경우(_aiClassifyQuotaError) — "30초 뒤 재시도" 안내가 틀린 경우였다.
+    if (quotaKind === 'day') {
+        const resetAt = window._aiNextPacificMidnight();
+        return window._t(
+            '\n\n💡 이건 분당 제한이 아니라 이 모델의 "하루 무료 한도"가 소진된 것입니다(최근 1분간 보낸 요청이 한도보다 적은데도 막혔으므로 분당 제한일 수 없음). 구글이 붙여주는 "Please retry in N초"는 일일 한도일 때도 붙어서 믿으면 안 됩니다.\n→ 리셋: ' + window._aiResetTimeLabel(resetAt) + ' (태평양시간 자정) — 그때까지 이 모델은 자동으로 호출하지 않습니다.\n→ 급하면 ⚙️ 설정에서 Groq/Mistral로 전환하거나 유료 등급으로 전환\n\n',
+            '\n\n💡 This is not a per-minute limit — this model\'s free DAILY quota is used up (fewer requests than the limit were sent in the last minute, so it cannot be per-minute). Google adds "Please retry in Ns" even for daily limits.\n→ Resets at ' + window._aiResetTimeLabel(resetAt) + ' (Pacific midnight) — this model will be skipped until then.\n→ If urgent, switch to Groq/Mistral in ⚙️ Settings or upgrade to a paid tier.\n\n'
+        ) + window._aiUsageSummaryText();
+    }
     const sec = window._aiExtractRetrySeconds(errMessage);
-    if (sec != null) {
+    if (sec != null && quotaKind !== 'unknown') {
         return '\n\n💡 이건 "오늘 하루치 한도 소진"이 아니라 분당 요청 수(RPM) 제한입니다 — 짧은 시간에 요청이 몰려서 잠깐 걸린 것뿐이라 약 ' + sec + '초 후 재시도하면 바로 다시 됩니다.\n→ 계속 이 메시지만 반복된다면 ① 짧은 간격으로 여러 번 재시도하지 말고 위 대기시간만큼만 기다렸다 한 번만 시도 ② 메일 자동분석/자동수집이 백그라운드에서 같이 돌고 있지 않은지 확인 ③ 그래도 반복되면 유료 결제 등급으로 전환';
     }
     return window._AI_QUOTA_HINT;
@@ -237,6 +245,9 @@ window._AI_INTERNAL_ERROR_HINT = '\n\n💡 이 메시지는 구글 Gemini API �
 // 🐛 [2026-09-22] 실사용 로그에서 "limit: 20"(gemini-3.5-flash 분당 요청수, RPM) 초과가 확인됨 —
 //    20 RPM은 평균 3000ms 간격이 한계인데 기존 2500ms 간격은 여유가 전혀 없어(최대 24회/분) 쉽게
 //    넘었다. 후보 모델 재시도·메일 자동분석 등 여러 호출이 겹칠 때를 감안해 여유를 두고 3500ms로 상향.
+//    ⚠️ [2026-09-22 정정] 위 "limit: 20 = RPM" 해석은 틀렸을 가능성이 높다 — 3500ms 간격이면 1분에 최대
+//    17회라 20회 분당 한도에 걸릴 수가 없는데도 계속 걸렸다 → 실제로는 "하루 20회" 일일 한도. 판정은
+//    아래 _aiClassifyQuotaError가 결정론적으로 한다. 이 간격 자체는 분당 한도 보호용으로 그대로 둔다.
 window._AI_MIN_CALL_GAP_MS = 3500;
 window._aiCallQueueTail = window._aiCallQueueTail || Promise.resolve();
 window._aiThrottleGate = function() {
@@ -273,10 +284,18 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
     for (let ci = 0; ci < candidates.length; ci++) {
         const model = candidates[ci];
         let skipRemainingRetries = false; // 모델 사용중단 또는 할당량 초과 — 같은 모델로 더 재시도해도 소용없음
+        // 💡 [2026-09-22] 오늘 일일 한도가 이미 소진된 모델은 호출하지 않고 다음 후보로(낭비 호출 0)
+        if (window._aiModelExhausted(providerKey, model)) {
+            const until = window._aiUsageLoad().exhausted[providerKey + ':' + model];
+            lastErr = new Error(window._t(`${model}: 오늘 무료 한도 소진 — ${window._aiResetTimeLabel(until)} 리셋까지 건너뜀`, `${model}: daily free quota used up — skipped until ${window._aiResetTimeLabel(until)}`));
+            lastErr._quotaKind = 'day';
+            continue;
+        }
         for (let attempt = 1; attempt <= maxRetryPerModel; attempt++) {
             if (opts.isCancelled && opts.isCancelled()) return { ok: false, error: new Error('사용자가 중단함') };
             await window._aiThrottleGate();
             if (opts.isCancelled && opts.isCancelled()) return { ok: false, error: new Error('사용자가 중단함') };
+            window._aiUsageRecordAttempt(providerKey, model);
             try {
                 const res = await fetch(GAS_URL, {
                     method: 'POST',
@@ -285,6 +304,7 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
                 });
                 const data = await res.json();
                 if (data.status !== 'success') throw new Error(data.message || '구글 서버 응답 오류');
+                window._aiUsageRecordAttempt(providerKey, model, true);
                 if (model !== activeModel) {
                     console.warn(`[AI 모델 자동전환] "${activeModel}" 실패 → "${model}"로 전환 성공. 기본값을 갱신합니다.`);
                     localStorage.setItem('ai_model_' + providerKey, model);
@@ -295,8 +315,13 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
                 return { ok: true, data, modelUsed: model, providerUsed: providerKey, switched: model !== activeModel };
             } catch (err) {
                 lastErr = err;
+                window._aiUsageRecordAttempt(providerKey, model, false);
                 const isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
                 const isQuota = window._AI_QUOTA_EXCEEDED_RE.test(err.message || '');
+                if (isQuota) {
+                    err._quotaKind = window._aiClassifyQuotaError(providerKey, model, err.message);
+                    console.warn(`[AI 할당량] ${providerKey}:${model} 초과 — 판정: ${err._quotaKind === 'day' ? '일일 한도(리셋까지 이 모델 건너뜀)' : err._quotaKind === 'minute' ? '분당 한도' : '불명'}`);
+                }
                 const isTooLarge = window._AI_REQUEST_TOO_LARGE_RE.test(err.message || '');
                 const isInternal = window._AI_INTERNAL_ERROR_RE.test(err.message || '');
                 if (isDeprecated || isQuota || isTooLarge || isInternal) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
@@ -371,6 +396,18 @@ window._aiProviderCooldownUntil = (function() {
 window._aiMarkProviderCooldown = function(providerKey, err) {
     const minutes = window.getAiProviderCooldownMin();
     if (!minutes) return; // 0분 = 쿨다운 사용 안 함 — 등록하지 않음(매번 다시 시도)
+    // 💡 [2026-09-22] 이 제공사의 무료 후보 모델이 전부 "일일 한도 소진"(아래 _aiClassifyQuotaError)이면
+    //    짧은 재시도 대기시간과 무관하게 가장 이른 리셋 시각(태평양시간 자정)까지 건너뛴다.
+    const usage = window._aiUsageLoad && window._aiUsageLoad();
+    if (usage) {
+        const untils = window._aiProviderFreeCandidates(providerKey).map(function(m) { return usage.exhausted[providerKey + ':' + m] || 0; });
+        if (untils.length && untils.every(function(u) { return u > Date.now(); })) {
+            window._aiProviderCooldownUntil[providerKey] = Math.min.apply(null, untils);
+            try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }
+            return;
+        }
+    }
+    // 일부 모델만 일일 소진이면 그 모델은 _aiModelExhausted가 따로 건너뛰므로, 제공사 쿨다운은 기존처럼 짧게
     const shortSec = window._aiExtractRetrySeconds(err && err.message);
     const ms = (shortSec != null) ? (shortSec + 5) * 1000 : minutes * 60 * 1000;
     window._aiProviderCooldownUntil[providerKey] = Date.now() + ms;
@@ -386,6 +423,130 @@ window._aiProviderInCooldown = function(providerKey) {
     return !!(until && Date.now() < until);
 };
 
+// 🐛🐛 [2026-09-22 실사용 버그수정, 사용자 요청 "우리가 놓치는 무언가"] 구글은 분당 한도(RPM)와
+//    일일 한도(RPD) 초과를 **같은 metric 이름**(generate_content_free_tier_requests)으로 알려주고,
+//    일일 한도가 다 찼을 때도 "Please retry in 29s" 같은 짧은 대기시간을 붙인다. 그런데 위
+//    _aiExtractRetrySeconds/_aiMarkProviderCooldown은 "짧은 대기시간 = 분당 한도"로 단정해서, 실제로는
+//    "하루 20회" 무료 한도가 소진된 상황(limit: 20)을 "30초면 풀린다"고 안내하고 쿨다운도 34초만 걸었다
+//    → 한도가 이미 끝난 날에도 34초마다 Gemini 후보 전부 + Groq + Mistral을 계속 두드리고 있었다.
+//    **판정 원칙(결정론)**: 에러의 "limit: N"과 이 브라우저가 최근 60초간 그 모델에 실제로 보낸 요청
+//    수를 비교한다 — N회보다 적게 보냈는데 걸렸다면 분당 한도일 수 없으므로 일일 한도로 본다.
+//    (구글이 quotaId에 PerDay/PerMinute를 직접 실어주면 그걸 우선.) 일일 한도로 판정된 모델은 다음
+//    태평양시간 자정(구글 리셋 시각)까지 아예 호출하지 않는다.
+// 📊 [2026-09-22 신규] 동시에 "오늘 어떤 기능이 AI를 몇 번 불렀는지" 원장을 남긴다(학습 우선 원칙의
+//    "신호를 남기는가") — 다음에 한도가 빨리 소진되면 코드 재조사 없이 이 기록부터 보면 된다.
+//    ⚙️ AI 도구 설정의 쿨다운 항목 아래와 할당량 오류 메시지에 요약이 표시된다.
+window._AI_USAGE_KEY = 'gantt_ai_usage_v1';
+window._AI_USAGE_KEEP_DAYS = 7;
+window._aiPacificDayKey = function(ts) {
+    const d = new Date(ts || Date.now());
+    try {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    } catch (e) { return d.toISOString().slice(0, 10); }
+};
+/** 다음 태평양시간 자정(구글 무료 등급 일일 한도 리셋 시각)의 epoch ms */
+window._aiNextPacificMidnight = function() {
+    const now = Date.now();
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(now));
+        const g = function(t) { return parseInt((parts.find(function(p) { return p.type === t; }) || {}).value || '0', 10); };
+        const elapsedMs = ((g('hour') % 24) * 3600 + g('minute') * 60 + g('second')) * 1000;
+        return now - elapsedMs + 86400000;
+    } catch (e) { return now + 6 * 3600000; }
+};
+window._aiUsageLoad = function() {
+    let s;
+    try { s = JSON.parse(localStorage.getItem(window._AI_USAGE_KEY) || '{}'); } catch (e) { s = {}; }
+    s.days = s.days || {}; s.limits = s.limits || {}; s.exhausted = s.exhausted || {};
+    return s;
+};
+window._aiUsageSave = function(s) {
+    const keys = Object.keys(s.days).sort();
+    while (keys.length > window._AI_USAGE_KEEP_DAYS) delete s.days[keys.shift()];
+    Object.keys(s.exhausted).forEach(function(k) { if (s.exhausted[k] < Date.now()) delete s.exhausted[k]; });
+    try { localStorage.setItem(window._AI_USAGE_KEY, JSON.stringify(s)); } catch (e) { /* 저장 실패해도 AI 호출은 계속 */ }
+};
+/** 호출부 식별 — opts.feature가 없으면 콜스택에서 "함수명(파일)"을 뽑는다(호출부 수정 없이 자동 분류). */
+window._aiDetectFeature = function(stack) {
+    const lines = String(stack || '').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        if (!/\/js\//.test(l) || /14a-ai-mail-analysis-1\.js/.test(l)) continue;
+        const file = (/\/js\/([\w.-]+?)\.js/.exec(l) || [])[1] || '?';
+        const fn = (/at\s+(?:async\s+)?([\w.$]+)\s+\(/.exec(l) || [])[1];
+        return fn ? fn.replace(/^window\./, '') + ' (' + file + ')' : file;
+    }
+    return '?';
+};
+window._aiUsageRecordRequest = function(feature) {
+    const s = window._aiUsageLoad(), day = window._aiPacificDayKey();
+    const d = s.days[day] = s.days[day] || { models: {}, features: {} };
+    d.features[feature] = (d.features[feature] || 0) + 1;
+    window._aiUsageSave(s);
+};
+window._aiRecentAttemptTs = window._aiRecentAttemptTs || {}; // 'provider:model' → [최근 요청 시각] (분당 판정용, 메모리)
+window._aiUsageRecordAttempt = function(providerKey, model, ok) {
+    const pm = providerKey + ':' + model;
+    const arr = window._aiRecentAttemptTs[pm] = (window._aiRecentAttemptTs[pm] || []).filter(function(t) { return Date.now() - t < 60000; });
+    if (ok === undefined) { arr.push(Date.now()); return; }
+    const s = window._aiUsageLoad(), day = window._aiPacificDayKey();
+    const d = s.days[day] = s.days[day] || { models: {}, features: {} };
+    const m = d.models[pm] = d.models[pm] || { ok: 0, fail: 0 };
+    if (ok) m.ok++; else m.fail++;
+    window._aiUsageSave(s);
+};
+/** 할당량 오류 → 'day' | 'minute' | 'unknown' (위 판정 원칙 참고). 관측된 한도는 원장(limits)에 학습 저장. */
+window._aiClassifyQuotaError = function(providerKey, model, msg) {
+    msg = String(msg || '');
+    let kind = 'unknown';
+    const lim = /limit:\s*(\d+)/i.exec(msg);
+    if (/PerDay/i.test(msg)) kind = 'day';
+    else if (/PerMinute/i.test(msg)) kind = 'minute';
+    else if (lim && /requests/i.test(msg)) {
+        const limit = parseInt(lim[1], 10);
+        const recent = (window._aiRecentAttemptTs[providerKey + ':' + model] || []).filter(function(t) { return Date.now() - t < 60000; }).length;
+        kind = (limit === 0 || recent < limit) ? 'day' : 'minute';
+    } else if (lim) kind = 'minute'; // 토큰 수(TPM) 등 요청 횟수가 아닌 분당 한도
+    if (lim) {
+        const s = window._aiUsageLoad();
+        s.limits[providerKey + ':' + model] = { limit: parseInt(lim[1], 10), kind: kind, seenAt: new Date().toISOString() };
+        if (kind === 'day') s.exhausted[providerKey + ':' + model] = window._aiNextPacificMidnight();
+        window._aiUsageSave(s);
+    }
+    return kind;
+};
+/** 오늘(태평양시간 기준) 일일 한도가 소진된 모델인지 — 쿨다운 설정 0(끔)이면 항상 false */
+window._aiModelExhausted = function(providerKey, model) {
+    if (!window.getAiProviderCooldownMin()) return false;
+    const until = window._aiUsageLoad().exhausted[providerKey + ':' + model];
+    return !!(until && Date.now() < until);
+};
+window._aiProviderFreeCandidates = function(providerKey) {
+    const cfg = window.AI_PROVIDERS[providerKey] || window.AI_PROVIDERS.gemini;
+    const active = providerKey === window.getActiveAiProvider() ? window.getActiveAiModel() : cfg.defaultModel;
+    return [active].concat((cfg.models || []).filter(function(m) { return m.tier !== 'paid'; }).map(function(m) { return m.id; }).filter(function(id) { return id !== active; }));
+};
+window._aiResetTimeLabel = function(ts) {
+    const d = new Date(ts);
+    return d.toLocaleString(window._currentLang === 'en' ? 'en-US' : 'ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+/** 오늘 사용량 요약 문구(모델별 성공/실패 + 관측 한도, 기능별 호출 수 상위 6개) */
+window._aiUsageSummaryText = function() {
+    const s = window._aiUsageLoad(), d = s.days[window._aiPacificDayKey()];
+    if (!d) return window._t('오늘(태평양시간 기준) AI 호출 기록 없음', 'No AI calls recorded today (Pacific time)');
+    const models = Object.keys(d.models).map(function(pm) {
+        const m = d.models[pm], lim = s.limits[pm];
+        const ex = s.exhausted[pm] && s.exhausted[pm] > Date.now() ? ' ⛔' : '';
+        return '  · ' + pm.split(':').slice(1).join(':') + ': ' + window._t('성공 ', 'ok ') + m.ok + ' / ' + window._t('실패 ', 'fail ') + m.fail +
+            (lim ? window._t(' (관측 한도 ' + lim.limit + (lim.kind === 'day' ? '/일' : lim.kind === 'minute' ? '/분' : '') + ')', ' (observed limit ' + lim.limit + (lim.kind === 'day' ? '/day' : lim.kind === 'minute' ? '/min' : '') + ')') : '') + ex;
+    });
+    const feats = Object.keys(d.features).sort(function(a, b) { return d.features[b] - d.features[a]; }).slice(0, 6)
+        .map(function(f) { return '  · ' + f + ': ' + d.features[f]; });
+    return window._t('📊 오늘(태평양시간 기준) AI 사용량', '📊 AI usage today (Pacific time)') + '\n' +
+        window._t('[모델별]', '[By model]') + '\n' + (models.join('\n') || '  -') + '\n' +
+        window._t('[기능별 요청 수]', '[Requests by feature]') + '\n' + (feats.join('\n') || '  -');
+};
+
 window.callAiBackend = async function(apiKey, prompt, opts) {
     opts = opts || {};
     const provider = window.getActiveAiProvider();
@@ -396,17 +557,23 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
     //    실패하면, 예전엔 "마지막으로 시도한 제공사"의 에러만 보여줘서 "그 앞에 Groq는 시도되긴
     //    했는지, 됐다면 왜 실패했는지"를 전혀 알 수 없었다 — 시도한 제공사마다 결과를 전부 남겨서
     //    최종 실패 메시지에 요약으로 붙인다(원인 진단에 필요한 신호를 조용히 버리지 않는다는 원칙).
+    // 📊 기능별 요청 수 원장 — opts.feature가 없으면 콜스택에서 호출 함수·파일을 자동 추출
+    try { window._aiUsageRecordRequest(opts.feature || window._aiDetectFeature(new Error().stack)); } catch (e) { /* 기록 실패는 무시 */ }
     const attempts = [];
     let primaryResult;
     if (window._aiProviderInCooldown(provider)) {
         const remainMs = window._aiProviderCooldownUntil[provider] - Date.now();
         const remainLabel = remainMs <= 180000
             ? window._t(`${Math.ceil(remainMs / 1000)}초`, `${Math.ceil(remainMs / 1000)}s`)
-            : window._t(`${Math.ceil(remainMs / 60000)}분`, `${Math.ceil(remainMs / 60000)}min`);
-        primaryResult = { ok: false, allCandidatesFailed: true, error: new Error(
-            window._t(`(쿨다운 중 — 최근 할당량 소진이 확인돼 ${remainLabel}간 재시도를 건너뜁니다)`,
-                `(In cooldown — quota was recently exhausted, skipping retries for ${remainLabel} more)`)
-        ) };
+            : remainMs > 3 * 3600000
+                ? window._t(`${window._aiResetTimeLabel(window._aiProviderCooldownUntil[provider])}(일일 한도 리셋)까지`, `until ${window._aiResetTimeLabel(window._aiProviderCooldownUntil[provider])} (daily reset)`)
+                : window._t(`${Math.ceil(remainMs / 60000)}분`, `${Math.ceil(remainMs / 60000)}min`);
+        const cdErr = new Error(remainMs > 3 * 3600000
+            ? window._t(`(쿨다운 중 — 오늘 무료 한도 소진이 확인돼 ${remainLabel} 호출하지 않습니다)`, `(In cooldown — daily free quota used up, not calling ${remainLabel})`)
+            : window._t(`(쿨다운 중 — 최근 할당량 소진이 확인돼 ${remainLabel}간 재시도를 건너뜁니다)`,
+                `(In cooldown — quota was recently exhausted, skipping retries for ${remainLabel} more)`));
+        if (remainMs > 3 * 3600000) cdErr._quotaKind = 'day'; // 아래 최종 안내에서 일일 한도 설명 + 오늘 사용량 요약을 붙이도록
+        primaryResult = { ok: false, allCandidatesFailed: true, error: cdErr };
     } else {
         primaryResult = await _aiTryProviderCandidates(provider, apiKey, prompt, opts, GAS_URL);
         if (primaryResult.ok) { window._aiClearProviderCooldown(provider); return primaryResult; }
@@ -448,8 +615,8 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
     }
     // 활성 제공사 + (저장된 키가 있는) 모든 무료 폴백 제공사까지 다 막힘 — 마지막 에러가 할당량
     // 초과/요청 크기 초과/내부 일시오류라면 원인·대응법을 메시지에 덧붙여준다.
-    if (lastErr && window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '')) {
-        const quotaHint = window._aiBuildQuotaHint(lastErr.message);
+    if (lastErr && (window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '') || lastErr._quotaKind === 'day')) {
+        const quotaHint = window._aiBuildQuotaHint(lastErr.message, lastErr._quotaKind);
         if (lastErr.message.indexOf(quotaHint) === -1) lastErr = new Error(lastErr.message + quotaHint);
     } else if (lastErr && window._AI_REQUEST_TOO_LARGE_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_REQUEST_TOO_LARGE_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_REQUEST_TOO_LARGE_HINT);

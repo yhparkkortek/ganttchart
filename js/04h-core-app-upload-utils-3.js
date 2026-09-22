@@ -5347,10 +5347,18 @@ ${docsJson}`;
     function _qaClusterCacheSave(store) {
         try { localStorage.setItem(_QA_CLUSTER_CACHE_KEY, JSON.stringify(store)); } catch (e) {}
     }
-    // 원본 목록의 "서명" — 문구+횟수 조합이 하나라도 바뀌면 달라짐(캐시 무효화 판단용)
+    // 원본 목록의 "서명"(캐시 무효화 판단용).
+    // 🐛🐛 [2026-09-22 실사용 버그수정] 예전엔 "문구+횟수" 전부로 서명을 만들어서, 질문을 하나 할 때마다
+    //    (_ganttQaRecordQuestionFreq가 count를 올리므로) 서명이 매번 바뀌었고 → 바로 뒤의
+    //    _ganttQaPopulateFreqSelect가 백그라운드 AI 묶기 호출을 매번 쏴서, AI 문답 질문 1개 = AI 호출 2회
+    //    (묶기 + 답변)였다. 무료 등급 "하루 20회"를 질문 10개 만에 태우던 원인 중 하나. 이제 서명은
+    //    "2회 이상(=자주) 질문이 된 문구 집합" + 원본 10개 단위 증가분만 반영하고, 아래
+    //    _QA_CLUSTER_MIN_INTERVAL_MS(하루)에 한 번까지만 새로 묶는다(실패해도 시도 시각을 남김).
     function _qaRawSignature(list) {
-        return list.map(function(x) { return x.norm + ':' + (x.count || 1); }).sort().join('|');
+        return list.filter(function(x) { return (x.count || 1) >= 2; }).map(function(x) { return x.norm; }).sort().join('|') +
+            '#' + Math.floor(list.length / 10);
     }
+    const _QA_CLUSTER_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
     /**
      * 빈 채팅창에 보여줄 "자주 묻는 질문" 목록 — AI로 묶은 결과가 있으면 그걸, 없으면(원본이 적거나
@@ -5369,10 +5377,12 @@ ${docsJson}`;
 
         const sig = _qaRawSignature(raw);
         const cached = _qaClusterCacheStore()[key];
-        if (!cached || cached.sig !== sig) {
+        const lastTry = cached ? (cached.tryAt || cached.ts || 0) : 0;
+        if ((!cached || cached.sig !== sig) && Date.now() - lastTry >= _QA_CLUSTER_MIN_INTERVAL_MS) {
             window._ganttQaRefreshClusterCache(key, raw, sig, onUpdated); // fire-and-forget
         }
-        return (cached && cached.sig === sig && cached.clusters && cached.clusters.length) ? cached.clusters.slice(0, n || 6) : fallback();
+        // 서명이 조금 낡았어도(하루 안에 새 "자주 질문"이 생김) 기존 묶음을 그대로 보여준다 — 횟수 표시가 약간 뒤처질 뿐
+        return (cached && cached.clusters && cached.clusters.length) ? cached.clusters.slice(0, n || 6) : fallback();
     };
 
     window._ganttQaClusterInFlight = null; // 같은 서명으로 중복 호출 방지용
@@ -5380,6 +5390,10 @@ ${docsJson}`;
         if (window._ganttQaClusterInFlight === sig) return;
         window._ganttQaClusterInFlight = sig;
         try {
+            // 시도 시각을 먼저 남긴다 — 할당량 초과 등으로 실패해도 하루 동안은 다시 시도하지 않도록
+            const _pre = _qaClusterCacheStore();
+            _pre[key] = Object.assign({}, _pre[key] || {}, { tryAt: Date.now() });
+            _qaClusterCacheSave(_pre);
             const apiKey = window.getActiveAiKey();
             const listText = raw.slice(0, 60).map(function(x, i) { return (i + 1) + '. "' + x.sample + '" (x' + (x.count || 1) + ')'; }).join('\n');
             const prompt = '다음은 어떤 회사 프로젝트 Gantt 챗봇에 실제로 입력된 사용자 질문 목록이다. 괄호 안 숫자는 그 문구가 입력된 횟수다.\n\n' +
@@ -5388,7 +5402,7 @@ ${docsJson}`;
                 '그룹마다 가장 자연스러운 대표 문구 하나와 그 그룹에 속한 항목들의 횟수 합계를 계산하라. ' +
                 '완전히 다른 질문끼리는 절대 묶지 말 것. 합산 횟수 내림차순으로 최대 6개 그룹만, 다른 설명 없이 JSON 배열로만 응답하라:\n' +
                 '[{"sample":"대표 질문 문구","count":합산횟수}, ...]';
-            const result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; }, maxRetryPerModel: 1 });
+            const result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; }, maxRetryPerModel: 1, feature: 'AI 문답 - 자주 묻는 질문 묶기' });
             if (!result || !result.ok) { console.warn('[AI문답 질문 클러스터링] 실패:', result && result.error); return; }
             const text = (result.data && result.data.result && result.data.result.candidates && result.data.result.candidates[0] &&
                 result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts &&
@@ -5402,7 +5416,7 @@ ${docsJson}`;
                 .sort(function(a, b) { return b.count - a.count; })
                 .slice(0, 6);
             const store = _qaClusterCacheStore();
-            store[key] = { sig: sig, clusters: clusters, ts: Date.now() };
+            store[key] = { sig: sig, clusters: clusters, ts: Date.now(), tryAt: Date.now() };
             _qaClusterCacheSave(store);
             console.info('[AI문답 질문 클러스터링] 갱신 완료:', key, clusters.length + '개 그룹');
             if (onUpdated) onUpdated(clusters);

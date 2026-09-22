@@ -21,6 +21,7 @@
     // strategy: {type:'drop'} | {type:'fn', fn:'전역함수명'} | {type:'array', keep, order:'newest-first'|'newest-last'} | {type:'byProject', perProject, maxProjects}
     window.STORAGE_REGISTRY = window.STORAGE_REGISTRY || [
         { key: 'gantt_folder_cache_v1',           label: 'Drive 폴더 캐시',                 labelEn: 'Drive folder cache',      cls: 'cache', strategy: { type: 'drop' } },
+        { key: 'gantt_ai_usage_v1',               label: 'AI 사용량 원장(최근 7일, 일일 한도 소진 표시)', labelEn: 'AI usage ledger (7 days)', cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_qa_cluster_cache_v1',       label: '자주 묻는 질문 묶기 캐시',        labelEn: 'FAQ grouping cache',      cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_ai_learning_v1',            label: 'AI 학습 로그(프로젝트별)',         labelEn: 'AI learning log',         cls: 'log',   strategy: { type: 'byProject', perProject: 60, maxProjects: 30 } },
         { key: 'gantt_qa_feedback',               label: 'AI 문답 피드백(질문·답변 포함)',   labelEn: 'AI Q&A feedback',         cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },

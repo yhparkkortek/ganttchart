@@ -77,10 +77,21 @@
     //    이후 일정 시간(기본 10분) 안에는 또 자동 트리거되지 않도록 쿨다운을 둔다 — "지금
     //    일괄 재분석" 수동 버튼(`_alRunPendingRetryNow`)은 쿨다운과 무관하게 항상 즉시 실행.
     var _AL_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
-    var _alLastAutoRetryAt = 0;
+    // 🐛🐛 [2026-09-22 실사용 버그수정] 위 쿨다운 시각이 메모리 변수라 F5(새로고침)만 해도 0으로 초기화돼
+    //    새로고침 직후 첫 학습 이벤트에서 저신뢰도 업무 전부가 다시 AI로 재분석됐다 — localStorage에 보존.
+    //    또한 신뢰도가 "중"에 머무는 업무는 매 트리거마다 영원히 재시도됐으므로, 자동 재분석은 업무당 1회만
+    //    (row._aiRetryCount — `_` 필드라 Drive 저장에도 실림). 수동 "지금 일괄 재분석"은 전부 대상.
+    //    할당량 초과가 나오면 남은 업무를 계속 두드리지 않고 즉시 중단한다.
+    var _AL_RETRY_LAST_AT_KEY = 'gantt_ai_retry_last_auto_at';
+    var _alLastAutoRetryAt = (function() { try { return parseInt(localStorage.getItem(_AL_RETRY_LAST_AT_KEY) || '0', 10) || 0; } catch (e) { return 0; } })();
+    function _alSetLastAutoRetryAt(ts) {
+        _alLastAutoRetryAt = ts;
+        try { localStorage.setItem(_AL_RETRY_LAST_AT_KEY, String(ts)); } catch (e) { /* ignore */ }
+    }
 
     /** globalData에서 AI 등록 + 저신뢰도(중/하/미분류) 행만 뽑아 배열로 반환 (배너/설정 패널 공용) */
-    window._alCollectLowConfidenceRows = function() {
+    window._alCollectLowConfidenceRows = function(opts) {
+        var excludeRetried = !!(opts && opts.excludeRetried);
         var lowRows = [];
         if (typeof globalData === 'undefined' || !globalData || globalData.length <= 1) return lowRows;
         for (var i = 1; i < globalData.length; i++) {
@@ -88,6 +99,7 @@
             if (!row || !row._aiRegistered) continue;
             var conf = row._aiConfidence || '';
             if (conf === '상') continue; // 상은 이미 확정
+            if (excludeRetried && (row._aiRetryCount || 0) >= 1) continue; // 자동 재분석은 업무당 1회만
             lowRows.push({ idx: i, taskName: row._origT3 || row._origT2 || row._origT1 || row._origT4 || row._origDev || '업무', conf: conf, snippet: row._aiSourceSnippet || '' });
         }
         return lowRows;
@@ -98,7 +110,7 @@
      * 조용히 대기시킨다. _writeLearningEntry 호출 직후 자동으로 실행됨.
      */
     function _alTriggerRetry() {
-        var lowRows = window._alCollectLowConfidenceRows();
+        var lowRows = window._alCollectLowConfidenceRows({ excludeRetried: true });
         if (!lowRows.length) return;
         if (window.getAiRetryAutoEnabled()) {
             // 💡 위 쿨다운 설명 참고 — 같은 저신뢰도 잔더미를 짧은 시간 안에 피드백 여러 번
@@ -108,7 +120,7 @@
                 console.info('[재시도 엔진] 쿨다운 중(' + Math.ceil((_AL_RETRY_COOLDOWN_MS - _sinceLast) / 60000) + '분 남음) — 자동 재시도 건너뜀. "🔄 지금 일괄 재분석" 버튼으로 즉시 실행 가능.');
                 return;
             }
-            _alLastAutoRetryAt = Date.now();
+            _alSetLastAutoRetryAt(Date.now());
             _alRunRetry(lowRows); // 배너 없이 즉시 실행 — 결과는 _alRunRetry 내부 토스트로만 알림
         }
         // off일 때는 여기서 아무것도 하지 않음 — "🔄 저신뢰도 자동 재분석" 설정 그룹의
@@ -122,7 +134,7 @@
             _showToast(window._t('저신뢰도로 대기 중인 업무가 없습니다', 'No low-confidence tasks are pending'));
             return;
         }
-        _alLastAutoRetryAt = Date.now(); // 수동 실행도 쿨다운 시계를 갱신 — 직후 자동 트리거가 같은 걸 또 돌리지 않게
+        _alSetLastAutoRetryAt(Date.now()); // 수동 실행도 쿨다운 시계를 갱신 — 직후 자동 트리거가 같은 걸 또 돌리지 않게
         _alRunRetry(lowRows);
     };
 
@@ -141,7 +153,7 @@
 
         // 💡 [무료 API 절약] 건당 2000ms 딜레이 — 무료 Gemini 한도 준수 (메일 분석의 4000ms 기준 완화)
         var _RETRY_DELAY_MS = 2000;
-        var improved = 0;
+        var improved = 0, marked = 0, stoppedAt = -1;
         for (var ri = 0; ri < rows.length; ri++) {
             var item = rows[ri];
             // 첫 번째 건은 딜레이 없이 바로, 이후 건부터 딜레이
@@ -161,7 +173,16 @@
                 if (candidatesForAI && candidatesForAI.length && window._msBuildProjectMatchSection) {
                     prompt += window._msBuildProjectMatchSection(candidatesForAI, _retrySnippet, null);
                 }
-                var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
+                var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; }, feature: '저신뢰도 자동 재분석' });
+                if (!result || !result.ok) {
+                    var _em = (result && result.error && result.error.message) || '';
+                    if ((window._AI_QUOTA_EXCEEDED_RE && window._AI_QUOTA_EXCEEDED_RE.test(_em)) || /쿨다운|cooldown|한도 소진|quota used up/i.test(_em)) {
+                        stoppedAt = ri; // 할당량 문제 — 남은 업무는 다음 기회로(시도 표시도 안 함)
+                        break;
+                    }
+                }
+                var _mrow = typeof globalData !== 'undefined' && globalData[item.idx];
+                if (_mrow && _mrow._aiRegistered) { _mrow._aiRetryCount = (_mrow._aiRetryCount || 0) + 1; marked++; }
                 if (!result || !result.ok) continue;
                 var text = (result.data && result.data.result && result.data.result.candidates &&
                             result.data.result.candidates[0] &&
@@ -178,6 +199,13 @@
                     console.info('[재시도 엔진] 신뢰도 갱신:', item.taskName, item.conf, '→', newConf);
                 }
             } catch(e) { console.warn('[재시도 엔진] 실패:', item.taskName, e); }
+        }
+        if (marked > 0) window._nonGanttDirty = true; // 재시도 횟수(_aiRetryCount)도 자동저장되도록
+        if (stoppedAt >= 0) {
+            _showToast(window._t('⏸️ AI 할당량 초과로 저신뢰도 재분석 중단 (' + (rows.length - stoppedAt) + '건 남음)', '⏸️ Low-confidence re-analysis paused — AI quota exceeded (' + (rows.length - stoppedAt) + ' left)'), 6000);
+            if (improved > 0 && window.recalculateSchedules) window.recalculateSchedules();
+            if (window._aiRetryRefreshPendingCount) window._aiRetryRefreshPendingCount();
+            return;
         }
         if (improved > 0) {
             if (window.recalculateSchedules) window.recalculateSchedules();

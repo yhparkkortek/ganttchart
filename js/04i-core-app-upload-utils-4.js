@@ -86,10 +86,17 @@
     // 부분적으로 04j-core-app-upload-utils-5.js의 toggleLang()에 등록돼 있었고, 나머지 4개 그룹은
     // 전혀 없었음). Mail Auto-Placement Settings와 동일한 패턴 — id 기반 일괄 갱신 함수를 모달과
     // 같은 파일에 두고, ①toggleLang() ②이 모달을 열 때마다(영문 모드에서 처음 여는 경우 포함) 호출.
+    // 📊 [2026-09-22 신규] 오늘 AI 사용량(모델별·기능별) — js/14a의 _aiUsageSummaryText 원장을 그대로 보여준다
+    window._aiUsageRenderSettings = function() {
+        const el = document.getElementById('ai-usage-today');
+        if (el && window._aiUsageSummaryText) el.textContent = window._aiUsageSummaryText();
+    };
     window._aiSettingsRefreshLang = function() {
         const _en = window._currentLang === 'en';
         const idTexts = {
             'ai-set-sec-model-label':   { ko:'🤖 AI 모델 선택',                       en:'🤖 AI Model Selection' },
+            'ai-usage-today-label':     { ko:'📊 오늘 AI 사용량',                     en:'📊 AI usage today' },
+            'ai-usage-today-refresh-btn': { ko:'🔄 새로고침',                          en:'🔄 Refresh' },
             'ai-provider-groq':         { ko:'Groq — 오픈모델 무료 호스팅',           en:'Groq — free hosting for open models' },
             'ai-provider-mistral':      { ko:'Mistral (프랑스 AI, 무료)',             en:'Mistral (French AI, free)' },
             'ai-provider-openai':       { ko:'OpenAI (GPT, 유료·카드등록 필요)',      en:'OpenAI (GPT, paid — card required)' },
@@ -143,6 +150,7 @@
         // 💡 대기 건수 표시는 매번 새로 그리는(멱등) 동적 문구라 idTexts 정적 맵으로는 못 다룸 —
         // 언어 전환 시에도 다시 맞춰주도록 여기서 같이 호출.
         if (window._aiRetryRefreshPendingCount) window._aiRetryRefreshPendingCount();
+        if (window._aiUsageRenderSettings) window._aiUsageRenderSettings();
         // 💡 ai-set-sec-reqsize 라벨 자체는 04j-core-app-upload-utils-5.js의 toggleLang() 안
         // _reqsizeTexts가 이미 갱신하지만, 그 화살표(-arrow)는 어디에도 없었어서 여기서 같이 처리.
         ['ai-set-sec-model','ai-set-sec-maxlen','ai-set-sec-reqsize','ai-set-sec-range','ai-set-sec-learning','ai-set-sec-retry'].forEach(sid => {
@@ -327,6 +335,11 @@
                                 <button id="ai-cooldown-min-reset-btn" onclick="document.getElementById('ai-cooldown-min-input').value=window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
                             <div id="ai-cooldown-min-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 20분 (기본값) — 0으로 저장하면 쿨다운 기능이 꺼지고, 지금 막혀있던 제공사도 즉시 풀립니다.</div>
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px;">
+                                <span id="ai-usage-today-label" style="font-size:12.5px; font-weight:bold; color:#333;">📊 오늘 AI 사용량</span>
+                                <button id="ai-usage-today-refresh-btn" onclick="window._aiUsageRenderSettings()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:4px 10px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:11.5px; transition:background .15s;">🔄 새로고침</button>
+                            </div>
+                            <pre id="ai-usage-today" style="margin:6px 0 0; padding:8px 10px; background:#f7f9fb; border:1px solid #e3e8ee; border-radius:6px; font-size:11px; color:#444; white-space:pre-wrap; line-height:1.5; font-family:inherit;"></pre>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
                             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:4px;">
                                 <input id="ai-cross-fallback-checkbox" type="checkbox" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">
@@ -430,6 +443,7 @@
         document.getElementById('ai-sap-maxlen-input').value = window.getAiSapMaxLen();
         document.getElementById('ai-cooldown-min-input').value = window.getAiProviderCooldownMin();
         document.getElementById('ai-cross-fallback-checkbox').checked = window.getAiCrossProviderFallbackEnabled();
+        window._aiUsageRenderSettings();
         document.getElementById('ai-summary-range-days-input').value = window.getAiSummaryRangeDays();
         document.getElementById('ai-summary-urgent-days-input').value = window.getAiUrgentDays();
         document.getElementById('ai-topic-learning-days-input').value = window.getTopicLearningDays();

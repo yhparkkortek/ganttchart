@@ -169,6 +169,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - "AI에게 판정까지 맡기는" 기능은 로컬 정규식으로 먼저 걸러 AI 호출 대상 자체를 줄일 것(번역: 한국어만 있는 블록은 호출 생략, 청크가 0개인 정상 케이스를 실패로 처리하지 말 것).
 - **지금 열려있지 않은 프로젝트를 Drive에 직접 PATCH하는 헤드리스 경로**를 새로 추가하면, 같은 PATCH 직전에 `_tpMaybeAutoRegen(fileId, rows, colIdx, projectMeta)`를 호출해 `saveData.topicProfile`에 얹을 것(별도 Drive 왕복 금지). `_generateTopicProfile`을 열려있지 않은 프로젝트에 쓸 땐 `rows/colIdx/projectMeta`를 반드시 명시(안 하면 지금 열린 엉뚱한 프로젝트를 읽음).
 
+- **AI 할당량 오류는 "retry in N초"만 보고 분당 한도로 판단하지 말 것** — Gemini 무료 `limit: 20`은 하루 한도였다(`_aiClassifyQuotaError`, 사용량 원장 `gantt_ai_usage_v1` → ⚙️ AI 분석 설정 "📊 오늘 AI 사용량"). 사용자 조작 없이 AI를 부르는 백그라운드 호출(묶기·재분석 등)을 새로 만들면 호출 빈도 상한을 반드시 둘 것(`docs/mail-pipeline.md` 정정 절).
+
 - **localStorage에 무한히 쌓이는 새 저장소를 만들면 `window.STORAGE_REGISTRY`(`js/34-storage-doctor.js`)에 정리 규칙 한 줄 추가** — 브라우저 저장소(~5MB)는 앱 전체가 공유해서, 한 곳이 가득 차면 업무 보관함 저장이 막힌다("저장 공간이 가득" 경고 + 🧹 버튼이 "정리할 항목 없음" 반복했던 사고, `docs/mail-pipeline.md` 저장소 닥터 절).
 
 ### `docs/gantt-internals.md` — 일정 계산/탭 복원/표 오버레이/AI 검색 일괄삭제
