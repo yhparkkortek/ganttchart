@@ -99,10 +99,12 @@ window.AI_PROVIDERS = {
                // 💡 [2026-08-20] gemini-2.5-flash-lite가 "신규 사용자"에게 차단되는 게 확인되어(기존 사용자만 유예)
                //    3.x 세대로 전면 교체. 무료 등급 RPM/일일 한도 숫자는 구버전 값을 그대로 옮긴 추정치이므로
                //    실제 한도가 다르면 aistudio.google.com에서 재확인 필요.
+               // 💡 [2026-09-22] gemini-2.5-pro도 같은 이유("no longer available to new users")로 차단됨 확인
+               //    (구글 에러 메시지가 직접 models/gemini-3.1-pro-preview로 교체하라고 안내) → 교체.
                models: [
-                   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', tier: 'free',         note: '🟢 무료 · 가장 빠름' },
-                   { id: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash',      tier: 'free_limited', note: '🟡 무료(제한) · 균형' },
-                   { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro',        tier: 'paid',         note: '🔴 유료 · 최고 품질' },
+                   { id: 'gemini-3.5-flash-lite',  label: 'Gemini 3.5 Flash Lite', tier: 'free',         note: '🟢 무료 · 가장 빠름' },
+                   { id: 'gemini-3.5-flash',       label: 'Gemini 3.5 Flash',      tier: 'free_limited', note: '🟡 무료(제한) · 균형' },
+                   { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro',        tier: 'paid',         note: '🔴 유료 · 최고 품질' },
                ]},
     groq:    { label: 'Groq (오픈모델 무료 호스팅)',    keyName: 'groq_api_key',    defaultModel: 'openai/gpt-oss-120b',
                placeholder: 'gsk_로 시작하는 Groq API 키', guideUrl: 'https://console.groq.com/keys',
@@ -147,7 +149,7 @@ window.getActiveAiKey = function() {
 //    getActiveAiModel()이 이 목록에 걸리면 저장값을 무시하고 현재 defaultModel로 자동 교체(+localStorage 갱신)해서,
 //    "예전에 한 번 저장해둔 사용자"가 계속 같은 오류를 겪는 걸 막는다.
 window._AI_DEPRECATED_MODEL_IDS = [
-    'gemini-2.5-flash-lite', 'gemini-2.5-flash',
+    'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro',
     'llama-3.3-70b-versatile', 'llama-4-maverick', 'deepseek-r1-distill-llama-70b'
 ];
 window.getActiveAiModel = function() {
