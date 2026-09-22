@@ -2742,6 +2742,23 @@ ${docsJson}`;
             return;
         }
 
+        // 🔔🎯 [2026-09-22 신규, 사용자 요청] "g210 핀셋 걸어줘"처럼 #G번호로 업무 하나를 콕 집어
+        //    알람을 켜거나 끄는 요청 — "어느 업무인지 찾기" 자체가 필요 없다(번호가 이미 정확한
+        //    globalData 인덱스). 그런데도 지금까지는 이런 요청조차 일반 AI 문답으로 새서, "업무
+        //    하나만 토글"하는 데 전체 프로젝트 업무 목록(최대 300건)을 프롬프트에 다 실어 보내고
+        //    있었다("g210 핀셋 걸어줘" 한 번에 quota가 바로 소진되던 실제 원인). #G번호가 명시된
+        //    경우만 좁게 매칭(애매하면 안 건드리고 기존 AI 경로 유지) — 업무명으로 지칭하는
+        //    "OOO 업무 알람 켜줘"류는 여전히 AI가 어느 업무인지 찾아야 하므로 대상 아님.
+        const alarmSingleGReply = window._ganttQaTryHandleAlarmSingleGCommand ? window._ganttQaTryHandleAlarmSingleGCommand(question) : null;
+        if (alarmSingleGReply) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: alarmSingleGReply });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 🔔🔁 [2026-09-22 신규, 사용자 요청] "핀셋/알람 모두 해제·켜기" — 조건 없는 순수 일괄
         //    토글은 AI 호출 없이 즉시 처리(위 필터 명령과 달리 실제 _알림 값을 바꿈). 대량
         //    프로젝트에서 이게 AI 문답으로 새면 전체 업무 목록(최대 300건)을 통째로 프롬프트에
@@ -4440,6 +4457,43 @@ ${docsJson}`;
         }
 
         return null;
+    };
+
+    // 🔔🎯 [2026-09-22 신규, 사용자 요청] "g210 핀셋 걸어줘"/"#G50 알람 꺼줘" — 사람이 이미 정확한
+    //    #G번호(globalData 인덱스)를 알려줬으므로 "어느 업무인지 찾기"는 AI가 필요 없는 순수
+    //    기계적 작업. 메시지 전체가 "#G번호 + 알람단어 + 켜기/끄기 동사(+흔한 꼬리말)"일 때만
+    //    매칭(전체일치 앵커) — "G210이랑 G211 업무 비교해줘"처럼 #G가 다른 목적으로 쓰인 문장은
+    //    걸러진다. 매칭 안 되면 null 반환 → 기존 AI 경로(업무명으로 지칭하는 경우 등) 그대로.
+    window._ganttQaTryHandleAlarmSingleGCommand = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        var _en = window._currentLang === 'en';
+        var _aw = '알람|알림|핀셋알람|핀셋알림|핀셋|마감알람|마감알림|alarm|reminder|notification';
+        var _offV = '꺼|끄|해제|취소|풀어|off';
+        var _onV = '켜|걸어|설정|on\\b';
+        var _tail = '\\s*(?:해\\s*줘|해\\s*주세요|주세요|줘|부탁\\S*)?\\s*[.!?~]*';
+        var re = new RegExp('^\\s*#?g\\s*(\\d+)\\s*번?\\s*(?:' + _aw + ')\\s*(' + _offV + '|' + _onV + ')\\S*' + _tail + '\\s*$', 'i');
+        var m = re.exec(text);
+        if (!m) return null;
+        var idx = parseInt(m[1], 10);
+        var isOff = new RegExp('^(?:' + _offV + ')', 'i').test(m[2]);
+        var gd = (typeof globalData !== 'undefined') ? globalData : null;
+        var row = gd && gd[idx];
+        if (!row || row._level === undefined) {
+            return _en ? `⚠️ Task #G${idx} was not found.` : `⚠️ #G${idx} 업무를 찾을 수 없습니다.`;
+        }
+        var res = isOff ? window._aiAssistClearAlarm(idx) : window._aiAssistSetAlarm(idx);
+        if (!res || !res.ok) {
+            return _en ? `⚠️ Failed to update the alarm for #G${idx}.` : `⚠️ #G${idx} 업무의 알람 처리에 실패했습니다.`;
+        }
+        if (isOff) {
+            return res.alreadyOff
+                ? (_en ? `📌 "${res.taskName}" (#G${idx}) already had its alarm off.` : `📌 "${res.taskName}" (#G${idx}) 업무는 이미 알람이 꺼져 있었습니다.`)
+                : (_en ? `✅ Cleared the alarm for "${res.taskName}" (#G${idx}).` : `✅ "${res.taskName}" (#G${idx}) 업무의 알람을 해제했습니다.`);
+        }
+        return res.alreadyOn
+            ? (_en ? `📌 "${res.taskName}" (#G${idx}) already had its alarm on.` : `📌 "${res.taskName}" (#G${idx}) 업무는 이미 알람이 켜져 있었습니다.`)
+            : (_en ? `✅ Set the alarm for "${res.taskName}" (#G${idx}).` : `✅ "${res.taskName}" (#G${idx}) 업무에 알람을 설정했습니다.`);
     };
 
     // 🔔🔁 [2026-09-22 신규, 사용자 요청] "핀셋/알람 모두 해제·켜기" — 위 필터 명령과 달리 실제
