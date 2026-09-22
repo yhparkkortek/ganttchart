@@ -1232,6 +1232,37 @@ ${docsJson}`;
         }
     };
 
+    // 📐 [2026-09-22 신규, 사용자 요청] _aiFetchSapContext가 돌려주는 원본 텍스트("[메타 헤더줄]\n\n
+    //    탭구분 그리드")를 AI를 거치지 않고 그대로 보여줄 답변 문자열로 만든다 — 아래 "엑셀로
+    //    내보내줘" 로컬 명령(_exportSapDataToExcel 주변)이 하는 "\n\n으로 헤더/본문 분리 → 본문을
+    //    \n으로 행 분리 → 각 행을 \t으로 셀 분리" 파싱과 완전히 동일한 규칙을 재사용(새 파싱 로직
+    //    없음). 헤더 행(첫 줄)만 window._SAP_FIELD_LABEL_MAP으로 한글 라벨 치환 — SAP GUI
+    //    Scripting이 실제 컬럼 제목을 못 읽어와 원시 필드 코드로 나올 때가 많아서(js/04h 위쪽
+    //    _SAP_FIELD_LABEL_MAP 선언부 주석 참고). 채팅 렌더러(_mdToHtml)가 탭 포함 줄은
+    //    white-space:pre-wrap으로 그대로 보존해서, 자재내역 패턴조회(runPatternLookup)와 같은
+    //    방식으로 표처럼 정렬돼 보인다 — 새 렌더링 로직 없음.
+    window._ganttQaFormatSapGridReply = function(sapText) {
+        if (!sapText) return window._t('(조회 결과가 없습니다.)', '(No data returned.)');
+        const bodyStart = sapText.indexOf('\n\n');
+        const metaText = bodyStart !== -1 ? sapText.slice(0, bodyStart).trim() : '';
+        const body = bodyStart !== -1 ? sapText.slice(bodyStart + 2) : sapText;
+        const lines = body.split('\n').filter(function(l) { return l.length > 0; });
+        if (!lines.length) return (metaText ? metaText + '\n' : '') + window._t('표시할 데이터가 없습니다.', 'No data to show.');
+        let footNote = '';
+        if (/^\.\.\.\s*\(/.test(lines[lines.length - 1])) footNote = lines.pop();
+        let bodyOut;
+        if (lines[0] && lines[0].indexOf('\t') !== -1) {
+            const headerCells = lines[0].split('\t').map(function(code) {
+                const key = (code || '').trim();
+                return (window._SAP_FIELD_LABEL_MAP && window._SAP_FIELD_LABEL_MAP[key]) || code;
+            });
+            bodyOut = [headerCells.join('\t')].concat(lines.slice(1)).join('\n');
+        } else {
+            bodyOut = lines.join('\n'); // 그리드가 아닌 필드 덤프(선택화면 등) — 그대로
+        }
+        return (metaText ? metaText + '\n\n' : '') + bodyOut + (footNote ? '\n' + footNote : '');
+    };
+
     // 💡 [2026-09-07 확장] 다른 프로젝트의 저장 파일(globalData/colIdx/projectMeta/tabData)을 가볍게
     //    요약 텍스트로 변환. 현재 프로젝트용 _buildGanttQaContext처럼 DOM(rendered table)에서 읽지
     //    않고 저장된 JSON 값만 사용한다(다른 프로젝트를 화면에 렌더링하지 않고 조회만 하기 위함) —
@@ -3228,6 +3259,11 @@ ${docsJson}`;
         //    남겨두고 question을 원래 질문으로 되돌려 아래 정상 흐름(로컬명령/AI 호출)이 그대로
         //    이어지게 한다("승인원 표지"처럼 완전히 새 fetch/응답 로직을 만들지 않고, 이미 있는
         //    BOM 자동조회+AI 응답 경로를 재사용하기 위함).
+        // 🐛 [2026-09-22 신규, 사용자 요청 "BOM 조회도 AI 없이 처리되게"] BOM 옵션이 이번 턴에
+        //    막 해결됐는지(=아래 두 분기 중 하나에서 window._ganttQaBomResolvedOptions가 채워졌는지)
+        //    표시해두는 플래그 — 엑셀 내보내기 로컬 명령(아래) 바로 다음, API 키가 필요한 일반
+        //    AI 흐름이 시작되기 전에 이 플래그를 보고 AI 호출 없이 바로 표로 보여준다.
+        let _bomLookupReady = false;
         if (window._ganttQaBomDraft) {
             const bd = window._ganttQaBomDraft;
             const replyText = question.trim();
@@ -3274,6 +3310,7 @@ ${docsJson}`;
                 sapDocQuestion = question;
                 _skipUserHistoryPush = true; // 원래 질문은 draft 시작 시점에 이미 한 번 히스토리에 들어갔음
                 window._ganttQaBomDraft = null;
+                _bomLookupReady = true;
                 // return하지 않고 아래로 계속 진행(정상 로컬명령/AI 흐름 재개)
             }
         } else {
@@ -3317,6 +3354,7 @@ ${docsJson}`;
                     showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
                     layout: inlineOpts.layout || '/STD_MC'
                 };
+                _bomLookupReady = true;
                 // question은 그대로 두고 아래 정상 흐름(로컬명령/AI 호출)으로 계속 진행 — return 없음
             }
         }
@@ -3634,6 +3672,39 @@ ${docsJson}`;
                 sapExportReply = '⚠️ ' + window._t('엑셀 내보내기에 실패했습니다: ', 'Failed to export to Excel: ') + (e && e.message ? e.message : e);
             }
             window._ganttQaHistory.push({ role: 'ai', text: sapExportReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 📐🚫🤖 [2026-09-22 신규, 사용자 요청 "BOM 조회도 AI 없이 처리되게"] BOM 옵션이 방금
+        //    막 해결됐으면(_bomLookupReady) — 다른 더 구체적인 로컬 명령(배치다운로드/단일열기/
+        //    문서목록/엑셀내보내기, 전부 위에서 먼저 체크됨 — 예: "BOM 열어서 엑셀로 내보내줘"는
+        //    위 엑셀내보내기 블록이 먼저 잡아서 여기 도달하지 않음)이 하나도 안 걸렸다는 뜻이므로,
+        //    AI에게 "자연어로 정리해달라"고 맡기지 않고 SAP가 준 원본 표를 그대로 보여준다 —
+        //    "문서 데이터" 목록 조회(위 sapListReply)와 완전히 같은 패턴(원본 body를 그대로
+        //    답변에 싣기), 다만 헤더 행만 window._SAP_FIELD_LABEL_MAP으로 한글 치환해서 더
+        //    읽기 좋게 만든다. BOM은 부모-자식 계층 구조를 "이해"할 필요가 없는 단순 표 데이터라,
+        //    AI가 굳이 문장으로 재작성할 필요가 없었다(오히려 프롬프트 크기·quota만 소모).
+        if (_bomLookupReady) {
+            // 💡 draft로 되물어 답을 받은 경우(_skipUserHistoryPush=true)엔 그 답변이 이미 히스토리에
+            //    들어가 있음(이때 question은 원래 질문으로 되돌려진 상태라 여기서 또 넣으면 중복됨).
+            //    한 메시지에 옵션까지 다 왔던 경우(inline)엔 아직 안 들어가 있으므로 여기서 넣는다.
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 BOM을 조회하는 중...', 'Looking up the BOM in SAP...'), pending: true });
+            window._renderGanttQaMessages();
+            let bomReply;
+            try {
+                const sapText = await window._aiFetchSapContext(question);
+                const fetchFailed = !sapText || /^\(/.test(sapText);
+                bomReply = fetchFailed
+                    ? '⚠️ ' + (sapText || window._t('SAP 조회 실패', 'SAP lookup failed'))
+                    : window._ganttQaFormatSapGridReply(sapText);
+            } catch (e) {
+                bomReply = '⚠️ ' + window._t('BOM 조회 실패: ', 'BOM lookup failed: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: bomReply });
             window._renderGanttQaMessages();
             input.focus();
             return;
