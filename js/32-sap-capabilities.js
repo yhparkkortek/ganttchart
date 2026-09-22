@@ -14,6 +14,15 @@
 (function () {
     'use strict';
 
+    // 📄 [2026-09-22 신규] 문서 별칭 사전(데이터) — 사람이 "문서 타입 코드" 대신 부르는 이름.
+    //    "119531 승인원 조회해서 저장해줘"가 "문서/파일" 단어·P01 코드가 없어서 SAP 로컬 명령에 안 걸리고
+    //    AI로 새던 문제(할당량만 소모). js/04h의 문서 열기/목록/배치/모호성 판정이 전부 이 목록을 읽는다
+    //    — 새 별칭(예: "성적서"→Q11)이 확인되면 코드가 아니라 여기에 한 줄 추가.
+    //    docType: 이 별칭이 가리키는 SAP 문서 타입(승인원=P01, docs/sap-lookup.md 패턴 다운로드 절에서 확인).
+    window.SAP_DOC_ALIASES = window.SAP_DOC_ALIASES || [
+        { word: '승인원', docType: 'P01' }
+    ];
+
     window.SAP_CAPABILITIES = [
         { id: 'bom', title: 'BOM 전개', titleEn: 'BOM explosion', tcode: 'ZPP033 / ZPP038', mode: 'read', verified: 'live',
           kw: ['bom', '구성품', '부품구성', '전개', 'explosion'], needs: '자재번호', ex: '502572 BOM 보여줘' },

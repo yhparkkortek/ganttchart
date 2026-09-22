@@ -4908,9 +4908,18 @@ ${docsJson}`;
     //    받아들이고, 1자리면 앞에 0을 채워 표준형(P1→P01)으로 맞춘다. 문서 타입 판정이 필요한
     //    모든 곳(단일 열기/배치 다운로드)이 이 함수 하나를 공유 — 정규식을 각자 따로 두면 나중에
     //    한쪽만 고치고 다른 쪽을 빠뜨리는 실수가 재발하기 쉬움.
+    // 📄 [2026-09-22] "문서/파일" 대신 문서 별칭(승인원 등, js/32 SAP_DOC_ALIASES 데이터)으로 말해도 문서 요청으로 인정
+    window._sapDocAliasHit = function(text) {
+        var list = window.SAP_DOC_ALIASES || [];
+        for (var i = 0; i < list.length; i++) { if (list[i] && list[i].word && text.indexOf(list[i].word) !== -1) return list[i]; }
+        return null;
+    };
+    window._sapMentionsDoc = function(text) {
+        return /(문서|파일)/.test(text || '') || !!window._sapDocAliasHit(text || '');
+    };
     window._ganttQaExtractSapDocTypeCode = function(text) {
         var m = (text || '').match(/\b([A-Za-z])([0-9]{1,2})\b/);
-        if (!m) return null;
+        if (!m) { var al = window._sapDocAliasHit(text || ''); return al ? al.docType : null; }
         var digits = m[2].length === 1 ? ('0' + m[2]) : m[2];
         return (m[1] + digits).toUpperCase();
     };
@@ -4930,8 +4939,10 @@ ${docsJson}`;
         if (!/sap/i.test(text) && !hasMatNum) return null;
         // 💡 [2026-09-15] "문서"뿐 아니라 "파일"이라고만 말하는 경우도 실사용에서 확인됨
         //    (예: "SAP에서 106188 품번 정보 및 파일 열어줘") — 둘 다 트리거하도록 확장.
-        if (!/(문서|파일)/.test(text)) return null;
-        if (!/(열어|열기|다운로드|출력|보여|open)/i.test(text)) return null;
+        if (!window._sapMentionsDoc(text)) return null;
+        // 💡 [2026-09-22] "승인원 조회해서 저장해줘"처럼 "저장/받아"도 인정 — 단일 자재 저장은 open_document(다운로드+열기)가 유일한 경로
+        if (!/(열어|열기|다운로드|출력|보여|저장|받아|open)/i.test(text)) return null;
+        if (/(목록|리스트|list)/i.test(text)) return null; // "승인원 목록 보여줘"는 문서 목록(list-docs) 쪽
         // 💡 "문서 열기 가능해?"류 여부-질문까지 실행으로 오인하지 않도록(엑셀 내보내기 명령과 동일한
         //    가드 패턴 — 위 looksLikeQuestion 참고).
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
@@ -4959,11 +4970,12 @@ ${docsJson}`;
         //    확인하므로(없으면 null) 이중 체크지만, 게이트를 명확히 하기 위해 유지.
         var hasMatNum = /\b\d{5,8}\b/.test(text);
         if (!/sap/i.test(text) && !hasMatNum) return null;
-        if (!/(문서|파일)/.test(text)) return null;
+        if (!window._sapMentionsDoc(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
         if (looksLikeQuestion) return null;
         // 문서 타입 코드(P01/P1 등)가 이미 명시돼 있으면 이 함수의 대상이 아님(open 쪽에서 처리).
-        if (window._ganttQaExtractSapDocTypeCode(text)) return null;
+        // (별칭 "승인원"만 있고 "목록"을 달라는 경우는 여기서 처리 — 코드(P01 등)가 명시된 경우만 open 쪽으로)
+        if (/\b[A-Za-z][0-9]{1,2}\b/.test(text)) return null;
         var matM = text.match(/\b(\d{5,8})\b/);
         if (!matM) return null;
         return matM[1];
@@ -5043,7 +5055,7 @@ ${docsJson}`;
         var hasMatNums2 = (text.match(/\b\d{5,8}\b/g) || []).length >= 2;
         if (!/sap/i.test(text) && !hasMatNums2) return null;
         if (!/(열어|열기|다운로드|출력|보여|저장|open)/i.test(text)) return null;
-        if (!/(문서|파일)/.test(text)) return null;
+        if (!window._sapMentionsDoc(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
         if (looksLikeQuestion) return null;
         var materials = text.match(/\b\d{5,8}\b/g) || [];
@@ -5090,7 +5102,7 @@ ${docsJson}`;
     window._ganttQaExtractSapDocAmbiguous = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
-        if (!/(문서|파일)/.test(text)) return null;
+        if (!window._sapMentionsDoc(text)) return null;
         if (!/출력/.test(text)) return null;
         if (/(열어|열기|보여|다운로드|저장|open)/i.test(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);

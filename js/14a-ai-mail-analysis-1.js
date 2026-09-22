@@ -198,7 +198,14 @@ window._aiExtractRetrySeconds = function(errMessage) {
     const sec = Math.ceil(parseFloat(m[1]));
     return (sec > 0 && sec <= 180) ? sec : null;
 };
-window._aiBuildQuotaHint = function(errMessage, quotaKind) {
+window._aiBuildQuotaHint = function(errMessage, quotaKind, providerKey) {
+    // 💡 [2026-09-22] Groq/Mistral의 429에 구글 전용 안내("구글 클라우드 프로젝트", "aistudio")가 붙던 문제 — 제공사별 안내
+    if (providerKey && providerKey !== 'gemini') {
+        const label = ((window.AI_PROVIDERS[providerKey] || {}).label || providerKey).split(' (')[0];
+        return window._t(
+            '\n\n💡 ' + label + '의 요청 속도/사용량 제한(429)입니다. 무료 등급은 초당·분당 요청 수와 토큰 수 제한이 낮아(Mistral 무료는 대략 초당 1회 수준) 큰 요청이나 연속 요청에서 자주 걸립니다. 보통 잠시 후 다시 시도하면 됩니다.\n→ ① 1분쯤 뒤 재시도 ② 다른 제공사(Gemini/Groq) 키도 저장해 두면 자동으로 넘어갑니다 ③ ⚙️ AI 분석 설정 → 🧪 제공사 연결 테스트로 상태 확인',
+            '\n\n💡 ' + label + ' rate/usage limit (429). Free tiers have low per-second/per-minute request and token limits, so large or back-to-back requests hit them often. Usually retrying shortly works.\n→ ① retry in about a minute ② save a key for another provider (Gemini/Groq) for automatic fallback ③ ⚙️ AI Settings → 🧪 Test providers');
+    }
     // 💡 [2026-09-22] 일일 한도로 판정된 경우(_aiClassifyQuotaError) — "30초 뒤 재시도" 안내가 틀린 경우였다.
     if (quotaKind === 'day') {
         const resetAt = window._aiNextPacificMidnight();
@@ -429,7 +436,10 @@ window._aiMarkProviderCooldown = function(providerKey, err) {
     }
     // 일부 모델만 일일 소진이면 그 모델은 _aiModelExhausted가 따로 건너뛰므로, 제공사 쿨다운은 기존처럼 짧게
     const shortSec = window._aiExtractRetrySeconds(err && err.message);
-    const ms = (shortSec != null) ? (shortSec + 5) * 1000 : minutes * 60 * 1000;
+    // 💡 [2026-09-22] Groq/Mistral의 429는 대개 초당·분당 제한(대기시간 표기 없음) — 20분씩 막으면 활성 제공사로 쓸 때 사실상 먹통
+    const ms = (shortSec != null) ? (shortSec + 5) * 1000
+        : (providerKey !== 'gemini' && !(err && err._quotaKind === 'day')) ? Math.min(60, minutes * 60) * 1000
+        : minutes * 60 * 1000;
     window._aiProviderCooldownUntil[providerKey] = Date.now() + ms;
     try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }
 };
@@ -679,7 +689,7 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
     }
     attempts.push({ provider, error: primaryResult.error });
 
-    let lastErr = primaryResult.error;
+    let lastErr = primaryResult.error, lastErrProvider = provider;
     // 활성 제공사의 후보를 전부 시도했는데 전부 막힌 경우에만(키 오류 등 다른 이유면 다른 제공사도
     // 소용없으므로 시도 안 함) 저장된 키가 있는 다른 무료 제공사로 순서대로 넘어가본다 — 단, 이
     // 폴백 자체를 설정에서 껐으면(진단 목적 등) 시도하지 않고 바로 실패 처리.
@@ -708,18 +718,28 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
             }
             if (fbResult.allCandidatesFailed) window._aiMarkProviderCooldown(fbProvider, fbResult.error);
             attempts.push({ provider: fbProvider, error: fbResult.error });
-            if (fbResult.error) lastErr = fbResult.error; // 마지막으로 실패한 제공사의 에러를 최종 메시지로
+            if (fbResult.error) { lastErr = fbResult.error; lastErrProvider = fbProvider; } // 마지막으로 실패한 제공사의 에러를 최종 메시지로
         }
     }
     // 활성 제공사 + (저장된 키가 있는) 모든 무료 폴백 제공사까지 다 막힘 — 마지막 에러가 할당량
     // 초과/요청 크기 초과/내부 일시오류라면 원인·대응법을 메시지에 덧붙여준다.
     if (lastErr && (window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '') || lastErr._quotaKind === 'day')) {
-        const quotaHint = window._aiBuildQuotaHint(lastErr.message, lastErr._quotaKind);
+        const quotaHint = window._aiBuildQuotaHint(lastErr.message, lastErr._quotaKind, lastErrProvider);
         if (lastErr.message.indexOf(quotaHint) === -1) lastErr = new Error(lastErr.message + quotaHint);
     } else if (lastErr && window._AI_REQUEST_TOO_LARGE_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_REQUEST_TOO_LARGE_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_REQUEST_TOO_LARGE_HINT);
     } else if (lastErr && window._AI_INTERNAL_ERROR_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_INTERNAL_ERROR_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_INTERNAL_ERROR_HINT);
+    }
+    // 💡 [2026-09-22] 다른 제공사로 아예 안 넘어간 경우 그 이유를 한 줄로 — "키를 다 등록했는데 왜 한 곳만 시도했지?" 방지
+    if (attempts.length === 1 && lastErr && primaryResult.allCandidatesFailed) {
+        const others = window._AI_FREE_FALLBACK_PROVIDER_ORDER.filter(function(p) { return p !== provider; });
+        const withKey = others.filter(function(p) { const c = window.AI_PROVIDERS[p]; return c && localStorage.getItem(c.keyName); });
+        const why = !window.getAiCrossProviderFallbackEnabled()
+            ? window._t('교차 폴백이 꺼져 있음(⚙️ AI 분석 설정 → 🔀 다른 제공사로 자동 전환)', 'cross-provider fallback is off')
+            : !withKey.length ? window._t('다른 제공사(' + others.join('/') + ') 키가 이 브라우저에 저장돼 있지 않음', 'no key saved for other providers (' + others.join('/') + ')')
+            : '';
+        if (why) lastErr = new Error(lastErr.message + '\n\n🔀 ' + window._t('다른 제공사로 자동 전환 안 됨: ', 'No automatic switch: ') + why);
     }
     // 폴백까지 시도했는데도(제공사 2곳 이상) 다 실패했으면, 제공사별 결과를 요약해 덧붙인다 —
     // 단일 제공사만 시도된 일반적인 실패는 기존처럼 그 에러 하나만 보여줘 화면이 불필요하게 안 길어짐.
