@@ -184,6 +184,22 @@ window._AI_MODEL_DEPRECATED_RE = /does not exist|no longer available|decommissio
 //    에러 메시지에 덧붙여 사용자가 "왜 새 키를 받아도 안 되는지" 바로 알 수 있게 한다.
 window._AI_QUOTA_EXCEEDED_RE = /quota exceeded|exceeded your current quota|rate.?limit|429|resource_exhausted/i;
 window._AI_QUOTA_HINT = '\n\n💡 무료 등급의 요청 한도(quota)는 API 키 문자열이 아니라 그 키가 속한 구글 클라우드 "프로젝트" 단위로 관리됩니다. 같은 구글 계정으로 키를 새로 발급해도 보통 기존 프로젝트를 그대로 재사용해서 한도가 초기화되지 않습니다.\n→ ① 몇 시간 뒤(태평양시간 자정 리셋) 다시 시도 ② aistudio.google.com에서 키 발급 시 "새 프로젝트"를 선택 ③ ⚙️ 설정에서 AI 제공사를 Groq/Mistral로 임시 전환 ④ 유료 결제 등급으로 전환';
+// 🐛 [2026-09-22] "Quota exceeded... Please retry in 50.8s" 처럼 구글이 응답에 재시도 대기시간을
+//    직접 알려줄 때가 있는데, 이건 "하루치 한도가 다 소진돼 몇 시간 기다려야 하는" RPD(일일) 한도가
+//    아니라 "분당 요청수(RPM)" 한도라 아주 짧게(대개 1분 이내) 기다리면 바로 풀린다. 그런데도 위
+//    _AI_QUOTA_HINT는 항상 "몇 시간 뒤(태평양시간 자정 리셋)"이라고만 안내해서, 실제로는 1분도 안
+//    걸려 풀릴 상황을 사용자가 "오늘 하루 종일 막혔다"로 오해하게 만들고 있었다(실사용 제보로 확인).
+//    응답에 재시도 대기시간이 짧게(3분 이내) 찍혀 있으면 그 초 단위 그대로 안내하도록 분기한다.
+window._aiBuildQuotaHint = function(errMessage) {
+    const m = /retry in\s*([\d.]+)\s*s/i.exec(errMessage || '');
+    if (m) {
+        const sec = Math.ceil(parseFloat(m[1]));
+        if (sec > 0 && sec <= 180) {
+            return '\n\n💡 이건 "오늘 하루치 한도 소진"이 아니라 분당 요청 수(RPM) 제한입니다 — 짧은 시간에 요청이 몰려서 잠깐 걸린 것뿐이라 약 ' + sec + '초 후 재시도하면 바로 다시 됩니다.\n→ 계속 이 메시지만 반복된다면 ① 짧은 간격으로 여러 번 재시도하지 말고 위 대기시간만큼만 기다렸다 한 번만 시도 ② 메일 자동분석/자동수집이 백그라운드에서 같이 돌고 있지 않은지 확인 ③ 그래도 반복되면 유료 결제 등급으로 전환';
+        }
+    }
+    return window._AI_QUOTA_HINT;
+};
 // 🐛 [2026-09-07] "Request too large ... tokens per minute (TPM): Limit 8000, Requested 65649"
 //    — Groq 무료 등급처럼 "요청 1건의 크기(토큰 수)" 자체에 낮은 상한이 걸린 제공사에서는, 업무가
 //    많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을 넘어 매번
@@ -213,7 +229,10 @@ window._AI_INTERNAL_ERROR_HINT = '\n\n💡 이 메시지는 구글 Gemini API �
 //    callAiBackend가 모든 AI 기능(메일분석/AI문답/AI요약 등)의 공용 진입점이라 여기 한 곳에만
 //    넣으면 앱 전체에 적용된다. Promise 체인으로 직렬화해서 "동시에 여러 호출이 몰려도" 실제
 //    네트워크 호출 시작 시각 사이에 최소 간격을 보장하며 순서대로(먼저 온 순) 내보낸다.
-window._AI_MIN_CALL_GAP_MS = 2500;
+// 🐛 [2026-09-22] 실사용 로그에서 "limit: 20"(gemini-3.5-flash 분당 요청수, RPM) 초과가 확인됨 —
+//    20 RPM은 평균 3000ms 간격이 한계인데 기존 2500ms 간격은 여유가 전혀 없어(최대 24회/분) 쉽게
+//    넘었다. 후보 모델 재시도·메일 자동분석 등 여러 호출이 겹칠 때를 감안해 여유를 두고 3500ms로 상향.
+window._AI_MIN_CALL_GAP_MS = 3500;
 window._aiCallQueueTail = window._aiCallQueueTail || Promise.resolve();
 window._aiThrottleGate = function() {
     const p = window._aiCallQueueTail.then(function() {
@@ -411,8 +430,9 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
     }
     // 활성 제공사 + (저장된 키가 있는) 모든 무료 폴백 제공사까지 다 막힘 — 마지막 에러가 할당량
     // 초과/요청 크기 초과/내부 일시오류라면 원인·대응법을 메시지에 덧붙여준다.
-    if (lastErr && window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_QUOTA_HINT) === -1) {
-        lastErr = new Error(lastErr.message + window._AI_QUOTA_HINT);
+    if (lastErr && window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '')) {
+        const quotaHint = window._aiBuildQuotaHint(lastErr.message);
+        if (lastErr.message.indexOf(quotaHint) === -1) lastErr = new Error(lastErr.message + quotaHint);
     } else if (lastErr && window._AI_REQUEST_TOO_LARGE_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_REQUEST_TOO_LARGE_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_REQUEST_TOO_LARGE_HINT);
     } else if (lastErr && window._AI_INTERNAL_ERROR_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_INTERNAL_ERROR_HINT) === -1) {
