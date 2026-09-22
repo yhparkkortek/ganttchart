@@ -303,12 +303,22 @@ window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral'];
 //    폴백 기능이 오늘 새로 추가되면서 생긴 회귀). 한 제공사가 "완전히 막힘"(할당량 등,
 //    allCandidatesFailed)으로 확인되면 짧은 쿨다운 동안은 그 제공사를 아예 건드리지 않고
 //    건너뛴다 — 쿨다운이 지나면 자연히 다시 한 번 시도해서 할당량 리셋을 스스로 감지한다.
-window._AI_PROVIDER_COOLDOWN_MS = 20 * 60 * 1000; // 20분 — 짧은 RPM성 실패까지 너무 오래 건너뛰지 않으면서 낭비 호출은 크게 줄임
+// 💡 [2026-09-22 신규, 사용자 요청 "쿨다운도 설정 가능하게"] 20분은 그동안 하드코딩 고정값이었다 —
+//    다른 크기 설정들(AI 글자 수, SAP 조회 결과 최대 글자 수 등)과 같은 패턴으로 localStorage
+//    기반 설정값으로 뺀다(⚙️ AI 도구 설정 → 📉 AI 요청 크기 제한).
+window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT = 20;
+window.getAiProviderCooldownMin = function() {
+    const v = parseInt(localStorage.getItem('gantt_ai_provider_cooldown_min'), 10);
+    return (v && v >= 1) ? v : window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;
+};
+window.setAiProviderCooldownMin = function(v) {
+    localStorage.setItem('gantt_ai_provider_cooldown_min', String(v));
+};
 window._aiProviderCooldownUntil = (function() {
     try { return JSON.parse(localStorage.getItem('ai_provider_cooldown_v1') || '{}'); } catch (e) { return {}; }
 })();
 window._aiMarkProviderCooldown = function(providerKey) {
-    window._aiProviderCooldownUntil[providerKey] = Date.now() + window._AI_PROVIDER_COOLDOWN_MS;
+    window._aiProviderCooldownUntil[providerKey] = Date.now() + window.getAiProviderCooldownMin() * 60 * 1000;
     try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }
 };
 window._aiClearProviderCooldown = function(providerKey) {

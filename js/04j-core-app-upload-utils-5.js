@@ -1302,6 +1302,8 @@
                 ko: '권장값: 6,000자 (기본값) — Groq처럼 크기 제한이 낮은 제공사라면 2,000~3,000자대로 줄이는 걸 권장합니다.',
                 en: 'Recommended: 6,000 (default) — for providers with lower size limits (e.g. Groq), consider lowering to 2,000~3,000.'
             },
+            'ai-cooldown-min-label': { ko: '⏳ 제공사 할당량 소진 시 재시도 대기(쿨다운)', en: '⏳ Cooldown before retrying an exhausted provider' },
+            'ai-cooldown-min-hint': { ko: '권장값: 20분 (기본값)', en: 'Recommended: 20 min (default)' },
         };
         Object.entries(_reqsizeTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
@@ -1320,12 +1322,16 @@
                 ko: 'AI 문답이 "SAP" 언급 시 조회해온 화면 데이터(BOM/ZMM009/사용처 등)를 프롬프트에 담을 때 최대 몇 자까지 포함할지 정합니다. BOM 전개나 다중 자재 조회처럼 결과가 크면 이 값이 커서 Groq 등 무료 등급의 요청 크기 한도를 넘기기 쉬우니, "Request too large"류 오류가 자주 나면 줄여보세요.',
                 en: 'Sets the max characters of SAP screen data (BOM/ZMM009/where-used, etc.) included in the AI Q&A prompt when "SAP" is mentioned. Large results (e.g. BOM explosions, multi-material lookups) can exceed free-tier request size limits (e.g. Groq) — lower this if you see frequent "request too large" errors.'
             },
+            'ai-cooldown-min-desc': {
+                ko: '한 제공사(Gemini/Groq/Mistral)의 무료 후보 모델을 전부 시도했는데 할당량 등으로 다 막히면, 이 시간 동안은 그 제공사를 건너뛰고 바로 다음 제공사로 넘어갑니다(0번 낭비 호출). 시간이 지나면 자동으로 다시 한 번 시도해서 할당량이 풀렸는지 확인합니다 — 너무 짧으면 낭비 호출이 늘고, 너무 길면 할당량이 풀린 걸 늦게 알아챕니다.',
+                en: "If a provider's (Gemini/Groq/Mistral) free candidate models all fail (e.g. quota exhausted), that provider is skipped entirely for this duration (zero wasted calls), moving straight to the next provider. After it elapses, the provider is retried automatically to detect if the quota has reset — too short wastes calls, too long delays noticing a reset."
+            },
         };
         Object.entries(_reqsizeDescs).forEach(([id, t]) => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
-        const _reqsizeResetBtns = ['ai-qa-max-tasks-reset-btn', 'ai-qa-max-other-tasks-reset-btn', 'ai-sap-maxlen-reset-btn'];
+        const _reqsizeResetBtns = ['ai-qa-max-tasks-reset-btn', 'ai-qa-max-other-tasks-reset-btn', 'ai-sap-maxlen-reset-btn', 'ai-cooldown-min-reset-btn'];
         _reqsizeResetBtns.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? '🔄 Reset' : '🔄 기본값';

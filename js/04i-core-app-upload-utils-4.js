@@ -313,6 +313,14 @@
                                 <button id="ai-sap-maxlen-reset-btn" onclick="document.getElementById('ai-sap-maxlen-input').value=window._AI_SAP_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
                             <div id="ai-sap-maxlen-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 6,000자 (기본값) — Groq처럼 크기 제한이 낮은 제공사라면 2,000~3,000자대로 줄이는 걸 권장합니다.</div>
+                            <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+                            <label id="ai-cooldown-min-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">⏳ 제공사 할당량 소진 시 재시도 대기(쿨다운)</label>
+                            <div id="ai-cooldown-min-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">한 제공사(Gemini/Groq/Mistral)의 무료 후보 모델을 전부 시도했는데 할당량 등으로 다 막히면, 이 시간 동안은 그 제공사를 건너뛰고 바로 다음 제공사로 넘어갑니다(0번 낭비 호출). 시간이 지나면 자동으로 다시 한 번 시도해서 할당량이 풀렸는지 확인합니다 — 너무 짧으면 낭비 호출이 늘고, 너무 길면 할당량이 풀린 걸 늦게 알아챕니다.</div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-cooldown-min-input" type="number" min="1" max="180" step="5" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button id="ai-cooldown-min-reset-btn" onclick="document.getElementById('ai-cooldown-min-input').value=window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
+                            <div id="ai-cooldown-min-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 20분 (기본값)</div>
                         </div>
                     </div>
 
@@ -408,6 +416,7 @@
         document.getElementById('ai-qa-max-tasks-input').value = window.getAiQaMaxTasks();
         document.getElementById('ai-qa-max-other-tasks-input').value = window.getAiQaMaxOtherTasks();
         document.getElementById('ai-sap-maxlen-input').value = window.getAiSapMaxLen();
+        document.getElementById('ai-cooldown-min-input').value = window.getAiProviderCooldownMin();
         document.getElementById('ai-summary-range-days-input').value = window.getAiSummaryRangeDays();
         document.getElementById('ai-summary-urgent-days-input').value = window.getAiUrgentDays();
         document.getElementById('ai-topic-learning-days-input').value = window.getTopicLearningDays();
@@ -460,6 +469,13 @@
         if (sml > 30000) sml = 30000;
         sapMaxLenInput.value = sml;
         window.setAiSapMaxLen(sml);
+
+        const cooldownMinInput = document.getElementById('ai-cooldown-min-input');
+        let cdm = parseInt(cooldownMinInput.value, 10);
+        if (!cdm || cdm < 1) cdm = 1;
+        if (cdm > 180) cdm = 180;
+        cooldownMinInput.value = cdm;
+        window.setAiProviderCooldownMin(cdm);
 
         const rangeInput = document.getElementById('ai-summary-range-days-input');
         let rd = parseInt(rangeInput.value, 10);
