@@ -207,7 +207,13 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
 
     const activeModel = window.getActiveAiModel();
     // 시도 순서: 현재 활성 모델 → 나머지 후보 모델(같은 provider, 중복 제거)
-    const candidates = [activeModel].concat((cfg.models || []).map(m => m.id).filter(id => id !== activeModel));
+    // 💡 [2026-09-22 신규, 사용자 요청] 자동전환 후보에서 유료(tier:'paid') 모델은 제외한다 —
+    //    무료 등급 키로는 유료 모델 호출 자체가 안 돼서(실사용 확인: gemini-3.1-pro가 무료 등급
+    //    한도 "limit: 0"으로 거부됨) 자동전환 후보에 넣어봐야 매번 또 한 번 헛되이 실패만
+    //    반복하고 다음 후보로 넘어갈 뿐 — 사람이 설정 화면에서 유료 모델을 직접 골랐을 때(그
+    //    경우 activeModel 자체가 유료 모델)는 그 최초 시도만은 그대로 존중하고, "실패 시 자동으로
+    //    넘어가는 나머지 후보" 목록에서만 유료를 뺀다.
+    const candidates = [activeModel].concat((cfg.models || []).filter(m => m.tier !== 'paid').map(m => m.id).filter(id => id !== activeModel));
 
     const maxRetryPerModel = opts.maxRetryPerModel || 2;
     const retryDelayMs = opts.retryDelayMs != null ? opts.retryDelayMs : 3000;
