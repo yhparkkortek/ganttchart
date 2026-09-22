@@ -319,6 +319,31 @@
         )});
     };
 
+    // 💰 [2026-09-22 신규, 사용자 요청] "팀운영비/팀비/복리후생비 확인해줘" — 어느 팀인지 특정
+    //    안 됐을 때 AI에게 되묻지 않고 드롭다운으로 고르게 한다(정해진 목록 중 고르는 질문 =
+    //    드롭다운, docs/ai-qa.md). 답변 합성은 "사람이 타이핑했을 법한 문자열"을 그대로
+    //    입력창에 채워 sendGanttQaMessage()를 재호출하는 기존 패턴(_ganttQaShowBomTcodeDropdown
+    //    등과 동일) — 새 파싱 로직을 따로 만들지 않는다.
+    //    ⚠️ 팀 목록은 2026-09-22 실사용 스크린샷(ZCO021 코스트 센터 트리)으로 확인된 4개를
+    //    하드코딩했다 — 이 목록을 관리하는 별도 원장이 아직 없어서다(나중에 팀이 추가되면
+    //    이 배열만 갱신하면 됨). 목록에 없는 팀이어도 백엔드는 팀 이름을 그대로 받아 SAP
+    //    코스트센터 트리에서 동적으로 찾으므로, 드롭다운 없이 "개발4팀 팀운영비 확인해줘"처럼
+    //    직접 타이핑하면 목록 갱신 없이도 동작한다.
+    window._TEAM_BUDGET_TEAMS = ['개발1팀', '개발2팀', '개발3팀', '시제품팀'];
+    window._ganttQaShowTeamBudgetDropdown = function() {
+        const _en = window._currentLang === 'en';
+        const id = 'team-budget-' + Date.now();
+        window._ganttQaPendingChoiceDropdown = {
+            id: id, multi: false,
+            options: window._TEAM_BUDGET_TEAMS.map(function(t) { return { value: t, label: t }; }),
+            buildAnswerText: function(sel) { return sel[0] ? (sel[0] + ' 팀운영비 확인해줘') : ''; }
+        };
+        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
+            '💰 어느 팀의 팀운영비를 조회할까요?',
+            '💰 Which team\'s budget would you like to look up?'
+        )});
+    };
+
     // 🛒 [2026-09-15 신규] "구매오더 요청" — AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면
     //    항목을 추출해 "연구소 구매오더,기타출고 제안 BDC Upload양식"(사용자 제공
     //    Z38MMR060.xls) 엑셀을 만들고, ZMMR060에 업로드→F8→협력사/세금코드/단가 입력까지
@@ -3780,6 +3805,58 @@ ${docsJson}`;
             }
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: sapLookupReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 💰🚫🤖 [2026-09-22 신규, 사용자 요청] "팀운영비/팀비/복리후생비" 확인 — SAP ZCO021
+        //    ("코텍 예실레포트")에서 팀별 "550203 복리후생비-팀운영비" 행을 그대로 읽어온다.
+        //    위 BOM/사용처/ZMM009 블록과 달리 자재번호가 아니라 팀 이름으로 트리거되므로
+        //    별도 정규식을 쓴다. 팀을 특정 못 하면(예: "팀운영비 확인해줘"만) AI에게 맡기지
+        //    않고 드롭다운으로 되묻는다(window._ganttQaShowTeamBudgetDropdown, 위 320번째 줄
+        //    근처). ⚠️ sap_bridge_32.py의 fetch_team_budget()은 사용자가 준 SAP GUI "기록 및
+        //    재생" 매크로 + 스크린샷 기반으로 구현했지만 실환경 미검증(unverified) — 실패
+        //    사유를 그대로 보여주므로(방어 설계) 실패하면 그 메시지로 원인을 좁힐 수 있다.
+        const _teamBudgetRe = /(팀\s*운영비|팀비|복리후생비)/;
+        if (_teamBudgetRe.test(question)) {
+            let _teamBudgetTeam = '';
+            const _teamNumMatch = question.match(/개발\s*([1-9])\s*팀/);
+            if (_teamNumMatch) {
+                _teamBudgetTeam = '개발' + _teamNumMatch[1] + '팀';
+            } else if (/시제품/.test(question)) {
+                _teamBudgetTeam = '시제품팀';
+            } else {
+                const _foundTeam = (window._TEAM_BUDGET_TEAMS || []).find(function(t) { return question.indexOf(t) !== -1; });
+                if (_foundTeam) _teamBudgetTeam = _foundTeam;
+            }
+
+            if (!_teamBudgetTeam) {
+                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+                window._ganttQaShowTeamBudgetDropdown();
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 "${_teamBudgetTeam}" 팀운영비를 조회하는 중...`, `Looking up team budget for "${_teamBudgetTeam}" in SAP...`), pending: true });
+            window._renderGanttQaMessages();
+            let teamBudgetReply;
+            try {
+                const res = await fetch('http://127.0.0.1:5000/sap-team-budget?team=' + encodeURIComponent(_teamBudgetTeam));
+                const data = await res.json();
+                if (data.ok) {
+                    const lines = Object.keys(data.values || {}).map(function(k) { return `${k}: ${data.values[k]}`; });
+                    teamBudgetReply = `💰 **${data.team}** — ${data.account}\n` + lines.join('\n');
+                } else {
+                    teamBudgetReply = '⚠️ ' + (data.error || window._t('팀운영비 조회 실패', 'Team budget lookup failed'));
+                }
+            } catch (e) {
+                teamBudgetReply = '⚠️ ' + window._t('팀운영비 조회 실패: ', 'Team budget lookup failed: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: teamBudgetReply });
             window._renderGanttQaMessages();
             input.focus();
             return;

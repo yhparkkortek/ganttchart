@@ -1909,6 +1909,147 @@ def download_documents_by_pattern(pattern, doc_type='P01'):
     }
 
 
+# ── "팀 운영비" 조회 (ZCO021, "코텍 예실레포트") 전용 헬퍼 (2026-09-22 신규) ──────
+# 사용자가 직접 준 SAP GUI "기록 및 재생" 매크로(팀분영비.vbs)와 스크린샷 2장을 기반으로
+# 구현. ⚠️⚠️ **실환경 미검증(unverified)** — 아래 두 부분은 매크로/스크린샷만으로는 100%
+# 확신할 수 없어 실사용 테스트가 꼭 필요하다(추측 금지 원칙, docs/sap-lookup.md 참고):
+#   ① 트랜잭션 진입 직후 뜨는 리포트(변형) 선택 팝업 — 매크로의 스크롤바 위치 이동(1~6~0)
+#      + F2 시퀀스를 정확한 의미를 다 이해하지 못한 채 그대로 재현한다(실제로 성공했던
+#      시퀀스이므로 "왜 되는지"보다 "그대로 재현하는" 쪽을 택함). 팝업이 없는 세션이면
+#      try/except로 조용히 건너뛴다.
+#   ② "550203 복리후생비-팀운영비(개발)" 행의 값 추출 — 이 화면은 표준 ALV 그리드가 아니라
+#      GuiLabel 매트릭스로 렌더링되는 것으로 보여(매크로의 `lbl[97,3]` 같은 ID가 그 근거),
+#      `_sap_dump_fields`로 화면의 모든 라벨을 순서대로 모은 뒤 "550203" 라벨을 찾아 그
+#      뒤로 이어지는 라벨들을 값으로 읽는다. 계정명 라벨이 코드와 합쳐진 라벨인지 분리된
+#      라벨인지 확신이 없어 `_sap_find_team_budget_row`가 두 경우 다 시도한다.
+# 기간은 스크린샷에서 "기간시작=1, 기간종료=12"(연간 누적)로 고정 확인됨 — ctxtP_FPERBL/
+# ctxtP_TPERBL은 매크로처럼 F4 드롭다운을 재현하지 않고, 같은 GuiCTextField 타입 필드를
+# 이미 .text로 직접 설정하고 있는 fetch_where_used_batch의 ctxtP_WERKS와 동일한 방식으로
+# 단순화했다(더 안정적).
+# 팀 목록(개발1팀/개발2팀/개발3팀/시제품팀)은 코스트 센터 트리 노드 텍스트에 그대로 들어
+# 있음이 스크린샷으로 확인됨("1008E030 개발3팀(판)") — 그래서 고정 노드키("000004") 대신
+# 트리를 전부 훑어 팀 이름이 포함된 노드를 찾는다(팀이 늘어나도 코드 변경 불필요).
+_TEAM_BUDGET_ACCOUNT_CODE = '550203'
+_TEAM_BUDGET_COLUMNS = ['예산금액', '전기금액', '임시전표', '전기+임시', '잔여예산']
+
+
+def _sap_find_team_budget_row(wnd):
+    """`usr` 영역의 모든 GuiLabel을 화면에 보이는 순서대로 모아(`_sap_dump_fields`)
+    `_TEAM_BUDGET_ACCOUNT_CODE`("550203")가 들어있는 라벨을 찾는다. 계정코드와 계정명이
+    한 라벨에 합쳐져 있는지, 코드만 있고 다음 라벨이 계정명인지 확신이 없어 둘 다 시도한다.
+    (전체 라벨 목록, {'account_label', 'values'} | None)을 반환."""
+    labels = _sap_dump_fields(wnd)
+    n = len(_TEAM_BUDGET_COLUMNS)
+    for i, text in enumerate(labels):
+        if _TEAM_BUDGET_ACCOUNT_CODE not in text:
+            continue
+        if '팀운영비' in text or '복리후생비' in text:
+            # 코드+계정명이 한 라벨에 합쳐진 경우 — 값은 바로 다음부터.
+            values = labels[i + 1:i + 1 + n]
+            if len(values) == n:
+                return labels, {'account_label': text.strip(), 'values': values}
+        # 코드만 있는 라벨 — 다음 라벨이 계정명, 그다음부터 값.
+        if i + 1 < len(labels):
+            values = labels[i + 2:i + 2 + n]
+            if len(values) == n:
+                return labels, {'account_label': labels[i + 1].strip(), 'values': values}
+    return labels, None
+
+
+def fetch_team_budget(team):
+    """ZCO021 "코텍 예실레포트"에서 지정한 팀의 "550203 복리후생비-팀운영비" 행을 조회한다.
+    `team`은 코스트 센터 트리에 보이는 팀 이름의 일부(예: "개발3팀")면 된다."""
+    team = (team or '').strip()
+    if not team:
+        raise RuntimeError('팀 이름을 지정해주세요. 예: 개발3팀')
+
+    session = _get_sap_session()
+    session.StartTransaction('ZCO021')
+    time.sleep(0.8)
+
+    # 리포트(변형) 선택 팝업 — 위 주석 ① 참고. 없는 세션도 있을 수 있어 조용히 건너뛴다.
+    try:
+        wnd1 = session.findById('wnd[1]')
+        usr1 = wnd1.findById('usr')
+        for pos in (1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 0):
+            usr1.verticalScrollbar.position = pos
+        session.findById('wnd[1]').sendVKey(2)  # F2 = 선택(Choose)
+        time.sleep(0.6)
+    except Exception:
+        pass
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('usr/ctxtP_FPERBL').text = '1'
+        wnd.findById('usr/ctxtP_TPERBL').text = '12'
+    except Exception as e:
+        raise RuntimeError(f'ZCO021 기간(P_FPERBL/P_TPERBL) 입력 필드를 찾지 못했습니다 — SAP 화면 구성이 바뀌었을 수 있습니다: {e}')
+
+    try:
+        wnd.findById('tbar[1]/btn[8]').press()  # 실행(F8)
+    except Exception as e:
+        raise RuntimeError(f'ZCO021 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(1.5)
+
+    wnd = session.findById('wnd[0]')
+    try:
+        tree = wnd.findById('shellcont/shell/shellcont[2]/shell')
+    except Exception as e:
+        raise RuntimeError(f'코스트 센터 트리를 찾지 못했습니다(SAP 화면 구성이 바뀌었을 수 있음): {e}')
+    try:
+        node_keys = list(tree.GetAllNodeKeys())
+    except Exception as e:
+        raise RuntimeError(f'코스트 센터 트리 노드 목록을 읽지 못했습니다: {e}')
+
+    team_norm = team.replace(' ', '')
+    target_key = None
+    all_texts = []
+    for key in node_keys:
+        try:
+            text = str(tree.GetNodeTextByKey(key))
+        except Exception:
+            continue
+        all_texts.append(text)
+        if team_norm in text.replace(' ', ''):
+            target_key = key
+            break
+    if target_key is None:
+        raise RuntimeError(f'"{team}" 팀을 코스트 센터 트리에서 찾지 못했습니다. 트리에 있는 항목: {", ".join(all_texts) or "(읽기 실패)"}')
+    tree.selectedNode = target_key
+    time.sleep(1.2)
+
+    wnd = session.findById('wnd[0]')
+    labels, matched = _sap_find_team_budget_row(wnd)
+
+    if matched is None:
+        # 위 주석 ② — "* 원가 요소 그룹" 같은 접힌 행을 한 번 펼쳐보고 재시도.
+        try:
+            fields = wnd.findById('usr').Children
+            for i in range(fields.Count):
+                child = fields.Item(i)
+                if child.Type == 'GuiLabel' and str(child.Text).strip().startswith('*'):
+                    child.SetFocus()
+                    session.findById('wnd[0]').sendVKey(2)
+                    time.sleep(0.8)
+                    break
+        except Exception:
+            pass
+        wnd = session.findById('wnd[0]')
+        labels, matched = _sap_find_team_budget_row(wnd)
+
+    if matched is None:
+        return {
+            'ok': False,
+            'error': f'"{team}" 화면은 열었지만 계정 {_TEAM_BUDGET_ACCOUNT_CODE}(복리후생비-팀운영비) 행을 찾지 못했습니다. 화면에서 읽은 항목 수: {len(labels)}건 — 화면 구성이 다를 수 있습니다.',
+        }
+
+    values = dict(zip(_TEAM_BUDGET_COLUMNS, matched['values']))
+    text = (f'[SAP 팀 운영비 조회(ZCO021): {team}]\n'
+            f'계정: {matched["account_label"]}\n' +
+            '\n'.join(f'{k}: {v}' for k, v in values.items()))
+    return {'ok': True, 'team': team, 'account': matched['account_label'], 'values': values, 'text': text}
+
+
 # ── "구매오더 요청"(ZMMR060 → ZMM018) 전용 헬퍼 (2026-09-15 신규) ──────────
 # AI 문답에 전자세금계산서/견적서 PDF를 첨부하면 항목을 추출해 만든 BDC Upload 엑셀을
 # ZMMR060에 업로드해 구매오더를 생성하고, 저장 직전에 사람이 확인하도록 두 단계로 나눴다
@@ -2573,6 +2714,9 @@ def main():
             purchasing_org = sys.argv[3] if len(sys.argv) > 3 else '9000'
             plant = sys.argv[4] if len(sys.argv) > 4 else '1000'
             result = print_po_via_zmm018(po_number, purchasing_org, plant)
+        elif action == 'fetch_team_budget':
+            team = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = fetch_team_budget(team)
         else:
             result = fetch_current_screen()
         if isinstance(result, dict) and result.get('ok') is False:

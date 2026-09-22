@@ -1908,6 +1908,19 @@ def sap_download_documents_batch():
     return jsonify(data), status
 
 
+@app.route('/sap-team-budget', methods=['GET'])
+def sap_team_budget():
+    # 💰 [2026-09-22 신규, 사용자 요청] "개발3팀 팀운영비 확인해줘"처럼 팀 이름으로 ZCO021
+    #    "코텍 예실레포트"의 "550203 복리후생비-팀운영비" 행을 조회한다. 실제 컨트롤 조작은
+    #    sap_bridge_32.py의 fetch_team_budget()에 있다(사용자가 준 SAP GUI "기록 및 재생"
+    #    매크로 + 스크린샷 기반, 리포트 선택 팝업/값 추출 부분은 실환경 미검증).
+    team = (request.args.get('team') or '').strip()
+    if not team:
+        return jsonify({'ok': False, 'error': '팀 이름(team 파라미터)이 필요합니다. 예: /sap-team-budget?team=개발3팀'}), 400
+    data, status = _run_sap_bridge(['fetch_team_budget', team], 45, 'SAP 팀 운영비 조회')
+    return jsonify(data), status
+
+
 @app.route('/sap-download-documents-by-pattern', methods=['GET'])
 def sap_download_documents_by_pattern():
     # 💡 [2026-09-16 신규] "*01+01*500*로 조회된 아이템 승인원 다운로드해줘"처럼 자재번호를
