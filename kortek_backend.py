@@ -1913,11 +1913,15 @@ def sap_team_budget():
     # 💰 [2026-09-22 신규, 사용자 요청] "개발3팀 팀운영비 확인해줘"처럼 팀 이름으로 ZCO021
     #    "코텍 예실레포트"의 "550203 복리후생비-팀운영비" 행을 조회한다. 실제 컨트롤 조작은
     #    sap_bridge_32.py의 fetch_team_budget()에 있다(사용자가 준 SAP GUI "기록 및 재생"
-    #    매크로 + 스크린샷 기반, 리포트 선택 팝업/값 추출 부분은 실환경 미검증).
+    #    매크로 + 스크린샷 기반). 실사용 테스트로 팀 이름 매칭 버그·값 추출 둘 다 확인 완료.
+    # 💡 [2026-09-22 확장, 사용자 요청 "1~6월까지"] from/to(기간시작/종료, 1~12)를 선택적으로
+    #    받는다 — 기본값은 기존처럼 연간 누적(1~12).
     team = (request.args.get('team') or '').strip()
     if not team:
         return jsonify({'ok': False, 'error': '팀 이름(team 파라미터)이 필요합니다. 예: /sap-team-budget?team=개발3팀'}), 400
-    data, status = _run_sap_bridge(['fetch_team_budget', team], 45, 'SAP 팀 운영비 조회')
+    fperbl = (request.args.get('from') or '1').strip()
+    tperbl = (request.args.get('to') or '12').strip()
+    data, status = _run_sap_bridge(['fetch_team_budget', team, fperbl, tperbl], 45, 'SAP 팀 운영비 조회')
     return jsonify(data), status
 
 

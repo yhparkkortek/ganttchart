@@ -330,13 +330,15 @@
     //    코스트센터 트리에서 동적으로 찾으므로, 드롭다운 없이 "개발4팀 팀운영비 확인해줘"처럼
     //    직접 타이핑하면 목록 갱신 없이도 동작한다.
     window._TEAM_BUDGET_TEAMS = ['개발1팀', '개발2팀', '개발3팀', '시제품팀'];
-    window._ganttQaShowTeamBudgetDropdown = function() {
+    // periodPhrase: 원래 질문에 "1~6월까지" 같은 기간 표현이 있었으면 그대로 넘겨받아 합성
+    //    답변 문자열에 다시 실어준다(팀만 다시 물어보면서 기간 정보를 잃어버리지 않게).
+    window._ganttQaShowTeamBudgetDropdown = function(periodPhrase) {
         const _en = window._currentLang === 'en';
         const id = 'team-budget-' + Date.now();
         window._ganttQaPendingChoiceDropdown = {
             id: id, multi: false,
             options: window._TEAM_BUDGET_TEAMS.map(function(t) { return { value: t, label: t }; }),
-            buildAnswerText: function(sel) { return sel[0] ? (sel[0] + ' 팀운영비 확인해줘') : ''; }
+            buildAnswerText: function(sel) { return sel[0] ? (sel[0] + ' 팀운영비' + (periodPhrase ? ' ' + periodPhrase : '') + ' 확인해줘') : ''; }
         };
         window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
             '💰 어느 팀의 팀운영비를 조회할까요?',
@@ -3831,24 +3833,38 @@ ${docsJson}`;
                 if (_foundTeam) _teamBudgetTeam = _foundTeam;
             }
 
+            // 💡 [2026-09-22 신규, 사용자 요청 "1~6월까지"] 기간 범위 — "1~6월"/"1월~6월"/"1-6월"
+            //    같은 표현이 있으면 시작/종료 월을 뽑는다(없으면 백엔드 기본값인 1~12월 그대로).
+            let _teamBudgetFrom = '', _teamBudgetTo = '';
+            const _periodMatch = question.match(/(\d{1,2})\s*월?\s*[~\-]\s*(\d{1,2})\s*월/);
+            if (_periodMatch) {
+                const f = parseInt(_periodMatch[1], 10), t = parseInt(_periodMatch[2], 10);
+                if (f >= 1 && f <= 12) _teamBudgetFrom = String(f);
+                if (t >= 1 && t <= 12) _teamBudgetTo = String(t);
+            }
+
             if (!_teamBudgetTeam) {
                 if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
-                window._ganttQaShowTeamBudgetDropdown();
+                window._ganttQaShowTeamBudgetDropdown(_periodMatch ? _periodMatch[0] + '까지' : '');
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
             }
 
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 "${_teamBudgetTeam}" 팀운영비를 조회하는 중...`, `Looking up team budget for "${_teamBudgetTeam}" in SAP...`), pending: true });
+            const _periodLabel = (_teamBudgetFrom && _teamBudgetTo) ? `${_teamBudgetFrom}~${_teamBudgetTo}월 ` : '';
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 "${_teamBudgetTeam}" ${_periodLabel}팀운영비를 조회하는 중...`, `Looking up "${_teamBudgetTeam}" ${_periodLabel}team budget in SAP...`), pending: true });
             window._renderGanttQaMessages();
             let teamBudgetReply;
             try {
-                const res = await fetch('http://127.0.0.1:5000/sap-team-budget?team=' + encodeURIComponent(_teamBudgetTeam));
+                let url = 'http://127.0.0.1:5000/sap-team-budget?team=' + encodeURIComponent(_teamBudgetTeam);
+                if (_teamBudgetFrom) url += '&from=' + encodeURIComponent(_teamBudgetFrom);
+                if (_teamBudgetTo) url += '&to=' + encodeURIComponent(_teamBudgetTo);
+                const res = await fetch(url);
                 const data = await res.json();
                 if (data.ok) {
-                    const lines = Object.keys(data.values || {}).map(function(k) { return `${k}: ${data.values[k]}`; });
-                    teamBudgetReply = `💰 **${data.team}** — ${data.account}\n` + lines.join('\n');
+                    const lines = (data.values || []).map(function(v) { return `${v.label}: ${v.value}`; });
+                    teamBudgetReply = `💰 **${data.team}** (${data.periodFrom}~${data.periodTo}월) — ${data.account}\n` + lines.join('\n');
                 } else {
                     teamBudgetReply = '⚠️ ' + (data.error || window._t('팀운영비 조회 실패', 'Team budget lookup failed'));
                 }

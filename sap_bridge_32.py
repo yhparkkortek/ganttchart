@@ -1978,12 +1978,20 @@ def _sap_find_team_budget_row(wnd):
     return labels, None
 
 
-def fetch_team_budget(team):
+def fetch_team_budget(team, fperbl='1', tperbl='12'):
     """ZCO021 "코텍 예실레포트"에서 지정한 팀의 "550203 복리후생비-팀운영비" 행을 조회한다.
-    `team`은 코스트 센터 트리에 보이는 팀 이름의 일부(예: "개발3팀")면 된다."""
+    `team`은 코스트 센터 트리에 보이는 팀 이름의 일부(예: "개발3팀")면 된다.
+    `fperbl`/`tperbl`은 기간시작/기간종료(1~12) — 기본은 연간 누적(1~12)."""
     team = (team or '').strip()
     if not team:
         raise RuntimeError('팀 이름을 지정해주세요. 예: 개발3팀')
+    try:
+        fperbl_i, tperbl_i = int(fperbl), int(tperbl)
+    except (TypeError, ValueError):
+        raise RuntimeError(f'기간(fperbl/tperbl)은 1~12 사이의 숫자여야 합니다: {fperbl}~{tperbl}')
+    if not (1 <= fperbl_i <= 12 and 1 <= tperbl_i <= 12 and fperbl_i <= tperbl_i):
+        raise RuntimeError(f'기간이 올바르지 않습니다(1~12, 시작<=종료): {fperbl_i}~{tperbl_i}')
+    fperbl, tperbl = str(fperbl_i), str(tperbl_i)
 
     session = _get_sap_session()
     session.StartTransaction('ZCO021')
@@ -2002,8 +2010,8 @@ def fetch_team_budget(team):
 
     wnd = session.findById('wnd[0]')
     try:
-        wnd.findById('usr/ctxtP_FPERBL').text = '1'
-        wnd.findById('usr/ctxtP_TPERBL').text = '12'
+        wnd.findById('usr/ctxtP_FPERBL').text = fperbl
+        wnd.findById('usr/ctxtP_TPERBL').text = tperbl
     except Exception as e:
         raise RuntimeError(f'ZCO021 기간(P_FPERBL/P_TPERBL) 입력 필드를 찾지 못했습니다 — SAP 화면 구성이 바뀌었을 수 있습니다: {e}')
 
@@ -2073,11 +2081,16 @@ def fetch_team_budget(team):
             'error': f'"{team}" 화면은 열었지만 계정 {_TEAM_BUDGET_ACCOUNT_CODE}(복리후생비-팀운영비) 행을 찾지 못했습니다. 화면에서 읽은 항목 수: {len(labels)}건 — 화면 구성이 다를 수 있습니다.',
         }
 
-    values = dict(zip(_TEAM_BUDGET_COLUMNS, matched['values']))
-    text = (f'[SAP 팀 운영비 조회(ZCO021): {team}]\n'
+    # ⚠️ [2026-09-22 실사용 버그수정] dict로 반환하면 Flask jsonify(JSON_SORT_KEYS 기본값)가
+    #    키를 알파벳(유니코드) 순으로 재정렬해버려 "예산금액→전기금액→...→잔여예산" 순서가
+    #    "예산금액,임시전표,잔여예산,전기+임시,전기금액"처럼 뒤죽박죽 나왔다(실사용 확인) —
+    #    배열(JSON array)은 정렬 대상이 아니라서 순서가 보존되는 [{'label','value'}] 형태로 변경.
+    values = [{'label': k, 'value': v} for k, v in zip(_TEAM_BUDGET_COLUMNS, matched['values'])]
+    period_label = f'{fperbl}~{tperbl}월'
+    text = (f'[SAP 팀 운영비 조회(ZCO021): {team}, {period_label}]\n'
             f'계정: {matched["account_label"]}\n' +
-            '\n'.join(f'{k}: {v}' for k, v in values.items()))
-    return {'ok': True, 'team': team, 'account': matched['account_label'], 'values': values, 'text': text}
+            '\n'.join(f'{v["label"]}: {v["value"]}' for v in values))
+    return {'ok': True, 'team': team, 'periodFrom': fperbl, 'periodTo': tperbl, 'account': matched['account_label'], 'values': values, 'text': text}
 
 
 # ── "구매오더 요청"(ZMMR060 → ZMM018) 전용 헬퍼 (2026-09-15 신규) ──────────
@@ -2746,7 +2759,9 @@ def main():
             result = print_po_via_zmm018(po_number, purchasing_org, plant)
         elif action == 'fetch_team_budget':
             team = sys.argv[2] if len(sys.argv) > 2 else ''
-            result = fetch_team_budget(team)
+            fperbl = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else '1'
+            tperbl = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else '12'
+            result = fetch_team_budget(team, fperbl, tperbl)
         else:
             result = fetch_current_screen()
         if isinstance(result, dict) and result.get('ok') is False:
