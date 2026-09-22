@@ -289,6 +289,32 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
 //    그건 이미 1차 시도로 끝났으므로 자동으로 건너뛴다.
 window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral'];
 
+// 🐛🐛 [2026-09-22 실사용 버그수정, 사용자 지적] 위 교차 제공사 폴백이 오히려 quota 소모를
+//    가속시키고 있었다 — Gemini가 (일일 한도라) 하루 종일 막혀 있으면, AI 호출 "1번"마다
+//    매번 Gemini 후보 전부(최대 3) + Groq 후보 전부(최대 3) + Mistral(1)까지 **다시** 두드려서,
+//    폴백 추가 전엔 Gemini만 실패하고 끝났을 일이 이제는 매번 Groq/Mistral 몫까지 같이
+//    태워버리고 있었다("Groq/Mistral도 최근에 안 되기 시작했다"는 제보의 실제 원인 — 이
+//    폴백 기능이 오늘 새로 추가되면서 생긴 회귀). 한 제공사가 "완전히 막힘"(할당량 등,
+//    allCandidatesFailed)으로 확인되면 짧은 쿨다운 동안은 그 제공사를 아예 건드리지 않고
+//    건너뛴다 — 쿨다운이 지나면 자연히 다시 한 번 시도해서 할당량 리셋을 스스로 감지한다.
+window._AI_PROVIDER_COOLDOWN_MS = 20 * 60 * 1000; // 20분 — 짧은 RPM성 실패까지 너무 오래 건너뛰지 않으면서 낭비 호출은 크게 줄임
+window._aiProviderCooldownUntil = (function() {
+    try { return JSON.parse(localStorage.getItem('ai_provider_cooldown_v1') || '{}'); } catch (e) { return {}; }
+})();
+window._aiMarkProviderCooldown = function(providerKey) {
+    window._aiProviderCooldownUntil[providerKey] = Date.now() + window._AI_PROVIDER_COOLDOWN_MS;
+    try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }
+};
+window._aiClearProviderCooldown = function(providerKey) {
+    if (!(providerKey in window._aiProviderCooldownUntil)) return;
+    delete window._aiProviderCooldownUntil[providerKey];
+    try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }
+};
+window._aiProviderInCooldown = function(providerKey) {
+    const until = window._aiProviderCooldownUntil[providerKey];
+    return !!(until && Date.now() < until);
+};
+
 window.callAiBackend = async function(apiKey, prompt, opts) {
     opts = opts || {};
     const provider = window.getActiveAiProvider();
@@ -300,8 +326,17 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
     //    했는지, 됐다면 왜 실패했는지"를 전혀 알 수 없었다 — 시도한 제공사마다 결과를 전부 남겨서
     //    최종 실패 메시지에 요약으로 붙인다(원인 진단에 필요한 신호를 조용히 버리지 않는다는 원칙).
     const attempts = [];
-    const primaryResult = await _aiTryProviderCandidates(provider, apiKey, prompt, opts, GAS_URL);
-    if (primaryResult.ok) return primaryResult;
+    let primaryResult;
+    if (window._aiProviderInCooldown(provider)) {
+        primaryResult = { ok: false, allCandidatesFailed: true, error: new Error(
+            window._t(`(쿨다운 중 — 최근 할당량 소진이 확인돼 ${Math.ceil((window._aiProviderCooldownUntil[provider] - Date.now()) / 60000)}분간 재시도를 건너뜁니다)`,
+                `(In cooldown — quota was recently exhausted, skipping retries for ${Math.ceil((window._aiProviderCooldownUntil[provider] - Date.now()) / 60000)} more min)`)
+        ) };
+    } else {
+        primaryResult = await _aiTryProviderCandidates(provider, apiKey, prompt, opts, GAS_URL);
+        if (primaryResult.ok) { window._aiClearProviderCooldown(provider); return primaryResult; }
+        if (primaryResult.allCandidatesFailed) window._aiMarkProviderCooldown(provider);
+    }
     attempts.push({ provider, error: primaryResult.error });
 
     let lastErr = primaryResult.error;
@@ -313,8 +348,13 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
             const fbCfg = window.AI_PROVIDERS[fbProvider];
             const fbKey = fbCfg && localStorage.getItem(fbCfg.keyName);
             if (!fbKey) continue; // 그 제공사 키를 저장해둔 적이 없으면 시도할 수 없음 — 조용히 건너뜀
+            if (window._aiProviderInCooldown(fbProvider)) {
+                attempts.push({ provider: fbProvider, error: new Error(window._t('(쿨다운 중)', '(in cooldown)')) });
+                continue;
+            }
             const fbResult = await _aiTryProviderCandidates(fbProvider, fbKey, prompt, opts, GAS_URL);
             if (fbResult.ok) {
+                window._aiClearProviderCooldown(fbProvider);
                 console.warn(`[AI 제공사 자동전환] "${provider}" 무료 한도 소진 → "${fbProvider}"로 이번 요청만 대신 처리`);
                 if (window.showToast) {
                     const fromLabel = (window.AI_PROVIDERS[provider] || {}).label || provider;
@@ -325,6 +365,7 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                 }
                 return Object.assign({}, fbResult, { crossProviderFallback: true, originalProvider: provider });
             }
+            if (fbResult.allCandidatesFailed) window._aiMarkProviderCooldown(fbProvider);
             attempts.push({ provider: fbProvider, error: fbResult.error });
             if (fbResult.error) lastErr = fbResult.error; // 마지막으로 실패한 제공사의 에러를 최종 메시지로
         }
