@@ -136,3 +136,15 @@ Task Inbox "📧 원문 보기"의 🌐 번역 버튼(`js/14c-task-inbox.js`의 
   - **의도적으로 persist하지 않음**: 성공한 폴백 제공사를 `ai_provider`(활성 제공사 설정)로 영구 저장하지 않는다 — 모델 자동전환(사용중단은 영구적)과 달리 할당량 소진은 **하루 지나면 원상복구되는 일시적** 문제라, 다음 호출도 항상 사람이 고른 원래 제공사부터 다시 시도한다(단, 아래 쿨다운으로 "매번 실제로 두드려보진" 않음).
   - **전제조건**: 이 폴백은 사람이 **Groq/Mistral 키를 미리 저장해둔 경우에만** 동작한다(키가 없으면 조용히 건너뜀) — 한 곳 키만 등록해뒀다면 효과 없음, ⚙️ 설정에서 백업용으로 다른 제공사 키도 미리 등록해두라고 안내할 것.
   - **🐛🐛 [2026-09-22 같은 날 회귀 발견, 사용자 지적] 이 폴백 자체가 quota 소모를 가속시키는 부작용이 있었다**: "Gemini는 오늘 종일 막힘(일일 한도)"인 상태에서 AI 호출을 할 때마다, 폴백 추가 전엔 Gemini 후보(최대 3개)만 두드리고 끝났는데, 추가 후에는 **매번 Gemini 3개 + Groq 3개 + Mistral 1개, 최대 7번의 실제 API 요청**을 매번 다시 시도하고 있었다 — 메일 자동분석/AI 문답/AI 요약 등 무엇을 하든 Gemini가 막혀있는 한 매번 Groq·Mistral 몫까지 같이 태워버려서, "Groq/Mistral도 최근에 안 되기 시작했다"는 제보로 이어짐(제보 시점 = 이 폴백 기능을 배포한 날과 정확히 일치 — 사용자가 "이전엔 문제없었는데 최근에"라고 직접 지적해서 발견). **수정**: `window._aiProviderCooldownUntil`(localStorage `ai_provider_cooldown_v1`, provider→만료시각 맵) — 한 제공사가 `allCandidatesFailed`(할당량 등으로 후보 전부 실패)로 확인되면 `window._aiMarkProviderCooldown(provider)`로 20분(`_AI_PROVIDER_COOLDOWN_MS`) 쿨다운 등록, 이후 호출은 `window._aiProviderInCooldown(provider)`가 true면 **그 제공사를 아예 시도하지 않고** 즉시 다음 후보(폴백 provider든, 결국 최종 실패든)로 넘어간다. 성공하면 `window._aiClearProviderCooldown`으로 즉시 해제(빠른 회복 감지). 활성 제공사·폴백 제공사 양쪽 모두 동일하게 적용 — 어느 한쪽만 봐주면 그쪽에서 또 같은 문제가 재발하므로. 20분은 "너무 자주 재확인해서 낭비"와 "너무 늦게 재확인해서 quota 리셋을 못 알아챔" 사이의 절충값 — 실사용 반응 보고 조정할 것.
+  - **🐛🐛🐛 [2026-09-22 같은 날 재발견] 쿨다운 도입 직후에도 "여전히 너무 빨리 소진된다"는 재제보 —
+    원인은 크기초과 판정 정규식 누락**: Groq가 모델별 상세 설명 없이 표준 HTTP 413 문구
+    "**Request Entity Too Large**"(중간에 "Entity"가 끼어 있음)로만 거부하는 경우가 있는데,
+    기존 `window._AI_REQUEST_TOO_LARGE_RE`는 "request **too large**"(Entity 없이 붙어있는 형태 —
+    Groq가 모델별로 주는 "Request too large for model `X`... TPM Limit 8000..." 상세 메시지용)만
+    찾고 있어서 이 문구와는 매치가 안 됐다. 그 결과 `isTooLarge=false` → `skipRemainingRetries`가
+    안 걸려 후보 모델을 1개만 시도하고 바로 실패 반환 → `allCandidatesFailed`도 안 남아 위 쿨다운
+    자체가 등록되지 않았다 — 이 실패 유형을 겪은 제공사는 쿨다운 도입 후에도 계속 매번 처음부터
+    다시 두드려지고 있었던 것. **수정**: 정규식에 `request entity too large`/`payload too large`/
+    `\b413\b`를 추가. **앞으로 이런 "정규식이 실제 에러 문구와 미묘하게 다름" 버그를 피하려면**,
+    새 에러 패턴을 정규식에 넣을 때 반드시 사용자가 보낸 **에러 원문 그대로**를 대조해볼 것 — 비슷해
+    보이는 문구도 중간에 단어 하나(Entity 등)가 끼면 안 걸릴 수 있다.
