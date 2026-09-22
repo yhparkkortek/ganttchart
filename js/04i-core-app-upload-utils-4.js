@@ -91,12 +91,31 @@
         const el = document.getElementById('ai-usage-today');
         if (el && window._aiUsageSummaryText) el.textContent = window._aiUsageSummaryText();
     };
+    // 🧪 [2026-09-22 신규] 제공사 연결 테스트 버튼 — 실제 로직은 js/14a의 _aiTestProviders
+    window._aiRunProviderTest = async function() {
+        const out = document.getElementById('ai-provider-test-result');
+        const btn = document.getElementById('ai-provider-test-btn');
+        if (!out || !window._aiTestProviders) return;
+        out.style.display = 'block';
+        out.textContent = '⏳ ' + window._t('키를 저장한 제공사마다 짧은 요청을 보내는 중...', 'Sending a short request to each provider with a saved key...');
+        if (btn) btn.disabled = true;
+        try {
+            const lines = await window._aiTestProviders(function(ls) { out.textContent = ls.join('\n') + '\n⏳ ...'; });
+            out.textContent = lines.join('\n');
+        } catch (e) {
+            out.textContent = '❌ ' + (e.message || e);
+        } finally {
+            if (btn) btn.disabled = false;
+            window._aiUsageRenderSettings();
+        }
+    };
     window._aiSettingsRefreshLang = function() {
         const _en = window._currentLang === 'en';
         const idTexts = {
             'ai-set-sec-model-label':   { ko:'🤖 AI 모델 선택',                       en:'🤖 AI Model Selection' },
             'ai-usage-today-label':     { ko:'📊 오늘 AI 사용량',                     en:'📊 AI usage today' },
             'ai-usage-today-refresh-btn': { ko:'🔄 새로고침',                          en:'🔄 Refresh' },
+            'ai-provider-test-btn':     { ko:'🧪 제공사 연결 테스트',                 en:'🧪 Test providers' },
             'ai-provider-groq':         { ko:'Groq — 오픈모델 무료 호스팅',           en:'Groq — free hosting for open models' },
             'ai-provider-mistral':      { ko:'Mistral (프랑스 AI, 무료)',             en:'Mistral (French AI, free)' },
             'ai-provider-openai':       { ko:'OpenAI (GPT, 유료·카드등록 필요)',      en:'OpenAI (GPT, paid — card required)' },
@@ -337,8 +356,12 @@
                             <div id="ai-cooldown-min-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 20분 (기본값) — 0으로 저장하면 쿨다운 기능이 꺼지고, 지금 막혀있던 제공사도 즉시 풀립니다.</div>
                             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px;">
                                 <span id="ai-usage-today-label" style="font-size:12.5px; font-weight:bold; color:#333;">📊 오늘 AI 사용량</span>
+                                <span style="display:flex; gap:6px;">
+                                <button id="ai-provider-test-btn" onclick="window._aiRunProviderTest()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="padding:4px 10px; border:1px solid #a5c8f0; background:#e8f4fd; color:#1a4f7a; border-radius:4px; cursor:pointer; font-size:11.5px; font-weight:bold; transition:background .15s;">🧪 제공사 연결 테스트</button>
                                 <button id="ai-usage-today-refresh-btn" onclick="window._aiUsageRenderSettings()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:4px 10px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:11.5px; transition:background .15s;">🔄 새로고침</button>
+                                </span>
                             </div>
+                            <pre id="ai-provider-test-result" style="display:none; margin:6px 0 0; padding:8px 10px; background:#fffdf5; border:1px solid #f0e2b6; border-radius:6px; font-size:11px; color:#444; white-space:pre-wrap; line-height:1.5; font-family:inherit;"></pre>
                             <pre id="ai-usage-today" style="margin:6px 0 0; padding:8px 10px; background:#f7f9fb; border:1px solid #e3e8ee; border-radius:6px; font-size:11px; color:#444; white-space:pre-wrap; line-height:1.5; font-family:inherit;"></pre>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
                             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:4px;">

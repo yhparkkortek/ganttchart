@@ -224,7 +224,7 @@ window._aiBuildQuotaHint = function(errMessage, quotaKind) {
 //    안 걸려서 isTooLarge=false → skipRemainingRetries 안 걸리고 allCandidatesFailed도 안 남아
 //    쿨다운 등록 자체가 안 되고 있었다 — 그 결과 이 실패 유형만 겪은 제공사는 매번 계속
 //    두드려져서 "쿨다운을 도입했는데도 여전히 너무 빨리 소진된다"는 제보로 이어짐.
-window._AI_REQUEST_TOO_LARGE_RE = /request too large|request entity too large|payload too large|\b413\b|tokens per minute|context length exceeded|maximum context length|too many tokens|context_length_exceeded/i;
+window._AI_REQUEST_TOO_LARGE_RE = /요청이 너무 큼|request too large|request entity too large|payload too large|\b413\b|tokens per minute|context length exceeded|maximum context length|too many tokens|context_length_exceeded/i;
 window._AI_REQUEST_TOO_LARGE_HINT = '\n\n💡 무료 등급은 보통 "요청 1건의 토큰 수" 자체에도 낮은 상한이 걸려 있습니다(예: Groq 무료 등급의 분당 토큰(TPM) 한도). 업무가 많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을 넘어버려서, 시간을 두고 재시도해도 소용없고 요청 크기 자체를 줄여야 합니다.\n→ ① ⚙️ AI 분석 설정 → 📉 요청 크기 제한에서 "최대 참고 업무 건수"·"최대 글자 수"를 줄이기 ② 요청 크기 제한이 더 넉넉한 제공사(Gemini 등)로 임시 전환 ③ 유료 등급으로 전환';
 // 🐛 [2026-09-10] "⚠️ 오류: Error: Internal error encountered." 문의 대응. 이건 구글 Gemini API
 //    자체의 일시적 5xx 백엔드 오류라 우리 프롬프트/코드와 무관하게 터질 수 있는데, 기존엔 이 패턴이
@@ -291,6 +291,11 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
             lastErr._quotaKind = 'day';
             continue;
         }
+        const _big = window._aiPromptTooLargeFor(providerKey, model, (prompt || '').length);
+        if (_big) {
+            lastErr = new Error(window._t(`${model}: 요청이 너무 큼(예상 ${_big.est.toLocaleString()} 토큰 > 요청당 한도 ${_big.cap.toLocaleString()}) — 호출 없이 건너뜀`, `${model}: request too large (est. ${_big.est.toLocaleString()} tokens > per-request cap ${_big.cap.toLocaleString()}) — skipped without calling`));
+            continue;
+        }
         for (let attempt = 1; attempt <= maxRetryPerModel; attempt++) {
             if (opts.isCancelled && opts.isCancelled()) return { ok: false, error: new Error('사용자가 중단함') };
             await window._aiThrottleGate();
@@ -304,7 +309,14 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
                 });
                 const data = await res.json();
                 if (data.status !== 'success') throw new Error(data.message || '구글 서버 응답 오류');
+                // 💡 [2026-09-22] 호출부 20여 곳이 전부 Gemini 형식(result.candidates[0].content.parts[0].text)으로 답을 꺼낸다 —
+                //    Groq/Mistral(OpenAI 호환 choices 형식)으로 온 응답도 여기서 Gemini 형식을 덧붙여 통일한다(호출부 수정 불필요).
+                const _txt = window._aiExtractText(data);
+                if (_txt && !(data.result && data.result.candidates)) {
+                    data.result = Object.assign({}, (data.result && typeof data.result === 'object') ? data.result : {}, { candidates: [{ content: { parts: [{ text: _txt }] } }] });
+                }
                 window._aiUsageRecordAttempt(providerKey, model, true);
+                if (!_txt) window._aiUsageRecordAttempt(providerKey, model, false, window._t('성공 응답이지만 답변 텍스트가 비어 있음(응답 형식 확인 필요): ', 'success but empty text: ') + JSON.stringify(data).slice(0, 120));
                 if (model !== activeModel) {
                     console.warn(`[AI 모델 자동전환] "${activeModel}" 실패 → "${model}"로 전환 성공. 기본값을 갱신합니다.`);
                     localStorage.setItem('ai_model_' + providerKey, model);
@@ -315,7 +327,7 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
                 return { ok: true, data, modelUsed: model, providerUsed: providerKey, switched: model !== activeModel };
             } catch (err) {
                 lastErr = err;
-                window._aiUsageRecordAttempt(providerKey, model, false);
+                window._aiUsageRecordAttempt(providerKey, model, false, err.message);
                 const isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
                 const isQuota = window._AI_QUOTA_EXCEEDED_RE.test(err.message || '');
                 if (isQuota) {
@@ -323,8 +335,11 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
                     console.warn(`[AI 할당량] ${providerKey}:${model} 초과 — 판정: ${err._quotaKind === 'day' ? '일일 한도(리셋까지 이 모델 건너뜀)' : err._quotaKind === 'minute' ? '분당 한도' : '불명'}`);
                 }
                 const isTooLarge = window._AI_REQUEST_TOO_LARGE_RE.test(err.message || '');
+                if (isTooLarge) window._aiLearnSizeLimit(providerKey, model, err.message, (prompt || '').length);
                 const isInternal = window._AI_INTERNAL_ERROR_RE.test(err.message || '');
                 if (isDeprecated || isQuota || isTooLarge || isInternal) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
+                // 💡 [2026-09-22] 키 오류(401/403)는 몇 번을 다시 보내도 같다 — 재시도 없이 즉시 실패(다른 제공사 폴백은 그대로)
+                if (/HTTP 40[13]\b|invalid api key|api key not valid|unauthorized|permission denied/i.test(err.message || '')) break;
                 if (attempt < maxRetryPerModel && !(opts.isCancelled && opts.isCancelled())) {
                     await new Promise(r => setTimeout(r, retryDelayMs));
                 }
@@ -396,6 +411,9 @@ window._aiProviderCooldownUntil = (function() {
 window._aiMarkProviderCooldown = function(providerKey, err) {
     const minutes = window.getAiProviderCooldownMin();
     if (!minutes) return; // 0분 = 쿨다운 사용 안 함 — 등록하지 않음(매번 다시 시도)
+    // 💡 [2026-09-22] 요청 크기 초과는 "이 프롬프트만" 못 보내는 것이지 제공사가 막힌 게 아니다 — 쿨다운을 걸면
+    //    큰 AI 문답 하나 때문에 작은 메일 분석까지 20분간 그 제공사로 못 간다. 크기는 _aiPromptTooLargeFor가 따로 거른다.
+    if (err && window._AI_REQUEST_TOO_LARGE_RE.test(err.message || '')) return;
     // 💡 [2026-09-22] 이 제공사의 무료 후보 모델이 전부 "일일 한도 소진"(아래 _aiClassifyQuotaError)이면
     //    짧은 재시도 대기시간과 무관하게 가장 이른 리셋 시각(태평양시간 자정)까지 건너뛴다.
     const usage = window._aiUsageLoad && window._aiUsageLoad();
@@ -485,7 +503,7 @@ window._aiUsageRecordRequest = function(feature) {
     window._aiUsageSave(s);
 };
 window._aiRecentAttemptTs = window._aiRecentAttemptTs || {}; // 'provider:model' → [최근 요청 시각] (분당 판정용, 메모리)
-window._aiUsageRecordAttempt = function(providerKey, model, ok) {
+window._aiUsageRecordAttempt = function(providerKey, model, ok, errMsg) {
     const pm = providerKey + ':' + model;
     const arr = window._aiRecentAttemptTs[pm] = (window._aiRecentAttemptTs[pm] || []).filter(function(t) { return Date.now() - t < 60000; });
     if (ok === undefined) { arr.push(Date.now()); return; }
@@ -493,7 +511,53 @@ window._aiUsageRecordAttempt = function(providerKey, model, ok) {
     const d = s.days[day] = s.days[day] || { models: {}, features: {} };
     const m = d.models[pm] = d.models[pm] || { ok: 0, fail: 0 };
     if (ok) m.ok++; else m.fail++;
+    // 💡 [2026-09-22] "Groq/Mistral이 먹통"처럼 폴백 제공사가 왜 실패하는지 화면에서 바로 보이도록 마지막 실패 사유 보존
+    if (!ok && errMsg) { m.lastError = String(errMsg).replace(/^Error:\s*/, '').split('\n')[0].slice(0, 160); m.lastErrorAt = new Date().toISOString(); }
+    if (ok) m.lastOkAt = new Date().toISOString();
     window._aiUsageSave(s);
+};
+/** AI 응답에서 답변 텍스트 추출 — Gemini(candidates) / OpenAI 호환(Groq·Mistral의 choices) / 평문 모두 대응 */
+window._aiExtractText = function(data) {
+    if (!data) return '';
+    const r = data.result !== undefined ? data.result : data;
+    try {
+        if (typeof r === 'string') return r;
+        if (r && r.candidates && r.candidates[0] && r.candidates[0].content && r.candidates[0].content.parts) {
+            return r.candidates[0].content.parts.map(function(p) { return (p && p.text) || ''; }).join('');
+        }
+        if (r && r.choices && r.choices[0]) {
+            const c = r.choices[0];
+            const mc = c.message && c.message.content;
+            if (typeof mc === 'string') return mc;
+            if (Array.isArray(mc)) return mc.map(function(p) { return (p && p.text) || ''; }).join('');
+            if (typeof c.text === 'string') return c.text;
+        }
+        if (r && typeof r.text === 'string') return r.text;
+        if (typeof data.text === 'string') return data.text;
+    } catch (e) { /* 아래 빈 문자열 */ }
+    return '';
+};
+window._aiGasUrl = function() {
+    return localStorage.getItem('gas_server_url') ||
+        'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
+};
+// 💡 [2026-09-22 신규] 요청 크기 학습 — Groq 무료 등급은 "Limit 8000, Requested 65649"처럼 요청 1건 토큰 상한을
+//    알려준다. 그 숫자와 당시 프롬프트 글자 수로 "글자당 토큰 비율"까지 원장에 학습해 두고, 다음부터는 같은
+//    모델에 상한을 넘을 게 뻔한 프롬프트(AI 문답 전체 프로젝트 등)를 보내지 않고 바로 다음 후보로 넘긴다
+//    (예전엔 매번 실제로 보내서 실패 → 폴백 시간만 늘어나 "Groq는 먹통"으로 보였다).
+window._aiLearnSizeLimit = function(providerKey, model, msg, promptLen) {
+    const m = /limit\s*:?\s*(\d+)\s*,\s*requested\s*:?\s*(\d+)/i.exec(String(msg || ''));
+    if (!m || !promptLen) return;
+    const s = window._aiUsageLoad(), pm = providerKey + ':' + model;
+    s.limits[pm] = Object.assign({}, s.limits[pm] || {}, { tpm: parseInt(m[1], 10), charsPerToken: promptLen / parseInt(m[2], 10), seenAt: new Date().toISOString() });
+    window._aiUsageSave(s);
+};
+/** 학습된 토큰 상한을 넘을 게 확실하면 {est, cap}, 아니면 null (5% 여유) */
+window._aiPromptTooLargeFor = function(providerKey, model, promptLen) {
+    const lim = window._aiUsageLoad().limits[providerKey + ':' + model];
+    if (!lim || !lim.tpm || !lim.charsPerToken) return null;
+    const est = Math.round(promptLen / lim.charsPerToken);
+    return est > lim.tpm * 0.95 ? { est: est, cap: lim.tpm } : null;
 };
 /** 할당량 오류 → 'day' | 'minute' | 'unknown' (위 판정 원칙 참고). 관측된 한도는 원장(limits)에 학습 저장. */
 window._aiClassifyQuotaError = function(providerKey, model, msg) {
@@ -509,7 +573,7 @@ window._aiClassifyQuotaError = function(providerKey, model, msg) {
     } else if (lim) kind = 'minute'; // 토큰 수(TPM) 등 요청 횟수가 아닌 분당 한도
     if (lim) {
         const s = window._aiUsageLoad();
-        s.limits[providerKey + ':' + model] = { limit: parseInt(lim[1], 10), kind: kind, seenAt: new Date().toISOString() };
+        s.limits[providerKey + ':' + model] = Object.assign({}, s.limits[providerKey + ':' + model] || {}, { limit: parseInt(lim[1], 10), kind: kind, seenAt: new Date().toISOString() });
         if (kind === 'day') s.exhausted[providerKey + ':' + model] = window._aiNextPacificMidnight();
         window._aiUsageSave(s);
     }
@@ -538,7 +602,9 @@ window._aiUsageSummaryText = function() {
         const m = d.models[pm], lim = s.limits[pm];
         const ex = s.exhausted[pm] && s.exhausted[pm] > Date.now() ? ' ⛔' : '';
         return '  · ' + pm.split(':').slice(1).join(':') + ': ' + window._t('성공 ', 'ok ') + m.ok + ' / ' + window._t('실패 ', 'fail ') + m.fail +
-            (lim ? window._t(' (관측 한도 ' + lim.limit + (lim.kind === 'day' ? '/일' : lim.kind === 'minute' ? '/분' : '') + ')', ' (observed limit ' + lim.limit + (lim.kind === 'day' ? '/day' : lim.kind === 'minute' ? '/min' : '') + ')') : '') + ex;
+            (lim && lim.limit != null ? window._t(' (관측 한도 ' + lim.limit + (lim.kind === 'day' ? '/일' : lim.kind === 'minute' ? '/분' : '') + ')', ' (observed limit ' + lim.limit + (lim.kind === 'day' ? '/day' : lim.kind === 'minute' ? '/min' : '') + ')') : '') +
+            (lim && lim.tpm ? window._t(' (요청당 토큰 한도 ' + lim.tpm + ')', ' (per-request token cap ' + lim.tpm + ')') : '') + ex +
+            (m.lastError && (!m.lastOkAt || m.lastOkAt < m.lastErrorAt) ? '\n      ↳ ' + window._t('마지막 실패: ', 'last error: ') + m.lastError : '');
     });
     const feats = Object.keys(d.features).sort(function(a, b) { return d.features[b] - d.features[a]; }).slice(0, 6)
         .map(function(f) { return '  · ' + f + ': ' + d.features[f]; });
@@ -547,11 +613,41 @@ window._aiUsageSummaryText = function() {
         window._t('[기능별 요청 수]', '[Requests by feature]') + '\n' + (feats.join('\n') || '  -');
 };
 
+// 🧪 [2026-09-22 신규, 사용자 제보 "Groq/Mistral 등록했는데 먹통"] 키를 저장해둔 제공사마다 아주 짧은 요청을 1회씩
+//    보내서 실제로 되는지·안 되면 왜인지를 한 화면에 보여준다(추측 대신 확인). 성공한 제공사는 남아있던 쿨다운도 해제.
+//    OpenAI는 유료라 활성 제공사일 때만 시험한다. 결과 줄 배열을 반환(UI는 js/04i의 _aiRunProviderTest).
+window._aiTestProviders = async function(onProgress) {
+    const lines = [], GAS_URL = window._aiGasUrl(), active = window.getActiveAiProvider();
+    const order = window._AI_FREE_FALLBACK_PROVIDER_ORDER.concat(active === 'openai' ? ['openai'] : []);
+    for (const pk of order) {
+        const cfg = window.AI_PROVIDERS[pk];
+        const key = cfg && localStorage.getItem(cfg.keyName);
+        const label = cfg ? cfg.label.split(' (')[0] : pk;
+        if (!key) { lines.push('⚪ ' + label + ': ' + window._t('키 없음(미등록)', 'no key saved')); if (onProgress) onProgress(lines); continue; }
+        window._aiUsageRecordRequest('🧪 ' + window._t('연결 테스트', 'connection test'));
+        const t0 = Date.now();
+        let r;
+        try { r = await _aiTryProviderCandidates(pk, key, 'Reply with exactly one word: OK', { maxRetryPerModel: 1 }, GAS_URL); }
+        catch (e) { r = { ok: false, error: e }; }
+        const sec = ((Date.now() - t0) / 1000).toFixed(1);
+        if (r.ok) {
+            const txt = window._aiExtractText(r.data).trim();
+            window._aiClearProviderCooldown(pk);
+            lines.push((txt ? '✅ ' : '⚠️ ') + label + ' · ' + r.modelUsed + ' — ' +
+                (txt ? window._t('정상 (', 'OK (') + sec + window._t('초) 응답: "', 's) reply: "') + txt.slice(0, 20) + '"'
+                     : window._t('성공 응답인데 답변 텍스트가 비어 있음 → GAS 응답 형식 확인 필요: ', 'success but empty text → check GAS response format: ') + JSON.stringify(r.data).slice(0, 160)));
+        } else {
+            lines.push('❌ ' + label + ' — ' + String((r.error && r.error.message) || r.error || '?').replace(/^Error:\s*/, '').split('\n')[0].slice(0, 200));
+        }
+        if (onProgress) onProgress(lines);
+    }
+    return lines;
+};
+
 window.callAiBackend = async function(apiKey, prompt, opts) {
     opts = opts || {};
     const provider = window.getActiveAiProvider();
-    const GAS_URL = localStorage.getItem('gas_server_url') ||
-        'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
+    const GAS_URL = window._aiGasUrl();
 
     // 💡 [2026-09-22 신규, 사용자 제보] "Groq/Mistral 키도 등록했는데 전부 안 됨"처럼 폴백까지 다
     //    실패하면, 예전엔 "마지막으로 시도한 제공사"의 에러만 보여줘서 "그 앞에 Groq는 시도되긴
