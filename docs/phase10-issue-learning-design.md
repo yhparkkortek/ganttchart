@@ -240,3 +240,6 @@
   `_sap_gui_process_running()`(tasklist에서 saplogon/sapgui/saplgpad 확인, 판정 불가면 True=기존 안내 유지)로 구분해 "SAP Logon을 실행해 로그인해주세요"를 따로 안내. 실패 경로에서만 동작(정상 조회 영향 없음). 실제 SAP가 꺼진 상태의 라이브 재현은 아직 안 함.
 - 원본 샤드가 Drive `Backups/SAP_Issues/issues_박용훈_202609.json`에 실제 생성된 것을 Drive 커넥터로 확인(폴더 부모 = `Backups`).
 
+### 12-7. 리포트 세션 캐시 (2026-09-22, 성능 개선)
+리포트를 열 때마다 최근 3개월 샤드를 매번 전체 재다운로드하던 것을, `js/31-issue-report.js`의 `cachedDriveJson`이 파일별 `modifiedTime`을 세션 메모리(`_shardCache`)에 기억해두고 **안 바뀐 샤드는 다시 받지 않도록** 고쳤다(`_resolved.json`/`sap_learning.json`도 동일). `files.list`로 메타데이터(가벼움)는 매번 확인하지만 본문 다운로드는 변경분만. 페이지 새로고침하면 비워지는 세션 캐시라 Drive가 여전히 진실의 원천 — 다른 사람이 쓴 갱신은 `modifiedTime` 변경으로 정상 감지됨. 이벤트가 아직 적어 체감은 낮지만 쌓일수록 효과가 커진다. Drive 저장 구조(사용자·월별 JSON 배열 샤드) 자체는 이벤트량이 적어 그대로 유지 — JSONL 전환/오래된 원본 압축/샤드 인덱스 파일은 물량이 늘면 재검토(옵션 C/D/E로 논의됨, 보류).
+
