@@ -218,21 +218,19 @@ window._aiThrottleGate = function() {
     return p;
 };
 
-window.callAiBackend = async function(apiKey, prompt, opts) {
-    opts = opts || {};
-    const provider = window.getActiveAiProvider();
-    const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
-    const GAS_URL = localStorage.getItem('gas_server_url') ||
-        'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
-
-    const activeModel = window.getActiveAiModel();
-    // 시도 순서: 현재 활성 모델 → 나머지 후보 모델(같은 provider, 중복 제거)
-    // 💡 [2026-09-22 신규, 사용자 요청] 자동전환 후보에서 유료(tier:'paid') 모델은 제외한다 —
-    //    무료 등급 키로는 유료 모델 호출 자체가 안 돼서(실사용 확인: gemini-3.1-pro가 무료 등급
-    //    한도 "limit: 0"으로 거부됨) 자동전환 후보에 넣어봐야 매번 또 한 번 헛되이 실패만
-    //    반복하고 다음 후보로 넘어갈 뿐 — 사람이 설정 화면에서 유료 모델을 직접 골랐을 때(그
-    //    경우 activeModel 자체가 유료 모델)는 그 최초 시도만은 그대로 존중하고, "실패 시 자동으로
-    //    넘어가는 나머지 후보" 목록에서만 유료를 뺀다.
+// 💡 [2026-09-22 신규, 사용자 요청] 한 제공사(provider) 안에서 후보 모델을 순서대로 시도하는 부분을
+//    별도 함수로 뽑아냈다 — callAiBackend가 활성 제공사뿐 아니라 "그 제공사가 완전히 막혔을 때
+//    다른 무료 제공사로" 넘어가는 로직을 아래에서 추가하는데, 그때도 완전히 같은 시도 로직을
+//    그대로 재사용하기 위함(새 재시도/판정 코드를 두 벌 만들지 않음). 동작 자체는 예전
+//    callAiBackend 본문 그대로 — 순서만 함수로 옮겼다.
+async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_URL) {
+    const cfg = window.AI_PROVIDERS[providerKey] || window.AI_PROVIDERS.gemini;
+    // 활성 제공사면 사람이 고른(또는 예전에 자동전환된) 모델을 1순위로, 아니면 그 제공사의 기본 무료 모델부터.
+    const activeModel = providerKey === window.getActiveAiProvider() ? window.getActiveAiModel() : cfg.defaultModel;
+    // 시도 순서: 활성 모델 → 나머지 후보 모델(같은 provider, 중복 제거). 유료(tier:'paid') 모델은
+    // 자동전환 후보에서 제외 — 무료 등급 키로는 애초에 호출이 안 돼서(실사용 확인: gemini-3.1-pro가
+    // 무료 등급 한도 "limit: 0"으로 거부됨) 자동전환 후보에 넣어봐야 매번 헛되이 한 번 더 실패할 뿐.
+    // 사람이 설정에서 유료 모델을 직접 골랐을 때(그 경우 activeModel 자체가 유료)는 최초 시도만 존중.
     const candidates = [activeModel].concat((cfg.models || []).filter(m => m.tier !== 'paid').map(m => m.id).filter(id => id !== activeModel));
 
     const maxRetryPerModel = opts.maxRetryPerModel || 2;
@@ -250,18 +248,18 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                 const res = await fetch(GAS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ userApiKey: apiKey, prompt, provider, model })
+                    body: JSON.stringify({ userApiKey: apiKey, prompt, provider: providerKey, model })
                 });
                 const data = await res.json();
                 if (data.status !== 'success') throw new Error(data.message || '구글 서버 응답 오류');
                 if (model !== activeModel) {
                     console.warn(`[AI 모델 자동전환] "${activeModel}" 실패 → "${model}"로 전환 성공. 기본값을 갱신합니다.`);
-                    localStorage.setItem('ai_model_' + provider, model);
+                    localStorage.setItem('ai_model_' + providerKey, model);
                     if (window.showToast) {
                         window.showToast(window._t(`⚠️ AI 모델("${activeModel}")이 사용 중단되어 "${model}"로 자동 전환했습니다.`, `⚠️ AI model "${activeModel}" is unavailable — automatically switched to "${model}".`));
                     }
                 }
-                return { ok: true, data, modelUsed: model, switched: model !== activeModel };
+                return { ok: true, data, modelUsed: model, providerUsed: providerKey, switched: model !== activeModel };
             } catch (err) {
                 lastErr = err;
                 const isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
@@ -278,7 +276,54 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
         //    다른 모델로 바꿔봐야 소용없으므로 후보를 계속 순회하지 않고 여기서 바로 실패 처리
         if (!skipRemainingRetries) return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
     }
-    // 모든 후보 모델이 실패 — 마지막 에러가 할당량 초과/요청 크기 초과/내부 일시오류라면 원인·대응법을 메시지에 덧붙여준다.
+    // 이 제공사의 후보 모델을 전부 시도했는데 전부 막힘(할당량/사용중단/요청크기/일시오류 등) —
+    // 호출부(callAiBackend)가 이 신호로 "다른 제공사로 넘어갈지" 판단한다.
+    return { ok: false, error: lastErr || new Error('알 수 없는 오류'), allCandidatesFailed: true };
+}
+
+// 💡 [2026-09-22 신규, 사용자 요청] 다른 무료 제공사로 자동 폴백 — 활성 제공사(예: Gemini)의 무료
+//    후보를 전부 시도했는데 다 막혔을 때(할당량 등), 사람이 이미 키를 저장해둔 다른 "무료" 제공사가
+//    있으면 이번 요청만 그쪽으로 대신 처리한다. OpenAI는 무료 등급이 없는(카드 필요) 제공사라 이
+//    자동목록에서 뺀다 — 사람이 명시적으로 선택 안 했는데 자동으로 돈이 나가는 제공사로 넘어가면
+//    안 되므로(다른 곳은 전부 "무료" 등급이 실제로 있는 곳들). 활성 제공사가 이미 이 목록에 있으면
+//    그건 이미 1차 시도로 끝났으므로 자동으로 건너뛴다.
+window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral'];
+
+window.callAiBackend = async function(apiKey, prompt, opts) {
+    opts = opts || {};
+    const provider = window.getActiveAiProvider();
+    const GAS_URL = localStorage.getItem('gas_server_url') ||
+        'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
+
+    const primaryResult = await _aiTryProviderCandidates(provider, apiKey, prompt, opts, GAS_URL);
+    if (primaryResult.ok) return primaryResult;
+
+    let lastErr = primaryResult.error;
+    // 활성 제공사의 후보를 전부 시도했는데 전부 막힌 경우에만(키 오류 등 다른 이유면 다른 제공사도
+    // 소용없으므로 시도 안 함) 저장된 키가 있는 다른 무료 제공사로 순서대로 넘어가본다.
+    if (primaryResult.allCandidatesFailed && !(opts.isCancelled && opts.isCancelled())) {
+        for (const fbProvider of window._AI_FREE_FALLBACK_PROVIDER_ORDER) {
+            if (fbProvider === provider) continue; // 이미 1차로 시도함
+            const fbCfg = window.AI_PROVIDERS[fbProvider];
+            const fbKey = fbCfg && localStorage.getItem(fbCfg.keyName);
+            if (!fbKey) continue; // 그 제공사 키를 저장해둔 적이 없으면 시도할 수 없음 — 조용히 건너뜀
+            const fbResult = await _aiTryProviderCandidates(fbProvider, fbKey, prompt, opts, GAS_URL);
+            if (fbResult.ok) {
+                console.warn(`[AI 제공사 자동전환] "${provider}" 무료 한도 소진 → "${fbProvider}"로 이번 요청만 대신 처리`);
+                if (window.showToast) {
+                    const fromLabel = (window.AI_PROVIDERS[provider] || {}).label || provider;
+                    window.showToast(window._t(
+                        `⚠️ ${fromLabel} 무료 한도를 모두 소진해 이번 요청만 ${fbCfg.label}(으)로 대신 처리했습니다.`,
+                        `⚠️ ${fromLabel}'s free quota is exhausted — this request was handled via ${fbCfg.label} instead.`
+                    ));
+                }
+                return Object.assign({}, fbResult, { crossProviderFallback: true, originalProvider: provider });
+            }
+            if (fbResult.error) lastErr = fbResult.error; // 마지막으로 실패한 제공사의 에러를 최종 메시지로
+        }
+    }
+    // 활성 제공사 + (저장된 키가 있는) 모든 무료 폴백 제공사까지 다 막힘 — 마지막 에러가 할당량
+    // 초과/요청 크기 초과/내부 일시오류라면 원인·대응법을 메시지에 덧붙여준다.
     if (lastErr && window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_QUOTA_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_QUOTA_HINT);
     } else if (lastErr && window._AI_REQUEST_TOO_LARGE_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_REQUEST_TOO_LARGE_HINT) === -1) {
