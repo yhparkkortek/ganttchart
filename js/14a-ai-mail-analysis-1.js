@@ -113,10 +113,12 @@ window.AI_PROVIDERS = {
                // 💡 [2026-08-20] 기존 llama-3.3-70b-versatile / llama-4-maverick / deepseek-r1-distill-llama-70b가
                //    Groq 공식 지원 모델 목록(console.groq.com/docs/models)에서 전부 빠짐(사용중단) → 현재 목록으로 교체.
                //    Groq 모델 라인업은 자주 바뀌므로 또 실패하면 위 문서에서 최신 model ID 재확인 필요.
+               // 💡 [2026-09-22] groq/compound가 이 계정에는 "does not exist or you do not have access to it"로
+               //    매번 100% 실패(베타/권한 제한 추정, 일시적 quota 문제 아님) 확인 → 후보에서 제거.
+               //    매 폴백 시도마다 반드시 실패하는 후보를 하나씩 거치며 시간을 낭비하고 있었음.
                models: [
                    { id: 'openai/gpt-oss-120b',  label: 'GPT-OSS 120B (OpenAI 오픈모델)', tier: 'free', note: '🟢 무료 · 범용 추천' },
                    { id: 'openai/gpt-oss-20b',   label: 'GPT-OSS 20B (경량)',              tier: 'free', note: '🟢 무료 · 빠름' },
-                   { id: 'groq/compound',        label: 'Groq Compound (도구 연동 에이전트)', tier: 'free', note: '🟢 무료 · 웹검색 등 도구 사용' },
                ]},
     mistral: { label: 'Mistral (프랑스 AI)',  keyName: 'mistral_api_key', defaultModel: 'mistral-small-latest',
                placeholder: '(Mistral API 키)', guideUrl: 'https://console.mistral.ai/api-keys',
@@ -150,7 +152,8 @@ window.getActiveAiKey = function() {
 //    "예전에 한 번 저장해둔 사용자"가 계속 같은 오류를 겪는 걸 막는다.
 window._AI_DEPRECATED_MODEL_IDS = [
     'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro',
-    'llama-3.3-70b-versatile', 'llama-4-maverick', 'deepseek-r1-distill-llama-70b'
+    'llama-3.3-70b-versatile', 'llama-4-maverick', 'deepseek-r1-distill-llama-70b',
+    'groq/compound'
 ];
 window.getActiveAiModel = function() {
     const provider = window.getActiveAiProvider();
@@ -454,7 +457,6 @@ window.refreshAiModelDropdown = function() {
 window._MODEL_GUIDE = {
     'openai/gpt-oss-120b': { ko: '💡 Groq API 키로 사용합니다. OpenAI가 공개한 오픈소스 모델로 별도 발급 불필요 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. An open-weight model released by OpenAI — no separate key needed.' },
     'openai/gpt-oss-20b':   { ko: '💡 Groq API 키로 사용합니다. 120B의 경량 버전으로 속도가 더 빠릅니다 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. A lighter, faster variant of the 120B model.' },
-    'groq/compound':        { ko: '💡 Groq API 키로 사용합니다. 웹검색 등 도구를 자동으로 함께 사용하는 에이전트형 시스템입니다.', en: '💡 Uses your Groq API key. An agentic system that can auto-use tools like web search.' },
 };
 
 window.onAiModelChange = function() {
