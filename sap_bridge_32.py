@@ -891,7 +891,26 @@ def fetch_zmm009_material_list(materials, storage_location='1000'):
     body, source = _sap_dump_screen_body(wnd)
     mat_label = ', '.join(mat_list)
     if not body:
-        return {'ok': False, 'error': f'자재 "{mat_label}"의 조회 결과를 찾지 못했습니다 — 자재번호/저장위치가 올바른지 확인해주세요.'}
+        # 🐛 [2026-09-22 버그수정, 실사용 이슈 리포트로 확인] 결과가 없으면 SAP이 "정보" 팝업(wnd[1])에
+        #    실제 사유(예: 그 저장위치엔 이 자재 마스터가 없음)를 담아 띄우는데, 기존 코드는 wnd[0]만
+        #    읽어서 이 팝업을 읽지도 닫지도 않았다 — 그래서 ① 사용자는 진짜 사유를 모른 채 뭉뚱그린
+        #    안내만 받고 ② 팝업이 열린 채로 남아 다음 조회 시도까지 씹히는 2차 문제가 있었다(이슈
+        #    리포트가 "③ 코드: 팝업 잔존 처리"로 정확히 짚어낸 사례 — docs/phase10-issue-learning-design.md).
+        popup_msg = ''
+        try:
+            if int(session.Children.Count) > 1:
+                for fid in ('wnd[1]/usr/txtMESSTXT1', 'wnd[1]/usr/txtMESSTXT2', 'wnd[1]/usr/txtIK1'):
+                    try:
+                        txt = (session.findById(fid).Text or '').strip()
+                        if txt and txt not in popup_msg:
+                            popup_msg = (popup_msg + ' ' + txt).strip()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        _sap_close_stray_popups(session)   # 팝업을 남겨두면 다음 조회 시도가 여기 막힌다 — 항상 정리하고 반환
+        reason = f' SAP 안내: "{popup_msg}"' if popup_msg else ''
+        return {'ok': False, 'error': f'자재 "{mat_label}"의 조회 결과를 찾지 못했습니다 — 자재번호/저장위치가 올바른지 확인해주세요.{reason}'}
 
     header = f'[SAP 자재 List(ZMM009): 자재 {mat_label}]\n'
     text = header + '\n' + body
