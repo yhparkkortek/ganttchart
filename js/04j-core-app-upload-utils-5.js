@@ -1307,6 +1307,7 @@
                 ko: '권장값: 20분 (기본값) — 0으로 저장하면 쿨다운 기능이 꺼지고, 지금 막혀있던 제공사도 즉시 풀립니다.',
                 en: 'Recommended: 20 min (default) — saving 0 disables cooldown entirely and immediately releases any provider currently in cooldown.'
             },
+            'ai-cross-fallback-checkbox-label': { ko: '🔀 다른 제공사로 자동 전환 (교차 폴백)', en: '🔀 Auto-switch to another provider (cross-provider fallback)' },
         };
         Object.entries(_reqsizeTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
@@ -1328,6 +1329,10 @@
             'ai-cooldown-min-desc': {
                 ko: '한 제공사(Gemini/Groq/Mistral)의 무료 후보 모델을 전부 시도했는데 할당량 등으로 다 막히면, 이 시간 동안은 그 제공사를 건너뛰고 바로 다음 제공사로 넘어갑니다(0번 낭비 호출). 시간이 지나면 자동으로 다시 한 번 시도해서 할당량이 풀렸는지 확인합니다 — 너무 짧으면 낭비 호출이 늘고, 너무 길면 할당량이 풀린 걸 늦게 알아챕니다.',
                 en: "If a provider's (Gemini/Groq/Mistral) free candidate models all fail (e.g. quota exhausted), that provider is skipped entirely for this duration (zero wasted calls), moving straight to the next provider. After it elapses, the provider is retried automatically to detect if the quota has reset — too short wastes calls, too long delays noticing a reset."
+            },
+            'ai-cross-fallback-desc': {
+                ko: '활성 제공사(예: Gemini)가 무료 한도로 막히면 Groq/Mistral 등 키를 저장해둔 다른 제공사로 자동으로 넘어갑니다. 기본값: 켜짐 — 끄면 활성 제공사만 쓰고, 그게 막히면 다른 제공사로 넘어가지 않고 바로 실패 메시지를 보여줍니다(원인이 폴백 자체에 있는지 확인하고 싶을 때 꺼보세요).',
+                en: "If the active provider (e.g. Gemini) hits its free quota, this automatically switches to another provider (Groq/Mistral) whose key you've saved. Default: on — turn it off to use only the active provider and fail immediately when it's blocked, without switching (useful for isolating whether the fallback itself is the cause)."
             },
         };
         Object.entries(_reqsizeDescs).forEach(([id, t]) => {

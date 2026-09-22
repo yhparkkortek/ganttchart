@@ -294,6 +294,17 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
 //    안 되므로(다른 곳은 전부 "무료" 등급이 실제로 있는 곳들). 활성 제공사가 이미 이 목록에 있으면
 //    그건 이미 1차 시도로 끝났으므로 자동으로 건너뛴다.
 window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral'];
+// 💡 [2026-09-22 신규, 사용자 요청 "자동전환을 막아도 같은 현상인지 보고 싶다"] 교차 제공사
+//    폴백 자체를 끌 수 있게 함 — Groq/Mistral 쪽이 원인인지, 폴백 로직 자체가 원인인지 구분하는
+//    진단 목적. 기본 켜짐(기존 동작 유지), ⚙️ AI 도구 설정에서 끄면 활성 제공사(예: Gemini)만
+//    쓰고 그게 막히면(할당량 등) 다른 제공사로 넘어가지 않고 바로 실패 메시지를 보여준다.
+window.getAiCrossProviderFallbackEnabled = function() {
+    var v = localStorage.getItem('gantt_ai_cross_provider_fallback');
+    return v === null ? true : v === '1';
+};
+window.setAiCrossProviderFallbackEnabled = function(on) {
+    localStorage.setItem('gantt_ai_cross_provider_fallback', on ? '1' : '0');
+};
 
 // 🐛🐛 [2026-09-22 실사용 버그수정, 사용자 지적] 위 교차 제공사 폴백이 오히려 quota 소모를
 //    가속시키고 있었다 — Gemini가 (일일 한도라) 하루 종일 막혀 있으면, AI 호출 "1번"마다
@@ -365,8 +376,9 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
 
     let lastErr = primaryResult.error;
     // 활성 제공사의 후보를 전부 시도했는데 전부 막힌 경우에만(키 오류 등 다른 이유면 다른 제공사도
-    // 소용없으므로 시도 안 함) 저장된 키가 있는 다른 무료 제공사로 순서대로 넘어가본다.
-    if (primaryResult.allCandidatesFailed && !(opts.isCancelled && opts.isCancelled())) {
+    // 소용없으므로 시도 안 함) 저장된 키가 있는 다른 무료 제공사로 순서대로 넘어가본다 — 단, 이
+    // 폴백 자체를 설정에서 껐으면(진단 목적 등) 시도하지 않고 바로 실패 처리.
+    if (primaryResult.allCandidatesFailed && window.getAiCrossProviderFallbackEnabled() && !(opts.isCancelled && opts.isCancelled())) {
         for (const fbProvider of window._AI_FREE_FALLBACK_PROVIDER_ORDER) {
             if (fbProvider === provider) continue; // 이미 1차로 시도함
             const fbCfg = window.AI_PROVIDERS[fbProvider];

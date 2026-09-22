@@ -145,6 +145,16 @@ Task Inbox "📧 원문 보기"의 🌐 번역 버튼(`js/14c-task-inbox.js`의 
     발견 — 이미 쿨다운 중인 제공사는 `_aiProviderCooldownUntil`에 남은 만료시각이 그대로라
     "0으로 했는데 왜 아직도 막혀있냐"는 혼란이 생기므로, 설정 저장 시점(`saveAiToolsSettings`)에
     0이면 `_aiProviderCooldownUntil`을 즉시 비우고(`localStorage` 항목도 삭제) 토스트로 안내한다.
+  - **🔀🔍 [2026-09-22 같은 날 후속, 사용자 요청 "자동전환을 막아도 같은 현상인지 보고 싶다"] 교차
+    폴백 자체를 끄는 스위치 추가**: 사용자가 "Groq/Mistral 쪽이 문제인 것 같기도 하고, Gemini를
+    바로 Groq/Mistral로 자동전환하는 것 자체가 문제인 것 같기도 하다"며 **Gemini만 쓰도록 강제해
+    같은 현상이 재현되는지 직접 격리해서 보고 싶어 함** — 진단 목적의 온/오프 스위치가 필요했다.
+    `window.getAiCrossProviderFallbackEnabled()`/`setAiCrossProviderFallbackEnabled()`(localStorage
+    `gantt_ai_cross_provider_fallback`, 기본 켜짐) 추가, `callAiBackend`의 폴백 루프 진입 조건에
+    이 값을 더함 — 끄면 활성 제공사의 후보가 전부 막혀도(`allCandidatesFailed`) 다른 제공사로
+    넘어가지 않고 바로 실패 메시지를 보여준다(모델 자동전환 자체는 그대로 유지 — 이건 "같은
+    제공사 안에서 다른 모델로" 넘어가는 것이라 별개, 여기서 끄는 건 "다른 제공사로" 넘어가는
+    교차 폴백만). ⚙️ AI 도구 설정 → 📉 AI 요청 크기 제한 → "🔀 다른 제공사로 자동 전환" 체크박스.
   - **🖥️ 같은 요청에서 같이 발견된 별개 버그**: ⚙️ AI 도구 설정 모달의 스크롤 영역
     (`overflow-y:auto; flex:1;`인 내부 div)에 `min-height:0`이 빠져 있어서, 이 세션에서 설정
     항목(SAP 최대 글자 수/쿨다운 등)을 계속 추가하며 내용이 길어지자 **내부 div가 스크롤되는

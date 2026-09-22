@@ -321,6 +321,12 @@
                                 <button id="ai-cooldown-min-reset-btn" onclick="document.getElementById('ai-cooldown-min-input').value=window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
                             <div id="ai-cooldown-min-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 20분 (기본값) — 0으로 저장하면 쿨다운 기능이 꺼지고, 지금 막혀있던 제공사도 즉시 풀립니다.</div>
+                            <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:4px;">
+                                <input id="ai-cross-fallback-checkbox" type="checkbox" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">
+                                <span id="ai-cross-fallback-checkbox-label" style="font-size:12.5px; font-weight:bold; color:#333;">🔀 다른 제공사로 자동 전환 (교차 폴백)</span>
+                            </label>
+                            <div id="ai-cross-fallback-desc" style="font-size:11px; color:#888; line-height:1.5;">활성 제공사(예: Gemini)가 무료 한도로 막히면 Groq/Mistral 등 키를 저장해둔 다른 제공사로 자동으로 넘어갑니다. 기본값: 켜짐 — 끄면 활성 제공사만 쓰고, 그게 막히면 다른 제공사로 넘어가지 않고 바로 실패 메시지를 보여줍니다(원인이 폴백 자체에 있는지 확인하고 싶을 때 꺼보세요).</div>
                         </div>
                     </div>
 
@@ -417,6 +423,7 @@
         document.getElementById('ai-qa-max-other-tasks-input').value = window.getAiQaMaxOtherTasks();
         document.getElementById('ai-sap-maxlen-input').value = window.getAiSapMaxLen();
         document.getElementById('ai-cooldown-min-input').value = window.getAiProviderCooldownMin();
+        document.getElementById('ai-cross-fallback-checkbox').checked = window.getAiCrossProviderFallbackEnabled();
         document.getElementById('ai-summary-range-days-input').value = window.getAiSummaryRangeDays();
         document.getElementById('ai-summary-urgent-days-input').value = window.getAiUrgentDays();
         document.getElementById('ai-topic-learning-days-input').value = window.getTopicLearningDays();
@@ -485,6 +492,8 @@
             try { localStorage.removeItem('ai_provider_cooldown_v1'); } catch (e) { /* ignore */ }
             if (window.showToast) window.showToast(window._t('⏳ 쿨다운을 껐습니다 — 지금 막혀있던 제공사도 모두 즉시 다시 시도 대상이 됩니다.', '⏳ Cooldown disabled — providers currently in cooldown will be retried immediately.'), 'info');
         }
+
+        window.setAiCrossProviderFallbackEnabled(document.getElementById('ai-cross-fallback-checkbox').checked);
 
         const rangeInput = document.getElementById('ai-summary-range-days-input');
         let rd = parseInt(rangeInput.value, 10);
