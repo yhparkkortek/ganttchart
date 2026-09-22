@@ -190,13 +190,18 @@ window._AI_QUOTA_HINT = '\n\n💡 무료 등급의 요청 한도(quota)는 API �
 //    _AI_QUOTA_HINT는 항상 "몇 시간 뒤(태평양시간 자정 리셋)"이라고만 안내해서, 실제로는 1분도 안
 //    걸려 풀릴 상황을 사용자가 "오늘 하루 종일 막혔다"로 오해하게 만들고 있었다(실사용 제보로 확인).
 //    응답에 재시도 대기시간이 짧게(3분 이내) 찍혀 있으면 그 초 단위 그대로 안내하도록 분기한다.
-window._aiBuildQuotaHint = function(errMessage) {
+// errMessage에 구글이 알려준 "Please retry in Ns" 같은 짧은(3분 이내) 재시도 대기시간이 있으면
+// 그 초 단위 숫자를 반환하고, 없거나 너무 길면(=RPM성이 아니라 일/시간 단위 한도로 추정) null.
+window._aiExtractRetrySeconds = function(errMessage) {
     const m = /retry in\s*([\d.]+)\s*s/i.exec(errMessage || '');
-    if (m) {
-        const sec = Math.ceil(parseFloat(m[1]));
-        if (sec > 0 && sec <= 180) {
-            return '\n\n💡 이건 "오늘 하루치 한도 소진"이 아니라 분당 요청 수(RPM) 제한입니다 — 짧은 시간에 요청이 몰려서 잠깐 걸린 것뿐이라 약 ' + sec + '초 후 재시도하면 바로 다시 됩니다.\n→ 계속 이 메시지만 반복된다면 ① 짧은 간격으로 여러 번 재시도하지 말고 위 대기시간만큼만 기다렸다 한 번만 시도 ② 메일 자동분석/자동수집이 백그라운드에서 같이 돌고 있지 않은지 확인 ③ 그래도 반복되면 유료 결제 등급으로 전환';
-        }
+    if (!m) return null;
+    const sec = Math.ceil(parseFloat(m[1]));
+    return (sec > 0 && sec <= 180) ? sec : null;
+};
+window._aiBuildQuotaHint = function(errMessage) {
+    const sec = window._aiExtractRetrySeconds(errMessage);
+    if (sec != null) {
+        return '\n\n💡 이건 "오늘 하루치 한도 소진"이 아니라 분당 요청 수(RPM) 제한입니다 — 짧은 시간에 요청이 몰려서 잠깐 걸린 것뿐이라 약 ' + sec + '초 후 재시도하면 바로 다시 됩니다.\n→ 계속 이 메시지만 반복된다면 ① 짧은 간격으로 여러 번 재시도하지 말고 위 대기시간만큼만 기다렸다 한 번만 시도 ② 메일 자동분석/자동수집이 백그라운드에서 같이 돌고 있지 않은지 확인 ③ 그래도 반복되면 유료 결제 등급으로 전환';
     }
     return window._AI_QUOTA_HINT;
 };
@@ -356,10 +361,19 @@ window.setAiProviderCooldownMin = function(v) {
 window._aiProviderCooldownUntil = (function() {
     try { return JSON.parse(localStorage.getItem('ai_provider_cooldown_v1') || '{}'); } catch (e) { return {}; }
 })();
-window._aiMarkProviderCooldown = function(providerKey) {
+// 🐛 [2026-09-22 실사용 버그수정, 사용자 지적 "고민도 안 하는 것 같음"] 할당량 초과 에러에 구글이
+//    "Please retry in 6.5s" 처럼 짧은 대기시간을 직접 알려주는 경우(=RPM성, 위 _aiExtractRetrySeconds
+//    참고)에도 무조건 고정 설정값(기본 20분) 만큼 쿨다운을 걸어버리고 있었다 — 실제로는 몇 초~1분
+//    안에 풀리는 제한인데, 그 이후 같은 제공사로 오는 모든 호출(AI 요약 등)이 최대 20분간 API를
+//    아예 호출조차 안 하고 즉시 "쿨다운 중" 메시지만 반환해서 "실제로 시도해보지도 않는다"는
+//    체감으로 이어졌다. 짧은 재시도 대기시간이 있으면 그 시간(+5초 여유)만큼만 쿨다운을 걸고,
+//    없을 때만(=하루치 등 더 오래 걸릴 것으로 추정) 기존 설정값을 그대로 쓴다.
+window._aiMarkProviderCooldown = function(providerKey, err) {
     const minutes = window.getAiProviderCooldownMin();
     if (!minutes) return; // 0분 = 쿨다운 사용 안 함 — 등록하지 않음(매번 다시 시도)
-    window._aiProviderCooldownUntil[providerKey] = Date.now() + minutes * 60 * 1000;
+    const shortSec = window._aiExtractRetrySeconds(err && err.message);
+    const ms = (shortSec != null) ? (shortSec + 5) * 1000 : minutes * 60 * 1000;
+    window._aiProviderCooldownUntil[providerKey] = Date.now() + ms;
     try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }
 };
 window._aiClearProviderCooldown = function(providerKey) {
@@ -385,14 +399,18 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
     const attempts = [];
     let primaryResult;
     if (window._aiProviderInCooldown(provider)) {
+        const remainMs = window._aiProviderCooldownUntil[provider] - Date.now();
+        const remainLabel = remainMs <= 180000
+            ? window._t(`${Math.ceil(remainMs / 1000)}초`, `${Math.ceil(remainMs / 1000)}s`)
+            : window._t(`${Math.ceil(remainMs / 60000)}분`, `${Math.ceil(remainMs / 60000)}min`);
         primaryResult = { ok: false, allCandidatesFailed: true, error: new Error(
-            window._t(`(쿨다운 중 — 최근 할당량 소진이 확인돼 ${Math.ceil((window._aiProviderCooldownUntil[provider] - Date.now()) / 60000)}분간 재시도를 건너뜁니다)`,
-                `(In cooldown — quota was recently exhausted, skipping retries for ${Math.ceil((window._aiProviderCooldownUntil[provider] - Date.now()) / 60000)} more min)`)
+            window._t(`(쿨다운 중 — 최근 할당량 소진이 확인돼 ${remainLabel}간 재시도를 건너뜁니다)`,
+                `(In cooldown — quota was recently exhausted, skipping retries for ${remainLabel} more)`)
         ) };
     } else {
         primaryResult = await _aiTryProviderCandidates(provider, apiKey, prompt, opts, GAS_URL);
         if (primaryResult.ok) { window._aiClearProviderCooldown(provider); return primaryResult; }
-        if (primaryResult.allCandidatesFailed) window._aiMarkProviderCooldown(provider);
+        if (primaryResult.allCandidatesFailed) window._aiMarkProviderCooldown(provider, primaryResult.error);
     }
     attempts.push({ provider, error: primaryResult.error });
 
@@ -423,7 +441,7 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                 }
                 return Object.assign({}, fbResult, { crossProviderFallback: true, originalProvider: provider });
             }
-            if (fbResult.allCandidatesFailed) window._aiMarkProviderCooldown(fbProvider);
+            if (fbResult.allCandidatesFailed) window._aiMarkProviderCooldown(fbProvider, fbResult.error);
             attempts.push({ provider: fbProvider, error: fbResult.error });
             if (fbResult.error) lastErr = fbResult.error; // 마지막으로 실패한 제공사의 에러를 최종 메시지로
         }
