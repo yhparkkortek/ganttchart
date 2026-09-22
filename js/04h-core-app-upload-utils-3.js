@@ -2694,6 +2694,32 @@ ${docsJson}`;
             return;
         }
 
+        // 🔔🔁 [2026-09-22 신규, 사용자 요청] "핀셋/알람 모두 해제·켜기" — 조건 없는 순수 일괄
+        //    토글은 AI 호출 없이 즉시 처리(위 필터 명령과 달리 실제 _알림 값을 바꿈). 대량
+        //    프로젝트에서 이게 AI 문답으로 새면 전체 업무 목록(최대 300건)을 통째로 프롬프트에
+        //    넣어야 해서 Groq 등 무료 등급 요청크기 한도를 넘기고, 301번째 이후 업무는 검토도
+        //    안 되는 문제가 있었다(실사용 제보) — 자세한 배경은 docs/ai-qa.md 참고.
+        const alarmBulkReply = window._ganttQaTryHandleAlarmBulkCommand ? window._ganttQaTryHandleAlarmBulkCommand(question) : null;
+        if (alarmBulkReply) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: alarmBulkReply });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+        // 🔔🤖 [2026-09-22 신규, 사용자 요청] "이번주 지난 알람 모두 해제해줘"처럼 수량어(모두/전체/
+        //    다/전부)는 있지만 조건(날짜·담당자 등)까지 붙어서 위 무조건부 명령엔 안 걸리는 경우 —
+        //    AI 판단 자체는 필요하지만, 전체 프로젝트 대신 **지금 알람 켜진 업무만**(보통 훨씬
+        //    적음, 알람 탭과 같은 `collectAlarmItems()`)을 프롬프트에 넣어 판단시킨다("AI가
+        //    조건부 선별까지 판단하되, 알람 탭의 이미 작은 목록만 보여줘서 무겁지 않게" — 사용자 지시).
+        const alarmCondBulk = window._ganttQaDetectAlarmConditionalBulk ? window._ganttQaDetectAlarmConditionalBulk(question) : null;
+        if (alarmCondBulk) {
+            await window._ganttQaRunAlarmConditionalBulk(question);
+            input.focus();
+            return;
+        }
+
         // 🛑 [2026-09-16 신규, 실사용 버그수정] "처음부터 다시"/"취소"/"그만" — 여러 턴 draft
         //    (PO/BOM/승인원 표지/SAP 문서 모호성/드롭다운/확인버튼) 진행 중일 때, 사람이 중단·
         //    재시작을 요청하면 그 draft가 정확히 뭘 기대하고 있었든 상관없이 무조건 정리하고
@@ -4273,6 +4299,142 @@ ${docsJson}`;
         }
 
         return null;
+    };
+
+    // 🔔🔁 [2026-09-22 신규, 사용자 요청] "핀셋/알람 모두 해제·켜기" — 위 필터 명령과 달리 실제
+    //    업무의 알람 플래그(_알림)를 바꾼다. 각 업무에 이미 켜짐/꺼짐 값이 있으므로 "켜진 것만
+    //    찾아서 끈다"는 순수 기계적 작업이라 AI 판단이 전혀 필요 없다 — globalData를 직접 훑어
+    //    _aiAssistSetAlarm/_aiAssistClearAlarm(AI 문답 태그 실행과 완전히 같은 함수, 새 토글
+    //    로직을 만들지 않음)을 호출한다. "모두/전체/다/전부" 같은 수량어가 명시적으로 있을
+    //    때만 매칭해서, "이 업무 알람 꺼줘"처럼 단일 업무를 가리키는 요청을 잘못 가로채지
+    //    않는다 — 조건(날짜/담당자 등)까지 붙은 요청은 매칭시키지 않고 null을 반환해 아래
+    //    _ganttQaDetectAlarmConditionalBulk로 넘어가게 한다.
+    window._ganttQaTryHandleAlarmBulkCommand = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        var _en = window._currentLang === 'en';
+        var _aw = '알람|알림|핀셋알람|핀셋알림|핀셋|마감알람|마감알림|alarm|reminder|notification';
+        var _qw = '모두|전체|다|전부|all';
+        var _offV = '꺼|끄|해제|취소|풀어|off';
+        var _onV = '켜|on\\b';
+        var _filler = '(?:지금|바로|좀)?\\s*';
+        var _tail = '\\s*(?:해\\s*줘|해\\s*주세요|주세요|줘|부탁\\S*)?\\s*[.!?~]*';
+        function bothOrders(verbPart) {
+            return '(?:' + _filler + '(?:' + _aw + ')\\s*(?:' + _qw + ')|' + _filler + '(?:' + _qw + ')\\s*(?:' + _aw + '))\\s*(?:' + verbPart + ')\\S*' + _tail;
+        }
+        var offRe = new RegExp('^\\s*' + bothOrders(_offV) + '$', 'i');
+        var onRe  = new RegExp('^\\s*' + bothOrders(_onV) + '$', 'i');
+        var isOff = offRe.test(text);
+        var isOn  = !isOff && onRe.test(text);
+        if (!isOff && !isOn) return null;
+
+        var changed = 0;
+        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : [];
+        for (var i = 1; i < gd.length; i++) {
+            var row = gd[i];
+            if (!row || row._level === undefined) continue;
+            if (isOff) {
+                if (row._알림) {
+                    var r1 = window._aiAssistClearAlarm(i);
+                    if (r1 && r1.ok && !r1.alreadyOff) changed++;
+                }
+            } else {
+                if (!row._알림) {
+                    var r2 = window._aiAssistSetAlarm(i);
+                    if (r2 && r2.ok && !r2.alreadyOn) changed++;
+                }
+            }
+        }
+        if (!changed) {
+            return isOff
+                ? (_en ? '✅ There were no alarms to clear — nothing was on.' : '✅ 해제할 알람이 없습니다 — 이미 전부 꺼져 있습니다.')
+                : (_en ? '✅ All tasks already have alarms set.' : '✅ 이미 모든 업무에 알람이 켜져 있습니다.');
+        }
+        return isOff
+            ? (_en ? `🔔 Cleared alarms on ${changed} task(s).` : `🔔 업무 ${changed}건의 알람을 해제했습니다.`)
+            : (_en ? `🔔 Set alarms on ${changed} task(s).` : `🔔 업무 ${changed}건에 알람을 설정했습니다.`);
+    };
+
+    // 🔔🤖 [2026-09-22 신규, 사용자 요청] "이번주 지난 알람 모두 해제해줘"처럼 수량어(모두/전체/다/
+    //    전부)는 있지만 날짜/담당자 같은 조건이 붙어서 위 무조건부 명령엔 안 걸리는 경우 — AI
+    //    판단 자체는 필요하지만, 전체 프로젝트(최대 300건) 대신 **지금 알람 켜진 업무만**(알람
+    //    탭과 같은 window.collectAlarmItems(), 보통 훨씬 적음)을 프롬프트에 넣어 판단시킨다.
+    //    켜기(ON) 조건부는 대상 후보(꺼진 업무 전체)가 오히려 더 커질 수 있어 지원 범위 밖 —
+    //    끄기(OFF) 조건부만 지원(실사용 요청도 이 방향이었음).
+    window._ganttQaDetectAlarmConditionalBulk = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        var _aw = '알람|알림|핀셋알람|핀셋알림|핀셋|마감알람|마감알림|alarm|reminder|notification';
+        var _qw = '모두|전체|다|전부|all';
+        var _offV = '꺼|끄|해제|취소|풀어|off';
+        if (!new RegExp(_aw, 'i').test(text)) return null;
+        if (!new RegExp(_qw, 'i').test(text)) return null;
+        if (!new RegExp(_offV, 'i').test(text)) return null;
+        // 이 시점에 도달했다는 건 위 _ganttQaTryHandleAlarmBulkCommand(무조건부 순수 패턴)에
+        // 안 걸렸다는 뜻이므로(호출 순서상 이미 먼저 시도됨), 자연히 "조건부"만 남는다.
+        return true;
+    };
+
+    window._ganttQaRunAlarmConditionalBulk = async function(question) {
+        const _en = window._currentLang === 'en';
+        window._ganttQaHistory.push({ role: 'user', text: question });
+        const inputEl = document.getElementById('gantt-qa-input');
+        if (inputEl) inputEl.value = '';
+        const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        if (!apiKey) {
+            window._ganttQaHistory.push({ role: 'ai', text: window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.') });
+            window._renderGanttQaMessages();
+            return;
+        }
+        const items = window.collectAlarmItems ? window.collectAlarmItems() : [];
+        if (!items.length) {
+            window._ganttQaHistory.push({ role: 'ai', text: window._t('📌 지금 알람이 켜진 업무가 없습니다.', '📌 No tasks currently have an alarm on.') });
+            window._renderGanttQaMessages();
+            return;
+        }
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('알람 켜진 업무 중 조건에 맞는 것을 찾는 중...', 'Finding alarmed tasks that match your condition...'), pending: true });
+        window._renderGanttQaMessages();
+        let pendingPopped = false; // catch가 실수로 이미 지워진 자리(성공 메시지 등)를 또 지우지 않도록
+        try {
+            const listText = items.map(function(it) {
+                const dueSign = it.diffDays >= 0 ? 'D-' + it.diffDays : 'D+' + Math.abs(it.diffDays);
+                return `#G${it.rowIdx} | ${it.taskName} | ${_en ? 'assignee' : '담당'}:${it.assignee || '-'} | ${_en ? 'due' : '마감'}:${it.dueStr}(${dueSign}) | ${_en ? 'status' : '상태'}:${it.status || '-'}`;
+            }).join('\n');
+            const prompt = (_en
+                ? `Below is the list of tasks that currently have an alarm ON.\n${listText}\n\nUser request: "${question}"\n\nList only the #G numbers of the tasks matching this request's condition, one per line, formatted exactly as "[[G:number]]". If none match, reply with just "none". No other text.`
+                : `다음은 지금 알람이 켜져 있는 업무 목록입니다.\n${listText}\n\n사용자 요청: "${question}"\n\n이 요청 조건에 맞는 업무의 #G번호만, 각 줄에 하나씩 정확히 "[[G:번호]]" 형식으로 나열하세요. 조건에 맞는 게 하나도 없으면 "없음"이라고만 답하세요. 다른 설명은 쓰지 마세요.`);
+            const result = await window.callAiBackend(apiKey, prompt, {});
+            window._ganttQaHistory.pop();
+            pendingPopped = true;
+            if (!result.ok) {
+                window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('오류: ', 'Error: ') + (result.error && result.error.message ? result.error.message : result.error) });
+                window._renderGanttQaMessages();
+                return;
+            }
+            const text = (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
+                && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
+                && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '';
+            const matches = Array.from(text.matchAll(/\[\[G:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
+            if (!matches.length) {
+                window._ganttQaHistory.push({ role: 'ai', text: window._t('📌 조건에 맞는 알람이 없습니다.', '📌 No alarms match that condition.') });
+                window._renderGanttQaMessages();
+                return;
+            }
+            let changed = 0;
+            const names = [];
+            matches.forEach(function(idx) {
+                const r = window._aiAssistClearAlarm(idx);
+                if (r && r.ok && !r.alreadyOff) { changed++; names.push(r.taskName); }
+            });
+            const nameList = names.length ? ':\n- ' + names.slice(0, 10).join('\n- ') + (names.length > 10 ? '\n...' : '') : '';
+            window._ganttQaHistory.push({ role: 'ai', text: _en
+                ? `🔔 Matched ${matches.length} task(s); cleared alarms on ${changed}${nameList}`
+                : `🔔 조건에 맞는 업무 ${matches.length}건 중 ${changed}건의 알람을 해제했습니다${nameList}` });
+        } catch (e) {
+            if (!pendingPopped) window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('오류: ', 'Error: ') + (e && e.message ? e.message : e) });
+        }
+        window._renderGanttQaMessages();
     };
 
     // 📊 [2026-09-14 신규] "엑셀로 내보내줘" 로컬 명령 — AI 호출 없이, 방금 조회에 성공한 SAP 원본
