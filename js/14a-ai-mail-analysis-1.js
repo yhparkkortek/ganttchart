@@ -295,8 +295,14 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
     const GAS_URL = localStorage.getItem('gas_server_url') ||
         'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
 
+    // 💡 [2026-09-22 신규, 사용자 제보] "Groq/Mistral 키도 등록했는데 전부 안 됨"처럼 폴백까지 다
+    //    실패하면, 예전엔 "마지막으로 시도한 제공사"의 에러만 보여줘서 "그 앞에 Groq는 시도되긴
+    //    했는지, 됐다면 왜 실패했는지"를 전혀 알 수 없었다 — 시도한 제공사마다 결과를 전부 남겨서
+    //    최종 실패 메시지에 요약으로 붙인다(원인 진단에 필요한 신호를 조용히 버리지 않는다는 원칙).
+    const attempts = [];
     const primaryResult = await _aiTryProviderCandidates(provider, apiKey, prompt, opts, GAS_URL);
     if (primaryResult.ok) return primaryResult;
+    attempts.push({ provider, error: primaryResult.error });
 
     let lastErr = primaryResult.error;
     // 활성 제공사의 후보를 전부 시도했는데 전부 막힌 경우에만(키 오류 등 다른 이유면 다른 제공사도
@@ -319,6 +325,7 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                 }
                 return Object.assign({}, fbResult, { crossProviderFallback: true, originalProvider: provider });
             }
+            attempts.push({ provider: fbProvider, error: fbResult.error });
             if (fbResult.error) lastErr = fbResult.error; // 마지막으로 실패한 제공사의 에러를 최종 메시지로
         }
     }
@@ -330,6 +337,16 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
         lastErr = new Error(lastErr.message + window._AI_REQUEST_TOO_LARGE_HINT);
     } else if (lastErr && window._AI_INTERNAL_ERROR_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_INTERNAL_ERROR_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_INTERNAL_ERROR_HINT);
+    }
+    // 폴백까지 시도했는데도(제공사 2곳 이상) 다 실패했으면, 제공사별 결과를 요약해 덧붙인다 —
+    // 단일 제공사만 시도된 일반적인 실패는 기존처럼 그 에러 하나만 보여줘 화면이 불필요하게 안 길어짐.
+    if (attempts.length > 1 && lastErr) {
+        const summary = attempts.map(function(a) {
+            const label = (window.AI_PROVIDERS[a.provider] || {}).label || a.provider;
+            const firstLine = (a.error && a.error.message ? String(a.error.message) : '알 수 없는 오류').split('\n')[0];
+            return `• ${label}: ${firstLine}`;
+        }).join('\n');
+        lastErr = new Error(lastErr.message + '\n\n📋 ' + window._t('시도한 제공사별 결과:', 'Result per provider tried:') + '\n' + summary);
     }
     return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
 };
