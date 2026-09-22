@@ -346,6 +346,48 @@
         )});
     };
 
+    // 📦 [2026-09-22 신규, 사용자 요청] "자재 입고 처리" — ZMM062로 실제 SAP 전기(POSTING)를
+    //    한다(조회 아님). window._ganttQaLastGrCandidates(직전 발주 배치의 성공 오더번호)가
+    //    여러 개면 드롭다운으로 고르게 하고, 하나면 바로 쓰고(호출부에서 처리), 없으면 번호를
+    //    직접 물어본다(window._ganttQaPendingGrEbelnAsk).
+    window._ganttQaShowGrEbelnDropdown = function(candidates) {
+        const _en = window._currentLang === 'en';
+        const id = 'gr-ebeln-' + Date.now();
+        window._ganttQaPendingChoiceDropdown = {
+            id: id, multi: false,
+            options: candidates.map(function(n) { return { value: n, label: n }; }),
+            buildAnswerText: function(sel) { return sel[0] ? (sel[0] + ' 입고 처리해줘') : ''; }
+        };
+        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
+            '📦 어느 구매오더의 자재 입고 처리를 할까요?',
+            '📦 Which purchase order should I process goods receipt for?'
+        )});
+    };
+
+    window._ganttQaRunGoodsReceipt = async function(ebeln) {
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+            `구매오더 "${ebeln}" 자재 입고 처리 중... (SAP 저장까지 진행되며 시간이 걸릴 수 있습니다)`,
+            `Processing goods receipt for PO "${ebeln}"... (includes SAP save, may take a while)`
+        ), pending: true });
+        window._renderGanttQaMessages();
+        let reply;
+        try {
+            const res = await fetch('http://127.0.0.1:5000/po-goods-receipt', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ebeln: ebeln })
+            });
+            const data = await res.json();
+            reply = data.ok
+                ? '📦 ' + (data.message || window._t('입고 처리 완료', 'Goods receipt completed'))
+                : '⚠️ ' + (data.error || window._t('입고 처리 실패', 'Goods receipt failed'));
+        } catch (e) {
+            reply = '⚠️ ' + window._t('입고 처리 실패: ', 'Goods receipt failed: ') + (e && e.message ? e.message : e);
+        }
+        window._ganttQaHistory.pop();
+        window._ganttQaHistory.push({ role: 'ai', text: reply });
+        window._renderGanttQaMessages();
+    };
+
     // 🛒 [2026-09-15 신규] "구매오더 요청" — AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면
     //    항목을 추출해 "연구소 구매오더,기타출고 제안 BDC Upload양식"(사용자 제공
     //    Z38MMR060.xls) 엑셀을 만들고, ZMMR060에 업로드→F8→협력사/세금코드/단가 입력까지
@@ -1146,6 +1188,23 @@ ${docsJson}`;
             `🏁 Finished automatic purchase order processing (${successCount}/${results.length} succeeded):\n${lines}`
         )});
         window._ganttQaPoDraft = null;
+
+        // 📦 [2026-09-22 신규, 사용자 요청] "발주서 출력하고 나면 자재 입고 처리를 연속으로
+        //    해야하는데" — 성공한 오더가 있으면 바로 이어서 입고 처리할지 확인 버튼으로 묻는다.
+        //    아래 window._ganttQaLastGrCandidates에 담아두면, 사람이 나중에("나중에 하게 되면")
+        //    번호를 몰라도 이 목록에서 고를 수 있다(window._ganttQaTryGoodsReceiptTrigger 참고).
+        const successPos = results.filter(function(r) { return r.ok; }).map(function(r) { return r.poNumber; });
+        if (successPos.length) {
+            window._ganttQaLastGrCandidates = successPos;
+            window._ganttQaShowConfirmButtons(
+                window._t('📦 이어서 자재 입고 처리도 진행할까요?', '📦 Would you like to proceed with goods receipt processing too?'),
+                [
+                    { label: window._t('✅ 네, 입고 처리 할게요', '✅ Yes, process goods receipt'), value: '자재 입고 처리 할게요', style: 'confirm' },
+                    { label: window._t('아니요, 나중에요', 'No, later'), value: window._t('아니요, 나중에요', 'No, later'), style: 'cancel' }
+                ]
+            );
+            window._renderGanttQaMessages();
+        }
     };
 
     // 🐛🐛 [2026-09-16 실사용 버그수정] 백엔드가 오래된 버전이거나 꺼져 있으면 `/po-build-excel`/
@@ -2831,7 +2890,8 @@ ${docsJson}`;
         const INTERRUPT_RE = /^\s*(처음부터\s*(다시)?|취소|그만|중단|초기화|리셋|cancel|reset|restart|start\s*over)\s*[.!?~]*\s*$/i;
         const hasAnyActiveQaDraft = !!(window._ganttQaPoDraft || window._ganttQaBomDraft ||
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
-            window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons);
+            window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons ||
+            window._ganttQaPendingGrEbelnAsk);
         if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
             try { window._issueLogInterrupt && window._issueLogInterrupt(); } catch (e) { /* Phase 10 수집 — 실패해도 무시 */ }
             window._ganttQaPoDraft = null;
@@ -2841,6 +2901,7 @@ ${docsJson}`;
             window._ganttQaSapDocClarify = null;
             window._ganttQaPendingChoiceDropdown = null;
             window._ganttQaPendingConfirmButtons = null;
+            window._ganttQaPendingGrEbelnAsk = false;
             window._ganttQaHistory.push({ role: 'user', text: question });
             window._ganttQaHistory.push({ role: 'ai', text: window._t(
                 '🛑 진행 중이던 작업을 중단했습니다. 새로운 질문이나 요청을 말씀해주세요.',
@@ -3873,6 +3934,55 @@ ${docsJson}`;
             }
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: teamBudgetReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 📦🚫🤖 [2026-09-22 신규, 사용자 요청] "발주서 출력하고 나면 자재 입고 처리를 연속으로
+        //    해야하는데" — ZMM062 자재 입고 처리(post_goods_receipt, sap_bridge_32.py). 위
+        //    _ganttQaRunPoBatchAutomatically가 발주 완료 직후 확인 버튼으로 먼저 물어보는 게
+        //    주 경로지만, "나중에 하게 되면 구매오더 번호를 물어봐야" 한다는 사용자 지적대로
+        //    독립적으로도 트리거된다 — 메시지에 오더번호(8~12자리 숫자)가 있으면 바로 쓰고,
+        //    없으면 최근 발주 목록(window._ganttQaLastGrCandidates)에서 고르거나, 그것도 없으면
+        //    번호를 직접 물어본다(다음 메시지가 순수 숫자면 그 답으로 간주).
+        // ⚠️ 이건 조회가 아니라 실제 SAP 전기(POSTING)다 — 실패해도 원인 메시지를 그대로 보여줌.
+        if (window._ganttQaPendingGrEbelnAsk) {
+            const _ebelnAnswer = (question.match(/\b\d{8,12}\b/) || [])[0];
+            window._ganttQaPendingGrEbelnAsk = false;
+            if (_ebelnAnswer) {
+                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+                await window._ganttQaRunGoodsReceipt(_ebelnAnswer);
+                input.focus();
+                return;
+            }
+            // 숫자가 아니면 답이 아니라 다른 질문일 수 있으므로 pending만 풀고 계속 진행.
+        }
+        if (/입고\s*처리|입고처리/.test(question)) {
+            const _ebelnMatch = (question.match(/\b\d{8,12}\b/) || [])[0];
+            if (_ebelnMatch) {
+                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+                await window._ganttQaRunGoodsReceipt(_ebelnMatch);
+                input.focus();
+                return;
+            }
+            const _grCandidates = window._ganttQaLastGrCandidates || [];
+            if (_grCandidates.length === 1) {
+                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+                await window._ganttQaRunGoodsReceipt(_grCandidates[0]);
+                input.focus();
+                return;
+            }
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (_grCandidates.length > 1) {
+                window._ganttQaShowGrEbelnDropdown(_grCandidates);
+            } else {
+                window._ganttQaPendingGrEbelnAsk = true;
+                window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                    '📦 어느 구매오더 번호의 자재 입고 처리를 할까요? 오더번호를 알려주세요.',
+                    '📦 Which purchase order number should I process goods receipt for? Please provide the PO number.'
+                )});
+            }
             window._renderGanttQaMessages();
             input.focus();
             return;

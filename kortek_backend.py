@@ -2402,6 +2402,21 @@ def po_print_via_zmm018():
     return jsonify(data_out), status
 
 
+@app.route('/po-goods-receipt', methods=['POST'])
+def po_goods_receipt():
+    # 📦 [2026-09-22 신규, 사용자 요청] 발주서 출력 뒤 이어지는 "자재 입고 처리"(ZMM062) —
+    #    AI 문답에서 사람이 "입고 처리 할게요"라고 명시적으로 확인한 뒤에만 호출된다. 실제
+    #    컨트롤 조작은 sap_bridge_32.py의 post_goods_receipt()에 있다(사용자가 준 SAP GUI
+    #    "기록 및 재생" 매크로 기반, 실환경 미검증 — 실제 SAP 전기이므로 처음 테스트는
+    #    되돌리기 쉬운/확인 가능한 구매오더로 해볼 것을 권장).
+    data = request.get_json(silent=True) or {}
+    ebeln = (data.get('ebeln') or '').strip()
+    if not ebeln:
+        return jsonify({'ok': False, 'error': 'ebeln(구매오더 번호)이 필요합니다.'}), 400
+    data_out, status = _run_sap_bridge(['post_goods_receipt', ebeln], 60, 'SAP 자재 입고 처리')
+    return jsonify(data_out), status
+
+
 # ── 백엔드 자동 업데이트("SAP 조회 연동" 절 kortek_backend.zip 배포 방식의 대안, 2026-09-15) ─
 # 이 앱은 GitHub Pages(정적 프런트) + 각 PC의 로컬 백엔드(kortek_backend.py) 구조라, 백엔드
 # 파일이 바뀔 때마다 사용자가 kortek_backend.zip을 다시 받아 기존 폴더에 덮어써야 했다 —

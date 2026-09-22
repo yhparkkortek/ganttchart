@@ -2678,6 +2678,167 @@ def _attach_failure_info(result):
     return result
 
 
+# ── "자재 입고 처리"(ZMM062) 전용 헬퍼 (2026-09-22 신규, 사용자 제공 매크로 기반) ──────
+# ⚠️⚠️ 이건 조회가 아니라 실제 SAP 전기(POSTING) — 재고/회계에 실제 영향을 준다. 구매오더
+# 자동화(prepare_po_from_excel → confirm_save_po)와 같은 원칙으로, AI 문답에서 사람이
+# "입고 처리 할게요"라고 명시적으로 확인한 뒤에만 호출되고, 그 뒤로는 저장까지 완전
+# 자동화한다(중간에 멈추지 않음 — "저장 직전 정지는 폐기"와 동일 원칙, 사용자 요청으로 확정).
+# 실사용 매크로("자재 입고 처리(ZMM062).vbs")에서 그대로 가져온 시퀀스 — 일부 단계(초반
+# F4 리포트 선택 팝업, "실행 → 뒤로 → 즐겨찾기 더블클릭 → 같은 오더번호로 재실행", 저장 후
+# 이어지는 두 번째 저장+확인)는 정확한 이유를 다 이해하지 못한 채 그대로 재현한다(추측
+# 금지 원칙 — 그 사람이 실제로 성공했던 시퀀스이므로 "왜 되는지"보다 "그대로 재현"을 택함).
+# 매크로의 하드코딩값(오더번호 9100019479, 입고수량 70, 입고일자 20260918)은 그날의 예시
+# 값일 뿐이라 그대로 쓰면 안 되므로:
+#   - 오더번호(EBELN)는 인자로 받는다.
+#   - 입고수량(INQTY)은 **사용자 요청대로 발주수량과 동일**하게 — 이 리포트 자체가 이미
+#     "MENGE"(발주수량) 컬럼을 갖고 있어, 하드코딩 대신 그 행의 MENGE 값을 그대로 읽어
+#     INQTY에 쓴다(추가 조회 없이 같은 화면 안에서 해결).
+#   - 입고일자(INDAT)도 **사용자 요청대로 생성일자와 동일**하게 — 같은 이유로 "AEDAT"
+#     (생성일) 컬럼 값을 그대로 읽어 쓴다.
+# ⚠️ 즐겨찾기 노드("F00216")는 그 사람 SAP GUI 개인 설정이라 다른 세션/PC에서 그대로
+# 재현된다는 보장이 없음 — 있으면 쓰고, 실패하면(예외) 이미 한 번 실행해둔 화면을 그대로 쓴다.
+def post_goods_receipt(ebeln):
+    """ZMM062에서 구매오더 `ebeln`의 자재를 입고 처리(전기)한다. 입고수량=발주수량,
+    입고일자=생성일자로 자동 채운다(사용자 요청)."""
+    ebeln = (ebeln or '').strip()
+    if not ebeln:
+        raise RuntimeError('구매오더 번호(EBELN)를 지정해주세요.')
+
+    session = _get_sap_session()
+    session.StartTransaction('ZMM062')
+    time.sleep(0.8)
+
+    # 리포트(변형) 선택 팝업 — ZCO021 등과 같은 패턴, 없는 세션도 있을 수 있어 조용히 건너뜀.
+    try:
+        wnd1 = session.findById('wnd[1]')
+        wnd1.findById('usr/lbl[1,3]').caretPosition = 2
+        wnd1.sendVKey(2)  # F2 = 선택(Choose)
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+    # 관리회계영역(P_EKORG) — 매크로에서 F4 값도움말의 첫 항목을 그대로 선택.
+    try:
+        wnd = session.findById('wnd[0]')
+        wnd.findById('usr/ctxtP_EKORG').setFocus()
+        wnd.findById('usr/ctxtP_EKORG').caretPosition = 2
+        session.findById('wnd[0]').sendVKey(4)  # F4
+        w1 = session.findById('wnd[1]')
+        w1.findById('usr/lbl[1,6]').setFocus()
+        w1.findById('usr/lbl[1,6]').caretPosition = 1
+        w1.sendVKey(2)
+        w1.findById('usr/lbl[1,6]').caretPosition = 2
+        w1.sendVKey(2)
+        w1.findById('tbar[0]/btn[0]').press()
+        time.sleep(0.5)
+    except Exception as e:
+        raise RuntimeError(f'ZMM062 관리회계영역(P_EKORG) 선택 중 오류가 발생했습니다: {e}')
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('usr/ctxtS_EBELN-LOW').text = ebeln
+        wnd.findById('tbar[1]/btn[8]').press()  # 실행(F8)
+        time.sleep(1.2)
+    except Exception as e:
+        raise RuntimeError(f'ZMM062 구매오더 번호 입력/실행 중 오류가 발생했습니다: {e}')
+
+    # 매크로의 "뒤로 → 즐겨찾기 더블클릭 → 같은 오더번호로 재실행" — 위 주석 참고.
+    try:
+        session.findById('wnd[0]/tbar[0]/btn[3]').press()  # 뒤로
+        time.sleep(0.5)
+        session.findById(
+            'wnd[0]/usr/cntlIMAGE_CONTAINER/shellcont/shell/shellcont[0]/shell'
+        ).doubleClickNode('F00216')
+        time.sleep(0.8)
+        wnd = session.findById('wnd[0]')
+        wnd.findById('usr/ctxtS_EBELN-LOW').text = ebeln
+        wnd.findById('tbar[1]/btn[8]').press()
+        time.sleep(1.2)
+    except Exception:
+        pass  # 즐겨찾기 재진입 실패 — 위에서 이미 실행해둔 화면을 그대로 사용
+
+    wnd = session.findById('wnd[0]')
+    try:
+        grid = wnd.findById('shellcont/shell')
+    except Exception as e:
+        raise RuntimeError(f'입고 처리 입력 화면(그리드)을 찾지 못했습니다 — 구매오더 "{ebeln}"가 입고 대상인지, 이미 처리되지 않았는지 확인해주세요: {e}')
+
+    try:
+        row_count = grid.RowCount
+    except Exception:
+        row_count = 0
+    if not row_count:
+        raise RuntimeError(f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목을 찾지 못했습니다 — 오더번호가 맞는지, 이미 입고 처리되지 않았는지 확인해주세요.')
+
+    try:
+        order_qty = str(grid.GetCellValue(0, 'MENGE')).strip()
+        created_date = str(grid.GetCellValue(0, 'AEDAT')).strip()
+    except Exception as e:
+        raise RuntimeError(f'발주수량(MENGE)/생성일자(AEDAT)를 읽지 못했습니다: {e}')
+    if not order_qty:
+        raise RuntimeError('발주수량(MENGE)을 읽었지만 값이 비어 있습니다 — 화면을 직접 확인해주세요.')
+    if not created_date:
+        raise RuntimeError('생성일자(AEDAT)를 읽었지만 값이 비어 있습니다 — 화면을 직접 확인해주세요.')
+
+    try:
+        grid.modifyCell(0, 'INQTY', order_qty)
+        grid.currentCellColumn = 'INDAT'
+        grid.triggerModified()
+        grid.modifyCell(0, 'INDAT', created_date)
+    except Exception as e:
+        raise RuntimeError(f'입고수량/입고일자 입력 중 오류가 발생했습니다: {e}')
+
+    # 1차 저장 — 매크로에서 확인된 패턴(confirm_save_po와 동일 계열: 저장 버튼 → 확인 팝업).
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[5]').press()
+        time.sleep(1.0)
+    except Exception as e:
+        raise RuntimeError(f'저장(SAVE) 중 오류가 발생했습니다: {e}')
+    try:
+        session.findById('wnd[1]/tbar[0]/btn[0]').press()
+        time.sleep(0.8)
+    except Exception:
+        pass
+
+    # 매크로에는 이후 여러 컬럼을 선택(selectColumn)하고 행을 고른 뒤 **한 번 더** 저장하는
+    # 시퀀스가 이어진다 — 위 1차 저장이 셀 편집을 확정만 하고, 이 2차 저장이 실제 전기(문서
+    # 생성)일 가능성이 있어(정확한 이유 불명, 추측 금지 원칙) 그대로 재현한다.
+    try:
+        grid = session.findById('wnd[0]/shellcont/shell')
+        grid.setCurrentCell(-1, '')
+        for col in ('STATUS', 'WERKS', 'EKORG', 'EKGRP', 'LIFNR', 'NAME1', 'EBELN', 'EBELP',
+                    'AEDAT', 'GRDAT', 'MATNR', 'MAKTX', 'MEINS', 'SAKTO', 'AUFNR', 'KTEXT',
+                    'KOSTL', 'MCTXT', 'WEMPF', 'MENGE', 'MENGE3', 'INQTY', 'INDAT', 'LGORT'):
+            try:
+                grid.selectColumn(col)
+            except Exception:
+                pass  # 화면에 없는 컬럼은 건너뜀(레이아웃 차이 대비)
+        grid.selectedRows = '0'
+        session.findById('wnd[0]/tbar[1]/btn[5]').press()
+        time.sleep(1.0)
+    except Exception as e:
+        raise RuntimeError(f'입고 처리는 1차 저장까지 됐지만, 최종 확정 단계에서 오류가 발생했습니다 — SAP에서 구매오더 "{ebeln}"의 입고 상태를 직접 확인해주세요: {e}')
+    try:
+        session.findById('wnd[1]/tbar[0]/btn[12]').press()
+        time.sleep(0.8)
+    except Exception:
+        pass
+
+    try:
+        status_text = session.findById('wnd[0]/sbar').Text
+    except Exception:
+        status_text = ''
+
+    return {
+        'ok': True,
+        'ebeln': ebeln,
+        'orderQty': order_qty,
+        'goodsReceiptDate': created_date,
+        'statusText': status_text,
+        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 (수량: {order_qty}, 입고일자: {created_date}).' + (f' [SAP 상태표시줄: {status_text}]' if status_text else ''),
+    }
+
+
 def main():
     try:
         import win32com.client  # noqa: F401  (설치 여부 확인용)
@@ -2762,6 +2923,9 @@ def main():
             fperbl = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else '1'
             tperbl = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else '12'
             result = fetch_team_budget(team, fperbl, tperbl)
+        elif action == 'post_goods_receipt':
+            ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = post_goods_receipt(ebeln)
         else:
             result = fetch_current_screen()
         if isinstance(result, dict) and result.get('ok') is False:
