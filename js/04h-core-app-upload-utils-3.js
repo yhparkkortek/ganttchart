@@ -1263,6 +1263,23 @@ ${docsJson}`;
         return (metaText ? metaText + '\n\n' : '') + bodyOut + (footNote ? '\n' + footNote : '');
     };
 
+    // 📐🚫🤖 [2026-09-22 신규] "이 요청이 순수 SAP 조회일 뿐인가, 아니면 그 데이터를 근거로 뭔가
+    //    더 판단해달라는 것까지 포함하는가"를 가르는 보수적 판정. 자재번호/흔한 트리거 단어/흔한
+    //    동사를 전부 떼어내고도 글자가 남으면 "조회 이상의 뭔가"로 보고 false를 반환해 기존 AI
+    //    경로로 흘려보낸다 — 오탐(진짜 조회인데 AI로 새는 것)은 그냥 느릴 뿐이지만, 반대로
+    //    "관련 업무 있는지 확인해줘" 같은 요청을 조회로만 오인해 가로채면 그 기능 자체를 잃으므로
+    //    항상 "애매하면 안전한 쪽(AI 경로 유지)"으로 판정한다.
+    window._ganttQaIsPureSapLookupQuestion = function(question) {
+        let s = String(question || '');
+        s = s.replace(/\b\d{5,8}\b/g, ' ');
+        const stripWords = ['sap', '에서', '역전개', '사용처', '다중', '일괄', '복수', 'bom', 'zmm009',
+            '조회', '확인', '보여줘', '보여주세요', '알려줘', '알려주세요', '해줘', '해주세요', '좀', '줘',
+            '품번', '품목', '자재', '코드', '해서'];
+        stripWords.forEach(function(w) { s = s.replace(new RegExp(w, 'gi'), ' '); });
+        s = s.replace(/[\s,，.!?~]+/g, '');
+        return s.length === 0;
+    };
+
     // 💡 [2026-09-07 확장] 다른 프로젝트의 저장 파일(globalData/colIdx/projectMeta/tabData)을 가볍게
     //    요약 텍스트로 변환. 현재 프로젝트용 _buildGanttQaContext처럼 DOM(rendered table)에서 읽지
     //    않고 저장된 JSON 값만 사용한다(다른 프로젝트를 화면에 렌더링하지 않고 조회만 하기 위함) —
@@ -3705,6 +3722,47 @@ ${docsJson}`;
             }
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: bomReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 📐🚫🤖 [2026-09-22 신규, 사용자 요청 "토큰 많이 쓰는 SAP 기능 전부 AI 없이"] 사용처(역전개)/
+        //    ZMM009도 BOM과 같은 이유(순수 조회일 뿐 AI 판단이 필요 없음)로 원본 표를 바로 보여준다.
+        //    `_aiFetchSapContext`가 내부에서 쓰는 판정(사용처 > BOM > ZMM009 우선순위, 위
+        //    "BOM" 분기와 동일 로직)을 여기서도 그대로 반복 — BOM은 이미 위에서 가로채졌으므로
+        //    실제로 여기 도달하는 bomMatch2는 항상 false여야 정상이지만, 우선순위를 동일하게
+        //    유지해 혹시 모를 순서 꼬임을 방지한다.
+        //    ⚠️ **순수 조회일 때만** 가로챈다 — "사용처 조회해서 관련 업무 있는지 확인해줘"처럼
+        //    SAP 데이터를 근거로 **프로젝트 데이터와 엮어 판단**해달라는 요청까지 가로채면 그
+        //    기능을 잃으므로, 자재번호/트리거단어/흔한 동사를 다 떼어내고도 실질적인 말이
+        //    남으면(=조회 이상의 뭔가를 더 원하는 것으로 보이면) 가로채지 않고 기존 AI 경로로
+        //    그대로 흘려보낸다(라우터의 "확실할 때만 동작을 바꾼다" 원칙과 동일).
+        // ⚠️ _questionMentionsSapIntent(위 126번째 줄 근처)는 "역전개/사용처+숫자" 또는 "bom+숫자"
+        //    또는 "sap" 언급 중 하나가 있어야만 true다 — 순수 숫자만으론 SAP 조회 자체가 트리거되지
+        //    않는다(안 그러면 "133025 업무 상태 어때?"처럼 SAP와 무관한 질문까지 잘못 가로챔).
+        //    ZMM009는 그 안에서 "sap는 있는데 bom/사용처/역전개는 없고 숫자만 있는" 경우의
+        //    catch-all이므로, 여기서도 반드시 "sap" 언급을 그대로 요구해야 원래 트리거 조건과 같다.
+        const _sapLookupNums = question.match(/\b\d{5,8}\b/g) || [];
+        const _wuMatch = _sapLookupNums.length > 0 && /(역전개|사용처)/.test(question);
+        const _bomMatch2 = !_wuMatch && _sapLookupNums.length > 0 && /bom/i.test(question);
+        const _zmmMatch = !_wuMatch && !_bomMatch2 && _sapLookupNums.length > 0 && /sap/i.test(question);
+        if ((_wuMatch || _zmmMatch) && window._ganttQaIsPureSapLookupQuestion(question)) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 조회하는 중...', 'Looking up SAP data...'), pending: true });
+            window._renderGanttQaMessages();
+            let sapLookupReply;
+            try {
+                const sapText = await window._aiFetchSapContext(question);
+                const fetchFailed = !sapText || /^\(/.test(sapText);
+                sapLookupReply = fetchFailed
+                    ? '⚠️ ' + (sapText || window._t('SAP 조회 실패', 'SAP lookup failed'))
+                    : window._ganttQaFormatSapGridReply(sapText);
+            } catch (e) {
+                sapLookupReply = '⚠️ ' + window._t('SAP 조회 실패: ', 'SAP lookup failed: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: sapLookupReply });
             window._renderGanttQaMessages();
             input.focus();
             return;
