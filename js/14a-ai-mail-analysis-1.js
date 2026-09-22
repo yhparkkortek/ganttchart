@@ -155,6 +155,16 @@ window._AI_DEPRECATED_MODEL_IDS = [
     'llama-3.3-70b-versatile', 'llama-4-maverick', 'deepseek-r1-distill-llama-70b',
     'groq/compound'
 ];
+// 🐛 [2026-09-22 실사용 버그수정] 활성 제공사가 아닐 때(자동 전환·🧪 연결 테스트)는 사람이 그 제공사에 골라둔 모델을
+//    무시하고 항상 defaultModel을 썼다 — Mistral을 활성으로 Large를 골라두면 분석은 되는데, Gemini 활성 상태의 폴백/테스트는
+//    Small로 가서 429("Mistral은 되는데 테스트는 실패")가 났다. 그 제공사에 저장된 선택(ai_model_<provider>)을 우선한다.
+window._aiProviderPreferredModel = function(providerKey) {
+    if (providerKey === window.getActiveAiProvider()) return window.getActiveAiModel();
+    const cfg = window.AI_PROVIDERS[providerKey] || window.AI_PROVIDERS.gemini;
+    const saved = localStorage.getItem('ai_model_' + providerKey);
+    const valid = saved && window._AI_DEPRECATED_MODEL_IDS.indexOf(saved) === -1 && (cfg.models || []).some(function(m) { return m.id === saved; });
+    return valid ? saved : cfg.defaultModel;
+};
 window.getActiveAiModel = function() {
     const provider = window.getActiveAiProvider();
     const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
@@ -277,7 +287,7 @@ window._aiThrottleGate = function() {
 async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_URL) {
     const cfg = window.AI_PROVIDERS[providerKey] || window.AI_PROVIDERS.gemini;
     // 활성 제공사면 사람이 고른(또는 예전에 자동전환된) 모델을 1순위로, 아니면 그 제공사의 기본 무료 모델부터.
-    const activeModel = providerKey === window.getActiveAiProvider() ? window.getActiveAiModel() : cfg.defaultModel;
+    const activeModel = window._aiProviderPreferredModel(providerKey);
     // 시도 순서: 활성 모델 → 나머지 후보 모델(같은 provider, 중복 제거). 유료(tier:'paid') 모델은
     // 자동전환 후보에서 제외 — 무료 등급 키로는 애초에 호출이 안 돼서(실사용 확인: gemini-3.1-pro가
     // 무료 등급 한도 "limit: 0"으로 거부됨) 자동전환 후보에 넣어봐야 매번 헛되이 한 번 더 실패할 뿐.
@@ -599,7 +609,7 @@ window._aiModelExhausted = function(providerKey, model) {
 };
 window._aiProviderFreeCandidates = function(providerKey) {
     const cfg = window.AI_PROVIDERS[providerKey] || window.AI_PROVIDERS.gemini;
-    const active = providerKey === window.getActiveAiProvider() ? window.getActiveAiModel() : cfg.defaultModel;
+    const active = window._aiProviderPreferredModel(providerKey);
     return [active].concat((cfg.models || []).filter(function(m) { return m.tier !== 'paid'; }).map(function(m) { return m.id; }).filter(function(id) { return id !== active; }));
 };
 window._aiResetTimeLabel = function(ts) {
