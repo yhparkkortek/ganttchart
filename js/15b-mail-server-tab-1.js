@@ -1118,6 +1118,12 @@ window._autoMailFetchTick = async function() {
     //    두 틱이 같은 신규 메일을 각자 중복 없다고 판단해 미분류 큐(_msResults)에 동시에 쌓는다.
     //    → 재진입 가드로 이전 틱이 실행 중이면 새 틱을 건너뛴다.
     if (window._msAutoTickRunning) return;
+    // 🐛 [2026-09-22 버그수정, 사용자 제보] "🔴 메일 자동배치 OFF"로 꺼놔도 이 백그라운드 틱은
+    //    mail_mode를 전혀 확인하지 않아서 계속 POP3 조회 + 메일마다 AI 분석을 돌리고 있었다 —
+    //    페이지를 열어만 둬도(로그인 정보 저장돼 있으면) 사람이 "오늘 쓴 적 없는데" AI 할당량이
+    //    소진되는 원인 중 하나였음. OFF일 땐 조회 자체를 시작하지 않는다(등록 방식만 다르게
+    //    하려던 mail_mode를 실제로 완전히 존중하도록 통일).
+    if (window.isMailAutoProcessEnabled && !window.isMailAutoProcessEnabled()) return;
     window._msAutoTickRunning = true;
     try {
     const savedUser = localStorage.getItem('ms_saved_userid');
