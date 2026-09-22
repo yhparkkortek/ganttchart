@@ -430,6 +430,47 @@ sendGanttQaMessage`처럼 그 파일이 정의하는 핵심 함수가 실제로 
   이상)를 붙여넣으면 가짜 첨부로 감싸져 기존 추출 파이프라인이 그대로 타는지(추출 함수에 실제로
   전달된 첨부 텍스트 확인) — 전부 모킹 테스트로 확인 완료.
 
+### 🔀 draft 진행 중 "곁다리 SAP 조회" 가로채기 (2026-09-22 신규, 사용자 요청)
+
+**문제**: 위 "🛑 전역 중단" 이전까지는, draft(PO/BOM/승인원/SAP 문서 모호성/드롭다운/확인버튼)가
+진행 중이면 그 뒤 들어오는 **모든** 메시지를 무조건 "지금 단계에 대한 답"으로만 해석했다 —
+`INTERRUPT_RE`(전체 취소) 말고는 탈출구가 없었다. 실사용 시나리오: "세금계산서 분석 → 발주서
+출력"을 하다가 프로젝트 코드를 몰라서 SAP에서 조회해야 하는데, 조회 후 발주서 작성으로 돌아올
+방법이 없어서 결국 draft를 통째로 취소(→ 이미 추출된 품목/입력값을 전부 잃음)해야 했다.
+
+**개선**: `js/04h-core-app-upload-utils-3.js`의 `sendGanttQaMessage` 맨 앞, `INTERRUPT_RE` 블록
+바로 다음(PO draft 블록보다 먼저)에서 draft가 하나라도 활성 상태(`hasAnyActiveQaDraft`)이고
+메시지가 인터럽트 문구와도 다를 때, **질문 라우터의 `window._qaClassify(question)`을 그대로
+재사용**해 `cls==='sap' && confident===true`(SAP 조회로 확실히 판정될 때)만 가로챈다 — 새 판별
+로직을 따로 만들지 않고 기존 라우터의 "확실할 때만 동작을 바꾸고 애매하면 기존 경로" 원칙을
+그대로 물려받는다(사번처럼 숫자만 있는 평범한 draft 답변은 `confident=false`라 그대로 draft
+답변으로 처리됨 — 오탐 위험 낮음).
+
+- **구현**: `window._ganttQaRunSideQueryDuringDraft(question)` — 6개 draft 전역변수
+  (`_ganttQaPoDraft`/`_ganttQaBomDraft`/`_ganttQaApprovalDraft`/`_ganttQaSapDocClarify`/
+  `_ganttQaPendingChoiceDropdown`/`_ganttQaPendingConfirmButtons`)를 저장해두고 전부 `null`로
+  비운 뒤 **`sendGanttQaMessage()`를 그대로 재호출**한다. 그러면 이 함수 안의 모든 draft
+  게이트가 "draft 없음"으로 보고 통과되어, 기존 SAP 로컬 명령(`_aiFetchSapContext`)/라우터
+  (`33-qa-router.js`)/일반 AI 호출 로직이 **새 코드 없이 그대로 재사용**된다(입력창 값은 건드리지
+  않으므로 재호출도 같은 질문을 그대로 읽음 — `_ganttQaRecordInputHistory`는 직전 항목과 같으면
+  중복 저장하지 않게 이미 설계돼 있어 두 번 불려도 무해).
+- **복원**: 재호출이 끝나면(성공/실패 무관, `finally`) 저장해둔 draft 값을 되돌린다 — **단, 그
+  슬롯이 재호출 도중 새 값으로 채워졌다면(=곁다리 조회 자체가 새 draft를 시작시킨 경우, 예:
+  조회 도중 "승인원도 만들어줘"로 번짐) 옛 draft로 덮어쓰지 않고 새 draft를 우선한다**(슬롯이
+  여전히 `null`일 때만 복원 — 방금 시작된 draft를 잃지 않기 위함). 무언가 복원됐으면 draft가
+  마지막으로 묻던 질문(`window._ganttQaHistory`의 재호출 직전 마지막 AI 메시지)을 "📌 진행
+  중이던 작업을 이어서 계속합니다"로 다시 보여준다(드롭다운/확인버튼 id는 재부착하지 않음 —
+  원래 메시지가 여전히 대화창 위쪽에 남아있고 draft 객체도 복원됐으니 거기서 계속 클릭 가능,
+  중복 위젯을 피하기 위해 리마인더는 텍스트만).
+- **알려진 한계(엣지 케이스, 의도적으로 미대응)**: 곁다리 조회 자체가 다른 multi-turn draft를
+  새로 시작시키면서 **동시에** 원래 draft 슬롯이 그대로 남아있는 경우(예: PO draft 진행 중
+  "BOM도 열어줘"로 새 BOM draft가 시작됨)는 스택이 아니라 단일 슬롯 저장이라 새 draft가
+  우선되고 원래 draft 복원이 그 슬롯만 건너뛴다 — 두 draft를 동시에 유지하는 스택 구조는 이번
+  요청 범위 밖이라 구현하지 않음. 실사용에서 이 조합이 자주 나오면 그때 스택으로 확장할 것.
+- **검증 방법**: `hasAnyActiveQaDraft` 판정과 `_qaClassify` 재사용 자체는 기존 검증된 함수라
+  별도 브라우저 왕복 없이 코드 리딩으로 확인 — 실사용 중 이 경로를 타면 draft 텍스트가 그대로
+  다시 보이는지, 다음 답변이 정상적으로 원래 단계 파서로 들어가는지 직접 확인 권장.
+
 ### 🧭 질문 라우터 훅 (2026-09-21, Phase 11)
 - `sendGanttQaMessage`에 라우터 훅 5곳(H1 접두어 파싱 / H2 `_qaRouteAndMaybeHandle` / H3 SAP 게이트 OR / H4 일반 추론 가벼운 프롬프트 / H5 답변에 `route` 부착) + `04g` 배지 1줄. 로컬 명령 정규식들은 라우터보다 **앞**에서 먼저 처리된다(라우터는 그 뒤 fallthrough만 담당). 상세·규칙은 `docs/qa-router-and-sap-learning.md`.
 

@@ -2599,6 +2599,43 @@ ${docsJson}`;
         }
     };
 
+    // 🔀 [2026-09-22 신규] draft(PO/BOM/승인원/SAP 문서 모호성/드롭다운/확인버튼) 6종을 전부 잠깐
+    //    비우고 sendGanttQaMessage()를 그대로 다시 호출 — 그러면 이 함수 안의 모든 draft 게이트가
+    //    "draft 없음"으로 보고 통과되어, 기존 SAP 로컬 명령/라우터/AI 호출 로직이 새 코드 없이
+    //    그대로 재사용된다(입력창 값은 손대지 않았으므로 재호출도 같은 질문을 그대로 읽음).
+    //    끝나면 draft를 원래대로 복원 + 마지막으로 물어보던 질문을 다시 보여준다. 단, 그 곁다리
+    //    조회 자체가 새 draft를 시작시켰다면(예: 조회 도중 "승인원도 만들어줘"로 번짐) 그 새
+    //    draft를 되살리지 않고 우선한다 — 옛 draft로 덮어쓰면 방금 시작된 걸 잃어버리므로, 해당
+    //    슬롯이 여전히 비어있을 때만(=이번 호출에서 새로 채워지지 않았을 때만) 복원한다.
+    window._ganttQaRunSideQueryDuringDraft = async function(question) {
+        const h = window._ganttQaHistory || [];
+        const lastPending = h.length ? h[h.length - 1] : null; // draft가 방금 물어보던 질문 — 복귀 시 다시 보여줄 대상
+        const saved = {
+            po: window._ganttQaPoDraft, bom: window._ganttQaBomDraft, approval: window._ganttQaApprovalDraft,
+            sapClarify: window._ganttQaSapDocClarify, dropdown: window._ganttQaPendingChoiceDropdown, confirmBtns: window._ganttQaPendingConfirmButtons
+        };
+        window._ganttQaPoDraft = null; window._ganttQaBomDraft = null; window._ganttQaApprovalDraft = null;
+        window._ganttQaSapDocClarify = null; window._ganttQaPendingChoiceDropdown = null; window._ganttQaPendingConfirmButtons = null;
+        let restoredAny = false;
+        try {
+            await window.sendGanttQaMessage();
+        } finally {
+            if (window._ganttQaPoDraft === null && saved.po) { window._ganttQaPoDraft = saved.po; restoredAny = true; }
+            if (window._ganttQaBomDraft === null && saved.bom) { window._ganttQaBomDraft = saved.bom; restoredAny = true; }
+            if (window._ganttQaApprovalDraft === null && saved.approval) { window._ganttQaApprovalDraft = saved.approval; restoredAny = true; }
+            if (window._ganttQaSapDocClarify === null && saved.sapClarify) { window._ganttQaSapDocClarify = saved.sapClarify; restoredAny = true; }
+            if (window._ganttQaPendingChoiceDropdown === null && saved.dropdown) { window._ganttQaPendingChoiceDropdown = saved.dropdown; restoredAny = true; }
+            if (window._ganttQaPendingConfirmButtons === null && saved.confirmBtns) { window._ganttQaPendingConfirmButtons = saved.confirmBtns; restoredAny = true; }
+        }
+        if (restoredAny && lastPending && lastPending.role === 'ai' && lastPending.text) {
+            window._ganttQaHistory.push({ role: 'ai', text: '📌 ' + window._t(
+                '진행 중이던 작업을 이어서 계속합니다 — 아까 물어보던 질문입니다:',
+                "Resuming the task you were in the middle of — here's the question again:"
+            ) + '\n\n' + lastPending.text });
+            window._renderGanttQaMessages();
+        }
+    };
+
     window.sendGanttQaMessage = async function() {
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
@@ -2695,6 +2732,23 @@ ${docsJson}`;
             window._renderGanttQaMessages();
             input.focus();
             return;
+        }
+
+        // 🔀 [2026-09-22 신규, 사용자 요청] draft 진행 중 "곁다리 SAP 조회" 가로채기 — PO/BOM/승인원/
+        //    SAP 문서 모호성 해소 등 여러 턴 draft가 진행 중일 때 지금까지는 모든 메시지를 무조건
+        //    "지금 단계에 대한 답"으로만 해석했다(위 INTERRUPT_RE로 전체 취소하는 것 말고는 탈출구
+        //    없음). 실사용 사례: 발주서 작성 중 프로젝트 코드를 몰라 SAP에서 조회해야 하는데,
+        //    조회 후 발주서 작업으로 돌아올 방법이 없었음. 메시지가 지금 단계 답변 모양이 아니라
+        //    명확히 SAP 조회로 보일 때만(라우터 confident 판정 재사용 — 새 판별 로직을 따로 만들지
+        //    않음) draft를 건드리지 않고 그 조회만 먼저 처리한 뒤 draft의 마지막 질문을 다시 보여준다.
+        //    애매하면(사번처럼 숫자만 있는 답 등) confident=false라 기존처럼 draft 답변으로 처리됨
+        //    — 라우터 문서의 "확실할 때만 동작을 바꾸고 애매하면 기존 경로" 원칙과 동일.
+        if (hasAnyActiveQaDraft) {
+            const _sideRoute = window._qaClassify ? window._qaClassify(question) : null;
+            if (_sideRoute && _sideRoute.cls === 'sap' && _sideRoute.confident) {
+                await window._ganttQaRunSideQueryDuringDraft(question);
+                return;
+            }
         }
 
         // 🛒 [2026-09-15 신규] "구매오더 요청" — PDF 첨부(📎) + 전송 → AI로 품목 추출 →
