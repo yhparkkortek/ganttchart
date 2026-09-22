@@ -465,6 +465,21 @@ AI 추론은 필요할 때만" 원칙 위반.
   지칭하는 요청("OOO 업무 알람 켜줘")이나 "D-3로 설정해줘"류 세부 설정 요청은 여전히 AI(또는
   ALARM_DRAFT)가 처리한다. 위 무조건부 명령과 마찬가지로 `_aiAssistSetAlarm`/`_aiAssistClearAlarm`
   재사용 — 새 토글 로직 없음.
+  - **🔀 [2026-09-22 같은 날 후속, 사용자 질문 "앞에 G를 적어야 하는 이유는? 번호만 말하면 안돼?"]
+    #G 없이 순수 숫자만 써도 되게 확장** — 처음엔 `#?g숫자`만 인식해서 "210 핀셋 해제해줘"(G 없이)는
+    이 로컬 명령에 안 걸리고 AI 경로로 샜다. 그냥 아무 검증 없이 숫자를 바로 인덱스로 썼다면
+    더 간단했겠지만, 이 앱의 Gantt 표 "No." 열은 WBS 접기/필터에 따라 매번 다시 매겨지는
+    **표시용** 번호라 실제 `globalData` 인덱스(#G)와 다를 수 있다(위 "표시No. ≠ 실제 #G 인덱스"
+    절 참고, `_buildGanttQaContext`의 `visibleNoMap`과 완전히 같은 문제) — 검증 없이 그대로 쓰면
+    엉뚱한 업무의 알람을 건드릴 위험이 있어서 처음엔 안전하게 `#G` 명시를 요구했다. 새 헬퍼
+    `window._ganttQaResolveDisplayNoToRealIdx(displayNo)`(`js/04h`)가 `visibleNoMap`과 동일한
+    DOM 읽기 방식(`#table-body`의 각 `<tr>`에서 `.no-td .row-num-span`의 표시No. ↔
+    `dataset.rowIndex`의 실제 인덱스)으로 "지금 화면에 보이는 그 표시No."를 실제 인덱스로
+    변환한다 — AI 프롬프트가 이미 쓰고 있는 "G 없이 숫자만 말하면 표시No.로 해석하고, 실행은
+    항상 #G 인덱스로"라는 규칙을 로컬 명령에도 그대로 적용한 것. `#G`가 있으면 검증 없이 그
+    숫자를 바로 인덱스로 쓰고(사람이 AI 답변 등에서 #G를 직접 복사해왔을 가능성이 높아 이미
+    정확함), 없으면 이 변환을 거친다 — 변환 실패(화면에 그 표시No.가 없음, 필터로 숨겨진 경우
+    등)는 조용히 실패하지 않고 "화면에 표시No. N에 해당하는 업무가 없습니다"로 명확히 알린다.
 - **조건부(알람 목록만 AI에게)**: 수량어+알람단어+끄기 동사는 있는데 날짜·담당자 등 추가 조건이
   붙어 위 무조건부 패턴엔 안 걸리는 경우(`_ganttQaDetectAlarmConditionalBulk`) —
   `window._ganttQaRunAlarmConditionalBulk`가 **전체 프로젝트가 아니라 `window.collectAlarmItems()`

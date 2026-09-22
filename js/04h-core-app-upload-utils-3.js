@@ -4464,6 +4464,30 @@ ${docsJson}`;
     //    기계적 작업. 메시지 전체가 "#G번호 + 알람단어 + 켜기/끄기 동사(+흔한 꼬리말)"일 때만
     //    매칭(전체일치 앵커) — "G210이랑 G211 업무 비교해줘"처럼 #G가 다른 목적으로 쓰인 문장은
     //    걸러진다. 매칭 안 되면 null 반환 → 기존 AI 경로(업무명으로 지칭하는 경우 등) 그대로.
+    // 💡 [2026-09-22 신규, 사용자 요청 "G 없이 번호만 써도 안되나?"] 화면의 "No." 열은 WBS 접기/
+    //    필터에 따라 매번 다시 매겨지는 "표시용" 번호라 실제 globalData 인덱스(#G)와 다를 수
+    //    있다(위 _buildGanttQaContext의 visibleNoMap과 완전히 같은 DOM 읽기 방식 — AI 프롬프트가
+    //    "G 없이 숫자만 말하면 표시No.로 해석하라"고 지시하는 것과 동일한 규칙을 로컬 명령에도
+    //    그대로 적용). #G가 붙어 있으면 그 숫자를 실제 인덱스로 바로 쓰고, 안 붙어 있으면 이
+    //    함수로 "지금 화면에 보이는 그 표시No."를 실제 인덱스로 바꿔서 쓴다 — 숫자를 곧바로
+    //    인덱스로 오인해 엉뚱한 업무를 건드리는 사고를 막기 위함.
+    window._ganttQaResolveDisplayNoToRealIdx = function(displayNo) {
+        var tbody = document.getElementById('table-body');
+        if (!tbody) return null;
+        var trs = tbody.getElementsByTagName('tr');
+        for (var i = 0; i < trs.length; i++) {
+            var tr = trs[i];
+            if (tr.style.display === 'none') continue; // 필터/WBS접힘으로 숨겨진 행은 표시No. 자체가 없음
+            var span = tr.querySelector('.no-td .row-num-span');
+            var visibleNo = span && span.textContent ? parseInt(span.textContent, 10) : NaN;
+            if (visibleNo === displayNo) {
+                var realIdx = parseInt(tr.dataset.rowIndex, 10);
+                return isNaN(realIdx) ? null : realIdx;
+            }
+        }
+        return null;
+    };
+
     window._ganttQaTryHandleAlarmSingleGCommand = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
@@ -4472,11 +4496,22 @@ ${docsJson}`;
         var _offV = '꺼|끄|해제|취소|풀어|off';
         var _onV = '켜|걸어|설정|on\\b';
         var _tail = '\\s*(?:해\\s*줘|해\\s*주세요|주세요|줘|부탁\\S*)?\\s*[.!?~]*';
-        var re = new RegExp('^\\s*#?g\\s*(\\d+)\\s*번?\\s*(?:' + _aw + ')\\s*(' + _offV + '|' + _onV + ')\\S*' + _tail + '\\s*$', 'i');
+        // (#?g)는 이제 선택사항 — 있으면 실제 #G 인덱스, 없으면 화면 표시No.로 해석한다.
+        var re = new RegExp('^\\s*(#?g)?\\s*(\\d+)\\s*번?\\s*(?:' + _aw + ')\\s*(' + _offV + '|' + _onV + ')\\S*' + _tail + '\\s*$', 'i');
         var m = re.exec(text);
         if (!m) return null;
-        var idx = parseInt(m[1], 10);
-        var isOff = new RegExp('^(?:' + _offV + ')', 'i').test(m[2]);
+        var hasG = !!m[1];
+        var num = parseInt(m[2], 10);
+        var idx;
+        if (hasG) {
+            idx = num;
+        } else {
+            idx = window._ganttQaResolveDisplayNoToRealIdx(num);
+            if (idx === null || idx === undefined) {
+                return _en ? `⚠️ Couldn't find a task with display No. ${num} on screen.` : `⚠️ 화면에 표시No. ${num}에 해당하는 업무가 없습니다.`;
+            }
+        }
+        var isOff = new RegExp('^(?:' + _offV + ')', 'i').test(m[3]);
         var gd = (typeof globalData !== 'undefined') ? globalData : null;
         var row = gd && gd[idx];
         if (!row || row._level === undefined) {
