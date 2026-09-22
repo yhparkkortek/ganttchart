@@ -1256,8 +1256,16 @@ ${question}
             : '';
         // 💡 [2026-09-14 신규] "SAP" 언급 시 로컬 백엔드(kortek_backend.py)가 이미 로그인해 열어둔
         //    SAP GUI의 현재 화면을 읽어온 결과(sendGanttQaMessage의 _aiFetchSapContext 호출부 참고).
-        const sapSection = sapText
-            ? `\n[방금 조회한 SAP 화면 데이터]\n${sapText}\n`
+        // 🐛 [2026-09-22 실사용 버그수정] 원래 상한이 전혀 없어서 BOM 전개/ZMM009 다중 조회처럼 큰
+        //    결과가 오면 이 한 섹션만으로 Groq 무료 등급 요청당 토큰 한도(8,000)를 넘기곤 했다 —
+        //    다른 크기 설정([🤖 AI 도구 → ⚙️ 설정])과 같은 패턴으로 상한을 적용(js/04h
+        //    getAiSapMaxLen 참고). 실패 안내 문자열("(SAP 조회 실패: ...)")은 항상 짧으므로 잘릴 일 없음.
+        const _sapMaxLen = window.getAiSapMaxLen ? window.getAiSapMaxLen() : 6000;
+        const sapTextTrimmed = (sapText && sapText.length > _sapMaxLen)
+            ? sapText.slice(0, _sapMaxLen) + `\n...(${window._t('원본이 길어 일부만 표시됨', 'truncated — original was longer')})`
+            : sapText;
+        const sapSection = sapTextTrimmed
+            ? `\n[방금 조회한 SAP 화면 데이터]\n${sapTextTrimmed}\n`
             : '';
 
         const savedTemplate = localStorage.getItem('gantt_qa_prompt');
@@ -1312,8 +1320,8 @@ ${question}
         // 처리 규칙도 템플릿 안에만 두지 않고 여기서 무조건 한 번 더 덧붙여, 저장된 커스텀
         // 프롬프트를 쓰는 팀에서도 항상 적용되게 한다.
         result += `\n\n🔔 [필수] 알람 일괄 처리 규칙: "알람 모두 풀어줘"/"전체 해제해줘"/"다 꺼줘"/"전부 켜줘"처럼 특정 업무 하나가 아니라 여러(또는 전체) 업무의 알람을 한 번에 켜거나 끄라는 요청이면, [업무 목록]에서 조건에 맞는 업무(끌 때는 "[알람ON]" 마커가 붙은 업무 전부, 켤 때는 그 마커가 없는 업무 전부) 각각에 대해 [[ACTION:CLEAR_ALARM:번호]] 또는 [[ACTION:SET_ALARM:번호]] 태그를 업무 수만큼 한 줄씩 반복해서 답변 끝에 붙이세요(예: 세 업무면 세 줄). "일괄 해제/설정 기능이 지원되지 않는다"거나 "개별로 요청해달라"고 절대 답하지 마세요 — 이 태그를 여러 번 붙이는 것 자체가 이미 일괄 처리이며 시스템이 전부 실행합니다. 조건에 맞는 업무가 하나도 없으면(이미 전부 그 상태인 경우 등) 그 사실만 안내하고 태그는 붙이지 마세요.`;
-        if (sapText && !templateHasSapToken) {
-            result += `\n\n[방금 조회한 SAP 화면 데이터]\n${sapText}\n\n🏭 위 SAP 데이터가 있으면 이를 근거로 답하거나, 필요하면 그 내용을 간트차트 업무로 반영하는 초안([[GANTT_ADD_DRAFT]]/[[GANTT_EDIT_DRAFT:번호]])을 제안하세요. "SAP 조회 실패"로 시작하면 SAP 데이터를 가져오지 못했다는 뜻이니 그렇다고 솔직히 답하고, SAP GUI가 켜져 있고 원하는 화면이 열려 있는지 확인해달라고 안내하세요 — 조회 실패를 "그런 데이터가 아예 없다"는 뜻으로 단정하지 마세요.`;
+        if (sapTextTrimmed && !templateHasSapToken) {
+            result += `\n\n[방금 조회한 SAP 화면 데이터]\n${sapTextTrimmed}\n\n🏭 위 SAP 데이터가 있으면 이를 근거로 답하거나, 필요하면 그 내용을 간트차트 업무로 반영하는 초안([[GANTT_ADD_DRAFT]]/[[GANTT_EDIT_DRAFT:번호]])을 제안하세요. "SAP 조회 실패"로 시작하면 SAP 데이터를 가져오지 못했다는 뜻이니 그렇다고 솔직히 답하고, SAP GUI가 켜져 있고 원하는 화면이 열려 있는지 확인해달라고 안내하세요 — 조회 실패를 "그런 데이터가 아예 없다"는 뜻으로 단정하지 마세요.`;
         }
         // 💡 [2026-09-12 신규] AI 요약(_buildProjectSummaryPrompt)과 동일한 패턴 — 사용자가 프롬프트를
         // 직접 고쳐 저장했어도 항상 마지막에 붙도록, 템플릿 치환이 다 끝난 뒤에 조건부로 덧붙인다.

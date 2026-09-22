@@ -305,6 +305,14 @@
                                 <button id="ai-qa-max-other-tasks-reset-btn" onclick="document.getElementById('ai-qa-max-other-tasks-input').value=window._AI_QA_MAX_OTHER_TASKS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
                             <div id="ai-qa-max-other-tasks-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 200건 (기본값)</div>
+                            <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+                            <label id="ai-sap-maxlen-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🏭 SAP 조회 결과 최대 글자 수</label>
+                            <div id="ai-sap-maxlen-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">AI 문답이 "SAP" 언급 시 조회해온 화면 데이터(BOM/ZMM009/사용처 등)를 프롬프트에 담을 때 최대 몇 자까지 포함할지 정합니다. BOM 전개나 다중 자재 조회처럼 결과가 크면 이 값이 커서 Groq 등 무료 등급의 요청 크기 한도를 넘기기 쉬우니, "Request too large"류 오류가 자주 나면 줄여보세요.</div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-sap-maxlen-input" type="number" min="500" max="30000" step="500" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button id="ai-sap-maxlen-reset-btn" onclick="document.getElementById('ai-sap-maxlen-input').value=window._AI_SAP_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
+                            <div id="ai-sap-maxlen-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 6,000자 (기본값) — Groq처럼 크기 제한이 낮은 제공사라면 2,000~3,000자대로 줄이는 걸 권장합니다.</div>
                         </div>
                     </div>
 
@@ -399,6 +407,7 @@
         document.getElementById('ai-content-maxlen-input').value = window.getAiContentMaxLen();
         document.getElementById('ai-qa-max-tasks-input').value = window.getAiQaMaxTasks();
         document.getElementById('ai-qa-max-other-tasks-input').value = window.getAiQaMaxOtherTasks();
+        document.getElementById('ai-sap-maxlen-input').value = window.getAiSapMaxLen();
         document.getElementById('ai-summary-range-days-input').value = window.getAiSummaryRangeDays();
         document.getElementById('ai-summary-urgent-days-input').value = window.getAiUrgentDays();
         document.getElementById('ai-topic-learning-days-input').value = window.getTopicLearningDays();
@@ -444,6 +453,13 @@
         if (qmo > 1000) qmo = 1000;
         qaMaxOtherInput.value = qmo;
         window.setAiQaMaxOtherTasks(qmo);
+
+        const sapMaxLenInput = document.getElementById('ai-sap-maxlen-input');
+        let sml = parseInt(sapMaxLenInput.value, 10);
+        if (!sml || sml < 500) sml = 500;
+        if (sml > 30000) sml = 30000;
+        sapMaxLenInput.value = sml;
+        window.setAiSapMaxLen(sml);
 
         const rangeInput = document.getElementById('ai-summary-range-days-input');
         let rd = parseInt(rangeInput.value, 10);

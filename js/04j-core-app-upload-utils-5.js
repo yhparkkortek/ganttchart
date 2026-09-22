@@ -1297,6 +1297,11 @@
             },
             'ai-qa-max-other-tasks-label': { ko: '🌐 다른 프로젝트 조회 시 최대 업무 건수', en: '🌐 Other-project lookup — Max tasks' },
             'ai-qa-max-other-tasks-hint': { ko: '권장값: 200건 (기본값)', en: 'Recommended: 200 (default)' },
+            'ai-sap-maxlen-label': { ko: '🏭 SAP 조회 결과 최대 글자 수', en: '🏭 SAP lookup result — Max characters' },
+            'ai-sap-maxlen-hint': {
+                ko: '권장값: 6,000자 (기본값) — Groq처럼 크기 제한이 낮은 제공사라면 2,000~3,000자대로 줄이는 걸 권장합니다.',
+                en: 'Recommended: 6,000 (default) — for providers with lower size limits (e.g. Groq), consider lowering to 2,000~3,000.'
+            },
         };
         Object.entries(_reqsizeTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
@@ -1311,12 +1316,16 @@
                 ko: 'AI 문답에서 "질문 대상"으로 다른 프로젝트를 골랐을 때(또는 AI가 스스로 다른 프로젝트를 조회할 때), 그 프로젝트의 업무 목록을 몇 건까지 포함할지 정합니다.',
                 en: 'Sets the max number of tasks included when AI Q&A looks at another project — either one you pick as "Target", or one the AI looks up on its own.'
             },
+            'ai-sap-maxlen-desc': {
+                ko: 'AI 문답이 "SAP" 언급 시 조회해온 화면 데이터(BOM/ZMM009/사용처 등)를 프롬프트에 담을 때 최대 몇 자까지 포함할지 정합니다. BOM 전개나 다중 자재 조회처럼 결과가 크면 이 값이 커서 Groq 등 무료 등급의 요청 크기 한도를 넘기기 쉬우니, "Request too large"류 오류가 자주 나면 줄여보세요.',
+                en: 'Sets the max characters of SAP screen data (BOM/ZMM009/where-used, etc.) included in the AI Q&A prompt when "SAP" is mentioned. Large results (e.g. BOM explosions, multi-material lookups) can exceed free-tier request size limits (e.g. Groq) — lower this if you see frequent "request too large" errors.'
+            },
         };
         Object.entries(_reqsizeDescs).forEach(([id, t]) => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
-        const _reqsizeResetBtns = ['ai-qa-max-tasks-reset-btn', 'ai-qa-max-other-tasks-reset-btn'];
+        const _reqsizeResetBtns = ['ai-qa-max-tasks-reset-btn', 'ai-qa-max-other-tasks-reset-btn', 'ai-sap-maxlen-reset-btn'];
         _reqsizeResetBtns.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? '🔄 Reset' : '🔄 기본값';

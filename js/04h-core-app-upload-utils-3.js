@@ -5956,6 +5956,22 @@ ${docsJson}`;
         localStorage.setItem('gantt_ai_content_maxlen', String(v));
     };
 
+    // 🐛 [2026-09-22 실사용 버그수정, 사용자 제보 "SAP 컨트롤하면서 토큰을 많이 소비하나?"] SAP
+    //    조회 결과(_aiFetchSapContext, BOM/ZMM009/사용처 등)는 위 업무 상세내용/문답 건수와 달리
+    //    **어디에도 글자수 상한이 없어서**, AI 문답 프롬프트(js/04g `_buildGanttQaPrompt`의
+    //    sapSection)에 원본 그대로 통째로 실렸다 — BOM 전개나 ZMM009 다중 조회 결과가 크면
+    //    이게 이미 300건 캡이 걸린 업무 목록보다도 더 큰 프롬프트를 만들어, Groq 무료 등급
+    //    요청당 토큰 한도(8,000)를 넘기는 실제 원인 중 하나였다(다른 요청보다 SAP 관련 질문에서
+    //    유독 빨리 소진된다는 제보와 일치). 다른 크기 설정들과 같은 패턴으로 상한을 둔다.
+    window._AI_SAP_MAXLEN_DEFAULT = 6000;
+    window.getAiSapMaxLen = function() {
+        const v = parseInt(localStorage.getItem('gantt_ai_sap_maxlen'), 10);
+        return (v && v >= 500) ? v : window._AI_SAP_MAXLEN_DEFAULT;
+    };
+    window.setAiSapMaxLen = function(v) {
+        localStorage.setItem('gantt_ai_sap_maxlen', String(v));
+    };
+
     // 💡 [2026-08-27 신규] AI 업무분석(메일 분석)이 Gemini에게 보내는 메일 본문 최대 글자 수 — 원래
     //    토큰·응답시간 보호를 위해 2000자로 하드코딩돼 있던 값(analyzeBtn 클릭 시/msCallGemini 자동수집
     //    둘 다 동일)을 위 업무 상세내용 설정과 같은 방식으로 사용자가 직접 조절할 수 있게 함.
