@@ -1933,6 +1933,28 @@ _TEAM_BUDGET_ACCOUNT_CODE = '550203'
 _TEAM_BUDGET_COLUMNS = ['예산금액', '전기금액', '임시전표', '전기+임시', '잔여예산']
 
 
+def _sap_tree_node_search_text(tree, key, col_names):
+    """트리 노드 하나의 검색 가능한 텍스트를 모은다. `GetNodeTextByKey`가 계층(키) 컬럼
+    텍스트만 주는 트리가 있어(2026-09-22 실사용 확인 — "1008E010"만 나오고 화면에 보이는
+    "개발1팀(판)"은 별도 컬럼이었음), `_sap_dump_tree`와 같은 다중 컬럼 시도 패턴으로
+    있는 컬럼을 전부 훑어 합친다."""
+    parts = []
+    try:
+        parts.append(str(tree.GetNodeTextByKey(key)))
+    except Exception:
+        pass
+    for col in col_names:
+        for attempt in ('GetItemText', 'GetCellValue'):
+            try:
+                v = str(getattr(tree, attempt)(key, col))
+                if v:
+                    parts.append(v)
+                break
+            except Exception:
+                continue
+    return ' '.join(p for p in parts if p)
+
+
 def _sap_find_team_budget_row(wnd):
     """`usr` 영역의 모든 GuiLabel을 화면에 보이는 순서대로 모아(`_sap_dump_fields`)
     `_TEAM_BUDGET_ACCOUNT_CODE`("550203")가 들어있는 라벨을 찾는다. 계정코드와 계정명이
@@ -2001,13 +2023,21 @@ def fetch_team_budget(team):
     except Exception as e:
         raise RuntimeError(f'코스트 센터 트리 노드 목록을 읽지 못했습니다: {e}')
 
+    # 🐛 [2026-09-22 실사용 버그수정, 스크린샷으로 확인] `GetNodeTextByKey`는 이 트리에서
+    #    "1008E010" 같은 코드(계층 컬럼)만 주고, 화면에 보이는 "개발1팀(판)" 같은 이름은
+    #    **다른 컬럼**에 들어있었다(실패 메시지에 코드만 나열됐던 게 증거) — `_sap_dump_tree`와
+    #    같은 다중 컬럼 탐색으로 바꿔 모든 컬럼 텍스트를 합쳐서 검색한다.
+    try:
+        col_names = list(tree.GetColumnNames())
+    except Exception:
+        col_names = []
+
     team_norm = team.replace(' ', '')
     target_key = None
     all_texts = []
     for key in node_keys:
-        try:
-            text = str(tree.GetNodeTextByKey(key))
-        except Exception:
+        text = _sap_tree_node_search_text(tree, key, col_names)
+        if not text:
             continue
         all_texts.append(text)
         if team_norm in text.replace(' ', ''):
