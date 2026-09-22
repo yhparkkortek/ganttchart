@@ -65,6 +65,20 @@
         localStorage.setItem('gantt_ai_retry_auto', on ? '1' : '0');
     };
 
+    // 🐛🐛 [2026-09-22 실사용 버그수정, 사용자 지적 "SAP 말고 다른 이유가 있는 것 같다"] 위
+    //    `_writeLearningEntry`가 (👍👎🚩 피드백, 업무보관함 전송, 오매칭 삭제 사유 등) **어떤
+    //    학습 이벤트든 하나라도 기록될 때마다** 매번 `_alTriggerRetry()`를 불렀고, 그건 매번
+    //    프로젝트 전체를 다시 훑어 **누적된 저신뢰도 업무 전부**를 재시도 대기열로 잡아 AI로
+    //    돌렸다(기본 켜짐, 배너 없이 조용히) — 디바운스가 전혀 없어서, 저신뢰도 업무가 예를
+    //    들어 15건 쌓여 있으면 피드백 한 번 줄 때마다(같은 세션에서 여러 번 주면 그때마다
+    //    또!) AI 호출이 15번씩 추가로 발생했다. "간단한 질문도 리밋이 걸린다"는 제보의
+    //    실제 원인 중 하나로 보임 — 사람이 의식적으로 요청한 적 없는 AI 호출이 일상적인
+    //    피드백/보관함 조작만으로 계속 쌓이고 있었던 것. **수정**: 마지막 자동 재시도 실행
+    //    이후 일정 시간(기본 10분) 안에는 또 자동 트리거되지 않도록 쿨다운을 둔다 — "지금
+    //    일괄 재분석" 수동 버튼(`_alRunPendingRetryNow`)은 쿨다운과 무관하게 항상 즉시 실행.
+    var _AL_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
+    var _alLastAutoRetryAt = 0;
+
     /** globalData에서 AI 등록 + 저신뢰도(중/하/미분류) 행만 뽑아 배열로 반환 (배너/설정 패널 공용) */
     window._alCollectLowConfidenceRows = function() {
         var lowRows = [];
@@ -87,6 +101,14 @@
         var lowRows = window._alCollectLowConfidenceRows();
         if (!lowRows.length) return;
         if (window.getAiRetryAutoEnabled()) {
+            // 💡 위 쿨다운 설명 참고 — 같은 저신뢰도 잔더미를 짧은 시간 안에 피드백 여러 번
+            //    받을 때마다 매번 통째로 재시도하지 않도록 마지막 자동 실행 이후 최소 간격을 둔다.
+            var _sinceLast = Date.now() - _alLastAutoRetryAt;
+            if (_sinceLast < _AL_RETRY_COOLDOWN_MS) {
+                console.info('[재시도 엔진] 쿨다운 중(' + Math.ceil((_AL_RETRY_COOLDOWN_MS - _sinceLast) / 60000) + '분 남음) — 자동 재시도 건너뜀. "🔄 지금 일괄 재분석" 버튼으로 즉시 실행 가능.');
+                return;
+            }
+            _alLastAutoRetryAt = Date.now();
             _alRunRetry(lowRows); // 배너 없이 즉시 실행 — 결과는 _alRunRetry 내부 토스트로만 알림
         }
         // off일 때는 여기서 아무것도 하지 않음 — "🔄 저신뢰도 자동 재분석" 설정 그룹의
@@ -100,6 +122,7 @@
             _showToast(window._t('저신뢰도로 대기 중인 업무가 없습니다', 'No low-confidence tasks are pending'));
             return;
         }
+        _alLastAutoRetryAt = Date.now(); // 수동 실행도 쿨다운 시계를 갱신 — 직후 자동 트리거가 같은 걸 또 돌리지 않게
         _alRunRetry(lowRows);
     };
 
