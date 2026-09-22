@@ -307,9 +307,15 @@ window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral'];
 //    다른 크기 설정들(AI 글자 수, SAP 조회 결과 최대 글자 수 등)과 같은 패턴으로 localStorage
 //    기반 설정값으로 뺀다(⚙️ AI 도구 설정 → 📉 AI 요청 크기 제한).
 window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT = 20;
+// 💡 [2026-09-22 신규, 사용자 요청 "0으로 하면 풀리게"] 0 = 쿨다운 기능 자체를 끔(매번 모든
+//    제공사를 다시 시도 — 폴백 도입 이전의 원래 동작으로 되돌아감). parseInt("0")은 falsy라
+//    `v && v>=1`식 판정으로는 0을 "설정 안 됨"과 구분 못 해 기본값(20)으로 되돌아가버리므로,
+//    저장된 문자열이 있는지부터 명시적으로 확인한다.
 window.getAiProviderCooldownMin = function() {
-    const v = parseInt(localStorage.getItem('gantt_ai_provider_cooldown_min'), 10);
-    return (v && v >= 1) ? v : window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;
+    const raw = localStorage.getItem('gantt_ai_provider_cooldown_min');
+    if (raw === null || raw === '') return window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;
+    const v = parseInt(raw, 10);
+    return (isNaN(v) || v < 0) ? window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT : v;
 };
 window.setAiProviderCooldownMin = function(v) {
     localStorage.setItem('gantt_ai_provider_cooldown_min', String(v));
@@ -318,7 +324,9 @@ window._aiProviderCooldownUntil = (function() {
     try { return JSON.parse(localStorage.getItem('ai_provider_cooldown_v1') || '{}'); } catch (e) { return {}; }
 })();
 window._aiMarkProviderCooldown = function(providerKey) {
-    window._aiProviderCooldownUntil[providerKey] = Date.now() + window.getAiProviderCooldownMin() * 60 * 1000;
+    const minutes = window.getAiProviderCooldownMin();
+    if (!minutes) return; // 0분 = 쿨다운 사용 안 함 — 등록하지 않음(매번 다시 시도)
+    window._aiProviderCooldownUntil[providerKey] = Date.now() + minutes * 60 * 1000;
     try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }
 };
 window._aiClearProviderCooldown = function(providerKey) {

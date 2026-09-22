@@ -1303,7 +1303,10 @@
                 en: 'Recommended: 6,000 (default) — for providers with lower size limits (e.g. Groq), consider lowering to 2,000~3,000.'
             },
             'ai-cooldown-min-label': { ko: '⏳ 제공사 할당량 소진 시 재시도 대기(쿨다운)', en: '⏳ Cooldown before retrying an exhausted provider' },
-            'ai-cooldown-min-hint': { ko: '권장값: 20분 (기본값)', en: 'Recommended: 20 min (default)' },
+            'ai-cooldown-min-hint': {
+                ko: '권장값: 20분 (기본값) — 0으로 저장하면 쿨다운 기능이 꺼지고, 지금 막혀있던 제공사도 즉시 풀립니다.',
+                en: 'Recommended: 20 min (default) — saving 0 disables cooldown entirely and immediately releases any provider currently in cooldown.'
+            },
         };
         Object.entries(_reqsizeTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);

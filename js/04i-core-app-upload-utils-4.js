@@ -182,7 +182,7 @@
                     <span>⚙️ <span id="ai-tools-settings-title">${_en ? 'AI Analysis Settings' : 'AI 분석 설정'}</span></span>
                     <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
-                <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
+                <div style="overflow-y:auto; flex:1; min-height:0; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
 
                     <!-- ══ 그룹1: AI 모델 선택 (기본 접힘) — 원래 AI 업무분석 팝업에 있던 것을 이동 ══ -->
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
@@ -317,10 +317,10 @@
                             <label id="ai-cooldown-min-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">⏳ 제공사 할당량 소진 시 재시도 대기(쿨다운)</label>
                             <div id="ai-cooldown-min-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">한 제공사(Gemini/Groq/Mistral)의 무료 후보 모델을 전부 시도했는데 할당량 등으로 다 막히면, 이 시간 동안은 그 제공사를 건너뛰고 바로 다음 제공사로 넘어갑니다(0번 낭비 호출). 시간이 지나면 자동으로 다시 한 번 시도해서 할당량이 풀렸는지 확인합니다 — 너무 짧으면 낭비 호출이 늘고, 너무 길면 할당량이 풀린 걸 늦게 알아챕니다.</div>
                             <div style="display:flex; gap:8px; align-items:center;">
-                                <input id="ai-cooldown-min-input" type="number" min="1" max="180" step="5" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <input id="ai-cooldown-min-input" type="number" min="0" max="180" step="5" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
                                 <button id="ai-cooldown-min-reset-btn" onclick="document.getElementById('ai-cooldown-min-input').value=window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div id="ai-cooldown-min-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 20분 (기본값)</div>
+                            <div id="ai-cooldown-min-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 20분 (기본값) — 0으로 저장하면 쿨다운 기능이 꺼지고, 지금 막혀있던 제공사도 즉시 풀립니다.</div>
                         </div>
                     </div>
 
@@ -470,12 +470,21 @@
         sapMaxLenInput.value = sml;
         window.setAiSapMaxLen(sml);
 
+        // 💡 [2026-09-22 신규, 사용자 요청] 0 = 쿨다운 기능 자체를 끔(min=1 강제 안 함). 0으로
+        //    저장하면 지금 이미 쿨다운 중인 제공사들도 즉시 풀어준다 — 설정만 바꾸고 실제
+        //    상태(`_aiProviderCooldownUntil`)는 안 바뀌면 "0으로 했는데 왜 아직도 막혀있냐"는
+        //    혼란이 생기므로, 저장 시점에 바로 반영.
         const cooldownMinInput = document.getElementById('ai-cooldown-min-input');
         let cdm = parseInt(cooldownMinInput.value, 10);
-        if (!cdm || cdm < 1) cdm = 1;
+        if (isNaN(cdm) || cdm < 0) cdm = window._AI_PROVIDER_COOLDOWN_MIN_DEFAULT;
         if (cdm > 180) cdm = 180;
         cooldownMinInput.value = cdm;
         window.setAiProviderCooldownMin(cdm);
+        if (cdm === 0) {
+            window._aiProviderCooldownUntil = {};
+            try { localStorage.removeItem('ai_provider_cooldown_v1'); } catch (e) { /* ignore */ }
+            if (window.showToast) window.showToast(window._t('⏳ 쿨다운을 껐습니다 — 지금 막혀있던 제공사도 모두 즉시 다시 시도 대상이 됩니다.', '⏳ Cooldown disabled — providers currently in cooldown will be retried immediately.'), 'info');
+        }
 
         const rangeInput = document.getElementById('ai-summary-range-days-input');
         let rd = parseInt(rangeInput.value, 10);
