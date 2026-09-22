@@ -183,9 +183,15 @@
                     <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="overflow-y:auto; flex:1; min-height:0; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
+                    <!-- 🐛 [2026-09-22 버그수정, 사용자 제보] 아래 각 "그룹" 박스는 이 column flex 컨테이너의
+                         자식인데 flex-shrink:0이 없었다 — 박스에 border:1px solid #e0e0e0; overflow:hidden;이
+                         있으면 CSS 플렉스박스 규격상 자동 최소 높이(auto min-height)가 0으로 취급돼서, 모달을
+                         작게 리사이즈하면 오버플로해서 스크롤되는 대신 내용이 실제로 짜부라져(그룹 텍스트가
+                         안 보일 만큼) 렌더링됐다. 각 그룹에 flex-shrink:0을 줘서 항상 원래 크기를 유지하고,
+                         넘치는 만큼은 이 컨테이너의 overflow-y:auto가 스크롤로 보여주게 한다. -->
 
                     <!-- ══ 그룹1: AI 모델 선택 (기본 접힘) — 원래 AI 업무분석 팝업에 있던 것을 이동 ══ -->
-                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-model')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span id="ai-set-sec-model-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🤖 AI 모델 선택</span>
@@ -248,7 +254,7 @@
                     </div>
 
                     <!-- ══ 그룹2: AI 글자 수 설정 (기본 접힘) — 기존 메일분석/요약·문답 최대 글자 수 통합 ══ -->
-                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-maxlen')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span id="ai-set-sec-maxlen-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔢 AI 글자 수 설정</span>
@@ -277,7 +283,7 @@
                          "Request too large ... tokens per minute" 같은 오류는 quota(하루/분당 횟수)와
                          달리 기다려도 안 풀리고 요청 자체를 줄여야만 해결되므로, 그 레버(참고 업무
                          건수)와 무료 등급별 제약 안내를 한곳에 모음 ══ -->
-                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-reqsize')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span id="ai-set-sec-reqsize-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📉 AI 요청 크기 제한 (무료 등급 대응)</span>
@@ -332,7 +338,7 @@
 
                     <!-- ══ 그룹3: AI 요약 기간 설정 (기본 접힘) — "검색 범위"(며칠치를 볼지)와 "임박(긴급)
                          기준"(그중 특히 급한 것)은 서로 다른 개념이라 두 값을 분리해서 둠 ══ -->
-                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-range')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span id="ai-set-sec-range-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📅 AI 요약 기간 설정</span>
@@ -359,7 +365,7 @@
 
                     <!-- ══ 그룹4: 학습 로그 반영 범위 (기본 접힘, 신규) — 오매칭 신고·AI 근거문의·
                          재분석힌트 등이 토픽 프로파일 생성에 얼마나 반영될지 조절 ══ -->
-                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-learning')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span id="ai-set-sec-learning-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📚 학습 로그 반영 범위</span>
@@ -386,7 +392,7 @@
                     <!-- ══ 그룹5: 🔄 저신뢰도 자동 재분석 (기본 접힘, 신규 2026-09-14) — Phase 4
                          재시도 엔진(_alTriggerRetry, js/25-ai-learning.js)의 실행 방식 선택.
                          on: 배너 없이 즉시 자동 재분석. off: 조용히 대기시켰다가 아래 버튼으로 일괄 처리 ══ -->
-                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-retry')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span id="ai-set-sec-retry-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔄 저신뢰도 자동 재분석</span>

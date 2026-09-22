@@ -574,7 +574,7 @@ window.openMailAutoConfigModal = async function() {
             <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
 
                 <!-- ══ 큰그룹1: 수집설정 (기본 접힘) — 옛 그룹1 ══ -->
-                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                     <div onclick="window._toggleAlarmSection('mac-sec-collect')"
                          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                         <span id="mac-sec-collect-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⏱️ 수집설정</span>
@@ -618,7 +618,7 @@ window.openMailAutoConfigModal = async function() {
                 </div>
 
                 <!-- ══ 큰그룹2: 가산점수 (기본 접힘) — 옛 그룹2(점수 가산 키워드)+그룹3(우선순위 점수)+그룹4(직급별 점수) 통합 ══ -->
-                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                     <div onclick="window._toggleAlarmSection('mac-sec-score')"
                          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                         <span id="mac-sec-score-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⭐ 가산점수</span>
@@ -650,7 +650,7 @@ window.openMailAutoConfigModal = async function() {
                      있어서(중복) 사용자 요청으로 여기서는 제거 — 그 큐들은 업무 보관함 쪽에서만 연다. -->
 
                 <!-- ══ 큰그룹3: 자동폐기 필터 (기본 접힘) — 옛 그룹5 ══ -->
-                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                     <div onclick="window._toggleAlarmSection('mac-sec-filter')"
                          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                         <span id="mac-sec-filter-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🚫 자동폐기 필터</span>
