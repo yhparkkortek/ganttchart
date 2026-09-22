@@ -198,6 +198,26 @@ window._AI_REQUEST_TOO_LARGE_HINT = '\n\n💡 무료 등급은 보통 "요청 1�
 window._AI_INTERNAL_ERROR_RE = /internal error|internal server error|\b500\b.*internal|internal_error/i;
 window._AI_INTERNAL_ERROR_HINT = '\n\n💡 이 메시지는 구글 Gemini API 쪽의 일시적 서버 오류입니다(우리 앱의 설정 문제가 아님). 대부분 몇 초~몇 분 뒤 재시도하면 해결됩니다.\n→ ① 같은 요청을 다시 시도 ② 계속되면 ⚙️ 설정에서 AI 모델을 다른 걸로 바꾸거나 Groq/Mistral 등 다른 제공사로 임시 전환';
 
+// 💡 [2026-09-22 신규, 사용자 요청] 전역 호출 간격 — 메일 자동분석(여러 건 연속 AI 호출)과 AI 문답을
+//    동시에 쓰면 짧은 시간에 요청이 몰려서, 무료 등급의 분당 요청 한도(RPM)를 실제 필요한 것보다
+//    빨리 태워버린다("모델 자동전환을 손보기 전에 애초에 한도 자체를 덜 건드리자"는 사용자 판단).
+//    callAiBackend가 모든 AI 기능(메일분석/AI문답/AI요약 등)의 공용 진입점이라 여기 한 곳에만
+//    넣으면 앱 전체에 적용된다. Promise 체인으로 직렬화해서 "동시에 여러 호출이 몰려도" 실제
+//    네트워크 호출 시작 시각 사이에 최소 간격을 보장하며 순서대로(먼저 온 순) 내보낸다.
+window._AI_MIN_CALL_GAP_MS = 2500;
+window._aiCallQueueTail = window._aiCallQueueTail || Promise.resolve();
+window._aiThrottleGate = function() {
+    const p = window._aiCallQueueTail.then(function() {
+        const elapsed = Date.now() - (window._aiLastCallStartedAt || 0);
+        const remain = window._AI_MIN_CALL_GAP_MS - elapsed;
+        if (remain > 0) return new Promise(function(r) { setTimeout(r, remain); });
+    }).then(function() {
+        window._aiLastCallStartedAt = Date.now();
+    });
+    window._aiCallQueueTail = p.catch(function() { /* 실패해도 다음 대기자는 막지 않음 */ });
+    return p;
+};
+
 window.callAiBackend = async function(apiKey, prompt, opts) {
     opts = opts || {};
     const provider = window.getActiveAiProvider();
@@ -223,6 +243,8 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
         const model = candidates[ci];
         let skipRemainingRetries = false; // 모델 사용중단 또는 할당량 초과 — 같은 모델로 더 재시도해도 소용없음
         for (let attempt = 1; attempt <= maxRetryPerModel; attempt++) {
+            if (opts.isCancelled && opts.isCancelled()) return { ok: false, error: new Error('사용자가 중단함') };
+            await window._aiThrottleGate();
             if (opts.isCancelled && opts.isCancelled()) return { ok: false, error: new Error('사용자가 중단함') };
             try {
                 const res = await fetch(GAS_URL, {
