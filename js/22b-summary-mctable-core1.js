@@ -1104,12 +1104,19 @@ window.toggleAlarmAuto = function() {
     //    위임 리스너(data-keep-open="true")가 일괄 처리하므로 여기서 따로 닫지 않음.
 };
 
-// 💡 메일 자동배치 3단계 토글 — 'full'(완전자동·녹색) / 'semi'(반자동·주황) / 'off'(꺼짐·빨강)
+// 💡 메일 자동배치 2단계 토글 — 'full'(완전자동·녹색) / 'off'(꺼짐·빨강)
 //    full : 수집→분석→점수→Gantt자동등록→알람 전체 자동
-//    semi : 수집→분석→점수→TaskInbox 대기 (사람 확인 후 등록)
 //    off  : 아무것도 안 함
+// 💡 [2026-09-23 정책변경] 중간 단계였던 'semi'(반자동 — 분석까지 하고 TaskInbox '대기'로만
+//    쌓아두기)를 제거했다. 매칭이 확정된 건까지 사람이 다시 누르게 만드는 단계였고, 그 때문에
+//    "신뢰도 상인데 왜 대기냐"가 가장 흔한 혼란 원인이었다. 여전히 TaskInbox는 쓰이되, "매칭 자체가
+//    안 된(미분류)·날짜 미확정·자동배치 실패" 건만 남기는 용도로 좌혀졌다.
+//    예전에 'semi'로 저장돼 있던 브라우저는 읽는 즉시 'full'로 승격시켜(1회성 마이그레이션)
+//    토글 순환이나 배지 표시가 엉뚱한 상태로 남지 않게 한다.
 window.getMailMode = function() {
-    return localStorage.getItem('mail_mode') || 'semi'; // 기본값 반자동
+    const raw = localStorage.getItem('mail_mode');
+    if (raw === 'semi') { localStorage.setItem('mail_mode', 'full'); return 'full'; }
+    return raw || 'full'; // 기본값 완전자동
 };
 // 하위 호환 래퍼 — 기존 참조 코드(_autoMailFetchTick 등) 수정 불필요
 window.isMailAutoProcessEnabled = function() { return window.getMailMode() !== 'off'; };
@@ -1123,9 +1130,6 @@ window.refreshMailModeButton = function() {
     if (mode === 'full') {
         btn.textContent = isEn ? '🟢 Mail Auto (Gantt)' : '🟢 메일 완전자동 (Gantt)';
         btn.style.color = '#2f7a2f';
-    } else if (mode === 'semi') {
-        btn.textContent = isEn ? '🟠 Mail Semi-Auto (Inbox)' : '🟠 메일 반자동 (보관함)';
-        btn.style.color = '#b85c00';
     } else {
         btn.textContent = isEn ? '🔴 Mail Auto OFF' : '🔴 메일 자동배치 OFF';
         btn.style.color = '#c92a2a';
@@ -1134,7 +1138,7 @@ window.refreshMailModeButton = function() {
 
 window.toggleMailMode = function() {
     const cur = window.getMailMode();
-    const next = cur === 'full' ? 'semi' : cur === 'semi' ? 'off' : 'full';
+    const next = cur === 'full' ? 'off' : 'full'; // 💡 [2026-09-23] 'semi' 제거로 2단계 순환
     localStorage.setItem('mail_mode', next);
     window.refreshMailModeButton();
     // D안: OFF → ON 전환 시 즉시 1회 수집 (테스트 재수집 대체)

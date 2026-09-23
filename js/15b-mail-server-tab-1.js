@@ -578,6 +578,11 @@ window._msResolveMatchAndContext = async function(mail) {
 // 💡 [복수 프로젝트 매칭] 주매칭이 "상"으로 확정된 경우에만, AI가 별도로 확신한 추가 프로젝트를
 //    extraCandidates로 함께 반환한다. 주매칭 자체가 불확실(중/하)하면 그 위에 추가매칭을 얹지 않고
 //    무시한다(불확실한 기준 위에 더 쌓지 않기 위한 안전장치). 폭주 방지를 위해 최대 2개까지만 허용.
+// ⭐ [2026-09-23 신규] 메일 1건의 업무를 자동으로 넣을 수 있는 프로젝트 수 상한(주매칭 포함).
+//    추가매칭(서로 다른 독립 용건)·복수매칭(하나의 공통 이슈) 둘 다 이 숫자 하나를 쓴다.
+//    넘으면 자동배치하지 않고 보관함 '대기'로 남겨 사람이 고르게 한다(과배분 방지선).
+window.MAX_AUTO_PLACE_TARGETS = window.MAX_AUTO_PLACE_TARGETS || 5;
+
 window._msResolveAiProjectMatch = function(task, candidatesForAI) {
     if (!task || !candidatesForAI || !candidatesForAI.length) return null;
     const conf = task['매칭신뢰도'];
@@ -606,7 +611,23 @@ window._msResolveAiProjectMatch = function(task, candidatesForAI) {
                 multi.push(candidatesForAI[idx - 1]);
             }
         });
-        if (multi.length) return { status: 'ambiguous', candidates: multi, extraCandidates: [], multi: true, matchBasis: matchBasis, confidence: conf || '' };
+        if (multi.length) {
+            // ⭐ [2026-09-23 정책변경] 예전엔 공통이슈(복수 후보)를 신뢰도와 무관하게 무조건 ambiguous로
+            //    내려보내 보관함 '대기'에만 쌓았다 — 그러면서 표시용 confidence엔 '상'이 그대로 실려
+            //    "신뢰도가 상인데 왜 대기지?"의 가장 흔한 원인이었고, 실제로도 "AMUSNET 3종 공통 이슈"처럼
+            //    사람이 보면 그냥 전부에 배분할 건을 매번 손으로 다시 누르고 있었다.
+            //    → AI가 "상"으로 확신한 공통이슈는 matched로 승격해 후보 전부에 자동배치한다
+            //    (첫 번째를 주매칭, 나머지를 extraCandidates로 — 이후 경로는 추가매칭과 완전히 동일).
+            //    단, AI가 넓게 짚을수록 과배분 위험이 커지므로 window.MAX_AUTO_PLACE_TARGETS를 넘으면
+            //    승격하지 않고 예전처럼 사람이 고르도록 대기(ambiguous)로 남긴다.
+            if (conf === '상' && multi.length <= window.MAX_AUTO_PLACE_TARGETS) {
+                return { status: 'matched', candidates: [multi[0]], extraCandidates: multi.slice(1),
+                         multi: true, multiCount: multi.length, matchBasis: matchBasis, confidence: conf };
+            }
+            return { status: 'ambiguous', candidates: multi, extraCandidates: [], multi: true,
+                     multiCount: multi.length, matchBasis: matchBasis, confidence: conf || '',
+                     ambiguousReason: (conf === '상' ? 'multi_over_cap' : 'multi_low_conf') };
+        }
     }
 
     if (!conf || !pickedIdx) return null;
@@ -617,7 +638,8 @@ window._msResolveAiProjectMatch = function(task, candidatesForAI) {
     if (conf === '상' && Array.isArray(task['추가매칭프로젝트번호목록'])) {
         const seen = new Set([pickedIdx]);
         task['추가매칭프로젝트번호목록'].forEach(function(n) {
-            if (extraCandidates.length >= 2) return; // 최대 2개(주매칭 포함 총 3개 프로젝트)까지만
+            // ⭐ [2026-09-23] 상한을 공통 상수(window.MAX_AUTO_PLACE_TARGETS)로 통일 — 예전엔 여기만 총 3개 고정이었다
+            if (extraCandidates.length >= window.MAX_AUTO_PLACE_TARGETS - 1) return;
             const idx = parseInt(n, 10);
             if (idx >= 1 && idx <= candidatesForAI.length && !seen.has(idx)) {
                 seen.add(idx);
@@ -1053,7 +1075,10 @@ window._msRegisterToProjectTargets = function(targets, task, mailRawObj, sourceL
                     //    PC가 꺼져도 Drive에 남아있어 다른 사용자도 혜택을 받음
                     if (window._tpAppendMailSignal) window._tpAppendMailSignal(target.drive_file_id, task, mailRawObj);
                 } else {
-                    console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태로 유지:', result.reason);
+                    // ⭐ [2026-09-23] 예전엔 여기서 warn 한 줄만 남기고 끝이라 다시 시도되는 일이 없었다 —
+                    //    실패를 항목에 기록해 두면 유휴 스윕(_ibAutoPlaceSweep)이 백오프 간격으로 재시도한다.
+                    if (window._ibMarkAutoPlaceFail) window._ibMarkAutoPlaceFail(newUid, result.reason);
+                    console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태로 유지(재시도 예약):', result.reason);
                 }
                 if (onEachDone) onEachDone(target, result, idx);
             });
@@ -1301,7 +1326,8 @@ window._autoMailFetchTick = async function() {
                                         ), 'info');
                                     }
                                 } else {
-                                    console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태 유지:', result.reason);
+                                    if (window._ibMarkAutoPlaceFail) window._ibMarkAutoPlaceFail(newUid, result.reason); // ⭐ [2026-09-23] 유휴 스윕이 재시도하도록 실패 기록
+                                    console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태 유지(재시도 예약):', result.reason);
                                 }
                             });
                     }
@@ -1326,7 +1352,8 @@ window._autoMailFetchTick = async function() {
                             }
                         );
                         if (!fullAuto) {
-                            // 반자동: 자동등록 없이 "대기" 상태로만 추가 — 사람이 보관함에서 [✅매칭전송]으로 직접 처리
+                            // ⭐ [2026-09-23] '반자동' 모드를 없앴으므로 여기로 오는 건 = 날짜 미확정(날짜확인필요) 건뿐이다.
+                            //    자동등록 없이 "대기"로만 추가 — 사람이 날짜를 고쳐 보관함에서 [✅매칭전송]으로 처리
                             extraTargets.forEach(function(target) {
                                 window.TaskInbox.add(item.task, {
                                     source: `${sourceLabel} [추가매칭: ${target.model || target.customer || target.file_name}]`,

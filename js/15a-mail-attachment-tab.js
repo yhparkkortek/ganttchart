@@ -252,15 +252,41 @@ function pasteAddResult(task, mailText) {
 }
 
 // ─── 신뢰도 배지 헬퍼 (파일첨부 · 직접입력 · 메일서버 공용) ───────────────────
-function _confBadge(conf) {
+// ⭐ [2026-09-23] 배지가 그냥 "🟢상"으로만 보여서 "신뢰도가 상인데 왜 대기지?"라는 오해를 불렀다 —
+//    이 값은 "이 메일을 이 프로젝트로 볼 확신도"(매칭 신뢰도)일 뿐, 업무명·날짜 추출 정확도도
+//    아니고 무엇보다도 "자동배치 확정"을 뜻하지 않는다(날짜 확정·후보 수·모드 조건이 따로 있음).
+//    → 종류를 이름과 아이콘으로 명시한다. kind: 'match'(기본, 🎯매칭) | 'analysis'(📝분석)
+//    note: 배지 뒤에 붙일 보충 문구(예: "후보 3개")
+function _confBadge(conf, kind, note) {
     if (!conf) return '';
-    const cfg = conf === '상' ? { bg:'#d4edda', color:'#155724', icon:'🟢' }
-              : conf === '중' ? { bg:'#fff3cd', color:'#856404', icon:'🟡' }
-              : conf === '하' ? { bg:'#f8d7da', color:'#721c24', icon:'🔴' }
-              :                 { bg:'#f1f3f5', color:'#6c757d', icon:'⚪' };
-    return `<span style="flex-shrink:0;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:${cfg.bg};color:${cfg.color};">${cfg.icon}${conf}</span>`;
+    const cfg = conf === '상' ? { bg:'#d4edda', color:'#155724' }
+              : conf === '중' ? { bg:'#fff3cd', color:'#856404' }
+              : conf === '하' ? { bg:'#f8d7da', color:'#721c24' }
+              :                 { bg:'#f1f3f5', color:'#6c757d' };
+    const _en = window._currentLang === 'en';
+    const isAnalysis = kind === 'analysis';
+    const icon  = isAnalysis ? '📝' : '🎯';
+    const label = isAnalysis ? (_en ? 'analysis ' : '분석 ') : (_en ? 'match ' : '매칭 ');
+    const tip = isAnalysis
+        ? (_en ? 'How confident the AI is about the extracted task name/dates' : 'AI가 업무명·날짜를 제대로 뽑았다고 보는 확신도')
+        : (_en ? 'How confident the AI is that this mail belongs to this project (not a guarantee of auto-placement)'
+               : 'AI가 이 메일을 이 프로젝트로 보는 확신도 — 자동배치 확정을 뜻하지는 않음(날짜 확정·후보 수 조건이 따로 있음)');
+    const noteTxt = note ? ` (${note})` : '';
+    // ⭐ [2026-09-23] 영문 모드에서만 값도 영문으로(상/중/하 → High/Med/Low) — 저장값 자체는 한글 고정
+    const confTxt = _en ? ({ '상':'High', '중':'Med', '하':'Low' }[conf] || conf) : conf;
+    return `<span title="${tip}" style="flex-shrink:0;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:${cfg.bg};color:${cfg.color};">${icon}${label}${confTxt}${noteTxt}</span>`;
 }
 window._confBadge = _confBadge; // 전역 노출 (msRenderList 등 다른 파일에서도 사용)
+
+// ⭐ [2026-09-23] "신뢰도 상인데 대기" 중 가장 흔한 케이스가 "공통이슈라 프로젝트를 하나로
+//    못 좁힘" — 배지에 후보 개수를 같이 적어 한눈에 구분되게 한다(예: 🎯매칭 상 (후보 3개)).
+window._confNoteFromTask = function(task) {
+    if (!task) return '';
+    const multi = task['복수매칭후보목록'];
+    if (!Array.isArray(multi) || multi.length < 2) return '';
+    if (parseInt(task['주매칭프로젝트번호'] || 0, 10)) return '';
+    return window._currentLang === 'en' ? `${multi.length} candidates` : `후보 ${multi.length}개`;
+};
 
 // ─── 직접입력 누적 결과 목록 렌더링 (파일첨부/메일서버와 동일한 UI: 체크박스+번호+이름+상태pill+×삭제) ─────
 function pasteRenderResultList() {
@@ -294,7 +320,7 @@ function pasteRenderResultList() {
                   title="${escapeHtml(r.task['업무명']||'새업무')}">
                 ${escapeHtml(r.task['업무명']||'새업무')} 📧
             </span>
-            ${_confBadge((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도'] || '')}
+            ${_confBadge((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도'] || '', 'match', window._confNoteFromTask(r.task))}
             <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; border-radius:12px;
                          ${r.registered ? 'background:#28a745; color:#fff;' : 'background:#f1f3f5; color:#888;'}">
                 ${r.registered ? '✅ 완료' : '⬜ 미등록'}
@@ -1232,7 +1258,7 @@ function mfRenderList(results) {
                                         border-radius:3px; font-size:10px; font-weight:bold;">
                                ${r.project}</span>`
                         : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
-                    ${_confBadge(r.task && ((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도']) || '')}
+                    ${_confBadge(r.task && ((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도']) || '', 'match', window._confNoteFromTask(r.task))}
                     ${r.task && r.task['시작일']
                         ? `<span style="font-size:10px; color:#888;">
                                ${r.task['시작일'].includes('날짜확인필요')

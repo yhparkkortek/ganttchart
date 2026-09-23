@@ -449,7 +449,16 @@ window.renderTaskInbox = function() {
                     ${it.status === '대기' ? `<button onclick="window.inboxCreateNewProjectFromPending('${it.uid}')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_ibEn ? 'No project matched (or matched project is wrong) — register this mail as a new project (AI-prefilled)' : '아직 어느 프로젝트에도 배치되지 않은 건 — 이 메일로 새 프로젝트를 등록합니다(AI 자동 추출)'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">➕ ${_ibEn ? 'New Proj' : '새 Proj 생성'}</button>` : ''}
                     ${it.status !== '대기' ? `<button onclick="window.inboxReportFalseMatch('${it.uid}')" onmouseover="this.style.background='#ffe0b2'; this.style.borderColor='#ef8c25';" onmouseout="this.style.background='#fff3e0'; this.style.borderColor='#ffca75';" title="${_ibEn ? 'Report as false match — logs to topic learning, removes from current Gantt if placed here' : '오매칭으로 신고 — 토픽 학습에 기록 · 현재 Proj 배치됨이면 간트에서도 삭제'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#fff3e0; color:#b05000; border:1px solid #ffca75; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">🚨 ${_ibEn ? 'False match' : '오매칭 신고'}</button>` : ''}
                 </div>
-                <span title="${(it.matchedProject && it.matchedProject.matchBasis) ? escapeHtml((it.matchedProject.confidence ? '[' + (_ibEn ? 'AI confidence: ' : 'AI 신뢰도: ') + it.matchedProject.confidence + '] ' : '') + it.matchedProject.matchBasis) : ''}" style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
+                <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                ${(window._confBadge && it.matchedProject && it.matchedProject.confidence)
+                    ? window._confBadge(it.matchedProject.confidence, 'match',
+                        ((it.matchedProject.multiCount || (it.matchedProject.candidates || []).length) > 1)
+                            ? (_ibEn ? `${it.matchedProject.multiCount || it.matchedProject.candidates.length} candidates`
+                                     : `후보 ${it.matchedProject.multiCount || it.matchedProject.candidates.length}개`)
+                            : '')
+                    : ''}
+                <span title="${(it.matchedProject && it.matchedProject.matchBasis) ? escapeHtml((it.matchedProject.confidence ? '[' + (_ibEn ? 'AI match confidence: ' : 'AI 매칭 신뢰도: ') + it.matchedProject.confidence + '] ' : '') + it.matchedProject.matchBasis) : ''}" style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
+                </div>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
                 ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(sourceDisplay)} · ${when}
@@ -457,10 +466,16 @@ window.renderTaskInbox = function() {
             <!-- 💡 [2026-09-09 신규] "왜 자동배치 안 되고 대기인지" — AI가 매 건마다 반환하는 매칭근거를
                  지금까진 신뢰도 판정에만 쓰고 버렸는데(사람이 이유를 알 방법이 없었음), 후보/신뢰도와
                  함께 상태뱃지 툴팁 + 대기 항목에 한해 카드에 바로 보이는 줄로도 노출한다. -->
+            <!-- ⭐ [2026-09-23 신규] "신뢰도는 상인데 왜 대기인지" — 자동배치 조건 중 무엇에 걸렸는지를
+                 콘솔이 아니라 카드에서 바로 보여준다(window._ibPendingReason). -->
+            ${it.status === '대기' ? (function(){ const _r = window._ibPendingReason ? window._ibPendingReason(it) : ''; return _r ? `
+            <div style="font-size:10.5px; color:#7a5210; background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:3px 7px; margin-top:4px; line-height:1.4; display:flex; gap:4px; align-items:flex-start;">
+                <span style="flex-shrink:0;">⏸</span><span>${escapeHtml(_r)}</span>
+            </div>` : ''; })() : ''}
             ${(it.status === '대기' && it.matchedProject && it.matchedProject.matchBasis) ? `
             <div style="font-size:10.5px; color:#a85d0a; margin-top:3px; line-height:1.4; display:flex; gap:4px; align-items:flex-start;">
                 <span style="flex-shrink:0;">🤖</span>
-                <span>${(_ibEn ? 'AI reasoning' : 'AI 판단 근거')}${it.matchedProject.confidence ? ` (${_ibEn ? 'confidence: ' : '신뢰도: '}${escapeHtml(it.matchedProject.confidence)})` : ''}: ${escapeHtml(it.matchedProject.matchBasis)}</span>
+                <span>${(_ibEn ? 'AI reasoning' : 'AI 판단 근거')}${it.matchedProject.confidence ? ` (${_ibEn ? 'match confidence: ' : '매칭 신뢰도: '}${escapeHtml(it.matchedProject.confidence)})` : ''}: ${escapeHtml(it.matchedProject.matchBasis)}</span>
             </div>` : ''}
             <div id="inbox-detail-${it.uid}" style="display:${window._ibExpandedUids.has(it.uid) ? 'block' : 'none'}; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
                 <div><b>${_ibEn ? 'Task' : '업무명'}</b> : ${escapeHtml(t['업무명'] || '')}</div>
@@ -612,6 +627,203 @@ window.inboxQuickRegisterMatched = async function(uid) {
         alert(window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error')));
     }
 };
+
+// ⭐ [2026-09-23 신규] "왜 이 항목이 아직 '대기'인지"를 카드에서 바로 읽히게 하는 한 줄 사유.
+//    사용자 제보: 신뢰도가 "상"으로 보이는데 대기라서 이유를 알 수 없었다 — 매칭 신뢰도는
+//    자동배치 조건 중 하나일 뿐이고(날짜 확정·후보 수·모드·직전 실패가 각각 따로 걸림),
+//    그 조건 중 무엇에 걸렸는지 여태 화면 어디에도 없었다(콘솔에만 찍힘).
+// 💡 [하드코딩 지양] 문구는 조건 판정과 1:1로 붙어 있지만, 판정 기준 자체는 전부
+//    _ibIsAutoPlaceReady / MAX_AUTO_PLACE_TARGETS / IB_AUTO_RETRY 등 한 곳의 값을 읽어 쓴다.
+window._ibPendingReason = function(it) {
+    if (!it || it.status !== '대기') return '';
+    const en = window._currentLang === 'en';
+    const T = function(ko, eng) { return en ? eng : ko; };
+    const C = function(conf) { return en ? ({ '상':'High', '중':'Med', '하':'Low' }[conf] || conf || '?') : (conf || '?'); };
+    const mp = it.matchedProject;
+    if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) {
+        return T('메일 자동배치가 OFF입니다 — 상단 [🟢 메일 완전자동]으로 켜면 자동으로 배치됩니다',
+                 'Mail auto-placement is OFF — turn on [🟢 Mail Auto (Gantt)] in the top menu');
+    }
+    if (!mp || !mp.candidates || !mp.candidates.length) {
+        return T('매칭된 프로젝트가 없습니다(미분류) — [➕ 새 Proj 생성]이나 [📤 다른 프로젝트]로 처리하세요',
+                 'No matched project (unclassified) — use [➕ New Proj] or [📤 Other project]');
+    }
+    if (mp.status !== 'matched') {
+        const n = mp.multiCount || mp.candidates.length;
+        if (mp.ambiguousReason === 'multi_over_cap') {
+            return T(`후보 ${n}개 — 자동배치 상한(${window.MAX_AUTO_PLACE_TARGETS}개)을 넘어서 사람이 골라야 합니다`,
+                     `${n} candidates — over the auto-place cap (${window.MAX_AUTO_PLACE_TARGETS}), pick manually`);
+        }
+        if (mp.multi) {
+            return T(`후보 ${n}개 — AI가 하나로 좁히지 못했습니다(매칭 신뢰도 ${mp.confidence || '?'})`,
+                     `${n} candidates — AI could not narrow it down (match confidence ${C(mp.confidence)})`);
+        }
+        return T(`매칭 신뢰도가 "${mp.confidence || '?'}" — 확정("상")이 아니라 사람 확인이 필요합니다`,
+                 `Match confidence "${C(mp.confidence)}" — not confirmed ("High"), needs review`);
+    }
+    if (!mp.candidates[0].drive_file_id) {
+        return T('매칭된 프로젝트의 Drive 파일 정보가 없습니다 — [📤 다른 프로젝트]로 직접 보내세요',
+                 'Matched project has no Drive file id — send it manually with [📤 Other project]');
+    }
+    const t = it.task || {};
+    if (String(t['시작일'] || '').includes('날짜확인필요') || String(t['완료일'] || '').includes('날짜확인필요')) {
+        return T('날짜가 확정되지 않았습니다(날짜확인필요) — 날짜를 채우면 자동으로 배치됩니다',
+                 'Dates are unconfirmed — fill them in and it will be placed automatically');
+    }
+    const ap = it.autoPlace;
+    if (ap && ap.givenUp) {
+        return T(`자동배치 ${ap.fails}회 실패(${ap.lastReason}) — 자동 재시도를 멈췄습니다. [✅매칭전송]으로 직접 처리하세요`,
+                 `Auto-placement failed ${ap.fails}x (${ap.lastReason}) — retries stopped; use [✅ Send matched]`);
+    }
+    if (ap && ap.fails) {
+        const when = ap.nextAt ? new Date(ap.nextAt).toLocaleTimeString() : '';
+        return T(`자동배치 ${ap.fails}회 실패(${ap.lastReason}) — ${when} 이후 자동으로 다시 시도합니다`,
+                 `Auto-placement failed ${ap.fails}x (${ap.lastReason}) — will retry after ${when}`);
+    }
+    return T('자동배치 대기 중 — 다음 자동 점검(최대 10분) 때 처리됩니다',
+             'Waiting for auto-placement — will be handled at the next sweep (within 10 min)');
+};
+
+// ─── ⭐ [2026-09-23 신규] 자동배치 실패 재시도 + 유휴 시점 자동 스윕 ──────────────────
+// 💡 왜 필요한가 (사용자 제보: "신뢰도 상인데 왜 대기지?"):
+//    ① 자동배치(완전자동)는 Drive 충돌·토큰 만료·업로드 실패 같은 일시적 이유로 실패할 수 있는데,
+//       예전엔 console.warn 한 줄만 남기고 '대기'로 방치돼서 **다시 시도되는 일이 영영 없었다**.
+//       사람이 보관함을 열어 [🚀 매칭건 일괄전송]을 누르기 전까지는 영구 대기.
+//    ② 완전자동 도입 전에 쌓인 옛 '대기' 항목도 같은 이유로 저절로 넘어가지 않았다.
+//    → 실패를 항목에 기록(_ibMarkAutoPlaceFail)하고, 한가한 시점마다 조건을 다시 만족하는
+//      '대기' 항목을 훑어 자동으로 재시도한다. 실패가 반복되면 지수 백오프로 간격을 벌리고,
+//      상한(maxFails)을 넘으면 자동 재시도를 멈춰 사람 확인 대상으로 남긴다(무한 재시도 금지).
+// 💡 [하드코딩 지양] 재시도 정책 수치는 코드 곳곳에 흩지 말고 여기 한 곳(window.IB_AUTO_RETRY)에
+//    모아 둔다 — 나중에 설정 UI/원장으로 옮길 때 이 객체만 데이터 소스로 바꾸면 된다.
+window.IB_AUTO_RETRY = window.IB_AUTO_RETRY || {
+    baseMin:    10,   // 1회 실패 후 최소 대기(분) — 이후 실패마다 2배
+    capMin:     360,  // 재시도 간격 상한(분, 6시간)
+    maxFails:   6,    // 이 횟수를 넘기면 자동 재시도 중단(사람 확인 대상)
+    perSweep:   10,   // 한 번의 스윕에서 처리할 최대 건수(Drive 왕복 폭주 방지)
+    gapMs:      400,  // 건과 건 사이 간격
+    firstDelayMin: 3, // 드라이브 연동 후 첫 스윕까지 대기(분) — 로그인 직후 초기 로드/AI 호출과 안 겹치게
+    everyMin:   10    // 이후 스윕 주기(분)
+};
+
+// 💡 자동배치 실패를 항목에 기록 — 다음 스윕이 언제 다시 시도할지(nextAt)까지 같이 계산해 둔다.
+window._ibMarkAutoPlaceFail = function(uid, reason) {
+    try {
+        const cfg = window.IB_AUTO_RETRY;
+        const list = window.TaskInbox.load();
+        const it = list.find(function(x) { return x.uid === uid; });
+        if (!it) return;
+        const prev = it.autoPlace || {};
+        const fails = (prev.fails || 0) + 1;
+        const waitMin = Math.min(cfg.capMin, cfg.baseMin * Math.pow(2, fails - 1));
+        it.autoPlace = {
+            fails: fails,
+            lastReason: String(reason || 'unknown').substring(0, 120),
+            lastAt: new Date().toISOString(),
+            nextAt: new Date(Date.now() + waitMin * 60000).toISOString(),
+            givenUp: fails >= cfg.maxFails
+        };
+        window.TaskInbox.save(list);
+        console.warn(`[자동배치 재시도] "${(it.task && it.task['업무명']) || uid}" ${fails}회 실패(${it.autoPlace.lastReason}) — ` +
+            (it.autoPlace.givenUp ? '자동 재시도 중단(사람 확인 필요)' : `${waitMin}분 뒤 재시도 예정`));
+    } catch (e) { console.warn('[자동배치 재시도] 실패 기록 중 오류(무시):', e.message); }
+};
+
+// 💡 지금 자동배치를 (다시) 시도해도 되는 '대기' 항목인지 — 수동 [🚀 매칭건 일괄전송]과 동일한
+//    기본 조건(매칭 확정 + drive_file_id + 날짜 확정)에, 재시도 백오프 조건만 추가로 본다.
+window._ibIsAutoPlaceReady = function(it, now) {
+    if (!it || it.status !== '대기') return false;
+    const mp = it.matchedProject;
+    if (!mp || mp.status !== 'matched') return false;
+    const c = mp.candidates && mp.candidates[0];
+    if (!c || !c.drive_file_id) return false;
+    const t = it.task || {};
+    if (String(t['시작일'] || '').includes('날짜확인필요')) return false;
+    if (String(t['완료일'] || '').includes('날짜확인필요')) return false;
+    const ap = it.autoPlace;
+    if (ap) {
+        if (ap.givenUp) return false;
+        if (ap.nextAt && new Date(ap.nextAt).getTime() > (now || Date.now())) return false;
+    }
+    return true;
+};
+
+// 💡 유휴 스윕 본체 — 조건을 만족하는 '대기' 항목을 자동배치한다(재시도 + 옛 항목 백필 겸용).
+//    본 기능을 절대 방해하지 않도록: 메일 자동틱이 도는 중이면 양보하고, 실패해도 조용히 다음 기회로 넘긴다.
+window._ibAutoPlaceSweep = async function(opts) {
+    opts = opts || {};
+    const cfg = window.IB_AUTO_RETRY;
+    if (window._ibSweepRunning) return { skipped: 'sweep_running' };
+    if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) return { skipped: 'mode_off' };
+    if (window._msAutoTickRunning) return { skipped: 'mail_tick_running' }; // AI 분석 중 — 한가할 때 다시
+    const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+    const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+    if (!token) return { skipped: 'no_token' };
+
+    const now = Date.now();
+    const targets = window.TaskInbox.load()
+        .filter(function(it) { return window._ibIsAutoPlaceReady(it, now); })
+        .slice(0, cfg.perSweep);
+    if (!targets.length) return { skipped: 'none' };
+
+    window._ibSweepRunning = true;
+    let ok = 0; const fails = [];
+    try {
+        for (const it of targets) {
+            const target = it.matchedProject.candidates[0];
+            let result;
+            try {
+                result = await window._msAutoRegisterToProject(it.uid, it.task, target.drive_file_id,
+                    target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
+            } catch (e) { result = { ok: false, reason: e.message }; }
+            if (result && result.ok) {
+                window.TaskInbox.setStatus(it.uid, '자동배치됨', {
+                    type: (it.autoPlace ? '자동배치 재시도' : '자동배치 스윕'),
+                    target: target.file_name, at: new Date().toISOString()
+                });
+                if (window._tpAppendMailSignal) window._tpAppendMailSignal(target.drive_file_id, it.task, it.mailRaw);
+                ok++;
+            } else {
+                window._ibMarkAutoPlaceFail(it.uid, result && result.reason);
+                fails.push(`${(it.task && it.task['업무명']) || it.uid}: ${(result && result.reason) || 'unknown'}`);
+            }
+            await new Promise(function(r) { setTimeout(r, cfg.gapMs); });
+        }
+    } finally {
+        window._ibSweepRunning = false;
+    }
+    if (typeof window.renderTaskInbox === 'function') { try { window.renderTaskInbox(); } catch (e) {} }
+    if (ok && window.showToast) {
+        window.showToast(window._t(
+            `🎯 대기 중이던 업무 ${ok}건을 자동배치했습니다${fails.length ? ` (실패 ${fails.length}건)` : ''}`,
+            `🎯 Auto-placed ${ok} pending task(s)${fails.length ? ` (${fails.length} failed)` : ''}`), 'info');
+    }
+    if (fails.length) console.warn('[자동배치 스윕] 실패 목록:', fails);
+    return { ok: ok, failed: fails.length };
+};
+
+// 💡 스케줄러 — "한가한 시점"의 정의(사용자 지시 2026-09-23):
+//    드라이브 연동(토큰 확보)이 끝나고 firstDelayMin분이 지난 뒤 첫 스윕, 이후 everyMin분 주기.
+//    (로그인 직후엔 프로젝트 로드·토픽 프로파일·메일 자동수집 등 AI/네트워크 작업이 몰려 있어서
+//     그 구간을 피한다. 스윕 자체도 메일 자동틱이 도는 중이면 그 회차를 건너뛴다.)
+window._ibStartAutoPlaceScheduler = function() {
+    if (window._ibSweepTimer) return;
+    window._ibSweepTimer = setInterval(function() {
+        const cfg = window.IB_AUTO_RETRY;
+        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) { window._ibDriveReadyAt = 0; return; } // 아직 미연동 — 연동되면 그때부터 다시 카운트
+        if (!window._ibDriveReadyAt) { window._ibDriveReadyAt = Date.now(); return; }
+        const now = Date.now();
+        if (now - window._ibDriveReadyAt < cfg.firstDelayMin * 60000) return;
+        if (window._ibLastSweepAt && now - window._ibLastSweepAt < cfg.everyMin * 60000) return;
+        window._ibLastSweepAt = now;
+        window._ibAutoPlaceSweep().then(function(r) {
+            // 실행 자체를 건너뛴 회차는 "돌았다"고 치지 않고 다음 점검(1분 뒤)에 바로 다시 보게 한다
+            if (r && r.skipped && r.skipped !== 'none') window._ibLastSweepAt = 0;
+        });
+    }, 60 * 1000);
+};
+document.addEventListener('DOMContentLoaded', function() { window._ibStartAutoPlaceScheduler(); });
 
 // 💡 [완전자동 백필] 완전자동 기능이 생기기 전부터 쌓여있던 '대기' 항목들은 그때는 자동전송 대상이 아니었으므로
 //    새로 분석되는 메일과 달리 저절로 넘어가지 않는다 — 매칭 확정 + 날짜 확정된 기존 대기 항목을 한 번에 훑어서 전송

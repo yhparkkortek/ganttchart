@@ -169,6 +169,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - "AI에게 판정까지 맡기는" 기능은 로컬 정규식으로 먼저 걸러 AI 호출 대상 자체를 줄일 것(번역: 한국어만 있는 블록은 호출 생략, 청크가 0개인 정상 케이스를 실패로 처리하지 말 것).
 - **지금 열려있지 않은 프로젝트를 Drive에 직접 PATCH하는 헤드리스 경로**를 새로 추가하면, 같은 PATCH 직전에 `_tpMaybeAutoRegen(fileId, rows, colIdx, projectMeta)`를 호출해 `saveData.topicProfile`에 얹을 것(별도 Drive 왕복 금지). `_generateTopicProfile`을 열려있지 않은 프로젝트에 쓸 땐 `rows/colIdx/projectMeta`를 반드시 명시(안 하면 지금 열린 엉뚱한 프로젝트를 읽음).
 
+- **메일 자동배치는 '완전자동(full)/OFF' 2단계만 있다(2026-09-23, 반자동 semi 삭제)** — 자동배치는 매칭신뢰도 '상'만으로 되지 않고 모드·날짜확정·후보 수(≤`MAX_AUTO_PLACE_TARGETS`=5)·drive_file_id가 모두 맞아야 한다. 실패한 건은 `_ibMarkAutoPlaceFail`로 기록돼 유휴 스윕(`_ibAutoPlaceSweep`, 드라이브 연동 3분 후 → 10분 주기)이 백오프로 재시도한다. 자동배치 조건을 늘리면 `_ibIsAutoPlaceReady`와 화면 사유 `_ibPendingReason`을 **항상 같이** 고칠 것(`docs/mail-pipeline.md` 자동배치 조건 재정비 절).
+
 - **AI 할당량 오류는 "retry in N초"만 보고 분당 한도로 판단하지 말 것** — Gemini 무료 `limit: 20`은 하루 한도였다(`_aiClassifyQuotaError`, 사용량 원장 `gantt_ai_usage_v1` → ⚙️ AI 분석 설정 "📊 오늘 AI 사용량"). 사용자 조작 없이 AI를 부르는 백그라운드 호출(묶기·재분석 등)을 새로 만들면 호출 빈도 상한을 반드시 둘 것(`docs/mail-pipeline.md` 정정 절).
 
 - **localStorage에 무한히 쌓이는 새 저장소를 만들면 `window.STORAGE_REGISTRY`(`js/34-storage-doctor.js`)에 정리 규칙 한 줄 추가** — 브라우저 저장소(~5MB)는 앱 전체가 공유해서, 한 곳이 가득 차면 업무 보관함 저장이 막힌다("저장 공간이 가득" 경고 + 🧹 버튼이 "정리할 항목 없음" 반복했던 사고, `docs/mail-pipeline.md` 저장소 닥터 절).
@@ -199,6 +201,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - ALV 그리드 **한글은 SAP GUI Scripting 자체 버그로 깨짐**(복구 불가) — 헤더는 `_SAP_FIELD_LABEL_MAP`(실측 134개)으로 치환. 셀 한글 깨짐은 AI 탓이 아님.
 - 진단 스크립트와 실사용이 같은 SAP 세션을 동시에 만지면 가짜 실패 발생 — 재현 전에 진단 스크립트부터 멈출 것. 이 harness는 SAP 저장/OS 키 입력 자동화를 Bash로 직접 실행할 수 없어 라이브 검증은 사용자가 한다.
 - 자재번호가 있는 요청은 "SAP" 단어 없이도 인식(트리거 확장 원칙). 로컬 명령 체크 순서: 배치 다운로드 → 단일 열기 → 목록 → 엑셀 내보내기(catch-all은 마지막). python-docx 셀 채우기는 `cell.text=` 금지(서식 소실).
+- **새 SAP 기능을 붙일 때 매크로(.vbs) 해석 대신**: 대상 화면을 열어두고 AI 문답에 "SAP 화면 덤프해줘"라고 하면 `dump_screen_tree`(`sap_bridge_32.py`)가 GuiComponent 트리 전체(Id/Type/Text)를 그대로 보여준다 — 필드 ID 추측 없이 바로 확인.
 
 ### `docs/purchase-order.md` — 🛒 구매오더 요청 (PDF→AI 추출→ZMMR060/ZMM018)
 - **읽을 때**: 구매오더 요청, 세금계산서/거래명세서 복수 처리, 발주서 출력.

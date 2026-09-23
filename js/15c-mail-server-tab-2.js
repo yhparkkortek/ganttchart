@@ -917,7 +917,7 @@ function msRenderList(results) {
                     ${r.project
                         ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r.project}</span>`
                         : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
-                    ${(window._confBadge && r.task) ? window._confBadge((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도'] || '') : ''}
+                    ${(window._confBadge && r.task) ? window._confBadge((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도'] || '', 'match', window._confNoteFromTask && window._confNoteFromTask(r.task)) : ''}
                     ${r.registered
                         ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>`
                         : `<span style="color:#999; font-size:10px;">⬜미등록</span>`}
@@ -1548,9 +1548,11 @@ window._msBuildProjectMatchSection = function(candidateProjects, mailText, userH
         ` 이슈·가격변경·공지 등, 또는 여러 프로젝트가 대등하게 다뤄지는 회의록)라서 특정 하나의 프로젝트로 좁힐 수 없고, 후보 목록 중 "이 중 여러 개에` +
         ` 다같이 해당될 가능성이 있다"고 판단되면 — 그 후보들의 번호를 전부 "복수매칭후보목록" 배열에 적으세요(예: 후보 3번이 "AMUSNET 32인치",` +
         ` 5번이 "AMUSNET 43인치", 7번이 "AMUSNET 55인치"처럼 같은 제품군의 다른 사이즈 프로젝트들이고 메일이 "AMUSNET 전체 모델 공통" 얘기면` +
-        ` [3,5,7]). 이 배열에 넣을 때는 "주매칭프로젝트번호"는 그중 아무 것도 확정하지 말고 0으로 두고 "매칭신뢰도"도 "하"로 두세요(자동 배치되지` +
-        ` 않고 반드시 사람이 확인 후 원하는 프로젝트에 배분하는 절차를 거치므로, 여기서는 "후보를 넓게 잡아 놓치지 않는 것"이 "정확히 하나로` +
-        ` 좁히는 것"보다 중요합니다 — 관련 있을 법한 후보는 과감히 포함시키세요). 단순히 하나의 프로젝트 얘기인데 AI가 어디인지 확신 못 하는` +
+        ` [3,5,7]). 이 배열에 넣을 때는 "주매칭프로젝트번호"는 그중 아무 것도 확정하지 말고 0으로 두되, "매칭신뢰도"는 실제` +
+        ` 확신도를 그대로 적으세요 — 열거한 후보 "전부"가 이 메일의 영향을 실제로 받는 게 확실하면 "상"(이때는 그 후보 전부에` +
+        ` 업무가 자동으로 배치됩니다), 그중 일부는 아닐 수도 있거나 혹시 몰라 넓게 잡아본 추정이면 "중" 이하로 두세요(그러면 자동` +
+        ` 배치하지 않고 사람이 보관함에서 직접 골라 배분합니다). 넓게 잡아 놓치지 않는 것은 여전히 중요하니 관련 있을 법한 후보는` +
+        ` 포함하되, "상"은 그 후보 전부에 업무를 넣어도 맞을 때만 쓰세요. 단순히 하나의 프로젝트 얘기인데 AI가 어디인지 확신 못 하는` +
         ` 경우(진짜 애매함)는 여기 넣지 마세요 — 그건 그냥 0으로 두세요. 해당 없으면 이 배열도 반드시 빈 배열 []로 두세요.\n` +
         `위 JSON에 아래 다섯 필드를 추가로 포함해서 응답하세요:\n` +
         `"주매칭프로젝트번호": 1 (해당 번호, 애매하거나 목록에 없으면 0),\n` +

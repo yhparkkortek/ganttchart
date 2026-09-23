@@ -473,7 +473,7 @@
     };
 
     // ✅ [2026-08-24] "프로젝트"/"설정" 드롭다운의 하위 메뉴 버튼을 누르면 드롭다운이 자동으로 닫히도록.
-    //    ON/OFF 상태를 계속 바꿔가며 눌러야 하는 토글 버튼(자동알람 ON, 메일 반자동)은 매번 닫히면
+    //    ON/OFF 상태를 계속 바꿔가며 눌러야 하는 토글 버튼(자동알람 ON, 메일 자동배치)은 매번 닫히면
     //    다시 열어야 해서 불편하므로, data-keep-open="true"가 있는 버튼만 예외로 열어둠.
     document.querySelectorAll('.topbar-popup').forEach(function(popup) {
         popup.addEventListener('click', function(e) {
