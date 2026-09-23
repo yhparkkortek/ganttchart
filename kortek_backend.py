@@ -2162,11 +2162,12 @@ def sap_zmm009():
     #    그대로 가져온 정확한 필드 ID/버튼 시퀀스 — 추측 아님).
     material = (request.args.get('material') or '').strip()
     loc = (request.args.get('loc') or '1000').strip()
+    layout = (request.args.get('layout') or '').strip()  # 🆕 2026-09-23 — 비우면 기본값(_ZMM009_LAYOUT_VARIANT) 사용
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-zmm009?material=133025,133026'}), 400
     materials = [m.strip() for m in material.split(',') if m.strip()]
     timeout = min(150, 30 + 15 * len(materials))
-    data, status = _run_sap_bridge(['fetch_zmm009_material_list', ','.join(materials), loc], timeout, 'SAP ZMM009 자재 조회')
+    data, status = _run_sap_bridge(['fetch_zmm009_material_list', ','.join(materials), loc, layout], timeout, 'SAP ZMM009 자재 조회')
     return jsonify(data), status
 
 

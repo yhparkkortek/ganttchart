@@ -942,7 +942,24 @@ def fetch_where_used_batch(materials, plant='1000'):
     return {'ok': True, 'source': source, 'materials': mat_list, 'text': text}
 
 
-def fetch_zmm009_material_list(materials, storage_location='1000'):
+# 🆕 [2026-09-23 신규, 사용자 요청] "SAP 레이아웃을 사람들이 수시로 바꾸니까 코드가 알아서
+# 처리해달라" — 팀이 SAP ID를 공용으로 쓰다 보니 ZMM009의 "자재내역2(KO)"(ZTEXT) 컬럼이
+# 어떤 사람 세션엔 보이고 어떤 세션엔 안 보인다(기본 레이아웃엔 숨겨진 컬럼이라 컬럼 표시
+# 선택 화면에서 "표시"로 옮겨야만 나오는데, 그 변경이 저장 안 하면 세션이 끝나면 사라짐 —
+# 2026-09-23 실사용으로 확인). 매번 "표시로 옮기기" 다이얼로그를 자동 클릭하는 건 그
+# 다이얼로그 안의 버튼 2개(▶/◀ 중 뭐가 추가인지) 의미가 라이브 검증 없인 불확실해서
+# 만들지 않았다(추측 금지 원칙) — 대신 위 BOM(`_sap_select_alv_layout`)이 이미 라이브
+# 검증까지 끝낸 "저장된 레이아웃(변형)을 이름으로 강제 적용" 방식을 그대로 재사용한다.
+# **전제조건(사람이 한 번만 하면 됨)**: SAP에서 ZMM009 결과 화면 → 헤더 오른쪽클릭 →
+# "표시..." → "자재내역2(KO)"를 표시 열로 옮김 → 💾(레이아웃 저장) → 이름을 정확히
+# `_ZMM009_LAYOUT_VARIANT` 값으로 저장. 그 뒤로는 이 함수가 매번 그 이름의 레이아웃을
+# 강제 적용해서, 세션이 새로 시작되거나 다른 팀원이 기본 레이아웃을 바꿔도 항상 ZTEXT가
+# 보이는 상태로 읽는다. 그 이름의 레이아웃이 아직 없으면(저장 전) 조용히 건너뛰고 지금
+# 화면(기본 레이아웃)을 그대로 쓴다 — BOM과 동일한 방어적 설계, 조회 자체를 막지 않음.
+_ZMM009_LAYOUT_VARIANT = 'ZTEXT'  # SAP에 이 이름으로 저장된 레이아웃이 있어야 자동 적용됨
+
+
+def fetch_zmm009_material_list(materials, storage_location='1000', layout_variant=None):
     """ZMM009("자재 List(복수조회)")로 여러 자재를 한 번에 조회한다 — 2026-09-17, 사용자가
     "SAP에서 자재번호+엑셀 출력해줘"류 요청을 할 때 ZMM009를 기본 경로로 써달라고 요청해서
     추가함. 사용자가 직접 준 SAP GUI "기록 및 재생" 매크로(ZMM009.vbs)에서 그대로 가져온
@@ -1025,6 +1042,12 @@ def fetch_zmm009_material_list(materials, storage_location='1000'):
     time.sleep(1.5)
 
     wnd = session.findById('wnd[0]')
+    layout_variant = layout_variant or _ZMM009_LAYOUT_VARIANT
+    grid_for_layout = _sap_find_grid(wnd)
+    if grid_for_layout is not None:
+        _sap_select_alv_layout(session, grid_for_layout, layout_variant)  # 실패해도 조용히 무시 — 위 상수 선언부 주석 참고
+        wnd = session.findById('wnd[0]')  # 레이아웃 적용 후 화면이 다시 그려지므로 참조 갱신
+
     body, source = _sap_dump_screen_body(wnd)
     mat_label = ', '.join(mat_list)
     if not body:
@@ -3236,8 +3259,9 @@ def main():
         elif action == 'fetch_zmm009_material_list':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             storage_location = sys.argv[3] if len(sys.argv) > 3 else '1000'
+            layout_variant = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
-            result = fetch_zmm009_material_list(materials_list, storage_location)
+            result = fetch_zmm009_material_list(materials_list, storage_location, layout_variant)
         elif action == 'prepare_po_from_excel':
             excel_path = sys.argv[2] if len(sys.argv) > 2 else ''
             biz_reg_no = sys.argv[3] if len(sys.argv) > 3 else ''
