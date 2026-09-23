@@ -929,13 +929,34 @@ window._msComputeTotalScore = function(mail, task, priorityConfig) {
 
 // ─── [완전자동] 커트라인 이상 → Gantt 자동배치 + 알림 자동설정 ──
 //    기존 "다른 프로젝트로 전송"(inboxDistExecute) 로직을 헤드리스로 재구성 — DOM 의존 없음
-window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileName, mailRaw, attempt, setAlarm) {
+// ⭐ [2026-09-23 성능] opts.deferRefresh — 지금 열려있는 프로젝트에 여러 건을 연속으로 넣을 때
+//    한 건마다 recalculateSchedules()(→ globalData 전체 딥카피 Undo 스냅샷, 최대 50개 보관)와
+//    saveToGoogleDrive()(프로젝트 통째 업로드)가 돌아 화면이 통째로 멈추는 문제가 있었다
+//    (사용자 제보: "다른 기능을 쓸 수 없을 정도로 무거움"). true면 행 삽입만 하고
+//    재계산·렌더·저장은 호출부가 마지막에 "한 번"만 하도록 단단히 미룬다.
+window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileName, mailRaw, attempt, setAlarm, opts) {
+    opts = opts || {};
     try {
         // 💡 지금 브라우저에 열려있는 바로 그 프로젝트면, Drive 직접쓰기 대신 화면(globalData)에 바로 꽂고
         //    즉시 저장 — 헤드리스로 Drive만 건드리면 화면이 예전 상태로 남아있다가, 사용자가 저장할 때
         //    방금 자동배치한 내용이 통째로 덮어써져서 사라지는 심각한 문제가 생김
         if (driveFileId === window.currentDriveFileId && globalData && globalData.length) {
             try {
+                // ⭐ [2026-09-23] 중복 삽입 방지 — 저장이 한 번 실패해 '대기'로 남은 건을 재시도할 때
+                //    같은 메일이 두 번 꽂힐 수 있었다. 상세내용의 [출처] 태그는 메일 1통당 고유하므로
+                //    그걸로 이미 들어있는지 확인하고, 있으면 성공으로 간주해 상태만 정리하게 한다.
+                const _detail = String(task['상세내용'] || '');
+                const _tagIx = _detail.indexOf('[출처]');
+                const _srcTag = _tagIx === -1 ? '' : _detail.slice(_tagIx).split(String.fromCharCode(10))[0].trim();
+                if (_srcTag && colIdx && colIdx.content !== -1) {
+                    for (let _i = 1; _i < globalData.length; _i++) {
+                        const _r = globalData[_i];
+                        if (_r && String(_r[colIdx.content] || '').indexOf(_srcTag) !== -1) {
+                            console.info('[자동배치] 이미 같은 메일이 배치돼 있어 건너뜀:', _srcTag.slice(0, 60));
+                            return { ok: true, label: window._t('이미 배치됨', 'already placed'), alreadyPlaced: true };
+                        }
+                    }
+                }
                 const l0s = window.buildL0SectionInfo(globalData, colIdx);
                 const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
                 const built = window.buildMailTaskRow(task, undefined, undefined, mailRaw);
@@ -945,6 +966,9 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
                 if (chosenL0 !== '__END__' && colIdx.devStage !== -1) built.row[colIdx.devStage] = chosenL0;
                 globalData.splice(pos, 0, built.row);
                 logChange(pos, -1, "없음", `메일 자동처리(완전자동)로 배치: ${built.taskName}`);
+                // ⭐ [2026-09-23 성능] 여러 건을 연속 배치하는 중이면 여기서 재계산·저장을 하지 않고
+                //    호출부가 마지막에 한 번만 하게 한다(스냅샷·업로드가 N배로 누적되는 것을 막음).
+                if (opts.deferRefresh) return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0, deferred: true };
                 window.recalculateSchedules();
                 if (window.renderGantt) window.renderGantt();
                 // ✅ [A: 토픽 자동갱신] AI 업무 5개 추가마다 현재 프로젝트 프로파일 백그라운드 재생성

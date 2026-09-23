@@ -757,8 +757,9 @@ window.IB_AUTO_RETRY = window.IB_AUTO_RETRY || {
     baseMin:    10,   // 1회 실패 후 최소 대기(분) — 이후 실패마다 2배
     capMin:     360,  // 재시도 간격 상한(분, 6시간)
     maxFails:   6,    // 이 횟수를 넘기면 자동 재시도 중단(사람 확인 대상)
-    perSweep:   10,   // 한 번의 스윕에서 처리할 최대 건수(Drive 왕복 폭주 방지)
-    gapMs:      400,  // 건과 건 사이 간격
+    perSweep:   3,    // ⭐ [2026-09-23] 10→3 — 한 회차가 길어질수록 화면이 멈추는 것처럼 느껴짐
+    gapMs:      1200, // ⭐ [2026-09-23] 400→1200 — 건 사이에 UI가 숨 쉰 틈을 준다
+    idleGraceSec: 45, // ⭐ [2026-09-23] 마지막 조작 후 이 시간이 지나야 "한가하다"고 본다
     firstDelayMin: 3, // 드라이브 연동 후 첫 스윕까지 대기(분) — 로그인 직후 초기 로드/AI 호출과 안 겹치게
     everyMin:   10    // 이후 스윕 주기(분)
 };
@@ -811,8 +812,16 @@ window._ibAutoPlaceSweep = async function(opts) {
     opts = opts || {};
     const cfg = window.IB_AUTO_RETRY;
     if (window._ibSweepRunning) return { skipped: 'sweep_running' };
+    if (localStorage.getItem('gantt_autoplace_sweep_off') === '1') return { skipped: 'disabled_by_user' };
     if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) return { skipped: 'mode_off' };
     if (window._msAutoTickRunning) return { skipped: 'mail_tick_running' }; // AI 분석 중 — 한가할 때 다시
+    // ⭐ [2026-09-23] "한가한 시점"을 시간 경과만으로 판단하면 안 된다(사용자 제보: 쓰는 도중에 화면이
+    //    통째로 멈춤). 배치 1건이 recalculateSchedules(전체 딥카피 Undo 스냅샷) + 프로젝트 통째 저장을
+    //    유발하므로, 사람이 지금 만지고 있는 중이면 아예 시작하지 않고 다음 점검(1분 뒤)으로 미룬다.
+    if (!opts.force && !document.hidden && window._ibLastUserActivityAt
+        && (Date.now() - window._ibLastUserActivityAt) < cfg.idleGraceSec * 1000) {
+        return { skipped: 'user_busy' };
+    }
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) return { skipped: 'no_token' };
@@ -821,33 +830,79 @@ window._ibAutoPlaceSweep = async function(opts) {
     //    — 이것만으로 자동배치가 막혀 무기한 대기하던 건들이 이번 회차에 바로 풀린다.
     window._ibRepairPendingDates();
     const now = Date.now();
-    const targets = window.TaskInbox.load()
-        .filter(function(it) { return window._ibIsAutoPlaceReady(it, now); })
-        .slice(0, cfg.perSweep);
-    if (!targets.length) return { skipped: 'none' };
+    const ready = window.TaskInbox.load().filter(function(it) { return window._ibIsAutoPlaceReady(it, now); });
+    if (!ready.length) return { skipped: 'none' };
+
+    // ⭐ [2026-09-23 성능] 지금 열려있는 프로젝트로 갈 건들을 먼저 몰아서(perSweep 안에서) 처리한다 —
+    //    이 그룹은 행 삽입만 연달아 하고 재계산·저장은 맨 끝에 한 번만 하므로, N건이 1건 비용으로 끝난다.
+    //    (헤드리스 Drive 경로는 파일마다 fetch+PATCH가 필요해 묶을 수 없어 건수 자체를 적게 가져간다.)
+    const cur = [], others = [];
+    ready.forEach(function(it) {
+        const fid = it.matchedProject.candidates[0].drive_file_id;
+        (fid === window.currentDriveFileId ? cur : others).push(it);
+    });
+    const targets = cur.concat(others).slice(0, cfg.perSweep);
 
     window._ibSweepRunning = true;
-    let ok = 0; const fails = [];
+    let ok = 0; const fails = []; const deferredUids = [];
     try {
         for (const it of targets) {
             const target = it.matchedProject.candidates[0];
+            const isCurrent = target.drive_file_id === window.currentDriveFileId;
             let result;
             try {
                 result = await window._msAutoRegisterToProject(it.uid, it.task, target.drive_file_id,
-                    target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
+                    target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { deferRefresh: isCurrent });
             } catch (e) { result = { ok: false, reason: e.message }; }
             if (result && result.ok) {
-                window.TaskInbox.setStatus(it.uid, '자동배치됨', {
-                    type: (it.autoPlace ? '자동배치 재시도' : '자동배치 스윕'),
-                    target: target.file_name, at: new Date().toISOString()
-                });
-                if (window._tpAppendMailSignal) window._tpAppendMailSignal(target.drive_file_id, it.task, it.mailRaw);
-                ok++;
+                if (result.deferred) {
+                    // 저장이 끝난 뒤에 상태를 확정한다(저장 실패 시 '대기'로 남겨야 하므로)
+                    deferredUids.push({ uid: it.uid, name: target.file_name, task: it.task, fileId: target.drive_file_id, raw: it.mailRaw });
+                } else {
+                    window.TaskInbox.setStatus(it.uid, '자동배치됨', {
+                        type: (it.autoPlace ? '자동배치 재시도' : '자동배치 스윕'),
+                        target: target.file_name, at: new Date().toISOString()
+                    });
+                    if (window._tpAppendMailSignal) window._tpAppendMailSignal(target.drive_file_id, it.task, it.mailRaw);
+                    ok++;
+                }
             } else {
                 window._ibMarkAutoPlaceFail(it.uid, result && result.reason);
                 fails.push(`${(it.task && it.task['업무명']) || it.uid}: ${(result && result.reason) || 'unknown'}`);
             }
             await new Promise(function(r) { setTimeout(r, cfg.gapMs); });
+        }
+
+        // ⭐ 미뤄둔 현재 프로젝트 건들 — 재계산 1회 + 저장 1회로 마무리
+        if (deferredUids.length) {
+            try {
+                window.recalculateSchedules();
+                // recalculateSchedules는 내부에서 setTimeout으로 실제 계산을 뒤로 미룬다 — 저장 전에 한 틱
+                // 양보해 계산이 끝난 상태를 저장하고, 그 사이에 UI도 한 번 숨을 쉬게 한다.
+                await new Promise(function(r) { setTimeout(r, 300); });
+                if (window._tpCheckAutoRegen) window._tpCheckAutoRegen();
+                const saved = await window.saveToGoogleDrive({ suppressAlert: true });
+                if (saved) {
+                    deferredUids.forEach(function(d) {
+                        window.TaskInbox.setStatus(d.uid, '자동배치됨', {
+                            type: '자동배치 스윕(묶음)', target: d.name, at: new Date().toISOString()
+                        });
+                        if (window._tpAppendMailSignal) window._tpAppendMailSignal(d.fileId, d.task, d.raw);
+                        ok++;
+                    });
+                } else {
+                    // 저장이 막힌 경우: 행은 이미 화면(globalData)에 있으므로 다음 저장 때 함께 저장된다.
+                    // 상태는 '대기'로 남겨 재시도 대상으로 두되, 중복 삽입은 [출처] 태그 대조로 막힌다.
+                    deferredUids.forEach(function(d) {
+                        window._ibMarkAutoPlaceFail(d.uid, 'batch_save_blocked: ' + String(window._lastSaveBlockReason || '').slice(0, 60));
+                        fails.push(`${(d.task && d.task['업무명']) || d.uid}: batch_save_blocked`);
+                    });
+                    if (window._saveLocalBackup) window._saveLocalBackup('autoplace-sweep-save-blocked');
+                }
+            } catch (e) {
+                deferredUids.forEach(function(d) { window._ibMarkAutoPlaceFail(d.uid, 'batch_finalize_failed: ' + e.message); });
+                fails.push('batch_finalize_failed: ' + e.message);
+            }
         }
     } finally {
         window._ibSweepRunning = false;
@@ -859,9 +914,8 @@ window._ibAutoPlaceSweep = async function(opts) {
             `🎯 Auto-placed ${ok} pending task(s)${fails.length ? ` (${fails.length} failed)` : ''}`), 'info');
     }
     if (fails.length) console.warn('[자동배치 스윕] 실패 목록:', fails);
-    return { ok: ok, failed: fails.length };
+    return { ok: ok, failed: fails.length, remaining: Math.max(0, ready.length - targets.length) };
 };
-
 // 💡 스케줄러 — "한가한 시점"의 정의(사용자 지시 2026-09-23):
 //    드라이브 연동(토큰 확보)이 끝나고 firstDelayMin분이 지난 뒤 첫 스윕, 이후 everyMin분 주기.
 //    (로그인 직후엔 프로젝트 로드·토픽 프로파일·메일 자동수집 등 AI/네트워크 작업이 몰려 있어서
@@ -884,6 +938,12 @@ window._ibStartAutoPlaceScheduler = function() {
         });
     }, 60 * 1000);
 };
+// ⭐ [2026-09-23] "사람이 지금 쓰는 중인지"를 알아야 진짜 유휴 시점에만 돌 수 있다.
+//    passive 리스너 2개로 마지막 입력 시각만 기록한다(핸들러는 대입 한 줄 — 비용 없음).
+window._ibLastUserActivityAt = Date.now();
+['pointerdown', 'keydown'].forEach(function(ev) {
+    document.addEventListener(ev, function() { window._ibLastUserActivityAt = Date.now(); }, { passive: true, capture: true });
+});
 document.addEventListener('DOMContentLoaded', function() { window._ibStartAutoPlaceScheduler(); });
 
 // 💡 [완전자동 백필] 완전자동 기능이 생기기 전부터 쌓여있던 '대기' 항목들은 그때는 자동전송 대상이 아니었으므로

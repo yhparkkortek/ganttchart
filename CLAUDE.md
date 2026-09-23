@@ -171,6 +171,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 - **메일 자동배치는 '완전자동(full)/OFF' 2단계만 있다(2026-09-23, 반자동 semi 삭제)** — 자동배치는 매칭신뢰도 '상'만으로 되지 않고 모드·날짜확정·후보 수(≤`MAX_AUTO_PLACE_TARGETS`=5)·drive_file_id가 모두 맞아야 한다. 실패한 건은 `_ibMarkAutoPlaceFail`로 기록돼 유휴 스윕(`_ibAutoPlaceSweep`, 드라이브 연동 3분 후 → 10분 주기)이 백오프로 재시도한다. AI가 날짜를 못 뽑은 건은 **메일 수신일로 자동 대체**된다(`_applyMailDateFallback`, 보관함 카드에 "수신일 기준" 표시). 자동배치 조건을 늘리면 `_ibIsAutoPlaceReady`와 화면 사유 `_ibPendingReason`을 **항상 같이** 고칠 것(`docs/mail-pipeline.md` 자동배치 조건 재정비 절).
 
+- **배경(사람이 안 누른) 작업에서 `recalculateSchedules()`·`saveToGoogleDrive()`를 루프 안에서 부르지 말 것(2026-09-23, 사용자 제보 "앱이 엄청 무거워졌다")** — 전자는 끝에서 globalData 전체를 딥카피해 Undo 스택(최대 50개)에 쌓고, 후자는 프로젝트 파일을 통째로 올린다. 자동배치 스윕은 현재 프로젝트 건을 `opts.deferRefresh`로 모아 삽입한 뒤 **끝에 1회만** 재계산·저장한다. 주기 작업은 시간 경과가 아니라 **사용자 입력 공백(`_ibLastUserActivityAt`)+탭 가시성**으로 유휴를 판단. 긴급 중단은 `localStorage.gantt_autoplace_sweep_off='1'`(`docs/mail-pipeline.md` 성능 절).
+
 - **AI 할당량 오류는 "retry in N초"만 보고 분당 한도로 판단하지 말 것** — Gemini 무료 `limit: 20`은 하루 한도였다(`_aiClassifyQuotaError`, 사용량 원장 `gantt_ai_usage_v1` → ⚙️ AI 분석 설정 "📊 오늘 AI 사용량"). 사용자 조작 없이 AI를 부르는 백그라운드 호출(묶기·재분석 등)을 새로 만들면 호출 빈도 상한을 반드시 둘 것(`docs/mail-pipeline.md` 정정 절).
 
 - **localStorage에 무한히 쌓이는 새 저장소를 만들면 `window.STORAGE_REGISTRY`(`js/34-storage-doctor.js`)에 정리 규칙 한 줄 추가** — 브라우저 저장소(~5MB)는 앱 전체가 공유해서, 한 곳이 가득 차면 업무 보관함 저장이 막힌다("저장 공간이 가득" 경고 + 🧹 버튼이 "정리할 항목 없음" 반복했던 사고, `docs/mail-pipeline.md` 저장소 닥터 절).
