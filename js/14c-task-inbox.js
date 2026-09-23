@@ -363,7 +363,7 @@ window._tiBuildSummaryHtml = function(items) {
             (active && project
                 ? `<span class="ti-bulk-del" data-status="${escapeHtml(status)}" data-project="${escapeHtml(project)}" ` +
                   `title="${_en ? 'Delete these ' + count + ' inbox records (tasks already placed in the Gantt chart are not affected)' : '이 ' + count + '건의 보관함 기록을 지웁니다 (간트차트에 배치된 업무는 그대로)'}" ` +
-                  `style="margin-left:5px;padding:0 2px;border-radius:4px;cursor:pointer;opacity:.75;">🗑</span>`
+                  `style="margin-left:5px;padding:0 4px;border-radius:5px;cursor:pointer;color:#b1432f;background:#fbe4e2;border:1px solid #eeb0ac;font-size:10.5px;line-height:1.5;">🗑︎</span>`
                 : '') +
             `</span>`;
     }
