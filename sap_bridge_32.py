@@ -428,10 +428,19 @@ def dump_screen_tree(save_dir=None):
                     chg = ' [편집가능]' if ch.Changeable else ''
                 except Exception:
                     chg = ''
+                # 🆕 [2026-09-23] 라디오버튼/체크박스는 "무엇이 선택돼 있는가"가 핵심 정보인데
+                # text만 찍어서는 알 수 없다 — 실제로 ZMMR060의 등록/조회 라디오 상태를 못 봐서
+                # 구매오더 업로드 실패 원인 판정이 막혔다(실사용 진단, 2026-09-23). 상태를 같이 찍는다.
+                sel = ''
+                if ctype in ('GuiRadioButton', 'GuiCheckBox'):
+                    try:
+                        sel = ' [선택됨✓]' if ch.Selected else ' [선택안됨]'
+                    except Exception:
+                        sel = ''
                 type_part = f'{ctype}/{subtype}' if subtype else ctype
                 name_part = f' name={name}' if name else ''
                 indent = '  ' * (depth + 1)
-                lines.append(f'{indent}{rel}  ({type_part}){name_part}{chg}  text="{_dump_safe_text(ch)}"')
+                lines.append(f'{indent}{rel}  ({type_part}){name_part}{chg}{sel}  text="{_dump_safe_text(ch)}"')
                 if ctype == 'GuiShell' and subtype == 'GridView':
                     try:
                         grid_dump = _sap_dump_grid(ch)
@@ -2572,7 +2581,22 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
 
     grid = _find_po_grid(session, wnd)
     if grid is None:
-        raise RuntimeError('엑셀 업로드 후 결과 그리드를 찾지 못했습니다 — 업로드가 실패했거나(파일 경로/형식 문제) 화면 구조가 다를 수 있습니다.')
+        # 🐛 [2026-09-23 실사용 버그수정] 이 실패는 대부분 "파일 문제"가 아니라 **엑셀 안의
+        # 마스터데이터(프로젝트코드/사번/자재코드 등)가 SAP에 없어서 검증에서 막힌 것**인데
+        # (docs/purchase-order.md 2026-09-15 라이브 검증에서 확정된 원인), 그때 SAP이
+        # 상태표시줄에 남기는 실제 사유("데이터가 존재하지 않습니다" 등)를 그냥 버리고 있었다
+        # — 실패 사유는 반드시 결과에 남긴다는 원칙(CLAUDE.md)대로 상태표시줄을 같이 싣는다.
+        sbar_text = ''
+        try:
+            sbar_text = (session.findById('wnd[0]/sbar').Text or '').strip()
+        except Exception:
+            pass
+        detail = f' [SAP 상태표시줄: "{sbar_text}"]' if sbar_text else ''
+        raise RuntimeError(
+            '엑셀 업로드 후 결과 그리드를 찾지 못했습니다.' + detail +
+            ' — 이 증상은 보통 엑셀 안의 값 중 SAP에 실제로 존재하지 않는 것이 있어 업로드 검증에서'
+            ' 막힌 경우입니다(프로젝트코드·구매담당자 사번·자재코드·구매그룹 등은 자유 텍스트가 아니라'
+            ' SAP 마스터데이터와 일치해야 합니다). 엑셀 파일: ' + str(excel_path))
 
     # ⚠️⚠️ [2026-09-15 실사용 버그수정] 협력사(LIFNR)/세금코드(MWSKZ)를 원래는 "현재 셀"
     # 개념으로 딱 한 번만(행 지정 없이 `currentCellColumn`만) 설정했는데, 실제 SAP 그리드는
