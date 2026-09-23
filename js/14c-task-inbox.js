@@ -320,9 +320,16 @@ window._tiBulkDeleteFiltered = function(status, project) {
     window.TaskInbox.save(all.filter(function(it) { return !hit(it); }));
     window.renderTaskInbox();
     if (window.showToast) {
+        // ⭐ [2026-09-23] '대기'는 아직 어느 프로젝트에도 안 들어간 업무라 지우면 그 자체로 사라진다 —
+        //    배치 끝난 기록을 정리하는 것과 무게가 다르므로 안내 문구를 구분한다.
+        const _pending = status === '대기';
         window.showToast(_en
-            ? `🗑 Removed ${doomed.length} inbox record(s) — use [↩ Undo delete] in the summary to restore. Tasks already placed in the Gantt chart are NOT affected.`
-            : `🗑 보관함 기록 ${doomed.length}건 삭제 — 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다. 이미 간트차트에 배치된 업무는 그대로입니다.`,
+            ? (_pending
+                ? `🗑 Removed ${doomed.length} PENDING record(s) — these were not placed in any project. Use [↩ Undo delete] in the summary to restore.`
+                : `🗑 Removed ${doomed.length} inbox record(s) — use [↩ Undo delete] in the summary to restore. Tasks already placed in the Gantt chart are NOT affected.`)
+            : (_pending
+                ? `🗑 대기 기록 ${doomed.length}건 삭제 — 어느 프로젝트에도 배치되지 않았던 건입니다. 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다.`
+                : `🗑 보관함 기록 ${doomed.length}건 삭제 — 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다. 이미 간트차트에 배치된 업무는 그대로입니다.`),
             'info', 6000);
     }
 };
@@ -359,10 +366,15 @@ window._tiBuildSummaryHtml = function(items) {
             `style="display:inline-block;background:${bg};color:${fg};border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
             `font-size:11px;white-space:nowrap;cursor:pointer;${active ? 'outline:2px solid ' + fg + ';' : ''}">` +
             `${escapeHtml(label)} <b>${count}</b>` +
-            // ⭐ [2026-09-23] 선택된 프로젝트 칩에만 작은 휴지통 — 그 묶음을 통째로 지운다
-            (active && project
-                ? `<span class="ti-bulk-del" data-status="${escapeHtml(status)}" data-project="${escapeHtml(project)}" ` +
-                  `title="${_en ? 'Delete these ' + count + ' inbox records (tasks already placed in the Gantt chart are not affected)' : '이 ' + count + '건의 보관함 기록을 지웁니다 (간트차트에 배치된 업무는 그대로)'}" ` +
+            // ⭐ [2026-09-23] 선택된 칩에 작은 휴지통 — 그 묶음을 통째로 지운다.
+            //    프로젝트 칩은 "그 상태+그 프로젝트", 상태 칩(큰 분류)은 "그 상태 전체"가 대상이다.
+            (active
+                ? `<span class="ti-bulk-del" data-status="${escapeHtml(status)}" data-project="${escapeHtml(project || '')}" ` +
+                  `title="${status === '대기'
+                      ? (_en ? 'Delete these ' + count + ' pending records — they are NOT placed in any project yet, so the tasks are lost (undo available right after)'
+                             : '이 ' + count + '건의 대기 기록을 지웁니다 — 아직 어느 프로젝트에도 배치되지 않은 업무라 같이 사라집니다 (직후 되돌리기 가능)')
+                      : (_en ? 'Delete these ' + count + ' inbox records (tasks already placed in the Gantt chart are not affected)'
+                             : '이 ' + count + '건의 보관함 기록을 지웁니다 (간트차트에 배치된 업무는 그대로)')}" ` +
                   `style="margin-left:5px;padding:0 4px;border-radius:5px;cursor:pointer;color:#b1432f;background:#fbe4e2;border:1px solid #eeb0ac;font-size:10.5px;line-height:1.5;">🗑︎</span>`
                 : '') +
             `</span>`;
@@ -387,14 +399,27 @@ window._tiBuildSummaryHtml = function(items) {
     if (filter) {
         const st = filter.status;
         const subset = items.filter(x => x.status === st);
-        const byProject = topCount(subset, x => _tiProjectOf(x, noMatchLabel), 8);
-        if (subset.length && byProject.length > 1) {
+        // ⭐ [2026-09-23] 예전엔 (1) 프로젝트가 한 종류뿐이면(byProject.length > 1 조건) 아예 안 보이고
+        //    (2) 상위 8개만 보여줘서, "대기 175건"처럼 많은 상태가 프로젝트별로 전혀 정리되지
+        //    않았다(미분류 항목이 많으면 전부 "(매칭없음)" 한 바구니라 줄 자체가 사라졌다).
+        //    → 상태를 고르면 항상 프로젝트별 줄을 보여주고, 상위 12개까지 내보내고 나머지는 "그 외" 칩으로 알린다.
+        const PROJ_CHIP_MAX = 12;
+        const byProjectAll = topCount(subset, x => _tiProjectOf(x, noMatchLabel), 9999);
+        const byProject = byProjectAll.slice(0, PROJ_CHIP_MAX);
+        const restGroups = byProjectAll.slice(PROJ_CHIP_MAX);
+        const restCount = restGroups.reduce((a, e) => a + e[1], 0);
+        if (subset.length) {
             const dates = subset.map(x => (x.addedAt || '').slice(0, 10)).filter(Boolean).sort();
             const range = dates.length ? `${dates[0]} ~ ${dates[dates.length - 1]}` : '';
             const sc = _TI_STATUS_STYLE[st] || { bg: '#eef3ff', fg: '#1a4f7a', emoji: '🔹' };
             const stLabel = _en ? (_TI_STATUS_LABEL_EN[st] || st) : st;
             html += `<div style="margin-top:6px;"><b>${sc.emoji} ${stLabel} ${subset.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
                 byProject.map(e => chip(e[0], e[1], sc.bg, sc.fg, st, e[0])).join('') +
+                (restGroups.length
+                    ? `<span title="${_en ? restGroups.map(e => e[0] + ' ' + e[1]).join(', ') : escapeHtml(restGroups.map(e => e[0] + ' ' + e[1] + '건').join(', '))}" ` +
+                      `style="display:inline-block;color:#888;font-size:11px;padding:2px 6px;">` +
+                      `${_en ? `+${restGroups.length} more (${restCount})` : `외 ${restGroups.length}개 프로젝트 ${restCount}건`}</span>`
+                    : '') +
                 (range ? `<span style="color:#999;margin-left:4px;">(${escapeHtml(range)})</span>` : '') + `</div>`;
         }
         const filterStatusLabel = _en ? (_TI_STATUS_LABEL_EN[filter.status] || filter.status) : filter.status;
