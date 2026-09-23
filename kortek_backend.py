@@ -1890,6 +1890,19 @@ def sap_material_documents():
     return jsonify(data), status
 
 
+@app.route('/sap-material-price', methods=['GET'])
+def sap_material_price():
+    # 💰 [2026-09-23 신규, 실사용 제보] "표준가격/기간별단가 확인해줘" — MM03 "회계 1" 탭의
+    #    표준가격(STPRS)/기간별단가(PVPRS)를 가격단위(PEINH)로 나눈 실제 단가까지 계산해서
+    #    돌려준다. 실제 컨트롤 조작은 sap_bridge_32.py의 fetch_material_price()에 있다
+    #    (사용자가 직접 준 화면 트리 덤프로 정확한 필드 ID 확인).
+    material = (request.args.get('material') or '').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-material-price?material=106437'}), 400
+    data, status = _run_sap_bridge(['fetch_material_price', material], 30, 'SAP 표준가격/기간별단가 조회')
+    return jsonify(data), status
+
+
 @app.route('/sap-download-documents-batch', methods=['GET'])
 def sap_download_documents_batch():
     # 💡 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호를

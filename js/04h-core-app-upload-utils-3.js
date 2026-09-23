@@ -3886,6 +3886,39 @@ ${docsJson}`;
             return;
         }
 
+        // 💵🚫🤖 [2026-09-23 신규, 실사용 제보 "표준가격 기간별 단가 확인해줘"] MM03 "회계 1"
+        //    탭의 표준가격(STPRS)/기간별단가(PVPRS)를 가격단위(PEINH)로 나눈 실제 단가까지
+        //    계산해서 보여준다(사용자 지적: "가격 단위 수량이 있어, 나누기 해서 알려줘야해").
+        //    실제 컨트롤 조작은 sap_bridge_32.py의 fetch_material_price() — 사용자가 직접
+        //    "SAP 화면 덤프해줘"로 MM03 회계1 탭을 떠서 얻은 정확한 필드 ID로 구현(추측 없음).
+        //    자재번호 + 가격 키워드가 같이 있을 때만 트리거("단가" 단독으론 다른 질문과 겹칠 수
+        //    있어 자재번호를 반드시 요구) — 위 BOM/사용처/ZMM009와 같은 트리거 패턴.
+        const _priceMatch = _sapLookupNums.length > 0 && /(표준\s*가격|기간별\s*단가|기간별\s*간가|단가)/.test(question);
+        if (_priceMatch) {
+            if (!_skipUserHistoryPush) {
+                window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 표준가격/기간별단가를 조회하는 중...', 'Looking up standard/period price in SAP...'), pending: true });
+            window._renderGanttQaMessages();
+            let priceReply;
+            try {
+                const res = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-material-price?material=' + encodeURIComponent(_sapLookupNums[0])), 30000,
+                    window._t('SAP 가격 조회 시간 초과', 'SAP price lookup timed out')
+                );
+                const data = await res.json();
+                priceReply = data.ok ? data.text : ('⚠️ ' + (data.error || window._t('가격 조회 실패', 'Price lookup failed')));
+            } catch (e) {
+                priceReply = '⚠️ ' + window._t('가격 조회 실패: ', 'Price lookup failed: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: priceReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 💰🚫🤖 [2026-09-22 신규, 사용자 요청] "팀운영비/팀비/복리후생비" 확인 — SAP ZCO021
         //    ("코텍 예실레포트")에서 팀별 "550203 복리후생비-팀운영비" 행을 그대로 읽어온다.
         //    위 BOM/사용처/ZMM009 블록과 달리 자재번호가 아니라 팀 이름으로 트리거되므로

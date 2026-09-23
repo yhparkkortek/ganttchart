@@ -1424,29 +1424,11 @@ def _open_material_from_current_list(wnd, material):
     return True
 
 
-def _navigate_to_material_document_tab(session, wnd, material):
-    """MM03으로 이동해 지정한 자재번호를 조회하고 "문서 데이터"(tabpZU04) 탭까지 연다.
-    2026-09-15 실사용 화면 녹화(SAP Easy Access 메인 메뉴에서 시작 → 명령창에 MM03 입력 →
-    자재번호 입력 → Enter → 기본 데이터 탭 → "문서 데이터" 탭 선택)로 얻은 정확한 컨트롤을
-    일반화한 것 — `ctxtRMMG1-MATNR` 절대경로 대신 `_find_by_id_substring`로 찾아 화면
-    서브구조가 달라져도 버티게 했다.
-    ⚠️ 녹화 당시엔 자재번호 입력 후 곧바로 기본 데이터 화면으로 넘어갔고 "뷰 선택(Select
-    View(s))" 팝업은 뜨지 않았다 — 그 자재에 최근 조회 이력이 있어 SAP가 뷰를 기억하고
-    있었을 가능성이 있다. 뷰 선택 이력이 없는 자재는 이 팝업이 뜰 수 있어, 방어적으로
-    wnd[1]이 나타나면 Enter(기본 선택 확정)를 한 번 시도한다 — 이 경로는 실사용 녹화가
-    없어 추측성 코드이니, 만약 특정 자재에서 계속 실패하면 그 팝업이 뜬 상태로 화면을
-    캡처해서 정확한 컨트롤을 다시 녹화해야 한다.
-    ⚠️⚠️ [2026-09-15 실사용에서 확인] "RMMG1-MATNR" 문자열을 포함한 컨트롤이 화면에 하나가
-    아닐 수 있다(예: 매치코드/히스토리 드롭다운 버튼 등) — 첫 매치가 실제 입력 필드가 아니면
-    `.text = ...`가 COM 오류("Property 'Item.text' can not be set.")로 실패한다. 그래서
-    `_find_by_id_substring`(첫 매치만 반환) 대신 `_find_all_by_id_substring`으로 후보를 전부
-    모아, 녹화에서 확인된 타입(GuiCTextField, ID 접두사 `ctxt`)을 우선순위로 정렬한 뒤 실제로
-    값을 설정할 수 있는 첫 번째 후보를 채택한다.
-    💡 [2026-09-15 신규] 지금 화면에 이미 자재 목록 그리드(ZMM009 "자재 List" 등)가 떠 있으면
-    `/nMM03`을 매번 새로 여는 대신 그 그리드에서 바로 drill-down한다(`_open_material_from_
-    current_list`) — 여러 자재를 한 번에 조회해둔 상태에서 하나씩 문서를 열 때 더 빠르고,
-    이미 그 자재가 그 리스트에 있다는 걸 사람이 확인한 셈이라 더 안전하다. 그 화면에 그리드가
-    없거나 그 자재가 없으면 조용히 실패하고 아래 `/nMM03` 새로 열기 경로로 폴백한다."""
+def _navigate_to_material_screen(session, wnd, material):
+    """MM03으로 이동해 지정한 자재번호를 조회한다(탭 선택은 호출부 몫) — 아래
+    `_navigate_to_material_document_tab`의 "자재 열기" 부분만 떼어낸 공용 함수(2026-09-23,
+    `fetch_material_price`에도 똑같은 열기 로직이 필요해서 분리했다). 나머지 동작·이유는
+    그 함수 docstring 그대로."""
     if not _open_material_from_current_list(wnd, material):
         session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
         wnd.sendVKey(0)
@@ -1471,7 +1453,7 @@ def _navigate_to_material_document_tab(session, wnd, material):
         wnd.sendVKey(0)
         time.sleep(0.8)
 
-        # 방어적 팝업 처리(추측성 — 위 주석 참고).
+        # 방어적 팝업 처리(추측성 — _navigate_to_material_document_tab 원래 주석 참고).
         try:
             popup = session.findById('wnd[1]')
             if popup is not None:
@@ -1479,6 +1461,32 @@ def _navigate_to_material_document_tab(session, wnd, material):
                 time.sleep(0.5)
         except Exception:
             pass
+
+
+def _navigate_to_material_document_tab(session, wnd, material):
+    """MM03으로 이동해 지정한 자재번호를 조회하고 "문서 데이터"(tabpZU04) 탭까지 연다.
+    2026-09-15 실사용 화면 녹화(SAP Easy Access 메인 메뉴에서 시작 → 명령창에 MM03 입력 →
+    자재번호 입력 → Enter → 기본 데이터 탭 → "문서 데이터" 탭 선택)로 얻은 정확한 컨트롤을
+    일반화한 것 — `ctxtRMMG1-MATNR` 절대경로 대신 `_find_by_id_substring`로 찾아 화면
+    서브구조가 달라져도 버티게 했다.
+    ⚠️ 녹화 당시엔 자재번호 입력 후 곧바로 기본 데이터 화면으로 넘어갔고 "뷰 선택(Select
+    View(s))" 팝업은 뜨지 않았다 — 그 자재에 최근 조회 이력이 있어 SAP가 뷰를 기억하고
+    있었을 가능성이 있다. 뷰 선택 이력이 없는 자재는 이 팝업이 뜰 수 있어, 방어적으로
+    wnd[1]이 나타나면 Enter(기본 선택 확정)를 한 번 시도한다 — 이 경로는 실사용 녹화가
+    없어 추측성 코드이니, 만약 특정 자재에서 계속 실패하면 그 팝업이 뜬 상태로 화면을
+    캡처해서 정확한 컨트롤을 다시 녹화해야 한다.
+    ⚠️⚠️ [2026-09-15 실사용에서 확인] "RMMG1-MATNR" 문자열을 포함한 컨트롤이 화면에 하나가
+    아닐 수 있다(예: 매치코드/히스토리 드롭다운 버튼 등) — 첫 매치가 실제 입력 필드가 아니면
+    `.text = ...`가 COM 오류("Property 'Item.text' can not be set.")로 실패한다. 그래서
+    `_find_by_id_substring`(첫 매치만 반환) 대신 `_find_all_by_id_substring`으로 후보를 전부
+    모아, 녹화에서 확인된 타입(GuiCTextField, ID 접두사 `ctxt`)을 우선순위로 정렬한 뒤 실제로
+    값을 설정할 수 있는 첫 번째 후보를 채택한다.
+    💡 [2026-09-15 신규] 지금 화면에 이미 자재 목록 그리드(ZMM009 "자재 List" 등)가 떠 있으면
+    `/nMM03`을 매번 새로 여는 대신 그 그리드에서 바로 drill-down한다(`_open_material_from_
+    current_list`) — 여러 자재를 한 번에 조회해둔 상태에서 하나씩 문서를 열 때 더 빠르고,
+    이미 그 자재가 그 리스트에 있다는 걸 사람이 확인한 셈이라 더 안전하다. 그 화면에 그리드가
+    없거나 그 자재가 없으면 조용히 실패하고 아래 `/nMM03` 새로 열기 경로로 폴백한다."""
+    _navigate_to_material_screen(session, wnd, material)
 
     # 💡⚠️ [2026-09-15 실사용 스크린샷으로 확정] "문서 데이터" 탭은 메인 화면(기본 데이터 1/2 등)의
     # 탭 스트립에 없다 — 화면 하단 "기본 데이터 텍스트" 섹션의 버튼(기술 ID에 GRUNDDATENTEXT
@@ -1526,6 +1534,91 @@ def fetch_material_documents(material):
     header = f'[SAP MM03 문서 데이터: 자재 {material}]\n'
     text = header + '\n' + body
     return {'ok': True, 'source': source, 'material': material, 'text': text}
+
+
+# ── "표준가격/기간별단가" 조회 (MM03 "회계 1" 탭, 2026-09-23 신규, 사용자 요청) ──────────
+# "표준가격 기간별 단가 확인해줘"가 안 된다는 실사용 제보 → 새 `dump_screen_tree` 도구로
+# 사용자가 직접 자재 106437의 MM03 "회계 1" 탭을 덤프해줘서, 매크로 없이 정확한 필드 ID를
+# 그 자리에서 확인해 구현(추측 없음, docs/sap-lookup.md "화면 트리 덤프" 절 참고).
+# ⚠️ 표준가격(STPRS)/기간별단가(PVPRS)는 **가격단위(PEINH)당** 금액이다 — 가격단위가
+# 100이면 화면 숫자는 "100개당 가격"이라, 실제 개당 단가는 그 값을 가격단위로 나눠야
+# 한다(사용자 지적: "가격 단위 수량이 있어, 나누기 해서 알려줘야해"). 예: 가격단위 100,
+# 표준가격 10,800 → 실제 단가 108.
+_MATERIAL_PRICE_FIELD_IDS = {
+    'stprs': 'CKMMAT_DISPLAY-STPRS_1',  # 표준 가격
+    'pvprs': 'CKMMAT_DISPLAY-PVPRS_1',  # 기간별 단가
+    'peinh': 'CKMMAT_DISPLAY-PEINH_1',  # 가격단위
+    'vprsv': 'CKMMAT_DISPLAY-VPRSV_1',  # 가격 관리(S=표준가/V=이동평균가)
+    'stprv': 'CKMMAT_DISPLAY-STPRV_1',  # 이전가격
+}
+
+
+def _parse_sap_number(text):
+    """SAP 숫자 표기("10,800", "8,796 ")를 float로 변환. 실패/빈 값이면 None."""
+    if text is None:
+        return None
+    t = str(text).strip().replace(',', '')
+    if not t:
+        return None
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def fetch_material_price(material):
+    """MM03 "회계 1" 탭에서 표준가격(STPRS)/기간별단가(PVPRS)/가격단위(PEINH)를 읽어,
+    가격단위로 나눈 실제 개당 단가까지 계산해 돌려준다."""
+    if not material:
+        raise RuntimeError('자재번호를 지정해주세요.')
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_material_screen(session, wnd, material)
+
+    found = _select_tab_with_retry(wnd, 'tabpSP24')  # "회계 1"
+    if not found:
+        raise RuntimeError(f'자재 "{material}" 화면에서 "회계 1" 탭을 찾지 못했습니다 — 이 자재에 회계 뷰가 없을 수 있습니다.')
+    time.sleep(0.4)
+    wnd = session.findById('wnd[0]')
+
+    values = {}
+    for key, id_sub in _MATERIAL_PRICE_FIELD_IDS.items():
+        field = _find_by_id_substring(wnd, id_sub)
+        values[key] = str(field.Text).strip() if field is not None else None
+
+    stprs = _parse_sap_number(values.get('stprs'))
+    pvprs = _parse_sap_number(values.get('pvprs'))
+    if stprs is None and pvprs is None:
+        raise RuntimeError(f'자재 "{material}"의 "회계 1" 탭에서 가격 필드를 찾지 못했습니다 — 화면 구성이 다를 수 있습니다.')
+
+    peinh = _parse_sap_number(values.get('peinh')) or 1.0
+    if peinh <= 0:
+        peinh = 1.0
+
+    vprsv = values.get('vprsv')
+    vprsv_label = {'S': '표준가', 'V': '이동평균가'}.get(vprsv, vprsv)
+
+    lines = [f'[SAP MM03 회계1: 자재 {material}]']
+    if vprsv:
+        lines.append(f'가격 관리: {vprsv}' + (f' ({vprsv_label})' if vprsv_label != vprsv else ''))
+    lines.append(f'가격단위(PEINH): {values.get("peinh") or "1"}')
+    if stprs is not None:
+        lines.append(f'표준 가격: {values["stprs"]} (가격단위 {peinh:g}개당) → 실제 단가: {stprs / peinh:,.4f}')
+    if pvprs is not None:
+        lines.append(f'기간별 단가: {values["pvprs"]} (가격단위 {peinh:g}개당) → 실제 단가: {pvprs / peinh:,.4f}')
+    if values.get('stprv'):
+        lines.append(f'이전가격: {values["stprv"]}')
+    text = '\n'.join(lines)
+
+    return {
+        'ok': True, 'material': material,
+        'priceUnit': peinh,
+        'standardPrice': stprs, 'standardPricePerUnit': (stprs / peinh) if stprs is not None else None,
+        'periodPrice': pvprs, 'periodPricePerUnit': (pvprs / peinh) if pvprs is not None else None,
+        'priceControl': vprsv,
+        'text': text,
+    }
 
 
 def open_document(doc_type, material=None):
@@ -3086,6 +3179,9 @@ def main():
         elif action == 'fetch_material_documents':
             material = sys.argv[2] if len(sys.argv) > 2 else ''
             result = fetch_material_documents(material)
+        elif action == 'fetch_material_price':
+            material = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = fetch_material_price(material)
         elif action == 'download_documents_batch':
             doc_type = sys.argv[2] if len(sys.argv) > 2 else 'P01'
             materials_str = sys.argv[3] if len(sys.argv) > 3 else ''

@@ -1275,6 +1275,37 @@ true일 때만**(자재번호/트리거단어/흔한 동사를 다 떼어내고�
   3,120,000 / 전기금액 3,107,453 / 임시전표 (빈 값, 정상) / 전기+임시 3,107,453 / 잔여예산
   12,547. `js/32-sap-capabilities.js`의 `teambudget` 항목도 `verified: 'live'`로 갱신.
 
+### 💵 표준가격/기간별단가 조회 (MM03 "회계 1" 탭, 2026-09-23 신규, 사용자 요청)
+
+"표준가격 기간별 단가 확인해 달라고 했는데 못하네"라는 실사용 제보 → 지원하지 않는
+기능이었음(기존에 STPRS/PVPRS를 읽는 경로 자체가 없었음). 사용자가 위 "화면 트리 덤프"로
+자재 106437의 MM03 "회계 1" 탭을 직접 떠줘서, 매크로 없이 정확한 필드 ID를 그 자리에서
+확인해 구현.
+
+**확인된 필드 ID**(화면 트리 덤프로 확인, 경로는 화면마다 다를 수 있어 `_find_by_id_substring`로
+ID 뒷부분만 검색): `CKMMAT_DISPLAY-STPRS_1`(표준 가격) / `CKMMAT_DISPLAY-PVPRS_1`(기간별
+단가) / `CKMMAT_DISPLAY-PEINH_1`(가격단위) / `CKMMAT_DISPLAY-VPRSV_1`(가격 관리, S=표준가/
+V=이동평균가) / `CKMMAT_DISPLAY-STPRV_1`(이전가격). 전부 "회계 1" 탭(`tabpSP24`) 안, 현재
+활성 기간 탭(PPLF 등) 서브화면에 있음.
+
+**⚠️ 가격단위(PEINH)로 나눠야 실제 단가** — 사용자 지적: "가격 단위 수량이 있어, 나누기
+해서 알려줘야해". 가격단위가 100이면 화면 숫자는 "100개당 가격"이라, 실제 개당 단가는
+`가격 / 가격단위`. 예: 가격단위 100, 표준가격 10,800 → 실제 단가 108. `fetch_material_price`가
+`standardPricePerUnit`/`periodPricePerUnit`로 미리 계산해서 반환.
+
+**구현 위치**: `sap_bridge_32.py`의 `fetch_material_price(material)` + 공용 헬퍼
+`_navigate_to_material_screen`(기존 `_navigate_to_material_document_tab`에서 "자재 열기"
+부분만 분리), `kortek_backend.py`의 `/sap-material-price?material=...`,
+`js/04h-core-app-upload-utils-3.js`의 "표준가격/기간별단가" 로컬 명령(자재번호 + 가격
+키워드 트리거, 사용처/ZMM009 블록 바로 뒤), `js/32-sap-capabilities.js`의 `materialprice`
+항목(`verified: 'unverified'` — 실사용 검증 후 `'live'`로 갱신할 것).
+
+**미확인 사항**: "기간별"이 여러 회계기간(PPLF/PPVM/PPVJ 탭)을 비교해 보여달라는 뜻일
+수도 있음 — 지금은 화면에 **현재 활성 기간 탭 하나만** 읽는다(사용자가 준 덤프의
+"기간별 단가"는 SAP 표준 필드 라벨(PVPRS)일 뿐, 여러 기간을 뜻하는 게 아니라고 판단해서
+이렇게 구현함). 여러 기간 비교가 실제로 필요하면 탭(PPLF→PPVM→PPVJ)을 순회하며 같은
+필드 ID를 다시 읽는 확장이 필요.
+
 ### 🔧 SAP 화면 트리 통째로 덤프 — 새 기능 만들 때 매크로 해석 대신 쓰는 진단 도구 (2026-09-23 신규)
 
 **배경**: 지금까지 새 SAP 기능(BOM/사용처/ZMM009/팀운영비/입고처리 등)을 붙일 때마다 사용자가
