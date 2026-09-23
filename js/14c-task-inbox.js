@@ -135,9 +135,11 @@ window.TaskInbox = {
         if (self._syncTimer) clearTimeout(self._syncTimer);
         self._syncTimer = setTimeout(function() { self.syncToDrive(); }, 3000);
     },
+    // ⭐ [2026-09-23] 호출부가 "드라이브까지 반영됐는지"를 알 수 있게 결과를 돌려준다.
+    //    'ok'(업로드 성공) | 'skipped'(비로그인 — 로컬에만 저장) | 'failed'(시도했지만 실패)
     syncToDrive: async function() {
         const fname = this._fileName(); const token = this._token();
-        if (!fname || !token) return; // 비로그인: localStorage 단독 동작
+        if (!fname || !token) return 'skipped'; // 비로그인: localStorage 단독 동작
         try {
             const folderId = await window.getOrCreateTaskInboxFolder(token);
             if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
@@ -149,7 +151,17 @@ window.TaskInbox = {
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
             const file = await resp.json();
             if (resp.ok && file && file.id) this._driveFileId = file.id;
-        } catch (e) { console.warn('보관함 드라이브 동기화 실패(로컬에는 저장됨):', e); }
+            return resp.ok ? 'ok' : 'failed';
+        } catch (e) { console.warn('보관함 드라이브 동기화 실패(로컬에는 저장됨):', e); return 'failed'; }
+    },
+
+    // ⭐ [2026-09-23 신규] 예약된 3초 디바운스를 기다리지 않고 지금 바로 올린다.
+    //    삭제처럼 "반영됐는지"가 중요한 조작은 이걸 쓰고 결과를 사람에게 알린다 —
+    //    예전엔 3초 뒤 조용히 올리고 실패해도 console.warn뿐이라, 그 사이에 창을 닫거나
+    //    업로드가 실패하면 다음 loadFromDrive(uid 기준 병합)에서 지운 항목이 다시 살아나왔다.
+    syncNow: async function() {
+        if (this._syncTimer) { clearTimeout(this._syncTimer); this._syncTimer = null; }
+        return await this.syncToDrive();
     },
     loadFromDrive: async function() {
         const fname = this._fileName(); const token = this._token();
@@ -304,7 +316,7 @@ function _tiUndoLabel(ub, en) {
     return parts.length ? ` <span style="color:#b98a4b;">(${escapeHtml(parts.join(' · '))})</span>` : '';
 }
 
-window._tiBulkDeleteFiltered = function(status, project) {
+window._tiBulkDeleteFiltered = async function(status, project) {
     const _en = window._currentLang === 'en';
     const noMatchLabel = _en ? '(no match)' : '(매칭없음)';
     const all = window.TaskInbox.load();
@@ -319,6 +331,9 @@ window._tiBulkDeleteFiltered = function(status, project) {
     window._tiUndoBuffer = { items: doomed, status: status || '', project: project || '', at: Date.now() };
     window.TaskInbox.save(all.filter(function(it) { return !hit(it); }));
     window.renderTaskInbox();
+    // ⭐ [2026-09-23] 3초 디바운스를 기다리지 않고 즉시 드라이브까지 반영한다 —
+    //    업로드 전에 창을 닫거나 실패하면, 다음 loadFromDrive(uid 기준 병합)에서 지운 항목이 되살아난다.
+    const _sync = await window.TaskInbox.syncNow();
     if (window.showToast) {
         // ⭐ [2026-09-23] '대기'는 아직 어느 프로젝트에도 안 들어간 업무라 지우면 그 자체로 사라진다 —
         //    배치 끝난 기록을 정리하는 것과 무게가 다르므로 안내 문구를 구분한다.
@@ -332,9 +347,16 @@ window._tiBulkDeleteFiltered = function(status, project) {
                 : `🗑 보관함 기록 ${doomed.length}건 삭제 — 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다. 이미 간트차트에 배치된 업무는 그대로입니다.`),
             'info', 6000);
     }
+    // ⭐ 드라이브 반영 결과는 따로 알린다(실패를 조용히 삼키면 "지웠는데 다시 생김"으로 돌아온다)
+    if (_sync === 'failed' && window.showToast) {
+        window.showToast(window._t(
+            '⚠️ 드라이브 반영에 실패했습니다(로컬에는 삭제됨) — 연결 확인 후 다시 지우거나, 그대로 두면 다음 접속 때 복구될 수 있습니다.',
+            '⚠️ Failed to sync the deletion to Drive (deleted locally) — check your connection and delete again, otherwise the items may come back on next sign-in.'
+        ), 'error', 7000);
+    }
 };
 
-window._tiUndoBulkDelete = function() {
+window._tiUndoBulkDelete = async function() {
     const buf = window._tiUndoBuffer;
     if (!buf || !buf.items || !buf.items.length) return;
     const cur = window.TaskInbox.load();
@@ -344,8 +366,11 @@ window._tiUndoBulkDelete = function() {
     window.TaskInbox.save(restored.concat(cur));
     window._tiUndoBuffer = null;
     window.renderTaskInbox();
+    const _sync = await window.TaskInbox.syncNow(); // ⭐ 복구도 드라이브에 바로 반영
     if (window.showToast) {
-        window.showToast(window._t(`↩ ${restored.length}건을 되돌렸습니다.`, `↩ Restored ${restored.length} record(s).`), 'info');
+        window.showToast(window._t(
+            `↩ ${restored.length}건을 되돌렸습니다.${_sync === 'failed' ? ' (드라이브 반영 실패 — 로컬엔 복구됨)' : ''}`,
+            `↩ Restored ${restored.length} record(s).${_sync === 'failed' ? ' (Drive sync failed — restored locally)' : ''}`), _sync === 'failed' ? 'error' : 'info');
     }
 };
 
@@ -2053,6 +2078,14 @@ window.inboxDeleteWithFeedback = function(uid) {
         window._ibExpandedUids.delete(uid);
         window.TaskInbox.remove(uid);
         window.renderTaskInbox();
+        // ⭐ [2026-09-23] 단건 삭제도 3초 대기 없이 바로 드라이브까지 반영
+        window.TaskInbox.syncNow().then(function(r) {
+            if (r === 'failed' && window.showToast) {
+                window.showToast(window._t(
+                    '⚠️ 드라이브 반영에 실패했습니다(로컬에는 삭제됨) — 연결 확인 후 다시 시도해주세요.',
+                    '⚠️ Failed to sync the deletion to Drive (deleted locally) — check your connection and try again.'), 'error', 6000);
+            }
+        });
     }
     document.getElementById('ib-del-cancel-btn').onclick = closeModal;
     document.getElementById('ib-del-plain-btn').onclick = function() { closeModal(); doRemove(); };

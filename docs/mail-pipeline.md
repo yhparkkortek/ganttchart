@@ -321,6 +321,21 @@ Task Inbox "📧 원문 보기"의 🌐 번역 버튼(`js/14c-task-inbox.js`의 
 > `node --check`를 못 쓰니, **js를 고친 뒤에는 브라우저 콘솔의 SyntaxError를 반드시 확인**하고
 > (CORS 잡음에 묻히므로 `pattern:'Syntax'`로 필터) 대표 함수가 `window`에 실제로 올라왔는지 본다.
 
+#### 🗑 보관함 삭제는 드라이브까지 즉시 반영해야 한다 (2026-09-23, 사용자 지시)
+
+`TaskInbox.save()`는 3초 디바운스(`scheduleDriveSync`)로 올리고, 실패해도 `console.warn`만 남길 뿐이었다.
+그런데 `loadFromDrive()`는 **uid 기준 병합**(로컬 우선, 드라이브에만 있으면 살림)이라 **삭제를 표현할 수이 없다**
+— 업로드 전에 창을 닫거나 업로드가 실패하면 다음 접속 때 지운 항목이 그대로 되살아난다.
+
+- `TaskInbox.syncNow()` — 예약된 디바운스를 취소하고 지금 올린다. 반환: `'ok' | 'skipped'(비로그인) | 'failed'`.
+- 적용: 묶음 삭제(`_tiBulkDeleteFiltered`), 되돌리기(`_tiUndoBulkDelete`), 단건 삭제(`inboxDeleteWithFeedback`의 `doRemove`).
+- `'failed'`면 **토스트로 명시**한다("다음 접속 때 복구될 수 있습니다") — 조용히 삼키면 사용자가 원인을 모른 채
+  "지웠는데 다시 생긴다"만 겪게 된다.
+
+> ⚠️ 남은 한계: 여전히 **삭제 묘비(tombstone)가 없다**. 한 PC에서 지우고 업로드까지 성공해도, 다른 PC의
+> localStorage에 그 항목이 남아있으면 그 PC가 다음에 업로드할 때 되살아난다. 다기기 사용이 문제되면 uid별
+> 삭제 기록(묘비)을 파일에 함께 저장하는 설계로 넘어가야 한다.
+
 #### 이 영역을 고칠 때 주의
 - 자동배치 조건을 새로 추가하면 **`_ibIsAutoPlaceReady`(스윕 판정)와 `_ibPendingReason`(화면 사유)에도
   같이 반영**할 것 — 한쪽만 고치면 "조건에 걸려 영영 대기인데 화면엔 '곧 처리됩니다'"가 된다.
