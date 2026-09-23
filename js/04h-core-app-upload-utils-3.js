@@ -3595,79 +3595,88 @@ ${docsJson}`;
         const sapMaterialInfoReq = window._ganttQaExtractMaterialInfoRequest ? window._ganttQaExtractMaterialInfoRequest(sapDocQuestion) : null;
         if (sapMaterialInfoReq) {
             // 🐛 [2026-09-23 실사용 버그수정, 사용자 지적 "MM03=단수, ZMM009=복수 사용하면 되는데
-            // (기본으로 ZMM009 써도 됨), 자재 22개를 MM03로 순회하느라 너무 오래 걸림"] 자재
-            // 여러 건일 때 지금까지 무조건 fetch_approval_info(자재마다 MM03 진입 → 추가 데이터
-            // 화면까지 들어가는 느린 경로)를 썼던 이유는 "ZMM009 그리드에도 품목2(자재내역2)가
-            // 이미 컬럼으로 나온다"는 예전 가정(위 주석, 사용자 스크린샷 기반) 때문이었는데,
-            // 2026-09-23 라이브로 직접 ZMM009를 조회해서 확인해보니 **품목2에 해당하는 컬럼이
-            // 실제로는 없었다**(MAKTX만 있고, 그 뒷부분 "기본 데이터 텍스트" 장문은 ZMM009
-            // 화면 자체에 없는 데이터 — MM03 "추가 데이터" 서브화면에만 있음). 그래서 품목2를
-            // 실제로 요청했을 때만(wantsSub) 어쩔 수 없이 느린 MM03 경로를 쓰고, 품목2를 안
-            // 물어봤으면 자재 수와 무관하게 항상 빠른 ZMM009로 보낸다(사용자 지시 "기본으로
-            // ZMM009 써도 됨"과 일치). 느린 경로는 이제 "그만"/"중단해줘"로 도중에 멈출 수 있다
-            // (위 🛑 SAP 중단 로컬 명령 참고).
+            // (기본으로 ZMM009 써도 됨), 자재 22개를 MM03로 순회하느라 너무 오래 걸림"] 항상
+            // 빠른 ZMM009부터 먼저 조회한다. 품목2를 요청 안 했으면 그걸로 끝 — 품목2를
+            // 요청했는데 이번 응답에 ZTEXT(자재내역2) 컬럼이 실제로 있으면(그 SAP 계정의
+            // ZMM009 레이아웃에 이미 추가돼 있으면) 그걸로 끝, **없을 때만** 느린
+            // fetch_approval_info(자재마다 MM03 진입 → "추가 데이터"→tabpZU05 장문 텍스트
+            // 읽기)로 폴백한다 — 위 _ganttQaParseZmm009DescriptionMap 선언부 주석 참고
+            // (ZTEXT는 컬럼 자체가 없는 게 아니라 기본 레이아웃엔 숨겨진 컬럼이었을 뿐이라,
+            // 그 계정이 레이아웃에 "자재내역2(KO)"를 추가+저장해두면 이후 조회는 항상 빠른
+            // 경로로 끝난다). 느린 경로는 "그만"/"중단해줘"로 도중에 멈출 수 있다(위 🛑 SAP
+            // 중단 로컬 명령 참고).
             const _matInfoMaterials = sapMaterialInfoReq.materials;
             const _matInfoWantsSub = sapMaterialInfoReq.wantsSub;
-            const _matInfoUseFastPath = !_matInfoWantsSub;
             window._ganttQaHistory.push({ role: 'user', text: question });
             if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // "자주 쓰는 질문" 저장 버그(2026-09-23) — 이 블록도 누락돼 있었음
-            window._ganttQaHistory.push({
+            const _matInfoPendingMsg = {
                 role: 'ai',
-                text: '⏳ ' + window._t(
-                    `SAP에서 자재 ${_matInfoMaterials.length}개의 품목 내역을 조회하는 중...` + (_matInfoUseFastPath ? '' : ' (품목2까지 포함이라 자재마다 MM03을 순회합니다 — 오래 걸리면 "그만"이라고 말씀하시면 중단됩니다)'),
-                    `Looking up item description(s) for ${_matInfoMaterials.length} material(s) in SAP...` + (_matInfoUseFastPath ? '' : ' (includes Item2, so it visits MM03 per material — say "stop" if this takes too long)')
-                ),
+                text: '⏳ ' + window._t(`SAP에서 자재 ${_matInfoMaterials.length}개의 품목 내역을 조회하는 중...`, `Looking up item description(s) for ${_matInfoMaterials.length} material(s) in SAP...`),
                 pending: true
-            });
+            };
+            window._ganttQaHistory.push(_matInfoPendingMsg);
             input.value = '';
             window._renderGanttQaMessages();
             let materialInfoReply;
             try {
-                if (_matInfoUseFastPath) {
-                    const url = 'http://127.0.0.1:5000/sap-zmm009?material=' + encodeURIComponent(_matInfoMaterials.join(','));
-                    const timeoutMs = Math.min(150000, 30000 + 15000 * _matInfoMaterials.length);
-                    const res = await window._withTimeout(fetch(url), timeoutMs, window._t('SAP 품목 내역 조회 시간 초과', 'Looking up SAP item description(s) timed out'));
-                    const data = await res.json();
-                    if (data.ok) {
-                        const descMap = _ganttQaParseZmm009DescriptionMap(data.text);
-                        const lines = _matInfoMaterials.map(function(code) {
-                            const desc = descMap[code];
-                            if (desc === undefined) return `📦 ${code}\n⚠️ ` + window._t('조회 결과에서 못 찾음(자재번호를 확인해주세요)', 'Not found in the result (check the material number)');
-                            const shown = desc || window._t('(없음)', '(none)');
-                            return `📦 ${code}\t${shown}\n` + window._t('품목: ', 'Item: ') + shown;
-                        });
-                        materialInfoReply = lines.join('\n\n');
-                    } else {
-                        materialInfoReply = '⚠️ ' + window._t('품목 내역 조회 실패: ', 'Failed to look up item description(s): ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
-                    }
+                const zUrl = 'http://127.0.0.1:5000/sap-zmm009?material=' + encodeURIComponent(_matInfoMaterials.join(','));
+                const zTimeoutMs = Math.min(150000, 30000 + 15000 * _matInfoMaterials.length);
+                const zRes = await window._withTimeout(fetch(zUrl), zTimeoutMs, window._t('SAP 품목 내역 조회 시간 초과', 'Looking up SAP item description(s) timed out'));
+                const zData = await zRes.json();
+                if (!zData.ok) {
+                    materialInfoReply = '⚠️ ' + window._t('품목 내역 조회 실패: ', 'Failed to look up item description(s): ') + (zData.error || window._t('알 수 없는 오류', 'unknown error'));
                 } else {
-                    const url = 'http://127.0.0.1:5000/sap-approval-fetch?materials=' + encodeURIComponent(_matInfoMaterials.join(','));
-                    const timeoutMs = Math.min(200000, 30000 + 10000 * _matInfoMaterials.length);
-                    const res = await window._withTimeout(fetch(url), timeoutMs, window._t('SAP 품목 내역 조회 시간 초과', 'Looking up SAP item description(s) timed out'));
-                    const data = await res.json();
-                    if (data.ok && Array.isArray(data.results)) {
-                        const lines = data.results.map(function(r) {
-                            if (!r.ok) {
-                                return `📦 ${r.code}\n⚠️ ` + window._t('조회 실패: ', 'Lookup failed: ') + (r.err || window._t('알 수 없는 오류', 'unknown error'));
-                            }
-                            const desc = r.desc || window._t('(없음)', '(none)');
-                            const subRaw = (r.sub || '').trim();
-                            const sub = subRaw || window._t('(없음)', '(none)');
-                            // 🆕 [2026-09-17 신규, 사용자 요청] 품목+품목2를 합친 전체 내역도 같이
-                            // 보여주되, 자재번호와 그 내역 사이를 탭(TAB) 문자로 구분한다("6자리 숫자와
-                            // 내역 사이에 tab key 넣어서 합친 것도 보여줘") — 엑셀에 그대로 붙여넣으면
-                            // 자재번호/내역이 자동으로 별도 열에 들어가게 하려는 용도. desc는 SAP 원본이
-                            // 40자에서 끊길 때 끝을 "="로 표시하는 관례가 있는데(예: "...USB="), 이건
-                            // 실제 내용이 아니라 SAP 자체의 연속 표시 문자이므로 품목2가 실제로 있을
-                            // 때만(=진짜로 이어지는 내용이 있을 때만) 그 끝 "="를 떼고 이어붙인다 —
-                            // 사용자가 직접 준 예시 2건(133025/133026, 둘 다 desc가 "="로 끝나는 경우)
-                            // 으로 정확히 검증함.
-                            const combinedDesc = subRaw ? (desc.replace(/=$/, '') + subRaw) : desc;
-                            return `📦 ${r.code}\t${combinedDesc}\n` + window._t('품목: ', 'Item: ') + desc + '\n' + window._t('품목2: ', 'Item2: ') + sub;
+                    const parsed = _ganttQaParseZmm009DescriptionMap(zData.text);
+                    if (!_matInfoWantsSub || parsed.hasZtext) {
+                        // 빠른 경로로 끝 — 품목2 요청이 없었거나, 있었는데 마침 이 계정 레이아웃에 ZTEXT가 있었음.
+                        const lines = _matInfoMaterials.map(function(code) {
+                            const row = parsed.map[code];
+                            if (!row) return `📦 ${code}\n⚠️ ` + window._t('조회 결과에서 못 찾음(자재번호를 확인해주세요)', 'Not found in the result (check the material number)');
+                            const desc = row.maktx || window._t('(없음)', '(none)');
+                            if (!_matInfoWantsSub) return `📦 ${code}\t${desc}\n` + window._t('품목: ', 'Item: ') + desc;
+                            const sub = row.ztext || window._t('(없음)', '(none)');
+                            const combinedDesc = row.ztext ? (desc.replace(/=$/, '') + row.ztext) : desc;
+                            return `📦 ${code}\t${combinedDesc}\n` + window._t('품목: ', 'Item: ') + desc + '\n' + window._t('품목2: ', 'Item2: ') + sub;
                         });
                         materialInfoReply = lines.join('\n\n');
                     } else {
-                        materialInfoReply = '⚠️ ' + window._t('품목 내역 조회 실패: ', 'Failed to look up item description(s): ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                        // 품목2를 물어봤는데 이 계정 ZMM009 레이아웃엔 "자재내역2(KO)" 컬럼이 없음 — 느린 MM03 경로로 폴백.
+                        _matInfoPendingMsg.text = '⏳ ' + window._t(
+                            'SAP ZMM009 화면에 "자재내역2(KO)" 열이 아직 없어서, 자재마다 MM03을 순회합니다 — 오래 걸리면 "그만"이라고 말씀하시면 중단됩니다...',
+                            'The ZMM009 layout doesn\'t have the "Item2" column yet, so visiting MM03 per material — say "stop" if this takes too long...'
+                        );
+                        window._renderGanttQaMessages();
+                        const url = 'http://127.0.0.1:5000/sap-approval-fetch?materials=' + encodeURIComponent(_matInfoMaterials.join(','));
+                        const timeoutMs = Math.min(200000, 30000 + 10000 * _matInfoMaterials.length);
+                        const res = await window._withTimeout(fetch(url), timeoutMs, window._t('SAP 품목 내역 조회 시간 초과', 'Looking up SAP item description(s) timed out'));
+                        const data = await res.json();
+                        if (data.ok && Array.isArray(data.results)) {
+                            const lines = data.results.map(function(r) {
+                                if (!r.ok) {
+                                    return `📦 ${r.code}\n⚠️ ` + window._t('조회 실패: ', 'Lookup failed: ') + (r.err || window._t('알 수 없는 오류', 'unknown error'));
+                                }
+                                const desc = r.desc || window._t('(없음)', '(none)');
+                                const subRaw = (r.sub || '').trim();
+                                const sub = subRaw || window._t('(없음)', '(none)');
+                                // 🆕 [2026-09-17 신규, 사용자 요청] 품목+품목2를 합친 전체 내역도 같이
+                                // 보여주되, 자재번호와 그 내역 사이를 탭(TAB) 문자로 구분한다("6자리 숫자와
+                                // 내역 사이에 tab key 넣어서 합친 것도 보여줘") — 엑셀에 그대로 붙여넣으면
+                                // 자재번호/내역이 자동으로 별도 열에 들어가게 하려는 용도. desc는 SAP 원본이
+                                // 40자에서 끊길 때 끝을 "="로 표시하는 관례가 있는데(예: "...USB="), 이건
+                                // 실제 내용이 아니라 SAP 자체의 연속 표시 문자이므로 품목2가 실제로 있을
+                                // 때만(=진짜로 이어지는 내용이 있을 때만) 그 끝 "="를 떼고 이어붙인다 —
+                                // 사용자가 직접 준 예시 2건(133025/133026, 둘 다 desc가 "="로 끝나는 경우)
+                                // 으로 정확히 검증함.
+                                const combinedDesc = subRaw ? (desc.replace(/=$/, '') + subRaw) : desc;
+                                return `📦 ${r.code}\t${combinedDesc}\n` + window._t('품목: ', 'Item: ') + desc + '\n' + window._t('품목2: ', 'Item2: ') + sub;
+                            });
+                            materialInfoReply = lines.join('\n\n') + '\n\n💡 ' + window._t(
+                                'SAP ZMM009 화면에서 "자재내역2(KO)" 열을 레이아웃에 추가하고 저장해두면, 다음부터는 이 조회도 훨씬 빨라집니다.',
+                                'Adding the "Item2" column to your ZMM009 layout in SAP (and saving it) will make this lookup much faster next time.'
+                            );
+                        } else {
+                            materialInfoReply = '⚠️ ' + window._t('품목 내역 조회 실패: ', 'Failed to look up item description(s): ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                        }
                     }
                 }
             } catch (e) {
@@ -5370,18 +5379,19 @@ ${docsJson}`;
     // 40자를 넘으면 나머지가 "추가 데이터 → 기본 데이터 텍스트"(tabpZU05) 장문 텍스트에
     // 이어서 들어간다(사용자가 자재 132931로 실제 확인: MAKTX="GLASS CHEM>320,-,
     // STELLATPR,727X433.8,3T="(40자로 끊김) + 기본 데이터 텍스트=", BLK,-,ASF,-").
-    // ❌ [2026-09-23 정정] 예전엔 "ZMM009 다중조회 화면에도 이 둘이 자재내역(KO)/자재내역2(KO)
-    // 두 컬럼으로 그대로 노출된다"고 적혀 있었는데, 2026-09-23 사용자 제보("자재 22개를
-    // MM03로 순회하느라 너무 오래 걸림")로 실제 ZMM009 조회 결과를 라이브로 직접 확인해보니
-    // **품목2에 해당하는 컬럼이 없었다**(MAKTX 하나뿐 — 그 예전 판단은 틀렸음, 사용자 스크린샷을
-    // 오독했거나 다른 레이아웃이었던 것으로 추정). 그래서 아래 호출부(sendGanttQaMessage)는
-    // "품목2"를 명시적으로 요청했을 때만(wantsSub) 이 느린 fetch_approval_info(자재마다 MM03
-    // 진입 → MAKTX 읽기 → VKey(30)로 "추가 데이터" 화면 진입 → tabpZU05 선택 → 장문 텍스트
-    // 읽기) + 백엔드 GET /sap-approval-fetch를 쓰고, 품목2를 안 물어봤으면 자재 수와 무관하게
-    // 항상 빠른 ZMM009(/sap-zmm009, _ganttQaParseZmm009DescriptionMap로 MATNR/MAKTX만 추출)로
-    // 보낸다. "승인원 표지 생성" 여러 턴 draft(window._ganttQaApprovalDraft)와는 완전히 무관한
-    // 별도의 1회성 조회 명령(담당자/팀장 등을 안 물어봄, 그냥 바로 조회해서 보여줌)이라 별개
-    // 함수로 뺐다.
+    // ❌✅ [2026-09-23 정정 → 재정정] 처음엔 "ZMM009엔 자재내역2(KO) 컬럼이 아예 없다"고
+    // 적었었는데(직접 조회해서 헤더에 없는 걸 확인했었음), **사용자가 직접 "레이아웃 변경"
+    // 화면(헤더 오른쪽클릭 → 표시)에서 확인해준 결과 실제로는 있음** — 기술필드명 `ZTEXT`
+    // (헤더에서 MAKTX 바로 다음, "자재내역2(KO)"로 표시됨)인데, **기본 레이아웃엔 숨겨진
+    // 컬럼**이라 안 보였을 뿐이다(SAP ALV는 컬럼을 사용자별 저장 레이아웃으로 관리 — 그
+    // 레이아웃에 아직 추가 안 된 컬럼은 `ColumnOrder`에도 안 잡힘). 그래서 아래 호출부
+    // (sendGanttQaMessage)는 항상 먼저 빠른 ZMM009로 조회하고, 응답에 ZTEXT 컬럼이 실제로
+    // 있으면(=그 SAP 계정의 레이아웃에 이미 추가돼 있으면) 품목2까지 그걸로 끝내고, ZTEXT가
+    // 없으면(레이아웃에 아직 없는 계정) 품목2를 물어봤을 때만 느린 fetch_approval_info
+    // (자재마다 MM03 진입 → MAKTX 읽기 → "추가 데이터"→tabpZU05 장문 텍스트 읽기)로 폴백한다.
+    // **SAP에서 ZMM009 레이아웃에 "자재내역2(KO)"를 추가하고 저장해두면, 그 계정으로 하는
+    // 모든 이후 자동조회(사람이 하든 이 앱이 하든)가 코드 변경 없이 그냥 빨라진다** — 이게
+    // 확인되면 실사용자에게 그렇게 안내할 것.
     window._ganttQaExtractMaterialInfoRequest = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
@@ -5396,25 +5406,33 @@ ${docsJson}`;
         return { materials: materials, wantsSub: wantsSub };
     };
 
-    // 🆕 [2026-09-23 신규] ZMM009 원본 텍스트(헤더 + 탭구분 행)에서 MATNR/MAKTX 두 열만 뽑아
-    // {matnr: maktx} 사전으로 반환 — 아래 "품목 내역"(품목2 미요청) 빠른 경로 전용.
+    // 🆕 [2026-09-23 신규, 같은 날 ZTEXT 발견으로 갱신] ZMM009 원본 텍스트(헤더 + 탭구분 행)에서
+    // MATNR/MAKTX(+있으면 ZTEXT=자재내역2)를 뽑아 {matnr: {maktx, ztext|null}} 사전으로 반환.
+    // ztext는 그 SAP 계정의 ZMM009 레이아웃에 "자재내역2(KO)" 컬럼이 추가돼 있을 때만 존재
+    // (없으면 헤더에 ZTEXT 자체가 없음 — 위 함수 선언부 주석 참고). `hasZtext`도 같이 반환해
+    // 호출부가 "이번엔 품목2까지 빠른 길로 됐는지" 바로 판단할 수 있게 한다.
     function _ganttQaParseZmm009DescriptionMap(sapText) {
-        var out = {};
-        if (!sapText) return out;
+        var result = { map: {}, hasZtext: false };
+        if (!sapText) return result;
         var bodyStart = sapText.indexOf('\n\n');
         var body = bodyStart !== -1 ? sapText.slice(bodyStart + 2) : sapText;
         var lines = body.split('\n').filter(function(l) { return l.length > 0; });
-        if (!lines.length || lines[0].indexOf('\t') === -1) return out;
+        if (!lines.length || lines[0].indexOf('\t') === -1) return result;
         var header = lines[0].split('\t');
-        var matnrIdx = header.indexOf('MATNR'), maktxIdx = header.indexOf('MAKTX');
-        if (matnrIdx === -1 || maktxIdx === -1) return out;
+        var matnrIdx = header.indexOf('MATNR'), maktxIdx = header.indexOf('MAKTX'), ztextIdx = header.indexOf('ZTEXT');
+        if (matnrIdx === -1 || maktxIdx === -1) return result;
+        result.hasZtext = ztextIdx !== -1;
         for (var i = 1; i < lines.length; i++) {
             if (/^\.\.\.\s*\(/.test(lines[i])) continue; // "...(생략)" 꼬리 각주
             var cells = lines[i].split('\t');
             var code = (cells[matnrIdx] || '').trim();
-            if (code) out[code] = (cells[maktxIdx] || '').trim();
+            if (!code) continue;
+            result.map[code] = {
+                maktx: (cells[maktxIdx] || '').trim(),
+                ztext: ztextIdx !== -1 ? (cells[ztextIdx] || '').trim() : null
+            };
         }
-        return out;
+        return result;
     }
 
     // 🤔 [2026-09-15 신규, 사용자 요청] "104446 문서 출력해줘"처럼 "출력"이라는 동사 하나만으로는
