@@ -23,6 +23,10 @@
         { key: 'gantt_folder_cache_v1',           label: 'Drive 폴더 캐시',                 labelEn: 'Drive folder cache',      cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_ai_usage_v1',               label: 'AI 사용량 원장(최근 7일, 일일 한도 소진 표시)', labelEn: 'AI usage ledger (7 days)', cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_qa_cluster_cache_v1',       label: '자주 묻는 질문 묶기 캐시',        labelEn: 'FAQ grouping cache',      cls: 'cache', strategy: { type: 'drop' } },
+        // 🐛 [2026-09-23 누락 보완] "자주 쓰는 질문" 원본 기록은 프로젝트별로 최대 150건씩 무한 누적되는데
+        //    레지스트리에 빠져 있었다 — 저장소가 꽉 차면 이 키 저장이 조용히 실패(_qaFreqSaveStore의 catch)해
+        //    "자주 쓰는 질문이 저장이 안 된다"로 이어질 수 있어서, 🧹 정리 대상에 포함시킨다(로그류이므로 확인 후 정리).
+        { key: 'gantt_qa_question_freq_v2',       label: '자주 쓰는 질문 기록(프로젝트별)',  labelEn: 'Frequent questions log',  cls: 'log',   strategy: { type: 'byProject', perProject: 60, maxProjects: 30 } },
         { key: 'gantt_ai_learning_v1',            label: 'AI 학습 로그(프로젝트별)',         labelEn: 'AI learning log',         cls: 'log',   strategy: { type: 'byProject', perProject: 60, maxProjects: 30 } },
         { key: 'gantt_qa_feedback',               label: 'AI 문답 피드백(질문·답변 포함)',   labelEn: 'AI Q&A feedback',         cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },
         { key: 'gantt_project_summary_feedback',  label: 'AI 요약 피드백',                   labelEn: 'AI summary feedback',     cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },

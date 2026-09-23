@@ -5692,7 +5692,24 @@ ${docsJson}`;
         try { return JSON.parse(localStorage.getItem(_QA_FREQ_KEY)) || {}; } catch (e) { return {}; }
     }
     function _qaFreqSaveStore(store) {
-        try { localStorage.setItem(_QA_FREQ_KEY, JSON.stringify(store)); } catch (e) {}
+        // 🐛 [2026-09-23] 예전엔 예외를 통째로 삼켜서, localStorage가 꽉 차면(브라우저 ~5MB를 앱 전체가
+        //    공유) "자주 쓰는 질문"이 조용히 하나도 안 쌓였다 — 사용자에겐 "예전부터 안 되는 기능"으로만
+        //    보였다. 실패를 더는 숨기지 않고 콘솔 경고 + 저장소 닥터의 자동 정리(캐시류만) 후 1회 재시도한다.
+        try {
+            localStorage.setItem(_QA_FREQ_KEY, JSON.stringify(store));
+            return true;
+        } catch (e) {
+            console.warn('[자주 쓰는 질문] localStorage 저장 실패 — 저장 공간이 가득 찼을 수 있습니다:', e && e.message);
+            try {
+                if (window._storageDoctorAuto) window._storageDoctorAuto(); // 저장소 닥터: 다시 만들 수 있는 캐시류만 자동 정리
+                localStorage.setItem(_QA_FREQ_KEY, JSON.stringify(store));
+                console.info('[자주 쓰는 질문] 캐시 정리 후 저장 성공');
+                return true;
+            } catch (e2) {
+                console.warn('[자주 쓰는 질문] 재시도도 실패 — 🧹 저장소 정리가 필요합니다:', e2 && e2.message);
+                return false;
+            }
+        }
     }
     // 프로젝트를 아직 저장하기 전(새 프로젝트, fileId 없음)이면 '_unsaved' 키에 임시로 쌓아두되,
     // 이 키는 saveData에 실어 Drive로 올리지 않는다(어느 프로젝트 것인지 알 수 없으므로).
@@ -5815,8 +5832,24 @@ ${docsJson}`;
         if ((!cached || cached.sig !== sig) && Date.now() - lastTry >= _QA_CLUSTER_MIN_INTERVAL_MS) {
             window._ganttQaRefreshClusterCache(key, raw, sig, onUpdated); // fire-and-forget
         }
-        // 서명이 조금 낡았어도(하루 안에 새 "자주 질문"이 생김) 기존 묶음을 그대로 보여준다 — 횟수 표시가 약간 뒤처질 뿐
-        return (cached && cached.clusters && cached.clusters.length) ? cached.clusters.slice(0, n || 6) : fallback();
+        if (!(cached && cached.clusters && cached.clusters.length)) return fallback();
+
+        // 🐛🐛 [2026-09-23 실사용 버그수정] "자주 쓰는 질문이 저장이 안 된다"는 제보의 진짜 원인.
+        //    예전엔 여기서 **캐시(AI 묶음)만** 반환했는데, 캐시 갱신은 위 조건대로 하루에 한 번
+        //    (_QA_CLUSTER_MIN_INTERVAL_MS)만 시도한다 — 게다가 AI 호출이 할당량 등으로 실패해도
+        //    `tryAt`을 남겨서 또 하루를 기다린다. 그래서 새로 "2회 이상" 질문이 생겨도 최대 하루
+        //    동안 드롭다운이 전혀 안 변했고, 사용자 눈엔 기록 자체가 안 되는 것처럼 보였다
+        //    (실제로는 localStorage엔 정상 적립되고 Drive에도 올라가고 있었음).
+        //    이제 캐시를 우선 보여주되, **캐시에 아직 없는 새 빈발 질문을 뒤에 합쳐서** 즉시
+        //    보이게 한다 — AI 호출 빈도(하루 1회)는 그대로 유지하면서 표시만 최신화한다.
+        const _clusters = cached.clusters.slice();
+        const _isCovered = function(item) {
+            return _clusters.some(function(c) {
+                return window._ganttQaQuestionSimilarity(c.sample, item.sample) >= 0.75;
+            });
+        };
+        const _extras = raw.filter(function(x) { return (x.count || 1) >= 2 && !_isCovered(x); });
+        return _clusters.concat(_extras).slice(0, n || 6);
     };
 
     window._ganttQaClusterInFlight = null; // 같은 서명으로 중복 호출 방지용
