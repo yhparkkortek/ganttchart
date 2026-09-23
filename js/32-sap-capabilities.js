@@ -54,7 +54,7 @@
           kw: ['화면 덤프', '화면덤프', '트리 덤프', '화면 구조', '필드 id', '필드아이디'], needs: '없음(SAP에 미리 로그인 + 대상 화면 열어둠)', ex: 'SAP 화면 덤프해줘' },
         { id: 'materialprice', title: '표준가격/기간별단가 조회', titleEn: 'Standard/period price lookup', tcode: 'MM03', mode: 'read', verified: 'unverified',
           kw: ['표준가격', '표준 가격', '기간별단가', '기간별 단가', '기간별간가'], needs: '자재번호', ex: '106437 표준가격 기간별단가 확인해줘' },
-        { id: 'sapcancel', title: '진행 중인 SAP 작업 중단', titleEn: 'Cancel a running SAP operation', tcode: '-', mode: 'control', verified: 'unverified',
+        { id: 'sapcancel', title: '진행 중인 SAP 작업 중단', titleEn: 'Cancel a running SAP operation', tcode: '-', mode: 'control', verified: 'live',
           kw: ['중단', '그만', '멈춰', '스톱', 'stop', 'cancel'], needs: '없음(자재 여러 건 조회처럼 오래 걸리는 작업이 진행 중일 때)', ex: '그만' }
     ];
 
