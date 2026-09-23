@@ -36,7 +36,7 @@
           kw: ['일괄 다운로드', '문서 다운로드', '문서 일괄', '승인원 다운로드'], needs: '자재번호 2개 이상', ex: '133012, 133010 문서 다운로드해줘' },
         { id: 'descpattern', title: '자재내역 패턴 조회 / 일괄 다운로드', titleEn: 'Description pattern search', tcode: 'MM60 (F4 검색도움말)', mode: 'read', verified: 'partial', wildcard: true,
           kw: ['패턴', '와일드카드', '자재내역', '조회된 아이템', '내역으로 검색'], needs: '패턴(예: SMAJ12A*)', ex: 'SMAJ12A* 조회해줘 / *01+01*150*로 조회된 아이템 승인원 다운로드해줘' },
-        { id: 'itemdesc', title: '품목 내역(품목/품목2)', titleEn: 'Item description', tcode: 'MM03', mode: 'read', verified: 'live',
+        { id: 'itemdesc', title: '품목 내역(품목/품목2)', titleEn: 'Item description', tcode: 'ZMM009 (품목2 요청 시 MM03)', mode: 'read', verified: 'live',
           kw: ['품목 내역', '품목내역', '품명', '자재 내역', '자재내역 보여', '품목2'], needs: '자재번호', ex: '133025 품목 내역 보여줘' },
         { id: 'approval', title: '승인원 표지 생성', titleEn: 'Approval cover sheet', tcode: 'MM03', mode: 'write-file', verified: 'live',
           kw: ['승인원 표지', '표지 생성', '가승인원', '승인원 만들'], needs: '자재번호', ex: '104446 승인원 표지 만들어줘' },
@@ -53,7 +53,9 @@
         { id: 'screendump', title: '화면 구조 덤프(개발용 진단)', titleEn: 'Screen tree dump (dev diagnostic)', tcode: '(열려 있는 화면)', mode: 'read', verified: 'live',
           kw: ['화면 덤프', '화면덤프', '트리 덤프', '화면 구조', '필드 id', '필드아이디'], needs: '없음(SAP에 미리 로그인 + 대상 화면 열어둠)', ex: 'SAP 화면 덤프해줘' },
         { id: 'materialprice', title: '표준가격/기간별단가 조회', titleEn: 'Standard/period price lookup', tcode: 'MM03', mode: 'read', verified: 'unverified',
-          kw: ['표준가격', '표준 가격', '기간별단가', '기간별 단가', '기간별간가'], needs: '자재번호', ex: '106437 표준가격 기간별단가 확인해줘' }
+          kw: ['표준가격', '표준 가격', '기간별단가', '기간별 단가', '기간별간가'], needs: '자재번호', ex: '106437 표준가격 기간별단가 확인해줘' },
+        { id: 'sapcancel', title: '진행 중인 SAP 작업 중단', titleEn: 'Cancel a running SAP operation', tcode: '-', mode: 'control', verified: 'unverified',
+          kw: ['중단', '그만', '멈춰', '스톱', 'stop', 'cancel'], needs: '없음(자재 여러 건 조회처럼 오래 걸리는 작업이 진행 중일 때)', ex: '그만' }
     ];
 
     var STOP = {};

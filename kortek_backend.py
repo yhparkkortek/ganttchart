@@ -1804,20 +1804,55 @@ def issue_export():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# 🛑 [2026-09-23 신규, 사용자 요청] "실행 중단해줘"/"그만"/"멈춰" — 자재 여러 건을 MM03로
+# 하나씩 순회하는 것처럼 오래 걸리는 SAP 조회를 사람이 도중에 멈출 수 있게 한다. 기존
+# subprocess.run(...)은 블로킹이라 다른 요청(/sap-cancel)이 그 사이에 끼어들 방법이 없었다
+# — Popen으로 바꿔 진행 중인 프로세스 핸들을 전역에 보관해두고, /sap-cancel이 다른 요청
+# 스레드에서 그 핸들을 kill()한다(Flask를 threaded=True로 띄워야 동시에 처리됨, 아래
+# _run_flask_with_port_retry 참고). 외부에서 kill되면 이 스레드가 블로킹 중이던
+# proc.communicate()가 TimeoutExpired 없이 정상적으로(빈 출력과 함께) 리턴한다.
+_SAP_PROC_LOCK = threading.Lock()
+_SAP_PROC_STATE = {'proc': None, 'cancelled': False}
+
+
 def _run_sap_bridge(extra_args, timeout, log_prefix):
     """sap_bridge_32.py를 32비트 Python 서브프로세스로 실행하고 JSON 결과를 돌려주는 공용
     헬퍼 — /sap-fetch와 /sap-open-document가 똑같이 쓴다(2026-09-14, 두 번째 엔드포인트
     추가하면서 중복 제거)."""
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             ['py', '-3-32', _SAP_BRIDGE_PATH] + extra_args,
-            capture_output=True, text=True, timeout=timeout, encoding='utf-8', errors='replace'
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace'
         )
     except FileNotFoundError:
         return {'ok': False, 'error': 'Python 런처(py.exe)를 찾을 수 없습니다 — Python 공식 설치 상태를 확인하세요.'}, 500
+
+    with _SAP_PROC_LOCK:
+        _SAP_PROC_STATE['proc'] = proc
+        _SAP_PROC_STATE['cancelled'] = False
+
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except Exception:
+            stdout, stderr = '', ''
+        with _SAP_PROC_LOCK:
+            if _SAP_PROC_STATE.get('proc') is proc:
+                _SAP_PROC_STATE['proc'] = None
         return {'ok': False, 'error': f'{timeout}초 안에 끝나지 않았습니다. SAP GUI에 응답 대기 중인 팝업이 떠 있지 않은지 확인해주세요.'}, 500
 
+    with _SAP_PROC_LOCK:
+        was_cancelled = _SAP_PROC_STATE.get('cancelled', False)
+        if _SAP_PROC_STATE.get('proc') is proc:
+            _SAP_PROC_STATE['proc'] = None
+    if was_cancelled:
+        print(f"[{log_prefix}] 사용자 요청으로 중단됨")
+        return {'ok': False, 'error': '⏹ 사용자 요청으로 중단되었습니다.', 'cancelled': True}, 200
+
+    proc.stdout, proc.stderr = stdout, stderr  # 아래 기존 코드가 proc.stdout/stderr를 그대로 읽으므로 맞춰줌
     stdout_lines = [ln for ln in (proc.stdout or '').strip().splitlines() if ln.strip()]
     if not stdout_lines:
         # 💡 32비트 Python/pywin32가 아예 없는 경우 등 — sap_bridge_32.py가 뭘 출력하기도 전에
@@ -1845,6 +1880,24 @@ def _run_sap_bridge(extra_args, timeout, log_prefix):
     else:
         print(f"[{log_prefix} 실패] {data.get('error')}")
     return data, 200
+
+
+@app.route('/sap-cancel', methods=['POST'])
+def sap_cancel():
+    # 🛑 [2026-09-23 신규, 사용자 요청 "실행 중단해줘"] 지금 실행 중인 SAP 조회(자재 여러
+    #    건을 순회하는 것처럼 오래 걸리는 작업)를 강제 종료한다. 실행 중인 게 없으면 조용히
+    #    cancelled:false만 돌려준다(호출부가 "혹시 몰라서" 매번 불러도 안전).
+    with _SAP_PROC_LOCK:
+        proc = _SAP_PROC_STATE.get('proc')
+        if proc is None or proc.poll() is not None:
+            return jsonify({'ok': True, 'cancelled': False})
+        _SAP_PROC_STATE['cancelled'] = True
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    print('[SAP 중단] 사용자 요청으로 진행 중인 SAP 작업을 종료했습니다.')
+    return jsonify({'ok': True, 'cancelled': True})
 
 
 @app.route('/sap-fetch', methods=['GET'])
@@ -2602,7 +2655,9 @@ def _run_flask_with_port_retry(max_wait_sec=15):
     start = time.time()
     while True:
         try:
-            app.run(host='127.0.0.1', port=5000, debug=False)
+            # threaded=True: /sap-cancel이 SAP 조회로 블로킹된 다른 요청과 동시에 처리돼야
+            # "실행 중단해줘"가 그 조회가 끝날 때까지 안 기다리고 바로 먹힌다(2026-09-23).
+            app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
             return
         except OSError as e:
             if time.time() - start > max_wait_sec:
