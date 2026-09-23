@@ -73,6 +73,10 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 파일을 새로 쪼개거나 옮길 때는 **문장(top-level statement) 경계에서만 자를 것** — 함수 중간이나
   블록 중간에서 자르면 두 조각 다 문법 오류가 납니다. 자른 뒤 `node --check 파일.js` 로 각 조각이
   단독으로 문법상 유효한지 검증하세요.
+  **⚠️ 이 PC에는 node가 설치돼 있지 않다(2026-09-23 확인).** 대신 브라우저에서 전 파일을 한 번에 파싱 검사할 수 있다 —
+  콘솔에 `for (const s of [...document.querySelectorAll('script[src^="js/"]')].map(e=>e.getAttribute('src'))) { try { new Function(await (await fetch(s)).text()); } catch(e) { console.error(s, e.message); } }`
+  (실행하지 않고 파싱만 한다). js를 고친 뒤엔 이걸로든 콘솔 SyntaxError로든 **반드시 확인할 것** —
+  리터럴 안에 줄바꿈이 들어가면 파일 하나가 통째로 죽어 그 기능 전체가 조용히 사라진다(실제 사고: 2026-09-23 `js/15b`).
 
 ## 파일 맵 (로딩 순서대로)
 

@@ -929,6 +929,58 @@ window._msComputeTotalScore = function(mail, task, priorityConfig) {
 
 // ─── [완전자동] 커트라인 이상 → Gantt 자동배치 + 알림 자동설정 ──
 //    기존 "다른 프로젝트로 전송"(inboxDistExecute) 로직을 헤드리스로 재구성 — DOM 의존 없음
+// ⭐ [2026-09-23 성능] 현재 열린 프로젝트에 연달아 배치될 때 재계산·저장을 묶는 코얼레서.
+//    자동배치 1건의 진짜 비용은 행 삽입이 아니라 그 뒤에 따라오는 두 가지다:
+//      · recalculateSchedules() → 끝에서 pushUndoSnapshot()이 globalData 전체를 딥카피(최대 50개 보관)
+//      · saveToGoogleDrive()    → 프로젝트 파일 통째 업로드
+//    메일 자동수집 틱은 메일마다 이 함수를 fire-and-forget으로 부르므로, 한 번에 여러 통이 매칭되면
+//    그 횟수만큼 정지가 반복된다(사용자 제보: "몇 분마다 몇 초씩 멈춘다").
+//    → 먼저 예약된 마무리가 있으면 거기에 "합류"만 하고(타이머를 리셋하지 않는다 — 리셋하면
+//      4초 간격으로 들어오는 호출 때문에 영영 안 끝난다), 창이 닫힐 때 한 번만 재계산+저장한다.
+//    사람이 직접 누른 단건 전송은 기다리게 하면 안 되므로 호출부에서 {coalesce:false}로 즉시 저장한다.
+window.MS_FINALIZE_COALESCE_MS = window.MS_FINALIZE_COALESCE_MS || 10000;
+
+window._msRunCurrentProjectFinalize = async function() {
+    try {
+        window.recalculateSchedules();
+        // recalculateSchedules는 내부에서 setTimeout으로 실제 계산을 미룬다 — 저장 전에 한 틱
+        // 양보해 계산이 끝난 상태를 저장하고, 그 사이에 UI도 한 번 숨을 쉬게 한다.
+        await new Promise(function(r) { setTimeout(r, 300); });
+        if (window._tpCheckAutoRegen) window._tpCheckAutoRegen();
+        const saved = await window.saveToGoogleDrive({ suppressAlert: true });
+        if (!saved) {
+            console.warn('[메일 자동처리] 묶음 저장이 막힘:', window._lastSaveBlockReason || 'unknown');
+            if (window._saveLocalBackup) {
+                window._saveLocalBackup('mail-auto-register-save-blocked: ' + String(window._lastSaveBlockReason || 'unknown').slice(0, 80));
+            }
+        }
+        return !!saved;
+    } catch (e) {
+        console.warn('[메일 자동처리] 묶음 마무리 실패:', e.message);
+        return false;
+    }
+};
+
+window._msScheduleCurrentProjectFinalize = function() {
+    if (window._msFinalizeTimer) return; // 이미 예약됨 — 이번 건도 그 회차에 같이 저장된다
+    window._msFinalizeTimer = setTimeout(function() {
+        window._msFinalizeTimer = null;
+        window._msRunCurrentProjectFinalize();
+    }, window.MS_FINALIZE_COALESCE_MS);
+};
+
+// 💡 예약된 마무리를 지금 당장 실행 — 일괄 작업이 끝난 직후, 탭이 숨겨질 때처럼
+//    "더 기다릴 이유가 없는" 시점에 호출한다(저장 안 된 채로 창이 닫히는 것 방지).
+window._msFlushCurrentProjectFinalize = async function() {
+    if (!window._msFinalizeTimer) return null;
+    clearTimeout(window._msFinalizeTimer);
+    window._msFinalizeTimer = null;
+    return await window._msRunCurrentProjectFinalize();
+};
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') window._msFlushCurrentProjectFinalize();
+});
+
 // ⭐ [2026-09-23 성능] opts.deferRefresh — 지금 열려있는 프로젝트에 여러 건을 연속으로 넣을 때
 //    한 건마다 recalculateSchedules()(→ globalData 전체 딥카피 Undo 스냅샷, 최대 50개 보관)와
 //    saveToGoogleDrive()(프로젝트 통째 업로드)가 돌아 화면이 통째로 멈추는 문제가 있었다
@@ -969,6 +1021,14 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
                 // ⭐ [2026-09-23 성능] 여러 건을 연속 배치하는 중이면 여기서 재계산·저장을 하지 않고
                 //    호출부가 마지막에 한 번만 하게 한다(스냅샷·업로드가 N배로 누적되는 것을 막음).
                 if (opts.deferRefresh) return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0, deferred: true };
+                // ⭐ [2026-09-23 성능] 호출부가 직접 묶지 않는 경로(메일 자동수집 틱 등)는 여기서
+                //    코얼레싱해 준다 — 연달아 들어오는 배치들을 한 번의 재계산+저장으로 모은다.
+                //    행은 이미 globalData에 들어갔으므로 화면에는 다음 재계산 때 반영되고,
+                //    저장이 막히면 로컬 백업 + 콘솔 경고를 남긴다(조용히 삼키지 않음).
+                if (opts.coalesce !== false) {
+                    window._msScheduleCurrentProjectFinalize();
+                    return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0, pendingSave: true };
+                }
                 window.recalculateSchedules();
                 if (window.renderGantt) window.renderGantt();
                 // ✅ [A: 토픽 자동갱신] AI 업무 5개 추가마다 현재 프로젝트 프로파일 백그라운드 재생성

@@ -619,7 +619,8 @@ window.inboxQuickRegisterMatched = async function(uid) {
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) { alert(window._t('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.', '🔒 Please sign in to Google via [🔵 Connect Drive] at the top first.')); return; }
 
-    const result = await window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
+    // ⭐ [2026-09-23] 사람이 방금 누른 단건 전송은 코얼레싱하지 않고 즉시 저장한다(기존 동작 유지)
+    const result = await window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false });
     if (result.ok) {
         window.TaskInbox.setStatus(uid, '배치됨', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
         window.renderTaskInbox();
@@ -987,6 +988,9 @@ window.inboxBatchRegisterMatched = async function() {
             fails.push(`${it.task['업무명'] || (_en ? '(untitled)' : '(제목없음)')}: ${e.message}`);
         }
     }
+    // ⭐ [2026-09-23 성능] 위 루프에서 현재 프로젝트 건들은 재계산·저장이 코얼레싱돼 미뤄져 있다 —
+    //    사람이 결과 토스트를 보고 바로 창을 닫을 수 있으므로 여기서 한 번에 마무리해 넣는다.
+    if (window._msFlushCurrentProjectFinalize) { try { await window._msFlushCurrentProjectFinalize(); } catch (e) {} }
     window.renderTaskInbox();
     // 💡 [2026-09-10] confirm() 없이 바로 실행하는 흐름과 짝을 맞춰, 결과도 alert(막힘) 대신 toast(안 막힘)로
     //    안내 — 실패 상세 목록은 toast에 다 담기 어려우니 console.warn으로 남기고 toast엔 건수만 표기.
