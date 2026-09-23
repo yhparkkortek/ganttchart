@@ -8,25 +8,78 @@
     window._isRestoringUndo = false;
     const UNDO_MAX = 50;
 
+    // ⭐ [2026-09-23 성능] 증분(구조 공유) 스냅샷
+    //    예전엔 pushUndoSnapshot()마다 globalData 전체를 딥카피해서 최대 50개까지 들고 있었다.
+    //    행 수천 개짜리 프로젝트에서는 스냅샷 하나가 수 MB라, 메일 자동배치처럼 배경에서 재계산이
+    //    반복되면 메모리가 계단식으로 불어나고 GC가 자주 돌아 앱 전체가 무거워졌다
+    //    (사용자 제보 2026-09-23: "몇 분마다 몇 초씩 멈췄다 풀림").
+    //    → 스냅샷의 "모양"(= { globalData:[{data,...}], colIdx })은 그대로 두고,
+    //      **바뀌지 않은 행은 직전 스냅샷이 만든 복사본 객체를 그대로 재사용(공유)**한다.
+    //      복사본은 한 번 만들면 절대 변형하지 않으므로 여러 스냅샷이 같이 가리켜도 안전하다.
+    //      결과: 스냅샷 1개의 메모리가 O(전체 행) → O(이번에 바뀐 행)으로 줄고,
+    //      복원 로직(_restoreState)과 스택 구조는 하나도 바뀌지 않는다.
+    //    ⚠️ 공유가 안전하려면 두 가지가 지켜져야 한다:
+    //      ① 복사본(o.data 배열, o의 언더스코어 값)은 만들어진 뒤 절대 수정하지 않는다.
+    //      ② 복원할 때는 복사본을 그대로 쓰지 말고 **새 배열로 다시 복사**한다(아래 _restoreState).
+    //         예전 코드는 obj.data를 그대로 globalData의 행으로 썼는데, 그러면 복원 직후의 편집이
+    //         스택 안의 스냅샷까지 같이 바꿔버린다(공유 전에도 잠재 버그였고, 공유하면 치명적).
+    const _rowCopyCache = new WeakMap(); // 살아있는 행(Array) → 그 행의 마지막 복사본
+    window._undoStats = { snapshots: 0, rowsCopied: 0, rowsShared: 0 };
+
+    // 복사본과 현재 행이 내용상 같은지 — 셀 값과 언더스코어 속성을 얕게 비교한다
+    // (언더스코어 값이 객체인 경우 참조 비교: 예전 딥카피도 참조를 그대로 담았으므로 의미가 같다)
+    function _rowCopyMatches(copy, row) {
+        const d = copy.data;
+        if (!d || d.length !== row.length) return false;
+        for (let i = 0; i < d.length; i++) { if (d[i] !== row[i]) return false; }
+        let liveUnderscores = 0;
+        for (const k in row) {
+            if (k.charCodeAt(0) !== 95) continue; // '_'
+            liveUnderscores++;
+            if (copy[k] !== row[k]) return false;
+        }
+        let copyUnderscores = 0;
+        for (const k in copy) { if (k !== 'data') copyUnderscores++; }
+        return liveUnderscores === copyUnderscores;
+    }
+
+    function _copyRow(row, idx) {
+        if (idx === 0 || !Array.isArray(row)) return { data: Array.from(row || []) };
+        const cached = _rowCopyCache.get(row);
+        if (cached && _rowCopyMatches(cached, row)) { window._undoStats.rowsShared++; return cached; }
+        const o = { data: Array.from(row) };
+        for (const k in row) { if (k.charCodeAt(0) === 95) o[k] = row[k]; }
+        _rowCopyCache.set(row, o);
+        window._undoStats.rowsCopied++;
+        return o;
+    }
+
+    // colIdx도 대부분의 스냅샷에서 그대로다 — 직렬화 결과가 같으면 같은 객체를 공유한다
+    let _lastColIdxJson = null, _lastColIdxCopy = null;
+    function _copyColIdx() {
+        const json = JSON.stringify(colIdx);
+        if (json === _lastColIdxJson && _lastColIdxCopy) return _lastColIdxCopy;
+        _lastColIdxJson = json;
+        _lastColIdxCopy = JSON.parse(json);
+        return _lastColIdxCopy;
+    }
+
     function _snapshotState() {
+        window._undoStats.snapshots++;
         return {
-            globalData: globalData.map(function(row, idx) {
-                if (idx === 0 || !Array.isArray(row)) return { data: Array.from(row || []) };
-                let o = { data: Array.from(row) };
-                for (let k in row) { if (k.startsWith('_')) o[k] = row[k]; }
-                return o;
-            }),
-            colIdx: JSON.parse(JSON.stringify(colIdx))
+            globalData: globalData.map(_copyRow),
+            colIdx: _copyColIdx()
         };
     }
 
     function _restoreState(snap) {
         globalData = snap.globalData.map(function(obj) {
-            let row = obj.data;
+            // ⚠️ obj.data를 그대로 쓰면 복원 후의 편집이 스냅샷을 오염시킨다 — 반드시 새 배열로 복사
+            let row = Array.from(obj.data);
             for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
             return row;
         });
-        colIdx = JSON.parse(JSON.stringify(snap.colIdx));
+        colIdx = JSON.parse(JSON.stringify(snap.colIdx)); // 공유 객체를 직접 쓰지 않도록 복사
     }
 
     window.pushUndoSnapshot = function() {
