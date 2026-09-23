@@ -50,7 +50,7 @@
           kw: ['팀비', '팀운영비', '팀 운영비', '복리후생비'], needs: '팀 이름(없으면 드롭다운으로 물어봄)', ex: '개발3팀 팀운영비 확인해줘' },
         { id: 'goodsreceipt', title: '자재 입고 처리', titleEn: 'Goods receipt processing', tcode: 'ZMM062', mode: 'write', verified: 'unverified',
           kw: ['입고 처리', '입고처리'], needs: '구매오더 번호(없으면 직전 발주 목록에서 고르거나 물어봄)', ex: '9100019479 입고 처리해줘' },
-        { id: 'screendump', title: '화면 구조 덤프(개발용 진단)', titleEn: 'Screen tree dump (dev diagnostic)', tcode: '(열려 있는 화면)', mode: 'read', verified: 'unverified',
+        { id: 'screendump', title: '화면 구조 덤프(개발용 진단)', titleEn: 'Screen tree dump (dev diagnostic)', tcode: '(열려 있는 화면)', mode: 'read', verified: 'live',
           kw: ['화면 덤프', '화면덤프', '트리 덤프', '화면 구조', '필드 id', '필드아이디'], needs: '없음(SAP에 미리 로그인 + 대상 화면 열어둠)', ex: 'SAP 화면 덤프해줘' }
     ];
 

@@ -1285,6 +1285,12 @@ SAP GUI "기록 및 재생"으로 녹화한 매크로(.vbs)나 스크린샷을 �
 **구현 위치**: `sap_bridge_32.py`의 `dump_screen_tree(save_dir)`(CLI 액션 `dump_screen_tree`),
 `kortek_backend.py`의 `/sap-dump-screen`, `js/04h-core-app-upload-utils-3.js`의 "화면 덤프" 로컬
 명령 블록(팀운영비 블록 바로 뒤), `js/32-sap-capabilities.js`의 `screendump` 항목
-(`verified: 'unverified'` — 실사용 검증 후 `'live'`로 갱신할 것). 제한: 노드 1500개/8초 초과 시
-잘림(`truncated: true`로 표시), 그리드는 화면당 60행까지만 트리 안에 포함.
+(`verified: 'live'`). 제한: 노드 1500개/8초 초과 시 잘림(`truncated: true`로 표시), 그리드는
+화면당 60행까지만 트리 안에 포함.
+
+**✅ [2026-09-23 실사용 검증]** `/sap-dump-screen`을 직접 호출해 SAP Easy Access 첫 화면
+(SESSION_MANAGER)을 정상적으로 덤프함(38개 노드, `wnd[0]/usr/cntlIMAGE_CONTAINER/...` 등 실제
+findById 경로와 Text 값 확인, `C:\SAP_DMS\SAP_화면덤프\`에 파일 저장도 확인). 다음 단계는 이
+도구로 ZCO021 팀운영비 화면(개발3팀, 1~6월)을 실제로 덤프해서 위 "550203 행을 못 찾음" 버그의
+근본 원인(라벨 배치 변경 vs 그리드 전환 등)을 확인하는 것 — 아직 대기 중.
   하는 모든 복합 요청 — 위 순수조회 판정에서 자동으로 걸러짐.
