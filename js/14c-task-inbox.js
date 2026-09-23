@@ -289,6 +289,59 @@ window._tiClearFilter = function() {
     window.renderTaskInbox();
 };
 
+// ⭐ [2026-09-23 신규] 요약에서 상태+프로젝트로 걸러낸 묶음을 통째로 지우는 버튼(🗑).
+//    자동배치가 끝난 건들이 보관함에 수백 건씩 남아 "전체 479건" 같은 상태가 되는데, 프로젝트별로
+//    정리하려면 카드마다 🗑을 눌러야 했다. 선택된 프로젝트 칩 옆에서 한 번에 지운다.
+//    ⚠️ 지우는 건 "보관함 기록"일 뿐 — 이미 간트차트에 배치된 업무 자체는 그대로 남는다.
+// 💡 확인창(confirm)은 쓰지 않는다(보관함 수동 작업 공통 규칙) — 대신 지운 묶음을 메모리에 들고
+//    있다가 요약에 [↩ 삭제 취소] 칩을 띄워 되돌릴 수 있게 한다(실수 복구 경로를 먼저 만들어 둠).
+window._tiUndoBuffer = window._tiUndoBuffer || null; // { items:[...], label:'', at:ms }
+
+/** ↩ 삭제 취소 칩에 붙일 "(프로젝트 · 상태)" 문구 — 저장값은 한글 고정이므로 표시할 때만 영문으로 바꿼다 */
+function _tiUndoLabel(ub, en) {
+    const st = ub.status ? (en ? (_TI_STATUS_LABEL_EN[ub.status] || ub.status) : ub.status) : '';
+    const parts = [ub.project, st].filter(Boolean);
+    return parts.length ? ` <span style="color:#b98a4b;">(${escapeHtml(parts.join(' · '))})</span>` : '';
+}
+
+window._tiBulkDeleteFiltered = function(status, project) {
+    const _en = window._currentLang === 'en';
+    const noMatchLabel = _en ? '(no match)' : '(매칭없음)';
+    const all = window.TaskInbox.load();
+    const hit = function(it) {
+        if (status && it.status !== status) return false;
+        if (project && _tiProjectOf(it, noMatchLabel) !== project) return false;
+        return true;
+    };
+    const doomed = all.filter(hit);
+    if (!doomed.length) return;
+    // 💡 [i18n] 라벨을 미리 문자열로 굳혀놓으면 언어를 바꿔도 상태명이 한글로 남는다 — 값만 보관하고 표시는 렌더링 시점에
+    window._tiUndoBuffer = { items: doomed, status: status || '', project: project || '', at: Date.now() };
+    window.TaskInbox.save(all.filter(function(it) { return !hit(it); }));
+    window.renderTaskInbox();
+    if (window.showToast) {
+        window.showToast(_en
+            ? `🗑 Removed ${doomed.length} inbox record(s) — use [↩ Undo delete] in the summary to restore. Tasks already placed in the Gantt chart are NOT affected.`
+            : `🗑 보관함 기록 ${doomed.length}건 삭제 — 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다. 이미 간트차트에 배치된 업무는 그대로입니다.`,
+            'info', 6000);
+    }
+};
+
+window._tiUndoBulkDelete = function() {
+    const buf = window._tiUndoBuffer;
+    if (!buf || !buf.items || !buf.items.length) return;
+    const cur = window.TaskInbox.load();
+    const seen = {};
+    cur.forEach(function(it) { seen[it.uid] = true; });
+    const restored = buf.items.filter(function(it) { return !seen[it.uid]; });
+    window.TaskInbox.save(restored.concat(cur));
+    window._tiUndoBuffer = null;
+    window.renderTaskInbox();
+    if (window.showToast) {
+        window.showToast(window._t(`↩ ${restored.length}건을 되돌렸습니다.`, `↩ Restored ${restored.length} record(s).`), 'info');
+    }
+};
+
 window._tiBuildSummaryHtml = function(items) {
     if (!items || !items.length) return '';
     const _en = window._currentLang === 'en';
@@ -305,7 +358,14 @@ window._tiBuildSummaryHtml = function(items) {
             `title="${_en ? 'Click to filter the list below' : '클릭하면 아래 목록을 이 항목만 보여줍니다'}" ` +
             `style="display:inline-block;background:${bg};color:${fg};border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
             `font-size:11px;white-space:nowrap;cursor:pointer;${active ? 'outline:2px solid ' + fg + ';' : ''}">` +
-            `${escapeHtml(label)} <b>${count}</b></span>`;
+            `${escapeHtml(label)} <b>${count}</b>` +
+            // ⭐ [2026-09-23] 선택된 프로젝트 칩에만 작은 휴지통 — 그 묶음을 통째로 지운다
+            (active && project
+                ? `<span class="ti-bulk-del" data-status="${escapeHtml(status)}" data-project="${escapeHtml(project)}" ` +
+                  `title="${_en ? 'Delete these ' + count + ' inbox records (tasks already placed in the Gantt chart are not affected)' : '이 ' + count + '건의 보관함 기록을 지웁니다 (간트차트에 배치된 업무는 그대로)'}" ` +
+                  `style="margin-left:5px;padding:0 2px;border-radius:4px;cursor:pointer;opacity:.75;">🗑</span>`
+                : '') +
+            `</span>`;
     }
 
     // 💡 [2026-09-06 개선] "전체 N건" 자체를 클릭하면 필터가 해제되도록(➜ 기존 "✕ 해제" 버튼은 제거,
@@ -341,6 +401,15 @@ window._tiBuildSummaryHtml = function(items) {
         const filterLabel = filter.project ? `${filterStatusLabel} · ${filter.project}` : filterStatusLabel;
         html += `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 ${_en ? 'Filtered' : '필터링 중'}: ${escapeHtml(filterLabel)}</span></div>`;
     }
+    // ⭐ [2026-09-23] 방금 묶음 삭제한 게 있으면 되돌릴 길을 열어둔다(확인창 없이 지우므로 필수)
+    if (window._tiUndoBuffer && window._tiUndoBuffer.items && window._tiUndoBuffer.items.length) {
+        const ub = window._tiUndoBuffer;
+        html += `<div style="margin-top:6px;"><span class="ti-undo-del" ` +
+            `title="${_en ? 'Restore the records just deleted' : '방금 지운 기록을 되돌립니다'}" ` +
+            `style="display:inline-block;background:#fff3e0;color:#a85d0a;border:1px solid #ffca75;border-radius:10px;` +
+            `padding:2px 8px;font-size:11px;cursor:pointer;">↩ ${_en ? 'Undo delete' : '삭제 취소'} ` +
+            `<b>${ub.items.length}</b>${_en ? '' : '건'}${_tiUndoLabel(ub, _en)}</span></div>`;
+    }
     html += `</div>`;
     return html;
 };
@@ -368,6 +437,14 @@ window.renderTaskInbox = function() {
             summaryEl._tiDelegated = true; // 렌더할 때마다 innerHTML을 통째로 새로 그리므로, 리스너는 한 번만 위임 바인딩
             summaryEl.addEventListener('click', function(e) {
                 if (e.target.closest('.ti-clear-filter')) { window._tiClearFilter(); return; }
+                // ⭐ [2026-09-23] 휴지통은 칩 안에 있으므로 칩 토글보다 먼저 가로채야 한다
+                const delEl = e.target.closest('.ti-bulk-del');
+                if (delEl) {
+                    e.stopPropagation();
+                    window._tiBulkDeleteFiltered(delEl.dataset.status || null, delEl.dataset.project || null);
+                    return;
+                }
+                if (e.target.closest('.ti-undo-del')) { window._tiUndoBulkDelete(); return; }
                 const chipEl = e.target.closest('.ti-chip');
                 if (!chipEl) return;
                 window._tiSetFilter(chipEl.dataset.status || null, chipEl.dataset.project || null);
