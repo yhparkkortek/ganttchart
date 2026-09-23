@@ -46,7 +46,7 @@
           kw: ['구매오더', '발주', '세금계산서', '거래명세서', '견적서', '발주서'], needs: 'PDF 첨부', ex: '(세금계산서 PDF 첨부 후 전송)' },
         { id: 'screen', title: '현재 SAP 화면 읽기', titleEn: 'Read current SAP screen', tcode: '(열려 있는 화면)', mode: 'read', verified: 'live',
           kw: ['지금 화면', '현재 화면', '열려있는 화면', '열려 있는 화면', '화면 내용', '화면에 보이는'], needs: '없음(SAP에 미리 로그인)', ex: 'SAP 지금 화면 내용 요약해줘' },
-        { id: 'teambudget', title: '팀 운영비/복리후생비 조회', titleEn: 'Team budget lookup', tcode: 'ZCO021', mode: 'read', verified: 'unverified',
+        { id: 'teambudget', title: '팀 운영비/복리후생비 조회', titleEn: 'Team budget lookup', tcode: 'ZCO021', mode: 'read', verified: 'live',
           kw: ['팀비', '팀운영비', '팀 운영비', '복리후생비'], needs: '팀 이름(없으면 드롭다운으로 물어봄)', ex: '개발3팀 팀운영비 확인해줘' },
         { id: 'goodsreceipt', title: '자재 입고 처리', titleEn: 'Goods receipt processing', tcode: 'ZMM062', mode: 'write', verified: 'unverified',
           kw: ['입고 처리', '입고처리'], needs: '구매오더 번호(없으면 직전 발주 목록에서 고르거나 물어봄)', ex: '9100019479 입고 처리해줘' },

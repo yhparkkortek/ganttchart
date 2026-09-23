@@ -2092,10 +2092,74 @@ def _sap_tree_node_search_text(tree, key, col_names):
     return ' '.join(p for p in parts if p)
 
 
-def _sap_find_team_budget_row(wnd):
-    """`usr` 영역의 모든 GuiLabel을 화면에 보이는 순서대로 모아(`_sap_dump_fields`)
-    `_TEAM_BUDGET_ACCOUNT_CODE`("550203")가 들어있는 라벨을 찾는다. 계정코드와 계정명이
-    한 라벨에 합쳐져 있는지, 코드만 있고 다음 라벨이 계정명인지 확신이 없어 둘 다 시도한다.
+_LBL_COORD_RE = re.compile(r'lbl\[(\d+),(\d+)\]$')
+
+
+def _sap_parse_label_grid(wnd):
+    """`usr` 영역의 GuiLabel Id가 `lbl[열,행]` 좌표 패턴인 화면(ZCO021 팀운영비 등)을
+    {(col,row): text} 딕셔너리로 파싱한다(2026-09-23, 실사용 화면 트리 덤프로 이 좌표 패턴을
+    직접 확인 — `dump_screen_tree` 참고). `_sap_dump_fields`와 달리 **빈 텍스트도 그대로
+    딕셔너리에 남긴다** — 값이 0이라 화면에 안 보이는 칸(예: 활동이 없는 기간의 "임시전표")도
+    좌표 자체는 존재해야 컬럼이 밀리지 않는다."""
+    grid = {}
+    try:
+        children = wnd.findById('usr').Children
+    except Exception:
+        return grid
+    for i in range(children.Count):
+        try:
+            child = children.Item(i)
+            if child.Type != 'GuiLabel':
+                continue
+            m = _LBL_COORD_RE.search(str(child.Id))
+            if not m:
+                continue
+            grid[(int(m.group(1)), int(m.group(2)))] = str(child.Text or '').strip()
+        except Exception:
+            continue
+    return grid
+
+
+def _sap_find_team_budget_row_by_coords(wnd):
+    """`_sap_parse_label_grid`로 좌표 격자를 얻어, 헤더 행에서 `_TEAM_BUDGET_COLUMNS` 각각의
+    열(column) 위치를 찾고, `_TEAM_BUDGET_ACCOUNT_CODE`가 들어있는 행(row)에서 그 열들의
+    값을 좌표로 직접 읽는다 — 순서 기반 슬라이싱(`_sap_find_team_budget_row_sequential`)과
+    달리 중간에 빈 칸이 있어도 흔들리지 않는다. 실패하면 None."""
+    grid = _sap_parse_label_grid(wnd)
+    if not grid:
+        return None
+    header_row = None
+    col_for_label = {}
+    for (col, row), text in grid.items():
+        if not text:
+            continue
+        for label in _TEAM_BUDGET_COLUMNS:
+            if label in text:
+                if header_row is None or row == header_row:
+                    header_row = row
+                    col_for_label[label] = col
+    if header_row is None or len(col_for_label) != len(_TEAM_BUDGET_COLUMNS):
+        return None
+    account_row = None
+    account_label = None
+    for (col, row), text in grid.items():
+        if _TEAM_BUDGET_ACCOUNT_CODE in text:
+            account_row = row
+            account_label = text
+            break
+    if account_row is None:
+        return None
+    values = [grid.get((col_for_label[label], account_row), '') for label in _TEAM_BUDGET_COLUMNS]
+    return {'account_label': account_label, 'values': values}
+
+
+def _sap_find_team_budget_row_sequential(wnd):
+    """[예전 방식, 폴백용] `usr` 영역의 모든 GuiLabel을 화면에 보이는 순서대로 모아
+    (`_sap_dump_fields`) `_TEAM_BUDGET_ACCOUNT_CODE`("550203")가 들어있는 라벨을 찾는다.
+    ⚠️ 값이 빈 문자열인 칸은 `_sap_dump_fields`가 통째로 건너뛰어 버려서, 임시전표처럼
+    0(빈 칸)이 될 수 있는 컬럼이 있으면 순서가 밀려 실패한다(2026-09-23 실사용 버그로 확인
+    — `_sap_find_team_budget_row_by_coords`가 그 재발 방지용 1차 경로이고, 이건 좌표 패턴이
+    아닌 화면을 위한 안전망으로만 남겨둔다).
     (전체 라벨 목록, {'account_label', 'values'} | None)을 반환."""
     labels = _sap_dump_fields(wnd)
     n = len(_TEAM_BUDGET_COLUMNS)
@@ -2113,6 +2177,17 @@ def _sap_find_team_budget_row(wnd):
             if len(values) == n:
                 return labels, {'account_label': labels[i + 1].strip(), 'values': values}
     return labels, None
+
+
+def _sap_find_team_budget_row(wnd):
+    """팀운영비 행 값 추출 진입점 — 좌표 기반(`_sap_find_team_budget_row_by_coords`)을 먼저
+    시도하고, 실패하면(좌표 패턴이 아닌 화면 등) 예전 순서 기반 방식으로 폴백한다.
+    (전체 라벨 목록, {'account_label', 'values'} | None)을 반환 — 실패 시 진단 메시지에
+    쓸 라벨 목록은 폴백 경로에서 어차피 계산하므로 그대로 재사용."""
+    by_coords = _sap_find_team_budget_row_by_coords(wnd)
+    if by_coords is not None:
+        return [], by_coords  # 성공 시 labels는 실패 진단용이라 불필요 — 재계산 생략
+    return _sap_find_team_budget_row_sequential(wnd)
 
 
 def fetch_team_budget(team, fperbl='1', tperbl='12'):
