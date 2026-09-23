@@ -157,7 +157,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | 7 | 다중 프로젝트 배분 (`gantt_ai_reassign_queue_v1`) | `14a`, `15a`, HTML |
 | 8 | 토픽 오염 감지·AI 자가진단 (`_tcGetScore`, `_tcRunDiagnosis`, `_tcApplyFix`) | `27-topic-contamination.js` |
 | 9 | 완전 미분류 메일 군집 감지 → 신규 프로젝트 생성 제안 (`_ncdRecordCandidate`, `_ncdCheckAndSuggest`) | `29-new-project-cluster-detect.js` |
-| 10 | SAP·AI 문답 이슈 수집(실패 자동 기록+화면 스냅샷+🚩 신고) → Drive 샤드 → 관리자 군집 리포트 → 내보내 Claude가 진단 (`docs/phase10-issue-learning-design.md`) | `30-issue-collector.js`, `31-issue-report.js`, `kortek_backend.py`(이슈 수집 블록), `sap_bridge_32.py`(스냅샷) |
+| 10 | SAP·AI 문답 이슈 수집(실패 자동 기록+화면 스냅샷+🚩 신고) → Drive 샤드 → 관리자 군집 리포트 → 내보내 Claude가 진단 → Claude가 쓴 `resolved_patch.json`을 [📥 처리결과 반영]로 되먹임(해결/구현됨 일괄 표시) (`docs/phase10-issue-learning-design.md`) | `30-issue-collector.js`, `31-issue-report.js`, `kortek_backend.py`(이슈 수집 블록), `sap_bridge_32.py`(스냅샷) |
 | 11 | AI 문답 질문 라우터(SAP/프로젝트/일반 분류, 칩·접두어·배지·다시 분류) + SAP 적립학습(미지원 요청 적립·🚩 새 기능 요청·AI 추론 원장) (`docs/qa-router-and-sap-learning.md`) | `32-sap-capabilities.js`, `33-qa-router.js`, `31-issue-report.js`(학습 탭), `30-issue-collector.js`(🚩 분류) |
 
 ## 📚 상세 문서(`docs/`) 색인 — 해당 작업을 할 때만 읽을 것

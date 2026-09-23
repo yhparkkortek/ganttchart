@@ -452,6 +452,138 @@
 
     function render() { renderTabs(); if ((_state.view || 'issues') === 'learn') renderLearn(); else renderIssues(); }
 
+    // ⭐ [2026-09-23 신규] 처리결과 되먹임 — Claude가 정리한 결과를 리포트에 한 번에 반영한다.
+    //    왜 필요한가(사용자 지적): 지금까지 경로가 **단방향**이었다.
+    //      앱 → [내보내기] → digest_*.json → Claude가 읽고 고침 → (되돌아올 길 없음)
+    //    그래서 이미 고친 건(알람 일괄해제·승인원 저장·팀운영비 등)이 계속 "미해결"로 상위에
+    //    남았고, 사람이 커밋 시각과 이벤트 시각을 대조해야만 걸러낼 수 있었다. 큐가 쌓이면
+    //    "뭘 하고 뭘 안 했는지" 추적이 불가능해진다.
+    //    → Claude가 쓰는 처리결과 파일(resolved_patch.json)을 읽어 **미리보기 후 한 번에** 반영.
+    //      판단은 Claude가, 승인 클릭은 사람이 — 기존 [해결]/[구현됨] 버튼의 일괄 버전이다.
+    //    파일 형식(자세한 건 docs/phase10-issue-learning-design.md):
+    //      { generatedBy, generatedAt,
+    //        issues:   [{ sig, note, commit }],                      → _resolved.json
+    //        learning: [{ key, status:'done|hold|reviewing|new', note, commit }] → sap_learning.json }
+    var PATCH_MAX = 500; // 한 파일에서 반영할 최대 항목 수(양쪽 합) — 실수로 거대한 파일을 물렸을 때의 방어선
+    var _patchPending = null;
+
+    function patchSummarize(patch) {
+        var issues = Array.isArray(patch.issues) ? patch.issues : [];
+        var learning = Array.isArray(patch.learning) ? patch.learning : [];
+        var sigSeen = {}, keySeen = {};
+        (_state.clusters || []).forEach(function (c) { sigSeen[c.sig] = c; });
+        (_state.learn || []).forEach(function (c) { keySeen[c.key] = c; });
+        var rows = [];
+        issues.slice(0, PATCH_MAX).forEach(function (it) {
+            if (!it || !it.sig) return;
+            var already = _state.resolved[it.sig];
+            rows.push({ kind: 'issue', id: it.sig, now: already ? t('해결됨', 'resolved') : t('미해결', 'open'),
+                next: t('해결됨', 'resolved'), note: it.note || '', commit: it.commit || '',
+                known: !!sigSeen[it.sig], dup: !!already });
+        });
+        learning.slice(0, PATCH_MAX).forEach(function (it) {
+            if (!it || !it.key || !STATUS[it.status]) return;
+            var prev = _state.ledger[it.key];
+            rows.push({ kind: 'learn', id: it.key, now: prev && prev.status ? STATUS[prev.status][window._currentLang === 'en' ? 1 : 0] : STATUS.new[window._currentLang === 'en' ? 1 : 0],
+                next: STATUS[it.status][window._currentLang === 'en' ? 1 : 0], note: it.note || '', commit: it.commit || '',
+                known: !!keySeen[it.key], dup: !!(prev && prev.status === it.status), status: it.status });
+        });
+        return rows.slice(0, PATCH_MAX);
+    }
+
+    /** 파일 고르기 → 미리보기 (아직 반영하지 않는다) */
+    window._issueApplyPatch = function () {
+        var inp = document.getElementById('issue-rpt-patch-file');
+        if (!inp) {
+            inp = document.createElement('input');
+            inp.type = 'file'; inp.accept = 'application/json,.json'; inp.id = 'issue-rpt-patch-file';
+            inp.style.display = 'none';
+            inp.addEventListener('change', function () {
+                var f = inp.files && inp.files[0]; if (!f) return;
+                var fr = new FileReader();
+                fr.onload = function () {
+                    var patch;
+                    try { patch = JSON.parse(String(fr.result)); }
+                    catch (e) { alert(t('JSON을 읽지 못했습니다: ', 'Could not parse JSON: ') + e.message); return; }
+                    if (!patch || (!Array.isArray(patch.issues) && !Array.isArray(patch.learning))) {
+                        alert(t('처리결과 파일 형식이 아닙니다 (issues / learning 배열이 필요).',
+                                'Not a patch file (needs an issues / learning array).'));
+                        return;
+                    }
+                    var rows = patchSummarize(patch);
+                    if (!rows.length) { alert(t('반영할 항목이 없습니다.', 'Nothing to apply.')); return; }
+                    _patchPending = { patch: patch, rows: rows, fileName: f.name };
+                    renderPatchPreview();
+                };
+                fr.readAsText(f);
+                inp.value = ''; // 같은 파일을 다시 고를 수 있게
+            });
+            document.body.appendChild(inp);
+        }
+        inp.click();
+    };
+
+    function renderPatchPreview() {
+        var body = document.getElementById('issue-rpt-body'); if (!body || !_patchPending) return;
+        var p = _patchPending, meta = p.patch || {};
+        var newCnt = p.rows.filter(function (r) { return !r.dup; }).length;
+        var html = '<div style="font-size:12.5px; margin-bottom:10px; line-height:1.6;">' +
+            '<b>' + esc(t('📥 처리결과 미리보기', '📥 Patch preview')) + '</b> — ' + esc(p.fileName) +
+            (meta.generatedBy ? ' · ' + esc(meta.generatedBy) : '') + (meta.generatedAt ? ' · ' + esc(String(meta.generatedAt).slice(0, 16)) : '') +
+            '<br>' + esc(t('총 ', 'Total ')) + '<b>' + p.rows.length + '</b>' + esc(t('건 (새로 바뀌는 항목 ', ' (changes ')) + '<b>' + newCnt + '</b>' + esc(t('건)', ')')) +
+            '<br><span style="color:#888;">' + esc(t('반영하면 Drive의 _resolved.json / sap_learning.json에 저장되고, 이후 같은 시그니처가 다시 오면 재발로 표시됩니다.',
+                'Applying saves to _resolved.json / sap_learning.json on Drive; later hits on the same signature show up as recurrences.')) + '</span></div>';
+        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="text-align:left; color:#7a5210; background:#fff8e6;">' +
+            '<th style="padding:5px;">' + esc(t('구분', 'Type')) + '</th><th style="padding:5px;">' + esc(t('대상', 'Target')) + '</th>' +
+            '<th style="padding:5px;">' + esc(t('변경', 'Change')) + '</th><th style="padding:5px;">' + esc(t('사유/커밋', 'Reason/commit')) + '</th></tr></thead><tbody>' +
+            p.rows.map(function (r) {
+                return '<tr style="border-top:1px solid #eee;' + (r.dup ? ' color:#aaa;' : '') + '">' +
+                    '<td style="padding:5px; white-space:nowrap;">' + (r.kind === 'issue' ? esc(t('이슈', 'Issue')) : esc(t('학습', 'Learning'))) +
+                    (r.known ? '' : ' <span title="' + esc(t('현재 조회 범위(기본 3개월)에는 없는 항목 — 그래도 기록은 남깁니다', 'Not in the current window — still recorded')) + '" style="color:#c92a2a;">*</span>') + '</td>' +
+                    '<td style="padding:5px; word-break:break-all; max-width:380px;">' + esc(String(r.id).slice(0, 120)) + '</td>' +
+                    '<td style="padding:5px; white-space:nowrap;">' + esc(r.now) + ' → <b>' + esc(r.next) + '</b>' + (r.dup ? ' ' + esc(t('(변화 없음)', '(no change)')) : '') + '</td>' +
+                    '<td style="padding:5px;">' + esc(String(r.note).slice(0, 80)) + (r.commit ? ' <code style="color:#888;">' + esc(r.commit) + '</code>' : '') + '</td></tr>';
+            }).join('') + '</tbody></table>' +
+            '<div style="margin-top:12px; display:flex; gap:8px;">' +
+            '<button onclick="window._issueApplyPatchConfirm()" style="padding:7px 16px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">' +
+            esc(t('✅ 반영하기', '✅ Apply')) + '</button>' +
+            '<button onclick="window._issueRptReload()" style="padding:7px 16px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12.5px; cursor:pointer;">' +
+            esc(t('취소', 'Cancel')) + '</button></div>';
+        body.innerHTML = html;
+    }
+
+    /** 미리보기에서 확인한 내용을 실제로 반영 — 이슈는 _resolved.json, 학습은 sap_learning.json */
+    window._issueApplyPatchConfirm = async function () {
+        if (!_patchPending) return;
+        var p = _patchPending, now = new Date().toISOString();
+        var by = (p.patch && p.patch.generatedBy) || 'Claude';
+        var nIssue = 0, nLearn = 0;
+        p.rows.forEach(function (r) {
+            if (r.kind === 'issue') {
+                _state.resolved[r.id] = { at: now, note: String(r.note || '').slice(0, 120) + (r.commit ? ' [' + r.commit + ']' : ''), by: by };
+                nIssue++;
+            } else {
+                var prev = _state.ledger[r.id] || {};
+                _state.ledger[r.id] = Object.assign({}, prev, {
+                    status: r.status, at: now, by: by,
+                    note: String(r.note || '').slice(0, 200) + (r.commit ? ' [' + r.commit + ']' : ''),
+                    doneAt: r.status === 'done' ? now : prev.doneAt
+                });
+                nLearn++;
+            }
+        });
+        var errs = [];
+        try { if (nIssue) await saveResolved(); } catch (e) { errs.push('_resolved.json: ' + e.message); }
+        try { if (nLearn) await saveLedger(); } catch (e) { errs.push('sap_learning.json: ' + e.message); }
+        _state.clusters = window._issueCluster(_state.events, _state.resolved);
+        refreshLearn();
+        _patchPending = null;
+        render();
+        var msg = t('✅ 처리결과 반영 완료 — 이슈 ', '✅ Patch applied — issues ') + nIssue + t('건, 학습 ', ', learning ') + nLearn + t('건', '');
+        if (errs.length) msg += '\n' + t('⚠️ 저장 실패: ', '⚠️ Save failed: ') + errs.join(' / ');
+        if (window.showToast) window.showToast(msg, errs.length ? 'error' : 'info', 6000); else alert(msg);
+    };
+
     window.openIssueReportModal = function () {
         try {
             if (window.verifyAdminPassword && !window.verifyAdminPassword(t('🔒 이슈 리포트를 열려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to open the issue report.\n(case-insensitive)'))) return;
@@ -465,7 +597,8 @@
                     '<div id="issue-rpt-handle" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; display:flex; justify-content:space-between; align-items:center; cursor:grab; user-select:none;">' +
                     '<span id="issue-rpt-title"></span><span style="display:flex; gap:6px; align-items:center;">' +
                     '<button id="issue-rpt-reload" onclick="window._issueRptReload()" onmouseover="this.style.background=\'#ffefc0\';" onmouseout="this.style.background=\'#fff8e6\';" style="font-size:11.5px; padding:4px 10px; border:none; background:#fff8e6; color:#7a5210; border-radius:6px; cursor:pointer; transition:background .15s;"></button>' +
-                    '<button id="issue-rpt-export" onclick="window._issueExportDigest()" onmouseover="this.style.background=\'#ffefc0\';" onmouseout="this.style.background=\'#fff8e6\';" style="font-size:11.5px; padding:4px 10px; border:none; background:#fff8e6; color:#7a5210; border-radius:6px; cursor:pointer; transition:background .15s;"></button>' +
+                    '<button id="issue-rpt-export" onclick="window._issueExportDigest()" onmouseover="this.style.background=\'#ffefc0\';" onmouseout="this.style.background=\'#fff8e6\';" style="font-size:11.5px; padding:4px 10px; border:none; background:#fff8e6; color:#7a5210; border-radius:6px; cursor:pointer; transition:background .15s;"></button>'  +
+                    '<button id="issue-rpt-patch" onclick="window._issueApplyPatch()" onmouseover="this.style.background=\'#ffefc0\';" onmouseout="this.style.background=\'#fff8e6\';" style="font-size:11.5px; padding:4px 10px; border:none; background:#fff8e6; color:#7a5210; border-radius:6px; cursor:pointer;"></button>' +
                     '<button onclick="event.stopPropagation(); document.getElementById(\'issue-rpt-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></span></div>' +
                     '<div id="issue-rpt-tabs" style="padding:8px 18px 0; display:flex; gap:4px; border-bottom:1px solid #e0b64a;"></div>' +
                     '<div id="issue-rpt-body" style="padding:14px 18px; overflow:auto; flex:1;"></div></div>';
@@ -476,6 +609,7 @@
             document.getElementById('issue-rpt-title').textContent = t('🧾 SAP·AI 문답 이슈 리포트', '🧾 SAP / AI Q&A Issue Report');
             document.getElementById('issue-rpt-reload').textContent = t('🔄 새로고침', '🔄 Reload');
             document.getElementById('issue-rpt-export').textContent = t('📤 내보내기', '📤 Export');
+            document.getElementById('issue-rpt-patch').textContent = t('📥 처리결과 반영', '📥 Apply patch');
             modal.style.display = 'flex';
             if (window.bringModalToFront) window.bringModalToFront('issue-rpt-modal');
             window._issueRptReload();
