@@ -1579,16 +1579,25 @@ def fetch_material_price(material):
     found = _select_tab_with_retry(wnd, 'tabpSP24')  # "회계 1"
     if not found:
         raise RuntimeError(f'자재 "{material}" 화면에서 "회계 1" 탭을 찾지 못했습니다 — 이 자재에 회계 뷰가 없을 수 있습니다.')
-    time.sleep(0.4)
-    wnd = session.findById('wnd[0]')
 
+    # 🐛 [2026-09-23 실사용 버그수정] "회계 1" 탭 안에 다시 중첩된 기간 탭스트립(PPLF 등)의
+    # 서브화면(가격 필드들이 실제로 들어있는 곳)이 탭 전환 직후 바로 안 잡혀서(0.4초 고정
+    # 대기로는 부족) "가격 필드를 찾지 못했습니다"로 실패하던 문제 — 고정 대기 한 번 대신
+    # `_select_tab_with_retry`와 같은 패턴으로 짧게 여러 번 재시도한다.
     values = {}
-    for key, id_sub in _MATERIAL_PRICE_FIELD_IDS.items():
-        field = _find_by_id_substring(wnd, id_sub)
-        values[key] = str(field.Text).strip() if field is not None else None
+    stprs = pvprs = None
+    for _attempt in range(6):
+        time.sleep(0.5)
+        wnd = session.findById('wnd[0]')
+        values = {}
+        for key, id_sub in _MATERIAL_PRICE_FIELD_IDS.items():
+            field = _find_by_id_substring(wnd, id_sub)
+            values[key] = str(field.Text).strip() if field is not None else None
+        stprs = _parse_sap_number(values.get('stprs'))
+        pvprs = _parse_sap_number(values.get('pvprs'))
+        if stprs is not None or pvprs is not None:
+            break
 
-    stprs = _parse_sap_number(values.get('stprs'))
-    pvprs = _parse_sap_number(values.get('pvprs'))
     if stprs is None and pvprs is None:
         raise RuntimeError(f'자재 "{material}"의 "회계 1" 탭에서 가격 필드를 찾지 못했습니다 — 화면 구성이 다를 수 있습니다.')
 
