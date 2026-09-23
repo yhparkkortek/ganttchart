@@ -328,6 +328,143 @@ def fetch_current_screen():
     return {'ok': True, 'source': source, 'text': text}
 
 
+# ── "화면 트리 통째로 덤프" (2026-09-23 신규, "SAP를 빠르게 마스터하는 법" 사용자 요청) ──
+# 지금까지 새 SAP 기능을 붙일 때마다 사용자가 준 "기록 및 재생" 매크로(.vbs)나 스크린샷을
+# 사람이 해석해서 필드 ID를 추측해왔다(팀운영비 기간지정 버그가 그 부작용 — 코드 주석
+# 곳곳의 "추측 금지 원칙"도 이 문제의 방증). 매크로 해석 대신, 지금 SAP 화면에 떠 있는
+# GuiComponent 트리 전체(Id·Type·SubType·Name·편집가능여부·**Text 값까지**)를 사람이
+# 읽을 수 있는 텍스트로 그대로 덤프하는 범용 도구 — 새 기능이 필요하면 "그 화면을 열어두고
+# 이 명령을 한 번 실행해서 결과를 보내주세요"만 요청하면, 매크로 해석 없이 정확한 findById
+# 경로를 바로 확인할 수 있다.
+# ⚠️ `_capture_failure_snapshot`(Phase 10 이슈 자동수집용)과는 목적이 다르다 — 그건 자동/
+#    백그라운드로 수집되므로 필드 값을 마스킹하고 구조만 남기지만, 이건 사람이 새 기능을
+#    만들려고 그때그때 수동으로 부르는 진단 도구라 값(Text)까지 그대로 남긴다. 자동 트리거
+#    금지 — 반드시 사람이 명시적으로 요청했을 때만 호출할 것.
+_DUMP_MAX_NODES = 1500
+_DUMP_MAX_SECONDS = 8.0
+_DUMP_SKIP_DESCEND = ('GuiMenubar', 'GuiStatusbar')
+
+
+def _dump_safe_text(node):
+    try:
+        t = str(node.Text)
+    except Exception:
+        return ''
+    return t.replace('\r', '').replace('\n', ' ¶ ')[:200]
+
+
+def dump_screen_tree(save_dir=None):
+    """지금 열려 있는 SAP 화면의 GuiComponent 트리 전체를 findById 상대경로 + Type/SubType/
+    Text 그대로 텍스트로 덤프한다. `save_dir`을 주면 C:\\SAP_DMS 아래에 파일로도 남겨 매번
+    채팅창에 옮겨 붙이지 않고 재사용할 수 있게 한다."""
+    session = _get_sap_session()
+    try:
+        title = session.findById('wnd[0]').Text
+    except Exception:
+        title = ''
+    try:
+        info = session.Info
+        tcode = str(info.Transaction)
+        program = str(info.Program)
+        screen = str(info.ScreenNumber)
+    except Exception:
+        tcode = program = screen = ''
+    try:
+        win_count = int(session.Children.Count)
+    except Exception:
+        win_count = 1
+
+    t0 = time.time()
+    lines = []
+    total = 0
+    truncated = False
+    for wi in range(win_count):
+        if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
+            truncated = True
+            break
+        try:
+            wnd = session.findById('wnd[%d]' % wi)
+        except Exception:
+            continue
+        lines.append(f'[wnd[{wi}]] text="{_dump_safe_text(wnd)}"')
+        queue = [(wnd, 0)]
+        while queue:
+            if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
+                truncated = True
+                break
+            node, depth = queue.pop(0)
+            try:
+                children = node.Children
+                count = children.Count
+            except Exception:
+                continue
+            for ci in range(count):
+                if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
+                    truncated = True
+                    break
+                try:
+                    ch = children.Item(ci)
+                except Exception:
+                    continue
+                total += 1
+                try:
+                    ctype = str(ch.Type)
+                except Exception:
+                    ctype = '?'
+                try:
+                    subtype = str(getattr(ch, 'SubType', '') or '')
+                except Exception:
+                    subtype = ''
+                try:
+                    cid = str(ch.Id)
+                    rel = cid.split('ses[0]/', 1)[-1] if 'ses[0]/' in cid else cid
+                except Exception:
+                    rel = '?'
+                try:
+                    name = str(getattr(ch, 'Name', '') or '')
+                except Exception:
+                    name = ''
+                try:
+                    chg = ' [편집가능]' if ch.Changeable else ''
+                except Exception:
+                    chg = ''
+                type_part = f'{ctype}/{subtype}' if subtype else ctype
+                name_part = f' name={name}' if name else ''
+                indent = '  ' * (depth + 1)
+                lines.append(f'{indent}{rel}  ({type_part}){name_part}{chg}  text="{_dump_safe_text(ch)}"')
+                if ctype == 'GuiShell' and subtype == 'GridView':
+                    try:
+                        grid_dump = _sap_dump_grid(ch)
+                    except Exception:
+                        grid_dump = None
+                    if grid_dump:
+                        grid_lines = grid_dump.split('\n')
+                        for gl in grid_lines[:60]:
+                            lines.append(indent + '  │ ' + gl)
+                        if len(grid_lines) > 60:
+                            lines.append(indent + f'  │ …(그리드 {len(grid_lines)}행 중 60행만 표시)')
+                if ctype not in _DUMP_SKIP_DESCEND and depth < 14:
+                    queue.append((ch, depth + 1))
+
+    header = (f'[SAP 화면 트리 덤프]\n트랜잭션: {tcode} / 프로그램: {program} / 화면번호: {screen}\n'
+              f'창 제목: {title}\n노드 수: {total}건' + (' (시간/개수 제한으로 일부 생략됨)' if truncated else ''))
+    body = header + '\n\n' + '\n'.join(lines)
+
+    result = {'ok': True, 'tcode': tcode, 'program': program, 'screen': screen, 'nodeCount': total, 'truncated': truncated, 'text': body}
+    if save_dir:
+        try:
+            os.makedirs(save_dir, exist_ok=True)
+            safe_tcode = re.sub(r'[^A-Za-z0-9_-]', '_', tcode or 'unknown')
+            fname = f'sap_screen_dump_{safe_tcode}_{time.strftime("%Y%m%d_%H%M%S")}.txt'
+            fpath = os.path.join(save_dir, fname)
+            with open(fpath, 'w', encoding='utf-8') as f:
+                f.write(body)
+            result['savedPath'] = fpath
+        except Exception:
+            pass
+    return result
+
+
 # ── "BOM 조회" (ZPP038) 전용 헬퍼 ──────────────────────────────────────
 # ⚠️⚠️ [2026-09-16 신규, 사용자 요청] "SAP ID를 공용으로 쓰는데 다른 팀원이 ALV 레이아웃을
 # 바꿔놓으면 원하는 컬럼을 못 받는다 — 항상 이 레이아웃으로 조회하게 하드코딩할 수 있냐"는
@@ -2946,6 +3083,9 @@ def main():
         elif action == 'post_goods_receipt':
             ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
             result = post_goods_receipt(ebeln)
+        elif action == 'dump_screen_tree':
+            save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
+            result = dump_screen_tree(save_dir)
         else:
             result = fetch_current_screen()
         if isinstance(result, dict) and result.get('ok') is False:

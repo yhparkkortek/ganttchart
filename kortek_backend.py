@@ -1925,6 +1925,18 @@ def sap_team_budget():
     return jsonify(data), status
 
 
+@app.route('/sap-dump-screen', methods=['GET'])
+def sap_dump_screen():
+    # 🔧 [2026-09-23 신규, "SAP 마스터" 사용자 요청] 새 SAP 기능을 만들 때마다 매크로(.vbs)를
+    #    사람이 해석해서 필드 ID를 추측하던 방식 대신 — 지금 열려 있는 SAP 화면의
+    #    GuiComponent 트리 전체(Id/Type/Text)를 그대로 덤프해서 정확한 findById 경로를
+    #    바로 확인하는 진단 전용 명령. 실제 트리 순회는 sap_bridge_32.py의
+    #    dump_screen_tree()에 있다. 결과가 길어 C:\SAP_DMS\SAP_화면덤프\에도 파일로 남긴다
+    #    (SAP 관련 파일은 브라우저 다운로드 대신 백엔드가 저장하는 기존 규칙과 동일).
+    data, status = _run_sap_bridge(['dump_screen_tree', r'C:\SAP_DMS\SAP_화면덤프'], 30, 'SAP 화면 트리 덤프')
+    return jsonify(data), status
+
+
 @app.route('/sap-download-documents-by-pattern', methods=['GET'])
 def sap_download_documents_by_pattern():
     # 💡 [2026-09-16 신규] "*01+01*500*로 조회된 아이템 승인원 다운로드해줘"처럼 자재번호를

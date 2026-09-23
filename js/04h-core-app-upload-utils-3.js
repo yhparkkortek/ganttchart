@@ -3939,6 +3939,39 @@ ${docsJson}`;
             return;
         }
 
+        // 🔧🚫🤖 [2026-09-23 신규, "SAP 마스터" 사용자 요청] "SAP 화면 덤프해줘"/"화면 구조 확인해줘"
+        //    — 새 SAP 기능을 붙일 때마다 사용자가 준 매크로(.vbs)를 사람이 해석해서 필드 ID를
+        //    추측해오던 방식(팀운영비 기간지정 버그가 그 부작용) 대신, 지금 열려 있는 SAP 화면의
+        //    GuiComponent 트리 전체(Id/Type/Text)를 그대로 읽어와 채팅에 보여주는 진단 전용
+        //    로컬 명령. AI를 거치지 않고(추측 없음) sap_bridge_32.py의 dump_screen_tree()를
+        //    그대로 호출 — docs/sap-lookup.md "화면 트리 덤프" 절 참고.
+        const _screenDumpRe = /(화면\s*덤프|트리\s*덤프|화면\s*구조|필드\s*id|필드\s*아이디)/i;
+        if (_screenDumpRe.test(question)) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('지금 SAP 화면의 구조를 덤프하는 중...', 'Dumping the current SAP screen structure...'), pending: true });
+            window._renderGanttQaMessages();
+            let dumpReply;
+            try {
+                const res = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-dump-screen'), 30000,
+                    window._t('SAP 화면 덤프 시간 초과', 'SAP screen dump timed out')
+                );
+                const data = await res.json();
+                if (data.ok) {
+                    dumpReply = (data.text || '') + (data.savedPath ? `\n\n📁 ${window._t('파일로도 저장됨', 'Also saved to file')}: ${data.savedPath}` : '');
+                } else {
+                    dumpReply = '⚠️ ' + (data.error || window._t('화면 덤프 실패', 'Screen dump failed'));
+                }
+            } catch (e) {
+                dumpReply = '⚠️ ' + window._t('화면 덤프 실패: ', 'Screen dump failed: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: dumpReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 📦🚫🤖 [2026-09-22 신규, 사용자 요청] "발주서 출력하고 나면 자재 입고 처리를 연속으로
         //    해야하는데" — ZMM062 자재 입고 처리(post_goods_receipt, sap_bridge_32.py). 위
         //    _ganttQaRunPoBatchAutomatically가 발주 완료 직후 확인 버튼으로 먼저 물어보는 게
