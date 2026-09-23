@@ -959,6 +959,20 @@ def fetch_where_used_batch(materials, plant='1000'):
 _ZMM009_LAYOUT_VARIANT = 'ZTEXT'  # SAP에 이 이름으로 저장된 레이아웃이 있어야 자동 적용됨
 
 
+def _set_windows_clipboard_text(text):
+    """윈도우 클립보드에 텍스트를 넣는다(pywin32의 win32clipboard) — SAP 다중값 선택 팝업의
+    Shift+F12(클립보드 붙여넣기)를 자동화하기 위한 용도(2026-09-23, 사용자 지적).
+    `win32com.client`처럼 함수 안에서 지연 import(32비트 전용 모듈이라 모듈 최상단에 두면
+    64비트 백엔드 쪽 정적 분석/린트에서 불필요한 혼란을 줄 수 있어 기존 스타일을 따름)."""
+    import win32clipboard
+    win32clipboard.OpenClipboard()
+    try:
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+    finally:
+        win32clipboard.CloseClipboard()
+
+
 def fetch_zmm009_material_list(materials, storage_location='1000', layout_variant=None):
     """ZMM009("자재 List(복수조회)")로 여러 자재를 한 번에 조회한다 — 2026-09-17, 사용자가
     "SAP에서 자재번호+엑셀 출력해줘"류 요청을 할 때 ZMM009를 기본 경로로 써달라고 요청해서
@@ -976,8 +990,14 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
     드릴다운하는 단계가 이어지는데, 그건 이미 별도로 구현된 "ZMM009 리스트에서 바로 문서
     열기" 기능(`_open_material_from_current_list` 등)의 몫이라 여기서는 재현하지 않는다 —
     이 함수는 "여러 자재를 리스트로 조회"하는 부분(매크로의 앞부분)까지만 담당한다.
-    ⚠️ ZDMSR004와 마찬가지로 팝업 한 화면에 보이는 입력 행 수(스크롤 없이) 이상을 넣을 때의
-    동작은 검증 안 됨 — 8개 이상 자재로 문제가 생기면 이 스크롤 로직부터 의심할 것."""
+    🐛 [2026-09-23 실사용 버그수정] "8개 이상 자재를 넣으면 8개만 조회된다"는 실사용 제보로
+    확인 — 원래 이 아래 있던 `table.FirstVisibleRow = idx`로 스크롤한 뒤 같은 8칸(visible_rows)
+    에 계속 덮어쓰는 방식이었는데, `FirstVisibleRow`가 이 GuiTableControl에서 실제로 스크롤을
+    일으키지 않아(그런데 `try/except: pass`로 조용히 삼켜져서 티가 안 났음) 매 배치가 똑같은
+    화면 위치에 다시 쓰기만 하고 스크롤은 안 돼서, 마지막 배치(8개)만 남고 나머지는 덮어써
+    사라진 것이었다. **사용자 지적대로 Shift+F12(클립보드에서 붙여넣기)로 교체** — SAP가
+    내부적으로 스크롤까지 알아서 처리해서, 몇 개를 넣든(팝업 한 화면에 보이는 행 수와 무관)
+    안전하다. `_set_windows_clipboard_text`(win32clipboard) 참고."""
     session = _get_sap_session()
     wnd = session.findById('wnd[0]')
     mat_list = list(materials) if isinstance(materials, (list, tuple)) else [materials]
@@ -1005,26 +1025,18 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
         table = session.findById(_SAP_MULTI_SELECT_POPUP_TABLE)
     except Exception:
         raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
+    # 사용자 지적대로 Shift+F12(클립보드 붙여넣기)로 채운다 — 몇 줄이든 SAP가 알아서 스크롤하며
+    # 다 채워주므로, 팝업 한 화면에 보이는 행 수(visible_rows)에 갇히지 않는다.
     try:
-        visible_rows = table.VisibleRowCount or 7
-    except Exception:
-        visible_rows = 7
-    idx = 0
-    while idx < len(mat_list):
-        if idx > 0:
-            try:
-                table.FirstVisibleRow = idx
-                time.sleep(0.3)
-            except Exception:
-                pass
-        batch = mat_list[idx: idx + visible_rows]
-        for row_offset, mat in enumerate(batch):
-            cell_id = f"{_SAP_MULTI_SELECT_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
-            try:
-                session.findById(cell_id).text = mat
-            except Exception as e:
-                raise RuntimeError(f'"자재코드 복수 선택" 팝업에 {idx + row_offset + 1}번째 자재("{mat}")를 입력하지 못했습니다: {e}')
-        idx += len(batch)
+        _set_windows_clipboard_text('\r\n'.join(mat_list))
+    except Exception as e:
+        raise RuntimeError(f'자재번호 목록을 클립보드에 넣지 못했습니다: {e}')
+    try:
+        table.SetFocus()
+        session.findById('wnd[1]').sendVKey(24)  # Shift+F12 = 클립보드에서 붙여넣기
+    except Exception as e:
+        raise RuntimeError(f'"자재코드 복수 선택" 팝업에 클립보드 붙여넣기(Shift+F12)를 실행하지 못했습니다: {e}')
+    time.sleep(0.5 + 0.05 * len(mat_list))  # 자재 수가 많으면 SAP가 표를 채우는 데도 시간이 더 걸림
 
     try:
         session.findById('wnd[1]/tbar[0]/btn[24]').press()
