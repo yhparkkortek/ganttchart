@@ -149,6 +149,64 @@
         } catch (e) { /* ignore */ }
     }
 
+    // ⭐ [2026-09-23 신규] 선제 점검 — 가득 차고 나서가 아니라, 차기 전에 줄인다.
+    //    근거(Phase 10 학습 자료 digest_20260923): storage_full 5건 + storage_report 1건이
+    //    같은 사용자에게서 연달아 기록됐고, 그때 저장소는 5116KB로 사실상 한도(≈5MB)에 붙어
+    //    있었다(ms_pending_queue 2394KB + gantt_task_inbox 1624KB). 지금 구조는 **저장이
+    //    실패한 뒤에야**(_storageDoctorAuto) 캐시를 비우므로, 그 사이 업무 보관함 저장이
+    //    조용히 실패하는 구간이 생긴다 — 실제로 "보관함 저장이 안 된다"로 나타났다.
+    //    → 주기적으로 사용량을 재서 임계치를 넘으면 캐시류를 먼저 자동 정리하고,
+    //      그래도 높으면 하루 한 번만 안내한다(반복 토스트로 사람을 괴롭히지 않는다).
+    //    probeFree()는 큰 문자열을 실제로 써 보는 방식이라 여기서는 쓰지 않고(스스로 저장소를
+    //    흔들 수 있음), 브라우저 통상 한도 5MB를 기준치로 삼는다.
+    var SD_BUDGET = 5 * 1024 * 1024;   // 기준 한도(문자 수) — 대부분의 브라우저가 5MB
+    var SD_WARN_PCT = 0.8;             // 이 이상이면 자동 정리 시도
+    var SD_NOTICE_KEY = 'gantt_storage_notice_day';
+
+    /** 선제 점검 1회. 반환: {pct, freed, notified} (문제 없으면 notified=false) */
+    window._storageDoctorCheck = function (opts) {
+        opts = opts || {};
+        try {
+            // 항상 숫자로 고정 — 0을 넘기면 `0 || 0.8`로 기본값이 되어버려 테스트가 헛도는 함정
+            var th = (typeof opts.threshold === 'number') ? opts.threshold : SD_WARN_PCT;
+            var an = analyze();
+            var pct = an.total / SD_BUDGET;
+            if (pct < th) return { pct: pct, freed: 0, notified: false };
+
+            // ① 다시 만들 수 있는 캐시부터 조용히 정리
+            var freed = 0;
+            try { var pl = plan('cache'); if (pl.length) freed = apply(pl); } catch (e) { /* 계속 */ }
+
+            // ② 그래도 높으면 하루 한 번만 안내 — 어떤 키가 큰지까지 같이 알려준다
+            var an2 = analyze();
+            var pct2 = an2.total / SD_BUDGET;
+            var notified = false;
+            if (pct2 >= th) {
+                logReport('storage_report', an2, { pct: Math.round(pct2 * 100), proactive: true, freedKB: kb(freed) });
+                var today = new Date().toISOString().slice(0, 10);
+                var last = '';
+                try { last = localStorage.getItem(SD_NOTICE_KEY) || ''; } catch (e) { /* ignore */ }
+                if (last !== today && window.showToast) {
+                    try { localStorage.setItem(SD_NOTICE_KEY, today); } catch (e) { /* ignore */ }
+                    window.showToast(T(
+                        '🧹 브라우저 저장 공간이 ' + Math.round(pct2 * 100) + '% 찼습니다 (' + topList(an2, 2).join(' · ') +
+                        '). 업무 보관함의 [🧹 저장공간 정리]로 줄여주세요 — 이대로 두면 보관함 저장이 실패할 수 있습니다.',
+                        '🧹 Browser storage is ' + Math.round(pct2 * 100) + '% full (' + topList(an2, 2).join(' · ') +
+                        '). Use [🧹 Clean Up Storage] in the Task Inbox — otherwise inbox saves may start failing.'), 'error', 8000);
+                    notified = true;
+                }
+            }
+            if (freed) console.info('[저장소 닥터] 선제 정리로 ' + kb(freed) + 'KB 확보 (사용량 ' +
+                Math.round(pct * 100) + '% → ' + Math.round(pct2 * 100) + '%)');
+            return { pct: pct2, freed: freed, notified: notified };
+        } catch (e) { console.warn('[저장소 닥터] 선제 점검 실패(무시):', e.message); return null; }
+    };
+
+    // 로드 직후엔 다른 초기화(드라이브 연동·프로젝트 로드)와 겹치지 않게 2분 뒤 첫 점검,
+    // 이후 30분마다. 화면을 오래 켜 두는 사용 패턴(메일 자동수집)이라 주기 점검이 의미가 있다.
+    setTimeout(function () { window._storageDoctorCheck(); }, 2 * 60 * 1000);
+    setInterval(function () { window._storageDoctorCheck(); }, 30 * 60 * 1000);
+
     // ── 🧹 버튼 흐름 ────────────────────────────────────────────────────
     function inboxHasCleanable() {
         try {

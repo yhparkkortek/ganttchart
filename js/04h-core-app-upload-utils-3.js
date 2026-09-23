@@ -2863,6 +2863,20 @@ ${docsJson}`;
             return;
         }
 
+        // 🌏❌ [2026-09-23 신규] 앱 범위 밖 질문(날씨·환율·뉴스) — AI 호출 없이 즉답.
+        //    근거: Phase 10 학습 자료(digest_20260923)에서 "오늘 날씨 확인해줘" 재질문 4회 —
+        //    AI가 매번 "인터넷 검색을 이용하세요"라고 답했지만 사람은 답이 아니라 계속 다시 물었고,
+        //    그때마다 하루 할당량만 소모됐다. 목록은 window.QA_OUT_OF_SCOPE(js/32, 데이터).
+        const oosReply = window._qaOutOfScopeAnswer ? window._qaOutOfScopeAnswer(question) : null;
+        if (oosReply) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: oosReply });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 🔔 [2026-09-12 신규] "알람" / "alarm" 알람 필터 로컬 명령 — API 키 없어도 동작.
         const alarmFilterReply = window._ganttQaTryHandleAlarmFilterCommand ? window._ganttQaTryHandleAlarmFilterCommand(question) : null;
         if (alarmFilterReply) {

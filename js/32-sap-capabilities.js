@@ -133,6 +133,48 @@
         { id: 'register', label: '프로젝트/Gantt에 등록',    labelEn: 'Register to project/Gantt', re: /(프로젝트|간트|gantt|업무\s*보관함).{0,10}(등록|추가|반영|올려|넣어)/i },
         { id: 'notify',   label: '알람/공지로 연결',          labelEn: 'Link to alarm/notice', re: /(알람|공지|텔레그램|telegram).{0,8}(등록|설정|보내|올려|알려\s*줘)/i }
     ];
+    // ⭐ [2026-09-23 신규] 앱 범위 밖 주제 카탈로그 — AI를 부르지 않고 즉답할 질문들.
+    //    근거(Phase 10 학습 자료 digest_20260923): "오늘 날씨 확인해줘"가 재질문 4회로 1위권
+    //    클러스터였다. AI가 매번 "인터넷 검색을 이용하세요"라고 답했는데, 사람 입장에선 답이
+    //    아니라서 계속 다시 물었고 그때마다 AI 호출(=하루 할당량)이 소진됐다.
+    //    → 이런 주제는 "못 한다"가 이미 확정된 사실이므로, 데이터로 적어 두고 즉시 답한다.
+    //    ⚠️ 하드코딩이 아니라 카탈로그다 — 새 주제가 생기면 여기 한 줄만 추가하고,
+    //       반대로 앱이 그 기능을 갖게 되면 이 줄을 지우면 된다(코드는 그대로).
+    //    오탐 방지: kw가 실제 업무 맥락(자재번호·#G·프로젝트/SAP 단어)과 같이 오면 발동하지 않고,
+    //    질문이 짧을 때(기본 30자 이하)만 본다 — "날씨 때문에 납기 지연" 같은 문장은 통과시킨다.
+    window.QA_OUT_OF_SCOPE = window.QA_OUT_OF_SCOPE || [
+        { id: 'weather', kw: ['날씨', '기온', '미세먼지', '비 와', '비와', 'weather'],
+          ko: '날씨는 이 앱이 다루지 않습니다 — 프로젝트 데이터·SAP·메일만 조회할 수 있어서 인터넷 날씨 서비스를 이용해주세요.',
+          en: 'Weather is out of scope — this app only looks at project data, SAP and mail. Please use a weather service.' },
+        { id: 'market', kw: ['환율', '주가', '주식 시세', '코스피', '비트코인'],
+          ko: '환율·시세는 이 앱이 다루지 않습니다 — 프로젝트 데이터·SAP·메일만 조회할 수 있습니다.',
+          en: 'Exchange rates and market prices are out of scope — this app only looks at project data, SAP and mail.' },
+        { id: 'news', kw: ['뉴스', '오늘 이슈', '속보'],
+          ko: '뉴스는 이 앱이 다루지 않습니다 — 프로젝트 데이터·SAP·메일만 조회할 수 있습니다.',
+          en: 'News is out of scope — this app only looks at project data, SAP and mail.' }
+    ];
+    // 이 단어들이 같이 있으면 "업무 맥락"으로 보고 범위 밖 판정을 하지 않는다
+    var _OOS_WORK_HINT = /#?G\d|\d{5,}|자재|프로젝트|업무|일정|간트|gantt|sap|메일|발주|구매|재고|알람|공지|보고/i;
+
+    /** 범위 밖 질문이면 즉답 문구를, 아니면 null. (AI 호출 전에 확인) */
+    window._qaOutOfScopeAnswer = function (text) {
+        var q = String(text || '').trim();
+        if (!q || q.length > 30) return null;          // 긴 문장은 업무 맥락일 가능성이 커서 건드리지 않음
+        if (_OOS_WORK_HINT.test(q)) return null;
+        var en = window._currentLang === 'en';
+        for (var i = 0; i < window.QA_OUT_OF_SCOPE.length; i++) {
+            var t = window.QA_OUT_OF_SCOPE[i];
+            for (var j = 0; j < t.kw.length; j++) {
+                if (q.toLowerCase().indexOf(String(t.kw[j]).toLowerCase()) !== -1) {
+                    return (en ? t.en : t.ko) + (en
+                        ? '\n\n(Answered without calling the AI — this saves your daily quota.)'
+                        : '\n\n(AI를 부르지 않고 바로 답했습니다 — 하루 사용량을 아끼기 위함입니다.)');
+                }
+            }
+        }
+        return null;
+    };
+
     window._qaDetectChain = function (text) {
         var q = String(text || '');
         return window.QA_CHAIN_INTENTS.filter(function (c) { return c.re.test(q); }).map(function (c) { return { id: c.id, label: c.label, labelEn: c.labelEn }; });
