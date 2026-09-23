@@ -30,6 +30,10 @@
         { key: 'gantt_ai_learning_v1',            label: 'AI 학습 로그(프로젝트별)',         labelEn: 'AI learning log',         cls: 'log',   strategy: { type: 'byProject', perProject: 60, maxProjects: 30 } },
         { key: 'gantt_qa_feedback',               label: 'AI 문답 피드백(질문·답변 포함)',   labelEn: 'AI Q&A feedback',         cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },
         { key: 'gantt_project_summary_feedback',  label: 'AI 요약 피드백',                   labelEn: 'AI summary feedback',     cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },
+        // ⭐ [2026-09-23 신규] 보관함 삭제 묘비 — 기기 간 "지운 건"을 전파하는 기록(uid+시각).
+        //    코드 자체가 90일/1000건으로 자체 정리하지만, 그래도 누적되는 키라 레지스트리에 넣어 둔다.
+        //    지우면 다른 기기에 남은 항목이 되살아날 수 있으므로 cache가 아니라 log로 두고 오래된 것부터 줄인다.
+        { key: 'gantt_task_inbox_deleted',        label: '보관함 삭제 기록(기기 간 동기화용)', labelEn: 'Inbox deletion tombstones', cls: 'log', strategy: { type: 'array', keep: 300, order: 'newest-last' } },
         { key: 'ms_discard_queue',                label: '자동 폐기된 메일 목록',            labelEn: 'Auto-discarded mails',    cls: 'log',   strategy: { type: 'array', keep: 50, order: 'newest-first' } },
         // 메일 서버 검토 큐 — 등록 완료 건의 본문을 줄이고 예산 초과분(오래된 것부터)을 뺀다(js/15b _msSlimQueue). 검토 대기 건 본문은 보존.
         { key: 'ms_pending_queue',                label: '메일 검토 큐(등록 완료 메일 본문 축소)', labelEn: 'Mail review queue (shrink done mails)', cls: 'log', strategy: { type: 'fn', fn: '_msSlimQueue' } }

@@ -109,7 +109,76 @@ window.TaskInbox = {
         });
         this.save(list);
     },
+    // ⭐ [2026-09-23 신규] 삭제 묘비(tombstone)
+    //    보관함 드라이브 동기화는 uid 기준 "병합"이라, 묘비가 없으면 **삭제를 표현할 방법이 없다** —
+    //    A PC에서 지우고 업로드까지 성공해도 B PC의 localStorage에 그 항목이 남아 있으면 B가 다음에
+    //    업로드할 때 되살아난다(실제로 "지웠는데 다시 생긴다"의 원인).
+    //    → 지운 uid와 시각을 따로 적어 두고, 파일에 inbox와 함께 올린다. 불러올 때는 양쪽 묘비를
+    //      합쳐서 그 uid를 가진 항목을 모든 기기에서 지운다.
+    //    되돌리기(↩)는 묘비를 지우는 것으로 표현한다(unmarkDeleted).
+    TOMB_KEY: 'gantt_task_inbox_deleted',
+    TOMB_MAX_DAYS: 90,   // 이보다 오래된 묘비는 버린다(그 무렵이면 어느 기기든 이미 동기화됐다고 본다)
+    TOMB_MAX: 1000,      // 그래도 무한히 쌓이지 않도록 상한 — 오래된 것부터 버림
+
+    loadTombs: function() {
+        try { const a = JSON.parse(localStorage.getItem(this.TOMB_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+        catch (e) { return []; }
+    },
+    saveTombs: function(list) {
+        try { localStorage.setItem(this.TOMB_KEY, JSON.stringify(list)); }
+        catch (e) {
+            // 용량이 모자라면 최근 절반만 남기고 재시도 — 묘비 때문에 보관함 저장이 막히면 안 된다
+            try { localStorage.setItem(this.TOMB_KEY, JSON.stringify(list.slice(-Math.ceil(list.length / 2)))); }
+            catch (e2) { console.warn('[업무 보관함] 삭제 묘비 저장 실패(무시):', e2.message); }
+        }
+    },
+    _pruneTombs: function(list) {
+        const cut = Date.now() - this.TOMB_MAX_DAYS * 86400000;
+        let out = (list || []).filter(function(t) {
+            if (!t || !t.uid) return false;
+            const ts = t.at ? new Date(t.at).getTime() : 0;
+            return !ts || ts >= cut;
+        });
+        out.sort(function(a, b) { return String(a.at || '').localeCompare(String(b.at || '')); }); // 오래된 것 먼저
+        if (out.length > this.TOMB_MAX) out = out.slice(-this.TOMB_MAX);
+        return out;
+    },
+    /** uid들을 "삭제됨"으로 기록 (이미 있으면 시각만 갱신) */
+    markDeleted: function(uids, atIso) {
+        const arr = Array.isArray(uids) ? uids : [uids];
+        if (!arr.length) return;
+        const at = atIso || new Date().toISOString();
+        const map = {};
+        this.loadTombs().forEach(function(t) { if (t && t.uid) map[t.uid] = t; });
+        arr.forEach(function(u) { if (u) map[u] = { uid: u, at: at }; });
+        this.saveTombs(this._pruneTombs(Object.keys(map).map(function(k) { return map[k]; })));
+    },
+    /** 되돌리기 — 묘비를 지워 다시 살아나게 한다 */
+    unmarkDeleted: function(uids) {
+        const arr = Array.isArray(uids) ? uids : [uids];
+        if (!arr.length) return;
+        const drop = {};
+        arr.forEach(function(u) { drop[u] = true; });
+        this.saveTombs(this.loadTombs().filter(function(t) { return !(t && drop[t.uid]); }));
+    },
+    /** 로컬 + 원격 묘비를 합쳐 저장하고, uid Set을 돌려준다 */
+    _mergeTombs: function(remoteTombs) {
+        const map = {};
+        this.loadTombs().forEach(function(t) { if (t && t.uid) map[t.uid] = t; });
+        (remoteTombs || []).forEach(function(t) {
+            if (!t || !t.uid) return;
+            const cur = map[t.uid];
+            if (!cur || String(t.at || '') > String(cur.at || '')) map[t.uid] = t;
+        });
+        const merged = this._pruneTombs(Object.keys(map).map(function(k) { return map[k]; }));
+        this.saveTombs(merged);
+        const set = {};
+        merged.forEach(function(t) { set[t.uid] = true; });
+        return set;
+    },
+
     remove: function(uid) {
+        this.markDeleted([uid]); // ⭐ [2026-09-23] 다른 기기에서 되살아나지 않도록 묘비를 먼저 남긴다
         this.save(this.load().filter(it => it.uid !== uid));
     },
     setStatus: function(uid, status, historyEntry) {
@@ -119,6 +188,7 @@ window.TaskInbox = {
         // 💡 [처리됨 자동삭제 모드] "대기"가 아닌 상태(=처리 완료)로 바뀌는 순간, 모드가 'auto'면
         //    [🧹 처리됨 정리]를 기다리지 않고 바로 목록에서 제거한다. (window.getInboxCleanupMode 참고)
         if (status !== '대기' && window.getInboxCleanupMode && window.getInboxCleanupMode() === 'auto') {
+            this.markDeleted([uid]); // ⭐ [2026-09-23] 설정으로 선택한 삭제라 묘비 대상(다른 기기에서도 정리)
             this.save(list.filter(x => x.uid !== uid));
             return;
         }
@@ -146,7 +216,7 @@ window.TaskInbox = {
             const boundary = 'inbox_sync_boundary';
             const metadata = { name: fname, mimeType: 'application/json' };
             if (!this._driveFileId) metadata.parents = [folderId];
-            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ inbox: this.load(), savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
+            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ inbox: this.load(), deleted: this.loadTombs(), savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
             const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
             const file = await resp.json();
@@ -174,11 +244,16 @@ window.TaskInbox = {
             if (!resp.ok) return;
             const data = await resp.json();
             const remote = (data && data.inbox) || [];
+            // ⭐ [2026-09-23] 삭제 묘비 — 로컬+원격 묘비를 합쳐 저장하고, 그 uid는 양쪽 어디에 있든 지운다.
+            //    이게 없으면 병합이 삭제를 표현하지 못해 다른 기기에 남은 항목이 계속 되살아난다.
+            const tombSet = this._mergeTombs((data && data.deleted) || []);
             // 💡 uid 기준 병합: 같은 항목은 로컬 우선(현재 기기에서 조작한 상태가 최신), 드라이브에만 있으면 복원
             const local = this.load(); const byUid = {};
             remote.forEach(function(it) { if (it && it.uid) byUid[it.uid] = it; });
             local.forEach(function(it) { if (it && it.uid) byUid[it.uid] = it; });
-            const merged = Object.keys(byUid).map(function(k) { return byUid[k]; }).sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
+            const merged = Object.keys(byUid)
+                .filter(function(k) { return !tombSet[k]; }) // ⭐ 지운 건은 다시 살리지 않는다
+                .map(function(k) { return byUid[k]; }).sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
             this.save(merged, true);
             this.scheduleDriveSync();
             const ov = document.getElementById('task-inbox-overlay');
@@ -329,6 +404,7 @@ window._tiBulkDeleteFiltered = async function(status, project) {
     if (!doomed.length) return;
     // 💡 [i18n] 라벨을 미리 문자열로 굳혀놓으면 언어를 바꿔도 상태명이 한글로 남는다 — 값만 보관하고 표시는 렌더링 시점에
     window._tiUndoBuffer = { items: doomed, status: status || '', project: project || '', at: Date.now() };
+    window.TaskInbox.markDeleted(doomed.map(function(it) { return it.uid; })); // ⭐ [2026-09-23] 삭제 묘비 — 다른 기기에서도 지워진다
     window.TaskInbox.save(all.filter(function(it) { return !hit(it); }));
     window.renderTaskInbox();
     // ⭐ [2026-09-23] 3초 디바운스를 기다리지 않고 즉시 드라이브까지 반영한다 —
@@ -363,6 +439,7 @@ window._tiUndoBulkDelete = async function() {
     const seen = {};
     cur.forEach(function(it) { seen[it.uid] = true; });
     const restored = buf.items.filter(function(it) { return !seen[it.uid]; });
+    window.TaskInbox.unmarkDeleted(buf.items.map(function(it) { return it.uid; })); // ⭐ 묘비를 지워야 다시 살아난다
     window.TaskInbox.save(restored.concat(cur));
     window._tiUndoBuffer = null;
     window.renderTaskInbox();

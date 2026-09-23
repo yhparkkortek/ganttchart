@@ -179,6 +179,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 - **AI 할당량 오류는 "retry in N초"만 보고 분당 한도로 판단하지 말 것** — Gemini 무료 `limit: 20`은 하루 한도였다(`_aiClassifyQuotaError`, 사용량 원장 `gantt_ai_usage_v1` → ⚙️ AI 분석 설정 "📊 오늘 AI 사용량"). 사용자 조작 없이 AI를 부르는 백그라운드 호출(묶기·재분석 등)을 새로 만들면 호출 빈도 상한을 반드시 둘 것(`docs/mail-pipeline.md` 정정 절).
 
+- **보관함 삭제는 즉시 드라이브 반영 + 삭제 묘비(tombstone)** (2026-09-23) — `TaskInbox.syncNow()`로 3초 디바운스 없이 바로 올리고, 지운 uid는 `gantt_task_inbox_deleted`에 쌓아 파일의 `deleted`로 같이 올린다. `loadFromDrive`가 uid 병합이라 **묘비가 없으면 삭제가 표현되지 않아 되살아난다**. 새 삭제 경로를 만들면 `markDeleted()`를 같이 부를 것(단, 용량 응급 정리는 제외) — `docs/mail-pipeline.md` 삭제 절.
 - **localStorage에 무한히 쌓이는 새 저장소를 만들면 `window.STORAGE_REGISTRY`(`js/34-storage-doctor.js`)에 정리 규칙 한 줄 추가** — 브라우저 저장소(~5MB)는 앱 전체가 공유해서, 한 곳이 가득 차면 업무 보관함 저장이 막힌다("저장 공간이 가득" 경고 + 🧹 버튼이 "정리할 항목 없음" 반복했던 사고, `docs/mail-pipeline.md` 저장소 닥터 절).
 
 ### `docs/gantt-internals.md` — 일정 계산/탭 복원/표 오버레이/AI 검색 일괄삭제
