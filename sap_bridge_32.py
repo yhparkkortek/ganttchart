@@ -2076,9 +2076,29 @@ def fetch_team_budget(team, fperbl='1', tperbl='12'):
         labels, matched = _sap_find_team_budget_row(wnd)
 
     if matched is None:
+        # 🆕 [2026-09-23, 실사용 버그리포트] 기간을 연간 누적(1~12)이 아니라 좁혀서(예: 1~6월)
+        #    조회하면 이 라벨 매칭이 실패한다는 신고 접수 — 부분 기간에서는 화면이 라벨
+        #    그리드가 아니라 ALV 그리드로 바뀔 가능성이 있어(추측, 실환경 미검증) 그리드
+        #    존재 여부와 실제 라벨 목록을 에러에 그대로 남긴다(추측으로 파싱 로직을 고치는
+        #    대신 다음 실패 시 원인을 바로 좁힐 수 있도록 — CLAUDE.md "추측 금지" 원칙).
+        diag = [f'화면에서 읽은 항목 수: {len(labels)}건']
+        try:
+            grid_shell = _sap_find_grid(wnd)
+        except Exception:
+            grid_shell = None
+        if grid_shell is not None:
+            diag.append('⚠️ 화면에 ALV 그리드가 감지됨(부분 기간에서는 라벨 화면 대신 그리드로 바뀌었을 수 있음)')
+            try:
+                grid_dump = _sap_dump_grid(grid_shell)
+            except Exception:
+                grid_dump = None
+            if grid_dump:
+                diag.append('그리드 내용(최대 2000자): ' + (grid_dump if len(grid_dump) <= 2000 else grid_dump[:2000] + ' …(생략)'))
+        else:
+            diag.append('라벨 목록(최대 60개): ' + ' | '.join(labels[:60]))
         return {
             'ok': False,
-            'error': f'"{team}" 화면은 열었지만 계정 {_TEAM_BUDGET_ACCOUNT_CODE}(복리후생비-팀운영비) 행을 찾지 못했습니다. 화면에서 읽은 항목 수: {len(labels)}건 — 화면 구성이 다를 수 있습니다.',
+            'error': f'"{team}" 화면은 열었지만 계정 {_TEAM_BUDGET_ACCOUNT_CODE}(복리후생비-팀운영비) 행을 찾지 못했습니다. 화면 구성이 다를 수 있습니다. ' + ' / '.join(diag),
         }
 
     # ⚠️ [2026-09-22 실사용 버그수정] dict로 반환하면 Flask jsonify(JSON_SORT_KEYS 기본값)가
