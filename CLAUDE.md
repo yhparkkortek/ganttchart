@@ -169,7 +169,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - "AI에게 판정까지 맡기는" 기능은 로컬 정규식으로 먼저 걸러 AI 호출 대상 자체를 줄일 것(번역: 한국어만 있는 블록은 호출 생략, 청크가 0개인 정상 케이스를 실패로 처리하지 말 것).
 - **지금 열려있지 않은 프로젝트를 Drive에 직접 PATCH하는 헤드리스 경로**를 새로 추가하면, 같은 PATCH 직전에 `_tpMaybeAutoRegen(fileId, rows, colIdx, projectMeta)`를 호출해 `saveData.topicProfile`에 얹을 것(별도 Drive 왕복 금지). `_generateTopicProfile`을 열려있지 않은 프로젝트에 쓸 땐 `rows/colIdx/projectMeta`를 반드시 명시(안 하면 지금 열린 엉뚱한 프로젝트를 읽음).
 
-- **메일 자동배치는 '완전자동(full)/OFF' 2단계만 있다(2026-09-23, 반자동 semi 삭제)** — 자동배치는 매칭신뢰도 '상'만으로 되지 않고 모드·날짜확정·후보 수(≤`MAX_AUTO_PLACE_TARGETS`=5)·drive_file_id가 모두 맞아야 한다. 실패한 건은 `_ibMarkAutoPlaceFail`로 기록돼 유휴 스윕(`_ibAutoPlaceSweep`, 드라이브 연동 3분 후 → 10분 주기)이 백오프로 재시도한다. 자동배치 조건을 늘리면 `_ibIsAutoPlaceReady`와 화면 사유 `_ibPendingReason`을 **항상 같이** 고칠 것(`docs/mail-pipeline.md` 자동배치 조건 재정비 절).
+- **메일 자동배치는 '완전자동(full)/OFF' 2단계만 있다(2026-09-23, 반자동 semi 삭제)** — 자동배치는 매칭신뢰도 '상'만으로 되지 않고 모드·날짜확정·후보 수(≤`MAX_AUTO_PLACE_TARGETS`=5)·drive_file_id가 모두 맞아야 한다. 실패한 건은 `_ibMarkAutoPlaceFail`로 기록돼 유휴 스윕(`_ibAutoPlaceSweep`, 드라이브 연동 3분 후 → 10분 주기)이 백오프로 재시도한다. AI가 날짜를 못 뽑은 건은 **메일 수신일로 자동 대체**된다(`_applyMailDateFallback`, 보관함 카드에 "수신일 기준" 표시). 자동배치 조건을 늘리면 `_ibIsAutoPlaceReady`와 화면 사유 `_ibPendingReason`을 **항상 같이** 고칠 것(`docs/mail-pipeline.md` 자동배치 조건 재정비 절).
 
 - **AI 할당량 오류는 "retry in N초"만 보고 분당 한도로 판단하지 말 것** — Gemini 무료 `limit: 20`은 하루 한도였다(`_aiClassifyQuotaError`, 사용량 원장 `gantt_ai_usage_v1` → ⚙️ AI 분석 설정 "📊 오늘 AI 사용량"). 사용자 조작 없이 AI를 부르는 백그라운드 호출(묶기·재분석 등)을 새로 만들면 호출 빈도 상한을 반드시 둘 것(`docs/mail-pipeline.md` 정정 절).
 

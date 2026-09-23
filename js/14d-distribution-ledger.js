@@ -26,6 +26,7 @@ window.inboxOpenDistribute = async function(uid) {
 
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
+    if (window._ibRepairDatesFromMail) window._ibRepairDatesFromMail(it); // ⭐ [2026-09-23] 메일 수신일로 채우기 먼저 시도
     const r = it.task;
     if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
         alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.', '⚠️ Start/end date is unconfirmed ("date needs confirmation"). Please confirm the date in the mail analyzer screen before adding to the inbox.'));

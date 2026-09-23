@@ -1071,6 +1071,30 @@ window._applyDefaultDueDate = function(result) {
     return result;
 };
 
+// ⭐ [2026-09-23 신규] "AI가 날짜를 못 뽑은" 경우의 공통 폴백 — 메일 수신일로 대체한다.
+//    지금까지는 '날짜확인필요'가 그대로 남아 자동배치·수동전송이 모두 막혔고(보관함 대기의 주원인 중 하나),
+//    사람이 메일 분석 화면에서 일일이 날짜를 고쳐야 했다. 메일 업무는 "그 메일을 받은 날에 생긴 일"이므로
+//    수신일을 쓰는 게 비어두는 것보다 항상 낚b다(사람은 나중에 달력에서 고칠 수 있음).
+//    rawDate가 아예 없거나 파싱 불가일 때만 opts.allowToday로 오늘을 마지막 폴백으로 쓴다(예: 붙여넣기 직접입력).
+//    대체한 경우 task['_dateSource']에 'mail'|'today'를 남겨 나중에 "이 날짜는 본문에서 뽑은 게 아니다"를 구분할 수 있게 한다.
+//    반환: 실제로 채운 YYYY-MM-DD (안 바니면 null)
+window._applyMailDateFallback = function(task, rawDate, opts) {
+    if (!task) return null;
+    const _need = function(v) { const s = String(v || '').trim(); return !s || s.includes('날짜확인필요'); };
+    if (!_need(task['시작일'])) { window._applyDefaultDueDate(task); return null; } // 시작일이 멀줦하면 그대로 둠
+    let ymd = window.parseMailDateToYMD(rawDate);
+    let src = 'mail';
+    if (!ymd && opts && opts.allowToday) { ymd = window.parseMailDateToYMD(new Date().toISOString()); src = 'today'; }
+    if (!ymd) return null;
+    task['시작일'] = ymd;
+    // 완료일이 새 시작일보다 앞이면 모순 — 비워서 아래 기본값(시작일+1일)이 채우게 한다
+    if (!_need(task['완료일']) && String(task['완료일']) < ymd) task['완료일'] = '';
+    window._applyDefaultDueDate(task);
+    task['_dateSource'] = src;
+    console.info(`[날짜 폴백] "${task['업무명'] || ''}" 시작일을 ${src === 'mail' ? '메일 수신일' : '오늘 날짜'}(${ymd})로 대체`);
+    return ymd;
+};
+
 async function mfCallGemini(apiKey, parsed) {
     // 동일 메일 캐싱 (제목+발신자+본문 앞 200자 해시)
     // 💡 v2: 출처 태그 로직 추가로 캐시 포맷이 바뀌어서, 예전 캐시가 섞이지 않도록 버전 마커 포함
@@ -1405,6 +1429,7 @@ window.mfRetryAsManual = function(idx) {
         '상태': '진행', '개발단계': '', '상세내용': r.body || '',
         'wbs레벨': 4
     };
+    window._applyMailDateFallback(r.task, r.date, { allowToday: true }); // ⭐ [2026-09-23] 날짜확인필요로 남기지 않고 메일 수신일로
     r.selected = true;
     r.error = null;
     mfRenderList(window._mfResults); // 좌측 목록 체크박스/스타일 갱신

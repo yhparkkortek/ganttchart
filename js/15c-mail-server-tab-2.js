@@ -1224,6 +1224,7 @@ const AR = {
             '상태': '진행', '개발단계': '', '상세내용': r.body || '',
             'wbs레벨': 4
         };
+        window._applyMailDateFallback(r.task, r.date, { allowToday: true }); // ⭐ [2026-09-23] 메일 수신일로 대체
         r.selected = true;
         r.error = null;
         AR.render(tabKey);
@@ -1628,6 +1629,10 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
         }
         // 💡 완료일을 못 찾았으면 시작일+1일로 기본값 채움
         window._applyDefaultDueDate(result);
+        // ⭐ [2026-09-23] 위 박스는 메일 발송일(_msDateYMD)이 파싱된 때만 동작한다 — 날짜 헤더가 없거나
+        //    파싱 불가한 메일(붙여넣기 직접입력 등)은 AI가 본문에서 못 뽑으면 '날짜확인필요'로 남아
+        //    자동배치·수동전송이 모두 막혔다. 공통 폴백으로 수신일(없으면 오늘)을 채워 끝낸다.
+        window._applyMailDateFallback(result, parsed.date, { allowToday: true });
         // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
         result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
         // 💡 [2026-08-25 신규] AI가 판정한 "담당구분"(예: HW)은 지금까지 배지/보관함 메타 정보로만

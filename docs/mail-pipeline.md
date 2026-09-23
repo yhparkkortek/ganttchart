@@ -221,7 +221,7 @@ Task Inbox "📧 원문 보기"의 🌐 번역 버튼(`js/14c-task-inbox.js`의 
 | 2 | AI 업무 추출 성공(`item.task`) | `js/15b` |
 | 3 | 매칭 status가 `matched` (= 매칭신뢰도 `상`) | `_msResolveAiProjectMatch`(`js/15b`) |
 | 4 | 후보에 `drive_file_id` 존재 | `js/15b` |
-| 5 | 시작일·완료일에 `날짜확인필요` 없음 | `js/15b` |
+| 5 | 시작일·완료일에 `날짜확인필요` 없음 (2026-09-23부터 메일 수신일로 자동 대체 — 아래 보강 절) | `js/15b` |
 
 점수/커트라인은 **배치가 아니라 알람만** 결정한다(`setAlarm`). "내 담당" 여부는 2026-08 정책 변경으로 보지 않는다.
 
@@ -254,6 +254,29 @@ Task Inbox "📧 원문 보기"의 🌐 번역 버튼(`js/14c-task-inbox.js`의 
 > (`js/15c`의 `result['_aiMeta']` 구성부), Gantt 행의 `row._aiConfidence`(Phase 3/4 재시도 엔진이 쓰는 값)도
 > 같은 출처다. "분석 신뢰도"라는 별도 값은 존재하지 않으니, 새 배지를 만들 때 `kind:'analysis'`를 쓰려면
 > **먼저 그런 값을 실제로 만들어서** 넣어야 한다(현재는 자리만 마련해 둔 상태).
+
+#### 🗓️ 보강 — "AI가 날짜를 못 뽑은 건"은 메일 수신일로 대체 (2026-09-23, 위 ③ 보류분 처리)
+
+위 표의 조건 5(`날짜확인필요`)가 자동배치를 막는 문제를 폴백으로 없앴다. **메일 업무는 "그 메일을 받은
+날에 생긴 일"**이므로, 본문에서 날짜를 못 찾았다고 비워두는 것보다 수신일을 넣어두는 편이 항상 낫다
+(사람이 나중에 달력에서 고칠 수 있다).
+
+- **공용 헬퍼** `window._applyMailDateFallback(task, rawDate, {allowToday})` (`js/15a`, `_applyDefaultDueDate` 바로 위).
+  시작일이 비었거나 `날짜확인필요`일 때만 동작하고, `parseMailDateToYMD(rawDate)` → (실패 + `allowToday`면) 오늘 순으로 채운다.
+  완료일은 기존 `_applyDefaultDueDate`가 시작일+1일로 채우며, 완료일이 새 시작일보다 앞서면 비워서 다시 채운다.
+  대체한 경우 `task['_dateSource'] = 'mail' | 'today'`를 남긴다 — 보관함 카드에 `📅(수신일 기준)`으로 표시되고,
+  "이 날짜는 본문에서 뽑은 게 아니다"를 나중에 구분할 수 있는 신호로도 쓴다.
+- **적용 지점**
+  - `msCallGemini`(`js/15c`) — 모든 AI 분석 경로(메일서버·파일첨부·직접입력)가 이 함수를 거친다.
+    발송일(`_msDateYMD`)이 파싱되면 예전처럼 시작일을 그 날짜로 덮어쓰고, 파싱이 안 되는 메일만 폴백이 받는다(`allowToday:true`).
+  - `mfRetryAsManual`(`js/15a`) / `AR.retryAsManual`(`js/15c`) — AI 분석 실패 → "빈 업무" 전환 템플릿.
+  - `window._ibRepairPendingDates()` / `window._ibRepairDatesFromMail(uid|item)`(`js/14c`) — **기존에 쌓인** 대기 항목 보수.
+    `mailRaw.date` → 없으면 보관함 등록 시각(`addedAt`) 순으로 쓰고, `allowToday:false`(옛 항목에 오늘 날짜를 박지 않음).
+    호출 지점: 보관함 열 때 1회, 유휴 스윕 시작 시, 수동 전송 3곳(`inboxQuickRegisterMatched`·`inboxPlaceToCurrent`·`inboxOpenDistribute`)의
+    "날짜 미확정" 차단 **직전**(막기 전에 채우는 것부터 시도).
+- **이력 보존**: 보수한 항목은 `history`에 `날짜 보정(메일 수신일)` 항목이 남는다. 업무 데이터를 코드가 바꾸는 일이므로
+  조용히 처리하지 않는다(학습 원칙 ①).
+- 남은 `날짜확인필요`는 "메일 수신일도 보관함 등록일도 없는" 예외적인 건뿐이며, 대기 사유 문구도 그에 맞게 바뀌었다.
 
 #### 이 영역을 고칠 때 주의
 - 자동배치 조건을 새로 추가하면 **`_ibIsAutoPlaceReady`(스윕 판정)와 `_ibPendingReason`(화면 사유)에도

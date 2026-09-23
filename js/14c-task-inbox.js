@@ -204,6 +204,7 @@ window.updateInboxBadge = function() {
 };
 
 window.openTaskInbox = function() {
+    if (window._ibRepairPendingDates) window._ibRepairPendingDates(); // ⭐ [2026-09-23] 열 때 '날짜확인필요' 항목을 메일 수신일로 보수
     window.closeAllTopbarMenus(); // ✅ 업무 보관함 열릴 때 업무 드롭다운 자동 닫기
     window.renderTaskInbox();
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); // 💡 미분류/신규발신자 배지가 이제 여기 있음
@@ -461,7 +462,7 @@ window.renderTaskInbox = function() {
                 </div>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
-                ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(sourceDisplay)} · ${when}
+                ${dateStr}${t['_dateSource'] ? (t['_dateSource'] === 'mail' ? (_ibEn ? ' 📅(from mail date)' : ' 📅(수신일 기준)') : (_ibEn ? ' 📅(today)' : ' 📅(오늘 기준)')) : ''}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(sourceDisplay)} · ${when}
             </div>
             <!-- 💡 [2026-09-09 신규] "왜 자동배치 안 되고 대기인지" — AI가 매 건마다 반환하는 매칭근거를
                  지금까진 신뢰도 판정에만 쓰고 버렸는데(사람이 이유를 알 방법이 없었음), 후보/신뢰도와
@@ -607,6 +608,7 @@ window.inboxQuickRegisterMatched = async function(uid) {
         return;
     }
     const target = mp.candidates[0];
+    window._ibRepairDatesFromMail(it); // ⭐ [2026-09-23] 막기 전에 메일 수신일로 채우는 것부터 시도
     if ((it.task['시작일'] || '').includes('날짜확인필요') || (it.task['완료일'] || '').includes('날짜확인필요')) {
         alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 다시 시도해주세요.', '⚠️ Start/end date is unconfirmed ("date needs confirmation"). Please confirm the date in the mail analyzer screen and try again.'));
         return;
@@ -626,6 +628,60 @@ window.inboxQuickRegisterMatched = async function(uid) {
     } else {
         alert(window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error')));
     }
+};
+
+// ⭐ [2026-09-23 신규] '날짜확인필요'로 굳어버린 기존 대기 항목을 메일 수신일로 보수한다.
+//    신규 분석 건은 _applyMailDateFallback(js/15a)이 분석 직후에 이미 채워주지만, 그 전에 쌓인
+//    항목들은 여전히 '날짜확인필요'라 자동배치·수동전송이 전부 막힌 채 남아 있다.
+//    수신일(mailRaw.date)이 없으면 보관함에 담긴 시각(addedAt)을 쓴다 — 둘 다 없을 때만 포기.
+//    업무 데이터를 바꾸는 작업이므로 이력(history)에 반드시 남긴다(조용히 바꾸지 않는다).
+window._ibRepairDatesFromMail = function(uidOrItem) {
+    try {
+        const uid = (typeof uidOrItem === 'string') ? uidOrItem : (uidOrItem && uidOrItem.uid);
+        if (!uid || !window._applyMailDateFallback) return false;
+        const list = window.TaskInbox.load();
+        const it = list.find(function(x) { return x.uid === uid; });
+        if (!it || !it.task) return false;
+        const ymd = window._applyMailDateFallback(it.task, (it.mailRaw && it.mailRaw.date) || it.addedAt, { allowToday: false });
+        if (!ymd) return false;
+        (it.history = it.history || []).push({
+            time: new Date().toLocaleString(), type: '날짜 보정(메일 수신일)', target: ymd
+        });
+        window.TaskInbox.save(list);
+        // 호출부가 이미 들고 있던 사본에도 반영 (load()는 매번 새 객체를 주므로)
+        if (typeof uidOrItem === 'object' && uidOrItem && uidOrItem.task) {
+            uidOrItem.task['시작일'] = it.task['시작일'];
+            uidOrItem.task['완료일'] = it.task['완료일'];
+            uidOrItem.task['_dateSource'] = it.task['_dateSource'];
+        }
+        return true;
+    } catch (e) { console.warn('[날짜 보정] 실패(무시):', e.message); return false; }
+};
+
+// 💡 대기 중인 항목들의 날짜를 한 번에 보수 — 보관함을 열 때와 유휴 스윕 시작 시 호출한다.
+window._ibRepairPendingDates = function() {
+    try {
+        const list = window.TaskInbox.load();
+        let n = 0;
+        list.forEach(function(it) {
+            if (!it || it.status !== '대기' || !it.task) return;
+            const s = String(it.task['시작일'] || ''), e = String(it.task['완료일'] || '');
+            if (!s.includes('날짜확인필요') && !e.includes('날짜확인필요') && s && e) return;
+            if (!window._applyMailDateFallback) return;
+            const ymd = window._applyMailDateFallback(it.task, (it.mailRaw && it.mailRaw.date) || it.addedAt, { allowToday: false });
+            if (ymd) {
+                (it.history = it.history || []).push({
+                    time: new Date().toLocaleString(), type: '날짜 보정(메일 수신일)', target: ymd
+                });
+                n++;
+            }
+        });
+        if (n) {
+            window.TaskInbox.save(list);
+            console.info(`[날짜 보정] 대기 항목 ${n}건의 시작일을 메일 수신일로 채웠습니다.`);
+        }
+        return n;
+    } catch (e) { console.warn('[날짜 보정] 일괄 보수 실패(무시):', e.message); return 0; }
 };
 
 // ⭐ [2026-09-23 신규] "왜 이 항목이 아직 '대기'인지"를 카드에서 바로 읽히게 하는 한 줄 사유.
@@ -667,8 +723,10 @@ window._ibPendingReason = function(it) {
     }
     const t = it.task || {};
     if (String(t['시작일'] || '').includes('날짜확인필요') || String(t['완료일'] || '').includes('날짜확인필요')) {
-        return T('날짜가 확정되지 않았습니다(날짜확인필요) — 날짜를 채우면 자동으로 배치됩니다',
-                 'Dates are unconfirmed — fill them in and it will be placed automatically');
+        // ⭐ [2026-09-23] 이제 날짜는 메일 수신일로 자동 대체된다 — 그래도 여기 남았다면
+        //    메일 수신일도 보관함 등록일도 없는 예외적인 건(수작업 추가 등)이다.
+        return T('날짜가 확정되지 않았고 대체할 메일 수신일도 없습니다 — 날짜를 직접 채우면 자동으로 배치됩니다',
+                 'Dates are unconfirmed and there is no mail date to fall back on — fill them in and it will be placed automatically');
     }
     const ap = it.autoPlace;
     if (ap && ap.givenUp) {
@@ -759,6 +817,9 @@ window._ibAutoPlaceSweep = async function(opts) {
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) return { skipped: 'no_token' };
 
+    // ⭐ [2026-09-23] 배치 판정 전에 '날짜확인필요' 항목을 메일 수신일로 먼저 보수한다
+    //    — 이것만으로 자동배치가 막혀 무기한 대기하던 건들이 이번 회차에 바로 풀린다.
+    window._ibRepairPendingDates();
     const now = Date.now();
     const targets = window.TaskInbox.load()
         .filter(function(it) { return window._ibIsAutoPlaceReady(it, now); })
@@ -1487,6 +1548,7 @@ window.inboxPlaceToCurrent = function(uid) {
     if (!globalData || globalData.length <= 1) { alert(window._t('먼저 프로젝트(엑셀 또는 드라이브)를 로드해주세요.', 'Please load a project (Excel or Drive) first.')); return; }
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
+    window._ibRepairDatesFromMail(it); // ⭐ [2026-09-23] 막기 전에 메일 수신일로 채우는 것부터 시도
     const r = it.task;
     if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
         alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.', '⚠️ Start/end date is unconfirmed ("date needs confirmation"). Please confirm the date in the mail analyzer screen before adding to the inbox.'));
