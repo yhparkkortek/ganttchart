@@ -5613,6 +5613,26 @@ ${docsJson}`;
         return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' ').replace(/[?!.,~，。！]+$/g, '');
     };
 
+    // 🆕 [2026-09-23 신규, 실사용 제보 "자재번호 빼고 패턴 단위로 묶어줘"] "자주 쓰는 질문" 빈도를
+    // 셀 때 쓰는 **패턴 키** — `_ganttQaNormalizeQ`는 소문자화/공백정리/끝문장부호 제거만 해서,
+    // "124512 품목 내역 조회해줘"와 "133025 품목 내역 조회해줘"가 서로 다른 항목으로 각각 1회씩
+    // 쌓였다. SAP 조회처럼 자재번호가 매번 바뀌는 질문은 **영원히 count=1**이라 "2회 이상"이라는
+    // 자주쓰는질문 자격을 절대 못 넘겼다(실측: 한 프로젝트에 137건이 쌓였는데도 드롭다운이 안 변함).
+    // 가변 토큰(자재번호·구매오더번호·날짜)을 자리표시자로 바꿔서 "질문 패턴" 단위로 센다.
+    // ⚠️ `_ganttQaNormalizeQ` 자체는 절대 바꾸지 않는다 — 재질문 감지(`_ganttQaQuestionSimilarity`)는
+    //    **숫자/이름이 다르면 다른 질문**이라고 판단해야 해서(그쪽 주석 참고) 정반대 요구사항이다.
+    window._ganttQaPatternKey = function(s) {
+        var t = window._ganttQaNormalizeQ(s);
+        if (!t) return '';
+        t = t.replace(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/g, '#날짜');   // 2026-09-23 / 2026.09.23
+        // 4자리 이상 숫자만 치환 — 2~3자리는 "품목2"/"mrp 2"/"회계 1"처럼 질문의 의미 자체를
+        // 가르는 경우가 많아 그대로 둔다(그걸 지우면 "품목 내역"과 "품목 내역2"가 합쳐져 버림).
+        t = t.replace(/\d{4,}/g, '#번호');
+        // 자재를 몇 개 나열했든 같은 질문 패턴 — "#번호, #번호 #번호"는 하나로 접는다.
+        t = t.replace(/#번호(\s*[,、]?\s*#번호)+/g, '#번호들');
+        return t.replace(/\s+/g, ' ').trim();
+    };
+
     // 두 질문이 "거의 같은 질문"인지 판단 — 공백 기준 단어 비교는 한국어 조사("수요량이"/"수요량은"/
     // "수요량을")가 단어 끝에 그대로 붙어버려 같은 단어를 다른 단어로 오판하기 쉽다(실측 결과 "얼마야?"
     // vs "얼마입니까?"처럼 흔한 표현 차이에도 유사도가 절반 이하로 뚝 떨어짐). 형태소 분석기 없이도
@@ -5714,20 +5734,78 @@ ${docsJson}`;
     // 프로젝트를 아직 저장하기 전(새 프로젝트, fileId 없음)이면 '_unsaved' 키에 임시로 쌓아두되,
     // 이 키는 saveData에 실어 Drive로 올리지 않는다(어느 프로젝트 것인지 알 수 없으므로).
     function _qaFreqKey(projectKey) { return projectKey || window.currentDriveFileId || window.currentDriveFileName || '_unsaved'; }
+    /** 기록 1건의 패턴 키 — 옛 기록(pat 없음)은 저장된 sample에서 즉석 계산해 자연스럽게 합쳐진다. */
+    function _qaFreqPatOf(entry) {
+        return (entry && entry.pat) || window._ganttQaPatternKey((entry && entry.sample) || '');
+    }
+    /** 같은 패턴끼리 합산 — 표시 문구(sample)는 가장 최근에 입력된 것을 쓴다. */
+    function _qaFreqMergeByPattern(list) {
+        const byPat = {};
+        (list || []).forEach(function(e) {
+            if (!e || !e.sample) return;
+            const pat = _qaFreqPatOf(e);
+            if (!pat) return;
+            const cur = byPat[pat];
+            if (!cur) {
+                byPat[pat] = { pat: pat, norm: e.norm || window._ganttQaNormalizeQ(e.sample), sample: e.sample,
+                               count: e.count || 1, lastAsked: e.lastAsked || 0 };
+            } else {
+                cur.count += (e.count || 1);
+                if ((e.lastAsked || 0) >= (cur.lastAsked || 0)) {
+                    cur.lastAsked = e.lastAsked || 0;
+                    cur.sample = e.sample;
+                    cur.norm = e.norm || window._ganttQaNormalizeQ(e.sample);
+                }
+            }
+        });
+        return Object.keys(byPat).map(function(k) { return byPat[k]; })
+            .sort(function(a, b) { return (b.lastAsked || 0) - (a.lastAsked || 0); });
+    }
+    // 🆕 [2026-09-23] 이미 쌓여 있던 옛 기록(문구 그대로 1건씩 = 자재번호만 다른 같은 질문이 전부
+    // 따로 count=1)을 패턴 단위로 한 번 합쳐준다 — 이게 있어야 "고친 다음부터"가 아니라 **지금 당장**
+    // 드롭다운에 실제 빈도가 반영된다(실측 사례: 137건 → 패턴 몇십 개, 상당수가 count 2 이상).
+    const _QA_FREQ_PAT_FLAG = 'gantt_qa_freq_pat_merged_v1';
+    let _qaFreqMigrationDone = false;
+    function _qaFreqEnsureMerged() {
+        if (_qaFreqMigrationDone) return;
+        _qaFreqMigrationDone = true;
+        try {
+            if (localStorage.getItem(_QA_FREQ_PAT_FLAG)) return;
+            const store = _qaFreqStore();
+            let before = 0, after = 0;
+            Object.keys(store).forEach(function(k) {
+                const src = store[k] || [];
+                const merged = _qaFreqMergeByPattern(src);
+                before += src.length; after += merged.length;
+                store[k] = merged;
+            });
+            _qaFreqSaveStore(store);
+            localStorage.setItem(_QA_FREQ_PAT_FLAG, '1');
+            if (before !== after) console.info(`[자주 쓰는 질문] 패턴 단위로 기록 병합: ${before}건 → ${after}건(자재번호 등 가변 숫자 제외)`);
+        } catch (e) {
+            console.warn('[자주 쓰는 질문] 패턴 병합 실패:', e && e.message);
+        }
+    }
 
     window._ganttQaRecordQuestionFreq = function(question, projectKey) {
         const norm = window._ganttQaNormalizeQ(question);
         if (!norm || norm.length < 2) return;
+        _qaFreqEnsureMerged();
+        const pat = window._ganttQaPatternKey(question) || norm;
         const key = _qaFreqKey(projectKey);
         const store = _qaFreqStore();
         let list = store[key] || [];
-        const entry = list.find(function(x) { return x.norm === norm; });
+        // 🐛 [2026-09-23] 예전엔 `x.norm === norm`(문구 완전일치)으로 찾아서 자재번호만 달라도
+        //    매번 새 항목이 됐다 — 이제 패턴 키로 찾아 같은 유형의 질문이 제대로 누적된다.
+        const entry = list.find(function(x) { return _qaFreqPatOf(x) === pat; });
         if (entry) {
             entry.count = (entry.count || 1) + 1;
             entry.lastAsked = Date.now();
             entry.sample = question; // 화면 표시용 — 가장 최근에 입력된 자연스러운 원문 표기를 씀
+            entry.norm = norm;
+            entry.pat = pat;
         } else {
-            list.push({ norm: norm, sample: question, count: 1, lastAsked: Date.now() });
+            list.push({ pat: pat, norm: norm, sample: question, count: 1, lastAsked: Date.now() });
         }
         if (list.length > _QA_FREQ_MAX) {
             list.sort(function(a, b) { return (b.lastAsked || 0) - (a.lastAsked || 0); });
@@ -5740,6 +5818,7 @@ ${docsJson}`;
     // "2번 이상" 물어본 것만 "자주"로 인정 — 한 번만 물어본 걸 예시로 보여주는 건 의미가 없음.
     // 지금 열려있는 프로젝트 것만 보여준다(다른 프로젝트에서 자주 묻던 질문은 여기 안 섞임).
     window._ganttQaGetTopQuestions = function(n, projectKey) {
+        _qaFreqEnsureMerged();
         const key = _qaFreqKey(projectKey);
         const list = _qaFreqStore()[key] || [];
         return list
@@ -5750,6 +5829,7 @@ ${docsJson}`;
 
     /** 저장 시 호출 — 현재 프로젝트의 질문 빈도 배열을 반환하여 saveData.qaQuestionFreq에 담음. */
     window._ganttQaGetFreqForSave = function(projectKey) {
+        _qaFreqEnsureMerged();
         const key = _qaFreqKey(projectKey);
         if (key === '_unsaved') return []; // 어느 프로젝트인지 모르는 임시 기록은 Drive에 올리지 않음
         return _qaFreqStore()[key] || [];
@@ -5765,18 +5845,25 @@ ${docsJson}`;
         if (!driveEntries || !driveEntries.length) return;
         const key = _qaFreqKey(projectKey);
         if (key === '_unsaved') return;
+        _qaFreqEnsureMerged();
         const store = _qaFreqStore();
         const local = store[key] || [];
-        const byNorm = {};
-        local.forEach(function(e) { if (e && e.norm) byNorm[e.norm] = e; });
+        // 🐛 [2026-09-23] 예전엔 norm(문구 완전일치)으로 합쳐서, 팀원끼리 자재번호만 다른 같은
+        //    질문이 서로 별개 항목으로 섞였다 — 이제 패턴 키 기준으로 합친다(기록 쪽과 동일 기준).
+        const byPat = {};
+        local.forEach(function(e) { const p = _qaFreqPatOf(e); if (p) byPat[p] = e; });
         driveEntries.forEach(function(e) {
-            if (!e || !e.norm) return;
-            const existing = byNorm[e.norm];
+            if (!e || !(e.sample || e.norm)) return;
+            const p = _qaFreqPatOf(e) || window._ganttQaPatternKey(e.norm || '');
+            if (!p) return;
+            const existing = byPat[p];
             if (!existing || (e.count || 1) > (existing.count || 1)) {
-                byNorm[e.norm] = { norm: e.norm, sample: e.sample || e.norm, count: Math.max(e.count || 1, existing ? (existing.count || 1) : 0), lastAsked: Math.max(e.lastAsked || 0, existing ? (existing.lastAsked || 0) : 0) };
+                byPat[p] = { pat: p, norm: e.norm || window._ganttQaNormalizeQ(e.sample || ''), sample: e.sample || e.norm,
+                             count: Math.max(e.count || 1, existing ? (existing.count || 1) : 0),
+                             lastAsked: Math.max(e.lastAsked || 0, existing ? (existing.lastAsked || 0) : 0) };
             }
         });
-        let merged = Object.values(byNorm).sort(function(a, b) { return (b.lastAsked || 0) - (a.lastAsked || 0); });
+        let merged = Object.values(byPat).sort(function(a, b) { return (b.lastAsked || 0) - (a.lastAsked || 0); });
         if (merged.length > _QA_FREQ_MAX) merged = merged.slice(0, _QA_FREQ_MAX);
         store[key] = merged;
         _qaFreqSaveStore(store);
