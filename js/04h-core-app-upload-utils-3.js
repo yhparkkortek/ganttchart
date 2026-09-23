@@ -3812,7 +3812,17 @@ ${docsJson}`;
             // 💡 draft로 되물어 답을 받은 경우(_skipUserHistoryPush=true)엔 그 답변이 이미 히스토리에
             //    들어가 있음(이때 question은 원래 질문으로 되돌려진 상태라 여기서 또 넣으면 중복됨).
             //    한 메시지에 옵션까지 다 왔던 경우(inline)엔 아직 안 들어가 있으므로 여기서 넣는다.
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            // 🐛 [2026-09-23 실사용 버그수정] "자주 쓰는 질문"이 저장 안 된다는 제보 — 이 아래 AI-free
+            //    SAP 로컬 명령들(BOM/사용처/ZMM009/팀운영비/화면덤프/입고처리, 전부 🚫🤖 표시)은
+            //    AI 호출 없이 여기서 바로 return하는데, 빈도 기록(_ganttQaRecordQuestionFreq)은
+            //    원래 AI 호출 직전(아래 라우터 이후)에서만 불렸다 — 그래서 실사용자가 가장 자주
+            //    쓰는 바로 이런 SAP 조회들이 정작 "자주 쓰는 질문"에 하나도 안 쌓이고 있었다(2026-09-22
+            //    AI-free 전환 이후 계속). 각 로컬 명령이 "새로 들어온 질문"을 확정하는 시점(=
+            //    _skipUserHistoryPush가 아닐 때만, 즉 draft 답변 재진입이 아닐 때만)에 직접 기록.
+            if (!_skipUserHistoryPush) {
+                window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 BOM을 조회하는 중...', 'Looking up the BOM in SAP...'), pending: true });
             window._renderGanttQaMessages();
             let bomReply;
@@ -3853,7 +3863,10 @@ ${docsJson}`;
         const _bomMatch2 = !_wuMatch && _sapLookupNums.length > 0 && /bom/i.test(question);
         const _zmmMatch = !_wuMatch && !_bomMatch2 && _sapLookupNums.length > 0 && /sap/i.test(question);
         if ((_wuMatch || _zmmMatch) && window._ganttQaIsPureSapLookupQuestion(question)) {
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (!_skipUserHistoryPush) {
+                window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // 위 BOM 블록과 같은 이유(2026-09-23)
+            }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 조회하는 중...', 'Looking up SAP data...'), pending: true });
             window._renderGanttQaMessages();
             let sapLookupReply;
@@ -3912,7 +3925,10 @@ ${docsJson}`;
                 return;
             }
 
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (!_skipUserHistoryPush) {
+                window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // 위 BOM 블록과 같은 이유(2026-09-23)
+            }
             const _periodLabel = (_teamBudgetFrom && _teamBudgetTo) ? `${_teamBudgetFrom}~${_teamBudgetTo}월 ` : '';
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 "${_teamBudgetTeam}" ${_periodLabel}팀운영비를 조회하는 중...`, `Looking up "${_teamBudgetTeam}" ${_periodLabel}team budget in SAP...`), pending: true });
             window._renderGanttQaMessages();
@@ -3947,7 +3963,10 @@ ${docsJson}`;
         //    그대로 호출 — docs/sap-lookup.md "화면 트리 덤프" 절 참고.
         const _screenDumpRe = /(화면\s*덤프|트리\s*덤프|화면\s*구조|필드\s*id|필드\s*아이디)/i;
         if (_screenDumpRe.test(question)) {
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (!_skipUserHistoryPush) {
+                window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // 위 BOM 블록과 같은 이유(2026-09-23)
+            }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('지금 SAP 화면의 구조를 덤프하는 중...', 'Dumping the current SAP screen structure...'), pending: true });
             window._renderGanttQaMessages();
             let dumpReply;
@@ -3992,6 +4011,7 @@ ${docsJson}`;
             // 숫자가 아니면 답이 아니라 다른 질문일 수 있으므로 pending만 풀고 계속 진행.
         }
         if (/입고\s*처리|입고처리/.test(question)) {
+            if (!_skipUserHistoryPush && window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // 위 BOM 블록과 같은 이유(2026-09-23) — 순수 숫자 답변(위 pendingGrEbelnAsk 분기)은 기록 안 함
             const _ebelnMatch = (question.match(/\b\d{8,12}\b/) || [])[0];
             if (_ebelnMatch) {
                 if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
@@ -4034,8 +4054,13 @@ ${docsJson}`;
         if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
         // 💡 [2026-09-08 신규] AI 호출 없이 로컬에서만 처리 — 재질문 패턴 감지(위 규칙 참고)는 이번
-        //    질문을 히스토리에 넣기 "전"에 검사해야 자기 자신과 비교되지 않는다. 질문 문구 빈도 기록도
-        //    실제로 AI에게 보내는 "진짜 질문"에 대해서만(음성/실행취소 같은 로컬 명령 제외) 남긴다.
+        //    질문을 히스토리에 넣기 "전"에 검사해야 자기 자신과 비교되지 않는다.
+        // 💡 [2026-09-23 정정] 아래 기록은 "AI에게 실제로 보내는 질문" 경로의 기본 기록 지점이다 —
+        //    음성/실행취소/알람처럼 순수 UI 제어 명령은 여기 도달하지 않아 원래도 기록 안 됨(의도한
+        //    동작). 다만 BOM/사용처/ZMM009/팀운영비/화면덤프/입고처리/자재내역패턴 같은 AI-free SAP
+        //    로컬 명령(🚫🤖 표시)은 여기 도달하기 "전"에 각자 return하므로, 그 블록들 안에 이 호출을
+        //    각각 복제해뒀다(실사용 "자주 쓰는 질문 저장 안 됨" 버그 원인 — 새 AI-free 로컬 명령을
+        //    추가할 때도 그 블록 안에서 이 함수를 직접 호출해야 한다는 뜻).
         const reaskTarget = window._ganttQaCheckReaskPattern ? window._ganttQaCheckReaskPattern(question) : null;
         if (reaskTarget && !reaskTarget.possibleDissatisfaction && !window._qaFeedbackFor(reaskTarget.uid)) {
             reaskTarget.possibleDissatisfaction = true;

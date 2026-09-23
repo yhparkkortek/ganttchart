@@ -250,6 +250,9 @@
     // ── 자재내역 패턴 조회(새 로컬 명령) ─────────────────────────────
     async function runPatternLookup(question, pattern, input, route) {
         pushUser(question, input, route);
+        // 🐛 [2026-09-23] "자주 쓰는 질문" 저장 버그 — 이 라우터 경로도 AI 호출 없이 바로 답하고
+        // 끝나서(js/04h의 여러 🚫🤖 SAP 로컬 명령과 같은 원인) 빈도 기록이 안 되고 있었다.
+        if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
         window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + T('SAP에서 자재내역 "' + pattern + '" 패턴을 검색하는 중...', 'Searching SAP for description pattern "' + pattern + '"...'), pending: true });
         window._renderGanttQaMessages();
         var reply;
