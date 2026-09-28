@@ -6173,7 +6173,7 @@ ${docsJson}`;
     //    로컬과 병합해서 팀 전체가 이 프로젝트에서 실제로 자주 묻는 질문을 서로 볼 수 있게 한다.
     //    질문 "문구"만 저장하고 답변 내용은 여전히 저장하지 않음(기존 방침 그대로).
     const _QA_FREQ_KEY = 'gantt_qa_question_freq_v2'; // v2: 구조가 [항목...] → {fileKey:[항목...]}로 바뀌어 키를 새로 씀
-    const _QA_FREQ_MAX = 150; // 프로젝트당 localStorage 무한 증가 방지용 상한
+    const _QA_FREQ_MAX = 300; // 전역(프로젝트 구분 없음) 풀 상한 — 프로젝트별 150에서 확대
 
     function _qaFreqStore() {
         try { return JSON.parse(localStorage.getItem(_QA_FREQ_KEY)) || {}; } catch (e) { return {}; }
@@ -6198,9 +6198,8 @@ ${docsJson}`;
             }
         }
     }
-    // 프로젝트를 아직 저장하기 전(새 프로젝트, fileId 없음)이면 '_unsaved' 키에 임시로 쌓아두되,
-    // 이 키는 saveData에 실어 Drive로 올리지 않는다(어느 프로젝트 것인지 알 수 없으므로).
-    function _qaFreqKey(projectKey) { return projectKey || window.currentDriveFileId || window.currentDriveFileName || '_unsaved'; }
+    // [2026-09-28] 프로젝트 구분 없이 전역 단일 풀로 관리 — 어느 프로젝트에서 물어봤든 함께 쌓인다.
+    function _qaFreqKey(projectKey) { return '_global'; }
     /** 기록 1건의 패턴 키 — 옛 기록(pat 없음)은 저장된 sample에서 즉석 계산해 자연스럽게 합쳐진다. */
     function _qaFreqPatOf(entry) {
         return (entry && entry.pat) || window._ganttQaPatternKey((entry && entry.sample) || '');
@@ -6231,26 +6230,47 @@ ${docsJson}`;
     // 🆕 [2026-09-23] 이미 쌓여 있던 옛 기록(문구 그대로 1건씩 = 자재번호만 다른 같은 질문이 전부
     // 따로 count=1)을 패턴 단위로 한 번 합쳐준다 — 이게 있어야 "고친 다음부터"가 아니라 **지금 당장**
     // 드롭다운에 실제 빈도가 반영된다(실측 사례: 137건 → 패턴 몇십 개, 상당수가 count 2 이상).
-    const _QA_FREQ_PAT_FLAG = 'gantt_qa_freq_pat_merged_v1';
+    const _QA_FREQ_PAT_FLAG    = 'gantt_qa_freq_pat_merged_v1';
+    const _QA_FREQ_GLOBAL_FLAG = 'gantt_qa_global_merged_v1'; // 프로젝트별 → _global 일괄 병합 완료 플래그
     let _qaFreqMigrationDone = false;
     function _qaFreqEnsureMerged() {
         if (_qaFreqMigrationDone) return;
         _qaFreqMigrationDone = true;
         try {
-            if (localStorage.getItem(_QA_FREQ_PAT_FLAG)) return;
             const store = _qaFreqStore();
-            let before = 0, after = 0;
-            Object.keys(store).forEach(function(k) {
-                const src = store[k] || [];
-                const merged = _qaFreqMergeByPattern(src);
-                before += src.length; after += merged.length;
-                store[k] = merged;
-            });
+
+            // [마이그레이션 1] 패턴 단위 병합 (2026-09-23 도입)
+            if (!localStorage.getItem(_QA_FREQ_PAT_FLAG)) {
+                let before = 0, after = 0;
+                Object.keys(store).forEach(function(k) {
+                    const src = store[k] || [];
+                    const merged = _qaFreqMergeByPattern(src);
+                    before += src.length; after += merged.length;
+                    store[k] = merged;
+                });
+                localStorage.setItem(_QA_FREQ_PAT_FLAG, '1');
+                if (before !== after) console.info(`[자주 쓰는 질문] 패턴 단위로 기록 병합: ${before}건 → ${after}건`);
+            }
+
+            // [마이그레이션 2] 프로젝트별 키 → '_global' 단일 풀로 통합 (2026-09-28 도입)
+            if (!localStorage.getItem(_QA_FREQ_GLOBAL_FLAG)) {
+                const allItems = [];
+                Object.keys(store).forEach(function(k) {
+                    if (k !== '_global') allItems.push.apply(allItems, store[k] || []);
+                });
+                if (allItems.length) {
+                    const existing = store['_global'] || [];
+                    store['_global'] = _qaFreqMergeByPattern(existing.concat(allItems));
+                    // 기존 프로젝트별 키는 삭제
+                    Object.keys(store).forEach(function(k) { if (k !== '_global') delete store[k]; });
+                    console.info(`[자주 쓰는 질문] 프로젝트별 기록 → _global 통합: ${allItems.length}건`);
+                }
+                localStorage.setItem(_QA_FREQ_GLOBAL_FLAG, '1');
+            }
+
             _qaFreqSaveStore(store);
-            localStorage.setItem(_QA_FREQ_PAT_FLAG, '1');
-            if (before !== after) console.info(`[자주 쓰는 질문] 패턴 단위로 기록 병합: ${before}건 → ${after}건(자재번호 등 가변 숫자 제외)`);
         } catch (e) {
-            console.warn('[자주 쓰는 질문] 패턴 병합 실패:', e && e.message);
+            console.warn('[자주 쓰는 질문] 병합 실패:', e && e.message);
         }
     }
 
@@ -6282,24 +6302,19 @@ ${docsJson}`;
         _qaFreqSaveStore(store);
     };
 
-    // "2번 이상" 물어본 것만 "자주"로 인정 — 한 번만 물어본 걸 예시로 보여주는 건 의미가 없음.
-    // 지금 열려있는 프로젝트 것만 보여준다(다른 프로젝트에서 자주 묻던 질문은 여기 안 섞임).
+    // [2026-09-28] 횟수 제한 없이 1회도 등록, 프로젝트 구분 없는 전역 풀 — 많을수록 유리.
     window._ganttQaGetTopQuestions = function(n, projectKey) {
         _qaFreqEnsureMerged();
-        const key = _qaFreqKey(projectKey);
-        const list = _qaFreqStore()[key] || [];
+        const list = _qaFreqStore()['_global'] || [];
         return list
-            .filter(function(x) { return (x.count || 1) >= 2; })
             .sort(function(a, b) { return (b.count - a.count) || ((b.lastAsked || 0) - (a.lastAsked || 0)); })
-            .slice(0, n || 6);
+            .slice(0, n || 12);
     };
 
-    /** 저장 시 호출 — 현재 프로젝트의 질문 빈도 배열을 반환하여 saveData.qaQuestionFreq에 담음. */
+    /** 저장 시 호출 — 전역 풀을 Drive 프로젝트 JSON에 담아 팀 동기화에 활용. */
     window._ganttQaGetFreqForSave = function(projectKey) {
         _qaFreqEnsureMerged();
-        const key = _qaFreqKey(projectKey);
-        if (key === '_unsaved') return []; // 어느 프로젝트인지 모르는 임시 기록은 Drive에 올리지 않음
-        return _qaFreqStore()[key] || [];
+        return _qaFreqStore()['_global'] || [];
     };
 
     /**
@@ -6310,8 +6325,7 @@ ${docsJson}`;
      */
     window._ganttQaMergeFreqFromDrive = function(driveEntries, projectKey) {
         if (!driveEntries || !driveEntries.length) return;
-        const key = _qaFreqKey(projectKey);
-        if (key === '_unsaved') return;
+        const key = '_global'; // 프로젝트 무관하게 전역 풀로 병합
         _qaFreqEnsureMerged();
         const store = _qaFreqStore();
         const local = store[key] || [];
@@ -6344,7 +6358,7 @@ ${docsJson}`;
     //    캐시하고, 그 전까지는 캐시(또는 원본 그대로)를 즉시 보여준다 — 화면이 AI 응답을 기다리며
     //    멈추는 일은 없음.
     const _QA_CLUSTER_CACHE_KEY = 'gantt_qa_cluster_cache_v1';
-    const _QA_CLUSTER_MIN_RAW   = 4; // 원본이 이보다 적으면 묶어봐야 의미 없어 AI 호출 안 함
+    const _QA_CLUSTER_MIN_RAW   = 2; // 2개부터 AI 묶기 시도 — 전역 풀에서는 빨리 채워짐
 
     function _qaClusterCacheStore() {
         try { return JSON.parse(localStorage.getItem(_QA_CLUSTER_CACHE_KEY)) || {}; } catch (e) { return {}; }
@@ -6360,7 +6374,8 @@ ${docsJson}`;
     //    "2회 이상(=자주) 질문이 된 문구 집합" + 원본 10개 단위 증가분만 반영하고, 아래
     //    _QA_CLUSTER_MIN_INTERVAL_MS(하루)에 한 번까지만 새로 묶는다(실패해도 시도 시각을 남김).
     function _qaRawSignature(list) {
-        return list.filter(function(x) { return (x.count || 1) >= 2; }).map(function(x) { return x.norm; }).sort().join('|') +
+        // 모든 항목 포함(횟수 제한 없음) — 최근 추가 여부도 반영해 AI 클러스터 캐시 무효화
+        return list.map(function(x) { return x.norm; }).sort().join('|') +
             '#' + Math.floor(list.length / 10);
     }
     const _QA_CLUSTER_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -6373,8 +6388,8 @@ ${docsJson}`;
      */
     window._ganttQaGetDisplayQuestions = function(n, projectKey, onUpdated) {
         const key = _qaFreqKey(projectKey);
-        const raw = (_qaFreqStore()[key] || []).slice().sort(function(a, b) { return (b.count || 1) - (a.count || 1); });
-        const fallback = function() { return raw.filter(function(x) { return (x.count || 1) >= 2; }).slice(0, n || 6); };
+        const raw = (_qaFreqStore()['_global'] || []).slice().sort(function(a, b) { return (b.count || 1) - (a.count || 1); });
+        const fallback = function() { return raw.slice(0, n || 12); }; // 횟수 제한 없음, 더 많이 표시
         if (raw.length < _QA_CLUSTER_MIN_RAW) return fallback();
 
         const apiKey = window.getActiveAiKey && window.getActiveAiKey();
@@ -6457,8 +6472,8 @@ ${docsJson}`;
         if (!sel) return;
         const _fqEn = window._currentLang === 'en';
         const top = window._ganttQaGetDisplayQuestions
-            ? window._ganttQaGetDisplayQuestions(6, projectKey, function() { window._ganttQaPopulateFreqSelect(projectKey); })
-            : (window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(6, projectKey) : []);
+            ? window._ganttQaGetDisplayQuestions(12, projectKey, function() { window._ganttQaPopulateFreqSelect(projectKey); })
+            : (window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(12, projectKey) : []);
         const examples = _fqEn
             ? ['Any delayed tasks?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
             : ['지연된 업무가 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
