@@ -2462,7 +2462,7 @@ def po_sap_prepare():
     currency = (data.get('currency') or 'KRW').strip() or 'KRW'
     if not excel_path or not biz_reg_no or not items:
         return jsonify({'ok': False, 'error': 'excelPath/bizRegNo/items가 모두 필요합니다.'}), 400
-    timeout = min(120, 40 + 8 * len(items))
+    timeout = min(300, 40 + 10 * len(items))  # 20품목=240초(4분) — 이전 120초 캡이 20품목에서 초과됨
     data_out, status = _run_sap_bridge(
         ['prepare_po_from_excel', excel_path, biz_reg_no, json.dumps(items, ensure_ascii=False), plant, currency],
         timeout, 'SAP 구매오더 준비')

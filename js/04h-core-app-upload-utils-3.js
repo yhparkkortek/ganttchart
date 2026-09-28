@@ -1164,12 +1164,14 @@ ${docsJson}`;
         return parsed.documents;
     };
 
-    window._ganttQaPoBatchSummaryText = function(docs) {
+    window._ganttQaPoBatchSummaryText = function(docs, opts) {
+        opts = opts || {};
         const multi = docs.length > 1;
         const body = docs.map(function(doc, i) {
             const docHeader = multi ? window._t(`\n━━━ 문서 ${i + 1}/${docs.length} ━━━\n`, `\n━━━ Document ${i + 1}/${docs.length} ━━━\n`) : '';
             return docHeader + window._ganttQaPoSummaryText(doc, { noInstructions: true });
         }).join('');
+        if (opts.noInstructions) return body;
         const instructions = window._t(
             '\n\n내용이 모두 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "문서 2의 1번 임시코드는 900201로 변경").',
             '\n\nReply "confirm" if everything looks right, or tell me what to fix (e.g. "document 2 item 1\'s temp code should be 900201").'
@@ -1441,7 +1443,7 @@ ${docsJson}`;
                     items: doc.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
                     plant: '1000', currency: doc.currency || 'KRW'
                 })
-            }), Math.min(120000, 40000 + 8000 * doc.items.length),
+            }), Math.min(300000, 40000 + 10000 * doc.items.length),
             window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
         );
         const prepData = await window._ganttQaParsePoApiResponse(prepRes, 'SAP 구매오더 준비', 'SAP purchase order preparation');
@@ -1522,21 +1524,21 @@ ${docsJson}`;
             );
         }
 
-        // 📦 [2026-09-22 신규, 사용자 요청] "발주서 출력하고 나면 자재 입고 처리를 연속으로
-        //    해야하는데" — 성공한 오더가 있으면 바로 이어서 입고 처리할지 확인 버튼으로 묻는다.
-        //    아래 window._ganttQaLastGrCandidates에 담아두면, 사람이 나중에("나중에 하게 되면")
-        //    번호를 몰라도 이 목록에서 고를 수 있다(window._ganttQaTryGoodsReceiptTrigger 참고).
+        // 📦 [2026-09-22 신규 → 2026-09-28 변경] 발주서 저장 완료 후 입고 처리.
+        //    원래는 "진행할까요?" 확인 버튼을 보여줬으나(2026-09-22),
+        //    사용자 요청으로 자동 순차 실행으로 변경(2026-09-28 — "입고 처리도 묻지 말고 자동으로").
+        //    _ganttQaLastGrCandidates에는 여전히 담아둬 나중에 "입고 처리해줘" 명령어로도 재실행 가능.
         const successPos = results.filter(function(r) { return r.ok; }).map(function(r) { return r.poNumber; });
         if (successPos.length) {
             window._ganttQaLastGrCandidates = successPos;
-            window._ganttQaShowConfirmButtons(
-                window._t('📦 이어서 자재 입고 처리도 진행할까요?', '📦 Would you like to proceed with goods receipt processing too?'),
-                [
-                    { label: window._t('✅ 네, 입고 처리 할게요', '✅ Yes, process goods receipt'), value: '자재 입고 처리 할게요', style: 'confirm' },
-                    { label: window._t('아니요, 나중에요', 'No, later'), value: window._t('아니요, 나중에요', 'No, later'), style: 'cancel' }
-                ]
-            );
+            window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                '📦 발주서 저장 완료 — 이어서 ' + successPos.length + '건 자재 입고 처리를 자동으로 시작합니다...',
+                '📦 PO saved — auto-starting goods receipt for ' + successPos.length + ' order(s)...'
+            )});
             window._renderGanttQaMessages();
+            for (var _grIdx = 0; _grIdx < successPos.length; _grIdx++) {
+                await window._ganttQaRunGoodsReceipt(successPos[_grIdx]);
+            }
         }
     };
 
@@ -3392,7 +3394,8 @@ ${docsJson}`;
                     // 아래 _ganttQaPoAskFieldsPrompt/_ganttQaParsePoFieldsInto 참고.
                     window._ganttQaPoDraft = { stage: 'confirm_items', docs: docs };
                     window._ganttQaHistory.pop();
-                    let summaryText = window._ganttQaPoBatchSummaryText(docs);
+                    // [2026-09-28 변경] "확인" 버튼 단계 건너뜀 — 추출 내용을 보여주고 바로 필수 입력 폼으로 이동
+                    let summaryText = window._ganttQaPoBatchSummaryText(docs, { noInstructions: true });
                     if (errors.length) {
                         var _is503 = errors.some(function(e) { return /503|high demand|temporarily unavailable|service unavailable/i.test(e); });
                         var _hint503 = _is503 ? window._t(
@@ -3402,8 +3405,8 @@ ${docsJson}`;
                         summaryText = window._t('⚠️ 일부 파일은 추출에 실패해 건너뛰었습니다(' + errors.length + '건): ' + errors.join('; '),
                             '⚠️ Skipped ' + errors.length + ' file(s) that failed to extract: ' + errors.join('; ')) + _hint503 + '\n\n' + summaryText;
                     }
-                    window._ganttQaShowConfirmButtons(summaryText,
-                        [{ label: window._t('✅ 확인', '✅ Confirm'), value: window._t('확인', 'confirm'), style: 'confirm' }]);
+                    window._ganttQaHistory.push({ role: 'ai', text: summaryText });
+                    window._ganttQaPoAdvanceAfterItemsConfirmed(window._ganttQaPoDraft);
                 } catch (e) {
                     window._ganttQaHistory.pop();
                     window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('품목 추출 실패: ', 'Failed to extract line items: ') + (e && e.message ? e.message : e) });
