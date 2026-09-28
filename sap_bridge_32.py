@@ -3050,28 +3050,49 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
         raise RuntimeError('저장 후 결과 그리드를 찾지 못했습니다 — 저장이 실패했을 수 있습니다.')
 
     po_number = None
+
+    # [2026-09-28] 오더번호 다단계 폴백 — 이전 drill-down 방식은 화면 상태에 따라
+    # "control not found"(619)가 빈번하게 발생했음. 더 안정적인 방법부터 순서대로 시도.
+
+    # 방법 1: 상태표시줄 파싱 — SAP이 저장 직후 "구매오더 XXXXXXXXXX가 생성되었습니다"
+    # 형태의 메시지를 sbar에 남긴다. 10자리 숫자 패턴을 추출.
     try:
-        # ⚠️ [2026-09-15 실사용 버그수정] 행을 명시하지 않고 `currentCellColumn`만 설정하면
-        # 그 시점에 우연히 "현재 행"이었던 셀(위 협력사/단가 입력 루프가 마지막으로 건드린
-        # 행 등)을 클릭하게 되어, 품목이 여러 개일 때 엉뚱한 셀을 클릭해 잘못된 값을 읽는
-        # 사고가 실사용에서 확인됨("구매오더 번호도 행이 여러 개인 경우라서 그런지 엉뚱한
-        # 곳을 복사했음") — 저장된 PO는 모든 행이 같은 오더번호(EBELN)를 공유하므로, 항상
-        # **0번 행**을 명시적으로 지정해 결정적으로 그 셀을 클릭하도록 고침.
-        grid.currentCellRow = 0
-        grid.currentCellColumn = 'EBELN'
-        grid.firstVisibleColumn = 'NOMNG'
-        grid.clickCurrentCell()  # 오더 상세화면으로 drill-down
-        time.sleep(1.0)
-        po_field = session.findById(
-            'wnd[0]/usr/subSUB0:SAPLMEGUI:0020/subSUB0:SAPLMEGUI:0030/subSUB1:SAPLMEGUI:1105/txtMEPO_TOPLINE-EBELN'
-        )
-        po_number = (po_field.text or '').strip()
-        # 뒤로가기 3번 — 매크로에서 확인된 정확한 복귀 경로.
-        for _ in range(3):
-            session.findById('wnd[0]/tbar[0]/btn[3]').press()
-            time.sleep(0.4)
-    except Exception as e:
-        raise RuntimeError(f'저장은 됐지만 오더번호를 확인하는 중 오류가 발생했습니다: {e} — SAP에서 방금 생성된 구매오더를 직접 확인해주세요.')
+        sbar_text = (session.findById('wnd[0]/sbar').Text or '').strip()
+        m = re.search(r'\b(\d{10})\b', sbar_text)
+        if m:
+            po_number = m.group(1)
+    except Exception:
+        pass
+
+    # 방법 2: 그리드의 EBELN 컬럼 직접 읽기 — drill-down 없이 getCellValue 사용.
+    # ZMMR060은 저장 성공 후 그리드의 EBELN 컬럼에 오더번호를 채운다.
+    if not po_number:
+        try:
+            val = (grid.getCellValue(0, 'EBELN') or '').strip()
+            if re.search(r'\d{7,}', val):
+                po_number = val
+        except Exception:
+            pass
+
+    # 방법 3: 기존 drill-down 방식 — 위 방법들이 모두 실패한 경우에만.
+    # ⚠️ [2026-09-15] 행을 명시하지 않으면 엉뚱한 행을 클릭해 잘못된 오더번호를 읽는
+    # 사고가 실사용에서 확인됨 → currentCellRow=0 고정.
+    if not po_number:
+        try:
+            grid.currentCellRow = 0
+            grid.currentCellColumn = 'EBELN'
+            grid.clickCurrentCell()  # ME21N 상세화면으로 drill-down
+            time.sleep(1.0)
+            po_field = session.findById(
+                'wnd[0]/usr/subSUB0:SAPLMEGUI:0020/subSUB0:SAPLMEGUI:0030/subSUB1:SAPLMEGUI:1105/txtMEPO_TOPLINE-EBELN'
+            )
+            po_number = (po_field.text or '').strip()
+            # 뒤로가기 3번 — 매크로에서 확인된 복귀 경로.
+            for _ in range(3):
+                session.findById('wnd[0]/tbar[0]/btn[3]').press()
+                time.sleep(0.4)
+        except Exception as e:
+            raise RuntimeError(f'저장은 됐지만 오더번호를 확인하는 중 오류가 발생했습니다: {e} — SAP에서 방금 생성된 구매오더를 직접 확인해주세요.')
 
     if not po_number:
         raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
