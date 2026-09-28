@@ -943,12 +943,13 @@
 ⚠️ 중요 — 반드시 지킬 것:
 1. 문서에 회사 정보가 두 개(우리 회사와 상대 회사) 나란히 있으면, bizRegNo/vendorName은
    반드시 우리 회사가 아닌 **상대 회사(물건을 파는 쪽, 공급자)** 정보로만 채우세요.
-   ⚠️⚠️ **가장 확실한 판별 방법**: 우리 회사는 거의 항상 "(주)코텍"/"주식회사 코텍"이고
-   사업자등록번호는 "130-81-44628"입니다 — 이 이름이나 번호가 보이면 그건 100% 우리 회사
-   (공급받는자)이니 bizRegNo/vendorName에 **절대 이 정보를 쓰지 말고, 문서에 있는 다른 쪽
-   회사** 정보를 쓰세요. "공급자"/"공급받는자" 라벨 텍스트는 PDF 추출 과정에서 글자가
-   깨지거나 뒤섞여 나올 수 있어 라벨 자체보다 "130-81-44628"/"코텍" 여부로 판단하는 게
-   더 안전합니다.
+   ⚠️⚠️ **가장 확실한 판별 방법**: 우리 회사는 거의 항상 상호가 "(주)코텍"/"주식회사 코텍"
+   입니다 — 이 이름이 보이면 그건 100% 우리 회사(공급받는자)이니 bizRegNo/vendorName에
+   **절대 이 정보를 쓰지 말고, 반대쪽(공급자) 회사 정보**를 쓰세요. "공급자"/"공급받는자"
+   라벨이 PDF 추출 중 깨졌다면 상호 "코텍" 여부로 판단하세요.
+   ⚠️ 박스형 칸에 한 칸씩 들어간 숫자는 인접한 다른 숫자와 절대 혼동하지 마세요 — PDF에서
+   실제로 읽히는 숫자를 자리 하나도 틀리지 않고 정확히 그대로 추출하세요(코드에서 별도
+   검증합니다).
 2. "단가"(품목 1개당 가격)와 "공급가액"/"합계"(단가에 수량을 곱한 그 줄의 합계 금액)가
    문서에 따로 있으면, unitPrice에는 반드시 "단가"(1개당 가격)만 넣으세요 — "공급가액"이나
    "합계"를 넣으면 안 됩니다. 헷갈리면 unitPrice × qty 가 그 줄의 "공급가액"과 거의 같아야
@@ -1018,8 +1019,41 @@ ${attachText}`;
                 parsed.bizRegNo = '';
                 parsed.vendorName = '';
             }
-            parsed.note = parsed.note ? `${parsed.note} ${warnNote}` : warnNote;
+            parsed.note = parsed.note ? parsed.note + ' ' + warnNote : warnNote;
         }
+
+        // [2026-09-28] 추가 검증: AI가 환각한 번호(원문에 없는 번호)를 원문 digit-stream에서
+        // 직접 재탐색해 자동 정정한다.
+        // 실사례: 공급자 113-81-76523 → 프롬프트에 박힌 "130-81-44628" 패턴에 끌려 AI가
+        //   1308176523으로 오독 → KORTEK 정확 일치 체크(===)를 통과해 버림.
+        var _ct2 = attachments.map(function(a) { return a.text || ''; }).join('\n');
+        var _td2 = _ct2.replace(/\D/g, ''); // digit-only 스트림
+        var _norm2 = (parsed.bizRegNo || '').replace(/\D/g, '');
+        if (_norm2 && _norm2 !== KORTEK_BIZ_NO && !_td2.includes(_norm2)) {
+            // AI 번호가 원문 digit-stream에 없음 → 환각으로 판정, 원문에서 직접 탐색
+            var _cands2 = (_ct2.match(/\d{3}-?\d{2}-?\d{5}/g) || [])
+                .map(function(s) { return s.replace(/-/g, ''); })
+                .filter(function(n) { return n.length === 10 && n !== KORTEK_BIZ_NO; });
+            if (!_cands2.length) {
+                // 하이픈 없이 연속된 10자리도 탐색 — 박스형 PDF에서 하이픈 누락 대비
+                for (var _ki = 0; _ki <= _td2.length - 10; _ki++) {
+                    var _s = _td2.substring(_ki, _ki + 10);
+                    if (_s[0] !== '0' && _s !== KORTEK_BIZ_NO && _cands2.indexOf(_s) < 0) {
+                        _cands2.push(_s);
+                    }
+                }
+            }
+            var _fix2 = _cands2[0];
+            if (_fix2) {
+                var _warnH = window._t(
+                    '⚠️ AI가 추출한 사업자등록번호(' + _norm2 + ')가 문서 원문에 없어 자동 정정했습니다(' + _fix2 + ') — 협력사명도 다시 확인해주세요.',
+                    '⚠️ The biz reg no from AI (' + _norm2 + ') was not in the raw document; auto-corrected to (' + _fix2 + '). Please verify the vendor name.'
+                );
+                parsed.bizRegNo = _fix2;
+                parsed.note = parsed.note ? parsed.note + ' ' + _warnH : _warnH;
+            }
+        }
+
         return parsed;
     };
 
