@@ -931,7 +931,7 @@
         const correctionBlock = correctionNote ? `\n\n[사람의 정정 지시 — 이전 추출 결과 대신 이 지시를 반영해서 다시 추출할 것]\n${correctionNote}` : '';
         const prompt = `다음은 전자세금계산서/거래명세서/견적서 등 PDF에서 추출한 원문 텍스트입니다. 아래 정보를 JSON 객체 하나로만 정확히 응답하세요(설명 문구·코드블록 표시 없이 JSON만):
 {
-  "bizRegNo": "공급자 사업자등록번호(숫자만, 하이픈 제거)",
+  "bizRegNo": "공급자 사업자등록번호(숫자만, 하이픈 제거) — 반드시 10자리, 형식 NNN-NN-NNNNN",
   "invoiceDate": "작성일자(YYYYMMDD 8자리 숫자)",
   "vendorName": "공급자(협력사) 상호",
   "currency": "통화 코드 — KRW 또는 USD(다른 통화 기호/코드가 명확히 보이면 그 코드, 불명확하면 KRW)",
@@ -950,6 +950,10 @@
    ⚠️ 박스형 칸에 한 칸씩 들어간 숫자는 인접한 다른 숫자와 절대 혼동하지 마세요 — PDF에서
    실제로 읽히는 숫자를 자리 하나도 틀리지 않고 정확히 그대로 추출하세요(코드에서 별도
    검증합니다).
+   ⚠️ bizRegNo 추출 시 "등록번호", "공급자"/"공급자 등록번호" 라벨 옆/아래에 있는 숫자를 찾으세요.
+   ⚠️⚠️ **날짜(YYYYMMDD, 예: 20260917)와 사업자등록번호(NNN-NN-NNNNN, 예: 113-81-76523)를
+   절대 혼동하지 마세요** — 사업자등록번호는 10자리이고 절대 연도(2026, 2025 등)로 시작하지
+   않습니다. 작성일자(년/월/일)가 보이면 그건 invoiceDate에만 넣고 bizRegNo에 쓰지 마세요.
 2. "단가"(품목 1개당 가격)와 "공급가액"/"합계"(단가에 수량을 곱한 그 줄의 합계 금액)가
    문서에 따로 있으면, unitPrice에는 반드시 "단가"(1개당 가격)만 넣으세요 — "공급가액"이나
    "합계"를 넣으면 안 됩니다. 헷갈리면 unitPrice × qty 가 그 줄의 "공급가액"과 거의 같아야
@@ -1026,7 +1030,10 @@ ${attachText}`;
         var _ct2 = attachments.map(function(a) { return a.text || ''; }).join('\n');
         var _td2 = _ct2.replace(/\D/g, ''); // digit-only 스트림
         var _norm2 = (parsed.bizRegNo || '').replace(/\D/g, '');
-        if (_norm2 && _norm2 !== KORTEK_BIZ_NO && !_td2.includes(_norm2)) {
+        // 연도처럼 보이는 번호는 날짜(invoiceDate)를 오인한 것으로 판정
+        // 한국 사업자등록번호 앞 3자리는 세무서 코드(100~799 범위)라 1900~2099(연도)로 시작하지 않는다
+        var _looksLikeYear = /^(?:19|20)\d{2}/.test(_norm2);
+        if (_norm2 && _norm2 !== KORTEK_BIZ_NO && (!_td2.includes(_norm2) || _looksLikeYear)) {
             // AI 번호가 원문 digit-stream에 없음 → 환각으로 판정, 원문에서 직접 탐색
             var _cands2 = (_ct2.match(/\d{3}-?\d{2}-?\d{5}/g) || [])
                 .map(function(s) { return s.replace(/-/g, ''); })

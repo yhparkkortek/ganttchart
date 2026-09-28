@@ -982,6 +982,20 @@ def _set_windows_clipboard_text(text):
         win32clipboard.CloseClipboard()
 
 
+def _clear_windows_clipboard():
+    """클립보드를 비운다 — SAP 붙여넣기 후 클립보드에 내용이 남아있으면 Excel이 파일을
+    열 때 '클립보드에 많은 양의 내용이 들어 있습니다' 팝업을 띄우는 문제 방지(2026-09-28)."""
+    try:
+        import win32clipboard
+        win32clipboard.OpenClipboard()
+        try:
+            win32clipboard.EmptyClipboard()
+        finally:
+            win32clipboard.CloseClipboard()
+    except Exception:
+        pass  # 클립보드 정리 실패는 치명적이지 않음 — 조용히 무시
+
+
 def fetch_zmm009_material_list(materials, storage_location='1000', layout_variant=None):
     """ZMM009("자재 List(복수조회)")로 여러 자재를 한 번에 조회한다 — 2026-09-17, 사용자가
     "SAP에서 자재번호+엑셀 출력해줘"류 요청을 할 때 ZMM009를 기본 경로로 써달라고 요청해서
@@ -1046,6 +1060,7 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
     except Exception as e:
         raise RuntimeError(f'"자재코드 복수 선택" 팝업에 클립보드 붙여넣기(Shift+F12)를 실행하지 못했습니다: {e}')
     time.sleep(0.5 + 0.05 * len(mat_list))  # 자재 수가 많으면 SAP가 표를 채우는 데도 시간이 더 걸림
+    _clear_windows_clipboard()  # 붙여넣기 후 클립보드 비움 — 나중에 Excel이 열릴 때 팝업 방지
 
     try:
         session.findById('wnd[1]/tbar[0]/btn[24]').press()
@@ -3290,6 +3305,8 @@ def _save_po_pdf_to_file(save_path):
 
     time.sleep(0.3)
     send_keys('{ENTER}')
+    time.sleep(0.5)
+    _clear_windows_clipboard()  # PDF 저장 후 클립보드 비움 — Excel 팝업 방지
     time.sleep(1.0)
 
     # "파일이 이미 있습니다 — 덮어쓰시겠습니까?" 같은 확인창이 뜰 수 있음 — 뜨면 Enter로 승인.
