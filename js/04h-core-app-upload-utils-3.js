@@ -686,26 +686,8 @@
         const totalDocs = pd.docs.length;
         const docSections = pd.docs.map(function(doc, i) {
             const label = doc.vendorName ? escapeHtml(doc.vendorName) : (doc.bizRegNo ? escapeHtml(doc.bizRegNo) : (_en ? 'Document ' + (i+1) : '문서 ' + (i+1)));
-            // [2026-09-28] 임시코드: 전 품목 표시 — AI 추론값 기본 선택, 없으면 (선택)
-            const allTcItems = (doc.items || []).map(function(it, ii) { return { it: it, ii: ii }; });
-            const tempSection = allTcItems.length ? (
-                '<div style="margin-bottom:6px;">' +
-                '<div style="font-size:10.5px; color:#555; margin-bottom:3px;">' + (_en ? '📦 Temp Code (per item)' : '📦 임시코드 (품목별)') + '</div>' +
-                allTcItems.map(function(x) {
-                    const shortDesc = escapeHtml((x.it.desc || (_en ? 'Item ' + (x.ii + 1) : '품목 ' + (x.ii + 1))).substring(0, 40));
-                    const currentTc = x.it.tempCode || '';
-                    const tcOpts = '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>' +
-                        (window._PO_TEMP_CODE_TABLE || []).map(function(r) {
-                            return '<option value="' + r.code + '"' + (r.code === currentTc ? ' selected' : '') + '>' + r.code + ' ' + escapeHtml(r.desc) + '</option>';
-                        }).join('');
-                    return '<div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">' +
-                        '<span style="font-size:10px; color:#444; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(x.it.desc || '') + '">' + (x.ii + 1) + '. ' + shortDesc + '</span>' +
-                        '<select id="pof-' + id + '-temp-' + i + '-' + x.ii + '" style="' + selSt + ' flex:0 0 auto; min-width:110px;">' + tcOpts + '</select>' +
-                        '</div>';
-                }).join('') +
-                '</div>'
-            ) : '';
-            // [2026-09-28] 사원번호: 각 문서별 표시, 첫 번째 문서 변경 시 이후 문서 자동 전파
+            const totalItems = (doc.items || []).length;
+            // 사원번호 자동전파 (첫 번째 문서 → 이후 문서)
             const propagateYr = i === 0 && totalDocs > 1 ? ' onchange="(function(v){for(var j=1;j<' + totalDocs + ';j++){var el=document.getElementById(\'pof-' + id + '-yr-\'+j);if(el)el.value=v;}})(this.value)"' : '';
             const propagateMo = i === 0 && totalDocs > 1 ? ' onchange="(function(v){for(var j=1;j<' + totalDocs + ';j++){var el=document.getElementById(\'pof-' + id + '-mo-\'+j);if(el)el.value=v;}})(this.value)"' : '';
             const propagateDy = i === 0 && totalDocs > 1 ? ' onchange="(function(v){for(var j=1;j<' + totalDocs + ';j++){var el=document.getElementById(\'pof-' + id + '-dy-\'+j);if(el)el.value=v;}})(this.value)"' : '';
@@ -714,38 +696,69 @@
                 '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? '🧑 Buyer Employee ID' : '🧑 구매담당자 사원번호') + (i === 0 && totalDocs > 1 ? (' <span style="font-size:10px;color:#888;">(' + (_en ? 'auto-fills others' : '입력 시 나머지 자동 적용') + ')</span>') : '') + '</div>' +
                 '<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">' +
                 '<select id="pof-' + id + '-yr-' + i + '" style="' + selSt + '"' + propagateYr + '>' + yrOpts + '</select>' +
-                '<span style="font-size:10.5px;color:#666;">' + (_en ? 'yr' : '년') + '</span>' +
+                '<span style="font-size:10.5px;color:#666;">년</span>' +
                 '<select id="pof-' + id + '-mo-' + i + '" style="' + selSt + '"' + propagateMo + '>' + moOpts + '</select>' +
-                '<span style="font-size:10.5px;color:#666;">' + (_en ? 'mo' : '월') + '</span>' +
+                '<span style="font-size:10.5px;color:#666;">월</span>' +
                 '<select id="pof-' + id + '-dy-' + i + '" style="' + selSt + '"' + propagateDy + '>' + dyOpts + '</select>' +
-                '<span style="font-size:10.5px;color:#666;">' + (_en ? 'day' : '일') + '</span>' +
+                '<span style="font-size:10.5px;color:#666;">일</span>' +
                 '<select id="pof-' + id + '-sr-' + i + '" style="' + selSt + '"' + propagateSr + '>' + srOpts + '</select>' +
-                '<span style="font-size:10.5px;color:#666;">' + (_en ? 'serial' : '입사순번') + '</span>' +
+                '<span style="font-size:10.5px;color:#666;">입사순번</span>' +
                 '</div></div>';
+            // SAP 프로젝트코드 조회 — 결과가 이 문서 전체 행의 datalist를 채움
+            const sapSearchRow = '<div style="margin-bottom:5px; display:flex; gap:4px; align-items:center; flex-wrap:wrap;">' +
+                '<span style="font-size:10px; color:#555; white-space:nowrap;">' + (_en ? '🔍 Project SAP:' : '🔍 프로젝트 SAP 조회:') + '</span>' +
+                '<input id="pof-' + id + '-projsearch-' + i + '" list="pof-' + id + '-projlist-' + i + '" placeholder="' + (_en ? 'e.g. *G26* or G2610OB' : '예: *G26* 또는 G2610OB') + '" style="flex:1; min-width:80px; font-size:11px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;"/>' +
+                '<datalist id="pof-' + id + '-projlist-' + i + '"></datalist>' +
+                '<button onclick="window._ganttQaPoSearchProjectCodesForForm(\'' + id + '\',' + i + ')" style="font-size:10px; padding:3px 6px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:4px; cursor:pointer; white-space:nowrap;">&#128269; SAP</button>' +
+                '<span id="pof-' + id + '-projmsg-' + i + '" style="font-size:10px; color:#888;"></span>' +
+                '</div>';
+            // 품목 테이블: 임시코드·프로젝트코드·목적·요청사유 모두 품목별 — 1행 변경 시 이후 행 자동 전파
+            const thSt = 'padding:3px 4px; border:1px solid #c5cef5; background:#dde3f8; color:#2c5fa8; font-size:10px; font-weight:bold; text-align:left; white-space:nowrap;';
+            const tdSt = 'padding:2px 3px; border:1px solid #d5daf0; vertical-align:middle;';
+            const selRSt = 'width:100%; font-size:10.5px; padding:2px 3px; border:1px solid #ccc; border-radius:3px; background:#fff;';
+            const inpRSt = 'width:100%; font-size:10.5px; padding:2px 4px; border:1px solid #ccc; border-radius:3px; box-sizing:border-box;';
+            const firstNote = totalItems > 1 ? '<br><span style="font-size:8.5px;color:#888;font-weight:normal;">(' + (_en ? '1st→all' : '1행→전체') + ')</span>' : '';
+            const itemRows = (doc.items || []).map(function(it, ii) {
+                const isFirst = ii === 0 && totalItems > 1;
+                const makeP = function(field) {
+                    return isFirst ? ' onchange="(function(v){for(var k=1;k<' + totalItems + ';k++){var e=document.getElementById(\'pof-' + id + '-' + field + '-' + i + '-\'+k);if(e)e.value=v;}})(this.value)"' : '';
+                };
+                const currentTc = it.tempCode || '';
+                const tcOpts = '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>' +
+                    (window._PO_TEMP_CODE_TABLE || []).map(function(r) {
+                        return '<option value="' + r.code + '"' + (r.code === currentTc ? ' selected' : '') + '>' + r.code + ' ' + escapeHtml(r.desc) + '</option>';
+                    }).join('');
+                const curProj = escapeHtml(it.projectCode || '');
+                const curPurpose = it.purpose || '';
+                const curReason = escapeHtml(it.reason || '');
+                const shortName = escapeHtml((it.desc || (_en ? 'Item '+(ii+1) : '품목 '+(ii+1))).substring(0, 26));
+                const purposeOptsWithSel = '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>' +
+                    (window._PO_PURPOSE_TABLE || []).map(function(r) {
+                        return '<option value="' + r.code + '"' + (r.code === curPurpose ? ' selected' : '') + '>' + r.code + ' ' + escapeHtml(r.desc) + '</option>';
+                    }).join('');
+                return '<tr>' +
+                    '<td style="' + tdSt + '">' +
+                        '<span style="font-size:10px;color:#333;" title="' + escapeHtml(it.desc || '') + '">' + (ii+1) + '. ' + shortName + '</span>' +
+                    '</td>' +
+                    '<td style="' + tdSt + '"><select id="pof-' + id + '-temp-' + i + '-' + ii + '" style="' + selRSt + '"' + makeP('temp') + '>' + tcOpts + '</select></td>' +
+                    '<td style="' + tdSt + '"><input id="pof-' + id + '-proj-' + i + '-' + ii + '" list="pof-' + id + '-projlist-' + i + '" value="' + curProj + '" placeholder="' + (_en ? 'code' : '코드') + '" style="' + inpRSt + '"' + makeP('proj') + '/></td>' +
+                    '<td style="' + tdSt + '"><select id="pof-' + id + '-purpose-' + i + '-' + ii + '" style="' + selRSt + '"' + makeP('purpose') + '>' + purposeOptsWithSel + '</select></td>' +
+                    '<td style="' + tdSt + '"><input id="pof-' + id + '-reason-' + i + '-' + ii + '" value="' + curReason + '" placeholder="' + (_en ? 'reason (→ fill ex.)' : '이유 (→ 예시입력)') + '" style="' + inpRSt + '"' + makeP('reason') + ' onkeydown="if(event.key===\'ArrowRight\' && !this.value){event.preventDefault();this.value=\'PS10/RD02/LNW 프로젝트명>요청사유\';this.select();}"/></td>' +
+                    '</tr>';
+            }).join('');
+            const itemTable = '<table style="width:100%; border-collapse:collapse; margin-bottom:4px; font-size:10.5px; table-layout:auto;">' +
+                '<thead><tr>' +
+                    '<th style="' + thSt + 'width:26%;">' + (_en ? 'Item' : '품목') + '</th>' +
+                    '<th style="' + thSt + 'width:18%;">' + (_en ? 'Temp Code' : '임시코드') + firstNote + '</th>' +
+                    '<th style="' + thSt + 'width:18%;">' + (_en ? 'Project Code' : '프로젝트코드') + '</th>' +
+                    '<th style="' + thSt + 'width:14%;">' + (_en ? 'Purpose' : '목적') + '</th>' +
+                    '<th style="' + thSt + 'width:24%;">' + (_en ? 'Reason (→ fill ex.)' : '요청사유 (→ 예시)') + '</th>' +
+                '</tr></thead>' +
+                '<tbody>' + itemRows + '</tbody>' +
+                '</table>';
             return '<div style="padding:8px; background:#f5f7ff; border-radius:6px; border-left:3px solid #7aaedc; margin-bottom:8px;">' +
                 '<div style="font-size:11px; font-weight:bold; color:#2c5fa8; margin-bottom:6px;">' + (i+1) + '. ' + label + '</div>' +
-                empRow +
-                tempSection +
-                '<div style="margin-bottom:5px;">' +
-                    '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? 'Project Code' : '프로젝트 코드') + '</div>' +
-                    '<div style="display:flex; gap:4px; align-items:center;">' +
-                        '<input id="pof-' + id + '-proj-' + i + '" list="pof-' + id + '-projlist-' + i + '" placeholder="' + (_en ? 'e.g. *G26* search or G2610OB direct' : '예: *G26* 으로 조회 또는 G2610OB 직접 입력') + '" style="flex:1; font-size:11.5px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; min-width:0;"/>' +
-                        '<datalist id="pof-' + id + '-projlist-' + i + '"></datalist>' +
-                        '<button onclick="window._ganttQaPoSearchProjectCodesForForm(\'' + id + '\',' + i + ')" style="font-size:10.5px; padding:4px 7px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:4px; cursor:pointer; white-space:nowrap;">&#128269; SAP &#51312;&#54924;</button>' +
-                    '</div>' +
-                    '<div id="pof-' + id + '-projmsg-' + i + '" style="font-size:10px; color:#888; margin-top:2px;"></div>' +
-                '</div>' +
-                '<div style="margin-bottom:5px;">' +
-                    '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? 'Reason' : '요청사유') + '<span style="font-size:10px;color:#aaa;"> (' + (_en ? '> to fill example' : '빈 칸에서 > 누르면 예시 자동 입력') + ')</span></div>' +
-                    '<input id="pof-' + id + '-reason-' + i + '" placeholder="' + (_en ? 'e.g. PS10/RD02/LNW [project] > reason' : '예: PS10/RD02/LNW 프로젝트명>요청사유') + '" style="' + inpSt + '" onkeydown="if(event.key===\'>\' && !this.value){event.preventDefault();this.value=\'PS10/RD02/LNW 프로젝트명>요청사유\';this.select();}"/>' +
-                '</div>' +
-                '<div>' +
-                    '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? 'Purpose' : '목적') + '</div>' +
-                    '<select id="pof-' + id + '-purpose-' + i + '" style="' + selSt + ' width:100%;">' +
-                        '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>' +
-                        purposeOpts +
-                    '</select>' +
-                '</div>' +
+                empRow + sapSearchRow + itemTable +
             '</div>';
         }).join('');
 
@@ -761,7 +774,7 @@
     };
 
     window._ganttQaPoSearchProjectCodesForForm = async function(formId, docIdx) {
-        const projInput = document.getElementById('pof-' + formId + '-proj-' + docIdx);
+        const projInput = document.getElementById('pof-' + formId + '-projsearch-' + docIdx);
         const msgEl = document.getElementById('pof-' + formId + '-projmsg-' + docIdx);
         const listEl = document.getElementById('pof-' + formId + '-projlist-' + docIdx);
         if (!projInput || !msgEl) return;
@@ -835,19 +848,22 @@
             if (errEl) errEl.textContent = window._t('임시코드를 선택해주세요: ' + missingTc.join(', '), 'Please select a temp code for: ' + missingTc.join(', '));
             return;
         }
+        // [2026-09-28] per-item: 프로젝트코드·요청사유·목적을 품목마다 개별 수집
         const missing = [];
         pd.docs.forEach(function(doc, i) {
-            const projRaw = (getV('pof-' + id + '-proj-' + i) || '').trim();
-            const proj = projRaw.split(/\s+/)[0].trim(); // datalist 선택 시 "CODE — DESC" 에서 코드만 추출
-            const reason = (getV('pof-' + id + '-reason-' + i) || '').trim();
-            const purpose = getV('pof-' + id + '-purpose-' + i);
-            if (!proj || !reason || !purpose) { missing.push(i + 1); return; }
-            doc.projectCode = proj;
-            doc.reason = reason;
-            doc.purpose = purpose;
+            (doc.items || []).forEach(function(it, ii) {
+                const projRaw = (getV('pof-' + id + '-proj-' + i + '-' + ii) || '').trim();
+                const proj = projRaw.split(/\s+/)[0].trim(); // "CODE — DESC" 에서 코드만
+                const reason = (getV('pof-' + id + '-reason-' + i + '-' + ii) || '').trim();
+                const purpose = getV('pof-' + id + '-purpose-' + i + '-' + ii);
+                if (!proj || !reason || !purpose) { missing.push((i+1) + '번 문서 ' + (ii+1) + '번 품목'); return; }
+                it.projectCode = proj;
+                it.reason = reason;
+                it.purpose = purpose;
+            });
         });
         if (missing.length) {
-            if (errEl) errEl.textContent = window._t(missing.join(', ') + '번 문서의 모든 항목(프로젝트코드/요청사유/목적)을 입력해주세요.', 'Please complete all fields for document(s): ' + missing.join(', '));
+            if (errEl) errEl.textContent = window._t('프로젝트코드/요청사유/목적을 입력해주세요: ' + missing.join(', '), 'Please complete project/reason/purpose for: ' + missing.join(', '));
             return;
         }
         window._ganttQaPoFieldsForm = null;
@@ -1354,9 +1370,9 @@ ${docsJson}`;
         const rows = doc.items.map(function(it) {
             return {
                 '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
-                '필요일자': doc.invoiceDate, '구매그룹': '908', '프로젝트코드': doc.projectCode,
-                '수령인': receiver, '구매담당자 사번': doc.buyerEmpId || pd.buyerEmpId, '요청사유': doc.reason,
-                'VINA PO': '', '목적': doc.purpose, '비고': '',
+                '필요일자': doc.invoiceDate, '구매그룹': '908', '프로젝트코드': it.projectCode || doc.projectCode,
+                '수령인': receiver, '구매담당자 사번': doc.buyerEmpId || pd.buyerEmpId, '요청사유': it.reason || doc.reason,
+                'VINA PO': '', '목적': it.purpose || doc.purpose, '비고': '',
             };
         });
         const exRes = await window._withTimeout(
