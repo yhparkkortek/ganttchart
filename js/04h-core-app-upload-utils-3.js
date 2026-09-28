@@ -4010,8 +4010,16 @@ ${docsJson}`;
                 if (_yr) _pcPattern = '*G' + _yr[1] + '*';   // "26년도 프로젝트 코드" → *G26*
             }
             if (_pcPattern) {
-                // 코드(오더)로 찾을지, 프로젝트명(내역)으로 찾을지 — 말에서 결정한다.
-                const _pcBy = /(프로젝트\s*(명|이름)|내역|설명|이름으로|명으로)/.test(question) ? 'desc' : 'code';
+                // 🆕 [2026-09-28 사용자 지적] 코드(오더)로 찾을지 프로젝트명(내역)으로 찾을지는
+                //    **말투가 아니라 패턴 모양**으로 정한다 — "*STELLAR* 프로젝트 코드 조회해줘"처럼
+                //    "코드"라고 말해도 STELLAR는 오더 칸에선 절대 안 나온다(오더는 G2610OB 같은 값).
+                //    규칙: 패턴에 **숫자가 있으면 코드(오더)**, 문자만이면 **프로젝트명(내역)**.
+                //    (*G26*/*G26LWTN*/301432 → 코드 / *STELLAR*/*LNW* → 내역)
+                //    "프로젝트명/이름/내역"이라고 명시하면 그게 우선. 그래도 0건이면 백엔드가
+                //    자동으로 반대쪽도 한 번 더 찾아보므로 잘못 골라도 구제된다.
+                const _pcCore = _pcPattern.replace(/\*/g, '');
+                const _pcBy = /(프로젝트\s*(명|이름)|내역|설명|이름으로|명으로)/.test(question) ? 'desc'
+                            : (/\d/.test(_pcCore) ? 'code' : 'desc');
                 const _pcWhatKo = _pcBy === 'desc' ? '프로젝트명(내역)' : '프로젝트 코드(오더)';
                 if (!_skipUserHistoryPush) {
                     window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
@@ -4031,7 +4039,9 @@ ${docsJson}`;
                     if (data.ok) {
                         const items = data.items || (data.codes || []).map(function(c) { return { code: c, desc: '' }; });
                         const lines = items.map(function(it) { return it.desc ? `${it.code}\t${it.desc}` : it.code; });
-                        _pcReply = `🗂 ${_pcWhatKo} "${data.pattern}" — ${items.length}${window._t('건', '')}\n` + lines.join('\n')
+                        // 백엔드가 0건이면 반대쪽으로 자동 재검색하므로, 실제로 찾은 쪽(data.by)을 표시한다.
+                        const _usedKo = (data.by === 'desc') ? '프로젝트명(내역)' : '프로젝트 코드(오더)';
+                        _pcReply = `🗂 ${_usedKo} "${data.pattern}" — ${items.length}${window._t('건', '')}\n` + lines.join('\n')
                             + '\n\n💡 ' + window._t('SAP 검색은 대소문자를 구분합니다 — 영문은 대문자로 넣으세요(예: *STELLAR*).',
                                                    'SAP search is case-sensitive — use uppercase (e.g. *STELLAR*).');
                     } else {

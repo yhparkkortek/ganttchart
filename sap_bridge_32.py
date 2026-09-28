@@ -2355,68 +2355,101 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
             ' — 기준일자/이동유형/플랜트 같은 필수 항목이 비어 있어 다음 화면으로 넘어가지 못했을 수 있습니다'
             ' (이동유형을 bwart 인자로 지정해보세요).')
 
-    try:
-        aufnr_field.setFocus()
-        aufnr_field.caretPosition = 0   # 매크로와 동일
-        wnd.sendVKey(4)  # F4 = 검색도움말
-    except Exception as e:
-        raise RuntimeError(f'내부오더 검색도움말(F4)을 열지 못했습니다: {e}')
-
-    popup = None
-    for _ in range(8):   # 팝업이 뜰 때까지 짧게 재시도(화면이 무거우면 1초로는 부족)
-        time.sleep(0.4)
-        try:
-            popup = session.findById('wnd[1]')
-            break
-        except Exception:
-            continue
-    if popup is None:
-        raise RuntimeError('내부오더 검색도움말 팝업이 뜨지 않았습니다.')
-
-    # 패턴 입력칸 — 줄 번호를 박지 않고 **라벨(KEYWORD)로 찾는다**: 코드 검색은 "오더",
-    # 프로젝트명 검색은 "내역". 못 찾으면 매크로에서 확인된 좌표로 폴백.
-    want_keyword = '내역' if by == 'desc' else '오더'
-    field = _sap_searchhelp_field_by_keyword(session, want_keyword)
-    if field is None:
-        fallback_row = 4 if by == 'desc' else 3
-        for prefix in ('txt', 'ctxt'):
+    def _close_popups():
+        for _ in range(3):
             try:
-                field = session.findById(f'{_SEARCHHELP_TAB1_BASE}/{prefix}G_SELFLD_TAB-LOW[{fallback_row},24]')
+                session.findById('wnd[1]').sendVKey(12)
+                time.sleep(0.2)
+            except Exception:
+                break
+
+    def _search_once(search_by):
+        """F4 팝업을 열어 지정한 칸('오더' 또는 '내역')에 패턴을 넣고 결과를 읽은 뒤 팝업을 닫는다."""
+        # ⚠️ [2026-09-28] 매번 화면/필드를 **다시 찾는다** — 첫 검색이 끝나면 화면이 다시 그려져서
+        #    처음에 잡아둔 COM 참조가 무효가 된다(자동 폴백 2차 검색이 "서버에서 예외 오류"로
+        #    실패했던 원인). SAP 자동화에서 화면 전환 뒤 참조 재사용은 항상 이런 식으로 깨진다.
+        cur_wnd = session.findById('wnd[0]')
+        fld_aufnr = None
+        for cand in _find_all_by_id_substring(cur_wnd, 'COBL-AUFNR'):
+            try:
+                if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                    fld_aufnr = cand
+                    break
+            except Exception:
+                continue
+        if fld_aufnr is None:
+            raise RuntimeError('MB21 화면에서 내부오더(COBL-AUFNR) 입력칸을 찾지 못했습니다.')
+        try:
+            fld_aufnr.setFocus()
+            fld_aufnr.caretPosition = 0   # 매크로와 동일
+            cur_wnd.sendVKey(4)  # F4 = 검색도움말
+        except Exception as e:
+            raise RuntimeError(f'내부오더 검색도움말(F4)을 열지 못했습니다: {e}')
+
+        popup = None
+        for _ in range(8):   # 팝업이 뜰 때까지 짧게 재시도(화면이 무거우면 1초로는 부족)
+            time.sleep(0.4)
+            try:
+                popup = session.findById('wnd[1]')
                 break
             except Exception:
                 continue
-    if field is None:
-        raise RuntimeError(f'내부오더 검색도움말에서 "{want_keyword}" 입력칸을 찾지 못했습니다.')
-    try:
-        field.text = pattern
-        field.setFocus()
-        field.caretPosition = len(pattern)
-    except Exception as e:
-        raise RuntimeError(f'검색 패턴을 입력하지 못했습니다: {e}')
+        if popup is None:
+            raise RuntimeError('내부오더 검색도움말 팝업이 뜨지 않았습니다.')
 
-    session.findById('wnd[1]').sendVKey(0)  # 검색 실행
-    time.sleep(1.2)
-
-    headers, rows = [], []
-    try:
-        session.findById('wnd[1]')
-        headers, rows = _sap_read_searchhelp_matrix(
-            session, max_results, header_hints=('오더', '내역', '유형'))
-    except Exception:
-        pass
-
-    # 읽기만 하고 아무것도 고르지 않는다 — 팝업 닫고 MB21에서도 빠져나온다(저장 없음).
-    for _ in range(3):
+        # 패턴 입력칸 — 줄 번호를 박지 않고 **라벨(KEYWORD)로 찾는다**: 코드 검색은 "오더",
+        # 프로젝트명 검색은 "내역". 못 찾으면 매크로에서 확인된 좌표로 폴백.
+        want_keyword = '내역' if search_by == 'desc' else '오더'
+        fld = _sap_searchhelp_field_by_keyword(session, want_keyword)
+        if fld is None:
+            fallback_row = 4 if search_by == 'desc' else 3
+            for prefix in ('txt', 'ctxt'):
+                try:
+                    fld = session.findById(f'{_SEARCHHELP_TAB1_BASE}/{prefix}G_SELFLD_TAB-LOW[{fallback_row},24]')
+                    break
+                except Exception:
+                    continue
+        if fld is None:
+            raise RuntimeError(f'내부오더 검색도움말에서 "{want_keyword}" 입력칸을 찾지 못했습니다.')
         try:
-            session.findById('wnd[1]').sendVKey(12)
-            time.sleep(0.2)
+            fld.text = pattern
+            fld.setFocus()
+            fld.caretPosition = len(pattern)
+        except Exception as e:
+            raise RuntimeError(f'검색 패턴을 입력하지 못했습니다: {e}')
+
+        session.findById('wnd[1]').sendVKey(0)  # 검색 실행
+        time.sleep(1.2)
+
+        h, r = [], []
+        try:
+            session.findById('wnd[1]')
+            h, r = _sap_read_searchhelp_matrix(
+                session, max_results, header_hints=('오더', '내역', '유형'))
         except Exception:
-            break
+            pass
+        _close_popups()
+        return h, r
+
+    # 🆕 [2026-09-28 사용자 지적] 예전엔 사용자가 "프로젝트 **코드**"라고 말했다는 이유로 무조건
+    # "오더" 칸을 썼는데, `*STELLAR*`처럼 **문자만 있는 패턴**은 오더 칸으로는 절대 안 나온다
+    # (오더는 G2610OB 같은 코드값). 호출부가 패턴 모양으로 먼저 고르고(숫자 포함=코드), 여기서는
+    # **고른 쪽에서 0건이면 반대쪽도 자동으로 한 번 더 찾아본다** — 사람이 "코드/이름" 중 뭘로
+    # 검색되는지 몰라도 그냥 찾아지게 하기 위함(예: "STELLAR_32"처럼 숫자가 섞인 이름도 구제).
+    headers, rows = _search_once(by)
+    used_by = by
+    if not rows:
+        other = 'code' if by == 'desc' else 'desc'
+        headers, rows = _search_once(other)
+        if rows:
+            used_by = other
+
     try:
         session.findById('wnd[0]/tbar[0]/okcd').text = '/n'
         session.findById('wnd[0]').sendVKey(0)
     except Exception:
         pass
+    by = used_by
 
     # 🧹 결과 정리 — 헤더에서 "오더"/"내역" 열 위치를 찾아 코드+프로젝트명 짝으로 만든다.
     # 헤더를 못 찾는 경우(검색도움말 레이아웃이 다를 때)에는 예전처럼 "코드처럼 생긴 값"만 뽑는다.
@@ -2445,10 +2478,10 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
                 items.append({'code': v, 'desc': ''})
 
     if not items:
-        how = '프로젝트명(내역)' if by == 'desc' else '프로젝트 코드(오더)'
         return {'ok': False, 'pattern': pattern, 'by': by, 'caseSensitive': True,
-                'error': f'{how} "{pattern}"에 맞는 항목을 찾지 못했습니다 — SAP 검색은 대소문자를 구분하니 '
-                         f'영문을 대문자로 바꿔보시고(예: *STELLAR*), 패턴도 넓혀보세요.'}
+                'error': f'"{pattern}"에 맞는 항목을 **코드(오더)와 프로젝트명(내역) 양쪽 모두에서** '
+                         f'찾지 못했습니다 — SAP 검색은 대소문자를 구분하니 영문을 대문자로 바꿔보시고'
+                         f'(예: *STELLAR*), 패턴도 넓혀보세요.'}
 
     codes = [it['code'] for it in items]
     lines = [(f"{it['code']}\t{it['desc']}" if it['desc'] else it['code']) for it in items]
