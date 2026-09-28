@@ -3162,38 +3162,46 @@ def _save_po_pdf_to_file(save_path):
     if sap_win is None:
         raise RuntimeError('SAP GUI 창을 찾지 못해 PDF 저장 다이얼로그를 띄울 수 없습니다.')
 
-    sap_win.set_focus()
-    time.sleep(0.5)
-    # ⚠️ [2026-09-15 2차 수정, 사용자 관찰 반영] "발주서출력" 버튼을 누른 직후엔 SAP GUI
-    # 자체의 키보드 포커스가 여전히 그 버튼(또는 그리드)에 남아있어서, 곧바로 단축키를
-    # 보내면 임베드된 PDF 뷰어가 아니라 SAP GUI로 전달되어 무시되는 것으로 추정됨.
-    # 1차 수정(SAP 창 전체의 기하학적 중앙 클릭)으로도 안 됐다 — 사용자가 "PDF 미리보기
-    # 창을 직접 클릭해야 한다"고 제보해서, SAP 창 중앙이 아니라 **"PDF 미리보기"라는
-    # 이름/텍스트를 가진 하위 요소를 UIA 트리에서 직접 찾아 그 위치를 클릭**하도록 변경
-    # (라이브 진단으로 "일괄 다운로드" 클릭 시 `wnd[1]`의 Text가 정확히 "PDF 미리보기"임을
-    # 확인한 적 있음 — "발주서출력"도 내부적으로 같은 이름의 서브 요소를 갖고 있을 가능성이
-    # 높음). 못 찾으면 기존처럼 SAP 창 전체 중앙 클릭으로 폴백.
-    clicked = False
+    import ctypes as _ct_pre
+    from pywinauto import Desktop as _Desktop_pdf
+
+    # ⚠️ [2026-09-28 v6] PDF 미리보기가 wnd[1]로 별도 최상위 창으로 열리는 경우가 있음.
+    # 이전 코드: sap_win.descendants()에서 "PDF"/"미리보기" 이름의 자식을 click_input()
+    # → 문제: 그 요소가 탭/버튼이면 클릭 시 화면이 전환되어 PDF 뷰어가 닫힐 수 있음.
+    # → 문제: set_focus()는 OS 전경(SetForegroundWindow)을 보장하지 않아 단축키가 엉뚱한 창으로 감.
+    # 수정: (1) 최상위 창 레벨에서 "PDF 미리보기" 창(또는 추가 SAP 창)을 찾아 대상으로 삼고,
+    #        (2) SetForegroundWindow로 OS 전경을 확실히 보장한 뒤,
+    #        (3) 창 중앙(콘텐츠 영역)을 클릭해 임베드 PDF 컨트롤에 키보드 포커스를 줌.
+    #            (자식 요소 이름 검색 → click 방식은 탭버튼 오동작 위험이 있어 제거)
+    pdf_target_win = None
     try:
-        for desc in sap_win.descendants():
+        for _w in _Desktop_pdf(backend='uia').windows():
             try:
-                name = desc.window_text() or ''
+                _title = _w.window_text() or ''
+                _cls = _w.element_info.class_name or ''
             except Exception:
                 continue
-            if 'PDF' in name or '미리보기' in name:
-                desc.click_input()
-                clicked = True
+            if 'PDF' in _title or '미리보기' in _title:
+                pdf_target_win = _w
                 break
+            if 'SAP_FRONTEND' in _cls and _w.handle != sap_win.handle:
+                pdf_target_win = _w  # 또 다른 SAP 창 = wnd[1] 후보
     except Exception:
         pass
-    if not clicked:
-        try:
-            rect = sap_win.rectangle()
-            cx = (rect.left + rect.right) // 2 - rect.left
-            cy = (rect.top + rect.bottom) // 2 - rect.top
-            sap_win.click_input(coords=(cx, cy))
-        except Exception:
-            pass  # 클릭 실패해도 단축키는 일단 시도
+    target_win = pdf_target_win or sap_win
+
+    # OS 레벨 전경 전환 → 이후 send_keys가 확실히 이 창으로 감
+    _ct_pre.windll.user32.SetForegroundWindow(target_win.handle)
+    time.sleep(0.5)
+
+    # 창 중앙 클릭: 임베드 PDF 컨트롤에 키보드 포커스 전달
+    try:
+        _r = target_win.rectangle()
+        _cx = (_r.left + _r.right) // 2 - _r.left
+        _cy = (_r.top + _r.bottom) // 2 - _r.top
+        target_win.click_input(coords=(_cx, _cy))
+    except Exception:
+        pass
     time.sleep(0.5)
 
     def _find_save_dialog(timeout_sec):
