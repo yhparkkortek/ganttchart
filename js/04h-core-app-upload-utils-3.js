@@ -1065,15 +1065,30 @@ ${attachText}`;
     // "문서가 여러 건일 수 있다"는 것만 다르고, 그 외 설계 원칙(드롭다운/버튼은 입력 방식만
     // 바꾸고 처리 로직은 자유서술 AI 재추출 경로를 그대로 재사용)은 기존 PO 흐름과 동일하다.
     window._ganttQaExtractPoDocumentsViaAi = async function(apiKey, attachments) {
-        const settled = await Promise.allSettled(attachments.map(function(a) {
-            return window._ganttQaExtractPoItemsViaAi(apiKey, [a], null);
-        }));
-        const docs = [];
-        const errors = [];
-        settled.forEach(function(r, i) {
-            if (r.status === 'fulfilled') docs.push(r.value);
-            else errors.push(attachments[i].name + ': ' + ((r.reason && r.reason.message) ? r.reason.message : r.reason));
-        });
+        // [2026-09-28] 동시(Promise.allSettled) → 순차 처리 + 파일 간 4s 딜레이
+        // 무료 API는 동시 호출이 몰리면 503 "high demand"를 즉시 반환 — 순차 처리로 스파이크를 방지.
+        var docs = [];
+        var errors = [];
+        for (var i = 0; i < attachments.length; i++) {
+            // 진행 상황을 pending 메시지에 실시간 반영
+            if (attachments.length > 1 && window._ganttQaHistory) {
+                var _hist = window._ganttQaHistory;
+                var _last = _hist.length ? _hist[_hist.length - 1] : null;
+                if (_last && _last.pending) {
+                    _last.text = '⏳ ' + window._t(
+                        '(' + (i + 1) + '/' + attachments.length + ') ' + attachments[i].name + ' 추출 중...',
+                        '(' + (i + 1) + '/' + attachments.length + ') Extracting ' + attachments[i].name + '...');
+                    if (window._renderGanttQaMessages) window._renderGanttQaMessages();
+                }
+            }
+            if (i > 0) await new Promise(function(r) { setTimeout(r, 4000); }); // 파일 간 딜레이
+            try {
+                var doc = await window._ganttQaExtractPoItemsViaAi(apiKey, [attachments[i]], null);
+                docs.push(doc);
+            } catch (e) {
+                errors.push(attachments[i].name + ': ' + ((e && e.message) ? e.message : String(e)));
+            }
+        }
         if (!docs.length) throw new Error(errors.join('; ') || window._t('품목 추출에 실패했습니다.', 'Failed to extract line items.'));
         return { docs: docs, errors: errors };
     };
@@ -3329,7 +3344,10 @@ ${docsJson}`;
                 // 💡 [2026-09-17 신규, 사용자 요청] "세금계산서/거래명세서 복수 처리" — 첨부된
                 // 파일이 여러 개면 파일마다 별도 문서로 보고 각각 추출한다(파일 1개=문서 1개는
                 // 기존과 100% 동일한 동작). 아래 `docs` 배열이 이번 요청의 핵심 자료구조.
-                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`첨부 파일 ${attachments.length}건에서 품목 정보를 추출하는 중...`, `Extracting line items from ${attachments.length} attached file(s)...`), pending: true });
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+                    '첨부 파일 ' + attachments.length + '건에서 품목 정보를 추출하는 중' + (attachments.length > 1 ? ' (순차 처리, 잠시 기다려주세요)' : '') + '...',
+                    'Extracting line items from ' + attachments.length + ' file(s)' + (attachments.length > 1 ? ' (processing one by one, please wait)' : '') + '...'
+                ), pending: true });
                 window._renderGanttQaMessages();
                 try {
                     const { docs, errors } = await window._ganttQaExtractPoDocumentsViaAi(apiKeyForPo, attachments);
@@ -3342,7 +3360,13 @@ ${docsJson}`;
                     window._ganttQaHistory.pop();
                     let summaryText = window._ganttQaPoBatchSummaryText(docs);
                     if (errors.length) {
-                        summaryText = window._t(`⚠️ 일부 파일은 추출에 실패해 건너뛰었습니다(${errors.length}건): ${errors.join('; ')}\n\n`, `⚠️ Skipped ${errors.length} file(s) that failed to extract: ${errors.join('; ')}\n\n`) + summaryText;
+                        var _is503 = errors.some(function(e) { return /503|high demand|temporarily unavailable|service unavailable/i.test(e); });
+                        var _hint503 = _is503 ? window._t(
+                            '\n\n💡 무료 AI 모델은 요청이 한꺼번에 몰리면 일시적으로 거부할 수 있습니다(HTTP 503).\n→ PDF를 1~2개씩 나눠서 다시 시도해보세요.\n→ 잠시 후(수분) 재시도하면 보통 해소됩니다.',
+                            '\n\n💡 Free AI models may temporarily reject requests when demand spikes (HTTP 503).\n→ Try uploading 1–2 PDFs at a time.\n→ Retrying after a few minutes usually resolves it.'
+                        ) : '';
+                        summaryText = window._t('⚠️ 일부 파일은 추출에 실패해 건너뛰었습니다(' + errors.length + '건): ' + errors.join('; '),
+                            '⚠️ Skipped ' + errors.length + ' file(s) that failed to extract: ' + errors.join('; ')) + _hint503 + '\n\n' + summaryText;
                     }
                     window._ganttQaShowConfirmButtons(summaryText,
                         [{ label: window._t('✅ 확인', '✅ Confirm'), value: window._t('확인', 'confirm'), style: 'confirm' }]);
