@@ -2010,6 +2010,97 @@ def download_documents_batch(materials, doc_type='P01'):
 # 그 열 위치를 동적으로 찾아내도록 수정**(`_sap_read_material_label_matrix`). 앞으로 이
 # 라벨 매트릭스 구조를 가진 다른 SAP 검색도움말을 자동화할 때도, 열 번호를 한 번 발견
 # 했다고 고정값으로 믿지 말고 항상 헤더 행에서 동적으로 찾을 것.
+def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_data_row=3):
+    """검색도움말(SAPLSDH4) 결과 라벨 매트릭스를 **열 이름 그대로** 통째로 읽는 범용 리더
+    (2026-09-28 신규 — `_sap_read_material_label_matrix`가 자재 전용으로 열 이름을 하드코딩
+    해둔 것을, "프로젝트 코드 조회"처럼 다른 검색도움말에도 쓸 수 있게 일반화한 것).
+    ⚠️ 결과가 한 화면을 넘으면 스크롤해야 다 보인다(사용자 매크로도 position=469까지 내렸음)
+    — `wnd[1]/usr`의 세로 스크롤바를 한 화면씩 내리며 중복 없이 모은다.
+    반환: (헤더목록:[str], 행목록:[[str]]) — 헤더 순서와 각 행의 셀 순서가 서로 대응한다."""
+    id_re = re.compile(r'lbl\[(\d+),(\d+)\]$')
+
+    def _scan_visible():
+        """지금 화면에 보이는 라벨을 {행: {열: 텍스트}}로 모은다."""
+        out = {}
+        try:
+            usr = session.findById('wnd[1]/usr')
+            children = usr.Children
+        except Exception:
+            return out
+        for i in range(children.Count):
+            try:
+                child = children.ElementAt(i)
+                m = id_re.search(str(child.Id))
+                if not m:
+                    continue
+                col, row = int(m.group(1)), int(m.group(2))
+                out.setdefault(row, {})[col] = (child.Text or '').strip()
+            except Exception:
+                continue
+        return out
+
+    visible = _scan_visible()
+    if not visible:
+        return [], []
+    header_cells = visible.get(header_row, {})
+    cols = sorted(header_cells.keys())
+    headers = [header_cells[c] for c in cols]
+    if not cols:
+        return [], []
+
+    rows, seen = [], set()
+
+    def _collect(snapshot):
+        for row_no in sorted(snapshot.keys()):
+            if row_no < first_data_row:
+                continue
+            cells = snapshot[row_no]
+            vals = [cells.get(c, '') for c in cols]
+            if not any(v for v in vals):
+                continue
+            key = '\x01'.join(vals)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(vals)
+
+    _collect(visible)
+    # 스크롤하며 나머지 페이지 수집 — 위치가 더 안 내려가면(끝) 중단.
+    last_pos = -1
+    while len(rows) < max_results:
+        try:
+            sb = session.findById('wnd[1]/usr').verticalScrollbar
+            pos, page, maximum = int(sb.position), int(sb.pageSize or 10), int(sb.maximum)
+        except Exception:
+            break
+        if pos >= maximum or pos == last_pos:
+            break
+        last_pos = pos
+        try:
+            sb.position = min(maximum, pos + max(1, page))
+        except Exception:
+            break
+        time.sleep(0.15)
+        _collect(_scan_visible())
+
+    rows = rows[:max_results]
+
+    # 🧹 [2026-09-28] 검색도움말마다 헤더가 몇 번째 행인지 다르다 — 내부오더 검색도움말은
+    # 1행이 필터 영역("처리그룹"/"00")이고 진짜 헤더("오더")가 데이터 첫 행으로 잡혔다(실사용
+    # 확인). 행 번호를 더 하드코딩하는 대신, ① 전부 비어 있는 열을 버리고 ② 헤더가 비었으면
+    # 첫 행을 헤더로 승격시켜 정리한다 — 어떤 검색도움말이든 같은 규칙으로 깔끔해진다.
+    keep = [i for i in range(len(cols))
+            if (i < len(headers) and headers[i]) or any(r[i] for r in rows)]
+    if keep and len(keep) != len(cols):
+        headers = [headers[i] if i < len(headers) else '' for i in keep]
+        rows = [[r[i] for i in keep] for r in rows]
+    if rows and not any(headers):
+        headers, rows = rows[0], rows[1:]
+    # 헤더와 똑같은 내용이 데이터 행으로 또 잡힌 경우 제거
+    rows = [r for r in rows if r != headers]
+    return headers, rows
+
+
 def _sap_read_material_label_matrix(session, max_results=200):
     """자재 검색도움말(SAPLSDH4 "M: 자재 번호/자재 내역") 결과 화면의 라벨 매트릭스에서
     자재번호/자재내역을 읽는다. 열 위치를 하드코딩하지 않고, 헤더 행(row=1)의 GuiLabel
@@ -2135,6 +2226,168 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
         raise RuntimeError(f'패턴 "{pattern}"이 너무 광범위합니다(최소 {max_results}건 이상 매치) — 더 구체적인 패턴으로 다시 시도해주세요.')
 
     return materials
+
+
+# ── "프로젝트 코드(내부오더) 패턴 조회" (MB21, 2026-09-28 신규, 사용자 요청) ──────────
+# ℹ️ **MB21의 사내 정식 업무 명칭은 "계정대체청구서 발행"**(2026-09-28 사용자 지정) — 지금은
+# 프로젝트 코드 조회용으로만 쓰지만, 나중에 이 트랜잭션으로 실제 계정대체청구서 발행 기능을
+# 붙일 예정이다. 그때 이 함수(조회, 저장 없음)와 발행 기능(쓰기)을 반드시 분리해서 만들 것.
+# 사용자가 준 매크로(`프로젝트 코드확인.vbs`) 기반. 프로젝트코드는 MB21(예약 생성) 화면의
+# 계정지정 블록에 있는 **내부오더(COBL-AUFNR) 검색도움말**에서 패턴으로 찾는다 — 이 검색도움말
+# 팝업은 이미 이 코드베이스가 쓰고 있는 자재내역 패턴 조회(SAPLSDH4:0220)와 **완전히 같은 구조**라
+# 입력 필드/결과 읽기 로직을 그대로 재사용한다(다른 점은 패턴 입력칸의 행 번호뿐: 자재는
+# `[0,24]`, 여기는 매크로 기준 `[3,24]` — 검색도움말마다 달라서 못 찾으면 후보를 훑는다).
+# ⚠️ 매크로는 기준일자/이동유형/플랜트를 **F4 목록에서 좌표(lbl[1,32] 등)로** 골랐는데, 그 좌표는
+# 목록 내용이 바뀌면 엉뚱한 값을 고르게 되므로 재현하지 않는다(화면 좌표 하드코딩 금지 원칙).
+# 대신 **화면에 이미 들어있는 값(SAP이 기억하는 직전 입력값)을 그대로 두고**, 인자로 명시했을
+# 때만 덮어쓴다 — 조회는 어차피 아무것도 저장하지 않으므로 헤더 값이 무엇이든 상관없다.
+# ⚠️ 읽기 전용: 어떤 값도 선택/채택하지 않고, 끝나면 팝업을 F12로 닫고 `/n`으로 빠져나온다.
+def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=None):
+    """프로젝트 코드(내부오더 AUFNR)를 와일드카드 패턴으로 조회한다. 예: "*G26*"."""
+    pattern = (pattern or '').strip()
+    if not pattern:
+        raise RuntimeError('조회할 프로젝트 코드 패턴을 지정해주세요. 예: *G26*')
+    if '*' not in pattern:
+        pattern = f'*{pattern}*'  # 사람이 "G26"만 말해도 부분일치로 찾아준다
+
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB21'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+    wnd = session.findById('wnd[0]')
+
+    # 🐛 [2026-09-28 실사용 확인] MB21 초기화면의 필요일(RSDAT)/이동유형(BWART)/플랜트(WERKS)는
+    # 셋 다 필수인데 SAP이 직전 값을 기억하지 않아 비어 있었다("모든 필수 입력 필드에 값을
+    # 입력하십시오"). 조회는 아무것도 저장하지 않으므로 이 값들은 **검색도움말까지 가기 위한
+    # 통과용**일 뿐이다 — 이동유형은 **사용자가 알려준 951**을 기본으로 쓴다(2026-09-28).
+    # 처음엔 표준 SAP 관례대로 261(오더에 대한 출고)을 넣었다가 SAP이 "261에 대한 예약이
+    # 불가능합니다 (다른 이동유형을 선택하십시오)"로 거절한 것을 실사용에서 확인했다 — 이
+    # 시스템에서 예약 가능한 이동유형은 사내 설정을 따르므로 추측하지 말 것.
+    _PC_DEFAULT_BWART = '951'
+    _set_text_on_best_candidate(wnd, 'RM07M-RSDAT', str(rsdat or time.strftime('%Y%m%d')))
+    _set_text_on_best_candidate(wnd, 'RM07M-BWART', str(bwart or _PC_DEFAULT_BWART))
+    _set_text_on_best_candidate(wnd, 'RM07M-WERKS', str(werks or '1000'))
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[7]').press()  # 매크로와 동일 — 품목(계정지정) 화면으로
+    except Exception as e:
+        raise RuntimeError(f'MB21에서 다음 화면으로 넘어가지 못했습니다: {e}')
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+
+    # 상태표시줄에 필수입력 오류가 떠서 화면이 안 넘어갔을 수 있다 — 사유를 그대로 전달한다.
+    # ⚠️ `_find_by_id_substring`은 같은 이름의 **라벨**(lblCOBL-AUFNR)을 먼저 잡는다(CLAUDE.md의
+    #    알려진 함정) — 라벨에 setFocus()해도 F4가 안 열려서 "팝업이 뜨지 않았습니다"로 실패했다
+    #    (2026-09-28 실사용 확인). 반드시 입력칸(ctxt…)을 골라야 한다.
+    aufnr_field = None
+    for cand in _find_all_by_id_substring(wnd, 'COBL-AUFNR'):
+        try:
+            if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                aufnr_field = cand
+                break
+        except Exception:
+            continue
+    if aufnr_field is None:
+        sbar = ''
+        try:
+            sbar = (session.findById('wnd[0]/sbar').Text or '').strip()
+        except Exception:
+            pass
+        detail = f' [SAP 상태표시줄: "{sbar}"]' if sbar else ''
+        raise RuntimeError(
+            'MB21 화면에서 내부오더(COBL-AUFNR) 입력칸을 찾지 못했습니다.' + detail +
+            ' — 기준일자/이동유형/플랜트 같은 필수 항목이 비어 있어 다음 화면으로 넘어가지 못했을 수 있습니다'
+            ' (이동유형을 bwart 인자로 지정해보세요).')
+
+    try:
+        aufnr_field.setFocus()
+        aufnr_field.caretPosition = 0   # 매크로와 동일
+        wnd.sendVKey(4)  # F4 = 검색도움말
+    except Exception as e:
+        raise RuntimeError(f'내부오더 검색도움말(F4)을 열지 못했습니다: {e}')
+
+    popup = None
+    for _ in range(8):   # 팝업이 뜰 때까지 짧게 재시도(화면이 무거우면 1초로는 부족)
+        time.sleep(0.4)
+        try:
+            popup = session.findById('wnd[1]')
+            break
+        except Exception:
+            continue
+    if popup is None:
+        raise RuntimeError('내부오더 검색도움말 팝업이 뜨지 않았습니다.')
+
+    # 패턴 입력칸 — 매크로에서 확인된 [3,24]를 먼저 쓰고, 없으면 같은 이름의 후보를 훑는다.
+    base = 'wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/sub:SAPLSDH4:0220'
+    field = None
+    try:
+        field = session.findById(f'{base}/txtG_SELFLD_TAB-LOW[3,24]')
+    except Exception:
+        for cand in _find_all_by_id_substring(popup, 'G_SELFLD_TAB-LOW'):
+            try:
+                cand.text = pattern
+                field = cand
+                break
+            except Exception:
+                continue
+    if field is None:
+        raise RuntimeError('내부오더 검색도움말에서 패턴 입력칸(G_SELFLD_TAB-LOW)을 찾지 못했습니다.')
+    try:
+        field.text = pattern
+        field.setFocus()
+        field.caretPosition = len(pattern)
+    except Exception as e:
+        raise RuntimeError(f'검색 패턴을 입력하지 못했습니다: {e}')
+
+    session.findById('wnd[1]').sendVKey(0)  # 검색 실행
+    time.sleep(1.2)
+
+    headers, rows = [], []
+    try:
+        session.findById('wnd[1]')
+        headers, rows = _sap_read_searchhelp_matrix(session, max_results)
+    except Exception:
+        pass
+
+    # 읽기만 하고 아무것도 고르지 않는다 — 팝업 닫고 MB21에서도 빠져나온다(저장 없음).
+    for _ in range(3):
+        try:
+            session.findById('wnd[1]').sendVKey(12)
+            time.sleep(0.2)
+        except Exception:
+            break
+    try:
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/n'
+        session.findById('wnd[0]').sendVKey(0)
+    except Exception:
+        pass
+
+    # 🧹 이 기능이 원하는 건 "코드 목록" 하나뿐이다 — 검색도움말 화면의 필터 영역("처리그룹"/"00")
+    # 이나 열 제목("오더")이 행으로 섞여 들어오므로, 코드처럼 생긴 값만 골라 정리한다.
+    label_like = {h.strip() for h in headers if h.strip()} | {'오더', 'Order', '내부오더'}
+    codes, seen = [], set()
+    for r in rows:
+        for cell in r:
+            v = (cell or '').strip()
+            if not v or v in label_like or v in seen:
+                continue
+            if not re.match(r'^[A-Za-z0-9][A-Za-z0-9_\-/.]{2,19}$', v):
+                continue  # 공백/한글이 섞인 설명 문구 등은 코드가 아님
+            seen.add(v)
+            codes.append(v)
+
+    if not codes:
+        return {'ok': False, 'pattern': pattern,
+                'error': f'패턴 "{pattern}"에 맞는 프로젝트 코드를 찾지 못했습니다 — 패턴을 넓혀보세요(예: *G26*).'}
+
+    text = (f'[SAP 프로젝트 코드 조회(MB21 "계정대체청구서 발행" 화면의 내부오더 검색): '
+            f'패턴 "{pattern}" — {len(codes)}건]\n\n' + '\n'.join(codes))
+    return {'ok': True, 'pattern': pattern, 'count': len(codes), 'codes': codes,
+            'headers': headers, 'rows': rows, 'text': text,
+            'truncated': len(rows) >= max_results}
 
 
 def download_documents_by_pattern(pattern, doc_type='P01'):
@@ -3259,6 +3512,11 @@ def main():
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             mats = resolve_materials_by_description_pattern(pattern)
             result = {'ok': True, 'pattern': pattern, 'count': len(mats), 'materials': mats}
+        elif action == 'fetch_project_codes':
+            pattern = sys.argv[2] if len(sys.argv) > 2 else ''
+            bwart = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
+            werks = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            result = fetch_project_codes(pattern, bwart, werks)
         elif action == 'download_documents_by_pattern':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             doc_type = sys.argv[3] if len(sys.argv) > 3 else 'P01'

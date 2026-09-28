@@ -1943,6 +1943,21 @@ def sap_material_documents():
     return jsonify(data), status
 
 
+@app.route('/sap-project-codes', methods=['GET'])
+def sap_project_codes():
+    # 🗂 [2026-09-28 신규, 사용자 요청] "*G26* 26년도 프로젝트 코드 조회해줘" — MB21 화면의
+    #    내부오더(COBL-AUFNR) 검색도움말로 프로젝트 코드를 패턴 조회한다(읽기 전용, 저장 없음).
+    #    실제 조작은 sap_bridge_32.py의 fetch_project_codes() — 사용자가 준 매크로
+    #    "프로젝트 코드확인.vbs" 기반. 구매오더 요청의 프로젝트코드를 확인할 때도 쓴다.
+    pattern = (request.args.get('pattern') or '').strip()
+    bwart = (request.args.get('bwart') or '').strip()
+    werks = (request.args.get('werks') or '').strip()
+    if not pattern:
+        return jsonify({'ok': False, 'error': '조회할 패턴(pattern 파라미터)이 필요합니다. 예: /sap-project-codes?pattern=*G26*'}), 400
+    data, status = _run_sap_bridge(['fetch_project_codes', pattern, bwart, werks], 90, 'SAP 프로젝트 코드 조회')
+    return jsonify(data), status
+
+
 @app.route('/sap-material-price', methods=['GET'])
 def sap_material_price():
     # 💰 [2026-09-23 신규, 실사용 제보] "표준가격/기간별단가 확인해줘" — MM03 "회계 1" 탭의

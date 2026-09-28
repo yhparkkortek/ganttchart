@@ -3990,6 +3990,56 @@ ${docsJson}`;
             return;
         }
 
+        // 🗂🚫🤖 [2026-09-28 신규, 사용자 요청] "*G26* 26년도 프로젝트 코드 조회해줘" — MB21
+        //    (사내 정식 명칭 "계정대체청구서 발행") 화면의 내부오더 검색도움말로 프로젝트 코드를
+        //    패턴 조회한다(읽기 전용, 저장 없음). 사용자가 준 매크로 "프로젝트 코드확인.vbs" 기반.
+        //    구매오더 요청에 넣을 프로젝트코드가 SAP에 실제로 있는지 확인할 때도 쓴다.
+        //    자재번호와 헷갈리지 않도록 "프로젝트"+"코드" 조합이 있을 때만 트리거한다.
+        const _projCodeRe = /프로젝트\s*(코드|번호)/;
+        if (_projCodeRe.test(question)) {
+            // 패턴 추출: "*G26*"처럼 별표가 있으면 그대로, 없으면 "G26"류 토큰을 찾아 감싼다.
+            let _pcPattern = (question.match(/[A-Za-z0-9_\-/.]*\*[A-Za-z0-9_\-/.*]*/) || [])[0] || '';
+            if (!_pcPattern) {
+                const _tok = question.match(/\b([A-Za-z]{1,3}\d{2,}[A-Za-z0-9]*)\b/);
+                if (_tok) _pcPattern = '*' + _tok[1] + '*';
+            }
+            if (!_pcPattern) {
+                const _yr = question.match(/(\d{2})\s*년도?/);
+                if (_yr) _pcPattern = '*G' + _yr[1] + '*';   // "26년도 프로젝트 코드" → *G26*
+            }
+            if (_pcPattern) {
+                if (!_skipUserHistoryPush) {
+                    window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                }
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+                    `SAP에서 프로젝트 코드 "${_pcPattern}"를 조회하는 중... (오래 걸리면 "그만"이라고 하시면 중단됩니다)`,
+                    `Looking up project codes matching "${_pcPattern}" in SAP...`), pending: true });
+                window._renderGanttQaMessages();
+                let _pcReply;
+                try {
+                    const res = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/sap-project-codes?pattern=' + encodeURIComponent(_pcPattern)), 120000,
+                        window._t('SAP 프로젝트 코드 조회 시간 초과', 'SAP project code lookup timed out')
+                    );
+                    const data = await res.json();
+                    if (data.ok) {
+                        const codes = data.codes || [];
+                        _pcReply = `🗂 ${window._t('프로젝트 코드', 'Project codes')} "${data.pattern}" — ${codes.length}${window._t('건', '')}\n` + codes.join('\n');
+                    } else {
+                        _pcReply = '⚠️ ' + (data.error || window._t('프로젝트 코드 조회 실패', 'Project code lookup failed'));
+                    }
+                } catch (e) {
+                    _pcReply = '⚠️ ' + window._t('프로젝트 코드 조회 실패: ', 'Project code lookup failed: ') + (e && e.message ? e.message : e);
+                }
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: _pcReply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+        }
+
         // 💵🚫🤖 [2026-09-23 신규, 실사용 제보 "표준가격 기간별 단가 확인해줘"] MM03 "회계 1"
         //    탭의 표준가격(STPRS)/기간별단가(PVPRS)를 가격단위(PEINH)로 나눈 실제 단가까지
         //    계산해서 보여준다(사용자 지적: "가격 단위 수량이 있어, 나누기 해서 알려줘야해").
