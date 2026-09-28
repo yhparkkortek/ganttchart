@@ -3294,12 +3294,16 @@ def _save_po_pdf_to_file(save_path):
     time.sleep(0.2)
     _ct.windll.user32.AttachThreadInput(my_tid, dlg_tid, False)
 
-    # 파일이름 입력: Ctrl+A 후 클립보드 붙여넣기
-    _set_windows_clipboard_text(save_path)
-    time.sleep(0.15)
+    # 파일이름 입력: Ctrl+A → 직접 타이핑 (클립보드 사용 안 함)
+    # ⚠️ 이전(v8) 클립보드 방식(_set_windows_clipboard_text + Ctrl+V)은
+    # Excel이 클립보드 변경을 감지해 "클립보드에 많은 양의 내용" 팝업을 띄움.
+    # send_keys는 파일 경로 문자(\, :, 한글, 숫자 등)를 특수문자 없이 직접 전송 가능.
+    # pywinauto send_keys 특수문자({, }, +, ^, %, (, ), ~)를 이스케이프 처리.
+    import re as _re
+    _safe_path = _re.sub(r'([{}+^%()~])', r'{\1}', save_path)
     send_keys('^a')
     time.sleep(0.1)
-    send_keys('^v')
+    send_keys(_safe_path, with_spaces=True)
     time.sleep(0.3)
 
     # 저장 버튼 클릭 (버튼 못 찾으면 Enter로 폴백)
@@ -3314,8 +3318,6 @@ def _save_po_pdf_to_file(save_path):
         _wa.mouse_event(_wc.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
     else:
         send_keys('{ENTER}')
-    time.sleep(0.5)
-    _clear_windows_clipboard()
     time.sleep(1.0)
 
     # "파일이 이미 있습니다 — 덮어쓰시겠습니까?" 같은 확인창이 뜰 수 있음 — 뜨면 Enter로 승인.
