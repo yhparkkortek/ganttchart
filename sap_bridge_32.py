@@ -3229,11 +3229,24 @@ def _save_po_pdf_to_file(save_path):
         raise RuntimeError(f'PDF 저장("사본 저장") 다이얼로그가 뜨지 않았습니다(Ctrl+S, Ctrl+Shift+S 둘 다 시도함) — PDF 미리보기가 열려있지 않거나, 단축키가 전달되지 않았을 수 있습니다. (열려있던 창: {titles_str})')
 
     save_dlg.set_focus()
-    time.sleep(0.3)
+    time.sleep(0.5)
+
+    # 파일명 입력란에 전체 경로를 입력한다.
+    # ⚠️ [2026-09-28 재작성] 이전 구현(child_window class_name='Edit' found_index=0)이
+    # Windows 파일 저장 다이얼로그의 주소창(Address bar)이나 검색 필드를 잡아서 실제
+    # 파일명 칸에 경로가 안 들어가는 문제가 있었음 — 결과: 기본값(바탕화면+랜덤 파일명)으로
+    # 저장됨. 수정: (1) Alt+N으로 "파일 이름(N):" 단축키를 직접 눌러 파일명 칸에 포커스,
+    # (2) Ctrl+A로 기존 텍스트 전체 선택, (3) 한글 경로를 클립보드 경유로 Ctrl+V 붙여넣기,
+    # (4) Enter로 저장. 한글 경로를 send_keys 직접 타이핑하면 IME 간섭으로 깨질 수 있어
+    # 클립보드(_set_windows_clipboard_text)를 쓴다.
     try:
-        edit = save_dlg.child_window(class_name='Edit', found_index=0)
-        edit.set_focus()
-        edit.set_edit_text(save_path)
+        send_keys('%n')  # Alt+N → 파일 이름(N): 입력란으로 포커스 이동
+        time.sleep(0.3)
+        send_keys('^a')  # 기존 텍스트 전체 선택
+        time.sleep(0.1)
+        _set_windows_clipboard_text(save_path)  # 경로를 클립보드에 올림
+        send_keys('^v')  # 붙여넣기
+        time.sleep(0.3)
     except Exception as e:
         raise RuntimeError(f'저장 다이얼로그의 파일명 입력란을 찾지 못했습니다: {e}')
     time.sleep(0.3)
