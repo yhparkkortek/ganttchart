@@ -3121,14 +3121,28 @@ ${docsJson}`;
         //    않고 그 말풍선 자체를 바로 갱신**한다 — 새로 push하면, 잠시 뒤 원래 요청이 응답을
         //    받고 실행하는 `history.pop()`(배열의 "마지막" 항목을 지우는 기존 관례)이 방금 push한
         //    이 메시지를 엉뚱하게 지워버려 원래 pending 말풍선이 "⏳"인 채로 영원히 남는다.
-        const _sapCancelRe = /^\s*(?:작업\s*|실행\s*|조회\s*)?(?:중단|취소|그만|멈춰|스톱|stop|cancel)(?:해\s*줘|해줘|해주세요|줄래|줘|주세요)?\s*[.!?~]*\s*$/i;
-        if (_sapCancelRe.test(question)) {
+        // SAP 취소 — 2단계 범위:
+        //   넓은(SAP 실행 중일 때만): 패스/완료/다음처럼 평소에 다른 뜻으로도 쓰이는 단어 포함
+        //   좁은(SAP 미실행 시에도): 중단/그만/멈춰처럼 맥락 없이도 명확한 취소 단어만
+        // [2026-09-28] 사용자 요청: "패스", "완료", "다음" 등 유사 취소 표현도 인식
+        const _suf = '(?:해\s*줘|해줘|해주세요|줄래|줘|주세요|해)?';
+        const _sapCancelBroadRe = new RegExp(
+            '^\\s*(?:작업\\s*|실행\\s*|조회\\s*)?' +
+            '(?:중단|취소|그만|멈춰|스톱|패스|완료|다음|skip|pass|done|next|stop|cancel)' +
+            _suf + '\\s*[.!?~]*\\s*$', 'i');
+        const _sapCancelNarrowRe = new RegExp(
+            '^\\s*(?:작업\\s*|실행\\s*|조회\\s*)?' +
+            '(?:중단|취소|그만|멈춰|스톱|stop|cancel)' +
+            _suf + '\\s*[.!?~]*\\s*$', 'i');
+        // 진행 중인 pending SAP 요청 여부를 먼저 확인
+        let _pendingMsg = null;
+        for (let i = window._ganttQaHistory.length - 1; i >= 0; i--) {
+            const m = window._ganttQaHistory[i];
+            if (m && m.role === 'ai' && m.pending) { _pendingMsg = m; break; }
+        }
+        const _isCancelCmd = _pendingMsg ? _sapCancelBroadRe.test(question) : _sapCancelNarrowRe.test(question);
+        if (_isCancelCmd) {
             input.value = '';
-            let _pendingMsg = null;
-            for (let i = window._ganttQaHistory.length - 1; i >= 0; i--) {
-                const m = window._ganttQaHistory[i];
-                if (m && m.role === 'ai' && m.pending) { _pendingMsg = m; break; }
-            }
             if (_pendingMsg) {
                 _pendingMsg.text = '⏹ ' + window._t('중단 요청을 보냈습니다 — SAP 작업을 종료하는 중...', 'Stop requested — terminating the SAP operation...');
                 window._renderGanttQaMessages();
