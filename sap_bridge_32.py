@@ -3268,42 +3268,80 @@ def _save_po_pdf_to_file(save_path):
     except Exception:
         pass
 
-    # 단계 2: win32gui WM_SETTEXT — 가장 아래쪽 넓은 Edit 컨트롤(파일명 입력란)에 직접 전송
+    # 단계 2: win32gui — ComboBoxEx32(파일명 입력 콤보) 안의 Edit을 정확히 타겟팅
+    # y좌표 오름차순으로 "가장 아래" Edit을 고르면 파일형식 콤보의 내부 Edit이 선택돼
+    # 폴더는 이동되지만 파일명이 안 바뀌는 문제가 있었음 (2026-09-28 수정).
     if not path_set:
         try:
             import win32gui as _w32g
             import win32con as _w32c
             _dlg_hwnd = save_dlg.handle
-            _edits = []
-            def _enum_edits_cb(hwnd, _):
+
+            # ComboBoxEx32 클래스 수집 (파일명 입력란은 이 클래스)
+            _combo_ex_hwnds = []
+            def _find_combo_ex(hwnd, _):
                 try:
-                    if _w32g.GetClassName(hwnd) == 'Edit' and \
-                       _w32g.IsWindowVisible(hwnd) and _w32g.IsWindowEnabled(hwnd):
-                        r = _w32g.GetWindowRect(hwnd)
-                        if (r[2] - r[0]) > 100:  # 너무 좁은 컨트롤(검색창 등) 제외
-                            _edits.append((r[1], hwnd))  # (y좌표, hwnd)
+                    if _w32g.GetClassName(hwnd) == 'ComboBoxEx32':
+                        _combo_ex_hwnds.append(hwnd)
                 except Exception:
                     pass
                 return True
-            _w32g.EnumChildWindows(_dlg_hwnd, _enum_edits_cb, None)
-            if _edits:
-                _edits.sort(key=lambda x: x[0], reverse=True)  # 제일 아래(파일명 칸)가 먼저
-                _fn_hwnd = _edits[0][1]
-                _w32g.SetFocus(_fn_hwnd)
-                time.sleep(0.1)
-                _w32g.SendMessage(_fn_hwnd, _w32c.WM_SETTEXT, 0, save_path)
-                path_set = True
+            _w32g.EnumChildWindows(_dlg_hwnd, _find_combo_ex, None)
+
+            if _combo_ex_hwnds:
+                # ComboBoxEx32 안의 Edit 찾기
+                _fn_edits = []
+                def _find_inner_edit(hwnd, _):
+                    try:
+                        if _w32g.GetClassName(hwnd) == 'Edit':
+                            _fn_edits.append(hwnd)
+                    except Exception:
+                        pass
+                    return True
+                _w32g.EnumChildWindows(_combo_ex_hwnds[0], _find_inner_edit, None)
+                if _fn_edits:
+                    _fn_hwnd = _fn_edits[0]
+                    _w32g.SetFocus(_fn_hwnd)
+                    time.sleep(0.1)
+                    _w32g.SendMessage(_fn_hwnd, _w32c.WM_SETTEXT, 0, save_path)
+                    path_set = True
+            else:
+                # ComboBoxEx32가 없으면(모던 다이얼로그) 두 번째로 낮은 Edit을 시도
+                # (가장 낮은 것은 파일형식 콤보 내부 Edit일 수 있으므로 두 번째를 선택)
+                _edits = []
+                def _enum_edits_cb(hwnd, _):
+                    try:
+                        if _w32g.GetClassName(hwnd) == 'Edit' and \
+                           _w32g.IsWindowVisible(hwnd) and _w32g.IsWindowEnabled(hwnd):
+                            r = _w32g.GetWindowRect(hwnd)
+                            if (r[2] - r[0]) > 100:
+                                _edits.append((r[1], hwnd))
+                    except Exception:
+                        pass
+                    return True
+                _w32g.EnumChildWindows(_dlg_hwnd, _enum_edits_cb, None)
+                if len(_edits) >= 2:
+                    _edits.sort(key=lambda x: x[0], reverse=True)
+                    _fn_hwnd = _edits[1][1]  # 두 번째로 아래쪽 = 파일명 칸
+                    _w32g.SetFocus(_fn_hwnd)
+                    time.sleep(0.1)
+                    _w32g.SendMessage(_fn_hwnd, _w32c.WM_SETTEXT, 0, save_path)
+                    path_set = True
         except Exception:
             pass
 
-    # 단계 3: 클립보드 폴백 — Alt+N 없이 Ctrl+A + Ctrl+V만
+    # 단계 3: 클립보드 폴백 — 다이얼로그 재포커싱 후 Ctrl+A + Ctrl+V
+    # DeepL 등 클립보드 감시 프로그램이 타이밍을 방해할 수 있어 포커스 확보 후 충분히 대기
     if not path_set:
+        save_dlg.set_focus()
+        time.sleep(0.5)  # 포커스 안정화 후 클립보드 작업
         _set_windows_clipboard_text(save_path)
+        time.sleep(0.2)
         send_keys('^a')
-        time.sleep(0.1)
+        time.sleep(0.2)
         send_keys('^v')
 
-    time.sleep(0.3)
+    time.sleep(0.4)
     send_keys('{ENTER}')
     time.sleep(0.5)
     _clear_windows_clipboard()  # PDF 저장 후 클립보드 비움 — Excel 팝업 방지
@@ -3538,53 +3576,55 @@ def _attach_failure_info(result):
 # ⚠️ 즐겨찾기 노드("F00216")는 그 사람 SAP GUI 개인 설정이라 다른 세션/PC에서 그대로
 # 재현된다는 보장이 없음 — 있으면 쓰고, 실패하면(예외) 이미 한 번 실행해둔 화면을 그대로 쓴다.
 def post_goods_receipt(ebeln):
-    """ZMM062에서 구매오더 `ebeln`의 자재를 입고 처리(전기)한다. 입고수량=발주수량,
-    입고일자=생성일자로 자동 채운다(사용자 요청)."""
+    """ZMM062에서 구매오더 `ebeln`의 자재를 입고 처리(전기)한다.
+    입고수량=발주수량(MENGE), 입고일자=오늘(F4 날짜선택).
+    시퀀스는 사용자가 기록한 VBS 매크로(입고처리.vbs) 기준으로 재작성됨."""
     ebeln = (ebeln or '').strip()
     if not ebeln:
         raise RuntimeError('구매오더 번호(EBELN)를 지정해주세요.')
 
+    today = time.strftime('%Y%m%d')
     session = _get_sap_session()
     session.StartTransaction('ZMM062')
     time.sleep(0.8)
 
-    # 리포트(변형) 선택 팝업 — ZCO021 등과 같은 패턴, 없는 세션도 있을 수 있어 조용히 건너뜀.
+    # 리포트(변형) 선택 팝업 — 없는 세션도 있어 조용히 건너뜀
     try:
         wnd1 = session.findById('wnd[1]')
         wnd1.findById('usr/lbl[1,3]').caretPosition = 2
-        wnd1.sendVKey(2)  # F2 = 선택(Choose)
+        wnd1.sendVKey(2)
         time.sleep(0.5)
     except Exception:
         pass
 
-    # 관리회계영역(P_EKORG) — 매크로에서 F4 값도움말의 첫 항목을 그대로 선택.
+    # Plant(P_WERKS) = 9000, F4 값도움말 → lbl[1,3] 선택 (VBS 기준)
     try:
         wnd = session.findById('wnd[0]')
-        wnd.findById('usr/ctxtP_EKORG').setFocus()
-        wnd.findById('usr/ctxtP_EKORG').caretPosition = 2
-        session.findById('wnd[0]').sendVKey(4)  # F4
-        w1 = session.findById('wnd[1]')
-        w1.findById('usr/lbl[1,6]').setFocus()
-        w1.findById('usr/lbl[1,6]').caretPosition = 1
-        w1.sendVKey(2)
-        w1.findById('usr/lbl[1,6]').caretPosition = 2
-        w1.sendVKey(2)
-        w1.findById('tbar[0]/btn[0]').press()
+        wnd.findById('usr/ctxtP_WERKS').text = '9000'
+        wnd.findById('usr/ctxtP_WERKS').caretPosition = 2
+        wnd.sendVKey(4)  # F4
         time.sleep(0.5)
+        w1 = session.findById('wnd[1]')
+        w1.findById('usr/lbl[1,3]').caretPosition = 3
+        w1.sendVKey(2)   # 선택
+        time.sleep(0.4)
     except Exception as e:
-        raise RuntimeError(f'ZMM062 관리회계영역(P_EKORG) 선택 중 오류가 발생했습니다: {e}')
+        raise RuntimeError(f'ZMM062 Plant(P_WERKS) 선택 중 오류: {e}')
 
+    # 구매오더 번호 입력 → 실행(F8)
     wnd = session.findById('wnd[0]')
     try:
         wnd.findById('usr/ctxtS_EBELN-LOW').text = ebeln
-        wnd.findById('tbar[1]/btn[8]').press()  # 실행(F8)
+        wnd.findById('usr/ctxtS_EBELN-LOW').setFocus()
+        wnd.findById('usr/ctxtS_EBELN-LOW').caretPosition = len(ebeln)
+        wnd.findById('tbar[1]/btn[8]').press()
         time.sleep(1.2)
     except Exception as e:
-        raise RuntimeError(f'ZMM062 구매오더 번호 입력/실행 중 오류가 발생했습니다: {e}')
+        raise RuntimeError(f'ZMM062 구매오더 번호 입력/실행 중 오류: {e}')
 
-    # 매크로의 "뒤로 → 즐겨찾기 더블클릭 → 같은 오더번호로 재실행" — 위 주석 참고.
+    # 뒤로 → 즐겨찾기 더블클릭 → 같은 오더번호로 재실행 (VBS 그대로)
     try:
-        session.findById('wnd[0]/tbar[0]/btn[3]').press()  # 뒤로
+        session.findById('wnd[0]/tbar[0]/btn[3]').press()
         time.sleep(0.5)
         session.findById(
             'wnd[0]/usr/cntlIMAGE_CONTAINER/shellcont/shell/shellcont[0]/shell'
@@ -3592,72 +3632,75 @@ def post_goods_receipt(ebeln):
         time.sleep(0.8)
         wnd = session.findById('wnd[0]')
         wnd.findById('usr/ctxtS_EBELN-LOW').text = ebeln
+        wnd.findById('usr/ctxtS_EBELN-LOW').setFocus()
+        wnd.findById('usr/ctxtS_EBELN-LOW').caretPosition = len(ebeln)
         wnd.findById('tbar[1]/btn[8]').press()
         time.sleep(1.2)
     except Exception:
-        pass  # 즐겨찾기 재진입 실패 — 위에서 이미 실행해둔 화면을 그대로 사용
+        pass  # 즐겨찾기 재진입 실패 — 이미 실행해둔 화면을 그대로 사용
 
     wnd = session.findById('wnd[0]')
     try:
         grid = wnd.findById('shellcont/shell')
     except Exception as e:
-        raise RuntimeError(f'입고 처리 입력 화면(그리드)을 찾지 못했습니다 — 구매오더 "{ebeln}"가 입고 대상인지, 이미 처리되지 않았는지 확인해주세요: {e}')
+        raise RuntimeError(f'입고 처리 입력 화면(그리드)을 찾지 못했습니다: {e}')
 
     try:
         row_count = grid.RowCount
     except Exception:
         row_count = 0
     if not row_count:
-        raise RuntimeError(f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목을 찾지 못했습니다 — 오더번호가 맞는지, 이미 입고 처리되지 않았는지 확인해주세요.')
+        raise RuntimeError(f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목이 없습니다 — 이미 처리됐거나 오더번호를 확인해주세요.')
 
+    # 발주수량(MENGE) 읽기
     try:
         order_qty = str(grid.GetCellValue(0, 'MENGE')).strip()
-        created_date = str(grid.GetCellValue(0, 'AEDAT')).strip()
     except Exception as e:
-        raise RuntimeError(f'발주수량(MENGE)/생성일자(AEDAT)를 읽지 못했습니다: {e}')
+        raise RuntimeError(f'발주수량(MENGE)을 읽지 못했습니다: {e}')
     if not order_qty:
-        raise RuntimeError('발주수량(MENGE)을 읽었지만 값이 비어 있습니다 — 화면을 직접 확인해주세요.')
-    if not created_date:
-        raise RuntimeError('생성일자(AEDAT)를 읽었지만 값이 비어 있습니다 — 화면을 직접 확인해주세요.')
+        raise RuntimeError('발주수량(MENGE) 값이 비어 있습니다.')
 
+    # 입고수량(INQTY) 직접 입력 (VBS: modifyCell)
     try:
         grid.modifyCell(0, 'INQTY', order_qty)
+    except Exception as e:
+        raise RuntimeError(f'입고수량(INQTY) 입력 오류: {e}')
+
+    # 입고일자(INDAT) — VBS 기준: currentCellColumn → triggerModified → pressF4 → 날짜 선택
+    try:
         grid.currentCellColumn = 'INDAT'
         grid.triggerModified()
-        grid.modifyCell(0, 'INDAT', created_date)
+        grid.pressF4()
+        time.sleep(0.5)
+        session.findById(
+            'wnd[1]/usr/cntlCONTAINER/shellcont/shell'
+        ).selectionInterval = f'{today},{today}'
+        time.sleep(0.3)
     except Exception as e:
-        raise RuntimeError(f'입고수량/입고일자 입력 중 오류가 발생했습니다: {e}')
+        # F4 날짜 팝업 실패 시 직접 입력으로 폴백
+        try:
+            grid.modifyCell(0, 'INDAT', today)
+        except Exception as e2:
+            raise RuntimeError(f'입고일자(INDAT) 입력 오류: F4 팝업={e}, 직접입력={e2}')
 
-    # 1차 저장 — 매크로에서 확인된 패턴(confirm_save_po와 동일 계열: 저장 버튼 → 확인 팝업).
+    # 행 선택 (VBS: currentCellColumn="" → selectedRows="0")
+    try:
+        grid.currentCellColumn = ''
+        grid.selectedRows = '0'
+    except Exception:
+        pass
+
+    # 저장(입고처리 전기) → 확인 팝업
     try:
         session.findById('wnd[0]/tbar[1]/btn[5]').press()
         time.sleep(1.0)
     except Exception as e:
-        raise RuntimeError(f'저장(SAVE) 중 오류가 발생했습니다: {e}')
+        raise RuntimeError(f'입고처리 저장 중 오류: {e}')
     try:
         session.findById('wnd[1]/tbar[0]/btn[0]').press()
         time.sleep(0.8)
     except Exception:
         pass
-
-    # 매크로에는 이후 여러 컬럼을 선택(selectColumn)하고 행을 고른 뒤 **한 번 더** 저장하는
-    # 시퀀스가 이어진다 — 위 1차 저장이 셀 편집을 확정만 하고, 이 2차 저장이 실제 전기(문서
-    # 생성)일 가능성이 있어(정확한 이유 불명, 추측 금지 원칙) 그대로 재현한다.
-    try:
-        grid = session.findById('wnd[0]/shellcont/shell')
-        grid.setCurrentCell(-1, '')
-        for col in ('STATUS', 'WERKS', 'EKORG', 'EKGRP', 'LIFNR', 'NAME1', 'EBELN', 'EBELP',
-                    'AEDAT', 'GRDAT', 'MATNR', 'MAKTX', 'MEINS', 'SAKTO', 'AUFNR', 'KTEXT',
-                    'KOSTL', 'MCTXT', 'WEMPF', 'MENGE', 'MENGE3', 'INQTY', 'INDAT', 'LGORT'):
-            try:
-                grid.selectColumn(col)
-            except Exception:
-                pass  # 화면에 없는 컬럼은 건너뜀(레이아웃 차이 대비)
-        grid.selectedRows = '0'
-        session.findById('wnd[0]/tbar[1]/btn[5]').press()
-        time.sleep(1.0)
-    except Exception as e:
-        raise RuntimeError(f'입고 처리는 1차 저장까지 됐지만, 최종 확정 단계에서 오류가 발생했습니다 — SAP에서 구매오더 "{ebeln}"의 입고 상태를 직접 확인해주세요: {e}')
     try:
         session.findById('wnd[1]/tbar[0]/btn[12]').press()
         time.sleep(0.8)
@@ -3673,9 +3716,9 @@ def post_goods_receipt(ebeln):
         'ok': True,
         'ebeln': ebeln,
         'orderQty': order_qty,
-        'goodsReceiptDate': created_date,
+        'goodsReceiptDate': today,
         'statusText': status_text,
-        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 (수량: {order_qty}, 입고일자: {created_date}).' + (f' [SAP 상태표시줄: {status_text}]' if status_text else ''),
+        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 (수량: {order_qty}, 입고일자: {today}).' + (f' [SAP 상태표시줄: {status_text}]' if status_text else ''),
     }
 
 
