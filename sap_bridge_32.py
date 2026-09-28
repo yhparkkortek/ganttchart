@@ -3231,24 +3231,63 @@ def _save_po_pdf_to_file(save_path):
     save_dlg.set_focus()
     time.sleep(0.5)
 
-    # 파일명 입력란에 전체 경로를 입력한다.
-    # ⚠️ [2026-09-28 재작성] 이전 구현(child_window class_name='Edit' found_index=0)이
-    # Windows 파일 저장 다이얼로그의 주소창(Address bar)이나 검색 필드를 잡아서 실제
-    # 파일명 칸에 경로가 안 들어가는 문제가 있었음 — 결과: 기본값(바탕화면+랜덤 파일명)으로
-    # 저장됨. 수정: (1) Alt+N으로 "파일 이름(N):" 단축키를 직접 눌러 파일명 칸에 포커스,
-    # (2) Ctrl+A로 기존 텍스트 전체 선택, (3) 한글 경로를 클립보드 경유로 Ctrl+V 붙여넣기,
-    # (4) Enter로 저장. 한글 경로를 send_keys 직접 타이핑하면 IME 간섭으로 깨질 수 있어
-    # 클립보드(_set_windows_clipboard_text)를 쓴다.
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # [2026-09-28 v3] 파일명 입력 — 3단계 폴백 구조
+    # 이전 v2(Alt+N + 클립보드)가 Acrobat에서 Alt+N을 메뉴 단축키로 해석해
+    # 파일명 칸에 포커스가 안 가는 문제가 있었음 → Alt+N 완전히 제거.
+    # 단계 1) pywinauto UIA로 Edit 컨트롤을 직접 찾아 set_edit_text
+    # 단계 2) win32gui WM_SETTEXT로 hWnd에 직접 전송
+    # 단계 3) 클립보드 붙여넣기(Ctrl+A 후 Ctrl+V) — 가장 단순한 폴백
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    path_set = False
+
+    # 단계 1: pywinauto UIA Edit 컨트롤 직접 조작
     try:
-        send_keys('%n')  # Alt+N → 파일 이름(N): 입력란으로 포커스 이동
-        time.sleep(0.3)
-        send_keys('^a')  # 기존 텍스트 전체 선택
+        from pywinauto import Desktop as _Desktop2
+        dlg_uia = _Desktop2(backend='uia').window(handle=save_dlg.handle)
+        edit_ctrl = dlg_uia.child_window(control_type='Edit', found_index=0)
+        edit_ctrl.set_focus()
         time.sleep(0.1)
-        _set_windows_clipboard_text(save_path)  # 경로를 클립보드에 올림
-        send_keys('^v')  # 붙여넣기
-        time.sleep(0.3)
-    except Exception as e:
-        raise RuntimeError(f'저장 다이얼로그의 파일명 입력란을 찾지 못했습니다: {e}')
+        edit_ctrl.set_edit_text(save_path)
+        path_set = True
+    except Exception:
+        pass
+
+    # 단계 2: win32gui WM_SETTEXT — 가장 아래쪽 넓은 Edit 컨트롤(파일명 입력란)에 직접 전송
+    if not path_set:
+        try:
+            import win32gui as _w32g
+            import win32con as _w32c
+            _dlg_hwnd = save_dlg.handle
+            _edits = []
+            def _enum_edits_cb(hwnd, _):
+                try:
+                    if _w32g.GetClassName(hwnd) == 'Edit' and \
+                       _w32g.IsWindowVisible(hwnd) and _w32g.IsWindowEnabled(hwnd):
+                        r = _w32g.GetWindowRect(hwnd)
+                        if (r[2] - r[0]) > 100:  # 너무 좁은 컨트롤(검색창 등) 제외
+                            _edits.append((r[1], hwnd))  # (y좌표, hwnd)
+                except Exception:
+                    pass
+                return True
+            _w32g.EnumChildWindows(_dlg_hwnd, _enum_edits_cb, None)
+            if _edits:
+                _edits.sort(key=lambda x: x[0], reverse=True)  # 제일 아래(파일명 칸)가 먼저
+                _fn_hwnd = _edits[0][1]
+                _w32g.SetFocus(_fn_hwnd)
+                time.sleep(0.1)
+                _w32g.SendMessage(_fn_hwnd, _w32c.WM_SETTEXT, 0, save_path)
+                path_set = True
+        except Exception:
+            pass
+
+    # 단계 3: 클립보드 폴백 — Alt+N 없이 Ctrl+A + Ctrl+V만
+    if not path_set:
+        _set_windows_clipboard_text(save_path)
+        send_keys('^a')
+        time.sleep(0.1)
+        send_keys('^v')
+
     time.sleep(0.3)
     send_keys('{ENTER}')
     time.sleep(1.0)
