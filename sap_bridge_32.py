@@ -3247,80 +3247,29 @@ def _save_po_pdf_to_file(save_path):
     time.sleep(0.5)
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # [2026-09-28 v4] 파일명 입력 — 클립보드 붙여넣기만 사용
-    # v1~v3에서 시도한 WM_SETTEXT / UIA set_edit_text 방식은 모두
-    # EN_CHANGE 알림을 발생시키지 않아 다이얼로그 내부 상태가 갱신되지
-    # 않음(폴더는 이동되지만 파일명이 원래 헥스명 그대로 남는 원인).
-    # 클립보드 붙여넣기(SendInput 기반 Ctrl+V)만이 EN_CHANGE를 발생시켜
-    # 다이얼로그가 새 파일명을 인식한다.
-    # → Win32 컨트롤 탐색 코드 전면 제거, 클립보드 단일 경로로 정리.
+    # [2026-09-28 v5] 다이얼로그 표준 단축키 사용
+    # Alt+N = 파일명 입력란 포커스, Alt+S = 저장 버튼
+    # v1~v4 실패 원인: save_dlg.set_focus()가 OS 전경을 보장하지 않아
+    # Alt+N이 뒤에 있는 Acrobat 메뉴로 빠졌음.
+    # SetForegroundWindow(OS 레벨 전경 전환) 후 단축키를 쓰면 확실히 동작.
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    # 파일명 입력란에 마우스 클릭으로 포커스를 명시적으로 확보한 뒤 붙여넣기
-    # (다이얼로그가 열릴 때 파일명 Edit이 기본 포커스지만, 이전 단계에서
-    #  포커스가 이동됐을 경우를 대비해 ComboBoxEx32 찾아 PostMessage 클릭)
-    try:
-        import win32gui as _w32g
-        import win32con as _w32c
-        import win32api as _w32a
-        _dlg_hwnd = save_dlg.handle
-        _fn_hwnd = None
-
-        # ComboBoxEx32(파일명 입력란 클래스) → 내부 Edit 탐색
-        _combo_ex = []
-        def _find_cex(h, _):
-            try:
-                if _w32g.GetClassName(h) == 'ComboBoxEx32':
-                    _combo_ex.append(h)
-            except Exception:
-                pass
-            return True
-        _w32g.EnumChildWindows(_dlg_hwnd, _find_cex, None)
-        if _combo_ex:
-            _inner = []
-            def _find_inner(h, _):
-                try:
-                    if _w32g.GetClassName(h) == 'Edit':
-                        _inner.append(h)
-                except Exception:
-                    pass
-                return True
-            _w32g.EnumChildWindows(_combo_ex[0], _find_inner, None)
-            if _inner:
-                _fn_hwnd = _inner[0]
-
-        if _fn_hwnd:
-            # PostMessage 좌클릭으로 키보드 포커스를 파일명 Edit으로 이동
-            # (PostMessage는 크로스-프로세스에서도 동작)
-            r = _w32g.GetWindowRect(_fn_hwnd)
-            _cx = (r[2] - r[0]) // 2
-            _cy = (r[3] - r[1]) // 2
-            _lparam = (_cy << 16) | (_cx & 0xFFFF)
-            _w32a.PostMessage(_fn_hwnd, _w32c.WM_LBUTTONDOWN, _w32c.MK_LBUTTON, _lparam)
-            time.sleep(0.05)
-            _w32a.PostMessage(_fn_hwnd, _w32c.WM_LBUTTONUP, 0, _lparam)
-            time.sleep(0.15)
-    except Exception:
-        pass
-
-    # 다이얼로그를 전경으로 올린 뒤 클립보드로 전체 경로 붙여넣기
-    # (SendInput 기반 send_keys는 현재 OS 포커스를 받은 컨트롤에 전달됨)
     import ctypes as _ct
-    try:
-        _ct.windll.user32.SetForegroundWindow(save_dlg.handle)
-    except Exception:
-        save_dlg.set_focus()
-    time.sleep(0.4)
+    _ct.windll.user32.SetForegroundWindow(save_dlg.handle)
+    time.sleep(0.5)                    # 전경 전환 안정화
+
+    send_keys('%n')                    # Alt+N: 파일명 입력란으로 포커스
+    time.sleep(0.2)
 
     _set_windows_clipboard_text(save_path)
-    time.sleep(0.2)
-    send_keys('^a')   # 파일명 전체 선택
     time.sleep(0.15)
-    send_keys('^v')   # 전체 경로 붙여넣기 → EN_CHANGE 발생 → 다이얼로그 인식
+    send_keys('^a')                    # 기존 파일명 전체 선택
+    time.sleep(0.1)
+    send_keys('^v')                    # 전체 경로 붙여넣기
     time.sleep(0.3)
-    send_keys('{ENTER}')
+
+    send_keys('%s')                    # Alt+S: 저장 버튼 클릭
     time.sleep(0.5)
-    _clear_windows_clipboard()  # Excel "클립보드에 많은 양의 내용" 팝업 방지
+    _clear_windows_clipboard()         # Excel "클립보드에 많은 양의 내용" 팝업 방지
     time.sleep(1.0)
 
     # "파일이 이미 있습니다 — 덮어쓰시겠습니까?" 같은 확인창이 뜰 수 있음 — 뜨면 Enter로 승인.
