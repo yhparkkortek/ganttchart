@@ -23,6 +23,33 @@
         { word: '승인원', docType: 'P01' }
     ];
 
+    // 🗂 [2026-09-28 신규, 사용자 지정] MB21의 사내 정식 업무는 **"계정대체청구"**다 — 프로젝트
+    //    코드 조회는 그 화면을 빌려 쓰는 부수 용도일 뿐이고, 본 용도는 개발용 자재를 청구/반납해
+    //    계정을 대체하는 것. 사람이 부르는 이름이 여러 개라 **코드가 아니라 이 표(데이터)**로 둔다 —
+    //    새 표현이 나오면 여기 한 줄만 추가하면 로컬 명령/라우터가 같이 따라온다.
+    //    ⚠️ 이동유형은 사내 설정값이라 표준 SAP 관례로 추측하면 틀린다(261을 넣었다가 SAP이
+    //    "261에 대한 예약이 불가능합니다"로 거절한 실사례 — docs/sap-lookup.md 참고).
+    window.SAP_MB21_MOVEMENT_TYPES = window.SAP_MB21_MOVEMENT_TYPES || [
+        { bwart: '951', title: '개발 출고처리', titleEn: 'Dev goods issue',
+          kw: ['계정대체청구서', '계정대체', '자재청구서', '자재청구', '자재출고'] },
+        { bwart: '907', title: '개발 입고처리', titleEn: 'Dev goods receipt',
+          kw: ['자재입고', '자재반납', '반납입고'] }
+    ];
+    /** 문장에서 MB21 이동유형을 고른다(없으면 null) — 결정론적, AI 호출 없음. */
+    window._sapMb21MovementType = function (text) {
+        var q = String(text || '').toLowerCase();
+        var best = null;
+        window.SAP_MB21_MOVEMENT_TYPES.forEach(function (m) {
+            m.kw.forEach(function (k) {
+                // 더 긴 표현이 더 구체적이므로 우선(예: "자재청구서" > "자재청구")
+                if (q.indexOf(k.toLowerCase()) >= 0 && (!best || k.length > best.kwLen)) {
+                    best = { bwart: m.bwart, title: m.title, kw: k, kwLen: k.length };
+                }
+            });
+        });
+        return best;
+    };
+
     window.SAP_CAPABILITIES = [
         { id: 'bom', title: 'BOM 전개', titleEn: 'BOM explosion', tcode: 'ZPP033 / ZPP038', mode: 'read', verified: 'live',
           kw: ['bom', '구성품', '부품구성', '전개', 'explosion'], needs: '자재번호', ex: '502572 BOM 보여줘' },
@@ -54,8 +81,14 @@
           kw: ['화면 덤프', '화면덤프', '트리 덤프', '화면 구조', '필드 id', '필드아이디'], needs: '없음(SAP에 미리 로그인 + 대상 화면 열어둠)', ex: 'SAP 화면 덤프해줘' },
         { id: 'materialprice', title: '표준가격/기간별단가 조회', titleEn: 'Standard/period price lookup', tcode: 'MM03', mode: 'read', verified: 'unverified',
           kw: ['표준가격', '표준 가격', '기간별단가', '기간별 단가', '기간별간가'], needs: '자재번호', ex: '106437 표준가격 기간별단가 확인해줘' },
-        { id: 'projectcode', title: '프로젝트 코드(내부오더) 패턴 조회', titleEn: 'Project code lookup', tcode: 'MB21 (계정대체청구서 발행)', mode: 'read', verified: 'live',
+        { id: 'projectcode', title: '프로젝트 코드(내부오더) 패턴 조회', titleEn: 'Project code lookup', tcode: 'MB21 (계정대체청구)', mode: 'read', verified: 'live',
           kw: ['프로젝트 코드', '프로젝트코드', '프로젝트 번호', '내부오더'], needs: '패턴(예: *G26*) 또는 "26년도"', ex: '*G26* 26년도 프로젝트 코드 조회해줘' },
+        // ⛔ 아직 미구현(적립용) — MB21의 본 용도. 어휘/이동유형은 위 SAP_MB21_MOVEMENT_TYPES 참고.
+        //    구현할 때 "조회"(projectcode)와 달리 **실제 SAP에 예약을 생성하는 쓰기 동작**이므로,
+        //    구매오더(po)처럼 사람 확인 단계를 반드시 거칠 것.
+        { id: 'mb21posting', title: '계정대체청구(개발 자재 출고/입고)', titleEn: 'Account reassignment request', tcode: 'MB21 (계정대체청구)', mode: 'write', verified: 'planned',
+          kw: ['계정대체청구서', '계정대체', '자재청구서', '자재청구', '자재출고', '자재입고', '자재반납', '반납입고'],
+          needs: '프로젝트코드·자재·수량 (+출고 951 / 입고 907)', ex: '(미구현) G2610OB 자재청구서 만들어줘' },
         { id: 'sapcancel', title: '진행 중인 SAP 작업 중단', titleEn: 'Cancel a running SAP operation', tcode: '-', mode: 'control', verified: 'live',
           kw: ['중단', '그만', '멈춰', '스톱', 'stop', 'cancel'], needs: '없음(자재 여러 건 조회처럼 오래 걸리는 작업이 진행 중일 때)', ex: '그만' }
     ];
