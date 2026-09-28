@@ -3251,33 +3251,55 @@ def _save_po_pdf_to_file(save_path):
         titles_str = ' / '.join(seen_titles[:20])
         raise RuntimeError(f'PDF 저장("사본 저장") 다이얼로그가 뜨지 않았습니다(Ctrl+S, Ctrl+Shift+S 둘 다 시도함) — PDF 미리보기가 열려있지 않거나, 단축키가 전달되지 않았을 수 있습니다. (열려있던 창: {titles_str})')
 
-    save_dlg.set_focus()
-    time.sleep(0.5)
-
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # [2026-09-28 v5] 다이얼로그 표준 단축키 사용
-    # Alt+N = 파일명 입력란 포커스, Alt+S = 저장 버튼
-    # v1~v4 실패 원인: save_dlg.set_focus()가 OS 전경을 보장하지 않아
-    # Alt+N이 뒤에 있는 Acrobat 메뉴로 빠졌음.
-    # SetForegroundWindow(OS 레벨 전경 전환) 후 단축키를 쓰면 확실히 동작.
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     import ctypes as _ct
     _ct.windll.user32.SetForegroundWindow(save_dlg.handle)
-    time.sleep(0.5)                    # 전경 전환 안정화
+    time.sleep(0.5)
 
-    send_keys('%n')                    # Alt+N: 파일명 입력란으로 포커스
-    time.sleep(0.2)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # [2026-09-28 v7] 파일이름 Edit 컨트롤 직접 클릭 후 타이핑
+    # v5 실패 원인: send_keys('%n') = Alt+N이 Acrobat의 메뉴 가속키로 빠짐.
+    # Alt 키가 OS 레벨에서 활성 창의 메뉴바를 먼저 열기 때문에, 다이얼로그
+    # 내부 가속키(파일이름 필드)로 전달되지 않는 경우가 있음.
+    # 수정: pywinauto로 Edit 컨트롤을 직접 찾아 click_input() → 확실한 포커스
+    # 단, Windows 파일 대화상자에는 Edit가 여러 개(주소표시줄, 파일이름, 파일형식 내부):
+    #   v3 실패 사례: Y좌표 최하단 Edit → 파일형식 콤보박스 내부 Edit이었음
+    # 해결: Y좌표로 정렬 후 "두 번째로 아래에 있는" Edit = 파일이름 입력란 (파일형식 바로 위).
+    # 실패 시 폴백: send_keys('%n') 구방식.
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    fn_edit = None
+    try:
+        edits = save_dlg.descendants(control_type='Edit')
+        # Y좌표 내림차순(아래→위) 정렬: [0]=파일형식내부Edit, [1]=파일이름Edit, ...
+        edits_sorted = sorted(edits, key=lambda e: e.rectangle().bottom, reverse=True)
+        if len(edits_sorted) >= 2:
+            fn_edit = edits_sorted[1]  # 두 번째로 아래 = 파일이름 입력란
+        elif edits_sorted:
+            fn_edit = edits_sorted[0]
+    except Exception:
+        pass
 
+    if fn_edit is not None:
+        try:
+            fn_edit.click_input()
+            time.sleep(0.15)
+        except Exception:
+            pass
+    else:
+        send_keys('%n')              # 폴백: Alt+N 가속키
+        time.sleep(0.2)
+
+    # 파일이름 입력란에 전체 경로 입력
+    # Ctrl+A로 기존 내용 전체 선택 후 클립보드 붙여넣기
     _set_windows_clipboard_text(save_path)
     time.sleep(0.15)
-    send_keys('^a')                    # 기존 파일명 전체 선택
+    send_keys('^a')                  # 전체 선택
     time.sleep(0.1)
-    send_keys('^v')                    # 전체 경로 붙여넣기
+    send_keys('^v')                  # 붙여넣기
     time.sleep(0.3)
 
-    send_keys('%s')                    # Alt+S: 저장 버튼 클릭
+    send_keys('{ENTER}')             # Enter = 저장 확정 (Alt+S보다 안전)
     time.sleep(0.5)
-    _clear_windows_clipboard()         # Excel "클립보드에 많은 양의 내용" 팝업 방지
+    _clear_windows_clipboard()       # Excel "클립보드에 많은 양의 내용" 팝업 방지
     time.sleep(1.0)
 
     # "파일이 이미 있습니다 — 덮어쓰시겠습니까?" 같은 확인창이 뜰 수 있음 — 뜨면 Enter로 승인.
