@@ -1690,6 +1690,10 @@ ${question}
             const choiceDropdownHtml = (!isUser && m.choiceDropdownId && window._ganttQaPendingChoiceDropdown && window._ganttQaPendingChoiceDropdown.id === m.choiceDropdownId)
                 ? window._ganttQaRenderChoiceDropdownHtml(window._ganttQaPendingChoiceDropdown)
                 : '';
+            // 🆕 [2026-09-28] 구매오더 필수 입력 통합 폼 (사번+프로젝트코드+요청사유+목적)
+            const poFieldsFormHtml = (!isUser && m.poFieldsFormId && window._ganttQaPoFieldsForm && window._ganttQaPoFieldsForm.id === m.poFieldsFormId)
+                ? (window._ganttQaRenderPoFieldsFormHtml ? window._ganttQaRenderPoFieldsFormHtml(window._ganttQaPoFieldsForm) : '')
+                : '';
             // ✅ [2026-09-16 신규, 사용자 요청] "확인/저장해줘/취소"류 짧은 확인성 답변 버튼 —
             // 메일/공지/알람 초안 버튼(위)과 완전히 같은 패턴, js/04h의 window._ganttQaPendingConfirmButtons
             // 참고. CLAUDE.md "⚡ AI 문답 확인성 질문" 절 참고.
@@ -1707,6 +1711,7 @@ ${question}
                 ${ganttAddDraftHtml ? `<div style="max-width:82%; width:100%;">${ganttAddDraftHtml}</div>` : ''}
                 ${openExecDraftHtml ? `<div style="max-width:82%; width:100%;">${openExecDraftHtml}</div>` : ''}
                 ${choiceDropdownHtml ? `<div style="max-width:82%; width:100%;">${choiceDropdownHtml}</div>` : ''}
+                ${poFieldsFormHtml ? `<div style="max-width:90%; width:100%;">${poFieldsFormHtml}</div>` : ''}
                 ${confirmButtonsHtml ? `<div style="max-width:82%; width:100%;">${confirmButtonsHtml}</div>` : ''}
             </div>`;
         }).join('');

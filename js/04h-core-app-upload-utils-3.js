@@ -626,6 +626,187 @@
         window._ganttQaHistory.push({ role: 'ai', confirmButtonsId: id, text: text });
     };
 
+    // 🆕 [2026-09-28 신규, 사용자 요청] 구매오더 필수 입력 통합 폼 — 사번/프로젝트코드/요청사유/목적을
+    // 여러 턴에 나눠 물어보는 대신, 한 번에 모두 입력할 수 있는 통합 폼을 보여준다.
+    // ask_buyer → ask_fields 순차 질문 흐름을 이 하나의 폼으로 대체.
+    window._ganttQaPoFieldsForm = null; // {id, pd}
+
+    window._ganttQaShowPoFieldsForm = function(pd) {
+        const id = 'po-flds-' + Date.now();
+        window._ganttQaPoFieldsForm = { id: id, pd: pd };
+        const introText = window._t(
+            '✅ 문서 ' + pd.docs.length + '건 품목 확인 완료.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행됩니다 — 아래 항목을 한 번에 입력해주세요:',
+            '✅ Item confirmation done for all ' + pd.docs.length + ' document(s).\n\nEverything after this (Excel → SAP upload → save → PO printing) runs automatically — please fill in all fields below at once:'
+        );
+        window._ganttQaHistory.push({ role: 'ai', poFieldsFormId: id, text: introText });
+    };
+
+    window._ganttQaRenderPoFieldsFormHtml = function(form) {
+        const id = form.id;
+        const pd = form.pd;
+        const _en = window._currentLang === 'en';
+
+        // 사번 사전 입력 (localStorage에 저장된 최근 값)
+        let savedEmpId = '';
+        try { savedEmpId = localStorage.getItem('gantt_po_last_buyer_emp_id') || ''; } catch(e) {}
+        const savedYr = savedEmpId.length === 10 ? savedEmpId.slice(0, 4) : '';
+        const savedMo = savedEmpId.length === 10 ? savedEmpId.slice(4, 6) : '';
+        const savedDy = savedEmpId.length === 10 ? savedEmpId.slice(6, 8) : '';
+        const savedSr = savedEmpId.length === 10 ? savedEmpId.slice(8, 10) : '';
+
+        const curYear = new Date().getFullYear();
+        let yrOpts = '<option value="">' + (_en ? '(yr)' : '(년)') + '</option>';
+        for (let y = curYear + 2; y >= 1990; y--) {
+            yrOpts += '<option value="' + y + '"' + (String(y) === savedYr ? ' selected' : '') + '>' + y + '</option>';
+        }
+        let moOpts = '<option value="">' + (_en ? '(mo)' : '(월)') + '</option>';
+        for (let m = 1; m <= 12; m++) {
+            const mv = String(m).padStart(2, '0');
+            moOpts += '<option value="' + mv + '"' + (mv === savedMo ? ' selected' : '') + '>' + mv + '</option>';
+        }
+        let dyOpts = '<option value="">' + (_en ? '(day)' : '(일)') + '</option>';
+        for (let d = 1; d <= 31; d++) {
+            const dv = String(d).padStart(2, '0');
+            dyOpts += '<option value="' + dv + '"' + (dv === savedDy ? ' selected' : '') + '>' + dv + '</option>';
+        }
+        let srOpts = '<option value="">' + (_en ? '(no.)' : '(번호)') + '</option>';
+        for (let s = 0; s <= 99; s++) {
+            const sv = String(s).padStart(2, '0');
+            srOpts += '<option value="' + sv + '"' + (sv === savedSr ? ' selected' : '') + '>' + sv + '</option>';
+        }
+
+        const selSt = 'font-size:11.5px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; background:#fff;';
+        const empSection = '<div style="padding:8px; background:#f5f5f5; border-radius:6px; margin-bottom:8px;">' +
+            '<div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:5px;">' + (_en ? '🧑 Buyer Employee ID (common for all docs)' : '🧑 구매담당자 사번 (전체 공통)') + '</div>' +
+            '<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">' +
+            '<select id="pof-' + id + '-yr" style="' + selSt + '">' + yrOpts + '</select>' +
+            '<span style="font-size:10.5px;color:#666;">' + (_en ? 'yr' : '년') + '</span>' +
+            '<select id="pof-' + id + '-mo" style="' + selSt + '">' + moOpts + '</select>' +
+            '<span style="font-size:10.5px;color:#666;">' + (_en ? 'mo' : '월') + '</span>' +
+            '<select id="pof-' + id + '-dy" style="' + selSt + '">' + dyOpts + '</select>' +
+            '<span style="font-size:10.5px;color:#666;">' + (_en ? 'day' : '일') + '</span>' +
+            '<select id="pof-' + id + '-sr" style="' + selSt + '">' + srOpts + '</select>' +
+            '<span style="font-size:10.5px;color:#666;">' + (_en ? 'no.' : '번') + '</span>' +
+            '</div></div>';
+
+        const purposeOpts = (window._PO_PURPOSE_TABLE || []).map(function(r) {
+            return '<option value="' + r.code + '">' + r.code + ' ' + escapeHtml(r.desc) + '</option>';
+        }).join('');
+
+        const inpSt = 'width:100%; font-size:11.5px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;';
+        const docSections = pd.docs.map(function(doc, i) {
+            const label = doc.vendorName ? escapeHtml(doc.vendorName) : (doc.bizRegNo ? escapeHtml(doc.bizRegNo) : (_en ? 'Document ' + (i+1) : '문서 ' + (i+1)));
+            return '<div style="padding:8px; background:#f5f7ff; border-radius:6px; border-left:3px solid #7aaedc; margin-bottom:8px;">' +
+                '<div style="font-size:11px; font-weight:bold; color:#2c5fa8; margin-bottom:6px;">' + (i+1) + '. ' + label + '</div>' +
+                '<div style="margin-bottom:5px;">' +
+                    '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? 'Project Code' : '프로젝트 코드') + '</div>' +
+                    '<div style="display:flex; gap:4px; align-items:center;">' +
+                        '<input id="pof-' + id + '-proj-' + i + '" list="pof-' + id + '-projlist-' + i + '" placeholder="' + (_en ? 'e.g. G2610OB' : '예: G2610OB') + '" style="flex:1; font-size:11.5px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; min-width:0;"/>' +
+                        '<datalist id="pof-' + id + '-projlist-' + i + '"></datalist>' +
+                        '<button onclick="window._ganttQaPoSearchProjectCodesForForm(\'' + id + '\',' + i + ')" style="font-size:10.5px; padding:4px 7px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:4px; cursor:pointer; white-space:nowrap;">🔍 SAP 조회</button>' +
+                    '</div>' +
+                    '<div id="pof-' + id + '-projmsg-' + i + '" style="font-size:10px; color:#888; margin-top:2px;"></div>' +
+                '</div>' +
+                '<div style="margin-bottom:5px;">' +
+                    '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? 'Reason' : '요청사유') + '</div>' +
+                    '<input id="pof-' + id + '-reason-' + i + '" placeholder="' + (_en ? 'e.g. PS10/RD02/LNW [project] > reason' : '예: PS10/RD02/LNW 프로젝트명>요청사유') + '" style="' + inpSt + '"/>' +
+                '</div>' +
+                '<div>' +
+                    '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? 'Purpose' : '목적') + '</div>' +
+                    '<select id="pof-' + id + '-purpose-' + i + '" style="' + selSt + ' width:100%;">' +
+                        '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>' +
+                        purposeOpts +
+                    '</select>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        return '<div style="margin-top:6px; padding:10px 10px 8px; background:#fff; border:1px solid #dee2e6; border-radius:8px;">' +
+            empSection + docSections +
+            '<div id="pof-' + id + '-error" style="font-size:10.5px; color:#c0392b; margin-bottom:5px;"></div>' +
+            '<div style="display:flex; justify-content:flex-end;">' +
+                '<button onclick="window._ganttQaSubmitPoFieldsForm(\'' + id + '\')" style="font-size:11.5px; padding:6px 14px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer;">' +
+                    (_en ? '✅ Confirm — Start Auto-Processing' : '✅ 입력 완료 — 자동 처리 시작') +
+                '</button>' +
+            '</div>' +
+        '</div>';
+    };
+
+    window._ganttQaPoSearchProjectCodesForForm = async function(formId, docIdx) {
+        const projInput = document.getElementById('pof-' + formId + '-proj-' + docIdx);
+        const msgEl = document.getElementById('pof-' + formId + '-projmsg-' + docIdx);
+        const listEl = document.getElementById('pof-' + formId + '-projlist-' + docIdx);
+        if (!projInput || !msgEl) return;
+        const raw = projInput.value.trim();
+        const pattern = raw ? (raw.includes('*') ? raw : '*' + raw + '*') : '*';
+        msgEl.textContent = window._t('SAP 조회 중...', 'Searching SAP...'); msgEl.style.color = '#888';
+        try {
+            const res = await window._withTimeout(
+                fetch('http://127.0.0.1:5000/sap-project-codes?by=order&pattern=' + encodeURIComponent(pattern)),
+                60000, window._t('SAP 조회 시간 초과', 'SAP lookup timed out')
+            );
+            const data = await res.json();
+            if (data.ok) {
+                const items = data.items || (data.codes || []).map(function(c) { return { code: c, desc: '' }; });
+                if (listEl) {
+                    listEl.innerHTML = items.map(function(it) {
+                        return '<option value="' + escapeHtml(it.code) + '">' + escapeHtml(it.code) + (it.desc ? ' — ' + escapeHtml(it.desc) : '') + '</option>';
+                    }).join('');
+                }
+                msgEl.textContent = window._t(items.length + '건 조회됨 — 입력창에서 선택하거나 직접 입력', items.length + ' result(s) — select from list or type manually');
+                msgEl.style.color = items.length ? '#1f7a3d' : '#c0392b';
+            } else {
+                msgEl.textContent = window._t('조회 실패 — 직접 입력해주세요', 'Lookup failed — please type manually'); msgEl.style.color = '#c0392b';
+            }
+        } catch(e) {
+            msgEl.textContent = window._t('SAP 조회 실패 — 직접 입력해주세요', 'SAP lookup failed — please type manually'); msgEl.style.color = '#c0392b';
+        }
+    };
+
+    window._ganttQaSubmitPoFieldsForm = async function(id) {
+        const form = window._ganttQaPoFieldsForm;
+        if (!form || form.id !== id) return;
+        const pd = form.pd;
+        const getV = function(elId) { const el = document.getElementById(elId); return el ? el.value : ''; };
+        const yr = getV('pof-' + id + '-yr');
+        const mo = getV('pof-' + id + '-mo');
+        const dy = getV('pof-' + id + '-dy');
+        const sr = getV('pof-' + id + '-sr');
+        const errEl = document.getElementById('pof-' + id + '-error');
+        if (!yr || !mo || !dy || !sr) {
+            if (errEl) errEl.textContent = window._t('사번의 모든 항목(년/월/일/번호)을 선택해주세요.', 'Please select all parts of the employee ID (year/month/day/serial).');
+            return;
+        }
+        pd.buyerEmpId = yr + mo + dy + sr;
+        try { localStorage.setItem('gantt_po_last_buyer_emp_id', pd.buyerEmpId); } catch(e) {}
+        const missing = [];
+        pd.docs.forEach(function(doc, i) {
+            const proj = (getV('pof-' + id + '-proj-' + i) || '').trim();
+            const reason = (getV('pof-' + id + '-reason-' + i) || '').trim();
+            const purpose = getV('pof-' + id + '-purpose-' + i);
+            if (!proj || !reason || !purpose) { missing.push(i + 1); return; }
+            doc.projectCode = proj;
+            doc.reason = reason;
+            doc.purpose = purpose;
+        });
+        if (missing.length) {
+            if (errEl) errEl.textContent = window._t(missing.join(', ') + '번 문서의 모든 항목(프로젝트코드/요청사유/목적)을 입력해주세요.', 'Please complete all fields for document(s): ' + missing.join(', '));
+            return;
+        }
+        window._ganttQaPoFieldsForm = null;
+        pd.stage = 'running';
+        window._ganttQaHistory.push({ role: 'user', text: window._t('[발주 정보 입력 완료]', '[Purchase order info submitted]') });
+        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+            '✅ 확인했습니다. 총 ' + pd.docs.length + '건의 구매오더를 자동으로 순차 처리합니다 — 완료될 때까지 기다려주시거나 나중에 다시 확인해주세요.',
+            '✅ Got it. Automatically processing ' + pd.docs.length + ' purchase order(s) in sequence — this may take a while, feel free to check back later.'
+        )});
+        window._renderGanttQaMessages();
+        await window._ganttQaRunPoBatchAutomatically(pd);
+        window._renderGanttQaMessages();
+        const input = document.getElementById('gantt-qa-input');
+        if (input) input.focus();
+    };
+
     // 📋 [2026-09-16 신규, 사용자 요청] "이전 내용(복사 붙여넣기) 이어서" — PDF를 다시 첨부하지
     // 않고, 이전 AI 답변(예: 품목 확인 요약)이나 원본 문서 텍스트를 그대로 복사해 붙여넣기만
     // 해도 구매오더 추출을 이어갈 수 있게 한다. 이미 PO draft가 진행 중이거나(그 흐름이
@@ -1085,21 +1266,9 @@ ${docsJson}`;
             window._ganttQaPoShowTempCodeDropdown(missingTemp);
             return;
         }
-        // 사번은 배치 전체 공통으로 딱 한 번만 묻는다(사용자: "작성자가 같은 경우가 많다").
-        // 이미 채워져 있으면(예: 사용자가 앞 단계 답변에 미리 적어둔 경우) 건너뛴다.
-        if (!pd.buyerEmpId) {
-            pd.stage = 'ask_buyer';
-            window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다.\n\n구매담당자 사번을 알려주세요(예: 2004051002) — 모든 문서에 공통으로 적용됩니다.`,
-                `✅ Item confirmation is done for all ${pd.docs.length} document(s).\n\nPlease provide the buyer's employee ID (e.g. 2004051002) — it applies to every document.`
-            )});
-            return;
-        }
-        pd.stage = 'ask_fields';
-        window._ganttQaPoAskFieldsPrompt(pd, window._t(
-            `이제 문서별 정보(프로젝트코드/요청사유/목적)가 필요합니다.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
-            `Now I need the per-document info (project code / reason / purpose).\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
-        ));
+        // [2026-09-28] 사번/프로젝트코드/요청사유/목적을 한 번에 입력받는 통합 폼으로 변경
+        pd.stage = 'po_fields_form';
+        window._ganttQaShowPoFieldsForm(pd);
     };
 
     // 🆕 [2026-09-17 신규, 사용자 요청] 문서 하나를 엑셀 생성 → SAP 업로드/입력 → **바로 이어서
