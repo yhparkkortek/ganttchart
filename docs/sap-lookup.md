@@ -1414,8 +1414,22 @@ V=이동평균가) / `CKMMAT_DISPLAY-STPRV_1`(이전가격). 전부 "회계 1" �
   + 범용 `_sap_read_searchhelp_matrix`, `kortek_backend.py`의 `/sap-project-codes?pattern=...`,
   `js/04h`의 "프로젝트 코드" 로컬 명령(패턴이 없으면 "26년도" 같은 표현에서 `*G26*`을 합성),
   `js/32-sap-capabilities.js`의 `projectcode` 항목.
-- **실사용 검증(2026-09-28)**: `*G26*` → 38건(G2601EC … G2623OC, G26ATTN/G26EUTN/G26HQTN/
-  G26IGTN/G26LWTN/G26USTN) 정상 조회.
+- **두 가지 검색 축**(2026-09-28 확장): 검색도움말 첫 탭에는 "오더"(코드)와 "내역"(프로젝트명)
+  칸이 따로 있다 — `by='code'`(기본, 예 `*G26*`) / `by='desc'`(예 `*STELLAR*`).
+  AI 문답은 말에 "프로젝트명/이름/내역"이 있으면 `desc`로 보낸다.
+- **⚠️ SAP 검색은 대소문자를 구분한다** — `*stellar*`로는 안 나오고 `*STELLAR*`라야 나온다.
+  결과·실패 안내 문구에 이 사실을 항상 같이 보여준다(`caseSensitive: true`).
+- **⚠️ 입력칸은 줄 번호가 아니라 라벨(KEYWORD)로 찾는다** — 팝업은 줄마다
+  `txtG_SELFLD_TAB-KEYWORD[N,0]`(라벨) + `txt|ctxtG_SELFLD_TAB-LOW[N,24]`(입력칸) 쌍이고,
+  실측상 0=관리회계 영역 / 1=처리그룹 / 2=오더 유형 / **3=오더** / **4=내역**이다
+  (`_sap_searchhelp_field_by_keyword`). 입력칸 접두사가 줄마다 `ctxt`/`txt`로 다른 것도 실측 확인.
+  🐛 **부분일치만 쓰면 "오더"가 "오더 유형"에 먼저 걸린다** — 반드시 완전일치를 우선할 것
+  (그대로 당해서 `Property '<unknown>.text' can not be set.`로 실패했음).
+- **결과 헤더 행 자동 탐지**: 이 검색도움말은 1행이 필터 영역이라 진짜 헤더("유형/오더/내역")가
+  아래에 있다 — `_sap_read_searchhelp_matrix(header_hints=('오더','내역','유형'))`가 힌트 단어가
+  들어있는 행을 헤더로 삼는다. 덕분에 코드 검색도 이제 **코드+프로젝트명**을 함께 돌려준다.
+- **실사용 검증(2026-09-28)**: `*G26*` → 38건(코드+내역), `*STELLAR*`(내역 검색) → 4건
+  (G2608OB LNW>STELLAR_32>LOWER / G2609OB …UPPER / G2610OB …TOPPER / 301432 금형).
 
 ### 🔧 SAP 화면 트리 통째로 덤프 — 새 기능 만들 때 매크로 해석 대신 쓰는 진단 도구 (2026-09-23 신규)
 

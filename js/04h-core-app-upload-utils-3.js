@@ -3995,7 +3995,9 @@ ${docsJson}`;
         //    패턴 조회한다(읽기 전용, 저장 없음). 사용자가 준 매크로 "프로젝트 코드확인.vbs" 기반.
         //    구매오더 요청에 넣을 프로젝트코드가 SAP에 실제로 있는지 확인할 때도 쓴다.
         //    자재번호와 헷갈리지 않도록 "프로젝트"+"코드" 조합이 있을 때만 트리거한다.
-        const _projCodeRe = /프로젝트\s*(코드|번호)/;
+        //    🆕 [2026-09-28] "내역"(프로젝트명)으로도 찾는다 — "*STELLAR* 프로젝트명으로 찾아줘".
+        //    SAP 검색은 대소문자를 구분하므로 결과/실패 안내에 그 사실을 함께 알려준다.
+        const _projCodeRe = /프로젝트\s*(코드|번호|명|이름)|프로젝트.*(내역|설명)/;
         if (_projCodeRe.test(question)) {
             // 패턴 추출: "*G26*"처럼 별표가 있으면 그대로, 없으면 "G26"류 토큰을 찾아 감싼다.
             let _pcPattern = (question.match(/[A-Za-z0-9_\-/.]*\*[A-Za-z0-9_\-/.*]*/) || [])[0] || '';
@@ -4008,24 +4010,30 @@ ${docsJson}`;
                 if (_yr) _pcPattern = '*G' + _yr[1] + '*';   // "26년도 프로젝트 코드" → *G26*
             }
             if (_pcPattern) {
+                // 코드(오더)로 찾을지, 프로젝트명(내역)으로 찾을지 — 말에서 결정한다.
+                const _pcBy = /(프로젝트\s*(명|이름)|내역|설명|이름으로|명으로)/.test(question) ? 'desc' : 'code';
+                const _pcWhatKo = _pcBy === 'desc' ? '프로젝트명(내역)' : '프로젝트 코드(오더)';
                 if (!_skipUserHistoryPush) {
                     window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
                     if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
                 }
                 window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
-                    `SAP에서 프로젝트 코드 "${_pcPattern}"를 조회하는 중... (오래 걸리면 "그만"이라고 하시면 중단됩니다)`,
-                    `Looking up project codes matching "${_pcPattern}" in SAP...`), pending: true });
+                    `SAP에서 ${_pcWhatKo} "${_pcPattern}"를 조회하는 중... (오래 걸리면 "그만"이라고 하시면 중단됩니다)`,
+                    `Looking up ${_pcBy === 'desc' ? 'project names' : 'project codes'} matching "${_pcPattern}" in SAP...`), pending: true });
                 window._renderGanttQaMessages();
                 let _pcReply;
                 try {
                     const res = await window._withTimeout(
-                        fetch('http://127.0.0.1:5000/sap-project-codes?pattern=' + encodeURIComponent(_pcPattern)), 120000,
+                        fetch('http://127.0.0.1:5000/sap-project-codes?by=' + _pcBy + '&pattern=' + encodeURIComponent(_pcPattern)), 120000,
                         window._t('SAP 프로젝트 코드 조회 시간 초과', 'SAP project code lookup timed out')
                     );
                     const data = await res.json();
                     if (data.ok) {
-                        const codes = data.codes || [];
-                        _pcReply = `🗂 ${window._t('프로젝트 코드', 'Project codes')} "${data.pattern}" — ${codes.length}${window._t('건', '')}\n` + codes.join('\n');
+                        const items = data.items || (data.codes || []).map(function(c) { return { code: c, desc: '' }; });
+                        const lines = items.map(function(it) { return it.desc ? `${it.code}\t${it.desc}` : it.code; });
+                        _pcReply = `🗂 ${_pcWhatKo} "${data.pattern}" — ${items.length}${window._t('건', '')}\n` + lines.join('\n')
+                            + '\n\n💡 ' + window._t('SAP 검색은 대소문자를 구분합니다 — 영문은 대문자로 넣으세요(예: *STELLAR*).',
+                                                   'SAP search is case-sensitive — use uppercase (e.g. *STELLAR*).');
                     } else {
                         _pcReply = '⚠️ ' + (data.error || window._t('프로젝트 코드 조회 실패', 'Project code lookup failed'));
                     }
@@ -4148,8 +4156,16 @@ ${docsJson}`;
         //    GuiComponent 트리 전체(Id/Type/Text)를 그대로 읽어와 채팅에 보여주는 진단 전용
         //    로컬 명령. AI를 거치지 않고(추측 없음) sap_bridge_32.py의 dump_screen_tree()를
         //    그대로 호출 — docs/sap-lookup.md "화면 트리 덤프" 절 참고.
+        // 🗣 [2026-09-28 사용자 지적 "SAP 덤프해줘는 왜 못 알아듣나 — 하드코딩인가?"] 맞다. 트리거가
+        //    이 자리에 정규식으로 박혀 있어서 목록에 없는 표현은 전부 못 알아들었다. 이제 어휘는
+        //    카탈로그(js/32의 SAP_CAPABILITIES[].kw, 데이터)에 두고 여기선 그걸 읽기만 한다 —
+        //    새 표현은 카탈로그에 한 줄 추가하면 되고 코드는 안 건드린다(CLAUDE.md 하드코딩 지양).
+        //    ⚠️ 카탈로그가 아직 로드 안 된 상황을 대비해 예전 정규식을 폴백으로 남겨둔다.
         const _screenDumpRe = /(화면\s*덤프|트리\s*덤프|화면\s*구조|필드\s*id|필드\s*아이디)/i;
-        if (_screenDumpRe.test(question)) {
+        const _screenDumpHit = window._sapCapKwHit
+            ? window._sapCapKwHit(question, 'screendump')
+            : _screenDumpRe.test(question);
+        if (_screenDumpHit) {
             if (!_skipUserHistoryPush) {
                 window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
                 if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // 위 BOM 블록과 같은 이유(2026-09-23)

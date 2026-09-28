@@ -77,12 +77,18 @@
           kw: ['팀비', '팀운영비', '팀 운영비', '복리후생비'], needs: '팀 이름(없으면 드롭다운으로 물어봄)', ex: '개발3팀 팀운영비 확인해줘' },
         { id: 'goodsreceipt', title: '자재 입고 처리', titleEn: 'Goods receipt processing', tcode: 'ZMM062', mode: 'write', verified: 'unverified',
           kw: ['입고 처리', '입고처리'], needs: '구매오더 번호(없으면 직전 발주 목록에서 고르거나 물어봄)', ex: '9100019479 입고 처리해줘' },
+        // 🗣 [2026-09-28] 트리거 어휘는 **여기(데이터)에만** 둔다 — 예전엔 js/04h 안에 정규식으로
+        //    박혀 있어서 "SAP 덤프해줘"처럼 조금만 달리 말하면 못 알아들었다(사용자 지적).
+        //    새 표현이 나오면 이 kw 배열에 한 줄만 추가하면 로컬 명령이 바로 따라온다.
         { id: 'screendump', title: '화면 구조 덤프(개발용 진단)', titleEn: 'Screen tree dump (dev diagnostic)', tcode: '(열려 있는 화면)', mode: 'read', verified: 'live',
-          kw: ['화면 덤프', '화면덤프', '트리 덤프', '화면 구조', '필드 id', '필드아이디'], needs: '없음(SAP에 미리 로그인 + 대상 화면 열어둠)', ex: 'SAP 화면 덤프해줘' },
+          kw: ['덤프', 'dump', '화면 구조', '화면구조', '화면 구성', '필드 id', '필드아이디', '필드 아이디', '컨트롤 id'],
+          needs: '없음(SAP에 미리 로그인 + 대상 화면 열어둠)', ex: 'SAP 화면 덤프해줘 / SAP 덤프해줘' },
         { id: 'materialprice', title: '표준가격/기간별단가 조회', titleEn: 'Standard/period price lookup', tcode: 'MM03', mode: 'read', verified: 'unverified',
           kw: ['표준가격', '표준 가격', '기간별단가', '기간별 단가', '기간별간가'], needs: '자재번호', ex: '106437 표준가격 기간별단가 확인해줘' },
         { id: 'projectcode', title: '프로젝트 코드(내부오더) 패턴 조회', titleEn: 'Project code lookup', tcode: 'MB21 (계정대체청구)', mode: 'read', verified: 'live',
-          kw: ['프로젝트 코드', '프로젝트코드', '프로젝트 번호', '내부오더'], needs: '패턴(예: *G26*) 또는 "26년도"', ex: '*G26* 26년도 프로젝트 코드 조회해줘' },
+          kw: ['프로젝트 코드', '프로젝트코드', '프로젝트 번호', '프로젝트명', '프로젝트 이름', '내부오더'],
+          needs: '패턴(예: *G26* / *STELLAR*) — 코드(오더) 또는 프로젝트명(내역)으로 검색, 대소문자 구분',
+          ex: '*G26* 26년도 프로젝트 코드 조회해줘 / *STELLAR* 프로젝트명으로 찾아줘' },
         // ⛔ 아직 미구현(적립용) — MB21의 본 용도. 어휘/이동유형은 위 SAP_MB21_MOVEMENT_TYPES 참고.
         //    구현할 때 "조회"(projectcode)와 달리 **실제 SAP에 예약을 생성하는 쓰기 동작**이므로,
         //    구매오더(po)처럼 사람 확인 단계를 반드시 거칠 것.
@@ -92,6 +98,20 @@
         { id: 'sapcancel', title: '진행 중인 SAP 작업 중단', titleEn: 'Cancel a running SAP operation', tcode: '-', mode: 'control', verified: 'live',
           kw: ['중단', '그만', '멈춰', '스톱', 'stop', 'cancel'], needs: '없음(자재 여러 건 조회처럼 오래 걸리는 작업이 진행 중일 때)', ex: '그만' }
     ];
+
+    /** 🆕 [2026-09-28] 어떤 기능의 트리거 어휘(kw)가 문장에 있는지 — 로컬 명령이 **정규식을 코드에
+     *  박는 대신** 이 함수로 카탈로그(데이터)를 읽게 하기 위한 공용 판정기.
+     *  공백 유무 차이("화면 덤프"/"화면덤프")는 양쪽 공백을 지워서 함께 인정한다. */
+    window._sapCapKwHit = function (text, capId) {
+        var q = String(text || '').toLowerCase();
+        var qFlat = q.replace(/\s+/g, '');
+        var cap = (window.SAP_CAPABILITIES || []).find(function (c) { return c.id === capId; });
+        if (!cap) return false;
+        return cap.kw.some(function (k) {
+            var kk = String(k).toLowerCase();
+            return q.indexOf(kk) >= 0 || qFlat.indexOf(kk.replace(/\s+/g, '')) >= 0;
+        });
+    };
 
     var STOP = {};
     ('해줘 해주세요 해봐 알려줘 알려주세요 보여줘 보여주세요 조회 조회해줘 조회해 좀 그리고 하고 이거 그거 저거 있어 없어 뭐야 뭔가 대해 대한 관련 정보 내용 확인 해줄래 줄래 주세요 the a an of to')

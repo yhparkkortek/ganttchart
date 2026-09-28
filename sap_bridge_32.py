@@ -2010,7 +2010,44 @@ def download_documents_batch(materials, doc_type='P01'):
 # 그 열 위치를 동적으로 찾아내도록 수정**(`_sap_read_material_label_matrix`). 앞으로 이
 # 라벨 매트릭스 구조를 가진 다른 SAP 검색도움말을 자동화할 때도, 열 번호를 한 번 발견
 # 했다고 고정값으로 믿지 말고 항상 헤더 행에서 동적으로 찾을 것.
-def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_data_row=3):
+_SEARCHHELP_TAB1_BASE = ('wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/'
+                         'ssubSUBSCR_PRESEL:SAPLSDH4:0220/sub:SAPLSDH4:0220')
+
+
+def _sap_searchhelp_field_by_keyword(session, keyword, max_rows=12):
+    """검색도움말(SAPLSDH4) 첫 탭에서 **라벨(KEYWORD) 텍스트로** 짝이 되는 입력칸을 찾는다
+    (2026-09-28 신규). 이 팝업은 각 줄이 `txtG_SELFLD_TAB-KEYWORD[N,0]`(라벨) +
+    `txt|ctxtG_SELFLD_TAB-LOW[N,24]`(입력칸) 쌍으로 돼 있다 — 실사용 덤프로 확인:
+    0=관리회계 영역, 1=처리그룹, 2=오더 유형, **3=오더**, **4=내역**.
+    줄 번호를 하드코딩하면 검색도움말이 바뀔 때 엉뚱한 칸에 값을 넣게 되므로(이 코드베이스의
+    "좌표 대신 라벨로 동적 탐색" 원칙) 항상 라벨로 찾는다. 입력칸 접두사가 줄마다 `ctxt`/`txt`로
+    다른 것도 실측으로 확인돼 둘 다 시도한다."""
+    labels = {}
+    for i in range(max_rows):
+        try:
+            kw = (session.findById(f'{_SEARCHHELP_TAB1_BASE}/txtG_SELFLD_TAB-KEYWORD[{i},0]').Text or '').strip()
+        except Exception:
+            continue
+        if kw:
+            labels[i] = kw
+
+    # ⚠️ [2026-09-28 실사용 버그수정] 부분일치만 쓰면 "오더"가 **"오더 유형"**(바로 윗줄)에 먼저
+    #    걸려서 엉뚱한 칸에 값을 넣는다("Property '<unknown>.text' can not be set."로 실패).
+    #    반드시 **완전일치 우선 → 그다음 부분일치** 순서로 찾을 것.
+    order = ([i for i, kw in labels.items() if kw == keyword]
+             + [i for i, kw in labels.items() if kw != keyword and keyword in kw])
+    for i in order:
+        for prefix in ('txt', 'ctxt'):
+            try:
+                fld = session.findById(f'{_SEARCHHELP_TAB1_BASE}/{prefix}G_SELFLD_TAB-LOW[{i},24]')
+                if fld is not None:
+                    return fld
+            except Exception:
+                continue
+    return None
+
+
+def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_data_row=3, header_hints=None):
     """검색도움말(SAPLSDH4) 결과 라벨 매트릭스를 **열 이름 그대로** 통째로 읽는 범용 리더
     (2026-09-28 신규 — `_sap_read_material_label_matrix`가 자재 전용으로 열 이름을 하드코딩
     해둔 것을, "프로젝트 코드 조회"처럼 다른 검색도움말에도 쓸 수 있게 일반화한 것).
@@ -2042,6 +2079,15 @@ def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_da
     visible = _scan_visible()
     if not visible:
         return [], []
+    # 🆕 [2026-09-28] 결과 목록의 진짜 헤더 행은 검색도움말마다 다르다(내부오더 검색은 1행이
+    # 필터 영역이고 "유형/오더/내역" 헤더는 그 아래에 있다) — 기대하는 열 이름(header_hints)이
+    # 있으면 그 단어가 들어있는 행을 헤더로 삼는다. 없으면 기존처럼 header_row를 쓴다.
+    if header_hints:
+        for row_no in sorted(visible.keys()):
+            texts = {(v or '').strip() for v in visible[row_no].values()}
+            if any(h in texts for h in header_hints):
+                header_row, first_data_row = row_no, row_no + 1
+                break
     header_cells = visible.get(header_row, {})
     cols = sorted(header_cells.keys())
     headers = [header_cells[c] for c in cols]
@@ -2245,8 +2291,12 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
 # 대신 **화면에 이미 들어있는 값(SAP이 기억하는 직전 입력값)을 그대로 두고**, 인자로 명시했을
 # 때만 덮어쓴다 — 조회는 어차피 아무것도 저장하지 않으므로 헤더 값이 무엇이든 상관없다.
 # ⚠️ 읽기 전용: 어떤 값도 선택/채택하지 않고, 끝나면 팝업을 F12로 닫고 `/n`으로 빠져나온다.
-def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=None):
-    """프로젝트 코드(내부오더 AUFNR)를 와일드카드 패턴으로 조회한다. 예: "*G26*"."""
+def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=None, by='code'):
+    """프로젝트 코드(내부오더 AUFNR)를 와일드카드 패턴으로 조회한다.
+    `by='code'`(기본) — "오더" 칸으로 코드 검색(예: "*G26*").
+    `by='desc'`        — "내역" 칸으로 **프로젝트명** 검색(예: "*STELLAR*", 2026-09-28 추가).
+    ⚠️ SAP 검색은 **대소문자를 구분**한다 — "stellar"로는 안 찾아지고 "STELLAR"로 해야 한다.
+    호출부(AI 문답)가 이 사실을 사용자에게 안내하도록 결과에 `caseSensitive: True`를 싣는다."""
     pattern = (pattern or '').strip()
     if not pattern:
         raise RuntimeError('조회할 프로젝트 코드 패턴을 지정해주세요. 예: *G26*')
@@ -2323,21 +2373,20 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
     if popup is None:
         raise RuntimeError('내부오더 검색도움말 팝업이 뜨지 않았습니다.')
 
-    # 패턴 입력칸 — 매크로에서 확인된 [3,24]를 먼저 쓰고, 없으면 같은 이름의 후보를 훑는다.
-    base = 'wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/sub:SAPLSDH4:0220'
-    field = None
-    try:
-        field = session.findById(f'{base}/txtG_SELFLD_TAB-LOW[3,24]')
-    except Exception:
-        for cand in _find_all_by_id_substring(popup, 'G_SELFLD_TAB-LOW'):
+    # 패턴 입력칸 — 줄 번호를 박지 않고 **라벨(KEYWORD)로 찾는다**: 코드 검색은 "오더",
+    # 프로젝트명 검색은 "내역". 못 찾으면 매크로에서 확인된 좌표로 폴백.
+    want_keyword = '내역' if by == 'desc' else '오더'
+    field = _sap_searchhelp_field_by_keyword(session, want_keyword)
+    if field is None:
+        fallback_row = 4 if by == 'desc' else 3
+        for prefix in ('txt', 'ctxt'):
             try:
-                cand.text = pattern
-                field = cand
+                field = session.findById(f'{_SEARCHHELP_TAB1_BASE}/{prefix}G_SELFLD_TAB-LOW[{fallback_row},24]')
                 break
             except Exception:
                 continue
     if field is None:
-        raise RuntimeError('내부오더 검색도움말에서 패턴 입력칸(G_SELFLD_TAB-LOW)을 찾지 못했습니다.')
+        raise RuntimeError(f'내부오더 검색도움말에서 "{want_keyword}" 입력칸을 찾지 못했습니다.')
     try:
         field.text = pattern
         field.setFocus()
@@ -2351,7 +2400,8 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
     headers, rows = [], []
     try:
         session.findById('wnd[1]')
-        headers, rows = _sap_read_searchhelp_matrix(session, max_results)
+        headers, rows = _sap_read_searchhelp_matrix(
+            session, max_results, header_hints=('오더', '내역', '유형'))
     except Exception:
         pass
 
@@ -2368,27 +2418,45 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
     except Exception:
         pass
 
-    # 🧹 이 기능이 원하는 건 "코드 목록" 하나뿐이다 — 검색도움말 화면의 필터 영역("처리그룹"/"00")
-    # 이나 열 제목("오더")이 행으로 섞여 들어오므로, 코드처럼 생긴 값만 골라 정리한다.
-    label_like = {h.strip() for h in headers if h.strip()} | {'오더', 'Order', '내부오더'}
-    codes, seen = [], set()
-    for r in rows:
-        for cell in r:
-            v = (cell or '').strip()
-            if not v or v in label_like or v in seen:
+    # 🧹 결과 정리 — 헤더에서 "오더"/"내역" 열 위치를 찾아 코드+프로젝트명 짝으로 만든다.
+    # 헤더를 못 찾는 경우(검색도움말 레이아웃이 다를 때)에는 예전처럼 "코드처럼 생긴 값"만 뽑는다.
+    label_like = {h.strip() for h in headers if h.strip()} | {'오더', 'Order', '내부오더', '유형', '내역'}
+    code_col = next((i for i, h in enumerate(headers) if h.strip() == '오더'), None)
+    desc_col = next((i for i, h in enumerate(headers) if h.strip() == '내역'), None)
+
+    items, seen = [], set()
+    if code_col is not None:
+        for r in rows:
+            code = (r[code_col] if code_col < len(r) else '').strip()
+            if not code or code in label_like or code in seen:
                 continue
-            if not re.match(r'^[A-Za-z0-9][A-Za-z0-9_\-/.]{2,19}$', v):
-                continue  # 공백/한글이 섞인 설명 문구 등은 코드가 아님
-            seen.add(v)
-            codes.append(v)
+            seen.add(code)
+            desc = (r[desc_col] if desc_col is not None and desc_col < len(r) else '').strip()
+            items.append({'code': code, 'desc': desc})
+    else:
+        for r in rows:
+            for cell in r:
+                v = (cell or '').strip()
+                if not v or v in label_like or v in seen:
+                    continue
+                if not re.match(r'^[A-Za-z0-9][A-Za-z0-9_\-/.]{2,19}$', v):
+                    continue  # 공백/한글이 섞인 설명 문구 등은 코드가 아님
+                seen.add(v)
+                items.append({'code': v, 'desc': ''})
 
-    if not codes:
-        return {'ok': False, 'pattern': pattern,
-                'error': f'패턴 "{pattern}"에 맞는 프로젝트 코드를 찾지 못했습니다 — 패턴을 넓혀보세요(예: *G26*).'}
+    if not items:
+        how = '프로젝트명(내역)' if by == 'desc' else '프로젝트 코드(오더)'
+        return {'ok': False, 'pattern': pattern, 'by': by, 'caseSensitive': True,
+                'error': f'{how} "{pattern}"에 맞는 항목을 찾지 못했습니다 — SAP 검색은 대소문자를 구분하니 '
+                         f'영문을 대문자로 바꿔보시고(예: *STELLAR*), 패턴도 넓혀보세요.'}
 
-    text = (f'[SAP 프로젝트 코드 조회(MB21 "계정대체청구서 발행" 화면의 내부오더 검색): '
-            f'패턴 "{pattern}" — {len(codes)}건]\n\n' + '\n'.join(codes))
-    return {'ok': True, 'pattern': pattern, 'count': len(codes), 'codes': codes,
+    codes = [it['code'] for it in items]
+    lines = [(f"{it['code']}\t{it['desc']}" if it['desc'] else it['code']) for it in items]
+    how_label = '프로젝트명(내역)' if by == 'desc' else '프로젝트 코드(오더)'
+    text = (f'[SAP {how_label} 조회(MB21 "계정대체청구" 화면의 내부오더 검색): '
+            f'패턴 "{pattern}" — {len(items)}건]\n\n' + '\n'.join(lines))
+    return {'ok': True, 'pattern': pattern, 'by': by, 'caseSensitive': True,
+            'count': len(items), 'codes': codes, 'items': items,
             'headers': headers, 'rows': rows, 'text': text,
             'truncated': len(rows) >= max_results}
 
@@ -3519,7 +3587,8 @@ def main():
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             bwart = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
             werks = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
-            result = fetch_project_codes(pattern, bwart, werks)
+            by = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else 'code'
+            result = fetch_project_codes(pattern, bwart, werks, by=by)
         elif action == 'download_documents_by_pattern':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             doc_type = sys.argv[3] if len(sys.argv) > 3 else 'P01'

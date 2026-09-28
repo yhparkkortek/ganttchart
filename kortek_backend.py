@@ -1952,9 +1952,10 @@ def sap_project_codes():
     pattern = (request.args.get('pattern') or '').strip()
     bwart = (request.args.get('bwart') or '').strip()
     werks = (request.args.get('werks') or '').strip()
+    by = (request.args.get('by') or 'code').strip()   # 'code'(오더) | 'desc'(내역=프로젝트명)
     if not pattern:
         return jsonify({'ok': False, 'error': '조회할 패턴(pattern 파라미터)이 필요합니다. 예: /sap-project-codes?pattern=*G26*'}), 400
-    data, status = _run_sap_bridge(['fetch_project_codes', pattern, bwart, werks], 90, 'SAP 프로젝트 코드 조회')
+    data, status = _run_sap_bridge(['fetch_project_codes', pattern, bwart, werks, by], 90, 'SAP 프로젝트 코드 조회')
     return jsonify(data), status
 
 
