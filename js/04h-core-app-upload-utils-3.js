@@ -509,6 +509,7 @@
     // {stage, materialsSourceNames, bizRegNo, invoiceDate, vendorName, items:[{desc,qty,unitPrice,tempCode}],
     //  projectCode, buyerEmpId, reason, purpose, excelPath, receiver}
     window._ganttQaPoDraft = null;
+    window._ganttQaPoRetryDraft = null; // [2026-09-28] 실패 문서 재처리용 임시 draft
 
     window._ganttQaPoOptionsTableText = function() {
         const tempLines = window._PO_TEMP_CODE_TABLE.map(function(r) { return `${r.code} ${r.desc}`; }).join('\n');
@@ -696,14 +697,39 @@
         const inpSt = 'width:100%; font-size:11.5px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;';
         const docSections = pd.docs.map(function(doc, i) {
             const label = doc.vendorName ? escapeHtml(doc.vendorName) : (doc.bizRegNo ? escapeHtml(doc.bizRegNo) : (_en ? 'Document ' + (i+1) : '문서 ' + (i+1)));
+            // [2026-09-28] 임시코드 미확인 품목 — 통합 폼에서 선택
+            const missingTcItems = [];
+            (doc.items || []).forEach(function(it, ii) {
+                const valid = it.tempCode && (window._PO_TEMP_CODE_TABLE || []).some(function(r) { return r.code === it.tempCode; });
+                if (!valid) missingTcItems.push({ it: it, ii: ii });
+            });
+            const tempCodeOpts = (window._PO_TEMP_CODE_TABLE || []).map(function(r) {
+                return '<option value="' + r.code + '">' + r.code + ' ' + escapeHtml(r.desc) + '</option>';
+            }).join('');
+            const tempSection = missingTcItems.length ? (
+                '<div style="margin-bottom:6px; padding:6px 7px; background:#fff8e6; border-radius:4px; border:1px solid #ffd700;">' +
+                    '<div style="font-size:10.5px; color:#c0392b; font-weight:bold; margin-bottom:4px;">&#9888;&#65039; ' + (_en ? 'Temp code needed:' : '임시코드 미확인 품목:') + '</div>' +
+                    missingTcItems.map(function(x) {
+                        const shortDesc = escapeHtml((x.it.desc || (_en ? 'Item ' + (x.ii + 1) : '품목 ' + (x.ii + 1))).substring(0, 40));
+                        return '<div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">' +
+                            '<span style="font-size:10px; color:#444; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(x.it.desc || '') + '">' + (x.ii + 1) + '. ' + shortDesc + '</span>' +
+                            '<select id="pof-' + id + '-temp-' + i + '-' + x.ii + '" style="' + selSt + ' flex:0 0 auto; min-width:110px;">' +
+                                '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>' +
+                                tempCodeOpts +
+                            '</select>' +
+                        '</div>';
+                    }).join('') +
+                '</div>'
+            ) : '';
             return '<div style="padding:8px; background:#f5f7ff; border-radius:6px; border-left:3px solid #7aaedc; margin-bottom:8px;">' +
                 '<div style="font-size:11px; font-weight:bold; color:#2c5fa8; margin-bottom:6px;">' + (i+1) + '. ' + label + '</div>' +
+                tempSection +
                 '<div style="margin-bottom:5px;">' +
                     '<div style="font-size:10.5px; color:#555; margin-bottom:2px;">' + (_en ? 'Project Code' : '프로젝트 코드') + '</div>' +
                     '<div style="display:flex; gap:4px; align-items:center;">' +
                         '<input id="pof-' + id + '-proj-' + i + '" list="pof-' + id + '-projlist-' + i + '" placeholder="' + (_en ? 'e.g. G2610OB' : '예: G2610OB') + '" style="flex:1; font-size:11.5px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; min-width:0;"/>' +
                         '<datalist id="pof-' + id + '-projlist-' + i + '"></datalist>' +
-                        '<button onclick="window._ganttQaPoSearchProjectCodesForForm(\'' + id + '\',' + i + ')" style="font-size:10.5px; padding:4px 7px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:4px; cursor:pointer; white-space:nowrap;">🔍 SAP 조회</button>' +
+                        '<button onclick="window._ganttQaPoSearchProjectCodesForForm(\'' + id + '\',' + i + ')" style="font-size:10.5px; padding:4px 7px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:4px; cursor:pointer; white-space:nowrap;">&#128269; SAP &#51312;&#54924;</button>' +
                     '</div>' +
                     '<div id="pof-' + id + '-projmsg-' + i + '" style="font-size:10px; color:#888; margin-top:2px;"></div>' +
                 '</div>' +
@@ -779,6 +805,29 @@
         }
         pd.buyerEmpId = yr + mo + dy + sr;
         try { localStorage.setItem('gantt_po_last_buyer_emp_id', pd.buyerEmpId); } catch(e) {}
+        // [2026-09-28] 임시코드 수집 — 통합 폼에서 선택한 값을 doc.items에 적용
+        pd.docs.forEach(function(doc, i) {
+            (doc.items || []).forEach(function(it, ii) {
+                const needsTc = !it.tempCode || !(window._PO_TEMP_CODE_TABLE || []).some(function(r) { return r.code === it.tempCode; });
+                if (needsTc) {
+                    const tval = getV('pof-' + id + '-temp-' + i + '-' + ii);
+                    if (tval) it.tempCode = tval;
+                }
+            });
+        });
+        // 임시코드 검증 — 아직 없는 게 있으면 에러
+        const missingTc = [];
+        pd.docs.forEach(function(doc, i) {
+            (doc.items || []).forEach(function(it, ii) {
+                if (!it.tempCode || !(window._PO_TEMP_CODE_TABLE || []).some(function(r) { return r.code === it.tempCode; })) {
+                    missingTc.push(window._t((i + 1) + '번 문서 ' + (ii + 1) + '번 품목', 'doc ' + (i + 1) + ' item ' + (ii + 1)));
+                }
+            });
+        });
+        if (missingTc.length) {
+            if (errEl) errEl.textContent = window._t('임시코드를 선택해주세요: ' + missingTc.join(', '), 'Please select a temp code for: ' + missingTc.join(', '));
+            return;
+        }
         const missing = [];
         pd.docs.forEach(function(doc, i) {
             const proj = (getV('pof-' + id + '-proj-' + i) || '').trim();
@@ -1249,24 +1298,36 @@ ${docsJson}`;
     // 여러 지점에서 재사용된다. 사업자등록번호 → 임시코드 → 문서별 4항목(프로젝트코드/사번/
     // 요청사유/목적) 순으로 부족한 것부터 확인하고, 전부 채워지면 4항목을 묻는 단계
     // (ask_fields, 2026-09-18 이전 이름은 ask_shared)로 넘어간다.
+    // [2026-09-28] 사번/프로젝트코드/요청사유/목적/임시코드를 한 번에 입력받는 통합 폼으로 변경.
+    // 사업자등록번호 오류 문서는 skip하고 나머지를 먼저 처리한 뒤 재시도 안내(사용자 요청).
+    // 임시코드 미확인 품목은 별도 드롭다운 단계 없이 통합 폼에서 같이 선택(사용자 요청).
     window._ganttQaPoAdvanceAfterItemsConfirmed = function(pd) {
         const missingBiz = window._ganttQaPoFindMissingBizNoDocs(pd.docs);
         if (missingBiz.length) {
-            pd.stage = 'fix_biznos';
-            const lines = missingBiz.map(function(x) { return `${x.idx + 1}번(${x.doc.vendorName || (window._currentLang === 'en' ? 'unknown' : '미확인')})`; }).join(', ');
+            if (!pd.errorDocs) pd.errorDocs = [];
+            const skipIndices = new Set(missingBiz.map(function(x) { return x.idx; }));
+            missingBiz.forEach(function(x) {
+                pd.errorDocs.push({ doc: x.doc, docIdx: x.idx, skipReason: 'missing_biz_no' });
+            });
+            pd.docs = pd.docs.filter(function(_, i) { return !skipIndices.has(i); });
+            const skippedLabels = missingBiz.map(function(x) {
+                return (x.idx + 1) + '번(' + (x.doc.vendorName || (window._currentLang === 'en' ? 'unknown' : '미확인')) + ')';
+            }).join(', ');
             window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                `⚠️ 아래 문서는 협력사 사업자등록번호가 확인되지 않았습니다 — 알려주세요(예: "1번: 2168144558", 문서가 1건이면 번호만 말해도 됩니다):\n${lines}`,
-                `⚠️ These document(s) need a confirmed vendor business registration number (e.g. "1: 2168144558" — if there's only one document, just the number is fine):\n${lines}`
+                '⚠️ 사업자등록번호 미확인 문서를 건너뜁니다: ' + skippedLabels + '\n나머지 문서를 먼저 처리한 뒤 이 문서들을 다시 안내합니다.',
+                '⚠️ Skipping document(s) with unconfirmed business registration number: ' + skippedLabels + '\nWill process remaining documents first, then re-advise on these.'
             )});
-            return;
+            if (!pd.docs.length) {
+                window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                    '처리할 수 있는 문서가 없습니다. 협력사 사업자등록번호를 확인한 뒤 파일을 다시 첨부해주세요.',
+                    'No documents can be processed. Please verify the vendor business registration number(s) and re-attach the file(s).'
+                )});
+                window._ganttQaPoDraft = null;
+                window._renderGanttQaMessages();
+                return;
+            }
         }
-        const missingTemp = window._ganttQaPoFindMissingTempCodeItems(pd.docs);
-        if (missingTemp.length) {
-            pd.stage = 'confirm_items'; // 드롭다운 답도 기존처럼 자유서술 정정 경로로 흘려보냄
-            window._ganttQaPoShowTempCodeDropdown(missingTemp);
-            return;
-        }
-        // [2026-09-28] 사번/프로젝트코드/요청사유/목적을 한 번에 입력받는 통합 폼으로 변경
+        // 임시코드 미확인 품목은 통합 폼에서 처리 — 별도 드롭다운 단계 없음
         pd.stage = 'po_fields_form';
         window._ganttQaShowPoFieldsForm(pd);
     };
@@ -1334,29 +1395,59 @@ ${docsJson}`;
         for (let i = 0; i < pd.docs.length; i++) {
             const doc = pd.docs[i];
             const label = doc.vendorName || doc.bizRegNo || (i + 1);
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`(${i + 1}/${pd.docs.length}) "${label}" 구매오더 처리 중... (SAP 입력에 시간이 걸릴 수 있습니다)`, `(${i + 1}/${pd.docs.length}) Processing purchase order for "${label}"... (SAP entry may take a while)`), pending: true });
+            // [2026-09-28] 요청 5: 코텍 자기 번호(130-81-44628)가 협력사로 남아있으면 즉시 실패 — 절대 협력사가 될 수 없음
+            if (doc.bizRegNo && doc.bizRegNo.replace(/[^0-9]/g, '') === '1308144628') {
+                results.push({ label: label, ok: false, error: window._t('협력사 사업자등록번호가 코텍 자기 번호(130-81-44628)입니다 — 올바른 협력사 번호를 확인해주세요.', 'Vendor registration number matches Kortek\'s own (130-81-44628) — please verify the correct vendor number.'), _doc: doc });
+                continue;
+            }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('(' + (i + 1) + '/' + pd.docs.length + ') "' + label + '" 구매오더 처리 중... (SAP 입력에 시간이 걸릴 수 있습니다)', '(' + (i + 1) + '/' + pd.docs.length + ') Processing purchase order for "' + label + '"... (SAP entry may take a while)'), pending: true });
             window._renderGanttQaMessages();
             try {
                 const r = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
                 results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved });
             } catch (e) {
-                results.push({ label: label, ok: false, error: (e && e.message) ? e.message : String(e) });
+                results.push({ label: label, ok: false, error: (e && e.message) ? e.message : String(e), _doc: doc });
             }
             window._ganttQaHistory.pop();
         }
         const lines = results.map(function(r, i) {
             if (r.ok) {
-                return `✅ ${i + 1}. ${r.label} → ${window._t('오더번호', 'PO')} ${r.poNumber}` +
+                return '✅ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('오더번호', 'PO') + ' ' + r.poNumber +
                     (r.autoSaved ? window._t(' (PDF 자동저장·오픈 완료)', ' (PDF auto-saved and opened)') : window._t(' (PDF 미리보기가 열려있습니다 — 💾 아이콘으로 직접 저장해주세요)', ' (PDF preview is open — please save it manually via the 💾 icon)'));
             }
-            return `⚠️ ${i + 1}. ${r.label} → ${window._t('실패', 'failed')}: ${r.error}`;
+            return '⚠️ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('실패', 'failed') + ': ' + r.error;
         }).join('\n');
         const successCount = results.filter(function(r) { return r.ok; }).length;
         window._ganttQaHistory.push({ role: 'ai', text: window._t(
-            `🏁 구매오더 자동 처리를 마쳤습니다(${successCount}/${results.length}건 성공):\n${lines}`,
-            `🏁 Finished automatic purchase order processing (${successCount}/${results.length} succeeded):\n${lines}`
+            '🏁 구매오더 자동 처리를 마쳤습니다(' + successCount + '/' + results.length + '건 성공):\n' + lines,
+            '🏁 Finished automatic purchase order processing (' + successCount + '/' + results.length + ' succeeded):\n' + lines
         )});
         window._ganttQaPoDraft = null;
+        // [2026-09-28] 요청 4: 건너뛴 문서(사업자등록번호 오류) 안내
+        if (pd.errorDocs && pd.errorDocs.length) {
+            const errLabels = pd.errorDocs.map(function(e) {
+                return (e.docIdx + 1) + '번(' + (e.doc.vendorName || e.doc.bizRegNo || (window._currentLang === 'en' ? 'unknown' : '미확인')) + ')';
+            }).join(', ');
+            window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                '⚠️ 사업자등록번호 오류로 건너뛴 문서: ' + errLabels + '\n해당 문서는 정확한 협력사 사업자등록번호를 확인한 뒤 파일을 다시 첨부해 새로 시작해주세요.',
+                '⚠️ Skipped (business registration number error): ' + errLabels + '\nPlease verify the correct vendor registration number and re-attach those files to start fresh.'
+            )});
+        }
+        // [2026-09-28] 요청 4: SAP 처리 실패 문서 재처리 제안
+        const failedDocs = results.filter(function(r) { return !r.ok && r._doc; }).map(function(r) { return r._doc; });
+        if (failedDocs.length) {
+            window._ganttQaPoRetryDraft = { stage: 'po_fields_form', docs: failedDocs, buyerEmpId: pd.buyerEmpId, errorDocs: [] };
+            window._ganttQaShowConfirmButtons(
+                window._t(
+                    '⚠️ SAP 처리에 실패한 문서 ' + failedDocs.length + '건이 있습니다. 정보를 다시 확인하고 재처리할까요?',
+                    '⚠️ ' + failedDocs.length + ' document(s) failed SAP processing. Would you like to review and retry?'
+                ),
+                [
+                    { label: window._t('🔄 재처리', '🔄 Retry'), value: '[retry_po_failed]', style: 'confirm' },
+                    { label: window._t('건너뜀', 'Skip'), value: window._t('건너뜀', 'Skip'), style: 'cancel' }
+                ]
+            );
+        }
 
         // 📦 [2026-09-22 신규, 사용자 요청] "발주서 출력하고 나면 자재 입고 처리를 연속으로
         //    해야하는데" — 성공한 오더가 있으면 바로 이어서 입고 처리할지 확인 버튼으로 묻는다.
@@ -3124,6 +3215,7 @@ ${docsJson}`;
         if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
             try { window._issueLogInterrupt && window._issueLogInterrupt(); } catch (e) { /* Phase 10 수집 — 실패해도 무시 */ }
             window._ganttQaPoDraft = null;
+            window._ganttQaPoRetryDraft = null; // [2026-09-28] 재처리 draft도 같이 초기화
             window._ganttQaBomDraft = null;
             window._ganttQaBomResolvedOptions = null;
             window._ganttQaApprovalDraft = null;
@@ -3168,6 +3260,19 @@ ${docsJson}`;
         //    다른 모든 로컬 명령보다 먼저 체크해야 함(트리거 단어 없는 후속 답변이 엉뚱하게
         //    다른 로컬 명령/일반 AI 질문으로 새면 안 되므로, 첨부 자체가 유일한 용도인 지금은
         //    최우선 순위로 둠).
+        // [2026-09-28] 실패 문서 재처리 트리거 — confirm 버튼에서 '[retry_po_failed]' 값으로 트리거됨
+        if (window._ganttQaPoRetryDraft && question.trim() === '[retry_po_failed]') {
+            const retryPd = window._ganttQaPoRetryDraft;
+            window._ganttQaPoRetryDraft = null;
+            window._ganttQaPendingConfirmButtons = null;
+            window._ganttQaHistory.push({ role: 'user', text: window._t('[실패 문서 재처리]', '[Retry failed docs]') });
+            input.value = '';
+            window._ganttQaPoDraft = retryPd;
+            window._ganttQaShowPoFieldsForm(retryPd);
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
         const pastedPoContext = window._ganttQaExtractPastedPoContext(question);
         if (window._ganttQaPoDraft || (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) || pastedPoContext) {
             const apiKeyForPo = window.getActiveAiKey ? window.getActiveAiKey() : null;
