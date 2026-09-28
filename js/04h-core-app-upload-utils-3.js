@@ -1461,7 +1461,7 @@ ${docsJson}`;
         );
         const saveData = await window._ganttQaParsePoApiResponse(saveRes, 'SAP 구매오더 저장', 'SAP purchase order save');
         if (!saveData.ok) throw new Error(saveData.error || window._t('알 수 없는 오류', 'unknown error'));
-        return { poNumber: saveData.poNumber, autoSaved: saveData.autoSaved, message: saveData.message };
+        return { poNumber: saveData.poNumber, autoSaved: saveData.autoSaved, pdfPath: saveData.pdfPath || null, message: saveData.message };
     };
 
     // 🆕 [2026-09-17 신규] 배치 안의 모든 문서를 순차로(SAP GUI는 세션 1개라 병렬 불가) 자동
@@ -1483,7 +1483,7 @@ ${docsJson}`;
             window._renderGanttQaMessages();
             try {
                 const r = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
-                results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved });
+                results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved, pdfPath: r.pdfPath || null });
             } catch (e) {
                 results.push({ label: label, ok: false, error: (e && e.message) ? e.message : String(e), _doc: doc });
             }
@@ -1492,7 +1492,9 @@ ${docsJson}`;
         const lines = results.map(function(r, i) {
             if (r.ok) {
                 return '✅ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('오더번호', 'PO') + ' ' + r.poNumber +
-                    (r.autoSaved ? window._t(' (PDF 자동저장·오픈 완료)', ' (PDF auto-saved and opened)') : window._t(' (PDF 미리보기가 열려있습니다 — 💾 아이콘으로 직접 저장해주세요)', ' (PDF preview is open — please save it manually via the 💾 icon)'));
+                    (r.autoSaved
+                        ? window._t(' → 📁 ' + (r.pdfPath || window._t('자동저장 완료', 'auto-saved')), ' → 📁 ' + (r.pdfPath || 'auto-saved'))
+                        : window._t(' (PDF 미리보기 열림 — 직접 저장해주세요)', ' (PDF preview open — please save manually)'));
             }
             return '⚠️ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('실패', 'failed') + ': ' + r.error;
         }).join('\n');

@@ -3204,102 +3204,118 @@ def _save_po_pdf_to_file(save_path):
         pass
     time.sleep(0.5)
 
-    def _find_save_dialog(timeout_sec):
-        deadline = time.time() + timeout_sec
-        titles = []
-        while time.time() < deadline:
-            for w in Desktop(backend='uia').windows():
-                try:
-                    title = w.window_text()
-                except Exception:
-                    continue
-                if title and title not in titles:
-                    titles.append(title)
-                if '사본 저장' in title or 'Save' in title:
-                    return w, titles
-            time.sleep(0.4)
-        return None, titles
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # [2026-09-28 v8] 라이브 테스트로 확인한 방식으로 전면 재작성
+    # 핵심 발견:
+    # 1) 다이얼로그 제목이 '사본 저장...' — UIA Desktop.windows()에서 안 보임.
+    #    win32gui.EnumWindows로 class=#32770 + 제목에 '저장' 포함으로 찾아야 함.
+    # 2) AttachThreadInput(my_tid, dlg_tid) + SetFocus(Edit_HWND) 후 send_keys
+    #    → 파일이름 입력란에 확실히 타이핑 됨 (GetFocus()가 0x0이어도 동작).
+    # 3) 파일이름 Edit은 y좌표 두 번째(EnumChildWindows로 class=Edit 탐색).
+    # 4) 저장 버튼은 mouse_event 절대좌표 클릭.
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    import win32gui as _wg, win32con as _wc, win32api as _wa, win32process as _wp
 
-    # ⚠️ [2026-09-15 사용자 제안 반영, 2차 수정] 임베드 뷰어에 따라 "다른 이름으로 저장"
-    # 단축키가 Ctrl+S가 아니라 Ctrl+Shift+S일 수 있고(Acrobat 계열이 "저장"과 "다른
-    # 이름으로 저장"을 구분하는 경우 흔함), 사용자가 실사용 관찰로 "Ctrl+Shift+S가 맞는
-    # 것 같다"고 제보 — **Ctrl+Shift+S를 먼저 시도**하고, 혹시 몰라 Ctrl+S로 폴백한다
-    # (처음엔 반대 순서였다가 사용자 제보로 순서를 바꿈). 둘 다 실패하면 그 시점에
-    # 열려있던 창 목록을 에러에 남겨 다음 디버깅 왕복을 줄인다.
-    # 🆕 [2026-09-17 신규, 사용자 요청으로 한 번 더 시도] 지금까지 3차례 실패했던 원인 후보
-    # 하나를 아직 안 바꿔봤다 — 단축키를 `sap_win.type_keys(...)`(특정 창 핸들에 WM_CHAR류
-    # 메시지를 보내는 방식)로 보내고 있었는데, 이 방식은 최상위 창(sap_win)을 대상으로 하지
-    # 그 안의(클릭으로 포커스를 옮겨둔) 임베드 PDF 뷰어 서브컨트롤을 대상으로 하지 않는다 —
-    # 구형 ActiveX/OLE 임베드 컨트롤은 이런 창 핸들 지정 합성 메시지 자체를 아예 무시하고,
-    # 진짜 OS 레벨 하드웨어 입력(SendInput)만 받아들이는 경우가 흔하다. 위에서 이미
-    # `from pywinauto.keyboard import send_keys`로 가져온 **모듈 최상위 `send_keys()`**(특정
-    # 창에 묶이지 않고, 그 순간 OS가 포커스를 준 대상에 SendInput으로 진짜 키 입력을 보냄)는
-    # 이 함수 끝의 `{ENTER}` 전송엔 이미 쓰고 있었으면서 정작 이 단축키 전송에는 안 쓰고
-    # 있었다 — `sap_win.type_keys()`를 이 모듈 최상위 `send_keys()`로 바꿔 시도.
-    save_dlg = None
-    seen_titles = []
+    def _find_save_dialog_win32(timeout_sec):
+        """win32gui.EnumWindows로 '사본 저장' 다이얼로그(#32770) 탐색."""
+        deadline = time.time() + timeout_sec
+        while time.time() < deadline:
+            found = []
+            def _cb(hwnd, _):
+                try:
+                    t = _wg.GetWindowText(hwnd)
+                    cls = _wg.GetClassName(hwnd)
+                    if ('저장' in t or 'Save' in t or 'save' in t) and cls == '#32770':
+                        found.append(hwnd)
+                except Exception:
+                    pass
+            _wg.EnumWindows(_cb, None)
+            if found:
+                return found[0]
+            time.sleep(0.3)
+        return None
+
+    def _find_filename_edit(dlg_hwnd):
+        """다이얼로그 안에서 파일이름 Edit 컨트롤 HWND 반환.
+        구조: 다이얼로그 → ComboBoxEx32 → ComboBox → Edit (class=Edit, y좌표 두 번째).
+        """
+        children = []
+        def _cb2(hwnd, _):
+            try:
+                if _wg.GetClassName(hwnd) == 'Edit':
+                    r = _wg.GetWindowRect(hwnd)
+                    children.append((hwnd, r[3]))  # (handle, y_bottom)
+            except Exception:
+                pass
+        _wg.EnumChildWindows(dlg_hwnd, _cb2, None)
+        # y_bottom 내림차순: [0]=파일형식콤보내부Edit, [1]=파일이름Edit
+        children.sort(key=lambda x: x[1], reverse=True)
+        if len(children) >= 2:
+            return children[1][0]
+        return children[0][0] if children else None
+
+    def _find_save_button(dlg_hwnd):
+        """다이얼로그 안에서 '저장' 버튼 HWND 반환."""
+        result = []
+        def _cb3(hwnd, _):
+            try:
+                t = _wg.GetWindowText(hwnd)
+                cls = _wg.GetClassName(hwnd)
+                if cls == 'Button' and ('저장' in t or t == '&Save' or t == 'Save'):
+                    result.append(hwnd)
+            except Exception:
+                pass
+        _wg.EnumChildWindows(dlg_hwnd, _cb3, None)
+        return result[0] if result else None
+
+    # 단축키 전송으로 다이얼로그 오픈
     for shortcut in ('^+s', '^s'):
         send_keys(shortcut, pause=0.05)
         time.sleep(1.5)
-        save_dlg, titles = _find_save_dialog(5)
-        seen_titles = list(dict.fromkeys(seen_titles + titles))
-        if save_dlg is not None:
+        dlg_h = _find_save_dialog_win32(5)
+        if dlg_h:
             break
-    if save_dlg is None:
-        # 디버깅에 필요한 최소 정보(그 시점에 열려있던 창 목록)를 에러 메시지에 같이
-        # 남긴다 — 다음 실패 시 왕복 없이 바로 원인을 좁힐 수 있게.
-        titles_str = ' / '.join(seen_titles[:20])
-        raise RuntimeError(f'PDF 저장("사본 저장") 다이얼로그가 뜨지 않았습니다(Ctrl+S, Ctrl+Shift+S 둘 다 시도함) — PDF 미리보기가 열려있지 않거나, 단축키가 전달되지 않았을 수 있습니다. (열려있던 창: {titles_str})')
+    if not dlg_h:
+        raise RuntimeError('PDF 저장 다이얼로그("사본 저장...")가 열리지 않았습니다 — PDF 미리보기가 열려 있는지 확인하세요.')
+
+    edit_h = _find_filename_edit(dlg_h)
+    btn_h  = _find_save_button(dlg_h)
+    if edit_h is None:
+        raise RuntimeError('파일이름 Edit 컨트롤을 찾지 못했습니다.')
 
     import ctypes as _ct
-    _ct.windll.user32.SetForegroundWindow(save_dlg.handle)
-    time.sleep(0.5)
+    # 스레드 입력 연결 → SetFocus로 Edit에 포커스
+    dlg_tid, _ = _wp.GetWindowThreadProcessId(dlg_h)
+    my_tid = _ct.windll.kernel32.GetCurrentThreadId()
+    _ct.windll.user32.AttachThreadInput(my_tid, dlg_tid, True)
+    _ct.windll.user32.SetForegroundWindow(dlg_h)
+    time.sleep(0.2)
+    _ct.windll.user32.SetFocus(edit_h)
+    time.sleep(0.2)
+    _ct.windll.user32.AttachThreadInput(my_tid, dlg_tid, False)
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # [2026-09-28 v7] 파일이름 Edit 컨트롤 직접 클릭 후 타이핑
-    # v5 실패 원인: send_keys('%n') = Alt+N이 Acrobat의 메뉴 가속키로 빠짐.
-    # Alt 키가 OS 레벨에서 활성 창의 메뉴바를 먼저 열기 때문에, 다이얼로그
-    # 내부 가속키(파일이름 필드)로 전달되지 않는 경우가 있음.
-    # 수정: pywinauto로 Edit 컨트롤을 직접 찾아 click_input() → 확실한 포커스
-    # 단, Windows 파일 대화상자에는 Edit가 여러 개(주소표시줄, 파일이름, 파일형식 내부):
-    #   v3 실패 사례: Y좌표 최하단 Edit → 파일형식 콤보박스 내부 Edit이었음
-    # 해결: Y좌표로 정렬 후 "두 번째로 아래에 있는" Edit = 파일이름 입력란 (파일형식 바로 위).
-    # 실패 시 폴백: send_keys('%n') 구방식.
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    fn_edit = None
-    try:
-        edits = save_dlg.descendants(control_type='Edit')
-        # Y좌표 내림차순(아래→위) 정렬: [0]=파일형식내부Edit, [1]=파일이름Edit, ...
-        edits_sorted = sorted(edits, key=lambda e: e.rectangle().bottom, reverse=True)
-        if len(edits_sorted) >= 2:
-            fn_edit = edits_sorted[1]  # 두 번째로 아래 = 파일이름 입력란
-        elif edits_sorted:
-            fn_edit = edits_sorted[0]
-    except Exception:
-        pass
-
-    if fn_edit is not None:
-        try:
-            fn_edit.click_input()
-            time.sleep(0.15)
-        except Exception:
-            pass
-    else:
-        send_keys('%n')              # 폴백: Alt+N 가속키
-        time.sleep(0.2)
-
-    # 파일이름 입력란에 전체 경로 입력
-    # Ctrl+A로 기존 내용 전체 선택 후 클립보드 붙여넣기
+    # 파일이름 입력: Ctrl+A 후 클립보드 붙여넣기
     _set_windows_clipboard_text(save_path)
     time.sleep(0.15)
-    send_keys('^a')                  # 전체 선택
+    send_keys('^a')
     time.sleep(0.1)
-    send_keys('^v')                  # 붙여넣기
+    send_keys('^v')
     time.sleep(0.3)
 
-    send_keys('{ENTER}')             # Enter = 저장 확정 (Alt+S보다 안전)
+    # 저장 버튼 클릭 (버튼 못 찾으면 Enter로 폴백)
+    if btn_h:
+        r = _wg.GetWindowRect(btn_h)
+        cx = (r[0] + r[2]) // 2
+        cy = (r[1] + r[3]) // 2
+        _wa.SetCursorPos((cx, cy))
+        time.sleep(0.05)
+        _wa.mouse_event(_wc.MOUSEEVENTF_LEFTDOWN, cx, cy, 0, 0)
+        time.sleep(0.05)
+        _wa.mouse_event(_wc.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
+    else:
+        send_keys('{ENTER}')
     time.sleep(0.5)
-    _clear_windows_clipboard()       # Excel "클립보드에 많은 양의 내용" 팝업 방지
+    _clear_windows_clipboard()
     time.sleep(1.0)
 
     # "파일이 이미 있습니다 — 덮어쓰시겠습니까?" 같은 확인창이 뜰 수 있음 — 뜨면 Enter로 승인.
