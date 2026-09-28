@@ -2448,6 +2448,23 @@ def po_build_excel():
                      'message': f'구매오더 요청 엑셀({len(rows)}개 품목)을 생성했습니다: {file_name}'})
 
 
+@app.route('/open-folder', methods=['POST'])
+def open_folder():
+    data = request.get_json(silent=True) or {}
+    path = data.get('path', '')
+    if not path:
+        return jsonify({'ok': False, 'error': '경로가 없습니다.'}), 400
+    try:
+        if os.path.isfile(path):
+            subprocess.Popen(['explorer', '/select,', path])
+        else:
+            folder = path if os.path.isdir(path) else os.path.dirname(path)
+            os.startfile(folder)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/po-sap-prepare', methods=['POST'])
 def po_sap_prepare():
     # 🛒 [2026-09-15 신규] "구매오더 요청" 2단계 — /po-build-excel로 만든 엑셀을 ZMMR060에

@@ -1583,6 +1583,13 @@ ${question}
         input.focus();
     };
 
+    window._ganttQaOpenFolder = function(path) {
+        fetch('http://127.0.0.1:5000/open-folder', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path })
+        }).catch(function() {});
+    };
+
     window._renderGanttQaMessages = function() {
         const box = document.getElementById('gantt-qa-messages');
         if (!box) return;
@@ -1700,6 +1707,26 @@ ${question}
             const confirmButtonsHtml = (!isUser && m.confirmButtonsId && window._ganttQaPendingConfirmButtons && window._ganttQaPendingConfirmButtons.id === m.confirmButtonsId)
                 ? window._ganttQaRenderConfirmButtonsHtml(window._ganttQaPendingConfirmButtons)
                 : '';
+            // 📂 [2026-09-28 신규] 구매오더 완료 후 저장경로 클릭 버튼 — 클릭 시 탐색기로 해당 파일 위치 오픈
+            const savePathsHtml = (!isUser && m.savePaths && (m.savePaths.xlsPaths || m.savePaths.pdfPaths))
+                ? (function() {
+                    const _lang = window._currentLang === 'en';
+                    const _btns = [];
+                    (m.savePaths.xlsPaths || []).forEach(function(p) {
+                        const fn = p.split('\\').pop() || p;
+                        _btns.push('<button onclick="window._ganttQaOpenFolder(\'' + p.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + escapeHtml(p) + '" style="font-size:11px; padding:3px 9px; border:1px solid #a8c8a0; background:#eaf7e4; color:#1f6b1a; border-radius:5px; cursor:pointer; margin:2px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle;">📊 ' + escapeHtml(fn) + '</button>');
+                    });
+                    (m.savePaths.pdfPaths || []).forEach(function(p) {
+                        const fn = p.split('\\').pop() || p;
+                        _btns.push('<button onclick="window._ganttQaOpenFolder(\'' + p.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + escapeHtml(p) + '" style="font-size:11px; padding:3px 9px; border:1px solid #a0b8d8; background:#e6eff8; color:#1a3a6a; border-radius:5px; cursor:pointer; margin:2px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle;">📄 ' + escapeHtml(fn) + '</button>');
+                    });
+                    if (!_btns.length) return '';
+                    return '<div style="margin-top:5px; padding:5px 8px; background:#f8fcf6; border:1px solid #d0e8c8; border-radius:6px;">'
+                        + '<div style="font-size:10.5px; color:#888; margin-bottom:3px;">' + (_lang ? '📂 Saved files — click to open in Explorer:' : '📂 저장된 파일 — 클릭하면 탐색기로 열립니다:') + '</div>'
+                        + '<div style="display:flex; flex-wrap:wrap; gap:2px;">' + _btns.join('') + '</div>'
+                        + '</div>';
+                })()
+                : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; ${_bd} background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
@@ -1713,6 +1740,7 @@ ${question}
                 ${choiceDropdownHtml ? `<div style="max-width:82%; width:100%;">${choiceDropdownHtml}</div>` : ''}
                 ${poFieldsFormHtml ? `<div style="max-width:90%; width:100%;">${poFieldsFormHtml}</div>` : ''}
                 ${confirmButtonsHtml ? `<div style="max-width:82%; width:100%;">${confirmButtonsHtml}</div>` : ''}
+                ${savePathsHtml ? `<div style="max-width:90%; width:100%;">${savePathsHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;

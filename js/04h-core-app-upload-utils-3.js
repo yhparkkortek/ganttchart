@@ -1477,7 +1477,7 @@ ${docsJson}`;
         );
         const saveData = await window._ganttQaParsePoApiResponse(saveRes, 'SAP 구매오더 저장', 'SAP purchase order save');
         if (!saveData.ok) throw new Error(saveData.error || window._t('알 수 없는 오류', 'unknown error'));
-        return { poNumber: saveData.poNumber, autoSaved: saveData.autoSaved, pdfPath: saveData.pdfPath || null, message: saveData.message };
+        return { poNumber: saveData.poNumber, autoSaved: saveData.autoSaved, pdfPath: saveData.pdfPath || null, xlsPath: exData.path || null, message: saveData.message };
     };
 
     // 🆕 [2026-09-17 신규] 배치 안의 모든 문서를 순차로(SAP GUI는 세션 1개라 병렬 불가) 자동
@@ -1499,7 +1499,7 @@ ${docsJson}`;
             window._renderGanttQaMessages();
             try {
                 const r = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
-                results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved, pdfPath: r.pdfPath || null });
+                results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved, pdfPath: r.pdfPath || null, xlsPath: r.xlsPath || null });
             } catch (e) {
                 results.push({ label: label, ok: false, error: (e && e.message) ? e.message : String(e), _doc: doc });
             }
@@ -1509,16 +1509,19 @@ ${docsJson}`;
             if (r.ok) {
                 return '✅ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('오더번호', 'PO') + ' ' + r.poNumber +
                     (r.autoSaved
-                        ? window._t(' → 📁 ' + (r.pdfPath || window._t('자동저장 완료', 'auto-saved')), ' → 📁 ' + (r.pdfPath || 'auto-saved'))
+                        ? window._t(' → 📁 자동저장', ' → 📁 auto-saved')
                         : window._t(' (PDF 미리보기 열림 — 직접 저장해주세요)', ' (PDF preview open — please save manually)'));
             }
             return '⚠️ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('실패', 'failed') + ': ' + r.error;
         }).join('\n');
         const successCount = results.filter(function(r) { return r.ok; }).length;
+        const _xlsPaths = results.filter(function(r) { return r.ok && r.xlsPath; }).map(function(r) { return r.xlsPath; });
+        const _pdfPaths = results.filter(function(r) { return r.ok && r.autoSaved && r.pdfPath; }).map(function(r) { return r.pdfPath; });
+        const _savePaths = (_xlsPaths.length || _pdfPaths.length) ? { xlsPaths: _xlsPaths, pdfPaths: _pdfPaths } : null;
         window._ganttQaHistory.push({ role: 'ai', text: window._t(
             '🏁 구매오더 자동 처리를 마쳤습니다(' + successCount + '/' + results.length + '건 성공):\n' + lines,
             '🏁 Finished automatic purchase order processing (' + successCount + '/' + results.length + ' succeeded):\n' + lines
-        )});
+        ), savePaths: _savePaths });
         window._ganttQaPoDraft = null;
         // [2026-09-28] 요청 4: 건너뛴 문서(사업자등록번호 오류) 안내
         if (pd.errorDocs && pd.errorDocs.length) {
