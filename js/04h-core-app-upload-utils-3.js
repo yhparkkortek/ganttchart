@@ -6465,6 +6465,28 @@ ${docsJson}`;
         }
     };
 
+    // 🗑 [2026-09-28 신규] 자주 쓰는 질문 개별 삭제 — 실패/불필요한 항목 제거
+    window._ganttQaLastFreqSelected = null;
+    window._ganttQaDeleteFreqQuestion = function(sample) {
+        if (!sample) return;
+        try {
+            var store = JSON.parse(localStorage.getItem('gantt_qa_question_freq_v2') || '{}');
+            if (store['_global']) {
+                var before = store['_global'].length;
+                store['_global'] = store['_global'].filter(function(item) { return item.sample !== sample; });
+                localStorage.setItem('gantt_qa_question_freq_v2', JSON.stringify(store));
+                var after = store['_global'].length;
+                if (before !== after) console.info('[자주 쓰는 질문] 삭제:', sample);
+            }
+        } catch (e) {
+            console.warn('[자주 쓰는 질문] 삭제 실패:', e && e.message);
+        }
+        window._ganttQaLastFreqSelected = null;
+        var delBtn = document.getElementById('gantt-qa-freq-del-btn');
+        if (delBtn) delBtn.style.display = 'none';
+        if (window._ganttQaPopulateFreqSelect) window._ganttQaPopulateFreqSelect();
+    };
+
     // 💡 [2026-09-12 신규] 헤더에 항상 떠 있는 "자주 쓰는 질문" 드롭다운(#gantt-qa-freq-select) 채우기.
     //    대화 중에도(비어있지 않아도) 계속 갱신 가능하도록 _renderGanttQaMessages와 분리했다 —
     //    "한 번 대화하면 안 나오네" 실사용 피드백 반영. 실제 기록이 없으면(신규 프로젝트 등) 예전
@@ -6472,6 +6494,9 @@ ${docsJson}`;
     window._ganttQaPopulateFreqSelect = function(projectKey) {
         const sel = document.getElementById('gantt-qa-freq-select');
         if (!sel) return;
+        // 드롭다운이 갱신되면 삭제 버튼 숨김 (선택 상태가 리셋됐으므로)
+        const _delBtn = document.getElementById('gantt-qa-freq-del-btn');
+        if (_delBtn) _delBtn.style.display = 'none';
         const _fqEn = window._currentLang === 'en';
         const top = window._ganttQaGetDisplayQuestions
             ? window._ganttQaGetDisplayQuestions(12, projectKey, function() { window._ganttQaPopulateFreqSelect(projectKey); })
@@ -6776,9 +6801,10 @@ ${docsJson}`;
                         </div>
                         <div style="display:flex; align-items:center; gap:6px; min-width:0;">
                             <label id="gantt-qa-freq-label" for="gantt-qa-freq-select" style="flex:0 0 96px; font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '💡 Frequently used' : '💡 자주 쓰는 질문'}</label>
-                            <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="flex:1; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
+                            <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaLastFreqSelected=this.value; window._ganttQaFillQuestion(this.value); var _d=document.getElementById('gantt-qa-freq-del-btn'); if(_d){_d.style.display='inline-flex';_d.title=(window._currentLang==='en'?'Delete: ':'삭제: ')+this.value;} this.selectedIndex=0; }" style="flex:1; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
                                 <option value="">${_qEn ? '(select a question)' : '(질문 선택하기)'}</option>
                             </select>
+                            <button id="gantt-qa-freq-del-btn" onclick="window._ganttQaDeleteFreqQuestion(window._ganttQaLastFreqSelected)" title="${_qEn ? 'Delete this question from the list' : '이 질문을 목록에서 삭제'}" style="display:none; flex-shrink:0; align-items:center; justify-content:center; width:26px; height:26px; box-sizing:border-box; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';">🗑</button>
                         </div>
                     </div>
                     <div style="flex:0 0 72px; display:flex; flex-direction:column; gap:6px;">
