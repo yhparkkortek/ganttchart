@@ -980,7 +980,23 @@ ${correctionBlock}
 
 [PDF 원문]
 ${attachText}`;
-        const result = await window.callAiBackend(apiKey, prompt, {});
+        // 503 "high demand" 자동 재시도 (최대 2회 추가, 5s·10s 대기)
+        let result;
+        for (let _attempt = 0; _attempt <= 2; _attempt++) {
+            result = await window.callAiBackend(apiKey, prompt, {});
+            if (result.ok) break;
+            const _em = (result.error && result.error.message) ? result.error.message : String(result.error || '');
+            if (_attempt < 2 && (_em.includes('503') || /overload|high demand/i.test(_em))) {
+                const _wait = 5000 * (_attempt + 1);
+                if (window._ganttQaHistory) {
+                    const _last = window._ganttQaHistory[window._ganttQaHistory.length - 1];
+                    if (_last && _last.pending) { _last.text = '⏳ ' + window._t('AI 서버 과부하(503) — ' + (_wait / 1000) + '초 후 재시도 중...', 'AI server busy (503) — retrying in ' + (_wait / 1000) + 's...'); if (window._renderGanttQaMessages) window._renderGanttQaMessages(); }
+                }
+                await new Promise(function(r) { setTimeout(r, _wait); });
+                continue;
+            }
+            break;
+        }
         if (!result.ok) throw result.error || new Error('AI 추출 실패');
         const text = window._extractGanttQaAiText(result);
         const m = text.match(/\{[\s\S]*\}/);
