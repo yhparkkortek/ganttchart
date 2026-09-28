@@ -3247,104 +3247,80 @@ def _save_po_pdf_to_file(save_path):
     time.sleep(0.5)
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # [2026-09-28 v3] 파일명 입력 — 3단계 폴백 구조
-    # 이전 v2(Alt+N + 클립보드)가 Acrobat에서 Alt+N을 메뉴 단축키로 해석해
-    # 파일명 칸에 포커스가 안 가는 문제가 있었음 → Alt+N 완전히 제거.
-    # 단계 1) pywinauto UIA로 Edit 컨트롤을 직접 찾아 set_edit_text
-    # 단계 2) win32gui WM_SETTEXT로 hWnd에 직접 전송
-    # 단계 3) 클립보드 붙여넣기(Ctrl+A 후 Ctrl+V) — 가장 단순한 폴백
+    # [2026-09-28 v4] 파일명 입력 — 클립보드 붙여넣기만 사용
+    # v1~v3에서 시도한 WM_SETTEXT / UIA set_edit_text 방식은 모두
+    # EN_CHANGE 알림을 발생시키지 않아 다이얼로그 내부 상태가 갱신되지
+    # 않음(폴더는 이동되지만 파일명이 원래 헥스명 그대로 남는 원인).
+    # 클립보드 붙여넣기(SendInput 기반 Ctrl+V)만이 EN_CHANGE를 발생시켜
+    # 다이얼로그가 새 파일명을 인식한다.
+    # → Win32 컨트롤 탐색 코드 전면 제거, 클립보드 단일 경로로 정리.
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    path_set = False
 
-    # 단계 1: pywinauto UIA Edit 컨트롤 직접 조작
+    # 파일명 입력란에 마우스 클릭으로 포커스를 명시적으로 확보한 뒤 붙여넣기
+    # (다이얼로그가 열릴 때 파일명 Edit이 기본 포커스지만, 이전 단계에서
+    #  포커스가 이동됐을 경우를 대비해 ComboBoxEx32 찾아 PostMessage 클릭)
     try:
-        from pywinauto import Desktop as _Desktop2
-        dlg_uia = _Desktop2(backend='uia').window(handle=save_dlg.handle)
-        edit_ctrl = dlg_uia.child_window(control_type='Edit', found_index=0)
-        edit_ctrl.set_focus()
-        time.sleep(0.1)
-        edit_ctrl.set_edit_text(save_path)
-        path_set = True
-    except Exception:
-        pass
+        import win32gui as _w32g
+        import win32con as _w32c
+        import win32api as _w32a
+        _dlg_hwnd = save_dlg.handle
+        _fn_hwnd = None
 
-    # 단계 2: win32gui — ComboBoxEx32(파일명 입력 콤보) 안의 Edit을 정확히 타겟팅
-    # y좌표 오름차순으로 "가장 아래" Edit을 고르면 파일형식 콤보의 내부 Edit이 선택돼
-    # 폴더는 이동되지만 파일명이 안 바뀌는 문제가 있었음 (2026-09-28 수정).
-    if not path_set:
-        try:
-            import win32gui as _w32g
-            import win32con as _w32c
-            _dlg_hwnd = save_dlg.handle
-
-            # ComboBoxEx32 클래스 수집 (파일명 입력란은 이 클래스)
-            _combo_ex_hwnds = []
-            def _find_combo_ex(hwnd, _):
+        # ComboBoxEx32(파일명 입력란 클래스) → 내부 Edit 탐색
+        _combo_ex = []
+        def _find_cex(h, _):
+            try:
+                if _w32g.GetClassName(h) == 'ComboBoxEx32':
+                    _combo_ex.append(h)
+            except Exception:
+                pass
+            return True
+        _w32g.EnumChildWindows(_dlg_hwnd, _find_cex, None)
+        if _combo_ex:
+            _inner = []
+            def _find_inner(h, _):
                 try:
-                    if _w32g.GetClassName(hwnd) == 'ComboBoxEx32':
-                        _combo_ex_hwnds.append(hwnd)
+                    if _w32g.GetClassName(h) == 'Edit':
+                        _inner.append(h)
                 except Exception:
                     pass
                 return True
-            _w32g.EnumChildWindows(_dlg_hwnd, _find_combo_ex, None)
+            _w32g.EnumChildWindows(_combo_ex[0], _find_inner, None)
+            if _inner:
+                _fn_hwnd = _inner[0]
 
-            if _combo_ex_hwnds:
-                # ComboBoxEx32 안의 Edit 찾기
-                _fn_edits = []
-                def _find_inner_edit(hwnd, _):
-                    try:
-                        if _w32g.GetClassName(hwnd) == 'Edit':
-                            _fn_edits.append(hwnd)
-                    except Exception:
-                        pass
-                    return True
-                _w32g.EnumChildWindows(_combo_ex_hwnds[0], _find_inner_edit, None)
-                if _fn_edits:
-                    _fn_hwnd = _fn_edits[0]
-                    _w32g.SetFocus(_fn_hwnd)
-                    time.sleep(0.1)
-                    _w32g.SendMessage(_fn_hwnd, _w32c.WM_SETTEXT, 0, save_path)
-                    path_set = True
-            else:
-                # ComboBoxEx32가 없으면(모던 다이얼로그) 두 번째로 낮은 Edit을 시도
-                # (가장 낮은 것은 파일형식 콤보 내부 Edit일 수 있으므로 두 번째를 선택)
-                _edits = []
-                def _enum_edits_cb(hwnd, _):
-                    try:
-                        if _w32g.GetClassName(hwnd) == 'Edit' and \
-                           _w32g.IsWindowVisible(hwnd) and _w32g.IsWindowEnabled(hwnd):
-                            r = _w32g.GetWindowRect(hwnd)
-                            if (r[2] - r[0]) > 100:
-                                _edits.append((r[1], hwnd))
-                    except Exception:
-                        pass
-                    return True
-                _w32g.EnumChildWindows(_dlg_hwnd, _enum_edits_cb, None)
-                if len(_edits) >= 2:
-                    _edits.sort(key=lambda x: x[0], reverse=True)
-                    _fn_hwnd = _edits[1][1]  # 두 번째로 아래쪽 = 파일명 칸
-                    _w32g.SetFocus(_fn_hwnd)
-                    time.sleep(0.1)
-                    _w32g.SendMessage(_fn_hwnd, _w32c.WM_SETTEXT, 0, save_path)
-                    path_set = True
-        except Exception:
-            pass
+        if _fn_hwnd:
+            # PostMessage 좌클릭으로 키보드 포커스를 파일명 Edit으로 이동
+            # (PostMessage는 크로스-프로세스에서도 동작)
+            r = _w32g.GetWindowRect(_fn_hwnd)
+            _cx = (r[2] - r[0]) // 2
+            _cy = (r[3] - r[1]) // 2
+            _lparam = (_cy << 16) | (_cx & 0xFFFF)
+            _w32a.PostMessage(_fn_hwnd, _w32c.WM_LBUTTONDOWN, _w32c.MK_LBUTTON, _lparam)
+            time.sleep(0.05)
+            _w32a.PostMessage(_fn_hwnd, _w32c.WM_LBUTTONUP, 0, _lparam)
+            time.sleep(0.15)
+    except Exception:
+        pass
 
-    # 단계 3: 클립보드 폴백 — 다이얼로그 재포커싱 후 Ctrl+A + Ctrl+V
-    # DeepL 등 클립보드 감시 프로그램이 타이밍을 방해할 수 있어 포커스 확보 후 충분히 대기
-    if not path_set:
+    # 다이얼로그를 전경으로 올린 뒤 클립보드로 전체 경로 붙여넣기
+    # (SendInput 기반 send_keys는 현재 OS 포커스를 받은 컨트롤에 전달됨)
+    import ctypes as _ct
+    try:
+        _ct.windll.user32.SetForegroundWindow(save_dlg.handle)
+    except Exception:
         save_dlg.set_focus()
-        time.sleep(0.5)  # 포커스 안정화 후 클립보드 작업
-        _set_windows_clipboard_text(save_path)
-        time.sleep(0.2)
-        send_keys('^a')
-        time.sleep(0.2)
-        send_keys('^v')
-
     time.sleep(0.4)
+
+    _set_windows_clipboard_text(save_path)
+    time.sleep(0.2)
+    send_keys('^a')   # 파일명 전체 선택
+    time.sleep(0.15)
+    send_keys('^v')   # 전체 경로 붙여넣기 → EN_CHANGE 발생 → 다이얼로그 인식
+    time.sleep(0.3)
     send_keys('{ENTER}')
     time.sleep(0.5)
-    _clear_windows_clipboard()  # PDF 저장 후 클립보드 비움 — Excel 팝업 방지
+    _clear_windows_clipboard()  # Excel "클립보드에 많은 양의 내용" 팝업 방지
     time.sleep(1.0)
 
     # "파일이 이미 있습니다 — 덮어쓰시겠습니까?" 같은 확인창이 뜰 수 있음 — 뜨면 Enter로 승인.
