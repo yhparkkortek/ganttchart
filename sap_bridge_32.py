@@ -2476,13 +2476,36 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
     except Exception:
         raise RuntimeError('검색 실행 후 결과 팝업이 사라졌습니다 — 매치가 없거나 오류가 발생했을 수 있습니다.')
 
-    materials = _sap_read_material_label_matrix(session, max_results)
+    # [2026-09-29 버그수정] _sap_read_material_label_matrix → _sap_read_searchhelp_matrix
+    # 구 함수는 스크롤 없이 첫 화면 분량만 읽어 "*MLCC*" 같은 다건 패턴에서 결과가 잘렸다.
+    headers, data_rows = _sap_read_searchhelp_matrix(session, max_results)
 
     # 결과는 읽기만 하고 아무것도 채택하지 않음 — 취소(F12)로 팝업을 닫는다.
     try:
         session.findById('wnd[1]').sendVKey(12)
     except Exception:
         pass
+
+    # (headers, data_rows) → [{'matnr': ..., 'desc': ...}] 형식으로 변환
+    def _col_idx(names):
+        for n in names:
+            try:
+                return headers.index(n)
+            except ValueError:
+                pass
+        return None
+
+    matnr_idx = _col_idx(['자재', 'Material', 'Material Number'])
+    desc_idx  = _col_idx(['자재내역', 'Material Description', 'Description'])
+    if matnr_idx is None:
+        raise RuntimeError('검색 결과에서 "자재" 열을 찾지 못했습니다 — 헤더: ' + str(headers))
+
+    materials = []
+    for r in data_rows:
+        matnr = r[matnr_idx] if matnr_idx < len(r) else ''
+        desc  = (r[desc_idx] if desc_idx < len(r) else '') if desc_idx is not None else ''
+        if matnr:
+            materials.append({'matnr': matnr, 'desc': desc})
 
     if len(materials) >= max_results:
         raise RuntimeError(f'패턴 "{pattern}"이 너무 광범위합니다(최소 {max_results}건 이상 매치) — 더 구체적인 패턴으로 다시 시도해주세요.')
