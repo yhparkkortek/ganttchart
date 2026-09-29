@@ -3625,41 +3625,55 @@ def post_goods_receipt(ebeln):
     if not row_count:
         raise RuntimeError(f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목이 없습니다 — 이미 처리됐거나 오더번호를 확인해주세요.')
 
-    # 발주수량(MENGE) 읽기
-    try:
-        order_qty = str(grid.GetCellValue(0, 'MENGE')).strip()
-    except Exception as e:
-        raise RuntimeError(f'발주수량(MENGE)을 읽지 못했습니다: {e}')
-    if not order_qty:
-        raise RuntimeError('발주수량(MENGE) 값이 비어 있습니다.')
-
-    # 입고수량(INQTY) 직접 입력 (VBS: modifyCell)
-    try:
-        grid.modifyCell(0, 'INQTY', order_qty)
-    except Exception as e:
-        raise RuntimeError(f'입고수량(INQTY) 입력 오류: {e}')
-
-    # 입고일자(INDAT) — VBS 기준: currentCellColumn → triggerModified → pressF4 → 날짜 선택
-    try:
-        grid.currentCellColumn = 'INDAT'
-        grid.triggerModified()
-        grid.pressF4()
-        time.sleep(0.5)
-        session.findById(
-            'wnd[1]/usr/cntlCONTAINER/shellcont/shell'
-        ).selectionInterval = f'{today},{today}'
-        time.sleep(0.3)
-    except Exception as e:
-        # F4 날짜 팝업 실패 시 직접 입력으로 폴백
+    # 모든 행에 대해 발주수량(MENGE) 읽어 입고수량(INQTY)·입고일자(INDAT) 입력
+    processed_rows = []
+    order_qtys = []
+    for row_idx in range(row_count):
         try:
-            grid.modifyCell(0, 'INDAT', today)
-        except Exception as e2:
-            raise RuntimeError(f'입고일자(INDAT) 입력 오류: F4 팝업={e}, 직접입력={e2}')
+            order_qty = str(grid.GetCellValue(row_idx, 'MENGE')).strip()
+        except Exception as e:
+            raise RuntimeError(f'발주수량(MENGE) 읽기 오류 (행 {row_idx}): {e}')
+        if not order_qty:
+            continue  # 수량 없는 행 건너뜀
 
-    # 행 선택 (VBS: currentCellColumn="" → selectedRows="0")
+        # 입고수량(INQTY) 입력
+        try:
+            grid.modifyCell(row_idx, 'INQTY', order_qty)
+        except Exception as e:
+            raise RuntimeError(f'입고수량(INQTY) 입력 오류 (행 {row_idx}): {e}')
+
+        # 입고일자(INDAT) — 첫 행은 F4 팝업 시도, 나머지는 직접 입력
+        if row_idx == 0:
+            try:
+                grid.currentCellColumn = 'INDAT'
+                grid.triggerModified()
+                grid.pressF4()
+                time.sleep(0.5)
+                session.findById(
+                    'wnd[1]/usr/cntlCONTAINER/shellcont/shell'
+                ).selectionInterval = f'{today},{today}'
+                time.sleep(0.3)
+            except Exception:
+                try:
+                    grid.modifyCell(row_idx, 'INDAT', today)
+                except Exception as e2:
+                    raise RuntimeError(f'입고일자(INDAT) 입력 오류 (행 0): {e2}')
+        else:
+            try:
+                grid.modifyCell(row_idx, 'INDAT', today)
+            except Exception as e:
+                raise RuntimeError(f'입고일자(INDAT) 입력 오류 (행 {row_idx}): {e}')
+
+        processed_rows.append(row_idx)
+        order_qtys.append(order_qty)
+
+    if not processed_rows:
+        raise RuntimeError(f'구매오더 "{ebeln}"에 처리할 수량이 있는 품목이 없습니다.')
+
+    # 처리한 모든 행 선택
     try:
         grid.currentCellColumn = ''
-        grid.selectedRows = '0'
+        grid.selectedRows = ','.join(str(r) for r in processed_rows)
     except Exception:
         pass
 
@@ -3685,13 +3699,16 @@ def post_goods_receipt(ebeln):
     except Exception:
         status_text = ''
 
+    qty_summary = ', '.join(order_qtys) if len(order_qtys) > 1 else (order_qtys[0] if order_qtys else '?')
+    row_label = f'{len(processed_rows)}건' if len(processed_rows) > 1 else '1건'
     return {
         'ok': True,
         'ebeln': ebeln,
-        'orderQty': order_qty,
+        'rowCount': len(processed_rows),
+        'orderQtys': order_qtys,
         'goodsReceiptDate': today,
         'statusText': status_text,
-        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 (수량: {order_qty}, 입고일자: {today}).' + (f' [SAP 상태표시줄: {status_text}]' if status_text else ''),
+        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}).' + (f' [SAP 상태표시줄: {status_text}]' if status_text else ''),
     }
 
 

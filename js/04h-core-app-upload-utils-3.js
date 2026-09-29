@@ -440,7 +440,18 @@
             }
             try {
                 const text = await window._pcExtractPdfText(file);
-                window._ganttQaPendingAttachments.push({ name: file.name, text: text || '' });
+                // 의미 있는 문자(공백·제어문자·대체문자 제외)가 20자 미만이면 추출 실패로 판단
+                const meaningfulLen = (text || '').replace(/[\s\u0000-\u001f�￾￿?]/g, '').length;
+                if (meaningfulLen < 20) {
+                    if (window.showToast) window.showToast(
+                        window._t(
+                            `⚠️ "${file.name}" — PDF에서 텍스트를 읽지 못했습니다. 이 PDF는 한글 폰트가 임베드되지 않은 형식(비텍스트 레이어)이라 분석이 불가합니다. 인쇄 후 "Microsoft Print to PDF"로 다시 저장한 PDF를 사용해주세요.`,
+                            `⚠️ "${file.name}" — Could not extract text. This PDF has non-embedded fonts or is image-based. Please re-save it via "Print to PDF" and try again.`
+                        ), 'warning'
+                    );
+                } else {
+                    window._ganttQaPendingAttachments.push({ name: file.name, text: text });
+                }
             } catch (e) {
                 if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}" 읽기 실패: `, `⚠️ Failed to read "${file.name}": `) + (e && e.message ? e.message : e), 'warning');
             }
