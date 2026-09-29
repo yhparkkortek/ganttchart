@@ -1436,9 +1436,10 @@ def fetch_lifnr_from_mm03(material):
     time.sleep(0.4)
     wnd = session.findById('wnd[0]')
 
-    # MARA-ZLIFNR 읽기 (GuiTextField, ID substring 탐색)
+    # MARA-ZLIFNR 읽기 — 'txt' 접두사로 라벨(lblMARA-ZLIFNR, text="공급사코드")이 아닌
+    # 값 필드(txtMARA-ZLIFNR, text="100503")를 명시적으로 찾는다.
     try:
-        lifnr_field = _find_by_id_substring(wnd, 'MARA-ZLIFNR')
+        lifnr_field = _find_by_id_substring(wnd, 'txtMARA-ZLIFNR')
         if lifnr_field is None:
             return None
         return lifnr_field.Text.strip() or None
