@@ -1416,13 +1416,44 @@ def fetch_vendor_by_lifnr(lifnr):
     }
 
 
+def fetch_lifnr_from_mm03(material):
+    """MM03 구매 탭(SP09) MARA-ZLIFNR 필드에서 공급사코드를 읽어 반환한다.
+    ZMM006보다 안정적 — 구매 이력 없어도 자재마스터에 등록된 공급사코드를 그대로 반환.
+    2026-09-29, 화면 덤프(132995 구매탭)로 MARA-ZLIFNR(GuiTextField) 확인.
+    반환: LIFNR 문자열 또는 None."""
+    material = str(material).strip()
+    if not material:
+        return None
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_material_screen(session, wnd, material)
+    wnd = session.findById('wnd[0]')
+
+    # 구매 탭(SP09) 선택 — _select_tab_with_retry는 ID substring으로 재시도
+    found = _select_tab_with_retry(wnd, 'tabpSP09')
+    if not found:
+        return None
+    time.sleep(0.4)
+    wnd = session.findById('wnd[0]')
+
+    # MARA-ZLIFNR 읽기 (GuiTextField, ID substring 탐색)
+    try:
+        lifnr_field = _find_by_id_substring(wnd, 'MARA-ZLIFNR')
+        if lifnr_field is None:
+            return None
+        return lifnr_field.Text.strip() or None
+    except Exception:
+        return None
+
+
 def fetch_vendor_info_by_material(material):
-    """ZMM006→LIFNR→ZMM005 순서로 자재의 협력사 상세 정보를 조회한다.
+    """MM03 구매탭→LIFNR→ZMM005 순서로 자재의 협력사 상세 정보를 조회한다.
+    2026-09-29: ZMM006 대신 MM03 구매탭(MARA-ZLIFNR)으로 변경 — 구매이력 없는 자재도 조회 가능.
     반환: {'ok': True, 'vendor': {...}} 또는 {'ok': False, 'error': ...}"""
     material = str(material).strip()
-    lifnr = fetch_lifnr_from_zmm006(material)
+    lifnr = fetch_lifnr_from_mm03(material)
     if not lifnr:
-        return {'ok': False, 'error': f'ZMM006에서 자재 {material}의 공급업체 코드(LIFNR)를 찾지 못했습니다.'}
+        return {'ok': False, 'error': f'MM03 구매 탭에서 자재 {material}의 공급사코드(MARA-ZLIFNR)를 찾지 못했습니다.'}
     vendor = fetch_vendor_by_lifnr(lifnr)
     if not vendor:
         return {'ok': False, 'error': f'ZMM005에서 LIFNR {lifnr}의 공급업체 정보를 찾지 못했습니다.'}
@@ -3975,6 +4006,9 @@ def main():
         elif action == 'fetch_vendor_by_lifnr':
             lifnr_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             result = fetch_vendor_by_lifnr(lifnr_arg) or {'ok': False, 'error': '조회 결과 없음'}
+        elif action == 'fetch_lifnr_from_mm03':
+            material_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = {'lifnr': fetch_lifnr_from_mm03(material_arg), 'ok': True}
         elif action == 'fetch_vendor_info_by_material':
             material_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             result = fetch_vendor_info_by_material(material_arg)
