@@ -3365,7 +3365,11 @@ def _save_po_pdf_to_file(save_path):
     #        (2) SetForegroundWindow로 OS 전경을 확실히 보장한 뒤,
     #        (3) 창 중앙(콘텐츠 영역)을 클릭해 임베드 PDF 컨트롤에 키보드 포커스를 줌.
     #            (자식 요소 이름 검색 → click 방식은 탭버튼 오동작 위험이 있어 제거)
+    # [2026-09-29 버그수정] 2건 이상 배치 처리 시 1번째 PDF가 Acrobat으로 열려있으면
+    # "PDF" 제목에서 break → Acrobat을 대상 창으로 잘못 선택하는 버그 수정.
+    # SAP_FRONTEND 클래스 창(wnd[1])을 최우선으로 찾고, 없을 때만 "PDF/미리보기" 제목 창을 폴백으로.
     pdf_target_win = None
+    _pdf_title_fallback = None
     try:
         for _w in _Desktop_pdf(backend='uia').windows():
             try:
@@ -3373,13 +3377,15 @@ def _save_po_pdf_to_file(save_path):
                 _cls = _w.element_info.class_name or ''
             except Exception:
                 continue
-            if 'PDF' in _title or '미리보기' in _title:
-                pdf_target_win = _w
-                break
             if 'SAP_FRONTEND' in _cls and _w.handle != sap_win.handle:
-                pdf_target_win = _w  # 또 다른 SAP 창 = wnd[1] 후보
+                pdf_target_win = _w  # SAP wnd[1] — 최우선
+                break
+            if _pdf_title_fallback is None and ('PDF' in _title or '미리보기' in _title):
+                _pdf_title_fallback = _w  # Acrobat 등 — SAP wnd[1]이 없을 때만 사용
     except Exception:
         pass
+    if pdf_target_win is None:
+        pdf_target_win = _pdf_title_fallback
     target_win = pdf_target_win or sap_win
 
     # OS 레벨 전경 전환 → 이후 send_keys가 확실히 이 창으로 감
@@ -3593,8 +3599,8 @@ def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
         return {'ok': True, 'poNumber': po_number, 'pdfPath': pdf_path, 'autoSaved': True,
                 'message': f'구매오더 "{po_number}"의 발주서 PDF를 "{pdf_path}"로 저장하고 열었습니다.'}
 
-    return {'ok': True, 'poNumber': po_number, 'autoSaved': False,
-            'message': f'구매오더 "{po_number}"의 발주서 미리보기가 열렸습니다. 미리보기 하단의 💾 저장 아이콘을 눌러 "{po_number}.pdf"로 직접 저장해주세요(자동 저장이 아직 지원되지 않습니다).'}
+    return {'ok': True, 'poNumber': po_number, 'autoSaved': False, 'pdfPath': pdf_path,
+            'message': f'구매오더 "{po_number}"의 발주서 미리보기가 열렸습니다. 미리보기 하단의 💾 저장 아이콘을 눌러 "{pdf_path}"로 직접 저장해주세요(자동 저장이 아직 지원되지 않습니다).'}
 
 
 # ── 🆕 [2026-09-21, Phase 10] 실패 화면 스냅샷 — "구조만" 저장 (docs/phase10-issue-learning-design.md §3-C) ──

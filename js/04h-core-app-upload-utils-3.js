@@ -1906,7 +1906,7 @@ ${docsJson}`;
         }).join('\n');
         const successCount = results.filter(function(r) { return r.ok; }).length;
         const _xlsPaths = results.filter(function(r) { return r.ok && r.xlsPath; }).map(function(r) { return r.xlsPath; });
-        const _pdfPaths = results.filter(function(r) { return r.ok && r.autoSaved && r.pdfPath; }).map(function(r) { return r.pdfPath; });
+        const _pdfPaths = results.filter(function(r) { return r.ok && r.pdfPath; }).map(function(r) { return r.pdfPath; });
         const _savePaths = (_xlsPaths.length || _pdfPaths.length) ? { xlsPaths: _xlsPaths, pdfPaths: _pdfPaths } : null;
         window._ganttQaHistory.push({ role: 'ai', text: window._t(
             '🏁 구매오더 자동 처리를 마쳤습니다(' + successCount + '/' + results.length + '건 성공):\n' + lines,
