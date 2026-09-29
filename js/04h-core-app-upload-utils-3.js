@@ -4768,21 +4768,132 @@ ${docsJson}`;
             }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 BOM을 조회하는 중...', 'Looking up the BOM in SAP...'), pending: true });
             window._renderGanttQaMessages();
+            // 📐🚫🤖 [2026-09-29 신규] 복잡도 판정 — 행수>30 또는 자재 2건 이상이면 채팅 대신
+            //    엑셀 버튼 + 메모리 저장으로 처리한다. 소량이면 기존처럼 전체 텍스트 표시.
+            let _bomFetchedText = null;
+            let _bomIsComplex = false;
             let bomReply;
             try {
-                const sapText = await window._aiFetchSapContext(question);
-                const fetchFailed = !sapText || /^\(/.test(sapText);
-                bomReply = fetchFailed
-                    ? '⚠️ ' + (sapText || window._t('SAP 조회 실패', 'SAP lookup failed'))
-                    : window._ganttQaFormatSapGridReply(sapText);
+                _bomFetchedText = await window._aiFetchSapContext(question);
+                const fetchFailed = !_bomFetchedText || /^\(/.test(_bomFetchedText);
+                if (fetchFailed) {
+                    bomReply = '⚠️ ' + (_bomFetchedText || window._t('SAP 조회 실패', 'SAP lookup failed'));
+                } else {
+                    const _bBodyStart = _bomFetchedText.indexOf('\n\n');
+                    const _bBody = _bBodyStart !== -1 ? _bomFetchedText.slice(_bBodyStart + 2) : _bomFetchedText;
+                    const _bLines = _bBody.split('\n').filter(function(l) { return l.length > 0 && !/^\.\.\.\s*\(/.test(l); });
+                    const _bDataRows = Math.max(0, _bLines.length - 1);
+                    const _bMatNums = (question.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
+                    _bomIsComplex = _bDataRows > 30 || _bMatNums.length >= 2;
+                    if (_bomIsComplex) {
+                        window._lastBomData = { sapText: _bomFetchedText, queriedAt: Date.now(), matNums: _bMatNums, dataRows: _bDataRows };
+                        bomReply = null; // 아래에서 confirm 버튼으로 표시
+                    } else {
+                        bomReply = window._ganttQaFormatSapGridReply(_bomFetchedText);
+                    }
+                }
             } catch (e) {
                 bomReply = '⚠️ ' + window._t('BOM 조회 실패: ', 'BOM lookup failed: ') + (e && e.message ? e.message : e);
             }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: bomReply });
+            if (bomReply !== null && bomReply !== undefined) {
+                window._ganttQaHistory.push({ role: 'ai', text: bomReply });
+            } else if (_bomIsComplex && window._lastBomData) {
+                const _bmd = window._lastBomData;
+                const _bEn = window._currentLang === 'en';
+                const _bSummary = _bEn
+                    ? '📊 **BOM lookup complete** — ' + _bmd.dataRows + ' rows (' + _bmd.matNums.length + ' material(s))\n\nToo many rows to display in chat. Press the button below or type **"BOM 엑셀로 열기"**.\n\n💡 **Cached** — follow-up filter queries (H1 / X3 / P1 ...) answered without re-querying SAP.'
+                    : '📊 **BOM 조회 완료** — 총 **' + _bmd.dataRows + '행** (자재 ' + _bmd.matNums.length + '건)\n\n데이터가 많아 채팅창 대신 엑셀을 권장합니다.\n\n💡 **메모리에 저장됨** — "H1 상태 자재 확인해줘", "X3 자재 목록" 같은 후속 질문에 SAP 재조회 없이 바로 답변합니다.';
+                window._ganttQaShowConfirmButtons(_bSummary, [
+                    { label: '📊 엑셀로 열기', value: 'BOM 엑셀로 열기', style: 'confirm' },
+                    { label: '💬 채팅창에 전체 보기', value: 'BOM 전체 내용 채팅창에 보여줘', style: 'neutral' }
+                ]);
+            }
             window._renderGanttQaMessages();
             input.focus();
             return;
+        }
+
+        // 📐🚫🤖 [2026-09-29 신규] BOM 메모리 로컬 명령 — window._lastBomData에 BOM 데이터가
+        //    캐시돼 있을 때 SAP 재조회 없이 바로 답변하는 세 가지 명령.
+        //    ① "BOM 엑셀로 열기" — confirm 버튼 또는 직접 타이핑으로 오는 엑셀 저장 요청.
+        //    ② "BOM 전체 내용 채팅창에 보여줘" — 확인 버튼 "채팅창에 전체 보기".
+        //    ③ 상태코드 필터 (H1/X3/P1 등) — "H1 상태 자재 확인해줘" 류의 후속 질문.
+        if (window._lastBomData) {
+            // ① BOM 엑셀로 열기
+            if (/^BOM\s*엑셀로?\s*열기$/.test(question.trim()) || /BOM.*엑셀.*(저장|열기)|엑셀.*BOM.*(저장|열기)/i.test(question)) {
+                if (!_skipUserHistoryPush) {
+                    window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                }
+                let _bomXlsReply;
+                try {
+                    const _bExported = window._exportSapDataToExcel({ text: window._lastBomData.sapText });
+                    const _bRes = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/sap-save-export', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ fileName: _bExported.fileName, dataBase64: _bExported.base64 })
+                        }), 20000, window._t('SAP 엑셀 저장 시간 초과', 'Saving the SAP Excel file timed out')
+                    );
+                    const _bData = await _bRes.json();
+                    _bomXlsReply = _bData.ok
+                        ? '📊 ' + (_bData.message || window._t('BOM 엑셀 파일을 저장했습니다.', 'BOM Excel file saved.'))
+                        : '⚠️ ' + window._t('엑셀 저장에 실패했습니다: ', 'Failed to save the Excel file: ') + (_bData.error || window._t('알 수 없는 오류', 'unknown error'));
+                } catch (e) {
+                    _bomXlsReply = '⚠️ ' + window._t('BOM 엑셀 저장 실패: ', 'BOM Excel save failed: ') + (e && e.message ? e.message : e);
+                }
+                window._ganttQaHistory.push({ role: 'ai', text: _bomXlsReply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+            // ② 채팅창에 전체 보기
+            if (/^BOM\s*전체\s*내용\s*채팅창에\s*보여줘$/.test(question.trim()) || /BOM.*(전체|전부|모두).*(채팅|보여|표시)/i.test(question)) {
+                if (!_skipUserHistoryPush) {
+                    window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                }
+                const _bFullReply = window._ganttQaFormatSapGridReply(window._lastBomData.sapText);
+                window._ganttQaHistory.push({ role: 'ai', text: _bFullReply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+            // ③ 상태코드 필터 — "H1 상태 자재 확인해줘", "X3 자재 목록 보여줘" 류
+            const _bmStatusM = question.match(/\b([A-Z]\d)\b/);
+            if (_bmStatusM && /(상태|자재|목록|확인|보여|리스트|filter)/i.test(question)) {
+                if (!_skipUserHistoryPush) {
+                    window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                }
+                const _bCode = _bmStatusM[1];
+                const _bsText = window._lastBomData.sapText || '';
+                const _bsBodyStart = _bsText.indexOf('\n\n');
+                const _bsBody = _bsBodyStart !== -1 ? _bsText.slice(_bsBodyStart + 2) : _bsText;
+                const _bsLines = _bsBody.split('\n').filter(function(l) { return l.length > 0; });
+                const _bsHeader = _bsLines[0] || '';
+                const _bsDataLines = _bsLines.slice(1);
+                const _bsHeaderCells = _bsHeader.split('\t').map(function(code) {
+                    var k = (code || '').trim();
+                    return (window._SAP_FIELD_LABEL_MAP && window._SAP_FIELD_LABEL_MAP[k]) || code;
+                });
+                const _bsFiltered = _bsDataLines.filter(function(line) {
+                    return line.split('\t').some(function(cell) { return cell.trim() === _bCode; });
+                });
+                let _bsReply;
+                if (!_bsFiltered.length) {
+                    _bsReply = window._t('메모리된 BOM 데이터에서 **' + _bCode + '** 상태 자재를 찾지 못했습니다.', 'No parts with status **' + _bCode + '** found in the cached BOM data.');
+                } else {
+                    _bsReply = window._t('메모리된 BOM 데이터에서 **' + _bCode + '** 상태 자재 **' + _bsFiltered.length + '건**:',
+                        'Parts with status **' + _bCode + '** in cached BOM (' + _bsFiltered.length + ' rows):')
+                        + '\n\n' + _bsHeaderCells.join('\t') + '\n' + _bsFiltered.join('\n');
+                }
+                window._ganttQaHistory.push({ role: 'ai', text: _bsReply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
         }
 
         // 📐🚫🤖 [2026-09-22 신규, 사용자 요청 "토큰 많이 쓰는 SAP 기능 전부 AI 없이"] 사용처(역전개)/
