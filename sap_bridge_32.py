@@ -3859,55 +3859,13 @@ def post_goods_receipt(ebeln, dump_only=False):
                 pass
         return {'ok': True, 'dump_only': True, 'dumpLines': _dump_lines, 'tbar1': _tb, 'ebeln': ebeln}
 
-    # ── 그리드 컬럼 목록 수집 (진단용 — 실제 INQTY·INDAT 컬럼명 확인)
-    _grid_cols = {}
-    try:
-        for _ci in range(grid.ColumnCount):
-            try:
-                _key = grid.GetColumnKey(_ci)
-                _title = ''
-                try:
-                    _title = grid.GetDisplayedColumnTitle(_ci) or ''
-                except Exception:
-                    pass
-                _grid_cols[_key] = _title
-            except Exception:
-                break
-    except Exception as _ce:
-        _grid_cols = {'error': str(_ce)}
-
-    # 컬럼명 후보 자동 매핑 (INQTY·INDAT 대신 실제 컬럼명 사용)
-    _col_qty  = None  # 입고수량 컬럼
-    _col_date = None  # 입고일자 컬럼
-    _qty_keywords  = ['INQTY', 'MENGE', 'WEMPF', 'ERFMG', 'IINFM', 'QTY']
-    _date_keywords = ['INDAT', 'WBDAT', 'BLDAT', 'BUDAT', 'DATE', 'DAT']
-    _known_qty  = ['INQTY', 'WEMPF', 'ERFMG']
-    _known_date = ['INDAT', 'WBDAT', 'BLDAT']
-    for _k in _grid_cols:
-        _ku = _k.upper()
-        if _col_qty  is None and any(_ku == _c for _c in _known_qty):
-            _col_qty = _k
-        if _col_date is None and any(_ku == _c for _c in _known_date):
-            _col_date = _k
-    # 정확 매칭 안 되면 키워드 부분 일치
-    if _col_qty is None:
-        for _k in _grid_cols:
-            if any(kw in _k.upper() for kw in _qty_keywords) and _k.upper() != 'MENGE':
-                _col_qty = _k; break
-    if _col_date is None:
-        for _k in _grid_cols:
-            if any(kw in _k.upper() for kw in _date_keywords):
-                _col_date = _k; break
-    # 최후 fallback: 원래 하드코딩 값
-    if _col_qty  is None: _col_qty  = 'INQTY'
-    if _col_date is None: _col_date = 'INDAT'
-
-    # 모든 행에 대해 발주수량(MENGE) 읽어 입고수량(INQTY)·입고일자(INDAT) 입력
-    # [2026-09-29] 각 행마다 setCurrentCell로 포커스 → modifyCell → Tab(셀 확정) 순서로
-    # 충분한 딜레이를 두어 SAP 그리드가 값을 확정할 시간을 준다.
+    # ── 각 행: INQTY 입력 → triggerModified → F4 캘린더로 INDAT 설정 (VBS 기준)
+    # [2026-09-29] VBS 매크로 분석 결과:
+    #   modifyCell(INQTY) → currentCellColumn='INDAT' → triggerModified() → pressF4() → 캘린더 선택
+    # triggerModified() 없이는 INQTY가 그리드에 커밋되지 않아 값이 비어있는 채로 전기됨.
     processed_rows = []
     order_qtys = []
-    _debug_steps = []  # 디버그용 단계 기록
+    _debug_steps = []
 
     for row_idx in range(row_count):
         try:
@@ -3915,52 +3873,60 @@ def post_goods_receipt(ebeln, dump_only=False):
         except Exception as e:
             raise RuntimeError(f'발주수량(MENGE) 읽기 오류 (행 {row_idx}): {e}')
         if not order_qty:
-            _debug_steps.append(f'행{row_idx}: MENGE 없음, 건너뜀')
             continue
 
-        # INQTY 셀에 포커스 → 값 입력
+        # 1. INQTY 입력
         try:
-            grid.setCurrentCell(row_idx, _col_qty)
-            time.sleep(0.3)
-        except Exception:
-            pass
-        try:
-            grid.modifyCell(row_idx, _col_qty, order_qty)
+            grid.modifyCell(row_idx, 'INQTY', order_qty)
             time.sleep(0.4)
         except Exception as e:
-            raise RuntimeError(f'입고수량({_col_qty}) 입력 오류 (행 {row_idx}): {e}')
+            raise RuntimeError(f'입고수량(INQTY) 입력 오류 (행 {row_idx}): {e}')
 
-        # INQTY → INDAT로 포커스 이동(Tab)하여 INQTY 값 확정
+        # 2. currentCellColumn = 'INDAT' + triggerModified() — INQTY 값 그리드 커밋
         try:
-            wnd.sendVKey(0)   # Enter: 현재 셀 편집 확정
+            grid.currentCellColumn = 'INDAT'
             time.sleep(0.3)
-        except Exception:
-            pass
-
-        # INDAT 셀에 포커스 → 날짜 직접 입력
-        try:
-            grid.setCurrentCell(row_idx, _col_date)
-            time.sleep(0.3)
-        except Exception:
-            pass
-        try:
-            grid.modifyCell(row_idx, _col_date, today)
-            time.sleep(0.4)
+            grid.triggerModified()
+            time.sleep(0.5)
         except Exception as e:
-            raise RuntimeError(f'입고일자({_col_date}) 입력 오류 (행 {row_idx}): {e}')
+            raise RuntimeError(f'triggerModified 오류 (행 {row_idx}): {e}')
 
-        # INDAT도 Enter로 확정
+        # 3. F4 캘린더 팝업 열기
         try:
-            wnd.sendVKey(0)
-            time.sleep(0.3)
-        except Exception:
-            pass
+            grid.pressF4()
+            time.sleep(1.0)
+        except Exception as e:
+            raise RuntimeError(f'pressF4(INDAT) 오류 (행 {row_idx}): {e}')
 
-        # 입력 후 실제 반영값 확인(디버그)
+        # 4. 캘린더에서 오늘 날짜 선택 → 팝업 자동 닫힘
+        _cal_set = False
+        for _cal_path in [
+            'wnd[1]/usr/cntlCONTAINER/shellcont/shell',
+            'wnd[1]/usr/cntlCONTAINER/shellcont/shell/shellcont/shell',
+        ]:
+            try:
+                _cal = session.findById(_cal_path)
+                _cal.focusDate = today
+                _cal.selectionInterval = f'{today},{today}'
+                _cal_set = True
+                time.sleep(0.6)
+                break
+            except Exception:
+                pass
+        if not _cal_set:
+            # 캘린더 경로를 못 찾으면 Enter로 닫기 시도
+            try:
+                session.findById('wnd[1]').sendVKey(0)
+                time.sleep(0.5)
+            except Exception:
+                pass
+            _debug_steps.append(f'행{row_idx}: 캘린더 경로 탐색 실패, Enter로 닫기 시도')
+
+        # 5. 반영값 확인 (디버그)
         try:
-            _chk_qty  = str(grid.GetCellValue(row_idx, _col_qty)).strip()
-            _chk_date = str(grid.GetCellValue(row_idx, _col_date)).strip()
-            _debug_steps.append(f'행{row_idx}: MENGE={order_qty} → {_col_qty}={_chk_qty}, {_col_date}={_chk_date}')
+            _chk = str(grid.GetCellValue(row_idx, 'INQTY')).strip()
+            _chk_d = str(grid.GetCellValue(row_idx, 'INDAT')).strip()
+            _debug_steps.append(f'행{row_idx}: MENGE={order_qty} → INQTY={_chk}, INDAT={_chk_d}')
         except Exception as e:
             _debug_steps.append(f'행{row_idx}: 확인읽기 실패: {e}')
 
@@ -3968,120 +3934,71 @@ def post_goods_receipt(ebeln, dump_only=False):
         order_qtys.append(order_qty)
 
     if not processed_rows:
-        raise RuntimeError(f'구매오더 "{ebeln}"에 처리할 수량이 있는 품목이 없습니다. [steps: {_debug_steps}]')
-
-    # 마지막 셀 편집 최종 확정 후 충분한 대기
-    try:
-        wnd.sendVKey(0)
-        time.sleep(1.0)
-    except Exception:
-        pass
-
-    # ── 툴바 버튼 목록 읽기 — tbar[1]과 그리드 내부 툴바 둘 다 시도
-    _tbar_map = {}
-    # 방법1: wnd[0]/tbar[1]/btn[N]
-    for _bi in range(20):
-        try:
-            _b = wnd.findById(f'tbar[1]/btn[{_bi}]')
-            _tbar_map[f't1/{_bi}'] = (getattr(_b,'Text','') or '').strip() + '/' + (getattr(_b,'Tooltip','') or '').strip()
-        except Exception:
-            pass  # break 아닌 pass — 간격 있는 버튼 인덱스 허용
-    # 방법2: shellcont 그리드 내 툴바 (ALV 내장 툴바)
-    try:
-        _gtb = wnd.findById('shellcont/shell/toolbar')
-        for _bi in range(30):
-            try:
-                _b = _gtb.item(_bi)
-                _tbar_map[f'gtb/{_bi}'] = (getattr(_b,'Text','') or '').strip() + '/' + (getattr(_b,'Tooltip','') or '').strip()
-            except Exception:
-                break
-    except Exception:
-        pass
-
-    # ── "모두선택" / "입고처리" 버튼 자동 탐색
-    _sel_all_key = None
-    _gr_key = None
-    for _k, _label in _tbar_map.items():
-        _lo = _label.lower()
-        if _sel_all_key is None and ('모두' in _lo or 'all' in _lo or '전체선택' in _lo):
-            _sel_all_key = _k
-        if _gr_key is None and ('입고' in _lo or 'goods' in _lo or 'gr' in _lo or 'receipt' in _lo):
-            _gr_key = _k
-
-    # 버튼 키로부터 실제 누를 경로 결정
-    def _press_tbar_btn(key):
-        """'t1/5' → wnd[0]/tbar[1]/btn[5], 'gtb/3' → grid.toolbar.item(3).press()"""
-        if key is None:
-            return False
-        try:
-            if key.startswith('t1/'):
-                wnd.findById(f'tbar[1]/btn[{key[3:]}]').press()
-            elif key.startswith('gtb/'):
-                wnd.findById('shellcont/shell/toolbar').item(int(key[4:])).press()
-            else:
-                return False
-            return True
-        except Exception:
-            return False
-
-    # 탐색 실패 시 fallback: t1/5 (기존 방식)
-    if _gr_key is None:
-        _gr_key = 't1/5'
+        raise RuntimeError(f'구매오더 "{ebeln}"에 처리할 수량이 있는 품목이 없습니다.')
 
     _popup_texts = []
 
-    def _dismiss_popups(max_n=4):
-        """wnd[1] 팝업이 있으면 텍스트 읽어 기록 후 btn[0]으로 닫음 (최대 max_n회)."""
-        for _p in range(max_n):
-            try:
-                _w1 = session.findById('wnd[1]')
-                _pt = ''
-                for _pid in ['usr/txtMESSAGE', 'usr/lbl[1,2]', 'usr/lbl[2,2]', 'usr/lbl[1,3]']:
-                    try:
-                        _pt = (_w1.findById(_pid).Text or '').strip()
-                        if _pt:
-                            break
-                    except Exception:
-                        pass
-                if _pt:
-                    _popup_texts.append(f'팝업{_p+1}: {_pt}')
-                _w1.findById('tbar[0]/btn[0]').press()
-                time.sleep(0.8)
-            except Exception:
-                break
-
-    # ── STEP 1: 행 선택 (grid.selectedRows)
+    # ── PASS 1: btn[5](F5) → "수량 확인" 팝업 → btn[0](확인/예)
+    # VBS: tbar[1]/btn[5].press → wnd[1]/tbar[0]/btn[0].press
     try:
-        grid.currentCellColumn = ''
+        wnd.findById('tbar[1]/btn[5]').press()
+        time.sleep(1.5)
+    except Exception as e:
+        raise RuntimeError(f'입고처리 PASS1 btn[5] 오류: {e}')
+    try:
+        _w1 = session.findById('wnd[1]')
+        _pt = ''
+        for _pid in ['usr/txtMESSAGE', 'usr/lbl[1,2]', 'usr/lbl[2,2]']:
+            try:
+                _pt = (_w1.findById(_pid).Text or '').strip()
+                if _pt: break
+            except Exception:
+                pass
+        if _pt:
+            _popup_texts.append(f'PASS1팝업: {_pt}')
+        _w1.findById('tbar[0]/btn[0]').press()
+        time.sleep(0.8)
+    except Exception:
+        pass  # 팝업이 없으면 그냥 진행
+
+    # ── PASS 2: selectColumn(VBS 기준) + selectedRows → btn[5] → btn[12]
+    # VBS: setCurrentCell(-1,"") → selectColumn 여러 개 → selectedRows="0" → btn[5] → btn[12]
+    try:
+        grid.setCurrentCell(-1, '')
+        time.sleep(0.3)
+    except Exception:
+        pass
+    for _sc in ['STATUS','WERKS','EKORG','EKGRP','LIFNR','NAME1','EBELN','EBELP',
+                'AEDAT','GRDAT','MATNR','MAKTX','MEINS','SAKTO','AUFNR','KTEXT',
+                'KOSTL','MCTXT','WEMPF','MENGE','MENGE3','INQTY','INDAT','LGORT']:
+        try:
+            grid.selectColumn(_sc)
+        except Exception:
+            pass
+    time.sleep(0.3)
+    try:
         grid.selectedRows = ','.join(str(r) for r in processed_rows)
-        time.sleep(0.5)
+        time.sleep(0.4)
     except Exception:
         pass
 
-    # ── STEP 2: "모두선택" 툴바 버튼 클릭 → 팝업 처리
-    if _sel_all_key:
-        _ok2 = _press_tbar_btn(_sel_all_key)
-        if _ok2:
-            time.sleep(1.2)
-            _dismiss_popups(4)
-        else:
-            _popup_texts.append(f'모두선택({_sel_all_key}) press 실패')
-    else:
-        _popup_texts.append('모두선택 버튼을 찾지 못함(tbarMap=' + str(_tbar_map) + ')')
-
-    # ── STEP 3: 입고처리 실행 버튼 클릭 → 팝업 처리
-    _ok3 = _press_tbar_btn(_gr_key)
-    if not _ok3:
-        raise RuntimeError(
-            f'입고처리 버튼({_gr_key}) press 실패 '
-            f'[tbar={_tbar_map}, cols={_grid_cols}, steps={_debug_steps}, popups={_popup_texts}]'
-        )
-    time.sleep(2.0)
-    _dismiss_popups(4)
-
-    # ── STEP 4: VBS에 있던 btn[12] 팝업 처리
     try:
-        session.findById('wnd[1]/tbar[0]/btn[12]').press()
+        wnd.findById('tbar[1]/btn[5]').press()
+        time.sleep(2.0)
+    except Exception as e:
+        raise RuntimeError(f'입고처리 PASS2 btn[5] 오류: {e} [debug={_debug_steps}]')
+    try:
+        _w1 = session.findById('wnd[1]')
+        _pt2 = ''
+        for _pid in ['usr/txtMESSAGE', 'usr/lbl[1,2]', 'usr/lbl[2,2]']:
+            try:
+                _pt2 = (_w1.findById(_pid).Text or '').strip()
+                if _pt2: break
+            except Exception:
+                pass
+        if _pt2:
+            _popup_texts.append(f'PASS2팝업: {_pt2}')
+        _w1.findById('tbar[0]/btn[12]').press()
         time.sleep(0.8)
     except Exception:
         pass
@@ -4097,22 +4014,12 @@ def post_goods_receipt(ebeln, dump_only=False):
             status_text = session.findById('wnd[0]/sbar').Text or ''
         except Exception:
             pass
-    # 상태바가 비어 있으면 전기 실패로 반환(ok=False) — 진단 정보 포함
     if not status_text:
         return {
             'ok': False,
             'ebeln': ebeln,
             'error': f'구매오더 "{ebeln}" 입고 처리 후 SAP 상태표시줄이 비어 있습니다 — 전기가 완료되지 않았을 수 있습니다. SAP 화면을 직접 확인해주세요.',
-            'debug': {
-                'tbarMap': _tbar_map,
-                'selAllKey': _sel_all_key,
-                'grKey': _gr_key,
-                'gridCols': _grid_cols,
-                'colQty': _col_qty,
-                'colDate': _col_date,
-                'debugSteps': _debug_steps,
-                'popupTexts': _popup_texts,
-            },
+            'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts},
         }
 
     qty_summary = ', '.join(order_qtys) if len(order_qtys) > 1 else (order_qtys[0] if order_qtys else '?')
@@ -4125,15 +4032,7 @@ def post_goods_receipt(ebeln, dump_only=False):
         'goodsReceiptDate': today,
         'statusText': status_text,
         'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}). [SAP: {status_text}]',
-        'debug': {
-            'tbarMap': _tbar_map,
-            'selAllKey': _sel_all_key,
-            'grKey': _gr_key,
-            'gridCols': _grid_cols,
-            'colQty': _col_qty,
-            'colDate': _col_date,
-            'debugSteps': _debug_steps,
-            'popupTexts': _popup_texts,
+        'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts
         },
     }
 
