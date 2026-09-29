@@ -2290,11 +2290,7 @@ ${docsJson}`;
         const m3 = members3.find(function(m) { return m && norm(m.name) === norm(name) && (m.email || '').trim(); });
         if (m3) return { name: m3.name, email: m3.email.trim() };
 
-        // 💡 [2026-09-01 신규 — 버그 수정] "다른 프로젝트 얘기하다가 메일 보내줘" 대응 — 지금 열려있는
-        //    이 프로젝트에서 못 찾았으면, 이번 대화에서 [[ACTION:LOAD_PROJECT:번호]]로 실제로 조회했던
-        //    다른 프로젝트들의 주소록/담당자도 마저 뒤진다(window._aiOtherProjectDataCache,
-        //    _aiFetchOtherProjectContext 참고). 이걸 안 하면 다른 프로젝트에만 등록된 사람은 이메일을
-        //    못 찾거나, 이름이 우연히 겹치는 현재 프로젝트의 다른 사람 이메일로 잘못 보내질 수 있었음.
+        // 💡 [2026-09-01 신규 — 버그 수정] "다른 프로젝트 얘기하다가 메일 보내줘" 대응
         const otherCache = window._aiOtherProjectDataCache || {};
         for (const no in otherCache) {
             const pd = otherCache[no];
@@ -2313,6 +2309,23 @@ ${docsJson}`;
             if (otherM3) return { name: otherM3.name, email: otherM3.email.trim() };
         }
 
+        // (2026-09-29) 개인 이름으로 못 찾은 경우 → 부서명(dept)으로 재조회해서 팀원 전체 이메일 반환.
+        // "개발3팀" 같은 팀명을 수신인/참조인으로 지정하면 그 팀 소속 전원의 이메일로 확장된다.
+        // 배열로 반환하면 _aiBuildMailDraftFromParsed의 flatMap이 풀어서 처리한다.
+        const deptMatches = [];
+        document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
+            const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value.trim() : ''; };
+            const dept = g('dept'), email = g('email');
+            if (!email) return;
+            // 부서명 정규화: "개발3팀 (Dev3)" → "개발3팀" 앞부분도 매칭
+            const deptNorm = norm(dept).replace(/\s*\(.*\)$/, '').trim();
+            const nameNorm = norm(name).replace(/\s*\(.*\)$/, '').trim();
+            if (deptNorm === nameNorm || norm(dept) === norm(name)) {
+                deptMatches.push({ name: g('name') || g('nameEn') || name, email: email });
+            }
+        });
+        if (deptMatches.length > 0) return deptMatches;
+
         return { name: name, email: null };
     };
 
@@ -2320,10 +2333,17 @@ ${docsJson}`;
     //    id는 채팅 메시지(m.mailDraftId)와 짝지어, 옛날 메시지의 [📤 보내기] 버튼이 그 사이 새로
     //    생긴 다른 초안을 잘못 보내는 걸 막는 용도.
     window._aiBuildMailDraftFromParsed = function(parsed) {
+        // _aiResolveNameToEmail이 팀(부서)명을 받으면 팀원 배열을 반환하므로 flatMap으로 펼침
+        const resolveAll = function(names) {
+            return (names || []).reduce(function(acc, n) {
+                const r = window._aiResolveNameToEmail(n);
+                return acc.concat(Array.isArray(r) ? r : [r]);
+            }, []);
+        };
         return {
             id: 'maildraft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-            to: (parsed.toNames || []).map(window._aiResolveNameToEmail),
-            cc: (parsed.ccNames || []).map(window._aiResolveNameToEmail),
+            to: resolveAll(parsed.toNames),
+            cc: resolveAll(parsed.ccNames),
             subject: parsed.subject || '',
             body: parsed.body || ''
         };
