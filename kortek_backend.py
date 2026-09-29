@@ -2349,31 +2349,18 @@ def sap_approval_generate():
     fmt = (body.get('format') or 'both').strip().lower()
     if fmt not in ('xlsx', 'docx', 'both'):
         fmt = 'both'
-    writer = (body.get('writer') or '').strip()
-    leader = (body.get('leader') or '').strip()
+    # 공통(fallback) 필드 — per_material에 없을 때 사용
+    shared_writer = (body.get('writer') or '').strip()
+    shared_leader = (body.get('leader') or '').strip()
     is_pre = bool(body.get('is_pre'))
-    rev = (body.get('rev') or '00').strip() or '00'
-    remark = (body.get('remark') or '').strip()
-    kind = (body.get('kind') or '').strip()
-    if kind not in ('New', 'Update'):
-        kind = 'New' if rev in ('00', '0') else 'Update'  # Revision이 있으면 보통 Update로 보는 게 합리적
+    shared_rev = (body.get('rev') or '00').strip() or '00'
+    shared_remark = (body.get('remark') or '').strip()
+    # 품목별 필드 override: {code: {writer, leader, rev, remark}}
+    per_material = body.get('per_material') or {}
+    if not isinstance(per_material, dict):
+        per_material = {}
 
-    # remark 가공 — 원본 앱 `_approval_generate` 로직 그대로(가승인원이면 그 문구를 보장, 완전히 비면 '.').
-    if is_pre:
-        if remark and _APPROVAL_PRE_REMARK not in remark:
-            remark = f'{_APPROVAL_PRE_REMARK} / {remark}'
-        elif not remark:
-            remark = _APPROVAL_PRE_REMARK
-    if not remark:
-        remark = '.'
-
-    dms_text = (('■' if kind == 'New' else '□') + ' New '
-                + ('■' if kind == 'Update' else '□') + f' Update (Revision: {rev} )')
-    ctx = {
-        'today': datetime.now(KST).strftime('%Y.%m.%d'),
-        'remark': remark, 'name_chk': writer, 'name_apv': leader, 'dms_text': dms_text,
-    }
-
+    today_str = datetime.now(KST).strftime('%Y.%m.%d')
     need_xlsx = fmt in ('xlsx', 'both')
     need_docx = fmt in ('docx', 'both')
     if need_xlsx and not os.path.exists(_APPROVAL_TEMPLATE_XLSX):
@@ -2389,18 +2376,43 @@ def sap_approval_generate():
 
     made, failed = [], []
     for r in ok_results:
+        # 품목별 필드 — 없으면 공통값으로 fallback
+        pm = per_material.get(r.get('code', ''), {}) if per_material else {}
+        if not isinstance(pm, dict):
+            pm = {}
+        writer = ((pm.get('writer') or '').strip()) or shared_writer
+        leader = ((pm.get('leader') or '').strip()) or shared_leader
+        rev = ((pm.get('rev') or '').strip()) or shared_rev
+        rev = rev or '00'
+        remark = ((pm.get('remark') or '').strip()) or shared_remark
+        # kind 결정
+        kind_val = 'New' if rev in ('00', '0') else 'Update'
+        # remark 가공 — 원본 앱 로직 그대로
+        if is_pre:
+            if remark and _APPROVAL_PRE_REMARK not in remark:
+                remark = f'{_APPROVAL_PRE_REMARK} / {remark}'
+            elif not remark:
+                remark = _APPROVAL_PRE_REMARK
+        if not remark:
+            remark = '.'
+        dms_text = (('■' if kind_val == 'New' else '□') + ' New '
+                    + ('■' if kind_val == 'Update' else '□') + f' Update (Revision: {rev} )')
+        r_ctx = {
+            'today': today_str,
+            'remark': remark, 'name_chk': writer, 'name_apv': leader, 'dms_text': dms_text,
+        }
         base = f"{prefix}_{r['code']}_Rev{rev}"
         if need_xlsx:
             out_path = os.path.join(_APPROVAL_OUT_DIR, base + '.xlsx')
             try:
-                _approval_fill_xlsx(_APPROVAL_TEMPLATE_XLSX, out_path, r, ctx)
+                _approval_fill_xlsx(_APPROVAL_TEMPLATE_XLSX, out_path, r, r_ctx)
                 made.append(out_path)
             except Exception as e:
                 failed.append(f"{r['code']} (xlsx): {e}")
         if need_docx:
             out_path = os.path.join(_APPROVAL_OUT_DIR, base + '.docx')
             try:
-                _approval_fill_docx(_APPROVAL_TEMPLATE_DOCX, out_path, r, ctx)
+                _approval_fill_docx(_APPROVAL_TEMPLATE_DOCX, out_path, r, r_ctx)
                 made.append(out_path)
             except Exception as e:
                 failed.append(f"{r['code']} (docx): {e}")
