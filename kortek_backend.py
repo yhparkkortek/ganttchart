@@ -2231,9 +2231,11 @@ def _approval_fill_xlsx(tpl_path, out_path, r, ctx):
     if ctx.get('name_apv'):
         ws[_APPROVAL_CELLS['apv_name']] = ctx['name_apv']
         ws[_APPROVAL_CELLS['apv_date']] = f"Date: {ctx['today']}"
-    if ctx.get('vendor_name'):    ws['C34'] = ctx['vendor_name']
-    if ctx.get('vendor_address'): ws['C35'] = ctx['vendor_address']
-    if ctx.get('vendor_tel'):     ws['C36'] = ctx['vendor_tel']
+    from openpyxl.styles import Alignment as _Align
+    for _addr, _key in (('C34', 'vendor_name'), ('C35', 'vendor_address'), ('C36', 'vendor_tel')):
+        if ctx.get(_key):
+            ws[_addr] = ctx[_key]
+            ws[_addr].alignment = _Align(horizontal='center', vertical='center', wrap_text=True)
     wb.save(out_path)
 
 
@@ -2300,12 +2302,23 @@ def _approval_fill_docx(tpl_path, out_path, r, ctx):
                     pass
 
     # 대표자(J_1KFREPRE) → Provider 서명란 Written/Reviewed/Approved by (nested[1], col 1)
+    # 이름(rows 2,4,6) + 날짜(rows 1,3,5) 모두 중앙정렬로 채움
     if ctx.get('vendor_rep'):
+        from docx.enum.text import WD_ALIGN_PARAGRAPH as _WDA
         rep = ctx['vendor_rep'].strip()
+        date_str = f"Date: {ctx['today']}"
         if rep:
-            for row_i in (2, 4, 6):
+            for name_row, date_row in ((2, 1), (4, 3), (6, 5)):
                 try:
-                    _set_cell_text_preserve_format(t_sign.cell(row_i, 1), rep)
+                    c_n = t_sign.cell(name_row, 1)
+                    _set_cell_text_preserve_format(c_n, rep)
+                    c_n.paragraphs[0].alignment = _WDA.CENTER
+                except Exception:
+                    pass
+                try:
+                    c_d = t_sign.cell(date_row, 1)
+                    _set_cell_text_preserve_format(c_d, date_str)
+                    c_d.paragraphs[0].alignment = _WDA.CENTER
                 except Exception:
                     pass
 

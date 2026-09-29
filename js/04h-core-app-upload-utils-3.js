@@ -944,7 +944,7 @@
         if (!form || form.id !== formId) return;
         var materials = form.materials || [];
         if (!materials.length || materials[0] !== fromCode) return;
-        var fields = ['writer','leader','rev','rmk','fmt','ispre','vendor'];
+        var fields = ['writer','leader','rev','rmk','fmt','ispre'];
         for (var fi = 0; fi < fields.length; fi++) {
             var f = fields[fi];
             var srcEl = document.getElementById('apfall-' + f + '-' + formId + '-' + fromCode);
@@ -952,7 +952,7 @@
             var srcVal = srcEl.value;
             for (var mi = 1; mi < materials.length; mi++) {
                 var tgtEl = document.getElementById('apfall-' + f + '-' + formId + '-' + materials[mi]);
-                if (tgtEl && !tgtEl.value) tgtEl.value = srcVal;
+                if (tgtEl) tgtEl.value = srcVal;
             }
         }
     };
@@ -983,7 +983,7 @@
 
         html += '<div style="overflow-x:auto;">';
         html += '<table style="width:100%; border-collapse:collapse; table-layout:auto;">';
-        html += '<colgroup><col style="width:78px"><col style="width:90px"><col style="width:90px"><col style="width:54px"><col style="width:90px"><col style="width:62px"><col style="width:62px"><col style="width:90px"></colgroup>';
+        html += '<colgroup><col style="width:78px"><col style="width:90px"><col style="width:90px"><col style="width:54px"><col style="width:90px"><col style="width:62px"><col style="width:62px"></colgroup>';
         html += '<thead><tr>';
         var headers = [
             (_en ? '📦 Material' : '📦 자재번호'),
@@ -991,8 +991,7 @@
             (_en ? '👔 Approved by' : '👔 팀장'),
             'Rev', 'Remark',
             (_en ? '📄 Format' : '📄 출력'),
-            (_en ? '📋 Type' : '📋 가승인'),
-            (_en ? '🏭 Provider' : '🏭 협력사명')
+            (_en ? '📋 Type' : '📋 가승인')
         ];
         for (var hi = 0; hi < headers.length; hi++) {
             html += '<th style="' + thSt + '">' + headers[hi] + '</th>';
@@ -1018,8 +1017,6 @@
             html += '<option value="formal">' + (_en ? 'Formal' : '정식') + '</option>';
             html += '<option value="provisional">' + (_en ? 'Pre' : '가승인') + '</option>';
             html += '</select></td>';
-            var vendorLookupAttr = ' onblur="window._ganttQaApprovalVendorLookup(\'' + id + '\',\'' + escapeHtml(code) + '\',this)"';
-            html += '<td style="' + tdSt + '"><input id="apfall-vendor-' + id + '-' + escapeHtml(code) + '" type="text" placeholder="' + (_en ? 'name or biz-no' : '업체명 또는 사업자번호') + '" value="" style="' + inpSt + '"' + afAttr + vendorLookupAttr + ' /></td>';
             html += '</tr>';
         }
 
