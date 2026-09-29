@@ -966,7 +966,13 @@
         var inpSt = 'width:100%; font-size:12px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; min-width:0;';
         var selSt = 'width:100%; font-size:11px; padding:3px 4px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; background:#fff;';
 
+        // 주소록 이름 + 이전 기록(localStorage) 병합 — 이전 기록이 먼저 노출되도록 앞에 배치
         var abNames = ((window.tabData && window.tabData.addressBook) || []).map(function(p) { return p.name || ''; }).filter(Boolean);
+        var histNames = [];
+        try { histNames = JSON.parse(localStorage.getItem('gantt_approval_name_hist') || '[]'); } catch(e) {}
+        var allNameSet = {};
+        var allNames = [];
+        histNames.concat(abNames).forEach(function(n) { if (n && !allNameSet[n]) { allNameSet[n] = true; allNames.push(n); } });
         var nameListId = 'apfall-names-' + id;
         var revListId  = 'apfall-rev-'   + id;
         var rmkListId  = 'apfall-rmk-'   + id;
@@ -977,7 +983,7 @@
         html += '<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">📋 ';
         html += (_en ? '1st row auto-fills others · click Confirm when done' : '1행 입력 시 나머지 자동완성 · "선택 완료"');
         html += '</div>';
-        html += '<datalist id="' + nameListId + '">' + abNames.map(function(n){ return '<option value="' + escapeHtml(n) + '">'; }).join('') + '</datalist>';
+        html += '<datalist id="' + nameListId + '">' + allNames.map(function(n){ return '<option value="' + escapeHtml(n) + '">'; }).join('') + '</datalist>';
         html += '<datalist id="' + revListId  + '">' + revOpts + '</datalist>';
         html += '<datalist id="' + rmkListId  + '"><option value="."><option value="' + (_en ? 'Preliminary approval required' : '가승인원 검토 필요') + '"></datalist>';
 
@@ -1076,6 +1082,17 @@
                 vendor: vEl ? vEl.value.trim() : ''
             };
         }
+
+        // 입력된 담당자/팀장 이름을 이전 기록에 저장 (localStorage, 최대 20개 유지)
+        try {
+            var savedHist = JSON.parse(localStorage.getItem('gantt_approval_name_hist') || '[]');
+            var newNames = [];
+            materials.forEach(function(c) { var pm = perMaterial[c]; if (pm.writer) newNames.push(pm.writer); if (pm.leader) newNames.push(pm.leader); });
+            var merged = [];
+            var seen = {};
+            newNames.concat(savedHist).forEach(function(n) { if (n && !seen[n]) { seen[n] = true; merged.push(n); } });
+            localStorage.setItem('gantt_approval_name_hist', JSON.stringify(merged.slice(0, 20)));
+        } catch(e) {}
 
         // 폼 닫기
         window._ganttQaApprovalAllFieldsForm = null;
