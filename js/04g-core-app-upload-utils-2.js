@@ -1701,9 +1701,9 @@ ${question}
             const poFieldsFormHtml = (!isUser && m.poFieldsFormId && window._ganttQaPoFieldsForm && window._ganttQaPoFieldsForm.id === m.poFieldsFormId)
                 ? (window._ganttQaRenderPoFieldsFormHtml ? window._ganttQaRenderPoFieldsFormHtml(window._ganttQaPoFieldsForm) : '')
                 : '';
-            // 🆕 [2026-09-29] 승인원 표지 이름 입력 폼 (담당자/팀장 — 기존 텍스트 채팅 대체)
-            const approvalNamesFormHtml = (!isUser && m.approvalNamesFormId && window._ganttQaApprovalNamesForm && window._ganttQaApprovalNamesForm.id === m.approvalNamesFormId)
-                ? (window._ganttQaRenderApprovalNamesFormHtml ? window._ganttQaRenderApprovalNamesFormHtml(window._ganttQaApprovalNamesForm) : '')
+            // 🔄 [2026-09-29 개선] 승인원 표지 통합 6필드 폼 (담당자/팀장/Revision/Remark/출력형식/가승인원여부)
+            const approvalAllFieldsFormHtml = (!isUser && m.approvalAllFieldsFormId && window._ganttQaApprovalAllFieldsForm && window._ganttQaApprovalAllFieldsForm.id === m.approvalAllFieldsFormId)
+                ? (window._ganttQaRenderApprovalAllFieldsFormHtml ? window._ganttQaRenderApprovalAllFieldsFormHtml(window._ganttQaApprovalAllFieldsForm) : '')
                 : '';
             // 🆕 [2026-09-29] 입고 처리 PO 번호 입력 폼 (후보 없을 때 텍스트 채팅 대체)
             const grEbelnFormHtml = (!isUser && m.grEbelnFormId && window._ganttQaGrEbelnForm && window._ganttQaGrEbelnForm.id === m.grEbelnFormId)
@@ -1747,7 +1747,7 @@ ${question}
                 ${openExecDraftHtml ? `<div style="max-width:82%; width:100%;">${openExecDraftHtml}</div>` : ''}
                 ${choiceDropdownHtml ? `<div style="max-width:82%; width:100%;">${choiceDropdownHtml}</div>` : ''}
                 ${poFieldsFormHtml ? `<div style="max-width:90%; width:100%;">${poFieldsFormHtml}</div>` : ''}
-                ${approvalNamesFormHtml ? `<div style="max-width:90%; width:100%;">${approvalNamesFormHtml}</div>` : ''}
+                ${approvalAllFieldsFormHtml ? `<div style="max-width:90%; width:100%;">${approvalAllFieldsFormHtml}</div>` : ''}
                 ${grEbelnFormHtml ? `<div style="max-width:90%; width:100%;">${grEbelnFormHtml}</div>` : ''}
                 ${confirmButtonsHtml ? `<div style="max-width:82%; width:100%;">${confirmButtonsHtml}</div>` : ''}
                 ${savePathsHtml ? `<div style="max-width:90%; width:100%;">${savePathsHtml}</div>` : ''}

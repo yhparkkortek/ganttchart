@@ -898,51 +898,78 @@
         if (input) input.focus();
     };
 
-    // 🆕 [2026-09-29 신규, 사용자 요청] 승인원 표지 이름 입력 폼 — 기존에 텍스트 채팅으로 물어보던
-    // 담당자(writer)/팀장(leader) 이름을 인라인 입력 폼으로 대체. 구매오더 폼과 동일한 패턴.
-    window._ganttQaApprovalNamesForm = null; // {id, needWriter, needLeader}
+    // 🔄 [2026-09-29 개선, 사용자 요청] 승인원 표지 전체 필드 통합 폼 — 담당자/팀장/Revision/
+    // Remark/출력형식/가승인원여부를 한 카드에서 드롭다운+텍스트로 한꺼번에 입력.
+    window._ganttQaApprovalAllFieldsForm = null; // {id, draft:{writer,leader,rev,remark,format,isPre}}
 
-    window._ganttQaRenderApprovalNamesFormHtml = function(form) {
+    window._ganttQaRenderApprovalAllFieldsFormHtml = function(form) {
         const id = form.id;
+        const draft = form.draft || {};
         const _en = window._currentLang === 'en';
-        const inpSt = 'width:100%; font-size:12px; padding:5px 8px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;';
         const labelSt = 'font-size:11px; color:#555; margin-bottom:3px; display:block;';
-        let html = '<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:6px;">';
-        html += '<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:10px;">' + (_en ? '📝 Please enter the names:' : '📝 이름을 입력해주세요:') + '</div>';
-        if (form.needWriter) {
-            html += '<div style="margin-bottom:8px;">';
-            html += '<label style="' + labelSt + '">' + (_en ? '🧑 Checked by (담당자)' : '🧑 담당자 (Checked by)') + '</label>';
-            html += '<input id="apf-writer-' + id + '" type="text" placeholder="' + (_en ? 'e.g. Hong Gildong' : '예: 홍길동') + '" style="' + inpSt + '" onkeydown="if(event.key===\'Enter\'){window._ganttQaSubmitApprovalNamesForm(\'' + id + '\');}" />';
-            html += '</div>';
-        }
-        if (form.needLeader) {
-            html += '<div style="margin-bottom:10px;">';
-            html += '<label style="' + labelSt + '">' + (_en ? '👔 Approved by (팀장)' : '👔 팀장 (Approved by)') + '</label>';
-            html += '<input id="apf-leader-' + id + '" type="text" placeholder="' + (_en ? 'e.g. Kim Teamlead' : '예: 김팀장') + '" style="' + inpSt + '" onkeydown="if(event.key===\'Enter\'){window._ganttQaSubmitApprovalNamesForm(\'' + id + '\');}" />';
-            html += '</div>';
-        }
-        html += '<button onclick="window._ganttQaSubmitApprovalNamesForm(\'' + id + '\')" style="font-size:12px; padding:6px 16px; background:#1971c2; color:#fff; border:none; border-radius:6px; cursor:pointer;">&#10003; ' + (_en ? 'Confirm' : '확인') + '</button>';
+        const inpSt = 'width:100%; font-size:12px; padding:5px 8px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;';
+        const selSt = 'width:100%; font-size:12px; padding:5px 8px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box; background:#fff;';
+        const grid2 = 'display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;';
+
+        const abNames = ((window.tabData && window.tabData.addressBook) || [])
+            .map(function(p) { return p.name || ''; }).filter(Boolean);
+        const nameListId = 'apfall-names-' + id;
+        let html = '<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:14px; margin-top:6px;">';
+        html += '<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:12px;">📋 ' + (_en ? 'Fill in all fields then click Confirm:' : '아래 항목을 모두 확인 후 "선택 완료"를 눌러주세요:') + '</div>';
+        html += '<datalist id="' + nameListId + '">' + abNames.map(function(n) { return '<option value="' + escapeHtml(n) + '">'; }).join('') + '</datalist>';
+        html += '<datalist id="apfall-rev-' + id + '"><option value="00"><option value="01"><option value="02"><option value="03"><option value="04"><option value="05"></datalist>';
+        html += '<datalist id="apfall-rmk-' + id + '"><option value="."><option value="' + (_en ? 'Preliminary approval required' : '가승인원 검토 필요') + '"></datalist>';
+
+        html += '<div style="' + grid2 + '">';
+        html += '<div><label style="' + labelSt + '">' + (_en ? '🧑 Checked by (담당자)' : '🧑 담당자 (Checked by)') + '</label>';
+        html += '<input id="apfall-writer-' + id + '" type="text" list="' + nameListId + '" placeholder="' + (_en ? 'type or select' : '입력 또는 선택') + '" value="' + escapeHtml(draft.writer || '') + '" style="' + inpSt + '" /></div>';
+        html += '<div><label style="' + labelSt + '">' + (_en ? '👔 Approved by (팀장)' : '👔 팀장 (Approved by)') + '</label>';
+        html += '<input id="apfall-leader-' + id + '" type="text" list="' + nameListId + '" placeholder="' + (_en ? 'type or select' : '입력 또는 선택') + '" value="' + escapeHtml(draft.leader || '') + '" style="' + inpSt + '" /></div>';
         html += '</div>';
+
+        html += '<div style="' + grid2 + '">';
+        html += '<div><label style="' + labelSt + '">' + (_en ? '🔢 Revision No.' : '🔢 Revision 번호') + '</label>';
+        html += '<input id="apfall-rev-' + id + '" type="text" list="apfall-rev-' + id + '" value="' + escapeHtml(draft.rev || '00') + '" style="' + inpSt + '" /></div>';
+        html += '<div><label style="' + labelSt + '">' + (_en ? '📝 Remark' : '📝 Remark') + '</label>';
+        html += '<input id="apfall-rmk-' + id + '" type="text" list="apfall-rmk-' + id + '" placeholder="' + (_en ? '(optional)' : '생략 시 자동 처리') + '" value="' + escapeHtml(draft.remark || '') + '" style="' + inpSt + '" /></div>';
+        html += '</div>';
+
+        const fmtVal = draft.format || 'docx';
+        const isPreVal = draft.isPre;
+        html += '<div style="' + grid2 + '">';
+        html += '<div><label style="' + labelSt + '">' + (_en ? '📄 Output format' : '📄 출력 형식') + '</label>';
+        html += '<select id="apfall-fmt-' + id + '" style="' + selSt + '">';
+        html += '<option value="docx"' + (fmtVal === 'docx' || fmtVal === '워드' ? ' selected' : '') + '>' + (_en ? 'Word (.docx)' : '워드') + '</option>';
+        html += '<option value="xlsx"' + (fmtVal === 'xlsx' || fmtVal === '엑셀' ? ' selected' : '') + '>' + (_en ? 'Excel (.xlsx)' : '엑셀') + '</option>';
+        html += '<option value="both"' + (fmtVal === 'both' || fmtVal === '둘 다' ? ' selected' : '') + '>' + (_en ? 'Both' : '둘 다') + '</option>';
+        html += '</select></div>';
+        html += '<div><label style="' + labelSt + '">' + (_en ? '📋 Approval type' : '📋 가승인원 여부') + '</label>';
+        html += '<select id="apfall-ispre-' + id + '" style="' + selSt + '">';
+        html += '<option value="formal"' + (isPreVal === false ? ' selected' : '') + '>' + (_en ? 'Formal approval' : '정식승인원') + '</option>';
+        html += '<option value="provisional"' + (isPreVal === true ? ' selected' : '') + '>' + (_en ? 'Provisional approval' : '가승인원') + '</option>';
+        html += '</select></div>';
+        html += '</div>';
+
+        html += '<div style="text-align:right; margin-top:2px;">';
+        html += '<button onclick="window._ganttQaSubmitApprovalAllFieldsForm(\'' + id + '\')" style="font-size:13px; padding:7px 22px; background:#1971c2; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">&#10003; ' + (_en ? 'Confirm' : '선택 완료') + '</button>';
+        html += '</div></div>';
         return html;
     };
 
-    window._ganttQaSubmitApprovalNamesForm = function(formId) {
-        if (!window._ganttQaApprovalNamesForm || window._ganttQaApprovalNamesForm.id !== formId) return;
-        const form = window._ganttQaApprovalNamesForm;
-        const parts = [];
-        if (form.needWriter) {
-            const el = document.getElementById('apf-writer-' + formId);
-            const v = el ? el.value.trim() : '';
-            if (!v) { if (window.showToast) window.showToast(window._t('담당자 이름을 입력해주세요.', 'Please enter the preparer name.')); return; }
-            parts.push(window._t('담당자: ' + v, 'Checked by: ' + v));
-        }
-        if (form.needLeader) {
-            const el = document.getElementById('apf-leader-' + formId);
-            const v = el ? el.value.trim() : '';
-            if (!v) { if (window.showToast) window.showToast(window._t('팀장 이름을 입력해주세요.', 'Please enter the team leader name.')); return; }
-            parts.push(window._t('팀장: ' + v, 'Approved by: ' + v));
-        }
-        window._ganttQaApprovalNamesForm = null;
+    window._ganttQaSubmitApprovalAllFieldsForm = function(formId) {
+        if (!window._ganttQaApprovalAllFieldsForm || window._ganttQaApprovalAllFieldsForm.id !== formId) return;
+        const _en = window._currentLang === 'en';
+        const g = function(sfx) { const el = document.getElementById('apfall-' + sfx + '-' + formId); return el ? el.value.trim() : ''; };
+        const writer = g('writer'), leader = g('leader'), rev = g('rev'), remark = g('rmk');
+        const fmtSel = g('fmt'), isPreSel = g('ispre');
+        if (!writer) { if (window.showToast) window.showToast(window._t('담당자 이름을 입력해주세요.', 'Please enter the Checked by name.')); return; }
+        if (!leader) { if (window.showToast) window.showToast(window._t('팀장 이름을 입력해주세요.', 'Please enter the Approved by name.')); return; }
+        window._ganttQaApprovalAllFieldsForm = null;
+        const fmtText = fmtSel === 'xlsx' ? '엑셀' : fmtSel === 'both' ? '둘 다' : '워드';
+        const isPreText = isPreSel === 'provisional' ? '가승인원' : '정식승인원';
+        const revPart = 'rev: ' + (rev || '00').replace(/^0*(\d+)$/, function(_, n) { return n.padStart(2, '0'); });
+        const parts = [fmtText, isPreText, '담당자: ' + writer, '팀장: ' + leader, revPart];
+        if (remark) parts.push('remark: ' + remark);
         window.sendGanttQaMessage(parts.join(', '));
     };
 
@@ -3422,7 +3449,7 @@ ${docsJson}`;
         const hasAnyActiveQaDraft = !!(window._ganttQaPoDraft || window._ganttQaBomDraft ||
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
             window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons ||
-            window._ganttQaPendingGrEbelnAsk || window._ganttQaApprovalNamesForm ||
+            window._ganttQaPendingGrEbelnAsk || window._ganttQaApprovalAllFieldsForm ||
             window._ganttQaGrEbelnForm);
         if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
             try { window._issueLogInterrupt && window._issueLogInterrupt(); } catch (e) { /* Phase 10 수집 — 실패해도 무시 */ }
@@ -3435,7 +3462,7 @@ ${docsJson}`;
             window._ganttQaPendingChoiceDropdown = null;
             window._ganttQaPendingConfirmButtons = null;
             window._ganttQaPendingGrEbelnAsk = false;
-            window._ganttQaApprovalNamesForm = null;
+            window._ganttQaApprovalAllFieldsForm = null;
             window._ganttQaGrEbelnForm = null;
             window._ganttQaHistory.push({ role: 'user', text: question });
             window._ganttQaHistory.push({ role: 'ai', text: window._t(
@@ -3714,69 +3741,33 @@ ${docsJson}`;
             input.value = '';
 
             const missing = [];
-            if (!approvalDraft.format) missing.push(window._t('출력 형식(엑셀/워드/둘 다)', 'output format (Excel/Word/both)'));
-            if (!approvalDraft.writer) missing.push(window._t('담당자(Checked by) 이름', "the preparer's (Checked by) name"));
-            if (!approvalDraft.leader) missing.push(window._t('팀장(Approved by) 이름', "the team leader's (Approved by) name"));
-            if (approvalDraft.isPre === undefined) missing.push(window._t('가승인원 여부(정식승인원 / 가승인원)', 'whether this is a provisional approval (formal / provisional)'));
+            if (!approvalDraft.format) missing.push('format');
+            if (!approvalDraft.writer) missing.push('writer');
+            if (!approvalDraft.leader) missing.push('leader');
+            if (approvalDraft.isPre === undefined) missing.push('isPre');
 
             if (missing.length) {
-                // 🔽 [2026-09-17 신규, 사용자 요청] "드롭다운/클릭이 안 되어 있다"는 제보로
-                // 발견 — 이 질문은 4개 항목을 텍스트 한 덩어리로만 물어봐서, 그중 정해진
-                // 선택지가 있는 "출력 형식"/"가승인원 여부"까지 전부 타이핑해야 했다. 위
-                // "🔽 AI 문답 객관식 질문 — 드롭다운" 원칙(정해진 목록에서 고르는 질문은 항상
-                // 드롭다운)이 이 두 항목엔 적용이 안 돼 있었던 것 — 이름(담당자/팀장)은 정해진
-                // 목록이 없으니 그대로 자유 텍스트로 남겨두고, 나머지 둘만 BOM 옵션 드롭다운과
-                // 같은 "항목마다 다른 선택지" 멀티 드롭다운으로 전환한다. 선택 결과는 기존
-                // `_ganttQaExtractApprovalUpdate`의 키워드 매칭(예: "엑셀"/"정식승인원")과
-                // 그대로 맞아떨어지는 문자열로 합성해 흘려보내므로 파서는 전혀 안 건드림.
+                // 🔄 [2026-09-29 개선, 사용자 요청] 출력형식/가승인원여부/담당자/팀장/Revision/
+                // Remark 6개 항목을 한 통합 폼으로 한 번에 수집. 제출 시 기존 파서가 인식하는
+                // 문자열로 합성해 sendGanttQaMessage() 경유 → 파서 변경 없음.
                 const matLabel = approvalDraft.materials.join(', ');
-                const categoricalMissing = [];
-                if (!approvalDraft.format) {
-                    categoricalMissing.push({
-                        label: window._t('출력 형식', 'Output format'),
-                        options: [
-                            { value: '엑셀', label: window._t('엑셀', 'Excel') },
-                            { value: '워드', label: window._t('워드', 'Word') },
-                            { value: '둘 다', label: window._t('둘 다', 'Both') }
-                        ]
-                    });
-                }
-                if (approvalDraft.isPre === undefined) {
-                    categoricalMissing.push({
-                        label: window._t('가승인원 여부', 'Provisional approval?'),
-                        options: [
-                            { value: '정식승인원', label: window._t('정식승인원', 'Formal approval') },
-                            { value: '가승인원', label: window._t('가승인원', 'Provisional approval') }
-                        ]
-                    });
-                }
-                const needWriter = !approvalDraft.writer;
-                const needLeader = !approvalDraft.leader;
+                const allFieldsFormId = 'apfall-' + Date.now();
+                window._ganttQaApprovalAllFieldsForm = {
+                    id: allFieldsFormId,
+                    draft: {
+                        writer: approvalDraft.writer || '',
+                        leader: approvalDraft.leader || '',
+                        rev: approvalDraft.rev || '00',
+                        remark: approvalDraft.remark || '',
+                        format: approvalDraft.format || 'docx',
+                        isPre: approvalDraft.isPre
+                    }
+                };
                 const reply = window._t(
-                    `📋 자재 "${matLabel}"의 승인원 표지를 만들려면 아래 항목이 더 필요합니다.`,
-                    `📋 To generate the approval cover for material(s) "${matLabel}", I still need the following.`
-                ) + window._t(
-                    '\n\n(Revision 번호와 Remark는 생략하면 각각 "00"/빈 비고로 자동 처리됩니다)',
-                    '\n\n(Revision number and Remark default to "00" / blank if omitted)'
+                    '📋 자재 "' + matLabel + '"의 승인원 표지를 만들 준비가 됐습니다. 아래 항목을 확인 후 "선택 완료"를 눌러주세요.',
+                    '📋 Ready to generate the approval cover for "' + matLabel + '". Please fill in the fields below and click Confirm.'
                 );
-                let approvalNamesFormId = null;
-                if (needWriter || needLeader) {
-                    approvalNamesFormId = 'apf-' + Date.now();
-                    window._ganttQaApprovalNamesForm = { id: approvalNamesFormId, needWriter: needWriter, needLeader: needLeader };
-                }
-                if (categoricalMissing.length) {
-                    const dropdownId = 'approval-choice-' + Date.now();
-                    window._ganttQaPendingChoiceDropdown = {
-                        id: dropdownId, multi: true,
-                        items: categoricalMissing,
-                        buildAnswerText: function(selections) {
-                            return selections.filter(function(v) { return !!v; }).join(', ');
-                        }
-                    };
-                    window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: dropdownId, approvalNamesFormId: approvalNamesFormId, text: reply });
-                } else {
-                    window._ganttQaHistory.push({ role: 'ai', approvalNamesFormId: approvalNamesFormId, text: reply });
-                }
+                window._ganttQaHistory.push({ role: 'ai', approvalAllFieldsFormId: allFieldsFormId, text: reply });
                 window._renderGanttQaMessages();
                 input.focus();
                 return;

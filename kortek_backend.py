@@ -2285,6 +2285,34 @@ def _approval_fill_docx(tpl_path, out_path, r, ctx):
         _set_cell_text_preserve_format(t_sign.cell(rr, cc), ctx['name_apv'])
         rr, cc = _APPROVAL_DOCX_SIGN['apv_date']
         _set_cell_text_preserve_format(t_sign.cell(rr, cc), f"Date: {ctx['today']}")
+
+    # 외부 셀 안의 테이블 사이 빈 단락(~5mm × 7개 = ~35mm)을 1pt 높이로 최소화 → 1페이지 유지
+    from lxml import etree as _et
+    from docx.oxml.ns import qn as _qn
+    for _ch in list(outer_cell._tc):
+        if _ch.tag != _qn('w:p'):
+            continue
+        if ''.join(_t.text or '' for _t in _ch.findall('.//' + _qn('w:t'))).strip():
+            continue  # 내용 있는 단락은 건드리지 않음
+        _pPr = _ch.find(_qn('w:pPr'))
+        if _pPr is None:
+            _pPr = _et.SubElement(_ch, _qn('w:pPr'))
+        _sp = _pPr.find(_qn('w:spacing'))
+        if _sp is None:
+            _sp = _et.SubElement(_pPr, _qn('w:spacing'))
+        _sp.set(_qn('w:before'), '0')
+        _sp.set(_qn('w:after'), '0')
+        _sp.set(_qn('w:line'), '20')
+        _sp.set(_qn('w:lineRule'), 'exact')
+        _rPr = _pPr.find(_qn('w:rPr'))
+        if _rPr is None:
+            _rPr = _et.SubElement(_pPr, _qn('w:rPr'))
+        for _tag in (_qn('w:sz'), _qn('w:szCs')):
+            _sz = _rPr.find(_tag)
+            if _sz is None:
+                _sz = _et.SubElement(_rPr, _tag)
+            _sz.set(_qn('w:val'), '2')
+
     doc.save(out_path)
 
 
