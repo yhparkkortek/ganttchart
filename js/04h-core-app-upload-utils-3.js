@@ -3747,7 +3747,7 @@ ${docsJson}`;
         //    위험이 있음) — 전체 메시지가 정확히 이 짧은 문구와 일치할 때만 매치되도록
         //    좁혀서(`sap_prep_failed`의 기존 "다시 시도" 정규식과 같은 안전장치) "취소 관련
         //    업무를 물어보는" 같은 긴 문장을 오인하지 않는다.
-        const INTERRUPT_RE = /^\s*(처음부터\s*(다시)?|취소|그만|중단|초기화|리셋|cancel|reset|restart|start\s*over)\s*[.!?~]*\s*$/i;
+        const INTERRUPT_RE = /^\s*(처음부터\s*(다시)?|취소|그만|중단|초기화|리셋|종료|멈춰|됐어|그만둬|그냥\s*둬|cancel|reset|restart|start\s*over|stop|quit|abort)(해|해줘|해주세요|할게|할게요|줘|주세요)?\s*[.!?~]*\s*$/i;
         const hasAnyActiveQaDraft = !!(window._ganttQaPoDraft || window._ganttQaBomDraft ||
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
             window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons ||
