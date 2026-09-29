@@ -23,6 +23,59 @@
         { word: '승인원', docType: 'P01' }
     ];
 
+    // 📋 [2026-09-29 신규] 회사 SAP DMS 문서 종류 목록 (데이터) — 사용자가 제공한 화면 기준.
+    //    inactive: true = "(미사용)" 항목. 새 종류가 추가/변경되면 코드가 아니라 이 목록만 갱신.
+    //    — 트리거 인식(_sapHasDocCode), 드롭다운(_ganttQaShowDocTypeDropdown) 모두 이 목록 사용.
+    window.SAP_DOC_TYPES = window.SAP_DOC_TYPES || [
+        { code: 'C01', label: '부품포 (BOM)',         inactive: true  },
+        { code: 'C02', label: '유체적 BOM',           inactive: true  },
+        { code: 'C03', label: '거래선 스펙',           inactive: true  },
+        { code: 'C04', label: '원자재 승인 결과서',     inactive: true  },
+        { code: 'C05', label: '신뢰성 시험 의뢰서',     inactive: true  },
+        { code: 'C06', label: '신뢰성 시험 결과서',     inactive: true  },
+        { code: 'C07', label: '서비스 매뉴얼',         inactive: true  },
+        { code: 'C08', label: '동작 매뉴얼',           inactive: true  },
+        { code: 'C09', label: '제품 규격서',           inactive: true  },
+        { code: 'C10', label: '규격 인증 요청서',       inactive: true  },
+        { code: 'C11', label: '규격 인증 체크리스트',   inactive: true  },
+        { code: 'C12', label: '규격 인증 완료 자료',    inactive: true  },
+        { code: 'C13', label: '고객 요구사항 정리 자료', inactive: true  },
+        { code: 'C14', label: '로크메락 스펙(제품)',    inactive: true  },
+        { code: 'C15', label: 'CE Report',            inactive: true  },
+        { code: 'C16', label: 'RM Template',          inactive: true  },
+        { code: 'C17', label: 'ECR',                  inactive: true  },
+        { code: 'C18', label: 'ECO',                  inactive: true  },
+        { code: 'D02', label: '회로도',               inactive: true  },
+        { code: 'D03', label: 'PCB Gerber Data',      inactive: true  },
+        { code: 'D04', label: 'PCB JOB Data',         inactive: true  },
+        { code: 'D05', label: '기구도',               inactive: true  },
+        { code: 'D06', label: '조립도',               inactive: true  },
+        { code: 'E01', label: 'SOP',                  inactive: false },
+        { code: 'E02', label: 'JIG',                  inactive: false },
+        { code: 'M01', label: '업재등록관리',           inactive: false },
+        { code: 'P01', label: '원자재 승인 결과서',     inactive: false },
+        { code: 'P02', label: '서비스 매뉴얼',         inactive: false },
+        { code: 'P03', label: '동작 매뉴얼',           inactive: false },
+        { code: 'P04', label: '제품 규격서',           inactive: false },
+        { code: 'P05', label: '규격 인증 완료 자료',    inactive: false },
+        { code: 'P06', label: '제품 로크메락 스펙',     inactive: false },
+        { code: 'P07', label: 'ECO',                  inactive: false },
+        { code: 'P08', label: '회로도',               inactive: false },
+        { code: 'P09', label: 'PCB Gerber Data',      inactive: false },
+        { code: 'P10', label: '기구도',               inactive: false },
+        { code: 'P11', label: '최종 F/W',             inactive: false },
+        { code: 'P12', label: '최종 EDID',            inactive: false },
+        { code: 'P13', label: 'SOP',                  inactive: false },
+        { code: 'Q11', label: '수입검사 기준서',        inactive: false },
+        { code: 'Q12', label: '출하검사 기준서',        inactive: false },
+        { code: 'S01', label: 'S/W, F/W 소스코드',    inactive: true  },
+        { code: 'S02', label: 'S/W 라이브러리',        inactive: true  },
+        { code: 'S03', label: 'S/W, F/W 요구상세스펙', inactive: true  },
+        { code: 'S04', label: 'S/W, F/W 테스트문서',  inactive: true  },
+        { code: 'S05', label: '양산 F/W',             inactive: true  },
+        { code: 'S06', label: 'EDID',                 inactive: true  }
+    ];
+
     // 🗂 [2026-09-28 신규, 사용자 지정] MB21의 사내 정식 업무는 **"계정대체청구"**다 — 프로젝트
     //    코드 조회는 그 화면을 빌려 쓰는 부수 용도일 뿐이고, 본 용도는 개발용 자재를 청구/반납해
     //    계정을 대체하는 것. 사람이 부르는 이름이 여러 개라 **코드가 아니라 이 표(데이터)**로 둔다 —

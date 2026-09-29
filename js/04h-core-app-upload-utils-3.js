@@ -349,6 +349,33 @@
         )});
     };
 
+    // 📋 [2026-09-29 신규] "112294 다운로드 해줘"처럼 문서 타입 코드 없이 다운로드 요청 시
+    //    SAP_DOC_TYPES(사용 중인 항목만) 목록에서 종류를 고르는 드롭다운을 보여준다.
+    //    buildAnswerText 가 "{자재번호} {코드} 문서 {동사}" 형식 문자열을 합성해서 sendGanttQaMessage로 재전송.
+    window._ganttQaShowDocTypeDropdown = function(matNums, actionVerb) {
+        const _en = window._currentLang === 'en';
+        const id = 'sap-doc-type-' + Date.now();
+        const activeTypes = (window.SAP_DOC_TYPES || []).filter(function(d) { return !d.inactive; });
+        const mats = matNums.join(', ');
+        const verb = actionVerb || '다운로드 해줘';
+        window._ganttQaPendingChoiceDropdown = {
+            id: id, multi: false,
+            options: activeTypes.map(function(d) {
+                return { value: d.code, label: d.code + ' — ' + d.label };
+            }),
+            buildAnswerText: function(sel) {
+                if (!sel || !sel[0]) return '';
+                return mats + ' ' + sel[0] + ' 문서 ' + verb;
+            }
+        };
+        window._ganttQaHistory.push({
+            role: 'ai', choiceDropdownId: id,
+            text: _en
+                ? '📄 Which document type for material "' + mats + '"?'
+                : '📄 자재 "' + mats + '"의 어떤 문서 종류를 받으시겠어요?'
+        });
+    };
+
     window._ganttQaRunGoodsReceipt = async function(ebeln) {
         window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
             `구매오더 "${ebeln}" 자재 입고 처리 중... (SAP 저장까지 진행되며 시간이 걸릴 수 있습니다)`,
@@ -4676,6 +4703,23 @@ ${docsJson}`;
             return;
         }
 
+        // 📋 [2026-09-29 신규] "112294 다운로드 해줘"처럼 자재번호+다운로드 동사가 있지만
+        //    문서 키워드("문서"/"파일"/"승인원")도 코드(P01 등)도 없는 경우 — 위 sapOpenDocReq/
+        //    sapBatchDocReq/sapListDocsMaterial 핸들러가 모두 null이 되어 흘러오면 여기서 잡아
+        //    문서 종류 드롭다운을 보여준다. AI는 호출하지 않는다(🚫🤖).
+        const sapDocNoTypeReq = window._ganttQaExtractSapDocNoTypeRequest ? window._ganttQaExtractSapDocNoTypeRequest(sapDocQuestion) : null;
+        if (sapDocNoTypeReq) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            input.value = '';
+            if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            const _downloadVerb = /(저장|save)/i.test(sapDocQuestion) ? '저장해줘'
+                : /(열어|열기|open)/i.test(sapDocQuestion) ? '열어줘' : '다운로드 해줘';
+            window._ganttQaShowDocTypeDropdown(sapDocNoTypeReq, _downloadVerb);
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 📊 [2026-09-14 신규, 2026-09-15 순서 조정] "엑셀로 내보내줘" 로컬 명령 — API 키 없어도
         //    동작, AI를 거치지 않고 방금 조회된 SAP 원본 데이터를 바로 파일로 저장한다. 위 배치
         //    다운로드/단일 문서 열기/문서 목록 판정들보다 반드시 나중에 체크해야 함 — 자재번호가
@@ -6326,8 +6370,26 @@ ${docsJson}`;
         for (var i = 0; i < list.length; i++) { if (list[i] && list[i].word && text.indexOf(list[i].word) !== -1) return list[i]; }
         return null;
     };
+    // [2026-09-29] "P01" 처럼 명시적 SAP 문서 코드가 텍스트에 있는지 SAP_DOC_TYPES 목록으로 확인
+    window._sapHasDocCode = function(text) {
+        var t = (text || '').toUpperCase();
+        var types = window.SAP_DOC_TYPES || [];
+        for (var i = 0; i < types.length; i++) {
+            if (!types[i].code) continue;
+            if (new RegExp('\\b' + types[i].code + '\\b').test(t)) return types[i];
+        }
+        // P1 → P01 한 자리 숫자 정규화
+        var m = t.match(/\b([A-Z])([0-9])\b/);
+        if (m) {
+            var normalized = m[1] + '0' + m[2];
+            for (var j = 0; j < types.length; j++) {
+                if (types[j].code === normalized) return types[j];
+            }
+        }
+        return null;
+    };
     window._sapMentionsDoc = function(text) {
-        return /(문서|파일)/.test(text || '') || !!window._sapDocAliasHit(text || '');
+        return /(문서|파일)/.test(text || '') || !!window._sapDocAliasHit(text || '') || !!window._sapHasDocCode(text || '');
     };
     window._ganttQaExtractSapDocTypeCode = function(text) {
         var m = (text || '').match(/\b([A-Za-z])([0-9]{1,2})\b/);
@@ -6475,6 +6537,27 @@ ${docsJson}`;
         if (materials.length < 2) return null; // 자재 1개면 기존 단일 경로가 처리
         var docType = window._ganttQaExtractSapDocTypeCode(text);
         return { materials: materials, docType: docType || 'P01' };
+    };
+
+    // 📋 [2026-09-29 신규] "112294 다운로드 해줘"처럼 자재번호 + 다운로드 동사가 있지만
+    //    문서 타입 코드(P01 등)도 "문서"/"파일"/"승인원" 키워드도 없는 경우를 감지.
+    //    위의 _sapMentionsDoc 기반 핸들러(batch/open/list)가 전부 null인 뒤 이 함수로 걸러
+    //    _ganttQaShowDocTypeDropdown을 띄운다.
+    window._ganttQaExtractSapDocNoTypeRequest = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        // 이미 문서 키워드(문서/파일/승인원) 또는 코드(P01 등)가 있으면 기존 핸들러가 처리
+        if (window._sapMentionsDoc(text)) return null;
+        // 명확한 다운로드/저장/열기 동사 필요 (엑셀 내보내기와 구분: "엑셀" 없어야 함)
+        if (!/(열어|열기|다운로드|저장|받아|open|download)/i.test(text)) return null;
+        // BOM/엑셀/품목내역/패턴(*)류 요청 제외
+        if (/bom|엑셀|excel|xlsx|역전개|사용처/i.test(text)) return null;
+        if (text.indexOf('*') !== -1) return null; // 와일드카드 패턴은 별도 경로
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (looksLikeQuestion) return null;
+        var materials = (text.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
+        if (!materials.length) return null;
+        return materials;
     };
 
     // 📦 [2026-09-16 신규, 사용자 요청] "123456 품목 내역 보여줘"/"123456,654321 품목 내역
