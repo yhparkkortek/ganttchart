@@ -2302,23 +2302,59 @@ def _approval_fill_docx(tpl_path, out_path, r, ctx):
                     pass
 
     # 대표자(J_1KFREPRE) → Provider 서명란 Written/Reviewed/Approved by (nested[1], col 1)
-    # 이름(rows 2,4,6) + 날짜(rows 1,3,5) 모두 중앙정렬로 채움
+    # 이름(rows 2,4,6) + 날짜(rows 1,3,5): 수평·수직 모두 정중앙
     if ctx.get('vendor_rep'):
         from docx.enum.text import WD_ALIGN_PARAGRAPH as _WDA
+        from copy import deepcopy as _deepcopy
+        from docx.oxml.ns import qn as _qn2
+        from lxml import etree as _et2
         rep = ctx['vendor_rep'].strip()
         date_str = f"Date: {ctx['today']}"
+
+        def _cell_vcenter(cell):
+            tc = cell._tc
+            tcPr = tc.find(_qn2('w:tcPr'))
+            if tcPr is None:
+                tcPr = _et2.SubElement(tc, _qn2('w:tcPr'))
+            vAlign = tcPr.find(_qn2('w:vAlign'))
+            if vAlign is None:
+                vAlign = _et2.SubElement(tcPr, _qn2('w:vAlign'))
+            vAlign.set(_qn2('w:val'), 'center')
+
+        # Customer 날짜 셀(row=1, col=3)의 rPr를 복사해 Provider 날짜 셀의 폰트를 맞춤
+        def _copy_date_rpr(tgt_cell):
+            try:
+                ref_cell = t_sign.cell(1, 3)
+                if not (ref_cell.paragraphs and ref_cell.paragraphs[0].runs):
+                    return
+                src_rPr = ref_cell.paragraphs[0].runs[0]._r.find(_qn2('w:rPr'))
+                if src_rPr is None:
+                    return
+                if not (tgt_cell.paragraphs and tgt_cell.paragraphs[0].runs):
+                    return
+                tgt_r = tgt_cell.paragraphs[0].runs[0]._r
+                existing = tgt_r.find(_qn2('w:rPr'))
+                if existing is not None:
+                    tgt_r.remove(existing)
+                tgt_r.insert(0, _deepcopy(src_rPr))
+            except Exception:
+                pass
+
         if rep:
             for name_row, date_row in ((2, 1), (4, 3), (6, 5)):
                 try:
                     c_n = t_sign.cell(name_row, 1)
                     _set_cell_text_preserve_format(c_n, rep)
                     c_n.paragraphs[0].alignment = _WDA.CENTER
+                    _cell_vcenter(c_n)
                 except Exception:
                     pass
                 try:
                     c_d = t_sign.cell(date_row, 1)
                     _set_cell_text_preserve_format(c_d, date_str)
                     c_d.paragraphs[0].alignment = _WDA.CENTER
+                    _cell_vcenter(c_d)
+                    _copy_date_rpr(c_d)
                 except Exception:
                     pass
 
@@ -2420,6 +2456,7 @@ def sap_approval_generate():
         return jsonify({'ok': False, 'error': f'저장 폴더({_APPROVAL_OUT_DIR})를 만들지 못했습니다: {e}'}), 500
 
     made, failed = [], []
+    last_good_vendor_info = {}  # ZMM006에 없는 자재는 같은 배치 이전 성공 결과를 carry-forward
     for r in ok_results:
         # 품목별 협력사 정보 조회 (ZMM006→LIFNR→ZMM005) — 품목마다 다른 업체일 수 있으므로 각각 조회
         vendor_info = {}
@@ -2427,9 +2464,15 @@ def sap_approval_generate():
             v_data, _ = _run_sap_bridge(
                 ['fetch_vendor_info_by_material', r['code']], 60, f"협력사 정보 조회({r['code']})")
             if v_data.get('ok'):
-                vendor_info = v_data.get('vendor') or {}
+                vi = v_data.get('vendor') or {}
+                if vi.get('name'):
+                    vendor_info = vi
+                    last_good_vendor_info = vi
         except Exception:
             pass  # SAP 미연결·실패 시 수동 입력값만 사용
+        # 이 자재의 ZMM006 조회 실패 시 같은 배치의 이전 성공 결과 재사용
+        if not vendor_info and last_good_vendor_info:
+            vendor_info = last_good_vendor_info
 
         # 품목별 필드 — 없으면 공통값으로 fallback
         pm = per_material.get(r.get('code', ''), {}) if per_material else {}
