@@ -1002,7 +1002,7 @@
         for (var mi = 0; mi < materials.length; mi++) {
             var code = materials[mi];
             var isFirst = (mi === 0);
-            var afAttr = isFirst ? ' oninput="window._ganttQaApprovalAutoFill(\'' + id + '\',\'' + escapeHtml(code) + '\')" onchange="window._ganttQaApprovalAutoFill(\'' + id + '\',\'' + escapeHtml(code) + '\')"' : '';
+            var afAttr = isFirst ? ' onchange="window._ganttQaApprovalAutoFill(\'' + id + '\',\'' + escapeHtml(code) + '\')"' : '';
             html += '<tr style="background:' + (mi % 2 === 0 ? '#fff' : '#f9fafb') + ';">';
             html += '<td style="' + tdSt + 'font-weight:bold; color:#1c7ed6; font-size:12px; text-align:center;">' + escapeHtml(code) + '</td>';
             html += '<td style="' + tdSt + '"><input id="apfall-writer-' + id + '-' + escapeHtml(code) + '" type="text" list="' + nameListId + '" placeholder="' + (_en ? 'name' : '이름') + '" value="" style="' + inpSt + '"' + afAttr + ' /></td>';

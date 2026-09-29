@@ -1337,6 +1337,98 @@ def fetch_vendor_by_stcd2(stcd2):
     }
 
 
+def fetch_lifnr_from_zmm006(material):
+    """ZMM006(자재별 공급업체 조회)에서 자재번호로 공급업체 코드(LIFNR 6자리)를 반환한다.
+    2026-09-29 — VBS 기반(ctxtS_MATNR-LOW = GuiCTextField, F8 실행 후 ALV 첫 행 LIFNR 컬럼)."""
+    material = str(material).strip()
+    if not material:
+        return None
+    session = _get_sap_session()
+    session.findById('wnd[0]/tbar[0]/okcd').Text = '/nZMM006'
+    session.findById('wnd[0]').sendVKey(0)
+    time.sleep(1.0)
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('usr/ctxtS_MATNR-LOW').Text = material
+    except Exception as e:
+        raise RuntimeError(f'ZMM006 자재번호 입력 필드를 찾지 못했습니다: {e}')
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(1.5)
+
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid is None or grid.RowCount == 0:
+        return None
+
+    col_ids = list(grid.ColumnOrder)
+    lifnr_col = next((c for c in col_ids if c.upper() == 'LIFNR'), None)
+    if not lifnr_col:
+        return None
+    return str(grid.GetCellValue(0, lifnr_col)).strip() or None
+
+
+def fetch_vendor_by_lifnr(lifnr):
+    """ZMM005(공급업체 리스트)에서 LIFNR(공급업체 코드)로 협력사 상세 정보를 반환한다.
+    2026-09-29 — 결과 ALV 덤프 기반(ctxtS_LIFNR-LOW = GuiCTextField, 결과 grid = wnd[0]/shellcont/shell).
+    반환: {'lifnr', 'name', 'address'(ORT01+STRAS), 'tel'(TELF1), 'representative'(J_1KFREPRE)}"""
+    lifnr = str(lifnr).strip()
+    if not lifnr:
+        return None
+    session = _get_sap_session()
+    session.findById('wnd[0]/tbar[0]/okcd').Text = '/nZMM005'
+    session.findById('wnd[0]').sendVKey(0)
+    time.sleep(1.0)
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('usr/ctxtS_LIFNR-LOW').Text = lifnr
+    except Exception as e:
+        raise RuntimeError(f'ZMM005 LIFNR 입력 필드를 찾지 못했습니다: {e}')
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(1.5)
+
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid is None or grid.RowCount == 0:
+        return None
+
+    col_ids = list(grid.ColumnOrder)
+
+    def _get(col_names, row=0):
+        for n in col_names:
+            col = next((c for c in col_ids if c.upper() == n.upper()), None)
+            if col:
+                val = str(grid.GetCellValue(row, col)).strip()
+                if val:
+                    return val
+        return ''
+
+    city   = _get(['ORT01'])
+    street = _get(['STRAS'])
+    address = (city + ' ' + street).strip()
+    return {
+        'lifnr':          lifnr,
+        'name':           _get(['NAME1', 'NAME']),
+        'address':        address,
+        'tel':            _get(['TELF1', 'TEL_NUMBER']),
+        'representative': _get(['J_1KFREPRE']),
+    }
+
+
+def fetch_vendor_info_by_material(material):
+    """ZMM006→LIFNR→ZMM005 순서로 자재의 협력사 상세 정보를 조회한다.
+    반환: {'ok': True, 'vendor': {...}} 또는 {'ok': False, 'error': ...}"""
+    material = str(material).strip()
+    lifnr = fetch_lifnr_from_zmm006(material)
+    if not lifnr:
+        return {'ok': False, 'error': f'ZMM006에서 자재 {material}의 공급업체 코드(LIFNR)를 찾지 못했습니다.'}
+    vendor = fetch_vendor_by_lifnr(lifnr)
+    if not vendor:
+        return {'ok': False, 'error': f'ZMM005에서 LIFNR {lifnr}의 공급업체 정보를 찾지 못했습니다.'}
+    return {'ok': True, 'vendor': vendor}
+
+
 # ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
 def _find_by_id_substring(container, substring, depth=0, max_depth=30, require_type=None):
     """창 트리를 재귀 탐색해 .Id에 특정 문자열이 포함된 첫 번째 컨트롤을 찾는다.
@@ -3880,6 +3972,12 @@ def main():
         elif action == 'fetch_vendor_by_stcd2':
             stcd2_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             result = fetch_vendor_by_stcd2(stcd2_arg)
+        elif action == 'fetch_vendor_by_lifnr':
+            lifnr_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = fetch_vendor_by_lifnr(lifnr_arg) or {'ok': False, 'error': '조회 결과 없음'}
+        elif action == 'fetch_vendor_info_by_material':
+            material_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = fetch_vendor_info_by_material(material_arg)
         elif action == 'dump_screen_tree':
             save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
             result = dump_screen_tree(save_dir)

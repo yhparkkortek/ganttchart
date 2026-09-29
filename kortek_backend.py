@@ -2231,8 +2231,9 @@ def _approval_fill_xlsx(tpl_path, out_path, r, ctx):
     if ctx.get('name_apv'):
         ws[_APPROVAL_CELLS['apv_name']] = ctx['name_apv']
         ws[_APPROVAL_CELLS['apv_date']] = f"Date: {ctx['today']}"
-    if ctx.get('vendor_name'):
-        ws['C34'] = ctx['vendor_name']
+    if ctx.get('vendor_name'):    ws['C34'] = ctx['vendor_name']
+    if ctx.get('vendor_address'): ws['C35'] = ctx['vendor_address']
+    if ctx.get('vendor_tel'):     ws['C36'] = ctx['vendor_tel']
     wb.save(out_path)
 
 
@@ -2288,12 +2289,25 @@ def _approval_fill_docx(tpl_path, out_path, r, ctx):
         rr, cc = _APPROVAL_DOCX_SIGN['apv_date']
         _set_cell_text_preserve_format(t_sign.cell(rr, cc), f"Date: {ctx['today']}")
 
-    # 협력사명 → Provider Info 표(nested[2]) cell(1,1)
-    if ctx.get('vendor_name') and len(nested) >= 3:
-        try:
-            _set_cell_text_preserve_format(nested[2].cell(1, 1), ctx['vendor_name'])
-        except Exception:
-            pass  # 양식 구조가 다를 때 조용히 무시
+    # 협력사 정보 → Provider Info 표(nested[2]) Name/Address/Tel
+    if len(nested) >= 3:
+        info_tbl = nested[2]
+        for row_i, key in ((1, 'vendor_name'), (2, 'vendor_address'), (3, 'vendor_tel')):
+            if ctx.get(key):
+                try:
+                    _set_cell_text_preserve_format(info_tbl.cell(row_i, 1), ctx[key])
+                except Exception:
+                    pass
+
+    # 대표자(J_1KFREPRE) → Provider 서명란 Written/Reviewed/Approved by (nested[1], col 1)
+    if ctx.get('vendor_rep'):
+        rep = ctx['vendor_rep'].strip()
+        if rep:
+            for row_i in (2, 4, 6):
+                try:
+                    _set_cell_text_preserve_format(t_sign.cell(row_i, 1), rep)
+                except Exception:
+                    pass
 
     # 외부 셀 안의 테이블 사이 빈 단락(~5mm × 7개 = ~35mm)을 1pt 높이로 최소화 → 1페이지 유지
     from lxml import etree as _et
@@ -2392,6 +2406,16 @@ def sap_approval_generate():
     except Exception as e:
         return jsonify({'ok': False, 'error': f'저장 폴더({_APPROVAL_OUT_DIR})를 만들지 못했습니다: {e}'}), 500
 
+    # 첫 번째 자재 코드로 협력사 정보 1회 조회 (ZMM006→LIFNR→ZMM005 상세)
+    vendor_info = {}
+    try:
+        v_data, _ = _run_sap_bridge(
+            ['fetch_vendor_info_by_material', ok_results[0]['code']], 60, '협력사 정보 조회')
+        if v_data.get('ok'):
+            vendor_info = v_data.get('vendor') or {}
+    except Exception:
+        pass  # SAP 미연결·실패 시 수동 입력값만 사용
+
     made, failed = [], []
     for r in ok_results:
         # 품목별 필드 — 없으면 공통값으로 fallback
@@ -2408,7 +2432,8 @@ def sap_approval_generate():
         if r_fmt not in ('xlsx', 'docx', 'both'):
             r_fmt = shared_fmt
         r_is_pre = pm.get('isPre') if 'isPre' in pm else shared_is_pre
-        vendor_name = (pm.get('vendor') or '').strip()
+        # vendor_name: 수동입력 우선, 없으면 SAP 자동조회 결과 사용
+        vendor_name = (pm.get('vendor') or '').strip() or vendor_info.get('name', '')
         # kind 결정
         kind_val = 'New' if rev in ('00', '0') else 'Update'
         # remark 가공 — 원본 앱 로직 그대로
@@ -2425,7 +2450,10 @@ def sap_approval_generate():
         r_ctx = {
             'today': today_str,
             'remark': remark, 'name_chk': writer, 'name_apv': leader, 'dms_text': dms_text,
-            'vendor_name': vendor_name,
+            'vendor_name':    vendor_name,
+            'vendor_address': vendor_info.get('address', ''),
+            'vendor_tel':     vendor_info.get('tel', ''),
+            'vendor_rep':     vendor_info.get('representative', ''),
         }
         base = f"{prefix}_{r['code']}_Rev{rev}"
         need_xlsx = r_fmt in ('xlsx', 'both')
