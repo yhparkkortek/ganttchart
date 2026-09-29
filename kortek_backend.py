@@ -2419,18 +2419,18 @@ def sap_approval_generate():
     except Exception as e:
         return jsonify({'ok': False, 'error': f'저장 폴더({_APPROVAL_OUT_DIR})를 만들지 못했습니다: {e}'}), 500
 
-    # 첫 번째 자재 코드로 협력사 정보 1회 조회 (ZMM006→LIFNR→ZMM005 상세)
-    vendor_info = {}
-    try:
-        v_data, _ = _run_sap_bridge(
-            ['fetch_vendor_info_by_material', ok_results[0]['code']], 60, '협력사 정보 조회')
-        if v_data.get('ok'):
-            vendor_info = v_data.get('vendor') or {}
-    except Exception:
-        pass  # SAP 미연결·실패 시 수동 입력값만 사용
-
     made, failed = [], []
     for r in ok_results:
+        # 품목별 협력사 정보 조회 (ZMM006→LIFNR→ZMM005) — 품목마다 다른 업체일 수 있으므로 각각 조회
+        vendor_info = {}
+        try:
+            v_data, _ = _run_sap_bridge(
+                ['fetch_vendor_info_by_material', r['code']], 60, f"협력사 정보 조회({r['code']})")
+            if v_data.get('ok'):
+                vendor_info = v_data.get('vendor') or {}
+        except Exception:
+            pass  # SAP 미연결·실패 시 수동 입력값만 사용
+
         # 품목별 필드 — 없으면 공통값으로 fallback
         pm = per_material.get(r.get('code', ''), {}) if per_material else {}
         if not isinstance(pm, dict):
@@ -2440,7 +2440,7 @@ def sap_approval_generate():
         rev = ((pm.get('rev') or '').strip()) or shared_rev
         rev = rev or '00'
         remark = ((pm.get('remark') or '').strip()) or shared_remark
-        # 품목별 출력형식·가승인원 여부 (신규: 행 테이블 UI)
+        # 품목별 출력형식·가승인원 여부
         r_fmt = (pm.get('format') or '').strip().lower() or shared_fmt
         if r_fmt not in ('xlsx', 'docx', 'both'):
             r_fmt = shared_fmt
