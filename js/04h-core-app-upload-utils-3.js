@@ -2348,24 +2348,30 @@ ${docsJson}`;
     //    #/##소제목, - 글머리)을 그대로 지원한다. AI는 사용자가 서식을 요청하면 본문에 이 문법을 써서
     //    작성하고(위 프롬프트의 [[MAIL_DRAFT]] 규칙 참고), 여기서 실제 메일 클라이언트에서도 보이도록
     //    인라인 스타일 HTML로 바꾼다(이메일은 외부 CSS/class를 못 쓰므로 항상 style="" 인라인만 사용).
+    // (2026-09-29) AI 채팅창(_mdToHtml) 스타일에 맞게 통일:
+    //   제목은 font-size 변경 없이 굵기만, 하위 글머리는 '◦', hanging-indent 적용.
+    //   email-safe(인라인 스타일만, JS 없음)이면서 채팅창과 동일하게 보이도록 글꼴·크기·색도 명시.
     window._aiMdToMailHtml = function(text) {
+        const wrapStyle = "font-family:'Malgun Gothic','Apple SD Gothic Neo',Arial,sans-serif; font-size:13px; color:#222; line-height:1.6;";
         let escaped = escapeHtml(text || '');
-        escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
+        escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
         const lines = escaped.split('\n');
-        return lines.map(function(line) {
-            const heading = line.match(/^(#{1,3})\s+(.*)$/);
+        const body = lines.map(function(line) {
+            const heading = line.match(/^(#{1,4})\s+(.*)$/);
             if (heading) {
-                const size = heading[1].length === 1 ? '16px' : (heading[1].length === 2 ? '15px' : '14px');
-                return `<div style="font-weight:bold; font-size:${size}; margin:12px 0 4px;">${heading[2]}</div>`;
+                return '<div style="font-weight:bold; margin:8px 0 3px;">' + heading[2] + '</div>';
             }
             const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
             if (bullet) {
                 const depth = Math.floor(bullet[1].length / 2);
-                return `<div style="margin:0 0 3px; padding-left:${14 + depth * 16}px;">• ${bullet[2]}</div>`;
+                const mark = depth > 0 ? '&#9702;' : '&#8226;'; // ◦ / •
+                const pad = 14 + depth * 16;
+                return '<div style="padding-left:' + pad + 'px; text-indent:-14px; margin-bottom:2px;">' + mark + '&nbsp;' + bullet[2] + '</div>';
             }
-            if (line.trim() === '') return '<div style="height:8px;"></div>';
-            return `<div style="margin:0 0 3px;">${line}</div>`;
+            if (line.trim() === '') return '<div style="height:6px;"></div>';
+            return '<div style="margin-bottom:2px;">' + line + '</div>';
         }).join('');
+        return '<div style="' + wrapStyle + '">' + body + '</div>';
     };
 
     // 💡 실제 발송 — kortek_backend.py의 기존 /send-mail(SMTP)을 그대로 재사용(알람 메일 발송과 동일
