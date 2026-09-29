@@ -3766,31 +3766,25 @@ def post_goods_receipt(ebeln, dump_only=False):
 
     today = time.strftime('%Y%m%d')
     session = _get_sap_session()
-    session.StartTransaction('ZMM062')
-    time.sleep(0.8)
 
-    # 리포트(변형) 선택 팝업 — 없는 세션도 있어 조용히 건너뜀
+    # VBS: 즐겨찾기(F00216) → ZMM062 → PO번호 입력 → F8 실행
+    # 즐겨찾기 경로로 먼저 시도, 실패 시 /nZMM062 직접 입력
+    _nav_ok = False
     try:
-        wnd1 = session.findById('wnd[1]')
-        wnd1.findById('usr/lbl[1,3]').caretPosition = 2
-        wnd1.sendVKey(2)
-        time.sleep(0.5)
+        session.findById(
+            'wnd[0]/usr/cntlIMAGE_CONTAINER/shellcont/shell/shellcont[0]/shell'
+        ).doubleClickNode('F00216')
+        time.sleep(1.0)
+        _nav_ok = True
     except Exception:
         pass
-
-    # Plant(P_WERKS) = 9000, F4 값도움말 → lbl[1,3] 선택 (VBS 기준)
-    try:
-        wnd = session.findById('wnd[0]')
-        wnd.findById('usr/ctxtP_WERKS').text = '9000'
-        wnd.findById('usr/ctxtP_WERKS').caretPosition = 2
-        wnd.sendVKey(4)  # F4
-        time.sleep(0.5)
-        w1 = session.findById('wnd[1]')
-        w1.findById('usr/lbl[1,3]').caretPosition = 3
-        w1.sendVKey(2)   # 선택
-        time.sleep(0.4)
-    except Exception as e:
-        raise RuntimeError(f'ZMM062 Plant(P_WERKS) 선택 중 오류: {e}')
+    if not _nav_ok:
+        try:
+            session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM062'
+            session.findById('wnd[0]').sendVKey(0)
+            time.sleep(1.0)
+        except Exception as e:
+            raise RuntimeError(f'ZMM062 진입 실패: {e}')
 
     # 구매오더 번호 입력 → 실행(F8)
     wnd = session.findById('wnd[0]')
@@ -3802,23 +3796,6 @@ def post_goods_receipt(ebeln, dump_only=False):
         time.sleep(1.2)
     except Exception as e:
         raise RuntimeError(f'ZMM062 구매오더 번호 입력/실행 중 오류: {e}')
-
-    # 뒤로 → 즐겨찾기 더블클릭 → 같은 오더번호로 재실행 (VBS 그대로)
-    try:
-        session.findById('wnd[0]/tbar[0]/btn[3]').press()
-        time.sleep(0.5)
-        session.findById(
-            'wnd[0]/usr/cntlIMAGE_CONTAINER/shellcont/shell/shellcont[0]/shell'
-        ).doubleClickNode('F00216')
-        time.sleep(0.8)
-        wnd = session.findById('wnd[0]')
-        wnd.findById('usr/ctxtS_EBELN-LOW').text = ebeln
-        wnd.findById('usr/ctxtS_EBELN-LOW').setFocus()
-        wnd.findById('usr/ctxtS_EBELN-LOW').caretPosition = len(ebeln)
-        wnd.findById('tbar[1]/btn[8]').press()
-        time.sleep(1.2)
-    except Exception:
-        pass  # 즐겨찾기 재진입 실패 — 이미 실행해둔 화면을 그대로 사용
 
     wnd = session.findById('wnd[0]')
     try:
@@ -3868,10 +3845,11 @@ def post_goods_receipt(ebeln, dump_only=False):
                 pass
         return {'ok': True, 'dump_only': True, 'dumpLines': _dump_lines, 'tbar1': _tb, 'ebeln': ebeln}
 
-    # ── 각 행: INQTY 입력 → triggerModified → F4 캘린더로 INDAT 설정 (VBS 기준)
-    # [2026-09-29] VBS 매크로 분석 결과:
-    #   modifyCell(INQTY) → currentCellColumn='INDAT' → triggerModified() → pressF4() → 캘린더 선택
-    # triggerModified() 없이는 INQTY가 그리드에 커밋되지 않아 값이 비어있는 채로 전기됨.
+    # ── 각 행: INQTY 입력 → triggerModified → F4 캘린더로 INDAT 설정
+    # [2026-09-29 V01 VBS 기준]
+    # 행0:  modifyCell(INQTY) → currentCellColumn='INDAT' → triggerModified → pressF4 → selectionInterval
+    # 행1+: modifyCell(INQTY) → currentCellRow=row_idx  → triggerModified → pressF4 → selectionInterval
+    # (focusDate 없음 — VBS에 없음)
     processed_rows = []
     order_qtys = []
     _debug_steps = []
@@ -3891,9 +3869,13 @@ def post_goods_receipt(ebeln, dump_only=False):
         except Exception as e:
             raise RuntimeError(f'입고수량(INQTY) 입력 오류 (행 {row_idx}): {e}')
 
-        # 2. currentCellColumn = 'INDAT' + triggerModified() — INQTY 값 그리드 커밋
+        # 2. 포커스 이동 + triggerModified — INQTY 값 그리드 커밋
+        #    행0: currentCellColumn='INDAT', 행1+: currentCellRow=row_idx (VBS 그대로)
         try:
-            grid.currentCellColumn = 'INDAT'
+            if row_idx == 0:
+                grid.currentCellColumn = 'INDAT'
+            else:
+                grid.currentCellRow = row_idx
             time.sleep(0.3)
             grid.triggerModified()
             time.sleep(0.5)
@@ -3907,7 +3889,7 @@ def post_goods_receipt(ebeln, dump_only=False):
         except Exception as e:
             raise RuntimeError(f'pressF4(INDAT) 오류 (행 {row_idx}): {e}')
 
-        # 4. 캘린더에서 오늘 날짜 선택 → 팝업 자동 닫힘
+        # 4. 캘린더에서 날짜 선택 (selectionInterval만 — VBS에 focusDate 없음)
         _cal_set = False
         for _cal_path in [
             'wnd[1]/usr/cntlCONTAINER/shellcont/shell',
@@ -3915,7 +3897,6 @@ def post_goods_receipt(ebeln, dump_only=False):
         ]:
             try:
                 _cal = session.findById(_cal_path)
-                _cal.focusDate = today
                 _cal.selectionInterval = f'{today},{today}'
                 _cal_set = True
                 time.sleep(0.6)
@@ -3923,7 +3904,6 @@ def post_goods_receipt(ebeln, dump_only=False):
             except Exception:
                 pass
         if not _cal_set:
-            # 캘린더 경로를 못 찾으면 Enter로 닫기 시도
             try:
                 session.findById('wnd[1]').sendVKey(0)
                 time.sleep(0.5)
@@ -3947,55 +3927,21 @@ def post_goods_receipt(ebeln, dump_only=False):
 
     _popup_texts = []
 
-    # ── PASS 1: btn[5](F5) → "수량 확인" 팝업 → btn[0](확인/예)
-    # VBS: tbar[1]/btn[5].press → wnd[1]/tbar[0]/btn[0].press
-    try:
-        wnd.findById('tbar[1]/btn[5]').press()
-        time.sleep(1.5)
-    except Exception as e:
-        raise RuntimeError(f'입고처리 PASS1 btn[5] 오류: {e}')
-    try:
-        _w1 = session.findById('wnd[1]')
-        _pt = ''
-        for _pid in ['usr/txtMESSAGE', 'usr/lbl[1,2]', 'usr/lbl[2,2]']:
-            try:
-                _pt = (_w1.findById(_pid).Text or '').strip()
-                if _pt: break
-            except Exception:
-                pass
-        if _pt:
-            _popup_texts.append(f'PASS1팝업: {_pt}')
-        _w1.findById('tbar[0]/btn[0]').press()
-        time.sleep(0.8)
-    except Exception:
-        pass  # 팝업이 없으면 그냥 진행
-
-    # ── PASS 2: selectColumn(VBS 기준) + selectedRows → btn[5] → btn[12]
-    # VBS: setCurrentCell(-1,"") → selectColumn 여러 개 → selectedRows="0" → btn[5] → btn[12]
+    # ── 전체선택: setCurrentCell(-1,"") → selectAll (V01 VBS 기준)
     try:
         grid.setCurrentCell(-1, '')
         time.sleep(0.3)
-    except Exception:
-        pass
-    for _sc in ['STATUS','WERKS','EKORG','EKGRP','LIFNR','NAME1','EBELN','EBELP',
-                'AEDAT','GRDAT','MATNR','MAKTX','MEINS','SAKTO','AUFNR','KTEXT',
-                'KOSTL','MCTXT','WEMPF','MENGE','MENGE3','INQTY','INDAT','LGORT']:
-        try:
-            grid.selectColumn(_sc)
-        except Exception:
-            pass
-    time.sleep(0.3)
-    try:
-        grid.selectedRows = ','.join(str(r) for r in processed_rows)
+        grid.selectAll()
         time.sleep(0.4)
     except Exception:
         pass
 
+    # ── 저장: btn[5] → 팝업 → btn[12] (단일 패스, V01 VBS 기준)
     try:
         wnd.findById('tbar[1]/btn[5]').press()
         time.sleep(2.0)
     except Exception as e:
-        raise RuntimeError(f'입고처리 PASS2 btn[5] 오류: {e} [debug={_debug_steps}]')
+        raise RuntimeError(f'입고처리 btn[5] 오류: {e} [debug={_debug_steps}]')
     try:
         _w1 = session.findById('wnd[1]')
         _pt2 = ''
@@ -4006,7 +3952,7 @@ def post_goods_receipt(ebeln, dump_only=False):
             except Exception:
                 pass
         if _pt2:
-            _popup_texts.append(f'PASS2팝업: {_pt2}')
+            _popup_texts.append(f'팝업: {_pt2}')
         _w1.findById('tbar[0]/btn[12]').press()
         time.sleep(0.8)
     except Exception:
