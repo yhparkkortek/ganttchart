@@ -1701,6 +1701,14 @@ ${question}
             const poFieldsFormHtml = (!isUser && m.poFieldsFormId && window._ganttQaPoFieldsForm && window._ganttQaPoFieldsForm.id === m.poFieldsFormId)
                 ? (window._ganttQaRenderPoFieldsFormHtml ? window._ganttQaRenderPoFieldsFormHtml(window._ganttQaPoFieldsForm) : '')
                 : '';
+            // 🆕 [2026-09-29] 승인원 표지 이름 입력 폼 (담당자/팀장 — 기존 텍스트 채팅 대체)
+            const approvalNamesFormHtml = (!isUser && m.approvalNamesFormId && window._ganttQaApprovalNamesForm && window._ganttQaApprovalNamesForm.id === m.approvalNamesFormId)
+                ? (window._ganttQaRenderApprovalNamesFormHtml ? window._ganttQaRenderApprovalNamesFormHtml(window._ganttQaApprovalNamesForm) : '')
+                : '';
+            // 🆕 [2026-09-29] 입고 처리 PO 번호 입력 폼 (후보 없을 때 텍스트 채팅 대체)
+            const grEbelnFormHtml = (!isUser && m.grEbelnFormId && window._ganttQaGrEbelnForm && window._ganttQaGrEbelnForm.id === m.grEbelnFormId)
+                ? (window._ganttQaRenderGrEbelnFormHtml ? window._ganttQaRenderGrEbelnFormHtml(window._ganttQaGrEbelnForm) : '')
+                : '';
             // ✅ [2026-09-16 신규, 사용자 요청] "확인/저장해줘/취소"류 짧은 확인성 답변 버튼 —
             // 메일/공지/알람 초안 버튼(위)과 완전히 같은 패턴, js/04h의 window._ganttQaPendingConfirmButtons
             // 참고. CLAUDE.md "⚡ AI 문답 확인성 질문" 절 참고.
@@ -1739,6 +1747,8 @@ ${question}
                 ${openExecDraftHtml ? `<div style="max-width:82%; width:100%;">${openExecDraftHtml}</div>` : ''}
                 ${choiceDropdownHtml ? `<div style="max-width:82%; width:100%;">${choiceDropdownHtml}</div>` : ''}
                 ${poFieldsFormHtml ? `<div style="max-width:90%; width:100%;">${poFieldsFormHtml}</div>` : ''}
+                ${approvalNamesFormHtml ? `<div style="max-width:90%; width:100%;">${approvalNamesFormHtml}</div>` : ''}
+                ${grEbelnFormHtml ? `<div style="max-width:90%; width:100%;">${grEbelnFormHtml}</div>` : ''}
                 ${confirmButtonsHtml ? `<div style="max-width:82%; width:100%;">${confirmButtonsHtml}</div>` : ''}
                 ${savePathsHtml ? `<div style="max-width:90%; width:100%;">${savePathsHtml}</div>` : ''}
             </div>`;

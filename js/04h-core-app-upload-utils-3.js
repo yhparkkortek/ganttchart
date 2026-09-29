@@ -880,6 +880,85 @@
         if (input) input.focus();
     };
 
+    // 🆕 [2026-09-29 신규, 사용자 요청] 승인원 표지 이름 입력 폼 — 기존에 텍스트 채팅으로 물어보던
+    // 담당자(writer)/팀장(leader) 이름을 인라인 입력 폼으로 대체. 구매오더 폼과 동일한 패턴.
+    window._ganttQaApprovalNamesForm = null; // {id, needWriter, needLeader}
+
+    window._ganttQaRenderApprovalNamesFormHtml = function(form) {
+        const id = form.id;
+        const _en = window._currentLang === 'en';
+        const inpSt = 'width:100%; font-size:12px; padding:5px 8px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;';
+        const labelSt = 'font-size:11px; color:#555; margin-bottom:3px; display:block;';
+        let html = '<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:6px;">';
+        html += '<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:10px;">' + (_en ? '📝 Please enter the names:' : '📝 이름을 입력해주세요:') + '</div>';
+        if (form.needWriter) {
+            html += '<div style="margin-bottom:8px;">';
+            html += '<label style="' + labelSt + '">' + (_en ? '🧑 Checked by (담당자)' : '🧑 담당자 (Checked by)') + '</label>';
+            html += '<input id="apf-writer-' + id + '" type="text" placeholder="' + (_en ? 'e.g. Hong Gildong' : '예: 홍길동') + '" style="' + inpSt + '" onkeydown="if(event.key===\'Enter\'){window._ganttQaSubmitApprovalNamesForm(\'' + id + '\');}" />';
+            html += '</div>';
+        }
+        if (form.needLeader) {
+            html += '<div style="margin-bottom:10px;">';
+            html += '<label style="' + labelSt + '">' + (_en ? '👔 Approved by (팀장)' : '👔 팀장 (Approved by)') + '</label>';
+            html += '<input id="apf-leader-' + id + '" type="text" placeholder="' + (_en ? 'e.g. Kim Teamlead' : '예: 김팀장') + '" style="' + inpSt + '" onkeydown="if(event.key===\'Enter\'){window._ganttQaSubmitApprovalNamesForm(\'' + id + '\');}" />';
+            html += '</div>';
+        }
+        html += '<button onclick="window._ganttQaSubmitApprovalNamesForm(\'' + id + '\')" style="font-size:12px; padding:6px 16px; background:#1971c2; color:#fff; border:none; border-radius:6px; cursor:pointer;">&#10003; ' + (_en ? 'Confirm' : '확인') + '</button>';
+        html += '</div>';
+        return html;
+    };
+
+    window._ganttQaSubmitApprovalNamesForm = function(formId) {
+        if (!window._ganttQaApprovalNamesForm || window._ganttQaApprovalNamesForm.id !== formId) return;
+        const form = window._ganttQaApprovalNamesForm;
+        const parts = [];
+        if (form.needWriter) {
+            const el = document.getElementById('apf-writer-' + formId);
+            const v = el ? el.value.trim() : '';
+            if (!v) { if (window.showToast) window.showToast(window._t('담당자 이름을 입력해주세요.', 'Please enter the preparer name.')); return; }
+            parts.push(window._t('담당자: ' + v, 'Checked by: ' + v));
+        }
+        if (form.needLeader) {
+            const el = document.getElementById('apf-leader-' + formId);
+            const v = el ? el.value.trim() : '';
+            if (!v) { if (window.showToast) window.showToast(window._t('팀장 이름을 입력해주세요.', 'Please enter the team leader name.')); return; }
+            parts.push(window._t('팀장: ' + v, 'Approved by: ' + v));
+        }
+        window._ganttQaApprovalNamesForm = null;
+        window.sendGanttQaMessage(parts.join(', '));
+    };
+
+    // 🆕 [2026-09-29 신규, 사용자 요청] 입고 처리 PO 번호 입력 폼 — 후보 오더가 없을 때
+    // 기존 _ganttQaPendingGrEbelnAsk 텍스트 대기 대신 인라인 폼으로 대체.
+    window._ganttQaGrEbelnForm = null; // {id}
+
+    window._ganttQaRenderGrEbelnFormHtml = function(form) {
+        const id = form.id;
+        const _en = window._currentLang === 'en';
+        const inpSt = 'flex:1; min-width:140px; font-size:12px; padding:5px 8px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;';
+        let html = '<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:6px;">';
+        html += '<div style="font-size:11px; color:#555; margin-bottom:8px;">' + (_en ? '📦 Enter the purchase order number:' : '📦 입고 처리할 구매오더 번호를 입력하세요:') + '</div>';
+        html += '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">';
+        html += '<input id="grf-ebeln-' + id + '" type="text" placeholder="' + (_en ? 'e.g. 9100019568' : '예: 9100019568') + '" style="' + inpSt + '" onkeydown="if(event.key===\'Enter\'){window._ganttQaSubmitGrEbelnForm(\'' + id + '\');}" />';
+        html += '<button onclick="window._ganttQaSubmitGrEbelnForm(\'' + id + '\')" style="font-size:12px; padding:5px 14px; background:#1971c2; color:#fff; border:none; border-radius:6px; cursor:pointer; white-space:nowrap;">&#128230; ' + (_en ? 'Process' : '입고 처리') + '</button>';
+        html += '</div></div>';
+        return html;
+    };
+
+    window._ganttQaSubmitGrEbelnForm = async function(formId) {
+        if (!window._ganttQaGrEbelnForm || window._ganttQaGrEbelnForm.id !== formId) return;
+        const el = document.getElementById('grf-ebeln-' + formId);
+        const v = el ? el.value.trim().replace(/\s/g, '') : '';
+        if (!v) { if (window.showToast) window.showToast(window._t('오더번호를 입력해주세요.', 'Please enter the PO number.')); return; }
+        window._ganttQaGrEbelnForm = null;
+        window._ganttQaPendingGrEbelnAsk = false;
+        window._ganttQaHistory.push({ role: 'user', text: v + window._t(' 입고 처리해줘', ' goods receipt') });
+        window._renderGanttQaMessages();
+        await window._ganttQaRunGoodsReceipt(v);
+        const input = document.getElementById('gantt-qa-input');
+        if (input) input.focus();
+    };
+
     // 📋 [2026-09-16 신규, 사용자 요청] "이전 내용(복사 붙여넣기) 이어서" — PDF를 다시 첨부하지
     // 않고, 이전 AI 답변(예: 품목 확인 요약)이나 원본 문서 텍스트를 그대로 복사해 붙여넣기만
     // 해도 구매오더 추출을 이어갈 수 있게 한다. 이미 PO draft가 진행 중이거나(그 흐름이
@@ -3325,7 +3404,8 @@ ${docsJson}`;
         const hasAnyActiveQaDraft = !!(window._ganttQaPoDraft || window._ganttQaBomDraft ||
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
             window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons ||
-            window._ganttQaPendingGrEbelnAsk);
+            window._ganttQaPendingGrEbelnAsk || window._ganttQaApprovalNamesForm ||
+            window._ganttQaGrEbelnForm);
         if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
             try { window._issueLogInterrupt && window._issueLogInterrupt(); } catch (e) { /* Phase 10 수집 — 실패해도 무시 */ }
             window._ganttQaPoDraft = null;
@@ -3337,6 +3417,8 @@ ${docsJson}`;
             window._ganttQaPendingChoiceDropdown = null;
             window._ganttQaPendingConfirmButtons = null;
             window._ganttQaPendingGrEbelnAsk = false;
+            window._ganttQaApprovalNamesForm = null;
+            window._ganttQaGrEbelnForm = null;
             window._ganttQaHistory.push({ role: 'user', text: question });
             window._ganttQaHistory.push({ role: 'ai', text: window._t(
                 '🛑 진행 중이던 작업을 중단했습니다. 새로운 질문이나 요청을 말씀해주세요.',
@@ -3650,19 +3732,20 @@ ${docsJson}`;
                         ]
                     });
                 }
-                const nameMissing = [];
-                if (!approvalDraft.writer) nameMissing.push(window._t('담당자(Checked by) 이름', "the preparer's (Checked by) name"));
-                if (!approvalDraft.leader) nameMissing.push(window._t('팀장(Approved by) 이름', "the team leader's (Approved by) name"));
-                const nameLine = nameMissing.length
-                    ? window._t(`\n\n그리고 아래 이름도 이어서 말씀해주세요:\n- ${nameMissing.join('\n- ')}`, `\n\nAlso, please reply with:\n- ${nameMissing.join('\n- ')}`)
-                    : '';
+                const needWriter = !approvalDraft.writer;
+                const needLeader = !approvalDraft.leader;
                 const reply = window._t(
                     `📋 자재 "${matLabel}"의 승인원 표지를 만들려면 아래 항목이 더 필요합니다.`,
                     `📋 To generate the approval cover for material(s) "${matLabel}", I still need the following.`
-                ) + nameLine + window._t(
+                ) + window._t(
                     '\n\n(Revision 번호와 Remark는 생략하면 각각 "00"/빈 비고로 자동 처리됩니다)',
                     '\n\n(Revision number and Remark default to "00" / blank if omitted)'
                 );
+                let approvalNamesFormId = null;
+                if (needWriter || needLeader) {
+                    approvalNamesFormId = 'apf-' + Date.now();
+                    window._ganttQaApprovalNamesForm = { id: approvalNamesFormId, needWriter: needWriter, needLeader: needLeader };
+                }
                 if (categoricalMissing.length) {
                     const dropdownId = 'approval-choice-' + Date.now();
                     window._ganttQaPendingChoiceDropdown = {
@@ -3672,9 +3755,9 @@ ${docsJson}`;
                             return selections.filter(function(v) { return !!v; }).join(', ');
                         }
                     };
-                    window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: dropdownId, text: reply });
+                    window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: dropdownId, approvalNamesFormId: approvalNamesFormId, text: reply });
                 } else {
-                    window._ganttQaHistory.push({ role: 'ai', text: reply });
+                    window._ganttQaHistory.push({ role: 'ai', approvalNamesFormId: approvalNamesFormId, text: reply });
                 }
                 window._renderGanttQaMessages();
                 input.focus();
@@ -4641,10 +4724,11 @@ ${docsJson}`;
             if (_grCandidates.length > 1) {
                 window._ganttQaShowGrEbelnDropdown(_grCandidates);
             } else {
-                window._ganttQaPendingGrEbelnAsk = true;
-                window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                    '📦 어느 구매오더 번호의 자재 입고 처리를 할까요? 오더번호를 알려주세요.',
-                    '📦 Which purchase order number should I process goods receipt for? Please provide the PO number.'
+                const _grEbelnFormId = 'grf-' + Date.now();
+                window._ganttQaGrEbelnForm = { id: _grEbelnFormId };
+                window._ganttQaHistory.push({ role: 'ai', grEbelnFormId: _grEbelnFormId, text: window._t(
+                    '📦 어느 구매오더 번호의 자재 입고 처리를 할까요?',
+                    '📦 Which purchase order number should I process goods receipt for?'
                 )});
             }
             window._renderGanttQaMessages();
