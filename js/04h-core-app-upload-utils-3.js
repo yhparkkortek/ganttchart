@@ -3150,7 +3150,12 @@ ${docsJson}`;
         const mSendConfirm = text.match(/\[\[ACTION:SEND_MAIL:CONFIRM\]\]/);
         if (mSendConfirm) {
             text = text.replace(mSendConfirm[0], '').trim();
-            if (!window._ganttQaPendingMailDraft) {
+            if (mailDraftIdThisTurn) {
+                // ⚠️ 같은 응답에서 [[MAIL_DRAFT]]와 [[ACTION:SEND_MAIL:CONFIRM]]이 함께 온 경우:
+                // AI가 수정 요청("참조인 제외" 등) 처리 중 실수로 CONFIRM 태그를 붙인 것으로 판단.
+                // 절대 발송하지 않고 초안 대기 상태 유지 — 사용자가 직접 확정해야 함.
+                // (2026-09-29: "참조인 제외" 후 확인 없이 바로 발송되던 버그 방어)
+            } else if (!window._ganttQaPendingMailDraft) {
                 text += '\n\n⚠️ 아직 확정할 메일 초안이 없습니다. 먼저 메일 작성을 요청해주세요.';
             } else {
                 const pending = window._ganttQaPendingMailDraft;
