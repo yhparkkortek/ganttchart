@@ -1326,7 +1326,7 @@
   "vendorName": "공급자(협력사) 상호",
   "currency": "통화 코드 — KRW 또는 USD(다른 통화 기호/코드가 명확히 보이면 그 코드, 불명확하면 KRW)",
   "items": [
-    {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(통화 단위 그대로, 콤마 제거), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
+    {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(통화 단위 그대로, 콤마 제거), "supplyAmount": 숫자(그 줄의 공급가액/합계 금액, 없으면 0), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
   ],
   "note": "페이지를 일부만 사용했거나 애매해서 넘어간 부분이 있으면 한 문장으로, 없으면 빈 문자열"
 }
@@ -1349,6 +1349,10 @@
    "합계"를 넣으면 안 됩니다. 헷갈리면 unitPrice × qty 가 그 줄의 "공급가액"과 거의 같아야
    한다는 걸로 검산해서 맞는 값을 고르세요(수량이 1이면 단가와 공급가액이 같으므로 문제
    없음).
+   ⚠️ 단가 칸이 비어 있거나 0인데 공급가액과 수량이 있으면:
+   - unitPrice = round(공급가액 / 수량) 으로 직접 계산해서 넣으세요.
+   - 수량을 임의로 1로 바꾸면 절대 안 됩니다(qty는 문서에 있는 실제 수량 그대로).
+   - 공급가액을 그대로 unitPrice에 넣으면 절대 안 됩니다(수량이 1보다 크면 단가가 아님).
 3. tempCode는 품목명에 임시코드 표의 분류를 짐작할 수 있는 명확한 단서(예: "Panel"/
    "LCM"/"PCB"/"TSP"/"Glass"/"Frame"/"포장" 등)가 있을 때만 채우세요. 품번(part number)만
    있거나 "CABLE ASSY" 같은 일반 부품명이라 표의 13개 분류 중 어디에 해당하는지 확신할
@@ -1462,6 +1466,31 @@ ${attachText}`;
                 parsed.bizRegNo = _fix2;
                 parsed.note = parsed.note ? parsed.note + ' ' + _warnH : _warnH;
             }
+        }
+
+        // [2026-09-29] 단가 검산: AI가 단가 공란인 품목의 unitPrice를 공급가액으로 잘못 넣거나
+        // 수량을 임의로 1로 세팅했을 수 있으므로, supplyAmount vs unitPrice×qty 불일치 시 자동 보정.
+        var _unitPriceFixNotes = [];
+        parsed.items.forEach(function(item) {
+            var sa = Number(item.supplyAmount) || 0;
+            var qty = Number(item.qty) || 0;
+            var up = Number(item.unitPrice) || 0;
+            if (sa <= 0 || qty <= 0) return; // 검산 불가
+            var computed = Math.round(up * qty);
+            var diff = Math.abs(computed - sa);
+            var tolerance = Math.max(1, Math.round(sa * 0.01)); // 1% 허용 오차
+            if (diff > tolerance) {
+                // unitPrice×qty ≠ supplyAmount → 단가 역산으로 보정
+                var corrected = Math.round(sa / qty);
+                _unitPriceFixNotes.push(window._t(
+                    '⚠️ [단가 자동 보정] "' + item.desc.substring(0, 20) + '": AI 추출 단가(' + up.toLocaleString() + ') × 수량(' + qty + ') ≠ 공급가액(' + sa.toLocaleString() + ') → 단가를 ' + corrected.toLocaleString() + '으로 자동 정정했습니다.',
+                    '⚠️ [Auto unit-price fix] "' + item.desc.substring(0, 20) + '": AI unit price(' + up.toLocaleString() + ') × qty(' + qty + ') ≠ supply amount(' + sa.toLocaleString() + ') → auto-corrected unit price to ' + corrected.toLocaleString() + '.'
+                ));
+                item.unitPrice = corrected;
+            }
+        });
+        if (_unitPriceFixNotes.length > 0) {
+            parsed.note = (_unitPriceFixNotes.join(' ') + (parsed.note ? ' ' + parsed.note : ''));
         }
 
         return parsed;
