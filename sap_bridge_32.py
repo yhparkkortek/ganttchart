@@ -3824,73 +3824,156 @@ def post_goods_receipt(ebeln):
         raise RuntimeError(f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목이 없습니다 — 이미 처리됐거나 오더번호를 확인해주세요.')
 
     # 모든 행에 대해 발주수량(MENGE) 읽어 입고수량(INQTY)·입고일자(INDAT) 입력
-    # [2026-09-29 버그수정] F4 캘린더 팝업(wnd[1])을 닫지 않아 이후 행의 modifyCell이
-    # 무시되던 문제 → F4 완전 제거, modifyCell로 모든 행에 직접 입력
+    # [2026-09-29] 각 행마다 setCurrentCell로 포커스 → modifyCell → Tab(셀 확정) 순서로
+    # 충분한 딜레이를 두어 SAP 그리드가 값을 확정할 시간을 준다.
     processed_rows = []
     order_qtys = []
+    _debug_steps = []  # 디버그용 단계 기록
+
     for row_idx in range(row_count):
         try:
             order_qty = str(grid.GetCellValue(row_idx, 'MENGE')).strip()
         except Exception as e:
             raise RuntimeError(f'발주수량(MENGE) 읽기 오류 (행 {row_idx}): {e}')
         if not order_qty:
-            continue  # 수량 없는 행 건너뜀
+            _debug_steps.append(f'행{row_idx}: MENGE 없음, 건너뜀')
+            continue
 
-        # 입고수량(INQTY) 입력
+        # INQTY 셀에 포커스 → 값 입력
+        try:
+            grid.setCurrentCell(row_idx, 'INQTY')
+            time.sleep(0.3)
+        except Exception:
+            pass
         try:
             grid.modifyCell(row_idx, 'INQTY', order_qty)
+            time.sleep(0.4)
         except Exception as e:
             raise RuntimeError(f'입고수량(INQTY) 입력 오류 (행 {row_idx}): {e}')
 
-        # 입고일자(INDAT) — 모든 행 직접 입력 (F4 캘린더 팝업 미사용)
+        # INQTY → INDAT로 포커스 이동(Tab)하여 INQTY 값 확정
+        try:
+            wnd.sendVKey(0)   # Enter: 현재 셀 편집 확정
+            time.sleep(0.3)
+        except Exception:
+            pass
+
+        # INDAT 셀에 포커스 → 날짜 직접 입력
+        try:
+            grid.setCurrentCell(row_idx, 'INDAT')
+            time.sleep(0.3)
+        except Exception:
+            pass
         try:
             grid.modifyCell(row_idx, 'INDAT', today)
+            time.sleep(0.4)
         except Exception as e:
             raise RuntimeError(f'입고일자(INDAT) 입력 오류 (행 {row_idx}): {e}')
+
+        # INDAT도 Enter로 확정
+        try:
+            wnd.sendVKey(0)
+            time.sleep(0.3)
+        except Exception:
+            pass
+
+        # 입력 후 실제 반영값 확인(디버그)
+        try:
+            _chk_qty  = str(grid.GetCellValue(row_idx, 'INQTY')).strip()
+            _chk_date = str(grid.GetCellValue(row_idx, 'INDAT')).strip()
+            _debug_steps.append(f'행{row_idx}: MENGE={order_qty} → INQTY={_chk_qty}, INDAT={_chk_date}')
+        except Exception as e:
+            _debug_steps.append(f'행{row_idx}: 확인읽기 실패: {e}')
 
         processed_rows.append(row_idx)
         order_qtys.append(order_qty)
 
     if not processed_rows:
-        raise RuntimeError(f'구매오더 "{ebeln}"에 처리할 수량이 있는 품목이 없습니다.')
+        raise RuntimeError(f'구매오더 "{ebeln}"에 처리할 수량이 있는 품목이 없습니다. [steps: {_debug_steps}]')
 
-    # [2026-09-29] 마지막 modifyCell 후 Enter(sendVKey 0)로 셀 편집을 SAP에 커밋한 뒤
-    # 충분한 딜레이를 주어야 그리드가 값을 확정한다 — 너무 빨리 행 선택/저장으로 넘어가면
-    # SAP이 "입고수량을 확인하라"는 팝업을 내거나 INQTY가 0으로 전기되는 문제가 발생함.
+    # 마지막 셀 편집 최종 확정 후 충분한 대기
     try:
-        wnd.sendVKey(0)  # Enter — 마지막 편집 셀 커밋
-        time.sleep(0.6)
+        wnd.sendVKey(0)
+        time.sleep(1.0)
     except Exception:
         pass
 
-    # 처리한 모든 행 선택
+    # ── 툴바 버튼 목록 읽기 (진단용 — 어떤 btn[N]이 무엇인지 확인)
+    _tbar_map = {}
+    for _bi in range(20):
+        try:
+            _b = wnd.findById(f'tbar[1]/btn[{_bi}]')
+            _tbar_map[_bi] = (_b.Text or '').strip() + '/' + (_b.Tooltip or '').strip()
+        except Exception:
+            break
+
+    # ── "모두선택" 버튼 찾기: Tooltip/Text에 "선택" 또는 "All" 포함하는 버튼
+    _sel_all_btn = None
+    _gr_btn = None
+    for _bi, _label in _tbar_map.items():
+        _lo = _label.lower()
+        if _sel_all_btn is None and ('모두' in _lo or 'all' in _lo or '전체선택' in _lo):
+            _sel_all_btn = _bi
+        if _gr_btn is None and ('입고' in _lo or 'goods' in _lo or 'gr' in _lo or 'receipt' in _lo):
+            _gr_btn = _bi
+
+    # 버튼을 못 찾으면 기존 인덱스 사용 (모두선택=0 추정, 입고처리=5)
+    if _sel_all_btn is None:
+        _sel_all_btn = 0
+    if _gr_btn is None:
+        _gr_btn = 5
+
+    _popup_texts = []
+
+    def _dismiss_popups(max_n=4):
+        """wnd[1] 팝업이 있으면 텍스트 읽어 기록 후 btn[0]으로 닫음 (최대 max_n회)."""
+        for _p in range(max_n):
+            try:
+                _w1 = session.findById('wnd[1]')
+                _pt = ''
+                for _pid in ['usr/txtMESSAGE', 'usr/lbl[1,2]', 'usr/lbl[2,2]', 'usr/lbl[1,3]']:
+                    try:
+                        _pt = (_w1.findById(_pid).Text or '').strip()
+                        if _pt:
+                            break
+                    except Exception:
+                        pass
+                if _pt:
+                    _popup_texts.append(f'팝업{_p+1}: {_pt}')
+                _w1.findById('tbar[0]/btn[0]').press()
+                time.sleep(0.8)
+            except Exception:
+                break
+
+    # ── STEP 1: 행 선택 (grid.selectedRows)
     try:
         grid.currentCellColumn = ''
         grid.selectedRows = ','.join(str(r) for r in processed_rows)
-        time.sleep(0.4)  # 행 선택 반영 대기
+        time.sleep(0.5)
     except Exception:
         pass
 
-    # 저장(입고처리 전기) → 확인 팝업 처리
+    # ── STEP 2: "모두선택" 툴바 버튼 클릭 → 팝업 처리
+    # ("모두선택"이 수량 확정 확인 팝업을 띄우는 역할도 함께 한다)
     try:
-        session.findById('wnd[0]/tbar[1]/btn[5]').press()
-        time.sleep(1.8)
+        wnd.findById(f'tbar[1]/btn[{_sel_all_btn}]').press()
+        time.sleep(1.2)
+        _dismiss_popups(4)
+    except Exception as _e:
+        _popup_texts.append(f'모두선택btn[{_sel_all_btn}] 실패: {_e}')
+
+    # ── STEP 3: 입고처리 실행 버튼 클릭 → 팝업 처리
+    try:
+        wnd.findById(f'tbar[1]/btn[{_gr_btn}]').press()
+        time.sleep(2.0)
+        _dismiss_popups(4)
     except Exception as e:
-        raise RuntimeError(f'입고처리 저장 중 오류: {e}')
-    # wnd[1] 팝업(수량확인/전기확인 등) — 최대 4회까지 btn[0](예/확인) 처리
-    for _pop in range(4):
-        try:
-            w1 = session.findById('wnd[1]')
-            _popup_text = ''
-            try:
-                _popup_text = w1.findById('usr/txtMESSAGE').Text or ''
-            except Exception:
-                pass
-            w1.findById('tbar[0]/btn[0]').press()
-            time.sleep(0.8)
-        except Exception:
-            break
-    # 두 번째 확인 팝업(btn[12]) — VBS 매크로에 있던 두 번째 팝업 처리
+        raise RuntimeError(
+            f'입고처리 버튼(btn[{_gr_btn}]) 실행 오류: {e} '
+            f'[tbar={_tbar_map}, steps={_debug_steps}, popups={_popup_texts}]'
+        )
+
+    # ── STEP 4: VBS에 있던 btn[12] 팝업 처리
     try:
         session.findById('wnd[1]/tbar[0]/btn[12]').press()
         time.sleep(0.8)
@@ -3908,12 +3991,19 @@ def post_goods_receipt(ebeln):
             status_text = session.findById('wnd[0]/sbar').Text or ''
         except Exception:
             pass
-    # 상태바가 비어 있으면 전기 실패로 반환(ok=False)
+    # 상태바가 비어 있으면 전기 실패로 반환(ok=False) — 진단 정보 포함
     if not status_text:
         return {
             'ok': False,
             'ebeln': ebeln,
             'error': f'구매오더 "{ebeln}" 입고 처리 후 SAP 상태표시줄이 비어 있습니다 — 전기가 완료되지 않았을 수 있습니다. SAP 화면을 직접 확인해주세요.',
+            'debug': {
+                'tbarMap': _tbar_map,
+                'selAllBtn': _sel_all_btn,
+                'grBtn': _gr_btn,
+                'debugSteps': _debug_steps,
+                'popupTexts': _popup_texts,
+            },
         }
 
     qty_summary = ', '.join(order_qtys) if len(order_qtys) > 1 else (order_qtys[0] if order_qtys else '?')
@@ -3926,6 +4016,13 @@ def post_goods_receipt(ebeln):
         'goodsReceiptDate': today,
         'statusText': status_text,
         'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}). [SAP: {status_text}]',
+        'debug': {
+            'tbarMap': _tbar_map,
+            'selAllBtn': _sel_all_btn,
+            'grBtn': _gr_btn,
+            'debugSteps': _debug_steps,
+            'popupTexts': _popup_texts,
+        },
     }
 
 
