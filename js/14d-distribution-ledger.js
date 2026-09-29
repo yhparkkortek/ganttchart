@@ -486,7 +486,8 @@ window.inboxDistExecute = async function(attempt) {
         const file = await resp.json();
         if (resp.ok && file && file.id) {
             window.TaskInbox.setStatus(ctx.uid, '전송됨', { type: '드라이브전송', target: ctx.fileName, distUid: distUid, at: nowIso });
-            alert(`🎉 "${built.taskName}" 업무가 [${ctx.fileName}] 프로젝트로 전송되었습니다!\n(${posInfo.previewLabel})\n(📌 알림 자동 설정 · 수정이력/배분원장 기록 완료)`);
+            if (window.showToast) window.showToast(`🎉 "${built.taskName}" → [${ctx.fileName}] 전송 완료 (${posInfo.previewLabel})`, 'info');
+
             window.closeInboxDist();
             window.renderTaskInbox();
         } else {
@@ -648,9 +649,10 @@ window.inboxDistExecuteMulti = async function() {
         });
     }
     let msg = '';
-    if (result.okNames.length) msg += `🎉 ${result.okNames.length}개 프로젝트로 전송 완료!\n· ` + result.okNames.join('\n· ');
-    if (result.failNames.length) msg += (msg ? '\n\n' : '') + `❌ ${result.failNames.length}건 실패\n· ` + result.failNames.join('\n· ');
-    alert(msg || '전송할 항목이 없습니다.');
+    if (result.okNames.length) msg += `🎉 ${result.okNames.length}개 프로젝트로 전송 완료`;
+    if (result.failNames.length) msg += (msg ? ' / ' : '') + `❌ ${result.failNames.length}건 실패`;
+    if (window.showToast) window.showToast(msg || window._t('전송할 항목이 없습니다.', 'Nothing to send.'), result.failNames.length ? 'error' : 'info');
+
 
     if (result.okNames.length) {
         window.closeInboxDist();

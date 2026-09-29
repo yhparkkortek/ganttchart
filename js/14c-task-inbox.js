@@ -1843,7 +1843,7 @@ window.inboxPlaceToCurrent = function(uid) {
         at: new Date().toISOString()
     });
     window.renderTaskInbox();
-    alert(`✅ "${built.taskName}" 업무가 배치되었습니다.\n(${posInfo.previewLabel})`);
+    if (window.showToast) window.showToast(`✅ "${built.taskName}" 배치 완료 (${posInfo.previewLabel})`, 'info');
 };
 
 // ─── 💡 [처리됨 정리 모드] 처리됨(대기 아닌 상태) 항목을 어떻게 다룰지 두 모드 ─────────────────
