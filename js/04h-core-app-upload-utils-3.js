@@ -170,6 +170,12 @@
         // 드롭다운이 주 사용처라 자유 텍스트 지원은 부차적).
         const layoutSeg = text.match(/레이아웃\s*[:：]?\s*"([^"]+)"/) || text.match(/layout\s*[:：]?\s*"([^"]+)"/i);
         if (layoutSeg) out.layout = layoutSeg[1];
+        // 🆕 [2026-09-29] 기준환율(USD 단가 열 계산용) 파싱
+        const rateSeg = text.match(/기준환율\s*[:：]?\s*([\d,.]+)/);
+        if (rateSeg) {
+            const rateVal = parseFloat(rateSeg[1].replace(/,/g, ''));
+            if (!isNaN(rateVal) && rateVal > 0) out.exchangeRate = rateVal;
+        }
         return out;
     };
 
@@ -249,49 +255,27 @@
         { value: '/장정범', label: '/장정범 — 장정범' }
     ];
 
+    // 🆕 [2026-09-29 UI 업그레이드] 품목마다 행 나열식 — 열: 전개방식|단가표시|부품위치|레이아웃|기준환율
+    //    1행 입력 시 나머지 자동완성, 기준환율은 엑셀 USD 단가 열 계산에 사용됨
     window._ganttQaShowBomOptionsDropdown = function(materials) {
         const _en = window._currentLang === 'en';
         const matLabel = materials.join(', ');
         const id = 'bom-options-' + Date.now();
         window._ganttQaPendingChoiceDropdown = {
-            id: id, multi: true,
+            id: id, perMaterial: true, materials: materials,
+            layoutOptions: window._SAP_BOM_LAYOUT_OPTIONS,
             title: _en ? `📐 BOM options — ${matLabel}` : `📐 BOM 조회 옵션 — ${matLabel}`,
-            items: [
-                {
-                    label: _en ? '1) Explosion type' : '1) 전개 방식(Explosion type)',
-                    options: [
-                        { value: 'single', label: _en ? 'Single level' : '단일 레벨' },
-                        { value: 'multi', label: _en ? 'Multi level' : '다중 레벨' }
-                    ]
-                },
-                {
-                    label: _en ? '2) Show price?' : '2) Show price(표준가격)',
-                    options: [
-                        { value: 'yes', label: _en ? 'Yes' : '예 (표시)' },
-                        { value: 'no', label: _en ? 'No' : '아니오 (표시 안 함)' }
-                    ]
-                },
-                {
-                    label: _en ? '3) Location Information?' : '3) Location Information(재고위치)',
-                    options: [
-                        { value: 'yes', label: _en ? 'Yes' : '예 (표시)' },
-                        { value: 'no', label: _en ? 'No' : '아니오 (표시 안 함)' }
-                    ]
-                },
-                {
-                    label: _en ? '4) ALV layout (optional)' : '4) 레이아웃(ALV Layout, 선택사항)',
-                    options: window._SAP_BOM_LAYOUT_OPTIONS
-                }
-            ],
-            buildAnswerText: function(selections) {
+            buildAnswerText: function(perMatSels) {
+                // perMatSels: [{explosion, showPrice, showLocation, layout, exchangeRate}, ...]
+                // 파서(_ganttQaParseBomOptionReply)가 인식하는 문구로 합성 — 1행 기준
+                const s = perMatSels[0] || {};
                 const parts = [];
-                if (selections[0]) parts.push(selections[0] === 'multi' ? '다중 레벨' : '단일 레벨');
-                if (selections[1]) parts.push('가격 ' + (selections[1] === 'yes' ? '표시' : '표시 안 함'));
-                if (selections[2]) parts.push('위치 정보 ' + (selections[2] === 'yes' ? '표시' : '안 함'));
-                // 🆕 레이아웃 코드에 공백이 들어간 것도 있어서(예: "/CHKIM STD") 쉼표/공백
-                // 기반 파싱과 안 겹치게 따옴표로 감싸서 합성 — _ganttQaParseBomOptionReply가
-                // 같은 따옴표 패턴으로 파싱함.
-                if (selections[3]) parts.push(`레이아웃: "${selections[3]}"`);
+                if (s.explosion) parts.push(s.explosion === 'multi' ? '다중 레벨' : '단일 레벨');
+                if (s.showPrice) parts.push('가격 ' + (s.showPrice === 'yes' ? '표시' : '표시 안 함'));
+                if (s.showLocation) parts.push('위치 정보 ' + (s.showLocation === 'yes' ? '표시' : '안 함'));
+                if (s.layout) parts.push('레이아웃: "' + s.layout + '"');
+                const rate = parseFloat(s.exchangeRate);
+                if (!isNaN(rate) && rate > 0) parts.push('기준환율: ' + rate);
                 return parts.join(', ');
             }
         };
@@ -550,6 +534,66 @@
     window._ganttQaRenderChoiceDropdownHtml = function(draft) {
         const _en = window._currentLang === 'en';
         const opts = (draft.options || []).map(function(o) { return `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`; }).join('');
+
+        // 🆕 [2026-09-29] 품목별 행 레이아웃: 행=자재, 열=전개방식|단가표시|부품위치|레이아웃|기준환율
+        if (draft.perMaterial) {
+            const mats = draft.materials || [];
+            const tdSt2 = 'font-size:11px; padding:5px 6px; border:1px solid #dee2e6; vertical-align:middle;';
+            const thSt = tdSt2 + ' font-weight:600; color:#555; background:#e9ecef; text-align:center; white-space:nowrap;';
+            const layoutOptHtml = '<option value="">' + (_en ? '(default)' : '(기본값)') + '</option>'
+                + (draft.layoutOptions || []).map(function(o) { return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>'; }).join('');
+            const explOpts = '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>'
+                + '<option value="single">' + (_en ? 'Single' : '단일 레벨') + '</option>'
+                + '<option value="multi">' + (_en ? 'Multi' : '다중 레벨') + '</option>';
+            const ynOpts = '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>'
+                + '<option value="yes">' + (_en ? 'Yes' : '예') + '</option>'
+                + '<option value="no">' + (_en ? 'No' : '아니오') + '</option>';
+            const did = escapeHtml(draft.id);
+            // 자동완성 헬퍼: 1행 변경 시 나머지 행에 복사
+            window['_bomFill_' + draft.id] = function(field) {
+                var src = document.getElementById('qabc-' + field + '-' + draft.id + '-0');
+                if (!src) return;
+                for (var k = 1; k < mats.length; k++) {
+                    var dst = document.getElementById('qabc-' + field + '-' + draft.id + '-' + k);
+                    if (dst) dst.value = src.value;
+                }
+            };
+            const rows = mats.map(function(mat, i) {
+                const bg = i % 2 === 0 ? '#fff' : '#f9fafb';
+                const i0 = i === 0;
+                const autoFill = i0 ? ' onchange="window[\'_bomFill_' + did + '\'](this.dataset.f)"' : '';
+                return `<tr style="background:${bg};">
+                    <td style="${tdSt2} color:#444; font-weight:bold; white-space:nowrap;">${escapeHtml(mat)}</td>
+                    <td style="${tdSt2}"><select id="qabc-expl-${did}-${i}" data-f="expl"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${explOpts}</select></td>
+                    <td style="${tdSt2}"><select id="qabc-price-${did}-${i}" data-f="price"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${ynOpts}</select></td>
+                    <td style="${tdSt2}"><select id="qabc-loc-${did}-${i}" data-f="loc"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${ynOpts}</select></td>
+                    <td style="${tdSt2}"><select id="qabc-layout-${did}-${i}" data-f="layout"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${layoutOptHtml}</select></td>
+                    <td style="${tdSt2}"><input type="number" id="qabc-rate-${did}-${i}" value="1360" min="1" step="1"${i0 ? ' onchange="window[\'_bomFill_' + did + '\'](this.dataset.f)"' : ''} data-f="rate" style="width:72px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;"></td>
+                </tr>`;
+            }).join('');
+            const titleHtml = draft.title ? `<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">${escapeHtml(draft.title)}</div>` : '';
+            const hint = mats.length > 1 ? `<div style="font-size:10.5px;color:#888;margin-bottom:6px;">${_en ? '✏️ Editing row 1 auto-fills the rest' : '✏️ 1행 입력 시 나머지 자동완성'}</div>` : '';
+            return `<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:6px;">
+                ${titleHtml}${hint}
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; table-layout:auto;">
+                        <thead><tr style="background:#e9ecef;">
+                            <th style="${thSt}">${_en ? 'Material' : '자재번호'}</th>
+                            <th style="${thSt}">${_en ? 'Explosion' : '전개방식'}</th>
+                            <th style="${thSt}">${_en ? 'Price' : '단가표시'}</th>
+                            <th style="${thSt}">${_en ? 'Location' : '부품위치'}</th>
+                            <th style="${thSt}">${_en ? 'Layout' : '레이아웃'}</th>
+                            <th style="${thSt}">${_en ? 'Rate(KRW/USD)' : '기준환율'}</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+                    <button onclick="window._ganttQaSubmitChoiceDropdown('${did}')" style="font-size:11.5px; padding:5px 14px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer;">${_en ? '✅ Confirm' : '✅ 선택 완료'}</button>
+                </div>
+            </div>`;
+        }
+
         if (draft.multi) {
             // 💡 [2026-09-16 확장] 항목마다 선택지가 다른 경우(예: BOM 옵션)를 지원.
             // [2026-09-29 UI 업그레이드] 카드+테이블 레이아웃으로 변경 — 승인원/발주서 폼과 동일한 스타일.
@@ -596,6 +640,23 @@
     window._ganttQaSubmitChoiceDropdown = function(id) {
         const draft = window._ganttQaPendingChoiceDropdown;
         if (!draft || draft.id !== id) return;
+        // 🆕 [2026-09-29] 품목별 행 모드
+        if (draft.perMaterial) {
+            const mats = draft.materials || [];
+            const perMatSels = mats.map(function(mat, i) {
+                const g = function(field) { const el = document.getElementById('qabc-' + field + '-' + id + '-' + i); return el ? el.value : ''; };
+                return { explosion: g('expl'), showPrice: g('price'), showLocation: g('loc'), layout: g('layout'), exchangeRate: g('rate') };
+            });
+            if (!perMatSels[0] || (!perMatSels[0].explosion && !perMatSels[0].showPrice)) return;
+            const answerText = draft.buildAnswerText(perMatSels);
+            if (!answerText) return;
+            window._ganttQaPendingChoiceDropdown = null;
+            const input = document.getElementById('gantt-qa-input');
+            if (!input) return;
+            input.value = answerText;
+            window.sendGanttQaMessage();
+            return;
+        }
         const count = draft.multi ? draft.items.length : 1;
         const selections = [];
         for (let i = 0; i < count; i++) {
@@ -1972,7 +2033,11 @@ ${docsJson}`;
                     priceParam = resolvedOpts.showPrice ? '1' : '0';
                     locParam = resolvedOpts.showLocation ? '1' : '0';
                     layoutParam = resolvedOpts.layout || '';
+                    // 🆕 [2026-09-29] 엑셀 USD 열 계산을 위해 exchangeRate·showPrice를 전달
+                    window._pendingBomMeta = { exchangeRate: resolvedOpts.exchangeRate || 0, showPrice: !!resolvedOpts.showPrice };
                     window._ganttQaBomResolvedOptions = null;
+                } else {
+                    window._pendingBomMeta = null;
                 }
                 url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(bomNums.join(','))
                     + '&tcode=' + tcodeParam + '&explosion=' + explosionParam
@@ -1999,7 +2064,8 @@ ${docsJson}`;
             // 💡 [2026-09-14 신규] "엑셀로 내보내줘" 로컬 명령(sendGanttQaMessage의
             //    _ganttQaExtractSapExportRequest 처리 블록)이 AI를 다시 거치지 않고 바로 쓸 수
             //    있도록, 성공한 조회 결과를 매번 최신 것으로 캐싱해둔다.
-            window._lastSapFetchResult = { source: data.source, text: data.text, fetchedAt: Date.now() };
+            window._lastSapFetchResult = { source: data.source, text: data.text, fetchedAt: Date.now(), bomMeta: window._pendingBomMeta || null };
+            window._pendingBomMeta = null;
             return data.text || null;
         } catch (e) {
             console.warn('[AI 문답] SAP 조회 실패:', e && e.message);
@@ -4218,6 +4284,7 @@ ${docsJson}`;
                 if (parsed.showPrice !== undefined) bd.showPrice = parsed.showPrice;
                 if (parsed.showLocation !== undefined) bd.showLocation = parsed.showLocation;
                 if (parsed.layout !== undefined) bd.layout = parsed.layout;
+                if (parsed.exchangeRate !== undefined) bd.exchangeRate = parsed.exchangeRate;
                 if (bd.explosion === undefined) bd.explosion = 'single';
                 if (bd.showPrice === undefined) bd.showPrice = false;
                 if (bd.showLocation === undefined) bd.showLocation = false;
@@ -4228,7 +4295,8 @@ ${docsJson}`;
                 window._ganttQaBomResolvedOptions = {
                     materialsKey: bd.materials.slice().sort().join(','),
                     useSingleTcode: bd.useSingleTcode, explosion: bd.explosion,
-                    showPrice: bd.showPrice, showLocation: bd.showLocation, layout: bd.layout
+                    showPrice: bd.showPrice, showLocation: bd.showLocation, layout: bd.layout,
+                    exchangeRate: bd.exchangeRate || 0
                 };
                 question = bd.originalQuestion; // 원래 질문으로 되돌려 정상 흐름 재개
                 sapDocQuestion = question;
@@ -4276,7 +4344,7 @@ ${docsJson}`;
                     materialsKey: bomTrig.materials.slice().sort().join(','),
                     useSingleTcode: useSingleTcode, explosion: inlineOpts.explosion,
                     showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
-                    layout: inlineOpts.layout || '/STD_MC'
+                    layout: inlineOpts.layout || '/STD_MC', exchangeRate: inlineOpts.exchangeRate || 0
                 };
                 _bomLookupReady = true;
                 // question은 그대로 두고 아래 정상 흐름(로컬명령/AI 호출)으로 계속 진행 — return 없음
@@ -6371,6 +6439,19 @@ ${docsJson}`;
         ZLIST2: '대체 그룹 자재의 모품목', ZMATNR: '관련 패널품목', ZPLD1: '계획가격일 1',
         ZPLD2: '계획가격일 2', ZPLD3: '계획가격일 3', ZPLP1: '계획가격 1',
         ZPLP2: '계획가격 2', ZPLP3: '계획가격 3',
+        // 🆕 [2026-09-29] ZPP033 BOM 전개 화면 덤프에서 확인된 추가 필드
+        EKNAM: '구매담당자', NETPR: '현재가격', MC_STATUS: '구매정보레코드번호',
+        ZPLPR: '계획가격(Z)', PDATZ: '계획가격일(Z)', PPRDZ: '계획기간(Z)',
+        LPLPR: '계획가격(L)', PDATL: '계획가격일(L)', PPRDL: '계획기간(L)',
+        VPLPR: '계획가격(V)', PDATV: '계획가격일(V)', PPRDV: '계획기간(V)',
+        UPMNG: '상위수량', UPTXT: '상위내역', DOKAR: '문서유형',
+        DOKNR: '문서번호', DOKVR: '문서버전', GUBUN1: '구분1',
+        QMATV: '검사자재', MENGE_Y: '수량(Y)', MEINS_S: 'S기본단위',
+        ZKUMAT: '고객자재번호', SANKA: '공급사부품번호',
+        INFNR_INFO: '구매정보레코드No', NETPR_INFO: '구매정보단가',
+        REVLV: '개정레벨', AENNR2: '변경번호2', PEINH_INFO: '정보레코드가격단위',
+        WAERS_INFO1: '정보레코드통화1', WAERS_INFO2: '정보레코드통화2',
+        STPRS: '표준가격', KBETR: '단가', KONWA: '조건통화', WAERS: '통화', SORTF: '정렬기준',
     };
 
     window._exportSapDataToExcel = function(cached) {
@@ -6405,6 +6486,21 @@ ${docsJson}`;
                     var key = (code || '').trim();
                     return window._SAP_FIELD_LABEL_MAP[key] || code;
                 });
+            }
+            // 🆕 [2026-09-29] BOM + 단가표시 + 기준환율 → 현재가격(USD/1EA) 열 추가
+            var bmeta = cached.bomMeta;
+            if (bmeta && bmeta.showPrice && bmeta.exchangeRate > 0 && rows.length > 1) {
+                var netprLabel = window._SAP_FIELD_LABEL_MAP['NETPR'] || '현재가격';
+                var netprIdx = rows[0].indexOf(netprLabel);
+                if (netprIdx >= 0) {
+                    var exchRate = bmeta.exchangeRate;
+                    rows[0].push('현재가격(USD/1EA)');
+                    for (var ri = 1; ri < rows.length; ri++) {
+                        var rawVal = (rows[ri][netprIdx] || '').toString().replace(/,/g, '');
+                        var numVal = parseFloat(rawVal);
+                        rows[ri].push(isNaN(numVal) ? '' : Math.round(numVal / exchRate * 100) / 100);
+                    }
+                }
             }
         } else {
             rows = [[window._t('내용', 'Content')]].concat(lines.map(function(l) { return [l]; }));
