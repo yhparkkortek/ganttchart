@@ -4335,7 +4335,15 @@ ${docsJson}`;
                 // return하지 않고 아래로 계속 진행(정상 로컬명령/AI 흐름 재개)
             }
         } else {
-            const bomTrig = window._ganttQaExtractBomTrigger(question);
+            // 📐🚫🤖 [2026-09-29] _lastBomData가 있고 질문의 자재번호가 전부 캐시에 들어있으면
+            //    SAP 재조회 없이 아래 BOM 메모리 로컬 명령이 처리한다 — 이 guard 없으면
+            //    "303409 BOM만 정리해줘"처럼 캐시된 데이터를 재사용하려는 요청도 새 SAP 조회
+            //    옵션 드롭다운이 먼저 가로채는 문제가 발생한다("AI와 하드코딩 경계" 이슈).
+            const _bTrigNums = /bom/i.test(question) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
+            const _bCacheNums = window._lastBomData && window._lastBomData.matNums;
+            const _bAllCached = _bTrigNums.length > 0 && _bCacheNums && _bCacheNums.length > 0 &&
+                _bTrigNums.every(function(n) { return _bCacheNums.indexOf(n) !== -1; });
+            const bomTrig = !_bAllCached && window._ganttQaExtractBomTrigger(question);
             if (bomTrig) {
                 let useSingleTcode; // undefined = 자재 개수로 자동 결정
                 if (/(복수|다중)/.test(question)) useSingleTcode = false;
@@ -4860,7 +4868,63 @@ ${docsJson}`;
                 input.focus();
                 return;
             }
-            // ③ 상태코드 필터 — "H1 상태 자재 확인해줘", "X3 자재 목록 보여줘" 류
+            // ③ 자재번호 섹션 필터 — "303409 BOM만 정리해줘", "303409 보여줘" 류
+            //    캐시된 BOM 텍스트에서 특정 최상위코드(루트 자재)에 속하는 행만 추출해 답변.
+            //    루트 자재 헤더 행은 col[0]=empty, col[1]=empty, col[2]=ROOT_NUM 구조로 구분.
+            const _bmSecNums = (question.match(/\b(\d{5,8})\b/g) || []).filter(function(n) {
+                return window._lastBomData.matNums.indexOf(n) !== -1;
+            });
+            if (_bmSecNums.length > 0 && /(bom|정리|보여|확인|만|분리|추출|별도)/i.test(question)) {
+                if (!_skipUserHistoryPush) {
+                    window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                }
+                const _bAllRoots = window._lastBomData.matNums;
+                const _bAllRootsSet = {};
+                _bAllRoots.forEach(function(m) { _bAllRootsSet[m] = true; });
+                const _bsText = window._lastBomData.sapText || '';
+                const _bsBodyStart = _bsText.indexOf('\n\n');
+                const _bsBody = _bsBodyStart !== -1 ? _bsText.slice(_bsBodyStart + 2) : _bsText;
+                const _bsAllLines = _bsBody.split('\n').filter(function(l) { return l.length > 0; });
+                const _bsHdr = _bsAllLines[0] || '';
+                const _bsData = _bsAllLines.slice(1);
+                const _bsHdrCells = _bsHdr.split('\t').map(function(code) {
+                    var k = (code || '').trim();
+                    return (window._SAP_FIELD_LABEL_MAP && window._SAP_FIELD_LABEL_MAP[k]) || code;
+                });
+                // 각 요청 자재번호에 대해 섹션 행 추출
+                const _bsResultParts = [];
+                _bmSecNums.forEach(function(rootMat) {
+                    const _bsFiltered = [];
+                    let _bsCapturing = false;
+                    for (let _bsi = 0; _bsi < _bsData.length; _bsi++) {
+                        const _bsLine = _bsData[_bsi];
+                        const _bsCells = _bsLine.split('\t');
+                        const _bsC0 = (_bsCells[0] || '').trim();
+                        const _bsC1 = (_bsCells[1] || '').trim();
+                        const _bsC2 = (_bsCells[2] || '').trim();
+                        // 루트 자재 헤더 행: col[0] 비어있음, col[1] 비어있음, col[2]가 루트 자재 중 하나
+                        if (!_bsC0 && !_bsC1 && _bsAllRootsSet[_bsC2]) {
+                            _bsCapturing = (_bsC2 === rootMat);
+                        }
+                        if (_bsCapturing) _bsFiltered.push(_bsLine);
+                    }
+                    if (_bsFiltered.length) {
+                        _bsResultParts.push(_bsHdrCells.join('\t') + '\n' + _bsFiltered.join('\n'));
+                    }
+                });
+                let _bsReply;
+                if (!_bsResultParts.length) {
+                    _bsReply = window._t('메모리된 BOM 데이터에서 해당 자재(' + _bmSecNums.join(', ') + ') 섹션을 찾지 못했습니다.', 'Could not find section for material(s) ' + _bmSecNums.join(', ') + ' in cached BOM.');
+                } else {
+                    _bsReply = window._t('메모리된 BOM에서 **' + _bmSecNums.join(', ') + '** 섹션:', 'Cached BOM section(s) for **' + _bmSecNums.join(', ') + '**:') + '\n\n' + _bsResultParts.join('\n\n');
+                }
+                window._ganttQaHistory.push({ role: 'ai', text: _bsReply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+            // ④ 상태코드 필터 — "H1 상태 자재 확인해줘", "X3 자재 목록 보여줘" 류
             const _bmStatusM = question.match(/\b([A-Z]\d)\b/);
             if (_bmStatusM && /(상태|자재|목록|확인|보여|리스트|filter)/i.test(question)) {
                 if (!_skipUserHistoryPush) {
