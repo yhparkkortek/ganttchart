@@ -908,6 +908,36 @@
     window._ganttQaOpToken = 0;              // 중단 감지용 단조 증가 토큰
     window._ganttQaLastInterruptedApproval = null; // 중단 시 복원용 저장
 
+    // 협력사명 입력칸에서 사업자번호(10자리 숫자) 감지 → ZMM005 SAP 조회 → 업체명으로 교체
+    window._ganttQaApprovalVendorLookup = async function(formId, code, inputEl) {
+        var raw = inputEl ? inputEl.value.trim().replace(/-/g, '') : '';
+        if (!/^\d{10}$/.test(raw)) return; // 10자리 숫자가 아니면 무시
+        inputEl.disabled = true;
+        inputEl.placeholder = '🔍 조회 중...';
+        try {
+            var res = await fetch('http://127.0.0.1:5000/sap-vendor-lookup?stcd2=' + encodeURIComponent(raw));
+            var data = await res.json();
+            if (data.ok && data.vendors && data.vendors.length > 0) {
+                var v = data.vendors[0];
+                if (v.name) {
+                    inputEl.value = v.name;
+                    if (window.showToast) window.showToast('🏭 ' + v.name + (v.lifnr ? ' (' + v.lifnr + ')' : '') + ' 자동 입력됨');
+                } else {
+                    if (window.showToast) window.showToast('⚠️ 업체명(NAME1) 컬럼을 찾지 못했습니다. 컬럼: ' + (data.cols || []).slice(0,8).join(', '));
+                }
+            } else if (data.ok) {
+                if (window.showToast) window.showToast('⚠️ 사업자번호 ' + raw + ' 조회 결과 없음');
+            } else {
+                if (window.showToast) window.showToast('⚠️ SAP 조회 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        } catch (e) {
+            if (window.showToast) window.showToast('⚠️ 백엔드 연결 실패: ' + (e && e.message ? e.message : String(e)));
+        } finally {
+            inputEl.disabled = false;
+            inputEl.placeholder = '(선택)';
+        }
+    };
+
     // 1행(첫 품목) 변경 시 빈 나머지 행에 자동 채움
     window._ganttQaApprovalAutoFill = function(formId, fromCode) {
         var form = window._ganttQaApprovalAllFieldsForm;
@@ -988,7 +1018,8 @@
             html += '<option value="formal">' + (_en ? 'Formal' : '정식') + '</option>';
             html += '<option value="provisional">' + (_en ? 'Pre' : '가승인') + '</option>';
             html += '</select></td>';
-            html += '<td style="' + tdSt + '"><input id="apfall-vendor-' + id + '-' + escapeHtml(code) + '" type="text" placeholder="' + (_en ? '(opt)' : '(선택)') + '" value="" style="' + inpSt + '"' + afAttr + ' /></td>';
+            var vendorLookupAttr = ' onblur="window._ganttQaApprovalVendorLookup(\'' + id + '\',\'' + escapeHtml(code) + '\',this)"';
+            html += '<td style="' + tdSt + '"><input id="apfall-vendor-' + id + '-' + escapeHtml(code) + '" type="text" placeholder="' + (_en ? 'name or biz-no' : '업체명 또는 사업자번호') + '" value="" style="' + inpSt + '"' + afAttr + vendorLookupAttr + ' /></td>';
             html += '</tr>';
         }
 

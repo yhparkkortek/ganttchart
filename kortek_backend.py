@@ -2325,6 +2325,17 @@ def _approval_fill_docx(tpl_path, out_path, r, ctx):
     doc.save(out_path)
 
 
+@app.route('/sap-vendor-lookup', methods=['GET'])
+def sap_vendor_lookup():
+    # ZMM005(공급업체 리스트)에서 사업자등록번호로 협력사명·LIFNR 조회.
+    # 파라미터: stcd2 (사업자등록번호, 하이픈 포함 가능)
+    stcd2 = (request.args.get('stcd2') or '').strip().replace('-', '')
+    if not stcd2:
+        return jsonify({'ok': False, 'error': '사업자등록번호(stcd2 파라미터)가 필요합니다.'}), 400
+    data, status = _run_sap_bridge(['fetch_vendor_by_stcd2', stcd2], 30, 'ZMM005 공급업체 조회')
+    return jsonify(data), status
+
+
 @app.route('/sap-approval-fetch', methods=['GET'])
 def sap_approval_fetch():
     # "SAP에서 자재정보 가져오기" 단계 — 자재 여러 개(최대 30개, 원본 앱과 동일 상한)의

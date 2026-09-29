@@ -1269,6 +1269,74 @@ def fetch_approval_info(materials):
     return {'ok': True, 'results': results}
 
 
+def fetch_vendor_by_stcd2(stcd2):
+    """ZMM005(공급업체 리스트)에서 사업자등록번호(STCD2)로 협력사를 조회해 반환한다.
+    결과 ALV 컬럼은 동적으로 읽으며, NAME1(업체명)·LIFNR(코드)·STCD2(사번)를 우선 추출.
+    회사코드는 기본값 1000을 사용(선택화면에 이미 채워져 있음).
+    2026-09-29 신규 — 덤프 기반 구현(필드ID: S_STCD2-LOW=GuiTextField, F8=tbar[1]/btn[8])."""
+    stcd2 = str(stcd2).strip().replace('-', '')  # 하이픈 제거
+    if not stcd2:
+        raise RuntimeError('사업자등록번호를 입력해주세요.')
+
+    session = _get_sap_session()
+    # ZMM005 선택 화면으로 이동
+    session.findById('wnd[0]/tbar[0]/okcd').Text = '/nZMM005'
+    session.findById('wnd[0]').sendVKey(0)
+    time.sleep(1.0)
+
+    wnd = session.findById('wnd[0]')
+    # S_STCD2-LOW는 GuiTextField (덤프 확인 — GuiCTextField가 아님)
+    wnd.findById('usr/txtS_STCD2-LOW').Text = stcd2
+    # 회사코드 1000이 기본으로 채워져 있으니 건드리지 않음
+
+    # F8 실행
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(1.5)
+
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid is None:
+        # 결과 화면에서 그리드를 못 찾으면 fields 덤프로 오류 확인
+        body, _ = _sap_dump_screen_body(wnd)
+        raise RuntimeError(f'ZMM005 결과 그리드를 찾을 수 없습니다. 화면: {(body or "")[:200]}')
+
+    total_rows = grid.RowCount
+    if total_rows == 0:
+        return {'ok': True, 'rows': [], 'message': f'사업자번호 {stcd2}로 조회된 업체가 없습니다.'}
+
+    col_ids = list(grid.ColumnOrder)
+    rows = []
+    for r in range(min(total_rows, 50)):
+        row = {}
+        for cid in col_ids:
+            try:
+                row[cid] = str(grid.GetCellValue(r, cid))
+            except Exception:
+                row[cid] = ''
+        rows.append(row)
+
+    # NAME1(업체명) 컬럼 자동 탐색 — 대소문자 무관
+    name_col = next((c for c in col_ids if c.upper() in ('NAME1', 'NAME')), None)
+    lifnr_col = next((c for c in col_ids if c.upper() == 'LIFNR'), None)
+    stcd2_col = next((c for c in col_ids if 'STCD' in c.upper()), None)
+
+    # 결과를 간결한 형태로 정리
+    vendors = []
+    for row in rows:
+        v = {
+            'lifnr': (row.get(lifnr_col, '') if lifnr_col else '').strip(),
+            'name':  (row.get(name_col, '')  if name_col  else '').strip(),
+            'stcd2': (row.get(stcd2_col, '') if stcd2_col else '').strip(),
+        }
+        if v['lifnr'] or v['name']:
+            vendors.append(v)
+
+    return {
+        'ok': True, 'vendors': vendors, 'total': total_rows,
+        'cols': col_ids,  # 디버깅용
+    }
+
+
 # ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
 def _find_by_id_substring(container, substring, depth=0, max_depth=30, require_type=None):
     """창 트리를 재귀 탐색해 .Id에 특정 문자열이 포함된 첫 번째 컨트롤을 찾는다.
@@ -3809,6 +3877,9 @@ def main():
         elif action == 'post_goods_receipt':
             ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
             result = post_goods_receipt(ebeln)
+        elif action == 'fetch_vendor_by_stcd2':
+            stcd2_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = fetch_vendor_by_stcd2(stcd2_arg)
         elif action == 'dump_screen_tree':
             save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
             result = dump_screen_tree(save_dir)
