@@ -1,3 +1,50 @@
+    // 🌐 [2026-09-29] IE / 비크롬 브라우저 권장 배너 — 탭 세션 단위 1회 표시(sessionStorage)
+    (function() {
+        var ua = navigator.userAgent;
+        var isIE = /Trident|MSIE/i.test(ua);
+        var isEdgeLegacy = /Edge\//i.test(ua); // Chromium Edge는 "Edg/" 이므로 구분됨
+        var isChrome = /Chrome\//i.test(ua) && !/Edge\//i.test(ua) && !/OPR\//i.test(ua);
+        var isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+
+        if (!isMobile && !isChrome) {
+            var dismissed = false;
+            try { dismissed = !!sessionStorage.getItem('gantt_chrome_banner_v1'); } catch(e) {}
+            if (!dismissed) {
+                function _showChromeBanner() {
+                    if (document.getElementById('gantt-chrome-banner')) return;
+                    var bgColor = isIE ? '#c92a2a' : '#e67700';
+                    var msg = isIE
+                        ? '⚠️ Internet Explorer는 이 앱을 지원하지 않습니다. 일부 기능이 동작하지 않을 수 있습니다. Google Chrome 사용을 권장합니다.'
+                        : '🔔 이 앱은 Google Chrome에 최적화되어 있습니다. 현재 브라우저에서는 일부 기능이 정상 동작하지 않을 수 있습니다.';
+                    var banner = document.createElement('div');
+                    banner.id = 'gantt-chrome-banner';
+                    banner.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:99999; background:' + bgColor + '; color:#fff; font-size:13px; padding:9px 48px 9px 16px; text-align:center; font-family:sans-serif; line-height:1.5; box-shadow:0 2px 8px rgba(0,0,0,.3);';
+                    banner.innerHTML = msg + ' &nbsp;<a href="https://www.google.com/chrome/" target="_blank" rel="noopener" style="color:#fff; font-weight:bold; text-decoration:underline; white-space:nowrap;">&#128279; Chrome 다운로드</a>';
+                    var closeBtn = document.createElement('button');
+                    closeBtn.innerHTML = '&#10005;';
+                    closeBtn.title = '닫기';
+                    closeBtn.style.cssText = 'position:absolute; right:12px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.25); border:none; color:#fff; font-size:14px; line-height:1; width:24px; height:24px; border-radius:4px; cursor:pointer;';
+                    closeBtn.onclick = function() {
+                        var b = document.getElementById('gantt-chrome-banner');
+                        if (b && b.parentNode) b.parentNode.removeChild(b);
+                        try { sessionStorage.setItem('gantt_chrome_banner_v1', '1'); } catch(e2) {}
+                    };
+                    banner.appendChild(closeBtn);
+                    if (document.body.firstChild) {
+                        document.body.insertBefore(banner, document.body.firstChild);
+                    } else {
+                        document.body.appendChild(banner);
+                    }
+                }
+                if (document.body) {
+                    _showChromeBanner();
+                } else {
+                    document.addEventListener('DOMContentLoaded', _showChromeBanner);
+                }
+            }
+        }
+    })();
+
     (function() {
         var userAgent = navigator.userAgent.toLowerCase();
         var targetUrl = location.href;
