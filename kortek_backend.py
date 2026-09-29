@@ -2677,7 +2677,9 @@ def po_goods_receipt():
     ebeln = (data.get('ebeln') or '').strip()
     if not ebeln:
         return jsonify({'ok': False, 'error': 'ebeln(구매오더 번호)이 필요합니다.'}), 400
-    data_out, status = _run_sap_bridge(['post_goods_receipt', ebeln], 60, 'SAP 자재 입고 처리')
+    dump_only = bool(data.get('dump_only'))
+    args = ['post_goods_receipt', ebeln, '--dump-only'] if dump_only else ['post_goods_receipt', ebeln]
+    data_out, status = _run_sap_bridge(args, 60, 'SAP 자재 입고 처리')
     return jsonify(data_out), status
 
 

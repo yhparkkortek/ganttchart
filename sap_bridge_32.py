@@ -3746,10 +3746,11 @@ def _attach_failure_info(result):
 #     (생성일) 컬럼 값을 그대로 읽어 쓴다.
 # ⚠️ 즐겨찾기 노드("F00216")는 그 사람 SAP GUI 개인 설정이라 다른 세션/PC에서 그대로
 # 재현된다는 보장이 없음 — 있으면 쓰고, 실패하면(예외) 이미 한 번 실행해둔 화면을 그대로 쓴다.
-def post_goods_receipt(ebeln):
+def post_goods_receipt(ebeln, dump_only=False):
     """ZMM062에서 구매오더 `ebeln`의 자재를 입고 처리(전기)한다.
     입고수량=발주수량(MENGE), 입고일자=오늘(F4 날짜선택).
-    시퀀스는 사용자가 기록한 VBS 매크로(입고처리.vbs) 기준으로 재작성됨."""
+    시퀀스는 사용자가 기록한 VBS 매크로(입고처리.vbs) 기준으로 재작성됨.
+    dump_only=True: 그리드 화면까지만 이동 후 스크린 덤프 반환 (실제 전기 안 함)."""
     ebeln = (ebeln or '').strip()
     if not ebeln:
         raise RuntimeError('구매오더 번호(EBELN)를 지정해주세요.')
@@ -3822,6 +3823,41 @@ def post_goods_receipt(ebeln):
         row_count = 0
     if not row_count:
         raise RuntimeError(f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목이 없습니다 — 이미 처리됐거나 오더번호를 확인해주세요.')
+
+    # dump_only 모드: 그리드 화면 덤프만 반환 (실제 전기 없음)
+    if dump_only:
+        _dump_lines = []
+        try:
+            _dump_lines.append(f'GridType={grid.Type}, RowCount={row_count}')
+            # 첫 번째 행 모든 컬럼 값 읽기 시도
+            _sample_cols = ['MENGE','INQTY','INDAT','ERFMG','WBDAT','BLDAT','BUDAT',
+                            'WEMPF','UMENG','WMENGE','BWTAR','LGORT','CHARG','EBELN',
+                            'EBELP','MATNR','MAKTX','MEINS','LICHA','ZEINR']
+            _row_vals = {}
+            for _c in _sample_cols:
+                try:
+                    _v = grid.GetCellValue(0, _c)
+                    _row_vals[_c] = str(_v)
+                except Exception as _e:
+                    _row_vals[_c] = f'ERR:{_e}'
+            _dump_lines.append('행0 샘플컬럼값: ' + str(_row_vals))
+            # 그리드 type 속성
+            for _attr in ['ColumnCount','RowCount','FirstVisibleRow','CurrentCellRow','CurrentCellColumn']:
+                try:
+                    _dump_lines.append(f'{_attr}={getattr(grid, _attr)}')
+                except Exception as _e:
+                    _dump_lines.append(f'{_attr}=ERR:{_e}')
+        except Exception as _de:
+            _dump_lines.append(f'덤프오류: {_de}')
+        # tbar[1] 버튼도 읽기
+        _tb = {}
+        for _bi in range(20):
+            try:
+                _b = wnd.findById(f'tbar[1]/btn[{_bi}]')
+                _tb[_bi] = (getattr(_b,'Text','') or '') + '/' + (getattr(_b,'Tooltip','') or '')
+            except Exception:
+                pass
+        return {'ok': True, 'dump_only': True, 'dumpLines': _dump_lines, 'tbar1': _tb, 'ebeln': ebeln}
 
     # ── 그리드 컬럼 목록 수집 (진단용 — 실제 INQTY·INDAT 컬럼명 확인)
     _grid_cols = {}
@@ -4198,7 +4234,8 @@ def main():
             result = fetch_team_budget(team, fperbl, tperbl)
         elif action == 'post_goods_receipt':
             ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
-            result = post_goods_receipt(ebeln)
+            _dump_flag = '--dump-only' in sys.argv
+            result = post_goods_receipt(ebeln, dump_only=_dump_flag)
         elif action == 'fetch_vendor_by_stcd2':
             stcd2_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             result = fetch_vendor_by_stcd2(stcd2_arg)
