@@ -255,6 +255,7 @@
         const id = 'bom-options-' + Date.now();
         window._ganttQaPendingChoiceDropdown = {
             id: id, multi: true,
+            title: _en ? `📐 BOM options — ${matLabel}` : `📐 BOM 조회 옵션 — ${matLabel}`,
             items: [
                 {
                     label: _en ? '1) Explosion type' : '1) 전개 방식(Explosion type)',
@@ -550,24 +551,37 @@
         const _en = window._currentLang === 'en';
         const opts = (draft.options || []).map(function(o) { return `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`; }).join('');
         if (draft.multi) {
-            // 💡 [2026-09-16 확장, 사용자 요청] 항목마다 선택지가 다른 경우(예: BOM 옵션 —
-            // "전개 방식"은 단일/다중, "Show price"는 예/아니오로 서로 다름)를 지원하기 위해
-            // 각 항목이 자기만의 options를 가질 수 있게 함 — 없으면 기존처럼 draft.options를
-            // 공유한다(PO 임시코드 선택처럼 모든 항목이 같은 표를 쓰는 기존 용도는 그대로 동작).
+            // 💡 [2026-09-16 확장] 항목마다 선택지가 다른 경우(예: BOM 옵션)를 지원.
+            // [2026-09-29 UI 업그레이드] 카드+테이블 레이아웃으로 변경 — 승인원/발주서 폼과 동일한 스타일.
+            const tdSt = 'font-size:11.5px; padding:6px 8px; border:1px solid #dee2e6; vertical-align:middle;';
             const rows = draft.items.map(function(it, i) {
                 const rowOpts = (it.options ? it.options.map(function(o) { return `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`; }).join('') : opts);
-                return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
-                    <span style="font-size:11.5px; color:#555; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</span>
-                    <select id="qa-choice-${draft.id}-${i}" style="font-size:11.5px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; max-width:55%;">
-                        <option value="">${_en ? '(choose)' : '(선택)'}</option>
-                        ${rowOpts}
-                    </select>
-                </div>`;
+                const bg = i % 2 === 0 ? '#fff' : '#f9fafb';
+                return `<tr style="background:${bg};">
+                    <td style="${tdSt} color:#444;">${escapeHtml(it.label)}</td>
+                    <td style="${tdSt}">
+                        <select id="qa-choice-${draft.id}-${i}" style="width:100%; font-size:11.5px; padding:3px 6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; background:#fff;">
+                            <option value="">${_en ? '(choose)' : '(선택)'}</option>
+                            ${rowOpts}
+                        </select>
+                    </td>
+                </tr>`;
             }).join('');
-            return `<div style="margin-top:6px; padding:8px; background:#fff; border:1px solid #dee2e6; border-radius:6px;">
-                ${rows}
-                <div style="display:flex; justify-content:flex-end; margin-top:4px;">
-                    <button onclick="window._ganttQaSubmitChoiceDropdown('${draft.id}')" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer;">${_en ? '✅ Confirm' : '✅ 선택 완료'}</button>
+            const titleHtml = draft.title ? `<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">${escapeHtml(draft.title)}</div>` : '';
+            return `<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:6px;">
+                ${titleHtml}
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+                        <colgroup><col style="width:55%"><col style="width:45%"></colgroup>
+                        <thead><tr style="background:#e9ecef;">
+                            <th style="${tdSt} font-weight:600; color:#555; text-align:left;">${_en ? 'Option' : '항목'}</th>
+                            <th style="${tdSt} font-weight:600; color:#555; text-align:left;">${_en ? 'Value' : '선택'}</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+                    <button onclick="window._ganttQaSubmitChoiceDropdown('${draft.id}')" style="font-size:11.5px; padding:5px 14px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer;">${_en ? '✅ Confirm' : '✅ 선택 완료'}</button>
                 </div>
             </div>`;
         }
