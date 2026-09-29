@@ -3854,23 +3854,39 @@ def post_goods_receipt(ebeln):
     if not processed_rows:
         raise RuntimeError(f'구매오더 "{ebeln}"에 처리할 수량이 있는 품목이 없습니다.')
 
+    # [2026-09-29] 마지막 modifyCell 후 Enter(sendVKey 0)로 셀 편집을 SAP에 커밋한 뒤
+    # 충분한 딜레이를 주어야 그리드가 값을 확정한다 — 너무 빨리 행 선택/저장으로 넘어가면
+    # SAP이 "입고수량을 확인하라"는 팝업을 내거나 INQTY가 0으로 전기되는 문제가 발생함.
+    try:
+        wnd.sendVKey(0)  # Enter — 마지막 편집 셀 커밋
+        time.sleep(0.6)
+    except Exception:
+        pass
+
     # 처리한 모든 행 선택
     try:
         grid.currentCellColumn = ''
         grid.selectedRows = ','.join(str(r) for r in processed_rows)
+        time.sleep(0.4)  # 행 선택 반영 대기
     except Exception:
         pass
 
-    # 저장(입고처리 전기) → 확인 팝업 처리(VBS 기준: 최대 2개)
+    # 저장(입고처리 전기) → 확인 팝업 처리
     try:
         session.findById('wnd[0]/tbar[1]/btn[5]').press()
-        time.sleep(1.5)
+        time.sleep(1.8)
     except Exception as e:
         raise RuntimeError(f'입고처리 저장 중 오류: {e}')
-    # wnd[1] 팝업(수량확인/전기확인 등) → btn[0](확인/예) 최대 3회까지 처리
-    for _pop in range(3):
+    # wnd[1] 팝업(수량확인/전기확인 등) — 최대 4회까지 btn[0](예/확인) 처리
+    for _pop in range(4):
         try:
-            session.findById('wnd[1]/tbar[0]/btn[0]').press()
+            w1 = session.findById('wnd[1]')
+            _popup_text = ''
+            try:
+                _popup_text = w1.findById('usr/txtMESSAGE').Text or ''
+            except Exception:
+                pass
+            w1.findById('tbar[0]/btn[0]').press()
             time.sleep(0.8)
         except Exception:
             break
