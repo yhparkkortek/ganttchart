@@ -3824,6 +3824,8 @@ def post_goods_receipt(ebeln):
         raise RuntimeError(f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목이 없습니다 — 이미 처리됐거나 오더번호를 확인해주세요.')
 
     # 모든 행에 대해 발주수량(MENGE) 읽어 입고수량(INQTY)·입고일자(INDAT) 입력
+    # [2026-09-29 버그수정] F4 캘린더 팝업(wnd[1])을 닫지 않아 이후 행의 modifyCell이
+    # 무시되던 문제 → F4 완전 제거, modifyCell로 모든 행에 직접 입력
     processed_rows = []
     order_qtys = []
     for row_idx in range(row_count):
@@ -3840,27 +3842,11 @@ def post_goods_receipt(ebeln):
         except Exception as e:
             raise RuntimeError(f'입고수량(INQTY) 입력 오류 (행 {row_idx}): {e}')
 
-        # 입고일자(INDAT) — 첫 행은 F4 팝업 시도, 나머지는 직접 입력
-        if row_idx == 0:
-            try:
-                grid.currentCellColumn = 'INDAT'
-                grid.triggerModified()
-                grid.pressF4()
-                time.sleep(0.5)
-                session.findById(
-                    'wnd[1]/usr/cntlCONTAINER/shellcont/shell'
-                ).selectionInterval = f'{today},{today}'
-                time.sleep(0.3)
-            except Exception:
-                try:
-                    grid.modifyCell(row_idx, 'INDAT', today)
-                except Exception as e2:
-                    raise RuntimeError(f'입고일자(INDAT) 입력 오류 (행 0): {e2}')
-        else:
-            try:
-                grid.modifyCell(row_idx, 'INDAT', today)
-            except Exception as e:
-                raise RuntimeError(f'입고일자(INDAT) 입력 오류 (행 {row_idx}): {e}')
+        # 입고일자(INDAT) — 모든 행 직접 입력 (F4 캘린더 팝업 미사용)
+        try:
+            grid.modifyCell(row_idx, 'INDAT', today)
+        except Exception as e:
+            raise RuntimeError(f'입고일자(INDAT) 입력 오류 (행 {row_idx}): {e}')
 
         processed_rows.append(row_idx)
         order_qtys.append(order_qty)
@@ -3875,27 +3861,44 @@ def post_goods_receipt(ebeln):
     except Exception:
         pass
 
-    # 저장(입고처리 전기) → 확인 팝업
+    # 저장(입고처리 전기) → 확인 팝업 처리(VBS 기준: 최대 2개)
     try:
         session.findById('wnd[0]/tbar[1]/btn[5]').press()
-        time.sleep(1.0)
+        time.sleep(1.5)
     except Exception as e:
         raise RuntimeError(f'입고처리 저장 중 오류: {e}')
-    try:
-        session.findById('wnd[1]/tbar[0]/btn[0]').press()
-        time.sleep(0.8)
-    except Exception:
-        pass
+    # wnd[1] 팝업(수량확인/전기확인 등) → btn[0](확인/예) 최대 3회까지 처리
+    for _pop in range(3):
+        try:
+            session.findById('wnd[1]/tbar[0]/btn[0]').press()
+            time.sleep(0.8)
+        except Exception:
+            break
+    # 두 번째 확인 팝업(btn[12]) — VBS 매크로에 있던 두 번째 팝업 처리
     try:
         session.findById('wnd[1]/tbar[0]/btn[12]').press()
         time.sleep(0.8)
     except Exception:
         pass
 
+    # 상태바 확인 — 전기 성공 여부 판정
     try:
-        status_text = session.findById('wnd[0]/sbar').Text
+        status_text = session.findById('wnd[0]/sbar').Text or ''
     except Exception:
         status_text = ''
+    if not status_text:
+        time.sleep(0.5)
+        try:
+            status_text = session.findById('wnd[0]/sbar').Text or ''
+        except Exception:
+            pass
+    # 상태바가 비어 있으면 전기 실패로 반환(ok=False)
+    if not status_text:
+        return {
+            'ok': False,
+            'ebeln': ebeln,
+            'error': f'구매오더 "{ebeln}" 입고 처리 후 SAP 상태표시줄이 비어 있습니다 — 전기가 완료되지 않았을 수 있습니다. SAP 화면을 직접 확인해주세요.',
+        }
 
     qty_summary = ', '.join(order_qtys) if len(order_qtys) > 1 else (order_qtys[0] if order_qtys else '?')
     row_label = f'{len(processed_rows)}건' if len(processed_rows) > 1 else '1건'
@@ -3906,7 +3909,7 @@ def post_goods_receipt(ebeln):
         'orderQtys': order_qtys,
         'goodsReceiptDate': today,
         'statusText': status_text,
-        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}).' + (f' [SAP 상태표시줄: {status_text}]' if status_text else ''),
+        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}). [SAP: {status_text}]',
     }
 
 
