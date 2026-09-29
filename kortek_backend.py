@@ -2231,6 +2231,8 @@ def _approval_fill_xlsx(tpl_path, out_path, r, ctx):
     if ctx.get('name_apv'):
         ws[_APPROVAL_CELLS['apv_name']] = ctx['name_apv']
         ws[_APPROVAL_CELLS['apv_date']] = f"Date: {ctx['today']}"
+    if ctx.get('vendor_name'):
+        ws['C34'] = ctx['vendor_name']
     wb.save(out_path)
 
 
@@ -2285,6 +2287,13 @@ def _approval_fill_docx(tpl_path, out_path, r, ctx):
         _set_cell_text_preserve_format(t_sign.cell(rr, cc), ctx['name_apv'])
         rr, cc = _APPROVAL_DOCX_SIGN['apv_date']
         _set_cell_text_preserve_format(t_sign.cell(rr, cc), f"Date: {ctx['today']}")
+
+    # 협력사명 → Provider Info 표(nested[2]) cell(1,1)
+    if ctx.get('vendor_name') and len(nested) >= 3:
+        try:
+            _set_cell_text_preserve_format(nested[2].cell(1, 1), ctx['vendor_name'])
+        except Exception:
+            pass  # 양식 구조가 다를 때 조용히 무시
 
     # 외부 셀 안의 테이블 사이 빈 단락(~5mm × 7개 = ~35mm)을 1pt 높이로 최소화 → 1페이지 유지
     from lxml import etree as _et
@@ -2346,29 +2355,27 @@ def sap_approval_generate():
     if not ok_results:
         return jsonify({'ok': False, 'error': '생성할 자재 정보가 없습니다. 먼저 SAP에서 자재정보를 조회해주세요.'}), 400
 
-    fmt = (body.get('format') or 'both').strip().lower()
-    if fmt not in ('xlsx', 'docx', 'both'):
-        fmt = 'both'
     # 공통(fallback) 필드 — per_material에 없을 때 사용
     shared_writer = (body.get('writer') or '').strip()
     shared_leader = (body.get('leader') or '').strip()
-    is_pre = bool(body.get('is_pre'))
+    shared_is_pre = bool(body.get('is_pre'))
+    shared_fmt = (body.get('format') or 'docx').strip().lower()
+    if shared_fmt not in ('xlsx', 'docx', 'both'):
+        shared_fmt = 'docx'
     shared_rev = (body.get('rev') or '00').strip() or '00'
     shared_remark = (body.get('remark') or '').strip()
-    # 품목별 필드 override: {code: {writer, leader, rev, remark}}
+    # 품목별 필드 override: {code: {writer, leader, rev, remark, format, isPre, vendor}}
     per_material = body.get('per_material') or {}
     if not isinstance(per_material, dict):
         per_material = {}
 
     today_str = datetime.now(KST).strftime('%Y.%m.%d')
-    need_xlsx = fmt in ('xlsx', 'both')
-    need_docx = fmt in ('docx', 'both')
-    if need_xlsx and not os.path.exists(_APPROVAL_TEMPLATE_XLSX):
+    # 양식 파일 존재 여부는 루프 전에 한 번만 확인
+    if not os.path.exists(_APPROVAL_TEMPLATE_XLSX):
         return jsonify({'ok': False, 'error': f'엑셀 양식({_APPROVAL_TEMPLATE_XLSX})을 찾을 수 없습니다.'}), 500
-    if need_docx and not os.path.exists(_APPROVAL_TEMPLATE_DOCX):
+    if not os.path.exists(_APPROVAL_TEMPLATE_DOCX):
         return jsonify({'ok': False, 'error': f'워드 양식({_APPROVAL_TEMPLATE_DOCX})을 찾을 수 없습니다.'}), 500
 
-    prefix = _APPROVAL_PRE_REMARK if is_pre else '승인원'
     try:
         os.makedirs(_APPROVAL_OUT_DIR, exist_ok=True)
     except Exception as e:
@@ -2385,10 +2392,16 @@ def sap_approval_generate():
         rev = ((pm.get('rev') or '').strip()) or shared_rev
         rev = rev or '00'
         remark = ((pm.get('remark') or '').strip()) or shared_remark
+        # 품목별 출력형식·가승인원 여부 (신규: 행 테이블 UI)
+        r_fmt = (pm.get('format') or '').strip().lower() or shared_fmt
+        if r_fmt not in ('xlsx', 'docx', 'both'):
+            r_fmt = shared_fmt
+        r_is_pre = pm.get('isPre') if 'isPre' in pm else shared_is_pre
+        vendor_name = (pm.get('vendor') or '').strip()
         # kind 결정
         kind_val = 'New' if rev in ('00', '0') else 'Update'
         # remark 가공 — 원본 앱 로직 그대로
-        if is_pre:
+        if r_is_pre:
             if remark and _APPROVAL_PRE_REMARK not in remark:
                 remark = f'{_APPROVAL_PRE_REMARK} / {remark}'
             elif not remark:
@@ -2397,11 +2410,15 @@ def sap_approval_generate():
             remark = '.'
         dms_text = (('■' if kind_val == 'New' else '□') + ' New '
                     + ('■' if kind_val == 'Update' else '□') + f' Update (Revision: {rev} )')
+        prefix = _APPROVAL_PRE_REMARK if r_is_pre else '승인원'
         r_ctx = {
             'today': today_str,
             'remark': remark, 'name_chk': writer, 'name_apv': leader, 'dms_text': dms_text,
+            'vendor_name': vendor_name,
         }
         base = f"{prefix}_{r['code']}_Rev{rev}"
+        need_xlsx = r_fmt in ('xlsx', 'both')
+        need_docx = r_fmt in ('docx', 'both')
         if need_xlsx:
             out_path = os.path.join(_APPROVAL_OUT_DIR, base + '.xlsx')
             try:

@@ -898,82 +898,102 @@
         if (input) input.focus();
     };
 
-    // 🔄 [2026-09-29 개선 v2, 사용자 요청] 승인원 표지 품목별 통합 폼 — 발주서 UI처럼
-    // 품목마다 담당자/팀장/Revision/Remark 카드, 하단에 출력형식/가승인원여부 공통 선택.
-    // 제출 시 직접 API 호출 (sendGanttQaMessage 우회 — 품목별 데이터를 텍스트로 표현 불가).
+    // 🔄 [2026-09-29 개선 v3] 승인원 표지 품목별 행 테이블 폼
+    // — 1행당 1품목, 8열(담당자·팀장·Rev·Remark·출력형식·가승인원·협력사명), 1행 입력 시 나머지 자동완성.
+    // — 출력형식·가승인원 여부도 품목별 개별 설정.
+    // — 협력사명 → 템플릿 Provider Info Name 자동 채움(백엔드).
     window._ganttQaApprovalAllFieldsForm = null;
-    // {id, materials:[], perMaterial:{code:{writer,leader,rev,remark}}, format, isPre, fetched}
+    // {id, materials:[], perMaterial:{code:{writer,leader,rev,remark,format,isPre,vendor}}, fetched}
     window._ganttQaOperationInFlight = false; // SAP fetch/generate 진행 중 여부
     window._ganttQaOpToken = 0;              // 중단 감지용 단조 증가 토큰
     window._ganttQaLastInterruptedApproval = null; // 중단 시 복원용 저장
 
-    window._ganttQaRenderApprovalAllFieldsFormHtml = function(form) {
-        const id = form.id;
-        const materials = form.materials || [];
-        const _en = window._currentLang === 'en';
-        const labelSt = 'font-size:11px; color:#555; margin-bottom:3px; display:block;';
-        const inpSt = 'width:100%; font-size:12px; padding:5px 8px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;';
-        const selSt = 'width:100%; font-size:12px; padding:5px 8px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box; background:#fff;';
-        const grid2 = 'display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;';
-
-        const abNames = ((window.tabData && window.tabData.addressBook) || [])
-            .map(function(p) { return p.name || ''; }).filter(Boolean);
-        const nameListId = 'apfall-names-' + id;
-        const revListId = 'apfall-rev-' + id;
-        const rmkListId = 'apfall-rmk-' + id;
-
-        // Revision 00~10
-        var revOpts = '';
-        for (var ri = 0; ri <= 10; ri++) {
-            revOpts += '<option value="' + (ri < 10 ? '0' + ri : '10') + '">';
+    // 1행(첫 품목) 변경 시 빈 나머지 행에 자동 채움
+    window._ganttQaApprovalAutoFill = function(formId, fromCode) {
+        var form = window._ganttQaApprovalAllFieldsForm;
+        if (!form || form.id !== formId) return;
+        var materials = form.materials || [];
+        if (!materials.length || materials[0] !== fromCode) return;
+        var fields = ['writer','leader','rev','rmk','fmt','ispre','vendor'];
+        for (var fi = 0; fi < fields.length; fi++) {
+            var f = fields[fi];
+            var srcEl = document.getElementById('apfall-' + f + '-' + formId + '-' + fromCode);
+            if (!srcEl) continue;
+            var srcVal = srcEl.value;
+            for (var mi = 1; mi < materials.length; mi++) {
+                var tgtEl = document.getElementById('apfall-' + f + '-' + formId + '-' + materials[mi]);
+                if (tgtEl && !tgtEl.value) tgtEl.value = srcVal;
+            }
         }
+    };
 
-        var html = '<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:14px; margin-top:6px;">';
-        html += '<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:10px;">📋 ';
-        html += (_en ? 'Fill in per-material fields, then click Confirm:' : '품목별 담당자/팀장/Rev 입력 후 "선택 완료"를 눌러주세요:');
+    window._ganttQaRenderApprovalAllFieldsFormHtml = function(form) {
+        var id = form.id;
+        var materials = form.materials || [];
+        var _en = window._currentLang === 'en';
+        var thSt = 'font-size:11px; color:#555; background:#f1f3f5; padding:5px 6px; border:1px solid #dee2e6; white-space:nowrap; text-align:center;';
+        var tdSt = 'padding:4px; border:1px solid #dee2e6; vertical-align:middle;';
+        var inpSt = 'width:100%; font-size:12px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; min-width:0;';
+        var selSt = 'width:100%; font-size:11px; padding:3px 4px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; background:#fff;';
+
+        var abNames = ((window.tabData && window.tabData.addressBook) || []).map(function(p) { return p.name || ''; }).filter(Boolean);
+        var nameListId = 'apfall-names-' + id;
+        var revListId  = 'apfall-rev-'   + id;
+        var rmkListId  = 'apfall-rmk-'   + id;
+        var revOpts = '';
+        for (var ri = 0; ri <= 10; ri++) { revOpts += '<option value="' + (ri < 10 ? '0' + ri : '10') + '">'; }
+
+        var html = '<div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:6px;">';
+        html += '<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">📋 ';
+        html += (_en ? '1st row auto-fills others · click Confirm when done' : '1행 입력 시 나머지 자동완성 · "선택 완료"');
         html += '</div>';
-        html += '<datalist id="' + nameListId + '">' + abNames.map(function(n) { return '<option value="' + escapeHtml(n) + '">'; }).join('') + '</datalist>';
-        html += '<datalist id="' + revListId + '">' + revOpts + '</datalist>';
-        html += '<datalist id="' + rmkListId + '"><option value="."><option value="' + (_en ? 'Preliminary approval required' : '가승인원 검토 필요') + '"></datalist>';
+        html += '<datalist id="' + nameListId + '">' + abNames.map(function(n){ return '<option value="' + escapeHtml(n) + '">'; }).join('') + '</datalist>';
+        html += '<datalist id="' + revListId  + '">' + revOpts + '</datalist>';
+        html += '<datalist id="' + rmkListId  + '"><option value="."><option value="' + (_en ? 'Preliminary approval required' : '가승인원 검토 필요') + '"></datalist>';
 
-        // 품목별 카드
+        html += '<div style="overflow-x:auto;">';
+        html += '<table style="width:100%; border-collapse:collapse; table-layout:auto;">';
+        html += '<colgroup><col style="width:78px"><col style="width:90px"><col style="width:90px"><col style="width:54px"><col style="width:90px"><col style="width:62px"><col style="width:62px"><col style="width:90px"></colgroup>';
+        html += '<thead><tr>';
+        var headers = [
+            (_en ? '📦 Material' : '📦 자재번호'),
+            (_en ? '🧑 Checked by' : '🧑 담당자'),
+            (_en ? '👔 Approved by' : '👔 팀장'),
+            'Rev', 'Remark',
+            (_en ? '📄 Format' : '📄 출력'),
+            (_en ? '📋 Type' : '📋 가승인'),
+            (_en ? '🏭 Provider' : '🏭 협력사명')
+        ];
+        for (var hi = 0; hi < headers.length; hi++) {
+            html += '<th style="' + thSt + '">' + headers[hi] + '</th>';
+        }
+        html += '</tr></thead><tbody>';
+
         for (var mi = 0; mi < materials.length; mi++) {
             var code = materials[mi];
-            html += '<div style="background:#fff; border:1px solid #dce3ea; border-radius:6px; padding:10px; margin-bottom:10px;">';
-            html += '<div style="font-size:11px; font-weight:bold; color:#1c7ed6; margin-bottom:8px;">📦 ' + escapeHtml(code) + '</div>';
-            html += '<div style="' + grid2 + '">';
-            html += '<div><label style="' + labelSt + '">' + (_en ? '🧑 Checked by' : '🧑 담당자') + '</label>';
-            html += '<input id="apfall-writer-' + id + '-' + escapeHtml(code) + '" type="text" list="' + nameListId + '" placeholder="' + (_en ? 'type or select' : '입력 또는 선택') + '" value="" style="' + inpSt + '" /></div>';
-            html += '<div><label style="' + labelSt + '">' + (_en ? '👔 Approved by' : '👔 팀장') + '</label>';
-            html += '<input id="apfall-leader-' + id + '-' + escapeHtml(code) + '" type="text" list="' + nameListId + '" placeholder="' + (_en ? 'type or select' : '입력 또는 선택') + '" value="" style="' + inpSt + '" /></div>';
-            html += '</div>';
-            html += '<div style="' + grid2 + '">';
-            html += '<div><label style="' + labelSt + '">🔢 Revision</label>';
-            html += '<input id="apfall-rev-' + id + '-' + escapeHtml(code) + '" type="text" list="' + revListId + '" value="00" style="' + inpSt + '" /></div>';
-            html += '<div><label style="' + labelSt + '">📝 Remark</label>';
-            html += '<input id="apfall-rmk-' + id + '-' + escapeHtml(code) + '" type="text" list="' + rmkListId + '" placeholder="' + (_en ? '(optional)' : '생략 가능') + '" value="" style="' + inpSt + '" /></div>';
-            html += '</div>';
-            html += '</div>';
+            var isFirst = (mi === 0);
+            var afAttr = isFirst ? ' oninput="window._ganttQaApprovalAutoFill(\'' + id + '\',\'' + escapeHtml(code) + '\')" onchange="window._ganttQaApprovalAutoFill(\'' + id + '\',\'' + escapeHtml(code) + '\')"' : '';
+            html += '<tr style="background:' + (mi % 2 === 0 ? '#fff' : '#f9fafb') + ';">';
+            html += '<td style="' + tdSt + 'font-weight:bold; color:#1c7ed6; font-size:12px; text-align:center;">' + escapeHtml(code) + '</td>';
+            html += '<td style="' + tdSt + '"><input id="apfall-writer-' + id + '-' + escapeHtml(code) + '" type="text" list="' + nameListId + '" placeholder="' + (_en ? 'name' : '이름') + '" value="" style="' + inpSt + '"' + afAttr + ' /></td>';
+            html += '<td style="' + tdSt + '"><input id="apfall-leader-' + id + '-' + escapeHtml(code) + '" type="text" list="' + nameListId + '" placeholder="' + (_en ? 'name' : '이름') + '" value="" style="' + inpSt + '"' + afAttr + ' /></td>';
+            html += '<td style="' + tdSt + '"><input id="apfall-rev-' + id + '-' + escapeHtml(code) + '" type="text" list="' + revListId + '" value="00" style="' + inpSt + '"' + afAttr + ' /></td>';
+            html += '<td style="' + tdSt + '"><input id="apfall-rmk-' + id + '-' + escapeHtml(code) + '" type="text" list="' + rmkListId + '" placeholder="' + (_en ? '(opt)' : '생략가능') + '" value="" style="' + inpSt + '"' + afAttr + ' /></td>';
+            html += '<td style="' + tdSt + '"><select id="apfall-fmt-' + id + '-' + escapeHtml(code) + '" style="' + selSt + '"' + afAttr + '>';
+            html += '<option value="docx">' + (_en ? 'Word' : '워드') + '</option>';
+            html += '<option value="xlsx">' + (_en ? 'Excel' : '엑셀') + '</option>';
+            html += '<option value="both">' + (_en ? 'Both' : '둘다') + '</option>';
+            html += '</select></td>';
+            html += '<td style="' + tdSt + '"><select id="apfall-ispre-' + id + '-' + escapeHtml(code) + '" style="' + selSt + '"' + afAttr + '>';
+            html += '<option value="formal">' + (_en ? 'Formal' : '정식') + '</option>';
+            html += '<option value="provisional">' + (_en ? 'Pre' : '가승인') + '</option>';
+            html += '</select></td>';
+            html += '<td style="' + tdSt + '"><input id="apfall-vendor-' + id + '-' + escapeHtml(code) + '" type="text" placeholder="' + (_en ? '(opt)' : '(선택)') + '" value="" style="' + inpSt + '"' + afAttr + ' /></td>';
+            html += '</tr>';
         }
 
-        // 공통 출력형식 / 가승인원여부
-        var fmtVal = form.format || 'docx';
-        var isPreVal = form.isPre;
-        html += '<div style="' + grid2 + '">';
-        html += '<div><label style="' + labelSt + '">' + (_en ? '📄 Output format' : '📄 출력 형식') + '</label>';
-        html += '<select id="apfall-fmt-' + id + '" style="' + selSt + '">';
-        html += '<option value="docx"' + (fmtVal === 'docx' || fmtVal === '워드' ? ' selected' : '') + '>' + (_en ? 'Word (.docx)' : '워드') + '</option>';
-        html += '<option value="xlsx"' + (fmtVal === 'xlsx' || fmtVal === '엑셀' ? ' selected' : '') + '>' + (_en ? 'Excel (.xlsx)' : '엑셀') + '</option>';
-        html += '<option value="both"' + (fmtVal === 'both' || fmtVal === '둘 다' ? ' selected' : '') + '>' + (_en ? 'Both' : '둘 다') + '</option>';
-        html += '</select></div>';
-        html += '<div><label style="' + labelSt + '">' + (_en ? '📋 Approval type' : '📋 가승인원 여부') + '</label>';
-        html += '<select id="apfall-ispre-' + id + '" style="' + selSt + '">';
-        html += '<option value="formal"' + (isPreVal === false ? ' selected' : '') + '>' + (_en ? 'Formal approval' : '정식승인원') + '</option>';
-        html += '<option value="provisional"' + (isPreVal === true ? ' selected' : '') + '>' + (_en ? 'Provisional approval' : '가승인원') + '</option>';
-        html += '</select></div>';
-        html += '</div>';
-
-        html += '<div style="text-align:right; margin-top:4px;">';
+        html += '</tbody></table></div>';
+        html += '<div style="text-align:right; margin-top:8px;">';
         html += '<button onclick="window._ganttQaSubmitApprovalAllFieldsForm(\'' + id + '\')" style="font-size:13px; padding:7px 22px; background:#1971c2; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">&#10003; ' + (_en ? 'Confirm' : '선택 완료') + '</button>';
         html += '</div></div>';
         return html;
@@ -986,16 +1006,12 @@
         window._ganttQaLastInterruptedApproval = null;
         var perMaterial = {};
         for (var ci = 0; ci < saved.materials.length; ci++) {
-            perMaterial[saved.materials[ci]] = { writer: '', leader: '', rev: '00', remark: '' };
+            perMaterial[saved.materials[ci]] = { writer: '', leader: '', rev: '00', remark: '', format: 'docx', isPre: false, vendor: '' };
         }
         var restoreFormId = 'apfall-' + Date.now();
         window._ganttQaApprovalAllFieldsForm = {
-            id: restoreFormId,
-            materials: saved.materials,
-            perMaterial: perMaterial,
-            format: saved.format || 'docx',
-            isPre: saved.isPre,
-            fetched: saved.fetched || null
+            id: restoreFormId, materials: saved.materials,
+            perMaterial: perMaterial, fetched: saved.fetched || null
         };
         window._ganttQaHistory.push({ role: 'ai', approvalAllFieldsFormId: restoreFormId,
             text: window._t('📋 이전 작업이 복원되었습니다. 아래에서 계속해주세요.', '📋 Previous task restored. Please continue below.') });
@@ -1014,10 +1030,11 @@
         var perMaterial = {};
         for (var vi = 0; vi < materials.length; vi++) {
             var vcode = materials[vi];
-            var wEl = document.getElementById('apfall-writer-' + formId + '-' + vcode);
-            var lEl = document.getElementById('apfall-leader-' + formId + '-' + vcode);
-            var rEl = document.getElementById('apfall-rev-'    + formId + '-' + vcode);
-            var mEl = document.getElementById('apfall-rmk-'    + formId + '-' + vcode);
+            function _gid(field, c) { return document.getElementById('apfall-' + field + '-' + formId + '-' + c); }
+            var wEl = _gid('writer', vcode), lEl = _gid('leader', vcode);
+            var rEl = _gid('rev', vcode),    mEl = _gid('rmk', vcode);
+            var fEl = _gid('fmt', vcode),    iEl = _gid('ispre', vcode);
+            var vEl = _gid('vendor', vcode);
             var vw = wEl ? wEl.value.trim() : '';
             var vl = lEl ? lEl.value.trim() : '';
             if (!vw) { if (window.showToast) window.showToast(vcode + (_en ? ': Please enter Checked by.' : ': 담당자를 입력해주세요.')); return; }
@@ -1025,29 +1042,26 @@
             perMaterial[vcode] = {
                 writer: vw, leader: vl,
                 rev:    (rEl ? rEl.value.trim() : '') || '00',
-                remark: mEl ? mEl.value.trim() : ''
+                remark: mEl ? mEl.value.trim() : '',
+                format: fEl ? fEl.value : 'docx',
+                isPre:  iEl ? (iEl.value === 'provisional') : false,
+                vendor: vEl ? vEl.value.trim() : ''
             };
         }
-        var fmtEl    = document.getElementById('apfall-fmt-'   + formId);
-        var isPreEl  = document.getElementById('apfall-ispre-' + formId);
-        var fmtSel   = fmtEl   ? fmtEl.value   : 'docx';
-        var isPreSel = isPreEl  ? isPreEl.value  : 'formal';
-        var isPre = (isPreSel === 'provisional');
 
-        // 폼 닫기 — 인터럽트 가드가 보이도록 먼저 null
+        // 폼 닫기
         window._ganttQaApprovalAllFieldsForm = null;
         window._ganttQaApprovalDraft = null;
 
-        // 사용자 메시지로 요약 표시
+        // 사용자 메시지 요약
         var summaryParts = materials.map(function(c) {
             var pm = perMaterial[c];
-            return c + '(' + (_en ? 'by:' : '담당자:') + pm.writer + '/' + (_en ? 'apv:' : '팀장:') + pm.leader + ' Rev' + pm.rev + ')';
+            var extra = pm.vendor ? ' / ' + pm.vendor : '';
+            return c + '(담당:' + pm.writer + ' 팀장:' + pm.leader + ' Rev' + pm.rev + extra + ')';
         });
-        var summaryText = summaryParts.join(' | ') + '  ' + (fmtSel === 'xlsx' ? '엑셀' : fmtSel === 'both' ? '둘 다' : '워드') + '  ' + (isPre ? '가승인원' : '정식승인원');
-        window._ganttQaHistory.push({ role: 'user', text: summaryText });
+        window._ganttQaHistory.push({ role: 'user', text: summaryParts.join(' | ') });
         window._renderGanttQaMessages();
 
-        // 조회 + 생성 — 인터럽트 토큰으로 중단 감지
         var myToken = ++window._ganttQaOpToken;
         window._ganttQaOperationInFlight = true;
         window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + (_en ? 'Looking up material info in SAP...' : 'SAP에서 자재정보를 조회하는 중...'), pending: true });
@@ -1064,7 +1078,7 @@
                 );
                 fetched = await fres.json();
             }
-            if (window._ganttQaOpToken !== myToken) { window._ganttQaHistory.pop(); window._renderGanttQaMessages(); return; }
+            if (window._ganttQaOpToken !== myToken) { window._ganttQaHistory.pop(); window._ganttQaOperationInFlight = false; window._renderGanttQaMessages(); return; }
             if (!fetched.ok) {
                 finalReply = '⚠️ ' + (_en ? 'SAP lookup failed: ' : 'SAP 조회 실패: ') + (fetched.error || (_en ? 'unknown error' : '알 수 없는 오류'));
             } else {
@@ -1078,14 +1092,11 @@
                     fetch('http://127.0.0.1:5000/sap-approval-generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            results: fetched.results, format: fmtSel,
-                            is_pre: isPre, per_material: perMaterial
-                        })
+                        body: JSON.stringify({ results: fetched.results, per_material: perMaterial })
                     }),
                     60000, _en ? 'Generation timed out' : '승인원 표지 생성 시간 초과'
                 );
-                if (window._ganttQaOpToken !== myToken) { window._ganttQaHistory.pop(); window._renderGanttQaMessages(); return; }
+                if (window._ganttQaOpToken !== myToken) { window._ganttQaHistory.pop(); window._ganttQaOperationInFlight = false; window._renderGanttQaMessages(); return; }
                 var gdata = await gres.json();
                 if (gdata.ok) {
                     finalReply = '📄 ' + (gdata.message || (_en ? 'Approval cover generated.' : '승인원 표지가 생성되었습니다.'));
@@ -1101,7 +1112,7 @@
             finalReply = '⚠️ ' + (_en ? 'Error: ' : '승인원 표지 생성 중 오류: ') + (e && e.message ? e.message : String(e));
         }
         window._ganttQaOperationInFlight = false;
-        window._ganttQaHistory.pop(); // pending 제거
+        window._ganttQaHistory.pop();
         window._ganttQaHistory.push({ role: 'ai', text: finalReply });
         window._renderGanttQaMessages();
         var inputEl = document.getElementById('gantt-qa-input');
@@ -3896,19 +3907,17 @@ ${docsJson}`;
             if (approvalDraft.isPre === undefined) missing.push('isPre');
 
             if (missing.length) {
-                // 🔄 [2026-09-29 개선 v2] 품목별 카드 폼으로 수집. 제출 시 직접 API 호출.
+                // 🔄 [2026-09-29 개선 v3] 품목별 행 테이블 폼으로 수집. 제출 시 직접 API 호출.
                 const matLabel = approvalDraft.materials.join(', ');
                 const allFieldsFormId = 'apfall-' + Date.now();
                 const perMaterialInit = {};
                 (approvalDraft.materials || []).forEach(function(c) {
-                    perMaterialInit[c] = { writer: '', leader: '', rev: '00', remark: '' };
+                    perMaterialInit[c] = { writer: '', leader: '', rev: '00', remark: '', format: 'docx', isPre: false, vendor: '' };
                 });
                 window._ganttQaApprovalAllFieldsForm = {
                     id: allFieldsFormId,
                     materials: approvalDraft.materials || [],
                     perMaterial: perMaterialInit,
-                    format: approvalDraft.format || 'docx',
-                    isPre: approvalDraft.isPre,
                     fetched: null
                 };
                 const reply = window._t(
