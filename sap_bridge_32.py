@@ -156,7 +156,16 @@ def _sap_dump_grid(shell):
     total_rows = shell.RowCount
     row_count = min(total_rows, 500)
     lines = ['\t'.join(titles)]
+    # SAP ALV는 화면에 보이는 행만 렌더링 → 스크롤 밖 행은 GetCellValue가 '' 반환
+    # firstVisibleRow를 30행마다 강제 이동해 전 구간을 렌더링시킨다 (2026-09-29 수정)
+    _SCROLL_STEP = 30
     for r in range(row_count):
+        if r % _SCROLL_STEP == 0:
+            try:
+                shell.firstVisibleRow = r
+                time.sleep(0.08)
+            except Exception:
+                pass
         cells = []
         for cid in col_ids:
             try:
