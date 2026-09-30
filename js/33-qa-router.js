@@ -182,7 +182,7 @@
                 lab = document.createElement('label'); lab.id = 'gantt-qa-route-label'; lab.htmlFor = 'gantt-qa-route-select';
                 lab.style.cssText = 'font-size:10.5px; color:#888; white-space:nowrap;' + (col ? '' : ' margin-left:6px;');
                 sel = document.createElement('select'); sel.id = 'gantt-qa-route-select';
-                sel.style.cssText = 'flex:1; width:100%; min-width:0; box-sizing:border-box; font-size:12.5px; font-weight:bold; padding:2px 4px; border:1px solid #ccc; border-radius:6px;' + (col ? ' text-align:center; text-align-last:center;' : ' max-width:120px;');
+                sel.style.cssText = 'display:block; width:100%; height:100%; min-width:0; box-sizing:border-box; font-size:12.5px; font-weight:bold; padding:2px 4px; border:1px solid #ccc; border-radius:6px;' + (col ? ' text-align:center; text-align-last:center;' : ' max-width:120px;');
                 sel.onchange = function () { window._qaSetForce(sel.value); };
                 if (col) { lab = null; row.appendChild(sel); } else { row.appendChild(lab); row.appendChild(sel); }   // 3칸 줄에서는 라벨 없이 선택 상자만
             }
