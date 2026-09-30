@@ -6906,6 +6906,10 @@ ${docsJson}`;
         // 문서 타입 코드(P01/P1 등)가 이미 명시돼 있으면 이 함수의 대상이 아님(open 쪽에서 처리).
         // (별칭 "승인원"만 있고 "목록"을 달라는 경우는 여기서 처리 — 코드(P01 등)가 명시된 경우만 open 쪽으로)
         if (/\b[A-Za-z][0-9]{1,2}\b/.test(text)) return null;
+        // 💡 [2026-09-30 버그수정] "저장해줘"/"열어줘"처럼 의도가 명확하면 문서 종류 드롭다운을
+        //    먼저 물어봐야 하는데, 이 함수가 먼저 잡아서 목록만 보여주는 문제 수정.
+        //    저장/열기/다운로드 동사가 있으면 docNoType 핸들러(드롭다운)에 위임.
+        if (/(열어|열기|다운로드|저장|받아|open|download)/i.test(text)) return null;
         var matM = text.match(/\b(\d{5,8})\b/);
         if (!matM) return null;
         return matM[1];
@@ -7002,8 +7006,14 @@ ${docsJson}`;
     window._ganttQaExtractSapDocNoTypeRequest = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
-        // 이미 문서 키워드(문서/파일/승인원) 또는 코드(P01 등)가 있으면 기존 핸들러가 처리
-        if (window._sapMentionsDoc(text)) return null;
+        // 이미 문서 키워드(문서/파일/승인원) 또는 코드(P01 등)가 있으면 기존 핸들러가 처리 — 단,
+        // 💡 [2026-09-30] "문서" 언급 있어도 타입코드 없는 저장/열기 의도는 드롭다운을 보여야 함.
+        //    _ganttQaExtractSapListDocsRequest의 fix(저장/열기 동사 있으면 null 반환)로
+        //    이 함수까지 내려오게 됐으니, 여기서는 타입코드가 이미 있는 경우만 걸러낸다.
+        if (window._sapMentionsDoc(text)) {
+            if (/\b[A-Za-z][0-9]{1,2}\b/.test(text)) return null; // 타입코드 있으면 openDocRequest가 처리했어야 함
+            if (!/(열어|열기|다운로드|저장|받아|open|download)/i.test(text)) return null; // 동사 없으면 기존 경로
+        }
         // 명확한 다운로드/저장/열기 동사 필요 (엑셀 내보내기와 구분: "엑셀" 없어야 함)
         if (!/(열어|열기|다운로드|저장|받아|open|download)/i.test(text)) return null;
         // BOM/엑셀/품목내역/패턴(*)류 요청 제외

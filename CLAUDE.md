@@ -77,6 +77,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
   콘솔에 `for (const s of [...document.querySelectorAll('script[src^="js/"]')].map(e=>e.getAttribute('src'))) { try { new Function(await (await fetch(s)).text()); } catch(e) { console.error(s, e.message); } }`
   (실행하지 않고 파싱만 한다). js를 고친 뒤엔 이걸로든 콘솔 SyntaxError로든 **반드시 확인할 것** —
   리터럴 안에 줄바꿈이 들어가면 파일 하나가 통째로 죽어 그 기능 전체가 조용히 사라진다(실제 사고: 2026-09-23 `js/15b`).
+  **⚠️ 폰트/아이콘이 깨지면 JS 문법 오류부터 의심할 것(2026-09-30 반복 사고)** — `@tabler/icons-webfont` 아이콘이 □로 깨지거나 UI 전체가 이상해지면 대부분 어떤 `js/*.js` 파일에 SyntaxError가 발생해 후속 스크립트 실행이 중단된 것이다. 위 콘솔 파싱 명령으로 먼저 확인. 특히 `modal.innerHTML = \`...\`` 같은 거대 템플릿 리터럴 안에 줄바꿈이 끼거나 백틱(`` ` ``)이 들어가면 그 파일 전체가 조용히 죽는다 — 수정 후엔 반드시 파싱 검증.
 
 ## 파일 맵 (로딩 순서대로)
 
