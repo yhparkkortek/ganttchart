@@ -1612,8 +1612,18 @@ ${question}
             else if (m.role === 'ai' && !m.pending) { m._aIdx = ++_aSeq; }
             else { m._aIdx = undefined; }
         });
+        // Q/A 번호 클릭 시 해당 메시지 내용을 입력창으로 복사하는 내용 맵
+        window._ganttQaMsgContentMap = {};
+        window._ganttQaCopyMsgToInput = function(key) {
+            var content = window._ganttQaMsgContentMap && window._ganttQaMsgContentMap[key];
+            if (!content) return;
+            var el = document.getElementById('gantt-qa-input');
+            if (el) { el.value = content; el.focus(); }
+        };
         box.innerHTML = window._ganttQaHistory.map(function(m) {
             const isUser = m.role === 'user';
+            if (isUser && m._qIdx) window._ganttQaMsgContentMap['Q' + m._qIdx] = m.text;
+            else if (!isUser && m._aIdx) window._ganttQaMsgContentMap['A' + m._aIdx] = m.text;
             // 💡 [2026-08-29 버그 수정] 원색 파랑(#0056b3) 배경 + 흰 글자 조합이었는데, 대부분의 브라우저
             //    기본 텍스트 선택(드래그) 하이라이트도 비슷한 파란 계열이라 이미 파란 배경 위에서는
             //    "지금 어디까지 선택됐는지"가 거의 안 보였다 — 그래서 복사하려고 드래그해도 선택 범위를
@@ -1629,8 +1639,8 @@ ${question}
                 : (function() {
                     let _bHtml = window._mdToHtml(m.text);
                     // 💡 [2026-09-30] "명령예시" 클릭 → 입력창 자동채움 + 즉시 전송
-                    //    한국어가 포함된 "..." 따옴표 문자열만 대상 (HTML 속성값 오탐 방지)
-                    _bHtml = _bHtml.replace(/"([^"<>]*[가-힣][^"<>]*)"/g, function(_m, cmd) {
+                    //    한국어가 포함된 "..." 따옴표 문자열만 대상. (?<!=) lookbehind로 attr="값" 형태 제외
+                    _bHtml = _bHtml.replace(/(?<!=)"([^"<>]*[가-힣][^"<>]*)"/g, function(_m, cmd) {
                         const esc = cmd.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                         return '<span onclick="(function(){var el=document.getElementById(\'gantt-qa-input\');if(!el)return;el.value=\'' + esc + '\';var btn=document.getElementById(\'gantt-qa-send-btn\');if(btn)btn.click();})()" '
                             + 'style="color:#0057ad;background:#dceeff;border-bottom:1px dashed #4a90d9;border-radius:3px;padding:1px 3px;cursor:pointer;white-space:nowrap;" '
@@ -1755,8 +1765,8 @@ ${question}
                 })()
                 : '';
             const _seqLabel = isUser
-                ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;padding-right:2px;cursor:pointer;" title="클릭: Q' + m._qIdx + ' 참조" onclick="var el=document.getElementById(\'gantt-qa-input\');if(el){el.value=\'Q' + m._qIdx + ' \';el.focus();}">Q' + m._qIdx + '</div>' : '')
-                : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;padding-left:2px;cursor:pointer;" title="클릭: A' + m._aIdx + ' 참조" onclick="var el=document.getElementById(\'gantt-qa-input\');if(el){el.value=\'A' + m._aIdx + ' \';el.focus();}">A' + m._aIdx + '</div>' : '');
+                ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;padding-right:2px;cursor:pointer;" title="클릭: 이 질문을 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'Q' + m._qIdx + '\')">Q' + m._qIdx + '</div>' : '')
+                : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;padding-left:2px;cursor:pointer;" title="클릭: 이 답변을 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'A' + m._aIdx + '\')">A' + m._aIdx + '</div>' : '');
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 ${_seqLabel}
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; ${_bd} background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
