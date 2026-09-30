@@ -34,7 +34,7 @@
 # ══════════════════════════════════════════════════════════════
 
 import sys
-import os, json, re, poplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess
+import os, json, re, poplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess, shutil
 
 # 💡 [2026-09-14] sap_bridge_32.py에서 겪은 것과 같은 부류의 문제(콘솔이 실제 콘솔이 아니라
 #    파이프/다른 인코딩으로 연결되면 Windows에서 stdout이 cp949로 잡혀 한글 print()가
@@ -2801,6 +2801,283 @@ def po_goods_receipt():
     args = ['post_goods_receipt', ebeln, '--dump-only'] if dump_only else ['post_goods_receipt', ebeln]
     data_out, status = _run_sap_bridge(args, 60, 'SAP 자재 입고 처리')
     return jsonify(data_out), status
+
+
+# ══ mcp-sap-gui 연동: AI 문답 미지원 SAP 요청 동적 탐색 (2026-09-30) ════════════════════════
+# 기존 sap_bridge_32.py 하드코딩 커버리지 밖의 요청을 받으면, mcp-sap-gui(MCP over stdio)를
+# 통해 Gemini가 SAP 화면을 직접 읽고 조작해 답변하는 "폴백 경로".
+# js/33-qa-router.js 의 runUnsupported() → POST /ai-sap-chat 호출.
+
+class _McpSapGuiClient:
+    """Gemini 함수 호출 루프에서 mcp-sap-gui를 호출하는 최소 MCP stdio 클라이언트."""
+
+    def __init__(self):
+        self._proc   = None
+        self._req_id = 0
+        self._pending = {}          # id → (threading.Event, list)
+        self._lock   = threading.Lock()
+
+    def _find_uvx(self):
+        u = shutil.which('uvx')
+        if u:
+            return u
+        common = os.path.expandvars(
+            r'%LOCALAPPDATA%\Microsoft\WinGet\Packages'
+            r'\astral-sh.uv_Microsoft.Winget.Source_8wekyb3d8bbwe\uvx.exe'
+        )
+        if os.path.exists(common):
+            return common
+        raise RuntimeError('uvx를 찾을 수 없습니다. winget install astral-sh.uv 로 설치하세요.')
+
+    def _next_id(self):
+        with self._lock:
+            self._req_id += 1
+            return self._req_id
+
+    def _send(self, obj):
+        line = json.dumps(obj, ensure_ascii=False) + '\n'
+        self._proc.stdin.write(line)
+        self._proc.stdin.flush()
+
+    def _reader_loop(self):
+        while True:
+            try:
+                proc = self._proc
+                if proc is None or proc.poll() is not None:
+                    break
+                line = proc.stdout.readline()
+            except Exception:
+                break
+            if not line:
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except Exception:
+                continue
+            msg_id = data.get('id')
+            if msg_id is None:
+                continue
+            with self._lock:
+                entry = self._pending.get(msg_id)
+            if entry:
+                evt, container = entry
+                container.append(data)
+                evt.set()
+
+    def _request(self, method, params=None, timeout=30):
+        req_id = self._next_id()
+        evt = threading.Event()
+        container = []
+        with self._lock:
+            self._pending[req_id] = (evt, container)
+        try:
+            self._send({'jsonrpc': '2.0', 'method': method,
+                        'params': params or {}, 'id': req_id})
+            if not evt.wait(timeout):
+                raise TimeoutError(f'mcp-sap-gui 응답 타임아웃 ({method}, {timeout}s)')
+            resp = container[0]
+            if 'error' in resp:
+                e = resp['error']
+                msg = e.get('message', str(e)) if isinstance(e, dict) else str(e)
+                raise RuntimeError(msg)
+            return resp.get('result', {})
+        finally:
+            with self._lock:
+                self._pending.pop(req_id, None)
+
+    def start(self):
+        with self._lock:
+            if self._proc and self._proc.poll() is None:
+                return
+        uvx = self._find_uvx()
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+        proc = subprocess.Popen(
+            [uvx, 'mcp-sap-gui[screenshots]'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, bufsize=1, encoding='utf-8', env=env
+        )
+        with self._lock:
+            self._proc = proc
+            self._req_id = 0
+            self._pending = {}
+        t = threading.Thread(target=self._reader_loop, daemon=True)
+        t.start()
+        # MCP 초기화 핸드셰이크
+        self._request('initialize', {
+            'protocolVersion': '2024-11-05',
+            'capabilities': {},
+            'clientInfo': {'name': 'kortek_backend', 'version': '1.0'}
+        }, timeout=20)
+        self._send({'jsonrpc': '2.0', 'method': 'notifications/initialized', 'params': {}})
+        print('[mcp-sap-gui] 시작 및 MCP 초기화 완료')
+
+    def list_tools(self):
+        result = self._request('tools/list', {}, timeout=10)
+        return result.get('tools', [])
+
+    def call_tool(self, name, arguments, timeout=30):
+        result = self._request('tools/call', {'name': name, 'arguments': arguments}, timeout=timeout)
+        content = result.get('content', [])
+        texts = [c.get('text', '') for c in content if c.get('type') == 'text']
+        return {
+            'isError': result.get('isError', False),
+            'text': '\n'.join(filter(None, texts)),
+        }
+
+    def stop(self):
+        with self._lock:
+            proc = self._proc
+            self._proc = None
+        if proc:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        print('[mcp-sap-gui] 종료')
+
+    @property
+    def running(self):
+        with self._lock:
+            return self._proc is not None and self._proc.poll() is None
+
+
+_mcp_sap_gui = _McpSapGuiClient()
+_mcp_sap_gui_op_lock = threading.Lock()  # 동시에 1개 AI-SAP 대화만(SAP 세션 1개)
+
+
+def _mcp_tools_to_gemini_decls(tools):
+    decls = []
+    for t in tools:
+        schema = t.get('inputSchema') or {}
+        decls.append({
+            'name': t['name'],
+            'description': (t.get('description') or '')[:400],
+            'parameters': schema
+        })
+    return decls
+
+
+def _call_gemini_with_tools(api_key, model, contents, tool_decls):
+    url = (f'https://generativelanguage.googleapis.com/v1beta/models/{model}'
+           f':generateContent?key={api_key}')
+    body = {'contents': contents}
+    if tool_decls:
+        body['tools'] = [{'function_declarations': tool_decls}]
+        body['tool_config'] = {'function_calling_config': {'mode': 'AUTO'}}
+    try:
+        resp = requests.post(url, json=body, timeout=60)
+    except requests.RequestException as e:
+        return {'error': f'네트워크 오류: {e}'}
+    if resp.status_code != 200:
+        return {'error': f'Gemini API 오류 {resp.status_code}: {resp.text[:300]}'}
+    data = resp.json()
+    candidates = data.get('candidates', [])
+    if not candidates:
+        return {'error': '응답 없음 (candidates 비어 있음)'}
+    parts = candidates[0].get('content', {}).get('parts', [])
+    fcs   = [p['functionCall'] for p in parts if 'functionCall' in p]
+    texts = [p['text'] for p in parts if 'text' in p]
+    return {'ok': True, 'text': '\n'.join(texts), 'functionCalls': fcs, 'rawParts': parts}
+
+
+@app.route('/sap-mcp-health', methods=['GET'])
+def sap_mcp_health():
+    """uvx / mcp-sap-gui 사용 가능 여부 빠른 확인."""
+    try:
+        uvx = _mcp_sap_gui._find_uvx()
+        return jsonify({'ok': True, 'uvx': uvx, 'running': _mcp_sap_gui.running})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/ai-sap-chat', methods=['POST'])
+def ai_sap_chat():
+    """Gemini + mcp-sap-gui 함수 호출 루프 — 미지원 SAP 요청 동적 처리.
+    Body: { apiKey, model, question, systemPrompt? }"""
+    body     = request.get_json(silent=True) or {}
+    api_key  = (body.get('apiKey') or '').strip()
+    model    = (body.get('model') or 'gemini-2.5-flash-lite').strip()
+    question = (body.get('question') or '').strip()
+    sys_hint = (body.get('systemPrompt') or '').strip()
+
+    if not api_key:
+        return jsonify({'ok': False, 'error': 'apiKey 필요'}), 400
+    if not question:
+        return jsonify({'ok': False, 'error': 'question 필요'}), 400
+
+    if not _mcp_sap_gui_op_lock.acquire(timeout=10):
+        return jsonify({'ok': False, 'error': 'SAP 탐색 중인 다른 요청이 있습니다. 잠시 후 다시 시도하세요.'}), 503
+
+    try:
+        try:
+            _mcp_sap_gui.start()
+        except Exception as e:
+            return jsonify({'ok': False, 'error': f'mcp-sap-gui 시작 실패: {e}'}), 500
+
+        try:
+            mcp_tools = _mcp_sap_gui.list_tools()
+        except Exception as e:
+            return jsonify({'ok': False, 'error': f'SAP 도구 목록 조회 실패: {e}'}), 500
+
+        gemini_fns = _mcp_tools_to_gemini_decls(mcp_tools)
+
+        sys_msg = ('당신은 SAP GUI 자동화 도우미입니다. '
+                   'SAP 세션은 이미 로그인된 상태입니다. '
+                   '도구를 사용해 화면을 읽고, 필요한 정보를 조회하세요. '
+                   '데이터를 저장·삭제·변경하는 작업은 사용자가 명시적으로 요청한 경우에만 하세요. '
+                   '답변은 한국어로 하세요.')
+        if sys_hint:
+            sys_msg += '\n\n추가 맥락: ' + sys_hint[:500]
+
+        contents = [
+            {'role': 'user',  'parts': [{'text': sys_msg}]},
+            {'role': 'model', 'parts': [{'text': '네, SAP 화면 도구를 사용해 도와드리겠습니다.'}]},
+            {'role': 'user',  'parts': [{'text': question}]},
+        ]
+
+        for turn in range(8):
+            gr = _call_gemini_with_tools(api_key, model, contents, gemini_fns)
+            if 'error' in gr:
+                return jsonify({'ok': False, 'error': f'AI 호출 오류: {gr["error"]}'}), 500
+
+            fcs    = gr.get('functionCalls', [])
+            text   = gr.get('text', '')
+            rparts = gr.get('rawParts', [])
+
+            if not fcs:
+                return jsonify({'ok': True, 'text': text, 'turns': turn + 1})
+
+            contents.append({'role': 'model', 'parts': rparts})
+
+            fn_results = []
+            for fc in fcs:
+                fname = fc.get('name', '')
+                fargs = fc.get('args', {})
+                print(f'[AI-SAP turn={turn+1}] 툴 호출: {fname}({list(fargs.keys())})')
+                try:
+                    result = _mcp_sap_gui.call_tool(fname, fargs, timeout=30)
+                except Exception as e:
+                    result = {'isError': True, 'text': str(e)}
+                fn_results.append({
+                    'functionResponse': {
+                        'name': fname,
+                        'response': {'result': result.get('text', ''), 'isError': result.get('isError', False)}
+                    }
+                })
+            contents.append({'role': 'user', 'parts': fn_results})
+
+        return jsonify({'ok': False, 'error': 'AI 대화 최대 횟수(8턴) 초과'}), 500
+
+    finally:
+        _mcp_sap_gui_op_lock.release()
 
 
 # ── 백엔드 자동 업데이트("SAP 조회 연동" 절 kortek_backend.zip 배포 방식의 대안, 2026-09-15) ─

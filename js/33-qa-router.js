@@ -281,9 +281,50 @@
         finish(input);
     }
 
-    // ── 지원하지 않는 SAP 요청: 가짜 답변 대신 안내 + 적립 ─────────────
-    function runUnsupported(question, input, route, cls) {
+    // ── 지원하지 않는 SAP 요청: mcp-sap-gui 동적 탐색 먼저 시도 → 실패 시 안내 + 적립 ──
+    async function runUnsupported(question, input, route, cls) {
         pushUser(question, input, route);
+
+        // mcp-sap-gui + Gemini 함수 호출 루프 시도 (Gemini 제공사일 때만)
+        var provider = window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini';
+        var apiKey   = window.getActiveAiKey   ? window.getActiveAiKey()   : null;
+        var model    = window.getActiveAiModel ? window.getActiveAiModel() : 'gemini-2.5-flash-lite';
+        if (provider === 'gemini' && apiKey) {
+            var LOADING_TEXT = '🔬 ' + T('AI가 SAP 화면을 직접 탐색 중입니다… (최대 1분 소요)', 'AI is exploring SAP screen directly… (up to 1 min)');
+            pushAi(LOADING_TEXT, question, route);
+            try {
+                var ctrl = new AbortController();
+                var _abt = setTimeout(function () { ctrl.abort(); }, 65000);
+                var resp = await fetch('http://127.0.0.1:5000/ai-sap-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: apiKey, model: model, question: question }),
+                    signal: ctrl.signal
+                });
+                clearTimeout(_abt);
+                var data = await resp.json();
+                if (data.ok && data.text) {
+                    // 로딩 메시지를 AI 답변으로 교체
+                    var h = window._ganttQaHistory || [];
+                    for (var _i = h.length - 1; _i >= 0; _i--) {
+                        if (h[_i].role === 'ai' && h[_i].text === LOADING_TEXT) {
+                            h.splice(_i, 1);
+                            break;
+                        }
+                    }
+                    pushAi('🔬 ' + T('AI SAP 직접 탐색 결과', 'AI SAP Exploration Result') + '\n\n' + data.text, question, route);
+                    finish(input);
+                    return;
+                }
+            } catch (_e) { /* 타임아웃·네트워크 오류 — 아래 "안내" 경로로 폴백 */ }
+            // 로딩 메시지 제거
+            var _h = window._ganttQaHistory || [];
+            for (var _j = _h.length - 1; _j >= 0; _j--) {
+                if (_h[_j].role === 'ai' && _h[_j].text === LOADING_TEXT) { _h.splice(_j, 1); break; }
+            }
+        }
+
+        // 폴백: 기존 "지원하지 않음" 안내 + 적립
         var en = window._currentLang === 'en';
         var caps = window._qaMatchCapabilities ? window._qaMatchCapabilities(question).slice(0, 2) : [];
         var msg = '🏭 ' + T('SAP 요청으로 이해했지만, 아직 이 유형은 직접 조회하지 못합니다. (SAP에 없는 정보를 지어내지 않기 위해 프로젝트 데이터로 추측해 답하지 않았습니다.)',
