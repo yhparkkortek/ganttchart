@@ -2199,11 +2199,11 @@ def sap_save_export():
     except Exception as e:
         return jsonify({'ok': False, 'error': f'파일 저장 중 오류가 발생했습니다: {e}'}), 500
     try:
-        os.startfile(_SAP_EXPORT_OUT_DIR)
+        os.startfile(out_path)
     except Exception:
         pass
     return jsonify({'ok': True, 'path': out_path, 'folder': _SAP_EXPORT_OUT_DIR,
-                    'message': f'"{safe_name}" 파일을 {_SAP_EXPORT_OUT_DIR} 폴더에 저장했습니다. 탐색기로 그 폴더를 열었습니다.'})
+                    'message': f'"{safe_name}" 파일을 {_SAP_EXPORT_OUT_DIR} 폴더에 저장했습니다. 엑셀로 열었습니다.'})
 
 
 @app.route('/sap-where-used', methods=['GET'])
