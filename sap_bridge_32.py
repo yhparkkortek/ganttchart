@@ -3397,22 +3397,27 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
                     raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e2}')
 
     # 품목별 단가(NETPR)/EPEIN — PDF에서 추출한 값을 행 순서대로 입력.
+    # [2026-09-30 버그수정] 소수점 단가(예: 321.94)를 NETPR에 그대로 쓰면 SAP KRW 필드가
+    #   반올림(322)하여 금액 불일치 발생. 소수점 자릿수만큼 EPEIN(가격단위)을 올려서 보완:
+    #   321.94 → NETPR=32194, EPEIN=100 → 2,000개 × 32194 ÷ 100 = 643,880원 ≈ 명세서 643,882원 ✓
     for idx, item in enumerate(items):
         price = item.get('unitPrice')
         if price is None:
             continue
         try:
-            grid.modifyCell(idx, 'NETPR', str(price))
+            price = float(price)
+            # 소수점 자릿수 → EPEIN 결정
+            _ps = ('{:.10f}'.format(price)).rstrip('0')
+            _dec_len = len(_ps.split('.')[1]) if '.' in _ps else 0
+            _epein = (10 ** _dec_len) if _dec_len > 0 else 1
+            _netpr = int(round(price * _epein))
+            grid.modifyCell(idx, 'NETPR', str(_netpr))
             if currency and currency != 'KRW':
                 grid.modifyCell(idx, 'WAERS', currency)
             grid.currentCellRow = idx
             grid.currentCellColumn = 'EPEIN'
             grid.triggerModified()
-            grid.modifyCell(idx, 'EPEIN', '1')
-            # ⚠️ EPEIN을 매크로 그대로 "1" 고정값으로 재현 — 정확한 의미(수량이 아니라
-            # 납기일수 등 다른 필드일 가능성이 있음, 요청수량은 이미 엑셀의 "요청수량"
-            # 컬럼으로 들어가 있어 중복일 수 있음) 미확인. 실사용에서 이상하면 이 값부터
-            # 의심할 것.
+            grid.modifyCell(idx, 'EPEIN', str(_epein))
         except Exception as e:
             raise RuntimeError(f'{idx + 1}번째 품목의 단가 입력 중 오류가 발생했습니다: {e}')
 

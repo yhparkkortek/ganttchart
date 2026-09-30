@@ -1480,9 +1480,10 @@
    한다는 걸로 검산해서 맞는 값을 고르세요(수량이 1이면 단가와 공급가액이 같으므로 문제
    없음).
    ⚠️ 단가 칸이 비어 있거나 0인데 공급가액과 수량이 있으면:
-   - unitPrice = round(공급가액 / 수량) 으로 직접 계산해서 넣으세요.
+   - unitPrice = 공급가액 ÷ 수량 으로 직접 계산해서 넣으세요(소수점 둘째 자리까지 그대로 — 반올림하지 마세요. 예: 643882÷2000=321.941 → 321.94).
    - 수량을 임의로 1로 바꾸면 절대 안 됩니다(qty는 문서에 있는 실제 수량 그대로).
    - 공급가액을 그대로 unitPrice에 넣으면 절대 안 됩니다(수량이 1보다 크면 단가가 아님).
+   - 소수점을 정수로 반올림하면 SAP 금액 불일치가 생겨 처리가 안 됩니다(반드시 소수점 유지).
 3. tempCode는 품목명에 임시코드 표의 분류를 짐작할 수 있는 명확한 단서(예: "Panel"/
    "LCM"/"PCB"/"TSP"/"Glass"/"Frame"/"포장" 등)가 있을 때만 채우세요. 품번(part number)만
    있거나 "CABLE ASSY" 같은 일반 부품명이라 표의 13개 분류 중 어디에 해당하는지 확신할
@@ -1608,15 +1609,17 @@ ${_sourceSection}`;
             var qty = Number(item.qty) || 0;
             var up = Number(item.unitPrice) || 0;
             if (sa <= 0 || qty <= 0) return; // 검산 불가
-            var computed = Math.round(up * qty);
+            // [2026-09-30 버그수정] 소수점 단가(예: 321.94)를 반올림하면 SAP 금액 불일치 →
+            //   computed는 소수점 그대로 비교, 허용오차는 환율 반올림 등 ₩2~₩5 허용(기존 1%)
+            var computed = Math.round(up * qty * 100) / 100; // 소수점 2자리 유지
             var diff = Math.abs(computed - sa);
-            var tolerance = Math.max(1, Math.round(sa * 0.01)); // 1% 허용 오차
+            var tolerance = Math.max(5, Math.round(sa * 0.001)); // 0.1% 또는 최소 ₩5 (환율 반올림 허용)
             if (diff > tolerance) {
-                // unitPrice×qty ≠ supplyAmount → 단가 역산으로 보정
-                var corrected = Math.round(sa / qty);
+                // unitPrice×qty ≠ supplyAmount → 단가 역산으로 보정(소수점 2자리 유지)
+                var corrected = Math.round((sa / qty) * 100) / 100;
                 _unitPriceFixNotes.push(window._t(
-                    '⚠️ [단가 자동 보정] "' + item.desc.substring(0, 20) + '": AI 추출 단가(' + up.toLocaleString() + ') × 수량(' + qty + ') ≠ 공급가액(' + sa.toLocaleString() + ') → 단가를 ' + corrected.toLocaleString() + '으로 자동 정정했습니다.',
-                    '⚠️ [Auto unit-price fix] "' + item.desc.substring(0, 20) + '": AI unit price(' + up.toLocaleString() + ') × qty(' + qty + ') ≠ supply amount(' + sa.toLocaleString() + ') → auto-corrected unit price to ' + corrected.toLocaleString() + '.'
+                    '⚠️ [단가 자동 보정] "' + item.desc.substring(0, 20) + '": AI 추출 단가(' + up + ') × 수량(' + qty + ') ≠ 공급가액(' + sa.toLocaleString() + ') → 단가를 ' + corrected + '으로 자동 정정했습니다.',
+                    '⚠️ [Auto unit-price fix] "' + item.desc.substring(0, 20) + '": AI unit price(' + up + ') × qty(' + qty + ') ≠ supply amount(' + sa.toLocaleString() + ') → auto-corrected unit price to ' + corrected + '.'
                 ));
                 item.unitPrice = corrected;
             }
