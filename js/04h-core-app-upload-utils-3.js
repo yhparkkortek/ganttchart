@@ -7637,6 +7637,51 @@ ${docsJson}`;
         }
     }
 
+    // [2026-09-30 신규] SAP mcp-sap-gui 예시 질문 시드 — 첫 로드 시 1회만 주입.
+    // 실제 사용 이력이 쌓이면 count·lastAsked가 자연스럽게 올라가 위로 밀려나고,
+    // 사용자가 🗑 버튼으로 삭제하면 해당 항목은 사라진다.
+    const _QA_SAP_SEED_FLAG = 'gantt_qa_sap_seeds_v1';
+    const _QA_SAP_SEED_LIST = [
+        '현재 SAP 화면 상태 알려줘',
+        'MMBE에서 자재 100-001 재고 현황 봐줘',
+        'ME23N에서 구매오더 4500001234 상태 확인해줘',
+        'MB51로 자재 100-001 입출고 이력 조회해줘',
+        'MIGO 화면 열어서 구매오더 입고 처리해줘',
+        'ME2M에서 미납 구매오더 목록 조회해줘',
+        'CJ03에서 프로젝트 G26-001 공정 현황 봐줘',
+        'CS03에서 자재 100-001 BOM 보여줘',
+        'MD04로 자재 100-001 MRP 결과 확인해줘',
+        'MM60에서 자재 100-001 최근 구매 가격 이력 봐줘',
+        'QM02에서 품질 검사 진행 상황 확인해줘',
+        'ME59N에서 자동 구매오더 생성 대상 목록 봐줘',
+        '지연된 업무가 있어?',
+        '이 프로젝트 연간 수요량이 얼마야?',
+        '기구 담당자가 누구야?',
+    ];
+    // _ganttQaPatternKey는 나중에 로드된 스크립트에서 정의될 수 있어서 lazy하게 참조한다.
+    function _qaInjectSapSeeds() {
+        if (localStorage.getItem(_QA_SAP_SEED_FLAG)) return;
+        try {
+            const patFn = window._ganttQaPatternKey || function(q) { return q; };
+            const store = _qaFreqStore();
+            const global = store['_global'] || [];
+            const existing = {};
+            global.forEach(function(e) { existing[_qaFreqPatOf(e)] = true; });
+            let added = 0;
+            _QA_SAP_SEED_LIST.forEach(function(q, i) {
+                const pat = patFn(q) || q;
+                if (existing[pat]) return;
+                global.push({ pat: pat, norm: q, sample: q, count: 1, lastAsked: i + 1 });
+                added++;
+            });
+            if (added) { store['_global'] = global; _qaFreqSaveStore(store); }
+            localStorage.setItem(_QA_SAP_SEED_FLAG, '1');
+            if (added) console.info('[자주 쓰는 질문] SAP 예시 시드 주입:', added + '건');
+        } catch (e) {
+            console.warn('[자주 쓰는 질문] SAP 시드 주입 실패:', e && e.message);
+        }
+    }
+
     window._ganttQaRecordQuestionFreq = function(question, projectKey) {
         const norm = window._ganttQaNormalizeQ(question);
         if (!norm || norm.length < 2) return;
@@ -7853,6 +7898,7 @@ ${docsJson}`;
     //    "한 번 대화하면 안 나오네" 실사용 피드백 반영. 실제 기록이 없으면(신규 프로젝트 등) 예전
     //    "예시 질문"과 같은 문구를 그대로 보여주되, 라벨은 항상 "자주 쓰는 질문"으로 통일한다.
     window._ganttQaPopulateFreqSelect = function(projectKey) {
+        _qaInjectSapSeeds(); // 첫 호출 시 1회만 SAP 예시 시드 주입 (이미 했으면 즉시 반환)
         const sel = document.getElementById('gantt-qa-freq-select');
         if (!sel) return;
         // 드롭다운이 갱신되면 삭제 버튼 숨김 (선택 상태가 리셋됐으므로)
@@ -7863,8 +7909,29 @@ ${docsJson}`;
             ? window._ganttQaGetDisplayQuestions(12, projectKey, function() { window._ganttQaPopulateFreqSelect(projectKey); })
             : (window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(12, projectKey) : []);
         const examples = _fqEn
-            ? ['Any delayed tasks?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
-            : ['지연된 업무가 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
+            ? [
+                'Any delayed tasks?',
+                "What's the current SAP screen status?",
+                'Check MMBE for stock of material 100-001',
+                'Look up purchase order 4500001234 in ME23N',
+                'Query MB51 for material movement history',
+                "What's this project's annual demand volume?",
+                'Who is in charge of mechanical design?',
+              ]
+            : [
+                '지연된 업무가 있어?',
+                '현재 SAP 화면 상태 알려줘',
+                'MMBE에서 자재 100-001 재고 현황 봐줘',
+                'ME23N에서 구매오더 4500001234 상태 확인해줘',
+                'MB51로 자재 100-001 입출고 이력 조회해줘',
+                'MIGO 화면 열어서 구매오더 입고 처리해줘',
+                'ME2M에서 미납 구매오더 목록 조회해줘',
+                'CJ03에서 프로젝트 G26-001 공정 현황 봐줘',
+                'CS03에서 자재 100-001 BOM 보여줘',
+                'MD04로 자재 100-001 MRP 결과 확인해줘',
+                '이 프로젝트 연간 수요량이 얼마야?',
+                '기구 담당자가 누구야?',
+              ];
         const options = top.length ? top.map(function(t) { return t.sample; }) : examples;
         const placeholderHtml = `<option value="">${_fqEn ? '(select a question)' : '(질문 선택하기)'}</option>`;
         sel.innerHTML = placeholderHtml + options.map(function(t) { return `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; }).join('');
