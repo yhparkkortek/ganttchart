@@ -2088,6 +2088,49 @@ def sap_bom():
 
 _SAP_EXPORT_OUT_DIR = os.path.join('C:\\SAP_DMS', 'SAP조회')
 
+# ── SAP 저장 경로 레지스트리 (2026-09-30 신규) ──────────────────────────────
+# 모든 SAP 기능의 저장 위치를 한 곳에서 관리 — 새 기능 추가 시 여기에도 등록.
+SAP_FOLDER_REGISTRY = [
+    {'key': 'doc',      'path': r'C:\SAP_DMS',              'label': '문서/BOM 다운로드 (ZDMSR004)',  'kw': ['문서', 'bom', '자재문서', '다운로드', '첨부']},
+    {'key': 'approval', 'path': r'C:\SAP_DMS\승인원표지',    'label': '승인원 표지',                   'kw': ['승인원']},
+    {'key': 'po',       'path': r'C:\SAP_DMS\구매오더',      'label': '발주서 / 구매오더',             'kw': ['발주서', '구매오더', 'po', '발주']},
+    {'key': 'export',   'path': r'C:\SAP_DMS\SAP조회',       'label': 'SAP 조회 엑셀 내보내기',        'kw': ['엑셀', '조회', 'sap조회', '내보내기']},
+    {'key': 'issue',    'path': r'C:\SAP_DMS\SAP이슈',       'label': '이슈 리포트',                   'kw': ['이슈', '오류리포트', '학습리포트']},
+    {'key': 'dump',     'path': r'C:\SAP_DMS\SAP_화면덤프',  'label': 'SAP 화면 덤프',                 'kw': ['덤프', '화면덤프', '트리덤프']},
+]
+
+
+@app.route('/open-sap-folder', methods=['POST'])
+def open_sap_folder():
+    # 🗂 [2026-09-30 신규] AI 문답에서 "승인원 저장경로 열어줘" 등의 요청을 받아
+    #    해당 폴더를 탐색기로 연다. key 또는 path를 받으며, 둘 다 없으면 전체 목록만 반환.
+    data = request.get_json(silent=True) or {}
+    key  = (data.get('key') or '').strip().lower()
+    path = (data.get('path') or '').strip()
+
+    if key:
+        for e in SAP_FOLDER_REGISTRY:
+            if e['key'] == key:
+                path, label = e['path'], e['label']
+                break
+        else:
+            return jsonify({'ok': False, 'error': f'알 수 없는 폴더 키: {key}'}), 400
+
+    if not path:
+        folders = [{'key': e['key'], 'path': e['path'], 'label': e['label']} for e in SAP_FOLDER_REGISTRY]
+        return jsonify({'ok': True, 'listOnly': True, 'folders': folders})
+
+    label = next((e['label'] for e in SAP_FOLDER_REGISTRY if e['path'] == path), path)
+    try:
+        os.makedirs(path, exist_ok=True)
+    except Exception:
+        pass
+    try:
+        os.startfile(path)
+    except Exception as ex:
+        return jsonify({'ok': False, 'error': f'폴더를 열지 못했습니다: {path} — {ex}'}), 500
+    return jsonify({'ok': True, 'path': path, 'label': label})
+
 
 @app.route('/sap-save-export', methods=['POST'])
 def sap_save_export():

@@ -5363,6 +5363,65 @@ ${docsJson}`;
             return;
         }
 
+        // 🗂 [2026-09-30 신규] SAP 저장 경로 폴더 열기 로컬 명령(🚫🤖) ────────────────
+        //    "승인원 저장경로 열어줘", "발주서 폴더", "BOM 저장위치" 등 — 코드에 박힌 저장경로를
+        //    탐색기로 바로 열어준다. 컨텍스트가 없으면 전체 경로 목록을 안내한다.
+        const _isFolderOpenReq = /(저장\s*경로|저장\s*위치|저장\s*폴더|저장된\s*폴더|어디.*저장|폴더.*열어|경로.*열어|열어.*폴더|folder|path|directory)/i.test(question);
+        if (_isFolderOpenReq) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            const _lq = question.toLowerCase();
+            // 컨텍스트 키워드 → 폴더 키 매핑
+            const _folderKeyMap = [
+                { kw: /승인원/,                       key: 'approval' },
+                { kw: /발주서|구매오더|\bpo\b|발주/i,  key: 'po'       },
+                { kw: /bom|부품포|역전개|사용처/i,     key: 'doc'      },
+                { kw: /문서|첨부|다운로드|zdmsr/i,    key: 'doc'      },
+                { kw: /엑셀|조회|내보내기|sap조회/i,   key: 'export'   },
+                { kw: /이슈|오류리포트|학습리포트/,     key: 'issue'    },
+                { kw: /덤프|화면덤프|트리덤프/,        key: 'dump'     },
+            ];
+            let _folderKey = null;
+            for (const m of _folderKeyMap) {
+                if (m.kw.test(question)) { _folderKey = m.key; break; }
+            }
+            // 백엔드 호출
+            try {
+                const _res = await fetch('http://127.0.0.1:5000/open-sap-folder', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(_folderKey ? { key: _folderKey } : {})
+                });
+                const _fd = await _res.json();
+                let _reply;
+                if (_fd.listOnly) {
+                    // 전체 목록 안내
+                    const _rows = (_fd.folders || []).map(function(f) {
+                        return `• **${f.label}**\n  \`${f.path}\``;
+                    }).join('\n');
+                    _reply = window._t(
+                        `🗂 SAP 관련 저장 경로 목록입니다. 특정 폴더를 열려면 "승인원 저장경로 열어줘"처럼 말씀해주세요.\n\n${_rows}`,
+                        `🗂 SAP save folder list. Say e.g. "Open the approval folder" to open a specific one.\n\n${_rows}`
+                    );
+                } else if (_fd.ok) {
+                    _reply = window._t(
+                        `🗂 **${_fd.label}** 폴더를 탐색기로 열었습니다.\n\`${_fd.path}\``,
+                        `🗂 Opened **${_fd.label}** folder in Explorer.\n\`${_fd.path}\``
+                    );
+                } else {
+                    _reply = '⚠️ ' + (_fd.error || window._t('폴더를 열지 못했습니다.', 'Could not open folder.'));
+                }
+                window._ganttQaHistory.push({ role: 'ai', text: _reply });
+            } catch (_e) {
+                window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                    '❌ 폴더 열기 실패: ' + (_e && _e.message ? _e.message : _e) + ' — 백엔드(kortek_backend.py)가 실행 중인지 확인해주세요.',
+                    '❌ Failed to open folder: ' + (_e && _e.message ? _e.message : _e)
+                )});
+            }
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 🏷 [Phase 11] 질문 라우터 — 확실할 때만 동작을 바꾼다(SAP 패턴 조회/미지원 SAP 안내/일반 추론). 애매하면 기존 경로 그대로.
         let _qaRoute = null;
         try {
