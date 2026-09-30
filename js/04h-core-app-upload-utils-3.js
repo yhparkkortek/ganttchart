@@ -5195,6 +5195,26 @@ ${docsJson}`;
                 input.focus();
                 return;
             }
+            // ⑤ 캐시된 BOM 재확인 — "502574 BOM 열어줘" 등 위 명령에 걸리지 않은 BOM 질문
+            //    → SAP 재조회 없이 confirm 버튼 다시 표시 (캐시 안내 포함)
+            if (/bom/i.test(question)) {
+                if (!_skipUserHistoryPush) {
+                    window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                }
+                const _bmd2 = window._lastBomData;
+                const _bEn2 = window._currentLang === 'en';
+                const _bRe = _bEn2
+                    ? '📊 **BOM data already cached** — ' + _bmd2.dataRows + ' rows (' + _bmd2.matNums.join(', ') + '). Use the buttons below, or type "다시 열어줘" to re-query SAP.'
+                    : '📊 **이미 메모리에 있습니다** — 총 **' + _bmd2.dataRows + '행** (' + _bmd2.matNums.join(', ') + ')\n\n아래 버튼을 누르거나 후속 명령("H1 상태 자재 확인해줘" 등)을 입력하세요.\n_SAP 재조회가 필요하면 "다시 열어줘"라고 하세요._';
+                window._ganttQaShowConfirmButtons(_bRe, [
+                    { label: '📊 엑셀로 열기', value: 'BOM 엑셀로 열기', style: 'confirm' },
+                    { label: '💬 채팅창에 전체 보기', value: 'BOM 전체 내용 채팅창에 보여줘', style: 'neutral' }
+                ]);
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
         }
 
         // 📐🚫🤖 [2026-09-22 신규, 사용자 요청 "토큰 많이 쓰는 SAP 기능 전부 AI 없이"] 사용처(역전개)/
