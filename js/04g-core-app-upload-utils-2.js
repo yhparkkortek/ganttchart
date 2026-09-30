@@ -1744,8 +1744,8 @@ ${question}
                 })()
                 : '';
             const _seqLabel = isUser
-                ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;user-select:none;padding-right:2px;">Q' + m._qIdx + '</div>' : '')
-                : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;user-select:none;padding-left:2px;">A' + m._aIdx + '</div>' : '');
+                ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;padding-right:2px;cursor:pointer;" title="클릭: Q' + m._qIdx + ' 참조" onclick="var el=document.getElementById(\'gantt-qa-input\');if(el){el.value=\'Q' + m._qIdx + ' \';el.focus();}">Q' + m._qIdx + '</div>' : '')
+                : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;padding-left:2px;cursor:pointer;" title="클릭: A' + m._aIdx + ' 참조" onclick="var el=document.getElementById(\'gantt-qa-input\');if(el){el.value=\'A' + m._aIdx + ' \';el.focus();}">A' + m._aIdx + '</div>' : '');
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 ${_seqLabel}
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; ${_bd} background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>

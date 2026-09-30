@@ -3861,6 +3861,54 @@ ${docsJson}`;
             }
         }
 
+        // 📌 [2026-09-30] Q/A 번호 참조 처리 — "Q1 내용 메일로 보내줘", "Q1에서 H1 상태 자재 조회해줘"
+        //    등 클릭으로 삽입된 Q/A 번호 참조를 해석해 해당 메시지 컨텍스트(자재번호·내용)를 주입한다.
+        //    _qaNavM 위의 "A45번 대화로 돌아가서" 패턴은 이미 위에서 처리했으므로 여기서는
+        //    그 이외의 참조 명령("Q1 내용 메일로", "Q1에서 H1 조회" 등)만 다룬다.
+        const _qaRefM = question.match(/^([AaQq])(\d+)\s*번?\s*(?:에서|의|내용|아이템|자재|항목)?\s*/);
+        if (_qaRefM) {
+            const _qaRefRole = /^[Aa]$/.test(_qaRefM[1]) ? 'ai' : 'user';
+            const _qaRefN = parseInt(_qaRefM[2], 10);
+            let _cntRef2 = 0, _refMsg2 = null, _refIdx2 = -1;
+            for (let i = 0; i < window._ganttQaHistory.length; i++) {
+                const _rm2 = window._ganttQaHistory[i];
+                if (_rm2.role === _qaRefRole && !_rm2.pending) {
+                    _cntRef2++;
+                    if (_cntRef2 === _qaRefN) { _refMsg2 = _rm2; _refIdx2 = i; break; }
+                }
+            }
+            if (_refMsg2) {
+                const _restCmd2 = question.slice(_qaRefM[0].length).trim();
+                if (_restCmd2) { // 참조만 있고 명령이 없으면 패스 (다른 블록 처리)
+                    // 참조 메시지 + 대응 페어에서 자재번호 추출
+                    let _pairMsg2 = null;
+                    if (_qaRefRole === 'user' && _refIdx2 + 1 < window._ganttQaHistory.length) {
+                        _pairMsg2 = window._ganttQaHistory[_refIdx2 + 1];
+                    } else if (_qaRefRole === 'ai' && _refIdx2 > 0) {
+                        _pairMsg2 = window._ganttQaHistory[_refIdx2 - 1];
+                    }
+                    const _refCombined = _refMsg2.text + (_pairMsg2 ? ' ' + _pairMsg2.text : '');
+                    const _refNums2 = (_refCombined.match(/\b\d{5,8}\b/g) || []).filter(function(n, i, a) { return a.indexOf(n) === i; });
+                    // 원래 질문을 히스토리에 기록(참조 표기 그대로), 처리할 question만 교체
+                    window._ganttQaHistory.push({ role: 'user', text: question });
+                    input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                    _skipUserHistoryPush = true;
+                    if (_refNums2.length > 0 && !(_restCmd2.match(/\b\d{5,8}\b/g) || []).length) {
+                        // 명령에 자재번호 없음 → 참조에서 추출한 번호를 앞에 주입
+                        question = _refNums2.join(' ') + ' ' + _restCmd2;
+                    } else if (/메일|mail/i.test(_restCmd2)) {
+                        // "내용 메일로 보내줘" → 참조 답변 내용을 컨텍스트로 AI에게 전달
+                        const _refSnip = (_pairMsg2 || _refMsg2).text.substring(0, 500);
+                        question = _restCmd2 + '\n\n[' + (_qaRefRole === 'user' ? 'Q' : 'A') + _qaRefN + ' 참조 내용: ' + _refSnip + ']';
+                    } else {
+                        question = _restCmd2; // 자재번호 이미 있거나 순수 텍스트 명령
+                    }
+                    // question 교체 완료 → 아래 기존 처리 흐름으로 계속 (return 없음)
+                }
+            }
+        }
+
         // 🌏❌ [2026-09-23 신규] 앱 범위 밖 질문(날씨·환율·뉴스) — AI 호출 없이 즉답.
         //    근거: Phase 10 학습 자료(digest_20260923)에서 "오늘 날씨 확인해줘" 재질문 4회 —
         //    AI가 매번 "인터넷 검색을 이용하세요"라고 답했지만 사람은 답이 아니라 계속 다시 물었고,
@@ -4496,6 +4544,7 @@ ${docsJson}`;
                     showPrice: bd.showPrice, showLocation: bd.showLocation, layout: bd.layout,
                     exchangeRate: bd.exchangeRate || 0
                 };
+                window._lastBomOptions = Object.assign({}, window._ganttQaBomResolvedOptions); // "다시 열어줘" 재조회용
                 question = bd.originalQuestion; // 원래 질문으로 되돌려 정상 흐름 재개
                 sapDocQuestion = question;
                 _skipUserHistoryPush = true; // 원래 질문은 draft 시작 시점에 이미 한 번 히스토리에 들어갔음
