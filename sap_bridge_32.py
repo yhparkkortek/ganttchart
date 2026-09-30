@@ -3353,25 +3353,48 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
     session = _get_sap_session()
     _sap_close_stray_popups(session)
     wnd = session.findById('wnd[0]')
-    wnd = _navigate_to_po_upload_screen(session, wnd, excel_path, plant)
+    _dbg = []  # 진단 로그 — 실패 시 오류 메시지에 포함
+    wnd = _navigate_to_po_upload_screen(session, wnd, excel_path, plant, debug_steps=_dbg)
 
     grid = _find_po_grid(session, wnd)
     if grid is None:
-        # 🐛 [2026-09-23 실사용 버그수정] 이 실패는 대부분 "파일 문제"가 아니라 **엑셀 안의
-        # 마스터데이터(프로젝트코드/사번/자재코드 등)가 SAP에 없어서 검증에서 막힌 것**인데
-        # (docs/purchase-order.md 2026-09-15 라이브 검증에서 확정된 원인), 그때 SAP이
-        # 상태표시줄에 남기는 실제 사유("데이터가 존재하지 않습니다" 등)를 그냥 버리고 있었다
-        # — 실패 사유는 반드시 결과에 남긴다는 원칙(CLAUDE.md)대로 상태표시줄을 같이 싣는다.
         sbar_text = ''
         try:
             sbar_text = (session.findById('wnd[0]/sbar').Text or '').strip()
         except Exception:
             pass
         detail = f' [SAP 상태표시줄: "{sbar_text}"]' if sbar_text else ''
+        # 라디오버튼 현재 상태 스캔 — "재처리" 모드인지 진단용
+        _rb_diag = []
+        try:
+            def _scan_rb(container, depth=0):
+                if depth > 6:
+                    return
+                try:
+                    count = container.Children.Count
+                except Exception:
+                    return
+                for i in range(count):
+                    try:
+                        ch = container.Children.ElementAt(i)
+                        if ch.Type == 'GuiRadioButton':
+                            _rb_diag.append(f'  [{ch.Text}] selected={ch.Selected}')
+                    except Exception:
+                        pass
+                    try:
+                        _scan_rb(container.Children.ElementAt(i), depth + 1)
+                    except Exception:
+                        pass
+            _scan_rb(session.findById('wnd[0]'))
+        except Exception:
+            pass
+        _dbg_str = (' | debug: ' + '; '.join(_dbg)) if _dbg else ''
+        _rb_str = (' | 라디오버튼: ' + ', '.join(_rb_diag)) if _rb_diag else ''
         raise RuntimeError(
-            '엑셀 업로드 후 결과 그리드를 찾지 못했습니다.' + detail +
-            ' — 이 증상은 보통 엑셀 안의 값 중 SAP에 실제로 존재하지 않는 것이 있어 업로드 검증에서'
-            ' 막힌 경우입니다(프로젝트코드·구매담당자 사번·자재코드·구매그룹 등은 자유 텍스트가 아니라'
+            '엑셀 업로드 후 결과 그리드를 찾지 못했습니다.' + detail + _dbg_str + _rb_str +
+            ' — 이 증상은 보통 ①ZMMR060이 "재처리" 모드로 열렸거나 ②엑셀 안의 값 중 SAP에'
+            ' 실제로 존재하지 않는 것이 있어 업로드 검증에서 막힌 경우입니다'
+            '(프로젝트코드·구매담당자 사번·자재코드·구매그룹 등은 자유 텍스트가 아니라'
             ' SAP 마스터데이터와 일치해야 합니다). 엑셀 파일: ' + str(excel_path))
 
     # [2026-09-30 수정] 협력사(LIFNR)/세금코드(MWSKZ)는 첫 행(row 0)만 F4로 조회·선택하고,
