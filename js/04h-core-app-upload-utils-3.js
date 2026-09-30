@@ -5363,28 +5363,36 @@ ${docsJson}`;
             return;
         }
 
-        // 🗂 [2026-09-30 신규] SAP 저장 경로 폴더 열기 로컬 명령(🚫🤖) ────────────────
-        //    "승인원 저장경로 열어줘", "발주서 폴더", "BOM 저장위치" 등 — 코드에 박힌 저장경로를
-        //    탐색기로 바로 열어준다. 컨텍스트가 없으면 전체 경로 목록을 안내한다.
-        const _isFolderOpenReq = /(저장\s*경로|저장\s*위치|저장\s*폴더|저장된\s*폴더|어디.*저장|폴더.*열어|경로.*열어|열어.*폴더|folder|path|directory)/i.test(question);
+        // 🗂 [2026-09-30 신규, 2026-09-30 확장] SAP 저장 경로 폴더 열기 로컬 명령(🚫🤖) ──────
+        //    ① 명시적 경로 키워드: "승인원 저장경로 열어줘", "발주서 폴더", "BOM 저장위치" 등
+        //    ② 문서 타입 코드(P01/Q11 등) + 약한 위치 동사("확인", "보여줘", "어디", "있어" 등)
+        //       + 자재번호 없음 → "P01 파일 어디 있어", "Q11 저장된 거 확인해줘" 등 처리
+        //    컨텍스트가 없으면 전체 경로 목록을 안내한다.
+        const _folderExplicitKw = /(저장\s*경로|저장\s*위치|저장\s*폴더|저장된\s*폴더|어디.*저장|폴더.*열어|경로.*열어|열어.*폴더|폴더.*위치|위치.*폴더|\bfolder\b|\bpath\b|\bdirectory\b)/i.test(question);
+        // 문서 타입 코드(P01 등)가 있고, "확인/보여/어디/있어/저장" 중 하나가 있고, 자재번호(5~8자리)는 없는 경우
+        const _folderDocCode = window._sapHasDocCode ? window._sapHasDocCode(question) : null;
+        const _folderWeakVerb = /(확인|보여|어디|있어|있나|저장됐|파일|찾아|알려|열어)/i.test(question);
+        const _folderHasMat   = /\b\d{5,8}\b/.test(question);
+        const _isFolderOpenReq = _folderExplicitKw || (_folderDocCode && _folderWeakVerb && !_folderHasMat);
         if (_isFolderOpenReq) {
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
             if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
-            const _lq = question.toLowerCase();
-            // 컨텍스트 키워드 → 폴더 키 매핑
+            // 컨텍스트 키워드 → 폴더 키 매핑 (우선순위 위에서 아래)
             const _folderKeyMap = [
-                { kw: /승인원/,                       key: 'approval' },
-                { kw: /발주서|구매오더|\bpo\b|발주/i,  key: 'po'       },
-                { kw: /bom|부품포|역전개|사용처/i,     key: 'doc'      },
-                { kw: /문서|첨부|다운로드|zdmsr/i,    key: 'doc'      },
-                { kw: /엑셀|조회|내보내기|sap조회/i,   key: 'export'   },
-                { kw: /이슈|오류리포트|학습리포트/,     key: 'issue'    },
-                { kw: /덤프|화면덤프|트리덤프/,        key: 'dump'     },
+                { kw: /승인원/,                            key: 'approval' },
+                { kw: /발주서|구매오더|\bpo\b|발주/i,       key: 'po'       },
+                { kw: /bom|부품포|역전개|사용처/i,          key: 'doc'      },
+                { kw: /문서|첨부|다운로드|zdmsr/i,         key: 'doc'      },
+                { kw: /엑셀|조회|내보내기|sap조회/i,        key: 'export'   },
+                { kw: /이슈|오류리포트|학습리포트/,          key: 'issue'    },
+                { kw: /덤프|화면덤프|트리덤프/,             key: 'dump'     },
             ];
             let _folderKey = null;
             for (const m of _folderKeyMap) {
                 if (m.kw.test(question)) { _folderKey = m.key; break; }
             }
+            // 문서 타입 코드(P01/Q11 등)로 감지된 경우 → 문서 다운로드 루트 폴더
+            if (!_folderKey && _folderDocCode) { _folderKey = 'doc'; }
             // 백엔드 호출
             try {
                 const _res = await fetch('http://127.0.0.1:5000/open-sap-folder', {
@@ -5403,9 +5411,16 @@ ${docsJson}`;
                         `🗂 SAP save folder list. Say e.g. "Open the approval folder" to open a specific one.\n\n${_rows}`
                     );
                 } else if (_fd.ok) {
+                    // doc 폴더 + 문서 타입 코드가 감지된 경우: 하위 폴더 구조 안내 추가
+                    const _docCodeNote = (_folderKey === 'doc' && _folderDocCode)
+                        ? window._t(
+                            `\n\n📂 **${_folderDocCode.code}** 문서는 \`${_fd.path}\\${_folderDocCode.code}XXXXXXXXX\` 형식의 하위 폴더(문서번호)에 저장됩니다.`,
+                            `\n\n📂 **${_folderDocCode.code}** documents are in subfolders named \`${_fd.path}\\${_folderDocCode.code}XXXXXXXXX\` (document number).`
+                          )
+                        : '';
                     _reply = window._t(
-                        `🗂 **${_fd.label}** 폴더를 탐색기로 열었습니다.\n\`${_fd.path}\``,
-                        `🗂 Opened **${_fd.label}** folder in Explorer.\n\`${_fd.path}\``
+                        `🗂 **${_fd.label}** 폴더를 탐색기로 열었습니다.\n\`${_fd.path}\`` + _docCodeNote,
+                        `🗂 Opened **${_fd.label}** folder in Explorer.\n\`${_fd.path}\`` + _docCodeNote
                     );
                 } else {
                     _reply = '⚠️ ' + (_fd.error || window._t('폴더를 열지 못했습니다.', 'Could not open folder.'));
