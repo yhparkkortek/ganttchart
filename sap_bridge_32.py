@@ -3277,7 +3277,29 @@ def _navigate_to_po_upload_screen(session, wnd, excel_path, plant='1000', debug_
         session.findById('wnd[0]/tbar[1]/btn[8]').press()  # 실행(F8) — 엑셀 업로드 실행
     except Exception as e:
         raise RuntimeError(f'ZMMR060 실행(F8) 중 오류가 발생했습니다: {e}')
-    time.sleep(2.0)
+
+    # F8 후 SAP가 엑셀을 파싱·검증하는 시간이 파일 크기·서버 응답에 따라 달라진다.
+    # 고정 2초 대신 그리드 또는 상태표시줄 메시지가 나타날 때까지 폴링(최대 15초).
+    for _w in range(15):
+        time.sleep(1.0)
+        try:
+            _test_wnd = session.findById('wnd[0]')
+        except Exception:
+            continue
+        # 결과 그리드가 나타났으면 즉시 반환
+        try:
+            session.findById('wnd[0]/shellcont/shell/shellcont/shell')
+            return _test_wnd  # 그리드 발견
+        except Exception:
+            pass
+        # 오류·경고 메시지가 상태표시줄에 나타났으면 더 기다려도 그리드는 안 나옴 → 반환
+        try:
+            _sbar = (session.findById('wnd[0]/sbar').Text or '').strip()
+            if _sbar:
+                return _test_wnd
+        except Exception:
+            pass
+    # 15초 경과 후에도 변화 없으면 현재 wnd 반환(호출부에서 grid=None 처리)
     return session.findById('wnd[0]')
 
 
