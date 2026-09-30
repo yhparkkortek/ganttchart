@@ -7735,9 +7735,9 @@ ${docsJson}`;
         if (!btn) return;
         const _mEn = window._currentLang === 'en';
         const on = window._ganttQaVoiceMode;
-        btn.innerHTML = on ? (_mEn ? 'Text<br>Q&A' : '글자<br>문답') : (_mEn ? 'Voice<br>Q&A' : '음성<br>문답');
+        btn.innerHTML = on ? (_mEn ? '⌨️ Text' : '⌨️ 글자문답') : (_mEn ? '🎙️ Voice' : '🎙️ 음성문답');
         btn.style.background = on ? '#c9ecd3' : '#e8f4fd';
-        btn.style.borderColor = on ? '#a8dab8' : '#a5c8f0';
+        btn.style.border = on ? 'none' : 'none';
         btn.style.color = on ? '#1f7a3d' : '#1a4f7a';
         btn.title = on
             ? (_mEn ? 'Voice Q&A is ON — click to switch back to typing' : '음성문답 모드 켜짐 — 클릭하면 글자로 묻는 방식으로 돌아갑니다')
@@ -7967,6 +7967,7 @@ ${docsJson}`;
                              편집창의 🕒 이력 버튼)과 동일한 톤(#e8f4fd, 테두리 없음)으로 맞춰 헤더(#e7f3ff)
                              위에서 튀지 않게 통일 — 예전엔 #d8edfb로 더 진하게 박혀 있어 다른 모달과 이질적이었음. -->
                         <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🔇</button>
+                        <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';">${_qEn ? '🎙️ Voice' : '🎙️ 음성문답'}</button>
                         <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
                         <!-- 💡 [2026-09-13 신규] 투명도 슬라이더 — 드래그해서 창 배경 투명도 실시간 조절.
                              배경도 위 두 버튼과 같은 개념(#e8f4fd, 테두리 없음)으로 통일. -->
@@ -8010,9 +8011,8 @@ ${docsJson}`;
                             <button id="gantt-qa-freq-del-btn" onclick="window._ganttQaDeleteFreqQuestion(window._ganttQaLastFreqSelected)" title="${_qEn ? 'Delete this question from the list' : '이 질문을 목록에서 삭제'}" style="display:none; flex-shrink:0; align-items:center; justify-content:center; width:26px; height:26px; box-sizing:border-box; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';">🗑</button>
                         </div>
                     </div>
-                    <div style="flex:0 0 72px; display:flex; flex-direction:column; gap:6px;">
-                        <div id="gantt-qa-route-col" style="display:flex;"></div>
-                        <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="width:100%; height:26px; box-sizing:border-box; padding:0 4px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; white-space:nowrap; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear Chat' : '대화삭제'}</button>
+                    <div style="flex:0 0 72px; display:flex; align-items:stretch;">
+                        <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="width:100%; box-sizing:border-box; padding:0 4px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; white-space:nowrap; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear Chat' : '대화삭제'}</button>
                     </div>
                 </div>
                 <div style="padding:8px 14px 10px; display:flex; gap:8px; align-items:stretch;">
@@ -8021,7 +8021,7 @@ ${docsJson}`;
                          (window._ganttQaPendingAttachments 참고). 나중에 다른 첨부 용도가 추가되면 이 가정을 반드시 재검토할 것. -->
                     <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a PDF (e.g. tax invoice/quote) — used for Purchase Order requests' : 'PDF 첨부(전자세금계산서/견적서 등) — 구매오더 요청에 사용됩니다'}" style="flex-shrink:0; padding:0 16px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach<br>File' : '첨부<br>파일'}</button>
                     <input type="file" id="gantt-qa-file-input" accept=".pdf,application/pdf" multiple style="display:none;" onchange="window._ganttQaHandleFileSelect(this)">
-                    <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Voice<br>Q&A' : '음성<br>문답'}</button>
+                    <div id="gantt-qa-route-col" style="display:flex; flex-direction:column; justify-content:center; flex-shrink:0;"></div>
                     <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line, ↑↓=History)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈, ↑↓=이전 질문)'}" style="flex:1; min-width:0; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="window._ganttQaHandleInputKeydown(event)"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:0 0 72px; padding:0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>
