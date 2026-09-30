@@ -3531,9 +3531,21 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
 
     try:
         session.findById('wnd[0]/tbar[1]/btn[5]').press()  # 저장
-        time.sleep(1.0)
+        time.sleep(0.5)
     except Exception as e:
         raise RuntimeError(f'저장(SAVE) 중 오류가 발생했습니다: {e}')
+
+    # ★ 저장 직후 즉시 상태표시줄 읽기 — SAP가 "구매오더 XXXXXXXXXX가 생성되었습니다"
+    # 메시지를 이 시점에만 잠깐 남기고 팝업이나 다른 상호작용으로 곧 지워진다.
+    po_number = None
+    try:
+        _sbar_early = (session.findById('wnd[0]/sbar').Text or '').strip()
+        _m = re.search(r'\b(\d{7,10})\b', _sbar_early)
+        if _m:
+            po_number = _m.group(1)
+            print(f'[DEBUG] 저장 직후 sbar: {_sbar_early!r} → po={po_number}', file=sys.stderr)
+    except Exception:
+        pass
 
     # 저장 확인 팝업이 뜨면 확인(매크로에서 확인된 패턴) — 안 뜨면 조용히 건너뜀.
     try:
@@ -3542,45 +3554,45 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
     except Exception:
         pass
 
+    # 팝업 확인 후 상태표시줄 재확인 (아직 못 읽었을 경우)
+    if not po_number:
+        try:
+            _sbar_post = (session.findById('wnd[0]/sbar').Text or '').strip()
+            _m2 = re.search(r'\b(\d{7,10})\b', _sbar_post)
+            if _m2:
+                po_number = _m2.group(1)
+                print(f'[DEBUG] 팝업 후 sbar: {_sbar_post!r} → po={po_number}', file=sys.stderr)
+        except Exception:
+            pass
+
     wnd = session.findById('wnd[0]')
     grid = _find_po_grid(session, wnd)
     if grid is None:
-        raise RuntimeError('저장 후 결과 그리드를 찾지 못했습니다 — 저장이 실패했을 수 있습니다.')
-
-    po_number = None
-
-    # [2026-09-28] 오더번호 다단계 폴백 — 이전 drill-down 방식은 화면 상태에 따라
-    # "control not found"(619)가 빈번하게 발생했음. 더 안정적인 방법부터 순서대로 시도.
-
-    # 방법 1: 상태표시줄 파싱 — SAP이 저장 직후 "구매오더 XXXXXXXXXX가 생성되었습니다"
-    # 형태의 메시지를 sbar에 남긴다. 10자리 숫자 패턴을 추출.
-    try:
-        sbar_text = (session.findById('wnd[0]/sbar').Text or '').strip()
-        m = re.search(r'\b(\d{10})\b', sbar_text)
-        if m:
-            po_number = m.group(1)
-    except Exception:
-        pass
+        if po_number:
+            # 그리드는 사라졌지만 이미 오더번호를 읽었으면 계속 진행
+            pass
+        else:
+            raise RuntimeError('저장 후 결과 그리드를 찾지 못했습니다 — 저장이 실패했을 수 있습니다.')
 
     # 방법 2: 그리드의 EBELN 컬럼 직접 읽기 — drill-down 없이 getCellValue 사용.
-    # ZMMR060은 저장 성공 후 그리드의 EBELN 컬럼에 오더번호를 채운다.
-    if not po_number:
+    if not po_number and grid is not None:
         try:
             val = (grid.getCellValue(0, 'EBELN') or '').strip()
             if re.search(r'\d{7,}', val):
                 po_number = val
+                print(f'[DEBUG] getCellValue EBELN: {val!r}', file=sys.stderr)
         except Exception:
             pass
 
-    # 방법 3: 기존 drill-down 방식 — 위 방법들이 모두 실패한 경우에만.
-    # ⚠️ [2026-09-15] 행을 명시하지 않으면 엉뚱한 행을 클릭해 잘못된 오더번호를 읽는
-    # 사고가 실사용에서 확인됨 → currentCellRow=0 고정.
-    if not po_number:
+    # 방법 3: drill-down — 위 방법이 모두 실패한 경우에만.
+    # VBS 매크로 확인 경로: currentCellColumn=EBELN → clickCurrentCell → MEPO_TOPLINE-EBELN
+    if not po_number and grid is not None:
         try:
+            time.sleep(0.5)  # 저장 완료 안정화 대기
             grid.currentCellRow = 0
             grid.currentCellColumn = 'EBELN'
             grid.clickCurrentCell()  # ME21N 상세화면으로 drill-down
-            time.sleep(1.0)
+            time.sleep(1.5)  # ME21N 로딩 대기 (기존 1.0 → 1.5)
             po_field = session.findById(
                 'wnd[0]/usr/subSUB0:SAPLMEGUI:0020/subSUB0:SAPLMEGUI:0030/subSUB1:SAPLMEGUI:1105/txtMEPO_TOPLINE-EBELN'
             )
@@ -3590,7 +3602,8 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
                 session.findById('wnd[0]/tbar[0]/btn[3]').press()
                 time.sleep(0.4)
         except Exception as e:
-            raise RuntimeError(f'저장은 됐지만 오더번호를 확인하는 중 오류가 발생했습니다: {e} — SAP에서 방금 생성된 구매오더를 직접 확인해주세요.')
+            # 오더는 저장됐으므로 raise 대신 경고만 — po_number는 None 상태로 유지
+            print(f'[DEBUG] drill-down 오더번호 읽기 실패: {e}', file=sys.stderr)
 
     if not po_number:
         raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
