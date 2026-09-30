@@ -4950,7 +4950,8 @@ ${docsJson}`;
                     const _bMatNums = (question.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
                     _bomIsComplex = _bDataRows > 30 || _bMatNums.length >= 2;
                     if (_bomIsComplex) {
-                        window._lastBomData = { sapText: _bomFetchedText, queriedAt: Date.now(), matNums: _bMatNums, dataRows: _bDataRows };
+                        window._lastBomData = { sapText: _bomFetchedText, queriedAt: Date.now(), matNums: _bMatNums, dataRows: _bDataRows,
+                            bomMeta: (window._lastSapFetchResult && window._lastSapFetchResult.bomMeta) || null };
                         bomReply = null; // 아래에서 confirm 버튼으로 표시
                     } else {
                         bomReply = window._ganttQaFormatSapGridReply(_bomFetchedText);
@@ -4992,7 +4993,7 @@ ${docsJson}`;
                 }
                 let _bomXlsReply;
                 try {
-                    const _bExported = window._exportSapDataToExcel({ text: window._lastBomData.sapText });
+                    const _bExported = window._exportSapDataToExcel({ text: window._lastBomData.sapText, source: 'grid', bomMeta: window._lastBomData.bomMeta || null });
                     const _bRes = await window._withTimeout(
                         fetch('http://127.0.0.1:5000/sap-save-export', {
                             method: 'POST',
