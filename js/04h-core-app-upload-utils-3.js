@@ -7775,10 +7775,11 @@ ${docsJson}`;
         ['gantt-qa-mic-btn', 'gantt-qa-mic-btn2'].forEach(function(id) {
             const btn = document.getElementById(id);
             if (!btn) return;
-            btn.innerHTML = on ? (_mEn ? '⌨️ Text' : '⌨️ 글자문답') : (_mEn ? '🎙️ Voice' : '🎙️ 음성문답');
             const isBottom = id === 'gantt-qa-mic-btn2';
-            btn.style.background = on ? '#c9ecd3' : (isBottom ? '#c8f0d4' : '#e8f4fd');
-            btn.style.color = on ? '#1f7a3d' : (isBottom ? '#1a6b35' : '#1a4f7a');
+            btn.innerHTML = on ? (isBottom ? (_mEn ? '⌨️ Text' : '⌨️ 글자문답') : (_mEn ? '⌨️ Text' : '⌨️ 글자문답'))
+                               : (isBottom ? (_mEn ? 'Voice' : '음성문답') : (_mEn ? '🎙️ Voice' : '🎙️ 음성문답'));
+            btn.style.background = on ? '#c9ecd3' : (isBottom ? '#e6f6ea' : '#e8f4fd');
+            btn.style.color = on ? '#1f7a3d' : (isBottom ? '#1f7a3d' : '#1a4f7a');
             btn.title = on
                 ? (_mEn ? 'Voice Q&A is ON — click to switch back to typing' : '음성문답 모드 켜짐 — 클릭하면 글자로 묻는 방식으로 돌아갑니다')
                 : (_mEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다');
@@ -8053,14 +8054,14 @@ ${docsJson}`;
                         </div>
                     </div>
                     <div style="flex:0 0 72px; display:flex; flex-direction:column; gap:6px; align-items:stretch;">
-                        <button id="gantt-qa-mic-btn2" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex:1; box-sizing:border-box; padding:0 4px; background:#c8f0d4; color:#1a6b35; border:1px solid #8dd4a8; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; white-space:nowrap; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#a8e6bc'; this.style.borderColor='#5cc483';" onmouseout="this.style.background='#c8f0d4'; this.style.borderColor='#8dd4a8';">${_qEn ? '🎙️ Voice' : '🎙️ 음성문답'}</button>
+                        <button id="gantt-qa-mic-btn2" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Voice' : '음성문답'}</button>
                         <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex:1; box-sizing:border-box; padding:0 4px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; white-space:nowrap; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear Chat' : '대화삭제'}</button>
                     </div>
                 </div>
                 <div style="padding:8px 14px 10px; display:flex; gap:8px; align-items:stretch;">
                     <!-- 📎 [2026-09-15 UI 변경] 첨부파일·자동 버튼을 96px 컬럼으로 세로 묶음 → textarea 왼쪽 끝이 자주쓰는질문 select와 정렬됨 -->
                     <div style="flex:0 0 96px; display:flex; flex-direction:column; gap:6px; min-width:0;">
-                        <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a PDF (e.g. tax invoice/quote) — used for Purchase Order requests' : 'PDF 첨부(전자세금계산서/견적서 등) — 구매오더 요청에 사용됩니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach<br>File' : '첨부<br>파일'}</button>
+                        <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a PDF (e.g. tax invoice/quote) — used for Purchase Order requests' : 'PDF 첨부(전자세금계산서/견적서 등) — 구매오더 요청에 사용됩니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach File' : '첨부파일'}</button>
                         <input type="file" id="gantt-qa-file-input" accept=".pdf,application/pdf" multiple style="display:none;" onchange="window._ganttQaHandleFileSelect(this)">
                         <div id="gantt-qa-route-col" style="flex:1; display:flex; flex-direction:column; justify-content:center; min-width:0;"></div>
                     </div>
