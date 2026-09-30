@@ -1456,8 +1456,12 @@
   "vendorName": "공급자(협력사) 상호",
   "currency": "통화 코드 — KRW 또는 USD(다른 통화 기호/코드가 명확히 보이면 그 코드, 불명확하면 KRW)",
   "items": [
-    {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(통화 단위 그대로, 콤마 제거), "supplyAmount": 숫자(그 줄의 공급가액/합계 금액, 없으면 0), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
+    {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(통화 단위 그대로, 콤마 제거), "supplyAmount": 숫자(그 줄의 공급가액/합계 금액 — 반드시 원화KRW로, USD 단가라면 환율 적용 후 원화값, 없으면 0), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
   ],
+  "exchangeRate": 문서에 적힌 적용환율 숫자(KRW/달러, 예: 1358.4. 없으면 0),
+  "totalSupplyAmount": 문서 하단의 공급가액 합계 숫자(KRW, 없으면 0),
+  "totalVat": 문서 하단의 부가세 합계 숫자(없으면 0),
+  "totalAmount": 문서 하단의 최종 합계 금액 숫자(공급가액+부가세, 없으면 0),
   "note": "페이지를 일부만 사용했거나 애매해서 넘어간 부분이 있으면 한 문장으로, 없으면 빈 문자열"
 }
 ⚠️ 중요 — 반드시 지킬 것:
@@ -1628,6 +1632,66 @@ ${_sourceSection}`;
             parsed.note = (_unitPriceFixNotes.join(' ') + (parsed.note ? ' ' + parsed.note : ''));
         }
 
+        // [2026-09-30 신규] 검산: 공급가액/부가세/합계 교차 검증 + USD 환율 검산
+        // → 사람이 "확인" 전에 금액 일관성을 한눈에 확인할 수 있도록 _ganttQaPoSummaryText에 표시됨.
+        var _csDocSupply = Number(parsed.totalSupplyAmount) || 0;
+        var _csDocVat    = Number(parsed.totalVat) || 0;
+        var _csDocTotal  = Number(parsed.totalAmount) || 0;
+        var _csRate      = Number(parsed.exchangeRate) || 0;
+        var _csComputedSupply = parsed.items.reduce(function(s, it) {
+            return s + (Number(it.supplyAmount) || 0);
+        }, 0);
+        var _csChecks = [];
+        var _csAllOk = true;
+
+        // ① 공급가액 검산
+        if (_csDocSupply > 0) {
+            var _csTolS = Math.max(10, Math.round(_csDocSupply * 0.005)); // 0.5% 또는 최소 ₩10
+            var _csDiffS = Math.abs(Math.round(_csComputedSupply) - _csDocSupply);
+            var _csOkS = _csDiffS <= _csTolS;
+            if (!_csOkS) _csAllOk = false;
+            _csChecks.push({ type: 'supply', ok: _csOkS, docVal: _csDocSupply, computedVal: Math.round(_csComputedSupply), diff: _csDiffS });
+        }
+
+        // ② 부가세 검산 (10% 여부)
+        var _csBaseForVat = _csDocSupply || Math.round(_csComputedSupply);
+        if (_csDocVat > 0 && _csBaseForVat > 0) {
+            var _csComputedVat = Math.round(_csBaseForVat * 0.1);
+            var _csDiffV = Math.abs(_csComputedVat - _csDocVat);
+            var _csOkV = _csDiffV <= 2;
+            if (!_csOkV) _csAllOk = false;
+            _csChecks.push({ type: 'vat', ok: _csOkV, docVal: _csDocVat, computedVal: _csComputedVat, diff: _csDiffV });
+        }
+
+        // ③ 합계 검산 (공급가액 + 부가세)
+        if (_csDocTotal > 0 && _csBaseForVat > 0) {
+            var _csUsedVat = _csDocVat || Math.round(_csBaseForVat * 0.1);
+            var _csComputedTotal = Math.round(_csBaseForVat) + Math.round(_csUsedVat);
+            var _csDiffT = Math.abs(_csComputedTotal - _csDocTotal);
+            var _csOkT = _csDiffT <= 2;
+            if (!_csOkT) _csAllOk = false;
+            _csChecks.push({ type: 'total', ok: _csOkT, docVal: _csDocTotal, computedVal: _csComputedTotal, diff: _csDiffT });
+        }
+
+        // ④ USD 환율 검산: unitPrice(USD) × exchangeRate ≈ supplyAmount/qty
+        if (parsed.currency === 'USD' && _csRate > 0) {
+            parsed.items.forEach(function(item) {
+                var usdP = Number(item.unitPrice) || 0;
+                var qty  = Number(item.qty) || 0;
+                var sa   = Number(item.supplyAmount) || 0;
+                if (usdP <= 0 || qty <= 0 || sa <= 0) return;
+                var krwFromExch = Math.round(usdP * _csRate * 100) / 100;
+                var krwFromDoc  = Math.round((sa / qty) * 100) / 100;
+                var eTol = Math.max(1, Math.round(krwFromDoc * 0.005)); // 0.5% 또는 ₩1
+                var eDiff = Math.abs(krwFromExch - krwFromDoc);
+                var eOk = eDiff <= eTol;
+                if (!eOk) _csAllOk = false;
+                _csChecks.push({ type: 'exchange', ok: eOk, desc: (item.desc || '').substring(0, 20), usdPrice: usdP, rate: _csRate, krwComputed: krwFromExch, krwDoc: krwFromDoc, diff: eDiff });
+            });
+        }
+
+        parsed.checksumResult = { ok: _csAllOk, checks: _csChecks, exchangeRate: _csRate };
+
         return parsed;
     };
 
@@ -1656,9 +1720,47 @@ ${_sourceSection}`;
         const currencyLine = (draft.currency && draft.currency !== 'KRW')
             ? window._t(`\n⚠️ 통화: ${draft.currency} (KRW가 아닙니다 — 맞는지 확인해주세요)`, `\n⚠️ Currency: ${draft.currency} (not KRW — please confirm this is correct)`)
             : '';
+        // [2026-09-30 신규] 검산 결과 표시
+        var checksumSection = '';
+        var _csData = draft.checksumResult;
+        if (_csData && _csData.checks && _csData.checks.length > 0) {
+            var _csLines = _csData.checks.map(function(c) {
+                if (c.type === 'supply') {
+                    var _icon = c.ok ? '✅' : '❌';
+                    return _icon + ' ' + window._t(
+                        '공급가액: 문서 ' + c.docVal.toLocaleString() + '원 | 품목합산 ' + c.computedVal.toLocaleString() + '원' + (c.ok ? ' (일치)' : ' ← ⚠️ 차이 ' + c.diff.toLocaleString() + '원 — 단가/수량 확인 필요'),
+                        'Supply: doc ₩' + c.docVal.toLocaleString() + ' | items sum ₩' + c.computedVal.toLocaleString() + (c.ok ? ' (match)' : ' ← ⚠️ diff ₩' + c.diff.toLocaleString() + ' — check unit prices/qty'));
+                }
+                if (c.type === 'vat') {
+                    var _icon2 = c.ok ? '✅' : '⚠️';
+                    return _icon2 + ' ' + window._t(
+                        '부가세(10%): 문서 ' + c.docVal.toLocaleString() + '원 | 계산값 ' + c.computedVal.toLocaleString() + '원' + (c.ok ? ' (일치)' : ' ← 세율이 10%가 아닐 수 있음'),
+                        'VAT(10%): doc ₩' + c.docVal.toLocaleString() + ' | computed ₩' + c.computedVal.toLocaleString() + (c.ok ? ' (match)' : ' ← tax rate may not be 10%'));
+                }
+                if (c.type === 'total') {
+                    var _icon3 = c.ok ? '✅' : '❌';
+                    return _icon3 + ' ' + window._t(
+                        '합계: 문서 ' + c.docVal.toLocaleString() + '원 | 공급가액+부가세 ' + c.computedVal.toLocaleString() + '원' + (c.ok ? ' (일치)' : ' ← ⚠️ 불일치'),
+                        'Total: doc ₩' + c.docVal.toLocaleString() + ' | supply+VAT ₩' + c.computedVal.toLocaleString() + (c.ok ? ' (match)' : ' ← ⚠️ mismatch'));
+                }
+                if (c.type === 'exchange') {
+                    var _icon4 = c.ok ? '✅' : '⚠️';
+                    return _icon4 + ' ' + window._t(
+                        '환율검산[' + c.desc + ']: $' + c.usdPrice + ' × ' + c.rate + ' = ' + c.krwComputed + '원 | 문서 원화단가 ' + c.krwDoc + '원' + (c.ok ? ' (허용범위 내)' : ' ← 차이 ' + c.diff + '원'),
+                        'Rate check[' + c.desc + ']: $' + c.usdPrice + ' × ' + c.rate + ' = ₩' + c.krwComputed + ' | doc KRW/unit ₩' + c.krwDoc + (c.ok ? ' (OK)' : ' ← diff ₩' + c.diff));
+                }
+                return '';
+            }).filter(Boolean);
+            if (_csLines.length > 0) {
+                var _csHeader = _csData.ok
+                    ? window._t('📊 검산: 전체 통과 ✅', '📊 Verification: all passed ✅')
+                    : window._t('📊 검산: ⚠️ 불일치 항목 있음 — 확인 후 "확인" 또는 수정 지시를 주세요', '📊 Verification: ⚠️ mismatch found — review and reply "confirm" or provide corrections');
+                checksumSection = '\n\n' + _csHeader + '\n' + _csLines.map(function(l) { return '  ' + l; }).join('\n');
+            }
+        }
         const header = window._t(
-            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}${currencyLine}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}`,
-            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}${currencyLine}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}`
+            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}${currencyLine}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}${checksumSection}`,
+            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}${currencyLine}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}${checksumSection}`
         );
         if (noInstructions) return header;
         return header + window._t(
