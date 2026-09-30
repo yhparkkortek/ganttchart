@@ -6019,6 +6019,20 @@ ${docsJson}`;
 
     window.clearGanttQaChat = function() {
         if (window._ganttQaHistory.length && !confirm(window._t('대화 내용을 모두 지울까요?', 'Clear the entire conversation?'))) return;
+        // 응답 대기 중에 대화삭제하면 진행 중 콜백을 무효화하고 입력 상태를 복원
+        ++window._ganttQaOpToken;
+        window._ganttQaSending = false;
+        const _clrInput = document.getElementById('gantt-qa-input');
+        if (_clrInput) { _clrInput.disabled = false; _clrInput.focus(); }
+        const _clrBtn = document.getElementById('gantt-qa-send-btn');
+        if (_clrBtn) {
+            _clrBtn.disabled = false;
+            _clrBtn.textContent = window._currentLang === 'en' ? 'Send' : '전송';
+            _clrBtn.style.background = '#e8f4fd'; _clrBtn.style.color = '#1a4f7a'; _clrBtn.style.borderColor = '#a5c8f0';
+            _clrBtn.onmouseover = function() { this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd'; };
+            _clrBtn.onmouseout  = function() { this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0'; };
+            _clrBtn.onclick = function() { window.sendGanttQaMessage(); };
+        }
         window._ganttQaHistory = [];
         window._ganttQaPendingMailDraft = null; // 💡 대화를 지우면 남아있던 메일 초안도 함께 무효화
         window._ganttQaPendingNoticeDraft = null; // 💡 공지 초안도 함께 무효화
