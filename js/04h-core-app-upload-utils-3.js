@@ -1236,6 +1236,8 @@
     window._ganttQaSubmitApprovalAllFieldsForm = async function(formId) {
         var form = window._ganttQaApprovalAllFieldsForm;
         if (!form || form.id !== formId) return;
+        // 🐛 [2026-09-30] 이미 SAP 작업 진행 중이면 중복 실행 방지 (더블클릭 / in-flight 중 사이드쿼리 충돌 대비)
+        if (window._ganttQaOperationInFlight) { if (window.showToast) window.showToast(window._t('처리 중입니다. 잠시 후 시도해주세요.', 'Processing — please wait.')); return; }
         var _en = window._currentLang === 'en';
         var materials = form.materials || [];
 
@@ -3665,10 +3667,15 @@ ${docsJson}`;
         const lastPending = h.length ? h[h.length - 1] : null; // draft가 방금 물어보던 질문 — 복귀 시 다시 보여줄 대상
         const saved = {
             po: window._ganttQaPoDraft, bom: window._ganttQaBomDraft, approval: window._ganttQaApprovalDraft,
-            sapClarify: window._ganttQaSapDocClarify, dropdown: window._ganttQaPendingChoiceDropdown, confirmBtns: window._ganttQaPendingConfirmButtons
+            sapClarify: window._ganttQaSapDocClarify, dropdown: window._ganttQaPendingChoiceDropdown, confirmBtns: window._ganttQaPendingConfirmButtons,
+            // 🐛 [2026-09-30 버그수정] _ganttQaApprovalAllFieldsForm/_ganttQaGrEbelnForm 누락 → 폼이 보이는 상태에서
+            //    SAP 사이드 쿼리를 보내면 hasAnyActiveQaDraft가 true로 남아 무한 재귀 발생.
+            approvalAllFieldsForm: window._ganttQaApprovalAllFieldsForm,
+            grEbelnForm: window._ganttQaGrEbelnForm
         };
         window._ganttQaPoDraft = null; window._ganttQaBomDraft = null; window._ganttQaApprovalDraft = null;
         window._ganttQaSapDocClarify = null; window._ganttQaPendingChoiceDropdown = null; window._ganttQaPendingConfirmButtons = null;
+        window._ganttQaApprovalAllFieldsForm = null; window._ganttQaGrEbelnForm = null;
         let restoredAny = false;
         try {
             await window.sendGanttQaMessage();
@@ -3679,6 +3686,8 @@ ${docsJson}`;
             if (window._ganttQaSapDocClarify === null && saved.sapClarify) { window._ganttQaSapDocClarify = saved.sapClarify; restoredAny = true; }
             if (window._ganttQaPendingChoiceDropdown === null && saved.dropdown) { window._ganttQaPendingChoiceDropdown = saved.dropdown; restoredAny = true; }
             if (window._ganttQaPendingConfirmButtons === null && saved.confirmBtns) { window._ganttQaPendingConfirmButtons = saved.confirmBtns; restoredAny = true; }
+            if (window._ganttQaApprovalAllFieldsForm === null && saved.approvalAllFieldsForm) { window._ganttQaApprovalAllFieldsForm = saved.approvalAllFieldsForm; restoredAny = true; }
+            if (window._ganttQaGrEbelnForm === null && saved.grEbelnForm) { window._ganttQaGrEbelnForm = saved.grEbelnForm; restoredAny = true; }
         }
         if (restoredAny && lastPending && lastPending.role === 'ai' && lastPending.text) {
             window._ganttQaHistory.push({ role: 'ai', text: '📌 ' + window._t(
