@@ -4197,31 +4197,60 @@ def post_goods_receipt(ebeln, dump_only=False):
         if _pt2:
             _popup_texts.append(f'팝업: {_pt2}')
         _w1.findById('tbar[0]/btn[12]').press()
-        time.sleep(0.8)
+        time.sleep(2.0)  # 팝업 confirm 후 SAP 전기 완료까지 충분히 대기
     except Exception:
         pass
 
     # 상태바 확인 — 전기 성공 여부 판정
-    try:
-        status_text = session.findById('wnd[0]/sbar').Text or ''
-    except Exception:
-        status_text = ''
-    if not status_text:
-        time.sleep(0.5)
+    # SAP이 전기 후 상태바를 채우는 데 시간이 걸릴 수 있으므로 최대 4회 재시도
+    status_text = ''
+    for _sbar_try in range(4):
         try:
-            status_text = session.findById('wnd[0]/sbar').Text or ''
+            status_text = (session.findById('wnd[0]/sbar').Text or '').strip()
         except Exception:
-            pass
-    if not status_text:
+            status_text = ''
+        if status_text:
+            break
+        time.sleep(0.8)
+
+    # "자재 문서 XXXXXXXXXX이(가) 전기되었습니다" 패턴 → 확실한 성공
+    _mat_doc_m = re.search(r'자재\s*문서\s*(\d{10})', status_text)
+    _mat_doc_no = _mat_doc_m.group(1) if _mat_doc_m else None
+
+    # 오류 키워드 확인
+    _sbar_mtype = ''
+    try:
+        _sbar_mtype = (session.findById('wnd[0]/sbar').MessageType or '').strip()
+    except Exception:
+        pass
+    _is_sbar_error = (_sbar_mtype in ('E', 'A')) or any(
+        kw in status_text for kw in ['오류', '불가', '실패', 'Fehler', 'Error', '취소']
+    )
+
+    if _is_sbar_error:
         return {
             'ok': False,
             'ebeln': ebeln,
-            'error': f'구매오더 "{ebeln}" 입고 처리 후 SAP 상태표시줄이 비어 있습니다 — 전기가 완료되지 않았을 수 있습니다. SAP 화면을 직접 확인해주세요.',
+            'error': f'구매오더 "{ebeln}" 입고 처리 중 오류: {status_text}',
+            'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts},
+        }
+
+    if not status_text:
+        # 팝업까지 확인했으면 전기는 거의 확실히 됐으나 문서번호 확인 불가
+        return {
+            'ok': True,
+            'ebeln': ebeln,
+            'rowCount': len(processed_rows),
+            'orderQtys': order_qtys,
+            'goodsReceiptDate': today,
+            'statusText': '',
+            'message': f'구매오더 "{ebeln}" 입고 처리 저장까지 진행됐습니다 ({len(processed_rows)}건). SAP 상태표시줄이 비어 있어 자재문서 번호를 확인하지 못했습니다 — SAP에서 자재문서가 생성됐는지 직접 확인해주세요.',
             'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts},
         }
 
     qty_summary = ', '.join(order_qtys) if len(order_qtys) > 1 else (order_qtys[0] if order_qtys else '?')
     row_label = f'{len(processed_rows)}건' if len(processed_rows) > 1 else '1건'
+    mat_doc_label = f', 자재문서: {_mat_doc_no}' if _mat_doc_no else ''
     return {
         'ok': True,
         'ebeln': ebeln,
@@ -4229,9 +4258,9 @@ def post_goods_receipt(ebeln, dump_only=False):
         'orderQtys': order_qtys,
         'goodsReceiptDate': today,
         'statusText': status_text,
-        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}). [SAP: {status_text}]',
-        'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts
-        },
+        'matDocNo': _mat_doc_no,
+        'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}{mat_doc_label}). [SAP: {status_text}]',
+        'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts},
     }
 
 
