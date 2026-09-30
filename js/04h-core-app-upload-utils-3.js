@@ -5608,7 +5608,11 @@ ${docsJson}`;
         if (sendBtn) {
             sendBtn.disabled = false; // 클릭 가능하게 유지(취소 버튼 역할)
             sendBtn.textContent = '⏳ 취소';
-            sendBtn.style.cssText = 'background:#d33;color:#fff;border-color:#a00;';
+            // 색상만 개별 설정 — cssText 덮어쓰기 금지(flex/padding/border-radius 등 원본 스타일이 날아감)
+            sendBtn.style.background = '#d33';
+            sendBtn.style.color = '#fff';
+            sendBtn.style.borderColor = '#a00';
+            sendBtn.onmouseover = null; sendBtn.onmouseout = null; // hover 효과 일시 비활성
             sendBtn.onclick = async function() {
                 ++window._ganttQaOpToken; // 진행 중 콜백 무효화
                 for (var _pi = window._ganttQaHistory.length - 1; _pi >= 0; _pi--) {
@@ -5617,8 +5621,10 @@ ${docsJson}`;
                 }
                 window._ganttQaSending = false;
                 input.disabled = false; input.focus();
-                sendBtn.disabled = false; sendBtn.textContent = '전송';
-                sendBtn.style.cssText = '';
+                sendBtn.disabled = false; sendBtn.textContent = window._currentLang === 'en' ? 'Send' : '전송';
+                sendBtn.style.background = '#e8f4fd'; sendBtn.style.color = '#1a4f7a'; sendBtn.style.borderColor = '#a5c8f0';
+                sendBtn.onmouseover = function() { this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd'; };
+                sendBtn.onmouseout  = function() { this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0'; };
                 sendBtn.onclick = function() { window.sendGanttQaMessage(); };
                 window._renderGanttQaMessages();
                 try { await fetch('http://127.0.0.1:5000/sap-cancel', { method: 'POST' }); } catch (_e) {}
@@ -5739,8 +5745,10 @@ ${docsJson}`;
                 input.disabled = false;
                 input.focus();
                 if (sendBtn) {
-                    sendBtn.disabled = false; sendBtn.textContent = '전송';
-                    sendBtn.style.cssText = '';
+                    sendBtn.disabled = false; sendBtn.textContent = window._currentLang === 'en' ? 'Send' : '전송';
+                    sendBtn.style.background = '#e8f4fd'; sendBtn.style.color = '#1a4f7a'; sendBtn.style.borderColor = '#a5c8f0';
+                    sendBtn.onmouseover = function() { this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd'; };
+                    sendBtn.onmouseout  = function() { this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0'; };
                     sendBtn.onclick = function() { window.sendGanttQaMessage(); };
                 }
             }
