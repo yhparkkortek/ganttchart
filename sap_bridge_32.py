@@ -4111,8 +4111,15 @@ def post_goods_receipt(ebeln, dump_only=False):
                 try:
                     grid.modifyCell(row_idx, 'INDAT', _indat_filled)
                     time.sleep(0.2)
+                    # ⚠️ [2026-09-30 버그수정] modifyCell은 F4 캘린더와 달리 커밋을 자동으로
+                    #    트리거하지 않는다. 마지막 행은 다음 행 반복의 triggerModified가 없어
+                    #    INDAT가 미커밋 상태로 저장 → SAP "입고 날짜 확인" 오류 발생.
+                    #    모든 행에서 modifyCell 직후 triggerModified로 즉시 커밋한다.
+                    grid.currentCellRow = row_idx
+                    grid.triggerModified()
+                    time.sleep(0.3)
                     _indat_set = True
-                    _debug_steps.append(f'행{row_idx}: INDAT modifyCell 성공({_indat_filled!r})')
+                    _debug_steps.append(f'행{row_idx}: INDAT modifyCell+triggerModified 성공({_indat_filled!r})')
                 except Exception as _me:
                     _debug_steps.append(f'행{row_idx}: INDAT modifyCell 실패({_me}), F4 폴백')
             if not _indat_set:
