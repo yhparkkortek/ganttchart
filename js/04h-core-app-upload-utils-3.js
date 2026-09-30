@@ -2177,10 +2177,10 @@ ${docsJson}`;
         }
         const lines = results.map(function(r, i) {
             if (r.ok) {
-                return '✅ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('오더번호', 'PO') + ' ' + r.poNumber +
-                    (r.autoSaved
-                        ? window._t(' → 📁 자동저장', ' → 📁 auto-saved')
-                        : window._t(' (PDF 미리보기 열림 — 직접 저장해주세요)', ' (PDF preview open — please save manually)'));
+                var _savedLabel = r.autoSaved
+                    ? window._t(' → 📁 발주서 PDF 자동저장 완료', ' → 📁 PO PDF auto-saved')
+                    : window._t(' → ⚠️ PDF 자동저장 3회 실패 — ZMM018에서 오더번호 ' + r.poNumber + '로 직접 발주서를 출력해주세요', ' → ⚠️ PDF auto-save failed (3 tries) — please print the PO manually via ZMM018 using order ' + r.poNumber);
+                return '✅ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('오더번호', 'PO') + ' ' + r.poNumber + _savedLabel;
             }
             return '⚠️ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('실패', 'failed') + ': ' + r.error;
         }).join('\n');

@@ -3502,7 +3502,9 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
         raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
 
     print_result = print_po_via_zmm018(po_number, purchasing_org, plant)
-    return {'ok': True, 'poNumber': po_number, 'autoSaved': print_result.get('autoSaved', False),
+    return {'ok': True, 'poNumber': po_number,
+            'autoSaved': print_result.get('autoSaved', False),
+            'pdfPath': print_result.get('pdfPath'),   # 발주서 PDF 경로(자동저장 성공 시에만 유효)
             'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. ' + print_result.get('message', '')}
 
 
@@ -3782,11 +3784,17 @@ def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
     os.makedirs(_PO_PDF_OUT_DIR, exist_ok=True)
     pdf_path = os.path.join(_PO_PDF_OUT_DIR, f'{po_number}.pdf')
     auto_saved = False
-    try:
-        _save_po_pdf_to_file(pdf_path)
-        auto_saved = True
-    except Exception as e:
-        print(f'[구매오더 PDF 자동저장 실패 — 사람이 직접 저장 필요] {e}', file=sys.stderr)
+    _last_err = None
+    for _try in range(3):  # 최대 3회 재시도
+        try:
+            _save_po_pdf_to_file(pdf_path)
+            auto_saved = True
+            break
+        except Exception as e:
+            _last_err = e
+            print(f'[구매오더 PDF 자동저장 시도 {_try + 1}/3 실패] {e}', file=sys.stderr)
+            if _try < 2:
+                time.sleep(2.0)
 
     if auto_saved:
         try:
@@ -3796,8 +3804,9 @@ def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
         return {'ok': True, 'poNumber': po_number, 'pdfPath': pdf_path, 'autoSaved': True,
                 'message': f'구매오더 "{po_number}"의 발주서 PDF를 "{pdf_path}"로 저장하고 열었습니다.'}
 
-    return {'ok': True, 'poNumber': po_number, 'autoSaved': False, 'pdfPath': pdf_path,
-            'message': f'구매오더 "{po_number}"의 발주서 미리보기가 열렸습니다. 미리보기 하단의 💾 저장 아이콘을 눌러 "{pdf_path}"로 직접 저장해주세요(자동 저장이 아직 지원되지 않습니다).'}
+    # 3회 모두 실패 — pdfPath는 None(파일 미존재), 수동 출력 안내
+    return {'ok': True, 'poNumber': po_number, 'autoSaved': False, 'pdfPath': None,
+            'message': f'구매오더 "{po_number}" 발주서 PDF 자동저장에 3번 실패했습니다 — ZMM018을 직접 열어 오더번호 "{po_number}"로 발주서를 출력해주세요. (마지막 오류: {_last_err})'}
 
 
 # ── 🆕 [2026-09-21, Phase 10] 실패 화면 스냅샷 — "구조만" 저장 (docs/phase10-issue-learning-design.md §3-C) ──
