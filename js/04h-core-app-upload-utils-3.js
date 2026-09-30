@@ -4832,32 +4832,57 @@ ${docsJson}`;
         if (sapOpenDocReq) {
             const sapOpenDocType = sapOpenDocReq.docType;
             const sapOpenDocMaterial = sapOpenDocReq.material;
+            const sapOpenDocIsSave = !!sapOpenDocReq.save;
             window._ganttQaHistory.push({ role: 'user', text: question });
-            const pendingText = sapOpenDocMaterial
-                ? window._t(`SAP에서 자재 "${sapOpenDocMaterial}"의 "${sapOpenDocType}" 문서를 조회해서 여는 중...`, `Looking up material "${sapOpenDocMaterial}" in SAP and opening document "${sapOpenDocType}"...`)
-                : window._t(`SAP에서 "${sapOpenDocType}" 문서를 찾아 여는 중...`, `Looking up and opening SAP document "${sapOpenDocType}"...`);
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + pendingText, pending: true });
-            input.value = '';
-            window._renderGanttQaMessages();
-            let sapDocReply;
-            try {
-                let url = 'http://127.0.0.1:5000/sap-open-document?type=' + encodeURIComponent(sapOpenDocType);
-                if (sapOpenDocMaterial) url += '&material=' + encodeURIComponent(sapOpenDocMaterial);
-                const res = await window._withTimeout(
-                    fetch(url),
-                    sapOpenDocMaterial ? 60000 : 50000,
-                    sapOpenDocMaterial
-                        ? window._t('SAP 문서 열기 60초 시간 초과', 'Opening the SAP document timed out after 60s')
-                        : window._t('SAP 문서 열기 50초 시간 초과', 'Opening the SAP document timed out after 50s')
+            // 💡 [2026-09-30] 맥락 추론: 저장/다운로드 의도 → ZDMSR004(C:\SAP_DMS 저장), 열람/열기 의도 → SAP 뷰어 열기
+            let pendingText, sapDocReply;
+            if (sapOpenDocIsSave && sapOpenDocMaterial) {
+                pendingText = window._t(
+                    `ZDMSR004로 자재 "${sapOpenDocMaterial}"의 "${sapOpenDocType}" 문서를 C:\\SAP_DMS\\에 저장하는 중...`,
+                    `Downloading material "${sapOpenDocMaterial}" document "${sapOpenDocType}" via ZDMSR004 to C:\\SAP_DMS\\...`
                 );
-                const data = await res.json();
-                if (data.ok) {
-                    sapDocReply = '📄 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 열었습니다.`, `Opened document "${sapOpenDocType}".`));
-                } else {
-                    sapDocReply = '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + pendingText, pending: true });
+                input.value = '';
+                window._renderGanttQaMessages();
+                try {
+                    const url = 'http://127.0.0.1:5000/sap-download-documents-batch?materials='
+                        + encodeURIComponent(sapOpenDocMaterial) + '&type=' + encodeURIComponent(sapOpenDocType);
+                    const res = await window._withTimeout(
+                        fetch(url), 90000,
+                        window._t('ZDMSR004 문서 저장 90초 시간 초과', 'ZDMSR004 document save timed out after 90s')
+                    );
+                    const data = await res.json();
+                    sapDocReply = data.ok
+                        ? '💾 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 C:\\SAP_DMS\\에 저장했습니다.`, `Saved document "${sapOpenDocType}" to C:\\SAP_DMS\\.`))
+                        : '⚠️ ' + window._t('SAP 문서 저장 실패: ', 'Failed to save SAP document: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                } catch (e) {
+                    sapDocReply = '⚠️ ' + window._t('SAP 문서 저장 실패: ', 'Failed to save SAP document: ') + (e && e.message ? e.message : e);
                 }
-            } catch (e) {
-                sapDocReply = '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (e && e.message ? e.message : e);
+            } else {
+                // 열람(view) 의도 또는 자재번호 없이 저장 요청 → SAP 뷰어 열기
+                pendingText = sapOpenDocMaterial
+                    ? window._t(`SAP에서 자재 "${sapOpenDocMaterial}"의 "${sapOpenDocType}" 문서를 조회해서 여는 중...`, `Looking up material "${sapOpenDocMaterial}" in SAP and opening document "${sapOpenDocType}"...`)
+                    : window._t(`SAP에서 "${sapOpenDocType}" 문서를 찾아 여는 중...`, `Looking up and opening SAP document "${sapOpenDocType}"...`);
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + pendingText, pending: true });
+                input.value = '';
+                window._renderGanttQaMessages();
+                try {
+                    let url = 'http://127.0.0.1:5000/sap-open-document?type=' + encodeURIComponent(sapOpenDocType);
+                    if (sapOpenDocMaterial) url += '&material=' + encodeURIComponent(sapOpenDocMaterial);
+                    const res = await window._withTimeout(
+                        fetch(url),
+                        sapOpenDocMaterial ? 60000 : 50000,
+                        sapOpenDocMaterial
+                            ? window._t('SAP 문서 열기 60초 시간 초과', 'Opening the SAP document timed out after 60s')
+                            : window._t('SAP 문서 열기 50초 시간 초과', 'Opening the SAP document timed out after 50s')
+                    );
+                    const data = await res.json();
+                    sapDocReply = data.ok
+                        ? '📄 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 열었습니다.`, `Opened document "${sapOpenDocType}".`))
+                        : '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                } catch (e) {
+                    sapDocReply = '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (e && e.message ? e.message : e);
+                }
             }
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: sapDocReply });
@@ -4912,8 +4937,9 @@ ${docsJson}`;
             window._ganttQaHistory.push({ role: 'user', text: question });
             input.value = '';
             if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
-            const _downloadVerb = /(저장|save)/i.test(sapDocQuestion) ? '저장해줘'
-                : /(열어|열기|open)/i.test(sapDocQuestion) ? '열어줘' : '다운로드 해줘';
+            // 💡 [2026-09-30] 맥락 추론: 저장/다운로드/받아 → 저장 경로(ZDMSR004), 열어/열기 → 열람 경로
+            const _downloadVerb = /(열어|열기|열람|open)/i.test(sapDocQuestion) ? '열어줘'
+                : /(저장|다운로드|받아|내려받아|save|download)/i.test(sapDocQuestion) ? '저장해줘' : '다운로드 해줘';
             window._ganttQaShowDocTypeDropdown(sapDocNoTypeReq, _downloadVerb);
             window._renderGanttQaMessages();
             input.focus();
@@ -6870,8 +6896,9 @@ ${docsJson}`;
         // 💡 [2026-09-15] "문서"뿐 아니라 "파일"이라고만 말하는 경우도 실사용에서 확인됨
         //    (예: "SAP에서 106188 품번 정보 및 파일 열어줘") — 둘 다 트리거하도록 확장.
         if (!window._sapMentionsDoc(text)) return null;
-        // 💡 [2026-09-22] "승인원 조회해서 저장해줘"처럼 "저장/받아"도 인정 — 단일 자재 저장은 open_document(다운로드+열기)가 유일한 경로
-        if (!/(열어|열기|다운로드|출력|보여|저장|받아|open)/i.test(text)) return null;
+        // 💡 [2026-09-22] "승인원 조회해서 저장해줘"처럼 "저장/받아"도 인정
+        // 💡 [2026-09-30] "저장/다운로드/받아" = ZDMSR004 경로(C:\SAP_DMS 저장), "열어/보여/열람" = SAP 뷰어 열기 — 맥락 추론으로 구분
+        if (!/(열어|열기|다운로드|출력|보여|저장|받아|열람|open|download|save)/i.test(text)) return null;
         if (/(목록|리스트|list)/i.test(text)) return null; // "승인원 목록 보여줘"는 문서 목록(list-docs) 쪽
         // 💡 "문서 열기 가능해?"류 여부-질문까지 실행으로 오인하지 않도록(엑셀 내보내기 명령과 동일한
         //    가드 패턴 — 위 looksLikeQuestion 참고).
@@ -6884,7 +6911,9 @@ ${docsJson}`;
         //    조회한다(sap_bridge_32.py의 _navigate_to_material_document_tab). 문서 타입 코드
         //    (P01 등)는 숫자만으로 된 문자열이 아니라 이 정규식과 겹치지 않는다.
         var matM = text.match(/\b(\d{5,8})\b/);
-        return { docType: docType, material: matM ? matM[1] : null };
+        // 맥락 추론: "저장/다운로드/받아/내려받아/save/download" → ZDMSR004(C:\SAP_DMS 저장), 나머지 → SAP 뷰어 열기
+        var isSave = /(저장|다운로드|받아|내려받아|save|download)/i.test(text);
+        return { docType: docType, material: matM ? matM[1] : null, save: isSave };
     };
 
     // 📄 [2026-09-15 신규] "SAP에서 106188 품번 정보 및 파일 열어줘"처럼 자재번호는 있지만
