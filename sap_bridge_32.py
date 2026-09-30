@@ -3204,13 +3204,62 @@ def simulate_vendor_copy(row_count=2):
 # 라이브 진단으로 정확한 ID를 확인해야 함). 반대로 협력사(LIFNR)/세금코드(MWSKZ)/
 # 단가(NETPR)/저장(btn[5])/ZMM018 부분은 사용자가 제공한 SAP GUI "기록 및 재생" 매크로
 # (발주서 작성,출력.vbs)에서 그대로 가져온 정확한 ID다(추측 아님).
-def _navigate_to_po_upload_screen(session, wnd, excel_path, plant='1000'):
+def _zmm060_select_create_radio(wnd, debug_steps=None):
+    """ZMMR060 초기화면의 '생성' 라디오버튼을 선택한다.
+    이전 실행이 '재처리' 모드였으면 그 모드가 남아 F8 후 "데이터가 존재하지 않습니다"
+    오류가 나므로 항상 명시적으로 선택한다.
+    라디오버튼 Name은 SAP 사내 커스텀이라 알 수 없으므로 Text로 탐색한다."""
+    CREATE_TEXTS = ('생성', '신규', '등록', 'Anlegen', 'Create', 'New')
+    def _search(container, depth=0):
+        if depth > 6:
+            return False
+        try:
+            count = container.Children.Count
+        except Exception:
+            return False
+        for i in range(count):
+            try:
+                ch = container.Children.ElementAt(i)
+            except Exception:
+                continue
+            ctype = ''
+            try:
+                ctype = ch.Type
+            except Exception:
+                pass
+            if ctype == 'GuiRadioButton':
+                try:
+                    txt = (ch.Text or '').strip()
+                    if any(t in txt for t in CREATE_TEXTS):
+                        if not ch.Selected:
+                            ch.Select()
+                            if debug_steps is not None:
+                                debug_steps.append(f'ZMMR060 생성 라디오버튼 선택: "{txt}"')
+                        else:
+                            if debug_steps is not None:
+                                debug_steps.append(f'ZMMR060 생성 라디오버튼 이미 선택됨: "{txt}"')
+                        return True
+                except Exception:
+                    pass
+            if _search(ch, depth + 1):
+                return True
+        return False
+    found = _search(wnd)
+    if not found and debug_steps is not None:
+        debug_steps.append('ZMMR060 생성 라디오버튼을 찾지 못함 — 현재 모드 그대로 진행')
+
+
+def _navigate_to_po_upload_screen(session, wnd, excel_path, plant='1000', debug_steps=None):
     """ZMMR060("연구개발자재 발주시스템") 초기화면에 진입해 "생성" 모드로 로컬 엑셀
     파일을 업로드한다."""
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMMR060'
     wnd.sendVKey(0)
     time.sleep(0.8)
     wnd = session.findById('wnd[0]')
+
+    # ★ 생성 라디오버튼 강제 선택 — 이전 세션이 "재처리" 모드로 끝났으면 그대로 남아
+    # F8 후 "데이터가 존재하지 않습니다" 오류가 나므로 항상 생성 모드를 명시한다.
+    _zmm060_select_create_radio(wnd, debug_steps=debug_steps)
 
     _set_text_on_best_candidate(wnd, 'WERKS', plant)
     # 플랜트는 화면 기본값(보통 1000)이 이미 들어있는 경우가 많아, 못 찾아도 치명적이지
