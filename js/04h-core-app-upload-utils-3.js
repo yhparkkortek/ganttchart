@@ -3831,6 +3831,36 @@ ${docsJson}`;
             return;
         }
 
+        // ↩️ [2026-09-30] "A45번 대화로 돌아가서 H1 자재 확인해줘" — 그 메시지까지로 히스토리 트리밍
+        const _qaNavM = question.match(/([AaQq])(\d+)\s*번?\s*(?:대화(?:로\s*돌아가서?|부터\s*다시?)|부터\s*다시?|까지만\s*남기)/);
+        if (_qaNavM) {
+            const _navRole = /^[Aa]$/.test(_qaNavM[1]) ? 'ai' : 'user';
+            const _navN = parseInt(_qaNavM[2], 10);
+            let _cnt = 0, _cutIdx = -1;
+            for (let i = 0; i < window._ganttQaHistory.length; i++) {
+                const _hm = window._ganttQaHistory[i];
+                if (_hm.role === _navRole && !_hm.pending) { _cnt++; if (_cnt === _navN) { _cutIdx = i; break; } }
+            }
+            if (_cutIdx !== -1) {
+                window._ganttQaHistory = window._ganttQaHistory.slice(0, _cutIdx + 1);
+                const _restQ = question.replace(_qaNavM[0], '').replace(/^\s*[—\-]?\s*/, '').trim();
+                input.value = _restQ;
+                window._renderGanttQaMessages();
+                if (_restQ) {
+                    window.sendGanttQaMessage();
+                } else {
+                    const _navType = _navRole === 'ai' ? 'A' : 'Q';
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                        _navType + _navN + '번 이후 대화를 지웠습니다. 이어서 질문해 주세요.',
+                        'Cleared conversation after ' + _navType + _navN + '. Please continue.'
+                    ) });
+                    window._renderGanttQaMessages();
+                    input.focus();
+                }
+                return;
+            }
+        }
+
         // 🌏❌ [2026-09-23 신규] 앱 범위 밖 질문(날씨·환율·뉴스) — AI 호출 없이 즉답.
         //    근거: Phase 10 학습 자료(digest_20260923)에서 "오늘 날씨 확인해줘" 재질문 4회 —
         //    AI가 매번 "인터넷 검색을 이용하세요"라고 답했지만 사람은 답이 아니라 계속 다시 물었고,
@@ -4478,10 +4508,15 @@ ${docsJson}`;
             //    SAP 재조회 없이 아래 BOM 메모리 로컬 명령이 처리한다 — 이 guard 없으면
             //    "303409 BOM만 정리해줘"처럼 캐시된 데이터를 재사용하려는 요청도 새 SAP 조회
             //    옵션 드롭다운이 먼저 가로채는 문제가 발생한다("AI와 하드코딩 경계" 이슈).
+            const _hasDasi = /다시|새로|재조회/.test(question);
             const _bTrigNums = /bom/i.test(question) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
             const _bCacheNums = window._lastBomData && window._lastBomData.matNums;
-            const _bAllCached = _bTrigNums.length > 0 && _bCacheNums && _bCacheNums.length > 0 &&
+            const _bAllCached = !_hasDasi && _bTrigNums.length > 0 && _bCacheNums && _bCacheNums.length > 0 &&
                 _bTrigNums.every(function(n) { return _bCacheNums.indexOf(n) !== -1; });
+            // "다시" 재조회: 이전 옵션이 있으면 드롭다운 없이 바로 진행
+            if (_hasDasi && window._lastBomOptions && _bTrigNums.length > 0) {
+                window._ganttQaBomResolvedOptions = Object.assign({}, window._lastBomOptions);
+            }
             const bomTrig = !_bAllCached && window._ganttQaExtractBomTrigger(question);
             if (bomTrig) {
                 let useSingleTcode; // undefined = 자재 개수로 자동 결정
@@ -4500,7 +4535,9 @@ ${docsJson}`;
                 if (useSingleTcode === undefined) useSingleTcode = bomTrig.materials.length <= 1;
 
                 const inlineOpts = window._ganttQaParseBomOptionReply(question);
-                if (inlineOpts.explosion === undefined || inlineOpts.showPrice === undefined || inlineOpts.showLocation === undefined) {
+                const _bomMKey0 = bomTrig.materials.slice().sort().join(',');
+                const _reuseOpts = window._ganttQaBomResolvedOptions && window._ganttQaBomResolvedOptions.materialsKey === _bomMKey0;
+                if (!_reuseOpts && (inlineOpts.explosion === undefined || inlineOpts.showPrice === undefined || inlineOpts.showLocation === undefined)) {
                     window._ganttQaHistory.push({ role: 'user', text: question });
                     input.value = '';
                     window._ganttQaBomDraft = {
@@ -4513,15 +4550,17 @@ ${docsJson}`;
                     input.focus();
                     return;
                 }
-                // 옵션이 한 메시지에 전부 이미 있음 — 되묻지 않고 바로 진행. 레이아웃은
-                // 이 "이미 다 있으면 안 물어보고 진행" 판정에서 제외된 선택 항목이라(위
-                // if문이 explosion/showPrice/showLocation만 검사) 안 왔으면 조용히 기본값.
-                window._ganttQaBomResolvedOptions = {
-                    materialsKey: bomTrig.materials.slice().sort().join(','),
-                    useSingleTcode: useSingleTcode, explosion: inlineOpts.explosion,
-                    showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
-                    layout: inlineOpts.layout || '/STD_MC', exchangeRate: inlineOpts.exchangeRate || 0
-                };
+                if (!_reuseOpts) {
+                    // 옵션이 한 메시지에 전부 이미 있음 — 되묻지 않고 바로 진행. 레이아웃은
+                    // 이 판정에서 제외된 선택 항목이라 안 왔으면 조용히 기본값.
+                    window._ganttQaBomResolvedOptions = {
+                        materialsKey: _bomMKey0,
+                        useSingleTcode: useSingleTcode, explosion: inlineOpts.explosion,
+                        showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
+                        layout: inlineOpts.layout || '/STD_MC', exchangeRate: inlineOpts.exchangeRate || 0
+                    };
+                    window._lastBomOptions = Object.assign({}, window._ganttQaBomResolvedOptions); // "다시" 재조회용
+                }
                 _bomLookupReady = true;
                 // question은 그대로 두고 아래 정상 흐름(로컬명령/AI 호출)으로 계속 진행 — return 없음
             }
@@ -4952,6 +4991,7 @@ ${docsJson}`;
                     if (_bomIsComplex) {
                         window._lastBomData = { sapText: _bomFetchedText, queriedAt: Date.now(), matNums: _bMatNums, dataRows: _bDataRows,
                             bomMeta: (window._lastSapFetchResult && window._lastSapFetchResult.bomMeta) || null };
+                        window._lastBomFilteredData = null; // 새 BOM 로드 시 이전 필터 결과 초기화
                         bomReply = null; // 아래에서 confirm 버튼으로 표시
                     } else {
                         bomReply = window._ganttQaFormatSapGridReply(_bomFetchedText);
@@ -4985,6 +5025,36 @@ ${docsJson}`;
         //    ② "BOM 전체 내용 채팅창에 보여줘" — 확인 버튼 "채팅창에 전체 보기".
         //    ③ 상태코드 필터 (H1/X3/P1 등) — "H1 상태 자재 확인해줘" 류의 후속 질문.
         if (window._lastBomData) {
+            // ①' 필터 결과 엑셀 출력 — H1/X3 상태 필터 직후 "엑셀로 출력해줘" 등 (전체 BOM이 아닌 경우)
+            if (window._lastBomFilteredData && /엑셀.*(출력|열어?|내보|저장)/i.test(question) && !/전체|전부/.test(question)) {
+                if (!_skipUserHistoryPush) {
+                    window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                    if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+                }
+                let _bfXlsReply;
+                try {
+                    const _bfExported = window._exportSapDataToExcel({ text: window._lastBomFilteredData.sapText, source: 'grid', bomMeta: window._lastBomFilteredData.bomMeta || null });
+                    const _bfRes = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/sap-save-export', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ fileName: _bfExported.fileName, dataBase64: _bfExported.base64 })
+                        }), 20000, window._t('SAP 엑셀 저장 시간 초과', 'Saving the SAP Excel file timed out')
+                    );
+                    const _bfData = await _bfRes.json();
+                    _bfXlsReply = _bfData.ok
+                        ? '📊 ' + (_bfData.message || window._t('엑셀 파일을 저장했습니다.', 'Excel file saved.'))
+                            + window._t(' (' + window._lastBomFilteredData.code + ' 상태 ' + window._lastBomFilteredData.rowCount + '건)',
+                               ' (status ' + window._lastBomFilteredData.code + ', ' + window._lastBomFilteredData.rowCount + ' rows)')
+                        : '⚠️ ' + window._t('엑셀 저장에 실패했습니다: ', 'Failed to save the Excel file: ') + (_bfData.error || window._t('알 수 없는 오류', 'unknown error'));
+                } catch (e) {
+                    _bfXlsReply = '⚠️ ' + window._t('BOM 필터 엑셀 저장 실패: ', 'Filtered BOM Excel save failed: ') + (e && e.message ? e.message : e);
+                }
+                window._ganttQaHistory.push({ role: 'ai', text: _bfXlsReply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
             // ① BOM 엑셀로 열기
             if (/^BOM\s*엑셀로?\s*열기$/.test(question.trim()) || /BOM.*엑셀.*(저장|열기)|엑셀.*BOM.*(저장|열기)/i.test(question)) {
                 if (!_skipUserHistoryPush) {
@@ -5104,11 +5174,21 @@ ${docsJson}`;
                 });
                 let _bsReply;
                 if (!_bsFiltered.length) {
+                    window._lastBomFilteredData = null;
                     _bsReply = window._t('메모리된 BOM 데이터에서 **' + _bCode + '** 상태 자재를 찾지 못했습니다.', 'No parts with status **' + _bCode + '** found in the cached BOM data.');
                 } else {
+                    // 필터 결과 보관 — "엑셀로 출력해줘" 후속 요청용
+                    const _bsPfx = _bsBodyStart !== -1 ? _bsText.slice(0, _bsBodyStart) : '';
+                    window._lastBomFilteredData = {
+                        sapText: (_bsPfx ? _bsPfx + '\n\n' : '') + _bsHeader + '\n' + _bsFiltered.join('\n'),
+                        bomMeta: window._lastBomData.bomMeta || null,
+                        code: _bCode, rowCount: _bsFiltered.length
+                    };
                     _bsReply = window._t('메모리된 BOM 데이터에서 **' + _bCode + '** 상태 자재 **' + _bsFiltered.length + '건**:',
                         'Parts with status **' + _bCode + '** in cached BOM (' + _bsFiltered.length + ' rows):')
-                        + '\n\n' + _bsHeaderCells.join('\t') + '\n' + _bsFiltered.join('\n');
+                        + '\n\n' + _bsHeaderCells.join('\t') + '\n' + _bsFiltered.join('\n')
+                        + window._t('\n\n*"엑셀로 출력해줘"라고 하면 이 필터 결과를 엑셀로 저장합니다.*',
+                            '\n\n*Say "엑셀로 출력해줘" to save this filtered result as Excel.*');
                 }
                 window._ganttQaHistory.push({ role: 'ai', text: _bsReply });
                 window._renderGanttQaMessages();
@@ -5610,9 +5690,9 @@ ${docsJson}`;
             sendBtn.disabled = false; // 클릭 가능하게 유지(취소 버튼 역할)
             sendBtn.textContent = '⏳ 취소';
             // 색상만 개별 설정 — cssText 덮어쓰기 금지(flex/padding/border-radius 등 원본 스타일이 날아감)
-            sendBtn.style.background = '#d33';
-            sendBtn.style.color = '#fff';
-            sendBtn.style.borderColor = '#a00';
+            sendBtn.style.background = '#fde8e8';
+            sendBtn.style.color = '#c0392b';
+            sendBtn.style.borderColor = '#f5b7b1';
             sendBtn.onmouseover = null; sendBtn.onmouseout = null; // hover 효과 일시 비활성
             sendBtn.onclick = async function() {
                 ++window._ganttQaOpToken; // 진행 중 콜백 무효화

@@ -1605,6 +1605,13 @@ ${question}
             </div>`;
             return;
         }
+        // Q/A 순번 배정 (렌더 시마다 재산정 — 말풍선 오른쪽 하단에 Q1·A1 표시용)
+        let _qSeq = 0, _aSeq = 0;
+        window._ganttQaHistory.forEach(function(m) {
+            if (m.role === 'user') { m._qIdx = ++_qSeq; }
+            else if (m.role === 'ai' && !m.pending) { m._aIdx = ++_aSeq; }
+            else { m._aIdx = undefined; }
+        });
         box.innerHTML = window._ganttQaHistory.map(function(m) {
             const isUser = m.role === 'user';
             // 💡 [2026-08-29 버그 수정] 원색 파랑(#0056b3) 배경 + 흰 글자 조합이었는데, 대부분의 브라우저
@@ -1736,7 +1743,11 @@ ${question}
                         + '</div>';
                 })()
                 : '';
+            const _seqLabel = isUser
+                ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;user-select:none;padding-right:2px;">Q' + m._qIdx + '</div>' : '')
+                : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;user-select:none;padding-left:2px;">A' + m._aIdx + '</div>' : '');
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
+                ${_seqLabel}
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; ${_bd} background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
                 ${reaskHintHtml ? `<div style="max-width:82%; width:100%;">${reaskHintHtml}</div>` : ''}
