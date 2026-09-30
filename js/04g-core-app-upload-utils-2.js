@@ -1626,7 +1626,18 @@ ${question}
             const _bd = _pal ? 'border:1px solid ' + _pal.accent + ';' : '';
             const body = isUser
                 ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
-                : `<div style="word-break:break-word;">${window._mdToHtml(m.text)}</div>`;
+                : (function() {
+                    let _bHtml = window._mdToHtml(m.text);
+                    // 💡 [2026-09-30] "명령예시" 클릭 → 입력창 자동채움 + 즉시 전송
+                    //    한국어가 포함된 "..." 따옴표 문자열만 대상 (HTML 속성값 오탐 방지)
+                    _bHtml = _bHtml.replace(/"([^"<>]*[가-힣][^"<>]*)"/g, function(_m, cmd) {
+                        const esc = cmd.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        return '<span onclick="(function(){var el=document.getElementById(\'gantt-qa-input\');if(!el)return;el.value=\'' + esc + '\';var btn=document.getElementById(\'gantt-qa-send-btn\');if(btn)btn.click();})()" '
+                            + 'style="color:#0057ad;background:#dceeff;border-bottom:1px dashed #4a90d9;border-radius:3px;padding:1px 3px;cursor:pointer;white-space:nowrap;" '
+                            + 'title="클릭하면 바로 실행">“' + cmd + '”</span>';
+                    });
+                    return `<div style="word-break:break-word;">${_bHtml}</div>`;
+                })();
             // 💡 [2026-08-31 신규] AI 요약의 👍/👎 피드백 + 일괄개선과 동일한 개념을 AI 문답에도 적용 —
             //    답변 하나하나(m.uid, sendGanttQaMessage에서 부여)에 평가를 남기면, 쌓인 👎 케이스를
             //    [📝 프롬프트 → 🤖 일괄개선]에서 한 번에 모아 프롬프트 개선을 요청할 수 있다.
