@@ -229,6 +229,11 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **읽을 때**: `/self-check-update`·`/self-update`, `kortek_backend.zip`, `.bat`/`.vbs` 변경.
 - 새 배포 파일을 추가하면 **`_SELF_UPDATE_FILES`와 `.claude/settings.json`의 zip 목록 둘 다** 갱신. `.bat`/`.vbs`는 항상 CRLF(LF-only는 cmd 파서 오동작). 원격은 `main` 브랜치 고정. 자동 재시작은 새 콘솔 + `/health` 폴링이며 실패하면 수동 안내로 폴백.
 
+### `docs/html-corruption-recovery.md` — 🔥 HTML 인코딩 손상 복구
+- **읽을 때**: 한국어가 `?◆◆`으로 깨지거나 `??/button>` 같은 태그 텍스트가 화면에 보이거나, 배경 클릭 시 외부 사이트로 이동하는 증상이 나타날 때.
+- **원인**: PowerShell `Set-Content`/`Out-File`이 HTML을 덮어쓸 때 UTF-8 한국어 바이트 → `?` 치환, `<` 유실 → 닫는 태그 깨짐. **HTML 수정은 Python `open('...','wb')`으로만.**
+- **복구**: `python3 -c "open('GANTT_CHART_V02_Color.html','rb').read().decode('utf-8'); print('OK')"` 로 손상 확인 → 마지막 정상 커밋에서 복원 (`git show GOOD_HASH:GANTT_CHART_V02_Color.html`) → Python `wb` 모드로 캐시버스터만 업데이트.
+
 ### `docs/ui-conventions.md` — 🌐 i18n / 🎨 팔레트 / 🪟 모달 컨벤션 (상세)
 새 UI를 만들 때 **아래 세 가지는 항상 함께 끝내야 완료**다(별도 지시가 없어도 기본 범위):
 - **영문 대응**: 정적 HTML은 `data-i18n*` 속성 + `LANG` 맵, 동적 문구는 `window._t(ko,en)`/`_en` 삼항. "최초 1회 렌더 후 재사용" 모달은 언어 토글 시 갱신되도록 id 맵 또는 전용 `_xxxRefreshLang()`, 목록/리포트 재렌더 함수는 `toggleLang()` 끝에서 호출. 검증은 🌐 왕복 + 모달을 닫았다 다시 연 상태.
@@ -288,3 +293,4 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
   당혹스러운 증상의 흔한 원인이다. 파일을 하나만 고쳐도 되지만, 쿼리스트링 자체는 52개 스크립트
   태그가 전부 공유하므로 `sed -i 's/v=옛날값/v=새값/g' GANTT_CHART_V02_Color.html`처럼 한 번에
   전체를 바꾸는 게 안전하다(형식은 날짜+알파벳 접미사, 예: `20260912e` → `20260914a`).
+- **⚠️ HTML 파일은 절대 PowerShell `Set-Content`/`Out-File`로 덮어쓰지 말 것(2026-09-30 반복 사고)** — UTF-8 한국어 바이트가 `?`로 치환되고 `<`도 유실돼 `</a>`→`/a>` 같이 닫는 태그가 깨진다. 수정은 반드시 Python `open('...','wb')` 또는 PowerShell `[System.IO.File]::WriteAllText(..., Encoding::UTF8)` 사용. 손상 시 복구 절차 → `docs/html-corruption-recovery.md`.
