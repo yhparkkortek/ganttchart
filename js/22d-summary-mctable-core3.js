@@ -568,6 +568,30 @@ window._pcExtractPdfText = async function(file) {
     return text;
 };
 
+// 텍스트 레이어가 없는 PDF(세금계산서·거래명세서 등)를 pdf.js로 캔버스에 렌더링해
+// JPEG base64 이미지 배열로 반환 — _pcExtractPdfText가 실패했을 때 AI 비전 분석 폴백용.
+window._pcRenderPdfAsImages = async function(file, opts) {
+    opts = opts || {};
+    var maxPages = opts.maxPages || 3;
+    var scale    = opts.scale    || 1.5;
+    var buf = await file.arrayBuffer();
+    var pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    var numPages = Math.min(pdf.numPages, maxPages);
+    var images = [];
+    for (var i = 1; i <= numPages; i++) {
+        var page = await pdf.getPage(i);
+        var viewport = page.getViewport({ scale: scale });
+        var canvas = document.createElement('canvas');
+        canvas.width  = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        var ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        images.push({ mimeType: 'image/jpeg', data: dataUrl.split(',')[1] });
+    }
+    return images;
+};
+
 // 💡 [2026-08-25 실측 확인] panelook.com 비교 페이지는 라벨(#left_attr_table의 <li>)과 값
 //    (#right_attr_table의 <dl>, 값은 그 안의 .vartd)이 완전히 분리된 두 DOM 서브트리다 — 그냥
 //    textContent만 뽑으면 "라벨 129개가 통째로 먼저, 그다음 값 129개가 통째로" 나와버려서 순서가

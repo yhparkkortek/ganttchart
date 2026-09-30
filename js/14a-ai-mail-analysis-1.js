@@ -322,7 +322,7 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
                 const res = await fetch(GAS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ userApiKey: apiKey, prompt, provider: providerKey, model })
+                    body: JSON.stringify({ userApiKey: apiKey, prompt, provider: providerKey, model, imageParts: opts.imageParts || null })
                 });
                 const data = await res.json();
                 if (data.status !== 'success') throw new Error(data.message || '구글 서버 응답 오류');

@@ -22,10 +22,11 @@ function doPost(e) {
     var params = JSON.parse(rawBody);
     Logger.log('[doPost] provider=' + params.provider + ' model=' + params.model + ' promptLen=' + String(params.prompt || '').length);
 
-    var userKey  = params.userApiKey;
-    var prompt   = params.prompt;
-    var model    = params.model;
-    var provider = params.provider || 'gemini';
+    var userKey    = params.userApiKey;
+    var prompt     = params.prompt;
+    var model      = params.model;
+    var provider   = params.provider || 'gemini';
+    var imageParts = params.imageParts || null; // [{mimeType, data}] — Gemini 비전 전용
 
     if (!userKey) throw new Error('[HTTP 401] API 키가 없습니다 — 앱의 ⚙️ AI 분석 설정에서 개인 API 키를 저장하세요.');
     if (!prompt) throw new Error('[HTTP 400] 프롬프트가 비어 있습니다.');
@@ -41,7 +42,7 @@ function doPost(e) {
       text = callOpenAiCompatible_('OpenAI', 'https://api.openai.com/v1/chat/completions', userKey, prompt,
         model || 'gpt-5.6-luna', { max_completion_tokens: 8192 });
     } else {
-      text = callGemini_(userKey, prompt, model);
+      text = callGemini_(userKey, prompt, model, imageParts);
     }
 
     return json_({ status: 'success', result: { candidates: [{ content: { parts: [{ text: text.text }] }, finishReason: text.finish }] } });
@@ -72,11 +73,19 @@ function errorMessage_(label, code, body, raw) {
   return '[HTTP ' + code + '] ' + msg;
 }
 
-function callGemini_(apiKey, prompt, model) {
+function callGemini_(apiKey, prompt, model, imageParts) {
   var geminiModel = model || 'gemini-3.5-flash-lite';
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + geminiModel + ':generateContent';
+  // 이미지가 있으면 image parts 먼저, 그 다음 텍스트 프롬프트 (Gemini Vision)
+  var parts = [];
+  if (imageParts && imageParts.length) {
+    imageParts.forEach(function(img) {
+      parts.push({ inlineData: { mimeType: img.mimeType || 'image/jpeg', data: img.data } });
+    });
+  }
+  parts.push({ text: prompt });
   var payload = {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts: parts }],
     generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
   };
   var res = UrlFetchApp.fetch(url, {
