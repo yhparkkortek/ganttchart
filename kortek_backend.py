@@ -2192,7 +2192,19 @@ def sap_save_export():
         os.makedirs(_SAP_EXPORT_OUT_DIR, exist_ok=True)
     except Exception as e:
         return jsonify({'ok': False, 'error': f'저장 폴더({_SAP_EXPORT_OUT_DIR})를 만들지 못했습니다: {e}'}), 500
+    # 같은 이름 파일이 Excel에 열려 있으면 Permission denied — 숫자 접미사로 회피
+    base, ext = os.path.splitext(safe_name)
     out_path = os.path.join(_SAP_EXPORT_OUT_DIR, safe_name)
+    counter = 1
+    while os.path.exists(out_path):
+        try:
+            with open(out_path, 'r+b'):
+                pass
+            break  # 쓸 수 있으면 덮어씀
+        except PermissionError:
+            out_path = os.path.join(_SAP_EXPORT_OUT_DIR, f'{base}_{counter}{ext}')
+            counter += 1
+    actual_name = os.path.basename(out_path)
     try:
         with open(out_path, 'wb') as f:
             f.write(base64.b64decode(data_base64))
@@ -2203,7 +2215,7 @@ def sap_save_export():
     except Exception:
         pass
     return jsonify({'ok': True, 'path': out_path, 'folder': _SAP_EXPORT_OUT_DIR,
-                    'message': f'"{safe_name}" 파일을 {_SAP_EXPORT_OUT_DIR} 폴더에 저장했습니다. 엑셀로 열었습니다.'})
+                    'message': f'"{actual_name}" 파일을 {_SAP_EXPORT_OUT_DIR} 폴더에 저장했습니다. 엑셀로 열었습니다.'})
 
 
 @app.route('/sap-where-used', methods=['GET'])
