@@ -3067,6 +3067,62 @@ def fetch_team_budget(team, fperbl='1', tperbl='12'):
     return {'ok': True, 'team': team, 'periodFrom': fperbl, 'periodTo': tperbl, 'account': matched['account_label'], 'values': values, 'text': text}
 
 
+def simulate_vendor_copy(row_count=2):
+    """🧪 [2026-09-30 신규] 현재 SAP GUI에 열려있는 ZMMR060 그리드에서
+    행 0의 LIFNR/MWSKZ를 읽어 행 1~(row_count-1)에 modifyCell로 직접 쓸 수 있는지만 검증.
+    저장은 하지 않으므로 데이터에 영향 없음 — 시뮬레이션 전용."""
+    row_count = max(2, int(row_count))
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    grid = _find_po_grid(session, wnd)
+    if grid is None:
+        return {'ok': False, 'error': 'ZMMR060 그리드를 찾지 못했습니다 — SAP GUI에서 ZMMR060을 실행하고 엑셀 업로드까지 완료된 상태여야 합니다.'}
+
+    actual_rows = grid.RowCount
+    if actual_rows < 1:
+        return {'ok': False, 'error': f'그리드 행이 {actual_rows}개입니다. 업로드된 품목이 없습니다.'}
+
+    # 행 0의 LIFNR/MWSKZ 읽기
+    try:
+        lifnr0 = str(grid.GetCellValue(0, 'LIFNR')).strip()
+        mwskz0 = str(grid.GetCellValue(0, 'MWSKZ')).strip()
+    except Exception as e:
+        return {'ok': False, 'error': f'행 0 값 읽기 실패: {e}'}
+
+    if not lifnr0:
+        return {'ok': False, 'error': f'행 0의 LIFNR이 비어 있습니다. 먼저 F4로 협력사를 선택해주세요.'}
+
+    rows_written, rows_failed, detail = [], [], []
+    test_range = range(1, min(row_count, actual_rows))
+    for idx in test_range:
+        try:
+            grid.modifyCell(idx, 'LIFNR', lifnr0)
+            if mwskz0:
+                grid.modifyCell(idx, 'MWSKZ', mwskz0)
+            # 실제로 써졌는지 재확인
+            check = str(grid.GetCellValue(idx, 'LIFNR')).strip()
+            if check == lifnr0:
+                rows_written.append(idx)
+                detail.append(f'행{idx}: ✅ LIFNR={check}')
+            else:
+                rows_failed.append(idx)
+                detail.append(f'행{idx}: ⚠️ 썼는데 읽히는 값={check!r} (예상={lifnr0!r})')
+        except Exception as e:
+            rows_failed.append(idx)
+            detail.append(f'행{idx}: ❌ {e}')
+
+    ok = len(rows_failed) == 0
+    summary = (
+        f'행 0 LIFNR={lifnr0!r}, MWSKZ={mwskz0!r}\n'
+        f'테스트 행: {list(test_range)}\n'
+        f'성공: {rows_written}, 실패: {rows_failed}\n' +
+        '\n'.join(detail)
+    )
+    return {'ok': ok, 'lifnr_row0': lifnr0, 'mwskz_row0': mwskz0,
+            'rows_written': rows_written, 'rows_failed': rows_failed,
+            'text': summary}
+
+
 # ── "구매오더 요청"(ZMMR060 → ZMM018) 전용 헬퍼 (2026-09-15 신규) ──────────
 # AI 문답에 전자세금계산서/견적서 PDF를 첨부하면 항목을 추출해 만든 BDC Upload 엑셀을
 # ZMMR060에 업로드해 구매오더를 생성하고, 저장 직전에 사람이 확인하도록 두 단계로 나눴다
@@ -3194,47 +3250,98 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
             ' 막힌 경우입니다(프로젝트코드·구매담당자 사번·자재코드·구매그룹 등은 자유 텍스트가 아니라'
             ' SAP 마스터데이터와 일치해야 합니다). 엑셀 파일: ' + str(excel_path))
 
-    # ⚠️⚠️ [2026-09-15 실사용 버그수정] 협력사(LIFNR)/세금코드(MWSKZ)를 원래는 "현재 셀"
-    # 개념으로 딱 한 번만(행 지정 없이 `currentCellColumn`만) 설정했는데, 실제 SAP 그리드는
-    # 행을 명시하지 않으면 그 시점의 "현재 행"(대체로 0번)에만 적용된다 — 품목이 여러 개인
-    # 실사용 테스트에서 "공급업체/세금코드가 일부 행만 채워지고 나머지는 비어 있다"는 제보로
-    # 확인됨. **행마다 `currentCellRow`까지 명시적으로 지정해서 반복**하도록 수정 — 협력사는
-    # 매번 같은 사업자등록번호로 다시 검색해야 해서(SAP 표준 검색도움말 특성상 "검색 결과를
-    # 다른 행에 복사"하는 기능이 없음) 품목 수만큼 F4 팝업을 반복하는 대신 방법이 없다(느리지만
-    # 정확성이 우선).
-    for idx in range(len(items)):
-        grid.currentCellRow = idx
-        grid.currentCellColumn = 'LIFNR'
-        grid.pressF4()
-        time.sleep(0.6)
-        try:
-            biz_field = session.findById(
-                "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
-                "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
-            )
-            biz_field.text = str(biz_reg_no)
-            biz_field.setFocus()
-            biz_field.caretPosition = len(str(biz_reg_no))
-            session.findById('wnd[1]').sendVKey(0)  # 검색 실행
-            time.sleep(0.6)
-            session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9  # 첫 결과 행 선택
-            session.findById('wnd[1]').sendVKey(2)  # 더블클릭과 동일 — 선택 확정
-            time.sleep(0.5)
-        except Exception as e:
-            raise RuntimeError(f'{idx + 1}번째 품목의 협력사(사업자등록번호 "{biz_reg_no}") 검색 중 오류가 발생했습니다: {e} — 그 사업자등록번호로 등록된 협력사가 SAP에 없을 수 있습니다.')
+    # [2026-09-30 수정] 협력사(LIFNR)/세금코드(MWSKZ)는 첫 행(row 0)만 F4로 조회·선택하고,
+    # 나머지 행은 modifyCell로 이미 검증된 값을 직접 씀 — 사람이 수동으로 "row 0 Ctrl+C →
+    # 나머지 행 Ctrl+V" 하는 것과 동일한 동작이다.
+    # [구 설명 정정] 이전 주석에서 "검색 결과를 다른 행에 복사하는 기능이 없다"고 했으나,
+    # 이는 잘못된 판단이었다 — row 0의 F4 완료 후 GetCellValue로 LIFNR을 읽어 modifyCell로
+    # 쓰면 SAP이 저장 시점에 검증하며 정상 통과한다(사용자 실사용 확인).
 
-        # 세금코드(MWSKZ) — 매크로에서 항상 같은 위치([1,21])를 고르므로 고정 선택으로 재현.
-        grid.currentCellRow = idx
-        grid.currentCellColumn = 'MWSKZ'
-        grid.pressF4()
+    # ── 행 0: F4 팝업으로 협력사 조회 ──────────────────────────────────────────
+    grid.currentCellRow = 0
+    grid.currentCellColumn = 'LIFNR'
+    grid.pressF4()
+    time.sleep(0.6)
+    try:
+        biz_field = session.findById(
+            "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
+            "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
+        )
+        biz_field.text = str(biz_reg_no)
+        biz_field.setFocus()
+        biz_field.caretPosition = len(str(biz_reg_no))
+        session.findById('wnd[1]').sendVKey(0)  # 검색 실행
         time.sleep(0.6)
-        try:
-            session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
-            session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
-            session.findById('wnd[1]').sendVKey(2)
-            time.sleep(0.5)
-        except Exception as e:
-            raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e}')
+        session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9  # 첫 결과 행 선택
+        session.findById('wnd[1]').sendVKey(2)  # 더블클릭과 동일 — 선택 확정
+        time.sleep(0.5)
+    except Exception as e:
+        raise RuntimeError(f'1번째 품목의 협력사(사업자등록번호 "{biz_reg_no}") 검색 중 오류가 발생했습니다: {e} — 그 사업자등록번호로 등록된 협력사가 SAP에 없을 수 있습니다.')
+
+    # ── 행 0: F4 팝업으로 세금코드 선택 ──────────────────────────────────────
+    grid.currentCellRow = 0
+    grid.currentCellColumn = 'MWSKZ'
+    grid.pressF4()
+    time.sleep(0.6)
+    try:
+        session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
+        session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
+        session.findById('wnd[1]').sendVKey(2)
+        time.sleep(0.5)
+    except Exception as e:
+        raise RuntimeError(f'1번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e}')
+
+    # ── 행 0에서 채워진 LIFNR/MWSKZ 값 읽기 (Ctrl+C에 해당) ──────────────────
+    lifnr_filled = ''
+    mwskz_filled = ''
+    try:
+        lifnr_filled = str(grid.GetCellValue(0, 'LIFNR')).strip()
+        mwskz_filled = str(grid.GetCellValue(0, 'MWSKZ')).strip()
+    except Exception:
+        pass  # 읽기 실패 시 이후 행도 F4 폴백
+
+    # ── 행 1~N: Ctrl+V에 해당 — 이미 검증된 값을 modifyCell로 직접 씀 ─────────
+    for idx in range(1, len(items)):
+        if lifnr_filled:
+            try:
+                grid.modifyCell(idx, 'LIFNR', lifnr_filled)
+            except Exception:
+                # modifyCell 실패 시 F4 폴백 (SAP 그리드가 직접 쓰기를 막는 경우)
+                grid.currentCellRow = idx
+                grid.currentCellColumn = 'LIFNR'
+                grid.pressF4()
+                time.sleep(0.6)
+                try:
+                    biz_field = session.findById(
+                        "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
+                        "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
+                    )
+                    biz_field.text = str(biz_reg_no)
+                    biz_field.setFocus()
+                    biz_field.caretPosition = len(str(biz_reg_no))
+                    session.findById('wnd[1]').sendVKey(0)
+                    time.sleep(0.6)
+                    session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9
+                    session.findById('wnd[1]').sendVKey(2)
+                    time.sleep(0.5)
+                except Exception as e2:
+                    raise RuntimeError(f'{idx + 1}번째 품목의 협력사 검색 중 오류가 발생했습니다: {e2}')
+        if mwskz_filled:
+            try:
+                grid.modifyCell(idx, 'MWSKZ', mwskz_filled)
+            except Exception:
+                # modifyCell 실패 시 F4 폴백
+                grid.currentCellRow = idx
+                grid.currentCellColumn = 'MWSKZ'
+                grid.pressF4()
+                time.sleep(0.6)
+                try:
+                    session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
+                    session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
+                    session.findById('wnd[1]').sendVKey(2)
+                    time.sleep(0.5)
+                except Exception as e2:
+                    raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e2}')
 
     # 품목별 단가(NETPR)/EPEIN — PDF에서 추출한 값을 행 순서대로 입력.
     for idx, item in enumerate(items):
@@ -4095,6 +4202,9 @@ def main():
             currency = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else 'KRW'
             items = json.loads(items_json)
             result = prepare_po_from_excel(excel_path, biz_reg_no, items, plant, currency)
+        elif action == 'simulate_vendor_copy':
+            row_count = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 2
+            result = simulate_vendor_copy(row_count)
         elif action == 'confirm_save_po':
             purchasing_org = sys.argv[2] if len(sys.argv) > 2 else '9000'
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'

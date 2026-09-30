@@ -376,6 +376,45 @@
         });
     };
 
+    // 🧪 [2026-09-30 신규] "발주서 협력사 복사 시뮬레이션" — ZMMR060 그리드가 이미 열려있는
+    //    상태에서 행 0의 LIFNR을 modifyCell로 나머지 행에 복사할 수 있는지 검증(저장 안 함).
+    //    "왜 Ctrl+C/V가 안 되나?" 질문에 대한 직접 시뮬레이션 응답.
+    window._ganttQaRunPoVendorCopySimulate = async function(rowCount) {
+        rowCount = rowCount || 3;
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+            `ZMMR060 그리드에서 협력사(LIFNR) 복사 가능 여부 시뮬레이션 중 (행 0→1~${rowCount-1})...`,
+            `Simulating vendor (LIFNR) copy on ZMMR060 grid (row 0→1~${rowCount-1})...`
+        ), pending: true });
+        window._renderGanttQaMessages();
+        let reply;
+        try {
+            const res = await fetch('http://127.0.0.1:5000/po-sap-simulate-copy', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rowCount: rowCount })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                reply = window._t(
+                    `✅ Ctrl+V 방식(modifyCell) 시뮬레이션 성공!\n\n${data.text || ''}\n\n→ 행 0 F4 선택 후 나머지 행은 modifyCell로 직접 쓰는 방식이 정상 동작합니다.`,
+                    `✅ Ctrl+V simulation (modifyCell) succeeded!\n\n${data.text || ''}`
+                );
+            } else {
+                reply = window._t(
+                    `⚠️ 시뮬레이션 결과:\n${data.text || data.error || '알 수 없는 오류'}\n\n→ modifyCell이 막히면 F4 폴백으로 처리됩니다.`,
+                    `⚠️ Simulation result:\n${data.text || data.error || 'unknown error'}`
+                );
+            }
+        } catch (e) {
+            reply = window._t(
+                `❌ 시뮬레이션 실패: ${e.message} — 백엔드(kortek_backend.py)가 실행 중이고 SAP GUI에서 ZMMR060 엑셀 업로드가 완료된 상태인지 확인해주세요.`,
+                `❌ Simulation failed: ${e.message}`
+            );
+        }
+        window._ganttQaHistory.splice(-1, 1);
+        window._ganttQaHistory.push({ role: 'ai', text: reply });
+        window._renderGanttQaMessages();
+    };
+
     window._ganttQaRunGoodsReceipt = async function(ebeln) {
         window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
             `구매오더 "${ebeln}" 자재 입고 처리 중... (SAP 저장까지 진행되며 시간이 걸릴 수 있습니다)`,
@@ -5309,6 +5348,17 @@ ${docsJson}`;
                 )});
             }
             window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 🧪 [2026-09-30 신규] "발주서 협력사 복사 시뮬" 로컬 명령(🚫🤖) —
+        //    ZMMR060 그리드가 열려있는 상태에서 행 0 LIFNR을 modifyCell로 복사 가능한지 검증.
+        if (/협력사.*복사.*시뮬|발주서.*복사.*시뮬|vendor.*copy.*sim|po.*vendor.*sim|공급업체.*복사.*테스트/i.test(question)) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            const _simRowCount = parseInt((question.match(/(\d+)\s*행/) || [])[1]) || 3;
+            await window._ganttQaRunPoVendorCopySimulate(_simRowCount);
             input.focus();
             return;
         }

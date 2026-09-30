@@ -2638,6 +2638,20 @@ def po_sap_prepare():
     return jsonify(data_out), status
 
 
+@app.route('/po-sap-simulate-copy', methods=['POST'])
+def po_sap_simulate_copy():
+    # 🧪 [2026-09-30 신규] 협력사(LIFNR) Ctrl+C/V 방식 시뮬레이션 —
+    #    현재 SAP GUI에 열려있는 ZMMR060 그리드에서 행 0의 LIFNR을 읽어
+    #    나머지 행에 modifyCell로 쓸 수 있는지 검증만 한다(저장 하지 않음).
+    #    결과: {'ok', 'lifnr_row0', 'rows_written', 'rows_failed', 'detail'}
+    data = request.get_json(silent=True) or {}
+    row_count = int(data.get('rowCount') or 2)  # 테스트할 행 수 (기본 2)
+    data_out, status = _run_sap_bridge(
+        ['simulate_vendor_copy', str(row_count)],
+        30, 'SAP 협력사 복사 시뮬레이션')
+    return jsonify(data_out), status
+
+
 @app.route('/po-sap-confirm-save', methods=['POST'])
 def po_sap_confirm_save():
     # 🛒 [2026-09-15 신규] "구매오더 요청" 3단계 — 사람이 /po-sap-prepare 결과를 채팅에서
