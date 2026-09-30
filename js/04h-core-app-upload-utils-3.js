@@ -7772,7 +7772,7 @@ ${docsJson}`;
     window._ganttQaUpdateMicBtn = function() {
         const _mEn = window._currentLang === 'en';
         const on = window._ganttQaVoiceMode;
-        ['gantt-qa-mic-btn', 'gantt-qa-mic-btn2'].forEach(function(id) {
+        ['gantt-qa-mic-btn2'].forEach(function(id) {
             const btn = document.getElementById(id);
             if (!btn) return;
             const isBottom = id === 'gantt-qa-mic-btn2';
@@ -8009,8 +8009,7 @@ ${docsJson}`;
                              편집창의 🕒 이력 버튼)과 동일한 톤(#e8f4fd, 테두리 없음)으로 맞춰 헤더(#e7f3ff)
                              위에서 튀지 않게 통일 — 예전엔 #d8edfb로 더 진하게 박혀 있어 다른 모달과 이질적이었음. -->
                         <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🔇</button>
-                        <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';">${_qEn ? '🎙️ Voice' : '🎙️ 음성문답'}</button>
-                        <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
+<button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
                         <!-- 💡 [2026-09-13 신규] 투명도 슬라이더 — 드래그해서 창 배경 투명도 실시간 조절.
                              배경도 위 두 버튼과 같은 개념(#e8f4fd, 테두리 없음)으로 통일. -->
                         <div onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:3px; background:#e8f4fd; border-radius:6px; padding:2px 6px; border:none;" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
