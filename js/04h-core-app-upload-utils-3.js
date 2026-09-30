@@ -1454,7 +1454,7 @@
   "bizRegNo": "공급자 사업자등록번호(숫자만, 하이픈 제거) — 반드시 10자리, 형식 NNN-NN-NNNNN",
   "invoiceDate": "작성일자(YYYYMMDD 8자리 숫자)",
   "vendorName": "공급자(협력사) 상호",
-  "currency": "통화 코드 — KRW 또는 USD(다른 통화 기호/코드가 명확히 보이면 그 코드, 불명확하면 KRW)",
+  "currency": "청구 통화 코드 — 문서 하단 합계/공급가액이 원화(₩ 또는 원)로 표기되면 KRW, 달러($)로 표기되면 USD. 단가가 달러이더라도 합계가 원화이면 KRW. 불명확하면 KRW.",
   "items": [
     {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(통화 단위 그대로, 콤마 제거), "supplyAmount": 숫자(그 줄의 공급가액/합계 금액 — 반드시 원화KRW로, USD 단가라면 환율 적용 후 원화값, 없으면 0), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
   ],
@@ -1607,6 +1607,8 @@ ${_sourceSection}`;
 
         // [2026-09-29] 단가 검산: AI가 단가 공란인 품목의 unitPrice를 공급가액으로 잘못 넣거나
         // 수량을 임의로 1로 세팅했을 수 있으므로, supplyAmount vs unitPrice×qty 불일치 시 자동 보정.
+        // 보정 전에 원래 AI 추출 단가(USD 등 외화일 수 있음)를 저장 — 환율 검산에서 재사용
+        parsed.items.forEach(function(item) { item._origUnitPrice = item.unitPrice; });
         var _unitPriceFixNotes = [];
         parsed.items.forEach(function(item) {
             var sa = Number(item.supplyAmount) || 0;
@@ -1630,6 +1632,12 @@ ${_sourceSection}`;
         });
         if (_unitPriceFixNotes.length > 0) {
             parsed.note = (_unitPriceFixNotes.join(' ') + (parsed.note ? ' ' + parsed.note : ''));
+        }
+
+        // [2026-09-30] 환율이 있는 문서 = 합계/단가가 원화로 청구 → SAP 발주서 통화를 KRW로 강제
+        // (AI가 단가의 $기호를 보고 USD로 잘못 판정해도, 환율로 이미 원화로 환산됐으므로 KRW가 맞음)
+        if ((Number(parsed.exchangeRate) || 0) > 0) {
+            parsed.currency = 'KRW';
         }
 
         // [2026-09-30 신규] 검산: 공급가액/부가세/합계 교차 검증 + USD 환율 검산
@@ -1673,10 +1681,11 @@ ${_sourceSection}`;
             _csChecks.push({ type: 'total', ok: _csOkT, docVal: _csDocTotal, computedVal: _csComputedTotal, diff: _csDiffT });
         }
 
-        // ④ USD 환율 검산: unitPrice(USD) × exchangeRate ≈ supplyAmount/qty
-        if (parsed.currency === 'USD' && _csRate > 0) {
+        // ④ USD 환율 검산: AI가 추출한 원래 외화단가 × 환율 ≈ 문서 원화단가
+        // (currency는 이미 KRW로 보정됐을 수 있으므로 exchangeRate 유무로 판단, _origUnitPrice 사용)
+        if (_csRate > 0) {
             parsed.items.forEach(function(item) {
-                var usdP = Number(item.unitPrice) || 0;
+                var usdP = Number(item._origUnitPrice) || 0;
                 var qty  = Number(item.qty) || 0;
                 var sa   = Number(item.supplyAmount) || 0;
                 if (usdP <= 0 || qty <= 0 || sa <= 0) return;
@@ -1833,9 +1842,14 @@ ${docsJson}`;
         let parsed;
         try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error(window._t('AI 응답 JSON 파싱에 실패했습니다: ', 'Failed to parse the AI response JSON: ') + e.message); }
         if (!parsed.documents || !parsed.documents.length) throw new Error(window._t('정정 결과에서 문서를 찾지 못했습니다.', 'No documents found in the correction result.'));
-        parsed.documents.forEach(function(d) {
+        parsed.documents.forEach(function(d, idx) {
             const rawCurrency = (d.currency || '').toString().trim().toUpperCase();
             d.currency = (rawCurrency === 'USD' || rawCurrency === 'US$' || rawCurrency === '$') ? 'USD' : 'KRW';
+            // 원본 문서에 환율이 있으면 청구 통화는 KRW
+            const origDoc = docs[idx];
+            if (origDoc && (Number(origDoc.exchangeRate) || 0) > 0) {
+                d.currency = 'KRW';
+            }
         });
         return parsed.documents;
     };
