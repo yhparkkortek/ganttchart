@@ -3067,6 +3067,59 @@ def fetch_team_budget(team, fperbl='1', tperbl='12'):
     return {'ok': True, 'team': team, 'periodFrom': fperbl, 'periodTo': tperbl, 'account': matched['account_label'], 'values': values, 'text': text}
 
 
+def simulate_indat_copy(row_count=2):
+    """🧪 [2026-09-30 신규] 현재 SAP GUI에 열려있는 ZMM062 그리드에서
+    행 0의 INDAT(입고일자)를 읽어 행 1~(row_count-1)에 modifyCell로 직접 쓸 수 있는지만 검증.
+    저장은 하지 않으므로 데이터에 영향 없음 — 시뮬레이션 전용.
+    전제: ZMM062를 열고 행 0의 INQTY·INDAT까지 이미 채워진 상태."""
+    row_count = max(2, int(row_count))
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    try:
+        grid = wnd.findById('shellcont/shell')
+    except Exception as e:
+        return {'ok': False, 'error': f'ZMM062 그리드를 찾지 못했습니다 — SAP GUI에서 ZMM062를 실행하고 구매오더 번호를 입력해 그리드 화면까지 진행된 상태여야 합니다: {e}'}
+
+    actual_rows = grid.RowCount
+    if actual_rows < 2:
+        return {'ok': False, 'error': f'그리드 행이 {actual_rows}개입니다. 시뮬레이션은 2행 이상 필요합니다.'}
+
+    try:
+        indat0 = str(grid.GetCellValue(0, 'INDAT')).strip()
+    except Exception as e:
+        return {'ok': False, 'error': f'행 0 INDAT 읽기 실패: {e}'}
+
+    if not indat0:
+        return {'ok': False, 'error': '행 0의 INDAT가 비어 있습니다. 먼저 행 0에서 F4 캘린더로 날짜를 선택해주세요.'}
+
+    rows_written, rows_failed, detail = [], [], []
+    test_range = range(1, min(row_count, actual_rows))
+    for idx in test_range:
+        try:
+            grid.modifyCell(idx, 'INDAT', indat0)
+            time.sleep(0.2)
+            check = str(grid.GetCellValue(idx, 'INDAT')).strip()
+            if check == indat0:
+                rows_written.append(idx)
+                detail.append(f'행{idx}: ✅ INDAT={check}')
+            else:
+                rows_failed.append(idx)
+                detail.append(f'행{idx}: ⚠️ 썼는데 읽히는 값={check!r} (예상={indat0!r})')
+        except Exception as e:
+            rows_failed.append(idx)
+            detail.append(f'행{idx}: ❌ {e}')
+
+    ok = len(rows_failed) == 0
+    summary = (
+        f'행 0 INDAT={indat0!r}\n'
+        f'테스트 행: {list(test_range)}\n'
+        f'성공: {rows_written}, 실패: {rows_failed}\n' +
+        '\n'.join(detail)
+    )
+    return {'ok': ok, 'indat_row0': indat0, 'rows_written': rows_written, 'rows_failed': rows_failed,
+            'text': summary, 'detail': detail}
+
+
 def simulate_vendor_copy(row_count=2):
     """🧪 [2026-09-30 신규] 현재 SAP GUI에 열려있는 ZMMR060 그리드에서
     행 0의 LIFNR/MWSKZ를 읽어 행 1~(row_count-1)에 modifyCell로 직접 쓸 수 있는지만 검증.
@@ -3975,14 +4028,17 @@ def post_goods_receipt(ebeln, dump_only=False):
                 pass
         return {'ok': True, 'dump_only': True, 'dumpLines': _dump_lines, 'tbar1': _tb, 'ebeln': ebeln}
 
-    # ── 각 행: INQTY 입력 → triggerModified → F4 캘린더로 INDAT 설정
+    # ── 각 행: INQTY 입력 → triggerModified → INDAT 설정
+    # [2026-09-30 수정] 행 0만 F4 캘린더로 날짜 선택, 행 1+는 modifyCell로 직접 복사
+    # (LIFNR 최적화와 동일 패턴 — simulate_indat_copy로 사전 검증됨)
     # [2026-09-29 V01 VBS 기준]
     # 행0:  modifyCell(INQTY) → currentCellColumn='INDAT' → triggerModified → pressF4 → selectionInterval
-    # 행1+: modifyCell(INQTY) → currentCellRow=row_idx  → triggerModified → pressF4 → selectionInterval
+    # 행1+: modifyCell(INQTY) → currentCellRow=row_idx  → triggerModified → modifyCell(INDAT, indat_row0)
     # (focusDate 없음 — VBS에 없음)
     processed_rows = []
     order_qtys = []
     _debug_steps = []
+    _indat_filled = ''  # 행 0 F4 후 읽은 SAP 포맷 날짜값 (행 1+에 재사용)
 
     for row_idx in range(row_count):
         try:
@@ -4012,36 +4068,81 @@ def post_goods_receipt(ebeln, dump_only=False):
         except Exception as e:
             raise RuntimeError(f'triggerModified 오류 (행 {row_idx}): {e}')
 
-        # 3. F4 캘린더 팝업 열기
-        try:
-            grid.pressF4()
-            time.sleep(1.0)
-        except Exception as e:
-            raise RuntimeError(f'pressF4(INDAT) 오류 (행 {row_idx}): {e}')
-
-        # 4. 캘린더에서 날짜 선택 (selectionInterval만 — VBS에 focusDate 없음)
-        _cal_set = False
-        for _cal_path in [
-            'wnd[1]/usr/cntlCONTAINER/shellcont/shell',
-            'wnd[1]/usr/cntlCONTAINER/shellcont/shell/shellcont/shell',
-        ]:
+        # 3. INDAT 설정
+        #    행 0: F4 캘린더 팝업으로 today 선택 (VBS 그대로)
+        #    행 1+: modifyCell로 행 0에서 읽은 값 직접 복사 (F4 폴백 포함)
+        if row_idx == 0:
             try:
-                _cal = session.findById(_cal_path)
-                _cal.selectionInterval = f'{today},{today}'
-                _cal_set = True
-                time.sleep(0.6)
-                break
-            except Exception:
-                pass
-        if not _cal_set:
-            try:
-                session.findById('wnd[1]').sendVKey(0)
-                time.sleep(0.5)
-            except Exception:
-                pass
-            _debug_steps.append(f'행{row_idx}: 캘린더 경로 탐색 실패, Enter로 닫기 시도')
+                grid.pressF4()
+                time.sleep(1.0)
+            except Exception as e:
+                raise RuntimeError(f'pressF4(INDAT) 오류 (행 {row_idx}): {e}')
 
-        # 5. 반영값 확인 (디버그)
+            _cal_set = False
+            for _cal_path in [
+                'wnd[1]/usr/cntlCONTAINER/shellcont/shell',
+                'wnd[1]/usr/cntlCONTAINER/shellcont/shell/shellcont/shell',
+            ]:
+                try:
+                    _cal = session.findById(_cal_path)
+                    _cal.selectionInterval = f'{today},{today}'
+                    _cal_set = True
+                    time.sleep(0.6)
+                    break
+                except Exception:
+                    pass
+            if not _cal_set:
+                try:
+                    session.findById('wnd[1]').sendVKey(0)
+                    time.sleep(0.5)
+                except Exception:
+                    pass
+                _debug_steps.append(f'행0: 캘린더 경로 탐색 실패, Enter로 닫기 시도')
+
+            # 행 0의 실제 INDAT 값(SAP 포맷)을 읽어 두기
+            try:
+                _indat_filled = str(grid.GetCellValue(0, 'INDAT')).strip()
+            except Exception:
+                _indat_filled = ''
+        else:
+            # 행 1+: modifyCell로 직접 복사, 실패 시 F4 폴백
+            _indat_set = False
+            if _indat_filled:
+                try:
+                    grid.modifyCell(row_idx, 'INDAT', _indat_filled)
+                    time.sleep(0.2)
+                    _indat_set = True
+                    _debug_steps.append(f'행{row_idx}: INDAT modifyCell 성공({_indat_filled!r})')
+                except Exception as _me:
+                    _debug_steps.append(f'행{row_idx}: INDAT modifyCell 실패({_me}), F4 폴백')
+            if not _indat_set:
+                # F4 폴백 (행 0와 동일 시퀀스)
+                try:
+                    grid.pressF4()
+                    time.sleep(1.0)
+                except Exception as e:
+                    raise RuntimeError(f'pressF4(INDAT) 오류 (행 {row_idx}): {e}')
+                _cal_set = False
+                for _cal_path in [
+                    'wnd[1]/usr/cntlCONTAINER/shellcont/shell',
+                    'wnd[1]/usr/cntlCONTAINER/shellcont/shell/shellcont/shell',
+                ]:
+                    try:
+                        _cal = session.findById(_cal_path)
+                        _cal.selectionInterval = f'{today},{today}'
+                        _cal_set = True
+                        time.sleep(0.6)
+                        break
+                    except Exception:
+                        pass
+                if not _cal_set:
+                    try:
+                        session.findById('wnd[1]').sendVKey(0)
+                        time.sleep(0.5)
+                    except Exception:
+                        pass
+
+        # 4. 반영값 확인 (디버그)
         try:
             _chk = str(grid.GetCellValue(row_idx, 'INQTY')).strip()
             _chk_d = str(grid.GetCellValue(row_idx, 'INDAT')).strip()
@@ -4202,6 +4303,9 @@ def main():
             currency = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else 'KRW'
             items = json.loads(items_json)
             result = prepare_po_from_excel(excel_path, biz_reg_no, items, plant, currency)
+        elif action == 'simulate_indat_copy':
+            row_count = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 2
+            result = simulate_indat_copy(row_count)
         elif action == 'simulate_vendor_copy':
             row_count = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 2
             result = simulate_vendor_copy(row_count)

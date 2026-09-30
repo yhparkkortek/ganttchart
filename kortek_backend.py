@@ -2681,6 +2681,19 @@ def po_sap_prepare():
     return jsonify(data_out), status
 
 
+@app.route('/po-sap-simulate-indat', methods=['POST'])
+def po_sap_simulate_indat():
+    # 🧪 [2026-09-30 신규] 입고일자(INDAT) modifyCell 방식 시뮬레이션 —
+    #    ZMM062 그리드에서 행 0 INDAT를 읽어 나머지 행에 modifyCell로 쓸 수 있는지 검증만 한다.
+    #    전제: ZMM062가 열려 있고 행 0 INDAT가 이미 F4로 채워진 상태여야 함.
+    data = request.get_json(silent=True) or {}
+    row_count = int(data.get('rowCount') or 2)
+    data_out, status = _run_sap_bridge(
+        ['simulate_indat_copy', str(row_count)],
+        30, 'SAP 입고일자 복사 시뮬레이션')
+    return jsonify(data_out), status
+
+
 @app.route('/po-sap-simulate-copy', methods=['POST'])
 def po_sap_simulate_copy():
     # 🧪 [2026-09-30 신규] 협력사(LIFNR) Ctrl+C/V 방식 시뮬레이션 —

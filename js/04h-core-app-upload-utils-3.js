@@ -376,6 +376,44 @@
         });
     };
 
+    // 🧪 [2026-09-30 신규] "입고일자(INDAT) 복사 시뮬레이션" — ZMM062 그리드가 열려 있고
+    //    행 0 INDAT가 이미 F4로 채워진 상태에서, 행 1+에 modifyCell이 동작하는지 검증.
+    window._ganttQaRunGrIndatCopySimulate = async function(rowCount) {
+        rowCount = rowCount || 3;
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+            `ZMM062 그리드에서 입고일자(INDAT) 복사 가능 여부 시뮬레이션 중 (행 0→1~${rowCount-1})...`,
+            `Simulating INDAT copy on ZMM062 grid (row 0→1~${rowCount-1})...`
+        ), pending: true });
+        window._renderGanttQaMessages();
+        let reply;
+        try {
+            const res = await fetch('http://127.0.0.1:5000/po-sap-simulate-indat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rowCount: rowCount })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                reply = window._t(
+                    `✅ INDAT modifyCell 시뮬레이션 성공!\n\n${data.text || ''}\n\n→ 행 0 F4 캘린더 후 나머지 행은 modifyCell로 직접 쓰는 방식이 정상 동작합니다.`,
+                    `✅ INDAT modifyCell simulation succeeded!\n\n${data.text || ''}`
+                );
+            } else {
+                reply = window._t(
+                    `⚠️ 시뮬레이션 결과:\n${data.text || data.error || '알 수 없는 오류'}\n\n→ modifyCell이 막히면 F4 폴백으로 처리됩니다.`,
+                    `⚠️ Simulation result:\n${data.text || data.error || 'unknown error'}`
+                );
+            }
+        } catch (e) {
+            reply = window._t(
+                `❌ 시뮬레이션 실패: ${e.message} — 백엔드가 실행 중이고 ZMM062에서 구매오더를 열어 행 0 INDAT까지 F4로 채운 상태인지 확인해주세요.`,
+                `❌ Simulation failed: ${e.message}`
+            );
+        }
+        window._ganttQaHistory.splice(-1, 1);
+        window._ganttQaHistory.push({ role: 'ai', text: reply });
+        window._renderGanttQaMessages();
+    };
+
     // 🧪 [2026-09-30 신규] "발주서 협력사 복사 시뮬레이션" — ZMMR060 그리드가 이미 열려있는
     //    상태에서 행 0의 LIFNR을 modifyCell로 나머지 행에 복사할 수 있는지 검증(저장 안 함).
     //    "왜 Ctrl+C/V가 안 되나?" 질문에 대한 직접 시뮬레이션 응답.
@@ -5348,6 +5386,17 @@ ${docsJson}`;
                 )});
             }
             window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 🧪 [2026-09-30 신규] "입고일자 복사 시뮬" 로컬 명령(🚫🤖) —
+        //    ZMM062 그리드에서 행 0 INDAT를 modifyCell로 복사 가능한지 검증.
+        if (/입고.{0,6}날짜.*시뮬|indat.*시뮬|입고일자.*시뮬|zmm062.*indat.*시뮬|입고일자.*복사.*시뮬|gr.*indat.*sim/i.test(question)) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            const _simRowCount = parseInt((question.match(/(\d+)\s*행/) || [])[1]) || 3;
+            await window._ganttQaRunGrIndatCopySimulate(_simRowCount);
             input.focus();
             return;
         }
