@@ -1527,6 +1527,9 @@ ${_sourceSection}`;
         try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error(window._t('AI 응답 JSON 파싱에 실패했습니다: ', 'Failed to parse the AI response JSON: ') + e.message); }
         if (!parsed.items || !parsed.items.length) throw new Error(window._t('PDF에서 품목을 추출하지 못했습니다.', 'Could not extract any line items from the PDF.'));
 
+        // bizRegNo 정규화: AI가 하이픈을 남기거나 공백을 포함하면 10자리 검증이 실패하므로 숫자만 추출
+        if (parsed.bizRegNo) parsed.bizRegNo = String(parsed.bizRegNo).replace(/\D/g, '');
+
         // 💡 [2026-09-16 신규] 통화 코드 정규화 — AI가 "원"/"₩"/소문자 등으로 답하거나
         // 아예 빠뜨릴 수 있어, KRW/USD 두 가지로만 정리하고 그 외/누락은 KRW로 기본값 처리.
         const rawCurrency = (parsed.currency || '').toString().trim().toUpperCase();
@@ -1571,7 +1574,8 @@ ${_sourceSection}`;
         // 연도처럼 보이는 번호는 날짜(invoiceDate)를 오인한 것으로 판정
         // 한국 사업자등록번호 앞 3자리는 세무서 코드(100~799 범위)라 1900~2099(연도)로 시작하지 않는다
         var _looksLikeYear = /^(?:19|20)\d{2}/.test(_norm2);
-        if (_norm2 && _norm2 !== KORTEK_BIZ_NO && (!_td2.includes(_norm2) || _looksLikeYear)) {
+        // 이미지 기반 PDF(_td2 = '')는 원문 텍스트가 없어 digit-stream으로 검증 불가 → 환각 체크 건너뜀
+        if (_td2 && _norm2 && _norm2 !== KORTEK_BIZ_NO && (!_td2.includes(_norm2) || _looksLikeYear)) {
             // AI 번호가 원문 digit-stream에 없음 → 환각으로 판정, 원문에서 직접 탐색
             var _cands2 = (_ct2.match(/\d{3}-?\d{2}-?\d{5}/g) || [])
                 .map(function(s) { return s.replace(/-/g, ''); })
