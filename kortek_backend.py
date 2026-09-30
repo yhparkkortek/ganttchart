@@ -2132,6 +2132,44 @@ def open_sap_folder():
     return jsonify({'ok': True, 'path': path, 'label': label})
 
 
+@app.route('/close-sap-folder', methods=['POST'])
+def close_sap_folder():
+    # 🗂 [2026-09-30 신규] "폴더 닫아줘" 명령에서 호출 — Shell.Application COM으로
+    #    해당 경로의 Explorer 창을 닫는다. powershell -NonInteractive 사용.
+    data = request.get_json(silent=True) or {}
+    path = (data.get('path') or '').strip()
+    if not path:
+        return jsonify({'ok': False, 'error': 'path가 필요합니다.'}), 400
+    # Shell.Application COM으로 해당 경로의 Explorer 창을 찾아 닫음
+    ps_cmd = (
+        '$tgt = [System.IO.Path]::GetFullPath("' + path.replace('"', '').replace("'", '') + '")\n'
+        '$shell = New-Object -ComObject Shell.Application\n'
+        '$closed = 0\n'
+        'foreach ($w in $shell.Windows()) {\n'
+        '    try {\n'
+        '        $wpath = [System.IO.Path]::GetFullPath($w.Document.Folder.Self.Path)\n'
+        '        if ($wpath -eq $tgt) { $w.Quit(); $closed++ }\n'
+        '    } catch {}\n'
+        '}\n'
+        'Write-Output "closed:$closed"'
+    )
+    try:
+        result = subprocess.run(
+            ['powershell', '-NonInteractive', '-NoProfile', '-Command', ps_cmd],
+            capture_output=True, text=True, timeout=5
+        )
+        closed = 0
+        for line in (result.stdout or '').splitlines():
+            if line.startswith('closed:'):
+                try:
+                    closed = int(line.split(':')[1])
+                except Exception:
+                    pass
+        return jsonify({'ok': True, 'closed': closed})
+    except Exception as ex:
+        return jsonify({'ok': False, 'error': str(ex)}), 500
+
+
 @app.route('/sap-save-export', methods=['POST'])
 def sap_save_export():
     # 💡 [2026-09-16 신규, 사용자 요청 "SAP 관련 저장 경로는 C:\SAP_DMS로 통일해줘"] "엑셀로

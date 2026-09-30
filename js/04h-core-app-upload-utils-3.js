@@ -3747,14 +3747,14 @@ ${docsJson}`;
         //   넓은(SAP 실행 중일 때만): 패스/완료/다음처럼 평소에 다른 뜻으로도 쓰이는 단어 포함
         //   좁은(SAP 미실행 시에도): 중단/그만/멈춰처럼 맥락 없이도 명확한 취소 단어만
         // [2026-09-28] 사용자 요청: "패스", "완료", "다음" 등 유사 취소 표현도 인식
-        const _suf = '(?:해\s*줘|해줘|해주세요|줄래|줘|주세요|해)?';
+        const _suf = '(?:해\\s*줘|해줘|해주세요|줄래|줘|주세요|해)?';
         const _sapCancelBroadRe = new RegExp(
             '^\\s*(?:작업\\s*|실행\\s*|조회\\s*)?' +
-            '(?:중단|취소|그만|멈춰|스톱|패스|완료|다음|skip|pass|done|next|stop|cancel)' +
+            '(?:중단|취소|그만|멈춰|스톱|패스|완료|다음|됐어|나가|포기|그냥\\s*(?:둬|놔둬?)|skip|pass|done|next|stop|cancel)' +
             _suf + '\\s*[.!?~]*\\s*$', 'i');
         const _sapCancelNarrowRe = new RegExp(
             '^\\s*(?:작업\\s*|실행\\s*|조회\\s*)?' +
-            '(?:중단|취소|그만|멈춰|스톱|stop|cancel)' +
+            '(?:중단|취소|그만|멈춰|스톱|됐어|포기|stop|cancel)' +
             _suf + '\\s*[.!?~]*\\s*$', 'i');
         // 진행 중인 pending SAP 요청 여부를 먼저 확인
         let _pendingMsg = null;
@@ -3915,7 +3915,7 @@ ${docsJson}`;
         //    위험이 있음) — 전체 메시지가 정확히 이 짧은 문구와 일치할 때만 매치되도록
         //    좁혀서(`sap_prep_failed`의 기존 "다시 시도" 정규식과 같은 안전장치) "취소 관련
         //    업무를 물어보는" 같은 긴 문장을 오인하지 않는다.
-        const INTERRUPT_RE = /^\s*(처음부터\s*(다시)?|취소|그만|중단|초기화|리셋|종료|멈춰|됐어|그만둬|그냥\s*둬|cancel|reset|restart|start\s*over|stop|quit|abort)(해|해줘|해주세요|할게|할게요|줘|주세요)?\s*[.!?~]*\s*$/i;
+        const INTERRUPT_RE = /^\s*(처음부터\s*(다시)?|취소|그만|중단|초기화|리셋|종료|멈춰|됐어|그만둬|그냥\s*(?:둬|놔둬?)|나가|포기|안\s*할|cancel|reset|restart|start\s*over|stop|quit|abort)(해|해줘|해주세요|할게|할게요|줘|주세요)?\s*[.!?~]*\s*$/i;
         const hasAnyActiveQaDraft = !!(window._ganttQaPoDraft || window._ganttQaBomDraft ||
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
             window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons ||
@@ -5495,6 +5495,7 @@ ${docsJson}`;
                         `🗂 SAP save folder list. Say e.g. "Open the approval folder" to open a specific one.\n\n${_rows}`
                     );
                 } else if (_fd.ok) {
+                    window._ganttQaLastOpenedFolderPath = _fd.path; // 닫기 명령에서 재사용
                     // doc 폴더 + 문서 타입 코드가 감지된 경우: 하위 폴더 구조 안내 추가
                     const _docCodeNote = (_folderKey === 'doc' && _folderDocCode)
                         ? window._t(
@@ -5515,6 +5516,49 @@ ${docsJson}`;
                     '❌ 폴더 열기 실패: ' + (_e && _e.message ? _e.message : _e) + ' — 백엔드(kortek_backend.py)가 실행 중인지 확인해주세요.',
                     '❌ Failed to open folder: ' + (_e && _e.message ? _e.message : _e)
                 )});
+            }
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 🗂 [2026-09-30 신규] SAP 저장 경로 폴더 닫기 로컬 명령(🚫🤖) ──────────────────────────────
+        //    "폴더 닫아줘", "탐색기 닫아줘", "창 닫아줘" 등. 직전에 열었던 경로가 없으면 안내.
+        const _folderClosePatRe = /(?:폴더|탐색기|창)\s*(?:를|을)?\s*닫|닫\s*아\s*줘?\s*(?:폴더|탐색기|창)?/;
+        const _folderCloseShortRe = /^닫아줘?$|^창\s*닫아줘?$/;
+        const _isFolderCloseReq = _folderClosePatRe.test(question) ||
+            (!!window._ganttQaLastOpenedFolderPath && _folderCloseShortRe.test(question.trim()));
+        if (_isFolderCloseReq) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            const _closePath = window._ganttQaLastOpenedFolderPath;
+            if (!_closePath) {
+                window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                    '열려있는 폴더가 없습니다. 먼저 "승인원 폴더 열어줘" 등으로 폴더를 열어주세요.',
+                    'No folder is currently open. Try "open the approval folder" first.'
+                )});
+            } else {
+                try {
+                    const _cr = await fetch('http://127.0.0.1:5000/close-sap-folder', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: _closePath })
+                    });
+                    const _cd = await _cr.json();
+                    if (_cd.ok && _cd.closed > 0) {
+                        window._ganttQaLastOpenedFolderPath = null;
+                        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                            '🗂 폴더 창을 닫았습니다.\n`' + _closePath + '`',
+                            '🗂 Closed the folder window.\n`' + _closePath + '`'
+                        )});
+                    } else {
+                        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                            '🗂 열려있는 창을 찾지 못했습니다 (이미 닫혀있을 수 있습니다).\n`' + _closePath + '`',
+                            '🗂 Could not find an open window (it may already be closed).\n`' + _closePath + '`'
+                        )});
+                    }
+                } catch (_e) {
+                    window._ganttQaHistory.push({ role: 'ai', text: '❌ ' + window._t('폴더 닫기 실패: ', 'Failed to close folder: ') + (_e && _e.message ? _e.message : _e) });
+                }
             }
             window._renderGanttQaMessages();
             input.focus();
@@ -5554,12 +5598,32 @@ ${docsJson}`;
         if (window._ganttQaPopulateFreqSelect) window._ganttQaPopulateFreqSelect();
 
         window._ganttQaSending = true;
+        window._ganttQaOpToken = (window._ganttQaOpToken || 0);
+        const _sendOpToken = window._ganttQaOpToken; // 취소 감지: 이 값이 바뀌면 콜백을 무효화
         const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
         if (!_skipUserHistoryPush) window._ganttQaHistory.push({ role: 'user', text: question, route: _qaRoute }); // route: 말풍선 색(분류별) 결정용
         input.value = '';
         input.disabled = true;
         const sendBtn = document.getElementById('gantt-qa-send-btn');
-        if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳'; }
+        if (sendBtn) {
+            sendBtn.disabled = false; // 클릭 가능하게 유지(취소 버튼 역할)
+            sendBtn.textContent = '⏳ 취소';
+            sendBtn.style.cssText = 'background:#d33;color:#fff;border-color:#a00;';
+            sendBtn.onclick = async function() {
+                ++window._ganttQaOpToken; // 진행 중 콜백 무효화
+                for (var _pi = window._ganttQaHistory.length - 1; _pi >= 0; _pi--) {
+                    var _pm = window._ganttQaHistory[_pi];
+                    if (_pm && _pm.pending) { _pm.text = '⏹ ' + window._t('취소됐습니다.', 'Cancelled.'); _pm.pending = false; break; }
+                }
+                window._ganttQaSending = false;
+                input.disabled = false; input.focus();
+                sendBtn.disabled = false; sendBtn.textContent = '전송';
+                sendBtn.style.cssText = '';
+                sendBtn.onclick = function() { window.sendGanttQaMessage(); };
+                window._renderGanttQaMessages();
+                try { await fetch('http://127.0.0.1:5000/sap-cancel', { method: 'POST' }); } catch (_e) {}
+            };
+        }
         window._ganttQaHistory.push({ role: 'ai', text: '⏳ 답변 생성 중...', pending: true });
         window._renderGanttQaMessages();
 
@@ -5654,21 +5718,33 @@ ${docsJson}`;
 
             const processed = await window._aiProcessGanttQaTurn(text, qaQuestionForPrompt, question, priorHistory, apiKey, manualOtherProjectTexts);
 
-            window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
-            // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
-            //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
-            //    AI에게 다시 보여줄 수 있게 한다.
-            window._ganttQaHistory.push({ role: 'ai', text: processed.text, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: processed.mailDraftId, noticeDraftId: processed.noticeDraftId, alarmDraftId: processed.alarmDraftId, ganttEditDraftId: processed.ganttEditDraftId, ganttAddDraftId: processed.ganttAddDraftId, openExecDraftId: processed.openExecDraftId });
-            if (_qaRoute) { try { window._ganttQaHistory[window._ganttQaHistory.length - 1].route = _qaRoute; } catch (e) { /* ignore */ } }
+            if (window._ganttQaOpToken === _sendOpToken) {
+                window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
+                // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
+                //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
+                //    AI에게 다시 보여줄 수 있게 한다.
+                window._ganttQaHistory.push({ role: 'ai', text: processed.text, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: processed.mailDraftId, noticeDraftId: processed.noticeDraftId, alarmDraftId: processed.alarmDraftId, ganttEditDraftId: processed.ganttEditDraftId, ganttAddDraftId: processed.ganttAddDraftId, openExecDraftId: processed.openExecDraftId });
+                if (_qaRoute) { try { window._ganttQaHistory[window._ganttQaHistory.length - 1].route = _qaRoute; } catch (e) { /* ignore */ } }
+            }
         } catch (e) {
-            window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
+            if (window._ganttQaOpToken === _sendOpToken) {
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
+            }
         } finally {
             window._ganttQaSending = false;
-            window._renderGanttQaMessages();
-            input.disabled = false;
-            input.focus();
-            if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '전송'; }
+            if (window._ganttQaOpToken === _sendOpToken) {
+                // 취소 안 됨 — 정상 복원
+                window._renderGanttQaMessages();
+                input.disabled = false;
+                input.focus();
+                if (sendBtn) {
+                    sendBtn.disabled = false; sendBtn.textContent = '전송';
+                    sendBtn.style.cssText = '';
+                    sendBtn.onclick = function() { window.sendGanttQaMessage(); };
+                }
+            }
+            // 취소된 경우엔 cancel handler가 이미 UI를 복원했으므로 여기서 건드리지 않음
         }
     };
 
