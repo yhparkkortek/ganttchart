@@ -4178,10 +4178,16 @@ def _query_stock_via_mb52(matnr_list, werks='1000'):
         s = (s or '').strip()
         if not s or s == '-':
             return 0.0
+        # SAP Korean: comma = 천단위 구분자. "9,641" → 9641
         if '.' in s and ',' in s:
-            return float(s.replace('.', '').replace(',', '.'))
+            last_dot = s.rfind('.')
+            last_comma = s.rfind(',')
+            if last_comma > last_dot:  # German: "1.234,56"
+                return float(s.replace('.', '').replace(',', '.'))
+            else:  # US: "1,234.56"
+                return float(s.replace(',', ''))
         if ',' in s:
-            return float(s.replace(',', '.'))
+            return float(s.replace(',', ''))   # "9,641" → 9641
         if '.' in s:
             parts = s.split('.')
             if len(parts) == 2 and len(parts[1]) == 3:
@@ -4229,10 +4235,16 @@ def _query_stock_via_mm03(matnr, werks='1000'):
         s = (raw or '').strip()
         if not s or s == '-':
             return 0.0
+        # SAP Korean: comma = 천단위 구분자 (US format). "9,641" → 9641, not 9.641
         if '.' in s and ',' in s:
-            return float(s.replace('.', '').replace(',', '.'))
+            last_dot = s.rfind('.')
+            last_comma = s.rfind(',')
+            if last_comma > last_dot:  # German: "1.234,56"
+                return float(s.replace('.', '').replace(',', '.'))
+            else:  # US: "1,234.56"
+                return float(s.replace(',', ''))
         if ',' in s:
-            return float(s.replace(',', '.'))
+            return float(s.replace(',', ''))   # "9,641" → 9641
         if '.' in s:
             parts = s.split('.')
             if len(parts) == 2 and len(parts[1]) == 3:
