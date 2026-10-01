@@ -5619,6 +5619,38 @@ ${docsJson}`;
             }
         }
 
+        // 📦🚫🤖 [2026-10-01 신규] SE16N→MARD 직접 조회로 전체 플랜트 재고 반환.
+        //    MB52의 T133E 오류 없이 작동. 자재번호 + 재고 키워드 조합에서만 트리거
+        //    (재고 단독으론 업무 문맥과 겹칠 수 있어 자재번호 반드시 요구).
+        const _stockHit = window._sapCapKwHit
+            ? window._sapCapKwHit(question, 'mardstock')
+            : /(재고\s*수량|재고\s*확인|재고\s*조회|가용\s*재고)/.test(question);
+        const _stockMatch = _sapLookupNums.length > 0 && _stockHit && !_wuMatch && !_bomMatch2;
+        if (_stockMatch) {
+            if (!_skipUserHistoryPush) {
+                window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP MARD에서 재고 수량을 조회하는 중...', 'Looking up stock quantity from SAP MARD...'), pending: true });
+            window._renderGanttQaMessages();
+            let stockReply;
+            try {
+                const res = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-mard-stock?material=' + encodeURIComponent(_sapLookupNums[0])),
+                    45000, window._t('SAP 재고 조회 시간 초과', 'SAP stock lookup timed out')
+                );
+                const data = await res.json();
+                stockReply = data.ok ? data.text : ('⚠️ ' + (data.error || window._t('재고 조회 실패', 'Stock lookup failed')));
+            } catch (e) {
+                stockReply = '⚠️ ' + window._t('재고 조회 실패: ', 'Stock lookup failed: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: stockReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 💵🚫🤖 [2026-09-23 신규, 실사용 제보 "표준가격 기간별 단가 확인해줘"] MM03 "회계 1"
         //    탭의 표준가격(STPRS)/기간별단가(PVPRS)를 가격단위(PEINH)로 나눈 실제 단가까지
         //    계산해서 보여준다(사용자 지적: "가격 단위 수량이 있어, 나누기 해서 알려줘야해").

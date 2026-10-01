@@ -2997,6 +2997,18 @@ def _call_gemini_with_tools(api_key, model, contents, tool_decls):
     return {'ok': True, 'text': '\n'.join(texts), 'functionCalls': fcs, 'rawParts': parts}
 
 
+@app.route('/sap-mard-stock', methods=['GET'])
+def sap_mard_stock():
+    # 💰 [2026-10-01 신규] SE16N → MARD 직접 조회로 자재 저장위치별/전체 재고 반환.
+    # MB52의 T133E 오류 없이 작동 — "자재번호 재고 수량 확인해줘" 트리거.
+    material = (request.args.get('material') or '').strip()
+    werks = (request.args.get('werks') or '1000').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material)가 필요합니다.'}), 400
+    data, status = _run_sap_bridge(['query_mard_stock', material, werks], 45, 'SAP MARD 재고 조회')
+    return jsonify(data), status
+
+
 @app.route('/sap-mcp-health', methods=['GET'])
 def sap_mcp_health():
     """uvx / mcp-sap-gui 사용 가능 여부 빠른 확인."""
