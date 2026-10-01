@@ -2347,6 +2347,8 @@ ${docsJson}`;
                     + '&layout=' + encodeURIComponent(layoutParam);
                 timeoutMs = Math.min(90000, 30000 + 10000 * bomNums.length);
                 timeoutMsgKo = 'SAP BOM 조회 시간 초과'; timeoutMsgEn = 'SAP BOM lookup timed out';
+                // [2026-10-01] 재시도를 위해 BOM 최종 URL 저장 (타임아웃/실패 후 "다시" 명령 지원)
+                window._ganttQaLastBomUrl = { url: url, timeoutMs: timeoutMs, timeoutMsgKo: timeoutMsgKo, timeoutMsgEn: timeoutMsgEn };
             } else if (zmm009Match) {
                 url = 'http://127.0.0.1:5000/sap-zmm009?material=' + encodeURIComponent(zmm009Nums.join(','));
                 timeoutMs = Math.min(150000, 30000 + 15000 * zmm009Nums.length);
@@ -4211,6 +4213,36 @@ ${docsJson}`;
             return;
         }
 
+        // 🔄 [2026-10-01 신규, 사용자 요청] BOM 재시도 — 타임아웃/실패 후 "다시"/"다시확인"/"retry"로
+        //    바로 이전 BOM URL을 재실행. AI를 거치지 않아 quota 소비 없음.
+        //    _ganttQaLastBomUrl은 BOM fetch 직전에 저장되며, 성공 시엔 유지(다시 볼 수 있도록).
+        const _BOM_RETRY_RE = /^\s*(다시\s*(?:확인|시도|해줘?)?|재시도|retry)\s*[.!?~]*\s*$/i;
+        if (_BOM_RETRY_RE.test(question) && window._ganttQaLastBomUrl) {
+            const _retryInfo = window._ganttQaLastBomUrl;
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('이전 BOM 조회를 다시 시도합니다...', 'Retrying previous BOM lookup...') });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            (async function() {
+                const _lastIdx = window._ganttQaHistory.length - 1;
+                try {
+                    const _retryRes = await window._withTimeout(fetch(_retryInfo.url), _retryInfo.timeoutMs, window._t(_retryInfo.timeoutMsgKo, _retryInfo.timeoutMsgEn));
+                    const _retryData = await _retryRes.json();
+                    if (_retryData.ok && _retryData.text) {
+                        window._lastSapFetchResult = { source: _retryData.source, text: _retryData.text, fetchedAt: Date.now(), bomMeta: null };
+                        window._ganttQaHistory[_lastIdx] = { role: 'ai', text: window._ganttQaFormatSapGridReply ? window._ganttQaFormatSapGridReply(_retryData.text) : _retryData.text };
+                    } else {
+                        window._ganttQaHistory[_lastIdx] = { role: 'ai', text: '(' + window._t('BOM 재시도 실패', 'BOM retry failed') + ': ' + (_retryData.error || '?') + ')' };
+                    }
+                } catch (_retryE) {
+                    window._ganttQaHistory[_lastIdx] = { role: 'ai', text: '(' + window._t('BOM 재시도 시간 초과', 'BOM retry timed out') + ')' };
+                }
+                window._renderGanttQaMessages();
+            })();
+            return;
+        }
+
         // 🔄 [2026-10-01 신규, 사용자 요청] 드롭다운/확인버튼 대기 중 새 맥락 자동 전환 ─────────
         //    "취소"/"중단" 같은 명시적 인터럽트 없이도, 드롭다운(예: BOM 레이아웃 옵션, GR EBELN 선택,
         //    팀운영비 팀 선택 등) 또는 확인버튼이 떠있을 때 라우터가 완전히 새로운 질문으로 판단하면
@@ -4225,7 +4257,10 @@ ${docsJson}`;
                 window._ganttQaBomDraft = null;
                 window._ganttQaBomResolvedOptions = null;
                 window._ganttQaPendingChoiceDropdown = null;
-                window._ganttQaPendingConfirmButtons = null;
+                // persistent 버튼(자재 선택 팝업 등)은 새 맥락 자동 전환 대상에서 제외 — 실행 중에도 유지
+                if (!(window._ganttQaPendingConfirmButtons && window._ganttQaPendingConfirmButtons.persistent)) {
+                    window._ganttQaPendingConfirmButtons = null;
+                }
                 // fall through — 아래 hasAnyActiveQaDraft 재계산 → 정상 흐름 진행
             }
         }
