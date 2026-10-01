@@ -1668,37 +1668,45 @@ ${question}
         var input = document.getElementById('gantt-qa-input');
         if (input) { input.value = matnr; input.focus(); }
         var en = window._currentLang === 'en';
-        var isRaw = /^1/.test(matnr); // 1로 시작 = 원자재, BOM 없음
+
+        // 자재 유형 판별 — 첫 자리 기준 (1=원자재, 3=반제품, 5=완제품)
+        var matType = /^1/.test(matnr) ? 'raw' : /^3/.test(matnr) ? 'semi' : /^5/.test(matnr) ? 'finished' : '';
+        var matLabel = matType === 'raw'      ? (en ? 'Raw material'   : '원자재') :
+                       matType === 'semi'     ? (en ? 'Semi-finished'  : '반제품') :
+                       matType === 'finished' ? (en ? 'Finished goods' : '완제품') : '';
+
         var buttons = [];
-        if (!isRaw) buttons.push({ label: '📋 BOM 조회', value: matnr + ' BOM 조회해줘', style: 'neutral' });
+        // BOM: 원자재는 BOM 없음
+        if (matType !== 'raw')      buttons.push({ label: '📋 BOM 조회',    value: matnr + ' BOM 조회해줘', style: 'neutral' });
+        // 사용처: 완제품은 사용처 없음 (최상위 완성품)
+        if (matType !== 'finished') buttons.push({ label: '🔄 사용처 조회', value: matnr + ' 사용처 조회해줘', style: 'neutral' });
         buttons.push(
-            { label: '🔄 사용처 조회', value: matnr + ' 사용처 조회해줘', style: 'neutral' },
-            { label: '📦 재고 조회', value: matnr + ' 재고 조회해줘', style: 'neutral' },
-            { label: '💰 가격 확인', value: matnr + ' 가격 확인해줘', style: 'neutral' },
-            { label: '📝 품목 내역', value: matnr + ' 품목 내역 보여줘', style: 'neutral' },
-            { label: '🔍 문서 조회', action: 'docLookup', style: 'neutral' },
-            { label: '📥 문서 저장', action: 'docSave', style: 'neutral' },
-            { label: '🏷️ 승인원 표지', value: matnr + ' 승인원 표지 만들어줘', style: 'neutral' },
+            { label: '📦 재고 조회',    value: matnr + ' 재고 조회해줘', style: 'neutral' },
+            { label: '💰 가격 확인',    value: matnr + ' 가격 확인해줘', style: 'neutral' },
+            { label: '📝 품목 내역',    value: matnr + ' 품목 내역 보여줘', style: 'neutral' },
+            { label: '🔍 문서 조회',    action: 'docLookup', style: 'neutral' },
+            { label: '📥 문서 저장',    action: 'docSave',   style: 'neutral' }
+        );
+        // 승인원 표지: 완제품 미사용
+        if (matType !== 'finished') buttons.push({ label: '🏷️ 승인원 표지',   value: matnr + ' 승인원 표지 만들어줘', style: 'neutral' });
+        buttons.push(
             { label: '🏭 공급업체 조회', value: matnr + ' 공급업체 조회해줘', style: 'neutral' },
             { label: '🛒 구매정보 조회', value: matnr + ' 구매 정보 레코드 조회해줘', style: 'neutral' },
-            { label: '🔧 변경이력', value: matnr + ' 변경이력 확인해줘', style: 'neutral' },
-            { label: '📄 MM03 열기', value: matnr + ' MM03 열어줘', style: 'neutral' }
+            { label: '🔧 변경이력',      value: matnr + ' 변경이력 확인해줘', style: 'neutral' },
+            { label: '📄 MM03 열기',     value: matnr + ' MM03 열어줘', style: 'neutral' }
         );
+
         // action 버튼 처리: docLookup/docSave는 직접 문서타입 드롭다운을 띄움
         var _resolvedButtons = buttons.map(function(b) {
-            if (b.action === 'docLookup') {
-                return { label: b.label, value: '__docLookup__' + matnr, style: b.style };
-            }
-            if (b.action === 'docSave') {
-                return { label: b.label, value: '__docSave__' + matnr, style: b.style };
-            }
+            if (b.action === 'docLookup') return { label: b.label, value: '__docLookup__' + matnr, style: b.style };
+            if (b.action === 'docSave')   return { label: b.label, value: '__docSave__'   + matnr, style: b.style };
             return b;
         });
-        window._ganttQaShowConfirmButtons(
-            (en ? 'Material ' : '자재 ') + matnr + (en ? ' — what would you like to do?' : ' — 무엇을 조회할까요?'),
-            _resolvedButtons,
-            { persistent: true }
-        );
+
+        var _header = (en ? 'Material ' : '자재 ') + matnr
+            + (matLabel ? ' (' + matLabel + ')' : '')
+            + (en ? ' — what would you like to do?' : ' — 무엇을 조회할까요?');
+        window._ganttQaShowConfirmButtons(_header, _resolvedButtons, { persistent: true });
         window._renderGanttQaMessages();
     };
 
