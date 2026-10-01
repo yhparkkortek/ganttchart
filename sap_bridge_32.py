@@ -3911,18 +3911,172 @@ def _save_po_pdf_to_file(save_path):
     return save_path
 
 
-def query_mard_stock(matnr_input, werks='1000'):
-    """MM03 '회계 1' 탭의 LBKUM(일반평가데이타 = 전체 플랜트 가치화 재고)를 읽어 반환.
-    SE16N 권한 불필요, MB52 T133E 오류와 무관하게 작동.
-    matnr_input에 쉼표로 여러 자재번호를 전달하면 순차 조회.
-    반환: {ok, results:[{matnr,werks,lbkum,text}], text}
-    실측: 2026-10-01 SE16N 권한 없어 MM03 회계1 방식으로 변경."""
-    matnr_list = [m.strip() for m in matnr_input.split(',') if m.strip()]
-    if not matnr_list:
-        raise RuntimeError('자재번호를 지정해주세요.')
+def _mb52_multi_select(session, wnd, matnr_list):
+    """MB52 선택 화면에서 자재번호 복수 입력.
+    단일: MATNR-LOW에 직접 입력.
+    복수: VALU_PUSH 버튼 클릭 → 대화상자 테이블에 한 줄씩 입력 → F8(복사).
+    반환: 실제로 MB52에 입력된 자재번호 집합 (대화상자 실패 시 첫 번째만)."""
+    matnr_low_f = _find_by_id_substring(wnd, 'MATNR-LOW')
 
+    if len(matnr_list) == 1:
+        if matnr_low_f:
+            matnr_low_f.text = matnr_list[0]
+        return set(matnr_list)
+
+    # 다중값 버튼 클릭
+    valu_btn = _find_by_id_substring(wnd, 'MATNR_%_APP_%-VALU_PUSH')
+    if valu_btn is None:
+        if matnr_low_f:
+            matnr_low_f.text = matnr_list[0]
+        return {matnr_list[0]}
+
+    try:
+        valu_btn.press()
+        time.sleep(1.0)
+        dlg = session.findById('wnd[1]')
+    except Exception:
+        if matnr_low_f:
+            matnr_low_f.text = matnr_list[0]
+        return {matnr_list[0]}
+
+    # 표준 SAP 선택 옵션 대화상자 테이블 — 경로는 SAP 버전에 따라 달라질 수 있어
+    # 두 가지 공통 경로를 순서대로 시도하고, 둘 다 실패하면 id substring 탐색.
+    _DLG_LOW_PATHS = [
+        'wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSUBSCREEN_AREA:SAPLSSEL:1105/tblSAPSELECTION_SCREEN_T/ctxtSELECTION_SCREEN_T-LOW[2,{i}]',
+        'wnd[1]/usr/tblSELECT_OPTION_T/ctxtSELECT_OPTION_T-LOW[1,{i}]',
+    ]
+    entered = set()
+    for i, matnr in enumerate(matnr_list):
+        cell = None
+        for tmpl in _DLG_LOW_PATHS:
+            try:
+                cell = session.findById(tmpl.format(i=i))
+                break
+            except Exception:
+                pass
+        if cell is None:
+            break  # 대화상자 구조 불명 → 여기까지만
+        try:
+            cell.text = matnr
+            entered.add(matnr)
+        except Exception:
+            break
+
+    try:
+        dlg.sendVKey(8)  # F8 = 복사
+        time.sleep(0.5)
+    except Exception:
+        try:
+            dlg.sendVKey(12)
+        except Exception:
+            pass
+
+    if not entered:
+        # 대화상자 입력 전부 실패 → fallback
+        if matnr_low_f:
+            matnr_low_f.text = matnr_list[0]
+        return {matnr_list[0]}
+    return entered
+
+
+def _query_stock_via_mb52(matnr_list, werks='1000'):
+    """MB52로 자재 리스트 창고 재고 일괄조회.
+    반환: {found: {matnr: labst_total}, t133e: bool}
+    - found: 결과 그리드에서 읽은 자재별 합산 재고
+    - t133e: T133E 팝업이 발생해 일부 자재가 누락됐을 가능성
+    실측 덤프 기반 구현 (2026-10-01): MATNR-LOW=ctxtMATNR-LOW,
+      WERKS-LOW=ctxtWERKS-LOW, VALU_PUSH=btn%_MATNR_%_APP_%-VALU_PUSH."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB52'
+    wnd = session.findById('wnd[0]')
+    wnd.sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+
+    entered = _mb52_multi_select(session, wnd, matnr_list)
+
+    werks_f = _find_by_id_substring(wnd, 'WERKS-LOW')
+    if werks_f:
+        werks_f.text = werks
+
+    wnd.sendVKey(8)  # F8 실행
+    time.sleep(2.5)
+
+    t133e = False
+    # T133E 팝업이 떴으면 닫고 계속 (팝업 닫힌 후 결과 그리드가 있을 수 있음)
+    try:
+        popup = session.findById('wnd[1]')
+        popup_text = (popup.Text or '').upper()
+        if 'T133E' in popup_text or 'T133' in popup_text:
+            t133e = True
+        popup.sendVKey(12)
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+    wnd = session.findById('wnd[0]')
+    shell = _sap_find_grid(wnd)
+    if shell is None:
+        return {'found': {}, 't133e': t133e}
+
+    grid_text = _sap_dump_grid(shell)
+    if not grid_text:
+        return {'found': {}, 't133e': t133e}
+
+    def _parse_sap_num(s):
+        s = (s or '').strip()
+        if not s or s == '-':
+            return 0.0
+        if '.' in s and ',' in s:
+            return float(s.replace('.', '').replace(',', '.'))
+        if ',' in s:
+            return float(s.replace(',', '.'))
+        if '.' in s:
+            parts = s.split('.')
+            if len(parts) == 2 and len(parts[1]) == 3:
+                return float(parts[0])
+            return float(s)
+        try:
+            return float(s)
+        except Exception:
+            return 0.0
+
+    lines = grid_text.split('\n')
+    if not lines:
+        return {'found': {}, 't133e': t133e}
+    headers = lines[0].split('\t')
+
+    def _ci(name):
+        for idx, h in enumerate(headers):
+            if name.upper() in h.upper():
+                return idx
+        return -1
+
+    matnr_i = _ci('MATNR')
+    labst_i = _ci('LABST')
+    if matnr_i < 0 or labst_i < 0:
+        return {'found': {}, 't133e': t133e}
+
+    found = {}
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        cells = line.split('\t')
+        def _g(i): return cells[i].strip() if 0 <= i < len(cells) else ''
+        matnr = _g(matnr_i)
+        if not matnr:
+            continue
+        labst = _parse_sap_num(_g(labst_i))
+        found[matnr] = found.get(matnr, 0.0) + labst  # 저장위치별 합산
+
+    return {'found': found, 't133e': t133e}
+
+
+def _query_stock_via_mm03(matnr, werks='1000'):
+    """MM03 '회계 1' LBKUM 단일 자재 조회. MB52 fallback용."""
     def _parse_lbkum(raw):
-        """SAP 독일식 숫자 파싱: "867.000"→867, "1.234,56"→1234.56"""
         s = (raw or '').strip()
         if not s or s == '-':
             return 0.0
@@ -3933,65 +4087,92 @@ def query_mard_stock(matnr_input, werks='1000'):
         if '.' in s:
             parts = s.split('.')
             if len(parts) == 2 and len(parts[1]) == 3:
-                return float(parts[0])  # "867.000" → 867
+                return float(parts[0])
             return float(s)
         try:
             return float(s)
         except Exception:
             return 0.0
 
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    _navigate_to_material_screen(session, wnd, matnr)
+
+    found = _select_tab_with_retry(wnd, 'tabpSP24')
+    if not found:
+        raise RuntimeError(f'자재 {matnr}: "회계 1" 탭을 찾지 못했습니다.')
+
+    lbkum_raw = None
+    for _attempt in range(6):
+        time.sleep(0.5)
+        wnd = session.findById('wnd[0]')
+        field = _find_by_id_substring(wnd, 'LBKUM')
+        if field is not None:
+            lbkum_raw = str(field.Text).strip()
+            break
+
+    if lbkum_raw is None:
+        raise RuntimeError(f'자재 {matnr}: LBKUM 필드를 찾지 못했습니다.')
+
+    return _parse_lbkum(lbkum_raw), lbkum_raw
+
+
+def query_mard_stock(matnr_input, werks='1000'):
+    """자재 재고 조회: MB52 일괄(빠름) 우선 → 누락/실패 자재는 MM03 회계1 fallback.
+    matnr_input에 쉼표로 여러 자재번호 지정 가능.
+    반환: {ok, results:[{matnr,werks,labst,source,text}], text}
+    실측: 2026-10-01 덤프 기반 구현. MB52 layout '/MM' 기준 MATNR+LABST 컬럼 합산."""
+    matnr_list = [m.strip() for m in matnr_input.split(',') if m.strip()]
+    if not matnr_list:
+        raise RuntimeError('자재번호를 지정해주세요.')
+
+    # ── 1단계: MB52 일괄 조회 시도 ─────────────────────────────────────────
+    mb52_found = {}
+    mb52_ok = False
+    try:
+        mb52_res = _query_stock_via_mb52(matnr_list, werks)
+        mb52_found = mb52_res.get('found', {})
+        mb52_ok = True
+    except Exception as e:
+        print(f'[MB52 실패, MM03 fallback] {e}', file=sys.stderr)
+
+    # ── 2단계: MB52에서 누락된 자재 → MM03 회계1 LBKUM fallback ────────────
     results = []
+    mm03_needed = [m for m in matnr_list if m not in mb52_found]
+
     for matnr in matnr_list:
-        try:
-            session = _get_sap_session()
-            _sap_close_stray_popups(session)
-            wnd = session.findById('wnd[0]')
-            _navigate_to_material_screen(session, wnd, matnr)
-
-            found = _select_tab_with_retry(wnd, 'tabpSP24')  # "회계 1"
-            if not found:
-                results.append({
-                    'matnr': matnr, 'werks': werks, 'lbkum': None,
-                    'text': f'자재 {matnr}: "회계 1" 탭을 찾지 못했습니다 — 이 자재에 회계 뷰가 없을 수 있습니다.'
-                })
-                continue
-
-            # 탭 전환 직후 서브화면이 바로 안 잡힐 수 있어 최대 6회 retry
-            lbkum_raw = None
-            for _attempt in range(6):
-                time.sleep(0.5)
-                wnd = session.findById('wnd[0]')
-                field = _find_by_id_substring(wnd, 'LBKUM')
-                if field is not None:
-                    lbkum_raw = str(field.Text).strip()
-                    break
-
-            if lbkum_raw is None:
-                results.append({
-                    'matnr': matnr, 'werks': werks, 'lbkum': None,
-                    'text': f'자재 {matnr}: "회계 1" 탭에서 LBKUM(재고수량) 필드를 찾지 못했습니다.'
-                })
-                continue
-
-            lbkum_num = _parse_lbkum(lbkum_raw)
+        if matnr in mb52_found:
+            labst = mb52_found[matnr]
             results.append({
-                'matnr': matnr, 'werks': werks, 'lbkum': lbkum_num,
-                'text': f'자재 {matnr} 재고 (플랜트 {werks}): {lbkum_raw} EA [MM03 회계1 일반평가데이타]'
+                'matnr': matnr, 'werks': werks, 'labst': labst, 'source': 'MB52',
+                'text': f'자재 {matnr} 재고 (플랜트 {werks}): {labst:.0f} EA [MB52]'
             })
-        except Exception as e:
-            results.append({
-                'matnr': matnr, 'werks': werks, 'lbkum': None,
-                'text': f'자재 {matnr} 조회 실패: {str(e)}'
-            })
+        else:
+            # MM03 fallback
+            try:
+                lbkum_num, lbkum_raw = _query_stock_via_mm03(matnr, werks)
+                results.append({
+                    'matnr': matnr, 'werks': werks, 'labst': lbkum_num, 'source': 'MM03',
+                    'text': f'자재 {matnr} 재고 (플랜트 {werks}): {lbkum_raw} EA [MM03 회계1]'
+                })
+            except Exception as e:
+                results.append({
+                    'matnr': matnr, 'werks': werks, 'labst': None, 'source': 'error',
+                    'text': f'자재 {matnr} 조회 실패: {str(e)}'
+                })
 
-    # 전체 요약 텍스트
+    # ── 요약 텍스트 ────────────────────────────────────────────────────────
     if len(results) == 1:
         combined_text = results[0]['text']
     else:
-        lines = ['[MM03 회계1 재고 일괄조회]']
+        n_mb52 = sum(1 for r in results if r.get('source') == 'MB52')
+        n_mm03 = sum(1 for r in results if r.get('source') == 'MM03')
+        header = f'[재고 일괄조회: MB52 {n_mb52}건 + MM03 {n_mm03}건]' if n_mm03 else f'[MB52 재고 일괄조회]'
+        lines = [header]
         for r in results:
-            if r['lbkum'] is not None:
-                lines.append(f'  • {r["matnr"]}: {r["lbkum"]:.0f} EA')
+            if r['labst'] is not None:
+                lines.append(f'  • {r["matnr"]}: {r["labst"]:.0f} EA')
             else:
                 lines.append(f'  • {r["matnr"]}: 조회 실패')
         combined_text = '\n'.join(lines)
