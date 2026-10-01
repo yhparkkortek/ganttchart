@@ -110,7 +110,7 @@
           kw: ['사용처', '역전개', '어디에 쓰', '어디 쓰', 'where-used', 'whereused'], needs: '자재번호', ex: '104446 사용처 조회해줘' },
         { id: 'matlist', title: '자재 리스트 조회', titleEn: 'Material list', tcode: 'ZMM009', mode: 'read', verified: 'unverified',
           kw: ['자재 리스트', '자재리스트', '자재 목록', 'zmm009'], needs: '자재번호(복수 가능)', ex: '133025,133026 엑셀 출력해줘' },
-        { id: 'mardstock', title: '재고 수량 조회 (MM03 회계1)', titleEn: 'Stock quantity (MM03 Acctg1)', tcode: 'MM03→회계1', mode: 'read', verified: 'unverified',
+        { id: 'mardstock', title: '재고 수량 조회 (MB52+MM03)', titleEn: 'Stock quantity (MB52+MM03)', tcode: 'MB52 / MM03→회계1', mode: 'read', verified: 'unverified',
           kw: ['재고 수량', '재고수량', '재고 확인', '재고확인', '재고 조회', '재고조회', '가용 재고', '가용재고', 'lbkum', '일반평가', '수량 확인', '수량확인'],
           needs: '자재번호(복수 쉼표 가능)', ex: '301966 재고수량 확인해줘 / 301966,301967 재고 확인' },
         { id: 'matdocs', title: '자재 문서 열람(SAP 뷰어)', titleEn: 'Material documents (SAP viewer)', tcode: 'MM03', mode: 'read', verified: 'live',

@@ -4580,30 +4580,69 @@ def _query_stock_via_mm03(matnr, werks='1000'):
 
 
 def query_mard_stock(matnr_input, werks='1000'):
-    """자재 재고 조회: MB52 일괄(빠름) 우선 → 누락/실패 자재는 MM03 회계1 fallback.
+    """자재 재고 조회.
+    - 자재 1개  : MB52 + MM03 **둘 다** 조회해 나란히 보여준다(2026-10-02 사용자 요청).
+    - 자재 2개+ : MB52 일괄(빠름)만 쓰고 누락분만 MM03 fallback — MM03은 자재당 화면을
+                  순회해서 복수 조회 시 급격히 느려지므로 의도적으로 예외 적용.
     matnr_input에 쉼표로 여러 자재번호 지정 가능.
-    반환: {ok, results:[{matnr,werks,labst,source,text}], text}
+    반환: {ok, results:[{matnr,werks,labst,mb52Labst?,mm03Lbkum?,source,text}], text}
+    ⚠️ MB52 LABST(해당 플랜트 가용·비제한 재고)와 MM03 LBKUM(전체 플랜트 평가재고 총계)은
+       집계 범위가 다른 값이다 — 두 값이 달라도 버그가 아니므로 답변에 그 사실을 같이 적는다.
     실측: 2026-10-01 덤프 기반 구현. MB52 layout '/MM' 기준 MATNR+LABST 컬럼 합산."""
     matnr_list = [m.strip() for m in matnr_input.split(',') if m.strip()]
     if not matnr_list:
         raise RuntimeError('자재번호를 지정해주세요.')
+    single = len(matnr_list) == 1
 
     # ── 1단계: MB52 일괄 조회 시도 ─────────────────────────────────────────
     mb52_found = {}
-    mb52_ok = False
+    mb52_err = None
     try:
         mb52_res = _query_stock_via_mb52(matnr_list, werks)
         mb52_found = mb52_res.get('found', {})
-        mb52_ok = True
     except Exception as e:
+        mb52_err = str(e)
         print(f'[MB52 실패, MM03 fallback] {e}', file=sys.stderr)
 
-    # ── 2단계: MB52에서 누락된 자재 → MM03 회계1 LBKUM fallback ────────────
+    # ── 2단계: 단일=MB52+MM03 동시 / 복수=MB52 누락분만 MM03 fallback ──────
     results = []
-    mm03_needed = [m for m in matnr_list if m not in mb52_found]
 
     for matnr in matnr_list:
-        if matnr in mb52_found:
+        if single:
+            # 단일 조회는 두 트랜잭션을 모두 읽어 비교 제시(한쪽이 실패해도 다른 쪽은 보여준다)
+            labst = mb52_found.get(matnr)
+            lbkum_num = lbkum_raw = None
+            mm03_err = None
+            try:
+                lbkum_num, lbkum_raw = _query_stock_via_mm03(matnr, werks)
+            except Exception as e:
+                mm03_err = str(e)
+                print(f'[MM03 실패] {matnr}: {e}', file=sys.stderr)
+            if labst is None and lbkum_num is None:
+                results.append({
+                    'matnr': matnr, 'werks': werks, 'labst': None, 'source': 'error',
+                    'mb52Labst': None, 'mm03Lbkum': None,
+                    'text': (f'자재 {matnr} 조회 실패 — '
+                             f'MB52: {mb52_err or "결과 없음"} / MM03: {mm03_err or "결과 없음"}')
+                })
+                continue
+            lines = [f'자재 {matnr} 재고 (플랜트 {werks})']
+            lines.append('  - MB52 가용재고(LABST): '
+                         + (f'{labst:.0f} EA' if labst is not None
+                            else f'조회 실패 ({mb52_err or "결과 없음"})'))
+            lines.append('  - MM03 회계1 전체평가재고(LBKUM): '
+                         + (f'{lbkum_raw} EA' if lbkum_num is not None
+                            else f'조회 실패 ({mm03_err or "결과 없음"})'))
+            if labst is not None and lbkum_num is not None and abs(labst - lbkum_num) > 0.5:
+                lines.append('  * 두 값은 집계 범위가 달라 차이가 날 수 있습니다'
+                             ' (MB52=해당 플랜트 가용 / MM03=전체 플랜트 평가재고).')
+            results.append({
+                'matnr': matnr, 'werks': werks,
+                'labst': labst if labst is not None else lbkum_num,
+                'mb52Labst': labst, 'mm03Lbkum': lbkum_num,
+                'source': 'MB52+MM03', 'text': '\n'.join(lines)
+            })
+        elif matnr in mb52_found:
             labst = mb52_found[matnr]
             results.append({
                 'matnr': matnr, 'werks': werks, 'labst': labst, 'source': 'MB52',
@@ -4629,7 +4668,13 @@ def query_mard_stock(matnr_input, werks='1000'):
     else:
         n_mb52 = sum(1 for r in results if r.get('source') == 'MB52')
         n_mm03 = sum(1 for r in results if r.get('source') == 'MM03')
-        header = f'[재고 일괄조회: MB52 {n_mb52}건 + MM03 {n_mm03}건]' if n_mm03 else f'[MB52 재고 일괄조회]'
+        n_dual = sum(1 for r in results if r.get('source') == 'MB52+MM03')
+        if n_dual:
+            header = f'[재고 조회: MB52+MM03 동시 {n_dual}건]'
+        elif n_mm03:
+            header = f'[재고 일괄조회: MB52 {n_mb52}건 + MM03 {n_mm03}건]'
+        else:
+            header = '[MB52 재고 일괄조회]'
         lines = [header]
         for r in results:
             if r['labst'] is not None:

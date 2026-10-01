@@ -3003,7 +3003,9 @@ def sap_mard_stock():
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material)가 필요합니다.'}), 400
     n_mats = len([m for m in material.split(',') if m.strip()])
-    timeout = min(45 + (n_mats - 1) * 20, 120)
+    # [2026-10-02] 자재 1개는 MB52+MM03을 모두 조회하므로(사용자 요청) 2회분 시간을 준다.
+    #   복수는 MB52 일괄 + 누락분만 MM03이라 기존 계산 유지.
+    timeout = 75 if n_mats == 1 else min(45 + (n_mats - 1) * 20, 120)
     data, status = _run_sap_bridge(['query_mard_stock', material, werks], timeout, 'SAP 재고 조회(MM03)')
     return jsonify(data), status
 

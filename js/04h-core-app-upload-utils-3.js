@@ -349,6 +349,40 @@
         )});
     };
 
+    // 📂 [2026-10-02 신규, 사용자 요청] 🔍 문서 조회 결과 표의 행별 "열기" 버튼 핸들러.
+    //    문서 조회(/sap-dms-lookup)는 문서번호만 보여주고 끝났는데, 사용자가 원한 건
+    //    "찾아서 열어주는" 것이었다 — 열기 자체는 /sap-open-document에 이미 있었고
+    //    조회 결과와 연결만 안 돼 있었다. 📥 문서 저장(다운로드)과는 명확히 다른 동작:
+    //    저장 = C:\SAP_DMS\로 파일 내려받기 / 열기 = SAP에서 원본을 연결 프로그램으로 바로 열기.
+    window._sapOpenDocFromLookup = async function(matnr, docType, ev) {
+        if (ev && ev.stopPropagation) ev.stopPropagation();   // 행 클릭(입력창 채우기)과 분리
+        const _en = window._currentLang === 'en';
+        window._ganttQaHistory.push({ role: 'user', text: matnr + ' ' + docType + (_en ? ' open document' : ' 문서 열어줘') });
+        window._ganttQaHistory.push({ role: 'ai', pending: true, text: '⏳ ' + window._t(
+            'SAP에서 자재 ' + matnr + '의 "' + docType + '" 문서를 여는 중...',
+            'Opening "' + docType + '" document of material ' + matnr + ' in SAP...') });
+        window._renderGanttQaMessages();
+        let reply;
+        try {
+            const url = 'http://127.0.0.1:5000/sap-open-document?type=' + encodeURIComponent(docType)
+                      + '&material=' + encodeURIComponent(matnr);
+            const res = await window._withTimeout(fetch(url), 70000,
+                window._t('SAP 문서 열기 시간 초과', 'SAP document open timed out'));
+            const data = await res.json();
+            reply = data.ok
+                ? '📂 ' + (data.message || window._t(
+                    '자재 ' + matnr + '의 "' + docType + '" 문서를 열었습니다.',
+                    'Opened "' + docType + '" document of material ' + matnr + '.'))
+                : '⚠️ ' + window._t('문서 열기 실패: ', 'Failed to open document: ')
+                    + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+        } catch (e) {
+            reply = '⚠️ ' + window._t('문서 열기 실패: ', 'Failed to open document: ') + (e && e.message ? e.message : e);
+        }
+        window._ganttQaHistory.pop();
+        window._ganttQaHistory.push({ role: 'ai', text: reply });
+        window._renderGanttQaMessages();
+    };
+
     // 📋 [2026-09-29 신규] "112294 다운로드 해줘"처럼 문서 타입 코드 없이 다운로드 요청 시
     //    SAP_DOC_TYPES(사용 중인 항목만) 목록에서 종류를 고르는 드롭다운을 보여준다.
     //    buildAnswerText 가 "{자재번호} {코드} 문서 {동사}" 형식 문자열을 합성해서 sendGanttQaMessage로 재전송.
@@ -5044,6 +5078,7 @@ ${docsJson}`;
                         if (a.has !== b.has) return a.has ? -1 : 1;
                         return a.matnr < b.matnr ? -1 : 1;
                     });
+                    const _dmsDocType = String(data.doc_type || sapDmsLookupReq.docType || '').replace(/['\\]/g, '');
                     let tbl = '<div style="font-size:12.5px; margin-bottom:4px;">'
                         + '📋 <b>' + data.doc_type + ' ' + window._t('문서 조회 결과', 'Document lookup result') + '</b>'
                         + ' — ' + window._t(`문서 있음: ${hasCount}건 / 없음: ${noCount}건`, `With doc: ${hasCount} / Without: ${noCount}`)
@@ -5054,13 +5089,23 @@ ${docsJson}`;
                         + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:left;">' + window._t('자재번호', 'Material') + '</th>'
                         + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:center;">' + window._t('문서', 'Doc') + '</th>'
                         + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:left;">' + window._t('문서번호', 'Doc No.') + '</th>'
+                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:center; width:62px;">' + window._t('열기', 'Open') + '</th>'
                         + '</tr></thead><tbody>';
                     rows.forEach(function(r) {
                         const bg = r.has ? '' : 'background:#fff8f0;';
-                        tbl += '<tr style="' + bg + '" onclick="(function(){var el=document.getElementById(\'gantt-qa-input\');if(!el)return;el.value=\'' + r.matnr + ' \';el.focus();})()" style="cursor:pointer; ' + bg + '">'
+                        // 🐛 [2026-10-02] style 속성이 두 번 적혀 cursor:pointer가 적용되지 않던 것 — 하나로 합침
+                        tbl += '<tr style="cursor:pointer; ' + bg + '" onclick="(function(){var el=document.getElementById(\'gantt-qa-input\');if(!el)return;el.value=\'' + r.matnr + ' \';el.focus();})()">'
                             + '<td style="padding:3px 8px; border-bottom:1px solid #eee; font-family:monospace;">' + r.matnr + '</td>'
                             + '<td style="padding:3px 8px; border-bottom:1px solid #eee; text-align:center;">' + (r.has ? '✅' : '❌') + '</td>'
                             + '<td style="padding:3px 8px; border-bottom:1px solid #eee; color:#555;">' + r.doknr + '</td>'
+                            // 📂 [2026-10-02] 문서가 있는 행만 열기 버튼 — 없는 행은 열 게 없으므로 공백
+                            + '<td style="padding:3px 4px; border-bottom:1px solid #eee; text-align:center;">'
+                            + (r.has
+                                ? '<button onclick="window._sapOpenDocFromLookup(\'' + r.matnr + '\',\'' + _dmsDocType + '\',event)" '
+                                  + 'title="' + window._t('SAP에서 원본 파일 열기', 'Open original file in SAP') + '" '
+                                  + 'style="font-size:11px; padding:2px 7px; border:1px solid #bbb; border-radius:4px; background:#f5f7fa; cursor:pointer;">📂</button>'
+                                : '')
+                            + '</td>'
                             + '</tr>';
                     });
                     tbl += '</tbody></table></div>';
@@ -5790,10 +5835,14 @@ ${docsJson}`;
             const _stockMatNums = _sapLookupNums.join(',');
             const _stockLabel = _sapLookupNums.length > 1
                 ? window._t(`SAP에서 자재 ${_sapLookupNums.length}건 재고 조회 중...`, `Looking up stock for ${_sapLookupNums.length} materials...`)
-                : window._t('SAP MB52에서 재고 조회 중 (MM03 fallback)...', 'Looking up stock via MB52 (MM03 fallback)...');
+                : window._t('SAP MB52 + MM03 두 곳에서 재고 조회 중... (약 30초)', 'Looking up stock via both MB52 and MM03... (~30s)');
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + _stockLabel, pending: true });
             window._renderGanttQaMessages();
-            const _stockTimeout = 45000 + (_sapLookupNums.length - 1) * 20000;
+            // [2026-10-02] 단일 조회는 MB52+MM03 두 번 돌므로 넉넉히(백엔드 75초 > 이 값이면
+            //   클라이언트가 먼저 끊어 백엔드 오류 메시지를 못 보므로 반드시 백엔드보다 길게 둔다)
+            const _stockTimeout = _sapLookupNums.length === 1
+                ? 80000
+                : 45000 + (_sapLookupNums.length - 1) * 20000;
             let stockReply;
             try {
                 const res = await window._withTimeout(
