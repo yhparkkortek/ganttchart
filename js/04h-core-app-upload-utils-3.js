@@ -5680,24 +5680,55 @@ ${docsJson}`;
         //    계산해서 보여준다(사용자 지적: "가격 단위 수량이 있어, 나누기 해서 알려줘야해").
         //    실제 컨트롤 조작은 sap_bridge_32.py의 fetch_material_price() — 사용자가 직접
         //    "SAP 화면 덤프해줘"로 MM03 회계1 탭을 떠서 얻은 정확한 필드 ID로 구현(추측 없음).
-        //    자재번호 + 가격 키워드가 같이 있을 때만 트리거("단가" 단독으론 다른 질문과 겹칠 수
-        //    있어 자재번호를 반드시 요구) — 위 BOM/사용처/ZMM009와 같은 트리거 패턴.
-        const _priceMatch = _sapLookupNums.length > 0 && /(표준\s*가격|기간별\s*단가|기간별\s*간가|단가)/.test(question);
+        //    자재번호 + 가격 키워드가 같이 있을 때 트리거. 자재번호가 없어도 최근 BOM 조회
+        //    결과(_lastBomData)에서 이름 검색으로 자재번호를 찾아 처리한다.
+        //    [2026-10-01] kw를 SAP_CAPABILITIES.materialprice.kw로 통일; 복수 자재 지원.
+        const _priceKw = window._sapCapKwHit ? window._sapCapKwHit(question, 'materialprice')
+            : /(표준\s*가격|기간별\s*단가|기간별\s*간가|단가|현재\s*가격|이동\s*평균가|가격\s*확인|가격\s*조회|단가\s*확인)/.test(question);
+        let _priceMatNums = _sapLookupNums.slice();
+        if (_priceKw && _priceMatNums.length === 0 && window._lastBomData && window._lastBomData.sapText) {
+            // 자재번호 없을 때: 최근 BOM 텍스트에서 질문 키워드로 자재번호 추출
+            const _priceSearchTerm = question
+                .replace(/(표준가격|기간별단가|기간별간가|단가|현재가격|이동평균가|가격확인|가격조회|단가확인|단가조회|가격알려|단가알려|가격|단가|해줘|확인|조회|알려|줘|주세요)/gi, ' ')
+                .replace(/[은는이가을를]/g, ' ')
+                .replace(/\s+/g, ' ').trim();
+            if (_priceSearchTerm.length >= 2) {
+                const _bomLines = window._lastBomData.sapText.split('\n');
+                for (let _bpi = 0; _bpi < _bomLines.length; _bpi++) {
+                    if (_bomLines[_bpi].toLowerCase().indexOf(_priceSearchTerm.toLowerCase()) !== -1) {
+                        (_bomLines[_bpi].match(/\b\d{5,8}\b/g) || []).forEach(function(n) {
+                            if (_priceMatNums.indexOf(n) === -1) _priceMatNums.push(n);
+                        });
+                    }
+                }
+            }
+        }
+        const _priceMatch = _priceKw && _priceMatNums.length > 0;
         if (_priceMatch) {
             if (!_skipUserHistoryPush) {
                 window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
                 if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
             }
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 표준가격/기간별단가를 조회하는 중...', 'Looking up standard/period price in SAP...'), pending: true });
+            const _priceMats = _priceMatNums.slice(0, 3); // 최대 3건
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + (_priceMats.length > 1
+                ? window._t('SAP에서 자재 ' + _priceMats.length + '건 가격 조회 중...', 'Looking up price for ' + _priceMats.length + ' materials in SAP...')
+                : window._t('SAP MM03에서 가격을 조회하는 중...', 'Looking up price in SAP MM03...')), pending: true });
             window._renderGanttQaMessages();
             let priceReply;
             try {
-                const res = await window._withTimeout(
-                    fetch('http://127.0.0.1:5000/sap-material-price?material=' + encodeURIComponent(_sapLookupNums[0])), 30000,
-                    window._t('SAP 가격 조회 시간 초과', 'SAP price lookup timed out')
-                );
-                const data = await res.json();
-                priceReply = data.ok ? data.text : ('⚠️ ' + (data.error || window._t('가격 조회 실패', 'Price lookup failed')));
+                const _priceResults = [];
+                for (let _pi = 0; _pi < _priceMats.length; _pi++) {
+                    const res = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/sap-material-price?material=' + encodeURIComponent(_priceMats[_pi])), 35000,
+                        window._t('SAP 가격 조회 시간 초과', 'SAP price lookup timed out')
+                    );
+                    const data = await res.json();
+                    _priceResults.push(data.ok ? data.text : ('⚠️ ' + _priceMats[_pi] + ': ' + (data.error || window._t('가격 조회 실패', 'Price lookup failed'))));
+                }
+                priceReply = _priceResults.join('\n\n---\n\n');
+                if (_priceMatNums.length > 3) {
+                    priceReply += '\n\n💡 ' + window._t('자재 ' + (_priceMatNums.length - 3) + '건은 조회 개수 제한(3건)으로 생략되었습니다.', (_priceMatNums.length - 3) + ' more material(s) not shown (limit: 3).');
+                }
             } catch (e) {
                 priceReply = '⚠️ ' + window._t('가격 조회 실패: ', 'Price lookup failed: ') + (e && e.message ? e.message : e);
             }
