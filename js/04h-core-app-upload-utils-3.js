@@ -3928,6 +3928,23 @@ ${docsJson}`;
         let question = input.value.trim();
         if (!question) return;
 
+        // 🔍📥 [2026-10-01] 자재 선택 팝업의 "문서 조회"/"문서 저장" — 문서 종류 드롭다운을 띄우고 종료
+        if (question.indexOf('__docLookup__') === 0 || question.indexOf('__docSave__') === 0) {
+            const _isLookup = question.indexOf('__docLookup__') === 0;
+            const _docMat = question.replace(/^__(docLookup|docSave)__/, '');
+            input.value = '';
+            if (window._ganttQaShowDocTypeDropdown) {
+                window._ganttQaShowDocTypeDropdown([_docMat], _isLookup ? '문서번호 확인해줘' : '문서 저장해줘');
+            } else {
+                // 폴백: 드롭다운 함수가 아직 로드 안 됐으면 문서 종류 없이 보냄
+                input.value = _docMat + (_isLookup ? ' 문서 조회해줘' : ' 문서 저장해줘');
+                window.sendGanttQaMessage();
+            }
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // [2026-10-01] "[mcp_retry] 원래질문" — 하드코딩 SAP 실패 후 "🔬 AI가 직접 재시도" 버튼에서 옴.
         // 접두어를 제거하고 하드코딩 SAP 블록을 건너뛰어 mcp-sap-gui AI 탐색 경로로 직접 보낸다.
         if (question.indexOf('[mcp_retry] ') === 0) {
