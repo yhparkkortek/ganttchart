@@ -319,44 +319,9 @@
         //    도달 못 하므로 여기서 직접 기록해야 한다.
         if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
 
-        // mcp-sap-gui + Gemini 함수 호출 루프 시도 (Gemini 제공사일 때만)
-        var provider = window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini';
-        var apiKey   = window.getActiveAiKey   ? window.getActiveAiKey()   : null;
-        var model    = window.getActiveAiModel ? window.getActiveAiModel() : 'gemini-2.5-flash-lite';
-        if (provider === 'gemini' && apiKey) {
-            var LOADING_TEXT = '🔬 ' + T('AI가 SAP 화면을 직접 탐색 중입니다… (최대 1분 소요)', 'AI is exploring SAP screen directly… (up to 1 min)');
-            pushAi(LOADING_TEXT, question, route);
-            try {
-                var ctrl = new AbortController();
-                var _abt = setTimeout(function () { ctrl.abort(); }, 65000);
-                var resp = await fetch('http://127.0.0.1:5000/ai-sap-chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey: apiKey, model: model, question: question }),
-                    signal: ctrl.signal
-                });
-                clearTimeout(_abt);
-                var data = await resp.json();
-                if (data.ok && data.text) {
-                    // 로딩 메시지를 AI 답변으로 교체
-                    var h = window._ganttQaHistory || [];
-                    for (var _i = h.length - 1; _i >= 0; _i--) {
-                        if (h[_i].role === 'ai' && h[_i].text === LOADING_TEXT) {
-                            h.splice(_i, 1);
-                            break;
-                        }
-                    }
-                    pushAi('🔬 ' + T('AI SAP 직접 탐색 결과', 'AI SAP Exploration Result') + '\n\n' + data.text, question, route);
-                    finish(input);
-                    return;
-                }
-            } catch (_e) { /* 타임아웃·네트워크 오류 — 아래 "안내" 경로로 폴백 */ }
-            // 로딩 메시지 제거
-            var _h = window._ganttQaHistory || [];
-            for (var _j = _h.length - 1; _j >= 0; _j--) {
-                if (_h[_j].role === 'ai' && _h[_j].text === LOADING_TEXT) { _h.splice(_j, 1); break; }
-            }
-        }
+        // [2026-10-02] A안: mcp-sap-gui 런타임 탐색 제거 — 바로 "미지원 안내 + 적립"으로 간다.
+        //   새 SAP 기능은 PC의 Claude Code + MCP로 화면을 탐색해 sap_bridge_32.py 함수로
+        //   승격시키고 SAP_CAPABILITIES(js/32)에 항목을 추가하는 방식으로 늘린다.
 
         // 폴백: 기존 "지원하지 않음" 안내 + 적립
         var en = window._currentLang === 'en';
@@ -450,8 +415,8 @@
         return { handled: false, route: route };
     };
 
-    // [2026-10-01] 하드코딩 SAP 실패 후 "[mcp_retry]" 버튼이 직접 호출하는 공개 진입점
+    // 미지원 SAP 질문 처리("미지원 안내 + 적립")를 외부에서 강제로 부르는 공개 진입점.
     window._qaRunUnsupported = function(question, input, route, cls) {
-        return runUnsupported(question, input, route || { cls: 'sap', forced: true, conf: true, scores: {}, reasons: ['mcp_retry'] }, cls || 'sap');
+        return runUnsupported(question, input, route || { cls: 'sap', forced: true, conf: true, scores: {}, reasons: ['forced'] }, cls || 'sap');
     };
 })();

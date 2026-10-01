@@ -2367,8 +2367,6 @@ ${docsJson}`;
             const data = await res.json();
             if (!data.ok) {
                 var _ferr = data.error || window._t('알 수 없는 오류', 'unknown error');
-                // fire-and-forget: AI가 실패 원인을 분석해 채팅에 붙임 (이 return은 블로킹 안 됨)
-                setTimeout(function() { if (window._ganttQaSapExplainFailure) window._ganttQaSapExplainFailure(url, _ferr, question); }, 200);
                 return '(' + window._t('SAP 조회 실패', 'SAP lookup failed') + ': ' + _ferr + ')';
             }
             // 💡 [2026-09-14 신규] "엑셀로 내보내줘" 로컬 명령(sendGanttQaMessage의
@@ -2379,61 +2377,9 @@ ${docsJson}`;
             return data.text || null;
         } catch (e) {
             console.warn('[AI 문답] SAP 조회 실패:', e && e.message);
-            var _netErr = (e && e.message) ? e.message : window._t('네트워크 오류', 'network error');
-            setTimeout(function() { if (window._ganttQaSapExplainFailure) window._ganttQaSapExplainFailure(url || '?', _netErr, question); }, 200);
             return '(' + window._t('SAP 조회 실패', 'SAP lookup failed') + ': ' + window._t('로컬 백엔드(kortek_backend.py)가 켜져 있는지 확인하세요.', 'Please check that the local backend (kortek_backend.py) is running.') + ')';
         }
     };
-
-    // [2026-10-01 신규] 하드코딩 SAP 명령 실패 시 AI가 원인을 분석하고 MCP 재시도 버튼을 제공.
-    // fire-and-forget으로 호출 — 호출부를 블로킹하지 않는다.
-    // 백엔드가 꺼져 있거나 API 키가 없으면 조용히 종료.
-    window._ganttQaSapExplainFailure = async function(endpoint, errorMsg, originalQuestion) {
-        if (window._ganttQaSapExplainFailure._busy) return; // 동시 중복 실행 방지
-        window._ganttQaSapExplainFailure._busy = true;
-        try {
-            var apiKey = window.getActiveAiKey && window.getActiveAiKey();
-            if (!apiKey) return;
-
-            // 현재 SAP 화면 상태 가져오기
-            var screenInfo = '(화면 정보 없음)';
-            try {
-                var dumpRes = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-dump-screen'), 6000, 'dump timeout');
-                if (dumpRes && dumpRes.ok) {
-                    var dumpData = await dumpRes.json();
-                    if (dumpData && dumpData.ok && dumpData.text) screenInfo = String(dumpData.text).slice(0, 500);
-                }
-            } catch (_e) { /* 화면 덤프 실패는 무시 */ }
-
-            // AI에게 실패 원인 분석 요청 (백틱 없이 연결)
-            var prompt = 'SAP 하드코딩 명령이 실패했습니다. 한 문장으로 원인을 설명하고 해결 방법을 알려줘.' +
-                '\n오류: ' + String(errorMsg).slice(0, 200) +
-                '\n엔드포인트: ' + endpoint +
-                '\n현재 SAP 화면:\n' + screenInfo;
-
-            var aiRes = await window._withTimeout(
-                fetch('http://127.0.0.1:5000/ai-sap-chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey: apiKey, question: prompt })
-                }), 30000, 'ai timeout'
-            );
-            var aiData = await aiRes.json();
-            if (!aiData.ok || !aiData.text) return;
-
-            // 분석 결과 + 재시도 버튼을 채팅에 추가
-            window._ganttQaShowConfirmButtons(
-                '🔍 ' + window._t('AI 분석', 'AI analysis') + ': ' + aiData.text,
-                [{ label: window._t('🔬 AI가 직접 재시도', '🔬 Retry via AI'), value: '[mcp_retry] ' + originalQuestion, style: 'neutral' }]
-            );
-            window._renderGanttQaMessages();
-        } catch (e) {
-            console.warn('[SAP 실패 AI 분석] 오류:', e && e.message);
-        } finally {
-            window._ganttQaSapExplainFailure._busy = false;
-        }
-    };
-    window._ganttQaSapExplainFailure._busy = false;
 
     // 📐 [2026-09-22 신규, 사용자 요청] _aiFetchSapContext가 돌려주는 원본 텍스트("[메타 헤더줄]\n\n
     //    탭구분 그리드")를 AI를 거치지 않고 그대로 보여줄 답변 문자열로 만든다 — 아래 "엑셀로
@@ -3949,25 +3895,6 @@ ${docsJson}`;
             }
             window._renderGanttQaMessages();
             input.focus();
-            return;
-        }
-
-        // [2026-10-01] "[mcp_retry] 원래질문" — 하드코딩 SAP 실패 후 "🔬 AI가 직접 재시도" 버튼에서 옴.
-        // 접두어를 제거하고 하드코딩 SAP 블록을 건너뛰어 mcp-sap-gui AI 탐색 경로로 직접 보낸다.
-        if (question.indexOf('[mcp_retry] ') === 0) {
-            question = question.slice(12).trim();
-            input.value = '';
-            if (!question) return;
-            if (window._ganttQaRecordInputHistory) window._ganttQaRecordInputHistory(question);
-            if (window._qaRunUnsupported) {
-                var _retryRoute = { cls: 'sap', forced: true, conf: true, scores: {}, reasons: ['mcp_retry'] };
-                window._qaLastRoute = _retryRoute;
-                window._qaRunUnsupported(question, input, _retryRoute, 'sap');
-            } else {
-                // 폴백: _qaRunUnsupported가 아직 로드 안 됐으면 #sap 접두어로 라우터에 넘김
-                input.value = '#sap ' + question;
-                window.sendGanttQaMessage();
-            }
             return;
         }
 
@@ -8326,23 +8253,22 @@ ${docsJson}`;
         }
     }
 
-    // [2026-09-30 신규] SAP mcp-sap-gui 예시 질문 시드 — 첫 로드 시 1회만 주입.
-    // 실제 사용 이력이 쌓이면 count·lastAsked가 자연스럽게 올라가 위로 밀려나고,
-    // 사용자가 🗑 버튼으로 삭제하면 해당 항목은 사라진다.
-    const _QA_SAP_SEED_FLAG = 'gantt_qa_sap_seeds_v1';
+    // [2026-10-02] A안 전환 — 기존 MCP 탐색 예시(MMBE/ME23N/MIGO 등 미지원 tcode)는 전부
+    //   "미지원 안내"로 떨어져 사용자를 헷갈리게 했으므로, SAP_CAPABILITIES[].ex 기준으로
+    //   **실제 동작하는** 예시로 교체했다. 플래그를 v2로 올려 기존 사용자도 한 번 재주입한다
+    //   (이미 쌓인 실사용 빈도는 existing[pat] 체크로 보존된다).
+    const _QA_SAP_SEED_FLAG = 'gantt_qa_sap_seeds_v2';
     const _QA_SAP_SEED_LIST = [
         '현재 SAP 화면 상태 알려줘',
-        'MMBE에서 자재 100-001 재고 현황 봐줘',
-        'ME23N에서 구매오더 4500001234 상태 확인해줘',
-        'MB51로 자재 100-001 입출고 이력 조회해줘',
-        'MIGO 화면 열어서 구매오더 입고 처리해줘',
-        'ME2M에서 미납 구매오더 목록 조회해줘',
-        'CJ03에서 프로젝트 G26-001 공정 현황 봐줘',
-        'CS03에서 자재 100-001 BOM 보여줘',
-        'MD04로 자재 100-001 MRP 결과 확인해줘',
-        'MM60에서 자재 100-001 최근 구매 가격 이력 봐줘',
-        'QM02에서 품질 검사 진행 상황 확인해줘',
-        'ME59N에서 자동 구매오더 생성 대상 목록 봐줘',
+        '502572 BOM 보여줘',
+        '104446 사용처 조회해줘',
+        '301966 재고수량 확인해줘',
+        '302509 가격 확인해줘',
+        '302509 품목 내역2 보여줘',
+        '133012 P01 문서 저장해줘',
+        '104477 승인원 표지 만들어줘',
+        '302509 공급업체 조회해줘',
+        'SMAJ12A* 조회해줘',
         '지연된 업무가 있어?',
         '이 프로젝트 연간 수요량이 얼마야?',
         '기구 담당자가 누구야?',
