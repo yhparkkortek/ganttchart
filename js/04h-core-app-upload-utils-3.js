@@ -5284,6 +5284,7 @@ ${docsJson}`;
             //    엑셀 버튼 + 메모리 저장으로 처리한다. 소량이면 기존처럼 전체 텍스트 표시.
             let _bomFetchedText = null;
             let _bomIsComplex = false;
+            let _bomUseInteractive = false;
             let bomReply;
             try {
                 _bomFetchedText = await window._aiFetchSapContext(question);
@@ -5303,14 +5304,20 @@ ${docsJson}`;
                         window._lastBomFilteredData = null; // 새 BOM 로드 시 이전 필터 결과 초기화
                         bomReply = null; // 아래에서 confirm 버튼으로 표시
                     } else {
-                        bomReply = window._ganttQaFormatSapGridReply(_bomFetchedText);
+                        _bomUseInteractive = true; // rawHtml 인터랙티브 표로 표시
+                        bomReply = null;
                     }
                 }
             } catch (e) {
                 bomReply = '⚠️ ' + window._t('BOM 조회 실패: ', 'BOM lookup failed: ') + (e && e.message ? e.message : e);
             }
             window._ganttQaHistory.pop();
-            if (bomReply !== null && bomReply !== undefined) {
+            if (_bomUseInteractive && window._renderBomAsInteractiveHtml) {
+                const _bomHtml = window._renderBomAsInteractiveHtml(_bomFetchedText);
+                window._ganttQaHistory.push(_bomHtml
+                    ? { role: 'ai', text: _bomHtml, rawHtml: true }
+                    : { role: 'ai', text: window._ganttQaFormatSapGridReply(_bomFetchedText) });
+            } else if (bomReply !== null && bomReply !== undefined) {
                 window._ganttQaHistory.push({ role: 'ai', text: bomReply });
             } else if (_bomIsComplex && window._lastBomData) {
                 const _bmd = window._lastBomData;

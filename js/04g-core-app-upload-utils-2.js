@@ -1593,6 +1593,66 @@ ${question}
         }).catch(function() {});
     };
 
+    // BOM 전개 결과를 클릭 가능한 HTML 표로 변환 — IDNRK(구성부품) 셀을 클릭 시 _sapSelectMaterial 호출
+    window._renderBomAsInteractiveHtml = function(sapText) {
+        if (!sapText) return null;
+        var bodyStart = sapText.indexOf('\n\n');
+        var metaText = bodyStart !== -1 ? sapText.slice(0, bodyStart).trim() : '';
+        var body = bodyStart !== -1 ? sapText.slice(bodyStart + 2) : sapText;
+        var lines = body.split('\n').filter(function(l) { return l.length > 0 && !/^\.\.\.\s*\(/.test(l); });
+        if (!lines.length || lines[0].indexOf('\t') === -1) return null;
+        var rawHeaders = lines[0].split('\t');
+        var headers = rawHeaders.map(function(code) {
+            var key = (code || '').trim();
+            return (window._SAP_FIELD_LABEL_MAP && window._SAP_FIELD_LABEL_MAP[key]) || code;
+        });
+        var idnrkIdx = -1;
+        rawHeaders.forEach(function(h, i) { if (h.trim() === 'IDNRK') idnrkIdx = i; });
+        if (idnrkIdx === -1) headers.forEach(function(h, i) { if (h === '구성부품') idnrkIdx = i; }); // 구성부품
+        var en = window._currentLang === 'en';
+        var html = '';
+        if (metaText) {
+            html += '<div style="font-size:11.5px; color:#555; margin-bottom:6px; line-height:1.4;">'
+                + metaText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+        }
+        if (idnrkIdx !== -1) {
+            html += '<div style="font-size:11px; color:#5577aa; margin-bottom:5px;">💡 '
+                + (en ? 'Click a row to select an action' : '행을 클릭하면 조회 기능을 선택할 수 있습니다')
+                + '</div>';
+        }
+        html += '<div style="max-height:350px; overflow:auto; border:1px solid #dde4ec; border-radius:5px;">'
+            + '<table style="border-collapse:collapse; font-size:11.5px; white-space:nowrap;">'
+            + '<thead><tr style="background:#eef3fa;">';
+        headers.forEach(function(h) {
+            html += '<th style="padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; position:sticky; top:0; background:#eef3fa;">'
+                + (h || '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+        lines.slice(1).forEach(function(line, i) {
+            var cells = line.split('\t');
+            var matnr = idnrkIdx !== -1 ? (cells[idnrkIdx] || '').trim() : '';
+            var isClickable = idnrkIdx !== -1 && /^\d{5,8}$/.test(matnr);
+            var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
+            var mnEsc = matnr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            if (isClickable) {
+                html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="window._sapSelectMaterial(\'' + mnEsc + '\')" onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">';
+            } else {
+                html += '<tr style="background:' + bg + ';">';
+            }
+            cells.forEach(function(cell, ci) {
+                var cv = (cell || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                if (ci === idnrkIdx && isClickable) {
+                    html += '<td style="padding:4px 7px; border-bottom:1px solid #eef0f3; font-family:monospace; color:#1a4a7a; font-weight:bold;">' + cv + '</td>';
+                } else {
+                    html += '<td style="padding:4px 7px; border-bottom:1px solid #eef0f3;">' + cv + '</td>';
+                }
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        return html;
+    };
+
     // 자재내역 패턴 조회 결과 행 클릭 → 입력창 채움 + 조회 기능 드롭다운
     // "1"로 시작하는 자재(원자재)는 BOM이 없으므로 BOM 조회 제외
     window._sapSelectMaterial = function(matnr) {
