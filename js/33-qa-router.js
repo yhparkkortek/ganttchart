@@ -315,6 +315,9 @@
     // ── 지원하지 않는 SAP 요청: mcp-sap-gui 동적 탐색 먼저 시도 → 실패 시 안내 + 적립 ──
     async function runUnsupported(question, input, route, cls) {
         pushUser(question, input, route);
+        // 🐛 [2026-10-01] runPatternLookup와 같은 이유 — handled:true로 04h 기록 지점(6467줄)에
+        //    도달 못 하므로 여기서 직접 기록해야 한다.
+        if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
 
         // mcp-sap-gui + Gemini 함수 호출 루프 시도 (Gemini 제공사일 때만)
         var provider = window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini';
