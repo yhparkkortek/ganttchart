@@ -1435,6 +1435,8 @@ def fetch_vendor_by_lifnr(lifnr):
         'address':        address,
         'tel':            _get(['TELF1', 'TEL_NUMBER']),
         'representative': _get(['J_1KFREPRE']),
+        'stcd2':          _get(['STCD2']),
+        'email':          _get(['SMTP_ADDR', 'SMTP']),
     }
 
 
@@ -2188,16 +2190,6 @@ def download_documents_batch(materials, doc_type='P01'):
     except Exception:
         pass
 
-    # 💡 [2026-09-15 신규] 다운로드 완료 후 C:\SAP_DMS\ 폴더를 탐색기로 열어준다 — 백엔드와
-    # SAP GUI가 같은 PC에서 돌아가는 구조라(파일을 옮길 필요 자체가 없다는 이 프로젝트의 기존
-    # 설계 원칙 그대로) os.startfile로 로컬 탐색기를 바로 띄울 수 있다. 폴더 여는 것 자체가
-    # 실패해도(예: 폴더가 아직 생성 안 됐거나 권한 문제) 다운로드 자체는 이미 끝난 뒤이니
-    # 전체 요청을 실패로 만들지 않는다.
-    try:
-        os.startfile(r'C:\SAP_DMS')
-    except Exception:
-        pass
-
     # 자재번호 → 문서번호(들) 역매핑 — 이름 변경이 실패했어도 채팅 응답 문구로 매칭 정보를
     # 그대로 전달할 수 있게 대비(벨트 앤 서스펜더스: 폴더명 개선이 안 돼도 최소한 텍스트로는
     # 사용자가 알 수 있어야 한다).
@@ -2218,7 +2210,8 @@ def download_documents_batch(materials, doc_type='P01'):
         'docType': doc_type,
         'matnrByDoknr': matnr_by_doknr,
         'renamedFolders': renamed_map,
-        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다. {folder_note} 탐색기로 그 폴더를 열었습니다.',
+        'savedFolder': r'C:\SAP_DMS',
+        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다. {folder_note}',
     }
 
 
@@ -5248,6 +5241,34 @@ def compare_bom(mat1, mat2, plant='1000', mode='diff'):
     mode_label = '차이비교' if mode == 'diff' else '요약비교'
     return {'ok': True, 'mat1': mat1, 'mat2': mat2, 'plant': plant, 'mode': mode_label,
             'table': table, 'rowCount': row_count}
+
+
+def navigate_to_material_mm03(material):
+    """MM03 자재 화면으로 이동만 한다 (읽기 전용, 화면 열기)."""
+    session = _get_sap_session()
+    if not session:
+        return {'ok': False, 'error': 'SAP 세션을 찾을 수 없습니다.'}
+    try:
+        matnr = material.strip().upper().zfill(18)
+        session.StartTransaction('/nMM03')
+        import time; time.sleep(0.5)
+        # 자재번호 입력 화면
+        try:
+            mat_field = session.findById('wnd[0]/usr/ctxtRMMG1-MATNR')
+            mat_field.text = matnr
+            session.findById('wnd[0]').sendVKey(0)
+            time.sleep(0.5)
+        except Exception:
+            pass
+        # 탭 선택 화면이 나오면 기본 탭(기본데이터 1)으로 진입
+        try:
+            session.findById('wnd[1]').sendVKey(0)
+            time.sleep(0.3)
+        except Exception:
+            pass
+        return {'ok': True, 'material': material.strip(), 'message': f'MM03 자재 {material.strip()} 화면을 열었습니다.'}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
 
 
 def fetch_material_change_history(material, plant='1000', valid_date=None):

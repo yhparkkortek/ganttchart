@@ -5189,14 +5189,38 @@ ${docsJson}`;
                     window._t('SAP 문서 일괄 다운로드 시간 초과', 'Batch document download timed out')
                 );
                 const data = await res.json();
-                sapBatchReply = data.ok
-                    ? ('📥 ' + (data.message || window._t('일괄 다운로드가 완료됐습니다.', 'Batch download completed.')))
-                    : ('⚠️ ' + window._t('SAP 문서 일괄 다운로드 실패: ', 'Failed to batch-download SAP documents: ') + (data.error || window._t('알 수 없는 오류', 'unknown error')));
+                if (data.ok) {
+                    // 저장된 폴더/파일 정보 + 폴더 열기 버튼을 rawHtml로 표시
+                    const _savedFolder = data.savedFolder || 'C:\\SAP_DMS';
+                    const _renamed = data.renamedFolders || {};
+                    const _renamedEntries = Object.entries(_renamed);
+                    let _fileListHtml = '';
+                    if (_renamedEntries.length > 0) {
+                        _fileListHtml = '<ul style="margin:4px 0 6px 0; padding-left:16px; font-size:12px;">'
+                            + _renamedEntries.map(function([oldName, newName]) {
+                                return '<li>' + (newName || oldName) + '</li>';
+                            }).join('')
+                            + '</ul>';
+                    }
+                    const _folderBtnStyle = 'display:inline-block;margin-top:6px;padding:3px 10px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
+                    const _escapedFolder = _savedFolder.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    sapBatchReply = '📥 ' + window._t('다운로드 완료', 'Download complete') + '<br>'
+                        + '<span style="font-size:12px;color:#555;">' + (data.message || '') + '</span>'
+                        + (_fileListHtml ? '<br>' + _fileListHtml : '')
+                        + '<br><button style="' + _folderBtnStyle + '" onclick="fetch(\'http://127.0.0.1:5000/sap-open-folder?path=' + encodeURIComponent(_savedFolder) + '\').catch(function(){});">'
+                        + '📁 ' + window._t('폴더 열기', 'Open folder') + ' (' + _savedFolder + ')</button>';
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply, rawHtml: true });
+                } else {
+                    sapBatchReply = '⚠️ ' + window._t('SAP 문서 일괄 다운로드 실패: ', 'Failed to batch-download SAP documents: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply });
+                }
             } catch (e) {
                 sapBatchReply = '⚠️ ' + window._t('SAP 문서 일괄 다운로드 실패: ', 'Failed to batch-download SAP documents: ') + (e && e.message ? e.message : e);
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply });
             }
-            window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply });
             window._renderGanttQaMessages();
             input.focus();
             return;
@@ -5839,7 +5863,7 @@ ${docsJson}`;
             const _stockMatNums = _sapLookupNums.join(',');
             const _stockLabel = _sapLookupNums.length > 1
                 ? window._t(`SAP에서 자재 ${_sapLookupNums.length}건 재고 조회 중...`, `Looking up stock for ${_sapLookupNums.length} materials...`)
-                : window._t('SAP MM03에서 재고 수량을 조회하는 중...', 'Looking up stock quantity from SAP MM03...');
+                : window._t('SAP MB52에서 재고 조회 중 (MM03 fallback)...', 'Looking up stock via MB52 (MM03 fallback)...');
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + _stockLabel, pending: true });
             window._renderGanttQaMessages();
             const _stockTimeout = 45000 + (_sapLookupNums.length - 1) * 20000;
@@ -6049,6 +6073,25 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // 📋🚫🤖 [2026-10-01 신규] MM03 자재 화면 탐색 — "자재번호 MM03 자재 화면 열어줘"
+        //    SAP MM03으로 이동만 하고 데이터는 반환하지 않음(탐색 전용).
+        const _mm03NavMatch = /MM03\s*(자재|화면)?\s*(열어줘|열어|이동|탐색|탐색해줘)/i.test(question);
+        const _mm03NavMat = _mm03NavMatch && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
+        if (_mm03NavMatch && _mm03NavMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP MM03 화면으로 이동 중...', 'Navigating to SAP MM03...'), pending: true });
+            window._renderGanttQaMessages();
+            let mm03NavReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-navigate-mm03?material=' + encodeURIComponent(_mm03NavMat)), 20000, window._t('MM03 탐색 시간 초과', 'MM03 navigation timed out'));
+                const data = await res.json();
+                mm03NavReply = data.ok ? ('📋 ' + (data.message || window._t('MM03 화면을 열었습니다.', 'MM03 screen opened.'))) : '⚠️ ' + (data.error || window._t('MM03 탐색 실패', 'MM03 navigation failed'));
+            } catch(e) { mm03NavReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: mm03NavReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 🚚🚫🤖 [2026-10-01 신규] 납품 내역 (ZSD027) — "자재번호 납품 내역"
         const _delivHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'zsd027') : false;
         const _delivMat = _delivHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
@@ -6082,6 +6125,42 @@ ${docsJson}`;
             } catch(e) { purchReply = '⚠️ ' + (e && e.message ? e.message : e); }
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: purchReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 🏭🚫🤖 [2026-10-01 신규] 공급업체 상세 조회 (ZMM005) — "자재번호 공급업체 조회해줘"
+        //    MM03 구매탭 → LIFNR 추출 → ZMM005 협력사 정보 조회.
+        //    표시: 업체명/번호/주소/전화/담당자/사업자번호/이메일 전체.
+        const _vendorHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'zmm005') : /공급업체|공급 업체|협력사|벤더/.test(question);
+        const _vendorMat = _vendorHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
+        if (_vendorHit && _vendorMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('MM03→ZMM005 공급업체 정보 조회 중...', 'Looking up vendor info via MM03→ZMM005...'), pending: true });
+            window._renderGanttQaMessages();
+            let vendorReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-vendor-info?material=' + encodeURIComponent(_vendorMat)), 45000, window._t('공급업체 조회 시간 초과', 'Vendor lookup timed out'));
+                const data = await res.json();
+                if (data.ok && data.vendor) {
+                    const v = data.vendor;
+                    const _en = window._currentLang === 'en';
+                    const _rows = [
+                        [_en ? 'Vendor No.' : '업체번호(LIFNR)', v.lifnr],
+                        [_en ? 'Name' : '업체명', v.name],
+                        [_en ? 'Address' : '주소', v.address],
+                        [_en ? 'Tel' : '전화', v.tel],
+                        [_en ? 'Manager' : '담당자', v.representative],
+                        [_en ? 'Business Reg.' : '사업자번호', v.stcd2],
+                        [_en ? 'Email' : '이메일', v.email],
+                    ].filter(function(r) { return r[1]; });
+                    const _table = _rows.map(function(r) { return r[0] + ': ' + r[1]; }).join('\n');
+                    vendorReply = '**' + window._t('공급업체 정보', 'Vendor Info') + ' (' + _vendorMat + ')**\n\n' + _table;
+                } else {
+                    vendorReply = '⚠️ ' + (data.error || window._t('공급업체 조회 실패', 'Vendor lookup failed'));
+                }
+            } catch(e) { vendorReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: vendorReply });
             window._renderGanttQaMessages(); input.focus(); return;
         }
 

@@ -2622,6 +2622,48 @@ def sap_vendor_lookup():
     return jsonify(data), status
 
 
+@app.route('/sap-vendor-info', methods=['GET'])
+def sap_vendor_info():
+    # 자재번호로 MM03 구매탭 LIFNR → ZMM005 공급업체 상세정보 조회.
+    # 파라미터: material (자재번호)
+    material = (request.args.get('material') or '').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다.'}), 400
+    data, status = _run_sap_bridge(['fetch_vendor_info_by_material', material], 40, 'MM03→ZMM005 공급업체 조회')
+    return jsonify(data), status
+
+
+@app.route('/sap-navigate-mm03', methods=['GET'])
+def sap_navigate_mm03():
+    # MM03 자재 화면으로 이동 (탐색만, 데이터 반환 없음).
+    # 파라미터: material (자재번호)
+    material = (request.args.get('material') or '').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다.'}), 400
+    data, status = _run_sap_bridge(['navigate_to_material_mm03', material], 15, 'MM03 화면 탐색')
+    return jsonify(data), status
+
+
+@app.route('/sap-open-folder', methods=['GET'])
+def sap_open_folder():
+    # 로컬 폴더를 탐색기로 열기. 파라미터: path (폴더 경로)
+    # 보안: C:\SAP_DMS\ 이하 경로만 허용.
+    import os
+    path = (request.args.get('path') or '').strip()
+    if not path:
+        path = r'C:\SAP_DMS'
+    # 경로 정규화 후 SAP_DMS 하위인지 확인
+    try:
+        norm = os.path.normpath(os.path.abspath(path))
+        allowed_root = os.path.normpath(os.path.abspath(r'C:\SAP_DMS'))
+        if not norm.startswith(allowed_root):
+            return jsonify({'ok': False, 'error': 'C:\\SAP_DMS 하위 경로만 열 수 있습니다.'}), 403
+        os.startfile(norm)
+        return jsonify({'ok': True, 'path': norm})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/sap-approval-fetch', methods=['GET'])
 def sap_approval_fetch():
     # "SAP에서 자재정보 가져오기" 단계 — 자재 여러 개(최대 30개, 원본 앱과 동일 상한)의
