@@ -5914,6 +5914,133 @@ ${docsJson}`;
             return;
         }
 
+        // 📋🚫🤖 [2026-10-01 신규] 예약 조회 (MB23) — "예약번호 12345 조회"
+        const _reservationHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'mb23') : false;
+        const _reservationNumMatch = _reservationHit && (question.match(/\b\d{7,10}\b/) || [])[0];
+        if (_reservationHit && _reservationNumMatch) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('MB23 예약 조회 중...', 'Looking up reservation in MB23...'), pending: true });
+            window._renderGanttQaMessages();
+            let resvReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-reservation?rsnum=' + encodeURIComponent(_reservationNumMatch)), 35000, window._t('예약 조회 시간 초과', 'Reservation lookup timed out'));
+                const data = await res.json();
+                resvReply = data.ok ? (data.title ? '**' + data.title + '**\n\n' : '') + (data.table || window._t('결과 없음', 'No results')) : '⚠️ ' + (data.error || window._t('예약 조회 실패', 'Reservation lookup failed'));
+            } catch(e) { resvReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: resvReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 🔀🚫🤖 [2026-10-01 신규] BOM 비교 (CS14) — "자재1 자재2 BOM 비교"
+        const _bomCompareHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'bom_compare') : false;
+        const _bomCompareMats = _bomCompareHit ? (question.match(/\b[A-Z0-9]{5,18}\b/g) || []).filter(function(m) { return !/^\d+$/.test(m) || m.length >= 7; }) : [];
+        if (_bomCompareHit && _bomCompareMats.length >= 2) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('CS14 BOM 비교 중...', 'Comparing BOMs in CS14...'), pending: true });
+            window._renderGanttQaMessages();
+            const mode = /요약/.test(question) ? 'summary' : 'diff';
+            let bomCmpReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-compare-bom?mat1=' + encodeURIComponent(_bomCompareMats[0]) + '&mat2=' + encodeURIComponent(_bomCompareMats[1]) + '&mode=' + mode), 45000, window._t('BOM 비교 시간 초과', 'BOM comparison timed out'));
+                const data = await res.json();
+                bomCmpReply = data.ok ? ('**BOM 비교: ' + data.mat1 + ' vs ' + data.mat2 + ' (' + (data.mode || '') + ')**\n\n' + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('BOM 비교 실패', 'BOM comparison failed'));
+            } catch(e) { bomCmpReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: bomCmpReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 📜🚫🤖 [2026-10-01 신규] 자재마스터 변경이력 (ZCO037) — "자재번호 변경이력"
+        const _chgHistHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'zco037') : false;
+        const _chgHistMat = _chgHistHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
+        if (_chgHistHit && _chgHistMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('ZCO037 변경이력 조회 중...', 'Looking up change history in ZCO037...'), pending: true });
+            window._renderGanttQaMessages();
+            let chgReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-material-change-history?material=' + encodeURIComponent(_chgHistMat)), 35000, window._t('변경이력 조회 시간 초과', 'Change history lookup timed out'));
+                const data = await res.json();
+                chgReply = data.ok ? ('**' + _chgHistMat + ' 변경이력**\n\n' + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('변경이력 조회 실패', 'Change history lookup failed'));
+            } catch(e) { chgReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: chgReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 🚚🚫🤖 [2026-10-01 신규] 납품 내역 (ZSD027) — "자재번호 납품 내역"
+        const _delivHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'zsd027') : false;
+        const _delivMat = _delivHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
+        if (_delivHit && _delivMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('ZSD027 납품 내역 조회 중...', 'Looking up delivery history in ZSD027...'), pending: true });
+            window._renderGanttQaMessages();
+            let delivReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-delivery-history?material=' + encodeURIComponent(_delivMat)), 35000, window._t('납품 내역 조회 시간 초과', 'Delivery history lookup timed out'));
+                const data = await res.json();
+                delivReply = data.ok ? ('**' + _delivMat + ' 납품 내역**\n\n' + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('납품 내역 조회 실패', 'Delivery history lookup failed'));
+            } catch(e) { delivReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: delivReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 🛒🚫🤖 [2026-10-01 신규] 구매 정보 레코드 (ZMM006) — "자재번호 구매정보"
+        const _purchInfoHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'zmm006') : false;
+        const _purchInfoMat = _purchInfoHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
+        if (_purchInfoHit && _purchInfoMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('ZMM006 구매정보 조회 중...', 'Looking up purchase info records in ZMM006...'), pending: true });
+            window._renderGanttQaMessages();
+            let purchReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-purchase-info?material=' + encodeURIComponent(_purchInfoMat)), 35000, window._t('구매정보 조회 시간 초과', 'Purchase info lookup timed out'));
+                const data = await res.json();
+                purchReply = data.ok ? ('**' + _purchInfoMat + ' 구매정보레코드**\n\n' + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('구매정보 조회 실패', 'Purchase info lookup failed'));
+            } catch(e) { purchReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: purchReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 🏭🚫🤖 [2026-10-01 신규] 생산 오더 조회 (CO03) — "오더번호 생산오더 조회"
+        const _prodOrdHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'co03') : false;
+        const _prodOrdNum = _prodOrdHit && (question.match(/\b\d{6,12}\b/) || [])[0];
+        if (_prodOrdHit && _prodOrdNum) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('CO03 생산오더 조회 중...', 'Looking up production order in CO03...'), pending: true });
+            window._renderGanttQaMessages();
+            let prodOrdReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-production-order?aufnr=' + encodeURIComponent(_prodOrdNum)), 35000, window._t('생산오더 조회 시간 초과', 'Production order lookup timed out'));
+                const data = await res.json();
+                prodOrdReply = data.ok ? ((data.title ? '**' + data.title + '**\n\n' : '') + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('생산오더 조회 실패', 'Production order lookup failed'));
+            } catch(e) { prodOrdReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: prodOrdReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 📊🚫🤖 [2026-10-01 신규] 생산오더 목록 (COOIS) — "자재번호 생산오더 목록"
+        const _cooisHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'coois') : false;
+        const _cooisMat = _cooisHit && !_prodOrdHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
+        if (_cooisHit && _cooisMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('COOIS 생산오더 목록 조회 중...', 'Looking up production orders in COOIS...'), pending: true });
+            window._renderGanttQaMessages();
+            let cooisReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-production-orders?material=' + encodeURIComponent(_cooisMat)), 45000, window._t('COOIS 조회 시간 초과', 'COOIS lookup timed out'));
+                const data = await res.json();
+                cooisReply = data.ok ? ('**' + _cooisMat + ' 생산오더 목록**\n\n' + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('COOIS 조회 실패', 'COOIS lookup failed'));
+            } catch(e) { cooisReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: cooisReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 🔧🚫🤖 [2026-09-23 신규, "SAP 마스터" 사용자 요청] "SAP 화면 덤프해줘"/"화면 구조 확인해줘"
         //    — 새 SAP 기능을 붙일 때마다 사용자가 준 매크로(.vbs)를 사람이 해석해서 필드 ID를
         //    추측해오던 방식(팀운영비 기간지정 버그가 그 부작용) 대신, 지금 열려 있는 SAP 화면의

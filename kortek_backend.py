@@ -2044,6 +2044,99 @@ def sap_team_budget():
     return jsonify(data), status
 
 
+@app.route('/sap-navigate-dump', methods=['GET'])
+def sap_navigate_dump():
+    tcode = (request.args.get('tcode') or '').strip().upper()
+    if not tcode:
+        return jsonify({'ok': False, 'error': 'tcode 파라미터가 필요합니다. 예: /sap-navigate-dump?tcode=CS14'}), 400
+    data, status = _run_sap_bridge(['navigate_and_dump', tcode, r'C:\SAP_DMS\SAP_화면덤프'], 40, f'SAP {tcode} 화면 이동 후 덤프')
+    return jsonify(data), status
+
+
+@app.route('/sap-reservation', methods=['GET'])
+def sap_reservation():
+    rsnum = (request.args.get('rsnum') or '').strip()
+    if not rsnum:
+        return jsonify({'ok': False, 'error': 'rsnum 파라미터가 필요합니다. 예: /sap-reservation?rsnum=0000001234'}), 400
+    data, status = _run_sap_bridge(['display_reservation', rsnum], 30, f'MB23 예약 조회 {rsnum}')
+    return jsonify(data), status
+
+
+@app.route('/sap-compare-bom', methods=['GET'])
+def sap_compare_bom():
+    mat1 = (request.args.get('mat1') or '').strip()
+    mat2 = (request.args.get('mat2') or '').strip()
+    if not mat1 or not mat2:
+        return jsonify({'ok': False, 'error': 'mat1, mat2 파라미터가 모두 필요합니다.'}), 400
+    plant = (request.args.get('plant') or '1000').strip()
+    mode = (request.args.get('mode') or 'diff').strip()
+    data, status = _run_sap_bridge(['compare_bom', mat1, mat2, plant, mode], 40, f'CS14 BOM 비교 {mat1}/{mat2}')
+    return jsonify(data), status
+
+
+@app.route('/sap-material-change-history', methods=['GET'])
+def sap_material_change_history():
+    material = (request.args.get('material') or '').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': 'material 파라미터가 필요합니다.'}), 400
+    plant = (request.args.get('plant') or '1000').strip()
+    vdate = (request.args.get('date') or '').strip() or None
+    data, status = _run_sap_bridge(['fetch_material_change_history', material, plant, vdate or ''], 35, f'ZCO037 변경이력 {material}')
+    return jsonify(data), status
+
+
+@app.route('/sap-delivery-history', methods=['GET'])
+def sap_delivery_history():
+    material = (request.args.get('material') or '').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': 'material 파라미터가 필요합니다.'}), 400
+    vendor = (request.args.get('vendor') or '').strip() or None
+    date_from = (request.args.get('from') or '').strip() or None
+    date_to = (request.args.get('to') or '').strip() or None
+    data, status = _run_sap_bridge(
+        ['fetch_delivery_history', material, vendor or '', date_from or '', date_to or ''], 35,
+        f'ZSD027 납품이력 {material}')
+    return jsonify(data), status
+
+
+@app.route('/sap-purchase-info', methods=['GET'])
+def sap_purchase_info():
+    material = (request.args.get('material') or '').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': 'material 파라미터가 필요합니다.'}), 400
+    vendor = (request.args.get('vendor') or '').strip() or None
+    porg = (request.args.get('porg') or '1000').strip()
+    kdate = (request.args.get('date') or '').strip() or None
+    data, status = _run_sap_bridge(
+        ['fetch_purchase_info_records', material, vendor or '', porg, kdate or ''], 35,
+        f'ZMM006 구매정보 {material}')
+    return jsonify(data), status
+
+
+@app.route('/sap-production-order', methods=['GET'])
+def sap_production_order():
+    aufnr = (request.args.get('aufnr') or '').strip()
+    if not aufnr:
+        return jsonify({'ok': False, 'error': 'aufnr 파라미터가 필요합니다.'}), 400
+    data, status = _run_sap_bridge(['display_production_order', aufnr], 35, f'CO03 생산오더 {aufnr}')
+    return jsonify(data), status
+
+
+@app.route('/sap-production-orders', methods=['GET'])
+def sap_production_orders():
+    material = (request.args.get('material') or '').strip() or None
+    aufnr = (request.args.get('aufnr') or '').strip() or None
+    if not material and not aufnr:
+        return jsonify({'ok': False, 'error': 'material 또는 aufnr 파라미터가 필요합니다.'}), 400
+    date_from = (request.args.get('from') or '').strip() or None
+    date_to = (request.args.get('to') or '').strip() or None
+    plant = (request.args.get('plant') or '1000').strip()
+    data, status = _run_sap_bridge(
+        ['fetch_production_orders', material or '', aufnr or '', date_from or '', date_to or '', plant],
+        45, f'COOIS 생산오더목록 {material or aufnr}')
+    return jsonify(data), status
+
+
 @app.route('/sap-dump-screen', methods=['GET'])
 def sap_dump_screen():
     # 🔧 [2026-09-23 신규, "SAP 마스터" 사용자 요청] 새 SAP 기능을 만들 때마다 매크로(.vbs)를

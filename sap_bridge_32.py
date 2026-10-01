@@ -483,6 +483,19 @@ def dump_screen_tree(save_dir=None):
     return result
 
 
+def navigate_and_dump(tcode, save_dir=None):
+    """트랜잭션 코드로 이동 후 화면 트리를 덤프한다."""
+    tcode = (tcode or '').strip().upper()
+    if not tcode:
+        raise RuntimeError('트랜잭션 코드가 필요합니다.')
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/n' + tcode
+    wnd.sendVKey(0)
+    time.sleep(1.2)
+    return dump_screen_tree(save_dir)
+
+
 # ── "BOM 조회" (ZPP038) 전용 헬퍼 ──────────────────────────────────────
 # ⚠️⚠️ [2026-09-16 신규, 사용자 요청] "SAP ID를 공용으로 쓰는데 다른 팀원이 ALV 레이아웃을
 # 바꿔놓으면 원하는 컬럼을 못 받는다 — 항상 이 레이아웃으로 조회하게 하드코딩할 수 있냐"는
@@ -4844,6 +4857,201 @@ def post_goods_receipt(ebeln, dump_only=False):
     }
 
 
+def display_reservation(rsnum):
+    """MB23 - 예약 번호로 예약 조회."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB23'
+    wnd.sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+    wnd.findById('usr/ctxtRM07M-RSNUM').text = str(rsnum).strip()
+    wnd.findById('tbar[1]/btn[5]').press()
+    time.sleep(1.2)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid:
+        table = _sap_dump_grid(grid)
+        row_count = grid.RowCount
+    else:
+        table = '\n'.join(_sap_dump_fields(wnd))
+        row_count = None
+    title = wnd.findById('titl').Text if wnd.findById('titl') else ''
+    return {'ok': True, 'rsnum': rsnum, 'title': title, 'table': table, 'rowCount': row_count}
+
+
+def compare_bom(mat1, mat2, plant='1000', mode='diff'):
+    """CS14 - 두 자재의 BOM을 비교한다. mode: 'diff'(차이비교) or 'summary'(요약비교)."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nCS14'
+    wnd.sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+    usr = wnd.findById('usr')
+    usr.findById('subINC1:SAPMC29V:0130/ctxtMATNR1').text = str(mat1).strip()
+    usr.findById('subINC1:SAPMC29V:0130/ctxtWERKS1').text = plant
+    usr.findById('subINC2:SAPMC29V:0131/ctxtMATNR2').text = str(mat2).strip()
+    usr.findById('subINC2:SAPMC29V:0131/ctxtWERKS2').text = plant
+    btn_id = 5 if mode == 'diff' else 6
+    wnd.findById('tbar[1]/btn[' + str(btn_id) + ']').press()
+    time.sleep(1.5)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid:
+        table = _sap_dump_grid(grid)
+        row_count = grid.RowCount
+    else:
+        table = '\n'.join(_sap_dump_fields(wnd))
+        row_count = None
+    mode_label = '차이비교' if mode == 'diff' else '요약비교'
+    return {'ok': True, 'mat1': mat1, 'mat2': mat2, 'plant': plant, 'mode': mode_label,
+            'table': table, 'rowCount': row_count}
+
+
+def fetch_material_change_history(material, plant='1000', valid_date=None):
+    """ZCO037 - 자재마스터 변경이력 조회."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZCO037'
+    wnd.sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+    wnd.findById('usr/ctxtS_MATNR-LOW').text = str(material).strip()
+    if valid_date:
+        wnd.findById('usr/ctxtP_UDATE').text = str(valid_date).strip()
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(1.5)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid:
+        table = _sap_dump_grid(grid)
+        row_count = grid.RowCount
+    else:
+        table = '\n'.join(_sap_dump_fields(wnd))
+        row_count = None
+    return {'ok': True, 'material': material, 'plant': plant, 'table': table, 'rowCount': row_count}
+
+
+def fetch_delivery_history(material, vendor=None, date_from=None, date_to=None):
+    """ZSD027 - 납품 내역 관리 조회."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZSD027'
+    wnd.sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+    wnd.findById('usr/ctxtP_MATNR-LOW').text = str(material).strip()
+    if vendor:
+        wnd.findById('usr/ctxtP_LIFNR-LOW').text = str(vendor).strip()
+    if date_from:
+        wnd.findById('usr/ctxtP_LFDAT-LOW').text = str(date_from).strip()
+    if date_to:
+        wnd.findById('usr/ctxtP_LFDAT-HIGH').text = str(date_to).strip()
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(1.5)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid:
+        table = _sap_dump_grid(grid)
+        row_count = grid.RowCount
+    else:
+        table = '\n'.join(_sap_dump_fields(wnd))
+        row_count = None
+    return {'ok': True, 'material': material, 'table': table, 'rowCount': row_count}
+
+
+def fetch_purchase_info_records(material, vendor=None, porg='1000', key_date=None):
+    """ZMM006 - 자재/공급업체 구매 정보 레코드 조회."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM006'
+    wnd.sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+    wnd.findById('usr/ctxtS_MATNR-LOW').text = str(material).strip()
+    if vendor:
+        wnd.findById('usr/ctxtS_LIFNR-LOW').text = str(vendor).strip()
+    wnd.findById('usr/ctxtS_EKORG-LOW').text = porg
+    if key_date:
+        wnd.findById('usr/ctxtP_KEYDT').text = str(key_date).strip()
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(1.5)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid:
+        table = _sap_dump_grid(grid)
+        row_count = grid.RowCount
+    else:
+        table = '\n'.join(_sap_dump_fields(wnd))
+        row_count = None
+    return {'ok': True, 'material': material, 'porg': porg, 'table': table, 'rowCount': row_count}
+
+
+def display_production_order(aufnr):
+    """CO03 - 생산 오더 조회 (개요)."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nCO03'
+    wnd.sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+    wnd.findById('usr/ctxtCAUFVD-AUFNR').text = str(aufnr).strip()
+    wnd.findById('tbar[1]/btn[5]').press()
+    time.sleep(1.5)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid:
+        table = _sap_dump_grid(grid)
+        row_count = grid.RowCount
+    else:
+        table = '\n'.join(_sap_dump_fields(wnd))
+        row_count = None
+    title = ''
+    try:
+        title = wnd.findById('titl').Text
+    except Exception:
+        pass
+    return {'ok': True, 'aufnr': aufnr, 'title': title, 'table': table, 'rowCount': row_count}
+
+
+def fetch_production_orders(material=None, aufnr=None, date_from=None, date_to=None, plant='1000'):
+    """COOIS - 생산오더정보시스템 목록 조회."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nCOOIS'
+    wnd.sendVKey(0)
+    time.sleep(1.2)
+    wnd = session.findById('wnd[0]')
+    _sel_base = 'usr/tabsTABSTRIP_SELBLOCK/tabpSEL_00/ssub%_SUBSCREEN_SELBLOCK:PPIO_ENTRY:1200/'
+    if material:
+        wnd.findById(_sel_base + 'ctxtS_MATNR-LOW').text = str(material).strip()
+    if aufnr:
+        wnd.findById(_sel_base + 'ctxtS_AUFNR-LOW').text = str(aufnr).strip()
+    if date_from:
+        wnd.findById(_sel_base + 'ctxtS_ECKST-LOW').text = str(date_from).strip()
+    if date_to:
+        wnd.findById(_sel_base + 'ctxtS_ECKST-HIGH').text = str(date_to).strip()
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(2.0)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid:
+        table = _sap_dump_grid(grid)
+        row_count = grid.RowCount
+    else:
+        table = '\n'.join(_sap_dump_fields(wnd))
+        row_count = None
+    return {'ok': True, 'material': material, 'aufnr': aufnr, 'table': table, 'rowCount': row_count}
+
+
 def main():
     try:
         import win32com.client  # noqa: F401  (설치 여부 확인용)
@@ -4974,6 +5182,44 @@ def main():
         elif action == 'dump_screen_tree':
             save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
             result = dump_screen_tree(save_dir)
+        elif action == 'navigate_and_dump':
+            tcode_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            save_dir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
+            result = navigate_and_dump(tcode_arg, save_dir)
+        elif action == 'display_reservation':
+            result = display_reservation(sys.argv[2] if len(sys.argv) > 2 else '')
+        elif action == 'compare_bom':
+            mat1 = sys.argv[2] if len(sys.argv) > 2 else ''
+            mat2 = sys.argv[3] if len(sys.argv) > 3 else ''
+            plant = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else '1000'
+            mode = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else 'diff'
+            result = compare_bom(mat1, mat2, plant, mode)
+        elif action == 'fetch_material_change_history':
+            mat = sys.argv[2] if len(sys.argv) > 2 else ''
+            plant = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '1000'
+            vdate = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            result = fetch_material_change_history(mat, plant, vdate)
+        elif action == 'fetch_delivery_history':
+            mat = sys.argv[2] if len(sys.argv) > 2 else ''
+            vendor = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
+            df = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            dt = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else None
+            result = fetch_delivery_history(mat, vendor, df, dt)
+        elif action == 'fetch_purchase_info_records':
+            mat = sys.argv[2] if len(sys.argv) > 2 else ''
+            vendor = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
+            porg = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else '1000'
+            kdate = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else None
+            result = fetch_purchase_info_records(mat, vendor, porg, kdate)
+        elif action == 'display_production_order':
+            result = display_production_order(sys.argv[2] if len(sys.argv) > 2 else '')
+        elif action == 'fetch_production_orders':
+            mat = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
+            aufnr = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
+            df = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            dt = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else None
+            plant = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6].strip() else '1000'
+            result = fetch_production_orders(mat, aufnr, df, dt, plant)
         else:
             result = fetch_current_screen()
         if isinstance(result, dict) and result.get('ok') is False:
