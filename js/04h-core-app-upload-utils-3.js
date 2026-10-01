@@ -808,11 +808,12 @@
         const btns = draft.buttons.map(function(b) {
             const isConfirm = b.style === 'confirm';
             const isCancel = b.style === 'cancel';
-            const bg = isConfirm ? '#e6f6ea' : (isCancel ? '#f8f9fa' : '#e7f3ff');
-            const border = isConfirm ? '#a8dab8' : (isCancel ? '#ccc' : '#a5c8f0');
-            const color = isConfirm ? '#1f7a3d' : (isCancel ? '#555' : '#1971c2');
-            const hoverBg = isConfirm ? '#c9ecd3' : (isCancel ? '#e9ecef' : '#d3e8fd');
-            const hoverBorder = isConfirm ? '#7cc494' : (isCancel ? '#ccc' : '#7cb3ea');
+            const isSap = b.style === 'sap'; // SAP 관련 — SAP 말풍선과 같은 핑크 계열
+            const bg = isConfirm ? '#e6f6ea' : (isCancel ? '#f8f9fa' : (isSap ? '#fff1f0' : '#e7f3ff'));
+            const border = isConfirm ? '#a8dab8' : (isCancel ? '#ccc' : (isSap ? '#eea59f' : '#a5c8f0'));
+            const color = isConfirm ? '#1f7a3d' : (isCancel ? '#555' : (isSap ? '#a8322a' : '#1971c2'));
+            const hoverBg = isConfirm ? '#c9ecd3' : (isCancel ? '#e9ecef' : (isSap ? '#fde3e1' : '#d3e8fd'));
+            const hoverBorder = isConfirm ? '#7cc494' : (isCancel ? '#ccc' : (isSap ? '#e08880' : '#7cb3ea'));
             return `<button onclick="window._ganttQaSubmitConfirmButton('${draft.id}', '${escapeHtml(b.value).replace(/'/g, "\\'")}')" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}';" onmouseout="this.style.background='${bg}'; this.style.borderColor='${border}';" style="font-size:11.5px; padding:5px 12px; border:1px solid ${border}; background:${bg}; color:${color}; border-radius:6px; font-weight:${isConfirm ? 'bold' : 'normal'}; cursor:pointer; transition:background .15s, border-color .15s;">${escapeHtml(b.label)}</button>`;
         }).join('');
         return `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px; flex-wrap:wrap;">${btns}</div>`;

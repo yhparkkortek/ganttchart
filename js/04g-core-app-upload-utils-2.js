@@ -1675,25 +1675,28 @@ ${question}
                        matType === 'semi'     ? (en ? 'Semi-finished'  : '반제품') :
                        matType === 'finished' ? (en ? 'Finished goods' : '완제품') : '';
 
+        // ── 자재 유형별 버튼 필터 규칙 ─────────────────────────────────────────
+        // BOM      : 원자재(1) 제외 — 원자재는 BOM 구조 없음
+        // 사용처   : 완제품(5) 제외 — 최상위 완성품은 다른 품목에 투입되지 않음
+        // 승인원   : 완제품(5) 제외 — 사내 구매 결재 프로세스 대상 아님
+        // 공급업체 : 완제품(5) 제외 — 자사 생산품이므로 외부 공급 없음
+        // 구매정보 : 완제품(5) 제외 — 구매 오더 대상이 아님
         var buttons = [];
-        // BOM: 원자재는 BOM 없음
-        if (matType !== 'raw')      buttons.push({ label: '📋 BOM 조회',    value: matnr + ' BOM 조회해줘', style: 'neutral' });
-        // 사용처: 완제품은 사용처 없음 (최상위 완성품)
-        if (matType !== 'finished') buttons.push({ label: '🔄 사용처 조회', value: matnr + ' 사용처 조회해줘', style: 'neutral' });
+        if (matType !== 'raw')      buttons.push({ label: '📋 BOM 조회',     value: matnr + ' BOM 조회해줘', style: 'sap' });
+        if (matType !== 'finished') buttons.push({ label: '🔄 사용처 조회',  value: matnr + ' 사용처 조회해줘', style: 'sap' });
         buttons.push(
-            { label: '📦 재고 조회',    value: matnr + ' 재고 조회해줘', style: 'neutral' },
-            { label: '💰 가격 확인',    value: matnr + ' 가격 확인해줘', style: 'neutral' },
-            { label: '📝 품목 내역',    value: matnr + ' 품목 내역 보여줘', style: 'neutral' },
-            { label: '🔍 문서 조회',    action: 'docLookup', style: 'neutral' },
-            { label: '📥 문서 저장',    action: 'docSave',   style: 'neutral' }
+            { label: '📦 재고 조회',   value: matnr + ' 재고 조회해줘', style: 'sap' },
+            { label: '💰 가격 확인',   value: matnr + ' 가격 확인해줘', style: 'sap' },
+            { label: '📝 품목 내역',   value: matnr + ' 품목 내역 보여줘', style: 'sap' },
+            { label: '🔍 문서 조회',   action: 'docLookup', style: 'sap' },
+            { label: '📥 문서 저장',   action: 'docSave',   style: 'sap' }
         );
-        // 승인원 표지: 완제품 미사용
-        if (matType !== 'finished') buttons.push({ label: '🏷️ 승인원 표지',   value: matnr + ' 승인원 표지 만들어줘', style: 'neutral' });
+        if (matType !== 'finished') buttons.push({ label: '🏷️ 승인원 표지',  value: matnr + ' 승인원 표지 만들어줘', style: 'sap' });
+        if (matType !== 'finished') buttons.push({ label: '🏭 공급업체 조회', value: matnr + ' 공급업체 조회해줘', style: 'sap' });
+        if (matType !== 'finished') buttons.push({ label: '🛒 구매정보 조회', value: matnr + ' 구매 정보 레코드 조회해줘', style: 'sap' });
         buttons.push(
-            { label: '🏭 공급업체 조회', value: matnr + ' 공급업체 조회해줘', style: 'neutral' },
-            { label: '🛒 구매정보 조회', value: matnr + ' 구매 정보 레코드 조회해줘', style: 'neutral' },
-            { label: '🔧 변경이력',      value: matnr + ' 변경이력 확인해줘', style: 'neutral' },
-            { label: '📄 MM03 열기',     value: matnr + ' MM03 열어줘', style: 'neutral' }
+            { label: '🔧 변경이력',    value: matnr + ' 변경이력 확인해줘', style: 'sap' },
+            { label: '📄 MM03 열기',   value: matnr + ' MM03 열어줘', style: 'sap' }
         );
 
         // action 버튼 처리: docLookup/docSave는 직접 문서타입 드롭다운을 띄움
