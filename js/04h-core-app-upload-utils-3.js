@@ -4192,6 +4192,25 @@ ${docsJson}`;
             return;
         }
 
+        // 🔄 [2026-10-01 신규, 사용자 요청] 드롭다운/확인버튼 대기 중 새 맥락 자동 전환 ─────────
+        //    "취소"/"중단" 같은 명시적 인터럽트 없이도, 드롭다운(예: BOM 레이아웃 옵션, GR EBELN 선택,
+        //    팀운영비 팀 선택 등) 또는 확인버튼이 떠있을 때 라우터가 완전히 새로운 질문으로 판단하면
+        //    드롭다운을 조용히 닫고 새 질문을 처리한다.
+        //    "새 질문"이냐는 window._qaClassify(question).confident 로만 판단 — 새 판별 로직 없음.
+        //    대상: _ganttQaPendingChoiceDropdown(단순 선택 대기) + _ganttQaBomDraft(드롭다운 짝 draft).
+        //    대상 아님: _ganttQaPoDraft / _ganttQaApprovalDraft — 복잡한 다단계 워크플로우는 여기서
+        //    건드리지 않는다(필요하면 아래 INTERRUPT_RE로 명시적 취소).
+        if ((window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons) && window._qaClassify) {
+            const _autoCtxRoute = window._qaClassify(question);
+            if (_autoCtxRoute && _autoCtxRoute.confident) {
+                window._ganttQaBomDraft = null;
+                window._ganttQaBomResolvedOptions = null;
+                window._ganttQaPendingChoiceDropdown = null;
+                window._ganttQaPendingConfirmButtons = null;
+                // fall through — 아래 hasAnyActiveQaDraft 재계산 → 정상 흐름 진행
+            }
+        }
+
         // 🛑 [2026-09-16 신규, 실사용 버그수정] "처음부터 다시"/"취소"/"그만" — 여러 턴 draft
         //    (PO/BOM/승인원 표지/SAP 문서 모호성/드롭다운/확인버튼) 진행 중일 때, 사람이 중단·
         //    재시작을 요청하면 그 draft가 정확히 뭘 기대하고 있었든 상관없이 무조건 정리하고
