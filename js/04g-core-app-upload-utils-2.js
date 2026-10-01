@@ -1675,6 +1675,10 @@ ${question}
             { label: '🔄 사용처 조회', value: matnr + ' 사용처 조회해줘', style: 'neutral' },
             { label: '📦 재고 조회', value: matnr + ' 재고 조회해줘', style: 'neutral' },
             { label: '💰 가격 확인', value: matnr + ' 가격 확인해줘', style: 'neutral' },
+            { label: '📝 품목 내역', value: matnr + ' 품목 내역 보여줘', style: 'neutral' },
+            { label: '🔍 P02 문서 조회', value: matnr + ' P02 문서번호 확인해줘', style: 'neutral' },
+            { label: '📥 P01 문서 저장', value: matnr + ' P01 문서 저장해줘', style: 'neutral' },
+            { label: '🏷️ 승인원 표지', value: matnr + ' 승인원 표지 만들어줘', style: 'neutral' },
             { label: '📄 MM03 열기', value: matnr + ' MM03 열어줘', style: 'neutral' }
         );
         window._ganttQaShowConfirmButtons(
