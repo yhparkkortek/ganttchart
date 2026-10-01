@@ -1662,6 +1662,123 @@ ${question}
         return html;
     };
 
+    // [2026-10-01] 범용 SAP 그리드 → 인터랙티브 테이블 렌더러
+    // 사용처/ZMM009/프로젝트코드 등 TAB 구분 SAP 결과물을 모두 처리.
+    // opts: { hint:false|str, noExcel:bool, excelCmd:str }
+    window._renderSapGridAsTable = function(sapText, opts) {
+        opts = opts || {};
+        if (!sapText) return null;
+        var en = window._currentLang === 'en';
+        // 최상단 메타헤더 분리
+        var topBodyStart = sapText.indexOf('\n\n');
+        var topMeta = topBodyStart !== -1 ? sapText.slice(0, topBodyStart).trim() : '';
+        var topBody = topBodyStart !== -1 ? sapText.slice(topBodyStart + 2) : sapText;
+        // [자재 X] / [섹션] 등 대괄호 섹션 헤더로 분리
+        var sectionParts = topBody.split(/\n(?=\[)/);
+        var allHtml = '';
+        var hasAnyTable = false;
+        var hasAnyClickable = false;
+        sectionParts.forEach(function(part, partIdx) {
+            part = (part || '').trim();
+            if (!part) return;
+            // 섹션 헤더 추출
+            var secHeaderEnd = part.indexOf('\n');
+            var secHeader = '', secBody = part;
+            if (part.charAt(0) === '[' && secHeaderEnd !== -1) {
+                secHeader = part.slice(0, secHeaderEnd).trim();
+                secBody = part.slice(secHeaderEnd + 1).trim();
+            } else if (part.charAt(0) === '[' && secHeaderEnd === -1) {
+                secHeader = part; secBody = '';
+            }
+            var rawLines = (secBody || '').split('\n');
+            var lines = rawLines.filter(function(l) { return l.length > 0 && !/^\.\.\.\s*\(/.test(l); });
+            var footLines = rawLines.filter(function(l) { return /^\.\.\.\s*\(/.test(l); });
+            // 첫 TAB 포함 행 = 헤더
+            var headerIdx = -1;
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].indexOf('\t') !== -1) { headerIdx = i; break; }
+            }
+            if (headerIdx === -1) {
+                // TAB 없음 → 텍스트 블록
+                if (secHeader) {
+                    var sl = secHeader.charAt(0) === '[' ? secHeader.slice(1, secHeader.charAt(secHeader.length - 1) === ']' ? -1 : undefined) : secHeader;
+                    allHtml += '<div style="font-size:11.5px;font-weight:bold;color:#444;margin:' + (partIdx > 0 ? '8px' : '0') + ' 0 3px;">'
+                        + sl.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+                }
+                if (secBody) allHtml += '<div style="font-size:11.5px;color:#666;white-space:pre-wrap;">' + secBody.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+                return;
+            }
+            hasAnyTable = true;
+            var rawHeaders = lines[headerIdx].split('\t');
+            var headers = rawHeaders.map(function(code) {
+                var key = (code || '').trim();
+                return (window._SAP_FIELD_LABEL_MAP && window._SAP_FIELD_LABEL_MAP[key]) || code;
+            });
+            var dataLines = lines.slice(headerIdx + 1);
+            // 섹션 소제목
+            if (secHeader) {
+                var sLabel = secHeader.charAt(0) === '[' ? secHeader.slice(1, secHeader.charAt(secHeader.length - 1) === ']' ? -1 : undefined) : secHeader;
+                allHtml += '<div style="font-size:11.5px;font-weight:bold;color:#444;margin:' + (partIdx > 0 ? '8px' : '0') + ' 0 3px;">'
+                    + sLabel.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+            }
+            allHtml += '<div style="max-height:300px;overflow:auto;border:1px solid #dde4ec;border-radius:5px;">'
+                + '<table style="border-collapse:collapse;font-size:11.5px;white-space:nowrap;">'
+                + '<thead><tr style="background:#eef3fa;">';
+            headers.forEach(function(h) {
+                allHtml += '<th style="padding:4px 8px;text-align:left;border-bottom:1px solid #cdd7e3;position:sticky;top:0;background:#eef3fa;">'
+                    + (h || '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</th>';
+            });
+            allHtml += '</tr></thead><tbody>';
+            dataLines.forEach(function(line, i) {
+                var cells = line.split('\t');
+                var matnrIdx = -1;
+                cells.forEach(function(c, ci) {
+                    if (matnrIdx === -1 && /^\d{5,8}$/.test((c || '').trim())) matnrIdx = ci;
+                });
+                var matnr = matnrIdx !== -1 ? cells[matnrIdx].trim() : '';
+                var isClickable = /^\d{5,8}$/.test(matnr);
+                if (isClickable) hasAnyClickable = true;
+                var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
+                var mnEsc = matnr.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                allHtml += isClickable
+                    ? '<tr style="background:' + bg + ';cursor:pointer;" onclick="window._sapSelectMaterial(\'' + mnEsc + '\')" onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
+                    : '<tr style="background:' + bg + ';">';
+                cells.forEach(function(cell, ci) {
+                    var cv = (cell || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    allHtml += (ci === matnrIdx && isClickable)
+                        ? '<td style="padding:4px 8px;border-bottom:1px solid #eef0f3;font-family:monospace;color:#1a4a7a;font-weight:bold;">' + cv + '</td>'
+                        : '<td style="padding:4px 8px;border-bottom:1px solid #eef0f3;">' + cv + '</td>';
+                });
+                allHtml += '</tr>';
+            });
+            allHtml += '</tbody></table></div>';
+            footLines.forEach(function(f) {
+                allHtml += '<div style="font-size:10.5px;color:#888;margin-top:2px;">' + f.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+            });
+        });
+        if (!hasAnyTable) return null;
+        var finalHtml = '';
+        if (topMeta) {
+            finalHtml += '<div style="font-size:11.5px;color:#555;margin-bottom:6px;line-height:1.4;">'
+                + topMeta.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+        }
+        if (hasAnyClickable && opts.hint !== false) {
+            finalHtml += '<div style="font-size:11px;color:#5577aa;margin-bottom:5px;">💡 '
+                + (en ? 'Click a row to look up the material' : '행을 클릭하면 조회 기능을 선택할 수 있습니다')
+                + '</div>';
+        }
+        finalHtml += allHtml;
+        if (!opts.noExcel && opts.excelCmd) {
+            finalHtml += '<div style="margin-top:5px;text-align:right;">'
+                + '<button onclick="(function(){var el=document.getElementById(\'gantt-qa-input\');if(!el)return;'
+                + 'el.value=\'' + opts.excelCmd.replace(/'/g, "\\'") + '\';'
+                + 'var sb=document.getElementById(\'gantt-qa-send-btn\');if(sb)sb.click();})()" '
+                + 'style="font-size:11.5px;padding:3px 10px;border:1px solid #bbb;border-radius:4px;background:#f5f7fa;cursor:pointer;">📊 '
+                + (en ? 'Open as Excel' : '엑셀로 열기') + '</button></div>';
+        }
+        return finalHtml;
+    };
+
     // 자재내역 패턴 조회 결과 행 클릭 → 입력창 채움 + 조회 기능 드롭다운
     // "1"로 시작하는 자재(원자재)는 BOM이 없으므로 BOM 조회 제외
     window._sapSelectMaterial = function(matnr) {

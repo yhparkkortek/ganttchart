@@ -5709,18 +5709,22 @@ ${docsJson}`;
             }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 조회하는 중...', 'Looking up SAP data...'), pending: true });
             window._renderGanttQaMessages();
-            let sapLookupReply;
+            let sapLookupReply, sapLookupRawHtml = false;
             try {
                 const sapText = await window._aiFetchSapContext(question);
                 const fetchFailed = !sapText || /^\(/.test(sapText);
-                sapLookupReply = fetchFailed
-                    ? '⚠️ ' + (sapText || window._t('SAP 조회 실패', 'SAP lookup failed'))
-                    : window._ganttQaFormatSapGridReply(sapText);
+                if (fetchFailed) {
+                    sapLookupReply = '⚠️ ' + (sapText || window._t('SAP 조회 실패', 'SAP lookup failed'));
+                } else {
+                    const _tblHtml = window._renderSapGridAsTable && window._renderSapGridAsTable(sapText);
+                    if (_tblHtml) { sapLookupReply = _tblHtml; sapLookupRawHtml = true; }
+                    else { sapLookupReply = window._ganttQaFormatSapGridReply(sapText); }
+                }
             } catch (e) {
                 sapLookupReply = '⚠️ ' + window._t('SAP 조회 실패: ', 'SAP lookup failed: ') + (e && e.message ? e.message : e);
             }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: sapLookupReply });
+            window._ganttQaHistory.push(sapLookupRawHtml ? { role: 'ai', text: sapLookupReply, rawHtml: true } : { role: 'ai', text: sapLookupReply });
             window._renderGanttQaMessages();
             input.focus();
             return;
@@ -5784,14 +5788,28 @@ ${docsJson}`;
                         window._t('SAP 프로젝트 코드 조회 시간 초과', 'SAP project code lookup timed out')
                     );
                     const data = await res.json();
+                    let _pcRawHtml = false;
                     if (data.ok) {
                         const items = data.items || (data.codes || []).map(function(c) { return { code: c, desc: '' }; });
-                        const lines = items.map(function(it) { return it.desc ? `${it.code}\t${it.desc}` : it.code; });
-                        // 백엔드가 0건이면 반대쪽으로 자동 재검색하므로, 실제로 찾은 쪽(data.by)을 표시한다.
                         const _usedKo = (data.by === 'desc') ? '프로젝트명(내역)' : '프로젝트 코드(오더)';
-                        _pcReply = `🗂 ${_usedKo} "${data.pattern}" — ${items.length}${window._t('건', '')}\n` + lines.join('\n')
-                            + '\n\n💡 ' + window._t('SAP 검색은 대소문자를 구분합니다 — 영문은 대문자로 넣으세요. * 없이 "STELLAR 프로젝트 코드 조회해줘"처럼 말해도 자동으로 *STELLAR*로 검색됩니다.',
-                                                   'SAP search is case-sensitive — use uppercase for English. You can omit * (e.g. "STELLAR project code") and it will be auto-wrapped as *STELLAR*.');
+                        const _pcHint = window._t('SAP 검색은 대소문자를 구분합니다 — 영문은 대문자로 넣으세요.',
+                                                   'SAP search is case-sensitive — use uppercase.');
+                        if (items.length > 0 && window._renderSapGridAsTable) {
+                            // 테이블 포맷: "🗂 ...(헤더)\n\n코드\t내역\n..."
+                            const _en = window._currentLang === 'en';
+                            const _pcTabText = '🗂 ' + _usedKo + ' "' + data.pattern + '" — ' + items.length + window._t('건', ' results') + '\n\n'
+                                + (_en ? 'Code\tDescription' : '코드\t내역') + '\n'
+                                + items.map(function(it) { return it.code + (it.desc ? '\t' + it.desc : ''); }).join('\n');
+                            const _pcTblHtml = window._renderSapGridAsTable(_pcTabText, { hint: false });
+                            if (_pcTblHtml) {
+                                _pcReply = _pcTblHtml + '<div style="font-size:10.5px;color:#777;margin-top:5px;">💡 ' + _pcHint + '</div>';
+                                _pcRawHtml = true;
+                            }
+                        }
+                        if (!_pcRawHtml) {
+                            const lines = items.map(function(it) { return it.desc ? it.code + '\t' + it.desc : it.code; });
+                            _pcReply = '🗂 ' + _usedKo + ' "' + data.pattern + '" — ' + items.length + window._t('건', '') + '\n' + lines.join('\n') + '\n\n💡 ' + _pcHint;
+                        }
                     } else {
                         _pcReply = '⚠️ ' + (data.error || window._t('프로젝트 코드 조회 실패', 'Project code lookup failed'));
                     }
@@ -5799,7 +5817,7 @@ ${docsJson}`;
                     _pcReply = '⚠️ ' + window._t('프로젝트 코드 조회 실패: ', 'Project code lookup failed: ') + (e && e.message ? e.message : e);
                 }
                 window._ganttQaHistory.pop();
-                window._ganttQaHistory.push({ role: 'ai', text: _pcReply });
+                window._ganttQaHistory.push((_pcRawHtml || false) ? { role: 'ai', text: _pcReply, rawHtml: true } : { role: 'ai', text: _pcReply });
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
