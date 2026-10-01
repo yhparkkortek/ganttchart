@@ -3506,8 +3506,10 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
             _epein = (10 ** _dec_len) if _dec_len > 0 else 1
             _netpr = int(round(price * _epein))
             grid.modifyCell(idx, 'NETPR', str(_netpr))
-            if currency and currency != 'KRW':
-                grid.modifyCell(idx, 'WAERS', currency)
+            # [2026-10-01] WAERS(통화) 수정은 ZMMR060 그리드에서 하지 않는다 — KRW가 기본값으로
+            # 자동 채워지는 것을 실사용에서 확인함. USD 등 다른 통화는 저장 후 ME22N에서 변경.
+            # (기존: currency != 'KRW'일 때 grid.modifyCell(idx, 'WAERS', currency) 호출했으나
+            #  WAERS 필드가 read-only인 SAP 구성에서 오류 위험 → 제거)
             grid.currentCellRow = idx
             grid.currentCellColumn = 'EPEIN'
             grid.triggerModified()
@@ -3521,7 +3523,76 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
     return {'ok': True, 'source': source, 'text': text}
 
 
-def confirm_save_po(purchasing_org='9000', plant='1000'):
+def _change_po_currency_in_me22n(po_number, currency):
+    """발주 저장 후 ME22N에서 통화(WAERS)를 변경하고 저장한다.
+    사용자가 ZMM018에서 발주번호를 클릭해 들어가는 것과 동일한 결과를, 직접 /nME22N으로
+    진입하는 방식으로 구현한다(ZMM018 그리드 drill-in보다 안정적).
+
+    실측(2026-10-01 덤프): WAERS는 SAPLMEGUI:1105 헤더 서브스크린이 아니라
+    품목 그리드 tblSAPLMEGUITC_1211의 MEPO1211-WAERS[11,0] 셀에 있음.
+    MEPO_TOPLINE-WAERS 필드는 이 SAP 레이아웃에 존재하지 않는다."""
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+
+    # 1. ME22N 직접 진입 (PO 변경 화면)
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nME22N'
+    wnd = session.findById('wnd[0]')
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+    wnd = session.findById('wnd[0]')
+
+    # 2. 발주 번호 입력 (ME22N 초기 선택 화면의 EBELN 필드)
+    ebeln_f = _set_text_on_best_candidate(wnd, 'EBELN', po_number)
+    if ebeln_f is None:
+        raise RuntimeError(
+            f'ME22N 화면에서 발주번호(EBELN) 입력 필드를 찾지 못했습니다. '
+            f'SAP GUI가 이미 다른 화면에 있을 수 있습니다.'
+        )
+    wnd.sendVKey(0)  # Enter → PO 로드
+    time.sleep(1.5)
+    wnd = session.findById('wnd[0]')
+
+    # 3. WAERS(통화) 필드 탐색 및 변경
+    # 1차: _set_text_on_best_candidate로 WAERS substring 탐색
+    #       실측 필드: MEPO1211-WAERS (품목 그리드 tblSAPLMEGUITC_1211 안의 셀)
+    waers_f = _set_text_on_best_candidate(wnd, 'WAERS', currency)
+    if waers_f is None:
+        # 2차 폴백: 실측 경로로 직접 접근 — 품목 그리드 1행 WAERS 셀 [11,0]
+        # (2026-10-01 덤프: MEPO_TOPLINE-WAERS 없음, MEPO1211-WAERS[11,0]에 "KRW" 확인)
+        try:
+            waers_f = session.findById(
+                'wnd[0]/usr/subSUB0:SAPLMEGUI:0020/subSUB2:SAPLMEVIEWS:1100'
+                '/subSUB2:SAPLMEVIEWS:1200/subSUB1:SAPLMEGUI:1211'
+                '/tblSAPLMEGUITC_1211/txtMEPO1211-WAERS[11,0]'
+            )
+            waers_f.text = currency
+        except Exception:
+            raise RuntimeError(
+                f'ME22N에서 통화(WAERS) 입력 필드를 변경하지 못했습니다. '
+                f'품목 그리드 WAERS 셀(MEPO1211-WAERS[11,0])이 편집 불가 상태일 수 있습니다. '
+                f'ME22N에서 발주번호 {po_number}를 열어 통화 컬럼이 편집 가능한지 확인해주세요.'
+            )
+
+    time.sleep(0.3)
+
+    # 4. 저장 (F11 = ME22N 저장 단축키)
+    wnd.sendVKey(11)
+    time.sleep(1.0)
+    _sap_close_stray_popups(session)
+
+    sbar_text = ''
+    try:
+        sbar_text = (session.findById('wnd[0]/sbar').Text or '').strip()
+    except Exception:
+        pass
+
+    return {
+        'ok': True,
+        'message': f'구매오더 {po_number} 통화를 {currency}로 변경했습니다.' + (f' ({sbar_text})' if sbar_text else '')
+    }
+
+
+def confirm_save_po(purchasing_org='9000', plant='1000', currency='KRW'):
     """구매오더 생성 2단계 — `prepare_po_from_excel`이 채워둔 화면을 사람이 확인한 뒤
     호출한다. 저장(SAVE) → 오더번호 확보 → ZMM018에서 발주서 PDF 출력까지 진행한다.
     이 함수 호출 시점에 SAP GUI가 반드시 `prepare_po_from_excel`이 마지막으로 남겨둔
@@ -3608,7 +3679,7 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
     if not po_number:
         raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
 
-    print_result = print_po_via_zmm018(po_number, purchasing_org, plant)
+    print_result = print_po_via_zmm018(po_number, purchasing_org, plant, currency)
     return {'ok': True, 'poNumber': po_number,
             'autoSaved': print_result.get('autoSaved', False),
             'pdfPath': print_result.get('pdfPath'),   # 발주서 PDF 경로(자동저장 성공 시에만 유효)
@@ -3840,14 +3911,22 @@ def _save_po_pdf_to_file(save_path):
     return save_path
 
 
-def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
+def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000', currency='KRW'):
     """ZMM018에서 이미 존재하는 구매오더번호로 발주서 PDF를 출력하고, 실제 파일로 저장한
-    뒤 연결된 프로그램(Acrobat 등)으로 연다. `confirm_save_po`가 저장 직후 자동으로
-    호출하지만(오더번호를 그 자리에서 방금 확보해서), 그와 별개로 **이미 저장된(사람이
-    SAP에서 직접 저장한 경우 포함) 오더번호를 알고 있을 때 출력만 다시 시도**하는 용도로도
-    쓸 수 있게 독립 함수로 분리했다(2026-09-15 — 실사용 테스트에서 저장은 harness 정책상
-    사람이 SAP 화면에서 직접 눌러야 했고, 그 뒤 출력만 이 함수로 이어서 실행함). 저장
-    (SAVE)이 전혀 없는 순수 조회/출력 동작이라 저장보다 안전하다."""
+    뒤 연결된 프로그램(Acrobat 등)으로 연다.
+    `currency`가 'KRW'가 아니면 ZMM018 진입 전에 ME22N에서 통화를 먼저 변경한다
+    (사용자 요청: "통화 변경은 구매 발주서 출력 화면에서 발주번호 누르고 들어가서 변경" — 2026-10-01).
+    `confirm_save_po`가 저장 직후 자동 호출하고, 이미 저장된 오더번호로 출력만 재시도하는 복구
+    용도로도 쓸 수 있다. 저장(SAVE)이 전혀 없는 순수 조회/출력 동작이라 저장보다 안전하다."""
+
+    # [2026-10-01] USD 등 KRW가 아닌 통화: ZMM018 출력 전에 ME22N에서 WAERS 변경
+    if currency and currency.upper() != 'KRW':
+        try:
+            _change_po_currency_in_me22n(po_number, currency)
+        except Exception as e:
+            print(f'[경고] ME22N 통화 변경 실패 (통화: {currency}), KRW로 발주서 출력 계속 진행: {e}', file=sys.stderr)
+            # 실패해도 중단하지 않음 — 발주는 이미 저장됐으므로 발주서 출력은 가능
+
     session = _get_sap_session()
     try:
         session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM018'
@@ -4469,12 +4548,14 @@ def main():
         elif action == 'confirm_save_po':
             purchasing_org = sys.argv[2] if len(sys.argv) > 2 else '9000'
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
-            result = confirm_save_po(purchasing_org, plant)
+            currency = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else 'KRW'
+            result = confirm_save_po(purchasing_org, plant, currency)
         elif action == 'print_po_via_zmm018':
             po_number = sys.argv[2] if len(sys.argv) > 2 else ''
             purchasing_org = sys.argv[3] if len(sys.argv) > 3 else '9000'
             plant = sys.argv[4] if len(sys.argv) > 4 else '1000'
-            result = print_po_via_zmm018(po_number, purchasing_org, plant)
+            currency = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else 'KRW'
+            result = print_po_via_zmm018(po_number, purchasing_org, plant, currency)
         elif action == 'fetch_team_budget':
             team = sys.argv[2] if len(sys.argv) > 2 else ''
             fperbl = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else '1'

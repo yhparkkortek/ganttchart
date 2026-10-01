@@ -2766,7 +2766,12 @@ def po_sap_confirm_save():
     data = request.get_json(silent=True) or {}
     purchasing_org = (data.get('purchasingOrg') or '9000').strip()
     plant = (data.get('plant') or '1000').strip()
-    data_out, status = _run_sap_bridge(['confirm_save_po', purchasing_org, plant], 60, 'SAP 구매오더 저장')
+    currency = (data.get('currency') or 'KRW').strip().upper() or 'KRW'
+    if currency not in ('KRW', 'USD', 'EUR', 'JPY', 'CNY'):
+        currency = 'KRW'
+    # USD 등 KRW 외 통화는 ME22N 통화 변경 스텝이 추가되므로 타임아웃 60→90초
+    timeout = 60 if currency == 'KRW' else 90
+    data_out, status = _run_sap_bridge(['confirm_save_po', purchasing_org, plant, currency], timeout, 'SAP 구매오더 저장')
     return jsonify(data_out), status
 
 
@@ -2780,9 +2785,13 @@ def po_print_via_zmm018():
     po_number = (data.get('poNumber') or '').strip()
     purchasing_org = (data.get('purchasingOrg') or '9000').strip()
     plant = (data.get('plant') or '1000').strip()
+    currency = (data.get('currency') or 'KRW').strip().upper() or 'KRW'
+    if currency not in ('KRW', 'USD', 'EUR', 'JPY', 'CNY'):
+        currency = 'KRW'
     if not po_number:
         return jsonify({'ok': False, 'error': 'poNumber가 필요합니다.'}), 400
-    data_out, status = _run_sap_bridge(['print_po_via_zmm018', po_number, purchasing_org, plant], 60, 'SAP 발주서 PDF 출력')
+    timeout = 60 if currency == 'KRW' else 90
+    data_out, status = _run_sap_bridge(['print_po_via_zmm018', po_number, purchasing_org, plant, currency], timeout, 'SAP 발주서 PDF 출력')
     return jsonify(data_out), status
 
 

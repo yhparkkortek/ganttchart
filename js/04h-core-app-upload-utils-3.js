@@ -2142,8 +2142,9 @@ ${docsJson}`;
         const saveRes = await window._withTimeout(
             fetch('http://127.0.0.1:5000/po-sap-confirm-save', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ purchasingOrg: '9000', plant: '1000' })
-            }), 60000, window._t('SAP 구매오더 저장 시간 초과', 'SAP purchase order save timed out')
+                body: JSON.stringify({ purchasingOrg: '9000', plant: '1000', currency: doc.currency || 'KRW' })
+            }), (doc.currency || 'KRW') !== 'KRW' ? 90000 : 60000,
+            window._t('SAP 구매오더 저장 시간 초과', 'SAP purchase order save timed out')
         );
         const saveData = await window._ganttQaParsePoApiResponse(saveRes, 'SAP 구매오더 저장', 'SAP purchase order save');
         if (!saveData.ok) throw new Error(saveData.error || window._t('알 수 없는 오류', 'unknown error'));
@@ -2171,16 +2172,35 @@ ${docsJson}`;
                 const r = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
                 results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved, pdfPath: r.pdfPath || null, xlsPath: r.xlsPath || null });
             } catch (e) {
-                results.push({ label: label, ok: false, error: (e && e.message) ? e.message : String(e), _doc: doc });
+                // [2026-10-01] 기본 KRW로 실패하면 USD로 1회 자동 재시도
+                var _origCurrency = doc.currency || 'KRW';
+                if (_origCurrency !== 'USD') {
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: '🔄 ' + window._t(
+                        '"' + label + '" KRW 처리 중 오류 — USD로 자동 재시도합니다...',
+                        '"' + label + '" KRW attempt failed — auto-retrying with USD...'
+                    ), pending: true });
+                    window._renderGanttQaMessages();
+                    try {
+                        doc.currency = 'USD';
+                        const r2 = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
+                        results.push({ label: label, ok: true, poNumber: r2.poNumber, autoSaved: r2.autoSaved, pdfPath: r2.pdfPath || null, xlsPath: r2.xlsPath || null, currencyRetried: true });
+                    } catch (e2) {
+                        results.push({ label: label, ok: false, error: (e2 && e2.message) ? e2.message : String(e2), _doc: doc });
+                    }
+                } else {
+                    results.push({ label: label, ok: false, error: (e && e.message) ? e.message : String(e), _doc: doc });
+                }
             }
             window._ganttQaHistory.pop();
         }
         const lines = results.map(function(r, i) {
             if (r.ok) {
+                var _currencyNote = r.currencyRetried ? window._t(' [KRW→USD 자동변경]', ' [KRW→USD auto]') : '';
                 var _savedLabel = r.autoSaved
                     ? window._t(' → 📁 발주서 PDF 자동저장 완료', ' → 📁 PO PDF auto-saved')
                     : window._t(' → ⚠️ PDF 자동저장 3회 실패 — ZMM018에서 오더번호 ' + r.poNumber + '로 직접 발주서를 출력해주세요', ' → ⚠️ PDF auto-save failed (3 tries) — please print the PO manually via ZMM018 using order ' + r.poNumber);
-                return '✅ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('오더번호', 'PO') + ' ' + r.poNumber + _savedLabel;
+                return '✅ ' + (i + 1) + '. ' + r.label + _currencyNote + ' → ' + window._t('오더번호', 'PO') + ' ' + r.poNumber + _savedLabel;
             }
             return '⚠️ ' + (i + 1) + '. ' + r.label + ' → ' + window._t('실패', 'failed') + ': ' + r.error;
         }).join('\n');
