@@ -278,6 +278,30 @@
         }
         window._ganttQaHistory.pop();
         pushAi(reply, question, route);
+        // 자재 선택 칩 — 최대 20개, 클릭 시 _sapSelectMaterial(matnr)로 조회 기능 선택
+        if (list && list.length > 0) {
+            var MAX_CHIPS = 20;
+            var chipped = list.slice(0, MAX_CHIPS);
+            var en = window._currentLang === 'en';
+            var chipsHtml = '<div style="margin-top:4px; padding:6px 8px; background:#f0f7ff; border:1px solid #c8dff8; border-radius:6px;">'
+                + '<div style="font-size:11px; color:#5577aa; margin-bottom:5px; font-weight:bold;">💡 '
+                + (en ? 'Click a material to select an action:' : '자재를 클릭하면 조회 기능을 선택할 수 있습니다:')
+                + '</div><div style="display:flex; flex-wrap:wrap; gap:4px;">';
+            chipped.forEach(function(x) {
+                var mn = (x.matnr || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                var mnHtml = (x.matnr || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var descTip = (x.desc || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                chipsHtml += '<button onclick="window._sapSelectMaterial(\'' + mn + '\')" title="' + descTip + '" '
+                    + 'style="font-size:11px; padding:3px 8px; border:1px solid #9bb8e0; background:#e8f1fb; color:#1a4a7a; border-radius:4px; cursor:pointer; font-family:monospace; white-space:nowrap; transition:background .1s;" '
+                    + 'onmouseover="this.style.background=\'#d0e4f7\'" onmouseout="this.style.background=\'#e8f1fb\'">'
+                    + mnHtml + '</button>';
+            });
+            if (list.length > MAX_CHIPS) {
+                chipsHtml += '<span style="font-size:11px; color:#999; align-self:center; padding:0 4px;">+' + (list.length - MAX_CHIPS) + (en ? ' more' : '건') + '</span>';
+            }
+            chipsHtml += '</div></div>';
+            window._ganttQaHistory.push({ role: 'ai', text: chipsHtml, rawHtml: true });
+        }
         finish(input);
     }
 

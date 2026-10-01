@@ -1528,8 +1528,10 @@ ${question}
         //    경우 "()" 가 그대로 출력되는 문제 방지. 날짜 제거 후에 실행해야 "(날짜)"만 제거된 뒤 남는
         //    "()" 도 잡을 수 있음.
         escaped = escaped.replace(/\(\s*\)/g, '');
-        escaped = window._linkifyTaskRefs(escaped); // #G{n} → 클릭 이동 링크(chip 포함)
-        const lines = escaped.split('\n');
+        // #G{n} → 클릭 이동 링크(chip 포함) — TAB이 있는 줄(SAP 데이터 행)은 건너뜀
+        const lines = escaped.split('\n').map(function(line) {
+            return line.indexOf('\t') !== -1 ? line : window._linkifyTaskRefs(line);
+        });
         // 💡 [2026-09-03 신규/수정] 문장/글머리 div 에 onclick(_aiToggleLineRefs) + hover 하이라이트 추가.
         //    — 마우스 올리면 연한 파랑, 클릭해서 ref 가 열리면 약간 더 진한 파랑 배경 유지.
         const _lineOnClick = 'window._aiToggleLineRefs(this, event);';
@@ -1591,6 +1593,24 @@ ${question}
         }).catch(function() {});
     };
 
+    // 자재내역 패턴 조회 결과 칩 클릭 → 입력창 채움 + 조회 기능 드롭다운
+    window._sapSelectMaterial = function(matnr) {
+        var input = document.getElementById('gantt-qa-input');
+        if (input) { input.value = matnr; input.focus(); }
+        var en = window._currentLang === 'en';
+        window._ganttQaShowConfirmButtons(
+            (en ? 'Material ' : '자재 ') + matnr + (en ? ' — what would you like to do?' : ' — 무엇을 조회할까요?'),
+            [
+                { label: '📋 BOM 조회', value: matnr + ' BOM 조회해줘', style: 'neutral' },
+                { label: '🔄 사용처 조회', value: matnr + ' 사용처 조회해줘', style: 'neutral' },
+                { label: '📦 재고 조회', value: matnr + ' 재고 조회해줘', style: 'neutral' },
+                { label: '💰 가격 확인', value: matnr + ' 가격 확인해줘', style: 'neutral' },
+                { label: '📄 MM03 열기', value: matnr + ' MM03 열어줘', style: 'neutral' }
+            ]
+        );
+        window._renderGanttQaMessages();
+    };
+
     window._renderGanttQaMessages = function() {
         const box = document.getElementById('gantt-qa-messages');
         if (!box) return;
@@ -1637,6 +1657,7 @@ ${question}
             const body = isUser
                 ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
                 : (function() {
+                    if (m.rawHtml) return `<div style="word-break:break-word;">${m.text}</div>`;
                     let _bHtml = window._mdToHtml(m.text);
                     // 💡 [2026-09-30] "명령예시" 클릭 → 입력창 자동채움 + 즉시 전송
                     //    한국어가 포함된 "..." 따옴표 문자열만 대상. (?<!=) lookbehind로 attr="값" 형태 제외
