@@ -1990,6 +1990,43 @@ def sap_download_documents_batch():
     return jsonify(data), status
 
 
+@app.route('/sap-dms-lookup', methods=['GET'])
+def sap_dms_lookup():
+    # 📋 [2026-10-01 신규] "501362 P02 문서번호 확인해줘" — 자재 목록에 대한 문서번호 유무를
+    #    조회만 하고 파일 다운로드는 하지 않는다. 7개씩 청크해서 순차 실행(팝업 입력 한계).
+    materials_str = (request.args.get('materials') or '').strip()
+    doc_type = (request.args.get('type') or 'P02').strip()
+    if not materials_str:
+        return jsonify({'ok': False, 'error': '자재번호(materials 파라미터, 쉼표구분)가 필요합니다.'}), 400
+    materials = [m.strip() for m in materials_str.split(',') if m.strip()]
+    chunk_size = 7
+    all_has = {}
+    for i in range(0, len(materials), chunk_size):
+        chunk = materials[i:i + chunk_size]
+        timeout = 30 + 8 * len(chunk)
+        data, status = _run_sap_bridge(['lookup_documents_batch', doc_type, ','.join(chunk)], timeout, 'SAP DMS 문서 조회')
+        if not data.get('ok'):
+            return jsonify(data), status
+        all_has.update(data.get('has_doc') or {})
+    no_doc = [m for m in materials if m not in all_has]
+    lines = [f'[SAP {doc_type} 문서 조회: {len(materials)}건]']
+    if no_doc:
+        lines.append(f'\n■ {doc_type} 문서 없음 ({len(no_doc)}건):')
+        lines.append('  ' + ', '.join(no_doc))
+    if all_has:
+        lines.append(f'\n■ {doc_type} 문서 있음 ({len(all_has)}건):')
+        for mat, docs in sorted(all_has.items()):
+            lines.append(f'  {mat}: ' + ', '.join(docs))
+    return jsonify({
+        'ok': True,
+        'doc_type': doc_type,
+        'total': len(materials),
+        'has_doc': all_has,
+        'no_doc': no_doc,
+        'text': '\n'.join(lines)
+    })
+
+
 @app.route('/sap-team-budget', methods=['GET'])
 def sap_team_budget():
     # 💰 [2026-09-22 신규, 사용자 요청] "개발3팀 팀운영비 확인해줘"처럼 팀 이름으로 ZCO021

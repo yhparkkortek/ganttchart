@@ -5013,6 +5013,87 @@ ${docsJson}`;
             return;
         }
 
+        // 📋 [2026-10-01 신규] "501362 P02 문서번호 확인해줘" / "P02 문서 없는 코드 알려줘"
+        //    ZDMSR004를 실행해 결과 그리드를 읽되 다운로드 버튼은 누르지 않는다.
+        //    batch download 핸들러보다 먼저 체크: "확인/조회" 의도는 다운로드 의도가 아님.
+        const sapDmsLookupReq = window._ganttQaExtractSapDmsLookupRequest ? window._ganttQaExtractSapDmsLookupRequest(sapDocQuestion) : null;
+        if (sapDmsLookupReq) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({
+                role: 'ai',
+                text: '⏳ ' + window._t(
+                    `SAP에서 자재 ${sapDmsLookupReq.materials.length}개의 "${sapDmsLookupReq.docType}" 문서번호를 조회하는 중...`,
+                    `Looking up "${sapDmsLookupReq.docType}" document numbers for ${sapDmsLookupReq.materials.length} materials in SAP...`
+                ),
+                pending: true
+            });
+            input.value = '';
+            window._renderGanttQaMessages();
+            let sapDmsLookupReply;
+            try {
+                const url = 'http://127.0.0.1:5000/sap-dms-lookup?materials='
+                    + encodeURIComponent(sapDmsLookupReq.materials.join(','))
+                    + '&type=' + encodeURIComponent(sapDmsLookupReq.docType);
+                const timeoutMs = Math.min(300000, 60000 + 8000 * sapDmsLookupReq.materials.length);
+                const res = await window._withTimeout(
+                    fetch(url), timeoutMs,
+                    window._t('SAP 문서 조회 시간 초과', 'SAP document lookup timed out')
+                );
+                const data = await res.json();
+                if (data.ok) {
+                    const hasCount = Object.keys(data.has_doc || {}).length;
+                    const noCount = (data.no_doc || []).length;
+                    // 결과를 인터랙티브 표로 변환
+                    let rows = [];
+                    Object.entries(data.has_doc || {}).forEach(function([mat, docs]) {
+                        rows.push({ matnr: mat, has: true, doknr: docs.join(', ') });
+                    });
+                    (data.no_doc || []).forEach(function(mat) {
+                        rows.push({ matnr: mat, has: false, doknr: '-' });
+                    });
+                    rows.sort(function(a, b) {
+                        if (a.has !== b.has) return a.has ? -1 : 1;
+                        return a.matnr < b.matnr ? -1 : 1;
+                    });
+                    let tbl = '<div style="font-size:12.5px; margin-bottom:4px;">'
+                        + '📋 <b>' + data.doc_type + ' ' + window._t('문서 조회 결과', 'Document lookup result') + '</b>'
+                        + ' — ' + window._t(`문서 있음: ${hasCount}건 / 없음: ${noCount}건`, `With doc: ${hasCount} / Without: ${noCount}`)
+                        + '</div>';
+                    tbl += '<div style="max-height:280px; overflow-y:auto; border:1px solid #ddd; border-radius:4px;">'
+                        + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+                        + '<thead><tr style="background:#f0f4ff; position:sticky; top:0;">'
+                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:left;">' + window._t('자재번호', 'Material') + '</th>'
+                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:center;">' + window._t('문서', 'Doc') + '</th>'
+                        + '<th style="padding:4px 8px; border-bottom:1px solid #ccc; text-align:left;">' + window._t('문서번호', 'Doc No.') + '</th>'
+                        + '</tr></thead><tbody>';
+                    rows.forEach(function(r) {
+                        const bg = r.has ? '' : 'background:#fff8f0;';
+                        tbl += '<tr style="' + bg + '" onclick="(function(){var el=document.getElementById(\'gantt-qa-input\');if(!el)return;el.value=\'' + r.matnr + ' \';el.focus();})()" style="cursor:pointer; ' + bg + '">'
+                            + '<td style="padding:3px 8px; border-bottom:1px solid #eee; font-family:monospace;">' + r.matnr + '</td>'
+                            + '<td style="padding:3px 8px; border-bottom:1px solid #eee; text-align:center;">' + (r.has ? '✅' : '❌') + '</td>'
+                            + '<td style="padding:3px 8px; border-bottom:1px solid #eee; color:#555;">' + r.doknr + '</td>'
+                            + '</tr>';
+                    });
+                    tbl += '</tbody></table></div>';
+                    sapDmsLookupReply = tbl;
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: sapDmsLookupReply, rawHtml: true });
+                } else {
+                    sapDmsLookupReply = '⚠️ ' + window._t('SAP 문서 조회 실패: ', 'SAP document lookup failed: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: sapDmsLookupReply });
+                }
+            } catch (e) {
+                sapDmsLookupReply = '⚠️ ' + window._t('SAP 문서 조회 실패: ', 'SAP document lookup failed: ') + (e && e.message ? e.message : e);
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: sapDmsLookupReply });
+            }
+            window._renderGanttQaMessages();
+            input.focus();
+            window._ganttQaRecordQuestionFreq(question);
+            return;
+        }
+
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
         //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
         //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
@@ -7353,6 +7434,36 @@ ${docsJson}`;
         if (materials.length < 2) return null; // 자재 1개면 기존 단일 경로가 처리
         var docType = window._ganttQaExtractSapDocTypeCode(text);
         return { materials: materials, docType: docType || 'P01' };
+    };
+
+    // 📋 [2026-10-01 신규] "501362 P02 문서번호 확인해줘" / "P02 문서 없는 코드 알려줘"처럼
+    //    자재 목록에 대해 특정 문서 타입의 문서번호 유무를 조회(확인)하는 요청을 감지한다.
+    //    "다운로드/저장/열어/받아" 동사가 없어야 하며(있으면 기존 batch/open 핸들러가 처리),
+    //    자재번호가 질문에 없으면 최근 채팅 히스토리에서 2개 이상의 숫자를 꺼낸다.
+    window._ganttQaExtractSapDmsLookupRequest = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        // 조회 의도: "문서번호", "확인", "있는지", "없는", "조회", "알려줘" 등
+        var hasLookupIntent = /(문서번호|문서 번호|문서 있는지|문서 없는|문서 없음|문서 있음|문서 유무|번호 확인|번호 조회|dms 조회|cv04)/i.test(text)
+            || (/(확인|조회|알려줘|알려주세요)/i.test(text) && window._sapMentionsDoc && window._sapMentionsDoc(text));
+        if (!hasLookupIntent) return null;
+        // 다운로드/저장/열기 의도가 있으면 기존 핸들러에게 양보
+        if (/(다운로드|저장해줘|저장 해줘|받아줘|열어줘|열기|download|save)/i.test(text)) return null;
+        var docType = (window._ganttQaExtractSapDocTypeCode ? window._ganttQaExtractSapDocTypeCode(text) : null) || 'P02';
+        // 질문 텍스트에서 자재번호 추출
+        var materials = (text.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
+        // 없으면 최근 채팅 히스토리에서 찾기 (사용자가 앞 메시지에 목록을 붙여넣은 경우)
+        if (!materials.length && window._ganttQaHistory && window._ganttQaHistory.length) {
+            var hist = window._ganttQaHistory;
+            for (var hi = hist.length - 1; hi >= Math.max(0, hist.length - 10); hi--) {
+                var entry = hist[hi];
+                if (!entry || entry.role !== 'user') continue;
+                var histMats = ((entry.text || '').match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
+                if (histMats.length >= 2) { materials = histMats; break; }
+            }
+        }
+        if (!materials.length) return null;
+        return { materials: materials, docType: docType };
     };
 
     // 📋 [2026-09-29 신규] "112294 다운로드 해줘"처럼 자재번호 + 다운로드 동사가 있지만

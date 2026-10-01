@@ -2189,6 +2189,122 @@ def download_documents_batch(materials, doc_type='P01'):
     }
 
 
+# ── DMS 문서번호 조회 전용 (ZDMSR004 read-only, 다운로드 없음) (2026-10-01 신규) ──────────
+# "501362 P02 문서번호 확인해줘" / "501362,501363 P02 문서 없는지 확인해줘" 처럼
+# 자재 목록에 대해 특정 문서 타입의 문서번호가 있는지만 확인하고 파일은 다운로드하지 않는다.
+# download_documents_batch()와 ZDMSR004 진입/팝업/실행 흐름은 동일하고,
+# 결과 그리드를 읽은 뒤 다운로드 버튼(tbar[1]/btn[13])을 누르지 않는 점만 다르다.
+def lookup_documents_batch(materials, doc_type='P02'):
+    """ZDMSR004를 실행해 자재 목록의 문서번호 유무를 조회한다(다운로드하지 않음)."""
+    materials = [str(m).strip() for m in (materials or []) if str(m).strip()]
+    if not materials:
+        raise RuntimeError('조회할 자재번호가 없습니다.')
+    doc_type = (doc_type or 'P02').strip().upper()
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZDMSR004'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+
+    multi_btn = _find_by_id_substring(wnd, '%_S_MATNR_%_APP_%-VALU_PUSH')
+    if multi_btn is None:
+        raise RuntimeError('ZDMSR004 화면에서 자재코드 입력 버튼을 찾지 못했습니다.')
+    multi_btn.press()
+    time.sleep(0.8)
+
+    try:
+        table = session.findById(_SAP_MULTI_SELECT_POPUP_TABLE)
+    except Exception:
+        raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
+    try:
+        visible_rows = table.VisibleRowCount or 7
+    except Exception:
+        visible_rows = 7
+
+    idx = 0
+    while idx < len(materials):
+        if idx > 0:
+            try:
+                table.FirstVisibleRow = idx
+                time.sleep(0.3)
+            except Exception:
+                pass
+        batch = materials[idx: idx + visible_rows]
+        for row_offset, mat in enumerate(batch):
+            cell_id = f"{_SAP_MULTI_SELECT_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
+            try:
+                cell = session.findById(cell_id)
+                cell.text = mat
+            except Exception as e:
+                raise RuntimeError(f'{idx + row_offset + 1}번째 자재("{mat}") 입력 실패: {e}')
+        idx += len(batch)
+
+    try:
+        session.findById('wnd[1]/tbar[0]/btn[24]').press()
+        time.sleep(0.3)
+        session.findById('wnd[1]/tbar[0]/btn[8]').press()
+    except Exception as e:
+        raise RuntimeError(f'팝업 확인 중 오류: {e}')
+    time.sleep(0.8)
+
+    try:
+        session.findById('wnd[0]/usr/ctxtS_DOKAR-LOW').text = doc_type
+    except Exception:
+        pass
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[8]').press()
+    except Exception as e:
+        raise RuntimeError(f'ZDMSR004 실행 중 오류: {e}')
+    time.sleep(1.5)
+
+    mat_to_docs = {m: [] for m in materials}
+    try:
+        grid = session.findById('wnd[0]/shellcont/shell')
+        row_count = grid.RowCount
+        for r in range(row_count):
+            try:
+                doknr = str(grid.GetCellValue(r, 'DOKNR')).strip()
+                matnr = str(grid.GetCellValue(r, 'MATNR')).strip()
+                if not matnr or not doknr:
+                    continue
+                dktxt = ''
+                try:
+                    dktxt = str(grid.GetCellValue(r, 'DKTXT')).strip()
+                except Exception:
+                    pass
+                if matnr in mat_to_docs:
+                    mat_to_docs[matnr].append({'doknr': doknr, 'dktxt': dktxt})
+            except Exception:
+                continue
+    except Exception as e:
+        raise RuntimeError(f'결과 그리드 읽기 실패(자재를 찾지 못해 결과가 비어 있을 수도 있습니다): {e}')
+
+    has_doc = {m: docs for m, docs in mat_to_docs.items() if docs}
+    no_doc_list = [m for m in materials if not mat_to_docs.get(m)]
+
+    lines = [f'[SAP ZDMSR004 {doc_type} 문서 조회: {len(materials)}건]']
+    if no_doc_list:
+        lines.append(f'\n■ {doc_type} 문서 없음 ({len(no_doc_list)}건):')
+        lines.append('  ' + ', '.join(no_doc_list))
+    if has_doc:
+        lines.append(f'\n■ {doc_type} 문서 있음 ({len(has_doc)}건):')
+        for mat, docs in sorted(has_doc.items()):
+            doc_strs = [d['doknr'] + (f' ({d["dktxt"]})' if d['dktxt'] else '') for d in docs]
+            lines.append(f'  {mat}: ' + ', '.join(doc_strs))
+
+    return {
+        'ok': True,
+        'doc_type': doc_type,
+        'total': len(materials),
+        'has_doc': {m: [d['doknr'] for d in docs] for m, docs in has_doc.items()},
+        'no_doc': no_doc_list,
+        'text': '\n'.join(lines)
+    }
+
+
 # ── 자재내역 와일드카드 패턴으로 자재번호 조회 + 승인원(P01) 일괄 다운로드 (2026-09-16 신규) ──
 # "*01+01*500*로 조회된 아이템 승인원 다운로드해줘" 요청을 지원한다. 사용자가 준 매크로
 # ("디스크립션 검색.vbs")는 ZMM009 화면에서 자재(MATNR) "복수 선택" 팝업을 열고 그 안에서
@@ -4751,6 +4867,11 @@ def main():
             materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
             materials = [m.strip() for m in materials_str.split(',') if m.strip()]
             result = download_documents_batch(materials, doc_type)
+        elif action == 'lookup_documents_batch':
+            doc_type = sys.argv[2] if len(sys.argv) > 2 else 'P02'
+            materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
+            materials = [m.strip() for m in materials_str.split(',') if m.strip()]
+            result = lookup_documents_batch(materials, doc_type)
         elif action == 'resolve_pattern':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             mats = resolve_materials_by_description_pattern(pattern)
