@@ -1593,20 +1593,24 @@ ${question}
         }).catch(function() {});
     };
 
-    // 자재내역 패턴 조회 결과 칩 클릭 → 입력창 채움 + 조회 기능 드롭다운
+    // 자재내역 패턴 조회 결과 행 클릭 → 입력창 채움 + 조회 기능 드롭다운
+    // "1"로 시작하는 자재(원자재)는 BOM이 없으므로 BOM 조회 제외
     window._sapSelectMaterial = function(matnr) {
         var input = document.getElementById('gantt-qa-input');
         if (input) { input.value = matnr; input.focus(); }
         var en = window._currentLang === 'en';
+        var isRaw = /^1/.test(matnr); // 1로 시작 = 원자재, BOM 없음
+        var buttons = [];
+        if (!isRaw) buttons.push({ label: '📋 BOM 조회', value: matnr + ' BOM 조회해줘', style: 'neutral' });
+        buttons.push(
+            { label: '🔄 사용처 조회', value: matnr + ' 사용처 조회해줘', style: 'neutral' },
+            { label: '📦 재고 조회', value: matnr + ' 재고 조회해줘', style: 'neutral' },
+            { label: '💰 가격 확인', value: matnr + ' 가격 확인해줘', style: 'neutral' },
+            { label: '📄 MM03 열기', value: matnr + ' MM03 열어줘', style: 'neutral' }
+        );
         window._ganttQaShowConfirmButtons(
             (en ? 'Material ' : '자재 ') + matnr + (en ? ' — what would you like to do?' : ' — 무엇을 조회할까요?'),
-            [
-                { label: '📋 BOM 조회', value: matnr + ' BOM 조회해줘', style: 'neutral' },
-                { label: '🔄 사용처 조회', value: matnr + ' 사용처 조회해줘', style: 'neutral' },
-                { label: '📦 재고 조회', value: matnr + ' 재고 조회해줘', style: 'neutral' },
-                { label: '💰 가격 확인', value: matnr + ' 가격 확인해줘', style: 'neutral' },
-                { label: '📄 MM03 열기', value: matnr + ' MM03 열어줘', style: 'neutral' }
-            ]
+            buttons
         );
         window._renderGanttQaMessages();
     };

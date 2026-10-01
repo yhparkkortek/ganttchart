@@ -266,41 +266,48 @@
             if (!list.length) {
                 reply = '🔎 ' + T('자재내역 "' + pattern + '" 패턴에 매치되는 자재가 없습니다. 앞뒤에 *를 붙여 범위를 넓혀보세요(예: *' + pattern.replace(/\*/g, '') + '*).', 'No materials match "' + pattern + '". Try widening it with * on both sides.');
             } else {
-                var shown = list.slice(0, 150);
-                reply = '🔎 ' + T('자재내역 "' + pattern + '" 패턴 매치 ' + list.length + '건', 'Description pattern "' + pattern + '" matched ' + list.length + ' material(s)') + '\n' +
-                    T('자재번호\t자재내역', 'Material\tDescription') + '\n' +
-                    shown.map(function (x) { return x.matnr + '\t' + (x.desc || ''); }).join('\n') +
-                    (list.length > shown.length ? '\n' + T('… 외 ' + (list.length - shown.length) + '건(화면에는 150건까지 표시)', '… and ' + (list.length - shown.length) + ' more (first 150 shown)') : '') +
-                    '\n\n' + T('💡 이 자재들의 승인원(P01)을 받으려면: "' + pattern + '로 조회된 아이템 승인원 다운로드해줘"', '💡 To download their P01 documents: "download approval docs for items matching ' + pattern + '"');
+                reply = null; // 클릭 가능한 HTML 표로 대체
             }
         } catch (e) {
             reply = '⚠️ ' + T('SAP 패턴 조회에 실패했습니다: ', 'SAP pattern lookup failed: ') + (e && e.message ? e.message : e);
         }
         window._ganttQaHistory.pop();
-        pushAi(reply, question, route);
-        // 자재 선택 칩 — 최대 20개, 클릭 시 _sapSelectMaterial(matnr)로 조회 기능 선택
-        if (list && list.length > 0) {
-            var MAX_CHIPS = 20;
-            var chipped = list.slice(0, MAX_CHIPS);
+        if (reply !== null) {
+            pushAi(reply, question, route);
+        } else {
+            // 행을 클릭하면 조회 기능 선택 드롭다운이 표시되는 인터랙티브 표
+            var shown = list.slice(0, 150);
             var en = window._currentLang === 'en';
-            var chipsHtml = '<div style="margin-top:4px; padding:6px 8px; background:#f0f7ff; border:1px solid #c8dff8; border-radius:6px;">'
-                + '<div style="font-size:11px; color:#5577aa; margin-bottom:5px; font-weight:bold;">💡 '
-                + (en ? 'Click a material to select an action:' : '자재를 클릭하면 조회 기능을 선택할 수 있습니다:')
-                + '</div><div style="display:flex; flex-wrap:wrap; gap:4px;">';
-            chipped.forEach(function(x) {
+            var hdr = '<div style="font-size:12px; margin-bottom:6px;">🔎 '
+                + T('자재내역 "' + pattern + '" 패턴 매치 ' + list.length + '건', 'Description pattern "' + pattern + '" matched ' + list.length + ' material(s)')
+                + (list.length > shown.length ? ' ' + T('(150건만 표시)', '(first 150 shown)') : '')
+                + '</div>'
+                + '<div style="font-size:11px; color:#5577aa; margin-bottom:5px;">💡 '
+                + T('행을 클릭하면 조회 기능을 선택할 수 있습니다', 'Click a row to select an action')
+                + '</div>';
+            var tbl = '<div style="max-height:300px; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+                + '<thead><tr style="background:#eef3fa;">'
+                + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; width:105px; position:sticky; top:0; background:#eef3fa;">' + T('자재번호', 'Material') + '</th>'
+                + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; position:sticky; top:0; background:#eef3fa;">' + T('자재내역', 'Description') + '</th>'
+                + '</tr></thead><tbody>';
+            shown.forEach(function(x, i) {
                 var mn = (x.matnr || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                var mnHtml = (x.matnr || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                var descTip = (x.desc || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                chipsHtml += '<button onclick="window._sapSelectMaterial(\'' + mn + '\')" title="' + descTip + '" '
-                    + 'style="font-size:11px; padding:3px 8px; border:1px solid #9bb8e0; background:#e8f1fb; color:#1a4a7a; border-radius:4px; cursor:pointer; font-family:monospace; white-space:nowrap; transition:background .1s;" '
-                    + 'onmouseover="this.style.background=\'#d0e4f7\'" onmouseout="this.style.background=\'#e8f1fb\'">'
-                    + mnHtml + '</button>';
+                var mnHtml = (x.matnr || '').replace(/&/g, '&amp;');
+                var descHtml = (x.desc || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
+                tbl += '<tr style="background:' + bg + '; cursor:pointer;" '
+                    + 'onclick="window._sapSelectMaterial(\'' + mn + '\')" '
+                    + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
+                    + '<td style="padding:5px 8px; font-family:monospace; white-space:nowrap; border-bottom:1px solid #eef0f3;">' + mnHtml + '</td>'
+                    + '<td style="padding:5px 8px; border-bottom:1px solid #eef0f3;">' + descHtml + '</td>'
+                    + '</tr>';
             });
-            if (list.length > MAX_CHIPS) {
-                chipsHtml += '<span style="font-size:11px; color:#999; align-self:center; padding:0 4px;">+' + (list.length - MAX_CHIPS) + (en ? ' more' : '건') + '</span>';
-            }
-            chipsHtml += '</div></div>';
-            window._ganttQaHistory.push({ role: 'ai', text: chipsHtml, rawHtml: true });
+            tbl += '</tbody></table></div>';
+            var apInfo = '<div style="margin-top:6px; font-size:11px; color:#888;">💡 '
+                + T('승인원(P01): "' + pattern + '로 조회된 아이템 승인원 다운로드해줘"', 'P01 docs: "download approval docs for items matching ' + pattern + '"')
+                + '</div>';
+            window._ganttQaHistory.push({ role: 'ai', text: hdr + tbl + apInfo, rawHtml: true });
         }
         finish(input);
     }
