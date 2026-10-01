@@ -3916,7 +3916,11 @@ ${docsJson}`;
             if (window._ganttQaApprovalAllFieldsForm === null && saved.approvalAllFieldsForm) { window._ganttQaApprovalAllFieldsForm = saved.approvalAllFieldsForm; restoredAny = true; }
             if (window._ganttQaGrEbelnForm === null && saved.grEbelnForm) { window._ganttQaGrEbelnForm = saved.grEbelnForm; restoredAny = true; }
         }
-        if (restoredAny && lastPending && lastPending.role === 'ai' && lastPending.text) {
+        // lastPending이 칩 버튼 메시지(confirmButtonsId)이거나 이미 "📌" 재표시 메시지면
+        // 다시 보여주지 않음 — persistent 버튼은 "대기 중 질문"이 아니고, 📌가 이미 있으면 연쇄 방지.
+        const _lastIsChip = lastPending && !!lastPending.confirmButtonsId;
+        const _lastIs14 = lastPending && lastPending.text && lastPending.text.startsWith('📌');
+        if (restoredAny && lastPending && lastPending.role === 'ai' && lastPending.text && !_lastIsChip && !_lastIs14) {
             window._ganttQaHistory.push({ role: 'ai', text: '📌 ' + window._t(
                 '진행 중이던 작업을 이어서 계속합니다 — 아까 물어보던 질문입니다:',
                 "Resuming the task you were in the middle of — here's the question again:"
@@ -4283,9 +4287,14 @@ ${docsJson}`;
         //    좁혀서(`sap_prep_failed`의 기존 "다시 시도" 정규식과 같은 안전장치) "취소 관련
         //    업무를 물어보는" 같은 긴 문장을 오인하지 않는다.
         const INTERRUPT_RE = /^\s*(처음부터\s*(다시)?|취소|그만|중단|초기화|리셋|종료|멈춰|됐어|그만둬|그냥\s*(?:둬|놔둬?)|나가|포기|안\s*할|cancel|reset|restart|start\s*over|stop|quit|abort)(해|해줘|해주세요|할게|할게요|줘|주세요)?\s*[.!?~]*\s*$/i;
+        // ⚠️ persistent confirmBtns(자재 선택 팝업 등)은 "대기 중 draft"가 아님 — 항상 표시되는
+        //    빠른접근 도구이므로, SAP 사이드쿼리/INTERRUPT 판정에서 draft 취급하지 않는다.
+        //    포함하면 자재 팝업이 떠있는 동안 모든 SAP 조회가 _ganttQaRunSideQueryDuringDraft를
+        //    거쳐 "📌 진행 중이던 작업" 메시지가 반복 생성되는 문제 발생.
         const hasAnyActiveQaDraft = !!(window._ganttQaPoDraft || window._ganttQaBomDraft ||
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
-            window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons ||
+            window._ganttQaPendingChoiceDropdown ||
+            (window._ganttQaPendingConfirmButtons && !window._ganttQaPendingConfirmButtons.persistent) ||
             window._ganttQaPendingGrEbelnAsk || window._ganttQaApprovalAllFieldsForm ||
             window._ganttQaGrEbelnForm || window._ganttQaOperationInFlight);
         if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
