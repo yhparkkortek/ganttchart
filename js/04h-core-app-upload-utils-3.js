@@ -5619,9 +5619,9 @@ ${docsJson}`;
             }
         }
 
-        // 📦🚫🤖 [2026-10-01 신규] SE16N→MARD 직접 조회로 전체 플랜트 재고 반환.
-        //    MB52의 T133E 오류 없이 작동. 자재번호 + 재고 키워드 조합에서만 트리거
-        //    (재고 단독으론 업무 문맥과 겹칠 수 있어 자재번호 반드시 요구).
+        // 📦🚫🤖 [2026-10-01] MM03 회계1 LBKUM(일반평가데이타)로 전체 플랜트 재고 반환.
+        //    SE16N 권한 불필요, MB52 T133E 오류와 무관. 복수 자재번호 일괄조회 지원.
+        //    자재번호 + 재고 키워드 조합에서만 트리거(재고 단독으론 업무 문맥과 겹침).
         const _stockHit = window._sapCapKwHit
             ? window._sapCapKwHit(question, 'mardstock')
             : /(재고\s*수량|재고\s*확인|재고\s*조회|가용\s*재고)/.test(question);
@@ -5631,13 +5631,18 @@ ${docsJson}`;
                 window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
                 if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
             }
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP MARD에서 재고 수량을 조회하는 중...', 'Looking up stock quantity from SAP MARD...'), pending: true });
+            const _stockMatNums = _sapLookupNums.join(',');
+            const _stockLabel = _sapLookupNums.length > 1
+                ? window._t(`SAP에서 자재 ${_sapLookupNums.length}건 재고 조회 중...`, `Looking up stock for ${_sapLookupNums.length} materials...`)
+                : window._t('SAP MM03에서 재고 수량을 조회하는 중...', 'Looking up stock quantity from SAP MM03...');
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + _stockLabel, pending: true });
             window._renderGanttQaMessages();
+            const _stockTimeout = 45000 + (_sapLookupNums.length - 1) * 20000;
             let stockReply;
             try {
                 const res = await window._withTimeout(
-                    fetch('http://127.0.0.1:5000/sap-mard-stock?material=' + encodeURIComponent(_sapLookupNums[0])),
-                    45000, window._t('SAP 재고 조회 시간 초과', 'SAP stock lookup timed out')
+                    fetch('http://127.0.0.1:5000/sap-mard-stock?material=' + encodeURIComponent(_stockMatNums)),
+                    _stockTimeout, window._t('SAP 재고 조회 시간 초과', 'SAP stock lookup timed out')
                 );
                 const data = await res.json();
                 stockReply = data.ok ? data.text : ('⚠️ ' + (data.error || window._t('재고 조회 실패', 'Stock lookup failed')));

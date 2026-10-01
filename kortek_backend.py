@@ -2999,13 +2999,15 @@ def _call_gemini_with_tools(api_key, model, contents, tool_decls):
 
 @app.route('/sap-mard-stock', methods=['GET'])
 def sap_mard_stock():
-    # 💰 [2026-10-01 신규] SE16N → MARD 직접 조회로 자재 저장위치별/전체 재고 반환.
-    # MB52의 T133E 오류 없이 작동 — "자재번호 재고 수량 확인해줘" 트리거.
+    # 💰 [2026-10-01] MM03 '회계 1' LBKUM(일반평가데이타)로 전체 플랜트 재고 반환.
+    # SE16N 권한 불필요, MB52 T133E 오류와 무관. material에 쉼표로 복수 자재번호 가능.
     material = (request.args.get('material') or '').strip()
     werks = (request.args.get('werks') or '1000').strip()
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material)가 필요합니다.'}), 400
-    data, status = _run_sap_bridge(['query_mard_stock', material, werks], 45, 'SAP MARD 재고 조회')
+    n_mats = len([m for m in material.split(',') if m.strip()])
+    timeout = min(45 + (n_mats - 1) * 20, 120)
+    data, status = _run_sap_bridge(['query_mard_stock', material, werks], timeout, 'SAP 재고 조회(MM03)')
     return jsonify(data), status
 
 

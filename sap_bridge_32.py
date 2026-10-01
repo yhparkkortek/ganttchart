@@ -3911,145 +3911,92 @@ def _save_po_pdf_to_file(save_path):
     return save_path
 
 
-def query_mard_stock(matnr, werks='1000'):
-    """SE16N → MARD 테이블 직접 조회로 자재 저장위치별/전체 재고 수량 반환.
-    MB52의 T133E 오류와 무관하게 작동한다.
-    반환: {ok, matnr, werks, rows:[{lgort,labst,insme,einme,speme}], total_labst, text}"""
-    session = _get_sap_session()
-    _sap_close_stray_popups(session)
+def query_mard_stock(matnr_input, werks='1000'):
+    """MM03 '회계 1' 탭의 LBKUM(일반평가데이타 = 전체 플랜트 가치화 재고)를 읽어 반환.
+    SE16N 권한 불필요, MB52 T133E 오류와 무관하게 작동.
+    matnr_input에 쉼표로 여러 자재번호를 전달하면 순차 조회.
+    반환: {ok, results:[{matnr,werks,lbkum,text}], text}
+    실측: 2026-10-01 SE16N 권한 없어 MM03 회계1 방식으로 변경."""
+    matnr_list = [m.strip() for m in matnr_input.split(',') if m.strip()]
+    if not matnr_list:
+        raise RuntimeError('자재번호를 지정해주세요.')
 
-    # 1. SE16N 진입
-    session.findById('wnd[0]/tbar[0]/okcd').text = '/nSE16N'
-    wnd = session.findById('wnd[0]')
-    wnd.sendVKey(0)
-    time.sleep(0.8)
-    wnd = session.findById('wnd[0]')
-
-    # 2. 테이블 이름 입력 (ctxtGD-TAB)
-    tab_f = _set_text_on_best_candidate(wnd, 'GD-TAB', 'MARD')
-    if tab_f is None:
-        raise RuntimeError(
-            'SE16N 테이블 이름 입력 필드(GD-TAB)를 찾지 못했습니다. '
-            'SAP에서 SE16N 화면이 열려 있는지 확인하세요.'
-        )
-    wnd.sendVKey(0)   # Enter → MARD 필드 선택 화면 로드
-    time.sleep(1.0)
-    wnd = session.findById('wnd[0]')
-
-    # 3. MATNR 조건 입력
-    matnr_f = _set_text_on_best_candidate(wnd, 'MATNR', matnr)
-    if matnr_f is None:
-        raise RuntimeError(
-            f'SE16N MARD 선택 화면에서 MATNR 입력 필드를 찾지 못했습니다. '
-            f'화면 덤프("SAP 화면 덤프해줘")로 실제 필드 ID를 확인해주세요.'
-        )
-
-    # 4. WERKS 조건 입력 (실패해도 전체 플랜트 조회로 진행)
-    _set_text_on_best_candidate(wnd, 'WERKS', werks)
-
-    # 5. 실행 (F8)
-    wnd.sendVKey(8)
-    time.sleep(1.5)
-    wnd = session.findById('wnd[0]')
-
-    # 6. ALV 그리드 읽기
-    shell = _sap_find_grid(wnd)
-    if shell is None:
-        # 결과 없음 → 재고 0
-        return {
-            'ok': True, 'matnr': matnr, 'werks': werks,
-            'rows': [], 'total_labst': 0.0,
-            'text': f'자재 {matnr} 재고 없음 (플랜트 {werks})'
-        }
-
-    grid_text = _sap_dump_grid(shell)
-    if not grid_text:
-        return {
-            'ok': True, 'matnr': matnr, 'werks': werks,
-            'rows': [], 'total_labst': 0.0,
-            'text': f'자재 {matnr} 재고 데이터를 읽지 못했습니다.'
-        }
-
-    # 7. 헤더/셀 파싱
-    def _parse_sap_num(s):
-        s = (s or '').strip()
+    def _parse_lbkum(raw):
+        """SAP 독일식 숫자 파싱: "867.000"→867, "1.234,56"→1234.56"""
+        s = (raw or '').strip()
         if not s or s == '-':
             return 0.0
-        # 독일식 형식: "." = 천단위, "," = 소수점
         if '.' in s and ',' in s:
             return float(s.replace('.', '').replace(',', '.'))
         if ',' in s:
             return float(s.replace(',', '.'))
         if '.' in s:
             parts = s.split('.')
-            # "867.000" 형태 → 소수점 3자리 = 867
             if len(parts) == 2 and len(parts[1]) == 3:
-                return float(parts[0])
+                return float(parts[0])  # "867.000" → 867
             return float(s)
         try:
             return float(s)
         except Exception:
             return 0.0
 
-    lines = grid_text.split('\n')
-    headers = lines[0].split('\t') if lines else []
+    results = []
+    for matnr in matnr_list:
+        try:
+            session = _get_sap_session()
+            _sap_close_stray_popups(session)
+            wnd = session.findById('wnd[0]')
+            _navigate_to_material_screen(session, wnd, matnr)
 
-    def _ci(name):
-        for i, h in enumerate(headers):
-            if name.upper() in h.upper():
-                return i
-        return -1
+            found = _select_tab_with_retry(wnd, 'tabpSP24')  # "회계 1"
+            if not found:
+                results.append({
+                    'matnr': matnr, 'werks': werks, 'lbkum': None,
+                    'text': f'자재 {matnr}: "회계 1" 탭을 찾지 못했습니다 — 이 자재에 회계 뷰가 없을 수 있습니다.'
+                })
+                continue
 
-    lgort_i = _ci('LGORT')
-    labst_i = _ci('LABST')
-    insme_i = _ci('INSME')
-    einme_i = _ci('EINME')
-    speme_i = _ci('SPEME')
+            # 탭 전환 직후 서브화면이 바로 안 잡힐 수 있어 최대 6회 retry
+            lbkum_raw = None
+            for _attempt in range(6):
+                time.sleep(0.5)
+                wnd = session.findById('wnd[0]')
+                field = _find_by_id_substring(wnd, 'LBKUM')
+                if field is not None:
+                    lbkum_raw = str(field.Text).strip()
+                    break
 
-    rows = []
-    total_labst = 0.0
-    for line in lines[1:]:
-        if not line.strip() or line.startswith('...'):
-            continue
-        cells = line.split('\t')
+            if lbkum_raw is None:
+                results.append({
+                    'matnr': matnr, 'werks': werks, 'lbkum': None,
+                    'text': f'자재 {matnr}: "회계 1" 탭에서 LBKUM(재고수량) 필드를 찾지 못했습니다.'
+                })
+                continue
 
-        def _g(i):
-            return cells[i].strip() if 0 <= i < len(cells) else ''
+            lbkum_num = _parse_lbkum(lbkum_raw)
+            results.append({
+                'matnr': matnr, 'werks': werks, 'lbkum': lbkum_num,
+                'text': f'자재 {matnr} 재고 (플랜트 {werks}): {lbkum_raw} EA [MM03 회계1 일반평가데이타]'
+            })
+        except Exception as e:
+            results.append({
+                'matnr': matnr, 'werks': werks, 'lbkum': None,
+                'text': f'자재 {matnr} 조회 실패: {str(e)}'
+            })
 
-        lgort = _g(lgort_i)
-        if not lgort:
-            continue
-        labst = _parse_sap_num(_g(labst_i))
-        total_labst += labst
-        rows.append({
-            'lgort': lgort,
-            'labst': labst,
-            'insme': _parse_sap_num(_g(insme_i)),
-            'einme': _parse_sap_num(_g(einme_i)),
-            'speme': _parse_sap_num(_g(speme_i)),
-        })
-
-    # 8. 텍스트 요약 생성
-    if not rows:
-        text = f'자재 {matnr} 재고 없음 (플랜트 {werks})'
+    # 전체 요약 텍스트
+    if len(results) == 1:
+        combined_text = results[0]['text']
     else:
-        loc_lines = '\n'.join(
-            f'  • {r["lgort"]}: {r["labst"]:.0f} EA'
-            + (f' (검사중 {r["insme"]:.0f})' if r['insme'] else '')
-            for r in rows
-        )
-        text = (
-            f'자재 {matnr} 재고 (플랜트 {werks})\n'
-            f'{loc_lines}\n'
-            f'  ────────────────\n'
-            f'  합계: {total_labst:.0f} EA (저장위치 {len(rows)}개)\n'
-            f'\n[SE16N→MARD 직접 조회]'
-        )
+        lines = ['[MM03 회계1 재고 일괄조회]']
+        for r in results:
+            if r['lbkum'] is not None:
+                lines.append(f'  • {r["matnr"]}: {r["lbkum"]:.0f} EA')
+            else:
+                lines.append(f'  • {r["matnr"]}: 조회 실패')
+        combined_text = '\n'.join(lines)
 
-    return {
-        'ok': True, 'matnr': matnr, 'werks': werks,
-        'rows': rows, 'total_labst': total_labst, 'text': text
-    }
+    return {'ok': True, 'results': results, 'text': combined_text}
 
 
 def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000', currency='KRW'):
