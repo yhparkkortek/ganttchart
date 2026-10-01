@@ -1697,11 +1697,31 @@ def _open_material_from_current_list(wnd, material):
     return True
 
 
+def _is_material_already_open(wnd, material):
+    """현재 화면이 이미 MM03에서 해당 자재를 열어둔 탭 화면인지 확인한다.
+    RMMG1-MATNR 필드 값이 요청 자재번호와 일치하면 True — 탭만 전환하면 되므로 재진입 불필요.
+    /nMM03 재진입 시 "뷰 선택" 팝업이 뜨면 SAP가 차단되는 문제 방지(2026-10-01)."""
+    try:
+        field = _find_by_id_substring(wnd, 'RMMG1-MATNR')
+        if field is None:
+            return False
+        current = str(field.Text).strip().lstrip('0')
+        target = str(material).strip().lstrip('0')
+        return current == target and current != ''
+    except Exception:
+        return False
+
+
 def _navigate_to_material_screen(session, wnd, material):
     """MM03으로 이동해 지정한 자재번호를 조회한다(탭 선택은 호출부 몫) — 아래
     `_navigate_to_material_document_tab`의 "자재 열기" 부분만 떼어낸 공용 함수(2026-09-23,
     `fetch_material_price`에도 똑같은 열기 로직이 필요해서 분리했다). 나머지 동작·이유는
     그 함수 docstring 그대로."""
+    # ⚡ [2026-10-01] 이미 그 자재의 MM03 탭 화면이면 탭 전환만 하면 됨 — /nMM03 재진입 시
+    # "뷰 선택" 팝업이 뜨면 SAP 화면이 차단되어 35초 타임아웃으로 실패하던 문제 방지
+    if _is_material_already_open(wnd, material):
+        return
+
     if not _open_material_from_current_list(wnd, material):
         session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
         wnd.sendVKey(0)

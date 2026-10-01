@@ -1734,18 +1734,37 @@ ${question}
             else if (m.role === 'ai' && !m.pending) { m._aIdx = ++_aSeq; }
             else { m._aIdx = undefined; }
         });
-        // Q/A 번호 클릭 시 해당 메시지 내용을 입력창으로 복사하는 내용 맵
+        // Q/A 번호 클릭 시 접기/펼치기 + 입력창 복사
         window._ganttQaMsgContentMap = {};
+        window._ganttQaMsgKeyIndexMap = {}; // key → history 배열 인덱스 (접기 토글용)
         window._ganttQaCopyMsgToInput = function(key) {
             var content = window._ganttQaMsgContentMap && window._ganttQaMsgContentMap[key];
+            var idx = window._ganttQaMsgKeyIndexMap && window._ganttQaMsgKeyIndexMap[key];
+            if (idx !== undefined && window._ganttQaHistory && window._ganttQaHistory[idx]) {
+                var _msg = window._ganttQaHistory[idx];
+                if (_msg._collapsed) {
+                    // 접힌 상태 → 펼치기 (복사 없음)
+                    _msg._collapsed = false;
+                } else {
+                    // 열린 상태 → 접기 + 내용 복사
+                    _msg._collapsed = true;
+                    if (content) {
+                        var _el = document.getElementById('gantt-qa-input');
+                        if (_el) { _el.value = content; _el.focus(); }
+                    }
+                }
+                window._renderGanttQaMessages();
+                return;
+            }
+            // 인덱스 없을 때 폴백: 복사만
             if (!content) return;
             var el = document.getElementById('gantt-qa-input');
             if (el) { el.value = content; el.focus(); }
         };
-        box.innerHTML = window._ganttQaHistory.map(function(m) {
+        box.innerHTML = window._ganttQaHistory.map(function(m, _histIdx) {
             const isUser = m.role === 'user';
-            if (isUser && m._qIdx) window._ganttQaMsgContentMap['Q' + m._qIdx] = m.text;
-            else if (!isUser && m._aIdx) window._ganttQaMsgContentMap['A' + m._aIdx] = m.text;
+            if (isUser && m._qIdx) { window._ganttQaMsgContentMap['Q' + m._qIdx] = m.text; window._ganttQaMsgKeyIndexMap['Q' + m._qIdx] = _histIdx; }
+            else if (!isUser && m._aIdx) { window._ganttQaMsgContentMap['A' + m._aIdx] = m.text; window._ganttQaMsgKeyIndexMap['A' + m._aIdx] = _histIdx; }
             // 💡 [2026-08-29 버그 수정] 원색 파랑(#0056b3) 배경 + 흰 글자 조합이었는데, 대부분의 브라우저
             //    기본 텍스트 선택(드래그) 하이라이트도 비슷한 파란 계열이라 이미 파란 배경 위에서는
             //    "지금 어디까지 선택됐는지"가 거의 안 보였다 — 그래서 복사하려고 드래그해도 선택 범위를
@@ -1756,6 +1775,20 @@ ${question}
             const bg = _pal ? (isUser ? _pal.userBg : _pal.aiBg) : (isUser ? '#e7f3ff' : (m.error ? '#fff0f0' : '#f1f3f5'));
             const fg = (_pal && isUser) ? _pal.userFg : (isUser ? '#0056b3' : (m.error ? '#c92a2a' : '#333'));
             const _bd = _pal ? 'border:1px solid ' + _pal.accent + ';' : '';
+            // 접힌 상태 — 시퀀스번호 클릭으로 토글
+            const _msgKey = isUser ? (m._qIdx ? 'Q' + m._qIdx : null) : (m._aIdx ? 'A' + m._aIdx : null);
+            if (m._collapsed && _msgKey) {
+                const _prev = (m.text || '').replace(/\n+/g, ' ').slice(0, 70);
+                const _prevEsc = _prev.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const _seqLblC = isUser
+                    ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;padding-right:2px;cursor:pointer;" title="클릭: 펼치기" onclick="window._ganttQaCopyMsgToInput(\'' + _msgKey + '\')">' + _msgKey + '</div>'
+                    : '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;padding-left:2px;cursor:pointer;" title="클릭: 펼치기" onclick="window._ganttQaCopyMsgToInput(\'' + _msgKey + '\')">' + _msgKey + '</div>';
+                return '<div style="display:flex;flex-direction:column;align-items:' + (isUser ? 'flex-end' : 'flex-start') + ';margin-bottom:4px;">'
+                    + _seqLblC
+                    + '<div onclick="window._ganttQaCopyMsgToInput(\'' + _msgKey + '\')" style="max-width:82%;padding:3px 10px;border-radius:6px;' + _bd + 'background:' + bg + ';color:' + fg + ';font-size:11px;opacity:0.6;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:none;" title="클릭: 펼치기">'
+                    + _prevEsc + ((m.text || '').length > 70 ? '…' : '')
+                    + '</div></div>';
+            }
             const body = isUser
                 ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
                 : (function() {
@@ -1888,8 +1921,8 @@ ${question}
                 })()
                 : '';
             const _seqLabel = isUser
-                ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;padding-right:2px;cursor:pointer;" title="클릭: 이 질문을 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'Q' + m._qIdx + '\')">Q' + m._qIdx + '</div>' : '')
-                : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;padding-left:2px;cursor:pointer;" title="클릭: 이 답변을 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'A' + m._aIdx + '\')">A' + m._aIdx + '</div>' : '');
+                ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;padding-right:2px;cursor:pointer;" title="클릭: 접기 + 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'Q' + m._qIdx + '\')">Q' + m._qIdx + '</div>' : '')
+                : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;padding-left:2px;cursor:pointer;" title="클릭: 접기 + 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'A' + m._aIdx + '\')">A' + m._aIdx + '</div>' : '');
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 ${_seqLabel}
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; ${_bd} background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
