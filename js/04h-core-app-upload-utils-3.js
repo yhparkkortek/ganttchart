@@ -6216,6 +6216,90 @@ ${docsJson}`;
             return;
         }
 
+        // 📦 [2026-10-01 신규] 반납 입고 (MB21 907 + F00151 전기) 로컬 명령 (🚫🤖) ─────────────
+        if (/반납\s*입고|자재\s*반납/.test(question)) {
+            if (!_skipUserHistoryPush && window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            // 자재번호 파싱: 쉼표/공백 구분, 5~8자리 숫자
+            const _rrMatches = question.match(/\b\d{5,8}\b/g) || [];
+            // 수량: 숫자+EA 패턴
+            const _rrQtyMatches = question.match(/(\d+(?:\.\d+)?)\s*EA/gi) || [];
+            // 오더번호: 영문+숫자 혼합 or 10자리 숫자
+            const _rrOrderMatch = (question.match(/오더[\s:]*([A-Za-z0-9]{5,12})|order[\s:]*([A-Za-z0-9]{5,12})/i) || [])[1]
+                || (question.match(/\b[A-Za-z][A-Za-z0-9]{4,11}\b/) || [])[0];
+            // 저장위치: 4자리
+            const _rrLgortMatch = (question.match(/저장\s*위치[\s:]*(\d{4})|저장소[\s:]*(\d{4})|lgort[\s:]*(\d{4})/i) || []).slice(1).find(Boolean)
+                || (question.match(/\b\d{4}\b(?!\s*EA)/i) || [])[0];
+            // 텍스트
+            const _rrTextMatch = (question.match(/텍스트[\s:]*["']?(.+?)["']?(?:$|[,\n])/i) || [])[1]
+                || (question.match(/LNW>[^\s,]+/i) || [])[0];
+            const _rrItems = _rrMatches.map(function(m, i) {
+                var qty = (_rrQtyMatches[i] || '').replace(/EA/i, '').trim() || '1';
+                return { matnr: m, qty: qty, unit: 'EA', lgort: _rrLgortMatch || '5000' };
+            });
+            if (!_rrItems.length || !_rrOrderMatch) {
+                window._ganttQaHistory.push({ role: 'ai', text:
+                    '📦 반납 입고를 위해 다음 정보가 필요합니다:\n\n' +
+                    (!_rrItems.length ? '- **자재번호** (5~8자리 숫자, 쉼표 구분)\n' : '') +
+                    (!_rrOrderMatch ? '- **내부오더번호** (예: G2610OB, 오더 G2610OB)\n' : '') +
+                    '\n예: `502573, 502574 각 2EA 반납 입고 — 오더 G2610OB, 저장위치 5000`'
+                });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+            const _rrSummaryLines = _rrItems.map(function(it) {
+                return '  • ' + it.matnr + '  ' + it.qty + ' ' + it.unit + '  (저장위치 ' + (it.lgort || '5000') + ')';
+            });
+            window._ganttQaHistory.push({ role: 'ai', text:
+                '📦 **반납 입고** (이동유형 907 → 실전기)\n\n' +
+                _rrSummaryLines.join('\n') + '\n\n' +
+                '오더: **' + _rrOrderMatch + '**' +
+                (_rrTextMatch ? '\n텍스트: ' + _rrTextMatch : '') +
+                '\n\n진행하시려면 **"반납 입고 확인"** 이라고 입력해주세요.'
+            });
+            // 확인 대기 상태 저장
+            window._ganttQaPendingReturnReceipt = {
+                items: _rrItems, order_number: _rrOrderMatch,
+                lgort_default: _rrLgortMatch || '5000',
+                text: _rrTextMatch || null
+            };
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+        // 반납 입고 확인 → 실행
+        if (/반납\s*입고\s*확인/.test(question) && window._ganttQaPendingReturnReceipt) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            const _rrPending = window._ganttQaPendingReturnReceipt;
+            window._ganttQaPendingReturnReceipt = null;
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ 반납 입고 처리 중... (MB21 예약 생성 → F00151 전기, 1~2분 소요)' });
+            window._renderGanttQaMessages();
+            try {
+                const _rrRes = await fetch('/sap-return-receipt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(_rrPending)
+                });
+                const _rrData = await _rrRes.json();
+                if (_rrData.ok) {
+                    window._ganttQaHistory.push({ role: 'ai', text:
+                        '✅ 반납 입고 완료!\n\n' +
+                        '예약번호: **' + (_rrData.rsnum || '-') + '**\n' +
+                        (_rrData.material_document ? '자재 문서번호: **' + _rrData.material_document + '**\n' : '') +
+                        (_rrData.text || '')
+                    });
+                } else {
+                    window._ganttQaHistory.push({ role: 'ai', text: '❌ 반납 입고 실패: ' + (_rrData.error || JSON.stringify(_rrData)) });
+                }
+            } catch(e) {
+                window._ganttQaHistory.push({ role: 'ai', text: '❌ 백엔드 오류: ' + e.message });
+            }
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 🧪 [2026-09-30 신규] "입고일자 복사 시뮬" 로컬 명령(🚫🤖) —
         //    ZMM062 그리드에서 행 0 INDAT를 modifyCell로 복사 가능한지 검증.
         if (/입고.{0,6}날짜.*시뮬|indat.*시뮬|입고일자.*시뮬|zmm062.*indat.*시뮬|입고일자.*복사.*시뮬|gr.*indat.*sim/i.test(question)) {

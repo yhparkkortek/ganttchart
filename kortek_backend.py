@@ -3141,6 +3141,31 @@ def sap_mard_stock():
     return jsonify(data), status
 
 
+@app.route('/sap-return-receipt', methods=['POST'])
+def sap_return_receipt():
+    """반납 입고 전기 (MB21 이동유형 907 + F00151 실전기).
+    Body JSON: {items:[{matnr,qty,unit?,lgort?}], order_number, cost_center?,
+                lgort_default?, text?, rsdat?, wempf?}
+    ⚠️ 실제 SAP 전기 — AI 문답에서 사람이 확인 후만 호출."""
+    import json as _j
+    body = request.get_json(force=True, silent=True) or {}
+    items        = body.get('items') or []
+    order_number = (body.get('order_number') or '').strip()
+    cost_center  = (body.get('cost_center') or '').strip() or None
+    lgort        = (body.get('lgort_default') or '5000').strip()
+    text_arg     = (body.get('text') or '').strip() or None
+    rsdat_arg    = (body.get('rsdat') or '').strip() or None
+    wempf_arg    = (body.get('wempf') or '').strip() or None
+    if not items or not order_number:
+        return jsonify({'ok': False, 'error': 'items와 order_number가 필요합니다.'}), 400
+    items_json = _j.dumps(items, ensure_ascii=False)
+    data, status = _run_sap_bridge(
+        ['migo_return_receipt', items_json, order_number,
+         cost_center or '', lgort, text_arg or '', rsdat_arg or '', wempf_arg or ''],
+        timeout=120, label='반납 입고(MB21+F00151)')
+    return jsonify(data), status
+
+
 @app.route('/sap-mcp-health', methods=['GET'])
 def sap_mcp_health():
     """uvx / mcp-sap-gui 사용 가능 여부 빠른 확인."""

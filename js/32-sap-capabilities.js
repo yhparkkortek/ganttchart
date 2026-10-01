@@ -152,12 +152,16 @@
           kw: ['프로젝트 코드', '프로젝트코드', '프로젝트 번호', '프로젝트명', '프로젝트 이름', '내부오더'],
           needs: '패턴(예: *G26* / *STELLAR*) — 코드(오더) 또는 프로젝트명(내역)으로 검색, 대소문자 구분',
           ex: '*G26* 26년도 프로젝트 코드 조회해줘 / *STELLAR* 프로젝트명으로 찾아줘' },
-        // ⛔ 아직 미구현(적립용) — MB21의 본 용도. 어휘/이동유형은 위 SAP_MB21_MOVEMENT_TYPES 참고.
-        //    구현할 때 "조회"(projectcode)와 달리 **실제 SAP에 예약을 생성하는 쓰기 동작**이므로,
-        //    구매오더(po)처럼 사람 확인 단계를 반드시 거칠 것.
-        { id: 'mb21posting', title: '계정대체청구(개발 자재 출고/입고)', titleEn: 'Account reassignment request', tcode: 'MB21 (계정대체청구)', mode: 'write', verified: 'planned',
-          kw: ['계정대체청구서', '계정대체', '자재청구서', '자재청구', '자재출고', '자재입고', '자재반납', '반납입고'],
-          needs: '프로젝트코드·자재·수량 (+출고 951 / 입고 907)', ex: '(미구현) G2610OB 자재청구서 만들어줘' },
+        // 반납 입고 전체 자동화 (MB21 907 → F00151 실전기, 2026-10-01 구현)
+        { id: 'returnreceipt', title: '반납 입고 (MB21 907 + F00151 전기)', titleEn: 'Return goods receipt', tcode: 'MB21+F00151', mode: 'write', verified: 'live',
+          kw: ['반납 입고', '반납입고', '자재 반납', '자재반납'],
+          needs: '자재번호+수량(+단위/저장위치)+내부오더번호 (+텍스트 선택)',
+          ex: '502573, 502574 각 2EA 반납 입고 — 오더 G2610OB, 저장위치 5000, 텍스트 LNW>STELLAR_32>반납',
+          endpoint: '/sap-return-receipt' },
+        // ⛔ 아직 미구현(적립용) — MB21 출고(951) 쪽. 반납(907)은 위 returnreceipt로 구현됨.
+        { id: 'mb21posting', title: '계정대체청구(개발 자재 출고 951)', titleEn: 'Account reassignment request (issue)', tcode: 'MB21 (계정대체청구)', mode: 'write', verified: 'planned',
+          kw: ['계정대체청구서', '계정대체', '자재청구서', '자재청구', '자재출고'],
+          needs: '프로젝트코드·자재·수량 (출고 951)', ex: '(미구현) G2610OB 자재청구서 만들어줘' },
         { id: 'sapcancel', title: '진행 중인 SAP 작업 중단', titleEn: 'Cancel a running SAP operation', tcode: '-', mode: 'control', verified: 'live',
           kw: ['중단', '그만', '멈춰', '스톱', '패스', '완료', '다음', 'stop', 'cancel', 'pass', 'done', 'next'], needs: '없음(자재 여러 건 조회처럼 오래 걸리는 작업이 진행 중일 때)', ex: '그만' },
         { id: 'openfolder', title: 'SAP 저장 경로 폴더 열기', titleEn: 'Open SAP save folder', tcode: '-', mode: 'control', verified: 'live',

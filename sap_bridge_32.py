@@ -2882,6 +2882,313 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
             'truncated': len(rows) >= max_results}
 
 
+def _migo_post_by_reservation(session, rsnum, posting_date):
+    """F00151(예약 기반 반납 전기) Phase 2 — VBS 반납입고.vbs lines 216-234 재현."""
+    nav_ok = False
+    try:
+        session.findById(
+            'wnd[0]/usr/cntlIMAGE_CONTAINER/shellcont/shell/shellcont[0]/shell'
+        ).doubleClickNode('F00151')
+        time.sleep(1.0)
+        nav_ok = True
+    except Exception:
+        pass
+    if not nav_ok:
+        raise RuntimeError(
+            f'예약번호 {rsnum} 전기를 위해 F00151 즐겨찾기를 찾지 못했습니다. '
+            'SAP Easy Access에서 F00151 즐겨찾기가 있는지 확인해주세요.')
+
+    wnd = session.findById('wnd[0]')
+    try:
+        rsnum_field = wnd.findById('usr/txtRSNUM-LOW')
+        rsnum_field.text = str(rsnum)
+        rsnum_field.setFocus()
+        rsnum_field.caretPosition = len(str(rsnum))
+    except Exception as e:
+        raise RuntimeError(f'예약번호(RSNUM-LOW) 입력칸을 찾지 못했습니다: {e}')
+
+    session.findById('wnd[0]/tbar[1]/btn[8]').press()   # F8 실행
+    time.sleep(1.2)
+
+    # 전기일자 F4 설정 (VBS line 220-222)
+    try:
+        session.findById('wnd[0]').sendVKey(4)
+        time.sleep(0.5)
+        cal = session.findById('wnd[1]/usr/cntlCONTAINER/shellcont/shell')
+        cal.focusDate = posting_date
+        cal.selectionInterval = f'{posting_date},{posting_date}'
+        time.sleep(0.3)
+    except Exception:
+        pass
+
+    session.findById('wnd[0]/tbar[1]/btn[8]').press()   # F8 재실행 (VBS line 223)
+    time.sleep(1.2)
+
+    # 전체 선택 후 전기 (VBS lines 224-232)
+    try:
+        grid = session.findById('wnd[0]/shellcont/shell')
+        grid.setCurrentCell(-1, '')
+        grid.selectAll()
+        session.findById('wnd[0]/tbar[1]/btn[13]').press()   # 전기
+        time.sleep(1.0)
+    except Exception as e:
+        raise RuntimeError(f'전기 버튼 실행 실패: {e}')
+
+    # 확인 팝업 (VBS lines 231-232)
+    try:
+        session.findById('wnd[1]/tbar[0]/btn[13]').press()
+        time.sleep(0.5)
+        session.findById('wnd[1]/tbar[0]/btn[86]').press()
+        time.sleep(1.0)
+    except Exception:
+        pass
+
+    sbar = ''
+    mat_doc = None
+    try:
+        sbar = (session.findById('wnd[0]/sbar').Text or '').strip()
+        import re as _re
+        m = _re.search(r'(\d{9,10})', sbar)
+        if m:
+            mat_doc = m.group(1)
+    except Exception:
+        pass
+
+    # 뒤로 2번 (VBS lines 233-234)
+    for _ in range(2):
+        try:
+            session.findById('wnd[0]/tbar[0]/btn[3]').press()
+            time.sleep(0.3)
+        except Exception:
+            break
+
+    return {
+        'ok': True,
+        'material_document': mat_doc,
+        'sbar': sbar,
+        'text': (f'반납 입고 전기 완료 — 자재 문서번호: {mat_doc}'
+                 if mat_doc else f'전기 후 문서번호 확인 필요. (상태바: {sbar})')
+    }
+
+
+def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
+                         lgort_default='5000', text=None, rsdat=None, bwart='907',
+                         wempf=None):
+    """반납 입고 전체 자동화: MB21 반납 예약(이동유형 907) 생성 + F00151 실전기.
+    실사용 VBS "반납입고.vbs" 기반(2026-10-01).
+    ⚠️ 실제 SAP 전기(재고/회계 영향) — 사람이 확인 후 호출할 것.
+
+    items: [{matnr, qty, unit?, lgort?}]  ex) [{'matnr':'502573','qty':'2','unit':'EA'}]
+    order_number: 내부오더번호 (직접 입력, 필수)
+    cost_center: 원가센터 (None이면 F4 첫번째)
+    lgort_default: items에 lgort 없을 때 기본 저장위치
+    text: 품목텍스트 (ex. 'LNW>STELLAR_32>PROTO B 반납')
+    rsdat: 전기일자 YYYYMMDD (None이면 오늘)
+    반환: {ok, rsnum, material_document, text}
+    """
+    if not items:
+        raise RuntimeError('자재 목록(items)이 비어 있습니다.')
+    if not order_number:
+        raise RuntimeError('내부오더번호(order_number)를 지정해주세요.')
+
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    posting_date = str(rsdat or time.strftime('%Y%m%d'))
+
+    # ── Phase 1: MB21 반납 예약 생성 (이동유형 907) ───────────────────────────
+    nav_ok = False
+    try:
+        session.findById(
+            'wnd[0]/usr/cntlIMAGE_CONTAINER/shellcont/shell/shellcont[0]/shell'
+        ).doubleClickNode('F00150')
+        time.sleep(1.0)
+        nav_ok = True
+    except Exception:
+        pass
+    if not nav_ok:
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB21'
+        session.findById('wnd[0]').sendVKey(0)
+        time.sleep(1.0)
+
+    wnd = session.findById('wnd[0]')
+    _set_text_on_best_candidate(wnd, 'RM07M-RSDAT', posting_date)
+    _set_text_on_best_candidate(wnd, 'RM07M-BWART', str(bwart))
+    _set_text_on_best_candidate(wnd, 'RM07M-WERKS', werks)
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[7]').press()
+    except Exception as e:
+        raise RuntimeError(f'MB21 다음 화면(계정지정) 이동 실패: {e}')
+    time.sleep(1.0)
+
+    wnd = session.findById('wnd[0]')
+    sbar_check = ''
+    try:
+        sbar_check = (session.findById('wnd[0]/sbar').Text or '').strip()
+    except Exception:
+        pass
+    if sbar_check and ('오류' in sbar_check or '필수' in sbar_check):
+        raise RuntimeError(f'MB21 화면 이동 중 오류: {sbar_check}')
+
+    # 원가센터
+    if cost_center:
+        try:
+            _set_text_on_best_candidate(wnd, 'COBL-KOSTL', cost_center)
+            wnd.sendVKey(0)
+            time.sleep(0.3)
+        except Exception:
+            pass
+    else:
+        # F4 → 첫번째 항목 (VBS line 65-68)
+        try:
+            kostl_fld = None
+            for cand in _find_all_by_id_substring(wnd, 'COBL-KOSTL'):
+                if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                    kostl_fld = cand
+                    break
+            if kostl_fld:
+                kostl_fld.setFocus()
+                kostl_fld.caretPosition = 0
+                wnd.sendVKey(4)
+                time.sleep(0.8)
+                try:
+                    session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9
+                    session.findById('wnd[1]').sendVKey(2)
+                    time.sleep(0.4)
+                except Exception:
+                    try:
+                        session.findById('wnd[1]').sendVKey(12)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    # 내부오더
+    wnd = session.findById('wnd[0]')
+    aufnr_fld = None
+    for cand in _find_all_by_id_substring(wnd, 'COBL-AUFNR'):
+        if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+            aufnr_fld = cand
+            break
+    if aufnr_fld is None:
+        raise RuntimeError('MB21에서 내부오더(COBL-AUFNR) 입력칸을 찾지 못했습니다.')
+    aufnr_fld.text = str(order_number)
+    aufnr_fld.setFocus()
+    wnd.sendVKey(0)
+    time.sleep(0.5)
+
+    # 수령인
+    if wempf:
+        try:
+            _set_text_on_best_candidate(wnd, 'WEMPF', wempf)
+        except Exception:
+            pass
+
+    # YYDEVTYPE (개발유형) — F4 첫번째 항목 (VBS lines 131-136)
+    try:
+        wnd = session.findById('wnd[0]')
+        more_btn = _find_by_id_substring(wnd, 'COBL_MORE')
+        if more_btn:
+            more_btn.press()
+            time.sleep(0.8)
+            wnd1 = session.findById('wnd[1]')
+            devtype_fld = None
+            try:
+                devtype_fld = _find_by_id_substring(wnd1, 'YYDEVTYPE')
+            except Exception:
+                pass
+            if devtype_fld and devtype_fld.Changeable:
+                devtype_fld.setFocus()
+                devtype_fld.caretPosition = 0
+                wnd1.sendVKey(4)
+                time.sleep(0.8)
+                try:
+                    session.findById('wnd[2]').sendVKey(2)  # 첫번째 선택
+                    time.sleep(0.4)
+                except Exception:
+                    try:
+                        session.findById('wnd[2]').sendVKey(12)
+                    except Exception:
+                        pass
+            try:
+                session.findById('wnd[1]/tbar[0]/btn[0]').press()
+                time.sleep(0.5)
+            except Exception:
+                try:
+                    session.findById('wnd[1]').sendVKey(0)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # 자재 입력 (VBS lines 137-199: RESB-MATNR/ERFMG/ERFME/LGORT 테이블)
+    wnd = session.findById('wnd[0]')
+    sub_path = 'usr/sub:SAPMM07R:0521/'
+    for i, item in enumerate(items):
+        matnr = str(item.get('matnr', '')).strip()
+        qty   = str(item.get('qty', '')).strip()
+        unit  = str(item.get('unit', 'EA')).strip()
+        ilgort = str(item.get('lgort', lgort_default)).strip()
+        if not matnr or not qty:
+            continue
+        for fld_path, val in [
+            (f'{sub_path}ctxtRESB-MATNR[{i},7]',  matnr),
+            (f'{sub_path}txtRESB-ERFMG[{i},26]',  qty),
+            (f'{sub_path}ctxtRESB-ERFME[{i},44]', unit),
+            (f'{sub_path}ctxtRESB-LGORT[{i},53]', ilgort),
+        ]:
+            try:
+                fld = wnd.findById(fld_path)
+                fld.text = val
+            except Exception:
+                try:
+                    _set_text_on_best_candidate(wnd, fld_path.split('/')[-1].split('[')[0], val)
+                except Exception:
+                    pass
+
+    wnd.sendVKey(0)
+    time.sleep(0.5)
+
+    # 품목 텍스트 (VBS lines 203-209: btn[11] → RESB-SGTXT → btn[3])
+    if text:
+        try:
+            wnd = session.findById('wnd[0]')
+            session.findById('wnd[0]/tbar[0]/btn[11]').press()
+            time.sleep(0.5)
+            wnd = session.findById('wnd[0]')
+            _set_text_on_best_candidate(wnd, 'RESB-SGTXT', text)
+            wnd.sendVKey(0)
+            time.sleep(0.3)
+            session.findById('wnd[0]/tbar[0]/btn[3]').press()  # 뒤로
+            time.sleep(0.5)
+        except Exception:
+            pass
+
+    # 저장 → 예약번호 생성 (F11 = Ctrl+S)
+    session.findById('wnd[0]').sendVKey(11)
+    time.sleep(1.5)
+
+    rsnum = None
+    sbar_save = ''
+    try:
+        sbar_save = (session.findById('wnd[0]/sbar').Text or '').strip()
+        import re as _re
+        m = _re.search(r'(\d{7,10})', sbar_save)
+        if m:
+            rsnum = m.group(1)
+    except Exception:
+        pass
+    if not rsnum:
+        raise RuntimeError(
+            f'MB21 저장 후 예약번호를 확인하지 못했습니다. (상태바: "{sbar_save}")\n'
+            '이동유형/오더번호/원가센터가 올바른지 확인해주세요.')
+
+    # ── Phase 2: 예약 기반 실전기 (F00151) ───────────────────────────────────
+    result = _migo_post_by_reservation(session, rsnum, posting_date)
+    result['rsnum'] = rsnum
+    return result
+
+
 def download_documents_by_pattern(pattern, doc_type='P01'):
     """자재내역 와일드카드 패턴으로 매치된 자재 전부의 문서를 다운로드한다 —
     `resolve_materials_by_description_pattern`으로 자재번호 목록을 구한 뒤, 이미 검증된
@@ -5191,6 +5498,18 @@ def main():
             fperbl = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else '1'
             tperbl = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else '12'
             result = fetch_team_budget(team, fperbl, tperbl)
+        elif action == 'migo_return_receipt':
+            import json as _json2
+            items_arg   = _json2.loads(sys.argv[2]) if len(sys.argv) > 2 else []
+            order_arg   = sys.argv[3] if len(sys.argv) > 3 else ''
+            cost_center = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            lgort_arg   = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else '5000'
+            text_arg    = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6].strip() else None
+            rsdat_arg   = sys.argv[7] if len(sys.argv) > 7 and sys.argv[7].strip() else None
+            wempf_arg   = sys.argv[8] if len(sys.argv) > 8 and sys.argv[8].strip() else None
+            result = migo_return_receipt(
+                items_arg, order_arg, cost_center=cost_center,
+                lgort_default=lgort_arg, text=text_arg, rsdat=rsdat_arg, wempf=wempf_arg)
         elif action == 'post_goods_receipt':
             ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
             _dump_flag = '--dump-only' in sys.argv
