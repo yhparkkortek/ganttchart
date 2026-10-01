@@ -415,4 +415,9 @@
         if (cls === 'general') route.skipProject = true;
         return { handled: false, route: route };
     };
+
+    // [2026-10-01] 하드코딩 SAP 실패 후 "[mcp_retry]" 버튼이 직접 호출하는 공개 진입점
+    window._qaRunUnsupported = function(question, input, route, cls) {
+        return runUnsupported(question, input, route || { cls: 'sap', forced: true, conf: true, scores: {}, reasons: ['mcp_retry'] }, cls || 'sap');
+    };
 })();
