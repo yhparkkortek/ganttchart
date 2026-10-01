@@ -5579,15 +5579,27 @@ ${docsJson}`;
         //    SAP 검색은 대소문자를 구분하므로 결과/실패 안내에 그 사실을 함께 알려준다.
         const _projCodeRe = /프로젝트\s*(코드|번호|명|이름)|프로젝트.*(내역|설명)/;
         if (_projCodeRe.test(question)) {
-            // 패턴 추출: "*G26*"처럼 별표가 있으면 그대로, 없으면 "G26"류 토큰을 찾아 감싼다.
+            // 패턴 추출: "*G26*"처럼 별표가 있으면 그대로, 없으면 토큰을 찾아 자동으로 감싼다.
+            // MCP 연결 후 사용자가 * 없이 말해도 되도록 — SAP DB 자체의 부분매칭 구문(*)은
+            // 코드가 대신 붙여준다.
             let _pcPattern = (question.match(/[A-Za-z0-9_\-/.]*\*[A-Za-z0-9_\-/.*]*/) || [])[0] || '';
             if (!_pcPattern) {
+                // 숫자 포함 코드: G26, G2610OB 등
                 const _tok = question.match(/\b([A-Za-z]{1,3}\d{2,}[A-Za-z0-9]*)\b/);
                 if (_tok) _pcPattern = '*' + _tok[1] + '*';
             }
             if (!_pcPattern) {
+                // "26년도" → *G26*
                 const _yr = question.match(/(\d{2})\s*년도?/);
-                if (_yr) _pcPattern = '*G' + _yr[1] + '*';   // "26년도 프로젝트 코드" → *G26*
+                if (_yr) _pcPattern = '*G' + _yr[1] + '*';
+            }
+            if (!_pcPattern) {
+                // 순수 영문 코드(STELLAR, LNW, KORTEK 등) — 3자 이상 영문 토큰을 자동으로 감싼다.
+                // 조회 동사/일반 영어는 제외.
+                const _pcExclude = /^(project|code|sap|find|search|lookup|the|and|or|for|of|in|by|to)$/i;
+                const _engToks = (question.match(/\b([A-Z][A-Za-z0-9]{2,})\b/g) || [])
+                    .filter(function(t) { return !_pcExclude.test(t); });
+                if (_engToks.length > 0) _pcPattern = '*' + _engToks[0] + '*';
             }
             if (_pcPattern) {
                 // 🆕 [2026-09-28 사용자 지적] 코드(오더)로 찾을지 프로젝트명(내역)으로 찾을지는
@@ -5622,8 +5634,8 @@ ${docsJson}`;
                         // 백엔드가 0건이면 반대쪽으로 자동 재검색하므로, 실제로 찾은 쪽(data.by)을 표시한다.
                         const _usedKo = (data.by === 'desc') ? '프로젝트명(내역)' : '프로젝트 코드(오더)';
                         _pcReply = `🗂 ${_usedKo} "${data.pattern}" — ${items.length}${window._t('건', '')}\n` + lines.join('\n')
-                            + '\n\n💡 ' + window._t('SAP 검색은 대소문자를 구분합니다 — 영문은 대문자로 넣으세요(예: *STELLAR*).',
-                                                   'SAP search is case-sensitive — use uppercase (e.g. *STELLAR*).');
+                            + '\n\n💡 ' + window._t('SAP 검색은 대소문자를 구분합니다 — 영문은 대문자로 넣으세요. * 없이 "STELLAR 프로젝트 코드 조회해줘"처럼 말해도 자동으로 *STELLAR*로 검색됩니다.',
+                                                   'SAP search is case-sensitive — use uppercase for English. You can omit * (e.g. "STELLAR project code") and it will be auto-wrapped as *STELLAR*.');
                     } else {
                         _pcReply = '⚠️ ' + (data.error || window._t('프로젝트 코드 조회 실패', 'Project code lookup failed'));
                     }
