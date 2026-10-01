@@ -1650,6 +1650,15 @@ ${question}
             html += '</tr>';
         });
         html += '</tbody></table></div>';
+        // 엑셀 내보내기 버튼 — _lastBomData가 있을 때 유효
+        html += '<div style="margin-top:5px; text-align:right;">'
+            + '<button onclick="(function(){var el=document.getElementById(\'gantt-qa-input\');if(!el)return;'
+            + 'el.value=\'BOM 엑셀로 열기\';'
+            + 'var sb=document.getElementById(\'gantt-qa-send-btn\');'
+            + 'if(sb)sb.click();else if(window.sendGanttQaMessage)window.sendGanttQaMessage();})()" '
+            + 'style="font-size:11.5px; padding:3px 10px; border:1px solid #bbb; border-radius:4px; background:#f5f7fa; cursor:pointer;">📊 '
+            + (window._currentLang === 'en' ? 'Open as Excel' : '엑셀로 열기')
+            + '</button></div>';
         return html;
     };
 
@@ -1670,7 +1679,8 @@ ${question}
         );
         window._ganttQaShowConfirmButtons(
             (en ? 'Material ' : '자재 ') + matnr + (en ? ' — what would you like to do?' : ' — 무엇을 조회할까요?'),
-            buttons
+            buttons,
+            { persistent: true }
         );
         window._renderGanttQaMessages();
     };

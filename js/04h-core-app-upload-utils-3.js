@@ -821,7 +821,8 @@
     window._ganttQaSubmitConfirmButton = function(id, value) {
         const draft = window._ganttQaPendingConfirmButtons;
         if (!draft || draft.id !== id) return;
-        window._ganttQaPendingConfirmButtons = null;
+        // persistent 버튼은 클릭 후에도 사라지지 않음 — 마음이 바뀌어 다른 선택 가능
+        if (!draft.persistent) window._ganttQaPendingConfirmButtons = null;
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
         input.value = value;
@@ -831,9 +832,10 @@
     // 호출부 공용 헬퍼 — text와 buttons를 넘기면 draft 등록 + choiceDropdown과 동일한 패턴으로
     // 히스토리에 confirmButtonsId를 실어 푸시까지 한 번에 처리(호출부가 매번 id를 직접 만들
     // 필요 없게).
-    window._ganttQaShowConfirmButtons = function(text, buttons) {
+    // opts.persistent: true 이면 클릭 후에도 버튼이 사라지지 않음(BOM 보기 전환 등 재사용 가능 선택지)
+    window._ganttQaShowConfirmButtons = function(text, buttons, opts) {
         const id = 'qa-confirm-' + Date.now();
-        window._ganttQaPendingConfirmButtons = { id: id, buttons: buttons };
+        window._ganttQaPendingConfirmButtons = { id: id, buttons: buttons, persistent: !!(opts && opts.persistent) };
         window._ganttQaHistory.push({ role: 'ai', confirmButtonsId: id, text: text });
     };
 
@@ -5297,11 +5299,13 @@ ${docsJson}`;
                     const _bLines = _bBody.split('\n').filter(function(l) { return l.length > 0 && !/^\.\.\.\s*\(/.test(l); });
                     const _bDataRows = Math.max(0, _bLines.length - 1);
                     const _bMatNums = (question.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
-                    _bomIsComplex = _bDataRows > 30 || _bMatNums.length >= 2;
+                    // 행수 제한 없음 — 자재 2건 이상일 때만 complex(confirm 버튼 경로)
+                    _bomIsComplex = _bMatNums.length >= 2;
+                    // _lastBomData는 단일 자재 대량 BOM도 포함해 항상 저장 — "BOM 엑셀로 열기" 공통 사용
+                    window._lastBomData = { sapText: _bomFetchedText, queriedAt: Date.now(), matNums: _bMatNums, dataRows: _bDataRows,
+                        bomMeta: (window._lastSapFetchResult && window._lastSapFetchResult.bomMeta) || null };
+                    window._lastBomFilteredData = null;
                     if (_bomIsComplex) {
-                        window._lastBomData = { sapText: _bomFetchedText, queriedAt: Date.now(), matNums: _bMatNums, dataRows: _bDataRows,
-                            bomMeta: (window._lastSapFetchResult && window._lastSapFetchResult.bomMeta) || null };
-                        window._lastBomFilteredData = null; // 새 BOM 로드 시 이전 필터 결과 초기화
                         bomReply = null; // 아래에서 confirm 버튼으로 표시
                     } else {
                         _bomUseInteractive = true; // rawHtml 인터랙티브 표로 표시
@@ -5328,7 +5332,7 @@ ${docsJson}`;
                 window._ganttQaShowConfirmButtons(_bSummary, [
                     { label: '📊 엑셀로 열기', value: 'BOM 엑셀로 열기', style: 'confirm' },
                     { label: '💬 채팅창에 전체 보기', value: 'BOM 전체 내용 채팅창에 보여줘', style: 'neutral' }
-                ]);
+                ], { persistent: true });
             }
             window._renderGanttQaMessages();
             input.focus();
@@ -5405,8 +5409,10 @@ ${docsJson}`;
                     window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
                     if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
                 }
-                const _bFullReply = window._ganttQaFormatSapGridReply(window._lastBomData.sapText);
-                window._ganttQaHistory.push({ role: 'ai', text: _bFullReply });
+                const _bFullHtml = window._renderBomAsInteractiveHtml && window._renderBomAsInteractiveHtml(window._lastBomData.sapText);
+                window._ganttQaHistory.push(_bFullHtml
+                    ? { role: 'ai', text: _bFullHtml, rawHtml: true }
+                    : { role: 'ai', text: window._ganttQaFormatSapGridReply(window._lastBomData.sapText) });
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
