@@ -886,6 +886,13 @@
                 } else {
                     console.info('[저장 계측]', _idxChanged ? '변경사항 없음' : '인덱스 관련 필드 불변', '— project_index.json 갱신 생략');
                 }
+                // [2026-10-02] 보류 큐 flush — 현재 프로젝트 외 다른 프로젝트 학습 데이터를 각 Drive 파일에 PATCH
+                //   fire-and-forget: 실패해도 pending에 남아 다음 저장 때 재시도, 저장 결과에 영향 없음
+                if (window._alFlushPending) {
+                    window._alFlushPending(token).catch(function(e) {
+                        console.warn('[AI학습 flush] 예외 (다음 저장 때 재시도):', e.message);
+                    });
+                }
                 // 💡 [팀 폴더] 기존 파일(fileId 있음) 재저장 시 — 팀 폴더로 이동 (fire-and-forget, 저장 결과에 영향 없음)
                 const _existingFileTeam = (window.projectMeta || {}).팀 || '';
                 if (fileId && _existingFileTeam && window._moveFileToTeamFolder) {

@@ -16,12 +16,21 @@
 (function() {
     var _AL_KEY  = 'gantt_ai_learning_v1';
     var _RQ_KEY  = 'gantt_ai_reassign_queue_v1';
+    // [2026-10-02] 현재 열린 프로젝트 외 다른 프로젝트에 귀속된 학습 데이터 보류 큐
+    //   어느 프로젝트 저장 시마다 _alFlushPending(token)이 이 큐를 소진 → 각 Drive 파일에 headless PATCH
+    var _PQ_KEY  = 'gantt_ai_learning_pending_v1';
 
     function _getStore() {
         try { return JSON.parse(localStorage.getItem(_AL_KEY)) || {}; } catch(e) { return {}; }
     }
     function _saveStore(store) {
         try { localStorage.setItem(_AL_KEY, JSON.stringify(store)); } catch(e) {}
+    }
+    function _getPQ() {
+        try { return JSON.parse(localStorage.getItem(_PQ_KEY)) || []; } catch(e) { return []; }
+    }
+    function _savePQ(arr) {
+        try { localStorage.setItem(_PQ_KEY, JSON.stringify(arr.slice(0, 300))); } catch(e) {}
     }
 
     /** 프로젝트 키별 학습 항목 배열 반환 (최신순, 최대 200개) */
@@ -37,14 +46,28 @@
      */
     window._writeLearningEntry = function(projectKey, entry) {
         if (!projectKey || !entry) return;
+        var currentKey = window.currentDriveFileId || window.currentDriveFileName || '';
+        // [2026-10-02] __unclassified__: 현재 열린 프로젝트로 귀속 — 다음 저장 시 Drive 반영 보장
+        var effectiveKey = (projectKey === '__unclassified__')
+            ? (currentKey || '__unclassified__') : projectKey;
         var store = _getStore();
-        if (!store[projectKey]) store[projectKey] = [];
+        if (!store[effectiveKey]) store[effectiveKey] = [];
         entry.id = entry.id || (Date.now() + '_' + Math.random().toString(36).slice(2, 7));
         entry.ts = entry.ts || new Date().toISOString();
-        store[projectKey].unshift(entry);                          // 최신순 prepend
-        if (store[projectKey].length > 200) store[projectKey] = store[projectKey].slice(0, 200);
+        store[effectiveKey].unshift(entry);                        // 최신순 prepend
+        if (store[effectiveKey].length > 200) store[effectiveKey] = store[effectiveKey].slice(0, 200);
         _saveStore(store);
-        console.log('[AI학습] 기록 완료:', entry.type, '/', projectKey, '/', entry.taskName);
+        console.log('[AI학습] 기록 완료:', entry.type, '/', effectiveKey, '/', entry.taskName);
+        // [2026-10-02] 현재 프로젝트와 다른 fileId에 귀속 → 보류 큐에 추가, 다음 저장 때 headless PATCH
+        if (effectiveKey && effectiveKey !== currentKey && effectiveKey !== '__unclassified__') {
+            var pq = _getPQ();
+            // 중복 방지: 같은 id가 이미 있으면 추가하지 않음
+            if (!pq.some(function(p) { return p.entry && p.entry.id === entry.id; })) {
+                pq.unshift({ projectKey: effectiveKey, entry: entry });
+                _savePQ(pq);
+                console.log('[AI학습 pending] 큐 추가:', effectiveKey, '현재 보류:', pq.length, '건');
+            }
+        }
         // Phase 4: 학습 갱신 시 저신뢰도 큐 재분석 트리거
         _alTriggerRetry();
     };
@@ -643,5 +666,95 @@
         _saveStore(store);
         console.log('[AI학습 Phase 3] Drive 병합 완료:', merged.length, '건 /', key,
                     '(Drive:', driveEntries.length, '+ Local:', local.length, ')');
+    };
+
+    // [2026-10-02] Phase 3 확장 — 어느 프로젝트 저장 직후 호출, 보류 큐 소진.
+    //   현재 프로젝트(이미 saveData.aiLearning에 포함)는 건너뛰고,
+    //   나머지 projectKey별로 Drive 파일 GET → aiLearning 병합 → PATCH.
+    //   실패 항목은 큐에 남아 다음 저장 때 재시도.
+    window._alFlushPending = async function(token) {
+        if (!token) return;
+        var pq = _getPQ();
+        if (!pq.length) return;
+
+        var currentKey = window.currentDriveFileId || window.currentDriveFileName || '';
+
+        // 현재 프로젝트에 해당하는 항목은 saveData.aiLearning에 이미 포함됨 → pending에서 제거
+        var currentItems = pq.filter(function(p) { return p.projectKey === currentKey; });
+        if (currentItems.length) {
+            var curIds = new Set(currentItems.map(function(p) { return p.entry && p.entry.id; }));
+            pq = pq.filter(function(p) { return !curIds.has(p.entry && p.entry.id); });
+            _savePQ(pq);
+        }
+
+        // 나머지: 다른 프로젝트 fileId별 그룹
+        var groups = {};
+        pq.forEach(function(p) {
+            if (!p.projectKey || p.projectKey === '__unclassified__') return;
+            if (!groups[p.projectKey]) groups[p.projectKey] = [];
+            groups[p.projectKey].push(p.entry);
+        });
+        if (!Object.keys(groups).length) return;
+
+        var flushedEntryIds = [];
+        var maxTargets = 3; // API 콜 제한 — 다음 저장에서 나머지 처리
+
+        for (var fileId in groups) {
+            if (flushedEntryIds.length >= maxTargets * 50) break; // 안전장치
+            if (Object.keys(groups).indexOf(fileId) >= maxTargets) break;
+            try {
+                // 1. Drive 파일 GET (전체 JSON)
+                var getRes = await fetch(
+                    'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media&supportsAllDrives=true',
+                    { headers: { Authorization: 'Bearer ' + token } }
+                );
+                if (!getRes.ok) {
+                    console.warn('[AI학습 flush] GET 실패 (다음 저장 때 재시도):', fileId, getRes.status);
+                    continue;
+                }
+                var driveJson = await getRes.json();
+
+                // 2. aiLearning 병합 (id 중복 제거)
+                var existing = driveJson.aiLearning || [];
+                var existingIds = new Set(existing.map(function(e) { return e.id; }));
+                var newEntries = groups[fileId].filter(function(e) { return e && !existingIds.has(e.id); });
+                if (!newEntries.length) {
+                    // 이미 Drive에 있음 → pending에서만 제거
+                    groups[fileId].forEach(function(e) { if (e && e.id) flushedEntryIds.push(e.id); });
+                    continue;
+                }
+                driveJson.aiLearning = newEntries.concat(existing).slice(0, 200);
+
+                // 3. Drive PATCH (aiLearning만 업데이트하지만 전체 JSON을 올려야 함)
+                var patchRes = await fetch(
+                    'https://www.googleapis.com/upload/drive/v3/files/' + fileId +
+                        '?uploadType=media&supportsAllDrives=true',
+                    {
+                        method: 'PATCH',
+                        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(driveJson)
+                    }
+                );
+                if (patchRes.ok) {
+                    groups[fileId].forEach(function(e) { if (e && e.id) flushedEntryIds.push(e.id); });
+                    console.log('[AI학습 flush] 완료:', fileId, '+' + newEntries.length + '건 →',
+                        driveJson.projects ? driveJson.projects[0] && (driveJson.projects[0]['모델명'] || fileId) : fileId);
+                } else {
+                    console.warn('[AI학습 flush] PATCH 실패 (다음 저장 때 재시도):', fileId, patchRes.status);
+                }
+            } catch(e) {
+                console.warn('[AI학습 flush] 오류 (다음 저장 때 재시도):', fileId, e.message);
+            }
+        }
+
+        // 성공한 항목 pending에서 제거
+        if (flushedEntryIds.length) {
+            var flushedSet = new Set(flushedEntryIds);
+            _savePQ(_getPQ().filter(function(p) {
+                return !flushedSet.has(p.entry && p.entry.id);
+            }));
+            console.log('[AI학습 flush] 보류 큐 소진:', flushedEntryIds.length, '건. 잔여:',
+                _getPQ().length, '건');
+        }
     };
 })();
