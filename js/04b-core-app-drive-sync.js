@@ -228,8 +228,12 @@
             //    (아직 연결 끊김 판정 전)인데 팝업만 계속 떠 있던 증상의 실제 원인. 로그인 성공 시
             //    기억해둔 이메일을 hint로 넘겨 계정을 미리 지정해서 이 창 자체가 뜨지 않게 한다.
             const _emailHint = window.currentUserEmail || (function() { try { return localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) { return ''; } })();
-            tokenClient.requestAccessToken(_emailHint ? { prompt: '', hint: _emailHint } : { prompt: '' });
-        }, 12 * 60 * 1000);
+            // [2026-10-02] prompt: '' → 'none': '' 는 구글이 필요시 OAuth 창을 순간 열었다 닫는 implicit
+            //   flow 동작으로 화면이 깜박이는 원인. 'none'은 UI 없이 즉시 성공 또는 에러 반환만 한다.
+            //   hint 없으면 계정 특정 불가이므로 그냥 skip (연결 중엔 항상 hint 있음).
+            if (!_emailHint) return;
+            tokenClient.requestAccessToken({ prompt: 'none', hint: _emailHint });
+        }, 50 * 60 * 1000); // 12분→50분: 구글 토큰 유효기간 60분, 불필요한 빈도 줄여 깜박임 최소화
     }
 
     window.handleAuthClick = function() {

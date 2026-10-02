@@ -230,7 +230,10 @@ window.handleAuthClick = function(event, silentOnly) {
             };
             tokenClient.requestAccessToken({ prompt: 'select_account' });
         } else {
-            // [B] 1차: 조용한 시도(prompt:'') — 이미 로그인+권한이 살아있으면 화면에 아무것도 안 띄우고 성공한다.
+            // [B] 1차: 조용한 시도(prompt:'none') — 세션이 살아있으면 UI 없이 즉시 성공.
+            //   [2026-10-02] prompt:'' → 'none': ''는 구글이 OAuth 창을 순간 열었다 닫아 화면이 깜박이는
+            //   원인. 'none'은 UI 없이 즉시 성공/에러만 반환 — 자동로그인 깜박임 완전 제거.
+            //   자동로그인(silentOnly) 실패 시 확전 없이 종료, 수동 클릭 시 2차로 select_account.
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
                     if (silentOnly) { onFinalFailure(resp); return; } // 자동로그인은 여기서 확전하지 않고 종료
@@ -245,7 +248,7 @@ window.handleAuthClick = function(event, silentOnly) {
                 }
                 await onAuthSuccess(resp);
             };
-            tokenClient.requestAccessToken({ prompt: '', hint: _emailHint });
+            tokenClient.requestAccessToken({ prompt: 'none', hint: _emailHint });
         }
     };
 
