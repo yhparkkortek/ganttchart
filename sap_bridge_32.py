@@ -3153,7 +3153,7 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
         if pops:
             popup_note = '열려 있던 팝업: ' + ', '.join(f'wnd[{i}]"{t}"' for i, t in pops)
             idx = pops[-1][0]
-            for closer in ('enter', 'btn0', 'cancel'):
+            for closer in ('btn0', 'enter', 'cancel'):   # ✓ 계속 버튼이 먼저(녹화 매크로 기준)
                 try:
                     w = session.findById(f'wnd[{idx}]')
                 except Exception:
@@ -3249,22 +3249,29 @@ def _mb21_set_purpose(session, purpose):
     except Exception as e:
         return f'" 기타" 버튼 클릭 실패: {e}'
 
-    # 코딩 블록 팝업은 wnd[1]로 뜨지만, 화면 구성에 따라 wnd[0] 안에 들어오는 경우도 있어 둘 다 본다
+    # ✅ [2026-10-02 녹화 매크로로 확정] 코딩 블록 팝업의 목적 필드 절대경로:
+    #      wnd[1]/usr/subBLOCK1:SAPLKACB:9999/ctxtCOBL-YYDEVTYPE
+    #    절대경로를 먼저 쓰고, 화면 구성이 다를 때만 부분일치로 폴백한다.
     fld = None
-    for wid in ('wnd[1]', 'wnd[0]'):
-        try:
-            w = session.findById(wid)
-        except Exception:
-            continue
-        for cand in _find_all_by_id_substring(w, 'YYDEVTYPE'):
+    try:
+        fld = session.findById('wnd[1]/usr/subBLOCK1:SAPLKACB:9999/ctxtCOBL-YYDEVTYPE')
+    except Exception:
+        fld = None
+    if fld is None:
+        for wid in ('wnd[1]', 'wnd[0]'):
             try:
-                if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
-                    fld = cand
-                    break
+                w = session.findById(wid)
             except Exception:
                 continue
-        if fld is not None:
-            break
+            for cand in _find_all_by_id_substring(w, 'YYDEVTYPE'):
+                try:
+                    if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                        fld = cand
+                        break
+                except Exception:
+                    continue
+            if fld is not None:
+                break
     if fld is None:
         # 팝업을 열어만 두고 못 채우면 이후 저장이 막히므로 닫고 사유를 돌려준다
         try:
@@ -3277,10 +3284,10 @@ def _mb21_set_purpose(session, purpose):
     except Exception as e:
         return f'"목적" 입력 실패: {e}'
 
-    # ⚠️ [2026-10-02] 팝업을 **확실히 닫아야** 한다 — 열린 채로 남으면 이후 wnd[0] 저장이
-    #    전부 "유효한 기능을 선택하십시오"로 막힌다. 확인(Enter) → 확인버튼 → 취소 순으로 시도하고,
-    #    그래도 안 닫히면 사유를 돌려준다(저장 루프가 한 번 더 치우지만, 원인을 남겨야 한다).
-    for closer in ('enter', 'btn0', 'cancel'):
+    # ⚠️ [2026-10-02 녹화 매크로로 확정] 코딩 블록은 **wnd[1]/tbar[0]/btn[0](✓ 계속)**으로 닫는다.
+    #    Enter가 아니다 — Enter를 먼저 보내면 F4 검색도움이 뜨거나 아무 일도 안 일어나고,
+    #    팝업이 열린 채 남아 이후 wnd[0] 저장이 전부 "유효한 기능을 선택하십시오"로 막힌다.
+    for closer in ('btn0', 'enter', 'cancel'):
         pops = _sap_open_popups(session)
         if not pops:
             return None
@@ -3551,7 +3558,7 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
     return result
 
 
-def print_reservation_zmm019(rsnum, werks='1000'):
+def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
     """🖨 ZMM019(자재 예약 리스트)에서 예약번호로 조회한 뒤 "청구서출력"을 눌러 계정대체청구서를 낸다.
 
     [2026-10-02 실화면 덤프] 선택화면(1000): RSNUM-LOW/HIGH, WERKS-LOW, R_ALL/R_ME …
@@ -3582,7 +3589,10 @@ def print_reservation_zmm019(rsnum, werks='1000'):
     # 예약번호만으로 좁힌다 — 다른 선택조건이 남아 있으면 0건이 될 수 있어 비운다
     _set('txtRSNUM-LOW', rsnum)
     _set('txtRSNUM-HIGH', '')
-    _set('ctxtRSDAT-LOW', '');  _set('ctxtRSDAT-HIGH', '')
+    # 녹화 매크로는 요청일(RSDAT)에 당일을 넣는다 — 비워두면 0건이 나오는 계정이 있을 수 있어
+    # 호출부가 준 날짜(없으면 오늘)를 넣고, HIGH는 비워 단일일자로 둔다.
+    _set('ctxtRSDAT-LOW', str(rsdat or time.strftime('%Y%m%d')))
+    _set('ctxtRSDAT-HIGH', '')
     _set('txtWEMPF-LOW', '');   _set('txtWEMPF-HIGH', '')
     _set('ctxtMATNR-LOW', '');  _set('ctxtMATNR-HIGH', '')
     _set('ctxtBWART-LOW', '');  _set('ctxtBWART-HIGH', '')
@@ -3615,12 +3625,39 @@ def print_reservation_zmm019(rsnum, werks='1000'):
             pass
         raise RuntimeError(f'ZMM019에서 예약번호 {rsnum} 조회 결과가 없습니다. (상태바: "{sbar0}")')
 
+    # ★★ [2026-10-02 녹화 매크로로 확정] **행을 먼저 선택해야** 청구서출력이 동작한다.
+    #    `selectedRows = "0"` 한 줄이 빠져서 출력이 안 먹던 것 — 같은 패턴이 이 파일의
+    #    `display_reservation` 쪽에 이미 있었는데 여기선 빠뜨렸다.
+    row_warn = None
+    try:
+        if grid is not None:
+            try:
+                grid.currentCellColumn = ''
+            except Exception:
+                pass
+            grid.selectedRows = '0'
+            time.sleep(0.4)
+        else:
+            row_warn = '결과 그리드를 찾지 못해 행을 선택하지 못했습니다.'
+    except Exception as e:
+        row_warn = f'행 선택 실패: {e}'
+
     # 청구서출력
     try:
         wnd.findById('tbar[1]/btn[13]').press()
         time.sleep(2.0)
     except Exception as e:
-        raise RuntimeError(f'ZMM019 "청구서출력" 버튼을 누르지 못했습니다: {e}')
+        raise RuntimeError(f'ZMM019 "청구서출력" 버튼을 누르지 못했습니다: {e}'
+                           + (f' ({row_warn})' if row_warn else ''))
+
+    # 출력 팝업 — 녹화 매크로: wnd[1]/tbar[0]/btn[13] → btn[86].
+    #   화면/프린터 설정에 따라 안 뜰 수도 있어 있으면 누르고 없으면 조용히 넘어간다.
+    for _btn in ('tbar[0]/btn[13]', 'tbar[0]/btn[86]'):
+        try:
+            session.findById('wnd[1]/' + _btn).press()
+            time.sleep(1.0)
+        except Exception:
+            break
 
     sbar = ''
     try:
@@ -3630,9 +3667,11 @@ def print_reservation_zmm019(rsnum, werks='1000'):
 
     return {
         'ok': True, 'rsnum': rsnum, 'rowCount': row_count, 'table': table, 'sbar': sbar,
-        'text': (f'예약번호 {rsnum} 계정대체청구서를 출력했습니다(품목 {row_count}건). '
-                 f'인쇄 미리보기/출력 대화상자가 SAP 화면에 떠 있으면 거기서 마무리해주세요.'
-                 + (f' (상태바: {sbar})' if sbar else '')),
+        'rowWarning': row_warn or '',
+        'text': (f'예약번호 {rsnum} 계정대체청구서를 출력했습니다(품목 {row_count}건).'
+                 + (f'\n  ⚠️ {row_warn}' if row_warn else '')
+                 + (f' (상태바: {sbar})' if sbar else '')
+                 + '\n  인쇄 대화상자가 SAP 화면에 남아 있으면 거기서 마무리해주세요.'),
     }
 
 
@@ -6058,7 +6097,8 @@ def main():
         elif action == 'print_reservation_zmm019':
             rsnum_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             werks_arg = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '1000'
-            result = print_reservation_zmm019(rsnum_arg, werks_arg)
+            rsdat_arg = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            result = print_reservation_zmm019(rsnum_arg, werks_arg, rsdat_arg)
         elif action == 'migo_return_receipt':
             import json as _json2
             items_arg   = _json2.loads(sys.argv[2]) if len(sys.argv) > 2 else []

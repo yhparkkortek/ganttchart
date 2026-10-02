@@ -531,7 +531,9 @@
         var reply, okFlag = false;   // 성공 여부는 문자열이 아니라 플래그로 판정한다
         try {
             var res = await window._withTimeout(
-                fetch(API + '/sap-print-reservation?rsnum=' + encodeURIComponent(rsnum) + '&werks=' + encodeURIComponent(plant())),
+                fetch(API + '/sap-print-reservation?rsnum=' + encodeURIComponent(rsnum)
+                    + '&werks=' + encodeURIComponent(plant())
+                    + '&rsdat=' + encodeURIComponent(hdr().rsdat || '')),   // ZMM019 요청일
                 95000, T('청구서 출력 시간 초과', 'Print timed out'));
             var data = await res.json();
             okFlag = !!(data && data.ok);

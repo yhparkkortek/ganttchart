@@ -3040,8 +3040,10 @@ def sap_print_reservation():
     if not rsnum:
         return jsonify({'ok': False, 'error': '예약번호(rsnum)가 필요합니다.'}), 400
     werks = (request.args.get('werks') or '1000').strip()
+    # 요청일 — ZMM019 선택화면 RSDAT. 비우면 0건이 나오는 계정이 있어 예약 때 쓴 날짜를 넘긴다.
+    rsdat = (request.args.get('rsdat') or '').strip()
     data, status = _run_sap_bridge(
-        ['print_reservation_zmm019', rsnum, werks], 90, f'ZMM019 청구서출력 {rsnum}')
+        ['print_reservation_zmm019', rsnum, werks, rsdat], 90, f'ZMM019 청구서출력 {rsnum}')
     return jsonify(data), status
 
 

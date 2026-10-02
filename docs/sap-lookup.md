@@ -1888,3 +1888,38 @@ MB21/SAPMM07R/0521 "예약생성: 신규품목" · 열린 팝업: wnd[1]"코딩 
 
 > **교훈**: SAP 자동화의 실패 메시지는 **상태바 + 화면 식별 + 열린 팝업** 셋이 함께 있어야
 > 다음 수를 둘 수 있다. 상태바만 있으면 추측밖에 못 한다.
+
+### 🎬 녹화 매크로가 답이었다 — MB21/ZMM019 확정 경로 (2026-10-02, 사용자 제공 VBS)
+
+세 번 추측하고 세 번 틀린 뒤, 사용자가 SAP GUI "기록 및 재생"으로 뜬 **실제 전체 흐름**을 줬다.
+그 안에 내가 추측하던 게 전부 있었다. **새 SAP 기능은 추측 전에 녹화부터 받을 것.**
+
+**① 목적(YYDEVTYPE) — 절대경로와 닫는 법**
+```vbs
+.../btnCOBL_MORE .press
+wnd[1]/usr/subBLOCK1:SAPLKACB:9999/ctxtCOBL-YYDEVTYPE    ' ← 정확한 경로
+wnd[1].sendVKey 4  →  wnd[2]/usr/lbl[1,3]  →  wnd[2].sendVKey 2   ' F4 선택
+wnd[1]/tbar[0]/btn[0] .press                             ' ← ✓ 계속. **Enter가 아니다**
+```
+Enter를 먼저 보내면 F4가 뜨거나 아무 일도 안 일어나고 **팝업이 열린 채 남아**, 이후 `wnd[0]`
+저장이 전부 `"유효한 기능을 선택하십시오"`로 막힌다. 닫기 순서를 `btn[0] → Enter → F12`로 바꿨다.
+
+**② 저장은 `tbar[0]/btn[11]` 두 번** — 자기교정 루프 구조와 일치(확인됨).
+```
+품목입력 → btn[11](저장) → txtRESB-SGTXT 입력 → btn[11](저장) → btn[3](뒤로)
+```
+
+**③ ZMM019 청구서출력 — 빠뜨린 결정적 한 줄**
+```vbs
+txtRSNUM-LOW = 예약번호 ;  ctxtRSDAT-LOW = 요청일(F4 달력)
+tbar[1]/btn[8] .press                          ' 실행
+wnd[0]/shellcont/shell .currentCellColumn = ""
+wnd[0]/shellcont/shell .selectedRows = "0"     ' ★ 행 선택 — 없으면 출력이 안 먹는다
+tbar[1]/btn[13] .press                         ' 청구서출력
+wnd[1]/tbar[0]/btn[13]  →  wnd[1]/tbar[0]/btn[86]   ' 출력 팝업
+```
+`selectedRows`가 빠져서 출력이 안 되고 있었다 — **같은 패턴이 이 파일의 `display_reservation`에
+이미 있었는데** 새로 쓰면서 빠뜨렸다. 요청일(RSDAT)도 채운다(비우면 0건이 나오는 계정이 있을 수 있음).
+
+> **교훈**: 새 SAP 화면을 자동화할 때 **녹화 매크로 한 번**이면 절대경로·버튼 인덱스·팝업 닫는 법이
+> 전부 나온다. 덤프는 "지금 보이는 것"만 주지만 녹화는 **"무엇을 눌러야 하는지"**를 준다.
