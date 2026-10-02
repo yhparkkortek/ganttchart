@@ -574,47 +574,53 @@ def dump_windows_dialogs(save_dir=None):
                      % (hex(hwnd), cls, ttl, _rect(hwnd), pname or '?', pid))
         total += 1
 
-        # 자식 컨트롤 — 너비 우선, 깊이 제한
-        queue = [(hwnd, 0)]
-        while queue:
+        # 자식 컨트롤 — **진짜 부모-자식 관계로** 트리를 그린다.
+        # 🐛 [2026-10-02] 처음엔 너비 우선으로 돌며 `'  ' * (깊이+1)`로 들여썼는데, 같은 깊이의
+        #   부모들이 자기 자식을 **차례로 이어 붙여** 찍는 바람에 마지막 부모 밑에 전부 달린 것처럼
+        #   보였다. 실제로 이 덤프를 읽다가 파일이름 Edit의 조상이 ReBarWindow32인 줄 알고
+        #   잘못 판단할 뻔했다(기하학적으로 따져 보니 DUIViewWndClassName 밑이었다).
+        #   덤프는 추측을 없애려고 만든 도구인데 덤프가 추측을 만들면 안 된다 — 부모를 실제로
+        #   물어서(GetParent) 자식 목록을 만든 뒤 깊이우선으로 찍는다.
+        descendants = []
+
+        def _cb2(ch, __):
+            descendants.append(ch)
+
+        try:
+            _wg.EnumChildWindows(hwnd, _cb2, None)
+        except Exception:
+            descendants = []
+        kids_of = {}
+        for ch in descendants:
+            try:
+                par = _wg.GetParent(ch)
+            except Exception:
+                par = 0
+            kids_of.setdefault(par, []).append(ch)
+
+        stack = [(c, 1) for c in reversed(kids_of.get(hwnd, []))]
+        while stack:
             if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
                 truncated = True
                 break
-            parent, depth = queue.pop(0)
-            kids = []
-
-            def _cb2(ch, __):
-                kids.append(ch)
-
+            ch, depth = stack.pop()
             try:
-                _wg.EnumChildWindows(parent, _cb2, None)
+                cid = _wg.GetDlgCtrlID(ch)
             except Exception:
-                kids = []
-            for ch in kids:
-                if total >= _DUMP_MAX_NODES:
-                    truncated = True
-                    break
-                try:
-                    if _wg.GetParent(ch) != parent:      # 손자는 다음 레벨에서
-                        continue
-                except Exception:
-                    pass
-                try:
-                    cid = _wg.GetDlgCtrlID(ch)
-                except Exception:
-                    cid = 0
-                ccls = ''
-                try:
-                    ccls = _wg.GetClassName(ch)
-                except Exception:
-                    pass
-                vis = '' if _wg.IsWindowVisible(ch) else ' [숨김]'
-                lines.append('%s%s  id=%s(0x%X)  hwnd=%s  text="%s"  %s%s'
-                             % ('  ' * (depth + 1), ccls, cid, cid & 0xFFFFFFFF,
-                                hex(ch), _text(ch), _rect(ch), vis))
-                total += 1
-                if depth < 6:
-                    queue.append((ch, depth + 1))
+                cid = 0
+            ccls = ''
+            try:
+                ccls = _wg.GetClassName(ch)
+            except Exception:
+                pass
+            vis = '' if _wg.IsWindowVisible(ch) else ' [숨김]'
+            lines.append('%s%s  id=%s(0x%X)  hwnd=%s  text="%s"  %s%s'
+                         % ('  ' * depth, ccls, cid, cid & 0xFFFFFFFF,
+                            hex(ch), _text(ch), _rect(ch), vis))
+            total += 1
+            if depth < 8:
+                for g in reversed(kids_of.get(ch, [])):
+                    stack.append((g, depth + 1))
 
     if others:
         lines.append('')
@@ -3955,8 +3961,9 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
         """파일 저장 대화상자의 '파일 이름' Edit 컨트롤.
 
         고르는 법(실측 덤프로 확정, 2026-10-02):
+          ⓪ **숨김 컨트롤 제외** — 실측 덤프에서 주소줄 Edit은 아예 [숨김]이었다(가장 강한 신호)
           ① 주소줄/검색 띠에 속한 Edit은 **제외** — 조상 8대 안에 _FE_BAND_CLASSES가 있으면 버린다
-          ② 남은 것 중 값이 `.pdf`로 끝나면 가점(Adobe가 채워둔 기본 파일명)
+          ② 남은 것 중 값이 `.pdf`로 끝나면 +2, 컨트롤 ID가 1001이면 +1
           ③ 그래도 여럿이면 **맨 아래** — 파일이름 칸은 버튼 바로 위에 있다
 
         ②는 있으면 좋은 신호지 필수가 아니다 — 실측 덤프에선 이 칸의 GetWindowText가
@@ -3979,6 +3986,13 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
                     if _wg.GetClassName(anc) in _FE_BAND_CLASSES:
                         return                          # 주소줄·검색창 → 버린다
                 score = 2 if (_wg.GetWindowText(ch) or '').strip().lower().endswith('.pdf') else 0
+                # [2026-10-02 컨트롤 ID 덤프] 파일이름 콤보 안의 Edit은 id=1001(0x3E9)이었고,
+                #   주소줄 Edit은 41477이었다. 셋째 신호로 더해 둔다(필수는 아님 — 창마다 다를 수 있다).
+                try:
+                    if _wg.GetDlgCtrlID(ch) == 1001:
+                        score += 1
+                except Exception:
+                    pass
                 found.append((score, _wg.GetWindowRect(ch)[3], ch))
             except Exception:
                 pass

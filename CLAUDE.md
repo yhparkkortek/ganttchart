@@ -178,6 +178,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **SAP 실패 메시지엔 `_sap_screen_info()`(트랜잭션/화면번호/제목/열린 팝업) 필수** — 상태바만으론 어디서 막혔는지 몰라 추측으로 두 번 실패했다. 코딩블록 팝업이 안 닫히면 wnd[0] 저장이 전부 막힘
 - **SAP 자동화는 화면 전환 순서를 코드에 박지 말 것** — 상태바를 읽고 반응하는 루프로(`_mb21_fill_texts_and_save`). 고정 순서로 짰다가 MB21 저장에서 두 번 실패(`virtual key not enabled` → `유효한 기능을 선택하십시오`). `tbar[0]/btn[11]`은 SAP 표준 **저장**
 - **"The virtual key is not enabled" = 그 화면에서 기능키가 잠긴 것** — MB21이면 필수입력(품목 텍스트) 미입력. `_sap_send_vkey`(툴바 버튼 폴백) + `humanize_sap_error`(상태바 포함 한국어) 사용
+- **저장창 파일이름 Edit = `id=1001`·보임·버튼 바로 위** (2026-10-02 ID 덤프 확정, 주소줄은 `id=41477`·숨김). 트리 덤프는 들여쓰기를 **깊이가 아니라 `GetParent`** 에서 뽑을 것 — 너비우선 들여쓰기가 조상을 오인하게 만들었다
 - **파일 저장 창에서 `ComboBoxEx32`는 파일이름이 아니라 주소줄** (2026-10-02 실측) — 가점 주면 경로를 주소줄에 써서 폴더만 이동한다. 주소줄/검색 띠 조상(`ReBarWindow32`/`WorkerW`/`Address Band Root`/`ComboBoxEx32`…)은 **제외** 신호. 최소화 창도 `IsWindowVisible`=True이니 `IsIconic`으로 뺄 것. 네이티브 클릭은 좌표 말고 `SendMessage(BM_CLICK)`
 - **Windows 대화상자 버튼은 `저장(&S)`처럼 니모닉이 붙는다** — `&`만 떼고 `== '저장'` 하면 빗나감(`_norm_label`). 파일이름 Edit은 **y좌표 말고 정체**로(ComboBoxEx32 조상 + 값이 `.pdf`) — 검색 상자도 Edit이다. 청구서 PDF는 `C:\SAP_DMS\계정대체청구서\<예약번호>.pdf`
 - **Windows 창은 `dump_windows_dialogs`/`/sap-dump-windows`("윈도우 화면 덤프해줘")로 따로 덤프** — SAP 덤프엔 안 나온다. SAP 세션을 안 써서 **모달이 COM을 막고 있을 때도** 동작. `js/04h`에서 **screendump 블록보다 위**에 둘 것(kw `덤프`가 겹침). 자주 쓰는 질문 시드 추가 시 `gantt_qa_sap_seeds_vN` 플래그도 올릴 것 + 예시 목록은 한/영 두 벌
