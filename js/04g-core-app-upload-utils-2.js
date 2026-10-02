@@ -1812,8 +1812,7 @@ ${question}
         if (matType !== 'finished') buttons.push({ label: '🏭 공급업체 조회', value: matnr + ' 공급업체 조회해줘', style: 'sap' });
         if (matType !== 'finished') buttons.push({ label: '🛒 구매정보 조회', value: matnr + ' 구매 정보 레코드 조회해줘', style: 'sap' });
         buttons.push(
-            { label: '🔧 상태변경이력', value: matnr + ' 변경이력 확인해줘', style: 'sap' },
-            { label: '📋 MM03 탐색',   value: matnr + ' MM03 자재 화면 열어줘', style: 'sap' }
+            { label: '🔧 상태변경이력', value: matnr + ' 변경이력 확인해줘', style: 'sap' }
         );
 
         // action 버튼 처리: docLookup/docSave는 직접 문서타입 드롭다운을 띄움

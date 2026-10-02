@@ -2639,16 +2639,6 @@ def sap_vendor_info():
     return jsonify(data), status
 
 
-@app.route('/sap-navigate-mm03', methods=['GET'])
-def sap_navigate_mm03():
-    # MM03 자재 화면으로 이동 (탐색만, 데이터 반환 없음).
-    # 파라미터: material (자재번호)
-    material = (request.args.get('material') or '').strip()
-    if not material:
-        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다.'}), 400
-    data, status = _run_sap_bridge(['navigate_to_material_mm03', material], 15, 'MM03 화면 탐색')
-    return jsonify(data), status
-
 
 @app.route('/sap-open-folder', methods=['GET'])
 def sap_open_folder():

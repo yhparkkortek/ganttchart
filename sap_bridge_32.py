@@ -5325,33 +5325,6 @@ def compare_bom(mat1, mat2, plant='1000', mode='diff'):
             'table': table, 'rowCount': row_count}
 
 
-def navigate_to_material_mm03(material):
-    """MM03 자재 화면으로 이동만 한다 (읽기 전용, 화면 열기)."""
-    session = _get_sap_session()
-    if not session:
-        return {'ok': False, 'error': 'SAP 세션을 찾을 수 없습니다.'}
-    try:
-        matnr = material.strip().upper().zfill(18)
-        session.StartTransaction('/nMM03')
-        import time; time.sleep(0.5)
-        # 자재번호 입력 화면
-        try:
-            mat_field = session.findById('wnd[0]/usr/ctxtRMMG1-MATNR')
-            mat_field.text = matnr
-            session.findById('wnd[0]').sendVKey(0)
-            time.sleep(0.5)
-        except Exception:
-            pass
-        # 탭 선택 화면이 나오면 기본 탭(기본데이터 1)으로 진입
-        try:
-            session.findById('wnd[1]').sendVKey(0)
-            time.sleep(0.3)
-        except Exception:
-            pass
-        return {'ok': True, 'material': material.strip(), 'message': f'MM03 자재 {material.strip()} 화면을 열었습니다.'}
-    except Exception as e:
-        return {'ok': False, 'error': str(e)}
-
 
 def fetch_material_change_history(material, plant='1000', date_from=None, date_to=None, by='change'):
     """ZCO037 - 자재마스터(상태) 변경이력 조회.

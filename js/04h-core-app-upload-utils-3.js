@@ -6186,25 +6186,6 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
-        // 📋🚫🤖 [2026-10-01 신규] MM03 자재 화면 탐색 — "자재번호 MM03 자재 화면 열어줘"
-        //    SAP MM03으로 이동만 하고 데이터는 반환하지 않음(탐색 전용).
-        const _mm03NavMatch = /MM03\s*(자재|화면)?\s*(열어줘|열어|이동|탐색|탐색해줘)/i.test(question);
-        const _mm03NavMat = _mm03NavMatch && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
-        if (_mm03NavMatch && _mm03NavMat) {
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP MM03 화면으로 이동 중...', 'Navigating to SAP MM03...'), pending: true });
-            window._renderGanttQaMessages();
-            let mm03NavReply;
-            try {
-                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-navigate-mm03?material=' + encodeURIComponent(_mm03NavMat)), 20000, window._t('MM03 탐색 시간 초과', 'MM03 navigation timed out'));
-                const data = await res.json();
-                mm03NavReply = data.ok ? ('📋 ' + (data.message || window._t('MM03 화면을 열었습니다.', 'MM03 screen opened.'))) : '⚠️ ' + (data.error || window._t('MM03 탐색 실패', 'MM03 navigation failed'));
-            } catch(e) { mm03NavReply = '⚠️ ' + (e && e.message ? e.message : e); }
-            window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: mm03NavReply });
-            window._renderGanttQaMessages(); input.focus(); return;
-        }
-
         // 🚚🚫🤖 [2026-10-01 신규] 납품 내역 (ZSD027) — "자재번호 납품 내역"
         const _delivHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'zsd027') : false;
         const _delivMat = _delivHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
