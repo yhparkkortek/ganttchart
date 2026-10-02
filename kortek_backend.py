@@ -3043,7 +3043,9 @@ def sap_print_reservation():
     # 요청일 — ZMM019 선택화면 RSDAT. 비우면 0건이 나오는 계정이 있어 예약 때 쓴 날짜를 넘긴다.
     rsdat = (request.args.get('rsdat') or '').strip()
     data, status = _run_sap_bridge(
-        ['print_reservation_zmm019', rsnum, werks, rsdat], 90, f'ZMM019 청구서출력 {rsnum}')
+        # [2026-10-02] 네이티브 인쇄 대화상자 대기(최대 120초) + PDF 파일 생성 대기가
+        #   들어가 90초로는 부족하다. 워치독 타임아웃(120)보다 넉넉히 잡는다.
+        ['print_reservation_zmm019', rsnum, werks, rsdat], 180, f'ZMM019 청구서출력 {rsnum}')
     return jsonify(data), status
 
 

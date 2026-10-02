@@ -43,6 +43,7 @@ import os
 import json
 import re
 import time
+import threading
 
 # 💡 [2026-09-14 버그수정] 이 스크립트는 kortek_backend.py가 subprocess.run(capture_output=True)로
 # 실행한다 — stdout이 실제 콘솔이 아니라 파이프로 연결되면, Windows에서는 Python이 시스템 ANSI
@@ -3633,6 +3634,253 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
     return result
 
 
+_RSV_PDF_OUT_DIR = os.path.join('C:\\SAP_DMS', '자재청구')
+
+
+def _win_documents_dir():
+    """Windows '문서' 폴더의 실제 경로 — 한글 Windows·폴더 리디렉션까지 대응.
+
+    Adobe PDF 프린터의 기본 출력 위치가 `Documents\\*.pdf`라(사용자 캡처 2026-10-02)
+    새로 생긴 PDF를 여기서 찾아야 한다. `~/Documents` 추측은 OneDrive 리디렉션에서
+    틀리므로 셸 API(CSIDL_PERSONAL)를 먼저 쓴다.
+    """
+    try:
+        import ctypes as _ct
+        buf = _ct.create_unicode_buffer(260)
+        # CSIDL_PERSONAL(5) = 내 문서, SHGFP_TYPE_CURRENT(0)
+        _ct.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf)
+        if buf.value:
+            return buf.value
+    except Exception:
+        pass
+    return os.path.join(os.path.expanduser('~'), 'Documents')
+
+
+def _pdf_snapshot(dirs):
+    """감시 폴더들의 현재 .pdf 목록(절대경로 set)."""
+    seen = set()
+    for d in dirs:
+        try:
+            for n in os.listdir(d):
+                if n.lower().endswith('.pdf'):
+                    seen.add(os.path.join(d, n))
+        except Exception:
+            pass
+    return seen
+
+
+def _wait_new_pdf(dirs, before, timeout_sec=60):
+    """스냅샷 이후 새로 생긴 PDF 1개를 기다렸다가 경로를 돌려준다.
+
+    Adobe PDF Converter는 비동기로 파일을 쓴다 — 생기자마자 가져가면 0바이트거나
+    쓰는 중인 파일을 잡는다. 그래서 크기가 멈출 때까지 한 번 더 기다린다.
+    """
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        fresh = list(_pdf_snapshot(dirs) - before)
+        if fresh:
+            try:
+                fresh.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            except Exception:
+                pass
+            cand, last = fresh[0], -1
+            for _ in range(40):          # 최대 ~12초 동안 크기 안정화 대기
+                try:
+                    sz = os.path.getsize(cand)
+                except Exception:
+                    sz = -1
+                if sz > 0 and sz == last:
+                    return cand
+                last = sz
+                time.sleep(0.3)
+            return cand
+        time.sleep(0.5)
+    return None
+
+
+def _win_print_dialog_watchdog(save_path, timeout_sec=120):
+    """Windows 네이티브 인쇄 대화상자를 대신 눌러주는 워치독(별도 스레드).
+
+    [2026-10-02] ZMM019 "청구서출력"이 띄우는 인쇄 창은 **SAP 창이 아니다** —
+    클래스 `#32770`의 Win32 대화상자라 `wnd[1]`로 안 잡히고, 모달이 떠 있는 동안
+    SAP COM 호출(press)이 블록된다. 그래서 메인 스레드가 press()에 묶여 있는 사이
+    이 스레드가 창을 눌러준다. (같은 Win32 기법을 이 파일의 DMS "사본 저장" 처리에서
+    이미 쓰고 있다 — 새 기법이 아니다.)
+
+    ① "인쇄"(#32770) → [확인]
+    ② 이어서 Adobe 파일 저장 창이 뜨면 → save_path 입력 후 [저장]
+       프린터 속성이 '파일 이름을 묻지 않음'이면 ②는 아예 안 뜨고, 그게 가장 안전한
+       상태다(건드릴 창이 하나로 줄어든다). 그래서 ②가 없는 것은 실패가 아니다.
+
+    반환: (thread, state) — state는 스레드가 채우는 dict
+    """
+    import win32gui as _wg
+    import win32con as _wc
+
+    state = {'printClicked': False, 'usedSaveDialog': False,
+             'printTitle': '', 'saveTitle': '', 'error': ''}
+
+    def _buttons(hwnd):
+        """대화상자 안의 Button 컨트롤을 [(hwnd, 라벨)]로."""
+        out = []
+
+        def _cb(ch, _):
+            try:
+                if _wg.GetClassName(ch) == 'Button':
+                    out.append((ch, (_wg.GetWindowText(ch) or '').replace('&', '').strip()))
+            except Exception:
+                pass
+        try:
+            _wg.EnumChildWindows(hwnd, _cb, None)
+        except Exception:
+            pass
+        return out
+
+    def _find_dialog(titles, btn_labels):
+        """제목과 **버튼 라벨을 둘 다** 만족하는 #32770만 고른다.
+
+        제목만으로 고르면 엉뚱한 창의 [확인]을 눌러버릴 수 있다.
+        """
+        hits = []
+
+        def _cb(hwnd, _):
+            try:
+                if _wg.GetClassName(hwnd) != '#32770' or not _wg.IsWindowVisible(hwnd):
+                    return
+                t = (_wg.GetWindowText(hwnd) or '').strip()
+                if not any(k in t for k in titles):
+                    return
+                for bh, bl in _buttons(hwnd):
+                    if bl in btn_labels:
+                        hits.append((hwnd, t, bh))
+                        return
+            except Exception:
+                pass
+
+        try:
+            _wg.EnumWindows(_cb, None)
+        except Exception:
+            pass
+        return hits[0] if hits else None
+
+    def _filename_edit(hwnd):
+        """파일 저장 대화상자의 '파일 이름' Edit 컨트롤.
+
+        구조: 대화상자 → ComboBoxEx32 → ComboBox → Edit.
+        y좌표 내림차순 정렬 후 두 번째가 파일이름 — 이 파일의 DMS 저장 코드에서
+        이미 실사용 검증된 규칙을 그대로 쓴다.
+        """
+        found = []
+
+        def _cb(ch, _):
+            try:
+                if _wg.GetClassName(ch) == 'Edit':
+                    found.append((ch, _wg.GetWindowRect(ch)[3]))
+            except Exception:
+                pass
+        try:
+            _wg.EnumChildWindows(hwnd, _cb, None)
+        except Exception:
+            pass
+        found.sort(key=lambda x: x[1], reverse=True)
+        if len(found) >= 2:
+            return found[1][0]
+        return found[0][0] if found else None
+
+    def _cancel(hwnd):
+        """대화상자를 [취소]로 닫는다 — 실패하고 그냥 빠져나가면 모달이 남아
+        SAP COM 호출이 계속 블록되고, 다음 요청까지 전부 막힌다."""
+        for bh, bl in _buttons(hwnd):
+            if bl in ('취소', 'Cancel'):
+                try:
+                    _wg.SendMessage(bh, _wc.BM_CLICK, 0, 0)
+                    return True
+                except Exception:
+                    pass
+        try:                               # 버튼을 못 찾으면 창 닫기로
+            _wg.PostMessage(hwnd, _wc.WM_CLOSE, 0, 0)
+            return True
+        except Exception:
+            return False
+
+    def _run():
+        deadline = time.time() + timeout_sec
+
+        # ① 인쇄 대화상자 → [확인]
+        while time.time() < deadline:
+            hit = _find_dialog(('인쇄', 'Print'), ('확인', 'OK', '인쇄', 'Print'))
+            if hit:
+                hwnd, title, btn = hit
+                state['printTitle'] = title
+                try:
+                    _wg.SendMessage(btn, _wc.BM_CLICK, 0, 0)
+                    state['printClicked'] = True
+                except Exception as e:
+                    state['error'] = '인쇄 대화상자 [확인] 클릭 실패: %s' % e
+                    return
+                break
+            time.sleep(0.4)
+        if not state['printClicked']:
+            state['error'] = '인쇄 대화상자를 찾지 못했습니다(%d초 대기).' % timeout_sec
+            return
+
+        # ② 파일 저장 창 — 프린터가 '파일 이름 묻기'로 설정된 경우에만 뜬다.
+        sub_deadline = time.time() + 10
+        while time.time() < sub_deadline:
+            hit = _find_dialog(('저장', 'Save', 'PDF'), ('저장', 'Save'))
+            if hit:
+                hwnd, title, btn = hit
+                state['saveTitle'] = title
+                edit = _filename_edit(hwnd)
+                if edit is None:
+                    _cancel(hwnd)
+                    state['error'] = ('파일 저장 창("%s")에서 파일이름 칸을 찾지 못해 '
+                                      '취소했습니다.' % title)
+                    return
+                ok = False
+                try:                     # ⓐ WM_SETTEXT — 포커스와 무관하게 값을 박는다
+                    _wg.SendMessage(edit, _wc.WM_SETTEXT, 0, save_path)
+                    time.sleep(0.2)
+                    ok = (_wg.GetWindowText(edit) or '').strip().lower() == save_path.lower()
+                except Exception:
+                    ok = False
+                if not ok:               # ⓑ 타이핑 폴백(DMS 저장 코드와 동일한 방식)
+                    try:
+                        import ctypes as _ct
+                        import win32process as _wp
+                        from pywinauto.keyboard import send_keys as _sk
+                        dlg_tid, _unused = _wp.GetWindowThreadProcessId(hwnd)
+                        my_tid = _ct.windll.kernel32.GetCurrentThreadId()
+                        _ct.windll.user32.AttachThreadInput(my_tid, dlg_tid, True)
+                        _ct.windll.user32.SetForegroundWindow(hwnd)
+                        time.sleep(0.2)
+                        _ct.windll.user32.SetFocus(edit)
+                        time.sleep(0.2)
+                        _ct.windll.user32.AttachThreadInput(my_tid, dlg_tid, False)
+                        _sk('^a')
+                        time.sleep(0.1)
+                        # pywinauto send_keys 특수문자 이스케이프
+                        _sk(re.sub(r'([{}+^%()~])', r'{\1}', save_path), with_spaces=True)
+                        time.sleep(0.3)
+                    except Exception as e:
+                        _cancel(hwnd)
+                        state['error'] = '파일 이름 입력 실패(취소했습니다): %s' % e
+                        return
+                try:
+                    _wg.SendMessage(btn, _wc.BM_CLICK, 0, 0)
+                    state['usedSaveDialog'] = True
+                except Exception as e:
+                    _cancel(hwnd)
+                    state['error'] = '파일 저장 창 [저장] 클릭 실패(취소했습니다): %s' % e
+                return
+            time.sleep(0.4)
+
+    th = threading.Thread(target=_run, name='zmm019-print-watchdog')
+    th.daemon = True
+    th.start()
+    return th, state
+
+
 def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
     """🖨 ZMM019(자재 예약 리스트)에서 예약번호로 조회한 뒤 "청구서출력"을 눌러 계정대체청구서를 낸다.
 
@@ -3717,7 +3965,23 @@ def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
     except Exception as e:
         row_warn = f'행 선택 실패: {e}'
 
+    # ── PDF 회수 준비 ──────────────────────────────────────────────
+    #   Adobe PDF가 어디에 쓰든 잡아내려고 **누르기 전에** 폴더 스냅샷을 찍는다.
+    try:
+        if not os.path.isdir(_RSV_PDF_OUT_DIR):
+            os.makedirs(_RSV_PDF_OUT_DIR)
+    except Exception:
+        pass
+    pdf_target = os.path.join(_RSV_PDF_OUT_DIR,
+                              '예약%s_%s.pdf' % (rsnum, time.strftime('%Y%m%d')))
+    watch_dirs = [d for d in (_RSV_PDF_OUT_DIR, _win_documents_dir()) if d]
+    pdf_before = _pdf_snapshot(watch_dirs)
+
     # 청구서출력
+    # ★ [2026-10-02] 이 버튼이 띄우는 인쇄 창은 **Windows 네이티브(#32770)** 라
+    #   SAP 스크립팅으로는 못 누른다. 게다가 모달이 떠 있는 동안 press()가 블록되므로
+    #   **누르기 전에** 눌러줄 워치독 스레드를 먼저 띄워야 한다.
+    pr_th, pr_state = _win_print_dialog_watchdog(pdf_target, timeout_sec=120)
     try:
         wnd.findById('tbar[1]/btn[13]').press()
         time.sleep(2.0)
@@ -3725,8 +3989,7 @@ def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
         raise RuntimeError(f'ZMM019 "청구서출력" 버튼을 누르지 못했습니다: {e}'
                            + (f' ({row_warn})' if row_warn else ''))
 
-    # 출력 팝업 — 녹화 매크로: wnd[1]/tbar[0]/btn[13] → btn[86].
-    #   화면/프린터 설정에 따라 안 뜰 수도 있어 있으면 누르고 없으면 조용히 넘어간다.
+    # SAP 자체 인쇄 팝업(뜨는 계정만) — 녹화 매크로: wnd[1]/tbar[0]/btn[13] → btn[86].
     for _btn in ('tbar[0]/btn[13]', 'tbar[0]/btn[86]'):
         try:
             session.findById('wnd[1]/' + _btn).press()
@@ -3734,19 +3997,76 @@ def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
         except Exception:
             break
 
+    pr_th.join(timeout=125)
+
     sbar = ''
     try:
         sbar = (session.findById('wnd[0]/sbar').Text or '').strip()
     except Exception:
         pass
 
+    # ⚠️ 인쇄 대화상자를 못 눌렀으면 **성공이라고 하지 않는다**.
+    #   예전에는 wnd[1]을 못 찾으면 조용히 break하고 ok:True로 "출력했습니다"가 나가서,
+    #   화면에 인쇄 창이 그대로 떠 있는데도 모달은 초록으로 끝났다(2026-10-02 제보).
+    if not pr_state.get('printClicked'):
+        raise RuntimeError(
+            f'예약번호 {rsnum} 조회는 됐지만(품목 {row_count}건) 인쇄를 끝내지 못했습니다. '
+            + (pr_state.get('error') or '')
+            + ' SAP 화면에 Windows "인쇄" 창이 떠 있으면 거기서 [확인]을 눌러주세요.'
+            + (f' (상태바: {sbar})' if sbar else ''))
+
+    # ── PDF 회수 ───────────────────────────────────────────────────
+    pdf_path, pdf_note = '', ''
+    if pr_state.get('usedSaveDialog'):
+        # 저장 창에 경로를 직접 넣었으니 그 자리에 생겨야 한다
+        for _ in range(60):
+            try:
+                if os.path.getsize(pdf_target) > 0:
+                    pdf_path = pdf_target
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+        if not pdf_path:
+            # 설정 안내는 **실패했을 때만** — 매번 띄우면 잔소리가 된다.
+            pdf_note = ('파일 저장 창에 경로는 넣었는데 파일이 안 생겼습니다. Adobe PDF 속성에서 '
+                        '"PDF 파일 이름을 묻습니다"를 끄고 출력 폴더를 고정하면 건드릴 창이 '
+                        '하나로 줄어 더 안정적입니다.')
+    else:
+        got = _wait_new_pdf(watch_dirs, pdf_before, timeout_sec=60)
+        if got:
+            if os.path.abspath(got).lower() == os.path.abspath(pdf_target).lower():
+                pdf_path = got
+            else:
+                try:
+                    import shutil
+                    if os.path.exists(pdf_target):
+                        os.remove(pdf_target)
+                    shutil.move(got, pdf_target)
+                    pdf_path = pdf_target
+                except Exception as e:
+                    pdf_path = got          # 옮기지 못해도 원본 경로는 알려준다
+                    pdf_note = f'파일명을 바꾸지 못해 원래 이름 그대로 둡니다: {e}'
+    if not pdf_path:
+        pdf_note = (('새로 생긴 PDF를 찾지 못했습니다 — 프린터가 Adobe PDF가 아니거나 '
+                     '출력 폴더가 %s 밖일 수 있습니다.') % ' / '.join(watch_dirs)
+                    + (' ' + pdf_note if pdf_note else ''))
+
+    head = (f'예약번호 {rsnum} 계정대체청구서를 출력했습니다(품목 {row_count}건).'
+            if pdf_path else
+            f'⚠️ 예약번호 {rsnum} 인쇄는 넘겼지만 PDF 파일을 확인하지 못했습니다(품목 {row_count}건).')
+
     return {
         'ok': True, 'rsnum': rsnum, 'rowCount': row_count, 'table': table, 'sbar': sbar,
         'rowWarning': row_warn or '',
-        'text': (f'예약번호 {rsnum} 계정대체청구서를 출력했습니다(품목 {row_count}건).'
+        'pdfPath': pdf_path, 'pdfNote': pdf_note,
+        'printDialog': pr_state.get('printTitle') or '',
+        'saveDialog': pr_state.get('saveTitle') or '',
+        'text': (head
                  + (f'\n  ⚠️ {row_warn}' if row_warn else '')
                  + (f' (상태바: {sbar})' if sbar else '')
-                 + '\n  인쇄 대화상자가 SAP 화면에 남아 있으면 거기서 마무리해주세요.'),
+                 + (f'\n  📄 {pdf_path}' if pdf_path else '')
+                 + (f'\n  ℹ️ {pdf_note}' if pdf_note else '')),
     }
 
 

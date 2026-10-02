@@ -534,7 +534,7 @@
                 fetch(API + '/sap-print-reservation?rsnum=' + encodeURIComponent(rsnum)
                     + '&werks=' + encodeURIComponent(plant())
                     + '&rsdat=' + encodeURIComponent(hdr().rsdat || '')),   // ZMM019 요청일
-                95000, T('청구서 출력 시간 초과', 'Print timed out'));
+                185000, T('청구서 출력 시간 초과', 'Print timed out'));   // 인쇄 대화상자 대기 포함
             var data = await res.json();
             okFlag = !!(data && data.ok);
             reply = okFlag ? ('🖨 ' + (data.text || T('청구서를 출력했습니다.', 'Printed.')))
