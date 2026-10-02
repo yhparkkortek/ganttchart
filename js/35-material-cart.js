@@ -197,6 +197,8 @@
                 + ' width:28px; height:28px;">✕</button>'
                 + '</div>'
                 + '<div id="matcart-body" style="overflow:auto; flex:1 1 auto; padding:13px 15px;"></div>'
+                + '<div id="matcart-status" style="display:none; padding:8px 15px; border-top:1px solid #eee;'
+                + ' font-size:12px; background:#f7f9fc; flex:0 0 auto; max-height:150px; overflow:auto;"></div>'
                 + '<div style="padding:9px 15px; border-top:1px solid #eee; display:flex; gap:8px; flex:0 0 auto;">'
                 + '<button onclick="window._mcClear()" onmouseover="this.style.filter=\'brightness(.95)\'" onmouseout="this.style.filter=\'\'"'
                 + ' style="padding:8px 14px; background:#fdecea; color:#a3281c; border:1px solid #f0b4ad;'
@@ -215,6 +217,18 @@
         wrap.style.display = 'block';
         if (window.bringModalToFront) window.bringModalToFront('matcart-modal');
     };
+
+    /** 보관함 모달 안 상태줄 — 채팅창이 닫혀 있어도 진행/결과가 보이게 한다.
+     *  (예전엔 결과와 🖨 버튼을 채팅 히스토리에만 넣어서, 보관함에서 작업하던 사람은
+     *   "MB21까지 하고 멈춘 것"처럼 보였다 — 2026-10-02 제보) */
+    function status(html, keep) {
+        var el = document.getElementById('matcart-status');
+        if (!el) return;
+        el.style.display = html ? 'block' : 'none';
+        el.innerHTML = keep ? (el.innerHTML + html) : html;
+        el.scrollTop = el.scrollHeight;
+    }
+    window._mcStatus = status;
 
     function optsOf(rows, sel, codeKey, labelKey) {
         return (rows || []).map(function (r) {
@@ -459,9 +473,28 @@
             if (btn) { btn.disabled = false; btn.textContent = '📄 ' + T('청구서 만들기', 'Create reservation'); }
         }
 
+        // 🔗 [2026-10-02 제보 "MB21까지 하고 멈춤"] 예약만 만들고 끊지 않는다.
+        //    CLAUDE.md 구매오더 원칙과 동일: **확인 1회 후 끝까지 자동**(임의 정지 금지).
+        //    최종 산출물은 ZMM019 청구서이므로 생성된 예약마다 바로 출력까지 이어간다.
+        var printed = [], printFailed = [];
+        for (var p = 0; p < created.length; p++) {
+            status('<div style="color:#1a4f7a;">⏳ ' + T('ZMM019 청구서 출력 중… ', 'Printing via ZMM019… ')
+                + '(' + (p + 1) + '/' + created.length + ') ' + T('예약 ', '') + esc(created[p]) + '</div>');
+            try {
+                var pr = await window._mcPrint(created[p], { quiet: true });
+                if (pr && pr.ok) printed.push(created[p]);
+                else printFailed.push(created[p] + ': ' + ((pr && pr.text) || T('출력 실패', 'print failed')));
+            } catch (e) {
+                printFailed.push(created[p] + ': ' + (e && e.message ? e.message : e));
+            }
+        }
+
         var out = '';
         if (created.length) {
             out += '✅ ' + T('예약(청구서) 생성 완료: ', 'Reservation(s) created: ') + created.join(', ');
+            if (printed.length) out += '\n🖨 ' + T('ZMM019 청구서 출력 완료: ', 'Printed via ZMM019: ') + printed.join(', ');
+            if (printFailed.length) out += '\n⚠️ ' + T('청구서 출력 실패: ', 'Print failed: ') + printFailed.join(' / ')
+                + '\n   ' + T('아래 🖨 버튼으로 다시 시도할 수 있습니다.', 'Retry with the 🖨 button below.');
             if (!failed.length) { setItems([]); render(); }
         }
         if (warns.length)  out += (out ? '\n' : '') + '⚠️ ' + warns.join(' / ');
@@ -481,32 +514,47 @@
             }
             if (window._renderGanttQaMessages) window._renderGanttQaMessages();
         }
-        if (window.showToast) window.showToast(out, created.length && !failed.length ? 'success' : 'error', 6000);
+        // 채팅창이 닫혀 있어도 보이도록 모달 안에도 결과 + 재출력 버튼을 남긴다
+        if (created.length) {
+            status('<div style="white-space:pre-wrap;">' + esc(out) + '</div>'
+                + '<div style="margin-top:6px;">' + created.map(function (rs) {
+                    return '<button onclick="window._mcPrint(\'' + rs + '\')" style="margin:3px 5px 0 0; padding:4px 11px;'
+                        + ' background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px;'
+                        + ' font-size:11.5px; cursor:pointer;">🖨 ' + rs + ' ' + T('다시 출력', 'Re-print') + '</button>';
+                }).join('') + '</div>');
+        } else {
+            status('<div style="white-space:pre-wrap; color:#a3281c;">' + esc(out) + '</div>');
+        }
+        if (window.showToast) window.showToast(out, created.length && !failed.length && !printFailed.length ? 'success' : 'error', 6000);
     };
 
-    /** 🖨 ZMM019 "청구서출력" — 계정대체 청구의 최종 산출물. */
-    window._mcPrint = async function (rsnum) {
-        if (window._ganttQaHistory) {
+    /** 🖨 ZMM019 "청구서출력" — 계정대체 청구의 최종 산출물.
+     *  opts.quiet=true면 채팅에 넣지 않고 결과만 돌려준다(자동 연결에서 호출부가 직접 표시). */
+    window._mcPrint = async function (rsnum, opts) {
+        opts = opts || {};
+        if (!opts.quiet && window._ganttQaHistory) {
             window._ganttQaHistory.push({ role: 'ai', pending: true,
                 text: '⏳ ' + T('ZMM019에서 예약번호 ' + rsnum + ' 청구서를 출력하는 중...', 'Printing reservation ' + rsnum + ' from ZMM019...') });
             if (window._renderGanttQaMessages) window._renderGanttQaMessages();
         }
-        var reply;
+        var reply, okFlag = false;   // 성공 여부는 문자열이 아니라 플래그로 판정한다
         try {
             var res = await window._withTimeout(
                 fetch(API + '/sap-print-reservation?rsnum=' + encodeURIComponent(rsnum) + '&werks=' + encodeURIComponent(plant())),
                 95000, T('청구서 출력 시간 초과', 'Print timed out'));
             var data = await res.json();
-            reply = data.ok ? ('🖨 ' + (data.text || T('청구서를 출력했습니다.', 'Printed.')))
-                            : ('⚠️ ' + (data.error || T('청구서 출력 실패', 'Print failed')));
+            okFlag = !!(data && data.ok);
+            reply = okFlag ? ('🖨 ' + (data.text || T('청구서를 출력했습니다.', 'Printed.')))
+                           : ('⚠️ ' + ((data && data.error) || T('청구서 출력 실패', 'Print failed')));
         } catch (e) {
             reply = '⚠️ ' + T('청구서 출력 실패: ', 'Print failed: ') + (e && e.message ? e.message : e);
         }
-        if (window._ganttQaHistory) {
+        if (!opts.quiet && window._ganttQaHistory) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: reply });
             if (window._renderGanttQaMessages) window._renderGanttQaMessages();
         }
+        return { ok: okFlag, text: reply };
     };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refreshChip);
