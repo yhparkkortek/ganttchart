@@ -3196,15 +3196,54 @@ def _delayed_self_exit(delay_sec=0.6):
     threading.Thread(target=_exit, daemon=True).start()
 
 
+def _self_update_validate(rel_path, data):
+    """받은 파일이 덮어쓸 만한 물건인지 검사한다. 문제가 있으면 사유 문자열, 없으면 None.
+
+    ⚠️⚠️ [2026-10-02 실사고] 예전엔 받은 바이트를 **검증 없이 바로 덮어쓰고 재시작**했다.
+      그래서 깨진 파일이 GitHub main에 올라간 ~2시간 동안 "백엔드 업데이트"를 누른 PC가
+      전부 같이 죽었다(sap_bridge_32.py가 289줄 잘려 IndentationError).
+      팀원 PC에는 git이 없어서 되돌릴 수단이 zip 재설치뿐이고, 만약 kortek_backend.py가
+      같은 식으로 깨지면 **기동 자체가 안 돼 /self-update를 다시 부를 서버도 없다**(벽돌).
+      그래서 "쓰기 전에 검사"가 반드시 필요하다.
+    """
+    if not data:
+        return '받은 파일이 비어 있습니다(0바이트)'
+    if rel_path.lower().endswith('.py'):
+        try:
+            compile(data.decode('utf-8'), rel_path, 'exec')
+        except UnicodeDecodeError as e:
+            return f'UTF-8로 읽히지 않습니다 - {e}'
+        except SyntaxError as e:
+            return f'원격 파일에 문법 오류가 있습니다 (line {e.lineno}: {e.msg})'
+    return None
+
+
 @app.route('/self-update', methods=['POST'])
 def self_update():
-    updated, errors = [], []
+    # [2026-10-02] 3단 안전장치: ① 받아서 검사 → ② 하나라도 실패하면 **아무것도 쓰지 않음**
+    #   → ③ 덮어쓰기 직전 .bak 백업. 반쯤 갱신된 상태가 가장 위험해서 전부 아니면 전무로 간다.
+    updated, errors, staged = [], [], []
+
+    # ── ① 전부 받아서 검사만 한다(디스크는 아직 건드리지 않음) ──────────────
     for rel_path in _SELF_UPDATE_FILES:
         try:
             remote_bytes = _fetch_github_raw(rel_path)
         except Exception as e:
             errors.append(f'{rel_path}: 다운로드 실패 - {e}')
             continue
+        bad = _self_update_validate(rel_path, remote_bytes)
+        if bad:
+            errors.append(f'{rel_path}: {bad} — 업데이트를 중단했습니다(기존 파일 그대로 둡니다)')
+            continue
+        staged.append((rel_path, remote_bytes))
+
+    # ── ② 하나라도 문제가 있으면 한 글자도 쓰지 않는다 ──────────────────────
+    if errors:
+        print(f'[self-update 중단] {len(errors)}건 문제 — 기존 파일을 보존합니다: {errors}', file=sys.stderr)
+        return jsonify({'ok': False, 'updatedFiles': [], 'errors': errors, 'restarting': False})
+
+    # ── ③ 전부 통과했을 때만 .bak을 남기고 덮어쓴다 ─────────────────────────
+    for rel_path, remote_bytes in staged:
         local_path = os.path.join(BASE_DIR, rel_path)
         try:
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -3214,6 +3253,13 @@ def self_update():
                 # 이미 CRLF든 결과가 항상 깨끗한 CRLF가 되게 한다(CRLF를 또 CRLF화해서
                 # CRCRLF가 되는 사고 방지).
                 write_bytes = remote_bytes.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+            if os.path.exists(local_path):
+                # 검사를 통과해도 예상 못 한 일이 생길 수 있다 — 직전 버전을 한 벌 남겨 둔다.
+                # (git이 없는 팀원 PC에서 되돌릴 수 있는 유일한 수단)
+                try:
+                    shutil.copy2(local_path, local_path + '.bak')
+                except Exception as be:
+                    print(f'[self-update] {rel_path} 백업 실패(계속 진행): {be}', file=sys.stderr)
             with open(local_path, 'wb') as f:
                 f.write(write_bytes)
             updated.append(rel_path)

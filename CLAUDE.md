@@ -191,6 +191,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/backend-auto-update.md` — 🔄 백엔드 자동 업데이트/재시작
 - **읽을 때**: `/self-check-update`·`/self-update`, `kortek_backend.zip`, `.bat`/`.vbs` 변경
 - 새 배포 파일 추가 시: `_SELF_UPDATE_FILES` + `.claude/settings.json` zip 목록 **둘 다** 갱신
+- **`/self-update`는 쓰기 전에 검증**(0바이트·`.py` 문법) + 하나라도 실패하면 전부 중단 + `.bak` 백업 — 깨진 파일이 main에 올라가 팀원 PC가 같이 죽은 사고(2026-10-02) 대응
+- **백엔드 `.py` 커밋 전 `py -3-32 -m py_compile` 필수** — 그 한 줄이면 위 사고는 안 났다
 - `.bat`/`.vbs`는 항상 CRLF(LF-only는 cmd 파서 오동작)
 
 ### `docs/html-corruption-recovery.md` — 🔥 HTML 인코딩 손상 복구
