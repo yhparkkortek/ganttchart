@@ -6335,7 +6335,24 @@ ${docsJson}`;
                 );
                 const data = await res.json();
                 if (data.ok) {
-                    dumpReply = (data.text || '') + (data.savedPath ? `\n\n📁 ${window._t('파일로도 저장됨', 'Also saved to file')}: ${data.savedPath}` : '');
+                    let _dumpSavedHtml = '';
+                    if (data.savedPath) {
+                        // 파일이 있는 폴더 경로 추출 (마지막 \ 또는 / 앞까지)
+                        const _sp = data.savedPath;
+                        const _folderPath = _sp.replace(/[/\\][^/\\]+$/, '') || _sp;
+                        const _btnStyle = 'display:inline-block;margin-top:4px;padding:2px 8px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
+                        _dumpSavedHtml = '<br><br>📁 '
+                            + window._t('파일로도 저장됨', 'Also saved to file') + ': '
+                            + '<span style="font-family:monospace;font-size:11px;">' + _sp + '</span> '
+                            + '<button style="' + _btnStyle + '" onclick="fetch(\'http://127.0.0.1:5000/sap-open-folder?path=' + encodeURIComponent(_folderPath) + '\').catch(function(){});">'
+                            + '📂 ' + window._t('폴더 열기', 'Open folder') + '</button>';
+                    }
+                    const _dumpText = (data.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: '<pre style="white-space:pre-wrap;word-break:break-all;font-size:11px;margin:0;">' + _dumpText + '</pre>' + _dumpSavedHtml, rawHtml: true });
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
                 } else {
                     dumpReply = '⚠️ ' + (data.error || window._t('화면 덤프 실패', 'Screen dump failed'));
                 }
