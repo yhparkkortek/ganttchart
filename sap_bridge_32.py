@@ -489,6 +489,166 @@ def dump_screen_tree(save_dir=None):
     return result
 
 
+def dump_windows_dialogs(save_dir=None):
+    """🪟 지금 떠 있는 **Windows 네이티브 대화상자**를 전부 덤프한다 (SAP 창이 아니라).
+
+    [2026-10-02 사용자 요청] ZMM019 청구서출력이 띄우는 인쇄/저장 창은 SAP 창이 아니라
+    Win32 대화상자(`#32770`)다. `dump_screen_tree`(SAP GuiComponent 트리)로는 **아예 안 보인다** —
+    실제로 저장 창이 떠 있는 상태의 SAP 덤프에 팝업이 0건으로 나왔다. 그래서 같은 역할을
+    하는 Windows용 덤프가 따로 필요하다.
+
+    ⚠️ **SAP 세션을 쓰지 않는다.** 네이티브 모달이 떠 있으면 SAP COM 호출이 전부 블록되는데,
+    바로 그때 쓰려고 만든 도구이기 때문이다. `_get_sap_session()`을 부르면 자기 자신이 멈춘다.
+
+    출력: 대화상자별로 클래스/제목/프로세스 + 자식 컨트롤의 **클래스·컨트롤ID·텍스트·좌표**.
+    컨트롤 ID가 나오면 제목·좌표 추측 없이 `GetDlgItem`으로 바로 잡을 수 있다.
+    """
+    import win32gui as _wg
+
+    def _proc_name(hwnd):
+        try:
+            import win32process as _wp
+            import win32api as _wa
+            import win32con as _wc
+            _tid, pid = _wp.GetWindowThreadProcessId(hwnd)
+            h = _wa.OpenProcess(_wc.PROCESS_QUERY_INFORMATION | _wc.PROCESS_VM_READ, False, pid)
+            try:
+                return os.path.basename(_wp.GetModuleFileNameEx(h, 0)), pid
+            finally:
+                _wa.CloseHandle(h)
+        except Exception:
+            try:
+                import win32process as _wp
+                return '', _wp.GetWindowThreadProcessId(hwnd)[1]
+            except Exception:
+                return '', 0
+
+    def _rect(hwnd):
+        try:
+            l, t, r, b = _wg.GetWindowRect(hwnd)
+            return '(%d,%d %dx%d)' % (l, t, r - l, b - t)
+        except Exception:
+            return ''
+
+    def _text(hwnd):
+        try:
+            return (_wg.GetWindowText(hwnd) or '').replace('\r', ' ').replace('\n', ' ')
+        except Exception:
+            return ''
+
+    # ── 보이는 최상위 창 수집 ────────────────────────────────────────
+    tops = []
+
+    def _cb(hwnd, _):
+        try:
+            if not _wg.IsWindowVisible(hwnd):
+                return
+            cls = _wg.GetClassName(hwnd)
+            ttl = _text(hwnd)
+            if cls == '#32770' or ttl.strip():
+                tops.append((hwnd, cls, ttl))
+        except Exception:
+            pass
+
+    try:
+        _wg.EnumWindows(_cb, None)
+    except Exception as e:
+        raise RuntimeError('창 목록을 읽지 못했습니다: %s' % e)
+
+    # 대화상자(#32770)를 먼저 — 덤프를 뜨는 순간 사람이 보고 싶은 건 보통 그 창이다
+    dialogs = [t for t in tops if t[1] == '#32770']
+    others = [t for t in tops if t[1] != '#32770']
+
+    t0 = time.time()
+    lines = []
+    total = 0
+    truncated = False
+
+    for hwnd, cls, ttl in dialogs:
+        if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
+            truncated = True
+            break
+        pname, pid = _proc_name(hwnd)
+        lines.append('')
+        lines.append('[대화상자] hwnd=%s class=%s  text="%s"  %s  proc=%s(pid %s)'
+                     % (hex(hwnd), cls, ttl, _rect(hwnd), pname or '?', pid))
+        total += 1
+
+        # 자식 컨트롤 — 너비 우선, 깊이 제한
+        queue = [(hwnd, 0)]
+        while queue:
+            if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
+                truncated = True
+                break
+            parent, depth = queue.pop(0)
+            kids = []
+
+            def _cb2(ch, __):
+                kids.append(ch)
+
+            try:
+                _wg.EnumChildWindows(parent, _cb2, None)
+            except Exception:
+                kids = []
+            for ch in kids:
+                if total >= _DUMP_MAX_NODES:
+                    truncated = True
+                    break
+                try:
+                    if _wg.GetParent(ch) != parent:      # 손자는 다음 레벨에서
+                        continue
+                except Exception:
+                    pass
+                try:
+                    cid = _wg.GetDlgCtrlID(ch)
+                except Exception:
+                    cid = 0
+                ccls = ''
+                try:
+                    ccls = _wg.GetClassName(ch)
+                except Exception:
+                    pass
+                vis = '' if _wg.IsWindowVisible(ch) else ' [숨김]'
+                lines.append('%s%s  id=%s(0x%X)  hwnd=%s  text="%s"  %s%s'
+                             % ('  ' * (depth + 1), ccls, cid, cid & 0xFFFFFFFF,
+                                hex(ch), _text(ch), _rect(ch), vis))
+                total += 1
+                if depth < 6:
+                    queue.append((ch, depth + 1))
+
+    if others:
+        lines.append('')
+        lines.append('[그 밖의 보이는 최상위 창] — 제목만')
+        for hwnd, cls, ttl in others[:40]:
+            lines.append('  %s  class=%s  text="%s"' % (hex(hwnd), cls, ttl))
+        if len(others) > 40:
+            lines.append('  …(%d개 중 40개만 표시)' % len(others))
+
+    header = ('[Windows 대화상자 덤프]\n'
+              '대화상자(#32770): %d개 · 그 밖의 최상위 창: %d개 · 노드 %d건%s\n'
+              '※ SAP 창이 아닌 Windows 창만 본다 — SAP 화면은 "SAP 화면 덤프해줘"를 쓸 것.'
+              % (len(dialogs), len(others), total,
+                 ' (시간/개수 제한으로 일부 생략됨)' if truncated else ''))
+    if not dialogs:
+        header += '\n⚠️ 지금 떠 있는 대화상자가 없습니다 — 창이 떠 있는 상태에서 다시 실행하세요.'
+    body = header + '\n' + '\n'.join(lines)
+
+    result = {'ok': True, 'dialogCount': len(dialogs), 'otherCount': len(others),
+              'nodeCount': total, 'truncated': truncated, 'text': body}
+    if save_dir:
+        try:
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir)
+            fname = 'win_dialog_dump_%s.txt' % time.strftime('%Y%m%d_%H%M%S')
+            fpath = os.path.join(save_dir, fname)
+            with open(fpath, 'w', encoding='utf-8') as f:
+                f.write(body)
+            result['savedPath'] = fpath
+        except Exception:
+            pass
+    return result
+
+
 def navigate_and_dump(tcode, save_dir=None):
     """트랜잭션 코드로 이동 후 화면 트리를 덤프한다."""
     tcode = (tcode or '').strip().upper()
@@ -6558,6 +6718,9 @@ def main():
         elif action == 'dump_screen_tree':
             save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
             result = dump_screen_tree(save_dir)
+        elif action == 'dump_windows_dialogs':
+            save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
+            result = dump_windows_dialogs(save_dir)
         elif action == 'navigate_and_dump':
             tcode_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             save_dir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None

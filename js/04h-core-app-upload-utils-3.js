@@ -6429,6 +6429,58 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // 🪟🚫🤖 [2026-10-02 신규, 사용자 요청 "윈도우 화면 덤프해줘도 자주쓰는 질문에 넣어줘"]
+        //    바로 아래 "SAP 화면 덤프"의 **Windows 판**. ZMM019 청구서출력이 띄우는 인쇄/저장 창은
+        //    SAP 창이 아니라 Win32 대화상자(#32770)라서 SAP 트리 덤프에는 아예 안 나온다 —
+        //    저장 창이 떠 있는 상태로 뜬 SAP 덤프에 "팝업 없음"으로 찍힌 걸로 확인됐다(실측).
+        //    ⚠️ 반드시 screendump 블록보다 **먼저** 와야 한다: screendump의 kw에 '덤프'가 있어
+        //    "윈도우 화면 덤프해줘"가 그쪽으로 먼저 걸려버린다. 어휘는 js/32 카탈로그(데이터)에
+        //    두되, 구체적인 쪽을 먼저 보는 **우선순위는 이 호출 순서로** 준다.
+        //    ⚠️ 백엔드가 SAP 세션을 안 쓰므로, 네이티브 모달이 SAP COM을 막고 있는 그 순간에도 된다.
+        const _winDumpHit = window._sapCapKwHit
+            ? window._sapCapKwHit(question, 'windump')
+            : /(윈도우|windows|win)\s*(화면\s*)?덤프|대화상자\s*덤프|창\s*덤프|팝업\s*덤프/i.test(question);
+        if (_winDumpHit) {
+            if (!_skipUserHistoryPush) {
+                window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';
+                // AI를 안 거치는 로컬 명령은 여기서 직접 기록해야 "자주 쓰는 질문"에 쌓인다
+                // (docs/ai-qa.md — 빈도 기록은 AI 호출 직전 한 곳에서만 일어난다)
+                if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            }
+            window._ganttQaHistory.push({ role: 'ai', pending: true, text: '⏳ ' + window._t('지금 떠 있는 Windows 대화상자를 덤프하는 중...', 'Dumping the open Windows dialogs...') });
+            window._renderGanttQaMessages();
+            let _winDumpReply;
+            try {
+                const _wdRes = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-dump-windows'), 35000,
+                    window._t('Windows 대화상자 덤프 시간 초과', 'Windows dialog dump timed out')
+                );
+                const _wdData = await _wdRes.json();
+                if (_wdData.ok) {
+                    let _wdSavedHtml = '';
+                    if (_wdData.savedPath) {
+                        const _wdFolder = _wdData.savedPath.replace(/[/\\][^/\\]+$/, '') || _wdData.savedPath;
+                        const _wdBtn = 'display:inline-block;margin-top:4px;padding:2px 8px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
+                        _wdSavedHtml = '<br><br>📁 ' + window._t('파일로도 저장됨', 'Also saved to file') + ': '
+                            + '<span style="font-family:monospace;font-size:11px;">' + _wdData.savedPath + '</span> '
+                            + '<button style="' + _wdBtn + '" onclick="fetch(\'http://127.0.0.1:5000/sap-open-folder?path=' + encodeURIComponent(_wdFolder) + '\').catch(function(){});">'
+                            + '📂 ' + window._t('폴더 열기', 'Open folder') + '</button>';
+                    }
+                    const _wdText = (_wdData.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', rawHtml: true,
+                        text: '<pre style="white-space:pre-wrap;word-break:break-all;font-size:11px;margin:0;">' + _wdText + '</pre>' + _wdSavedHtml });
+                    window._renderGanttQaMessages(); input.focus(); return;
+                }
+                _winDumpReply = '⚠️ ' + (_wdData.error || window._t('Windows 대화상자 덤프 실패', 'Windows dialog dump failed'));
+            } catch (e) {
+                _winDumpReply = '⚠️ ' + window._t('Windows 대화상자 덤프 실패: ', 'Windows dialog dump failed: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: _winDumpReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 🔧🚫🤖 [2026-09-23 신규, "SAP 마스터" 사용자 요청] "SAP 화면 덤프해줘"/"화면 구조 확인해줘"
         //    — 새 SAP 기능을 붙일 때마다 사용자가 준 매크로(.vbs)를 사람이 해석해서 필드 ID를
         //    추측해오던 방식(팀운영비 기간지정 버그가 그 부작용) 대신, 지금 열려 있는 SAP 화면의
@@ -8589,9 +8641,14 @@ ${docsJson}`;
     //   "미지원 안내"로 떨어져 사용자를 헷갈리게 했으므로, SAP_CAPABILITIES[].ex 기준으로
     //   **실제 동작하는** 예시로 교체했다. 플래그를 v2로 올려 기존 사용자도 한 번 재주입한다
     //   (이미 쌓인 실사용 빈도는 existing[pat] 체크로 보존된다).
-    const _QA_SAP_SEED_FLAG = 'gantt_qa_sap_seeds_v2';
+    // [2026-10-02] v2 → v3: 시드는 플래그가 있으면 통째로 건너뛴다. 목록에 줄을 더할 땐
+    //   **플래그도 같이 올릴 것** — 안 그러면 이미 돌린 PC엔 새 항목이 영영 안 들어간다.
+    //   기존 항목은 pat 중복 검사로 걸러지니 재주입돼도 늘어나지 않는다.
+    const _QA_SAP_SEED_FLAG = 'gantt_qa_sap_seeds_v3';
     const _QA_SAP_SEED_LIST = [
         '현재 SAP 화면 상태 알려줘',
+        'SAP 화면 덤프해줘',
+        '윈도우 화면 덤프해줘',
         '502572 BOM 보여줘',
         '104446 사용처 조회해줘',
         '301966 재고수량 확인해줘',
@@ -8623,6 +8680,9 @@ ${docsJson}`;
             });
             if (added) { store['_global'] = global; _qaFreqSaveStore(store); }
             localStorage.setItem(_QA_SAP_SEED_FLAG, '1');
+            // 플래그를 올리면 예전 키는 쓰레기로 남는다 — 레지스트리에 올릴 만한 크기가
+            //   아니니(1바이트) 여기서 바로 치운다.
+            try { localStorage.removeItem('gantt_qa_sap_seeds_v2'); } catch (e2) {}
             if (added) console.info('[자주 쓰는 질문] SAP 예시 시드 주입:', added + '건');
         } catch (e) {
             console.warn('[자주 쓰는 질문] SAP 시드 주입 실패:', e && e.message);
@@ -8861,6 +8921,8 @@ ${docsJson}`;
             ? [
                 'Any delayed tasks?',
                 "What's the current SAP screen status?",
+                'Dump the current SAP screen',
+                'Dump the open Windows dialogs',
                 'Check MMBE for stock of material 100-001',
                 'Look up purchase order 4500001234 in ME23N',
                 'Query MB51 for material movement history',
@@ -8870,6 +8932,8 @@ ${docsJson}`;
             : [
                 '지연된 업무가 있어?',
                 '현재 SAP 화면 상태 알려줘',
+                'SAP 화면 덤프해줘',
+                '윈도우 화면 덤프해줘',
                 'MMBE에서 자재 100-001 재고 현황 봐줘',
                 'ME23N에서 구매오더 4500001234 상태 확인해줘',
                 'MB51로 자재 100-001 입출고 이력 조회해줘',

@@ -2155,6 +2155,18 @@ def sap_dump_screen():
     return jsonify(data), status
 
 
+@app.route('/sap-dump-windows', methods=['GET'])
+def sap_dump_windows():
+    # 🪟 [2026-10-02 신규, 사용자 요청] 위 /sap-dump-screen의 **Windows 판**.
+    #    ZMM019 청구서출력이 띄우는 인쇄/저장 창은 SAP 창이 아니라 Win32 대화상자(#32770)라
+    #    SAP 트리 덤프에는 아예 안 나온다(저장 창이 떠 있는데 팝업 0건으로 찍힌 실측 확인).
+    #    이 엔드포인트는 SAP 세션을 전혀 쓰지 않으므로 **네이티브 모달이 SAP COM을 막고 있는
+    #    바로 그 상황에서도** 동작한다 — 그때 쓰라고 만든 것이다.
+    data, status = _run_sap_bridge(['dump_windows_dialogs', r'C:\SAP_DMS\SAP_화면덤프'], 30,
+                                   'Windows 대화상자 덤프')
+    return jsonify(data), status
+
+
 @app.route('/sap-download-documents-by-pattern', methods=['GET'])
 def sap_download_documents_by_pattern():
     # 💡 [2026-09-16 신규] "*01+01*500*로 조회된 아이템 승인원 다운로드해줘"처럼 자재번호를

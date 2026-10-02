@@ -413,6 +413,18 @@
         { id: 'screendump', title: '화면 구조 덤프(개발용 진단)', titleEn: 'Screen tree dump (dev diagnostic)', tcode: '(열려 있는 화면)', mode: 'read', verified: 'live',
           kw: ['덤프', 'dump', '화면 구조', '화면구조', '화면 구성', '필드 id', '필드아이디', '필드 아이디', '컨트롤 id'],
           needs: '없음(SAP에 미리 로그인 + 대상 화면 열어둠)', ex: 'SAP 화면 덤프해줘 / SAP 덤프해줘' },
+        // 🪟 [2026-10-02 사용자 요청] 위 screendump의 **Windows 판**. ZMM019 인쇄/저장 창처럼
+        //    SAP 창이 아닌 Win32 대화상자(#32770)는 SAP 트리 덤프에 아예 안 나온다.
+        //    ⚠️ kw에 '덤프'만 있는 screendump가 먼저 걸리지 않도록, js/04h에서 **이 블록을 먼저**
+        //    검사한다(어휘는 여기 데이터로 두되 우선순위는 호출 순서로 준다).
+        { id: 'windump', title: 'Windows 대화상자 덤프(개발용 진단)', titleEn: 'Windows dialog dump (dev diagnostic)',
+          tcode: '(떠 있는 Windows 창)', mode: 'read', verified: 'unverified',
+          kw: ['윈도우 덤프', '윈도우덤프', '윈도우 화면 덤프', '윈도우화면덤프', 'windows 덤프', 'win 덤프',
+               '대화상자 덤프', '대화상자덤프', '창 덤프', '창덤프', '팝업 덤프', '팝업덤프',
+               '인쇄창 덤프', '저장창 덤프', '인쇄 창 덤프', '저장 창 덤프',
+               '윈도우 창 덤프', '네이티브 창', '윈도우 대화상자'],
+          needs: '없음(덤프하려는 Windows 창을 띄워둔 상태에서 실행)',
+          ex: '윈도우 화면 덤프해줘 / 대화상자 덤프해줘 / 저장창 덤프해줘' },
         { id: 'materialprice', title: '표준가격/기간별단가 조회', titleEn: 'Standard/period price lookup', tcode: 'MM03', mode: 'read', verified: 'unverified',
           kw: ['표준가격', '표준 가격', '기간별단가', '기간별 단가', '기간별간가',
                '현재가격', '현재 가격', '이동평균가', '이동 평균가',
