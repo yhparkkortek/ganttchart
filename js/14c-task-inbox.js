@@ -347,12 +347,13 @@ var _TI_STATUS_STYLE = {
     '대기':       { bg: '#fff3e0', fg: '#a85d0a', emoji: '🟠' },
     '자동배치됨': { bg: '#f3f0ff', fg: '#5f3dc4', emoji: '🟣' },
     '전송됨':     { bg: '#e7f3ff', fg: '#1971c2', emoji: '🔵' },
-    '배치됨':     { bg: '#e6f6ea', fg: '#1f7a3d', emoji: '🟢' }
+    '배치됨':     { bg: '#e6f6ea', fg: '#1f7a3d', emoji: '🟢' },
+    '전송 중':    { bg: '#fff8dc', fg: '#8a6500', emoji: '⏳' }
 };
 // 💡 [2026-09-12 i18n] 요약 칩(_tiBuildSummaryHtml)과 카드 배지(renderTaskInboxList) 양쪽에서
 // 공유하는 상태명 영문 매핑 — 예전엔 요약 칩 쪽에 이 매핑이 아예 없어서 영문 모드에서도
 // "자동배치됨/대기/전송됨/배치됨"이 그대로 노출되고 있었음.
-var _TI_STATUS_LABEL_EN = { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed' };
+var _TI_STATUS_LABEL_EN = { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed', '전송 중': 'Sending…' };
 
 /** 업무 1건이 매칭된 프로젝트명 (없으면 noMatchLabel) — 요약 집계·필터 양쪽에서 재사용 */
 function _tiProjectOf(it, noMatchLabel) {
@@ -601,10 +602,10 @@ window.renderTaskInbox = function() {
     }
 
     const l0List = window.getCurrentL0List();
-    const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;', '자동배치됨': 'background:#f3f0ff;color:#7048e8;' };
+    const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;', '자동배치됨': 'background:#f3f0ff;color:#7048e8;', '전송 중': 'background:#fff8dc;color:#8a6500;' };
     const statusLabel = _ibEn
         ? _TI_STATUS_LABEL_EN
-        : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨', '자동배치됨': '자동배치됨' };
+        : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨', '자동배치됨': '자동배치됨', '전송 중': '전송 중' };
     let html = '';
     filteredItems.forEach(function(it) {
         const t = it.task || {};
@@ -810,7 +811,7 @@ window.inboxDistributeToMultiCandidates = function(uid) {
 
 // 💡 [매칭/점수 통일화] Stage1이 단일 프로젝트로 확정한 항목은 "다른 프로젝트" 모달로 전체 목록을
 //    다시 뒤질 필요 없이, 이미 알고 있는 drive_file_id로 바로 전송 — _msAutoRegisterToProject(자동틱과 동일 로직) 재사용
-window.inboxQuickRegisterMatched = async function(uid) {
+window.inboxQuickRegisterMatched = function(uid) {
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
     const mp = it.matchedProject;
@@ -819,32 +820,42 @@ window.inboxQuickRegisterMatched = async function(uid) {
         return;
     }
     const target = mp.candidates[0];
-    window._ibRepairDatesFromMail(it); // ⭐ [2026-09-23] 막기 전에 메일 수신일로 채우는 것부터 시도
+    window._ibRepairDatesFromMail(it);
     if ((it.task['시작일'] || '').includes('날짜확인필요') || (it.task['완료일'] || '').includes('날짜확인필요')) {
         alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 다시 시도해주세요.', '⚠️ Start/end date is unconfirmed ("date needs confirmation"). Please confirm the date in the mail analyzer screen and try again.'));
         return;
     }
-    // 💡 [2026-09-10] "✅ 매칭전송" 버튼 클릭 자체가 이미 명시적 의사표시라 확인창은 불필요한 클릭 한 번
-    //    더 요구할 뿐 — confirm() 없이 바로 전송하고, 결과는 성공/실패 토스트(아래)로 안내한다.
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) { alert(window._t('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.', '🔒 Please sign in to Google via [🔵 Connect Drive] at the top first.')); return; }
 
-    // ⭐ [2026-09-23] 사람이 방금 누른 단건 전송은 코얼레싱하지 않고 즉시 저장한다(기존 동작 유지)
-    const result = await window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false });
-    if (result.ok) {
-        window.TaskInbox.setStatus(uid, '배치됨', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
-        window.renderTaskInbox();
-        const msg = `✅ "${it.task['업무명'] || '새 업무'}" → ${target.file_name} 전송 완료 (${result.label || ''})`;
-        if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
-    } else {
-        alert(window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error')));
-    }
+    // ⭐ [2026-10-02] fire-and-forget: 즉시 "전송 중" 표시 후 백그라운드 전송 — 버튼 클릭 후 UI 블로킹 없음
+    const taskName = it.task['업무명'] || '새 업무';
+    window.TaskInbox.setStatus(uid, '전송 중', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
+    window.renderTaskInbox();
+    window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false })
+        .then(function(result) {
+            if (result.ok) {
+                window.TaskInbox.setStatus(uid, '배치됨', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
+                const msg = '✅ "' + taskName + '" → ' + target.file_name + ' 전송 완료 (' + (result.label || '') + ')';
+                if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
+            } else {
+                window.TaskInbox.setStatus(uid, '대기', { type: '전송실패', reason: result.reason, at: new Date().toISOString() });
+                const msg = window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error'));
+                if (window.showToast) window.showToast(msg, 'error'); else alert(msg);
+            }
+            window.renderTaskInbox();
+        })
+        .catch(function(e) {
+            window.TaskInbox.setStatus(uid, '대기', { type: '전송오류', reason: e.message, at: new Date().toISOString() });
+            window.renderTaskInbox();
+            if (window.showToast) window.showToast('❌ 전송 오류: ' + e.message, 'error');
+        });
 };
 
 // [2026-10-02] AI 분석 후보 프로젝트로 전송 — status 무관하게 candidates[0]으로 전송.
-//   inboxQuickRegisterMatched와 동일 로직이나 status === 'matched' 조건 없음.
-window.inboxPlaceToCandidate = async function(uid) {
+//   fire-and-forget: 즉시 "전송 중" 표시 후 백그라운드 전송.
+window.inboxPlaceToCandidate = function(uid) {
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
     const mp = it.matchedProject;
@@ -862,15 +873,27 @@ window.inboxPlaceToCandidate = async function(uid) {
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) { alert(window._t('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.', '🔒 Please sign in to Google via [🔵 Connect Drive] at the top first.')); return; }
-    const result = await window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false });
-    if (result.ok) {
-        window.TaskInbox.setStatus(uid, '배치됨', { type: 'AI분석 프로젝트 전송', target: target.file_name, at: new Date().toISOString() });
-        window.renderTaskInbox();
-        const msg = '✅ "' + (it.task['업무명'] || '새 업무') + '" → ' + target.file_name + ' 전송 완료 (' + (result.label || '') + ')';
-        if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
-    } else {
-        alert(window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error')));
-    }
+    const taskName = it.task['업무명'] || '새 업무';
+    window.TaskInbox.setStatus(uid, '전송 중', { type: 'AI분석 프로젝트 전송', target: target.file_name, at: new Date().toISOString() });
+    window.renderTaskInbox();
+    window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false })
+        .then(function(result) {
+            if (result.ok) {
+                window.TaskInbox.setStatus(uid, '배치됨', { type: 'AI분석 프로젝트 전송', target: target.file_name, at: new Date().toISOString() });
+                const msg = '✅ "' + taskName + '" → ' + target.file_name + ' 전송 완료 (' + (result.label || '') + ')';
+                if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
+            } else {
+                window.TaskInbox.setStatus(uid, '대기', { type: '전송실패', reason: result.reason, at: new Date().toISOString() });
+                const msg = window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error'));
+                if (window.showToast) window.showToast(msg, 'error'); else alert(msg);
+            }
+            window.renderTaskInbox();
+        })
+        .catch(function(e) {
+            window.TaskInbox.setStatus(uid, '대기', { type: '전송오류', reason: e.message, at: new Date().toISOString() });
+            window.renderTaskInbox();
+            if (window.showToast) window.showToast('❌ 전송 오류: ' + e.message, 'error');
+        });
 };
 
 // ⭐ [2026-09-23 신규] '날짜확인필요'로 굳어버린 기존 대기 항목을 메일 수신일로 보수한다.
