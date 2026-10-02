@@ -8772,8 +8772,10 @@ ${docsJson}`;
                 return window._ganttQaQuestionSimilarity(c.sample, item.sample) >= 0.75;
             });
         };
-        const _extras = raw.filter(function(x) { return (x.count || 1) >= 2 && !_isCovered(x); });
-        return _clusters.concat(_extras).slice(0, n || 6);
+        // [2026-10-02] count >= 2 조건 제거 — AI 캐시 경로에서만 새 질문이 차단되던 버그 수정.
+        //   "무조건 저장" 방식: 1회 사용만 해도 클러스터에 없으면 extras로 즉시 표시.
+        const _extras = raw.filter(function(x) { return !_isCovered(x); });
+        return _clusters.concat(_extras).slice(0, n || 12);
     };
 
     window._ganttQaClusterInFlight = null; // 같은 서명으로 중복 호출 방지용
