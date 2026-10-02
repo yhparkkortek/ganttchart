@@ -3009,6 +3009,48 @@ def _sap_status_text(session):
         return ''
 
 
+def _sap_open_popups(session, max_windows=4):
+    """지금 열려 있는 팝업(wnd[1] 이상)을 [(인덱스, 제목)] 로 돌려준다."""
+    out = []
+    for i in range(1, max_windows + 1):
+        try:
+            w = session.findById(f'wnd[{i}]')
+        except Exception:
+            continue
+        try:
+            out.append((i, str(w.Text or '').strip()))
+        except Exception:
+            out.append((i, ''))
+    return out
+
+
+def _sap_screen_info(session):
+    """"지금 어느 화면에 있나"를 한 줄로 — 실패 보고에 반드시 같이 실어야 다음 수를 둘 수 있다.
+
+    [2026-10-02] MB21 저장이 "유효한 기능을 선택하십시오"로 막혔을 때, 그 메시지만으로는
+    **어느 화면에서 막혔는지** 알 수 없어 두 번이나 추측으로 고치다 실패했다. 트랜잭션/프로그램/
+    화면번호/제목과 **열려 있는 팝업 목록**까지 같이 보면 원인이 바로 좁혀진다
+    (대표적으로 코딩 블록 팝업이 안 닫혀 wnd[0] 조작이 전부 막히는 경우).
+    """
+    tcode = program = screen = title = ''
+    try:
+        info = session.Info
+        tcode, program, screen = str(info.Transaction), str(info.Program), str(info.ScreenNumber)
+    except Exception:
+        pass
+    try:
+        title = str(session.findById('wnd[0]').Text or '').strip()
+    except Exception:
+        pass
+    pops = _sap_open_popups(session)
+    s = f'{tcode}/{program}/{screen} "{title}"'
+    if pops:
+        s += ' · 열린 팝업: ' + ', '.join(f'wnd[{i}]"{t}"' for i, t in pops)
+    else:
+        s += ' · 팝업 없음'
+    return s
+
+
 def humanize_sap_error(exc, session=None, step=''):
     """COM 예외를 사람이 바로 알아보는 한국어로 바꾼다.
 
@@ -3101,9 +3143,34 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
             by_mat[_norm((it or {}).get('matnr'))] = t
     default_txt = (fallback_text or '').strip() or (next(iter(by_mat.values())) if by_mat else '')
 
-    filled, last_sbar = 0, ''
+    filled, last_sbar, popup_note = 0, '', ''
     max_rounds = len(items or []) * 3 + 8
     for _ in range(max_rounds):
+        # ── 열린 팝업이 있으면 먼저 치운다 ───────────────────────────────────
+        #   [2026-10-02] 코딩 블록(목적) 팝업이 안 닫힌 채 남으면 wnd[0]의 저장이 전부
+        #   "유효한 기능을 선택하십시오"로 막힌다. 확인(Enter) → 확인버튼 → 취소(F12) 순으로 시도.
+        pops = _sap_open_popups(session)
+        if pops:
+            popup_note = '열려 있던 팝업: ' + ', '.join(f'wnd[{i}]"{t}"' for i, t in pops)
+            idx = pops[-1][0]
+            for closer in ('enter', 'btn0', 'cancel'):
+                try:
+                    w = session.findById(f'wnd[{idx}]')
+                except Exception:
+                    break
+                try:
+                    if closer == 'enter':
+                        w.sendVKey(0)
+                    elif closer == 'btn0':
+                        w.findById('tbar[0]/btn[0]').press()
+                    else:
+                        w.sendVKey(12)
+                except Exception:
+                    pass
+                time.sleep(0.5)
+                if not _sap_open_popups(session):
+                    break
+
         # ── 저장 시도 (키가 잠겼으면 툴바 버튼으로) ──
         try:
             _sap_send_vkey(session, 11, fallback_btn='tbar[0]/btn[11]', step='MB21 저장')
@@ -3124,8 +3191,11 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
             return None, f'SAP 화면을 읽지 못했습니다: {e}'
         fld = _find_by_id_substring(wnd, 'txtRESB-SGTXT')
         if fld is None:
-            # 채울 게 없으면 더 돌아봐야 소용없다
-            return None, (f'저장이 끝나지 않았고 텍스트 입력칸도 없습니다. (상태바: "{last_sbar}")')
+            # 채울 게 없으면 더 돌아봐야 소용없다 — 어느 화면에서 막혔는지 같이 알려준다
+            return None, (f'저장이 끝나지 않았고 텍스트 입력칸도 없습니다.\n'
+                          f'    상태바: "{last_sbar}"\n'
+                          f'    화면: {_sap_screen_info(session)}'
+                          + (f'\n    {popup_note}' if popup_note else ''))
 
         # 이 화면이 어느 품목인지 — 자재번호로 짝을 찾는다(품목 순서에 의존하지 않음)
         mat = ''
@@ -3143,7 +3213,9 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
             if str(fld.Text or '').strip() == txt:
                 # 이미 같은 값이 들어 있는데도 또 물어본다 = 다른 필수 항목이 비었다는 뜻
                 return None, (f'자재 {mat or "?"}에 사유를 넣었는데도 SAP이 계속 되묻습니다 — '
-                              f'다른 필수 항목이 비어 있을 수 있습니다. (상태바: "{last_sbar}")')
+                              f'다른 필수 항목이 비어 있을 수 있습니다.\n'
+                              f'    상태바: "{last_sbar}"\n'
+                              f'    화면: {_sap_screen_info(session)}')
             fld.text = txt
             wnd.sendVKey(0)
             time.sleep(0.5)
@@ -3151,8 +3223,9 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
         except Exception as e:
             return None, f'자재 {mat or "?"} 텍스트 입력 실패: {e} (앞 {filled}건 입력됨)'
 
-    return None, (f'저장을 {max_rounds}회 시도했지만 예약번호를 받지 못했습니다. '
-                  f'(상태바: "{last_sbar}", 텍스트 {filled}건 입력됨)')
+    return None, (f'저장을 {max_rounds}회 시도했지만 예약번호를 받지 못했습니다.\n'
+                  f'    상태바: "{last_sbar}" (텍스트 {filled}건 입력됨)\n'
+                  f'    화면: {_sap_screen_info(session)}')
 
 
 def _mb21_set_purpose(session, purpose):
@@ -3201,13 +3274,32 @@ def _mb21_set_purpose(session, purpose):
         return '코딩 블록에서 "목적"(YYDEVTYPE) 입력칸을 찾지 못했습니다.'
     try:
         fld.text = str(purpose).strip()
-        try:
-            session.findById('wnd[1]').sendVKey(0)    # 엔터로 확정
-        except Exception:
-            session.findById('wnd[0]').sendVKey(0)
-        time.sleep(0.6)
     except Exception as e:
         return f'"목적" 입력 실패: {e}'
+
+    # ⚠️ [2026-10-02] 팝업을 **확실히 닫아야** 한다 — 열린 채로 남으면 이후 wnd[0] 저장이
+    #    전부 "유효한 기능을 선택하십시오"로 막힌다. 확인(Enter) → 확인버튼 → 취소 순으로 시도하고,
+    #    그래도 안 닫히면 사유를 돌려준다(저장 루프가 한 번 더 치우지만, 원인을 남겨야 한다).
+    for closer in ('enter', 'btn0', 'cancel'):
+        pops = _sap_open_popups(session)
+        if not pops:
+            return None
+        idx = pops[-1][0]
+        try:
+            w = session.findById(f'wnd[{idx}]')
+            if closer == 'enter':
+                w.sendVKey(0)
+            elif closer == 'btn0':
+                w.findById('tbar[0]/btn[0]').press()
+            else:
+                w.sendVKey(12)
+        except Exception:
+            pass
+        time.sleep(0.6)
+    pops = _sap_open_popups(session)
+    if pops:
+        return ('코딩 블록 팝업이 닫히지 않았습니다: '
+                + ', '.join(f'wnd[{i}]"{t}"' for i, t in pops))
     return None
 
 
@@ -3406,7 +3498,9 @@ def create_reservation(items, bwart='951', order_number=None, cost_center=None,
         raise RuntimeError(
             'MB21 저장을 끝내지 못했습니다.\n  ' + (text_warn or '사유 불명')
             + (f'\n  목적(YYDEVTYPE) 입력 경고: {purpose_warn}' if purpose_warn else '')
-            + '\n  확인할 것: 품목별 사유(텍스트) · 오더 · 코스트센터 · 목적(기타 코딩블록)')
+            + '\n  확인할 것: 품목별 사유(텍스트) · 오더 · 코스트센터 · 목적(기타 코딩블록)'
+            + '\n  💡 SAP 화면을 그대로 둔 채 "SAP 화면 덤프해줘"를 실행하면 지금 멈춘 화면을'
+              ' 그대로 볼 수 있습니다(팝업부터 덤프됩니다).')
     sbar_save = _sap_status_text(session)
 
     return {
