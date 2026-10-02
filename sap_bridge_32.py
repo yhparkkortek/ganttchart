@@ -3057,57 +3057,102 @@ def _sap_send_vkey(session, key, wnd_id='wnd[0]', fallback_btn=None, step=''):
         raise RuntimeError(humanize_sap_error(e1, session, step))
 
 
-def _mb21_set_item_texts(session, items):
-    """MB21 품목별 "텍스트"(RESB-SGTXT)를 채운다 — 품목 수만큼 상세화면을 순회한다.
+_MB21_ERROR_HINTS = ('오류', '필수', '유효한', '입력하십시오', '선택하십시오',
+                     '없습니다', '불가', '허용되지')
 
-    [2026-10-02 실화면 덤프 + 사용자 확인] 텍스트는 **품목마다 필수**다
-    (화면 510 "예약생성: 신규품목 0001", 상태바 "모든 필수 입력 필드에 값을 입력하십시오").
-    다중 입력 화면(521)의 품목 그리드에는 SGTXT 열이 아예 없어서, 상세화면으로 들어가
-    한 품목씩 넣고 다음 품목으로 넘어가는 수밖에 없다.
 
-      tbar[0]/btn[11] : 그리드 → 상세(510) 진입
-      usr/txtRESB-SGTXT : 그 품목의 텍스트
-      tbar[1]/btn[19] : 다음 품목         ⚠️ 아직 실환경 미검증(아이콘만 있어 라벨이 비어 있음)
-      tbar[0]/btn[3]  : 뒤로(그리드 복귀)
-
-    실패해도 예외로 죽이지 않고 "어디까지 넣었는지"를 문자열로 돌려준다 — 텍스트가 비면
-    SAP이 저장 단계에서 거절하므로, 사람이 원인을 바로 알 수 있어야 한다.
-    """
-    texts = [str((it or {}).get('sgtxt', '') or '').strip() for it in items]
-    if not any(texts):
+def _mb21_extract_rsnum(sbar):
+    """상태바에서 예약번호를 뽑는다 — 오류 문구에 섞인 숫자를 번호로 오인하지 않게 거른다."""
+    if not sbar:
         return None
-    try:
-        session.findById('wnd[0]/tbar[0]/btn[11]').press()
-        time.sleep(0.9)
-    except Exception as e:
-        return f'품목 상세화면(btn[11]) 진입 실패 — 텍스트를 넣지 못했습니다: {e}'
+    if any(h in sbar for h in _MB21_ERROR_HINTS):
+        return None
+    import re as _re
+    m = _re.search(r'(\d{7,10})', sbar)
+    return m.group(1) if m else None
 
-    done = 0
-    for idx, txt in enumerate(texts):
-        wnd = session.findById('wnd[0]')
+
+def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
+    """MB21을 저장하되, SAP이 "필수 입력"으로 되물으면 그 화면에서 바로 채우고 다시 저장한다.
+
+    ⚠️⚠️ [2026-10-02 두 번 데인 자리] 처음엔 "btn[11] → 텍스트 → btn[19] 다음품목 → btn[3] → F11"
+      이라는 **고정 순서**로 짰다가 두 번 실패했다.
+        1차: "The virtual key is not enabled" — 필수 입력이 비어 저장키가 잠김
+        2차: "유효한 기능을 선택하십시오" — `tbar[0]/btn[11]`이 SAP 표준에서 **저장**이라,
+             텍스트를 다 채운 순간 거기서 이미 저장이 끝났는데 뒤에서 F11을 또 보냄
+      화면 전환 순서를 코드가 미리 안다고 가정한 게 잘못이었다. 그래서 **SAP이 지금 무엇을
+      요구하는지 읽고 거기에 반응하는 루프**로 바꿨다:
+
+        저장 시도 → 상태바 확인
+          ├ 예약번호가 보이면            → 끝
+          ├ 텍스트(RESB-SGTXT) 칸이 보이면 → 그 화면의 자재번호로 사유를 찾아 채우고 Enter → 다시 저장
+          └ 그 외                        → 상태바 문구를 그대로 담아 중단
+
+      화면이 몇 번 바뀌든, 품목 순서가 어떻든 상관없다(자재번호로 짝을 찾으므로).
+    반환: (rsnum, warning) — rsnum이 None이면 warning에 사유.
+    """
+    def _norm(m):
+        return str(m or '').strip().lstrip('0')
+
+    by_mat = {}
+    for it in (items or []):
+        t = str((it or {}).get('sgtxt', '') or '').strip()
+        if t:
+            by_mat[_norm((it or {}).get('matnr'))] = t
+    default_txt = (fallback_text or '').strip() or (next(iter(by_mat.values())) if by_mat else '')
+
+    filled, last_sbar = 0, ''
+    max_rounds = len(items or []) * 3 + 8
+    for _ in range(max_rounds):
+        # ── 저장 시도 (키가 잠겼으면 툴바 버튼으로) ──
         try:
-            fld = _find_by_id_substring(wnd, 'txtRESB-SGTXT')
-            if fld is None:
-                return f'{idx + 1}번째 품목에서 텍스트(RESB-SGTXT) 칸을 찾지 못했습니다. (앞 {done}건은 입력됨)'
+            _sap_send_vkey(session, 11, fallback_btn='tbar[0]/btn[11]', step='MB21 저장')
+        except Exception as e:
+            # 저장키 자체가 막혔다면 보통 지금 화면에 못 채운 필수 입력이 있다는 뜻 — 아래에서 찾아본다
+            print(f'[MB21] 저장 시도 실패(계속 진행): {e}', file=sys.stderr)
+        time.sleep(1.1)
+
+        last_sbar = _sap_status_text(session)
+        rsnum = _mb21_extract_rsnum(last_sbar)
+        if rsnum:
+            return rsnum, None
+
+        # ── SAP이 되물었다: 지금 화면에 텍스트 칸이 있나? ──
+        try:
+            wnd = session.findById('wnd[0]')
+        except Exception as e:
+            return None, f'SAP 화면을 읽지 못했습니다: {e}'
+        fld = _find_by_id_substring(wnd, 'txtRESB-SGTXT')
+        if fld is None:
+            # 채울 게 없으면 더 돌아봐야 소용없다
+            return None, (f'저장이 끝나지 않았고 텍스트 입력칸도 없습니다. (상태바: "{last_sbar}")')
+
+        # 이 화면이 어느 품목인지 — 자재번호로 짝을 찾는다(품목 순서에 의존하지 않음)
+        mat = ''
+        mfld = _find_by_id_substring(wnd, 'ctxtRESB-MATNR')
+        if mfld is not None:
+            try:
+                mat = _norm(mfld.Text)
+            except Exception:
+                mat = ''
+        txt = by_mat.get(mat) or default_txt
+        if not txt:
+            return None, (f'자재 {mat or "?"}의 사유(텍스트)가 비어 있어 저장할 수 없습니다. '
+                          f'(상태바: "{last_sbar}")')
+        try:
+            if str(fld.Text or '').strip() == txt:
+                # 이미 같은 값이 들어 있는데도 또 물어본다 = 다른 필수 항목이 비었다는 뜻
+                return None, (f'자재 {mat or "?"}에 사유를 넣었는데도 SAP이 계속 되묻습니다 — '
+                              f'다른 필수 항목이 비어 있을 수 있습니다. (상태바: "{last_sbar}")')
             fld.text = txt
             wnd.sendVKey(0)
-            time.sleep(0.4)
-            done += 1
+            time.sleep(0.5)
+            filled += 1
         except Exception as e:
-            return f'{idx + 1}번째 품목 텍스트 입력 실패: {e} (앞 {done}건은 입력됨)'
-        if idx < len(texts) - 1:
-            try:
-                session.findById('wnd[0]/tbar[1]/btn[19]').press()   # 다음 품목
-                time.sleep(0.5)
-            except Exception as e:
-                return f'{idx + 2}번째 품목으로 넘어가지 못했습니다(btn[19]): {e} (앞 {done}건은 입력됨)'
+            return None, f'자재 {mat or "?"} 텍스트 입력 실패: {e} (앞 {filled}건 입력됨)'
 
-    try:
-        session.findById('wnd[0]/tbar[0]/btn[3]').press()            # 그리드로 복귀
-        time.sleep(0.6)
-    except Exception:
-        pass
-    return None
+    return None, (f'저장을 {max_rounds}회 시도했지만 예약번호를 받지 못했습니다. '
+                  f'(상태바: "{last_sbar}", 텍스트 {filled}건 입력됨)')
 
 
 def _mb21_set_purpose(session, purpose):
@@ -3354,55 +3399,15 @@ def create_reservation(items, bwart='951', order_number=None, cost_center=None,
     wnd.sendVKey(0)
     time.sleep(0.5)
 
-    # 품목 텍스트(사유) — [2026-10-02] 품목마다 필수라 상세화면을 순회한다.
-    #   items[i]['sgtxt']가 하나라도 있으면 항목별 입력, 없고 text만 있으면 기존처럼 전체 1건.
-    text_warn = None
-    if any(str((it or {}).get('sgtxt', '') or '').strip() for it in items):
-        text_warn = _mb21_set_item_texts(session, items)
-        if text_warn:
-            print(f'[MB21 품목 텍스트] {text_warn}', file=sys.stderr)
-    elif text:
-        try:
-            wnd = session.findById('wnd[0]')
-            session.findById('wnd[0]/tbar[0]/btn[11]').press()
-            time.sleep(0.5)
-            wnd = session.findById('wnd[0]')
-            _set_text_on_best_candidate(wnd, 'RESB-SGTXT', text)
-            wnd.sendVKey(0)
-            time.sleep(0.3)
-            session.findById('wnd[0]/tbar[0]/btn[3]').press()  # 뒤로
-            time.sleep(0.5)
-        except Exception:
-            pass
-
-    # 저장 → 예약번호 생성 (F11 = Ctrl+S)
-    #   ⚠️ 필수 입력(특히 품목 텍스트)이 비면 SAP이 저장키를 잠가서 sendVKey가 COM 오류를 낸다
-    #      ("The virtual key is not enabled") — 툴바 저장 버튼으로 한 번 더 시도하고,
-    #      그래도 안 되면 상태바 문구까지 담은 한국어 오류로 바꿔 던진다.
-    _sap_send_vkey(session, 11, fallback_btn='tbar[0]/btn[11]', step='MB21 저장')
-    time.sleep(1.5)
-
-    rsnum = None
-    sbar_save = ''
-    try:
-        sbar_save = (session.findById('wnd[0]/sbar').Text or '').strip()
-        import re as _re
-        m = _re.search(r'(\d{7,10})', sbar_save)
-        if m:
-            rsnum = m.group(1)
-    except Exception:
-        pass
+    # 저장 — SAP이 "필수 입력"으로 되물으면 그 화면에서 채우고 다시 저장하는 자기교정 루프.
+    #   (고정 순서로 짰다가 "virtual key not enabled" / "유효한 기능을 선택하십시오"로 두 번 실패)
+    rsnum, text_warn = _mb21_fill_texts_and_save(session, items, fallback_text=text, purpose=purpose)
     if not rsnum:
-        if '필수' in sbar_save or '입력' in sbar_save:
-            raise RuntimeError(
-                f'SAP이 저장을 거부했습니다 — 필수 입력이 비어 있습니다.\n'
-                f'  SAP 상태바: "{sbar_save}"\n'
-                '  품목마다 **텍스트(사유)**가 필요합니다. 보관함의 "사유" 칸을 모두 채워주세요.'
-                + (f'\n  목적 입력 경고: {purpose_warn}' if purpose_warn else '')
-                + (f'\n  텍스트 입력 경고: {text_warn}' if text_warn else ''))
         raise RuntimeError(
-            f'MB21 저장 후 예약번호를 확인하지 못했습니다. (상태바: "{sbar_save}")\n'
-            '이동유형/오더번호/원가센터가 올바른지 확인해주세요.')
+            'MB21 저장을 끝내지 못했습니다.\n  ' + (text_warn or '사유 불명')
+            + (f'\n  목적(YYDEVTYPE) 입력 경고: {purpose_warn}' if purpose_warn else '')
+            + '\n  확인할 것: 품목별 사유(텍스트) · 오더 · 코스트센터 · 목적(기타 코딩블록)')
+    sbar_save = _sap_status_text(session)
 
     return {
         'ok': True, 'rsnum': rsnum, 'bwart': str(bwart),

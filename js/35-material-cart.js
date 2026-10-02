@@ -135,6 +135,9 @@
     };
     window._mcCount = function () { return items().length; };
     window._mcList  = function () { return items(); };
+    /** 공통 입력값 스냅샷(읽기 전용) — "지금 보관함이 뭘 보내려 하는지" 콘솔에서 바로 확인용.
+     *  수령인 자동기입처럼 저장 전에만 존재하는 기본값도 여기서 그대로 보인다. */
+    window._mcHdr   = function () { var h = hdr(); return JSON.parse(JSON.stringify(h)); };
 
     // ── 우하단 칩 — 담긴 게 있을 때만 "자재청구/자재입고"가 활성화된다 ──
     function refreshChip() {
@@ -148,28 +151,16 @@
             document.body.appendChild(bar);
         }
         bar.style.display = 'flex';
-        function chip(label, bg, bd, fg, onclick) {
-            return '<button onclick="' + onclick + '" style="padding:7px 13px; background:' + bg
-                + '; border:1px solid ' + bd + '; border-radius:20px; cursor:pointer; font-size:12.5px;'
-                + ' font-weight:bold; color:' + fg + '; box-shadow:0 2px 8px rgba(0,0,0,.18);"'
-                + ' onmouseover="this.style.filter=\'brightness(.96)\'" onmouseout="this.style.filter=\'\'">'
-                + label + '</button>';
-        }
+        // [2026-10-02 사용자 요청] 자재청구/자재입고 칩은 뺐다 — 이동유형은 모달 안 드롭다운(84종)에서
+        //   고르면 되고, 칩이 둘 더 있으면 같은 선택을 두 군데서 하게 돼 헷갈린다.
         bar.innerHTML =
-            chip('🧺 ' + T('자재 보관함 ', 'Cart ') + n + T('건', ''), '#fff3e0', '#e8b974', '#8a5a12', 'window._mcOpen()')
-            + chip('📤 ' + T('자재청구', 'Goods issue'), '#e7f3ff', '#a5c8f0', '#1971c2', "window._mcOpenWith('951')")
-            + chip('📥 ' + T('자재입고', 'Goods receipt'), '#e6f6ea', '#a8dab8', '#1f7a3d', "window._mcOpenWith('907')");
+            '<button onclick="window._mcOpen()" style="padding:7px 13px; background:#fff3e0;'
+            + ' border:1px solid #e8b974; border-radius:20px; cursor:pointer; font-size:12.5px;'
+            + ' font-weight:bold; color:#8a5a12; box-shadow:0 2px 8px rgba(0,0,0,.18);"'
+            + ' onmouseover="this.style.filter=\'brightness(.96)\'" onmouseout="this.style.filter=\'\'">'
+            + '🧺 ' + T('자재 보관함 ', 'Cart ') + n + T('건', '') + '</button>';
     }
     window._mcRefreshChip = refreshChip;
-
-    /** 자재청구(951)/자재입고(907) 칩 — 이동유형을 정해서 보관함을 연다. */
-    window._mcOpenWith = function (bwart) {
-        var h = hdr();
-        h.bwart = String(bwart);
-        h.lgort = window._mcDefaultLgort(h.bwart);   // 유형이 바뀌면 기본창고도 따라간다
-        setHdr(h);
-        window._mcOpen();
-    };
 
     // ── 모달 (docs/ui-conventions.md 패턴: 투명 래퍼 + 내부 박스) ──────
     window._mcOpen = function () {
