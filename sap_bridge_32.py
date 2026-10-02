@@ -3009,6 +3009,48 @@ def _sap_status_text(session):
         return ''
 
 
+def _sap_open_popups(session, max_windows=4):
+    """지금 열려 있는 팝업(wnd[1] 이상)을 [(인덱스, 제목)] 로 돌려준다."""
+    out = []
+    for i in range(1, max_windows + 1):
+        try:
+            w = session.findById(f'wnd[{i}]')
+        except Exception:
+            continue
+        try:
+            out.append((i, str(w.Text or '').strip()))
+        except Exception:
+            out.append((i, ''))
+    return out
+
+
+def _sap_screen_info(session):
+    """"지금 어느 화면에 있나"를 한 줄로 — 실패 보고에 반드시 같이 실어야 다음 수를 둘 수 있다.
+
+    [2026-10-02] MB21 저장이 "유효한 기능을 선택하십시오"로 막혔을 때, 그 메시지만으로는
+    **어느 화면에서 막혔는지** 알 수 없어 두 번이나 추측으로 고치다 실패했다. 트랜잭션/프로그램/
+    화면번호/제목과 **열려 있는 팝업 목록**까지 같이 보면 원인이 바로 좁혀진다
+    (대표적으로 코딩 블록 팝업이 안 닫혀 wnd[0] 조작이 전부 막히는 경우).
+    """
+    tcode = program = screen = title = ''
+    try:
+        info = session.Info
+        tcode, program, screen = str(info.Transaction), str(info.Program), str(info.ScreenNumber)
+    except Exception:
+        pass
+    try:
+        title = str(session.findById('wnd[0]').Text or '').strip()
+    except Exception:
+        pass
+    pops = _sap_open_popups(session)
+    s = f'{tcode}/{program}/{screen} "{title}"'
+    if pops:
+        s += ' · 열린 팝업: ' + ', '.join(f'wnd[{i}]"{t}"' for i, t in pops)
+    else:
+        s += ' · 팝업 없음'
+    return s
+
+
 def humanize_sap_error(exc, session=None, step=''):
     """COM 예외를 사람이 바로 알아보는 한국어로 바꾼다.
 
@@ -3072,6 +3114,64 @@ def _mb21_extract_rsnum(sbar):
     return m.group(1) if m else None
 
 
+def _sap_screen_no(session):
+    """현재 화면번호(문자열). MB21은 500=초기화면 / 521=품목입력 / 510=품목상세."""
+    try:
+        return str(session.Info.ScreenNumber).strip()
+    except Exception:
+        return ''
+
+
+def _mb21_read_last_rsnum(session):
+    """방금 만든 예약번호를 회수한다.
+
+    ✅ [2026-10-02 사용자 설명 + 녹화 매크로] MB21은 저장이 끝나면 **초기화면(500)으로 돌아가고**,
+      예약번호는 상태바에 남지 않을 수 있다. 사람은 이때 **MB23(예약조회)을 열어** 확인한다 —
+      SAP이 "바로 전에 처리한 문서번호"를 그 칸에 기억해 두기 때문이다(녹화에서도 F00198로 이동).
+
+    순서: ① 지금 화면의 RM07M-RSNUM(참조 칸) → ② MB23으로 가서 같은 칸 →
+          ③ 그래도 비어 있으면 F5(마지막 값 가져오기) 후 다시 읽기.
+    """
+    def _read(path='wnd[0]/usr/ctxtRM07M-RSNUM'):
+        try:
+            v = str(session.findById(path).Text or '').strip()
+            return v if v and v.strip('0') else None
+        except Exception:
+            return None
+
+    # ① 지금 화면(저장 후 MB21 초기화면)에 이미 들어 있는 경우
+    v = _read()
+    if v:
+        return v
+
+    # ② MB23으로 이동해서 읽는다 — 조회 전용이라 데이터를 건드리지 않는다
+    try:
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB23'
+        session.findById('wnd[0]').sendVKey(0)
+        time.sleep(1.2)
+    except Exception as e:
+        print(f'[MB21] 예약번호 확인용 MB23 이동 실패: {e}', file=sys.stderr)
+        return None
+
+    v = _read()
+    if v:
+        return v
+
+    # ③ 칸이 비어 있으면 "마지막 값 가져오기"(F5)
+    try:
+        fld = session.findById('wnd[0]/usr/ctxtRM07M-RSNUM')
+        fld.setFocus()
+        try:
+            fld.caretPosition = 0
+        except Exception:
+            pass
+        session.findById('wnd[0]').sendVKey(5)
+        time.sleep(0.9)
+    except Exception:
+        pass
+    return _read()
+
+
 def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
     """MB21을 저장하되, SAP이 "필수 입력"으로 되물으면 그 화면에서 바로 채우고 다시 저장한다.
 
@@ -3101,9 +3201,34 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
             by_mat[_norm((it or {}).get('matnr'))] = t
     default_txt = (fallback_text or '').strip() or (next(iter(by_mat.values())) if by_mat else '')
 
-    filled, last_sbar = 0, ''
+    filled, last_sbar, popup_note = 0, '', ''
     max_rounds = len(items or []) * 3 + 8
     for _ in range(max_rounds):
+        # ── 열린 팝업이 있으면 먼저 치운다 ───────────────────────────────────
+        #   [2026-10-02] 코딩 블록(목적) 팝업이 안 닫힌 채 남으면 wnd[0]의 저장이 전부
+        #   "유효한 기능을 선택하십시오"로 막힌다. 확인(Enter) → 확인버튼 → 취소(F12) 순으로 시도.
+        pops = _sap_open_popups(session)
+        if pops:
+            popup_note = '열려 있던 팝업: ' + ', '.join(f'wnd[{i}]"{t}"' for i, t in pops)
+            idx = pops[-1][0]
+            for closer in ('btn0', 'enter', 'cancel'):   # ✓ 계속 버튼이 먼저(녹화 매크로 기준)
+                try:
+                    w = session.findById(f'wnd[{idx}]')
+                except Exception:
+                    break
+                try:
+                    if closer == 'enter':
+                        w.sendVKey(0)
+                    elif closer == 'btn0':
+                        w.findById('tbar[0]/btn[0]').press()
+                    else:
+                        w.sendVKey(12)
+                except Exception:
+                    pass
+                time.sleep(0.5)
+                if not _sap_open_popups(session):
+                    break
+
         # ── 저장 시도 (키가 잠겼으면 툴바 버튼으로) ──
         try:
             _sap_send_vkey(session, 11, fallback_btn='tbar[0]/btn[11]', step='MB21 저장')
@@ -3117,6 +3242,19 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
         if rsnum:
             return rsnum, None
 
+        # ★★ [2026-10-02] **MB21이 초기화면(500)으로 돌아왔으면 저장이 끝난 것이다.**
+        #    예전엔 이걸 모르고 거기서 또 저장을 보내 "유효한 기능을 선택하십시오"를 맞았다.
+        #    예약번호는 상태바에 안 남을 수 있으므로 MB23에서 회수한다(사용자 설명: 직전 번호가 거기 남음).
+        if _sap_screen_no(session) == '500':
+            got = _mb21_read_last_rsnum(session)
+            if got:
+                return got, None
+            return None, ('저장은 끝난 것으로 보입니다(MB21 초기화면으로 복귀). '
+                          '다만 예약번호를 자동으로 읽지 못했습니다 — MB23(예약조회)에서 직접 확인한 뒤 '
+                          '"<예약번호> 청구서 출력해줘"로 이어가 주세요.\n'
+                          f'    상태바: "{last_sbar}"\n'
+                          f'    화면: {_sap_screen_info(session)}')
+
         # ── SAP이 되물었다: 지금 화면에 텍스트 칸이 있나? ──
         try:
             wnd = session.findById('wnd[0]')
@@ -3124,8 +3262,15 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
             return None, f'SAP 화면을 읽지 못했습니다: {e}'
         fld = _find_by_id_substring(wnd, 'txtRESB-SGTXT')
         if fld is None:
-            # 채울 게 없으면 더 돌아봐야 소용없다
-            return None, (f'저장이 끝나지 않았고 텍스트 입력칸도 없습니다. (상태바: "{last_sbar}")')
+            # 채울 것도 없고 되묻지도 않는다 = 더 보낼 게 없다. 저장이 이미 끝났을 수 있으니
+            # 예약번호를 한 번 더 회수해 본다(화면번호가 500이 아니어도 완료 화면일 수 있다).
+            got = _mb21_read_last_rsnum(session)
+            if got:
+                return got, None
+            return None, (f'저장이 끝나지 않았고 텍스트 입력칸도 없습니다.\n'
+                          f'    상태바: "{last_sbar}"\n'
+                          f'    화면: {_sap_screen_info(session)}'
+                          + (f'\n    {popup_note}' if popup_note else ''))
 
         # 이 화면이 어느 품목인지 — 자재번호로 짝을 찾는다(품목 순서에 의존하지 않음)
         mat = ''
@@ -3143,7 +3288,9 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
             if str(fld.Text or '').strip() == txt:
                 # 이미 같은 값이 들어 있는데도 또 물어본다 = 다른 필수 항목이 비었다는 뜻
                 return None, (f'자재 {mat or "?"}에 사유를 넣었는데도 SAP이 계속 되묻습니다 — '
-                              f'다른 필수 항목이 비어 있을 수 있습니다. (상태바: "{last_sbar}")')
+                              f'다른 필수 항목이 비어 있을 수 있습니다.\n'
+                              f'    상태바: "{last_sbar}"\n'
+                              f'    화면: {_sap_screen_info(session)}')
             fld.text = txt
             wnd.sendVKey(0)
             time.sleep(0.5)
@@ -3151,8 +3298,9 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
         except Exception as e:
             return None, f'자재 {mat or "?"} 텍스트 입력 실패: {e} (앞 {filled}건 입력됨)'
 
-    return None, (f'저장을 {max_rounds}회 시도했지만 예약번호를 받지 못했습니다. '
-                  f'(상태바: "{last_sbar}", 텍스트 {filled}건 입력됨)')
+    return None, (f'저장을 {max_rounds}회 시도했지만 예약번호를 받지 못했습니다.\n'
+                  f'    상태바: "{last_sbar}" (텍스트 {filled}건 입력됨)\n'
+                  f'    화면: {_sap_screen_info(session)}')
 
 
 def _mb21_set_purpose(session, purpose):
@@ -3176,22 +3324,29 @@ def _mb21_set_purpose(session, purpose):
     except Exception as e:
         return f'" 기타" 버튼 클릭 실패: {e}'
 
-    # 코딩 블록 팝업은 wnd[1]로 뜨지만, 화면 구성에 따라 wnd[0] 안에 들어오는 경우도 있어 둘 다 본다
+    # ✅ [2026-10-02 녹화 매크로로 확정] 코딩 블록 팝업의 목적 필드 절대경로:
+    #      wnd[1]/usr/subBLOCK1:SAPLKACB:9999/ctxtCOBL-YYDEVTYPE
+    #    절대경로를 먼저 쓰고, 화면 구성이 다를 때만 부분일치로 폴백한다.
     fld = None
-    for wid in ('wnd[1]', 'wnd[0]'):
-        try:
-            w = session.findById(wid)
-        except Exception:
-            continue
-        for cand in _find_all_by_id_substring(w, 'YYDEVTYPE'):
+    try:
+        fld = session.findById('wnd[1]/usr/subBLOCK1:SAPLKACB:9999/ctxtCOBL-YYDEVTYPE')
+    except Exception:
+        fld = None
+    if fld is None:
+        for wid in ('wnd[1]', 'wnd[0]'):
             try:
-                if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
-                    fld = cand
-                    break
+                w = session.findById(wid)
             except Exception:
                 continue
-        if fld is not None:
-            break
+            for cand in _find_all_by_id_substring(w, 'YYDEVTYPE'):
+                try:
+                    if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                        fld = cand
+                        break
+                except Exception:
+                    continue
+            if fld is not None:
+                break
     if fld is None:
         # 팝업을 열어만 두고 못 채우면 이후 저장이 막히므로 닫고 사유를 돌려준다
         try:
@@ -3201,13 +3356,32 @@ def _mb21_set_purpose(session, purpose):
         return '코딩 블록에서 "목적"(YYDEVTYPE) 입력칸을 찾지 못했습니다.'
     try:
         fld.text = str(purpose).strip()
-        try:
-            session.findById('wnd[1]').sendVKey(0)    # 엔터로 확정
-        except Exception:
-            session.findById('wnd[0]').sendVKey(0)
-        time.sleep(0.6)
     except Exception as e:
         return f'"목적" 입력 실패: {e}'
+
+    # ⚠️ [2026-10-02 녹화 매크로로 확정] 코딩 블록은 **wnd[1]/tbar[0]/btn[0](✓ 계속)**으로 닫는다.
+    #    Enter가 아니다 — Enter를 먼저 보내면 F4 검색도움이 뜨거나 아무 일도 안 일어나고,
+    #    팝업이 열린 채 남아 이후 wnd[0] 저장이 전부 "유효한 기능을 선택하십시오"로 막힌다.
+    for closer in ('btn0', 'enter', 'cancel'):
+        pops = _sap_open_popups(session)
+        if not pops:
+            return None
+        idx = pops[-1][0]
+        try:
+            w = session.findById(f'wnd[{idx}]')
+            if closer == 'enter':
+                w.sendVKey(0)
+            elif closer == 'btn0':
+                w.findById('tbar[0]/btn[0]').press()
+            else:
+                w.sendVKey(12)
+        except Exception:
+            pass
+        time.sleep(0.6)
+    pops = _sap_open_popups(session)
+    if pops:
+        return ('코딩 블록 팝업이 닫히지 않았습니다: '
+                + ', '.join(f'wnd[{i}]"{t}"' for i, t in pops))
     return None
 
 
@@ -3406,7 +3580,9 @@ def create_reservation(items, bwart='951', order_number=None, cost_center=None,
         raise RuntimeError(
             'MB21 저장을 끝내지 못했습니다.\n  ' + (text_warn or '사유 불명')
             + (f'\n  목적(YYDEVTYPE) 입력 경고: {purpose_warn}' if purpose_warn else '')
-            + '\n  확인할 것: 품목별 사유(텍스트) · 오더 · 코스트센터 · 목적(기타 코딩블록)')
+            + '\n  확인할 것: 품목별 사유(텍스트) · 오더 · 코스트센터 · 목적(기타 코딩블록)'
+            + '\n  💡 SAP 화면을 그대로 둔 채 "SAP 화면 덤프해줘"를 실행하면 지금 멈춘 화면을'
+              ' 그대로 볼 수 있습니다(팝업부터 덤프됩니다).')
     sbar_save = _sap_status_text(session)
 
     return {
@@ -3457,7 +3633,7 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
     return result
 
 
-def print_reservation_zmm019(rsnum, werks='1000'):
+def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
     """🖨 ZMM019(자재 예약 리스트)에서 예약번호로 조회한 뒤 "청구서출력"을 눌러 계정대체청구서를 낸다.
 
     [2026-10-02 실화면 덤프] 선택화면(1000): RSNUM-LOW/HIGH, WERKS-LOW, R_ALL/R_ME …
@@ -3488,7 +3664,10 @@ def print_reservation_zmm019(rsnum, werks='1000'):
     # 예약번호만으로 좁힌다 — 다른 선택조건이 남아 있으면 0건이 될 수 있어 비운다
     _set('txtRSNUM-LOW', rsnum)
     _set('txtRSNUM-HIGH', '')
-    _set('ctxtRSDAT-LOW', '');  _set('ctxtRSDAT-HIGH', '')
+    # 녹화 매크로는 요청일(RSDAT)에 당일을 넣는다 — 비워두면 0건이 나오는 계정이 있을 수 있어
+    # 호출부가 준 날짜(없으면 오늘)를 넣고, HIGH는 비워 단일일자로 둔다.
+    _set('ctxtRSDAT-LOW', str(rsdat or time.strftime('%Y%m%d')))
+    _set('ctxtRSDAT-HIGH', '')
     _set('txtWEMPF-LOW', '');   _set('txtWEMPF-HIGH', '')
     _set('ctxtMATNR-LOW', '');  _set('ctxtMATNR-HIGH', '')
     _set('ctxtBWART-LOW', '');  _set('ctxtBWART-HIGH', '')
@@ -3521,12 +3700,39 @@ def print_reservation_zmm019(rsnum, werks='1000'):
             pass
         raise RuntimeError(f'ZMM019에서 예약번호 {rsnum} 조회 결과가 없습니다. (상태바: "{sbar0}")')
 
+    # ★★ [2026-10-02 녹화 매크로로 확정] **행을 먼저 선택해야** 청구서출력이 동작한다.
+    #    `selectedRows = "0"` 한 줄이 빠져서 출력이 안 먹던 것 — 같은 패턴이 이 파일의
+    #    `display_reservation` 쪽에 이미 있었는데 여기선 빠뜨렸다.
+    row_warn = None
+    try:
+        if grid is not None:
+            try:
+                grid.currentCellColumn = ''
+            except Exception:
+                pass
+            grid.selectedRows = '0'
+            time.sleep(0.4)
+        else:
+            row_warn = '결과 그리드를 찾지 못해 행을 선택하지 못했습니다.'
+    except Exception as e:
+        row_warn = f'행 선택 실패: {e}'
+
     # 청구서출력
     try:
         wnd.findById('tbar[1]/btn[13]').press()
         time.sleep(2.0)
     except Exception as e:
-        raise RuntimeError(f'ZMM019 "청구서출력" 버튼을 누르지 못했습니다: {e}')
+        raise RuntimeError(f'ZMM019 "청구서출력" 버튼을 누르지 못했습니다: {e}'
+                           + (f' ({row_warn})' if row_warn else ''))
+
+    # 출력 팝업 — 녹화 매크로: wnd[1]/tbar[0]/btn[13] → btn[86].
+    #   화면/프린터 설정에 따라 안 뜰 수도 있어 있으면 누르고 없으면 조용히 넘어간다.
+    for _btn in ('tbar[0]/btn[13]', 'tbar[0]/btn[86]'):
+        try:
+            session.findById('wnd[1]/' + _btn).press()
+            time.sleep(1.0)
+        except Exception:
+            break
 
     sbar = ''
     try:
@@ -3536,9 +3742,11 @@ def print_reservation_zmm019(rsnum, werks='1000'):
 
     return {
         'ok': True, 'rsnum': rsnum, 'rowCount': row_count, 'table': table, 'sbar': sbar,
-        'text': (f'예약번호 {rsnum} 계정대체청구서를 출력했습니다(품목 {row_count}건). '
-                 f'인쇄 미리보기/출력 대화상자가 SAP 화면에 떠 있으면 거기서 마무리해주세요.'
-                 + (f' (상태바: {sbar})' if sbar else '')),
+        'rowWarning': row_warn or '',
+        'text': (f'예약번호 {rsnum} 계정대체청구서를 출력했습니다(품목 {row_count}건).'
+                 + (f'\n  ⚠️ {row_warn}' if row_warn else '')
+                 + (f' (상태바: {sbar})' if sbar else '')
+                 + '\n  인쇄 대화상자가 SAP 화면에 남아 있으면 거기서 마무리해주세요.'),
     }
 
 
@@ -5964,7 +6172,8 @@ def main():
         elif action == 'print_reservation_zmm019':
             rsnum_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             werks_arg = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '1000'
-            result = print_reservation_zmm019(rsnum_arg, werks_arg)
+            rsdat_arg = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            result = print_reservation_zmm019(rsnum_arg, werks_arg, rsdat_arg)
         elif action == 'migo_return_receipt':
             import json as _json2
             items_arg   = _json2.loads(sys.argv[2]) if len(sys.argv) > 2 else []
