@@ -697,11 +697,8 @@
         if (!Object.keys(groups).length) return;
 
         var flushedEntryIds = [];
-        var maxTargets = 3; // API 콜 제한 — 다음 저장에서 나머지 처리
 
         for (var fileId in groups) {
-            if (flushedEntryIds.length >= maxTargets * 50) break; // 안전장치
-            if (Object.keys(groups).indexOf(fileId) >= maxTargets) break;
             try {
                 // 1. Drive 파일 GET (전체 JSON)
                 var getRes = await fetch(
