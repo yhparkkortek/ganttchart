@@ -97,16 +97,71 @@
     //    (해외 공장 등). 새 코드가 확정되면 코드가 아니라 여기에 한 줄만 추가할 것.
     //    ⚠️ VINA(해외) 플랜트 코드는 아직 확인 전 — 확인되면 아래에 추가.
     window.SAP_PLANTS = window.SAP_PLANTS || [
-        { code: '1000', label: '코텍 송도 공장', labelEn: 'Kortek Songdo' }
+        { code: '1000', label: '코텍 송도 공장', labelEn: 'Kortek Songdo' },
+        { code: '7000', label: 'VINA (해외 공장)', labelEn: 'VINA (overseas)' }
     ];
+    // [2026-10-02] SAP 저장위치 전체 목록(사용자 제공 화면 기준). 951 기본=1000, 907 기본=5000.
     window.SAP_STORAGE_LOCATIONS = window.SAP_STORAGE_LOCATIONS || [
-        { code: '1000', label: '자재창고 (951 기본)', labelEn: 'Material store (951 default)' },
-        { code: '5000', label: '반납 입고 (907 기본)', labelEn: 'Return receipt (907 default)' }
+        { code: '1000', label: '자재창고 (951 기본)',  labelEn: 'Material store (951 default)' },
+        { code: '1001', label: '전략비축-1사업',       labelEn: 'Strategic stock 1' },
+        { code: '1002', label: '전략비축-2사업',       labelEn: 'Strategic stock 2' },
+        { code: '1003', label: '외부보관',             labelEn: 'External storage' },
+        { code: '1004', label: 'EOL관리자재',          labelEn: 'EOL material' },
+        { code: '1005', label: 'MP 자재',              labelEn: 'MP material' },
+        { code: '1800', label: '연구소창고',           labelEn: 'R&D store' },
+        { code: '1901', label: 'RMA판정완료',          labelEn: 'RMA judged' },
+        { code: '1902', label: 'RMA출고완료',          labelEn: 'RMA issued' },
+        { code: '1903', label: 'RMA불가',              labelEn: 'RMA rejected' },
+        { code: '1999', label: 'AS 수리 창고',         labelEn: 'AS repair' },
+        { code: '2000', label: '생산창고',             labelEn: 'Production' },
+        { code: '2001', label: 'MP 기구물',            labelEn: 'MP mechanical' },
+        { code: '2002', label: 'MP 생산창고',          labelEn: 'MP production' },
+        { code: '2900', label: '재작업 창고',          labelEn: 'Rework' },
+        { code: '5000', label: '제품창고 (907 기본)',  labelEn: 'Finished goods (907 default)' },
+        { code: '5001', label: '선적창고',             labelEn: 'Shipping' },
+        { code: '5900', label: '반출 창고',            labelEn: 'Outbound' },
+        { code: '5901', label: '반품 창고-해외',       labelEn: 'Returns (overseas)' },
+        { code: '6000', label: 'C/S창고',              labelEn: 'C/S' },
+        { code: '6001', label: 'C/S미주창고',          labelEn: 'C/S Americas' },
+        { code: '6002', label: 'A/S(CKS HQ)',          labelEn: 'A/S(CKS HQ)' },
+        { code: '6003', label: 'A/S(CKS WEST)',        labelEn: 'A/S(CKS WEST)' },
+        { code: '6004', label: 'A/S(ETC)',             labelEn: 'A/S(ETC)' },
+        { code: '6005', label: 'A/S(E-service)',       labelEn: 'A/S(E-service)' },
+        { code: '6006', label: 'A/S(Westview)',        labelEn: 'A/S(Westview)' },
+        { code: '6007', label: 'A/S(QUEST DE)',        labelEn: 'A/S(QUEST DE)' },
+        { code: '6008', label: 'A/S(JVP Service)',     labelEn: 'A/S(JVP Service)' },
+        { code: '6009', label: 'A/S(KORTEK AU)',       labelEn: 'A/S(KORTEK AU)' },
+        { code: '6010', label: 'A/S(DAEWOO)',          labelEn: 'A/S(DAEWOO)' },
+        { code: '6011', label: 'A/S(REDINFO)',         labelEn: 'A/S(REDINFO)' },
+        { code: '6012', label: 'A/S(플러스서비스)',     labelEn: 'A/S(Plus Service)' },
+        { code: '6013', label: 'A/S(금영)',            labelEn: 'A/S(Kumyoung)' },
+        { code: '6014', label: 'A/S(Barco)',           labelEn: 'A/S(Barco)' },
+        { code: '6015', label: 'RMA Service',          labelEn: 'RMA Service' },
+        { code: '6100', label: 'CS 안전재고 창고',      labelEn: 'CS safety stock' },
+        { code: '7000', label: 'VINA 완제품창고',       labelEn: 'VINA finished goods' },
+        { code: '7001', label: 'VINA CS창고',          labelEn: 'VINA CS' },
+        { code: '7002', label: 'VINA CS 안전재고 창고', labelEn: 'VINA CS safety stock' },
+        { code: '7100', label: 'VINA PO 창고',          labelEn: 'VINA PO' },
+        { code: '7200', label: 'VINA 자재 창고',        labelEn: 'VINA material' },
+        { code: '7901', label: 'RMA판정(VINA)',         labelEn: 'RMA judged (VINA)' },
+        { code: '7902', label: 'RMA출고(VINA)',         labelEn: 'RMA issued (VINA)' },
+        { code: '7903', label: 'RMA불가(VINA)',         labelEn: 'RMA rejected (VINA)' }
     ];
 
-    // 📏 [2026-10-02 덤프 확인] MB21 신규품목 화면(521)의 품목 그리드는 한 화면에 28행(RSPOS 1~28).
-    //    보관함이 이보다 많으면 예약을 여러 건으로 나눠 생성한다(사용자 선택: 쪼개기).
-    window.SAP_RESERVATION_MAX_ITEMS = window.SAP_RESERVATION_MAX_ITEMS || 28;
+    // 📏 [2026-10-02 정정] MB21 신규품목 화면(521)의 품목 입력칸은 **43행**(RSPOS 1~43, 인덱스 0~42).
+    //    ⚠️ 처음에 28로 넣었던 건 덤프 출력이 중간에 잘린 걸 보고 센 값이라 틀렸다 — 실제 덤프에서
+    //       RESB-MATNR[42,7]까지 확인됨. 보관함이 이보다 많으면 예약을 나눠 생성한다.
+    window.SAP_RESERVATION_MAX_ITEMS = window.SAP_RESERVATION_MAX_ITEMS || 43;
+
+    // 🎯 [2026-10-02 실화면] MB21 " 기타" → "코딩 블록" 팝업의 **목적**(YYDEVTYPE). 필수 입력이며
+    //    ZMM019 결과의 YYDEVTYPE 컬럼으로 그대로 나온다. 새 코드가 생기면 여기에 한 줄 추가.
+    window.SAP_RESERVATION_PURPOSES = window.SAP_RESERVATION_PURPOSES || [
+        { code: 'P01', label: '유상샘플',   labelEn: 'Paid sample' },
+        { code: 'P02', label: '무상샘플',   labelEn: 'Free sample' },
+        { code: 'P03', label: 'E3 자재',    labelEn: 'E3 material' },
+        { code: 'P04', label: '내부검토용', labelEn: 'Internal review' },
+        { code: 'P05', label: '기타',       labelEn: 'Other' }
+    ];
     /** 문장에서 MB21 이동유형을 고른다(없으면 null) — 결정론적, AI 호출 없음. */
     window._sapMb21MovementType = function (text) {
         var q = String(text || '').toLowerCase();

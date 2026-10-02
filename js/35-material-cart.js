@@ -225,6 +225,11 @@
                 + esc(m.bwart + ' — ' + (window._currentLang === 'en' ? (m.titleEn || m.title) : m.title)) + '</option>';
         }).join('');
 
+        var purpOpts = (window.SAP_RESERVATION_PURPOSES || []).map(function (p) {
+            return '<option value="' + esc(p.code) + '"' + (h.purpose === p.code ? ' selected' : '') + '>'
+                + esc(p.code + ' — ' + (window._currentLang === 'en' ? (p.labelEn || p.label) : p.label)) + '</option>';
+        }).join('');
+
         var inp = 'padding:4px 6px; border:1px solid #ccd3dd; border-radius:4px; font-size:12px;';
         var lab = 'font-size:11.5px; color:#555; display:block; margin-bottom:2px;';
 
@@ -247,6 +252,10 @@
             + '<input id="mc-aufnr" value="' + esc(h.aufnr || '') + '" onchange="window._mcHdrChange()" style="' + inp + ' width:100%;"></div>'
             + '<div><label style="' + lab + '">' + T('코스트센터', 'Cost center') + '</label>'
             + '<input id="mc-kostl" value="' + esc(h.kostl || '') + '" onchange="window._mcHdrChange()" style="' + inp + ' width:100%;"></div>'
+            // 🎯 목적(YYDEVTYPE) — MB21 " 기타" 코딩블록의 필수 항목. ZMM019에 그대로 찍힌다.
+            + '<div><label style="' + lab + '">' + T('목적(용도)', 'Purpose') + '</label>'
+            + '<select id="mc-purpose" onchange="window._mcHdrChange()" style="' + inp + ' width:100%;">'
+            + '<option value="">' + T('— 선택 —', '— select —') + '</option>' + purpOpts + '</select></div>'
             + '</div>'
             // ── 품목 표 ──
             + '<div style="border:1px solid #ddd; border-radius:5px; overflow:hidden;">'
@@ -304,6 +313,7 @@
         h.wempf = v('mc-wempf');
         h.aufnr = v('mc-aufnr');
         h.kostl = v('mc-kostl');
+        h.purpose = v('mc-purpose');
         if (h.bwart !== prevBwart) h.lgort = window._mcDefaultLgort(h.bwart);   // 951↔907 전환 시 기본창고 교체
         setHdr(h);
         render();
@@ -316,6 +326,7 @@
         var missing = [];
         if (!h.aufnr) missing.push(T('오더', 'Order'));
         if (!h.kostl) missing.push(T('코스트센터', 'Cost center'));
+        if (!h.purpose) missing.push(T('목적(용도)', 'Purpose'));   // MB21 "기타" 코딩블록 필수
         if (missing.length) {
             alert(T('다음 항목이 필요합니다: ', 'Required: ') + missing.join(', '));
             return;
@@ -327,20 +338,21 @@
         var msg = T('이동유형 ', 'Movement type ') + h.bwart + ' (' + mvTitle(h.bwart) + ')\n'
             + T('품목 ', 'Items: ') + list.length + T('건', '')
             + (batches.length > 1 ? T(' → 예약 ', ' → ') + batches.length + T('건으로 분할', ' reservations') : '') + '\n'
-            + T('오더 ', 'Order ') + h.aufnr + ' / ' + T('코스트센터 ', 'Cost center ') + h.kostl + '\n\n'
+            + T('오더 ', 'Order ') + h.aufnr + ' / ' + T('코스트센터 ', 'Cost center ') + h.kostl
+            + ' / ' + T('목적 ', 'Purpose ') + h.purpose + '\n\n'
             + T('⚠️ SAP에 실제 예약(청구서)을 생성합니다. 진행할까요?', '⚠️ This creates real reservations in SAP. Proceed?');
         if (!confirm(msg)) return;
 
         var btn = document.getElementById('matcart-submit');
         if (btn) { btn.disabled = true; btn.textContent = '⏳ ' + T('생성 중...', 'Creating...'); }
-        var created = [], failed = [];
+        var created = [], failed = [], warns = [];
         try {
             for (var b = 0; b < batches.length; b++) {
                 var payload = {
                     bwart: h.bwart, werks: h.werks || '1000',
                     lgort_default: h.lgort || window._mcDefaultLgort(h.bwart),
                     rsdat: h.rsdat || '', wempf: h.wempf || '',
-                    order_number: h.aufnr, cost_center: h.kostl,
+                    order_number: h.aufnr, cost_center: h.kostl, purpose: h.purpose,
                     items: batches[b].map(function (x) {
                         return { matnr: x.matnr, qty: String(x.qty), unit: x.unit || 'EA', lgort: x.lgort || '' };
                     })
@@ -351,8 +363,13 @@
                         body: JSON.stringify(payload)
                     }), 180000, T('예약 생성 시간 초과', 'Reservation creation timed out'));
                     var data = await res.json();
-                    if (data.ok && data.rsnum) created.push(data.rsnum);
-                    else failed.push((data && data.error) || T('알 수 없는 오류', 'unknown error'));
+                    if (data.ok && data.rsnum) {
+                        created.push(data.rsnum);
+                        // 목적을 못 넣었으면 조용히 넘기지 않는다 — ZMM019에 YYDEVTYPE이 비어 나간다
+                        if (data.purposeWarning) warns.push(data.rsnum + ': ' + data.purposeWarning);
+                    } else {
+                        failed.push((data && data.error) || T('알 수 없는 오류', 'unknown error'));
+                    }
                 } catch (e) { failed.push(e && e.message ? e.message : String(e)); }
             }
         } finally {
@@ -365,12 +382,52 @@
             // 전부 성공했을 때만 보관함을 비운다 — 실패분이 남아 있으면 사람이 다시 시도할 수 있어야 한다
             if (!failed.length) { setItems([]); render(); }
         }
+        if (warns.length) out += (out ? '\n' : '') + '⚠️ ' + T('목적(YYDEVTYPE) 미입력: ', 'Purpose not set: ') + warns.join(' / ');
         if (failed.length) out += (out ? '\n' : '') + '⚠️ ' + T('실패 ', 'Failed ') + failed.length + T('건: ', ': ') + failed.join(' / ');
         if (window._ganttQaHistory) {
-            window._ganttQaHistory.push({ role: 'ai', text: out });
+            if (created.length) {
+                // 🖨 최종 산출물은 ZMM019 PDF — 예약번호별로 바로 출력할 수 있게 버튼을 붙인다
+                var btns = created.map(function (rs) {
+                    return '<button onclick="window._mcPrint(\'' + rs + '\')" style="margin:3px 5px 0 0; padding:4px 11px;'
+                        + ' background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px;'
+                        + ' font-size:11.5px; cursor:pointer;">🖨 ' + rs + ' ' + T('청구서 출력', 'Print') + '</button>';
+                }).join('');
+                window._ganttQaHistory.push({ role: 'ai', rawHtml: true,
+                    text: '<div style="font-size:12.5px; white-space:pre-wrap;">' + esc(out) + '</div>'
+                        + '<div style="margin-top:6px;">' + btns + '</div>' });
+            } else {
+                window._ganttQaHistory.push({ role: 'ai', text: out });
+            }
             if (window._renderGanttQaMessages) window._renderGanttQaMessages();
         }
         if (window.showToast) window.showToast(out, created.length && !failed.length ? 'success' : 'error', 6000);
+    };
+
+    /** 🖨 ZMM019 "청구서출력" — 계정대체 청구의 최종 산출물. */
+    window._mcPrint = async function (rsnum) {
+        var h = hdr();
+        if (window._ganttQaHistory) {
+            window._ganttQaHistory.push({ role: 'ai', pending: true,
+                text: '⏳ ' + T('ZMM019에서 예약번호 ' + rsnum + ' 청구서를 출력하는 중...', 'Printing reservation ' + rsnum + ' from ZMM019...') });
+            if (window._renderGanttQaMessages) window._renderGanttQaMessages();
+        }
+        var reply;
+        try {
+            var res = await window._withTimeout(
+                fetch(API + '/sap-print-reservation?rsnum=' + encodeURIComponent(rsnum)
+                    + '&werks=' + encodeURIComponent(h.werks || '1000')),
+                95000, T('청구서 출력 시간 초과', 'Print timed out'));
+            var data = await res.json();
+            reply = data.ok ? ('🖨 ' + (data.text || T('청구서를 출력했습니다.', 'Printed.')))
+                            : ('⚠️ ' + (data.error || T('청구서 출력 실패', 'Print failed')));
+        } catch (e) {
+            reply = '⚠️ ' + T('청구서 출력 실패: ', 'Print failed: ') + (e && e.message ? e.message : e);
+        }
+        if (window._ganttQaHistory) {
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: reply });
+            if (window._renderGanttQaMessages) window._renderGanttQaMessages();
+        }
     };
 
     // 첫 로드 시 칩 복원(이전 세션에 담아둔 게 있으면 보이게)

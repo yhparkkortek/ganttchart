@@ -387,7 +387,12 @@ def dump_screen_tree(save_dir=None):
     lines = []
     total = 0
     truncated = False
-    for wi in range(win_count):
+    # 🐛 [2026-10-02] 팝업(wnd[1]+)을 **먼저** 덤프한다.
+    #   예전엔 wnd[0]부터 돌았는데, MB21 신규품목처럼 wnd[0]이 큰 화면(43행 그리드 ≈ 350노드)이면
+    #   8초 제한에 걸려 정작 보고 싶던 팝업(MB21 "코딩 블록" wnd[1])까지 가지도 못하고 끊겼다.
+    #   사람이 덤프를 뜨는 순간 팝업이 떠 있다면 보통 그 팝업이 목적이다 — 작기도 해서 거의 공짜.
+    win_order = list(range(1, win_count)) + [0]
+    for wi in win_order:
         if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
             truncated = True
             break
@@ -2996,8 +3001,65 @@ def _migo_post_by_reservation(session, rsnum, posting_date):
     }
 
 
+def _mb21_set_purpose(session, purpose):
+    """MB21 신규품목 화면에서 " 기타"(COBL_MORE) → "코딩 블록" 팝업의 **목적**(YYDEVTYPE)을 채운다.
+
+    [2026-10-02 사용자 확인] 오더·코스트센터만으로는 부족하고 "기타"까지 필수 선택이다.
+    목적 값은 ZMM019 결과의 YYDEVTYPE 컬럼으로 그대로 나온다(P01 유상샘플 … P05 기타).
+    ⚠️ 팝업(wnd[1]) 안 필드의 정확한 id는 아직 덤프로 확인되지 않았다(덤프가 8초 제한에 걸려
+       wnd[1]까지 못 갔다) — 그래서 'YYDEVTYPE' 부분일치로 찾는다. 실패해도 예외로 죽이지 않고
+       사유를 돌려주어 호출부가 "목적 미입력"을 사람에게 알릴 수 있게 한다.
+    """
+    if not purpose:
+        return None
+    try:
+        wnd = session.findById('wnd[0]')
+        btn = _find_by_id_substring(wnd, 'btnCOBL_MORE')
+        if btn is None:
+            return 'COBL_MORE(" 기타") 버튼을 찾지 못했습니다.'
+        btn.press()
+        time.sleep(0.8)
+    except Exception as e:
+        return f'" 기타" 버튼 클릭 실패: {e}'
+
+    # 코딩 블록 팝업은 wnd[1]로 뜨지만, 화면 구성에 따라 wnd[0] 안에 들어오는 경우도 있어 둘 다 본다
+    fld = None
+    for wid in ('wnd[1]', 'wnd[0]'):
+        try:
+            w = session.findById(wid)
+        except Exception:
+            continue
+        for cand in _find_all_by_id_substring(w, 'YYDEVTYPE'):
+            try:
+                if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                    fld = cand
+                    break
+            except Exception:
+                continue
+        if fld is not None:
+            break
+    if fld is None:
+        # 팝업을 열어만 두고 못 채우면 이후 저장이 막히므로 닫고 사유를 돌려준다
+        try:
+            session.findById('wnd[1]').sendVKey(12)   # 취소
+        except Exception:
+            pass
+        return '코딩 블록에서 "목적"(YYDEVTYPE) 입력칸을 찾지 못했습니다.'
+    try:
+        fld.text = str(purpose).strip()
+        try:
+            session.findById('wnd[1]').sendVKey(0)    # 엔터로 확정
+        except Exception:
+            session.findById('wnd[0]').sendVKey(0)
+        time.sleep(0.6)
+    except Exception as e:
+        return f'"목적" 입력 실패: {e}'
+    return None
+
+
 def create_reservation(items, bwart='951', order_number=None, cost_center=None,
-                       werks='1000', lgort_default=None, rsdat=None, wempf=None, text=None):
+                       werks='1000', lgort_default=None, rsdat=None, wempf=None, text=None,
+                       purpose=None):
     """MB21 예약(계정대체 청구서) 생성 — 전기(MIGO)는 하지 않는다.
 
     [2026-10-02 신규, 사용자 요청] 자재 보관함(js/35)에 담아둔 자재를 모아 한 번에 청구서를
@@ -3150,6 +3212,11 @@ def create_reservation(items, bwart='951', order_number=None, cost_center=None,
     except Exception:
         pass
 
+    # 🎯 [2026-10-02] 목적(YYDEVTYPE) — " 기타" → 코딩 블록 팝업. 실패해도 멈추지 않고 사유만 모은다.
+    purpose_warn = _mb21_set_purpose(session, purpose)
+    if purpose_warn:
+        print(f'[MB21 목적 미입력] {purpose_warn}', file=sys.stderr)
+
     # 자재 입력 (VBS lines 137-199: RESB-MATNR/ERFMG/ERFME/LGORT 테이블)
     wnd = session.findById('wnd[0]')
     sub_path = 'usr/sub:SAPMM07R:0521/'
@@ -3215,6 +3282,7 @@ def create_reservation(items, bwart='951', order_number=None, cost_center=None,
     return {
         'ok': True, 'rsnum': rsnum, 'bwart': str(bwart),
         'itemCount': len([i for i in items if str(i.get('matnr', '')).strip()]),
+        'purpose': purpose or '', 'purposeWarning': purpose_warn or '',
         'sbar': sbar_save,
         'text': (f'예약(계정대체청구서) 생성 완료 — 예약번호 {rsnum} '
                  f'(이동유형 {bwart}, 품목 {len(items)}건). ZMM019에서 PDF로 출력하세요.'),
@@ -3248,7 +3316,7 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
     _res = create_reservation(items, bwart=bwart, order_number=order_number,
                               cost_center=cost_center, werks=werks,
                               lgort_default=lgort_default, rsdat=posting_date,
-                              wempf=wempf, text=text)
+                              wempf=wempf, text=text, purpose=None)
     rsnum = _res['rsnum']
     session = _get_sap_session()
 
@@ -3256,6 +3324,91 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
     result = _migo_post_by_reservation(session, rsnum, posting_date)
     result['rsnum'] = rsnum
     return result
+
+
+def print_reservation_zmm019(rsnum, werks='1000'):
+    """🖨 ZMM019(자재 예약 리스트)에서 예약번호로 조회한 뒤 "청구서출력"을 눌러 계정대체청구서를 낸다.
+
+    [2026-10-02 실화면 덤프] 선택화면(1000): RSNUM-LOW/HIGH, WERKS-LOW, R_ALL/R_ME …
+    결과화면(100): ALV 그리드 + tbar[1]/btn[13]=" 청구서출력", btn[14]="REFRESH".
+    사용자 확인: **계정대체 청구의 최종 산출물이 이 PDF다**(MIGO는 거의 쓰지 않음).
+
+    반환: {ok, rsnum, rowCount, table, sbar, text}
+    """
+    rsnum = str(rsnum or '').strip()
+    if not rsnum:
+        raise RuntimeError('예약번호(rsnum)를 지정해주세요.')
+
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    wnd = session.findById('wnd[0]')
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM019'
+    wnd.sendVKey(0)
+    time.sleep(1.2)
+    wnd = session.findById('wnd[0]')
+
+    def _set(fid, val):
+        try:
+            wnd.findById('usr/' + fid).text = val
+            return True
+        except Exception:
+            return False
+
+    # 예약번호만으로 좁힌다 — 다른 선택조건이 남아 있으면 0건이 될 수 있어 비운다
+    _set('txtRSNUM-LOW', rsnum)
+    _set('txtRSNUM-HIGH', '')
+    _set('ctxtRSDAT-LOW', '');  _set('ctxtRSDAT-HIGH', '')
+    _set('txtWEMPF-LOW', '');   _set('txtWEMPF-HIGH', '')
+    _set('ctxtMATNR-LOW', '');  _set('ctxtMATNR-HIGH', '')
+    _set('ctxtBWART-LOW', '');  _set('ctxtBWART-HIGH', '')
+    _set('ctxtKOSTL-LOW', '');  _set('ctxtKOSTL-HIGH', '')
+    _set('ctxtS_AUFNR-LOW', ''); _set('ctxtS_AUFNR-HIGH', '')
+    if werks:
+        _set('ctxtWERKS-LOW', str(werks).strip())
+    try:
+        wnd.findById('usr/radR_ALL').select()      # 전체(미출자재만 보기 R_ME 아님)
+    except Exception:
+        pass
+
+    wnd.findById('tbar[1]/btn[8]').press()         # 실행(F8)
+    time.sleep(1.8)
+    wnd = session.findById('wnd[0]')
+
+    grid = _sap_find_grid(wnd)
+    table, row_count = '', None
+    if grid is not None:
+        table = _sap_dump_grid(grid)
+        try:
+            row_count = int(grid.RowCount)
+        except Exception:
+            row_count = None
+    if not row_count:
+        sbar0 = ''
+        try:
+            sbar0 = (session.findById('wnd[0]/sbar').Text or '').strip()
+        except Exception:
+            pass
+        raise RuntimeError(f'ZMM019에서 예약번호 {rsnum} 조회 결과가 없습니다. (상태바: "{sbar0}")')
+
+    # 청구서출력
+    try:
+        wnd.findById('tbar[1]/btn[13]').press()
+        time.sleep(2.0)
+    except Exception as e:
+        raise RuntimeError(f'ZMM019 "청구서출력" 버튼을 누르지 못했습니다: {e}')
+
+    sbar = ''
+    try:
+        sbar = (session.findById('wnd[0]/sbar').Text or '').strip()
+    except Exception:
+        pass
+
+    return {
+        'ok': True, 'rsnum': rsnum, 'rowCount': row_count, 'table': table, 'sbar': sbar,
+        'text': (f'예약번호 {rsnum} 계정대체청구서를 출력했습니다(품목 {row_count}건). '
+                 f'인쇄 미리보기/출력 대화상자가 SAP 화면에 떠 있으면 거기서 마무리해주세요.'
+                 + (f' (상태바: {sbar})' if sbar else '')),
+    }
 
 
 def download_documents_by_pattern(pattern, doc_type='P01'):
@@ -5672,10 +5825,15 @@ def main():
             rsdat_arg   = sys.argv[8] if len(sys.argv) > 8 and sys.argv[8].strip() else None
             wempf_arg   = sys.argv[9] if len(sys.argv) > 9 and sys.argv[9].strip() else None
             text_arg    = sys.argv[10] if len(sys.argv) > 10 and sys.argv[10].strip() else None
+            purp_arg    = sys.argv[11] if len(sys.argv) > 11 and sys.argv[11].strip() else None
             result = create_reservation(
                 items_arg, bwart=bwart_arg, order_number=order_arg, cost_center=kostl_arg,
                 werks=werks_arg, lgort_default=lgort_arg, rsdat=rsdat_arg,
-                wempf=wempf_arg, text=text_arg)
+                wempf=wempf_arg, text=text_arg, purpose=purp_arg)
+        elif action == 'print_reservation_zmm019':
+            rsnum_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            werks_arg = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '1000'
+            result = print_reservation_zmm019(rsnum_arg, werks_arg)
         elif action == 'migo_return_receipt':
             import json as _json2
             items_arg   = _json2.loads(sys.argv[2]) if len(sys.argv) > 2 else []

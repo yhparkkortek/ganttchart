@@ -3014,12 +3014,28 @@ def sap_create_reservation():
     rsdat = (body.get('rsdat') or '').strip()
     wempf = (body.get('wempf') or '').strip()
     text  = (body.get('text') or '').strip()
+    purpose = (body.get('purpose') or '').strip()      # 목적(YYDEVTYPE) — "기타" 코딩블록. 필수.
+    if not purpose:
+        return jsonify({'ok': False, 'error': '목적(용도)이 필요합니다.'}), 400
     # 품목 수에 비례해 넉넉히 — MB21은 자재당 입력+엔터라 건수가 곧 시간이다
     timeout = min(90 + len(items) * 6, 300)
     data, status = _run_sap_bridge(
         ['create_reservation', _j.dumps(items, ensure_ascii=False), bwart, order_number,
-         cost_center, werks, lgort, rsdat, wempf, text],
+         cost_center, werks, lgort, rsdat, wempf, text, purpose],
         timeout, f'MB21 예약 생성(이동유형 {bwart}, {len(items)}건)')
+    return jsonify(data), status
+
+
+@app.route('/sap-print-reservation', methods=['GET'])
+def sap_print_reservation():
+    """🖨 [2026-10-02] ZMM019에서 예약번호로 조회 후 "청구서출력".
+    계정대체 청구의 최종 산출물(MIGO는 쓰지 않음)."""
+    rsnum = (request.args.get('rsnum') or '').strip()
+    if not rsnum:
+        return jsonify({'ok': False, 'error': '예약번호(rsnum)가 필요합니다.'}), 400
+    werks = (request.args.get('werks') or '1000').strip()
+    data, status = _run_sap_bridge(
+        ['print_reservation_zmm019', rsnum, werks], 90, f'ZMM019 청구서출력 {rsnum}')
     return jsonify(data), status
 
 
