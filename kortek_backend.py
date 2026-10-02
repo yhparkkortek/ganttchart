@@ -3009,6 +3009,12 @@ def sap_create_reservation():
         return jsonify({'ok': False, 'error': '오더번호가 필요합니다.'}), 400
     if not cost_center:
         return jsonify({'ok': False, 'error': '코스트센터가 필요합니다.'}), 400
+    # [2026-10-02] 사유(텍스트)는 품목마다 필수 — 비면 SAP이 저장 단계에서 거절한다
+    _no_txt = [str(i.get('matnr', '')) for i in items if not str(i.get('sgtxt', '') or '').strip()]
+    if _no_txt:
+        return jsonify({'ok': False,
+                        'error': '사유(텍스트)가 비어 있는 품목이 있습니다: ' + ', '.join(_no_txt[:5])
+                                 + ('…' if len(_no_txt) > 5 else '')}), 400
     werks = (body.get('werks') or '1000').strip()
     lgort = (body.get('lgort_default') or '').strip()
     rsdat = (body.get('rsdat') or '').strip()

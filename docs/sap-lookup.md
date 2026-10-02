@@ -1733,3 +1733,39 @@ MB21 코딩 블록을 덤프했는데 `wnd[1]`이 안 담겼다. 원인은 노�
 
 **플랜트/저장위치 데이터 확장**: `SAP_PLANTS`에 **7000 VINA**, `SAP_STORAGE_LOCATIONS`에 사내 전체
 44건(1000 자재창고 … 7903 RMA불가(VINA)). 둘 다 `<datalist>`라 목록 밖 코드도 직접 입력된다.
+
+### 🧺 자재 보관함 3차 — UI 컨벤션 적용 + 항목별 사유 (2026-10-02, 사용자 요청 11건)
+
+| # | 요청 | 처리 |
+|---|---|---|
+| 1 | 담기면 자재청구/자재입고 칩 활성화 | 우하단 칩바 — 보관함이 비어 있지 않을 때만 3개 칩(🧺/📤 자재청구/📥 자재입고) |
+| 2 | 모달 기본 기능 | `docs/ui-conventions.md` 패턴: 투명 래퍼 + 내부 박스 `resize:both`, **헤더 하늘색**, 닫기 버튼 CSS 변수, `_makeDraggable`/`_bindClickToFront`/`bringModalToFront` |
+| 3 | 필요일 달력 | `<input type="date">` ↔ YYYYMMDD 변환(`toDateInput`/`fromDateInput`) |
+| 4 | 이동유형 전체 + 칩별 기본값 | `SAP_MOVEMENT_TYPES` **84종**(데이터). `_mcOpenWith('951'/'907')` |
+| 5 | 플랜트 1000 고정·입력칸 삭제 | `SAP_PLANT_FIXED`(데이터). 모달엔 안내 문구로만 표시 |
+| 6 | 수령인 자동 | `window.currentUserName`. 사람이 고치면 `wempfEdited` 플래그로 자동기입 중단 |
+| 7 | 오더 = 프로젝트 코드 조회 | 🔍 버튼 → 기존 `/sap-project-codes` 재사용. 숫자 섞이면 `by=order`, 문자만이면 `by=desc`(기존 규칙 동일). 결과 클릭 → 오더 칸 |
+| 8 | 코스트센터 조회 | `SAP_COST_CENTERS` 드롭다운 + 직접 입력 — **⚠️ 확인된 건 1008E030(개발3팀(판)) 1건뿐** |
+| 9 | 항목 저장위치 중복 제거 / 기본 저장위치 드롭다운 | 항목 열 삭제. `<input list=datalist>` → **`<select>`**로 교체(값+라벨이 두 번 보이던 "중복" 해소, 목록이 바로 펼쳐짐) |
+| 10 | 입력박스 너비 | `table-layout:fixed` + `<colgroup>`(92px/가변/68px/38%/30px) |
+| 11 | 항목별 사유(텍스트) | 표에 "사유" 열 + 비면 빨간 테두리, 전송 차단(프런트·백엔드 양쪽) |
+
+**🔴 텍스트(RESB-SGTXT)는 품목마다 필수** — 화면 510 상태바 `"모든 필수 입력 필드에 값을 입력하십시오"`로 확인.
+다중 입력 화면(521) 품목 그리드에는 **SGTXT 열이 아예 없어서**, 상세화면을 순회하며 넣어야 한다:
+
+```
+tbar[0]/btn[11]  그리드 → 상세(510)
+usr/txtRESB-SGTXT  그 품목의 텍스트
+tbar[1]/btn[19]  다음 품목     ⚠️ 실환경 미검증(아이콘만 있어 라벨이 비어 있음)
+tbar[0]/btn[3]   뒤로
+```
+
+`_mb21_set_item_texts()`는 실패해도 예외로 죽이지 않고 **"앞 N건은 입력됨"**까지 담아 `textWarning`으로
+돌려준다 — 텍스트가 비면 SAP이 저장에서 거절하므로 사람이 어디서 멈췄는지 알아야 한다.
+
+**MB21 상세화면(510) 필드** — `RESB-BWART` `RESB-WERKS` `RESB-MATNR` `RESB-LGORT` `RESB-ERFMG`
+`RESB-ERFME` `RESB-BDTER`(소요일) `RESB-XWAOK`(이동 허용) `RESB-WEMPF` `RESB-ABLAD`(하역지점)
+**`RESB-SGTXT`(텍스트)** + `COBL-KOSTL`/`COBL-AUFNR`/`COBL_MORE`.
+
+**🚧 남은 것**: ① 코스트센터 개발1~10팀 매핑(1건만 확인됨) ② 앱에서 "현재 팀"을 담는 전역변수를
+찾지 못함 — 어디서 읽어야 하는지 확인 필요 ③ `btn[19]`(다음 품목) 실환경 검증.

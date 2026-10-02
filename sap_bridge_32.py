@@ -3001,6 +3001,59 @@ def _migo_post_by_reservation(session, rsnum, posting_date):
     }
 
 
+def _mb21_set_item_texts(session, items):
+    """MB21 품목별 "텍스트"(RESB-SGTXT)를 채운다 — 품목 수만큼 상세화면을 순회한다.
+
+    [2026-10-02 실화면 덤프 + 사용자 확인] 텍스트는 **품목마다 필수**다
+    (화면 510 "예약생성: 신규품목 0001", 상태바 "모든 필수 입력 필드에 값을 입력하십시오").
+    다중 입력 화면(521)의 품목 그리드에는 SGTXT 열이 아예 없어서, 상세화면으로 들어가
+    한 품목씩 넣고 다음 품목으로 넘어가는 수밖에 없다.
+
+      tbar[0]/btn[11] : 그리드 → 상세(510) 진입
+      usr/txtRESB-SGTXT : 그 품목의 텍스트
+      tbar[1]/btn[19] : 다음 품목         ⚠️ 아직 실환경 미검증(아이콘만 있어 라벨이 비어 있음)
+      tbar[0]/btn[3]  : 뒤로(그리드 복귀)
+
+    실패해도 예외로 죽이지 않고 "어디까지 넣었는지"를 문자열로 돌려준다 — 텍스트가 비면
+    SAP이 저장 단계에서 거절하므로, 사람이 원인을 바로 알 수 있어야 한다.
+    """
+    texts = [str((it or {}).get('sgtxt', '') or '').strip() for it in items]
+    if not any(texts):
+        return None
+    try:
+        session.findById('wnd[0]/tbar[0]/btn[11]').press()
+        time.sleep(0.9)
+    except Exception as e:
+        return f'품목 상세화면(btn[11]) 진입 실패 — 텍스트를 넣지 못했습니다: {e}'
+
+    done = 0
+    for idx, txt in enumerate(texts):
+        wnd = session.findById('wnd[0]')
+        try:
+            fld = _find_by_id_substring(wnd, 'txtRESB-SGTXT')
+            if fld is None:
+                return f'{idx + 1}번째 품목에서 텍스트(RESB-SGTXT) 칸을 찾지 못했습니다. (앞 {done}건은 입력됨)'
+            fld.text = txt
+            wnd.sendVKey(0)
+            time.sleep(0.4)
+            done += 1
+        except Exception as e:
+            return f'{idx + 1}번째 품목 텍스트 입력 실패: {e} (앞 {done}건은 입력됨)'
+        if idx < len(texts) - 1:
+            try:
+                session.findById('wnd[0]/tbar[1]/btn[19]').press()   # 다음 품목
+                time.sleep(0.5)
+            except Exception as e:
+                return f'{idx + 2}번째 품목으로 넘어가지 못했습니다(btn[19]): {e} (앞 {done}건은 입력됨)'
+
+    try:
+        session.findById('wnd[0]/tbar[0]/btn[3]').press()            # 그리드로 복귀
+        time.sleep(0.6)
+    except Exception:
+        pass
+    return None
+
+
 def _mb21_set_purpose(session, purpose):
     """MB21 신규품목 화면에서 " 기타"(COBL_MORE) → "코딩 블록" 팝업의 **목적**(YYDEVTYPE)을 채운다.
 
@@ -3245,8 +3298,14 @@ def create_reservation(items, bwart='951', order_number=None, cost_center=None,
     wnd.sendVKey(0)
     time.sleep(0.5)
 
-    # 품목 텍스트 (VBS lines 203-209: btn[11] → RESB-SGTXT → btn[3])
-    if text:
+    # 품목 텍스트(사유) — [2026-10-02] 품목마다 필수라 상세화면을 순회한다.
+    #   items[i]['sgtxt']가 하나라도 있으면 항목별 입력, 없고 text만 있으면 기존처럼 전체 1건.
+    text_warn = None
+    if any(str((it or {}).get('sgtxt', '') or '').strip() for it in items):
+        text_warn = _mb21_set_item_texts(session, items)
+        if text_warn:
+            print(f'[MB21 품목 텍스트] {text_warn}', file=sys.stderr)
+    elif text:
         try:
             wnd = session.findById('wnd[0]')
             session.findById('wnd[0]/tbar[0]/btn[11]').press()
@@ -3283,6 +3342,7 @@ def create_reservation(items, bwart='951', order_number=None, cost_center=None,
         'ok': True, 'rsnum': rsnum, 'bwart': str(bwart),
         'itemCount': len([i for i in items if str(i.get('matnr', '')).strip()]),
         'purpose': purpose or '', 'purposeWarning': purpose_warn or '',
+        'textWarning': text_warn or '',
         'sbar': sbar_save,
         'text': (f'예약(계정대체청구서) 생성 완료 — 예약번호 {rsnum} '
                  f'(이동유형 {bwart}, 품목 {len(items)}건). ZMM019에서 PDF로 출력하세요.'),
