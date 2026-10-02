@@ -2446,6 +2446,130 @@ ${docsJson}`;
         return (metaText ? metaText + '\n\n' : '') + bodyOut + (footNote ? '\n' + footNote : '');
     };
 
+    // 📐 [2026-10-02 신규, 사용자 요청] SAP 조회 결과 렌더러 (A안)
+    //    제보: "구매정보 레코드·변경이력처럼 출력이 사용자가 볼 수 없는 형태로 나와 뭐가 뭔지 모르겠다."
+    //    구매정보는 **36컬럼 × 1행**이라 가로로 눕히면 어떻게 꾸며도 안 읽힌다 — 표를 다듬을 게 아니라
+    //    형태를 바꿔야 한다. 규칙 하나로 자동 전환한다:
+    //      · 행 1건 && 컬럼 CARD_MIN_COLS 초과  → **세로 카드**(항목/값 2열, 화면 폭과 무관)
+    //      · 그 외                              → **가로 표**(자재내역 패턴조회와 같은 모양 유지)
+    //    컬럼 순서·제목은 window.SAP_RESULT_LAYOUT(js/32, 데이터), 라벨은 _SAP_FIELD_LABEL_MAP.
+    //    둘 다 데이터라 새 SAP 조회가 생겨도 이 함수는 손대지 않는다(CLAUDE.md "규칙은 데이터로").
+    //    표가 아니거나 해석 불가면 null을 돌려주고, 호출부는 기존 텍스트 방식으로 폴백한다.
+    window._ganttQaFormatSapRecord = function(kind, titleText, sapTable) {
+        try {
+            var LAY  = window.SAP_RESULT_LAYOUT || {};
+            var conf = LAY[kind] || {};
+            var minCols = LAY.CARD_MIN_COLS || 8;
+            var en = window._currentLang === 'en';
+            function lbl(code) {
+                var k = String(code || '').trim();
+                return (window._SAP_FIELD_LABEL_MAP && window._SAP_FIELD_LABEL_MAP[k]) || k;
+            }
+            function esc(v) {
+                return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+                });
+            }
+
+            var text = String(sapTable || '').replace(/\r/g, '').trim();
+            if (!text) return null;
+            // 메타 헤더(탭 없는 첫 덩어리)가 있으면 떼어낸다
+            var meta = '', body = text, sp = text.indexOf('\n\n');
+            if (sp !== -1 && text.slice(0, sp).indexOf('\t') === -1) {
+                meta = text.slice(0, sp).trim();
+                body = text.slice(sp + 2);
+            }
+            var lines = body.split('\n').filter(function (l) { return l.trim().length > 0; });
+            if (lines.length < 2 || lines[0].indexOf('\t') === -1) return null;   // 표가 아님 → 폴백
+
+            var cols = lines[0].split('\t').map(function (c) { return c.trim(); });
+            var rows = lines.slice(1).map(function (l) { return l.split('\t'); });
+
+            // primary에 있는 컬럼을 그 순서대로 앞세우고, 나머지는 원래 순서로 뒤에 붙인다
+            var primary = conf.primary || [];
+            var head = [], tail = [];
+            primary.forEach(function (c) { if (cols.indexOf(c) !== -1) head.push(c); });
+            cols.forEach(function (c) { if (head.indexOf(c) === -1) tail.push(c); });
+            var ordered = head.concat(tail);
+            function cellOf(row, code) { return (row[cols.indexOf(code)] || '').trim(); }
+
+            var uid = 'saprec-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+            var titleHtml = '<div style="font-size:12.5px; margin-bottom:5px;"><b>'
+                + esc(titleText || conf.title || 'SAP') + '</b>'
+                + (rows.length > 1 ? ' <span style="color:#666;">(' + rows.length + (en ? ' rows)' : '건)') + '</span>' : '')
+                + '</div>';
+            var metaHtml = meta ? '<div style="font-size:11.5px; color:#666; margin-bottom:5px;">' + esc(meta) + '</div>' : '';
+            function moreBtn(n, innerHtml) {
+                return '<div id="' + uid + '" style="display:none; margin-top:6px;">' + innerHtml + '</div>'
+                    + '<div style="margin-top:5px; text-align:right;">'
+                    + '<button onclick="(function(){var d=document.getElementById(\'' + uid + '\');'
+                    + 'if(!d)return;var on=d.style.display===\'none\';d.style.display=on?\'block\':\'none\';'
+                    + 'this.textContent=on?' + JSON.stringify(en ? 'Hide details' : '접기')
+                    + ':' + JSON.stringify(en ? 'Show all ' + n + ' fields' : '전체 ' + n + '개 항목 보기') + ';}).call(this)" '
+                    + 'style="font-size:11px; padding:2px 9px; border:1px solid #bbb; border-radius:4px; background:#f5f7fa; cursor:pointer;">'
+                    + esc(en ? 'Show all ' + n + ' fields' : '전체 ' + n + '개 항목 보기') + '</button></div>';
+            }
+
+            // ── 세로 카드 (1건 × 다컬럼) ──────────────────────────────────
+            if (rows.length === 1 && cols.length > minCols) {
+                var r = rows[0];
+                var subtitle = cellOf(r, 'MAKTX');
+                var skip = { MATNR: 1, MAKTX: 1 };
+                function kvRows(codes) {
+                    var out = '';
+                    codes.forEach(function (c) {
+                        if (skip[c]) return;
+                        var v = cellOf(r, c);
+                        if (!v) return;                       // 빈 값은 숨긴다(36개 중 절반이 빈 칸)
+                        out += '<tr>'
+                            + '<td style="padding:3px 10px 3px 0; color:#555; white-space:nowrap; vertical-align:top; border-bottom:1px solid #f0f2f5;">' + esc(lbl(c)) + '</td>'
+                            + '<td style="padding:3px 0; border-bottom:1px solid #f0f2f5;">' + esc(v) + '</td>'
+                            + '</tr>';
+                    });
+                    return out;
+                }
+                var mainRows = kvRows(head.length ? head : ordered);
+                var restCodes = head.length ? tail : [];
+                var restRows = kvRows(restCodes);
+                var html = titleHtml
+                    + (subtitle ? '<div style="font-size:12px; color:#444; margin:-2px 0 7px 0;">' + esc(subtitle) + '</div>' : '')
+                    + metaHtml
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12px;"><tbody>' + mainRows + '</tbody></table>';
+                if (restRows) {
+                    html += moreBtn(cols.length,
+                        '<table style="width:100%; border-collapse:collapse; font-size:12px;"><tbody>' + restRows + '</tbody></table>');
+                }
+                return html;
+            }
+
+            // ── 가로 표 (여러 건 또는 컬럼이 적을 때) ─────────────────────
+            function tableOf(codes) {
+                var t = '<div style="max-height:300px; overflow:auto; border:1px solid #ddd; border-radius:4px;">'
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:#eef3fa;">';
+                codes.forEach(function (c) {
+                    t += '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;">'
+                        + esc(lbl(c)) + '</th>';
+                });
+                t += '</tr></thead><tbody>';
+                rows.forEach(function (row, i) {
+                    t += '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#f7f9fc') + ';">';
+                    codes.forEach(function (c) {
+                        t += '<td style="padding:4px 8px; border-bottom:1px solid #eef0f3;">' + esc(cellOf(row, c)) + '</td>';
+                    });
+                    t += '</tr>';
+                });
+                return t + '</tbody></table></div>';
+            }
+            var shown = head.length ? head : ordered;
+            var out = titleHtml + metaHtml + tableOf(shown);
+            if (shown.length < cols.length) out += moreBtn(cols.length, tableOf(ordered));
+            return out;
+        } catch (e) {
+            console.warn('[SAP 결과 렌더링] 실패 — 기존 텍스트 방식으로 폴백:', e && e.message);
+            return null;
+        }
+    };
+
     // 📐🚫🤖 [2026-09-22 신규] "이 요청이 순수 SAP 조회일 뿐인가, 아니면 그 데이터를 근거로 뭔가
     //    더 판단해달라는 것까지 포함하는가"를 가르는 보수적 판정. 자재번호/흔한 트리거 단어/흔한
     //    동사를 전부 떼어내고도 글자가 남으면 "조회 이상의 뭔가"로 보고 false를 반환해 기존 AI
@@ -6038,14 +6162,27 @@ ${docsJson}`;
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('ZCO037 변경이력 조회 중...', 'Looking up change history in ZCO037...'), pending: true });
             window._renderGanttQaMessages();
-            let chgReply;
+            let chgReply, _chgRawHtml = null;   // [2026-10-02] 카드/표 HTML 경로
             try {
                 const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-material-change-history?material=' + encodeURIComponent(_chgHistMat)), 35000, window._t('변경이력 조회 시간 초과', 'Change history lookup timed out'));
                 const data = await res.json();
-                chgReply = data.ok ? ('**' + _chgHistMat + ' 변경이력**\n\n' + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('변경이력 조회 실패', 'Change history lookup failed'));
+                if (data.ok) {
+                    // [2026-10-02] rowCount·조회기준을 같이 보여준다 — "1건뿐"인지 "더 있는데 안 보이는"지 판별용
+                    var _chgTitle = '🔧 ' + window._t('상태변경이력', 'Status change history') + ' — ' + _chgHistMat;
+                    var _chgMeta  = (data.basis ? data.basis : '') + (data.rowCount != null ? ' · ' + data.rowCount + window._t('건', ' rows') : '');
+                    var _chgHtml  = window._ganttQaFormatSapRecord
+                        ? window._ganttQaFormatSapRecord('chghist', _chgTitle + (_chgMeta ? '  (' + _chgMeta.trim() + ')' : ''), data.table)
+                        : null;
+                    if (_chgHtml) { _chgRawHtml = _chgHtml; chgReply = null; }
+                    else chgReply = '**' + _chgHistMat + ' 변경이력**\n\n' + (data.table || window._t('결과 없음', 'No results'));
+                } else {
+                    chgReply = '⚠️ ' + (data.error || window._t('변경이력 조회 실패', 'Change history lookup failed'));
+                }
             } catch(e) { chgReply = '⚠️ ' + (e && e.message ? e.message : e); }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: chgReply });
+            window._ganttQaHistory.push(_chgRawHtml
+                ? { role: 'ai', text: _chgRawHtml, rawHtml: true }
+                : { role: 'ai', text: chgReply });
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
@@ -6093,14 +6230,25 @@ ${docsJson}`;
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('ZMM006 구매정보 조회 중...', 'Looking up purchase info records in ZMM006...'), pending: true });
             window._renderGanttQaMessages();
-            let purchReply;
+            let purchReply, _purRawHtml = null;   // [2026-10-02] 카드/표 HTML 경로
             try {
                 const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-purchase-info?material=' + encodeURIComponent(_purchInfoMat)), 35000, window._t('구매정보 조회 시간 초과', 'Purchase info lookup timed out'));
                 const data = await res.json();
-                purchReply = data.ok ? ('**' + _purchInfoMat + ' 구매정보레코드**\n\n' + (data.table || window._t('결과 없음', 'No results'))) : '⚠️ ' + (data.error || window._t('구매정보 조회 실패', 'Purchase info lookup failed'));
+                if (data.ok) {
+                    var _purTitle = '🛒 ' + window._t('구매정보 레코드', 'Purchase info record') + ' — ' + _purchInfoMat;
+                    var _purHtml  = window._ganttQaFormatSapRecord
+                        ? window._ganttQaFormatSapRecord('purchaseinfo', _purTitle, data.table)
+                        : null;
+                    if (_purHtml) { _purRawHtml = _purHtml; purchReply = null; }
+                    else purchReply = '**' + _purchInfoMat + ' 구매정보레코드**\n\n' + (data.table || window._t('결과 없음', 'No results'));
+                } else {
+                    purchReply = '⚠️ ' + (data.error || window._t('구매정보 조회 실패', 'Purchase info lookup failed'));
+                }
             } catch(e) { purchReply = '⚠️ ' + (e && e.message ? e.message : e); }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: purchReply });
+            window._ganttQaHistory.push(_purRawHtml
+                ? { role: 'ai', text: _purRawHtml, rawHtml: true }
+                : { role: 'ai', text: purchReply });
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
@@ -8018,6 +8166,19 @@ ${docsJson}`;
         REVLV: '개정레벨', AENNR2: '변경번호2', PEINH_INFO: '정보레코드가격단위',
         WAERS_INFO1: '정보레코드통화1', WAERS_INFO2: '정보레코드통화2',
         STPRS: '표준가격', KBETR: '단가', KONWA: '조건통화', WAERS: '통화', SORTF: '정렬기준',
+        // 🆕 [2026-10-02] ZMM006 구매정보 레코드 / ZCO037 상태변경이력 실출력에서 확인된 필드.
+        //    ⚠️ 뜻이 확실한 것만 넣는다 — 위 주석대로 "틀린 한글보다 원본 코드가 낫다".
+        //    (NETPR_G, MEPRF, PSTAT 등은 확신이 없어 일부러 비워 둠 → 코드 그대로 표시됨)
+        LIFNR: '공급업체코드', DATAB: '유효시작일', DATBI: '유효종료일',
+        NETPR_G: '순가격',   // ⚠️ ZMM006 실출력에서 단가가 실제로 들어오는 칸(0.22 USD). 라벨 확인 요망
+
+        PEINH: '가격단위', BPRME: '주문가격단위', ESOKZ_T: '정보레코드유형',
+        NORBM: '표준발주수량', MINBM: '최소발주수량', APLFZ: '계획납품기간(일)',
+        MWSKZ: '세금코드', TELF1: '전화번호', VERKF: '영업담당자',
+        ERDAT: '생성일', CHDAT: '변경일', INFNR: '구매정보레코드번호',
+        LOEKZ: '삭제지시자', LOEKZH: '삭제지시자(헤더)', LTEXT: '텍스트',
+        WEBRE: '입고기준송장검증', EKORG: '구매조직',
+        OBJECTID: '자재번호', VALUE_NEW: '변경후 값', UDATE: '변경일자',
     };
 
     window._exportSapDataToExcel = function(cached) {

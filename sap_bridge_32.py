@@ -1839,12 +1839,26 @@ def fetch_material_documents(material):
 # 100이면 화면 숫자는 "100개당 가격"이라, 실제 개당 단가는 그 값을 가격단위로 나눠야
 # 한다(사용자 지적: "가격 단위 수량이 있어, 나누기 해서 알려줘야해"). 예: 가격단위 100,
 # 표준가격 10,800 → 실제 단가 108.
+# 🐛🐛 [2026-10-02 실화면 덤프로 원인 확정] 검색어에 컨트롤 접두어(txt/ctxt)를 반드시 포함할 것.
+#   _find_by_id_substring은 타입 구분 없이 깊이우선 "첫 매치"를 돌려주는데, SAP 화면 트리에는
+#   같은 이름의 GuiLabel(lblXXX)이 실제 값이 든 GuiTextField(txtXXX)보다 **먼저** 나온다.
+#   접두어 없이 'CKMMAT_DISPLAY-STPRS_1'로 찾으면 라벨(.Text="표준 가격")이 잡혀서
+#   숫자 파싱이 실패하고 "가격 필드를 찾지 못했습니다"로 끝났다(실사용 제보).
+#   ⚠️ 새 필드를 추가할 때도 반드시 덤프에서 실제 접두어를 확인할 것 — 값 필드가
+#      txt(GuiTextField)인지 ctxt(GuiCTextField)인지는 필드마다 다르다.
 _MATERIAL_PRICE_FIELD_IDS = {
-    'stprs': 'CKMMAT_DISPLAY-STPRS_1',  # 표준 가격
-    'pvprs': 'CKMMAT_DISPLAY-PVPRS_1',  # 기간별 단가
-    'peinh': 'CKMMAT_DISPLAY-PEINH_1',  # 가격단위
-    'vprsv': 'CKMMAT_DISPLAY-VPRSV_1',  # 가격 관리(S=표준가/V=이동평균가)
-    'stprv': 'CKMMAT_DISPLAY-STPRV_1',  # 이전가격
+    'stprs': 'txtCKMMAT_DISPLAY-STPRS_1',   # 표준 가격        예: 44,950
+    'pvprs': 'txtCKMMAT_DISPLAY-PVPRS_1',   # 기간별 단가      예: 37,044
+    'peinh': 'txtCKMMAT_DISPLAY-PEINH_1',   # 가격단위         예: 100
+    'vprsv': 'ctxtCKMMAT_DISPLAY-VPRSV_1',  # 가격 관리(S/V)   ← ctxt 주의
+    'stprv': 'txtCKMMAT_DISPLAY-STPRV_1',   # 이전가격
+    # [2026-10-02] 같은 화면에 이미 있어 추가 조회 없이 얻는 값들
+    'waers': 'txtCKMMAT_DISPLAY-WAERS_1',   # 통화             예: KRW
+    'salk3': 'txtCKMMAT_DISPLAY-SALK3_1',   # 재고 값
+    'zkprs': 'txtCKMMAT_DISPLAY-ZKPRS_1',   # 미래가격
+    'laepr': 'ctxtCKMMAT_DISPLAY-LAEPR_1',  # 최종 가격변경일  ← ctxt
+    'lbkum': 'txtCKMLPP-LBKUM',             # 총 재고
+    'meins': 'ctxtMARA-MEINS',              # 기본단위         ← ctxt
 }
 
 
@@ -1903,7 +1917,11 @@ def fetch_material_price(material):
     vprsv = values.get('vprsv')
     vprsv_label = {'S': '표준가', 'V': '이동평균가'}.get(vprsv, vprsv)
 
+    unit = values.get('meins') or ''
+    cur  = values.get('waers') or ''
     lines = [f'[SAP MM03 회계1: 자재 {material}]']
+    if cur:
+        lines.append(f'통화: {cur}')
     if vprsv:
         lines.append(f'가격 관리: {vprsv}' + (f' ({vprsv_label})' if vprsv_label != vprsv else ''))
     lines.append(f'가격단위(PEINH): {values.get("peinh") or "1"}')
@@ -1913,6 +1931,14 @@ def fetch_material_price(material):
         lines.append(f'기간별 단가: {values["pvprs"]} (가격단위 {peinh:g}개당) → 실제 단가: {pvprs / peinh:,.4f}')
     if values.get('stprv'):
         lines.append(f'이전가격: {values["stprv"]}')
+    if values.get('zkprs') and _parse_sap_number(values.get('zkprs')):
+        lines.append(f'미래가격: {values["zkprs"]}')
+    if values.get('laepr'):
+        lines.append(f'최종 가격변경: {values["laepr"]}')
+    if values.get('salk3'):
+        lines.append(f'재고 값: {values["salk3"]}')
+    if values.get('lbkum'):
+        lines.append(f'총 재고: {values["lbkum"]}' + (f' {unit}' if unit else ''))
     text = '\n'.join(lines)
 
     return {
@@ -1921,6 +1947,12 @@ def fetch_material_price(material):
         'standardPrice': stprs, 'standardPricePerUnit': (stprs / peinh) if stprs is not None else None,
         'periodPrice': pvprs, 'periodPricePerUnit': (pvprs / peinh) if pvprs is not None else None,
         'priceControl': vprsv,
+        'currency': cur or None,
+        'baseUnit': unit or None,
+        'stockValue': values.get('salk3'),
+        'futurePrice': values.get('zkprs'),
+        'lastPriceChange': values.get('laepr'),
+        'totalStock': _parse_sap_number(values.get('lbkum')),
         'text': text,
     }
 
@@ -4553,7 +4585,10 @@ def _query_stock_via_mm03(matnr, werks='1000'):
         try:
             return float(s)
         except Exception:
-            return 0.0
+            # 🐛🐛 [2026-10-02] 파싱 실패를 0.0으로 삼키면 "재고 0개"라는 **틀린 답**이
+            #   그대로 사용자에게 나간다(실제로 라벨 "총 재고"를 집어와 0이 나가고 있었다).
+            #   조회 실패는 실패로 드러낼 것 — CLAUDE.md "조용히 삼키지 말 것".
+            raise RuntimeError(f'재고 수치를 해석하지 못했습니다: "{raw}"')
 
     session = _get_sap_session()
     _sap_close_stray_popups(session)
@@ -4568,7 +4603,9 @@ def _query_stock_via_mm03(matnr, werks='1000'):
     for _attempt in range(6):
         time.sleep(0.5)
         wnd = session.findById('wnd[0]')
-        field = _find_by_id_substring(wnd, 'LBKUM')
+        # ⚠️ 'LBKUM'만 쓰면 lblCKMLPP-LBKUM(라벨 .Text="총 재고")이 먼저 걸려 0이 나간다
+        #    — _MATERIAL_PRICE_FIELD_IDS 위 주석 참고(2026-10-02 덤프로 확인).
+        field = _find_by_id_substring(wnd, 'txtCKMLPP-LBKUM')
         if field is not None:
             lbkum_raw = str(field.Text).strip()
             break
@@ -5316,8 +5353,19 @@ def navigate_to_material_mm03(material):
         return {'ok': False, 'error': str(e)}
 
 
-def fetch_material_change_history(material, plant='1000', valid_date=None):
-    """ZCO037 - 자재마스터 변경이력 조회."""
+def fetch_material_change_history(material, plant='1000', date_from=None, date_to=None, by='change'):
+    """ZCO037 - 자재마스터(상태) 변경이력 조회.
+
+    by: 'change'=변경일자기준(radR2, 화면 기본) / 'valid'=유효일자기준(radR1).
+
+    ⚠️⚠️ [2026-10-02 실화면 덤프로 확인된 3가지 불일치 수정 — 실사용 제보 "이전 이력이 안 보임"]
+      1) 라디오(radR1/radR2)를 코드가 전혀 건드리지 않아, **사람이 마지막에 둔 상태**가 그대로
+         적용됐다 — 같은 질문에 PC·시점마다 다른 답이 나오는 구조였다. 이제 명시적으로 고른다.
+      2) plant 인자를 받기만 하고 P_WERKS에 **쓰지 않으면서** 반환값에는 담아, 적용된 것처럼 보였다.
+      3) 날짜 필드명이 P_UDATE인 줄 알았으나 그런 필드는 없고 실제로는 S_UDATE-LOW/HIGH다
+         (valid_date를 넘기면 findById에서 예외가 났다).
+      또한 이전 조회에서 남은 선택조건(S_MTART/S_BKLAS/S_MMSTA)이 그대로 필터로 걸려
+      이력이 조용히 잘려 나갈 수 있어 매번 비운다."""
     session = _get_sap_session()
     _sap_close_stray_popups(session)
     wnd = session.findById('wnd[0]')
@@ -5325,9 +5373,37 @@ def fetch_material_change_history(material, plant='1000', valid_date=None):
     wnd.sendVKey(0)
     time.sleep(1.0)
     wnd = session.findById('wnd[0]')
-    wnd.findById('usr/ctxtS_MATNR-LOW').text = str(material).strip()
-    if valid_date:
-        wnd.findById('usr/ctxtP_UDATE').text = str(valid_date).strip()
+
+    def _set(field_id, value):
+        """선택화면 필드에 값을 쓴다(없는 필드는 조용히 무시 — 계정별 화면 차이 대비)."""
+        try:
+            wnd.findById('usr/' + field_id).text = value
+            return True
+        except Exception:
+            return False
+
+    # (1) 작업구분 라디오를 명시적으로 선택 — 화면에 남은 상태에 결과가 좌우되지 않게
+    try:
+        wnd.findById('usr/radR1' if by == 'valid' else 'usr/radR2').select()
+    except Exception as e:
+        print(f'[ZCO037] 작업구분 라디오 설정 실패(화면 기본값 사용): {e}', file=sys.stderr)
+
+    # (2) 플랜트 — 기존엔 인자를 받고도 쓰지 않았다
+    if plant:
+        _set('ctxtP_WERKS', str(plant).strip())
+
+    _set('ctxtS_MATNR-LOW', str(material).strip())
+    _set('ctxtS_MATNR-HIGH', '')
+
+    # (3) 변경일자 기간 — 실제 필드는 P_UDATE가 아니라 S_UDATE-LOW/HIGH
+    _set('ctxtS_UDATE-LOW', str(date_from).strip() if date_from else '')
+    _set('ctxtS_UDATE-HIGH', str(date_to).strip() if date_to else '')
+
+    # (4) 이전 조회의 잔존 필터 제거 — 남아 있으면 이력이 조용히 걸러진다
+    for _f in ('ctxtS_MTART-LOW', 'ctxtS_MTART-HIGH', 'ctxtS_BKLAS-LOW', 'ctxtS_BKLAS-HIGH',
+               'ctxtS_MMSTA-LOW', 'ctxtS_MMSTA-HIGH'):
+        _set(_f, '')
+
     wnd.findById('tbar[1]/btn[8]').press()
     time.sleep(1.5)
     wnd = session.findById('wnd[0]')
@@ -5338,7 +5414,10 @@ def fetch_material_change_history(material, plant='1000', valid_date=None):
     else:
         table = '\n'.join(_sap_dump_fields(wnd))
         row_count = None
-    return {'ok': True, 'material': material, 'plant': plant, 'table': table, 'rowCount': row_count}
+    # rowCount를 answer에도 실어 "1건뿐"인지 "더 있는데 안 보이는"지 사람이 바로 판별하게 한다
+    return {'ok': True, 'material': material, 'plant': plant, 'table': table,
+            'rowCount': row_count, 'basis': ('유효일자기준' if by == 'valid' else '변경일자기준'),
+            'dateFrom': date_from or '', 'dateTo': date_to or ''}
 
 
 def fetch_delivery_history(material, vendor=None, date_from=None, date_to=None):
@@ -5614,8 +5693,10 @@ def main():
         elif action == 'fetch_material_change_history':
             mat = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '1000'
-            vdate = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
-            result = fetch_material_change_history(mat, plant, vdate)
+            dfrom = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            dto   = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else None
+            by    = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6].strip() else 'change'
+            result = fetch_material_change_history(mat, plant, dfrom, dto, by)
         elif action == 'fetch_delivery_history':
             mat = sys.argv[2] if len(sys.argv) > 2 else ''
             vendor = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None

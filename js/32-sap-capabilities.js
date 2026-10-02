@@ -103,6 +103,26 @@
         return best;
     };
 
+    // 📐 [2026-10-02 신규, 사용자 요청] SAP 조회 결과 표시 레이아웃 — **데이터**.
+    //    제보: "구매정보 레코드·변경이력처럼 출력이 사용자가 볼 수 없는 형태로 나와 뭐가 뭔지 모르겠다."
+    //    원인은 표 모양이 아니라 **형태 선택**이었다 — 36컬럼 1행을 가로로 눕히면 어떻게 꾸며도 안 읽힌다.
+    //    규칙(_ganttQaFormatSapRecord): 행 1건 && 컬럼 CARD_MIN_COLS 초과 → 세로 카드, 그 외 → 가로 표.
+    //    primary = 카드/표에서 먼저 보여줄 컬럼 순서. 나머지는 "전체 보기"로 접힌다.
+    //    새 SAP 조회가 생기면 코드가 아니라 여기에 한 줄만 추가할 것.
+    window.SAP_RESULT_LAYOUT = window.SAP_RESULT_LAYOUT || {
+        CARD_MIN_COLS: 8,
+        // ⚠️ [2026-10-02 실데이터 확인] ZMM006 출력에서 실제 단가가 들어오는 칸은 NETPR_G이고
+        //    NETPR·KBETR은 비어 있었다 — NETPR만 우선 컬럼에 두면 **단가가 접힌 영역으로 숨는다**.
+        //    셋 다 앞에 둔다(빈 값은 렌더러가 자동으로 감춘다).
+        purchaseinfo: { title: '구매정보 레코드', primary: [
+            'LIFNR', 'NAME1', 'NETPR_G', 'NETPR', 'KBETR', 'WAERS', 'PEINH', 'BPRME', 'MEINS',
+            'DATAB', 'DATBI', 'EKGRP', 'EKNAM', 'MATKL', 'WGBEZ',
+            'APLFZ', 'NORBM', 'MINBM', 'WERKS', 'EKORG', 'ESOKZ_T',
+            'INFNR', 'TELF1', 'ERDAT', 'CHDAT'] },
+        chghist: { title: '상태변경이력', primary: [
+            'OBJECTID', 'MAKTX', 'MTART', 'VALUE_NEW', 'UDATE'] }
+    };
+
     window.SAP_CAPABILITIES = [
         { id: 'bom', title: 'BOM 전개', titleEn: 'BOM explosion', tcode: 'ZPP033 / ZPP038', mode: 'read', verified: 'live',
           kw: ['bom', '구성품', '부품구성', '전개', 'explosion'], needs: '자재번호', ex: '502572 BOM 보여줘' },

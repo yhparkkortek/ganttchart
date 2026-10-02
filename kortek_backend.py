@@ -2080,8 +2080,14 @@ def sap_material_change_history():
     if not material:
         return jsonify({'ok': False, 'error': 'material 파라미터가 필요합니다.'}), 400
     plant = (request.args.get('plant') or '1000').strip()
-    vdate = (request.args.get('date') or '').strip() or None
-    data, status = _run_sap_bridge(['fetch_material_change_history', material, plant, vdate or ''], 35, f'ZCO037 변경이력 {material}')
+    # [2026-10-02] 단일 date → 변경일자 기간(from/to) + 작업구분(by)으로 확장.
+    #   date=만 주던 기존 호출은 from으로 받아 그대로 동작한다(하위호환).
+    dfrom = (request.args.get('from') or request.args.get('date') or '').strip()
+    dto   = (request.args.get('to') or '').strip()
+    by    = (request.args.get('by') or 'change').strip()
+    data, status = _run_sap_bridge(
+        ['fetch_material_change_history', material, plant, dfrom, dto, by],
+        35, f'ZCO037 변경이력 {material}')
     return jsonify(data), status
 
 
