@@ -128,6 +128,33 @@
         }
         setItems(list);
     };
+    /** 📂 청구서 PDF가 저장된 폴더를 탐색기로 연다.
+     *  [2026-10-02 사용자 요청] 출력이 끝나면 바로 파일을 보고 싶다 — 경로를 눈으로 읽고
+     *  탐색기에 직접 쳐 넣는 수고를 없앤다. 경로는 백엔드가 돌려준 pdfPath에서 뽑되
+     *  (브릿지가 폴더를 바꿔도 버튼이 따라온다) 없으면 기본 폴더로 떨어진다. */
+    var MC_PDF_DIR = 'C:\\SAP_DMS\\계정대체청구서';
+    function pdfFolderOf(path) {
+        if (!path) return MC_PDF_DIR;
+        var m = String(path).replace(/[/\\][^/\\]+$/, '');
+        return m || MC_PDF_DIR;
+    }
+    function openFolderBtn(folder) {
+        return '<button onclick="fetch(\'http://127.0.0.1:5000/sap-open-folder?path='
+            + encodeURIComponent(folder) + '\').catch(function(){});"'
+            + ' style="margin:3px 5px 0 0; padding:4px 11px; background:#eef4fd; color:#1971c2;'
+            + ' border:1px solid #a5c8f0; border-radius:5px; font-size:11.5px; cursor:pointer;">'
+            + '📂 ' + T('저장 폴더 열기', 'Open folder') + '</button>';
+    }
+    /** 🖨 출력에 **실패한** 예약만 재시도 버튼으로. 성공분엔 달지 않는다(중복 출력 방지). */
+    function retryBtns(failedList) {
+        return (failedList || []).map(function (f) {
+            var rs = String(f).split(':')[0].trim();
+            return '<button onclick="window._mcPrint(\'' + rs + '\')" style="margin:3px 5px 0 0; padding:4px 11px;'
+                + ' background:#fdeceb; color:#a3281c; border:1px solid #f0b3ad; border-radius:5px;'
+                + ' font-size:11.5px; cursor:pointer;">🖨 ' + rs + ' ' + T('다시 출력', 'Re-print') + '</button>';
+        }).join('');
+    }
+
     window._mcClear = function () {
         if (!items().length) return;
         if (!confirm(T('자재 보관함을 비울까요? 담아둔 항목이 모두 사라집니다.', 'Empty the cart? All staged items will be removed.'))) return;
@@ -467,13 +494,13 @@
         // 🔗 [2026-10-02 제보 "MB21까지 하고 멈춤"] 예약만 만들고 끊지 않는다.
         //    CLAUDE.md 구매오더 원칙과 동일: **확인 1회 후 끝까지 자동**(임의 정지 금지).
         //    최종 산출물은 ZMM019 청구서이므로 생성된 예약마다 바로 출력까지 이어간다.
-        var printed = [], printFailed = [];
+        var printed = [], printFailed = [], lastPdf = '';
         for (var p = 0; p < created.length; p++) {
             status('<div style="color:#1a4f7a;">⏳ ' + T('ZMM019 청구서 출력 중… ', 'Printing via ZMM019… ')
                 + '(' + (p + 1) + '/' + created.length + ') ' + T('예약 ', '') + esc(created[p]) + '</div>');
             try {
                 var pr = await window._mcPrint(created[p], { quiet: true });
-                if (pr && pr.ok) printed.push(created[p]);
+                if (pr && pr.ok) { printed.push(created[p]); if (pr.pdfPath) lastPdf = pr.pdfPath; }
                 else printFailed.push(created[p] + ': ' + ((pr && pr.text) || T('출력 실패', 'print failed')));
             } catch (e) {
                 printFailed.push(created[p] + ': ' + (e && e.message ? e.message : e));
@@ -486,17 +513,17 @@
             if (printed.length) out += '\n🖨 ' + T('ZMM019 청구서 출력 완료: ', 'Printed via ZMM019: ') + printed.join(', ');
             if (printFailed.length) out += '\n⚠️ ' + T('청구서 출력 실패: ', 'Print failed: ') + printFailed.join(' / ')
                 + '\n   ' + T('아래 🖨 버튼으로 다시 시도할 수 있습니다.', 'Retry with the 🖨 button below.');
+            if (printed.length) out += '\n📂 ' + T('저장 폴더: ', 'Saved to: ') + pdfFolderOf(lastPdf);
             if (!failed.length) { setItems([]); render(); }
         }
         if (warns.length)  out += (out ? '\n' : '') + '⚠️ ' + warns.join(' / ');
         if (failed.length) out += (out ? '\n' : '') + '⚠️ ' + T('실패 ', 'Failed ') + failed.length + T('건: ', ': ') + failed.join(' / ');
         if (window._ganttQaHistory) {
             if (created.length) {
-                var btns = created.map(function (rs) {
-                    return '<button onclick="window._mcPrint(\'' + rs + '\')" style="margin:3px 5px 0 0; padding:4px 11px;'
-                        + ' background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px;'
-                        + ' font-size:11.5px; cursor:pointer;">🖨 ' + rs + ' ' + T('청구서 출력', 'Print') + '</button>';
-                }).join('');
+                // 🔘 [2026-10-02 사용자 지적] 출력이 **성공**했는데 "다시 출력" 버튼이 남아 있으면
+                //    혼란스럽고, 잘못 누르면 같은 청구서를 또 뽑는다. 성공분은 📂 폴더 열기로 바꾸고
+                //    🖨 재출력은 **실패한 예약에만** 남긴다(그때는 재시도 수단이 꼭 필요하다).
+                var btns = retryBtns(printFailed) + (printed.length ? openFolderBtn(pdfFolderOf(lastPdf)) : '');
                 window._ganttQaHistory.push({ role: 'ai', rawHtml: true,
                     text: '<div style="font-size:12.5px; white-space:pre-wrap;">' + esc(out) + '</div>'
                         + '<div style="margin-top:6px;">' + btns + '</div>' });
@@ -508,11 +535,10 @@
         // 채팅창이 닫혀 있어도 보이도록 모달 안에도 결과 + 재출력 버튼을 남긴다
         if (created.length) {
             status('<div style="white-space:pre-wrap;">' + esc(out) + '</div>'
-                + '<div style="margin-top:6px;">' + created.map(function (rs) {
-                    return '<button onclick="window._mcPrint(\'' + rs + '\')" style="margin:3px 5px 0 0; padding:4px 11px;'
-                        + ' background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px;'
-                        + ' font-size:11.5px; cursor:pointer;">🖨 ' + rs + ' ' + T('다시 출력', 'Re-print') + '</button>';
-                }).join('') + '</div>');
+                + '<div style="margin-top:6px;">'
+                + retryBtns(printFailed)
+                + (printed.length ? openFolderBtn(pdfFolderOf(lastPdf)) : '')
+                + '</div>');
         } else {
             status('<div style="white-space:pre-wrap; color:#a3281c;">' + esc(out) + '</div>');
         }
@@ -528,7 +554,7 @@
                 text: '⏳ ' + T('ZMM019에서 예약번호 ' + rsnum + ' 청구서를 출력하는 중...', 'Printing reservation ' + rsnum + ' from ZMM019...') });
             if (window._renderGanttQaMessages) window._renderGanttQaMessages();
         }
-        var reply, okFlag = false;   // 성공 여부는 문자열이 아니라 플래그로 판정한다
+        var reply, okFlag = false, pdfPath = '';   // 성공 여부는 문자열이 아니라 플래그로 판정한다
         try {
             var res = await window._withTimeout(
                 fetch(API + '/sap-print-reservation?rsnum=' + encodeURIComponent(rsnum)
@@ -537,6 +563,7 @@
                 185000, T('청구서 출력 시간 초과', 'Print timed out'));   // 인쇄 대화상자 대기 포함
             var data = await res.json();
             okFlag = !!(data && data.ok);
+            pdfPath = (data && data.pdfPath) || '';
             reply = okFlag ? ('🖨 ' + (data.text || T('청구서를 출력했습니다.', 'Printed.')))
                            : ('⚠️ ' + ((data && data.error) || T('청구서 출력 실패', 'Print failed')));
         } catch (e) {
@@ -544,10 +571,16 @@
         }
         if (!opts.quiet && window._ganttQaHistory) {
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: reply });
+            if (okFlag) {   // 성공했으면 경로를 읽어 치는 대신 바로 열 수 있게
+                window._ganttQaHistory.push({ role: 'ai', rawHtml: true,
+                    text: '<div style="font-size:12.5px; white-space:pre-wrap;">' + esc(reply) + '</div>'
+                        + '<div style="margin-top:6px;">' + openFolderBtn(pdfFolderOf(pdfPath)) + '</div>' });
+            } else {
+                window._ganttQaHistory.push({ role: 'ai', text: reply });
+            }
             if (window._renderGanttQaMessages) window._renderGanttQaMessages();
         }
-        return { ok: okFlag, text: reply };
+        return { ok: okFlag, text: reply, pdfPath: pdfPath };
     };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refreshChip);

@@ -489,6 +489,172 @@ def dump_screen_tree(save_dir=None):
     return result
 
 
+def dump_windows_dialogs(save_dir=None):
+    """🪟 지금 떠 있는 **Windows 네이티브 대화상자**를 전부 덤프한다 (SAP 창이 아니라).
+
+    [2026-10-02 사용자 요청] ZMM019 청구서출력이 띄우는 인쇄/저장 창은 SAP 창이 아니라
+    Win32 대화상자(`#32770`)다. `dump_screen_tree`(SAP GuiComponent 트리)로는 **아예 안 보인다** —
+    실제로 저장 창이 떠 있는 상태의 SAP 덤프에 팝업이 0건으로 나왔다. 그래서 같은 역할을
+    하는 Windows용 덤프가 따로 필요하다.
+
+    ⚠️ **SAP 세션을 쓰지 않는다.** 네이티브 모달이 떠 있으면 SAP COM 호출이 전부 블록되는데,
+    바로 그때 쓰려고 만든 도구이기 때문이다. `_get_sap_session()`을 부르면 자기 자신이 멈춘다.
+
+    출력: 대화상자별로 클래스/제목/프로세스 + 자식 컨트롤의 **클래스·컨트롤ID·텍스트·좌표**.
+    컨트롤 ID가 나오면 제목·좌표 추측 없이 `GetDlgItem`으로 바로 잡을 수 있다.
+    """
+    import win32gui as _wg
+
+    def _proc_name(hwnd):
+        try:
+            import win32process as _wp
+            import win32api as _wa
+            import win32con as _wc
+            _tid, pid = _wp.GetWindowThreadProcessId(hwnd)
+            h = _wa.OpenProcess(_wc.PROCESS_QUERY_INFORMATION | _wc.PROCESS_VM_READ, False, pid)
+            try:
+                return os.path.basename(_wp.GetModuleFileNameEx(h, 0)), pid
+            finally:
+                _wa.CloseHandle(h)
+        except Exception:
+            try:
+                import win32process as _wp
+                return '', _wp.GetWindowThreadProcessId(hwnd)[1]
+            except Exception:
+                return '', 0
+
+    def _rect(hwnd):
+        try:
+            l, t, r, b = _wg.GetWindowRect(hwnd)
+            return '(%d,%d %dx%d)' % (l, t, r - l, b - t)
+        except Exception:
+            return ''
+
+    def _text(hwnd):
+        try:
+            return (_wg.GetWindowText(hwnd) or '').replace('\r', ' ').replace('\n', ' ')
+        except Exception:
+            return ''
+
+    # ── 보이는 최상위 창 수집 ────────────────────────────────────────
+    tops = []
+
+    def _cb(hwnd, _):
+        try:
+            if not _wg.IsWindowVisible(hwnd):
+                return
+            cls = _wg.GetClassName(hwnd)
+            ttl = _text(hwnd)
+            if cls == '#32770' or ttl.strip():
+                tops.append((hwnd, cls, ttl))
+        except Exception:
+            pass
+
+    try:
+        _wg.EnumWindows(_cb, None)
+    except Exception as e:
+        raise RuntimeError('창 목록을 읽지 못했습니다: %s' % e)
+
+    # 대화상자(#32770)를 먼저 — 덤프를 뜨는 순간 사람이 보고 싶은 건 보통 그 창이다
+    dialogs = [t for t in tops if t[1] == '#32770']
+    others = [t for t in tops if t[1] != '#32770']
+
+    t0 = time.time()
+    lines = []
+    total = 0
+    truncated = False
+
+    for hwnd, cls, ttl in dialogs:
+        if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
+            truncated = True
+            break
+        pname, pid = _proc_name(hwnd)
+        lines.append('')
+        lines.append('[대화상자] hwnd=%s class=%s  text="%s"  %s  proc=%s(pid %s)'
+                     % (hex(hwnd), cls, ttl, _rect(hwnd), pname or '?', pid))
+        total += 1
+
+        # 자식 컨트롤 — **진짜 부모-자식 관계로** 트리를 그린다.
+        # 🐛 [2026-10-02] 처음엔 너비 우선으로 돌며 `'  ' * (깊이+1)`로 들여썼는데, 같은 깊이의
+        #   부모들이 자기 자식을 **차례로 이어 붙여** 찍는 바람에 마지막 부모 밑에 전부 달린 것처럼
+        #   보였다. 실제로 이 덤프를 읽다가 파일이름 Edit의 조상이 ReBarWindow32인 줄 알고
+        #   잘못 판단할 뻔했다(기하학적으로 따져 보니 DUIViewWndClassName 밑이었다).
+        #   덤프는 추측을 없애려고 만든 도구인데 덤프가 추측을 만들면 안 된다 — 부모를 실제로
+        #   물어서(GetParent) 자식 목록을 만든 뒤 깊이우선으로 찍는다.
+        descendants = []
+
+        def _cb2(ch, __):
+            descendants.append(ch)
+
+        try:
+            _wg.EnumChildWindows(hwnd, _cb2, None)
+        except Exception:
+            descendants = []
+        kids_of = {}
+        for ch in descendants:
+            try:
+                par = _wg.GetParent(ch)
+            except Exception:
+                par = 0
+            kids_of.setdefault(par, []).append(ch)
+
+        stack = [(c, 1) for c in reversed(kids_of.get(hwnd, []))]
+        while stack:
+            if total >= _DUMP_MAX_NODES or (time.time() - t0) >= _DUMP_MAX_SECONDS:
+                truncated = True
+                break
+            ch, depth = stack.pop()
+            try:
+                cid = _wg.GetDlgCtrlID(ch)
+            except Exception:
+                cid = 0
+            ccls = ''
+            try:
+                ccls = _wg.GetClassName(ch)
+            except Exception:
+                pass
+            vis = '' if _wg.IsWindowVisible(ch) else ' [숨김]'
+            lines.append('%s%s  id=%s(0x%X)  hwnd=%s  text="%s"  %s%s'
+                         % ('  ' * depth, ccls, cid, cid & 0xFFFFFFFF,
+                            hex(ch), _text(ch), _rect(ch), vis))
+            total += 1
+            if depth < 8:
+                for g in reversed(kids_of.get(ch, [])):
+                    stack.append((g, depth + 1))
+
+    if others:
+        lines.append('')
+        lines.append('[그 밖의 보이는 최상위 창] — 제목만')
+        for hwnd, cls, ttl in others[:40]:
+            lines.append('  %s  class=%s  text="%s"' % (hex(hwnd), cls, ttl))
+        if len(others) > 40:
+            lines.append('  …(%d개 중 40개만 표시)' % len(others))
+
+    header = ('[Windows 대화상자 덤프]\n'
+              '대화상자(#32770): %d개 · 그 밖의 최상위 창: %d개 · 노드 %d건%s\n'
+              '※ SAP 창이 아닌 Windows 창만 본다 — SAP 화면은 "SAP 화면 덤프해줘"를 쓸 것.'
+              % (len(dialogs), len(others), total,
+                 ' (시간/개수 제한으로 일부 생략됨)' if truncated else ''))
+    if not dialogs:
+        header += '\n⚠️ 지금 떠 있는 대화상자가 없습니다 — 창이 떠 있는 상태에서 다시 실행하세요.'
+    body = header + '\n' + '\n'.join(lines)
+
+    result = {'ok': True, 'dialogCount': len(dialogs), 'otherCount': len(others),
+              'nodeCount': total, 'truncated': truncated, 'text': body}
+    if save_dir:
+        try:
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir)
+            fname = 'win_dialog_dump_%s.txt' % time.strftime('%Y%m%d_%H%M%S')
+            fpath = os.path.join(save_dir, fname)
+            with open(fpath, 'w', encoding='utf-8') as f:
+                f.write(body)
+            result['savedPath'] = fpath
+        except Exception:
+            pass
+    return result
+
+
 def navigate_and_dump(tcode, save_dir=None):
     """트랜잭션 코드로 이동 후 화면 트리를 덤프한다."""
     tcode = (tcode or '').strip().upper()
@@ -3634,7 +3800,10 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
     return result
 
 
-_RSV_PDF_OUT_DIR = os.path.join('C:\\SAP_DMS', '자재청구')
+# [2026-10-02 실측] 저장 대화상자가 기본으로 여는 폴더가 여기이고, 사용자가 이미
+#   `2920302.pdf` `2920318.pdf`처럼 **예약번호만** 파일명으로 쓰고 있었다.
+#   코드가 새 규칙(예약NNNN_날짜.pdf)을 만들지 말고 쓰던 규칙에 맞춘다.
+_RSV_PDF_OUT_DIR = os.path.join('C:\\SAP_DMS', '계정대체청구서')
 
 
 def _win_documents_dir():
@@ -3720,14 +3889,24 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
     state = {'printClicked': False, 'usedSaveDialog': False,
              'printTitle': '', 'saveTitle': '', 'error': ''}
 
+    def _norm_label(t):
+        """버튼 라벨 정규화 — 액셀러레이터와 니모닉 접미사를 벗긴다.
+
+        [2026-10-02] 저장 대화상자의 버튼이 "저장(S)"(원문 "저장(&S)")이라
+        `== '저장'` 비교가 전부 빗나가 창을 못 찾았다. "확인"처럼 접미사가 없는
+        버튼만 보고 짰던 게 원인.
+        """
+        t = (t or '').replace('&', '').strip()
+        return re.sub(r'\([A-Za-z]\)$', '', t).strip()
+
     def _buttons(hwnd):
-        """대화상자 안의 Button 컨트롤을 [(hwnd, 라벨)]로."""
+        """대화상자 안의 Button 컨트롤을 [(hwnd, 정규화 라벨)]로."""
         out = []
 
         def _cb(ch, _):
             try:
                 if _wg.GetClassName(ch) == 'Button':
-                    out.append((ch, (_wg.GetWindowText(ch) or '').replace('&', '').strip()))
+                    out.append((ch, _norm_label(_wg.GetWindowText(ch))))
             except Exception:
                 pass
         try:
@@ -3747,6 +3926,11 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
             try:
                 if _wg.GetClassName(hwnd) != '#32770' or not _wg.IsWindowVisible(hwnd):
                     return
+                # [2026-10-02 실측] 최소화된 창도 IsWindowVisible은 True다 — 덤프에 '기록 및 재생'과
+                #   'SAP Logon 740'이 좌표 -32000대로 찍혀 나왔다. 제목이 우연히 겹치면 엉뚱한 창을
+                #   누를 수 있으니 아이콘 상태는 후보에서 뺀다.
+                if _wg.IsIconic(hwnd):
+                    return
                 t = (_wg.GetWindowText(hwnd) or '').strip()
                 if not any(k in t for k in titles):
                     return
@@ -3763,29 +3947,63 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
             pass
         return hits[0] if hits else None
 
+    # 주소줄/검색창이 들어 있는 띠(band) — 여기 속한 Edit은 파일이름 칸이 **아니다**.
+    # [2026-10-02 실측 덤프] "PDF 파일을 다른 이름으로 저장" 창의 Edit은 딱 둘인데
+    #   · 파일이름:  Edit ← ComboBox ← FloatNotifySink ← 대화상자
+    #   · 주소줄:    Edit ← ComboBox ← **ComboBoxEx32** ← Address Band Root ← ReBarWindow32 ← WorkerW
+    # 즉 `ComboBoxEx32`는 파일이름의 표시가 아니라 **주소줄의 표시**였다. 그걸 가점으로 줬던
+    # 직전 버전은 주소줄을 집는다 — 경로를 주소줄에 쓰면 폴더만 이동하고 저장은 안 된다.
+    _FE_BAND_CLASSES = ('ReBarWindow32', 'WorkerW', 'Address Band Root', 'UniversalSearchBand',
+                        'Search Box', 'SearchEditBoxWrapperClass', 'Breadcrumb Parent',
+                        'ToolbarWindow32', 'ComboBoxEx32')
+
     def _filename_edit(hwnd):
         """파일 저장 대화상자의 '파일 이름' Edit 컨트롤.
 
-        구조: 대화상자 → ComboBoxEx32 → ComboBox → Edit.
-        y좌표 내림차순 정렬 후 두 번째가 파일이름 — 이 파일의 DMS 저장 코드에서
-        이미 실사용 검증된 규칙을 그대로 쓴다.
+        고르는 법(실측 덤프로 확정, 2026-10-02):
+          ⓪ **숨김 컨트롤 제외** — 실측 덤프에서 주소줄 Edit은 아예 [숨김]이었다(가장 강한 신호)
+          ① 주소줄/검색 띠에 속한 Edit은 **제외** — 조상 8대 안에 _FE_BAND_CLASSES가 있으면 버린다
+          ② 남은 것 중 값이 `.pdf`로 끝나면 +2, 컨트롤 ID가 1001이면 +1
+          ③ 그래도 여럿이면 **맨 아래** — 파일이름 칸은 버튼 바로 위에 있다
+
+        ②는 있으면 좋은 신호지 필수가 아니다 — 실측 덤프에선 이 칸의 GetWindowText가
+        빈 문자열로 왔다(다른 프로세스 소유라 항상 읽히진 않는다). 그래서 ①이 본체다.
+
+        ⚠️ 이 판정이 틀려도 조용히 넘어가지 않는다 — 호출부가 값을 되읽어 확인하고,
+        저장 뒤에는 파일 존재까지 확인한다.
         """
         found = []
 
         def _cb(ch, _):
             try:
-                if _wg.GetClassName(ch) == 'Edit':
-                    found.append((ch, _wg.GetWindowRect(ch)[3]))
+                if _wg.GetClassName(ch) != 'Edit' or not _wg.IsWindowVisible(ch):
+                    return
+                anc = ch
+                for _ in range(8):                      # 주소줄은 6대쯤 위에 있다
+                    anc = _wg.GetParent(anc)
+                    if not anc or anc == hwnd:
+                        break
+                    if _wg.GetClassName(anc) in _FE_BAND_CLASSES:
+                        return                          # 주소줄·검색창 → 버린다
+                score = 2 if (_wg.GetWindowText(ch) or '').strip().lower().endswith('.pdf') else 0
+                # [2026-10-02 컨트롤 ID 덤프] 파일이름 콤보 안의 Edit은 id=1001(0x3E9)이었고,
+                #   주소줄 Edit은 41477이었다. 셋째 신호로 더해 둔다(필수는 아님 — 창마다 다를 수 있다).
+                try:
+                    if _wg.GetDlgCtrlID(ch) == 1001:
+                        score += 1
+                except Exception:
+                    pass
+                found.append((score, _wg.GetWindowRect(ch)[3], ch))
             except Exception:
                 pass
         try:
             _wg.EnumChildWindows(hwnd, _cb, None)
         except Exception:
             pass
-        found.sort(key=lambda x: x[1], reverse=True)
-        if len(found) >= 2:
-            return found[1][0]
-        return found[0][0] if found else None
+        if not found:
+            return None
+        found.sort(key=lambda x: (x[0], x[1]), reverse=True)   # 점수 → 아래쪽 순
+        return found[0][2]
 
     def _cancel(hwnd):
         """대화상자를 [취소]로 닫는다 — 실패하고 그냥 빠져나가면 모달이 남아
@@ -3825,7 +4043,7 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
             return
 
         # ② 파일 저장 창 — 프린터가 '파일 이름 묻기'로 설정된 경우에만 뜬다.
-        sub_deadline = time.time() + 10
+        sub_deadline = time.time() + 25        # Adobe 스풀이 느린 PC도 있다
         while time.time() < sub_deadline:
             hit = _find_dialog(('저장', 'Save', 'PDF'), ('저장', 'Save'))
             if hit:
@@ -3972,8 +4190,7 @@ def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
             os.makedirs(_RSV_PDF_OUT_DIR)
     except Exception:
         pass
-    pdf_target = os.path.join(_RSV_PDF_OUT_DIR,
-                              '예약%s_%s.pdf' % (rsnum, time.strftime('%Y%m%d')))
+    pdf_target = os.path.join(_RSV_PDF_OUT_DIR, '%s.pdf' % rsnum)
     watch_dirs = [d for d in (_RSV_PDF_OUT_DIR, _win_documents_dir()) if d]
     pdf_before = _pdf_snapshot(watch_dirs)
 
@@ -5218,17 +5435,36 @@ def _save_po_pdf_to_file(save_path):
     send_keys(_safe_path, with_spaces=True)
     time.sleep(0.3)
 
-    # 저장 버튼 클릭 (버튼 못 찾으면 Enter로 폴백)
-    if btn_h:
-        r = _wg.GetWindowRect(btn_h)
-        cx = (r[0] + r[2]) // 2
-        cy = (r[1] + r[3]) // 2
-        _wa.SetCursorPos((cx, cy))
-        time.sleep(0.05)
-        _wa.mouse_event(_wc.MOUSEEVENTF_LEFTDOWN, cx, cy, 0, 0)
-        time.sleep(0.05)
-        _wa.mouse_event(_wc.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
-    else:
+    # 저장 버튼 클릭 — ① 메시지(BM_CLICK) ② 좌표 클릭 ③ Enter 순.
+    # 🔧 [2026-10-02] 예전엔 ②가 1순위였다. 바꾼 이유 둘:
+    #   · **좌표가 음수일 수 있다** — ZMM019 쪽 Win32 덤프에서 이 PC의 대화상자 좌표가 전부
+    #     음수(-2319~-1375)로 나왔다(보조 모니터가 주 모니터 **왼쪽**). 모니터 배치나 DPI 배율이
+    #     바뀌면 엉뚱한 곳을 누른다. 메시지 방식은 좌표를 아예 안 쓴다.
+    #   · **실제 마우스 커서를 뺏는다** — 사용자가 작업 중이면 손이 튕긴다.
+    # 기존 좌표 클릭은 지우지 않고 폴백으로 남긴다(돌고 있던 경로라 섣불리 버리지 않는다).
+    def _click_save_btn():
+        if not btn_h:
+            return False
+        try:
+            _wg.SendMessage(btn_h, _wc.BM_CLICK, 0, 0)
+            time.sleep(0.6)
+            if not _wg.IsWindow(dlg_h) or not _wg.IsWindowVisible(dlg_h):
+                return True                      # 대화상자가 닫혔다 = 눌렸다
+        except Exception:
+            pass
+        try:                                     # 폴백: 예전 좌표 클릭
+            r = _wg.GetWindowRect(btn_h)
+            cx, cy = (r[0] + r[2]) // 2, (r[1] + r[3]) // 2
+            _wa.SetCursorPos((cx, cy))
+            time.sleep(0.05)
+            _wa.mouse_event(_wc.MOUSEEVENTF_LEFTDOWN, cx, cy, 0, 0)
+            time.sleep(0.05)
+            _wa.mouse_event(_wc.MOUSEEVENTF_LEFTUP, cx, cy, 0, 0)
+            return True
+        except Exception:
+            return False
+
+    if not _click_save_btn():
         send_keys('{ENTER}')
     time.sleep(1.0)
 
@@ -6529,6 +6765,9 @@ def main():
         elif action == 'dump_screen_tree':
             save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
             result = dump_screen_tree(save_dir)
+        elif action == 'dump_windows_dialogs':
+            save_dir = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].strip() else None
+            result = dump_windows_dialogs(save_dir)
         elif action == 'navigate_and_dump':
             tcode_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             save_dir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None
