@@ -3001,6 +3001,62 @@ def _migo_post_by_reservation(session, rsnum, posting_date):
     }
 
 
+def _sap_status_text(session):
+    """상태바 문구 — 실패했을 때 SAP이 실제로 뭐라고 했는지가 가장 중요한 단서다."""
+    try:
+        return (session.findById('wnd[0]/sbar').Text or '').strip()
+    except Exception:
+        return ''
+
+
+def humanize_sap_error(exc, session=None, step=''):
+    """COM 예외를 사람이 바로 알아보는 한국어로 바꾼다.
+
+    [2026-10-02 실사용 제보] 사용자가 받은 메시지:
+      "(-2147352567, '예외가 발생했습니다.', (617, 'SAP Frontend Server',
+        'The virtual key is not enabled.', None, 0, 0), None)"
+    → 이 문자열만으로는 무엇을 해야 하는지 알 수 없다. "그 화면에서 그 기능키가 비활성"이라는
+      뜻이고, MB21에서는 **필수 입력(특히 품목 텍스트)이 비어 저장키가 잠긴 경우**가 대표적이다.
+      그래서 상태바 문구를 같이 실어 보낸다.
+    """
+    raw = str(exc)
+    sbar = _sap_status_text(session) if session is not None else ''
+    where = f'[{step}] ' if step else ''
+    if 'virtual key is not enabled' in raw.lower():
+        msg = (f'{where}SAP이 그 단축키를 지금 화면에서 받지 않았습니다(저장/확인 키가 잠긴 상태). '
+               '보통 **필수 입력 항목이 비어 있을 때** 이렇게 됩니다 — MB21이라면 품목 텍스트(사유)를 '
+               '확인해주세요.')
+    elif 'element id' in raw.lower() or 'not be found' in raw.lower():
+        msg = f'{where}SAP 화면에서 필요한 입력칸을 찾지 못했습니다(화면이 예상과 다릅니다).'
+    elif 'rejected' in raw.lower() or 'busy' in raw.lower():
+        msg = f'{where}SAP GUI가 다른 작업을 처리 중이라 요청을 거부했습니다. 잠시 후 다시 시도해주세요.'
+    else:
+        msg = f'{where}SAP 조작 중 오류가 발생했습니다.'
+    if sbar:
+        msg += f'\n  SAP 상태바: "{sbar}"'
+    msg += f'\n  (원본: {raw[:300]})'
+    return msg
+
+
+def _sap_send_vkey(session, key, wnd_id='wnd[0]', fallback_btn=None, step=''):
+    """sendVKey를 보내되, 그 키가 잠겨 있으면 같은 기능의 툴바 버튼으로 한 번 더 시도한다.
+
+    둘 다 실패하면 humanize_sap_error로 번역한 RuntimeError를 던진다 — 원시 COM 문자열이
+    사용자에게 그대로 나가지 않게 하기 위함(2026-10-02 제보).
+    """
+    try:
+        session.findById(wnd_id).sendVKey(key)
+        return True
+    except Exception as e1:
+        if fallback_btn:
+            try:
+                session.findById(wnd_id + '/' + fallback_btn).press()
+                return True
+            except Exception:
+                pass
+        raise RuntimeError(humanize_sap_error(e1, session, step))
+
+
 def _mb21_set_item_texts(session, items):
     """MB21 품목별 "텍스트"(RESB-SGTXT)를 채운다 — 품목 수만큼 상세화면을 순회한다.
 
@@ -3054,6 +3110,305 @@ def _mb21_set_item_texts(session, items):
     return None
 
 
+def _mb21_set_purpose(session, purpose):
+    """MB21 신규품목 화면에서 " 기타"(COBL_MORE) → "코딩 블록" 팝업의 **목적**(YYDEVTYPE)을 채운다.
+
+    [2026-10-02 사용자 확인] 오더·코스트센터만으로는 부족하고 "기타"까지 필수 선택이다.
+    목적 값은 ZMM019 결과의 YYDEVTYPE 컬럼으로 그대로 나온다(P01 유상샘플 … P05 기타).
+    ⚠️ 팝업(wnd[1]) 안 필드의 정확한 id는 아직 덤프로 확인되지 않았다(덤프가 8초 제한에 걸려
+       wnd[1]까지 못 갔다) — 그래서 'YYDEVTYPE' 부분일치로 찾는다. 실패해도 예외로 죽이지 않고
+       사유를 돌려주어 호출부가 "목적 미입력"을 사람에게 알릴 수 있게 한다.
+    """
+    if not purpose:
+        return None
+    try:
+        wnd = session.findById('wnd[0]')
+        btn = _find_by_id_substring(wnd, 'btnCOBL_MORE')
+        if btn is None:
+            return 'COBL_MORE(" 기타") 버튼을 찾지 못했습니다.'
+        btn.press()
+        time.sleep(0.8)
+    except Exception as e:
+        return f'" 기타" 버튼 클릭 실패: {e}'
+
+    # 코딩 블록 팝업은 wnd[1]로 뜨지만, 화면 구성에 따라 wnd[0] 안에 들어오는 경우도 있어 둘 다 본다
+    fld = None
+    for wid in ('wnd[1]', 'wnd[0]'):
+        try:
+            w = session.findById(wid)
+        except Exception:
+            continue
+        for cand in _find_all_by_id_substring(w, 'YYDEVTYPE'):
+            try:
+                if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                    fld = cand
+                    break
+            except Exception:
+                continue
+        if fld is not None:
+            break
+    if fld is None:
+        # 팝업을 열어만 두고 못 채우면 이후 저장이 막히므로 닫고 사유를 돌려준다
+        try:
+            session.findById('wnd[1]').sendVKey(12)   # 취소
+        except Exception:
+            pass
+        return '코딩 블록에서 "목적"(YYDEVTYPE) 입력칸을 찾지 못했습니다.'
+    try:
+        fld.text = str(purpose).strip()
+        try:
+            session.findById('wnd[1]').sendVKey(0)    # 엔터로 확정
+        except Exception:
+            session.findById('wnd[0]').sendVKey(0)
+        time.sleep(0.6)
+    except Exception as e:
+        return f'"목적" 입력 실패: {e}'
+    return None
+
+
+def create_reservation(items, bwart='951', order_number=None, cost_center=None,
+                       werks='1000', lgort_default=None, rsdat=None, wempf=None, text=None,
+                       purpose=None):
+    """MB21 예약(계정대체 청구서) 생성 — 전기(MIGO)는 하지 않는다.
+
+    [2026-10-02 신규, 사용자 요청] 자재 보관함(js/35)에 담아둔 자재를 모아 한 번에 청구서를
+    만들기 위한 진입점. 사용자 확인: **최종 산출물은 ZMM019(계정대체청구서) PDF이고 MIGO는
+    거의 쓰지 않는다** — 그래서 예약 생성에서 끝낸다.
+
+    bwart: 951=연구개발 출고(자재청구) / 907=개발 입고(자재반납). 기본 저장위치는 호출부가
+           lgort_default로 넘긴다(951→1000, 907→5000 — js/32 SAP_MB21_MOVEMENT_TYPES가 원본).
+    items: [{matnr, qty, unit?, lgort?}] — MB21 신규품목 화면(521)은 **한 화면에 28행**이므로
+           그보다 많으면 호출부가 나눠서 여러 번 부른다(js/35가 분할 처리).
+    order_number/cost_center: 오더·코스트센터 모두 필수(사용자 확인).
+
+    ⚠️ 실제 SAP 예약이 생성된다 — 사람이 확인한 뒤에만 호출할 것.
+    반환: {ok, rsnum, bwart, itemCount, text}
+    """
+    if not items:
+        raise RuntimeError('자재 목록(items)이 비어 있습니다.')
+    if not order_number:
+        raise RuntimeError('오더번호(order_number)를 지정해주세요.')
+    if lgort_default is None:
+        lgort_default = '1000' if str(bwart) == '951' else '5000'
+
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    posting_date = str(rsdat or time.strftime('%Y%m%d'))
+
+    # ── Phase 1: MB21 반납 예약 생성 (이동유형 907) ───────────────────────────
+    nav_ok = False
+    try:
+        session.findById(
+            'wnd[0]/usr/cntlIMAGE_CONTAINER/shellcont/shell/shellcont[0]/shell'
+        ).doubleClickNode('F00150')
+        time.sleep(1.0)
+        nav_ok = True
+    except Exception:
+        pass
+    if not nav_ok:
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB21'
+        session.findById('wnd[0]').sendVKey(0)
+        time.sleep(1.0)
+
+    wnd = session.findById('wnd[0]')
+    _set_text_on_best_candidate(wnd, 'RM07M-RSDAT', posting_date)
+    _set_text_on_best_candidate(wnd, 'RM07M-BWART', str(bwart))
+    _set_text_on_best_candidate(wnd, 'RM07M-WERKS', werks)
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[7]').press()
+    except Exception as e:
+        raise RuntimeError(f'MB21 다음 화면(계정지정) 이동 실패: {e}')
+    time.sleep(1.0)
+
+    wnd = session.findById('wnd[0]')
+    sbar_check = ''
+    try:
+        sbar_check = (session.findById('wnd[0]/sbar').Text or '').strip()
+    except Exception:
+        pass
+    if sbar_check and ('오류' in sbar_check or '필수' in sbar_check):
+        raise RuntimeError(f'MB21 화면 이동 중 오류: {sbar_check}')
+
+    # 원가센터
+    if cost_center:
+        try:
+            _set_text_on_best_candidate(wnd, 'COBL-KOSTL', cost_center)
+            wnd.sendVKey(0)
+            time.sleep(0.3)
+        except Exception:
+            pass
+    else:
+        # F4 → 첫번째 항목 (VBS line 65-68)
+        try:
+            kostl_fld = None
+            for cand in _find_all_by_id_substring(wnd, 'COBL-KOSTL'):
+                if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                    kostl_fld = cand
+                    break
+            if kostl_fld:
+                kostl_fld.setFocus()
+                kostl_fld.caretPosition = 0
+                wnd.sendVKey(4)
+                time.sleep(0.8)
+                try:
+                    session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9
+                    session.findById('wnd[1]').sendVKey(2)
+                    time.sleep(0.4)
+                except Exception:
+                    try:
+                        session.findById('wnd[1]').sendVKey(12)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    # 내부오더
+    wnd = session.findById('wnd[0]')
+    aufnr_fld = None
+    for cand in _find_all_by_id_substring(wnd, 'COBL-AUFNR'):
+        if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+            aufnr_fld = cand
+            break
+    if aufnr_fld is None:
+        raise RuntimeError('MB21에서 내부오더(COBL-AUFNR) 입력칸을 찾지 못했습니다.')
+    aufnr_fld.text = str(order_number)
+    aufnr_fld.setFocus()
+    wnd.sendVKey(0)
+    time.sleep(0.5)
+
+    # 수령인
+    if wempf:
+        try:
+            _set_text_on_best_candidate(wnd, 'WEMPF', wempf)
+        except Exception:
+            pass
+
+    # YYDEVTYPE (개발유형) — F4 첫번째 항목 (VBS lines 131-136)
+    try:
+        wnd = session.findById('wnd[0]')
+        more_btn = _find_by_id_substring(wnd, 'COBL_MORE')
+        if more_btn:
+            more_btn.press()
+            time.sleep(0.8)
+            wnd1 = session.findById('wnd[1]')
+            devtype_fld = None
+            try:
+                devtype_fld = _find_by_id_substring(wnd1, 'YYDEVTYPE')
+            except Exception:
+                pass
+            if devtype_fld and devtype_fld.Changeable:
+                devtype_fld.setFocus()
+                devtype_fld.caretPosition = 0
+                wnd1.sendVKey(4)
+                time.sleep(0.8)
+                try:
+                    session.findById('wnd[2]').sendVKey(2)  # 첫번째 선택
+                    time.sleep(0.4)
+                except Exception:
+                    try:
+                        session.findById('wnd[2]').sendVKey(12)
+                    except Exception:
+                        pass
+            try:
+                session.findById('wnd[1]/tbar[0]/btn[0]').press()
+                time.sleep(0.5)
+            except Exception:
+                try:
+                    session.findById('wnd[1]').sendVKey(0)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # 🎯 [2026-10-02] 목적(YYDEVTYPE) — " 기타" → 코딩 블록 팝업. 실패해도 멈추지 않고 사유만 모은다.
+    purpose_warn = _mb21_set_purpose(session, purpose)
+    if purpose_warn:
+        print(f'[MB21 목적 미입력] {purpose_warn}', file=sys.stderr)
+
+    # 자재 입력 (VBS lines 137-199: RESB-MATNR/ERFMG/ERFME/LGORT 테이블)
+    wnd = session.findById('wnd[0]')
+    sub_path = 'usr/sub:SAPMM07R:0521/'
+    for i, item in enumerate(items):
+        matnr = str(item.get('matnr', '')).strip()
+        qty   = str(item.get('qty', '')).strip()
+        unit  = str(item.get('unit', 'EA')).strip()
+        ilgort = str(item.get('lgort', lgort_default)).strip()
+        if not matnr or not qty:
+            continue
+        for fld_path, val in [
+            (f'{sub_path}ctxtRESB-MATNR[{i},7]',  matnr),
+            (f'{sub_path}txtRESB-ERFMG[{i},26]',  qty),
+            (f'{sub_path}ctxtRESB-ERFME[{i},44]', unit),
+            (f'{sub_path}ctxtRESB-LGORT[{i},53]', ilgort),
+        ]:
+            try:
+                fld = wnd.findById(fld_path)
+                fld.text = val
+            except Exception:
+                try:
+                    _set_text_on_best_candidate(wnd, fld_path.split('/')[-1].split('[')[0], val)
+                except Exception:
+                    pass
+
+    wnd.sendVKey(0)
+    time.sleep(0.5)
+
+    # 품목 텍스트(사유) — [2026-10-02] 품목마다 필수라 상세화면을 순회한다.
+    #   items[i]['sgtxt']가 하나라도 있으면 항목별 입력, 없고 text만 있으면 기존처럼 전체 1건.
+    text_warn = None
+    if any(str((it or {}).get('sgtxt', '') or '').strip() for it in items):
+        text_warn = _mb21_set_item_texts(session, items)
+        if text_warn:
+            print(f'[MB21 품목 텍스트] {text_warn}', file=sys.stderr)
+    elif text:
+        try:
+            wnd = session.findById('wnd[0]')
+            session.findById('wnd[0]/tbar[0]/btn[11]').press()
+            time.sleep(0.5)
+            wnd = session.findById('wnd[0]')
+            _set_text_on_best_candidate(wnd, 'RESB-SGTXT', text)
+            wnd.sendVKey(0)
+            time.sleep(0.3)
+            session.findById('wnd[0]/tbar[0]/btn[3]').press()  # 뒤로
+            time.sleep(0.5)
+        except Exception:
+            pass
+
+    # 저장 → 예약번호 생성 (F11 = Ctrl+S)
+    #   ⚠️ 필수 입력(특히 품목 텍스트)이 비면 SAP이 저장키를 잠가서 sendVKey가 COM 오류를 낸다
+    #      ("The virtual key is not enabled") — 툴바 저장 버튼으로 한 번 더 시도하고,
+    #      그래도 안 되면 상태바 문구까지 담은 한국어 오류로 바꿔 던진다.
+    _sap_send_vkey(session, 11, fallback_btn='tbar[0]/btn[11]', step='MB21 저장')
+    time.sleep(1.5)
+
+    rsnum = None
+    sbar_save = ''
+    try:
+        sbar_save = (session.findById('wnd[0]/sbar').Text or '').strip()
+        import re as _re
+        m = _re.search(r'(\d{7,10})', sbar_save)
+        if m:
+            rsnum = m.group(1)
+    except Exception:
+        pass
+    if not rsnum:
+        if '필수' in sbar_save or '입력' in sbar_save:
+            raise RuntimeError(
+                f'SAP이 저장을 거부했습니다 — 필수 입력이 비어 있습니다.\n'
+                f'  SAP 상태바: "{sbar_save}"\n'
+                '  품목마다 **텍스트(사유)**가 필요합니다. 보관함의 "사유" 칸을 모두 채워주세요.'
+                + (f'\n  목적 입력 경고: {purpose_warn}' if purpose_warn else '')
+                + (f'\n  텍스트 입력 경고: {text_warn}' if text_warn else ''))
+        raise RuntimeError(
+            f'MB21 저장 후 예약번호를 확인하지 못했습니다. (상태바: "{sbar_save}")\n'
+            '이동유형/오더번호/원가센터가 올바른지 확인해주세요.')
+
+    return {
+        'ok': True, 'rsnum': rsnum, 'bwart': str(bwart),
+        'itemCount': len([i for i in items if str(i.get('matnr', '')).strip()]),
+        'purpose': purpose or '', 'purposeWarning': purpose_warn or '',
+        'textWarning': text_warn or '',
         'sbar': sbar_save,
         'text': (f'예약(계정대체청구서) 생성 완료 — 예약번호 {rsnum} '
                  f'(이동유형 {bwart}, 품목 {len(items)}건). ZMM019에서 PDF로 출력하세요.'),
@@ -5690,7 +6045,13 @@ def main():
     except Exception as e:
         import traceback
         traceback.print_exc(file=sys.stderr)
-        print(json.dumps(_attach_failure_info({'ok': False, 'error': 'SAP 연결 중 예상치 못한 오류가 발생했습니다. (' + str(e) + ')'}), ensure_ascii=False))
+        # [2026-10-02] 원시 COM 문자열을 그대로 내보내면 사용자가 무엇을 해야 할지 알 수 없다
+        #   — humanize_sap_error가 상태바까지 담아 한국어로 바꿔 준다.
+        try:
+            _sess = _get_sap_session()
+        except Exception:
+            _sess = None
+        print(json.dumps(_attach_failure_info({'ok': False, 'error': humanize_sap_error(e, _sess)}), ensure_ascii=False))
 
 
 if __name__ == '__main__':

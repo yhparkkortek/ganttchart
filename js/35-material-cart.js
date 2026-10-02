@@ -20,6 +20,8 @@
 
     var API = 'http://127.0.0.1:5000';
     var ITEMS_KEY = 'gantt_matcart_items_v1';
+    // 💡 사유 예시 — placeholder로 보이고, 빈 칸에서 → 를 누르면 그대로 채워진다(사용자 요청 형식).
+    var REASON_EXAMPLE = 'PS00/RD00/LNW>STELLAR32>PROTO B 샘플 (US)';
     var HDR_KEY   = 'gantt_matcart_hdr_v1';
 
     function T(ko, en) { return window._t ? window._t(ko, en) : ko; }
@@ -29,6 +31,21 @@
         });
     }
     function plant() { return window.SAP_PLANT_FIXED || '1000'; }
+
+    // 🔍 [2026-10-02] 프로젝트 코드 조회 결과는 **다시 조회하기 전까지 그대로 둔다**.
+    //    예전엔 코드를 고르면 _mcHdrChange→render가 돌면서 목록이 사라져, 다른 코드를
+    //    보려면 매번 돋보기를 다시 눌러야 했다(사용자 지적). 그래서 render 바깥에 보관한다.
+    var orderResultsHtml = '';
+
+    // 💡 [2026-10-02] 사유(텍스트) 입력 도우미 — 빈 칸에서 → (오른쪽 방향키)를 누르면
+    //    예시(placeholder)가 그대로 채워진다. 셸 자동완성과 같은 감각.
+    window._mcHintKey = function (ev, el) {
+        if (!ev || ev.key !== 'ArrowRight' || !el) return;
+        if (String(el.value || '').length) return;              // 이미 쓴 글자가 있으면 커서 이동 그대로
+        ev.preventDefault();
+        el.value = el.placeholder || '';
+        if (el.onchange) el.onchange();
+    };
 
     // ── 저장소 ────────────────────────────────────────────────────────
     function load(key, dflt) {
@@ -258,7 +275,8 @@
             + '<div style="display:flex; gap:4px;">'
             + '<input id="mc-kostl" value="' + esc(h.kostl || '') + '" onchange="window._mcHdrChange()" style="' + inp + ' flex:1; min-width:0;">'
             + '<select onchange="if(this.value){document.getElementById(\'mc-kostl\').value=this.value;window._mcHdrChange();}"'
-            + ' style="' + inp + ' width:62px;"><option value="">▾</option>'
+            + ' title="' + T('조직 선택 ([미사용] 제외 69건)', 'Pick org (69 active)') + '"'
+            + ' style="' + inp + ' width:66px;"><option value="">▾</option>'
             + optsOf(window.SAP_COST_CENTERS, '') + '</select>'
             + '</div></div>'
             + '<div><label style="' + lab + '">' + T('목적(용도)', 'Purpose') + '</label>'
@@ -266,15 +284,16 @@
             + '<option value="">' + T('— 선택 —', '— select —') + '</option>'
             + optsOf(window.SAP_RESERVATION_PURPOSES, h.purpose) + '</select></div>'
             + '</div>'
-            + '<div id="mc-order-results"></div>'
+            + '<div id="mc-order-results">' + orderResultsHtml + '</div>'
             // ── 품목 표 — 저장위치 열은 "기본 저장위치"와 중복이라 뺐다(사용자 지적) ──
             + '<div style="border:1px solid #ddd; border-radius:5px; overflow:hidden;">'
             + '<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px;">'
-            + '<colgroup><col style="width:92px;"><col><col style="width:68px;"><col style="width:38%;"><col style="width:30px;"></colgroup>'
+            + '<colgroup><col style="width:90px;"><col><col style="width:62px;"><col style="width:52px;"><col style="width:36%;"><col style="width:28px;"></colgroup>'
             + '<thead><tr style="background:#eef3fa;">'
             + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #cdd7e3;">' + T('자재번호', 'Material') + '</th>'
             + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #cdd7e3;">' + T('자재내역', 'Description') + '</th>'
             + '<th style="padding:5px 6px; border-bottom:1px solid #cdd7e3;">' + T('수량', 'Qty') + '</th>'
+            + '<th style="padding:5px 6px; border-bottom:1px solid #cdd7e3;">' + T('단위', 'Unit') + '</th>'
             + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #cdd7e3;">' + T('사유(텍스트) *', 'Reason (text) *') + '</th>'
             + '<th style="padding:5px 2px; border-bottom:1px solid #cdd7e3;"></th>'
             + '</tr></thead><tbody>';
@@ -287,7 +306,12 @@
                 + '<td style="' + cell + ' overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(it.maktx) + '">' + esc(it.maktx) + '</td>'
                 + '<td style="' + cell + '"><input type="number" min="1" step="1" value="' + esc(it.qty) + '"'
                 + ' onchange="window._mcSetField(\'' + esc(it.matnr) + '\',\'qty\',this.value)" style="' + inp + ' width:100%;"></td>'
-                + '<td style="' + cell + '"><input value="' + esc(it.sgtxt) + '" placeholder="' + T('청구 사유 (필수)', 'Reason (required)') + '"'
+                + '<td style="' + cell + '"><input value="' + esc(it.unit || 'EA') + '" title="' + T('SAP 기본단위(MM03 MEINS). 대부분 EA.', 'Base unit (MM03 MEINS), usually EA.') + '"'
+                + ' onchange="window._mcSetField(\'' + esc(it.matnr) + '\',\'unit\',this.value.toUpperCase()||\'EA\')"'
+                + ' style="' + inp + ' width:100%; text-align:center;"></td>'
+                + '<td style="' + cell + '"><input value="' + esc(it.sgtxt) + '" placeholder="' + esc(REASON_EXAMPLE) + '"'
+                + ' title="' + T('→ (오른쪽 방향키)를 누르면 예시가 그대로 채워집니다', 'Press → to fill the example') + '"'
+                + ' onkeydown="window._mcHintKey(event, this)"'
                 + ' onchange="window._mcSetField(\'' + esc(it.matnr) + '\',\'sgtxt\',this.value); window._mcRender();"'
                 + ' style="' + inp + noTxt + ' width:100%;"></td>'
                 + '<td style="' + cell + ' text-align:center;">'
@@ -304,6 +328,7 @@
                 + '</div>';
         }
         html += '<div style="margin-top:8px; font-size:11.5px; color:#666;">'
+            + '💡 ' + T('사유 칸에서 → (오른쪽 방향키)를 누르면 예시가 채워집니다.', 'Press → in the Reason box to fill the example.') + '<br>'
             + '🏭 ' + T('플랜트 ', 'Plant ') + plant() + T(' 고정', ' (fixed)')
             + '  ·  📄 ' + T('만들어진 예약은 ZMM019(계정대체청구서)에서 PDF로 출력합니다.', 'Reservations are printed as PDF from ZMM019.')
             + '</div>';
@@ -331,15 +356,16 @@
     /** 🔍 오더(프로젝트 코드) 조회 — 기존 /sap-project-codes 재사용. 결과를 눌러 채운다. */
     window._mcFindOrder = async function () {
         var box = document.getElementById('mc-order-results');
+        function put(h) { orderResultsHtml = h; if (box) box.innerHTML = h; }
         var pattern = (document.getElementById('mc-aufnr') || {}).value || '';
         pattern = String(pattern).trim();
         if (!pattern) {
-            if (box) box.innerHTML = '<div style="font-size:11.5px; color:#a3281c; margin:-5px 0 9px;">'
-                + T('오더 칸에 검색어를 넣고 🔍를 눌러주세요 (예: G26 또는 STELLAR).', 'Type a search term in the Order box first (e.g. G26 or STELLAR).') + '</div>';
+            put('<div style="font-size:11.5px; color:#a3281c; margin:-5px 0 9px;">'
+                + T('오더 칸에 검색어를 넣고 🔍를 눌러주세요 (예: G26 또는 STELLAR).', 'Type a search term in the Order box first (e.g. G26 or STELLAR).') + '</div>');
             return;
         }
-        if (box) box.innerHTML = '<div style="font-size:11.5px; color:#666; margin:-5px 0 9px;">⏳ '
-            + T('프로젝트 코드 조회 중...', 'Looking up project codes...') + '</div>';
+        put('<div style="font-size:11.5px; color:#666; margin:-5px 0 9px;">⏳ '
+            + T('프로젝트 코드 조회 중...', 'Looking up project codes...') + '</div>');
         // 숫자가 섞여 있으면 오더번호 칸, 문자만이면 내역 칸 — docs/sap-lookup.md의 기존 규칙과 동일
         var by = /\d/.test(pattern) ? 'order' : 'desc';
         try {
@@ -350,9 +376,9 @@
             if (!data.ok) throw new Error(data.error || T('조회 실패', 'lookup failed'));
             var rows = data.items || (data.codes || []).map(function (c) { return { code: c, desc: '' }; });
             if (!rows.length) {
-                box.innerHTML = '<div style="font-size:11.5px; color:#a3281c; margin:-5px 0 9px;">'
+                put('<div style="font-size:11.5px; color:#a3281c; margin:-5px 0 9px;">'
                     + T('"' + pattern + '" 매치 없음 — SAP 검색은 대소문자를 구분합니다(영문은 대문자).',
-                        'No match for "' + pattern + '" — SAP search is case-sensitive (use uppercase).') + '</div>';
+                        'No match for "' + pattern + '" — SAP search is case-sensitive (use uppercase).') + '</div>');
                 return;
             }
             var h2 = '<div style="margin:-5px 0 9px; border:1px solid #cdd7e3; border-radius:5px; max-height:150px; overflow:auto;">'
@@ -365,10 +391,10 @@
                     + '<span style="font-family:monospace;">' + esc(r.code) + '</span>'
                     + (r.desc ? '<span style="color:#666;">  ' + esc(r.desc) + '</span>' : '') + '</div>';
             });
-            box.innerHTML = h2 + '</div>';
+            put(h2 + '</div>');
         } catch (e) {
-            box.innerHTML = '<div style="font-size:11.5px; color:#a3281c; margin:-5px 0 9px;">⚠️ '
-                + esc(e && e.message ? e.message : e) + '</div>';
+            put('<div style="font-size:11.5px; color:#a3281c; margin:-5px 0 9px;">⚠️ '
+                + esc(e && e.message ? e.message : e) + '</div>');
         }
     };
     window._mcPickOrder = function (code) {
