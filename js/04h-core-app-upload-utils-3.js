@@ -390,23 +390,31 @@
         const _en = window._currentLang === 'en';
         const id = 'sap-doc-type-' + Date.now();
         const activeTypes = (window.SAP_DOC_TYPES || []).filter(function(d) { return !d.inactive; });
-        const mats = matNums.join(', ');
+        const mats = matNums.join(',');
         const verb = actionVerb || '다운로드 해줘';
+        const isSave = /저장/.test(verb);
         window._ganttQaPendingChoiceDropdown = {
-            id: id, multi: false,
+            id: id,
+            checkboxMulti: true,
             options: activeTypes.map(function(d) {
                 return { value: d.code, label: d.code + ' — ' + d.label };
             }),
             buildAnswerText: function(sel) {
-                if (!sel || !sel[0]) return '';
-                return mats + ' ' + sel[0] + ' 문서 ' + verb;
+                if (!sel || !sel.length) return '';
+                if (sel.length === 1) {
+                    // 단일: 기존 경로 그대로
+                    return mats + ' ' + sel[0] + ' 문서 ' + verb;
+                }
+                // 다중: 내부 특수 포맷 → sendGanttQaMessage의 배치 핸들러가 처리
+                const prefix = isSave ? '__MULTIDOC_SAVE__' : '__MULTIDOC_LOOKUP__';
+                return prefix + mats + '__' + sel.join(',');
             }
         };
         window._ganttQaHistory.push({
             role: 'ai', choiceDropdownId: id,
             text: _en
-                ? '📄 Which document type for material "' + mats + '"?'
-                : '📄 자재 "' + mats + '"의 어떤 문서 종류를 받으시겠어요?'
+                ? '📄 Which document type for material "' + mats + '"? (multi-select available)'
+                : '📄 자재 "' + mats + '"의 문서 종류를 선택해주세요 (여러 개 선택 가능)'
         });
     };
 
@@ -780,6 +788,31 @@
                 </div>
             </div>`;
         }
+        // 📋 [2026-10-02] 체크박스 다중선택 모드 (문서 종류 선택 등)
+        if (draft.checkboxMulti) {
+            const did = escapeHtml(draft.id);
+            const cbxClass = 'qa-cbx-' + did;
+            const allId = 'qa-checkall-' + did;
+            const checkAllJs = "document.querySelectorAll('." + cbxClass + "').forEach(function(c){c.checked=this.checked;})";
+            const cbItems = (draft.options || []).map(function(o) {
+                return '<label style="display:flex;align-items:center;gap:6px;padding:4px 6px;cursor:pointer;border-radius:4px;" onmouseover="this.style.background=\'#f0f0f0\'" onmouseout="this.style.background=\'\'">'
+                    + '<input type="checkbox" class="' + cbxClass + '" value="' + escapeHtml(o.value) + '" style="cursor:pointer;width:14px;height:14px;">'
+                    + '<span style="font-size:12px;">' + escapeHtml(o.label) + '</span>'
+                    + '</label>';
+            }).join('');
+            return '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:10px;margin-top:6px;min-width:180px;">'
+                + '<label style="display:flex;align-items:center;gap:6px;padding:4px 6px;border-bottom:1px solid #dee2e6;margin-bottom:4px;cursor:pointer;font-weight:600;font-size:12px;">'
+                +   '<input type="checkbox" id="' + allId + '" onchange="' + checkAllJs + '" style="cursor:pointer;width:14px;height:14px;">'
+                +   (_en ? '✔ Select all' : '✔ 전체 선택')
+                + '</label>'
+                + cbItems
+                + '<div style="display:flex;justify-content:flex-end;margin-top:8px;">'
+                +   '<button onclick="window._ganttQaSubmitChoiceDropdown(\'' + did + '\')" style="font-size:11.5px;padding:5px 14px;border:1px solid #a8dab8;background:#e6f6ea;color:#1f7a3d;border-radius:6px;font-weight:bold;cursor:pointer;">'
+                +   (_en ? '✅ Confirm' : '✅ 선택 완료')
+                +   '</button>'
+                + '</div>'
+                + '</div>';
+        }
         return `<div style="margin-top:6px;">
             <select id="qa-choice-${draft.id}-0" onchange="window._ganttQaSubmitChoiceDropdown('${draft.id}')" style="font-size:11.5px; padding:5px 8px; border:1px solid #ccc; border-radius:6px; width:100%;">
                 <option value="">${_en ? '(choose one)' : '(선택해주세요)'}</option>
@@ -805,6 +838,19 @@
             const input = document.getElementById('gantt-qa-input');
             if (!input) return;
             input.value = answerText;
+            window.sendGanttQaMessage();
+            return;
+        }
+        // 📋 [2026-10-02] 체크박스 다중선택 수집
+        if (draft.checkboxMulti) {
+            const checked = Array.prototype.slice.call(document.querySelectorAll('.qa-cbx-' + id + ':checked')).map(function(c) { return c.value; });
+            if (!checked.length) return;
+            const answerText = draft.buildAnswerText(checked);
+            if (!answerText) return;
+            window._ganttQaPendingChoiceDropdown = null;
+            const input2 = document.getElementById('gantt-qa-input');
+            if (!input2) return;
+            input2.value = answerText;
             window.sendGanttQaMessage();
             return;
         }
@@ -4069,6 +4115,66 @@ ${docsJson}`;
                 input.value = _docMat + (_isLookup ? ' 문서 조회해줘' : ' 문서 저장해줘');
                 window.sendGanttQaMessage();
             }
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 📥🔍🚫🤖 [2026-10-02] 다중 문서 타입 배치 처리 (__MULTIDOC_SAVE__ / __MULTIDOC_LOOKUP__)
+        //    체크박스로 여러 문서 타입을 고른 경우 각 타입별로 순차 실행 후 결과 합산 표시.
+        if (question.indexOf('__MULTIDOC_SAVE__') === 0 || question.indexOf('__MULTIDOC_LOOKUP__') === 0) {
+            const _isSave = question.indexOf('__MULTIDOC_SAVE__') === 0;
+            const _mdBody = question.replace(/^__MULTIDOC_(SAVE|LOOKUP)__/, '');
+            const _mdParts = _mdBody.split('__');
+            const _mdMats = (_mdParts[0] || '').split(',').filter(Boolean);
+            const _mdTypes = (_mdParts[1] || '').split(',').filter(Boolean);
+            if (!_mdMats.length || !_mdTypes.length) return;
+            input.value = '';
+            const _mdLabel = _isSave
+                ? window._t('문서 저장', 'Document save')
+                : window._t('문서 조회', 'Document lookup');
+            window._ganttQaHistory.push({ role: 'user', text: _mdMats.join(', ') + ' ' + _mdTypes.join('+') + ' ' + _mdLabel });
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+                _mdMats.length + '개 자재 × ' + _mdTypes.length + '개 타입 ' + _mdLabel + ' 진행 중...',
+                'Processing ' + _mdLabel + ' for ' + _mdMats.length + ' material(s) × ' + _mdTypes.length + ' type(s)...'
+            ), pending: true });
+            window._renderGanttQaMessages();
+            const _mdResults = [];
+            for (let _ti = 0; _ti < _mdTypes.length; _ti++) {
+                const _tp = _mdTypes[_ti];
+                try {
+                    let _mdUrl, _mdRes, _mdData;
+                    if (_isSave) {
+                        _mdUrl = 'http://127.0.0.1:5000/sap-download-documents-batch?materials=' + encodeURIComponent(_mdMats.join(',')) + '&type=' + encodeURIComponent(_tp);
+                        _mdRes = await window._withTimeout(fetch(_mdUrl), 120000, window._t('다운로드 시간 초과', 'Download timed out'));
+                        _mdData = await _mdRes.json();
+                        if (_mdData.ok) {
+                            const _rn = _mdData.renamedFolders || {};
+                            const _fileList = Object.values(_rn).filter(Boolean);
+                            _mdResults.push('✅ **' + _tp + '**: ' + (_fileList.length ? _fileList.join(', ') : (_mdData.message || window._t('저장 완료', 'Saved'))));
+                        } else {
+                            _mdResults.push('⚠️ **' + _tp + '**: ' + (_mdData.error || window._t('실패', 'Failed')));
+                        }
+                    } else {
+                        _mdUrl = 'http://127.0.0.1:5000/sap-dms-lookup?materials=' + encodeURIComponent(_mdMats.join(',')) + '&type=' + encodeURIComponent(_tp);
+                        _mdRes = await window._withTimeout(fetch(_mdUrl), 60000, window._t('조회 시간 초과', 'Lookup timed out'));
+                        _mdData = await _mdRes.json();
+                        _mdResults.push('**' + _tp + '**\n' + (_mdData.ok ? (_mdData.table || window._t('결과 없음', 'No results')) : ('⚠️ ' + (_mdData.error || window._t('조회 실패', 'Lookup failed')))));
+                    }
+                } catch(e) {
+                    _mdResults.push('⚠️ **' + _tp + '**: ' + (e && e.message ? e.message : String(e)));
+                }
+            }
+            window._ganttQaHistory.pop();
+            let _mdFinalText = _mdResults.join('\n\n---\n\n');
+            let _mdRawHtml = false;
+            if (_isSave) {
+                const _savedFolder = 'C:\\SAP_DMS';
+                const _btnStyle = 'display:inline-block;margin-top:6px;padding:3px 10px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
+                _mdFinalText += '\n\n<button style="' + _btnStyle + '" onclick="fetch(\'http://127.0.0.1:5000/sap-open-folder?path=' + encodeURIComponent(_savedFolder) + '\').catch(function(){});">📁 ' + window._t('폴더 열기', 'Open folder') + ' (C:\\SAP_DMS)</button>';
+                _mdRawHtml = true;
+            }
+            window._ganttQaHistory.push({ role: 'ai', text: _mdFinalText, rawHtml: _mdRawHtml });
             window._renderGanttQaMessages();
             input.focus();
             return;
