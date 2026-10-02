@@ -3634,7 +3634,10 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
     return result
 
 
-_RSV_PDF_OUT_DIR = os.path.join('C:\\SAP_DMS', '자재청구')
+# [2026-10-02 실측] 저장 대화상자가 기본으로 여는 폴더가 여기이고, 사용자가 이미
+#   `2920302.pdf` `2920318.pdf`처럼 **예약번호만** 파일명으로 쓰고 있었다.
+#   코드가 새 규칙(예약NNNN_날짜.pdf)을 만들지 말고 쓰던 규칙에 맞춘다.
+_RSV_PDF_OUT_DIR = os.path.join('C:\\SAP_DMS', '계정대체청구서')
 
 
 def _win_documents_dir():
@@ -3720,14 +3723,24 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
     state = {'printClicked': False, 'usedSaveDialog': False,
              'printTitle': '', 'saveTitle': '', 'error': ''}
 
+    def _norm_label(t):
+        """버튼 라벨 정규화 — 액셀러레이터와 니모닉 접미사를 벗긴다.
+
+        [2026-10-02] 저장 대화상자의 버튼이 "저장(S)"(원문 "저장(&S)")이라
+        `== '저장'` 비교가 전부 빗나가 창을 못 찾았다. "확인"처럼 접미사가 없는
+        버튼만 보고 짰던 게 원인.
+        """
+        t = (t or '').replace('&', '').strip()
+        return re.sub(r'\([A-Za-z]\)$', '', t).strip()
+
     def _buttons(hwnd):
-        """대화상자 안의 Button 컨트롤을 [(hwnd, 라벨)]로."""
+        """대화상자 안의 Button 컨트롤을 [(hwnd, 정규화 라벨)]로."""
         out = []
 
         def _cb(ch, _):
             try:
                 if _wg.GetClassName(ch) == 'Button':
-                    out.append((ch, (_wg.GetWindowText(ch) or '').replace('&', '').strip()))
+                    out.append((ch, _norm_label(_wg.GetWindowText(ch))))
             except Exception:
                 pass
         try:
@@ -3766,26 +3779,43 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
     def _filename_edit(hwnd):
         """파일 저장 대화상자의 '파일 이름' Edit 컨트롤.
 
-        구조: 대화상자 → ComboBoxEx32 → ComboBox → Edit.
-        y좌표 내림차순 정렬 후 두 번째가 파일이름 — 이 파일의 DMS 저장 코드에서
-        이미 실사용 검증된 규칙을 그대로 쓴다.
+        [2026-10-02] y좌표로 "아래에서 두 번째"를 고르던 규칙은 이 창에서 **검색 상자**를
+        집는다(주소줄 옆 "○○ 검색"도 Edit이다). 그래서 위치 대신 **정체**로 고른다:
+
+          ① 조상에 `ComboBoxEx32`가 있는 Edit  → 파일이름 콤보의 내부 Edit
+          ② 현재 값이 `.pdf`로 끝나는 Edit      → Adobe가 채워둔 기본 파일명
+          둘 다 만족하면 확실, 하나만이면 그걸, 아무것도 없으면 맨 아래 Edit.
+
+        위치는 Windows 버전/테마에 따라 흔들리지만 이 두 성질은 안 흔들린다.
         """
         found = []
 
         def _cb(ch, _):
             try:
-                if _wg.GetClassName(ch) == 'Edit':
-                    found.append((ch, _wg.GetWindowRect(ch)[3]))
+                if _wg.GetClassName(ch) != 'Edit':
+                    return
+                score, y = 0, _wg.GetWindowRect(ch)[3]
+                anc = ch
+                for _ in range(4):                      # 조상 4대까지 거슬러 본다
+                    anc = _wg.GetParent(anc)
+                    if not anc:
+                        break
+                    if _wg.GetClassName(anc) == 'ComboBoxEx32':
+                        score += 2
+                        break
+                if (_wg.GetWindowText(ch) or '').strip().lower().endswith('.pdf'):
+                    score += 2
+                found.append((score, y, ch))
             except Exception:
                 pass
         try:
             _wg.EnumChildWindows(hwnd, _cb, None)
         except Exception:
             pass
-        found.sort(key=lambda x: x[1], reverse=True)
-        if len(found) >= 2:
-            return found[1][0]
-        return found[0][0] if found else None
+        if not found:
+            return None
+        found.sort(key=lambda x: (x[0], x[1]), reverse=True)   # 점수 → 아래쪽 순
+        return found[0][2]
 
     def _cancel(hwnd):
         """대화상자를 [취소]로 닫는다 — 실패하고 그냥 빠져나가면 모달이 남아
@@ -3825,7 +3855,7 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
             return
 
         # ② 파일 저장 창 — 프린터가 '파일 이름 묻기'로 설정된 경우에만 뜬다.
-        sub_deadline = time.time() + 10
+        sub_deadline = time.time() + 25        # Adobe 스풀이 느린 PC도 있다
         while time.time() < sub_deadline:
             hit = _find_dialog(('저장', 'Save', 'PDF'), ('저장', 'Save'))
             if hit:
@@ -3972,8 +4002,7 @@ def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
             os.makedirs(_RSV_PDF_OUT_DIR)
     except Exception:
         pass
-    pdf_target = os.path.join(_RSV_PDF_OUT_DIR,
-                              '예약%s_%s.pdf' % (rsnum, time.strftime('%Y%m%d')))
+    pdf_target = os.path.join(_RSV_PDF_OUT_DIR, '%s.pdf' % rsnum)
     watch_dirs = [d for d in (_RSV_PDF_OUT_DIR, _win_documents_dir()) if d]
     pdf_before = _pdf_snapshot(watch_dirs)
 
