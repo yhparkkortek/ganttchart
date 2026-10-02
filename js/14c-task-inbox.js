@@ -326,15 +326,16 @@ window.getCurrentL0List = function() {
 //    renderTaskInbox()는 목록 전체를 innerHTML로 통째로 새로 그리기 때문에, 버튼 하나(현재 Proj 전송/
 //    매칭 Proj 전송/🗑 등)를 눌러 목록이 다시 그려지는 순간 펼쳐놨던 상세 내용이 전부 접혀버렸음.
 //    → 어떤 카드를 펼쳤는지 uid 기준으로 별도 기억해뒀다가, 다시 그릴 때 그 상태를 그대로 복원한다.
-window._ibExpandedUids = window._ibExpandedUids || new Set();
+window._ibExpandedUids = window._ibExpandedUids || new Set(); // 호환성 유지 (미사용)
+window._ibCollapsedUids = window._ibCollapsedUids || new Set(); // [2026-10-02] 기본 펼침 — 접은 카드만 추적
 window._ibToggleDetail = function(uid, linkEl) {
     const d = document.getElementById('inbox-detail-' + uid);
     if (!d) return;
-    const open = d.style.display === 'none';
+    const open = d.style.display === 'none'; // true = 현재 접혀있음 → 펼치기
     d.style.display = open ? 'block' : 'none';
     const _en = window._currentLang === 'en';
     linkEl.textContent = open ? (_en ? '▲ Collapse' : '▲ 상세 접기') : (_en ? '▼ Details' : '▼ 상세 보기');
-    if (open) window._ibExpandedUids.add(uid); else window._ibExpandedUids.delete(uid);
+    if (open) window._ibCollapsedUids.delete(uid); else window._ibCollapsedUids.add(uid);
 };
 
 // 💡 [2026-09-06 신규] 업무 보관함 상단 집계 요약 — 사용자 피드백: "대기가 너무 많아서 뭐가 문제인지
@@ -649,7 +650,7 @@ window.renderTaskInbox = function() {
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
                     <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || (_ibEn ? 'New Task' : '새 업무'))} 📧</span>
-                    <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibExpandedUids.has(it.uid) ? (_ibEn ? '▲ Collapse' : '▲ 상세 접기') : (_ibEn ? '▼ Details' : '▼ 상세 보기')}</a>
+                    <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibCollapsedUids.has(it.uid) ? (_ibEn ? '▼ Details' : '▼ 상세 보기') : (_ibEn ? '▲ Collapse' : '▲ 상세 접기')}</a>
                     <button onclick="window.extractInboxForAI('${it.uid}')" onmouseover="this.style.background='#e4dbff'; this.style.borderColor='#b8a4f0';" onmouseout="this.style.background='#f3f0ff'; this.style.borderColor='#d0bfff';" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#5f3dc4; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📋 ${_ibEn ? 'Extract reason' : '추출사유'}</button>
                     ${it.status === '대기' ? `<button onclick="window.inboxCreateNewProjectFromPending('${it.uid}')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_ibEn ? 'No project matched (or matched project is wrong) — register this mail as a new project (AI-prefilled)' : '아직 어느 프로젝트에도 배치되지 않은 건 — 이 메일로 새 프로젝트를 등록합니다(AI 자동 추출)'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">➕ ${_ibEn ? 'New Proj' : '새 Proj 생성'}</button>` : ''}
                     ${it.status !== '대기' ? `<button onclick="window.inboxReportFalseMatch('${it.uid}')" onmouseover="this.style.background='#ffe0b2'; this.style.borderColor='#ef8c25';" onmouseout="this.style.background='#fff3e0'; this.style.borderColor='#ffca75';" title="${_ibEn ? 'Report as false match — logs to topic learning, removes from current Gantt if placed here' : '오매칭으로 신고 — 토픽 학습에 기록 · 현재 Proj 배치됨이면 간트에서도 삭제'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#fff3e0; color:#b05000; border:1px solid #ffca75; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">🚨 ${_ibEn ? 'False match' : '오매칭 신고'}</button>` : ''}
@@ -682,7 +683,7 @@ window.renderTaskInbox = function() {
                 <span style="flex-shrink:0;">🤖</span>
                 <span>${(_ibEn ? 'AI reasoning' : 'AI 판단 근거')}${it.matchedProject.confidence ? ` (${_ibEn ? 'match confidence: ' : '매칭 신뢰도: '}${escapeHtml(it.matchedProject.confidence)})` : ''}: ${escapeHtml(it.matchedProject.matchBasis)}</span>
             </div>` : ''}
-            <div id="inbox-detail-${it.uid}" style="display:${window._ibExpandedUids.has(it.uid) ? 'block' : 'none'}; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
+            <div id="inbox-detail-${it.uid}" style="display:${window._ibCollapsedUids.has(it.uid) ? 'none' : 'block'}; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
                 <div><b>${_ibEn ? 'Task' : '업무명'}</b> : ${escapeHtml(t['업무명'] || '')}</div>
                 <div><b>${_ibEn ? 'Detail' : '상세내용'}</b> : <span style="white-space:pre-wrap;">${escapeHtml((t['상세내용'] || '').toString())}</span></div>
                 <div><b>${_ibEn ? 'Period' : '기간'}</b> : ${escapeHtml(t['시작일'] || '?')} ~ ${escapeHtml(t['완료일'] || '?')} · <b>${_ibEn ? 'Status' : '상태'}</b> : ${escapeHtml(t['상태'] || '진행')} · <b>${_ibEn ? 'WBS Level' : 'WBS레벨'}</b> : L${escapeHtml(String(t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4))}</div>
@@ -707,10 +708,16 @@ window.renderTaskInbox = function() {
             </div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 1 200px; min-width:60px; max-width:220px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
-                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
-                ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
-                    : ''}
+                ${(function() {
+                    const _hasCand = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id;
+                    const _cand0 = _hasCand ? it.matchedProject.candidates[0] : null;
+                    const _cand0Label = _cand0 ? (_cand0.model || _cand0.customer || _cand0.file_name || '') : '';
+                    if (_hasCand) {
+                        return '<button onclick="window.inboxPlaceToCandidate(\'' + it.uid + '\')" title="' + escapeHtml((_ibEn ? 'Send to AI-analyzed project: ' : 'AI 분석 프로젝트로 전송: ') + _cand0Label) + '" onmouseover="this.style.background=\'#c9ecd3\'; this.style.borderColor=\'#7cc494\';" onmouseout="this.style.background=\'#e6f6ea\'; this.style.borderColor=\'#a8dab8\';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'AI Proj' : '분석 Proj 전송') + '</button>';
+                    } else {
+                        return '<button onclick="window.inboxPlaceToCurrent(\'' + it.uid + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'Current Proj' : '현재 Proj 전송') + '</button>';
+                    }
+                })()}
                 <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
                 <button onclick="window.inboxDeleteWithFeedback('${it.uid}')" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
             </div>
@@ -829,6 +836,37 @@ window.inboxQuickRegisterMatched = async function(uid) {
         window.TaskInbox.setStatus(uid, '배치됨', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
         window.renderTaskInbox();
         const msg = `✅ "${it.task['업무명'] || '새 업무'}" → ${target.file_name} 전송 완료 (${result.label || ''})`;
+        if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
+    } else {
+        alert(window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error')));
+    }
+};
+
+// [2026-10-02] AI 분석 후보 프로젝트로 전송 — status 무관하게 candidates[0]으로 전송.
+//   inboxQuickRegisterMatched와 동일 로직이나 status === 'matched' 조건 없음.
+window.inboxPlaceToCandidate = async function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const mp = it.matchedProject;
+    if (!mp || !mp.candidates || !mp.candidates[0] || !mp.candidates[0].drive_file_id) {
+        const msg = window._t('AI 분석 후보 프로젝트가 없습니다. [📤 다른 프로젝트]로 직접 선택해주세요.', 'No AI candidate project. Please select via [📤 Other Project].');
+        if (window.showToast) window.showToast(msg, 'warn'); else alert(msg);
+        return;
+    }
+    const target = mp.candidates[0];
+    window._ibRepairDatesFromMail(it);
+    if ((it.task['시작일'] || '').includes('날짜확인필요') || (it.task['완료일'] || '').includes('날짜확인필요')) {
+        alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 다시 시도해주세요.', '⚠️ Start/end date is unconfirmed. Please confirm the date in the mail analyzer screen and try again.'));
+        return;
+    }
+    const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+    const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+    if (!token) { alert(window._t('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.', '🔒 Please sign in to Google via [🔵 Connect Drive] at the top first.')); return; }
+    const result = await window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false });
+    if (result.ok) {
+        window.TaskInbox.setStatus(uid, '배치됨', { type: 'AI분석 프로젝트 전송', target: target.file_name, at: new Date().toISOString() });
+        window.renderTaskInbox();
+        const msg = '✅ "' + (it.task['업무명'] || '새 업무') + '" → ' + target.file_name + ' 전송 완료 (' + (result.label || '') + ')';
         if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
     } else {
         alert(window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error')));
