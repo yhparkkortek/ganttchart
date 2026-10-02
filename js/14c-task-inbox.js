@@ -2167,30 +2167,29 @@ window.inboxDeleteWithFeedback = function(uid) {
     modal.id = 'inbox-delete-feedback-modal';
     // 💡 다른 확인용 팝업들과 동일하게 배경 조작 허용(pointer-events:none 오버레이 + 내부 박스만 all).
     modal.style.cssText = 'position:fixed;inset:0;z-index:100010;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
+    // [2026-10-02] 원클릭 삭제 — 이유 버튼 클릭 즉시 학습+삭제. 라디오+확인 2단계 제거.
+    //   "불필요"+"기타" 통합(학습 신호가 동일) → 3개 버튼으로 축소.
     modal.innerHTML =
-        '<div style="pointer-events:all;background:#fff;border-radius:14px;padding:26px 30px;min-width:340px;max-width:440px;' +
-        'box-shadow:0 10px 44px rgba(0,0,0,0.22);font-family:sans-serif;max-height:88vh;overflow-y:auto;">' +
-          '<div style="font-size:17px;font-weight:700;margin-bottom:4px;">🗑 ' + (_en ? 'Delete Inbox Item' : '업무 보관함 항목 삭제') + '</div>' +
-          '<div style="font-size:12px;color:#888;margin-bottom:14px;">' + (_en ? 'Let us know why — it helps improve future analysis.' : '이유를 알려주시면 다음 분석 정확도가 높아집니다.') + '</div>' +
-          '<div style="background:#f8f9fa;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;font-weight:600;">' + escapeHtml(taskName) + '</div>' +
-          '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">' + (_en ? 'Reason' : '삭제 이유') + '</div>' +
-          '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="오매칭"> ❌ ' + (_en ? 'False match — not this project' : '오매칭 — 이 프로젝트 업무가 아님') + '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="중복"> ♻️ ' + (_en ? 'Duplicate — already registered' : '중복 — 이미 등록된 업무') + '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="불필요"> 🚫 ' + (_en ? 'Irrelevant' : '불필요 — 등록할 필요 없는 내용') + '</label>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="기타"> 💬 ' + (_en ? 'Other' : '기타') + '</label>' +
+        '<div style="pointer-events:all;background:#fff;border-radius:14px;padding:22px 26px;min-width:320px;max-width:420px;' +
+        'box-shadow:0 10px 44px rgba(0,0,0,0.22);font-family:sans-serif;">' +
+          '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">🗑 ' + (_en ? 'Delete Inbox Item' : '업무 보관함 항목 삭제') + '</div>' +
+          '<div style="background:#f8f9fa;border-radius:7px;padding:8px 11px;margin:10px 0 14px;font-size:13px;font-weight:600;color:#333;">' + escapeHtml(taskName) + '</div>' +
+          '<div style="font-size:12px;color:#666;margin-bottom:10px;">' + (_en ? 'Why are you deleting? (tap to delete immediately)' : '삭제 이유를 선택하면 즉시 삭제됩니다') + '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">' +
+            '<button id="ib-del-mismatch" style="text-align:left;padding:10px 14px;background:#fff3f3;color:#b10000;border:1px solid #f5a5a5;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">❌ ' + (_en ? 'False match — not this project' : '오매칭 — 이 프로젝트 업무가 아님') + '</button>' +
+            '<button id="ib-del-dup" style="text-align:left;padding:10px 14px;background:#f0fff4;color:#1a6b35;border:1px solid #a3d9b5;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">♻️ ' + (_en ? 'Duplicate — already registered' : '중복 — 이미 등록된 업무') + '</button>' +
+            '<button id="ib-del-irrelevant" style="text-align:left;padding:10px 14px;background:#f8f9fa;color:#555;border:1px solid #ced4da;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🚫 ' + (_en ? 'Unnecessary / Other' : '불필요 / 기타') + '</button>' +
           '</div>' +
-          '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-            '<button id="ib-del-cancel-btn" style="padding:9px 18px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:13px;cursor:pointer;">' + (_en ? 'Cancel' : '취소') + '</button>' +
-            '<button id="ib-del-plain-btn" style="padding:9px 16px;background:#f8f9fa;color:#495057;border:1px solid #ced4da;border-radius:7px;font-size:13px;cursor:pointer;">' + (_en ? 'Just delete' : '그냥 삭제') + '</button>' +
-            '<button id="ib-del-learn-btn" style="padding:9px 18px;background:#d63384;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">📚 ' + (_en ? 'Learn + Delete' : '학습+삭제') + '</button>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<a id="ib-del-plain-btn" href="javascript:void(0)" style="font-size:11px;color:#aaa;text-decoration:underline;cursor:pointer;">' + (_en ? 'Delete without learning' : '이유 없이 삭제') + '</a>' +
+            '<button id="ib-del-cancel-btn" style="padding:7px 18px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:13px;cursor:pointer;">' + (_en ? 'Cancel' : '취소') + '</button>' +
           '</div>' +
         '</div>';
     document.body.appendChild(modal);
 
     function closeModal() { modal.remove(); }
     function doRemove() {
-        window._ibExpandedUids.delete(uid);
+        window._ibCollapsedUids && window._ibCollapsedUids.delete(uid);
         window.TaskInbox.remove(uid);
         window.renderTaskInbox();
         // ⭐ [2026-09-23] 단건 삭제도 3초 대기 없이 바로 드라이브까지 반영
@@ -2202,18 +2201,12 @@ window.inboxDeleteWithFeedback = function(uid) {
             }
         });
     }
-    document.getElementById('ib-del-cancel-btn').onclick = closeModal;
-    document.getElementById('ib-del-plain-btn').onclick = function() { closeModal(); doRemove(); };
-    document.getElementById('ib-del-learn-btn').onclick = function() {
-        const reasonEl = modal.querySelector('input[name="ib-del-reason"]:checked');
-        const reason = reasonEl ? reasonEl.value : '';
-        if (!reason) { alert(_en ? 'Please choose a reason.' : '사유를 선택해주세요.'); return; }
+    function doLearnAndRemove(reason) {
         const projectKey = (mc && mc.drive_file_id) || window.currentDriveFileId || window.currentDriveFileName || '__unclassified__';
         if (window._writeLearningEntry) {
             window._writeLearningEntry(projectKey, {
                 type: reason === '오매칭' ? 'negative_match' :
-                      reason === '중복'   ? 'duplicate' :
-                      reason === '불필요' ? 'irrelevant' : 'other',
+                      reason === '중복'   ? 'duplicate' : 'irrelevant',
                 reason: reason,
                 taskName: taskName,
                 confidence: (mc && mc.confidence) || t['매칭신뢰도'] || '',
@@ -2227,6 +2220,11 @@ window.inboxDeleteWithFeedback = function(uid) {
         closeModal();
         doRemove();
         if (window.showToast) window.showToast(_en ? '📚 Learning recorded' : '📚 학습 데이터가 기록됐습니다', 'info');
-    };
+    }
+    document.getElementById('ib-del-cancel-btn').onclick = closeModal;
+    document.getElementById('ib-del-plain-btn').onclick = function() { closeModal(); doRemove(); };
+    document.getElementById('ib-del-mismatch').onclick   = function() { doLearnAndRemove('오매칭'); };
+    document.getElementById('ib-del-dup').onclick        = function() { doLearnAndRemove('중복'); };
+    document.getElementById('ib-del-irrelevant').onclick = function() { doLearnAndRemove('불필요'); };
 };
 
