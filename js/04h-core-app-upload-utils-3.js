@@ -5073,7 +5073,7 @@ ${docsJson}`;
             if (_hasDasi && window._lastBomOptions && _bTrigNums.length > 0) {
                 window._ganttQaBomResolvedOptions = Object.assign({}, window._lastBomOptions);
             }
-            const bomTrig = !_bAllCached && window._ganttQaExtractBomTrigger(question);
+            const bomTrig = window._ganttQaExtractBomTrigger(question); // [2026-10-02] _bAllCached 조건 제거 — 같은 자재 재조회 허용
             if (bomTrig) {
                 let useSingleTcode; // undefined = 자재 개수로 자동 결정
                 if (/(복수|다중)/.test(question)) useSingleTcode = false;
