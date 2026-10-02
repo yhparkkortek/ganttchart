@@ -3920,6 +3920,11 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
             try:
                 if _wg.GetClassName(hwnd) != '#32770' or not _wg.IsWindowVisible(hwnd):
                     return
+                # [2026-10-02 실측] 최소화된 창도 IsWindowVisible은 True다 — 덤프에 '기록 및 재생'과
+                #   'SAP Logon 740'이 좌표 -32000대로 찍혀 나왔다. 제목이 우연히 겹치면 엉뚱한 창을
+                #   누를 수 있으니 아이콘 상태는 후보에서 뺀다.
+                if _wg.IsIconic(hwnd):
+                    return
                 t = (_wg.GetWindowText(hwnd) or '').strip()
                 if not any(k in t for k in titles):
                     return
@@ -3936,36 +3941,45 @@ def _win_print_dialog_watchdog(save_path, timeout_sec=120):
             pass
         return hits[0] if hits else None
 
+    # 주소줄/검색창이 들어 있는 띠(band) — 여기 속한 Edit은 파일이름 칸이 **아니다**.
+    # [2026-10-02 실측 덤프] "PDF 파일을 다른 이름으로 저장" 창의 Edit은 딱 둘인데
+    #   · 파일이름:  Edit ← ComboBox ← FloatNotifySink ← 대화상자
+    #   · 주소줄:    Edit ← ComboBox ← **ComboBoxEx32** ← Address Band Root ← ReBarWindow32 ← WorkerW
+    # 즉 `ComboBoxEx32`는 파일이름의 표시가 아니라 **주소줄의 표시**였다. 그걸 가점으로 줬던
+    # 직전 버전은 주소줄을 집는다 — 경로를 주소줄에 쓰면 폴더만 이동하고 저장은 안 된다.
+    _FE_BAND_CLASSES = ('ReBarWindow32', 'WorkerW', 'Address Band Root', 'UniversalSearchBand',
+                        'Search Box', 'SearchEditBoxWrapperClass', 'Breadcrumb Parent',
+                        'ToolbarWindow32', 'ComboBoxEx32')
+
     def _filename_edit(hwnd):
         """파일 저장 대화상자의 '파일 이름' Edit 컨트롤.
 
-        [2026-10-02] y좌표로 "아래에서 두 번째"를 고르던 규칙은 이 창에서 **검색 상자**를
-        집는다(주소줄 옆 "○○ 검색"도 Edit이다). 그래서 위치 대신 **정체**로 고른다:
+        고르는 법(실측 덤프로 확정, 2026-10-02):
+          ① 주소줄/검색 띠에 속한 Edit은 **제외** — 조상 8대 안에 _FE_BAND_CLASSES가 있으면 버린다
+          ② 남은 것 중 값이 `.pdf`로 끝나면 가점(Adobe가 채워둔 기본 파일명)
+          ③ 그래도 여럿이면 **맨 아래** — 파일이름 칸은 버튼 바로 위에 있다
 
-          ① 조상에 `ComboBoxEx32`가 있는 Edit  → 파일이름 콤보의 내부 Edit
-          ② 현재 값이 `.pdf`로 끝나는 Edit      → Adobe가 채워둔 기본 파일명
-          둘 다 만족하면 확실, 하나만이면 그걸, 아무것도 없으면 맨 아래 Edit.
+        ②는 있으면 좋은 신호지 필수가 아니다 — 실측 덤프에선 이 칸의 GetWindowText가
+        빈 문자열로 왔다(다른 프로세스 소유라 항상 읽히진 않는다). 그래서 ①이 본체다.
 
-        위치는 Windows 버전/테마에 따라 흔들리지만 이 두 성질은 안 흔들린다.
+        ⚠️ 이 판정이 틀려도 조용히 넘어가지 않는다 — 호출부가 값을 되읽어 확인하고,
+        저장 뒤에는 파일 존재까지 확인한다.
         """
         found = []
 
         def _cb(ch, _):
             try:
-                if _wg.GetClassName(ch) != 'Edit':
+                if _wg.GetClassName(ch) != 'Edit' or not _wg.IsWindowVisible(ch):
                     return
-                score, y = 0, _wg.GetWindowRect(ch)[3]
                 anc = ch
-                for _ in range(4):                      # 조상 4대까지 거슬러 본다
+                for _ in range(8):                      # 주소줄은 6대쯤 위에 있다
                     anc = _wg.GetParent(anc)
-                    if not anc:
+                    if not anc or anc == hwnd:
                         break
-                    if _wg.GetClassName(anc) == 'ComboBoxEx32':
-                        score += 2
-                        break
-                if (_wg.GetWindowText(ch) or '').strip().lower().endswith('.pdf'):
-                    score += 2
-                found.append((score, y, ch))
+                    if _wg.GetClassName(anc) in _FE_BAND_CLASSES:
+                        return                          # 주소줄·검색창 → 버린다
+                score = 2 if (_wg.GetWindowText(ch) or '').strip().lower().endswith('.pdf') else 0
+                found.append((score, _wg.GetWindowRect(ch)[3], ch))
             except Exception:
                 pass
         try:

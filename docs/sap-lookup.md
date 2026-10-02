@@ -2049,3 +2049,38 @@ wnd[1]/tbar[0]/btn[13]  →  wnd[1]/tbar[0]/btn[86]   ' 출력 팝업
 
 검증 31/31 — 트리거 어휘 8종, 기존 screendump 회귀 4종, 우선순위, 빈도 기록, 시드/플래그,
 엔드포인트 배선, SAP 세션 미사용.
+
+
+### 🪟 실측 덤프로 뒤집힌 규칙 — `ComboBoxEx32`는 주소줄이었다 (2026-10-02)
+
+"PDF 파일을 다른 이름으로 저장" 창의 Win32 덤프를 받아 보니, 바로 전에 넣은 판정 규칙이
+**정반대로** 작동하고 있었다.
+
+```
+파일이름:  Edit ← ComboBox ← FloatNotifySink ← 대화상자          (y 735~752)
+주소줄:    Edit ← ComboBox ← ComboBoxEx32 ← Address Band Root
+                  ← ReBarWindow32 ← WorkerW ← 대화상자          (y 393~408)
+```
+
+`ComboBoxEx32`를 "파일이름 콤보의 표시"로 보고 가점을 줬는데, 이 창에선 그게 **주소줄의
+표시**였다. 그대로 뒀으면 경로를 주소줄에 써넣어 **폴더만 이동하고 저장은 안 되는** 상태가
+된다. 재현 테스트로 확인(예전 규칙 → `0x306` 주소줄 선택).
+
+**고친 규칙** — `ComboBoxEx32`는 가점이 아니라 **제외 신호**로:
+- 조상 8대 안에 `ReBarWindow32` `WorkerW` `Address Band Root` `UniversalSearchBand`
+  `Search Box` `SearchEditBoxWrapperClass` `Breadcrumb Parent` `ToolbarWindow32`
+  `ComboBoxEx32`가 있으면 **버린다**(주소줄·검색 띠)
+- 남은 것 중 값이 `.pdf`로 끝나면 가점 → 그래도 여럿이면 맨 아래(파일이름 칸은 버튼 바로 위)
+- **`.pdf` 텍스트는 보조 신호일 뿐** — 실측에서 이 칸의 `GetWindowText`가 빈 문자열로 왔다
+  (다른 프로세스 소유라 항상 읽히지 않는다). 본체는 제외 규칙이다
+
+**최소화된 창도 `IsWindowVisible`은 True** — 덤프에 `기록 및 재생`과 `SAP Logon 740`이
+좌표 -32000대로 찍혀 나왔다. 제목이 우연히 겹치면 엉뚱한 창을 누르므로 `IsIconic`으로 뺀다.
+
+**좌표가 전부 음수였다**(-2319 ~ -1375) — 보조 모니터가 주 모니터 왼쪽에 있는 배치다.
+좌표 클릭(`mouse_event`)이었다면 멀티모니터 보정이 필요했다. `SendMessage(BM_CLICK)`
+방식이라 영향 없음 — **네이티브 창 조작은 메시지 기반으로 할 것.**
+
+> **교훈**: 컨트롤을 "구조"로 찾겠다고 정한 뒤에도, 그 구조가 **어느 창의 구조인지**는
+> 실측해야 안다. 한 창에서 맞는 표시가 다른 창에선 함정이다.
+> 다음부터는 `/sap-dump-windows`가 **컨트롤 ID까지** 찍어주므로 ID로 직결할 것.
