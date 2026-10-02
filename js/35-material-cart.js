@@ -178,7 +178,7 @@
                 + '<div id="matcart-drag" style="padding:10px 14px; background:#e7f3ff;'
                 + ' border-bottom:1px solid #a5c8f0; color:#1971c2; cursor:move; display:flex;'
                 + ' align-items:center; gap:8px; flex:0 0 auto;">'
-                + '<b style="font-size:14px;">🧺 ' + T('자재 보관함', 'Material Cart') + '</b>'
+                + '<strong style="font-size:14px;">🧺 ' + T('자재 보관함', 'Material Cart') + '</strong>'
                 + '<span id="matcart-count" style="font-size:12px; opacity:.8;"></span>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="document.getElementById(\'matcart-modal\').style.display=\'none\'"'
