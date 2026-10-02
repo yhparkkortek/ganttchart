@@ -2996,25 +2996,29 @@ def _migo_post_by_reservation(session, rsnum, posting_date):
     }
 
 
-def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
-                         lgort_default='5000', text=None, rsdat=None, bwart='907',
-                         wempf=None):
-    """반납 입고 전체 자동화: MB21 반납 예약(이동유형 907) 생성 + F00151 실전기.
-    실사용 VBS "반납입고.vbs" 기반(2026-10-01).
-    ⚠️ 실제 SAP 전기(재고/회계 영향) — 사람이 확인 후 호출할 것.
+def create_reservation(items, bwart='951', order_number=None, cost_center=None,
+                       werks='1000', lgort_default=None, rsdat=None, wempf=None, text=None):
+    """MB21 예약(계정대체 청구서) 생성 — 전기(MIGO)는 하지 않는다.
 
-    items: [{matnr, qty, unit?, lgort?}]  ex) [{'matnr':'502573','qty':'2','unit':'EA'}]
-    order_number: 내부오더번호 (직접 입력, 필수)
-    cost_center: 원가센터 (None이면 F4 첫번째)
-    lgort_default: items에 lgort 없을 때 기본 저장위치
-    text: 품목텍스트 (ex. 'LNW>STELLAR_32>PROTO B 반납')
-    rsdat: 전기일자 YYYYMMDD (None이면 오늘)
-    반환: {ok, rsnum, material_document, text}
+    [2026-10-02 신규, 사용자 요청] 자재 보관함(js/35)에 담아둔 자재를 모아 한 번에 청구서를
+    만들기 위한 진입점. 사용자 확인: **최종 산출물은 ZMM019(계정대체청구서) PDF이고 MIGO는
+    거의 쓰지 않는다** — 그래서 예약 생성에서 끝낸다.
+
+    bwart: 951=연구개발 출고(자재청구) / 907=개발 입고(자재반납). 기본 저장위치는 호출부가
+           lgort_default로 넘긴다(951→1000, 907→5000 — js/32 SAP_MB21_MOVEMENT_TYPES가 원본).
+    items: [{matnr, qty, unit?, lgort?}] — MB21 신규품목 화면(521)은 **한 화면에 28행**이므로
+           그보다 많으면 호출부가 나눠서 여러 번 부른다(js/35가 분할 처리).
+    order_number/cost_center: 오더·코스트센터 모두 필수(사용자 확인).
+
+    ⚠️ 실제 SAP 예약이 생성된다 — 사람이 확인한 뒤에만 호출할 것.
+    반환: {ok, rsnum, bwart, itemCount, text}
     """
     if not items:
         raise RuntimeError('자재 목록(items)이 비어 있습니다.')
     if not order_number:
-        raise RuntimeError('내부오더번호(order_number)를 지정해주세요.')
+        raise RuntimeError('오더번호(order_number)를 지정해주세요.')
+    if lgort_default is None:
+        lgort_default = '1000' if str(bwart) == '951' else '5000'
 
     session = _get_sap_session()
     _sap_close_stray_popups(session)
@@ -3207,6 +3211,46 @@ def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
         raise RuntimeError(
             f'MB21 저장 후 예약번호를 확인하지 못했습니다. (상태바: "{sbar_save}")\n'
             '이동유형/오더번호/원가센터가 올바른지 확인해주세요.')
+
+    return {
+        'ok': True, 'rsnum': rsnum, 'bwart': str(bwart),
+        'itemCount': len([i for i in items if str(i.get('matnr', '')).strip()]),
+        'sbar': sbar_save,
+        'text': (f'예약(계정대체청구서) 생성 완료 — 예약번호 {rsnum} '
+                 f'(이동유형 {bwart}, 품목 {len(items)}건). ZMM019에서 PDF로 출력하세요.'),
+    }
+
+
+def migo_return_receipt(items, order_number, cost_center=None, werks='1000',
+                         lgort_default='5000', text=None, rsdat=None, bwart='907',
+                         wempf=None):
+    """반납 입고 전체 자동화: MB21 반납 예약(이동유형 907) 생성 + F00151 실전기.
+    실사용 VBS "반납입고.vbs" 기반(2026-10-01).
+    ⚠️ 실제 SAP 전기(재고/회계 영향) — 사람이 확인 후 호출할 것.
+
+    items: [{matnr, qty, unit?, lgort?}]  ex) [{'matnr':'502573','qty':'2','unit':'EA'}]
+    order_number: 내부오더번호 (직접 입력, 필수)
+    cost_center: 원가센터 (None이면 F4 첫번째)
+    lgort_default: items에 lgort 없을 때 기본 저장위치
+    text: 품목텍스트 (ex. 'LNW>STELLAR_32>PROTO B 반납')
+    rsdat: 전기일자 YYYYMMDD (None이면 오늘)
+    반환: {ok, rsnum, material_document, text}
+    """
+    if not items:
+        raise RuntimeError('자재 목록(items)이 비어 있습니다.')
+    if not order_number:
+        raise RuntimeError('내부오더번호(order_number)를 지정해주세요.')
+
+    # [2026-10-02 리팩터링] MB21 예약 생성 부분은 create_reservation으로 옮겼다 —
+    #   자재 보관함(자재청구/자재입고 청구서)과 이 반납입고가 같은 MB21 조작을 쓰기 때문.
+    #   동작은 그대로이고, 아래 Phase 2(F00151 실전기)는 이 함수에만 남는다.
+    posting_date = str(rsdat or time.strftime('%Y%m%d'))
+    _res = create_reservation(items, bwart=bwart, order_number=order_number,
+                              cost_center=cost_center, werks=werks,
+                              lgort_default=lgort_default, rsdat=posting_date,
+                              wempf=wempf, text=text)
+    rsnum = _res['rsnum']
+    session = _get_sap_session()
 
     # ── Phase 2: 예약 기반 실전기 (F00151) ───────────────────────────────────
     result = _migo_post_by_reservation(session, rsnum, posting_date)
@@ -5616,6 +5660,22 @@ def main():
             fperbl = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else '1'
             tperbl = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else '12'
             result = fetch_team_budget(team, fperbl, tperbl)
+        elif action == 'create_reservation':
+            # [2026-10-02] 자재 보관함 → MB21 예약(계정대체청구서) 생성. MIGO 전기는 하지 않는다.
+            import json as _json3
+            items_arg   = _json3.loads(sys.argv[2]) if len(sys.argv) > 2 else []
+            bwart_arg   = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '951'
+            order_arg   = sys.argv[4] if len(sys.argv) > 4 else ''
+            kostl_arg   = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5].strip() else None
+            werks_arg   = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6].strip() else '1000'
+            lgort_arg   = sys.argv[7] if len(sys.argv) > 7 and sys.argv[7].strip() else None
+            rsdat_arg   = sys.argv[8] if len(sys.argv) > 8 and sys.argv[8].strip() else None
+            wempf_arg   = sys.argv[9] if len(sys.argv) > 9 and sys.argv[9].strip() else None
+            text_arg    = sys.argv[10] if len(sys.argv) > 10 and sys.argv[10].strip() else None
+            result = create_reservation(
+                items_arg, bwart=bwart_arg, order_number=order_arg, cost_center=kostl_arg,
+                werks=werks_arg, lgort_default=lgort_arg, rsdat=rsdat_arg,
+                wempf=wempf_arg, text=text_arg)
         elif action == 'migo_return_receipt':
             import json as _json2
             items_arg   = _json2.loads(sys.argv[2]) if len(sys.argv) > 2 else []

@@ -277,6 +277,12 @@
         } else {
             // 행을 클릭하면 조회 기능 선택 드롭다운이 표시되는 인터랙티브 표
             var shown = list.slice(0, 150);
+            // 🧺 [2026-10-02] 자재번호 → 자재내역 캐시. 자재 보관함(js/35)에 담을 때 내역을 같이
+            //    넣어주기 위한 것 — 칩 팝업은 자재번호만 들고 있어서 이게 없으면 보관함이 번호만 남는다.
+            try {
+                window._sapLastPatternDesc = window._sapLastPatternDesc || {};
+                list.forEach(function (x) { if (x && x.matnr) window._sapLastPatternDesc[x.matnr] = x.desc || ''; });
+            } catch (e) { /* 캐시 실패는 기능에 영향 없음 */ }
             var en = window._currentLang === 'en';
             var hdr = '<div style="font-size:12px; margin-bottom:6px;">🔎 '
                 + T('자재내역 "' + pattern + '" 패턴 매치 ' + list.length + '건', 'Description pattern "' + pattern + '" matched ' + list.length + ' material(s)')

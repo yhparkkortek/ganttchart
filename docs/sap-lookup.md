@@ -1637,3 +1637,59 @@ Claude Code는 실행 위치가 여러 가지이고, **SAP 접근 가능 여부�
 ⚠️ **실데이터 테스트에서 잡은 함정**: ZMM006 출력에서 단가가 실제로 들어오는 칸은 `NETPR_G`이고
 `NETPR`·`KBETR`은 비어 있었다. `NETPR`만 우선 컬럼에 두면 **단가가 접힌 영역으로 숨는다** —
 셋 다 앞에 둔다(빈 값은 렌더러가 알아서 감춘다). 새 조회를 붙일 때도 실제 출력으로 한 번 돌려볼 것.
+
+### 🧺 자재 보관함 → 계정대체 청구서 (MB21 → ZMM019, 2026-10-02 사용자 요청)
+
+**요구**: 자재를 여러 번 검색해 가며 담아 두었다가 모아서 한 번에 청구서를 만든다.
+**사용자 확인 사항 (설계 전제)**
+
+| 항목 | 답 |
+|---|---|
+| 최종 산출물 | **ZMM019(계정대체청구서) PDF**. MIGO는 거의 쓰지 않음 → **예약 생성에서 끝낸다** |
+| 계정지정 | 오더·코스트센터·**기타(COBL_MORE)까지 모두 필수 선택** |
+| 기본 저장위치 | 951(원자재 청구)=**1000 자재창고** / 907(반납)=**5000**. 드롭다운으로 바꿀 수 있고 미지정이면 기본값 |
+| 28건 초과 | 예약을 여러 건으로 **쪼개서** 생성 |
+
+**⚠️ 이름 주의**: Phase 1의 "업무 보관함"(`js/14c-task-inbox.js`, 메일→업무 스테이징)과 **다른 물건**이다.
+이쪽은 SAP 자재 청구용 장바구니(`js/35-material-cart.js`).
+
+**흐름**
+```
+자재 조회(패턴/칩 팝업) ──[🧺 담기]──▶ 자재 보관함(localStorage)
+                                          │ 수량·저장위치 편집
+                                          ▼
+                    [청구서 만들기] ──▶ POST /sap-create-reservation
+                                          ▼
+                              create_reservation() → MB21 예약 생성
+                                          ▼
+                                  예약번호(RSNUM) 반환
+                                          ▼
+                              ZMM019에서 PDF 출력  ← **미구현(덤프 필요)**
+```
+
+**MB21 신규품목 화면(521) 필드 — 2026-10-02 덤프로 확인**
+
+| 용도 | ID |
+|---|---|
+| 이동유형(표시) / 명칭 | `usr/ctxtRKPF-BWART` / `usr/txtKM07R-BTEXT`("연구개발 출고") |
+| 자재 수령인 | `usr/txtRKPF-WEMPF` |
+| 코스트센터 / 오더 / 기타 | `usr/subBLOCK:SAPLKACB:1002/` 아래 `ctxtCOBL-KOSTL` · `ctxtCOBL-AUFNR` · `btnCOBL_MORE` |
+| 품목 그리드 | `usr/sub:SAPMM07R:0521/` 아래 `ctxtRESB-MATNR[N,7]` `txtRESB-ERFMG[N,26]` `ctxtRESB-ERFME[N,44]` `ctxtRESB-WERKS[N,48]` `ctxtRESB-LGORT[N,53]` |
+
+**📏 한 화면 28행(RSPOS 1~28)** — `window.SAP_RESERVATION_MAX_ITEMS`(js/32, 데이터).
+보관함이 더 많으면 프런트가 28건씩 끊어 `/sap-create-reservation`을 여러 번 부른다.
+
+**리팩터링**: MB21 예약 생성 부분을 `migo_return_receipt`에서 **`create_reservation()`으로 추출**했다
+(반납입고와 자재청구가 같은 MB21 조작을 쓰기 때문). `migo_return_receipt`는 이제
+`create_reservation()` 호출 + Phase 2(F00151 실전기)만 남는다 — 동작은 그대로지만
+**반납입고는 SAP 실환경 회귀 테스트가 필요하다**(클라우드에서 검증 불가).
+
+**데이터로 분리한 것**(새 플랜트·창고·이동유형은 코드가 아니라 여기에 추가):
+`SAP_MB21_MOVEMENT_TYPES`(이동유형 + `defaultLgort`) · `SAP_PLANTS` · `SAP_STORAGE_LOCATIONS` ·
+`SAP_RESERVATION_MAX_ITEMS` — 전부 `js/32-sap-capabilities.js`.
+플랜트/저장위치는 `<datalist>`라 **목록에 없는 코드도 직접 입력**된다(해외 공장 대비).
+
+**🚧 아직 못 한 것 — 덤프가 있어야 한다**
+1. **ZMM019 PDF 출력** — 최종 산출물인데 ZMM019는 선택화면 덤프만 있고 실행 후 리스트/출력 경로를 모른다.
+2. **COBL_MORE "기타"** — 필수 입력인데 그 화면에 무엇이 있는지 모른다. 현재 코드는 오더·코스트센터만 넣는다.
+3. VINA 등 해외 플랜트 코드 — `SAP_PLANTS`에 1000만 있다(직접 입력은 가능).

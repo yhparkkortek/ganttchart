@@ -1812,13 +1812,17 @@ ${question}
         if (matType !== 'finished') buttons.push({ label: '🏭 공급업체 조회', value: matnr + ' 공급업체 조회해줘', style: 'sap' });
         if (matType !== 'finished') buttons.push({ label: '🛒 구매정보 조회', value: matnr + ' 구매 정보 레코드 조회해줘', style: 'sap' });
         buttons.push(
-            { label: '🔧 상태변경이력', value: matnr + ' 변경이력 확인해줘', style: 'sap' }
+            { label: '🔧 상태변경이력', value: matnr + ' 변경이력 확인해줘', style: 'sap' },
+            // 🧺 [2026-10-02 신규] 자재 보관함 담기 — 조회가 아니라 로컬 장바구니 적재라
+            //    질문을 보내지 않고 action으로 바로 처리한다(아래 _resolvedButtons 분기).
+            { label: '🧺 담기',        action: 'cartAdd', style: 'sap' }
         );
 
         // action 버튼 처리: docLookup/docSave는 직접 문서타입 드롭다운을 띄움
         var _resolvedButtons = buttons.map(function(b) {
             if (b.action === 'docLookup') return { label: b.label, value: '__docLookup__' + matnr, style: b.style };
             if (b.action === 'docSave')   return { label: b.label, value: '__docSave__'   + matnr, style: b.style };
+            if (b.action === 'cartAdd')   return { label: b.label, value: '__cartAdd__'   + matnr, style: b.style };
             return b;
         });
 

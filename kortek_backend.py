@@ -2990,6 +2990,39 @@ def po_goods_receipt():
 #                   /sap-mcp-health, /ai-sap-chat
 
 
+@app.route('/sap-create-reservation', methods=['POST'])
+def sap_create_reservation():
+    """🧺 [2026-10-02] 자재 보관함 → MB21 예약(계정대체청구서) 생성.
+    Body JSON: {items:[{matnr,qty,unit?,lgort?}], bwart, order_number, cost_center,
+                werks?, lgort_default?, rsdat?, wempf?, text?}
+    ⚠️ 실제 SAP 예약이 생성된다 — 프런트(js/35)가 사람 확인을 받은 뒤에만 호출한다.
+    MIGO 전기는 하지 않는다(최종 산출물은 ZMM019 PDF)."""
+    import json as _j
+    body = request.get_json(force=True, silent=True) or {}
+    items = body.get('items') or []
+    if not items:
+        return jsonify({'ok': False, 'error': '담긴 자재가 없습니다.'}), 400
+    bwart        = (body.get('bwart') or '951').strip()
+    order_number = (body.get('order_number') or '').strip()
+    cost_center  = (body.get('cost_center') or '').strip()
+    if not order_number:
+        return jsonify({'ok': False, 'error': '오더번호가 필요합니다.'}), 400
+    if not cost_center:
+        return jsonify({'ok': False, 'error': '코스트센터가 필요합니다.'}), 400
+    werks = (body.get('werks') or '1000').strip()
+    lgort = (body.get('lgort_default') or '').strip()
+    rsdat = (body.get('rsdat') or '').strip()
+    wempf = (body.get('wempf') or '').strip()
+    text  = (body.get('text') or '').strip()
+    # 품목 수에 비례해 넉넉히 — MB21은 자재당 입력+엔터라 건수가 곧 시간이다
+    timeout = min(90 + len(items) * 6, 300)
+    data, status = _run_sap_bridge(
+        ['create_reservation', _j.dumps(items, ensure_ascii=False), bwart, order_number,
+         cost_center, werks, lgort, rsdat, wempf, text],
+        timeout, f'MB21 예약 생성(이동유형 {bwart}, {len(items)}건)')
+    return jsonify(data), status
+
+
 @app.route('/sap-mard-stock', methods=['GET'])
 def sap_mard_stock():
     # 💰 [2026-10-01] MM03 '회계 1' LBKUM(일반평가데이타)로 전체 플랜트 재고 반환.

@@ -82,12 +82,31 @@
     //    새 표현이 나오면 여기 한 줄만 추가하면 로컬 명령/라우터가 같이 따라온다.
     //    ⚠️ 이동유형은 사내 설정값이라 표준 SAP 관례로 추측하면 틀린다(261을 넣었다가 SAP이
     //    "261에 대한 예약이 불가능합니다"로 거절한 실사례 — docs/sap-lookup.md 참고).
+    //    [2026-10-02] title은 MB21 신규품목 화면(521)의 KM07R-BTEXT가 실제로 보여주는 문구로 맞췄다.
+    //    defaultLgort = 그 이동유형의 기본 저장위치(951 원자재 청구=1000 자재창고 / 907 반납=5000).
+    //    사용자가 자재 보관함에서 바꿀 수 있고(datalist), 비워 두면 이 값이 적용된다.
     window.SAP_MB21_MOVEMENT_TYPES = window.SAP_MB21_MOVEMENT_TYPES || [
-        { bwart: '951', title: '개발 출고처리', titleEn: 'Dev goods issue',
+        { bwart: '951', title: '연구개발 출고', titleEn: 'R&D goods issue', defaultLgort: '1000',
           kw: ['계정대체청구서', '계정대체', '자재청구서', '자재청구', '자재출고'] },
-        { bwart: '907', title: '개발 입고처리', titleEn: 'Dev goods receipt',
+        { bwart: '907', title: '개발 입고처리', titleEn: 'Dev goods receipt', defaultLgort: '5000',
           kw: ['자재입고', '자재반납', '반납입고'] }
     ];
+
+    // 🏭 [2026-10-02] 플랜트 / 저장위치 드롭다운 후보(데이터).
+    //    자재 보관함은 이 목록을 <datalist>로 띄우므로 **목록에 없는 코드도 직접 입력**할 수 있다
+    //    (해외 공장 등). 새 코드가 확정되면 코드가 아니라 여기에 한 줄만 추가할 것.
+    //    ⚠️ VINA(해외) 플랜트 코드는 아직 확인 전 — 확인되면 아래에 추가.
+    window.SAP_PLANTS = window.SAP_PLANTS || [
+        { code: '1000', label: '코텍 송도 공장', labelEn: 'Kortek Songdo' }
+    ];
+    window.SAP_STORAGE_LOCATIONS = window.SAP_STORAGE_LOCATIONS || [
+        { code: '1000', label: '자재창고 (951 기본)', labelEn: 'Material store (951 default)' },
+        { code: '5000', label: '반납 입고 (907 기본)', labelEn: 'Return receipt (907 default)' }
+    ];
+
+    // 📏 [2026-10-02 덤프 확인] MB21 신규품목 화면(521)의 품목 그리드는 한 화면에 28행(RSPOS 1~28).
+    //    보관함이 이보다 많으면 예약을 여러 건으로 나눠 생성한다(사용자 선택: 쪼개기).
+    window.SAP_RESERVATION_MAX_ITEMS = window.SAP_RESERVATION_MAX_ITEMS || 28;
     /** 문장에서 MB21 이동유형을 고른다(없으면 null) — 결정론적, AI 호출 없음. */
     window._sapMb21MovementType = function (text) {
         var q = String(text || '').toLowerCase();
@@ -124,6 +143,10 @@
     };
 
     window.SAP_CAPABILITIES = [
+        { id: 'matcart', title: '자재 보관함 → 계정대체 청구서(MB21)', titleEn: 'Material cart → reservation (MB21)',
+          tcode: 'MB21 → ZMM019', mode: 'write', verified: 'unverified',
+          kw: ['자재 보관함', '자재보관함', '계정대체청구서', '자재청구서', '자재청구', '자재출고', '자재입고', '자재반납', '장바구니'],
+          needs: '담아둔 자재 + 오더 + 코스트센터', ex: '🧺 담기로 모은 뒤 "청구서 만들기"' },
         { id: 'bom', title: 'BOM 전개', titleEn: 'BOM explosion', tcode: 'ZPP033 / ZPP038', mode: 'read', verified: 'live',
           kw: ['bom', '구성품', '부품구성', '전개', 'explosion'], needs: '자재번호', ex: '502572 BOM 보여줘' },
         { id: 'whereused', title: '사용처(역전개)', titleEn: 'Where-used', tcode: 'CS15 / ZPP046', mode: 'read', verified: 'live',

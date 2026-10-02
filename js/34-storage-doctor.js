@@ -36,7 +36,11 @@
         { key: 'gantt_task_inbox_deleted',        label: '보관함 삭제 기록(기기 간 동기화용)', labelEn: 'Inbox deletion tombstones', cls: 'log', strategy: { type: 'array', keep: 300, order: 'newest-last' } },
         { key: 'ms_discard_queue',                label: '자동 폐기된 메일 목록',            labelEn: 'Auto-discarded mails',    cls: 'log',   strategy: { type: 'array', keep: 50, order: 'newest-first' } },
         // 메일 서버 검토 큐 — 등록 완료 건의 본문을 줄이고 예산 초과분(오래된 것부터)을 뺀다(js/15b _msSlimQueue). 검토 대기 건 본문은 보존.
-        { key: 'ms_pending_queue',                label: '메일 검토 큐(등록 완료 메일 본문 축소)', labelEn: 'Mail review queue (shrink done mails)', cls: 'log', strategy: { type: 'fn', fn: '_msSlimQueue' } }
+        { key: 'ms_pending_queue',                label: '메일 검토 큐(등록 완료 메일 본문 축소)', labelEn: 'Mail review queue (shrink done mails)', cls: 'log', strategy: { type: 'fn', fn: '_msSlimQueue' } },
+        // 🧺 [2026-10-02 신규] 자재 보관함(js/35) — SAP 자재청구/입고 전 담아두는 장바구니.
+        //    사람이 직접 담은 것이라 자동 정리 대상(cache)으로 두면 안 된다 — log로 두고 확인 후에만 줄인다.
+        { key: 'gantt_matcart_items_v1',          label: '자재 보관함(담아둔 자재)',          labelEn: 'Material cart items',     cls: 'log',   strategy: { type: 'array', keep: 200, order: 'newest-last' } },
+        { key: 'gantt_matcart_hdr_v1',            label: '자재 보관함 공통입력(오더/수령인 등)', labelEn: 'Material cart header',  cls: 'cache', strategy: { type: 'drop' } }
     ];
 
     function sizeOf(key) { try { return (localStorage.getItem(key) || '').length; } catch (e) { return 0; } }

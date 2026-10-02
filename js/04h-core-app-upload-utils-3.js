@@ -4039,6 +4039,24 @@ ${docsJson}`;
         let question = input.value.trim();
         if (!question) return;
 
+        // 🧺 [2026-10-02] 자재 선택 팝업의 "담기" — SAP 조회가 아니라 로컬 장바구니 적재라
+        //    AI/백엔드를 거치지 않고 여기서 바로 처리하고 끝낸다. 수량은 1로 담고
+        //    보관함 모달에서 고친다(장바구니 통상 동작). 자재내역은 패턴조회가 캐시해 둔 게 있으면 쓴다.
+        if (question.indexOf('__cartAdd__') === 0) {
+            const _cartMat = question.replace(/^__cartAdd__/, '').trim();
+            input.value = '';
+            if (window._mcAdd) {
+                let _desc = '';
+                try { _desc = (window._sapLastPatternDesc && window._sapLastPatternDesc[_cartMat]) || ''; } catch (e) { /* 내역 없으면 빈 값 */ }
+                window._mcAdd(_cartMat, _desc, { qty: 1 });
+            } else if (window.showToast) {
+                window.showToast(window._t('자재 보관함이 아직 로드되지 않았습니다. 새로고침 후 다시 시도해주세요.',
+                    'Material cart is not loaded yet — please refresh and retry.'), 'error');
+            }
+            input.focus();
+            return;
+        }
+
         // 🔍📥 [2026-10-01] 자재 선택 팝업의 "문서 조회"/"문서 저장" — 문서 종류 드롭다운을 띄우고 종료
         if (question.indexOf('__docLookup__') === 0 || question.indexOf('__docSave__') === 0) {
             const _isLookup = question.indexOf('__docLookup__') === 0;
