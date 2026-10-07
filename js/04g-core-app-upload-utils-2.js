@@ -737,15 +737,21 @@
         });
         const needsPanel = !!(pc.selectedModels && pc.selectedModels.length && window.loadPanelLibrary && window.findPanelInLibrary && !window._epLibCache.panel);
         let otherProjectsRaw = [];
+        // 🐛 [2026-10-07 버그 수정] catch에서 window._epLibCache[type]에 직접 빈 값을 박아넣던 것을
+        //    제거 — loadElecPartLibrary/loadPanelLibrary가 이제 자체적으로 _epLibCache를 캐싱하는데
+        //    (성공했을 때만 채움), 여기서 실패 시 빈 값을 먼저 써버리면 다음부터 영영 재시도를 안 하고
+        //    그 세션 내내 "데이터 없음"으로 고정되는 사고가 생긴다(8초 타임아웃 한 번만 걸려도 발생).
+        //    실패해도 캐시는 그대로 비워두고(=다음 호출에서 재시도), 이번 한 번의 렌더링에서만 빈
+        //    값으로 취급한다(아래 lib 참조부에서 || {items:[]} 폴백).
         await Promise.all(
             typesToFetch.map(function(type) {
                 return window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과')
                     .then(function(lib) { window._epLibCache[type] = lib; })
-                    .catch(function() { window._epLibCache[type] = { items: [] }; });
+                    .catch(function() { /* 캐시에 빈 값을 쓰지 않음 — 다음 호출에서 다시 시도되게 둠 */ });
             }).concat(needsPanel ? [
                 window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과')
                     .then(function(lib) { window._epLibCache.panel = lib; })
-                    .catch(function() { window._epLibCache.panel = { items: [] }; })
+                    .catch(function() { /* 캐시에 빈 값을 쓰지 않음 — 다음 호출에서 다시 시도되게 둠 */ })
             ] : []).concat([
                 (window._msLoadProjectIndex ? window._msLoadProjectIndex() : Promise.resolve([]))
                     .then(function(list) { otherProjectsRaw = list || []; })
