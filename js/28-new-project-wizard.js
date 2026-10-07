@@ -320,6 +320,12 @@ function _fillSummaryFields() {
     setVal('sum-pm',            d.pm        || '');
     setVal('sum-mail-keywords', d.keywords  || '');
 
+    // 🐛 [2026-10-07 버그 수정] 위 setVal('sum-pm', ...)이 발생시킨 input 이벤트가 이름 자동완성
+    //    추천 박스를 띄우는데, 사람이 연 게 아니라 닫힐 계기(blur)가 없어 화면 어딘가(보통 탭을
+    //    이동한 뒤라 좌상단)에 계속 떠 있던 문제 — 프로그램적으로 값을 채운 직후엔 항상 닫아준다.
+    const _acDropdown = document.getElementById('addr-autocomplete-dropdown');
+    if (_acDropdown) _acDropdown.style.display = 'none';
+
     // PROTO Start (시작일)
     if (d.startDate) {
         const dateEl = document.getElementById('sum-ms-plan-protostart');
@@ -342,13 +348,17 @@ function _fillSummaryFields() {
     // MC Table 구분자 초기화
     const units = d.mcUnits || [];
     if (units.length && window.tabData) {
+        // 🐛 [2026-10-07 버그 수정] getMcUnits()/mcNormalizeAfterLoad()가 실제로 보는 필드는
+        //    tabData.mcRevisionsByUnit가 아니라 tabData.mcUnits(평평한 배열)다 — 이걸 안 채워서
+        //    저장 후 재로드하면 "구분자 없음"으로 판정되어 이름 짓기 팝업이 다시 뜨던 버그.
+        window.tabData.mcUnits = units.slice();
         if (!window.tabData.mcRevisionsByUnit) window.tabData.mcRevisionsByUnit = {};
         units.forEach(function(u) {
-            if (!window.tabData.mcRevisionsByUnit[u]) window.tabData.mcRevisionsByUnit[u] = [];
+            if (!window.tabData.mcRevisionsByUnit[u]) window.tabData.mcRevisionsByUnit[u] = {}; // 다른 곳과 동일하게 객체(리비전명→행)
         });
         // 첫 번째 구분자를 활성으로 설정
         if (units[0]) window.mcActiveUnit = units[0];
-        if (window.renderMcTabs) window.renderMcTabs();
+        if (window.mcRenderUnitTabs) window.mcRenderUnitTabs(); // 🐛 존재하지 않던 함수명(renderMcTabs) 수정
     }
 
     // 필수필드 하이라이트 갱신
@@ -366,7 +376,12 @@ function _applyToSummary() {
         if (btn) btn.click();
     }
 
-    setTimeout(_fillSummaryFields, 100);
+    setTimeout(function() {
+        _fillSummaryFields();
+        // 🆕 [2026-10-07] 필수 정보 입력 완료 직후 자동 저장 — 비밀번호 확인은 saveToGoogleDrive
+        //    내부(_saveToGoogleDriveRaw, 신규 파일 생성 시점)에서 그대로 진행되고, 통과하면 바로 저장됨.
+        if (window.saveToGoogleDrive) window.saveToGoogleDrive();
+    }, 100);
     // 🐛 [2026-10-07] 참조 엑셀 자동 가져오기(_npwOpen에서 시작)가 이 시점까지 안 끝났을 경우를 대비한
     //    안전장치 — 참조 엑셀의 Summary 시트 값(보통 빈 템플릿)이 뒤늦게 적용되어 방금 입력한 값을
     //    덮어쓰는 것을 막기 위해, 넉넉한 지연 후 위자드 입력값으로 한 번 더 확정한다.
@@ -409,7 +424,7 @@ window._npwNext = function() {
         // 완료
         _applyToSummary();
         window._npwClose();
-        if (window.showToast) window.showToast(window._t('✅ 프로젝트 정보를 입력했습니다. 확인 후 저장해주세요.', '✅ Project info filled in. Please review and save.'), 'success', 4000);
+        if (window.showToast) window.showToast(window._t('✅ 프로젝트 정보를 입력했습니다. 자동 저장 중...', '✅ Project info filled in. Auto-saving...'), 'success', 4000);
         return;
     }
     _step++;
