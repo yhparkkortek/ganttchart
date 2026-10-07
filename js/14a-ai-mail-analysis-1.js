@@ -14,7 +14,13 @@ window.showMailAnalyzer = function() {
     // 💡 [버그 수정] getSystemPrompt()가 아니라 _msBuildDefaultPrompt()를 직접 호출 — localStorage에
     //    저장된(오염됐을 수 있는) 프롬프트를 거치지 않고 항상 진짜 코드 기본값을 담도록 함
         if (!window._defaultPromptTemplate) {
-        window._defaultPromptTemplate = window._msBuildDefaultPrompt('${projectAssignee}', '${projectCustomer}', '${projectModel}', '${projectInch}', '${mailText}').replace(new Date().toISOString().split('T')[0], '${todayStr}');
+        // 🐛 [2026-10-07 버그 수정] mailDate 인자가 빠져 있어서(undefined) "메일 발송일" 줄도
+        //    "오늘 날짜" 줄과 똑같이 실제 날짜 문자열로 렌더링됐고, 아래 .replace()는 문자열 치환이라
+        //    맨 처음 1개(오늘 날짜 줄)만 ${todayStr}로 되돌리고 "메일 발송일" 줄은 그 날짜가 그대로
+        //    박혀버렸다 — 이 템플릿을 누군가 저장하면 그 날짜가 영구 고정되어, 이후 모든 메일 분석이
+        //    실제 메일 날짜와 무관하게 그 날짜를 "메일 발송일"로 받는 사고로 이어짐. 다른 인자들과
+        //    동일하게 '${mailDate}' 플레이스홀더 문자열을 그대로 넘겨서 제대로 보존되게 한다.
+        window._defaultPromptTemplate = window._msBuildDefaultPrompt('${projectAssignee}', '${projectCustomer}', '${projectModel}', '${projectInch}', '${mailText}', '${mailDate}').replace(new Date().toISOString().split('T')[0], '${todayStr}');
     }
 
     // 초기화
