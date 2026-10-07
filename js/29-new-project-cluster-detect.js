@@ -27,6 +27,7 @@
 
     var _buffer = {}; // { key: { count, samples:[{subject,snippet,date}], lastSeen } }
     var _flushTimer = null;
+    var _ncdCollapsed = false; // 배너 접힘 상태 — 재렌더(제안 수락/기각) 시에도 유지, 새로고침 시 초기화
 
     // ── ① 결정론적 키워드 추출 (AI 호출 없음) ───────────────────────────
     var _GENERIC_WORDS = ['확인','요청','검토','회신','안내','공유','승인원','견적','문의','회의','자료','작업','일정','보고','완료','진행','참고','송부','제출'];
@@ -179,8 +180,9 @@
         var suggested = (clusters || []).filter(function(c) { return c.status === 'suggested'; });
         if (!suggested.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
         var _en = window._currentLang === 'en';
-        el.style.cssText = 'display:block; margin-bottom:10px; padding:10px 12px; background:#eaf7ea; border:1px solid #a8dab8; border-radius:6px; font-size:11.5px; color:#1f6a3a;';
-        el.innerHTML = suggested.map(function(c) {
+        el.style.cssText = 'display:block; margin-bottom:10px; border:1px solid #a8dab8; border-radius:6px; font-size:11.5px; color:#1f6a3a; overflow:hidden;';
+        var countAll = _en ? (suggested.length + ' new project suggestion(s)') : ('새 프로젝트 제안 ' + suggested.length + '건');
+        var rows = suggested.map(function(c) {
             var v = c.aiVerdict || {};
             var safeKey = String(c.key).replace(/'/g, '');
             var label = v.summary || c.key;
@@ -193,6 +195,22 @@
                 '</span>' +
             '</div>';
         }).join('');
+        el.innerHTML =
+            '<div onclick="window._ncdToggleBanner()" style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; background:#eaf7ea; cursor:pointer; font-weight:bold;">' +
+                '<span>🆕 ' + countAll + '</span>' +
+                '<span id="ncd-banner-arrow">' + (_ncdCollapsed ? '▼' : '▲') + '</span>' +
+            '</div>' +
+            '<div id="ncd-banner-body" style="' + (_ncdCollapsed ? 'display:none;' : 'display:block;') + ' padding:8px 12px; background:#eaf7ea;">' + rows + '</div>';
+    };
+
+    // ── ④-1 배너 접기/펴기 ──────────────────────────────────────────────
+    window._ncdToggleBanner = function() {
+        var body = document.getElementById('ncd-banner-body');
+        var arrow = document.getElementById('ncd-banner-arrow');
+        if (!body || !arrow) return;
+        _ncdCollapsed = body.style.display !== 'none';
+        body.style.display = _ncdCollapsed ? 'none' : 'block';
+        arrow.textContent = _ncdCollapsed ? '▼' : '▲';
     };
 
     // ── ⑤ 제안 수락 — 새 프로젝트 마법사 열기 (실제 Drive 파일 생성은 사람이 마법사에서 완료) ──

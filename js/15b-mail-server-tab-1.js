@@ -8,6 +8,16 @@ const MS_SERVER_URL = 'http://127.0.0.1:5000';
 window._msResults   = [];
 window._msCurrentIdx = -1;
 
+// 🔽 필터 조건 접기/펴기 — 자주 안 쓰는 영역이라 기본 접힘(2026-10-07)
+window.toggleMsFilter = function() {
+    const body = document.getElementById('ms-filter-body');
+    const arrow = document.getElementById('ms-filter-arrow');
+    if (!body || !arrow) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    arrow.textContent = open ? '▼' : '▲';
+};
+
 // 💡 [메일 자동처리 ①] 자동수집 전용 큐 영속성 — 새로고침해도 검토 대기 목록 유지
 const MS_QUEUE_STORAGE_KEY     = 'ms_pending_queue';
 const MS_LAST_AUTO_FETCH_KEY   = 'ms_last_auto_fetch_at';
