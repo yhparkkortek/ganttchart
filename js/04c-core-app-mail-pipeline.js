@@ -107,7 +107,18 @@
     window.findProjectIndexFile = async function(token) {
         if (window._projectIndexFileId) return window._projectIndexFileId;
         const folderId = await window.getOrCreateConfigFolder(token);
-        const id = await window._findOrMigrateFile(token, PROJECT_INDEX_FILENAME, folderId);
+        const id = await window._findOrMigrateFile2(token, PROJECT_INDEX_FILENAME, folderId, {
+            merge: function(contents) {
+                const byId = {}; const order = [];
+                contents.forEach(function(data) {
+                    ((data && Array.isArray(data.projects)) ? data.projects : []).forEach(function(p) {
+                        const key = p && p.drive_file_id;
+                        if (key && !byId[key]) { byId[key] = p; order.push(key); }
+                    });
+                });
+                return Object.assign({}, contents[0] || {}, { projects: order.map(function(k) { return byId[k]; }) });
+            }
+        });
         if (id) window._projectIndexFileId = id;
         return id;
     };

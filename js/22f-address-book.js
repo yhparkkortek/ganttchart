@@ -97,6 +97,17 @@ window.AddressBook = {
     KEY: 'gantt_address_book_shared',
     FILE_NAME: 'AddressBook_Shared.json',
     _driveFileId: null,
+    _mergeCfg: { merge: function(contents) {
+        const base = (contents[0] && Array.isArray(contents[0].addressBook)) ? contents[0].addressBook.slice() : [];
+        const seen = new Set(base.map(function(p) { return String(p.name || '').trim().toLowerCase(); }).filter(Boolean));
+        for (let i = 1; i < contents.length; i++) {
+            ((contents[i] && Array.isArray(contents[i].addressBook)) ? contents[i].addressBook : []).forEach(function(p) {
+                const key = String(p.name || '').trim().toLowerCase();
+                if (key && !seen.has(key)) { seen.add(key); base.push(p); }
+            });
+        }
+        return { addressBook: base, savedAt: new Date().toISOString() };
+    } },
     _syncTimer: null,
     // 💡 [2026-08-24 사고 방지] 마지막으로 Drive에서 확인된(=진짜 존재가 확인된) "내용이 채워진" 인원 수.
     //    프로젝트 자동저장(collectTabData)이 Address 탭을 보지도 않은 채 collectAddressData()를 얼결에
@@ -137,7 +148,7 @@ window.AddressBook = {
         }
         try {
             const folderId = await window.getOrCreateConfigFolder(token);
-            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
+            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile2(token, this.FILE_NAME, folderId, this._mergeCfg);
 
             // 💡 [낙관적 동시성 제어] 파일이 이미 있고(=신규 생성이 아니고) 내가 이전에 읽어둔 savedAt이
             //    있다면, 쓰기 직전 Drive의 "지금" savedAt을 한 번 더 확인한다. 그 사이 달라졌다면 —
@@ -177,7 +188,7 @@ window.AddressBook = {
         if (!token) return null; // 비로그인: 로컬 캐시만 사용
         try {
             const folderId = await window.getOrCreateConfigFolder(token);
-            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
+            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile2(token, this.FILE_NAME, folderId, this._mergeCfg);
             if (!this._driveFileId) return null;
             const response = await gapi.client.drive.files.get({ fileId: this._driveFileId, alt: 'media', supportsAllDrives: true });
             const data = response.result;

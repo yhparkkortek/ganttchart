@@ -898,22 +898,63 @@
     // 💡 [마이그레이션 포함 조회] 이미 팀이 루트에 저장해둔 기존 설정 파일을 "새로 만든 것처럼" 못 찾아서
     //    빈 기본값으로 초기화되는 사고를 막기 위해: 새 하위 폴더에서 먼저 찾고, 없으면 예전 위치(루트)에서
     //    찾아 그 파일을 하위 폴더로 실제로 옮긴다(복제가 아니라 이동 — 되돌리기 쉬움, 데이터 유실 없음).
+    // 💡 [2026-10-07 — 중복 파일 예방/자가치유] Drive는 같은 이름 파일 생성을 막는 잠금이 없어서
+    //    (두 세션이 "없음 확인 → 생성"을 거의 동시에 하면 둘 다 성공 — 실제로
+    //    ElecPartLib_ADBD_Shared.json이 2개 생긴 사고로 확인됨), "안 생기게 완전히 막기"는
+    //    불가능하다. 대신 "생겨도 다음에 누가 열 때 바로 자동으로 합쳐지게" 한다 — 이름이 같은
+    //    파일이 여러 개 발견되면 최신 파일을 기준으로(mergeCfg가 있으면 내용까지 병합해서) 그
+    //    파일에 다시 저장하고, 나머지는 휴지통(복구 가능)으로 치운다.
+    window._mergeDuplicateDriveFiles = async function(token, files, mergeCfg) {
+        const newest = files[0];
+        try {
+            if (mergeCfg) {
+                const contents = await Promise.all(files.map(function(f) {
+                    return fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media&supportsAllDrives=true`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).then(function(r) { return r.json(); }).catch(function() { return null; });
+                }));
+                const merged = mergeCfg.merge(contents);
+                if (merged !== null && merged !== undefined) {
+                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${newest.id}?uploadType=media&supportsAllDrives=true`, {
+                        method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(merged)
+                    });
+                }
+            }
+            // 나머지 중복은 휴지통으로(영구삭제 아님 — Drive에서 30일 내 복구 가능)
+            await Promise.all(files.slice(1).map(function(f) {
+                return fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?supportsAllDrives=true`, {
+                    method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true })
+                }).catch(function() {});
+            }));
+            console.warn(`⚠️ [Drive 중복 파일 자동정리] "${newest.name}" 동일 이름 ${files.length}개 → 1개로 정리(나머지는 휴지통, 복구 가능)`, files);
+        } catch (e) { console.warn('중복 파일 정리 실패(일단 최신본만 사용):', e.message); }
+        return newest.id;
+    };
+
     window._findOrMigrateFile = async function(token, fileName, targetFolderId) {
+        return window._findOrMigrateFile2(token, fileName, targetFolderId, null);
+    };
+    window._findOrMigrateFile2 = async function(token, fileName, targetFolderId, mergeCfg) {
         const qSub = `name='${fileName}' and trashed=false and '${targetFolderId}' in parents`;
-        const subRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qSub)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+        const subRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qSub)}&orderBy=modifiedTime%20desc&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,modifiedTime)`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const subData = await subRes.json();
-        if (subData.files && subData.files.length > 0) return subData.files[0].id;
+        if (subData.files && subData.files.length > 0) {
+            if (subData.files.length > 1) return window._mergeDuplicateDriveFiles(token, subData.files, mergeCfg);
+            return subData.files[0].id;
+        }
 
         const qRoot = `name='${fileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-        const rootRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qRoot)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+        const rootRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qRoot)}&orderBy=modifiedTime%20desc&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,modifiedTime)`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const rootData = await rootRes.json();
         if (!rootData.files || !rootData.files.length) return null; // 어디에도 없음 — 신규 파일
 
-        const oldId = rootData.files[0].id;
+        const oldId = rootData.files.length > 1
+            ? await window._mergeDuplicateDriveFiles(token, rootData.files, mergeCfg)
+            : rootData.files[0].id;
         try {
             await fetch(`https://www.googleapis.com/drive/v3/files/${oldId}?addParents=${targetFolderId}&removeParents=${SHARED_FOLDER_ID}&supportsAllDrives=true`, {
                 method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
@@ -1242,7 +1283,18 @@
 
     window.findHolidayDriveFile = async function(token) {
         const folderId = await window.getOrCreateConfigFolder(token);
-        return window._findOrMigrateFile(token, HOLIDAY_DRIVE_FILENAME, folderId);
+        return window._findOrMigrateFile2(token, HOLIDAY_DRIVE_FILENAME, folderId, {
+            merge: function(contents) {
+                const seen = new Set(); const out = [];
+                contents.forEach(function(list) {
+                    (Array.isArray(list) ? list : []).forEach(function(h) {
+                        const key = (h && h.date) + '|' + (h && (h.endDate || h.date));
+                        if (h && h.date && !seen.has(key)) { seen.add(key); out.push(h); }
+                    });
+                });
+                return out;
+            }
+        });
     };
 
     // 💡 드라이브에서 팀 공용 휴일 목록을 받아와 로컬 캐시(localStorage)에 반영 (미연동이면 조용히 종료)

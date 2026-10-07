@@ -12,7 +12,20 @@ window._panelLibFileId = null;
 window.findPanelLibFile = async function(token) {
     if (window._panelLibFileId) return window._panelLibFileId;
     const folderId = await window.getOrCreateConfigFolder(token);
-    const id = await window._findOrMigrateFile(token, PANEL_LIB_FILENAME, folderId);
+    const id = await window._findOrMigrateFile2(token, PANEL_LIB_FILENAME, folderId, {
+        merge: function(contents) {
+            const byModel = {}; const order = [];
+            contents.forEach(function(data) {
+                ((data && Array.isArray(data.panels)) ? data.panels : []).forEach(function(p) {
+                    const key = String(p.model || '').trim().toLowerCase();
+                    if (!key) return;
+                    if (!byModel[key] || String(p.updatedAt || '') > String(byModel[key].updatedAt || '')) byModel[key] = p;
+                    if (order.indexOf(key) === -1) order.push(key);
+                });
+            });
+            return { panels: order.map(function(k) { return byModel[k]; }) };
+        }
+    });
     if (id) window._panelLibFileId = id;
     return id;
 };
@@ -1090,12 +1103,24 @@ window._epFlatFields = function(type) {
 
 // ─── 팀 공용 전기부품 스펙 라이브러리 (AddressBook/project_index.json·Panel Compare와 동일한 Drive 업서트 패턴) ───
 window._epLibFileIds = {};
+window._epMergeCfg = { merge: function(contents) {
+    const byModel = {}; const order = [];
+    contents.forEach(function(data) {
+        ((data && Array.isArray(data.items)) ? data.items : []).forEach(function(it) {
+            const key = String(it.model || '').trim().toLowerCase();
+            if (!key) return;
+            if (!byModel[key] || String(it.updatedAt || '') > String(byModel[key].updatedAt || '')) byModel[key] = it;
+            if (order.indexOf(key) === -1) order.push(key);
+        });
+    });
+    return { items: order.map(function(k) { return byModel[k]; }) };
+} };
 window.findElecPartLibFile = async function(type, token) {
     if (window._epLibFileIds[type]) return window._epLibFileIds[type];
     const cfg = window.ELEC_PART_TYPES[type];
     if (!cfg || !cfg.libFilename) return null;
     const folderId = await window.getOrCreateConfigFolder(token);
-    const id = await window._findOrMigrateFile(token, cfg.libFilename, folderId);
+    const id = await window._findOrMigrateFile2(token, cfg.libFilename, folderId, window._epMergeCfg);
     if (id) window._epLibFileIds[type] = id;
     return id;
 };
