@@ -958,6 +958,11 @@ window.mcRenameUnit = function(oldName) {
 // 💡 데이터는 있는데 아직 제품구분자가 하나도 없으면, 자동으로 이름 지정 팝업을 띄움
 //    (엑셀/프로젝트를 불러온 직후 호출됨)
 window.mcCheckNeedsNaming = function() {
+    // 🐛 [2026-10-07 버그 수정] 새 프로젝트 위자드가 열려 있는 동안은 Step1에서 이미 구분자를
+    //    받는 중이므로, 참조 엑셀 자동 가져오기가 유발하는 이 자동 확인 팝업을 띄우지 않는다
+    //    (위자드 질문과 이 팝업이 중복으로 뜨던 버그).
+    const _npwModal = document.getElementById('npw-modal');
+    if (_npwModal && _npwModal.style.display !== 'none') return;
     // 💡 이미 제품구분자가 하나라도 등록되어 있다면, 맨 위 mcRevisions는 진짜 "이름 없는 새 데이터"가
     //    아니라 예전 활성화면의 잔재일 뿐이므로 다시 물어보지 않음 (아래 mcNormalizeAfterLoad가 정리함)
     if (window.getMcUnits().length > 0) return;

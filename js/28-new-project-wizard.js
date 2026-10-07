@@ -242,7 +242,7 @@ function _buildPmHtml() {
         //    교체 — Summary 탭 담당자(sum-pm)와 동일한 전역 부품(attachAddressAutocomplete) 재사용.
         //    주소록에 없는 이름도 그대로 입력해 쓸 수 있음(기존 "직접 입력" 칸과 동일하게 동작).
         '<input id="npw-pm" type="text" autocomplete="off" value="' + pm + '" placeholder="' +
-        _t('이름 일부만 입력해도 찾습니다 (예: 박용 → 박용훈)', 'Type part of the name (e.g. "Park" finds "Park Yonghun")') + '" ' +
+        _t('이름 일부만 입력해도 찾습니다', 'Type part of the name to search') + '" ' +
         'style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; background:#fff;">' +
         '<div style="font-size:11.5px; color:#888; margin:4px 0 0 2px;">주소록에 없으면 입력한 이름 그대로 사용됩니다.</div>' +
         '<div style="font-size:13px; font-weight:bold; color:#333; margin:18px 0 8px;">메일 키워드 <span style="font-size:11px; color:#aaa; font-weight:normal;">(선택)</span></div>' +
