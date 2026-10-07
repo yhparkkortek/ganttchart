@@ -28,7 +28,15 @@ window.findPanelInLibrary = function(lib, model) {
         function(p) { return p.specs && p.specs['Part Name']; }
     );
 };
+// 🐛 [2026-10-07 성능 수정] 이 함수를 호출하는 곳이 10여 곳인데 일부만 window._epLibCache를 먼저
+//    확인하고 나머지는 매번 그냥 호출해서, Elec Parts/Panel 비교 UI를 조작할 때마다 수백KB짜리 Drive
+//    파일을 1~2초씩 다시 받아오고 있었다(Network 탭 실측) — 호출부마다 캐시를 챙기게 하는 대신, 함수
+//    자체가 한 번 읽으면 세션 동안 재사용하도록 캐시를 내부로 옮김. 실패/미연동 시엔 캐시하지 않아
+//    다음 호출에서 다시 시도됨. 쓰기(upsertPanelLibraryEntry)/삭제(_panelLibRemoveEntry) 성공 시
+//    캐시를 지워서 다음 읽기에서 최신본을 받도록 함.
 window.loadPanelLibrary = async function() {
+    window._epLibCache = window._epLibCache || {};
+    if (window._epLibCache.panel) return window._epLibCache.panel;
     try {
         const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -39,7 +47,9 @@ window.loadPanelLibrary = async function() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
-        return (data && Array.isArray(data.panels)) ? data : { panels: [] };
+        const result = (data && Array.isArray(data.panels)) ? data : { panels: [] };
+        window._epLibCache.panel = result;
+        return result;
     } catch (e) { console.warn('패널 라이브러리 로드 실패:', e.message); return { panels: [] }; }
 };
 window.upsertPanelLibraryEntry = async function(entry) {
@@ -76,6 +86,7 @@ window.upsertPanelLibraryEntry = async function(entry) {
             const created = await createRes.json();
             if (created && created.id) window._panelLibFileId = created.id;
         }
+        if (window._epLibCache) delete window._epLibCache.panel; // 🐛 [2026-10-07] 저장 성공 → 캐시 무효화
         return true;
     } catch (e) { alert((_en ? 'Failed to save panel library: ' : '패널 라이브러리 저장 실패: ') + e.message); return false; }
 };
@@ -98,6 +109,7 @@ window._panelLibRemoveEntry = async function(model) {
         await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
             method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(loaded)
         });
+        if (window._epLibCache) delete window._epLibCache.panel; // 🐛 [2026-10-07] 삭제 성공 → 캐시 무효화
         return true;
     } catch (e) { console.warn('패널 라이브러리 항목 삭제 실패:', e.message); return false; }
 };
@@ -1154,7 +1166,11 @@ window.findElecPartInLibrary = function(lib, model) {
         function(p) { return window._epPartNameOf(p.specs); }
     );
 };
+// 🐛 [2026-10-07 성능 수정] loadPanelLibrary와 동일한 이유 — 호출할 때마다 매번 Drive에서 다시
+//    받던 것을 세션 캐시로 전환(_epLibCache[type]). 쓰기/삭제 성공 시 해당 type만 무효화.
 window.loadElecPartLibrary = async function(type) {
+    window._epLibCache = window._epLibCache || {};
+    if (window._epLibCache[type]) return window._epLibCache[type];
     try {
         const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -1165,7 +1181,9 @@ window.loadElecPartLibrary = async function(type) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
-        return (data && Array.isArray(data.items)) ? data : { items: [] };
+        const result = (data && Array.isArray(data.items)) ? data : { items: [] };
+        window._epLibCache[type] = result;
+        return result;
     } catch (e) { console.warn('전기부품 라이브러리 로드 실패:', e.message); return { items: [] }; }
 };
 // 💡 [2026-08-31 신규 — 사고 방지] "파일이 있는지 찾아보고 없으면 만든다"는 흐름 사이에 잠금장치가
@@ -1243,6 +1261,7 @@ window.upsertElecPartLibraryEntry = async function(type, entry) {
             const created = await createRes.json();
             if (created && created.id) window._epLibFileIds[type] = created.id;
         }
+        if (window._epLibCache) delete window._epLibCache[type]; // 🐛 [2026-10-07] 저장 성공 → 캐시 무효화
         return true;
     } catch (e) { alert((_en ? 'Failed to save library: ' : '라이브러리 저장 실패: ') + e.message); return false; }
 };
@@ -1262,6 +1281,7 @@ window._epLibRemoveEntry = async function(type, model) {
         await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
             method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(loaded)
         });
+        if (window._epLibCache) delete window._epLibCache[type]; // 🐛 [2026-10-07] 삭제 성공 → 캐시 무효화
         return true;
     } catch (e) { console.warn('전기부품 라이브러리 항목 삭제 실패:', e.message); return false; }
 };
