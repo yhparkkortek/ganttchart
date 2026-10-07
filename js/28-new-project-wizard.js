@@ -234,24 +234,17 @@ function _validateStep4() {
 
 // ─── Step 5: 담당자 + 메일 키워드 ────────────────────────────────────
 //    주소록은 Google Drive에서 로딩: AddressBook.loadFromDrive() 우선, 없으면 tabData.addressBook 폴백
-function _buildPmHtml(ab) {
+function _buildPmHtml() {
     const pm  = (window._npwData && window._npwData.pm)  || _prefill.assignee || '';
     const kws = (window._npwData && window._npwData.keywords) || (_prefill.keywords ? _prefill.keywords.join(', ') : '');
-    const seen = {}; const members = [];
-    (ab || []).forEach(function(r) {
-        const n = (r.name || r.이름 || '').trim();
-        if (n && !seen[n]) { seen[n] = 1; members.push({ name: n, dept: (r.department || r.부서 || '') }); }
-    });
-    const opts = '<option value="">-- 담당자를 선택하세요 --</option>' +
-        members.map(function(m) {
-            const sel = (pm && m.name === pm) ? ' selected' : '';
-            return '<option value="' + m.name + '"' + sel + '>' + m.name + (m.dept ? ' (' + m.dept + ')' : '') + '</option>';
-        }).join('');
     return '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:8px;">프로젝트 담당자 <span style="color:#e03131;">*</span></div>' +
-        '<select id="npw-pm" style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; background:#fff;">' + opts + '</select>' +
-        '<div style="font-size:11.5px; color:#888; margin:4px 0 0 2px;">주소록에 없으면 아래에 직접 입력하세요.</div>' +
-        '<input id="npw-pm-manual" type="text" placeholder="' + _t('직접 입력 (주소록 선택 시 무시됨)', 'Enter manually (ignored if selected from address book)') + '" value="" ' +
-        'style="width:100%; box-sizing:border-box; padding:8px 12px; font-size:13px; border:1px solid #ced4da; border-radius:8px; margin-top:6px;">' +
+        // 🆕 [2026-10-07] 긴 드롭다운 대신 이름 일부(예: "박용" → "박용훈")만 쳐도 좁혀지는 자동완성으로
+        //    교체 — Summary 탭 담당자(sum-pm)와 동일한 전역 부품(attachAddressAutocomplete) 재사용.
+        //    주소록에 없는 이름도 그대로 입력해 쓸 수 있음(기존 "직접 입력" 칸과 동일하게 동작).
+        '<input id="npw-pm" type="text" autocomplete="off" value="' + pm + '" placeholder="' +
+        _t('이름 일부만 입력해도 찾습니다 (예: 박용 → 박용훈)', 'Type part of the name (e.g. "Park" finds "Park Yonghun")') + '" ' +
+        'style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; background:#fff;">' +
+        '<div style="font-size:11.5px; color:#888; margin:4px 0 0 2px;">주소록에 없으면 입력한 이름 그대로 사용됩니다.</div>' +
         '<div style="font-size:13px; font-weight:bold; color:#333; margin:18px 0 8px;">메일 키워드 <span style="font-size:11px; color:#aaa; font-weight:normal;">(선택)</span></div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">이 프로젝트로 메일을 자동 매칭할 키워드. 쉼표로 구분.</div>' +
         '<input id="npw-kw" type="text" placeholder="' + _t('예: S32, STELLAR, 에스삼투', 'e.g. S32, STELLAR, ESSAMTU') + '" value="' + kws + '" ' +
@@ -277,19 +270,19 @@ async function _renderStep5(body) {
         console.warn('[npw Step5] 주소록 Drive 로딩 실패:', e);
         ab = (window.tabData && window.tabData.addressBook) || [];
     }
-    body.innerHTML = _buildPmHtml(ab);
+    body.innerHTML = _buildPmHtml();
+    // 🆕 담당자 입력칸에 이름 자동완성 연결 (isMulti=false — 한 명만)
+    const pmInput = document.getElementById('npw-pm');
+    if (pmInput && window.attachAddressAutocomplete) window.attachAddressAutocomplete(pmInput, null, false);
 }
 function _collectStep5() {
     window._npwData = window._npwData || {};
-    const selVal = (document.getElementById('npw-pm') || {}).value || '';
-    const manVal = (document.getElementById('npw-pm-manual') || {}).value || '';
-    window._npwData.pm = selVal || manVal.trim();
+    window._npwData.pm = ((document.getElementById('npw-pm') || {}).value || '').trim();
     window._npwData.keywords = (document.getElementById('npw-kw') || {}).value || '';
 }
 function _validateStep5() {
-    const sel = (document.getElementById('npw-pm') || {}).value || '';
-    const man = (document.getElementById('npw-pm-manual') || {}).value || '';
-    if (!sel && !man.trim()) { alert(_t('프로젝트 담당자를 선택하거나 입력해주세요.', 'Please select or enter the project owner.')); return false; }
+    const pm = ((document.getElementById('npw-pm') || {}).value || '').trim();
+    if (!pm) { alert(_t('프로젝트 담당자를 입력해주세요.', 'Please enter the project owner.')); return false; }
     return true;
 }
 
