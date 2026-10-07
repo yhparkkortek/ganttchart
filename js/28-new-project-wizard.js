@@ -320,6 +320,19 @@ function _fillSummaryFields() {
     setVal('sum-pm',            d.pm        || '');
     setVal('sum-mail-keywords', d.keywords  || '');
 
+    // 🐛 [2026-10-07 버그 수정] sum-pm은 자동완성 "선택" 또는 "포커스 이탈(blur)" 시에만 주소록
+    //    dept → projectMeta.팀 자동 감지가 동작하는데(js/22g), 위 setVal은 값만 채울 뿐 그 어느
+    //    쪽도 발생시키지 않아 위자드로 만든 프로젝트는 팀이 항상 미지정으로 남던 문제.
+    //    blur 핸들러와 동일한 로직(_addrFindByName)을 그대로 재사용해서 직접 채운다.
+    if (d.pm) {
+        const _pmFirst = d.pm.split(',')[0].trim();
+        const _pmPerson = window._addrFindByName ? window._addrFindByName(_pmFirst) : null;
+        if (_pmPerson && _pmPerson.dept) {
+            window.projectMeta = window.projectMeta || {};
+            window.projectMeta.팀 = _pmPerson.dept;
+        }
+    }
+
     // 🐛 [2026-10-07 버그 수정] 위 setVal('sum-pm', ...)이 발생시킨 input 이벤트가 이름 자동완성
     //    추천 박스를 띄우는데, 사람이 연 게 아니라 닫힐 계기(blur)가 없어 화면 어딘가(보통 탭을
     //    이동한 뒤라 좌상단)에 계속 떠 있던 문제 — 프로그램적으로 값을 채운 직후엔 항상 닫아준다.
