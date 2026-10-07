@@ -426,10 +426,13 @@ window.populateTabData = function() {
         }
     } else {
         // 💡 이 프로젝트에 Brief SPEC 데이터가 없으면, 이전 프로젝트 표 내용이 남지 않도록 비움
+        //    → M.C Table과 동일하게, 아무 행도 없으면 우클릭할 대상이 없어 행 추가가 불가능하므로
+        //    "첫 행 추가" 버튼을 보여준다 (BM_CONF의 'bs' 키, window.bmAddFirstRow 재사용)
         const bsTbodyEmpty = document.getElementById('briefspec-body');
         if (bsTbodyEmpty) {
-            bsTbodyEmpty.innerHTML = '';
-            if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
+            bsTbodyEmpty.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px 0;">'
+                + '<button class="action-btn" onclick="window.bmAddFirstRow(\'bs\')" style="min-width:auto; background:#2c5f8a; color:#fff;">➕ ' + (window._currentLang === 'en' ? 'Add First Row' : '첫 행 추가') + '</button>'
+                + '</td></tr>';
         }
     }
 

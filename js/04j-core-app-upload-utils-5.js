@@ -1602,7 +1602,18 @@
 
     function renderTable(data) {
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
-        if(!data || data.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; return; }
+        if(!data || data.length === 0) {
+            thead.innerHTML = '';
+            // 🐛 [2026-10-07 버그 수정] 참조 엑셀을 아직 못 가져온 상태(Drive 미연동 등)에서 Gantt가
+            //    완전히 비어있으면 행 추가할 대상 자체가 없어 더 진행이 불가능했다 — Brief SPEC/M.C
+            //    Table과 동일하게 안내+버튼을 보여준다. 여기는 컬럼 구조가 참조 엑셀에만 있으므로
+            //    가짜 기본 스키마를 만드는 대신 참조 엑셀 가져오기를 다시 트리거한다.
+            tbody.innerHTML = '<tr><td style="text-align:center; padding:40px 0; color:#999;">'
+                + '<div style="margin-bottom:10px;">' + window._t('아직 Gantt 데이터가 없습니다.', 'No Gantt data yet.') + '</div>'
+                + '<button class="action-btn" onclick="window.autoImportReferenceExcel && window.autoImportReferenceExcel()" style="min-width:auto; background:#2c5f8a; color:#fff;">📥 ' + window._t('참조 엑셀 가져오기', 'Import Reference Excel') + '</button>'
+                + '</td></tr>';
+            return;
+        }
         
         // ✅ 추가: 레벨별 bold 한 곳에서 관리
         const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';

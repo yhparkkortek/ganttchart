@@ -310,7 +310,7 @@ function _validate() {
 }
 
 // ─── 완료: Summary 필드 채움 ─────────────────────────────────────────
-function _applyToSummary() {
+function _fillSummaryFields() {
     const d = window._npwData || {};
     const setVal = function(id, val) {
         const el = document.getElementById(id);
@@ -320,6 +320,52 @@ function _applyToSummary() {
         el.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
+    // 필수 필드
+    setVal('sum-customer',      d.customer  || '');
+    setVal('sum-customer-model', d.model    || '');
+    setVal('sum-ktk-pn-model',  d.ktkpn    || '');
+    setVal('sum-pm',            d.pm        || '');
+    setVal('sum-mail-keywords', d.keywords  || '');
+
+    // PROTO Start (시작일)
+    if (d.startDate) {
+        const dateEl = document.getElementById('sum-ms-plan-protostart');
+        if (dateEl) {
+            dateEl.value = d.startDate;
+            dateEl.removeAttribute('readonly');
+            dateEl.dispatchEvent(new Event('input', { bubbles: true }));
+            dateEl.dispatchEvent(new Event('change', { bubbles: true }));
+            dateEl.setAttribute('readonly', '');
+        }
+    }
+
+    // 프로젝트 상태 (DV or MP(EC))
+    const statusEl = document.getElementById('sum-project-status');
+    if (statusEl) {
+        statusEl.value = _status;
+        statusEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // MC Table 구분자 초기화
+    const units = d.mcUnits || [];
+    if (units.length && window.tabData) {
+        if (!window.tabData.mcRevisionsByUnit) window.tabData.mcRevisionsByUnit = {};
+        units.forEach(function(u) {
+            if (!window.tabData.mcRevisionsByUnit[u]) window.tabData.mcRevisionsByUnit[u] = [];
+        });
+        // 첫 번째 구분자를 활성으로 설정
+        if (units[0]) window.mcActiveUnit = units[0];
+        if (window.renderMcTabs) window.renderMcTabs();
+    }
+
+    // 필수필드 하이라이트 갱신
+    if (window._checkAllRequiredFields) window._checkAllRequiredFields();
+
+    // dirty 표시 (저장 필요 상태)
+    if (window._markDirty) window._markDirty();
+}
+
+function _applyToSummary() {
     // Summary 탭으로 전환
     if (window.switchTabTo) window.switchTabTo('tab-summary');
     else {
@@ -327,52 +373,11 @@ function _applyToSummary() {
         if (btn) btn.click();
     }
 
-    setTimeout(function() {
-        // 필수 필드
-        setVal('sum-customer',      d.customer  || '');
-        setVal('sum-customer-model', d.model    || '');
-        setVal('sum-ktk-pn-model',  d.ktkpn    || '');
-        setVal('sum-pm',            d.pm        || '');
-        setVal('sum-mail-keywords', d.keywords  || '');
-
-        // PROTO Start (시작일)
-        if (d.startDate) {
-            const dateEl = document.getElementById('sum-ms-plan-protostart');
-            if (dateEl) {
-                dateEl.value = d.startDate;
-                dateEl.removeAttribute('readonly');
-                dateEl.dispatchEvent(new Event('input', { bubbles: true }));
-                dateEl.dispatchEvent(new Event('change', { bubbles: true }));
-                dateEl.setAttribute('readonly', '');
-            }
-        }
-
-        // 프로젝트 상태 (DV or MP(EC))
-        const statusEl = document.getElementById('sum-project-status');
-        if (statusEl) {
-            statusEl.value = _status;
-            statusEl.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-
-        // MC Table 구분자 초기화
-        const units = d.mcUnits || [];
-        if (units.length && window.tabData) {
-            if (!window.tabData.mcRevisionsByUnit) window.tabData.mcRevisionsByUnit = {};
-            units.forEach(function(u) {
-                if (!window.tabData.mcRevisionsByUnit[u]) window.tabData.mcRevisionsByUnit[u] = [];
-            });
-            // 첫 번째 구분자를 활성으로 설정
-            if (units[0]) window.mcActiveUnit = units[0];
-            if (window.renderMcTabs) window.renderMcTabs();
-        }
-
-        // 필수필드 하이라이트 갱신
-        if (window._checkAllRequiredFields) window._checkAllRequiredFields();
-
-        // dirty 표시 (저장 필요 상태)
-        if (window._markDirty) window._markDirty();
-
-    }, 100);
+    setTimeout(_fillSummaryFields, 100);
+    // 🐛 [2026-10-07] 참조 엑셀 자동 가져오기(_npwOpen에서 시작)가 이 시점까지 안 끝났을 경우를 대비한
+    //    안전장치 — 참조 엑셀의 Summary 시트 값(보통 빈 템플릿)이 뒤늦게 적용되어 방금 입력한 값을
+    //    덮어쓰는 것을 막기 위해, 넉넉한 지연 후 위자드 입력값으로 한 번 더 확정한다.
+    setTimeout(_fillSummaryFields, 1800);
 }
 
 // ─── 공개 API ─────────────────────────────────────────────────────────
@@ -389,6 +394,14 @@ window._npwOpen = function(prefill, statusVal) {
     window._npwData = {};
     document.getElementById('npw-modal').style.display = '';
     _renderStep();
+
+    // 🐛 [2026-10-07 버그 수정] 위자드가 생기면서 "참조 엑셀 가져오기" 팝업이 건너뛰어져, Gantt/Customer
+    //    SPEC의 컬럼 구조(colIdx)가 세팅되지 않아 행 추가 자체가 불가능해지는 문제가 있었다 — 이미
+    //    드라이브에 연동돼 있으면 위자드를 여는 동시에 참조 엑셀을 조용히 함께 불러온다
+    //    (미연동이면 매번 "연동하시겠습니까?" 확인창이 뜨는 걸 피하기 위해 평소처럼 건너뜀).
+    const _tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+    const _hasToken = !!((_tokenObj && _tokenObj.access_token) || window.googleAccessToken);
+    if (_hasToken && window.autoImportReferenceExcel) window.autoImportReferenceExcel();
 };
 
 window._npwClose = function() {
