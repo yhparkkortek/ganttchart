@@ -1945,6 +1945,7 @@
             const doneBadge = isCompleted ? ` <span style="font-size:10.5px; font-weight:bold; color:#2f9e44; background:#e7f6ec; border-radius:9px; padding:1px 8px; vertical-align:middle;">✅ ${_dmEn ? 'Done' : '완료'}</span>` : '';
             const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd' };
             const fileBtn = document.createElement('div');
+            fileBtn.dataset.fileId = file.id; // 🆕 삭제 성공 직후 이 행만 즉시 지우기 위한 식별자
             if (mode === 'delete') {
                 const delBg = isCompleted ? '#fff' : rowC.bg, delBorder = isCompleted ? '#ced4da' : rowC.border;
                 fileBtn.style.cssText = 'padding:9px 14px; border:1px solid ' + delBorder + '; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; background:' + delBg + '; transition:background .15s, border-color .15s;';

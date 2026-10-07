@@ -716,6 +716,13 @@
                 throw new Error((errBody.error && errBody.error.message) || ('HTTP ' + res.status));
             }
 
+            // 🐛 [2026-10-07 버그 수정] 실제 파일은 이 시점에 이미 삭제됐는데, 화면(모달 목록)에서
+            //    그 줄이 사라지는 건 아래 인덱스 정리+전체 재조회까지 끝난 뒤였다 — 네트워크 왕복
+            //    2~3번만큼 "실제 삭제"와 "화면 반영" 사이에 체감 지연이 있었음. 실제 삭제가 확정된
+            //    지금 바로 해당 줄만 지워서 즉시 반영한다(아래 정리 작업은 그대로 이어서 진행).
+            const _delRow = document.querySelector('#drive-file-list [data-file-id="' + file.id + '"]');
+            if (_delRow) _delRow.remove();
+
             await window._removeProjectIndexEntry(file.id);
 
             // 지금 열려있는 시트 중 이 파일과 연결된 탭이 있으면 정리(이미 지운 파일이라 저장하지 않고 그냥 닫음)
