@@ -59,6 +59,7 @@ window.loadPanelLibrary = async function() {
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!res.ok) { console.warn('패널 라이브러리 로드 실패(HTTP ' + res.status + ') — 캐시하지 않음, 다음 호출에서 재시도'); return { panels: [] }; }
         const data = await res.json();
         const result = (data && Array.isArray(data.panels)) ? data : { panels: [] };
         window._epLibCache.panel = result;
@@ -1205,6 +1206,7 @@ window.loadElecPartLibrary = async function(type) {
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!res.ok) { console.warn('전기부품 라이브러리 로드 실패(HTTP ' + res.status + ') — 캐시하지 않음, 다음 호출에서 재시도'); return { items: [] }; }
         const data = await res.json();
         const result = (data && Array.isArray(data.items)) ? data : { items: [] };
         window._epLibCache[type] = result;
