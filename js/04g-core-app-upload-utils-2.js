@@ -746,11 +746,9 @@
         await Promise.all(
             typesToFetch.map(function(type) {
                 return window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과')
-                    .then(function(lib) { window._epLibCache[type] = lib; })
                     .catch(function() { /* 캐시에 빈 값을 쓰지 않음 — 다음 호출에서 다시 시도되게 둠 */ });
             }).concat(needsPanel ? [
                 window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과')
-                    .then(function(lib) { window._epLibCache.panel = lib; })
                     .catch(function() { /* 캐시에 빈 값을 쓰지 않음 — 다음 호출에서 다시 시도되게 둠 */ })
             ] : []).concat([
                 (window._msLoadProjectIndex ? window._msLoadProjectIndex() : Promise.resolve([]))

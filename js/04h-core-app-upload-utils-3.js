@@ -2742,7 +2742,7 @@ ${docsJson}`;
             if (!ec || !ec.selectedModels || !ec.selectedModels.length) continue;
             let lib = window._epLibCache && window._epLibCache[type];
             if (!lib && window.loadElecPartLibrary) {
-                try { lib = await window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과'); window._epLibCache = window._epLibCache || {}; window._epLibCache[type] = lib; } catch (e) { lib = null; }
+                try { lib = await window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과'); } catch (e) { lib = null; }
             }
             const items = (lib && lib.items) || [];
             const notes = ec.notes || {};
@@ -2763,7 +2763,7 @@ ${docsJson}`;
         if (panelCompareOther.selectedModels && panelCompareOther.selectedModels.length && window.loadPanelLibrary && window.findPanelInLibrary) {
             let panelLib = window._epLibCache && window._epLibCache.panel;
             if (!panelLib) {
-                try { panelLib = await window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과'); window._epLibCache = window._epLibCache || {}; window._epLibCache.panel = panelLib; } catch (e) { panelLib = null; }
+                try { panelLib = await window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과'); } catch (e) { panelLib = null; }
             }
             const panelFields = [];
             (window.PANEL_SPEC_SCHEMA || []).forEach(function(sec) { sec.fields.forEach(function(f) { panelFields.push(f); }); });

@@ -68,7 +68,6 @@ window.renderElecCompareTab = async function(type) {
     theadEl.innerHTML = `<tr><th colspan="99" style="padding:16px; text-align:center; color:#999; background:#fff;">${_en ? 'Loading…' : '불러오는 중...'}</th></tr>`;
     tbodyEl.innerHTML = '';
     const lib = await window.loadElecPartLibrary(type);
-    window._epLibCache[type] = lib;
 
     const selected = ec.selectedModels.slice(0, 10);
     const slotCount = Math.max(2, selected.length); // 💡 기본 최소 2개 비교 슬롯을 항상 보여줌
@@ -355,7 +354,6 @@ window.elecCompareReextract = async function(type, model) {
 window.elecCompareOpenEditModal = async function(type, model) {
     const _en = window._currentLang === 'en';
     const lib = await window.loadElecPartLibrary(type);
-    window._epLibCache[type] = lib;
     const entry = window.findElecPartInLibrary(lib, model);
     if (!entry) { alert(_en ? 'This item was not found in the library.' : '라이브러리에서 이 항목을 찾을 수 없습니다.'); return; }
     await window.elecCompareOpenAddModal(type);
@@ -444,7 +442,6 @@ window.elecCompareOpenAddModal = async function(type) {
     window._epPendingImages = [null, null];
     window._epSyncImageSlotsUI();
     const lib = await window.loadElecPartLibrary(type);
-    window._epLibCache[type] = lib;
     window._epRenderLibList('');
 };
 
@@ -878,7 +875,6 @@ window.showElecPartSpecModal = async function(type, model, codeHint) {
     const bodyEl = document.getElementById('ep-spec-body');
     bodyEl.innerHTML = `<div style="text-align:center; color:#999; padding:20px;">${_en ? 'Loading…' : '불러오는 중...'}</div>`;
     const lib = await window.loadElecPartLibrary(type);
-    window._epLibCache[type] = lib;
     // 💡 ktk pn(codeHint)이 있으면 "코드_이름"으로 합쳐서 검색 — findElecPartInLibrary도 PANEL과 동일하게
     //    _epFlexibleFind로 코드/이름을 분리 대조하므로 이 조합만으로 ktk pn도 검색 근거가 된다.
     const searchQuery = codeHint ? (codeHint + (model ? '_' + model : '')) : model;
