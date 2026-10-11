@@ -8,6 +8,15 @@
    붙어서 이 파일의 모든 규칙보다 나중에 적용되도록 JS가 보장한다).
    ================================================================ */
 
+/* 스크롤바 숨김 — 스크롤은 동작하되 스크롤바 UI는 표시 안 함 */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 레거시 Edge/IE */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Edge(Chromium) */
+}
+
 /* ───── 1. head 메인 스타일시트 (:root 변수 등) (원본 줄 31~1085) ───── */
     :root {
         --table-font-size:   clamp(9px, 1.05vw, 13px);
