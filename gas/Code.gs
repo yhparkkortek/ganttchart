@@ -41,6 +41,9 @@ function doPost(e) {
     } else if (provider === 'openai') {
       text = callOpenAiCompatible_('OpenAI', 'https://api.openai.com/v1/chat/completions', userKey, prompt,
         model || 'gpt-5.6-luna', { max_completion_tokens: 8192 });
+    } else if (provider === 'openrouter') {
+      text = callOpenAiCompatible_('OpenRouter', 'https://openrouter.ai/api/v1/chat/completions', userKey, prompt,
+        model || 'deepseek/deepseek-r1:free', { max_tokens: 4096 });
     } else {
       text = callGemini_(userKey, prompt, model, imageParts);
     }

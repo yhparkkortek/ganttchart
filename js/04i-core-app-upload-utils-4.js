@@ -232,6 +232,7 @@
                                     <option value="gemini">Gemini (Google)</option>
                                     <option value="groq" data-i18n="ai-provider-groq">Groq — 오픈모델 무료 호스팅</option>
                                     <option value="mistral" data-i18n="ai-provider-mistral">Mistral (프랑스 AI, 무료)</option>
+                                    <option value="openrouter" data-i18n="ai-provider-openrouter">OpenRouter (무료모델 20개+, Llama4 포함)</option>
                                     <option value="openai" data-i18n="ai-provider-openai">OpenAI (GPT, 유료·카드등록 필요)</option>
                                 </select>
                             </div>

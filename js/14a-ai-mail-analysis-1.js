@@ -123,8 +123,10 @@ window.AI_PROVIDERS = {
                //    매번 100% 실패(베타/권한 제한 추정, 일시적 quota 문제 아님) 확인 → 후보에서 제거.
                //    매 폴백 시도마다 반드시 실패하는 후보를 하나씩 거치며 시간을 낭비하고 있었음.
                models: [
-                   { id: 'openai/gpt-oss-120b',  label: 'GPT-OSS 120B (OpenAI 오픈모델)', tier: 'free', note: '🟢 무료 · 범용 추천' },
-                   { id: 'openai/gpt-oss-20b',   label: 'GPT-OSS 20B (경량)',              tier: 'free', note: '🟢 무료 · 빠름' },
+                   { id: 'meta-llama/llama-4-maverick-17b-128e-instruct', label: 'Llama 4 Maverick (Meta)',  tier: 'free', note: '🟢 무료 · 범용 고품질 추천' },
+                   { id: 'meta-llama/llama-4-scout-17b-16e-instruct',    label: 'Llama 4 Scout (Meta, 경량)', tier: 'free', note: '🟢 무료 · 빠름' },
+                   { id: 'openai/gpt-oss-120b',  label: 'GPT-OSS 120B (OpenAI 오픈모델)', tier: 'free', note: '🟢 무료 · 범용' },
+                   { id: 'openai/gpt-oss-20b',   label: 'GPT-OSS 20B (경량)',              tier: 'free', note: '🟢 무료 · 초경량' },
                ]},
     mistral: { label: 'Mistral (프랑스 AI)',  keyName: 'mistral_api_key', defaultModel: 'mistral-small-latest',
                placeholder: '(Mistral API 키)', guideUrl: 'https://console.mistral.ai/api-keys',
@@ -133,6 +135,19 @@ window.AI_PROVIDERS = {
                models: [
                    { id: 'mistral-small-latest', label: 'Mistral Small', tier: 'free', note: '🟢 무료 · 속도 우선' },
                    { id: 'mistral-large-latest', label: 'Mistral Large', tier: 'paid', note: '🔴 유료 · 품질 우선' },
+               ]},
+    openrouter: { label: 'OpenRouter (무료모델 20개+)', keyName: 'openrouter_api_key', defaultModel: 'deepseek/deepseek-r1:free',
+               placeholder: 'sk-or-로 시작하는 OpenRouter API 키', guideUrl: 'https://openrouter.ai/keys',
+               guideText: '💡 OpenRouter는 무료 모델 20개 이상을 단 하나의 키로 쓸 수 있는 허브입니다.\n   Gemini/Groq/Mistral 키가 없어도 바로 사용 가능\n\n① openrouter.ai 접속 → 구글/깃허브 계정으로 로그인\n② 우측 상단 이름 → [Keys] 메뉴 → [Create Key] 클릭\n③ 생성된 키(sk-or-로 시작)를 복사 → 아래 입력란에 붙여넣고 저장\n※ 무료 발급 가능 (카드 등록 불필요, 무료 모델은 결제 없이 사용)',
+               guideTextEn: '💡 OpenRouter is a hub for 20+ free models under one key.\n\n① Go to openrouter.ai → sign in with Google or GitHub\n② Top-right name → [Keys] → [Create Key]\n③ Copy the key (starts with sk-or-) → paste below and save\n※ Free, no card required for free models',
+               // 💡 무료 모델은 ID 뒤에 :free 접미어. openrouter.ai/models?q=free 에서 최신 목록 확인.
+               //    일일 50회(크레딧 $10 이상 보유 시 1000회) 제한. 모델 로테이션이 잦으므로 빈 응답 시 다른 모델로 바꿀 것.
+               models: [
+                   { id: 'deepseek/deepseek-r1:free',           label: 'DeepSeek R1 (추론특화)',         tier: 'free', note: '🟢 무료 · 추론·분석 강점' },
+                   { id: 'meta-llama/llama-4-maverick:free',    label: 'Llama 4 Maverick (Meta)',        tier: 'free', note: '🟢 무료 · 범용 고품질' },
+                   { id: 'meta-llama/llama-4-scout:free',       label: 'Llama 4 Scout (Meta, 경량)',     tier: 'free', note: '🟢 무료 · 빠름' },
+                   { id: 'google/gemini-2.5-flash:free',        label: 'Gemini 2.5 Flash (경량 무료판)', tier: 'free', note: '🟢 무료 · OpenRouter 경유' },
+                   { id: 'nvidia/llama-3.1-nemotron-nano-8b-v1:free', label: 'Nemotron Nano 8B (NVIDIA)', tier: 'free', note: '🟢 무료 · 초경량' },
                ]},
     openai:  { label: 'OpenAI (GPT)',  keyName: 'openai_api_key', defaultModel: 'gpt-5.6-luna',
                placeholder: 'sk-로 시작하는 OpenAI API 키', guideUrl: 'https://platform.openai.com/api-keys',
@@ -385,7 +400,7 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
 //    자동목록에서 뺀다 — 사람이 명시적으로 선택 안 했는데 자동으로 돈이 나가는 제공사로 넘어가면
 //    안 되므로(다른 곳은 전부 "무료" 등급이 실제로 있는 곳들). 활성 제공사가 이미 이 목록에 있으면
 //    그건 이미 1차 시도로 끝났으므로 자동으로 건너뛴다.
-window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral'];
+window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral', 'openrouter'];
 // 💡 [2026-09-22 신규, 사용자 요청 "자동전환을 막아도 같은 현상인지 보고 싶다"] 교차 제공사
 //    폴백 자체를 끌 수 있게 함 — Groq/Mistral 쪽이 원인인지, 폴백 로직 자체가 원인인지 구분하는
 //    진단 목적. 기본 켜짐(기존 동작 유지), ⚙️ AI 도구 설정에서 끄면 활성 제공사(예: Gemini)만
