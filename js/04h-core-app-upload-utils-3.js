@@ -255,15 +255,53 @@
         { value: '/장정범', label: '/장정범 — 장정범' }
     ];
 
+    // 🆕 [2026-10-12 실사용 버그수정] 자재가 2개 이상이면 BOM이 ZPP033이 아니라 **ZPP038**로 조회되는데,
+    //    ZPP038은 레이아웃 카탈로그가 완전히 별개다(위 56건 중 하나도 없음) — 그래서 드롭다운에서 뭘
+    //    골라도 SAP이 "그런 레이아웃 없음"으로 거절하고 화면 기본값으로 열렸다("레이아웃을 물어보지만
+    //    기본값으로 열린다"는 제보의 진짜 원인). 라이브로 ZPP038 레이아웃 팝업(&MB_VARIANT)을 읽어 확정한
+    //    23건(2026-10-12) — 이름은 SAP 원본 그대로(끝 공백은 비교 시 strip되므로 제거).
+    //    화면 기본값("기본 세팅" 체크)은 `/표준품BOM`.
+    window._SAP_BOM_LAYOUT_OPTIONS_MULTI = [
+        { value: '/BOM등록', label: '/BOM등록 — kkr027' },
+        { value: '/CJBOM', label: '/CJBOM — BOM MC산출' },
+        { value: '/CJW BOM', label: '/CJW BOM — MC' },
+        { value: '/E3 BOM', label: '/E3 BOM — E3 BOM LIST LAYOUT' },
+        { value: '/GG', label: '/GG — GG' },
+        { value: '/HC', label: '/HC — HC' },
+        { value: '/JKB BOM', label: '/JKB BOM — BOM LIST LAYOUT' },
+        { value: '/JO BOM', label: '/JO BOM — BOM LIST LAYOUT(구매)' },
+        { value: '/LSH BOM', label: '/LSH BOM — LT 제조사' },
+        { value: '/MC(\\)', label: '/MC(\\) — MC(\\)' },
+        { value: '/PP', label: '/PP — BOM 단독자재' },
+        { value: '/PP-EOL', label: '/PP-EOL — PP EOL LAY OUT' },
+        { value: '/PP-재료비', label: '/PP-재료비 — PP 재료비' },
+        { value: '/SEO', label: '/SEO — seo' },
+        { value: '/SEOK_BOM', label: '/SEOK_BOM — kkr027' },
+        { value: '/SJ', label: '/SJ — SJ' },
+        { value: '/SKI', label: '/SKI — SKI' },
+        { value: '/생산기술01', label: '/생산기술01 — 생산기술_Vincent BOM' },
+        { value: '/자재', label: '/자재 — BOM LIST LAYOUT(JHM)' },
+        { value: '/자재-1', label: '/자재-1 — BOM LIST LAYOUT(JHM)' },
+        { value: '/장정범', label: '/장정범 — 장정범' },
+        { value: '/표준MC', label: '/표준MC — 재료비 MC' },
+        { value: '/표준품BOM', label: '/표준품BOM — 임의로 레이아웃변경 금지 (기본값)' }
+    ];
+
     // 🆕 [2026-09-29 UI 업그레이드] 품목마다 행 나열식 — 열: 전개방식|단가표시|부품위치|레이아웃|기준환율
     //    1행 입력 시 나머지 자동완성, 기준환율은 엑셀 USD 단가 열 계산에 사용됨
-    window._ganttQaShowBomOptionsDropdown = function(materials) {
+    window._ganttQaShowBomOptionsDropdown = function(materials, useSingleTcode) {
         const _en = window._currentLang === 'en';
         const matLabel = materials.join(', ');
         const id = 'bom-options-' + Date.now();
+        // 🆕 [2026-10-12] 조회에 쓰일 트랜잭션에 맞는 레이아웃 목록만 보여준다 — 단일=ZPP033(56건),
+        //    복수=ZPP038(23건, 카탈로그가 별개). 안 맞는 목록을 보여주면 선택이 조용히 무시된다.
+        const isSingle = useSingleTcode === undefined ? materials.length <= 1 : useSingleTcode === true;
+        const layoutOptions = isSingle ? window._SAP_BOM_LAYOUT_OPTIONS : window._SAP_BOM_LAYOUT_OPTIONS_MULTI;
+        const tcodeName = isSingle ? 'ZPP033' : 'ZPP038';
+        const defaultName = isSingle ? '/STD_MC' : '/표준품BOM';
         window._ganttQaPendingChoiceDropdown = {
             id: id, perMaterial: true, materials: materials,
-            layoutOptions: window._SAP_BOM_LAYOUT_OPTIONS,
+            layoutOptions: layoutOptions,
             title: _en ? `📐 BOM options — ${matLabel}` : `📐 BOM 조회 옵션 — ${matLabel}`,
             buildAnswerText: function(perMatSels) {
                 // perMatSels: [{explosion, showPrice, showLocation, layout, exchangeRate}, ...]
@@ -280,8 +318,8 @@
             }
         };
         window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
-            `📐 자재 "${matLabel}"의 BOM을 조회하기 전에 아래에서 옵션을 선택해주세요(레이아웃을 고르지 않으면 기본값 "/STD_MC"가 적용됩니다).`,
-            `📐 Before looking up the BOM for material(s) "${matLabel}", please choose the options below (if you skip the layout, the default "/STD_MC" is used).`
+            `📐 자재 "${matLabel}"의 BOM을 조회하기 전에 아래에서 옵션을 선택해주세요(${tcodeName} 기준 레이아웃 목록 — 고르지 않으면 기본값 "${defaultName}"가 적용됩니다).`,
+            `📐 Before looking up the BOM for material(s) "${matLabel}", please choose the options below (layout list for ${tcodeName} — if you skip the layout, the default "${defaultName}" is used).`
         )});
     };
 
@@ -5026,7 +5064,7 @@ ${docsJson}`;
                 bd.stage = 'options';
                 window._ganttQaHistory.push({ role: 'user', text: question });
                 input.value = '';
-                window._ganttQaShowBomOptionsDropdown(bd.materials);
+                window._ganttQaShowBomOptionsDropdown(bd.materials, bd.useSingleTcode);
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
@@ -5041,7 +5079,9 @@ ${docsJson}`;
                 if (bd.explosion === undefined) bd.explosion = 'single';
                 if (bd.showPrice === undefined) bd.showPrice = false;
                 if (bd.showLocation === undefined) bd.showLocation = false;
-                if (bd.layout === undefined) bd.layout = '/STD_MC'; // 🆕 레이아웃을 안 고르면 기존 기본값 유지
+                // 🆕 레이아웃을 안 고르면 기본값 유지 — ZPP033(단일)은 '/STD_MC', ZPP038(복수)은 그 카탈로그에
+                // /STD_MC가 없으므로 빈 값(=적용 시도 안 함, SAP 화면 기본값 /표준품BOM 그대로)
+                if (bd.layout === undefined) bd.layout = (bd.useSingleTcode === false) ? '' : '/STD_MC';
 
                 window._ganttQaHistory.push({ role: 'user', text: question });
                 input.value = '';
@@ -5101,7 +5141,7 @@ ${docsJson}`;
                         explosion: inlineOpts.explosion, showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
                         stage: 'options'
                     };
-                    window._ganttQaShowBomOptionsDropdown(bomTrig.materials);
+                    window._ganttQaShowBomOptionsDropdown(bomTrig.materials, useSingleTcode);
                     window._renderGanttQaMessages();
                     input.focus();
                     return;
@@ -5113,7 +5153,7 @@ ${docsJson}`;
                         materialsKey: _bomMKey0,
                         useSingleTcode: useSingleTcode, explosion: inlineOpts.explosion,
                         showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
-                        layout: inlineOpts.layout || '/STD_MC', exchangeRate: inlineOpts.exchangeRate || 0
+                        layout: inlineOpts.layout || (useSingleTcode === false ? '' : '/STD_MC'), exchangeRate: inlineOpts.exchangeRate || 0
                     };
                     window._lastBomOptions = Object.assign({}, window._ganttQaBomResolvedOptions); // "다시" 재조회용
                 }
@@ -5674,6 +5714,7 @@ ${docsJson}`;
             let _bomFetchedText = null;
             let _bomIsComplex = false;
             let _bomUseInteractive = false;
+            let _bomLayoutWarn = '';
             let bomReply;
             try {
                 _bomFetchedText = await window._aiFetchSapContext(question);
@@ -5681,6 +5722,18 @@ ${docsJson}`;
                 if (fetchFailed) {
                     bomReply = '⚠️ ' + (_bomFetchedText || window._t('SAP 조회 실패', 'SAP lookup failed'));
                 } else {
+                    // 🆕 [2026-10-12] 고른 레이아웃이 안 먹었으면(SAP 화면 카탈로그에 없음 등) 결과 헤더의
+                    //    `[레이아웃: "X" 적용 실패(사유) — 화면 기본값 사용]` 줄이 표 렌더링에서 가려져서
+                    //    사용자는 "선택을 무시하고 기본값으로 열렸다"고만 느꼈다 — 채팅에 경고로 드러낸다.
+                    const _lw = _bomFetchedText.match(/\[레이아웃: "([^"]*)" 적용 실패\(([^\n\]]*)\)/);
+                    if (_lw) {
+                        const _catIdx = _lw[2].indexOf('not_in_catalog:');
+                        _bomLayoutWarn = _catIdx === 0
+                            ? window._t('⚠️ 선택하신 레이아웃 "' + _lw[1] + '"이(가) 이 BOM 화면의 레이아웃 목록에 없어 SAP 화면 기본값으로 열었습니다. (이 화면에 있는 레이아웃: ' + _lw[2].slice(15) + ' …)',
+                                '⚠️ The layout "' + _lw[1] + '" is not in this BOM screen\'s layout list, so the SAP default was used. (Available: ' + _lw[2].slice(15) + ' …)')
+                            : window._t('⚠️ 레이아웃 "' + _lw[1] + '" 적용에 실패해 SAP 화면 기본값으로 열었습니다 — 사유: ' + _lw[2],
+                                '⚠️ Applying layout "' + _lw[1] + '" failed, so the SAP default was used — reason: ' + _lw[2]);
+                    }
                     const _bBodyStart = _bomFetchedText.indexOf('\n\n');
                     const _bBody = _bBodyStart !== -1 ? _bomFetchedText.slice(_bBodyStart + 2) : _bomFetchedText;
                     const _bLines = _bBody.split('\n').filter(function(l) { return l.length > 0 && !/^\.\.\.\s*\(/.test(l); });
@@ -5721,6 +5774,7 @@ ${docsJson}`;
                     { label: '💬 채팅창에 전체 보기', value: 'BOM 전체 내용 채팅창에 보여줘', style: 'neutral' }
                 ], { persistent: true });
             }
+            if (_bomLayoutWarn) window._ganttQaHistory.push({ role: 'ai', text: _bomLayoutWarn });
             window._renderGanttQaMessages();
             input.focus();
             return;

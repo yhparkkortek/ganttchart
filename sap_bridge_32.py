@@ -903,10 +903,14 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     # (`/STD_MC`)로 무조건 고정했는데, 팀이 실제로 쓰는 레이아웃 목록(60여 개)을 주며
     # "하드코딩하지 말고 매번 물어봐달라"고 요청 — `layout_variant` 인자가 오면 그걸
     # 우선 쓰고, 안 오면(하위호환) 기존 기본값을 그대로 쓴다.
-    layout_variant = layout_variant or _BOM_LAYOUT_VARIANT
+    # 🆕 [2026-10-12] 레이아웃 카탈로그는 트랜잭션마다 별개다 — 기본값 `/STD_MC`는 ZPP033(단일)에만
+    # 있고 ZPP038(복수)에는 없어서, 지정이 없을 때 ZPP038에 억지로 적용하려다 매번 "적용 실패"가
+    # 났다. 지정이 없으면 ZPP038은 적용을 시도하지 않고 SAP 화면 기본값(/표준품BOM)을 그대로 쓴다.
+    if not layout_variant:
+        layout_variant = _BOM_LAYOUT_VARIANT if used_single else ''
     _stage('bom_layout')
     layout_applied, layout_diag = None, ''
-    grid_for_layout = _sap_find_grid(wnd)
+    grid_for_layout = _sap_find_grid(wnd) if layout_variant else None
     if grid_for_layout is not None:
         layout_applied, layout_diag = _sap_select_alv_layout(session, grid_for_layout, layout_variant)
         wnd = session.findById('wnd[0]')  # 레이아웃 적용 후 화면이 다시 그려지므로 참조 갱신
@@ -2986,23 +2990,48 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=120, rsdat=
                 continue
         if fld_aufnr is None:
             raise RuntimeError('MB21 화면에서 내부오더(COBL-AUFNR) 입력칸을 찾지 못했습니다.')
-        try:
-            fld_aufnr.setFocus()
-            fld_aufnr.caretPosition = 0   # 매크로와 동일
-            cur_wnd.sendVKey(4)  # F4 = 검색도움말
-        except Exception as e:
-            raise RuntimeError(f'내부오더 검색도움말(F4)을 열지 못했습니다: {e}')
-
+        # 🐛 [2026-10-12 실사용 확인] 직전 조회 직후 **연속 호출**하면 F4 팝업이 3초 안에 안 떠서
+        #   "검색도움말 팝업이 뜨지 않았습니다"로 실패했다(같은 패턴을 잠시 뒤 다시 하면 성공 — 간헐적).
+        #   F4가 화면 전환 중에 씹힌 것이므로 **F4를 한 번 더 누르는 재시도**를 넣고, 대기도 늘린다.
         popup = None
-        for _ in range(8):   # 팝업이 뜰 때까지 짧게 재시도(화면이 무거우면 1초로는 부족)
-            time.sleep(0.4)
+        for attempt in range(3):
             try:
-                popup = session.findById('wnd[1]')
-                break
-            except Exception:
+                if attempt > 0:  # 재시도 — 화면이 다시 그려졌을 수 있어 필드를 새로 찾는다
+                    cur_wnd = session.findById('wnd[0]')
+                    fld_aufnr = None
+                    for cand in _find_all_by_id_substring(cur_wnd, 'COBL-AUFNR'):
+                        try:
+                            if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField') and cand.Changeable:
+                                fld_aufnr = cand
+                                break
+                        except Exception:
+                            continue
+                    if fld_aufnr is None:
+                        raise RuntimeError('내부오더 입력칸을 다시 찾지 못했습니다.')
+                fld_aufnr.setFocus()
+                fld_aufnr.caretPosition = 0   # 매크로와 동일
+                cur_wnd.sendVKey(4)  # F4 = 검색도움말
+            except Exception as e:
+                if attempt == 2:
+                    raise RuntimeError(f'내부오더 검색도움말(F4)을 열지 못했습니다: {e}')
+                time.sleep(0.8)
                 continue
+            for _ in range(10):   # 팝업이 뜰 때까지 재시도(화면이 무거우면 1초로는 부족)
+                time.sleep(0.4)
+                try:
+                    popup = session.findById('wnd[1]')
+                    break
+                except Exception:
+                    continue
+            if popup is not None:
+                break
         if popup is None:
-            raise RuntimeError('내부오더 검색도움말 팝업이 뜨지 않았습니다.')
+            scr = ''
+            try:
+                scr = ' · 화면: ' + _sap_screen_info(session)
+            except Exception:
+                pass
+            raise RuntimeError('내부오더 검색도움말 팝업이 뜨지 않았습니다(F4를 3번 시도).' + scr)
 
         # 패턴 입력칸 — 줄 번호를 박지 않고 **라벨(KEYWORD)로 찾는다**: 코드 검색은 "오더",
         # 프로젝트명 검색은 "내역". 못 찾으면 매크로에서 확인된 좌표로 폴백.
@@ -3091,6 +3120,7 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=120, rsdat=
     try:
         session.findById('wnd[0]/tbar[0]/okcd').text = '/n'
         session.findById('wnd[0]').sendVKey(0)
+        time.sleep(0.7)  # 🐛 [2026-10-12] 화면 전환이 끝나기 전에 다음 조회가 시작되면 F4가 씹힘
     except Exception:
         pass
     by = used_by
