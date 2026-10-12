@@ -5981,8 +5981,16 @@ ${docsJson}`;
         //    자재번호와 헷갈리지 않도록 "프로젝트"+"코드" 조합이 있을 때만 트리거한다.
         //    🆕 [2026-09-28] "내역"(프로젝트명)으로도 찾는다 — "*STELLAR* 프로젝트명으로 찾아줘".
         //    SAP 검색은 대소문자를 구분하므로 결과/실패 안내에 그 사실을 함께 알려준다.
-        const _projCodeRe = /프로젝트\s*(코드|번호|명|이름)|프로젝트.*(내역|설명)/;
-        if (_projCodeRe.test(question)) {
+        // 🗣 [2026-10-12] 트리거 어휘는 카탈로그(js/32, 데이터)에서만 읽는다 —
+        //    CLAUDE.md "SAP 로컬 명령 트리거 어휘는 SAP_CAPABILITIES[].kw + _sapCapKwHit, 코드 정규식 금지".
+        //    여기만 그 규칙 이전에 만들어져 정규식이 남아 있었고, 그래서 "프로젝트 조회해줘"처럼
+        //    목록에 없는 표현이 통째로 샜다(2026-09-28 "SAP 덤프해줘"와 똑같은 함정).
+        //    ⚠️ 카탈로그가 아직 로드 안 된 경우만 예전 정규식으로 폴백.
+        const _projCodeRe = /프로젝트\s*(코드|번호|명|이름|조회|검색|확인)|프로젝트.*(내역|설명)/;
+        const _projCodeHit = window._sapCapKwHit
+            ? window._sapCapKwHit(question, 'projectcode')
+            : _projCodeRe.test(question);
+        if (_projCodeHit) {
             // 패턴 추출: "*G26*"처럼 별표가 있으면 그대로, 없으면 토큰을 찾아 자동으로 감싼다.
             // MCP 연결 후 사용자가 * 없이 말해도 되도록 — SAP DB 자체의 부분매칭 구문(*)은
             // 코드가 대신 붙여준다.
@@ -6014,8 +6022,13 @@ ${docsJson}`;
                 //    "프로젝트명/이름/내역"이라고 명시하면 그게 우선. 그래도 0건이면 백엔드가
                 //    자동으로 반대쪽도 한 번 더 찾아보므로 잘못 골라도 구제된다.
                 const _pcCore = _pcPattern.replace(/\*/g, '');
-                const _pcBy = /(프로젝트\s*(명|이름)|내역|설명|이름으로|명으로)/.test(question) ? 'desc'
-                            : (/\d/.test(_pcCore) ? 'code' : 'desc');
+                // 🐛 [2026-10-12 제보] 예전엔 "내역"이라는 **말**이 패턴 모양을 이겼다. 그래서
+                //    "*G26LWTN* 프로젝트 내역 조회해줘"가 코드를 **이름 칸**에서 찾아 0건이 되고,
+                //    백엔드 자동 재검색으로 SAP을 두 번 뒤졌다(느리고 90초 타임아웃 위험).
+                //    바로 위 주석의 원래 의도대로 **패턴 모양이 우선**: 숫자가 있으면 코드(오더).
+                //    G26LWTN은 "내역"이라고 말해도 오더 칸에만 있다. 문자만이면 이름(내역).
+                //    잘못 골라도 0건이면 백엔드가 반대쪽을 자동으로 한 번 더 찾아 구제한다.
+                const _pcBy = /\d/.test(_pcCore) ? 'code' : 'desc';
                 const _pcWhatKo = _pcBy === 'desc' ? '프로젝트명(내역)' : '프로젝트 코드(오더)';
                 if (!_skipUserHistoryPush) {
                     window._ganttQaHistory.push({ role: 'user', text: question }); input.value = '';

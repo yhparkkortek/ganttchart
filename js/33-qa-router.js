@@ -412,7 +412,11 @@
         window._qaLastRoute = route;
         if (cls === 'sap') {
             route.local = true;                                   // 라우터가 직접 처리(로컬 명령) — 연결 요청 감지 대상
-            if (res.patterns.length) { await runPatternLookup(question, res.patterns[0], input, route); return { handled: true, route: route }; }
+            // 🛡 [2026-10-12] 프로젝트 질문이 **자재내역** 조회로 새어나가지 않게.
+            //    위 ②로 이미 로컬 명령에서 잡히지만, 어휘가 또 빠지면 같은 사고가 난다 —
+            //    와일드카드만 보고 자재로 단정하기 전에 프로젝트 어휘를 한 번 더 확인한다.
+            var _isProj = !!(window._sapCapKwHit && window._sapCapKwHit(question, 'projectcode'));
+            if (res.patterns.length && !_isProj) { await runPatternLookup(question, res.patterns[0], input, route); return { handled: true, route: route }; }
             if (res.materials.length || ((/sap/i.test(question) || res.tcodes.length) && SCREEN_RE.test(question))) { route.local = false; route.useSapContext = true; return { handled: false, route: route }; }
             runUnsupported(question, input, route, cls);
             return { handled: true, route: route };

@@ -1,5 +1,19 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$j = [Console]::In.ReadToEnd() | ConvertFrom-Json; $cmd = [string]$j.tool_input.command; if ($cmd -notmatch 'git\\s+commit') { exit 0 }; $root = 'C:\\Users\\YHPARK\\Documents\\GitHub\\ganttchart'; if (Test-Path $root) { Set-Location $root }; git fetch origin main --quiet 2>$null; $behind = (git rev-list --count HEAD..origin/main 2>$null); if ($behind -and ([int]$behind) -gt 0) { $files = ((git diff --name-only HEAD origin/main 2>$null) | Select-Object -First 8) -join ', '; $msg = '커밋 차단: origin/main보다 ' + $behind + '개 커밋 뒤처져 있습니다. 이대로 커밋하면 손대지 않은 파일이 과거로 되돌아갑니다 (2026-10-02 sap_bridge_32.py가 194줄/236줄 되돌아간 사고 2회). git pull --rebase origin main 을 먼저 실행한 뒤 다시 커밋하세요. 원격에서 바뀐 파일: ' + $files; $o = @{ hookSpecificOutput = @{ hookEventName = 'PreToolUse'; permissionDecision = 'deny'; permissionDecisionReason = $msg } } | ConvertTo-Json -Compress -Depth 5; Write-Output $o }; exit 0",
+            "timeout": 30,
+            "statusMessage": "원격(origin/main) 뒤처짐 확인 중..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
