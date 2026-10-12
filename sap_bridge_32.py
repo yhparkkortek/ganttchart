@@ -2609,7 +2609,11 @@ def _sap_searchhelp_field_by_keyword(session, keyword, max_rows=12):
     return None
 
 
-def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_data_row=3, header_hints=None):
+_SEARCHHELP_SCROLL_BUDGET = 12.0   # 초 — 히트가 수백 건이면 전부 긁다 백엔드 타임아웃에 걸린다
+
+
+def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_data_row=3, header_hints=None,
+                                time_budget=None, stats=None):
     """검색도움말(SAPLSDH4) 결과 라벨 매트릭스를 **열 이름 그대로** 통째로 읽는 범용 리더
     (2026-09-28 신규 — `_sap_read_material_label_matrix`가 자재 전용으로 열 이름을 하드코딩
     해둔 것을, "프로젝트 코드 조회"처럼 다른 검색도움말에도 쓸 수 있게 일반화한 것).
@@ -2674,8 +2678,19 @@ def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_da
 
     _collect(visible)
     # 스크롤하며 나머지 페이지 수집 — 위치가 더 안 내려가면(끝) 중단.
+    # ⏱ [2026-10-12] **시간 예산**을 둔다. 사용자 녹화 매크로의 내부오더 히트 목록은
+    #   verticalScrollbar.maximum이 469였다 — 한 페이지(≈20행)씩 24번을 COM으로 긁으면
+    #   스캔 한 번에 수백 개 자식을 도는 탓에 수십 초가 걸려 백엔드 90초 타임아웃에 걸렸다.
+    #   그러면 서브프로세스가 죽어 **아무것도 못 돌려주고 팝업만 닫히는 것처럼** 보인다
+    #   (실사용 제보 "마지막에 정보를 못가져오고 닫아 버림").
+    #   끝까지 못 읽으면 조용히 자르지 말고 호출부가 "범위를 좁히라"고 안내하게 둔다.
+    deadline = time.time() + (time_budget if time_budget is not None else _SEARCHHELP_SCROLL_BUDGET)
+    stop = 'end'            # 'end'=끝까지 읽음 / 'budget'=시간 초과 / 'max'=건수 상한
     last_pos = -1
     while len(rows) < max_results:
+        if time.time() >= deadline:
+            stop = 'budget'
+            break
         try:
             sb = session.findById('wnd[1]/usr').verticalScrollbar
             pos, page, maximum = int(sb.position), int(sb.pageSize or 10), int(sb.maximum)
@@ -2691,6 +2706,11 @@ def _sap_read_searchhelp_matrix(session, max_results=300, header_row=1, first_da
         time.sleep(0.15)
         _collect(_scan_visible())
 
+    if len(rows) >= max_results:
+        stop = 'max'
+    if stats is not None:
+        stats['stop'] = stop
+        stats['partial'] = (stop != 'end')
     rows = rows[:max_results]
 
     # 🧹 [2026-09-28] 검색도움말마다 헤더가 몇 번째 행인지 다르다 — 내부오더 검색도움말은
@@ -2876,7 +2896,7 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
 # 대신 **화면에 이미 들어있는 값(SAP이 기억하는 직전 입력값)을 그대로 두고**, 인자로 명시했을
 # 때만 덮어쓴다 — 조회는 어차피 아무것도 저장하지 않으므로 헤더 값이 무엇이든 상관없다.
 # ⚠️ 읽기 전용: 어떤 값도 선택/채택하지 않고, 끝나면 팝업을 F12로 닫고 `/n`으로 빠져나온다.
-def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=None, by='code'):
+def fetch_project_codes(pattern, bwart=None, werks=None, max_results=120, rsdat=None, by='code'):
     """프로젝트 코드(내부오더 AUFNR)를 와일드카드 패턴으로 조회한다.
     `by='code'`(기본) — "오더" 칸으로 코드 검색(예: "*G26*").
     `by='desc'`        — "내역" 칸으로 **프로젝트명** 검색(예: "*STELLAR*", 2026-09-28 추가).
@@ -2948,6 +2968,8 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
             except Exception:
                 break
 
+    read_stats = {}
+
     def _search_once(search_by):
         """F4 팝업을 열어 지정한 칸('오더' 또는 '내역')에 패턴을 넣고 결과를 읽은 뒤 팝업을 닫는다."""
         # ⚠️ [2026-09-28] 매번 화면/필드를 **다시 찾는다** — 첫 검색이 끝나면 화면이 다시 그려져서
@@ -3006,13 +3028,47 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
         session.findById('wnd[1]').sendVKey(0)  # 검색 실행
         time.sleep(1.2)
 
-        h, r = [], []
+        # 🎯 히트가 **딱 1건**이면 SAP은 목록을 안 띄우고 그 값을 바로 넣은 뒤 팝업을 닫는다
+        #   (녹화 매크로의 마지막 `sendVKey 2` 선택과 같은 결과). 예전엔 이때 wnd[1]이 없어
+        #   예외가 났고 그걸 통째로 삼켜서 "0건"으로 처리했다 — 정답을 찾아놓고 못 찾았다고 한 것.
         try:
             session.findById('wnd[1]')
-            h, r = _sap_read_searchhelp_matrix(
-                session, max_results, header_hints=('오더', '내역', '유형'))
+            has_popup = True
         except Exception:
-            pass
+            has_popup = False
+        if not has_popup:
+            picked = ''
+            try:
+                cur = session.findById('wnd[0]')
+                for cand in _find_all_by_id_substring(cur, 'COBL-AUFNR'):
+                    try:
+                        if str(getattr(cand, 'Type', '')) in ('GuiCTextField', 'GuiTextField'):
+                            picked = (cand.Text or '').strip()
+                            if picked:
+                                break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            if picked:
+                return ['오더'], [[picked]]
+            return [], []
+
+        # ⚠️ [2026-10-12] 예전엔 여기서 `except Exception: pass`로 **읽기 실패를 통째로 삼키고**
+        #   팝업을 닫았다. 그래서 화면에 결과가 떠 있어도 "찾지 못했습니다"로 끝났고, 사용자에겐
+        #   "정보를 못 가져오고 닫아버린" 것으로 보였다(CLAUDE.md: 실패를 조용히 삼키지 말 것).
+        #   이제 원인을 그대로 올려보내고, 어디서 막혔는지 화면 정보까지 붙인다.
+        try:
+            h, r = _sap_read_searchhelp_matrix(
+                session, max_results, header_hints=('오더', '내역', '유형'), stats=read_stats)
+        except Exception as e:
+            scr = ''
+            try:
+                scr = ' · 화면: ' + _sap_screen_info(session)
+            except Exception:
+                pass
+            _close_popups()
+            raise RuntimeError(f'검색도움말 결과를 읽지 못했습니다: {e}{scr}')
         _close_popups()
         return h, r
 
@@ -3021,6 +3077,9 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
     # (오더는 G2610OB 같은 코드값). 호출부가 패턴 모양으로 먼저 고르고(숫자 포함=코드), 여기서는
     # **고른 쪽에서 0건이면 반대쪽도 자동으로 한 번 더 찾아본다** — 사람이 "코드/이름" 중 뭘로
     # 검색되는지 몰라도 그냥 찾아지게 하기 위함(예: "STELLAR_32"처럼 숫자가 섞인 이름도 구제).
+    # ⚠️ [2026-10-12] 1차가 **오류**로 끝났으면 반대쪽을 또 돌리지 않는다 — 같은 이유로 또
+    #   실패하면서 조회 시간만 두 배가 되고(백엔드 90초) 결국 타임아웃으로 아무것도 못 돌려준다.
+    #   반대쪽 재검색은 "정상적으로 0건"일 때만 의미가 있다.
     headers, rows = _search_once(by)
     used_by = by
     if not rows:
@@ -3071,12 +3130,20 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=300, rsdat=
     codes = [it['code'] for it in items]
     lines = [(f"{it['code']}\t{it['desc']}" if it['desc'] else it['code']) for it in items]
     how_label = '프로젝트명(내역)' if by == 'desc' else '프로젝트 코드(오더)'
+    # ⏱ 히트가 많으면 전부 긁다 타임아웃이 나므로 중간에 끊는다 — 끊었으면 **숨기지 말고** 알린다.
+    partial = bool(read_stats.get('partial'))
+    note = ''
+    if partial:
+        note = ('\n\n⚠️ 결과가 많아 일부만 읽었습니다('
+                + ('시간 제한' if read_stats.get('stop') == 'budget' else f'{max_results}건 상한')
+                + ') — 패턴을 더 좁혀주세요(예: "*G26*" → "*G26LW*").')
     text = (f'[SAP {how_label} 조회(MB21 "계정대체청구" 화면의 내부오더 검색): '
-            f'패턴 "{pattern}" — {len(items)}건]\n\n' + '\n'.join(lines))
+            f'패턴 "{pattern}" — {len(items)}건]\n\n' + '\n'.join(lines) + note)
     return {'ok': True, 'pattern': pattern, 'by': by, 'caseSensitive': True,
             'count': len(items), 'codes': codes, 'items': items,
             'headers': headers, 'rows': rows, 'text': text,
-            'truncated': len(rows) >= max_results}
+            'partial': partial, 'readStop': read_stats.get('stop', 'end'),
+            'truncated': partial or len(rows) >= max_results}
 
 
 def _migo_post_by_reservation(session, rsnum, posting_date):
