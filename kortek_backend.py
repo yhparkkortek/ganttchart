@@ -2094,7 +2094,7 @@ def sap_material_price():
     material = (request.args.get('material') or '').strip()
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-material-price?material=106437'}), 400
-    data, status = _run_sap_bridge(['fetch_material_price', material], 30, 'SAP 표준가격/기간별단가 조회')
+    data, status = _run_sap_bridge(['fetch_material_price', material], 45, 'SAP 표준가격/기간별단가 조회')
     return jsonify(data), status
 
 
@@ -2773,7 +2773,7 @@ def sap_vendor_info():
     material = (request.args.get('material') or '').strip()
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다.'}), 400
-    data, status = _run_sap_bridge(['fetch_vendor_info_by_material', material], 40, 'MM03→ZMM005 공급업체 조회')
+    data, status = _run_sap_bridge(['fetch_vendor_info_by_material', material], 60, 'MM03→ZMM005 공급업체 조회')
     return jsonify(data), status
 
 

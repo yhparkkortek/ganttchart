@@ -1831,13 +1831,63 @@ def fetch_vendor_info_by_material(material):
     2026-09-29: ZMM006 대신 MM03 구매탭(MARA-ZLIFNR)으로 변경 — 구매이력 없는 자재도 조회 가능.
     반환: {'ok': True, 'vendor': {...}} 또는 {'ok': False, 'error': ...}"""
     material = str(material).strip()
-    lifnr = fetch_lifnr_from_mm03(material)
+    # 🆕 [2026-10-13, 사용자 요청] 공급사코드(MARA-ZLIFNR)만 찾고 비어 있으면 "못 찾았다"로 끝내지 않고, 구매 탭의
+    #    "기타 데이터/제조자 데이터"·"공급사" 영역을 **전부 스캔**해서 보여준다 — 예: 자재 106188은 공급사/
+    #    공급사코드가 비어 있지만 "제조자 부품 번호"에 업체명(삼완전자)이 들어 있었다. 데이터가 없거나 부족하면
+    #    구매 탭 스캔 전체(+원시 노드)를 돌려준다. (예전엔 같은 탭을 `_find_by_id_substring`으로 필드마다 훑었다)
+    _stage('vendor_nav')
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_material_screen(session, wnd, material)
+    _stage('vendor_tab')
+    if not _direct_select_tab(session, 'tabpSP09'):  # "구매"
+        wnd = session.findById('wnd[0]')
+        if not _select_tab_with_retry(wnd, 'tabpSP09'):
+            return {'ok': False, 'error': f'자재 {material}에서 "구매" 탭을 찾지 못했습니다 — 이 자재에 구매 뷰가 없을 수 있습니다.'}
+    _stage('vendor_scan')
+    entries, by_name = [], {}
+    for _attempt in range(5):
+        time.sleep(0.4)
+        try:
+            tab = session.findById('wnd[0]/usr/tabsTABSPR1/tabpSP09')
+        except Exception:
+            tab = session.findById('wnd[0]/usr')
+        entries = _scan_screen(tab)
+        by_name = {e['name']: e for e in entries if e['type'] in _SCAN_VALUE_TYPES}
+        if 'MARA-ZLIFNR' in by_name or 'MARC-WEBAZ' in by_name or 'MARA-MFRPN' in by_name:
+            break
+
+    def _v(name):
+        e = by_name.get(name)
+        return (e['text'] or '').strip() if e is not None else ''
+
+    groups = _scan_group(entries)
+    lifnr, zname1, mfrpn, mfrnr = _v('MARA-ZLIFNR'), _v('MARA-ZNAME1'), _v('MARA-MFRPN'), _v('MARA-MFRNR')
+    focus = _scan_render(groups, only_sections=['기타 데이터/제조자 데이터', '공급사'],
+                         title='🔍 스캔 결과 — 구매 탭 "기타 데이터/제조자 데이터" · "공급사" (화면에 보이는 값 전부)')
+    res = {'ok': True, 'material': material, 'lifnr': lifnr or None, 'supplierName': zname1 or None,
+           'mfrPartNo': mfrpn or None, 'mfr': mfrnr or None, 'scanText': focus, 'vendor': None}
+    problems = []
     if not lifnr:
-        return {'ok': False, 'error': f'MM03 구매 탭에서 자재 {material}의 공급사코드(MARA-ZLIFNR)를 찾지 못했습니다.'}
-    vendor = fetch_vendor_by_lifnr(lifnr)
-    if not vendor:
-        return {'ok': False, 'error': f'ZMM005에서 LIFNR {lifnr}의 공급업체 정보를 찾지 못했습니다.'}
-    return {'ok': True, 'vendor': vendor}
+        problems.append('공급사코드(MARA-ZLIFNR)가 비어 있음')
+    if not zname1 and not lifnr:
+        problems.append('공급사명(MARA-ZNAME1)이 비어 있음')
+    if not mfrnr and not mfrpn:
+        problems.append('제조자/제조자 부품 번호가 비어 있음')
+    if lifnr:
+        try:
+            vendor = fetch_vendor_by_lifnr(lifnr)  # ZMM005 — 이후 화면이 바뀌므로 스캔은 이미 끝낸 뒤에 한다
+        except Exception as e:
+            vendor = None
+            problems.append(f'ZMM005 조회 중 오류: {e}')
+        if vendor:
+            res['vendor'] = vendor
+        elif not any('ZMM005' in p_ for p_ in problems):
+            problems.append(f'ZMM005에서 LIFNR {lifnr}의 공급업체 정보를 찾지 못함')
+    if problems:
+        res['problems'] = problems
+        res['fullScanText'] = _scan_render(groups) + chr(10) + chr(10) + '── 원시 스캔(노드별) ──' + chr(10) + _scan_raw_dump(entries)
+    return res
 
 
 # ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
@@ -2186,6 +2236,145 @@ def fetch_material_documents(material):
     return {'ok': True, 'source': source, 'material': material, 'text': text}
 
 
+# ═══ 🔍 화면 "한 번 스캔" 헬퍼 (2026-10-13) ═══════════════════════════════════════════
+# 🐛 [2026-10-13 실측] 필드마다 `_find_by_id_substring`으로 **화면 전체 트리를 새로 훑으면** 필드 하나에
+# 2~4초가 든다(COM 호출이 느림) — 가격 조회가 11필드 × 3초 + 이동/탭 선택으로 **46초**가 걸려 30초 제한에
+# 걸려 "30초 안에 끝나지 않았습니다"로 실패했다. 대상 탭(컨테이너) 하위를 **딱 한 번만** 순회해서 모든 노드
+# (라벨/값/체크박스/박스 제목)를 읽고, 필요한 값은 그 결과에서 이름으로 찾는다 — 사용자가 요구한 "영역 전부
+# 스캔해서 출력"도 같은 스캔 결과로 그대로 해결된다.
+_SCAN_VALUE_TYPES = ('GuiTextField', 'GuiCTextField', 'GuiComboBox', 'GuiCheckBox', 'GuiRadioButton', 'GuiPasswordField')
+
+
+def _scan_screen(container, section='', out=None, depth=0, max_depth=14):
+    """container 하위를 한 번 순회해 `[{type,name,text,sel,section,tab}]`를 화면 순서대로 돌려준다.
+    GuiBox 제목을 같은 컨테이너의 직계 자식들의 `section`으로 쓴다(SAP 화면은 박스와 그 안의 필드가 같은
+    서브스크린 컨테이너 아래 형제로 놓인다)."""
+    if out is None:
+        out = []
+    if depth > max_depth:
+        return out
+    try:
+        kids_obj = container.Children
+        n = kids_obj.Count
+        kids = [kids_obj.Item(i) for i in range(n)]
+    except Exception:
+        return out
+    info = []
+    for k in kids:
+        try:
+            info.append((k, k.Type, k.Name))
+        except Exception:
+            continue
+    sec = section
+    for k, typ, name in info:
+        if typ == 'GuiBox':
+            try:
+                t = (k.Text or '').strip()
+                if t:
+                    sec = t
+            except Exception:
+                pass
+            break
+    for k, typ, name in info:
+        if typ == 'GuiBox':
+            continue
+        try:
+            text = (k.Text or '')
+        except Exception:
+            text = ''
+        if typ in ('GuiLabel',) or typ in _SCAN_VALUE_TYPES or typ in ('GuiButton', 'GuiTab'):
+            sel = None
+            if typ in ('GuiCheckBox', 'GuiRadioButton'):
+                try:
+                    sel = bool(k.Selected)
+                except Exception:
+                    sel = None
+            out.append({'type': typ, 'name': name, 'text': text, 'sel': sel, 'section': sec})
+        if typ not in ('GuiLabel',) and typ not in _SCAN_VALUE_TYPES and typ != 'GuiButton':
+            _scan_screen(k, sec, out, depth + 1, max_depth)
+    return out
+
+
+def _scan_group(entries):
+    """`_scan_screen` 결과를 섹션별 `(라벨, 값, 이름)` 행으로 묶는다. 라벨과 값 필드는 `Name`이 같고, 짝 없는
+    짧은 라벨("일", "%")은 직전 값의 단위로, 라벨 없는 값 필드("개별", "회사코드통화")는 직전 값의 설명으로
+    붙인다. 반환: `[(섹션, [{label,name,value,extra}])]` (섹션 등장 순서 유지)."""
+    field_names = {e['name'] for e in entries if e['type'] in _SCAN_VALUE_TYPES}
+    labels = {}
+    for e in entries:
+        if e['type'] == 'GuiLabel' and e['name'] in field_names and e['name'] not in labels:
+            labels[e['name']] = (e['text'] or '').strip()
+    sections, order = {}, []
+    for e in entries:
+        sec = e['section'] or '(구분 없음)'
+        if sec not in sections:
+            sections[sec] = []
+            order.append(sec)
+        rows = sections[sec]
+        if e['type'] in _SCAN_VALUE_TYPES:
+            if e['type'] in ('GuiCheckBox', 'GuiRadioButton'):
+                val = '☑' if e['sel'] else '☐'
+                lab = (e['text'] or '').strip() or labels.get(e['name'], e['name'])
+                rows.append({'label': lab, 'name': e['name'], 'value': val, 'extra': '', 'raw': ''})
+                continue
+            lab = labels.get(e['name'])
+            val = (e['text'] or '').strip()
+            if lab is None and rows and rows[-1].get('extra') is not None and not rows[-1].get('_desc'):
+                if val:
+                    rows[-1]['extra'] = (rows[-1]['extra'] + ' ' + val).strip()
+                    rows[-1]['_desc'] = True
+                continue
+            rows.append({'label': lab or e['name'], 'name': e['name'], 'value': val, 'extra': '', 'raw': val})
+        elif e['type'] == 'GuiLabel' and e['name'] not in field_names:
+            t = (e['text'] or '').strip()
+            if t and rows and len(t) <= 8:
+                rows[-1]['extra'] = (rows[-1]['extra'] + ' ' + t).strip()
+    return [(sec, [r for r in sections[sec] if r.get('name')]) for sec in order if sections[sec]]
+
+
+def _scan_render(groups, only_sections=None, title=None):
+    """`_scan_group` 결과를 사람이 읽는 텍스트로. 값이 빈 항목도 "(비어 있음)"으로 **그대로 보여준다**
+    (빈 값을 생략하면 "스캔이 안 된 건지 원래 비어 있는 건지" 구분이 안 된다)."""
+    lines = []
+    if title:
+        lines.append(title)
+    for sec, rows in groups:
+        if only_sections is not None and not any(o in sec for o in only_sections):
+            continue
+        lines.append(f'▪ {sec}')
+        for r in rows:
+            v = r['value'] if r['value'] != '' else '(비어 있음)'
+            ex = f' {r["extra"]}' if r.get('extra') else ''
+            lines.append(f'   {r["label"]}: {v}{ex}')
+    return '\n'.join(lines)
+
+
+def _scan_raw_dump(entries):
+    """"데이터가 없거나 부족하면 스캔 정보 전체" 요청용 — 스캔된 모든 노드를 이름/타입/값 그대로."""
+    out = []
+    for e in entries:
+        if e['type'] == 'GuiTab':
+            out.append(f'[탭] {e["name"]} = {e["text"].strip()}')
+        elif e['type'] == 'GuiButton':
+            out.append(f'[버튼] {e["name"]} = {e["text"].strip()}')
+        elif e['type'] == 'GuiLabel':
+            out.append(f'[라벨] {e["name"]} = {e["text"].strip()}')
+        else:
+            v = e['text'].strip() if e['sel'] is None else ('☑' if e['sel'] else '☐')
+            out.append(f'[{e["type"].replace("Gui", "")}] {e["name"]} = {v if v else "(비어 있음)"}  ({e["section"]})')
+    return '\n'.join(out)
+
+
+def _direct_select_tab(session, tab_name):
+    """MM03 상위 탭을 **절대 경로로 바로** 선택(전체 트리 순회 없음). 성공 여부 반환."""
+    try:
+        session.findById('wnd[0]/usr/tabsTABSPR1/' + tab_name).select()
+        return True
+    except Exception:
+        return False
+
+
+
 # ── "표준가격/기간별단가" 조회 (MM03 "회계 1" 탭, 2026-09-23 신규, 사용자 요청) ──────────
 # "표준가격 기간별 단가 확인해줘"가 안 된다는 실사용 제보 → 새 `dump_screen_tree` 도구로
 # 사용자가 직접 자재 106437의 MM03 "회계 1" 탭을 덤프해줘서, 매크로 없이 정확한 필드 ID를
@@ -2231,8 +2420,128 @@ def _parse_sap_number(text):
 
 
 def fetch_material_price(material):
-    """MM03 "회계 1" 탭에서 표준가격(STPRS)/기간별단가(PVPRS)/가격단위(PEINH)를 읽어,
-    가격단위로 나눈 실제 개당 단가까지 계산해 돌려준다."""
+    """MM03 "회계 1" 탭에서 **"일반평가데이타" + "가격 및 가액" 영역 전체**를 한 번에 스캔해 돌려준다
+    (2026-10-13 사용자 요청 — "가격 및 가액은 전부 스캔, 가격단위·통화를 출력에 반영, 데이터가 없거나
+    부족하면 스캔 정보 전체 표시"). 표준가격(STPRS)/기간별단가(PVPRS)는 가격단위(PEINH)로 나눈 **개당
+    단가(통화/기본단위)**까지 계산한다.
+    ⚡ 필드마다 화면 전체를 다시 훑던 예전 방식은 46초가 걸려 30초 제한에 걸렸다 — 탭 하위를 한 번만 스캔한다
+    (`_scan_screen`). 스캔 대상은 첫 기간 탭(현재 기간, 예: 기간 2026.010)이다."""
+    if not material:
+        raise RuntimeError('자재번호를 지정해주세요.')
+
+    _stage('price_nav')
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_material_screen(session, wnd, material)
+
+    _stage('price_tab')
+    if not _direct_select_tab(session, 'tabpSP24'):  # "회계 1"
+        wnd = session.findById('wnd[0]')
+        if not _select_tab_with_retry(wnd, 'tabpSP24'):
+            raise RuntimeError(f'자재 "{material}" 화면에서 "회계 1" 탭을 찾지 못했습니다 — 이 자재에 회계 뷰가 없을 수 있습니다.')
+
+    # 탭 안 서브화면(가격 필드)은 탭 전환 직후 바로 안 그려질 수 있어, "스캔 → 가격 필드가 있는지 확인"을
+    # 짧게 몇 번 반복한다(스캔 1회가 1~2초라 최대 5회).
+    _stage('price_scan')
+    entries, by_name = [], {}
+    for _attempt in range(5):
+        time.sleep(0.4)
+        try:
+            tab = session.findById('wnd[0]/usr/tabsTABSPR1/tabpSP24')
+        except Exception:
+            tab = session.findById('wnd[0]/usr')
+        entries = _scan_screen(tab)
+        by_name = {e['name']: e for e in entries if e['type'] in _SCAN_VALUE_TYPES}
+        if 'CKMMAT_DISPLAY-STPRS_1' in by_name or 'CKMMAT_DISPLAY-PVPRS_1' in by_name:
+            break
+
+    def _val(id_sub):
+        # `_MATERIAL_PRICE_FIELD_IDS`의 값은 'txt'/'ctxt' 접두어가 붙은 검색어 — 스캔 결과의 Name은 접두어 없음
+        nm = id_sub[4:] if id_sub.startswith('ctxt') else id_sub[3:]
+        e = by_name.get(nm)
+        return (e['text'] or '').strip() if e is not None else None
+
+    values = {k: _val(v) for k, v in _MATERIAL_PRICE_FIELD_IDS.items()}
+    stprs = _parse_sap_number(values.get('stprs'))
+    pvprs = _parse_sap_number(values.get('pvprs'))
+    stprv = _parse_sap_number(values.get('stprv'))
+    zkprs = _parse_sap_number(values.get('zkprs'))
+    peinh_raw = _parse_sap_number(values.get('peinh'))
+    peinh = peinh_raw if (peinh_raw and peinh_raw > 0) else 1.0
+    cur = values.get('waers') or ''
+    unit = values.get('meins') or ''
+    vprsv = values.get('vprsv')
+    vprsv_label = {'S': '표준가', 'V': '이동평균가'}.get(vprsv, vprsv)
+    tab_text = ''
+    for e in entries:
+        if e['type'] == 'GuiTab' and e['name'] == 'PPLF':
+            tab_text = (e['text'] or '').strip()
+            break
+
+    groups = _scan_group(entries)
+    scan_secs = ['일반평가데이타', '가격 및 가액']
+    # 데이터 충분성 — 표준가/기간별단가 중 하나는 있어야 하고, 통화·가격단위를 읽었어야 "충분"
+    problems = []
+    if stprs is None and pvprs is None:
+        problems.append('표준가격/기간별단가를 읽지 못함')
+    if not cur:
+        problems.append('통화를 읽지 못함')
+    if peinh_raw is None:
+        problems.append('가격단위를 읽지 못함(1로 간주)')
+
+    def _per(v):
+        return None if v is None else v / peinh
+
+    cur_u = f'{cur}/{unit}' if (cur and unit) else (cur or unit or '')
+    lines = [f'[SAP MM03 회계1: 자재 {material}' + (f' · {tab_text}' if tab_text else '') + ']']
+    lines.append(f'통화: {cur or "(읽지 못함)"} · 기본단위: {unit or "(읽지 못함)"} · 가격단위(PEINH): {values.get("peinh") or "(읽지 못함 → 1로 계산)"}'
+                 + (f' · 가격 관리: {vprsv}' + (f' ({vprsv_label})' if vprsv_label != vprsv else '') if vprsv else ''))
+    if stprs is not None:
+        lines.append(f'표준 가격: {values["stprs"]} {cur} / {peinh:g} {unit} → **개당 단가: {_per(stprs):,.4f} {cur_u}**')
+    if pvprs is not None:
+        lines.append(f'기간별 단가: {values["pvprs"]} {cur} / {peinh:g} {unit} → **개당 단가: {_per(pvprs):,.4f} {cur_u}**')
+    if stprv is not None:
+        lines.append(f'이전 가격: {values["stprv"]} {cur} / {peinh:g} {unit} → 개당 {_per(stprv):,.4f} {cur_u}')
+    if zkprs:
+        lines.append(f'미래 가격: {values["zkprs"]} {cur} / {peinh:g} {unit} → 개당 {_per(zkprs):,.4f} {cur_u}')
+    if values.get('laepr'):
+        lines.append(f'최종 가격변경: {values["laepr"]}')
+    if values.get('salk3'):
+        lines.append(f'재고 값: {values["salk3"]} {cur}' + (f' (총 재고 {values["lbkum"]} {unit})' if values.get('lbkum') else ''))
+    lines.append('')
+    scan_text = _scan_render(groups, only_sections=scan_secs, title='🔍 스캔 결과 — 일반평가데이타 / 가격 및 가액 (화면에 보이는 값 전부)')
+    lines.append(scan_text if scan_text.count(chr(10)) >= 2 else '🔍 스캔 결과: 해당 영역을 찾지 못했습니다.')
+    if problems:
+        lines.append('')
+        lines.append('⚠️ 데이터가 부족합니다(' + ', '.join(problems) + ') — 스캔된 정보 전체:')
+        lines.append(_scan_render(groups))
+        lines.append('')
+        lines.append('── 원시 스캔(노드별) ──')
+        lines.append(_scan_raw_dump(entries))
+    text = chr(10).join(lines)
+
+    if stprs is None and pvprs is None and not by_name:
+        # 아무 값도 못 읽었으면(화면이 안 그려졌거나 뷰 없음) 예외 대신 스캔 전체를 담아 돌려준다
+        return {'ok': True, 'material': material, 'incomplete': True, 'text': text}
+
+    return {
+        'ok': True, 'material': material, 'incomplete': bool(problems),
+        'priceUnit': peinh,
+        'standardPrice': stprs, 'standardPricePerUnit': _per(stprs),
+        'periodPrice': pvprs, 'periodPricePerUnit': _per(pvprs),
+        'priceControl': vprsv,
+        'currency': cur or None,
+        'baseUnit': unit or None,
+        'stockValue': values.get('salk3'),
+        'futurePrice': values.get('zkprs'),
+        'lastPriceChange': values.get('laepr'),
+        'totalStock': _parse_sap_number(values.get('lbkum')),
+        'text': text,
+    }
+
+
+def _fetch_material_price_legacy(material):
+    """(2026-10-13 이전 구현 — 필드마다 화면 전체를 훑어 46초 걸림. 참고용으로만 남김, 호출 안 함)"""
     if not material:
         raise RuntimeError('자재번호를 지정해주세요.')
 

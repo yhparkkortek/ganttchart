@@ -6223,11 +6223,11 @@ ${docsJson}`;
                 const _priceResults = [];
                 for (let _pi = 0; _pi < _priceMats.length; _pi++) {
                     const res = await window._withTimeout(
-                        fetch('http://127.0.0.1:5000/sap-material-price?material=' + encodeURIComponent(_priceMats[_pi])), 35000,
+                        fetch('http://127.0.0.1:5000/sap-material-price?material=' + encodeURIComponent(_priceMats[_pi])), 50000,
                         window._t('SAP 가격 조회 시간 초과', 'SAP price lookup timed out')
                     );
                     const data = await res.json();
-                    _priceResults.push(data.ok ? data.text : ('⚠️ ' + _priceMats[_pi] + ': ' + (data.error || window._t('가격 조회 실패', 'Price lookup failed'))));
+                    _priceResults.push(data.ok ? String(data.text || '').replace(/^ {3}/gm, '• ') : ('⚠️ ' + _priceMats[_pi] + ': ' + (data.error || window._t('가격 조회 실패', 'Price lookup failed'))));
                 }
                 priceReply = _priceResults.join('\n\n---\n\n');
                 if (_priceMatNums.length > 3) {
@@ -6438,7 +6438,7 @@ ${docsJson}`;
             window._renderGanttQaMessages();
             let vendorReply;
             try {
-                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-vendor-info?material=' + encodeURIComponent(_vendorMat)), 45000, window._t('공급업체 조회 시간 초과', 'Vendor lookup timed out'));
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-vendor-info?material=' + encodeURIComponent(_vendorMat)), 65000, window._t('공급업체 조회 시간 초과', 'Vendor lookup timed out'));
                 const data = await res.json();
                 if (data.ok && data.vendor) {
                     const v = data.vendor;
@@ -6454,6 +6454,20 @@ ${docsJson}`;
                     ].filter(function(r) { return r[1]; });
                     const _table = _rows.map(function(r) { return r[0] + ': ' + r[1]; }).join('\n');
                     vendorReply = '**' + window._t('공급업체 정보', 'Vendor Info') + ' (' + _vendorMat + ')**\n\n' + _table;
+                    // 🆕 [2026-10-13] 구매 탭 "기타 데이터/제조자 데이터"·"공급사" 영역 스캔 전체를 함께 보여준다
+                    if (data.scanText) vendorReply += '\n\n' + data.scanText.replace(/^ {3}/gm, '• ');
+                    if (data.fullScanText) vendorReply += '\n\n⚠️ ' + window._t('일부 정보가 부족해 구매 탭 스캔 전체를 함께 표시합니다:', 'Some data is missing — full purchasing-tab scan:') + '\n' + data.fullScanText.replace(/^ {3}/gm, '• ');
+                } else if (data.ok) {
+                    // 🆕 [2026-10-13, 사용자 요청] 공급사코드가 비어 있어도 "못 찾았다"로 끝내지 않는다 — 있는 정보(제조자
+                    //    부품 번호 등)와 스캔 전체를 보여준다. 예: 자재 106188은 공급사코드/공급사가 비고 제조자 부품 번호에 업체명이 있음.
+                    const _facts = [];
+                    if (data.mfrPartNo) _facts.push((window._currentLang === 'en' ? 'Mfr part no. (maybe vendor name): ' : '제조자 부품 번호(업체명일 수 있음): ') + data.mfrPartNo);
+                    if (data.mfr) _facts.push((window._currentLang === 'en' ? 'Manufacturer: ' : '제조자: ') + data.mfr);
+                    vendorReply = '⚠️ ' + window._t('자재 ' + _vendorMat + '의 공급업체(공급사코드)를 확정하지 못했습니다', 'Could not determine the vendor for ' + _vendorMat)
+                        + ' — ' + (data.problems || []).join(' / ')
+                        + (_facts.length ? '\n\n' + _facts.join('\n') : '')
+                        + (data.scanText ? '\n\n' + data.scanText.replace(/^ {3}/gm, '• ') : '')
+                        + (data.fullScanText ? '\n\n' + window._t('데이터가 부족해 구매 탭 스캔 전체를 표시합니다:', 'Data is insufficient — full purchasing-tab scan:') + '\n' + data.fullScanText.replace(/^ {3}/gm, '• ') : '');
                 } else {
                     vendorReply = '⚠️ ' + (data.error || window._t('공급업체 조회 실패', 'Vendor lookup failed'));
                 }
