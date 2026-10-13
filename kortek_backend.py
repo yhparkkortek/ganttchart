@@ -1515,6 +1515,128 @@ def all_decrypt():
 #    다시 끌어오지 말 것(64비트라 어차피 못 씀).
 _SAP_BRIDGE_PATH = os.path.join(BASE_DIR, 'sap_bridge_32.py')
 
+# ── 🔑 SAP 자동 로그인 설정 (2026-10-13, 사용자 요청 — 사내 전용이라 계정 저장 허용) ──────────────
+#    SAP이 꺼져 있거나 로그아웃 상태면 sap_bridge_32.py의 `_get_sap_session()`이 이 설정으로 알아서 로그인한다
+#    (실제 로그인 로직은 거기 — 이 파일은 설정 저장/조회만). 비밀번호는 **Windows DPAPI**(현재 Windows 사용자
+#    계정에 묶인 암호화 — 다른 PC/계정에선 복호화 불가)로 암호화해 `sap_login_config.json`(.gitignore)에만
+#    저장하고, **어떤 응답에도 비밀번호를 돌려주지 않는다**(상태 조회는 접속항목/클라이언트/ID만). 복호화는
+#    브리지(32비트)가 로그인 직전에만 한다.
+_SAP_LOGIN_CFG_PATH = os.path.join(BASE_DIR, 'sap_login_config.json')
+
+
+def _dpapi_encrypt_b64(text):
+    import ctypes
+    import base64
+    from ctypes import wintypes
+
+    class _BLOB(ctypes.Structure):
+        _fields_ = [('cbData', wintypes.DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+    raw = text.encode('utf-8')
+    buf = ctypes.create_string_buffer(raw, len(raw))
+    blob_in = _BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    blob_out = _BLOB()
+    if not ctypes.windll.crypt32.CryptProtectData(ctypes.byref(blob_in), 'kortek-sap-login', None, None, None, 0, ctypes.byref(blob_out)):
+        raise RuntimeError('Windows 데이터 보호(DPAPI)로 비밀번호를 암호화하지 못했습니다.')
+    try:
+        return base64.b64encode(ctypes.string_at(blob_out.pbData, blob_out.cbData)).decode('ascii')
+    finally:
+        ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+
+
+def _read_sap_login_cfg():
+    try:
+        with open(_SAP_LOGIN_CFG_PATH, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        return cfg if isinstance(cfg, dict) else None
+    except Exception:
+        return None
+
+
+def _sap_logon_entries():
+    """SAP Logon에 등록된 접속 항목 이름(Description)만 읽는다 — 주소/서버 정보는 읽지도 돌려주지도 않는다."""
+    path = os.path.join(os.environ.get('APPDATA', ''), 'SAP', 'Common', 'saplogon.ini')
+    text = ''
+    for enc in ('utf-8', 'utf-16', 'cp949'):
+        try:
+            with open(path, 'r', encoding=enc) as f:
+                text = f.read()
+            if '[Description]' in text:
+                break
+        except Exception:
+            continue
+    names, in_sec = [], False
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s.startswith('['):
+            in_sec = (s.lower() == '[description]')
+            continue
+        if in_sec and '=' in s:
+            v = s.split('=', 1)[1].strip()
+            if v:
+                names.append(v)
+    return names
+
+
+@app.route('/sap-login-config', methods=['GET'])
+def sap_login_config_get():
+    cfg = _read_sap_login_cfg() or {}
+    return jsonify({
+        'ok': True, 'configured': bool(cfg.get('sysname') and cfg.get('user') and cfg.get('pw_dpapi')),
+        'sysname': cfg.get('sysname', ''), 'client': cfg.get('client', ''),
+        'user': cfg.get('user', ''), 'language': cfg.get('language', 'KO'),
+    })
+
+
+@app.route('/sap-login-config', methods=['POST'])
+def sap_login_config_save():
+    body = request.get_json(silent=True) or {}
+    sysname = str(body.get('sysname') or '').strip()
+    user = str(body.get('user') or '').strip()
+    client = str(body.get('client') or '').strip()
+    language = str(body.get('language') or 'KO').strip().upper() or 'KO'
+    password = str(body.get('password') or '')
+    if not sysname or not user:
+        return jsonify({'ok': False, 'error': 'SAP Logon 접속 항목과 사용자 ID는 필수입니다.'}), 400
+    old = _read_sap_login_cfg() or {}
+    if password:
+        try:
+            pw_enc = _dpapi_encrypt_b64(password)
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+    elif old.get('pw_dpapi'):
+        pw_enc = old['pw_dpapi']  # 비밀번호 칸을 비워두면 기존 값 유지(다른 항목만 수정)
+    else:
+        return jsonify({'ok': False, 'error': '비밀번호를 입력해주세요.'}), 400
+    try:
+        with open(_SAP_LOGIN_CFG_PATH, 'w', encoding='utf-8') as f:
+            json.dump({'sysname': sysname, 'client': client, 'user': user, 'language': language, 'pw_dpapi': pw_enc}, f, ensure_ascii=False)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'설정 파일을 저장하지 못했습니다: {e}'}), 500
+    print('[SAP 자동 로그인] 설정 저장됨 (접속항목=%s, 사용자=%s)' % (sysname, user))
+    return jsonify({'ok': True})
+
+
+@app.route('/sap-login-config/delete', methods=['POST'])
+def sap_login_config_delete():
+    try:
+        if os.path.exists(_SAP_LOGIN_CFG_PATH):
+            os.remove(_SAP_LOGIN_CFG_PATH)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    return jsonify({'ok': True})
+
+
+@app.route('/sap-login-entries', methods=['GET'])
+def sap_login_entries():
+    return jsonify({'ok': True, 'entries': _sap_logon_entries()})
+
+
+@app.route('/sap-ensure-login', methods=['POST', 'GET'])
+def sap_ensure_login():
+    """SAP이 로그인돼 있는지 확인하고, 아니면(설정이 있을 때) 자동 로그인한다."""
+    data, status = _run_sap_bridge(['ensure_login'], 60, 'SAP 자동 로그인')
+    return jsonify(data), status
+
 # ── 승인원 표지 생성 — 자재그룹표(matgroups.json, 618건) ──────────────
 #    [2026-09-15 신규] 사내에서 쓰던 별도 데스크톱 앱("연구소 가이드 시스템")의 exe를 분석해
 #    그대로 재현한 기능 — MM03 화면엔 자재그룹 "코드"만 있고 명칭이 없어서, 그 앱에 내장돼
@@ -1819,6 +1941,10 @@ def _run_sap_bridge(extra_args, timeout, log_prefix):
     """sap_bridge_32.py를 32비트 Python 서브프로세스로 실행하고 JSON 결과를 돌려주는 공용
     헬퍼 — /sap-fetch와 /sap-open-document가 똑같이 쓴다(2026-09-14, 두 번째 엔드포인트
     추가하면서 중복 제거)."""
+    # 🔑 [2026-10-13] 자동 로그인 설정이 있으면 SAP이 꺼져 있어도 이 호출 안에서 로그인(최대 ~45초)까지
+    #    하므로, 호출부가 정한 시간에 그만큼을 더해준다(안 그러면 로그인하다 시간 초과로 죽는다).
+    if os.path.exists(_SAP_LOGIN_CFG_PATH):
+        timeout = timeout + 45
     try:
         proc = subprocess.Popen(
             ['py', '-3-32', _SAP_BRIDGE_PATH] + extra_args,

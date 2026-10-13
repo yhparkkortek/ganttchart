@@ -178,7 +178,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/sap-lookup.md` — 🏭 SAP 조회 연동 (`sap_bridge_32.py`, `/sap-*`)
 - **읽을 때**: SAP GUI 자동화 전반. **SAP 기능 안 될 때 원인 이력이 여기 다 있음 — 먼저 검색.**
 - `kortek_backend.py`에서 `win32com` 직접 import 금지 — `py -3-32 sap_bridge_32.py` 서브프로세스만
-- **SAP 자동 로그인 다시 제안 금지** — 사람이 미리 로그인해둔 세션에 올라탐
+- **SAP 자동 로그인은 2026-10-13부터 지원**(사용자가 사내 전용이라며 번복) — 설정은 AI 문답 창 🔑 버튼(`js/36-sap-login.js`), 비밀번호는 Windows DPAPI로 `sap_login_config.json`(.gitignore)에만 저장, 로그인 실패는 **절대 재시도 금지**(계정 잠금), 비밀번호를 명령줄/로그/응답에 싣지 말 것. 상세는 docs/sap-lookup.md
 - **MCP(mcp-sap-gui)는 런타임에서 쓰지 않음(2026-10-02 A안)** — 새 기능 화면 탐색용 개발 도구 전용. 런타임 SAP 경로는 `sap_bridge_32.py` 하나뿐
 - **클라우드 세션(claude.ai/code)에서는 SAP 실측 불가** — `127.0.0.1:5000`이 빈 컨테이너. 덤프는 채팅에 붙여넣거나 PC 세션에서 작업
 - **⚠️ SAP 필드 검색어엔 컨트롤 접두어(`txt`/`ctxt`) 필수** — `_find_by_id_substring`이 같은 이름의 GuiLabel을 먼저 집어 "재고 0 EA" 오답·가격조회 실패를 냈음(2026-10-02). 파싱 실패를 기본값으로 삼키지 말 것

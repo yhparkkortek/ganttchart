@@ -80,7 +80,184 @@ def _sap_gui_process_running():
         return True
 
 
+# ═══ 🔑 SAP 자동 로그인 (2026-10-13, 사용자 요청 — 사내 전용이라 계정 저장 방식 B 채택) ═══════════
+# 과거(2026-09-15)엔 "SAP 계정은 ERP 전체 권한이라 저장하지 않는다"며 자동 로그인을 안 하기로 했는데,
+# 사내 PC에서만 쓰는 도구라 괜찮다는 사용자의 명시적 결정으로 뒤집었다(docs/sap-lookup.md 참고).
+# 안전 장치: ① 비밀번호는 **Windows DPAPI**(현재 Windows 사용자 계정에 묶임 — 다른 PC/다른 사용자는 복호화
+# 불가)로 암호화돼 `sap_login_config.json`(.gitignore)에만 있다 ② 비밀번호를 **명령줄에 넣지 않는다**
+# (sapshcut -pw=는 프로세스 목록에 보임) — SAP Logon을 띄워 로그인 화면 필드에 스크립팅으로 입력 ③ **로그인
+# 실패는 절대 재시도하지 않는다**(비밀번호가 틀렸으면 재시도가 계정 잠금으로 이어짐) ④ 비밀번호는 로그·
+# 오류 메시지·결과에 절대 싣지 않는다.
+_LOGIN_CFG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sap_login_config.json')
+_AUTO_LOGIN_PERFORMED = [False]
+
+
+def _dpapi_decrypt_b64(b64):
+    import ctypes
+    import base64
+    from ctypes import wintypes
+
+    class _BLOB(ctypes.Structure):
+        _fields_ = [('cbData', wintypes.DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+    raw = base64.b64decode(b64)
+    buf = ctypes.create_string_buffer(raw, len(raw))
+    blob_in = _BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    blob_out = _BLOB()
+    if not ctypes.windll.crypt32.CryptUnprotectData(ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)):
+        raise RuntimeError('저장된 SAP 비밀번호를 복호화하지 못했습니다(다른 Windows 계정/PC에서 저장한 설정일 수 있음) — SAP 자동 로그인 설정에서 다시 저장해주세요.')
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData).decode('utf-8')
+    finally:
+        ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+
+
+def _load_login_config():
+    """저장된 자동 로그인 설정을 읽는다(없으면 None). 비밀번호는 호출 시점에만 복호화."""
+    try:
+        with open(_LOGIN_CFG_PATH, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+    except Exception:
+        return None
+    if not isinstance(cfg, dict) or not cfg.get('sysname') or not cfg.get('user') or not cfg.get('pw_dpapi'):
+        return None
+    return cfg
+
+
+def _find_saplogon_exe():
+    for base in (os.environ.get('ProgramFiles(x86)'), os.environ.get('ProgramFiles'), r'C:\Program Files (x86)', r'C:\Program Files'):
+        if not base:
+            continue
+        p = os.path.join(base, 'SAP', 'FrontEnd', 'SAPgui', 'saplogon.exe')
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _auto_login(cfg, session=None):
+    """꺼져 있거나 로그아웃된 SAP에 저장된 계정으로 로그인해 세션을 돌려준다.
+    session이 주어지면(연결은 있는데 로그인 화면인 상태) 그 화면에 바로 입력한다."""
+    import win32com.client
+    _stage('auto_login')
+    desc = cfg['sysname']
+    if session is None:
+        app = None
+        try:
+            app = win32com.client.GetObject('SAPGUI').GetScriptingEngine
+        except Exception:
+            if _sap_gui_process_running():
+                raise RuntimeError('SAP Logon은 켜져 있지만 스크립팅 엔진에 연결하지 못했습니다 — SAP GUI 옵션에서 스크립팅 사용(Enable Scripting)이 켜져 있는지 확인해주세요.')
+            exe = _find_saplogon_exe()
+            if not exe:
+                raise RuntimeError('SAP Logon(saplogon.exe)을 찾지 못해 자동으로 실행할 수 없습니다 — SAP GUI 설치 경로를 확인해주세요.')
+            import subprocess
+            subprocess.Popen([exe], close_fds=True)
+            for _ in range(40):  # 최대 20초 — SAP Logon이 떠서 스크립팅 엔진이 등록될 때까지
+                time.sleep(0.5)
+                try:
+                    app = win32com.client.GetObject('SAPGUI').GetScriptingEngine
+                    break
+                except Exception:
+                    continue
+        if app is None:
+            raise RuntimeError('SAP Logon을 실행했지만 20초 안에 스크립팅 엔진에 연결하지 못했습니다 — SAP Logon 창이 떠 있는지, 스크립팅 사용 옵션이 켜져 있는지 확인해주세요.')
+        try:
+            conn = app.OpenConnection(desc, True)
+        except Exception as e:
+            raise RuntimeError(f'SAP Logon 접속 항목 "{desc}"을(를) 열지 못했습니다 — 항목 이름이 SAP Logon 목록의 설명과 정확히 같은지 확인해주세요. ({e})')
+        session = conn.Children(0)
+
+    wnd = session.findById('wnd[0]')
+    pw = _dpapi_decrypt_b64(cfg['pw_dpapi'])
+
+    def _put(sub, val):
+        if not val:
+            return
+        try:
+            wnd.findById('usr/' + sub).text = val
+            return True
+        except Exception:
+            return False
+
+    ok_user = _put('txtRSYST-BNAME', cfg['user'])
+    ok_pw = False
+    try:
+        wnd.findById('usr/pwdRSYST-BCODE').text = pw
+        ok_pw = True
+    except Exception:
+        pass
+    pw = None  # 메모리에서 빨리 버린다
+    if not ok_user or not ok_pw:
+        raise RuntimeError('SAP 로그인 화면에서 사용자/비밀번호 입력칸을 찾지 못했습니다 · 화면: ' + _sap_screen_info(session))
+    _put('txtRSYST-MANDT', cfg.get('client'))
+    _put('txtRSYST-LANGU', cfg.get('language') or 'KO')
+    wnd.sendVKey(0)
+
+    # 로그인 완료 대기 — 중간 팝업(다중 로그온 등)만 처리하고, 오류는 즉시 중단(재시도 금지)
+    for _ in range(50):  # 최대 25초
+        time.sleep(0.5)
+        try:
+            wnd = session.findById('wnd[0]')
+        except Exception:
+            continue
+        try:
+            sb = wnd.findById('sbar')
+            if (sb.MessageType or '') in ('E', 'A') and (sb.Text or '').strip():
+                raise RuntimeError('SAP 로그인 실패 — ' + (sb.Text or '').strip() + ' (계정 잠금 방지를 위해 재시도하지 않았습니다. SAP 자동 로그인 설정의 계정 정보를 확인해주세요.)')
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
+        try:
+            popup = session.findById('wnd[1]')
+        except Exception:
+            popup = None
+        if popup is not None:
+            try:
+                title = (popup.Text or '')
+            except Exception:
+                title = ''
+            if re.search(r'비밀번호|password|암호', title, re.I):
+                raise RuntimeError('SAP가 비밀번호 변경 등 추가 입력을 요구합니다(팝업: ' + title + ') — SAP에 직접 로그인해 처리한 뒤 다시 시도해주세요.')
+            # 다중 로그온 경고 — "기존 로그온을 끊지 않고 계속"(OPT2)을 고른다. 다른 세션을 종료시키지 않는다.
+            try:
+                popup.findById('usr/radMULTI_LOGON_OPT2').select()
+            except Exception:
+                pass
+            try:
+                popup.findById('tbar[0]/btn[0]').press()
+            except Exception:
+                try:
+                    popup.sendVKey(0)
+                except Exception:
+                    pass
+            continue
+        try:
+            if (session.Info.User or '').strip():
+                time.sleep(1.0)
+                _AUTO_LOGIN_PERFORMED[0] = True
+                return session
+        except Exception:
+            continue
+    raise RuntimeError('SAP 로그인 후 초기 화면으로 넘어가지 못했습니다(25초 대기) · 화면: ' + _sap_screen_info(session))
+
+
 def _get_sap_session():
+    """SAP 세션을 돌려준다. 자동 로그인 설정이 있으면, 꺼져 있거나 로그아웃된 SAP는 먼저 로그인한다."""
+    cfg = _load_login_config()
+    if cfg is None:
+        return _get_sap_session_raw()
+    try:
+        session = _get_sap_session_raw()
+    except RuntimeError:
+        return _auto_login(cfg, None)
+    try:
+        logged_in = bool((session.Info.User or '').strip())
+    except Exception:
+        logged_in = True  # 판단 불가면 기존 동작 유지
+    return session if logged_in else _auto_login(cfg, session)
+
+
+def _get_sap_session_raw():
     """이미 로그인돼 열려 있는 SAP GUI의 첫 번째 연결/세션을 가져온다."""
     import win32com.client
     try:
@@ -93,12 +270,14 @@ def _get_sap_session():
             pass
         if hresult == -2147221020:
             if not _sap_gui_process_running():
-                raise RuntimeError('SAP GUI가 실행 중이 아닙니다 — SAP Logon을 실행해 로그인해주세요. 로그인한 뒤 다시 시도하면 됩니다.')
+                raise RuntimeError('SAP GUI가 실행 중이 아닙니다 — SAP Logon을 실행해 로그인해주세요. 로그인한 뒤 다시 시도하면 됩니다.'
+                               ' (AI 문답 창의 🔑 SAP 자동 로그인 설정에 계정을 등록해두면 이런 경우 자동으로 로그인합니다.)')
             raise RuntimeError('SAP GUI Scripting이 아직 켜져 있지 않습니다(COM 오류 -2147221020/MK_E_SYNTAX — "SAPGUI" 항목을 찾을 수 없음). 확인해주세요: ① SAP GUI가 켜져 있고 로그인돼 있는지 ② SAP GUI 세션 안에서 Alt+F12 → 옵션(Options) → Accessibility & Scripting → Scripting → "스크립트 사용(Enable Scripting)" 체크 후 세션을 다시 열었는지. 그래도 안 되면 SAP 서버 쪽 파라미터(sapgui/user_scripting) 문제일 수 있어 사내 SAP 담당자(Basis) 확인이 필요합니다.')
         raise RuntimeError('SAP GUI Scripting 엔진을 찾지 못했습니다. SAP GUI가 켜져 있는지 확인하세요. (원본 오류: ' + str(e) + ')')
     application = sap_gui_auto.GetScriptingEngine
     if application.Children.Count == 0:
-        raise RuntimeError('SAP GUI Scripting 엔진 연결에는 성공했지만, 열려 있는 SAP 연결(접속)이 없습니다 — SAP에 로그인해주세요.')
+        raise RuntimeError('SAP GUI Scripting 엔진 연결에는 성공했지만, 열려 있는 SAP 연결(접속)이 없습니다 — SAP에 로그인해주세요.'
+                           ' (AI 문답 창의 🔑 SAP 자동 로그인 설정에 계정을 등록해두면 이런 경우 자동으로 로그인합니다.)')
     connection = application.Children(0)
     if connection.Children.Count == 0:
         raise RuntimeError('SAP 연결은 있지만 열려 있는 세션(화면)이 없습니다.')
@@ -6706,7 +6885,17 @@ def main():
         return
     try:
         action = sys.argv[1] if len(sys.argv) > 1 else 'fetch_screen'
-        if action == 'open_document':
+        if action == 'ensure_login':
+            # 🔑 "지금 테스트"/사전 점검용 — 이미 로그인돼 있으면 아무것도 안 하고, 꺼져 있거나 로그아웃이면 로그인한다.
+            _AUTO_LOGIN_PERFORMED[0] = False
+            sess = _get_sap_session()
+            user = ''
+            try:
+                user = (sess.Info.User or '').strip()
+            except Exception:
+                pass
+            result = {'ok': True, 'user': user, 'autoLoggedIn': _AUTO_LOGIN_PERFORMED[0]}
+        elif action == 'open_document':
             doc_type = sys.argv[2] if len(sys.argv) > 2 else ''
             material = sys.argv[3] if len(sys.argv) > 3 else None
             result = open_document(doc_type, material)

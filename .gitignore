@@ -26,3 +26,4 @@ issue_events.cursor
 
 # [2026-10-02] /self-update가 덮어쓰기 전에 남기는 직전 버전 백업 — 각 PC 로컬 전용
 *.bak
+sap_login_config.json
