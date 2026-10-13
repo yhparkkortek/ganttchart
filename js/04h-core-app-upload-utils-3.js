@@ -6093,13 +6093,16 @@ ${docsJson}`;
                     `Looking up ${_pcBy === 'desc' ? 'project names' : 'project codes'} matching "${_pcPattern}" in SAP...`), pending: true });
                 window._renderGanttQaMessages();
                 let _pcReply;
+                // 🐛 [2026-10-13] 예전엔 `let _pcRawHtml`이 try 블록 **안**에 선언돼 있었는데 아래 push에서
+                //    블록 **밖**에서 읽어 ReferenceError가 났다 — SAP 조회는 성공하는데 결과가 채팅에 안 뜨고
+                //    pending 메시지만 사라지던 증상("조회만 하고 도표를 못 가져옴")의 원인.
+                let _pcRawHtml = false;
                 try {
                     const res = await window._withTimeout(
                         fetch('http://127.0.0.1:5000/sap-project-codes?by=' + _pcBy + '&pattern=' + encodeURIComponent(_pcPattern)), 120000,
                         window._t('SAP 프로젝트 코드 조회 시간 초과', 'SAP project code lookup timed out')
                     );
                     const data = await res.json();
-                    let _pcRawHtml = false;
                     if (data.ok) {
                         const items = data.items || (data.codes || []).map(function(c) { return { code: c, desc: '' }; });
                         const _usedKo = (data.by === 'desc') ? '프로젝트명(내역)' : '프로젝트 코드(오더)';
