@@ -274,12 +274,53 @@
             });
     }
 
+    // ── Layer 4: 탭 전환 시 recalculateSchedules 경량화 ──────────────────────
+    // 이미 열려 있는 시트 탭 간 전환은 globalData가 이미 계산 완료 상태이므로
+    // 날짜 트리 재계산·Undo 스냅샷·toast를 스킵하고 뷰 범위+필터+렌더만 처리.
+    function _patchSwitchToSheet() {
+        if (typeof window.switchToSheet !== 'function') return;
+        var _origSwitch = window.switchToSheet;
+        window.switchToSheet = function(key) {
+            window._pcTabSwitching = true;
+            try {
+                return _origSwitch.call(this, key);
+            } finally {
+                window._pcTabSwitching = false;
+            }
+        };
+    }
+
+    function _patchRecalcForTabSwitch() {
+        if (typeof window.recalculateSchedules !== 'function') return;
+        var _origRecalc = window.recalculateSchedules;
+        window.recalculateSchedules = function() {
+            if (!window._pcTabSwitching) {
+                return _origRecalc.apply(this, arguments);
+            }
+            // 탭 전환 전용 경량 경로:
+            //   스냅샷의 globalData에 _calcStartTs/_calcPlanTs가 이미 세팅돼 있으므로
+            //   날짜 트리 재계산을 스킵. recomputeGanttViewRange/generateFilters는
+            //   _restoreSheetSnapshot 이 직접 renderTable 호출하기 전에 동기로 완료.
+            if (window.recomputeGanttViewRange) window.recomputeGanttViewRange();
+            if (window.generateFilters) window.generateFilters(globalData);
+            // applyFilters/검색/하이라이트는 renderTable 완료 후 defer
+            setTimeout(function() {
+                if (typeof applyFilters === 'function') applyFilters();
+                if (window.ganttSearchInit) window.ganttSearchInit();
+                if (window.ganttSearchObserve) window.ganttSearchObserve();
+                if (typeof window.syncRowHighlight === 'function') window.syncRowHighlight();
+            }, 0);
+        };
+    }
+
     // ── 패치 적용 ─────────────────────────────────────────────────────────────
     // 이 파일은 04c 이후에 로드되므로 대상 함수들이 이미 정의돼 있음
     _patchExecuteLoadFile();
     _patchCloseSheet();
     _patchSaveToGoogleDrive();
     _patchShowDriveFileModal();
+    _patchSwitchToSheet();
+    _patchRecalcForTabSwitch();
 
-    console.info('[PC] 초기화 완료 (Layer1:캐시, Layer2:디바운스, Layer3:pre-fetch)');
+    console.info('[PC] 초기화 완료 (Layer1:캐시, Layer2:디바운스, Layer3:pre-fetch, Layer4:탭전환 경량화)');
 })();
