@@ -5241,6 +5241,8 @@ ${docsJson}`;
             // 경로로 끝난다). 느린 경로는 "그만"/"중단해줘"로 도중에 멈출 수 있다(위 🛑 SAP
             // 중단 로컬 명령 참고).
             const _matInfoMaterials = sapMaterialInfoReq.materials;
+            // [2026-10-13, 사용자 정정] 내역2가 없는 곳에서 일부러 MM03을 더 돌려 가져오지는 않는다 — "품목2/내역2"를 말했을 때만 느린 MM03 폴백.
+            // 대신 ZMM009 결과에 ZTEXT(자재내역2)가 **이미 있으면** 요청 여부와 무관하게 같이 보여준다(아래 hasZtext 분기).
             const _matInfoWantsSub = sapMaterialInfoReq.wantsSub;
             window._ganttQaHistory.push({ role: 'user', text: question });
             if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // "자주 쓰는 질문" 저장 버그(2026-09-23) — 이 블록도 누락돼 있었음
@@ -5268,7 +5270,7 @@ ${docsJson}`;
                             const row = parsed.map[code];
                             if (!row) return `📦 ${code}\n⚠️ ` + window._t('조회 결과에서 못 찾음(자재번호를 확인해주세요)', 'Not found in the result (check the material number)');
                             const desc = row.maktx || window._t('(없음)', '(none)');
-                            if (!_matInfoWantsSub) return `📦 ${code}\t${desc}\n` + window._t('품목: ', 'Item: ') + desc;
+                            if (!_matInfoWantsSub && !parsed.hasZtext) return `📦 ${code}\t${desc}\n` + window._t('품목: ', 'Item: ') + desc;
                             const sub = row.ztext || window._t('(없음)', '(none)');
                             const combinedDesc = row.ztext ? (desc.replace(/=$/, '') + row.ztext) : desc;
                             return `📦 ${code}\t${combinedDesc}\n` + window._t('품목: ', 'Item: ') + desc + '\n' + window._t('품목2: ', 'Item2: ') + sub;
@@ -6454,9 +6456,7 @@ ${docsJson}`;
                     ].filter(function(r) { return r[1]; });
                     const _table = _rows.map(function(r) { return r[0] + ': ' + r[1]; }).join('\n');
                     vendorReply = '**' + window._t('공급업체 정보', 'Vendor Info') + ' (' + _vendorMat + ')**\n\n' + _table;
-                    // 🆕 [2026-10-13] 구매 탭 "기타 데이터/제조자 데이터"·"공급사" 영역 스캔 전체를 함께 보여준다
-                    if (data.scanText) vendorReply += '\n\n' + data.scanText.replace(/^ {3}/gm, '• ');
-                    if (data.fullScanText) vendorReply += '\n\n⚠️ ' + window._t('일부 정보가 부족해 구매 탭 스캔 전체를 함께 표시합니다:', 'Some data is missing — full purchasing-tab scan:') + '\n' + data.fullScanText.replace(/^ {3}/gm, '• ');
+                    // [2026-10-13] 스캔 결과(scanText/fullScanText)는 사용자 요청으로 표시하지 않음 — 대부분 불필요한 값
                 } else if (data.ok) {
                     // 🆕 [2026-10-13, 사용자 요청] 공급사코드가 비어 있어도 "못 찾았다"로 끝내지 않는다 — 있는 정보(제조자
                     //    부품 번호 등)와 스캔 전체를 보여준다. 예: 자재 106188은 공급사코드/공급사가 비고 제조자 부품 번호에 업체명이 있음.
@@ -6465,9 +6465,7 @@ ${docsJson}`;
                     if (data.mfr) _facts.push((window._currentLang === 'en' ? 'Manufacturer: ' : '제조자: ') + data.mfr);
                     vendorReply = '⚠️ ' + window._t('자재 ' + _vendorMat + '의 공급업체(공급사코드)를 확정하지 못했습니다', 'Could not determine the vendor for ' + _vendorMat)
                         + ' — ' + (data.problems || []).join(' / ')
-                        + (_facts.length ? '\n\n' + _facts.join('\n') : '')
-                        + (data.scanText ? '\n\n' + data.scanText.replace(/^ {3}/gm, '• ') : '')
-                        + (data.fullScanText ? '\n\n' + window._t('데이터가 부족해 구매 탭 스캔 전체를 표시합니다:', 'Data is insufficient — full purchasing-tab scan:') + '\n' + data.fullScanText.replace(/^ {3}/gm, '• ') : '');
+                        + (_facts.length ? '\n\n' + _facts.join('\n') : '');
                 } else {
                     vendorReply = '⚠️ ' + (data.error || window._t('공급업체 조회 실패', 'Vendor lookup failed'));
                 }

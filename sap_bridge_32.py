@@ -1863,10 +1863,8 @@ def fetch_vendor_info_by_material(material):
 
     groups = _scan_group(entries)
     lifnr, zname1, mfrpn, mfrnr = _v('MARA-ZLIFNR'), _v('MARA-ZNAME1'), _v('MARA-MFRPN'), _v('MARA-MFRNR')
-    focus = _scan_render(groups, only_sections=['기타 데이터/제조자 데이터', '공급사'],
-                         title='🔍 스캔 결과 — 구매 탭 "기타 데이터/제조자 데이터" · "공급사" (화면에 보이는 값 전부)')
     res = {'ok': True, 'material': material, 'lifnr': lifnr or None, 'supplierName': zname1 or None,
-           'mfrPartNo': mfrpn or None, 'mfr': mfrnr or None, 'scanText': focus, 'vendor': None}
+           'mfrPartNo': mfrpn or None, 'mfr': mfrnr or None, 'vendor': None}
     problems = []
     if not lifnr:
         problems.append('공급사코드(MARA-ZLIFNR)가 비어 있음')
@@ -1886,7 +1884,6 @@ def fetch_vendor_info_by_material(material):
             problems.append(f'ZMM005에서 LIFNR {lifnr}의 공급업체 정보를 찾지 못함')
     if problems:
         res['problems'] = problems
-        res['fullScanText'] = _scan_render(groups) + chr(10) + chr(10) + '── 원시 스캔(노드별) ──' + chr(10) + _scan_raw_dump(entries)
     return res
 
 
@@ -2419,6 +2416,15 @@ def _parse_sap_number(text):
         return None
 
 
+def _fmt_unit_price(v, cur):
+    """개당 단가 표시 — 원화(KRW/JPY)는 소수점 반올림한 **정수**만, 그 외 통화는 소수 2자리(정수로 반올림하면 USD 0.5가 1이 된다)."""
+    if v is None:
+        return ''
+    if (cur or 'KRW').upper() in ('KRW', 'JPY'):
+        return f'{int(v + 0.5):,}' if v >= 0 else f'-{int(-v + 0.5):,}'
+    return f'{v:,.2f}'
+
+
 def fetch_material_price(material):
     """MM03 "회계 1" 탭에서 **"일반평가데이타" + "가격 및 가액" 영역 전체**를 한 번에 스캔해 돌려준다
     (2026-10-13 사용자 요청 — "가격 및 가액은 전부 스캔, 가격단위·통화를 출력에 반영, 데이터가 없거나
@@ -2493,31 +2499,33 @@ def fetch_material_price(material):
         return None if v is None else v / peinh
 
     cur_u = f'{cur}/{unit}' if (cur and unit) else (cur or unit or '')
-    lines = [f'[SAP MM03 회계1: 자재 {material}' + (f' · {tab_text}' if tab_text else '') + ']']
+
+    def _won(raw, v):
+        return f'{raw} {cur} / {peinh:g} {unit} → 개당 {_fmt_unit_price(_per(v), cur)} {cur_u}'
+
+    desc = ((by_name.get('MAKT-MAKTX') or {}).get('text') or '').strip()
+    lines = [f'📦 {material}'+chr(9)+(desc or '(자재내역 없음)')]
+    if desc.endswith('='):  # SAP가 40자에서 끊은 표시 — 일부러 더 조회하진 않고 안내만
+        lines.append('(자재내역이 40자에서 끊겼습니다 — 이어지는 내용은 "'+material+' 품목 내역2 보여줘"로 확인)')
+    lines.append('')
+    lines.append(f'[SAP MM03 회계1' + (f' · {tab_text}' if tab_text else '') + ']')
     lines.append(f'통화: {cur or "(읽지 못함)"} · 기본단위: {unit or "(읽지 못함)"} · 가격단위(PEINH): {values.get("peinh") or "(읽지 못함 → 1로 계산)"}'
                  + (f' · 가격 관리: {vprsv}' + (f' ({vprsv_label})' if vprsv_label != vprsv else '') if vprsv else ''))
     if stprs is not None:
-        lines.append(f'표준 가격: {values["stprs"]} {cur} / {peinh:g} {unit} → **개당 단가: {_per(stprs):,.4f} {cur_u}**')
+        lines.append(f'표준 가격: {_won(values["stprs"], stprs)}')
     if pvprs is not None:
-        lines.append(f'기간별 단가: {values["pvprs"]} {cur} / {peinh:g} {unit} → **개당 단가: {_per(pvprs):,.4f} {cur_u}**')
+        lines.append(f'기간별 단가: {_won(values["pvprs"], pvprs)}')
     if stprv is not None:
-        lines.append(f'이전 가격: {values["stprv"]} {cur} / {peinh:g} {unit} → 개당 {_per(stprv):,.4f} {cur_u}')
+        lines.append(f'이전 가격: {_won(values["stprv"], stprv)}')
     if zkprs:
-        lines.append(f'미래 가격: {values["zkprs"]} {cur} / {peinh:g} {unit} → 개당 {_per(zkprs):,.4f} {cur_u}')
+        lines.append(f'미래 가격: {_won(values["zkprs"], zkprs)}')
     if values.get('laepr'):
         lines.append(f'최종 가격변경: {values["laepr"]}')
     if values.get('salk3'):
         lines.append(f'재고 값: {values["salk3"]} {cur}' + (f' (총 재고 {values["lbkum"]} {unit})' if values.get('lbkum') else ''))
-    lines.append('')
-    scan_text = _scan_render(groups, only_sections=scan_secs, title='🔍 스캔 결과 — 일반평가데이타 / 가격 및 가액 (화면에 보이는 값 전부)')
-    lines.append(scan_text if scan_text.count(chr(10)) >= 2 else '🔍 스캔 결과: 해당 영역을 찾지 못했습니다.')
     if problems:
         lines.append('')
-        lines.append('⚠️ 데이터가 부족합니다(' + ', '.join(problems) + ') — 스캔된 정보 전체:')
-        lines.append(_scan_render(groups))
-        lines.append('')
-        lines.append('── 원시 스캔(노드별) ──')
-        lines.append(_scan_raw_dump(entries))
+        lines.append('⚠️ 일부 정보를 읽지 못했습니다: ' + ' / '.join(problems))
     text = chr(10).join(lines)
 
     if stprs is None and pvprs is None and not by_name:
@@ -2526,6 +2534,7 @@ def fetch_material_price(material):
 
     return {
         'ok': True, 'material': material, 'incomplete': bool(problems),
+        'desc': desc,
         'priceUnit': peinh,
         'standardPrice': stprs, 'standardPricePerUnit': _per(stprs),
         'periodPrice': pvprs, 'periodPricePerUnit': _per(pvprs),
