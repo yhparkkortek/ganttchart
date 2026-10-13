@@ -283,19 +283,23 @@ function bmDataRows(key) {
 }
 
 // 행 전체에 번호 매기기 + NO 클릭 이벤트 연결 (초기 로드, 데이터 복원, 행 변경 후 항상 호출)
+// 💡 숨겨진 행(검색 필터)도 포함해 전체 번호를 매긴다 — 검색 중 행 추가/삭제/이동 후
+//    filter가 살아있는 상태에서 호출돼도 번호 중복·결번이 생기지 않도록.
 window.bmSetupAllRows = function(key) {
     let n = 0;
     bmDataRows(key).forEach(function(tr) {
         const noTd = tr.querySelector('.bm-no');
         if (!noTd) return;
-        if (tr.style.display !== 'none') {
-            n++;
-            noTd.textContent = n;
-            tr.classList.remove('mc-zebra-a', 'mc-zebra-b');
-            tr.classList.add(n % 2 === 1 ? 'mc-zebra-a' : 'mc-zebra-b');
-        }
+        n++;
+        noTd.textContent = n;
+        tr.classList.remove('mc-zebra-a', 'mc-zebra-b');
+        tr.classList.add(n % 2 === 1 ? 'mc-zebra-a' : 'mc-zebra-b');
         noTd.onclick = function(ev) { window.bmOnNoClick(key, tr, ev); };
     });
+    // 주소록은 검색 필터 재적용 — 번호 재매김 후에도 현재 검색어 상태를 유지
+    if (key === 'addr' && window.filterAddressRows) {
+        window.filterAddressRows(window._addrSearchTerm || '');
+    }
 };
 
 // "펼치기" 버튼: 자동으로 숨겨진(내용 없는) 행을 보이거나 다시 숨김
