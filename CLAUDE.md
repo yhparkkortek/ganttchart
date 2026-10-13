@@ -214,6 +214,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **`/self-update`는 쓰기 전에 검증**(0바이트·`.py` 문법) + 하나라도 실패하면 전부 중단 + `.bak` 백업 — 깨진 파일이 main에 올라가 팀원 PC가 같이 죽은 사고(2026-10-02) 대응
 - **백엔드 `.py` 커밋 전 `py -3-32 -m py_compile` 필수** — 그 한 줄이면 위 사고는 안 났다
 - `.bat`/`.vbs`는 항상 CRLF(LF-only는 cmd 파서 오동작)
+- **푸시 직후 `/self-update`는 raw CDN 캐시로 옛 버전이 최신 작업본을 덮어쓴 적 있음(2026-10-13)** — 이상하면 `git status`부터, `_fetch_github_raw`는 `?cb=` 캐시 우회
 
 ### `docs/html-corruption-recovery.md` — 🔥 HTML 인코딩 손상 복구
 - **읽을 때**: 한국어가 `?◆◆`으로 깨지거나 배경 클릭 시 외부 사이트로 이동

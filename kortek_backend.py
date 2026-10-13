@@ -3274,7 +3274,12 @@ _SELF_UPDATE_CRLF_EXTS = ('.bat', '.vbs')
 
 def _fetch_github_raw(rel_path):
     url = _GITHUB_RAW_BASE + '/' + '/'.join(quote(seg) for seg in rel_path.split('/'))
-    resp = requests.get(url, timeout=10)
+    # ⚠️ [2026-10-13 실사고] raw.githubusercontent.com은 CDN 캐시(최대 ~5분)가 있어, 푸시 직후
+    #   /self-update를 누르면 **푸시 전 옛 버전**을 받아 최신 파일을 옛 버전으로 덮어썼다
+    #   (sap_bridge_32.py 319줄 롤백 → 고친 가격/공급업체 조회가 옛 동작으로 되돌아감).
+    #   쿼리스트링이 다르면 CDN이 다른 URL로 취급하므로 매 요청 고유값을 붙여 캐시를 우회한다.
+    resp = requests.get(url, params={'cb': str(int(time.time() * 1000))},
+                        headers={'Cache-Control': 'no-cache'}, timeout=10)
     resp.raise_for_status()
     return resp.content
 

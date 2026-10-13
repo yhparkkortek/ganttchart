@@ -135,3 +135,13 @@
 
 > **교훈**: 백엔드 `.py`를 고쳤으면 커밋 전에 `py -3-32 -m py_compile sap_bridge_32.py` 한 번.
 > 이번 사고는 그 한 줄이면 즉시 잡혔다.
+
+## ⚠️ raw.githubusercontent.com CDN 캐시 → 최신 파일이 옛 버전으로 롤백 (2026-10-13 실사고)
+
+- **증상**: 푸시한 수정이 "적용 안 된 것처럼" 옛 동작으로 돌아감. `git status`에 손대지 않은 `sap_bridge_32.py`/`kortek_backend.py`가
+  `M`(수백 줄 삭제)로 보이고, `.bak`에는 오히려 **최신 코드**가 들어 있다.
+- **원인**: 푸시 2분 뒤 `/self-update`가 raw URL을 받았는데 CDN(최대 ~5분 캐시)이 **푸시 전 버전**을 돌려줘 최신 작업본을 덮어썼다.
+  문법 검증은 통과하는 "멀쩡한 옛 파일"이라 막지 못한다.
+- **수정**: `_fetch_github_raw`가 요청마다 `?cb=<ms>` + `Cache-Control: no-cache`를 붙여 캐시를 우회한다(새 백엔드를 재시작해야 적용).
+- **복구**: 개발 PC는 `git checkout -- sap_bridge_32.py kortek_backend.py`(HEAD가 정답), 팀원 PC는 `.bak`을 되돌리거나 zip 재설치.
+  **자동 업데이트 직후 이상하면 `git status`부터** — 커밋하지 않은 롤백 상태에서 커밋하면 그대로 main에 박힌다.
