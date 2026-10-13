@@ -2500,8 +2500,11 @@ def fetch_material_price(material):
 
     cur_u = f'{cur}/{unit}' if (cur and unit) else (cur or unit or '')
 
-    def _won(raw, v):
-        return f'{raw} {cur} / {peinh:g} {unit} → 개당 {_fmt_unit_price(_per(v), cur)} {cur_u}'
+    def _won(raw, v, strong=False):
+        base = f'{raw} {cur} / {peinh:g} {unit} → '
+        if strong:  # 표준가/기간별단가의 개당 단가 — 굵게 + 형광펜(`==..==`, js/04g _mdToHtml)
+            return base + f'**==개당 단가: {_fmt_unit_price(_per(v), cur)} {cur_u}==**'
+        return base + f'개당 {_fmt_unit_price(_per(v), cur)} {cur_u}'
 
     desc = ((by_name.get('MAKT-MAKTX') or {}).get('text') or '').strip()
     lines = [f'📦 {material}'+chr(9)+(desc or '(자재내역 없음)')]
@@ -2512,9 +2515,9 @@ def fetch_material_price(material):
     lines.append(f'통화: {cur or "(읽지 못함)"} · 기본단위: {unit or "(읽지 못함)"} · 가격단위(PEINH): {values.get("peinh") or "(읽지 못함 → 1로 계산)"}'
                  + (f' · 가격 관리: {vprsv}' + (f' ({vprsv_label})' if vprsv_label != vprsv else '') if vprsv else ''))
     if stprs is not None:
-        lines.append(f'표준 가격: {_won(values["stprs"], stprs)}')
+        lines.append(f'표준 가격: {_won(values["stprs"], stprs, True)}')
     if pvprs is not None:
-        lines.append(f'기간별 단가: {_won(values["pvprs"], pvprs)}')
+        lines.append(f'기간별 단가: {_won(values["pvprs"], pvprs, True)}')
     if stprv is not None:
         lines.append(f'이전 가격: {_won(values["stprv"], stprv)}')
     if zkprs:

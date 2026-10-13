@@ -1520,6 +1520,9 @@ ${question}
     window._mdToHtml = function(raw) {
         let escaped = escapeHtml(raw || '');
         escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
+        // [2026-10-13, 사용자 요청] ==형광펜== — SAP 가격 조회의 개당 단가 강조용. escapeHtml 이후라 안전.
+        //   '='는 이스케이프되지 않으며, SAP 내역 끝의 단일 '='(40자 끊김 표시)와는 `==` 연속 2개 + 닫는 `==` 쌍이 있어야만 매치돼 겹치지 않는다.
+        escaped = escaped.replace(/==([^=\n]+?)==/g, '<mark style="background:#fff176; color:inherit; padding:0 2px; border-radius:2px;">$1</mark>');
         // 💡 [2026-09-03 신규] AI가 답변 텍스트에 직접 쓰는 "기간:X/Y~X/Y" 또는 "기간:X/Y" 패턴을
         //    제거 — ref chip 바깥에 항상 표시되는 기간 배지(ai-ref-date-badge)와 중복되기 때문.
         //    앞의 ", " 또는 " " 도 같이 제거해서 "읽다가 (, 기간:...) 가 남는" 어색함을 방지.
