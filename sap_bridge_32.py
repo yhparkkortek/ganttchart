@@ -1528,9 +1528,9 @@ def resolve_pattern_via_zmm009(pattern, lgort='1000'):
     except Exception:
         pass
 
-    # 자재내역 패턴 입력 (txtP_MAKTX-LOW)
+    # 자재내역 패턴 입력 (txtP_MAKTX-LOW) — MAKTX는 SAP에서 대문자 저장이므로 강제 변환
     try:
-        session.findById('wnd[0]/usr/txtP_MAKTX-LOW').text = pattern
+        session.findById('wnd[0]/usr/txtP_MAKTX-LOW').text = pattern.upper()
     except Exception as e:
         raise RuntimeError(f'ZMM009 자재내역 패턴 필드(txtP_MAKTX-LOW)를 찾지 못했습니다: {e}')
 
