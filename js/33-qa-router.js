@@ -293,6 +293,15 @@
                 + '</div>';
             var _esc = function(v) { return (v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
             var _tr42 = function(v) { var s = v||''; return s.length > 42 ? s.slice(0,42)+'…' : s; };
+            var _unitPrice = function(stprs, peinh) {
+                var p = parseFloat((stprs||'').replace(/,/g,'')) || 0;
+                var u = parseInt(peinh||'1', 10) || 1;
+                var val = p / u;
+                var formatted = val % 1 === 0
+                    ? val.toLocaleString('ko-KR')
+                    : val.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+                return u > 1 ? formatted + ' <span style="color:#999;font-size:10px;">(' + _esc(stprs) + '/'+u+')</span>' : formatted;
+            };
             var _thS = 'padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
             var tbl = '<div style="max-height:300px; overflow-x:auto; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
                 + '<table style="border-collapse:collapse; font-size:12px; white-space:nowrap;">'
@@ -300,7 +309,7 @@
                 + '<th style="' + _thS + '">' + T('자재번호','Material No.') + '</th>'
                 + '<th style="' + _thS + '">' + T('자재내역','Description') + '</th>'
                 + '<th style="' + _thS + '">' + T('자재내역2','Description 2') + '</th>'
-                + '<th style="' + _thS + ' text-align:right;">' + T('표준가격','Std.Price') + '</th>'
+                + '<th style="' + _thS + ' text-align:right;">' + T('단가(KRW)','Unit Price') + '</th>'
                 + '<th style="' + _thS + '">' + T('자재상태','Status') + '</th>'
                 + '<th style="' + _thS + '">' + T('제조자P/N','Mfr P/N') + '</th>'
                 + '<th style="' + _thS + '">' + T('생산/검사 메모','Prod Memo') + '</th>'
@@ -315,7 +324,7 @@
                     + '<td style="' + _tdS + ' font-family:monospace;">' + _esc(x.MATNR) + '</td>'
                     + '<td style="' + _tdS + '" title="' + _esc(x.MAKTX) + '">' + _esc(_tr42(x.MAKTX)) + '</td>'
                     + '<td style="' + _tdS + '" title="' + _esc(x.ZTEXT) + '">' + _esc(_tr42(x.ZTEXT)) + '</td>'
-                    + '<td style="' + _tdS + ' text-align:right;">' + _esc(x.STPRS1) + '</td>'
+                    + '<td style="' + _tdS + ' text-align:right;">' + _unitPrice(x.STPRS1, x.PEINH1) + '</td>'
                     + '<td style="' + _tdS + ' text-align:center;">' + _esc(x.MMSTA) + '</td>'
                     + '<td style="' + _tdS + '" title="' + _esc(x.MFRPN) + '">' + _esc(_tr42(x.MFRPN)) + '</td>'
                     + '<td style="' + _tdS + '">' + _esc(x.FERTH) + '</td>'

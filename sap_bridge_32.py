@@ -1352,6 +1352,7 @@ _ZMM009_PATTERN_COLS = [
     ('MAKTX',  'MAKTX'),
     ('ZTEXT',  'ZTEXT'),
     ('STPRS1', 'STPRS1'),
+    ('PEINH1', 'PEINH1'),
     ('MMSTA',  'MMSTA'),
     ('MFRPN',  'MFRPN'),
     ('FERTH',  'FERTH'),
