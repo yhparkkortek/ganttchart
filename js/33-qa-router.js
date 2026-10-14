@@ -293,17 +293,16 @@
                 + '</div>';
             var _esc = function(v) { return (v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
             var _thS = 'padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
-            var tbl = '<div style="max-height:300px; overflow:auto; border:1px solid #dde4ec; border-radius:5px;">'
-                + '<table style="border-collapse:collapse; font-size:12px;">'
+            var tbl = '<div style="max-height:300px; overflow-x:auto; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
+                + '<table style="border-collapse:collapse; font-size:12px; white-space:nowrap;">'
                 + '<thead><tr style="background:#eef3fa;">'
                 + '<th style="' + _thS + ' min-width:100px;">' + T('자재번호','Material No.') + '</th>'
-                + '<th style="' + _thS + ' min-width:180px;">' + T('자재내역','Description') + '</th>'
-                + '<th style="' + _thS + ' min-width:160px;">' + T('자재내역2','Description 2') + '</th>'
+                + '<th style="' + _thS + ' min-width:180px; white-space:normal;">' + T('자재내역','Description') + '</th>'
+                + '<th style="' + _thS + ' min-width:160px; white-space:normal;">' + T('자재내역2','Description 2') + '</th>'
                 + '<th style="' + _thS + ' min-width:80px; text-align:right;">' + T('표준가격','Std.Price') + '</th>'
                 + '<th style="' + _thS + ' min-width:60px;">' + T('자재상태','Status') + '</th>'
-                + '<th style="' + _thS + ' min-width:70px;">' + T('구매담당자','Pur.Grp') + '</th>'
-                + '<th style="' + _thS + ' min-width:130px;">' + T('제조자P/N','Mfr P/N') + '</th>'
-                + '<th style="' + _thS + ' min-width:140px;">' + T('생산/검사 메모','Prod/Insp Memo') + '</th>'
+                + '<th style="' + _thS + ' min-width:130px; white-space:normal;">' + T('제조자P/N','Mfr P/N') + '</th>'
+                + '<th style="' + _thS + ' min-width:140px; white-space:normal;">' + T('생산/검사 메모','Prod Memo') + '</th>'
                 + '</tr></thead><tbody>';
             var _tdS = 'padding:5px 8px; border-bottom:1px solid #eef0f3;';
             shown.forEach(function(x, i) {
@@ -312,14 +311,13 @@
                 tbl += '<tr style="background:' + bg + '; cursor:pointer;" '
                     + 'onclick="window._sapSelectMaterial(\'' + mn + '\')" '
                     + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
-                    + '<td style="' + _tdS + ' font-family:monospace; white-space:nowrap;">' + _esc(x.MATNR) + '</td>'
-                    + '<td style="' + _tdS + '">' + _esc(x.MAKTX) + '</td>'
-                    + '<td style="' + _tdS + '">' + _esc(x.ZTEXT) + '</td>'
-                    + '<td style="' + _tdS + ' text-align:right; white-space:nowrap;">' + _esc(x.STPRS1) + '</td>'
-                    + '<td style="' + _tdS + '">' + _esc(x.MMSTA) + '</td>'
-                    + '<td style="' + _tdS + '">' + _esc(x.EKGRP) + '</td>'
-                    + '<td style="' + _tdS + ' white-space:nowrap;">' + _esc(x.MFRPN) + '</td>'
-                    + '<td style="' + _tdS + '">' + _esc(x.ZPTEXT) + '</td>'
+                    + '<td style="' + _tdS + ' font-family:monospace;">' + _esc(x.MATNR) + '</td>'
+                    + '<td style="' + _tdS + ' white-space:normal; max-width:220px;">' + _esc(x.MAKTX) + '</td>'
+                    + '<td style="' + _tdS + ' white-space:normal; max-width:200px;">' + _esc(x.ZTEXT) + '</td>'
+                    + '<td style="' + _tdS + ' text-align:right;">' + _esc(x.STPRS1) + '</td>'
+                    + '<td style="' + _tdS + ' text-align:center;">' + _esc(x.MMSTA) + '</td>'
+                    + '<td style="' + _tdS + ' white-space:normal; max-width:160px;">' + _esc(x.MFRPN) + '</td>'
+                    + '<td style="' + _tdS + '">' + _esc(x.FERTH) + '</td>'
                     + '</tr>';
             });
             tbl += '</tbody></table></div>';

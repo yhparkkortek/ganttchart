@@ -1345,15 +1345,16 @@ def fetch_where_used_batch(materials, plant='1000'):
 _ZMM009_LAYOUT_VARIANT = 'ZTEXT'  # SAP에 이 이름으로 저장된 레이아웃이 있어야 자동 적용됨
 
 # ZMM009 패턴 조회 시 읽을 컬럼 목록 — (SAP 컬럼 코드, JS 반환 키)
+# FERTH: 덤프에서 MMSTA(P1) 바로 다음 값 "6팀 이기준" — ZMM009에서 "생산/검사 메모" 칸에 표시되는 컬럼
+# ZPTEXT: custom 필드(빈값), EKGRP: ZMM009 ZTEXT 레이아웃에서 미조회 → 둘 다 제외
 _ZMM009_PATTERN_COLS = [
     ('MATNR',  'MATNR'),
     ('MAKTX',  'MAKTX'),
     ('ZTEXT',  'ZTEXT'),
     ('STPRS1', 'STPRS1'),
     ('MMSTA',  'MMSTA'),
-    ('EKGRP',  'EKGRP'),
     ('MFRPN',  'MFRPN'),
-    ('ZPTEXT', 'ZPTEXT'),
+    ('FERTH',  'FERTH'),
 ]
 
 
