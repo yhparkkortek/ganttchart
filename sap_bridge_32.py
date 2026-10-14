@@ -1344,6 +1344,18 @@ def fetch_where_used_batch(materials, plant='1000'):
 # 화면(기본 레이아웃)을 그대로 쓴다 — BOM과 동일한 방어적 설계, 조회 자체를 막지 않음.
 _ZMM009_LAYOUT_VARIANT = 'ZTEXT'  # SAP에 이 이름으로 저장된 레이아웃이 있어야 자동 적용됨
 
+# ZMM009 패턴 조회 시 읽을 컬럼 목록 — (SAP 컬럼 코드, JS 반환 키)
+_ZMM009_PATTERN_COLS = [
+    ('MATNR',  'MATNR'),
+    ('MAKTX',  'MAKTX'),
+    ('ZTEXT',  'ZTEXT'),
+    ('STPRS1', 'STPRS1'),
+    ('MMSTA',  'MMSTA'),
+    ('EKGRP',  'EKGRP'),
+    ('MFRPN',  'MFRPN'),
+    ('ZPTEXT', 'ZPTEXT'),
+]
+
 
 def _set_windows_clipboard_text(text):
     """윈도우 클립보드에 텍스트를 넣는다(pywin32의 win32clipboard) — SAP 다중값 선택 팝업의
@@ -1488,6 +1500,78 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
     header = f'[SAP 자재 List(ZMM009): 자재 {mat_label}]\n'
     text = header + '\n' + body
     return {'ok': True, 'source': source, 'materials': mat_list, 'text': text}
+
+
+def resolve_pattern_via_zmm009(pattern, werks='1000'):
+    """ZMM009 P_MAKTX-LOW 패턴으로 자재를 조회하고 _ZMM009_PATTERN_COLS 컬럼을 한 번에
+    읽어 반환한다(각 항목이 8필드 dict). resolve_materials_by_description_pattern(MM60 F4)
+    대비 장점: 한 트랜잭션에서 자재내역2(ZTEXT)·표준가격(STPRS1)·자재상태(MMSTA)·
+    구매담당자(EKGRP)·제조자부품번호(MFRPN)·생산/검사 메모(ZPTEXT)까지 한 번에 읽음.
+    컬럼이 그리드에 없거나 읽기 실패 시 해당 필드 빈 문자열로 안전하게 채움."""
+    pattern = (pattern or '').strip()
+    if not pattern:
+        raise RuntimeError('검색할 자재내역 패턴이 없습니다.')
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _sap_close_stray_popups(session)
+
+    # ZMM009 진입
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM009'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+    wnd = session.findById('wnd[0]')
+
+    # 플랜트 설정 (ctxtP_WERKS-LOW)
+    try:
+        session.findById('wnd[0]/usr/ctxtP_WERKS-LOW').text = (werks or '1000').strip()
+    except Exception:
+        pass  # 기본값 1000이면 건너뜀
+
+    # 자재내역 패턴 입력 (txtP_MAKTX-LOW)
+    try:
+        session.findById('wnd[0]/usr/txtP_MAKTX-LOW').text = pattern
+    except Exception as e:
+        raise RuntimeError(f'ZMM009 자재내역 패턴 필드(txtP_MAKTX-LOW)를 찾지 못했습니다: {e}')
+
+    # F8 실행
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[8]').press()
+    except Exception as e:
+        raise RuntimeError(f'ZMM009 실행(F8) 실패: {e}')
+    time.sleep(1.5)
+
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid is None:
+        _sap_close_stray_popups(session)
+        return []
+
+    # ZTEXT 레이아웃 적용 — 실패해도 진행(없는 컬럼은 빈 문자열)
+    ok, _diag = _sap_select_alv_layout(session, grid, _ZMM009_LAYOUT_VARIANT)
+    if ok:
+        wnd = session.findById('wnd[0]')
+        grid = _sap_find_grid(wnd)
+        if grid is None:
+            return []
+
+    try:
+        row_count = int(grid.RowCount)
+    except Exception:
+        return []
+
+    materials = []
+    for row in range(row_count):
+        item = {}
+        for col_sap, col_key in _ZMM009_PATTERN_COLS:
+            try:
+                item[col_key] = (grid.GetCellValue(row, col_sap) or '').strip()
+            except Exception:
+                item[col_key] = ''
+        if item.get('MATNR'):
+            materials.append(item)
+
+    return materials
 
 
 # ── "승인원 표지 생성" 전용 헬퍼 ────────────────────────────────────────
@@ -7238,7 +7322,7 @@ def main():
             result = lookup_documents_batch(materials, doc_type)
         elif action == 'resolve_pattern':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
-            mats = resolve_materials_by_description_pattern(pattern)
+            mats = resolve_pattern_via_zmm009(pattern)
             result = {'ok': True, 'pattern': pattern, 'count': len(mats), 'materials': mats}
         elif action == 'fetch_project_codes':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''

@@ -281,7 +281,7 @@
             //    넣어주기 위한 것 — 칩 팝업은 자재번호만 들고 있어서 이게 없으면 보관함이 번호만 남는다.
             try {
                 window._sapLastPatternDesc = window._sapLastPatternDesc || {};
-                list.forEach(function (x) { if (x && x.matnr) window._sapLastPatternDesc[x.matnr] = x.desc || ''; });
+                list.forEach(function (x) { if (x && x.MATNR) window._sapLastPatternDesc[x.MATNR] = x.MAKTX || ''; });
             } catch (e) { /* 캐시 실패는 기능에 영향 없음 */ }
             var en = window._currentLang === 'en';
             var hdr = '<div style="font-size:12px; margin-bottom:6px;">🔎 '
@@ -291,22 +291,35 @@
                 + '<div style="font-size:11px; color:#5577aa; margin-bottom:5px;">💡 '
                 + T('행을 클릭하면 조회 기능을 선택할 수 있습니다', 'Click a row to select an action')
                 + '</div>';
-            var tbl = '<div style="max-height:300px; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
-                + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+            var _esc = function(v) { return (v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+            var _thS = 'padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
+            var tbl = '<div style="max-height:300px; overflow:auto; border:1px solid #dde4ec; border-radius:5px;">'
+                + '<table style="border-collapse:collapse; font-size:12px;">'
                 + '<thead><tr style="background:#eef3fa;">'
-                + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; width:105px; position:sticky; top:0; background:#eef3fa;">' + T('자재번호', 'Material') + '</th>'
-                + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; position:sticky; top:0; background:#eef3fa;">' + T('자재내역', 'Description') + '</th>'
+                + '<th style="' + _thS + ' min-width:100px;">' + T('자재번호','Material No.') + '</th>'
+                + '<th style="' + _thS + ' min-width:180px;">' + T('자재내역','Description') + '</th>'
+                + '<th style="' + _thS + ' min-width:160px;">' + T('자재내역2','Description 2') + '</th>'
+                + '<th style="' + _thS + ' min-width:80px; text-align:right;">' + T('표준가격','Std.Price') + '</th>'
+                + '<th style="' + _thS + ' min-width:60px;">' + T('자재상태','Status') + '</th>'
+                + '<th style="' + _thS + ' min-width:70px;">' + T('구매담당자','Pur.Grp') + '</th>'
+                + '<th style="' + _thS + ' min-width:130px;">' + T('제조자P/N','Mfr P/N') + '</th>'
+                + '<th style="' + _thS + ' min-width:140px;">' + T('생산/검사 메모','Prod/Insp Memo') + '</th>'
                 + '</tr></thead><tbody>';
+            var _tdS = 'padding:5px 8px; border-bottom:1px solid #eef0f3;';
             shown.forEach(function(x, i) {
-                var mn = (x.matnr || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                var mnHtml = (x.matnr || '').replace(/&/g, '&amp;');
-                var descHtml = (x.desc || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var mn = (x.MATNR || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
                 tbl += '<tr style="background:' + bg + '; cursor:pointer;" '
                     + 'onclick="window._sapSelectMaterial(\'' + mn + '\')" '
                     + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
-                    + '<td style="padding:5px 8px; font-family:monospace; white-space:nowrap; border-bottom:1px solid #eef0f3;">' + mnHtml + '</td>'
-                    + '<td style="padding:5px 8px; border-bottom:1px solid #eef0f3;">' + descHtml + '</td>'
+                    + '<td style="' + _tdS + ' font-family:monospace; white-space:nowrap;">' + _esc(x.MATNR) + '</td>'
+                    + '<td style="' + _tdS + '">' + _esc(x.MAKTX) + '</td>'
+                    + '<td style="' + _tdS + '">' + _esc(x.ZTEXT) + '</td>'
+                    + '<td style="' + _tdS + ' text-align:right; white-space:nowrap;">' + _esc(x.STPRS1) + '</td>'
+                    + '<td style="' + _tdS + '">' + _esc(x.MMSTA) + '</td>'
+                    + '<td style="' + _tdS + '">' + _esc(x.EKGRP) + '</td>'
+                    + '<td style="' + _tdS + ' white-space:nowrap;">' + _esc(x.MFRPN) + '</td>'
+                    + '<td style="' + _tdS + '">' + _esc(x.ZPTEXT) + '</td>'
                     + '</tr>';
             });
             tbl += '</tbody></table></div>';
