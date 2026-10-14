@@ -50,9 +50,12 @@
         else el.classList.add('req-missing');
     };
     window._checkAllRequiredFields = function() {
-        ['sum-customer', 'sum-customer-model', 'sum-ktk-pn-model', 'sum-pm'].forEach(function(id) {
+        ['sum-customer', 'sum-pm'].forEach(function(id) {
             const el = document.getElementById(id);
             if (el) window._checkRequiredField(el);
+        });
+        document.querySelectorAll('.sum-model-card .req-field').forEach(function(el) {
+            window._checkRequiredField(el);
         });
         // 💡 PROTO Start는 신규 프로젝트(아직 드라이브에 없는 파일) 등록 시에만 필수 — 이미 등록된
         //    기존 프로젝트를 열었을 때는 빨간 경고를 띄우지 않는다 (validateRequiredProjectInfo와 동일 기준)

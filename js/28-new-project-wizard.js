@@ -315,10 +315,23 @@ function _fillSummaryFields() {
 
     // 필수 필드
     setVal('sum-customer',      d.customer  || '');
-    setVal('sum-customer-model', d.model    || '');
-    setVal('sum-ktk-pn-model',  d.ktkpn    || '');
     setVal('sum-pm',            d.pm        || '');
     setVal('sum-mail-keywords', d.keywords  || '');
+    // 다중 모델 카드 — 마법사 pre-fill 값을 첫 번째 카드에 반영
+    (function() {
+        if (!window.tabData) window.tabData = {};
+        const ktkRaw = d.ktkpn || '';
+        const us = ktkRaw.indexOf('_');
+        window.tabData.projectModels = [{
+            unitId: (window.getMcUnits && window.getMcUnits().length) ? window.getMcUnits()[0] : '',
+            고객모델명: d.model || '',
+            프로젝트코드: d.projectCode || '',
+            프로젝트명칭: d.projectName || '',
+            KTKPN: us === -1 ? ktkRaw : ktkRaw.slice(0, us),
+            KTK모델명: us === -1 ? '' : ktkRaw.slice(us + 1)
+        }];
+        if (window.renderProjectModels) window.renderProjectModels();
+    })();
 
     // 🐛 [2026-10-07 버그 수정] sum-pm은 자동완성 "선택" 또는 "포커스 이탈(blur)" 시에만 주소록
     //    dept → projectMeta.팀 자동 감지가 동작하는데(js/22g), 위 setVal은 값만 채울 뿐 그 어느

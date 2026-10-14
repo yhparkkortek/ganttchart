@@ -44,6 +44,8 @@ window.mcAddUnitConfirm = function() {
             delete window.tabData.mcSalesPriceDetailByUnit[oldName];
             if (window.mcActiveUnit === oldName) window.mcActiveUnit = name;
             window.mcRenderUnitTabs();
+            // Summary 모델 카드 unitId 동기
+            if (window.renameProjectModelUnit) window.renameProjectModelUnit(oldName, name);
         }
     } else if (isNaming) {
         // 💡 기존 데이터를 통째로 이 이름으로 이관 (내용은 그대로, 이름표만 붙임)
@@ -64,10 +66,22 @@ window.mcAddUnitConfirm = function() {
         window.tabData.mcTable = movedRevisions.R1 || [];
         window.mcRenderUnitTabs();
         window.populateTabData();
+        // Summary 모델 카드 unitId 동기 (이름 없는 첫 카드에 이름 부여)
+        if (window.tabData.projectModels) {
+            const _em = window.tabData.projectModels.find(function(m) { return !m.unitId; });
+            if (_em) { _em.unitId = name; if (window.renderProjectModels) window.renderProjectModels(); }
+        }
     } else {
         // 새 빈 종류 추가 (기존 동작)
         units.push(name);
         window.mcRenderUnitTabs();
+        // Summary에 대응 모델 카드 추가
+        if (window.tabData && window.tabData.projectModels) {
+            if (!window.tabData.projectModels.some(function(m) { return m.unitId === name; })) {
+                window.tabData.projectModels.push({ unitId: name, 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' });
+                if (window.renderProjectModels) window.renderProjectModels();
+            }
+        }
     }
     if (ov) { ov.dataset.mode = ''; ov.dataset.renameTarget = ''; ov.style.display = 'none'; }
 };
@@ -89,6 +103,11 @@ window.mcRemoveUnit = function(unit) {
     if (idx !== -1) units.splice(idx, 1);
     if (window.mcActiveUnit === unit) window.mcActiveUnit = '';
     window.mcRenderUnitTabs();
+    // Summary 모델 카드에서도 해당 unitId 카드 제거 (첫 번째 카드는 유지)
+    if (window.tabData && window.tabData.projectModels && window.tabData.projectModels.length > 1) {
+        const _cidx = window.tabData.projectModels.findIndex(function(m) { return m.unitId === unit; });
+        if (_cidx > 0) { window.tabData.projectModels.splice(_cidx, 1); if (window.renderProjectModels) window.renderProjectModels(); }
+    }
 };
 
 // 종류 전환: 현재 화면 내용을 지금 종류에 저장하고, mcRevisions/mcSalesPriceDetail "포인터"를

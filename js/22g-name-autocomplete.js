@@ -187,6 +187,65 @@ window._toggleProjectStatus = function() {
     sel.dispatchEvent(new Event('change', { bubbles: true }));
 };
 
+// ─── 프로젝트 정보 다중 모델 카드 ──────────────────────────────────────────
+window._renderModelCardHtml = function(model, idx) {
+    var uid = escapeHtml(model.unitId || '');
+    var label = uid ? ('모델 #' + (idx + 1) + ' · ' + uid) : ('모델 #' + (idx + 1));
+    var canDelete = idx > 0;
+    var ktkVal = escapeHtml(model.KTKPN && model.KTK모델명 ? model.KTKPN + '_' + model.KTK모델명 : (model.KTKPN || model.KTK모델명 || ''));
+    return '<div class="sum-model-card" data-unit-id="' + uid + '" style="display:grid; grid-template-columns:130px 1fr 130px 1fr; gap:4px 10px; padding:10px 14px; border:1px solid #cfe3e5; border-radius:6px; background:#f8fdfe;">' +
+        '<div style="grid-column:1/-1; display:flex; align-items:center; gap:8px; margin-bottom:4px;">' +
+            '<span style="font-size:12px; font-weight:bold; color:#1b7a87;">' + label + '</span>' +
+            (canDelete ? '<button type="button" onclick="window.removeProjectModel(' + idx + ')" style="margin-left:auto; font-size:11px; padding:1px 8px; border:1px solid #fcc; border-radius:10px; background:#fff5f5; cursor:pointer; color:#c92a2a;">✕ 삭제</button>' : '<span style="margin-left:auto; font-size:11px; color:#aaa;">(기본)</span>') +
+        '</div>' +
+        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">고객 모델명 <span style="color:#e03131;">*</span></label>' +
+        '<input type="text" class="u-input req-field" data-model-field="고객모델명" placeholder="예: STELLAR32" value="' + escapeHtml(model.고객모델명 || '') + '" oninput="window._checkRequiredField(this)">' +
+        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">프로젝트 코드</label>' +
+        '<input type="text" class="u-input" data-model-field="프로젝트코드" placeholder="예: G2608OB" value="' + escapeHtml(model.프로젝트코드 || '') + '">' +
+        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">프로젝트 명칭</label>' +
+        '<input type="text" class="u-input" data-model-field="프로젝트명칭" placeholder="예: LNW>S32>LOWER" value="' + escapeHtml(model.프로젝트명칭 || '') + '">' +
+        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">KTK PN_모델명 <span style="color:#e03131;">*</span></label>' +
+        '<input type="text" class="u-input req-field" data-model-field="KTK" placeholder="예: 502574_KTS320DPS01" value="' + ktkVal + '" oninput="window._checkRequiredField(this)">' +
+    '</div>';
+};
+
+window.renderProjectModels = function() {
+    var container = document.getElementById('sum-models-container');
+    if (!container) return;
+    window.tabData = window.tabData || {};
+    var models = window.tabData.projectModels;
+    if (!models || !models.length) {
+        models = [{ unitId: '', 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' }];
+        window.tabData.projectModels = models;
+    }
+    container.innerHTML = models.map(function(m, i) { return window._renderModelCardHtml(m, i); }).join('');
+};
+
+window.addProjectModel = function() {
+    window.tabData = window.tabData || {};
+    if (!window.tabData.projectModels || !window.tabData.projectModels.length) {
+        window.tabData.projectModels = [{ unitId: '', 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' }];
+    }
+    var units = window.getMcUnits ? window.getMcUnits() : [];
+    var usedIds = window.tabData.projectModels.map(function(m) { return m.unitId; });
+    var nextUnit = '';
+    for (var i = 0; i < units.length; i++) { if (!usedIds.includes(units[i])) { nextUnit = units[i]; break; } }
+    window.tabData.projectModels.push({ unitId: nextUnit, 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' });
+    window.renderProjectModels();
+};
+
+window.removeProjectModel = function(idx) {
+    if (!window.tabData || !window.tabData.projectModels || idx === 0) return;
+    window.tabData.projectModels.splice(idx, 1);
+    window.renderProjectModels();
+};
+
+window.renameProjectModelUnit = function(oldId, newId) {
+    if (!window.tabData || !window.tabData.projectModels) return;
+    var m = window.tabData.projectModels.find(function(x) { return x.unitId === oldId; });
+    if (m) { m.unitId = newId; window.renderProjectModels(); }
+};
+
 window.collectTabData = function() {
     window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
 
@@ -216,17 +275,30 @@ window.collectTabData = function() {
     window.projectMeta = window.projectMeta || {};
     const pm = window.projectMeta;
     const bind = function(id, key) { const el = document.getElementById(id); if (el) pm[key] = el.value; };
-    bind('sum-project-code', '프로젝트코드');
-    bind('sum-project-name', '프로젝트명');
     bind('sum-customer', '고객사');
-    bind('sum-customer-model', '고객모델명');
-    // 💡 KTK PN_모델명: 화면엔 하나로 합쳐서 입력받고, 내부 데이터는 기존 호환을 위해 KTKPN / KTK모델명으로 분리 저장
-    const ktkCombinedEl = document.getElementById('sum-ktk-pn-model');
-    if (ktkCombinedEl) {
-        const ktkVal = ktkCombinedEl.value || '';
-        const us = ktkVal.indexOf('_');
-        pm.KTKPN = us === -1 ? ktkVal : ktkVal.slice(0, us);
-        pm.KTK모델명 = us === -1 ? '' : ktkVal.slice(us + 1);
+    // 다중 모델 카드 수집
+    const _cardModels = [];
+    document.querySelectorAll('.sum-model-card').forEach(function(card) {
+        const gf = function(f) { const el = card.querySelector('[data-model-field="' + f + '"]'); return el ? el.value.trim() : ''; };
+        const ktkRaw = gf('KTK');
+        const us = ktkRaw.indexOf('_');
+        _cardModels.push({
+            unitId: card.dataset.unitId || '',
+            고객모델명: gf('고객모델명'),
+            프로젝트코드: gf('프로젝트코드'),
+            프로젝트명칭: gf('프로젝트명칭'),
+            KTKPN: us === -1 ? ktkRaw : ktkRaw.slice(0, us),
+            KTK모델명: us === -1 ? '' : ktkRaw.slice(us + 1)
+        });
+    });
+    window.tabData.projectModels = _cardModels;
+    // 선택 1: 첫 번째 카드를 단일값 필드에 반영 (기존 downstream 코드 하위 호환)
+    if (_cardModels.length > 0) {
+        pm.고객모델명 = _cardModels[0].고객모델명;
+        pm.프로젝트코드 = _cardModels[0].프로젝트코드;
+        pm.프로젝트명 = _cardModels[0].프로젝트명칭;
+        pm.KTKPN = _cardModels[0].KTKPN;
+        pm.KTK모델명 = _cardModels[0].KTK모델명;
     }
     bind('sum-pm', '프로젝트담당자');
     bind('sum-project-status', '완료여부'); // 💡 값: "" = 진행중, "완료" = 완료
@@ -312,12 +384,22 @@ window.populateTabData = function() {
     const setVal = function(id, val) { const el = document.getElementById(id); if (el) el.value = val || ''; };
     
     // Summary 탭 데이터 매핑
-    setVal('sum-project-code', pm.프로젝트코드);
-    setVal('sum-project-name', pm.프로젝트명);
     setVal('sum-customer', pm.고객사);
-    setVal('sum-customer-model', pm.고객모델명);
-    // 💡 KTK PN / KTK 모델명을 하나의 필드로 합쳐서 표시 (예: 502574_MVD>KTS320DPS01,LNW)
-    setVal('sum-ktk-pn-model', [pm.KTKPN || '', pm.KTK모델명 || ''].filter(Boolean).join('_'));
+    // 다중 모델 카드 복원 (구버전 마이그레이션 포함)
+    (function() {
+        if (!td.projectModels || !td.projectModels.length) {
+            var _firstUnit = (window.getMcUnits && window.getMcUnits().length) ? window.getMcUnits()[0] : '';
+            td.projectModels = [{
+                unitId: _firstUnit,
+                고객모델명: pm.고객모델명 || pm.모델명 || '',
+                프로젝트코드: pm.프로젝트코드 || '',
+                프로젝트명칭: pm.프로젝트명 || '',
+                KTKPN: pm.KTKPN || '',
+                KTK모델명: pm.KTK모델명 || ''
+            }];
+        }
+        if (window.renderProjectModels) window.renderProjectModels();
+    })();
     setVal('sum-pm', pm.프로젝트담당자);
     setVal('sum-project-status', pm.완료여부);
     setVal('sum-mail-keywords', pm.메일키워드);
