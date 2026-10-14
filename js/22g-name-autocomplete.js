@@ -193,19 +193,28 @@ window._renderModelCardHtml = function(model, idx) {
     var label = uid ? ('모델 #' + (idx + 1) + ' · ' + uid) : ('모델 #' + (idx + 1));
     var canDelete = idx > 0;
     var ktkVal = escapeHtml(model.KTKPN && model.KTK모델명 ? model.KTKPN + '_' + model.KTK모델명 : (model.KTKPN || model.KTK모델명 || ''));
-    return '<div class="sum-model-card" data-unit-id="' + uid + '" style="display:grid; grid-template-columns:130px 1fr 130px 1fr; gap:4px 10px; padding:10px 14px; border:1px solid #cfe3e5; border-radius:6px; background:#f8fdfe;">' +
-        '<div style="grid-column:1/-1; display:flex; align-items:center; gap:8px; margin-bottom:4px;">' +
-            '<span style="font-size:12px; font-weight:bold; color:#1b7a87;">' + label + '</span>' +
-            (canDelete ? '<button type="button" onclick="window.removeProjectModel(' + idx + ')" style="margin-left:auto; font-size:11px; padding:1px 8px; border:1px solid #fcc; border-radius:10px; background:#fff5f5; cursor:pointer; color:#c92a2a;">✕ 삭제</button>' : '<span style="margin-left:auto; font-size:11px; color:#aaa;">(기본)</span>') +
+    var _delBtn = canDelete
+        ? '<button type="button" onclick="window.removeProjectModel(' + idx + ')" '
+          + 'style="margin-left:auto; font-size:11px; padding:2px 10px; border:1px solid #f0b8b8; border-radius:10px; background:#fdecec; cursor:pointer; color:#c92a2a;" '
+          + 'onmouseover="this.style.background=\'#f8d4d4\';this.style.borderColor=\'#e59a9a\';" '
+          + 'onmouseout="this.style.background=\'#fdecec\';this.style.borderColor=\'#f0b8b8\';">✕ 삭제</button>'
+        : '<span style="margin-left:auto; font-size:11px; color:#aaa;">(기본)</span>';
+    var _lbl = '<label style="font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; background:#fff; white-space:nowrap;">';
+    return '<div class="sum-model-card" data-unit-id="' + uid + '" style="border:1px solid #cfe3e5; border-radius:6px; background:#fff; overflow:hidden;">' +
+        '<div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#e0f5f7; border-bottom:1px solid #cfe3e5;">' +
+            '<span style="font-size:12px; font-weight:bold; color:#00707d;">' + label + '</span>' +
+            _delBtn +
         '</div>' +
-        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">고객 모델명 <span style="color:#e03131;">*</span></label>' +
-        '<input type="text" class="u-input req-field" data-model-field="고객모델명" placeholder="예: STELLAR32" value="' + escapeHtml(model.고객모델명 || '') + '" oninput="window._checkRequiredField(this)">' +
-        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">프로젝트 코드</label>' +
-        '<input type="text" class="u-input" data-model-field="프로젝트코드" placeholder="예: G2608OB" value="' + escapeHtml(model.프로젝트코드 || '') + '">' +
-        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">프로젝트 명칭</label>' +
-        '<input type="text" class="u-input" data-model-field="프로젝트명칭" placeholder="예: LNW>S32>LOWER" value="' + escapeHtml(model.프로젝트명칭 || '') + '">' +
-        '<label style="font-size:12.5px; color:#555; white-space:nowrap;">KTK PN_모델명 <span style="color:#e03131;">*</span></label>' +
-        '<input type="text" class="u-input req-field" data-model-field="KTK" placeholder="예: 502574_KTS320DPS01" value="' + ktkVal + '" oninput="window._checkRequiredField(this)">' +
+        '<div class="concept-grid" style="grid-template-columns:140px 1fr 140px 1fr; padding:10px 12px;">' +
+            _lbl + '고객 모델명 <span style="color:#e03131;">*</span></label>' +
+            '<input type="text" class="u-input req-field" data-model-field="고객모델명" placeholder="예: STELLAR32" value="' + escapeHtml(model.고객모델명 || '') + '" oninput="window._checkRequiredField(this)">' +
+            _lbl + '프로젝트 코드</label>' +
+            '<input type="text" class="u-input" data-model-field="프로젝트코드" placeholder="예: G2608OB" value="' + escapeHtml(model.프로젝트코드 || '') + '">' +
+            _lbl + '프로젝트 명칭</label>' +
+            '<input type="text" class="u-input" data-model-field="프로젝트명칭" placeholder="예: LNW>S32>LOWER" value="' + escapeHtml(model.프로젝트명칭 || '') + '">' +
+            _lbl + 'KTK PN_모델명 <span style="color:#e03131;">*</span></label>' +
+            '<input type="text" class="u-input req-field" data-model-field="KTK" placeholder="예: 502574_MVD>KTS320DPS01" value="' + ktkVal + '" oninput="window._checkRequiredField(this)">' +
+        '</div>' +
     '</div>';
 };
 

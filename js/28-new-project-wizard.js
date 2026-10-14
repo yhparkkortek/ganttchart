@@ -104,10 +104,10 @@ function _renderStep() {
 
 // ─── Step 1: MC Table 구분자 ──────────────────────────────────────────
 const _MC_UNITS = [
+    { key: 'MVD',  label: 'MVD',  desc: 'Main Video Display — 메인 디스플레이' },
+    { key: 'TVD',  label: 'TVD',  desc: 'Top Video Display — 상단 디스플레이' },
+    { key: 'TPR',  label: 'TPR',  desc: 'Topper — 토퍼 디스플레이' },
     { key: 'BTN',  label: 'BTN',  desc: 'Button Deck — 버튼 데크' },
-    { key: 'MAIN', label: 'MAIN', desc: 'Main Display — 메인 디스플레이 (MVD)' },
-    { key: 'UPR',  label: 'UPR',  desc: 'Upper Display — 상단 디스플레이 (TVD)' },
-    { key: 'TPR',  label: 'TPR',  desc: 'Topper — 토퍼 디스플레이 (TPR)' },
     { key: 'PTD',  label: 'PTD',  desc: 'Player Tracking Display — Info 디스플레이' },
 ];
 function _renderStep1(body) {
