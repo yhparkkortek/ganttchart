@@ -1502,7 +1502,7 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
     return {'ok': True, 'source': source, 'materials': mat_list, 'text': text}
 
 
-def resolve_pattern_via_zmm009(pattern, werks='1000'):
+def resolve_pattern_via_zmm009(pattern, lgort='1000'):
     """ZMM009 P_MAKTX-LOW 패턴으로 자재를 조회하고 _ZMM009_PATTERN_COLS 컬럼을 한 번에
     읽어 반환한다(각 항목이 8필드 dict). resolve_materials_by_description_pattern(MM60 F4)
     대비 장점: 한 트랜잭션에서 자재내역2(ZTEXT)·표준가격(STPRS1)·자재상태(MMSTA)·
@@ -1522,11 +1522,11 @@ def resolve_pattern_via_zmm009(pattern, werks='1000'):
     time.sleep(0.8)
     wnd = session.findById('wnd[0]')
 
-    # 플랜트 설정 (ctxtP_WERKS-LOW)
+    # 저장위치 설정 (ctxtP_LGORT-LOW) — 매크로(ZMM009.vbs)와 동일하게 "1000"
     try:
-        session.findById('wnd[0]/usr/ctxtP_WERKS-LOW').text = (werks or '1000').strip()
+        session.findById('wnd[0]/usr/ctxtP_LGORT-LOW').text = (lgort or '1000').strip()
     except Exception:
-        pass  # 기본값 1000이면 건너뜀
+        pass
 
     # 자재내역 패턴 입력 (txtP_MAKTX-LOW)
     try:
