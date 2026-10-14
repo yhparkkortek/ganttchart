@@ -473,6 +473,7 @@ window.populateTabData = function() {
     if (window.loadFilterRulesFromDrive) window.loadFilterRulesFromDrive();
 
     setVal('sum-purpose', sd.purpose);
+    (function() { var ta = document.getElementById('sum-purpose'); if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; } })();
     setVal('sum-volume', sd.volume);
     setVal('sum-mp-date', sd.mpDate);
     setVal('sum-background', sd.background);
