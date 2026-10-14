@@ -292,17 +292,18 @@
                 + T('행을 클릭하면 조회 기능을 선택할 수 있습니다', 'Click a row to select an action')
                 + '</div>';
             var _esc = function(v) { return (v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+            var _tr42 = function(v) { var s = v||''; return s.length > 42 ? s.slice(0,42)+'…' : s; };
             var _thS = 'padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
             var tbl = '<div style="max-height:300px; overflow-x:auto; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
                 + '<table style="border-collapse:collapse; font-size:12px; white-space:nowrap;">'
                 + '<thead><tr style="background:#eef3fa;">'
-                + '<th style="' + _thS + ' min-width:100px;">' + T('자재번호','Material No.') + '</th>'
-                + '<th style="' + _thS + ' min-width:180px; white-space:normal;">' + T('자재내역','Description') + '</th>'
-                + '<th style="' + _thS + ' min-width:160px; white-space:normal;">' + T('자재내역2','Description 2') + '</th>'
-                + '<th style="' + _thS + ' min-width:80px; text-align:right;">' + T('표준가격','Std.Price') + '</th>'
-                + '<th style="' + _thS + ' min-width:60px;">' + T('자재상태','Status') + '</th>'
-                + '<th style="' + _thS + ' min-width:130px; white-space:normal;">' + T('제조자P/N','Mfr P/N') + '</th>'
-                + '<th style="' + _thS + ' min-width:140px; white-space:normal;">' + T('생산/검사 메모','Prod Memo') + '</th>'
+                + '<th style="' + _thS + '">' + T('자재번호','Material No.') + '</th>'
+                + '<th style="' + _thS + '">' + T('자재내역','Description') + '</th>'
+                + '<th style="' + _thS + '">' + T('자재내역2','Description 2') + '</th>'
+                + '<th style="' + _thS + ' text-align:right;">' + T('표준가격','Std.Price') + '</th>'
+                + '<th style="' + _thS + '">' + T('자재상태','Status') + '</th>'
+                + '<th style="' + _thS + '">' + T('제조자P/N','Mfr P/N') + '</th>'
+                + '<th style="' + _thS + '">' + T('생산/검사 메모','Prod Memo') + '</th>'
                 + '</tr></thead><tbody>';
             var _tdS = 'padding:5px 8px; border-bottom:1px solid #eef0f3;';
             shown.forEach(function(x, i) {
@@ -312,11 +313,11 @@
                     + 'onclick="window._sapSelectMaterial(\'' + mn + '\')" '
                     + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
                     + '<td style="' + _tdS + ' font-family:monospace;">' + _esc(x.MATNR) + '</td>'
-                    + '<td style="' + _tdS + ' white-space:normal; max-width:220px;">' + _esc(x.MAKTX) + '</td>'
-                    + '<td style="' + _tdS + ' white-space:normal; max-width:200px;">' + _esc(x.ZTEXT) + '</td>'
+                    + '<td style="' + _tdS + '" title="' + _esc(x.MAKTX) + '">' + _esc(_tr42(x.MAKTX)) + '</td>'
+                    + '<td style="' + _tdS + '" title="' + _esc(x.ZTEXT) + '">' + _esc(_tr42(x.ZTEXT)) + '</td>'
                     + '<td style="' + _tdS + ' text-align:right;">' + _esc(x.STPRS1) + '</td>'
                     + '<td style="' + _tdS + ' text-align:center;">' + _esc(x.MMSTA) + '</td>'
-                    + '<td style="' + _tdS + ' white-space:normal; max-width:160px;">' + _esc(x.MFRPN) + '</td>'
+                    + '<td style="' + _tdS + '" title="' + _esc(x.MFRPN) + '">' + _esc(_tr42(x.MFRPN)) + '</td>'
                     + '<td style="' + _tdS + '">' + _esc(x.FERTH) + '</td>'
                     + '</tr>';
             });
