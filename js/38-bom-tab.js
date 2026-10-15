@@ -33,17 +33,20 @@
     //    ZPP033이 주는 컬럼: IDNRK OJTXP MMSTA MENGE MMEIN WGBEZ60 (MTSTB는 MMSTA와 중복이라 제외)
     //    ZMM009 보강으로 붙는 컬럼: ZTEXT(자재내역2) STPRS1·PEINH1(→단가) MFRPN(제조사) FERTH(담당자)
     //    `_UNITPRICE`는 STPRS1÷PEINH1로 계산하는 가상 컬럼.
+    //  폭은 "글자수가 고정인 열"(구성부품 6자리·담당자·수량·단위·상태)을 최대한 좁혀서,
+    //  40자가 반드시 다 보여야 하는 구성부품내역(310px)과 맨 끝 비고가 같이 들어가게 맞췄다.
+    //  비고는 폭을 지정하지 않아 남는 공간을 그대로 가져간다(가로 스크롤 없이 항상 보이게).
     var BOM_COLUMNS = [
-        { key: 'IDNRK',      ko: '구성부품',     en: 'Component',     w: '72px',  mono: true },
+        { key: 'IDNRK',      ko: '구성부품',     en: 'Component',     w: '60px',  mono: true },
         { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '310px', nowrap: true },
-        { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '140px', nowrap: true },
-        { key: 'MENGE',      ko: '수량',         en: 'Qty',           w: '52px',  align: 'right' },
-        { key: 'MMEIN',      ko: '단위',         en: 'Unit',          w: '40px',  align: 'center' },
-        { key: '_UNITPRICE', ko: '단가(KRW)',    en: 'Unit Price',    w: '78px',  align: 'right' },
-        { key: 'MMSTA',      ko: '상태',         en: 'Status',        w: '44px',  align: 'center' },
-        { key: 'WGBEZ60',    ko: 'Group2',       en: 'Group2',        w: '126px', nowrap: true },
-        { key: 'MFRPN',      ko: '제조사',       en: 'Manufacturer',  w: '104px', nowrap: true },
-        { key: 'FERTH',      ko: '담당자',       en: 'Person',        w: '88px',  nowrap: true }
+        { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '116px', nowrap: true },
+        { key: 'MENGE',      ko: '수량',         en: 'Qty',           w: '48px',  align: 'right' },
+        { key: 'MMEIN',      ko: '단위',         en: 'Unit',          w: '36px',  align: 'center' },
+        { key: '_UNITPRICE', ko: '단가(KRW)',    en: 'Unit Price',    w: '74px',  align: 'right' },
+        { key: 'MMSTA',      ko: '상태',         en: 'Status',        w: '40px',  align: 'center' },
+        { key: 'WGBEZ60',    ko: 'Group2',       en: 'Group2',        w: '118px', nowrap: true },
+        { key: 'MFRPN',      ko: '제조사',       en: 'Manufacturer',  w: '92px',  nowrap: true },
+        { key: 'FERTH',      ko: '담당자',       en: 'Person',        w: '72px',  nowrap: true }
     ];
 
     var _matKey = function (v) { return String(v || '').trim().replace(/^0+/, ''); };
@@ -236,13 +239,41 @@
     };
 
     // ─── 비고(메모) — 구성부품번호 기준으로 보관해서 재조회해도 유지 ──────
-    window.bomSetNote = function (idnrk, value) {
+    window.bomSetNote = function (el) {
         var unit = window._bomActiveUnit();
         var st = window._bomStore(unit);
+        el.title = el.value;   // 마우스를 올리면 전체 내용이 말풍선으로 보이게
         if (!st) return;
         st.notes = st.notes || {};
-        if (value && value.trim()) st.notes[idnrk] = value;
-        else delete st.notes[idnrk];
+        if (el.value && el.value.trim()) st.notes[el.dataset.bomNote] = el.value;
+        else delete st.notes[el.dataset.bomNote];
+    };
+
+    // 비고 칸은 좁아서 긴 메모를 쓰기 어렵다 — 쓰는 동안만 넓은 입력창으로 띄우고(절대배치라
+    // 표 레이아웃은 그대로), 다 쓰고 포커스를 떠나면 원래 너비로 되돌린다.
+    window._bomNoteFocus = function (el) {
+        el.style.position = 'absolute';
+        el.style.right = '2px';
+        el.style.top = '1px';
+        el.style.width = '340px';
+        el.style.zIndex = '20';
+        el.style.background = '#fff';
+        el.style.border = '1px solid #52a5af';
+        el.style.borderRadius = '4px';
+        el.style.padding = '2px 5px';
+        el.style.boxShadow = '0 2px 8px rgba(0,0,0,.18)';
+    };
+    window._bomNoteBlur = function (el) {
+        el.style.position = '';
+        el.style.right = '';
+        el.style.top = '';
+        el.style.width = '100%';
+        el.style.zIndex = '';
+        el.style.background = 'transparent';
+        el.style.border = 'none';
+        el.style.borderRadius = '';
+        el.style.padding = '';
+        el.style.boxShadow = '';
     };
 
     // ─── 레벨 접기/펴기 ────────────────────────────────────────────────
@@ -255,9 +286,14 @@
         window.bomRender();
     };
 
+    // 버튼 하나로 "모두 접기 ↔ 모두 펼치기"를 번갈아 수행한다(지금 접힌 가지가 있으면 펼치기로 동작)
     window.bomToggleAll = function (collapse) {
         var st = window._bomStore();
         if (!st || !st.rows) return;
+        if (collapse === undefined) {
+            var anyCollapsed = Object.keys(st._collapsed || {}).some(function (k) { return st._collapsed[k]; });
+            collapse = !anyCollapsed;
+        }
         st._collapsed = {};
         if (collapse) {
             st.rows.forEach(function (r, i) {
@@ -266,6 +302,16 @@
             });
         }
         window.bomRender();
+    };
+
+    // 토글 버튼의 글자/툴팁을 현재 상태에 맞춘다(렌더 끝에서 호출)
+    window._bomSyncToggleBtn = function () {
+        var btn = document.getElementById('bom-toggle-btn');
+        if (!btn) return;
+        var st = window._bomStore();
+        var anyCollapsed = !!(st && st._collapsed && Object.keys(st._collapsed).some(function (k) { return st._collapsed[k]; }));
+        btn.textContent = anyCollapsed ? _t('▾ 펼치기', '▾ Expand') : _t('▸ 접기', '▸ Collapse');
+        btn.title = anyCollapsed ? _t('하위 구성품 모두 펼치기', 'Expand all children') : _t('하위 구성품 모두 접기', 'Collapse all children');
     };
 
     // ─── 렌더 ──────────────────────────────────────────────────────────
@@ -302,11 +348,13 @@
         };
 
         thead.innerHTML = '<tr>'
-            + '<th style="' + thS + ' width:58px;">' + _esc(_t('레벨', 'Level')) + '</th>'
+            + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
             + BOM_COLUMNS.map(function (c) {
                 return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
             }).join('')
-            + '<th style="' + thS + ' width:120px;">' + _esc(_t('비고', 'Note')) + '</th>'
+            // ⚠️ .concept-table은 table-layout:fixed라 min-width가 무시된다 — 반드시 width로 줄 것
+            //    (min-width만 줬더니 비고 열이 0px로 찌그러져 안 보였다, 2026-10-15)
+            + '<th style="' + thS + ' width:130px;">' + _esc(_t('비고', 'Note')) + '</th>'
             + '</tr>';
 
         var colCount = BOM_COLUMNS.length + 2;
@@ -361,9 +409,11 @@
                     var v = valueOf(r, c);
                     return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                 }).join('')
-                + '<td style="padding:1px 3px; border:1px solid #cfe3e5;">'
+                + '<td style="padding:1px 3px; border:1px solid #cfe3e5; position:relative;">'
                 + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
-                + 'oninput="window.bomSetNote(this.dataset.bomNote, this.value)" '
+                + 'title="' + _esc(note) + '" '
+                + 'oninput="window.bomSetNote(this)" '
+                + 'onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
                 + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" '
                 + 'placeholder="-"></td>'
                 + '</tr>';
@@ -381,6 +431,7 @@
         });
 
         tbody.innerHTML = html;
+        window._bomSyncToggleBtn();
         window._bomRenderMeta(st);
     };
 
@@ -465,10 +516,7 @@
         if (lay && lay.options.length) lay.options[0].textContent = _t('(SAP 기본 레이아웃)', '(SAP default layout)');
         var mat = document.getElementById('bom-material');
         if (mat) mat.placeholder = en ? 'e.g. 502572' : '예: 502572';
-        var cb = document.getElementById('bom-collapse-btn');
-        if (cb) { cb.title = _t('하위 구성품 모두 접기', 'Collapse all children'); cb.textContent = _t('▸ 접기', '▸ Collapse'); }
-        var eb = document.getElementById('bom-expand-btn');
-        if (eb) { eb.title = _t('모두 펼치기', 'Expand all'); eb.textContent = _t('▾ 펼치기', '▾ Expand'); }
+        window._bomSyncToggleBtn();
         if (window.bomRender) window.bomRender();   // 헤더/빈 메시지/메타줄은 렌더에서 이중언어 처리됨
     };
 
