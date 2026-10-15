@@ -29,6 +29,36 @@
     var _t = function (ko, en) { return window._currentLang === 'en' ? en : ko; };
     var _esc = function (v) { return window.escapeHtml ? window.escapeHtml(String(v == null ? '' : v)) : String(v == null ? '' : v); };
 
+    // 🧱 표 컬럼 정의(데이터) — 순서/헤더/폭을 여기서만 고친다.
+    //    ZPP033이 주는 컬럼: IDNRK OJTXP MMSTA MENGE MMEIN WGBEZ60 (MTSTB는 MMSTA와 중복이라 제외)
+    //    ZMM009 보강으로 붙는 컬럼: ZTEXT(자재내역2) STPRS1·PEINH1(→단가) MFRPN(제조사) FERTH(담당자)
+    //    `_UNITPRICE`는 STPRS1÷PEINH1로 계산하는 가상 컬럼.
+    var BOM_COLUMNS = [
+        { key: 'IDNRK',      ko: '구성부품',     en: 'Component',     w: '72px',  mono: true },
+        { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '310px', nowrap: true },
+        { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '140px', nowrap: true },
+        { key: 'MENGE',      ko: '수량',         en: 'Qty',           w: '52px',  align: 'right' },
+        { key: 'MMEIN',      ko: '단위',         en: 'Unit',          w: '40px',  align: 'center' },
+        { key: '_UNITPRICE', ko: '단가(KRW)',    en: 'Unit Price',    w: '78px',  align: 'right' },
+        { key: 'MMSTA',      ko: '상태',         en: 'Status',        w: '44px',  align: 'center' },
+        { key: 'WGBEZ60',    ko: 'Group2',       en: 'Group2',        w: '126px', nowrap: true },
+        { key: 'MFRPN',      ko: '제조사',       en: 'Manufacturer',  w: '104px', nowrap: true },
+        { key: 'FERTH',      ko: '담당자',       en: 'Person',        w: '88px',  nowrap: true }
+    ];
+
+    var _matKey = function (v) { return String(v || '').trim().replace(/^0+/, ''); };
+
+    // 단가 = 표준가격 ÷ 가격단위 (ZMM009 패턴 조회 표와 같은 규칙)
+    var _unitPrice = function (stprs, peinh) {
+        var s = String(stprs == null ? '' : stprs).trim();
+        if (!s) return '';
+        var p = parseFloat(s.replace(/,/g, ''));
+        if (!isFinite(p)) return '';
+        var u = parseInt(peinh || '1', 10) || 1;
+        var val = p / u;
+        return val % 1 === 0 ? val.toLocaleString('ko-KR') : val.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+    };
+
     // 모델 키 — 제품구분자를 안 쓰는 프로젝트는 빈 문자열('') 하나로 동작한다(M.C Table과 동일 규칙)
     window._bomActiveUnit = function () {
         var units = window.getMcUnits ? window.getMcUnits() : [];
@@ -88,6 +118,47 @@
         return { cols: cols, parent: parent, rows: rows, totals: totals, truncated: truncated, totalRows: totalRows };
     };
 
+    // ─── ZMM009 보강 ───────────────────────────────────────────────────
+    // ZPP033 BOM엔 자재내역2·단가·제조사·담당자가 없다. 구성부품 번호를 모아
+    // `/sap-material-rows`(ZMM009 복수선택 조회, 포크 세션 2026-10-15 신규)로 한 번에 받아 합친다.
+    // 한 번에 200건까지라 나눠서 호출하고, 실패해도 BOM 자체는 그대로 보여준다(보강만 생략).
+    window._bomEnrichFromZmm009 = async function (rows, onProgress) {
+        var codes = [];
+        var seen = {};
+        rows.forEach(function (r) {
+            var k = _matKey(r.IDNRK);
+            if (k && !seen[k]) { seen[k] = 1; codes.push(String(r.IDNRK).trim()); }
+        });
+        if (!codes.length) return { ok: true, matched: 0, total: 0 };
+
+        var CHUNK = 200;
+        var byMat = {}, failed = 0;
+        for (var i = 0; i < codes.length; i += CHUNK) {
+            var part = codes.slice(i, i + CHUNK);
+            if (onProgress) onProgress(Math.min(i + part.length, codes.length), codes.length);
+            try {
+                var res = await fetch('http://127.0.0.1:5000/sap-material-rows?materials=' + encodeURIComponent(part.join(',')));
+                var d = await res.json();
+                if (d && d.ok && d.materials) {
+                    d.materials.forEach(function (m) { if (m && m.MATNR) byMat[_matKey(m.MATNR)] = m; });
+                } else { failed++; }
+            } catch (e) { failed++; }
+        }
+
+        var matched = 0;
+        rows.forEach(function (r) {
+            var m = byMat[_matKey(r.IDNRK)];
+            if (!m) return;
+            matched++;
+            r.ZTEXT = m.ZTEXT || '';
+            r.STPRS1 = m.STPRS1 || '';
+            r.PEINH1 = m.PEINH1 || '';
+            r.MFRPN = m.MFRPN || '';
+            r.FERTH = m.FERTH || '';
+        });
+        return { ok: failed === 0, matched: matched, total: codes.length, failedChunks: failed };
+    };
+
     // ─── SAP 조회 ──────────────────────────────────────────────────────
     window.bomFetchFromSap = async function () {
         var unit = window._bomActiveUnit();
@@ -129,8 +200,15 @@
                     'SAP returned a non-table screen (source: ' + (data && data.source) + '). Check the material number or retry.'));
             }
 
+            // 자재내역2·단가·제조사·담당자는 BOM 화면에 없으므로 ZMM009로 보강한다(실패해도 BOM은 유지)
+            window._bomSetStatus(_t('구성품 정보를 ZMM009로 보강하는 중입니다…', 'Enriching components via ZMM009…'), 'busy');
+            var enrich = await window._bomEnrichFromZmm009(parsed.rows, function (done, total) {
+                window._bomSetStatus(_t('구성품 정보 보강 중… ' + done + '/' + total, 'Enriching components… ' + done + '/' + total), 'busy');
+            });
+
             var prev = window._bomStore(unit) || {};
             window.tabData.bomByUnit[unit] = {
+                enrich: enrich,
                 material: material, plant: '1000', explosion: explosion,
                 layout: layout || (data.layoutRequested || ''), layoutApplied: data.layoutApplied,
                 tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
@@ -208,24 +286,32 @@
         var layEl = document.getElementById('bom-layout');
         if (layEl && st && st.layout) layEl.value = st.layout;
 
-        var LBL = window._SAP_FIELD_LABEL_MAP || {};
-        var order = ((window.SAP_RESULT_LAYOUT || {}).bom || {}).primary || ['STUFE', 'IDNRK', 'OJTXP', 'MENGE', 'MMEIN', 'MMSTA', 'WGBEZ60', 'MTSTB'];
-        // 실제로 온 컬럼만, 지정 순서대로. STUFE는 전용 레벨 칸으로 따로 그리므로 본문 컬럼에서 제외.
-        var cols = (st && st.cols) ? order.filter(function (c) { return c !== 'STUFE' && st.cols.indexOf(c) !== -1; }) : [];
-        if (st && st.cols) st.cols.forEach(function (c) { if (c !== 'STUFE' && cols.indexOf(c) === -1) cols.push(c); });
+        // 컴팩트 규격 — 한 화면에 더 많은 행이 들어가도록 패딩/글자를 줄인다
+        var TD = 'padding:2px 5px; border:1px solid #cfe3e5; font-size:11.5px;';
+        var thS = 'padding:3px 5px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap; font-size:11.5px;';
+        var cellStyle = function (c, extra) {
+            return TD
+                + (c.align ? ' text-align:' + c.align + ';' : '')
+                + (c.mono ? ' font-family:monospace;' : '')
+                + (c.nowrap ? ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:' + c.w + ';' : '')
+                + (extra || '');
+        };
+        var valueOf = function (row, c) {
+            if (c.key === '_UNITPRICE') return _unitPrice(row.STPRS1, row.PEINH1);
+            return row[c.key] || '';
+        };
 
-        var thS = 'padding:5px 6px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap;';
         thead.innerHTML = '<tr>'
-            + '<th style="' + thS + ' width:64px;">' + _esc(en ? 'Level' : (LBL.STUFE || '레벨')) + '</th>'
-            + cols.map(function (c) {
-                var w = (c === 'OJTXP') ? ' min-width:280px;' : (c === 'IDNRK' ? ' width:90px;' : (c === 'MENGE' ? ' width:70px;' : (c === 'MMEIN' ? ' width:52px;' : '')));
-                return '<th style="' + thS + w + '">' + _esc(LBL[c] || c) + '</th>';
+            + '<th style="' + thS + ' width:58px;">' + _esc(_t('레벨', 'Level')) + '</th>'
+            + BOM_COLUMNS.map(function (c) {
+                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
             }).join('')
-            + '<th style="' + thS + ' min-width:160px;">' + _esc(en ? 'Note' : '비고') + '</th>'
+            + '<th style="' + thS + ' width:120px;">' + _esc(_t('비고', 'Note')) + '</th>'
             + '</tr>';
 
+        var colCount = BOM_COLUMNS.length + 2;
         if (!st || !st.rows || !st.rows.length) {
-            tbody.innerHTML = '<tr><td colspan="' + (cols.length + 2) + '" style="padding:28px; text-align:center; color:#999; border:1px solid #cfe3e5;">'
+            tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:28px; text-align:center; color:#999; border:1px solid #cfe3e5;">'
                 + _esc(_t('아직 조회한 BOM이 없습니다. 위에서 자재번호를 확인하고 "🔄 SAP 조회"를 누르세요.',
                     'No BOM yet. Check the material number above and press "🔄 Fetch from SAP".'))
                 + '</td></tr>';
@@ -239,15 +325,16 @@
         // 모체 자재 행(레벨 없이 맨 앞에 오는 행) — 표 맨 위에 강조해서 고정
         if (st.parent) {
             html += '<tr style="background:#e0f5f7; font-weight:bold;">'
-                + '<td style="padding:4px 6px; border:1px solid #cfe3e5; text-align:center; color:#00707d;">' + _esc(en ? 'Top' : '모체') + '</td>'
-                + cols.map(function (c) {
-                    return '<td style="padding:4px 6px; border:1px solid #cfe3e5; color:#00707d;">' + _esc(st.parent[c] || '') + '</td>';
+                + '<td style="' + TD + ' text-align:center; color:#00707d;">' + _esc(_t('모체', 'Top')) + '</td>'
+                + BOM_COLUMNS.map(function (c) {
+                    return '<td style="' + cellStyle(c, ' color:#00707d;') + '">' + _esc(valueOf(st.parent, c)) + '</td>';
                 }).join('')
-                + '<td style="padding:2px; border:1px solid #cfe3e5;"></td>'
+                + '<td style="' + TD + '"></td>'
                 + '</tr>';
         }
 
-        var hidden = -1; // 이 레벨보다 깊은 행은 접힌 부모 때문에 숨김
+        var hidden = -1;  // 이 레벨보다 깊은 행은 접힌 부모 때문에 숨김
+        var pos = 0;      // 제브라는 "화면에 실제로 그려지는 위치" 기준 (주요자재 표와 같은 규칙)
         st.rows.forEach(function (r, i) {
             if (hidden !== -1) {
                 if (r._level > hidden) return;   // 접힌 가지의 자식 — 건너뜀
@@ -258,41 +345,38 @@
             var collapsed = !!st._collapsed[i];
             if (hasChild && collapsed) hidden = r._level;
 
-            var zebra = (r._level > 1) ? '#f7fbfc' : '#fff';
-            var indent = (r._level - 1) * 16;
+            var zebra = (pos % 2 === 1) ? '#e8f2f3' : '#fff';
+            pos++;
+            var indent = (r._level - 1) * 12;
             var twisty = hasChild
                 ? '<span onclick="window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
                 : '<span style="color:#cfe3e5;">·</span>';
             var note = (st.notes && st.notes[r.IDNRK]) || '';
 
             html += '<tr style="background:' + zebra + ';">'
-                + '<td style="padding:4px 6px; border:1px solid #cfe3e5; white-space:nowrap;">'
+                + '<td style="' + TD + ' white-space:nowrap;">'
                 + '<span style="display:inline-block; width:' + indent + 'px;"></span>' + twisty
-                + ' <span style="color:#666; font-size:11px;">' + r._level + '</span></td>'
-                + cols.map(function (c) {
-                    var v = r[c] || '';
-                    var align = (c === 'MENGE') ? ' text-align:right;' : (c === 'MMEIN' || c === 'MMSTA' ? ' text-align:center;' : '');
-                    var mono = (c === 'IDNRK') ? ' font-family:monospace;' : '';
-                    var pad = (c === 'OJTXP') ? ('padding-left:' + (4 + indent) + 'px;') : '';
-                    return '<td style="padding:4px 6px; border:1px solid #cfe3e5;' + align + mono + pad + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                + ' <span style="color:#666;">' + r._level + '</span></td>'
+                + BOM_COLUMNS.map(function (c) {
+                    var v = valueOf(r, c);
+                    return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                 }).join('')
-                + '<td style="padding:2px; border:1px solid #cfe3e5;">'
+                + '<td style="padding:1px 3px; border:1px solid #cfe3e5;">'
                 + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
                 + 'oninput="window.bomSetNote(this.dataset.bomNote, this.value)" '
-                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:12px;" '
-                + 'placeholder="' + _esc(_t('메모', 'Note')) + '"></td>'
+                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" '
+                + 'placeholder="-"></td>'
                 + '</tr>';
         });
 
         // 단위별 합계(SAP가 표 끝에 붙여주는 행)
         (st.totals || []).forEach(function (o) {
             html += '<tr style="background:#eef6f7; font-weight:bold; color:#2c5f8a;">'
-                + '<td style="padding:4px 6px; border:1px solid #cfe3e5; text-align:center;">Σ</td>'
-                + cols.map(function (c) {
-                    var align = (c === 'MENGE') ? ' text-align:right;' : (c === 'MMEIN' ? ' text-align:center;' : '');
-                    return '<td style="padding:4px 6px; border:1px solid #cfe3e5;' + align + '">' + _esc(o[c] || '') + '</td>';
+                + '<td style="' + TD + ' text-align:center;">Σ</td>'
+                + BOM_COLUMNS.map(function (c) {
+                    return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
                 }).join('')
-                + '<td style="border:1px solid #cfe3e5;"></td>'
+                + '<td style="' + TD + '"></td>'
                 + '</tr>';
         });
 
@@ -320,6 +404,11 @@
         if (st.layout) {
             parts.push(_t('레이아웃 ', 'Layout ') + _esc(st.layout)
                 + (st.layoutApplied === false ? ' ⚠️' + _t('적용 실패 — SAP 기본값 사용', ' not applied — SAP default used') : ''));
+        }
+        // 자재내역2·단가·제조사·담당자는 ZMM009 보강으로 채워지므로, 몇 건이 붙었는지 함께 보여준다
+        if (st.enrich && st.enrich.total) {
+            parts.push(_t('ZMM009 보강 ', 'ZMM009 enrich ') + st.enrich.matched + '/' + st.enrich.total
+                + (st.enrich.ok ? '' : ' ⚠️' + _t('일부 실패', ' partly failed')));
         }
         var html = '<div style="font-size:11.5px; color:#666; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">'
             + parts.filter(Boolean).map(function (p) { return '<span>' + p + '</span>'; }).join('<span style="color:#cfe3e5;">|</span>')
@@ -377,9 +466,9 @@
         var mat = document.getElementById('bom-material');
         if (mat) mat.placeholder = en ? 'e.g. 502572' : '예: 502572';
         var cb = document.getElementById('bom-collapse-btn');
-        if (cb) cb.title = _t('하위 구성품 모두 접기', 'Collapse all children');
+        if (cb) { cb.title = _t('하위 구성품 모두 접기', 'Collapse all children'); cb.textContent = _t('▸ 접기', '▸ Collapse'); }
         var eb = document.getElementById('bom-expand-btn');
-        if (eb) eb.title = _t('모두 펼치기', 'Expand all');
+        if (eb) { eb.title = _t('모두 펼치기', 'Expand all'); eb.textContent = _t('▾ 펼치기', '▾ Expand'); }
         if (window.bomRender) window.bomRender();   // 헤더/빈 메시지/메타줄은 렌더에서 이중언어 처리됨
     };
 
