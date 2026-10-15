@@ -2249,3 +2249,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 🧱 BOM 탭: 메타·상태 줄은 고정하고 표만 스크롤 (2026-10-15) */
 #bom-meta, #bom-status { flex-shrink: 0; }
+
+/* 🧱 BOM 표 행 색 — 팔레트 대응을 위해 인라인 hex 대신 클래스로 뺀다 (2026-10-15).
+   기본값은 청록 테마이고, 테마를 바꾸면 js/21-color-palette.js의 _cpApplyLive가
+   이 네 클래스를 hue 기반 값으로 덮어쓴다. 호버도 CSS :hover로 처리해야
+   onmouseover JS가 원본 hex를 다시 써넣어 테마가 풀리는 문제가 안 생긴다. */
+.bom-row-l1      { background: #e8f2f3; }   /* 레벨1 제브라 A = zebraB 역할 */
+.bom-row-l1-alt  { background: #dcedef; }   /* 레벨1 제브라 B */
+.bom-row-sub     { background: #fff; }      /* 레벨2+ 제브라 A */
+.bom-row-sub-alt { background: #f4f9fa; }   /* 레벨2+ 제브라 B */
+.bom-row-top     { background: #e0f5f7; }   /* 모체 = bg 역할 */
+.bom-row-sum     { background: #eef6f7; }   /* 합계 = headerTint 역할 */
+.bom-lvhdr       { background: #dff0f2; }   /* 레벨 블록 머리행 */
+#bom-body tr.bom-row:hover > td { background: #cfeaf0; }

@@ -401,6 +401,18 @@ window._cpApplyLive = function(hex, skipSave) {
     css += '#btn-alarm-send-selected, #btn-notice-delete-selected { background-color: ' + gen.bg + ' !important; border-color: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '#btn-alarm-send-selected:hover, #btn-notice-delete-selected:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
+    // 🧱 [2026-10-15 신규] BOM 표 행 색 — 제브라 두 번째 톤·호버·레벨 머리행은 CP_ROLES에 대응하는
+    //    역할이 없어서(제브라 A/배경/헤더틴트만 있음) 같은 hue·같은 공식으로 여기서 직접 만든다.
+    //    styles.css의 .bom-row-* 기본값(청록)을 그대로 덮어써서 어떤 팔레트를 골라도 따라온다.
+    //    호버는 CSS :hover로만 처리한다 — onmouseover JS로 배경을 쓰면 그 인라인 값이 남아 테마가 풀린다.
+    css += '.bom-row-l1      { background: ' + gen.zebraB + ' !important; }\n'
+        + '.bom-row-l1-alt  { background: ' + window._cpHslToHex(hue, 30, 89) + ' !important; }\n'
+        + '.bom-row-sub-alt { background: ' + window._cpHslToHex(hue, 30, 98) + ' !important; }\n'
+        + '.bom-row-top     { background: ' + gen.bg + ' !important; }\n'
+        + '.bom-row-sum     { background: ' + gen.headerTint + ' !important; }\n'
+        + '.bom-lvhdr       { background: ' + window._cpHslToHex(hue, 36, 91) + ' !important; }\n'
+        + '#bom-body tr.bom-row:hover > td { background: ' + window._cpHslToHex(hue, 45, 86) + ' !important; }\n';
+
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
     //    문서 전체에서 가장 마지막 스타일이 되도록 보장한다(매번 다시 appendChild해서 위치 유지).

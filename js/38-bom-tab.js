@@ -469,8 +469,10 @@
         //    기본 접힘 상태나 단일 레벨 조회처럼 레벨1만 모이면 전부 같은 색이라 제브라가
         //    무용지물이었다(사용자 지적). 레벨1은 청록 계열 두 톤, 레벨2 이하는 흰색 계열 두 톤으로
         //    교대 — 레벨 구분(색 계열)과 행 구분(명암)을 동시에 얻는다.
-        var zebraPair = function (level) {
-            return level === 1 ? ['#e8f2f3', '#dcedef'] : ['#fff', '#f4f9fa'];
+        //    색은 styles.css의 .bom-row-* 클래스에 있고, 팔레트 변경 시 _cpApplyLive가 덮어쓴다.
+        var zebraClass = function (level, pos) {
+            return level === 1 ? (pos % 2 ? 'bom-row-l1-alt' : 'bom-row-l1')
+                               : (pos % 2 ? 'bom-row-sub-alt' : 'bom-row-sub');
         };
         var TD = 'padding:2px 5px; border:1px solid #cfe3e5; font-size:11.5px; box-sizing:border-box; height:' + ROW_H + ';';
         var thS = 'padding:3px 5px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap; font-size:11.5px;';
@@ -511,7 +513,7 @@
         // 단위별 합계(SAP가 표 끝에 붙여주는 행) — 두 렌더 분기가 공용으로 쓴다
         var renderTotals = function () {
             (st.totals || []).forEach(function (o) {
-                html += '<tr style="background:#eef6f7; font-weight:bold; color:#2c5f8a;">'
+                html += '<tr class="bom-row-sum" style="font-weight:bold; color:#2c5f8a;">'
                     + '<td style="' + TD + ' text-align:center;">Σ</td>'
                     + BOM_COLUMNS.map(function (c) {
                         return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
@@ -524,11 +526,10 @@
         // 모체 자재 행(레벨 없이 맨 앞에 오는 행) — 표 맨 위에 강조해서 고정
         if (st.parent) {
             var pEsc = String(st.parent.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            // 글자는 다른 행과 같게 두고 배경색(#e0f5f7)만으로 구분한다 — 예전엔 bold+청록이라
+            // 글자는 다른 행과 같게 두고 배경색(.bom-row-top)만으로 구분한다 — 예전엔 bold+청록이라
             // 혼자 폰트가 다른 것처럼 보였다(2026-10-15 사용자 지적). "모체" 라벨 칸만 강조 유지.
-            html += '<tr style="background:#e0f5f7; cursor:pointer;"'
-                + ' onclick="window.bomSelectComponent(\'' + pEsc + '\')"'
-                + ' onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'#e0f5f7\'">'
+            html += '<tr class="bom-row bom-row-top" style="cursor:pointer;"'
+                + ' onclick="window.bomSelectComponent(\'' + pEsc + '\')">'
                 + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">' + _esc(_t('모체', 'Top')) + '</td>'
                 + BOM_COLUMNS.map(function (c) {
                     return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
@@ -553,7 +554,7 @@
                 var collapsed = !!st._collapsed[i];
                 if (hasChild && collapsed) hidden = r._level;
 
-                var zb = zebraPair(r._level)[visIdx % 2];
+                var zcls = zebraClass(r._level, visIdx);
                 visIdx++;
                 var sp = '';
                 var ind = (r._level - 1) * 12;
@@ -563,9 +564,8 @@
                 var nt = (st.notes && st.notes[r.IDNRK]) || '';
                 var me = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-                html += '<tr style="background:' + zb + '; cursor:pointer;"'
-                    + ' onclick="window.bomSelectComponent(\'' + me + '\')"'
-                    + ' onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + zb + '\'">'
+                html += '<tr class="bom-row ' + zcls + '" style="cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + me + '\')">'
                     + '<td style="' + TD + sp + ' white-space:nowrap;">'
                     + '<span style="display:inline-block; width:' + ind + 'px;"></span>' + tw
                     + ' <span style="color:#666;">' + r._level + '</span></td>'
@@ -598,7 +598,7 @@
             var collapsed = !!st._collapsed[lv];
 
             // 레벨 구분 머리행 — 클릭하면 그 레벨 전체를 접었다 편다
-            html += '<tr style="background:#dff0f2; cursor:pointer;" onclick="window.bomToggleLevel(' + lv + ')"'
+            html += '<tr class="bom-lvhdr" style="cursor:pointer;" onclick="window.bomToggleLevel(' + lv + ')"'
                 + ' title="' + _esc(_t('이 레벨 접기/펴기', 'Collapse/expand this level')) + '">'
                 + '<td colspan="' + colCount + '" style="padding:3px 8px; border:1px solid #cfe3e5;'
                 + ' box-sizing:border-box; height:' + ROW_H + '; font-size:11.5px; font-weight:bold; color:#00707d;">'
@@ -611,12 +611,10 @@
                 var note = (st.notes && st.notes[r.IDNRK]) || '';
                 var mnEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 // 제브라는 화면에 실제로 그려지는 행 기준(레벨 블록을 접어도 줄무늬가 안 깨짐)
-                var zebra = zebraPair(r._level)[visIdx2 % 2];
+                var zcls2 = zebraClass(r._level, visIdx2);
                 visIdx2++;
-                html += '<tr style="background:' + zebra + '; cursor:pointer;"'
-                    + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')"'
-                    + ' onmouseover="this.style.background=\'#d4eaf8\'"'
-                    + ' onmouseout="this.style.background=\'' + zebra + '\'">'
+                html += '<tr class="bom-row ' + zcls2 + '" style="cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')">'
                     + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
                     + BOM_COLUMNS.map(function (c) {
                         var v = valueOf(r, c);
