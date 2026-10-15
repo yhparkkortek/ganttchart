@@ -1107,6 +1107,8 @@
         //    (모델별 자재 카드 전체를 다시 그리므로, 먼저 화면 입력값을 모델에 거둬들인다)
         if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
         if (window.renderProjectModels) window.renderProjectModels(); // 내부에서 renderMaterialModelsContainer()도 호출
+        // 🧱 BOM 탭 — 정적 HTML 문구(라벨/셀렉트/버튼)는 전용 갱신 함수가 맞춘다(docs/ui-conventions.md)
+        if (window.bomRefreshLang) window.bomRefreshLang();
 
         // [변경이력 박스] 시작일/종료일/삭제비밀번호/구간삭제 번역 (6개 탭 공통)
         document.querySelectorAll('label').forEach(lbl => {

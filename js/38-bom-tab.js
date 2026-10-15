@@ -1,0 +1,398 @@
+// ═══════════════════════════════════════════════════════════════════
+// 🧱 [2026-10-15 신규] BOM 탭 — Customer SPEC과 M.C Table 사이.
+//    SAP ZPP033(단일)/ZPP038(복수) "BOM 전개"를 조회해 모델(제품구분자)별로 보관한다.
+//
+//  설계 근거(실측 2026-10-15, 자재 502572 / 플랜트 1000):
+//   · `/sap-bom`은 이미 있던 엔드포인트 — 새로 만들지 않고 그대로 쓴다(sap_bridge_32.fetch_bom).
+//   · 결과는 `source:'grid'`일 때 **탭 구분 텍스트 표**로 온다(메타헤더 → 빈 줄 → 헤더행 → 데이터행).
+//     컬럼: STUFE IDNRK OJTXP MMSTA MENGE MMEIN WGBEZ60 MTSTB (레이아웃 /STD_MC 기준)
+//   · STUFE 포맷이 `[ 1     ]` / `[   2   ]` — **대괄호 안 숫자 위치가 레벨**이라 숫자만 뽑으면 된다.
+//   · 다단계(explosion=multi)는 정상 동작 확인: single 68행 → multi 239행(레벨2가 170행).
+//     깊이 우선 순서라 `[1]` 뒤에 붙는 `[2]`들이 그 자식 — 접기/펴기로 재구성 가능.
+//   · STUFE가 빈 행이 두 종류 섞여 온다: **맨 앞 1행 = 모체 자재 자신**, **맨 끝 몇 행 = 단위별 합계**.
+//     둘 다 일반 구성품이 아니므로 분리해서 다룬다.
+//   · `_sap_dump_grid`는 500행 상한이라 초과 시 `... (총 N행 중 500행만 표시)` 한 줄이 붙는다 →
+//     파싱에서 걸러내고 사용자에게 "잘렸음"을 공개한다(조용히 삼키지 말 것 — CLAUDE.md).
+//   · 간헐적으로 `source:'fields'`(선택화면을 읽음)가 나온다 — 고정 sleep 기반 네비게이션의 한계.
+//     그래서 grid가 아니면 1회 자동 재시도한다.
+//
+//  컬럼 라벨은 `window._SAP_FIELD_LABEL_MAP`(js/04h), 순서는 `window.SAP_RESULT_LAYOUT.bom`(js/32)
+//  — 둘 다 데이터라 레이아웃이 바뀌어도 이 파일은 손대지 않는다(CLAUDE.md "규칙은 데이터로").
+//
+//  모델(제품구분자)은 M.C Table과 **같은 체계**를 그대로 쓴다(getMcUnits/mcActiveUnit/mcSwitchUnit)
+//  — BOM 전용 모델 목록을 따로 만들지 않는다. 저장은 tabData.bomByUnit[unit].
+// ═══════════════════════════════════════════════════════════════════
+
+(function () {
+    'use strict';
+
+    var _t = function (ko, en) { return window._currentLang === 'en' ? en : ko; };
+    var _esc = function (v) { return window.escapeHtml ? window.escapeHtml(String(v == null ? '' : v)) : String(v == null ? '' : v); };
+
+    // 모델 키 — 제품구분자를 안 쓰는 프로젝트는 빈 문자열('') 하나로 동작한다(M.C Table과 동일 규칙)
+    window._bomActiveUnit = function () {
+        var units = window.getMcUnits ? window.getMcUnits() : [];
+        if (!units.length) return '';
+        return window.mcActiveUnit || units[0];
+    };
+
+    window._bomStore = function (unit) {
+        window.tabData = window.tabData || {};
+        window.tabData.bomByUnit = window.tabData.bomByUnit || {};
+        var k = unit === undefined ? window._bomActiveUnit() : unit;
+        return window.tabData.bomByUnit[k] || null;
+    };
+
+    // 이 모델에 대응하는 Summary 모델 카드의 KTK PN(=SAP 자재번호)을 기본 자재번호로 제안
+    window._bomDefaultMaterial = function (unit) {
+        var models = (window.tabData && window.tabData.projectModels) || [];
+        var m = models.find(function (x) { return (x.unitId || '') === (unit || ''); }) || models[0];
+        return (m && m.KTKPN ? String(m.KTKPN).trim() : '');
+    };
+
+    // ─── SAP 응답(탭 구분 텍스트) 파싱 ─────────────────────────────────
+    // 반환: { cols, parent, rows, totals, truncated, totalRows }  (표가 아니면 null)
+    window._bomParseSapText = function (text) {
+        var t = String(text || '').replace(/\r/g, '').trim();
+        if (!t) return null;
+        // 메타헤더(탭 없는 첫 덩어리) 분리 — _ganttQaFormatSapRecord와 같은 규칙
+        var body = t, sp = t.indexOf('\n\n');
+        if (sp !== -1 && t.slice(0, sp).indexOf('\t') === -1) body = t.slice(sp + 2);
+
+        var truncated = false, totalRows = 0;
+        var lines = body.split('\n').filter(function (l) {
+            var m = l.match(/총\s*([0-9]+)\s*행\s*중\s*([0-9]+)\s*행만\s*표시/);
+            if (m) { truncated = true; totalRows = Number(m[1]) || 0; return false; }
+            return l.trim().length > 0;
+        });
+        if (lines.length < 2 || lines[0].indexOf('\t') === -1) return null;
+
+        var cols = lines[0].split('\t').map(function (c) { return c.trim(); });
+        var iStufe = cols.indexOf('STUFE');
+        var raw = lines.slice(1).map(function (l) {
+            var cells = l.split('\t');
+            var o = {};
+            cols.forEach(function (c, i) { o[c] = (cells[i] || '').trim(); });
+            return o;
+        });
+
+        var parent = null, rows = [], totals = [];
+        raw.forEach(function (o) {
+            var stufe = iStufe === -1 ? '' : (o.STUFE || '');
+            var lv = (stufe.match(/(\d+)/) || [])[1];
+            if (lv) { o._level = Number(lv); rows.push(o); return; }
+            // 레벨 없는 행: 구성품번호가 있으면 모체 자재(맨 앞 1행), 없으면 단위별 합계(맨 끝)
+            if (o.IDNRK) { if (!parent) parent = o; }
+            else if (o.MENGE || o.MMEIN) totals.push(o);
+        });
+        return { cols: cols, parent: parent, rows: rows, totals: totals, truncated: truncated, totalRows: totalRows };
+    };
+
+    // ─── SAP 조회 ──────────────────────────────────────────────────────
+    window.bomFetchFromSap = async function () {
+        var unit = window._bomActiveUnit();
+        var matEl = document.getElementById('bom-material');
+        var material = (matEl ? matEl.value : '').trim();
+        if (!material) {
+            if (window.showToast) window.showToast(_t('자재번호를 입력해주세요.', 'Enter a material number.'), 'warning');
+            if (matEl) matEl.focus();
+            return;
+        }
+        var explosion = (document.getElementById('bom-explosion') || {}).value || 'multi';
+        var layout = (document.getElementById('bom-layout') || {}).value || '';
+        var btn = document.getElementById('bom-fetch-btn');
+        var setBusy = function (on) {
+            if (!btn) return;
+            btn.disabled = on;
+            btn.textContent = on ? _t('⏳ 조회 중…', '⏳ Loading…') : _t('🔄 SAP 조회', '🔄 Fetch from SAP');
+        };
+        // 백엔드 주소는 앱 전체가 로컬 고정(127.0.0.1:5000)을 그대로 쓴다 — js/04h의 다른 /sap-* 호출과 동일
+        var url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(material)
+            + '&plant=1000&explosion=' + encodeURIComponent(explosion)
+            + (layout ? '&layout=' + encodeURIComponent(layout) : '');
+
+        setBusy(true);
+        window._bomSetStatus(_t('SAP에서 BOM을 전개하는 중입니다…', 'Exploding BOM in SAP…'), 'busy');
+        try {
+            var data = null, parsed = null, attempt = 0;
+            // 간헐적으로 결과화면 대신 선택화면(source:'fields')을 읽어오므로 1회 재시도한다
+            while (attempt < 2) {
+                attempt++;
+                var res = await fetch(url);
+                data = await res.json();
+                if (!data || !data.ok) throw new Error((data && data.error) || _t('조회 실패', 'Lookup failed'));
+                if (data.source === 'grid') { parsed = window._bomParseSapText(data.text); if (parsed) break; }
+                if (attempt < 2) window._bomSetStatus(_t('결과 화면을 못 읽어 재시도합니다…', 'Could not read result screen — retrying…'), 'busy');
+            }
+            if (!parsed) {
+                throw new Error(_t('SAP가 BOM 결과 표 대신 다른 화면을 돌려줬습니다(source: ' + (data && data.source) + '). 자재번호를 확인하거나 잠시 뒤 다시 시도해주세요.',
+                    'SAP returned a non-table screen (source: ' + (data && data.source) + '). Check the material number or retry.'));
+            }
+
+            var prev = window._bomStore(unit) || {};
+            window.tabData.bomByUnit[unit] = {
+                material: material, plant: '1000', explosion: explosion,
+                layout: layout || (data.layoutRequested || ''), layoutApplied: data.layoutApplied,
+                tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
+                cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
+                truncated: parsed.truncated, totalRows: parsed.totalRows,
+                notes: prev.notes || {}   // 사람이 쓴 비고는 재조회해도 보존(구성부품번호 기준)
+            };
+            window._bomSetStatus('', ''); // 직전 실패 메시지가 성공 후에도 남지 않도록 비운다
+            window.bomRender();
+            if (window.showToast) window.showToast(_t('BOM ' + parsed.rows.length + '건을 가져왔습니다.', 'Fetched ' + parsed.rows.length + ' BOM rows.'), 'success');
+        } catch (e) {
+            window._bomSetStatus('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+            if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    window._bomSetStatus = function (msg, kind) {
+        var el = document.getElementById('bom-status');
+        if (!el) return;
+        var color = kind === 'error' ? '#b1432f' : (kind === 'busy' ? '#00707d' : '#666');
+        el.style.color = color;
+        el.innerHTML = msg ? _esc(msg) : '';
+    };
+
+    // ─── 비고(메모) — 구성부품번호 기준으로 보관해서 재조회해도 유지 ──────
+    window.bomSetNote = function (idnrk, value) {
+        var unit = window._bomActiveUnit();
+        var st = window._bomStore(unit);
+        if (!st) return;
+        st.notes = st.notes || {};
+        if (value && value.trim()) st.notes[idnrk] = value;
+        else delete st.notes[idnrk];
+    };
+
+    // ─── 레벨 접기/펴기 ────────────────────────────────────────────────
+    // 깊이 우선 순서라, 어떤 행의 "자식"은 그 다음부터 레벨이 더 깊은 연속 구간이다.
+    window.bomToggleBranch = function (rowIdx) {
+        var st = window._bomStore();
+        if (!st) return;
+        st._collapsed = st._collapsed || {};
+        st._collapsed[rowIdx] = !st._collapsed[rowIdx];
+        window.bomRender();
+    };
+
+    window.bomToggleAll = function (collapse) {
+        var st = window._bomStore();
+        if (!st || !st.rows) return;
+        st._collapsed = {};
+        if (collapse) {
+            st.rows.forEach(function (r, i) {
+                var next = st.rows[i + 1];
+                if (next && next._level > r._level) st._collapsed[i] = true;
+            });
+        }
+        window.bomRender();
+    };
+
+    // ─── 렌더 ──────────────────────────────────────────────────────────
+    window.bomRender = function () {
+        var tbody = document.getElementById('bom-body');
+        var thead = document.getElementById('bom-thead');
+        if (!tbody || !thead) return;
+        var en = window._currentLang === 'en';
+        var unit = window._bomActiveUnit();
+        var st = window._bomStore(unit);
+
+        // 모델 전환 바 + 조회 조건 칸 동기화
+        window.bomRenderUnitBar();
+        var matEl = document.getElementById('bom-material');
+        if (matEl && document.activeElement !== matEl) matEl.value = (st && st.material) || window._bomDefaultMaterial(unit);
+        var expEl = document.getElementById('bom-explosion');
+        if (expEl && st && st.explosion) expEl.value = st.explosion;
+        var layEl = document.getElementById('bom-layout');
+        if (layEl && st && st.layout) layEl.value = st.layout;
+
+        var LBL = window._SAP_FIELD_LABEL_MAP || {};
+        var order = ((window.SAP_RESULT_LAYOUT || {}).bom || {}).primary || ['STUFE', 'IDNRK', 'OJTXP', 'MENGE', 'MMEIN', 'MMSTA', 'WGBEZ60', 'MTSTB'];
+        // 실제로 온 컬럼만, 지정 순서대로. STUFE는 전용 레벨 칸으로 따로 그리므로 본문 컬럼에서 제외.
+        var cols = (st && st.cols) ? order.filter(function (c) { return c !== 'STUFE' && st.cols.indexOf(c) !== -1; }) : [];
+        if (st && st.cols) st.cols.forEach(function (c) { if (c !== 'STUFE' && cols.indexOf(c) === -1) cols.push(c); });
+
+        var thS = 'padding:5px 6px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap;';
+        thead.innerHTML = '<tr>'
+            + '<th style="' + thS + ' width:64px;">' + _esc(en ? 'Level' : (LBL.STUFE || '레벨')) + '</th>'
+            + cols.map(function (c) {
+                var w = (c === 'OJTXP') ? ' min-width:280px;' : (c === 'IDNRK' ? ' width:90px;' : (c === 'MENGE' ? ' width:70px;' : (c === 'MMEIN' ? ' width:52px;' : '')));
+                return '<th style="' + thS + w + '">' + _esc(LBL[c] || c) + '</th>';
+            }).join('')
+            + '<th style="' + thS + ' min-width:160px;">' + _esc(en ? 'Note' : '비고') + '</th>'
+            + '</tr>';
+
+        if (!st || !st.rows || !st.rows.length) {
+            tbody.innerHTML = '<tr><td colspan="' + (cols.length + 2) + '" style="padding:28px; text-align:center; color:#999; border:1px solid #cfe3e5;">'
+                + _esc(_t('아직 조회한 BOM이 없습니다. 위에서 자재번호를 확인하고 "🔄 SAP 조회"를 누르세요.',
+                    'No BOM yet. Check the material number above and press "🔄 Fetch from SAP".'))
+                + '</td></tr>';
+            window._bomRenderMeta(st);
+            return;
+        }
+
+        st._collapsed = st._collapsed || {};
+        var html = '';
+
+        // 모체 자재 행(레벨 없이 맨 앞에 오는 행) — 표 맨 위에 강조해서 고정
+        if (st.parent) {
+            html += '<tr style="background:#e0f5f7; font-weight:bold;">'
+                + '<td style="padding:4px 6px; border:1px solid #cfe3e5; text-align:center; color:#00707d;">' + _esc(en ? 'Top' : '모체') + '</td>'
+                + cols.map(function (c) {
+                    return '<td style="padding:4px 6px; border:1px solid #cfe3e5; color:#00707d;">' + _esc(st.parent[c] || '') + '</td>';
+                }).join('')
+                + '<td style="padding:2px; border:1px solid #cfe3e5;"></td>'
+                + '</tr>';
+        }
+
+        var hidden = -1; // 이 레벨보다 깊은 행은 접힌 부모 때문에 숨김
+        st.rows.forEach(function (r, i) {
+            if (hidden !== -1) {
+                if (r._level > hidden) return;   // 접힌 가지의 자식 — 건너뜀
+                hidden = -1;
+            }
+            var next = st.rows[i + 1];
+            var hasChild = !!(next && next._level > r._level);
+            var collapsed = !!st._collapsed[i];
+            if (hasChild && collapsed) hidden = r._level;
+
+            var zebra = (r._level > 1) ? '#f7fbfc' : '#fff';
+            var indent = (r._level - 1) * 16;
+            var twisty = hasChild
+                ? '<span onclick="window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
+                : '<span style="color:#cfe3e5;">·</span>';
+            var note = (st.notes && st.notes[r.IDNRK]) || '';
+
+            html += '<tr style="background:' + zebra + ';">'
+                + '<td style="padding:4px 6px; border:1px solid #cfe3e5; white-space:nowrap;">'
+                + '<span style="display:inline-block; width:' + indent + 'px;"></span>' + twisty
+                + ' <span style="color:#666; font-size:11px;">' + r._level + '</span></td>'
+                + cols.map(function (c) {
+                    var v = r[c] || '';
+                    var align = (c === 'MENGE') ? ' text-align:right;' : (c === 'MMEIN' || c === 'MMSTA' ? ' text-align:center;' : '');
+                    var mono = (c === 'IDNRK') ? ' font-family:monospace;' : '';
+                    var pad = (c === 'OJTXP') ? ('padding-left:' + (4 + indent) + 'px;') : '';
+                    return '<td style="padding:4px 6px; border:1px solid #cfe3e5;' + align + mono + pad + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                }).join('')
+                + '<td style="padding:2px; border:1px solid #cfe3e5;">'
+                + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
+                + 'oninput="window.bomSetNote(this.dataset.bomNote, this.value)" '
+                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:12px;" '
+                + 'placeholder="' + _esc(_t('메모', 'Note')) + '"></td>'
+                + '</tr>';
+        });
+
+        // 단위별 합계(SAP가 표 끝에 붙여주는 행)
+        (st.totals || []).forEach(function (o) {
+            html += '<tr style="background:#eef6f7; font-weight:bold; color:#2c5f8a;">'
+                + '<td style="padding:4px 6px; border:1px solid #cfe3e5; text-align:center;">Σ</td>'
+                + cols.map(function (c) {
+                    var align = (c === 'MENGE') ? ' text-align:right;' : (c === 'MMEIN' ? ' text-align:center;' : '');
+                    return '<td style="padding:4px 6px; border:1px solid #cfe3e5;' + align + '">' + _esc(o[c] || '') + '</td>';
+                }).join('')
+                + '<td style="border:1px solid #cfe3e5;"></td>'
+                + '</tr>';
+        });
+
+        tbody.innerHTML = html;
+        window._bomRenderMeta(st);
+    };
+
+    window._bomRenderMeta = function (st) {
+        var el = document.getElementById('bom-meta');
+        if (!el) return;
+        if (!st || !st.rows) { el.innerHTML = ''; return; }
+        var en = window._currentLang === 'en';
+        var when = '';
+        try { when = new Date(st.fetchedAt).toLocaleString(en ? 'en-US' : 'ko-KR'); } catch (e) { when = st.fetchedAt || ''; }
+        var lv = {};
+        st.rows.forEach(function (r) { lv[r._level] = (lv[r._level] || 0) + 1; });
+        var lvTxt = Object.keys(lv).sort().map(function (k) { return (en ? 'L' : '레벨') + k + ' ' + lv[k]; }).join(' · ');
+
+        var parts = [
+            '<b>' + _esc(st.material) + '</b>' + (st.parent && st.parent.OJTXP ? ' <span style="color:#555;">' + _esc(st.parent.OJTXP) + '</span>' : ''),
+            (st.tcode || '') + ' · ' + (st.explosion === 'multi' ? _t('다단계', 'Multi-level') : _t('단일 레벨', 'Single level')),
+            _t('총 ', 'Total ') + st.rows.length + (en ? ' rows' : '건') + (lvTxt ? ' (' + lvTxt + ')' : ''),
+            when
+        ];
+        if (st.layout) {
+            parts.push(_t('레이아웃 ', 'Layout ') + _esc(st.layout)
+                + (st.layoutApplied === false ? ' ⚠️' + _t('적용 실패 — SAP 기본값 사용', ' not applied — SAP default used') : ''));
+        }
+        var html = '<div style="font-size:11.5px; color:#666; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">'
+            + parts.filter(Boolean).map(function (p) { return '<span>' + p + '</span>'; }).join('<span style="color:#cfe3e5;">|</span>')
+            + '</div>';
+        if (st.truncated) {
+            // SAP 덤프가 500행에서 잘렸다 — 조용히 넘기지 않고 화면에 공개한다
+            html += '<div style="margin-top:4px; font-size:11.5px; color:#b1432f;">⚠️ '
+                + _esc(_t('SAP 응답이 500행에서 잘렸습니다(전체 ' + (st.totalRows || '?') + '행). 전개 단계를 "단일 레벨"로 줄이거나 자재를 나눠서 조회하세요.',
+                    'SAP response was truncated at 500 rows (total ' + (st.totalRows || '?') + '). Use single-level explosion or split the lookup.'))
+                + '</div>';
+        }
+        el.innerHTML = html;
+    };
+
+    // ─── 모델(제품구분자) 전환 바 — M.C Table과 같은 체계를 공유 ─────────
+    window.bomRenderUnitBar = function () {
+        var bar = document.getElementById('bom-unit-bar');
+        if (!bar) return;
+        var units = window.getMcUnits ? window.getMcUnits() : [];
+        if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+        var cur = window._bomActiveUnit();
+        bar.style.display = 'flex';
+        bar.innerHTML = '<button onclick="window.bomCycleUnit()" title="' + _esc(_t('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
+            + ' style="padding:6px 10px; min-width:auto; border:1px solid #c9b8f0; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#ede9fb; color:#6741d9;">'
+            + _esc(cur) + '</button>';
+    };
+
+    window.bomCycleUnit = function () {
+        var units = window.getMcUnits ? window.getMcUnits() : [];
+        if (!units.length) return;
+        var cur = window._bomActiveUnit();
+        var next = units[(units.indexOf(cur) + 1) % units.length];
+        // M.C Table과 같은 전환 함수를 쓴다(그쪽 리비전/견적 포인터까지 같이 맞춰져야 하므로)
+        if (window.mcSwitchUnit) window.mcSwitchUnit(next);
+        else window.mcActiveUnit = next;
+        window.bomRender();
+    };
+
+    // ─── 언어 전환 ────────────────────────────────────────────────────
+    // ⚠️ docs/ui-conventions.md: "함수 자체가 이중언어여도 toggleLang()이 다시 안 부르면 옛 언어로 남는다".
+    //    정적 HTML에 박힌 문구(라벨/셀렉트 옵션/버튼)는 여기서 한 번에 맞추고, toggleLang()에서 호출한다.
+    window.bomRefreshLang = function () {
+        var en = window._currentLang === 'en';
+        var set = function (id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; };
+        set('bom-lbl-material', _t('자재번호', 'Material'));
+        var btn = document.getElementById('bom-fetch-btn');
+        if (btn && !btn.disabled) btn.textContent = _t('🔄 SAP 조회', '🔄 Fetch from SAP');
+        var exp = document.getElementById('bom-explosion');
+        if (exp && exp.options.length >= 2) {
+            exp.options[0].textContent = _t('다단계', 'Multi-level');
+            exp.options[1].textContent = _t('단일 레벨', 'Single level');
+        }
+        var lay = document.getElementById('bom-layout');
+        if (lay && lay.options.length) lay.options[0].textContent = _t('(SAP 기본 레이아웃)', '(SAP default layout)');
+        var mat = document.getElementById('bom-material');
+        if (mat) mat.placeholder = en ? 'e.g. 502572' : '예: 502572';
+        var cb = document.getElementById('bom-collapse-btn');
+        if (cb) cb.title = _t('하위 구성품 모두 접기', 'Collapse all children');
+        var eb = document.getElementById('bom-expand-btn');
+        if (eb) eb.title = _t('모두 펼치기', 'Expand all');
+        if (window.bomRender) window.bomRender();   // 헤더/빈 메시지/메타줄은 렌더에서 이중언어 처리됨
+    };
+
+    // 레이아웃 드롭다운 — 04h의 BOM 레이아웃 카탈로그(데이터)를 그대로 재사용
+    window.bomFillLayoutOptions = function () {
+        var sel = document.getElementById('bom-layout');
+        if (!sel || sel.dataset.filled === '1') return;
+        var opts = window._SAP_BOM_LAYOUT_OPTIONS || [];
+        if (!opts.length) return;
+        sel.innerHTML = '<option value="">' + _esc(_t('(SAP 기본 레이아웃)', '(SAP default layout)')) + '</option>'
+            + opts.map(function (o) {
+                return '<option value="' + _esc(o.value) + '"' + (o.value === '/STD_MC' ? ' selected' : '') + '>' + _esc(o.label) + '</option>';
+            }).join('');
+        sel.dataset.filled = '1';
+    };
+})();

@@ -67,6 +67,12 @@
         if (tabName === 'summary' && window._checkAllRequiredFields) window._checkAllRequiredFields();
         // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
         if (tabName === 'calendar' && window.calRender) window.calRender();
+        // BOM 탭은 진입할 때마다 현재 모델(제품구분자)의 저장된 BOM으로 다시 그린다
+        //  — M.C Table에서 제품구분자를 바꾸고 넘어왔을 수 있으므로 매번 갱신해야 한다.
+        if (tabName === 'bom') {
+            if (window.bomFillLayoutOptions) window.bomFillLayoutOptions();
+            if (window.bomRender) window.bomRender();
+        }
         // Elec Parts 탭 진입 시 마지막으로 보던 서브뷰(PANEL/AD BD/CONV BD)를 복원해서 그린다.
         // PANEL 뷰는 Summary 주요자재(PANEL) 등록값 반영 + 최신 라이브러리 상태로 매번 다시 그려진다(_switchElecView 내부).
         if (tabName === 'elecparts') {

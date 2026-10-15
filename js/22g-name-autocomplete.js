@@ -486,6 +486,10 @@ window.populateTabData = function() {
     window._materialsCollapsed = {}; // 프로젝트를 새로 열면 기본 접힘 상태로 리셋
     if (window.renderMaterialModelsContainer) window.renderMaterialModelsContainer();
 
+    // 🧱 BOM 탭 — 저장된 모델별 BOM 스냅샷 복원(tabData.bomByUnit은 tabData 통째 저장에 자동 포함)
+    if (window.bomFillLayoutOptions) window.bomFillLayoutOptions();
+    if (window.bomRender) window.bomRender();
+
     // 🪪 Address Book — 프로젝트 파일 안의 값은 더 이상 쓰지 않고, 공용 저장소를 단일 소스로 사용
     //    (로컬 캐시로 즉시 렌더 → 백그라운드에서 Drive 최신본으로 갱신)
     window.tabData.addressBook = window.AddressBook.load();
