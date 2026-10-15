@@ -220,9 +220,23 @@
                 window._bomSetStatus(_t('구성품 정보 보강 중… ' + done + '/' + total, 'Enriching components… ' + done + '/' + total), 'busy');
             });
 
+            // 다단계는 기본 접힘 — 레벨1(모체 직속)만 먼저 보이고, 필요한 가지만 펼쳐 본다.
+            var initCollapsed = {};
+            if (explosion === 'multi') {
+                if (parsed.hierarchyOk) {
+                    parsed.rows.forEach(function (r, i) {
+                        var n = parsed.rows[i + 1];
+                        if (n && n._level > r._level) initCollapsed[i] = true;
+                    });
+                } else {
+                    parsed.rows.forEach(function (r) { if (r._level > 1) initCollapsed[r._level] = true; });
+                }
+            }
+
             var prev = window._bomStore(unit) || {};
             window.tabData.bomByUnit[unit] = {
                 enrich: enrich,
+                _collapsed: initCollapsed,
                 material: material, plant: '1000', explosion: explosion,
                 layout: layout || (data.layoutRequested || ''), layoutApplied: data.layoutApplied,
                 tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
@@ -515,9 +529,10 @@
 
         if (st.hierarchyOk !== false) {
             // ── 계층 정상(깊이 우선) — 진짜 모자 관계를 그린다 ──────────────
-            // 💡 [2026-10-15] 레벨1 행에만 색을 깔면 그 자체가 경계 역할을 해서 충분히 구분된다
-            //    (사용자 요청) — 덩어리 전체 교대 배경·경계 굵은 선은 과했다.
-            var hidden = -1;
+            // 💡 [2026-10-15] 레벨1 행은 테마 틴트로 경계 역할을 하고, 그 아래 하위 행들은
+            //    제브라로 읽기를 돕는다. 제브라는 **실제로 화면에 그려지는 행** 기준이라
+            //    가지를 접었다 펴도 줄무늬가 어긋나지 않는다(행 인덱스 기준이면 숨은 행 때문에 깨짐).
+            var hidden = -1, visIdx = 0;
             st.rows.forEach(function (r, i) {
                 if (hidden !== -1) {
                     if (r._level > hidden) return;      // 접힌 가지의 자식
@@ -528,7 +543,8 @@
                 var collapsed = !!st._collapsed[i];
                 if (hasChild && collapsed) hidden = r._level;
 
-                var zb = (r._level === 1) ? '#e8f2f3' : '#fff';
+                var zb = (r._level === 1) ? '#e8f2f3' : (visIdx % 2 === 1 ? '#f4f9fa' : '#fff');
+                visIdx++;
                 var sp = '';
                 var ind = (r._level - 1) * 12;
                 var tw = hasChild
@@ -566,10 +582,10 @@
         st.rows.forEach(function (r) { (byLevel[r._level] = byLevel[r._level] || []).push(r); });
         var levels = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
 
-        levels.forEach(function (lv, li) {
+        var visIdx2 = 0;
+        levels.forEach(function (lv) {
             var list = byLevel[lv];
             var collapsed = !!st._collapsed[lv];
-            var zebra = (li % 2 === 1) ? '#e8f2f3' : '#fff';
 
             // 레벨 구분 머리행 — 클릭하면 그 레벨 전체를 접었다 편다
             html += '<tr style="background:#dff0f2; cursor:pointer;" onclick="window.bomToggleLevel(' + lv + ')"'
@@ -584,6 +600,9 @@
             list.forEach(function (r) {
                 var note = (st.notes && st.notes[r.IDNRK]) || '';
                 var mnEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                // 제브라는 화면에 실제로 그려지는 행 기준(레벨 블록을 접어도 줄무늬가 안 깨짐)
+                var zebra = (visIdx2 % 2 === 1) ? '#f4f9fa' : '#fff';
+                visIdx2++;
                 html += '<tr style="background:' + zebra + '; cursor:pointer;"'
                     + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')"'
                     + ' onmouseover="this.style.background=\'#d4eaf8\'"'
