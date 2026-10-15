@@ -462,7 +462,10 @@
         if (layEl && st && st.layout) layEl.value = st.layout;
 
         // 컴팩트 규격 — 한 화면에 더 많은 행이 들어가도록 패딩/글자를 줄인다
-        var TD = 'padding:2px 5px; border:1px solid #cfe3e5; font-size:11.5px;';
+        // 💡 [2026-10-15] 비고 <input>이 있는 행은 24px, 없는 모체·Σ 행은 21px로 높이가 달랐다.
+        //    모든 칸에 box-sizing:border-box + height를 줘서(표에서 height는 최소높이로 동작) 통일.
+        var ROW_H = '24px';
+        var TD = 'padding:2px 5px; border:1px solid #cfe3e5; font-size:11.5px; box-sizing:border-box; height:' + ROW_H + ';';
         var thS = 'padding:3px 5px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap; font-size:11.5px;';
         var cellStyle = function (c, extra) {
             return TD
@@ -564,7 +567,7 @@
                         var pad = (c.key === 'OJTXP') ? ' padding-left:' + (5 + ind) + 'px;' : '';
                         return '<td style="' + cellStyle(c, sp + pad) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                     }).join('')
-                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5;' + sp + ' position:relative;" onclick="event.stopPropagation()">'
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + ';' + sp + ' position:relative;" onclick="event.stopPropagation()">'
                     + '<input type="text" value="' + _esc(nt) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(nt) + '" '
                     + 'oninput="window.bomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
                     + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
@@ -591,7 +594,7 @@
             html += '<tr style="background:#dff0f2; cursor:pointer;" onclick="window.bomToggleLevel(' + lv + ')"'
                 + ' title="' + _esc(_t('이 레벨 접기/펴기', 'Collapse/expand this level')) + '">'
                 + '<td colspan="' + colCount + '" style="padding:3px 8px; border:1px solid #cfe3e5;'
-                + ' font-size:11.5px; font-weight:bold; color:#00707d;">'
+                + ' box-sizing:border-box; height:' + ROW_H + '; font-size:11.5px; font-weight:bold; color:#00707d;">'
                 + (collapsed ? '▸' : '▾') + ' ' + _esc(_t('레벨 ', 'Level ') + lv)
                 + ' <span style="font-weight:normal; color:#5b8a90;">(' + list.length + (en ? ' rows' : '건') + ')</span>'
                 + '</td></tr>';
@@ -613,7 +616,7 @@
                         return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                     }).join('')
                     // 비고 칸은 입력용이라 행 클릭(AI 문답 열기)이 끼어들면 안 된다
-                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; position:relative;" onclick="event.stopPropagation()">'
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
                     + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
                     + 'title="' + _esc(note) + '" '
                     + 'oninput="window.bomSetNote(this)" '
