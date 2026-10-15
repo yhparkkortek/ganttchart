@@ -110,15 +110,26 @@
         });
 
         var parent = null, rows = [], totals = [];
+        var firstDataLevel = 0, hierarchyOk = true, prevLevel = 0;
         raw.forEach(function (o) {
             var stufe = iStufe === -1 ? '' : (o.STUFE || '');
             var lv = (stufe.match(/(\d+)/) || [])[1];
-            if (lv) { o._level = Number(lv); rows.push(o); return; }
+            if (lv) {
+                o._level = Number(lv);
+                // 계층 성립 여부 검증 — ALV에 정렬이 걸려 있으면 순서가 섞여 모자 관계를 못 쓴다.
+                // 정상(깊이 우선)이면 ① 첫 데이터가 레벨1, ② 레벨이 한 번에 2 이상 깊어지지 않는다.
+                if (!firstDataLevel) { firstDataLevel = o._level; if (o._level !== 1) hierarchyOk = false; }
+                else if (o._level > prevLevel + 1) hierarchyOk = false;
+                prevLevel = o._level;
+                rows.push(o);
+                return;
+            }
             // 레벨 없는 행: 구성품번호가 있으면 모체 자재(맨 앞 1행), 없으면 단위별 합계(맨 끝)
             if (o.IDNRK) { if (!parent) parent = o; }
             else if (o.MENGE || o.MMEIN) totals.push(o);
         });
-        return { cols: cols, parent: parent, rows: rows, totals: totals, truncated: truncated, totalRows: totalRows };
+        return { cols: cols, parent: parent, rows: rows, totals: totals, truncated: truncated,
+                 totalRows: totalRows, hierarchyOk: hierarchyOk };
     };
 
     // ─── ZMM009 보강 ───────────────────────────────────────────────────
@@ -305,6 +316,15 @@
     //   → 이 출력만으로는 모자 관계를 복원할 수 없다. 틀린 묶음을 보여주느니 **레벨 블록**으로만
     //   묶고, 모자 관계를 알 수 없다는 사실을 화면에 명시한다(조용히 틀리게 두지 말 것).
     //   진짜 계층이 필요하면 단일 레벨 조회를 자재마다 재귀 호출해야 한다(행 클릭 → BOM 조회).
+    // 계층이 정상일 때 — 그 행의 하위 가지만 접었다 편다
+    window.bomToggleBranch = function (rowIdx) {
+        var st = window._bomStore();
+        if (!st) return;
+        st._collapsed = st._collapsed || {};
+        st._collapsed[rowIdx] = !st._collapsed[rowIdx];
+        window.bomRender();
+    };
+
     window.bomToggleLevel = function (level) {
         var st = window._bomStore();
         if (!st) return;
@@ -322,7 +342,15 @@
         }
         st._collapsed = {};
         if (collapse) {
-            st.rows.forEach(function (r) { if (r._level > 1) st._collapsed[r._level] = true; });
+            if (st.hierarchyOk !== false) {
+                // 계층 모드: 자식을 가진 행(= 그 다음 행이 더 깊은 레벨)을 모두 접는다
+                st.rows.forEach(function (r, i) {
+                    var next = st.rows[i + 1];
+                    if (next && next._level > r._level) st._collapsed[i] = true;
+                });
+            } else {
+                st.rows.forEach(function (r) { if (r._level > 1) st._collapsed[r._level] = true; });
+            }
         }
         window.bomRender();
     };
@@ -456,6 +484,18 @@
 
         st._collapsed = st._collapsed || {};
         var html = '';
+        // 단위별 합계(SAP가 표 끝에 붙여주는 행) — 두 렌더 분기가 공용으로 쓴다
+        var renderTotals = function () {
+            (st.totals || []).forEach(function (o) {
+                html += '<tr style="background:#eef6f7; font-weight:bold; color:#2c5f8a;">'
+                    + '<td style="' + TD + ' text-align:center;">Σ</td>'
+                    + BOM_COLUMNS.map(function (c) {
+                        return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
+                    }).join('')
+                    + '<td style="' + TD + '"></td>'
+                    + '</tr>';
+            });
+        };
 
         // 모체 자재 행(레벨 없이 맨 앞에 오는 행) — 표 맨 위에 강조해서 고정
         if (st.parent) {
@@ -471,8 +511,56 @@
                 + '</tr>';
         }
 
-        // 레벨 블록으로 묶어서 그린다(모자 관계는 이 출력으로 복원 불가 — 위 bomToggleLevel 주석 참고).
-        // SAP이 준 행 순서(구성부품내역 역순)는 레벨 안에서 그대로 유지한다.
+        if (st.hierarchyOk !== false) {
+            // ── 계층 정상(깊이 우선) — 진짜 모자 관계를 그린다 ──────────────
+            // 최상위(레벨1) 한 덩어리가 같은 배경을 쓰고 덩어리마다 색이 교대된다.
+            var hidden = -1, groupIdx = -1;
+            st.rows.forEach(function (r, i) {
+                if (hidden !== -1) {
+                    if (r._level > hidden) return;      // 접힌 가지의 자식
+                    hidden = -1;
+                }
+                var next = st.rows[i + 1];
+                var hasChild = !!(next && next._level > r._level);
+                var collapsed = !!st._collapsed[i];
+                if (hasChild && collapsed) hidden = r._level;
+
+                if (r._level === 1) groupIdx++;
+                var zb = (groupIdx % 2 === 1) ? '#e8f2f3' : '#fff';
+                // ⚠️ border-collapse 표에선 border-top 색이 이웃 셀과 충돌 해결되며 밀린다 → inset box-shadow
+                var sp = (r._level === 1 && groupIdx > 0) ? ' box-shadow: inset 0 2px 0 0 #52a5af;' : '';
+                var ind = (r._level - 1) * 12;
+                var tw = hasChild
+                    ? '<span onclick="event.stopPropagation(); window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
+                    : '<span style="color:#cfe3e5;">·</span>';
+                var nt = (st.notes && st.notes[r.IDNRK]) || '';
+                var me = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+                html += '<tr style="background:' + zb + '; cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + me + '\')"'
+                    + ' onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + zb + '\'">'
+                    + '<td style="' + TD + sp + ' white-space:nowrap;">'
+                    + '<span style="display:inline-block; width:' + ind + 'px;"></span>' + tw
+                    + ' <span style="color:#666;">' + r._level + '</span></td>'
+                    + BOM_COLUMNS.map(function (c) {
+                        var v = valueOf(r, c);
+                        var pad = (c.key === 'OJTXP') ? ' padding-left:' + (5 + ind) + 'px;' : '';
+                        return '<td style="' + cellStyle(c, sp + pad) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    }).join('')
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5;' + sp + ' position:relative;" onclick="event.stopPropagation()">'
+                    + '<input type="text" value="' + _esc(nt) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(nt) + '" '
+                    + 'oninput="window.bomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                    + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
+                    + '</tr>';
+            });
+            renderTotals();
+            tbody.innerHTML = html;
+            window._bomSyncToggleBtn();
+            window._bomRenderMeta(st);
+            return;
+        }
+
+        // ── 계층이 깨진 경우(ALV 정렬) — 레벨 블록으로만 묶는다 ──────────────
         var byLevel = {};
         st.rows.forEach(function (r) { (byLevel[r._level] = byLevel[r._level] || []).push(r); });
         var levels = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
@@ -516,16 +604,7 @@
             });
         });
 
-        // 단위별 합계(SAP가 표 끝에 붙여주는 행)
-        (st.totals || []).forEach(function (o) {
-            html += '<tr style="background:#eef6f7; font-weight:bold; color:#2c5f8a;">'
-                + '<td style="' + TD + ' text-align:center;">Σ</td>'
-                + BOM_COLUMNS.map(function (c) {
-                    return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
-                }).join('')
-                + '<td style="' + TD + '"></td>'
-                + '</tr>';
-        });
+        renderTotals();
 
         tbody.innerHTML = html;
         window._bomSyncToggleBtn();
@@ -564,11 +643,11 @@
             + '<div style="font-size:11px; color:#5577aa; margin-top:3px;">💡 '
             + _esc(_t('행을 클릭하면 그 구성품으로 조회 기능을 선택할 수 있습니다', 'Click a row to pick a lookup for that component'))
             + '</div>';
-        // 다단계일 때만 — SAP 출력이 정렬돼 와서 "어느 상위품 밑인지"는 알 수 없다는 점을 분명히 밝힌다
-        if (st.explosion === 'multi' && (st.rows || []).some(function (r) { return r._level > 1; })) {
+        // 계층이 깨진 경우에만 경고 — ALV에 정렬이 걸려 있으면 모자 관계를 복원할 수 없다.
+        if (st.hierarchyOk === false) {
             html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
-                + _esc(_t('SAP이 구성부품내역 순으로 정렬된 목록을 주고 상위품 정보를 함께 주지 않아, 레벨2 이하가 어느 상위품에 속하는지는 표시할 수 없습니다. 특정 상위품의 구성만 보려면 그 행을 클릭해 "BOM 조회"를 쓰세요.',
-                    'SAP returns the list sorted by description without parent info, so which parent a level-2+ item belongs to cannot be shown. To see one assembly’s components, click its row and use "BOM 조회".'))
+                + _esc(_t('SAP 결과가 정렬된 상태로 와서 상·하위 관계를 복원할 수 없어 레벨별로만 묶었습니다. SAP ALV에서 "레이아웃 관리"로 정렬 없는 레이아웃을 적용한 뒤 다시 조회하면 계층이 그대로 나옵니다.',
+                    'The SAP result came back sorted, so parent-child links cannot be restored and rows are grouped by level only. Apply an unsorted layout via "Layout management" in SAP ALV and re-run the lookup to get the real hierarchy.'))
                 + '</div>';
         }
         if (st.truncated) {
