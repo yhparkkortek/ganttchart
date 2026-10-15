@@ -190,8 +190,33 @@ window._toggleProjectStatus = function() {
 // ─── 프로젝트 정보 다중 모델 카드 ──────────────────────────────────────────
 window._renderModelCardHtml = function(model, idx) {
     var uid = escapeHtml(model.unitId || '');
-    var label = uid ? ('모델 #' + (idx + 1) + ' · ' + uid) : ('모델 #' + (idx + 1));
+    var label = '모델 #' + (idx + 1);
     var canDelete = idx > 0;
+
+    // 제품군 선택 — 후보는 이 프로젝트의 제품구분자 목록(getMcUnits). 다른 카드가 쓰는 건 비활성.
+    var _mEn = window._currentLang === 'en';
+    var _units = (window.getMcUnits ? window.getMcUnits() : []) || [];
+    var _usedByOthers = {};
+    ((window.tabData && window.tabData.projectModels) || []).forEach(function(m, i) {
+        if (i !== idx && m.unitId) _usedByOthers[m.unitId] = true;
+    });
+    var _opt = '<option value=""' + (model.unitId ? '' : ' selected') + '>'
+        + (_mEn ? '(pick family)' : '(제품군 선택)') + '</option>';
+    _units.forEach(function(u) {
+        var used = !!_usedByOthers[u];
+        _opt += '<option value="' + escapeHtml(u) + '"' + (u === model.unitId ? ' selected' : '')
+            + (used ? ' disabled' : '') + '>' + escapeHtml(u) + (used ? (_mEn ? ' (in use)' : ' (사용중)') : '') + '</option>';
+    });
+    // 목록에 없는 값(엑셀에서만 들어온 경우 등)도 사라지지 않게 유지
+    if (model.unitId && _units.indexOf(model.unitId) === -1) {
+        _opt += '<option value="' + uid + '" selected>' + uid + '</option>';
+    }
+    _opt += '<option value="__new__">' + (_mEn ? '+ New family…' : '＋ 새 제품군…') + '</option>';
+    var _unitSel = '<select onchange="window.setProjectModelUnit(' + idx + ', this.value)" '
+        + 'title="' + (_mEn ? 'Pick the product family for this model' : '이 모델의 제품군을 고릅니다') + '" '
+        + 'style="font-size:12px; font-weight:bold; color:#00707d; background:#fff; border:1px solid #cfe3e5; '
+        + 'border-radius:5px; padding:2px 6px; height:22px; box-sizing:border-box; cursor:pointer;">'
+        + _opt + '</select>';
     var ktkVal = escapeHtml(model.KTKPN && model.KTK모델명 ? model.KTKPN + '_' + model.KTK모델명 : (model.KTKPN || model.KTK모델명 || ''));
     // 💡 [2026-10-15] 헤더 높이 통일 — 예전엔 "(기본)"은 맨텍스트, 삭제는 테두리+패딩 버튼이라
     //    모델 #1 헤더만 6px 낮았다. 둘 다 같은 알약(pill) 박스 규격(_SUM_CARD_HDR_PILL)으로 맞추고,
@@ -224,6 +249,7 @@ window._renderModelCardHtml = function(model, idx) {
     return '<div class="sum-model-card" data-unit-id="' + uid + '" style="border:1px solid #cfe3e5; border-radius:6px; background:#fff; overflow:hidden;">' +
         '<div style="' + _hdr + '">' +
             '<span style="font-size:12px; font-weight:bold; color:#00707d;">' + label + '</span>' +
+            _unitSel +
             _moveBtns + _delBtn +
         '</div>' +
         '<div class="concept-grid" style="grid-template-columns:140px 1fr 140px 1fr; padding:10px 12px;">' +
@@ -237,6 +263,38 @@ window._renderModelCardHtml = function(model, idx) {
             '<input type="text" class="u-input req-field" data-model-field="KTK" placeholder="예: 502574_MVD>KTS320DPS01" value="' + ktkVal + '" oninput="window._checkRequiredField(this)">' +
         '</div>' +
     '</div>';
+};
+
+// 🏷️ [2026-10-15] 모델 카드의 제품군(unitId)을 직접 고른다.
+//    예전엔 addProjectModel이 "안 쓰인 첫 제품군"을 자동 배정하고 끝이라, 프로젝트마다
+//    구성이 다른 경우(MVD+TPR / MVD+BTN 등)를 순서 바꾸기만으로는 표현할 수 없었다.
+//    ⚠️ BOM(tabData.bomByUnit)·M.C Table(mcRevisionsByUnit)은 제품군 이름을 키로 쓰므로,
+//    여기서 바꾸면 그 카드는 "그 제품군의 데이터"를 보게 된다(데이터 이사가 아니라 배정 변경).
+//    이름 자체를 고치는 건 M.C Table의 제품구분자 관리(✏️)가 담당 — 역할이 다르다.
+window.setProjectModelUnit = function(idx, val) {
+    window._syncProjectModelsFromDom();
+    if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
+    const models = (window.tabData && window.tabData.projectModels) || [];
+    if (!models[idx]) return;
+    const _en = window._currentLang === 'en';
+
+    if (val === '__new__') {
+        const name = (prompt(_en ? 'Enter a new product family (e.g. MVD, TPR, BTN)'
+                                 : '새 제품군 이름을 입력하세요 (예: MVD, TPR, BTN)') || '').trim();
+        if (!name) { window.renderProjectModels(); return; }
+        const units = window.getMcUnits ? window.getMcUnits() : [];
+        if (units.indexOf(name) === -1) units.push(name);
+        val = name;
+    }
+    // 같은 제품군을 두 카드가 쓰면 BOM·주요자재가 어느 카드 것인지 모호해진다 — 막는다.
+    if (val && models.some(function(m, i) { return i !== idx && (m.unitId || '') === val; })) {
+        if (window.showToast) window.showToast(
+            _en ? '"' + val + '" is already used by another model.' : '"' + val + '"은(는) 다른 모델이 이미 쓰고 있습니다.', 'warning');
+        window.renderProjectModels();
+        return;
+    }
+    models[idx].unitId = val;
+    window.renderProjectModels();
 };
 
 window.renderProjectModels = function() {
