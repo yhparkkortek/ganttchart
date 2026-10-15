@@ -276,6 +276,24 @@
         el.style.boxShadow = '';
     };
 
+    // ─── 행 클릭 → AI 문답 칩 버튼("무엇을 조회할까요?") ─────────────────
+    // ZMM009 조회 표(js/33 runPatternLookup)와 완전히 같은 흐름을 쓴다 — 거기선 AI 문답 창이
+    // 이미 열려 있는 상태라 `_sapSelectMaterial`만 부르면 됐지만, BOM 탭은 창이 닫혀 있을 수
+    // 있으므로 먼저 모달을 연다. `_sapSelectMaterial`이 자재유형(1원자재/3반제품/5완제품)에 따라
+    // BOM·사용처·재고·가격·승인원·공급업체·구매정보·담기 버튼을 알아서 걸러준다.
+    window.bomSelectComponent = function (matnr) {
+        matnr = String(matnr || '').trim();
+        if (!matnr) return;
+        if (window.openGanttQaModal) window.openGanttQaModal();
+        var go = function () {
+            if (window._sapSelectMaterial) window._sapSelectMaterial(matnr);
+            else if (window.showToast) window.showToast(_t('AI 문답을 불러오지 못했습니다.', 'Could not load AI Q&A.'), 'warning');
+        };
+        // 모달을 방금 처음 만든 경우 입력칸이 아직 없을 수 있어 한 틱 기다렸다 호출
+        if (document.getElementById('gantt-qa-input')) go();
+        else setTimeout(go, 60);
+    };
+
     // ─── 레벨 접기/펴기 ────────────────────────────────────────────────
     // 깊이 우선 순서라, 어떤 행의 "자식"은 그 다음부터 레벨이 더 깊은 연속 구간이다.
     window.bomToggleBranch = function (rowIdx) {
@@ -372,7 +390,10 @@
 
         // 모체 자재 행(레벨 없이 맨 앞에 오는 행) — 표 맨 위에 강조해서 고정
         if (st.parent) {
-            html += '<tr style="background:#e0f5f7; font-weight:bold;">'
+            var pEsc = String(st.parent.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            html += '<tr style="background:#e0f5f7; font-weight:bold; cursor:pointer;"'
+                + ' onclick="window.bomSelectComponent(\'' + pEsc + '\')"'
+                + ' onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'#e0f5f7\'">'
                 + '<td style="' + TD + ' text-align:center; color:#00707d;">' + _esc(_t('모체', 'Top')) + '</td>'
                 + BOM_COLUMNS.map(function (c) {
                     return '<td style="' + cellStyle(c, ' color:#00707d;') + '">' + _esc(valueOf(st.parent, c)) + '</td>';
@@ -405,12 +426,17 @@
             //    inset box-shadow는 테두리 합치기와 무관하게 셀 안쪽에 그려져 색이 그대로 유지된다.
             var sep = isGroupHead && groupIdx > 0 ? ' box-shadow: inset 0 2px 0 0 #52a5af;' : '';
             var indent = (r._level - 1) * 12;
+            // 접기 토글은 행 클릭(= AI 문답 열기)과 겹치므로 전파를 막는다
             var twisty = hasChild
-                ? '<span onclick="window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
+                ? '<span onclick="event.stopPropagation(); window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
                 : '<span style="color:#cfe3e5;">·</span>';
             var note = (st.notes && st.notes[r.IDNRK]) || '';
+            var mnEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-            html += '<tr style="background:' + zebra + ';">'
+            html += '<tr style="background:' + zebra + '; cursor:pointer;"'
+                + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')"'
+                + ' onmouseover="this.style.background=\'#d4eaf8\'"'
+                + ' onmouseout="this.style.background=\'' + zebra + '\'">'
                 + '<td style="' + TD + sep + ' white-space:nowrap;">'
                 + '<span style="display:inline-block; width:' + indent + 'px;"></span>' + twisty
                 + ' <span style="color:#666;">' + r._level + '</span></td>'
@@ -418,7 +444,8 @@
                     var v = valueOf(r, c);
                     return '<td style="' + cellStyle(c, sep) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                 }).join('')
-                + '<td style="padding:1px 3px; border:1px solid #cfe3e5;' + sep + ' position:relative;">'
+                // 비고 칸은 입력용이라 행 클릭(AI 문답 열기)이 끼어들면 안 된다
+                + '<td style="padding:1px 3px; border:1px solid #cfe3e5;' + sep + ' position:relative;" onclick="event.stopPropagation()">'
                 + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
                 + 'title="' + _esc(note) + '" '
                 + 'oninput="window.bomSetNote(this)" '
@@ -472,6 +499,9 @@
         }
         var html = '<div style="font-size:11.5px; color:#666; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">'
             + parts.filter(Boolean).map(function (p) { return '<span>' + p + '</span>'; }).join('<span style="color:#cfe3e5;">|</span>')
+            + '</div>'
+            + '<div style="font-size:11px; color:#5577aa; margin-top:3px;">💡 '
+            + _esc(_t('행을 클릭하면 그 구성품으로 조회 기능을 선택할 수 있습니다', 'Click a row to pick a lookup for that component'))
             + '</div>';
         if (st.truncated) {
             // SAP 덤프가 500행에서 잘렸다 — 조용히 넘기지 않고 화면에 공개한다
