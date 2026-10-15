@@ -42,6 +42,9 @@
     var GENERAL_CUE_RE = /(뭐야|뭔가요|뭐예요|무엇|무슨\s*뜻|의미|차이|왜\s|원리|어떻게\s*(동작|작동|되|하|쓰)|설명해|개념|정의|장단점|비교|추천|what\s+is|why\s|how\s+does|difference)/i;
     var OTHER_RE = /^\s*(안녕|하이|hello|hi\b|고마워|감사|도움말|사용법|뭘\s*할\s*수|무엇을\s*할\s*수|help\b)/i;
     var SCREEN_RE = /(화면|보이는|지금|현재|열려)/;
+    // 자재코드 목록을 ZMM009 구조화 조회(renderMatRows 표)로 처리할 SAP 기능 id.
+    // 이 밖의 기능(가격·재고·BOM·문서 등)이 어휘로 이기면 기존 경로를 그대로 둔다.
+    var ZMM009_ROW_CAPS = ['matlist', 'itemdesc', 'descpattern'];
     var KO_STOP = /^(조회|알려|보여|해줘|해주|있어|없어|이거|그거|정보|내용|관련|대해|대한|확인|이번|다음|지금|현재|전체|모든|업무|일정|담당|프로젝트|진행|완료|지연|마감|설명|무엇)/;
 
     function patternOf(q) {
@@ -247,6 +250,96 @@
     }
     function finish(input) { window._renderGanttQaMessages(); if (input) input.focus(); }
 
+    // ── ZMM009 조회 결과 표(패턴 조회·자재코드 복수 조회 공용) ───────────
+    // 백엔드 `_ZMM009_PATTERN_COLS`가 돌려주는 구조화 컬럼을 그대로 렌더링한다. 두 경로가
+    // 같은 표를 쓰므로 컬럼을 바꿀 때 여기 한 곳만 고치면 된다.
+    function renderMatRows(rows) {
+        var _esc = function (v) { return (v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+        var _tr = function (v, n) { var s = v || ''; return s.length > n ? s.slice(0, n) + '…' : s; };
+        var _unitPrice = function (stprs, peinh) {
+            var p = parseFloat((stprs || '').replace(/,/g, '')) || 0;
+            var u = parseInt(peinh || '1', 10) || 1;
+            var val = p / u;
+            return val % 1 === 0 ? val.toLocaleString('ko-KR') : val.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+        };
+        var _thS = 'padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
+        var _tdS = 'padding:5px 8px; border-bottom:1px solid #eef0f3;';
+        var tbl = '<div style="max-height:300px; overflow-x:auto; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
+            + '<table style="border-collapse:collapse; font-size:12px; white-space:nowrap;">'
+            + '<thead><tr style="background:#eef3fa;">'
+            + '<th style="' + _thS + '">' + T('자재번호', 'Material No.') + '</th>'
+            + '<th style="' + _thS + '">' + T('자재내역', 'Description') + '</th>'
+            + '<th style="' + _thS + '">' + T('자재내역2', 'Description 2') + '</th>'
+            + '<th style="' + _thS + ' text-align:right;">' + T('단가(KRW)', 'Unit Price') + '</th>'
+            + '<th style="' + _thS + '">' + T('자재상태', 'Status') + '</th>'
+            + '<th style="' + _thS + '">' + T('제조사', 'Manufacturer') + '</th>'
+            + '<th style="' + _thS + '">' + T('담당자', 'Person') + '</th>'
+            + '</tr></thead><tbody>';
+        rows.forEach(function (x, i) {
+            var mn = (x.MATNR || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
+            tbl += '<tr style="background:' + bg + '; cursor:pointer;" '
+                + 'onclick="window._sapSelectMaterial(\'' + mn + '\')" '
+                + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
+                + '<td style="' + _tdS + ' font-family:monospace;">' + _esc(x.MATNR) + '</td>'
+                + '<td style="' + _tdS + '" title="' + _esc(x.MAKTX) + '">' + _esc(_tr(x.MAKTX, 42)) + '</td>'
+                + '<td style="' + _tdS + '" title="' + _esc(x.ZTEXT) + '">' + _esc(_tr(x.ZTEXT, 42)) + '</td>'
+                + '<td style="' + _tdS + ' text-align:right;">' + _unitPrice(x.STPRS1, x.PEINH1) + '</td>'
+                + '<td style="' + _tdS + ' text-align:center;">' + _esc(x.MMSTA) + '</td>'
+                + '<td style="' + _tdS + '" title="' + _esc(x.MFRPN) + '">' + _esc(_tr(x.MFRPN, 10)) + '</td>'
+                + '<td style="' + _tdS + '">' + _esc(x.FERTH) + '</td>'
+                + '</tr>';
+        });
+        return tbl + '</tbody></table></div>';
+    }
+    /** 자재번호 → 자재내역 캐시. 자재 보관함(js/35)이 칩에서 번호만 받아 담을 때 내역을 채워준다. */
+    function cacheDesc(list) {
+        try {
+            window._sapLastPatternDesc = window._sapLastPatternDesc || {};
+            list.forEach(function (x) { if (x && x.MATNR) window._sapLastPatternDesc[x.MATNR] = x.MAKTX || ''; });
+        } catch (e) { /* 캐시 실패는 기능에 영향 없음 */ }
+    }
+
+    // ── 자재번호 복수 조회(6자리 코드 목록) ──────────────────────────
+    // 🛡 [2026-10-15] 코드 목록을 AI에 넘기면 ZMM009 덤프 텍스트로 없는 값(납기일·제조사)을
+    //    만들어내는 환각이 나왔다. 패턴 조회와 똑같이 백엔드가 구조화한 컬럼만 표로 보여준다.
+    async function runMaterialRowsLookup(question, mats, input, route) {
+        pushUser(question, input, route);
+        if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+        window._ganttQaHistory.push({ role: 'ai', pending: true, text: '⏳ ' + T('SAP(ZMM009)에서 자재 ' + mats.length + '건을 조회하는 중...', 'Looking up ' + mats.length + ' material(s) in SAP (ZMM009)...') });
+        window._renderGanttQaMessages();
+        var reply = null, list = [], missing = [];
+        try {
+            var p = fetch(API + '/sap-material-rows?materials=' + encodeURIComponent(mats.join(',')));
+            var res = await (window._withTimeout ? window._withTimeout(p, 100000, T('SAP 자재 조회 시간 초과', 'SAP material lookup timed out')) : p);
+            if ((res.headers.get('content-type') || '').indexOf('json') < 0) throw new Error(T('백엔드가 구버전이거나 꺼져 있습니다 — kortek_backend.bat을 다시 실행해주세요.', 'Backend is outdated or offline — restart kortek_backend.bat.'));
+            var d = await res.json();
+            if (!d.ok) throw new Error(d.error || T('알 수 없는 오류', 'unknown error'));
+            list = d.materials || [];
+            missing = d.missing || [];
+            if (!list.length) reply = '🔎 ' + T('자재 ' + mats.join(', ') + '의 ZMM009 조회 결과가 없습니다 — 자재번호를 확인해주세요.', 'No ZMM009 rows for ' + mats.join(', ') + ' — check the material numbers.');
+        } catch (e) {
+            reply = '⚠️ ' + T('SAP 자재 조회에 실패했습니다: ', 'SAP material lookup failed: ') + (e && e.message ? e.message : e);
+        }
+        window._ganttQaHistory.pop();
+        if (reply !== null) { pushAi(reply, question, route); finish(input); return; }
+        cacheDesc(list);
+        var hdr = '<div style="font-size:12px; margin-bottom:6px;">🏭 '
+            + T('ZMM009 자재 조회 ' + list.length + '건', 'ZMM009 material lookup — ' + list.length + ' row(s)')
+            + '</div>'
+            + '<div style="font-size:11px; color:#5577aa; margin-bottom:5px;">💡 '
+            + T('행을 클릭하면 조회 기능을 선택할 수 있습니다', 'Click a row to select an action')
+            + '</div>';
+        var tail = missing.length
+            ? '<div style="margin-top:6px; font-size:11px; color:#b06a00;">⚠️ '
+                + T('조회되지 않은 자재: ', 'Not found: ') + missing.join(', ')
+                + T(' (저장위치 1000에 자재 마스터가 없을 수 있습니다)', ' (may have no material master in storage location 1000)')
+                + '</div>'
+            : '';
+        window._ganttQaHistory.push({ role: 'ai', text: hdr + renderMatRows(list) + tail, rawHtml: true });
+        finish(input);
+    }
+
     // ── 자재내역 패턴 조회(새 로컬 명령) ─────────────────────────────
     async function runPatternLookup(question, pattern, input, route) {
         pushUser(question, input, route);
@@ -277,13 +370,7 @@
         } else {
             // 행을 클릭하면 조회 기능 선택 드롭다운이 표시되는 인터랙티브 표
             var shown = list.slice(0, 150);
-            // 🧺 [2026-10-02] 자재번호 → 자재내역 캐시. 자재 보관함(js/35)에 담을 때 내역을 같이
-            //    넣어주기 위한 것 — 칩 팝업은 자재번호만 들고 있어서 이게 없으면 보관함이 번호만 남는다.
-            try {
-                window._sapLastPatternDesc = window._sapLastPatternDesc || {};
-                list.forEach(function (x) { if (x && x.MATNR) window._sapLastPatternDesc[x.MATNR] = x.MAKTX || ''; });
-            } catch (e) { /* 캐시 실패는 기능에 영향 없음 */ }
-            var en = window._currentLang === 'en';
+            cacheDesc(list);
             var hdr = '<div style="font-size:12px; margin-bottom:6px;">🔎 '
                 + T('자재내역 "' + pattern + '" 패턴 매치 ' + list.length + '건', 'Description pattern "' + pattern + '" matched ' + list.length + ' material(s)')
                 + (list.length > shown.length ? ' ' + T('(150건만 표시)', '(first 150 shown)') : '')
@@ -291,45 +378,7 @@
                 + '<div style="font-size:11px; color:#5577aa; margin-bottom:5px;">💡 '
                 + T('행을 클릭하면 조회 기능을 선택할 수 있습니다', 'Click a row to select an action')
                 + '</div>';
-            var _esc = function(v) { return (v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-            var _tr42 = function(v) { var s = v||''; return s.length > 42 ? s.slice(0,42)+'…' : s; };
-            var _unitPrice = function(stprs, peinh) {
-                var p = parseFloat((stprs||'').replace(/,/g,'')) || 0;
-                var u = parseInt(peinh||'1', 10) || 1;
-                var val = p / u;
-                return val % 1 === 0
-                    ? val.toLocaleString('ko-KR')
-                    : val.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
-            };
-            var _thS = 'padding:5px 8px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
-            var tbl = '<div style="max-height:300px; overflow-x:auto; overflow-y:auto; border:1px solid #dde4ec; border-radius:5px;">'
-                + '<table style="border-collapse:collapse; font-size:12px; white-space:nowrap;">'
-                + '<thead><tr style="background:#eef3fa;">'
-                + '<th style="' + _thS + '">' + T('자재번호','Material No.') + '</th>'
-                + '<th style="' + _thS + '">' + T('자재내역','Description') + '</th>'
-                + '<th style="' + _thS + '">' + T('자재내역2','Description 2') + '</th>'
-                + '<th style="' + _thS + ' text-align:right;">' + T('단가(KRW)','Unit Price') + '</th>'
-                + '<th style="' + _thS + '">' + T('자재상태','Status') + '</th>'
-                + '<th style="' + _thS + '">' + T('제조사','Manufacturer') + '</th>'
-                + '<th style="' + _thS + '">' + T('담당자','Person') + '</th>'
-                + '</tr></thead><tbody>';
-            var _tdS = 'padding:5px 8px; border-bottom:1px solid #eef0f3;';
-            shown.forEach(function(x, i) {
-                var mn = (x.MATNR || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                var bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
-                tbl += '<tr style="background:' + bg + '; cursor:pointer;" '
-                    + 'onclick="window._sapSelectMaterial(\'' + mn + '\')" '
-                    + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
-                    + '<td style="' + _tdS + ' font-family:monospace;">' + _esc(x.MATNR) + '</td>'
-                    + '<td style="' + _tdS + '" title="' + _esc(x.MAKTX) + '">' + _esc(_tr42(x.MAKTX)) + '</td>'
-                    + '<td style="' + _tdS + '" title="' + _esc(x.ZTEXT) + '">' + _esc(_tr42(x.ZTEXT)) + '</td>'
-                    + '<td style="' + _tdS + ' text-align:right;">' + _unitPrice(x.STPRS1, x.PEINH1) + '</td>'
-                    + '<td style="' + _tdS + ' text-align:center;">' + _esc(x.MMSTA) + '</td>'
-                    + '<td style="' + _tdS + '" title="' + _esc(x.MFRPN) + '">' + _esc((x.MFRPN||'').length > 10 ? (x.MFRPN||'').slice(0,10)+'…' : (x.MFRPN||'')) + '</td>'
-                    + '<td style="' + _tdS + '">' + _esc(x.FERTH) + '</td>'
-                    + '</tr>';
-            });
-            tbl += '</tbody></table></div>';
+            var tbl = renderMatRows(shown);
             var apInfo = '<div style="margin-top:6px; font-size:11px; color:#888;">💡 '
                 + T('승인원(P01): "' + pattern + '로 조회된 아이템 승인원 다운로드해줘"', 'P01 docs: "download approval docs for items matching ' + pattern + '"')
                 + '</div>';
@@ -437,7 +486,17 @@
             //    와일드카드만 보고 자재로 단정하기 전에 프로젝트 어휘를 한 번 더 확인한다.
             var _isProj = !!(window._sapCapKwHit && window._sapCapKwHit(question, 'projectcode'));
             if (res.patterns.length && !_isProj) { await runPatternLookup(question, res.patterns[0], input, route); return { handled: true, route: route }; }
-            if (res.materials.length || ((/sap/i.test(question) || res.tcodes.length) && SCREEN_RE.test(question))) { route.local = false; route.useSapContext = true; return { handled: false, route: route }; }
+            // 🛡 [2026-10-15] 6자리 자재코드 목록도 패턴 조회와 같은 ZMM009 구조화 조회로.
+            //    예전엔 AI에 화면 덤프 텍스트를 넘겨 읽게 했는데 없는 값(납기일·제조사)을
+            //    만들어내는 환각이 나왔다. 다른 SAP 기능 어휘가 이기면 기존 경로를 유지한다
+            //    (가격·재고·BOM 등은 04h 로컬 명령이나 SAP 컨텍스트가 담당).
+            var _isScreen = (/sap/i.test(question) || res.tcodes.length) && SCREEN_RE.test(question);
+            var _topCap = (res.caps && res.caps.length) ? res.caps[0].id : '';
+            if (res.materials.length && !_isProj && !_isScreen && (!_topCap || ZMM009_ROW_CAPS.indexOf(_topCap) >= 0)) {
+                await runMaterialRowsLookup(question, res.materials, input, route);
+                return { handled: true, route: route };
+            }
+            if (res.materials.length || _isScreen) { route.local = false; route.useSapContext = true; return { handled: false, route: route }; }
             runUnsupported(question, input, route, cls);
             return { handled: true, route: route };
         }

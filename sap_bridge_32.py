@@ -1506,9 +1506,9 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
 
 def resolve_pattern_via_zmm009(pattern, lgort='1000'):
     """ZMM009 P_MAKTX-LOW 패턴으로 자재를 조회하고 _ZMM009_PATTERN_COLS 컬럼을 한 번에
-    읽어 반환한다(각 항목이 8필드 dict). resolve_materials_by_description_pattern(MM60 F4)
-    대비 장점: 한 트랜잭션에서 자재내역2(ZTEXT)·표준가격(STPRS1)·자재상태(MMSTA)·
-    구매담당자(EKGRP)·제조자부품번호(MFRPN)·생산/검사 메모(ZPTEXT)까지 한 번에 읽음.
+    읽어 반환한다. resolve_materials_by_description_pattern(MM60 F4) 대비 장점: 한
+    트랜잭션에서 자재내역2(ZTEXT)·표준가격(STPRS1)·가격단위(PEINH1)·자재상태(MMSTA)·
+    제조사(MFRPN)·담당자(FERTH)까지 한 번에 읽음.
     컬럼이 그리드에 없거나 읽기 실패 시 해당 필드 빈 문자열로 안전하게 채움."""
     pattern = (pattern or '').strip()
     if not pattern:
@@ -1543,6 +1543,13 @@ def resolve_pattern_via_zmm009(pattern, lgort='1000'):
         raise RuntimeError(f'ZMM009 실행(F8) 실패: {e}')
     time.sleep(1.5)
 
+    return _zmm009_read_grid_rows(session)
+
+
+def _zmm009_read_grid_rows(session):
+    """ZMM009 결과 ALV에서 `_ZMM009_PATTERN_COLS` 컬럼을 구조화해 읽는다.
+    패턴 조회(`resolve_pattern_via_zmm009`)와 자재번호 복수 조회
+    (`resolve_materials_via_zmm009`)가 같은 표를 쓰므로 공용으로 뺐다."""
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
     if grid is None:
@@ -1585,6 +1592,74 @@ def resolve_pattern_via_zmm009(pattern, lgort='1000'):
             materials.append(item)
 
     return materials
+
+
+def resolve_materials_via_zmm009(materials, lgort='1000'):
+    """자재번호 목록(6자리 코드 등)을 ZMM009 "복수 선택" 팝업으로 한 번에 조회하고
+    `_ZMM009_PATTERN_COLS` 컬럼을 구조화해 반환한다 — `resolve_pattern_via_zmm009`와
+    같은 표를 쓰므로 프런트에서 동일한 도표로 렌더링된다.
+    기존 `fetch_zmm009_material_list`는 결과를 범용 화면 덤프 텍스트로 넘겨 AI가 읽게 했는데,
+    AI가 그 텍스트로 없는 값(날짜·제조사)을 만들어낸 환각 사고가 있어(2026-10-15) 이 경로를
+    추가했다. 화면 진입/팝업 시퀀스는 사용자 녹화 매크로(ZMM009.vbs)를 그대로 따른다."""
+    mat_list = list(materials) if isinstance(materials, (list, tuple)) else [materials]
+    mat_list = [str(m).strip() for m in mat_list if str(m).strip()]
+    if not mat_list:
+        raise RuntimeError('조회할 자재번호가 없습니다.')
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _sap_close_stray_popups(session)
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM009'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+    wnd = session.findById('wnd[0]')
+
+    try:
+        session.findById('wnd[0]/usr/ctxtP_LGORT-LOW').text = (lgort or '1000').strip()
+    except Exception:
+        pass
+
+    multi_btn = _find_by_id_substring(wnd, '%_P_MATNR_%_APP_%-VALU_PUSH')
+    if multi_btn is None:
+        raise RuntimeError('ZMM009 화면에서 "자재코드 복수 선택" 버튼을 찾지 못했습니다.')
+    multi_btn.press()
+    time.sleep(0.8)
+
+    try:
+        table = session.findById(_SAP_MULTI_SELECT_POPUP_TABLE)
+    except Exception:
+        raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
+    # Shift+F12(클립보드 붙여넣기) — SAP가 스크롤까지 알아서 처리해 건수 제한이 없다.
+    # fetch_zmm009_material_list의 2026-09-23 버그수정 주석 참고(FirstVisibleRow는 안 먹는다).
+    try:
+        _set_windows_clipboard_text('\r\n'.join(mat_list))
+    except Exception as e:
+        raise RuntimeError(f'자재번호 목록을 클립보드에 넣지 못했습니다: {e}')
+    try:
+        table.SetFocus()
+        session.findById('wnd[1]').sendVKey(24)
+    except Exception as e:
+        raise RuntimeError(f'"자재코드 복수 선택" 팝업에 클립보드 붙여넣기(Shift+F12)를 실행하지 못했습니다: {e}')
+    time.sleep(0.5 + 0.05 * len(mat_list))
+    _clear_windows_clipboard()
+
+    try:
+        session.findById('wnd[1]/tbar[0]/btn[24]').press()
+        time.sleep(0.3)
+        session.findById('wnd[1]/tbar[0]/btn[8]').press()
+    except Exception as e:
+        raise RuntimeError(f'"자재코드 복수 선택" 팝업을 확인하는 중 오류가 발생했습니다: {e}')
+    time.sleep(0.8)
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('tbar[1]/btn[8]').press()  # 실행(F8)
+    except Exception as e:
+        raise RuntimeError(f'ZMM009 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(1.5)
+
+    return _zmm009_read_grid_rows(session)
 
 
 # ── "승인원 표지 생성" 전용 헬퍼 ────────────────────────────────────────
@@ -7337,6 +7412,14 @@ def main():
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             mats = resolve_pattern_via_zmm009(pattern)
             result = {'ok': True, 'pattern': pattern, 'count': len(mats), 'materials': mats}
+        elif action == 'resolve_materials':
+            materials_str = sys.argv[2] if len(sys.argv) > 2 else ''
+            req = [m.strip() for m in materials_str.split(',') if m.strip()]
+            mats = resolve_materials_via_zmm009(req)
+            found = {m.get('MATNR', '').lstrip('0') for m in mats}
+            missing = [m for m in req if m.lstrip('0') not in found]
+            result = {'ok': True, 'requested': req, 'count': len(mats),
+                      'materials': mats, 'missing': missing}
         elif action == 'fetch_project_codes':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             bwart = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None

@@ -367,7 +367,10 @@
             'APLFZ', 'NORBM', 'MINBM', 'WERKS', 'EKORG', 'ESOKZ_T',
             'INFNR', 'TELF1', 'ERDAT', 'CHDAT'] },
         chghist: { title: '상태변경이력', primary: [
-            'OBJECTID', 'MAKTX', 'MTART', 'VALUE_NEW', 'UDATE'] }
+            'OBJECTID', 'MAKTX', 'MTART', 'VALUE_NEW', 'UDATE'] },
+        // 🧱 [2026-10-15 실측] ZPP033 `/STD_MC` 레이아웃의 실제 컬럼 순서 (BOM 탭 js/38도 이걸 읽는다)
+        bom: { title: 'BOM 전개', primary: [
+            'STUFE', 'IDNRK', 'OJTXP', 'MENGE', 'MMEIN', 'MMSTA', 'WGBEZ60', 'MTSTB'] }
     };
 
     window.SAP_CAPABILITIES = [
@@ -379,8 +382,8 @@
           kw: ['bom', '구성품', '부품구성', '전개', 'explosion'], needs: '자재번호', ex: '502572 BOM 보여줘' },
         { id: 'whereused', title: '사용처(역전개)', titleEn: 'Where-used', tcode: 'CS15 / ZPP046', mode: 'read', verified: 'live',
           kw: ['사용처', '역전개', '어디에 쓰', '어디 쓰', 'where-used', 'whereused'], needs: '자재번호', ex: '104446 사용처 조회해줘' },
-        { id: 'matlist', title: '자재 리스트 조회', titleEn: 'Material list', tcode: 'ZMM009', mode: 'read', verified: 'unverified',
-          kw: ['자재 리스트', '자재리스트', '자재 목록', 'zmm009'], needs: '자재번호(복수 가능)', ex: '133025,133026 엑셀 출력해줘' },
+        { id: 'matlist', title: '자재 리스트 조회', titleEn: 'Material list', tcode: 'ZMM009', mode: 'read', verified: 'live',
+          kw: ['자재 리스트', '자재리스트', '자재 목록', 'zmm009'], needs: '자재번호(복수 가능)', ex: '133025,133026 조회해줘 / 303410 303409 ZMM009로 도표로 보여줘' },
         { id: 'mardstock', title: '재고 수량 조회 (MB52+MM03)', titleEn: 'Stock quantity (MB52+MM03)', tcode: 'MB52 / MM03→회계1', mode: 'read', verified: 'unverified',
           kw: ['재고 수량', '재고수량', '재고 확인', '재고확인', '재고 조회', '재고조회', '가용 재고', '가용재고', 'lbkum', '일반평가', '수량 확인', '수량확인'],
           needs: '자재번호(복수 쉼표 가능)', ex: '301966 재고수량 확인해줘 / 301966,301967 재고 확인' },

@@ -2325,6 +2325,22 @@ def sap_material_pattern():
     return jsonify(data), status
 
 
+@app.route('/sap-material-rows', methods=['GET'])
+def sap_material_rows():
+    # 💡 [2026-10-15] 6자리 자재코드 목록을 주면 ZMM009 "복수 선택"으로 한 번에 조회해
+    #    /sap-material-pattern과 **동일한 구조화 컬럼**을 돌려준다. 기존 경로
+    #    (fetch_zmm009_material_list)는 범용 화면 덤프 텍스트를 AI에 넘겨 읽게 했는데,
+    #    AI가 없는 값(납기일·제조사)을 만들어낸 환각 사고가 있어 분리했다.
+    raw = (request.args.get('materials') or '').strip()
+    mats = [m.strip() for m in re.split(r'[,\s]+', raw) if m.strip()]
+    if not mats:
+        return jsonify({'ok': False, 'error': '자재번호(materials 파라미터)가 필요합니다. 예: /sap-material-rows?materials=303410,303409'}), 400
+    if len(mats) > 200:
+        return jsonify({'ok': False, 'error': f'한 번에 조회 가능한 자재는 200건까지입니다(요청 {len(mats)}건).'}), 400
+    data, status = _run_sap_bridge(['resolve_materials', ','.join(mats)], 90, 'SAP 자재 복수 조회')
+    return jsonify(data), status
+
+
 @app.route('/sap-bom', methods=['GET'])
 def sap_bom():
     # 💡 [2026-09-15 신규] "SAP에서 502572 BOM 열어서 엑셀로 출력해줘"처럼 질문에 "BOM"과
