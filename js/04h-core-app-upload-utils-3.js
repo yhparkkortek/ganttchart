@@ -967,7 +967,11 @@
             const hoverBorder = isConfirm ? '#7cc494' : (isCancel ? '#ccc' : (isSap ? '#e08880' : '#7cb3ea'));
             return `<button onclick="window._ganttQaSubmitConfirmButton('${draft.id}', '${escapeHtml(b.value).replace(/'/g, "\\'")}')" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}';" onmouseout="this.style.background='${bg}'; this.style.borderColor='${border}';" style="font-size:11.5px; padding:5px 12px; border:1px solid ${border}; background:${bg}; color:${color}; border-radius:6px; font-weight:${isConfirm ? 'bold' : 'normal'}; cursor:pointer; transition:background .15s, border-color .15s;">${escapeHtml(b.label)}</button>`;
         }).join('');
-        return `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px; flex-wrap:wrap;">${btns}</div>`;
+        // 💡 [2026-10-15] 버튼이 많으면(자재 선택 칩처럼 10개 이상) 오른쪽 정렬은 줄마다 시작점이
+        //    들쭉날쭉해 읽기 나쁘다 — 4개 이상이면 왼쪽 맞춤으로 흘려서 2줄 이상으로 보이게 한다.
+        //    "확인/취소"처럼 2~3개짜리 확인창은 기존대로 오른쪽 정렬(대화상자 관례)을 유지.
+        const _justify = draft.buttons.length >= 4 ? 'flex-start' : 'flex-end';
+        return `<div style="display:flex; justify-content:${_justify}; gap:6px; margin-top:6px; flex-wrap:wrap;">${btns}</div>`;
     };
 
     window._ganttQaSubmitConfirmButton = function(id, value) {

@@ -640,9 +640,6 @@
         }
         var html = '<div style="font-size:11.5px; color:#666; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">'
             + parts.filter(Boolean).map(function (p) { return '<span>' + p + '</span>'; }).join('<span style="color:#cfe3e5;">|</span>')
-            + '</div>'
-            + '<div style="font-size:11px; color:#5577aa; margin-top:3px;">💡 '
-            + _esc(_t('행을 클릭하면 그 구성품으로 조회 기능을 선택할 수 있습니다', 'Click a row to pick a lookup for that component'))
             + '</div>';
         // 계층이 깨진 경우에만 경고 — ALV에 정렬이 걸려 있으면 모자 관계를 복원할 수 없다.
         if (st.hierarchyOk === false) {

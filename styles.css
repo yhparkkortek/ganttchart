@@ -764,6 +764,7 @@
 /* 1. 각 탭의 .concept-tab-wrap 을 뷰포트 전체 높이로 확장 (flex column) */
 #tab-address   > .concept-tab-wrap,
 #tab-briefspec > .concept-tab-wrap,
+#tab-bom       > .concept-tab-wrap,
 #tab-mctable   > .concept-tab-wrap,
 #tab-alarm     > .concept-tab-wrap {
     height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
@@ -775,6 +776,7 @@
 /* 2. 타이틀 헤더 박스: 항상 고정 크기 (flex-shrink 방지) */
 #tab-address   > .concept-tab-wrap > .concept-header-box,
 #tab-briefspec > .concept-tab-wrap > .concept-header-box,
+#tab-bom       > .concept-tab-wrap > .concept-header-box,
 #tab-mctable   > .concept-tab-wrap > .concept-header-box {
     flex-shrink: 0;
 }
@@ -808,6 +810,7 @@
 /* 3. 테이블을 감싼 .concept-section: 남은 공간 전체 차지 (flex:1) */
 #tab-address   > .concept-tab-wrap > .concept-section,
 #tab-briefspec > .concept-tab-wrap > .concept-section,
+#tab-bom       > .concept-tab-wrap > .concept-section,
 #tab-mctable   > .concept-tab-wrap > .concept-section,
 #alarm-view-alarm > .concept-section {
     flex: 1;
@@ -820,6 +823,7 @@
 /* 4. 실제 스크롤 컨테이너: 남은 공간 채우기 (max-height 고정값 해제) */
 #addr-table-scroll,
 #briefspec-table-scroll,
+#bom-table-scroll,
 #alarm-table-scroll {
     flex: 1 !important;
     overflow-y: auto !important;
@@ -2242,3 +2246,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #cp-custom-color::-webkit-color-swatch { border:none; border-radius:6px; }
 #cp-custom-color::-moz-color-swatch { border:none; border-radius:6px; }
 
+
+/* 🧱 BOM 탭: 메타·상태 줄은 고정하고 표만 스크롤 (2026-10-15) */
+#bom-meta, #bom-status { flex-shrink: 0; }
