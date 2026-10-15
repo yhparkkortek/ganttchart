@@ -1104,8 +1104,9 @@
         }
         // 💡 주요 자재 표의 칸 placeholder/버튼 title도 언어에 맞춰 다시 그림(값은 collectMaterialRows(true)로
         //    빈 자유추가 행까지 그대로 보존한 채 다시 렌더링해서, 언어만 바뀌고 입력 중이던 내용은 안 날아감)
-        if (window.renderMaterialRows && window.collectMaterialRows) window.renderMaterialRows(window.collectMaterialRows(true));
-        if (window.renderProjectModels) window.renderProjectModels();
+        //    (모델별 자재 카드 전체를 다시 그리므로, 먼저 화면 입력값을 모델에 거둬들인다)
+        if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
+        if (window.renderProjectModels) window.renderProjectModels(); // 내부에서 renderMaterialModelsContainer()도 호출
 
         // [변경이력 박스] 시작일/종료일/삭제비밀번호/구간삭제 번역 (6개 탭 공통)
         document.querySelectorAll('label').forEach(lbl => {

@@ -645,12 +645,19 @@
         // 💡 [2026-08-30 신규] 주요자재도 #MT숫자로 인용 가능하게 — 화면(#sum-materials-rows-a/b)의
         // <tr>에는 위치기반 data-idx만 있고 고유 id가 없어서, CS/MC와 동일하게 category+ktkPn+description
         // 값 대조로 찾는다(_aiJumpToMtRow 참고).
+        // 💡 [2026-10-15] 자재가 모델별로 나뉘어 projectMaterials는 전 모델 합본(_modelIdx 포함) —
+        //    어느 모델 자재인지 알 수 있게 모델 라벨을 함께 적는다.
         window._aiMtRefMap = [];
+        const _mdlName = function(mi) {
+            const m = (td.projectModels || [])[mi];
+            if (!m) return '';
+            return '[' + (m.unitId || ('모델#' + (mi + 1))) + (m.고객모델명 ? ' ' + m.고객모델명 : '') + '] ';
+        };
         const materialLines = (td.projectMaterials || [])
             .filter(function(m) { return m && (m.category || m.ktkPn || m.description); })
             .map(function(m, i) {
-                window._aiMtRefMap[i] = { category: m.category || '', ktkPn: m.ktkPn || '', description: m.description || '' };
-                return `- #MT${i} ${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}` + (m.cost ? ` | Cost:${m.cost}` : '') + (m.useForAnalysis ? ' [분석용]' : '');
+                window._aiMtRefMap[i] = { category: m.category || '', ktkPn: m.ktkPn || '', description: m.description || '', modelIdx: m._modelIdx || 0 };
+                return `- #MT${i} ${_mdlName(m._modelIdx || 0)}${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}` + (m.cost ? ` | Cost:${m.cost}` : '') + (m.useForAnalysis ? ' [분석용]' : '');
             });
 
         // 💡 [2026-08-27 추가] Brief SPEC / M.C Table / Elec Parts / Address 탭도 물어볼 수 있도록 포함

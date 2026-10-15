@@ -327,7 +327,9 @@
         }
         if (window.switchTab) window.switchTab('summary');
         setTimeout(function() {
-            const rows = document.querySelectorAll('#sum-materials-rows-a tr, #sum-materials-rows-b tr');
+            // 💡 [2026-10-15] 자재표가 모델별로 나뉘면서 tbody id에 모델번호가 붙는다
+            //    (sum-materials-rows-a-0 …). 찾은 행이 접혀 있는 모델 카드에 있으면 먼저 펼친다.
+            const rows = document.querySelectorAll('[id^="sum-materials-rows-a-"] tr, [id^="sum-materials-rows-b-"] tr');
             let found = null;
             rows.forEach(function(tr) {
                 if (found) return;
@@ -343,6 +345,8 @@
                     : '⚠️ 주요 자재 #' + idx + ' 행을 찾지 못했습니다(내용이 바뀐 것 같습니다).', 'warning');
                 return;
             }
+            const _mi = found.getAttribute('data-model-idx');
+            if (_mi !== null && window._toggleMaterialsCollapse) window._toggleMaterialsCollapse(Number(_mi), true);
             window._aiFlashRow(found);
         }, 60);
     };

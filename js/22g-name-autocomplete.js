@@ -193,15 +193,20 @@ window._renderModelCardHtml = function(model, idx) {
     var label = uid ? ('모델 #' + (idx + 1) + ' · ' + uid) : ('모델 #' + (idx + 1));
     var canDelete = idx > 0;
     var ktkVal = escapeHtml(model.KTKPN && model.KTK모델명 ? model.KTKPN + '_' + model.KTK모델명 : (model.KTKPN || model.KTK모델명 || ''));
+    // 💡 [2026-10-15] 헤더 높이 통일 — 예전엔 "(기본)"은 맨텍스트, 삭제는 테두리+패딩 버튼이라
+    //    모델 #1 헤더만 6px 낮았다. 둘 다 같은 알약(pill) 박스 규격(_SUM_CARD_HDR_PILL)으로 맞추고,
+    //    헤더 자체도 min-height 고정(_SUM_CARD_HDR_STYLE) — 모델별 주요자재 카드 헤더와 같은 규격.
+    var _pill = window._SUM_CARD_HDR_PILL || 'font-size:11px; padding:0 10px; height:22px; line-height:20px; box-sizing:border-box; border-radius:10px; white-space:nowrap;';
     var _delBtn = canDelete
         ? '<button type="button" onclick="window.removeProjectModel(' + idx + ')" '
-          + 'style="margin-left:auto; font-size:11px; padding:2px 10px; border:1px solid #f0b8b8; border-radius:10px; background:#fdecec; cursor:pointer; color:#c92a2a;" '
+          + 'style="margin-left:auto; ' + _pill + ' border:1px solid #f0b8b8; background:#fdecec; cursor:pointer; color:#c92a2a;" '
           + 'onmouseover="this.style.background=\'#f8d4d4\';this.style.borderColor=\'#e59a9a\';" '
           + 'onmouseout="this.style.background=\'#fdecec\';this.style.borderColor=\'#f0b8b8\';">✕ 삭제</button>'
-        : '<span style="margin-left:auto; font-size:11px; color:#aaa;">(기본)</span>';
+        : '<span style="margin-left:auto; ' + _pill + ' border:1px solid transparent; color:#aaa;">(기본)</span>';
     var _lbl = '<label style="font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; background:#fff; white-space:nowrap;">';
+    var _hdr = window._SUM_CARD_HDR_STYLE || 'display:flex; align-items:center; gap:8px; padding:5px 12px; min-height:32px; box-sizing:border-box; background:#e0f5f7; border-bottom:1px solid #cfe3e5;';
     return '<div class="sum-model-card" data-unit-id="' + uid + '" style="border:1px solid #cfe3e5; border-radius:6px; background:#fff; overflow:hidden;">' +
-        '<div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#e0f5f7; border-bottom:1px solid #cfe3e5;">' +
+        '<div style="' + _hdr + '">' +
             '<span style="font-size:12px; font-weight:bold; color:#00707d;">' + label + '</span>' +
             _delBtn +
         '</div>' +
@@ -228,6 +233,8 @@ window.renderProjectModels = function() {
         window.tabData.projectModels = models;
     }
     container.innerHTML = models.map(function(m, i) { return window._renderModelCardHtml(m, i); }).join('');
+    // 모델 구성이 바뀌면 모델별 주요자재 카드도 같이 다시 그린다(모델 수와 1:1로 유지)
+    if (window.renderMaterialModelsContainer) window.renderMaterialModelsContainer();
 };
 
 window.addProjectModel = function() {
@@ -239,13 +246,30 @@ window.addProjectModel = function() {
     var usedIds = window.tabData.projectModels.map(function(m) { return m.unitId; });
     var nextUnit = '';
     for (var i = 0; i < units.length; i++) { if (!usedIds.includes(units[i])) { nextUnit = units[i]; break; } }
-    window.tabData.projectModels.push({ unitId: nextUnit, 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' });
+    // 화면에 입력 중인 자재값을 먼저 거둬들인 뒤(안 그러면 재렌더 때 날아감), 새 모델은 모델 #1 자재를 복사해서 시작
+    if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
+    var _base = (window.tabData.projectModels[0] || {}).materials || [];
+    var _copied = _base.map(function(r) {
+        return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: !!r.useForAnalysis };
+    });
+    window.tabData.projectModels.push({ unitId: nextUnit, 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '', materials: _copied });
     window.renderProjectModels();
 };
 
 window.removeProjectModel = function(idx) {
     if (!window.tabData || !window.tabData.projectModels || idx === 0) return;
+    if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
     window.tabData.projectModels.splice(idx, 1);
+    // 접힘 상태도 같이 당겨서 번호가 밀리지 않게 한다
+    if (window._materialsCollapsed) {
+        var _next = {};
+        Object.keys(window._materialsCollapsed).forEach(function(k) {
+            var n = Number(k);
+            if (n < idx) _next[n] = window._materialsCollapsed[k];
+            else if (n > idx) _next[n - 1] = window._materialsCollapsed[k];
+        });
+        window._materialsCollapsed = _next;
+    }
     window.renderProjectModels();
 };
 
@@ -361,8 +385,9 @@ window.collectTabData = function() {
     });
     window.tabData.projectMembers3 = member3Rows;
 
-    // 💡 주요 자재 목록 수집 (고정 13개 + 자유추가)
-    if (window.collectMaterialRows) window.tabData.projectMaterials = window.collectMaterialRows();
+    // 💡 주요 자재 목록 수집 — 모델마다 따로(projectModels[i].materials),
+    //    projectMaterials에는 전 모델 합본이 들어간다(AI 매칭 신호 소비처 호환)
+    if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
 
     // 🪪 Address Book도 함께 수집 (프로젝트 자체 JSON 저장용 스냅샷) — 이 프로젝트 자동저장 경로에서는
     //    공용 Drive 주소록까지는 밀어쓰지 않는다(skipDriveSync=true). 실제 편집은 onchange 핸들러에서 별도 동기화됨.
@@ -456,8 +481,10 @@ window.populateTabData = function() {
     // 💡 프로젝트 멤버-3 렌더링
     if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
 
-    // 💡 주요 자재 목록 렌더링 (없으면 고정 13개 구분만 빈 값으로 표시됨)
-    if (window.renderMaterialRows) window.renderMaterialRows(td.projectMaterials || []);
+    // 💡 주요 자재 목록 렌더링 — 모델별 카드(모델 #1만 펼침). 구버전 저장본(전역 목록 1개)은
+    //    _ensureModelMaterials()가 모델 #1로 이관하고, 자재가 없는 추가 모델엔 모델 #1 값을 복사한다.
+    window._materialsCollapsed = {}; // 프로젝트를 새로 열면 기본 접힘 상태로 리셋
+    if (window.renderMaterialModelsContainer) window.renderMaterialModelsContainer();
 
     // 🪪 Address Book — 프로젝트 파일 안의 값은 더 이상 쓰지 않고, 공용 저장소를 단일 소스로 사용
     //    (로컬 캐시로 즉시 렌더 → 백그라운드에서 Drive 최신본으로 갱신)

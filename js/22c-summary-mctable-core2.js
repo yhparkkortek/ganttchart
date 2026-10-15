@@ -1077,9 +1077,63 @@ window._MATERIAL_CATEGORY_ALIASES = { 'SLIM/CUT': ['SLIMMING/CUTTING'] };
 //    눌러도 매번 "빈 칸 1개"로 되돌아가는 것처럼 보였다(실제로는 늘었다 지워지길 반복). "+ 자재 추가"/
 //    "－ 삭제"처럼 화면에 지금 있는 행 그대로를 기준으로 조작할 때는 keepEmptyExtras=true로 불러서
 //    빈 행도 그대로 유지한 채 개수를 센다. 실제 저장(collectTabData 등)은 그대로 기본값(정리함)을 쓴다.
-window.collectMaterialRows = function(keepEmptyExtras) {
+// 💡 [2026-10-15] 모델별 주요자재 — 프로젝트 정보가 모델 #1/#2/#3…로 나뉘면서 자재도 모델마다
+//    따로 관리한다. 데이터는 window.tabData.projectModels[i].materials에 저장하고,
+//    window.tabData.projectMaterials는 "모든 모델 합본"(AI 메일분석 매칭 신호용)으로 자동 재계산한다
+//    — 기존 소비처(04a 프롬프트·04c 매칭/인덱스·04g AI문답 #MT)는 합본을 그대로 읽으면 되므로 수정 불필요.
+window._SUM_CARD_HDR_STYLE = 'display:flex; align-items:center; gap:8px; padding:5px 12px; min-height:32px; box-sizing:border-box; background:#e0f5f7; border-bottom:1px solid #cfe3e5;';
+window._SUM_CARD_HDR_PILL = 'font-size:11px; padding:0 10px; height:22px; line-height:20px; box-sizing:border-box; border-radius:10px; white-space:nowrap;';
+
+// 각 모델 자재표의 접힘 상태(런타임 전용 — 저장 안 함). 기본: 모델 #1만 펼침.
+window._materialsCollapsed = window._materialsCollapsed || {};
+
+// 모델별 materials 보장 + 레거시(전역 1개 목록) 이관.
+// 기존 값은 모델 #1로, 아직 자재가 없는 추가 모델은 모델 #1 값을 복사해서 시작한다(사용자 결정 2026-10-15).
+window._ensureModelMaterials = function() {
+    window.tabData = window.tabData || {};
+    const models = window.tabData.projectModels;
+    if (!models || !models.length) return [];
+    const _clone = function(rows) {
+        return (rows || []).map(function(r) {
+            return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: !!r.useForAnalysis };
+        });
+    };
+    if (!Array.isArray(models[0].materials)) models[0].materials = _clone(window.tabData.projectMaterials);
+    for (let i = 1; i < models.length; i++) {
+        if (!Array.isArray(models[i].materials)) models[i].materials = _clone(models[0].materials);
+    }
+    return models;
+};
+
+// 화면에 그려져 있는 모든 모델 자재표의 현재 입력값을 각 모델의 materials로 거둬들인다.
+// 모델 추가/삭제로 컨테이너를 다시 그리기 전에 먼저 불러야 미저장 편집이 날아가지 않는다.
+window._syncMaterialsFromDom = function() {
+    const models = window._ensureModelMaterials();
+    models.forEach(function(m, i) {
+        if (document.getElementById('sum-materials-rows-a-' + i)) m.materials = window.collectMaterialRows(true, i);
+    });
+    window._recomputeProjectMaterialsUnion();
+    return models;
+};
+
+// 모든 모델의 자재를 합쳐 window.tabData.projectMaterials에 반영(소비처 호환 + 어느 모델 것인지 _modelIdx로 표시)
+window._recomputeProjectMaterialsUnion = function() {
+    window.tabData = window.tabData || {};
+    const models = window.tabData.projectModels || [];
+    const union = [];
+    models.forEach(function(m, mi) {
+        (m.materials || []).forEach(function(r) {
+            union.push({ category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: !!r.useForAnalysis, _modelIdx: mi });
+        });
+    });
+    window.tabData.projectMaterials = union;
+    return union;
+};
+
+window.collectMaterialRows = function(keepEmptyExtras, modelIdx) {
+    const _mi = modelIdx || 0;
     const map = {};
-    document.querySelectorAll('#sum-materials-rows-a [data-idx], #sum-materials-rows-b [data-idx]').forEach(function(el) {
+    document.querySelectorAll('#sum-materials-rows-a-' + _mi + ' [data-idx], #sum-materials-rows-b-' + _mi + ' [data-idx]').forEach(function(el) {
         const i = Number(el.dataset.idx);
         map[i] = map[i] || {};
         map[i][el.dataset.field] = (el.type === 'checkbox') ? el.checked : el.value;
@@ -1102,9 +1156,10 @@ window.collectMaterialRows = function(keepEmptyExtras) {
     return result;
 };
 
-window.renderMaterialRows = function(rows) {
-    const tbodyA = document.getElementById('sum-materials-rows-a');
-    const tbodyB = document.getElementById('sum-materials-rows-b');
+window.renderMaterialRows = function(rows, modelIdx) {
+    const _mi = modelIdx || 0;
+    const tbodyA = document.getElementById('sum-materials-rows-a-' + _mi);
+    const tbodyB = document.getElementById('sum-materials-rows-b-' + _mi);
     if (!tbodyA || !tbodyB) return;
     window.tabData = window.tabData || {};
     rows = rows || [];
@@ -1126,7 +1181,13 @@ window.renderMaterialRows = function(rows) {
     const extraRows = rows.filter(function(r) { return window.MATERIAL_FIXED_CATEGORIES.indexOf(r.category) === -1 && allAliasNames.indexOf(r.category) === -1; })
         .map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: !!r.useForAnalysis, locked: false }; });
     const allRows = fixedRows.concat(extraRows);
-    window.tabData.projectMaterials = allRows.map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: r.useForAnalysis }; });
+    const _plain = allRows.map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: r.useForAnalysis }; });
+    if (window.tabData.projectModels && window.tabData.projectModels[_mi]) {
+        window.tabData.projectModels[_mi].materials = _plain;
+        window._recomputeProjectMaterialsUnion();
+    } else {
+        window.tabData.projectMaterials = _plain; // 모델 목록이 아직 없는 초기 상태 대비
+    }
 
     // 💡 [2열 배치] 프로젝트 멤버-1/2와 같은 느낌으로 좌우 분할. 고정 13개(ETC 제외 12개) 중
     //    왼쪽 7개/오른쪽 5개로 나누고, 자유추가 행은 아래에서 지그재그로 배정한다.
@@ -1146,7 +1207,7 @@ window.renderMaterialRows = function(rows) {
         // 💡 [2026-08-25 UX 개선] 예전엔 "삭제 버튼"이 맨 오른쪽 체크박스 칸에 있어서 눈에 잘 안 띈다는
         //    지적이 있었음 — PANEL 행의 🔎(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
         //    자유추가 행을 열 때 바로 보이는 "행 액션 버튼" 자리로 통일했다.
-        const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="' + (_matEn ? 'Delete this row' : '이 행 삭제') + '" style="flex-shrink:0; border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">－</button>';
+        const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ', ' + _mi + ')" title="' + (_matEn ? 'Delete this row' : '이 행 삭제') + '" style="flex-shrink:0; border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">－</button>';
         // 💡 [2026-08-25 신규 — Panel Compare 연동] PANEL 구분 행에 모델명이 적혀 있으면, 그 옆에
         //    스펙 미리보기 버튼을 붙인다 — 클릭하면 패널 스펙 라이브러리에서 조회해 보여주고,
         //    Panel Compare 탭 비교표에 없으면 바로 추가할 수 있게 한다.
@@ -1164,7 +1225,7 @@ window.renderMaterialRows = function(rows) {
         const _hasSpecKey = !!(r.description || r.ktkPn);
         const descInputCell = '<td style="padding:2px; border:1px solid #cfe3e5;"><div style="display:flex; align-items:center; gap:2px;">'
             + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;" '
-            + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
+            + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true, ' + _mi + '), ' + _mi + ');"' : '') + '>'
             + ((r.category === 'PANEL' && _hasSpecKey)
                 ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
                 : ((_epRowType[r.category] && _hasSpecKey)
@@ -1172,9 +1233,9 @@ window.renderMaterialRows = function(rows) {
                     : ''))
             + delBtn
             + '</div></td>';
-        return '<tr style="background:' + _zebraBg + ';">' + catCell
+        return '<tr data-model-idx="' + _mi + '" style="background:' + _zebraBg + ';">' + catCell
             + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box; background:transparent;" '
-            + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '></td>'
+            + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true, ' + _mi + '), ' + _mi + ');"' : '') + '></td>'
             + descInputCell
             + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;"></td>'
             + '<td style="border:1px solid #cfe3e5; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="' + (_matEn ? 'Check to trust mentions of this PN as a project-identifying signal (uncheck for shared/common parts)' : '체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)') + '"></td>'
@@ -1213,19 +1274,74 @@ window.renderMaterialRows = function(rows) {
     tbodyB.innerHTML = displayRight.map(function(e, pos) { return rowHtml(e.r, e.idx, pos); }).join('');
 };
 
-window.addMaterialRow = function() {
-    const current = window.collectMaterialRows(true); // 지금 화면에 입력 중인 값 보존(빈 자유추가 행도 유지해야 연속 클릭 시 계속 늘어남)
+window.addMaterialRow = function(modelIdx) {
+    const _mi = modelIdx || 0;
+    const current = window.collectMaterialRows(true, _mi); // 지금 화면에 입력 중인 값 보존(빈 자유추가 행도 유지해야 연속 클릭 시 계속 늘어남)
     current.push({ category: '', ktkPn: '', description: '', cost: '', useForAnalysis: false });
-    window.tabData.projectMaterials = current;
-    window.renderMaterialRows(current);
+    window.renderMaterialRows(current, _mi);
 };
 
-window.deleteMaterialRow = function(idx) {
+window.deleteMaterialRow = function(idx, modelIdx) {
     if (idx < window.MATERIAL_FIXED_CATEGORIES.length) return; // 고정 구분은 삭제 불가(안전장치)
-    const current = window.collectMaterialRows(true); // 다른 빈 자유추가 행이 먼저 정리되면 idx가 어긋나므로 그대로 유지한 채 삭제
+    const _mi = modelIdx || 0;
+    const current = window.collectMaterialRows(true, _mi); // 다른 빈 자유추가 행이 먼저 정리되면 idx가 어긋나므로 그대로 유지한 채 삭제
     current.splice(idx, 1);
-    window.tabData.projectMaterials = current;
-    window.renderMaterialRows(current);
+    window.renderMaterialRows(current, _mi);
+};
+
+// ─── 모델별 주요자재 카드(접기/펴기) ────────────────────────────────────────
+window._toggleMaterialsCollapse = function(modelIdx, forceOpen) {
+    const body = document.getElementById('sum-materials-body-' + modelIdx);
+    const arrow = document.getElementById('sum-materials-arrow-' + modelIdx);
+    if (!body) return;
+    const open = (forceOpen === true) ? true : (body.style.display === 'none');
+    body.style.display = open ? '' : 'none';
+    window._materialsCollapsed[modelIdx] = !open;
+    if (arrow) arrow.textContent = open ? '▾' : '▸';
+};
+
+window.renderMaterialModelsContainer = function() {
+    const container = document.getElementById('sum-materials-models-container');
+    if (!container) return;
+    const models = window._ensureModelMaterials();
+    if (!models.length) { container.innerHTML = ''; return; }
+    const _en = window._currentLang === 'en';
+    const _thS = 'padding:5px 6px; border:1px solid #cfe3e5; text-align:center;';
+    const _trustTitle = _en
+        ? 'Check to let AI trust a mention of this PN as a project-identifying signal. Leave unchecked for shared parts.'
+        : '체크하면 AI가 이 PN 언급을 "이 프로젝트가 맞다"는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).';
+    const _tableHtml = function(side, mi) {
+        return '<div style="flex:1 1 320px; min-width:280px; overflow:auto; border:1px solid #cfe3e5; border-radius:8px;">'
+            + '<table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr style="background:#eef6f7;">'
+            + '<th style="' + _thS + ' width:120px;">TYPE</th>'
+            + '<th style="' + _thS + ' width:60px;">KTK PN</th>'
+            + '<th style="' + _thS + '">Description</th>'
+            + '<th style="' + _thS + ' width:50px;">Cost($)</th>'
+            + '<th style="' + _thS + ' width:30px;" title="' + escapeHtml(_trustTitle) + '">✓</th>'
+            + '</tr></thead><tbody id="sum-materials-rows-' + side + '-' + mi + '"></tbody></table></div>';
+    };
+    container.innerHTML = models.map(function(m, i) {
+        // 기본 접힘 상태: 모델 #1만 펼침(사용자 결정 2026-10-15). 이미 사람이 토글했으면 그 상태 유지.
+        if (window._materialsCollapsed[i] === undefined) window._materialsCollapsed[i] = (i !== 0);
+        const collapsed = !!window._materialsCollapsed[i];
+        const uid = escapeHtml(m.unitId || '');
+        const label = (_en ? 'Model #' : '모델 #') + (i + 1) + (uid ? ' · ' + uid : '');
+        const mdl = escapeHtml(m.고객모델명 || '');
+        return '<div style="border:1px solid #cfe3e5; border-radius:6px; background:#fff; overflow:hidden;">'
+            + '<div onclick="window._toggleMaterialsCollapse(' + i + ')" style="' + window._SUM_CARD_HDR_STYLE + ' cursor:pointer; user-select:none;">'
+                + '<span id="sum-materials-arrow-' + i + '" style="font-size:11px; color:#00707d; width:10px;">' + (collapsed ? '▸' : '▾') + '</span>'
+                + '<span style="font-size:12px; font-weight:bold; color:#00707d;">' + label + '</span>'
+                + (mdl ? '<span style="font-size:11px; color:#5b8a90;">' + mdl + '</span>' : '')
+                + '<span style="margin-left:auto; ' + window._SUM_CARD_HDR_PILL + ' color:#aaa;">' + (collapsed ? (_en ? 'collapsed' : '접힘') : '') + '</span>'
+            + '</div>'
+            + '<div id="sum-materials-body-' + i + '" style="padding:10px 12px;' + (collapsed ? ' display:none;' : '') + '">'
+                + '<div style="display:flex; gap:16px; flex-wrap:wrap;">' + _tableHtml('a', i) + _tableHtml('b', i) + '</div>'
+                + '<button type="button" onclick="window.addMaterialRow(' + i + ')" onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fff\';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">'
+                + (_en ? '+ Add Material' : '+ 자재 추가') + '</button>'
+            + '</div>'
+        + '</div>';
+    }).join('');
+    models.forEach(function(m, i) { window.renderMaterialRows(m.materials || [], i); });
 };
 
 // ═══════════════════════════════════════════════════════════════════

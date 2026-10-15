@@ -78,6 +78,8 @@ window.mcAddUnitConfirm = function() {
         // Summary에 대응 모델 카드 추가
         if (window.tabData && window.tabData.projectModels) {
             if (!window.tabData.projectModels.some(function(m) { return m.unitId === name; })) {
+                // 재렌더 전에 화면 입력 중인 모델별 주요자재를 먼저 거둬들인다(미저장 편집 보호)
+                if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
                 window.tabData.projectModels.push({ unitId: name, 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' });
                 if (window.renderProjectModels) window.renderProjectModels();
             }
@@ -106,7 +108,8 @@ window.mcRemoveUnit = function(unit) {
     // Summary 모델 카드에서도 해당 unitId 카드 제거 (첫 번째 카드는 유지)
     if (window.tabData && window.tabData.projectModels && window.tabData.projectModels.length > 1) {
         const _cidx = window.tabData.projectModels.findIndex(function(m) { return m.unitId === unit; });
-        if (_cidx > 0) { window.tabData.projectModels.splice(_cidx, 1); if (window.renderProjectModels) window.renderProjectModels(); }
+        // removeProjectModel을 거쳐야 모델별 주요자재 수집·접힘 상태 재정렬까지 함께 처리된다
+        if (_cidx > 0) window.removeProjectModel(_cidx);
     }
 };
 
