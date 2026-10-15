@@ -1558,12 +1558,23 @@ def resolve_pattern_via_zmm009(pattern, lgort='1000'):
             return []
 
     try:
-        row_count = int(grid.RowCount)
+        total_rows = int(grid.RowCount)
     except Exception:
         return []
+    # ALV는 화면에 실제로 렌더링된 행만 GetCellValue가 채워진다 — 스크롤 밖 행은 빈 값이라
+    # 전체가 62건(초기 뷰포트 높이)으로 조용히 잘렸었다(2026-10-15). dump_screen_tree의
+    # firstVisibleRow 30행 스윕(sap_bridge_32.py:340-347)과 동일한 처리.
+    row_count = min(total_rows, 500)
+    _SCROLL_STEP = 30
 
     materials = []
     for row in range(row_count):
+        if row % _SCROLL_STEP == 0:
+            try:
+                grid.firstVisibleRow = row
+                time.sleep(0.08)
+            except Exception:
+                pass
         item = {}
         for col_sap, col_key in _ZMM009_PATTERN_COLS:
             try:
