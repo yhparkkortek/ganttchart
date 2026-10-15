@@ -290,8 +290,62 @@
                 + '<td style="' + _tdS + '">' + _esc(x.FERTH) + '</td>'
                 + '</tr>';
         });
-        return tbl + '</tbody></table></div>';
+        tbl += '</tbody></table></div>';
+        // 📊 엑셀로 열기 — BOM 조회와 동일한 위치/스타일. 표에 쓴 구조화 행을 그대로 쓰므로
+        //    AI 재호출도 SAP 재조회도 없다(BOM 쪽은 입력창에 명령을 넣어 다시 보내는 방식).
+        var exId = 'matrows_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        window._qaMatRowsStore = window._qaMatRowsStore || {};
+        window._qaMatRowsStore[exId] = rows;
+        tbl += '<div style="margin-top:5px; text-align:right;">'
+            + '<button onclick="window._sapExportMatRows(\'' + exId + '\')" '
+            + 'style="font-size:11.5px; padding:3px 10px; border:1px solid #bbb; border-radius:4px; background:#f5f7fa; cursor:pointer;">📊 '
+            + T('엑셀로 열기', 'Open as Excel') + '</button></div>';
+        return tbl;
     }
+
+    /** 표에 보여준 ZMM009 행을 엑셀로 저장 — C:\SAP_DMS\SAP조회\ (다른 SAP 기능과 동일 경로). */
+    window._sapExportMatRows = async function (key) {
+        var rows = (window._qaMatRowsStore || {})[key];
+        if (!rows || !rows.length) {
+            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + T('내보낼 조회 결과가 없습니다 — 다시 조회해주세요.', 'No lookup result to export — please run the lookup again.') });
+            window._renderGanttQaMessages();
+            return;
+        }
+        var reply;
+        try {
+            if (typeof XLSX === 'undefined') throw new Error(T('엑셀 라이브러리를 불러오지 못했습니다.', 'The Excel library is not loaded.'));
+            // 표에서 잘라 보여준 값(42자/10자)이 아니라 원본 전체를 넣는다.
+            var aoa = [[T('자재번호', 'Material No.'), T('자재내역', 'Description'), T('자재내역2', 'Description 2'),
+                        T('표준가격', 'Std.Price'), T('가격단위', 'Price Unit'), T('단가(KRW)', 'Unit Price'),
+                        T('자재상태', 'Status'), T('제조사', 'Manufacturer'), T('담당자', 'Person')]];
+            rows.forEach(function (x) {
+                var p = parseFloat((x.STPRS1 || '').replace(/,/g, ''));
+                var u = parseInt(x.PEINH1 || '1', 10) || 1;
+                aoa.push([x.MATNR || '', x.MAKTX || '', x.ZTEXT || '',
+                          isNaN(p) ? '' : p, u, isNaN(p) ? '' : Math.round(p / u * 100) / 100,
+                          x.MMSTA || '', x.MFRPN || '', x.FERTH || '']);
+            });
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(aoa);
+            ws['!cols'] = [{ wch: 12 }, { wch: 44 }, { wch: 22 }, { wch: 12 }, { wch: 9 }, { wch: 12 }, { wch: 9 }, { wch: 16 }, { wch: 14 }];
+            XLSX.utils.book_append_sheet(wb, ws, 'ZMM009');
+            if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
+            var fileName = 'SAP_ZMM009_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            var p2 = fetch(API + '/sap-save-export', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fileName: fileName, dataBase64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) })
+            });
+            var res = await (window._withTimeout ? window._withTimeout(p2, 20000, T('SAP 엑셀 저장 시간 초과', 'Saving the Excel file timed out')) : p2);
+            var d = await res.json();
+            reply = d.ok
+                ? '📊 ' + (d.message || T('조회 결과를 엑셀로 저장했습니다.', 'Saved the lookup result to Excel.'))
+                : '⚠️ ' + T('엑셀 저장에 실패했습니다: ', 'Failed to save the Excel file: ') + (d.error || T('알 수 없는 오류', 'unknown error'));
+        } catch (e) {
+            reply = '⚠️ ' + T('엑셀 내보내기에 실패했습니다: ', 'Failed to export to Excel: ') + (e && e.message ? e.message : e);
+        }
+        window._ganttQaHistory.push({ role: 'ai', text: reply });
+        window._renderGanttQaMessages();
+    };
     /** 자재번호 → 자재내역 캐시. 자재 보관함(js/35)이 칩에서 번호만 받아 담을 때 내역을 채워준다. */
     function cacheDesc(list) {
         try {

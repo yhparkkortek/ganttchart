@@ -287,6 +287,29 @@
         { value: '/표준품BOM', label: '/표준품BOM — 임의로 레이아웃변경 금지 (기본값)' }
     ];
 
+    // 💾 [2026-10-15, 사용자 요청 "기본값 넣어줘 매번 누르려니까 귀찮네"] 마지막에 고른 BOM 옵션을
+    //    기억해 다음 조회 때 미리 선택해둔다. 레이아웃 목록은 단일(ZPP033)/복수(ZPP038)가 서로
+    //    달라서 따로 기억한다 — 안 맞는 레이아웃을 넣으면 선택이 조용히 무시된다.
+    window._BOM_OPTS_KEY = 'gantt_bom_opts_v1';
+    window._bomOptsLoad = function() {
+        try { return JSON.parse(localStorage.getItem(window._BOM_OPTS_KEY) || '{}') || {}; }
+        catch (e) { return {}; }
+    };
+    window._bomOptsSave = function(sel, isSingle) {
+        try {
+            var prev = window._bomOptsLoad();
+            var layout = prev.layout || {};
+            if (sel.layout) layout[isSingle ? 'single' : 'multi'] = sel.layout;
+            localStorage.setItem(window._BOM_OPTS_KEY, JSON.stringify({
+                expl: sel.explosion || prev.expl || '',
+                price: sel.showPrice || prev.price || '',
+                loc: sel.showLocation || prev.loc || '',
+                rate: sel.exchangeRate || prev.rate || '',
+                layout: layout
+            }));
+        } catch (e) { /* 저장 실패는 기능에 영향 없음 — 기본값만 비워진다 */ }
+    };
+
     // 🆕 [2026-09-29 UI 업그레이드] 품목마다 행 나열식 — 열: 전개방식|단가표시|부품위치|레이아웃|기준환율
     //    1행 입력 시 나머지 자동완성, 기준환율은 엑셀 USD 단가 열 계산에 사용됨
     window._ganttQaShowBomOptionsDropdown = function(materials, useSingleTcode) {
@@ -301,7 +324,7 @@
         const defaultName = isSingle ? '/STD_MC' : '/표준품BOM';
         window._ganttQaPendingChoiceDropdown = {
             id: id, perMaterial: true, materials: materials,
-            layoutOptions: layoutOptions,
+            layoutOptions: layoutOptions, isSingle: isSingle,
             title: _en ? `📐 BOM options — ${matLabel}` : `📐 BOM 조회 옵션 — ${matLabel}`,
             buildAnswerText: function(perMatSels) {
                 // perMatSels: [{explosion, showPrice, showLocation, layout, exchangeRate}, ...]
@@ -737,14 +760,23 @@
             const mats = draft.materials || [];
             const tdSt2 = 'font-size:11px; padding:5px 6px; border:1px solid #dee2e6; vertical-align:middle;';
             const thSt = tdSt2 + ' font-weight:600; color:#555; background:#e9ecef; text-align:center; white-space:nowrap;';
+            // 💾 마지막에 쓴 옵션을 미리 선택 — 매번 다시 고르지 않아도 "선택 완료"만 누르면 된다.
+            const _prev = window._bomOptsLoad ? window._bomOptsLoad() : {};
+            const _prevLayout = (_prev.layout || {})[draft.isSingle ? 'single' : 'multi'] || '';
+            const _sel = function(v, cur) { return v === cur ? ' selected' : ''; };
             const layoutOptHtml = '<option value="">' + (_en ? '(default)' : '(기본값)') + '</option>'
-                + (draft.layoutOptions || []).map(function(o) { return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>'; }).join('');
+                + (draft.layoutOptions || []).map(function(o) { return '<option value="' + escapeHtml(o.value) + '"' + _sel(o.value, _prevLayout) + '>' + escapeHtml(o.label) + '</option>'; }).join('');
             const explOpts = '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>'
-                + '<option value="single">' + (_en ? 'Single' : '단일 레벨') + '</option>'
-                + '<option value="multi">' + (_en ? 'Multi' : '다중 레벨') + '</option>';
-            const ynOpts = '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>'
-                + '<option value="yes">' + (_en ? 'Yes' : '예') + '</option>'
-                + '<option value="no">' + (_en ? 'No' : '아니오') + '</option>';
+                + '<option value="single"' + _sel('single', _prev.expl) + '>' + (_en ? 'Single' : '단일 레벨') + '</option>'
+                + '<option value="multi"' + _sel('multi', _prev.expl) + '>' + (_en ? 'Multi' : '다중 레벨') + '</option>';
+            const ynOptsFor = function(cur) {
+                return '<option value="">' + (_en ? '(choose)' : '(선택)') + '</option>'
+                    + '<option value="yes"' + _sel('yes', cur) + '>' + (_en ? 'Yes' : '예') + '</option>'
+                    + '<option value="no"' + _sel('no', cur) + '>' + (_en ? 'No' : '아니오') + '</option>';
+            };
+            const priceOpts = ynOptsFor(_prev.price);
+            const locOpts = ynOptsFor(_prev.loc);
+            const rateVal = escapeHtml(String(_prev.rate || '1360'));
             const did = escapeHtml(draft.id);
             // 자동완성 헬퍼: 1행 변경 시 나머지 행에 복사
             window['_bomFill_' + draft.id] = function(field) {
@@ -762,10 +794,10 @@
                 return `<tr style="background:${bg};">
                     <td style="${tdSt2} color:#444; font-weight:bold; white-space:nowrap;">${escapeHtml(mat)}</td>
                     <td style="${tdSt2}"><select id="qabc-expl-${did}-${i}" data-f="expl"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${explOpts}</select></td>
-                    <td style="${tdSt2}"><select id="qabc-price-${did}-${i}" data-f="price"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${ynOpts}</select></td>
-                    <td style="${tdSt2}"><select id="qabc-loc-${did}-${i}" data-f="loc"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${ynOpts}</select></td>
+                    <td style="${tdSt2}"><select id="qabc-price-${did}-${i}" data-f="price"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${priceOpts}</select></td>
+                    <td style="${tdSt2}"><select id="qabc-loc-${did}-${i}" data-f="loc"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${locOpts}</select></td>
                     <td style="${tdSt2}"><select id="qabc-layout-${did}-${i}" data-f="layout"${autoFill} style="width:100%;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;">${layoutOptHtml}</select></td>
-                    <td style="${tdSt2}"><input type="number" id="qabc-rate-${did}-${i}" value="1360" min="1" step="1"${i0 ? ' onchange="window[\'_bomFill_' + did + '\'](this.dataset.f)"' : ''} data-f="rate" style="width:72px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;"></td>
+                    <td style="${tdSt2}"><input type="number" id="qabc-rate-${did}-${i}" value="${rateVal}" min="1" step="1"${i0 ? ' onchange="window[\'_bomFill_' + did + '\'](this.dataset.f)"' : ''} data-f="rate" style="width:72px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;"></td>
                 </tr>`;
             }).join('');
             const titleHtml = draft.title ? `<div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:8px;">${escapeHtml(draft.title)}</div>` : '';
@@ -872,6 +904,7 @@
             if (!perMatSels[0] || (!perMatSels[0].explosion && !perMatSels[0].showPrice)) return;
             const answerText = draft.buildAnswerText(perMatSels);
             if (!answerText) return;
+            if (window._bomOptsSave) window._bomOptsSave(perMatSels[0], draft.isSingle);
             window._ganttQaPendingChoiceDropdown = null;
             const input = document.getElementById('gantt-qa-input');
             if (!input) return;

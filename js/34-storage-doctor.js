@@ -40,7 +40,10 @@
         // 🧺 [2026-10-02 신규] 자재 보관함(js/35) — SAP 자재청구/입고 전 담아두는 장바구니.
         //    사람이 직접 담은 것이라 자동 정리 대상(cache)으로 두면 안 된다 — log로 두고 확인 후에만 줄인다.
         { key: 'gantt_matcart_items_v1',          label: '자재 보관함(담아둔 자재)',          labelEn: 'Material cart items',     cls: 'log',   strategy: { type: 'array', keep: 200, order: 'newest-last' } },
-        { key: 'gantt_matcart_hdr_v1',            label: '자재 보관함 공통입력(오더/수령인 등)', labelEn: 'Material cart header',  cls: 'cache', strategy: { type: 'drop' } }
+        { key: 'gantt_matcart_hdr_v1',            label: '자재 보관함 공통입력(오더/수령인 등)', labelEn: 'Material cart header',  cls: 'cache', strategy: { type: 'drop' } },
+        // 💾 [2026-10-15] BOM 조회 옵션 기본값 — 마지막 선택을 기억해 다음 조회에 미리 채운다(js/04h).
+        //    지워져도 "(선택)"으로 돌아갈 뿐이라 cache/drop으로 둔다. 한 줄짜리라 용량 문제는 없음.
+        { key: 'gantt_bom_opts_v1',               label: 'BOM 조회 옵션 기본값',              labelEn: 'BOM lookup option defaults', cls: 'cache', strategy: { type: 'drop' } }
     ];
 
     function sizeOf(key) { try { return (localStorage.getItem(key) || '').length; } catch (e) { return 0; } }
