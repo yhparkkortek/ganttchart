@@ -61,7 +61,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 - 각 파일은 독립 모듈이 아님. `const`/`let` 최상위 변수도 이후 로드 스크립트에서 그대로 보임.
 - 파일을 쪼갤 때 **top-level statement 경계에서만** 자를 것 — 함수/블록 중간에서 자르면 문법 오류.
-- **⚠️ node 없음(2026-09-23 확인)** — 파싱 검증은 브라우저 콘솔에서:
+- **✅ node 있음(2026-10-15 확인, `C:\Program Files\nodejs\node`)** — 1차 검증은 `node --check js/파일.js`가 가장 빠름(예전 "node 없음" 기록은 틀림).
+- 전체 스크립트 일괄 파싱 검증은 브라우저 콘솔에서:
   ```
   for (const s of [...document.querySelectorAll('script[src^="js/"]')].map(e=>e.getAttribute('src'))) { try { new Function(await (await fetch(s)).text()); } catch(e) { console.error(s, e.message); } }
   ```
