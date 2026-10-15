@@ -500,12 +500,14 @@
         // 모체 자재 행(레벨 없이 맨 앞에 오는 행) — 표 맨 위에 강조해서 고정
         if (st.parent) {
             var pEsc = String(st.parent.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            html += '<tr style="background:#e0f5f7; font-weight:bold; cursor:pointer;"'
+            // 글자는 다른 행과 같게 두고 배경색(#e0f5f7)만으로 구분한다 — 예전엔 bold+청록이라
+            // 혼자 폰트가 다른 것처럼 보였다(2026-10-15 사용자 지적). "모체" 라벨 칸만 강조 유지.
+            html += '<tr style="background:#e0f5f7; cursor:pointer;"'
                 + ' onclick="window.bomSelectComponent(\'' + pEsc + '\')"'
                 + ' onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'#e0f5f7\'">'
-                + '<td style="' + TD + ' text-align:center; color:#00707d;">' + _esc(_t('모체', 'Top')) + '</td>'
+                + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">' + _esc(_t('모체', 'Top')) + '</td>'
                 + BOM_COLUMNS.map(function (c) {
-                    return '<td style="' + cellStyle(c, ' color:#00707d;') + '">' + _esc(valueOf(st.parent, c)) + '</td>';
+                    return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
                 }).join('')
                 + '<td style="' + TD + '"></td>'
                 + '</tr>';
