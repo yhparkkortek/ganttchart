@@ -513,8 +513,9 @@
 
         if (st.hierarchyOk !== false) {
             // ── 계층 정상(깊이 우선) — 진짜 모자 관계를 그린다 ──────────────
-            // 최상위(레벨1) 한 덩어리가 같은 배경을 쓰고 덩어리마다 색이 교대된다.
-            var hidden = -1, groupIdx = -1;
+            // 💡 [2026-10-15] 레벨1 행에만 색을 깔면 그 자체가 경계 역할을 해서 충분히 구분된다
+            //    (사용자 요청) — 덩어리 전체 교대 배경·경계 굵은 선은 과했다.
+            var hidden = -1;
             st.rows.forEach(function (r, i) {
                 if (hidden !== -1) {
                     if (r._level > hidden) return;      // 접힌 가지의 자식
@@ -525,10 +526,8 @@
                 var collapsed = !!st._collapsed[i];
                 if (hasChild && collapsed) hidden = r._level;
 
-                if (r._level === 1) groupIdx++;
-                var zb = (groupIdx % 2 === 1) ? '#e8f2f3' : '#fff';
-                // ⚠️ border-collapse 표에선 border-top 색이 이웃 셀과 충돌 해결되며 밀린다 → inset box-shadow
-                var sp = (r._level === 1 && groupIdx > 0) ? ' box-shadow: inset 0 2px 0 0 #52a5af;' : '';
+                var zb = (r._level === 1) ? '#e8f2f3' : '#fff';
+                var sp = '';
                 var ind = (r._level - 1) * 12;
                 var tw = hasChild
                     ? '<span onclick="event.stopPropagation(); window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
@@ -574,7 +573,7 @@
             html += '<tr style="background:#dff0f2; cursor:pointer;" onclick="window.bomToggleLevel(' + lv + ')"'
                 + ' title="' + _esc(_t('이 레벨 접기/펴기', 'Collapse/expand this level')) + '">'
                 + '<td colspan="' + colCount + '" style="padding:3px 8px; border:1px solid #cfe3e5;'
-                + ' box-shadow: inset 0 2px 0 0 #52a5af; font-size:11.5px; font-weight:bold; color:#00707d;">'
+                + ' font-size:11.5px; font-weight:bold; color:#00707d;">'
                 + (collapsed ? '▸' : '▾') + ' ' + _esc(_t('레벨 ', 'Level ') + lv)
                 + ' <span style="font-weight:normal; color:#5b8a90;">(' + list.length + (en ? ' rows' : '건') + ')</span>'
                 + '</td></tr>';
