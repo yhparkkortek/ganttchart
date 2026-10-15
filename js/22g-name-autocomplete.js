@@ -199,16 +199,32 @@ window._renderModelCardHtml = function(model, idx) {
     var _pill = window._SUM_CARD_HDR_PILL || 'font-size:11px; padding:0 10px; height:22px; line-height:20px; box-sizing:border-box; border-radius:10px; white-space:nowrap;';
     var _delBtn = canDelete
         ? '<button type="button" onclick="window.removeProjectModel(' + idx + ')" '
-          + 'style="margin-left:auto; ' + _pill + ' border:1px solid #f0b8b8; background:#fdecec; cursor:pointer; color:#c92a2a;" '
+          + 'style="' + _pill + ' border:1px solid #f0b8b8; background:#fdecec; cursor:pointer; color:#c92a2a;" '
           + 'onmouseover="this.style.background=\'#f8d4d4\';this.style.borderColor=\'#e59a9a\';" '
           + 'onmouseout="this.style.background=\'#fdecec\';this.style.borderColor=\'#f0b8b8\';">✕ 삭제</button>'
-        : '<span style="margin-left:auto; ' + _pill + ' border:1px solid transparent; color:#aaa;">(기본)</span>';
+        : '<span style="' + _pill + ' border:1px solid transparent; color:#aaa;">(기본)</span>';
+    // 🔀 [2026-10-15] 모델 순서 바꾸기 — 예전엔 push 순서로 고정돼 바꿀 방법이 아예 없었다.
+    //    맨 위(index 0)가 "기본" 모델이자 새 모델 추가 시 주요자재를 복사해 오는 기준이라 순서가 의미를 가진다.
+    var _tt = window._t || function(ko) { return ko; };
+    var _navBtn = function(dir, disabled, tip) {
+        return '<button type="button"' + (disabled ? ' disabled' : ' onclick="window.moveProjectModel(' + idx + ',' + dir + ')"')
+            + ' title="' + tip + '"'
+            + ' style="' + _pill + ' border:1px solid #cfe3e5; background:' + (disabled ? '#f5f7f8' : '#fff')
+            + '; color:' + (disabled ? '#ccc' : '#00707d') + '; cursor:' + (disabled ? 'default' : 'pointer') + '; padding:0 7px;"'
+            + (disabled ? '' : ' onmouseover="this.style.background=\'#e0f5f7\';" onmouseout="this.style.background=\'#fff\';"')
+            + '>' + (dir < 0 ? '▲' : '▼') + '</button>';
+    };
+    var _total = ((window.tabData && window.tabData.projectModels) || []).length;
+    var _moveBtns = '<span style="margin-left:auto; display:flex; gap:3px;">'
+        + _navBtn(-1, idx === 0, _tt('위로 올리기 (맨 위가 기본 모델)', 'Move up (the top one is the default model)'))
+        + _navBtn(1, idx >= _total - 1, _tt('아래로 내리기', 'Move down'))
+        + '</span>';
     var _lbl = '<label style="font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; background:#fff; white-space:nowrap;">';
     var _hdr = window._SUM_CARD_HDR_STYLE || 'display:flex; align-items:center; gap:8px; padding:5px 12px; min-height:32px; box-sizing:border-box; background:#e0f5f7; border-bottom:1px solid #cfe3e5;';
     return '<div class="sum-model-card" data-unit-id="' + uid + '" style="border:1px solid #cfe3e5; border-radius:6px; background:#fff; overflow:hidden;">' +
         '<div style="' + _hdr + '">' +
             '<span style="font-size:12px; font-weight:bold; color:#00707d;">' + label + '</span>' +
-            _delBtn +
+            _moveBtns + _delBtn +
         '</div>' +
         '<div class="concept-grid" style="grid-template-columns:140px 1fr 140px 1fr; padding:10px 12px;">' +
             _lbl + '고객 모델명 <span style="color:#e03131;">*</span></label>' +
@@ -237,6 +253,50 @@ window.renderProjectModels = function() {
     if (window.renderMaterialModelsContainer) window.renderMaterialModelsContainer();
 };
 
+// 화면의 모델 카드에 **지금 입력돼 있는 값**을 projectModels로 거둬들인다.
+// ⚠️ renderProjectModels()는 배열을 보고 카드를 다시 그리므로, 추가/삭제/순서변경 전에 이걸 먼저
+//    부르지 않으면 아직 저장 전인 입력(고객모델명·KTK PN 등)이 통째로 날아간다.
+//    materials 등 카드에 없는 필드는 같은 인덱스의 기존 객체에서 그대로 이어받는다.
+window._syncProjectModelsFromDom = function() {
+    const cards = document.querySelectorAll('.sum-model-card');
+    if (!cards.length) return (window.tabData && window.tabData.projectModels) || [];
+    window.tabData = window.tabData || {};
+    const prev = window.tabData.projectModels || [];
+    const out = [];
+    cards.forEach(function(card, i) {
+        const gf = function(f) { const el = card.querySelector('[data-model-field="' + f + '"]'); return el ? el.value.trim() : ''; };
+        const ktkRaw = gf('KTK');
+        const us = ktkRaw.indexOf('_');
+        out.push(Object.assign({}, prev[i] || {}, {
+            unitId: card.dataset.unitId || '',
+            고객모델명: gf('고객모델명'),
+            프로젝트코드: gf('프로젝트코드'),
+            프로젝트명칭: gf('프로젝트명칭'),
+            KTKPN: us === -1 ? ktkRaw : ktkRaw.slice(0, us),
+            KTK모델명: us === -1 ? '' : ktkRaw.slice(us + 1)
+        }));
+    });
+    window.tabData.projectModels = out;
+    return out;
+};
+
+// 🔀 모델 순서 바꾸기(↑/↓). 맨 위가 "기본" 모델이므로 순서는 의미가 있다 —
+//    pm.고객모델명 등 하위호환 단일값과 새 모델의 주요자재 복사 기준이 모두 0번을 본다.
+window.moveProjectModel = function(idx, dir) {
+    window._syncProjectModelsFromDom();              // 카드 입력값 먼저 확보
+    if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();  // 자재표 입력값도
+    const models = (window.tabData && window.tabData.projectModels) || [];
+    const to = idx + dir;
+    if (to < 0 || to >= models.length) return;
+    const tmp = models[idx]; models[idx] = models[to]; models[to] = tmp;
+    // 주요자재 카드 접힘 상태는 인덱스 기준이라 같이 바꿔준다
+    if (window._materialsCollapsed) {
+        const a = window._materialsCollapsed[idx], b = window._materialsCollapsed[to];
+        window._materialsCollapsed[idx] = b; window._materialsCollapsed[to] = a;
+    }
+    window.renderProjectModels();
+};
+
 window.addProjectModel = function() {
     window.tabData = window.tabData || {};
     if (!window.tabData.projectModels || !window.tabData.projectModels.length) {
@@ -246,7 +306,8 @@ window.addProjectModel = function() {
     var usedIds = window.tabData.projectModels.map(function(m) { return m.unitId; });
     var nextUnit = '';
     for (var i = 0; i < units.length; i++) { if (!usedIds.includes(units[i])) { nextUnit = units[i]; break; } }
-    // 화면에 입력 중인 자재값을 먼저 거둬들인 뒤(안 그러면 재렌더 때 날아감), 새 모델은 모델 #1 자재를 복사해서 시작
+    // 화면에 입력 중인 값을 먼저 거둬들인 뒤(안 그러면 재렌더 때 날아감), 새 모델은 모델 #1 자재를 복사해서 시작
+    window._syncProjectModelsFromDom();
     if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
     var _base = (window.tabData.projectModels[0] || {}).materials || [];
     var _copied = _base.map(function(r) {
@@ -258,6 +319,7 @@ window.addProjectModel = function() {
 
 window.removeProjectModel = function(idx) {
     if (!window.tabData || !window.tabData.projectModels || idx === 0) return;
+    window._syncProjectModelsFromDom();
     if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
     window.tabData.projectModels.splice(idx, 1);
     // 접힘 상태도 같이 당겨서 번호가 밀리지 않게 한다
@@ -309,22 +371,8 @@ window.collectTabData = function() {
     const pm = window.projectMeta;
     const bind = function(id, key) { const el = document.getElementById(id); if (el) pm[key] = el.value; };
     bind('sum-customer', '고객사');
-    // 다중 모델 카드 수집
-    const _cardModels = [];
-    document.querySelectorAll('.sum-model-card').forEach(function(card) {
-        const gf = function(f) { const el = card.querySelector('[data-model-field="' + f + '"]'); return el ? el.value.trim() : ''; };
-        const ktkRaw = gf('KTK');
-        const us = ktkRaw.indexOf('_');
-        _cardModels.push({
-            unitId: card.dataset.unitId || '',
-            고객모델명: gf('고객모델명'),
-            프로젝트코드: gf('프로젝트코드'),
-            프로젝트명칭: gf('프로젝트명칭'),
-            KTKPN: us === -1 ? ktkRaw : ktkRaw.slice(0, us),
-            KTK모델명: us === -1 ? '' : ktkRaw.slice(us + 1)
-        });
-    });
-    window.tabData.projectModels = _cardModels;
+    // 다중 모델 카드 수집 (순서변경/추가/삭제와 같은 헬퍼를 쓴다 — materials 등 보존 포함)
+    const _cardModels = window._syncProjectModelsFromDom();
     // 선택 1: 첫 번째 카드를 단일값 필드에 반영 (기존 downstream 코드 하위 호환)
     if (_cardModels.length > 0) {
         pm.고객모델명 = _cardModels[0].고객모델명;
