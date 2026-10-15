@@ -294,30 +294,35 @@
         else setTimeout(go, 60);
     };
 
-    // ─── 레벨 접기/펴기 ────────────────────────────────────────────────
-    // 깊이 우선 순서라, 어떤 행의 "자식"은 그 다음부터 레벨이 더 깊은 연속 구간이다.
-    window.bomToggleBranch = function (rowIdx) {
+    // ─── 레벨 블록 접기/펴기 ────────────────────────────────────────────
+    // ⚠️⚠️ [2026-10-15 버그수정] 예전엔 "결과가 깊이 우선 순서라 레벨1 바로 뒤의 레벨2가 그 자식"
+    //   이라고 보고 부모-자식 묶음을 그렸는데 **완전히 틀렸다**. ZPP033이 돌려주는 행은
+    //   구성부품내역(OJTXP) 역순으로 **정렬된 상태**로 온다 — 실측(자재 502572, 다단계):
+    //     idx0~4 = 레벨2, idx5 = 모체, idx6 = 레벨2, idx7~ = 레벨1 …
+    //   레이아웃을 바꿔도(/STD_MC·/HC·미적용) 순서가 같아 정렬은 프로그램/사용자 ALV 기본값에
+    //   박혀 있고, 그리드 컬럼에도 부모를 가리키는 필드가 없다(STUFE POSNR MMSTA MTSTB MATKL
+    //   IDNRK OJTXP MENGE MENGE_Y LABST MMEIN ALPGR ALPRF EWAHR BSTMI EKGRP EKNAM SORTF AENNR PLIFZ).
+    //   → 이 출력만으로는 모자 관계를 복원할 수 없다. 틀린 묶음을 보여주느니 **레벨 블록**으로만
+    //   묶고, 모자 관계를 알 수 없다는 사실을 화면에 명시한다(조용히 틀리게 두지 말 것).
+    //   진짜 계층이 필요하면 단일 레벨 조회를 자재마다 재귀 호출해야 한다(행 클릭 → BOM 조회).
+    window.bomToggleLevel = function (level) {
         var st = window._bomStore();
         if (!st) return;
         st._collapsed = st._collapsed || {};
-        st._collapsed[rowIdx] = !st._collapsed[rowIdx];
+        st._collapsed[level] = !st._collapsed[level];
         window.bomRender();
     };
 
-    // 버튼 하나로 "모두 접기 ↔ 모두 펼치기"를 번갈아 수행한다(지금 접힌 가지가 있으면 펼치기로 동작)
+    // 버튼 하나로 "레벨2 이하 모두 접기 ↔ 모두 펼치기"
     window.bomToggleAll = function (collapse) {
         var st = window._bomStore();
         if (!st || !st.rows) return;
         if (collapse === undefined) {
-            var anyCollapsed = Object.keys(st._collapsed || {}).some(function (k) { return st._collapsed[k]; });
-            collapse = !anyCollapsed;
+            collapse = !Object.keys(st._collapsed || {}).some(function (k) { return st._collapsed[k]; });
         }
         st._collapsed = {};
         if (collapse) {
-            st.rows.forEach(function (r, i) {
-                var next = st.rows[i + 1];
-                if (next && next._level > r._level) st._collapsed[i] = true;
-            });
+            st.rows.forEach(function (r) { if (r._level > 1) st._collapsed[r._level] = true; });
         }
         window.bomRender();
     };
@@ -329,7 +334,71 @@
         var st = window._bomStore();
         var anyCollapsed = !!(st && st._collapsed && Object.keys(st._collapsed).some(function (k) { return st._collapsed[k]; }));
         btn.textContent = anyCollapsed ? _t('▾ 펼치기', '▾ Expand') : _t('▸ 접기', '▸ Collapse');
-        btn.title = anyCollapsed ? _t('하위 구성품 모두 펼치기', 'Expand all children') : _t('하위 구성품 모두 접기', 'Collapse all children');
+        btn.title = anyCollapsed ? _t('하위 레벨 모두 펼치기', 'Expand all levels') : _t('하위 레벨 모두 접기', 'Collapse lower levels');
+    };
+
+    // ─── 엑셀 출력 ─────────────────────────────────────────────────────
+    // ZMM009 조회 표(js/33 _sapExportMatRows)와 같은 방식 — 화면에 그린 행을 그대로 쓰므로
+    // SAP 재조회가 없고, 저장 위치도 같은 C:\SAP_DMS\SAP조회.
+    window.bomExportExcel = async function () {
+        var st = window._bomStore();
+        if (!st || !st.rows || !st.rows.length) {
+            if (window.showToast) window.showToast(_t('내보낼 BOM이 없습니다 — 먼저 조회해주세요.', 'No BOM to export — run a lookup first.'), 'warning');
+            return;
+        }
+        try {
+            if (typeof XLSX === 'undefined') throw new Error(_t('엑셀 라이브러리를 불러오지 못했습니다.', 'The Excel library is not loaded.'));
+            var en = window._currentLang === 'en';
+            var head = [_t('레벨', 'Level')].concat(BOM_COLUMNS.map(function (c) { return en ? c.en : c.ko; }));
+            head.splice(head.length - 0, 0); // (순서 유지용 noop)
+            head.push(_t('비고', 'Note'));
+            var aoa = [head];
+            if (st.parent) {
+                aoa.push([_t('모체', 'Top')].concat(BOM_COLUMNS.map(function (c) {
+                    return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
+                })).concat(['']));
+            }
+            // 화면과 같은 순서로 — 레벨 블록끼리 묶고(안정 정렬) 레벨 안에서는 SAP 순서 유지
+            var ordered = st.rows.map(function (r, i) { return { r: r, i: i }; })
+                .sort(function (a, b) { return (a.r._level - b.r._level) || (a.i - b.i); })
+                .map(function (x) { return x.r; });
+            ordered.forEach(function (r) {
+                aoa.push([r._level].concat(BOM_COLUMNS.map(function (c) {
+                    if (c.key === '_UNITPRICE') {
+                        var p = parseFloat(String(r.STPRS1 || '').replace(/,/g, ''));
+                        var u = parseInt(r.PEINH1 || '1', 10) || 1;
+                        return isNaN(p) ? '' : Math.round(p / u * 100) / 100;   // 숫자로 넣어 엑셀에서 계산 가능하게
+                    }
+                    if (c.key === 'MENGE') {
+                        var q = parseFloat(String(r.MENGE || '').replace(/,/g, ''));
+                        return isNaN(q) ? (r.MENGE || '') : q;
+                    }
+                    return r[c.key] || '';
+                })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
+            });
+            (st.totals || []).forEach(function (o) {
+                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return c.key === '_UNITPRICE' ? '' : (o[c.key] || ''); })).concat(['']));
+            });
+
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(aoa);
+            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 44 }, { wch: 20 }, { wch: 8 }, { wch: 6 },
+                           { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
+            XLSX.utils.book_append_sheet(wb, ws, 'BOM');
+            if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
+            var fileName = 'SAP_BOM_' + (st.material || '') + '_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            var res = await fetch('http://127.0.0.1:5000/sap-save-export', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fileName: fileName, dataBase64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) })
+            });
+            var d = await res.json();
+            if (window.showToast) {
+                window.showToast(d.ok ? ('📊 ' + (d.message || _t('BOM을 엑셀로 저장했습니다.', 'Saved the BOM to Excel.')))
+                                      : ('⚠️ ' + (d.error || _t('엑셀 저장 실패', 'Excel save failed'))), d.ok ? 'success' : 'error');
+            }
+        } catch (e) {
+            if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+        }
     };
 
     // ─── 렌더 ──────────────────────────────────────────────────────────
@@ -402,57 +471,49 @@
                 + '</tr>';
         }
 
-        var hidden = -1;    // 이 레벨보다 깊은 행은 접힌 부모 때문에 숨김
-        // 💡 [2026-10-15] 제브라를 행 단위가 아니라 **그룹 단위**로 — 최상위(레벨1) 한 덩어리
-        //    (부모 + 그 하위 전체)가 같은 배경을 쓰고, 덩어리가 바뀔 때마다 색이 교대된다.
-        //    행 단위로 교대하면 "이 하위품이 어느 상위품 소속인지"가 안 보여서 바꿨다(사용자 선택).
-        //    덩어리 첫 행 위에는 굵은 구분선을 그어 경계를 한 번 더 분명히 한다.
-        var groupIdx = -1;
-        st.rows.forEach(function (r, i) {
-            if (hidden !== -1) {
-                if (r._level > hidden) return;   // 접힌 가지의 자식 — 건너뜀
-                hidden = -1;
-            }
-            var next = st.rows[i + 1];
-            var hasChild = !!(next && next._level > r._level);
-            var collapsed = !!st._collapsed[i];
-            if (hasChild && collapsed) hidden = r._level;
+        // 레벨 블록으로 묶어서 그린다(모자 관계는 이 출력으로 복원 불가 — 위 bomToggleLevel 주석 참고).
+        // SAP이 준 행 순서(구성부품내역 역순)는 레벨 안에서 그대로 유지한다.
+        var byLevel = {};
+        st.rows.forEach(function (r) { (byLevel[r._level] = byLevel[r._level] || []).push(r); });
+        var levels = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
 
-            var isGroupHead = (r._level === 1);
-            if (isGroupHead) groupIdx++;
-            var zebra = (groupIdx % 2 === 1) ? '#e8f2f3' : '#fff';
-            // ⚠️ border-collapse 표에서는 border-top을 줘도 이웃 셀 테두리와 충돌 해결되면서
-            //    색이 .concept-table 기본색(#d5dfe6)으로 밀린다(2026-10-15 실측).
-            //    inset box-shadow는 테두리 합치기와 무관하게 셀 안쪽에 그려져 색이 그대로 유지된다.
-            var sep = isGroupHead && groupIdx > 0 ? ' box-shadow: inset 0 2px 0 0 #52a5af;' : '';
-            var indent = (r._level - 1) * 12;
-            // 접기 토글은 행 클릭(= AI 문답 열기)과 겹치므로 전파를 막는다
-            var twisty = hasChild
-                ? '<span onclick="event.stopPropagation(); window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
-                : '<span style="color:#cfe3e5;">·</span>';
-            var note = (st.notes && st.notes[r.IDNRK]) || '';
-            var mnEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        levels.forEach(function (lv, li) {
+            var list = byLevel[lv];
+            var collapsed = !!st._collapsed[lv];
+            var zebra = (li % 2 === 1) ? '#e8f2f3' : '#fff';
 
-            html += '<tr style="background:' + zebra + '; cursor:pointer;"'
-                + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')"'
-                + ' onmouseover="this.style.background=\'#d4eaf8\'"'
-                + ' onmouseout="this.style.background=\'' + zebra + '\'">'
-                + '<td style="' + TD + sep + ' white-space:nowrap;">'
-                + '<span style="display:inline-block; width:' + indent + 'px;"></span>' + twisty
-                + ' <span style="color:#666;">' + r._level + '</span></td>'
-                + BOM_COLUMNS.map(function (c) {
-                    var v = valueOf(r, c);
-                    return '<td style="' + cellStyle(c, sep) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
-                }).join('')
-                // 비고 칸은 입력용이라 행 클릭(AI 문답 열기)이 끼어들면 안 된다
-                + '<td style="padding:1px 3px; border:1px solid #cfe3e5;' + sep + ' position:relative;" onclick="event.stopPropagation()">'
-                + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
-                + 'title="' + _esc(note) + '" '
-                + 'oninput="window.bomSetNote(this)" '
-                + 'onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
-                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" '
-                + 'placeholder="-"></td>'
-                + '</tr>';
+            // 레벨 구분 머리행 — 클릭하면 그 레벨 전체를 접었다 편다
+            html += '<tr style="background:#dff0f2; cursor:pointer;" onclick="window.bomToggleLevel(' + lv + ')"'
+                + ' title="' + _esc(_t('이 레벨 접기/펴기', 'Collapse/expand this level')) + '">'
+                + '<td colspan="' + colCount + '" style="padding:3px 8px; border:1px solid #cfe3e5;'
+                + ' box-shadow: inset 0 2px 0 0 #52a5af; font-size:11.5px; font-weight:bold; color:#00707d;">'
+                + (collapsed ? '▸' : '▾') + ' ' + _esc(_t('레벨 ', 'Level ') + lv)
+                + ' <span style="font-weight:normal; color:#5b8a90;">(' + list.length + (en ? ' rows' : '건') + ')</span>'
+                + '</td></tr>';
+            if (collapsed) return;
+
+            list.forEach(function (r) {
+                var note = (st.notes && st.notes[r.IDNRK]) || '';
+                var mnEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                html += '<tr style="background:' + zebra + '; cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')"'
+                    + ' onmouseover="this.style.background=\'#d4eaf8\'"'
+                    + ' onmouseout="this.style.background=\'' + zebra + '\'">'
+                    + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
+                    + BOM_COLUMNS.map(function (c) {
+                        var v = valueOf(r, c);
+                        return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    }).join('')
+                    // 비고 칸은 입력용이라 행 클릭(AI 문답 열기)이 끼어들면 안 된다
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; position:relative;" onclick="event.stopPropagation()">'
+                    + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
+                    + 'title="' + _esc(note) + '" '
+                    + 'oninput="window.bomSetNote(this)" '
+                    + 'onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                    + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" '
+                    + 'placeholder="-"></td>'
+                    + '</tr>';
+            });
         });
 
         // 단위별 합계(SAP가 표 끝에 붙여주는 행)
@@ -503,6 +564,13 @@
             + '<div style="font-size:11px; color:#5577aa; margin-top:3px;">💡 '
             + _esc(_t('행을 클릭하면 그 구성품으로 조회 기능을 선택할 수 있습니다', 'Click a row to pick a lookup for that component'))
             + '</div>';
+        // 다단계일 때만 — SAP 출력이 정렬돼 와서 "어느 상위품 밑인지"는 알 수 없다는 점을 분명히 밝힌다
+        if (st.explosion === 'multi' && (st.rows || []).some(function (r) { return r._level > 1; })) {
+            html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
+                + _esc(_t('SAP이 구성부품내역 순으로 정렬된 목록을 주고 상위품 정보를 함께 주지 않아, 레벨2 이하가 어느 상위품에 속하는지는 표시할 수 없습니다. 특정 상위품의 구성만 보려면 그 행을 클릭해 "BOM 조회"를 쓰세요.',
+                    'SAP returns the list sorted by description without parent info, so which parent a level-2+ item belongs to cannot be shown. To see one assembly’s components, click its row and use "BOM 조회".'))
+                + '</div>';
+        }
         if (st.truncated) {
             // SAP 덤프가 500행에서 잘렸다 — 조용히 넘기지 않고 화면에 공개한다
             html += '<div style="margin-top:4px; font-size:11.5px; color:#b1432f;">⚠️ '
