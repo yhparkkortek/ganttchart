@@ -465,6 +465,13 @@
         // 💡 [2026-10-15] 비고 <input>이 있는 행은 24px, 없는 모체·Σ 행은 21px로 높이가 달랐다.
         //    모든 칸에 box-sizing:border-box + height를 줘서(표에서 height는 최소높이로 동작) 통일.
         var ROW_H = '24px';
+        // 💡 [2026-10-15] 제브라 색 쌍을 **레벨별로** 따로 둔다. 레벨1을 단색 틴트로 칠했더니
+        //    기본 접힘 상태나 단일 레벨 조회처럼 레벨1만 모이면 전부 같은 색이라 제브라가
+        //    무용지물이었다(사용자 지적). 레벨1은 청록 계열 두 톤, 레벨2 이하는 흰색 계열 두 톤으로
+        //    교대 — 레벨 구분(색 계열)과 행 구분(명암)을 동시에 얻는다.
+        var zebraPair = function (level) {
+            return level === 1 ? ['#e8f2f3', '#dcedef'] : ['#fff', '#f4f9fa'];
+        };
         var TD = 'padding:2px 5px; border:1px solid #cfe3e5; font-size:11.5px; box-sizing:border-box; height:' + ROW_H + ';';
         var thS = 'padding:3px 5px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap; font-size:11.5px;';
         var cellStyle = function (c, extra) {
@@ -546,7 +553,7 @@
                 var collapsed = !!st._collapsed[i];
                 if (hasChild && collapsed) hidden = r._level;
 
-                var zb = (r._level === 1) ? '#e8f2f3' : (visIdx % 2 === 1 ? '#f4f9fa' : '#fff');
+                var zb = zebraPair(r._level)[visIdx % 2];
                 visIdx++;
                 var sp = '';
                 var ind = (r._level - 1) * 12;
@@ -604,7 +611,7 @@
                 var note = (st.notes && st.notes[r.IDNRK]) || '';
                 var mnEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 // 제브라는 화면에 실제로 그려지는 행 기준(레벨 블록을 접어도 줄무늬가 안 깨짐)
-                var zebra = (visIdx2 % 2 === 1) ? '#f4f9fa' : '#fff';
+                var zebra = zebraPair(r._level)[visIdx2 % 2];
                 visIdx2++;
                 html += '<tr style="background:' + zebra + '; cursor:pointer;"'
                     + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')"'
