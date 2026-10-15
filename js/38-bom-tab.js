@@ -76,11 +76,36 @@
         return window.tabData.bomByUnit[k] || null;
     };
 
-    // 이 모델에 대응하는 Summary 모델 카드의 KTK PN(=SAP 자재번호)을 기본 자재번호로 제안
+    // 이 모델(제품구분자)에 대응하는 Summary 모델 카드의 KTK PN(=SAP 자재번호)을 기본 자재번호로 제안.
+    // ⚠️ [2026-10-15] tabData.projectModels는 collectTabData() 시점(저장할 때)에만 갱신된다 —
+    //    Summary에서 PN을 고치고 바로 BOM 탭으로 오면 저장 전이라 옛 값이 잡혔다.
+    //    그래서 화면에 모델 카드가 있으면 **지금 입력돼 있는 값**을 먼저 읽는다(숨은 탭이어도 DOM엔 있음).
+    var _ktkToMatnr = function (raw) {
+        raw = String(raw || '').trim();
+        var us = raw.indexOf('_');            // "502574_MVD>KTS320DPS01" → 앞부분이 자재번호
+        return us === -1 ? raw : raw.slice(0, us);
+    };
     window._bomDefaultMaterial = function (unit) {
+        var cards = document.querySelectorAll('.sum-model-card');
+        var card = null;
+        for (var i = 0; i < cards.length; i++) {
+            if ((cards[i].dataset.unitId || '') === (unit || '')) { card = cards[i]; break; }
+        }
+        if (!card && cards.length) card = cards[0];
+        if (card) {
+            var el = card.querySelector('[data-model-field="KTK"]');
+            if (el && el.value.trim()) return _ktkToMatnr(el.value);
+        }
         var models = (window.tabData && window.tabData.projectModels) || [];
         var m = models.find(function (x) { return (x.unitId || '') === (unit || ''); }) || models[0];
         return (m && m.KTKPN ? String(m.KTKPN).trim() : '');
+    };
+
+    // 사람이 자재번호 칸을 직접 고쳤는지(= Summary 기본값을 덮어썼는지) 모델별로 기억한다.
+    // 런타임 전용 — 저장하지 않는다(프로젝트를 다시 열면 again Summary 기준으로 시작).
+    window._bomManualMaterial = window._bomManualMaterial || {};
+    window.bomMarkManualMaterial = function () {
+        window._bomManualMaterial[window._bomActiveUnit()] = true;
     };
 
     // ─── SAP 응답(탭 구분 텍스트) 파싱 ─────────────────────────────────
@@ -455,7 +480,17 @@
         // 모델 전환 바 + 조회 조건 칸 동기화
         window.bomRenderUnitBar();
         var matEl = document.getElementById('bom-material');
-        if (matEl && document.activeElement !== matEl) matEl.value = (st && st.material) || window._bomDefaultMaterial(unit);
+        // 자재번호 칸은 Summary의 KTK PN을 따라간다 — 사람이 직접 고친 모델만 그 값을 유지한다.
+        // 예전엔 st.material(마지막 조회값)이 무조건 이겨서, Summary에서 PN을 바꿔도 BOM은 계속 옛 값이었다.
+        var defMat = window._bomDefaultMaterial(unit);
+        if (matEl && document.activeElement !== matEl) {
+            if (window._bomManualMaterial[unit]) {
+                // 직접 고친 모델은 그 값을 그대로 둔다(비어 있을 때만 채워줌)
+                if (!matEl.value) matEl.value = (st && st.material) || defMat || '';
+            } else {
+                matEl.value = defMat || (st && st.material) || '';
+            }
+        }
         var expEl = document.getElementById('bom-explosion');
         if (expEl && st && st.explosion) expEl.value = st.explosion;
         var layEl = document.getElementById('bom-layout');
@@ -668,6 +703,15 @@
         var html = '<div style="font-size:11.5px; color:#666; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">'
             + parts.filter(Boolean).map(function (p) { return '<span>' + p + '</span>'; }).join('<span style="color:#cfe3e5;">|</span>')
             + '</div>';
+        // 화면에 떠 있는 표가 지금 자재번호 칸의 값과 다르면(= Summary에서 PN을 바꿨거나 직접 고쳤는데
+        // 아직 다시 조회를 안 한 상태) 조용히 옛 결과를 보여주지 않고 분명히 알린다.
+        var _curMat = (document.getElementById('bom-material') || {}).value;
+        if (_curMat && st.material && String(_curMat).trim() !== String(st.material).trim()) {
+            html += '<div style="font-size:11px; color:#b1432f; margin-top:2px;">⚠️ '
+                + _esc(_t('아래 표는 ' + st.material + ' 조회 결과입니다. 지금 자재번호(' + String(_curMat).trim() + ')로 보려면 "🔄 SAP 조회"를 다시 누르세요.',
+                    'The table below is for ' + st.material + '. Press "Fetch from SAP" again to load ' + String(_curMat).trim() + '.'))
+                + '</div>';
+        }
         // 계층이 깨진 경우에만 경고 — ALV에 정렬이 걸려 있으면 모자 관계를 복원할 수 없다.
         if (st.hierarchyOk === false) {
             html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
