@@ -403,6 +403,19 @@ window.collectTabData = function() {
     return window.tabData;
 };
 
+// 🐛 [2026-10-15 버그수정] "적용 목적" 칸이 내용 2줄인데도 한 줄도 안 되게 잘려 보이던 문제.
+//    원인: populateTabData()가 값을 넣고 높이를 다시 재는데, 그 시점에 Summary 탭이 숨겨져
+//    있으면(마지막으로 보던 탭이 Gantt 등이면 그대로 복원됨) display:none이라 scrollHeight가
+//    **0**으로 나와 height가 "0px"로 박힌다. 탭을 열어도 그 값이 남아 잘린 채로 보였다.
+//    → 숨겨져 있을 땐 손대지 않고, Summary 탭이 실제로 보이는 시점에 다시 계산한다
+//      (js/23-sidebar-tabs.js의 switchTab('summary') 훅에서 호출).
+window._sumAutoGrowPurpose = function() {
+    const ta = document.getElementById('sum-purpose');
+    if (!ta || ta.offsetParent === null) return;   // 숨겨진 상태에서는 scrollHeight가 0이라 측정 불가
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+};
+
 window.populateTabData = function() {
     const td = window.tabData || {};
     // 💡 R1~R5 리비전 데이터 구조 마이그레이션: 기존 mcTable은 R1으로 그대로 이전(기본값)
@@ -504,7 +517,7 @@ window.populateTabData = function() {
     if (window.loadFilterRulesFromDrive) window.loadFilterRulesFromDrive();
 
     setVal('sum-purpose', sd.purpose);
-    (function() { var ta = document.getElementById('sum-purpose'); if (ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; } })();
+    window._sumAutoGrowPurpose();
     setVal('sum-volume', sd.volume);
     setVal('sum-mp-date', sd.mpDate);
     setVal('sum-background', sd.background);

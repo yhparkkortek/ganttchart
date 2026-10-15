@@ -65,6 +65,9 @@
         if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
         // Summary 탭 진입 시 필수 항목(고객사/모델명/KTK PN/담당자) 미입력 하이라이트 갱신
         if (tabName === 'summary' && window._checkAllRequiredFields) window._checkAllRequiredFields();
+        // "적용 목적" 자동 높이 — 숨겨진 동안엔 scrollHeight가 0이라 계산이 안 되므로,
+        // 탭이 실제로 보이는 지금 다시 잰다(js/22g의 _sumAutoGrowPurpose 주석 참고).
+        if (tabName === 'summary' && window._sumAutoGrowPurpose) window._sumAutoGrowPurpose();
         // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
         if (tabName === 'calendar' && window.calRender) window.calRender();
         // BOM 탭은 진입할 때마다 현재 모델(제품구분자)의 저장된 BOM으로 다시 그린다
