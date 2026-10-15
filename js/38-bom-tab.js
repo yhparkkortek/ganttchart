@@ -381,8 +381,12 @@
                 + '</tr>';
         }
 
-        var hidden = -1;  // 이 레벨보다 깊은 행은 접힌 부모 때문에 숨김
-        var pos = 0;      // 제브라는 "화면에 실제로 그려지는 위치" 기준 (주요자재 표와 같은 규칙)
+        var hidden = -1;    // 이 레벨보다 깊은 행은 접힌 부모 때문에 숨김
+        // 💡 [2026-10-15] 제브라를 행 단위가 아니라 **그룹 단위**로 — 최상위(레벨1) 한 덩어리
+        //    (부모 + 그 하위 전체)가 같은 배경을 쓰고, 덩어리가 바뀔 때마다 색이 교대된다.
+        //    행 단위로 교대하면 "이 하위품이 어느 상위품 소속인지"가 안 보여서 바꿨다(사용자 선택).
+        //    덩어리 첫 행 위에는 굵은 구분선을 그어 경계를 한 번 더 분명히 한다.
+        var groupIdx = -1;
         st.rows.forEach(function (r, i) {
             if (hidden !== -1) {
                 if (r._level > hidden) return;   // 접힌 가지의 자식 — 건너뜀
@@ -393,8 +397,13 @@
             var collapsed = !!st._collapsed[i];
             if (hasChild && collapsed) hidden = r._level;
 
-            var zebra = (pos % 2 === 1) ? '#e8f2f3' : '#fff';
-            pos++;
+            var isGroupHead = (r._level === 1);
+            if (isGroupHead) groupIdx++;
+            var zebra = (groupIdx % 2 === 1) ? '#e8f2f3' : '#fff';
+            // ⚠️ border-collapse 표에서는 border-top을 줘도 이웃 셀 테두리와 충돌 해결되면서
+            //    색이 .concept-table 기본색(#d5dfe6)으로 밀린다(2026-10-15 실측).
+            //    inset box-shadow는 테두리 합치기와 무관하게 셀 안쪽에 그려져 색이 그대로 유지된다.
+            var sep = isGroupHead && groupIdx > 0 ? ' box-shadow: inset 0 2px 0 0 #52a5af;' : '';
             var indent = (r._level - 1) * 12;
             var twisty = hasChild
                 ? '<span onclick="window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
@@ -402,14 +411,14 @@
             var note = (st.notes && st.notes[r.IDNRK]) || '';
 
             html += '<tr style="background:' + zebra + ';">'
-                + '<td style="' + TD + ' white-space:nowrap;">'
+                + '<td style="' + TD + sep + ' white-space:nowrap;">'
                 + '<span style="display:inline-block; width:' + indent + 'px;"></span>' + twisty
                 + ' <span style="color:#666;">' + r._level + '</span></td>'
                 + BOM_COLUMNS.map(function (c) {
                     var v = valueOf(r, c);
-                    return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    return '<td style="' + cellStyle(c, sep) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                 }).join('')
-                + '<td style="padding:1px 3px; border:1px solid #cfe3e5; position:relative;">'
+                + '<td style="padding:1px 3px; border:1px solid #cfe3e5;' + sep + ' position:relative;">'
                 + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" '
                 + 'title="' + _esc(note) + '" '
                 + 'oninput="window.bomSetNote(this)" '
