@@ -4884,6 +4884,30 @@ ${docsJson}`;
         //   ⚠️ 결재요청(상신)은 하지 않는다 — 누르는 순간 팀장·합의자들에게 실제로 올라간다.
         //      상신은 사람이 그룹웨어에서 내용을 확인하고 직접 누른다.
         //   트리거 어휘는 GW_CAPABILITIES(js/32) 데이터 — 여기에 정규식으로 박지 않는다.
+        // 🧭 [2026-10-16] "승인원"은 두 기능이 공유한다 — SAP **승인원 표지**(붙일 파일)와
+        //    그룹웨어 **전자결재 기안**(업무 흐름 문서). 구분 신호가 없는 표현
+        //    ("102202 승인원 작성해줘")까지 한쪽으로 추측해 보내면 엉뚱한 기능이 돌아간다
+        //    (실사용에서 그룹웨어 요청이 SAP 표지로 샜다). 모호하면 **되묻는다.**
+        const _apprAmbig = /승인원/.test(question) && /(작성|만들|생성|해줘)/.test(question)
+            && !/표지/.test(question)
+            && !(window._gwCapKwHit && window._gwCapKwHit(question, 'gw_approval_draft'));
+        const _apprAmbigMat = _apprAmbig && (question.match(/\b\d{5,8}\b/) || [])[0];
+        if (_apprAmbigMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaShowConfirmButtons(
+                '❓ ' + window._t('"승인원"은 두 가지가 있어서 어느 쪽인지 확인이 필요합니다 — 자재 ', 'Two features match "승인원" — material ')
+                + _apprAmbigMat + '\n\n'
+                + window._t('- 🏢 **그룹웨어 전자결재 기안**: 결재선을 타는 문서(원자재 승인 결과서)를 임시저장합니다.\n'
+                            + '- 📋 **SAP 승인원 표지**: 문서에 붙이는 표지 파일을 만듭니다.',
+                            '- 🏢 **Groupware approval draft**: saves a draft document that goes through approval.\n'
+                            + '- 📋 **SAP cover sheet**: generates a cover-sheet file.'),
+                [
+                    { label: '🏢 ' + window._t('그룹웨어 기안', 'Groupware draft'), value: _apprAmbigMat + ' 원자재 승인원 기안 작성해줘' },
+                    { label: '📋 ' + window._t('SAP 승인원 표지', 'SAP cover sheet'), value: _apprAmbigMat + ' 승인원 표지 만들어줘' }
+                ]);
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         const _gwDraftHit = window._gwCapKwHit ? window._gwCapKwHit(question, 'gw_approval_draft') : false;
         const _gwDraftMat = _gwDraftHit && (question.match(/\b\d{5,8}\b/) || [])[0];
         // 확인 버튼이 돌려보내는 확정 명령
