@@ -507,7 +507,7 @@
             head.push(_t('비고', 'Note'));
             var aoa = [head];
             if (st.parent) {
-                aoa.push([_t('모체', 'Top')].concat(BOM_COLUMNS.map(function (c) {
+                aoa.push([0].concat(BOM_COLUMNS.map(function (c) {
                     if (c.loc) return '';
                     if (c.usd) return _usdNum(st.parent);
                     return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
@@ -532,9 +532,6 @@
                     if (c.loc) return _locOf(st, r);
                     return r[c.key] || '';
                 })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
-            });
-            (st.totals || []).forEach(function (o) {
-                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.usd || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
             });
 
             var wb = XLSX.utils.book_new();
@@ -640,19 +637,8 @@
 
         st._collapsed = st._collapsed || {};
         var html = '';
-        // 단위별 합계(SAP가 표 끝에 붙여주는 행) — 두 렌더 분기가 공용으로 쓴다
-        var renderTotals = function () {
-            (st.totals || []).forEach(function (o) {
-                html += '<tr class="bom-row-sum" style="font-weight:bold; color:#2c5f8a;">'
-                    + '<td style="' + TD + ' text-align:center;">Σ</td>'
-                    + BOM_COLUMNS.map(function (c) {
-                        if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
-                        return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
-                    }).join('')
-                    + '<td style="' + TD + '"></td>'
-                    + '</tr>';
-            });
-        };
+        // 💡 [2026-10-16 사용자 요청] SAP이 표 끝에 붙여주는 단위별 합계(Σ) 행은 **그리지 않는다**.
+        //    `st.totals`에는 그대로 담아 두므로(파서 변경 없음) 나중에 되살리려면 여기만 고치면 된다.
 
         // 모체 자재 행(레벨 없이 맨 앞에 오는 행) — 표 맨 위에 강조해서 고정
         if (st.parent) {
@@ -661,7 +647,7 @@
             // 혼자 폰트가 다른 것처럼 보였다(2026-10-15 사용자 지적). "모체" 라벨 칸만 강조 유지.
             html += '<tr class="bom-row bom-row-top" style="cursor:pointer;"'
                 + ' onclick="window.bomSelectComponent(\'' + pEsc + '\')">'
-                + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">' + _esc(_t('모체', 'Top')) + '</td>'
+                + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">0</td>'
                 + BOM_COLUMNS.map(function (c) {
                     if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
                     return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
@@ -719,7 +705,6 @@
                     + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
                     + '</tr>';
             });
-            renderTotals();
             tbody.innerHTML = html;
             window._bomSyncToggleBtn();
             window._bomRenderMeta(st);
@@ -777,8 +762,6 @@
                     + '</tr>';
             });
         });
-
-        renderTotals();
 
         tbody.innerHTML = html;
         window._bomSyncToggleBtn();
@@ -973,7 +956,7 @@
             var head = [_t('레벨', 'Level')].concat(BOM_COLUMNS.map(function (c) { return en ? c.en : c.ko; })).concat([_t('비고', 'Note')]);
             var aoa = [head];
             if (st.parent) {
-                aoa.push([_t('모체', 'Top')].concat(BOM_COLUMNS.map(function (c) {
+                aoa.push([0].concat(BOM_COLUMNS.map(function (c) {
                     if (c.loc) return '';
                     if (c.usd) return _usdNum(st.parent);
                     return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
@@ -990,9 +973,6 @@
                     if (c.loc) return _locOf(st, r);
                     return r[c.key] || '';
                 })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
-            });
-            (st.totals || []).forEach(function (o) {
-                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.usd || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
             });
             var wb = XLSX.utils.book_new();
             var ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -1161,7 +1141,7 @@
 
         if (st.parent) {
             html += '<tr class="bom-row bom-row-top">'
-                + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">' + _esc(_t('모체', 'Top')) + '</td>'
+                + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">0</td>'
                 + BOM_COLUMNS.map(function (c) {
                     if (c.loc) return '<td' + alCls(c) + ' style="' + cellStyle(c) + '"></td>';
                     return '<td' + alCls(c) + ' style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
@@ -1200,15 +1180,7 @@
                 + '</tr>';
         });
 
-        (st.totals || []).forEach(function (o) {
-            html += '<tr class="bom-row-sum" style="font-weight:bold; color:#2c5f8a;">'
-                + '<td style="' + TD + ' text-align:center;">&#931;</td>'
-                + BOM_COLUMNS.map(function (c) {
-                    if (c.loc) return '<td' + alCls(c) + ' style="' + cellStyle(c) + '"></td>';
-                    return '<td' + alCls(c) + ' style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
-                }).join('')
-                + '<td style="' + TD + '"></td></tr>';
-        });
+        // 단위별 합계(Σ) 행은 그리지 않는다 — 메인 BOM 탭과 같은 규칙(2026-10-16 사용자 요청).
 
         tbody.innerHTML = html;
 
