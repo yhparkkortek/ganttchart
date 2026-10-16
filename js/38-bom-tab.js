@@ -100,6 +100,64 @@
         return p ? parseFloat(p.v.toFixed(p.d)) : '';
     };
 
+    // ── 헤더 클릭 정렬 ─────────────────────────────────────────────────
+    //  `st._sort = {key, dir}` 이면 그 열 기준 평면 정렬로 그리고, null이면 SAP이 준 원래
+    //  순서(계층 트리/레벨 블록)로 돌아간다. 레벨 헤더가 "초기값으로 되돌리기" 역할을 한다.
+    //  정렬 중에는 모자 관계가 의미를 잃으므로 접기/펴기 없이 평면으로 그린다.
+    var _sortVal = function (st, r, c) {
+        if (c.key === '_UNITPRICE') {
+            var p = parseFloat(String(r.STPRS1 || '').replace(/,/g, ''));
+            var u = parseInt(r.PEINH1 || '1', 10) || 1;
+            return isFinite(p) ? p / u : null;
+        }
+        if (c.usd) { var q = _usdParts(r); return q ? q.v : null; }
+        if (c.key === 'MENGE') {
+            var m = parseFloat(String(r.MENGE || '').replace(/,/g, ''));
+            return isFinite(m) ? m : null;
+        }
+        if (c.loc) return _locOf(st, r) || '';
+        return r[c.key] || '';
+    };
+    // 빈 값은 방향과 무관하게 항상 뒤로. 문자는 숫자 섞인 값을 자연 정렬(R2 < R10, 101099 < 132487).
+    var _sortRows = function (st) {
+        if (!st || !st._sort) return null;
+        var c = null;
+        for (var i = 0; i < BOM_COLUMNS.length; i++) {
+            if (BOM_COLUMNS[i].key === st._sort.key) { c = BOM_COLUMNS[i]; break; }
+        }
+        if (!c) return null;
+        var desc = st._sort.dir === 'desc';
+        return (st.rows || []).slice().sort(function (x, y) {
+            var a = _sortVal(st, x, c), b = _sortVal(st, y, c);
+            var ae = (a === null || a === ''), be = (b === null || b === '');
+            if (ae || be) return (ae && be) ? 0 : (ae ? 1 : -1);
+            var r = (typeof a === 'number' && typeof b === 'number')
+                ? (a - b)
+                : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+            return desc ? -r : r;
+        });
+    };
+    var _sortStoreOf = function (scope) {
+        return scope === 'elec' ? window._elecBomGetStore(window._elecBomType) : window._bomStore();
+    };
+    var _sortRerender = function (scope) {
+        if (scope === 'elec') { if (window._elecBomRender) window._elecBomRender(); }
+        else if (window.bomRender) window.bomRender();
+    };
+    window.bomSortBy = function (key, scope) {
+        var st = _sortStoreOf(scope);
+        if (!st) return;
+        if (st._sort && st._sort.key === key) st._sort.dir = (st._sort.dir === 'asc' ? 'desc' : 'asc');
+        else st._sort = { key: key, dir: 'asc' };
+        _sortRerender(scope);
+    };
+    window.bomResetSort = function (scope) {
+        var st = _sortStoreOf(scope);
+        if (!st || !st._sort) return;
+        st._sort = null;
+        _sortRerender(scope);
+    };
+
     // Location(설치지점) — SAP ZPP033의 `EBORT`가 원본이고, 사람이 칸을 고쳐 적은 값이 있으면
     // 그게 이긴다. EBORT는 `/LOC` 레이아웃 + "Location Information" 옵션을 켜야 들어온다
     // (실측 2026-10-16: PBA 보드에서 R96·U4·Q1·SW1처럼 PCB 부품 위치가 그대로 채워짐).
@@ -615,10 +673,20 @@
             return row[c.key] || '';
         };
 
+        var sortInd = function (c) {
+            if (!st || !st._sort || st._sort.key !== c.key) return '';
+            return '<span style="color:#00707d;">' + (st._sort.dir === 'asc' ? ' ▲' : ' ▼') + '</span>';
+        };
+        var sorted = st ? !!st._sort : false;
         thead.innerHTML = '<tr>'
-            + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
+            + '<th style="' + thS + ' width:46px; cursor:pointer;" onclick="window.bomResetSort()"'
+            + ' title="' + _esc(_t('원래 순서(SAP 계층)로 되돌리기', 'Reset to original SAP order')) + '">'
+            + _esc(_t('레벨', 'Level')) + (sorted ? '<span style="color:#00707d;"> ↺</span>' : '') + '</th>'
             + BOM_COLUMNS.map(function (c) {
-                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
+                return '<th style="' + thS + ' width:' + c.w + '; cursor:pointer;"'
+                    + ' onclick="window.bomSortBy(\'' + c.key + '\')"'
+                    + ' title="' + _esc(_t('클릭: 오름/내림차순 정렬', 'Click to sort asc/desc')) + '">'
+                    + _esc(en ? c.en : c.ko) + sortInd(c) + '</th>';
             }).join('')
             // ⚠️ .concept-table은 table-layout:fixed라 min-width가 무시된다 — 반드시 width로 줄 것
             //    (min-width만 줬더니 비고 열이 0px로 찌그러져 안 보였다, 2026-10-15)
@@ -654,6 +722,38 @@
                 }).join('')
                 + '<td style="' + TD + '"></td>'
                 + '</tr>';
+        }
+
+        // ── 헤더 정렬 중 — 모자 관계가 의미를 잃으므로 평면으로 그린다 ──────
+        var sortedRows = _sortRows(st);
+        if (sortedRows) {
+            sortedRows.forEach(function (r, vi) {
+                var note = (st.notes && st.notes[r.IDNRK]) || '';
+                var mEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                html += '<tr class="bom-row ' + zebraClass(r._level, vi) + '" style="cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + mEsc + '\')">'
+                    + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
+                    + BOM_COLUMNS.map(function (c) {
+                        if (c.loc) {
+                            var lv = valueOf(r, c);
+                            return '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                                + '<input type="text" value="' + _esc(lv) + '" data-bom-loc="' + _esc(r.IDNRK) + '" title="' + _esc(lv) + '" '
+                                + 'oninput="window.bomSetLocation(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
+                        }
+                        var v = valueOf(r, c);
+                        return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    }).join('')
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                    + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(note) + '" '
+                    + 'oninput="window.bomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                    + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+            window._bomSyncToggleBtn();
+            window._bomRenderMeta(st);
+            return;
         }
 
         if (st.hierarchyOk !== false) {
@@ -1120,11 +1220,20 @@
                 + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
         };
 
+        var sortInd = function (c) {
+            if (!st || !st._sort || st._sort.key !== c.key) return '';
+            return '<span style="color:#00707d;">' + (st._sort.dir === 'asc' ? ' ▲' : ' ▼') + '</span>';
+        };
         var colCount = BOM_COLUMNS.length + 2;
         thead.innerHTML = '<tr>'
-            + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
+            + '<th style="' + thS + ' width:46px; cursor:pointer;" onclick="window.bomResetSort(\'elec\')"'
+            + ' title="' + _esc(_t('원래 순서(SAP 계층)로 되돌리기', 'Reset to original SAP order')) + '">'
+            + _esc(_t('레벨', 'Level')) + ((st && st._sort) ? '<span style="color:#00707d;"> ↺</span>' : '') + '</th>'
             + BOM_COLUMNS.map(function (c) {
-                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
+                return '<th style="' + thS + ' width:' + c.w + '; cursor:pointer;"'
+                    + ' onclick="window.bomSortBy(\'' + c.key + '\', \'elec\')"'
+                    + ' title="' + _esc(_t('클릭: 오름/내림차순 정렬', 'Click to sort asc/desc')) + '">'
+                    + _esc(en ? c.en : c.ko) + sortInd(c) + '</th>';
             }).join('')
             + '<th style="' + thS + ' width:100px;">' + _esc(_t('비고', 'Note')) + '</th>'
             + '</tr>';
@@ -1147,6 +1256,29 @@
                     return '<td' + alCls(c) + ' style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
                 }).join('')
                 + '<td style="' + TD + '"></td></tr>';
+        }
+
+        // 헤더 정렬 중에는 평면으로 그린다(메인 BOM 탭과 같은 규칙)
+        var epSorted = _sortRows(st);
+        if (epSorted) {
+            epSorted.forEach(function (r, vi) {
+                var n2 = (st.notes && st.notes[r.IDNRK]) || '';
+                html += '<tr class="bom-row ' + zebraClass(r._level, vi) + '">'
+                    + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
+                    + BOM_COLUMNS.map(function (c) {
+                        if (c.loc) return renderLocCell(r, '');
+                        var v = valueOf(r, c);
+                        return '<td' + alCls(c) + ' style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    }).join('')
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                    + '<input type="text" value="' + _esc(n2) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(n2) + '" '
+                    + 'oninput="window._elecBomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                    + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+            _elecBomRenderMeta(st, en);
+            return;
         }
 
         var hidden = -1, visIdx = 0;
@@ -1183,7 +1315,10 @@
         // 단위별 합계(Σ) 행은 그리지 않는다 — 메인 BOM 탭과 같은 규칙(2026-10-16 사용자 요청).
 
         tbody.innerHTML = html;
+        _elecBomRenderMeta(st, en);
+    };
 
+    function _elecBomRenderMeta(st, en) {
         var metaEl = document.getElementById('ep-bom-meta');
         if (metaEl && st.material) {
             var when = '';
@@ -1195,7 +1330,7 @@
         if (st.truncated) {
             window._elecBomSetStatus('⚠️ ' + _t('SAP 응답이 500행에서 잘렸습니다. 단일 레벨 조회를 시도하세요.', 'SAP response truncated at 500 rows. Try single-level explosion.'), 'error');
         }
-    };
+    }
 
     // 레이아웃 드롭다운 — 04h의 BOM 레이아웃 카탈로그(데이터)를 그대로 재사용
     window.bomFillLayoutOptions = function () {
