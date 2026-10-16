@@ -18,8 +18,12 @@
 
     var _t = function (ko, en) { return window._currentLang === 'en' ? en : ko; };
 
+    // 🔀 [2026-10-16 사용자 요청] 겹쳐보기가 아니라 **전환**이다 — 간트 일정 ↔ 그룹웨어 일정.
+    //    겹쳐 놨더니 하루 칩 상한(월간 10개)을 그룹웨어 일정이 선점해 내 간트 업무가
+    //    통째로 잘려나갔다(실측: 그룹웨어 12건이면 간트 0건). 한 번에 하나만 보여주면
+    //    자리 경쟁 자체가 없어지고, 무엇을 보고 있는지도 분명해진다.
     window._gwState = window._gwState || {
-        enabled: false,       // 겹쳐보기 on/off (사람이 토글)
+        mode: 'gantt',        // 'gantt' = 내 프로젝트 업무 | 'gw' = 그룹웨어 일정
         events: [],
         status: null,         // 마지막 /gw/status 결과
         loading: false,
@@ -27,9 +31,10 @@
         fetchedAt: 0
     };
 
-    var GW_SHOW_KEY = 'gantt_gw_overlay_on';
+    var GW_MODE_KEY = 'gantt_cal_source';
     try {
-        window._gwState.enabled = localStorage.getItem(GW_SHOW_KEY) === '1';
+        var saved = localStorage.getItem(GW_MODE_KEY);
+        if (saved === 'gw' || saved === 'gantt') window._gwState.mode = saved;
     } catch (e) {}
 
     var _ymd = function (d) {
@@ -65,43 +70,11 @@
         }
     };
 
-    // 🔑 로그인 정보 등록 — 비밀번호는 백엔드에서 Windows DPAPI로 암호화해 저장하고
-    //    여기로 다시 내려오지 않는다(SAP 자동 로그인과 동일한 원칙).
-    window._gwSetupLogin = async function () {
-        var cur = { configured: false, user: '' };
-        try {
-            var r0 = await fetch('http://127.0.0.1:5000/gw/login-config');
-            cur = await r0.json();
-        } catch (e) {
-            window._gwSetStatus('⚠️ ' + _t('백엔드에 연결할 수 없습니다.', 'Backend unreachable.'), 'error');
-            return;
-        }
-        var id = prompt(_t('그룹웨어 아이디 (예: yhpark)', 'Groupware ID'), cur.user || '');
-        if (id === null) return;
-        id = id.trim();
-        if (!id) {
-            // 빈 값으로 확인 → 저장된 정보 삭제로 간주
-            if (cur.configured && confirm(_t('저장된 그룹웨어 로그인 정보를 삭제할까요?', 'Delete saved groupware login?'))) {
-                await fetch('http://127.0.0.1:5000/gw/login-config', { method: 'DELETE' });
-                window._gwSetStatus(_t('저장된 로그인 정보를 삭제했습니다.', 'Saved login deleted.'), 'ok');
-            }
-            return;
-        }
-        var pw = prompt(_t('그룹웨어 비밀번호 (Windows 암호화로 이 PC에만 저장됩니다)',
-                           'Groupware password (stored encrypted on this PC only)'), '');
-        if (pw === null || !pw) return;
-        try {
-            var r = await fetch('http://127.0.0.1:5000/gw/login-config', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: id, pw: pw })
-            });
-            var d = await r.json();
-            pw = null;
-            window._gwSetStatus(d.ok ? ('✅ ' + d.message) : ('⚠️ ' + d.message), d.ok ? 'ok' : 'error');
-            if (d.ok) window._gwAutoLogin();
-        } catch (e) {
-            window._gwSetStatus('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
-        }
+    // 🔑 로그인 정보 등록 UI는 **AI 문답 창의 🔑**(js/36, SAP과 같은 자리)에 있다.
+    //    여기서는 그 모달을 열어주기만 한다 — 설정 자리가 두 군데로 갈라지지 않게.
+    window._gwSetupLogin = function () {
+        if (window.openSapLoginSettings) window.openSapLoginSettings();
+        else window._gwSetStatus(_t('AI 문답 창의 🔑에서 설정해주세요.', 'Use the 🔑 in the AI chat window.'), 'error');
     };
 
     // 저장된 계정으로 **1회만** 로그인. 실패하면 재시도하지 않고 사람에게 넘긴다.
@@ -194,20 +167,28 @@
     };
 
     window._gwToggleOverlay = function () {
-        window._gwState.enabled = !window._gwState.enabled;
-        try { localStorage.setItem(GW_SHOW_KEY, window._gwState.enabled ? '1' : '0'); } catch (e) {}
+        window._gwState.mode = (window._gwState.mode === 'gw') ? 'gantt' : 'gw';
+        try { localStorage.setItem(GW_MODE_KEY, window._gwState.mode); } catch (e) {}
         window._gwSyncToggleBtn();
-        if (window._gwState.enabled) window._gwLoadEvents(false);
+        if (window._gwState.mode === 'gw') window._gwLoadEvents(false);
         else { window._gwSetStatus(''); if (window.calRender) window.calRender(); }
     };
 
+    // 버튼에는 **지금 보고 있는 것**을 적고, 누르면 반대쪽으로 넘어간다고 알려준다.
     window._gwSyncToggleBtn = function () {
         var b = document.getElementById('gw-cal-toggle-btn');
         if (!b) return;
-        var on = window._gwState.enabled;
-        b.style.background = on ? '#00707d' : '#e0f5f7';
-        b.style.color = on ? '#fff' : '#00707d';
-        b.textContent = (on ? '🏢 ' : '🏢 ') + _t('그룹웨어 일정', 'Groupware');
+        var gw = window._gwState.mode === 'gw';
+        b.style.background = gw ? '#5b3fa3' : '#e0f5f7';
+        b.style.color = gw ? '#fff' : '#00707d';
+        b.textContent = gw ? ('🏢 ' + _t('그룹웨어 일정', 'Groupware'))
+                           : ('📊 ' + _t('Gantt 일정', 'Gantt'));
+        b.setAttribute('aria-pressed', gw ? 'true' : 'false');
+        b.title = gw
+            ? _t('지금 그룹웨어 일정을 보는 중 — 누르면 Gantt 업무로 전환합니다',
+                 'Showing groupware events — click to switch to Gantt tasks')
+            : _t('지금 Gantt 업무를 보는 중 — 누르면 그룹웨어 일정으로 전환합니다 (읽기 전용, 로그인은 AI 문답 창의 🔑)',
+                 'Showing Gantt tasks — click to switch to groupware events (read-only; sign in from the 🔑 in AI chat)');
     };
 
     // 간트 업무는 마감일 하루에만 찍히지만, 그룹웨어 일정은 기간 전체에 걸쳐 표시한다.
@@ -227,9 +208,13 @@
         return out;
     };
 
-    // js/24의 calRender가 eventsByDay를 만든 직후 호출한다(그 파일 수정은 한 줄).
+    // js/24의 calRender가 eventsByDay(간트 업무)를 만든 직후 호출한다.
+    //  · 간트 모드면 아무것도 하지 않는다 → 기존 캘린더 그대로.
+    //  · 그룹웨어 모드면 간트 업무를 **치우고** 그룹웨어 일정으로 갈아끼운다(전환이므로).
     window._gwMergeIntoCalendar = function (eventsByDay) {
-        if (!window._gwState.enabled || !window._gwState.events.length) return;
+        if (window._gwState.mode !== 'gw') return;
+        Object.keys(eventsByDay).forEach(function (k) { delete eventsByDay[k]; });
+        if (!window._gwState.events.length) return;
         window._gwState.events.forEach(function (ev, i) {
             var label = ev.title || _t('(제목 없음)', '(untitled)');
             var timeTxt = '';
@@ -275,6 +260,14 @@
     // Calendar 탭에 들어올 때 상태를 맞춘다(js/23의 switchTab에서 호출)
     window._gwOnCalendarTab = function () {
         window._gwSyncToggleBtn();
-        if (window._gwState.enabled) window._gwLoadEvents(false);
+        if (window._gwState.mode === 'gw') window._gwLoadEvents(false);
     };
+
+    // 첫 로드 때도 버튼이 저장된 on/off 상태로 보이게 한다 — switchTab을 거치지 않고
+    // 바로 Calendar 탭이 복원되는 경우가 있어 여기서도 한 번 맞춘다.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { window._gwSyncToggleBtn(); });
+    } else {
+        setTimeout(function () { window._gwSyncToggleBtn(); }, 0);
+    }
 })();

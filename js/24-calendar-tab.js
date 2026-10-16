@@ -413,7 +413,14 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
     opts = opts || {};
     const key = calDateKey(cellDate);
     const dow = cellDate.getDay();
-    const dayEvents = (eventsByDay[key] || []).slice().sort(function(a, b) { return a.end - b.end; });
+    // ⚠️ [2026-10-16] 간트 업무를 **항상 먼저** 놓는다. 칩은 하루 최대 10개까지만 그려지는데,
+    //    마감시각만으로 정렬했더니 오전에 끝나는 그룹웨어 일정들이 앞을 차지해 내 업무가
+    //    통째로 잘려 나갔다(실측: 그룹웨어 12건이면 간트 0건). 그룹웨어 일정은 어디까지나
+    //    참고용이므로 내 프로젝트 업무를 밀어내면 안 된다.
+    const dayEvents = (eventsByDay[key] || []).slice().sort(function(a, b) {
+        if (!!a._gw !== !!b._gw) return a._gw ? 1 : -1;
+        return a.end - b.end;
+    });
 
     let cls = 'cal-day-cell';
     if (opts.otherMonth) cls += ' cal-other-month';

@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Gantt Chart</title>
 
-<script src="js/01-gapi-gis-stub.js?v=20261016j"></script>
+<script src="js/01-gapi-gis-stub.js?v=20261016n"></script>
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <!-- 🖥️ [Panel Compare] PDF 데이터시트에서 텍스트를 뽑아 AI 추출 입력으로 쓰기 위한 pdf.js (UMD, 전역 pdfjsLib) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-<script src="js/02-pdfjs-worker-init.js?v=20261016j"></script>
+<script src="js/02-pdfjs-worker-init.js?v=20261016n"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=20261016j">
+<link rel="stylesheet" href="styles.css?v=20261016n">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -1689,7 +1689,9 @@
             <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
                  body 하단의 gantt-filter-popup-cal-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
             <button type="button" id="gantt-filter-trigger-cal-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('cal-wbs', event)" onmouseover="window._gftHover && window._gftHover(this, true)" onmouseout="window._gftHover && window._gftHover(this, false)" style="background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border:none;">LEVEL(WBS) ▾</button>
-            <div class="btn-group" style="flex:1; justify-content:center; gap:6px; margin-left:8px;">
+            <!-- ⚠️ [2026-10-16] flex-wrap:nowrap 필수 — 오른쪽 버튼이 늘어나면 날짜 이동 묶음이
+                 두 줄로 접혀서 "월/주 ◀이전" / "2026년 10월 다음▶ 오늘"로 갈라졌다(사용자 지적). -->
+            <div class="btn-group" style="flex:1 1 auto; justify-content:center; gap:6px; margin-left:8px; flex-wrap:nowrap; white-space:nowrap; min-width:0;">
                 <div class="cal-view-toggle">
                     <button type="button" id="cal-view-month-btn" class="cal-view-btn cal-view-btn-active" onclick="window.calSetViewMode('month')">월</button>
                     <button type="button" id="cal-view-week-btn" class="cal-view-btn" onclick="window.calSetViewMode('week')">주</button>
@@ -1699,20 +1701,11 @@
                 <button data-i18n="btn-next" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calChangePeriod(1)">다음 ▶</button>
                 <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calGoToday()">오늘</button>
             </div>
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="gw-cal-toggle-btn" onclick="window._gwToggleOverlay()" title="그룹웨어(다우오피스) 일정을 캘린더에 겹쳐 봅니다 — 읽기 전용"
-                    style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🏢 그룹웨어 일정</button>
-            <button onclick="window._gwAutoLogin()" title="저장된 계정으로 1회만 로그인합니다. 실패하면 재시도하지 않고 창을 열어드립니다(계정 잠금 방지)"
-                    onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                    style="padding:6px 10px; margin-left:4px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;">🔓 로그인</button>
-            <button onclick="window._gwSetupLogin()" title="그룹웨어 아이디/비밀번호 등록 — 비밀번호는 Windows 암호화로 이 PC에만 저장됩니다"
-                    onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                    style="padding:6px 8px; margin-left:4px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;">🔑</button>
-            <button onclick="window._gwOpenBrowser()" title="그룹웨어 창만 엽니다 — 직접 로그인하실 때"
-                    onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                    style="padding:6px 8px; margin-left:4px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; cursor:pointer; transition:background .15s;">🌐</button>
-            <span id="gw-cal-status" style="font-size:11.5px; color:#888; margin-left:8px; white-space:nowrap;"></span>
-            <span style="flex:1 1 auto;"></span>
+            <span id="gw-cal-status" style="font-size:11.5px; color:#888; margin-right:8px; white-space:nowrap;"></span>
+            <!-- 🏢 그룹웨어 일정 겹쳐보기 — "내보내기/동기화"와 같은 성격(외부 캘린더 연동)이라 붙여 둔다.
+                 로그인/계정 등록은 AI 문답 창의 🔑(SAP와 같은 자리)로 옮겼다. -->
+            <button id="gw-cal-toggle-btn" onclick="window._gwToggleOverlay()" title="그룹웨어(다우오피스) 일정을 캘린더에 겹쳐 봅니다 — 읽기 전용. 로그인은 AI 문답 창의 🔑에서."
+                    style="padding:6px 12px; margin-right:8px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;">🏢 그룹웨어 일정</button>
             <button data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서" data-i18n-title="ics-sync-hint">📤 내보내기/동기화</button>
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
@@ -1840,45 +1833,45 @@
         </div>
     </div>
 
-<script src="js/03-drive-modal-drag.js?v=20261016j"></script>
+<script src="js/03-drive-modal-drag.js?v=20261016n"></script>
 
 <!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/04a-core-app-globals.js?v=20261016j"></script>
-<script src="js/04b-core-app-drive-sync.js?v=20261016j"></script>
-<script src="js/04c-core-app-mail-pipeline.js?v=20261016j"></script>
-<script src="js/04d-core-app-gantt-core.js?v=20261016j"></script>
-<script src="js/04e-core-app-undo-redo.js?v=20261016j"></script>
-<script src="js/04f-core-app-upload-utils-1.js?v=20261016j"></script>
-<script src="js/04g-core-app-upload-utils-2.js?v=20261016j"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=20261016j"></script>
-<script src="js/04i-core-app-upload-utils-4.js?v=20261016j"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=20261016j"></script>
-<script src="js/04k-core-app-filter-export.js?v=20261016j"></script>
+<script src="js/04a-core-app-globals.js?v=20261016n"></script>
+<script src="js/04b-core-app-drive-sync.js?v=20261016n"></script>
+<script src="js/04c-core-app-mail-pipeline.js?v=20261016n"></script>
+<script src="js/04d-core-app-gantt-core.js?v=20261016n"></script>
+<script src="js/04e-core-app-undo-redo.js?v=20261016n"></script>
+<script src="js/04f-core-app-upload-utils-1.js?v=20261016n"></script>
+<script src="js/04g-core-app-upload-utils-2.js?v=20261016n"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=20261016n"></script>
+<script src="js/04i-core-app-upload-utils-4.js?v=20261016n"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=20261016n"></script>
+<script src="js/04k-core-app-filter-export.js?v=20261016n"></script>
 
-<script src="js/05-drive-sync-optimize.js?v=20261016j"></script>
+<script src="js/05-drive-sync-optimize.js?v=20261016n"></script>
 
-<script src="js/06-theme-color-chart.js?v=20261016j"></script>
+<script src="js/06-theme-color-chart.js?v=20261016n"></script>
 
-<script src="js/07-data-loss-safeguard.js?v=20261016j"></script>
+<script src="js/07-data-loss-safeguard.js?v=20261016n"></script>
 
-<script src="js/08-filter-ui.js?v=20261016j"></script>
+<script src="js/08-filter-ui.js?v=20261016n"></script>
 
-<script src="js/09-autosave-user-id.js?v=20261016j"></script>
+<script src="js/09-autosave-user-id.js?v=20261016n"></script>
 
-<script src="js/10-gantt-filter-date-ui.js?v=20261016j"></script>
+<script src="js/10-gantt-filter-date-ui.js?v=20261016n"></script>
 
-<script src="js/11-mobile-detect.js?v=20261016j"></script>
+<script src="js/11-mobile-detect.js?v=20261016n"></script>
 
-<script src="js/12-mobile-longpress.js?v=20261016j"></script>
+<script src="js/12-mobile-longpress.js?v=20261016n"></script>
 
 
-<script src="js/13-mobile-touch-timer.js?v=20261016j"></script>
+<script src="js/13-mobile-touch-timer.js?v=20261016n"></script>
 
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/14a-ai-mail-analysis-1.js?v=20261016j"></script>
-<script src="js/14b-ai-mail-analysis-2.js?v=20261016j"></script>
-<script src="js/14c-task-inbox.js?v=20261016j"></script>
-<script src="js/14d-distribution-ledger.js?v=20261016j"></script>
+<script src="js/14a-ai-mail-analysis-1.js?v=20261016n"></script>
+<script src="js/14b-ai-mail-analysis-2.js?v=20261016n"></script>
+<script src="js/14c-task-inbox.js?v=20261016n"></script>
+<script src="js/14d-distribution-ledger.js?v=20261016n"></script>
 
 
 
@@ -2432,22 +2425,22 @@
 </div>
 
 <!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/15a-mail-attachment-tab.js?v=20261016j"></script>
-<script src="js/15b-mail-server-tab-1.js?v=20261016j"></script>
-<script src="js/15c-mail-server-tab-2.js?v=20261016j"></script>
+<script src="js/15a-mail-attachment-tab.js?v=20261016n"></script>
+<script src="js/15b-mail-server-tab-1.js?v=20261016n"></script>
+<script src="js/15c-mail-server-tab-2.js?v=20261016n"></script>
 
 
 
 
-<script src="js/16-wbs-level-colors.js?v=20261016j"></script>
+<script src="js/16-wbs-level-colors.js?v=20261016n"></script>
 
-<script src="js/17-weekly-report-modal-drag.js?v=20261016j"></script>
+<script src="js/17-weekly-report-modal-drag.js?v=20261016n"></script>
 
-<script src="js/18-mail-analyzer-modal-drag.js?v=20261016j"></script>
+<script src="js/18-mail-analyzer-modal-drag.js?v=20261016n"></script>
 
-<script src="js/19-shared-modal-drag.js?v=20261016j"></script>
+<script src="js/19-shared-modal-drag.js?v=20261016n"></script>
 
-<script src="js/20-weekly-report.js?v=20261016j"></script>
+<script src="js/20-weekly-report.js?v=20261016n"></script>
 
 </div> <!-- /#app-main -->
 
@@ -2488,49 +2481,49 @@
     </div>
 </div>
 
-<script src="js/21-color-palette.js?v=20261016j"></script>
+<script src="js/21-color-palette.js?v=20261016n"></script>
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/22a-summary-mctable-parse.js?v=20261016j"></script>
-<script src="js/22b-summary-mctable-core1.js?v=20261016j"></script>
-<script src="js/22c-summary-mctable-core2.js?v=20261016j"></script>
-<script src="js/22d-summary-mctable-core3.js?v=20261016j"></script>
-<script src="js/22e-summary-mctable-core4.js?v=20261016j"></script>
-<script src="js/22f-address-book.js?v=20261016j"></script>
-<script src="js/22g-name-autocomplete.js?v=20261016j"></script>
-<script src="js/22h-brief-mc-common-1.js?v=20261016j"></script>
-<script src="js/22i-brief-mc-common-2.js?v=20261016j"></script>
+<script src="js/22a-summary-mctable-parse.js?v=20261016n"></script>
+<script src="js/22b-summary-mctable-core1.js?v=20261016n"></script>
+<script src="js/22c-summary-mctable-core2.js?v=20261016n"></script>
+<script src="js/22d-summary-mctable-core3.js?v=20261016n"></script>
+<script src="js/22e-summary-mctable-core4.js?v=20261016n"></script>
+<script src="js/22f-address-book.js?v=20261016n"></script>
+<script src="js/22g-name-autocomplete.js?v=20261016n"></script>
+<script src="js/22h-brief-mc-common-1.js?v=20261016n"></script>
+<script src="js/22i-brief-mc-common-2.js?v=20261016n"></script>
 
-<script src="js/23-sidebar-tabs.js?v=20261016j"></script>
+<script src="js/23-sidebar-tabs.js?v=20261016n"></script>
 
-<script src="js/24-calendar-tab.js?v=20261016j"></script>
+<script src="js/24-calendar-tab.js?v=20261016n"></script>
 
-<script src="js/25-ai-learning.js?v=20261016j"></script>
+<script src="js/25-ai-learning.js?v=20261016n"></script>
 
-<script src="js/26-topic-profile.js?v=20261016j"></script>
+<script src="js/26-topic-profile.js?v=20261016n"></script>
 
-<script src="js/27-topic-contamination.js?v=20261016j"></script>
+<script src="js/27-topic-contamination.js?v=20261016n"></script>
 
-<script src="js/26-gantt-search.js?v=20261016j"></script>
+<script src="js/26-gantt-search.js?v=20261016n"></script>
 
-<script src="js/28-new-project-wizard.js?v=20261016j"></script>
+<script src="js/28-new-project-wizard.js?v=20261016n"></script>
 
-<script src="js/29-new-project-cluster-detect.js?v=20261016j"></script>
+<script src="js/29-new-project-cluster-detect.js?v=20261016n"></script>
 
-<script src="js/30-issue-collector.js?v=20261016j"></script>
+<script src="js/30-issue-collector.js?v=20261016n"></script>
 
-<script src="js/31-issue-report.js?v=20261016j"></script>
+<script src="js/31-issue-report.js?v=20261016n"></script>
 
-<script src="js/32-sap-capabilities.js?v=20261016j"></script>
+<script src="js/32-sap-capabilities.js?v=20261016n"></script>
 
-<script src="js/33-qa-router.js?v=20261016j"></script>
+<script src="js/33-qa-router.js?v=20261016n"></script>
 
-<script src="js/34-storage-doctor.js?v=20261016j"></script>
-    <script src="js/35-material-cart.js?v=20261016j"></script>
-    <script src="js/36-sap-login.js?v=20261016j"></script>
-    <script src="js/37-project-cache.js?v=20261016j"></script>
-    <script src="js/38-bom-tab.js?v=20261016j"></script>
-    <script src="js/39-groupware-calendar.js?v=20261016j"></script>
+<script src="js/34-storage-doctor.js?v=20261016n"></script>
+    <script src="js/35-material-cart.js?v=20261016n"></script>
+    <script src="js/36-sap-login.js?v=20261016n"></script>
+    <script src="js/37-project-cache.js?v=20261016n"></script>
+    <script src="js/38-bom-tab.js?v=20261016n"></script>
+    <script src="js/39-groupware-calendar.js?v=20261016n"></script>
 
 </body>
 </html>
