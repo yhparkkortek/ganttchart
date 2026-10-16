@@ -3548,13 +3548,22 @@ def _fetch_github_raw(rel_path):
     return resp.content
 
 
+# 줄바꿈만 다르고 내용이 같은 경우를 "구버전"으로 오탐하지 않으려면 **모든 텍스트 파일**을
+# LF로 맞춰 비교해야 한다. 바이너리(.xlsx/.docx)는 그대로 바이트 비교.
+_SELF_UPDATE_TEXT_EXTS = ('.py', '.bat', '.vbs', '.json', '.txt', '.md')
+
+
 def _normalize_for_compare(rel_path, data):
-    """`.bat`/`.vbs`는 로컬에 항상 CRLF로 써두는데(아래 `/self-update`의
-    `_SELF_UPDATE_CRLF_EXTS` 참고) GitHub raw는 git이 LF로 정규화해 저장한 바이트를 그대로
-    돌려주므로, 줄바꿈만 다르고 내용은 같은 경우까지 매번 "구버전"으로 오탐하지 않도록
-    비교 직전에 양쪽 다 LF로 맞춰서 비교한다 — 실제 파일 갱신(`/self-update`)에는 영향
-    없음(그쪽은 항상 CRLF로 쓰는 로직 그대로 유지)."""
-    if rel_path.lower().endswith(_SELF_UPDATE_CRLF_EXTS):
+    """비교 직전에 양쪽 줄바꿈을 LF로 맞춘다 — 실제 파일 갱신(`/self-update`)에는 영향 없음
+    (그쪽은 `.bat`/`.vbs`를 항상 CRLF로 쓰는 로직 그대로 유지).
+
+    ⚠️⚠️ [2026-10-16 사고] 예전엔 `.bat`/`.vbs`만 정규화해서 **`.py`가 빠져 있었다.**
+    개발 PC는 git이 autocrlf로 CRLF 체크아웃하는데 GitHub raw는 LF를 주므로, 내용이
+    완전히 같은데도 `.py`가 **영원히 "업데이트 있음"** 으로 떴다. 그 상태에서 "지금 업데이트"를
+    누르면 방금 작업한 로컬 파일을 원격 버전으로 덮어쓴다 — 실제로 작업 중이던
+    `gw_bridge.py` 131줄 / `kortek_backend.py` 32줄이 이렇게 조용히 날아갔다.
+    (CLAUDE.md의 2026-10-13 raw 캐시 롤백 사고와 증상이 같지만 원인은 줄바꿈이다.)"""
+    if rel_path.lower().endswith(_SELF_UPDATE_TEXT_EXTS):
         return data.replace(b'\r\n', b'\n')
     return data
 
