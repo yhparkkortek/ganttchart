@@ -3568,8 +3568,21 @@ def _normalize_for_compare(rel_path, data):
     return data
 
 
+# ⚠️⚠️ [2026-10-16] 자동 업데이트는 **팀원 PC가 최신 백엔드를 받아가라고** 만든 기능이다.
+# 개발 PC(= git 작업본)에서는 로컬이 원본이라 받아올 게 없고, 누르면 **방금 한 작업을 원격
+# 버전으로 덮어쓴다** — 실제로 작업 중이던 gw_bridge.py 131줄 / kortek_backend.py 32줄이
+# 이렇게 날아갔다(두 번). `.git`이 있으면 업데이트는 git으로 관리하는 환경이므로 끈다.
+def _is_git_workdir():
+    return os.path.isdir(os.path.join(BASE_DIR, '.git'))
+
+
 @app.route('/self-check-update', methods=['GET'])
 def self_check_update():
+    if _is_git_workdir():
+        # 개발 PC — 업데이트 안내 자체를 띄우지 않는다(조용히 끄지 않고 이유를 같이 알린다)
+        return jsonify({'ok': True, 'outdated': False, 'changedFiles': [], 'errors': [],
+                        'devMode': True,
+                        'message': 'git 작업본이라 자동 업데이트를 건너뜁니다(업데이트는 git으로 관리).'})
     changed, errors = [], []
     for rel_path in _SELF_UPDATE_FILES:
         try:
@@ -3642,6 +3655,13 @@ def _self_update_validate(rel_path, data):
 def self_update():
     # [2026-10-02] 3단 안전장치: ① 받아서 검사 → ② 하나라도 실패하면 **아무것도 쓰지 않음**
     #   → ③ 덮어쓰기 직전 .bak 백업. 반쯤 갱신된 상태가 가장 위험해서 전부 아니면 전무로 간다.
+    # ⚠️ [2026-10-16 추가] 0단계: git 작업본에서는 아예 거부한다. 여기서 실행하면 커밋 안 한
+    #   로컬 작업이 원격 버전으로 덮어써진다(실제 사고 2회). 정말 필요하면 ?force=1.
+    if _is_git_workdir() and (request.args.get('force') or '') != '1':
+        return jsonify({'ok': False, 'devMode': True, 'updated': [], 'errors': [],
+                        'message': 'git 작업본에서는 자동 업데이트를 하지 않습니다 — '
+                                   '커밋하지 않은 로컬 작업이 원격 버전으로 덮어써집니다. '
+                                   '업데이트가 필요하면 `git pull`을 쓰세요(정말 강행하려면 ?force=1).'}), 409
     updated, errors, staged = [], [], []
 
     # ── ① 전부 받아서 검사만 한다(디스크는 아직 건드리지 않음) ──────────────
