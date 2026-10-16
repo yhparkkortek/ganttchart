@@ -8,7 +8,7 @@
 #    /health            — 서버 상태 확인
 #    /config            — SMTP 설정 저장
 #    /send-mail         — 메일 발송 (SMTP)
-#    /fetch-mail        — 메일 수신 (POP3)
+#    /fetch-mail        — 메일 수신 (IMAPS 993, 실패 시 POP3 110 폴백)
 #    /send-telegram     — Telegram 메시지 발송
 #    /telegram/config   — Telegram 설정 저장/조회
 #    /telegram/members  — 팀원 관리 (등록/조회/삭제)
@@ -34,7 +34,7 @@
 # ══════════════════════════════════════════════════════════════
 
 import sys
-import os, json, re, poplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess, shutil
+import os, json, re, poplib, imaplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess, shutil
 
 # 💡 [2026-09-14] sap_bridge_32.py에서 겪은 것과 같은 부류의 문제(콘솔이 실제 콘솔이 아니라
 #    파이프/다른 인코딩으로 연결되면 Windows에서 stdout이 cp949로 잡혀 한글 print()가
@@ -99,6 +99,9 @@ TG_CONFIG_FILE = os.path.join(BASE_DIR, 'telegram_config.json')
 SCHEDULE_FILE  = os.path.join(BASE_DIR, 'schedule_rules.json')
 POP3_HOST      = "gw.kortek.co.kr"
 POP3_PORT      = 110
+# 🆕 [2026-10-16] 메일 수신 기본 경로는 IMAPS(993). 위 POP3는 IMAP이 막힌 계정용 폴백으로만 남는다.
+IMAP_HOST      = "gw.kortek.co.kr"
+IMAP_PORT      = 993
 
 # ── 업무별(개별 태스크) 예약 알람 — 구글드라이브 서비스계정 읽기전용 접근 ──
 #    GANTT_CHART_V02_Color.html(js/04a-core-app-globals.js의 SHARED_FOLDER_ID)과 동일한 폴더.
@@ -437,6 +440,7 @@ def health():
         'port':    5000,
         'smtp':    SMTP_USER  or '(미설정)',
         'pop3':    POP3_HOST,
+        'imap':    f'{IMAP_HOST}:{IMAP_PORT}',
         'telegram': '연결됨' if TELEGRAM_TOKEN else '(미설정)',
         'members': len(TELEGRAM_MEMBERS),
         'scheduleRules': len(SCHEDULE_RULES),
@@ -515,7 +519,144 @@ def send_mail():
     return jsonify({'ok': False, 'error': err}), status
 
 
-# ── 메일 수신 (POP3) ──────────────────────────────────────────
+# ── 메일 수신 (IMAPS 우선, POP3 폴백) ────────────────────────────
+# 🆕 [2026-10-16] 평문 POP3(110) → IMAPS(993)로 전환. 실측(gw.kortek.co.kr):
+#   · 993 IMAPS 열려 있고 서버는 TIMS 3.0.2.2, capabilities = IMAP4REV1 SORT SPECIAL-USE …
+#   · POP3는 **날짜를 보려고 메일 전체를 받아야** 해서(헤더만 받을 방법이 없음) 느렸다.
+#     IMAP은 서버가 SEARCH로 날짜를 걸러주므로 받을 메일 수 자체가 줄어든다.
+#   · `select(readonly=True)` + `BODY.PEEK[]` — 사람의 실제 메일함 **읽음 표시를 건드리지 않는다**.
+#     (그냥 FETCH하면 \Seen이 붙어서 "안 읽은 메일인데 읽음으로 바뀐다"는 사고가 난다)
+# POP3 폴백을 남겨 둔 이유: 팀원이 각자 PC에서 자기 백엔드를 돌리고, 계정별로 IMAP이 막혀
+# 있을 수 있다. 폴백이 없으면 그 사람은 메일 분석 자체가 멈춘다. 대신 **어느 경로로 받았는지
+# 응답(`proto`)에 담아** 조용히 넘어가지 않게 한다(CLAUDE.md "신호를 삼키지 말 것").
+
+# IMAP 날짜는 `01-Jan-2026` 형식 고정 — strftime('%b')는 로케일을 타서 한국어 윈도우에서
+# "10월"이 나오면 SEARCH가 깨진다. 월 이름을 직접 박아 로케일 영향을 없앤다.
+_IMAP_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+
+def _imap_date(d):
+    return "%02d-%s-%04d" % (d.day, _IMAP_MONTHS[d.month - 1], d.year)
+
+
+def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
+                      keyword, keyword_from, keyword_body):
+    """원본 메일 바이트 → 프런트가 쓰는 결과 dict.
+    반환 ('ok', dict) / ('old', None)=기간보다 과거 / ('skip', None)=조건 불일치.
+    POP3 경로는 'old'를 받으면 더 과거로 갈 필요가 없어 루프를 끊는다(기존 동작 유지)."""
+    msg = email.message_from_bytes(raw)
+    try:
+        msg_dt = parsedate_to_datetime(msg.get("Date", ""))
+        if msg_dt.tzinfo is None:
+            msg_dt = msg_dt.replace(tzinfo=KST)
+        msg_dt = msg_dt.astimezone(KST)
+    except Exception:
+        return ('skip', None)
+    if msg_dt < start_dt:
+        return ('old', None)
+    if msg_dt > end_dt:
+        return ('skip', None)
+
+    subject = decode_str(msg.get("Subject", ""))
+    sender  = decode_str(msg.get("From", ""))
+    body    = extract_body(msg)
+    if not matches_keyword(subject, body, keyword, keyword_from, sender, keyword_body):
+        return ('skip', None)
+
+    # 💡 [우선순위 점수] 발신자가 명시한 중요도 헤더 — Outlook 등에서 "높음"으로 보낸 메일에 붙음
+    importance_raw = (msg.get("Importance", "") or msg.get("X-Priority", "")).strip().lower()
+    importance_high = importance_raw in ("high", "1", "1 (highest)", "2 (high)")
+
+    # 💡 내가 To(직접수신)인지 Cc(참조)인지 — mail_user 계정 기준으로 판별.
+    #    원본 대소문자를 보존한 값도 "to"/"cc"로 함께 내려준다(프런트 AI 프롬프트의 배경 정보).
+    to_raw    = decode_str(msg.get("To", ""))
+    cc_raw    = decode_str(msg.get("Cc", ""))
+    my_addr   = (mail_user or '').lower()
+    is_to_me  = my_addr in to_raw.lower()
+    is_cc_me  = (not is_to_me) and (my_addr in cc_raw.lower())
+
+    return ('ok', {
+        "subject":     subject,
+        "sender":      sender,
+        "to":          to_raw,
+        "cc":          cc_raw,
+        "date":        msg_dt.strftime("%Y-%m-%d %H:%M"),
+        "body":        body,
+        "fileName":    f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml",
+        "importance":  importance_high,
+        "isToMe":      is_to_me,
+        "isCcMe":      is_cc_me,
+        "attachments": extract_attachments(msg)
+    })
+
+
+def _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
+                     keyword, keyword_from, keyword_body):
+    """IMAPS로 받는다. 서버 SEARCH로 날짜를 먼저 걸러 받을 통수를 줄인다.
+    ⚠️ 키워드는 서버에 맡기지 않고 기존 matches_keyword로 거른다 — IMAP SEARCH의 한글
+    charset 처리가 서버마다 달라서, 검색 결과가 조용히 달라지는 위험을 피한다."""
+    M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=20)
+    try:
+        M.login(mail_user, mail_pw)
+        # readonly=True — 사람의 실제 메일함에 읽음 표시를 남기지 않는다
+        M.select('INBOX', readonly=True)
+        # BEFORE는 그 날짜 **미만**이라 종료일을 포함하려면 +1일
+        typ, data = M.uid('SEARCH', None,
+                          'SINCE', _imap_date(start_dt),
+                          'BEFORE', _imap_date(end_dt + timedelta(days=1)))
+        if typ != 'OK':
+            raise RuntimeError(f'IMAP SEARCH 실패: {typ}')
+        uids = (data[0] or b'').split()
+        uids = uids[-scan_limit:] if scan_limit else uids   # 최신 N건만
+        results = []
+        for uid in reversed(uids):                          # 최신 메일부터
+            try:
+                typ, md = M.uid('FETCH', uid, '(BODY.PEEK[])')
+                if typ != 'OK' or not md or not isinstance(md[0], tuple):
+                    continue
+                status, item = _mail_parse_entry(
+                    md[0][1], mail_user, start_dt, end_dt,
+                    keyword, keyword_from, keyword_body)
+                if status == 'ok':
+                    results.append(item)
+            except Exception:
+                continue
+        return results
+    finally:
+        try: M.close()
+        except Exception: pass
+        try: M.logout()
+        except Exception: pass
+
+
+def _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
+                     keyword, keyword_from, keyword_body):
+    """POP3 폴백 — IMAP이 막힌 계정/서버용. 동작은 전환 전과 동일하다."""
+    M = poplib.POP3(POP3_HOST, POP3_PORT, timeout=15)
+    try:
+        M.user(mail_user)
+        M.pass_(mail_pw)
+        num_messages = len(M.list()[1])
+        results = []
+        limit = min(num_messages, scan_limit or 200)
+        for i in range(num_messages, num_messages - limit, -1):
+            try:
+                status, item = _mail_parse_entry(
+                    b"\n".join(M.retr(i)[1]), mail_user, start_dt, end_dt,
+                    keyword, keyword_from, keyword_body)
+                if status == 'old':
+                    break          # POP3는 순서대로라 더 과거는 볼 필요 없음
+                if status == 'ok':
+                    results.append(item)
+            except Exception:
+                continue
+        return results
+    finally:
+        try: M.quit()
+        except Exception: pass
+
+
 @app.route('/fetch-mail', methods=['POST'])
 def fetch_mail():
     req        = request.get_json(force=True, silent=True) or {}
@@ -533,77 +674,35 @@ def fetch_mail():
         end_dt   = datetime.strptime(end_date,   "%Y-%m-%d").replace(
                        hour=23, minute=59, second=59, tzinfo=KST)
 
-        M            = poplib.POP3(POP3_HOST, POP3_PORT, timeout=15)
-        M.user(mail_user)
-        M.pass_(mail_pw)
-        num_messages = len(M.list()[1])
-        results      = []
-        scan_limit   = min(num_messages, max_count or 200)
+        scan_limit = max_count or 200
 
-        for i in range(num_messages, num_messages - scan_limit, -1):
-            try:
-                raw = b"\n".join(M.retr(i)[1])
-                msg = email.message_from_bytes(raw)
-                date_str = msg.get("Date", "")
-                try:
-                    msg_dt = parsedate_to_datetime(date_str)
-                    if msg_dt.tzinfo is None:
-                        msg_dt = msg_dt.replace(tzinfo=KST)
-                    msg_dt = msg_dt.astimezone(KST)
-                except Exception:
-                    continue
-                if msg_dt < start_dt:
-                    break
-                if msg_dt > end_dt:
-                    continue
-                subject = decode_str(msg.get("Subject", ""))
-                sender  = decode_str(msg.get("From", ""))
-                body    = extract_body(msg)
-                if not matches_keyword(subject, body, keyword, keyword_from, sender, keyword_body):
-                    continue
+        # IMAPS 우선 — 실패하면 POP3로 폴백한다. 폴백은 "조용히" 하지 않고 `proto`/`fallback`에
+        # 담아 올려보내, 어느 경로로 받았고 왜 넘어갔는지 화면에서 확인할 수 있게 한다.
+        proto, fallback_reason = 'imaps', None
+        try:
+            results = _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
+                                       keyword, keyword_from, keyword_body)
+        except imaplib.IMAP4.error as e:
+            # 인증 실패는 비밀번호가 틀린 것 — POP3로 재시도하면 같은 실패를 한 번 더 만들어
+            # 계정 잠금 위험만 키운다(SAP 로그인에서 세운 원칙과 동일). 폴백하지 않고 그대로 알린다.
+            return jsonify({"status": "error",
+                            "message": f"IMAP 인증 실패: {str(e)} — 메일 계정/비밀번호를 확인해주세요."})
+        except Exception as e:
+            proto, fallback_reason = 'pop3', f'{type(e).__name__}: {e}'
+            results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
+                                       keyword, keyword_from, keyword_body)
 
-                # 💡 [우선순위 점수] 발신자가 명시한 중요도 헤더 — Outlook 등에서 "높음"으로 보낸 메일에 붙음
-                importance_raw = (msg.get("Importance", "") or msg.get("X-Priority", "")).strip().lower()
-                importance_high = importance_raw in ("high", "1", "1 (highest)", "2 (high)")
-
-                # 💡 [우선순위 점수] 내가 To(직접수신)인지 Cc(참조)인지 — mail_user 계정 기준으로 판별
-                # 💡 [2026-09-06 신규] 위 판별용으로만 쓰던 디코딩 결과(소문자)와 별개로, 원본 대소문자를
-                #    보존한 값을 "to"/"cc"로도 함께 내려준다 — 프런트에서 AI 프롬프트의 수신자/참조 배경
-                #    정보로 사용(본문에 "수신:" 줄이 없는 메일의 폴백 근거). 헤더값은 보통 이메일 주소라
-                #    "받는사람" 표시로는 body에 적힌 사람 이름보다 덜 직관적이지만, 문맥 단서가 전혀 없을
-                #    때 "수신자 미지정"보다는 실제 주소를 보여주는 편이 낫다는 판단.
-                to_raw    = decode_str(msg.get("To", ""))
-                cc_raw    = decode_str(msg.get("Cc", ""))
-                to_header = to_raw.lower()
-                cc_header = cc_raw.lower()
-                my_addr   = mail_user.lower()
-                is_to_me  = my_addr in to_header
-                is_cc_me  = (not is_to_me) and (my_addr in cc_header)
-
-                results.append({
-                    "subject":     subject,
-                    "sender":      sender,
-                    "to":          to_raw,
-                    "cc":          cc_raw,
-                    "date":        msg_dt.strftime("%Y-%m-%d %H:%M"),
-                    "body":        body,
-                    "fileName":    f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml",
-                    "importance":  importance_high,           # true/false
-                    "isToMe":      is_to_me,                  # true/false
-                    "isCcMe":      is_cc_me,                  # true/false
-                    "attachments": extract_attachments(msg)   # [{name,size,type}, ...]
-                })
-            except Exception:
-                continue
-
-        M.quit()
-        return jsonify({
+        resp = {
             "status":  "success",
             "count":   len(results),
             "keyword": keyword or "(전체)",
             "userId":  mail_user.split("@")[0] if mail_user else "",
+            "proto":   proto,
             "data":    results
-        })
+        }
+        if fallback_reason:
+            resp["fallback"] = fallback_reason
+        return jsonify(resp)
     except poplib.error_proto as e:
         return jsonify({"status": "error", "message": f"POP3 인증 실패: {str(e)}"})
     except Exception as e:
@@ -3475,7 +3574,8 @@ if __name__ == '__main__':
     print("-" * 58)
     print(f"  SMTP : {SMTP_HOST or '(미설정)'}:{SMTP_PORT}")
     print(f"  계정 : {SMTP_USER or '(미설정)'}")
-    print(f"  POP3 : {POP3_HOST}:{POP3_PORT}")
+    print(f"  IMAP : {IMAP_HOST}:{IMAP_PORT} (SSL, 기본 경로)")
+    print(f"  POP3 : {POP3_HOST}:{POP3_PORT} (폴백)")
     print(f"  TG   : {'연결됨 ✓' if TELEGRAM_TOKEN else '미설정 (알람설정 > Telegram 탭에서 입력)'}")
     print(f"  팀원 : {len(TELEGRAM_MEMBERS)}명 등록")
     print(f"  예약 : {len(SCHEDULE_RULES)}건 등록 (1분마다 자동 확인)")
