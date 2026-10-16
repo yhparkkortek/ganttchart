@@ -569,6 +569,32 @@
     // ── 앱 전체(SAP 외) 기능 카탈로그 + 연결(chain) 의도 표 — 2026-09-21, 사용자 요청 ────────────────────────
     // 🚩 신고의 "SAP 외 새 기능/연결 요청"과 자동 감지된 연결 요청(chain_unsupported)이 "이미 있는 앱 기능과 얼마나 비슷한가"를
     // 판정할 때 쓰는 비교 대상. 기능을 새로 만들면 여기에 한 줄 추가한다(→ 이후 재요청이 추적됨). SAP 기능은 SAP_CAPABILITIES 참고.
+    // 🏢 [2026-10-16 신규] 그룹웨어(다우오피스) 기능 카탈로그 — SAP_CAPABILITIES와 같은 구조.
+    //    트리거 어휘는 **여기 데이터로만** 관리한다(코드에 정규식 박지 말 것 — CLAUDE.md).
+    //    mode:'write'는 그룹웨어에 실제로 쓰는 기능 → 반드시 사람 확인을 거친다.
+    window.GW_CAPABILITIES = window.GW_CAPABILITIES || [
+        { id: 'gw_approval_draft', title: '전자결재 기안 임시저장', titleEn: 'Approval draft (temp save)',
+          mode: 'write', verified: 'live',
+          form: '원자재 승인 결과서',
+          kw: ['원자재 승인원', '원자재승인원', '원자재 승인 결과서', '승인원 기안', '승인 결과서',
+               '기안 작성', '기안작성', '기안해줘', '기안 올려', '임시저장 기안'],
+          needs: '자재번호', ex: '102202 원자재 승인원 기안 작성해줘' },
+        { id: 'gw_calendar', title: '그룹웨어 일정 조회', titleEn: 'Groupware calendar',
+          mode: 'read', verified: 'live',
+          kw: ['그룹웨어 일정', '그룹웨어일정', '회사 일정', '전사일정', '사내 일정'],
+          needs: '기간(선택)', ex: '그룹웨어 일정 보여줘' }
+    ];
+    window._gwCapKwHit = function (text, capId) {
+        var q = String(text || '').toLowerCase();
+        var qFlat = q.replace(/\s+/g, '');
+        var cap = (window.GW_CAPABILITIES || []).find(function (c) { return c.id === capId; });
+        if (!cap) return false;
+        return cap.kw.some(function (k) {
+            var kk = String(k).toLowerCase();
+            return q.indexOf(kk) >= 0 || qFlat.indexOf(kk.replace(/\s+/g, '')) >= 0;
+        });
+    };
+
     window.APP_CAPABILITIES = window.APP_CAPABILITIES || [
         { id: 'mail_draft',  title: '메일 작성/발송(AI 문답 초안 → 확인 → 발송)', kw: ['메일 보내', '메일로 보내', '메일 작성', '메일 발송', '이메일 보내'], how: 'AI 문답 [[ACTION:MAIL_DRAFT]] → SEND_MAIL' },
         { id: 'gantt_add',   title: 'Gantt 업무 추가(초안 → 확인)',              kw: ['간트에 추가', '간트에 등록', '업무 추가', '업무 등록', 'gantt에 추가'], how: 'AI 문답 GANTT_ADD_DRAFT → APPLY_GANTT_ADD' },

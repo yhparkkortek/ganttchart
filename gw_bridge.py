@@ -315,6 +315,137 @@ def calendars():
     return out
 
 
+# ── 📝 전자결재 기안 (임시저장까지만) ────────────────────────────────
+# ⚠️⚠️ **'결재요청'은 이 모듈에서 절대 누르지 않는다.** 누르는 순간 팀장·합의자들에게
+#   실제로 올라가고 되돌리기 어렵다. 여기서는 '임시저장'만 한다 — 임시저장 문서는
+#   내 임시문서함에만 남고 남에게 안 보이며 그룹웨어에서 삭제할 수 있다.
+#   상신은 사람이 그룹웨어 화면에서 내용을 확인한 뒤 직접 누른다.
+#
+# 실측(2026-10-16, 원자재 승인 결과서 formId=4857 deptId=245):
+#  · 작성 화면 URL: /app/approval/document/new/{deptId}/{formId}
+#  · **화면을 여는 순간 서버가 문서 ID를 발급**한다(GET /api/approval/document/new?formId&deptId).
+#  · 입력칸 id는 `editorForm_N`이고 N은 양식마다 다르다 → **이름으로 하드코딩하면 안 된다.**
+#    표의 열 머리글(Item Code, Model …)과 행 라벨(Name, Address …)로 역매핑해서 찾는다.
+#    라벨만 보면 `Date :` 같은 게 섞여 엉뚱한 칸에 쓴다(실제로 한 번 잘못 읽었다).
+
+def approval_forms():
+    """자주 쓰는 결재 양식 목록(이름 → formId/deptId). 하드코딩 대신 매번 읽는다."""
+    j = gw_get('/api/approval/side')
+    out = []
+    for f in (j or {}).get('data', {}).get('favorites', []) if isinstance((j or {}).get('data'), dict) \
+            else (j or {}).get('favorites', []):
+        if f.get('formId'):
+            out.append({'name': f.get('formName') or '', 'formId': f['formId'], 'deptId': f.get('deptId')})
+    return out
+
+
+# 작성 화면을 열고, 입력칸을 '열 머리글/행 라벨'로 찾아 채운 뒤 임시저장한다.
+_DRAFT_JS = r"""
+(async (cfg) => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const log = [];
+
+  // 1) 작성 화면 로딩 대기 — subject 칸이 나타나면 준비된 것
+  for (let i = 0; i < 60 && !document.getElementById('subject'); i++) await sleep(300);
+  if (!document.getElementById('subject')) return { ok:false, step:'open', why:'작성 화면이 열리지 않았습니다.' };
+  await sleep(1200);
+
+  // 2) editorForm_* 칸마다 '열 머리글'과 '행 라벨'을 계산해 둔다
+  const norm = s => String(s||'').trim().replace(/\s+/g,' ').toLowerCase();
+  const map = [];
+  document.querySelectorAll('[id^=editorForm_]').forEach(el => {
+    const td = el.closest('td'); const tr = td && td.closest('tr');
+    const table = tr && tr.closest('table');
+    let header = '', rowLabel = '';
+    if (td && tr && table) {
+      const idx = [...tr.children].indexOf(td);
+      const rows = [...table.rows]; const myRow = rows.indexOf(tr);
+      for (let r = myRow - 1; r >= 0 && !header; r--) {
+        const c = rows[r].children[idx];
+        if (c) { const tx = (c.innerText||'').trim().replace(/\s+/g,' '); if (tx && tx.length < 30) header = tx; }
+      }
+      if (tr.children.length) rowLabel = (tr.children[0].innerText||'').trim().replace(/\s+/g,' ');
+    }
+    map.push({ el, id: el.id, type: el.type, header: norm(header), rowLabel: norm(rowLabel) });
+  });
+
+  const setVal = (el, v) => {
+    const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
+    el.dispatchEvent(new Event('input',  { bubbles:true }));
+    el.dispatchEvent(new Event('change', { bubbles:true }));
+    el.dispatchEvent(new Event('blur',   { bubbles:true }));
+  };
+
+  // 3) 제목
+  if (cfg.subject) { setVal(document.getElementById('subject'), cfg.subject); log.push({ field:'제목', id:'subject', ok:true, val:cfg.subject }); }
+
+  // 4) 나머지 칸 — 열 머리글 우선, 없으면 행 라벨로 찾는다(텍스트 칸만)
+  for (const [label, value] of Object.entries(cfg.fields || {})) {
+    const want = norm(label);
+    let hit = map.find(m => m.type === 'text' && m.header === want && !m.used)
+           || map.find(m => m.type === 'text' && m.rowLabel === want && !m.used)
+           || map.find(m => m.type === 'text' && m.header.indexOf(want) === 0 && !m.used);
+    if (!hit) { log.push({ field: label, ok:false, why:'해당 칸 없음' }); continue; }
+    hit.used = true;
+    setVal(hit.el, value);
+    log.push({ field: label, id: hit.id, ok: hit.el.value === value, val: hit.el.value });
+  }
+  await sleep(800);
+
+  if (cfg.dryRun) return { ok:true, step:'filled', dryRun:true, log, url: location.href };
+
+  // 5) '임시저장'만 누른다 — '결재요청'은 찾지도 않는다
+  const btn = [...document.querySelectorAll('button,a,input[type=button]')]
+    .filter(e => e.offsetParent !== null)
+    .find(e => ((e.textContent || e.value || '').trim()) === '임시저장');
+  if (!btn) return { ok:false, step:'save', why:'임시저장 버튼을 찾지 못했습니다.', log };
+  btn.click();
+  await sleep(4000);
+  const conf = [...document.querySelectorAll('button,a')]
+    .filter(e => e.offsetParent !== null)
+    .find(e => ['확인','예','OK'].includes((e.textContent||'').trim()));
+  if (conf) { conf.click(); await sleep(3000); }
+
+  const m = location.href.match(/\/document\/(\d+)/);
+  return { ok: !!m, step:'saved', docId: m ? m[1] : null, url: location.href, log };
+})(%s)
+"""
+
+
+def approval_draft(form_id, dept_id, subject, fields, dry_run=False):
+    """결재 양식에 값을 채우고 **임시저장**한다. 상신(결재요청)은 하지 않는다.
+
+    fields: {'Item Code': '102202', 'Model': '...', 'Name': '삼완전자'} 처럼
+            화면에 보이는 **열 머리글/행 라벨**을 키로 준다(editorForm_N을 직접 쓰지 않는다)."""
+    s = session_info()
+    if not s.get('ok'):
+        raise RuntimeError(s.get('message') or '그룹웨어 로그인이 필요합니다.')
+
+    t = _gw_page()
+    if not t:
+        raise RuntimeError('그룹웨어 탭을 열지 못했습니다.')
+
+    # 작성 화면으로 이동 — 이 시점에 서버가 문서 ID를 발급한다
+    url = f'{GW_ORIGIN}/app/approval/document/new/{int(dept_id)}/{int(form_id)}'
+    asyncio.run(_navigate(t['webSocketDebuggerUrl'], url))
+    time.sleep(2.0)
+
+    cfg = json.dumps({'subject': subject, 'fields': fields or {}, 'dryRun': bool(dry_run)},
+                     ensure_ascii=False)
+    return eval_in_gw(_DRAFT_JS % cfg, timeout=120)
+
+
+async def _navigate(ws_url, url):
+    import websockets
+    async with websockets.connect(ws_url, max_size=20_000_000) as ws:
+        await ws.send(json.dumps({'id': 1, 'method': 'Page.navigate', 'params': {'url': url}}))
+        while True:
+            m = json.loads(await asyncio.wait_for(ws.recv(), timeout=30))
+            if m.get('id') == 1:
+                return
+
+
 def events(date_from, date_to, calendar_ids=None):
     """기간 내 일정. `date_from/to`는 'YYYY-MM-DD'.
 

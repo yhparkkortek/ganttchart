@@ -3205,6 +3205,38 @@ def gw_login():
         return jsonify({'ok': False, 'result': 'error', 'message': str(e)})
 
 
+@app.route('/gw/approval/forms', methods=['GET'])
+def gw_approval_forms():
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, 'forms': gw_bridge.approval_forms()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/approval/draft', methods=['POST'])
+def gw_approval_draft():
+    """결재 양식을 채워 **임시저장**한다. 결재요청(상신)은 하지 않는다 —
+    상신은 사람이 그룹웨어에서 내용을 확인하고 직접 누른다."""
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        form_id = b.get('formId')
+        dept_id = b.get('deptId')
+        subject = (b.get('subject') or '').strip()
+        fields = b.get('fields') or {}
+        if not form_id or not dept_id:
+            return jsonify({'ok': False, 'message': '양식(formId)과 부서(deptId)가 필요합니다.'}), 400
+        if not subject:
+            return jsonify({'ok': False, 'message': '제목은 필수입니다.'}), 400
+        r = gw_bridge.approval_draft(form_id, dept_id, subject, fields, dry_run=bool(b.get('dryRun')))
+        if isinstance(r, dict) and r.get('docId'):
+            r['docUrl'] = f'https://gw.kortek.co.kr/app/approval/document/{r["docId"]}'
+        return jsonify(r if isinstance(r, dict) else {'ok': False, 'message': str(r)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/calendars', methods=['GET'])
 def gw_calendars():
     try:
