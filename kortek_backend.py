@@ -3114,6 +3114,62 @@ def po_build_excel():
                      'message': f'구매오더 요청 엑셀({len(rows)}개 품목)을 생성했습니다: {file_name}'})
 
 
+# ── 🏢 그룹웨어(다우오피스) 연동 ─────────────────────────────────────
+# 🆕 [2026-10-16 신규] gw.kortek.co.kr의 내부 REST API를 **사람이 로그인해 둔 브라우저 세션**으로
+# 읽는다. 상세 설계/안전원칙은 gw_bridge.py 최상단 주석 참고.
+#  · 자동 로그인 없음 — 로그인 실패가 쌓이면 CAPTCHA가 뜨고 그다음은 사내 계정 잠금이다.
+#  · 읽기 전용 — 쓰기(일정 등록/결재)는 확인 절차를 따로 설계하기 전까지 열지 않는다.
+# gw_bridge는 import 실패해도 백엔드 전체가 죽지 않게 지연 import 한다(크롬이 없는 PC 대비).
+@app.route('/gw/status', methods=['GET'])
+def gw_status():
+    try:
+        import gw_bridge
+    except Exception as e:
+        return jsonify({'ok': False, 'reason': 'module', 'message': f'gw_bridge 로드 실패: {e}'})
+    try:
+        return jsonify(gw_bridge.session_info())
+    except Exception as e:
+        return jsonify({'ok': False, 'reason': 'error', 'message': str(e)})
+
+
+@app.route('/gw/open', methods=['POST'])
+def gw_open():
+    """그룹웨어용 전용 크롬 창을 띄운다. 로그인은 **사람이 직접** 한다."""
+    try:
+        import gw_bridge
+        ok, msg = gw_bridge.launch_chrome()
+        if not ok:
+            return jsonify({'ok': False, 'message': msg})
+        return jsonify({'ok': True, 'message': msg, 'session': gw_bridge.session_info()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/calendars', methods=['GET'])
+def gw_calendars():
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, 'calendars': gw_bridge.calendars()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/events', methods=['GET'])
+def gw_events():
+    """기간 내 그룹웨어 일정. 기본은 지난 7일 ~ 앞으로 60일."""
+    try:
+        import gw_bridge
+        today = datetime.now(KST).date()
+        d_from = (request.args.get('from') or '').strip() or str(today - timedelta(days=7))
+        d_to   = (request.args.get('to') or '').strip() or str(today + timedelta(days=60))
+        ids_raw = (request.args.get('calendarIds') or '').strip()
+        ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()] if ids_raw else None
+        evs = gw_bridge.events(d_from, d_to, ids)
+        return jsonify({'ok': True, 'from': d_from, 'to': d_to, 'count': len(evs), 'events': evs})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/open-folder', methods=['POST'])
 def open_folder():
     data = request.get_json(silent=True) or {}
@@ -3369,6 +3425,7 @@ _GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/yhparkkortek/ganttchart/ma
 _SELF_UPDATE_FILES = [
     'kortek_backend.py',
     'sap_bridge_32.py',
+    'gw_bridge.py',
     'kortek_backend.bat',
     'kortek_backend_install.bat',
     'kortek_backend_start_minimized.vbs',

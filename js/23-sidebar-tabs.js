@@ -83,6 +83,8 @@
             try { savedElecView = localStorage.getItem('gantt_elec_view') || 'panel'; } catch(e) {}
             window._switchElecView(savedElecView);
         }
+        // 🏢 Calendar 탭 진입 시 그룹웨어 일정 겹쳐보기 상태 동기화(js/39) — 켜져 있으면 다시 불러온다
+        if (tabName === 'calendar' && window._gwOnCalendarTab) window._gwOnCalendarTab();
         // Alarm/Notice 탭 진입 시 마지막으로 보던 뷰(알람/공지)를 복원해서 그린다
         if (tabName === 'alarm') {
             let savedView = 'alarm';

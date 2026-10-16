@@ -1252,6 +1252,10 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
     border-left:2px solid #2c5f8a; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .cal-event-chip:hover { background:#d7e8fb; }
+/* 🏢 [2026-10-16] 그룹웨어 일정 칩 — 간트 업무(파랑)와 한눈에 구분되게 보라 계열 + 점선 테두리.
+   "내 프로젝트 업무"와 "회사가 잡은 일정"은 성격이 달라 색으로 분리한다. */
+.cal-event-chip.cal-gw-chip { background:#f1ecfb; color:#5b3fa3; border-left:2px dashed #7e5bc4; }
+.cal-event-chip.cal-gw-chip:hover { background:#e6dcf7; }
 .cal-event-chip.chip-done    { background:#f0f0f0; color:#999; border-left-color:#aaa; }
 .cal-event-chip.chip-delay   { background:#ffeef0; color:#c0392b; border-left-color:#e03131; }
 .cal-event-chip.chip-pending { background:#fff4e6; color:#c96a00; border-left-color:#e67e22; }

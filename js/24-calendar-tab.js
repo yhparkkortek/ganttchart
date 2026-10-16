@@ -430,6 +430,14 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
 
     const chipsHtml = '<div class="cal-chips-grid ' + gridCls + '">'
         + shown.map(function(ev) {
+            // 🏢 그룹웨어 일정은 간트 업무가 아니라서 행 선택(calSelectEvent)을 하면 안 된다 —
+            //    별도 칩으로 그리고 클릭하면 상세만 보여준다.
+            if (ev._gw) {
+                const gwTip = [ev.gwCalendar, ev.gwLocation, ev.name].filter(Boolean).join(' · ');
+                return '<div class="cal-event-chip cal-gw-chip" title="' + escapeHtml(gwTip) + '"'
+                    + ' onclick="event.stopPropagation(); window._gwShowEvent(' + ev._gwIdx + ');">🏢 '
+                    + escapeHtml(ev.name) + '</div>';
+            }
             const isSel = (window.calState.selectedIdx === ev.idx);
             let chipCls = 'cal-event-chip' + calStatusCls(ev.status);
             if (ev.alarm) chipCls += ' cal-alarm-on';
@@ -469,6 +477,9 @@ window.calRender = function() {
         const k = calTsToKey(ev.end); // 마감일 기준으로 캘린더에 표시
         (eventsByDay[k] = eventsByDay[k] || []).push(ev);
     });
+    // 🏢 [2026-10-16] 그룹웨어 일정 겹쳐보기(js/39) — 켜져 있을 때만 같은 맵에 끼워 넣는다.
+    //    간트 업무와 달리 시작~종료 모든 날에 걸쳐 들어온다.
+    if (window._gwMergeIntoCalendar) window._gwMergeIntoCalendar(eventsByDay);
     const todayKey = calDateKey(new Date());
     const selectedEvent = (window.calState.selectedIdx !== null) ? events.find(function(ev) { return ev.idx === window.calState.selectedIdx; }) : null;
 
