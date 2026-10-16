@@ -1356,7 +1356,21 @@ _ZMM009_PATTERN_COLS = [
     ('MMSTA',  'MMSTA'),
     ('MFRPN',  'MFRPN'),
     ('FERTH',  'FERTH'),
+    # 🆕 [2026-10-16] 자재그룹명(Group2) — BOM 탭이 `/LOC` 레이아웃(설치지점 EBORT 포함)으로
+    # 조회하면 BOM 그리드에 WGBEZ60이 없다. ZMM009엔 있으므로 보강 단계에서 같이 받아
+    # 레이아웃을 바꿔도 Group2 열이 비지 않게 한다(실측 2026-10-16: ZMM009 119컬럼에 존재).
+    ('WGBEZ60', 'WGBEZ60'),
 ]
+
+# 🆕 [2026-10-16] 표준가격(STPRS1)의 통화 컬럼 — BOM 표 단가 열에 환종이 섞여 있을 수 있다는
+# 지적으로 추가. 컬럼 이름이 계정별 ALV 레이아웃마다 달라서 **고정하지 않고** 후보를 순서대로
+# 찾는다(CLAUDE.md "규칙·어휘는 데이터로"). ColumnOrder에 실제로 있는 첫 후보만 읽으므로,
+# 하나도 없으면 통화는 빈 문자열이 되고 프런트가 기존처럼 KRW로 표시한다(무회귀).
+_ZMM009_CURRENCY_COL_CANDIDATES = ['WAERS', 'WAERS1', 'STWAE', 'HWAER', 'WAERS_1']
+
+# 마지막 ZMM009 그리드 읽기의 진단 정보(실제 컬럼 목록·탐지된 통화 컬럼) — 조용히 삼키지 않고
+# `resolve_materials` 결과의 `gridDiag`로 올려보낸다(CLAUDE.md Phase 10 "신호" 원칙).
+_ZMM009_LAST_GRID_DIAG = {}
 
 
 def _set_windows_clipboard_text(text):
@@ -1574,6 +1588,21 @@ def _zmm009_read_grid_rows(session):
     row_count = min(total_rows, 500)
     _SCROLL_STEP = 30
 
+    # 통화 컬럼 자동 탐지 — ColumnOrder를 행 루프 밖에서 **한 번만** 읽는다(행마다 후보를
+    # 시도하면 없는 컬럼에서 예외가 행수×후보수만큼 터져 느려진다).
+    global _ZMM009_LAST_GRID_DIAG
+    cur_col, avail = None, []
+    try:
+        avail = [str(c) for c in list(grid.ColumnOrder)]
+        for cand in _ZMM009_CURRENCY_COL_CANDIDATES:
+            if cand in avail:
+                cur_col = cand
+                break
+    except Exception:
+        pass
+    _ZMM009_LAST_GRID_DIAG = {'columns': avail, 'currencyCol': cur_col,
+                              'layoutApplied': bool(ok), 'rows': total_rows}
+
     materials = []
     for row in range(row_count):
         if row % _SCROLL_STEP == 0:
@@ -1588,6 +1617,10 @@ def _zmm009_read_grid_rows(session):
                 item[col_key] = (grid.GetCellValue(row, col_sap) or '').strip()
             except Exception:
                 item[col_key] = ''
+        try:
+            item['WAERS'] = (grid.GetCellValue(row, cur_col) or '').strip() if cur_col else ''
+        except Exception:
+            item['WAERS'] = ''
         if item.get('MATNR'):
             materials.append(item)
 
@@ -7419,7 +7452,8 @@ def main():
             found = {m.get('MATNR', '').lstrip('0') for m in mats}
             missing = [m for m in req if m.lstrip('0') not in found]
             result = {'ok': True, 'requested': req, 'count': len(mats),
-                      'materials': mats, 'missing': missing}
+                      'materials': mats, 'missing': missing,
+                      'gridDiag': _ZMM009_LAST_GRID_DIAG}
         elif action == 'fetch_project_codes':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             bwart = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else None

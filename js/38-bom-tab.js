@@ -36,19 +36,57 @@
     //  폭은 "글자수가 고정인 열"(구성부품 6자리·담당자·수량·단위·상태)을 최대한 좁혀서,
     //  40자가 반드시 다 보여야 하는 구성부품내역(310px)과 맨 끝 비고가 같이 들어가게 맞췄다.
     //  비고는 폭을 지정하지 않아 남는 공간을 그대로 가져간다(가로 스크롤 없이 항상 보이게).
+    //  🆕 [2026-10-16] 구성부품내역·자재내역2는 데이터 칸만 왼쪽 정렬(`align:'left'`) —
+    //  헤더는 `thS`가 가운데 정렬이라 그대로 유지된다(사용자 요청 "헤더는 제외").
     var BOM_COLUMNS = [
         { key: 'IDNRK',      ko: '구성부품',     en: 'Component',     w: '60px',  mono: true },
-        { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '220px', nowrap: true },
-        { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '100px', nowrap: true },
+        { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '220px', nowrap: true, align: 'left' },
+        { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '100px', nowrap: true, align: 'left' },
         { key: '_LOC',       ko: 'Loc.',         en: 'Loc.',          w: '90px',  loc: true },
         { key: 'MENGE',      ko: '수량',         en: 'Qty',           w: '48px',  align: 'right' },
         { key: 'MMEIN',      ko: '단위',         en: 'Unit',          w: '36px',  align: 'center' },
-        { key: '_UNITPRICE', ko: '단가(KRW)',    en: 'Unit Price',    w: '74px',  align: 'right' },
+        { key: '_UNITPRICE', ko: '단가',         en: 'Unit Price',    w: '74px',  align: 'right', price: true },
         { key: 'MMSTA',      ko: '상태',         en: 'Status',        w: '40px',  align: 'center' },
         { key: 'WGBEZ60',    ko: 'Group2',       en: 'Group2',        w: '118px', nowrap: true },
         { key: 'MFRPN',      ko: '제조사',       en: 'Manufacturer',  w: '92px',  nowrap: true },
         { key: 'FERTH',      ko: '담당자',       en: 'Person',        w: '72px',  nowrap: true }
     ];
+
+    // 통화 코드 → 표시 기호(데이터). 모르는 코드는 코드 그대로 보여준다.
+    var CURRENCY_SYMBOL = { KRW: '원', USD: '$', JPY: '¥', EUR: '€', CNY: '¥' };
+
+    // 표에 실제로 섞여 있는 통화를 모아 헤더/셀 표기를 정한다.
+    //  · 한 종류뿐이면  헤더에 `단가(KRW)`처럼 붙이고 셀은 숫자만
+    //  · 두 종류 이상이면 헤더에서 통화를 지우고(사용자 요청) 셀마다 기호를 붙인다
+    //  ⚠️ [2026-10-16 실측] ZMM009 119개 컬럼에 통화 컬럼이 **없다** — 표준가격(STPRS1)은
+    //    전사 통화 고정이라 SAP이 환종을 따로 주지 않는다. 그래서 평소엔 전부 'KRW'로
+    //    수렴해 기존과 똑같이 보이고, 나중에 통화를 주는 경로가 생기면 자동으로 섞임 처리된다.
+    var _priceCurrencies = function (st) {
+        var set = {};
+        (st && st.rows ? st.rows : []).forEach(function (r) {
+            if (!String(r.STPRS1 || '').trim()) return;
+            set[String(r.WAERS || '').trim().toUpperCase() || 'KRW'] = 1;
+        });
+        return Object.keys(set);
+    };
+
+    // Location(설치지점) — SAP ZPP033의 `EBORT`가 원본이고, 사람이 칸을 고쳐 적은 값이 있으면
+    // 그게 이긴다. EBORT는 `/LOC` 레이아웃 + "Location Information" 옵션을 켜야 들어온다
+    // (실측 2026-10-16: PBA 보드에서 R96·U4·Q1·SW1처럼 PCB 부품 위치가 그대로 채워짐).
+    var _locOf = function (st, row) {
+        var manual = st && st.locations ? st.locations[row.IDNRK] : '';
+        if (manual != null && String(manual).trim()) return manual;
+        return row.EBORT || '';
+    };
+
+    // 단가 표시 — 환종이 섞였을 때만 셀에 기호를 붙인다(한 종류면 헤더에만 붙음)
+    var _priceCell = function (row, mixed) {
+        var v = _unitPrice(row.STPRS1, row.PEINH1);
+        if (!v || !mixed) return v;
+        var cc = String(row.WAERS || '').trim().toUpperCase() || 'KRW';
+        var sym = CURRENCY_SYMBOL[cc] || cc;
+        return sym === '$' ? sym + v : v + ' ' + sym;
+    };
 
     var _matKey = function (v) { return String(v || '').trim().replace(/^0+/, ''); };
 
@@ -195,6 +233,10 @@
             r.PEINH1 = m.PEINH1 || '';
             r.MFRPN = m.MFRPN || '';
             r.FERTH = m.FERTH || '';
+            // 표준가격의 통화 — ZMM009 레이아웃에 통화 컬럼이 있을 때만 채워진다(없으면 '').
+            r.WAERS = m.WAERS || '';
+            // Group2는 BOM 그리드에 이미 있으면 그대로 두고, 없을 때만(`/LOC` 레이아웃) 채운다.
+            if (!String(r.WGBEZ60 || '').trim()) r.WGBEZ60 = m.WGBEZ60 || '';
         });
         return { ok: failed === 0, matched: matched, total: codes.length, failedChunks: failed };
     };
@@ -218,8 +260,13 @@
             btn.textContent = on ? _t('⏳ 조회 중…', '⏳ Loading…') : _t('🔄 SAP 조회', '🔄 Fetch from SAP');
         };
         // 백엔드 주소는 앱 전체가 로컬 고정(127.0.0.1:5000)을 그대로 쓴다 — js/04h의 다른 /sap-* 호출과 동일
+        // `show_location=1` = ZPP033 초기화면 Option의 "Location Information" 체크 — 이걸 켜야
+        // 설치지점(EBORT)이 들어온다. 단, 그 열을 실제로 보여주는 레이아웃을 골라야 한다
+        // (기본 `/STD_MC`엔 EBORT가 없고 `/LOC`엔 있다 — 실측 2026-10-16). 켜두면 손해는 없고,
+        // 레이아웃에 열이 있을 때만 `_locOf`가 그 값을 쓴다.
         var url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(material)
             + '&plant=1000&explosion=' + encodeURIComponent(explosion)
+            + '&show_location=1'
             + (layout ? '&layout=' + encodeURIComponent(layout) : '');
 
         setBusy(true);
@@ -453,7 +500,7 @@
                         var q = parseFloat(String(r.MENGE || '').replace(/,/g, ''));
                         return isNaN(q) ? (r.MENGE || '') : q;
                     }
-                    if (c.loc) return (st.locations && st.locations[r.IDNRK]) || '';
+                    if (c.loc) return _locOf(st, r);
                     return r[c.key] || '';
                 })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
             });
@@ -532,16 +579,21 @@
                 + (c.nowrap ? ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:' + c.w + ';' : '')
                 + (extra || '');
         };
+        var curList = _priceCurrencies(st);
+        var mixedCur = curList.length > 1;
         var valueOf = function (row, c) {
-            if (c.key === '_UNITPRICE') return _unitPrice(row.STPRS1, row.PEINH1);
-            if (c.loc) return (st.locations && st.locations[row.IDNRK]) || '';
+            if (c.key === '_UNITPRICE') return _priceCell(row, mixedCur);
+            if (c.loc) return _locOf(st, row);
             return row[c.key] || '';
         };
 
         thead.innerHTML = '<tr>'
             + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
             + BOM_COLUMNS.map(function (c) {
-                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
+                var lbl = en ? c.en : c.ko;
+                // 환종이 한 종류면 헤더에 표시, 섞였으면 헤더에서 지우고 셀마다 기호를 붙인다
+                if (c.price && curList.length === 1) lbl += '(' + curList[0] + ')';
+                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(lbl) + '</th>';
             }).join('')
             // ⚠️ .concept-table은 table-layout:fixed라 min-width가 무시된다 — 반드시 width로 줄 것
             //    (min-width만 줬더니 비고 열이 0px로 찌그러져 안 보였다, 2026-10-15)
@@ -905,7 +957,7 @@
                 aoa.push([r._level].concat(BOM_COLUMNS.map(function (c) {
                     if (c.key === '_UNITPRICE') { var p = parseFloat(String(r.STPRS1 || '').replace(/,/g, '')); var u = parseInt(r.PEINH1 || '1', 10) || 1; return isNaN(p) ? '' : Math.round(p / u * 100) / 100; }
                     if (c.key === 'MENGE') { var q = parseFloat(String(r.MENGE || '').replace(/,/g, '')); return isNaN(q) ? (r.MENGE || '') : q; }
-                    if (c.loc) return (st.locations && st.locations[r.IDNRK]) || '';
+                    if (c.loc) return _locOf(st, r);
                     return r[c.key] || '';
                 })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
             });
@@ -940,6 +992,9 @@
         window._elecBomRender();
     };
 
+    // 전자부품 BOM 전용 ALV 레이아웃 — 설치지점(EBORT)과 레벨(STUFE)을 같이 주는 레이아웃.
+    var _ELEC_BOM_LAYOUT = '/LOC';
+
     window._elecBomFetch = async function () {
         var type = window._elecBomType;
         if (!type) return;
@@ -957,8 +1012,15 @@
             btn.disabled = on;
             btn.textContent = on ? _t('⏳ 조회 중…', '⏳ Loading…') : _t('🔄 SAP 조회', '🔄 Fetch from SAP');
         };
+        // 🆕 [2026-10-16] 전자부품 BOM은 Location(설치지점)이 핵심이라 `/LOC` 레이아웃으로 조회한다.
+        //  · `show_location=1` = ZPP033 초기화면 Option의 "Location Information" 체크박스
+        //  · `/LOC`은 STUFE(레벨)와 EBORT(설치지점)를 같이 주는 유일한 레이아웃 — 기본 `/STD_MC`엔
+        //    EBORT가 아예 없고, `/SEOK_설치지점_재`는 EBORT는 있지만 STUFE가 없어 계층을 못 만든다
+        //    (세 레이아웃 실측 비교 2026-10-16).
+        //  · `/LOC`엔 WGBEZ60(Group2)이 없지만 ZMM009 보강이 같은 값을 채워주므로 손실 없음.
         var url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(material)
-            + '&plant=1000&explosion=' + encodeURIComponent(explosion);
+            + '&plant=1000&explosion=' + encodeURIComponent(explosion)
+            + '&show_location=1&layout=' + encodeURIComponent(_ELEC_BOM_LAYOUT);
         setBusy(true);
         window._elecBomSetStatus(_t('SAP에서 BOM을 전개하는 중입니다…', 'Exploding BOM in SAP…'), 'busy');
         try {
@@ -1027,14 +1089,19 @@
             return TD + (c.align ? ' text-align:' + c.align + ';' : '') + (c.mono ? ' font-family:monospace;' : '')
                 + (c.nowrap ? ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:' + c.w + ';' : '') + (extra || '');
         };
+        var curList = _priceCurrencies(st);
+        var mixedCur = curList.length > 1;
         var valueOf = function (row, c) {
-            if (c.key === '_UNITPRICE') return _unitPrice(row.STPRS1, row.PEINH1);
-            if (c.loc) return (st.locations && st.locations[row.IDNRK]) || '';
+            if (c.key === '_UNITPRICE') return _priceCell(row, mixedCur);
+            if (c.loc) return _locOf(st, row);
             return row[c.key] || '';
         };
+        // Elec Parts 탭의 SPEC 표 규칙이 `text-align:center !important`라 인라인으로는 못 이긴다 —
+        // 열의 align을 클래스로 넘겨 styles.css의 `#elec-view-bom ... td.bom-al-*`가 받게 한다.
+        var alCls = function (c) { return ' class="bom-al-' + (c.align || 'center') + '"'; };
         var renderLocCell = function (r, extra) {
-            var lv = (st.locations && st.locations[r.IDNRK]) || '';
-            return '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + ';' + (extra || '') + ' position:relative;" onclick="event.stopPropagation()">'
+            var lv = _locOf(st, r);
+            return '<td class="bom-al-left" style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + ';' + (extra || '') + ' position:relative;" onclick="event.stopPropagation()">'
                 + '<input type="text" value="' + _esc(lv) + '" data-bom-loc="' + _esc(r.IDNRK) + '" title="' + _esc(lv) + '" '
                 + 'oninput="window._elecBomSetLoc(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
                 + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
@@ -1044,7 +1111,9 @@
         thead.innerHTML = '<tr>'
             + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
             + BOM_COLUMNS.map(function (c) {
-                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
+                var lbl = en ? c.en : c.ko;
+                if (c.price && curList.length === 1) lbl += '(' + curList[0] + ')';
+                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(lbl) + '</th>';
             }).join('')
             + '<th style="' + thS + ' width:100px;">' + _esc(_t('비고', 'Note')) + '</th>'
             + '</tr>';
@@ -1063,8 +1132,8 @@
             html += '<tr class="bom-row bom-row-top">'
                 + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">' + _esc(_t('모체', 'Top')) + '</td>'
                 + BOM_COLUMNS.map(function (c) {
-                    if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
-                    return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
+                    if (c.loc) return '<td' + alCls(c) + ' style="' + cellStyle(c) + '"></td>';
+                    return '<td' + alCls(c) + ' style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
                 }).join('')
                 + '<td style="' + TD + '"></td></tr>';
         }
@@ -1091,7 +1160,7 @@
                     if (c.loc) return renderLocCell(r, '');
                     var v = valueOf(r, c);
                     var pad = (c.key === 'OJTXP') ? ' padding-left:' + (5 + ind) + 'px;' : '';
-                    return '<td style="' + cellStyle(c, pad) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    return '<td' + alCls(c) + ' style="' + cellStyle(c, pad) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                 }).join('')
                 + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
                 + '<input type="text" value="' + _esc(nt) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(nt) + '" '
@@ -1104,8 +1173,8 @@
             html += '<tr class="bom-row-sum" style="font-weight:bold; color:#2c5f8a;">'
                 + '<td style="' + TD + ' text-align:center;">&#931;</td>'
                 + BOM_COLUMNS.map(function (c) {
-                    if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
-                    return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
+                    if (c.loc) return '<td' + alCls(c) + ' style="' + cellStyle(c) + '"></td>';
+                    return '<td' + alCls(c) + ' style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
                 }).join('')
                 + '<td style="' + TD + '"></td></tr>';
         });
