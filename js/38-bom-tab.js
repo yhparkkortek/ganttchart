@@ -38,8 +38,9 @@
     //  비고는 폭을 지정하지 않아 남는 공간을 그대로 가져간다(가로 스크롤 없이 항상 보이게).
     var BOM_COLUMNS = [
         { key: 'IDNRK',      ko: '구성부품',     en: 'Component',     w: '60px',  mono: true },
-        { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '310px', nowrap: true },
-        { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '116px', nowrap: true },
+        { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '220px', nowrap: true },
+        { key: '_LOC',       ko: 'Location',     en: 'Location',      w: '90px',  loc: true },
+        { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '100px', nowrap: true },
         { key: 'MENGE',      ko: '수량',         en: 'Qty',           w: '48px',  align: 'right' },
         { key: 'MMEIN',      ko: '단위',         en: 'Unit',          w: '36px',  align: 'center' },
         { key: '_UNITPRICE', ko: '단가(KRW)',    en: 'Unit Price',    w: '74px',  align: 'right' },
@@ -267,7 +268,8 @@
                 tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
                 cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
                 truncated: parsed.truncated, totalRows: parsed.totalRows,
-                notes: prev.notes || {}   // 사람이 쓴 비고는 재조회해도 보존(구성부품번호 기준)
+                notes: prev.notes || {},      // 사람이 쓴 비고는 재조회해도 보존(구성부품번호 기준)
+                locations: prev.locations || {} // Location 정보도 재조회 후 보존
             };
             window._bomSetStatus('', ''); // 직전 실패 메시지가 성공 후에도 남지 않도록 비운다
             window.bomRender();
@@ -299,7 +301,17 @@
         else delete st.notes[el.dataset.bomNote];
     };
 
-    // 비고 칸은 좁아서 긴 메모를 쓰기 어렵다 — 쓰는 동안만 넓은 입력창으로 띄우고(절대배치라
+    window.bomSetLocation = function (el) {
+        var unit = window._bomActiveUnit();
+        var st = window._bomStore(unit);
+        el.title = el.value;
+        if (!st) return;
+        st.locations = st.locations || {};
+        if (el.value && el.value.trim()) st.locations[el.dataset.bomLoc] = el.value;
+        else delete st.locations[el.dataset.bomLoc];
+    };
+
+    // 비고/Location 칸은 좁아서 긴 메모를 쓰기 어렵다 — 쓰는 동안만 넓은 입력창으로 띄우고(절대배치라
     // 표 레이아웃은 그대로), 다 쓰고 포커스를 떠나면 원래 너비로 되돌린다.
     window._bomNoteFocus = function (el) {
         el.style.position = 'absolute';
@@ -422,6 +434,7 @@
             var aoa = [head];
             if (st.parent) {
                 aoa.push([_t('모체', 'Top')].concat(BOM_COLUMNS.map(function (c) {
+                    if (c.loc) return '';
                     return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
                 })).concat(['']));
             }
@@ -440,16 +453,17 @@
                         var q = parseFloat(String(r.MENGE || '').replace(/,/g, ''));
                         return isNaN(q) ? (r.MENGE || '') : q;
                     }
+                    if (c.loc) return (st.locations && st.locations[r.IDNRK]) || '';
                     return r[c.key] || '';
                 })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
             });
             (st.totals || []).forEach(function (o) {
-                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return c.key === '_UNITPRICE' ? '' : (o[c.key] || ''); })).concat(['']));
+                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
             });
 
             var wb = XLSX.utils.book_new();
             var ws = XLSX.utils.aoa_to_sheet(aoa);
-            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 44 }, { wch: 20 }, { wch: 8 }, { wch: 6 },
+            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 16 }, { wch: 20 }, { wch: 8 }, { wch: 6 },
                            { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
             XLSX.utils.book_append_sheet(wb, ws, 'BOM');
             if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
@@ -520,6 +534,7 @@
         };
         var valueOf = function (row, c) {
             if (c.key === '_UNITPRICE') return _unitPrice(row.STPRS1, row.PEINH1);
+            if (c.loc) return (st.locations && st.locations[row.IDNRK]) || '';
             return row[c.key] || '';
         };
 
@@ -551,6 +566,7 @@
                 html += '<tr class="bom-row-sum" style="font-weight:bold; color:#2c5f8a;">'
                     + '<td style="' + TD + ' text-align:center;">Σ</td>'
                     + BOM_COLUMNS.map(function (c) {
+                        if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
                         return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
                     }).join('')
                     + '<td style="' + TD + '"></td>'
@@ -567,6 +583,7 @@
                 + ' onclick="window.bomSelectComponent(\'' + pEsc + '\')">'
                 + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">' + _esc(_t('모체', 'Top')) + '</td>'
                 + BOM_COLUMNS.map(function (c) {
+                    if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
                     return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
                 }).join('')
                 + '<td style="' + TD + '"></td>'
@@ -605,6 +622,13 @@
                     + '<span style="display:inline-block; width:' + ind + 'px;"></span>' + tw
                     + ' <span style="color:#666;">' + r._level + '</span></td>'
                     + BOM_COLUMNS.map(function (c) {
+                        if (c.loc) {
+                            var lv = valueOf(r, c);
+                            return '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + ';' + sp + ' position:relative;" onclick="event.stopPropagation()">'
+                                + '<input type="text" value="' + _esc(lv) + '" data-bom-loc="' + _esc(r.IDNRK) + '" title="' + _esc(lv) + '" '
+                                + 'oninput="window.bomSetLocation(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
+                        }
                         var v = valueOf(r, c);
                         var pad = (c.key === 'OJTXP') ? ' padding-left:' + (5 + ind) + 'px;' : '';
                         return '<td style="' + cellStyle(c, sp + pad) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
@@ -652,6 +676,13 @@
                     + ' onclick="window.bomSelectComponent(\'' + mnEsc + '\')">'
                     + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
                     + BOM_COLUMNS.map(function (c) {
+                        if (c.loc) {
+                            var lv2 = valueOf(r, c);
+                            return '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                                + '<input type="text" value="' + _esc(lv2) + '" data-bom-loc="' + _esc(r.IDNRK) + '" title="' + _esc(lv2) + '" '
+                                + 'oninput="window.bomSetLocation(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
+                        }
                         var v = valueOf(r, c);
                         return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
                     }).join('')
@@ -773,6 +804,273 @@
         if (mat) mat.placeholder = en ? 'e.g. 502572' : '예: 502572';
         window._bomSyncToggleBtn();
         if (window.bomRender) window.bomRender();   // 헤더/빈 메시지/메타줄은 렌더에서 이중언어 처리됨
+    };
+
+    // ─── Elec Parts 내장 BOM ─────────────────────────────────────────
+    // Panel/AD BD/CONV BD/Touch Ctrl 뷰의 "BOM" 버튼 → 해당 타입 BOM 서브뷰로 전환.
+    // 저장: tabData.elecBomByType[type]. 재조회 시 locations/notes 보존.
+    window._elecBomType = null;
+
+    window._elecBomGetStore = function (type) {
+        window.tabData = window.tabData || {};
+        window.tabData.elecBomByType = window.tabData.elecBomByType || {};
+        return window.tabData.elecBomByType[type] || null;
+    };
+
+    window._elecBomOpen = function (type) {
+        window._elecBomType = type;
+        ['panel', 'adbd', 'convbd', 'touchctrl'].forEach(function (v) {
+            var el = document.getElementById('elec-view-' + v);
+            if (el) el.style.display = 'none';
+        });
+        var bomEl = document.getElementById('elec-view-bom');
+        if (bomEl) bomEl.style.display = 'flex';
+        ['panel', 'adbd', 'convbd', 'touchctrl'].forEach(function (v) {
+            var el = document.getElementById('eh-' + v + '-btns');
+            if (el) el.style.display = 'none';
+        });
+        var bomBtns = document.getElementById('eh-bom-btns');
+        if (bomBtns) bomBtns.style.display = 'contents';
+        var meta = window.ELEC_VIEW_META && window.ELEC_VIEW_META[type];
+        var label = document.getElementById('elec-view-trigger-label');
+        if (label && meta) label.textContent = meta.icon + ' ' + meta.label + ' BOM';
+        var matEl = document.getElementById('ep-bom-material');
+        if (matEl) {
+            var st = window._elecBomGetStore(type);
+            matEl.value = (st && st.material) || window._bomDefaultMaterial() || '';
+        }
+        window._elecBomRender();
+    };
+
+    window._elecBomClose = function () {
+        var type = window._elecBomType || 'panel';
+        window._elecBomType = null;
+        if (window._switchElecView) window._switchElecView(type);
+    };
+
+    window._elecBomSetStatus = function (msg, kind) {
+        var el = document.getElementById('ep-bom-status');
+        if (!el) return;
+        var color = kind === 'error' ? '#b1432f' : (kind === 'busy' ? '#00707d' : '#666');
+        el.style.color = color;
+        el.innerHTML = msg ? _esc(msg) : '';
+    };
+
+    window._elecBomSetNote = function (el) {
+        var type = window._elecBomType;
+        if (!type) return;
+        var st = window._elecBomGetStore(type);
+        el.title = el.value;
+        if (!st) return;
+        st.notes = st.notes || {};
+        if (el.value && el.value.trim()) st.notes[el.dataset.bomNote] = el.value;
+        else delete st.notes[el.dataset.bomNote];
+    };
+
+    window._elecBomSetLoc = function (el) {
+        var type = window._elecBomType;
+        if (!type) return;
+        var st = window._elecBomGetStore(type);
+        el.title = el.value;
+        if (!st) return;
+        st.locations = st.locations || {};
+        if (el.value && el.value.trim()) st.locations[el.dataset.bomLoc] = el.value;
+        else delete st.locations[el.dataset.bomLoc];
+    };
+
+    window._elecBomToggle = function (idx) {
+        var type = window._elecBomType;
+        if (!type) return;
+        var st = window._elecBomGetStore(type);
+        if (!st) return;
+        st._collapsed = st._collapsed || {};
+        st._collapsed[idx] = !st._collapsed[idx];
+        window._elecBomRender();
+    };
+
+    window._elecBomFetch = async function () {
+        var type = window._elecBomType;
+        if (!type) return;
+        var matEl = document.getElementById('ep-bom-material');
+        var material = (matEl ? matEl.value : '').trim();
+        if (!material) {
+            if (window.showToast) window.showToast(_t('자재번호를 입력해주세요.', 'Enter a material number.'), 'warning');
+            if (matEl) matEl.focus();
+            return;
+        }
+        var explosion = (document.getElementById('ep-bom-explosion') || {}).value || 'multi';
+        var btn = document.getElementById('ep-bom-fetch-btn');
+        var setBusy = function (on) {
+            if (!btn) return;
+            btn.disabled = on;
+            btn.textContent = on ? _t('⏳ 조회 중…', '⏳ Loading…') : _t('🔄 SAP 조회', '🔄 Fetch from SAP');
+        };
+        var url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(material)
+            + '&plant=1000&explosion=' + encodeURIComponent(explosion);
+        setBusy(true);
+        window._elecBomSetStatus(_t('SAP에서 BOM을 전개하는 중입니다…', 'Exploding BOM in SAP…'), 'busy');
+        try {
+            var data = null, parsed = null, attempt = 0;
+            while (attempt < 2) {
+                attempt++;
+                var res = await fetch(url);
+                data = await res.json();
+                if (!data || !data.ok) throw new Error((data && data.error) || _t('조회 실패', 'Lookup failed'));
+                if (data.source === 'grid') { parsed = window._bomParseSapText(data.text); if (parsed) break; }
+                if (attempt < 2) window._elecBomSetStatus(_t('결과 화면을 못 읽어 재시도합니다…', 'Retrying…'), 'busy');
+            }
+            if (!parsed) {
+                throw new Error(_t('SAP가 BOM 결과 표 대신 다른 화면을 돌려줬습니다(source: ' + (data && data.source) + ').', 'SAP returned a non-table screen (source: ' + (data && data.source) + ').'));
+            }
+            window._elecBomSetStatus(_t('구성품 정보를 ZMM009로 보강하는 중입니다…', 'Enriching via ZMM009…'), 'busy');
+            var enrich = await window._bomEnrichFromZmm009(parsed.rows, function (done, total) {
+                window._elecBomSetStatus(_t('구성품 정보 보강 중… ' + done + '/' + total, 'Enriching… ' + done + '/' + total), 'busy');
+            });
+            var initCollapsed = {};
+            if (explosion === 'multi' && parsed.hierarchyOk) {
+                parsed.rows.forEach(function (r, i) {
+                    var n = parsed.rows[i + 1];
+                    if (n && n._level > r._level) initCollapsed[i] = true;
+                });
+            }
+            window.tabData = window.tabData || {};
+            window.tabData.elecBomByType = window.tabData.elecBomByType || {};
+            var prev = window._elecBomGetStore(type) || {};
+            window.tabData.elecBomByType[type] = {
+                enrich: enrich, _collapsed: initCollapsed,
+                material: material, plant: '1000', explosion: explosion,
+                tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
+                cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
+                truncated: parsed.truncated, totalRows: parsed.totalRows,
+                notes: prev.notes || {},
+                locations: prev.locations || {}
+            };
+            window._elecBomSetStatus('', '');
+            window._elecBomRender();
+            if (window.showToast) window.showToast(_t('BOM ' + parsed.rows.length + '건을 가져왔습니다.', 'Fetched ' + parsed.rows.length + ' BOM rows.'), 'success');
+        } catch (e) {
+            window._elecBomSetStatus('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+            if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    window._elecBomRender = function () {
+        var tbody = document.getElementById('ep-bom-body');
+        var thead = document.getElementById('ep-bom-thead');
+        if (!tbody || !thead) return;
+        var en = window._currentLang === 'en';
+        var type = window._elecBomType;
+        if (!type) return;
+        var st = window._elecBomGetStore(type);
+
+        var ROW_H = '24px';
+        var zebraClass = function (level, pos) {
+            return level === 1 ? (pos % 2 ? 'bom-row-l1-alt' : 'bom-row-l1') : (pos % 2 ? 'bom-row-sub-alt' : 'bom-row-sub');
+        };
+        var TD = 'padding:2px 5px; border:1px solid #cfe3e5; font-size:11.5px; box-sizing:border-box; height:' + ROW_H + ';';
+        var thS = 'padding:3px 5px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap; font-size:11.5px;';
+        var cellStyle = function (c, extra) {
+            return TD + (c.align ? ' text-align:' + c.align + ';' : '') + (c.mono ? ' font-family:monospace;' : '')
+                + (c.nowrap ? ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:' + c.w + ';' : '') + (extra || '');
+        };
+        var valueOf = function (row, c) {
+            if (c.key === '_UNITPRICE') return _unitPrice(row.STPRS1, row.PEINH1);
+            if (c.loc) return (st.locations && st.locations[row.IDNRK]) || '';
+            return row[c.key] || '';
+        };
+        var renderLocCell = function (r, extra) {
+            var lv = (st.locations && st.locations[r.IDNRK]) || '';
+            return '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + ';' + (extra || '') + ' position:relative;" onclick="event.stopPropagation()">'
+                + '<input type="text" value="' + _esc(lv) + '" data-bom-loc="' + _esc(r.IDNRK) + '" title="' + _esc(lv) + '" '
+                + 'oninput="window._elecBomSetLoc(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
+        };
+
+        var colCount = BOM_COLUMNS.length + 2;
+        thead.innerHTML = '<tr>'
+            + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
+            + BOM_COLUMNS.map(function (c) {
+                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
+            }).join('')
+            + '<th style="' + thS + ' width:100px;">' + _esc(_t('비고', 'Note')) + '</th>'
+            + '</tr>';
+
+        if (!st || !st.rows || !st.rows.length) {
+            tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:28px; text-align:center; color:#999; border:1px solid #cfe3e5;">'
+                + _esc(_t('아직 조회한 BOM이 없습니다. 위에서 자재번호를 확인하고 "SAP 조회"를 누르세요.', 'No BOM yet. Enter a material number and press "Fetch from SAP".'))
+                + '</td></tr>';
+            return;
+        }
+
+        st._collapsed = st._collapsed || {};
+        var html = '';
+
+        if (st.parent) {
+            html += '<tr class="bom-row bom-row-top">'
+                + '<td style="' + TD + ' text-align:center; color:#00707d; font-weight:bold;">' + _esc(_t('모체', 'Top')) + '</td>'
+                + BOM_COLUMNS.map(function (c) {
+                    if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
+                    return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(st.parent, c)) + '</td>';
+                }).join('')
+                + '<td style="' + TD + '"></td></tr>';
+        }
+
+        var hidden = -1, visIdx = 0;
+        st.rows.forEach(function (r, i) {
+            if (hidden !== -1) { if (r._level > hidden) return; hidden = -1; }
+            var next = st.rows[i + 1];
+            var hasChild = !!(next && next._level > r._level);
+            var collapsed = !!st._collapsed[i];
+            if (hasChild && collapsed) hidden = r._level;
+            var zcls = zebraClass(r._level, visIdx);
+            visIdx++;
+            var ind = (r._level - 1) * 12;
+            var tw = hasChild
+                ? '<span onclick="event.stopPropagation(); window._elecBomToggle(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '&#9658;' : '&#9660;') + '</span>'
+                : '<span style="color:#cfe3e5;">&#183;</span>';
+            var nt = (st.notes && st.notes[r.IDNRK]) || '';
+            html += '<tr class="bom-row ' + zcls + '">'
+                + '<td style="' + TD + ' white-space:nowrap;">'
+                + '<span style="display:inline-block; width:' + ind + 'px;"></span>' + tw
+                + ' <span style="color:#666;">' + r._level + '</span></td>'
+                + BOM_COLUMNS.map(function (c) {
+                    if (c.loc) return renderLocCell(r, '');
+                    var v = valueOf(r, c);
+                    var pad = (c.key === 'OJTXP') ? ' padding-left:' + (5 + ind) + 'px;' : '';
+                    return '<td style="' + cellStyle(c, pad) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                }).join('')
+                + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                + '<input type="text" value="' + _esc(nt) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(nt) + '" '
+                + 'oninput="window._elecBomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
+                + '</tr>';
+        });
+
+        (st.totals || []).forEach(function (o) {
+            html += '<tr class="bom-row-sum" style="font-weight:bold; color:#2c5f8a;">'
+                + '<td style="' + TD + ' text-align:center;">&#931;</td>'
+                + BOM_COLUMNS.map(function (c) {
+                    if (c.loc) return '<td style="' + cellStyle(c) + '"></td>';
+                    return '<td style="' + cellStyle(c) + '">' + _esc(valueOf(o, c)) + '</td>';
+                }).join('')
+                + '<td style="' + TD + '"></td></tr>';
+        });
+
+        tbody.innerHTML = html;
+
+        var metaEl = document.getElementById('ep-bom-meta');
+        if (metaEl && st.material) {
+            var when = '';
+            try { when = new Date(st.fetchedAt).toLocaleString(en ? 'en-US' : 'ko-KR'); } catch (e2) { when = ''; }
+            metaEl.innerHTML = '<span style="font-size:11.5px; color:#666;"><b>' + _esc(st.material) + '</b>'
+                + (st.parent && st.parent.OJTXP ? ' <span style="color:#555;">' + _esc(st.parent.OJTXP) + '</span>' : '')
+                + ' &middot; ' + st.rows.length + _t('건', ' rows') + ' &middot; ' + _esc(when) + '</span>';
+        }
+        if (st.truncated) {
+            window._elecBomSetStatus('⚠️ ' + _t('SAP 응답이 500행에서 잘렸습니다. 단일 레벨 조회를 시도하세요.', 'SAP response truncated at 500 rows. Try single-level explosion.'), 'error');
+        }
     };
 
     // 레이아웃 드롭다운 — 04h의 BOM 레이아웃 카탈로그(데이터)를 그대로 재사용

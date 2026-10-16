@@ -224,6 +224,11 @@
         if (!window.ELEC_VIEW_META[view]) view = 'panel';
         window._elecView = view;
         const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd', touchctrl: 'elec-view-touchctrl' };
+        // BOM 서브뷰는 _elecBomOpen/_elecBomClose가 제어 — SPEC 전환 시 항상 숨긴다
+        const bomView = document.getElementById('elec-view-bom');
+        if (bomView) bomView.style.display = 'none';
+        const bomBtns = document.getElementById('eh-bom-btns');
+        if (bomBtns) bomBtns.style.display = 'none';
         Object.keys(sections).forEach(function(v) {
             const sec = document.getElementById(sections[v]);
             if (sec) sec.style.display = (v === view) ? 'flex' : 'none'; // 💡 [2026-09-02] 'block'→'flex': CSS flex 레이아웃과 연동
