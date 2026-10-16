@@ -149,6 +149,141 @@ def gw_get(path, timeout=45):
     return res
 
 
+# ── 1회 자동 로그인 ──────────────────────────────────────────────────
+# ⚠️⚠️ 설계 전제(2026-10-16 실측): 이 사이트는 **로그인에 실패해야 CAPTCHA가 나타난다**
+#   (평소엔 `#captcha`가 display:none). 그래서 규칙은 단 하나다 —
+#   **딱 한 번만 시도하고, 실패하면 그 자리에서 멈춰 사람에게 넘긴다.**
+#   재시도하면 실패가 쌓여 CAPTCHA에 막히고, 그다음은 사내 통합 계정 잠금이다.
+#   그룹웨어 계정이 잠기면 메일·전자결재까지 같이 멈춘다(SAP보다 파장이 크다).
+# 비밀번호는 Windows DPAPI로 암호화해 `gw_login_config.json`(.gitignore)에만 둔다.
+# 명령줄·로그·HTTP 응답 어디에도 비밀번호를 싣지 않는다.
+GW_LOGIN_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gw_login_config.json')
+
+
+def _dpapi_decrypt_b64(b64):
+    import base64
+    import ctypes
+    from ctypes import wintypes
+
+    class _BLOB(ctypes.Structure):
+        _fields_ = [('cbData', wintypes.DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+    raw = base64.b64decode(b64)
+    buf = ctypes.create_string_buffer(raw, len(raw))
+    bin_ = _BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    bout = _BLOB()
+    if not ctypes.windll.crypt32.CryptUnprotectData(ctypes.byref(bin_), None, None, None, None, 0, ctypes.byref(bout)):
+        raise RuntimeError('저장된 그룹웨어 비밀번호를 복호화하지 못했습니다'
+                           '(다른 Windows 계정/PC에서 저장한 설정일 수 있음) — 다시 저장해주세요.')
+    try:
+        return ctypes.string_at(bout.pbData, bout.cbData).decode('utf-8')
+    finally:
+        ctypes.windll.kernel32.LocalFree(bout.pbData)
+
+
+def load_login_config():
+    try:
+        with open(GW_LOGIN_CFG, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+    except Exception:
+        return None
+    if not isinstance(cfg, dict) or not cfg.get('user') or not cfg.get('pw_dpapi'):
+        return None
+    return cfg
+
+
+# 로그인 폼을 채우고 제출한 뒤 **결과만** 돌려준다. 재시도는 절대 하지 않는다.
+_LOGIN_JS = """
+(async (user, pw) => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  if (!location.pathname.startsWith('/login')) location.href = '/login';
+  for (let i = 0; i < 40 && !document.querySelector('#username'); i++) await sleep(250);
+
+  const u = document.querySelector('#username');
+  const p = document.querySelector('#password');
+  if (!u || !p) return { result: 'no_form' };
+
+  // 이미 CAPTCHA가 떠 있으면 시도 자체를 하지 않는다(실패가 이미 쌓인 상태)
+  const cap = document.querySelector('#captcha');
+  const capShown = !!(cap && cap.offsetParent !== null);
+  if (capShown) return { result: 'captcha_blocked' };
+
+  const set = (el, v) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  set(u, user); set(p, pw);
+
+  const form = u.closest('form');
+  if (form) {
+    const btn = form.querySelector('button[type=submit],input[type=submit]');
+    if (btn) btn.click(); else form.submit();
+  } else return { result: 'no_form' };
+
+  // 결과 대기 — 성공하면 /login 을 벗어난다
+  for (let i = 0; i < 60; i++) {
+    await sleep(400);
+    if (!location.pathname.startsWith('/login')) return { result: 'ok', url: location.href };
+    const c2 = document.querySelector('#captcha');
+    if (c2 && c2.offsetParent !== null) return { result: 'captcha_appeared' };
+  }
+  const err = document.querySelector('.alert,.error,[class*=error]');
+  return { result: 'failed', message: err ? (err.textContent || '').trim().slice(0, 120) : '' };
+})(%s, %s)
+"""
+
+
+def login_once():
+    """저장된 계정으로 **한 번만** 로그인한다.
+
+    반환 result:
+      already   이미 로그인돼 있음(아무것도 하지 않음)
+      ok        로그인 성공
+      그 외     실패 — **재시도하지 않고** 사람에게 넘긴다(창은 열어둔 채로)
+    """
+    if not chrome_alive():
+        ok, msg = launch_chrome()
+        if not ok:
+            return {'ok': False, 'result': 'chrome', 'message': msg}
+
+    s = session_info()
+    if s.get('ok'):
+        return {'ok': True, 'result': 'already', 'message': '이미 로그인되어 있습니다.', 'session': s}
+
+    cfg = load_login_config()
+    if not cfg:
+        return {'ok': False, 'result': 'not_configured',
+                'message': '저장된 그룹웨어 로그인 정보가 없습니다 — 🔑에서 먼저 등록해주세요.'}
+
+    try:
+        pw = _dpapi_decrypt_b64(cfg['pw_dpapi'])
+    except Exception as e:
+        return {'ok': False, 'result': 'decrypt', 'message': str(e)}
+
+    try:
+        r = eval_in_gw(_LOGIN_JS % (json.dumps(cfg['user']), json.dumps(pw)), timeout=60) or {}
+    except Exception as e:
+        return {'ok': False, 'result': 'error', 'message': f'로그인 시도 중 오류: {e}'}
+    finally:
+        pw = None  # 메모리에 더 들고 있지 않는다
+
+    res = r.get('result')
+    if res == 'ok':
+        return {'ok': True, 'result': 'ok', 'message': '로그인했습니다.', 'session': session_info()}
+
+    # ⚠️ 여기부터는 전부 실패 경로 — 어떤 경우에도 다시 시도하지 않는다.
+    human = {
+        'captcha_blocked':  '이미 보안문자(CAPTCHA)가 떠 있습니다 — 자동 로그인을 시도하지 않았습니다. 열린 창에서 직접 로그인해주세요.',
+        'captcha_appeared': '로그인에 실패해 보안문자(CAPTCHA)가 나타났습니다 — 계정 잠금을 막기 위해 재시도하지 않습니다. 열린 창에서 직접 로그인해주세요.',
+        'failed':           '로그인에 실패했습니다 — 계정 잠금을 막기 위해 재시도하지 않습니다. 열린 창에서 직접 로그인해주세요.',
+        'no_form':          '로그인 화면을 찾지 못했습니다 — 열린 창에서 직접 로그인해주세요.',
+    }.get(res, '로그인하지 못했습니다 — 열린 창에서 직접 로그인해주세요.')
+    if r.get('message'):
+        human += f' (서버 메시지: {r["message"]})'
+    return {'ok': False, 'result': res or 'failed', 'message': human, 'handoff': True}
+
+
 def session_info():
     """로그인 상태 + 내 계정 정보. 세션이 끊겼으면 ok=False."""
     if not chrome_alive():

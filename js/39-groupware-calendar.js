@@ -65,6 +65,73 @@
         }
     };
 
+    // 🔑 로그인 정보 등록 — 비밀번호는 백엔드에서 Windows DPAPI로 암호화해 저장하고
+    //    여기로 다시 내려오지 않는다(SAP 자동 로그인과 동일한 원칙).
+    window._gwSetupLogin = async function () {
+        var cur = { configured: false, user: '' };
+        try {
+            var r0 = await fetch('http://127.0.0.1:5000/gw/login-config');
+            cur = await r0.json();
+        } catch (e) {
+            window._gwSetStatus('⚠️ ' + _t('백엔드에 연결할 수 없습니다.', 'Backend unreachable.'), 'error');
+            return;
+        }
+        var id = prompt(_t('그룹웨어 아이디 (예: yhpark)', 'Groupware ID'), cur.user || '');
+        if (id === null) return;
+        id = id.trim();
+        if (!id) {
+            // 빈 값으로 확인 → 저장된 정보 삭제로 간주
+            if (cur.configured && confirm(_t('저장된 그룹웨어 로그인 정보를 삭제할까요?', 'Delete saved groupware login?'))) {
+                await fetch('http://127.0.0.1:5000/gw/login-config', { method: 'DELETE' });
+                window._gwSetStatus(_t('저장된 로그인 정보를 삭제했습니다.', 'Saved login deleted.'), 'ok');
+            }
+            return;
+        }
+        var pw = prompt(_t('그룹웨어 비밀번호 (Windows 암호화로 이 PC에만 저장됩니다)',
+                           'Groupware password (stored encrypted on this PC only)'), '');
+        if (pw === null || !pw) return;
+        try {
+            var r = await fetch('http://127.0.0.1:5000/gw/login-config', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: id, pw: pw })
+            });
+            var d = await r.json();
+            pw = null;
+            window._gwSetStatus(d.ok ? ('✅ ' + d.message) : ('⚠️ ' + d.message), d.ok ? 'ok' : 'error');
+            if (d.ok) window._gwAutoLogin();
+        } catch (e) {
+            window._gwSetStatus('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+        }
+    };
+
+    // 저장된 계정으로 **1회만** 로그인. 실패하면 재시도하지 않고 사람에게 넘긴다.
+    window._gwAutoLogin = async function () {
+        window._gwSetStatus(_t('그룹웨어 로그인 시도 중…', 'Signing in to groupware…'), 'busy');
+        try {
+            var r = await fetch('http://127.0.0.1:5000/gw/login', { method: 'POST' });
+            var d = await r.json();
+            if (d.ok) {
+                var em = (d.session && d.session.email) || '';
+                window._gwSetStatus('✅ ' + (d.result === 'already'
+                    ? _t('이미 로그인됨 ', 'Already signed in ') : _t('로그인됨 ', 'Signed in ')) + em, 'ok');
+                window._gwLoadEvents(true);
+                return;
+            }
+            if (d.result === 'not_configured') {
+                window._gwSetStatus('🔑 ' + d.message, 'error');
+                return;
+            }
+            // 실패 — 재시도하지 않고 창을 열어 사람에게 넘긴다
+            window._gwSetStatus('🔒 ' + (d.message || ''), 'error');
+            if (d.handoff) {
+                await fetch('http://127.0.0.1:5000/gw/open', { method: 'POST' }).catch(function () {});
+                alert('🔒 ' + d.message);
+            }
+        } catch (e) {
+            window._gwSetStatus('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+        }
+    };
+
     // 그룹웨어 브라우저 창 열기 — 로그인은 사람이 한다
     window._gwOpenBrowser = async function () {
         window._gwSetStatus(_t('그룹웨어 브라우저를 여는 중…', 'Opening groupware browser…'), 'busy');

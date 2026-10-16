@@ -3145,6 +3145,66 @@ def gw_open():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+# 🔑 그룹웨어 로그인 정보 — SAP 로그인과 동일한 원칙:
+#    비밀번호는 DPAPI로 암호화해 gw_login_config.json(.gitignore)에만 두고,
+#    **어떤 응답에도 비밀번호를 돌려주지 않는다**(등록 여부와 아이디만).
+_GW_LOGIN_CFG_PATH = os.path.join(BASE_DIR, 'gw_login_config.json')
+
+
+@app.route('/gw/login-config', methods=['GET'])
+def gw_login_config_get():
+    cfg = {}
+    try:
+        with open(_GW_LOGIN_CFG_PATH, 'r', encoding='utf-8') as f:
+            cfg = json.load(f) or {}
+    except Exception:
+        pass
+    return jsonify({'ok': True,
+                    'configured': bool(cfg.get('user') and cfg.get('pw_dpapi')),
+                    'user': cfg.get('user', '')})
+
+
+@app.route('/gw/login-config', methods=['POST'])
+def gw_login_config_save():
+    body = request.get_json(silent=True) or {}
+    user = str(body.get('user') or '').strip()
+    pw   = str(body.get('pw') or '')
+    if not user or not pw:
+        return jsonify({'ok': False, 'message': '아이디와 비밀번호를 모두 입력해주세요.'}), 400
+    try:
+        enc = _dpapi_encrypt_b64(pw)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+    finally:
+        pw = None
+    try:
+        with open(_GW_LOGIN_CFG_PATH, 'w', encoding='utf-8') as f:
+            json.dump({'user': user, 'pw_dpapi': enc}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'설정 저장 실패: {e}'}), 500
+    return jsonify({'ok': True, 'message': '그룹웨어 로그인 정보를 저장했습니다.', 'user': user})
+
+
+@app.route('/gw/login-config', methods=['DELETE'])
+def gw_login_config_delete():
+    try:
+        if os.path.exists(_GW_LOGIN_CFG_PATH):
+            os.remove(_GW_LOGIN_CFG_PATH)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+    return jsonify({'ok': True, 'message': '저장된 그룹웨어 로그인 정보를 삭제했습니다.'})
+
+
+@app.route('/gw/login', methods=['POST'])
+def gw_login():
+    """저장된 계정으로 **한 번만** 로그인 시도. 실패하면 재시도하지 않고 사람에게 넘긴다."""
+    try:
+        import gw_bridge
+        return jsonify(gw_bridge.login_once())
+    except Exception as e:
+        return jsonify({'ok': False, 'result': 'error', 'message': str(e)})
+
+
 @app.route('/gw/calendars', methods=['GET'])
 def gw_calendars():
     try:
