@@ -249,7 +249,26 @@
         if (view === 'convbd' && window.renderElecCompareTab) window.renderElecCompareTab('convbd');
         if (view === 'touchctrl' && window.renderElecCompareTab) window.renderElecCompareTab('touchctrl');
         try { localStorage.setItem('gantt_elec_view', view); } catch(e) {}
+        if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('spec');
     };
+
+    window._elecUpdateModeToggle = function(mode) {
+        var specBtn = document.getElementById('elec-mode-spec-btn');
+        var bomBtn = document.getElementById('elec-mode-bom-btn');
+        if (!specBtn || !bomBtn) return;
+        if (mode === 'bom') {
+            specBtn.style.background = '#e0f5f7'; specBtn.style.color = '#00707d';
+            specBtn.style.borderColor = '#a3d9e0';
+            bomBtn.style.background = '#00707d'; bomBtn.style.color = '#fff';
+            bomBtn.style.borderColor = '#00707d';
+        } else {
+            specBtn.style.background = '#00707d'; specBtn.style.color = '#fff';
+            specBtn.style.borderColor = '#00707d';
+            bomBtn.style.background = '#e0f5f7'; bomBtn.style.color = '#00707d';
+            bomBtn.style.borderColor = '#a3d9e0';
+        }
+    };
+    window._elecModeSpec = function() { if (window._elecBomClose) window._elecBomClose(); };
 
     // 새로고침해도 마지막 상태 복원
     try {

@@ -39,8 +39,8 @@
     var BOM_COLUMNS = [
         { key: 'IDNRK',      ko: '구성부품',     en: 'Component',     w: '60px',  mono: true },
         { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '220px', nowrap: true },
-        { key: '_LOC',       ko: 'Location',     en: 'Location',      w: '90px',  loc: true },
         { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '100px', nowrap: true },
+        { key: '_LOC',       ko: 'Loc.',         en: 'Loc.',          w: '90px',  loc: true },
         { key: 'MENGE',      ko: '수량',         en: 'Qty',           w: '48px',  align: 'right' },
         { key: 'MMEIN',      ko: '단위',         en: 'Unit',          w: '36px',  align: 'center' },
         { key: '_UNITPRICE', ko: '단가(KRW)',    en: 'Unit Price',    w: '74px',  align: 'right' },
@@ -463,7 +463,7 @@
 
             var wb = XLSX.utils.book_new();
             var ws = XLSX.utils.aoa_to_sheet(aoa);
-            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 16 }, { wch: 20 }, { wch: 8 }, { wch: 6 },
+            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 6 },
                            { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
             XLSX.utils.book_append_sheet(wb, ws, 'BOM');
             if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
@@ -840,6 +840,7 @@
             matEl.value = (st && st.material) || window._bomDefaultMaterial() || '';
         }
         window._elecBomRender();
+        if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('bom');
     };
 
     window._elecBomClose = function () {
@@ -876,6 +877,57 @@
         st.locations = st.locations || {};
         if (el.value && el.value.trim()) st.locations[el.dataset.bomLoc] = el.value;
         else delete st.locations[el.dataset.bomLoc];
+    };
+
+    window._elecBomExportExcel = async function () {
+        var type = window._elecBomType;
+        if (!type) return;
+        var st = window._elecBomGetStore(type);
+        if (!st || !st.rows || !st.rows.length) {
+            if (window.showToast) window.showToast(_t('내보낼 BOM이 없습니다 — 먼저 조회해주세요.', 'No BOM to export — run a lookup first.'), 'warning');
+            return;
+        }
+        try {
+            if (typeof XLSX === 'undefined') throw new Error(_t('엑셀 라이브러리를 불러오지 못했습니다.', 'Excel library not loaded.'));
+            var en = window._currentLang === 'en';
+            var head = [_t('레벨', 'Level')].concat(BOM_COLUMNS.map(function (c) { return en ? c.en : c.ko; })).concat([_t('비고', 'Note')]);
+            var aoa = [head];
+            if (st.parent) {
+                aoa.push([_t('모체', 'Top')].concat(BOM_COLUMNS.map(function (c) {
+                    if (c.loc) return '';
+                    return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
+                })).concat(['']));
+            }
+            var ordered = st.rows.map(function (r, i) { return { r: r, i: i }; })
+                .sort(function (a, b) { return (a.r._level - b.r._level) || (a.i - b.i); })
+                .map(function (x) { return x.r; });
+            ordered.forEach(function (r) {
+                aoa.push([r._level].concat(BOM_COLUMNS.map(function (c) {
+                    if (c.key === '_UNITPRICE') { var p = parseFloat(String(r.STPRS1 || '').replace(/,/g, '')); var u = parseInt(r.PEINH1 || '1', 10) || 1; return isNaN(p) ? '' : Math.round(p / u * 100) / 100; }
+                    if (c.key === 'MENGE') { var q = parseFloat(String(r.MENGE || '').replace(/,/g, '')); return isNaN(q) ? (r.MENGE || '') : q; }
+                    if (c.loc) return (st.locations && st.locations[r.IDNRK]) || '';
+                    return r[c.key] || '';
+                })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
+            });
+            (st.totals || []).forEach(function (o) {
+                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
+            });
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(aoa);
+            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 6 },
+                           { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
+            XLSX.utils.book_append_sheet(wb, ws, 'BOM');
+            if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
+            var fileName = 'SAP_BOM_' + type.toUpperCase() + '_' + (st.material || '') + '_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            var res = await fetch('http://127.0.0.1:5000/sap-save-export', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fileName: fileName, dataBase64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) })
+            });
+            var d = await res.json();
+            if (window.showToast) window.showToast(d.ok ? ('📊 ' + (d.message || _t('BOM을 엑셀로 저장했습니다.', 'Saved BOM to Excel.'))) : ('⚠️ ' + (d.error || _t('엑셀 저장 실패', 'Failed'))), d.ok ? 'success' : 'error');
+        } catch (e) {
+            if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
+        }
     };
 
     window._elecBomToggle = function (idx) {
