@@ -1610,6 +1610,35 @@ ${question}
         }).catch(function() {});
     };
 
+    // 📂 [2026-10-16 사용자 요청] "찾아주고 다운받아주는" 명령의 결과에는 저장 위치를 여는 버튼을
+    //    **기본으로** 붙인다. 예전엔 명령마다 버튼을 손으로 달았는데(04h의 문서저장·승인원·구매오더
+    //    등), 그러다 보니 새 명령에선 매번 빠졌다(문서 저장 답변에 버튼이 없다는 제보). 그래서
+    //    명령 쪽이 아니라 **렌더러가 답변 본문에서 저장 경로를 직접 찾아** 붙이도록 뒤집었다 —
+    //    새 명령을 추가해도 경로만 답변에 쓰면 버튼이 자동으로 생긴다.
+    //  ⚠️ 인식 범위를 `C:\SAP_DMS` 아래로 제한한다. `/open-folder`는 경로 제한이 없는 엔드포인트라,
+    //    AI가 지어내거나 외부 문서(메일·PDF)에서 흘러든 임의 경로가 클릭 가능한 버튼이 되면 안 된다.
+    var _QA_SAVE_ROOT = 'C:\\SAP_DMS';
+    window._ganttQaDetectSavedPaths = function(text) {
+        var s = String(text || '');
+        if (!s || s.toUpperCase().indexOf('C:\\SAP_DMS') === -1) return [];
+        var re = /[Cc]:\\SAP_DMS(?:\\[^\s"'<>|*?]+)*/g;
+        var found = [], seen = {}, mm;
+        while ((mm = re.exec(s)) !== null) {
+            // 문장 끝 구두점과 꼬리 역슬래시는 경로가 아니다("…C:\SAP_DMS\ 폴더로" → C:\SAP_DMS)
+            var p = mm[0].replace(/[.,;:)\]}]+$/, '').replace(/\\+$/, '');
+            if (p.length < _QA_SAVE_ROOT.length) continue;
+            var k = p.toLowerCase();
+            if (!seen[k]) { seen[k] = 1; found.push(p); }
+            if (found.length >= 8) break;
+        }
+        // 더 구체적인 경로가 있으면 그 부모(C:\SAP_DMS 같은 뿌리)는 버튼으로 내보내지 않는다
+        return found.filter(function(p) {
+            return !found.some(function(q) {
+                return q !== p && q.toLowerCase().indexOf(p.toLowerCase() + '\\') === 0;
+            });
+        });
+    };
+
     // BOM 전개 결과를 클릭 가능한 HTML 표로 변환 — IDNRK(구성부품) 셀을 클릭 시 _sapSelectMaterial 호출
     window._renderBomAsInteractiveHtml = function(sapText) {
         if (!sapText) return null;
@@ -2057,6 +2086,31 @@ ${question}
                         + '</div>';
                 })()
                 : '';
+            // 📂 [2026-10-16] 저장 경로 자동 감지 버튼 — 위 savePaths처럼 명령이 따로 넘겨주지
+            //    않아도 답변 본문에 저장 경로가 있으면 항상 붙는다. 이미 파일 버튼(savePaths)이
+            //    있거나 답변이 자체 "폴더 열기" 버튼을 rawHtml로 넣은 경우엔 중복이라 건너뛴다.
+            const autoFolderHtml = (!isUser && !m.pending && !m.error && !savePathsHtml
+                    && !(m.rawHtml && /sap-open-folder|_ganttQaOpenFolder/.test(m.text || ''))
+                    && window._ganttQaDetectSavedPaths)
+                ? (function() {
+                    const _paths = window._ganttQaDetectSavedPaths(m.text);
+                    if (!_paths.length) return '';
+                    const _fEn = window._currentLang === 'en';
+                    return '<div style="display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; margin-top:5px;">'
+                        + _paths.map(function(p) {
+                            const _arg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                            const _leaf = p.split('\\').filter(Boolean).pop() || p;
+                            return '<button onclick="window._ganttQaOpenFolder(\'' + _arg + '\')"'
+                                + ' title="' + escapeHtml(p) + '"'
+                                + ' onmouseover="this.style.background=\'#dcecf7\';" onmouseout="this.style.background=\'#eaf2fa\';"'
+                                + ' style="font-size:11px; padding:3px 10px; border:1px solid #a9c8e6; background:#eaf2fa;'
+                                + ' color:#1a4d80; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap;'
+                                + ' max-width:260px; overflow:hidden; text-overflow:ellipsis; transition:background .15s;">'
+                                + '📂 ' + (_fEn ? 'Open' : '열기') + ' · ' + escapeHtml(_leaf) + '</button>';
+                        }).join('')
+                        + '</div>';
+                })()
+                : '';
             const _seqLabel = isUser
                 ? (m._qIdx ? '<div style="font-size:9px;color:#b0c4de;text-align:right;margin-bottom:1px;padding-right:2px;cursor:pointer;" title="클릭: 접기 + 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'Q' + m._qIdx + '\')">Q' + m._qIdx + '</div>' : '')
                 : (m._aIdx ? '<div style="font-size:9px;color:#bbb;text-align:left;margin-bottom:1px;padding-left:2px;cursor:pointer;" title="클릭: 접기 + 입력창으로 복사" onclick="window._ganttQaCopyMsgToInput(\'A' + m._aIdx + '\')">A' + m._aIdx + '</div>' : '');
@@ -2077,6 +2131,7 @@ ${question}
                 ${grEbelnFormHtml ? `<div style="max-width:90%; width:100%;">${grEbelnFormHtml}</div>` : ''}
                 ${confirmButtonsHtml ? `<div style="max-width:82%; width:100%;">${confirmButtonsHtml}</div>` : ''}
                 ${savePathsHtml ? `<div style="max-width:90%; width:100%;">${savePathsHtml}</div>` : ''}
+                ${autoFolderHtml ? `<div style="max-width:90%; width:100%;">${autoFolderHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;
