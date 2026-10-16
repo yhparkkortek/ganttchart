@@ -4879,6 +4879,100 @@ ${docsJson}`;
         //    단어 자체는 저 판정들과 겹치지 않지만, 답변 대기 중(예: "담당자는 홍길동, 팀장은
         //    김철수요"처럼 트리거 단어 없이 값만 채우는 후속 메시지)에는 이 블록이 먼저
         //    가로채지 않으면 그 메시지가 엉뚱하게 일반 AI 질문으로 새어나간다.
+        // 🏢🚫🤖 [2026-10-16 신규] 그룹웨어 전자결재 기안 — "102202 원자재 승인원 기안 작성해줘"
+        //   SAP에서 자재 정보를 가져와 그룹웨어 양식을 채우고 **임시저장**까지만 한다.
+        //   ⚠️ 결재요청(상신)은 하지 않는다 — 누르는 순간 팀장·합의자들에게 실제로 올라간다.
+        //      상신은 사람이 그룹웨어에서 내용을 확인하고 직접 누른다.
+        //   트리거 어휘는 GW_CAPABILITIES(js/32) 데이터 — 여기에 정규식으로 박지 않는다.
+        const _gwDraftHit = window._gwCapKwHit ? window._gwCapKwHit(question, 'gw_approval_draft') : false;
+        const _gwDraftMat = _gwDraftHit && (question.match(/\b\d{5,8}\b/) || [])[0];
+        // 확인 버튼이 돌려보내는 확정 명령
+        const _gwDraftGo = /^그룹웨어 기안 임시저장 확정/.test(question.trim());
+
+        if (_gwDraftGo && window._gwPendingDraft) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            const pd = window._gwPendingDraft;
+            window._gwPendingDraft = null;
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('그룹웨어에 기안을 작성하고 임시저장하는 중...', 'Drafting in groupware and saving...'), pending: true });
+            window._renderGanttQaMessages();
+            let _gwReply;
+            try {
+                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/gw/approval/draft', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ formId: pd.formId, deptId: pd.deptId, subject: pd.subject, fields: pd.fields })
+                }), 150000, window._t('기안 작성 시간 초과', 'Draft timed out'));
+                const d = await res.json();
+                if (d.ok && d.docId) {
+                    const _rows = (d.log || []).filter(function(x) { return x.ok; })
+                        .map(function(x) { return '- ' + x.field + ': ' + (x.val || ''); }).join('\n');
+                    _gwReply = '✅ ' + window._t('임시저장했습니다', 'Saved as draft') + ' (문서 ' + d.docId + ')\n\n'
+                        + _rows + '\n\n'
+                        + window._t('⚠️ 아직 **상신하지 않았습니다**. 승인원 분류·상태전환·날짜 등 판단이 필요한 칸은 비워뒀습니다 — '
+                                    + '그룹웨어에서 내용을 확인하고 직접 [결재요청]을 눌러주세요.',
+                                    'Not submitted yet. Review in groupware and press [결재요청] yourself.')
+                        + '\n\n' + (d.docUrl || '');
+                } else {
+                    _gwReply = '⚠️ ' + (d.message || d.why || window._t('기안 작성 실패', 'Draft failed'));
+                }
+            } catch (e) { _gwReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: _gwReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        if (_gwDraftHit && _gwDraftMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 자재 정보를 가져오는 중...', 'Fetching material info from SAP...'), pending: true });
+            window._renderGanttQaMessages();
+            try {
+                // ① 그룹웨어 로그인 상태 — 끊겼으면 여기서 멈추고 안내(자동 로그인 시도 안 함)
+                const st = await (await fetch('http://127.0.0.1:5000/gw/status')).json();
+                if (!st.ok) {
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: '🔒 ' + window._t('그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.', 'Groupware sign-in required — use the 🔑 here.') });
+                    window._renderGanttQaMessages(); input.focus(); return;
+                }
+                // ② 양식 찾기(이름으로 — formId 하드코딩 안 함)
+                const fr = await (await fetch('http://127.0.0.1:5000/gw/approval/forms')).json();
+                const cap = (window.GW_CAPABILITIES || []).find(function (c) { return c.id === 'gw_approval_draft'; });
+                const form = (fr.forms || []).find(function (f) { return f.name && f.name.indexOf(cap.form) >= 0; });
+                if (!form) throw new Error(window._t('결재 양식 "', 'Approval form "') + cap.form + window._t('"을 찾지 못했습니다.', '" not found.'));
+                // ③ SAP 자재 정보
+                const mr = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-material-rows?materials=' + encodeURIComponent(_gwDraftMat)), 150000, window._t('SAP 조회 시간 초과', 'SAP lookup timed out'));
+                const md = await mr.json();
+                const m = (md.materials || [])[0];
+                if (!m) throw new Error(_gwDraftMat + window._t(' 자재 정보를 SAP에서 찾지 못했습니다.', ' not found in SAP.'));
+
+                const subject = '[원자재 승인] ' + _gwDraftMat + ' ' + (m.MAKTX || '');
+                const fields = { 'Item Code': _gwDraftMat, 'Model': m.MAKTX || '' };
+                if (m.MFRPN) fields['Name'] = m.MFRPN;
+                if (m.ZTEXT) fields['Sub Description'] = m.ZTEXT;
+                window._gwPendingDraft = { formId: form.formId, deptId: form.deptId, subject: subject, fields: fields };
+
+                const preview = '📝 **' + form.name + '** ' + window._t('기안을 아래 내용으로 작성합니다.', 'will be drafted with:') + '\n\n'
+                    + '- ' + window._t('제목', 'Subject') + ': ' + subject + '\n'
+                    + Object.keys(fields).map(function (k) { return '- ' + k + ': ' + fields[k]; }).join('\n')
+                    + '\n\n' + window._t('승인원 분류·상태전환·날짜·PACKING TYPE은 판단이 필요해 **비워둡니다**.',
+                                          'Approval type, status, dates and packing type are left blank for you to decide.')
+                    + '\n' + window._t('**임시저장만** 하고 상신은 하지 않습니다.', 'It will only be saved as a draft — not submitted.');
+                window._ganttQaHistory.pop();
+                window._ganttQaShowConfirmButtons(preview, [
+                    { label: '✅ ' + window._t('임시저장', 'Save draft'), value: '그룹웨어 기안 임시저장 확정' },
+                    { label: window._t('취소', 'Cancel'), value: '그룹웨어 기안 취소' }
+                ]);
+            } catch (e) {
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + (e && e.message ? e.message : e) });
+            }
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+        if (/^그룹웨어 기안 취소/.test(question.trim())) {
+            window._gwPendingDraft = null;
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            window._ganttQaHistory.push({ role: 'ai', text: window._t('기안 작성을 취소했습니다.', 'Draft cancelled.') });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         const approvalDraft = window._ganttQaExtractApprovalUpdate ? window._ganttQaExtractApprovalUpdate(question) : null;
         if (approvalDraft) {
             window._ganttQaHistory.push({ role: 'user', text: question });
@@ -6419,100 +6513,6 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
-        // 🏢🚫🤖 [2026-10-16 신규] 그룹웨어 전자결재 기안 — "102202 원자재 승인원 기안 작성해줘"
-        //   SAP에서 자재 정보를 가져와 그룹웨어 양식을 채우고 **임시저장**까지만 한다.
-        //   ⚠️ 결재요청(상신)은 하지 않는다 — 누르는 순간 팀장·합의자들에게 실제로 올라간다.
-        //      상신은 사람이 그룹웨어에서 내용을 확인하고 직접 누른다.
-        //   트리거 어휘는 GW_CAPABILITIES(js/32) 데이터 — 여기에 정규식으로 박지 않는다.
-        const _gwDraftHit = window._gwCapKwHit ? window._gwCapKwHit(question, 'gw_approval_draft') : false;
-        const _gwDraftMat = _gwDraftHit && (question.match(/\b\d{5,8}\b/) || [])[0];
-        // 확인 버튼이 돌려보내는 확정 명령
-        const _gwDraftGo = /^그룹웨어 기안 임시저장 확정/.test(question.trim());
-
-        if (_gwDraftGo && window._gwPendingDraft) {
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
-            const pd = window._gwPendingDraft;
-            window._gwPendingDraft = null;
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('그룹웨어에 기안을 작성하고 임시저장하는 중...', 'Drafting in groupware and saving...'), pending: true });
-            window._renderGanttQaMessages();
-            let _gwReply;
-            try {
-                const res = await window._withTimeout(fetch('http://127.0.0.1:5000/gw/approval/draft', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ formId: pd.formId, deptId: pd.deptId, subject: pd.subject, fields: pd.fields })
-                }), 150000, window._t('기안 작성 시간 초과', 'Draft timed out'));
-                const d = await res.json();
-                if (d.ok && d.docId) {
-                    const _rows = (d.log || []).filter(function(x) { return x.ok; })
-                        .map(function(x) { return '- ' + x.field + ': ' + (x.val || ''); }).join('\n');
-                    _gwReply = '✅ ' + window._t('임시저장했습니다', 'Saved as draft') + ' (문서 ' + d.docId + ')\n\n'
-                        + _rows + '\n\n'
-                        + window._t('⚠️ 아직 **상신하지 않았습니다**. 승인원 분류·상태전환·날짜 등 판단이 필요한 칸은 비워뒀습니다 — '
-                                    + '그룹웨어에서 내용을 확인하고 직접 [결재요청]을 눌러주세요.',
-                                    'Not submitted yet. Review in groupware and press [결재요청] yourself.')
-                        + '\n\n' + (d.docUrl || '');
-                } else {
-                    _gwReply = '⚠️ ' + (d.message || d.why || window._t('기안 작성 실패', 'Draft failed'));
-                }
-            } catch (e) { _gwReply = '⚠️ ' + (e && e.message ? e.message : e); }
-            window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: _gwReply });
-            window._renderGanttQaMessages(); input.focus(); return;
-        }
-
-        if (_gwDraftHit && _gwDraftMat) {
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 자재 정보를 가져오는 중...', 'Fetching material info from SAP...'), pending: true });
-            window._renderGanttQaMessages();
-            try {
-                // ① 그룹웨어 로그인 상태 — 끊겼으면 여기서 멈추고 안내(자동 로그인 시도 안 함)
-                const st = await (await fetch('http://127.0.0.1:5000/gw/status')).json();
-                if (!st.ok) {
-                    window._ganttQaHistory.pop();
-                    window._ganttQaHistory.push({ role: 'ai', text: '🔒 ' + window._t('그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.', 'Groupware sign-in required — use the 🔑 here.') });
-                    window._renderGanttQaMessages(); input.focus(); return;
-                }
-                // ② 양식 찾기(이름으로 — formId 하드코딩 안 함)
-                const fr = await (await fetch('http://127.0.0.1:5000/gw/approval/forms')).json();
-                const cap = (window.GW_CAPABILITIES || []).find(function (c) { return c.id === 'gw_approval_draft'; });
-                const form = (fr.forms || []).find(function (f) { return f.name && f.name.indexOf(cap.form) >= 0; });
-                if (!form) throw new Error(window._t('결재 양식 "', 'Approval form "') + cap.form + window._t('"을 찾지 못했습니다.', '" not found.'));
-                // ③ SAP 자재 정보
-                const mr = await window._withTimeout(fetch('http://127.0.0.1:5000/sap-material-rows?materials=' + encodeURIComponent(_gwDraftMat)), 150000, window._t('SAP 조회 시간 초과', 'SAP lookup timed out'));
-                const md = await mr.json();
-                const m = (md.materials || [])[0];
-                if (!m) throw new Error(_gwDraftMat + window._t(' 자재 정보를 SAP에서 찾지 못했습니다.', ' not found in SAP.'));
-
-                const subject = '[원자재 승인] ' + _gwDraftMat + ' ' + (m.MAKTX || '');
-                const fields = { 'Item Code': _gwDraftMat, 'Model': m.MAKTX || '' };
-                if (m.MFRPN) fields['Name'] = m.MFRPN;
-                if (m.ZTEXT) fields['Sub Description'] = m.ZTEXT;
-                window._gwPendingDraft = { formId: form.formId, deptId: form.deptId, subject: subject, fields: fields };
-
-                const preview = '📝 **' + form.name + '** ' + window._t('기안을 아래 내용으로 작성합니다.', 'will be drafted with:') + '\n\n'
-                    + '- ' + window._t('제목', 'Subject') + ': ' + subject + '\n'
-                    + Object.keys(fields).map(function (k) { return '- ' + k + ': ' + fields[k]; }).join('\n')
-                    + '\n\n' + window._t('승인원 분류·상태전환·날짜·PACKING TYPE은 판단이 필요해 **비워둡니다**.',
-                                          'Approval type, status, dates and packing type are left blank for you to decide.')
-                    + '\n' + window._t('**임시저장만** 하고 상신은 하지 않습니다.', 'It will only be saved as a draft — not submitted.');
-                window._ganttQaHistory.pop();
-                window._ganttQaShowConfirmButtons(preview, [
-                    { label: '✅ ' + window._t('임시저장', 'Save draft'), value: '그룹웨어 기안 임시저장 확정' },
-                    { label: window._t('취소', 'Cancel'), value: '그룹웨어 기안 취소' }
-                ]);
-            } catch (e) {
-                window._ganttQaHistory.pop();
-                window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + (e && e.message ? e.message : e) });
-            }
-            window._renderGanttQaMessages(); input.focus(); return;
-        }
-        if (/^그룹웨어 기안 취소/.test(question.trim())) {
-            window._gwPendingDraft = null;
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
-            window._ganttQaHistory.push({ role: 'ai', text: window._t('기안 작성을 취소했습니다.', 'Draft cancelled.') });
-            window._renderGanttQaMessages(); input.focus(); return;
-        }
-
         // 🚚🚫🤖 [2026-10-01 신규] 납품 내역 (ZSD027) — "자재번호 납품 내역"
         const _delivHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'zsd027') : false;
         const _delivMat = _delivHit && (question.match(/\b[A-Z0-9]{5,18}\b/) || [])[0];
@@ -8013,6 +8013,11 @@ ${docsJson}`;
         //    이유로 실사용에서 제보된 버그. "sap" 요구를 빼고, 바로 아래에서 자재번호가 없으면
         //    어차피 null로 걸러지므로(line 2537 근처) "승인원"+동작 동사만으로도 충분히 안전하다.
         var isNewTrigger = /승인원/.test(text) && /(표지|생성|만들|작성)/i.test(text);
+        // 🏢 [2026-10-16 충돌 수정] "102202 원자재 승인원 **기안** 작성해줘"는 그룹웨어 전자결재
+        //    기안이지 SAP 승인원 표지가 아니다. 위 조건이 "승인원"+"작성"만 보기 때문에 그룹웨어
+        //    요청까지 이쪽이 먼저 가로챘다(실사용 테스트에서 확인). 그룹웨어 기능 카탈로그가
+        //    매칭되면 여기서 양보한다 — 판정은 코드 정규식이 아니라 GW_CAPABILITIES 데이터로.
+        if (window._gwCapKwHit && window._gwCapKwHit(text, 'gw_approval_draft')) return null;
         var draft = window._ganttQaApprovalDraft;
         if (!isNewTrigger && !draft) return null;
 
