@@ -42,32 +42,62 @@
         { key: 'IDNRK',      ko: '구성부품',     en: 'Component',     w: '60px',  mono: true },
         { key: 'OJTXP',      ko: '구성부품내역', en: 'Description',   w: '220px', nowrap: true, align: 'left' },
         { key: 'ZTEXT',      ko: '자재내역2',    en: 'Description 2', w: '100px', nowrap: true, align: 'left' },
-        { key: '_LOC',       ko: 'Loc.',         en: 'Loc.',          w: '90px',  loc: true },
+        { key: '_LOC',       ko: 'Loc.',         en: 'Loc.',          w: '46px',  loc: true },
         { key: 'MENGE',      ko: '수량',         en: 'Qty',           w: '48px',  align: 'right' },
         { key: 'MMEIN',      ko: '단위',         en: 'Unit',          w: '36px',  align: 'center' },
-        { key: '_UNITPRICE', ko: '단가',         en: 'Unit Price',    w: '74px',  align: 'right', price: true },
+        { key: '_UNITPRICE', ko: 'KRW',          en: 'KRW',           w: '78px',  align: 'right' },
+        { key: '_USD',       ko: 'USD',          en: 'USD',           w: '74px',  align: 'right', usd: true },
         { key: 'MMSTA',      ko: '상태',         en: 'Status',        w: '40px',  align: 'center' },
         { key: 'WGBEZ60',    ko: 'Group2',       en: 'Group2',        w: '118px', nowrap: true },
         { key: 'MFRPN',      ko: '제조사',       en: 'Manufacturer',  w: '92px',  nowrap: true },
         { key: 'FERTH',      ko: '담당자',       en: 'Person',        w: '72px',  nowrap: true }
     ];
 
-    // 통화 코드 → 표시 기호(데이터). 모르는 코드는 코드 그대로 보여준다.
-    var CURRENCY_SYMBOL = { KRW: '원', USD: '$', JPY: '¥', EUR: '€', CNY: '¥' };
+    // ── USD 환산 환율 ──────────────────────────────────────────────────
+    //  ⚠️ [2026-10-16 실측] SAP 표준가격(STPRS1)은 전사 통화(KRW) 고정이고 ZMM009 119개 컬럼에
+    //    통화 컬럼이 아예 없다 — 그래서 USD는 SAP에서 받는 값이 아니라 **환율로 나눠 계산**한다.
+    //    기본값은 AI 문답 BOM 옵션의 기준환율 기본값(js/04h, 1360)과 맞췄다. 사람이 고치면
+    //    localStorage에 남아 두 BOM 표(메인 탭·전자부품 서브뷰)가 같은 값을 쓴다.
+    var USD_RATE_KEY = 'gantt_bom_usd_rate';
+    var USD_RATE_DEFAULT = 1360;
+    window._bomUsdRate = function () {
+        var v = 0;
+        try { v = parseFloat(localStorage.getItem(USD_RATE_KEY) || ''); } catch (e) {}
+        return isFinite(v) && v > 0 ? v : USD_RATE_DEFAULT;
+    };
+    window._bomSetUsdRate = function (el) {
+        var v = parseFloat(String(el && el.value || '').replace(/,/g, ''));
+        if (isFinite(v) && v > 0) { try { localStorage.setItem(USD_RATE_KEY, String(v)); } catch (e) {} }
+        if (window.bomRender) window.bomRender();
+        if (window._elecBomType && window._elecBomRender) window._elecBomRender();
+    };
 
-    // 표에 실제로 섞여 있는 통화를 모아 헤더/셀 표기를 정한다.
-    //  · 한 종류뿐이면  헤더에 `단가(KRW)`처럼 붙이고 셀은 숫자만
-    //  · 두 종류 이상이면 헤더에서 통화를 지우고(사용자 요청) 셀마다 기호를 붙인다
-    //  ⚠️ [2026-10-16 실측] ZMM009 119개 컬럼에 통화 컬럼이 **없다** — 표준가격(STPRS1)은
-    //    전사 통화 고정이라 SAP이 환종을 따로 주지 않는다. 그래서 평소엔 전부 'KRW'로
-    //    수렴해 기존과 똑같이 보이고, 나중에 통화를 주는 경로가 생기면 자동으로 섞임 처리된다.
-    var _priceCurrencies = function (st) {
-        var set = {};
-        (st && st.rows ? st.rows : []).forEach(function (r) {
-            if (!String(r.STPRS1 || '').trim()) return;
-            set[String(r.WAERS || '').trim().toUpperCase() || 'KRW'] = 1;
-        });
-        return Object.keys(set);
+    // USD 값과 표시 자리수 — 화면과 엑셀이 같은 반올림을 쓰도록 한 곳에서 정한다.
+    //  기본 소수 2자리. 2자리로는 `0.00`이 되어 버리는 작은 값만 유효숫자가 보일 때까지
+    //  자릿수를 늘린다(사용자 요청: `$0.000289` → 반올림 `$0.00029`).
+    var _usdParts = function (row) {
+        var s = String(row.STPRS1 == null ? '' : row.STPRS1).trim();
+        if (!s) return null;
+        var krw = parseFloat(s.replace(/,/g, ''));
+        if (!isFinite(krw)) return null;
+        var unit = parseInt(row.PEINH1 || '1', 10) || 1;
+        var v = (krw / unit) / window._bomUsdRate();
+        if (!isFinite(v)) return null;
+        if (v === 0) return { v: 0, d: 2 };
+        if (parseFloat(v.toFixed(2)) !== 0) return { v: v, d: 2 };
+        return { v: v, d: Math.min(8, Math.ceil(-Math.log10(Math.abs(v))) + 1) };
+    };
+    var _usdCell = function (row) {
+        var p = _usdParts(row);
+        if (!p) return '';
+        var s = p.v.toFixed(p.d);
+        if (p.d > 2) s = s.replace(/0+$/, '').replace(/\.$/, '');  // 늘린 자리의 끝 0은 지운다
+        return '$' + s;
+    };
+    // 엑셀은 숫자로 넣어 계산이 되게 한다(표시와 같은 자리수로 반올림).
+    var _usdNum = function (row) {
+        var p = _usdParts(row);
+        return p ? parseFloat(p.v.toFixed(p.d)) : '';
     };
 
     // Location(설치지점) — SAP ZPP033의 `EBORT`가 원본이고, 사람이 칸을 고쳐 적은 값이 있으면
@@ -79,13 +109,10 @@
         return row.EBORT || '';
     };
 
-    // 단가 표시 — 환종이 섞였을 때만 셀에 기호를 붙인다(한 종류면 헤더에만 붙음)
-    var _priceCell = function (row, mixed) {
+    // KRW 단가 표시 — 원화 기호(₩)를 붙인다($와 짝이 되게).
+    var _priceCell = function (row) {
         var v = _unitPrice(row.STPRS1, row.PEINH1);
-        if (!v || !mixed) return v;
-        var cc = String(row.WAERS || '').trim().toUpperCase() || 'KRW';
-        var sym = CURRENCY_SYMBOL[cc] || cc;
-        return sym === '$' ? sym + v : v + ' ' + sym;
+        return v ? '₩' + v : '';
     };
 
     var _matKey = function (v) { return String(v || '').trim().replace(/^0+/, ''); };
@@ -482,6 +509,7 @@
             if (st.parent) {
                 aoa.push([_t('모체', 'Top')].concat(BOM_COLUMNS.map(function (c) {
                     if (c.loc) return '';
+                    if (c.usd) return _usdNum(st.parent);
                     return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
                 })).concat(['']));
             }
@@ -500,18 +528,20 @@
                         var q = parseFloat(String(r.MENGE || '').replace(/,/g, ''));
                         return isNaN(q) ? (r.MENGE || '') : q;
                     }
+                    if (c.usd) return _usdNum(r);
                     if (c.loc) return _locOf(st, r);
                     return r[c.key] || '';
                 })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
             });
             (st.totals || []).forEach(function (o) {
-                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
+                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.usd || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
             });
 
             var wb = XLSX.utils.book_new();
             var ws = XLSX.utils.aoa_to_sheet(aoa);
-            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 6 },
-                           { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
+            // 레벨·구성부품·내역·내역2·Loc·수량·단위·KRW·USD·상태·Group2·제조사·담당자·비고
+            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 6 },
+                           { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
             XLSX.utils.book_append_sheet(wb, ws, 'BOM');
             if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
             var fileName = 'SAP_BOM_' + (st.material || '') + '_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
@@ -552,6 +582,8 @@
                 matEl.value = defMat || (st && st.material) || '';
             }
         }
+        var rateEl = document.getElementById('bom-usd-rate');
+        if (rateEl && document.activeElement !== rateEl) rateEl.value = window._bomUsdRate();
         var expEl = document.getElementById('bom-explosion');
         if (expEl && st && st.explosion) expEl.value = st.explosion;
         var layEl = document.getElementById('bom-layout');
@@ -579,10 +611,9 @@
                 + (c.nowrap ? ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:' + c.w + ';' : '')
                 + (extra || '');
         };
-        var curList = _priceCurrencies(st);
-        var mixedCur = curList.length > 1;
         var valueOf = function (row, c) {
-            if (c.key === '_UNITPRICE') return _priceCell(row, mixedCur);
+            if (c.key === '_UNITPRICE') return _priceCell(row);
+            if (c.usd) return _usdCell(row);
             if (c.loc) return _locOf(st, row);
             return row[c.key] || '';
         };
@@ -590,10 +621,7 @@
         thead.innerHTML = '<tr>'
             + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
             + BOM_COLUMNS.map(function (c) {
-                var lbl = en ? c.en : c.ko;
-                // 환종이 한 종류면 헤더에 표시, 섞였으면 헤더에서 지우고 셀마다 기호를 붙인다
-                if (c.price && curList.length === 1) lbl += '(' + curList[0] + ')';
-                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(lbl) + '</th>';
+                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
             }).join('')
             // ⚠️ .concept-table은 table-layout:fixed라 min-width가 무시된다 — 반드시 width로 줄 것
             //    (min-width만 줬더니 비고 열이 0px로 찌그러져 안 보였다, 2026-10-15)
@@ -947,6 +975,7 @@
             if (st.parent) {
                 aoa.push([_t('모체', 'Top')].concat(BOM_COLUMNS.map(function (c) {
                     if (c.loc) return '';
+                    if (c.usd) return _usdNum(st.parent);
                     return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
                 })).concat(['']));
             }
@@ -957,17 +986,19 @@
                 aoa.push([r._level].concat(BOM_COLUMNS.map(function (c) {
                     if (c.key === '_UNITPRICE') { var p = parseFloat(String(r.STPRS1 || '').replace(/,/g, '')); var u = parseInt(r.PEINH1 || '1', 10) || 1; return isNaN(p) ? '' : Math.round(p / u * 100) / 100; }
                     if (c.key === 'MENGE') { var q = parseFloat(String(r.MENGE || '').replace(/,/g, '')); return isNaN(q) ? (r.MENGE || '') : q; }
+                    if (c.usd) return _usdNum(r);
                     if (c.loc) return _locOf(st, r);
                     return r[c.key] || '';
                 })).concat([(st.notes && st.notes[r.IDNRK]) || '']));
             });
             (st.totals || []).forEach(function (o) {
-                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
+                aoa.push(['Σ'].concat(BOM_COLUMNS.map(function (c) { return (c.key === '_UNITPRICE' || c.usd || c.loc) ? '' : (o[c.key] || ''); })).concat(['']));
             });
             var wb = XLSX.utils.book_new();
             var ws = XLSX.utils.aoa_to_sheet(aoa);
-            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 6 },
-                           { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
+            // 레벨·구성부품·내역·내역2·Loc·수량·단위·KRW·USD·상태·Group2·제조사·담당자·비고
+            ws['!cols'] = [{ wch: 6 }, { wch: 11 }, { wch: 36 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 6 },
+                           { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
             XLSX.utils.book_append_sheet(wb, ws, 'BOM');
             if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
             var fileName = 'SAP_BOM_' + type.toUpperCase() + '_' + (st.material || '') + '_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
@@ -1083,16 +1114,18 @@
         var zebraClass = function (level, pos) {
             return level === 1 ? (pos % 2 ? 'bom-row-l1-alt' : 'bom-row-l1') : (pos % 2 ? 'bom-row-sub-alt' : 'bom-row-sub');
         };
+        var epRateEl = document.getElementById('ep-bom-usd-rate');
+        if (epRateEl && document.activeElement !== epRateEl) epRateEl.value = window._bomUsdRate();
+
         var TD = 'padding:2px 5px; border:1px solid #cfe3e5; font-size:11.5px; box-sizing:border-box; height:' + ROW_H + ';';
         var thS = 'padding:3px 5px; border:1px solid #cfe3e5; text-align:center; white-space:nowrap; font-size:11.5px;';
         var cellStyle = function (c, extra) {
             return TD + (c.align ? ' text-align:' + c.align + ';' : '') + (c.mono ? ' font-family:monospace;' : '')
                 + (c.nowrap ? ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:' + c.w + ';' : '') + (extra || '');
         };
-        var curList = _priceCurrencies(st);
-        var mixedCur = curList.length > 1;
         var valueOf = function (row, c) {
-            if (c.key === '_UNITPRICE') return _priceCell(row, mixedCur);
+            if (c.key === '_UNITPRICE') return _priceCell(row);
+            if (c.usd) return _usdCell(row);
             if (c.loc) return _locOf(st, row);
             return row[c.key] || '';
         };
@@ -1111,9 +1144,7 @@
         thead.innerHTML = '<tr>'
             + '<th style="' + thS + ' width:46px;">' + _esc(_t('레벨', 'Level')) + '</th>'
             + BOM_COLUMNS.map(function (c) {
-                var lbl = en ? c.en : c.ko;
-                if (c.price && curList.length === 1) lbl += '(' + curList[0] + ')';
-                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(lbl) + '</th>';
+                return '<th style="' + thS + ' width:' + c.w + ';">' + _esc(en ? c.en : c.ko) + '</th>';
             }).join('')
             + '<th style="' + thS + ' width:100px;">' + _esc(_t('비고', 'Note')) + '</th>'
             + '</tr>';
