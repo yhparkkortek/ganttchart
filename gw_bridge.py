@@ -217,7 +217,22 @@ _LOGIN_JS = """
 
   const form = u.closest('form');
   if (!form) return { result: 'no_form' };
-  const btn = form.querySelector('button[type=submit],input[type=submit]');
+
+  // ⚠️⚠️ [2026-10-19 버그수정] **숨겨진 제출 버튼을 누르면 아무 일도 안 일어난다.**
+  //   이 사이트의 진짜 로그인 버튼은 `<a id="login_submit" class="btn_login">로그인</a>`이고,
+  //   폼 안에는 `<input type="submit">`이 **숨김 상태로** 같이 들어 있다. 예전 코드가
+  //   `input[type=submit]`을 먼저 집어 그 숨은 걸 클릭해서, 제출이 아예 안 됐는데도
+  //   "로그인 실패"로 보고됐다(보안문자가 안 뜬 것도 실제 시도가 없었기 때문).
+  //   → **보이는 요소만** 고르고, 사이트의 로그인 버튼을 최우선으로 찾는다.
+  const visible = el => !!(el && el.offsetParent !== null &&
+                           getComputedStyle(el).visibility !== 'hidden' &&
+                           getComputedStyle(el).display !== 'none');
+  const label = el => (el.textContent || el.value || '').trim();
+  const cands = [...form.querySelectorAll('a,button,input[type=submit],input[type=button]')]
+                  .concat([...document.querySelectorAll('a,button')]);
+  const btn = cands.find(e => e.id === 'login_submit' && visible(e))
+           || cands.find(e => visible(e) && /^(로그인|LOGIN|Login|Sign in)$/.test(label(e)))
+           || cands.find(e => visible(e) && (e.type === 'submit' || /btn_login/.test(e.className || '')));
 
   // ⚠️⚠️ [2026-10-19 버그수정] 여기서 제출 결과를 **기다리면 안 된다.**
   //   제출하면 페이지가 이동하면서 이 JS의 실행 컨텍스트가 통째로 파괴된다 →
