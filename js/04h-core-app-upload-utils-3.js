@@ -626,8 +626,23 @@
             return;
         }
         for (const file of files) {
+            // 📎 [2026-10-19] 승인원 표지(.docx)도 받는다 — 협력사가 빈칸을 채워 보내주는 문서라
+            //    SAP에 없는 공급업체 상호/주소/전화가 여기 들어 있다. 브라우저에서 docx를 풀지 않고
+            //    base64로 백엔드(/gw/approval/parse-cover, python-docx)에 넘겨 파싱한다.
+            if (/\.docx$/i.test(file.name)) {
+                try {
+                    const buf = await file.arrayBuffer();
+                    let bin = ''; const bytes = new Uint8Array(buf);
+                    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                    window._ganttQaPendingAttachments.push({ name: file.name, docxBase64: btoa(bin) });
+                    if (window.showToast) window.showToast(window._t(`📎 "${file.name}" 첨부됨 — 승인원 표지로 읽습니다.`, `📎 "${file.name}" attached.`));
+                } catch (e) {
+                    if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}" 읽기 실패: `, `⚠️ Failed to read "${file.name}": `) + (e && e.message ? e.message : e), 'error');
+                }
+                continue;
+            }
             if (!/\.pdf$/i.test(file.name)) {
-                if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}"은(는) PDF가 아니라 건너뜁니다.`, `⚠️ Skipping "${file.name}" — not a PDF.`), 'warning');
+                if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}"은(는) PDF/DOCX가 아니라 건너뜁니다.`, `⚠️ Skipping "${file.name}" — not a PDF or DOCX.`), 'warning');
                 continue;
             }
             try {
@@ -4659,7 +4674,12 @@ ${docsJson}`;
             return;
         }
         const pastedPoContext = window._ganttQaExtractPastedPoContext(question);
-        if (window._ganttQaPoDraft || (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) || pastedPoContext) {
+        // 📎 [2026-10-19] 첨부가 있으면 무조건 구매오더로 보내던 분기 — 그룹웨어 기안에 쓰는
+        //    **승인원 표지(.docx)** 까지 여기로 끌려가서 기안 명령이 아예 실행되지 않았다
+        //    (PO 경로는 PDF 전용이라 조용히 멈춤). 기안 요청 + docx 첨부면 이 분기는 양보한다.
+        const _gwCoverFlow = !!(window._gwCapKwHit && window._gwCapKwHit(question, 'gw_approval_draft'))
+            && (window._ganttQaPendingAttachments || []).some(function (a) { return a.docxBase64; });
+        if (!_gwCoverFlow && (window._ganttQaPoDraft || (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) || pastedPoContext)) {
             const apiKeyForPo = window.getActiveAiKey ? window.getActiveAiKey() : null;
             if (!apiKeyForPo && !window._ganttQaPoDraft) {
                 alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.'));
@@ -4968,23 +4988,78 @@ ${docsJson}`;
                 if (!m) throw new Error(_gwDraftMat + window._t(' 자재 정보를 SAP에서 찾지 못했습니다.', ' not found in SAP.'));
 
                 // 📄 제목은 사내 관례를 따른다 — 기존 문서 실측(219538): `Customer Approval Sheet[133015]_V01`
-                const subject = 'Customer Approval Sheet[' + _gwDraftMat + ']_V01';
+                // 표지에 Revision이 적혀 있으면 아래에서 그 값으로 바꾼다 → let
+                let subject = 'Customer Approval Sheet[' + _gwDraftMat + ']_V01';
                 const fields = { 'Item Code': _gwDraftMat, 'Model': m.MAKTX || '' };
                 if (m.MATKL) fields['Item Group No'] = m.MATKL;   // 자재그룹 **코드**(WGBEZ60은 이름이라 다름)
                 if (m.ZTEXT) fields['Sub Description'] = m.ZTEXT;
-                // ⚠️ Provider Info의 Name은 **공급업체**지 제조사가 아니다. 예전엔 MFRPN(제조사,
-                //    예: AUO)을 넣었는데 실제 문서엔 공급업체(예: 정림전자㈜)가 들어간다 — 전혀 다른 값이라
-                //    자동으로 채우면 틀린 문서가 된다. ZMM006 조회도 MARA-ZLIFNR이 비어 있어 못 가져오므로
-                //    (실측 133015) **비워 두고 사람이 적는다.**
+                // ⚠️ Provider Info의 Name은 **공급업체**지 제조사가 아니다. MFRPN(제조사, 예: AUO)과
+                //    실제 문서의 공급업체(예: 정림전자㈜)는 전혀 다른 값이라 자동으로 채우면 틀린 문서가 된다.
+                //    SAP ZMM006도 MARA-ZLIFNR이 비어 있으면 못 가져온다(실측 133015) →
+                //    **협력사가 채워 보낸 승인원 표지(.docx)** 에서 가져온다.
+                let coverInfo = null;
+                const _coverAtt = (window._ganttQaPendingAttachments || []).find(function (a) { return a.docxBase64; });
+                if (_coverAtt) {
+                    try {
+                        const cr = await (await fetch('http://127.0.0.1:5000/gw/approval/parse-cover', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ dataBase64: _coverAtt.docxBase64 })
+                        })).json();
+                        if (cr.ok) {
+                            coverInfo = cr.fields || {};
+                            // 다 썼으면 첨부 목록에서 뺀다 — 안 그러면 다음 질문(예: 구매오더)에
+                            // 이 표지가 딸려 들어가 엉뚱한 경로를 탄다.
+                            window._ganttQaPendingAttachments = (window._ganttQaPendingAttachments || [])
+                                .filter(function (a) { return a !== _coverAtt; });
+                            if (window._ganttQaRenderAttachmentStrip) window._ganttQaRenderAttachmentStrip();
+                        }
+                    } catch (e) { /* 표지 파싱 실패해도 기안 자체는 막지 않는다 */ }
+                }
+
+                // 표지 값으로 빈 칸을 채우고, 겹치는 칸은 **교차검증**한다(둘 중 하나가 틀리면 드러남)
+                const mismatches = [];
+                if (coverInfo) {
+                    Object.keys(coverInfo).forEach(function (k) {
+                        if (k.charAt(0) === '_') return;
+                        const v = String(coverInfo[k] || '').trim();
+                        if (!v) return;
+                        if (fields[k] === undefined || fields[k] === '') fields[k] = v;
+                        else if (String(fields[k]).trim() !== v) mismatches.push(k + ': SAP "' + fields[k] + '" vs 표지 "' + v + '"');
+                    });
+                    if (coverInfo._rev) subject = 'Customer Approval Sheet[' + _gwDraftMat + ']_V' + coverInfo._rev;
+                }
+
+                // SAP으로도 표지로도 못 채운 칸 — 여기서 **실제로 표지를 요청한다**
+                const NEED = ['Name', 'Address', 'Tel'];
+                const missing = NEED.filter(function (k) { return !fields[k]; });
                 window._gwPendingDraft = { formId: form.formId, deptId: form.deptId, subject: subject, fields: fields };
+                window._ganttQaHistory.pop();
+
+                if (missing.length && !_coverAtt) {
+                    window._ganttQaShowConfirmButtons(
+                        '📎 ' + window._t('공급업체 정보가 SAP에 없습니다 — ', 'Supplier info is not in SAP — ')
+                        + missing.join(', ') + '\n\n'
+                        + window._t('협력사가 채워 보낸 **승인원 표지(.docx)** 가 있으면 아래 [📎 첨부파일]로 붙이고 '
+                                    + '같은 질문을 다시 보내주세요. 표지에서 상호·주소·전화를 읽어 채웁니다.',
+                                    'If you have the supplier-filled approval cover sheet (.docx), attach it and resend the same question.')
+                        + '\n\n' + window._t('표지 없이 그대로 진행하면 그 칸은 비워둡니다.',
+                                             'Without it, those fields stay blank.'),
+                        [
+                            { label: window._t('표지 없이 진행', 'Continue without it'), value: '그룹웨어 기안 임시저장 확정' },
+                            { label: window._t('취소', 'Cancel'), value: '그룹웨어 기안 취소' }
+                        ]);
+                    window._renderGanttQaMessages(); input.focus(); return;
+                }
 
                 const preview = '📝 **' + form.name + '** ' + window._t('기안을 아래 내용으로 작성합니다.', 'will be drafted with:') + '\n\n'
                     + '- ' + window._t('제목', 'Subject') + ': ' + subject + '\n'
                     + Object.keys(fields).map(function (k) { return '- ' + k + ': ' + fields[k]; }).join('\n')
+                    + (_coverAtt ? '\n\n📎 ' + window._t('표지에서 읽음: ', 'From cover sheet: ') + _coverAtt.name : '')
+                    + (mismatches.length ? '\n\n⚠️ ' + window._t('SAP과 표지 값이 다릅니다 — 확인해주세요:\n', 'SAP and cover differ:\n')
+                        + mismatches.map(function (x) { return '- ' + x; }).join('\n') : '')
                     + '\n\n' + window._t('승인원 분류·상태전환·날짜·PACKING TYPE은 판단이 필요해 **비워둡니다**.',
                                           'Approval type, status, dates and packing type are left blank for you to decide.')
                     + '\n' + window._t('**임시저장만** 하고 상신은 하지 않습니다.', 'It will only be saved as a draft — not submitted.');
-                window._ganttQaHistory.pop();
                 window._ganttQaShowConfirmButtons(preview, [
                     { label: '✅ ' + window._t('임시저장', 'Save draft'), value: '그룹웨어 기안 임시저장 확정' },
                     { label: window._t('취소', 'Cancel'), value: '그룹웨어 기안 취소' }

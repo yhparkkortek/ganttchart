@@ -3214,6 +3214,24 @@ def gw_approval_forms():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/approval/parse-cover', methods=['POST'])
+def gw_approval_parse_cover():
+    """협력사가 채워 보낸 승인원 표지(docx)에서 기안에 필요한 값을 뽑는다.
+    SAP에 없는 공급업체 상호/주소/전화가 여기 들어 있다."""
+    try:
+        import base64
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        raw = b.get('dataBase64') or ''
+        if not raw:
+            return jsonify({'ok': False, 'message': '파일 내용(dataBase64)이 없습니다.'}), 400
+        data = base64.b64decode(raw)
+        r = gw_bridge.parse_approval_cover(data)
+        return jsonify({'ok': True, 'fields': r['fields'], 'lineCount': r['lineCount']})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'표지 분석 실패: {e}'})
+
+
 @app.route('/gw/approval/draft', methods=['POST'])
 def gw_approval_draft():
     """결재 양식을 채워 **임시저장**한다. 결재요청(상신)은 하지 않는다 —

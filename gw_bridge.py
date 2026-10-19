@@ -408,6 +408,72 @@ def calendars():
 #    표의 열 머리글(Item Code, Model …)과 행 라벨(Name, Address …)로 역매핑해서 찾는다.
 #    라벨만 보면 `Date :` 같은 게 섞여 엉뚱한 칸에 쓴다(실제로 한 번 잘못 읽었다).
 
+# ── 📎 협력사 승인원 표지(docx) 파싱 ────────────────────────────────
+# 협력사에 표지를 보내면 빈칸을 채워 돌려준다. SAP에 없는 정보(공급업체 상호/주소/전화)가
+# 거기 들어 있으므로, 기안 작성 때 부족한 칸을 이걸로 채운다.
+# 실측(2026-10-19, 승인원_133015_Rev00.docx): Provider Info Name/Address/Tel. 과
+#   Item Group No·Item Code·Item Description·Sub-Description·DMS Upload(New/Rev)가 모두 있음.
+# ⚠️ 표지 양식은 협력사/시점마다 다를 수 있다 → 라벨은 **별칭 목록(데이터)** 으로 둬서
+#   문구가 달라도 잡히게 하고, 못 찾은 칸은 조용히 빈 채로 둔다(추측해서 채우지 않는다).
+_COVER_LABELS = [
+    (['Item Group No', 'Item Group No.', '자재그룹'],        'Item Group No'),
+    (['Item Code', '자재코드', '품번'],                       'Item Code'),
+    (['Item Description', 'Model', '품명'],                   'Model'),
+    (['Sub-Description', 'Sub Description', '세부내역'],      'Sub Description'),
+    (['Name', 'Provider Name', '업체명', '상호'],             'Name'),
+    (['Address', '주소'],                                     'Address'),
+    (['Tel.', 'Tel', 'TEL', '전화', '연락처'],                'Tel'),
+]
+_COVER_ALL_LABELS = {a for al, _ in _COVER_LABELS for a in al}
+
+
+def _docx_lines(data):
+    """docx 바이트에서 문단 텍스트를 순서대로 뽑는다(표·텍스트상자 안의 것도 포함).
+    python-docx의 paragraphs/tables만 보면 표 안 텍스트를 놓쳐서 XML을 직접 훑는다."""
+    import io
+    import zipfile
+    import xml.etree.ElementTree as ET
+    W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        root = ET.fromstring(z.read('word/document.xml'))
+    out = []
+    for p in root.iter(f'{W}p'):
+        t = ''.join(n.text or '' for n in p.iter(f'{W}t')).strip()
+        if t:
+            out.append(t)
+    return out
+
+
+def parse_approval_cover(data):
+    """승인원 표지 docx → {필드: 값}. 라벨 **바로 다음 줄**을 값으로 본다
+    (표가 라벨칸/값칸으로 나뉘어 있어 문단 순서가 그대로 유지된다)."""
+    import re
+    lines = _docx_lines(data)
+    found, used = {}, set()
+    for i, ln in enumerate(lines):
+        for aliases, key in _COVER_LABELS:
+            if key in found or ln not in aliases:
+                continue
+            for j in range(i + 1, min(i + 3, len(lines))):
+                if j in used:
+                    continue
+                v = lines[j].strip()
+                if v in _COVER_ALL_LABELS:   # 다음 라벨이면 값이 아니다
+                    break
+                if v and v != '.':
+                    found[key] = v
+                    used.add(j)
+                    break
+    # DMS Upload 체크 + 개정 차수 (■ New □ Update (Revision: 00))
+    for ln in lines:
+        m = re.search(r'(?:■|☑|✓|v|V)\s*(New|Update)[^()]*\(?\s*Rev(?:ision)?\s*[.:：]?\s*([0-9]{1,2})', ln)
+        if m:
+            found['_kind'] = m.group(1)
+            found['_rev'] = m.group(2)
+            break
+    return {'fields': found, 'lineCount': len(lines)}
+
+
 def approval_forms():
     """자주 쓰는 결재 양식 목록(이름 → formId/deptId). 하드코딩 대신 매번 읽는다."""
     j = gw_get('/api/approval/side')
