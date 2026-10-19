@@ -787,6 +787,13 @@ window.deleteHistoryByDateRange = function() {
             else { const ni = window.moveRow(rowIndex, +1); if (ni != null) rowIndex = ni; window._selectedRows = new Set(); }
             popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
         },
+        // 🐛 [2026-10-19] 이 'rap-del' 키가 이 객체 안에 **두 번** 있었다(여기 + 'rap-add' 뒤).
+        //    JS 객체 리터럴은 뒤가 이기므로 **이 핸들러가 통째로 죽어 있었다**(커밋 훅의
+        //    oxlint no-dupe-keys가 잡아냄). 뒤 버전에는 아래 _selectedRows 초기화가 없어서,
+        //    단일 행을 삭제한 뒤 낡은 다중 선택 Set이 남았다. 이웃 'rap-up'/'rap-dn'은 단일
+        //    행 분기에서 똑같이 초기화하므로, 일관된 이 버전만 남기고 뒤 중복을 지웠다.
+        //    ⚠️ _selectedRows는 배열 인덱스가 아니라 **행 객체 참조 Set**이다(배경 재렌더로
+        //       인덱스가 어긋나므로). 새 Set으로 비우는 것 외에 직접 조작하지 말 것.
         'rap-del':   () => {
             if (window._selectedRows && window._selectedRows.size >= 2) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
             window._selectedRows = new Set();
@@ -803,10 +810,6 @@ window.deleteHistoryByDateRange = function() {
             popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
         },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-del':   () => {
-            if (window._selectedRows && window._selectedRows.size > 1) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
-            window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
-        },
     };
     Object.entries(actions).forEach(([id, fn]) => {
         let btn = document.getElementById(id);
