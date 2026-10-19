@@ -105,6 +105,34 @@ SAP 로그인과 동일 — Windows **DPAPI** 암호화, `gw_login_config.json`(
 ```
 필드: `name` `email` `mobileNo` `companyName` `departmentName` `positionName` (실측 365건)
 
+### 메일 (조사 2026-10-19, 부분)
+| 경로 | 메서드 | 용도 |
+|---|---|---|
+| `/api/mail/folder/all` | GET | 폴더 목록 + **용량(quotaInfo)** |
+| `/api/mail/folder/info` | GET | 폴더별 건수(newCnt/unseenCnt/totalCnt) |
+| `/api/mail/message/list` | POST | 메일 목록. **body `{}`(JSON)이면 받은메일함 1페이지 80건** |
+| `/api/mail/message/count` | POST | 건수. body는 **form-urlencoded** (`flag=U&folder=Inbox`) |
+| `/api/mail/message/gadget?count=&folder=` | GET | 홈 위젯용 요약(`folder=quick/unseen`) |
+| `/api/mail/bookmark/list` | GET | 즐겨찾기(flaged/unseen 등) |
+| `/api/mail/accountstatus` | GET | 메일 계정 상태(`enabled`) |
+
+**기본 폴더 7개** — `Inbox`(받은) `Sent`(보낸) `Drafts`(임시보관) `Reserved`(예약) `Spam` `Trash` `Quotaviolate`(용량초과함)
+
+**messageList 항목 필드**: `id` `subject` `from` `to` `size` `byteSize` `flag` `preview` `dateUtc` `sentDateUtc` `seen` `priority` `spamRate` `existMeInCc` `tagList` `folderFullName`
+→ ⚠️ 식별자는 `uid`가 아니라 **`id`**.
+
+#### ⚠️ 아직 못 푼 것 (다음 조사 거리)
+- `message/list`의 **페이지·폴더·검색 파라미터 이름을 모른다.** JSON으로 `folder`/`page`/`pageBase`/`searchType`을 줘도 **무시**되고(항상 Inbox 80건), form-urlencoded로 주면 **응답이 비어** 온다.
+  → 추측하지 말고 **UI에서 폴더 전환·페이지 이동·검색을 실제로 눌러 요청 본문을 캡처**할 것. (`count`는 form-urlencoded인데 `list`는 JSON인 걸 보면 엔드포인트마다 형식이 다르다.)
+- **메일 상세 조회 경로 미확인** — `/api/mail/message/{id}` 등 5개 후보를 시도했으나 확인 못 함.
+- **발송 API 미확인** (의도적으로 실행하지 않음).
+
+#### ⚠️ 실무 발견 — 메일함 용량 초과
+```
+usage 5.5GB / limit 5.0GB · percent 100 · overQuota: true
+```
+`Quotaviolate`(용량초과함) 폴더가 따로 있다. **용량이 넘치면 새 메일 수신이 막힐 수 있으므로** 연동 기능과 별개로 정리가 필요하다.
+
 ### 전자결재
 | 경로 | 용도 |
 |---|---|
@@ -246,9 +274,50 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 
 ---
 
+## 11. 전수 조사 — 화면 지도와 진행 상황
+
+### 전체 화면 수 (실측 2026-10-19)
+`/resources/js/conf/routes.json`에 **앱 화면 라우트 352개**가 들어 있다. 이게 조사 대상의 전부다.
+(이 파일을 먼저 받아 보면 "어디를 조사해야 하는지"를 화면 하나씩 뒤지지 않고 알 수 있다.)
+
+| 모듈 | 화면 | 쓰기성 | 조사 |
+|---|---:|---:|---|
+| `approval` 전자결재 | 60 | 9 | 🟡 부분(기안/검색/문서함) |
+| `works` | 49 | 9 | ⬜ |
+| `ehr` 인사관리 | 29 | 0 | ⬜ |
+| `board` 게시판 | 23 | 8 | ⬜ |
+| `noti` 알림 | 21 | 0 | ⬜ |
+| `community` | 21 | 7 | ⬜ |
+| `contact` 주소록 | 21 | 10 | 🟡 목록만 |
+| `report` 보고 | 21 | 3 | ⬜ |
+| `task` | 18 | 5 | ⬜ |
+| `calendar` 캘린더 | 14 | 3 | 🟢 읽기 완료 |
+| `docs` 문서관리 | 14 | 5 | ⬜ |
+| `asset` 예약 | 11 | 4 | ⬜ |
+| `survey` 설문 | 10 | 5 | ⬜ |
+| `sms` | 4 | 1 | ⬜ |
+| `note` 쪽지 | 3 | 1 | ⬜ |
+| `mail` 메일 | **1** | 0 | 🟡 부분 |
+
+> ⚠️ **메일이 화면 1개인 이유**: 메일은 내부 SPA라 라우트가 `/app/mail` 하나뿐이고 폴더·읽기·쓰기 전환이 전부 그 안에서 일어난다. 그래서 **라우트 맵으로는 조사가 안 되고 UI 조작 관찰이 필수**다.
+
+### 조사 방법 — 효과 순
+1. **routes.json 받기** — 조사 대상 화면 전체를 한 번에 파악(위 표).
+2. **화면 열고 Network 관찰** — 가장 확실. 읽기 API는 이걸로 거의 다 나온다.
+3. **UI 조작 후 요청 본문 캡처** — 페이지·검색·필터 파라미터는 이 방법뿐. 추측하면 틀린다(메일 `message/list` 사례).
+4. ~~JS 번들 정적 추출~~ — **효과 낮음**. 모듈 JS가 지연 로딩이라 61개 스크립트에서 28개만 나왔다. 보조 수단으로만.
+   (⚠️ 번들 URL은 `?rev=`가 붙어 있어 `endsWith('.js')`로 거르면 거의 다 놓친다.)
+
+### ⚠️ 엔드포인트마다 요청 형식이 다르다
+같은 메일 모듈 안에서도 `message/count`는 **form-urlencoded**, `message/list`는 **JSON**이다.
+한 모듈 안에서 형식이 통일돼 있다고 가정하지 말 것.
+
+---
+
 ## 📌 아직 안 한 것 / 다음 거리
 
-- **전수 조사 미완** — 모듈이 14개(메일·결재·게시판·Works·보고·ToDo·캘린더·예약·커뮤니티·문서관리·자료실·주소록·설문·인사관리)인데 **캘린더·주소록·전자결재 3개만** 조사했다.
+- **전수 조사 진행 중** — 위 11절 표 참고. 화면 352개 중 캘린더(완료)·메일/전자결재/주소록(부분)만 손댔다.
+- **메일 다음 단계**: 폴더 전환·페이지 이동·검색을 UI에서 눌러 `message/list` 요청 본문을 캡처 → 파라미터 확정. 이어서 상세 조회·발송 API.
 - 서명·날짜 칸(`editorForm_6~17`) 매핑 — `Written by`/`Checked by` 앵커로 가능하나 미구현.
 - 공급업체 표기 규칙(SAP 그대로 vs 표지 우선) 미결정.
 - 쓰기는 전자결재 임시저장 하나뿐. 일정 등록·결재 상신은 **안전 설계 전까지 열지 않는다.**
