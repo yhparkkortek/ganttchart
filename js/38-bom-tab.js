@@ -548,13 +548,47 @@
         btn.title = anyCollapsed ? _t('하위 레벨 모두 펼치기', 'Expand all levels') : _t('하위 레벨 모두 접기', 'Collapse lower levels');
     };
 
+    // ⚠️⚠️ [2026-10-19 사용자 요청] 화면에 **보이는 행만** 돌려준다 — 접어둔 가지는 뺀다.
+    //   엑셀이 뷰 상태를 그대로 따라가게 하려고 뽑아낸 헬퍼다(접어서 레벨1만 보이면 엑셀도
+    //   단일 레벨, 펼쳐져 있으면 다단계).
+    //   ⚠️ 접힘 판정은 `bomRender`의 가시행 루프와 **같은 규칙이어야 한다** — 한쪽만 고치면
+    //      화면과 엑셀이 조용히 어긋난다. 바꿀 땐 반드시 두 곳을 같이 볼 것.
+    window._bomVisibleRows = function (st) {
+        if (!st || !st.rows) return [];
+        // ⚠️ 헤더 정렬이 켜져 있으면 렌더는 **접힘을 무시하고 전체를 평면으로** 그린다
+        //    (bomRender / _elecBomRender 의 `_sortRows(st)` 분기). 그 땐 엑셀도 전체여야
+        //    화면과 같다 — 여기서 같은 분기를 먼저 태운다.
+        var sorted = _sortRows(st);
+        if (sorted) return sorted;
+        var collapsed = st._collapsed || {};
+        var out = [], hidden = -1;
+        st.rows.forEach(function (r, i) {
+            if (hidden !== -1) {
+                if (r._level > hidden) return;      // 접힌 가지의 자식 → 건너뜀
+                hidden = -1;
+            }
+            var next = st.rows[i + 1];
+            var hasChild = !!(next && next._level > r._level);
+            if (hasChild && collapsed[i]) hidden = r._level;
+            out.push(r);
+        });
+        return out;
+    };
+
     // ─── 엑셀 출력 ─────────────────────────────────────────────────────
     // ZMM009 조회 표(js/33 _sapExportMatRows)와 같은 방식 — 화면에 그린 행을 그대로 쓰므로
     // SAP 재조회가 없고, 저장 위치도 같은 C:\SAP_DMS\SAP조회.
+    // ⚠️ [2026-10-19] 예전엔 위 주석과 달리 `st.rows` **전체**를 내보내서, 가지를 접어놔도
+    //    엑셀엔 접힌 하위가 다 들어갔다. 이제 `_bomVisibleRows`로 뷰 상태를 따라간다.
     window.bomExportExcel = async function () {
         var st = window._bomStore();
         if (!st || !st.rows || !st.rows.length) {
             if (window.showToast) window.showToast(_t('내보낼 BOM이 없습니다 — 먼저 조회해주세요.', 'No BOM to export — run a lookup first.'), 'warning');
+            return;
+        }
+        var visibleRows = window._bomVisibleRows(st);
+        if (!visibleRows.length) {
+            if (window.showToast) window.showToast(_t('화면에 보이는 행이 없습니다 — 펼친 뒤 다시 시도해주세요.', 'No visible rows — expand the tree and try again.'), 'warning');
             return;
         }
         try {
@@ -571,10 +605,14 @@
                     return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
                 })).concat(['']));
             }
-            // 화면과 같은 순서로 — 레벨 블록끼리 묶고(안정 정렬) 레벨 안에서는 SAP 순서 유지
-            var ordered = st.rows.map(function (r, i) { return { r: r, i: i }; })
-                .sort(function (a, b) { return (a.r._level - b.r._level) || (a.i - b.i); })
-                .map(function (x) { return x.r; });
+            // 대상은 `st.rows` 전체가 아니라 **보이는 행**(위 `_bomVisibleRows`) 이다.
+            // 헤더 정렬 중이면 그 정렬 순서가 곧 화면 순서이므로 **그대로 쓴다**.
+            // 아닐 때만 기존처럼 레벨 블록끼리 묶는다(안정 정렬, 레벨 안에선 SAP 순서 유지).
+            var ordered = _sortRows(st)
+                ? visibleRows
+                : visibleRows.map(function (r, i) { return { r: r, i: i }; })
+                    .sort(function (a, b) { return (a.r._level - b.r._level) || (a.i - b.i); })
+                    .map(function (x) { return x.r; });
             ordered.forEach(function (r) {
                 aoa.push([r._level].concat(BOM_COLUMNS.map(function (c) {
                     if (c.key === '_UNITPRICE') {
@@ -599,14 +637,25 @@
                            { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
             XLSX.utils.book_append_sheet(wb, ws, 'BOM');
             if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
-            var fileName = 'SAP_BOM_' + (st.material || '') + '_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            // 파일명에 뷰 상태를 박아둔다 — 같은 자재를 접은 채/펼친 채 두 번 뽑아도 구분된다.
+            // 판정은 드롭다운이 아니라 **실제로 내보낸 행**의 최대 레벨로 한다(내용과 항상 일치).
+            var maxLv = ordered.reduce(function (m, r) { return Math.max(m, r._level || 0); }, 0);
+            var modeTag = maxLv > 1 ? _t('다단계', 'multi') : _t('단일', 'single');
+            var fileName = 'SAP_BOM_' + (st.material || '') + '_' + modeTag + '_'
+                + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
             var res = await fetch('http://127.0.0.1:5000/sap-save-export', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fileName: fileName, dataBase64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) })
             });
             var d = await res.json();
             if (window.showToast) {
-                window.showToast(d.ok ? ('📊 ' + (d.message || _t('BOM을 엑셀로 저장했습니다.', 'Saved the BOM to Excel.')))
+                // 몇 행을 어떤 상태로 내보냈는지 같이 알린다 — 접어둔 걸 모르고 뽑았을 때
+                // "왜 행이 적지?" 하고 헤매지 않도록(접힌 하위는 의도적으로 빠진다).
+                var hiddenCnt = st.rows.length - visibleRows.length;
+                var okMsg = (d.message || _t('BOM을 엑셀로 저장했습니다.', 'Saved the BOM to Excel.'))
+                    + ' (' + modeTag + ', ' + ordered.length + _t('행', ' rows')
+                    + (hiddenCnt > 0 ? _t(' · 접힌 ' + hiddenCnt + '행 제외', ' · ' + hiddenCnt + ' collapsed rows excluded') : '') + ')';
+                window.showToast(d.ok ? ('📊 ' + okMsg)
                                       : ('⚠️ ' + (d.error || _t('엑셀 저장 실패', 'Excel save failed'))), d.ok ? 'success' : 'error');
             }
         } catch (e) {
@@ -1063,6 +1112,13 @@
             if (window.showToast) window.showToast(_t('내보낼 BOM이 없습니다 — 먼저 조회해주세요.', 'No BOM to export — run a lookup first.'), 'warning');
             return;
         }
+        // [2026-10-19] 메인 BOM 탭과 같은 규칙 — 뷰 상태(접힘/정렬)를 그대로 따라간다.
+        //   같은 "📊 엑셀 출력" 버튼인데 탭마다 다르게 동작하면 안 된다.
+        var visibleRows = window._bomVisibleRows(st);
+        if (!visibleRows.length) {
+            if (window.showToast) window.showToast(_t('화면에 보이는 행이 없습니다 — 펼친 뒤 다시 시도해주세요.', 'No visible rows — expand the tree and try again.'), 'warning');
+            return;
+        }
         try {
             if (typeof XLSX === 'undefined') throw new Error(_t('엑셀 라이브러리를 불러오지 못했습니다.', 'Excel library not loaded.'));
             var en = window._currentLang === 'en';
@@ -1075,9 +1131,11 @@
                     return c.key === '_UNITPRICE' ? _unitPrice(st.parent.STPRS1, st.parent.PEINH1) : (st.parent[c.key] || '');
                 })).concat(['']));
             }
-            var ordered = st.rows.map(function (r, i) { return { r: r, i: i }; })
-                .sort(function (a, b) { return (a.r._level - b.r._level) || (a.i - b.i); })
-                .map(function (x) { return x.r; });
+            var ordered = _sortRows(st)
+                ? visibleRows
+                : visibleRows.map(function (r, i) { return { r: r, i: i }; })
+                    .sort(function (a, b) { return (a.r._level - b.r._level) || (a.i - b.i); })
+                    .map(function (x) { return x.r; });
             ordered.forEach(function (r) {
                 aoa.push([r._level].concat(BOM_COLUMNS.map(function (c) {
                     if (c.key === '_UNITPRICE') { var p = parseFloat(String(r.STPRS1 || '').replace(/,/g, '')); var u = parseInt(r.PEINH1 || '1', 10) || 1; return isNaN(p) ? '' : Math.round(p / u * 100) / 100; }
@@ -1094,13 +1152,23 @@
                            { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 18 }, { wch: 16 }, { wch: 13 }, { wch: 24 }];
             XLSX.utils.book_append_sheet(wb, ws, 'BOM');
             if (typeof applyExcelStyles === 'function') applyExcelStyles(wb);
-            var fileName = 'SAP_BOM_' + type.toUpperCase() + '_' + (st.material || '') + '_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
+            // 메인 BOM 탭과 같은 규칙 — 내보낸 행의 최대 레벨로 단일/다단계를 판정해 파일명에 박는다.
+            var maxLv = ordered.reduce(function (m, r) { return Math.max(m, r._level || 0); }, 0);
+            var modeTag = maxLv > 1 ? _t('다단계', 'multi') : _t('단일', 'single');
+            var fileName = 'SAP_BOM_' + type.toUpperCase() + '_' + (st.material || '') + '_' + modeTag + '_'
+                + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx';
             var res = await fetch('http://127.0.0.1:5000/sap-save-export', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fileName: fileName, dataBase64: XLSX.write(wb, { bookType: 'xlsx', type: 'base64' }) })
             });
             var d = await res.json();
-            if (window.showToast) window.showToast(d.ok ? ('📊 ' + (d.message || _t('BOM을 엑셀로 저장했습니다.', 'Saved BOM to Excel.'))) : ('⚠️ ' + (d.error || _t('엑셀 저장 실패', 'Failed'))), d.ok ? 'success' : 'error');
+            if (window.showToast) {
+                var hiddenCnt = st.rows.length - visibleRows.length;
+                var okMsg = (d.message || _t('BOM을 엑셀로 저장했습니다.', 'Saved BOM to Excel.'))
+                    + ' (' + modeTag + ', ' + ordered.length + _t('행', ' rows')
+                    + (hiddenCnt > 0 ? _t(' · 접힌 ' + hiddenCnt + '행 제외', ' · ' + hiddenCnt + ' collapsed rows excluded') : '') + ')';
+                window.showToast(d.ok ? ('📊 ' + okMsg) : ('⚠️ ' + (d.error || _t('엑셀 저장 실패', 'Failed'))), d.ok ? 'success' : 'error');
+            }
         } catch (e) {
             if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : String(e)), 'error');
         }
