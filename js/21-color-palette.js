@@ -413,6 +413,16 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.bom-lvhdr       { background: ' + window._cpHslToHex(hue, 36, 91) + ' !important; }\n'
         + '#bom-body tr.bom-row:hover > td { background: ' + window._cpHslToHex(hue, 45, 86) + ' !important; }\n';
 
+    // ⚡ [2026-10-19] Elec Parts 헤더의 SPEC/BOM 전환 토글 — 형제 버튼과 같은 공식으로 맞춘다.
+    //    비활성: 배경 bg + 글자 darkText(다른 헤더 버튼과 동일), 활성: 배경 darkText + 흰 글자.
+    //    호버는 CSS에서만 — JS 인라인으로 칠하면 그 값이 남아 팔레트가 안 먹는다.
+    css += '.elec-mode-btn { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important;'
+        + ' border-color: ' + gen.hoverBg + ' !important; }\n'
+        + '.elec-mode-btn:hover { background: ' + gen.hoverBg + ' !important; }\n'
+        + '.elec-mode-btn.elec-mode-btn-active, .elec-mode-btn.elec-mode-btn-active:hover {'
+        + ' background: ' + gen.darkText + ' !important; color: #fff !important;'
+        + ' border-color: ' + gen.darkText + ' !important; }\n';
+
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
     //    문서 전체에서 가장 마지막 스타일이 되도록 보장한다(매번 다시 appendChild해서 위치 유지).

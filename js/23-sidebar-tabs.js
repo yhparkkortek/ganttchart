@@ -254,21 +254,17 @@
         if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('spec');
     };
 
+    // 🎨 [2026-10-19] 색을 JS에서 직접 칠하지 않는다 — 활성 클래스만 토글하고 색은
+    //    styles.css(.elec-mode-btn)와 팔레트 오버라이드(js/21 _cpApplyLive)가 정한다.
+    //    예전엔 여기서 인라인 style로 #00707d를 박아서, 팔레트를 바꿔도 이 버튼만
+    //    청록으로 남았다(인라인이 팔레트 CSS를 이긴다).
     window._elecUpdateModeToggle = function(mode) {
         var specBtn = document.getElementById('elec-mode-spec-btn');
         var bomBtn = document.getElementById('elec-mode-bom-btn');
         if (!specBtn || !bomBtn) return;
-        if (mode === 'bom') {
-            specBtn.style.background = '#e0f5f7'; specBtn.style.color = '#00707d';
-            specBtn.style.borderColor = '#a3d9e0';
-            bomBtn.style.background = '#00707d'; bomBtn.style.color = '#fff';
-            bomBtn.style.borderColor = '#00707d';
-        } else {
-            specBtn.style.background = '#00707d'; specBtn.style.color = '#fff';
-            specBtn.style.borderColor = '#00707d';
-            bomBtn.style.background = '#e0f5f7'; bomBtn.style.color = '#00707d';
-            bomBtn.style.borderColor = '#a3d9e0';
-        }
+        var gw = (mode === 'bom');
+        specBtn.classList.toggle('elec-mode-btn-active', !gw);
+        bomBtn.classList.toggle('elec-mode-btn-active', gw);
     };
     window._elecModeSpec = function() { if (window._elecBomClose) window._elecBomClose(); };
 

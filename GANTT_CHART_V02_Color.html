@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Gantt Chart</title>
 
-<script src="js/01-gapi-gis-stub.js?v=20261016r"></script>
+<script src="js/01-gapi-gis-stub.js?v=20261019a"></script>
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <!-- 🖥️ [Panel Compare] PDF 데이터시트에서 텍스트를 뽑아 AI 추출 입력으로 쓰기 위한 pdf.js (UMD, 전역 pdfjsLib) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-<script src="js/02-pdfjs-worker-init.js?v=20261016r"></script>
+<script src="js/02-pdfjs-worker-init.js?v=20261019a"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=20261016r">
+<link rel="stylesheet" href="styles.css?v=20261019a">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -1531,10 +1531,12 @@
                 <div id="elec-view-dropdown" class="row-action-popup" style="min-width:150px; padding:6px;"></div>
             </div>
             <div id="elec-mode-toggle" style="display:flex; gap:0; align-items:center; margin:0 8px;">
-                <button id="elec-mode-spec-btn" onclick="window._elecModeSpec()"
-                        style="padding:4px 10px; background:#00707d; color:#fff; border:1px solid #00707d; border-right:none; border-radius:6px 0 0 6px; font-size:12px; font-weight:bold; cursor:pointer;">&#9660; SPEC</button>
-                <button id="elec-mode-bom-btn" onclick="window._elecBomOpen(window._elecView || 'panel')"
-                        style="padding:4px 10px; background:#e0f5f7; color:#00707d; border:1px solid #a3d9e0; border-radius:0 6px 6px 0; font-size:12px; font-weight:bold; cursor:pointer;">&#9658; BOM</button>
+                <!-- 🎨 색은 인라인으로 박지 않는다 — styles.css의 .elec-mode-btn + 팔레트
+                     오버라이드(js/21 _cpApplyLive)가 테마를 따라가게 한다. -->
+                <button id="elec-mode-spec-btn" class="elec-mode-btn elec-mode-btn-l elec-mode-btn-active"
+                        onclick="window._elecModeSpec()">&#9660; SPEC</button>
+                <button id="elec-mode-bom-btn" class="elec-mode-btn elec-mode-btn-r"
+                        onclick="window._elecBomOpen(window._elecView || 'panel')">&#9658; BOM</button>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <span id="eh-panel-btns" style="display:contents;">
@@ -1833,45 +1835,45 @@
         </div>
     </div>
 
-<script src="js/03-drive-modal-drag.js?v=20261016r"></script>
+<script src="js/03-drive-modal-drag.js?v=20261019a"></script>
 
 <!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/04a-core-app-globals.js?v=20261016r"></script>
-<script src="js/04b-core-app-drive-sync.js?v=20261016r"></script>
-<script src="js/04c-core-app-mail-pipeline.js?v=20261016r"></script>
-<script src="js/04d-core-app-gantt-core.js?v=20261016r"></script>
-<script src="js/04e-core-app-undo-redo.js?v=20261016r"></script>
-<script src="js/04f-core-app-upload-utils-1.js?v=20261016r"></script>
-<script src="js/04g-core-app-upload-utils-2.js?v=20261016r"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=20261016r"></script>
-<script src="js/04i-core-app-upload-utils-4.js?v=20261016r"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=20261016r"></script>
-<script src="js/04k-core-app-filter-export.js?v=20261016r"></script>
+<script src="js/04a-core-app-globals.js?v=20261019a"></script>
+<script src="js/04b-core-app-drive-sync.js?v=20261019a"></script>
+<script src="js/04c-core-app-mail-pipeline.js?v=20261019a"></script>
+<script src="js/04d-core-app-gantt-core.js?v=20261019a"></script>
+<script src="js/04e-core-app-undo-redo.js?v=20261019a"></script>
+<script src="js/04f-core-app-upload-utils-1.js?v=20261019a"></script>
+<script src="js/04g-core-app-upload-utils-2.js?v=20261019a"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=20261019a"></script>
+<script src="js/04i-core-app-upload-utils-4.js?v=20261019a"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=20261019a"></script>
+<script src="js/04k-core-app-filter-export.js?v=20261019a"></script>
 
-<script src="js/05-drive-sync-optimize.js?v=20261016r"></script>
+<script src="js/05-drive-sync-optimize.js?v=20261019a"></script>
 
-<script src="js/06-theme-color-chart.js?v=20261016r"></script>
+<script src="js/06-theme-color-chart.js?v=20261019a"></script>
 
-<script src="js/07-data-loss-safeguard.js?v=20261016r"></script>
+<script src="js/07-data-loss-safeguard.js?v=20261019a"></script>
 
-<script src="js/08-filter-ui.js?v=20261016r"></script>
+<script src="js/08-filter-ui.js?v=20261019a"></script>
 
-<script src="js/09-autosave-user-id.js?v=20261016r"></script>
+<script src="js/09-autosave-user-id.js?v=20261019a"></script>
 
-<script src="js/10-gantt-filter-date-ui.js?v=20261016r"></script>
+<script src="js/10-gantt-filter-date-ui.js?v=20261019a"></script>
 
-<script src="js/11-mobile-detect.js?v=20261016r"></script>
+<script src="js/11-mobile-detect.js?v=20261019a"></script>
 
-<script src="js/12-mobile-longpress.js?v=20261016r"></script>
+<script src="js/12-mobile-longpress.js?v=20261019a"></script>
 
 
-<script src="js/13-mobile-touch-timer.js?v=20261016r"></script>
+<script src="js/13-mobile-touch-timer.js?v=20261019a"></script>
 
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/14a-ai-mail-analysis-1.js?v=20261016r"></script>
-<script src="js/14b-ai-mail-analysis-2.js?v=20261016r"></script>
-<script src="js/14c-task-inbox.js?v=20261016r"></script>
-<script src="js/14d-distribution-ledger.js?v=20261016r"></script>
+<script src="js/14a-ai-mail-analysis-1.js?v=20261019a"></script>
+<script src="js/14b-ai-mail-analysis-2.js?v=20261019a"></script>
+<script src="js/14c-task-inbox.js?v=20261019a"></script>
+<script src="js/14d-distribution-ledger.js?v=20261019a"></script>
 
 
 
@@ -2425,22 +2427,22 @@
 </div>
 
 <!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/15a-mail-attachment-tab.js?v=20261016r"></script>
-<script src="js/15b-mail-server-tab-1.js?v=20261016r"></script>
-<script src="js/15c-mail-server-tab-2.js?v=20261016r"></script>
+<script src="js/15a-mail-attachment-tab.js?v=20261019a"></script>
+<script src="js/15b-mail-server-tab-1.js?v=20261019a"></script>
+<script src="js/15c-mail-server-tab-2.js?v=20261019a"></script>
 
 
 
 
-<script src="js/16-wbs-level-colors.js?v=20261016r"></script>
+<script src="js/16-wbs-level-colors.js?v=20261019a"></script>
 
-<script src="js/17-weekly-report-modal-drag.js?v=20261016r"></script>
+<script src="js/17-weekly-report-modal-drag.js?v=20261019a"></script>
 
-<script src="js/18-mail-analyzer-modal-drag.js?v=20261016r"></script>
+<script src="js/18-mail-analyzer-modal-drag.js?v=20261019a"></script>
 
-<script src="js/19-shared-modal-drag.js?v=20261016r"></script>
+<script src="js/19-shared-modal-drag.js?v=20261019a"></script>
 
-<script src="js/20-weekly-report.js?v=20261016r"></script>
+<script src="js/20-weekly-report.js?v=20261019a"></script>
 
 </div> <!-- /#app-main -->
 
@@ -2481,49 +2483,49 @@
     </div>
 </div>
 
-<script src="js/21-color-palette.js?v=20261016r"></script>
+<script src="js/21-color-palette.js?v=20261019a"></script>
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/22a-summary-mctable-parse.js?v=20261016r"></script>
-<script src="js/22b-summary-mctable-core1.js?v=20261016r"></script>
-<script src="js/22c-summary-mctable-core2.js?v=20261016r"></script>
-<script src="js/22d-summary-mctable-core3.js?v=20261016r"></script>
-<script src="js/22e-summary-mctable-core4.js?v=20261016r"></script>
-<script src="js/22f-address-book.js?v=20261016r"></script>
-<script src="js/22g-name-autocomplete.js?v=20261016r"></script>
-<script src="js/22h-brief-mc-common-1.js?v=20261016r"></script>
-<script src="js/22i-brief-mc-common-2.js?v=20261016r"></script>
+<script src="js/22a-summary-mctable-parse.js?v=20261019a"></script>
+<script src="js/22b-summary-mctable-core1.js?v=20261019a"></script>
+<script src="js/22c-summary-mctable-core2.js?v=20261019a"></script>
+<script src="js/22d-summary-mctable-core3.js?v=20261019a"></script>
+<script src="js/22e-summary-mctable-core4.js?v=20261019a"></script>
+<script src="js/22f-address-book.js?v=20261019a"></script>
+<script src="js/22g-name-autocomplete.js?v=20261019a"></script>
+<script src="js/22h-brief-mc-common-1.js?v=20261019a"></script>
+<script src="js/22i-brief-mc-common-2.js?v=20261019a"></script>
 
-<script src="js/23-sidebar-tabs.js?v=20261016r"></script>
+<script src="js/23-sidebar-tabs.js?v=20261019a"></script>
 
-<script src="js/24-calendar-tab.js?v=20261016r"></script>
+<script src="js/24-calendar-tab.js?v=20261019a"></script>
 
-<script src="js/25-ai-learning.js?v=20261016r"></script>
+<script src="js/25-ai-learning.js?v=20261019a"></script>
 
-<script src="js/26-topic-profile.js?v=20261016r"></script>
+<script src="js/26-topic-profile.js?v=20261019a"></script>
 
-<script src="js/27-topic-contamination.js?v=20261016r"></script>
+<script src="js/27-topic-contamination.js?v=20261019a"></script>
 
-<script src="js/26-gantt-search.js?v=20261016r"></script>
+<script src="js/26-gantt-search.js?v=20261019a"></script>
 
-<script src="js/28-new-project-wizard.js?v=20261016r"></script>
+<script src="js/28-new-project-wizard.js?v=20261019a"></script>
 
-<script src="js/29-new-project-cluster-detect.js?v=20261016r"></script>
+<script src="js/29-new-project-cluster-detect.js?v=20261019a"></script>
 
-<script src="js/30-issue-collector.js?v=20261016r"></script>
+<script src="js/30-issue-collector.js?v=20261019a"></script>
 
-<script src="js/31-issue-report.js?v=20261016r"></script>
+<script src="js/31-issue-report.js?v=20261019a"></script>
 
-<script src="js/32-sap-capabilities.js?v=20261016r"></script>
+<script src="js/32-sap-capabilities.js?v=20261019a"></script>
 
-<script src="js/33-qa-router.js?v=20261016r"></script>
+<script src="js/33-qa-router.js?v=20261019a"></script>
 
-<script src="js/34-storage-doctor.js?v=20261016r"></script>
-    <script src="js/35-material-cart.js?v=20261016r"></script>
-    <script src="js/36-sap-login.js?v=20261016r"></script>
-    <script src="js/37-project-cache.js?v=20261016r"></script>
-    <script src="js/38-bom-tab.js?v=20261016r"></script>
-    <script src="js/39-groupware-calendar.js?v=20261016r"></script>
+<script src="js/34-storage-doctor.js?v=20261019a"></script>
+    <script src="js/35-material-cart.js?v=20261019a"></script>
+    <script src="js/36-sap-login.js?v=20261019a"></script>
+    <script src="js/37-project-cache.js?v=20261019a"></script>
+    <script src="js/38-bom-tab.js?v=20261019a"></script>
+    <script src="js/39-groupware-calendar.js?v=20261019a"></script>
 
 </body>
 </html>
