@@ -3297,6 +3297,58 @@ def gw_events():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+# ── 게시판 (읽기 전용) ───────────────────────────────────────────────
+# 엔드포인트는 docs/groupware.md "게시판" 절. 글 작성·삭제 라우트는 **만들지 않는다.**
+
+@app.route('/gw/boards', methods=['GET'])
+def gw_boards():
+    """볼 수 있는 게시판 목록(전사 + 부서). 게시판 지정 조회용."""
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, 'boards': gw_bridge.boards()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/board/recent', methods=['GET'])
+def gw_board_recent():
+    """기간 내 게시물 목록.
+
+    `from`/`to`('YYYY-MM-DD')로 기간을 직접 주는 게 정확하다 — "지난주"처럼 **달력 주**로
+    끊어야 하는 요청을 `days` 롤링으로 바꾸면 이번 주 글이 섞인다. `days`는 폴백.
+    `limit`(기본 80), `boardId`(선택)."""
+    try:
+        import gw_bridge
+        days = request.args.get('days', '7')
+        limit = request.args.get('limit', '80')
+        bid = (request.args.get('boardId') or '').strip()
+        r = gw_bridge.board_recent(days=int(days) if str(days).isdigit() else 7,
+                                   limit=int(limit) if str(limit).isdigit() else 80,
+                                   board_id=int(bid) if bid.isdigit() else None,
+                                   date_from=(request.args.get('from') or '').strip() or None,
+                                   date_to=(request.args.get('to') or '').strip() or None)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/board/post', methods=['GET'])
+def gw_board_post():
+    """게시물 1건 본문(평문). `boardId`·`postId` 필수."""
+    try:
+        import gw_bridge
+        bid = (request.args.get('boardId') or '').strip()
+        pid = (request.args.get('postId') or '').strip()
+        if not bid.isdigit() or not pid.isdigit():
+            return jsonify({'ok': False, 'message': 'boardId와 postId가 필요합니다.'}), 400
+        rec = gw_bridge.board_post(int(bid), int(pid))
+        rec['ok'] = True
+        return jsonify(rec)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/open-folder', methods=['POST'])
 def open_folder():
     data = request.get_json(silent=True) or {}

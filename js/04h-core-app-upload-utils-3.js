@@ -4928,6 +4928,89 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // 📰 [2026-10-19 신규] 그룹웨어 게시판 조회/요약 — AI 문답에서 바로.
+        //    ⚠️ 트리거 어휘와 기간 어휘는 GW_CAPABILITIES / GW_PERIOD_WORDS(js/32) **데이터**다.
+        //    ⚠️ 기안(gw_approval_draft)보다 **위**에 둔다 — "게시판"과 "기안/결재"는 겹치지 않지만,
+        //       두 블록 순서가 바뀌면 나중에 어휘가 늘었을 때 조용히 샌다(승인원 표지 사고와 같은 패턴).
+        //    읽기 전용이다. 글 작성·댓글은 백엔드에 라우트가 없다.
+        if (window._gwCapKwHit && window._gwCapKwHit(question, 'gw_board_recent')) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            const _per = window._gwPeriodRange ? window._gwPeriodRange(question, 7)
+                                               : { from: '', to: '', label: window._t('최근 7일', 'last 7 days') };
+            window._ganttQaHistory.push({ role: 'ai', pending: true,
+                text: '⏳ ' + window._t('그룹웨어 게시판에서 ' + _per.label + ' 게시물을 가져오는 중...',
+                                        'Fetching board posts (' + _per.label + ')...') });
+            window._renderGanttQaMessages();
+            let _bReply;
+            try {
+                // ① 로그인 상태 먼저 — 끊겼으면 여기서 멈춘다(자동 로그인 시도 안 함: 계정 잠금 위험)
+                const st = await (await fetch('http://127.0.0.1:5000/gw/status')).json();
+                if (!st.ok) throw new Error(window._t('🔒 그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
+                                                      '🔒 Groupware sign-in required — use the 🔑 here.'));
+                const res = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/gw/board/recent?limit=80'
+                          + (_per.from ? '&from=' + _per.from : '')
+                          + (_per.to ? '&to=' + _per.to : '')),
+                    90000, window._t('게시판 조회 시간 초과', 'Board lookup timed out'));
+                const d = await res.json();
+                if (!d.ok) throw new Error(d.message || window._t('게시판 조회 실패', 'Board lookup failed'));
+                const posts = d.posts || [];
+                if (!posts.length) {
+                    _bReply = 'ℹ️ ' + window._t(_per.label + ' 새 게시물이 없습니다.', 'No posts in ' + _per.label + '.');
+                } else {
+                    // ② 결정론 먼저 — 목록은 AI 없이 그대로 보여준다(AI가 죽어도 쓸 수 있어야 한다)
+                    const _lines = posts.map(function (p) {
+                        return '| ' + (p.createdAt || '').slice(0, 10) + ' | ' + (p.boardName || '')
+                             + ' | ' + (p.title || '').replace(/\|/g, '/')
+                             + ' | ' + (p.writer || '') + ' |';
+                    }).join('\n');
+                    const _table = '| ' + window._t('날짜', 'Date') + ' | ' + window._t('게시판', 'Board')
+                        + ' | ' + window._t('제목', 'Title') + ' | ' + window._t('작성자', 'Writer') + ' |\n'
+                        + '|---|---|---|---|\n' + _lines;
+                    _bReply = '📰 **' + _per.label + ' ' + window._t('게시물', 'posts') + ' ' + posts.length
+                            + window._t('건**', '') + ' (' + d.from + (d.to ? ' ~ ' + d.to : '') + ')\n\n' + _table;
+
+                    // ③ AI 요약 — 데이터는 위에서 이미 확보했으니, AI는 "요약"만 맡는다.
+                    //    키가 없거나 AI가 실패해도 목록은 그대로 남는다(조용히 삼키지 않고 사유를 적는다).
+                    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+                    if (apiKey) {
+                        const _ctx = posts.map(function (p, i) {
+                            return (i + 1) + '. [' + (p.createdAt || '').slice(0, 10) + '] (' + (p.boardName || '') + ') '
+                                 + (p.title || '') + ' — ' + (p.writer || '') + (p.position ? ' ' + p.position : '')
+                                 + (p.summary ? '\n   ' + p.summary : '');
+                        }).join('\n');
+                        const _p = '아래는 사내 그룹웨어 게시판에서 조회한 ' + _per.label
+                            + '(' + d.from + (d.to ? ' ~ ' + d.to : '') + ') 게시물 목록이다.\n'
+                            + '사용자 질문: ' + question + '\n\n'
+                            + '[게시물 ' + posts.length + '건]\n' + _ctx + '\n\n'
+                            + '요청: 위 목록만 근거로 한국어로 간결하게 요약하라. 게시판별로 묶고, 중요도가 높아 보이는 '
+                            + '공지(필독/마감일/제출 요청 등)를 앞에 두고, 각 항목은 한 줄로 쓴다. '
+                            + '목록에 없는 내용을 추측해 보태지 말고, 본문 요약이 비어 있는 항목은 제목만으로 쓴다. '
+                            + '표는 다시 만들지 말고 글머리표로만 답하라.';
+                        try {
+                            const _r = await window._withTimeout(window.callAiBackend(apiKey, _p, {}), 60000,
+                                window._t('AI 요약 시간 초과', 'AI summary timed out'));
+                            if (_r && _r.ok) {
+                                const _t2 = window._extractGanttQaAiText(_r);
+                                if (_t2 && _t2.trim()) _bReply += '\n\n---\n\n🤖 **' + window._t('요약', 'Summary') + '**\n\n' + _t2.trim();
+                            } else {
+                                _bReply += '\n\n⚠️ ' + window._t('AI 요약은 실패했습니다(목록은 위에 그대로 있습니다).',
+                                                                 'AI summary failed (the list above is still valid).');
+                            }
+                        } catch (e) {
+                            _bReply += '\n\n⚠️ ' + window._t('AI 요약 실패: ', 'AI summary failed: ') + (e && e.message ? e.message : e);
+                        }
+                    }
+                    // ④ 원문으로 가는 링크 — 조회만으로 끝나지 않게(최종 결과물로 가는 길을 붙인다)
+                    _bReply += '\n\n' + window._t('원문: ', 'Source: ')
+                            + posts.slice(0, 5).map(function (p) { return '[' + (p.title || '').slice(0, 18) + '](' + p.url + ')'; }).join(' · ');
+                }
+            } catch (e) { _bReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: _bReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         const _gwDraftHit = window._gwCapKwHit ? window._gwCapKwHit(question, 'gw_approval_draft') : false;
         const _gwDraftMat = _gwDraftHit && (question.match(/\b\d{5,8}\b/) || [])[0];
         // 확인 버튼이 돌려보내는 확정 명령

@@ -24,8 +24,10 @@
 실제로 보내는 요청**을 관찰해서 확정했다. 새 기능이 필요하면 같은 방법을 쓸 것.
 """
 import asyncio
+import datetime
 import json
 import os
+import re
 import subprocess
 import time
 
@@ -677,4 +679,149 @@ def events(date_from, date_to, calendar_ids=None):
             'creator':   ((e.get('creator') or {}).get('name') or ''),
             'description': (e.get('description') or '')[:500],
         })
+    return out
+
+
+# ── 게시판 (읽기 전용) ───────────────────────────────────────────────
+# 엔드포인트는 전수 조사(2026-10-19)로 확정 — docs/groupware.md "게시판" 절 참고.
+#   /api/board/myhome/all?page&offset&url_type=all   내가 보는 모든 게시판 통합 최신글
+#   /api/board/{boardId}/posts/classic?page&offset   게시판별 목록
+#   /api/board/{boardId}/post/{postId}/classic       본문
+# ⚠️ 쓰기(글 작성·삭제·댓글)는 **만들지 않는다.**
+
+_TAG_RE = re.compile(r'<[^>]+>')
+_WS_RE = re.compile(r'[ \t\xa0]+')
+
+
+def _html_to_text(html, limit=4000):
+    """게시물 본문 HTML을 요약용 평문으로. AI에 넘길 거라 태그·중복 공백을 없앤다."""
+    s = str(html or '')
+    s = re.sub(r'(?is)<(script|style)[^>]*>.*?</\1>', ' ', s)
+    s = re.sub(r'(?i)<br\s*/?>|</p>|</div>|</tr>|</li>', '\n', s)
+    s = _TAG_RE.sub(' ', s)
+    for a, b in (('&nbsp;', ' '), ('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'),
+                 ('&quot;', '"'), ('&#39;', "'")):
+        s = s.replace(a, b)
+    s = _WS_RE.sub(' ', s)
+    s = re.sub(r'\n\s*\n\s*\n+', '\n\n', s)
+    return s.strip()[:limit]
+
+
+def _post_brief(p):
+    w = p.get('writer') or {}
+    return {
+        'id':        p.get('id'),
+        'boardId':   p.get('boardId'),
+        'boardName': p.get('boardName') or '',
+        'title':     p.get('title') or '',
+        'writer':    w.get('name') or '',
+        'position':  w.get('positionName') or '',
+        'createdAt': p.get('createdAt') or '',
+        'summary':   _html_to_text(p.get('summary') or '', 400),
+        'readCount': p.get('readCount') or 0,
+        'comments':  p.get('commentsCount') or 0,
+        'hasAttach': bool(p.get('hasAttach')),
+        'url':       f'{GW_ORIGIN}/app/board/{p.get("boardId")}/post/{p.get("id")}',
+    }
+
+
+_KST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def _day_bounds(date_str, end_of_day):
+    """'YYYY-MM-DD' → KST 경계 datetime. 잘못된 값이면 None(= 제한 없음)."""
+    try:
+        d = datetime.datetime.strptime(str(date_str).strip(), '%Y-%m-%d').date()
+    except (ValueError, TypeError, AttributeError):
+        return None
+    t = datetime.time(23, 59, 59) if end_of_day else datetime.time(0, 0, 0)
+    return datetime.datetime.combine(d, t, tzinfo=_KST)
+
+
+def board_recent(days=7, limit=80, board_id=None, date_from=None, date_to=None):
+    """기간 내 게시물. `board_id`를 주면 그 게시판만.
+
+    ⚠️ **서버에 기간 필터 파라미터가 없다** — 최신순 목록을 받아 Python에서 잘라낸다.
+       그래서 `date_from`보다 오래된 글이 나오면 그때 페이징을 멈추고, limit로 상한을 둔다.
+    ⚠️ `date_to`는 **멈춤 조건이 아니라 건너뛰기**다 — 목록이 최신순이라 범위보다 새 글이
+       앞에 먼저 나온다. 여기서 멈추면 "지난주"를 물었을 때 0건이 된다(실수하기 쉬운 지점).
+    `days`는 date_from이 없을 때만 쓰는 폴백이다."""
+    cutoff = _day_bounds(date_from, False) or (
+        datetime.datetime.now(_KST) - datetime.timedelta(days=int(days)))
+    newest = _day_bounds(date_to, True)
+    out, page, pagesize = [], 0, 20
+    while page < 15 and len(out) < int(limit):
+        if board_id:
+            qs = (f'/api/board/{int(board_id)}/posts/classic'
+                  f'?page={page}&offset={pagesize}&sorts=sortCriteria+desc')
+        else:
+            qs = f'/api/board/myhome/all?page={page}&offset={pagesize}&url_type=all'
+        j = gw_get(qs, timeout=60)
+        rows = (j or {}).get('data') or []
+        if not rows:
+            break
+        stop = False
+        for p in rows:
+            ts = str(p.get('createdAt') or '')
+            try:
+                when = datetime.datetime.fromisoformat(ts)
+            except ValueError:
+                when = None
+            if when is not None and when < cutoff:
+                stop = True            # 최신순이므로 여기부터는 전부 범위 밖 → 페이징 중단
+                continue
+            if newest is not None and when is not None and when > newest:
+                continue               # 범위보다 새 글 — 건너만 뛴다(중단하면 0건이 된다)
+            out.append(_post_brief(p))
+        if stop or ((j or {}).get('page') or {}).get('lastPage'):
+            break
+        page += 1
+    out = out[:int(limit)]
+    return {'days': int(days), 'count': len(out),
+            'from': cutoff.strftime('%Y-%m-%d'),
+            'to': newest.strftime('%Y-%m-%d') if newest else '',
+            'posts': out}
+
+
+def board_post(board_id, post_id, body_limit=4000):
+    """게시물 1건 본문. 요약·인용용 평문으로 돌려준다.
+
+    ⚠️ 사내 공지는 **슬라이드를 그림으로 붙여** 올리는 경우가 흔하다(실측: 공지 30459는
+       content가 `<img>`뿐이라 평문이 0자). 그때 빈 문자열만 돌려주면 받는 쪽에서
+       '조회 실패'와 구분할 수 없으므로 `bodyNote`로 **사유를 드러낸다.**"""
+    j = gw_get(f'/api/board/{int(board_id)}/post/{int(post_id)}/classic', timeout=60)
+    d = (j or {}).get('data') or {}
+    raw = d.get('content') or ''
+    rec = _post_brief(d)
+    rec['body'] = _html_to_text(raw, body_limit)
+    rec['attaches'] = [{'name': a.get('name') or '', 'size': a.get('size') or 0}
+                       for a in (d.get('attaches') or [])]
+    rec['imageCount'] = len(re.findall(r'(?i)<img', raw))
+    if not rec['body']:
+        if rec['imageCount']:
+            rec['bodyNote'] = (f'본문이 이미지 {rec["imageCount"]}장으로만 되어 있어 읽을 글자가 없습니다'
+                               + ('. 첨부: ' + ', '.join(a['name'] for a in rec['attaches'])
+                                  if rec['attaches'] else '.'))
+        elif raw:
+            rec['bodyNote'] = '본문에서 읽을 수 있는 글자를 찾지 못했습니다(서식만 있는 글).'
+        else:
+            rec['bodyNote'] = '본문이 비어 있습니다.'
+    return rec
+
+
+def boards():
+    """볼 수 있는 게시판 목록(전사 + 부서). 게시판 지정 조회용."""
+    out = []
+    j = gw_get('/api/board/company/boardsWithIp', timeout=45)
+    for b in ((j or {}).get('data') or {}).get('boards') or []:
+        if b.get('nodeType') == 'FOLDER':
+            continue                   # 폴더는 글이 없다
+        out.append({'id': b.get('id'), 'name': b.get('nodeValue') or '', 'scope': '전사'})
+    j = gw_get('/api/department/boards', timeout=45)
+    for dept in (j or {}).get('data') or []:
+        for b in dept.get('boards') or []:
+            if b.get('nodeType') == 'FOLDER':
+                continue
+            out.append({'id': b.get('id'), 'name': b.get('nodeValue') or '',
+                        'scope': dept.get('deptName') or '부서'})
     return out

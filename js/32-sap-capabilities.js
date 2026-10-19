@@ -587,8 +587,86 @@
         { id: 'gw_calendar', title: '그룹웨어 일정 조회', titleEn: 'Groupware calendar',
           mode: 'read', verified: 'live',
           kw: ['그룹웨어 일정', '그룹웨어일정', '회사 일정', '전사일정', '사내 일정'],
-          needs: '기간(선택)', ex: '그룹웨어 일정 보여줘' }
+          needs: '기간(선택)', ex: '그룹웨어 일정 보여줘' },
+        // 📰 [2026-10-19 신규] 게시판 읽기 — 전수 조사로 확정한 /api/board/myhome/all 사용.
+        //    읽기 전용이다(글 작성·댓글·삭제는 백엔드에 라우트조차 만들지 않았다).
+        { id: 'gw_board_recent', title: '그룹웨어 게시판 조회/요약', titleEn: 'Groupware board digest',
+          mode: 'read', verified: 'live',
+          kw: ['그룹웨어 게시판', '그룹웨어게시판', '사내 게시판', '회사 게시판', '게시판 게시물',
+               '게시판 요약', '게시판 글', '공지사항 요약', '사내 공지', '그룹웨어 공지',
+               '게시판 열어', '게시판 보여', '게시물 요약', '게시글 요약'],
+          needs: '기간(선택: 오늘/어제/이번주/지난주/최근 N일)',
+          ex: '그룹웨어 게시판 지난주 게시물 요약해줘' }
     ];
+
+    // 📅 기간 어휘 → 날짜 범위. **데이터로 관리**한다(코드 정규식에 박지 말 것 — CLAUDE.md).
+    //    위에서부터 먼저 걸리는 항목이 이긴다(긴 표현을 앞에).
+    //    ⚠️ kind를 쓰는 이유: "지난주"를 `days: 14` 롤링으로 바꾸면 **이번 주 글이 섞인다.**
+    //       달력 주(월~일)로 끊어야 사용자가 생각하는 "지난주"와 같아진다.
+    window.GW_PERIOD_WORDS = window.GW_PERIOD_WORDS || [
+        { kw: ['지난주', '저번주', '지난 주', '전주'],   kind: 'lastWeek',  label: '지난주' },
+        { kw: ['이번주', '금주', '이번 주'],             kind: 'thisWeek',  label: '이번주' },
+        { kw: ['어제', '전날'],                          kind: 'yesterday', label: '어제' },
+        { kw: ['오늘', '금일'],                          kind: 'today',     label: '오늘' },
+        { kw: ['지난달', '저번달'],                       kind: 'lastMonth', label: '지난달' },
+        { kw: ['이번달', '당월', '이번 달'],              kind: 'thisMonth', label: '이번달' },
+        { kw: ['한달', '한 달'],                          kind: 'days', days: 31, label: '최근 한 달' },
+        { kw: ['보름', '2주', '이주'],                   kind: 'days', days: 15, label: '최근 2주' }
+    ];
+
+    // 기간 어휘/숫자를 **명시적인 from~to 날짜**로 바꾼다. 서버에 기간 필터가 없어
+    // 범위를 코드가 책임져야 하므로, 여기서 한 번만 계산해 백엔드에 넘긴다.
+    window._gwPeriodRange = function (text, fallbackDays) {
+        var q = String(text || '');
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        var ymd = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+        var today = new Date(); today.setHours(0, 0, 0, 0);
+        var mk = function (from, to, label) { return { from: ymd(from), to: ymd(to), label: label }; };
+        // 월요일 시작 — 일요일(getDay()==0)은 그 주의 7번째 날이다
+        var monday = function (base) {
+            var d = new Date(base); var dow = d.getDay(); var back = (dow === 0) ? 6 : (dow - 1);
+            d.setDate(d.getDate() - back); return d;
+        };
+
+        // ① "최근 N일" / "N일" 처럼 숫자가 직접 적힌 경우가 어휘표보다 우선
+        var m = q.match(/(\d{1,3})\s*일/);
+        if (m) {
+            var n = parseInt(m[1], 10);
+            if (n >= 1 && n <= 365) {
+                var f = new Date(today); f.setDate(f.getDate() - (n - 1));
+                return mk(f, today, '최근 ' + n + '일');
+            }
+        }
+        // ② 어휘표
+        var list = window.GW_PERIOD_WORDS || [];
+        for (var i = 0; i < list.length; i++) {
+            for (var j = 0; j < list[i].kw.length; j++) {
+                if (q.indexOf(list[i].kw[j]) < 0) continue;
+                var it = list[i], a, b;
+                if (it.kind === 'lastWeek') {
+                    b = monday(today); b.setDate(b.getDate() - 1);          // 지난주 일요일
+                    a = new Date(b); a.setDate(a.getDate() - 6);            // 지난주 월요일
+                    return mk(a, b, it.label);
+                }
+                if (it.kind === 'thisWeek')  return mk(monday(today), today, it.label);
+                if (it.kind === 'yesterday') { a = new Date(today); a.setDate(a.getDate() - 1); return mk(a, a, it.label); }
+                if (it.kind === 'today')     return mk(today, today, it.label);
+                if (it.kind === 'lastMonth') {
+                    a = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    b = new Date(today.getFullYear(), today.getMonth(), 0);  // 지난달 마지막 날
+                    return mk(a, b, it.label);
+                }
+                if (it.kind === 'thisMonth') return mk(new Date(today.getFullYear(), today.getMonth(), 1), today, it.label);
+                a = new Date(today); a.setDate(a.getDate() - ((it.days || 7) - 1));
+                return mk(a, today, it.label);
+            }
+        }
+        // ③ 기간 표현이 없으면 기본값
+        var fd = fallbackDays || 7;
+        var d0 = new Date(today); d0.setDate(d0.getDate() - (fd - 1));
+        return mk(d0, today, '최근 ' + fd + '일');
+    };
+
     window._gwCapKwHit = function (text, capId) {
         var q = String(text || '').toLowerCase();
         var qFlat = q.replace(/\s+/g, '');

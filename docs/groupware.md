@@ -248,6 +248,55 @@ jsTree 포맷 **배열**이 그대로 온다: `[{data:{id:"FOLDER_61",title}, st
 `/api/approval/official/{approve,return,cancel,rerequest,addreceiver}` (공문) · `/api/approval/document/bulkdraft` ·
 `/api/approval/manage/document/addreaders` · `/api/approval/auth/docmanage`
 → **쓰기성이라 호출하지 않았다.** 전체 64개 목록은 아래 "번들 추출" 참고.
+### 게시판 (전수 조사 + **앱 이식 완료** 2026-10-19)
+
+#### 엔드포인트
+| 경로 | 용도 |
+|---|---|
+| `/api/board/myhome/all?page=0&offset=20&url_type=all` | **내가 보는 모든 게시판 통합 최신글** — 기간 요약에 이걸 쓴다 |
+| `/api/board/{boardId}/posts/classic?page&offset&sorts=sortCriteria+desc` | 게시판별 목록 |
+| `/api/board/{boardId}/posts/classic/notice?page&sorts=..` | 그 게시판의 공지(상단 고정) |
+| `/api/board/{boardId}/post/{postId}/classic` | **본문** (`content`가 HTML) |
+| `/api/board/{boardId}/post/{postId}/comment?offset=1000` | 댓글 |
+| `/api/board/company/boardsWithIp` | 전사 게시판 목록 (`nodeType: FOLDER`는 글이 없으니 제외) |
+| `/api/department/boards` | 부서 게시판 목록 |
+| `/api/board/favorite?page&offset` · `/api/boardconfig` · `/api/search/board` | 즐겨찾기 / 설정 / 검색 |
+
+목록 항목 키: `id` `boardId` `boardName` `title` `writer{name,positionName}` `createdAt`
+`summary`(본문 발췌) `readCount` `commentsCount` `hasAttach`. 화면 경로는 `/app/board/{boardId}/post/{postId}`.
+
+#### ⚠️ **기간 필터 파라미터가 없다**
+서버에 `from`/`to`가 없다. 최신순 목록을 받아 **코드에서** 잘라야 한다(`gw_bridge.board_recent`).
+- `date_from`보다 오래된 글이 나오면 그 자리에서 **페이징 중단**(최신순이므로 뒤는 전부 범위 밖).
+- `date_to`는 **중단 조건이 아니라 건너뛰기**다 — 목록이 최신순이라 범위보다 새 글이 **앞에** 온다.
+  여기서 멈추면 "지난주"를 물었을 때 **0건**이 된다. (실수하기 쉬운 지점)
+
+#### ⚠️ "지난주"를 롤링 일수로 바꾸지 말 것
+`지난주 = days:14`로 처리하면 **이번 주 글이 섞인다.** 달력 주(월~일)로 끊어야 사용자가 생각하는
+"지난주"와 같아진다 → `window._gwPeriodRange`(js/32)가 어휘를 **from~to 날짜**로 환산한다.
+어휘표는 `window.GW_PERIOD_WORDS`(데이터) — `kind`가 `lastWeek/thisWeek/today/yesterday/lastMonth/thisMonth/days`.
+"최근 N일"처럼 숫자가 직접 적히면 어휘표보다 **숫자가 우선**.
+실측: 2026-10-19(월) 기준 `지난주` → `2026-10-12 ~ 2026-10-18` 3건, `이번주` → `10-19` 1건, `지난달` → `09-01~09-30` 15건.
+
+#### ⚠️ 사내 공지는 본문이 **이미지뿐**인 경우가 흔하다
+슬라이드를 그림으로 붙여 올린다. 실측: 공지 `30459`는 `content`가 `<img>` 8장뿐이라 평문 **0자**.
+빈 문자열만 돌려주면 받는 쪽에서 **"조회 실패"와 구분이 안 된다** → `board_post`가 `bodyNote`로
+사유(이미지 N장 / 첨부 파일명)를 드러낸다. 파싱 실패를 조용히 기본값으로 삼키지 말 것(CLAUDE.md).
+
+#### 앱 경로 (읽기 전용 — 글 작성·댓글 라우트는 **만들지 않았다**)
+```
+GET /gw/board/recent?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=80[&boardId=N][&days=7]
+GET /gw/board/post?boardId=N&postId=N
+GET /gw/boards
+```
+AI 문답 명령: `js/04h`의 `gw_board_recent` 블록 — 트리거 어휘는 `GW_CAPABILITIES`(js/32).
+**결정론 먼저**: 목록 표는 AI 없이 먼저 렌더하고, AI는 그 목록만 근거로 요약만 맡는다.
+AI가 실패해도 목록은 남고 실패 사유를 붙인다. 끝에 원문 링크를 붙인다.
+
+> 🧪 **검증 팁**: 백엔드를 재시작하지 않고 라우트만 확인하려면 `kortek_backend.app.test_client()`를
+> 쓴다 — 사용자가 돌리고 있는 5000번 프로세스를 건드리지 않는다(예약 발송·SAP 작업 중일 수 있음).
+
+
 ---
 
 ## 5. 기안 작성 (전자결재 쓰기)
