@@ -3247,7 +3247,8 @@ def gw_approval_draft():
             return jsonify({'ok': False, 'message': '양식(formId)과 부서(deptId)가 필요합니다.'}), 400
         if not subject:
             return jsonify({'ok': False, 'message': '제목은 필수입니다.'}), 400
-        r = gw_bridge.approval_draft(form_id, dept_id, subject, fields, dry_run=bool(b.get('dryRun')))
+        r = gw_bridge.approval_draft(form_id, dept_id, subject, fields,
+                                     dry_run=bool(b.get('dryRun')), checks=b.get('checks') or [])
         if isinstance(r, dict) and r.get('docId'):
             r['docUrl'] = f'https://gw.kortek.co.kr/app/approval/document/{r["docId"]}'
         return jsonify(r if isinstance(r, dict) else {'ok': False, 'message': str(r)})

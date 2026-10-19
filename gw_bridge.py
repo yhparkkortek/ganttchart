@@ -526,6 +526,16 @@ _DRAFT_JS = r"""
   // 3) 제목
   if (cfg.subject) { setVal(document.getElementById('subject'), cfg.subject); log.push({ field:'제목', id:'subject', ok:true, val:cfg.subject }); }
 
+  // 3-b) 체크박스 — 양식의 id가 `editorForm_28_정식승인`처럼 **값이 뒤에 붙어** 있어서
+  //      라벨로 바로 찾을 수 있다(실측). cfg.checks = ['정식승인','P1','New'] 형태.
+  for (const want of (cfg.checks || [])) {
+    const el = [...document.querySelectorAll('input[type=checkbox][id^=editorForm_]')]
+      .find(e => e.id.endsWith('_' + want));
+    if (!el) { log.push({ field: '체크:' + want, ok: false, why: '해당 체크박스 없음' }); continue; }
+    if (!el.checked) { el.click(); }
+    log.push({ field: '체크:' + want, id: el.id, ok: !!el.checked, val: want });
+  }
+
   // 4) 나머지 칸 — 열 머리글 우선, 없으면 행 라벨로 찾는다(텍스트 칸만)
   for (const [label, value] of Object.entries(cfg.fields || {})) {
     const want = norm(label);
@@ -559,7 +569,7 @@ _DRAFT_JS = r"""
 """
 
 
-def approval_draft(form_id, dept_id, subject, fields, dry_run=False):
+def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None):
     """결재 양식에 값을 채우고 **임시저장**한다. 상신(결재요청)은 하지 않는다.
 
     fields: {'Item Code': '102202', 'Model': '...', 'Name': '삼완전자'} 처럼
@@ -579,7 +589,8 @@ def approval_draft(form_id, dept_id, subject, fields, dry_run=False):
     # 소개 투어가 떠 있으면 입력칸을 가려 채우기가 실패한다 — 들어오자마자 한 번 닫는다
     dismiss_intro()
 
-    cfg = json.dumps({'subject': subject, 'fields': fields or {}, 'dryRun': bool(dry_run)},
+    cfg = json.dumps({'subject': subject, 'fields': fields or {},
+                      'checks': checks or [], 'dryRun': bool(dry_run)},
                      ensure_ascii=False)
     return eval_in_gw(_DRAFT_JS % cfg, timeout=120)
 

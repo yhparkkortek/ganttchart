@@ -1953,6 +1953,54 @@ def fetch_lifnr_from_zmm006(material):
     return str(grid.GetCellValue(0, lifnr_col)).strip() or None
 
 
+def fetch_lifnr_by_material_zmm006(material, porg='1000', plant='1000'):
+    """ZMM006(구매 정보 레코드)에서 자재의 공급업체 코드/이름을 찾는다.
+
+    ⚠️ [2026-10-19] MM03 구매탭의 `MARA-ZLIFNR`은 **비어 있는 자재가 많다**(실측 133015).
+    그런데 ZMM006에는 실제 거래 정보가 있어서 LIFNR을 얻을 수 있다 —
+    사용자가 알려준 경로(자재 → ZMM006 → LIFNR → ZMM005)를 그대로 구현.
+    덤프 실측(133015): LIFNR=100096, NAME1=정림전자(주), VERKF=홍성훈, TELF1=010-8880-1315
+    반환: {'lifnr', 'name', 'contact', 'contactTel'} 또는 None"""
+    material = str(material).strip()
+    if not material:
+        return None
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM006'
+    session.findById('wnd[0]').sendVKey(0)
+    time.sleep(1.0)
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('usr/ctxtS_MATNR-LOW').text = material
+        wnd.findById('usr/ctxtS_WERKS-LOW').text = plant
+        wnd.findById('usr/ctxtS_EKORG-LOW').text = porg
+    except Exception as e:
+        raise RuntimeError(f'ZMM006 검색 조건 입력 실패: {e}')
+    wnd.findById('tbar[1]/btn[8]').press()
+    time.sleep(1.6)
+
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid is None or int(getattr(grid, 'RowCount', 0) or 0) == 0:
+        return None
+    col_ids = [str(c) for c in grid.ColumnOrder]
+
+    def _cell(name, row=0):
+        col = next((c for c in col_ids if c.upper() == name.upper()), None)
+        if not col:
+            return ''
+        try:
+            return (grid.GetCellValue(row, col) or '').strip()
+        except Exception:
+            return ''
+
+    lifnr = _cell('LIFNR')
+    if not lifnr:
+        return None
+    return {'lifnr': lifnr, 'name': _cell('NAME1'),
+            'contact': _cell('VERKF'), 'contactTel': _cell('TELF1')}
+
+
 def fetch_vendor_by_lifnr(lifnr):
     """ZMM005(공급업체 리스트)에서 LIFNR(공급업체 코드)로 협력사 상세 정보를 반환한다.
     2026-09-29 — 결과 ALV 덤프 기반(ctxtS_LIFNR-LOW = GuiCTextField, 결과 grid = wnd[0]/shellcont/shell).
@@ -2080,6 +2128,24 @@ def fetch_vendor_info_by_material(material):
         problems.append('공급사명(MARA-ZNAME1)이 비어 있음')
     if not mfrnr and not mfrpn:
         problems.append('제조자/제조자 부품 번호가 비어 있음')
+    # 🆕 [2026-10-19] MM03 구매탭의 ZLIFNR이 비어 있으면 포기하지 않고 **ZMM006**에서 찾는다.
+    #    실측(133015): ZLIFNR/ZNAME1은 비었지만 ZMM006에 LIFNR=100096(정림전자(주))이 있다.
+    #    사용자가 알려준 경로 — 자재 → ZMM006 → LIFNR → ZMM005.
+    if not lifnr:
+        try:
+            via = fetch_lifnr_by_material_zmm006(material)
+            if via and via.get('lifnr'):
+                lifnr = via['lifnr']
+                res['lifnr'] = lifnr
+                res['lifnrSource'] = 'ZMM006'
+                if via.get('name') and not res.get('supplierName'):
+                    res['supplierName'] = via['name']
+                res['contact'] = via.get('contact') or None
+                res['contactTel'] = via.get('contactTel') or None
+                problems = [p for p in problems if '공급사코드' not in p and '공급사명' not in p]
+        except Exception as e:
+            problems.append(f'ZMM006 공급업체 조회 중 오류: {e}')
+
     if lifnr:
         try:
             vendor = fetch_vendor_by_lifnr(lifnr)  # ZMM005 — 이후 화면이 바뀌므로 스캔은 이미 끝낸 뒤에 한다
