@@ -128,21 +128,56 @@ def eval_in_gw(expr, timeout=45):
     return asyncio.run(_eval(t['webSocketDebuggerUrl'], expr, timeout))
 
 
+async def _ws_call(ws, mid, method, params, timeout):
+    await ws.send(json.dumps({'id': mid, 'method': method, 'params': params or {}}))
+    while True:
+        msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=timeout))
+        if msg.get('id') == mid:
+            if 'error' in msg:
+                raise RuntimeError(str(msg['error'])[:200])
+            return msg.get('result', {})
+
+
+async def _window_state(ws_url, state=None, timeout=30):
+    """창 상태를 읽고(state=None), 주면 그 상태로 바꾼다. 이전 상태를 돌려준다."""
+    import websockets
+    async with websockets.connect(ws_url, max_size=8_000_000) as ws:
+        w = await _ws_call(ws, 1, 'Browser.getWindowForTarget', {}, timeout)
+        prev = (w.get('bounds') or {}).get('windowState')
+        if state and prev != state:
+            await _ws_call(ws, 2, 'Browser.setWindowBounds',
+                           {'windowId': w['windowId'], 'bounds': {'windowState': state}},
+                           timeout)
+            await asyncio.sleep(0.8)   # 복원 후 합성·레이아웃이 자리잡을 시간
+        return prev
+
+
+def gw_window_state(state=None, timeout=30):
+    """그룹웨어 크롬 창의 상태를 읽거나(`None`) 바꾼다('normal'/'minimized'/…).
+
+    ⚠️⚠️ [2026-10-19 실측] **창이 최소화돼 있으면 `click_in_gw()`의 클릭이 조용히 빗나간다.**
+    CDP Input 도메인은 합성기(compositor) 히트테스트를 거치는데, 최소화된 창에는 합성된
+    표면이 없어서 좌표가 아무 요소에도 닿지 않는다. **오류도 안 나고 네트워크 요청도 안
+    나간다** — 겉으로는 "로그인 버튼이 안 눌린다"로만 보인다.
+    실측: minimized 상태 → 클릭해도 무반응. normal로 복원 후 **같은 좌표** → `POST
+    /api/login` 200, 로그인 성공. PC 재부팅 뒤 자동 로그인이 계속 실패하던 원인이 이것이다.
+    → **좌표를 재기 전에** 창을 normal로 돌려놓을 것(복원하면 뷰포트 크기가 바뀌어 버튼
+      위치도 달라지므로, 복원 → 측정 → 클릭 순서를 지켜야 한다).
+    """
+    t = _gw_page()
+    if not t:
+        raise RuntimeError('그룹웨어 탭을 열지 못했습니다 — 크롬이 떠 있는지 확인해주세요.')
+    return asyncio.run(_window_state(t['webSocketDebuggerUrl'], state, timeout))
+
+
 async def _click(ws_url, x, y, timeout=30):
     """CDP Input 도메인으로 **신뢰된**(isTrusted=true) 마우스 클릭을 보낸다."""
     import websockets
     async with websockets.connect(ws_url, max_size=8_000_000) as ws:
         for mid, typ, buttons in ((1, 'mousePressed', 1), (2, 'mouseReleased', 0)):
-            await ws.send(json.dumps({'id': mid, 'method': 'Input.dispatchMouseEvent',
-                                      'params': {'type': typ, 'x': x, 'y': y,
-                                                 'button': 'left', 'clickCount': 1,
-                                                 'buttons': buttons}}))
-            while True:
-                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=timeout))
-                if msg.get('id') == mid:
-                    if 'error' in msg:
-                        raise RuntimeError(str(msg['error'])[:200])
-                    break
+            await _ws_call(ws, mid, 'Input.dispatchMouseEvent',
+                           {'type': typ, 'x': x, 'y': y, 'button': 'left',
+                            'clickCount': 1, 'buttons': buttons}, timeout)
     return True
 
 
@@ -152,6 +187,8 @@ def click_in_gw(x, y, timeout=30):
     ⚠️ 페이지 안에서 `el.click()`을 부르는 것과 **다르다.** 이 사이트의 로그인 버튼은
     프로그램적 클릭에 반응하지 않는다(아래 `_LOGIN_JS` 주석 참고) — 그래서 이 경로가 필요하다.
     좌표는 **뷰포트 기준**이므로, 부르기 전에 대상을 화면 안으로 스크롤해 둘 것.
+    ⚠️ 그리고 창이 최소화돼 있으면 **조용히 빗나간다** — `gw_window_state('normal')`을
+       먼저 부를 것(그 함수 주석에 실측 근거).
     """
     t = _gw_page()
     if not t:
@@ -361,6 +398,16 @@ def login_once():
     except Exception as e:
         return {'ok': False, 'result': 'decrypt', 'message': str(e)}
 
+    # ⚠️⚠️ **창을 먼저 복원한다 — 좌표를 재기 전에.**
+    #   최소화된 창에서는 신뢰된 클릭이 조용히 빗나간다(`gw_window_state` 주석에 실측 근거).
+    #   그리고 복원하면 뷰포트 크기가 바뀌어 버튼 위치도 달라지므로, 반드시
+    #   **복원 → 측정 → 클릭** 순서여야 한다. 창 제어가 안 되더라도 로그인은 계속 시도한다.
+    prev_win = None
+    try:
+        prev_win = gw_window_state('normal')
+    except Exception:
+        pass
+
     try:
         r = eval_in_gw(_LOGIN_JS % (json.dumps(cfg['user']), json.dumps(pw)), timeout=60) or {}
     except Exception as e:
@@ -399,6 +446,14 @@ def login_once():
             if s2.get('ok'):
                 # 로그인 직후 "새로운 기능" 투어가 화면을 덮으면 이후 조작이 전부 막힌다 → 먼저 닫는다
                 intro = dismiss_intro()
+                # 성공했으면 창은 원래대로 돌려놓는다(부팅 때 최소화로 떠 있던 창이
+                # 자동 로그인 때마다 화면에 튀어나오지 않도록). 실패 시엔 **복원하지 않는다** —
+                # 사람이 직접 로그인해야 하므로 창이 보이는 게 맞다.
+                if prev_win and prev_win != 'normal':
+                    try:
+                        gw_window_state(prev_win)
+                    except Exception:
+                        pass
                 return {'ok': True, 'result': 'ok', 'message': '로그인했습니다.',
                         'session': s2, 'intro': intro}
         # 로그인 안 됐다 — 왜 안 됐는지(보안문자/오류문구)를 읽어서 알린다
