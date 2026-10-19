@@ -118,7 +118,30 @@
         if (c.loc) return _locOf(st, r) || '';
         return r[c.key] || '';
     };
+    // 접힘을 반영한 "화면에 보이는 행" — 정렬과 무관한 순수 트리 필터.
+    // ⚠️ 접힌 가지의 자식은 뺀다. 이 규칙은 bomRender / _elecBomRender 의 가시행 루프와
+    //    **같아야 한다** — 한쪽만 고치면 화면과 엑셀이 조용히 어긋난다.
+    var _bomTreeRows = function (st) {
+        if (!st || !st.rows) return [];
+        var collapsed = st._collapsed || {};
+        var out = [], hidden = -1;
+        st.rows.forEach(function (r, i) {
+            if (hidden !== -1) {
+                if (r._level > hidden) return;      // 접힌 가지의 자식 → 건너뜀
+                hidden = -1;
+            }
+            var next = st.rows[i + 1];
+            var hasChild = !!(next && next._level > r._level);
+            if (hasChild && collapsed[i]) hidden = r._level;
+            out.push(r);
+        });
+        return out;
+    };
     // 빈 값은 방향과 무관하게 항상 뒤로. 문자는 숫자 섞인 값을 자연 정렬(R2 < R10, 101099 < 132487).
+    // ⚠️⚠️ [2026-10-19 사용자 제보] 예전엔 `st.rows` **전체**를 정렬해서, 레벨1만 보이게
+    //   접어둔 상태에서 열 머리글을 누르면 **다단계가 통째로 펼쳐지며** 정렬됐다.
+    //   정렬은 보기 방식이지 펼치기 명령이 아니다 → **보이는 행만** 정렬한다.
+    //   (접은 상태는 접은 대로, 펼친 상태는 펼친 대로.)
     var _sortRows = function (st) {
         if (!st || !st._sort) return null;
         var c = null;
@@ -127,7 +150,7 @@
         }
         if (!c) return null;
         var desc = st._sort.dir === 'desc';
-        return (st.rows || []).slice().sort(function (x, y) {
+        return _bomTreeRows(st).slice().sort(function (x, y) {
             var a = _sortVal(st, x, c), b = _sortVal(st, y, c);
             var ae = (a === null || a === ''), be = (b === null || b === '');
             if (ae || be) return (ae && be) ? 0 : (ae ? 1 : -1);
@@ -548,31 +571,14 @@
         btn.title = anyCollapsed ? _t('하위 레벨 모두 펼치기', 'Expand all levels') : _t('하위 레벨 모두 접기', 'Collapse lower levels');
     };
 
-    // ⚠️⚠️ [2026-10-19 사용자 요청] 화면에 **보이는 행만** 돌려준다 — 접어둔 가지는 뺀다.
+    // ⚠️⚠️ [2026-10-19 사용자 요청] 화면에 **보이는 행을, 보이는 순서대로** 돌려준다.
     //   엑셀이 뷰 상태를 그대로 따라가게 하려고 뽑아낸 헬퍼다(접어서 레벨1만 보이면 엑셀도
     //   단일 레벨, 펼쳐져 있으면 다단계).
-    //   ⚠️ 접힘 판정은 `bomRender`의 가시행 루프와 **같은 규칙이어야 한다** — 한쪽만 고치면
-    //      화면과 엑셀이 조용히 어긋난다. 바꿀 땐 반드시 두 곳을 같이 볼 것.
+    //   정렬이 켜져 있으면 `_sortRows`가 **이미 가시행만** 정렬해서 돌려주므로(그 주석 참고)
+    //   여기서 접힘을 또 거를 필요가 없다 — 순서까지 화면과 같아진다.
     window._bomVisibleRows = function (st) {
         if (!st || !st.rows) return [];
-        // ⚠️ 헤더 정렬이 켜져 있으면 렌더는 **접힘을 무시하고 전체를 평면으로** 그린다
-        //    (bomRender / _elecBomRender 의 `_sortRows(st)` 분기). 그 땐 엑셀도 전체여야
-        //    화면과 같다 — 여기서 같은 분기를 먼저 태운다.
-        var sorted = _sortRows(st);
-        if (sorted) return sorted;
-        var collapsed = st._collapsed || {};
-        var out = [], hidden = -1;
-        st.rows.forEach(function (r, i) {
-            if (hidden !== -1) {
-                if (r._level > hidden) return;      // 접힌 가지의 자식 → 건너뜀
-                hidden = -1;
-            }
-            var next = st.rows[i + 1];
-            var hasChild = !!(next && next._level > r._level);
-            if (hasChild && collapsed[i]) hidden = r._level;
-            out.push(r);
-        });
-        return out;
+        return _sortRows(st) || _bomTreeRows(st);
     };
 
     // ─── 엑셀 출력 ─────────────────────────────────────────────────────
