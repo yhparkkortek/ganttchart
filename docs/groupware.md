@@ -160,18 +160,94 @@ usage 5.5GB / limit 5.0GB · percent 100 · overQuota: true
 ```
 `Quotaviolate`(용량초과함) 폴더가 따로 있다. **용량이 넘치면 새 메일 수신이 막힐 수 있으므로** 연동 기능과 별개로 정리가 필요하다.
 
-### 전자결재
+### 전자결재 (전수 조사 2026-10-19, 거의 완료)
+
+#### 구조 — **iframe 아님** (메일과 다르다)
+`/app/approval`은 최상위 문서에 그대로 렌더된다. `document.querySelector`가 바로 먹는다.
+모듈마다 다르니 **조사 전에 iframe 여부를 먼저 확인**할 것.
+
+#### 진입 시 호출 (19건)
 | 경로 | 용도 |
 |---|---|
-| `/api/approval/home/todo?page=0` · `/draft` · `/complete` · `/reception` | 문서함 |
-| `/api/approval/todo/count` 등 | 배지 숫자 |
-| `/api/approval/apprform/tree?folderId=..` | 양식 트리 |
-| `/api/approval/document/new?formId=..&deptId=..` | **화면 열면 서버가 docId 발급** |
-| `/api/search/approval?stype=simple&type=approval&keyword=..&fromDate=..&toDate=..&page=0&offset=20` | 문서 검색 |
+| `/api/approval/side` | **사이드바 전체** — `favorites[]{id,formName,formId,deptId}`, `deptFolders`, `drafterDeptFolders`, `apprConfig`, `writeMode` |
+| `/api/approval/apprconfig` | 결재 정책(합의·반송·대결·보안등급 사용 여부) |
+| `/api/approval/{todo,officialtodo,upcoming,todoreception,todoviewer}/count` | 배지 숫자 — 응답 `data.docCount` |
+| `/api/approval/home/{todo?page=0,draft,complete,reception}` | 홈 위젯 목록 |
 
-- 검색 응답 항목 키: `id` `title` `formName` `drafterName` `draftedAt` `docStatus` `docNum`
+#### 문서함 목록 — GET + 쿼리스트링 (메일과 형식이 다르다)
+```
+GET /api/approval/doclist/{box}/all
+      ?page=0&offset=20&property=draftedAt&direction=desc
+      &searchtype=&keyword=&fromDate=&toDate=&duration=all
+GET /api/approval/doclist/{box}/complete/count?searchtype=&keyword=&duration=
+```
+| `{box}` | 문서함 | 기본 `property` |
+|---|---|---|
+| `draft` | 기안 문서함 | `draftedAt` |
+| `tempsave` | 임시 저장함 | `updatedAt` (날짜 파라미터 없음) |
+| `approve` | 결재 문서함 | `draftedAt` |
+| `viewer` | 참조/열람 문서함 | `document.draftedAt` |
+| `userofficial` | 공문 문서함 | — |
+
+별도 경로:
+```
+GET /api/approval/upcoming?...&property=activityGroup.apprFlow.document.draftedAt   # 결재 예정 문서
+GET /api/approval/deptfolder/draft/{deptId}?...                                     # 부서 기안 완료함 (개발3팀=245)
+GET /api/approval/deptfolder/{reference|official}/{deptId}?...
+```
+
+**파라미터 값은 화면 셀렉트에서 확정**(추측 금지):
+- `searchtype` — `title`(제목) `drafterName`(기안자) `drafterDeptName`(기안부서) `formName`(결재양식) `docNum`(문서번호) `activityUserName`(결재선)
+- `duration` — `all` `1` `6` `12` `period`(직접입력 시 `fromDate`/`toDate` 동반)
+- `offset` — 20 / 40 / 60 / 80
+- `property` — 정렬 컬럼. 쓸 수 있는 값은 `/api/approval/doclistField/{key}` 의 `sortColumn`에 들어 있다
+  (`key` = `user_draft` `user_temp` `user_approval` `user_ref` `appr_wait` `dept_complete`)
+- `page` — **0부터**
+
+> 화면 조작 셀렉터: `div.table_search` 안에 `#searchtype` `#keyword` `#fromDate` `#toDate` `#duration`,
+> 정렬은 `th span.title_sort`, 페이지는 `a.paginate_button[data-page="N"]`(`#first_page` `#prev_page` …).
+
+#### 통합검색 (상단 검색창 `#search-keyword` + `#btn-search`)
+```
+GET /api/search/approval?stype=simple&type=approval&keyword=..
+    &fromDate=1970-01-01T00:00:00.000+09:00&toDate=2026-10-19T23:59:59.000+09:00&page=0&offset=20
+```
+- 문서함 검색과 **다른 API**다. 날짜는 ISO+09:00 형식.
+- 응답 항목 키: `id` `title` `formName` `drafterName` `draftedAt` `docStatus` `docNum`
 - ⚠️ `title`에 검색어가 `<strong class='txt_key'>`로 감싸져 온다 → **태그 제거 필요**.
 
+#### 문서 상세
+```
+GET /api/approval/document/{id}            # 본문·첨부·결재선·이력 전부
+GET /api/approval/document/{id}/comment
+GET /api/approval/securitylevel?docId={id}
+```
+`data` 안에 들어 있는 것:
+- `document.variables` — **양식 입력값 전체 맵**. 승인원이라면 `editorForm_6~28`(서명·날짜·업체정보)과
+  `{행}_{열}`(품목 표: `1_1`=자재코드, `1_2`=승인번호, `1_3`=내역 …)이 그대로 들어 있다.
+  👉 **기존 문서 1건을 읽으면 그 양식의 필드 맵이 그대로 나온다** — 작성 화면을 뒤질 필요 없음.
+- `document.docBodyContent` — 본문 HTML(승인원은 6만자 넘음), `attaches[]{id,name,size,download,preview}`
+- `docInfo` — `formId` `securityLevelId` `docReferenceReaders` `externalScript` `drafterDeptId`
+- `apprFlow.activityGroups[]` — 결재선(그룹별 결재/합의/확인), `actionLogs[]` 처리 이력, `readingHistory[]` 열람 이력
+- `actionCheck` — 내가 지금 할 수 있는 동작(결재 대기자인지, 수정 가능한지 등) 60여 개 플래그
+
+#### 양식 트리 — ⚠️ 응답이 `{data:…}` 래핑이 **아니다**
+```
+GET /api/approval/apprform/tree              # 루트
+GET /api/approval/apprform/tree?folderId=61  # 하위
+```
+jsTree 포맷 **배열**이 그대로 온다: `[{data:{id:"FOLDER_61",title}, state, metadata, attr:{rel:"FOLDER"|"FORM", nodeId, title}}]`
+- `attr.rel`로 폴더/양식을 가르고, `attr.nodeId`가 **formId**(양식일 때).
+- `(j.data||[])`로 받으면 **0건**이 나온다. 다른 API와 달라서 한 번 걸렸다.
+- BFS로 전부 긁으면 폴더 15개 / 양식 **97개**. 카탈로그 → `docs/groupware-forms.md`
+- 화면의 "자주 쓰는 양식"은 `/api/approval/side` → `favorites[]`와 같고, DOM에서는 `[data-formid]`.
+
+#### 관리/설정 계열 (번들 추출, 미호출)
+`/api/approval/classify/{user,dept}/rule` (문서 자동분류 규칙) · `/api/approval/favorite` (자주 쓰는 양식 등록) ·
+`/api/approval/usersetting/{deputy,password,userconfig}` · `/api/approval/userfolder` · `/api/approval/companyfolder/tree` ·
+`/api/approval/official/{approve,return,cancel,rerequest,addreceiver}` (공문) · `/api/approval/document/bulkdraft` ·
+`/api/approval/manage/document/addreaders` · `/api/approval/auth/docmanage`
+→ **쓰기성이라 호출하지 않았다.** 전체 64개 목록은 아래 "번들 추출" 참고.
 ---
 
 ## 5. 기안 작성 (전자결재 쓰기)
@@ -309,7 +385,7 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 
 | 모듈 | 화면 | 쓰기성 | 조사 |
 |---|---:|---:|---|
-| `approval` 전자결재 | 60 | 9 | 🟡 부분(기안/검색/문서함) |
+| `approval` 전자결재 | 60 | 9 | 🟢 거의 완료(읽기 전부 + 번들 64경로) |
 | `works` | 49 | 9 | ⬜ |
 | `ehr` 인사관리 | 29 | 0 | ⬜ |
 | `board` 게시판 | 23 | 8 | ⬜ |
@@ -324,16 +400,24 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 | `survey` 설문 | 10 | 5 | ⬜ |
 | `sms` | 4 | 1 | ⬜ |
 | `note` 쪽지 | 3 | 1 | ⬜ |
-| `mail` 메일 | **1** | 0 | 🟡 부분 |
+| `mail` 메일 | **1** | 0 | 🟡 목록·검색 확정 / 상세·발송 미확인 |
 
 > ⚠️ **메일이 화면 1개인 이유**: 메일은 내부 SPA라 라우트가 `/app/mail` 하나뿐이고 폴더·읽기·쓰기 전환이 전부 그 안에서 일어난다. 그래서 **라우트 맵으로는 조사가 안 되고 UI 조작 관찰이 필수**다.
 
 ### 조사 방법 — 효과 순
 1. **routes.json 받기** — 조사 대상 화면 전체를 한 번에 파악(위 표).
 2. **화면 열고 Network 관찰** — 가장 확실. 읽기 API는 이걸로 거의 다 나온다.
-3. **UI 조작 후 요청 본문 캡처** — 페이지·검색·필터 파라미터는 이 방법뿐. 추측하면 틀린다(메일 `message/list` 사례).
-4. ~~JS 번들 정적 추출~~ — **효과 낮음**. 모듈 JS가 지연 로딩이라 61개 스크립트에서 28개만 나왔다. 보조 수단으로만.
-   (⚠️ 번들 URL은 `?rev=`가 붙어 있어 `endsWith('.js')`로 거르면 거의 다 놓친다.)
+3. **번들 추출 (`/api/` 문자열 긁기)** — 모듈 화면을 열어 지연 로딩이 끝난 뒤 긁으면 **그 모듈 전체**가 나온다.
+   전자결재에서 JS 59개 → 경로 101개(approval 64개). 쓰기성 엔드포인트까지 **호출 없이** 목록화되는 게 핵심 장점.
+   ⚠️ 번들 URL엔 `?rev=`가 붙는다 — 확장자 판정은 **`split('?')[0]`에만** 적용할 것. `endsWith('.js')`로 거르면 거의 다 놓친다(초기 실패 원인).
+   ⚠️ 모듈 화면을 **열기 전에** 긁으면 아무것도 안 나온다(지연 로딩). 모듈별로 navigate → harvest 순.
+4. **UI 조작 후 요청 본문 캡처** — 페이지·검색·필터 파라미터는 이 방법뿐. 번들 추출은 **경로는 주지만 파라미터 이름·허용값은 안 준다.**
+   값 목록은 화면 `<select>`의 option에 들어 있는 경우가 많다(전자결재 `searchtype`/`duration` 확정 경로).
+
+> 스크립트는 scratchpad에 — `gw_survey.py`(navigate+Network+DOM), `gw_act.py`(액션 목록 실행+본문 캡처),
+> `gw_get2.py`(GET 응답 구조 축약), `gw_harvest.py`(번들 `/api/` 추출), `gw_formtree2.py`(jsTree BFS).
+> ⚠️ Git Bash에서 `/app/...` 인자는 Windows 경로로 변환된다 → **`MSYS_NO_PATHCONV=1`** 필수.
+> ⚠️ 콘솔 출력은 cp949라 한글이 깨진다 → **`PYTHONIOENCODING=utf-8`** + 결과는 UTF-8 파일로 쓰고 읽을 것.
 
 ### ⚠️ 엔드포인트마다 요청 형식이 다르다
 같은 메일 모듈 안에서도 `message/count`는 **form-urlencoded**, `message/list`는 **JSON**이다.
@@ -343,8 +427,9 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 
 ## 📌 아직 안 한 것 / 다음 거리
 
-- **전수 조사 진행 중** — 위 11절 표 참고. 화면 352개 중 캘린더(완료)·메일/전자결재/주소록(부분)만 손댔다.
-- **메일 다음 단계**: 폴더 전환·페이지 이동·검색을 UI에서 눌러 `message/list` 요청 본문을 캡처 → 파라미터 확정. 이어서 상세 조회·발송 API.
+- **전수 조사 진행 중** — 위 11절 표 참고. 캘린더·전자결재 완료, 메일/주소록 부분. 다음: `works` → `board` → `report` → `task` → `docs`.
+- **메일 다음 단계**: 메일 클릭 → 상세 조회 경로 캡처, 메일쓰기 창 열어 발송 폼 구조 확인.
+- **전자결재 남은 것**: 쓰기(임시저장) REST 본문 미확인 — 지금은 UI 클릭으로 저장한다. 사용자가 실제로 저장할 때 캡처하면 된다.
 - 서명·날짜 칸(`editorForm_6~17`) 매핑 — `Written by`/`Checked by` 앵커로 가능하나 미구현.
 - 공급업체 표기 규칙(SAP 그대로 vs 표지 우선) 미결정.
 - 쓰기는 전자결재 임시저장 하나뿐. 일정 등록·결재 상신은 **안전 설계 전까지 열지 않는다.**
