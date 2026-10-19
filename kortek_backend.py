@@ -2468,7 +2468,13 @@ def sap_bom():
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-bom?material=502572'}), 400
     material_count = len([m for m in material.split(',') if m.strip()])
-    timeout = 30 if material_count <= 1 else min(90, 30 + 10 * material_count)
+    # ⚠️⚠️ [2026-10-19 실측] 단일 자재 기본값이 30초였는데 **실제 질의가 31~34초 걸린다**
+    #   (722행 BOM, ZPP033 다단계, /STD_MC — 2회 평균 31.4초/상한500, 34.3초/상한1500).
+    #   즉 30초로는 모자라서, `sap_login_config.json`이 있어 `_run_sap_bridge`가 +45초를
+    #   얹어주는 PC에서만 우연히 성공하고 있었다 — 자동로그인을 안 쓰는 팀원 PC에서는
+    #   단일 자재 BOM이 그냥 타임아웃이다. 복수 자재 상한과 같은 90초로 올린다.
+    #   (행 상한은 `sap_bridge_32.py`의 `_GRID_ROW_CAP` — 2000행이면 ≈51초로 들어온다.)
+    timeout = 90 if material_count <= 1 else min(90, 30 + 10 * material_count)
     data, status = _run_sap_bridge(
         ['fetch_bom', material, plant, tcode_mode, explosion, show_price, show_location, layout],
         timeout, 'SAP BOM 조회')

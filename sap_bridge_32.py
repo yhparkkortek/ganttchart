@@ -307,8 +307,35 @@ def _sap_find_grid(container, depth=0):
     return None
 
 
+# ALV 그리드 덤프의 행 상한.
+#
+# ⚠️⚠️ [2026-10-19 실측으로 500 -> 2000] 예전 500은 "응답 크기 보호"라는 이름만 있고
+#   근거가 없었다. 722행짜리 BOM(502267, ZPP033 다단계, /STD_MC)으로 재보니:
+#
+#     상한   소요(2회 평균)   데이터 행
+#     500    31.4초           132
+#     1500   34.3초           255      ← 722행 전부 읽음
+#
+#   **500 상한은 성능 이득이 거의 없으면서 데이터를 절반으로 깎고 있었다**(132 vs 255).
+#   행당 비용은 ~13ms, 고정비(SAP 전개·화면 탐색)가 ~25초로 시간을 지배한다.
+#     t(n) ≈ 25초 + 0.013 × n
+#   2000행이면 ≈51초로 타임아웃(아래) 안에 넉넉히 들어온다. 더 키우려면 **먼저 재볼 것** —
+#   4000행이면 ≈77초라 단일 자재 기본 타임아웃 90초에 거의 붙는다.
+#
+#   ⚠️ 타임아웃과 같이 봐야 한다: `kortek_backend.py`의 `/sap-bom`이 정하는 값이고,
+#      `sap_login_config.json`이 있으면 `_run_sap_bridge`가 로그인 몫으로 +45초를 더한다.
+#      그 +45초는 **로그인에 쓰라고 준 여유지 질의용이 아니다** — 질의 자체가 기본
+#      타임아웃 안에 들어와야 한다.
+#
+# 측정할 때만 환경변수로 덮어쓴다(평소엔 건드리지 말 것).
+try:
+    _GRID_ROW_CAP = max(1, int(os.environ.get('KORTEK_GRID_ROW_CAP') or 2000))
+except Exception:
+    _GRID_ROW_CAP = 2000
+
+
 def _sap_dump_grid(shell):
-    """ALV 그리드의 보이는 열/행을 탭 구분 텍스트로 변환. 응답 크기 보호를 위해 최대 500행.
+    """ALV 그리드의 보이는 열/행을 탭 구분 텍스트로 변환. 행 상한은 `_GRID_ROW_CAP`.
     ⚠️⚠️ [2026-09-15 실사용 진단] `shell.GetColumnTitle(cid)`는 `GuiGridView`에 실제로
     존재하는 메서드가 아니다(항상 예외 → 아래 except에서 원본 필드 코드 `cid`로 폴백) —
     "진짜" 메서드 이름은 `GetDisplayedColumnTitle(cid)`이지만, **의도적으로 이걸로 고치지
@@ -334,7 +361,11 @@ def _sap_dump_grid(shell):
         except Exception:
             titles.append(cid)
     total_rows = shell.RowCount
-    row_count = min(total_rows, 500)
+    # ⚠️ [2026-10-19] 응답 크기 보호용 행 상한. **SAP의 제한이 아니라 우리 상한이다** —
+    #    SAP은 `shell.RowCount`로 전체 행수를 정확히 보고한다. 화면 문구도 그렇게 고쳤다
+    #    (js/38-bom-tab.js). 값은 실측으로 정한다: 근거와 측정표는 docs/sap-lookup.md.
+    #    측정/임시조정용으로 환경변수 KORTEK_GRID_ROW_CAP로 덮어쓸 수 있다.
+    row_count = min(total_rows, _GRID_ROW_CAP)
     lines = ['\t'.join(titles)]
     # SAP ALV는 화면에 보이는 행만 렌더링 → 스크롤 밖 행은 GetCellValue가 '' 반환
     # firstVisibleRow를 30행마다 강제 이동해 전 구간을 렌더링시킨다 (2026-09-29 수정)
