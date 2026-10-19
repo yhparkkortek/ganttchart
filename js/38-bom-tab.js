@@ -914,10 +914,19 @@
                 + '</div>';
         }
         if (st.truncated) {
-            // SAP 덤프가 500행에서 잘렸다 — 조용히 넘기지 않고 화면에 공개한다
+            // ⚠️ [2026-10-19 정정] 예전 문구는 "SAP 응답이 잘렸다"고 했는데 **틀렸다.**
+            //    500행은 SAP의 제한이 아니라 **우리 브릿지의 응답 크기 상한**이다
+            //    (`sap_bridge_32.py`의 `_sap_dump_grid`: `row_count = min(total_rows, 500)`).
+            //    SAP은 전체 행수(`shell.RowCount`)를 제대로 보고하며, 스크롤 시간이 모자라서
+            //    못 가져오는 것도 아니다(스크롤 루프엔 시간 예산이 없다).
+            //    원인을 SAP에 돌리면 엉뚱한 곳을 디버깅하게 되므로 출처를 분명히 적는다.
             html += '<div style="margin-top:4px; font-size:11.5px; color:#b1432f;">⚠️ '
-                + _esc(_t('SAP 응답이 500행에서 잘렸습니다(전체 ' + (st.totalRows || '?') + '행). 전개 단계를 "단일 레벨"로 줄이거나 자재를 나눠서 조회하세요.',
-                    'SAP response was truncated at 500 rows (total ' + (st.totalRows || '?') + '). Use single-level explosion or split the lookup.'))
+                + _esc(_t('결과가 500행에서 잘렸습니다(SAP은 전체 ' + (st.totalRows || '?') + '행으로 보고). '
+                        + '500행은 SAP 제한이 아니라 앱 브릿지의 응답 크기 상한입니다. '
+                        + '전개 단계를 "단일 레벨"로 줄이거나 자재를 나눠서 조회하세요.',
+                    'Result truncated at 500 rows (SAP reports ' + (st.totalRows || '?') + ' in total). '
+                        + 'The 500-row cap is this app\'s bridge limit, not a SAP limit. '
+                        + 'Use single-level explosion or split the lookup.'))
                 + '</div>';
         }
         el.innerHTML = html;
@@ -953,7 +962,11 @@
     window.bomRefreshLang = function () {
         var en = window._currentLang === 'en';
         var set = function (id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; };
-        set('bom-lbl-material', _t('자재번호', 'Material'));
+        // [2026-10-19] "자재번호" 라벨은 헤더 줄바꿈 때문에 삭제했다(HTML). 설명은 입력칸
+        //   title 툴팁으로 옮겼고, 정적 HTML에 박으면 영문 전환이 안 되므로 여기서 설정한다.
+        var matIn = document.getElementById('bom-material');
+        if (matIn) matIn.title = _t('자재번호 — Summary 모델 카드의 KTK PN이 기본값',
+                                    'Material number — defaults to the KTK PN on the Summary model card');
         var btn = document.getElementById('bom-fetch-btn');
         if (btn && !btn.disabled) btn.textContent = _t('🔄 SAP 조회', '🔄 Fetch from SAP');
         var exp = document.getElementById('bom-explosion');
@@ -1328,7 +1341,8 @@
                 + ' &middot; ' + st.rows.length + _t('건', ' rows') + ' &middot; ' + _esc(when) + '</span>';
         }
         if (st.truncated) {
-            window._elecBomSetStatus('⚠️ ' + _t('SAP 응답이 500행에서 잘렸습니다. 단일 레벨 조회를 시도하세요.', 'SAP response truncated at 500 rows. Try single-level explosion.'), 'error');
+            // [2026-10-19 정정] 500행은 SAP이 아니라 앱 브릿지(_sap_dump_grid)의 상한이다. 위 주석 참고.
+            window._elecBomSetStatus('⚠️ ' + _t('결과가 500행에서 잘렸습니다(SAP 제한이 아니라 앱 브릿지 상한). 단일 레벨 조회를 시도하세요.', 'Result truncated at 500 rows (this app\'s bridge cap, not a SAP limit). Try single-level explosion.'), 'error');
         }
     }
 
