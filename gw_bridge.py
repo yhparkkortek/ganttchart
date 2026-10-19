@@ -128,6 +128,37 @@ def eval_in_gw(expr, timeout=45):
     return asyncio.run(_eval(t['webSocketDebuggerUrl'], expr, timeout))
 
 
+async def _click(ws_url, x, y, timeout=30):
+    """CDP Input 도메인으로 **신뢰된**(isTrusted=true) 마우스 클릭을 보낸다."""
+    import websockets
+    async with websockets.connect(ws_url, max_size=8_000_000) as ws:
+        for mid, typ, buttons in ((1, 'mousePressed', 1), (2, 'mouseReleased', 0)):
+            await ws.send(json.dumps({'id': mid, 'method': 'Input.dispatchMouseEvent',
+                                      'params': {'type': typ, 'x': x, 'y': y,
+                                                 'button': 'left', 'clickCount': 1,
+                                                 'buttons': buttons}}))
+            while True:
+                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=timeout))
+                if msg.get('id') == mid:
+                    if 'error' in msg:
+                        raise RuntimeError(str(msg['error'])[:200])
+                    break
+    return True
+
+
+def click_in_gw(x, y, timeout=30):
+    """그룹웨어 탭의 (x, y)를 실제 마우스처럼 클릭한다.
+
+    ⚠️ 페이지 안에서 `el.click()`을 부르는 것과 **다르다.** 이 사이트의 로그인 버튼은
+    프로그램적 클릭에 반응하지 않는다(아래 `_LOGIN_JS` 주석 참고) — 그래서 이 경로가 필요하다.
+    좌표는 **뷰포트 기준**이므로, 부르기 전에 대상을 화면 안으로 스크롤해 둘 것.
+    """
+    t = _gw_page()
+    if not t:
+        raise RuntimeError('그룹웨어 탭을 열지 못했습니다 — 크롬이 떠 있는지 확인해주세요.')
+    return asyncio.run(_click(t['webSocketDebuggerUrl'], x, y, timeout))
+
+
 # 내부 API를 페이지 컨텍스트에서 호출한다(same-origin이라 세션 쿠키가 자동으로 붙는다).
 # ⚠️ GET 전용. 쓰기는 이 모듈에서 하지 않는다.
 _GET_JSON = """
@@ -241,8 +272,24 @@ _LOGIN_JS = """
   //   await 하던 프라미스가 영원히 안 풀리고, CDP는 **본문이 빈 예외**를 돌려준다
   //   (실제로 "로그인 시도 중 오류: " 라는 메시지 없는 실패가 났다).
   //   그래서 제출만 하고 즉시 반환하고, **결과 판정은 바깥(파이썬)에서 폴링**한다.
-  if (btn) btn.click(); else form.submit();
-  return { result: 'submitted' };
+
+  // ⚠️⚠️ [2026-10-19 재수정 — 실측] **페이지 안에서 btn.click()을 부르면 아무 일도 안 일어난다.**
+  //   버튼은 `<a id="login_submit" class="btn_login" href="#">`이고 그 자체엔 리스너가 없다.
+  //   핸들러는 `<form id="loginForm">`에 jQuery로 **위임**돼 있는데(선택자 '#login_submit'),
+  //   프로그램적 클릭에는 반응하지 않는다. 실측 결과:
+  //     el.click()                     → 무반응. 네트워크 요청조차 안 나간다.
+  //     CDP Input.dispatchMouseEvent   → 즉시 로그인 성공.
+  //   ⚠️ 이게 **"보안문자가 안 뜨는데 로그인도 안 되는"** 증상의 진짜 원인이다 —
+  //      서버까지 간 시도가 없으니 실패가 쌓이지 않아 CAPTCHA도 안 뜬다. 숨은 submit을
+  //      누르던 이전 버그와 증상이 똑같아 보이지만 원인이 다르다(그 버그는 이미 고쳤다).
+  //   → 여기서는 **누르지 않고** 버튼 좌표(뷰포트 기준)만 돌려주고,
+  //      클릭은 바깥에서 `click_in_gw()`가 CDP로 한다.
+  if (!btn) { form.submit(); return { result: 'submitted' }; }
+  btn.scrollIntoView({ block: 'center' });
+  const r = btn.getBoundingClientRect();
+  return { result: 'filled',
+           cx: Math.round(r.x + r.width / 2),
+           cy: Math.round(r.y + r.height / 2) };
 })(%s, %s)
 """
 
@@ -324,6 +371,25 @@ def login_once():
         pw = None  # 메모리에 더 들고 있지 않는다
 
     res = r.get('result')
+
+    # 칸만 채워진 상태 — 실제 클릭은 **신뢰된 마우스 이벤트**로 보내야 한다.
+    # (페이지 안의 el.click()은 이 사이트에서 무반응. `_LOGIN_JS` 주석 참고.)
+    if res == 'filled':
+        try:
+            click_in_gw(r['cx'], r['cy'])
+            res = 'submitted'
+        except Exception as e:
+            # 신뢰된 클릭을 못 보냈으면 **제출이 아예 일어나지 않았다**(= 실패로 안 쌓인다).
+            # 네이티브 폼 제출로 딱 한 번만 폴백한다. 이것도 실패하면 사람에게 넘긴다.
+            try:
+                eval_in_gw("(() => { const u = document.querySelector('#username');"
+                           " const f = u && u.closest('form'); if (f) f.submit();"
+                           " return true; })()", timeout=20)
+                res = 'submitted'
+            except Exception:
+                return {'ok': False, 'result': 'click_failed', 'handoff': True,
+                        'message': f'로그인 버튼을 누르지 못했습니다 ({e}) — '
+                                   '재시도하지 않습니다. 열린 창에서 직접 로그인해주세요.'}
 
     # 제출했으면 결과는 **바깥에서** 확인한다(페이지 이동으로 JS 컨텍스트가 죽기 때문).
     if res == 'submitted':
