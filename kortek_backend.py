@@ -3214,6 +3214,22 @@ def gw_approval_forms():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/approval/search', methods=['GET'])
+def gw_approval_search():
+    """같은 자재코드로 올라간 기존 승인원을 찾는다 — Revision History 판단용."""
+    try:
+        import gw_bridge
+        kw = (request.args.get('keyword') or '').strip()
+        if not kw:
+            return jsonify({'ok': False, 'message': '검색어가 필요합니다.'}), 400
+        only = (request.args.get('onlyApprovalForm') or '1') != '0'
+        r = gw_bridge.search_approval_docs(kw, only_approval_form=only)
+        return jsonify({'ok': True, 'keyword': kw, 'total': r['total'],
+                        'count': len(r['items']), 'items': r['items']})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/approval/parse-cover', methods=['POST'])
 def gw_approval_parse_cover():
     """협력사가 채워 보낸 승인원 표지(docx)에서 기안에 필요한 값을 뽑는다.

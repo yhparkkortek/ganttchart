@@ -474,6 +474,47 @@ def parse_approval_cover(data):
     return {'fields': found, 'lineCount': len(lines)}
 
 
+# ── 🔎 이전 승인원 문서 찾기 (Revision History 판단용) ──────────────
+# 같은 자재코드로 올라간 승인원이 이미 있으면 "개정", 없으면 "최초등록"이다.
+# 실측(2026-10-19): /api/search/approval?stype=simple&type=approval&keyword=...
+#   응답 항목 키: id, title, formName, drafterName, draftedAt, docStatus …
+#   title에는 검색어가 <strong class='txt_key'>로 감싸져 오므로 태그를 떼야 한다.
+_APPROVAL_TITLE_HINT = 'Customer Approval Sheet'
+
+
+def search_approval_docs(keyword, only_approval_form=True, limit=20):
+    """자재코드 등으로 기존 결재문서를 찾는다. 읽기 전용."""
+    import re
+    js = """
+    (async (kw, limit) => {
+      const q = new URLSearchParams({
+        stype:'simple', type:'approval', keyword: kw,
+        fromDate:'1970-01-01T00:00:00.000+09:00',
+        toDate: (new Date().getFullYear()+1) + '-12-31T23:59:59.000+09:00',
+        page:'0', offset: String(limit)
+      });
+      const r = await fetch('/api/search/approval?' + q.toString(),
+                            { credentials:'same-origin', headers:{Accept:'application/json'} });
+      if (!r.ok) return { __err:true, status:r.status };
+      const j = await r.json();
+      return { total:(j.page && j.page.total) || 0,
+               items:(j.data||[]).map(x => ({ id:x.id, title:x.title||'', formName:x.formName||'',
+                      drafter:x.drafterName||'', at:(x.draftedAt||'').slice(0,10), status:x.docStatus||'' })) };
+    })(%s, %s)
+    """ % (json.dumps(str(keyword)), int(limit))
+    r = eval_in_gw(js, timeout=45) or {}
+    if r.get('__err'):
+        raise RuntimeError(f'문서 검색 실패 (HTTP {r.get("status")})')
+    items = []
+    for it in r.get('items', []):
+        title = re.sub(r'<[^>]+>', '', it.get('title') or '')
+        if only_approval_form and _APPROVAL_TITLE_HINT.lower() not in title.lower():
+            continue
+        it['title'] = title
+        items.append(it)
+    return {'total': r.get('total', 0), 'items': items}
+
+
 def approval_forms():
     """자주 쓰는 결재 양식 목록(이름 → formId/deptId). 하드코딩 대신 매번 읽는다."""
     j = gw_get('/api/approval/side')

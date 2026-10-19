@@ -4943,7 +4943,8 @@ ${docsJson}`;
             try {
                 const res = await window._withTimeout(fetch('http://127.0.0.1:5000/gw/approval/draft', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ formId: pd.formId, deptId: pd.deptId, subject: pd.subject, fields: pd.fields })
+                    body: JSON.stringify({ formId: pd.formId, deptId: pd.deptId, subject: pd.subject,
+                                           fields: pd.fields, checks: pd.checks || [] })
                 }), 150000, window._t('기안 작성 시간 초과', 'Draft timed out'));
                 const d = await res.json();
                 if (d.ok && d.docId) {
@@ -4997,6 +4998,22 @@ ${docsJson}`;
                 //    실제 문서의 공급업체(예: 정림전자㈜)는 전혀 다른 값이라 자동으로 채우면 틀린 문서가 된다.
                 //    SAP ZMM006도 MARA-ZLIFNR이 비어 있으면 못 가져온다(실측 133015) →
                 //    **협력사가 채워 보낸 승인원 표지(.docx)** 에서 가져온다.
+                //  ① SAP 공급업체 조회를 **먼저** 시도한다(ZMM006 → LIFNR → ZMM005).
+                //     MM03의 MARA-ZLIFNR이 비어 있어도 ZMM006에 거래 정보가 있으면 찾아진다.
+                try {
+                    const vr = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/sap-vendor-info?material=' + encodeURIComponent(_gwDraftMat)),
+                        90000, window._t('공급업체 조회 시간 초과', 'Vendor lookup timed out'));
+                    const vd = await vr.json();
+                    const vv = (vd && vd.vendor) || null;
+                    if (vv) {
+                        if (vv.name) fields['Name'] = vv.name;
+                        if (vv.address) fields['Address'] = vv.address;
+                        if (vv.tel) fields['Tel'] = vv.tel;
+                    }
+                } catch (e) { /* 공급업체 조회 실패해도 아래 표지 경로로 이어간다 */ }
+
+                //  ② SAP에 없으면 협력사가 채워 보낸 승인원 표지에서 가져온다
                 let coverInfo = null;
                 const _coverAtt = (window._ganttQaPendingAttachments || []).find(function (a) { return a.docxBase64; });
                 if (_coverAtt) {
@@ -5029,10 +5046,39 @@ ${docsJson}`;
                     if (coverInfo._rev) subject = 'Customer Approval Sheet[' + _gwDraftMat + ']_V' + coverInfo._rev;
                 }
 
-                // SAP으로도 표지로도 못 채운 칸 — 여기서 **실제로 표지를 요청한다**
+                // ■ Revision History — 같은 자재코드로 올라간 승인원이 이미 있는지 먼저 본다.
+                //   없으면 "최초등록"으로 기본값을 채우고, 있으면 **추측하지 않고 사람에게 묻는다**
+                //   (개정 차수·변경 요약은 사람만 아는 내용이라 AI가 지어내면 안 된다).
+                let priorDocs = [];
+                try {
+                    const sr = await (await fetch('http://127.0.0.1:5000/gw/approval/search?keyword=' + encodeURIComponent(_gwDraftMat))).json();
+                    if (sr.ok) priorDocs = sr.items || [];
+                } catch (e) { /* 검색 실패는 기안을 막지 않는다 — 아래에서 이전 문서 없음으로 간주 */ }
+
+                // 날짜 기본값: 표지가 있으면 그 문서 날짜, 없으면 오늘(기안 작성일)
+                const _today = new Date();
+                const _pad = function (n) { return String(n).padStart(2, '0'); };
+                const docDate = (coverInfo && coverInfo._date)
+                    || (_today.getFullYear() + '-' + _pad(_today.getMonth() + 1) + '-' + _pad(_today.getDate()));
+                if (!priorDocs.length) {
+                    fields['Date'] = docDate;
+                    fields['Rev.No'] = (coverInfo && coverInfo._rev) || '00';
+                    fields['Page'] = 'ALL';
+                    fields['Summary'] = '최초등록';
+                }
+
+                // 기본 체크 — 승인원 분류는 정식승인, 상태전환은 SAP 자재상태(MMSTA), DMS는 New.
+                // 임시저장이라 사람이 검토하며 바꾸면 되므로 기본값을 넣어 둔다(사용자 요청).
+                const checks = ['정식승인'];
+                if (m.MMSTA === 'H2' || m.MMSTA === 'P1') checks.push(m.MMSTA);
+                checks.push(priorDocs.length ? 'Update' : 'New');
+
+                // SAP으로도 표지로도 못 채운 칸 — 있으면 표지를 요청한다
                 const NEED = ['Name', 'Address', 'Tel'];
                 const missing = NEED.filter(function (k) { return !fields[k]; });
-                window._gwPendingDraft = { formId: form.formId, deptId: form.deptId, subject: subject, fields: fields };
+
+                window._gwPendingDraft = { formId: form.formId, deptId: form.deptId,
+                                           subject: subject, fields: fields, checks: checks };
                 window._ganttQaHistory.pop();
 
                 if (missing.length && !_coverAtt) {
@@ -5057,9 +5103,15 @@ ${docsJson}`;
                     + (_coverAtt ? '\n\n📎 ' + window._t('표지에서 읽음: ', 'From cover sheet: ') + _coverAtt.name : '')
                     + (mismatches.length ? '\n\n⚠️ ' + window._t('SAP과 표지 값이 다릅니다 — 확인해주세요:\n', 'SAP and cover differ:\n')
                         + mismatches.map(function (x) { return '- ' + x; }).join('\n') : '')
-                    + '\n\n' + window._t('승인원 분류·상태전환·날짜·PACKING TYPE은 판단이 필요해 **비워둡니다**.',
-                                          'Approval type, status, dates and packing type are left blank for you to decide.')
-                    + '\n' + window._t('**임시저장만** 하고 상신은 하지 않습니다.', 'It will only be saved as a draft — not submitted.');
+                    + '\n\n☑ ' + window._t('기본 체크: ', 'Default checks: ') + checks.join(' / ')
+                    + (priorDocs.length
+                        ? '\n\n📑 ' + window._t('같은 코드로 올라간 승인원이 ', 'Found ') + priorDocs.length
+                            + window._t('건 있습니다 — **Revision History는 비워뒀습니다.** 개정 차수와 변경 내용은 직접 적어주세요:\n', ' prior approval doc(s) — Revision History left blank; please fill it in:\n')
+                            + priorDocs.slice(0, 5).map(function (d) { return '- ' + d.title + (d.at ? ' (' + d.at + ')' : ''); }).join('\n')
+                        : '\n\n📑 ' + window._t('이전 승인원이 없어 Revision History를 최초등록으로 채웠습니다 (Rev.No 00 / Page ALL).',
+                                                 'No prior approval doc — Revision History set to first registration.'))
+                    + '\n\n' + window._t('**임시저장만** 합니다 — 검토 후 직접 [결재요청]을 눌러주세요.',
+                                          'Saved as a draft only — review and press [결재요청] yourself.');
                 window._ganttQaShowConfirmButtons(preview, [
                     { label: '✅ ' + window._t('임시저장', 'Save draft'), value: '그룹웨어 기안 임시저장 확정' },
                     { label: window._t('취소', 'Cancel'), value: '그룹웨어 기안 취소' }
