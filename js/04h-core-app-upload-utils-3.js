@@ -4928,6 +4928,107 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // 📧 [2026-10-19 신규] 그룹웨어 웹메일 조회/요약.
+        //    ⚠️ **메일을 열지 않는다** — 상세 조회는 서버에서 읽음 처리를 해 안읽음 배지를 줄인다.
+        //       목록의 preview(본문 발췌)만으로 요약한다.
+        //    ⚠️ 발송(APP_CAPABILITIES의 mail_draft)과 '메일'을 공유한다 — 여기 kw엔 '보내'가 없어
+        //       충돌하지 않지만, 어휘가 늘면 샐 수 있다. 판정은 양쪽 다 카탈로그 데이터로만.
+        if (window._gwCapKwHit && window._gwCapKwHit(question, 'gw_mail_recent')) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            const _mPer = window._gwPeriodRange ? window._gwPeriodRange(question, 1)
+                                                : { from: '', to: '', label: window._t('오늘', 'today') };
+            // 폴더·안읽음 여부도 **데이터**로 판정(GW_MAIL_SCOPES, js/32)
+            const _scopes = window.GW_MAIL_SCOPES || [];
+            let _folder = 'Inbox', _unread = false, _scopeLabel = '';
+            for (let i = 0; i < _scopes.length; i++) {
+                const hit = (_scopes[i].kw || []).some(function (k) { return question.indexOf(k) >= 0; });
+                if (!hit) continue;
+                if (_scopes[i].folder) _folder = _scopes[i].folder;
+                if (_scopes[i].unread) _unread = true;
+                _scopeLabel = _scopes[i].label || '';
+                break;
+            }
+            window._ganttQaHistory.push({ role: 'ai', pending: true,
+                text: '⏳ ' + window._t('그룹웨어 메일함에서 ' + _mPer.label + ' 메일을 가져오는 중...',
+                                        'Fetching mail (' + _mPer.label + ')...') });
+            window._renderGanttQaMessages();
+            let _mReply;
+            try {
+                const st = await (await fetch('http://127.0.0.1:5000/gw/status')).json();
+                if (!st.ok) throw new Error(window._t('🔒 그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
+                                                      '🔒 Groupware sign-in required — use the 🔑 here.'));
+                const res = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/gw/mail/recent?limit=80&folder=' + _folder
+                          + (_unread ? '&unread=1' : '')
+                          + (_mPer.from ? '&from=' + _mPer.from : '')
+                          + (_mPer.to ? '&to=' + _mPer.to : '')),
+                    120000, window._t('메일 조회 시간 초과', 'Mail lookup timed out'));
+                const d = await res.json();
+                if (!d.ok) throw new Error(d.message || window._t('메일 조회 실패', 'Mail lookup failed'));
+                const mails = d.mails || [];
+                const _scopeTxt = (_scopeLabel ? _scopeLabel + ' ' : '');
+                if (!mails.length) {
+                    _mReply = 'ℹ️ ' + _mPer.label + ' ' + _scopeTxt
+                            + window._t('메일이 없습니다.', 'no mail.')
+                            + ' (' + d.from + (d.to ? ' ~ ' + d.to : '') + ')';
+                } else {
+                    // ① 결정론 먼저 — 목록은 AI 없이 그대로 보여준다(AI가 죽어도 쓸 수 있어야 한다)
+                    const _rows = mails.map(function (m) {
+                        return '| ' + String(m.at || '').slice(5, 16).replace('T', ' ')
+                             + ' | ' + String(m.from || '').split('|').join('/').slice(0, 16)
+                             + ' | ' + String(m.subject || '').split('|').join('/')
+                             + ' | ' + (m.seen ? '' : '●') + ' |';
+                    }).join('\n');
+                    const _table = '| ' + window._t('시각', 'When') + ' | ' + window._t('보낸이', 'From')
+                        + ' | ' + window._t('제목', 'Subject') + ' | ' + window._t('안읽음', 'New') + ' |\n'
+                        + '|---|---|---|---|\n' + _rows;
+                    _mReply = '📧 **' + _mPer.label + ' ' + _scopeTxt + window._t('메일', 'mail') + ' '
+                            + mails.length + window._t('건**', '')
+                            + ' (' + d.from + (d.to ? ' ~ ' + d.to : '') + ')'
+                            + (d.unreadTotal ? '  ·  ' + window._t('메일함 안읽음 총 ', 'unread in folder: ') + d.unreadTotal + window._t('건', '') : '')
+                            + '\n\n' + _table;
+
+                    // ② AI 요약 — 목록만 근거로. 실패해도 목록은 남고 사유를 붙인다.
+                    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+                    if (apiKey) {
+                        const _ctx = mails.map(function (m, i) {
+                            return (i + 1) + '. [' + String(m.at || '').slice(0, 16).replace('T', ' ') + '] '
+                                 + (m.from || '') + ' / ' + (m.subject || '')
+                                 + (m.preview ? '\n   ' + m.preview : '');
+                        }).join('\n');
+                        const _p = '아래는 사내 그룹웨어 메일함에서 조회한 ' + _mPer.label
+                            + '(' + d.from + (d.to ? ' ~ ' + d.to : '') + ') 메일 목록이다.\n'
+                            + '사용자 질문: ' + question + '\n\n'
+                            + '[메일 ' + mails.length + '건]\n' + _ctx + '\n\n'
+                            + '요청: 위 목록만 근거로 한국어로 간결하게 요약하라. '
+                            + '보낸이별로 묶지 말고 **업무 주제별로** 묶고, 내 답장이나 조치가 필요해 보이는 것'
+                            + '(요청/마감/견적/승인/송부 요청 등)을 맨 앞에 둔다. '
+                            + '각 항목은 한 줄로 쓰고 보낸이를 괄호로 붙인다. '
+                            + '광고·스팸리포트·자동알림은 맨 끝에 한 줄로 묶어라. '
+                            + '목록에 없는 내용을 추측해 보태지 말고, 표는 다시 만들지 말고 글머리표로만 답하라.';
+                        try {
+                            const _r = await window._withTimeout(window.callAiBackend(apiKey, _p, {}), 60000,
+                                window._t('AI 요약 시간 초과', 'AI summary timed out'));
+                            if (_r && _r.ok) {
+                                const _t3 = window._extractGanttQaAiText(_r);
+                                if (_t3 && _t3.trim()) _mReply += '\n\n---\n\n🤖 **' + window._t('요약', 'Summary') + '**\n\n' + _t3.trim();
+                            } else {
+                                _mReply += '\n\n⚠️ ' + window._t('AI 요약은 실패했습니다(목록은 위에 그대로 있습니다).',
+                                                                     'AI summary failed (the list above is still valid).');
+                            }
+                        } catch (e) {
+                            _mReply += '\n\n⚠️ ' + window._t('AI 요약 실패: ', 'AI summary failed: ') + (e && e.message ? e.message : e);
+                        }
+                    }
+                    _mReply += '\n\n' + window._t('※ 메일을 열지 않았습니다(읽음 처리 방지) — 본문 발췌만으로 요약했습니다.',
+                                                      'Mail was not opened (to avoid marking it read) — summarized from previews only.');
+                }
+            } catch (e) { _mReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: _mReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 📰 [2026-10-19 신규] 그룹웨어 게시판 조회/요약 — AI 문답에서 바로.
         //    ⚠️ 트리거 어휘와 기간 어휘는 GW_CAPABILITIES / GW_PERIOD_WORDS(js/32) **데이터**다.
         //    ⚠️ 기안(gw_approval_draft)보다 **위**에 둔다 — "게시판"과 "기안/결재"는 겹치지 않지만,

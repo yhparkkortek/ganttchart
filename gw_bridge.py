@@ -825,3 +825,129 @@ def boards():
             out.append({'id': b.get('id'), 'name': b.get('nodeValue') or '',
                         'scope': dept.get('deptName') or '부서'})
     return out
+
+
+# ── 메일 (읽기 전용) ─────────────────────────────────────────────────
+# ⚠️⚠️ **메일을 열지 않는다.** 상세 조회는 서버에서 `읽음`으로 바꿔버린다 — 사용자 메일함의
+#   안읽음 배지가 조용히 줄어드는 건 조사·요약이 일으켜도 되는 변화가 아니다.
+#   목록 응답의 `preview`에 본문 발췌가 들어 있어 요약에는 그걸로 충분하다(실측).
+# ⚠️ `message/list`는 **POST + JSON**이다(게시판·전자결재는 GET 쿼리스트링). 모듈마다 다르다.
+#   검색어 키는 `keyWord` — 대문자 W. `keyword`로 주면 조용히 무시된다.
+# ⚠️ 이 POST는 조회 전용이라 아래 허용목록(_MAIL_POST_ALLOW)에 있는 경로만 부른다.
+#   쓰기(발송·삭제·읽음처리)는 **여기에 만들지 않는다** — 허용목록이 그 가드다.
+_MAIL_POST_ALLOW = ('/api/mail/message/list', '/api/mail/message/count')
+
+_MAIL_FOLDERS = {
+    'inbox': 'Inbox', '받은': 'Inbox', '받은메일함': 'Inbox',
+    'sent': 'Sent', '보낸': 'Sent', '보낸메일함': 'Sent',
+    'drafts': 'Drafts', '임시': 'Drafts', '임시보관함': 'Drafts',
+    'trash': 'Trash', '휴지통': 'Trash',
+}
+
+_POST_JSON = """
+(async () => {
+  const r = await fetch(%s, { method:'POST', credentials:'same-origin',
+    headers:{ 'Content-Type':'application/json; charset=UTF-8', Accept:'application/json' },
+    body: JSON.stringify(%s) });
+  const ct = r.headers.get('content-type') || '';
+  if (!r.ok || !ct.includes('json')) {
+    return { __err: true, status: r.status, body: (await r.text()).slice(0, 200) };
+  }
+  return await r.json();
+})()
+"""
+
+
+def _mail_post(path, body, timeout=60):
+    if path not in _MAIL_POST_ALLOW:
+        raise ValueError(f'허용되지 않은 메일 경로입니다(조회 전용): {path}')
+    res = eval_in_gw(_POST_JSON % (json.dumps(path), json.dumps(body, ensure_ascii=False)), timeout)
+    if isinstance(res, dict) and res.get('__err'):
+        raise RuntimeError(f'그룹웨어 메일 API {path} → HTTP {res.get("status")}: {res.get("body")}')
+    return res
+
+
+_ENT_RE = re.compile(r'&#(\d{1,5});')
+
+
+def _unentity(s):
+    """`preview`는 `&#91;`처럼 숫자 엔티티로 와서 그냥 쓰면 읽을 수 없다."""
+    t = _ENT_RE.sub(lambda m: chr(int(m.group(1))), str(s or ''))
+    for a, b in (('&nbsp;', ' '), ('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'),
+                 ('&quot;', '"'), ('&#39;', "'")):
+        t = t.replace(a, b)
+    return _WS_RE.sub(' ', t).strip()
+
+
+def _mail_brief(m):
+    utc = str(m.get('dateUtc') or m.get('sentDateUtc') or '')
+    kst = ''
+    try:
+        kst = (datetime.datetime.strptime(utc[:19], '%Y-%m-%dT%H:%M:%S')
+               .replace(tzinfo=datetime.timezone.utc).astimezone(_KST).isoformat())
+    except ValueError:
+        pass
+    return {
+        'id': m.get('id'),
+        'subject': _unentity(m.get('subject') or '(제목 없음)'),
+        'from': _unentity(m.get('fromToSimple') or m.get('from') or ''),
+        'to': _unentity(m.get('sendToSimple') or ''),
+        'at': kst or utc,
+        'date': (kst or utc)[:10],
+        'seen': bool(m.get('seen')),
+        'size': m.get('size') or '',
+        'priority': m.get('priority') or '',
+        'folder': m.get('folderName') or '',
+        'preview': _unentity(m.get('preview') or '')[:400],
+    }
+
+
+def mail_recent(date_from=None, date_to=None, folder='Inbox', unread_only=False,
+                limit=80, keyword=None):
+    """기간 내 메일 목록. **메일을 열지 않는다**(열면 읽음 처리된다).
+
+    ⚠️ 서버에 기간 필터가 없다 — 최신순 목록을 받아 코드에서 자른다(게시판과 같은 구조).
+       `date_to`는 중단이 아니라 **건너뛰기**(최신순이라 중단하면 "어제"가 0건이 된다).
+    `folder`는 'Inbox'/'Sent'/'Drafts'/'Trash' 또는 한국어('받은','보낸'…)."""
+    fol = _MAIL_FOLDERS.get(str(folder or '').strip().lower(), folder or 'Inbox')
+    cutoff = _day_bounds(date_from, False) or (
+        datetime.datetime.now(_KST) - datetime.timedelta(days=1))
+    newest = _day_bounds(date_to, True)
+
+    out, page, unread_total, total = [], 1, None, None
+    while page <= 15 and len(out) < int(limit):
+        body = {'folder': fol, 'sharedFlag': 'user', 'page': page}
+        if unread_only:
+            body['flag'] = 'U'
+        if keyword:
+            body.update({'folder': 'all', 'keyWord': keyword,
+                         'sharedUserSeq': '0', 'sharedFolderName': ''})
+        d = (_mail_post('/api/mail/message/list', body) or {}).get('data') or {}
+        if total is None:
+            total = d.get('total')
+            unread_total = d.get('unreadMessageCount')
+        rows = d.get('messageList') or []
+        if not rows:
+            break
+        stop = False
+        for m in rows:
+            rec = _mail_brief(m)
+            try:
+                when = datetime.datetime.fromisoformat(rec['at'])
+            except ValueError:
+                when = None
+            if when is not None and when < cutoff:
+                stop = True            # 최신순 → 뒤는 전부 범위 밖
+                continue
+            if newest is not None and when is not None and when > newest:
+                continue               # 범위보다 새 메일 — 건너만 뛴다
+            out.append(rec)
+        if stop:
+            break
+        page += 1
+    out = out[:int(limit)]
+    return {'folder': fol, 'count': len(out), 'folderTotal': total,
+            'unreadTotal': unread_total, 'unreadOnly': bool(unread_only),
+            'from': cutoff.strftime('%Y-%m-%d'),
+            'to': newest.strftime('%Y-%m-%d') if newest else '',
+            'mails': out}

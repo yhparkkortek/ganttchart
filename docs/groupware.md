@@ -150,6 +150,38 @@ POST /api/mail/setting/basic/pagebase   (form-urlencoded)   body: pageBase=20
 
 **검증(2026-10-19)**: 받은메일함 1601 / 보낸 0 / 임시보관 1 / 첨부 555 / `keyWord=회의` 11건 / 안읽음 1522 / page=2 정상 동작.
 
+#### 목록 항목 필드 (실측 2026-10-19)
+`data` → `total` `unreadMessageCount` `pageBase` `currentPage` `folderName` `messageList[]`
+`messageList[]` 항목:
+`id` `subject` `from` `fromToSimple`(표시이름) `to` `sendToSimple` `dateUtc` `sentDateUtc`
+`seen`(읽음) `flag` `priority` `size` `spamRate` `tagList` `folderName` **`preview`(본문 발췌)**
+
+- `dateUtc`는 **UTC**다(`...Z`) — KST로 쓰려면 +9h. 날짜로 거를 때 이걸 빼먹으면 하루가 어긋난다.
+- `preview`는 `&#91;`처럼 **숫자 엔티티로 인코딩**돼 온다 → 디코딩 필요(`_unentity`).
+- ⚠️ **기간 필터 파라미터가 없다** — 게시판과 같다. 최신순 목록을 코드에서 자르고,
+  `date_to`는 중단이 아니라 **건너뛰기**(최신순이라 중단하면 "어제"가 0건).
+
+#### ⚠️⚠️ 요약하려고 메일을 열지 말 것 — **읽음 처리된다**
+상세 조회는 서버가 그 메일을 `읽음`으로 바꾼다. 사용자 메일함의 안읽음 배지가 조용히 줄어드는 건
+조회·요약이 일으켜도 되는 변화가 아니다(안읽음 1527건짜리 메일함이다).
+→ **목록의 `preview`만으로 요약한다.** 구현 후 안읽음 총계가 조회 전후로 같은지 확인했다(1527 → 1527).
+조사 목적으로 상세를 봐야 하면 **이미 `seen:true`인 메일**로만 할 것. 그때도 인증코드·비밀번호
+메일은 건드리지 말 것(받은메일함 첫 페이지에 `Your Recovery Code` 메일이 있었다).
+
+#### ⚠️ 메일 API는 iframe과 무관하다
+화면 조작은 `iframe#mail-viewer` 안에서 해야 하지만, **API 직접 호출은 같은 오리진이면
+어느 화면에서든 된다** — `/app/todo`에 있는 상태로 `message/list`를 불러 확인했다.
+즉 요약 기능은 메일 화면을 열지 않고도 동작한다(화면을 옮기지 않으니 사용자 방해도 없다).
+
+#### 앱 경로 (읽기 전용 — 발송·삭제·읽음처리 라우트는 **만들지 않았다**)
+```
+GET /gw/mail/recent?from=YYYY-MM-DD&to=YYYY-MM-DD&folder=Inbox&unread=1&keyword=..&limit=80
+```
+`gw_bridge._mail_post`는 **허용목록(`_MAIL_POST_ALLOW`)에 있는 조회 경로만** 호출한다 —
+POST 헬퍼가 일반 쓰기 통로가 되지 않게 막는 가드다.
+AI 문답 명령은 `js/04h`의 `gw_mail_recent` 블록, 폴더/안읽음 어휘는 `GW_MAIL_SCOPES`(js/32, 데이터).
+⚠️ 발송 기능(`APP_CAPABILITIES.mail_draft`)과 "메일"을 공유한다 — 조회 kw에 `보내`류를 넣지 말 것.
+
 #### 아직 못 푼 것
 - **메일 상세 조회 경로 미확인** — `/api/mail/message/{id}` 등 후보 5개 실패. 목록에서 메일을 클릭해 캡처하면 바로 나온다.
 - **발송 API 미확인** (의도적으로 실행하지 않음). 메일쓰기 창을 열어 캡처하면 폼 구조까지 확인 가능.
@@ -449,7 +481,7 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 | `survey` 설문 | 10 | 5 | 🟡 진입 확인 |
 | `sms` | 4 | 1 | ⬜ |
 | `note` 쪽지 | 3 | 1 | ⬜ |
-| `mail` 메일 | **1** | 0 | 🟡 목록·검색 확정 / 상세·발송 미확인 |
+| `mail` 메일 | **1** | 0 | 🟢 **읽기 완료 + 앱 이식 완료**(상세는 의도적으로 안 씀) |
 
 > 📡 **모듈별 엔드포인트 목록은 `docs/groupware-endpoints.md`** — "관찰 확정"과 "번들 추출(미호출)"을 구분해 적어 뒀다.
 >

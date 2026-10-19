@@ -3333,6 +3333,31 @@ def gw_board_recent():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/mail/recent', methods=['GET'])
+def gw_mail_recent():
+    """기간 내 그룹웨어 메일 목록(읽기 전용).
+
+    ⚠️ **메일을 열지 않는다** — 상세 조회는 서버에서 '읽음'으로 바꿔 안읽음 배지를 줄인다.
+       목록의 `preview`(본문 발췌)로 요약한다.
+    `from`/`to`('YYYY-MM-DD'), `folder`(Inbox/Sent/Drafts/Trash 또는 한국어),
+    `unread`(1이면 안읽음만), `keyword`(검색), `limit`(기본 80).
+    """
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '80')
+        r = gw_bridge.mail_recent(
+            date_from=(request.args.get('from') or '').strip() or None,
+            date_to=(request.args.get('to') or '').strip() or None,
+            folder=(request.args.get('folder') or 'Inbox').strip() or 'Inbox',
+            unread_only=(request.args.get('unread') or '') in ('1', 'true', 'yes'),
+            limit=int(limit) if str(limit).isdigit() else 80,
+            keyword=(request.args.get('keyword') or '').strip() or None)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/board/post', methods=['GET'])
 def gw_board_post():
     """게시물 1건 본문(평문). `boardId`·`postId` 필수."""
