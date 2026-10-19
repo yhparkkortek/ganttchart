@@ -216,20 +216,16 @@ _LOGIN_JS = """
   set(u, user); set(p, pw);
 
   const form = u.closest('form');
-  if (form) {
-    const btn = form.querySelector('button[type=submit],input[type=submit]');
-    if (btn) btn.click(); else form.submit();
-  } else return { result: 'no_form' };
+  if (!form) return { result: 'no_form' };
+  const btn = form.querySelector('button[type=submit],input[type=submit]');
 
-  // 결과 대기 — 성공하면 /login 을 벗어난다
-  for (let i = 0; i < 60; i++) {
-    await sleep(400);
-    if (!location.pathname.startsWith('/login')) return { result: 'ok', url: location.href };
-    const c2 = document.querySelector('#captcha');
-    if (c2 && c2.offsetParent !== null) return { result: 'captcha_appeared' };
-  }
-  const err = document.querySelector('.alert,.error,[class*=error]');
-  return { result: 'failed', message: err ? (err.textContent || '').trim().slice(0, 120) : '' };
+  // ⚠️⚠️ [2026-10-19 버그수정] 여기서 제출 결과를 **기다리면 안 된다.**
+  //   제출하면 페이지가 이동하면서 이 JS의 실행 컨텍스트가 통째로 파괴된다 →
+  //   await 하던 프라미스가 영원히 안 풀리고, CDP는 **본문이 빈 예외**를 돌려준다
+  //   (실제로 "로그인 시도 중 오류: " 라는 메시지 없는 실패가 났다).
+  //   그래서 제출만 하고 즉시 반환하고, **결과 판정은 바깥(파이썬)에서 폴링**한다.
+  if (btn) btn.click(); else form.submit();
+  return { result: 'submitted' };
 })(%s, %s)
 """
 
@@ -264,11 +260,37 @@ def login_once():
     try:
         r = eval_in_gw(_LOGIN_JS % (json.dumps(cfg['user']), json.dumps(pw)), timeout=60) or {}
     except Exception as e:
-        return {'ok': False, 'result': 'error', 'message': f'로그인 시도 중 오류: {e}'}
+        # 제출 직후 페이지 이동으로 컨텍스트가 죽으면 본문 없는 예외가 온다 —
+        # 그 경우에도 **제출은 이미 일어났을 수 있으므로** 아래에서 세션으로 결과를 확인한다.
+        r = {'result': 'submitted', '_evalError': str(e) or '(본문 없음)'}
     finally:
         pw = None  # 메모리에 더 들고 있지 않는다
 
     res = r.get('result')
+
+    # 제출했으면 결과는 **바깥에서** 확인한다(페이지 이동으로 JS 컨텍스트가 죽기 때문).
+    if res == 'submitted':
+        for _ in range(20):            # 최대 ~20초
+            time.sleep(1.0)
+            s2 = session_info()
+            if s2.get('ok'):
+                return {'ok': True, 'result': 'ok', 'message': '로그인했습니다.', 'session': s2}
+        # 로그인 안 됐다 — 왜 안 됐는지(보안문자/오류문구)를 읽어서 알린다
+        try:
+            st = eval_in_gw("""
+              (() => {
+                const cap = document.querySelector('#captcha');
+                const err = document.querySelector('.alert,.error,[class*=error]');
+                return { captcha: !!(cap && cap.offsetParent !== null),
+                         url: location.href,
+                         msg: err ? (err.textContent || '').trim().slice(0, 120) : '' };
+              })()
+            """, timeout=20) or {}
+        except Exception:
+            st = {}
+        res = 'captcha_appeared' if st.get('captcha') else 'failed'
+        r['message'] = st.get('msg') or ''
+
     if res == 'ok':
         return {'ok': True, 'result': 'ok', 'message': '로그인했습니다.', 'session': session_info()}
 
