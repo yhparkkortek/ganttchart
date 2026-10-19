@@ -245,6 +245,46 @@ _LOGIN_JS = """
 """
 
 
+# 로그인 직후 뜨는 "새로운 기능" 투어(div.step)가 화면을 덮어 폼 조작을 막는다.
+# 실측(2026-10-19): 건너뛰기는 `<a class="welcome_skip">SKIP</a>`.
+# 어휘/선택자는 데이터로 둬서 그룹웨어가 문구를 바꿔도 여기만 고치면 되게 한다.
+_INTRO_SKIP_SELECTORS = ['.welcome_skip', '.btn_skip', '.tour_skip']
+_INTRO_SKIP_WORDS = ['SKIP', 'Skip', '건너뛰기', '다시 보지 않기', '그만보기']
+
+_DISMISS_JS = """
+(async (sels, words) => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const vis = el => !!(el && el.offsetParent !== null &&
+                       getComputedStyle(el).visibility !== 'hidden' &&
+                       getComputedStyle(el).display !== 'none');
+  const clicked = [];
+  for (let pass = 0; pass < 3; pass++) {
+    let hit = null;
+    for (const s of sels) { const e = document.querySelector(s); if (vis(e)) { hit = e; break; } }
+    if (!hit) {
+      hit = [...document.querySelectorAll('a,button,span,div')]
+        .find(e => vis(e) && words.includes((e.textContent || '').trim()));
+    }
+    if (!hit) break;
+    clicked.push((hit.textContent || '').trim().slice(0, 20) || hit.className);
+    hit.click();
+    await sleep(700);
+  }
+  const left = [...document.querySelectorAll('div[class*=step]')].filter(vis).length;
+  return { clicked, overlaysLeft: left };
+})(%s, %s)
+"""
+
+
+def dismiss_intro():
+    """로그인 직후 소개 투어가 떠 있으면 닫는다(없으면 아무 일도 하지 않는다)."""
+    try:
+        return eval_in_gw(_DISMISS_JS % (json.dumps(_INTRO_SKIP_SELECTORS),
+                                         json.dumps(_INTRO_SKIP_WORDS)), timeout=30)
+    except Exception as e:
+        return {'clicked': [], 'error': str(e)}
+
+
 def login_once():
     """저장된 계정으로 **한 번만** 로그인한다.
 
@@ -289,7 +329,10 @@ def login_once():
             time.sleep(1.0)
             s2 = session_info()
             if s2.get('ok'):
-                return {'ok': True, 'result': 'ok', 'message': '로그인했습니다.', 'session': s2}
+                # 로그인 직후 "새로운 기능" 투어가 화면을 덮으면 이후 조작이 전부 막힌다 → 먼저 닫는다
+                intro = dismiss_intro()
+                return {'ok': True, 'result': 'ok', 'message': '로그인했습니다.',
+                        'session': s2, 'intro': intro}
         # 로그인 안 됐다 — 왜 안 됐는지(보안문자/오류문구)를 읽어서 알린다
         try:
             st = eval_in_gw("""
@@ -467,6 +510,8 @@ def approval_draft(form_id, dept_id, subject, fields, dry_run=False):
     url = f'{GW_ORIGIN}/app/approval/document/new/{int(dept_id)}/{int(form_id)}'
     asyncio.run(_navigate(t['webSocketDebuggerUrl'], url))
     time.sleep(2.0)
+    # 소개 투어가 떠 있으면 입력칸을 가려 채우기가 실패한다 — 들어오자마자 한 번 닫는다
+    dismiss_intro()
 
     cfg = json.dumps({'subject': subject, 'fields': fields or {}, 'dryRun': bool(dry_run)},
                      ensure_ascii=False)
