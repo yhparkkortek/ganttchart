@@ -4967,10 +4967,15 @@ ${docsJson}`;
                 const m = (md.materials || [])[0];
                 if (!m) throw new Error(_gwDraftMat + window._t(' 자재 정보를 SAP에서 찾지 못했습니다.', ' not found in SAP.'));
 
-                const subject = '[원자재 승인] ' + _gwDraftMat + ' ' + (m.MAKTX || '');
+                // 📄 제목은 사내 관례를 따른다 — 기존 문서 실측(219538): `Customer Approval Sheet[133015]_V01`
+                const subject = 'Customer Approval Sheet[' + _gwDraftMat + ']_V01';
                 const fields = { 'Item Code': _gwDraftMat, 'Model': m.MAKTX || '' };
-                if (m.MFRPN) fields['Name'] = m.MFRPN;
+                if (m.MATKL) fields['Item Group No'] = m.MATKL;   // 자재그룹 **코드**(WGBEZ60은 이름이라 다름)
                 if (m.ZTEXT) fields['Sub Description'] = m.ZTEXT;
+                // ⚠️ Provider Info의 Name은 **공급업체**지 제조사가 아니다. 예전엔 MFRPN(제조사,
+                //    예: AUO)을 넣었는데 실제 문서엔 공급업체(예: 정림전자㈜)가 들어간다 — 전혀 다른 값이라
+                //    자동으로 채우면 틀린 문서가 된다. ZMM006 조회도 MARA-ZLIFNR이 비어 있어 못 가져오므로
+                //    (실측 133015) **비워 두고 사람이 적는다.**
                 window._gwPendingDraft = { formId: form.formId, deptId: form.deptId, subject: subject, fields: fields };
 
                 const preview = '📝 **' + form.name + '** ' + window._t('기안을 아래 내용으로 작성합니다.', 'will be drafted with:') + '\n\n'
