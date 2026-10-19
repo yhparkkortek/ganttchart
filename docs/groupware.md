@@ -121,11 +121,38 @@ SAP 로그인과 동일 — Windows **DPAPI** 암호화, `gw_login_config.json`(
 **messageList 항목 필드**: `id` `subject` `from` `to` `size` `byteSize` `flag` `preview` `dateUtc` `sentDateUtc` `seen` `priority` `spamRate` `existMeInCc` `tagList` `folderFullName`
 → ⚠️ 식별자는 `uid`가 아니라 **`id`**.
 
-#### ⚠️ 아직 못 푼 것 (다음 조사 거리)
-- `message/list`의 **페이지·폴더·검색 파라미터 이름을 모른다.** JSON으로 `folder`/`page`/`pageBase`/`searchType`을 줘도 **무시**되고(항상 Inbox 80건), form-urlencoded로 주면 **응답이 비어** 온다.
-  → 추측하지 말고 **UI에서 폴더 전환·페이지 이동·검색을 실제로 눌러 요청 본문을 캡처**할 것. (`count`는 form-urlencoded인데 `list`는 JSON인 걸 보면 엔드포인트마다 형식이 다르다.)
-- **메일 상세 조회 경로 미확인** — `/api/mail/message/{id}` 등 5개 후보를 시도했으나 확인 못 함.
-- **발송 API 미확인** (의도적으로 실행하지 않음).
+#### ⚠️⚠️ 메일 화면은 **iframe 안**에 있다
+```html
+<iframe id="mail-viewer" src="/app/mail/home">   ← 여기에 전부 들어 있다
+```
+최상위 문서는 **본문이 10자뿐**이라 `document.querySelector`로는 폴더·검색창·버튼을 **하나도 못 찾는다**(모든 클릭이 조용히 빗나간다).
+→ `document.getElementById('mail-viewer').contentDocument`로 들어가서 조작할 것. same-origin이라 접근된다.
+→ 입력값 설정 시 setter는 **iframe의** `contentWindow.HTMLInputElement.prototype`에서 가져와야 한다.
+
+#### `message/list` 파라미터 (UI 조작 캡처로 확정, 2026-10-19)
+**Content-Type: `application/json`**
+
+| 목적 | body |
+|---|---|
+| 받은메일함 | `{"folder":"Inbox","sharedFlag":"user"}` |
+| 보낸/임시/휴지통 | `folder`를 `Sent` / `Drafts` / `Trash` 로 |
+| 안 읽은 메일 | `{"folder":"Inbox","flag":"U","sharedFlag":"user"}` |
+| 첨부 있는 메일 | `{"flag":"T","folder":"all","extFolder":"on","extType":"attach"}` |
+| **검색** | `{"folder":"all","keyWord":"회의","sharedFlag":"user","sharedUserSeq":"0","sharedFolderName":""}` |
+| 페이지 이동 | 위에 `"page":2` 추가 |
+
+⚠️ **검색어 키는 `keyWord`** — 대문자 `W`다. `keyword`/`searchValue`/`searchType`은 전부 **조용히 무시**된다(에러 없이 전체 목록이 온다).
+⚠️ **페이지당 건수는 목록 파라미터가 아니라 별도 설정 API**다:
+```
+POST /api/mail/setting/basic/pagebase   (form-urlencoded)   body: pageBase=20
+```
+`message/list`에 `pageBase`를 넣어도 안 먹는다. 이걸 몰라서 한참 헤맸다.
+
+**검증(2026-10-19)**: 받은메일함 1601 / 보낸 0 / 임시보관 1 / 첨부 555 / `keyWord=회의` 11건 / 안읽음 1522 / page=2 정상 동작.
+
+#### 아직 못 푼 것
+- **메일 상세 조회 경로 미확인** — `/api/mail/message/{id}` 등 후보 5개 실패. 목록에서 메일을 클릭해 캡처하면 바로 나온다.
+- **발송 API 미확인** (의도적으로 실행하지 않음). 메일쓰기 창을 열어 캡처하면 폼 구조까지 확인 가능.
 
 #### ⚠️ 실무 발견 — 메일함 용량 초과
 ```
