@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "plugins": [
+    "eslint",
+    "oxc"
+  ],
+  "rules": {
+    "no-unused-vars": "off",
+    "no-useless-escape": "off",
+    "no-empty": "off",
+    "no-unused-expressions": "off",
+    "no-control-regex": "off"
+  },
+  "ignorePatterns": [
+    "node_modules/**"
+  ]
+}

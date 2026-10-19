@@ -1,0 +1,11 @@
+{
+  "name": "ganttchart-devtools",
+  "private": true,
+  "description": "개발 도구 전용 — 앱 런타임과 무관. 이 앱은 번들러 없이 CDN <script>로만 동작한다. 여기 적힌 의존성은 커밋 훅의 js/ 문법 검증(oxlint)에만 쓴다.",
+  "scripts": {
+    "lint": "oxlint js/"
+  },
+  "devDependencies": {
+    "oxlint": "1.42.0"
+  }
+}

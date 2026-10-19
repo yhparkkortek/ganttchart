@@ -62,6 +62,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 각 파일은 독립 모듈이 아님. `const`/`let` 최상위 변수도 이후 로드 스크립트에서 그대로 보임.
 - 파일을 쪼갤 때 **top-level statement 경계에서만** 자를 것 — 함수/블록 중간에서 자르면 문법 오류.
 - **✅ node 있음(2026-10-15 확인, `C:\Program Files\nodejs\node`)** — 1차 검증은 `node --check js/파일.js`가 가장 빠름(예전 "node 없음" 기록은 틀림).
+- **✅ (2026-10-19) 커밋 시 js/ 전체 문법 검증이 자동이다** — `.claude/settings.json` PreToolUse 훅이 `.claude/hooks/precommit-oxlint.ps1`을 돌려 63개 파일을 0.6초에 검사하고, **오류가 있으면 커밋을 차단**한다. 경고는 차단하지 않음(도입 당시 427건 중 328건이 전역 스코프 때문에 생긴 no-unused-vars 오탐 — `npm run lint`로 따로 봄). 규칙은 `.oxlintrc.json`. 새 PC는 `npm install` 1회 필요 — 미설치면 훅이 조용히 통과하므로 수동 `node --check`가 여전히 최후 방어선.
 - 전체 스크립트 일괄 파싱 검증은 브라우저 콘솔에서:
   ```
   for (const s of [...document.querySelectorAll('script[src^="js/"]')].map(e=>e.getAttribute('src'))) { try { new Function(await (await fetch(s)).text()); } catch(e) { console.error(s, e.message); } }

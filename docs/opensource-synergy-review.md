@@ -62,7 +62,7 @@ GitHub star 순위를 실측(`gh api repos/<owner>/<repo>`)해 100여 개 후보
 - 대안: 초성 변환만 필요하면 자체 구현 15줄(`0xAC00` 기반 `(code-0xAC00)/588`)로도 된다.
   es-hangul은 조사 처리(`josa`)·자모 분해까지 얹을 때 값어치가 생긴다.
 
-### 3. oxlint — 23,108★ (2026-10 활발)
+### 3. oxlint — 23,108★ (2026-10 활발) — ✅ **2026-10-19 도입 완료**
 **어디에**: `.claude/settings.json` PreToolUse 훅 (지금 `git commit` 뒤처짐만 막는 자리).
 
 CLAUDE.md의 1순위 사고 유형이 **"리터럴 안 줄바꿈 하나로 파일 전체가 조용히 죽는다"** +
@@ -72,9 +72,20 @@ CLAUDE.md의 1순위 사고 유형이 **"리터럴 안 줄바꿈 하나로 파�
 oxlint는 Rust 단일 바이너리, **zero-config**, 60,547줄 `js/*.js` 전체를 1초 이내 처리.
 커밋 훅에 걸면 수동 단계가 사라진다.
 
-```bash
-npx --yes oxlint@latest js/
-```
+**도입 결과 (실측)**:
+- `.claude/hooks/precommit-oxlint.ps1` + `.claude/settings.json` PreToolUse 훅 + `.oxlintrc.json`.
+- **63파일 0.6초**, 오류만 차단(경고는 통과). 미종료 템플릿 리터럴을 실제로 잡는 것 확인.
+- ⚠️ **npx는 7.4초 — 커밋 훅으로 못 쓴다.** `node node_modules/oxlint/bin/oxlint`로 직접 호출해야
+  0.6초. 그래서 개발 도구 전용 `package.json`(+`node_modules/` gitignore)을 두었다.
+- ⚠️ **경고 427건 중 328건이 `no-unused-vars` 오탐** — 전역 스코프라 한 파일 안에선 모든 함수가
+  "미사용"으로 보인다. 이 규칙을 끄지 않으면 훅을 쓸 수 없다. `no-useless-escape`(57),
+  `no-unused-expressions`(18, `window.foo && window.foo()` 가드 관용구), `no-control-regex`(3,
+  의도적 새니타이저)도 꺼서 **최종 경고 1건**으로 만들었다 — 남은 1건이 실제 버그다(아래).
+- ⚠️ **PowerShell 훅의 한국어는 UTF-8 강제 필요** — 이 PC의 `[Console]::OutputEncoding`이
+  cp949(ks_c_5601-1987)라서 그냥 두면 차단 메시지가 깨져 읽을 수 없다.
+  `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)`.
+- 🐛 **첫 수확**: `js/04i-core-app-upload-utils-4.js`의 `rap-del` 키가 790행·806행에 **중복** —
+  790행 핸들러가 완전히 죽어 있다(JS 객체 리터럴은 뒤가 이김).
 - node v24.19.0 / npx 11.17.0 확인됨.
 - 전역 스코프 교차 참조(함수가 사라져 NameError 나는 류)까지 잡으려면 ESLint `no-undef` +
   globals 목록 생성이 필요하다 — oxlint는 **문법/명백한 실수**까지가 현실적 범위.
@@ -142,7 +153,7 @@ Phase 9 군집(`js/29`)의 "① 결정론적 키워드 추출 (AI 호출 없음)
 
 ## 권장 순서
 
-1. **oxlint 훅** — 비용 거의 0, 1순위 사고 유형 방어. 여기서 시작.
+1. ~~**oxlint 훅**~~ — ✅ 2026-10-19 도입 완료.
 2. **es-hangul 초성 검색** — 체감 가장 큼, 변경 범위 작음(가드 필수).
 3. **pywinauto 점진 도입** — `_win_save_dialog_*` 한 함수 + 폴백 유지. SAP 작업 중 가장 많이
    깨지는 레이어라 누적 이득이 크다.

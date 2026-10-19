@@ -28,3 +28,8 @@ issue_events.cursor
 *.bak
 sap_login_config.json
 gw_login_config.json
+
+# [2026-10-19] 커밋 훅의 js/ 문법 검증(oxlint) 전용 개발 도구 — 앱 런타임과 무관.
+# 새 PC에서 훅을 쓰려면 저장소 루트에서 `npm install` 1회. 설치 안 돼 있으면 훅은
+# 조용히 통과한다(커밋을 막지는 않음).
+node_modules/
