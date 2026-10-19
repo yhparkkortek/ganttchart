@@ -1,0 +1,508 @@
+/* 🛠 [2026-10-19 신규] AI 문답 — function-calling 자율 호출 (읽기 전용)
+ *
+ * 왜 필요했나
+ * ───────────
+ * 지금까지 그룹웨어/SAP 조작은 `js/04h`에 **미리 박아둔 if 블록**이 했다. 카탈로그 어휘가
+ * 걸리면 정해진 라우트를 부르고, 안 걸리면 AI에게 텍스트로만 넘겼다. 그래서 구현해 두지
+ * 않은 조합("문서관리 승인 대기 보여줘")은 AI가 "지원하지 않습니다"라고 답했다 —
+ * AI가 거부한 게 아니라 **부를 코드가 없었던 것**이다.
+ *
+ * 이 파일은 그 마지막 경로를 바꾼다. 라우트 목록을 **데이터**로 들고 있다가 AI에게 보여주고,
+ * AI가 "어떤 도구를 어떤 인자로 부를지" 고르게 하고, 코드가 실행해 결과를 되먹인다.
+ *
+ * 설계 원칙 (CLAUDE.md)
+ * ─────────────────────
+ * 1. **결정론 먼저** — 기존 if 블록이 이긴다. 이 루프는 그게 전부 빗나간 뒤에만 돈다.
+ * 2. **읽기만** — `mode:'read'` 도구만 호출 가능. 쓰기는 사람 확인 경로를 그대로 쓴다.
+ *    AI가 엔드포인트 문자열을 고르는 게 아니라 **도구 id만** 고른다(URL 주입 차단).
+ * 3. **데이터화** — 도구·인자·허용값은 아래 QA_TOOLS 한 곳. 코드에 정규식/URL 박지 않는다.
+ * 4. **신호 기록** — 호출·실패를 전부 남긴다(조용히 삼키지 않는다).
+ * 5. **투명** — 무엇을 어떤 인자로 불렀는지 사용자 답변에 그대로 보여준다.
+ *
+ * ⚠️ GAS 프록시를 거치는 구조라 공급사 네이티브 function-calling을 쓸 수 없다. 그래서 앱에
+ *    이미 있는 `[[ACTION:...]]`과 같은 **텍스트 프로토콜**(`[[TOOL:id {json}]]`)을 쓴다.
+ *    백엔드 변경이 필요 없고, 모델을 바꿔도 그대로 동작한다.
+ */
+(function () {
+    'use strict';
+
+    var BACKEND = 'http://127.0.0.1:5000';
+
+    // ── 도구 레지스트리 (데이터) ─────────────────────────────────────
+    // 새 읽기 라우트를 만들면 **여기 한 줄만** 추가하면 AI가 쓸 수 있다.
+    //   path   : BACKEND 아래 경로. 반드시 '/'로 시작. AI는 이 값을 못 고른다(id만 고름).
+    //   params : name/type/desc(+enum/min/max/default). 스키마에 없는 인자는 **버린다**.
+    //   requires: 'gw'면 그룹웨어 로그인 확인을 먼저 한다(실패 시 호출 자체를 안 한다).
+    //   pick   : 응답에서 AI에게 넘길 배열 키(너무 큰 응답을 그대로 싣지 않기 위해).
+    window.QA_TOOLS = window.QA_TOOLS || [
+        {
+            id: 'gw_mail', mode: 'read', requires: 'gw',
+            title: '그룹웨어 메일 목록',
+            desc: '사내 그룹웨어 웹메일함을 기간/폴더/안읽음으로 조회한다. 메일을 열지 않으므로 읽음 처리되지 않고, 각 항목에 본문 발췌(preview)가 들어 있다.',
+            path: '/gw/mail/recent', pick: 'mails',
+            params: [
+                { name: 'from', type: 'date', desc: '시작일 YYYY-MM-DD (기본: 어제)' },
+                { name: 'to', type: 'date', desc: '종료일 YYYY-MM-DD (생략하면 오늘까지)' },
+                { name: 'folder', type: 'enum', enum: ['Inbox', 'Sent', 'Drafts', 'Trash'], def: 'Inbox', desc: '메일함' },
+                { name: 'unread', type: 'bool', desc: '1이면 안읽은 메일만' },
+                { name: 'keyword', type: 'text', max: 40, desc: '제목·본문 검색어' },
+                { name: 'limit', type: 'int', min: 1, max: 80, def: 40, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_board', mode: 'read', requires: 'gw',
+            title: '그룹웨어 게시판 게시물',
+            desc: '사내 게시판(공지사항·인사발령·IT공지·식단표 등) 게시물을 기간으로 조회한다. 항목에 본문 발췌가 들어 있다.',
+            path: '/gw/board/recent', pick: 'posts',
+            params: [
+                { name: 'from', type: 'date', desc: '시작일 YYYY-MM-DD' },
+                { name: 'to', type: 'date', desc: '종료일 YYYY-MM-DD' },
+                { name: 'boardId', type: 'int', min: 1, max: 99999, desc: '특정 게시판만 (gw_board_list로 id 확인)' },
+                { name: 'limit', type: 'int', min: 1, max: 80, def: 40, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_board_list', mode: 'read', requires: 'gw',
+            title: '그룹웨어 게시판 목록',
+            desc: '볼 수 있는 게시판 이름과 id 목록. 특정 게시판만 보려면 먼저 이걸로 id를 찾는다.',
+            path: '/gw/boards', pick: 'boards', params: []
+        },
+        {
+            id: 'gw_board_post', mode: 'read', requires: 'gw',
+            title: '그룹웨어 게시물 본문',
+            desc: '게시물 1건의 본문 전체. 발췌만으로 부족할 때만 쓴다. 본문이 이미지뿐이면 bodyNote에 그 사유가 온다.',
+            path: '/gw/board/post',
+            params: [
+                { name: 'boardId', type: 'int', min: 1, max: 99999, req: true, desc: '게시판 id' },
+                { name: 'postId', type: 'int', min: 1, max: 9999999, req: true, desc: '게시물 id' }
+            ]
+        },
+        {
+            id: 'gw_calendar', mode: 'read', requires: 'gw',
+            title: '그룹웨어 일정',
+            desc: '사내 캘린더 일정을 기간으로 조회한다.',
+            path: '/gw/events', pick: 'events',
+            params: [
+                { name: 'from', type: 'date', desc: '시작일 YYYY-MM-DD' },
+                { name: 'to', type: 'date', desc: '종료일 YYYY-MM-DD' }
+            ]
+        },
+        {
+            id: 'gw_approval_box', mode: 'read', requires: 'gw',
+            title: '전자결재 문서함',
+            desc: '내 전자결재 문서함을 본다. 기안함/임시저장함/결재함(내가 결재할 차례)/참조열람함.',
+            path: '/gw/approval/doclist', pick: 'docs',
+            params: [
+                { name: 'box', type: 'enum', enum: ['draft', 'tempsave', 'approve', 'viewer'], def: 'draft',
+                  desc: 'draft=내가 기안한 것 / tempsave=임시저장 / approve=내가 결재한·할 것 / viewer=참조·열람' },
+                { name: 'searchtype', type: 'enum',
+                  enum: ['title', 'drafterName', 'drafterDeptName', 'formName', 'docNum', 'activityUserName'],
+                  desc: '검색 대상 필드. ⚠️ 엉뚱한 필드로 찾으면 조용히 0건이 온다 — 사내 승인원 문서는 제목이 영문(Customer Approval Sheet...)이라 "승인원"은 title이 아니라 formName으로 찾아야 걸린다. 0건이면 다른 필드로 한 번 더 시도해라.' },
+                { name: 'keyword', type: 'text', max: 40, desc: '검색어 (searchtype과 함께 써야 한다)' },
+                { name: 'duration', type: 'enum', enum: ['all', '1', '6', '12'], def: 'all', desc: '기간(개월)' },
+                { name: 'limit', type: 'int', min: 1, max: 50, def: 20, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_docs', mode: 'read', requires: 'gw',
+            title: '문서관리 문서',
+            desc: '사내 문서관리(DMS) 문서 목록. 승인/등록 대기 중인 것과 내가 최근 열람한 것.',
+            path: '/gw/docs', pick: 'docs',
+            params: [
+                { name: 'kind', type: 'enum', enum: ['latestread', 'approvewaiting', 'registwaiting', 'favorite'],
+                  def: 'latestread', desc: 'latestread=최근 열람 / approvewaiting=승인 대기 / registwaiting=등록 대기 / favorite=즐겨찾기' },
+                { name: 'limit', type: 'int', min: 1, max: 50, def: 20, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_asset_list', mode: 'read', requires: 'gw',
+            title: '예약 자원 목록',
+            desc: '예약할 수 있는 자원(회의실·차량 등)의 이름과 id. 특정 자원만 보려면 먼저 이걸로 id를 찾는다.',
+            path: '/gw/assets', pick: 'assets', params: []
+        },
+        {
+            id: 'gw_asset_reservations', mode: 'read', requires: 'gw',
+            title: '예약 현황',
+            desc: '해당 날짜의 회의실·차량 예약 현황(시간·사용자). 비어 있는 시간을 찾을 때도 이걸 본다.',
+            path: '/gw/asset/reservations', pick: 'reservations',
+            params: [
+                { name: 'date', type: 'date', desc: '날짜 YYYY-MM-DD (기본: 오늘)' },
+                { name: 'assetId', type: 'int', min: 1, max: 99999, desc: '특정 자원만 (gw_asset_list로 id 확인)' }
+            ]
+        },
+        {
+            id: 'gw_community_feed', mode: 'read', requires: 'gw',
+            title: '커뮤니티 최신 글',
+            desc: '내가 가입한 사내 커뮤니티의 최신 게시물 피드.',
+            path: '/gw/community/feed', pick: 'posts',
+            params: [{ name: 'limit', type: 'int', min: 1, max: 50, def: 20, desc: '최대 건수' }]
+        },
+        {
+            id: 'gw_community_list', mode: 'read', requires: 'gw',
+            title: '커뮤니티 목록',
+            desc: '사내 커뮤니티 목록(이름·멤버수·글수·가입 여부).',
+            path: '/gw/communities', pick: 'communities',
+            params: [{ name: 'limit', type: 'int', min: 1, max: 50, def: 30, desc: '최대 건수' }]
+        },
+        {
+            id: 'gw_surveys', mode: 'read', requires: 'gw',
+            title: '설문',
+            desc: '사내 설문 목록. 내가 응답해야 하는 것(todo)과 최근 설문(latest).',
+            path: '/gw/surveys', pick: 'surveys',
+            params: [
+                { name: 'kind', type: 'enum', enum: ['todo', 'latest'], def: 'latest', desc: 'todo=응답 대기 / latest=최근' },
+                { name: 'limit', type: 'int', min: 1, max: 50, def: 20, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_webfolder', mode: 'read', requires: 'gw',
+            title: '자료실 폴더/파일',
+            desc: '사내 자료실의 폴더와 파일 목록. 하위로 들어갈 때는 path에 그 폴더 경로를 넣는다.',
+            path: '/gw/webfolder', pick: 'items',
+            params: [
+                { name: 'path', type: 'text', max: 120, def: '/', desc: '폴더 경로 (기본 루트 /)' },
+                { name: 'scope', type: 'enum', enum: ['public', 'user'], def: 'public', desc: 'public=공용 / user=개인' },
+                { name: 'limit', type: 'int', min: 1, max: 50, def: 30, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_approval_search', mode: 'read', requires: 'gw',
+            title: '전자결재 문서 검색',
+            desc: '전자결재 문서를 키워드로 검색한다(제목·양식명·기안자 등).',
+            path: '/gw/approval/search', pick: 'docs',
+            params: [
+                { name: 'keyword', type: 'text', max: 40, req: true, desc: '검색어' }
+            ]
+        }
+    ];
+
+
+    // ── 호출 기록 (Phase 10 학습 신호) ───────────────────────────────
+    // 조용히 삼키지 않는다 — 어떤 질문이 어떤 도구로 갔고 성공했는지 남겨야
+    // "AI가 엉뚱한 도구를 고른다"를 나중에 시그니처로 묶을 수 있다(CLAUDE.md 1·3·6).
+    var LOG_KEY = 'gantt_qa_tool_log_v1';
+    var LOG_MAX = 300;
+
+    window._qaLogToolCall = function (question, r) {
+        try {
+            var arr = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+            arr.push({ t: Date.now(), q: String(question || '').slice(0, 200),
+                       id: r.id, args: r.args || {}, ok: !!r.ok,
+                       count: (r.count === undefined ? null : r.count),
+                       msg: String(r.message || '').slice(0, 160) });
+            if (arr.length > LOG_MAX) arr = arr.slice(-LOG_MAX);
+            localStorage.setItem(LOG_KEY, JSON.stringify(arr));
+        } catch (e) { /* 저장 실패가 조회를 막으면 안 된다 */ }
+        if (!r.ok && window._issueLog) {
+            try {
+                window._issueLog({ kind: 'qa_tool_fail', tool: r.id,
+                                   args: r.args || {}, message: r.message || '',
+                                   question: String(question || '').slice(0, 200) });
+            } catch (e) { /* 수집기 없거나 꺼져 있을 수 있다 */ }
+        }
+    };
+
+    window._qaToolLogRead = function () {
+        try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; }
+    };
+
+    // 새 localStorage 저장소는 정리 규칙에 등록한다(docs/mail-pipeline.md)
+    if (window.STORAGE_REGISTRY && !window.STORAGE_REGISTRY[LOG_KEY]) {
+        window.STORAGE_REGISTRY[LOG_KEY] = {
+            label: 'AI 문답 도구 호출 로그', keep: LOG_MAX,
+            prune: function () {
+                try {
+                    var a = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+                    if (a.length > LOG_MAX) localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(-LOG_MAX)));
+                } catch (e) {}
+            }
+        };
+    }
+
+    // ── 인자 검증 (AI가 준 값을 그대로 URL에 싣지 않는다) ────────────
+    var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+    window._qaValidateToolArgs = function (tool, raw) {
+        var args = {}, notes = [];
+        var given = (raw && typeof raw === 'object') ? raw : {};
+        // 스키마에 없는 키는 버린다 — AI가 limit=9999, path=... 같은 걸 끼워 넣어도 통하지 않는다
+        Object.keys(given).forEach(function (k) {
+            var known = (tool.params || []).some(function (p) { return p.name === k; });
+            if (!known) notes.push('무시된 인자: ' + k);
+        });
+        // 값이 규격을 벗어나면 **기본값으로 떨어뜨린다** — 인자를 통째로 빼면
+        // 서버 기본값이 적용돼 "사용자가 말한 것과 다른 조회"가 조용히 일어난다.
+        var reject = function (name, why) {
+            notes.push(why);
+            var pp = (tool.params || []).find(function (x) { return x.name === name; });
+            if (pp && pp.def !== undefined) args[name] = pp.def;
+        };
+        for (var i = 0; i < (tool.params || []).length; i++) {
+            var p = tool.params[i];
+            var v = given[p.name];
+            if (v === undefined || v === null || v === '') {
+                if (p.req) return { error: '필수 인자 누락: ' + p.name };
+                if (p.def !== undefined) args[p.name] = p.def;
+                continue;
+            }
+            if (p.type === 'date') {
+                var s = String(v).trim();
+                if (!DATE_RE.test(s)) { reject(p.name, '날짜 형식이 아니라 무시: ' + p.name + '=' + s); continue; }
+                args[p.name] = s;
+            } else if (p.type === 'int') {
+                var n = parseInt(String(v).replace(/[^0-9-]/g, ''), 10);
+                if (isNaN(n)) { reject(p.name, '숫자가 아니라 무시: ' + p.name); continue; }
+                if (p.min !== undefined && n < p.min) n = p.min;
+                if (p.max !== undefined && n > p.max) n = p.max;   // 상한은 조용히 깎는다(과다 조회 방지)
+                args[p.name] = n;
+            } else if (p.type === 'bool') {
+                args[p.name] = (v === true || v === 1 || /^(1|true|yes|y|on)$/i.test(String(v))) ? 1 : 0;
+                if (!args[p.name]) delete args[p.name];
+            } else if (p.type === 'enum') {
+                var hit = (p.enum || []).find(function (e) { return String(e).toLowerCase() === String(v).trim().toLowerCase(); });
+                if (!hit) { reject(p.name, '허용값이 아니라 무시: ' + p.name + '=' + v); continue; }
+                args[p.name] = hit;
+            } else {
+                var t = String(v).trim().slice(0, p.max || 100);
+                if (t) args[p.name] = t;
+            }
+        }
+        return { args: args, notes: notes };
+    };
+
+    // ── 도구 실행 ────────────────────────────────────────────────────
+    window._qaToolById = function (id) {
+        return (window.QA_TOOLS || []).find(function (t) { return t.id === String(id || '').trim(); }) || null;
+    };
+
+    window._qaRunTool = async function (id, rawArgs) {
+        var tool = window._qaToolById(id);
+        if (!tool) return { ok: false, id: id, message: '없는 도구입니다: ' + id };
+        // 🔒 읽기 전용 가드 — 쓰기 도구는 이 루프로 절대 실행하지 않는다
+        if (tool.mode !== 'read') return { ok: false, id: id, message: '읽기 전용 루프에서는 실행할 수 없는 도구입니다: ' + id };
+        if (String(tool.path || '').charAt(0) !== '/') return { ok: false, id: id, message: '도구 경로가 잘못됐습니다.' };
+
+        var v = window._qaValidateToolArgs(tool, rawArgs);
+        if (v.error) return { ok: false, id: id, message: v.error };
+
+        var qs = Object.keys(v.args).map(function (k) {
+            return encodeURIComponent(k) + '=' + encodeURIComponent(v.args[k]);
+        }).join('&');
+        var url = BACKEND + tool.path + (qs ? '?' + qs : '');
+
+        try {
+            var res = window._withTimeout
+                ? await window._withTimeout(fetch(url), 120000, '도구 호출 시간 초과: ' + id)
+                : await fetch(url);
+            var d = await res.json();
+            if (!d || d.ok === false) {
+                return { ok: false, id: id, args: v.args, notes: v.notes, message: (d && d.message) || ('HTTP ' + res.status) };
+            }
+            var rows = tool.pick ? (d[tool.pick] || []) : d;
+            return { ok: true, id: id, args: v.args, notes: v.notes, data: d, rows: rows,
+                     count: Array.isArray(rows) ? rows.length : null };
+        } catch (e) {
+            return { ok: false, id: id, args: v.args, notes: v.notes, message: (e && e.message) ? e.message : String(e) };
+        }
+    };
+
+    // ── 프롬프트에 실을 도구 설명 ────────────────────────────────────
+    window._qaToolsSpec = function () {
+        var lines = [];
+        (window.QA_TOOLS || []).forEach(function (t) {
+            if (t.mode !== 'read') return;
+            var ps = (t.params || []).map(function (p) {
+                var d = p.name + '(' + p.type + (p.req ? ', 필수' : '') + (p.enum ? ': ' + p.enum.join('|') : '') + ')';
+                return d + ' — ' + p.desc;
+            });
+            lines.push('- `' + t.id + '` : ' + t.title + ' — ' + t.desc);
+            if (ps.length) lines.push('    인자: ' + ps.join(' / '));
+            else lines.push('    인자: 없음');
+        });
+        return lines.join('\n');
+    };
+
+    // 오늘 날짜를 같이 줘야 "오늘/어제/지난주"를 날짜로 바꿀 수 있다
+    function todayStr() {
+        var d = new Date();
+        var p = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+
+    var DOW = ['일', '월', '화', '수', '목', '금', '토'];
+
+    window._qaToolPlanPrompt = function (question, priorHistory) {
+        var hist = (priorHistory || []).slice(-4).map(function (m) {
+            return (m.role === 'user' ? '사용자: ' : 'AI: ') + String(m.text || '').slice(0, 300);
+        }).join('\n');
+        return '너는 사내 업무 앱의 질문 라우터다. 아래 **조회 도구**로 사내 시스템에서 실제 데이터를 가져올 수 있다.\n\n'
+            + '[오늘] ' + todayStr() + '(' + DOW[new Date().getDay()] + ')\n\n'
+            + '[쓸 수 있는 도구]\n' + window._qaToolsSpec() + '\n\n'
+            + (hist ? '[최근 대화]\n' + hist + '\n\n' : '')
+            + '[사용자 질문]\n' + question + '\n\n'
+            + '판단: 이 질문이 위 도구로 **실제 데이터를 가져와야** 답할 수 있는 것인가?\n'
+            + '- 그렇다면 다른 말 없이 호출만 출력하라. 형식은 정확히: [[TOOL:도구id {"인자":"값"}]]\n'
+            + '  · 한 번에 여러 개를 줄 바꿔 쓸 수 있다(최대 3개).\n'
+            + '  · 기간 표현은 **날짜로 바꿔서** 넣어라. "오늘"이면 from과 to를 모두 ' + todayStr() + '로,\n'
+            + '    "어제"면 둘 다 전날로, "지난주"면 지난 월요일~일요일로 계산해 넣는다.\n'
+            + '  · 인자 이름과 허용값은 위 목록에 있는 것만 쓴다. 모르면 생략해라(기본값이 쓰인다).\n'
+            + '- 사내 데이터가 필요 없는 질문(일반 지식, 계산, 이미 대화에 있는 내용)이면\n'
+            + '  다른 말 없이 정확히 이 한 줄만 출력: [[NO_TOOL]]\n'
+            + '- 설명·인사·사과를 붙이지 마라. 위 두 형식 중 하나만 출력한다.';
+    };
+
+    // `[[TOOL:id {json}]]` 파싱 — 모델이 코드블록/따옴표를 섞어 내도 견디게
+    var TOOL_RE = /\[\[\s*TOOL\s*:\s*([A-Za-z0-9_]+)\s*(\{[\s\S]*?\})?\s*\]\]/g;
+
+    window._qaParseToolCalls = function (text) {
+        var out = [], m;
+        TOOL_RE.lastIndex = 0;
+        while ((m = TOOL_RE.exec(String(text || '')))) {
+            var args = {};
+            if (m[2]) {
+                try { args = JSON.parse(m[2]); } catch (e) { args = { __parseError: m[2].slice(0, 120) }; }
+            }
+            out.push({ id: m[1], args: args });
+            if (out.length >= 3) break;          // 한 턴에 3개까지
+        }
+        return out;
+    };
+
+    // ── 결과를 AI에게 되먹일 텍스트로 ────────────────────────────────
+    function rowsToText(r, limit) {
+        var rows = r.rows;
+        if (!Array.isArray(rows)) {
+            try { return JSON.stringify(rows).slice(0, 3000); } catch (e) { return String(rows).slice(0, 3000); }
+        }
+        return rows.slice(0, limit || 60).map(function (x, i) {
+            var parts = [];
+            ['at', 'date', 'createdAt', 'start'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
+            ['from', 'writer', 'drafterName', 'creator'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
+            ['boardName', 'folder', 'formName', 'calendar'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
+            ['subject', 'title', 'name'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
+            if (x.seen === false) parts.push('[안읽음]');
+            var head = (i + 1) + '. ' + parts.join(' ');
+            var body = x.preview || x.summary || x.body || x.bodyNote || '';
+            return body ? head + '\n   ' + String(body).slice(0, 300) : head;
+        }).join('\n');
+    }
+
+    window._qaToolResultsText = function (results) {
+        return results.map(function (r) {
+            var t = window._qaToolById(r.id);
+            var head = '[' + r.id + (t ? ' — ' + t.title : '') + ' / 인자 '
+                + (Object.keys(r.args || {}).length ? JSON.stringify(r.args) : '없음') + ']';
+            if (!r.ok) return head + '\n조회 실패: ' + r.message + '\n(실패를 "데이터가 없다"는 뜻으로 단정하지 마라.)';
+            var meta = [];
+            if (r.count !== null) meta.push(r.count + '건');
+            if (r.data && r.data.from) meta.push(r.data.from + (r.data.to ? ' ~ ' + r.data.to : ''));
+            if (r.data && r.data.unreadTotal) meta.push('메일함 안읽음 총 ' + r.data.unreadTotal + '건');
+            if (r.notes && r.notes.length) meta.push(r.notes.join('; '));
+            if (r.count === 0) return head + ' ' + meta.join(' · ') + '\n결과 0건 — 그 기간/조건에 자료가 없다.';
+            return head + ' ' + meta.join(' · ') + '\n' + rowsToText(r, 60);
+        }).join('\n\n');
+    };
+
+    window._qaToolAnswerPrompt = function (question, results) {
+        return '아래는 사내 시스템에서 **방금 조회한 실제 데이터**다.\n\n'
+            + window._qaToolResultsText(results) + '\n\n'
+            + '[사용자 질문]\n' + question + '\n\n'
+            + '요청: 위 데이터만 근거로 한국어로 간결하게 답하라.\n'
+            + '- 업무 주제별로 묶고, 내 답장·조치가 필요해 보이는 것을 앞에 둔다.\n'
+            + '- 각 항목은 한 줄. 보낸이/작성자는 괄호로 붙인다.\n'
+            + '- 광고·스팸리포트·자동알림은 맨 끝에 한 줄로 묶는다.\n'
+            + '- **데이터에 없는 내용을 추측해 보태지 마라.** 0건이면 없다고 답한다.\n'
+            + '- 조회 실패가 있으면 그 사실을 한 줄로 밝힌다.\n'
+            + '- 표는 만들지 말고 글머리표로만 답하라.';
+    };
+
+    // ── 에이전트 루프 ────────────────────────────────────────────────
+    // 반환: null = 도구가 필요 없다(기존 일반 AI 경로로 넘긴다)
+    //       { reply, calls } = 도구로 답을 만들었다
+    window._qaToolLoop = async function (question, opts) {
+        opts = opts || {};
+        var apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        if (!apiKey) return null;                       // 키가 없으면 조용히 기존 경로
+        var onStep = opts.onStep || function () {};
+        var MAX_CALLS = 4;
+        var calls = [];
+
+        // ① 계획 — 어떤 도구를 부를지 AI가 고른다
+        onStep('🧭 ' + window._t('무엇을 조회해야 할지 판단 중...', 'Deciding what to look up...'));
+        var plan;
+        try {
+            plan = await window._withTimeout(
+                window.callAiBackend(apiKey, window._qaToolPlanPrompt(question, opts.priorHistory), {}),
+                45000, window._t('도구 선택 시간 초과', 'Tool planning timed out'));
+        } catch (e) {
+            console.warn('[AI 도구] 계획 단계 실패 — 일반 경로로 넘깁니다:', e && e.message);
+            return null;
+        }
+        if (!plan || !plan.ok) return null;
+        var planText = window._extractGanttQaAiText(plan) || '';
+        if (/\[\[\s*NO_TOOL\s*\]\]/.test(planText)) return null;
+
+        var wanted = window._qaParseToolCalls(planText);
+        if (!wanted.length) return null;                // 형식을 못 맞췄으면 기존 경로
+
+        // ② 로그인 전제 확인 — 한 번만
+        if (wanted.some(function (w) { var t = window._qaToolById(w.id); return t && t.requires === 'gw'; })) {
+            onStep('🔑 ' + window._t('그룹웨어 로그인 상태 확인 중...', 'Checking groupware session...'));
+            try {
+                var st = await (await fetch(BACKEND + '/gw/status')).json();
+                if (!st.ok) {
+                    return { reply: '🔒 ' + window._t('그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
+                                                      'Groupware sign-in required — use the 🔑 here.'), calls: [] };
+                }
+            } catch (e) {
+                return { reply: '⚠️ ' + window._t('백엔드(127.0.0.1:5000)에 연결할 수 없습니다 — kortek_backend가 켜져 있는지 확인해주세요.',
+                                                  'Cannot reach the local backend (127.0.0.1:5000).'), calls: [] };
+            }
+        }
+
+        // ③ 실행
+        var results = [];
+        for (var i = 0; i < wanted.length && calls.length < MAX_CALLS; i++) {
+            var t = window._qaToolById(wanted[i].id);
+            onStep('🔎 ' + window._t((t ? t.title : wanted[i].id) + ' 조회 중...', 'Running ' + wanted[i].id + '...'));
+            var r = await window._qaRunTool(wanted[i].id, wanted[i].args);
+            results.push(r);
+            calls.push({ id: r.id, args: r.args || {}, ok: r.ok, count: r.count, message: r.message || '' });
+            if (window._qaLogToolCall) window._qaLogToolCall(question, r);
+        }
+        if (!results.length) return null;
+
+        // ④ 결과로 답을 만든다. AI 요약이 실패해도 **조회 결과는 보여준다**(결정론 먼저).
+        var deterministic = window._qaToolResultsText(results);
+        var reply = '';
+        onStep('✍️ ' + window._t('조회 결과를 정리하는 중...', 'Summarizing results...'));
+        try {
+            var ans = await window._withTimeout(
+                window.callAiBackend(apiKey, window._qaToolAnswerPrompt(question, results), {}),
+                60000, window._t('답변 생성 시간 초과', 'Answer timed out'));
+            if (ans && ans.ok) {
+                var txt = window._extractGanttQaAiText(ans);
+                if (txt && txt.trim()) reply = txt.trim();
+            }
+        } catch (e) { /* 아래 폴백 */ }
+        if (!reply) {
+            reply = '⚠️ ' + window._t('AI 요약은 실패했습니다 — 조회한 원자료를 그대로 보여드립니다.',
+                                       'AI summary failed — raw lookup results below.')
+                  + '\n\n```\n' + deterministic.slice(0, 4000) + '\n```';
+        }
+        return { reply: reply, calls: calls };
+    };
+
+    // 사용자에게 "무엇을 어떤 인자로 불렀는지" 그대로 보여준다(블랙박스 방지)
+    window._qaToolCallsFooter = function (calls) {
+        if (!calls || !calls.length) return '';
+        var items = calls.map(function (c) {
+            var t = window._qaToolById(c.id);
+            var a = Object.keys(c.args || {}).map(function (k) { return k + '=' + c.args[k]; }).join(', ');
+            return (c.ok ? '✅' : '⚠️') + ' ' + (t ? t.title : c.id)
+                 + (a ? ' (' + a + ')' : '')
+                 + (c.ok ? (c.count !== null && c.count !== undefined ? ' → ' + c.count + '건' : '') : ' → ' + c.message);
+        });
+        return '\n\n---\n🛠 ' + window._t('조회한 것', 'Looked up') + ': ' + items.join(' · ');
+    };
+})();

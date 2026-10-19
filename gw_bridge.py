@@ -951,3 +951,184 @@ def mail_recent(date_from=None, date_to=None, folder='Inbox', unread_only=False,
             'from': cutoff.strftime('%Y-%m-%d'),
             'to': newest.strftime('%Y-%m-%d') if newest else '',
             'mails': out}
+
+
+# ── 문서관리 / 예약 / 커뮤니티 / 설문 / 자료실 / 전자결재 문서함 (읽기 전용) ──
+# 필드 이름은 전수 조사(2026-10-19)로 실측 확인한 것만 쓴다 — 추측 금지.
+# 상세는 docs/groupware-endpoints.md.
+
+_DOCS_KINDS = {
+    'approvewaiting': '승인 대기', 'registwaiting': '등록 대기',
+    'latestread': '최근 열람', 'favorite': '즐겨찾기',
+}
+
+
+def docs_waiting(kind='latestread', limit=20):
+    """문서관리 문서 목록. kind = approvewaiting / registwaiting / latestread / favorite."""
+    k = str(kind or 'latestread').strip()
+    if k not in _DOCS_KINDS:
+        raise ValueError('kind는 %s 중 하나입니다.' % ' / '.join(_DOCS_KINDS))
+    j = gw_get('/api/docs/folder/%s?offset=%d' % (k, int(limit)), timeout=60)
+    out = []
+    for d in (j or {}).get('data') or []:
+        out.append({
+            'id': d.get('docsId'), 'infoId': d.get('docsInfoId'),
+            'title': d.get('title') or '',
+            'folder': d.get('folderName') or '',
+            'folderPath': d.get('folderPath') or '',
+            'creatorName': d.get('creatorName') or '',
+            'creatorPosition': d.get('creatorPositionName') or '',
+            'status': d.get('docsStatus') or '',
+            'requestDate': d.get('requestDate') or '',
+            'completDate': d.get('completDate') or '',
+            'readDate': d.get('readDate') or '',
+            'attachCount': d.get('attachCount') or 0,
+        })
+    return {'kind': k, 'kindName': _DOCS_KINDS[k], 'count': len(out), 'docs': out}
+
+
+def assets():
+    """예약 가능한 자원(회의실·차량 등) 목록. `/api/asset/reservation`이 자원 목록을 준다."""
+    j = gw_get('/api/asset/reservation', timeout=60)
+    out = []
+    for a in (j or {}).get('data') or []:
+        if str(a.get('status') or '') != 'ACTIVE':
+            continue
+        out.append({'id': a.get('id'), 'name': a.get('name') or '',
+                    'rental': bool(a.get('useRental'))})
+    return out
+
+
+def asset_reservations(asset_id=None, date=None):
+    """해당 날짜의 예약 현황. asset_id를 생략하면 활성 자원 전부를 돈다.
+
+    ⚠️ `fromDate`는 ISO+09:00 형식이 필요하다('YYYY-MM-DDT00:00:00.000+09:00')."""
+    day = str(date or datetime.datetime.now(_KST).strftime('%Y-%m-%d')).strip()
+    if not _day_bounds(day, False):
+        raise ValueError('date는 YYYY-MM-DD 형식입니다.')
+    targets = ([{'id': int(asset_id), 'name': ''}] if asset_id
+               else assets())
+    from urllib.parse import quote
+    frm = quote('%sT00:00:00.000+09:00' % day, safe='')
+    out = []
+    for a in targets:
+        try:
+            j = gw_get('/api/asset/%d/items/daily?fromDate=%s' % (int(a['id']), frm), timeout=60)
+        except Exception as e:
+            out.append({'asset': a.get('name') or a['id'], 'error': str(e)[:120]})
+            continue
+        for r in (j or {}).get('data') or []:
+            u = r.get('user') or {}
+            out.append({
+                'id': r.get('id'), 'asset': a.get('name') or '', 'item': r.get('itemName') or '',
+                'start': r.get('startTime') or '', 'end': r.get('endTime') or '',
+                'allday': bool(r.get('allday')),
+                'user': u.get('name') or '', 'position': u.get('positionName') or '',
+            })
+    out.sort(key=lambda x: str(x.get('start') or ''))
+    return {'date': day, 'count': len(out), 'reservations': out}
+
+
+def community_feed(limit=20):
+    """내가 가입한 커뮤니티의 최신 글 피드."""
+    j = gw_get('/api/community/myfeed?page=0&offset=%d' % int(limit), timeout=60)
+    out = []
+    for p in (j or {}).get('data') or []:
+        out.append(_post_brief(p))      # 게시판과 같은 구조라 그대로 쓴다
+    return {'count': len(out), 'posts': out}
+
+
+def community_list(limit=30):
+    """커뮤니티 목록(멤버수 순)."""
+    j = gw_get('/api/community/list/all?page=0&offset=%d&property=memberCount' % int(limit), timeout=60)
+    out = []
+    for c in (j or {}).get('data') or []:
+        out.append({'id': c.get('id'), 'name': c.get('name') or '',
+                    'description': (c.get('description') or '').replace('\r\n', ' ')[:160],
+                    'members': c.get('memberCount') or 0, 'posts': c.get('postCount') or 0,
+                    'master': c.get('masterUser') or '', 'joined': c.get('memberStatus') or ''})
+    return {'count': len(out), 'communities': out}
+
+
+def surveys(kind='latest', limit=20):
+    """설문 목록. kind = todo(응답 대기) / latest(최근)."""
+    k = 'todo' if str(kind or '').strip() == 'todo' else 'latest'
+    j = gw_get('/api/survey/list/%s?page=0&offset=%d&property=id&direction=desc'
+               % (k, int(limit)), timeout=60)
+    out = []
+    for s in (j or {}).get('data') or []:
+        cr = s.get('creator') or {}
+        out.append({'id': s.get('id'), 'title': s.get('title') or '',
+                    'start': s.get('startTime') or '', 'end': s.get('endTime') or '',
+                    'status': s.get('status') or '',
+                    'creator': cr.get('name') if isinstance(cr, dict) else ''})
+    # ⚠️ 설문 목록은 서버가 offset을 **무시**한다(limit=3을 줘도 20건이 온다, 2026-10-19 실측)
+    #    → 여기서 자른다. 다른 모듈처럼 offset이 먹는다고 가정하지 말 것.
+    out = out[:int(limit)]
+    return {'kind': k, 'count': len(out), 'surveys': out}
+
+
+def webfolder_list(path='/', limit=30, scope='public'):
+    """자료실 폴더/파일 목록.
+
+    ⚠️ 자료실 화면은 `iframe#webfolder-viewer` 안이지만 **API 직접 호출은 무관**하다."""
+    from urllib.parse import quote
+    p = str(path or '/').strip() or '/'
+    qs = ('/api/webfolder/folder/list?path=%s&fullPath=%s&currentPage=1&offset=%d&type=%s'
+          % (quote(p, safe=''), quote(p, safe=''), int(limit),
+             'user' if str(scope) == 'user' else 'public'))
+    j = gw_get(qs, timeout=60)
+    d = (j or {}).get('data') or {}
+    out = []
+    for f in d.get('folders') or []:
+        out.append({'name': f.get('name') or f.get('folderName') or '',
+                    'path': f.get('path') or '', 'type': f.get('type') or '',
+                    'size': f.get('size') or '', 'updatedAt': f.get('updatedAt') or ''})
+    return {'path': d.get('currentPath') or p, 'total': d.get('total'),
+            'count': len(out), 'items': out}
+
+
+_APPR_BOXES = {
+    'draft': ('기안 문서함', 'draftedAt'),
+    'tempsave': ('임시 저장함', 'updatedAt'),
+    'approve': ('결재 문서함', 'draftedAt'),
+    'viewer': ('참조/열람 문서함', 'document.draftedAt'),
+}
+
+
+def approval_doclist(box='draft', limit=20, searchtype=None, keyword=None, duration='all'):
+    """전자결재 문서함 목록.
+
+    box = draft(기안) / tempsave(임시저장) / approve(결재) / viewer(참조열람)
+    searchtype = title / drafterName / drafterDeptName / formName / docNum / activityUserName
+    duration = all / 1 / 6 / 12  (개월)
+    ⚠️ 문서함마다 기본 정렬 컬럼(property)이 다르다 — 섞으면 서버가 500을 준다."""
+    b = str(box or 'draft').strip()
+    if b not in _APPR_BOXES:
+        raise ValueError('box는 %s 중 하나입니다.' % ' / '.join(_APPR_BOXES))
+    name, prop = _APPR_BOXES[b]
+    from urllib.parse import quote
+    qs = ('/api/approval/doclist/%s/all?page=0&offset=%d&property=%s&direction=desc'
+          '&searchtype=%s&keyword=%s&fromDate=&toDate=&duration=%s'
+          % (b, int(limit), prop, quote(str(searchtype or ''), safe=''),
+             quote(str(keyword or ''), safe=''), quote(str(duration or 'all'), safe='')))
+    j = gw_get(qs, timeout=60)
+    out = []
+    for d in (j or {}).get('data') or []:
+        out.append({
+            'id': d.get('documentId') or d.get('id'),
+            'docNum': d.get('docNum') or '',
+            'formName': d.get('formName') or '',
+            'title': d.get('title') or '',
+            'status': d.get('docStatusName') or d.get('docStatus') or '',
+            'apprStatus': d.get('apprStatusName') or '',
+            'drafterName': d.get('drafterName') or '',
+            'drafterDept': d.get('drafterDeptName') or '',
+            'draftedAt': d.get('draftedAt') or '',
+            'attachCount': d.get('attachCount') or 0,
+            'currentUsers': d.get('currentActivityUsers') or '',
+            'url': '%s/app/approval/document/%s' % (GW_ORIGIN, d.get('documentId') or d.get('id')),
+        })
+    page = (j or {}).get('page') or {}
+    return {'box': b, 'boxName': name, 'total': page.get('total'),
+            'count': len(out), 'docs': out}

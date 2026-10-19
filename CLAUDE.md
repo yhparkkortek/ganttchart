@@ -133,6 +133,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `28-new-project-wizard.js` | 새 프로젝트 마법사. `_npwOpen(prefill, 'MP(EC)')` — 미분류 메일 AI pre-fill 지원 |
 | `29-new-project-cluster-detect.js` | Phase 9 완전 미분류 군집 감지 → 신규 프로젝트 배너 제안. **스스로 프로젝트 생성 안 함** |
 | `35-material-cart.js` | 🧺 자재 보관함 — SAP 자재청구/입고(MB21 예약) 장바구니. **Phase 1 "업무 보관함"(14c)과 다른 것** |
+| `40-qa-tool-router.js` | 🛠 AI 문답 도구 자율 호출 — `QA_TOOLS` 레지스트리(데이터)·인자 검증·에이전트 루프. **읽기 전용**. 새 조회 기능은 여기 한 줄 추가 → `docs/qa-tool-router.md` |
 
 > `04`, `14`, `15`, `22`는 원래 하나의 거대 파일(최대 11,915줄)을 쪼갠 것.
 
@@ -223,6 +224,14 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 사내 공지는 본문이 **이미지뿐**인 경우가 흔함(평문 0자) — 빈 문자열만 주면 "조회 실패"와 구분 불가라 `bodyNote`로 사유를 드러낼 것
 - 백엔드 라우트 검증은 `app.test_client()`로 — 사용자가 돌리는 5000번 프로세스를 죽이지 말 것(예약 발송·SAP 작업 중일 수 있음)
 - **모듈별 엔드포인트 목록 → `docs/groupware-endpoints.md`**(관찰 확정 vs 번들 추출 구분). iframe 모듈은 메일·자료실뿐, 나머지는 최상위. 진입만으로 호출이 0건인 모듈(보고·주소록·Task)은 "API 없음"이 아니라 "아직 안 불림" — 랜딩 URL이 바뀌는 경우도 있어(`/app/todo`→`/app/report`) `location.href`를 같이 기록할 것
+
+### `docs/qa-tool-router.md` — 🛠 AI 문답 도구 자율 호출 (function-calling)
+- **읽을 때**: AI가 "지원하지 않습니다"라고 답할 때, 새 조회 기능을 AI가 쓰게 만들 때
+- 새 조회 기능은 `QA_TOOLS`(`js/40-qa-tool-router.js`)에 **한 줄** 추가하면 끝 — if 블록 코딩 불필요. `desc`가 AI의 유일한 선택 근거이니 성의 있게
+- **읽기 전용**(`mode:'read'`만 실행) + AI는 **도구 id만** 고름(엔드포인트 문자열 못 정함) + 인자는 스키마로 검증·보정(규격 위반은 빼지 말고 **기본값으로** — 빼면 서버 기본값으로 엉뚱한 조회가 조용히 일어남)
+- 순서: 기존 결정론 블록 → SAP 의도 → **도구 루프** → 일반 AI. 결정론 블록이 여전히 최우선
+- **엉뚱한 searchtype은 조용히 0건** — 승인원 문서 제목은 영문이라 `title/승인원`=0건, `formName/승인`=18건. "0건=없음"으로 단정 금지
+- 호출 기록: `localStorage.gantt_qa_tool_log_v1`(300건) + 실패는 `_issueLog`
 
 ### `docs/purchase-order.md` — 🛒 구매오더 (PDF→AI→ZMMR060/ZMM018)
 - **읽을 때**: 구매오더 요청, 세금계산서/거래명세서 복수 처리, 발주서 출력

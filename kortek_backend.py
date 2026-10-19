@@ -3333,6 +3333,124 @@ def gw_board_recent():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+# ── 모듈 읽기 라우트 (문서관리/예약/커뮤니티/설문/자료실/전자결재 문서함) ──
+# 전부 조회 전용. 등록·예약·삭제 라우트는 **만들지 않는다**(사람 확인 경로가 따로 필요).
+
+@app.route('/gw/docs', methods=['GET'])
+def gw_docs():
+    """문서관리 문서 목록. `kind`=approvewaiting|registwaiting|latestread|favorite."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '20')
+        r = gw_bridge.docs_waiting(kind=(request.args.get('kind') or 'latestread').strip(),
+                                   limit=int(limit) if str(limit).isdigit() else 20)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/assets', methods=['GET'])
+def gw_assets():
+    """예약 가능한 자원(회의실·차량 등) 목록."""
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, 'assets': gw_bridge.assets()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/asset/reservations', methods=['GET'])
+def gw_asset_reservations():
+    """해당 날짜 예약 현황. `date`=YYYY-MM-DD(기본 오늘), `assetId`(선택)."""
+    try:
+        import gw_bridge
+        aid = (request.args.get('assetId') or '').strip()
+        r = gw_bridge.asset_reservations(asset_id=int(aid) if aid.isdigit() else None,
+                                         date=(request.args.get('date') or '').strip() or None)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/community/feed', methods=['GET'])
+def gw_community_feed():
+    """내가 가입한 커뮤니티 최신 글."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '20')
+        r = gw_bridge.community_feed(limit=int(limit) if str(limit).isdigit() else 20)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/communities', methods=['GET'])
+def gw_communities():
+    """커뮤니티 목록(멤버수 순)."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '30')
+        r = gw_bridge.community_list(limit=int(limit) if str(limit).isdigit() else 30)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/surveys', methods=['GET'])
+def gw_surveys():
+    """설문 목록. `kind`=todo(응답 대기)|latest."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '20')
+        r = gw_bridge.surveys(kind=(request.args.get('kind') or 'latest').strip(),
+                              limit=int(limit) if str(limit).isdigit() else 20)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/webfolder', methods=['GET'])
+def gw_webfolder():
+    """자료실 폴더/파일 목록. `path`(기본 /), `scope`=public|user."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '30')
+        r = gw_bridge.webfolder_list(path=(request.args.get('path') or '/').strip() or '/',
+                                     limit=int(limit) if str(limit).isdigit() else 30,
+                                     scope=(request.args.get('scope') or 'public').strip())
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/approval/doclist', methods=['GET'])
+def gw_approval_doclist():
+    """전자결재 문서함 목록.
+
+    `box`=draft|tempsave|approve|viewer, `searchtype`/`keyword`/`duration`/`limit`.
+    ⚠️ searchtype을 엉뚱하게 주면 **조용히 0건**이 온다(제목에 없는 말을 title로 찾는 등).
+    """
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '20')
+        r = gw_bridge.approval_doclist(
+            box=(request.args.get('box') or 'draft').strip(),
+            limit=int(limit) if str(limit).isdigit() else 20,
+            searchtype=(request.args.get('searchtype') or '').strip() or None,
+            keyword=(request.args.get('keyword') or '').strip() or None,
+            duration=(request.args.get('duration') or 'all').strip())
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/mail/recent', methods=['GET'])
 def gw_mail_recent():
     """기간 내 그룹웨어 메일 목록(읽기 전용).

@@ -7468,6 +7468,55 @@ ${docsJson}`;
         //    판단할 필요 없이 여기서 바로 로컬 백엔드에 "지금 SAP GUI 화면"을 물어봐서 프롬프트에
         //    실어 보낸다(질문마다 항상 조회하면 느려지고 불필요하므로, 언급이 있을 때만 — CLAUDE.md
         //    "SAP/TIPR" 결정 사항 참고).
+        // 🛠 [2026-10-19 신규] 도구 자율 호출 (function-calling) — `js/40-qa-tool-router.js`
+        //    여기까지 왔다는 건 위의 **결정론 블록이 전부 빗나갔다**는 뜻이다(결정론 먼저).
+        //    이제 AI에게 "어떤 조회 도구를 어떤 인자로 부를지" 고르게 하고, 코드가 실행한다.
+        //    · 읽기 도구만 호출된다(쓰기는 `_qaRunTool`이 거부 — 사람 확인 경로를 그대로 쓴다).
+        //    · AI는 **도구 id만** 고른다. 엔드포인트·인자는 레지스트리 스키마로 검증·보정한다.
+        //    · 도구가 필요 없다고 판단하면(`[[NO_TOOL]]`) null이 와서 아래 기존 경로로 넘어간다.
+        //    ⚠️ SAP 의도는 아래 `_aiFetchSapContext`가 전담하므로 여기서 가로채지 않는다.
+        if (window._qaToolLoop && !window._questionMentionsSapIntent(question)
+                && !(_qaRoute && _qaRoute.cls === 'sap')) {
+            const _pendIdx = window._ganttQaHistory.length - 1;
+            const _setStep = function (txt) {
+                if (window._ganttQaOpToken !== _sendOpToken) return;   // 취소됐으면 건드리지 않는다
+                if (window._ganttQaHistory[_pendIdx]) {
+                    window._ganttQaHistory[_pendIdx].text = txt;
+                    window._renderGanttQaMessages();
+                }
+            };
+            let _toolRes = null;
+            try {
+                _toolRes = await window._qaToolLoop(question, {
+                    priorHistory: priorHistory, onStep: _setStep
+                });
+            } catch (e) {
+                console.warn('[AI 도구] 루프 실패 — 일반 경로로 넘깁니다:', e && e.message);
+            }
+            if (window._ganttQaOpToken !== _sendOpToken) return;        // 진행 중 취소
+            if (_toolRes && _toolRes.reply) {
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', route: _qaRoute,
+                    text: _toolRes.reply + (window._qaToolCallsFooter
+                        ? window._qaToolCallsFooter(_toolRes.calls) : '') });
+                window._ganttQaSending = false;
+                input.disabled = false;
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = window._currentLang === 'en' ? 'Send' : '전송';
+                    sendBtn.style.background = '#e8f4fd'; sendBtn.style.color = '#1a4f7a';
+                    sendBtn.style.borderColor = '#a5c8f0';
+                    sendBtn.onmouseover = function () { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
+                    sendBtn.onmouseout = function () { this.style.background = '#e8f4fd'; this.style.borderColor = '#a5c8f0'; };
+                    sendBtn.onclick = function () { window.sendGanttQaMessage(); };
+                }
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+            _setStep('⏳ 답변 생성 중...');     // 도구가 필요 없었다 — 원래 문구로 돌려놓는다
+        }
+
         let sapText = null;
         // 🏷 사람이 직접 프로젝트/추론으로 지정했으면 "SAP" 단어가 있어도 지금 SAP 화면을 읽어 오지 않는다(지정을 존중 — 옛 화면이 답에 섞이던 문제)
         const _qaSapSuppressed = !!(_qaRoute && _qaRoute.forced && _qaRoute.cls !== 'sap');
