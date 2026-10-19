@@ -249,6 +249,11 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 새 SAP 기능 구현 시: `SAP_CAPABILITIES`(`js/32`)에 항목 추가 + 리포트 학습 탭 `구현됨` 처리
 - 새 앱 기능 구현 시: `APP_CAPABILITIES` + `QA_CHAIN_INTENTS` (둘 다 `js/32`, 데이터) 추가
 
+### `docs/opensource-synergy-review.md` — 🔭 오픈소스 시너지 검토 (2026-10-19)
+- **읽을 때**: 외부 라이브러리 도입 검토. star 수 실측 + 이 앱 제약(번들러 없음/전역 스코프/팀원 개인 PC) 기준 Tier A/B/C 판정
+- 권장: oxlint(커밋 훅 전체 파싱) · es-hangul(초성 검색) · pywinauto(SAP #32770 대화상자) · RapidFuzz(시그니처 군집)
+- **비권장 이유도 적어둠** — litellm은 이미 `js/14a`에 폴백·쿨다운·사용량 원장을 직접 만들어 둠, tui.calendar/tippy.js는 archived
+
 ### 백엔드 파일
 | 파일 | 역할 |
 |---|---|
