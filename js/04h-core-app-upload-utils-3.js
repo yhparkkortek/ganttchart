@@ -4928,6 +4928,69 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // ✍️ [2026-10-19 신규] 쓰기 의도(예약·일정등록·발송·글등록) — `js/41-qa-write-tools.js`
+        //    ⚠️ **AI가 스스로 실행하지 않는다.** 초안을 보여주고 사람이 1회 확인한 뒤 실행한다.
+        //       지금은 기안 임시저장만 'live'이고 나머지는 요청 본문 미확정이라 막혀 있다 —
+        //       그 사실을 숨기지 않고, 대신 **지금 할 수 있는 것**(현황 조회)으로 도움을 준다.
+        if (window.GW_WRITE_INTENTS && window._qaMakeWriteDraft) {
+            var _wHit = null;
+            for (var _wi = 0; _wi < window.GW_WRITE_INTENTS.length; _wi++) {
+                var _wc = window.GW_WRITE_INTENTS[_wi];
+                if ((_wc.kw || []).some(function (k) { return question.indexOf(k) >= 0; })) { _wHit = _wc; break; }
+            }
+            if (_wHit) {
+                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+                window._ganttQaHistory.push({ role: 'ai', pending: true,
+                    text: '⏳ ' + window._t('확인 중...', 'Checking...') });
+                window._renderGanttQaMessages();
+                var _wReply;
+                try {
+                    var _tool = window._qaWriteToolById(_wHit.tool);
+                    if (!_tool) throw new Error('쓰기 도구를 찾지 못했습니다: ' + _wHit.tool);
+                    _wReply = '✍️ **' + _tool.title + '**\n\n';
+                    if (_tool.verified !== 'live') {
+                        _wReply += '🚧 ' + window._t('아직 실행할 수 없습니다.', 'Not executable yet.') + '\n'
+                                 + '> ' + (_tool.pendingWhy || '') + '\n\n';
+                    }
+                    // 📅 예약이면 **그날 현황을 실제로 조회해** 빈 시간을 알려준다(지금 되는 일)
+                    if (_wHit.tool === 'gw_asset_reserve') {
+                        var _per = window._gwPeriodRange ? window._gwPeriodRange(question, 1) : null;
+                        var _day = (_per && _per.from) || '';
+                        var _r = await window._qaRunTool('gw_asset_reservations', _day ? { date: _day } : {});
+                        if (_r.ok) {
+                            var _byItem = {};
+                            (_r.rows || []).forEach(function (x) {
+                                (_byItem[x.item || x.asset] = _byItem[x.item || x.asset] || [])
+                                    .push(String(x.start || '').slice(11, 16) + '~' + String(x.end || '').slice(11, 16));
+                            });
+                            var _names = Object.keys(_byItem);
+                            _wReply += '📅 **' + ((_r.data && _r.data.date) || _day) + ' '
+                                     + window._t('예약 현황', 'reservations') + '** ('
+                                     + (_r.count || 0) + window._t('건', '') + ')\n\n';
+                            if (!_names.length) {
+                                _wReply += window._t('그날 예약이 하나도 없습니다 — 아무 시간이나 비어 있습니다.',
+                                                     'No reservations that day.') + '\n';
+                            } else {
+                                _names.slice(0, 14).forEach(function (n) {
+                                    _wReply += '- **' + n + '**: ' + _byItem[n].join(', ') + '\n';
+                                });
+                            }
+                            _wReply += '\n' + window._t('빈 시간을 골라 그룹웨어 예약 화면에서 등록해주세요.',
+                                                          'Pick a free slot and book it in groupware.') + '\n';
+                        } else {
+                            _wReply += '⚠️ ' + window._t('예약 현황 조회 실패: ', 'Lookup failed: ') + _r.message + '\n';
+                        }
+                    }
+                    _wReply += '\n' + window._t('무엇이 필요한지: 그룹웨어에서 이 작업을 **한 번만 직접** 수행해 주시면 '
+                                                  + '요청 형식을 캡처해 바로 자동화할 수 있습니다.',
+                                                  'One manual run lets me capture the request format and automate it.');
+                } catch (e) { _wReply = '⚠️ ' + (e && e.message ? e.message : e); }
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: _wReply });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+        }
+
         // 📧 [2026-10-19 신규] 그룹웨어 웹메일 조회/요약.
         //    ⚠️ **메일을 열지 않는다** — 상세 조회는 서버에서 읽음 처리를 해 안읽음 배지를 줄인다.
         //       목록의 preview(본문 발췌)만으로 요약한다.
