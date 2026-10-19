@@ -40,20 +40,32 @@
             undoNote: '임시저장함에서 삭제하면 된다(상신 전이라 아무에게도 안 보인다).'
         },
         {
-            id: 'gw_asset_reserve', mode: 'write', verified: 'pending', danger: 'medium',
+            id: 'gw_asset_reserve', mode: 'write', verified: 'live', danger: 'medium',
             title: '회의실·차량 예약',
-            desc: '자원을 지정 시간에 예약한다.',
+            desc: '자원을 지정 시간에 예약한다. **반드시 먼저 `gw_asset_reservations`로 그날 현황을 조회해 '
+                + '비어 있는 시간을 확인한 뒤** 초안을 내라. itemId를 모르면 `gw_asset_items`로 찾는다.',
             method: 'POST', path: '/gw/asset/reserve',
             params: [
-                { name: 'assetId', type: 'int', min: 1, max: 99999, req: true, desc: '자원 id' },
-                { name: 'itemId', type: 'int', min: 1, max: 99999, desc: '세부 항목 id(회의실 등)' },
+                { name: 'assetId', type: 'int', min: 1, max: 99999, req: true, desc: '자원 id (gw_asset_list로 확인)' },
+                { name: 'itemId', type: 'int', min: 1, max: 99999, req: true, desc: '세부 항목 id — 회의실 각 방/차량 각 대 (gw_asset_items로 확인)' },
                 { name: 'date', type: 'date', req: true, desc: '날짜 YYYY-MM-DD' },
                 { name: 'start', type: 'time', req: true, desc: '시작 HH:MM' },
                 { name: 'end', type: 'time', req: true, desc: '종료 HH:MM' },
-                { name: 'title', type: 'text', max: 60, req: true, desc: '예약 제목' }
+                { name: 'purpose', type: 'text', max: 80, req: true, desc: '목적(Purpose)' },
+                // ⚠️ 비우면 그룹웨어 화면이 **조용히** 막는다(오류도 요청도 없음) — 실측 확인
+                { name: 'attendee', type: 'text', max: 80, req: true, desc: '참석자(Attendee) — 필수. 모르면 지어내지 말고 사용자에게 물어라' }
             ],
-            pendingWhy: '예약 생성 요청 본문(필드 이름)이 미확정입니다. 그룹웨어에서 예약을 한 번만 직접 해 주시면 그때 캡처해 확정합니다.',
-            undoNote: '예약 목록에서 삭제할 수 있다(동료에게는 그 전까지 보인다).'
+            undoNote: '`gw_asset_cancel`로 바로 취소할 수 있다(그 전까지는 동료에게 보인다).'
+        },
+        {
+            id: 'gw_asset_cancel', mode: 'write', verified: 'live', danger: 'low',
+            title: '예약 취소',
+            desc: '내가 만든 예약을 취소한다. 예약 id는 `gw_asset_reservations` 결과의 id.',
+            method: 'POST', path: '/gw/asset/cancel',
+            params: [
+                { name: 'id', type: 'int', min: 1, max: 99999999, req: true, desc: '취소할 예약 id' }
+            ],
+            undoNote: '취소하면 되돌릴 수 없다(다시 예약해야 한다).'
         },
         {
             id: 'gw_calendar_add', mode: 'write', verified: 'pending', danger: 'medium',
@@ -149,6 +161,15 @@
         // 시간 필수 누락은 위에서 notes로 모았으니 여기서 에러로 승격
         var miss = notes.filter(function (n) { return n.indexOf('필수 인자 누락') === 0; });
         if (miss.length) return { error: miss.join(', ') };
+        // ⚠️ 형식 오류로 **빠져버린** 필수 시간도 에러다 — 조용히 통과시키면
+        //    사용자가 말한 것과 다른 시간으로 예약될 수 있다.
+        var badTime = (tool.params || []).filter(function (p) {
+            return p.type === 'time' && p.req && args[p.name] === undefined;
+        }).map(function (p) { return p.name; });
+        if (badTime.length) {
+            return { error: '시간 형식(HH:MM)이 아닙니다: ' + badTime.join(', ')
+                            + ' — 예: 14:00' };
+        }
         // 시작 < 종료
         if (args.start && args.end && args.start >= args.end) {
             return { error: '종료 시간이 시작 시간보다 빠르거나 같습니다: ' + args.start + ' → ' + args.end };

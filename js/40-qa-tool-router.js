@@ -121,6 +121,15 @@
             path: '/gw/assets', pick: 'assets', params: []
         },
         {
+            id: 'gw_asset_items', mode: 'read', requires: 'gw',
+            title: '예약 자원의 세부 항목',
+            desc: '자원 안의 개별 항목(회의실 각 방, 차량 각 대)과 그 itemId. 예약을 만들려면 itemId가 필요하다.',
+            path: '/gw/asset/items', pick: 'items',
+            params: [
+                { name: 'assetId', type: 'int', min: 1, max: 99999, req: true, desc: '자원 id (gw_asset_list로 확인)' }
+            ]
+        },
+        {
             id: 'gw_asset_reservations', mode: 'read', requires: 'gw',
             title: '예약 현황',
             desc: '해당 날짜의 회의실·차량 예약 현황(시간·사용자). 비어 있는 시간을 찾을 때도 이걸 본다.',
@@ -416,79 +425,135 @@
             + '- 표는 만들지 말고 글머리표로만 답하라.';
     };
 
-    // ── 에이전트 루프 ────────────────────────────────────────────────
-    // 반환: null = 도구가 필요 없다(기존 일반 AI 경로로 넘긴다)
-    //       { reply, calls } = 도구로 답을 만들었다
+    // ── 에이전트 루프 (다단계 추론) ──────────────────────────────────
+    // 단일턴이 아니다. 매 턴 **지금까지 본 것**을 주고 다음 행동을 고르게 한다:
+    //   · 더 조회해야 하면  → `[[TOOL:id {json}]]`  (여러 개 가능)
+    //   · 쓰기가 필요하면   → `[[WRITE:id {json}]]` (실행 안 함, 사람 확인으로)
+    //   · 충분하면          → 그냥 답변 글
+    // 이게 "매크로"와 "추론"을 가르는 지점이다 — 조회 결과를 보고 판단이 바뀐다.
+    window._qaToolStepPrompt = function (question, history, steps, priorHistory) {
+        var hist = (priorHistory || []).slice(-4).map(function (m) {
+            return (m.role === 'user' ? '사용자: ' : 'AI: ') + String(m.text || '').slice(0, 250);
+        }).join('\n');
+        var done = steps.length
+            ? '\n[지금까지 조회한 것과 그 결과]\n' + window._qaToolResultsText(steps) + '\n'
+            : '';
+        var writeSpec = window._qaWriteToolsSpec ? window._qaWriteToolsSpec() : '';
+        return '너는 사내 업무 앱의 에이전트다. 아래 도구로 사내 시스템을 **직접 조회**할 수 있다.\n\n'
+            + '[오늘] ' + todayStr() + '(' + DOW[new Date().getDay()] + ')\n\n'
+            + '[조회 도구]\n' + window._qaToolsSpec() + '\n'
+            + (writeSpec ? '\n[실행 도구 — 초안만 만든다. 사람이 확인해야 실행된다]\n' + writeSpec + '\n' : '')
+            + (hist ? '\n[최근 대화]\n' + hist + '\n' : '')
+            + '\n[사용자 요청]\n' + question + '\n'
+            + done
+            + '\n이번 턴에 할 일을 **하나만** 고르고, 그 형식으로만 출력하라.\n'
+            + '1) 아직 더 알아봐야 한다 → `[[TOOL:도구id {"인자":"값"}]]` (줄 바꿔 최대 3개)\n'
+            + '2) 조회는 충분하고 **실행**이 필요하다 → `[[WRITE:도구id {"인자":"값"}]]` (한 개만)\n'
+            + '3) 답할 수 있다 → 태그 없이 한국어 답변만 쓴다\n'
+            + '4) 사내 데이터가 필요 없는 질문이다 → `[[NO_TOOL]]` (첫 턴에만)\n\n'
+            + '판단 지침:\n'
+            + '- 기간 표현은 **날짜로 바꿔** 넣는다("오늘"=' + todayStr() + ').\n'
+            + '- **결과를 보고 다음을 정하라.** 예: 회의실을 잡으려면 먼저 그날 예약 현황을 조회해\n'
+            + '  비어 있는 시간을 확인한 뒤에 실행 초안을 낸다. 확인 없이 시간을 지어내지 마라.\n'
+            + '- id가 필요한데 모르면 목록 도구로 먼저 찾아라(예: 자원 목록 → 항목 목록).\n'
+            + '- 조회가 0건이면 "없다"는 뜻이다. 다만 검색 조건이 틀렸을 수 있으면 한 번만 바꿔 재시도하라.\n'
+            + '- 필요한 정보가 사용자 요청에 없으면(예: 참석자) 지어내지 말고 **되물어라**(3번 형식).\n'
+            + '- 설명·사과를 붙이지 마라.';
+    };
+
+    // 반환: null = 도구가 필요 없다(기존 일반 AI 경로로)
+    //       { reply, calls }        = 조회해서 답을 만들었다
+    //       { draft, calls, reply } = 쓰기 초안을 만들었다(사람 확인 필요)
     window._qaToolLoop = async function (question, opts) {
         opts = opts || {};
         var apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-        if (!apiKey) return null;                       // 키가 없으면 조용히 기존 경로
+        if (!apiKey) return null;
         var onStep = opts.onStep || function () {};
-        var MAX_CALLS = 4;
-        var calls = [];
+        var MAX_TURNS = 4, MAX_CALLS = 6;
+        var steps = [], calls = [], gwChecked = false;
 
-        // ① 계획 — 어떤 도구를 부를지 AI가 고른다
-        onStep('🧭 ' + window._t('무엇을 조회해야 할지 판단 중...', 'Deciding what to look up...'));
-        var plan;
-        try {
-            plan = await window._withTimeout(
-                window.callAiBackend(apiKey, window._qaToolPlanPrompt(question, opts.priorHistory), {}),
-                45000, window._t('도구 선택 시간 초과', 'Tool planning timed out'));
-        } catch (e) {
-            console.warn('[AI 도구] 계획 단계 실패 — 일반 경로로 넘깁니다:', e && e.message);
-            return null;
-        }
-        if (!plan || !plan.ok) return null;
-        var planText = window._extractGanttQaAiText(plan) || '';
-        if (/\[\[\s*NO_TOOL\s*\]\]/.test(planText)) return null;
-
-        var wanted = window._qaParseToolCalls(planText);
-        if (!wanted.length) return null;                // 형식을 못 맞췄으면 기존 경로
-
-        // ② 로그인 전제 확인 — 한 번만
-        if (wanted.some(function (w) { var t = window._qaToolById(w.id); return t && t.requires === 'gw'; })) {
-            onStep('🔑 ' + window._t('그룹웨어 로그인 상태 확인 중...', 'Checking groupware session...'));
+        for (var turn = 1; turn <= MAX_TURNS; turn++) {
+            onStep(turn === 1
+                ? '🧭 ' + window._t('무엇을 조회해야 할지 판단 중...', 'Deciding what to look up...')
+                : '🤔 ' + window._t('조회 결과를 보고 다음을 판단 중... (' + turn + '/' + MAX_TURNS + ')',
+                                    'Reasoning over results (' + turn + '/' + MAX_TURNS + ')'));
+            var res;
             try {
-                var st = await (await fetch(BACKEND + '/gw/status')).json();
-                if (!st.ok) {
-                    return { reply: '🔒 ' + window._t('그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
-                                                      'Groupware sign-in required — use the 🔑 here.'), calls: [] };
-                }
+                res = await window._withTimeout(
+                    window.callAiBackend(apiKey,
+                        window._qaToolStepPrompt(question, null, steps, opts.priorHistory), {}),
+                    60000, window._t('판단 시간 초과', 'Reasoning timed out'));
             } catch (e) {
-                return { reply: '⚠️ ' + window._t('백엔드(127.0.0.1:5000)에 연결할 수 없습니다 — kortek_backend가 켜져 있는지 확인해주세요.',
-                                                  'Cannot reach the local backend (127.0.0.1:5000).'), calls: [] };
+                console.warn('[AI 도구] 턴 ' + turn + ' 실패:', e && e.message);
+                break;
             }
+            if (!res || !res.ok) break;
+            var text = window._extractGanttQaAiText(res) || '';
+
+            if (turn === 1 && /\[\[\s*NO_TOOL\s*\]\]/.test(text)) return null;
+
+            // ① 쓰기 초안 — 실행하지 않는다
+            var writes = window._qaParseWriteCalls ? window._qaParseWriteCalls(text) : [];
+            if (writes.length) {
+                var draft = window._qaMakeWriteDraft(writes[0].id, writes[0].args);
+                var pre = String(text).replace(/\[\[\s*WRITE[\s\S]*?\]\]/g, '').trim();
+                return { draft: draft, calls: calls,
+                         reply: (pre ? pre + '\n\n' : '') + window._qaWriteDraftText(draft) };
+            }
+
+            // ② 추가 조회
+            var wanted = window._qaParseToolCalls(text);
+            if (!wanted.length) {
+                // ③ 태그가 없으면 최종 답변으로 본다
+                if (text.trim()) return { reply: text.trim(), calls: calls };
+                break;
+            }
+            if (!gwChecked && wanted.some(function (w) {
+                    var t = window._qaToolById(w.id); return t && t.requires === 'gw'; })) {
+                gwChecked = true;
+                onStep('🔑 ' + window._t('그룹웨어 로그인 상태 확인 중...', 'Checking groupware session...'));
+                try {
+                    var st = await (await fetch(BACKEND + '/gw/status')).json();
+                    if (!st.ok) {
+                        return { reply: '🔒 ' + window._t('그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
+                                                          'Groupware sign-in required — use the 🔑 here.'), calls: calls };
+                    }
+                } catch (e) {
+                    return { reply: '⚠️ ' + window._t('백엔드(127.0.0.1:5000)에 연결할 수 없습니다 — kortek_backend가 켜져 있는지 확인해주세요.',
+                                                      'Cannot reach the local backend.'), calls: calls };
+                }
+            }
+            for (var i = 0; i < wanted.length && calls.length < MAX_CALLS; i++) {
+                var tl = window._qaToolById(wanted[i].id);
+                onStep('🔎 ' + window._t((tl ? tl.title : wanted[i].id) + ' 조회 중...',
+                                         'Running ' + wanted[i].id + '...'));
+                var r = await window._qaRunTool(wanted[i].id, wanted[i].args);
+                steps.push(r);
+                calls.push({ id: r.id, args: r.args || {}, ok: r.ok,
+                             count: r.count, message: r.message || '' });
+                if (window._qaLogToolCall) window._qaLogToolCall(question, r);
+            }
+            if (calls.length >= MAX_CALLS) break;
         }
 
-        // ③ 실행
-        var results = [];
-        for (var i = 0; i < wanted.length && calls.length < MAX_CALLS; i++) {
-            var t = window._qaToolById(wanted[i].id);
-            onStep('🔎 ' + window._t((t ? t.title : wanted[i].id) + ' 조회 중...', 'Running ' + wanted[i].id + '...'));
-            var r = await window._qaRunTool(wanted[i].id, wanted[i].args);
-            results.push(r);
-            calls.push({ id: r.id, args: r.args || {}, ok: r.ok, count: r.count, message: r.message || '' });
-            if (window._qaLogToolCall) window._qaLogToolCall(question, r);
-        }
-        if (!results.length) return null;
+        if (!steps.length) return null;
 
-        // ④ 결과로 답을 만든다. AI 요약이 실패해도 **조회 결과는 보여준다**(결정론 먼저).
-        var deterministic = window._qaToolResultsText(results);
+        // 턴을 다 썼으면 지금까지 본 것으로 결론을 낸다 — **조회 결과는 반드시 보여준다**
+        onStep('✍️ ' + window._t('조회 결과를 정리하는 중...', 'Summarizing...'));
         var reply = '';
-        onStep('✍️ ' + window._t('조회 결과를 정리하는 중...', 'Summarizing results...'));
         try {
             var ans = await window._withTimeout(
-                window.callAiBackend(apiKey, window._qaToolAnswerPrompt(question, results), {}),
+                window.callAiBackend(apiKey, window._qaToolAnswerPrompt(question, steps), {}),
                 60000, window._t('답변 생성 시간 초과', 'Answer timed out'));
             if (ans && ans.ok) {
-                var txt = window._extractGanttQaAiText(ans);
-                if (txt && txt.trim()) reply = txt.trim();
+                var t2 = window._extractGanttQaAiText(ans);
+                if (t2 && t2.trim()) reply = t2.trim();
             }
         } catch (e) { /* 아래 폴백 */ }
         if (!reply) {
             reply = '⚠️ ' + window._t('AI 요약은 실패했습니다 — 조회한 원자료를 그대로 보여드립니다.',
-                                       'AI summary failed — raw lookup results below.')
-                  + '\n\n```\n' + deterministic.slice(0, 4000) + '\n```';
+                                       'AI summary failed — raw results below.')
+                  + '\n\n```\n' + window._qaToolResultsText(steps).slice(0, 4000) + '\n```';
         }
         return { reply: reply, calls: calls };
     };

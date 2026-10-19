@@ -329,6 +329,67 @@ AI가 실패해도 목록은 남고 실패 사유를 붙인다. 끝에 원문 �
 > 쓴다 — 사용자가 돌리고 있는 5000번 프로세스를 건드리지 않는다(예약 발송·SAP 작업 중일 수 있음).
 
 
+### 예약(회의실·차량) — 화면 구조 실측 2026-10-19
+
+#### 읽기
+```
+GET /api/asset/reservation                     자원 목록(= 예약 가능 자산). nodeType FOLDER 제외
+GET /api/asset/{assetId}/item/?page=0&offset=100        그 자산의 세부 항목(회의실 각 방 등)
+GET /api/asset/{assetId}/items/daily?fromDate=ISO+09:00 그 날짜 예약 현황
+GET /api/asset/my/reservation/remnant                   내 예약
+```
+자원 5개: `81` [COMMON]Video Conference · `10` 1층 리셉션홀 회의실 · `30` 3층 컨퍼런스룸 ·
+`31` 3층 레인보우 회의실 · `32` 차량 예약. 모두 `ACTIVE`, 06:00~24:00(81만 00:00~24:00),
+`timeInterval: A_HOUR`. `ableDays`는 7자리 비트(81만 `0111111`, 나머지 `1111111`).
+
+#### 쓰기 화면 (그리드 → 팝업)
+- 그리드는 `table.time_table_bg`. **30분 단위 셀**을 클릭하면 예약 팝업이 뜬다.
+- 날짜 이동은 상단 `<` `>` 버튼. ⚠️ `#matrixDate`에 JS로 값을 넣는 건 **안 먹는다**.
+- 팝업 필드: `#startDate` `#startTime` `#endDate` `#endTime` `#allday`(name=`timeType`),
+  그리고 **목적(Purpose)·참석자(Attendee)는 id가 없다** → 행 라벨로 역매핑해야 한다.
+- 제출은 `footer.btn_layer_wrap` 안의 `a.btn_major_s`(확인) / `a.btn_minor_s`(취소).
+
+#### ⚠️⚠️ 참석자(Attendee)는 **필수**다 — 비우면 조용히 막힌다
+비운 채 확인을 누르면 **아무 일도 안 일어난다**: 오류 메시지도, 네트워크 요청도 없다.
+"클릭이 안 먹는다"로 오해하기 쉽다(실제로 좌표·`elementFromPoint`·jQuery 핸들러 발화까지
+전부 정상인데 요청이 0건이었다). 자동화에서는 **필수 인자로 막을 것.**
+
+#### ⚠️ 팝업 라이브러리의 드래그 플래그 (`popupDragged`)
+확인 버튼 핸들러 첫 줄이 이렇다:
+```js
+function(e){ e.stopPropagation();
+  if(popupDragged) return popupDragged=!1, !1;      // ← 드래그 직후 첫 클릭은 통째로 삼킨다
+  v.callback && v.callback(popupEl,e), v.autoclose && GP.close(...) }
+```
+CDP로 그리드를 드래그/클릭한 직후면 이 플래그가 서 있어 **첫 확인 클릭이 무시**된다.
+클로저 변수라 `window.popupDragged`로는 못 끈다(= `undefined`). 핸들러가 스스로 false로
+되돌리므로 **한 번 더 누르면 통과**한다. 좌표가 맞는데 요청이 0건이면 이걸 의심할 것.
+
+#### 쓰기 API (2026-10-19 캡처 확정)
+```
+POST /api/asset/{assetId}/item/{itemId}/reserve     Content-Type: application/json
+{"assetId":"81","itemId":"127","type":"reserve",
+ "startTime":"2026-10-24T06:30:00.000+09:00","endTime":"2026-10-24T07:00:00.000+09:00",
+ "useAnonym":false,"user":{"id":"2102"},"allday":false,
+ "properties":[{"attributeId":"151","content":"목적"},
+               {"attributeId":"152","content":"참석자"}]}
+
+DELETE /api/asset/item/reservation   {"ids":["100452"]}
+```
+- `itemId`는 자원 안의 **개별 항목**(회의실 각 방/차량 각 대). `/api/asset/{id}/item/`로 찾는다.
+- `user.id`는 `/gw/status`의 userId. 시간은 ISO **+09:00**.
+
+##### ⚠️⚠️ `attributeId`는 **자원마다 다르다** — 하드코딩 금지
+실측: Video Conference `151/152` · 3층 레인보우 `80/81` · 1층 리셉션홀 `29/110`.
+순서는 **[0]=목적, [1]=참석자**로 일정하다.
+속성 정의 목록 엔드포인트를 못 찾았다(`/api/asset/share`는 500) →
+`gw_bridge.asset_attribute_ids()`가 **그 자원의 기존 예약 1건에서** 읽어 온다.
+예약이 하나도 없는 자원은 알 수 없으므로 사람에게 넘긴다.
+
+#### CDP 클릭 주의
+`Input.dispatchMouseEvent`에는 `buttons` 비트마스크(press=1, release=0)와 선행 `mouseMoved`를
+같이 보낸다. 빠뜨리면 일부 핸들러가 이벤트를 무시한다.
+
 ---
 
 ## 5. 기안 작성 (전자결재 쓰기)
@@ -477,7 +538,7 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 | `task` | 18 | 5 | ⬜ (`/app/task`는 거의 빈 화면) |
 | `calendar` 캘린더 | 14 | 3 | 🟢 읽기 완료 |
 | `docs` 문서관리 | 14 | 5 | 🟡 진입 확인 |
-| `asset` 예약 | 11 | 4 | 🟡 진입 확인(회의실·차량 목록 포함) |
+| `asset` 예약 | 11 | 4 | 🟢 읽기 완료 + 쓰기 화면 구조 실측 |
 | `survey` 설문 | 10 | 5 | 🟡 진입 확인 |
 | `sms` | 4 | 1 | ⬜ |
 | `note` 쪽지 | 3 | 1 | ⬜ |

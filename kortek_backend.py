@@ -3451,6 +3451,53 @@ def gw_approval_doclist():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/asset/items', methods=['GET'])
+def gw_asset_items():
+    """자원의 세부 항목(회의실 각 방/차량 각 대). 예약에는 itemId가 필요하다."""
+    try:
+        import gw_bridge
+        aid = (request.args.get('assetId') or '').strip()
+        if not aid.isdigit():
+            return jsonify({'ok': False, 'message': 'assetId가 필요합니다.'}), 400
+        return jsonify({'ok': True, 'items': gw_bridge.asset_items(int(aid))})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/asset/reserve', methods=['POST'])
+def gw_asset_reserve():
+    """회의실·차량 예약 생성 (쓰기).
+
+    ⚠️ 앱은 **사람이 확인 카드를 1회 누른 뒤에만** 이 라우트를 부른다.
+       AI 자율 루프에서는 호출되지 않는다(읽기 전용 루프가 mode:'write'를 거부).
+    """
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        r = gw_bridge.asset_reserve(
+            asset_id=b.get('assetId'), item_id=b.get('itemId'),
+            date=(b.get('date') or '').strip(),
+            start=(b.get('start') or '').strip(), end=(b.get('end') or '').strip(),
+            purpose=(b.get('purpose') or '').strip(),
+            attendee=(b.get('attendee') or '').strip(),
+            allday=bool(b.get('allday')))
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/asset/cancel', methods=['POST'])
+def gw_asset_cancel():
+    """예약 취소 (쓰기). 되돌리기 경로 — 잘못 만든 예약을 바로 지울 수 있게 둔다."""
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        ids = b.get('ids') or ([b.get('id')] if b.get('id') else [])
+        return jsonify(gw_bridge.asset_cancel(ids))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/mail/recent', methods=['GET'])
 def gw_mail_recent():
     """기간 내 그룹웨어 메일 목록(읽기 전용).

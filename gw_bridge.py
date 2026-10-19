@@ -1132,3 +1132,131 @@ def approval_doclist(box='draft', limit=20, searchtype=None, keyword=None, durat
     page = (j or {}).get('page') or {}
     return {'box': b, 'boxName': name, 'total': page.get('total'),
             'count': len(out), 'docs': out}
+
+
+# ── 예약 생성/취소 (쓰기) ────────────────────────────────────────────
+# ⚠️ 쓰기다. 호출 경로는 허용목록으로 좁히고, 앱에서는 사람이 1회 확인한 뒤에만 부른다.
+# ⚠️⚠️ `properties`의 `attributeId`는 **자원마다 다르다** (실측: Video Conference=151/152,
+#   3층 레인보우=80/81). 하드코딩하면 다른 회의실에서 엉뚱한 칸에 값이 들어간다.
+#   → 그 자원의 **기존 예약 1건에서 순서대로** 읽어 쓴다(첫 번째=목적, 두 번째=참석자).
+# ⚠️ 참석자는 **필수**다. 비우면 서버가 아니라 화면 단계에서 조용히 막힌다(요청조차 안 나감).
+_ASSET_WRITE_ALLOW = ('reserve', 'cancel')
+
+
+def _asset_post(path, body, method='POST', timeout=60):
+    if not path.startswith('/api/asset/'):
+        raise ValueError('예약 API 경로가 아닙니다: %s' % path)
+    expr = """
+    (async () => {
+      const r = await fetch(%s, { method: %s, credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json; charset=UTF-8', Accept:'application/json' },
+        body: JSON.stringify(%s) });
+      const t = await r.text();
+      let j = null; try { j = JSON.parse(t); } catch (e) {}
+      return { status: r.status, ok: r.ok, json: j, text: t.slice(0, 300) };
+    })()
+    """ % (json.dumps(path), json.dumps(method), json.dumps(body, ensure_ascii=False))
+    return eval_in_gw(expr, timeout)
+
+
+def asset_attribute_ids(asset_id, lookback_days=120):
+    """그 자원의 예약 속성 id(목적, 참석자)를 **기존 예약에서** 알아낸다.
+
+    서버에 속성 정의 목록 엔드포인트를 못 찾았다(`/api/asset/share`는 500). 대신
+    기존 예약의 `properties`가 같은 순서로 오는 것을 이용한다(실측 확인).
+    예약이 한 건도 없으면 알 수 없으므로 None을 돌려주고, 호출부가 사람에게 넘긴다."""
+    from urllib.parse import quote
+    today = datetime.datetime.now(_KST).date()
+    for back in range(0, int(lookback_days), 7):
+        day = today - datetime.timedelta(days=back)
+        frm = quote('%sT00:00:00.000+09:00' % day.isoformat(), safe='')
+        try:
+            j = gw_get('/api/asset/%d/items/daily?fromDate=%s' % (int(asset_id), frm), timeout=45)
+        except Exception:
+            continue
+        for r in (j or {}).get('data') or []:
+            props = r.get('properties') or []
+            if len(props) >= 2:
+                return {'purpose': props[0].get('attributeId'),
+                        'attendee': props[1].get('attributeId'),
+                        'from': '예약 %s' % r.get('id')}
+    return None
+
+
+def asset_reserve(asset_id, item_id, date, start, end, purpose, attendee, allday=False):
+    """회의실·차량 예약 1건 생성.
+
+    date='YYYY-MM-DD', start/end='HH:MM'. `attendee`는 **필수**(비우면 화면이 막는다)."""
+    if not str(purpose or '').strip():
+        raise ValueError('목적(Purpose)은 필수입니다.')
+    if not str(attendee or '').strip():
+        raise ValueError('참석자(Attendee)는 필수입니다 — 비우면 그룹웨어가 조용히 막습니다.')
+    if not _day_bounds(date, False):
+        raise ValueError('date는 YYYY-MM-DD 형식입니다.')
+    for t in (start, end):
+        if not re.match(r'^([01]?\d|2[0-3]):[0-5]\d$', str(t or '')):
+            raise ValueError('시간은 HH:MM 형식입니다: %s' % t)
+    if str(start) >= str(end):
+        raise ValueError('종료 시간이 시작보다 빠르거나 같습니다: %s → %s' % (start, end))
+
+    attrs = asset_attribute_ids(asset_id)
+    if not attrs:
+        raise RuntimeError('이 자원의 예약 속성 id를 알아내지 못했습니다(기존 예약이 없음). '
+                           '그룹웨어에서 한 건 예약해 두면 이후 자동으로 인식합니다.')
+    sess = session_info()
+    uid = (sess or {}).get('userId')
+    if not uid:
+        raise RuntimeError('그룹웨어 로그인 정보를 읽지 못했습니다.')
+
+    def iso(hhmm):
+        return '%sT%s:00.000+09:00' % (date, hhmm if len(hhmm) == 5 else '0' + hhmm)
+
+    body = {
+        'assetId': str(int(asset_id)), 'itemId': str(int(item_id)), 'type': 'reserve',
+        'startTime': iso(start), 'endTime': iso(end),
+        'useAnonym': False, 'user': {'id': str(uid)}, 'allday': bool(allday),
+        'properties': [
+            {'attributeId': str(attrs['purpose']), 'content': str(purpose)},
+            {'attributeId': str(attrs['attendee']), 'content': str(attendee)},
+        ],
+    }
+    res = _asset_post('/api/asset/%d/item/%d/reserve' % (int(asset_id), int(item_id)), body)
+    if not (res or {}).get('ok'):
+        raise RuntimeError('예약 실패 (HTTP %s): %s'
+                           % ((res or {}).get('status'), (res or {}).get('text', '')[:200]))
+    # 생성된 예약을 되읽어 id를 확인한다(응답 형식에 의존하지 않기 위해)
+    made = None
+    try:
+        for r in (asset_reservations(asset_id=asset_id, date=date) or {}).get('reservations') or []:
+            if str(r.get('start', ''))[11:16] == start and str(r.get('end', ''))[11:16] == end:
+                made = r
+                break
+    except Exception:
+        pass
+    return {'ok': True, 'assetId': int(asset_id), 'itemId': int(item_id), 'date': date,
+            'start': start, 'end': end, 'purpose': purpose, 'attendee': attendee,
+            'reservationId': (made or {}).get('id'), 'item': (made or {}).get('item', ''),
+            'attributeIds': attrs}
+
+
+def asset_cancel(reservation_ids):
+    """예약 취소. `reservation_ids`는 id 하나 또는 리스트."""
+    ids = reservation_ids if isinstance(reservation_ids, (list, tuple)) else [reservation_ids]
+    ids = [str(int(i)) for i in ids]
+    if not ids:
+        raise ValueError('취소할 예약 id가 없습니다.')
+    res = _asset_post('/api/asset/item/reservation', {'ids': ids}, method='DELETE')
+    if not (res or {}).get('ok'):
+        raise RuntimeError('예약 취소 실패 (HTTP %s): %s'
+                           % ((res or {}).get('status'), (res or {}).get('text', '')[:200]))
+    return {'ok': True, 'cancelled': ids}
+
+
+def asset_items(asset_id):
+    """자원의 세부 항목(회의실 각 방/차량 각 대) 목록 — 예약하려면 itemId가 필요하다."""
+    j = gw_get('/api/asset/%d/item/?page=0&offset=100' % int(asset_id), timeout=60)
+    out = []
+    for it in (j or {}).get('data') or []:
+        out.append({'itemId': it.get('id'), 'assetId': it.get('assetId'),
+                    'name': it.get('name') or ''})
+    return out

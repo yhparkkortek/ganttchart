@@ -2560,6 +2560,41 @@ ${docsJson}`;
     //    _SAP_FIELD_LABEL_MAP 선언부 주석 참고). 채팅 렌더러(_mdToHtml)가 탭 포함 줄은
     //    white-space:pre-wrap으로 그대로 보존해서, 자재내역 패턴조회(runPatternLookup)와 같은
     //    방식으로 표처럼 정렬돼 보인다 — 새 렌더링 로직 없음.
+
+    // ✍️ [2026-10-19] 쓰기 초안 실행 — 확인 버튼이 부른다. nonce가 맞아야만 돈다.
+    //    AI도, 도구 루프도 이 함수를 부르지 않는다(사람 클릭 전용).
+    window._qaConfirmWriteDraft = async function (nonce, confirmText) {
+        var histIdx = window._ganttQaHistory.length;
+        window._ganttQaHistory.push({ role: 'ai', pending: true,
+            text: '⏳ ' + window._t('실행하는 중...', 'Executing...') });
+        window._renderGanttQaMessages();
+        var r;
+        try {
+            r = await window._qaExecWriteDraft(nonce, confirmText);
+        } catch (e) {
+            r = { ok: false, message: (e && e.message) ? e.message : String(e) };
+        }
+        var txt;
+        if (r && r.ok) {
+            var d = r.data || {};
+            txt = '✅ ' + window._t('완료했습니다.', 'Done.');
+            var bits = [];
+            ['reservationId', 'item', 'date', 'start', 'end', 'purpose', 'attendee'].forEach(function (k) {
+                if (d[k] !== undefined && d[k] !== null && d[k] !== '') bits.push(k + ': ' + d[k]);
+            });
+            if (bits.length) txt += '\n\n' + bits.map(function (b) { return '- ' + b; }).join('\n');
+            if (d.reservationId) {
+                txt += '\n\n' + window._t('되돌리려면: ', 'To undo: ')
+                     + '`예약 ' + d.reservationId + ' 취소해줘`';
+            }
+        } else {
+            txt = '⚠️ ' + ((r && r.message) || window._t('실행하지 못했습니다.', 'Execution failed.'));
+        }
+        window._ganttQaHistory.splice(histIdx, 1);
+        window._ganttQaHistory.push({ role: 'ai', text: txt });
+        window._renderGanttQaMessages();
+    };
+
     window._ganttQaFormatSapGridReply = function(sapText) {
         if (!sapText) return window._t('(조회 결과가 없습니다.)', '(No data returned.)');
         const bodyStart = sapText.indexOf('\n\n');
@@ -4928,6 +4963,20 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // ✍️ [2026-10-19] 쓰기 초안 확정/취소 — **가장 먼저** 가로챈다.
+        //    확인 버튼이 보낸 고정 형식이라 AI를 거칠 이유가 없다.
+        if (/^쓰기확정\s+w\d+_/.test(question.trim()) || question.trim() === '쓰기취소') {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (question.trim() === '쓰기취소') {
+                window._qaPendingWrite = null;
+                window._ganttQaHistory.push({ role: 'ai',
+                    text: '취소했습니다 — ' + window._t('아무것도 실행하지 않았습니다.', 'nothing was executed.') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            await window._qaConfirmWriteDraft(question.trim().replace(/^쓰기확정\s+/, ''), '');
+            input.focus(); return;
+        }
+
         // ✍️ [2026-10-19 신규] 쓰기 의도(예약·일정등록·발송·글등록) — `js/41-qa-write-tools.js`
         //    ⚠️ **AI가 스스로 실행하지 않는다.** 초안을 보여주고 사람이 1회 확인한 뒤 실행한다.
         //       지금은 기안 임시저장만 'live'이고 나머지는 요청 본문 미확정이라 막혀 있다 —
@@ -4937,6 +4986,13 @@ ${docsJson}`;
             for (var _wi = 0; _wi < window.GW_WRITE_INTENTS.length; _wi++) {
                 var _wc = window.GW_WRITE_INTENTS[_wi];
                 if ((_wc.kw || []).some(function (k) { return question.indexOf(k) >= 0; })) { _wHit = _wc; break; }
+            }
+            // ⚠️ live 도구는 여기서 처리하지 않고 **추론 루프에 넘긴다** —
+            //    루프가 현황을 조회하고 빈 시간을 판단해 초안을 만든다(그게 매크로와의 차이).
+            //    여기서 가로채면 "값 받아 그대로 실행"하는 매크로로 되돌아간다.
+            if (_wHit) {
+                var _wTool = window._qaWriteToolById(_wHit.tool);
+                if (_wTool && _wTool.verified === 'live') _wHit = null;
             }
             if (_wHit) {
                 if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
@@ -7557,6 +7613,29 @@ ${docsJson}`;
                 console.warn('[AI 도구] 루프 실패 — 일반 경로로 넘깁니다:', e && e.message);
             }
             if (window._ganttQaOpToken !== _sendOpToken) return;        // 진행 중 취소
+            // ✍️ 쓰기 초안이면 **실행하지 않고** 확인 버튼을 띄운다
+            //    (앱 공용 패턴: _ganttQaShowConfirmButtons → 버튼 value가 다시 질문으로 들어온다)
+            if (_toolRes && _toolRes.draft && _toolRes.draft.ok && !_toolRes.draft.blocked) {
+                window._ganttQaHistory.pop();
+                window._ganttQaShowConfirmButtons(
+                    _toolRes.reply + (window._qaToolCallsFooter ? window._qaToolCallsFooter(_toolRes.calls) : ''),
+                    [{ label: '✅ ' + window._t('실행', 'Run'), value: '쓰기확정 ' + _toolRes.draft.nonce, style: 'confirm' },
+                     { label: window._t('취소', 'Cancel'), value: '쓰기취소', style: 'cancel' }]);
+                window._ganttQaSending = false;
+                input.disabled = false;
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.textContent = window._currentLang === 'en' ? 'Send' : '전송';
+                    sendBtn.style.background = '#e8f4fd'; sendBtn.style.color = '#1a4f7a';
+                    sendBtn.style.borderColor = '#a5c8f0';
+                    sendBtn.onmouseover = function () { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
+                    sendBtn.onmouseout = function () { this.style.background = '#e8f4fd'; this.style.borderColor = '#a5c8f0'; };
+                    sendBtn.onclick = function () { window.sendGanttQaMessage(); };
+                }
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
             if (_toolRes && _toolRes.reply) {
                 window._ganttQaHistory.pop();
                 window._ganttQaHistory.push({ role: 'ai', route: _qaRoute,
