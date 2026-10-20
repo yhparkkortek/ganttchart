@@ -1277,6 +1277,25 @@
         if (tabCalEl && tabCalEl.classList.contains('active') && window.calRender) window.calRender();
         const tabWeeklyEl = document.getElementById('tab-weekly');
         if (tabWeeklyEl && tabWeeklyEl.classList.contains('active') && window.showWeeklyReport) window.showWeeklyReport();
+        // 💡 [멀티시트 버그 수정 2026-10-20] BOM도 같은 캐시성 뷰다 — 프로젝트마다 따로
+        //    들고 있는데(tabData.bomByUnit / tabData.elecBomByType) 시트를 전환해도 다시 그리지
+        //    않아서 "Customer SPEC은 바뀌는데 BOM만 이전 프로젝트 것이 남는" 문제가 있었다(사용자 제보).
+        //    탭 진입(switchTab)에는 갱신이 걸려 있었지만, **그 탭에 머문 채 시트만 바꾸면** 안 걸린다.
+        const tabBomEl = document.getElementById('tab-bom');
+        if (tabBomEl && tabBomEl.classList.contains('active')) {
+            if (window.bomFillLayoutOptions) window.bomFillLayoutOptions();
+            if (window.bomRender) window.bomRender();
+        }
+        // Elec Parts 안에 **내장된** BOM 뷰. _elecBomOpen을 다시 부르면 표뿐 아니라 자재번호 칸까지
+        // 새 프로젝트 기준으로 다시 고른다(저장값 / 주요자재 부품코드).
+        // ⚠️ `_elecBomType`만 보면 안 된다 — _switchElecView(js/23)가 BOM 화면을 숨기면서도 그 값은
+        //    지우지 않으므로, PANEL을 보고 있는데 BOM이 튀어나온다. **실제로 보이는지**로 판단할 것.
+        const tabElecEl = document.getElementById('tab-elecparts');
+        const elecBomView = document.getElementById('elec-view-bom');
+        if (tabElecEl && tabElecEl.classList.contains('active') && window._elecBomType &&
+            elecBomView && elecBomView.style.display !== 'none' && window._elecBomOpen) {
+            window._elecBomOpen(window._elecBomType);
+        }
     };
 
     // fileId 기준으로 이미 열려있는 시트 찾기
