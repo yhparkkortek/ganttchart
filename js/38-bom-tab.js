@@ -1200,7 +1200,7 @@
             return;
         }
         // [2026-10-19] 메인 BOM 탭과 같은 규칙 — 뷰 상태(접힘/정렬)를 그대로 따라간다.
-        //   같은 "📊 엑셀 출력" 버튼인데 탭마다 다르게 동작하면 안 된다.
+        //   같은 "📊 엑셀 저장" 버튼인데 탭마다 다르게 동작하면 안 된다.
         var visibleRows = window._bomVisibleRows(st);
         if (!visibleRows.length) {
             if (window.showToast) window.showToast(_t('화면에 보이는 행이 없습니다 — 펼친 뒤 다시 시도해주세요.', 'No visible rows — expand the tree and try again.'), 'warning');

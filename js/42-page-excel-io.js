@@ -218,6 +218,14 @@
             if (aoa.length <= 1) empty++;
             window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(aoa), b.sheet.slice(0, 31));
         });
+        // 🎨 [2026-10-20] BOM 출력과 **같은 모양**으로 — 머리글/제브라/테두리/열너비.
+        //    앱 전체가 쓰는 공용 스타일러를 그대로 부른다(js/04k). 색은 거기서
+        //    `_cpXlsxRole`로 **현재 테마 팔레트**에서 가져오므로, 팔레트를 바꾸면 엑셀도 따라간다.
+        //    ⚠️ 여기서 색을 따로 칠하지 말 것 — 그러면 팔레트와 엇나가고 손으로 맞춰야 한다.
+        //    전역 스코프 공유 구조라 IIFE 안에서도 그냥 보인다(js/38도 같은 방식).
+        if (typeof applyExcelStyles === 'function') {
+            try { applyExcelStyles(wb); } catch (e) { /* 스타일 실패가 저장을 막지는 않는다 */ }
+        }
         var pm = window.projectMeta || {};
         var name = [(pm.프로젝트명 || pm.고객모델명 || 'project'), spec.label,
                     new Date().toISOString().slice(0, 10).replace(/-/g, '')].join('_') + '.xlsx';
@@ -307,10 +315,15 @@
     };
 
     // ── 버튼 (인쇄 버튼 **왼쪽**에 런타임 삽입) ────────────────────────
-    //   자리가 좁다는 요청이라 아이콘 위주로 아주 작게. 설명은 말풍선(title)에 둔다.
-    var BTN = 'white-space:nowrap; padding:4px 6px; background:#e0f5f7; color:#00707d; border:none;'
-            + ' border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer; line-height:1.3;'
-            + ' transition:background .15s; margin-right:3px;';
+    //   [2026-10-20 2차] 아이콘만 두니 무슨 버튼인지 알 수 없다는 지적 — 한글 라벨을 넣었다.
+    //   자리가 좁으므로 글자 11px, 여백 최소. 자세한 설명은 말풍선(title)에 남긴다.
+    //   ⚠️ '엑셀 입력'과 '엑셀 저장' **사이에 경계선**을 둔다 — 입력은 현재 내용을 통째로
+    //      덮어쓰므로, 저장하려다 잘못 누르는 일이 없게 시각적으로 갈라 놓는다.
+    //   용어는 앱 전체와 통일: 내보내기 = '엑셀 저장'(다른 페이지 버튼 6개도 같이 바꿨다).
+    var BTN = 'white-space:nowrap; padding:3px 7px; background:#e0f5f7; color:#00707d; border:none;'
+            + ' border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; line-height:1.4;'
+            + ' transition:background .15s;';
+    var SEP = '<span style="display:inline-block; width:1px; height:13px; background:#ccd9db; margin:0 4px;"></span>';
 
     function _pxRenderButtons() {
         (window.PAGE_EXCEL_SPECS || []).forEach(function (spec) {
@@ -334,21 +347,22 @@
             }
             var hasUndo = !!window._pageExcelUndo[spec.id];
             holder.innerHTML =
-                '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
-                  + _esc(_t(spec.label + ' 내용을 엑셀로 내보냅니다', 'Export ' + spec.label + ' to Excel'))
-                  + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
-                  + ' style="' + BTN + '">📊</button>'
-                + (spec.exportOnly ? '' :
+                (spec.exportOnly ? '' :
                     '<button onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'
-                  + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 (현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다)',
-                            'Import an edited Excel file (replaces current content; you can undo right after)'))
+                  + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다',
+                            'Import an edited Excel file — replaces current content; you can undo right after'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
-                  + ' style="' + BTN + '">📥</button>')
+                  + ' style="' + BTN + '">📥 ' + _t('엑셀 입력', 'Import') + '</button>' + SEP)
+                + '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
+                  + _esc(_t(spec.label + ' 내용을 엑셀 파일로 저장합니다', 'Save ' + spec.label + ' as an Excel file'))
+                  + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
+                  + ' style="' + BTN + ' margin-right:4px;">📊 ' + _t('엑셀 저장', 'Export') + '</button>'
                 + (hasUndo ?
                     '<button onclick="window.pageExcelUndo(\'' + spec.id + '\')" title="'
                   + _esc(_t('방금 불러오기 전으로 되돌립니다', 'Undo the import'))
                   + '" onmouseover="this.style.background=\'#f5c2bd\';" onmouseout="this.style.background=\'#fbe4e2\';"'
-                  + ' style="' + BTN + ' background:#fbe4e2; color:#b1432f;">↩</button>' : '');
+                  + ' style="' + BTN + ' margin-right:4px; background:#fbe4e2; color:#b1432f;">↩ '
+                  + _t('되돌리기', 'Undo') + '</button>' : '');
         });
     }
     window._pxRenderButtons = _pxRenderButtons;
