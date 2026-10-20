@@ -716,15 +716,33 @@
         // 🔑 [2026-10-20] 그룹웨어 로그인도 앱 기능이다 — 이게 없어서 "그룹웨어 로그인"이
         //    미구현 기능 요청으로 잡히고, AI는 "IT 지원 부서에 문의하세요"라고 답했다.
         //    상태 조회 자체는 QA_TOOLS의 gw_status 도구가 한다(js/40).
+        //    ⚠️ 어휘는 **전부 '그룹웨어'/'다우오피스'/'gw'로 한정한다.** 맨 '로그인'·'세션
+        //    만료'·'로그인 풀렸' 같은 말은 SAP 로그인(🔑 같은 모달, js/36)과 공유하는
+        //    단어다 — 어느 쪽인지 안 밝힌 질문을 이쪽으로 끌어오면 "승인원"이 SAP 표지와
+        //    그룹웨어 기안 사이에서 샜던 것과 같은 사고가 난다. 모호하면 되묻는 게 맞다.
+        //    띄어쓰기 변형은 적지 않는다 — _qaMatchAppCapabilities가 흡수한다.
         { id: 'gw_login',    title: '그룹웨어 로그인(🔑 등록 → 명령 시 1회 자동 로그인)',
-          kw: ['그룹웨어 로그인', '그룹웨어로그인', '그룹웨어 접속', '그룹웨어 연결', '그룹웨어 세션',
-               '그룹웨어 로그아웃', '다우오피스 로그인'],
+          kw: ['그룹웨어 로그인', '그룹웨어 로그아웃', '그룹웨어 로긴', '그룹웨어 접속',
+               '그룹웨어 연결', '그룹웨어 세션', '그룹웨어 인증', '그룹웨어 계정',
+               '그룹웨어 상태', '그룹웨어 끊', '그룹웨어 풀렸', '그룹웨어 안 돼',
+               '그룹웨어 들어가', '그룹웨어 붙어',
+               '다우오피스 로그인', '다우오피스 접속', '다우오피스 연결', 'gw 로그인'],
           how: 'AI 문답 창 🔑에서 아이디·비밀번호 저장(DPAPI) → 그룹웨어 명령 시 _gwEnsureLogin이 1회 자동 로그인(실패해도 재시도 안 함). 상태 확인은 gw_status 도구.' }
     ];
+    // ⚠️ [2026-10-20] 띄어쓰기를 무시해 비교한다 — `_sapCapKwHit`/`_gwCapKwHit`와 같은 방식.
+    //    그전까지 **여기만** 생짜 `q.indexOf(k)`여서, 같은 말을 붙여 쓰면("그룹웨어로그인")
+    //    못 잡았다. 그래서 항목마다 띄어쓰기 변형을 손으로 적어 넣고 있었다 —
+    //    어휘는 데이터로 두고 **변형 흡수는 코드가** 한다(하드코딩 지양).
+    //    세 매처가 같은 규칙을 쓰므로, 하나를 고치면 나머지도 같이 볼 것.
     window._qaMatchAppCapabilities = function (text) {
         var q = String(text || '').toLowerCase(), out = [];
+        var qFlat = q.replace(/\s+/g, '');
         window.APP_CAPABILITIES.forEach(function (c) {
-            var m = 0; c.kw.forEach(function (k) { if (q.indexOf(k) >= 0) m++; });
+            var m = 0;
+            c.kw.forEach(function (k) {
+                var kk = String(k).toLowerCase();
+                if (q.indexOf(kk) >= 0 || qFlat.indexOf(kk.replace(/\s+/g, '')) >= 0) m++;
+            });
             if (m > 0) out.push({ id: c.id, title: c.title, score: Math.min(1, Math.round(m / 2 * 100) / 100) });
         });
         return out.sort(function (a, b) { return b.score - a.score; });
