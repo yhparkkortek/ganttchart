@@ -105,6 +105,9 @@
         { h: 'Note',          k: 'note' }
     ];
     var _MC_CALC_LABELS = ['SUBTOTAL', 'TOTAL(M.C)', '영업판가', '재료비율'];
+    // 💵 금액 칸 표시형식 — 사용자가 쓰는 M.C Table 견본의 회계 서식 그대로다(달러 기호 왼쪽 정렬,
+    //    0은 "-"로). 역슬래시가 들어 있으니 **heredoc으로 쓰지 말 것**(조용히 깨진다).
+    var _MC_MONEY_FMT = '_-[$$-409]* #,##0.00_ ;_-[$$-409]* \\-#,##0.00\\ ;_-[$$-409]* "-"??_ ;_-@_ ';
     var _mcRev  = function () { return _td().mcActiveRevision || 'R1'; };
     var _mcRows = function () { return ((_td().mcRevisions || {})[_mcRev()]) || _td().mcTable || []; };
     // 엑셀에서 돌아온 행이 계산 행인지 — TYPE 칸의 라벨로 가린다(그 행은 화면이 다시 만든다).
@@ -115,6 +118,23 @@
     var _mcNum = function (v) {
         var n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.-]/g, ''));   // "$1,234.00" 같은 표시값도 받는다
         return isFinite(n) ? n : null;
+    };
+    // 🔁 엑셀에서 돌아온 행을 **앱이 쓰는 키로 되돌린다.** M.C 시트의 머리글은 사람이 읽는
+    //    이름('PROTO A Cost')이지만 화면 렌더러는 `r.protoCost`를 읽는다 — 이 환원을 빼먹으면
+    //    행 수는 맞는데 모든 칸이 비어 보인다(2026-10-20 왕복 실측에서 실제로 그랬다).
+    //    금액은 표시형식이 입힌 '$1,234.20'으로 돌아오므로 **숫자만 남겨 저장한다** — 그대로
+    //    두면 화면은 읽히지만(parseNum이 기호를 뗀다) 프로젝트 JSON에 통화기호가 섞여 쌓인다.
+    var _mcRowFromSheet = function (r) {
+        if (!r || typeof r !== 'object') return r;
+        var out = {};
+        _MC_COLS.forEach(function (col) {
+            if (!col.k) return;                                   // NO 열은 화면이 다시 매긴다
+            var v = (r[col.h] !== undefined) ? r[col.h] : r[col.k];
+            v = (v == null) ? '' : String(v).trim();
+            if (col.num && v !== '') { var n = _mcNum(v); v = (n === null) ? '' : String(n); }
+            out[col.k] = v;
+        });
+        return out;
     };
     var _colLetter = function (i) { var s = ''; i += 1;
         while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
@@ -130,6 +150,9 @@
         R++;
 
         // 데이터 행 — 숫자는 **숫자 타입으로** 넣어야 아래 SUM이 동작한다.
+        // ⚠️⚠️ [2026-10-20 3차] 값이 없는 칸도 **빈 셀을 반드시 만든다.** 공용 스타일러는
+        //   `if (!cell) continue`로 **없는 셀을 건너뛰므로**, 안 만들면 그 칸만 제브라도
+        //   테두리도 빠져 표가 중간부터 끊긴 것처럼 보인다(사용자 첨부에서 G열부터 그랬다).
         var dataStart = R, typeRuns = [], cur = null;
         rows.forEach(function (r, i) {
             var tp = String(r.type || '').trim();
@@ -138,51 +161,85 @@
             _MC_COLS.forEach(function (col, c) {
                 if (!col.k) { put(R, c, { t: 'n', v: i + 1 }); return; }
                 var v = r[col.k];
-                if (col.num) { var n = _mcNum(v); if (n !== null) put(R, c, { t: 'n', v: n }); }
-                else if (v != null && v !== '') put(R, c, { t: 's', v: String(v) });
+                if (col.num) {
+                    var n = _mcNum(v);
+                    put(R, c, n !== null ? { t: 'n', v: n, z: _MC_MONEY_FMT } : { t: 's', v: '' });
+                } else {
+                    put(R, c, { t: 's', v: (v == null ? '' : String(v)) });
+                }
             });
             R++;
         });
         var dataEnd = R - 1;
 
-        var calcRow = function (label, makeFormula) {
-            put(R, 1, { t: 's', v: label });
+        // 계산 행 스타일 — 굵게. `font`만 지정하면 공용 스타일러(js/04k)의 제브라·테두리는
+        // 그대로 얹히고 글꼴만 이쪽이 이긴다(`Object.assign(base, cell.s)`).
+        var BOLD = { font: { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: '1F2937' } } };
+        // SUBTOTAL은 머리글과 같은 색으로 깔아 **구간이 끊기는 자리를 눈에 보이게** 한다(견본과 동일).
+        var SUBTOTAL_S = {
+            font: { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: 'FFFFFF' } },
+            fill: { patternType: 'solid', fgColor: { rgb: window._cpXlsxRole('darkText') } }
+        };
+        var calcRow = function (label, makeFormula, extra) {
+            extra = extra || {};
             _MC_COLS.forEach(function (col, c) {
-                if (!col.num) return;
-                var f = makeFormula(c); if (f) put(R, c, { t: 'n', f: f });
+                var cell;
+                if (c === 1) cell = { t: 's', v: label };
+                else if (col.num) {
+                    var f = makeFormula ? makeFormula(c) : null;
+                    cell = f ? { t: 'n', f: f, z: extra.z || _MC_MONEY_FMT } : { t: 's', v: '' };
+                } else cell = { t: 's', v: '' };
+                cell.s = extra.s || BOLD;
+                put(R, c, cell);
             });
             R++;
         };
         // TYPE별 SUBTOTAL — 화면과 같은 기준이다(js/22g는 currentType이 바뀔 때마다 넣는다).
+        var subtotalRows = [];
         typeRuns.forEach(function (run) {
+            subtotalRows.push(R);
             calcRow((run.type || '') + ' SUBTOTAL', function (c) {
                 var L = _colLetter(c); return 'SUM(' + L + (run.from + 1) + ':' + L + (run.to + 1) + ')';
-            });
+            }, { s: SUBTOTAL_S });
         });
         var totalRow = R;
-        // ⚠️ TOTAL은 **데이터 행만** 더한다 — SUBTOTAL까지 범위에 넣으면 두 번 센다.
-        if (rows.length) calcRow('TOTAL(M.C)', function (c) {
-            var L = _colLetter(c); return 'SUM(' + L + (dataStart + 1) + ':' + L + (dataEnd + 1) + ')';
+        // 🧮 TOTAL은 **SUBTOTAL들을 더한다**(사용자 견본과 같은 방식: =G10+G14+G20+…).
+        //    데이터 행 전체를 SUM해도 값은 같지만, 이렇게 두면 엑셀에서 어느 SUBTOTAL이
+        //    합쳐졌는지 눈으로 따라갈 수 있고 SUBTOTAL을 고치면 TOTAL도 바로 따라온다.
+        //    ⚠️ 데이터 행 범위와 SUBTOTAL을 **같이** 더하면 두 번 세므로 절대 섞지 말 것.
+        if (rows.length && subtotalRows.length) calcRow('TOTAL(M.C)', function (c) {
+            var L = _colLetter(c);
+            return subtotalRows.map(function (r) { return L + (r + 1); }).join('+');
         });
         // 영업판가는 계산이 아니라 **입력값**이다 — 수식이 아니라 숫자로 넣어 엑셀에서 고칠 수 있게.
         var salesRow = R;
-        put(R, 1, { t: 's', v: '영업판가' });
         _MC_COLS.forEach(function (col, c) {
-            if (!col.num) return;
-            var n = _mcNum(sp[col.k]); if (n !== null) put(R, c, { t: 'n', v: n });
+            var cell;
+            if (c === 1) cell = { t: 's', v: '영업판가' };
+            else if (col.num) {
+                var n = _mcNum(sp[col.k]);
+                cell = (n !== null) ? { t: 'n', v: n, z: _MC_MONEY_FMT } : { t: 's', v: '' };
+            } else cell = { t: 's', v: '' };
+            cell.s = BOLD;
+            put(R, c, cell);
         });
         R++;
-        // 재료비율 = TOTAL ÷ 영업판가 × 100. 영업판가를 고치면 비율이 바로 따라 바뀐다.
-        if (rows.length) {
-            put(R, 1, { t: 's', v: '재료비율 (M.C ÷ 영업판가) [%]' });
-            _MC_COLS.forEach(function (col, c) {
-                if (!col.num) return;
+        // 재료비율 = TOTAL ÷ 영업판가. **×100을 하지 않는다** — 표시형식 `0%`가 100배해서
+        // 보여주므로, 곱하면 3400% 처럼 100배로 나온다(사용자 견본도 나누기만 한다).
+        if (rows.length && subtotalRows.length) {
+            calcRow('재료비율 (M.C ÷ 영업판가)', function (c) {
                 var L = _colLetter(c);
-                put(R, c, { t: 'n', f: 'IF(' + L + (salesRow + 1) + '=0,"",' + L + (totalRow + 1) + '/' + L + (salesRow + 1) + '*100)' });
-            });
-            R++;
+                return 'IF(' + L + (salesRow + 1) + '=0,"",' + L + (totalRow + 1) + '/' + L + (salesRow + 1) + ')';
+            }, { z: '0%' });
         }
         ws['!ref'] = 'A1:' + _colLetter(_MC_COLS.length - 1) + R;
+        // 🔢 열 너비는 **직접 지정한다.** 공용 스타일러의 자동 계산은 셀의 원값(1234.5)만 보므로
+        //    회계 서식으로 늘어난 표시폭("$ 1,234.50")을 모르고, 금액 칸이 `####`로 나온다.
+        ws['!cols'] = [
+            { wch: 7 }, { wch: 30 }, { wch: 22 }, { wch: 14 }, { wch: 20 }, { wch: 36 },
+            { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+            { wch: 60 }
+        ];
         return ws;
     }
 
@@ -303,7 +360,9 @@
                     var rev = _td().mcActiveRevision || 'R1';
                     _td().mcRevisions = _td().mcRevisions || {};
                     // 계산 행은 되돌려 넣지 않는다 — 화면이 다시 계산하므로 넣으면 중복된다.
-                    _td().mcRevisions[rev] = (rows || []).filter(function (r) { return !_mcIsCalcRow(r); });
+                    _td().mcRevisions[rev] = (rows || [])
+                        .filter(function (r) { return !_mcIsCalcRow(r); })
+                        .map(_mcRowFromSheet);
                     if (rev === 'R1') _td().mcTable = _td().mcRevisions[rev];   // 저장 호환용 별칭
                 } }]
         },
