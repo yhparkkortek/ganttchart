@@ -291,7 +291,7 @@ window.renderAlarmTab = async function() {
             <td style="padding:6px 6px; text-align:center;" onclick="event.stopPropagation()">
               <input type="checkbox" class="alarm-row-cb" data-idx="${idx}"
                      onclick="window._alarmCbClick(event, this, ${idx})"
-                     style="cursor:pointer; width:14px; height:14px;">
+                     style="cursor:pointer; width:14px; height:14px; display:block; margin:0 auto;">
             </td>
             <td style="padding:6px 6px; text-align:center; font-size:11.5px; color:#888; font-weight:bold;">${idx + 1}</td>
             <td style="padding:7px 10px; text-align:center; font-size:12px; ${_ell}" title="${_esc(item.taskName)}">${item.taskName}</td>
@@ -300,7 +300,7 @@ window.renderAlarmTab = async function() {
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${nameCell(item.receiverStr)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.receiverEmail, item.missingPeople, item.blockedByDomain)}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.dueStr}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px; white-space:nowrap;">${item.dueStr}</td>
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays, item.sentHidden, idx)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#888;">${lastSent(item.sentLog)}</td>
