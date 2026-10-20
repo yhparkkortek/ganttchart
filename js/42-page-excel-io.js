@@ -49,6 +49,23 @@
         return undefined;
     };
 
+    // 블록의 `center: ['키', …]`에 적힌 열을 가운데 정렬한다 — 어느 페이지든 쓸 수 있게 공용으로.
+    // 머리글 **이름**으로 찾으므로 열 순서가 바뀌어도 따라간다.
+    // ⚠️ 공용 스타일러(js/04k)는 `Object.assign(base, cell.s)`라 여기 alignment가 통째로 이긴다 —
+    //    `vertical:'center'`를 같이 넣지 않으면 그 칸만 세로 정렬이 풀린다.
+    var _centerCols = function (ws, aoa, center) {
+        if (!center || !center.length || !aoa || !aoa.length || !window.XLSX) return;
+        var hdr = aoa[0] || [];
+        var cols = [];
+        center.forEach(function (name) {
+            _nms(name).forEach(function (n) { var i = hdr.indexOf(n); if (i >= 0 && cols.indexOf(i) === -1) cols.push(i); });
+        });
+        for (var r = 0; r < aoa.length; r++) cols.forEach(function (c) {
+            var cell = ws[window.XLSX.utils.encode_cell({ r: r, c: c })];
+            if (cell) cell.s = Object.assign({}, cell.s || {}, { alignment: { horizontal: 'center', vertical: 'center' } });
+        });
+    };
+
     // ── 공용 헬퍼 ──────────────────────────────────────────────────────
     // 행 배열 → 2차원 배열(머리글 + 값). 열은 **등장하는 키 전부**(순서 보존).
     var rowsToAoa = function (rows) {
@@ -315,10 +332,15 @@
     // ── 🗓 Gantt 전용 헬퍼 ─────────────────────────────────────────────
     // 간트 행은 **배열**이고, 어느 칸이 무엇인지는 `colIdx`(이름 → 인덱스)가 안다.
     // 그래서 엑셀 열 머리글로 colIdx의 이름을 그대로 쓴다 — 화면 열 순서가 바뀌어도 안전하다.
-    // 🏷 레벨 표시 — 레벨당 들여쓰기 + 머리 기호. 둘 다 데이터로 둔다(취향이 바뀌면 여기만 고친다).
-    var _GANTT_LEVEL_MARK = ['■', '▶', '▸', '•', '·'];
-    var _GANTT_INDENT = '    ';
+    // 🌳 레벨 표시 — 트리 모양(`│` 세로줄 + ` └ ` 그 행 자신). 둘 다 데이터이니 모양을 바꾸려면
+    //    여기만 고치면 된다. 0레벨은 맨 위라 아무것도 붙이지 않는다.
+    //      0 │ RFQ(KICK OFF)
+    //      1 │  └ 견적 요청
+    //      2 │ │   └ 사양 검토
+    var _GANTT_TREE_STEM = '│  ';
+    var _GANTT_TREE_LEAF = ' └ ';
     var _GANTT_WBS_KEY = 'wbs';
+    var _GANTT_LEVEL_KEY = 'bogo';      // LEVEL(WBS) — WBS 바로 왼쪽에 둔다
     // 그 행 **자신의** 업무명.
     // ⚠️ `row[ci.wbs]`를 그냥 쓰면 안 된다 — `recalculateSchedules`가 단일 WBS 열 모드에서 그 칸을
     //    "가장 가까운 0레벨 조상 이름"으로 매번 덮어쓰기 때문에(js/04d:394, 개발단계 필터용), 하위
@@ -338,17 +360,18 @@
         var name = _ganttTaskName(row);
         if (!name) return '';
         var lv = parseInt(row && row._level, 10); if (!(lv >= 0)) lv = 0;
-        var mark = _GANTT_LEVEL_MARK[Math.min(lv, _GANTT_LEVEL_MARK.length - 1)];
-        return new Array(lv + 1).join(_GANTT_INDENT) + mark + ' ' + name;
+        if (lv === 0) return name;
+        return new Array(lv).join(_GANTT_TREE_STEM) + _GANTT_TREE_LEAF + name;
     };
     var _ganttKeys = function () {
         var ci = window.colIdx || {};
-        var keys = Object.keys(ci).filter(function (k) { return ci[k] >= 0 && k !== _GANTT_WBS_KEY; });
-        // 📍 업무명(WBS)은 **상태와 상세내용 사이**에 둔다(사용자 요청 2026-10-20).
-        //    colIdx에 wbs가 없는(레벨별 열로 나뉜) 프로젝트에서도 이 열은 항상 만든다 — 업무명이
-        //    없는 출력물은 읽을 수가 없기 때문.
+        var moved = [_GANTT_LEVEL_KEY, _GANTT_WBS_KEY];
+        var keys = Object.keys(ci).filter(function (k) { return ci[k] >= 0 && moved.indexOf(k) === -1; });
+        // 📍 업무명(WBS)은 **상태와 상세내용 사이**, LEVEL(WBS)은 **그 바로 왼쪽**에 둔다
+        //    (사용자 요청 2026-10-20). colIdx에 wbs가 없는(레벨별 열로 나뉜) 프로젝트에서도 이 열은
+        //    항상 만든다 — 업무명이 없는 출력물은 읽을 수가 없기 때문.
         var at = keys.indexOf('status');
-        keys.splice(at >= 0 ? at + 1 : keys.length, 0, _GANTT_WBS_KEY);
+        keys.splice(at >= 0 ? at + 1 : keys.length, 0, _GANTT_LEVEL_KEY, _GANTT_WBS_KEY);
         return keys;
     };
     var _ganttRows = function () {
@@ -356,8 +379,11 @@
         return (window.globalData || []).map(function (row) {
             var o = {};
             keys.forEach(function (k) {
-                o[k] = (k === _GANTT_WBS_KEY) ? _ganttWbsCell(row)
-                     : ((row && row[ci[k]] != null) ? row[ci[k]] : '');
+                if (k === _GANTT_WBS_KEY) { o[k] = _ganttWbsCell(row); return; }
+                // 레벨은 `_level`이 항상 정확하다 — bogo 칸은 재계산이 거기서 **베껴 넣는** 값이고,
+                // 레벨별 열 모드 프로젝트엔 bogo 칸 자체가 없다.
+                if (k === _GANTT_LEVEL_KEY && row && row._level != null) { o[k] = row._level; return; }
+                o[k] = (row && row[ci[k]] != null) ? row[ci[k]] : '';
             });
             return o;
         });
@@ -516,7 +542,10 @@
             id: 'gantt', label: 'Gantt chart',
             anchorSelector: '#print-btn',
             repaint: ['recalculateSchedules'],
-            blocks: [{ sheet: 'Gantt', kind: 'rows', get: _ganttRows, set: _ganttSet }]
+            // 숫자·날짜·짧은 상태 칸은 가운데 정렬(사용자 요청) — 업무명/상세내용은 들여쓰기와
+            // 긴 문장이라 왼쪽 그대로 둔다.
+            blocks: [{ sheet: 'Gantt', kind: 'rows', get: _ganttRows, set: _ganttSet,
+                center: ['no', 'bogo', 'start', 'plan', 'period', 'status'] }]
         },
         {
             // ⚠️ 알람은 간트에서 **계산되는** 목록이다(collectAlarmItems) — 되돌려 넣을 곳이 없다.
@@ -551,6 +580,7 @@
                 var aoa = (b.kind === 'kv') ? kvToAoa(b.get(), b.labels) : rowsToAoa(b.get());
                 if (aoa.length <= 1) empty++;
                 ws = window.XLSX.utils.aoa_to_sheet(aoa);
+                _centerCols(ws, aoa, b.center);
             }
             window.XLSX.utils.book_append_sheet(wb, ws, _nm(b.sheet).slice(0, 31));
         });
