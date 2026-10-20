@@ -512,16 +512,14 @@
                     var t = window._qaToolById(w.id); return t && t.requires === 'gw'; })) {
                 gwChecked = true;
                 onStep('🔑 ' + window._t('그룹웨어 로그인 상태 확인 중...', 'Checking groupware session...'));
-                try {
-                    var st = await (await fetch(BACKEND + '/gw/status')).json();
-                    if (!st.ok) {
-                        return { reply: '🔒 ' + window._t('그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
-                                                          'Groupware sign-in required — use the 🔑 here.'), calls: calls };
-                    }
-                } catch (e) {
-                    return { reply: '⚠️ ' + window._t('백엔드(127.0.0.1:5000)에 연결할 수 없습니다 — kortek_backend가 켜져 있는지 확인해주세요.',
-                                                      'Cannot reach the local backend.'), calls: calls };
-                }
+                // [2026-10-20] 끊겨 있으면 저장된 계정으로 **1회만** 자동 로그인한다.
+                //   그전까지는 여기서 바로 포기해, 계정을 저장해 뒀는데도 명령마다 사람이
+                //   🔑을 눌러야 했다. 재시도 금지 가드는 _gwEnsureLogin(js/36) 안에 있다 —
+                //   실패를 반복하면 CAPTCHA가 뜨고 사내 계정이 잠기기 때문이다.
+                //   게이트가 없으면(js/36 미로드) 통과시킨다 — 어차피 도구 호출이 실패하며
+                //   백엔드가 제 사유를 돌려주므로, 여기서 조용히 막는 것보다 낫다.
+                var _gwGate = window._gwEnsureLogin ? await window._gwEnsureLogin(onStep) : { ok: true };
+                if (!_gwGate.ok) return { reply: _gwGate.message, calls: calls };
             }
             for (var i = 0; i < wanted.length && calls.length < MAX_CALLS; i++) {
                 var tl = window._qaToolById(wanted[i].id);

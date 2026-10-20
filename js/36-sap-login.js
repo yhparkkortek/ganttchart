@@ -223,6 +223,67 @@
         }
     };
 
+    // ── 🔑 그룹웨어 자동 로그인 게이트 (AI 문답 그룹웨어 경로 공용) ─────────────
+    //
+    // [2026-10-20] 그전까지 AI 문답의 그룹웨어 경로(도구 루프 js/40, 04h의 메일·게시판·
+    // 기안 블록)는 /gw/status만 보고, 끊겨 있으면 "🔑에서 로그인해주세요"라며 **포기**했다.
+    // 계정을 저장해 뒀는데도 명령마다 사람이 🔑을 눌러야 했다 — 사용자 요청으로 연결한다.
+    // (SAP 자동 로그인을 2026-10-13에 허용한 것과 같은 번복이다.)
+    //
+    // ⚠️⚠️ **계정 잠금 방지가 이 함수의 존재 이유다.** 그룹웨어는 로그인에 실패해야
+    //   CAPTCHA가 뜨는 구조라, 실패를 반복하면 사내 계정이 잠긴다. 그래서:
+    //     · 백엔드 login_once()는 "호출 1회 = 시도 1회"일 뿐 실패를 기억하지 않는다
+    //       (gw_bridge.py). → **재시도 금지 가드는 여기(프런트)에 있어야 한다.**
+    //     · 실패하면 이 페이지 세션 동안 두 번 다시 자동 시도하지 않고, 기억해 둔 사유를
+    //       그대로 돌려준다. 사람이 🔑에서 직접 하는 길만 남긴다.
+    //     · 성공하면 가드를 푼다 — 나중에 세션이 만료돼도 한 번은 더 받아준다. 실패가
+    //       반복될 수는 없다(한 번 실패하면 잠기고, 푸는 건 성공뿐이다).
+    //     · 이미 로그인돼 있으면 /gw/login을 **아예 부르지 않는다**(상태 조회로 끝).
+    //
+    // 반환: { ok:true, session } | { ok:false, message:'사용자에게 보여줄 한 줄' }
+    var _gwAutoTried  = false;   // 이 페이지 세션에서 자동 로그인을 시도했는가
+    var _gwAutoFailMsg = '';     // 실패 사유(재사용 — 같은 이유로 다시 시도하지 않는다)
+
+    window._gwEnsureLogin = async function (onStep) {
+        var say = (typeof onStep === 'function') ? onStep : function () {};
+
+        // ① 현재 상태부터. 로그인돼 있으면 아무것도 하지 않는다.
+        var st;
+        try {
+            st = await fetch(BASE + '/gw/status').then(function (r) { return r.json(); });
+        } catch (e) {
+            return { ok: false, message: '⚠️ ' + T('백엔드(127.0.0.1:5000)에 연결할 수 없습니다 — kortek_backend가 켜져 있는지 확인해주세요.',
+                                                   'Cannot reach the local backend (127.0.0.1:5000).') };
+        }
+        if (st && st.ok) return { ok: true, session: st };
+
+        // ② 이미 한 번 시도해 실패했다면 **다시 시도하지 않는다**(계정 잠금 방지).
+        if (_gwAutoTried) return { ok: false, message: _gwAutoFailMsg };
+
+        // ③ 저장된 계정으로 단 한 번.
+        _gwAutoTried = true;
+        say('🔑 ' + T('그룹웨어 자동 로그인 시도 중... (실패해도 재시도하지 않습니다)',
+                      'Signing in to groupware... (no retry on failure)'));
+        var d;
+        try {
+            d = await fetch(BASE + '/gw/login', { method: 'POST' }).then(function (r) { return r.json(); });
+        } catch (e) {
+            _gwAutoFailMsg = '⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.');
+            return { ok: false, message: _gwAutoFailMsg };
+        }
+        if (d && d.ok) { _gwAutoTried = false; return { ok: true, session: d.session }; }
+
+        _gwAutoFailMsg = (d && d.result === 'not_configured')
+            ? ('🔑 ' + (d.message || T('저장된 그룹웨어 로그인 정보가 없습니다 — AI 문답 창의 🔑에서 등록해주세요.',
+                                       'No saved groupware login — register it with the 🔑 here.')))
+            : ('🔒 ' + (d && d.message ? d.message
+                                       : T('그룹웨어 로그인에 실패했습니다 — AI 문답 창의 🔑에서 직접 로그인해주세요.',
+                                           'Groupware sign-in failed — use the 🔑 here.'))
+               + ' ' + T('(계정 잠금을 막기 위해 자동 재시도는 하지 않습니다)',
+                         '(no automatic retry, to avoid account lockout)'));
+        return { ok: false, message: _gwAutoFailMsg };
+    };
+
     window._sapLoginSave = async function () {
         const g = function (id) { return (document.getElementById(id).value || '').trim(); };
         const body = { sysname: g('saplogin-sysname'), client: g('saplogin-client'), user: g('saplogin-user'),

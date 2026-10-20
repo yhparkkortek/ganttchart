@@ -5073,9 +5073,15 @@ ${docsJson}`;
             window._renderGanttQaMessages();
             let _mReply;
             try {
-                const st = await (await fetch('http://127.0.0.1:5000/gw/status')).json();
-                if (!st.ok) throw new Error(window._t('🔒 그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
-                                                      '🔒 Groupware sign-in required — use the 🔑 here.'));
+                // [2026-10-20] 끊겨 있으면 저장된 계정으로 **1회만** 자동 로그인한다.
+                //   재시도 금지 가드는 _gwEnsureLogin(js/36) 안 — 실패를 반복하면 CAPTCHA가
+                //   뜨고 사내 계정이 잠긴다. 로그인은 수 초 걸리므로 진행 문구를 갱신한다
+                //   (안 그러면 "메일 가져오는 중"에서 멈춘 것처럼 보인다).
+                const _gwStepM = function (m) { const h = window._ganttQaHistory, l = h[h.length - 1]; if (l && l.pending) { l.text = m; window._renderGanttQaMessages(); } };
+                //   게이트가 없으면(js/36 미로드) 통과시킨다 — 어차피 아래 호출이 실패하며
+                //   백엔드가 제 사유를 돌려주므로, 여기서 조용히 막는 것보다 낫다.
+                const _gwM = window._gwEnsureLogin ? await window._gwEnsureLogin(_gwStepM) : { ok: true };
+                if (!_gwM.ok) throw new Error(_gwM.message);
                 const res = await window._withTimeout(
                     fetch('http://127.0.0.1:5000/gw/mail/recent?limit=80&folder=' + _folder
                           + (_unread ? '&unread=1' : '')
@@ -5163,10 +5169,12 @@ ${docsJson}`;
             window._renderGanttQaMessages();
             let _bReply;
             try {
-                // ① 로그인 상태 먼저 — 끊겼으면 여기서 멈춘다(자동 로그인 시도 안 함: 계정 잠금 위험)
-                const st = await (await fetch('http://127.0.0.1:5000/gw/status')).json();
-                if (!st.ok) throw new Error(window._t('🔒 그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.',
-                                                      '🔒 Groupware sign-in required — use the 🔑 here.'));
+                // ① 로그인 먼저. [2026-10-20] 끊겨 있으면 저장된 계정으로 **1회만** 자동
+                //    로그인한다(그전까진 여기서 바로 포기했다). 재시도 금지 가드는
+                //    _gwEnsureLogin(js/36) 안 — 실패 반복 시 CAPTCHA·사내 계정 잠금.
+                const _gwStepB = function (m) { const h = window._ganttQaHistory, l = h[h.length - 1]; if (l && l.pending) { l.text = m; window._renderGanttQaMessages(); } };
+                const _gwB = window._gwEnsureLogin ? await window._gwEnsureLogin(_gwStepB) : { ok: true };
+                if (!_gwB.ok) throw new Error(_gwB.message);
                 const res = await window._withTimeout(
                     fetch('http://127.0.0.1:5000/gw/board/recent?limit=80'
                           + (_per.from ? '&from=' + _per.from : '')
@@ -5273,11 +5281,14 @@ ${docsJson}`;
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 자재 정보를 가져오는 중...', 'Fetching material info from SAP...'), pending: true });
             window._renderGanttQaMessages();
             try {
-                // ① 그룹웨어 로그인 상태 — 끊겼으면 여기서 멈추고 안내(자동 로그인 시도 안 함)
-                const st = await (await fetch('http://127.0.0.1:5000/gw/status')).json();
-                if (!st.ok) {
+                // ① 그룹웨어 로그인. [2026-10-20] 끊겨 있으면 저장된 계정으로 **1회만**
+                //    자동 로그인한다(그전까진 여기서 바로 멈추고 안내만 했다).
+                //    재시도 금지 가드는 _gwEnsureLogin(js/36) 안 — 실패 반복 시 계정 잠금.
+                const _gwStepD = function (m) { const h = window._ganttQaHistory, l = h[h.length - 1]; if (l && l.pending) { l.text = m; window._renderGanttQaMessages(); } };
+                const _gwD = window._gwEnsureLogin ? await window._gwEnsureLogin(_gwStepD) : { ok: true };
+                if (!_gwD.ok) {
                     window._ganttQaHistory.pop();
-                    window._ganttQaHistory.push({ role: 'ai', text: '🔒 ' + window._t('그룹웨어 로그인이 필요합니다 — AI 문답 창의 🔑에서 로그인해주세요.', 'Groupware sign-in required — use the 🔑 here.') });
+                    window._ganttQaHistory.push({ role: 'ai', text: _gwD.message });
                     window._renderGanttQaMessages(); input.focus(); return;
                 }
                 // ② 양식 찾기(이름으로 — formId 하드코딩 안 함)
