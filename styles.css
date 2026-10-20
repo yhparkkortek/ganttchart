@@ -1045,8 +1045,9 @@
 .mc-rev-btn:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
 .mc-comparison-btn { transition:0.2s; }
 .mc-comparison-btn:hover { background-color:#f4d9b3 !important; border-color:#dba354 !important; color:#a85d0a !important; }
+/* 🧩 [2026-10-21] 보라색 호버는 제품구분자 버튼이 보라였던 시절 것 — 지금은 진한 테마색이라
+   호버에서만 보라로 튀면 안 된다. 색은 .unit-cycle-btn 과 팔레트(js/21)가 정한다. */
 .mc-unit-btn { transition:0.2s; }
-.mc-unit-btn:hover { background-color:#dcd0f5 !important; border-color:#a98ce0 !important; color:#6741d9 !important; }
 /* 💡 Notice 탭 아이콘 버튼(즉시발송/수정/일시정지/삭제) hover 통일 */
 .notice-icon-btn { transition:0.2s; }
 .notice-icon-blue:hover { background-color:#2c5f8a !important; color:#fff !important; }
@@ -1263,6 +1264,16 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
     background:#e0f5f7; color:#00707d; border:1px solid #a3d9e0;
     transition:background .15s, color .15s;
 }
+/* 🧩 [2026-10-21] 제품구분자(MVD/TVD/TPR…) 전환 버튼 — M.C Table·BOM·Customer SPEC 공용.
+   색은 Elec Parts의 SPEC/BOM 토글 **활성 상태와 같은 공식**(진한 테마색 배경 + 흰 글자)이다.
+   지금 어느 모델을 보고 있는지가 한눈에 들어와야 하는 자리라 연한 배경으론 묻힌다.
+   ⚠️ 색을 JS 인라인 style로 칠하지 말 것 — 인라인이 남으면 팔레트를 바꿔도 안 따라온다. */
+.unit-cycle-btn {
+    padding:6px 10px; min-width:auto; font-size:12px; font-weight:bold; cursor:pointer;
+    border-radius:5px; background:#00707d; color:#fff; border:1px solid #00707d;
+    transition:background .15s, border-color .15s;
+}
+.unit-cycle-btn:hover { background:#00707d; }
 .elec-mode-btn-l { border-radius:6px 0 0 6px; border-right:none; }
 .elec-mode-btn-r { border-radius:0 6px 6px 0; }
 .elec-mode-btn:hover { background:#a3d9e0; }

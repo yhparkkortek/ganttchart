@@ -337,10 +337,10 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.cal-month-block.cal-month-current .cal-month-title { color: ' + compGen.darkText + ' !important; }\n'
         // 🧩 [2026-10-21] 제품구분자(MVD/TVD/TPR…) 전환 버튼 — M.C Table·BOM·Customer SPEC 세 곳이
         // `.unit-cycle-btn` 하나를 같이 쓴다. 보라색이 박혀 있어 팔레트를 바꿔도 혼자 안 바뀌었다(사용자 지적).
-        // 테마색 그대로 쓰면 주변 버튼과 섞여 "지금 어느 모델인지"가 안 보이므로 **보색**(compGen)으로 —
-        // 캘린더의 "핀셋 알람"·"이번달" 강조와 같은 규칙이다.
-        + '.unit-cycle-btn { background: ' + compGen.bg + ' !important; border-color: ' + compGen.border + ' !important; color: ' + compGen.darkText + ' !important; }\n'
-        + '.unit-cycle-btn:hover { background: ' + compGen.hoverBg + ' !important; border-color: ' + compGen.hoverBorder + ' !important; }\n'
+        // 처음엔 보색으로 했는데, **Elec Parts의 SPEC/BOM 토글 활성 상태와 같게** 해 달라는 요청(2026-10-21).
+        // → 팔레트 안에서 가장 진한 색(darkText) 배경 + 흰 글자. 아래 .elec-mode-btn-active 와 같은 공식이다.
+        + '.unit-cycle-btn, .unit-cycle-btn:hover { background: ' + gen.darkText + ' !important;'
+        + ' color: #fff !important; border-color: ' + gen.darkText + ' !important; }\n'
         // 💡 [2026-08-30 추가] 날짜 클릭 시 뜨는 "업무 목록" 팝업의 각 항목도 파스텔 호버(테두리+배경 채우기)
         // 적용 — 라벨 박스 호버와 동일한 규칙. 핀셋 알람 항목은 위 그리드 칩과 통일해서 보색 사용.
         + '.cal-day-popup-item { border-color: ' + gen.border + ' !important; }\n'
