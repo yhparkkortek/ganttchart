@@ -296,6 +296,26 @@
                 rows.push(o);
                 return;
             }
+            // 📍 [2026-10-20] 설치지점이 여러 곳인 부품은 ALV가 **행을 쪼개서** 준다 —
+            //    첫 행에만 구성부품·레벨이 들어 있고, 나머지는 EBORT만 있는 빈 행이다.
+            //    실측(export.XLSX, 자재 303222): 수량 17짜리 저항 100916이
+            //      R17 / R24 / R28 / R29 / R33 / R35 … 처럼 한 줄에 하나씩, 65개 부품이 264행.
+            //    예전엔 이 행들이 레벨도 IDNRK도 없어서 아래 두 분기 중 어디에도 제대로
+            //    못 들어가고(수량이 '0'으로 와서 totals로 새기까지 했다) 버려졌다 —
+            //    그래서 **첫 설치지점 하나만** 살아남았다.
+            //    → 앞 부품의 EBORT에 쉼표로 이어 붙인다. 행을 늘리지 않으므로 표가
+            //      부풀지 않고, 열 너비도 그대로 둔 채 말풍선(title)과 엑셀에서 전부 보인다.
+            //    ⚠️ 이 분기가 아래 totals 분기보다 **먼저** 와야 한다(위 이유).
+            if (!o.IDNRK && o.EBORT && String(o.EBORT).trim() && rows.length) {
+                var prevRow = rows[rows.length - 1];
+                var curLoc = String(prevRow.EBORT || '').trim();
+                var addLoc = String(o.EBORT).trim();
+                // 같은 지점이 두 번 오면 무시(중복 방지)
+                if ((',' + curLoc + ',').indexOf(',' + addLoc + ',') === -1) {
+                    prevRow.EBORT = curLoc ? curLoc + ',' + addLoc : addLoc;
+                }
+                return;
+            }
             // 레벨 없는 행: 구성품번호가 있으면 모체 자재(맨 앞 1행), 없으면 단위별 합계(맨 끝)
             if (o.IDNRK) { if (!parent) parent = o; }
             else if (o.MENGE || o.MMEIN) totals.push(o);
@@ -1048,6 +1068,42 @@
         return window.tabData.elecBomByType[type] || null;
     };
 
+    // 🆕 [2026-10-20] 이 부품 타입의 item code — Summary '주요자재' 표에서 가져온다.
+    //    그전엔 _bomDefaultMaterial()(= 그 모델의 **완제품** KTK 코드)이 들어가 있어서,
+    //    AD BD BOM을 열어도 자재번호 칸에 완제품 번호가 적혀 있었다. 부품 BOM을 보려는
+    //    건데 완제품을 조회하게 되니 열 때마다 사람이 손으로 고쳐야 했다.
+    //    ⚠️ 카테고리명을 여기에 박지 말 것 — ELEC_CATEGORY_TO_VIEW(js/23, 데이터)를
+    //       **거꾸로** 쓴다. 뷰가 늘어나면 거기 한 줄만 추가하면 이쪽도 따라온다.
+    window._elecBomItemCode = function (type) {
+        var map = window.ELEC_CATEGORY_TO_VIEW || {};
+        var cats = Object.keys(map).filter(function (c) { return map[c] === type; });
+        if (!cats.length) return '';
+
+        // 어느 모델의 주요자재인지 — BOM 탭이 보고 있는 모델을 따른다.
+        var unit = window._bomActiveUnit ? window._bomActiveUnit() : '';
+        var models = (window.tabData && window.tabData.projectModels) || [];
+        var idx = 0;
+        for (var i = 0; i < models.length; i++) {
+            if ((models[i].unitId || '') === (unit || '')) { idx = i; break; }
+        }
+
+        // 화면에 떠 있는 값이 가장 최신이다(저장 전 편집 포함) — 없으면 저장된 값으로.
+        var rows = [];
+        try {
+            if (window.collectMaterialRows && document.getElementById('sum-materials-rows-a-' + idx)) {
+                rows = window.collectMaterialRows(true, idx) || [];
+            }
+        } catch (e) { rows = []; }
+        if (!rows.length) rows = (models[idx] && models[idx].materials) || [];
+
+        for (var j = 0; j < rows.length; j++) {
+            if (cats.indexOf(String(rows[j].category || '').trim()) === -1) continue;
+            var code = _ktkToMatnr(rows[j].ktkPn || '');   // "502574_MVD>..." → 앞 자재번호만
+            if (code) return code;
+        }
+        return '';
+    };
+
     window._elecBomOpen = function (type) {
         window._elecBomType = type;
         ['panel', 'adbd', 'convbd', 'touchctrl'].forEach(function (v) {
@@ -1068,7 +1124,9 @@
         var matEl = document.getElementById('ep-bom-material');
         if (matEl) {
             var st = window._elecBomGetStore(type);
-            matEl.value = (st && st.material) || window._bomDefaultMaterial() || '';
+            //  ① 이미 조회해 둔 값(사람이 고친 것 포함)  ② 이 부품의 item code
+            //  ③ 예전 동작(완제품 코드) — 주요자재가 안 채워진 프로젝트를 위해 남겨 둔다.
+            matEl.value = (st && st.material) || window._elecBomItemCode(type) || window._bomDefaultMaterial() || '';
         }
         window._elecBomRender();
         if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('bom');
@@ -1350,7 +1408,12 @@
         if (epSorted) {
             epSorted.forEach(function (r, vi) {
                 var n2 = (st.notes && st.notes[r.IDNRK]) || '';
-                html += '<tr class="bom-row ' + zebraClass(r._level, vi) + '">'
+                // 🔗 [2026-10-20] 행 클릭 → AI 문답 조회 칩. 메인 BOM 탭엔 처음부터 있었는데
+                //    Elec Parts 내장 BOM에만 빠져 있었다(여기서 조회를 더 자주 쓰는데도).
+                //    Loc./비고 칸은 각자 stopPropagation을 하고 있어 편집과 안 겹친다.
+                var meS = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                html += '<tr class="bom-row ' + zebraClass(r._level, vi) + '" style="cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + meS + '\')">'
                     + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
                     + BOM_COLUMNS.map(function (c) {
                         if (c.loc) return renderLocCell(r, '');
@@ -1382,7 +1445,9 @@
                 ? '<span onclick="event.stopPropagation(); window._elecBomToggle(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '&#9658;' : '&#9660;') + '</span>'
                 : '<span style="color:#cfe3e5;">&#183;</span>';
             var nt = (st.notes && st.notes[r.IDNRK]) || '';
-            html += '<tr class="bom-row ' + zcls + '">'
+            var meH = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            html += '<tr class="bom-row ' + zcls + '" style="cursor:pointer;"'
+                + ' onclick="window.bomSelectComponent(\'' + meH + '\')">'
                 + '<td style="' + TD + ' white-space:nowrap;">'
                 + '<span style="display:inline-block; width:' + ind + 'px;"></span>' + tw
                 + ' <span style="color:#666;">' + r._level + '</span></td>'
