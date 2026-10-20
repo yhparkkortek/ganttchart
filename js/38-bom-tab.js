@@ -1320,6 +1320,12 @@
                 enrich: enrich, _collapsed: initCollapsed,
                 material: material, plant: '1000', explosion: explosion,
                 tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
+                // ⚠️⚠️ [2026-10-20] 레이아웃 적용 여부를 **반드시 들고 있는다.** 전엔 이 값을
+                //    버려서, `/LOC`이 안 먹어도 화면에 아무 말이 없었다 — 설치지점만 빈 채로
+                //    "조회 성공"처럼 보였다(사용자 제보: "loc는 그대로"). 메인 BOM 탭엔 원래
+                //    이 표시가 있었는데 여기만 빠져 있었다. 조용히 삼키지 말 것(CLAUDE.md).
+                layout: _ELEC_BOM_LAYOUT, layoutApplied: data.layoutApplied,
+                layoutDiag: data.layoutDiag || '',
                 cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
                 truncated: parsed.truncated, totalRows: parsed.totalRows,
                 notes: prev.notes || {},
@@ -1492,6 +1498,29 @@
         if (st.truncated) {
             // [2026-10-19 정정] 500행은 SAP이 아니라 앱 브릿지(_sap_dump_grid)의 상한이다. 위 주석 참고.
             window._elecBomSetStatus('⚠️ ' + _t('결과가 500행에서 잘렸습니다(SAP 제한이 아니라 앱 브릿지 상한). 단일 레벨 조회를 시도하세요.', 'Result truncated at 500 rows (this app\'s bridge cap, not a SAP limit). Try single-level explosion.'), 'error');
+        }
+        // 📍 레이아웃 적용 여부를 메타에 같이 보여준다 — 설치지점이 비는 이유가 여기 있기 때문이다.
+        if (metaEl && st.layout) {
+            metaEl.innerHTML += '<span style="font-size:11.5px; color:' + (st.layoutApplied === false ? '#b1432f' : '#666') + ';"> &middot; '
+                + _t('레이아웃 ', 'Layout ') + _esc(st.layout)
+                + (st.layoutApplied === false ? ' ⚠️' + _t('적용 실패', ' not applied') : '') + '</span>';
+        }
+        // ⚠️ 이 뷰는 **설치지점이 목적**이므로, 레이아웃이 안 먹었으면 조용히 넘기지 않고
+        //    무엇을 해야 하는지까지 말해준다. `/LOC`은 ZPP033(단일 레벨)에서 확인된 레이아웃이고,
+        //    레이아웃 목록은 tcode마다 다르다(ZPP038엔 아예 없을 수 있음 — CLAUDE.md).
+        if (st.layoutApplied === false) {
+            window._elecBomSetStatus('⚠️ ' + _t(
+                '설치지점(Loc.)은 "' + st.layout + '" 레이아웃이 있어야 나오는데 적용에 실패해 SAP 기본 레이아웃으로 조회됐습니다'
+                    + (st.layoutDiag ? ' (' + st.layoutDiag + ')' : '')
+                    + '. 전개 방식을 "단일 레벨"로 바꿔 다시 조회해보세요 — 레이아웃 목록은 ZPP033/ZPP038이 서로 다릅니다.',
+                'Location needs the "' + st.layout + '" layout, but it could not be applied'
+                    + (st.layoutDiag ? ' (' + st.layoutDiag + ')' : '')
+                    + '. Try single-level explosion — ZPP033 and ZPP038 have different layout catalogs.'), 'error');
+        } else if (st.layoutApplied === true && !st.truncated) {
+            // 직전 조회의 레이아웃 경고가 **성공한 뒤에도 남아 있던** 문제(2026-10-20 검증 중 발견).
+            // 조회 경로(_elecBomFetch)는 렌더 전에 상태를 비우지만, 뷰를 다시 열기만 해도
+            // _elecBomRender가 단독 호출되므로 여기서도 지워야 한다.
+            window._elecBomSetStatus('', '');
         }
     }
 
