@@ -124,27 +124,29 @@
         _td().briefSpec = rows;
     };
 
-    // ── 🏷 제품구분자 이름을 Customer SPEC 머리글에 표시 ────────────────
-    window.bsRenderUnitHead = function () {
-        var th = document.getElementById('bs-value-th');
-        if (!th) return;
-        var u = window.bsActiveUnit();
+    // ── 🏷 제품구분자 전환 바 ──────────────────────────────────────────
+    //   M.C Table(#mc-unit-bar)·BOM(#bom-unit-bar)과 **같은 모양·같은 동작**이다.
+    //   새로 디자인하지 않는다 — 탭마다 다르게 생기면 같은 기능으로 안 보인다(사용자 지적).
+    //   보라색 버튼 하나를 누를 때마다 다음 모델로 돌아가고, 모델이 없으면 바를 숨긴다.
+    window.bsRenderUnitBar = function () {
+        var bar = document.getElementById('bs-unit-bar');
+        if (!bar) return;
         var units = window.getMcUnits ? window.getMcUnits() : [];
-        var label = u || (units.length ? units[0] : '') || _t('값', 'Value');
-        th.innerHTML = '<span style="font-weight:bold;">' + (window.escapeHtml ? window.escapeHtml(label) : label) + '</span>'
-            + (units.length > 1
-                ? ' <button onclick="window.bsCycleUnit()" title="' + (window._currentLang === 'en'
-                    ? 'Click to switch to the next product category' : '클릭할 때마다 다음 제품구분자로 전환')
-                  + '" style="margin-left:6px; padding:1px 6px; border:1px solid #c9b8f0; border-radius:4px;'
-                  + ' background:#ede9fb; color:#6741d9; font-size:11px; font-weight:bold; cursor:pointer;">⇄</button>'
-                : '');
+        if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+        var cur = window.bsActiveUnit() || units[0];
+        var esc = window.escapeHtml || function (v) { return String(v == null ? '' : v); };
+        bar.style.display = 'flex';
+        bar.innerHTML = '<button onclick="window.bsCycleUnit()" title="'
+            + esc(_t('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
+            + ' style="padding:6px 10px; min-width:auto; border:1px solid #c9b8f0; border-radius:5px;'
+            + ' cursor:pointer; font-size:12px; font-weight:bold; background:#ede9fb; color:#6741d9;">'
+            + esc(cur) + '</button>';
     };
 
     window.bsCycleUnit = function () {
         var units = window.getMcUnits ? window.getMcUnits() : [];
         if (units.length < 2) return;
-        var cur = window.bsActiveUnit();
-        var i = units.indexOf(cur);
+        var i = units.indexOf(window.bsActiveUnit());
         if (window.mcSwitchUnit) window.mcSwitchUnit(units[(i + 1) % units.length]);
     };
 
@@ -185,7 +187,7 @@
         // 데이터 → 화면. 그리기 **전에** 이전·별칭을 맞춰야 옛 파일도 바로 보인다.
         _wrap('populateTabData',
             function () { window.bsMigrateFromModelCols(); window.bsSyncAlias(_switching); },
-            function () { window.bsRenderUnitHead(); });
+            function () { window.bsRenderUnitBar(); });
     };
 
     var _bsRepaint = function () {
