@@ -853,7 +853,7 @@ window.mcRenderUnitTabs = function() {
     // 연필 토글 뒤 펼침 패널로 이동.
     bar.innerHTML =
         '<button class="mc-unit-btn unit-cycle-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
-        + ' >'
+        + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#00707d; color:#fff;">'
         + escapeHtml(cur) + '</button>'
         + '<button id="mc-unit-actions-toggle" onclick="window.mcToggleUnitActions()" title="' + (isOpen ? '접기' : '제품구분자 관리(이름변경/추가/삭제)') + '" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (isOpen ? '#e9ecef' : 'none') + '; color:#555; cursor:pointer; font-size:12px;">' + (isOpen ? '◀' : '▶') + '</button>'
         + '<div id="mc-unit-actions-panel" class="' + (isOpen ? 'mc-unit-actions-open' : '') + '">'

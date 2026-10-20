@@ -142,7 +142,7 @@
         bar.style.display = 'flex';
         bar.innerHTML = '<button class="unit-cycle-btn" onclick="window.bsCycleUnit()" title="'
             + esc(_t('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
-            + ' >'
+            + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#00707d; color:#fff;">'
             + esc(cur) + '</button>';
     };
 
