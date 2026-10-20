@@ -760,6 +760,39 @@
             + ' transition:background .15s;';
     var SEP = '<span style="display:inline-block; width:1px; height:13px; background:#ccd9db; margin:0 4px;"></span>';
 
+    // 🫳 '엑셀 입력' 버튼에 **드래그앤드롭**. 파일 고르기 창을 안 거치고 바로 떨군다.
+    //   ⚠️⚠️ 떨어뜨린 이벤트를 **여기서 반드시 멈춰야 한다**(stopPropagation). js/04f가 window에
+    //      drop 핸들러를 달아 두고 **프로젝트 전체를 엑셀로 덮어쓰는** handleFiles를 부르기 때문에,
+    //      안 멈추면 페이지 불러오기와 프로젝트 전체 덮어쓰기(관리자 비밀번호 창)가 **같이** 일어난다.
+    //   그래서 드롭 영역을 페이지 전체가 아니라 **이 버튼으로 좁혔다** — 화면 아무 데나 떨구는
+    //   기존 "프로젝트 엑셀 열기" 동작은 그대로 살아 있어야 한다.
+    var _pxBindDrop = function (btn, id) {
+        if (!btn || btn._pxDropBound) return;
+        btn._pxDropBound = true;
+        var BASE = '#e0f5f7', HOT = '#a3d9e0';
+        var stop = function (e) { e.preventDefault(); e.stopPropagation(); };
+        var hot  = function () { btn.style.background = HOT; btn.style.outline = '2px dashed ' + HOT; btn.style.outlineOffset = '1px'; };
+        var cool = function () { btn.style.background = BASE; btn.style.outline = ''; btn.style.outlineOffset = ''; };
+        btn.addEventListener('dragenter', function (e) { stop(e); hot(); });
+        // dragover에서도 칠한다 — 끌고 있는 동안 mouseout이 끼어들어 색을 되돌리는 경우가 있다.
+        btn.addEventListener('dragover', function (e) { stop(e); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; hot(); });
+        btn.addEventListener('dragleave', function (e) { stop(e); cool(); });
+        btn.addEventListener('drop', function (e) {
+            stop(e); cool();
+            var files = (e.dataTransfer && e.dataTransfer.files) || [];
+            var f = null;
+            for (var i = 0; i < files.length; i++) if (/\.(xlsx|xls)$/i.test(files[i].name)) { f = files[i]; break; }
+            if (!f) {
+                _toast('⚠️ ' + _t('엑셀 파일(.xlsx/.xls)만 받습니다.', 'Only .xlsx / .xls files are accepted.'), 'error');
+                return;
+            }
+            if (files.length > 1) {
+                _toast(_t('파일이 여러 개라 첫 엑셀만 불러옵니다: ', 'Several files dropped — importing the first Excel only: ') + f.name, 'info');
+            }
+            window.pageExcelImport(id, f);
+        });
+    };
+
     function _pxRenderButtons() {
         (window.PAGE_EXCEL_SPECS || []).forEach(function (spec) {
             // 자리를 찾는다 — 기본은 그 탭의 인쇄 버튼, 인쇄 버튼이 없는 페이지는 anchorSelector.
@@ -787,9 +820,9 @@
             var hasUndo = !!window._pageExcelUndo[spec.id];
             holder.innerHTML =
                 (spec.exportOnly ? '' :
-                    '<button onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'
-                  + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다',
-                            'Import an edited Excel file — replaces current content; you can undo right after'))
+                    '<button id="px-import-' + spec.id + '" onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'
+                  + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다.\n이 버튼 위로 엑셀 파일을 끌어다 놓아도 됩니다.',
+                            'Import an edited Excel file — replaces current content; you can undo right after.\nYou can also drop an Excel file onto this button.'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
                   + ' style="' + BTN + '">📥 ' + _t('엑셀 입력', 'Import') + '</button>' + SEP)
                 + '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
@@ -802,6 +835,8 @@
                   + '" onmouseover="this.style.background=\'#f5c2bd\';" onmouseout="this.style.background=\'#fbe4e2\';"'
                   + ' style="' + BTN + ' margin-right:4px; background:#fbe4e2; color:#b1432f;">↩ '
                   + _t('되돌리기', 'Undo') + '</button>' : '');
+            // innerHTML을 다시 쓸 때마다 버튼이 새로 만들어지므로, 그때마다 다시 묶어 준다.
+            if (!spec.exportOnly) _pxBindDrop(document.getElementById('px-import-' + spec.id), spec.id);
         });
     }
     window._pxRenderButtons = _pxRenderButtons;
