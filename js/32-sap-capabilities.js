@@ -712,7 +712,14 @@
         { id: 'notice',      title: '공지 등록',                                 kw: ['공지 등록', '공지 올려', '공지사항'], how: 'AI 문답 NOTICE_DRAFT → REGISTER_NOTICE' },
         { id: 'project_open',title: '다른 프로젝트 조회/열기',                    kw: ['다른 프로젝트', '프로젝트 열어', '프로젝트 전환'], how: 'AI 문답 질문 대상 선택 / OPEN_PROJECT_TO_EDIT' },
         { id: 'inbox',       title: '업무 보관함 → 프로젝트 배분(다중 선택)',      kw: ['보관함', '다른 프로젝트로 전송', '배분'], how: 'AI 업무 보관함 [다른 프로젝트로 전송]' },
-        { id: 'excel_save',  title: '조회 결과 엑셀 저장(C:\\SAP_DMS\\SAP조회)',   kw: ['엑셀로 저장', '엑셀 출력', '엑셀로 출력'], how: 'AI 문답 SAP 엑셀 내보내기(로컬 명령)' }
+        { id: 'excel_save',  title: '조회 결과 엑셀 저장(C:\\SAP_DMS\\SAP조회)',   kw: ['엑셀로 저장', '엑셀 출력', '엑셀로 출력'], how: 'AI 문답 SAP 엑셀 내보내기(로컬 명령)' },
+        // 🔑 [2026-10-20] 그룹웨어 로그인도 앱 기능이다 — 이게 없어서 "그룹웨어 로그인"이
+        //    미구현 기능 요청으로 잡히고, AI는 "IT 지원 부서에 문의하세요"라고 답했다.
+        //    상태 조회 자체는 QA_TOOLS의 gw_status 도구가 한다(js/40).
+        { id: 'gw_login',    title: '그룹웨어 로그인(🔑 등록 → 명령 시 1회 자동 로그인)',
+          kw: ['그룹웨어 로그인', '그룹웨어로그인', '그룹웨어 접속', '그룹웨어 연결', '그룹웨어 세션',
+               '그룹웨어 로그아웃', '다우오피스 로그인'],
+          how: 'AI 문답 창 🔑에서 아이디·비밀번호 저장(DPAPI) → 그룹웨어 명령 시 _gwEnsureLogin이 1회 자동 로그인(실패해도 재시도 안 함). 상태 확인은 gw_status 도구.' }
     ];
     window._qaMatchAppCapabilities = function (text) {
         var q = String(text || '').toLowerCase(), out = [];
