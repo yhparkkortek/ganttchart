@@ -275,7 +275,7 @@
                 "admin-pw-change-hint": "삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다",
                 "new-user-setup-hint": "새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다.",
                 "kb-shortcuts-hint": "키보드 단축키 목록",
-                "open-other-project-hint": "클릭하면 다른 프로젝트를 열 수 있습니다 (저장 안 한 변경사항이 있으면 먼저 물어봅니다)",
+                "save-project-hint": "클릭하면 현재 프로젝트를 구글 드라이브에 저장합니다",
                 "lang-toggle-hint": "한글/영어 전환",
                 "sidebar-toggle-hint": "메뉴 접기/펴기",
                 "select-all": "전체 선택/해제",
@@ -565,7 +565,7 @@
                 "admin-pw-change-hint": "Changes the admin password used for delete/security actions",
                 "new-user-setup-hint": "2 steps to add a new user — ① Add on the Google Cloud 'Audience (test users)' page → ② Grant project folder sharing permission on Google Drive. Clicking opens both pages in new tabs.",
                 "kb-shortcuts-hint": "Keyboard shortcuts reference",
-                "open-other-project-hint": "Click to open another project (you'll be asked first if there are unsaved changes)",
+                "save-project-hint": "Click to save this project to Google Drive",
                 "lang-toggle-hint": "Switch Korean/English",
                 "sidebar-toggle-hint": "Collapse/expand menu",
                 "select-all": "Select/deselect all",
@@ -688,6 +688,10 @@
             const key = el.dataset.i18nValue;
             if (i18nValueMap[key] !== undefined) el.value = i18nValueMap[key];
         });
+
+        // 💾 상단바 "프로젝트 저장 : 파일명" 칩 — 글자가 _t로 조립돼 있어 여기서 다시 그려야 한다.
+        //    (멱등 함수라 그냥 한 번 더 부르면 된다 — docs/ui-conventions.md의 "재렌더 누락" 항목)
+        if (window.updateCurrentFileLabel) window.updateCurrentFileLabel();
 
         // 필터 라벨 갱신
         document.querySelectorAll('.filter-label').forEach(el => {

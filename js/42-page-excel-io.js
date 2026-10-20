@@ -49,6 +49,18 @@
         return undefined;
     };
 
+    // 🔽 머리글 줄에 **자동 필터**를 건다(사용자 요청 2026-10-20) — 엑셀에서 열자마자
+    //   TYPE·상태 같은 열로 걸러 볼 수 있다. 키/값 블록(개요처럼 두 칸짜리)은 걸 이유가 없고,
+    //   데이터가 한 줄도 없으면 필터 버튼만 떠서 거추장스러우니 둘 다 건너뛴다.
+    //   블록에 `filter: false`를 적으면 그 시트만 뺄 수 있다.
+    var _setAutoFilter = function (ws, b) {
+        if (!ws || !ws['!ref'] || !window.XLSX) return;
+        if (b && (b.filter === false || b.kind === 'kv')) return;
+        var rg = window.XLSX.utils.decode_range(ws['!ref']);
+        if (rg.e.r <= rg.s.r) return;
+        ws['!autofilter'] = { ref: window.XLSX.utils.encode_range(rg) };
+    };
+
     // ↩ 자동 줄바꿈 끄기. 공용 스타일러(js/04k)는 값에 줄바꿈이 있으면 `wrapText`를 켜는데,
     //   그러면 긴 상세내용 한 칸 때문에 행 높이가 늘어나 표가 들쭉날쭉해진다(사용자 요청 2026-10-20).
     //   ⚠️ 스타일러를 고치지 않고 **여기서만** 끈다 — 그 함수는 BOM·프로젝트 출력도 같이 쓴다.
@@ -626,6 +638,7 @@
                 ws = window.XLSX.utils.aoa_to_sheet(aoa);
                 _centerCols(ws, aoa, b.center);
             }
+            _setAutoFilter(ws, b);
             window.XLSX.utils.book_append_sheet(wb, ws, _nm(b.sheet).slice(0, 31));
         });
         // 🎨 [2026-10-20] BOM 출력과 **같은 모양**으로 — 머리글/제브라/테두리/열너비.

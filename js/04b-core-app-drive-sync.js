@@ -542,12 +542,17 @@
     }
 
     // 💡 상단바 현재 프로젝트 파일명 표시 갱신 — 로드된 파일이 없으면 아예 숨김
+    // 💾 [2026-10-20] "💾 프로젝트 저장 : <파일명>" 형태. 이 칩은 이제 **저장 버튼**이라
+    //    무엇을 하는 버튼인지 글자로 보여준다(예전엔 📄 + 파일명뿐이라 눌러야 알 수 있었다).
+    //    확장자(.json)는 떼고 파일명만 — 사람이 쓰는 이름은 거기까지다.
+    //    ⚠️ 언어가 바뀌면 다시 불러야 한다 — toggleLang() 끝에서 호출한다(js/04j).
     window.updateCurrentFileLabel = function() {
         const el  = document.getElementById('current-project-filename');
         const sep = document.getElementById('current-file-sep');
         if (!el) return;
         if (window.currentDriveFileName) {
-            el.textContent = '📄 ' + window.currentDriveFileName;
+            const bare = String(window.currentDriveFileName).replace(/\.json$/i, '');
+            el.textContent = '💾 ' + window._t('프로젝트 저장', 'Save Project') + ' : ' + bare;
             el.style.display = 'inline-flex';
             if (sep) sep.style.display = 'block';
         } else {
