@@ -149,29 +149,6 @@
         _MC_COLS.forEach(function (col, c) { put(R, c, { t: 's', v: col.h }); });
         R++;
 
-        // 데이터 행 — 숫자는 **숫자 타입으로** 넣어야 아래 SUM이 동작한다.
-        // ⚠️⚠️ [2026-10-20 3차] 값이 없는 칸도 **빈 셀을 반드시 만든다.** 공용 스타일러는
-        //   `if (!cell) continue`로 **없는 셀을 건너뛰므로**, 안 만들면 그 칸만 제브라도
-        //   테두리도 빠져 표가 중간부터 끊긴 것처럼 보인다(사용자 첨부에서 G열부터 그랬다).
-        var dataStart = R, typeRuns = [], cur = null;
-        rows.forEach(function (r, i) {
-            var tp = String(r.type || '').trim();
-            if (!cur || cur.type !== tp) { cur = { type: tp, from: R, to: R }; typeRuns.push(cur); }
-            cur.to = R;
-            _MC_COLS.forEach(function (col, c) {
-                if (!col.k) { put(R, c, { t: 'n', v: i + 1 }); return; }
-                var v = r[col.k];
-                if (col.num) {
-                    var n = _mcNum(v);
-                    put(R, c, n !== null ? { t: 'n', v: n, z: _MC_MONEY_FMT } : { t: 's', v: '' });
-                } else {
-                    put(R, c, { t: 's', v: (v == null ? '' : String(v)) });
-                }
-            });
-            R++;
-        });
-        var dataEnd = R - 1;
-
         // 계산 행 스타일 — 굵게. `font`만 지정하면 공용 스타일러(js/04k)의 제브라·테두리는
         // 그대로 얹히고 글꼴만 이쪽이 이긴다(`Object.assign(base, cell.s)`).
         var BOLD = { font: { name: '맑은 고딕', sz: 10, bold: true, color: { rgb: '1F2937' } } };
@@ -194,14 +171,44 @@
             });
             R++;
         };
-        // TYPE별 SUBTOTAL — 화면과 같은 기준이다(js/22g는 currentType이 바뀔 때마다 넣는다).
+
+        // 데이터 행 — 숫자는 **숫자 타입으로** 넣어야 아래 SUM이 동작한다.
+        // ⚠️⚠️ [2026-10-20 3차] 값이 없는 칸도 **빈 셀을 반드시 만든다.** 공용 스타일러는
+        //   `if (!cell) continue`로 **없는 셀을 건너뛰므로**, 안 만들면 그 칸만 제브라도
+        //   테두리도 빠져 표가 중간부터 끊긴 것처럼 보인다(사용자 첨부에서 G열부터 그랬다).
+        // 📍 [2026-10-20 4차] SUBTOTAL은 **그 TYPE 마지막 행 바로 다음 줄**에 끼워 넣는다 —
+        //   화면(js/22g)이 currentType이 바뀔 때 그 자리에 한 줄 추가하는 것과 같은 모양.
+        //   맨 아래로 몰아 두면 엑셀에서 어느 구간의 합인지 짚어 보기 어렵다.
         var subtotalRows = [];
-        typeRuns.forEach(function (run) {
+        var runFrom = -1, curType = null, no = 0;
+        var flushSubtotal = function () {
+            if (runFrom < 0) return;
+            var from = runFrom, to = R - 1;
             subtotalRows.push(R);
-            calcRow((run.type || '') + ' SUBTOTAL', function (c) {
-                var L = _colLetter(c); return 'SUM(' + L + (run.from + 1) + ':' + L + (run.to + 1) + ')';
+            calcRow((curType || '') + ' SUBTOTAL', function (c) {
+                var L = _colLetter(c); return 'SUM(' + L + (from + 1) + ':' + L + (to + 1) + ')';
             }, { s: SUBTOTAL_S });
+            runFrom = -1;
+        };
+        rows.forEach(function (r) {
+            var tp = String(r.type || '').trim();
+            if (runFrom < 0) { curType = tp; runFrom = R; }
+            else if (tp !== curType) { flushSubtotal(); curType = tp; runFrom = R; }
+            no++;
+            _MC_COLS.forEach(function (col, c) {
+                if (!col.k) { put(R, c, { t: 'n', v: no }); return; }
+                var v = r[col.k];
+                if (col.num) {
+                    var n = _mcNum(v);
+                    put(R, c, n !== null ? { t: 'n', v: n, z: _MC_MONEY_FMT } : { t: 's', v: '' });
+                } else {
+                    put(R, c, { t: 's', v: (v == null ? '' : String(v)) });
+                }
+            });
+            R++;
         });
+        flushSubtotal();          // 마지막 TYPE의 SUBTOTAL — 빼먹으면 TOTAL에서 한 구간이 빠진다
+
         var totalRow = R;
         // 🧮 TOTAL은 **SUBTOTAL들을 더한다**(사용자 견본과 같은 방식: =G10+G14+G20+…).
         //    데이터 행 전체를 SUM해도 값은 같지만, 이렇게 두면 엑셀에서 어느 SUBTOTAL이
