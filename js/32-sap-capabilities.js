@@ -582,16 +582,9 @@
     //      그걸 뜻하는 말은 **일부러 넣지 않는다**(gw_board_list / gw_board_post / 검색).
     //   ③ **공유 단어는 한정사 + notKw로 막을 것.** 조회 어휘는 발송·등록 요청의 앞부분과
     //      자주 겹친다. 긍정 어휘만으로는 못 막는다(실측 사고 — `_gwCapKwHit` 주석 참고).
-    //   ④ **알려진 한계 — 조사(에/에서/을)나 중간 단어가 끼면 못 잡는다.** `_gwCapKwHit`은
-    //      부분문자열 비교라 어휘의 토큰이 **붙어 있어야** 한다. 2026-10-20 실측:
-    //        "게시판 새 글 있어?" ✅ / "게시판**에** 새 글 있어?" ❌
-    //        "메일함 열어줘"      ✅ / "메일함**을** 열어줘"      ❌
-    //        "기안 등록해줘"      ✅ / "기안**을** 등록해줘"      ❌
-    //      **조사 변형을 kw에 쌓지 말 것** — 규칙 ①과 같은 이유로 끝이 없다. 못 잡힌 질문은
-    //      도구 루프(js/40)가 AI로 의도를 읽어 처리하므로 조용히 실패하지는 않는다.
-    //      근본 해결은 매처를 "토큰 순서 + 짧은 간격 허용"으로 바꾸는 것인데, 그러면
-    //      gw_approval_draft 판정까지 느슨해진다(모호한 "승인원" 요청을 되묻지 않고
-    //      그룹웨어로 끌어오던 실사용 사고가 있다) — 바꾸려면 그 영향부터 따질 것.
+    //   ④ **조사 변형도 적지 말 것** — `_gwCapKwHit`이 토큰 사이 2자까지 벌어져도 잡으므로
+    //      '기안 등록' 하나로 "기안**을** 등록해줘", "게시판**에서** 최근 글"까지 걸린다.
+    //      규칙 ①과 같은 이유다(변형 흡수는 코드가 한다). 자세한 건 `_qaKwSeqHit` 주석.
     window.GW_CAPABILITIES = window.GW_CAPABILITIES || [
         { id: 'gw_approval_draft', title: '전자결재 기안 임시저장', titleEn: 'Approval draft (temp save)',
           mode: 'write', verified: 'live',
@@ -631,7 +624,11 @@
           //    ⚠️ 맨 '공지'·'공지사항'은 넣지 않는다 — APP_CAPABILITIES의 notice(공지 **등록**)와
           //       겹친다. 그래도 '사내 공지'가 "사내 공지 등록해줘"를 가로채던 걸 실측했으므로
           //       쓰기 동사를 notKw로 막는다. 이 기능은 읽기 전용이라 막는 게 맞다.
-          notKw: ['등록', '올려', '게시해', '작성', '삭제', '댓글'],
+          //    ⚠️ '목록'·'검색'·'찾아'는 **도구 루프 몫**이다(gw_board_list / gw_board_post /
+          //       키워드 검색). 04h는 기간 다이제스트만 하므로 그 질문을 가져가면 답이 엉뚱해진다.
+          //       "게시판 글 검색해줘"는 간격 매칭 전에도 이미 04h가 가져가고 있었고(토큰이
+          //       붙어 있어서), "게시판 목록 보여줘"는 간격 매칭으로 새로 걸렸다 — 둘 다 여기서 막는다.
+          notKw: ['등록', '올려', '게시해', '작성', '삭제', '댓글', '목록', '검색', '찾아'],
           needs: '기간(선택: 오늘/어제/이번주/지난주/최근 N일)',
           ex: '그룹웨어 게시판 지난주 게시물 요약해줘' },
         // 📧 [2026-10-19 신규] 그룹웨어 **웹메일** 조회/요약 — 앱의 메일 서버 탭(POP3/IMAP)과 다른 경로다.
@@ -742,16 +739,47 @@
     //    kw가 문장의 **앞부분**만 맞아도 걸리기 때문에 그걸로는 막히지 않는다.
     //    → 긍정 어휘(kw)만으로는 부족하고, **아니라는 신호(notKw)도 데이터로** 있어야 한다.
     //    판정 순서: notKw가 하나라도 걸리면 그 즉시 false(kw는 보지도 않는다).
+    // ⚠️ [2026-10-20] 매칭을 **토큰 순서 + 짧은 간격**으로 바꿨다. 왜 —
+    //    부분문자열 비교는 어휘의 토큰이 붙어 있어야만 걸려서, 한국어 조사가 끼면 놓쳤다:
+    //      "게시판 새 글 있어?" ✅ / "게시판**에** 새 글 있어?" ❌
+    //      "메일함 열어줘"      ✅ / "메일함**을** 열어줘"      ❌
+    //      "기안 등록해줘"      ✅ / "기안**을** 등록해줘"      ❌
+    //    조사 변형을 kw에 쌓는 건 띄어쓰기 변형과 같은 이유로 끝이 없다 — 코드가 흡수한다.
+    //
+    //    규칙: 공백 제거본에서 kw의 토큰이 **순서대로** 나타나고, 이웃 토큰 사이 간격이
+    //    GAP 이내여야 한다. 2자면 조사 '에/을/를/의/로/가/은/는'(1자)과 '에서/으로/에는'(2자)
+    //    을 흡수하고, 그보다 벌어진 건 **다른 이야기**로 본다.
+    //    ⚠️⚠️ **GAP을 키우면 전혀 다른 질문이 걸린다.** "게시판 목록에서 글 찾아줘"처럼
+    //      도구 루프(js/40)가 더 잘하는 질문을 04h가 빼앗고, 모호한 "승인원" 요청을 되묻지
+    //      않고 그룹웨어 기안으로 끌어오던 실사용 사고가 재발할 수 있다. 늘리기 전에
+    //      반드시 그 두 경계를 다시 재 볼 것(2026-10-20에 2자로 실증해 정했다).
+    var GW_KW_GAP = 2;
+
+    // 한 어휘가 문장에 걸리는지. 다른 매처에서도 쓸 수 있게 노출한다(검증·재사용).
+    window._qaKwSeqHit = function (text, kw, gap) {
+        var q = String(text || '').toLowerCase().replace(/\s+/g, '');
+        var toks = String(kw || '').toLowerCase().split(/\s+/).filter(function (t) { return t; });
+        if (!toks.length) return false;
+        if (toks.length === 1) return q.indexOf(toks[0]) >= 0;   // 한 토큰이면 간격 개념이 없다
+        var g = (typeof gap === 'number') ? gap : GW_KW_GAP;
+        // 첫 토큰의 **모든 출현**을 앵커로 시도한다 — 앞쪽 출현에서 실패해도 뒤쪽에서 성립할 수 있다.
+        for (var s = q.indexOf(toks[0]); s >= 0; s = q.indexOf(toks[0], s + 1)) {
+            var from = s + toks[0].length, ok = true;
+            for (var i = 1; i < toks.length; i++) {
+                var at = q.indexOf(toks[i], from);
+                if (at < 0 || at - from > g) { ok = false; break; }
+                from = at + toks[i].length;
+            }
+            if (ok) return true;
+        }
+        return false;
+    };
+
     window._gwCapKwHit = function (text, capId) {
-        var q = String(text || '').toLowerCase();
-        var qFlat = q.replace(/\s+/g, '');
         var cap = (window.GW_CAPABILITIES || []).find(function (c) { return c.id === capId; });
         if (!cap) return false;
-        var hit = function (k) {
-            var kk = String(k).toLowerCase();
-            return q.indexOf(kk) >= 0 || qFlat.indexOf(kk.replace(/\s+/g, '')) >= 0;
-        };
-        if ((cap.notKw || []).some(hit)) return false;
+        var hit = function (k) { return window._qaKwSeqHit(text, k); };
+        if ((cap.notKw || []).some(hit)) return false;   // notKw도 같은 규칙(걸리면 더 안전한 쪽)
         return cap.kw.some(hit);
     };
 
