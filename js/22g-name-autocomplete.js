@@ -647,8 +647,8 @@ window.populateTabData = function() {
             const bsChunks = [];
             td.briefSpec.forEach(function(r) {
                 const modelA = r.modelA !== undefined ? r.modelA : (r.desc || ''); // 구버전 desc 호환
-                // 💡 MC Table과 동일하게: Model A/B/C, Note가 모두 비어있으면 행 숨김 처리
-                const isRowEmpty = !modelA && !r.modelB && !r.modelC && !r.note;
+                // 💡 MC Table과 동일하게: 값·Note가 모두 비어있으면 행 숨김 처리 (열은 제품구분자 1개뿐 — js/43)
+                const isRowEmpty = !modelA && !r.note;
                 const keepHidden = isRowEmpty && !(window._bmExpanded && window._bmExpanded.bs);
                 const isVisible = !keepHidden;
                 const zebraClass = isVisible ? (bsZebraIdx % 2 === 0 ? 'mc-zebra-a' : 'mc-zebra-b') : '';
@@ -658,8 +658,6 @@ window.populateTabData = function() {
                     + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
                     + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="modelA" value="' + _escTabVal(modelA) + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="modelB" value="' + _escTabVal(r.modelB) + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="modelC" value="' + _escTabVal(r.modelC) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>');
             });
             tbody.innerHTML = bsChunks.join('');

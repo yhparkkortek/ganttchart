@@ -117,8 +117,6 @@ const BM_CONF = {
                 + '<td><input type="text" data-field="type"></td>'
                 + '<td><input type="text" data-field="sub"></td>'
                 + '<td><input type="text" class="u-input" data-field="modelA"></td>'
-                + '<td><input type="text" class="u-input" data-field="modelB"></td>'
-                + '<td><input type="text" class="u-input" data-field="modelC"></td>'
                 + '<td><input type="text" class="u-input" data-field="note"></td>';
         }
     },
@@ -318,28 +316,17 @@ try {
 })();
 
 // "접기" 상태일 때 Model A/B/C 중 전체 데이터가 비어있는 열을 통째로 숨김 (Note 열은 항상 표시)
+// 🧩 [2026-10-21] 값 열이 Model A/B/C 셋에서 **제품구분자 하나**로 줄었다(js/43).
+//    예전엔 "값이 없는 모델 열은 접어서 숨긴다"가 이 함수의 일이었는데, 열이 하나뿐이니
+//    숨길 게 없다 — 오히려 그대로 두면 **빈 모델의 값 칸이 통째로 사라져** 입력을 못 한다.
+//    호출하는 곳이 세 군데(22a/22g/04c) 있어 함수는 남겨 두고 내용만 비운다.
 window.bsRefreshColumnVisibility = function() {
     const tbody = document.getElementById('briefspec-body');
     if (!tbody) return;
-    const collapsed = !(window._bmExpanded && window._bmExpanded.bs);
-    let visibleCount = 0;
-    ['modelA', 'modelB', 'modelC'].forEach(function(field) {
-        let hasData = false;
-        const inputs = tbody.querySelectorAll('input[data-field="' + field + '"]');
-        Array.prototype.forEach.call(inputs, function(inp) {
-            if (inp.value && inp.value.trim() !== '') hasData = true;
-        });
-        const hide = collapsed && !hasData;
-        if (!hide) visibleCount++;
-        const th = document.querySelector('#tab-briefspec thead th[data-col="' + field + '"]');
-        if (th) th.style.display = hide ? 'none' : '';
-        Array.prototype.forEach.call(inputs, function(inp) {
-            const td = inp.closest('td');
-            if (td) td.style.display = hide ? 'none' : '';
-        });
+    tbody.querySelectorAll('input[data-field="modelA"]').forEach(function(inp) {
+        const td = inp.closest('td');
+        if (td) td.style.display = '';      // 옛 버전이 숨겨 둔 게 남아 있으면 되살린다
     });
-    const descTh = document.getElementById('bs-desc-th');
-    if (descTh) descTh.colSpan = visibleCount || 1;
 };
 (function() {
     const tbody = document.getElementById('briefspec-body');

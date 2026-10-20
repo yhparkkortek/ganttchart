@@ -141,12 +141,18 @@ function _parseBriefSpecSheetFromWorkbook(workbook) {
         if (!r || r.length === 0) continue;
         const type = String(r[1] || '').trim();
         const sub = String(r[2] || '').trim();
-        const modelA = String(r[3] || '').trim();
-        const modelB = String(r[4] || '').trim();
-        const modelC = String(r[5] || '').trim();
-        const note = String(r[6] || '').trim();
-        if (!type && !sub && !modelA && !modelB && !modelC && !note) continue;
-        rows.push({ type: type, sub: sub, modelA: modelA, modelB: modelB, modelC: modelC, note: note });
+        // 🧩 [2026-10-21] 값 열이 3개(Model A/B/C) → 1개(제품구분자)로 줄었다(js/43).
+        //    ⚠️ **옛 파일도 계속 읽어야 한다** — 7열이면 3~5열이 값, 6열이 Note였고,
+        //       새 파일은 3열이 값, 4열이 Note다. 머리글 수로 어느 쪽인지 가른다.
+        //       옛 파일의 B/C 값은 버리지 않고 비어 있는 A 칸을 메우는 데 쓴다
+        //       (한 열만 남으므로, 셋 중 값이 있는 첫 칸이 그 행의 값이다).
+        const wide = (json[0] || []).length >= 7;
+        const modelA = wide
+            ? (String(r[3] || '').trim() || String(r[4] || '').trim() || String(r[5] || '').trim())
+            : String(r[3] || '').trim();
+        const note = String((wide ? r[6] : r[4]) || '').trim();
+        if (!type && !sub && !modelA && !note) continue;
+        rows.push({ type: type, sub: sub, modelA: modelA, note: note });
     }
     if (rows.length === 0) return false;
     window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };

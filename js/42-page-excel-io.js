@@ -554,7 +554,7 @@
                     //    그래서 mode를 'fill'로 둔다 — AI는 **값 칸만** 채우고, 못 찾은 항목은 빈칸으로
                     //    남긴다. 문서에서 새로 찾은 항목만 행으로 추가한다.
                     mode: 'fill',
-                    valueCols: ['modelA', 'modelB', 'modelC'],
+                    valueCols: ['modelA'],   // 🧩 [2026-10-21] 값 열은 지금 제품구분자 하나뿐(js/43)
                     // 📌 Power estimation 묶음은 **항상 맨 아래**다(사용자 요청) — 새 행은 그 위에 끼운다.
                     tailFrom: function (rows) {
                         for (var i = 0; i < rows.length; i++) {
@@ -562,8 +562,8 @@
                         }
                         return rows.length;
                     },
-                    fields: ['type', 'sub', 'modelA', 'modelB', 'modelC', 'note'],
-                    labels: { type: 'Type', sub: 'Description', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' },
+                    fields: ['type', 'sub', 'modelA', 'note'],
+                    labels: { type: 'Type', sub: 'Description', modelA: 'Value', note: 'Note' },
                     prompt: function (text, fileName, tpl) {
                         return '너는 고객이 보낸 사양서/RFP를 읽고, **이미 있는 표의 빈칸만 채우는** 일을 한다.\n'
                              + '표의 항목 목록(TYPE/TYPE2)은 회사 표준 서식이라 **절대 바꾸지 않는다.**\n\n'
@@ -929,7 +929,7 @@
         var sel = '<label style="font-size:12px; color:#495057;">' + _esc(_t('어느 열에 넣을까요: ', 'Target column: '))
             + '<select id="px-ai-col" style="font-size:12px; padding:2px 4px;">'
             + cols.map(function (k) {
-                var nm = (window.tabData && window.tabData.bsColLabels && window.tabData.bsColLabels[k]) || ai.labels[k] || k;
+                var nm = (window.bsActiveUnit && window.bsActiveUnit()) || ai.labels[k] || k;
                 return '<option value="' + k + '"' + (k === pick ? ' selected' : '') + '>' + _esc(nm) + '</option>';
             }).join('') + '</select></label>';
 
@@ -990,7 +990,7 @@
             if (F.extras.length) {
                 var at = (typeof ai.tailFrom === 'function') ? ai.tailFrom(newRows) : newRows.length;
                 var made = F.extras.map(function (e) {
-                    var o = { type: e.type, sub: e.sub, modelA: '', modelB: '', modelC: '', note: e.note || '' };
+                    var o = { type: e.type, sub: e.sub, modelA: '', note: e.note || '' };
                     o[col] = e.value;
                     return o;
                 });
