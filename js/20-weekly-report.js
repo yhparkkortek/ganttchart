@@ -904,7 +904,7 @@ ${issRaw}
 
             // ── 우측: 개발 Concept ────────────────────────────────────────
             const bsRows   = ((window.tabData || {}).briefSpec || []);
-            const getBsVal = (kw) => { const r = bsRows.find(r => r.type && r.type.toLowerCase().replace(/\s/g,'').includes(kw.toLowerCase().replace(/\s/g,''))); return r ? (r.modelA||r.modelB||r.modelC||'') : ''; };
+            const getBsVal = (kw) => { const r = bsRows.find(r => r.type && r.type.toLowerCase().replace(/\s/g,'').includes(kw.toLowerCase().replace(/\s/g,''))); return r ? (r.modelA||'') : ''; };
             const rOpt = { fontFace: 'Malgun Gothic', valign: 'top' };
             let rY = CY + PAD;   // 박스 상단 패딩
 
@@ -928,7 +928,7 @@ ${issRaw}
             ];
             const specLines = SPEC_TYPES.map(key => {
                 const row = bsRows.find(r => r.type && r.type.trim().toLowerCase() === key.toLowerCase());
-                const val = row ? (row.modelA || row.modelB || row.modelC || '') : '';
+                const val = row ? (row.modelA || '') : '';
                 return `- ${key}${val ? ' : ' + val : ''}`;
             });
             const specTxt = specLines.join('\n');

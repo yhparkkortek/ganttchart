@@ -677,6 +677,8 @@
         window._aiCsRefMap = [];
         const briefSpecLines = [];
         let briefSpecOmittedCount = 0;
+        // 🧩 [2026-10-21] 값 열이 Model A/B/C 셋에서 제품구분자 하나로 줄었다(js/43) — 지금 모델 이름으로 적는다.
+        const _bsUnitName = (window.bsActiveUnit && window.bsActiveUnit()) || '값';
         document.querySelectorAll('#briefspec-body tr').forEach(function(tr) {
             if (tr.style.display === 'none') return;
             const noEl = tr.querySelector('.bm-no');
@@ -684,9 +686,9 @@
             if (!no) return;
             if (briefSpecLines.length >= MAX_TABLE_ROWS) { briefSpecOmittedCount++; return; }
             const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
-            const type = g('type'), sub = g('sub'), modelA = g('modelA'), modelB = g('modelB'), modelC = g('modelC'), note = g('note');
+            const type = g('type'), sub = g('sub'), modelA = g('modelA'), note = g('note');
             window._aiCsRefMap[no] = true;
-            briefSpecLines.push(`- #CS${no} [${type || '-'}${sub ? '/' + sub : ''}] A:${modelA || '-'} | B:${modelB || '-'} | C:${modelC || '-'}` + (note ? ` | 비고:${note}` : ''));
+            briefSpecLines.push(`- #CS${no} [${type || '-'}${sub ? '/' + sub : ''}] ${_bsUnitName}:${modelA || '-'}` + (note ? ` | 비고:${note}` : ''));
         });
         const briefSpecOmitted = briefSpecOmittedCount ? `\n...(그 외 ${briefSpecOmittedCount}건 생략됨)` : '';
 
@@ -932,7 +934,7 @@
 🔎 추론 허용 규칙: 다만 사용자가 "추론해줘/추정해줘/네 생각은/일반적으로 어때/충족할 수 있어?"처럼 판단이나 추론을 명시적으로 요청하면, 데이터에 없는 내용이라도 당신이 아는 일반적인 전자/디스플레이/기구 엔지니어링 지식을 근거로 답변하세요 — 절대 "데이터에서 확인되지 않습니다"로 끝내지 마세요. 이때는 답변 앞에 "🔎 AI 추론(데이터 아님, 일반 지식 기반 추정)"이라고 표시를 붙여서 위 [데이터] 기반 사실과 명확히 구분하고, 추론에 사용한 전제·근거와 불확실성(예: 정확한 수치는 부품 데이터시트 확인 필요)도 함께 설명하세요. 지어낸 수치를 확정된 데이터처럼 단정하지 말고 "약 ~로 알려져 있음/일반적으로 ~하는 경향" 식으로 추정임을 드러내세요. 간결하고 실무적인 한국어로 답변하세요.
 
 🔧 "SPEC(스펙)" 질문 구분 규칙 — 이 프로젝트엔 성격이 다른 두 SPEC 데이터가 있으니 헷갈리지 마세요:
-- [Customer SPEC] = 고객사에 "제안"하는 완제품 모델 비교(Model A/B/C 등, TYPE별 비교표). "고객 스펙/제안 스펙/Model A랑 B 차이" 같은 질문은 여기서 찾으세요.
+- [Customer SPEC] = 고객사에 "제안"하는 완제품 사양(TYPE별 표). 제품구분자(MVD/TVD/TPR 등)마다 따로 있고, 아래 표는 **지금 보고 있는 모델** 것입니다.
 - [Elec Parts SPEC] = 실제로 이 제품에 "사용"하는 부품/원자재(패널·컨버터 보드·AD 보드 등)의 상세 스펙(해상도/전압/전류/커넥터/브랜드 등). "이 부품 SPEC이 뭐야/패널 해상도/컨버터 보드 사양/원자재 스펙" 같은 질문은 여기서 찾으세요 — [PANEL] 표시가 붙은 항목이 실사용 패널 부품 자체의 스펙입니다(고객 제안용 완제품 비교인 [Customer SPEC]의 패널 항목과 헷갈리지 마세요).
 - 질문에 어느 쪽인지 애매하면(예: 그냥 "SPEC 알려줘"), 두 섹션 모두에서 관련 내용을 찾아보고 어느 항목을 말하는 것인지 되물어보거나, 둘 다 있으면 구분해서 각각 답하세요.
 "오늘/이번 주/이번 달/내일" 등 상대적인 날짜 표현이 나오면, 반드시 아래 [오늘 날짜]를 기준으로 [업무 목록]의 "기간:" 값(시작일~계획일)과 비교해서 판단하세요 (예: 오늘 업무 = 기간 구간에 오늘 날짜가 포함되거나 오늘이 마감인 업무).

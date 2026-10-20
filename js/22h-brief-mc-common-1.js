@@ -315,7 +315,7 @@ try {
     if (bsBtn) bsBtn.textContent = window._bmExpanded.bs ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
 })();
 
-// "접기" 상태일 때 Model A/B/C 중 전체 데이터가 비어있는 열을 통째로 숨김 (Note 열은 항상 표시)
+// (옛 설명) "접기" 상태일 때 값이 빈 모델 열을 숨기던 함수.
 // 🧩 [2026-10-21] 값 열이 Model A/B/C 셋에서 **제품구분자 하나**로 줄었다(js/43).
 //    예전엔 "값이 없는 모델 열은 접어서 숨긴다"가 이 함수의 일이었는데, 열이 하나뿐이니
 //    숨길 게 없다 — 오히려 그대로 두면 **빈 모델의 값 칸이 통째로 사라져** 입력을 못 한다.
@@ -333,49 +333,26 @@ window.bsRefreshColumnVisibility = function() {
     if (tbody) {
         tbody.addEventListener('input', function(e) {
             const f = e.target && e.target.dataset && e.target.dataset.field;
-            if (f === 'modelA' || f === 'modelB' || f === 'modelC') {
+            if (f === 'modelA') {
                 window.bsRefreshColumnVisibility();
             }
         });
     }
 })();
 
-// 💡 [신규] Customer SPEC "Model A/B/C" 헤더를 프로젝트마다 실제 쓰는 이름(예: MVD/TVD/TPR)으로
-//    바꿀 수 있게 함 — 기본 영문 라벨이 고정 텍스트였는데, 실제로는 프로젝트/고객사마다 이 3개 열이
-//    가리키는 대상이 다르다는 제보. tabData.bsColLabels에 커스텀 이름을 저장하고(없으면 기본값
-//    Model A/B/C), 프로젝트 저장/불러오기에 자동으로 함께 실림(다른 tabData.* 필드와 동일).
-window.BS_COL_DEFAULT_LABEL = { modelA: 'Model A', modelB: 'Model B', modelC: 'Model C' };
+// 🧩 [2026-10-21] "Model A/B/C" 라는 이름은 **없앴다**(사용자 확정) — 값 열은 제품구분자 하나뿐이고,
+//    지금 어느 모델인지는 헤더의 전환 바(#bs-unit-bar, js/43)가 보여 준다. 옛 프로젝트의 열 이름
+//    (tabData.bsColLabels)은 이전할 때 **모델 이름으로 쓰이고 지워진다**(bsMigrateFromModelCols).
+//    이 함수는 수정이력 라벨에서 아직 부르므로 남겨 두되, 지금 모델 이름을 돌려준다.
 window.bsColLabel = function(field) {
-    const custom = window.tabData && window.tabData.bsColLabels && window.tabData.bsColLabels[field];
-    return (custom && String(custom).trim()) ? String(custom).trim() : (window.BS_COL_DEFAULT_LABEL[field] || field);
+    if (field === 'modelA') return (window.bsActiveUnit && window.bsActiveUnit()) || 'Description';
+    return field;
 };
 
-// 저장된 커스텀 라벨을 헤더 입력칸에 반영 — populateTabData(22g)가 프로젝트 로드마다 호출
-window.bsApplyColLabels = function() {
-    Object.keys(window.BS_COL_DEFAULT_LABEL).forEach(function(field) {
-        const inp = document.querySelector('.bs-col-label-input[data-col-field="' + field + '"]');
-        if (inp) inp.value = window.bsColLabel(field);
-    });
-};
-
-(function() {
-    const thead = document.querySelector('#tab-briefspec thead');
-    if (!thead) return;
-    thead.addEventListener('change', function(e) {
-        const inp = e.target;
-        if (!inp.matches || !inp.matches('.bs-col-label-input')) return;
-        const field = inp.dataset.colField;
-        const val = inp.value.trim();
-        window.tabData = window.tabData || {};
-        window.tabData.bsColLabels = window.tabData.bsColLabels || {};
-        if (val && val !== window.BS_COL_DEFAULT_LABEL[field]) {
-            window.tabData.bsColLabels[field] = val;
-        } else {
-            delete window.tabData.bsColLabels[field]; // 기본값으로 되돌리면 굳이 저장할 필요 없음
-            inp.value = window.BS_COL_DEFAULT_LABEL[field];
-        }
-    });
-})();
+// 🧩 [2026-10-21] 헤더의 열 이름 입력칸(.bs-col-label-input)은 **없앴다** — 값 열이 제품구분자
+//    하나뿐이고, 지금 모델은 헤더 전환 바(#bs-unit-bar, js/43)가 보여 준다.
+//    호출하는 곳이 두 군데(22g/04c) 남아 있어 함수는 두되 하는 일은 없다.
+window.bsApplyColLabels = function() { /* 열 이름 입력칸이 더 이상 없다 */ };
 
 window.bsToggleHistoryBox = function() {
     const body = document.getElementById('bs-history-body');
@@ -405,7 +382,7 @@ window.bsRenderHistoryTable = function() {
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
     // 💡 modelA/B/C는 사용자가 헤더에서 이름을 바꿨을 수 있으므로(bsColLabel) 고정 문구 대신 지금 헤더에
     //    표시 중인 이름을 그대로 씀 — 과거 로그도 항상 "지금 부르는 이름"으로 보여준다(단순화, 아래 참고).
-    const fieldLabel = { type: 'TYPE', sub: 'TYPE2', modelA: window.bsColLabel('modelA'), modelB: window.bsColLabel('modelB'), modelC: window.bsColLabel('modelC'), note: 'Note' };
+    const fieldLabel = { type: 'TYPE', sub: 'TYPE2', modelA: window.bsColLabel('modelA'), note: 'Note' };
     const _hisEn = window._currentLang === 'en';
     let html = '<thead><tr>'
         + '<th style="padding:4px 8px;">' + (_hisEn ? 'Time' : '시간') + '</th>'
@@ -484,7 +461,7 @@ window.bsFlushChangeReasons = function() {
     if (!window._bsPendingChanges || !window._bsPendingChanges.length) return;
     const list = window._bsPendingChanges;
     window._bsPendingChanges = [];
-    const fieldLabelMap = { type: 'TYPE', sub: 'TYPE2', modelA: window.bsColLabel('modelA'), modelB: window.bsColLabel('modelB'), modelC: window.bsColLabel('modelC'), note: 'Note' };
+    const fieldLabelMap = { type: 'TYPE', sub: 'TYPE2', modelA: window.bsColLabel('modelA'), note: 'Note' };
     const label = list.length === 1
         ? `[${list[0].rowLabel}] ${fieldLabelMap[list[0].field] || list[0].field}`
         : `Customer SPEC ${list.length}건`;
@@ -875,7 +852,7 @@ window.mcRenderUnitTabs = function() {
     // 💡 이름 순환 버튼(클릭할 때마다 다음 제품구분자로 전환)은 그대로 항상 보이고, 이름변경/추가/삭제는
     // 연필 토글 뒤 펼침 패널로 이동.
     bar.innerHTML =
-        '<button class="mc-unit-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
+        '<button class="mc-unit-btn unit-cycle-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
         + ' style="padding:6px 10px; min-width:auto; border:1px solid #c9b8f0; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#ede9fb; color:#6741d9;">'
         + escapeHtml(cur) + '</button>'
         + '<button id="mc-unit-actions-toggle" onclick="window.mcToggleUnitActions()" title="' + (isOpen ? '접기' : '제품구분자 관리(이름변경/추가/삭제)') + '" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (isOpen ? '#e9ecef' : 'none') + '; color:#555; cursor:pointer; font-size:12px;">' + (isOpen ? '◀' : '▶') + '</button>'

@@ -2830,9 +2830,9 @@ ${docsJson}`;
 
         // [Customer SPEC] — tabData.briefSpec에 이미 저장된 값(collectTabData 참고), DOM 불필요.
         const MAX_OTHER_TABLE_ROWS = 100;
-        const csRows = (td.briefSpec || []).filter(function(r) { return r && (r.modelA || r.modelB || r.modelC || r.type); });
+        const csRows = (td.briefSpec || []).filter(function(r) { return r && (r.modelA || r.type); });
         const csLines = csRows.slice(0, MAX_OTHER_TABLE_ROWS).map(function(r) {
-            return `- [${r.type || '-'}${r.sub ? '/' + r.sub : ''}] A:${r.modelA || '-'} | B:${r.modelB || '-'} | C:${r.modelC || '-'}` + (r.note ? ` | 비고:${r.note}` : '');
+            return `- [${r.type || '-'}${r.sub ? '/' + r.sub : ''}] ${(window.bsActiveUnit && window.bsActiveUnit()) || '값'}:${r.modelA || '-'}` + (r.note ? ` | 비고:${r.note}` : '');
         });
         const csOmitted = csRows.length > MAX_OTHER_TABLE_ROWS ? `\n...(그 외 ${csRows.length - MAX_OTHER_TABLE_ROWS}건 생략됨)` : '';
 

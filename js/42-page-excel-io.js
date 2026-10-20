@@ -807,7 +807,7 @@
 
         var res;
         try {
-            res = await window._withTimeout(window.callAiBackend(key, prompt, { feature: '페이지 엑셀 입력 - 비규격 파일 매핑' }),
+            res = await window._withTimeout(window.callAiBackend(key, prompt, { feature: '페이지 불러오기 - 비규격 파일 매핑' }),
                                             120000, _t('⏱️ AI 응답이 120초 안에 오지 않았습니다.', '⏱️ No AI response within 120s.'));
         } catch (e) { res = { ok: false, error: e }; }
         if (!res || !res.ok) {
@@ -1108,9 +1108,10 @@
     // ── 버튼 (인쇄 버튼 **왼쪽**에 런타임 삽입) ────────────────────────
     //   [2026-10-20 2차] 아이콘만 두니 무슨 버튼인지 알 수 없다는 지적 — 한글 라벨을 넣었다.
     //   자리가 좁으므로 글자 11px, 여백 최소. 자세한 설명은 말풍선(title)에 남긴다.
-    //   ⚠️ '엑셀 입력'과 '엑셀 저장' **사이에 경계선**을 둔다 — 입력은 현재 내용을 통째로
+    //   ⚠️ '엑셀 저장'과 '불러오기' **사이에 경계선**을 둔다 — 불러오기는 현재 내용을 통째로
     //      덮어쓰므로, 저장하려다 잘못 누르는 일이 없게 시각적으로 갈라 놓는다.
-    //   용어는 앱 전체와 통일: 내보내기 = '엑셀 저장'(다른 페이지 버튼 6개도 같이 바꿨다).
+    //   [2026-10-21] 용어·순서를 앱 전체와 통일(사용자 요청): **📊 엑셀 저장 │ 📂 불러오기**.
+    //      '엑셀 입력'이라는 말은 이 버튼에만 있었다 — 주소록 탭의 '📂 불러오기'로 맞췄다.
     //   [2026-10-20 3차] 글자 크기를 **주변 버튼과 똑같이** 맞춘다 — 인쇄(PDF) 등 이 줄의
     //   다른 버튼이 전부 13px/padding 6px 8px이라, 혼자 11px이면 눈에 따로 논다.
     var BTN = 'white-space:nowrap; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none;'
@@ -1118,7 +1119,7 @@
             + ' transition:background .15s;';
     var SEP = '<span style="display:inline-block; width:1px; height:13px; background:#ccd9db; margin:0 4px;"></span>';
 
-    // 🫳 '엑셀 입력' 버튼에 **드래그앤드롭**. 파일 고르기 창을 안 거치고 바로 떨군다.
+    // 🫳 '불러오기' 버튼에 **드래그앤드롭**. 파일 고르기 창을 안 거치고 바로 떨군다.
     //   ⚠️⚠️ 떨어뜨린 이벤트를 **여기서 반드시 멈춰야 한다**(stopPropagation). js/04f가 window에
     //      drop 핸들러를 달아 두고 **프로젝트 전체를 엑셀로 덮어쓰는** handleFiles를 부르기 때문에,
     //      안 멈추면 페이지 불러오기와 프로젝트 전체 덮어쓰기(관리자 비밀번호 창)가 **같이** 일어난다.
@@ -1179,17 +1180,22 @@
                 printBtn.parentNode.insertBefore(holder, printBtn);   // ← 인쇄 버튼 앞
             }
             var hasUndo = !!window._pageExcelUndo[spec.id];
+            // 📊 저장 → │ → 📂 불러오기 **순서**(사용자 요청 2026-10-21, 앱 전체 통일).
+            //    이름도 '엑셀 입력' → '불러오기'로. 주소록 탭의 '📂 불러오기'와 같은 말·같은 아이콘을 쓴다
+            //    — 같은 일을 하는 버튼이 탭마다 다른 이름이면 같은 기능으로 안 보인다.
             holder.innerHTML =
-                (spec.exportOnly ? '' :
-                    '<button id="px-import-' + spec.id + '" onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'
-                  + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다.\n이 버튼 위로 엑셀 파일을 끌어다 놓아도 됩니다.',
-                            'Import an edited Excel file — replaces current content; you can undo right after.\nYou can also drop an Excel file onto this button.'))
-                  + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
-                  + ' style="' + BTN + '">📥 ' + _t('엑셀 입력', 'Import') + '</button>' + SEP)
-                + '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
+                '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
                   + _esc(_t(_nm(spec.label) + ' 내용을 엑셀 파일로 저장합니다', 'Save ' + _nm(spec.label) + ' as an Excel file'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
-                  + ' style="' + BTN + ' margin-right:4px;">📊 ' + _t('엑셀 저장', 'Export') + '</button>'
+                  // 저장만 있는 페이지(알람 등)에선 이 버튼이 마지막이라 인쇄 버튼과 붙지 않게 여백을 준다.
+                  + ' style="' + BTN + (spec.exportOnly ? ' margin-right:4px;' : '') + '">📊 ' + _t('엑셀 저장', 'Save') + '</button>'
+                + (spec.exportOnly ? '' :
+                    SEP
+                  + '<button id="px-import-' + spec.id + '" onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'
+                  + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다.\n이 버튼 위로 엑셀 파일을 끌어다 놓아도 됩니다.',
+                            'Load an edited Excel file — replaces current content; you can undo right after.\nYou can also drop an Excel file onto this button.'))
+                  + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
+                  + ' style="' + BTN + ' margin-right:4px;">📂 ' + _t('불러오기', 'Load') + '</button>')
                 + (hasUndo ?
                     '<button onclick="window.pageExcelUndo(\'' + spec.id + '\')" title="'
                   + _esc(_t('방금 불러오기 전으로 되돌립니다', 'Undo the import'))

@@ -36,7 +36,9 @@
     //   Drive에 저장된 옛 프로젝트가 계속 들어오므로 "한 번 돌리고 끝"이 아니라
     //   **프로젝트를 읽을 때마다** 확인해야 한다(populateTabData 앞에서 부른다).
     var COLS = ['modelA', 'modelB', 'modelC'];
-    var DEFAULT_LABEL = { modelA: 'Model A', modelB: 'Model B', modelC: 'Model C' };
+    // 🏷 [2026-10-21 사용자 확정] Model A/B/C 라는 이름은 **없앤다** — 열 순서대로 MVD/TVD/TPR 이다.
+    //    사람이 열 이름을 따로 바꿔 뒀으면(bsColLabels) 그 이름이 우선이고, 안 바꿨으면 이 기본값을 쓴다.
+    var DEFAULT_LABEL = { modelA: 'MVD', modelB: 'TVD', modelC: 'TPR' };
 
     window.bsMigrateFromModelCols = function () {
         var td = _td();
@@ -45,9 +47,12 @@
         if (!Array.isArray(rows) || !rows.length) return false;
 
         var labels = td.bsColLabels || {};
+        var OLD_DEFAULT = { modelA: 'Model A', modelB: 'Model B', modelC: 'Model C' };
         var custom = function (k) {
             var v = String(labels[k] || '').trim();
-            return (v && v !== DEFAULT_LABEL[k]) ? v : '';
+            // 옛 기본값('Model A' 등)은 사람이 지은 이름이 아니다 — 새 기본값(MVD/TVD/TPR)으로 보낸다.
+            if (!v || v === OLD_DEFAULT[k] || v === DEFAULT_LABEL[k]) return '';
+            return v;
         };
         var hasData = function (k) {
             return rows.some(function (r) { return String((r && r[k]) || '').trim(); });
@@ -68,10 +73,9 @@
             });
         };
 
-        // 열 하나만 쓰였고 이름도 기본값이면 — 굳이 "Model A"라는 제품구분자를 만들지 않는다.
-        // 지금 보고 있는 제품구분자(없으면 빈 이름) 밑에 그대로 넣는다.
-        if (used.length <= 1 && !custom(used[0] || 'modelA')) {
-            byUnit[window.bsActiveUnit()] = mk(used[0] || 'modelA');
+        // 세 열이 전부 비어 있으면 붙일 이름이 없다 — 지금 보고 있는 제품구분자 밑에 그대로 넣는다.
+        if (!used.length) {
+            byUnit[window.bsActiveUnit()] = mk('modelA');
         } else {
             used.forEach(function (k) {
                 var name = custom(k) || DEFAULT_LABEL[k];
@@ -136,7 +140,7 @@
         var cur = window.bsActiveUnit() || units[0];
         var esc = window.escapeHtml || function (v) { return String(v == null ? '' : v); };
         bar.style.display = 'flex';
-        bar.innerHTML = '<button onclick="window.bsCycleUnit()" title="'
+        bar.innerHTML = '<button class="unit-cycle-btn" onclick="window.bsCycleUnit()" title="'
             + esc(_t('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
             + ' style="padding:6px 10px; min-width:auto; border:1px solid #c9b8f0; border-radius:5px;'
             + ' cursor:pointer; font-size:12px; font-weight:bold; background:#ede9fb; color:#6741d9;">'

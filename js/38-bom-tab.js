@@ -1028,7 +1028,7 @@
         if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
         var cur = window._bomActiveUnit();
         bar.style.display = 'flex';
-        bar.innerHTML = '<button onclick="window.bomCycleUnit()" title="' + _esc(_t('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
+        bar.innerHTML = '<button class="unit-cycle-btn" onclick="window.bomCycleUnit()" title="' + _esc(_t('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
             + ' style="padding:6px 10px; min-width:auto; border:1px solid #c9b8f0; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#ede9fb; color:#6741d9;">'
             + _esc(cur) + '</button>';
     };
