@@ -548,39 +548,46 @@
                 //    프롬프트는 **데이터**다 — 더 잘 읽히게 고치고 싶으면 여기만 고친다.
                 //    ⚠️ 프롬프트 문자열 안에 백틱(`)을 넣지 말 것(docs/ai-qa.md) — 파일 전체가 죽는다.
                 ai: {
+                    // ⚠️⚠️ [2026-10-20 2차] 이 표는 **고정 서식**이다. TYPE/TYPE2 두 열은 회사가 쓰는
+                    //    표준 항목 목록이라 AI가 건드리면 안 된다(사용자 지적: "도표 레퍼런스는
+                    //    훼손하지 않고"). 1차 구현은 표를 통째로 갈아치워서 템플릿이 날아갔다.
+                    //    그래서 mode를 'fill'로 둔다 — AI는 **값 칸만** 채우고, 못 찾은 항목은 빈칸으로
+                    //    남긴다. 문서에서 새로 찾은 항목만 행으로 추가한다.
+                    mode: 'fill',
+                    valueCols: ['modelA', 'modelB', 'modelC'],
+                    // 📌 Power estimation 묶음은 **항상 맨 아래**다(사용자 요청) — 새 행은 그 위에 끼운다.
+                    tailFrom: function (rows) {
+                        for (var i = 0; i < rows.length; i++) {
+                            if (/power\s*estimation/i.test(String(rows[i] && rows[i].type || ''))) return i;
+                        }
+                        return rows.length;
+                    },
                     fields: ['type', 'sub', 'modelA', 'modelB', 'modelC', 'note'],
                     labels: { type: 'Type', sub: 'Description', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' },
-                    prompt: function (text, fileName) {
-                        return '너는 고객이 보낸 사양서/RFP를 읽고 "Customer SPEC 비교표"로 옮기는 일을 한다.\n'
-                             + '아래는 "' + fileName + '" 에서 뽑은 글자다(표의 줄/열 순서는 좌표로 복원해 둔 것이라 대체로 맞다).\n\n'
-                             + '[칸의 뜻]\n'
-                             + '- type : 그 항목이 속한 절의 제목. 번호는 떼고 쓴다. 예) "2.1. LCD Panel Specification" → "LCD Panel Specification"\n'
-                             + '- sub  : 항목 이름(짧게). 표면 왼쪽 라벨을 그대로, 라벨이 없으면 그 문장의 주제를 네가 짧게 붙인다.\n'
-                             + '- modelA : 그 항목의 값 또는 요구사항 **원문 그대로**.\n'
-                             + '- modelB, modelC : 한 문서가 모델 여러 개를 비교할 때만 채운다. 아니면 빈 문자열.\n'
-                             + '- note : 각주(*1 같은 것)·단서·조건이 붙어 있으면 여기에. 없으면 빈 문자열.\n\n'
-                             + '[문서는 세 가지 모양이 섞여 있다 — 셋 다 담는다]\n'
-                             + '1) 라벨과 값이 짝인 표 : 예) "Active Screen Size 32.0 Screen Diagonal"\n'
-                             + '   → sub="Active Screen Size", modelA="32.0 Screen Diagonal"\n'
-                             + '2) 불릿 목록 : 예) "3.1 Display" 아래 "31.5 Flat", "QHD (2560x1440)", "3mm cover glass"\n'
-                             + '   → 불릿 **하나당 한 행**. type="Display", sub=그 불릿의 주제(예 "Resolution","Cover Glass"),\n'
-                             + '     modelA=불릿 원문 그대로. 여러 불릿을 한 칸에 몰아넣지 않는다.\n'
-                             + '3) 줄글 요구사항 : 예) "The unit shall mount to a LnW-defined bottom mount interface."\n'
-                             + '   → **이것도 반드시 담는다.** 요구사항 한 덩어리(보통 한 문단)당 한 행,\n'
-                             + '     sub=네가 붙인 짧은 이름(예 "Bottom Mount Interface"), modelA=원문 문장 그대로.\n\n'
-                             + '[버릴 것]\n'
-                             + '- 목차, 페이지 머리말/꼬리말("Page 7 of 12", 회사명 반복), 개정이력 표\n'
-                             + '- 법무/상거래 조항(기밀유지, 손해배상, 지식재산권, 가격 포함범위, 제출기한 같은 절)\n'
-                             + '- 용어·약어 목록(Terminology / Acronyms)\n\n'
+                    prompt: function (text, fileName, tpl) {
+                        return '너는 고객이 보낸 사양서/RFP를 읽고, **이미 있는 표의 빈칸만 채우는** 일을 한다.\n'
+                             + '표의 항목 목록(TYPE/TYPE2)은 회사 표준 서식이라 **절대 바꾸지 않는다.**\n\n'
+                             + '[지금 표의 항목 — 이 번호로 답한다]\n' + tpl + '\n\n'
+                             + '[문서] "' + fileName + '" 에서 뽑은 글자(표의 줄/열 순서는 좌표로 복원해 둔 것이라 대체로 맞다)\n'
+                             + text + '\n\n'
+                             + '[할 일]\n'
+                             + '1) 위 항목 하나하나에 대해 문서에서 해당하는 값을 찾아 적는다.\n'
+                             + '   - 표현이 달라도 뜻이 같으면 맞춘다. 예) 문서 "Pixel Resolution" → 항목 "Native Resolution",\n'
+                             + '     "Typical Luminance, White" → "Brightness(Centre. Min)", "Power Supply Voltage" → "Input voltage",\n'
+                             + '     "Viewing Angle" → "Viewing Angle (typ.)".\n'
+                             + '   - **문서에 없으면 그 번호는 아예 빼라.** 빈칸으로 두는 게 맞다. 지어내지 않는다.\n'
+                             + '2) 문서에 있는데 위 목록 어디에도 들어갈 자리가 없는 사양만 **새 항목**으로 추가한다(no를 0으로).\n'
+                             + '   - 목차/머리말/꼬리말/개정이력/법무·상거래 조항/용어집은 추가하지 않는다.\n'
+                             + '   - 꼭 필요할 때만 넣는다. 위 목록으로 덮이는 내용은 1)로 처리한다.\n\n'
+                             + '[답 형식] JSON 배열. 원소는 두 종류뿐이다.\n'
+                             + '  기존 항목 채우기 : {"no": 4, "value": "1920(H) x 1080(V) or higher", "note": ""}\n'
+                             + '  새 항목 추가     : {"no": 0, "type": "EDID Setting", "sub": "", "value": "DP : KGI0007", "note": ""}\n\n'
                              + '[주의]\n'
-                             + '- **요약하지 말 것.** modelA에는 원문 문장을 그대로 옮긴다. 줄이면 사양이 바뀐다.\n'
-                             + '- PDF에서 한 칸이 여러 줄로 끊긴 경우가 많다 — 이어지는 줄은 앞 칸에 합친다(줄바꿈 대신 공백).\n'
-                             + '  예) "Proto A (EVT) samples 17 each type 17 topper and 17" + "digital wheel versions"\n'
-                             + '- "Viewing Angle" 처럼 Horizontal/Vertical 하위가 있으면 sub를 "Viewing Angle - Horizontal" 처럼 적는다.\n'
-                             + '- 원문 순서를 그대로 유지한다.\n'
-                             + '- 단위와 조건문구("or higher", "min", "approximately")를 지우지 말 것 — 사양 판단의 핵심이다.\n'
-                             + '- 납품물 목록·일정표처럼 사양이 아닌 표도 그 절 제목을 type에 넣어 담는다. 지우는 건 사람이 보고 정한다.\n\n'
-                             + '[문서]\n' + text;
+                             + '- value 에는 **원문 그대로** 옮긴다. 요약하면 사양이 바뀐다.\n'
+                             + '- 단위와 조건문구("or higher", "min", "typ.")를 지우지 말 것.\n'
+                             + '- 한 항목의 값이 여러 줄로 끊겨 있으면 공백으로 이어 붙인다.\n'
+                             + '- 각주(*1 등)·단서는 note 에 넣는다.\n'
+                             + '- no 는 위 목록에 **실제로 있는 번호**만 쓴다.';
                     }
                 } }]
         },
@@ -783,9 +790,20 @@
 
         _toast('🤖 ' + _t('AI가 "', 'AI is reading "') + file.name + _t('"을(를) 읽고 있습니다…', '"…'), 'info');
 
-        var prompt = ai.prompt(text, file.name)
-            + '\n\n[출력 형식] 설명 없이 JSON 배열만 출력한다. 각 원소의 키는 정확히 다음만 쓴다: '
-            + ai.fields.join(', ') + '\n값이 없으면 빈 문자열("")로 둔다. 원문에 없는 값을 지어내지 않는다.';
+        // 🧩 채우기 모드: 지금 표의 항목 목록을 번호와 함께 AI에게 보여 준다 — AI는 그 번호로 답한다.
+        var cur = (spec.blocks[0].get() || []).map(function (r) { return r || {}; });
+        var tpl = '';
+        if (ai.mode === 'fill') {
+            tpl = cur.map(function (r, i) {
+                var a = String(r.type || '').trim(), b2 = String(r.sub || '').trim();
+                return (i + 1) + '. ' + (a || '(빈칸)') + (b2 ? ' / ' + b2 : '');
+            }).join('\n');
+        }
+
+        var prompt = ai.prompt(text, file.name, tpl)
+            + (ai.mode === 'fill' ? '\n\n설명 없이 JSON 배열만 출력한다.'
+               : '\n\n[출력 형식] 설명 없이 JSON 배열만 출력한다. 각 원소의 키는 정확히 다음만 쓴다: '
+                 + ai.fields.join(', ') + '\n값이 없으면 빈 문자열("")로 둔다. 원문에 없는 값을 지어내지 않는다.');
 
         var res;
         try {
@@ -805,6 +823,28 @@
             if (window._issueLog) { try { window._issueLog('page-excel-ai', { id: id, file: file.name, err: 'no-rows', head: raw.slice(0, 300) }); } catch (e3) { /* 〃 */ } }
             return;
         }
+        if (ai.mode === 'fill') {
+            // {no, value, note} / {no:0, type, sub, value, note} 만 받는다. 범위 밖 번호는 버린다.
+            var fills = [], extras = [];
+            rows.forEach(function (r) {
+                var n = parseInt(r && r.no, 10);
+                var v = (r && r.value != null) ? String(r.value).trim() : '';
+                var nt = (r && r.note != null) ? String(r.note).trim() : '';
+                if (n >= 1 && n <= cur.length) { if (v || nt) fills.push({ i: n - 1, value: v, note: nt }); }
+                else if (n === 0) {
+                    var ty = (r && r.type != null) ? String(r.type).trim() : '';
+                    var sb = (r && r.sub != null) ? String(r.sub).trim() : '';
+                    if (ty || sb || v) extras.push({ type: ty, sub: sb, value: v, note: nt });
+                }
+            });
+            if (!fills.length && !extras.length) {
+                _toast('⚠️ ' + _t('문서에서 이 표에 넣을 값을 찾지 못했습니다.', 'Nothing in the document matched this table.'), 'error');
+                return;
+            }
+            _pxAiPreviewFill(id, file.name, cur, fills, extras, ai, cut);
+            return;
+        }
+
         // 스키마에 없는 키는 버리고, 있는 키는 빠짐없이 채운다.
         rows = rows.map(function (r) {
             var o = {};
@@ -820,8 +860,7 @@
     //    잘못 매핑되면 페이지가 통째로 바뀌므로, 자동 적용은 하지 않는다.
     //    (적용 후에도 '↩ 되돌리기' 버튼이 한 번 더 받쳐 준다.)
     window._pxAiPending = null;
-    var _pxAiPreview = function (id, fileName, rows, ai, truncated) {
-        window._pxAiPending = { id: id, rows: rows };
+    var _pxAiEnsureBox = function () {
         var ov = document.getElementById('px-ai-overlay');
         if (!ov) {
             ov = document.createElement('div');
@@ -849,6 +888,11 @@
         }
         ov.style.display = 'flex';
         if (window.bringModalToFront) { try { window.bringModalToFront('px-ai-overlay'); } catch (e) { /* 〃 */ } }
+    };
+
+    var _pxAiPreview = function (id, fileName, rows, ai, truncated) {
+        window._pxAiPending = { id: id, rows: rows };
+        _pxAiEnsureBox();
         document.getElementById('px-ai-title').textContent =
             '🤖 ' + _t('AI가 읽은 내용 — ', 'AI extracted — ') + fileName + ' (' + rows.length + _t('행', ' rows') + ')';
         var th = ai.fields.map(function (f) {
@@ -868,6 +912,54 @@
             + '<table style="border-collapse:collapse; width:100%;"><thead><tr>' + th + '</tr></thead><tbody>' + tb + '</tbody></table>';
     };
 
+    // 🧩 채우기 모드 미리보기 — **어느 항목에 무엇이 들어가는지**를 보여 준다.
+    //    TYPE/TYPE2는 손대지 않으므로 그대로 보여 주고, 바뀌는 건 값 칸뿐이다.
+    var _pxAiPreviewFill = function (id, fileName, cur, fills, extras, ai, truncated) {
+        window._pxAiPending = { id: id, fill: { cur: cur, fills: fills, extras: extras, ai: ai } };
+        _pxAiEnsureBox();
+        document.getElementById('px-ai-title').textContent =
+            '🤖 ' + _t('AI가 읽은 내용 — ', 'AI extracted — ') + fileName
+            + ' (' + _t('채울 항목 ', 'fill ') + fills.length + _t('개', '') + (extras.length ? ', ' + _t('새 항목 ', 'new ') + extras.length + _t('개', '') : '') + ')';
+
+        // 값이 들어갈 열 고르기 — 지금은 Model A/B/C 중 하나. 기본은 첫 빈 열.
+        var cols = ai.valueCols, pick = cols[0];
+        for (var c = 0; c < cols.length; c++) {
+            if (!cur.some(function (r) { return String(r[cols[c]] || '').trim(); })) { pick = cols[c]; break; }
+        }
+        var sel = '<label style="font-size:12px; color:#495057;">' + _esc(_t('어느 열에 넣을까요: ', 'Target column: '))
+            + '<select id="px-ai-col" style="font-size:12px; padding:2px 4px;">'
+            + cols.map(function (k) {
+                var nm = (window.tabData && window.tabData.bsColLabels && window.tabData.bsColLabels[k]) || ai.labels[k] || k;
+                return '<option value="' + k + '"' + (k === pick ? ' selected' : '') + '>' + _esc(nm) + '</option>';
+            }).join('') + '</select></label>';
+
+        var tr = function (no, type, sub, val, note, isNew) {
+            return '<tr style="background:' + (isNew ? '#eefbf1' : (no % 2 ? '#f8fbfd' : '#fff')) + ';">'
+                + '<td style="border:1px solid #e3eaec; padding:2px 6px; font-size:11px; text-align:center; white-space:nowrap;">' + (isNew ? '🆕' : no) + '</td>'
+                + '<td style="border:1px solid #e3eaec; padding:2px 6px; font-size:11px;">' + _esc(type) + '</td>'
+                + '<td style="border:1px solid #e3eaec; padding:2px 6px; font-size:11px;">' + _esc(sub) + '</td>'
+                + '<td style="border:1px solid #e3eaec; padding:2px 6px; font-size:11px; font-weight:bold; color:#1f7a3d;">' + _esc(val) + '</td>'
+                + '<td style="border:1px solid #e3eaec; padding:2px 6px; font-size:11px; color:#868e96;">' + _esc(note) + '</td></tr>';
+        };
+        var body = fills.map(function (f) {
+            var r = cur[f.i] || {};
+            return tr(f.i + 1, r.type || '', r.sub || '', f.value, f.note, false);
+        }).join('') + extras.map(function (e) { return tr(0, e.type, e.sub, e.value, e.note, true); }).join('');
+
+        document.getElementById('px-ai-body').innerHTML =
+            (truncated ? '<div style="margin-bottom:6px; padding:5px 8px; background:#fff3cd; border-left:3px solid #e6a817; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">'
+                + _esc(_t('파일이 길어 앞부분만 읽었습니다.', 'The file was long; only the first part was read.')) + '</div>' : '')
+            + '<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap;">' + sel
+            + '<span style="font-size:11px; color:#868e96;">'
+            + _esc(_t('TYPE / TYPE2 서식은 건드리지 않습니다. 값 칸만 채웁니다. 🆕 행은 Power estimation 위에 끼워 넣습니다.',
+                      'TYPE / TYPE2 are left untouched — only value cells are filled. 🆕 rows are inserted above Power estimation.'))
+            + '</span></div>'
+            + '<table style="border-collapse:collapse; width:100%;"><thead><tr>'
+            + ['NO', 'TYPE', 'TYPE2', _t('읽은 값', 'Value'), 'Note'].map(function (h) {
+                return '<th style="position:sticky; top:0; background:#e7f3ff; border:1px solid #cfe3e5; padding:3px 6px; font-size:11px; white-space:nowrap;">' + _esc(h) + '</th>';
+            }).join('') + '</tr></thead><tbody>' + body + '</tbody></table>';
+    };
+
     window._pxAiClose = function () {
         var ov = document.getElementById('px-ai-overlay');
         if (ov) ov.style.display = 'none';
@@ -881,8 +973,34 @@
         var b = spec.blocks[0];
         var k = _nms(b.sheet)[0], snap = {};
         try { snap[k] = JSON.parse(JSON.stringify(b.get())); } catch (e) { snap[k] = null; }
-        var before = (b.get() || []).length;
-        b.set(p.rows);
+        var before = (b.get() || []).length, newRows;
+
+        if (p.fill) {
+            var F = p.fill, ai = F.ai;
+            var colSel = document.getElementById('px-ai-col');
+            var col = (colSel && colSel.value) || ai.valueCols[0];
+            // 원본을 복사해서 손댄다 — 되돌리기 스냅샷과 같은 배열을 쓰면 되돌릴 게 없어진다.
+            newRows = F.cur.map(function (r) { return Object.assign({}, r); });
+            F.fills.forEach(function (f) {
+                if (!newRows[f.i]) return;
+                newRows[f.i][col] = f.value;
+                if (f.note) newRows[f.i].note = f.note;   // 기존 note 가 있으면 덮지 않도록 값이 있을 때만
+            });
+            // 📌 새 항목은 Power estimation 묶음 **바로 위**에 끼운다 — 그 묶음은 늘 맨 아래여야 한다.
+            if (F.extras.length) {
+                var at = (typeof ai.tailFrom === 'function') ? ai.tailFrom(newRows) : newRows.length;
+                var made = F.extras.map(function (e) {
+                    var o = { type: e.type, sub: e.sub, modelA: '', modelB: '', modelC: '', note: e.note || '' };
+                    o[col] = e.value;
+                    return o;
+                });
+                newRows.splice.apply(newRows, [at, 0].concat(made));
+            }
+        } else {
+            newRows = p.rows;
+        }
+
+        b.set(newRows);
         var after = (b.get() || []).length;
         window._pageExcelUndo[p.id] = JSON.stringify(snap);
         _repaint(spec.repaint);
