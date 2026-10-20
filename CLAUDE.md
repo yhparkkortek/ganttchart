@@ -138,7 +138,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `38-bom-tab.js` | 📋 BOM 탭 + **Elec Parts 내장 BOM**. SAP 텍스트 파서 `_bomParseSapText`(설치지점 연속 행 병합), 행 클릭 조회 `bomSelectComponent`, 엑셀 출력, `_elecBomItemCode`(주요자재에서 부품 코드) |
 | `39-groupware-calendar.js` | 그룹웨어 일정을 Calendar 탭에 겹쳐 표시 |
 | `40-qa-tool-router.js` | 🛠 AI 문답 도구 자율 호출 — `QA_TOOLS` 레지스트리(데이터)·인자 검증·에이전트 루프. **읽기 전용**. 새 조회 기능은 여기 한 줄 추가 → `docs/qa-tool-router.md` |
-| `42-page-excel-io.js` | 📄↔📊 페이지 ↔ 엑셀 왕복(출력 → 엑셀 수정 → 다시 불러오기). 인쇄 버튼 **왼쪽에 런타임 삽입**. 대상·시트 구성은 `PAGE_EXCEL_SPECS`(데이터) 한 곳 — 새 페이지는 항목 하나만 추가. 통째 교체 + 되돌리기. 파생 뷰(Calendar·주간보고·알람)는 되돌려 넣지 않음 |
+| `42-page-excel-io.js` | 📄↔📊 페이지 ↔ 엑셀 왕복(출력 → 엑셀 수정 → 다시 불러오기). 인쇄 버튼 **왼쪽에 런타임 삽입**. 대상·시트 구성은 `PAGE_EXCEL_SPECS`(데이터) 한 곳 — 새 페이지는 항목 하나만 추가. 통째 교체 + 되돌리기. 파생 뷰(Calendar·주간보고·알람)는 되돌려 넣지 않음. **🤖 비규격 파일(PDF·TXT·HTML·남의 엑셀)은 AI가 매핑** — 블록의 `ai:{fields,labels,prompt}`(데이터)에 적고, 규격 파일은 AI를 **안 거친다**(결정론 우선 + 무료 키 하루 한도). 적용 전 미리보기 승인 필수. 현재 Customer SPEC만 연결됨 |
 | `41-qa-write-tools.js` | ✍️ 쓰기 도구 — **AI가 스스로 실행 안 함**. 초안→사람 확인 1회→자동. `verified:'pending'`은 요청 본문 미확정이라 실행 차단 |
 
 > `04`, `14`, `15`, `22`는 원래 하나의 거대 파일(최대 11,915줄)을 쪼갠 것.

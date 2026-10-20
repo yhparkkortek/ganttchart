@@ -543,7 +543,31 @@
             repaint: ['populateTabData'],
             blocks: [{ sheet: 'Brief SPEC', kind: 'rows',
                 get: function () { return _td().briefSpec || []; },
-                set: function (rows) { _td().briefSpec = rows || []; } }]
+                set: function (rows) { _td().briefSpec = rows || []; },
+                // 🤖 비규격 파일(고객 사양서 PDF, 메일 txt 등) → 이 표로 매핑하는 규칙.
+                //    프롬프트는 **데이터**다 — 더 잘 읽히게 고치고 싶으면 여기만 고친다.
+                //    ⚠️ 프롬프트 문자열 안에 백틱(`)을 넣지 말 것(docs/ai-qa.md) — 파일 전체가 죽는다.
+                ai: {
+                    fields: ['type', 'sub', 'modelA', 'modelB', 'modelC', 'note'],
+                    labels: { type: 'Type', sub: 'Description', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' },
+                    prompt: function (text, fileName) {
+                        return '너는 고객 하드웨어 사양서를 읽고 "Customer SPEC 비교표"로 옮기는 일을 한다.\n'
+                             + '아래는 "' + fileName + '" 에서 뽑은 글자다(표의 줄/열 순서는 좌표로 복원해 둔 것이라 대체로 맞다).\n\n'
+                             + '[옮기는 규칙]\n'
+                             + '- type : 그 항목이 속한 절의 제목. 번호는 떼고 쓴다. 예) "2.1. LCD Panel Specification" → "LCD Panel Specification"\n'
+                             + '- sub  : 항목 이름(왼쪽 라벨). 예) "Active Screen Size", "Pixel Resolution", "Aspect Ratio"\n'
+                             + '- modelA : 그 항목의 값(오른쪽). 예) "32.0\\" Screen Diagonal", "1920(H) x 1080(V) or higher"\n'
+                             + '- modelB, modelC : 한 문서에 모델이 여러 개 비교되어 있을 때만 채운다. 아니면 빈 문자열.\n'
+                             + '- note : 각주(*1 같은 것)나 단서가 그 항목에 붙어 있으면 여기에. 없으면 빈 문자열.\n\n'
+                             + '[주의]\n'
+                             + '- 라벨과 값이 짝을 이루는 줄만 담는다. 목차, 페이지 머리말/꼬리말, 개정이력, 줄글 설명 문단은 버린다.\n'
+                             + '- 값이 여러 줄로 나뉘어 있으면 한 칸에 합친다(줄바꿈 대신 공백).\n'
+                             + '- "Viewing Angle" 처럼 Horizontal/Vertical 하위 항목이 있으면 sub를 "Viewing Angle - Horizontal" 처럼 적는다.\n'
+                             + '- 원문 순서를 그대로 유지한다.\n'
+                             + '- 단위와 조건문구("or higher", "or faster")를 지우지 말 것 — 사양 판단의 핵심이다.\n\n'
+                             + '[문서]\n' + text;
+                    }
+                } }]
         },
         {
             id: 'mctable', tab: 'tab-mctable', label: 'M.C Table',
@@ -659,6 +683,200 @@
                + (empty ? ' (' + _t('빈 시트 ', 'empty sheets: ') + empty + ')' : ''), 'success');
     };
 
+    // ══ 🤖 비규격 파일 → AI 매핑 ═════════════════════════════════════
+    //  규격 엑셀(우리가 낸 파일)은 **AI 없이** 그대로 붙인다 — 결정론 먼저(CLAUDE.md 원칙 4).
+    //  AI는 "시트 이름이 안 맞거나 아예 엑셀이 아닐 때"만 부른다. 무료 키는 하루 한도가 있어서
+    //  매번 때리면 금방 막힌다.
+    var PX_ACCEPT = '.xlsx,.xls,.csv,.pdf,.txt,.html,.htm';
+    var PX_OK_RE  = /\.(xlsx|xls|csv|pdf|txt|html?)$/i;
+    var _pxIsWorkbook = function (f) { return /\.(xlsx|xls|csv)$/i.test(f && f.name || ''); };
+    var _pxAiSpec = function (spec) {
+        // AI 매핑은 블록이 하나뿐인 rows 페이지에만 연다 — 여러 블록이면 어느 시트로 보낼지
+        // 사람이 정해줘야 해서 지금 단계에선 다루지 않는다.
+        if (!spec || spec.blocks.length !== 1) return null;
+        return spec.blocks[0].ai || null;
+    };
+
+    // 파일 → 글자. PDF는 앱이 이미 쓰는 추출기(js/22d)를 그대로 쓴다 — 줄/열 순서를 좌표로
+    // 복원해 둔 함수라, 표가 든 문서에서 값이 뒤섞이지 않는다(구매오더에서 검증됨).
+    var _pxExtractText = async function (file, wb) {
+        var name = String(file.name || '');
+        if (/\.pdf$/i.test(name)) {
+            if (typeof window._pcExtractPdfText !== 'function') {
+                throw new Error(_t('PDF 읽기 기능을 아직 불러오지 못했습니다.', 'The PDF reader has not loaded yet.'));
+            }
+            var t = await window._pcExtractPdfText(file);
+            // 의미 있는 글자가 거의 없으면 스캔본이다 — 지금은 거기까진 안 간다(이미지 분석은 Gemini 전용).
+            if ((t || '').replace(/[\s\u0000-\u001f]/g, '').length < 20) {
+                throw new Error(_t('이 PDF에는 글자 레이어가 없습니다(스캔본). 원본 뷰어에서 [인쇄 → Microsoft Print to PDF]로 다시 저장한 뒤 넣어주세요.',
+                                   'This PDF has no text layer (scanned). Re-save it via Print → Microsoft Print to PDF and try again.'));
+            }
+            return t;
+        }
+        if (/\.html?$/i.test(name)) {
+            var html = await file.text();
+            var d = document.createElement('div'); d.innerHTML = html;
+            return d.innerText || d.textContent || '';
+        }
+        if (wb) {   // 엑셀인데 시트 이름이 안 맞는 경우 — 모든 시트를 글자로 펴서 넘긴다
+            return (wb.SheetNames || []).map(function (n) {
+                return '### ' + n + '\n' + window.XLSX.utils.sheet_to_csv(wb.Sheets[n]);
+            }).join('\n\n');
+        }
+        return await file.text();   // .txt (붙여넣은 메일 본문 등)
+    };
+
+    // 응답에서 JSON 배열만 떼어낸다 — 모델이 ```json 울타리나 설명을 같이 붙이는 일이 흔하다.
+    var _pxJsonRows = function (text) {
+        var s = String(text || '').replace(/```json/gi, '```').split('```').join('\n');
+        var a = s.indexOf('['), b = s.lastIndexOf(']');
+        if (a < 0 || b <= a) return null;
+        try { var v = JSON.parse(s.slice(a, b + 1)); return Array.isArray(v) ? v : null; } catch (e) { return null; }
+    };
+
+    var _pxAiImport = async function (id, file, wb) {
+        var spec = _specById(id), ai = _pxAiSpec(spec);
+        // ⚠️ 여기서 **확장자를 한 번 더 막는다.** 드롭 핸들러에서 거르긴 하지만 이 함수는
+        //    파일 선택창에서도 불리고, accept 목록은 브라우저가 지키지 않는 경우가 있다.
+        //    안 막으면 .png 같은 이진 파일을 file.text()로 읽어 **깨진 글자를 AI에 보낸다**
+        //    (실측에서 실제로 그랬다 — 사용자 AI 할당량만 날린다).
+        if (!PX_OK_RE.test(String(file && file.name || ''))) {
+            _toast('⚠️ ' + _t('받을 수 있는 형식이 아닙니다 — 엑셀(.xlsx/.xls/.csv), PDF, TXT, HTML만 됩니다.',
+                              'Unsupported file — only Excel (.xlsx/.xls/.csv), PDF, TXT and HTML are accepted.'), 'error');
+            return;
+        }
+        if (!ai) {
+            _toast('⚠️ ' + _t('이 페이지는 아직 비규격 파일을 읽지 못합니다 — 엑셀 저장으로 받은 파일만 넣어주세요.',
+                              'This page cannot read free-form files yet — use a file produced by Export.'), 'error');
+            return;
+        }
+        var key = window.getActiveAiKey && window.getActiveAiKey();
+        if (!key) {
+            _toast('🔑 ' + _t('AI 키가 없습니다 — [AI 도구 > AI 분석 설정]에서 먼저 등록해주세요.',
+                              'No AI key — register one under [AI Tools > AI Analysis Settings].'), 'error');
+            return;
+        }
+
+        var text;
+        try { text = await _pxExtractText(file, wb); }
+        catch (e) { _toast('⚠️ ' + (e && e.message ? e.message : e), 'error'); return; }
+        if (!String(text || '').trim()) { _toast('⚠️ ' + _t('파일에서 읽을 글자가 없습니다.', 'No readable text in the file.'), 'error'); return; }
+
+        // 너무 길면 앞부분만 — 사양서는 앞쪽에 표가 몰려 있고, 토큰도 한도가 있다.
+        var LIMIT = 60000, cut = text.length > LIMIT;
+        if (cut) text = text.slice(0, LIMIT);
+
+        _toast('🤖 ' + _t('AI가 "', 'AI is reading "') + file.name + _t('"을(를) 읽고 있습니다…', '"…'), 'info');
+
+        var prompt = ai.prompt(text, file.name)
+            + '\n\n[출력 형식] 설명 없이 JSON 배열만 출력한다. 각 원소의 키는 정확히 다음만 쓴다: '
+            + ai.fields.join(', ') + '\n값이 없으면 빈 문자열("")로 둔다. 원문에 없는 값을 지어내지 않는다.';
+
+        var res;
+        try {
+            res = await window._withTimeout(window.callAiBackend(key, prompt, { feature: '페이지 엑셀 입력 - 비규격 파일 매핑' }),
+                                            120000, _t('⏱️ AI 응답이 120초 안에 오지 않았습니다.', '⏱️ No AI response within 120s.'));
+        } catch (e) { res = { ok: false, error: e }; }
+        if (!res || !res.ok) {
+            var em = (res && res.error && res.error.message) ? res.error.message : String((res && res.error) || '');
+            _toast('⚠️ ' + _t('AI 분석 실패: ', 'AI analysis failed: ') + em, 'error');
+            if (window._issueLog) { try { window._issueLog('page-excel-ai', { id: id, file: file.name, err: em }); } catch (e2) { /* 기록 실패가 흐름을 막지 않게 */ } }
+            return;
+        }
+        var raw = window._extractGanttQaAiText ? window._extractGanttQaAiText(res) : '';
+        var rows = _pxJsonRows(raw);
+        if (!rows || !rows.length) {
+            _toast('⚠️ ' + _t('AI가 표를 찾지 못했습니다. 다른 파일로 시도해보세요.', 'AI found no table. Try another file.'), 'error');
+            if (window._issueLog) { try { window._issueLog('page-excel-ai', { id: id, file: file.name, err: 'no-rows', head: raw.slice(0, 300) }); } catch (e3) { /* 〃 */ } }
+            return;
+        }
+        // 스키마에 없는 키는 버리고, 있는 키는 빠짐없이 채운다.
+        rows = rows.map(function (r) {
+            var o = {};
+            ai.fields.forEach(function (k) { o[k] = (r && r[k] != null) ? String(r[k]).trim() : ''; });
+            return o;
+        }).filter(function (r) { return ai.fields.some(function (k) { return r[k]; }); });
+
+        _pxAiPreview(id, file.name, rows, ai, cut);
+    };
+    window._pxAiImport = _pxAiImport;
+
+    // 👀 적용 전 미리보기 — AI가 읽은 걸 **사람이 보고 승인**해야 들어간다(CLAUDE.md 원칙 5).
+    //    잘못 매핑되면 페이지가 통째로 바뀌므로, 자동 적용은 하지 않는다.
+    //    (적용 후에도 '↩ 되돌리기' 버튼이 한 번 더 받쳐 준다.)
+    window._pxAiPending = null;
+    var _pxAiPreview = function (id, fileName, rows, ai, truncated) {
+        window._pxAiPending = { id: id, rows: rows };
+        var ov = document.getElementById('px-ai-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'px-ai-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9400; pointer-events:none; background:none;';
+            ov.innerHTML = '<div id="px-ai-box" style="pointer-events:all; position:fixed; left:50%; top:12%; transform:translateX(-50%);'
+                + ' width:min(880px,92vw); max-height:74vh; display:flex; flex-direction:column; background:#fff; border:1px solid #a5c8f0;'
+                + ' border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18); overflow:hidden; resize:both;">'
+                + '<div id="px-ai-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:8px;'
+                + ' padding:9px 12px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; font-weight:bold; font-size:13px;'
+                + ' cursor:grab; user-select:none;"><span id="px-ai-title"></span>'
+                + '<button onclick="window._pxAiClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
+                + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div id="px-ai-body" style="flex:1; overflow:auto; padding:10px 12px;"></div>'
+                + '<div style="flex-shrink:0; display:flex; justify-content:flex-end; gap:6px; padding:9px 12px; border-top:1px solid #e9ecef;">'
+                + '<button onclick="window._pxAiClose()" style="padding:6px 12px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6;'
+                + ' border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">' + _esc(_t('취소', 'Cancel')) + '</button>'
+                + '<button onclick="window._pxAiApply()" onmouseover="this.style.background=\'#c9ecd3\'; this.style.borderColor=\'#7cc494\';"'
+                + ' onmouseout="this.style.background=\'#e6f6ea\'; this.style.borderColor=\'#a8dab8\';"'
+                + ' style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px;'
+                + ' font-size:12px; font-weight:bold; cursor:pointer;">✅ ' + _esc(_t('이대로 적용', 'Apply')) + '</button></div></div>';
+            document.body.appendChild(ov);
+            if (window._makeDraggable) { try { window._makeDraggable('px-ai-box', 'px-ai-head'); } catch (e) { /* 드래그 실패가 열기를 막지 않게 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('px-ai-overlay'); } catch (e) { /* 〃 */ } }
+        }
+        ov.style.display = 'flex';
+        if (window.bringModalToFront) { try { window.bringModalToFront('px-ai-overlay'); } catch (e) { /* 〃 */ } }
+        document.getElementById('px-ai-title').textContent =
+            '🤖 ' + _t('AI가 읽은 내용 — ', 'AI extracted — ') + fileName + ' (' + rows.length + _t('행', ' rows') + ')';
+        var th = ai.fields.map(function (f) {
+            return '<th style="position:sticky; top:0; background:#e7f3ff; border:1px solid #cfe3e5; padding:3px 6px; font-size:11px; white-space:nowrap;">' + _esc(ai.labels[f] || f) + '</th>';
+        }).join('');
+        var tb = rows.map(function (r, i) {
+            return '<tr style="background:' + (i % 2 ? '#f8fbfd' : '#fff') + ';">' + ai.fields.map(function (f) {
+                return '<td style="border:1px solid #e3eaec; padding:2px 6px; font-size:11px; vertical-align:top;">' + _esc(r[f] || '') + '</td>';
+            }).join('') + '</tr>';
+        }).join('');
+        document.getElementById('px-ai-body').innerHTML =
+            (truncated ? '<div style="margin-bottom:6px; padding:5px 8px; background:#fff3cd; border-left:3px solid #e6a817; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">'
+                + _esc(_t('파일이 길어 앞부분만 읽었습니다 — 뒤쪽 내용이 빠졌을 수 있습니다.', 'The file was long; only the first part was read.')) + '</div>' : '')
+            + '<div style="margin-bottom:6px; font-size:11px; color:#868e96;">'
+            + _esc(_t('적용하면 이 페이지의 현재 내용이 통째로 바뀝니다. 적용 후에도 ↩ 되돌리기로 되돌릴 수 있습니다.',
+                      'Applying replaces this page entirely. You can still undo afterwards.')) + '</div>'
+            + '<table style="border-collapse:collapse; width:100%;"><thead><tr>' + th + '</tr></thead><tbody>' + tb + '</tbody></table>';
+    };
+
+    window._pxAiClose = function () {
+        var ov = document.getElementById('px-ai-overlay');
+        if (ov) ov.style.display = 'none';
+        window._pxAiPending = null;
+    };
+
+    window._pxAiApply = function () {
+        var p = window._pxAiPending;
+        if (!p) return;
+        var spec = _specById(p.id); if (!spec) return;
+        var b = spec.blocks[0];
+        var k = _nms(b.sheet)[0], snap = {};
+        try { snap[k] = JSON.parse(JSON.stringify(b.get())); } catch (e) { snap[k] = null; }
+        var before = (b.get() || []).length;
+        b.set(p.rows);
+        var after = (b.get() || []).length;
+        window._pageExcelUndo[p.id] = JSON.stringify(snap);
+        _repaint(spec.repaint);
+        if (window._markNonGanttDirty) { try { window._markNonGanttDirty(); } catch (e) { /* 표시 실패가 적용을 막지 않게 */ } }
+        _toast('🤖 ' + _nm(spec.label) + ' ' + _t('AI로 불러왔습니다 — ', 'imported via AI — ') + before + '→' + after + _t('행', ' rows'), 'success');
+        window._pxAiClose();
+        _pxRenderButtons();   // ↩ 되돌리기 버튼을 띄운다
+    };
+
     // ── 불러오기 ───────────────────────────────────────────────────────
     window._pageExcelUndo = window._pageExcelUndo || {};   // id → 직전 스냅샷(JSON 문자열)
 
@@ -666,7 +884,7 @@
         var spec = _specById(id);
         if (!spec || spec.exportOnly) return;
         var inp = document.createElement('input');
-        inp.type = 'file'; inp.accept = '.xlsx,.xls';
+        inp.type = 'file'; inp.accept = PX_ACCEPT;
         inp.onchange = function () { if (inp.files && inp.files[0]) window.pageExcelImport(id, inp.files[0]); };
         inp.click();
     };
@@ -674,6 +892,11 @@
     window.pageExcelImport = async function (id, file) {
         var spec = _specById(id);
         if (!spec || spec.exportOnly || !window.XLSX) return;
+
+        // 📄 규격 엑셀이 아닌 것(PDF·TXT·HTML)은 바로 AI 경로로. 엑셀이라도 **이 페이지의 시트가
+        //    없으면** 아래에서 AI로 넘긴다 — 협력사가 보내온 제각각인 양식이 그렇다.
+        if (!_pxIsWorkbook(file)) return _pxAiImport(id, file);
+
         var wb;
         try {
             var buf = await file.arrayBuffer();
@@ -692,6 +915,8 @@
             if (sh) matched.push({ b: b, sh: sh }); else missing.push(_nm(b.sheet));
         });
         if (!matched.length) {
+            // 🤖 시트 이름이 안 맞는다 = 우리가 낸 파일이 아니다. 거절하지 말고 AI에게 넘긴다.
+            if (_pxAiSpec(spec)) return _pxAiImport(id, file, wb);
             _toast('⚠️ ' + _t('이 페이지의 시트를 찾지 못했습니다. 필요한 시트: ', 'No matching sheet. Expected: ')
                    + spec.blocks.map(function (b) { return _nm(b.sheet); }).join(', '), 'error');
             return;
@@ -781,13 +1006,16 @@
             stop(e); cool();
             var files = (e.dataTransfer && e.dataTransfer.files) || [];
             var f = null;
-            for (var i = 0; i < files.length; i++) if (/\.(xlsx|xls)$/i.test(files[i].name)) { f = files[i]; break; }
+            // 엑셀뿐 아니라 PDF·TXT·HTML도 받는다 — 규격이 아니면 AI가 읽어서 매핑한다.
+            var OK = /\.(xlsx|xls|csv|pdf|txt|html?)$/i;
+            for (var i = 0; i < files.length; i++) if (OK.test(files[i].name)) { f = files[i]; break; }
             if (!f) {
-                _toast('⚠️ ' + _t('엑셀 파일(.xlsx/.xls)만 받습니다.', 'Only .xlsx / .xls files are accepted.'), 'error');
+                _toast('⚠️ ' + _t('받을 수 있는 형식이 아닙니다 — 엑셀(.xlsx/.xls/.csv), PDF, TXT, HTML만 됩니다.',
+                                  'Unsupported file — only Excel (.xlsx/.xls/.csv), PDF, TXT and HTML are accepted.'), 'error');
                 return;
             }
             if (files.length > 1) {
-                _toast(_t('파일이 여러 개라 첫 엑셀만 불러옵니다: ', 'Several files dropped — importing the first Excel only: ') + f.name, 'info');
+                _toast(_t('파일이 여러 개라 첫 번째만 불러옵니다: ', 'Several files dropped — importing the first one only: ') + f.name, 'info');
             }
             window.pageExcelImport(id, f);
         });
