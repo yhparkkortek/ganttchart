@@ -315,20 +315,59 @@
     // ── 🗓 Gantt 전용 헬퍼 ─────────────────────────────────────────────
     // 간트 행은 **배열**이고, 어느 칸이 무엇인지는 `colIdx`(이름 → 인덱스)가 안다.
     // 그래서 엑셀 열 머리글로 colIdx의 이름을 그대로 쓴다 — 화면 열 순서가 바뀌어도 안전하다.
+    // 🏷 레벨 표시 — 레벨당 들여쓰기 + 머리 기호. 둘 다 데이터로 둔다(취향이 바뀌면 여기만 고친다).
+    var _GANTT_LEVEL_MARK = ['■', '▶', '▸', '•', '·'];
+    var _GANTT_INDENT = '    ';
+    var _GANTT_WBS_KEY = 'wbs';
+    // 그 행 **자신의** 업무명.
+    // ⚠️ `row[ci.wbs]`를 그냥 쓰면 안 된다 — `recalculateSchedules`가 단일 WBS 열 모드에서 그 칸을
+    //    "가장 가까운 0레벨 조상 이름"으로 매번 덮어쓰기 때문에(js/04d:394, 개발단계 필터용), 하위
+    //    행이 전부 그룹명으로 나온다. 사용자가 보낸 출력물이 실제로 그랬다 — 레벨1 일곱 줄이 전부
+    //    'RFQ(KICK OFF)'. 행 자신의 텍스트는 `_orig*`에 살아 있으므로 js/22c와 같은 우선순위로 읽는다.
+    var _ganttTaskName = function (row) {
+        var ci = window.colIdx || {}, lv = row && row._level;
+        var orig = (lv === 0) ? row._origDev : (lv === 1) ? row._origT1
+                 : (lv === 2) ? row._origT2 : (lv === 3) ? row._origT3 : row._origT4;
+        var c = (lv === 0) ? ci.devStage : (lv === 1) ? ci.taskType1
+              : (lv === 2) ? ci.taskType2 : (lv === 3) ? ci.taskType3 : ci.taskType4;
+        if ((c === undefined || c === -1) && ci.wbs !== undefined && ci.wbs !== -1) c = ci.wbs;
+        var name = (orig || '') || ((c !== undefined && c > -1 && row[c] != null) ? row[c] : '') || '';
+        return String(name).trim().replace(/^🌐\s*/, '');
+    };
+    var _ganttWbsCell = function (row) {
+        var name = _ganttTaskName(row);
+        if (!name) return '';
+        var lv = parseInt(row && row._level, 10); if (!(lv >= 0)) lv = 0;
+        var mark = _GANTT_LEVEL_MARK[Math.min(lv, _GANTT_LEVEL_MARK.length - 1)];
+        return new Array(lv + 1).join(_GANTT_INDENT) + mark + ' ' + name;
+    };
     var _ganttKeys = function () {
         var ci = window.colIdx || {};
-        return Object.keys(ci).filter(function (k) { return ci[k] >= 0; });
+        var keys = Object.keys(ci).filter(function (k) { return ci[k] >= 0 && k !== _GANTT_WBS_KEY; });
+        // 📍 업무명(WBS)은 **상태와 상세내용 사이**에 둔다(사용자 요청 2026-10-20).
+        //    colIdx에 wbs가 없는(레벨별 열로 나뉜) 프로젝트에서도 이 열은 항상 만든다 — 업무명이
+        //    없는 출력물은 읽을 수가 없기 때문.
+        var at = keys.indexOf('status');
+        keys.splice(at >= 0 ? at + 1 : keys.length, 0, _GANTT_WBS_KEY);
+        return keys;
     };
     var _ganttRows = function () {
         var ci = window.colIdx || {}, keys = _ganttKeys();
         return (window.globalData || []).map(function (row) {
             var o = {};
-            keys.forEach(function (k) { o[k] = (row && row[ci[k]] != null) ? row[ci[k]] : ''; });
+            keys.forEach(function (k) {
+                o[k] = (k === _GANTT_WBS_KEY) ? _ganttWbsCell(row)
+                     : ((row && row[ci[k]] != null) ? row[ci[k]] : '');
+            });
             return o;
         });
     };
     var _ganttSet = function (rows) {
-        var ci = window.colIdx || {}, keys = _ganttKeys();
+        var ci = window.colIdx || {};
+        // ⚠️ 업무명 열은 **읽기 전용**이다 — 레벨 기호·들여쓰기가 붙은 표시용 값이고, 원본은
+        //    레벨별 열(개발단계/1~4차 업무)에 있다. 되돌려 넣으면 그 칸이 장식된 문자열로 오염되고
+        //    `recalculateSchedules`가 어차피 다시 덮어쓴다. 이름을 고치려면 레벨별 열을 고칠 것.
+        var keys = _ganttKeys().filter(function (k) { return k !== _GANTT_WBS_KEY && ci[k] >= 0; });
         // ⚠️⚠️ 간트는 이 앱의 **원본 데이터**다. 엑셀 ↩되돌리기와 별개로, 앱의 Undo(Ctrl+Z)에도
         //    스냅샷을 남겨 둔다 — 되돌릴 길을 둘 다 열어 두는 게 맞다(js/04e).
         if (window.pushUndoSnapshot) { try { window.pushUndoSnapshot(); } catch (e) { /* 스냅샷 실패가 불러오기를 막진 않는다 */ } }
@@ -470,11 +509,12 @@
         },
         {
             // 🗓 Gantt chart — 이 페이지엔 인쇄 버튼이 **없어서** 탭으로 자리를 못 찾는다.
-            //    대신 기존 '프로젝트 엑셀 저장' 버튼 앞에 붙인다(anchorSelector).
-            //    ⚠️ 그 버튼은 프로젝트 전체 워크북을 만드는 **다른 기능**이다 — 여기 📊는
-            //       이 왕복 형식(열 머리글 = colIdx 이름)으로 내므로 📥로 그대로 되돌아온다.
+            //    대신 **간트 툴바의 인쇄(PDF) 버튼**(`#print-btn`) 앞에 붙인다 — 다른 페이지와 같은 자리다.
+            //    ⚠️ [2026-10-20 수정] 처음엔 `button[onclick*="exportToExcel"]`로 잡았는데, 그 선택자가
+            //       **프로젝트 드롭다운 메뉴 안의 '프로젝트 엑셀 저장' 항목**을 먼저 집어서 버튼 두 개가
+            //       메뉴 안에 들어가 버렸다(사용자 지적). 화면에 하나뿐인 id로 잡을 것.
             id: 'gantt', label: 'Gantt chart',
-            anchorSelector: 'button[onclick*="exportToExcel"]',
+            anchorSelector: '#print-btn',
             repaint: ['recalculateSchedules'],
             blocks: [{ sheet: 'Gantt', kind: 'rows', get: _ganttRows, set: _ganttSet }]
         },
