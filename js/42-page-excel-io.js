@@ -34,6 +34,21 @@
     var _esc = function (s) { return window.escapeHtml ? window.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); };
     var _toast = function (msg, kind) { if (window.showToast) window.showToast(msg, kind || 'info'); };
 
+    // ── 🌐 엑셀 **안**의 이름(시트명·머리글·라벨)도 영문 대응 ────────────
+    //   버튼·토스트만 `_t`로 감싸고 파일 내용은 한글로 두면, 영문 모드 사용자가 받는 파일은
+    //   그대로 한글이다. 그래서 이름은 `['한글','English']` 쌍으로 적고:
+    //     • 내보낼 땐 `_nm()`  — 지금 언어 하나
+    //     • 불러올 땐 `_nms()` — **두 언어 다 받는다**
+    //   한쪽만 받으면 한글 모드에서 뽑은 파일을 영문 모드에서 못 읽는다(그 반대도).
+    var _nm  = function (n) { return Array.isArray(n) ? _t(n[0], n[1]) : n; };
+    var _nms = function (n) { return Array.isArray(n) ? n.slice() : [n]; };
+    // 행 객체에서 이름(쌍 가능)으로 값 꺼내기 — 어느 언어로 저장된 파일이든 찾는다.
+    var _pick = function (r, n) {
+        var names = _nms(n);
+        for (var i = 0; i < names.length; i++) if (r && r[names[i]] !== undefined) return r[names[i]];
+        return undefined;
+    };
+
     // ── 공용 헬퍼 ──────────────────────────────────────────────────────
     // 행 배열 → 2차원 배열(머리글 + 값). 열은 **등장하는 키 전부**(순서 보존).
     var rowsToAoa = function (rows) {
@@ -67,12 +82,15 @@
     // 키/값 블록(개요처럼 칸이 몇 개뿐인 것)
     var kvToAoa = function (obj, labels) {
         var aoa = [[_t('항목', 'Field'), _t('값', 'Value')]];
-        Object.keys(labels).forEach(function (k) { aoa.push([labels[k], (obj && obj[k] != null) ? obj[k] : '']); });
+        Object.keys(labels).forEach(function (k) { aoa.push([_nm(labels[k]), (obj && obj[k] != null) ? obj[k] : '']); });
         return aoa;
     };
     var aoaToKv = function (aoa, labels) {
         var byLabel = {};
-        Object.keys(labels).forEach(function (k) { byLabel[labels[k]] = k; });
+        // 라벨 → 키. 한/영 **둘 다** 등록해 어느 언어로 저장된 파일이든 읽는다.
+        Object.keys(labels).forEach(function (k) {
+            _nms(labels[k]).forEach(function (name) { byLabel[name] = k; });
+        });
         var out = {};
         (aoa || []).slice(1).forEach(function (line) {
             var key = byLabel[String((line || [])[0] || '').trim()];
@@ -104,7 +122,12 @@
         { h: 'MP NRE',        k: 'mpNre',      num: true },
         { h: 'Note',          k: 'note' }
     ];
-    var _MC_CALC_LABELS = ['SUBTOTAL', 'TOTAL(M.C)', '영업판가', '재료비율'];
+    var _MC_SALES = ['영업판가', 'Sales Price'];
+    var _MC_RATIO = ['재료비율 (M.C ÷ 영업판가) [%]', 'M.C Ratio (M.C ÷ Sales Price) [%]'];
+    // ⚠️ 걸러낼 라벨엔 **두 언어를 다 넣는다** — 한글 모드에서 뽑은 파일을 영문 모드에서
+    //    불러오면(그 반대도) 계산 행이 데이터 행으로 섞여 들어온다.
+    //    판정은 **짧은 머리말**로 한다(괄호 안 설명까지 똑같이 맞추라고 요구하지 않게).
+    var _MC_CALC_LABELS = ['SUBTOTAL', 'TOTAL(M.C)', '영업판가', 'SALES PRICE', '재료비율', 'M.C RATIO'];
     // 계산 행 라벨이 들어가는 열 — 견본은 **Specification**에 적는다. 위치를 숫자로 박지 않고
     // `_MC_COLS`에서 찾는다(열을 끼워 넣어도 따라간다).
     var _MC_LABEL_C = (function () {
@@ -237,7 +260,7 @@
         var salesRow = R;
         _MC_COLS.forEach(function (col, c) {
             var cell;
-            if (c === _MC_LABEL_C) cell = { t: 's', v: '영업판가' };
+            if (c === _MC_LABEL_C) cell = { t: 's', v: _nm(_MC_SALES) };
             else if (col.num) {
                 var n = _mcNum(sp[col.k]);
                 cell = (n !== null) ? { t: 'n', v: n, z: _MC_MONEY_FMT } : { t: 's', v: '' };
@@ -249,7 +272,7 @@
         // 재료비율 = TOTAL ÷ 영업판가. **×100을 하지 않는다** — 표시형식 `0%`가 100배해서
         // 보여주므로, 곱하면 3400% 처럼 100배로 나온다(사용자 견본도 나누기만 한다).
         if (rows.length && subtotalRows.length) {
-            calcRow('재료비율 (M.C ÷ 영업판가) [%]', function (c) {
+            calcRow(_nm(_MC_RATIO), function (c) {
                 var L = _colLetter(c);
                 return 'IF(' + L + (salesRow + 1) + '=0,"",' + L + (totalRow + 1) + '/' + L + (salesRow + 1) + ')';
             }, { z: '0%' });
@@ -328,53 +351,65 @@
     //   label     : 파일명/안내문에 쓰는 이름
     //   exportOnly: true면 "불러오기"를 만들지 않는다(파생 뷰)
     //   blocks[]  : 시트 하나당 하나. get()은 쓸 데이터를, set()은 되돌려 넣기를 한다.
+    // Summary 시트가 **끼워 넣는** 열 이름(원래 데이터엔 없는 구분 열)
+    var _SUM_STAGE = ['단계', 'Stage'];
+    var _SUM_MODEL = ['모델', 'Model'];
+
     window.PAGE_EXCEL_SPECS = window.PAGE_EXCEL_SPECS || [
         {
             id: 'summary', tab: 'tab-summary', label: 'Summary',
             repaint: ['populateTabData', 'renderProjectModels', 'renderMaterialModelsContainer', 'renderSummaryTimeline'],
             blocks: [
                 {
-                    sheet: '개요', kind: 'kv',
-                    labels: { purpose: '개발 목적', volume: '예상 물량', mpDate: 'MP 일정', background: '배경', devDays: '개발기간(일)' },
+                    sheet: ['개요', 'Overview'], kind: 'kv',
+                    labels: {
+                        purpose:    ['개발 목적',      'Purpose'],
+                        volume:     ['예상 물량',      'Est. Volume'],
+                        mpDate:     ['MP 일정',        'MP Date'],
+                        background: ['배경',           'Background'],
+                        devDays:    ['개발기간(일)',   'Dev Days']
+                    },
                     get: function () { return (_td().summary || {}); },
                     set: function (obj) { _td().summary = Object.assign({}, _td().summary || {}, obj); }
                 },
                 {
-                    sheet: '마일스톤', kind: 'rows',
+                    sheet: ['마일스톤', 'Milestones'], kind: 'rows',
                     get: function () {
-                        var ms = (_td().summary || {}).milestones || {};
+                        var ms = (_td().summary || {}).milestones || {}, STAGE = _nm(_SUM_STAGE);
                         return Object.keys(ms).map(function (stage) {
-                            return Object.assign({ 단계: stage }, ms[stage] || {});
+                            var o = {}; o[STAGE] = stage;
+                            return Object.assign(o, ms[stage] || {});
                         });
                     },
                     set: function (rows) {
-                        var ms = {};
+                        var ms = {}, names = _nms(_SUM_STAGE);
                         (rows || []).forEach(function (r) {
-                            var stage = String(r['단계'] || '').trim(); if (!stage) return;
-                            var o = {}; Object.keys(r).forEach(function (k) { if (k !== '단계') o[k] = r[k]; });
+                            var stage = String(_pick(r, _SUM_STAGE) || '').trim(); if (!stage) return;
+                            var o = {}; Object.keys(r).forEach(function (k) { if (names.indexOf(k) === -1) o[k] = r[k]; });
                             ms[stage] = o;
                         });
                         _td().summary = _td().summary || {}; _td().summary.milestones = ms;
                     }
                 },
                 {
-                    sheet: '주요자재', kind: 'rows',
+                    sheet: ['주요자재', 'Key Materials'], kind: 'rows',
                     // 모델별로 나뉜 표를 한 시트에 담되, 어느 모델 것인지 '모델' 열로 구분한다.
                     get: function () {
-                        var out = [];
+                        var out = [], MODEL = _nm(_SUM_MODEL);
                         ((_td().projectModels) || []).forEach(function (m, i) {
                             (m.materials || []).forEach(function (r) {
-                                out.push(Object.assign({ 모델: '#' + (i + 1) }, r));
+                                var o = {}; o[MODEL] = '#' + (i + 1);
+                                out.push(Object.assign(o, r));
                             });
                         });
                         return out;
                     },
                     set: function (rows) {
                         var models = _td().projectModels || [];
-                        var buckets = {};
+                        var buckets = {}, names = _nms(_SUM_MODEL);
                         (rows || []).forEach(function (r) {
-                            var mi = parseInt(String(r['모델'] || '#1').replace(/[^0-9]/g, ''), 10) || 1;
-                            var o = {}; Object.keys(r).forEach(function (k) { if (k !== '모델') o[k] = r[k]; });
+                            var mi = parseInt(String(_pick(r, _SUM_MODEL) || '#1').replace(/[^0-9]/g, ''), 10) || 1;
+                            var o = {}; Object.keys(r).forEach(function (k) { if (names.indexOf(k) === -1) o[k] = r[k]; });
                             (buckets[mi - 1] = buckets[mi - 1] || []).push(o);
                         });
                         Object.keys(buckets).forEach(function (i) { if (models[i]) models[i].materials = buckets[i]; });
@@ -422,10 +457,10 @@
         {
             // ⚠️ 알람과 공지는 **인쇄 버튼 하나를 공유**한다(onclick이 `_alarmView` 조건식).
             //    그대로 두면 두 쌍이 같이 붙어 헷갈린다 — 지금 보고 있는 쪽만 띄운다.
-            id: 'notice', tab: 'tab-notice', label: '공지',
+            id: 'notice', tab: 'tab-notice', label: ['공지', 'Notice'],
             visibleWhen: function () { return window._alarmView === 'notice'; },
             repaint: ['renderNoticeTab'],
-            blocks: [{ sheet: '공지', kind: 'rows',
+            blocks: [{ sheet: ['공지', 'Notice'], kind: 'rows',
                 get: function () { return window._noticeItems || []; },
                 set: function (rows) {
                     window._noticeItems = rows || [];
@@ -445,9 +480,9 @@
         },
         {
             // ⚠️ 알람은 간트에서 **계산되는** 목록이다(collectAlarmItems) — 되돌려 넣을 곳이 없다.
-            id: 'alarm', tab: 'tab-alarm', label: '알람', exportOnly: true,
+            id: 'alarm', tab: 'tab-alarm', label: ['알람', 'Alarm'], exportOnly: true,
             visibleWhen: function () { return window._alarmView !== 'notice'; },
-            blocks: [{ sheet: '알람', kind: 'rows',
+            blocks: [{ sheet: ['알람', 'Alarm'], kind: 'rows',
                 get: function () { return (window.collectAlarmItems ? window.collectAlarmItems() : []) || []; } }]
         }
     ];
@@ -477,7 +512,7 @@
                 if (aoa.length <= 1) empty++;
                 ws = window.XLSX.utils.aoa_to_sheet(aoa);
             }
-            window.XLSX.utils.book_append_sheet(wb, ws, b.sheet.slice(0, 31));
+            window.XLSX.utils.book_append_sheet(wb, ws, _nm(b.sheet).slice(0, 31));
         });
         // 🎨 [2026-10-20] BOM 출력과 **같은 모양**으로 — 머리글/제브라/테두리/열너비.
         //    앱 전체가 쓰는 공용 스타일러를 그대로 부른다(js/04k). 색은 거기서
@@ -488,11 +523,11 @@
             try { applyExcelStyles(wb); } catch (e) { /* 스타일 실패가 저장을 막지는 않는다 */ }
         }
         var pm = window.projectMeta || {};
-        var name = [(pm.프로젝트명 || pm.고객모델명 || 'project'), spec.label,
+        var name = [(pm.프로젝트명 || pm.고객모델명 || 'project'), _nm(spec.label),
                     new Date().toISOString().slice(0, 10).replace(/-/g, '')].join('_') + '.xlsx';
         try { window.XLSX.writeFile(wb, name.replace(/[\\/:*?"<>|]/g, '_')); }
         catch (e) { _toast('⚠️ ' + _t('엑셀 저장 실패: ', 'Excel save failed: ') + (e && e.message ? e.message : e), 'error'); return; }
-        _toast('📊 ' + spec.label + ' ' + _t('엑셀을 내보냈습니다.', 'exported.')
+        _toast('📊 ' + _nm(spec.label) + ' ' + _t('엑셀을 내보냈습니다.', 'exported.')
                + (empty ? ' (' + _t('빈 시트 ', 'empty sheets: ') + empty + ')' : ''), 'success');
     };
 
@@ -523,25 +558,28 @@
         // 어떤 시트가 어느 블록인지 — 이름이 정확히 같은 것만 받는다(엉뚱한 시트를 밀어넣지 않게).
         var matched = [], missing = [];
         spec.blocks.forEach(function (b) {
-            var sh = wb.Sheets[b.sheet] || wb.Sheets[b.sheet.slice(0, 31)];
-            if (sh) matched.push({ b: b, sh: sh }); else missing.push(b.sheet);
+            // 한글/영문 어느 쪽으로 저장된 파일이든 받는다 — 한쪽만 보면 언어를 바꾼 순간 못 읽는다.
+            var sh = null;
+            _nms(b.sheet).some(function (n) { sh = wb.Sheets[n] || wb.Sheets[n.slice(0, 31)]; return !!sh; });
+            if (sh) matched.push({ b: b, sh: sh }); else missing.push(_nm(b.sheet));
         });
         if (!matched.length) {
             _toast('⚠️ ' + _t('이 페이지의 시트를 찾지 못했습니다. 필요한 시트: ', 'No matching sheet. Expected: ')
-                   + spec.blocks.map(function (b) { return b.sheet; }).join(', '), 'error');
+                   + spec.blocks.map(function (b) { return _nm(b.sheet); }).join(', '), 'error');
             return;
         }
 
         // 바꾸기 전 상태를 통째로 떠 둔다(되돌리기용).
         var snap = {};
-        spec.blocks.forEach(function (b) { try { snap[b.sheet] = JSON.parse(JSON.stringify(b.get())); } catch (e) { snap[b.sheet] = null; } });
+        spec.blocks.forEach(function (b) { var k = _nms(b.sheet)[0];
+            try { snap[k] = JSON.parse(JSON.stringify(b.get())); } catch (e) { snap[k] = null; } });
 
         var summary = [];
         matched.forEach(function (m) {
             var aoa = window.XLSX.utils.sheet_to_json(m.sh, { header: 1, defval: '', raw: false });
             if (m.b.kind === 'kv') {
                 m.b.set(aoaToKv(aoa, m.b.labels));
-                summary.push(m.b.sheet);
+                summary.push(_nm(m.b.sheet));
             } else {
                 var rows = aoaToRows(aoa);
                 var before = (m.b.get() || []).length;
@@ -549,7 +587,7 @@
                 // ⚠️ 파일의 행 수가 아니라 **실제로 저장된 행 수**를 말한다 — M.C Table처럼 계산
                 //    행을 걸러내는 블록이 있어서, 파일 행수를 그대로 말하면 사실과 달라진다.
                 var after = (m.b.get() || []).length;
-                summary.push(m.b.sheet + ' ' + before + '→' + after + _t('행', '')
+                summary.push(_nm(m.b.sheet) + ' ' + before + '→' + after + _t('행', '')
                              + (rows.length !== after ? _t(' (계산 행 ' + (rows.length - after) + '개 제외)',
                                                            ' (' + (rows.length - after) + ' calculated rows skipped)') : ''));
             }
@@ -560,7 +598,7 @@
         // 불러오기도 '저장 안 된 변경'이다 — 안 찍으면 창을 닫을 때 경고 없이 날아간다(js/04a).
         if (window._markNonGanttDirty) { try { window._markNonGanttDirty(); } catch (e) { /* 표시 실패가 불러오기를 막진 않는다 */ } }
 
-        _toast('📥 ' + spec.label + ' ' + _t('불러왔습니다 — ', 'imported — ') + summary.join(' / ')
+        _toast('📥 ' + _nm(spec.label) + ' ' + _t('불러왔습니다 — ', 'imported — ') + summary.join(' / ')
                + (missing.length ? (' / ' + _t('건너뜀: ', 'skipped: ') + missing.join(', ')) : ''), 'success');
         _pxRenderButtons();   // 되돌리기 버튼을 띄우기 위해 다시 그린다
     };
@@ -571,12 +609,13 @@
         var snap;
         try { snap = JSON.parse(raw); } catch (e) { return; }
         spec.blocks.forEach(function (b) {
-            if (snap[b.sheet] == null) return;
-            if (b.kind === 'kv') b.set(snap[b.sheet]); else b.set(snap[b.sheet]);
+            var k = _nms(b.sheet)[0];
+            if (snap[k] == null) return;
+            b.set(snap[k]);
         });
         delete window._pageExcelUndo[id];
         _repaint(spec.repaint);
-        _toast('↩️ ' + spec.label + ' ' + _t('불러오기 전으로 되돌렸습니다.', 'restored.'), 'success');
+        _toast('↩️ ' + _nm(spec.label) + ' ' + _t('불러오기 전으로 되돌렸습니다.', 'restored.'), 'success');
         _pxRenderButtons();
     };
 
@@ -626,7 +665,7 @@
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
                   + ' style="' + BTN + '">📥 ' + _t('엑셀 입력', 'Import') + '</button>' + SEP)
                 + '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
-                  + _esc(_t(spec.label + ' 내용을 엑셀 파일로 저장합니다', 'Save ' + spec.label + ' as an Excel file'))
+                  + _esc(_t(_nm(spec.label) + ' 내용을 엑셀 파일로 저장합니다', 'Save ' + _nm(spec.label) + ' as an Excel file'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
                   + ' style="' + BTN + ' margin-right:4px;">📊 ' + _t('엑셀 저장', 'Export') + '</button>'
                 + (hasUndo ?
