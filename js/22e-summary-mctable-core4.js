@@ -68,6 +68,11 @@ window.renderElecCompareTab = async function(type) {
     theadEl.innerHTML = `<tr><th colspan="99" style="padding:16px; text-align:center; color:#999; background:#fff;">${_en ? 'Loading…' : '불러오는 중...'}</th></tr>`;
     tbodyEl.innerHTML = '';
     const lib = await window.loadElecPartLibrary(type);
+    // 🆕 [2026-10-20] 주요자재 ↔ 라이브러리 대조는 **그릴 때마다** 계산한다.
+    //    공유 라이브러리(ElecPartLib_*_Shared.json)에는 아무것도 쓰지 않는다 — 모델 꼬리표는
+    //    이 프로젝트에서만 의미가 있기 때문이다. 실패해도 비교표 자체는 그려야 하므로 조용히 통과.
+    let projParts = { byLib: {}, order: [], unresolved: [] };
+    try { if (window._epProjectModelParts) projParts = await window._epProjectModelParts(type); } catch (e) { /* 대조 실패해도 표는 그린다 */ }
 
     const selected = ec.selectedModels.slice(0, 10);
     const slotCount = Math.max(2, selected.length); // 💡 기본 최소 2개 비교 슬롯을 항상 보여줌
@@ -75,7 +80,12 @@ window.renderElecCompareTab = async function(type) {
     const totalCols = 1 + slotCount + 1; // 라벨 + 슬롯들 + Note
 
     let headHtml = '<tr>';
-    headHtml += `<th style="min-width:140px;">Comparison table</th>`;
+    // 📥 주요자재에서 한 번에 가져오기 — 아직 비교표에 없는 개수를 같이 보여준다.
+    const _impN = projParts.order.filter(function(m) { return selected.indexOf(m) === -1; }).length;
+    const _impBtn = (projParts.order.length || projParts.unresolved.length)
+        ? `<div style="margin-top:3px;"><button onclick="window.elecCompareAddFromMaterials(${escapeHtml(JSON.stringify(type))})" title="${_en ? 'Add parts registered in Summary materials (all models)' : 'Summary 주요자재에 등록된 이 타입 부품을 모델별로 모두 가져옵니다'}" onmouseover="this.style.background='#d8eef0';" onmouseout="this.style.background='#e8f6f7';" style="background:#e8f6f7; border:1px solid #a3d9e0; border-radius:4px; color:#00707d; font-size:10.5px; font-weight:bold; cursor:pointer; padding:1px 6px; line-height:1.6;">📥 ${_en ? 'From materials' : '주요자재에서'}${_impN ? ' (' + _impN + ')' : ''}</button></div>`
+        : '';
+    headHtml += `<th style="min-width:140px;">Comparison table${_impBtn}</th>`;
     for (let i = 0; i < slotCount; i++) {
         const m = selected[i];
         if (m) {
@@ -86,6 +96,14 @@ window.renderElecCompareTab = async function(type) {
             //    헤더에 중복 표시할 필요 없음 — 요청에 따라 헤더에서는 뺌.
             headHtml += `<th style="min-width:130px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
                 <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>
+                ${(projParts.byLib[m] || []).length
+                    ? `<div style="margin-top:2px; display:flex; gap:3px; justify-content:center; flex-wrap:wrap;">`
+                      + (projParts.byLib[m] || []).map(function(b) {
+                            // 같은 부품을 여러 모델이 쓰면 열을 늘리지 않고 배지만 여러 개 붙는다.
+                            return `<span title="${escapeHtml(b.title)}" style="font-size:9.5px; font-weight:bold; color:#00707d; background:#e8f6f7; border:1px solid #a3d9e0; border-radius:8px; padding:0 5px; line-height:1.55; white-space:nowrap;">${escapeHtml(b.label)}</span>`;
+                        }).join('')
+                      + `</div>`
+                    : ''}
                 <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">✏️</button>` : ''}
                     <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🔄</button>
@@ -314,6 +332,97 @@ window.elecCompareRemove = function(type, model) {
     if (!window.tabData || !window.tabData.elecCompare || !window.tabData.elecCompare[type]) return;
     window.tabData.elecCompare[type].selectedModels = window.tabData.elecCompare[type].selectedModels.filter(function(m) { return m !== model; });
     window.epLogChange(type, model, window._currentLang === 'en' ? 'Comparison table' : '비교표', window._currentLang === 'en' ? 'Included' : '포함', window._currentLang === 'en' ? 'Removed' : '제거');
+    window.renderElecCompareTab(type);
+};
+
+// 🆕 [2026-10-20] Summary '주요자재'에 등록된 이 타입 부품을 **모델별로** 모은다.
+//
+// 왜 — 주요자재는 모델(#1/#2/#3…)마다 따로 있어서 같은 구분(AD BOARD 등)의 부품이 여러 개가
+// 된다. 그걸 비교표에 한 번에 올리고, 각 열이 어느 모델 것인지 보이게 하려고 쓴다.
+//
+// ⚠️⚠️ **모델 라벨을 라이브러리에 저장하지 말 것.** Elec Parts 라이브러리는
+//   `ElecPartLib_*_Shared.json` — **팀 공유** 파일이다. 내 프로젝트의 "모델 #2" 같은 꼬리표를
+//   거기 적으면 남의 프로젝트에서 의미 없는 값이 남는다. 그래서 이 함수는 **그릴 때마다
+//   계산**만 하고 아무것도 저장하지 않는다.
+//
+// ⚠️ 같은 부품을 여러 모델이 쓰면 **열을 늘리지 않고** 배지만 여러 개 붙인다(byLib에 라벨 누적).
+//
+// 반환: { byLib: { <라이브러리 model키>: [{label,title}…] }, order: [model키…], unresolved: [{label,q}…] }
+window._epProjectModelParts = async function(type) {
+    const out = { byLib: {}, order: [], unresolved: [] };
+    const catMap = window.ELEC_CATEGORY_TO_VIEW || {};
+    // 카테고리명을 여기 박지 않는다 — js/23의 매핑을 거꾸로 쓴다(뷰가 늘면 거기만 고치면 됨).
+    const cats = Object.keys(catMap).filter(function(c) { return catMap[c] === type; });
+    if (!cats.length || !window.loadElecPartLibrary || !window.findElecPartInLibrary) return out;
+
+    let lib;
+    try { lib = await window.loadElecPartLibrary(type); } catch (e) { return out; }
+    const _en = window._currentLang === 'en';
+    const models = (window.tabData && window.tabData.projectModels) || [];
+
+    models.forEach(function(m, i) {
+        // 화면 값이 가장 최신(저장 전 편집 포함) — 없으면 저장된 값으로.
+        let rows = [];
+        try {
+            if (window.collectMaterialRows && document.getElementById('sum-materials-rows-a-' + i)) {
+                rows = window.collectMaterialRows(true, i) || [];
+            }
+        } catch (e) { rows = []; }
+        if (!rows.length) rows = m.materials || [];
+
+        const label = '#' + (i + 1);
+        const title = (_en ? 'Model #' : '모델 #') + (i + 1)
+            + (m.unitId ? ' · ' + m.unitId : '')
+            + (m['고객모델명'] ? ' (' + m['고객모델명'] + ')' : '');
+
+        rows.forEach(function(r) {
+            if (cats.indexOf(String(r.category || '').trim()) === -1) return;
+            const code = String(r.ktkPn || '').trim();
+            const desc = String(r.description || '').trim();
+            if (!code && !desc) return;
+            // 돋보기(showElecPartSpecModal)와 **같은** 검색 규칙 — "코드_이름" 조합.
+            const q = code ? (code + (desc ? '_' + desc : '')) : desc;
+            const entry = window.findElecPartInLibrary(lib, q);
+            if (!entry) { out.unresolved.push({ label: label, q: q }); return; }
+            if (!out.byLib[entry.model]) { out.byLib[entry.model] = []; out.order.push(entry.model); }
+            const seen = out.byLib[entry.model].some(function(x) { return x.label === label; });
+            if (!seen) out.byLib[entry.model].push({ label: label, title: title });
+        });
+    });
+    return out;
+};
+
+// 🆕 [2026-10-20] 주요자재에 등록된 부품을 비교표에 한 번에 올린다.
+window.elecCompareAddFromMaterials = async function(type) {
+    const _en = window._currentLang === 'en';
+    const found = await window._epProjectModelParts(type);
+    window.tabData = window.tabData || {};
+    window.tabData.elecCompare = window.tabData.elecCompare || {};
+    window.tabData.elecCompare[type] = window.tabData.elecCompare[type] || { selectedModels: [], notes: {} };
+    const sel = window.tabData.elecCompare[type].selectedModels;
+
+    let added = 0, dup = 0, over = 0;
+    found.order.forEach(function(model) {
+        if (sel.indexOf(model) !== -1) { dup++; return; }
+        if (sel.length >= 10) { over++; return; }   // 비교표 상한은 기존 규칙 그대로 10개
+        sel.push(model);
+        added++;
+        if (window.epLogChange) window.epLogChange(type, model, _en ? 'Comparison table' : '비교표', '-', _en ? 'Added from materials' : '주요자재에서 추가');
+    });
+
+    const msg = [];
+    msg.push(_en ? (added + ' added') : (added + '건 추가'));
+    if (dup) msg.push(_en ? (dup + ' already there') : ('이미 있음 ' + dup + '건'));
+    if (over) msg.push(_en ? (over + ' skipped (max 10)') : ('상한 초과로 건너뜀 ' + over + '건'));
+    // 라이브러리에 아직 스펙이 없는 건 조용히 넘기지 않고 알려준다(추출 흐름으로 이어지게).
+    if (found.unresolved.length) {
+        msg.push(_en ? (found.unresolved.length + ' not in library') : ('라이브러리 미등록 ' + found.unresolved.length + '건'));
+    }
+    if (!found.order.length && !found.unresolved.length) {
+        if (window.showToast) window.showToast(_en ? 'No parts of this type in Summary materials.' : 'Summary 주요자재에 이 타입 부품이 없습니다.', 'info');
+        return;
+    }
+    if (window.showToast) window.showToast(msg.join(' / '), added ? 'success' : 'info');
     window.renderElecCompareTab(type);
 };
 
