@@ -1116,10 +1116,24 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     # 🆕 [2026-10-12] 레이아웃 카탈로그는 트랜잭션마다 별개다 — 기본값 `/STD_MC`는 ZPP033(단일)에만
     # 있고 ZPP038(복수)에는 없어서, 지정이 없을 때 ZPP038에 억지로 적용하려다 매번 "적용 실패"가
     # 났다. 지정이 없으면 ZPP038은 적용을 시도하지 않고 SAP 화면 기본값(/표준품BOM)을 그대로 쓴다.
-    if not layout_variant:
-        layout_variant = _BOM_LAYOUT_VARIANT if used_single else ''
+    # 🆕 [2026-10-20 실측] `layout=none`(또는 `-`)은 **화면 기본 레이아웃을 그대로 쓰라**는 뜻이다.
+    # 왜 필요했나 — 전자부품 BOM이 쓰던 `/LOC`은 EBORT를 주긴 하는데 **정렬이 걸려 있다.**
+    # 설치지점이 여러 곳인 부품은 ALV가 행을 쪼개 주는데(첫 행에만 구성부품, 나머지는 EBORT만),
+    # 정렬이 걸리면 그 "나머지 행" 199개가 전부 뒤로 몰려 **어느 부품 것인지 알 수 없게 된다**
+    # (연속 행에는 EBORT 말고 아무 값도 없다 — 실측 확인). 반면 화면 기본 레이아웃은
+    # STUFE·EBORT를 둘 다 주면서 자연 순서라 연속 행이 제 부품 바로 뒤에 온다
+    # (자재 303222로 실측: 264행 = 부품 65 + 연속 199, 사용자 엑셀 export와 순서 일치).
+    # ⚠️ 지정이 아예 없을 때(`''`)는 예전처럼 ZPP033에 `/STD_MC`를 씌운다 — 하위호환.
+    #    `/STD_MC`엔 EBORT가 없으므로 설치지점이 필요하면 반드시 `none`을 명시할 것.
+    if str(layout_variant or '').strip().lower() in ('none', '-'):
+        layout_variant = ''
+        _screen_default = True
+    else:
+        _screen_default = False
+        if not layout_variant:
+            layout_variant = _BOM_LAYOUT_VARIANT if used_single else ''
     _stage('bom_layout')
-    layout_applied, layout_diag = None, ''
+    layout_applied, layout_diag = None, ('screen_default' if _screen_default else '')
     grid_for_layout = _sap_find_grid(wnd) if layout_variant else None
     if grid_for_layout is not None:
         layout_applied, layout_diag = _sap_select_alv_layout(session, grid_for_layout, layout_variant)

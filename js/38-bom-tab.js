@@ -282,6 +282,7 @@
         });
 
         var parent = null, rows = [], totals = [];
+        var locOverflow = 0;   // 수량 초과로 못 붙인 설치지점 행 수(부품과 어긋났다는 신호)
         var firstDataLevel = 0, hierarchyOk = true, prevLevel = 0;
         raw.forEach(function (o) {
             var stufe = iStufe === -1 ? '' : (o.STUFE || '');
@@ -310,6 +311,18 @@
                 var prevRow = rows[rows.length - 1];
                 var curLoc = String(prevRow.EBORT || '').trim();
                 var addLoc = String(o.EBORT).trim();
+                // ⚠️⚠️ [2026-10-20 실측] **수량보다 많이 붙으면 그건 앞 부품 것이 아니다.**
+                //   정렬이 걸린 레이아웃(`/LOC`)에서는 연속 행이 부품에서 떨어져 나와 맨 뒤로
+                //   전부 몰린다 — 그대로 두면 마지막 부품 하나가 199개를 다 먹는다(실측: 자재
+                //   303222에서 101454가 설치지점 200개, 수량은 20). 연속 행에는 EBORT 말고
+                //   아무 값도 없어서 주인을 되찾을 방법이 없다.
+                //   → 수량만큼 찼으면 **붙이지 않고 세어만 둔다.** 틀린 값을 조용히 보여주는
+                //     것보다 "어긋났다"고 알리는 게 낫다(CLAUDE.md: 조용히 삼키지 말 것).
+                //   정상 경로(화면 기본 레이아웃, layout=none)에서는 지점 수 = 수량이 정확히
+                //   맞아떨어져서 이 가드에 걸리지 않는다(64개 부품 전부 실측 확인).
+                var need = parseInt(String(prevRow.MENGE || '0').replace(/,/g, ''), 10) || 0;
+                var have = curLoc ? curLoc.split(',').length : 0;
+                if (need && have >= need) { locOverflow++; return; }
                 // 같은 지점이 두 번 오면 무시(중복 방지)
                 if ((',' + curLoc + ',').indexOf(',' + addLoc + ',') === -1) {
                     prevRow.EBORT = curLoc ? curLoc + ',' + addLoc : addLoc;
@@ -321,7 +334,7 @@
             else if (o.MENGE || o.MMEIN) totals.push(o);
         });
         return { cols: cols, parent: parent, rows: rows, totals: totals, truncated: truncated,
-                 totalRows: totalRows, hierarchyOk: hierarchyOk };
+                 totalRows: totalRows, hierarchyOk: hierarchyOk, locOverflow: locOverflow };
     };
 
     // ─── ZMM009 보강 ───────────────────────────────────────────────────
@@ -1259,7 +1272,7 @@
     };
 
     // 전자부품 BOM 전용 ALV 레이아웃 — 설치지점(EBORT)과 레벨(STUFE)을 같이 주는 레이아웃.
-    var _ELEC_BOM_LAYOUT = '/LOC';
+    var _ELEC_BOM_LAYOUT = 'none';   // 'none' = 화면 기본 레이아웃 그대로 — 아래 주석 참고
 
     window._elecBomFetch = async function () {
         var type = window._elecBomType;
@@ -1278,7 +1291,14 @@
             btn.disabled = on;
             btn.textContent = on ? _t('⏳ 조회 중…', '⏳ Loading…') : _t('🔄 SAP 조회', '🔄 Fetch from SAP');
         };
-        // 🆕 [2026-10-16] 전자부품 BOM은 Location(설치지점)이 핵심이라 `/LOC` 레이아웃으로 조회한다.
+        // 🆕 [2026-10-20 실측으로 정정] 전자부품 BOM은 설치지점이 핵심인데, 예전엔 `/LOC`을 썼다.
+        //  ⚠️ `/LOC`은 EBORT를 주긴 하지만 **정렬이 걸려 있다.** 설치지점이 여러 곳인 부품은
+        //     ALV가 행을 쪼개 주는데(첫 행에만 구성부품, 나머지는 EBORT만), 정렬되면 그
+        //     '나머지 행'들이 전부 뒤로 몰려 **어느 부품 것인지 알 수 없게 된다** — 연속 행엔
+        //     EBORT 말고 아무 값도 없다(실측). 자재 303222에서 101454 하나가 199개를 다 먹었다.
+        //  ✅ 화면 기본 레이아웃('none')은 STUFE·EBORT를 둘 다 주면서 **자연 순서**라 연속 행이
+        //     제 부품 바로 뒤에 온다. 실측: 264행(부품 65 + 연속 199), 사용자 엑셀 export와
+        //     순서 일치, 64개 부품 전부 '지점 수 = 수량' 정확히 맞음.
         //  · `show_location=1` = ZPP033 초기화면 Option의 "Location Information" 체크박스
         //  · `/LOC`은 STUFE(레벨)와 EBORT(설치지점)를 같이 주는 유일한 레이아웃 — 기본 `/STD_MC`엔
         //    EBORT가 아예 없고, `/SEOK_설치지점_재`는 EBORT는 있지만 STUFE가 없어 계층을 못 만든다
@@ -1325,6 +1345,9 @@
                 //    "조회 성공"처럼 보였다(사용자 제보: "loc는 그대로"). 메인 BOM 탭엔 원래
                 //    이 표시가 있었는데 여기만 빠져 있었다. 조용히 삼키지 말 것(CLAUDE.md).
                 layout: _ELEC_BOM_LAYOUT, layoutApplied: data.layoutApplied,
+                // 설치지점이 제대로 붙었는지 판단할 신호 두 가지.
+                hasEbort: (parsed.cols || []).indexOf('EBORT') >= 0,
+                locOverflow: parsed.locOverflow || 0,
                 layoutDiag: data.layoutDiag || '',
                 cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
                 truncated: parsed.truncated, totalRows: parsed.totalRows,
@@ -1516,6 +1539,15 @@
                 'Location needs the "' + st.layout + '" layout, but it could not be applied'
                     + (st.layoutDiag ? ' (' + st.layoutDiag + ')' : '')
                     + '. Try single-level explosion — ZPP033 and ZPP038 have different layout catalogs.'), 'error');
+        } else if (st.hasEbort === false) {
+            window._elecBomSetStatus('⚠️ ' + _t(
+                '이 레이아웃에는 설치지점(EBORT) 열이 없습니다 — Loc. 칸이 빈 것은 조회 실패가 아니라 열 자체가 없어서입니다.',
+                'This layout has no location (EBORT) column — empty Loc. cells mean the column is absent, not a failed lookup.'), 'error');
+        } else if (st.locOverflow) {
+            // 수량보다 많은 설치지점 행이 들어왔다 = 연속 행이 부품에서 떨어져 나왔다는 뜻.
+            window._elecBomSetStatus('⚠️ ' + _t(
+                '설치지점 ' + st.locOverflow + '건이 어느 부품 것인지 확인되지 않아 버렸습니다 — 그리드에 정렬이 걸린 레이아웃일 수 있습니다. 표에 보이는 설치지점은 부품별 수량만큼만 채워져 있습니다.',
+                st.locOverflow + ' location rows could not be matched to a component (the grid layout may be sorted); shown locations are capped at each component quantity.'), 'error');
         } else if (st.layoutApplied === true && !st.truncated) {
             // 직전 조회의 레이아웃 경고가 **성공한 뒤에도 남아 있던** 문제(2026-10-20 검증 중 발견).
             // 조회 경로(_elecBomFetch)는 렌더 전에 상태를 비우지만, 뷰를 다시 열기만 해도
