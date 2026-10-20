@@ -49,6 +49,23 @@
         return undefined;
     };
 
+    // ↩ 자동 줄바꿈 끄기. 공용 스타일러(js/04k)는 값에 줄바꿈이 있으면 `wrapText`를 켜는데,
+    //   그러면 긴 상세내용 한 칸 때문에 행 높이가 늘어나 표가 들쭉날쭉해진다(사용자 요청 2026-10-20).
+    //   ⚠️ 스타일러를 고치지 않고 **여기서만** 끈다 — 그 함수는 BOM·프로젝트 출력도 같이 쓴다.
+    var _noWrap = function (wb) {
+        if (!wb || !window.XLSX) return;
+        (wb.SheetNames || []).forEach(function (name) {
+            var ws = wb.Sheets[name];
+            if (!ws || !ws['!ref']) return;
+            var rg = window.XLSX.utils.decode_range(ws['!ref']);
+            for (var r = rg.s.r; r <= rg.e.r; r++) for (var c = rg.s.c; c <= rg.e.c; c++) {
+                var cell = ws[window.XLSX.utils.encode_cell({ r: r, c: c })];
+                if (!cell || !cell.s) continue;
+                cell.s.alignment = Object.assign({}, cell.s.alignment || {}, { wrapText: false });
+            }
+        });
+    };
+
     // 블록의 `center: ['키', …]`에 적힌 열을 가운데 정렬한다 — 어느 페이지든 쓸 수 있게 공용으로.
     // 머리글 **이름**으로 찾으므로 열 순서가 바뀌어도 따라간다.
     // ⚠️ 공용 스타일러(js/04k)는 `Object.assign(base, cell.s)`라 여기 alignment가 통째로 이긴다 —
@@ -332,13 +349,20 @@
     // ── 🗓 Gantt 전용 헬퍼 ─────────────────────────────────────────────
     // 간트 행은 **배열**이고, 어느 칸이 무엇인지는 `colIdx`(이름 → 인덱스)가 안다.
     // 그래서 엑셀 열 머리글로 colIdx의 이름을 그대로 쓴다 — 화면 열 순서가 바뀌어도 안전하다.
-    // 🌳 레벨 표시 — 트리 모양(`│` 세로줄 + ` └ ` 그 행 자신). 둘 다 데이터이니 모양을 바꾸려면
-    //    여기만 고치면 된다. 0레벨은 맨 위라 아무것도 붙이지 않는다.
-    //      0 │ RFQ(KICK OFF)
-    //      1 │  └ 견적 요청
-    //      2 │ │   └ 사양 검토
-    var _GANTT_TREE_STEM = '│  ';
-    var _GANTT_TREE_LEAF = ' └ ';
+    // 🌳 레벨 표시 — 트리 모양. 0레벨은 맨 위라 아무것도 붙이지 않고, 그 아래는 레벨마다
+    //    한 칸씩 들어가며 **그 레벨의 마지막 형제만** `└`, 나머지는 `│`를 쓴다.
+    //      PROTO A
+    //      │  P.O(PURCHASE ORDER)
+    //      │  DESIGN
+    //      │  │  ELECTRICAL*
+    //      │  └  APPROVAL          ← DESIGN의 마지막 자식
+    //      │  PROCUREMENT
+    //      │  └  TOUCH & GLASS*
+    //      └  EX-WORK(ETD)         ← 0레벨의 마지막 자식
+    // ⚠️ 두 기호의 **폭이 같아야** 줄이 맞는다(둘 다 U+25xx, 같은 폭). 조상 칸을 공백으로
+    //    비우면 글꼴에 따라 폭이 달라져 어긋나므로, 조상은 끝까지 `│`로 채운다.
+    var _GANTT_TREE_STEM = '│  ';   // 조상 칸 / 마지막이 아닌 형제
+    var _GANTT_TREE_LEAF = '└  ';   // 그 레벨의 마지막 형제
     var _GANTT_WBS_KEY = 'wbs';
     var _GANTT_LEVEL_KEY = 'bogo';      // LEVEL(WBS) — WBS 바로 왼쪽에 둔다
     // 그 행 **자신의** 업무명.
@@ -356,12 +380,25 @@
         var name = (orig || '') || ((c !== undefined && c > -1 && row[c] != null) ? row[c] : '') || '';
         return String(name).trim().replace(/^🌐\s*/, '');
     };
-    var _ganttWbsCell = function (row) {
+    var _ganttLevel = function (row) { var lv = parseInt(row && row._level, 10); return (lv >= 0) ? lv : 0; };
+    // 각 행이 **그 레벨의 마지막 형제**인지. 뒤에서부터 한 번만 훑는다 — 더 얕은 레벨을 지나면
+    // 그보다 깊은 레벨의 "이미 봤음" 표시는 거기서 끊기므로 지운다.
+    var _ganttLastFlags = function (levels) {
+        var last = new Array(levels.length), seen = [];
+        for (var i = levels.length - 1; i >= 0; i--) {
+            var lv = levels[i];
+            last[i] = !seen[lv];
+            seen[lv] = true;
+            for (var d = lv + 1; d < seen.length; d++) seen[d] = false;
+        }
+        return last;
+    };
+    var _ganttWbsCell = function (row, isLast) {
         var name = _ganttTaskName(row);
         if (!name) return '';
-        var lv = parseInt(row && row._level, 10); if (!(lv >= 0)) lv = 0;
+        var lv = _ganttLevel(row);
         if (lv === 0) return name;
-        return new Array(lv).join(_GANTT_TREE_STEM) + _GANTT_TREE_LEAF + name;
+        return new Array(lv).join(_GANTT_TREE_STEM) + (isLast ? _GANTT_TREE_LEAF : _GANTT_TREE_STEM) + name;
     };
     var _ganttKeys = function () {
         var ci = window.colIdx || {};
@@ -376,10 +413,12 @@
     };
     var _ganttRows = function () {
         var ci = window.colIdx || {}, keys = _ganttKeys();
-        return (window.globalData || []).map(function (row) {
+        var data = window.globalData || [];
+        var isLast = _ganttLastFlags(data.map(_ganttLevel));
+        return data.map(function (row, i) {
             var o = {};
             keys.forEach(function (k) {
-                if (k === _GANTT_WBS_KEY) { o[k] = _ganttWbsCell(row); return; }
+                if (k === _GANTT_WBS_KEY) { o[k] = _ganttWbsCell(row, isLast[i]); return; }
                 // 레벨은 `_level`이 항상 정확하다 — bogo 칸은 재계산이 거기서 **베껴 넣는** 값이고,
                 // 레벨별 열 모드 프로젝트엔 bogo 칸 자체가 없다.
                 if (k === _GANTT_LEVEL_KEY && row && row._level != null) { o[k] = row._level; return; }
@@ -592,6 +631,7 @@
         if (typeof applyExcelStyles === 'function') {
             try { applyExcelStyles(wb); } catch (e) { /* 스타일 실패가 저장을 막지는 않는다 */ }
         }
+        _noWrap(wb);   // ↩ 자동 줄바꿈 해제 — 반드시 스타일러 **뒤에**(거기서 켜지기 때문)
         var pm = window.projectMeta || {};
         var name = [(pm.프로젝트명 || pm.고객모델명 || 'project'), _nm(spec.label),
                     new Date().toISOString().slice(0, 10).replace(/-/g, '')].join('_') + '.xlsx';
