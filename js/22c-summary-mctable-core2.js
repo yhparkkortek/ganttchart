@@ -255,7 +255,7 @@ window.renderAlarmTab = async function() {
     const nameCell = (nameStr) => {
         if (!nameStr || nameStr === '-') return '-';
         const names = nameStr.split(/[,，]/).map(n => n.trim()).filter(Boolean);
-        if (names.length <= 1) return `<span style="white-space:nowrap;">${names[0] || '-'}</span>`;
+        if (names.length <= 1) return `<span style="white-space:nowrap;" title="${names[0] || '-'}">${names[0] || '-'}</span>`;
         return `<span title="${names.join('\n')}" style="cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;">${names[0]} ${_isEn ? '+' + (names.length-1) + ' more' : '외 ' + (names.length-1) + '명'}</span>`;
     };
     // 🌐 도메인 차단으로 인해 실제 발송에서 제외된 이메일이 있으면 배지로 표시
@@ -267,11 +267,16 @@ window.renderAlarmTab = async function() {
             return `<span style="color:#e03131; font-size:11px; white-space:nowrap;">${_isEn ? 'Not entered' : '미입력'}</span>`;
         }
         const emails = email.split(',').map(e => e.trim()).filter(Boolean);
-        if (emails.length <= 1) return `<span style="font-size:11px; white-space:nowrap;">${emails[0]}</span>${domainBadge(blocked)}`;
+        if (emails.length <= 1) return `<span style="font-size:11px; white-space:nowrap;" title="${emails[0]}">${emails[0]}</span>${domainBadge(blocked)}`;
         return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;" title="${emails.join('\n')}">${emails[0]} ${_isEn ? '+' + (emails.length-1) : '외 ' + (emails.length-1)}</span>${domainBadge(blocked)}`;
     };
 
     const _statusEn = { '진행':'On going', '완료':'Done', '대기':'Pending', '지연':'Delay', '보류':'Delay' };
+    // ✂️ [2026-10-20, 사용자 요청] 표 폭을 넘어가던 글자를 말줄임표로 자르고 전체는 말풍선(title)으로.
+    //    표가 table-layout:fixed(HTML)라 th의 % 너비가 실제로 지켜지고, 그 덕에 ellipsis가 먹는다.
+    const _ell = 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+    const _esc = (v) => String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     // 전체선택 체크박스·선택발송 버튼 상태 초기화
     const _alSelAllCb = document.getElementById('alarm-select-all');
     const _alSendSelBtn = document.getElementById('btn-alarm-send-selected');
@@ -289,12 +294,12 @@ window.renderAlarmTab = async function() {
                      style="cursor:pointer; width:14px; height:14px;">
             </td>
             <td style="padding:6px 6px; text-align:center; font-size:11.5px; color:#888; font-weight:bold;">${idx + 1}</td>
-            <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${(item.status && _isEn ? (_statusEn[item.status] || item.status) : item.status) || '-'}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.assignee)}</td>
-            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain)}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.receiverStr)}</td>
-            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.receiverEmail, item.missingPeople, item.blockedByDomain)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:12px; ${_ell}" title="${_esc(item.taskName)}">${item.taskName}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${(item.status && _isEn ? (_statusEn[item.status] || item.status) : item.status) || '-'}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${nameCell(item.assignee)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${_ell}">${nameCell(item.receiverStr)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11px; color:#555; ${_ell}">${emailCell2(item.receiverEmail, item.missingPeople, item.blockedByDomain)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.dueStr}</td>
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays, item.sentHidden, idx)}</td>
