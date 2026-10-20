@@ -105,15 +105,29 @@
         { h: 'Note',          k: 'note' }
     ];
     var _MC_CALC_LABELS = ['SUBTOTAL', 'TOTAL(M.C)', '영업판가', '재료비율'];
+    // 계산 행 라벨이 들어가는 열 — 견본은 **Specification**에 적는다. 위치를 숫자로 박지 않고
+    // `_MC_COLS`에서 찾는다(열을 끼워 넣어도 따라간다).
+    var _MC_LABEL_C = (function () {
+        for (var i = 0; i < _MC_COLS.length; i++) if (_MC_COLS[i].h === 'Specification') return i;
+        return 1;
+    })();
     // 💵 금액 칸 표시형식 — 사용자가 쓰는 M.C Table 견본의 회계 서식 그대로다(달러 기호 왼쪽 정렬,
     //    0은 "-"로). 역슬래시가 들어 있으니 **heredoc으로 쓰지 말 것**(조용히 깨진다).
     var _MC_MONEY_FMT = '_-[$$-409]* #,##0.00_ ;_-[$$-409]* \\-#,##0.00\\ ;_-[$$-409]* "-"??_ ;_-@_ ';
     var _mcRev  = function () { return _td().mcActiveRevision || 'R1'; };
     var _mcRows = function () { return ((_td().mcRevisions || {})[_mcRev()]) || _td().mcTable || []; };
-    // 엑셀에서 돌아온 행이 계산 행인지 — TYPE 칸의 라벨로 가린다(그 행은 화면이 다시 만든다).
+    // 엑셀에서 돌아온 행이 계산 행인지 — 라벨로 가린다(그 행은 화면이 다시 만든다).
+    // ⚠️ 라벨은 **Specification 열**에 있다(견본과 같은 자리). 예전 출력은 TYPE 열에 적었으므로
+    //    둘 다 본다 — 한쪽만 보면 옛 파일이나 새 파일 중 하나에서 계산 행이 데이터로 섞여 들어온다.
+    // 그리고 **NO가 비어 있을 때만** 계산 행으로 본다 — 사람이 적은 Specification에
+    // 'TOTAL' 같은 말이 들어가도 그 행을 지우지 않기 위해서다.
     var _mcIsCalcRow = function (r) {
-        var t = String((r && (r.TYPE != null ? r.TYPE : r.type)) || '').toUpperCase();
-        return _MC_CALC_LABELS.some(function (L) { return t.indexOf(L.toUpperCase()) >= 0; });
+        if (!r || typeof r !== 'object') return false;
+        var pick = function (h, k) { var v = (r[h] !== undefined) ? r[h] : r[k]; return String(v == null ? '' : v).toUpperCase(); };
+        var label = pick('Specification', 'spec') + ' ' + pick('TYPE', 'type');
+        if (!_MC_CALC_LABELS.some(function (L) { return label.indexOf(L.toUpperCase()) >= 0; })) return false;
+        var no = (r.NO !== undefined) ? r.NO : r.no;
+        return (no === undefined) || String(no == null ? '' : no).trim() === '';
     };
     var _mcNum = function (v) {
         var n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.-]/g, ''));   // "$1,234.00" 같은 표시값도 받는다
@@ -161,7 +175,7 @@
             extra = extra || {};
             _MC_COLS.forEach(function (col, c) {
                 var cell;
-                if (c === 1) cell = { t: 's', v: label };
+                if (c === _MC_LABEL_C) cell = { t: 's', v: label };
                 else if (col.num) {
                     var f = makeFormula ? makeFormula(c) : null;
                     cell = f ? { t: 'n', f: f, z: extra.z || _MC_MONEY_FMT } : { t: 's', v: '' };
@@ -179,7 +193,7 @@
         // 📍 [2026-10-20 4차] SUBTOTAL은 **그 TYPE 마지막 행 바로 다음 줄**에 끼워 넣는다 —
         //   화면(js/22g)이 currentType이 바뀔 때 그 자리에 한 줄 추가하는 것과 같은 모양.
         //   맨 아래로 몰아 두면 엑셀에서 어느 구간의 합인지 짚어 보기 어렵다.
-        var subtotalRows = [];
+        var subtotalRows = [], blocks = [];
         var runFrom = -1, curType = null, no = 0;
         var flushSubtotal = function () {
             if (runFrom < 0) return;
@@ -188,6 +202,7 @@
             calcRow((curType || '') + ' SUBTOTAL', function (c) {
                 var L = _colLetter(c); return 'SUM(' + L + (from + 1) + ':' + L + (to + 1) + ')';
             }, { s: SUBTOTAL_S });
+            blocks.push({ from: from, to: R - 1 });   // TYPE 첫 행 ~ SUBTOTAL 행 = 굵은 박스 한 칸
             runFrom = -1;
         };
         rows.forEach(function (r) {
@@ -222,7 +237,7 @@
         var salesRow = R;
         _MC_COLS.forEach(function (col, c) {
             var cell;
-            if (c === 1) cell = { t: 's', v: '영업판가' };
+            if (c === _MC_LABEL_C) cell = { t: 's', v: '영업판가' };
             else if (col.num) {
                 var n = _mcNum(sp[col.k]);
                 cell = (n !== null) ? { t: 'n', v: n, z: _MC_MONEY_FMT } : { t: 's', v: '' };
@@ -234,12 +249,36 @@
         // 재료비율 = TOTAL ÷ 영업판가. **×100을 하지 않는다** — 표시형식 `0%`가 100배해서
         // 보여주므로, 곱하면 3400% 처럼 100배로 나온다(사용자 견본도 나누기만 한다).
         if (rows.length && subtotalRows.length) {
-            calcRow('재료비율 (M.C ÷ 영업판가)', function (c) {
+            calcRow('재료비율 (M.C ÷ 영업판가) [%]', function (c) {
                 var L = _colLetter(c);
                 return 'IF(' + L + (salesRow + 1) + '=0,"",' + L + (totalRow + 1) + '/' + L + (salesRow + 1) + ')';
             }, { z: '0%' });
         }
         ws['!ref'] = 'A1:' + _colLetter(_MC_COLS.length - 1) + R;
+
+        // 🖼 굵은 박스 — 머리글, TYPE 구간(첫 행 ~ SUBTOTAL), 맨 아래 합계 묶음을 각각 테두리로 가둔다.
+        //    공용 스타일러(js/04k)는 `cell.s`의 border가 있으면 그걸 그대로 쓰므로 여기서 완성해 둔다.
+        //    ⚠️ `cell.s`는 BOLD/SUBTOTAL_S처럼 **여러 셀이 공유하는 객체**다 — 반드시 복사해서 넣을 것.
+        //       직접 `cell.s.border = …` 하면 그 스타일을 쓰는 행이 전부 같이 바뀐다.
+        var THIN = { style: 'thin', color: { rgb: window._cpXlsxRole('border') } };
+        var MED  = { style: 'medium', color: { rgb: window._cpXlsxRole('darkText') } };
+        var lastC = _MC_COLS.length - 1;
+        var frame = function (r0, r1) {
+            if (r1 < r0) return;
+            for (var r = r0; r <= r1; r++) for (var c = 0; c <= lastC; c++) {
+                var cell = ws[_colLetter(c) + (r + 1)];
+                if (!cell) continue;
+                cell.s = Object.assign({}, cell.s || {}, { border: {
+                    top:    (r === r0)    ? MED : THIN,
+                    bottom: (r === r1)    ? MED : THIN,
+                    left:   (c === 0)     ? MED : THIN,
+                    right:  (c === lastC) ? MED : THIN
+                } });
+            }
+        };
+        frame(0, 0);                                            // 머리글
+        blocks.forEach(function (b) { frame(b.from, b.to); });  // TYPE ~ SUBTOTAL
+        frame(totalRow, R - 1);                                 // TOTAL(M.C) ~ 재료비율
         // 🔢 열 너비는 **직접 지정한다.** 공용 스타일러의 자동 계산은 셀의 원값(1234.5)만 보므로
         //    회계 서식으로 늘어난 표시폭("$ 1,234.50")을 모르고, 금액 칸이 `####`로 나온다.
         ws['!cols'] = [
