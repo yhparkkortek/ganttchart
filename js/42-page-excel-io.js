@@ -87,6 +87,138 @@
         (fns || []).forEach(function (f) { try { if (typeof window[f] === 'function') window[f](); } catch (e) { /* 하나 실패해도 나머지는 그린다 */ } });
     };
 
+    // ── 🧮 M.C Table 전용 헬퍼 ─────────────────────────────────────────
+    // 열 구성 — 화면에서 PROTO A/B·MP 쌍을 숨겨도 **데이터엔 남아 있으므로 전부 낸다**(사용자 요청).
+    var _MC_COLS = [
+        { h: 'NO',            k: null },
+        { h: 'TYPE',          k: 'type' },
+        { h: 'ITEM',          k: 'item' },
+        { h: 'GROUP',         k: 'group' },
+        { h: 'P/N',           k: 'pn' },
+        { h: 'Specification', k: 'spec' },
+        { h: 'PROTO A Cost',  k: 'protoCost',  num: true },
+        { h: 'PROTO A NRE',   k: 'protoNre',   num: true },
+        { h: 'PROTO B Cost',  k: 'protoBCost', num: true },
+        { h: 'PROTO B NRE',   k: 'protoBNre',  num: true },
+        { h: 'MP Cost',       k: 'mpCost',     num: true },
+        { h: 'MP NRE',        k: 'mpNre',      num: true },
+        { h: 'Note',          k: 'note' }
+    ];
+    var _MC_CALC_LABELS = ['SUBTOTAL', 'TOTAL(M.C)', '영업판가', '재료비율'];
+    var _mcRev  = function () { return _td().mcActiveRevision || 'R1'; };
+    var _mcRows = function () { return ((_td().mcRevisions || {})[_mcRev()]) || _td().mcTable || []; };
+    // 엑셀에서 돌아온 행이 계산 행인지 — TYPE 칸의 라벨로 가린다(그 행은 화면이 다시 만든다).
+    var _mcIsCalcRow = function (r) {
+        var t = String((r && (r.TYPE != null ? r.TYPE : r.type)) || '').toUpperCase();
+        return _MC_CALC_LABELS.some(function (L) { return t.indexOf(L.toUpperCase()) >= 0; });
+    };
+    var _mcNum = function (v) {
+        var n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.-]/g, ''));   // "$1,234.00" 같은 표시값도 받는다
+        return isFinite(n) ? n : null;
+    };
+    var _colLetter = function (i) { var s = ''; i += 1;
+        while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+
+    function _mcBuildSheet() {
+        if (!window.XLSX) return null;
+        var rows = _mcRows().filter(function (r) { return !_mcIsCalcRow(r); });
+        var sp = (_td().mcSalesPriceDetail || {})[_mcRev()] || {};   // 영업판가는 **열마다 따로**다(js/22g)
+        var ws = {}, R = 0;
+        var put = function (r, c, cell) { ws[_colLetter(c) + (r + 1)] = cell; };
+
+        _MC_COLS.forEach(function (col, c) { put(R, c, { t: 's', v: col.h }); });
+        R++;
+
+        // 데이터 행 — 숫자는 **숫자 타입으로** 넣어야 아래 SUM이 동작한다.
+        var dataStart = R, typeRuns = [], cur = null;
+        rows.forEach(function (r, i) {
+            var tp = String(r.type || '').trim();
+            if (!cur || cur.type !== tp) { cur = { type: tp, from: R, to: R }; typeRuns.push(cur); }
+            cur.to = R;
+            _MC_COLS.forEach(function (col, c) {
+                if (!col.k) { put(R, c, { t: 'n', v: i + 1 }); return; }
+                var v = r[col.k];
+                if (col.num) { var n = _mcNum(v); if (n !== null) put(R, c, { t: 'n', v: n }); }
+                else if (v != null && v !== '') put(R, c, { t: 's', v: String(v) });
+            });
+            R++;
+        });
+        var dataEnd = R - 1;
+
+        var calcRow = function (label, makeFormula) {
+            put(R, 1, { t: 's', v: label });
+            _MC_COLS.forEach(function (col, c) {
+                if (!col.num) return;
+                var f = makeFormula(c); if (f) put(R, c, { t: 'n', f: f });
+            });
+            R++;
+        };
+        // TYPE별 SUBTOTAL — 화면과 같은 기준이다(js/22g는 currentType이 바뀔 때마다 넣는다).
+        typeRuns.forEach(function (run) {
+            calcRow((run.type || '') + ' SUBTOTAL', function (c) {
+                var L = _colLetter(c); return 'SUM(' + L + (run.from + 1) + ':' + L + (run.to + 1) + ')';
+            });
+        });
+        var totalRow = R;
+        // ⚠️ TOTAL은 **데이터 행만** 더한다 — SUBTOTAL까지 범위에 넣으면 두 번 센다.
+        if (rows.length) calcRow('TOTAL(M.C)', function (c) {
+            var L = _colLetter(c); return 'SUM(' + L + (dataStart + 1) + ':' + L + (dataEnd + 1) + ')';
+        });
+        // 영업판가는 계산이 아니라 **입력값**이다 — 수식이 아니라 숫자로 넣어 엑셀에서 고칠 수 있게.
+        var salesRow = R;
+        put(R, 1, { t: 's', v: '영업판가' });
+        _MC_COLS.forEach(function (col, c) {
+            if (!col.num) return;
+            var n = _mcNum(sp[col.k]); if (n !== null) put(R, c, { t: 'n', v: n });
+        });
+        R++;
+        // 재료비율 = TOTAL ÷ 영업판가 × 100. 영업판가를 고치면 비율이 바로 따라 바뀐다.
+        if (rows.length) {
+            put(R, 1, { t: 's', v: '재료비율 (M.C ÷ 영업판가) [%]' });
+            _MC_COLS.forEach(function (col, c) {
+                if (!col.num) return;
+                var L = _colLetter(c);
+                put(R, c, { t: 'n', f: 'IF(' + L + (salesRow + 1) + '=0,"",' + L + (totalRow + 1) + '/' + L + (salesRow + 1) + '*100)' });
+            });
+            R++;
+        }
+        ws['!ref'] = 'A1:' + _colLetter(_MC_COLS.length - 1) + R;
+        return ws;
+    }
+
+    // ── 🗓 Gantt 전용 헬퍼 ─────────────────────────────────────────────
+    // 간트 행은 **배열**이고, 어느 칸이 무엇인지는 `colIdx`(이름 → 인덱스)가 안다.
+    // 그래서 엑셀 열 머리글로 colIdx의 이름을 그대로 쓴다 — 화면 열 순서가 바뀌어도 안전하다.
+    var _ganttKeys = function () {
+        var ci = window.colIdx || {};
+        return Object.keys(ci).filter(function (k) { return ci[k] >= 0; });
+    };
+    var _ganttRows = function () {
+        var ci = window.colIdx || {}, keys = _ganttKeys();
+        return (window.globalData || []).map(function (row) {
+            var o = {};
+            keys.forEach(function (k) { o[k] = (row && row[ci[k]] != null) ? row[ci[k]] : ''; });
+            return o;
+        });
+    };
+    var _ganttSet = function (rows) {
+        var ci = window.colIdx || {}, keys = _ganttKeys();
+        // ⚠️⚠️ 간트는 이 앱의 **원본 데이터**다. 엑셀 ↩되돌리기와 별개로, 앱의 Undo(Ctrl+Z)에도
+        //    스냅샷을 남겨 둔다 — 되돌릴 길을 둘 다 열어 두는 게 맞다(js/04e).
+        if (window.pushUndoSnapshot) { try { window.pushUndoSnapshot(); } catch (e) { /* 스냅샷 실패가 불러오기를 막진 않는다 */ } }
+        var old = window.globalData || [];
+        var width = old.reduce(function (m, r) { return Math.max(m, (r && r.length) || 0); }, 0);
+        keys.forEach(function (k) { width = Math.max(width, ci[k] + 1); });
+        window.globalData = (rows || []).map(function (o, i) {
+            // ⚠️ 기존 행이 있으면 그 배열을 바탕으로 덮어쓴다 — colIdx에 이름이 없는 칸(차트 내부
+            //    값 등)을 날리지 않기 위해서다. 새로 늘어난 행만 빈 배열에서 시작한다.
+            var base = (old[i] && old[i].slice) ? old[i].slice() : [];
+            while (base.length < width) base.push('');
+            keys.forEach(function (k) { if (o[k] !== undefined) base[ci[k]] = o[k]; });
+            return base;
+        });
+    };
+
     // ── 📚 페이지 카탈로그 (데이터) ────────────────────────────────────
     //   id        : 내부 식별자
     //   tab       : 인쇄 버튼이 가리키는 탭 id — 버튼을 꽂을 자리를 이걸로 찾는다
@@ -158,16 +290,21 @@
             id: 'mctable', tab: 'tab-mctable', label: 'M.C Table',
             repaint: ['populateTabData'],
             // 리비전별로 보관되므로 **지금 보고 있는 리비전**만 왕복한다.
-            blocks: [{ sheet: 'M.C Table', kind: 'rows',
-                get: function () {
-                    var rev = _td().mcActiveRevision || 'R1';   // js/22g의 collectTabData와 같은 출처
-                    return ((_td().mcRevisions || {})[rev]) || _td().mcTable || [];
-                },
+            blocks: [{ sheet: 'M.C Table',
+                get: function () { return _mcRows(); },
+                // 🧮 [2026-10-20] SUBTOTAL·TOTAL(M.C)·영업판가·재료비율이 빠진다는 지적.
+                //    이 네 줄은 저장 데이터에 **없다** — 화면 렌더러가 매번 계산해 그리는 행이고
+                //    `_readRowsFromTbody`가 `mc-summary-row`를 일부러 걸러낸다(js/22a).
+                //    그래서 여기서 직접 만들어 붙이되, **값이 아니라 엑셀 수식**으로 넣는다.
+                //    그래야 엑셀에서 숫자를 고치면 합계가 따라 바뀐다(사용자 요청).
+                //    PROTO A/B·MP 열도 같이 낸다 — 화면에서 숨겨져 있어도 데이터엔 있다.
+                buildSheet: _mcBuildSheet,
                 set: function (rows) {
                     var rev = _td().mcActiveRevision || 'R1';
                     _td().mcRevisions = _td().mcRevisions || {};
-                    _td().mcRevisions[rev] = rows || [];
-                    if (rev === 'R1') _td().mcTable = rows || [];   // 저장 호환용 별칭
+                    // 계산 행은 되돌려 넣지 않는다 — 화면이 다시 계산하므로 넣으면 중복된다.
+                    _td().mcRevisions[rev] = (rows || []).filter(function (r) { return !_mcIsCalcRow(r); });
+                    if (rev === 'R1') _td().mcTable = _td().mcRevisions[rev];   // 저장 호환용 별칭
                 } }]
         },
         {
@@ -192,6 +329,16 @@
                 } }]
         },
         {
+            // 🗓 Gantt chart — 이 페이지엔 인쇄 버튼이 **없어서** 탭으로 자리를 못 찾는다.
+            //    대신 기존 '프로젝트 엑셀 저장' 버튼 앞에 붙인다(anchorSelector).
+            //    ⚠️ 그 버튼은 프로젝트 전체 워크북을 만드는 **다른 기능**이다 — 여기 📊는
+            //       이 왕복 형식(열 머리글 = colIdx 이름)으로 내므로 📥로 그대로 되돌아온다.
+            id: 'gantt', label: 'Gantt chart',
+            anchorSelector: 'button[onclick*="exportToExcel"]',
+            repaint: ['recalculateSchedules'],
+            blocks: [{ sheet: 'Gantt', kind: 'rows', get: _ganttRows, set: _ganttSet }]
+        },
+        {
             // ⚠️ 알람은 간트에서 **계산되는** 목록이다(collectAlarmItems) — 되돌려 넣을 곳이 없다.
             id: 'alarm', tab: 'tab-alarm', label: '알람', exportOnly: true,
             visibleWhen: function () { return window._alarmView !== 'notice'; },
@@ -214,9 +361,18 @@
 
         var wb = window.XLSX.utils.book_new(), empty = 0;
         spec.blocks.forEach(function (b) {
-            var aoa = (b.kind === 'kv') ? kvToAoa(b.get(), b.labels) : rowsToAoa(b.get());
-            if (aoa.length <= 1) empty++;
-            window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(aoa), b.sheet.slice(0, 31));
+            var ws;
+            if (typeof b.buildSheet === 'function') {
+                // 🧮 수식이 들어가는 시트는 블록이 직접 만든다(M.C Table의 SUBTOTAL/TOTAL 등).
+                //    aoa_to_sheet은 값만 넣을 수 있어서, 수식 셀을 쓰려면 시트를 손으로 조립해야 한다.
+                ws = b.buildSheet();
+                if (!ws) { empty++; return; }
+            } else {
+                var aoa = (b.kind === 'kv') ? kvToAoa(b.get(), b.labels) : rowsToAoa(b.get());
+                if (aoa.length <= 1) empty++;
+                ws = window.XLSX.utils.aoa_to_sheet(aoa);
+            }
+            window.XLSX.utils.book_append_sheet(wb, ws, b.sheet.slice(0, 31));
         });
         // 🎨 [2026-10-20] BOM 출력과 **같은 모양**으로 — 머리글/제브라/테두리/열너비.
         //    앱 전체가 쓰는 공용 스타일러를 그대로 부른다(js/04k). 색은 거기서
@@ -285,7 +441,12 @@
                 var rows = aoaToRows(aoa);
                 var before = (m.b.get() || []).length;
                 m.b.set(rows);
-                summary.push(m.b.sheet + ' ' + before + '→' + rows.length + _t('행', ''));
+                // ⚠️ 파일의 행 수가 아니라 **실제로 저장된 행 수**를 말한다 — M.C Table처럼 계산
+                //    행을 걸러내는 블록이 있어서, 파일 행수를 그대로 말하면 사실과 달라진다.
+                var after = (m.b.get() || []).length;
+                summary.push(m.b.sheet + ' ' + before + '→' + after + _t('행', '')
+                             + (rows.length !== after ? _t(' (계산 행 ' + (rows.length - after) + '개 제외)',
+                                                           ' (' + (rows.length - after) + ' calculated rows skipped)') : ''));
             }
         });
 
@@ -320,18 +481,24 @@
     //   ⚠️ '엑셀 입력'과 '엑셀 저장' **사이에 경계선**을 둔다 — 입력은 현재 내용을 통째로
     //      덮어쓰므로, 저장하려다 잘못 누르는 일이 없게 시각적으로 갈라 놓는다.
     //   용어는 앱 전체와 통일: 내보내기 = '엑셀 저장'(다른 페이지 버튼 6개도 같이 바꿨다).
-    var BTN = 'white-space:nowrap; padding:3px 7px; background:#e0f5f7; color:#00707d; border:none;'
-            + ' border-radius:5px; font-size:11px; font-weight:bold; cursor:pointer; line-height:1.4;'
+    //   [2026-10-20 3차] 글자 크기를 **주변 버튼과 똑같이** 맞춘다 — 인쇄(PDF) 등 이 줄의
+    //   다른 버튼이 전부 13px/padding 6px 8px이라, 혼자 11px이면 눈에 따로 논다.
+    var BTN = 'white-space:nowrap; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none;'
+            + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; line-height:1.2;'
             + ' transition:background .15s;';
     var SEP = '<span style="display:inline-block; width:1px; height:13px; background:#ccd9db; margin:0 4px;"></span>';
 
     function _pxRenderButtons() {
         (window.PAGE_EXCEL_SPECS || []).forEach(function (spec) {
-            // 인쇄 버튼을 찾는다 — onclick 안의 탭 id로 식별(HTML을 안 고치기 위해).
+            // 자리를 찾는다 — 기본은 그 탭의 인쇄 버튼, 인쇄 버튼이 없는 페이지는 anchorSelector.
             var printBtn = null;
-            var all = document.querySelectorAll('button[onclick*="printTabSection"]');
-            for (var i = 0; i < all.length; i++) {
-                if ((all[i].getAttribute('onclick') || '').indexOf("'" + spec.tab + "'") !== -1) { printBtn = all[i]; break; }
+            if (spec.anchorSelector) {
+                printBtn = document.querySelector(spec.anchorSelector);
+            } else {
+                var all = document.querySelectorAll('button[onclick*="printTabSection"]');
+                for (var i = 0; i < all.length; i++) {
+                    if ((all[i].getAttribute('onclick') || '').indexOf("'" + spec.tab + "'") !== -1) { printBtn = all[i]; break; }
+                }
             }
             if (!printBtn || !printBtn.parentNode) return;
             var show = (typeof spec.visibleWhen === 'function') ? !!spec.visibleWhen() : true;
