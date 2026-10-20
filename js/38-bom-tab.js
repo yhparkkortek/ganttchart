@@ -1124,9 +1124,19 @@
         var matEl = document.getElementById('ep-bom-material');
         if (matEl) {
             var st = window._elecBomGetStore(type);
-            //  ① 이미 조회해 둔 값(사람이 고친 것 포함)  ② 이 부품의 item code
-            //  ③ 예전 동작(완제품 코드) — 주요자재가 안 채워진 프로젝트를 위해 남겨 둔다.
-            matEl.value = (st && st.material) || window._elecBomItemCode(type) || window._bomDefaultMaterial() || '';
+            var saved     = (st && st.material) || '';   // 전에 조회해 둔 값
+            var itemCode  = window._elecBomItemCode(type) || '';
+            var legacyAuto = window._bomDefaultMaterial() || '';  // 옛 자동입력값(= 모델 완제품 코드)
+
+            // ⚠️⚠️ [2026-10-20 당일 수정] 처음엔 `saved`를 무조건 앞세웠는데, 그러면 이 기능이
+            //    **이미 한 번 열어본 프로젝트에선 영원히 안 보인다** — 옛 코드가 완제품 코드를
+            //    자동으로 넣고 그대로 저장해 뒀기 때문이다(사용자 제보: "업데이트가 미적용").
+            //    사람이 직접 고른 값은 지켜야 하지만, 저장된 값이 **옛 자동입력값과 똑같으면**
+            //    그건 사람의 선택이 아니라 기계가 넣은 것이므로 부품 코드로 바꾼다.
+            //    (완제품 코드를 일부러 보려던 경우는 칸을 직접 고치면 그 값이 유지된다.)
+            if (saved && itemCode && saved === legacyAuto && itemCode !== saved) saved = '';
+
+            matEl.value = saved || itemCode || legacyAuto || '';
         }
         window._elecBomRender();
         if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('bom');
