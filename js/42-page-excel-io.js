@@ -381,8 +381,12 @@
         return String(name).trim().replace(/^🌐\s*/, '');
     };
     var _ganttLevel = function (row) { var lv = parseInt(row && row._level, 10); return (lv >= 0) ? lv : 0; };
-    // 각 행이 **그 레벨의 마지막 형제**인지. 뒤에서부터 한 번만 훑는다 — 더 얕은 레벨을 지나면
-    // 그보다 깊은 레벨의 "이미 봤음" 표시는 거기서 끊기므로 지운다.
+    // 어느 행에 `└`를 붙일지. 두 경우다(사용자 확인 2026-10-20):
+    //   ① 그 레벨의 **마지막 형제** — APPROVAL, TOUCH & GLASS
+    //   ② **바로 위 줄이 더 깊은 레벨**인 행 — PROCUREMENT, EX-WORK
+    //      (하위 묶음이 끝나고 돌아온 자리라, 거기서 한 단락이 닫히는 게 눈에 보여야 한다)
+    // ①은 뒤에서부터 한 번만 훑어 판정한다 — 더 얕은 레벨을 지나면 그보다 깊은 레벨의
+    // "이미 봤음" 표시는 거기서 끊기므로 지운다.
     var _ganttLastFlags = function (levels) {
         var last = new Array(levels.length), seen = [];
         for (var i = levels.length - 1; i >= 0; i--) {
@@ -391,6 +395,7 @@
             seen[lv] = true;
             for (var d = lv + 1; d < seen.length; d++) seen[d] = false;
         }
+        for (var j = 1; j < levels.length; j++) if (levels[j - 1] > levels[j]) last[j] = true;   // ②
         return last;
     };
     var _ganttWbsCell = function (row, isLast) {
