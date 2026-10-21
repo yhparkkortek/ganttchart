@@ -236,12 +236,16 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **모듈별 엔드포인트 목록 → `docs/groupware-endpoints.md`**(관찰 확정 vs 번들 추출 구분). iframe 모듈은 메일·자료실뿐, 나머지는 최상위. 진입만으로 호출이 0건인 모듈(보고·주소록·Task)은 "API 없음"이 아니라 "아직 안 불림" — 랜딩 URL이 바뀌는 경우도 있어(`/app/todo`→`/app/report`) `location.href`를 같이 기록할 것
 
 ### `docs/insa-hr.md` — 🧑‍💼 인사관리(kInsa) 연동 (`http://insa.kortek.co.kr`)
-- **읽을 때**: 인사관리 자동 로그인, 앞으로 인사 화면 조회/조작을 붙일 때
+- **읽을 때**: 인사관리 자동 로그인, 화면 조회, **신청서 칸 채우기(쓰기)**
 - 로그인(`POST /kInsa` + `userNum`/`password`, 실측 확정)과 **화면 자동 학습**까지 구현됨 — 메뉴 12개를 눌러 보고 실제 주소를 관찰해 `insa_menu_catalog.json`(데이터)에 저장. AI 문답 도구 `insa_menus`/`insa_screen`(js/40, 읽기 전용)
 - **⚠️ 학습한 주소로 직접 이동 금지(GET 405) — 메뉴를 클릭할 것.** path 는 이동 수단이 아니라 **도착 확인용**이다. 클릭 직후 바로 읽으면 **앞 화면 내용이 나온다**(실제로 틀린 답을 준 적 있음) — 주소가 바뀐 걸 확인한 뒤 읽고, 못 가면 정직하게 실패시킬 것
 - **성공/실패가 둘 다 HTTP 200** — 실패는 `location.href = "index"` 가 든 194바이트 `<script>`로 온다. `_insa_fail_message()`가 그 지문으로 판정
 - **⚠️ 한 번만 시도, 실패 시 재시도 금지**(계정 잠금). 가드는 프런트 `_insaEnsureLogin`(js/36) — **`/insa/login`을 직접 부르지 말 것**
 - 비밀번호는 DPAPI → `insa_login_config.json`(.gitignore). 복호화 함수를 gw_bridge에서 쓰지 않고 백엔드에 따로 둔 이유도 문서에
+- **(2026-10-21) 쓰기 구현됨 — 칸만 채운다. `등록`은 사람이 누른다.** `insa_write.py`(읽기와 모듈 분리) → `POST /insa/fill-workplan` → `insa_fill_workplan`(js/41)
+- **⚠️ 이 화면의 동기 XHR(`async:false`)이 인사관리 탭을 전부 얼린다** — 같은 사이트는 렌더러 프로세스를 공유해 **조회용 `/kInsa` 탭까지 같이 죽는다**. 렌더러 명령은 무응답인데 브라우저 명령이 `"No dialog is showing"`을 주면 대화상자가 아니라 **메인 스레드 블록**이다. 복구는 그 탭 닫기(`/json/close/<id>`) 하나뿐 → 그래서 일괄입력은 응답을 안 기다리고(`_fire`) 되살아나는지 폴링(`_wait_idle`)하고, 안 오면 정직하게 실패
+- **alert 문구를 삼키지 말 것**(`dialogs`로 돌려줌) — "채웠다"면서 실제론 적용 안 된 상태가 된다. 퇴근만 바꾸려 출근을 비우면 사이트가 거부하니 안 준 쪽은 **변경 전 계획**(`beSTime`, 카드기록 `workSTime` 아님)으로 채우고 분은 **00/30만**
+- `regForm`은 **POST 전용**(GET 405) + CDP `window.open`은 팝업 차단 → 새 탭을 `/kInsa`로 띄워 그 안에서 폼 POST. 405 탭을 남기면 **조회 경로가 그 탭을 집는다**
 
 ### `docs/qa-tool-router.md` — 🛠 AI 문답 도구 자율 호출 (function-calling)
 - **읽을 때**: AI가 "지원하지 않습니다"라고 답할 때, 새 조회 기능을 AI가 쓰게 만들 때
@@ -300,6 +304,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `gas/Code.gs` | AI 프록시(Google Apps Script 웹앱) 소스 사본. 수정 후 Apps Script 편집기에서 **기존 배포 편집 → 새 버전**으로 배포(새 배포 만들면 URL 바뀜) |
 | `kortek_backend.py` | Flask 서버. 메일 SMTP/POP3, Telegram, 암복호화, 예약 발송 스케줄러 |
 | `sap_bridge_32.py` | SAP GUI 32비트 브릿지 — `py -3-32` 서브프로세스. `kortek_backend.zip`에도 반드시 포함 |
+| `insa_write.py` | ✍️ 인사관리 **쓰기** — 근무계획 수정 신청서 칸 채우기(`open_regform`/`fill_workplan_edit`). **등록은 안 누른다.** 읽기(`gw_bridge.insa_*`)와 모듈 분리 |
 | `kortek_backend.bat` | 백엔드 실행. SAP용 32비트 Python/pywin32 최초 1회 자동 설치 |
 | `kortek_backend_install.bat` | 원클릭 설치 — 시작프로그램 자동등록 + 즉시 최소화 실행. 임시 `.ps1`로 따옴표 이스케이프 우회 |
 | `kortek_backend_start_minimized.vbs` | 위 설치 바로가기 대상 — `kortek_backend.bat`을 최소화 상태로 실행 |

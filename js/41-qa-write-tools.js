@@ -111,6 +111,23 @@
             confirmPhrase: '등록',
             pendingWhy: '글 등록 요청 본문이 미확정입니다. 사내 게시판은 전사 공개라 우선순위를 낮게 뒀습니다.',
             undoNote: '본인 글은 삭제할 수 있지만 그 전까지 전사에 보인다.'
+        },
+        {
+            id: 'insa_fill_workplan', mode: 'write', verified: 'live', danger: 'low', requires: 'insa',
+            title: '근무계획 수정 신청서 칸 채우기',
+            desc: '인사관리 근무계획 수정 신청서를 열어 **칸만 채운다. [등록]은 누르지 않는다** — '
+                + '사람이 화면을 보고 직접 누른다. 시간은 **변경 후** 시간이고, 한쪽만 주면 '
+                + '다른 쪽은 기존 계획시간을 그대로 유지한다. 이 화면은 분을 00/30만 받는다.',
+            method: 'POST', path: '/insa/fill-workplan',
+            params: [
+                { name: 'date', type: 'date', req: true, desc: '근무일자 YYYY-MM-DD' },
+                { name: 'start', type: 'time', desc: '변경 후 출근 HH:MM (생략하면 기존 계획 유지)' },
+                { name: 'end', type: 'time', desc: '변경 후 퇴근 HH:MM (생략하면 기존 계획 유지)' },
+                { name: 'subject', type: 'text', max: 100, desc: '제목' },
+                { name: 'content', type: 'text', max: 2000, desc: '신청 사유' },
+                { name: 'remark', type: 'text', max: 200, desc: '비고' }
+            ],
+            undoNote: '등록을 누르기 전이라 아무에게도 안 간다 — 창을 닫거나 칸을 고치면 끝이다.'
         }
     ];
 
@@ -126,7 +143,11 @@
         { tool: 'gw_mail_send',
           kw: ['그룹웨어로 메일 보내', '그룹웨어 메일 보내', '사내 메일 보내', '웹메일 보내'] },
         { tool: 'gw_board_write',
-          kw: ['게시판에 올려', '게시판에 글', '게시판 글 등록', '공지 올려'] }
+          kw: ['게시판에 올려', '게시판에 글', '게시판 글 등록', '공지 올려'] },
+        // 인사관리 — "조회"와 갈리도록 **바꿔달라/신청해달라**는 동작 동사만 잡는다
+        { tool: 'insa_fill_workplan',
+          kw: ['근무계획 수정 신청', '근무시간 변경해', '퇴근시간 변경해', '출근시간 변경해',
+               '퇴근 시간을', '근무계획 수정해', '근무시간 수정해', '근무계획 바꿔'] }
     ];
 
     window._qaWriteToolById = function (id) {
@@ -242,6 +263,17 @@
         if (t.confirmPhrase && String(confirmText || '').trim() !== t.confirmPhrase) {
             return { ok: false, id: t.id,
                      message: '확인 문구가 일치하지 않아 중단했습니다(필요: "' + t.confirmPhrase + '").' };
+        }
+        // 로그인 선검사 — 읽기(js/40)와 같은 게이트를 쓴다. 끊겨 있으면 저장된 계정으로
+        // **1회만** 자동 로그인한다(재시도 금지 가드는 게이트 안에 있다 — CLAUDE.md).
+        var gate = (t.requires === 'insa') ? window._insaEnsureLogin
+                 : (t.requires === 'gw') ? window._gwEnsureLogin : null;
+        if (gate) {
+            var g = await gate();
+            if (!g || g.ok === false) {
+                return { ok: false, id: t.id,
+                         message: (g && g.message) || '로그인이 되어 있지 않아 중단했습니다.' };
+            }
         }
 
         var r;

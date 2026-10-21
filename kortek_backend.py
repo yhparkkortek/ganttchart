@@ -3380,6 +3380,31 @@ def insa_screen():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/insa/fill-workplan', methods=['POST'])
+def insa_fill_workplan():
+    """✍️ 근무계획 수정 신청서의 **칸만 채운다. [등록]은 누르지 않는다.**
+
+    쓰기 경로라 조회(insa_read_screen)와 **모듈을 분리**해 insa_write 로만 간다
+    — 조회 코드가 실수로 제출을 부를 수 없게 하기 위해서다(docs/qa-tool-router.md).
+    등록은 사람이 화면을 보고 직접 누른다. 상세·함정은 docs/insa-hr.md.
+    """
+    d = request.get_json(silent=True) or {}
+    if not (d.get('date') or d.get('start') or d.get('end')):
+        return jsonify({'ok': False, 'message': '근무일자·시간 중 하나는 지정해주세요.'})
+    try:
+        import insa_write
+        opened = insa_write.open_regform()
+        if not opened.get('ok'):
+            return jsonify(opened)
+        out = insa_write.fill_workplan_edit(
+            date=d.get('date'), start=d.get('start'), end=d.get('end'),
+            subject=d.get('subject'), content=d.get('content'), remark=d.get('remark'))
+        out['openedWindow'] = bool(opened.get('opened'))
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/login', methods=['POST'])
 def gw_login():
     """저장된 계정으로 **한 번만** 로그인 시도. 실패하면 재시도하지 않고 사람에게 넘긴다."""
@@ -3980,6 +4005,7 @@ _SELF_UPDATE_FILES = [
     'kortek_backend.py',
     'sap_bridge_32.py',
     'gw_bridge.py',
+    'insa_write.py',
     'kortek_backend.bat',
     'kortek_backend_install.bat',
     'kortek_backend_start_minimized.vbs',
