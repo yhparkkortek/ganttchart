@@ -677,6 +677,18 @@ window.openMailAutoConfigModal = async function() {
                             </div>
                         </div>
 
+                        <div style="margin-bottom:10px;">
+                            <div id="mac-filter-exempt-label" style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">${window._currentLang === 'en' ? 'noreply-exempt domains (in-house systems)' : 'noreply 면제 도메인 (사내 시스템)'}</div>
+                            <div id="mac-filter-exempt-desc" style="font-size:10.5px; color:#888; margin-bottom:4px; line-height:1.45;">${window._currentLang === 'en'
+                                ? 'Mail from these domains skips the noreply rule — in-house notifications (JIRA, SAP, groupware, approvals) are real work even when sent from a noreply address. Subject-keyword and blocked-domain rules still apply. Your own mail domain is included by default.'
+                                : '이 도메인에서 온 메일은 noreply 규칙을 건너뜁니다 — 사내 시스템 알림(JIRA·SAP·그룹웨어·전자결재)은 발신 주소가 noreply여도 실제 업무입니다. 제목 키워드·도메인 차단 규칙은 그대로 적용됩니다. 내 메일 도메인은 기본 포함됩니다.'}</div>
+                            <div id="mac-filter-exempt-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
+                            <div style="display:flex; gap:4px;">
+                                <input id="mac-filter-exempt-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. kortek.vn' : '예: kortek.vn'}" data-i18n-placeholder="mac-filter-exempt-input" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <button id="mac-filter-exempt-add-btn" onclick="window._macAddFilterRuleFromInput('noreplyExemptDomains','mac-filter-exempt-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">${window._currentLang === 'en' ? '+ Add' : '+ 추가'}</button>
+                            </div>
+                        </div>
+
                         <div>
                             <div id="mac-filter-domain-label" style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 도메인 완전차단</div>
                             <div id="mac-filter-domain-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
@@ -764,6 +776,7 @@ window._macRenderFilterRules = function() {
     renderChips('mac-filter-subject-rows', 'subjectKeywords', rules.subjectKeywords);
     renderChips('mac-filter-noreply-rows', 'noreplyPatterns', rules.noreplyPatterns);
     renderChips('mac-filter-domain-rows', 'blockedDomains', rules.blockedDomains);
+    renderChips('mac-filter-exempt-rows', 'noreplyExemptDomains', rules.noreplyExemptDomains || []);
 };
 
 window._macAddFilterRuleFromInput = function(type, inputId) {

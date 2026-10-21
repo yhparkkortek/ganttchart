@@ -324,15 +324,36 @@ const MS_NEW_SENDER_QUEUE_KEY = 'ms_new_sender_queue';
 const MS_DISCARD_QUEUE_KEY = 'ms_discard_queue';
 const MS_FILTER_RULES_KEY = 'ms_filter_rules';
 
-// 💡 관리 가능한 필터 규칙 3종: 제목 키워드 차단 / 발신자 패턴 차단(noreply류) / 발신자 도메인 완전차단(신규 추가)
+// 🐛 [2026-10-21 버그수정, 실측 진단] 사내 시스템이 보내는 알림은 발신 주소에 noreply가 들어가도
+//    실제 업무다 — 폐기 큐 실측에서 jira_noreply@kortek.co.kr의 "[JIRA 알림] (GABJO-6) Base,
+//    Cover 내측 절단면 날카로움"(설계 결함 리포트)이 noreply 규칙에 걸려 조용히 폐기되고 있었다.
+//    Stage0 검사 순서가 ①제목 → ②noreply → ③차단도메인 → ④화이트리스트라, 사내 도메인이어도
+//    ②에서 끊겨 ④까지 가보지도 못한다. → 이 목록의 도메인은 ②만 면제한다(①·③은 그대로 적용).
+//    ⚠️ 사내 도메인을 코드에 박지 않는다 — 팀원마다 계정이 다르고 법인도 여럿(kortek.vn 등)이라
+//    하드코딩하면 다른 PC에서 같은 사고가 또 난다. 저장된 메일 계정에서 유도하고, 사용자가
+//    📬 필터 설정에서 추가·삭제할 수 있게 규칙 데이터로 둔다.
+window._msDefaultNoreplyExemptDomains = function() {
+    const own = (localStorage.getItem('ms_saved_userid') || '').split('@')[1];
+    return own ? [own.toLowerCase()] : [];
+};
+
+// 💡 관리 가능한 필터 규칙 4종: 제목 키워드 차단 / 발신자 패턴 차단(noreply류) /
+//    발신자 도메인 완전차단 / noreply 면제 도메인(사내 시스템 알림 보호)
 window._msGetFilterRules = function() {
     try {
         const saved = JSON.parse(localStorage.getItem(MS_FILTER_RULES_KEY) || 'null');
         if (saved && Array.isArray(saved.subjectKeywords) && Array.isArray(saved.noreplyPatterns) && Array.isArray(saved.blockedDomains)) {
+            // 💡 기존 저장본에는 이 필드가 없다 — 읽을 때 기본값으로 채운다(저장은 하지 않음, 멱등)
+            if (!Array.isArray(saved.noreplyExemptDomains)) saved.noreplyExemptDomains = window._msDefaultNoreplyExemptDomains();
             return saved;
         }
     } catch(e) {}
-    return { subjectKeywords: MS_AUTO_SUBJECT_KW_DEFAULT.slice(), noreplyPatterns: MS_NOREPLY_PATTERNS_DEFAULT.slice(), blockedDomains: [] };
+    return {
+        subjectKeywords: MS_AUTO_SUBJECT_KW_DEFAULT.slice(),
+        noreplyPatterns: MS_NOREPLY_PATTERNS_DEFAULT.slice(),
+        blockedDomains: [],
+        noreplyExemptDomains: window._msDefaultNoreplyExemptDomains()
+    };
 };
 window._msSaveFilterRules = function(rules) {
     localStorage.setItem(MS_FILTER_RULES_KEY, JSON.stringify(rules));
@@ -410,7 +431,10 @@ window.loadFilterRulesFromDrive = async function() {
         const merged = {
             subjectKeywords: mergeUnique(remote.subjectKeywords || [], local.subjectKeywords || []),
             noreplyPatterns: mergeUnique(remote.noreplyPatterns || [], local.noreplyPatterns || []),
-            blockedDomains:  mergeUnique(remote.blockedDomains  || [], local.blockedDomains  || [])
+            blockedDomains:  mergeUnique(remote.blockedDomains  || [], local.blockedDomains  || []),
+            // 💡 [2026-10-21] noreply 면제 도메인도 팀 공용으로 공유 — 사내 법인 도메인은 모두가 같으니
+            //    한 사람이 추가하면 다른 PC에서도 JIRA/SAP 알림이 같이 살아난다.
+            noreplyExemptDomains: mergeUnique(remote.noreplyExemptDomains || [], local.noreplyExemptDomains || [])
         };
         localStorage.setItem(MS_FILTER_RULES_KEY, JSON.stringify(merged)); // 💡 직접 저장 — _msSaveFilterRules를 쓰면 다시 Drive 업로드가 예약되어 불필요한 왕복이 생김
         return merged;
@@ -446,11 +470,18 @@ window._msStage0Filter = function(mail) {
     }
 
     const fromEmail = window._msParseSenderEmail(mail.sender);
-    for (const p of rules.noreplyPatterns) {
-        if (fromEmail.includes(p.toLowerCase())) return { action: 'discard', reason: 'noreply:' + p };
+    const domain = fromEmail.split('@')[1] || '';
+
+    // 🐛 [2026-10-21] noreply 패턴보다 "면제 도메인"을 먼저 본다 — 사내 시스템 알림(JIRA/SAP/
+    //    그룹웨어/전자결재)은 발신 주소가 noreply여도 내용이 실제 업무다. _msDefaultNoreplyExemptDomains
+    //    주석 참고. 면제는 noreply 검사에만 적용되고, 아래 차단 도메인·위 제목 키워드는 그대로 걸린다.
+    const noreplyExempt = (rules.noreplyExemptDomains || []).some(d => String(d).toLowerCase() === domain);
+    if (!noreplyExempt) {
+        for (const p of rules.noreplyPatterns) {
+            if (fromEmail.includes(p.toLowerCase())) return { action: 'discard', reason: 'noreply:' + p };
+        }
     }
 
-    const domain = fromEmail.split('@')[1] || '';
     // 💡 [신규] 사용자가 직접 등록한 도메인 완전차단 목록 — 신규발신자 검토 후 "이 도메인 영구차단" 클릭으로 쌓임
     if (domain && rules.blockedDomains.some(d => d.toLowerCase() === domain)) {
         return { action: 'discard', reason: 'blocked_domain:' + domain };
@@ -1680,6 +1711,18 @@ window._msRenderQueueModal = function(type) {
                         onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
                         title="사용자 의견을 참고해서 프로젝트 매칭 재분석 요청" style="display:inline-flex; align-items:center; justify-content:center; background:#e6f6ea; border:1px solid #a8dab8; color:#1f7a3d; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🔄</button>`
                 : '';
+            // 🐛 [2026-10-21 버그수정, 실측 진단] 신규발신자·폐기 큐는 편도(one-way)였다 — 행 버튼이
+            //    📧보기/🚫차단/🗑삭제뿐이라, 잘못 걸러진 메일을 AI로 보낼 방법이 아예 없었다
+            //    (실측: 보류 67 + 폐기 112 = 179건이 분석기 앞에 도달조차 못 함. 같은 기간 분석된 건
+            //    142건이니 걸러진 쪽이 더 많았다). 유일한 출구인 "주소록 일괄추가"(_msAddToAddressBook)도
+            //    발신자를 주소록에 넣고 큐에서 지우기만 할 뿐 분석은 하지 않으며, ms_last_auto_fetch_at이
+            //    이미 지나가 재수집도 안 되므로 과거 메일은 그대로 증발했다.
+            //    → 큐 항목에 본문(r.body)이 이미 저장돼 있으니 재수집 없이 그 자리에서 분석할 수 있다.
+            const analyzeBtn = (type !== 'unmatched')
+                ? `<button class="ms-queue-analyze-btn" data-filename="${_msQEsc(r.fileName)}"
+                        onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                        title="잘못 걸러진 메일 — 지금 AI로 분석해서 프로젝트 매칭 시도" style="display:inline-flex; align-items:center; justify-content:center; background:#e6f6ea; border:1px solid #a8dab8; color:#1f7a3d; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">✅</button>`
+                : '';
             return `
             <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
                 <div style="min-width:0; flex:1;">
@@ -1691,6 +1734,7 @@ window._msRenderQueueModal = function(type) {
                     <button class="ms-queue-view-btn" data-idx="${i}"
                         onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                         title="원문 보기" style="display:inline-flex; align-items:center; justify-content:center; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">📧</button>
+                    ${analyzeBtn}
                     ${ruleBtn}
                     ${reanalyzeBtn}
                     <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
@@ -1719,7 +1763,7 @@ window._msRenderQueueModal = function(type) {
             <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
                 <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"></button>
-                <button id="ms-queue-reanalyze-all-btn" onclick="window._msBulkReanalyzeUnmatched()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="display:none; flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 전체 재분석</button>
+                <button id="ms-queue-reanalyze-all-btn" onclick="window._msQueueBulkClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="display:none; flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 전체 재분석</button>
                 <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1; padding:7px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;"></button>
             </div>
         </div>`;
@@ -1739,6 +1783,9 @@ window._msRenderQueueModal = function(type) {
             // 💡 [2026-09-01 신규] "🔄 재분석 요청" — 미분류 사유를 읽고 사용자 의견(선택)을 남긴 뒤 그 메일만 다시 판단
             const reanalyzeBtn = e.target.closest('.ms-queue-reanalyze-btn');
             if (reanalyzeBtn) { window._msOpenReanalyzeHintModal(reanalyzeBtn.dataset.filename); return; }
+            // 💡 [2026-10-21 신규] "✅ 지금 AI 분석" — 신규발신자/폐기 큐에서 걸러진 메일을 분석기로 되돌린다
+            const analyzeNowBtn = e.target.closest('.ms-queue-analyze-btn');
+            if (analyzeNowBtn) { window._msQueueAnalyzeNow(window._msQueueCurrentType, analyzeNowBtn.dataset.filename); return; }
             // 💡 [자동 등록] 신규발신자 검토 중 "이 도메인 영구차단" — 필터 규칙에 추가 + 큐에서도 제거
             const ruleBtn = e.target.closest('.ms-queue-rule-btn');
             if (ruleBtn) {
@@ -1776,8 +1823,12 @@ window._msRenderQueueModal = function(type) {
     if (clearAllBtn) clearAllBtn.textContent = _msQEn ? '🗑 Clear All' : '🗑 일괄삭제';
     const reanalyzeAllBtn = document.getElementById('ms-queue-reanalyze-all-btn');
     if (reanalyzeAllBtn) {
-        reanalyzeAllBtn.style.display = (type === 'unmatched' && rows.length) ? '' : 'none';
-        reanalyzeAllBtn.textContent = _msQEn ? `🔄 Reanalyze All (${rows.length})` : `🔄 전체 재분석 (${rows.length}건)`;
+        // 💡 [2026-10-21] 신규발신자·폐기 큐에서도 쓴다 — 걸러진 메일을 한꺼번에 분석기로 되돌리는 경로.
+        //    문구를 구분하는 이유: 미분류는 "이미 분석했는데 못 맞춘 것"이고, 나머지 둘은 "분석조차 안 한 것"이다.
+        reanalyzeAllBtn.style.display = rows.length ? '' : 'none';
+        reanalyzeAllBtn.textContent = type === 'unmatched'
+            ? (_msQEn ? `🔄 Reanalyze All (${rows.length})` : `🔄 전체 재분석 (${rows.length}건)`)
+            : (_msQEn ? `✅ Analyze All (${rows.length})`   : `✅ 전체 분석 (${rows.length}건)`);
     }
     modal.style.display = 'block';
     window.bringModalToFront('ms-queue-modal'); // 💡 열 때 즉시 맨 앞으로 (클릭 안 해도)
@@ -1792,6 +1843,106 @@ window._msQueueRemoveRow = function(type, fileName) {
     window._msQueueDeleteOne(type, fileName);
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
     window._msRenderQueueModal(type);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// 💡 [2026-10-21 신규] Stage 0 복귀 경로 — 걸러진 메일을 분석기로 되돌린다
+//    위 analyzeBtn 주석의 "편도 큐" 문제 해결. 큐 항목(r)에 본문·헤더가 그대로 들어 있으므로
+//    메일 서버를 다시 조회하지 않는다(과거 메일은 ms_last_auto_fetch_at이 지나 재수집 자체가 불가).
+//    ⚠️ 분석 로직을 새로 짜지 않고 _msQueueReanalyze를 그대로 재사용한다 — 학습 로그 기록,
+//    TaskInbox 등록, 우선순위 점수, mailRaw 보존이 전부 거기 이미 검증된 채로 붙어 있어서,
+//    따로 구현하면 "원문 보기가 사라진다"류 사고(docs/mail-pipeline.md)를 또 만든다.
+//    그래서 ① 큐에서 꺼내 _msResults에 미분석 상태로 올리고 ② 기존 재분석 함수를 호출한다.
+// ═══════════════════════════════════════════════════════════════════
+/** 걸러진 메일 1건을 _msResults로 승격 (분석은 하지 않음) — 성공 시 true */
+window._msQueuePromoteToResults = function(type, fileName) {
+    if (type === 'unmatched') return true; // 이미 _msResults에 있음
+    const key = type === 'discarded' ? MS_DISCARD_QUEUE_KEY : MS_NEW_SENDER_QUEUE_KEY;
+    let list;
+    try { list = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { return false; }
+    const r = list.find(x => x.fileName === fileName);
+    if (!r) return false;
+
+    window._msResults = window._msResults || [];
+    if (!window._msResults.some(x => x.fileName === fileName)) {
+        window._msResults.unshift({
+            idx: window._msResults.length, fileName: r.fileName,
+            subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body: r.body,
+            // 💡 mailRaw 필수 — 빠뜨리면 "📧 원문 보기"가 조용히 사라진다(docs/mail-pipeline.md)
+            mailRaw: { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date,
+                       body2000: r.body, fileName: r.fileName, attachments: r.attachments || [] },
+            project: null, _projectTag: null, task: null,
+            selected: false, registered: false, error: null,
+            // 💡 어디서 어떤 규칙에 걸렸다가 돌아온 건지 남긴다 — 규칙을 고칠 때의 근거가 된다
+            _releasedFrom: type, _releasedReason: r.filteredReason || ''
+        });
+    }
+    // 큐에서 제거 — _msResults에 올라갔으므로 자동수집 중복제거(existingNames)는 계속 유효하다
+    localStorage.setItem(key, JSON.stringify(list.filter(x => x.fileName !== fileName)));
+    return true;
+};
+
+/** 걸러진 메일 1건을 지금 AI로 분석 */
+window._msQueueAnalyzeNow = async function(type, fileName) {
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) {
+        if (window.showToast) window.showToast(window._t('⚠️ AI API 키를 먼저 설정해주세요.', '⚠️ Please set up the AI API key first.'), 'error');
+        return;
+    }
+    if (!window._msQueuePromoteToResults(type, fileName)) return;
+    window._msSaveQueueToStorage();
+    await window._msQueueReanalyze(fileName, null);
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    window._msRenderQueueModal(window._msQueueCurrentType);
+};
+
+/** 현재 보이는 목록(필터 적용분) 전체를 순차 분석 — 무료 한도 보호를 위해 4초 간격 */
+window._msQueueAnalyzeAll = async function(type) {
+    const _en = window._currentLang === 'en';
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) {
+        if (window.showToast) window.showToast(window._t('⚠️ AI API 키를 먼저 설정해주세요.', '⚠️ Please set up the AI API key first.'), 'error');
+        return;
+    }
+    const rows = (window._msQueueRows || []).slice();
+    if (!rows.length) return;
+    // 💡 확인창을 두는 이유: 건당 AI 1회 + 4초라 67건이면 4분 30초·67회다. 무료 한도(하루)를
+    //    한 번에 태울 수 있어서, 보관함 수동 작업(확인창 없음 원칙)과 달리 여기선 먼저 묻는다.
+    const mins = Math.ceil(rows.length * 4 / 60);
+    if (!confirm(_en
+        ? `Analyze ${rows.length} filtered mail(s) with AI now?\nAbout ${rows.length} API calls, roughly ${mins} min.`
+        : `걸러진 메일 ${rows.length}건을 지금 AI로 분석할까요?\nAPI 호출 약 ${rows.length}회, 예상 ${mins}분 소요됩니다.`)) return;
+
+    const btn = document.getElementById('ms-queue-reanalyze-all-btn');
+    const origText = btn ? btn.textContent : '';
+    let done = 0, matched = 0;
+    try {
+        for (let i = 0; i < rows.length; i++) {
+            if (btn) btn.textContent = _en ? `⏳ ${i + 1}/${rows.length}` : `⏳ ${i + 1}/${rows.length}건`;
+            if (!window._msQueuePromoteToResults(type, rows[i].fileName)) continue;
+            await window._msQueueReanalyze(rows[i].fileName, null);
+            done++;
+            const _r = (window._msResults || []).find(x => x.fileName === rows[i].fileName);
+            if (_r && _r.project) matched++;
+            // 무료 티어 보호 — 기존 수동/자동 흐름과 동일한 4초 간격
+            if (i < rows.length - 1) await new Promise(res => setTimeout(res, 4000));
+        }
+    } finally {
+        window._msSaveQueueToStorage();
+        if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+        window._msRenderQueueModal(window._msQueueCurrentType);
+        if (btn) btn.textContent = origText;
+        if (window.showToast) window.showToast(window._t(
+            `✅ 복귀 분석 완료 — ${done}건 중 ${matched}건 프로젝트 매칭됨`,
+            `✅ Re-analysis done — ${matched} of ${done} matched to a project`), 'info', 5000);
+    }
+};
+
+/** 푸터 "전체 분석/재분석" 버튼 — 큐 종류에 따라 분기 */
+window._msQueueBulkClick = function() {
+    const type = window._msQueueCurrentType;
+    if (type === 'unmatched') return window._msBulkReanalyzeUnmatched();
+    return window._msQueueAnalyzeAll(type);
 };
 
 window._msQueueClearAll = function() {
