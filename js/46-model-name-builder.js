@@ -218,7 +218,7 @@ function _mnbRender() {
       + '<button type="button" onclick="window._mnbCheckSap()" style="padding:5px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">🔍 '
       + _t('SAP 중복 확인', 'Check SAP for duplicates') + '</button>'
       + '<span style="font-size:11px; color:#777;">' + _t('일련번호를 뺀 앞자리로 조회합니다 → ', 'Searches by the prefix without the serial → ')
-      + '<b style="font-family:monospace;">' + _mnbEsc((window._mnbPrefix ? window._mnbPrefix() : '') || '______') + '*</b></span>'
+      + '<b style="font-family:monospace;">*' + _mnbEsc((window._mnbPrefix ? window._mnbPrefix() : '') || '______') + '*</b></span>'
       + '</div>'
       + '<div id="mnb-sap" style="margin-top:8px; font-size:11.5px; color:#555; line-height:1.6;"></div>'
       + '</div>'
@@ -341,22 +341,39 @@ window._mnbCheckSap = async function() {
             'The part before the serial is incomplete — pick ①–⑤ first.') + '</span>';
         return;
     }
-    const pattern = prefix + '*';
+    // 🐛 [2026-10-21 버그수정, 실사용] 앞에만 '*'를 붙이면(KTC490DPS*) 영영 0건이 나온다.
+    //    SAP 자재내역(MAKTX)은 모델명으로 **시작하지 않는다** — 이 앱의 KTK PN 형식
+    //    "502574_MVD>KTS320DPS01,LNW"에서 보듯 자재내역은 "MVD>KTS320DPS01,LNW" 꼴이라
+    //    모델명 앞에 제품구분자(MVD/MAIN 등)와 '>'가 붙는다. 양쪽을 열어야 중간 일치가 잡힌다.
+    //    (SAP_CAPABILITIES의 descpattern 예시도 "*01+01*150*"처럼 앞뒤를 연다.)
+    const pattern = '*' + prefix + '*';
     box.innerHTML = '<span style="color:#888;">⏳ ' + _t('SAP 조회 중... ', 'Querying SAP... ') + _mnbEsc(pattern) + '</span>';
     try {
         const res = await fetch('http://127.0.0.1:5000/sap-material-pattern?pattern=' + encodeURIComponent(pattern),
             { signal: AbortSignal.timeout(95000) });
         const j = await res.json();
         if (!j || !j.ok) throw new Error((j && j.error) || 'SAP 조회 실패');
-        // 브릿지가 돌려주는 키가 경로에 따라 matnr/desc 또는 MATNR/MAKTX 라 둘 다 받는다
+        // 브릿지가 돌려주는 키가 경로에 따라 matnr/desc 또는 MATNR/MAKTX 라 둘 다 받는다.
+        // 실측(2026-10-21) 응답 예: {MATNR:"502574", MAKTX:"MVD>KTS320DPS01,LNW", MMSTA:"E3",
+        //                          WGBEZ60:"완제품/MVD", STPRS1:"322,666"}
         const rows = (j.materials || []).map(function(m) {
-            return { no: m.matnr || m.MATNR || '', desc: m.desc || m.MAKTX || m.maktx || '' };
+            return {
+                no:    m.matnr || m.MATNR || '',
+                desc:  m.desc  || m.MAKTX || m.maktx || '',
+                // 자재상태는 중복 판단에 바로 쓰인다 — 같은 앞자리라도 EOL이면 새로 따도 되는 경우가 있다
+                stat:  m.MMSTA || m.mmsta || '',
+                group: m.WGBEZ60 || m.wgbez60 || ''
+            };
         }).filter(function(r) { return r.no || r.desc; });
 
         if (!rows.length) {
             box.innerHTML = '<span style="color:#1f7a3d; font-weight:bold;">✅ '
-                + _t('중복 없음 — 같은 앞자리(' + _mnbEsc(prefix) + ')로 등록된 자재가 없습니다.',
-                     'No duplicate — no material registered with prefix ' + _mnbEsc(prefix) + '.') + '</span>';
+                + _t('중복 없음 — ' + _mnbEsc(pattern) + ' 로 조회된 자재가 없습니다.',
+                     'No duplicate — nothing matched ' + _mnbEsc(pattern) + '.') + '</span>'
+                // 0건이 "정말 없음"인지 "조회가 헛돈 것"인지 구분되게 조회 조건을 같이 남긴다
+                + '<div style="color:#888; margin-top:3px;">'
+                + _t('SAP 자재내역(MAKTX) 기준입니다. 자재내역에 모델명이 다른 형태로 적혀 있으면 안 잡힐 수 있습니다.',
+                     'Matched against SAP material description (MAKTX). A differently written description may not match.') + '</div>';
             return;
         }
         // 이미 쓰인 일련번호를 모아 다음 번호를 제안한다 — 이게 실제로 알고 싶은 것
@@ -383,7 +400,11 @@ window._mnbCheckSap = async function() {
             + rows.map(function(r) {
                 return '<div style="padding:3px 7px; border-bottom:1px solid #f4f4f4; font-size:11px;">'
                     + '<span style="font-family:monospace; color:#1a4f7a;">' + _mnbEsc(r.no) + '</span> · '
-                    + _mnbEsc(r.desc) + '</div>';
+                    + _mnbEsc(r.desc)
+                    + (r.stat ? ' <span style="padding:0 5px; border-radius:8px; background:#eef3f8; color:#1a4f7a; font-size:10px;">'
+                        + _mnbEsc(r.stat) + '</span>' : '')
+                    + (r.group ? ' <span style="color:#aaa;">' + _mnbEsc(r.group) + '</span>' : '')
+                    + '</div>';
             }).join('')
             + '</div>';
     } catch (e) {
