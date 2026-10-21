@@ -88,6 +88,43 @@ window.MNB_CHART = {
     ]
 };
 
+// ── 고객사 보기 = 문서 표 + 고객사 카탈로그(앞자리 코드) ───────────────
+/**
+ * 💡 [2026-10-21 신규, 사용자 요청] 고객사 카탈로그(js/04a CUSTOMER_CATALOG)의 회사도 ⑤에 띄우고,
+ *    코드는 **회사명 앞자리**를 쓴다.
+ *    ⚠️ 고객사 칸은 **한 글자**뿐이라 앞자리가 겹치면 둘 중 하나밖에 못 쓴다. 겹치는 걸 조용히
+ *    버리거나 아무 글자나 배정하면 나중에 "왜 이 회사가 목록에 없지"가 된다 — 문서 표(확정)를
+ *    항상 우선하고, 겹친 회사는 선택지가 아니라 **경고로 드러내서** 사람이 글자를 정하게 한다.
+ *    반환: { options:[...선택 가능], clash:[{name, code, taken}] }
+ */
+function _mnbNormCo(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+window._mnbCustomerOptions = function() {
+    var doc = (window.MNB_CHART.customer || []).slice();
+    var taken = {};
+    doc.forEach(function(o) { taken[o.code] = o.name; });
+
+    var added = [], clash = [];
+    (window.CUSTOMER_CATALOG || []).forEach(function(c) {
+        var nm = String((c && c.name) || '').trim();
+        if (!nm) return;
+        var key = _mnbNormCo(nm);
+        // 문서 표에 이미 있는 회사는 건너뛴다 — 같은 회사가 두 줄로 뜨면 안 된다.
+        //    LNW(SG) ↔ LNW, I.G.T ↔ IGT 처럼 표기가 달라도 같은 회사로 본다(정규화 후 포함관계).
+        var dup = doc.some(function(o) {
+            var k2 = _mnbNormCo(o.name);
+            return k2 === key || k2.indexOf(key) !== -1 || key.indexOf(k2) !== -1;
+        });
+        if (dup) return;
+        var ch = key.charAt(0);
+        if (!ch) return;
+        if (taken[ch]) { clash.push({ name: nm, code: ch, taken: taken[ch] }); return; }
+        taken[ch] = nm;
+        added.push({ code: ch, name: nm, src: 'catalog' });
+    });
+    return { options: doc.concat(added), clash: clash };
+};
+
 // ── 조립 / 역파싱 (순수함수) ──────────────────────────────────────────
 /**
  * 외형/크기 3자리를 만든다.
@@ -158,13 +195,17 @@ function _mnbOptionsHtml(key, list, cur) {
             + (o.legacy ? ' opacity:.55;' : '');
         return '<span class="mnb-opt" data-key="' + key + '" data-code="' + _mnbEsc(o.code) + '" style="' + style + '" title="'
             + _mnbEsc(o.name + (o.legacy ? ' — ' + _t('현재는 E(Extra)로 통합', 'merged into E (Extra)') : '')
-                     + (o.uncertain ? ' / ' + _t('원본 문서 판독 불확실 — 확인 필요', 'uncertain reading of the source doc') : '')) + '">'
+                     + (o.uncertain ? ' / ' + _t('원본 문서 판독 불확실 — 확인 필요', 'uncertain reading of the source doc') : '')
+                     // 카탈로그에서 온 회사는 사내 문서 표에 없는 것 — 앞자리로 임시 배정한 코드다
+                     + (o.src === 'catalog' ? ' — ' + _t('고객사 카탈로그(앞자리 코드) · 사내 규칙 문서에는 없음',
+                                                         'from the customer catalog (first-letter code) · not in the in-house rule doc') : '')) + '">'
             + '<b>' + _mnbEsc(o.code) + '</b> ' + _mnbEsc(label) + mark + '</span>';
     }).join('');
 }
 
 function _mnbRender() {
     var C = window.MNB_CHART;
+    var _mnbCust = window._mnbCustomerOptions();   // 문서 표 + 카탈로그(앞자리) + 충돌 목록
     var ap = C.appearance.filter(function(a) { return a.mode === _mnbMode; })[0] || C.appearance[0];
     var body = document.getElementById('mnb-body');
     if (!body) return;
@@ -203,7 +244,18 @@ function _mnbRender() {
       + '<div>' + _mnbOptionsHtml('touch', C.touch, _mnbSel.touch) + '</div>'
       // ⑤ 고객사
       + '<div style="font-size:12px; font-weight:bold; color:#333; margin:12px 0 5px;">⑤ ' + _t('고객사', 'Customer') + '</div>'
-      + '<div>' + _mnbOptionsHtml('customer', C.customer, _mnbSel.customer) + '</div>'
+      + '<div>' + _mnbOptionsHtml('customer', _mnbCust.options, _mnbSel.customer) + '</div>'
+      // ⚠️ 앞자리가 겹쳐 코드를 못 준 회사 — 숨기면 "왜 이 회사가 없지"가 되므로 드러낸다
+      + (_mnbCust.clash.length
+          ? '<div style="margin-top:5px; padding:6px 9px; background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; font-size:10.5px; color:#8a6100; line-height:1.6;">'
+            + '⚠️ ' + _t('앞자리가 겹쳐 코드를 못 준 회사 — 고객사 칸은 한 글자뿐입니다. 쓰시려면 글자를 따로 정해 ',
+                         'Same first letter, so no code was assigned — the customer slot is one character. Assign a letter in ')
+            + '<code>CUSTOMER_CATALOG</code>' + _t('에 넣어주세요.', '.') + '<br>'
+            + _mnbCust.clash.map(function(c) {
+                return _mnbEsc(c.name) + ' <span style="color:#b9975b;">(' + _mnbEsc(c.code) + ' → ' + _mnbEsc(c.taken) + ' 사용 중)</span>';
+              }).join(' · ')
+            + '</div>'
+          : '')
       // ⑥ 일련번호
       + '<div style="font-size:12px; font-weight:bold; color:#333; margin:12px 0 5px;">⑥ ' + _t('일련번호', 'Serial') + '</div>'
       + '<input id="mnb-serial" type="text" maxlength="5" value="' + _mnbEsc(_mnbSel.serial) + '" placeholder="01"'
