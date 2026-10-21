@@ -183,8 +183,28 @@ window._toggleProjectStatus = function() {
     if (!sel) return;
     if (sel.value === '') { sel.value = '완료'; }           // DV → EOL
     else if (sel.value === '완료') { sel.value = 'MP(EC)'; } // EOL → MP(EC)
-    else { sel.value = ''; }                                 // MP(EC) → DV
+    else {
+        // 💡 [2026-10-21 신규] MP(EC)(임시) → DV(정식)는 "승격"이다 — KTK PN·담당자·PROTO Start를
+        //    요구하는 지점을 신규 등록에서 여기로 옮겼으므로(js/04k validateRequiredProjectInfo 주석),
+        //    비어 있으면 지금 알려준다. 예전엔 등록 때 막아서 "RFQ 단계 프로젝트를 아예 못 만드는"
+        //    문제가 됐고, 지금 안 알리면 반대로 "DV로 바꾼 뒤 저장이 조용히 막히는" 문제가 된다.
+        //    ⚠️ 하드 차단이 아니라 확인(confirm)인 이유: 상태 순환이 DV→EOL→MP(EC)→DV라서 여기서
+        //    막아버리면 MP(EC) 프로젝트가 EOL에 영영 도달하지 못한다(폐기된 임시 건을 닫을 방법이 없어짐).
+        const _miss = window._dvRequiredMissing ? window._dvRequiredMissing() : [];
+        if (_miss.length) {
+            const _en = window._currentLang === 'en';
+            const _ok = confirm(_en
+                ? 'Promoting to DV requires these, and they are still empty:\n\n· ' + _miss.join('\n· ')
+                  + '\n\nSwitch to DV anyway? Saving will be blocked until they are filled in.'
+                : 'DV(정식)로 승격하려면 아래 항목이 필요한데 아직 비어 있습니다:\n\n· ' + _miss.join('\n· ')
+                  + '\n\n그래도 DV로 바꿀까요? 채우기 전까지는 저장이 막힙니다.');
+            if (!_ok) return; // MP(EC) 유지
+        }
+        sel.value = '';                                      // MP(EC) → DV
+    }
     sel.dispatchEvent(new Event('change', { bubbles: true }));
+    // 💡 상태가 바뀌면 필수 기준도 바뀐다 — 빨간 하이라이트를 즉시 다시 계산
+    if (window._checkAllRequiredFields) window._checkAllRequiredFields();
 };
 
 // ─── 프로젝트 정보 다중 모델 카드 ──────────────────────────────────────────

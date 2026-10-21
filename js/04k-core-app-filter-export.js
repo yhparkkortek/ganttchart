@@ -18,11 +18,39 @@
 
     // 💡 저장(=파일 생성) 전 필수 검증: 파일명 조립에 쓰이는 Summary 항목이 비어 있으면
     //    "All_All_All" 같은 의미 없는 파일명으로 저장되는 것을 막는다.
-    window.validateRequiredProjectInfo = function() {
+    // ═══════════════════════════════════════════════════════════════════
+    // 💡 [2026-10-21 구조 변경, 사용자 요청] 등록 게이트를 2단계로 나눈다.
+    //
+    //    왜: KTK PN은 수주 후에 채번되는데, 정작 분류가 필요한 메일은 그 *이전*(RFQ·견적·문의)에
+    //    온다. 그런데 신규 등록이 KTK PN을 요구하는 바람에, 진행 중인 건(Dice Popper RFQ,
+    //    BARON 19.5" 견적, ZITRO ICONIC 문의 등)을 아예 등록할 수 없었고 → 후보 목록에 없으니
+    //    → 메일이 영원히 미분류로 쌓였다(실측 미분류 31건 중 약 20건이 이 경로).
+    //    게이트를 없애는 게 아니라 "필요해지는 시점"으로 옮긴다.
+    //
+    //    ⚠️ 고객사·고객모델명을 계속 필수로 두는 이유는 이 둘이 실제로 파일명을 만들기 때문
+    //    ("고객사_모델_인치", updatePrintTitle 참고). 비면 "All_All_All"로 저장된다.
+    //    반대로 KTK모델명·프로젝트담당자는 파일명에 들어가지 않는다 — 기존 주석/마법사 안내의
+    //    "파일명 생성에 필요"는 이 둘에 대해서는 사실과 달랐다.
+    //
+    //    임시 단계 판정은 기존 완료여부 enum을 그대로 쓴다(새 값 추가 없음):
+    //      '' = DV(정식) · 'MP(EC)' = 메일 분석 생성 임시 · '완료' = EOL
+    // ═══════════════════════════════════════════════════════════════════
+    /** 지금 프로젝트가 "임시(MP(EC))" 단계인지 — 이 단계는 완화된 필수만 적용 */
+    window._isDraftStageProject = function() {
+        return String((window.projectMeta || {}).완료여부 || '') === 'MP(EC)';
+    };
+    /** 임시 단계에서도 반드시 필요한 것 — 파일명 조립에 실제로 쓰이는 두 개 */
+    window._draftRequiredMissing = function() {
         const pm = window.projectMeta || {};
         const missing = [];
         if (!String(pm.고객사 || '').trim()) missing.push('고객사');
         if (!String(pm.고객모델명 || '').trim()) missing.push('고객 모델명');
+        return missing;
+    };
+    /** DV(정식 개발) 승격부터 추가로 필요한 것 */
+    window._dvRequiredMissing = function() {
+        const pm = window.projectMeta || {};
+        const missing = [];
         if (!String(pm.KTK모델명 || '').trim()) missing.push('KTK PN_모델명');
         if (!String(pm.프로젝트담당자 || '').trim()) missing.push('프로젝트 담당자');
         // 💡 [버그 수정] PROTO Start는 "새 프로젝트를 처음 등록할 때"만 필수여야 하는데, 모든 저장에
@@ -34,13 +62,21 @@
         //    있는데, 아직 Gantt WBS를 하나도 안 불러온 채(Summary만 먼저 채우는 흔한 순서) 저장하려 하면
         //    앵커로 쓸 일정 자체가 없는데도 요구하고 있었다. 실제로 앵커링할 Gantt 데이터
         //    (globalData.length > 1)가 있을 때만 요구하도록 조건을 하나 더 좁힌다.
-        if (!window.currentDriveFileId && globalData && globalData.length > 1) {
+        if (!window.currentDriveFileId && typeof globalData !== 'undefined' && globalData && globalData.length > 1) {
             const protoStartMs = (((window.tabData || {}).summary || {}).milestones || {})['기획Start'];
             if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일 — Gantt 데이터가 있는 신규 프로젝트만 필수)');
         }
+        return missing;
+    };
+    window.validateRequiredProjectInfo = function() {
+        const draft = window._isDraftStageProject();
+        const missing = window._draftRequiredMissing().concat(draft ? [] : window._dvRequiredMissing());
         if (missing.length === 0) return '';
         // 💡 [UX] 빈 줄을 줄여 한눈에 들어오게 — 예전엔 문단마다 \n\n이 들어가 모달이 불필요하게 길었다.
-        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n(Summary 탭에서 입력 · 파일명 생성과 일정 자동계산에 필요)\n\n· ' + missing.join('\n· ');
+        const tail = draft
+            ? '' // 임시 단계에서 막혔다면 남은 건 파일명용 두 개뿐이라 추가 설명이 필요 없다
+            : '\n\n💡 아직 KTK PN이 안 나온 단계(RFQ·견적·문의)라면, 프로젝트 상태를 🟢 MP(EC)(임시)로 바꾸면 고객사·고객 모델명만으로 등록할 수 있습니다. 나머지는 🔵 DV로 승격할 때 입력하면 됩니다.';
+        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n(Summary 탭에서 입력 · 파일명 생성과 일정 자동계산에 필요)\n\n· ' + missing.join('\n· ') + tail;
     };
 
     // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자, 신규 프로젝트는 PROTO Start도) 빈 값이면 시각적 하이라이트
@@ -50,20 +86,24 @@
         else el.classList.add('req-missing');
     };
     window._checkAllRequiredFields = function() {
-        ['sum-customer', 'sum-pm'].forEach(function(id) {
-            const el = document.getElementById(id);
-            if (el) window._checkRequiredField(el);
-        });
+        // 💡 [2026-10-21] 빨간 하이라이트는 저장 게이트와 항상 같은 기준이어야 한다 —
+        //    임시(MP(EC)) 단계인데 "저장은 되는데 빨갛게 표시"되면 사람이 뭘 믿어야 할지 모른다.
+        const _draft = window._isDraftStageProject && window._isDraftStageProject();
+        const _mark = function(el, required) {
+            if (!el) return;
+            if (required) window._checkRequiredField(el);
+            else el.classList.remove('req-missing');
+        };
+        _mark(document.getElementById('sum-customer'), true);  // 파일명용 — 항상 필수
+        _mark(document.getElementById('sum-pm'), !_draft);     // DV 승격부터
         document.querySelectorAll('.sum-model-card .req-field').forEach(function(el) {
-            window._checkRequiredField(el);
+            // 고객모델명은 파일명용이라 항상, KTK는 DV 승격부터 (_renderModelCardHtml의 data-model-field)
+            const _isKtk = el.getAttribute('data-model-field') === 'KTK';
+            _mark(el, _isKtk ? !_draft : true);
         });
         // 💡 PROTO Start는 신규 프로젝트(아직 드라이브에 없는 파일) 등록 시에만 필수 — 이미 등록된
         //    기존 프로젝트를 열었을 때는 빨간 경고를 띄우지 않는다 (validateRequiredProjectInfo와 동일 기준)
-        const protoEl = document.getElementById('sum-ms-plan-protostart');
-        if (protoEl) {
-            if (window.currentDriveFileId) protoEl.classList.remove('req-missing');
-            else window._checkRequiredField(protoEl);
-        }
+        _mark(document.getElementById('sum-ms-plan-protostart'), !_draft && !window.currentDriveFileId);
     };
 
     window.updatePrintTitle = function() {

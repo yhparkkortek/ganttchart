@@ -214,11 +214,18 @@ function _renderStep4(body) {
     body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객 모델명 <span style="color:#e03131;">*</span></div>' +
         '<input id="npw-model" type="text" placeholder="' + _t('예: STELLAR32, KV-43XH8596', 'e.g. STELLAR32, KV-43XH8596') + '" value="' + model + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
-        '<div style="font-size:13px; font-weight:bold; color:#333; margin:16px 0 8px;">KTK PN_모델명 <span style="color:#e03131;">*</span></div>' +
-        '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">형식: <code style="background:#f8f9fa;padding:1px 5px;border-radius:3px;">502574_MAIN>KTS320DPS01,LNW</code> — 파일명 생성에 필요합니다.</div>' +
+        // 🐛 [2026-10-21 수정] 예전엔 여기 빨간 * 가 붙어 있는데 _validateStep4는 검사하지 않았고,
+        //    안내문은 "비워둬도 된다"면서 저장 게이트는 막았다 — 마법사를 KTK PN 없이 끝내면 끝나자마자
+        //    자동저장이 alert으로 튕기고 프로젝트가 생성되지 않았다(세 안내가 서로 모순이었다).
+        //    이제 비워두면 임시(MP(EC))로 등록되고, KTK PN은 DV 승격 때 요구한다.
+        '<div style="font-size:13px; font-weight:bold; color:#333; margin:16px 0 8px;">' + _t('KTK PN_모델명', 'KTK PN_Model') +
+        ' <span style="font-weight:normal; font-size:11px; color:#888;">(' + _t('선택', 'optional') + ')</span></div>' +
+        '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">' + _t('형식', 'Format') + ': <code style="background:#f8f9fa;padding:1px 5px;border-radius:3px;">502574_MAIN>KTS320DPS01,LNW</code></div>' +
         '<input id="npw-ktkpn" type="text" placeholder="' + _t('예: 502574_MAIN>KTS320DPS01,LNW', 'e.g. 502574_MAIN>KTS320DPS01,LNW') + '" value="' + ktkpn + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; font-family:monospace;">' +
-        '<div style="font-size:11px; color:#aaa; margin-top:6px;">※ 아직 모르면 비워두고 Summary 탭에서 나중에 입력해도 됩니다 (저장 전까지 필수).</div>';
+        '<div style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">' +
+        _t('※ 아직 채번 전(RFQ·견적·문의 단계)이면 비워두세요 — 🟢 <b>MP(EC)(임시)</b>로 등록되어 바로 메일 자동매칭 후보가 됩니다. 🔵 DV로 승격할 때 입력하면 됩니다.',
+           '※ Leave it empty if the part number does not exist yet (RFQ / quote / inquiry stage) — the project is registered as 🟢 <b>MP(EC)</b> (draft) and joins mail auto-matching right away. Fill it in when promoting to 🔵 DV.') + '</div>';
     setTimeout(function() { const el = document.getElementById('npw-model'); if (el) el.focus(); }, 50);
 }
 function _collectStep4() {
@@ -365,9 +372,22 @@ function _fillSummaryFields() {
     }
 
     // 프로젝트 상태 (DV or MP(EC))
+    // 💡 [2026-10-21 신규] KTK PN을 비운 채 끝냈으면 DV(정식)로 둘 수 없다 — 그대로 두면
+    //    바로 아래 자동저장이 "KTK PN_모델명 필수"로 막혀 프로젝트가 아예 안 만들어진다.
+    //    임시(MP(EC))로 내려서 등록 자체는 성립시키고, 사람에게 그 사실과 승격 방법을 알린다.
+    //    (메일 경유 진입은 _npwOpen이 이미 'MP(EC)'를 넘기므로 여기선 바뀌지 않는다.)
+    let _effStatus = _status;
+    if (!_effStatus && !String(d.ktkpn || '').trim()) {
+        _effStatus = 'MP(EC)';
+        // _applyToSummary가 이 함수를 100ms·1800ms 두 번 부르므로(참조 엑셀 덮어쓰기 방어) 안내는 1회만
+        if (window.showToast && !window._npwDraftNoticeShown) window.showToast(_t(
+            '🟢 KTK PN이 없어 임시(MP(EC))로 등록합니다 — 메일 자동매칭에는 바로 포함됩니다. PN이 나오면 Summary 탭에서 입력 후 🔵 DV로 바꾸세요.',
+            '🟢 Registered as draft MP(EC) since the KTK PN is empty — mail auto-matching already includes it. Enter the PN in the Summary tab, then switch to 🔵 DV.'), 'info', 7000);
+        window._npwDraftNoticeShown = true;
+    }
     const statusEl = document.getElementById('sum-project-status');
     if (statusEl) {
-        statusEl.value = _status;
+        statusEl.value = _effStatus;
         statusEl.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
@@ -426,6 +446,7 @@ window._npwOpen = function(prefill, statusVal) {
     _prefill = prefill || {};
     _status  = statusVal || '';
     window._npwData = {};
+    window._npwDraftNoticeShown = false; // "임시로 등록됨" 안내는 마법사 1회당 한 번만
     document.getElementById('npw-modal').style.display = '';
     _renderStep();
 
