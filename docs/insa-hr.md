@@ -87,7 +87,6 @@ SAP·그룹웨어와 동일하다. Windows DPAPI로 암호화해 `insa_login_con
 | `DELETE /insa/login-config` | 저장된 정보 삭제 + 세션 버림 |
 | `GET /insa/status` | 서버 연결 가능 여부 + 로그인 상태. **로그인은 하지 않는다** |
 | `POST /insa/login` | 저장된 계정으로 **한 번** 시도(전용 크롬 탭에서) |
-| `POST /insa/open` | 창만 띄운다 — **로그인은 하지 않음** |
 
 로그인 세션은 전용 크롬이 들고 있다(백엔드에 쿠키를 따로 보관하지 않는다).
 

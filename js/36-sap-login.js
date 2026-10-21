@@ -130,7 +130,6 @@
                 + '<div style="display:flex; gap:8px;">'
                 + '<button onclick="window._insaLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
-                + '<button onclick="window._insaOpen()" style="' + btnSt + '">🪟 ' + T('창 열기', 'Open window') + '</button>'
                 + '<button onclick="window._insaLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._insaLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div></div></div>';
@@ -311,17 +310,6 @@
             // 사람이 직접 누른 테스트는 **가드를 푼다** — 비밀번호를 고쳤을 수 있다.
             _insaTried = !d.ok; _insaFailMsg = d.ok ? '' : (d.message || '');
             insaStatus((d.ok ? '✅ ' : '🔒 ') + (d.message || ''), d.ok ? 'ok' : 'err');
-        } catch (e) {
-            insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
-        }
-    };
-
-    // 🪟 로그인은 하지 않고 **창만** 띄운다 — 직접 보고 쓰고 싶을 때.
-    window._insaOpen = async function () {
-        insaStatus('⏳ ' + T('인사관리 창을 여는 중…', 'Opening the HR window…'), '');
-        try {
-            var d = await fetch(BASE + '/insa/open', { method: 'POST' }).then(function (r) { return r.json(); });
-            insaStatus((d.ok ? '🪟 ' : '⚠️ ') + (d.message || ''), d.ok ? 'ok' : 'err');
         } catch (e) {
             insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
         }

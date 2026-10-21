@@ -3329,27 +3329,6 @@ def insa_status():
     return jsonify(out)
 
 
-@app.route('/insa/open', methods=['POST'])
-def insa_open():
-    """인사관리 화면을 전용 크롬에 **띄우기만** 한다(로그인은 하지 않음)."""
-    try:
-        import gw_bridge
-        if not gw_bridge.chrome_alive():
-            ok, msg = gw_bridge.launch_chrome()
-            if not ok:
-                return jsonify({'ok': False, 'message': msg})
-        t = gw_bridge._insa_page()
-        if not t:
-            return jsonify({'ok': False, 'message': '인사관리 탭을 열지 못했습니다.'})
-        try:
-            gw_bridge.gw_window_state('normal')   # 최소화돼 있으면 보이게
-        except Exception:
-            pass
-        return jsonify({'ok': True, 'message': '인사관리 창을 열었습니다.'})
-    except Exception as e:
-        return jsonify({'ok': False, 'message': str(e)})
-
-
 @app.route('/insa/login', methods=['POST'])
 def insa_login():
     """저장된 계정으로 **한 번만** 로그인 시도. 실패해도 재시도하지 않고 창을 열어 둔다.
