@@ -237,7 +237,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ### `docs/insa-hr.md` — 🧑‍💼 인사관리(kInsa) 연동 (`http://insa.kortek.co.kr`)
 - **읽을 때**: 인사관리 자동 로그인, 앞으로 인사 화면 조회/조작을 붙일 때
-- 지금은 **자동 로그인까지만** 구현됨. 로그인은 `POST /kInsa` + `userNum`/`password`(실측 확정, `GET`은 405)
+- 로그인(`POST /kInsa` + `userNum`/`password`, 실측 확정)과 **화면 자동 학습**까지 구현됨 — 메뉴 12개를 눌러 보고 실제 주소를 관찰해 `insa_menu_catalog.json`(데이터)에 저장. AI 문답 도구 `insa_menus`/`insa_screen`(js/40, 읽기 전용)
+- **⚠️ 학습한 주소로 직접 이동 금지(GET 405) — 메뉴를 클릭할 것.** path 는 이동 수단이 아니라 **도착 확인용**이다. 클릭 직후 바로 읽으면 **앞 화면 내용이 나온다**(실제로 틀린 답을 준 적 있음) — 주소가 바뀐 걸 확인한 뒤 읽고, 못 가면 정직하게 실패시킬 것
 - **성공/실패가 둘 다 HTTP 200** — 실패는 `location.href = "index"` 가 든 194바이트 `<script>`로 온다. `_insa_fail_message()`가 그 지문으로 판정
 - **⚠️ 한 번만 시도, 실패 시 재시도 금지**(계정 잠금). 가드는 프런트 `_insaEnsureLogin`(js/36) — **`/insa/login`을 직접 부르지 말 것**
 - 비밀번호는 DPAPI → `insa_login_config.json`(.gitignore). 복호화 함수를 gw_bridge에서 쓰지 않고 백엔드에 따로 둔 이유도 문서에

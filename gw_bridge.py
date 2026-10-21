@@ -1528,3 +1528,240 @@ def insa_login_once():
     return {'ok': False, 'result': 'failed', 'handoff': True,
             'message': '인사관리 로그인에 실패했습니다 — 계정 잠금을 막기 위해 재시도하지 않습니다. '
                        '열린 창에서 직접 로그인해주세요.'}
+
+
+# ══ 🔎 인사관리 화면 자동 학습 ════════════════════════════════════════════
+#
+#  [2026-10-21] 메뉴가 `<a href="#14">근무 계획</a>` 처럼 **해시 코드**로만 돼 있어서
+#  화면 주소를 밖에서 알 수 없다. 그래서 **추측하지 않고** 메뉴를 하나씩 눌러 보고
+#  안쪽 프레임이 실제로 어디로 가는지 기록한다(그룹웨어에서 "경로를 추측하지 말 것"으로
+#  배운 그대로). 결과는 카탈로그 파일(데이터)로 남겨 코드에 경로를 박지 않는다.
+#
+#  ⚠️ **읽기 전용이다.** 메뉴를 눌러 화면을 띄우기만 하고, 어떤 폼도 제출하지 않는다.
+#     (신청·결재처럼 값이 바뀌는 동작은 사람 확인 없이 절대 하지 않는다)
+INSA_MENU_CATALOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'insa_menu_catalog.json')
+
+_INSA_MENU_JS = r"""
+(() => {
+  const seen = new Set(), out = [];
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    const t = (a.textContent || '').trim().replace(/\s+/g, ' ');
+    const h = a.getAttribute('href') || '';
+    if (!t || h === '#' || seen.has(h)) return;
+    seen.add(h);
+    out.push({ code: h.slice(1), label: t });
+  });
+  return out;
+})()
+"""
+
+_INSA_INNER_URL_JS = r"""
+(() => { const f = document.querySelector('iframe');
+         try { return (f && f.contentDocument) ? f.contentDocument.location.href : ''; }
+         catch (e) { return ''; } })()
+"""
+
+
+def insa_menus_observed():
+    """최상위 화면의 메뉴(해시 코드 + 라벨)를 읽는다. 누르지는 않는다."""
+    return eval_in_insa(_INSA_MENU_JS, timeout=25) or []
+
+
+def insa_learn_menus(wait_each=6.0):
+    """메뉴를 하나씩 **눌러 보고** 안쪽 프레임의 실제 주소를 기록한다(읽기 전용).
+
+    반환: [{code, label, path, ok}] — path 는 관찰로 확정된 값이고, 못 알아낸 건 ok=False.
+    """
+    if not insa_session_info().get('ok'):
+        return {'ok': False, 'message': '인사관리에 로그인되어 있지 않습니다 — 🔑에서 먼저 로그인해주세요.'}
+
+    menus = insa_menus_observed()
+    if not menus:
+        return {'ok': False, 'message': '메뉴를 찾지 못했습니다(로그인 직후 화면인지 확인해주세요).'}
+
+    learned, before = [], (eval_in_insa(_INSA_INNER_URL_JS, timeout=15) or '')
+    for m in menus:
+        code = m.get('code') or ''
+        try:
+            eval_in_insa(
+                "(() => { const a = document.querySelector('a[href=\"#%s\"]');"
+                " if (a) a.click(); return !!a; })()" % code, timeout=15)
+        except Exception:
+            pass
+        # 🐛 [실측] 처음엔 "주소가 **바뀌면**" 그걸 경로로 봤는데, 두 메뉴가 같은 화면을
+        #    쓰면(의료비↔복리후생, 연차계획↔계획서목록) 바뀌지 않아 **조용히 빈 값**이 됐다.
+        #    → 바뀌길 기다리지 말고 **잠잠해질 때까지**(연속 두 번 같은 값) 기다렸다가 적는다.
+        path, last, stable, deadline = '', None, 0, time.time() + wait_each
+        while time.time() < deadline:
+            time.sleep(0.4)
+            try:
+                cur = eval_in_insa(_INSA_INNER_URL_JS, timeout=10) or ''
+            except Exception:
+                continue
+            if not cur:
+                continue
+            stable = stable + 1 if cur == last else 0
+            last = cur
+            if stable >= 1:          # 두 번 연속 같은 값 = 로딩이 끝났다
+                path = cur
+                break
+        if not path and last:
+            path = last
+        row = {'code': code, 'label': m.get('label', ''), 'path': path, 'ok': bool(path)}
+        # 앞 메뉴와 같은 화면이면 표시해 둔다 — 클릭이 안 먹어서 이전 화면을 적었을 수도 있다.
+        if path and path == before:
+            row['sameAsPrev'] = True
+        before = path or before
+        learned.append(row)
+
+    data = {'learnedAt': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'origin': INSA_ORIGIN, 'menus': learned}
+    try:
+        with open(INSA_MENU_CATALOG, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return {'ok': True, 'warning': f'카탈로그 저장 실패: {e}', **data}
+    return {'ok': True, **data}
+
+
+def insa_menu_catalog():
+    try:
+        with open(INSA_MENU_CATALOG, 'r', encoding='utf-8') as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+
+def _insa_reload_top(wait=12.0):
+    """최상위 화면을 새로고침해 앱 상태를 되돌린다(메뉴가 다시 보일 때까지 기다림)."""
+    try:
+        eval_in_insa("location.reload()", timeout=10)
+    except Exception:
+        pass                      # 새로고침으로 JS 컨텍스트가 죽는 건 정상 경로다
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        time.sleep(0.5)
+        try:
+            if eval_in_insa(r"""document.querySelectorAll('a[href^="#"]').length""", timeout=8):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def insa_read_screen(code_or_path, timeout=25):
+    """학습된 화면 하나를 열어 **글자만** 긁어 온다(읽기 전용).
+
+    ⚠️⚠️ [2026-10-21 실측] 학습해 둔 주소로 **직접 이동하면 안 된다.** 그 화면들은
+       GET 을 막아 둬서(`HTTP 405 - Request method 'GET' not supported`) 빈 오류 페이지가
+       나온다 — 로그인(`/kInsa`)과 같다. 메뉴는 POST 로 열리고, 어떤 파라미터가 붙는지는
+       밖에서 알 수 없다.
+       → **메뉴를 클릭한다.** 앱이 하던 그대로 하게 두는 것이 유일하게 안전한 방법이다.
+         학습해 둔 path 는 "그 메뉴가 어디로 가는지" 확인용이지 이동 수단이 아니다.
+    """
+    cat = insa_menu_catalog()
+    menus = cat.get('menus') or []
+    key = str(code_or_path or '').strip()
+    if not key:
+        return {'ok': False, 'message': '메뉴 이름이나 코드를 지정해주세요.'}
+
+    def _norm(v):
+        return ''.join(str(v or '').split()).lower()
+    nkey = _norm(key)
+    hit = None
+    for m in menus:                                  # 1) 코드 정확히
+        if str(m.get('code', '')).lower() == key.lower():
+            hit = m; break
+    if not hit:                                      # 2) 이름 정확히(공백 무시)
+        for m in menus:
+            if _norm(m.get('label')) == nkey:
+                hit = m; break
+    if not hit:                                      # 3) 이름 부분일치 — 라벨에 '연차휴가사용계획 0'
+        for m in menus:                              #    처럼 숫자가 붙어 있어 정확일치가 자주 빗나간다
+            if nkey and nkey in _norm(m.get('label')):
+                hit = m; break
+    if not hit:
+        return {'ok': False,
+                'message': '그런 화면이 없습니다. 볼 수 있는 화면: '
+                           + ', '.join(m.get('label', '') for m in menus if m.get('label'))}
+
+    code = hit.get('code')
+
+    # 🐛 [2026-10-21 실측] 안쪽 프레임이 한 번 오류 페이지(405 — GET 미지원)에 빠지면
+    #    그 뒤로는 메뉴를 눌러도 계속 오류 페이지만 나온다. 최상위를 새로고침하면 되돌아온다.
+    #    → 읽기 전에 프레임 상태를 보고, 수상하면 새로고침부터 한다.
+    try:
+        probe = eval_in_insa(r"""
+          (() => { const f = document.querySelector('iframe');
+                   const d = f && f.contentDocument;
+                   const t = (d && d.body && d.body.innerText) || '';
+                   return { err: t.indexOf('not supported') >= 0,
+                            menus: document.querySelectorAll('a[href^="#"]').length }; })()
+        """, timeout=15) or {}
+    except Exception:
+        probe = {}
+    if probe.get('err') or not probe.get('menus'):
+        _insa_reload_top()
+
+    try:
+        clicked = eval_in_insa(
+            "(() => { const a = document.querySelector('a[href=\"#%s\"]');"
+            " if (a) a.click(); return !!a; })()" % code, timeout=15)
+    except Exception:
+        clicked = True                               # 클릭으로 화면이 바뀌며 컨텍스트가 죽는 건 정상
+    if clicked is False:
+        return {'ok': False, 'message': f'"{hit.get("label")}" 메뉴를 화면에서 찾지 못했습니다.'}
+
+    # ⚠️⚠️ [2026-10-21 실측] 클릭 직후 바로 글자를 읽으면 **앞 화면 내용을 그대로 돌려준다.**
+    #    실제로 "연차휴가사용계획"을 물었는데 직전에 열려 있던 "근무 계획" 본문이 나왔다 —
+    #    틀린 답을 자신 있게 주는 셈이라 못 읽는 것보다 나쁘다.
+    #    → 학습해 둔 path 로 **주소가 그 화면으로 바뀐 것을 확인한 뒤에** 읽는다.
+    #      (path 는 이동 수단이 아니라 이런 확인용이다 — 직접 이동하면 405다)
+    want = (hit.get('path') or '').replace(INSA_ORIGIN, '')
+    arrived, cur = not want, ''
+    if want:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            time.sleep(0.3)
+            try:
+                cur = eval_in_insa(_INSA_INNER_URL_JS, timeout=10) or ''
+            except Exception:
+                continue
+            if want in cur:
+                arrived = True
+                break
+    if not arrived:
+        # 그 화면으로 가지 못했다. **앞 화면 내용을 돌려주지 않는다** — 틀린 답보다 못 읽었다는
+        # 답이 낫다. (메뉴가 단순 표시용이라 클릭해도 안 넘어가는 경우가 실제로 있다)
+        return {'ok': False, 'label': hit.get('label', ''), 'code': code,
+                'message': f'"{hit.get("label")}" 화면을 열지 못했습니다'
+                           f'(지금 화면: {cur.replace(INSA_ORIGIN, "") or "알 수 없음"}). '
+                           f'이 메뉴는 클릭으로 안 넘어가는 항목일 수 있습니다.'}
+
+    text, last = '', None
+    for _ in range(int(timeout / 0.5)):
+        time.sleep(0.5)
+        try:
+            # ⚠️ 여기에 정규식(/\n{3,}/ 같은)을 넣지 말 것 — 이 파일을 heredoc 으로 고치다
+            #    백슬래시가 먹혀 **진짜 줄바꿈**이 박히는 바람에 JS 가 매번 SyntaxError 를 냈고,
+            #    그게 조용히 삼켜져 "화면을 읽지 못했습니다"만 나왔다(2026-10-21 반나절 소모).
+            #    글자 다듬기는 아래 파이썬에서 한다 — 거기선 이스케이프가 안전하다.
+            r = eval_in_insa(
+                "(() => { const f = document.querySelector('iframe');"
+                " const d = f && f.contentDocument;"
+                " if (!d || !d.body) return '';"
+                " return (d.body.innerText || '').trim(); })()", timeout=12) or ''
+        except Exception:
+            r = ''
+        if len(r) > 50 and r == last:                # 두 번 연속 같으면 로딩이 끝난 것
+            text = r
+            break
+        last = r
+    if not text and last and len(last) > 50:
+        text = last
+    if 'Request method' in text and 'not supported' in text:
+        return {'ok': False, 'label': hit.get('label', ''),
+                'message': '화면이 오류를 돌려줬습니다(GET 미지원) — 메뉴 클릭으로 다시 시도해주세요.'}
+    text = re.sub(r'\n{3,}', '\n\n', text)      # 빈 줄 정리는 여기서(파이썬 쪽이 안전하다)
+    return {'ok': bool(text), 'label': hit.get('label', ''), 'code': code,
+            'text': text[:8000], 'message': '' if text else '화면을 읽지 못했습니다.'}

@@ -3343,6 +3343,43 @@ def insa_login():
         return jsonify({'ok': False, 'result': 'error', 'message': str(e)})
 
 
+@app.route('/insa/menus', methods=['GET'])
+def insa_menus():
+    """학습해 둔 인사관리 화면 카탈로그. 네트워크를 쓰지 않는다(파일만 읽음)."""
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, **gw_bridge.insa_menu_catalog()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/insa/learn', methods=['POST'])
+def insa_learn():
+    """메뉴를 하나씩 눌러 보고 **실제 화면 주소를 관찰해** 카탈로그를 새로 만든다.
+
+    ⚠️ 읽기 전용 — 화면을 띄우기만 하고 어떤 폼도 제출하지 않는다.
+       로그인이 안 돼 있으면 하지 않는다(여기서 로그인을 시도하지도 않는다).
+    """
+    try:
+        import gw_bridge
+        return jsonify(gw_bridge.insa_learn_menus())
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/insa/screen', methods=['GET'])
+def insa_screen():
+    """학습된 화면 하나를 열어 글자만 읽어 온다(읽기 전용)."""
+    code = (request.args.get('code') or '').strip()
+    if not code:
+        return jsonify({'ok': False, 'message': 'code(메뉴 코드 또는 이름)를 지정해주세요.'})
+    try:
+        import gw_bridge
+        return jsonify(gw_bridge.insa_read_screen(code))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/login', methods=['POST'])
 def gw_login():
     """저장된 계정으로 **한 번만** 로그인 시도. 실패하면 재시도하지 않고 사람에게 넘긴다."""

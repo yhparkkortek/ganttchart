@@ -1,0 +1,80 @@
+{
+  "learnedAt": "2026-10-21 11:40:32",
+  "origin": "http://insa.kortek.co.kr",
+  "menus": [
+    {
+      "code": "14",
+      "label": "연차휴가사용계획 0",
+      "path": "http://insa.kortek.co.kr/annual-plan/request",
+      "ok": true
+    },
+    {
+      "code": "AP",
+      "label": "연차휴가사용계획서목록",
+      "path": "http://insa.kortek.co.kr/annual-plan/request",
+      "ok": true,
+      "sameAsPrev": true
+    },
+    {
+      "code": "WT",
+      "label": "근무 유형 설정",
+      "path": "http://insa.kortek.co.kr/workPlan/requestDocList",
+      "ok": true
+    },
+    {
+      "code": "11",
+      "label": "근무 계획",
+      "path": "http://insa.kortek.co.kr/workCalendar/calendar",
+      "ok": true
+    },
+    {
+      "code": "OW",
+      "label": "연장근무 신청내역",
+      "path": "http://insa.kortek.co.kr/overWorkReq/request",
+      "ok": true
+    },
+    {
+      "code": "PE",
+      "label": "근무계획 수정내역",
+      "path": "http://insa.kortek.co.kr/workPlanEdit/request",
+      "ok": true
+    },
+    {
+      "code": "i01",
+      "label": "근무변동계 작성내역",
+      "path": "http://insa.kortek.co.kr/dl/request",
+      "ok": true
+    },
+    {
+      "code": "i02",
+      "label": "카드누락사유서 내역",
+      "path": "http://insa.kortek.co.kr/cardMissRs/request",
+      "ok": true
+    },
+    {
+      "code": "15",
+      "label": "복리후생",
+      "path": "http://insa.kortek.co.kr/medicalPay/calendar",
+      "ok": true
+    },
+    {
+      "code": "04",
+      "label": "의료비",
+      "path": "http://insa.kortek.co.kr/medicalPay/calendar",
+      "ok": true,
+      "sameAsPrev": true
+    },
+    {
+      "code": "05",
+      "label": "학자금",
+      "path": "http://insa.kortek.co.kr/eduExpense/calendar",
+      "ok": true
+    },
+    {
+      "code": "06",
+      "label": "설정",
+      "path": "http://insa.kortek.co.kr/setting/defaultconfirmline",
+      "ok": true
+    }
+  ]
+}
