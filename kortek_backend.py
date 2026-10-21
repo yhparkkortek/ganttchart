@@ -3469,7 +3469,11 @@ def gw_approval_forms():
 
 @app.route('/gw/approval/search', methods=['GET'])
 def gw_approval_search():
-    """같은 자재코드로 올라간 기존 승인원을 찾는다 — Revision History 판단용."""
+    """전자결재 문서 키워드 검색.
+
+    ⚠️ `onlyApprovalForm` 기본값이 1이라 **제목에 승인원 표시가 없는 문서는 전부 걸러진다.**
+    (2026-10-21 제보: 문서번호로 찾았는데 0건 — 승인원이 아니어서 걸러진 것이었다)
+    일반 검색은 `onlyApprovalForm=0`. 승인원 Revision History 판단용일 때만 1."""
     try:
         import gw_bridge
         kw = (request.args.get('keyword') or '').strip()
@@ -3686,8 +3690,9 @@ def gw_webfolder():
 def gw_approval_doclist():
     """전자결재 문서함 목록.
 
-    `box`=draft|tempsave|approve|viewer, `searchtype`/`keyword`/`duration`/`limit`.
+    `box`=draft|tempsave|approve|viewer|all, `searchtype`/`keyword`/`duration`/`limit`.
     ⚠️ searchtype을 엉뚱하게 주면 **조용히 0건**이 온다(제목에 없는 말을 title로 찾는 등).
+    ⚠️ draft 는 **내가 기안한 것만** 본다 — 남의 문서를 문서번호로 찾을 땐 box=all.
     """
     try:
         import gw_bridge

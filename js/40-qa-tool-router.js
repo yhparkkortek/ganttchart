@@ -171,8 +171,9 @@
             desc: '내 전자결재 문서함을 본다. 기안함/임시저장함/결재함(내가 결재할 차례)/참조열람함.',
             path: '/gw/approval/doclist', pick: 'docs',
             params: [
-                { name: 'box', type: 'enum', enum: ['draft', 'tempsave', 'approve', 'viewer'], def: 'draft',
-                  desc: 'draft=내가 기안한 것 / tempsave=임시저장 / approve=내가 결재한·할 것 / viewer=참조·열람' },
+                { name: 'box', type: 'enum', enum: ['draft', 'tempsave', 'approve', 'viewer', 'all'], def: 'draft',
+                  desc: 'draft=내가 기안한 것 / tempsave=임시저장 / approve=내가 결재한·할 것 / viewer=참조·열람 / all=문서함 전부. '
+                      + '⚠️ draft 는 **내가 올린 문서만** 보인다 — 문서번호(RD3-2610-050 같은)로 찾을 때는 남이 올린 문서일 수 있으니 반드시 all 을 써라.' },
                 { name: 'searchtype', type: 'enum',
                   enum: ['title', 'drafterName', 'drafterDeptName', 'formName', 'docNum', 'activityUserName'],
                   desc: '검색 대상 필드. ⚠️ 엉뚱한 필드로 찾으면 조용히 0건이 온다 — 사내 승인원 문서는 제목이 영문(Customer Approval Sheet...)이라 "승인원"은 title이 아니라 formName으로 찾아야 걸린다. 0건이면 다른 필드로 한 번 더 시도해라.' },
@@ -255,10 +256,15 @@
         {
             id: 'gw_approval_search', mode: 'read', requires: 'gw',
             title: '전자결재 문서 검색',
-            desc: '전자결재 문서를 키워드로 검색한다(제목·양식명·기안자 등).',
-            path: '/gw/approval/search', pick: 'docs',
+            desc: '전자결재 문서를 키워드로 통합검색한다(제목·양식명·기안자 등). '
+                + '⚠️ 기본이 **승인원 양식만** 보는 것이라, 승인원이 아닌 문서는 0건으로 나온다 — '
+                + '일반 문서를 찾을 땐 onlyApprovalForm=0 을 꼭 같이 줘라. '
+                + '그래도 0건이면 gw_approval_box 를 box=all·searchtype=docNum 으로 한 번 더 시도해라.',
+            path: '/gw/approval/search', pick: 'items',
             params: [
-                { name: 'keyword', type: 'text', max: 40, req: true, desc: '검색어' }
+                { name: 'keyword', type: 'text', max: 40, req: true, desc: '검색어' },
+                { name: 'onlyApprovalForm', type: 'enum', enum: ['0', '1'], def: '0',
+                  desc: '1이면 제목에 승인원 표시가 있는 문서만 남긴다(승인원 Revision History 판단용). 일반 검색은 0.' }
             ]
         }
     ];

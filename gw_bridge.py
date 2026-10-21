@@ -1301,10 +1301,34 @@ def approval_doclist(box='draft', limit=20, searchtype=None, keyword=None, durat
     box = draft(기안) / tempsave(임시저장) / approve(결재) / viewer(참조열람)
     searchtype = title / drafterName / drafterDeptName / formName / docNum / activityUserName
     duration = all / 1 / 6 / 12  (개월)
-    ⚠️ 문서함마다 기본 정렬 컬럼(property)이 다르다 — 섞으면 서버가 500을 준다."""
+    ⚠️ 문서함마다 기본 정렬 컬럼(property)이 다르다 — 섞으면 서버가 500을 준다.
+
+    ⚠️⚠️ box='draft'(기본)는 **내가 기안한 문서만** 본다. 남이 올린 문서를 문서번호로 찾으면
+    영원히 0건이다(2026-10-21 제보: RD3-2610-050 을 draft 에서만 찾아 "없음"으로 답했다).
+    그래서 box='all' 을 둔다 — 네 문서함을 모두 돌아 합친다. 문서번호 조회는 이걸 쓸 것."""
     b = str(box or 'draft').strip()
+    if b == 'all':
+        merged, seen = [], set()
+        errs = []
+        for key in _APPR_BOXES:
+            try:
+                r = approval_doclist(box=key, limit=limit, searchtype=searchtype,
+                                     keyword=keyword, duration=duration)
+            except Exception as e:          # 한 문서함이 막혀도 나머지는 살린다 — 조용히 삼키지 않고 모아서 알린다
+                errs.append('%s: %s' % (key, e))
+                continue
+            for d in r.get('docs') or []:
+                k = d.get('docNum') or d.get('id')
+                if k in seen:
+                    continue
+                seen.add(k)
+                d['box'] = key
+                merged.append(d)
+        return {'box': 'all', 'boxName': '전체 문서함', 'total': len(merged),
+                'count': len(merged), 'docs': merged,
+                'boxErrors': errs or None}
     if b not in _APPR_BOXES:
-        raise ValueError('box는 %s 중 하나입니다.' % ' / '.join(_APPR_BOXES))
+        raise ValueError("box는 %s / all 중 하나입니다." % ' / '.join(_APPR_BOXES))
     name, prop = _APPR_BOXES[b]
     from urllib.parse import quote
     qs = ('/api/approval/doclist/%s/all?page=0&offset=%d&property=%s&direction=desc'
