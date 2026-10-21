@@ -86,7 +86,180 @@ window._makeDraggable = function(modalId, handleId) {
     //    적용된다(별도로 각 모달마다 등록할 필요 없음. 새 모달을 추가해도 _makeDraggable만 호출하면
     //    자동으로 최소화 버튼이 붙는다).
     window._makeMinimizable(modalId, handleId);
+
+    // 💡 [2026-10-21 신규] 상하좌우 8방향 크기조절 + 화면 밖 이탈 방지.
+    //    드래그를 등록하는 모든 모달에 자동으로 함께 적용된다(_makeMinimizable과 같은 방식).
+    window._makeResizable(modalId);
 };
+
+// ══════════════════════════════════════════════════════════════════════
+// 💡 [2026-10-21 신규, 사용자 요청] 모달 크기조절을 모서리 하나가 아니라 상하좌우 전부에서.
+//    그동안은 각 모달 인라인 스타일의 CSS `resize:both`에 의존해서 **오른쪽 아래 모서리로만**
+//    늘릴 수 있었고, 그나마도 아래로 늘리면 화면 밖으로 넘어가 하단 버튼을 못 누르는 일이 있었다.
+//    → 8방향 손잡이를 직접 붙이고(위/아래/좌/우 + 네 모서리), 동시에 "항상 화면 안"을 보장한다.
+//    _makeDraggable을 거치는 모달 전부에 적용되므로 모달마다 따로 작업할 필요가 없다.
+// ══════════════════════════════════════════════════════════════════════
+window._resizableBoxIds = window._resizableBoxIds || [];
+
+/** 박스를 화면 안으로 되돌린다 — 넘치면 크기를 줄이고, 그 다음 위치를 민다. */
+window._clampModalToViewport = function(box) {
+    if (!box) return;
+    const r = box.getBoundingClientRect();
+    if (!r.width || !r.height) return;              // 숨겨져 있으면 건드리지 않는다
+    const GAP = 6;                                   // 화면 가장자리 여백
+    const maxW = Math.max(240, window.innerWidth  - GAP * 2);
+    const maxH = Math.max(160, window.innerHeight - GAP * 2);
+    let w = r.width, h = r.height, left = r.left, top = r.top;
+    let changed = false;
+
+    if (w > maxW) { w = maxW; changed = true; }
+    if (h > maxH) { h = maxH; changed = true; }
+    if (left + w > window.innerWidth - GAP) { left = window.innerWidth - GAP - w; changed = true; }
+    if (top  + h > window.innerHeight - GAP) { top  = window.innerHeight - GAP - h; changed = true; }
+    if (left < GAP) { left = GAP; changed = true; }
+    if (top  < GAP) { top  = GAP; changed = true; }
+    if (!changed) return;                            // 잘 들어가 있으면 그대로 둔다(중앙 정렬 유지)
+
+    // transform으로 중앙 정렬된 상태면 실제 좌표로 고정한 뒤 옮긴다
+    box.style.transform = 'none';
+    box.style.left   = left + 'px';
+    box.style.top    = top  + 'px';
+    box.style.width  = w + 'px';
+    box.style.height = h + 'px';
+    // 높이를 강제로 줄였으니 내부가 스크롤될 수 있어야 한다
+    if (!box.style.maxHeight) box.style.maxHeight = 'none';
+};
+
+window._clampAllModals = function() {
+    window._resizableBoxIds.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el && el.offsetParent !== null) window._clampModalToViewport(el);
+    });
+};
+
+window._makeResizable = function(boxId, _retry) {
+    const box = document.getElementById(boxId);
+    // 일부 모달은 박스를 나중에 만들면서 _makeDraggable을 먼저 부른다(드래그는 핸들러 안에서
+    // getElementById를 해서 괜찮지만, 손잡이는 지금 붙여야 한다) — 한 번만 뒤로 미뤄 재시도한다.
+    if (!box) {
+        if (!_retry) setTimeout(function() { window._makeResizable(boxId, true); }, 300);
+        return;
+    }
+    if (box.dataset.mresz === '1') return;
+    box.dataset.mresz = '1';
+    if (window._resizableBoxIds.indexOf(boxId) === -1) window._resizableBoxIds.push(boxId);
+
+    // 기존 CSS resize는 끈다 — 손잡이가 둘이 되면 서로 싸운다(모서리에서 네이티브가 먼저 먹음)
+    box.style.resize = 'none';
+
+    // 손잡이는 박스 "안쪽" 가장자리에 둔다 — 대부분의 모달이 overflow:hidden이라 바깥에 두면 잘린다
+    // ⚠️ 손잡이는 박스 안쪽에 있으므로 헤더 버튼(✕ 등) 위를 덮을 수 있다 — 얇게 둔다.
+    //    헤더가 보통 45px 높이에 28px 버튼이 세로 중앙(= 위에서 약 8px부터)이라, 모서리 10px면
+    //    버튼에 2px 정도만 걸쳐 실사용에 지장이 없다.
+    const T = 5, C = 10; // 변 두께 / 모서리 크기
+    const defs = [
+        { d: 'n',  css: 'top:0; left:' + C + 'px; right:' + C + 'px; height:' + T + 'px; cursor:ns-resize;' },
+        { d: 's',  css: 'bottom:0; left:' + C + 'px; right:' + C + 'px; height:' + T + 'px; cursor:ns-resize;' },
+        { d: 'w',  css: 'left:0; top:' + C + 'px; bottom:' + C + 'px; width:' + T + 'px; cursor:ew-resize;' },
+        { d: 'e',  css: 'right:0; top:' + C + 'px; bottom:' + C + 'px; width:' + T + 'px; cursor:ew-resize;' },
+        { d: 'nw', css: 'top:0; left:0; width:' + C + 'px; height:' + C + 'px; cursor:nwse-resize;' },
+        { d: 'ne', css: 'top:0; right:0; width:' + C + 'px; height:' + C + 'px; cursor:nesw-resize;' },
+        { d: 'sw', css: 'bottom:0; left:0; width:' + C + 'px; height:' + C + 'px; cursor:nesw-resize;' },
+        { d: 'se', css: 'bottom:0; right:0; width:' + C + 'px; height:' + C + 'px; cursor:nwse-resize;' }
+    ];
+    defs.forEach(function(def) {
+        const h = document.createElement('div');
+        h.className = 'modal-resize-handle';
+        h.dataset.dir = def.d;
+        h.style.cssText = 'position:absolute; z-index:20; background:transparent; touch-action:none; ' + def.css;
+        box.appendChild(h);
+    });
+
+    let rs = null;
+    const minW = parseInt(box.style.minWidth, 10)  || 280;
+    const minH = parseInt(box.style.minHeight, 10) || 160;
+
+    const startResize = function(dir, x, y) {
+        const r = box.getBoundingClientRect();
+        // 중앙 정렬(transform)을 실제 좌표로 확정해야 리사이즈 중 튀지 않는다
+        box.style.transform = 'none';
+        box.style.left = r.left + 'px';
+        box.style.top  = r.top  + 'px';
+        box.style.maxHeight = 'none';   // max-height가 걸려 있으면 세로가 안 늘어난다
+        box.style.maxWidth  = 'none';
+        rs = { dir: dir, x: x, y: y, left: r.left, top: r.top, w: r.width, h: r.height };
+        document.body.style.userSelect = 'none';
+    };
+    const moveResize = function(x, y) {
+        if (!rs) return;
+        const GAP = 6, dx = x - rs.x, dy = y - rs.y;
+        let left = rs.left, top = rs.top, w = rs.w, h = rs.h;
+        if (rs.dir.indexOf('e') !== -1) w = rs.w + dx;
+        if (rs.dir.indexOf('s') !== -1) h = rs.h + dy;
+        if (rs.dir.indexOf('w') !== -1) { w = rs.w - dx; left = rs.left + dx; }
+        if (rs.dir.indexOf('n') !== -1) { h = rs.h - dy; top  = rs.top  + dy; }
+        // 최소 크기 — 왼쪽/위로 줄일 때는 좌표도 같이 되돌려야 반대편이 밀리지 않는다
+        if (w < minW) { if (rs.dir.indexOf('w') !== -1) left = rs.left + (rs.w - minW); w = minW; }
+        if (h < minH) { if (rs.dir.indexOf('n') !== -1) top  = rs.top  + (rs.h - minH); h = minH; }
+        // 화면 밖으로 못 나가게 — 끌다가 가장자리를 넘으면 그 변은 거기서 멈춘다
+        if (left < GAP) { w -= (GAP - left); left = GAP; }
+        if (top  < GAP) { h -= (GAP - top);  top  = GAP; }
+        if (left + w > window.innerWidth  - GAP) w = window.innerWidth  - GAP - left;
+        if (top  + h > window.innerHeight - GAP) h = window.innerHeight - GAP - top;
+        if (w < minW) w = minW;
+        if (h < minH) h = minH;
+        box.style.left   = left + 'px';
+        box.style.top    = top  + 'px';
+        box.style.width  = w + 'px';
+        box.style.height = h + 'px';
+    };
+    const endResize = function() {
+        if (!rs) return;
+        rs = null;
+        document.body.style.userSelect = '';
+    };
+
+    box.addEventListener('mousedown', function(e) {
+        const h = e.target.closest ? e.target.closest('.modal-resize-handle') : null;
+        if (!h || !box.contains(h)) return;
+        startResize(h.dataset.dir, e.clientX, e.clientY);
+        // preventDefault만 — stopPropagation까지 하면 _bindClickToFront(맨 앞으로)가 안 걸린다
+        e.preventDefault();
+    });
+    box.addEventListener('touchstart', function(e) {
+        const h = e.target.closest ? e.target.closest('.modal-resize-handle') : null;
+        if (!h || !e.touches.length) return;
+        startResize(h.dataset.dir, e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('mousemove', function(e) { if (rs) moveResize(e.clientX, e.clientY); });
+    document.addEventListener('mouseup', endResize);
+    document.addEventListener('touchmove', function(e) {
+        if (!rs || !e.touches.length) return;
+        moveResize(e.touches[0].clientX, e.touches[0].clientY);
+        e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('touchend', endResize);
+    document.addEventListener('touchcancel', endResize);
+
+    // 열릴 때마다 화면 안으로 — 모달마다 "무엇의 display를 바꿔 여는지"가 제각각이라(박스 자신일 수도,
+    // 바깥 오버레이일 수도) 둘 다 관찰한다. _makeMinimizable이 ✕ 버튼에서 대상을 알아내는 것과 같은 사정.
+    const onShown = function() {
+        if (box.offsetParent === null) return;
+        requestAnimationFrame(function() { window._clampModalToViewport(box); });
+    };
+    try {
+        new MutationObserver(onShown).observe(box, { attributes: true, attributeFilter: ['style', 'class'] });
+        if (box.parentElement) {
+            new MutationObserver(onShown).observe(box.parentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+        }
+    } catch (e) { /* 구형 브라우저 — 창 크기 변경 시 보정은 아래에서 계속 동작 */ }
+};
+
+// 창 크기가 바뀌면(브라우저 축소·회전·개발자도구 열기) 열려 있는 모달을 전부 화면 안으로 되돌린다
+window.addEventListener('resize', function() {
+    clearTimeout(window._clampModalsTimer);
+    window._clampModalsTimer = setTimeout(window._clampAllModals, 120);
+});
 
 // ── 공통 모달 최소화(하단 taskbar) 함수 ──────────────────────
 // 💡 [2026-09-02 신규] 모달이 여러 개 뜨면 화면을 가려서 불편하다는 요청으로 추가.
