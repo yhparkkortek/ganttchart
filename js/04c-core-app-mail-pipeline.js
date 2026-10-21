@@ -677,11 +677,27 @@
             //    화면에서 곧바로 입력/드래그해서 저장했든 — 실제로 새 파일이 만들어지는 지점 하나만 지키면
             //    진입 경로에 상관없이 항상 막힌다(예전엔 버튼에만 걸려있어서 버튼을 안 거치면 그냥 통과됐음).
             if (!fileId) {
-                if (!verifyAdminPassword(window._t('🔒 새 프로젝트를 등록하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to register a new project.\n(case-insensitive)'))) {
-                    const _pwFail = window._t('❌ 비밀번호 인증 실패. 새 프로젝트 등록이 취소되었습니다.', '❌ Authentication failed. New project registration cancelled.');
-                    window._lastSaveBlockReason = _pwFail;
-                    if (!opts.suppressAlert) alert(_pwFail);
-                    return false;
+                // 🔒 [2026-10-21] 일괄 생성(js/44 백로그 취합)은 한 배치에서 새 파일을 여러 개 연달아
+                //    만든다. 매번 묻으면 사람이 비밀번호를 8번 입력해야 해서 "확인 1회"라는 취지가 깨진다.
+                //    ⚠️ 게이트를 없애는 게 아니다 — 배치의 **첫 파일에서 평소대로 묻고**, 통과하면
+                //    예고된 남은 건수만큼만 재확인을 생략한다. 토큰은 ①비밀번호가 실제로 통과한 뒤에만
+                //    발급되고 ②건수 제한 ③10분 만료 ④1회용이다. 배치를 예고하지 않은 평상시 저장은
+                //    _batchPwPending이 없어 토큰이 아예 생기지 않으므로 기존 동작과 완전히 같다.
+                const _bt = window._batchPwToken;
+                if (_bt && _bt.remaining > 0 && Date.now() < _bt.until) {
+                    _bt.remaining -= 1;
+                } else {
+                    window._batchPwToken = null;
+                    if (!verifyAdminPassword(window._t('🔒 새 프로젝트를 등록하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to register a new project.\n(case-insensitive)'))) {
+                        const _pwFail = window._t('❌ 비밀번호 인증 실패. 새 프로젝트 등록이 취소되었습니다.', '❌ Authentication failed. New project registration cancelled.');
+                        window._lastSaveBlockReason = _pwFail;
+                        window._batchPwPending = 0;
+                        if (!opts.suppressAlert) alert(_pwFail);
+                        return false;
+                    }
+                    const _pending = Number(window._batchPwPending || 0);
+                    if (_pending > 1) window._batchPwToken = { remaining: _pending - 1, until: Date.now() + 10 * 60 * 1000 };
+                    window._batchPwPending = 0;
                 }
             }
 
