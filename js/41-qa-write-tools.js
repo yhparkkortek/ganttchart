@@ -179,8 +179,17 @@
             if (!TIME_RE.test(s)) { notes.push('시간 형식(HH:MM)이 아님: ' + p.name + '=' + s); return; }
             times[p.name] = s.length === 4 ? '0' + s : s;
         });
+        // 🐛 [2026-10-21 실사용 버그수정] 시간 인자를 **뺀 스키마**에 **원본 인자 전부**를 넘기고 있었다 —
+        //    읽기 검증기는 스키마에 없는 키를 "무시된 인자"로 적으므로, 멀쩡히 적용된 end 를 두고
+        //    "⚠️ 무시된 인자: end"가 초안에 붙었다(값은 아래에서 다시 합쳐지니 동작은 정상, 안내만 틀림).
+        //    스키마에서 뺀 키는 넘기는 값에서도 빼야 짝이 맞는다. 진짜 모르는 키는 그대로 걸린다.
         var shim = { params: (tool.params || []).filter(function (p) { return p.type !== 'time'; }) };
-        var v = window._qaValidateToolArgs(shim, given);
+        var rest = {};
+        Object.keys(given).forEach(function (k) {
+            var isTime = (tool.params || []).some(function (p) { return p.name === k && p.type === 'time'; });
+            if (!isTime) rest[k] = given[k];
+        });
+        var v = window._qaValidateToolArgs(shim, rest);
         if (v.error) return { error: v.error };
         var args = v.args || {};
         Object.keys(times).forEach(function (k) { args[k] = times[k]; });

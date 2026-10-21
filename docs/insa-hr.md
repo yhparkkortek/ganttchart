@@ -328,6 +328,35 @@ HTTP `status == 1000` 은 **세션 만료**다.
 - **점심·저녁 둘 다** 있어야 적용한다(소스 233~241행). 한쪽만 주면 시간과 같은 원칙으로
   **기존값**(`o_lunch`/`o_dinner`)을 쓰고, 그 사실을 `steps` 에 적는다.
 
+### 🌐 크롬이 http 사이트를 막는다 (2026-10-21)
+
+인사관리는 **http 전용**인데 요즘 크롬은 기본으로 https 로 올려 시도하고(HTTPS-First /
+HTTPS-Upgrades) 실패하면 `이 사이트는 보안 연결을 지원하지 않습니다` 차단 화면을 띄운다.
+
+**증상이 엉뚱한 곳을 가리킨다** — 그 탭은 `chrome-error://chromewebdata/` 라 **DOM 이 비어 있어서**
+로그인 폼을 못 찾고, 자동 로그인이 `로그인 화면을 찾지 못했습니다` 로 끝난다. 자격증명을
+의심하게 되지만 **로그인 요청은 서버에 간 적도 없다**(그룹웨어의 `제출이 서버까지 간 적이 없다`와
+같은 지문이다 — docs/groupware.md).
+
+대응은 세 겹이다:
+
+- `launch_chrome()` 이 `--disable-features=HttpsUpgrades,HttpsFirstBalancedMode,HttpsFirstModeV2`
+  로 띄운다. 플래그 이름은 크롬 버전마다 바뀌므로
+- `_disable_https_upgrade_pref()` 가 프로필 `Preferences` 에 `https_only_mode_enabled=false`,
+  `https_first_balanced_mode_enabled=false` 도 **같이** 기록한다.
+  ⚠️ **크롬이 떠 있는 동안 쓰면 종료할 때 덮어쓴다** — 그래서 `launch_chrome` 안, Popen 직전에만 쓴다.
+- `insa_session_info()` 가 `chrome-error:` 를 보면 `blocked:True` 로 **구분해서** 돌려주고,
+  프런트 게이트(`_insaEnsureLogin`, js/36)가 `/gw/chrome-restart` 로 전용 크롬을 다시 띄운 뒤
+  **그때 한 번만** 로그인을 재시도한다(차단은 실패가 아니라 시도조차 못 한 것이므로
+  재시도 금지 가드에 걸지 않는다. 다시 띄운 뒤의 실패는 가드를 건다).
+
+⚠️ **전용 크롬 종료는 `Browser.close` 로** — `/json/close/<id>` 는 **탭만** 닫는다.
+브라우저 자체는 `/json/version` 이 주는 **브라우저 레벨 웹소켓**으로 보내야 닫힌다
+(없는 경로로 요청하면 조용히 아무 일도 안 일어난다 — 실측). 프로필이 남아 쿠키는 유지된다.
+
+실측(차단 상태에서 시작): 재시작 → 프로필 설정 기록 확인 → `http://insa.kortek.co.kr/` 정상 →
+자동 로그인 성공 → 신청서 창 열기 → 칸 채우기까지 한 번에 통과.
+
 ### 그리드 열 뜻 (헷갈리기 쉬움)
 
 | 열 | 뜻 |

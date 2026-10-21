@@ -369,6 +369,28 @@
             return { ok: false, message: _insaFailMsg };
         }
         if (d && d.ok) { _insaTried = false; _insaFailMsg = ''; return { ok: true }; }
+        // ⚠️ [2026-10-21] 크롬이 http 사이트를 https 로 올렸다 실패해 **차단 화면**이 떠 있는 경우는
+        //    자격증명 문제가 아니다. 재시도 금지 가드도 걸지 않는다 — 크롬을 다시 띄우면 바로 풀린다.
+        if (d && d.blocked) {
+            _insaTried = false;
+            var fixed = false;
+            try {
+                say('🌐 ' + T('전용 크롬을 다시 시작해 http 차단을 풉니다...',
+                              'Restarting the dedicated browser to clear the HTTP block...'));
+                var rr = await fetch(BASE + '/gw/chrome-restart', { method: 'POST' }).then(function (r) { return r.json(); });
+                fixed = !!(rr && rr.ok);
+            } catch (e) { fixed = false; }
+            if (fixed) {
+                // 다시 띄웠으니 **이번 한 번만** 로그인을 재시도한다(차단 때문이었지 실패가 아니었다)
+                try {
+                    var d2 = await fetch(BASE + '/insa/login', { method: 'POST' }).then(function (r) { return r.json(); });
+                    if (d2 && d2.ok) { _insaFailMsg = ''; return { ok: true }; }
+                    // 이번엔 **실제로 서버까지 간** 시도다 — 여기서 실패하면 가드를 다시 건다(계정 잠금 방지)
+                    if (d2 && !d2.blocked) _insaTried = true;
+                    d = d2 || d;
+                } catch (e) { /* 아래 공통 실패 경로로 */ }
+            }
+        }
         _insaFailMsg = '🔒 ' + ((d && d.message) || T('인사관리 로그인에 실패했습니다.', 'HR sign-in failed.'));
         return { ok: false, message: _insaFailMsg };
     };

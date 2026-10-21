@@ -60,6 +60,66 @@ def chrome_alive():
         return None
 
 
+def _disable_https_upgrade_pref():
+    """프로필에 "http 를 https 로 올리지 말 것"을 기록한다.
+
+    ⚠️ **크롬이 떠 있는 동안 쓰면 종료할 때 덮어쓴다** — 그래서 launch_chrome 안,
+       Popen 직전(=크롬이 죽어 있는 시점)에만 부른다.
+    실행 플래그만으로도 되지만 플래그 이름은 크롬 버전마다 바뀌므로 설정도 같이 남긴다.
+    """
+    path = os.path.join(GW_PROFILE, 'Default', 'Preferences')
+    try:
+        if not os.path.exists(path):
+            return False                      # 첫 실행 — 프로필이 생긴 뒤 다음 기회에 기록된다
+        with open(path, 'r', encoding='utf-8') as f:
+            prefs = json.load(f)
+        prof = prefs.setdefault('profile', {})
+        if (prof.get('https_only_mode_enabled') is False
+                and prof.get('https_first_balanced_mode_enabled') is False):
+            return False                      # 이미 꺼져 있음
+        prof['https_only_mode_enabled'] = False
+        prof['https_first_balanced_mode_enabled'] = False
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(prefs, f)
+        return True
+    except Exception:
+        return False                          # 설정 기록 실패는 치명적이지 않다 — 플래그가 남아 있다
+
+
+def chrome_restart(wait=20):
+    """전용 크롬을 닫았다 다시 띄운다 — http 차단(HTTPS 자동승격) 해제를 적용할 때.
+
+    프로필이 남으므로 로그인 쿠키는 유지된다. 사람이 보는 창을 닫는 동작이라
+    **사용자가 요청할 때만** 부른다(자동 호출 금지).
+    """
+    v = chrome_alive()
+    if v:
+        # ⚠️ `/json/close/<id>`는 **탭**만 닫는다. 브라우저 자체는 `/json/version` 이 주는
+        #    **브라우저 레벨 웹소켓**으로 `Browser.close` 를 보내야 닫힌다(실측: 없는 경로로
+        #    요청하면 조용히 아무 일도 안 일어나고 "닫히지 않았습니다"만 남는다).
+        async def _close(ws_url):
+            import websockets
+            async with websockets.connect(ws_url) as ws:
+                await ws.send(json.dumps({'id': 1, 'method': 'Browser.close'}))
+                try:
+                    await asyncio.wait_for(ws.recv(), timeout=5)
+                except Exception:
+                    pass                      # 닫히면서 소켓이 끊기는 게 정상이다
+        try:
+            asyncio.new_event_loop().run_until_complete(_close(v['webSocketDebuggerUrl']))
+        except Exception:
+            pass
+        for _ in range(int(wait / 0.5)):      # 완전히 죽어야 Preferences 를 쓸 수 있다
+            time.sleep(0.5)
+            if not chrome_alive():
+                break
+        else:
+            return {'ok': False, 'message': '전용 크롬이 닫히지 않았습니다 — 창을 직접 닫고 다시 시도해주세요.'}
+    ok, msg = launch_chrome(wait=wait)
+    return {'ok': ok, 'message': ('전용 크롬을 다시 띄웠습니다 — http 사이트 차단이 풀립니다.'
+                                  if ok else msg)}
+
+
 def launch_chrome(wait=15):
     """전용 프로필로 크롬을 띄운다. 이미 떠 있으면 그대로 쓴다."""
     if chrome_alive():
@@ -68,9 +128,17 @@ def launch_chrome(wait=15):
     if not exe:
         return False, '크롬/엣지를 찾지 못했습니다.'
     os.makedirs(GW_PROFILE, exist_ok=True)
+    _disable_https_upgrade_pref()
     subprocess.Popen(
         [exe, f'--remote-debugging-port={CDP_PORT}', f'--user-data-dir={GW_PROFILE}',
-         '--no-first-run', '--no-default-browser-check', GW_ORIGIN],
+         '--no-first-run', '--no-default-browser-check',
+         # ⚠️⚠️ [2026-10-21 실사용] 인사관리는 **http 전용**(insa.kortek.co.kr)인데 요즘 크롬은
+         #    기본으로 https 로 올려 시도하고 실패하면 "이 사이트는 보안 연결을 지원하지 않습니다"
+         #    차단 화면(chrome-error://chromewebdata/)을 띄운다. 그러면 그 탭엔 DOM 이 없어
+         #    로그인 폼을 못 찾고, 자동 로그인이 "로그인 화면을 찾지 못했습니다"로 끝난다.
+         #    기능 플래그와 프로필 설정을 **둘 다** 끈다(플래그 이름은 크롬 버전마다 바뀐다).
+         '--disable-features=HttpsUpgrades,HttpsFirstBalancedMode,HttpsFirstModeV2',
+         GW_ORIGIN],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(int(wait / 0.5)):
         time.sleep(0.5)
@@ -1446,7 +1514,15 @@ def insa_session_info():
         return {'ok': False, 'message': str(e)}
     url = r.get('url', '') or ''
     on_site = INSA_HOST in url
-    return {'ok': on_site and not r.get('hasLoginForm'), 'url': url, 'onSite': on_site}
+    out = {'ok': on_site and not r.get('hasLoginForm'), 'url': url, 'onSite': on_site}
+    # ⚠️ [2026-10-21] 크롬이 http 를 https 로 올렸다 실패하면 이 탭은 **DOM 이 없는 차단 화면**이 된다.
+    #    그걸 모르면 "로그인 화면을 찾지 못했습니다"로 끝나 사람이 원인을 못 찾는다(실제로 그랬다).
+    if url.startswith('chrome-error:'):
+        out['blocked'] = True
+        out['message'] = ('크롬이 http 사이트를 차단했습니다(보안 연결 미지원 안내 화면). '
+                          '인사관리는 http 전용이라 자동 승격을 꺼야 합니다 — '
+                          '전용 크롬을 다시 시작하면 적용됩니다.')
+    return out
 
 
 def insa_login_once():
@@ -1462,6 +1538,10 @@ def insa_login_once():
     s = insa_session_info()
     if s.get('ok'):
         return {'ok': True, 'result': 'already', 'message': '이미 로그인되어 있습니다.', 'session': s}
+    # 차단 화면이면 **자격증명 문제가 아니다** — 엉뚱한 곳을 의심하지 않도록 먼저 가른다.
+    if s.get('blocked'):
+        return {'ok': False, 'result': 'https_blocked', 'blocked': True,
+                'message': s.get('message'), 'handoff': True}
 
     cfg = load_insa_login_config()
     if not cfg:

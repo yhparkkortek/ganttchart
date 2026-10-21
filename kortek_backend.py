@@ -3380,6 +3380,22 @@ def insa_screen():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/chrome-restart', methods=['POST'])
+def gw_chrome_restart():
+    """전용 크롬을 닫았다 다시 띄운다 — **http 사이트 차단(HTTPS 자동승격) 해제용.**
+
+    인사관리(insa.kortek.co.kr)는 http 전용인데 요즘 크롬은 https 로 올려 시도하고
+    실패하면 차단 화면을 띄운다. 그 탭엔 DOM 이 없어 로그인 폼을 못 찾는다.
+    launch_chrome 이 플래그·프로필 설정을 끄고 다시 띄우므로 재시작하면 풀린다.
+    프로필이 남으므로 로그인 쿠키는 유지된다.
+    """
+    try:
+        import gw_bridge
+        return jsonify(gw_bridge.chrome_restart())
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/insa/fill-workplan', methods=['POST'])
 def insa_fill_workplan():
     """✍️ 근무계획 수정 신청서의 **칸만 채운다. [등록]은 누르지 않는다.**
