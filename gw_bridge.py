@@ -1702,11 +1702,27 @@ def insa_read_screen(code_or_path, timeout=25):
           (() => { const f = document.querySelector('iframe');
                    const d = f && f.contentDocument;
                    const t = (d && d.body && d.body.innerText) || '';
+                   // 사람이 입력해 둔 칸이 있는지 — 되돌리면 안 되는 화면인지 판단용
+                   const filled = [...document.querySelectorAll('input,textarea,select')]
+                     .filter(e => e.type !== 'hidden' && String(e.value || '').trim()).length;
                    return { err: t.indexOf('not supported') >= 0,
-                            menus: document.querySelectorAll('a[href^="#"]').length }; })()
+                            menus: document.querySelectorAll('a[href^="#"]').length,
+                            filled: filled, url: location.href }; })()
         """, timeout=15) or {}
     except Exception:
         probe = {}
+
+    # ⚠️⚠️ [2026-10-21] **작성 중인 화면은 절대 건드리지 않는다.**
+    #    사용자가 '근무계획 수정 신청서'를 쓰던 중에 조회가 들어왔는데, 메뉴가 없다는 이유로
+    #    복구 로직이 location.reload() 를 걸 뻔했다 — 사람이 채워 둔 5칸이 날아갈 뻔한 것이다.
+    #    메뉴가 없고(=메인 틀이 아니고) 입력된 칸이 있으면, 새로고침도 클릭도 하지 않고 그대로 보고한다.
+    if not probe.get('menus') and probe.get('filled'):
+        return {'ok': False, 'label': hit.get('label', ''), 'busyForm': True,
+                'message': '지금 인사관리 창이 **작성 중인 화면**입니다'
+                           f'({(probe.get("url") or "").replace(INSA_ORIGIN, "")}, 입력된 칸 {probe.get("filled")}개). '
+                           '입력 내용이 날아갈 수 있어 화면을 옮기지 않았습니다 — '
+                           '그 작업을 끝내거나 닫은 뒤 다시 시도해주세요.'}
+
     if probe.get('err') or not probe.get('menus'):
         _insa_reload_top()
 
