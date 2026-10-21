@@ -467,9 +467,25 @@ window._aiMarkProviderCooldown = function(providerKey, err) {
     }
     // 일부 모델만 일일 소진이면 그 모델은 _aiModelExhausted가 따로 건너뛰므로, 제공사 쿨다운은 기존처럼 짧게
     const shortSec = window._aiExtractRetrySeconds(err && err.message);
+    // 🐛 [2026-10-21 실사용 버그수정, 사용자 사용량 원장 제보] **원장에 이미 `kind:'minute'`이 적혀 있는데
+    //    쿨다운 계산이 그걸 안 보고 있었다.** 실제 사례: gemini-3.5-flash-lite 는 그날 136회 성공한 뒤
+    //    `limit:15, kind:"minute"`(분당 한도)에 걸렸는데, 이 429에 `retry in Xs`가 없어서 아래 shortSec 이
+    //    null → gemini 라는 이유로 **20분 전체 차단**이 걸렸다("19분간 재시도를 건너뜁니다").
+    //    분당 한도는 1분이면 풀리므로 60초만 막으면 된다. 일일 소진은 위에서 이미 걸러졌고,
+    //    `_quotaKind === 'day'`로 들어온 건은 그대로 설정값을 쓴다.
+    const minuteKind = (function() {
+        if (!usage || (err && err._quotaKind === 'day')) return false;
+        return window._aiProviderFreeCandidates(providerKey).some(function(m) {
+            const pm = providerKey + ':' + m;
+            // 일일 소진된 모델은 판단 근거에서 뺀다 — 그 모델은 어차피 _aiModelExhausted가 막는다
+            if ((usage.exhausted[pm] || 0) > Date.now()) return false;
+            return (usage.limits[pm] || {}).kind === 'minute';
+        });
+    })();
     // 💡 [2026-09-22] Groq/Mistral의 429는 대개 초당·분당 제한(대기시간 표기 없음) — 20분씩 막으면 활성 제공사로 쓸 때 사실상 먹통
     const ms = (shortSec != null) ? (shortSec + 5) * 1000
-        : (providerKey !== 'gemini' && !(err && err._quotaKind === 'day')) ? Math.min(60, minutes * 60) * 1000
+        : (err && err._quotaKind === 'day') ? minutes * 60 * 1000
+        : (minuteKind || providerKey !== 'gemini') ? Math.min(60, minutes * 60) * 1000
         : minutes * 60 * 1000;
     window._aiProviderCooldownUntil[providerKey] = Date.now() + ms;
     try { localStorage.setItem('ai_provider_cooldown_v1', JSON.stringify(window._aiProviderCooldownUntil)); } catch (e) { /* ignore */ }

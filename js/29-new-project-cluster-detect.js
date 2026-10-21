@@ -28,6 +28,33 @@
     var _NCD_THRESHOLD       = 5;     // 같은 군집으로 묶이는 미분류 메일 건수 기준
     var _NCD_FLUSH_DELAY_MS  = 30000; // project_index.json 갱신 디바운스 (토픽 신호와 동일 관례)
 
+    // 🐛🐛 [2026-10-21 실사용 버그수정, 사용자 사용량 원장 제보] 임계치를 10→5로 내리고 군집 묶기를
+    //    고친 직후(커밋 1ac63b7), 몇 주간 쌓여 있던 pending 군집 **백로그가 한꺼번에** 판정됐다.
+    //    아래 루프에 간격도 상한도 없어서 **76연발**이 나갔고 — 그날 AI 호출 153회의 49% —
+    //    gemini-3.5-flash-lite 의 **분당 15회** 한도를 터뜨린 뒤 폴백한 gemini-3.5-flash 의
+    //    **하루 20회**까지 소진시켜 앱 전체 AI 기능이 다음 태평양 자정(=16시 KST)까지 멈췄다.
+    //    재판정은 아니었다(pending 만 고르고 판정 후 상태가 바뀜) — 한 번씩 76개였다.
+    //    → 한 번 스윕에 판정하는 개수를 끊고, 호출 사이에 간격을 둔다. 남은 건 다음 스윕에서
+    //      이어 한다(모달을 열 때마다 돈다). 끊었다는 사실은 **숨기지 않고** 기록한다.
+    var _NCD_JUDGE_MAX_PER_RUN = 8;    // 한 번 스윕에 판정할 군집 수 상한
+    var _NCD_JUDGE_GAP_MS      = 4500; // 호출 간격 기본값(분당 한도가 관측되면 그 값으로 대체)
+
+    /** 호출 간격 — 원장에 관측된 **분당 한도**가 있으면 그걸 나눠 쓴다(하드코딩 대신 데이터). */
+    function _ncdJudgeGapMs() {
+        try {
+            var pk = window.getActiveAiProvider && window.getActiveAiProvider();
+            var usage = window._aiUsageLoad && window._aiUsageLoad();
+            if (!pk || !usage) return _NCD_JUDGE_GAP_MS;
+            var cands = window._aiProviderFreeCandidates ? window._aiProviderFreeCandidates(pk) : [];
+            var perMin = 0;
+            cands.forEach(function(m) {
+                var lim = usage.limits[pk + ':' + m];
+                if (lim && lim.kind === 'minute' && lim.limit > 0) perMin = Math.max(perMin, lim.limit);
+            });
+            return perMin ? Math.ceil(60000 / perMin) + 500 : _NCD_JUDGE_GAP_MS;
+        } catch (e) { return _NCD_JUDGE_GAP_MS; }
+    }
+
     var _buffer = {}; // { key: { count, samples:[{subject,snippet,date}], lastSeen } }
     var _flushTimer = null;
     var _ncdCollapsed = false; // 배너 접힘 상태 — 재렌더(제안 수락/기각) 시에도 유지, 새로고침 시 초기화
@@ -208,10 +235,24 @@
             var apiKey = window.getActiveAiKey && window.getActiveAiKey();
             if (!apiKey) { window._ncdRenderBanner(clusters); return; } // 키 없으면 판정만 보류, 다음 기회에 재시도
 
+            // 건수가 많은 군집부터 — 상한에 걸려 잘려도 가장 유력한 것이 먼저 판정된다
+            ready.sort(function(a, b) { return (b.count || 0) - (a.count || 0); });
+            var _gap = _ncdJudgeGapMs();
+            var _provider = window.getActiveAiProvider && window.getActiveAiProvider();
+            var _judged = 0, _stopped = '';
+
             for (var i = 0; i < ready.length; i++) {
+                if (_judged >= _NCD_JUDGE_MAX_PER_RUN) { _stopped = 'cap'; break; }
+                // 💡 할당량이 막힌 걸 알면서 계속 두드리지 않는다 — 위 사고의 연쇄가 여기서 끊긴다.
+                //    여기까지 판정한 것은 아래 PATCH로 그대로 저장되고, 남은 건 다음 스윕에서 잇는다.
+                if (_provider && window._aiProviderInCooldown && window._aiProviderInCooldown(_provider)) {
+                    _stopped = 'cooldown'; break;
+                }
                 var g = ready[i];
+                if (_judged > 0 && _gap > 0) await new Promise(function(r) { setTimeout(r, _gap); });
                 // AI 판정은 그룹당 1회 — 합쳐진 샘플로 한 번만 묻는다(무료 API 절약)
                 var verdict = await _judgeCluster({ key: g.rep.key, samples: g.samples, count: g.count }, apiKey);
+                _judged++;
                 var _st = (verdict && verdict.looksNewProject && verdict.confidence !== '하') ? 'suggested' : 'reviewed_no';
                 // 대표 군집이 판정·배너·건수를 대표한다
                 g.rep.aiVerdict  = verdict;
@@ -230,6 +271,21 @@
                     m.judgedAt = new Date().toISOString();
                 });
             }
+            // 끊었으면 **숨기지 않고** 남긴다 — 왜 배너에 아직 안 뜨는지 다음에 추적할 수 있어야 한다
+            if (_stopped) {
+                var _why = (_stopped === 'cap')
+                    ? '한 번에 ' + _NCD_JUDGE_MAX_PER_RUN + '개까지만 판정(남은 ' + (ready.length - _judged) + '개는 다음에)'
+                    : 'AI 할당량 쿨다운으로 중단(남은 ' + (ready.length - _judged) + '개는 다음에)';
+                console.info('[신규프로젝트감지] ' + _why);
+                if (window._issueLog) {
+                    window._issueLog({
+                        domain: 'ai', kind: 'ncd_judge_deferred', route: 'cluster-judge',
+                        result: { errorRaw: _why },
+                        env: { judged: _judged, pending: ready.length - _judged, reason: _stopped, gapMs: _gap }
+                    });
+                }
+            }
+            if (!_judged) { window._ncdRenderBanner(clusters); return; } // 판정한 게 없으면 Drive를 건드리지 않는다
             await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId + '?uploadType=media&supportsAllDrives=true', {
                 method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(indexData)
             });
