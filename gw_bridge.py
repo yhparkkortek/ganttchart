@@ -1726,14 +1726,27 @@ def insa_read_screen(code_or_path, timeout=25):
     if probe.get('err') or not probe.get('menus'):
         _insa_reload_top()
 
+    # 🔧 [2026-10-21] **메뉴를 클릭하지 않는다.** 사이트 JS(`/resources/common/js/common.js`)를
+    #    읽어 보니 화면 이동이 함수 하나였다:
+    #        function goToMenu(action, options) {
+    #          $("#menuFrm").attr({ action, method: "POST", target: "pageFrame" }).submit(); }
+    #    즉 공용 폼 #menuFrm 을 그 경로로 **POST** 해서 pageFrame 에 띄운다 — GET 이 405 였던 이유다.
+    #    클릭 방식은 메뉴가 안 보이는 화면(독립 페이지)에선 아예 못 썼는데, 이건 그런 제약이 없다.
+    #    ⚠️ 폼 전송이라 JS 컨텍스트가 죽는다 — 반환값을 믿지 말고 아래에서 주소로 확인한다.
+    nav_path = (hit.get('path') or '').replace(INSA_ORIGIN, '') or ('/' + str(code))
+    moved = False
     try:
-        clicked = eval_in_insa(
-            "(() => { const a = document.querySelector('a[href=\"#%s\"]');"
-            " if (a) a.click(); return !!a; })()" % code, timeout=15)
+        moved = bool(eval_in_insa(
+            "(() => { if (typeof goToMenu === 'function') { goToMenu(%s); return true; }"
+            " const a = document.querySelector('a[href=\"#%s\"]');"
+            " if (a) { a.click(); return true; } return false; })()"
+            % (json.dumps(nav_path), code), timeout=15))
     except Exception:
-        clicked = True                               # 클릭으로 화면이 바뀌며 컨텍스트가 죽는 건 정상
-    if clicked is False:
-        return {'ok': False, 'message': f'"{hit.get("label")}" 메뉴를 화면에서 찾지 못했습니다.'}
+        moved = True                                 # 전송으로 컨텍스트가 죽는 건 정상 경로
+    if moved is False:
+        return {'ok': False,
+                'message': f'"{hit.get("label")}" 화면으로 이동할 방법을 찾지 못했습니다'
+                           ' (goToMenu 도 메뉴 링크도 없음 — 메인 화면인지 확인해주세요).'}
 
     # ⚠️⚠️ [2026-10-21 실측] 클릭 직후 바로 글자를 읽으면 **앞 화면 내용을 그대로 돌려준다.**
     #    실제로 "연차휴가사용계획"을 물었는데 직전에 열려 있던 "근무 계획" 본문이 나왔다 —

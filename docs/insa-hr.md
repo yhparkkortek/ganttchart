@@ -151,6 +151,59 @@ SAP·그룹웨어와 동일하다. Windows DPAPI로 암호화해 `insa_login_con
   메뉴가 없고(=메인 틀 아님) 입력된 칸이 있으면 **새로고침도 클릭도 하지 않고** `busyForm: true` 로
   그대로 보고한다. 조회 하나 때문에 사람 작업을 날리는 쪽이 훨씬 나쁘다.
 
+## 🔬 리버스 엔지니어링 — 이 사이트는 **소스가 그대로 읽힌다**
+
+> [2026-10-21] "리버스 엔지니어링 못 하냐"는 지적을 받고 실제로 해 봤더니, **내가 너무 보수적이었다.**
+> 그룹웨어는 번들이 난독화돼 있어 런타임 관찰이 필요했지만, 인사관리는 2015년대 JSP + jQuery라
+> JS가 전부 평문 UTF-8이다. 추측이 아니라 **소스를 읽으면 된다.**
+
+```
+/resources/common/js/common.js        (14,816자, 함수 33개)  ← goToMenu, openPopup, getGridData…
+/resources/common/js/commonClass.js   (33,579자, 함수 65개)  ← 결재선·콤보·AJAX 래퍼
+/resources/common/js/overWorkMgr.js   (3,604자)              ← 연장근무 전용
+```
+
+### 핵심: 화면 이동은 함수 하나다
+
+```js
+function goToMenu(action, options = {}) {
+  if (!isEmpty(options.mainMenuNm)) $("#mainMenuNm").val(options.mainMenuNm);
+  if (!isEmpty(options.subMenuNm))  $("#subMenuNm").val(options.subMenuNm);
+  $("#menuFrm").attr({ action, method: "POST", target: "pageFrame" }).submit();
+}
+```
+
+공용 폼 `#menuFrm` 을 그 경로로 **POST** 해서 `pageFrame` 에 띄운다. **GET 이 405 였던 이유가 이거다.**
+팝업으로 뜨는 화면도 같은 방식이다(`target` 만 팝업 이름으로 바꾼다):
+
+```js
+$("#menuFrm").attr({ action: "/dl/regForm", method: "post", target: popupName }).submit();
+```
+
+→ `insa_read_screen` 은 이제 **메뉴를 클릭하지 않고 `goToMenu(path)` 를 직접 호출한다.**
+  메뉴가 안 보이는 화면에서도 되고, 클릭이 먹었는지 조마조마할 필요도 없다.
+  (메뉴 링크 클릭은 goToMenu 가 없을 때를 위한 폴백으로만 남겨 뒀다)
+
+> 남은 흠: `mainMenuNm`/`subMenuNm` 을 안 넘겨서 **빵부스러기(breadcrumb) 라벨만** 직전 것으로
+> 남는다. 본문은 정확하다. 메뉴 이름까지 학습해 넘기면 깔끔해진다.
+
+### 쓰기는 아직 — 무엇이 남았나
+
+읽기가 풀렸다고 쓰기가 따라오지는 않는다. 작성 중이던 '근무계획 수정 신청서'를 뜯어보니:
+
+- `<form>` 에 **action 이 없고** method 가 get — 평범한 폼 전송이 아니다
+- 입력칸 16개 중 **name 이 하나도 없다** → 이름으로 값을 실을 수 없다
+- `등록` 이 `type=button` 이고 onclick 도 없다 → 리스너를 JS 가 붙인다
+- hidden 6개
+
+다만 **그 핸들러도 평문 JS 안에 있다.** 그 화면을 열어 둔 채 인라인 스크립트와
+페이지별 JS 를 읽으면 "등록이 무엇을 어디로 보내는지"를 **소스로** 확정할 수 있다.
+관찰(`insa_capture_write.py`)은 그걸 **교차 검증**하는 용도로 쓰면 된다 — 소스에서 읽은
+payload 가 실제로 그렇게 나가는지 한 번만 확인하면 된다.
+
+⚠️ 쓰기를 붙일 때도 이 저장소 원칙은 그대로다: 읽기와 **경로를 분리**하고(js/41),
+   AI 자율 루프는 `mode:'write'` 를 영구 거부하며, 실행은 **사람 확인 1회 + nonce** 를 거친다.
+
 ## 아직 안 한 것 — 다음에 붙일 때
 
 화면 조회/조작은 **없다.** 붙일 때는 그룹웨어와 같은 순서로:
