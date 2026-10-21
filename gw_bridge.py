@@ -771,8 +771,18 @@ _DRAFT_JS = r"""
   // 3-b) 체크박스 — 양식의 id가 `editorForm_28_정식승인`처럼 **값이 뒤에 붙어** 있어서
   //      라벨로 바로 찾을 수 있다(실측). cfg.checks = ['정식승인','P1','New'] 형태.
   for (const want of (cfg.checks || [])) {
-    const el = [...document.querySelectorAll('input[type=checkbox][id^=editorForm_]')]
-      .find(e => e.id.endsWith('_' + want));
+    const boxes = [...document.querySelectorAll('input[type=checkbox][id^=editorForm_]')];
+    // ① 값이 id 뒤에 붙는 양식(editorForm_28_정식승인) — 승인원류가 이 모양이다
+    let el = boxes.find(e => e.id.endsWith('_' + want));
+    // ② 안 붙는 양식(editorForm_9_check)도 있다 — 그땐 **옆 칸 글자**로 찾는다.
+    //    제품코드 등록 신청서가 이 모양이라 ①만으로는 체크가 하나도 안 걸렸다(2026-10-21 실측).
+    if (!el) {
+      const w = norm(want);
+      const cellOf = e => { const td = e.closest('td'); return td ? norm(td.innerText) : ''; };
+      const rowOf  = e => { const tr = e.closest('tr'); return tr && tr.children.length ? norm(tr.children[0].innerText) : ''; };
+      el = boxes.find(e => cellOf(e) === w) || boxes.find(e => rowOf(e) === w)
+        || boxes.find(e => cellOf(e) && w.indexOf(cellOf(e)) === 0);
+    }
     if (!el) { log.push({ field: '체크:' + want, ok: false, why: '해당 체크박스 없음' }); continue; }
     if (!el.checked) { el.click(); }
     log.push({ field: '체크:' + want, id: el.id, ok: !!el.checked, val: want });
@@ -809,6 +819,164 @@ _DRAFT_JS = r"""
   return { ok: !!m, step:'saved', docId: m ? m[1] : null, url: location.href, log };
 })(%s)
 """
+
+
+# ── 기존 문서 읽기 (복사 기안용) ─────────────────────────────────────
+# ⚠️ 문서 **보기** 화면이 작성 화면과 **같은 `editorForm_N` 입력칸**을 그대로 렌더한다(2026-10-21 실측).
+#    그래서 _DRAFT_JS 가 값을 넣을 때 쓰는 "열 머리글 / 행 라벨" 규칙을 **그대로 뒤집어** 읽는다.
+#    화면 글자를 긁어 짐작하지 않으므로 양식이 바뀌어도 따라간다.
+_READ_JS = r"""
+(async () => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const norm = s => String(s||'').trim().replace(/\s+/g,' ');
+  for (let i = 0; i < 60 && !document.querySelector('[id^=editorForm_]'); i++) await sleep(300);
+  await sleep(800);
+
+  // 칸마다 '열 머리글'과 '행 라벨' — _DRAFT_JS 와 같은 계산
+  const label = el => {
+    const td = el.closest('td'); const tr = td && td.closest('tr');
+    const table = tr && tr.closest('table');
+    let header = '', rowLabel = '';
+    if (td && tr && table) {
+      const idx = [...tr.children].indexOf(td);
+      const rows = [...table.rows]; const my = rows.indexOf(tr);
+      for (let r = my - 1; r >= 0 && !header; r--) {
+        const c = rows[r].children[idx];
+        if (c) { const tx = norm(c.innerText); if (tx && tx.length < 30) header = tx; }
+      }
+      if (tr.children.length) rowLabel = norm(tr.children[0].innerText);
+    }
+    return { header, rowLabel, cell: td ? norm(td.innerText) : '' };
+  };
+
+  const fields = {}, checks = [];
+  // 체크박스는 보기 화면에도 **진짜 input** 으로 남아 있어 상태를 그대로 읽는다.
+  document.querySelectorAll('input[type=checkbox][id^=editorForm_]').forEach(el => {
+    if (!el.checked) return;
+    const L = label(el);
+    const v = L.cell || L.rowLabel || el.id.replace(/^editorForm_\d+_?/, '');
+    if (v && checks.indexOf(v) === -1) checks.push(v);
+  });
+  // ⚠️ 텍스트 칸은 보기 화면에서 input 이 아니라 **셀 글자**로 렌더된다(실측: value 가 전부 빈값).
+  //    라벨 칸과 값 칸은 클래스로 갈린다 — subjectColumn(회색·굵게) / detailColumn(값).
+  //    이 구분을 안 쓰고 "옆 칸끼리 짝"으로 읽으면 머리글끼리 짝지어져
+  //    '과제 구분 = 제품군' 같은 **가짜 값**이 생긴다(실측에서 실제로 그랬다).
+  const isLab = td => td.classList.contains('subjectColumn');
+  const isVal = td => td.classList.contains('detailColumn');
+  const put = (k, v) => { k = norm(k); v = norm(v);
+    if (k && v && k !== v && k.length <= 24 && !fields[k]) fields[k] = v; };
+  document.querySelectorAll('table.detailSection').forEach(tb => {
+    const rows = [...tb.rows];
+    rows.forEach((tr, ri) => {
+      const cells = [...tr.children];
+      cells.forEach((td, ci) => {
+        if (!isVal(td)) return;
+        const prev = cells[ci - 1];
+        if (prev && isLab(prev)) { put(prev.innerText, td.innerText); return; }   // 가로: 라벨 | 값
+        // 세로: 같은 열 위쪽에서 가장 가까운 머리글(subjectColumn)을 찾는다
+        for (let r = ri - 1; r >= 0; r--) {
+          const h = rows[r].children[ci];
+          if (h && isLab(h)) { put(h.innerText, td.innerText); break; }
+        }
+      });
+    });
+  });
+  // 머리 정보 — 라벨/값이 번갈아 오는 표
+  const head = {};
+  const ht = document.querySelector('table.detailSection, table.tb_doc_info');
+  if (ht) [...ht.rows].forEach(tr => {
+    const c = [...tr.children].map(x => norm(x.innerText));
+    for (let i = 0; i + 1 < c.length; i += 2) if (c[i] && c[i].length < 20) head[c[i].replace(/\s/g,'')] = c[i+1];
+  });
+
+  // 결재선 / 문서정보 / 첨부 — 탭 영역(aside)들에서 글자 그대로
+  const asides = [...document.querySelectorAll('.aside_wrapper_body')].map(e => norm(e.innerText));
+  const attach = [...document.querySelectorAll('a,span')]
+    .map(e => norm(e.innerText)).filter(t => /\.(xlsx|xls|pdf|docx|doc|pptx|zip|png|jpg)$/i.test(t));
+
+  return { url: location.href, subject: norm((document.getElementById('subject')||{}).value) || head['제목'] || '',
+           head, fields, checks, apprLine: asides[0] || '', docInfo: asides[1] || '',
+           attachments: [...new Set(attach)] };
+})()
+"""
+
+
+def approval_read(doc_num=None, doc_id=None):
+    """기존 전자결재 문서를 읽는다(읽기 전용) — 복사 기안의 재료.
+
+    `doc_num`('RD3-2610-050')이면 전 문서함에서 찾아 id 를 얻는다.
+    ⚠️ box='draft' 로만 찾으면 남이 올린 문서는 영영 안 나온다 — all 로 찾는다."""
+    meta = None
+    if not doc_id:
+        if not doc_num:
+            raise ValueError('문서번호(doc_num) 또는 문서 id 가 필요합니다.')
+        r = approval_doclist(box='all', limit=20, searchtype='docNum',
+                             keyword=str(doc_num).strip(), duration='all')
+        docs = r.get('docs') or []
+        if not docs:
+            raise RuntimeError('문서번호 %s 를 어느 문서함에서도 찾지 못했습니다.' % doc_num)
+        meta = docs[0]
+        doc_id = meta.get('id')
+
+    t = _gw_page()
+    if not t:
+        raise RuntimeError('그룹웨어 탭을 열지 못했습니다.')
+    asyncio.run(_navigate(t['webSocketDebuggerUrl'],
+                          '%s/app/approval/document/%s' % (GW_ORIGIN, doc_id)))
+    time.sleep(2.0)
+    dismiss_intro()
+    out = eval_in_gw(_READ_JS, timeout=90) or {}
+    out['docId'] = doc_id
+    if meta:
+        out['meta'] = meta
+    return out
+
+
+# 새 기안에서 **시스템이 알아서 채우는** 칸 — 복사해 넣으면 안 된다(원본의 문서번호·작성자가 박힌다).
+_COPY_SKIP = {'문서번호', '작성일', '작성부서', '작성자', '제목', '기안부서', '기안자'}
+
+
+def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=True):
+    """기존 문서를 읽어 **같은 양식의 새 기안에 채워 임시저장**한다. 상신은 하지 않는다.
+
+    첨부파일은 가져오지 않는다(사용자 결정 2026-10-21) — 몇 건 있었는지만 알려준다.
+    결재선은 새 기안의 기본값을 쓰고, 원본 결재선을 같이 돌려줘 **다른지 눈으로 보게** 한다.
+    `subject`/`fields` 를 주면 그 값이 원본을 덮는다(필요한 부분만 고쳐 쓰는 용도)."""
+    src = approval_read(doc_num=doc_num, doc_id=doc_id)
+    meta = src.get('meta') or {}
+    form_name = (meta.get('formName') or '').strip()
+    if not form_name:
+        raise RuntimeError('원본의 양식 이름을 알 수 없어 같은 양식을 열 수 없습니다.')
+
+    forms = approval_forms()
+    hit = next((f for f in forms if (f.get('name') or '').strip() == form_name), None)
+    if not hit:
+        raise RuntimeError('"%s" 양식을 자주 쓰는 양식 목록에서 못 찾았습니다. '
+                           '그룹웨어에서 그 양식을 즐겨찾기에 넣어주세요. (있는 것: %s)'
+                           % (form_name, ', '.join((f.get('name') or '') for f in forms)))
+
+    src_fields = {k: v for k, v in (src.get('fields') or {}).items()
+                  if k.replace(' ', '') not in _COPY_SKIP}
+    merged = dict(src_fields)
+    merged.update(fields or {})
+
+    r = approval_draft(form_id=hit['formId'], dept_id=hit['deptId'],
+                       subject=(subject if subject is not None else src.get('subject') or ''),
+                       fields=merged, dry_run=bool(dry_run), checks=src.get('checks') or [])
+    return {
+        'source': {'docNum': meta.get('docNum') or doc_num, 'docId': src.get('docId'),
+                   'formName': form_name, 'formId': hit['formId'], 'deptId': hit['deptId'],
+                   'box': meta.get('box'), 'drafter': meta.get('drafterName'),
+                   'apprLine': src.get('apprLine') or '',
+                   'attachments': src.get('attachments') or []},
+        'filled': {'subject': (subject if subject is not None else src.get('subject') or ''),
+                   'fields': merged, 'checks': src.get('checks') or []},
+        'dryRun': bool(dry_run),
+        'draft': r,
+        'notes': ([('첨부 %d건은 가져오지 않았습니다 — 새로 올려주세요: %s'
+                    % (len(src.get('attachments') or []), ', '.join(src.get('attachments') or [])))]
+                  if src.get('attachments') else []),
+    }
 
 
 def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None):

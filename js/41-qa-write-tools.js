@@ -40,6 +40,21 @@
             undoNote: '임시저장함에서 삭제하면 된다(상신 전이라 아무에게도 안 보인다).'
         },
         {
+            id: 'gw_approval_copy', mode: 'write', verified: 'live', danger: 'low',
+            title: '기안 복사 (같은 내용으로 새 기안)',
+            desc: '문서번호를 주면 그 문서를 읽어 **같은 양식의 새 기안에 똑같이 채워 임시저장**한다. '
+                + '상신은 하지 않는다 — 사람이 열어서 필요한 곳만 고치고 직접 올린다. '
+                + '⚠️ 첨부파일은 가져오지 않는다(몇 건이었는지만 알려준다). '
+                + '결재선은 새 기안의 기본값을 쓰고, 원본 결재선을 같이 보여주니 다르면 사람이 고친다. '
+                + 'subject/fields 를 같이 주면 그 값이 원본을 덮는다.',
+            method: 'POST', path: '/gw/approval/copy',
+            params: [
+                { name: 'docNum', type: 'text', max: 30, req: true, desc: '복사할 원본 문서번호 (예: RD3-2610-050)' },
+                { name: 'subject', type: 'text', max: 200, desc: '새 기안 제목 — 비우면 원본 제목 그대로' }
+            ],
+            undoNote: '임시저장함에서 삭제하면 된다(상신 전이라 아무에게도 안 보인다).'
+        },
+        {
             id: 'gw_asset_reserve', mode: 'write', verified: 'live', danger: 'medium',
             title: '회의실·차량 예약',
             desc: '자원을 지정 시간에 예약한다. **반드시 먼저 `gw_asset_reservations`로 그날 현황을 조회해 '

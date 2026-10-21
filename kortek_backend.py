@@ -3487,6 +3487,48 @@ def gw_approval_search():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/approval/read', methods=['GET'])
+def gw_approval_read():
+    """기존 전자결재 문서를 읽는다(읽기 전용). `docNum` 또는 `docId`.
+
+    복사 기안의 재료 — 제목·입력칸·체크·결재선·첨부목록을 돌려준다."""
+    try:
+        import gw_bridge
+        num = (request.args.get('docNum') or '').strip()
+        did = (request.args.get('docId') or '').strip()
+        if not num and not did:
+            return jsonify({'ok': False, 'message': 'docNum 또는 docId 가 필요합니다.'}), 400
+        r = gw_bridge.approval_read(doc_num=num or None, doc_id=did or None)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/approval/copy', methods=['POST'])
+def gw_approval_copy():
+    """기존 문서를 **같은 양식의 새 기안에 채워 임시저장**한다. 상신은 하지 않는다.
+
+    ⚠️ 쓰기다 — 앱에서 사람이 1회 확인한 뒤에만 부른다(js/41).
+    `dryRun`(기본 true)이면 칸만 채우고 저장하지 않는다.
+    첨부는 가져오지 않는다(사용자 결정 2026-10-21) — 몇 건인지만 알려준다."""
+    try:
+        import gw_bridge
+        d = request.get_json(silent=True) or {}
+        num = str(d.get('docNum') or '').strip()
+        did = str(d.get('docId') or '').strip()
+        if not num and not did:
+            return jsonify({'ok': False, 'message': 'docNum 또는 docId 가 필요합니다.'}), 400
+        r = gw_bridge.approval_copy(
+            doc_num=num or None, doc_id=did or None,
+            subject=d.get('subject'), fields=d.get('fields') or None,
+            dry_run=(d.get('dryRun', True) is not False))
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/approval/parse-cover', methods=['POST'])
 def gw_approval_parse_cover():
     """협력사가 채워 보낸 승인원 표지(docx)에서 기안에 필요한 값을 뽑는다.

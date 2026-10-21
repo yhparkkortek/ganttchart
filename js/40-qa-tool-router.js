@@ -254,6 +254,18 @@
             ]
         },
         {
+            id: 'gw_approval_read', mode: 'read', requires: 'gw',
+            title: '전자결재 문서 내용',
+            desc: '전자결재 문서 하나를 **문서번호로 열어 내용 전부**를 읽는다 — 제목·입력칸 값·체크된 항목·결재선·첨부 목록. '
+                + '"RD3-2610-050 내용 보여줘", "그 기안 뭐라고 썼어?" 같은 질문에 쓴다. '
+                + '같은 기안을 새로 만들어 달라는 요청이면 이걸로 먼저 읽어서 내용을 보여주고, 복사 실행은 사람 확인을 거친다.',
+            path: '/gw/approval/read', pick: null,
+            params: [
+                { name: 'docNum', type: 'text', max: 30, desc: '문서번호 (예: RD3-2610-050)' },
+                { name: 'docId', type: 'text', max: 20, desc: '문서 id — 문서번호를 모를 때만' }
+            ]
+        },
+        {
             id: 'gw_approval_search', mode: 'read', requires: 'gw',
             title: '전자결재 문서 검색',
             desc: '전자결재 문서를 키워드로 통합검색한다(제목·양식명·기안자 등). '
