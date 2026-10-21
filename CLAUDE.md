@@ -235,6 +235,13 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 백엔드 라우트 검증은 `app.test_client()`로 — 사용자가 돌리는 5000번 프로세스를 죽이지 말 것(예약 발송·SAP 작업 중일 수 있음)
 - **모듈별 엔드포인트 목록 → `docs/groupware-endpoints.md`**(관찰 확정 vs 번들 추출 구분). iframe 모듈은 메일·자료실뿐, 나머지는 최상위. 진입만으로 호출이 0건인 모듈(보고·주소록·Task)은 "API 없음"이 아니라 "아직 안 불림" — 랜딩 URL이 바뀌는 경우도 있어(`/app/todo`→`/app/report`) `location.href`를 같이 기록할 것
 
+### `docs/insa-hr.md` — 🧑‍💼 인사관리(kInsa) 연동 (`http://insa.kortek.co.kr`)
+- **읽을 때**: 인사관리 자동 로그인, 앞으로 인사 화면 조회/조작을 붙일 때
+- 지금은 **자동 로그인까지만** 구현됨. 로그인은 `POST /kInsa` + `userNum`/`password`(실측 확정, `GET`은 405)
+- **성공/실패가 둘 다 HTTP 200** — 실패는 `location.href = "index"` 가 든 194바이트 `<script>`로 온다. `_insa_fail_message()`가 그 지문으로 판정
+- **⚠️ 한 번만 시도, 실패 시 재시도 금지**(계정 잠금). 가드는 프런트 `_insaEnsureLogin`(js/36) — **`/insa/login`을 직접 부르지 말 것**
+- 비밀번호는 DPAPI → `insa_login_config.json`(.gitignore). 복호화 함수를 gw_bridge에서 쓰지 않고 백엔드에 따로 둔 이유도 문서에
+
 ### `docs/qa-tool-router.md` — 🛠 AI 문답 도구 자율 호출 (function-calling)
 - **읽을 때**: AI가 "지원하지 않습니다"라고 답할 때, 새 조회 기능을 AI가 쓰게 만들 때
 - 새 조회 기능은 `QA_TOOLS`(`js/40-qa-tool-router.js`)에 **한 줄** 추가하면 끝 — if 블록 코딩 불필요. `desc`가 AI의 유일한 선택 근거이니 성의 있게

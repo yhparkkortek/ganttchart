@@ -106,6 +106,30 @@
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._gwLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._gwLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
+                + '</div>'
+                // ── 🧑‍💼 인사관리(kInsa) ─────────────────────────────────────
+                //  http://insa.kortek.co.kr — SAP·그룹웨어와 같은 "사외 시스템 자동 로그인" 묶음.
+                //  ⚠️ 그룹웨어와 같은 보수적 규칙: **한 번만** 시도하고 실패하면 재시도하지 않는다.
+                //     이 시스템이 몇 번 틀리면 잠기는지 우리가 모르기 때문이다(모르면 안 한다).
+                + '<div style="border-top:1px solid #e5e5e5; margin:14px 0 12px;"></div>'
+                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
+                + '<strong style="font-size:13px; color:#1a6b73;">🧑‍💼 ' + T('인사관리 자동 로그인', 'HR (kInsa) auto-login') + '</strong>'
+                + '<span id="insalogin-state" style="font-size:11px; color:#888;"></span></div>'
+                + '<div style="font-size:11.5px; color:#666; margin-bottom:10px; line-height:1.5;">'
+                + T('사내 인사관리(insa.kortek.co.kr) 자동 로그인입니다. 아이디는 <b>사번</b>입니다. '
+                    + '그룹웨어와 같은 이유로 <b>한 번만</b> 시도하고 실패하면 재시도하지 않습니다. '
+                    + '비밀번호 보관 방식은 SAP·그룹웨어와 동일합니다(이 PC의 Windows 계정에서만 풀림).',
+                    'Auto-login for the in-house HR system (insa.kortek.co.kr). The ID is your <b>employee number</b>. '
+                    + 'Like groupware it is tried <b>once</b> and never retried. Password storage is the same as SAP.')
+                + '</div>'
+                + fieldRow(T('아이디(사번)', 'ID (emp. no.)'), '<input id="insalogin-user" autocomplete="off" style="' + inputSt + '" placeholder="' + T('예: 12345', 'e.g. 12345') + '">')
+                + fieldRow(T('비밀번호', 'Password'), '<input id="insalogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
+                + '<div id="insalogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
+                + '<div style="display:flex; gap:8px;">'
+                + '<button onclick="window._insaLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<span style="flex:1;"></span>'
+                + '<button onclick="window._insaLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
+                + '<button onclick="window._insaLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div></div></div>';
             document.body.appendChild(wrap);
             if (window._makeDraggable) window._makeDraggable('saplogin-box', 'saplogin-drag');
@@ -137,6 +161,7 @@
             setStatus('⚠️ ' + T('백엔드(kortek_backend)에 연결하지 못했습니다 — 실행 중인지 확인해주세요.', 'Could not reach the backend — is it running?'), 'err');
         }
         window._gwLoginRefresh();
+        window._insaLoginRefresh();
     };
 
     // ── 🏢 그룹웨어 자동 로그인 ───────────────────────────────────────
@@ -222,6 +247,130 @@
             gwStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
         }
     };
+
+    // ── 🧑‍💼 인사관리(kInsa) 자동 로그인 ─────────────────────────────
+    //  그룹웨어 블록과 같은 모양이다 — 같은 성격의 기능이 창 안에서 다르게 생기면 안 된다.
+    var insaStatus = function (msg, kind) {
+        var el = document.getElementById('insalogin-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'ok' ? '#1f7a3d' : (kind === 'err' ? '#b1432f' : '#555');
+        el.textContent = msg || '';
+    };
+
+    window._insaLoginRefresh = async function () {
+        var st = document.getElementById('insalogin-state');
+        var pwEl = document.getElementById('insalogin-pw');
+        if (pwEl) pwEl.value = '';
+        insaStatus('', '');
+        try {
+            var cfg = await fetch(BASE + '/insa/login-config').then(function (r) { return r.json(); });
+            if (cfg.configured) {
+                document.getElementById('insalogin-user').value = cfg.user || '';
+                if (pwEl) pwEl.placeholder = T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
+                if (st) { st.textContent = T('· 설정됨', '· configured'); st.style.color = '#1f7a3d'; }
+            } else if (st) {
+                st.textContent = T('· 미설정', '· not set'); st.style.color = '#999';
+            }
+        } catch (e) {
+            if (st) { st.textContent = T('· 백엔드 연결 안 됨', '· backend unreachable'); st.style.color = '#b1432f'; }
+        }
+    };
+
+    window._insaLoginSave = async function () {
+        var user = (document.getElementById('insalogin-user').value || '').trim();
+        var pw = document.getElementById('insalogin-pw').value;
+        if (!user) { insaStatus('⚠️ ' + T('아이디(사번)를 입력해주세요.', 'Enter the ID.'), 'err'); return false; }
+        if (!pw) { insaStatus('⚠️ ' + T('비밀번호를 입력해주세요.', 'Enter the password.'), 'err'); return false; }
+        try {
+            var r = await fetch(BASE + '/insa/login-config', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: user, pw: pw })
+            });
+            var d = await r.json();
+            document.getElementById('insalogin-pw').value = '';
+            insaStatus(d.ok ? ('✅ ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
+            if (d.ok) { _insaTried = false; _insaFailMsg = ''; window._insaLoginRefresh(); }
+            return !!d.ok;
+        } catch (e) {
+            insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
+            return false;
+        }
+    };
+
+    window._insaLoginTest = async function () {
+        if (document.getElementById('insalogin-pw').value) {
+            if (!(await window._insaLoginSave())) return;
+        }
+        insaStatus('⏳ ' + T('로그인 시도 중… (실패해도 재시도하지 않습니다)', 'Signing in… (no retry on failure)'), '');
+        try {
+            var d = await fetch(BASE + '/insa/login', { method: 'POST' }).then(function (r) { return r.json(); });
+            // 사람이 직접 누른 테스트는 **가드를 푼다** — 비밀번호를 고쳤을 수 있다.
+            _insaTried = !d.ok; _insaFailMsg = d.ok ? '' : (d.message || '');
+            insaStatus((d.ok ? '✅ ' : '🔒 ') + (d.message || ''), d.ok ? 'ok' : 'err');
+        } catch (e) {
+            insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
+        }
+    };
+
+    window._insaLoginDelete = async function () {
+        if (!confirm(T('저장된 인사관리 로그인 정보를 삭제할까요?', 'Delete the saved HR login?'))) return;
+        try {
+            var d = await fetch(BASE + '/insa/login-config', { method: 'DELETE' }).then(function (r) { return r.json(); });
+            document.getElementById('insalogin-user').value = '';
+            document.getElementById('insalogin-pw').value = '';
+            _insaTried = false; _insaFailMsg = '';
+            insaStatus(d.ok ? ('🗑 ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
+            window._insaLoginRefresh();
+        } catch (e) {
+            insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
+        }
+    };
+
+    // ── 🔑 인사관리 자동 로그인 게이트 ────────────────────────────────
+    //
+    // ⚠️⚠️ **계정 잠금 방지가 이 함수의 존재 이유다.** 그룹웨어의 _gwEnsureLogin 과 같은 역할.
+    //    이 시스템이 몇 번 틀리면 잠기는지 확인할 방법이 없으므로, 한 세션에서 **한 번 실패하면
+    //    다시 시도하지 않고** 그때 받은 사유를 그대로 돌려준다. 가드는 여기(프런트)에 있다 —
+    //    백엔드 /insa/login 은 부를 때마다 그냥 시도하므로, 새 경로를 붙일 땐 **반드시 이 함수를
+    //    통할 것**(/insa/login 을 직접 부르지 말 것).
+    var _insaTried = false, _insaFailMsg = '';
+
+    window._insaEnsureLogin = async function (onStep) {
+        var say = function (m) { try { if (onStep) onStep(m); } catch (e) { /* 안내 실패가 흐름을 막지 않게 */ } };
+        var st;
+        try {
+            st = await fetch(BASE + '/insa/status').then(function (r) { return r.json(); });
+        } catch (e) {
+            return { ok: false, message: T('백엔드(kortek_backend)에 연결하지 못했습니다 — 실행 중인지 확인해주세요.',
+                                           'Could not reach the backend — is it running?') };
+        }
+        if (st && st.loggedIn) return { ok: true };
+        if (st && !st.reachable) return { ok: false, message: st.message || T('인사관리 서버에 연결할 수 없습니다.', 'HR server unreachable.') };
+        if (!st || !st.configured) {
+            return { ok: false, message: T('🔑 저장된 인사관리 로그인 정보가 없습니다 — AI 문답 창의 🔑에서 등록해주세요.',
+                                           'No saved HR login — register it under 🔑.') };
+        }
+        if (_insaTried) {
+            // 이미 한 번 실패했다. **다시 시도하지 않는다.**
+            return { ok: false, message: _insaFailMsg || T('인사관리 로그인에 실패했습니다 — 🔑에서 확인해주세요.',
+                                                           'HR sign-in failed — check it under 🔑.') };
+        }
+        _insaTried = true;
+        say('🔑 ' + T('인사관리 자동 로그인 시도 중... (실패해도 재시도하지 않습니다)',
+                      'Signing in to HR... (no retry on failure)'));
+        var d;
+        try {
+            d = await fetch(BASE + '/insa/login', { method: 'POST' }).then(function (r) { return r.json(); });
+        } catch (e) {
+            _insaFailMsg = T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.');
+            return { ok: false, message: _insaFailMsg };
+        }
+        if (d && d.ok) { _insaTried = false; _insaFailMsg = ''; return { ok: true }; }
+        _insaFailMsg = '🔒 ' + ((d && d.message) || T('인사관리 로그인에 실패했습니다.', 'HR sign-in failed.'));
+        return { ok: false, message: _insaFailMsg };
+    };
+
 
     // ── 🔑 그룹웨어 자동 로그인 게이트 (AI 문답 그룹웨어 경로 공용) ─────────────
     //

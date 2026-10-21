@@ -1642,6 +1642,34 @@ def _dpapi_encrypt_b64(text):
         ctypes.windll.kernel32.LocalFree(blob_out.pbData)
 
 
+def _dpapi_decrypt_b64(b64):
+    """위 `_dpapi_encrypt_b64`의 짝. 같은 Windows 계정에서만 풀린다.
+
+    ⚠️ gw_bridge.py 에도 같은 함수가 있지만 **여기에 따로 둔다** — 인사관리(kInsa)는
+       그룹웨어와 무관한 기능이라, 그룹웨어를 안 쓰는 PC에서 gw_bridge 를 import 해야
+       비밀번호가 풀리는 구조는 맞지 않는다.
+    ⚠️ 양쪽 모두 pOptionalEntropy(3번째 인자)가 None 이라 서로 호환된다. 두 번째 인자
+       'kortek-sap-login' 은 **엔트로피가 아니라 설명 문자열**이라 복호화에 영향이 없다.
+    """
+    import ctypes
+    import base64
+    from ctypes import wintypes
+
+    class _BLOB(ctypes.Structure):
+        _fields_ = [('cbData', wintypes.DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+    raw = base64.b64decode(b64)
+    buf = ctypes.create_string_buffer(raw, len(raw))
+    bin_ = _BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    bout = _BLOB()
+    if not ctypes.windll.crypt32.CryptUnprotectData(ctypes.byref(bin_), None, None, None, None, 0, ctypes.byref(bout)):
+        raise RuntimeError('저장된 비밀번호를 복호화하지 못했습니다'
+                           '(다른 Windows 계정/PC에서 저장한 설정일 수 있음) — 다시 저장해주세요.')
+    try:
+        return ctypes.string_at(bout.pbData, bout.cbData).decode('utf-8')
+    finally:
+        ctypes.windll.kernel32.LocalFree(bout.pbData)
+
+
 def _read_sap_login_cfg():
     try:
         with open(_SAP_LOGIN_CFG_PATH, 'r', encoding='utf-8') as f:
@@ -3199,6 +3227,139 @@ def gw_login_config_delete():
     except Exception as e:
         return jsonify({'ok': False, 'message': str(e)}), 500
     return jsonify({'ok': True, 'message': '저장된 그룹웨어 로그인 정보를 삭제했습니다.'})
+
+
+# ══ 🧑‍💼 인사관리(kInsa) 자동 로그인 ═══════════════════════════════════════
+#  대상: http://insa.kortek.co.kr  (Apache 2.2.3/CentOS, 서버 렌더 JSP + Bootstrap3)
+#
+#  🔎 [2026-10-21 실측] 추측하지 않고 실제 응답으로 확인한 것:
+#    - 로그인 화면은 `/`, 폼은 `<form action="kInsa" method="post">`
+#      → 제출은 **POST /kInsa**, 입력칸은 `userNum`(사번) / `password`
+#    - `/kInsa` 는 GET 을 막아 둔다(`Allow: POST`). 세션은 표준 `JSESSIONID` 쿠키
+#    - **실패 응답이 특이하다**: HTTP 200 + 194바이트짜리 <script> 하나로,
+#      `var message = ...; alert(message); location.href = "index";` 를 돌려준다.
+#      즉 **`location.href = "index"` 가 있으면 로그인 실패**이고, message 에 사유가
+#      한/영 두 줄로 들어 있다(예: "아이디가 존재하지 않습니다 / ID is not exist").
+#      → 성공/실패 판정을 이 지문으로 한다. HTTP 코드로는 구분이 안 된다(둘 다 200).
+#
+#  ⚠️⚠️ **한 번만 시도하고, 실패하면 재시도하지 않는다.** 그룹웨어·SAP과 같은 이유다 —
+#     사내 계정이 잠기면 인사·급여까지 막힌다. 잠김 여부를 우리가 알 수 없으므로
+#     "모르면 안 한다"로 간다. 재시도 금지 가드는 프런트(js/36 `_insaEnsureLogin`)에 있고,
+#     이 함수는 부르면 그냥 한 번 시도한다(그룹웨어 `login_once()`와 같은 역할 분담).
+#
+#  비밀번호는 DPAPI로 암호화해 insa_login_config.json(.gitignore)에만 두고,
+#  **어떤 응답에도 비밀번호를 돌려주지 않는다**(등록 여부와 아이디만).
+_INSA_LOGIN_CFG_PATH = os.path.join(BASE_DIR, 'insa_login_config.json')
+INSA_BASE = 'http://insa.kortek.co.kr'
+_insa_session = None          # 로그인 성공한 requests.Session (쿠키 보관)
+
+
+def _insa_cfg():
+    try:
+        with open(_INSA_LOGIN_CFG_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+
+@app.route('/insa/login-config', methods=['GET'])
+def insa_login_config_get():
+    cfg = _insa_cfg()
+    return jsonify({'ok': True,
+                    'configured': bool(cfg.get('user') and cfg.get('pw_dpapi')),
+                    'user': cfg.get('user', '')})
+
+
+@app.route('/insa/login-config', methods=['POST'])
+def insa_login_config_save():
+    body = request.get_json(silent=True) or {}
+    user = str(body.get('user') or '').strip()
+    pw   = str(body.get('pw') or '')
+    if not user or not pw:
+        return jsonify({'ok': False, 'message': '아이디와 비밀번호를 모두 입력해주세요.'}), 400
+    try:
+        enc = _dpapi_encrypt_b64(pw)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+    finally:
+        pw = None
+    try:
+        with open(_INSA_LOGIN_CFG_PATH, 'w', encoding='utf-8') as f:
+            json.dump({'user': user, 'pw_dpapi': enc}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'설정 저장 실패: {e}'}), 500
+    return jsonify({'ok': True, 'message': '인사관리 로그인 정보를 저장했습니다.', 'user': user})
+
+
+@app.route('/insa/login-config', methods=['DELETE'])
+def insa_login_config_delete():
+    global _insa_session
+    _insa_session = None
+    try:
+        if os.path.exists(_INSA_LOGIN_CFG_PATH):
+            os.remove(_INSA_LOGIN_CFG_PATH)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+    return jsonify({'ok': True, 'message': '저장된 인사관리 로그인 정보를 삭제했습니다.'})
+
+
+def _insa_fail_message(html_text):
+    """실패 응답의 <script> 안 message 를 꺼낸다. 실패가 아니면 None."""
+    if 'location.href' not in html_text or '"index"' not in html_text:
+        return None
+    m = re.search(r'var\s+message\s*=\s*[`\'"](.*?)[`\'"]\s*;', html_text, re.S)
+    msg = (m.group(1).strip() if m else '').strip()
+    return msg or '로그인에 실패했습니다.'
+
+
+@app.route('/insa/status', methods=['GET'])
+def insa_status():
+    """지금 로그인된 세션이 살아 있는지. 네트워크만 확인하고 **로그인은 하지 않는다.**"""
+    cfg = _insa_cfg()
+    out = {'ok': True, 'configured': bool(cfg.get('user') and cfg.get('pw_dpapi')),
+           'user': cfg.get('user', ''), 'loggedIn': False}
+    try:
+        requests.get(INSA_BASE + '/', timeout=5)
+        out['reachable'] = True
+    except Exception as e:
+        out['reachable'] = False
+        out['message'] = f'인사관리 서버에 연결할 수 없습니다: {e}'
+        return jsonify(out)
+    out['loggedIn'] = _insa_session is not None
+    return jsonify(out)
+
+
+@app.route('/insa/login', methods=['POST'])
+def insa_login():
+    """저장된 계정으로 **한 번만** 로그인 시도. 실패하면 재시도하지 않고 사람에게 넘긴다."""
+    global _insa_session
+    cfg = _insa_cfg()
+    user, enc = cfg.get('user'), cfg.get('pw_dpapi')
+    if not user or not enc:
+        return jsonify({'ok': False, 'result': 'no-config',
+                        'message': '저장된 인사관리 로그인 정보가 없습니다 — 🔑에서 등록해주세요.'})
+    try:
+        pw = _dpapi_decrypt_b64(enc)
+    except Exception as e:
+        return jsonify({'ok': False, 'result': 'error', 'message': f'비밀번호 복호화 실패: {e}'})
+    s = requests.Session()
+    try:
+        s.get(INSA_BASE + '/', timeout=8)          # JSESSIONID 발급
+        r = s.post(INSA_BASE + '/kInsa', data={'userNum': user, 'password': pw},
+                   timeout=12, allow_redirects=True)
+    except Exception as e:
+        return jsonify({'ok': False, 'result': 'error',
+                        'message': f'인사관리 서버에 연결할 수 없습니다: {e}'})
+    finally:
+        pw = None                                   # 비밀번호는 응답/로그 어디에도 남기지 않는다
+    fail = _insa_fail_message(r.text or '')
+    if fail is not None:
+        _insa_session = None
+        # ⚠️ 여기서 **다시 시도하지 않는다.** 사유(아이디 없음/비밀번호 틀림/잠김)를 그대로 전한다.
+        return jsonify({'ok': False, 'result': 'fail', 'message': fail})
+    _insa_session = s
+    return jsonify({'ok': True, 'result': 'ok', 'user': user,
+                    'message': '인사관리에 로그인했습니다.'})
 
 
 @app.route('/gw/login', methods=['POST'])
