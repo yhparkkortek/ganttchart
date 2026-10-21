@@ -212,6 +212,16 @@ function _mnbRender() {
       + _t('· 일반 제품은 두 자리(01, 02 …)<br>· LED 모듈(LED-MD)은 <b>XXYYZ</b> — XX 연도 · YY 순번 · Z 보드(K=코텍 KLDC, N=Novastar). 예) 2401N',
            '· Regular products use two digits (01, 02 …)<br>· LED modules (LED-MD) use <b>XXYYZ</b> — XX year · YY number · Z board (K=Kortek KLDC, N=Novastar). e.g. 2401N')
       + '</div>'
+      // 💡 SAP 중복 확인 — 일련번호를 뺀 앞자리로 조회(일련번호는 "몇 번째 건"일 뿐이라 중복 판단 기준이 아니다)
+      + '<div style="margin-top:14px; padding:10px 12px; background:#f4fbf4; border:1px solid #cfe8cf; border-radius:8px;">'
+      + '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+      + '<button type="button" onclick="window._mnbCheckSap()" style="padding:5px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">🔍 '
+      + _t('SAP 중복 확인', 'Check SAP for duplicates') + '</button>'
+      + '<span style="font-size:11px; color:#777;">' + _t('일련번호를 뺀 앞자리로 조회합니다 → ', 'Searches by the prefix without the serial → ')
+      + '<b style="font-family:monospace;">' + _mnbEsc((window._mnbPrefix ? window._mnbPrefix() : '') || '______') + '*</b></span>'
+      + '</div>'
+      + '<div id="mnb-sap" style="margin-top:8px; font-size:11.5px; color:#555; line-height:1.6;"></div>'
+      + '</div>'
       + '<div style="margin-top:12px; padding:8px 10px; background:#f8f9fa; border:1px solid #e9ecef; border-radius:7px; font-size:11px; color:#777; line-height:1.6;">'
       + _t('💡 UGA 모델은 이 규칙이 아니라 <code>KT-</code> + UGA 모델명 + 리비전번호 형식입니다. 예) <code>KT-IVY01</code>',
            '💡 UGA models use a different form: <code>KT-</code> + UGA model name + revision. e.g. <code>KT-IVY01</code>')
@@ -267,7 +277,10 @@ window._mnbOpen = function(targetInputId) {
             var opt = e.target.closest ? e.target.closest('.mnb-opt') : null;
             if (opt) { _mnbSel[opt.dataset.key] = opt.dataset.code; _mnbRender(); return; }
             var mode = e.target.closest ? e.target.closest('.mnb-mode') : null;
-            if (mode) { _mnbMode = mode.dataset.mode; _mnbSel.appearance = window._mnbAppearance(_mnbMode, _mnbRaw); _mnbRender(); }
+            if (mode) { _mnbMode = mode.dataset.mode; _mnbSel.appearance = window._mnbAppearance(_mnbMode, _mnbRaw); _mnbRender(); return; }
+            // SAP 조회가 제안한 다음 일련번호를 그대로 채택
+            var next = e.target.closest ? e.target.closest('.mnb-usenext') : null;
+            if (next) { _mnbSel.serial = next.dataset.v; _mnbRender(); }
         });
         m.addEventListener('input', function(e) {
             if (e.target.id === 'mnb-raw') {
@@ -296,6 +309,83 @@ window._mnbOpen = function(targetInputId) {
     m.style.display = 'block';
     if (window.bringModalToFront) window.bringModalToFront('mnb-modal');
     _mnbRender();
+};
+
+// ── SAP 중복 확인 ─────────────────────────────────────────────────────
+/**
+ * 💡 [2026-10-21 신규, 사용자 요청] 모델명을 짓고 나서 **일련번호를 뺀 앞자리**로 SAP을 조회해
+ *    같은 사양의 자재가 이미 있는지 보여준다. 일련번호는 "몇 번째 건인지"일 뿐이라, 중복 판단은
+ *    그 앞 6자리(구분·크기·전원·터치·고객사)로 해야 맞다.
+ *    읽기 전용 엔드포인트 /sap-material-pattern(= resolve_pattern, ZMM009)을 그대로 쓴다 —
+ *    새 SAP 자동화를 만들지 않는다(CLAUDE.md: 런타임 SAP 경로는 sap_bridge_32.py 하나뿐).
+ */
+window._mnbPrefix = function(sel) {
+    sel = sel || _mnbSel;
+    if (!sel.type || !sel.appearance || !sel.power || !sel.touch || !sel.customer) return '';
+    return window.MNB_CHART.prefix + sel.type + sel.appearance + sel.power + sel.touch + sel.customer;
+};
+
+window._mnbCheckSap = async function() {
+    const prefix = window._mnbPrefix();
+    const box = document.getElementById('mnb-sap');
+    if (!box) return;
+    if (!prefix) {
+        box.innerHTML = '<span style="color:#c00;">' + _t('일련번호를 뺀 앞자리가 아직 안 채워졌습니다 — ①~⑤를 먼저 고르세요.',
+            'The part before the serial is incomplete — pick ①–⑤ first.') + '</span>';
+        return;
+    }
+    const pattern = prefix + '*';
+    box.innerHTML = '<span style="color:#888;">⏳ ' + _t('SAP 조회 중... ', 'Querying SAP... ') + _mnbEsc(pattern) + '</span>';
+    try {
+        const res = await fetch('http://127.0.0.1:5000/sap-material-pattern?pattern=' + encodeURIComponent(pattern),
+            { signal: AbortSignal.timeout(95000) });
+        const j = await res.json();
+        if (!j || !j.ok) throw new Error((j && j.error) || 'SAP 조회 실패');
+        // 브릿지가 돌려주는 키가 경로에 따라 matnr/desc 또는 MATNR/MAKTX 라 둘 다 받는다
+        const rows = (j.materials || []).map(function(m) {
+            return { no: m.matnr || m.MATNR || '', desc: m.desc || m.MAKTX || m.maktx || '' };
+        }).filter(function(r) { return r.no || r.desc; });
+
+        if (!rows.length) {
+            box.innerHTML = '<span style="color:#1f7a3d; font-weight:bold;">✅ '
+                + _t('중복 없음 — 같은 앞자리(' + _mnbEsc(prefix) + ')로 등록된 자재가 없습니다.',
+                     'No duplicate — no material registered with prefix ' + _mnbEsc(prefix) + '.') + '</span>';
+            return;
+        }
+        // 이미 쓰인 일련번호를 모아 다음 번호를 제안한다 — 이게 실제로 알고 싶은 것
+        const used = [];
+        rows.forEach(function(r) {
+            const m = String(r.desc || '').toUpperCase().match(new RegExp(prefix + '([0-9A-Z]{1,5})'));
+            if (m && used.indexOf(m[1]) === -1) used.push(m[1]);
+        });
+        const nums = used.map(function(u) { return parseInt(u, 10); }).filter(function(n) { return !isNaN(n); });
+        const next = nums.length ? String(Math.max.apply(null, nums) + 1).padStart(2, '0') : '';
+
+        box.innerHTML =
+            '<div style="font-weight:bold; color:#b05000; margin-bottom:5px;">⚠️ '
+            + _t(rows.length + '건이 이미 등록돼 있습니다 (' + _mnbEsc(prefix) + '*)',
+                 rows.length + ' already registered (' + _mnbEsc(prefix) + '*)') + '</div>'
+            + (used.length ? '<div style="margin-bottom:5px;">' + _t('사용 중인 일련번호: ', 'Serials in use: ')
+                + '<b>' + _mnbEsc(used.join(', ')) + '</b>'
+                + (next ? ' → ' + _t('다음 번호 제안 ', 'suggested next ')
+                    + '<b style="color:#145c2b;">' + next + '</b>'
+                    + ' <span class="mnb-usenext" data-v="' + next + '" style="cursor:pointer; text-decoration:underline; color:#1f7a3d;">'
+                    + _t('(이 번호로 넣기)', '(use it)') + '</span>' : '')
+                + '</div>' : '')
+            + '<div style="max-height:160px; overflow:auto; border:1px solid #eee; border-radius:6px;">'
+            + rows.map(function(r) {
+                return '<div style="padding:3px 7px; border-bottom:1px solid #f4f4f4; font-size:11px;">'
+                    + '<span style="font-family:monospace; color:#1a4f7a;">' + _mnbEsc(r.no) + '</span> · '
+                    + _mnbEsc(r.desc) + '</div>';
+            }).join('')
+            + '</div>';
+    } catch (e) {
+        const msg = String((e && e.message) || e);
+        box.innerHTML = '<span style="color:#c00;">❌ ' + _mnbEsc(msg) + '</span>'
+            + '<div style="color:#888; margin-top:3px;">'
+            + _t('백엔드(127.0.0.1:5000)와 SAP 로그인이 필요합니다. SAP 조회는 화면을 직접 조작하므로 다른 SAP 작업 중이면 실패할 수 있습니다.',
+                 'Requires the local backend (127.0.0.1:5000) and a signed-in SAP session.') + '</div>';
+    }
 };
 
 /** 완성된 모델명을 대상 입력란에 넣는다 */
