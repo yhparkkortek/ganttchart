@@ -1659,6 +1659,13 @@ def insa_read_screen(code_or_path, timeout=25):
        → **메뉴를 클릭한다.** 앱이 하던 그대로 하게 두는 것이 유일하게 안전한 방법이다.
          학습해 둔 path 는 "그 메뉴가 어디로 가는지" 확인용이지 이동 수단이 아니다.
     """
+    # 🔑 [2026-10-21 실사용 제보] 세션이 풀린 상태에서 읽으면 "메뉴를 화면에서 찾지 못했습니다"
+    #    라는 **엉뚱한 사유**가 나왔다(진짜 원인은 로그인 화면이 떠 있던 것). 먼저 확인한다.
+    st = insa_session_info()
+    if not st.get('ok'):
+        return {'ok': False, 'loggedOut': True,
+                'message': '인사관리 로그인이 풀려 있습니다 — 🔑에서 로그인한 뒤 다시 시도해주세요.'}
+
     cat = insa_menu_catalog()
     menus = cat.get('menus') or []
     key = str(code_or_path or '').strip()

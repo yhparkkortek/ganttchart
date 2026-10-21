@@ -66,7 +66,7 @@
         //  화면 주소는 코드에 박지 않는다 — `insa_menu_catalog.json`(관찰로 학습한 데이터)에서
         //  가져온다. 새 화면이 생기면 "인사관리 화면 학습해줘" 한 번이면 목록이 늘어난다.
         {
-            id: 'insa_menus', mode: 'read',
+            id: 'insa_menus', mode: 'read', requires: 'insa',
             title: '인사관리 화면 목록',
             desc: '사내 인사관리(kInsa)에서 볼 수 있는 화면 목록을 돌려준다. '
                 + '어떤 화면이 있는지 먼저 확인한 뒤 insa_screen 으로 내용을 읽는 식으로 쓴다. '
@@ -76,11 +76,13 @@
             params: []
         },
         {
-            id: 'insa_screen', mode: 'read',
+            id: 'insa_screen', mode: 'read', requires: 'insa',
             title: '인사관리 화면 읽기',
             desc: '인사관리 화면 하나를 열어 내용을 글자로 읽어 온다. code 에는 메뉴 이름이나 '
                 + '코드를 넣는다(예: "근무 계획", "연차휴가사용계획", "11"). '
-                + '연차 잔여일수·근무시간·연장근무 신청내역 같은 걸 물으면 이걸 쓴다. '
+                + '⚠️ **연차 잔여일수와 근무시간 집계는 "근무 계획"(code 11) 화면에 있다** — '
+                + '발생연차·이월연차·사용완료·사용예정·최종 잔여 연차와 소정/연장 근무시간이 그 화면 맨 위에 나온다. '
+                + '"연차휴가사용계획"은 신청서 목록이라 잔여일수가 없다. '
                 + '이런 질문에 쓴다: "내 연차 며칠 남았어?", "이번달 근무시간 얼마야?", '
                 + '"연장근무 신청내역 보여줘", "근무계획 확인해줘". '
                 + '어떤 화면이 있는지 모르면 insa_menus 로 먼저 확인하라.',
@@ -524,7 +526,7 @@
         if (!apiKey) return null;
         var onStep = opts.onStep || function () {};
         var MAX_TURNS = 4, MAX_CALLS = 6;
-        var steps = [], calls = [], gwChecked = false;
+        var steps = [], calls = [], gwChecked = false, insaChecked = false;
 
         for (var turn = 1; turn <= MAX_TURNS; turn++) {
             onStep(turn === 1
@@ -574,6 +576,17 @@
                 //   백엔드가 제 사유를 돌려주므로, 여기서 조용히 막는 것보다 낫다.
                 var _gwGate = window._gwEnsureLogin ? await window._gwEnsureLogin(onStep) : { ok: true };
                 if (!_gwGate.ok) return { reply: _gwGate.message, calls: calls };
+            }
+            // 🧑‍💼 [2026-10-21] 인사관리도 같은 선검사가 필요하다. 없이 뒀더니 세션이 풀린 뒤
+            //    "메뉴를 화면에서 찾지 못했습니다"라는 **엉뚱한 사유**로 실패했다(실사용 제보) —
+            //    진짜 원인은 로그인이 풀려 로그인 화면이 떠 있던 것이었다.
+            //    재시도 금지 가드는 _insaEnsureLogin(js/36) 안에 있다(한 번 실패하면 안 때린다).
+            if (!insaChecked && wanted.some(function (w) {
+                    var t = window._qaToolById(w.id); return t && t.requires === 'insa'; })) {
+                insaChecked = true;
+                onStep('🔑 ' + window._t('인사관리 로그인 상태 확인 중...', 'Checking HR session...'));
+                var _insaGate = window._insaEnsureLogin ? await window._insaEnsureLogin(onStep) : { ok: true };
+                if (!_insaGate.ok) return { reply: _insaGate.message, calls: calls };
             }
             for (var i = 0; i < wanted.length && calls.length < MAX_CALLS; i++) {
                 var tl = window._qaToolById(wanted[i].id);
