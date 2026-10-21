@@ -22,7 +22,10 @@
    · window._ncdDismissCluster(key)       제안 기각(다시 안 뜨게)
 */
 (function() {
-    var _NCD_THRESHOLD       = 10;    // 같은 군집으로 묶이는 미분류 메일 건수 기준
+    // 💡 [2026-10-21] 10 → 5. 실측에서 Dice Popper 8건·ZITRO ICONIC 5건·BARON 3건이 쌓여 있었는데
+    //    10은 그중 어느 것도 넘지 못했다. 한 건이 미분류로 8번 반복되면 이미 충분한 신호다.
+    //    (판정은 군집당 AI 1회뿐이고 결과도 "사람에게 제안"일 뿐이라 낮춰도 비용·위험이 작다.)
+    var _NCD_THRESHOLD       = 5;     // 같은 군집으로 묶이는 미분류 메일 건수 기준
     var _NCD_FLUSH_DELAY_MS  = 30000; // project_index.json 갱신 디바운스 (토픽 신호와 동일 관례)
 
     var _buffer = {}; // { key: { count, samples:[{subject,snippet,date}], lastSeen } }
@@ -30,19 +33,45 @@
     var _ncdCollapsed = false; // 배너 접힘 상태 — 재렌더(제안 수락/기각) 시에도 유지, 새로고침 시 초기화
 
     // ── ① 결정론적 키워드 추출 (AI 호출 없음) ───────────────────────────
-    var _GENERIC_WORDS = ['확인','요청','검토','회신','안내','공유','승인원','견적','문의','회의','자료','작업','일정','보고','완료','진행','참고','송부','제출'];
+    // 💡 [2026-10-21 보강] 업무 동사뿐 아니라 "이 바닥의 범용 명사"도 넣는다 — 군집 키는 길이로
+    //    점수를 매기는데, DISPLAY(7)·MONITOR(7) 같은 긴 범용어가 DICE(4)·POPPER(6) 같은 진짜
+    //    고유명사를 이겨서 "Dice Popper Marquee Display"의 키가 DISPLAY로 뽑히고 있었다.
+    //    어느 프로젝트에나 붙는 말이라 키로 쓰면 서로 다른 건이 한 군집에 섞인다.
+    //    ⚠️ 하드코딩이 아니라 데이터 — 오탐이 보이면 이 배열만 고치면 된다.
+    var _GENERIC_WORDS = ['확인','요청','검토','회신','안내','공유','승인원','견적','문의','회의','자료','작업','일정','보고','완료','진행','참고','송부','제출',
+        // 제품/부품 범용 명사 (한·영)
+        'DISPLAY','MONITOR','PANEL','MODULE','BOARD','UNIT','SYSTEM','ASSY','CABINET','SCREEN','PRODUCT','ITEM','MODEL','TYPE','VERSION',
+        '디스플레이','모니터','패널','모듈','보드','제품','부품','사양','도면','단가','납기','수량','가격','발주서','견적서','거래명세서',
+        // 메일 제목 상용어
+        'RE','FW','FWD','REPLY','FYI','URGENT','UPDATE','INFO','NOTICE','MEETING','MINUTES','REPORT','QUOTE','QUOTATION','INQUIRY','REQUEST',
+        '긴급','공지','회의록','주간','월간','변경','추가','수정','답변','전달'];
     function _normalize(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9가-힣]/g, ''); }
+    // 🐛 [2026-10-21] _GENERIC_WORDS를 원본 단어와 그대로 비교하면 "Display"·"display"가 안 걸린다
+    //    (목록이 한글뿐이던 때는 대소문자 문제가 없어서 드러나지 않았다). 정규화해서 비교한다.
+    var _GENERIC_SET = {};
+    _GENERIC_WORDS.forEach(function(w) { _GENERIC_SET[_normalize(w)] = true; });
     /** 단어가 "모델명/코드처럼 특이해 보이는지" 점수화 — 높을수록 군집 키로 적합 */
     function _specificity(w) {
         var hasDigit = /\d/.test(w), hasAlpha = /[A-Za-z]/.test(w);
         var score = w.length;
         if (hasDigit && hasAlpha) score += 10;                       // 영숫자 혼합(모델명/코드 패턴) 우대
         if (/^[A-Za-z0-9\-]+$/.test(w) && w.length >= 4) score += 5; // 순수 영숫자 코드 패턴
-        if (_GENERIC_WORDS.indexOf(w) !== -1) score -= 100;
+        if (_GENERIC_SET[_normalize(w)]) score -= 100;
         if (window._tpIsGenericKeyword && window._tpIsGenericKeyword(w)) score -= 100; // Phase6 범용 WBS 용어 재사용
         return score;
     }
-    /** task(AI 파싱 결과)의 업무명에서 가장 특이한 단어 하나를 군집 키로 뽑는다. 없으면 null. */
+    /**
+     * task(AI 파싱 결과)의 업무명에서 군집 키를 뽑는다. 없으면 null.
+     * 🐛 [2026-10-21 수정] 예전엔 "가장 특이한 단어 하나"만 썼다 — 제품명이 여러 단어인 경우
+     *    (Dice Popper Marquee Display) 한 단어로는 변별이 안 되고, 메일마다 제목이 조금씩
+     *    달라지면 매번 다른 단어가 1등이 돼서 같은 건이 여러 군집으로 흩어졌다.
+     *    → 상위 3개 토큰을 뽑아 "정렬 후 |로 연결"한다. 정렬하는 이유는 어순이 바뀌어도
+     *    (RFQ for Dice Popper / Dice Popper RFQ) 같은 키가 되게 하기 위함.
+     *    토큰은 '|'로 되돌려 쪼갤 수 있어서, 아래 _ncdGroupClusters가 "토큰을 공유하는 군집"을
+     *    합치는 데 쓴다 — 키가 완전히 같지 않아도 묶이므로 흩어짐이 한 번 더 보정된다.
+     *    ⚠️ 기존에 쌓인 단일 토큰 키(예: "MARQUEE")는 split('|')이 ["MARQUEE"]를 주므로 그대로 호환된다.
+     */
+    var _NCD_KEY_TOKENS = 3;
     function _extractKey(task) {
         var words = [];
         String((task && task['업무명']) || '').replace(/[<>【】\[\]\(\)「」『』\/\\|,;:]/g, ' ').split(/\s+/).forEach(function(w) {
@@ -50,9 +79,64 @@
             if (w.length >= 3 && !/^\d+$/.test(w)) words.push(w);
         });
         if (!words.length) return null;
-        words.sort(function(a, b) { return _specificity(b) - _specificity(a); });
-        var best = words[0];
-        return _specificity(best) > 0 ? _normalize(best) : null;
+        var scored = words
+            .map(function(w) { return { w: _normalize(w), s: _specificity(w) }; })
+            .filter(function(x) { return x.w && x.s > 0; });
+        if (!scored.length) return null;
+        scored.sort(function(a, b) { return b.s - a.s; });
+        var seen = {}, toks = [];
+        for (var i = 0; i < scored.length && toks.length < _NCD_KEY_TOKENS; i++) {
+            if (seen[scored[i].w]) continue;
+            seen[scored[i].w] = true;
+            toks.push(scored[i].w);
+        }
+        return toks.sort().join('|');
+    }
+
+    /** 군집 키 → 토큰 배열 (옛 단일 토큰 키도 그대로 처리됨) */
+    function _ncdTokens(key) { return String(key || '').split('|').filter(Boolean); }
+
+    /**
+     * 💡 [2026-10-21 신규] 토큰을 하나라도 공유하는 pending 군집들을 하나로 묶는다.
+     *    키가 정확히 같아야만 합쳐지던 구조로는, 같은 제품 얘기인데 메일 제목이 조금 달라
+     *    키가 갈린 건들이 각각 임계치에 못 미쳐 영영 제안되지 않았다(Dice Popper 8건이
+     *    실제로 이 모양이었을 가능성이 크다). 합친 합계로 임계치를 본다.
+     *    A-B, C-D가 각각 묶인 뒤 B-C가 이어지는 전이적 연결까지 잡으려고 안정될 때까지 반복한다.
+     */
+    function _ncdGroupClusters(clusters) {
+        var groups = [];
+        (clusters || []).filter(function(c) { return c.status === 'pending'; }).forEach(function(c) {
+            groups.push({ tokens: _ncdTokens(c.key), members: [c] });
+        });
+        var changed = true;
+        while (changed) {
+            changed = false;
+            outer:
+            for (var i = 0; i < groups.length; i++) {
+                for (var j = i + 1; j < groups.length; j++) {
+                    var shares = groups[i].tokens.some(function(t) { return groups[j].tokens.indexOf(t) !== -1; });
+                    if (!shares) continue;
+                    groups[j].tokens.forEach(function(t) { if (groups[i].tokens.indexOf(t) === -1) groups[i].tokens.push(t); });
+                    groups[i].members = groups[i].members.concat(groups[j].members);
+                    groups.splice(j, 1);
+                    changed = true;
+                    break outer;
+                }
+            }
+        }
+        return groups.map(function(g) {
+            // 대표는 건수가 가장 많은 군집 — 배너 한 줄 · 'created' 표시 · AI 판정 결과를 여기 담는다
+            var rep = g.members.slice().sort(function(a, b) { return (b.count || 0) - (a.count || 0); })[0];
+            var samples = [];
+            g.members.forEach(function(m) { samples = samples.concat(m.samples || []); });
+            return {
+                rep: rep,
+                members: g.members,
+                tokens: g.tokens,
+                count: g.members.reduce(function(s, m) { return s + (m.count || 0); }, 0),
+                samples: samples.slice(0, 10)
+            };
+        });
     }
 
     // ── ② 버퍼 기록 + Drive 디바운스 flush (js/26-topic-profile.js _tpFlushSignals와 동일 패턴) ──
@@ -116,21 +200,35 @@
             var res = await fetch('https://www.googleapis.com/drive/v3/files/' + indexFileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
             var indexData = await res.json();
             var clusters = (indexData && indexData.unmatchedClusters) || [];
-            var pending = clusters.filter(function(c) { return c.count >= _NCD_THRESHOLD && c.status === 'pending'; });
-            if (!pending.length) { window._ncdRenderBanner(clusters); return; }
+            // 💡 [2026-10-21] 군집 하나씩이 아니라 "토큰을 공유하는 군집들의 합계"로 임계치를 본다
+            //    (_ncdGroupClusters 주석 참고). 키가 조금 달라 흩어진 같은 건이 합쳐진다.
+            var ready = _ncdGroupClusters(clusters).filter(function(g) { return g.count >= _NCD_THRESHOLD; });
+            if (!ready.length) { window._ncdRenderBanner(clusters); return; }
 
             var apiKey = window.getActiveAiKey && window.getActiveAiKey();
             if (!apiKey) { window._ncdRenderBanner(clusters); return; } // 키 없으면 판정만 보류, 다음 기회에 재시도
 
-            for (var i = 0; i < pending.length; i++) {
-                var cluster = pending[i];
-                var verdict = await _judgeCluster(cluster, apiKey);
-                cluster.aiVerdict = verdict;
+            for (var i = 0; i < ready.length; i++) {
+                var g = ready[i];
+                // AI 판정은 그룹당 1회 — 합쳐진 샘플로 한 번만 묻는다(무료 API 절약)
+                var verdict = await _judgeCluster({ key: g.rep.key, samples: g.samples, count: g.count }, apiKey);
+                var _st = (verdict && verdict.looksNewProject && verdict.confidence !== '하') ? 'suggested' : 'reviewed_no';
+                // 대표 군집이 판정·배너·건수를 대표한다
+                g.rep.aiVerdict  = verdict;
+                g.rep.status     = _st;
+                g.rep.judgedAt   = new Date().toISOString();
+                g.rep.groupCount = g.count;                                      // 배너에 보여줄 합계
+                g.rep.groupKeys  = g.members.map(function(m) { return m.key; }); // 'created' 전파용
                 // 💡 [알려진 한계] 한 번 'reviewed_no'로 판정되면 이후 count가 더 늘어도 재판정하지 않는다
                 //    (군집당 무한 재판정으로 인한 토큰 낭비 방지). 필요하면 나중에 "count가 2배 이상 늘면
                 //    재판정" 같은 조건을 추가할 수 있다.
-                cluster.status = (verdict && verdict.looksNewProject && verdict.confidence !== '하') ? 'suggested' : 'reviewed_no';
-                cluster.judgedAt = new Date().toISOString();
+                g.members.forEach(function(m) {
+                    if (m === g.rep) return;
+                    // 나머지는 배너에 중복으로 뜨지 않도록 'merged' — 대표를 따라간다
+                    m.status = (_st === 'suggested') ? 'merged' : 'reviewed_no';
+                    m.mergedInto = g.rep.key;
+                    m.judgedAt = new Date().toISOString();
+                });
             }
             await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId + '?uploadType=media&supportsAllDrives=true', {
                 method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(indexData)
@@ -186,7 +284,10 @@
             var v = c.aiVerdict || {};
             var safeKey = String(c.key).replace(/'/g, '');
             var label = v.summary || c.key;
-            var countLabel = _en ? (c.count + ' unclassified mail(s)') : ('미분류 메일 ' + c.count + '건');
+            // 💡 [2026-10-21] groupCount = 토큰을 공유해 합쳐진 군집들의 합계(_ncdGroupClusters).
+            //    대표 군집 자기 count만 보여주면 "8건 모여서 제안됐는데 3건으로 표시"되어 혼란스럽다.
+            var _cnt = c.groupCount || c.count;
+            var countLabel = _en ? (_cnt + ' unclassified mail(s)') : ('미분류 메일 ' + _cnt + '건');
             return '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; flex-wrap:wrap;">' +
                 '<span>🆕 <b>' + label + '</b> — ' + countLabel + '</span>' +
                 '<span style="display:flex; gap:4px; flex-shrink:0;">' +
@@ -230,6 +331,12 @@
             if (cluster && indexFileId) {
                 cluster.status = 'created';
                 cluster.createdAt = new Date().toISOString();
+                // 💡 [2026-10-21] 합쳐졌던 군집들도 같이 'created'로 — 안 하면 그 키들이 pending으로
+                //    남아 다음 flush 때 다시 쌓이고, 같은 제안이 또 뜬다.
+                (cluster.groupKeys || []).forEach(function(k) {
+                    var m = (indexData.unmatchedClusters || []).find(function(x) { return x.key === k; });
+                    if (m && m !== cluster) { m.status = 'created'; m.createdAt = cluster.createdAt; }
+                });
                 await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId + '?uploadType=media&supportsAllDrives=true', {
                     method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(indexData)
                 });
@@ -260,6 +367,11 @@
             if (!cluster) return;
             cluster.status = 'dismissed';
             cluster.dismissedAt = new Date().toISOString();
+            // 💡 [2026-10-21] 합쳐졌던 군집들도 같이 기각 — 안 하면 무시해도 다시 올라온다
+            (cluster.groupKeys || []).forEach(function(k) {
+                var m = (indexData.unmatchedClusters || []).find(function(x) { return x.key === k; });
+                if (m && m !== cluster) { m.status = 'dismissed'; m.dismissedAt = cluster.dismissedAt; }
+            });
             await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId + '?uploadType=media&supportsAllDrives=true', {
                 method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(indexData)
             });
@@ -282,11 +394,29 @@
             if (!result && task && (task['매칭근거'] || task['업무명'])) {
                 var snippet = (task['_aiMeta'] && task['_aiMeta'].snippet) || task['상세내용'] || '';
                 var snippetLow = String(snippet).toLowerCase();
+                // 🐛 [2026-10-21 버그수정] 가드가 너무 헐거웠다 — 3글자 토큰 하나만 본문에 있어도
+                //    "근접 후보 있음"으로 보고 군집 기록 자체를 건너뛰었다. 이 바닥 업무에서 3글자
+                //    토큰은 고객사 약칭(LNW·KGI)·인치("4.3")·범용어라 거의 항상 걸린다 →
+                //    "기존 고객사의 신규 프로젝트"는 구조적으로 영원히 감지되지 않았다.
+                //    이 회사에서 제일 흔한 경우인데(LNW만 해도 프로젝트가 여럿) 그게 전부 막혔다.
+                //    → 근접 판정을 "고유 식별자급 일치"로 좁힌다: 4글자 이상 + 숫자만인 토큰 제외 +
+                //    범용 WBS 용어(Phase 6 블록리스트) 제외. 고객사명은 04c가 이미 keywords에서
+                //    빼지만, model 조각에는 남을 수 있어 여기서 한 번 더 제외한다.
+                var _MIN_NEAR_LEN = 4;
+                var _isNearToken = function(t, customerLow) {
+                    if (!t || t.length < _MIN_NEAR_LEN) return false;
+                    if (/^[0-9.]+$/.test(t)) return false;                       // "4.3" 같은 인치/숫자
+                    if (customerLow && t === customerLow) return false;          // 고객사명 자체는 변별력 없음
+                    if (window._tpIsGenericKeyword && window._tpIsGenericKeyword(t)) return false;
+                    return true;
+                };
                 var hasNearCandidate = (candidatesForAI || []).some(function(c) {
-                    var frags = (c.model || '').toLowerCase().split(/[\s\-_\/]+/).filter(function(f) { return f.length >= 3; });
+                    var cust = String(c.customer || '').toLowerCase().trim();
+                    var frags = (c.model || '').toLowerCase().split(/[\s\-_\/]+/);
                     var kws = (c.keywords || []).map(function(k) { return String(k).toLowerCase().trim(); });
-                    return frags.some(function(f) { return snippetLow.includes(f); }) ||
-                           kws.some(function(k) { return k.length >= 3 && snippetLow.includes(k); });
+                    return frags.concat(kws).some(function(t) {
+                        return _isNearToken(t, cust) && snippetLow.includes(t);
+                    });
                 });
                 if (!hasNearCandidate) window._ncdRecordCandidate(task);
             }
