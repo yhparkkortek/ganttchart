@@ -170,6 +170,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 백그라운드 루프에서 `recalculateSchedules()`·`saveToGoogleDrive()` 반복 호출 금지 — 끝에 1회만
 - 보관함 삭제: `markDeleted()` 호출 필수 + 묘비(tombstone) 없으면 Drive 재로드 시 되살아남
 - 새 localStorage 저장소: `window.STORAGE_REGISTRY`(`js/34-storage-doctor.js`)에 정리 규칙 등록
+- **⚠️ Phase 9 군집 판정은 "AI 업무 분석 모달을 열 때마다" 돈다** — `pending`이 쌓여 있으면 사람이 분석을 누른 적 없어도 스윕당 8개씩 AI가 나간다(실측 494개 누적). **임계치·필터를 완화하기 전에 누적 백로그 크기를 먼저 확인할 것** — 완화는 과거 데이터에 소급 적용된다. 모르고 임계치만 내려 한 스윕 76연발로 하루 한도를 태운 사고(2026-10-21) 이력이 문서에 있음
 
 ### `docs/gantt-internals.md` — 일정 계산/탭 복원/표 오버레이/AI 검색
 - **읽을 때**: `recalculateSchedules`·`_calcStartTs`, Undo, `.no-td` 오버레이, 체크박스 일괄 작업
