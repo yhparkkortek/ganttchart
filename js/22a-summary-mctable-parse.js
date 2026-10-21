@@ -160,23 +160,56 @@ function _parseBriefSpecSheetFromWorkbook(workbook) {
     return true;
 }
 
+// 💡 [2026-10-21] M.C 시트의 금액 열 위치를 **머리글로 찾는다.**
+//    예전엔 r[5]~r[10] 고정 인덱스였는데, 화면/내보내기의 열 순서를 바꾸면(PROTO A↔B 자리 교체)
+//    **예전에 내보낸 파일의 PROTO A 값이 PROTO B 칸으로 들어간다** — 오류도 안 나고 금액만 뒤바뀌는
+//    조용한 오염이다. 머리글을 보고 맞추면 옛 파일·새 파일이 둘 다 제자리로 들어간다.
+//    머리글은 2단이다 — 0행 "[단위]PROTO A"/"PROTO B"/"MP(R3)", 1행 "Cost($)"/"NRE"/"Note".
+//    (0행은 병합돼 있어 쌍의 두 번째 칸은 비어 있으므로, 비면 직전 쌍을 그대로 끌고 간다)
+function _mcColMap(json) {
+    const h0 = json[0] || [], h1 = json[1] || [];
+    const map = {}; let cur = '';
+    const n = Math.max(h0.length, h1.length);
+    for (let c = 0; c < n; c++) {
+        const top = String(h0[c] == null ? '' : h0[c]).toUpperCase();
+        if (top) {
+            // ⚠️ PROTO A를 MP보다 **먼저** 본다 — 단위 태그에 MP가 섞여도(예 "[MP-A]PROTO A") 안 밀린다.
+            if (/PROTO\s*A/.test(top)) cur = 'proto';
+            else if (/PROTO\s*B/.test(top)) cur = 'protoB';
+            else if (/\bMP\b/.test(top)) cur = 'mp';
+            else cur = '';
+        }
+        const sub = String(h1[c] == null ? '' : h1[c]).toUpperCase();
+        if (/NOTE/.test(sub) && map.note === undefined) map.note = c;
+        if (!cur) continue;
+        if (/COST/.test(sub)) map[cur + 'Cost'] = c;
+        else if (/NRE/.test(sub)) map[cur + 'Nre'] = c;
+    }
+    const need = ['protoCost', 'protoNre', 'protoBCost', 'protoBNre', 'mpCost', 'mpNre'];
+    return need.every(function (k) { return map[k] !== undefined; }) ? map : null;
+}
+
 function _parseMcTableSheetRows(workbook, sheetName) {
     if (!sheetName || !workbook.Sheets[sheetName]) return null;
     const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
     const rows = []; let _sales = null;
+    // 머리글을 못 알아보는 아주 옛날 파일은 그때의 고정 자리로 읽는다(그 시절 순서가 곧 이 값이다).
+    const M = _mcColMap(json) || { protoCost: 5, protoNre: 6, protoBCost: 7, protoBNre: 8, mpCost: 9, mpNre: 10, note: 11 };
+    if (M.note === undefined) M.note = 11;
+    const at = function (r, k) { const v = r[M[k]]; return (v === undefined || v === null) ? '' : v; };
     for (let i = 2; i < json.length; i++) { // 0,1행은 2단 헤더이므로 2행부터 데이터
         const r = json[i];
         if (!r || r.length === 0) continue;
         const _t0 = String(r[0] || '').trim();
-        if (_t0 === '영업판가') { _sales = { protoCost: r[5] || '', protoNre: r[6] || '', protoBCost: r[7] || '', protoBNre: r[8] || '', mpCost: r[9] || '', mpNre: r[10] || '' }; continue; }
+        if (_t0 === '영업판가') { _sales = { protoCost: at(r, 'protoCost'), protoNre: at(r, 'protoNre'), protoBCost: at(r, 'protoBCost'), protoBNre: at(r, 'protoBNre'), mpCost: at(r, 'mpCost'), mpNre: at(r, 'mpNre') }; continue; }
         if (/SUBTOTAL/i.test(_t0) || /^TOTAL/i.test(_t0) || _t0.indexOf('재료비율') === 0) continue; // 💡 요약행 제외
         const row = {
             type: String(r[0] || '').trim(), item: String(r[1] || '').trim(), group: String(r[2] || '').trim(),
             pn: (r[3] === undefined || r[3] === null) ? '' : String(r[3]).trim(), spec: String(r[4] || '').trim(),
-            protoCost: (r[5] === undefined || r[5] === null) ? '' : r[5], protoNre: (r[6] === undefined || r[6] === null) ? '' : r[6],
-            protoBCost: (r[7] === undefined || r[7] === null) ? '' : r[7], protoBNre: (r[8] === undefined || r[8] === null) ? '' : r[8],
-            mpCost: (r[9] === undefined || r[9] === null) ? '' : r[9], mpNre: (r[10] === undefined || r[10] === null) ? '' : r[10],
-            note: String(r[11] || '').trim()
+            protoCost: at(r, 'protoCost'), protoNre: at(r, 'protoNre'),
+            protoBCost: at(r, 'protoBCost'), protoBNre: at(r, 'protoBNre'),
+            mpCost: at(r, 'mpCost'), mpNre: at(r, 'mpNre'),
+            note: String(at(r, 'note') || '').trim()
         };
         const isEmpty = !row.type && !row.item && !row.group && !row.pn && !row.spec && !row.note
             && row.protoCost === '' && row.protoNre === '' && row.protoBCost === '' && row.protoBNre === '' && row.mpCost === '' && row.mpNre === '';

@@ -655,7 +655,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             const mcLatestDate = revChangeLogs.length ? revChangeLogs[revChangeLogs.length - 1].time : '-';
             const _mcUnitTag = unitLabel ? '[' + unitLabel + ']' : '';
             const mcData = [
-                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', _mcUnitTag + 'PROTO A', '', _mcUnitTag + 'PROTO B', '', _mcUnitTag + 'MP', '', (window._currentLang === 'en' ? 'Last Modified: ' : '최종수정: ') + mcLatestDate],
+                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', _mcUnitTag + 'PROTO B', '', _mcUnitTag + 'PROTO A', '', _mcUnitTag + 'MP', '', (window._currentLang === 'en' ? 'Last Modified: ' : '최종수정: ') + mcLatestDate],
                 ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Note'],
             ];
             const valid = (rows || []).filter(function(r) { const t = String(r.type || '').toUpperCase().replace(/\s/g, ''); return t !== 'SUBTOTAL' && t !== 'TOTAL'; });
@@ -668,7 +668,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             let segStartRow = mcData.length;
             valid.forEach(function(r, idx) {
                 curType = typed[idx] || curType;
-                mcData.push([String(r.type || ''), r.item || '', r.group || '', r.pn || '', r.spec || '', cellMoney(r.protoCost), cellMoney(r.protoNre), cellMoney(r.protoBCost), cellMoney(r.protoBNre), cellMoney(r.mpCost), cellMoney(r.mpNre), r.note || '']);
+                mcData.push([String(r.type || ''), r.item || '', r.group || '', r.pn || '', r.spec || '', cellMoney(r.protoBCost), cellMoney(r.protoBNre), cellMoney(r.protoCost), cellMoney(r.protoNre), cellMoney(r.mpCost), cellMoney(r.mpNre), r.note || '']);
                 const curRowIdx = mcData.length - 1;
                 sub.pc += num(r.protoCost); sub.pn += num(r.protoNre); sub.bc += num(r.protoBCost); sub.bn += num(r.protoBNre); sub.mc += num(r.mpCost); sub.mn += num(r.mpNre);
                 grand.pc += num(r.protoCost); grand.pn += num(r.protoNre); grand.bc += num(r.protoBCost); grand.bn += num(r.protoBNre); grand.mc += num(r.mpCost); grand.mn += num(r.mpNre);
@@ -679,20 +679,20 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                     if (curRowIdx > segStartRow) {
                         typeMerges.push({ s: { r: segStartRow, c: 0 }, e: { r: curRowIdx, c: 0 } });
                     }
-                    mcData.push([curType + ' SUBTOTAL', '', '', '', '', sub.pc, sub.pn, sub.bc, sub.bn, sub.mc, sub.mn, '']);
+                    mcData.push([curType + ' SUBTOTAL', '', '', '', '', sub.bc, sub.bn, sub.pc, sub.pn, sub.mc, sub.mn, '']);
                     summaryRows.push({ r: mcData.length - 1, color: 'FFF9C4' });
                     sub = zero();
                     segStartRow = mcData.length;
                 }
             });
-            mcData.push(['TOTAL(M.C)', '', '', '', '', grand.pc, grand.pn, grand.bc, grand.bn, grand.mc, grand.mn, '']);
+            mcData.push(['TOTAL(M.C)', '', '', '', '', grand.bc, grand.bn, grand.pc, grand.pn, grand.mc, grand.mn, '']);
             summaryRows.push({ r: mcData.length - 1, color: 'E3F2FD' });
             const sp = ((tabData.mcSalesPriceDetail || {})[rev]) || {};
             const spv = function(f) { return num(sp[f]); };
-            mcData.push(['영업판가', '', '', '', '', spv('protoCost') || '', spv('protoNre') || '', spv('protoBCost') || '', spv('protoBNre') || '', spv('mpCost') || '', spv('mpNre') || '', '']);
+            mcData.push(['영업판가', '', '', '', '', spv('protoBCost') || '', spv('protoBNre') || '', spv('protoCost') || '', spv('protoNre') || '', spv('mpCost') || '', spv('mpNre') || '', '']);
             summaryRows.push({ r: mcData.length - 1, color: 'E8F5E9' });
             const ratio = function(tot, f) { const s = spv(f); return s > 0 ? (tot / s * 100).toFixed(1) + '%' : '-'; };
-            mcData.push(['재료비율 (M.C ÷ 영업판가) [%]', '', '', '', '', ratio(grand.pc, 'protoCost'), ratio(grand.pn, 'protoNre'), ratio(grand.bc, 'protoBCost'), ratio(grand.bn, 'protoBNre'), ratio(grand.mc, 'mpCost'), ratio(grand.mn, 'mpNre'), '']);
+            mcData.push(['재료비율 (M.C ÷ 영업판가) [%]', '', '', '', '', ratio(grand.bc, 'protoBCost'), ratio(grand.bn, 'protoBNre'), ratio(grand.pc, 'protoCost'), ratio(grand.pn, 'protoNre'), ratio(grand.mc, 'mpCost'), ratio(grand.mn, 'mpNre'), '']);
             summaryRows.push({ r: mcData.length - 1, color: 'FFE0B2' });
 
             const wsMc = XLSX.utils.aoa_to_sheet(mcData);

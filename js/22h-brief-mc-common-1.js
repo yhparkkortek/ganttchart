@@ -130,10 +130,10 @@ const BM_CONF = {
                 + '<td><input type="text" data-field="group"></td>'
                 + '<td><input type="text" data-field="pn"></td>'
                 + '<td><input type="text" data-field="spec"></td>'
-                + '<td><input type="text" class="u-input" data-field="protoCost"></td>'
-                + '<td><input type="text" class="u-input" data-field="protoNre"></td>'
                 + '<td><input type="text" class="u-input" data-field="protoBCost"></td>'
                 + '<td><input type="text" class="u-input" data-field="protoBNre"></td>'
+                + '<td><input type="text" class="u-input" data-field="protoCost"></td>'
+                + '<td><input type="text" class="u-input" data-field="protoNre"></td>'
                 + '<td><input type="text" class="u-input" data-field="mpCost"></td>'
                 + '<td><input type="text" class="u-input" data-field="mpNre"></td>'
                 + '<td><input type="text" class="u-input" data-field="note"></td>';

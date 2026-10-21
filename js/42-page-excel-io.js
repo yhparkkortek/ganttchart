@@ -160,10 +160,10 @@
         { h: 'GROUP',         k: 'group' },
         { h: 'P/N',           k: 'pn' },
         { h: 'Specification', k: 'spec' },
-        { h: 'PROTO A Cost',  k: 'protoCost',  num: true },
-        { h: 'PROTO A NRE',   k: 'protoNre',   num: true },
         { h: 'PROTO B Cost',  k: 'protoBCost', num: true },
         { h: 'PROTO B NRE',   k: 'protoBNre',  num: true },
+        { h: 'PROTO A Cost',  k: 'protoCost',  num: true },
+        { h: 'PROTO A NRE',   k: 'protoNre',   num: true },
         { h: 'MP Cost',       k: 'mpCost',     num: true },
         { h: 'MP NRE',        k: 'mpNre',      num: true },
         { h: 'Note',          k: 'note' }

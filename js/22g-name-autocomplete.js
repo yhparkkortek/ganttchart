@@ -811,8 +811,8 @@ window.populateTabData = function() {
             if (colgroupEl) {
                 let cg = '<col style="width:40px;"><col style="width:90px;"><col style="width:160px;"><col style="width:140px;">';
                 if (!hidePnSpec) cg += '<col style="width:90px;"><col style="width:280px;">';
-                if (!hidePairs.protoA) cg += '<col style="width:70px;"><col style="width:90px;">';
                 if (!hidePairs.protoB) cg += '<col style="width:70px;"><col style="width:90px;">';
+                if (!hidePairs.protoA) cg += '<col style="width:70px;"><col style="width:90px;">';
                 if (!hidePairs.mp) cg += '<col style="width:70px;"><col style="width:90px;">';
                 cg += '<col style="width:400px;">';
                 colgroupEl.innerHTML = cg;
@@ -827,8 +827,8 @@ window.populateTabData = function() {
                     + '<th rowspan="2" style="width:140px;">GROUP</th>';
                 if (!hidePnSpec) row1 += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
                 const _mcUnitTag = window.mcActiveUnit ? '[' + escapeHtml(window.mcActiveUnit) + ']' : '';
-                if (!hidePairs.protoA) row1 += '<th colspan="2">' + _mcUnitTag + 'PROTO A</th>';
                 if (!hidePairs.protoB) row1 += '<th colspan="2">' + _mcUnitTag + 'PROTO B</th>';
+                if (!hidePairs.protoA) row1 += '<th colspan="2">' + _mcUnitTag + 'PROTO A</th>';
                 if (!hidePairs.mp) row1 += '<th colspan="2">' + _mcUnitTag + 'MP(' + curRev + ')</th>';
                 row1 += '<th rowspan="2" style="min-width:400px;">Note</th></tr>';
                 // 💡 엑셀 내보내기와 동일하게, 이 리비전의 마지막 수정이력 시각을 "견적 수정이력 확인" 줄 오른쪽에 표시
@@ -837,8 +837,8 @@ window.populateTabData = function() {
                 const _mcLastEditEl = document.getElementById('mc-history-lastedit');
                 if (_mcLastEditEl) _mcLastEditEl.textContent = (window._currentLang === 'en' ? 'Last Modified: ' : '최종수정: ') + _mcLatestDate;
                 let row2 = '<tr>';
-                if (!hidePairs.protoA) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
                 if (!hidePairs.protoB) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
+                if (!hidePairs.protoA) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
                 if (!hidePairs.mp) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
                 row2 += '</tr>';
                 theadEl.innerHTML = row1 + row2;
@@ -851,8 +851,9 @@ window.populateTabData = function() {
                 };
                 let html = '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
                     + '<td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>';
-                if (!hidePairs.protoA) html += valCell(sums.protoCost, true) + valCell(sums.protoNre);
+                // 🔁 [2026-10-21] PROTO B 를 A 앞에 — 머리글(HTML)과 같은 순서를 지켜야 칸이 안 밀린다.
                 if (!hidePairs.protoB) html += valCell(sums.protoBCost, true) + valCell(sums.protoBNre);
+                if (!hidePairs.protoA) html += valCell(sums.protoCost, true) + valCell(sums.protoNre);
                 if (!hidePairs.mp) html += valCell(sums.mpCost, true) + valCell(sums.mpNre);
                 // 💡 SUBTOTAL/TOTAL 행도 Note 입력 가능하도록 (기존엔 빈 칸이라 입력 자체가 불가능했음)
                 const noteVal = (_mcSummaryNotesStore()[curRev] && _mcSummaryNotesStore()[curRev][noteKey]) || '';
@@ -939,13 +940,13 @@ window.populateTabData = function() {
                         + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="color:' + otherColor + ';"></td>';
                 }
 
-                if (!hidePairs.protoA) {
-                    rowHtml += '<td style="border-left:2px solid #2c5f8a;"><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
-                        + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
-                }
                 if (!hidePairs.protoB) {
                     rowHtml += '<td style="border-left:2px solid #2c5f8a;"><input type="text" class="u-input" data-field="protoBCost" value="' + fmtCur(r.protoBCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                         + '<td><input type="text" class="u-input" data-field="protoBNre" value="' + fmtCur(r.protoBNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
+                }
+                if (!hidePairs.protoA) {
+                    rowHtml += '<td style="border-left:2px solid #2c5f8a;"><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                        + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
                 }
                 if (!hidePairs.mp) {
                     rowHtml += '<td style="border-left:2px solid #2c5f8a;"><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
@@ -976,8 +977,8 @@ window.populateTabData = function() {
                 return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value, this)" style="background-color:transparent; font-weight:bold; color:#1f7a3d; text-align:center;"></td>';
             };
             let salesHtml = '<tr class="mc-summary-row" style="background-color:#e6f6ea; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
-            if (!hidePairs.protoA) salesHtml += spCell('protoCost', true) + spCell('protoNre');
             if (!hidePairs.protoB) salesHtml += spCell('protoBCost', true) + spCell('protoBNre');
+            if (!hidePairs.protoA) salesHtml += spCell('protoCost', true) + spCell('protoNre');
             if (!hidePairs.mp) salesHtml += spCell('mpCost', true) + spCell('mpNre');
             const salesNoteVal = (_mcSummaryNotesStore()[curRev] && _mcSummaryNotesStore()[curRev].salesPrice) || '';
             salesHtml += '<td><input type="text" class="u-input" style="background-color:transparent;" value="' + _escTabVal(salesNoteVal) + '" onchange="window.mcUpdateSummaryNote(\'' + curRev + '\', \'salesPrice\', this.value)"></td></tr>';
@@ -990,8 +991,8 @@ window.populateTabData = function() {
                 return '<td' + (border ? ' style="border-left:2px solid #2c5f8a; text-align:center; font-weight:bold; color:#b1432f;"' : ' style="text-align:center; font-weight:bold; color:#b1432f;"') + '>' + text + '</td>';
             };
             let ratioHtml = '<tr class="mc-summary-row" style="background-color:#fbe4e2; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
-            if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost, true) + ratioCell('protoNre', grandtotal.protoNre);
             if (!hidePairs.protoB) ratioHtml += ratioCell('protoBCost', grandtotal.protoBCost, true) + ratioCell('protoBNre', grandtotal.protoBNre);
+            if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost, true) + ratioCell('protoNre', grandtotal.protoNre);
             if (!hidePairs.mp) ratioHtml += ratioCell('mpCost', grandtotal.mpCost, true) + ratioCell('mpNre', grandtotal.mpNre);
             const ratioNoteVal = (_mcSummaryNotesStore()[curRev] && _mcSummaryNotesStore()[curRev].ratio) || '';
             ratioHtml += '<td><input type="text" class="u-input" style="background-color:transparent;" value="' + _escTabVal(ratioNoteVal) + '" onchange="window.mcUpdateSummaryNote(\'' + curRev + '\', \'ratio\', this.value)"></td></tr>';
