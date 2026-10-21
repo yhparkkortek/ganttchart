@@ -819,6 +819,19 @@
         var cur = (spec.blocks[0].get() || []).map(function (r) { return r || {}; });
         var tpl = '';
         if (ai.mode === 'fill') {
+            // 🐛 [2026-10-21 버그수정, 사용자 제보 "이 값이 없어서 불러오기 AI 분석이 실패함"]
+            //    'fill'은 **이미 있는 표의 빈칸만 채우는** 모드라, 표준 서식(TYPE/TYPE2)이 없으면
+            //    AI에게 "채울 항목 목록"을 못 준다 — 프롬프트가 "1. (빈칸)"만 되어 결과가 쓸모없거나
+            //    아예 실패한다. 그런데 화면엔 막연히 "실패"로만 떠서 원인을 알 수 없었다.
+            //    → 여기서 먼저 막고, 무엇이 없고 어떻게 채우는지 알려준다.
+            var _tplRows = cur.filter(function (r) { return String(r.type || '').trim() || String(r.sub || '').trim(); });
+            if (!_tplRows.length) {
+                _toast('⚠️ ' + _t(
+                    '표준 서식(TYPE/TYPE2)이 비어 있어 AI 매핑을 할 수 없습니다. 이 기능은 "있는 항목의 빈칸만" 채웁니다 — 상단 [📥 참조 엑셀 가져오기]로 표준 서식을 먼저 불러온 뒤 다시 시도해주세요.',
+                    'The standard template (TYPE/TYPE2) is empty, so AI mapping cannot run. This feature only fills values into existing items — import the reference Excel first, then try again.'
+                ), 'error', 9000);
+                return;
+            }
             tpl = cur.map(function (r, i) {
                 var a = String(r.type || '').trim(), b2 = String(r.sub || '').trim();
                 return (i + 1) + '. ' + (a || '(빈칸)') + (b2 ? ' / ' + b2 : '');

@@ -363,6 +363,32 @@ function _bcBuildRows(ruleResult, ai, live) {
  *    DOM을 읽어 projectMeta를 덮어쓰기 때문(04c:632). 그래서 Summary DOM을 채운 뒤 저장한다.
  *    (js/28 마법사의 _fillSummaryFields와 같은 이유·같은 방식)
  */
+/**
+ * 참조 엑셀을 불러오고 "실제로 반영될 때까지" 기다린다.
+ * 반영 판정은 Customer SPEC 표준 서식(TYPE/TYPE2가 있는 행)이 생겼는지로 본다 —
+ * 그게 바로 뒤의 AI 매핑이 필요로 하는 것이고, colIdx만 보면 Gantt만 들어와도 통과해 버린다.
+ * 못 기다리면 false를 돌려주고, 호출부는 그 프로젝트를 "서식 없음"으로 보고한다(조용히 넘기지 않는다).
+ */
+async function _bcImportReferenceAndWait(timeoutMs) {
+    if (!window.autoImportReferenceExcel) return false;
+    const hasTpl = function() {
+        const rows = ((window.tabData || {}).briefSpec) || [];
+        return rows.some(function(r) { return r && (String(r.type || '').trim() || String(r.sub || '').trim()); });
+    };
+    if (hasTpl()) return true;
+    try { window.autoImportReferenceExcel(); } catch (e) { return false; }
+    const until = Date.now() + (timeoutMs || 20000);
+    while (Date.now() < until) {
+        await new Promise(function(r) { setTimeout(r, 400); });
+        if (hasTpl()) {
+            // 파싱이 끝난 직후 populate가 한 틱 더 필요한 경우가 있어 살짝 더 준다
+            await new Promise(function(r) { setTimeout(r, 400); });
+            return true;
+        }
+    }
+    return false;
+}
+
 async function _bcCreateOne(row) {
     var setVal = function(id, v) {
         var el = document.getElementById(id);
@@ -373,6 +399,16 @@ async function _bcCreateOne(row) {
     };
     window._openAsNewSheet('bc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), null, null);
     window._resetToBlankNoConfirm(true);
+
+    // 🐛 [2026-10-21 버그수정, 사용자 제보 "불러오기 AI 분석이 실패함"]
+    //    빈 시트에서 바로 저장하면 Gantt 컬럼(colIdx)도, Customer SPEC 표준 서식(TYPE/TYPE2)도
+    //    없는 껍데기 프로젝트가 만들어진다. 그러면 나중에 Customer SPEC [불러오기]의 AI 매핑이
+    //    'fill'(있는 항목의 빈칸만 채움) 모드라 채울 항목이 없어 실패한다.
+    //    마법사(js/28)는 _npwOpen에서 참조 엑셀을 불러오고 사람이 5단계를 걷는 동안 그게 끝나지만,
+    //    일괄 생성은 사람 대기 시간이 없어 그대로 저장돼 버렸다 — 같은 단계를 넣고 **기다린다.**
+    //    ⚠️ autoImportReferenceExcel은 끝에서 handleFiles()를 await 없이 부르므로 함수가 끝나도
+    //    파싱은 진행 중이다. 그래서 반환을 기다리지 않고 "실제로 들어왔는지"를 폴링한다.
+    const tplOk = await _bcImportReferenceAndWait();
 
     // 모델 카드(고객모델명이 실제로 사는 곳) — 마법사와 동일 구조
     window.tabData = window.tabData || {};
@@ -391,7 +427,7 @@ async function _bcCreateOne(row) {
     if (window._checkAllRequiredFields) window._checkAllRequiredFields();
 
     var ok = await window.saveToGoogleDrive({ suppressAlert: true });
-    return ok ? { fileId: window.currentDriveFileId, fileName: window.currentDriveFileName } : null;
+    return ok ? { fileId: window.currentDriveFileId, fileName: window.currentDriveFileName, tplOk: tplOk } : null;
 }
 
 /**
@@ -654,6 +690,10 @@ window._bcApplyClick = async function() {
         var txt = _t('✅ 생성 ' + out.made.length + '개 · 기각 ' + out.rejected.length + '줄',
                      '✅ created ' + out.made.length + ' · dismissed ' + out.rejected.length);
         if (out.failed.length) txt += _t(' · ❌ 실패 ' + out.failed.length + '개', ' · ❌ failed ' + out.failed.length);
+        // 표준 서식이 안 들어온 프로젝트는 조용히 넘기지 않는다 — 나중에 Customer SPEC 불러오기가 실패한다
+        var _noTpl = out.made.filter(function(m) { return !m.tplOk; });
+        if (_noTpl.length) txt += _t(' · ⚠️ 표준 서식 없음 ' + _noTpl.length + '개(참조 엑셀 미반영 — 해당 프로젝트에서 [📥 참조 엑셀 가져오기] 필요)',
+                                     ' · ⚠️ ' + _noTpl.length + ' without the standard template (import the reference Excel there)');
         _bcStatus(txt);
         if (out.failed.length) console.warn('[백로그 취합] 생성 실패 목록:', out.failed);
         if (window.showToast) window.showToast(txt, out.failed.length ? 'warning' : 'info', 6000);
