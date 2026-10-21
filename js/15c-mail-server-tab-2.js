@@ -1485,17 +1485,33 @@ window._msBuildProjectMatchSection = function(candidateProjects, mailText, userH
         catch(e) { return {}; }
     })();
     const numbered = candidateProjects.map((c, i) => {
-        // ✅ [토픽 프로파일] 1순위: project_index.json topicKeywords (모든 프로젝트, Drive에서 사전 저장됨)
-        //                   2순위: localStorage 캐시 (이 세션에서 로드한 프로젝트)
-        const _tpKw = (function() {
-            if (c.topicKeywords && c.topicKeywords.length)
-                return ' | 🔑토픽: ' + c.topicKeywords.slice(0, 8).join(', ');
-            const _cached = _tpStore[c.drive_file_id];
-            if (_cached && _cached.keywords && _cached.keywords.length)
-                return ' | 🔑토픽: ' + _cached.keywords.slice(0, 8).join(', ');
-            return '';
-        })();
-        return `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''}${_tpKw} [파일: ${c.file_name}]`;
+        // ✅ [토픽 프로파일] 1순위: project_index.json (모든 프로젝트, Drive에서 사전 저장됨)
+        //                   2순위: localStorage 캐시 (이 세션에서 로드한 프로젝트 — 인덱스가 아직
+        //                   갱신 안 된 구버전 항목을 읽기 시점에 보정)
+        const _cached = _tpStore[c.drive_file_id] || null;
+        const _pick = (idxVal, profKey) => {
+            if (idxVal && idxVal.length) return idxVal;
+            return (_cached && _cached[profKey] && _cached[profKey].length) ? _cached[profKey] : null;
+        };
+        const _kw = _pick(c.topicKeywords, 'keywords');
+        const _tpKw = _kw ? ' | 🔑토픽: ' + _kw.slice(0, 8).join(', ') : '';
+
+        // ✅ [2026-10-21 신규, 사용자 요청] 요약·현재단계·판별단서를 후보 줄에 함께 노출.
+        //    여태 이 셋은 getSystemPrompt 래퍼를 통해 "열려 있는 프로젝트 1개"에만 주입돼
+        //    업무 *추출*에만 쓰였고, 정작 "어느 프로젝트인가"를 고르는 이 *매칭* 판단에는
+        //    키워드 8개만 왔다. 키워드는 토큰 나열이라 "지금 E3 생산 준비 중" 같은 맥락을
+        //    담지 못해서, 같은 고객사의 형제 프로젝트를 가를 때 특히 약했다.
+        //    ⚠️ 후보 수만큼 곱해지므로 길이는 인덱스 저장 시점(04c)에 이미 잘라 두었다.
+        const _sum  = (c.topicSummary || (_cached && _cached.summary) || '').trim();
+        const _ph   = (c.topicPhase   || (_cached && _cached.current_phase) || '').trim();
+        const _dist = _pick(c.topicDistinguishers, 'distinguishers');
+        const _ctx  = [];
+        if (_sum)  _ctx.push(`   📌 프로젝트 상황: ${_sum}`);
+        if (_ph)   _ctx.push(`   🔄 현재 단계: ${_ph}`);
+        if (_dist) _ctx.push(`   📧 이 프로젝트 메일을 알아보는 단서: ${_dist.slice(0, 4).join(' / ')}`);
+
+        const head = `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''}${_tpKw} [파일: ${c.file_name}]`;
+        return _ctx.length ? head + '\n' + _ctx.join('\n') : head;
     }).join('\n');
     // 💡 [하이브리드-A] 키워드 사전매칭 힌트 — 모델명·키워드가 메일 본문에 직접 등장하는 후보를
     //    AI에게 알려줌(강제 override 아님 — 맥락이 다르면 무시 가능). 후보의 40% 이하일 때만 표시
@@ -1550,6 +1566,15 @@ window._msBuildProjectMatchSection = function(candidateProjects, mailText, userH
         `후보 프로젝트 목록:\n${numbered}\n` + codeHint + kwPreHint +
         `이 메일이 실제로 다루는 "핵심 주제"가 위 목록 중 하나로 명확한지 판단하세요. 목록의 "참고 키워드"는 힌트일 뿐이니,\n` +
         `본문 맥락상 명백히 그 프로젝트 얘기면 키워드가 없어도 선택하세요. 반대로 키워드가 우연히 겹쳐도 실제 핵심 주제가 아니면 고르지 마세요.\n` +
+        // 💡 [2026-10-21 신규] 후보 줄 아래 들여쓰기로 붙는 📌/🔄/📧 3줄의 사용법.
+        //    이 설명이 없으면 AI가 그냥 장식으로 보고 키워드만 보던 기존 행동을 유지한다.
+        `※ 후보 번호 아래에 들여쓰기로 "📌 프로젝트 상황 / 🔄 현재 단계 / 📧 메일을 알아보는 단서"가 붙어 있을 수 있습니다.\n` +
+        `  이건 그 프로젝트의 간트차트에 실제로 쌓인 업무와, 이미 그 프로젝트로 확정된 과거 메일들에서 뽑아낸 요약입니다.\n` +
+        `  키워드가 겹치지 않아도 이 "상황·단계·단서"가 메일 내용과 맞아떨어지면 그 근거로 선택할 수 있고, 매칭근거에 그렇게 적으세요\n` +
+        `  (예: 메일이 E3 양산 준비 일정을 다루는데 후보의 현재 단계가 "E3 생산 준비"이고 단서에 그 부품이 있다면 강한 근거).\n` +
+        `  반대로 상황·단계가 전혀 맞지 않으면(이미 EOL인 프로젝트에 신규 개발 요청 등) 키워드가 겹쳐도 의심하세요.\n` +
+        `  ⚠️ 단, 이 3줄이 "없는" 후보는 아직 요약이 생성되지 않았을 뿐이며 비활성/무관하다는 뜻이 절대 아닙니다 — 불이익을 주지 마세요.\n` +
+        `  ⚠️ 또한 이 요약은 보조 근거입니다. 아래 관리번호 일치/불일치처럼 본문에서 직접 확인되는 결정적 근거가 있으면 그쪽이 우선입니다.\n` +
         `※ 브랜드명(고객사)이나 크기(인치)가 같다는 이유만으로 매칭하지 마세요 — 같은 브랜드가 여러 프로젝트를 가질 수 있습니다. 본문의 구체적 내용(모델 고유 코드, 요청 사항 등)까지 확인하세요.\n` +
         `※ 후보 중 이름이 같은 것들은 인치(크기)로 구별하세요.\n` +
         `- 핵심 주제가 명확하면: 해당 후보의 번호를 아래 필드에 적으세요.\n` +

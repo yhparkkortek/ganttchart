@@ -206,6 +206,9 @@
             .filter(function(m) { return m && m.useForAnalysis; })
             .flatMap(function(m) { return [m.ktkPn, m.description].filter(Boolean); });
         const keywords = Array.from(new Set(baseFields.concat(customKeywords).concat(materialKeywords)));
+        // ✅ [토픽 프로파일] 프로파일은 한 번만 읽어서 아래 네 필드가 같이 쓴다
+        //    (예전엔 topicKeywords IIFE 안에서만 읽었음)
+        const _topicProf = (window._getTopicProfile && window._getTopicProfile(driveFileId)) || null;
         return {
             drive_file_id: driveFileId,
             file_name: dynamicFileName,
@@ -222,10 +225,20 @@
             team: pm.팀 || pm.개발팀 || '',
             updated_at: new Date().toISOString(),
             // ✅ [토픽 프로파일] project_index.json에 키워드 압축 저장 — 메일 분류 시 추가 Drive 조회 없이 활용
-            topicKeywords: (function() {
-                var _prof = window._getTopicProfile && window._getTopicProfile(driveFileId);
-                return (_prof && _prof.keywords && _prof.keywords.length) ? _prof.keywords.slice(0, 10) : [];
-            })()
+            topicKeywords: (_topicProf && _topicProf.keywords && _topicProf.keywords.length)
+                ? _topicProf.keywords.slice(0, 10) : [],
+            // ✅ [2026-10-21 신규, 사용자 요청] 요약·현재단계·판별단서도 인덱스에 싣는다.
+            //    지금까지 프로파일의 이 세 필드는 getSystemPrompt 래퍼(js/26 맨 아래)를 통해
+            //    "지금 열려 있는 프로젝트 1개"에만 주입됐다 — 즉 메일에서 업무를 *추출*할 때의
+            //    배경지식으로만 쓰이고, "이 메일이 어느 프로젝트인가"를 고르는 *매칭* 판단에는
+            //    키워드 8개만 전달되고 있었다. 가장 변별력 있는 정보(지금 무슨 단계인지, 이
+            //    프로젝트 메일을 알아보는 단서가 뭔지)가 정작 매칭에 안 가던 셈.
+            //    후보는 Drive를 다시 읽지 않고 이 인덱스만 보므로, 여기 실어야 전 후보에 쓰인다.
+            //    ⚠️ 길이 제한은 프롬프트 비대화 방지 — 후보 수만큼 곱해져 들어간다.
+            topicSummary: (_topicProf && _topicProf.summary) ? String(_topicProf.summary).slice(0, 160) : '',
+            topicPhase: (_topicProf && _topicProf.current_phase) ? String(_topicProf.current_phase).slice(0, 60) : '',
+            topicDistinguishers: (_topicProf && _topicProf.distinguishers && _topicProf.distinguishers.length)
+                ? _topicProf.distinguishers.slice(0, 4).map(function(d) { return String(d).slice(0, 80); }) : []
         };
     };
 
