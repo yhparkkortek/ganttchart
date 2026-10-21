@@ -48,7 +48,9 @@ var _BC_NON_PROJECT_WORDS = [
     'MEETING','MINUTES','UPDATE','INFO','MOLD',
     // 사내 활동 (프로젝트 아님)
     '프론티어','FRONTIER','교육','세미나','워크샵','동호회','경조사','휴가','연차','근태','연장근로',
-    '참여율','신청서','출입','규정','정산','법인카드'
+    '참여율','신청서','출입','규정','정산','법인카드',
+    // 2026-10-21 실측 결과 표에서 관찰된 범용 토큰 (키로 쓰이면 서로 다른 건이 섞인다)
+    '담당자','스케쥴','스케줄','업데이트','주간업무보고','주간보고','업무보고','월간보고','2027년','2026년'
 ];
 var _BC_NON_PROJECT_SET = {};
 _BC_NON_PROJECT_WORDS.forEach(function(w) { _BC_NON_PROJECT_SET[_bcNorm(w)] = true; });
@@ -88,30 +90,35 @@ window._bcRuleClassify = function(cluster) {
  * 고객사 사전 — 기존 project_index의 customer + 주소록 회사명. 하드코딩 아님.
  * 실측에서 ZITRO/LNW/IGT는 전부 기존 프로젝트나 주소록에 이미 있는 이름이었다.
  */
-window._bcCustomerDict = function(projects, addressBook) {
+/**
+ * 🐛 [2026-10-21 버그수정, 실사용] 첫 구현은 주소록 이메일 도메인도 고객사 후보로 넣었다.
+ *    주소록은 대부분 **협력사·공급사**라서 ILLOIND(48건)·WINDTECH(15)·TAWHALES(7)·
+ *    KOREA-EMS(7) 같은 "고객사가 아닌 묶음"이 만들어졌다. 고객사는 등록된 프로젝트의
+ *    customer 필드가 유일한 근거다 — 주소록은 쓰지 않는다.
+ */
+window._bcCustomerDict = function(projects) {
     var set = {};
     (projects || []).forEach(function(p) {
         var c = String(p.customer || '').trim();
-        if (c.length >= 2) set[_bcNorm(c)] = c;
-    });
-    (addressBook || []).forEach(function(a) {
-        // 주소록 회사명 필드가 따로 없으므로 도메인 앞부분을 회사 후보로 쓴다 (kortek.co.kr → KORTEK)
-        var em = String(a.email || '').toLowerCase();
-        var at = em.indexOf('@');
-        if (at === -1) return;
-        var host = em.slice(at + 1).split('.')[0];
-        if (host.length >= 3) set[_bcNorm(host)] = host.toUpperCase();
+        if (c.length < 2) return;
+        var k = _bcNorm(c);
+        if (k) set[k] = c;
     });
     return set;
 };
 
-/** 군집(키 + 샘플 제목 + AI요약)에서 사전에 있는 고객사명을 찾는다 */
+/**
+ * 군집에서 사전에 있는 고객사명을 찾는다.
+ * 🐛 [2026-10-21 버그수정] 첫 구현은 샘플 제목·본문까지 뒤졌다. 사내 메일엔 자사명(코텍)이
+ *    거의 항상 들어 있어서 KORTEK 하나가 377건을 삼켰고, ZITRO 건(ICONIC·SPLENDIDUM)까지
+ *    그 밑으로 빨려 들어갔다. 근거를 **군집 키와 AI 요약**으로 좁힌다 — 둘 다 "이 군집이
+ *    무엇인가"를 직접 말하는 값이고, 본문처럼 지나가는 언급이 섞이지 않는다.
+ */
 function _bcDetectCustomer(cluster, dict) {
     var hay = _bcNorm([
         cluster.key,
-        ((cluster.aiVerdict || {}).summary || ''),
         ((cluster.aiVerdict || {}).customer || ''),
-        (cluster.samples || []).map(function(s) { return (s.subject || '') + ' ' + (s.snippet || ''); }).join(' ')
+        ((cluster.aiVerdict || {}).summary || '')
     ].join(' '));
     if (!hay) return '';
     var best = '', bestLen = 0;
@@ -120,6 +127,30 @@ function _bcDetectCustomer(cluster, dict) {
         if (k.length >= 3 && k.length > bestLen && hay.indexOf(k) !== -1) { best = dict[k]; bestLen = k.length; }
     });
     return best;
+}
+
+/**
+ * 💡 [2026-10-21 신규] 변별력 없는 이름 제거 — 자사명(코텍)처럼 거의 모든 군집에 걸리는 이름은
+ *    묶는 기준이 될 수 없다. 자사명을 코드에 박는 대신(법인이 여럿이고 팀마다 다름) "전체 군집의
+ *    _BC_DOMINANT_RATIO 이상에 걸리면 변별력 없음"이라는 규칙으로 데이터에서 찾아낸다.
+ *    실측에서 KORTEK이 90개 중 377건분을 삼킨 것이 정확히 이 경우였다.
+ */
+var _BC_DOMINANT_RATIO = 0.4;
+function _bcDropDominant(dict, clusters) {
+    var n = (clusters || []).length;
+    if (n < 5) return dict;                       // 표본이 적으면 판단하지 않는다
+    var hit = {};
+    clusters.forEach(function(c) {
+        var hay = _bcNorm([c.key, ((c.aiVerdict || {}).customer || ''), ((c.aiVerdict || {}).summary || '')].join(' '));
+        Object.keys(dict).forEach(function(k) { if (hay.indexOf(k) !== -1) hit[k] = (hit[k] || 0) + 1; });
+    });
+    var out = {}, dropped = [];
+    Object.keys(dict).forEach(function(k) {
+        if ((hit[k] || 0) / n >= _BC_DOMINANT_RATIO) { dropped.push(dict[k] + '(' + hit[k] + '/' + n + ')'); return; }
+        out[k] = dict[k];
+    });
+    if (dropped.length) console.info('[백로그 취합] 변별력 없어 제외한 이름:', dropped.join(', '));
+    return out;
 }
 
 /**
@@ -195,25 +226,45 @@ function _bcBuildPrompt(ruleResult, existingProjects) {
         + '  "reason":"왜 이렇게 묶었는지 1문장","keys":["포함한 군집 키","..."]}]';
 }
 
-/** AI 취합 1회 — 실패하면 null (규칙 결과만으로 표를 그린다) */
+/**
+ * AI 취합 1회. 성공하면 배열, 실패하면 {error:'사유'} — null을 돌려주지 않는다.
+ * 🐛 [2026-10-21 버그수정] 첫 구현이 callAiBackend의 반환을 문자열로 취급해 String(raw)를 했다.
+ *    이 함수는 {ok, data, modelUsed, …} 객체를 돌려주므로 String()이 "[object Object]"가 되고,
+ *    거기에 '['와 ']'가 들어 있어서 그 구간을 JSON.parse 하다 매번 터졌다 — 즉 AI 호출은 늘
+ *    성공했는데 결과를 통째로 버리고 "AI 취합 실패"로 표시하고 있었다.
+ *    다른 호출부와 동일하게 window._aiExtractText(r.data)로 꺼낸다(제공사 공통 추출기).
+ */
 async function _bcAiConsolidate(ruleResult, existingProjects, apiKey) {
-    if (!window.callAiBackend) return null;
+    if (!window.callAiBackend) return { error: 'callAiBackend 없음' };
     var prompt = _bcBuildPrompt(ruleResult, existingProjects);
-    try {
-        var raw = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
-        var txt = String(raw || '').replace(/```json|```/g, '').trim();
-        var s = txt.indexOf('['), e = txt.lastIndexOf(']');
-        if (s === -1 || e === -1) throw new Error('JSON 배열을 찾지 못함');
-        var arr = JSON.parse(txt.slice(s, e + 1));
-        return Array.isArray(arr) ? arr : null;
-    } catch (err) {
-        console.warn('[백로그 취합] AI 취합 실패 — 규칙 결과만 사용:', err && err.message);
+    var fail = function(why, extra) {
+        console.warn('[백로그 취합] AI 취합 실패:', why, extra || '');
         if (window._issueLog) window._issueLog({
             domain: 'ai', kind: 'bc_consolidate_failed', route: 'backlog-consolidate',
-            result: { errorRaw: String((err && err.message) || err) }
+            result: { errorRaw: String(why) }, env: { promptKB: Math.round(prompt.length / 1024) }
         });
-        return null;
+        return { error: String(why) };
+    };
+    var r;
+    try {
+        r = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; }, feature: 'backlog-consolidate' });
+    } catch (err) {
+        return fail((err && err.message) || err);
     }
+    if (!r || !r.ok) return fail((r && (r.error || r.message)) || 'AI 응답 실패', r);
+    var txt = (window._aiExtractText ? window._aiExtractText(r.data) : '') || '';
+    if (!txt.trim()) return fail('AI가 빈 응답을 반환했습니다', r);
+    txt = txt.replace(/```json/gi, '').replace(/```/g, '').trim();
+    // 설명문 안의 대괄호에 속지 않도록, '['마다 끝에서부터 줄여가며 파싱을 시도한다
+    for (var s = txt.indexOf('['); s !== -1; s = txt.indexOf('[', s + 1)) {
+        for (var e = txt.lastIndexOf(']'); e > s; e = txt.lastIndexOf(']', e - 1)) {
+            try {
+                var arr = JSON.parse(txt.slice(s, e + 1));
+                if (Array.isArray(arr) && arr.length) return arr;
+            } catch (ignore) { /* 다음 후보 구간 */ }
+        }
+    }
+    return fail('응답에서 JSON 배열을 찾지 못했습니다', txt.slice(0, 200));
 }
 
 // ── 취합 본체 (생성 안 함 — 미리보기/테스트용으로 따로 노출) ───────────
@@ -234,18 +285,20 @@ window._bcAnalyze = async function() {
         return c.status !== 'created' && c.status !== 'dismissed' && (c.count || 0) >= _BC_MIN_COUNT;
     }).sort(function(a, b) { return (b.count || 0) - (a.count || 0); }).slice(0, _BC_MAX_AI_INPUT);
 
-    var dict = window._bcCustomerDict(projects,
-        (window.AddressBook && window.AddressBook.load) ? window.AddressBook.load() : []);
+    var dict = _bcDropDominant(window._bcCustomerDict(projects), live);
     var ruleResult = window._bcRuleGroup(live, dict);
 
     var apiKey = window.getActiveAiKey && window.getActiveAiKey();
-    var ai = apiKey ? await _bcAiConsolidate(ruleResult, projects, apiKey) : null;
+    var ai = apiKey ? await _bcAiConsolidate(ruleResult, projects, apiKey)
+                    : { error: _t('AI API 키가 설정되지 않았습니다.', 'No AI API key is set.') };
+    var aiErr = (ai && ai.error) ? ai.error : '';
+    var aiRows = Array.isArray(ai) ? ai : null;
 
     return {
         indexFileId: indexFileId, indexData: indexData,
         totalClusters: all.length, consideredClusters: live.length,
-        rule: ruleResult, ai: ai,
-        rows: _bcBuildRows(ruleResult, ai, live)
+        rule: ruleResult, ai: aiRows, aiError: aiErr,
+        rows: aiRows ? _bcBuildRows(ruleResult, aiRows, live) : []
     };
 };
 
@@ -463,6 +516,24 @@ window._bcOpenModal = async function() {
 
 function _bcRender(ctx) {
     var rows = ctx.rows;
+    // ⚠️ [2026-10-21] AI 취합이 실패하면 표를 그리지 않는다.
+    //    규칙만으로 묶은 결과는 "같은 고객사면 전부 한 줄"이라 제품이 섞인다(실측에서 ZITRO의
+    //    여러 제품이 한 줄로, 다른 고객 건까지 함께 들어왔다). 그 표로 프로젝트를 만들면
+    //    잘못된 프로젝트가 후보 목록에 영구히 남으므로, 나쁜 폴백은 없느니만 못하다.
+    if (ctx.aiError) {
+        _bcStatus('⚠️ ' + _t('AI 취합 실패 — ', 'AI consolidation failed — ') + ctx.aiError);
+        document.getElementById('bc-body').innerHTML =
+            '<div style="padding:18px; font-size:12.5px; color:#8a4b00; background:#fff8e6; border:1px solid #ffe08a; border-radius:8px; line-height:1.7;">'
+            + '<b>' + _t('AI 취합이 실패해서 표를 만들지 않았습니다.', 'The table was not built because AI consolidation failed.') + '</b><br>'
+            + _t('규칙만으로는 같은 고객사의 서로 다른 제품이 한 줄로 섞여, 잘못된 프로젝트가 만들어질 수 있습니다.',
+                 'Rules alone merge different products of the same customer into one row, which would create wrong projects.') + '<br><br>'
+            + '<code style="background:#fff; padding:3px 6px; border-radius:4px; display:inline-block; max-width:100%; overflow-wrap:break-word;">'
+            + _bcEsc(ctx.aiError) + '</code><br><br>'
+            + _t('AI 상태를 확인한 뒤 다시 열어주세요.', 'Check the AI status and reopen.') + '</div>';
+        var _sum0 = document.getElementById('bc-summary');
+        if (_sum0) _sum0.textContent = '';
+        return;
+    }
     _bcStatus(_t(
         '군집 ' + ctx.totalClusters + '개 중 ' + ctx.consideredClusters + '개(' + _BC_MIN_COUNT + '건 이상)를 취합 → ' + rows.length + '줄'
         + (ctx.ai ? ' · AI 취합 적용됨' : ' · ⚠️ AI 취합 실패 — 규칙 결과만'),
