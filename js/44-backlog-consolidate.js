@@ -542,7 +542,10 @@ function _bcRender(ctx) {
 
     var html = '<table style="width:100%; border-collapse:collapse; font-size:12px; background:#fff;">'
         + '<thead><tr style="background:#f1f3f5; text-align:left;">'
-        + '<th style="padding:6px 8px; width:34px;"></th>'
+        // 💡 [2026-10-21] 헤더 체크박스로 전체 선택/해제 — 줄이 수십 개라 하나씩 누르면 못 쓴다.
+        //    일부만 선택된 상태는 indeterminate(―)로 보여준다.
+        + '<th style="padding:6px 8px; width:34px;"><input type="checkbox" id="bc-chk-all" title="'
+        + _t('전체 선택 / 해제', 'Select / clear all') + '" style="cursor:pointer;"></th>'
         + '<th style="padding:6px 8px;">' + _t('고객사', 'Customer') + '</th>'
         + '<th style="padding:6px 8px;">' + _t('제품/모델명', 'Product / model') + '</th>'
         + '<th style="padding:6px 8px; width:60px; text-align:right;">' + _t('메일', 'Mails') + '</th>'
@@ -573,7 +576,25 @@ function _bcRender(ctx) {
           + '· Red rows are dismissed from the queue without creating anything.') + '</div>';
     document.getElementById('bc-body').innerHTML = html;
     _bcUpdateSummary();
-    document.getElementById('bc-body').addEventListener('change', _bcUpdateSummary);
+    // 💡 위임 한 곳에서 처리 — 헤더 체크박스면 전체 토글, 아니면 요약만 갱신
+    document.getElementById('bc-body').addEventListener('change', function(e) {
+        if (e.target && e.target.id === 'bc-chk-all') {
+            var on = e.target.checked;
+            document.querySelectorAll('#bc-body .bc-chk').forEach(function(c) { c.checked = on; });
+        }
+        _bcUpdateSummary();
+    });
+}
+
+/** 헤더 체크박스 상태를 개별 선택에 맞춘다 (전부/일부/없음) */
+function _bcSyncHeaderCheckbox() {
+    var all = document.querySelectorAll('#bc-body .bc-chk');
+    var head = document.getElementById('bc-chk-all');
+    if (!head || !all.length) return;
+    var on = 0;
+    all.forEach(function(c) { if (c.checked) on++; });
+    head.checked = (on === all.length);
+    head.indeterminate = (on > 0 && on < all.length);
 }
 
 function _bcSelected() {
@@ -600,6 +621,7 @@ function _bcUpdateSummary() {
     var mk = sel.filter(function(r) { return r.isProject; });
     var rj = sel.filter(function(r) { return !r.isProject; });
     var keys = sel.reduce(function(s, r) { return s + r.keys.length; }, 0);
+    _bcSyncHeaderCheckbox();
     var el = document.getElementById('bc-summary');
     if (el) el.textContent = _t(
         '생성 ' + mk.length + '개 · 기각 ' + rj.length + '줄 · 큐에서 비워질 군집 ' + keys + '개',

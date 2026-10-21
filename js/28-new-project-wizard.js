@@ -221,8 +221,17 @@ function _renderStep4(body) {
         '<div style="font-size:13px; font-weight:bold; color:#333; margin:16px 0 8px;">' + _t('KTK PN_모델명', 'KTK PN_Model') +
         ' <span style="font-weight:normal; font-size:11px; color:#888;">(' + _t('선택', 'optional') + ')</span></div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">' + _t('형식', 'Format') + ': <code style="background:#f8f9fa;padding:1px 5px;border-radius:3px;">502574_MAIN>KTS320DPS01,LNW</code></div>' +
+        // 💡 [2026-10-21 신규] 사내 명명 규칙(KORTEK Model name Descriptions V10)대로 한 글자씩
+        //    골라 모델명을 만들어 주는 보조 창(js/45). 규칙을 외우지 않아도 되고, 규칙이 개정되면
+        //    그 파일의 표만 고치면 된다.
+        '<div style="display:flex; gap:6px; align-items:stretch;">' +
         '<input id="npw-ktkpn" type="text" placeholder="' + _t('예: 502574_MAIN>KTS320DPS01,LNW', 'e.g. 502574_MAIN>KTS320DPS01,LNW') + '" value="' + ktkpn + '" ' +
-        'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; font-family:monospace;">' +
+        'style="flex:1; min-width:0; box-sizing:border-box; padding:10px 14px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; font-family:monospace;">' +
+        '<button type="button" onclick="window._mnbOpen && window._mnbOpen(\'npw-ktkpn\')" ' +
+        'onmouseover="this.style.background=\'#d8f0d8\';" onmouseout="this.style.background=\'#eaf7ea\';" ' +
+        'title="' + _t('사내 규칙대로 KORTEK 모델명을 만들어 넣습니다', 'Build a KORTEK model name by the in-house rule') + '" ' +
+        'style="flex-shrink:0; padding:0 12px; background:#eaf7ea; color:#1f6a3a; border:1.5px solid #a8dab8; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s;">🧩 ' +
+        _t('모델명 만들기', 'Build name') + '</button></div>' +
         '<div style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">' +
         _t('※ 아직 채번 전(RFQ·견적·문의 단계)이면 비워두세요 — 🟢 <b>MP(EC)(임시)</b>로 등록되어 바로 메일 자동매칭 후보가 됩니다. 🔵 DV로 승격할 때 입력하면 됩니다.',
            '※ Leave it empty if the part number does not exist yet (RFQ / quote / inquiry stage) — the project is registered as 🟢 <b>MP(EC)</b> (draft) and joins mail auto-matching right away. Fill it in when promoting to 🔵 DV.') + '</div>';
