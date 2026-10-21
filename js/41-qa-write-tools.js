@@ -117,12 +117,17 @@
             title: '근무계획 수정 신청서 칸 채우기',
             desc: '인사관리 근무계획 수정 신청서를 열어 **칸만 채운다. [등록]은 누르지 않는다** — '
                 + '사람이 화면을 보고 직접 누른다. 시간은 **변경 후** 시간이고, 한쪽만 주면 '
-                + '다른 쪽은 기존 계획시간을 그대로 유지한다. 이 화면은 분을 00/30만 받는다.',
+                + '다른 쪽은 기존 계획시간을 그대로 유지한다. 이 화면은 분을 00/30만 받는다. '
+                + '식사유형(점심/저녁)도 채울 수 있다 — 화면이 **둘 다** 요구하므로 한쪽만 주면 '
+                + '다른 쪽은 기존값을 유지한다. 사용자가 말하지 않은 식사유형을 지어내지 마라.',
             method: 'POST', path: '/insa/fill-workplan',
             params: [
                 { name: 'date', type: 'date', req: true, desc: '근무일자 YYYY-MM-DD' },
                 { name: 'start', type: 'time', desc: '변경 후 출근 HH:MM (생략하면 기존 계획 유지)' },
                 { name: 'end', type: 'time', desc: '변경 후 퇴근 HH:MM (생략하면 기존 계획 유지)' },
+                // 코드·이름 둘 다 받는다(화면 콤보에서 실제 값을 읽어 맞춘다 — 백엔드에서 처리)
+                { name: 'lunch', type: 'text', max: 10, desc: '식사유형(점심): 식사·휴게·근무·해당없음' },
+                { name: 'dinner', type: 'text', max: 10, desc: '식사유형(저녁): 식사·휴게·근무·해당없음' },
                 { name: 'subject', type: 'text', max: 100, desc: '제목' },
                 { name: 'content', type: 'text', max: 2000, desc: '신청 사유' },
                 { name: 'remark', type: 'text', max: 200, desc: '비고' }

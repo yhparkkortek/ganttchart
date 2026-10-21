@@ -153,6 +153,7 @@ def form_state():
         "              start: cell(a[i],'workSTime'), end: cell(a[i],'workETime'),"
         "              afS: cell(a[i],'afSHour') + ':' + cell(a[i],'afSMin'),"
         "              afE: cell(a[i],'afEHour') + ':' + cell(a[i],'afEMin'),"
+        "              lunch: cell(a[i],'lunchType'), dinner: cell(a[i],'dinnerType'),"
         "              remark: cell(a[i],'remark') }); } }"
         " return { subject: ($('#req_subject').val()||''), content: ($('#req_content').val()||''),"
         "          rowCount: n, rows: out };"
@@ -160,7 +161,35 @@ def form_state():
     return _ev(expr)
 
 
-def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=None, remark=None):
+def _meal_options():
+    """식사유형 콤보가 **실제로 가진** 값을 화면에서 읽어 온다.
+
+    코드표를 여기에 박지 않는다(하드코딩 지양 — CLAUDE.md). 실측값은
+    `01=식사 / 02=휴게 / 03=근무 / 04=해당없음` 이지만, 바뀌면 화면을 따라간다.
+    """
+    raw = _ev("(function(){ var o = [];"
+              " $('#iMealTypeLunch option').each(function(){"
+              "   o.push({ v: this.value, t: $(this).text().trim() }); });"
+              " return JSON.stringify(o); })()") or '[]'
+    return [o for o in json.loads(raw) if o.get('v')]
+
+
+def _meal_code(want, opts):
+    """'01' 같은 코드도, '식사'·'휴게' 같은 이름도 받는다. 못 알아보면 None."""
+    s = str(want or '').strip()
+    if not s:
+        return None
+    for o in opts:
+        if s == o['v'] or s == o['t']:
+            return o['v']
+    for o in opts:                      # '식사유형' 처럼 말을 덧붙인 경우까지
+        if o['t'] and o['t'] in s:
+            return o['v']
+    return None
+
+
+def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=None, remark=None,
+                       lunch=None, dinner=None):
     """근무계획 수정 신청서의 칸을 채운다. **등록은 누르지 않는다.**
 
     date  'YYYY-MM-DD'      근무일자
@@ -273,7 +302,45 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
         time.sleep(1.0)
         steps.append('근무시간 ' + (f'{sh}:{sm}' if sh else '…') + ' ~ ' + (f'{eh}:{em}' if eh else '…'))
 
-    # 5) 제목 / 사유
+    # 5) 식사유형 일괄입력 — ⚠️ 반드시 날짜·시간 **뒤에.**
+    #    · 근무일자 일괄입력이 lunchType/dinnerType 을 **지운다**(소스 156~157행).
+    #    · 이 버튼은 날짜와 afS/afE 가 다 차 있어야 돌아간다("근무일자 및 시간을 선택하세요").
+    #    · 점심·저녁 **둘 다** 골라야 한다 — 한쪽만 비면 거부한다(소스 233~241행).
+    #      그래서 안 준 쪽은 시간과 같은 원칙으로 **기존값**(o_lunch/o_dinner)을 쓴다.
+    if lunch is not None or dinner is not None:
+        opts = _meal_options()
+        if not opts:
+            return done('식사유형 선택값을 읽지 못했습니다.')
+        cur = _ev("(function(){ if (typeof myGrid === 'undefined') return '';"
+                  " var id = String(myGrid.getAllRowIds()||'').split(',')[0]; if (!id) return '';"
+                  " var g = function(c){ try { return myGrid.cells(id, myGrid.getColIndexById(c)).getValue(); }"
+                  "                      catch(e){ return ''; } };"
+                  " return g('o_lunch') + '~' + g('o_dinner'); })()") or ''
+        cur_l, _, cur_d = str(cur).partition('~')
+        names = ', '.join(o['v'] + '=' + o['t'] for o in opts)
+        lc = _meal_code(lunch, opts) if lunch is not None else (cur_l or None)
+        dc = _meal_code(dinner, opts) if dinner is not None else (cur_d or None)
+        if lunch is not None and not lc:
+            return done(f'식사유형(점심) "{lunch}" 를 알아볼 수 없습니다. 가능한 값: {names}')
+        if dinner is not None and not dc:
+            return done(f'식사유형(저녁) "{dinner}" 를 알아볼 수 없습니다. 가능한 값: {names}')
+        if not lc or not dc:
+            return done('이 화면은 식사유형 점심·저녁을 **둘 다** 받아야 적용합니다. '
+                        f'한쪽만 주셨고 기존값도 비어 있습니다. 가능한 값: {names}')
+        if lunch is None:
+            steps.append('점심은 기존값 유지')
+        if dinner is None:
+            steps.append('저녁은 기존값 유지')
+        if not _fire("(function(){ $('#iMealTypeLunch').val(%s); $('#iMealTypeDinner').val(%s);"
+                     " $('#inputAllMealBtn').click(); return true; })()"
+                     % (json.dumps(lc), json.dumps(dc))):
+            return done('식사유형 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
+                        extra={'busy': True})
+        time.sleep(1.0)
+        _lbl = {o['v']: o['t'] for o in opts}
+        steps.append(f'식사유형 점심 {_lbl.get(lc, lc)} / 저녁 {_lbl.get(dc, dc)}')
+
+    # 6) 제목 / 사유
     if subject is not None:
         _ev("(function(){ $('#req_subject').val(%s); return true; })()" % json.dumps(str(subject)))
         steps.append('제목')
@@ -281,7 +348,7 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
         _ev("(function(){ $('#req_content').val(%s); return true; })()" % json.dumps(str(content)))
         steps.append('사유')
 
-    # 6) 비고(그리드 remark 열)
+    # 7) 비고(그리드 remark 열)
     if remark is not None:
         _ev("(function(){ if (typeof myGrid === 'undefined') return false;"
             " var ids = String(myGrid.getAllRowIds()||''); if (!ids) return false;"

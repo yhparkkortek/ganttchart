@@ -3398,7 +3398,8 @@ def insa_fill_workplan():
             return jsonify(opened)
         out = insa_write.fill_workplan_edit(
             date=d.get('date'), start=d.get('start'), end=d.get('end'),
-            subject=d.get('subject'), content=d.get('content'), remark=d.get('remark'))
+            subject=d.get('subject'), content=d.get('content'), remark=d.get('remark'),
+            lunch=d.get('lunch'), dinner=d.get('dinner'))
         out['openedWindow'] = bool(opened.get('opened'))
         return jsonify(out)
     except Exception as e:
