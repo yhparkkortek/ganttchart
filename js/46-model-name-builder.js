@@ -116,6 +116,18 @@ window._mnbCustomerOptions = function() {
             return k2 === key || k2.indexOf(key) !== -1 || key.indexOf(k2) !== -1;
         });
         if (dup) return;
+
+        // 💡 [2026-10-21] 카탈로그에 code가 **적혀 있으면** 사람이 정해준 것이다 — 이미 쓰이는
+        //    코드와 겹쳐도 충돌이 아니라 의도된 공유로 본다. 사내 규칙이 지역 코드(1~4)를 폴백으로
+        //    두고 있어서, 전용 코드가 없는 고객사는 지역 코드를 함께 쓴다(예: AMUSNET=2 EUROPEAN).
+        //    ⚠️ 대신 모델명만으로는 둘을 구분할 수 없다 — 그래서 화면에 어느 코드를 함께 쓰는지 밝힌다.
+        if (c.code) {
+            var fixed = String(c.code).toUpperCase();
+            added.push({ code: fixed, name: nm, src: 'catalog', aliasOf: taken[fixed] || '' });
+            return;
+        }
+
+        // code가 없으면 앞자리로 자동 배정 — 이건 겹치면 임의 배정이 되므로 경고로 돌린다
         var ch = key.charAt(0);
         if (!ch) return;
         if (taken[ch]) { clash.push({ name: nm, code: ch, taken: taken[ch] }); return; }
@@ -197,8 +209,11 @@ function _mnbOptionsHtml(key, list, cur) {
             + _mnbEsc(o.name + (o.legacy ? ' — ' + _t('현재는 E(Extra)로 통합', 'merged into E (Extra)') : '')
                      + (o.uncertain ? ' / ' + _t('원본 문서 판독 불확실 — 확인 필요', 'uncertain reading of the source doc') : '')
                      // 카탈로그에서 온 회사는 사내 문서 표에 없는 것 — 앞자리로 임시 배정한 코드다
-                     + (o.src === 'catalog' ? ' — ' + _t('고객사 카탈로그(앞자리 코드) · 사내 규칙 문서에는 없음',
-                                                         'from the customer catalog (first-letter code) · not in the in-house rule doc') : '')) + '">'
+                     + (o.src === 'catalog' ? ' — ' + (o.aliasOf
+                            ? _t('코드 ' + o.code + '를 "' + o.aliasOf + '"와 함께 씁니다 — 모델명만으로는 둘을 구분할 수 없습니다',
+                                 'shares code ' + o.code + ' with "' + o.aliasOf + '" — the model name cannot tell them apart')
+                            : _t('고객사 카탈로그(앞자리 코드) · 사내 규칙 문서에는 없음',
+                                 'from the customer catalog (first-letter code) · not in the in-house rule doc')) : '')) + '">'
             + '<b>' + _mnbEsc(o.code) + '</b> ' + _mnbEsc(label) + mark + '</span>';
     }).join('');
 }

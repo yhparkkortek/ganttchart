@@ -229,7 +229,12 @@ window.CUSTOMER_CATALOG = window.CUSTOMER_CATALOG || [
     { name: 'ZITRO',      code: 'Z', src: 'doc' },
     { name: 'KONAMI',     code: 'K', src: 'doc' },
     // ── 이 앱 데이터에서 실제로 쓰이는 고객사 ──
-    { name: 'AMUSNET',    src: 'app' },
+    // 🏷️ [2026-10-21 사용자 지정] AMUSNET은 불가리아 회사라 지역 코드 2(EUROPEAN AREA)를 쓴다.
+    //    code를 사람이 직접 적어준 경우는 "앞자리 자동 배정"과 달리 **의도된 것**이므로, 이미
+    //    쓰이는 코드와 겹쳐도 충돌 경고 없이 그대로 쓴다(js/46 _mnbCustomerOptions 참고).
+    //    ⚠️ 대신 모델명만 보고는 AMUSNET과 EUROPEAN AREA를 구분할 수 없다 — 코드를 공유한다는 건
+    //    그런 뜻이고, 사내 규칙이 원래 그렇게 지역 코드를 폴백으로 두고 있다.
+    { name: 'AMUSNET',    code: '2', src: 'app' },
     { name: 'KGI',        src: 'app' },
     { name: 'INTRALOT',   src: 'app' },
     { name: 'UNIDESA',    src: 'app' },
