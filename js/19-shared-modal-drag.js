@@ -140,7 +140,7 @@ window._clampAllModals = function() {
 window._makeResizable = function(boxId, _retry) {
     const box = document.getElementById(boxId);
     // 일부 모달은 박스를 나중에 만들면서 _makeDraggable을 먼저 부른다(드래그는 핸들러 안에서
-    // getElementById를 해서 괜찮지만, 손잡이는 지금 붙여야 한다) — 한 번만 뒤로 미뤄 재시도한다.
+    // getElementById를 해서 괜찮지만, 여기선 지금 요소가 있어야 한다) — 한 번만 미뤄 재시도.
     if (!box) {
         if (!_retry) setTimeout(function() { window._makeResizable(boxId, true); }, 300);
         return;
@@ -149,35 +149,54 @@ window._makeResizable = function(boxId, _retry) {
     box.dataset.mresz = '1';
     if (window._resizableBoxIds.indexOf(boxId) === -1) window._resizableBoxIds.push(boxId);
 
-    // 기존 CSS resize는 끈다 — 손잡이가 둘이 되면 서로 싸운다(모서리에서 네이티브가 먼저 먹음)
+    // 기존 CSS resize는 끈다 — 두 방식이 겹치면 모서리에서 네이티브가 먼저 먹어 서로 싸운다
     box.style.resize = 'none';
 
-    // 손잡이는 박스 "안쪽" 가장자리에 둔다 — 대부분의 모달이 overflow:hidden이라 바깥에 두면 잘린다
-    // ⚠️ 손잡이는 박스 안쪽에 있으므로 헤더 버튼(✕ 등) 위를 덮을 수 있다 — 얇게 둔다.
-    //    헤더가 보통 45px 높이에 28px 버튼이 세로 중앙(= 위에서 약 8px부터)이라, 모서리 10px면
-    //    버튼에 2px 정도만 걸쳐 실사용에 지장이 없다.
-    const T = 5, C = 10; // 변 두께 / 모서리 크기
-    const defs = [
-        { d: 'n',  css: 'top:0; left:' + C + 'px; right:' + C + 'px; height:' + T + 'px; cursor:ns-resize;' },
-        { d: 's',  css: 'bottom:0; left:' + C + 'px; right:' + C + 'px; height:' + T + 'px; cursor:ns-resize;' },
-        { d: 'w',  css: 'left:0; top:' + C + 'px; bottom:' + C + 'px; width:' + T + 'px; cursor:ew-resize;' },
-        { d: 'e',  css: 'right:0; top:' + C + 'px; bottom:' + C + 'px; width:' + T + 'px; cursor:ew-resize;' },
-        { d: 'nw', css: 'top:0; left:0; width:' + C + 'px; height:' + C + 'px; cursor:nwse-resize;' },
-        { d: 'ne', css: 'top:0; right:0; width:' + C + 'px; height:' + C + 'px; cursor:nesw-resize;' },
-        { d: 'sw', css: 'bottom:0; left:0; width:' + C + 'px; height:' + C + 'px; cursor:nesw-resize;' },
-        { d: 'se', css: 'bottom:0; right:0; width:' + C + 'px; height:' + C + 'px; cursor:nwse-resize;' }
-    ];
-    defs.forEach(function(def) {
-        const h = document.createElement('div');
-        h.className = 'modal-resize-handle';
-        h.dataset.dir = def.d;
-        h.style.cssText = 'position:absolute; z-index:20; background:transparent; touch-action:none; ' + def.css;
-        box.appendChild(h);
-    });
-
-    let rs = null;
+    // 🐛 [2026-10-21 버그수정, 사용자 제보 "버튼이 안 눌린다"]
+    //    처음엔 8방향 손잡이를 <div>로 박스 안쪽 가장자리에 깔았다. 그 투명한 띠가 바로 아래에 있는
+    //    버튼·스크롤바 위를 덮어 클릭을 먹었다(보관함 하단 버튼들이 대표적).
+    //    → 덮개를 아예 두지 않는다. 박스 위에서 마우스가 "가장자리 몇 px 안"에 있는지를 그때그때
+    //    계산해서 커서를 바꾸고, 그 상태에서 누를 때만 리사이즈로 가로챈다. 화면을 가리는 요소가
+    //    없으므로 어떤 버튼도 막힐 수 없다. 게다가 버튼/입력 위에서는 아예 가로채지 않는다.
+    const EDGE = 6;                       // 가장자리로 인식할 두께(px)
     const minW = parseInt(box.style.minWidth, 10)  || 280;
     const minH = parseInt(box.style.minHeight, 10) || 160;
+    let hoverDir = '';
+    let rs = null;
+
+    const dirAt = function(x, y) {
+        const r = box.getBoundingClientRect();
+        if (x < r.left - EDGE || x > r.right + EDGE || y < r.top - EDGE || y > r.bottom + EDGE) return '';
+        let d = '';
+        if (y - r.top    <= EDGE) d += 'n';
+        if (r.bottom - y <= EDGE) d += 's';
+        if (x - r.left   <= EDGE) d += 'w';
+        if (r.right - x  <= EDGE) d += 'e';
+        return d;
+    };
+    const cursorFor = function(d) {
+        if (d === 'n' || d === 's') return 'ns-resize';
+        if (d === 'e' || d === 'w') return 'ew-resize';
+        if (d === 'nw' || d === 'se') return 'nwse-resize';
+        if (d === 'ne' || d === 'sw') return 'nesw-resize';
+        return '';
+    };
+    // 가장자리라도 버튼/입력 위면 리사이즈로 가로채지 않는다 — 클릭이 최우선
+    const isInteractive = function(t) {
+        return !!(t && t.closest && t.closest('button, input, select, textarea, a, [onclick], .mnb-opt, .mnb-mode'));
+    };
+
+    box.addEventListener('mousemove', function(e) {
+        if (rs) return;
+        const d = isInteractive(e.target) ? '' : dirAt(e.clientX, e.clientY);
+        if (d === hoverDir) return;
+        hoverDir = d;
+        box.style.cursor = cursorFor(d);   // 빈 문자열이면 원래 커서로 돌아간다
+    });
+    box.addEventListener('mouseleave', function() {
+        if (rs) return;
+        hoverDir = ''; box.style.cursor = '';
+    });
 
     const startResize = function(dir, x, y) {
         const r = box.getBoundingClientRect();
@@ -198,10 +217,10 @@ window._makeResizable = function(boxId, _retry) {
         if (rs.dir.indexOf('s') !== -1) h = rs.h + dy;
         if (rs.dir.indexOf('w') !== -1) { w = rs.w - dx; left = rs.left + dx; }
         if (rs.dir.indexOf('n') !== -1) { h = rs.h - dy; top  = rs.top  + dy; }
-        // 최소 크기 — 왼쪽/위로 줄일 때는 좌표도 같이 되돌려야 반대편이 밀리지 않는다
+        // 최소 크기 — 왼쪽/위로 줄일 때는 좌표도 같이 되돌려야 반대편 변이 밀리지 않는다
         if (w < minW) { if (rs.dir.indexOf('w') !== -1) left = rs.left + (rs.w - minW); w = minW; }
         if (h < minH) { if (rs.dir.indexOf('n') !== -1) top  = rs.top  + (rs.h - minH); h = minH; }
-        // 화면 밖으로 못 나가게 — 끌다가 가장자리를 넘으면 그 변은 거기서 멈춘다
+        // 화면 밖으로 못 나가게 — 가장자리를 넘으면 그 변은 거기서 멈춘다
         if (left < GAP) { w -= (GAP - left); left = GAP; }
         if (top  < GAP) { h -= (GAP - top);  top  = GAP; }
         if (left + w > window.innerWidth  - GAP) w = window.innerWidth  - GAP - left;
@@ -217,20 +236,26 @@ window._makeResizable = function(boxId, _retry) {
         if (!rs) return;
         rs = null;
         document.body.style.userSelect = '';
+        box.style.cursor = '';
+        hoverDir = '';
     };
 
     box.addEventListener('mousedown', function(e) {
-        const h = e.target.closest ? e.target.closest('.modal-resize-handle') : null;
-        if (!h || !box.contains(h)) return;
-        startResize(h.dataset.dir, e.clientX, e.clientY);
+        if (isInteractive(e.target)) return;            // 버튼/입력이 항상 이긴다
+        const d = dirAt(e.clientX, e.clientY);
+        if (!d) return;
+        startResize(d, e.clientX, e.clientY);
         // preventDefault만 — stopPropagation까지 하면 _bindClickToFront(맨 앞으로)가 안 걸린다
         e.preventDefault();
     });
     box.addEventListener('touchstart', function(e) {
-        const h = e.target.closest ? e.target.closest('.modal-resize-handle') : null;
-        if (!h || !e.touches.length) return;
-        startResize(h.dataset.dir, e.touches[0].clientX, e.touches[0].clientY);
+        if (!e.touches.length || isInteractive(e.target)) return;
+        const t = e.touches[0];
+        const d = dirAt(t.clientX, t.clientY);
+        if (!d) return;
+        startResize(d, t.clientX, t.clientY);
     }, { passive: true });
+
     document.addEventListener('mousemove', function(e) { if (rs) moveResize(e.clientX, e.clientY); });
     document.addEventListener('mouseup', endResize);
     document.addEventListener('touchmove', function(e) {
@@ -255,7 +280,6 @@ window._makeResizable = function(boxId, _retry) {
     } catch (e) { /* 구형 브라우저 — 창 크기 변경 시 보정은 아래에서 계속 동작 */ }
 };
 
-// 창 크기가 바뀌면(브라우저 축소·회전·개발자도구 열기) 열려 있는 모달을 전부 화면 안으로 되돌린다
 window.addEventListener('resize', function() {
     clearTimeout(window._clampModalsTimer);
     window._clampModalsTimer = setTimeout(window._clampAllModals, 120);

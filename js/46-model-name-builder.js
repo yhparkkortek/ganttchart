@@ -6,9 +6,10 @@
    · 구조:  KT + 제품구분(1) + 외형/크기(3) + 입력전원(1) + 터치(1) + 고객사(1) + 일련번호(2)
      예)   KTS195DPI01  =  KT · S(STD) · 195(19.5인치) · D(DC) · P(PCT) · I(I.G.T) · 01
    · 코드가 아니라 **데이터**다(MNB_CHART) — 규칙이 개정되면 이 표만 고친다.
-     ⚠️ 원본 문서의 표가 셀 경계 없이 추출돼서, 제품구분 일부 약어는 판독이 불확실하다.
-     불확실한 항목은 uncertain:true로 표시해 화면에 "확인 필요"로 뜬다 — 사람이 보고
-     고칠 수 있게 하되, 틀린 값을 맞는 것처럼 보여주지 않는다.
+   · 표 값은 Word 표를 **셀 단위로** 읽어 확정했다(2026-10-21). 처음엔 문서를 통짜 텍스트로
+     뽑아 읽어서 제품구분·터치·고객사에 오류가 있었다(아래 각 항목 주석 참고) — 표가 셀 경계
+     없이 한 줄로 이어져 나오면 추측이 섞인다. 다시 확인할 일이 있으면 Word COM으로
+     doc.Tables(n).Cell(r,c).Range.Text 를 읽을 것.
    ----------------------------------------------------------------
    · window._mnbOpen(targetInputId)   빌더 열기 (완성되면 그 입력란에 삽입)
    · window._mnbCompose(sel)          선택값 → 모델명 문자열 (순수함수, 테스트 가능)
@@ -24,24 +25,22 @@ var _t  = function(ko, en) { return _en() ? en : ko; };
 // ── 명명 규칙 표 (문서 V10) ───────────────────────────────────────────
 window.MNB_CHART = {
     prefix: 'KT',
-    // 2. 제품 구분 (문서의 주황색 칸)
-    //    Rev05: Product type 삭제 => R(Resized), E(Etc)
-    //    Rev08: Z, P, T, M -> "E(Extra)" 로 통합 · "N(LED)" 추가
-    //    → 아래 legacy:true 는 "지금은 E로 통합돼 쓰지 않는다"는 뜻(이력 보존용으로 남김)
+    // 2. 제품 구분 (문서 3쪽 주황색 표) — Word 표를 셀 단위로 읽어 확정(2026-10-21).
+    //    ⚠️ 처음엔 문서를 통짜 텍스트로 뽑아 읽는 바람에 Z(3DP)·T(KTTP)·M(MLD)·D(KRYPTONE)·P를
+    //    현재 항목처럼 넣었는데, 실제 표에는 **없다**. Rev08("Product type 삭제 : Z, P, T, M ->
+    //    E(Extra)")로 사라진 것들이 본문 다른 곳에 흔적만 남아 있던 것이다. 현재 표는 아래 7개뿐.
+    //    L도 'SUB/PT'가 아니라 'SUB/PTD'가 맞다.
     type: [
-        { code: 'S', name: 'STD',          nameKo: '표준' },
-        { code: 'C', name: 'CURVED',       nameKo: '커브드' },
-        { code: 'B', name: 'BUTTON DECK',  nameKo: '버튼 데크' },
-        { code: 'L', name: 'SUB/PT',       nameKo: '서브/PT' },
-        { code: 'D', name: 'KRYPTONE',     nameKo: 'KRYPTONE' },
-        { code: 'N', name: 'LED',          nameKo: 'LED (데코 없는 제품)' },
-        { code: 'E', name: 'Extra',        nameKo: '기타 (3DP·KTMP·KTTP·MLD 통합)' },
-        { code: 'Z', name: '3DP',          nameKo: '3DP', legacy: true },
-        { code: 'K', name: 'TMP',          nameKo: 'TMP', legacy: true, uncertain: true },
-        { code: 'T', name: 'KTTP',         nameKo: 'KTTP', legacy: true },
-        { code: 'M', name: 'MLD',          nameKo: 'MLD', legacy: true },
-        { code: 'P', name: '(구) P 타입',   nameKo: '(구) P 타입', legacy: true, uncertain: true }
+        { code: 'S', name: 'STD',         nameKo: '표준' },
+        { code: 'C', name: 'CURVED',      nameKo: '커브드' },
+        { code: 'B', name: 'BUTTON DECK', nameKo: '버튼 데크' },
+        { code: 'K', name: 'SET',         nameKo: 'SET' },
+        { code: 'L', name: 'SUB/PTD',     nameKo: 'SUB/PTD' },
+        { code: 'E', name: 'Extra',       nameKo: '기타 — 3D·KTMP·KTTP·MLD 통합' },
+        { code: 'N', name: 'LED',         nameKo: 'LED — 모든 제품 (wo/Deco)' }
     ],
+    // Rev08에서 E(Extra)로 통합되어 더는 쓰지 않는 코드 — 옛 모델명을 읽을 때의 참고용
+    typeRetired: ['Z(3D)', 'P', 'T(KTTP)', 'M(MLD)'],
     // 4. 입력 전원 (초록색 칸)
     power: [
         { code: 'A', name: 'AC POWER', nameKo: '교류(AC)' },
@@ -52,7 +51,7 @@ window.MNB_CHART = {
         { code: 'R', name: 'RESISTIVE',       nameKo: '감압식' },
         { code: 'C', name: 'CAPACITIVE',      nameKo: '정전식' },
         { code: 'P', name: 'PCT',             nameKo: 'PCT' },
-        { code: 'V', name: 'MCTI',            nameKo: 'MCTI' },
+        { code: 'V', name: 'MCT',             nameKo: 'MCT' },
         { code: 'I', name: 'IR',              nameKo: '적외선' },
         { code: 'O', name: 'OPTICAL',         nameKo: '광학식' },
         { code: 'M', name: 'MULTI TOUCH',     nameKo: '멀티터치' },
@@ -70,7 +69,7 @@ window.MNB_CHART = {
         { code: 'G', name: 'GTECH' },
         { code: 'Z', name: 'ZITRO' },
         { code: 'K', name: 'KONAMI' },
-        { code: 'S', name: 'SG' },
+        { code: 'S', name: 'LNW(SG)' },   // ⚠️ 표에는 'LNW(SG)' — 'SG'로만 적으면 이 회사 최대 고객을 못 알아본다
         { code: '1', name: 'AMERICAN AREA',   nameKo: '미주 지역' },
         { code: '2', name: 'EUROPEAN AREA',   nameKo: '유럽 지역' },
         { code: '3', name: 'AUSTRALIAN AREA', nameKo: '호주 지역' },
@@ -177,6 +176,9 @@ function _mnbRender() {
       // ① 제품 구분
       + '<div style="font-size:12px; font-weight:bold; color:#333; margin:10px 0 5px;">① ' + _t('제품 구분', 'Product type') + '</div>'
       + '<div>' + _mnbOptionsHtml('type', C.type, _mnbSel.type) + '</div>'
+      + '<div style="font-size:10.5px; color:#aaa; margin-top:3px;">'
+      + _t('Rev08에서 E(Extra)로 통합되어 더는 쓰지 않음: ', 'Retired in Rev08 (merged into E): ')
+      + _mnbEsc((C.typeRetired || []).join(', ')) + '</div>'
       // ② 외형/크기
       + '<div style="font-size:12px; font-weight:bold; color:#333; margin:12px 0 5px;">② ' + _t('외형 / 크기', 'Appearance / size') + '</div>'
       + '<div style="margin-bottom:6px;">'
