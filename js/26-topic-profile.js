@@ -884,6 +884,9 @@
     var _TP_REGEN_STATE_KEY   = 'gantt_topic_regen_state_v1';
     var _TP_REGEN_COOLDOWN_MS = 10 * 60 * 1000; // 프로젝트별 10분 쿨다운
     var _TP_REGEN_STEP        = 10;             // AI 업무 +10개마다 재생성 후보
+    // 💡 [2026-10-21] 신선도 — current_phase가 매칭 근거로 쓰이므로 업무가 안 늘어도 주기적으로 갱신
+    var _TP_REGEN_MAX_AGE_MS  = 30 * 24 * 60 * 60 * 1000; // 프로파일이 30일 넘으면 재생성 대상
+    var _TP_STALE_RETRY_MS    = 24 * 60 * 60 * 1000;      // 단, 시간 기반 트리거는 프로젝트당 하루 1회
 
     function _tpGetRegenState() {
         try { return JSON.parse(localStorage.getItem(_TP_REGEN_STATE_KEY)) || {}; } catch(e) { return {}; }
@@ -897,10 +900,29 @@
     function _tpShouldRegen(fileId, aiCount) {
         if (!fileId) return false;
         var state = _tpGetRegenState();
-        var s = state[fileId] || { count: 0, ts: 0 };
-        if (aiCount < s.count + _TP_REGEN_STEP) return false; // 아직 +10개 미만
+        var s = state[fileId] || { count: 0, ts: 0, staleTs: 0 };
         if (Date.now() - s.ts < _TP_REGEN_COOLDOWN_MS) return false; // 프로젝트별 쿨다운 중
-        state[fileId] = { count: aiCount, ts: Date.now() };
+
+        var grew = aiCount >= s.count + _TP_REGEN_STEP; // 기존 조건: AI 업무 +10개
+
+        // 💡 [2026-10-21 신규] 시간 기반 재생성 — 기존엔 "+10개" 하나뿐이라 시간 조건이 없었다.
+        //    메일이 뜸한 프로젝트는 AI 업무 10개가 쌓이는 데 몇 달이 걸리는데, 그 사이 프로젝트는
+        //    EVT→DVT→PP로 실제로 넘어간다. current_phase가 몇 달 전 값으로 남는다는 뜻이다.
+        //    예전엔 프로파일이 "열려 있는 프로젝트의 업무 추출 배경지식"으로만 쓰여서 낡아도 큰 해가
+        //    없었지만, 지금은 매칭 후보 목록에도 들어가고(js/15c) "단계가 안 맞으면 의심하라"는
+        //    지시까지 붙어 있어서 — 낡은 단계가 맞는 프로젝트를 탈락시키는 근거가 될 수 있다.
+        //    ⚠️ 재생성이 AI 호출 1회라 실패해도 10분마다 무한 재시도하면 무료 한도를 태운다.
+        //    그래서 시간 기반 트리거는 프로젝트당 하루 1회로 따로 제한한다(staleTs).
+        var _prof   = _getStore()[fileId];
+        var _profTs = (_prof && _prof.ts) ? Date.parse(_prof.ts) : 0;
+        var stale = aiCount > 0
+                 && (!_profTs || (Date.now() - _profTs) >= _TP_REGEN_MAX_AGE_MS)
+                 && (Date.now() - (s.staleTs || 0) >= _TP_STALE_RETRY_MS);
+
+        if (!grew && !stale) return false;
+        if (stale && !grew) console.log('[토픽 자동갱신] "' + fileId + '" 프로파일이 오래됨(' +
+            (_profTs ? Math.round((Date.now() - _profTs) / 86400000) + '일 전' : '생성시각 없음') + ') → 시간 기반 재생성');
+        state[fileId] = { count: aiCount, ts: Date.now(), staleTs: stale ? Date.now() : (s.staleTs || 0) };
         _tpSaveRegenState(state);
         return true;
     }

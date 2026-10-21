@@ -1505,9 +1505,21 @@ window._msBuildProjectMatchSection = function(candidateProjects, mailText, userH
         const _sum  = (c.topicSummary || (_cached && _cached.summary) || '').trim();
         const _ph   = (c.topicPhase   || (_cached && _cached.current_phase) || '').trim();
         const _dist = _pick(c.topicDistinguishers, 'distinguishers');
+        // 💡 [2026-10-21] 기준일 — 프로파일은 메일이 뜸한 프로젝트에서 몇 달씩 갱신 안 될 수 있다
+        //    (js/26 _tpShouldRegen). "단계가 안 맞으면 의심하라"는 아래 지시와 맞물리면 낡은 값이
+        //    맞는 후보를 탈락시키므로, 언제 기준인지 함께 준다. 2주 이내면 굳이 붙이지 않는다.
+        const _age = (function() {
+            const raw = c.topicGeneratedAt || (_cached && _cached.ts) || '';
+            const t = raw ? Date.parse(raw) : NaN;
+            if (!t || isNaN(t)) return '';
+            const d = Math.floor((Date.now() - t) / 86400000);
+            if (d < 14) return '';
+            return d < 60 ? ` (${Math.round(d / 7)}주 전 기준)` : ` (${Math.round(d / 30)}개월 전 기준)`;
+        })();
+
         const _ctx  = [];
         if (_sum)  _ctx.push(`   📌 프로젝트 상황: ${_sum}`);
-        if (_ph)   _ctx.push(`   🔄 현재 단계: ${_ph}`);
+        if (_ph)   _ctx.push(`   🔄 현재 단계: ${_ph}${_age}`);
         if (_dist) _ctx.push(`   📧 이 프로젝트 메일을 알아보는 단서: ${_dist.slice(0, 4).join(' / ')}`);
 
         const head = `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''}${_tpKw} [파일: ${c.file_name}]`;
@@ -1573,6 +1585,10 @@ window._msBuildProjectMatchSection = function(candidateProjects, mailText, userH
         `  키워드가 겹치지 않아도 이 "상황·단계·단서"가 메일 내용과 맞아떨어지면 그 근거로 선택할 수 있고, 매칭근거에 그렇게 적으세요\n` +
         `  (예: 메일이 E3 양산 준비 일정을 다루는데 후보의 현재 단계가 "E3 생산 준비"이고 단서에 그 부품이 있다면 강한 근거).\n` +
         `  반대로 상황·단계가 전혀 맞지 않으면(이미 EOL인 프로젝트에 신규 개발 요청 등) 키워드가 겹쳐도 의심하세요.\n` +
+        // 💡 [2026-10-21] 바로 위 "안 맞으면 의심하세요"의 안전장치 — 기준일이 오래된 단계는 그 사이
+        //    프로젝트가 다음 단계로 넘어갔을 뿐일 수 있다. 이 한 줄이 없으면 낡은 값이 맞는 후보를 떨어뜨린다.
+        `  ⚠️ "🔄 현재 단계"에 "(N개월 전 기준)"이 붙어 있으면 그만큼 오래된 정보입니다 — 그 사이 다음 단계로 넘어갔을 수 있으니,\n` +
+        `  단계가 안 맞는다는 이유만으로 후보를 떨어뜨리지 말고 오히려 "그 다음 단계로 진행된 내용인지"를 함께 고려하세요.\n` +
         `  ⚠️ 단, 이 3줄이 "없는" 후보는 아직 요약이 생성되지 않았을 뿐이며 비활성/무관하다는 뜻이 절대 아닙니다 — 불이익을 주지 마세요.\n` +
         `  ⚠️ 또한 이 요약은 보조 근거입니다. 아래 관리번호 일치/불일치처럼 본문에서 직접 확인되는 결정적 근거가 있으면 그쪽이 우선입니다.\n` +
         `※ 브랜드명(고객사)이나 크기(인치)가 같다는 이유만으로 매칭하지 마세요 — 같은 브랜드가 여러 프로젝트를 가질 수 있습니다. 본문의 구체적 내용(모델 고유 코드, 요청 사항 등)까지 확인하세요.\n` +

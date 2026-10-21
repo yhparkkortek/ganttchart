@@ -238,7 +238,12 @@
             topicSummary: (_topicProf && _topicProf.summary) ? String(_topicProf.summary).slice(0, 160) : '',
             topicPhase: (_topicProf && _topicProf.current_phase) ? String(_topicProf.current_phase).slice(0, 60) : '',
             topicDistinguishers: (_topicProf && _topicProf.distinguishers && _topicProf.distinguishers.length)
-                ? _topicProf.distinguishers.slice(0, 4).map(function(d) { return String(d).slice(0, 80); }) : []
+                ? _topicProf.distinguishers.slice(0, 4).map(function(d) { return String(d).slice(0, 80); }) : [],
+            // 💡 [2026-10-21] 프로파일 생성시각 — 매칭 프롬프트에 "(N개월 전 기준)"으로 노출해서
+            //    AI가 낡은 current_phase를 할인해서 보게 한다. 프로파일은 메일이 뜸한 프로젝트에서
+            //    몇 달씩 갱신 안 될 수 있는데(js/26 _tpShouldRegen 주석), 단계가 안 맞으면 의심하라는
+            //    지시가 프롬프트에 있어서 기준일을 안 주면 낡은 값이 맞는 후보를 탈락시킨다.
+            topicGeneratedAt: (_topicProf && _topicProf.ts) ? _topicProf.ts : ''
         };
     };
 
