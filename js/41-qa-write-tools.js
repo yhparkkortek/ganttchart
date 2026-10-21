@@ -116,13 +116,21 @@
             id: 'insa_fill_workplan', mode: 'write', verified: 'live', danger: 'low', requires: 'insa',
             title: '근무계획 수정 신청서 칸 채우기',
             desc: '인사관리 근무계획 수정 신청서를 열어 **칸만 채운다. [등록]은 누르지 않는다** — '
-                + '사람이 화면을 보고 직접 누른다. 시간은 **변경 후** 시간이고, 한쪽만 주면 '
-                + '다른 쪽은 기존 계획시간을 그대로 유지한다. 이 화면은 분을 00/30만 받는다. '
-                + '식사유형(점심/저녁)도 채울 수 있다 — 화면이 **둘 다** 요구하므로 한쪽만 주면 '
-                + '다른 쪽은 기존값을 유지한다. 사용자가 말하지 않은 식사유형을 지어내지 마라.',
+                + '사람이 화면을 보고 직접 누른다. '
+                + '[여러 날이면 days] days 는 **최종적으로 이런 행들이 있어야 한다**는 목록이다 — '
+                + '행 수를 여기에 맞춰 더하거나 지우므로, 하루 더 넣으려면 **기존 행까지 전부** 담아야 한다'
+                + '(새 행만 보내면 기존 행이 지워진다). 기존 행은 `insa_workplan_form` 으로 먼저 읽어라. '
+                + '한 날짜는 한 행뿐이다(같은 날짜를 두 번 주면 사이트가 막는다). '
+                + '[시간] 변경 **후** 시간이고, 한쪽만 주면 다른 쪽은 그 날의 기존 계획시간을 유지한다. '
+                + '분은 00/30만 받는다. '
+                + '[식사유형] 화면이 점심·저녁 **둘 다** 요구하므로 한쪽만 주면 다른 쪽은 기존값을 유지한다. '
+                + '사용자가 말하지 않은 식사유형·시간을 지어내지 마라.',
             method: 'POST', path: '/insa/fill-workplan',
             params: [
-                { name: 'date', type: 'date', req: true, desc: '근무일자 YYYY-MM-DD' },
+                { name: 'days', type: 'rows', max: 31,
+                  desc: '여러 날: [{date:"YYYY-MM-DD", start:"HH:MM", end:"HH:MM", lunch:"식사", dinner:"식사", remark:""}, ...] '
+                      + '— **최종 상태** 목록(기존 행 포함). 하루뿐이면 아래 date/end 를 써도 된다' },
+                { name: 'date', type: 'date', desc: '근무일자 YYYY-MM-DD (하루짜리일 때. days 를 주면 생략)' },
                 { name: 'start', type: 'time', desc: '변경 후 출근 HH:MM (생략하면 기존 계획 유지)' },
                 { name: 'end', type: 'time', desc: '변경 후 퇴근 HH:MM (생략하면 기존 계획 유지)' },
                 // 코드·이름 둘 다 받는다(화면 콤보에서 실제 값을 읽어 맞춘다 — 백엔드에서 처리)
@@ -183,16 +191,37 @@
         //    읽기 검증기는 스키마에 없는 키를 "무시된 인자"로 적으므로, 멀쩡히 적용된 end 를 두고
         //    "⚠️ 무시된 인자: end"가 초안에 붙었다(값은 아래에서 다시 합쳐지니 동작은 정상, 안내만 틀림).
         //    스키마에서 뺀 키는 넘기는 값에서도 빼야 짝이 맞는다. 진짜 모르는 키는 그대로 걸린다.
-        var shim = { params: (tool.params || []).filter(function (p) { return p.type !== 'time'; }) };
+        // 🧩 [2026-10-21] `rows` 타입 — 행 목록(날짜마다 한 줄)처럼 **객체 배열**을 받는 인자.
+        //    읽기 검증기는 스칼라만 다루므로 여기서 따로 본다. AI가 JSON 문자열로 줄 때도 받아준다.
+        var rows = {};
+        (tool.params || []).forEach(function (p) {
+            if (p.type !== 'rows') return;
+            var raw2 = given[p.name];
+            if (raw2 === undefined || raw2 === null || raw2 === '') {
+                if (p.req) notes.push('필수 인자 누락: ' + p.name);
+                return;
+            }
+            if (typeof raw2 === 'string') {
+                try { raw2 = JSON.parse(raw2); } catch (e) { notes.push('목록 형식이 아님: ' + p.name); return; }
+            }
+            if (!Array.isArray(raw2) || !raw2.length) { notes.push('목록 형식이 아님: ' + p.name); return; }
+            if (raw2.length > (p.max || 30)) { notes.push(p.name + ' 가 너무 깁니다(최대 ' + (p.max || 30) + '개)'); return; }
+            var bad = raw2.filter(function (r) { return !r || typeof r !== 'object' || Array.isArray(r); });
+            if (bad.length) { notes.push(p.name + ' 의 각 항목은 객체여야 합니다'); return; }
+            rows[p.name] = raw2;
+        });
+        var special = function (p) { return p.type === 'time' || p.type === 'rows'; };
+        var shim = { params: (tool.params || []).filter(function (p) { return !special(p); }) };
         var rest = {};
         Object.keys(given).forEach(function (k) {
-            var isTime = (tool.params || []).some(function (p) { return p.name === k && p.type === 'time'; });
-            if (!isTime) rest[k] = given[k];
+            var isSpecial = (tool.params || []).some(function (p) { return p.name === k && special(p); });
+            if (!isSpecial) rest[k] = given[k];
         });
         var v = window._qaValidateToolArgs(shim, rest);
         if (v.error) return { error: v.error };
         var args = v.args || {};
         Object.keys(times).forEach(function (k) { args[k] = times[k]; });
+        Object.keys(rows).forEach(function (k) { args[k] = rows[k]; });
         // 시간 필수 누락은 위에서 notes로 모았으니 여기서 에러로 승격
         var miss = notes.filter(function (n) { return n.indexOf('필수 인자 누락') === 0; });
         if (miss.length) return { error: miss.join(', ') };

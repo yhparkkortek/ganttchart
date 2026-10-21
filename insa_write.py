@@ -188,15 +188,65 @@ def _meal_code(want, opts):
     return None
 
 
+def _row_ids():
+    raw = _ev("(function(){ return (typeof myGrid === 'undefined') ? ''"
+              "        : String(myGrid.getAllRowIds() || ''); })()") or ''
+    return [r for r in str(raw).split(',') if r]
+
+
+def _check_only(ids):
+    """지정한 행만 체크한다 — **일괄입력은 체크된 행에만 걸리므로** 이게 행 단위 제어의 전부다."""
+    return _ev("(function(){ if (typeof myGrid === 'undefined') return false;"
+               " var want = %s, ci = myGrid.getColIndexById('ch');"
+               " String(myGrid.getAllRowIds()||'').split(',').forEach(function(id){"
+               "   if (!id) return;"
+               "   try { myGrid.cells(id, ci).setValue(want.indexOf(id) >= 0 ? 1 : 0); } catch(e){} });"
+               " return true; })()" % json.dumps([str(i) for i in ids]))
+
+
+def _row_get(row_id, cols):
+    """한 행에서 여러 열을 **한 번에** 읽는다(열마다 왕복하지 않는다)."""
+    raw = _ev("(function(){ if (typeof myGrid === 'undefined') return '{}';"
+              " var id = %s, out = {};"
+              " %s.forEach(function(c){"
+              "   try { out[c] = myGrid.cells(id, myGrid.getColIndexById(c)).getValue(); }"
+              "   catch(e){ out[c] = ''; } });"
+              " return JSON.stringify(out); })()"
+              % (json.dumps(str(row_id)), json.dumps(list(cols)))) or '{}'
+    return json.loads(raw)
+
+
+def _normalize_days(days, date, start, end, lunch, dinner, remark):
+    """`days` 목록으로 통일한다. 날짜 하나짜리 옛 호출 방식도 그대로 받는다."""
+    if days:
+        out = []
+        for d in days:
+            d = dict(d or {})
+            out.append({
+                'date': d.get('date'), 'start': d.get('start'), 'end': d.get('end'),
+                'lunch': d.get('lunch'), 'dinner': d.get('dinner'),
+                'remark': d.get('remark') if d.get('remark') is not None else remark,
+            })
+        return out
+    if date or start or end or lunch is not None or dinner is not None or remark is not None:
+        return [{'date': date, 'start': start, 'end': end,
+                 'lunch': lunch, 'dinner': dinner, 'remark': remark}]
+    return []
+
+
 def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=None, remark=None,
-                       lunch=None, dinner=None):
+                       lunch=None, dinner=None, days=None):
     """근무계획 수정 신청서의 칸을 채운다. **등록은 누르지 않는다.**
 
-    date  'YYYY-MM-DD'      근무일자
-    start 'HH:MM'           변경 후 출근(생략하면 그 칸은 건드리지 않는다)
-    end   'HH:MM'           변경 후 퇴근
-    subject / content       제목 / 신청 사유
-    remark                  비고(그리드 remark 열)
+    days  [{date,start,end,lunch,dinner,remark}, ...]
+          **최종적으로 이런 행들이 있어야 한다**는 목록이다. 행 수를 여기에 맞춰
+          더하거나 지우므로 같은 요청을 두 번 보내도 행이 불어나지 않는다(멱등).
+          날짜마다 다른 시간·식사유형을 넣으려면 이쪽을 쓴다.
+    date/start/end/lunch/dinner/remark
+          날짜 하나짜리 **옛 호출 방식** — days 한 개와 같다.
+    subject / content       제목 / 신청 사유 (신청서 전체에 하나씩)
+
+    ⚠️ 한 날짜는 한 행뿐이다 — 같은 날짜를 두 번 주면 사이트가 막는다($.getPlanTimeDupChk).
 
     반환: {'ok':…, 'before':…, 'after':…, 'steps':[…], 'dialogs':[…]}
     """
@@ -229,133 +279,169 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
             out.update(extra)
         return out
 
-    # 1) 신청자(본인) 행이 없으면 추가 — 페이지의 '본인신청' 버튼을 그대로 누른다.
-    if not before.get('rowCount'):
+    plan = _normalize_days(days, date, start, end, lunch, dinner, remark)
+    if not plan:
+        return done('채울 내용이 없습니다 — 근무일자나 시간을 지정해주세요.')
+
+    # ⚠️ 같은 사람·같은 날짜가 두 행이면 사이트가 막는다($.getPlanTimeDupChk) — 날짜는 서로 달라야 한다.
+    _seen = []
+    for _d in plan:
+        _k = str(_d.get('date') or '')
+        if _k and _k in _seen:
+            return done(f'같은 날짜({_k})가 두 번 들어왔습니다 — 이 화면은 한 날짜당 한 행만 받습니다.')
+        _seen.append(_k)
+
+    # 🐛 [2026-10-21] 근무일자 일괄입력은 그 행의 식사유형을 **지운다**(소스 156~157행).
+    #    그래서 "21·22일 식사로" 해 두고 다음 요청에서 식사유형을 안 주면, 날짜를 다시 넣는
+    #    순간 **앞서 설정한 식사유형이 조용히 사라진다**(대화로 조금씩 고쳐 나갈 때 바로 터진다).
+    #    `days` 는 "최종 상태"지만 **말하지 않은 칸은 그대로 둔다**가 사람의 기대다 —
+    #    같은 날짜의 직전 값을 물려준다.
+    _prev = {}
+    for _r in (before.get('rows') or []):
+        _k = str(_r.get('wdate') or '')[:10]
+        if _k:
+            _prev[_k] = {'lunch': _r.get('lunch') or '', 'dinner': _r.get('dinner') or ''}
+    for _d in plan:
+        _p = _prev.get(str(_d.get('date') or '')[:10])
+        if not _p:
+            continue
+        for _key in ('lunch', 'dinner'):
+            if _d.get(_key) is None and _p.get(_key):
+                _d[_key] = _p[_key]
+                _d.setdefault('_kept', []).append(_key)
+
+    # 1) 행 수를 신청할 **날짜 수**에 맞춘다(모자라면 본인신청으로 더하고, 남으면 지운다).
+    #    `days` 는 "최종적으로 이런 행들이 있어야 한다"는 목록이다 — 그래서 같은 요청을
+    #    두 번 보내도 행이 불어나지 않는다(멱등).
+    ids = _row_ids()
+    while len(ids) < len(plan):
         if not _fire("(function(){ $('#addMeBtn').click(); return true; })()"):
             return done('신청자 행 추가 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
                         extra={'busy': True})
-        time.sleep(1.2)
+        time.sleep(1.0)
+        grown = _row_ids()
+        if len(grown) <= len(ids):
+            return done('신청자 행이 늘지 않았습니다 — 화면을 확인해주세요.')
+        ids = grown
         steps.append('본인신청(행 추가)')
+    if len(ids) > len(plan):
+        drop = ids[len(plan):]
+        _check_only(drop)          # 지우기도 **체크된 행** 기준이다($.deleteGridRow)
+        _fire("(function(){ $('#deleteGridRow').click(); return true; })()")
+        time.sleep(0.8)
+        ids = _row_ids()
+        steps.append(f'남는 행 {len(drop)}개 삭제')
 
-    # 2) 모든 행을 체크 — 일괄입력은 **체크된 행에만** 적용된다(소스에서 확인).
-    _ev("(function(){ if (typeof myGrid === 'undefined') return false;"
-        " var ids = String(myGrid.getAllRowIds()||''); if (!ids) return false;"
-        " var ci = myGrid.getColIndexById('ch'); var a = ids.split(',');"
-        " for (var i=0;i<a.length;i++) { try { myGrid.cells(a[i], ci).setValue(1); } catch(e){} }"
-        " return true; })()")
-    steps.append('신청자 전체 선택')
+    meal_opts = None
 
-    # 3) 근무일자 일괄입력 — ⚠️ 행마다 동기 XHR(getPlanTime). 기다리지 않고 보내고 폴링한다.
-    if date:
-        if not _fire("(function(){ $('#date_from').val(%s); $('#inputAllDateBtn').click(); return true; })()"
-                     % json.dumps(str(date))):
-            return done(f'근무일자({date}) 조회가 응답하지 않아 창이 멈췄습니다. '
-                        '인사관리 서버가 늦을 때 생기는 현상입니다 — 신청서 창을 닫고 다시 열어주세요.',
-                        extra={'busy': True})
-        time.sleep(1.0)
-        steps.append(f'근무일자 {date}')
+    # 2) 행마다 채운다 — **그 행만 체크**한 뒤 화면의 일괄입력 버튼을 누른다.
+    #    일괄입력은 체크된 행에만 걸리므로, 이게 날짜별로 다른 값을 넣는 유일한 방법이다.
+    for idx, d in enumerate(plan):
+        if idx >= len(ids):
+            break
+        rid = ids[idx]
+        tag = str(d.get('date') or '') or f'{idx + 1}번째 행'
+        _check_only([rid])
 
-    # 4) 근무시간 일괄입력 — 변경 후 시간(afS*/afE*)을 채운다.
-    #
-    # ⚠️ 한쪽만 주면 사이트가 거부한다 — 퇴근만 바꾸려 해도 출근칸이 비면
-    #    "선택가능 시작시간은 (08:00:00~10:00:00) 입니다" alert 이 뜨고 적용이 안 된다(실측).
-    #    그래서 안 준 쪽은 **변경 전 계획시간**(beSTime/beETime)으로 채운다. 카드 기록
-    #    workSTime(08:53 같은 실제 출근)이 아니라 계획값이어야 한다 — 분 콤보가 00/30 만
-    #    받으므로 08:53 은 애초에 못 넣고, 신청 취지(그 칸은 그대로)에도 계획값이 맞다.
-    sh, sm = hhmm(start)
-    eh, em = hhmm(end)
-    if (sh and not eh) or (eh and not sh):
-        plan = _ev("(function(){ if (typeof myGrid === 'undefined') return '';"
-                   " var id = String(myGrid.getAllRowIds()||'').split(',')[0]; if (!id) return '';"
-                   " var g = function(c){ try { return myGrid.cells(id, myGrid.getColIndexById(c)).getValue(); }"
-                   "                      catch(e){ return ''; } };"
-                   " return g('beSTime') + '~' + g('beETime'); })()") or ''
-        be_s, _, be_e = str(plan).partition('~')
-        if not sh and be_s:
-            sh, sm = hhmm(be_s)
-            steps.append(f'출근은 기존 계획 {sh}:{sm} 유지')
-        if not eh and be_e:
-            eh, em = hhmm(be_e)
-            steps.append(f'퇴근은 기존 계획 {eh}:{em} 유지')
+        # 2-a) 근무일자 — ⚠️ 동기 XHR(getPlanTime). 기다리지 않고 보내고 폴링한다.
+        if d.get('date'):
+            if not _fire("(function(){ $('#date_from').val(%s); $('#inputAllDateBtn').click(); return true; })()"
+                         % json.dumps(str(d['date']))):
+                return done(f'근무일자({d["date"]}) 조회가 응답하지 않아 창이 멈췄습니다. '
+                            '인사관리 서버가 늦을 때 생기는 현상입니다 — 신청서 창을 닫고 다시 열어주세요.',
+                            extra={'busy': True})
+            time.sleep(1.0)
+            steps.append(f'[{tag}] 근무일자')
 
-    # 분은 00/30 만 받는다(콤보 옵션 실측) — 그 사이 값은 내림하고 사실을 알린다.
-    for _lbl, _hm in (('출근', (sh, sm)), ('퇴근', (eh, em))):
-        if _hm[1] and _hm[1] not in ('00', '30'):
-            steps.append(f'{_lbl} 분 {_hm[1]} → ' + ('30' if int(_hm[1]) >= 30 else '00')
-                         + ' (이 화면은 00/30 만 받습니다)')
-    if sm and sm not in ('00', '30'):
-        sm = '30' if int(sm) >= 30 else '00'
-    if em and em not in ('00', '30'):
-        em = '30' if int(em) >= 30 else '00'
+        # 2-b) 근무시간 — 한쪽만 주면 사이트가 거부하므로 안 준 쪽은 **그 행의** 기존 계획으로.
+        sh, sm = hhmm(d.get('start'))
+        eh, em = hhmm(d.get('end'))
+        if (sh and not eh) or (eh and not sh):
+            cur = _row_get(rid, ['beSTime', 'beETime'])
+            if not sh and cur.get('beSTime'):
+                sh, sm = hhmm(cur['beSTime'])
+                steps.append(f'[{tag}] 출근은 기존 계획 {sh}:{sm} 유지')
+            if not eh and cur.get('beETime'):
+                eh, em = hhmm(cur['beETime'])
+                steps.append(f'[{tag}] 퇴근은 기존 계획 {eh}:{em} 유지')
+        # 분은 00/30 만 받는다(콤보 옵션 실측) — 그 사이 값은 내림하고 사실을 알린다.
+        for _lbl, _mm in (('출근', sm), ('퇴근', em)):
+            if _mm and _mm not in ('00', '30'):
+                steps.append(f'[{tag}] {_lbl} 분 {_mm} → ' + ('30' if int(_mm) >= 30 else '00')
+                             + ' (이 화면은 00/30 만 받습니다)')
+        if sm and sm not in ('00', '30'):
+            sm = '30' if int(sm) >= 30 else '00'
+        if em and em not in ('00', '30'):
+            em = '30' if int(em) >= 30 else '00'
+        if sh or eh:
+            parts = []
+            if sh:
+                parts.append("$('#iStartHour').val(%s); $('#iStartMin').val(%s);"
+                             % (json.dumps(sh), json.dumps(sm)))
+            if eh:
+                parts.append("$('#iEndHour').val(%s); $('#iEndMin').val(%s);"
+                             % (json.dumps(eh), json.dumps(em)))
+            if not _fire("(function(){ %s $('#inputAllTimeBtn').click(); return true; })()" % ' '.join(parts)):
+                return done(f'[{tag}] 근무시간 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
+                            extra={'busy': True})
+            time.sleep(1.0)
+            steps.append(f'[{tag}] 근무시간 ' + (f'{sh}:{sm}' if sh else '…')
+                         + ' ~ ' + (f'{eh}:{em}' if eh else '…'))
 
-    if sh or eh:
-        parts = []
-        if sh:
-            parts.append("$('#iStartHour').val(%s); $('#iStartMin').val(%s);"
-                         % (json.dumps(sh), json.dumps(sm)))
-        if eh:
-            parts.append("$('#iEndHour').val(%s); $('#iEndMin').val(%s);"
-                         % (json.dumps(eh), json.dumps(em)))
-        if not _fire("(function(){ %s $('#inputAllTimeBtn').click(); return true; })()" % ' '.join(parts)):
-            return done('근무시간 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
-                        extra={'busy': True})
-        time.sleep(1.0)
-        steps.append('근무시간 ' + (f'{sh}:{sm}' if sh else '…') + ' ~ ' + (f'{eh}:{em}' if eh else '…'))
+        # 2-c) 식사유형 — ⚠️ 반드시 날짜·시간 **뒤에.**
+        #    · 근무일자 일괄입력이 lunchType/dinnerType 을 **지운다**(소스 156~157행).
+        #    · 이 버튼은 날짜와 afS/afE 가 다 차 있어야 돌아간다("근무일자 및 시간을 선택하세요").
+        #    · 점심·저녁 **둘 다** 골라야 한다 — 한쪽만 비면 거부한다(소스 233~241행).
+        if d.get('lunch') is not None or d.get('dinner') is not None:
+            if meal_opts is None:
+                meal_opts = _meal_options()
+            if not meal_opts:
+                return done('식사유형 선택값을 읽지 못했습니다.')
+            names = ', '.join(o['v'] + '=' + o['t'] for o in meal_opts)
+            cur = _row_get(rid, ['o_lunch', 'o_dinner'])
+            lc = _meal_code(d['lunch'], meal_opts) if d.get('lunch') is not None else (cur.get('o_lunch') or None)
+            dc = _meal_code(d['dinner'], meal_opts) if d.get('dinner') is not None else (cur.get('o_dinner') or None)
+            if d.get('lunch') is not None and not lc:
+                return done(f'[{tag}] 식사유형(점심) "{d["lunch"]}" 를 알아볼 수 없습니다. 가능한 값: {names}')
+            if d.get('dinner') is not None and not dc:
+                return done(f'[{tag}] 식사유형(저녁) "{d["dinner"]}" 를 알아볼 수 없습니다. 가능한 값: {names}')
+            if not lc or not dc:
+                return done(f'[{tag}] 이 화면은 식사유형 점심·저녁을 **둘 다** 받아야 적용합니다. '
+                            f'한쪽만 주셨고 기존값도 비어 있습니다. 가능한 값: {names}')
+            kept = d.get('_kept') or []
+            if 'lunch' in kept:
+                steps.append(f'[{tag}] 점심은 앞서 넣은 값 유지')
+            elif d.get('lunch') is None:
+                steps.append(f'[{tag}] 점심은 기존값 유지')
+            if 'dinner' in kept:
+                steps.append(f'[{tag}] 저녁은 앞서 넣은 값 유지')
+            elif d.get('dinner') is None:
+                steps.append(f'[{tag}] 저녁은 기존값 유지')
+            if not _fire("(function(){ $('#iMealTypeLunch').val(%s); $('#iMealTypeDinner').val(%s);"
+                         " $('#inputAllMealBtn').click(); return true; })()"
+                         % (json.dumps(lc), json.dumps(dc))):
+                return done(f'[{tag}] 식사유형 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
+                            extra={'busy': True})
+            time.sleep(1.0)
+            _lbl = {o['v']: o['t'] for o in meal_opts}
+            steps.append(f'[{tag}] 식사유형 점심 {_lbl.get(lc, lc)} / 저녁 {_lbl.get(dc, dc)}')
 
-    # 5) 식사유형 일괄입력 — ⚠️ 반드시 날짜·시간 **뒤에.**
-    #    · 근무일자 일괄입력이 lunchType/dinnerType 을 **지운다**(소스 156~157행).
-    #    · 이 버튼은 날짜와 afS/afE 가 다 차 있어야 돌아간다("근무일자 및 시간을 선택하세요").
-    #    · 점심·저녁 **둘 다** 골라야 한다 — 한쪽만 비면 거부한다(소스 233~241행).
-    #      그래서 안 준 쪽은 시간과 같은 원칙으로 **기존값**(o_lunch/o_dinner)을 쓴다.
-    if lunch is not None or dinner is not None:
-        opts = _meal_options()
-        if not opts:
-            return done('식사유형 선택값을 읽지 못했습니다.')
-        cur = _ev("(function(){ if (typeof myGrid === 'undefined') return '';"
-                  " var id = String(myGrid.getAllRowIds()||'').split(',')[0]; if (!id) return '';"
-                  " var g = function(c){ try { return myGrid.cells(id, myGrid.getColIndexById(c)).getValue(); }"
-                  "                      catch(e){ return ''; } };"
-                  " return g('o_lunch') + '~' + g('o_dinner'); })()") or ''
-        cur_l, _, cur_d = str(cur).partition('~')
-        names = ', '.join(o['v'] + '=' + o['t'] for o in opts)
-        lc = _meal_code(lunch, opts) if lunch is not None else (cur_l or None)
-        dc = _meal_code(dinner, opts) if dinner is not None else (cur_d or None)
-        if lunch is not None and not lc:
-            return done(f'식사유형(점심) "{lunch}" 를 알아볼 수 없습니다. 가능한 값: {names}')
-        if dinner is not None and not dc:
-            return done(f'식사유형(저녁) "{dinner}" 를 알아볼 수 없습니다. 가능한 값: {names}')
-        if not lc or not dc:
-            return done('이 화면은 식사유형 점심·저녁을 **둘 다** 받아야 적용합니다. '
-                        f'한쪽만 주셨고 기존값도 비어 있습니다. 가능한 값: {names}')
-        if lunch is None:
-            steps.append('점심은 기존값 유지')
-        if dinner is None:
-            steps.append('저녁은 기존값 유지')
-        if not _fire("(function(){ $('#iMealTypeLunch').val(%s); $('#iMealTypeDinner').val(%s);"
-                     " $('#inputAllMealBtn').click(); return true; })()"
-                     % (json.dumps(lc), json.dumps(dc))):
-            return done('식사유형 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
-                        extra={'busy': True})
-        time.sleep(1.0)
-        _lbl = {o['v']: o['t'] for o in opts}
-        steps.append(f'식사유형 점심 {_lbl.get(lc, lc)} / 저녁 {_lbl.get(dc, dc)}')
+        # 2-d) 비고 — 그 행에만
+        if d.get('remark') is not None:
+            _ev("(function(){ if (typeof myGrid === 'undefined') return false;"
+                " try { myGrid.cells(%s, myGrid.getColIndexById('remark')).setValue(%s); } catch(e){}"
+                " return true; })()" % (json.dumps(str(rid)), json.dumps(str(d['remark']))))
+            steps.append(f'[{tag}] 비고')
 
-    # 6) 제목 / 사유
+    _check_only(ids)      # 끝나면 전부 체크해 둔다 — 사람이 보기에 자연스럽게
+
+    # 3) 제목 / 사유 — 신청서 전체에 하나씩
     if subject is not None:
         _ev("(function(){ $('#req_subject').val(%s); return true; })()" % json.dumps(str(subject)))
         steps.append('제목')
     if content is not None:
         _ev("(function(){ $('#req_content').val(%s); return true; })()" % json.dumps(str(content)))
         steps.append('사유')
-
-    # 7) 비고(그리드 remark 열)
-    if remark is not None:
-        _ev("(function(){ if (typeof myGrid === 'undefined') return false;"
-            " var ids = String(myGrid.getAllRowIds()||''); if (!ids) return false;"
-            " var ci = myGrid.getColIndexById('remark'); var a = ids.split(',');"
-            " for (var i=0;i<a.length;i++) { try { myGrid.cells(a[i], ci).setValue(%s); } catch(e){} }"
-            " return true; })()" % json.dumps(str(remark)))
-        steps.append('비고')
 
     try:
         after = form_state()

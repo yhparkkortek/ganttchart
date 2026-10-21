@@ -66,6 +66,20 @@
         //  화면 주소는 코드에 박지 않는다 — `insa_menu_catalog.json`(관찰로 학습한 데이터)에서
         //  가져온다. 새 화면이 생기면 "인사관리 화면 학습해줘" 한 번이면 목록이 늘어난다.
         {
+            id: 'insa_workplan_form', mode: 'read', requires: 'insa',
+            title: '근무계획 수정 신청서 현재 내용',
+            // ⚠️ [2026-10-21 실사용] "행 하나 추가해줘"에 AI가 되묻기만 하고, 다음엔 date 없이
+            //    쓰기를 호출해 "필수 인자 누락"으로 끝났다. **지금 행을 볼 눈이 없었기 때문**이다.
+            //    insa_fill_workplan 의 days 는 "최종 상태" 목록이라, 더하려면 먼저 읽어야 한다.
+            desc: '지금 열려 있는 근무계획 수정 신청서에 **어떤 행이 들어 있는지** 읽는다'
+                + '(날짜·변경 후 출퇴근·식사유형·비고·제목·사유). '
+                + '"행 하나 추가해줘", "하루 더 넣어줘"처럼 **기존 내용에 더하는 요청이면 반드시 먼저 이걸 호출해** '
+                + '지금 행을 확인하고, insa_fill_workplan 의 days 에 **기존 행 + 새 행을 전부** 담아라. '
+                + 'days 는 최종 상태라서 새 행만 보내면 기존 행이 지워진다.',
+            path: '/insa/workplan-form',
+            params: []
+        },
+        {
             id: 'insa_menus', mode: 'read', requires: 'insa',
             title: '인사관리 화면 목록',
             desc: '사내 인사관리(kInsa)에서 볼 수 있는 화면 목록을 돌려준다. '
@@ -350,7 +364,17 @@
 
     window._qaRunTool = async function (id, rawArgs) {
         var tool = window._qaToolById(id);
-        if (!tool) return { ok: false, id: id, message: '없는 도구입니다: ' + id };
+        if (!tool) {
+            // 💡 [2026-10-21] AI가 **쓰기 도구를 [[TOOL:]]로** 부르는 일이 잦다(실측). 그때 "없는 도구"라고만
+            //    하면 다음 턴에도 같은 실수를 반복한다 — 어느 태그를 써야 하는지 알려 준다.
+            var w = window._qaWriteToolById && window._qaWriteToolById(id);
+            if (w) {
+                return { ok: false, id: id,
+                         message: '이건 실행(쓰기) 도구다 — 조회 태그 [[TOOL:]]로는 부를 수 없다. '
+                                + '필요하면 [[WRITE:' + id + ' {...}]] 로 초안을 내라(사람 확인 뒤 실행된다).' };
+            }
+            return { ok: false, id: id, message: '없는 도구입니다: ' + id };
+        }
         // 🔒 읽기 전용 가드 — 쓰기 도구는 이 루프로 절대 실행하지 않는다
         if (tool.mode !== 'read') return { ok: false, id: id, message: '읽기 전용 루프에서는 실행할 수 없는 도구입니다: ' + id };
         if (String(tool.path || '').charAt(0) !== '/') return { ok: false, id: id, message: '도구 경로가 잘못됐습니다.' };

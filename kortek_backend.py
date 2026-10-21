@@ -3380,6 +3380,23 @@ def insa_screen():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/insa/workplan-form', methods=['GET'])
+def insa_workplan_form():
+    """근무계획 수정 신청서에 **지금 뭐가 들어 있는지** 읽는다(읽기 전용).
+
+    AI 가 "행 하나 더 추가해줘" 같은 요청을 받으면 **지금 행을 먼저 보고** 전체 목록을
+    다시 만들어야 한다(fill 은 days 를 "최종 상태"로 받는다). 그 눈이 이 라우트다.
+    """
+    try:
+        import insa_write
+        if not insa_write._regform_tab():
+            return jsonify({'ok': True, 'open': False, 'rowCount': 0, 'rows': [],
+                            'message': '신청서 창이 열려 있지 않습니다(채우기를 하면 열립니다).'})
+        return jsonify(dict({'ok': True, 'open': True}, **(insa_write.form_state() or {})))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/chrome-restart', methods=['POST'])
 def gw_chrome_restart():
     """전용 크롬을 닫았다 다시 띄운다 — **http 사이트 차단(HTTPS 자동승격) 해제용.**
@@ -3405,14 +3422,23 @@ def insa_fill_workplan():
     등록은 사람이 화면을 보고 직접 누른다. 상세·함정은 docs/insa-hr.md.
     """
     d = request.get_json(silent=True) or {}
-    if not (d.get('date') or d.get('start') or d.get('end')):
-        return jsonify({'ok': False, 'message': '근무일자·시간 중 하나는 지정해주세요.'})
+    days = d.get('days')
+    if isinstance(days, str):                 # AI 가 JSON 문자열로 줄 때가 있다
+        try:
+            days = json.loads(days)
+        except Exception:
+            days = None
+    if not isinstance(days, list) or not days:
+        days = None
+    if not days and not (d.get('date') or d.get('start') or d.get('end')):
+        return jsonify({'ok': False, 'message': '근무일자·시간 중 하나는 지정해주세요(여러 날이면 days).'})
     try:
         import insa_write
         opened = insa_write.open_regform()
         if not opened.get('ok'):
             return jsonify(opened)
         out = insa_write.fill_workplan_edit(
+            days=days,
             date=d.get('date'), start=d.get('start'), end=d.get('end'),
             subject=d.get('subject'), content=d.get('content'), remark=d.get('remark'),
             lunch=d.get('lunch'), dinner=d.get('dinner'))
