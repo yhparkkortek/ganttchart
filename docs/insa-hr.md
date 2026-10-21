@@ -204,6 +204,64 @@ payload 가 실제로 그렇게 나가는지 한 번만 확인하면 된다.
 ⚠️ 쓰기를 붙일 때도 이 저장소 원칙은 그대로다: 읽기와 **경로를 분리**하고(js/41),
    AI 자율 루프는 `mode:'write'` 를 영구 거부하며, 실행은 **사람 확인 1회 + nonce** 를 거친다.
 
+## ✍️ 쓰기 계약 — 근무계획 수정 신청서 (소스로 확정, 2026-10-21)
+
+`/workPlanEdit/regForm` 팝업의 **인라인 JS 39,894자**를 읽어 확정했다. 관찰이 아니라 소스다.
+
+### 엔드포인트 4개 (전부 POST)
+
+| 경로 | 역할 |
+|---|---|
+| `/workPlanEdit/getPlanTime` | 그 날짜의 계획시간 조회 (`userNum`, `date`) |
+| `/workPlanEdit/chkInsert` | 등록 전 검증 + 임시저장 → `returnValue` 에 임시 문서번호 |
+| `/workPlanEdit/chkOverWorkTime` | 연장근무 시간 점검 (`docno`) |
+| `/workPlanEdit/insert` | **실제 등록** |
+
+**흐름: `chkInsert` → (성공 시) `chkOverWorkTime(returnValue)` → `insert`.**
+세 단계가 다 있고 검증이 앞에 붙어 있다 — `insert` 만 직접 때리면 이 검증을 건너뛴다.
+
+### payload
+
+```js
+mainParam = "&wano=" + $("#wano").val()
+          + "&req_subject=" + encodeURIComponent(제목)
+          + "&req_content=" + encodeURIComponent(내용)
+
+subParam  = encodeURIComponent(JSON.stringify(gridRows))   // 신청자 그리드(dhtmlxGrid)
+// gridRows 각 행의 열:
+//   seq, edituser, wdate, edno, beSTime, beETime, o_lunch, o_dinner,
+//   workSTime, workETime, afSHour, afSMin, afEHour, afEMin,
+//   lunchType, dinnerType, remark, userName
+//   ※ wdate 는 "YYYY-MM-DD HH:mm" 에서 앞부분만 잘라 보낸다(row.wdate.split(" ")[0])
+
+confirmParam = ConfirmInfoMaker.getConfirmInfoJson("confirmTb")   // 결재선
+consultParam = ConfirmInfoMaker.getConfirmInfoJson("consultTb")   // 합의선
+
+data = mainParam + "&subParam=" + subParam
+                 + "&confirmParam=" + confirmParam
+                 + "&consultParam=" + consultParam
+```
+
+### 응답 계약
+
+```js
+{ msgCode, msgDesc, returnValue, fieldType }
+```
+`msgCode == "Y"` 면 성공(→ `$.reloadData(); window.close();`).
+아니면 `msgDesc` 를 그대로 보여주고, `fieldType == "M"` 이면 `#returnValue` 칸에 포커스.
+HTTP `status == 1000` 은 **세션 만료**다.
+
+### 붙일 때의 선택 — 직접 POST 하지 말 것
+
+`insert` 를 직접 호출하면 `chkInsert`/`chkOverWorkTime` 검증을 건너뛰고,
+결재선 JSON(`ConfirmInfoMaker`)도 손으로 조립해야 한다. **페이지의 함수를 그대로 부르는 쪽**
+(`$.chkInsert()`)이 맞다 — 사람이 등록을 누르는 것과 같은 경로라 검증이 그대로 살아 있다.
+우리가 할 일은 **칸을 채우는 것까지**다.
+
+⚠️ 쓰기는 이 저장소 원칙을 그대로 따른다(docs/qa-tool-router.md): 읽기와 경로 분리(js/41),
+   AI 자율 루프는 `mode:'write'` 영구 거부, 실행은 **사람 확인 1회 + nonce**.
+   근무계획 수정 신청은 **결재로 올라가는 되돌리기 어려운 동작**이라 더더욱 그렇다.
+
 ## 아직 안 한 것 — 다음에 붙일 때
 
 화면 조회/조작은 **없다.** 붙일 때는 그룹웨어와 같은 순서로:
