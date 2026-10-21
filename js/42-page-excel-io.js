@@ -604,6 +604,31 @@
                 //    그래야 엑셀에서 숫자를 고치면 합계가 따라 바뀐다(사용자 요청).
                 //    PROTO A/B·MP 열도 같이 낸다 — 화면에서 숨겨져 있어도 데이터엔 있다.
                 buildSheet: _mcBuildSheet,
+                // 🧾 [2026-10-21] 협력사/사내 M.C 엑셀(R1 시트에 B~K 표)을 그대로 받는다.
+                //    고정 양식이라 **AI를 안 쓴다**(js/44). 못 알아보면 false 를 돌려 AI 경로로 넘긴다.
+                preParse: function (wb, fileName) {
+                    if (!window._mcScanWorkbook) return false;
+                    var c = window._mcScanWorkbook(wb, fileName);
+                    if (!c.length) return false;
+                    window._mcOpenImportPicker(c);
+                    return true;
+                },
+                // 파일 하나 = 모델 하나라, 여러 개를 떨구면 **전부 읽어** 어디에 넣을지 고르게 한다.
+                multiImport: async function (files) {
+                    if (!window._mcScanWorkbook || !window.XLSX) return;
+                    var all = [], bad = [];
+                    for (var i = 0; i < files.length; i++) {
+                        var f = files[i];
+                        if (!/\.(xlsx|xls|csv)$/i.test(f.name)) { bad.push(f.name); continue; }
+                        try {
+                            var wb = window.XLSX.read(await f.arrayBuffer(), { type: 'array' });
+                            var c = window._mcScanWorkbook(wb, f.name);
+                            if (c.length) all = all.concat(c); else bad.push(f.name);
+                        } catch (e) { bad.push(f.name); }
+                    }
+                    if (bad.length) _toast('⚠️ ' + _t('읽지 못한 파일: ', 'Could not read: ') + bad.join(', '), 'error');
+                    if (all.length) window._mcOpenImportPicker(all);
+                },
                 set: function (rows) {
                     var rev = _td().mcActiveRevision || 'R1';
                     _td().mcRevisions = _td().mcRevisions || {};
@@ -1017,8 +1042,14 @@
         var spec = _specById(id);
         if (!spec || spec.exportOnly) return;
         var inp = document.createElement('input');
-        inp.type = 'file'; inp.accept = PX_ACCEPT;
-        inp.onchange = function () { if (inp.files && inp.files[0]) window.pageExcelImport(id, inp.files[0]); };
+        inp.type = 'file'; inp.accept = PX_ACCEPT; inp.multiple = true;
+        inp.onchange = function () {
+            var fs = inp.files; if (!fs || !fs.length) return;
+            var sp = _specById(id);
+            if (fs.length > 1 && sp && sp.blocks[0] && typeof sp.blocks[0].multiImport === 'function') { sp.blocks[0].multiImport(Array.prototype.slice.call(fs)); return; }
+            if (fs.length > 1) _toast(_t('파일이 여러 개라 첫 번째만 불러옵니다: ', 'Several files — importing the first one only: ') + fs[0].name, 'info');
+            window.pageExcelImport(id, fs[0]);
+        };
         inp.click();
     };
 
@@ -1048,7 +1079,11 @@
             if (sh) matched.push({ b: b, sh: sh }); else missing.push(_nm(b.sheet));
         });
         if (!matched.length) {
-            // 🤖 시트 이름이 안 맞는다 = 우리가 낸 파일이 아니다. 거절하지 말고 AI에게 넘긴다.
+            // 🧾 우리가 낸 파일은 아니지만 **아는 양식**일 수 있다 — 결정론 파서가 먼저다(AI 안 씀).
+            if (spec.blocks[0] && typeof spec.blocks[0].preParse === 'function') {
+                if (spec.blocks[0].preParse(wb, file.name)) return;
+            }
+            // 🤖 그래도 모르겠으면 AI에게 넘긴다.
             if (_pxAiSpec(spec)) return _pxAiImport(id, file, wb);
             _toast('⚠️ ' + _t('이 페이지의 시트를 찾지 못했습니다. 필요한 시트: ', 'No matching sheet. Expected: ')
                    + spec.blocks.map(function (b) { return _nm(b.sheet); }).join(', '), 'error');
@@ -1139,19 +1174,27 @@
         btn.addEventListener('drop', function (e) {
             stop(e); cool();
             var files = (e.dataTransfer && e.dataTransfer.files) || [];
-            var f = null;
             // 엑셀뿐 아니라 PDF·TXT·HTML도 받는다 — 규격이 아니면 AI가 읽어서 매핑한다.
             var OK = /\.(xlsx|xls|csv|pdf|txt|html?)$/i;
-            for (var i = 0; i < files.length; i++) if (OK.test(files[i].name)) { f = files[i]; break; }
-            if (!f) {
+            var ok = [];
+            for (var i = 0; i < files.length; i++) if (OK.test(files[i].name)) ok.push(files[i]);
+            if (!ok.length) {
                 _toast('⚠️ ' + _t('받을 수 있는 형식이 아닙니다 — 엑셀(.xlsx/.xls/.csv), PDF, TXT, HTML만 됩니다.',
                                   'Unsupported file — only Excel (.xlsx/.xls/.csv), PDF, TXT and HTML are accepted.'), 'error');
                 return;
             }
-            if (files.length > 1) {
-                _toast(_t('파일이 여러 개라 첫 번째만 불러옵니다: ', 'Several files dropped — importing the first one only: ') + f.name, 'info');
+            // 📚 여러 개를 떨궜을 때: 그 페이지가 여러 파일을 다룰 수 있으면 **전부** 넘긴다
+            //    (M.C 는 파일 하나 = 모델 하나라 3개를 한 번에 받아 어디에 넣을지 고르게 한다).
+            //    못 다루는 페이지는 예전처럼 첫 번째만 쓰고, 그 사실을 밝힌다.
+            var sp = _specById(id);
+            if (ok.length > 1 && sp && sp.blocks[0] && typeof sp.blocks[0].multiImport === 'function') {
+                sp.blocks[0].multiImport(ok);
+                return;
             }
-            window.pageExcelImport(id, f);
+            if (ok.length > 1) {
+                _toast(_t('파일이 여러 개라 첫 번째만 불러옵니다: ', 'Several files dropped — importing the first one only: ') + ok[0].name, 'info');
+            }
+            window.pageExcelImport(id, ok[0]);
         });
     };
 
