@@ -113,35 +113,94 @@ const _MC_UNITS = [
 function _renderStep1(body) {
     const saved = (window._npwData && window._npwData.mcUnits) ? window._npwData.mcUnits : (_prefill.mcUnits || []);
     const customVal = (window._npwData && window._npwData.mcCustom) || '';
-    body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">MC Table 제품 구분자 선택</div>' +
-        '<div style="font-size:11.5px; color:#888; margin-bottom:14px;">이 프로젝트에 해당하는 디스플레이 종류를 선택하세요.<br>나중에 M.C Table 탭에서도 추가/삭제할 수 있습니다.</div>' +
-        _MC_UNITS.map(function(u) {
-            const chk = saved.indexOf(u.key) >= 0 ? 'checked' : '';
-            return '<label style="display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid #dee2e6; border-radius:8px; margin-bottom:8px; cursor:pointer; transition:background .15s;" onmouseover="this.style.background=\'#f0f7ff\'" onmouseout="this.style.background=\'\'"><input type="checkbox" class="npw-unit-chk" value="' + u.key + '" ' + chk + ' style="width:16px;height:16px;cursor:pointer;"><div><div style="font-weight:bold; font-size:13px;">' + u.label + '</div><div style="font-size:11px; color:#888;">' + u.desc + '</div></div></label>';
+    // 💡 [2026-10-21 변경, 사용자 요청] 체크박스 목록 → 드롭다운.
+    //    ⚠️ 제품구분자는 **복수 선택**이다(한 프로젝트에 MVD+TPR+BTN 식). 그래서 단순 <select>가
+    //    아니라 "드롭다운에서 고르면 칩으로 쌓이는" 방식으로 만든다 — 고르는 건 드롭다운 하나로
+    //    끝나고, 무엇을 골랐는지는 칩으로 한눈에 보이며, 칩의 ×로 뺀다.
+    //    목록에 없는 구분자는 드롭다운 맨 아래 "직접 입력"으로 넣는다(기존 기능 유지).
+    const chosen = saved.slice();
+    const remain = _MC_UNITS.filter(function(u) { return chosen.indexOf(u.key) === -1; });
+    body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">MC Table ' + _t('제품 구분자 선택', 'Product unit') + '</div>' +
+        '<div style="font-size:11.5px; color:#888; margin-bottom:14px;">' +
+        _t('이 프로젝트에 해당하는 디스플레이 종류를 고르세요. 여러 개 고를 수 있습니다.<br>나중에 M.C Table 탭에서도 추가/삭제할 수 있습니다.',
+           'Pick the display types for this project. You can pick several.<br>You can add or remove them later in the M.C Table tab.') + '</div>' +
+        '<select id="npw-unit-select" onchange="window._npwUnitPick(this.value)" ' +
+        'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; background:#fff; cursor:pointer;">' +
+        '<option value="">' + _t('＋ 제품 구분자 고르기…', '＋ Add a product unit…') + '</option>' +
+        remain.map(function(u) {
+            return '<option value="' + u.key + '">' + u.label + ' — ' + u.desc + '</option>';
         }).join('') +
-        // 직접 입력 행
-        '<label style="display:flex; align-items:flex-start; gap:10px; padding:9px 12px; border:1px dashed #ced4da; border-radius:8px; margin-bottom:8px; cursor:pointer; background:#fafafa; transition:background .15s;" onmouseover="this.style.background=\'#f5f5f5\'" onmouseout="this.style.background=\'#fafafa\'">' +
-        '<input type="checkbox" id="npw-custom-chk" style="width:16px;height:16px;cursor:pointer;margin-top:2px;" onchange="var inp=document.getElementById(\'npw-custom-input\');inp.disabled=!this.checked;if(this.checked)inp.focus();">' +
-        '<div style="flex:1;"><div style="font-weight:bold; font-size:13px; color:#555;">직접 입력</div>' +
-        '<input id="npw-custom-input" type="text" disabled placeholder="' + _t('예: PDU, SBD', 'e.g. PDU, SBD') + '" value="' + customVal + '" onclick="event.stopPropagation();" ' +
-        'style="margin-top:5px; width:100%; box-sizing:border-box; padding:5px 8px; font-size:12px; border:1px solid #ced4da; border-radius:5px;"></div></label>' +
-        '<div style="font-size:11px; color:#aaa; margin-top:4px;">※ 선택하지 않아도 등록은 가능합니다 — 건너뛰기로 넘어가세요.</div>';
+        '<option value="__custom__">' + _t('✎ 직접 입력…', '✎ Type it in…') + '</option>' +
+        '</select>' +
+        // 직접 입력 칸 — 드롭다운에서 "직접 입력"을 고를 때만 보인다
+        '<div id="npw-custom-wrap" style="display:' + (customVal ? 'flex' : 'none') + '; gap:6px; margin-top:8px;">' +
+        '<input id="npw-custom-input" type="text" placeholder="' + _t('예: PDU, SBD', 'e.g. PDU, SBD') + '" value="' + customVal + '" ' +
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._npwUnitAddCustom();}" ' +
+        'style="flex:1; min-width:0; box-sizing:border-box; padding:7px 10px; font-size:13px; border:1px solid #ced4da; border-radius:6px;">' +
+        '<button type="button" onclick="window._npwUnitAddCustom()" style="flex-shrink:0; padding:0 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">' +
+        _t('추가', 'Add') + '</button></div>' +
+        // 고른 것들 — 칩
+        '<div id="npw-unit-chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; min-height:28px;">' +
+        (chosen.length ? chosen.map(function(k) {
+            const u = _MC_UNITS.filter(function(x) { return x.key === k; })[0];
+            return '<span style="display:inline-flex; align-items:center; gap:5px; padding:5px 8px 5px 11px; background:#e0f5f7; color:#00707d; border:1px solid #cfe3e5; border-radius:14px; font-size:12px; font-weight:bold;">' +
+                k + (u ? '' : ' <span style="font-weight:normal; color:#888;">(' + _t('직접', 'custom') + ')</span>') +
+                '<button type="button" onclick="window._npwUnitRemove(\'' + k.replace(/'/g, "\\'") + '\')" title="' + _t('빼기', 'remove') + '" ' +
+                'style="border:none; background:none; color:#00707d; cursor:pointer; font-size:14px; line-height:1; padding:0 2px;">×</button></span>';
+        }).join('') : '<span style="font-size:11.5px; color:#bbb; align-self:center;">' + _t('아직 고른 것이 없습니다', 'nothing picked yet') + '</span>') +
+        '</div>' +
+        '<div style="font-size:11px; color:#aaa; margin-top:10px;">' +
+        _t('※ 고르지 않아도 등록은 가능합니다 — 건너뛰기로 넘어가세요.', '※ You can register without picking — just skip.') + '</div>';
 }
+// 💡 [2026-10-21] 체크박스 → 드롭다운+칩으로 바뀌면서, 고른 값은 화면이 아니라
+//    window._npwData.mcUnits 가 보관한다(칩은 그걸 그린 결과일 뿐). 그래서 수집은 읽기만 하면 된다.
 function _collectStep1() {
-    const checks = document.querySelectorAll('#npw-body .npw-unit-chk');
     window._npwData = window._npwData || {};
-    window._npwData.mcUnits = Array.from(checks).filter(function(c) { return c.checked; }).map(function(c) { return c.value; });
-    // 직접 입력 처리
-    const customChk   = document.getElementById('npw-custom-chk');
-    const customInput = document.getElementById('npw-custom-input');
-    if (customChk && customChk.checked && customInput && customInput.value.trim()) {
-        const extras = customInput.value.split(/[,\s]+/).map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
-        extras.forEach(function(k) { if (window._npwData.mcUnits.indexOf(k) < 0) window._npwData.mcUnits.push(k); });
-        window._npwData.mcCustom = customInput.value;
-    } else {
-        window._npwData.mcCustom = '';
-    }
+    if (!Array.isArray(window._npwData.mcUnits)) window._npwData.mcUnits = (_prefill.mcUnits || []).slice();
 }
+
+/** 드롭다운에서 하나 고름 — 바로 칩으로 쌓고 드롭다운은 처음으로 되돌린다 */
+window._npwUnitPick = function(v) {
+    const sel = document.getElementById('npw-unit-select');
+    if (v === '__custom__') {
+        const wrap = document.getElementById('npw-custom-wrap');
+        if (wrap) { wrap.style.display = 'flex'; }
+        const inp = document.getElementById('npw-custom-input');
+        if (inp) inp.focus();
+        if (sel) sel.value = '';
+        return;
+    }
+    if (!v) return;
+    _npwUnitAdd(v);
+    if (sel) sel.value = '';
+};
+
+/** 직접 입력 칸의 값(콤마·공백으로 여러 개 가능)을 칩으로 추가 */
+window._npwUnitAddCustom = function() {
+    const inp = document.getElementById('npw-custom-input');
+    if (!inp) return;
+    const extras = String(inp.value || '').split(/[,\s]+/).map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
+    if (!extras.length) return;
+    extras.forEach(_npwUnitAdd);
+    inp.value = '';
+    window._npwData.mcCustom = '';
+    _renderStep();   // 칩 목록·드롭다운 남은 항목 갱신
+};
+
+function _npwUnitAdd(key) {
+    key = String(key || '').trim().toUpperCase();
+    if (!key) return;
+    window._npwData = window._npwData || {};
+    if (!Array.isArray(window._npwData.mcUnits)) window._npwData.mcUnits = (_prefill.mcUnits || []).slice();
+    if (window._npwData.mcUnits.indexOf(key) === -1) window._npwData.mcUnits.push(key);
+    _renderStep();
+}
+
+window._npwUnitRemove = function(key) {
+    window._npwData = window._npwData || {};
+    window._npwData.mcUnits = (window._npwData.mcUnits || []).filter(function(k) { return k !== key; });
+    _renderStep();
+};
 
 // ─── Step 2: 프로젝트 시작일 ─────────────────────────────────────────
 function _renderStep2(body) {
@@ -170,10 +229,17 @@ function _renderStep3(body) {
     const val = (window._npwData && window._npwData.customer) || _prefill.customer || '';
     body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객사 <span style="color:#e03131;">*</span></div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:14px;">파일명 생성 및 메일 매칭에 사용됩니다.</div>' +
-        '<input id="npw-customer" type="text" placeholder="' + _t('예: LNW, Samsung, BOE', 'e.g. LNW, Samsung, BOE') + '" value="' + val + '" autocomplete="off" ' +
-        'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;" ' +
-        'oninput="window._npwCustAC(this.value)">' +
-        '<div id="npw-cust-ac" style="border:1px solid #ced4da; border-radius:6px; max-height:140px; overflow-y:auto; margin-top:4px; display:none; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); font-size:13px;"></div>';
+        // 💡 [2026-10-21 변경, 사용자 요청] 직접 타이핑 → 드롭다운.
+        //    datalist를 쓰는 이유: 목록에서 고를 수 있으면서도 **목록에 없는 신규 고객사는 그대로
+        //    입력**할 수 있다. <select>로 막으면 새 거래처를 등록할 방법이 사라진다.
+        //    목록은 window.getCustomerOptions()(js/04a CUSTOMER_CATALOG + 기존 프로젝트 + 주소록) —
+        //    기존 자동완성(_npwCustAC)이 쓰던 주소록 출처도 그 안에 합쳐져 있어 빠지는 게 없다.
+        '<input id="npw-customer" type="text" list="customer-options" placeholder="' + _t('목록에서 고르거나 직접 입력', 'pick from the list or type a new one') + '" value="' + val + '" autocomplete="off" ' +
+        'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
+        '<div style="font-size:11px; color:#aaa; margin-top:6px;">' +
+        _t('▾ 를 누르면 등록된 고객사 목록이 나옵니다. 목록에 없으면 그냥 입력하세요.',
+           'Click ▾ for the registered customers. Not listed? Just type it.') + '</div>';
+    if (window.refreshCustomerDatalist) window.refreshCustomerDatalist();
     setTimeout(function() { const el = document.getElementById('npw-customer'); if (el) el.focus(); }, 50);
 }
 window._npwCustAC = function(q) {

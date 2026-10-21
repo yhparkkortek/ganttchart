@@ -206,3 +206,103 @@ ${mailText}`;
     let tokenClient;
     let gapiInited = false;
     let gisInited = false;
+
+// ═══════════════════════════════════════════════════════════════════════
+// 🏷️ [2026-10-21 신규, 사용자 요청] 고객사 카탈로그 — 고객사 입력란 드롭다운의 원천.
+//    ⚠️ 코드가 아니라 **데이터**다. 고객사가 늘면 이 배열만 고친다(CLAUDE.md: 어휘는 데이터로).
+//    · code  = SAP 모델명 규칙(KORTEK Model name Descriptions V10)의 고객사 1글자 코드.
+//              문서 표에 있는 8곳만 코드가 있다 — 나머지는 코드 없이 이름만 쓴다.
+//              (js/46-model-name-builder.js의 MNB_CHART.customer가 문서 원본이고, 여기 code는
+//               같은 값을 편의상 함께 적어둔 것이다. 모델명 조립은 그쪽 표를 본다.)
+//    · src   = 'doc'  문서 표에 있는 고객사
+//              'app'  이 앱 데이터(프로젝트·메일 도메인)에서 실제로 관찰된 고객사
+//              'web'  카지노 게이밍 머신 제작사 조사로 보강(2026-10-21)
+// ═══════════════════════════════════════════════════════════════════════
+window.CUSTOMER_CATALOG = window.CUSTOMER_CATALOG || [
+    // ── 사내 모델명 규칙에 코드가 있는 고객사 (문서 표 기준) ──
+    { name: 'LNW(SG)',    code: 'S', src: 'doc', note: 'Light & Wonder (구 Scientific Games)' },
+    { name: 'I.G.T',      code: 'I', src: 'doc', note: 'International Game Technology' },
+    { name: 'WMS',        code: 'W', src: 'doc' },
+    { name: 'EUROCOIN',   code: 'E', src: 'doc' },
+    { name: 'ARISTOCRAT', code: 'A', src: 'doc' },
+    { name: 'GTECH',      code: 'G', src: 'doc' },
+    { name: 'ZITRO',      code: 'Z', src: 'doc' },
+    { name: 'KONAMI',     code: 'K', src: 'doc' },
+    // ── 이 앱 데이터에서 실제로 쓰이는 고객사 ──
+    { name: 'AMUSNET',    src: 'app' },
+    { name: 'KGI',        src: 'app' },
+    { name: 'INTRALOT',   src: 'app' },
+    { name: 'UNIDESA',    src: 'app' },
+    // ── 조사로 보강한 카지노 게이밍 머신 제작사 (2026-10-21) ──
+    //    ⚠️ 거래처 명단이 아니라 "있을 법한 후보"다. 실제 거래가 시작되면 src를 'app'으로 올릴 것.
+    { name: 'NOVOMATIC',  src: 'web' },
+    { name: 'AINSWORTH',  src: 'web' },
+    { name: 'ARUZE',      src: 'web', note: 'Aruze Gaming' },
+    { name: 'BALLY',      src: 'web', note: 'Bally Technologies' },
+    { name: 'EVERI',      src: 'web' },
+    { name: 'MERKUR',     src: 'web', note: 'Gauselmann' },
+    { name: 'SEGA SAMMY', src: 'web' },
+    { name: 'AGS',        src: 'web', note: 'PlayAGS' },
+    { name: 'INSPIRED',   src: 'web', note: 'Inspired Entertainment' },
+    { name: 'GAMING ARTS', src: 'web' },
+    { name: 'EGT',        src: 'web', note: 'Euro Games Technology' },
+    { name: 'APEX GAMING', src: 'web' },
+    { name: 'CASINO TECHNOLOGY', src: 'web' },
+    { name: 'JCM',        src: 'web', note: 'JCM Global' }
+];
+
+/**
+ * 드롭다운에 넣을 고객사 이름 목록.
+ * 카탈로그 + "이 앱이 이미 알고 있는 고객사"(열린 프로젝트·프로젝트 인덱스 캐시)를 합친다 —
+ * 카탈로그에 없는 실제 거래처가 목록에서 빠져 매번 직접 타이핑하게 되는 일을 막는다.
+ */
+window.getCustomerOptions = function() {
+    var seen = {}, out = [];
+    var push = function(n) {
+        n = String(n || '').trim();
+        if (!n) return;
+        var k = n.toUpperCase();
+        if (seen[k]) return;
+        seen[k] = true;
+        out.push(n);
+    };
+    (window.CUSTOMER_CATALOG || []).forEach(function(c) { push(c.name); });
+    // 지금 열려 있는 프로젝트의 고객사
+    push((window.projectMeta || {}).고객사);
+    // project_index.json 캐시(모달 열 때 5분 캐시로 채워짐) — Drive를 새로 읽지는 않는다
+    ((window._piModalCache) || []).forEach(function(p) { push(p && p.customer); });
+    // 주소록의 회사명 — 마법사의 기존 자동완성(_npwCustAC)이 쓰던 출처다.
+    //    드롭다운으로 바꾸면서 이 출처가 빠지면 "전엔 뜨던 거래처가 안 뜬다"가 되므로 같이 합친다.
+    try {
+        var ab = (window.tabData && window.tabData.addressBook)
+              || (window.AddressBook && window.AddressBook.load && window.AddressBook.load()) || [];
+        ab.forEach(function(r) { push(r && (r.company || r['고객사'])); });
+    } catch (e) { /* 주소록 미로드 — 카탈로그만으로 충분하다 */ }
+    return out;
+};
+
+/** 고객사 datalist를 만들고(없으면) 채운다. 입력란은 그대로 자유 입력도 된다. */
+window.refreshCustomerDatalist = function() {
+    var dl = document.getElementById('customer-options');
+    if (!dl) {
+        dl = document.createElement('datalist');
+        dl.id = 'customer-options';
+        document.body.appendChild(dl);
+    }
+    var cat = {};
+    (window.CUSTOMER_CATALOG || []).forEach(function(c) { cat[String(c.name).toUpperCase()] = c; });
+    dl.innerHTML = window.getCustomerOptions().map(function(n) {
+        var c = cat[n.toUpperCase()] || {};
+        var label = [c.code ? '코드 ' + c.code : '', c.note || ''].filter(Boolean).join(' · ');
+        return '<option value="' + String(n).replace(/"/g, '&quot;') + '">'
+             + String(label).replace(/</g, '&lt;') + '</option>';
+    }).join('');
+    var input = document.getElementById('sum-customer');
+    if (input && input.getAttribute('list') !== 'customer-options') input.setAttribute('list', 'customer-options');
+};
+
+// 입력란이 생겨 있을 때 한 번 채우고, 포커스할 때마다 최신 목록으로 갱신한다
+document.addEventListener('DOMContentLoaded', function() { try { window.refreshCustomerDatalist(); } catch (e) {} });
+document.addEventListener('focusin', function(e) {
+    if (e.target && e.target.id === 'sum-customer') { try { window.refreshCustomerDatalist(); } catch (err) {} }
+});
