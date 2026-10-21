@@ -79,31 +79,41 @@ def launch_chrome(wait=15):
     return False, '크롬이 디버그 포트로 뜨지 않았습니다.'
 
 
-def _gw_page():
-    """그룹웨어가 열린 탭을 찾는다. 없으면 새 탭으로 연다."""
+def _page_for(host, origin):
+    """그 사이트가 열린 탭을 찾는다. 없으면 새 탭으로 연다.
+
+    🧩 [2026-10-21] 원래 그룹웨어 전용(`_gw_page`)이었는데, **인사관리(kInsa)도 같은
+       전용 크롬에서 열어야 한다**는 요청으로 host/origin 을 받도록 일반화했다.
+       `_gw_page()`는 이 함수를 그대로 부르는 얇은 껍데기라 그룹웨어 동작은 그대로다.
+    """
     try:
         tabs = requests.get(f'{CDP_BASE}/json/list', timeout=5).json()
     except Exception:
         return None
     for t in tabs:
-        if t.get('type') == 'page' and 'gw.kortek.co.kr' in (t.get('url') or ''):
+        if t.get('type') == 'page' and host in (t.get('url') or ''):
             return t
     try:
-        requests.put(f'{CDP_BASE}/json/new?{GW_ORIGIN}', timeout=5)
+        requests.put(f'{CDP_BASE}/json/new?{origin}', timeout=5)
     except Exception:
         try:
-            requests.get(f'{CDP_BASE}/json/new?{GW_ORIGIN}', timeout=5)
+            requests.get(f'{CDP_BASE}/json/new?{origin}', timeout=5)
         except Exception:
             return None
     for _ in range(20):
         time.sleep(0.5)
         try:
             for t in requests.get(f'{CDP_BASE}/json/list', timeout=5).json():
-                if t.get('type') == 'page' and 'gw.kortek.co.kr' in (t.get('url') or ''):
+                if t.get('type') == 'page' and host in (t.get('url') or ''):
                     return t
         except Exception:
             pass
     return None
+
+
+def _gw_page():
+    """그룹웨어가 열린 탭을 찾는다. 없으면 새 탭으로 연다."""
+    return _page_for('gw.kortek.co.kr', GW_ORIGIN)
 
 
 async def _eval(ws_url, expr, timeout=45):
@@ -1381,3 +1391,140 @@ def asset_items(asset_id):
         out.append({'itemId': it.get('id'), 'assetId': it.get('assetId'),
                     'name': it.get('name') or ''})
     return out
+
+
+# ══ 🧑‍💼 인사관리(kInsa) — 같은 전용 크롬에서 연다 ═══════════════════════════
+#
+#  [2026-10-21] 처음엔 백엔드에서 requests 로만 로그인했는데, **화면이 안 열린다**는
+#  지적을 받았다. 그룹웨어처럼 사람이 보고 이어서 쓸 수 있어야 하므로 같은 전용 크롬
+#  (CDP 9222, KortekGW\cdp-profile)에 탭으로 띄운다. 로그인 세션도 그 브라우저에 남아
+#  이후 화면 조회/조작을 그대로 이어갈 수 있다.
+#
+#  ⚠️⚠️ 한 번만 시도하고 실패하면 재시도하지 않는다(그룹웨어와 같은 이유 — 계정 잠금).
+#     실패해도 **창은 열어 둔 채** 사람에게 넘긴다.
+INSA_ORIGIN = 'http://insa.kortek.co.kr'
+INSA_HOST   = 'insa.kortek.co.kr'
+INSA_LOGIN_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'insa_login_config.json')
+
+
+def _insa_page():
+    return _page_for(INSA_HOST, INSA_ORIGIN)
+
+
+def eval_in_insa(expr, timeout=45):
+    """인사관리 페이지 컨텍스트에서 JS 실행."""
+    t = _insa_page()
+    if not t:
+        raise RuntimeError('인사관리 탭을 열지 못했습니다.')
+    return asyncio.new_event_loop().run_until_complete(
+        _eval(t['webSocketDebuggerUrl'], expr, timeout))
+
+
+def load_insa_login_config():
+    try:
+        with open(INSA_LOGIN_CFG, 'r', encoding='utf-8') as f:
+            cfg = json.load(f) or {}
+        return cfg if cfg.get('user') and cfg.get('pw_dpapi') else None
+    except Exception:
+        return None
+
+
+def insa_session_info():
+    """로그인 상태 추정 — 로그인 화면이면 userNum 입력칸이 보인다.
+
+    🐛 [2026-10-21 실측에서 잡음] 처음엔 "url 이 있고 로그인 폼이 없으면 로그인됨"으로
+       봤는데, 탭이 아직 `about:blank` 일 때도 그 조건을 만족해 **로그인도 안 했는데
+       '이미 로그인되어 있습니다'** 가 떴다. 그러면 자동 로그인이 조용히 건너뛰어진다.
+       → **주소가 실제로 인사관리 호스트일 때만** 판정한다.
+    """
+    try:
+        r = eval_in_insa("""
+          (() => ({ url: location.href,
+                    hasLoginForm: !!document.querySelector("input[name='userNum']") }))()
+        """, timeout=20) or {}
+    except Exception as e:
+        return {'ok': False, 'message': str(e)}
+    url = r.get('url', '') or ''
+    on_site = INSA_HOST in url
+    return {'ok': on_site and not r.get('hasLoginForm'), 'url': url, 'onSite': on_site}
+
+
+def insa_login_once():
+    """저장된 계정으로 **한 번만** 로그인. 실패해도 재시도하지 않고 창을 열어 둔다."""
+    if not chrome_alive():
+        ok, msg = launch_chrome()
+        if not ok:
+            return {'ok': False, 'result': 'chrome', 'message': msg}
+
+    if not _insa_page():
+        return {'ok': False, 'result': 'no_tab', 'message': '인사관리 탭을 열지 못했습니다.'}
+
+    s = insa_session_info()
+    if s.get('ok'):
+        return {'ok': True, 'result': 'already', 'message': '이미 로그인되어 있습니다.', 'session': s}
+
+    cfg = load_insa_login_config()
+    if not cfg:
+        return {'ok': False, 'result': 'not_configured',
+                'message': '저장된 인사관리 로그인 정보가 없습니다 — 🔑에서 먼저 등록해주세요.'}
+    try:
+        pw = _dpapi_decrypt_b64(cfg['pw_dpapi'])
+    except Exception as e:
+        return {'ok': False, 'result': 'decrypt', 'message': str(e)}
+
+    # 아직 인사관리 화면이 아니거나(빈 탭 등) 로그인 폼이 안 보이면 먼저 로그인 화면으로 보낸다.
+    try:
+        st = insa_session_info()
+        need_nav = (not st.get('onSite'))
+        if not need_nav:
+            need_nav = not eval_in_insa("!!document.querySelector(\"input[name='userNum']\")", timeout=15)
+        if need_nav:
+            eval_in_insa("location.href = '%s/'" % INSA_ORIGIN, timeout=15)
+            for _ in range(20):                      # 로그인 폼이 뜰 때까지 기다린다
+                time.sleep(0.4)
+                try:
+                    if eval_in_insa("!!document.querySelector(\"input[name='userNum']\")", timeout=10):
+                        break
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # ⚠️ 제출 결과는 **바깥에서 폴링**한다 — submit 하면 페이지가 넘어가며 JS 컨텍스트가 죽어
+    #    eval 의 반환을 기다리면 예외가 난다(그룹웨어에서 겪은 것과 같은 함정).
+    #    그래서 submit 호출 자체의 응답은 무시하고, 아래에서 화면을 다시 읽어 판정한다.
+    js = """
+      (() => {
+        const u = document.querySelector("input[name='userNum']");
+        const p = document.querySelector("input[name='password']");
+        if (!u || !p) return 'no_form';
+        u.value = %s; p.value = %s;
+        const f = u.form || document.querySelector('form.form-signin');
+        if (!f) return 'no_form';
+        f.submit();
+        return 'submitted';
+      })()
+    """ % (json.dumps(cfg['user']), json.dumps(pw))
+    try:
+        res = eval_in_insa(js, timeout=20)
+    except Exception:
+        res = 'submitted'          # 페이지 이동으로 컨텍스트가 죽은 것 — 정상 경로다
+    finally:
+        pw = js = None             # 비밀번호가 담긴 문자열을 바로 버린다
+
+    if res == 'no_form':
+        return {'ok': False, 'result': 'no_form',
+                'message': '로그인 화면을 찾지 못했습니다 — 열린 창에서 직접 로그인해주세요.',
+                'handoff': True}
+
+    # 결과 폴링 — 실패면 alert 후 index 로 되돌아가 로그인 폼이 다시 보인다.
+    for _ in range(16):
+        time.sleep(0.5)
+        s2 = insa_session_info()
+        if s2.get('ok'):
+            return {'ok': True, 'result': 'ok', 'message': '인사관리에 로그인했습니다.', 'session': s2}
+
+    # ⚠️ 여기부터 실패 — **다시 시도하지 않는다.** 창은 열린 채로 사람에게 넘긴다.
+    return {'ok': False, 'result': 'failed', 'handoff': True,
+            'message': '인사관리 로그인에 실패했습니다 — 계정 잠금을 막기 위해 재시도하지 않습니다. '
+                       '열린 창에서 직접 로그인해주세요.'}

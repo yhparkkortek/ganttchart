@@ -3238,9 +3238,12 @@ def gw_login_config_delete():
 #    - `/kInsa` 는 GET 을 막아 둔다(`Allow: POST`). 세션은 표준 `JSESSIONID` 쿠키
 #    - **실패 응답이 특이하다**: HTTP 200 + 194바이트짜리 <script> 하나로,
 #      `var message = ...; alert(message); location.href = "index";` 를 돌려준다.
-#      즉 **`location.href = "index"` 가 있으면 로그인 실패**이고, message 에 사유가
-#      한/영 두 줄로 들어 있다(예: "아이디가 존재하지 않습니다 / ID is not exist").
-#      → 성공/실패 판정을 이 지문으로 한다. HTTP 코드로는 구분이 안 된다(둘 다 200).
+#      성공도 실패도 200이라 **상태코드로는 구분이 안 된다**(→ docs/insa-hr.md).
+#
+#  🖥 [2026-10-21 수정] 처음엔 여기서 requests 로만 로그인했는데 **화면이 안 열린다**는
+#     지적을 받았다. 그룹웨어처럼 사람이 보고 이어서 쓸 수 있어야 하므로, 지금은 같은
+#     전용 크롬(CDP 9222)에 탭으로 띄워 로그인한다 — 실제 동작은 gw_bridge.insa_login_once().
+#     덕분에 실패 판정도 위 HTML 지문 대신 **로그인 폼이 다시 보이는지**로 한다(더 단순하고 확실).
 #
 #  ⚠️⚠️ **한 번만 시도하고, 실패하면 재시도하지 않는다.** 그룹웨어·SAP과 같은 이유다 —
 #     사내 계정이 잠기면 인사·급여까지 막힌다. 잠김 여부를 우리가 알 수 없으므로
@@ -3251,7 +3254,6 @@ def gw_login_config_delete():
 #  **어떤 응답에도 비밀번호를 돌려주지 않는다**(등록 여부와 아이디만).
 _INSA_LOGIN_CFG_PATH = os.path.join(BASE_DIR, 'insa_login_config.json')
 INSA_BASE = 'http://insa.kortek.co.kr'
-_insa_session = None          # 로그인 성공한 requests.Session (쿠키 보관)
 
 
 def _insa_cfg():
@@ -3293,8 +3295,6 @@ def insa_login_config_save():
 
 @app.route('/insa/login-config', methods=['DELETE'])
 def insa_login_config_delete():
-    global _insa_session
-    _insa_session = None
     try:
         if os.path.exists(_INSA_LOGIN_CFG_PATH):
             os.remove(_INSA_LOGIN_CFG_PATH)
@@ -3303,18 +3303,13 @@ def insa_login_config_delete():
     return jsonify({'ok': True, 'message': '저장된 인사관리 로그인 정보를 삭제했습니다.'})
 
 
-def _insa_fail_message(html_text):
-    """실패 응답의 <script> 안 message 를 꺼낸다. 실패가 아니면 None."""
-    if 'location.href' not in html_text or '"index"' not in html_text:
-        return None
-    m = re.search(r'var\s+message\s*=\s*[`\'"](.*?)[`\'"]\s*;', html_text, re.S)
-    msg = (m.group(1).strip() if m else '').strip()
-    return msg or '로그인에 실패했습니다.'
-
-
 @app.route('/insa/status', methods=['GET'])
 def insa_status():
-    """지금 로그인된 세션이 살아 있는지. 네트워크만 확인하고 **로그인은 하지 않는다.**"""
+    """로그인 상태. **로그인은 하지 않는다**(재시도 금지 가드는 프런트에 있다).
+
+    [2026-10-21] 처음엔 백엔드가 requests 로만 로그인해서 **화면이 안 열린다**는 지적을
+    받았다 — 지금은 그룹웨어와 같은 전용 크롬 탭을 본다(gw_bridge.insa_session_info).
+    """
     cfg = _insa_cfg()
     out = {'ok': True, 'configured': bool(cfg.get('user') and cfg.get('pw_dpapi')),
            'user': cfg.get('user', ''), 'loggedIn': False}
@@ -3325,41 +3320,48 @@ def insa_status():
         out['reachable'] = False
         out['message'] = f'인사관리 서버에 연결할 수 없습니다: {e}'
         return jsonify(out)
-    out['loggedIn'] = _insa_session is not None
+    try:
+        import gw_bridge
+        if gw_bridge.chrome_alive():          # 크롬이 꺼져 있으면 띄우지 않는다(조회일 뿐이므로)
+            out['loggedIn'] = bool(gw_bridge.insa_session_info().get('ok'))
+    except Exception:
+        pass
     return jsonify(out)
+
+
+@app.route('/insa/open', methods=['POST'])
+def insa_open():
+    """인사관리 화면을 전용 크롬에 **띄우기만** 한다(로그인은 하지 않음)."""
+    try:
+        import gw_bridge
+        if not gw_bridge.chrome_alive():
+            ok, msg = gw_bridge.launch_chrome()
+            if not ok:
+                return jsonify({'ok': False, 'message': msg})
+        t = gw_bridge._insa_page()
+        if not t:
+            return jsonify({'ok': False, 'message': '인사관리 탭을 열지 못했습니다.'})
+        try:
+            gw_bridge.gw_window_state('normal')   # 최소화돼 있으면 보이게
+        except Exception:
+            pass
+        return jsonify({'ok': True, 'message': '인사관리 창을 열었습니다.'})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
 
 
 @app.route('/insa/login', methods=['POST'])
 def insa_login():
-    """저장된 계정으로 **한 번만** 로그인 시도. 실패하면 재시도하지 않고 사람에게 넘긴다."""
-    global _insa_session
-    cfg = _insa_cfg()
-    user, enc = cfg.get('user'), cfg.get('pw_dpapi')
-    if not user or not enc:
-        return jsonify({'ok': False, 'result': 'no-config',
-                        'message': '저장된 인사관리 로그인 정보가 없습니다 — 🔑에서 등록해주세요.'})
+    """저장된 계정으로 **한 번만** 로그인 시도. 실패해도 재시도하지 않고 창을 열어 둔다.
+
+    ⚠️ 재시도 금지 가드는 **프런트**(js/36 `_insaEnsureLogin`)에 있다 — 이 라우트는
+       부를 때마다 그냥 한 번 시도한다. 새 경로를 붙일 땐 반드시 그 게이트를 통할 것.
+    """
     try:
-        pw = _dpapi_decrypt_b64(enc)
+        import gw_bridge
+        return jsonify(gw_bridge.insa_login_once())
     except Exception as e:
-        return jsonify({'ok': False, 'result': 'error', 'message': f'비밀번호 복호화 실패: {e}'})
-    s = requests.Session()
-    try:
-        s.get(INSA_BASE + '/', timeout=8)          # JSESSIONID 발급
-        r = s.post(INSA_BASE + '/kInsa', data={'userNum': user, 'password': pw},
-                   timeout=12, allow_redirects=True)
-    except Exception as e:
-        return jsonify({'ok': False, 'result': 'error',
-                        'message': f'인사관리 서버에 연결할 수 없습니다: {e}'})
-    finally:
-        pw = None                                   # 비밀번호는 응답/로그 어디에도 남기지 않는다
-    fail = _insa_fail_message(r.text or '')
-    if fail is not None:
-        _insa_session = None
-        # ⚠️ 여기서 **다시 시도하지 않는다.** 사유(아이디 없음/비밀번호 틀림/잠김)를 그대로 전한다.
-        return jsonify({'ok': False, 'result': 'fail', 'message': fail})
-    _insa_session = s
-    return jsonify({'ok': True, 'result': 'ok', 'user': user,
-                    'message': '인사관리에 로그인했습니다.'})
+        return jsonify({'ok': False, 'result': 'error', 'message': str(e)})
 
 
 @app.route('/gw/login', methods=['POST'])

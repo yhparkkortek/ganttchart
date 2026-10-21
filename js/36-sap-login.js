@@ -117,9 +117,11 @@
                 + '<span id="insalogin-state" style="font-size:11px; color:#888;"></span></div>'
                 + '<div style="font-size:11.5px; color:#666; margin-bottom:10px; line-height:1.5;">'
                 + T('사내 인사관리(insa.kortek.co.kr) 자동 로그인입니다. 아이디는 <b>사번</b>입니다. '
+                    + '그룹웨어와 같은 <b>전용 크롬 창</b>에 열리므로, 로그인한 뒤 그 창에서 바로 쓰실 수 있습니다. '
                     + '그룹웨어와 같은 이유로 <b>한 번만</b> 시도하고 실패하면 재시도하지 않습니다. '
                     + '비밀번호 보관 방식은 SAP·그룹웨어와 동일합니다(이 PC의 Windows 계정에서만 풀림).',
                     'Auto-login for the in-house HR system (insa.kortek.co.kr). The ID is your <b>employee number</b>. '
+                    + 'It opens in the same dedicated Chrome window as groupware. '
                     + 'Like groupware it is tried <b>once</b> and never retried. Password storage is the same as SAP.')
                 + '</div>'
                 + fieldRow(T('아이디(사번)', 'ID (emp. no.)'), '<input id="insalogin-user" autocomplete="off" style="' + inputSt + '" placeholder="' + T('예: 12345', 'e.g. 12345') + '">')
@@ -128,6 +130,7 @@
                 + '<div style="display:flex; gap:8px;">'
                 + '<button onclick="window._insaLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
+                + '<button onclick="window._insaOpen()" style="' + btnSt + '">🪟 ' + T('창 열기', 'Open window') + '</button>'
                 + '<button onclick="window._insaLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._insaLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div></div></div>';
@@ -308,6 +311,17 @@
             // 사람이 직접 누른 테스트는 **가드를 푼다** — 비밀번호를 고쳤을 수 있다.
             _insaTried = !d.ok; _insaFailMsg = d.ok ? '' : (d.message || '');
             insaStatus((d.ok ? '✅ ' : '🔒 ') + (d.message || ''), d.ok ? 'ok' : 'err');
+        } catch (e) {
+            insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
+        }
+    };
+
+    // 🪟 로그인은 하지 않고 **창만** 띄운다 — 직접 보고 쓰고 싶을 때.
+    window._insaOpen = async function () {
+        insaStatus('⏳ ' + T('인사관리 창을 여는 중…', 'Opening the HR window…'), '');
+        try {
+            var d = await fetch(BASE + '/insa/open', { method: 'POST' }).then(function (r) { return r.json(); });
+            insaStatus((d.ok ? '🪟 ' : '⚠️ ') + (d.message || ''), d.ok ? 'ok' : 'err');
         } catch (e) {
             insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
         }
