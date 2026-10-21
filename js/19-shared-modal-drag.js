@@ -181,9 +181,23 @@ window._makeResizable = function(boxId, _retry) {
         if (d === 'ne' || d === 'sw') return 'nesw-resize';
         return '';
     };
-    // 가장자리라도 버튼/입력 위면 리사이즈로 가로채지 않는다 — 클릭이 최우선
+    // 가장자리라도 "누를 수 있는 것" 위면 리사이즈로 가로채지 않는다 — 클릭이 최우선.
+    // 🐛 [2026-10-21 보강, 사용자 제보 "버튼 위에서 커서가 리사이즈로 바뀐다"]
+    //    처음엔 태그·클래스 목록으로만 판정했는데, 이 앱은 <span>·<div>에 onclick과 cursor:pointer를
+    //    직접 붙여 쓰는 곳이 많아서 목록이 계속 새어 나간다(칩·배지·토글 등). 목록을 늘리는 대신
+    //    **이미 손가락 커서인 요소면 무조건 양보**한다 — 눌릴 수 있게 만들어 둔 것은 전부 걸러진다.
     const isInteractive = function(t) {
-        return !!(t && t.closest && t.closest('button, input, select, textarea, a, [onclick], .mnb-opt, .mnb-mode'));
+        if (!t || !t.closest) return false;
+        if (t.closest('button, input, select, textarea, a, label, summary, [onclick], [role="button"]')) return true;
+        try {
+            // 자기 자신부터 박스까지 올라가며 pointer 커서가 있으면 클릭 대상으로 본다
+            let el = t;
+            while (el && el !== box) {
+                if (window.getComputedStyle(el).cursor === 'pointer') return true;
+                el = el.parentElement;
+            }
+        } catch (e) { /* 계산 실패 시엔 아래 가장자리 판정으로 넘어간다 */ }
+        return false;
     };
 
     box.addEventListener('mousemove', function(e) {

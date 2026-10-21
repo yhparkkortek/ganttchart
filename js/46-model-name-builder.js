@@ -272,8 +272,15 @@ window._mnbOpen = function(targetInputId) {
         if (window._makeDraggable) window._makeDraggable('mnb-box', 'mnb-drag');
         if (window._bindClickToFront) window._bindClickToFront('mnb-modal');
 
+        // 🐛 [2026-10-21 버그수정, 사용자 제보 "버튼이 안 눌린다"]
+        //    위임 리스너를 오버레이(m)에 달았는데, 박스(#mnb-box)에 onclick="event.stopPropagation()"이
+        //    걸려 있어서 박스 안에서 난 클릭이 오버레이까지 **올라오지 못했다** — 칩을 눌러도 아무 일도
+        //    안 일어나고, 일련번호를 입력해도 미리보기가 안 바뀌었다(input도 같은 이유로 막혔다).
+        //    → 박스 자신에 단다. 박스의 stopPropagation은 "바깥(오버레이) 클릭으로 닫히는 것"을 막는
+        //    용도라 건드리지 않는다.
+        const _mnbEvtRoot = document.getElementById('mnb-box') || m;
         // 이벤트 위임 — 칩 선택 / 모드 전환 / 입력
-        m.addEventListener('click', function(e) {
+        _mnbEvtRoot.addEventListener('click', function(e) {
             var opt = e.target.closest ? e.target.closest('.mnb-opt') : null;
             if (opt) { _mnbSel[opt.dataset.key] = opt.dataset.code; _mnbRender(); return; }
             var mode = e.target.closest ? e.target.closest('.mnb-mode') : null;
@@ -282,7 +289,7 @@ window._mnbOpen = function(targetInputId) {
             var next = e.target.closest ? e.target.closest('.mnb-usenext') : null;
             if (next) { _mnbSel.serial = next.dataset.v; _mnbRender(); }
         });
-        m.addEventListener('input', function(e) {
+        _mnbEvtRoot.addEventListener('input', function(e) {
             if (e.target.id === 'mnb-raw') {
                 _mnbRaw = e.target.value;
                 _mnbSel.appearance = window._mnbAppearance(_mnbMode, _mnbRaw);
