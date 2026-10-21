@@ -494,6 +494,23 @@ window.bsFlushChangeReasons = function() {
     }
 })();
 
+// 🦓 보이는 행만 세어 제브라를 다시 매긴다 — Elec Parts의 _pcApplyZebra(js/22d)와 같은 방식.
+//    숨은 행은 번호를 안 먹어야 접었다 폈다 해도 줄무늬가 어긋나지 않는다.
+window.bmApplyZebra = function(key) {
+    const conf = BM_CONF[key];
+    if (!conf) return;
+    const tbody = document.getElementById(conf.tbodyId);
+    if (!tbody) return;
+    let i = 0;
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr'), function(tr) {
+        if (tr.classList.contains('mc-summary-row')) return;   // 합계 행은 제브라 대상이 아니다
+        tr.classList.remove('mc-zebra-a', 'mc-zebra-b');
+        if (tr.style.display === 'none') return;
+        tr.classList.add(i % 2 === 0 ? 'mc-zebra-a' : 'mc-zebra-b');
+        i++;
+    });
+};
+
 window.bmToggleHidden = function(key, btnEl) {
     const tbody = document.getElementById(BM_CONF[key].tbodyId);
     if (!tbody) return;
@@ -511,6 +528,11 @@ window.bmToggleHidden = function(key, btnEl) {
             tr.style.display = expand ? '' : 'none';
         });
         window.bmSetupAllRows(key);
+        // 🦓 [2026-10-21 버그수정] 제브라(얼룩) 줄무늬는 **그릴 때** "보이는 행" 기준으로 매겨진다
+        //    (js/22g의 bsZebraIdx). 여기서 display만 토글하면 그 번호가 그대로 남아, 접은 뒤
+        //    두 줄이 같은 색으로 붙거나 색이 뒤집힌다(Customer SPEC 제보). 다시 매긴다.
+        //    M.C는 위 분기에서 표를 통째로 다시 그리므로 해당 없음.
+        window.bmApplyZebra(key);
     }
     if (key === 'bs' && window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
 };
