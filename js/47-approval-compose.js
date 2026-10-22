@@ -212,13 +212,13 @@
                     : _resolveOne(form, k, srcFields[k], ctx);
                 return { label: k, srcValue: srcFields[k], value: d.value, from: d.from, kind: d.kind, note: d.note || '' };
             });
-        _apvOpen(docNum, src, form, rows, opts.asIs);
+        _apvOpen(docNum, src, form, rows, opts.asIs, ctx.material);
     };
 
     // ── 미리보기 (칸마다 출처를 보여준다) ───────────────────────────────
     window._apvPending = null;
-    var _apvOpen = function (docNum, src, form, rows, asIs) {
-        window._apvPending = { docNum: docNum, src: src, form: form, rows: rows, asIs: !!asIs };
+    var _apvOpen = function (docNum, src, form, rows, asIs, material) {
+        window._apvPending = { docNum: docNum, src: src, form: form, rows: rows, asIs: !!asIs, material: material || '' };
         var ov = document.getElementById('apv-overlay');
         if (!ov) {
             ov = document.createElement('div');
@@ -295,6 +295,19 @@
             + '</div>';
         // ⚠️ 이 양식의 매핑이 아예 없으면 **모든 칸이 원본 그대로** 나온다 = 사실상 복사다.
         //    말 안 하면 사용자는 "틀로 작성을 눌렀는데 SAP도 프로젝트도 안 쓴다"로만 보인다(실제 제보).
+        // ⚠️ 이 양식은 SAP 값이 필요한데 **자재번호를 안 받았다** — 그러면 SAP 를 아예 안 부른다.
+        //    예전 메시지의 버튼을 누르면 그 값이 안 실려 있어 이 상태가 된다(실사용에서 "SAP 조회를
+        //    못한다"로 보였다). 빈칸만 남기면 왜 비었는지 알 수 없으니 **크게 밝힌다.**
+        if (!p.asIs && !p.material && window.APPROVAL_FIELD_SOURCES[p.form]
+            && Object.keys(window.APPROVAL_FIELD_SOURCES[p.form]).some(function (k) {
+                   return (window.APPROVAL_FIELD_SOURCES[p.form][k] || {}).from === 'sap'; })) {
+            html += '<div style="margin-top:8px; padding:6px 9px; background:#fff3cd; border-left:3px solid #e6a817;'
+                + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#7a5210;">🏭 '
+                + _esc(_t('자재번호를 안 받아서 SAP 조회를 하지 않았습니다 — Item Code·Model 같은 칸이 비어 있습니다. '
+                          + '자재번호를 넣어 다시 요청하시면(예: "' + p.docNum + ' 참고하고 132933 로 기안 작성해줘") 채워집니다.',
+                          'No material number given, so SAP was not queried.'))
+                + '</div>';
+        }
         if (!p.asIs && !window.APPROVAL_FIELD_SOURCES[p.form]) {
             html += '<div style="margin-top:8px; padding:6px 9px; background:#fbe4e2; border-left:3px solid #b1432f;'
                 + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#b1432f;">'
