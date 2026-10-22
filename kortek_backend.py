@@ -541,7 +541,7 @@ def _imap_date(d):
 
 
 def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
-                      keyword, keyword_from, keyword_body):
+                      keyword, keyword_from, keyword_body, stage_dir=None):
     """원본 메일 바이트 → 프런트가 쓰는 결과 dict.
     반환 ('ok', dict) / ('old', None)=기간보다 과거 / ('skip', None)=조건 불일치.
     POP3 경로는 'old'를 받으면 더 과거로 갈 필요가 없어 루프를 끊는다(기존 동작 유지)."""
@@ -576,6 +576,12 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
     is_to_me  = my_addr in to_raw.lower()
     is_cc_me  = (not is_to_me) and (my_addr in cc_raw.lower())
 
+    # 📬 [2026-10-22] 원본 .eml 을 staging 에 둔다 — 나중에 프로젝트가 확정되면 그쪽으로 옮긴다.
+    #    ⚠️ 수신을 절대 막지 않는다(실패는 _stage_raw_mail 안에서 삼키고 None 반환).
+    _fname = f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml"
+    if stage_dir:
+        _stage_raw_mail(stage_dir, _fname, raw)
+
     return ('ok', {
         "subject":     subject,
         "sender":      sender,
@@ -583,7 +589,7 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
         "cc":          cc_raw,
         "date":        msg_dt.strftime("%Y-%m-%d %H:%M"),
         "body":        body,
-        "fileName":    f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml",
+        "fileName":    _fname,
         "importance":  importance_high,
         "isToMe":      is_to_me,
         "isCcMe":      is_cc_me,
@@ -592,7 +598,7 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
 
 
 def _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                     keyword, keyword_from, keyword_body):
+                     keyword, keyword_from, keyword_body, stage_dir=None):
     """IMAPS로 받는다. 서버 SEARCH로 날짜를 먼저 걸러 받을 통수를 줄인다.
     ⚠️ 키워드는 서버에 맡기지 않고 기존 matches_keyword로 거른다 — IMAP SEARCH의 한글
     charset 처리가 서버마다 달라서, 검색 결과가 조용히 달라지는 위험을 피한다."""
@@ -617,7 +623,7 @@ def _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
                     continue
                 status, item = _mail_parse_entry(
                     md[0][1], mail_user, start_dt, end_dt,
-                    keyword, keyword_from, keyword_body)
+                    keyword, keyword_from, keyword_body, stage_dir)
                 if status == 'ok':
                     results.append(item)
             except Exception:
@@ -631,7 +637,7 @@ def _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
 
 
 def _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                     keyword, keyword_from, keyword_body):
+                     keyword, keyword_from, keyword_body, stage_dir=None):
     """POP3 폴백 — IMAP이 막힌 계정/서버용. 동작은 전환 전과 동일하다."""
     M = poplib.POP3(POP3_HOST, POP3_PORT, timeout=15)
     try:
@@ -644,7 +650,7 @@ def _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
             try:
                 status, item = _mail_parse_entry(
                     b"\n".join(M.retr(i)[1]), mail_user, start_dt, end_dt,
-                    keyword, keyword_from, keyword_body)
+                    keyword, keyword_from, keyword_body, stage_dir)
                 if status == 'old':
                     break          # POP3는 순서대로라 더 과거는 볼 필요 없음
                 if status == 'ok':
@@ -675,13 +681,15 @@ def fetch_mail():
                        hour=23, minute=59, second=59, tzinfo=KST)
 
         scan_limit = max_count or 200
+        # 📬 원본 .eml staging 경로 — 저장소 미설정이면 None(보관을 그냥 건너뛴다)
+        _stage_dir = _docstore_mail_stage_dir()
 
         # IMAPS 우선 — 실패하면 POP3로 폴백한다. 폴백은 "조용히" 하지 않고 `proto`/`fallback`에
         # 담아 올려보내, 어느 경로로 받았고 왜 넘어갔는지 화면에서 확인할 수 있게 한다.
         proto, fallback_reason = 'imaps', None
         try:
             results = _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                       keyword, keyword_from, keyword_body)
+                                       keyword, keyword_from, keyword_body, _stage_dir)
         except imaplib.IMAP4.error as e:
             # 인증 실패는 비밀번호가 틀린 것 — POP3로 재시도하면 같은 실패를 한 번 더 만들어
             # 계정 잠금 위험만 키운다(SAP 로그인에서 세운 원칙과 동일). 폴백하지 않고 그대로 알린다.
@@ -690,7 +698,7 @@ def fetch_mail():
         except Exception as e:
             proto, fallback_reason = 'pop3', f'{type(e).__name__}: {e}'
             results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                       keyword, keyword_from, keyword_body)
+                                       keyword, keyword_from, keyword_body, _stage_dir)
 
         resp = {
             "status":  "success",
@@ -4550,6 +4558,231 @@ def doc_text_put():
     except Exception as e:
         return jsonify({'ok': False, 'error': f'캐시 저장 실패: {e}'}), 500
     return jsonify({'ok': True, 'folder': folder, 'name': name, 'chars': len(text)})
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 📬 [2026-10-22 신규] 분류 확정 메일을 .eml 통째로 보관
+#
+#   왜: 지금 extract_attachments()는 **메타데이터만** 뽑고 내용은 버린다 — 첨부가 영영
+#   사라진다. .eml 한 파일에 본문+첨부가 다 들어가므로 통째로 두면 첨부를 따로 다룰 필요가 없다.
+#
+#   흐름: 수신 중 staging에 저장 → 프런트가 프로젝트를 확정하면 MAIL/<프로젝트>/로 이동
+#         → 어느 큐에도 없고 오래된 staging만 정리(GC).
+#
+#   ⚠️ 키는 프런트가 이미 모든 경로에서 들고 다니는 fileName 을 쓴다. 새 필드를 응답에 끼워
+#   넣으면 "경유지마다 빠뜨려서 조용히 사라지는" 사고(docs/mail-pipeline.md의 mailRaw 패턴)를
+#   그대로 반복하게 된다.
+#
+#   ⚠️ 수신 경로는 "멈춘 것 같다"로 고생한 자리다. staging 저장은 **절대 수신을 막지 않는다** —
+#   실패해도 경고만 남기고 지나간다. 자동수집이 하루 단위로 같은 메일을 다시 받아오므로
+#   이미 있는 파일은 건너뛴다(네트워크 공유에 같은 1MB를 10분마다 다시 쓰지 않도록).
+# ══════════════════════════════════════════════════════════════════════════
+
+DOCSTORE_MAIL_DIR    = 'MAIL'
+DOCSTORE_MAIL_STAGE  = '_staging'
+DOCSTORE_GC_DAYS     = 60          # 어느 큐에도 없는 고아 staging의 수명(설정 가능)
+DOCSTORE_GC_MAX_GB   = 20          # 그래도 무한히 쌓이지 않도록 상한 — 오래된 것부터
+
+
+def _docstore_mail_root(cfg=None):
+    """<root>/MAIL — 없으면 만든다. 저장소 미설정이면 None."""
+    cfg = cfg or _docstore_load()
+    root = cfg.get('root') or ''
+    if not root or not os.path.isdir(root):
+        return None
+    p = os.path.join(root, DOCSTORE_MAIL_DIR)
+    try:
+        os.makedirs(p, exist_ok=True)
+        return p
+    except Exception:
+        return None
+
+
+def _docstore_mail_stage_dir(cfg=None):
+    mr = _docstore_mail_root(cfg)
+    if not mr:
+        return None
+    p = os.path.join(mr, DOCSTORE_MAIL_STAGE)
+    try:
+        os.makedirs(p, exist_ok=True)
+        return p
+    except Exception:
+        return None
+
+
+def _mail_stage_key(file_name):
+    """fileName('20261016_제목.eml') → 안전한 파일명 머리. 프런트 키와 1:1로 맞춘다."""
+    base = re.sub(r'\.eml$', '', str(file_name or ''), flags=re.I)
+    base = re.sub(r'[^0-9A-Za-z_.\-가-힣 ]', '_', base).strip()[:80]
+    return base or 'mail'
+
+
+def _stage_raw_mail(stage_dir, file_name, raw):
+    """원본 .eml을 staging에 저장. 이미 있으면 건너뛴다. 실패해도 예외를 올리지 않는다."""
+    if not stage_dir or not raw:
+        return None
+    try:
+        key = _mail_stage_key(file_name)
+        h = hashlib.sha1(raw).hexdigest()[:8]      # 같은 날·같은 제목 충돌 방지
+        name = f'{key}__{h}.eml'
+        path = os.path.join(stage_dir, name)
+        if not os.path.exists(path):
+            with open(path, 'wb') as f:
+                f.write(raw)
+        return name
+    except Exception as e:
+        print(f'[메일보관] staging 저장 실패(무시): {e}')
+        return None
+
+
+@app.route('/doc/mail-assign', methods=['POST'])
+def doc_mail_assign():
+    """분류 확정 → staging에서 MAIL/<프로젝트>/로 이동.
+    fileName으로 찾는다(프런트가 모든 경로에서 들고 다니는 유일한 키)."""
+    cfg = _docstore_load()
+    stage = _docstore_mail_stage_dir(cfg)
+    if not stage:
+        return jsonify({'ok': False, 'error': '문서 저장소가 설정되지 않았습니다.'}), 400
+    req = request.get_json(force=True, silent=True) or {}
+    file_name = str(req.get('fileName') or '')
+    project = _docstore_safe_name(req.get('project'))
+    if not file_name or not project:
+        return jsonify({'ok': False, 'error': 'fileName과 project가 필요합니다.'}), 400
+
+    key = _mail_stage_key(file_name)
+    try:
+        cands = [n for n in os.listdir(stage) if n.startswith(key + '__')]
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'staging 조회 실패: {e}'}), 500
+    if not cands:
+        # 흔한 경우다(저장소 설정 전에 받은 메일) — 오류가 아니라 '없음'으로 돌려준다
+        return jsonify({'ok': True, 'moved': False, 'reason': 'not_staged'})
+    cands.sort(key=lambda n: os.path.getmtime(os.path.join(stage, n)), reverse=True)
+
+    dest_dir = os.path.join(_docstore_mail_root(cfg), project)
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        src = os.path.join(stage, cands[0])
+        dst = os.path.join(dest_dir, cands[0])
+        if os.path.exists(dst):
+            os.remove(src)                      # 이미 보관됨 — staging만 비운다
+            return jsonify({'ok': True, 'moved': False, 'reason': 'already', 'project': project, 'name': cands[0]})
+        shutil.move(src, dst)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'이동 실패: {e}'}), 500
+    return jsonify({'ok': True, 'moved': True, 'project': project, 'name': cands[0]})
+
+
+@app.route('/doc/mail-gc', methods=['POST'])
+def doc_mail_gc():
+    """staging 정리. 기본은 **dry-run** — 무엇을 얼마나 지울지만 돌려준다.
+
+    ⚠️ 기간만으로 지우면 틀린다. 실측에서 신규발신자 큐에 한 달 넘게 남은 메일이 있었고,
+    "프로젝트를 나중에 만들고 과거 메일을 재분류"가 이 앱의 정상 워크플로다.
+    그래서 프런트가 보내는 alive(아직 어느 큐엔가 살아 있는 fileName들)에 없는 것만,
+    그것도 DOCSTORE_GC_DAYS 가 지난 것만 지운다. 기간은 최후 방어선일 뿐이다."""
+    cfg = _docstore_load()
+    stage = _docstore_mail_stage_dir(cfg)
+    if not stage:
+        return jsonify({'ok': False, 'error': '문서 저장소가 설정되지 않았습니다.'}), 400
+    req = request.get_json(force=True, silent=True) or {}
+    alive_keys = {_mail_stage_key(x) for x in (req.get('alive') or []) if x}
+    # ⚠️ `or` 로 쓰면 days=0(즉시 정리)이 falsy라 조용히 60으로 둔갑한다 — 테스트에서 걸렸다.
+    _d = req.get('days')
+    days = int(_d) if _d is not None and str(_d) != '' else DOCSTORE_GC_DAYS
+    # ⚠️ days=0 을 "지금 다 비우기"로 기대하면 안 된다 — NAS 시계가 이 PC보다 약 1초 앞서서
+    #    방금 쓴 파일의 mtime 이 미래로 찍힌다(실측). 60일 정책에는 영향이 없다.
+    apply_it = bool(req.get('apply'))
+    cutoff = time.time() - days * 86400
+
+    victims, kept_alive, kept_fresh, total_bytes = [], 0, 0, 0
+    try:
+        for n in os.listdir(stage):
+            fp = os.path.join(stage, n)
+            if not os.path.isfile(fp):
+                continue
+            st = os.stat(fp)
+            total_bytes += st.st_size
+            if n.rsplit('__', 1)[0] in alive_keys:
+                kept_alive += 1
+                continue
+            if st.st_mtime > cutoff:
+                kept_fresh += 1
+                continue
+            victims.append({'name': n, 'size': st.st_size,
+                            'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds')})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'staging 조회 실패: {e}'}), 500
+
+    # 용량 상한 — 기간이 어긋나도 디스크가 터지지 않게, 오래된 것부터 추가로 지운다
+    over = []
+    if total_bytes > DOCSTORE_GC_MAX_GB * (1024 ** 3):
+        try:
+            rest = sorted(
+                [n for n in os.listdir(stage) if os.path.isfile(os.path.join(stage, n))
+                 and n not in {v['name'] for v in victims}],
+                key=lambda n: os.path.getmtime(os.path.join(stage, n)))
+            need = total_bytes - DOCSTORE_GC_MAX_GB * (1024 ** 3)
+            for n in rest:
+                if need <= 0:
+                    break
+                sz = os.path.getsize(os.path.join(stage, n))
+                over.append({'name': n, 'size': sz})
+                need -= sz
+        except Exception:
+            pass
+
+    deleted = 0
+    if apply_it:
+        for v in victims + over:
+            try:
+                os.remove(os.path.join(stage, v['name']))
+                deleted += 1
+            except Exception as e:
+                print(f'[메일보관] GC 삭제 실패 {v["name"]}: {e}')
+
+    return jsonify({
+        'ok': True, 'dryRun': not apply_it, 'days': days,
+        'stagedTotal': kept_alive + kept_fresh + len(victims),
+        'totalMB': round(total_bytes / 1048576, 1),
+        'keptAlive': kept_alive, 'keptFresh': kept_fresh,
+        'wouldDelete': len(victims), 'overCap': len(over), 'deleted': deleted,
+        'sample': victims[:10]
+    })
+
+
+@app.route('/doc/mail-list', methods=['GET'])
+def doc_mail_list():
+    """프로젝트별 보관함 또는 staging 현황."""
+    cfg = _docstore_load()
+    mr = _docstore_mail_root(cfg)
+    if not mr:
+        return jsonify({'ok': False, 'error': '문서 저장소가 설정되지 않았습니다.'}), 400
+    project = (request.args.get('project') or '').strip()
+    if not project:
+        out = []
+        try:
+            for n in sorted(os.listdir(mr)):
+                d = os.path.join(mr, n)
+                if os.path.isdir(d):
+                    out.append({'project': n, 'count': len([x for x in os.listdir(d)
+                                                            if os.path.isfile(os.path.join(d, x))])})
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': True, 'projects': out})
+    p = _docstore_safe_name(project)
+    d = os.path.join(mr, p)
+    if not p or not os.path.isdir(d):
+        return jsonify({'ok': True, 'project': project, 'count': 0, 'files': []})
+    files = []
+    for n in sorted(os.listdir(d)):
+        fp = os.path.join(d, n)
+        if os.path.isfile(fp):
+            st = os.stat(fp)
+            files.append({'name': n, 'size': st.st_size,
+                          'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds')})
+    return jsonify({'ok': True, 'project': p, 'count': len(files), 'files': files})
 
 
 if __name__ == '__main__':

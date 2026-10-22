@@ -404,4 +404,69 @@ window._dsImportToPage = async function (pageId, folder) {
     });
 };
 
+// ── 📬 분류 확정 메일을 프로젝트 폴더로 보관 ──────────────────────────
+//    ⚠️ 훅을 "배치하는 코드마다" 심지 않는다 — docs/mail-pipeline.md의 mailRaw 사고가
+//    정확히 그 패턴이다(경유지가 늘 때마다 하나씩 빠뜨려 원문이 조용히 사라짐).
+//    대신 _tpAppendMailSignal 하나를 감싼다: 이 함수는 "메일이 어느 프로젝트로 확정됐다"는
+//    바로 그 순간에만 불리고(14c 3곳 · 15b 2곳), 새 배치 경로를 만들어도 관례상 같이 부른다.
+//    키는 mailRaw.fileName — 프런트의 모든 경로가 이미 들고 다니는 유일한 식별자다.
+(function () {
+    var _orig = window._tpAppendMailSignal;
+    if (typeof _orig !== 'function') return;     // js/26 로드 전이면 감싸지 않는다
+    window._tpAppendMailSignal = function (driveFileId, task, mailRaw) {
+        try { _orig.apply(this, arguments); } catch (e) { throw e; }   // 원래 동작이 최우선
+        try {
+            var fn = mailRaw && mailRaw.fileName;
+            if (!fn || !driveFileId) return;
+            // 프로젝트 "이름"이 필요하다 — 인덱스에서 찾고, 못 찾으면 보관을 건너뛴다(추측 금지)
+            Promise.resolve(window._msLoadProjectIndex ? window._msLoadProjectIndex() : [])
+                .then(function (list) {
+                    var hit = (list || []).filter(function (p) { return p.drive_file_id === driveFileId; })[0];
+                    var proj = hit && String(hit.file_name || '').replace(/\.json$/i, '');
+                    if (!proj) return;
+                    return fetch(DS + '/doc/mail-assign', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fileName: fn, project: proj }),
+                        signal: AbortSignal.timeout(20000)
+                    });
+                })
+                // 저장소 미설정·백엔드 미기동은 흔한 상태다 — 메일 배치를 막지 않고 조용히 넘긴다
+                .catch(function (e) { console.debug('[문서저장소] 메일 보관 건너뜀:', e && e.message); });
+        } catch (e) { console.debug('[문서저장소] 메일 보관 훅 오류(무시):', e); }
+    };
+})();
+
+/**
+ * staging 정리 — 아직 어느 큐엔가 살아 있는 메일은 넘기지 않는다.
+ * 기본은 dry-run(무엇을 지울지만 확인). 실제 삭제는 apply=true.
+ * ⚠️ 기간은 최후 방어선일 뿐이다. 실측에서 신규발신자 큐에 한 달 넘게 남은 메일이 있었고,
+ *    "프로젝트를 나중에 만들고 과거 메일을 재분류"가 이 앱의 정상 워크플로다.
+ */
+window._dsMailGc = async function (apply) {
+    var alive = [];
+    var push = function (arr, get) {
+        (arr || []).forEach(function (x) { var v = get(x); if (v) alive.push(v); });
+    };
+    push(window._msResults, function (r) { return r.fileName; });
+    try { push(JSON.parse(localStorage.getItem('ms_new_sender_queue') || '[]'), function (r) { return r.fileName; }); } catch (e) { /* ignore */ }
+    try { push(JSON.parse(localStorage.getItem('ms_discard_queue') || '[]'), function (r) { return r.fileName; }); } catch (e) { /* ignore */ }
+    try {
+        push(window.TaskInbox && window.TaskInbox.load ? window.TaskInbox.load() : [],
+             function (it) { return it.mailRaw && it.mailRaw.fileName; });
+    } catch (e) { /* ignore */ }
+
+    var r = await _api('/doc/mail-gc', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alive: alive, apply: !!apply })
+    });
+    console.log('[문서저장소] 메일 staging 현황', r);
+    _toast((apply ? '🧹 ' : '🔍 ') + _t(
+        'staging ' + r.stagedTotal + '건 / ' + r.totalMB + 'MB — 큐에 살아있음 ' + r.keptAlive
+            + ' · 아직 기간 내 ' + r.keptFresh + ' · ' + (apply ? '삭제 ' + r.deleted : '지울 것 ' + r.wouldDelete),
+        'staging ' + r.stagedTotal + ' / ' + r.totalMB + 'MB — alive ' + r.keptAlive
+            + ' · fresh ' + r.keptFresh + ' · ' + (apply ? 'deleted ' + r.deleted : 'would delete ' + r.wouldDelete)
+    ), 'info', 8000);
+    return r;
+};
+
 })();
