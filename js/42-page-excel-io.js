@@ -145,6 +145,124 @@
         return out;
     };
 
+    // ══ 📄 한 장으로 내보내기 (spec.onePage) ═══════════════════════════
+    //
+    // 왜 이런 모양인가 — 사용자가 "시트로 나뉜 걸 한 페이지로, 웹 UI처럼 예쁘게"를 원했다.
+    // ⚠️ 그런데 **규격 엑셀은 AI를 안 거치고 시트 이름으로 블록을 찾는다**(pageExcelImport).
+    //    그냥 합치면 시트를 못 찾아 불러오기가 깨진다(Summary는 블록이 3개라 AI 경로도 안 열린다).
+    // → 한 장 안에 **구역 머리글**(`■ 개요`)을 남기고, 불러올 때 그 머리글로 다시 쪼갠다.
+    //   왕복이 결정론으로 유지되고, 사람 눈에는 한 장으로 보인다.
+    //   머리글은 한/영 **두 이름 다** 받는다(`_nms`) — 언어를 바꿔도 읽힌다.
+    //
+    // 색은 전부 `_cpXlsxRole`(현재 테마 팔레트)에서 가져온다 — 화면과 같은 색이 나오고,
+    // 팔레트를 바꾸면 엑셀도 따라간다. **여기서 색을 직접 쓰지 말 것.**
+    // `applyExcelStyles`(js/04k)는 `Object.assign(base, cell.s)`라 **호출자가 이긴다** —
+    // 그래서 여기서 칠한 셀은 그대로 남고, 테두리만 보강된다.
+    var PX_SECT_MARK = '■ ';
+
+    var _pxRole = function (k, fb) {
+        try { return window._cpXlsxRole(k) || fb; } catch (e) { return fb; }
+    };
+    var _pxFill = function (hex) { return { patternType: 'solid', fgColor: { rgb: hex } }; };
+    var _pxFont = function (sz, bold, color) {
+        return { name: '맑은 고딕', sz: sz, bold: !!bold, color: { rgb: color || '1F2937' } };
+    };
+
+    /** 블록들을 **한 장**으로 조립한다. 반환 {ws, name} — 못 만들면 null. */
+    var _pxBuildOnePage = function (spec) {
+        var dark = _pxRole('darkText', '00707d'), tint = _pxRole('bg', 'E0F5F7');
+        var zeb  = _pxRole('zebraB', 'E8F2F3'), head = _pxRole('hoverBg', 'A3D9E0');
+        var aoa = [], marks = [], merges = [], empty = 0;
+        var kvRows = {};          // kv 구역의 데이터 행 번호 — 첫 칸(항목 이름)을 다르게 칠한다
+        var push = function (line, kind) { aoa.push(line); marks.push(kind); };
+
+        var pm = window.projectMeta || {};
+        var title = _nm(spec.onePage.title || spec.label)
+                  + (pm.프로젝트명 ? ' — ' + pm.프로젝트명 : '');
+        push([title], 'title');
+        push([''], 'gap');
+
+        spec.blocks.forEach(function (b) {
+            var body = (b.kind === 'kv') ? kvToAoa(b.get(), b.labels) : rowsToAoa(b.get());
+            if (body.length <= 1) empty++;
+            push([PX_SECT_MARK + _nm(b.sheet)], 'sect');
+            body.forEach(function (line, i) {
+                if (i > 0 && b.kind === 'kv') kvRows[aoa.length] = true;
+                push(line, i === 0 ? 'head' : 'data');
+            });
+            push([''], 'gap');
+        });
+
+        var width = aoa.reduce(function (m, l) { return Math.max(m, l.length); }, 1);
+        var ws = window.XLSX.utils.aoa_to_sheet(aoa);
+        var rows = [], colW = [];
+
+        marks.forEach(function (kind, r) {
+            var zebra = false, dataIdx = 0;
+            if (kind === 'data') {                 // 구역 안에서 몇 번째 데이터 행인지로 제브라를 센다
+                for (var k = r - 1; k >= 0 && marks[k] === 'data'; k--) dataIdx++;
+                zebra = (dataIdx % 2 === 1);
+            }
+            if (kind === 'title' || kind === 'sect') {
+                merges.push({ s: { r: r, c: 0 }, e: { r: r, c: Math.max(0, width - 1) } });
+            }
+            rows[r] = { hpt: kind === 'title' ? 28 : (kind === 'sect' ? 20 : (kind === 'gap' ? 6 : 17)) };
+
+            for (var c = 0; c < width; c++) {
+                var addr = window.XLSX.utils.encode_cell({ r: r, c: c });
+                var cell = ws[addr];
+                if (!cell) { ws[addr] = cell = { t: 's', v: '' }; }
+                var txt = String(cell.v == null ? '' : cell.v);
+                var w = 0; for (var ci = 0; ci < txt.length; ci++) w += /[가-힣ㄱ-ㅎ]/.test(txt.charAt(ci)) ? 2 : 1;
+                if (kind !== 'title' && kind !== 'sect') colW[c] = Math.min(46, Math.max(colW[c] || 8, w + 2));
+
+                if (kind === 'title') {
+                    cell.s = { font: _pxFont(14, true, 'FFFFFF'), fill: _pxFill(dark),
+                               alignment: { vertical: 'center', horizontal: 'left', indent: 1 } };
+                } else if (kind === 'sect') {
+                    cell.s = { font: _pxFont(11.5, true, 'FFFFFF'), fill: _pxFill(head),
+                               alignment: { vertical: 'center', horizontal: 'left', indent: 1 } };
+                } else if (kind === 'gap') {
+                    cell.s = { font: _pxFont(9), fill: _pxFill('FFFFFF'), border: {} };
+                } else if (kind === 'head') {
+                    cell.s = { font: _pxFont(10, true, 'FFFFFF'), fill: _pxFill(dark),
+                               alignment: { vertical: 'center', horizontal: 'center', wrapText: false } };
+                } else {
+                    // kv 블록의 첫 칸(항목 이름)은 화면처럼 연한 배경 + 진한 글자
+                    var isLabel = (c === 0 && kvRows[r]);
+                    cell.s = { font: _pxFont(10, isLabel, isLabel ? dark : '1F2937'),
+                               fill: _pxFill(isLabel ? tint : (zebra ? zeb : 'FFFFFF')),
+                               alignment: { vertical: 'center', wrapText: false } };
+                }
+            }
+        });
+
+        ws['!merges'] = merges;
+        ws['!rows'] = rows;
+        ws['!cols'] = [];
+        for (var c2 = 0; c2 < width; c2++) ws['!cols'].push({ wch: colW[c2] || 10 });
+        return { ws: ws, empty: empty, name: _nm(spec.onePage.sheet).slice(0, 31) };
+    };
+
+    /** 한 장 시트를 **구역별 AOA**로 다시 쪼갠다 — 불러오기의 핵심. */
+    var _pxSplitOnePage = function (aoa) {
+        var out = [], cur = null;
+        (aoa || []).forEach(function (line) {
+            var first = String(((line || [])[0] == null) ? '' : line[0]).trim();
+            var rest = (line || []).slice(1).some(function (v) { return String(v == null ? '' : v).trim(); });
+            // 구역 머리글: 첫 칸이 `■ …` 이고 나머지 칸은 비어 있다(병합 때문에 실제로 비어 있다)
+            if (!rest && first.indexOf(PX_SECT_MARK.trim()) === 0) {
+                cur = { name: first.replace(/^■\s*/, '').trim(), aoa: [] };
+                out.push(cur);
+                return;
+            }
+            if (!cur) return;                     // 제목 줄 등 구역 밖은 버린다
+            if (!(line || []).some(function (v) { return String(v == null ? '' : v).trim(); })) return;  // 빈 줄
+            cur.aoa.push(line);
+        });
+        return out.filter(function (s) { return s.aoa.length; });
+    };
+
     var _td = function () { window.tabData = window.tabData || {}; return window.tabData; };
     // 화면 반영 — 페이지마다 다른 렌더를 안전하게(없으면 조용히 건너뜀) 부른다.
     var _repaint = function (fns) {
@@ -479,6 +597,9 @@
     window.PAGE_EXCEL_SPECS = window.PAGE_EXCEL_SPECS || [
         {
             id: 'summary', tab: 'tab-summary', label: 'Summary',
+            // 📄 한 장으로 — 개요·마일스톤·주요자재를 구역으로 쌓는다(화면과 같은 순서).
+            //    불러오기는 `■ 개요` 같은 구역 머리글로 다시 쪼개므로 AI 없이 그대로 돌아온다.
+            onePage: { sheet: ['Summary', 'Summary'], title: ['📝 Summary', '📝 Summary'] },
             repaint: ['populateTabData', 'renderProjectModels', 'renderMaterialModelsContainer', 'renderSummaryTimeline'],
             blocks: [
                 {
@@ -696,6 +817,14 @@
         try { if (window.collectTabData) window.collectTabData(); } catch (e) { /* 수집 실패해도 있는 값으로 내보낸다 */ }
 
         var wb = window.XLSX.utils.book_new(), empty = 0;
+        // 📄 한 장 모드 — 블록들을 구역으로 나란히 쌓아 **시트 하나**로 낸다(불러오기는 구역 머리글로 복원).
+        if (spec.onePage) {
+            var one = _pxBuildOnePage(spec);
+            if (one) {
+                empty = one.empty;
+                window.XLSX.utils.book_append_sheet(wb, one.ws, one.name);
+            }
+        } else
         spec.blocks.forEach(function (b) {
             var ws;
             if (typeof b.buildSheet === 'function') {
@@ -721,6 +850,11 @@
             try { applyExcelStyles(wb); } catch (e) { /* 스타일 실패가 저장을 막지는 않는다 */ }
         }
         _noWrap(wb);   // ↩ 자동 줄바꿈 해제 — 반드시 스타일러 **뒤에**(거기서 켜지기 때문)
+        // 스타일러가 `!rows[0]`을 22pt로 덮어쓴다 — 한 장 모드의 제목 줄 높이를 되돌린다.
+        if (spec.onePage) {
+            var ws0 = wb.Sheets[wb.SheetNames[0]];
+            if (ws0 && ws0['!rows'] && ws0['!rows'][0]) ws0['!rows'][0].hpt = 28;
+        }
         var pm = window.projectMeta || {};
         var name = [(pm.프로젝트명 || pm.고객모델명 || 'project'), _nm(spec.label),
                     new Date().toISOString().slice(0, 10).replace(/-/g, '')].join('_') + '.xlsx';
@@ -1085,12 +1219,29 @@
 
         // 어떤 시트가 어느 블록인지 — 이름이 정확히 같은 것만 받는다(엉뚱한 시트를 밀어넣지 않게).
         var matched = [], missing = [];
-        spec.blocks.forEach(function (b) {
+        // 📄 한 장으로 낸 파일이면 **구역 머리글**로 쪼개 블록에 나눠 준다.
+        //    옛 여러-시트 파일도 그대로 읽히도록, 한 장 시트를 **못 찾았을 때만** 아래 경로로 간다.
+        if (spec.onePage) {
+            var oneSh = null;
+            _nms(spec.onePage.sheet).some(function (n) {
+                oneSh = wb.Sheets[n] || wb.Sheets[n.slice(0, 31)]; return !!oneSh;
+            });
+            if (oneSh) {
+                var sects = _pxSplitOnePage(
+                    window.XLSX.utils.sheet_to_json(oneSh, { header: 1, defval: '', raw: false }));
+                spec.blocks.forEach(function (b) {
+                    var names = _nms(b.sheet);
+                    var hit = sects.find(function (s2) { return names.indexOf(s2.name) !== -1; });
+                    if (hit) matched.push({ b: b, aoa: hit.aoa }); else missing.push(_nm(b.sheet));
+                });
+            }
+        }
+        if (!matched.length) { missing = []; spec.blocks.forEach(function (b) {
             // 한글/영문 어느 쪽으로 저장된 파일이든 받는다 — 한쪽만 보면 언어를 바꾼 순간 못 읽는다.
             var sh = null;
             _nms(b.sheet).some(function (n) { sh = wb.Sheets[n] || wb.Sheets[n.slice(0, 31)]; return !!sh; });
             if (sh) matched.push({ b: b, sh: sh }); else missing.push(_nm(b.sheet));
-        });
+        }); }
         if (!matched.length) {
             // 🧾 우리가 낸 파일은 아니지만 **아는 양식**일 수 있다 — 결정론 파서가 먼저다(AI 안 씀).
             if (spec.blocks[0] && typeof spec.blocks[0].preParse === 'function') {
@@ -1110,7 +1261,8 @@
 
         var summary = [];
         matched.forEach(function (m) {
-            var aoa = window.XLSX.utils.sheet_to_json(m.sh, { header: 1, defval: '', raw: false });
+            // 한 장 모드면 구역에서 이미 쪼개 둔 AOA 를, 아니면 그 시트를 읽는다.
+            var aoa = m.aoa || window.XLSX.utils.sheet_to_json(m.sh, { header: 1, defval: '', raw: false });
             if (m.b.kind === 'kv') {
                 m.b.set(aoaToKv(aoa, m.b.labels));
                 summary.push(_nm(m.b.sheet));
