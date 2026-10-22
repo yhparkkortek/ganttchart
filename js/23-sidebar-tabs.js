@@ -162,10 +162,14 @@
     //
     //    ⚠️ 구분명·아이콘·NAS 폴더 이름은 **데이터**다 — 새 구분이 생기면 여기 한 줄만 추가한다.
     //      • `view` — **전용** 스펙 도표가 설계된 구분만 적는다. 비우면 공용 기본 항목을 쓴다.
-    //      • `nas`  — NAS 하위 폴더 이름. 구분명에 Windows 폴더명으로 못 쓰는 글자(`/`)가 있어서
-    //                 따로 적는다. 비워 두면 구분명에서 그 글자를 공백으로 바꿔 쓴다.
+    //      • `nas`  — NAS 하위 폴더 이름(PARTS/<이름>). 구분명에 Windows 폴더명으로 못 쓰는
+    //                 글자(`/`)가 있어서 따로 적는다. 비워 두면 구분명에서 그 글자를 공백으로 바꾼다.
+    //      • `nasFull` — PARTS 아래가 **아닌** 폴더를 그대로 쓸 때. PANEL이 그렇다:
+    //                 회사가 이미 루트 `PANEL\`에 데이터시트 ~200개와 비교표 엑셀을 쌓아 뒀고
+    //                 `_dsFindPanelSpec`(js/48)도 그 폴더를 본다. 빈 `PARTS/PANEL`을 따로 두면
+    //                 **자료가 있는 폴더를 화면에서 못 고른다**(실제로 그래서 못 골랐다).
     window.ELEC_CATEGORY_META = {
-        'PANEL':         { icon: '🖥️', view: 'panel',     nas: 'PANEL' },
+        'PANEL':         { icon: '🖥️', view: 'panel',     nasFull: 'PANEL' },
         'SLIM/CUT':      { icon: '✂️',                     nas: 'SLIM CUT' },
         'TOUCH / GLASS': { icon: '🪟',                     nas: 'TOUCH GLASS' },
         'TOUCH CTRL':    { icon: '👆', view: 'touchctrl',  nas: 'TOUCH CTRL' },
@@ -255,6 +259,7 @@
     window._elecNasFolder = function(view) {
         const opt = window._elecOptionOf(view || window._elecView);
         const meta = (opt && window.ELEC_CATEGORY_META[opt.category]) || {};
+        if (meta.nasFull) return meta.nasFull;   // PARTS 아래가 아닌 폴더(PANEL 자료실)
         let sub = meta.nas || '';
         if (!sub) {
             sub = String((opt && opt.category) || '').split('').map(function(ch) {
