@@ -183,7 +183,9 @@
         push([''], 'gap');
 
         spec.blocks.forEach(function (b) {
-            var body = (b.kind === 'kv') ? kvToAoa(b.get(), b.labels) : rowsToAoa(b.get());
+            var body = (b.kind === 'kv')  ? kvToAoa(b.get(), b.labels)
+                     : (b.kind === 'aoa') ? (b.get() || [[]])      // 가로 전개 — 블록이 표를 통째로 준다
+                     : rowsToAoa(b.get());
             if (body.length <= 1) empty++;
             push([PX_SECT_MARK + _nm(b.sheet)], 'sect');
             body.forEach(function (line, i) {
@@ -594,6 +596,40 @@
     var _SUM_STAGE = ['단계', 'Stage'];
     var _SUM_MODEL = ['모델', 'Model'];
 
+    // ── 📝 Summary 전용 헬퍼 ───────────────────────────────────────────
+    var _pmeta = function () { window.projectMeta = window.projectMeta || {}; return window.projectMeta; };
+
+    // 마일스톤 가로 전개 — **화면 표와 같은 모양**(열=단계, 행=계획/실적).
+    //   데이터는 summary.milestones[stage] = { date: 계획, actualDate: 실적 } 이다.
+    //   화면 머리글이 PROTO/ES/PP 로 묶여 있으므로 열 이름도 그렇게 적는다(사용자 요청).
+    var _MS_COLS = [
+        { k: '기획Start',  n: ['PROTO Start', 'PROTO Start'] },
+        { k: '기획Finish', n: ['PROTO End',   'PROTO End'] },
+        { k: 'ProtoDR',    n: ['PROTO DR',    'PROTO DR'] },
+        { k: 'ESStart',    n: ['ES Start',    'ES Start'] },
+        { k: 'ESEnd',      n: ['ES End',      'ES End'] },
+        { k: 'DVR',        n: ['ES DVR',      'ES DVR'] },
+        { k: 'PPStart',    n: ['PP Start',    'PP Start'] },
+        { k: 'PPEnd',      n: ['PP End',      'PP End'] },
+        { k: 'PRA',        n: ['PP PRA',      'PP PRA'] }
+    ];
+    var _MS_ROW_PLAN = ['계획', 'Plan'], _MS_ROW_ACT = ['실적', 'Actual'], _MS_HEAD = ['구분', 'Type'];
+
+    // 멤버-1,2 — projectMeta 에 역할별로 흩어져 있다. 화면 라벨은 memberLabels 가 들고 있다.
+    var _MEMBER_KEYS = ['프로젝트담당자', '기구담당자', 'HW담당자', 'FW담당자', 'Module담당자',
+                        'TSP담당자', 'LCM담당자', 'Slimming담당자', 'Cutting담당자', 'Tooling담당자'];
+    //   ⚠️ 담당업무 이름(role)은 **사용자가 바꿔 쓰는 값**이다(Module → "BLU 담당자").
+    //      그걸 기준으로 되찾으면, 라벨을 바꿔 둔 프로젝트에서 고정 역할이 **자유 멤버로 새어나간다**
+    //      (실측에서 실제로 그랬다). 그래서 내부 키를 `키` 열로 같이 내보내고 그걸 기준으로 삼는다.
+    //      덤으로 사람이 엑셀에서 담당업무 이름을 고치면 그 이름이 화면 라벨로 돌아간다.
+    var _MEM_COL = { role: ['담당업무', 'Role'], name: ['이름', 'Name'], email: ['이메일', 'Email'],
+                     key:  ['키', 'Key'] };
+    /** 화면에 보이는 담당업무 이름 — 사용자가 라벨을 바꿔 썼으면 그 글자를 쓴다(예: Module→BLU 담당자). */
+    var _memberLabel = function (key) {
+        var L = (_pmeta().memberLabels || {});
+        return L[key] || key;
+    };
+
     window.PAGE_EXCEL_SPECS = window.PAGE_EXCEL_SPECS || [
         {
             id: 'summary', tab: 'tab-summary', label: 'Summary',
@@ -615,22 +651,143 @@
                     set: function (obj) { _td().summary = Object.assign({}, _td().summary || {}, obj); }
                 },
                 {
-                    sheet: ['마일스톤', 'Milestones'], kind: 'rows',
+                    // 📐 [2026-10-22 사용자 요청] "마일스톤처럼 가로 전개인 것은 가로 전개로".
+                    //    화면 표와 같은 모양으로 낸다 — 열=단계(PROTO/ES/PP), 행=계획/실적.
+                    //    예전에는 9행짜리 세로 표라 화면과 모양이 전혀 달랐다.
+                    sheet: ['마일스톤', 'Milestones'], kind: 'aoa',
                     get: function () {
-                        var ms = (_td().summary || {}).milestones || {}, STAGE = _nm(_SUM_STAGE);
-                        return Object.keys(ms).map(function (stage) {
-                            var o = {}; o[STAGE] = stage;
-                            return Object.assign(o, ms[stage] || {});
+                        var ms = (_td().summary || {}).milestones || {};
+                        var head = [_nm(_MS_HEAD)].concat(_MS_COLS.map(function (c) { return _nm(c.n); }));
+                        head.push(_t('개발기간(일)', 'Dev Days'));
+                        var plan = [_nm(_MS_ROW_PLAN)], act = [_nm(_MS_ROW_ACT)];
+                        _MS_COLS.forEach(function (c) {
+                            var v = ms[c.k] || {};
+                            plan.push(v.date || '');
+                            act.push(v.actualDate || '');
+                        });
+                        plan.push((_td().summary || {}).devDays || '');
+                        act.push('');
+                        return [head, plan, act];
+                    },
+                    set: function (aoa) {
+                        if (!aoa || aoa.length < 2) return;
+                        // 머리글로 열 위치를 찾는다 — 사람이 열 순서를 바꿔도 따라간다(한/영 둘 다).
+                        var head = (aoa[0] || []).map(function (h) { return String(h == null ? '' : h).trim(); });
+                        var planNames = _nms(_MS_ROW_PLAN), actNames = _nms(_MS_ROW_ACT);
+                        var rowOf = function (names) {
+                            for (var i = 1; i < aoa.length; i++) {
+                                if (names.indexOf(String((aoa[i] || [])[0] || '').trim()) !== -1) return aoa[i];
+                            }
+                            return null;
+                        };
+                        var pRow = rowOf(planNames), aRow = rowOf(actNames);
+                        var ms = Object.assign({}, (_td().summary || {}).milestones || {});
+                        _MS_COLS.forEach(function (c) {
+                            var ci = -1;
+                            _nms(c.n).forEach(function (n) { if (ci === -1) ci = head.indexOf(n); });
+                            if (ci < 0) return;
+                            ms[c.k] = Object.assign({}, ms[c.k] || {}, {
+                                date:       pRow ? String(pRow[ci] == null ? '' : pRow[ci]).trim() : '',
+                                actualDate: aRow ? String(aRow[ci] == null ? '' : aRow[ci]).trim() : ''
+                            });
+                        });
+                        _td().summary = _td().summary || {};
+                        _td().summary.milestones = ms;
+                        // 개발기간은 마일스톤에서 **자동 계산**되는 값이라 되돌려 넣지 않는다
+                        // (collectTabData 가 계획 Start~PRA 로 다시 계산한다 — 여기서 덮으면 어긋난다).
+                    }
+                },
+                {
+                    // 🧾 [2026-10-22 신규] 화면엔 있는데 엑셀에 없던 것 ① 프로젝트 정보(프로젝트 단위 값)
+                    //    ⚠️ 이 값들은 tabData 가 아니라 **window.projectMeta** 에 있다.
+                    sheet: ['프로젝트 정보', 'Project Info'], kind: 'kv',
+                    labels: {
+                        고객사:     ['고객사',       'Customer'],
+                        메일키워드: ['메일 키워드',  'Mail Keywords'],
+                        완료여부:   ['진행 상태',    'Status']
+                    },
+                    get: function () { return _pmeta(); },
+                    set: function (obj) { Object.assign(_pmeta(), obj || {}); }
+                },
+                {
+                    // 🧾 신규 ② 모델 카드 — 화면의 "모델 #1 / #2 …" 카드가 가로 한 줄씩이다.
+                    sheet: ['모델', 'Models'], kind: 'rows',
+                    get: function () {
+                        return ((_td().projectModels) || []).map(function (m, i) {
+                            var o = {};
+                            o[_nm(_SUM_MODEL)]                        = '#' + (i + 1);
+                            o[_t('제품구분자', 'Unit')]               = m.unitId || '';
+                            o[_t('고객 모델명', 'Customer Model')]    = m.고객모델명 || '';
+                            o[_t('프로젝트 코드', 'Project Code')]    = m.프로젝트코드 || '';
+                            o[_t('프로젝트 풀명', 'Project Name')]    = m.프로젝트명칭 || '';
+                            o[_t('KTK PN_모델명', 'KTK PN_Model')]    = m.KTK모델명 || '';
+                            o[_t('KTK PN', 'KTK PN')]                 = m.KTKPN || '';
+                            return o;
                         });
                     },
                     set: function (rows) {
-                        var ms = {}, names = _nms(_SUM_STAGE);
-                        (rows || []).forEach(function (r) {
-                            var stage = String(_pick(r, _SUM_STAGE) || '').trim(); if (!stage) return;
-                            var o = {}; Object.keys(r).forEach(function (k) { if (names.indexOf(k) === -1) o[k] = r[k]; });
-                            ms[stage] = o;
+                        var models = _td().projectModels || [];
+                        (rows || []).forEach(function (r, i) {
+                            // 기존 카드의 materials 는 **건드리지 않는다** — 자재는 아래 블록이 따로 맡는다.
+                            var m = models[i] || (models[i] = {});
+                            var put = function (names, key) {
+                                var v = _pick(r, names); if (v !== undefined) m[key] = String(v);
+                            };
+                            put(['제품구분자', 'Unit'], 'unitId');
+                            put(['고객 모델명', 'Customer Model'], '고객모델명');
+                            put(['프로젝트 코드', 'Project Code'], '프로젝트코드');
+                            put(['프로젝트 풀명', 'Project Name'], '프로젝트명칭');
+                            put(['KTK PN_모델명', 'KTK PN_Model'], 'KTK모델명');
+                            put(['KTK PN', 'KTK PN'], 'KTKPN');
                         });
-                        _td().summary = _td().summary || {}; _td().summary.milestones = ms;
+                        _td().projectModels = models;
+                    }
+                },
+                {
+                    // 🧾 신규 ③ 멤버 — 화면의 멤버-1·2(고정 역할)와 멤버-3(자유 추가)을 **한 표**로 합친다.
+                    //    담당업무 이름은 사용자가 바꿔 쓴 라벨을 그대로 쓴다(Module → "BLU 담당자" 등).
+                    sheet: ['프로젝트 멤버', 'Members'], kind: 'rows',
+                    get: function () {
+                        var pm = _pmeta(), out = [];
+                        var add = function (role, name, email, key) {
+                            var o = {};
+                            o[_nm(_MEM_COL.role)]  = role || '';
+                            o[_nm(_MEM_COL.name)]  = name || '';
+                            o[_nm(_MEM_COL.email)] = email || '';
+                            o[_nm(_MEM_COL.key)]   = key || '';
+                            out.push(o);
+                        };
+                        _MEMBER_KEYS.forEach(function (k) { add(_memberLabel(k), pm[k], pm[k + '이메일'], k); });
+                        ((_td().projectMembers3) || []).forEach(function (m) { add(m.role, m.name, m.email, ''); });
+                        return out;
+                    },
+                    set: function (rows) {
+                        var pm = _pmeta(), extra = [];
+                        var known = {};
+                        _MEMBER_KEYS.forEach(function (k) { known[k] = true; });
+                        // 라벨은 바뀔 수 있으니 **키가 먼저**, 키가 없는 옛 파일만 라벨로 되찾는다.
+                        var byLabel = {};
+                        _MEMBER_KEYS.forEach(function (k) { byLabel[_memberLabel(k)] = k; byLabel[k] = k; });
+                        (rows || []).forEach(function (r) {
+                            var role  = String(_pick(r, _MEM_COL.role)  || '').trim();
+                            var name  = String(_pick(r, _MEM_COL.name)  || '').trim();
+                            var email = String(_pick(r, _MEM_COL.email) || '').trim();
+                            var key   = String(_pick(r, _MEM_COL.key)   || '').trim();
+                            if (!key && !known[key]) key = '';
+                            if (!key) key = byLabel[role] || '';
+                            if (!role && !name && !key) return;
+                            if (known[key]) {
+                                pm[key] = name; pm[key + '이메일'] = email;
+                                // 사람이 엑셀에서 담당업무 이름을 고쳤으면 화면 라벨도 따라간다
+                                if (role && role !== key) {
+                                    pm.memberLabels = pm.memberLabels || {};
+                                    pm.memberLabels[key] = role;
+                                }
+                            } else if (role || name) {
+                                extra.push({ role: role, name: name, email: email });
+                            }
+                        });
+                        _td().projectMembers3 = extra;
                     }
                 },
                 {
@@ -656,6 +813,35 @@
                         });
                         Object.keys(buckets).forEach(function (i) { if (models[i]) models[i].materials = buckets[i]; });
                     }
+                },
+                {
+                    // 🧾 신규 ④ 제품 사진 — **그림 자체는 넣지 못한다.**
+                    //    xlsx-js-style 에는 이미지 삽입 기능이 없다(수식·서식만 된다). 그림까지
+                    //    옮기는 길은 이미 있다 — 프로젝트 전체 엑셀(js/04k)이 "제품사진_원본데이터"
+                    //    시트에 base64 를 조각내 싣고 js/22a 가 되읽는다. 여기서 base64 를 또 실으면
+                    //    한 장짜리 요약이 수십 MB가 되고 사람이 읽을 수도 없다.
+                    //    → 등록 현황(슬롯·크기)만 보여주고, 되돌려 넣지는 않는다(exportOnlyBlock).
+                    sheet: ['제품 사진', 'Photos'], kind: 'rows', readOnly: true,
+                    get: function () {
+                        var imgs = (_td().productImages) || [];
+                        var out = [], n = Math.max(3, imgs.length);
+                        for (var i = 0; i < n; i++) {
+                            var e = imgs[i], has = !!(e && (typeof e === 'string' ? e : e.data));
+                            var o = {};
+                            o[_t('슬롯', 'Slot')]       = '#' + (i + 1);
+                            o[_t('등록', 'Registered')] = has ? 'O' : '-';
+                            o[_t('가로', 'Width')]      = (e && e.w) || '';
+                            o[_t('세로', 'Height')]     = (e && e.h) || '';
+                            o[_t('비고', 'Note')]       = has
+                                ? _t('그림은 엑셀에 담기지 않습니다 — 프로젝트 엑셀 저장을 쓰세요',
+                                     'Images are not embedded here — use the project Excel export')
+                                : '';
+                            out.push(o);
+                        }
+                        return out;
+                    },
+                    // 되돌려 넣지 않는다 — 글자만 있는 표라 사진을 복원할 수 없다.
+                    set: function () { /* no-op */ }
                 }
             ]
         },
@@ -833,7 +1019,9 @@
                 ws = b.buildSheet();
                 if (!ws) { empty++; return; }
             } else {
-                var aoa = (b.kind === 'kv') ? kvToAoa(b.get(), b.labels) : rowsToAoa(b.get());
+                var aoa = (b.kind === 'kv')  ? kvToAoa(b.get(), b.labels)
+                        : (b.kind === 'aoa') ? (b.get() || [[]])
+                        : rowsToAoa(b.get());
                 if (aoa.length <= 1) empty++;
                 ws = window.XLSX.utils.aoa_to_sheet(aoa);
                 _centerCols(ws, aoa, b.center);
@@ -1281,6 +1469,10 @@
             var aoa = m.aoa || window.XLSX.utils.sheet_to_json(m.sh, { header: 1, defval: '', raw: false });
             if (m.b.kind === 'kv') {
                 m.b.set(aoaToKv(aoa, m.b.labels));
+                summary.push(_nm(m.b.sheet));
+            } else if (m.b.kind === 'aoa') {
+                // 가로 전개 블록 — 표 모양 그대로 돌려준다(행/열 해석은 블록이 안다)
+                m.b.set(aoa);
                 summary.push(_nm(m.b.sheet));
             } else {
                 var rows = aoaToRows(aoa);

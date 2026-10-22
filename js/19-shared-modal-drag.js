@@ -171,8 +171,12 @@ window._makeResizable = function(boxId, _retry) {
     //      화면 밖이라 잡을 수 없기 때문. 안쪽 띠에서는 예전처럼 isInteractive 가 양보한다.
     //    ⚠️ 바깥 링은 박스 밖이라 **박스에 건 리스너로는 안 잡힌다** — 그래서 아래 전역
     //      핸들러(_installModalResizeHost)가 document 에서 처리한다.
-    const EDGE_OUT = 8;                   // 박스 바깥으로 잡히는 두께(px)
-    const EDGE_IN  = 5;                   // 박스 안쪽으로 잡히는 두께(px)
+    // 💡 [2026-10-22 2차, 사용자 제보 "엣지가 잘 안 잡힌다"] 8/5 → 16/10 으로 키웠다.
+    //    ⚠️ 이 숫자는 **보이는 테두리가 아니라 투명한 판정 영역**이다 — 그려지는 것이 없고
+    //       모달 모양은 그대로다. 바깥 링은 박스 밖이라 넓혀도 버튼·스크롤바를 가리지 않는다.
+    //    모서리(대각선)는 두 축이 동시에 걸리는 지점이라 자동으로 16px 정사각형이 된다.
+    const EDGE_OUT = 16;                  // 박스 **바깥**으로 잡히는 두께(px) — 넓혀도 가리는 것이 없다
+    const EDGE_IN  = 10;                  // 박스 **안쪽**으로 잡히는 두께(px) — 버튼 위에서는 isInteractive 가 양보
     const EDGE = 6;                       // (호환) 예전 상수 — dirAt 은 위 두 값을 쓴다
     const minW = parseInt(box.style.minWidth, 10)  || 280;
     const minH = parseInt(box.style.minHeight, 10) || 160;
