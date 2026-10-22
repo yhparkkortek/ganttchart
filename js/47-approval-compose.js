@@ -60,9 +60,9 @@
             'Date':            { from: 'today' },
             // ⚠️ 공급업체는 **자재마다 다르다** — 원본 값을 물려받으면 엉뚱한 업체가 그대로 올라간다.
             //    SAP ZMM006 조회는 js/04h 전용 흐름에 있으니 여기선 비우고 사람이 확인하게 한다.
-            'Name':            { from: 'blank', why: '자재가 바뀌면 공급업체도 달라집니다 — 확인 후 입력' },
-            'Address':         { from: 'blank', why: '공급업체 주소 — 확인 후 입력' },
-            'Tel':             { from: 'blank', why: '공급업체 전화 — 확인 후 입력' }
+            'Name':            { from: 'vendor', key: 'name',    why: '자재번호를 같이 주세요' },
+            'Address':         { from: 'vendor', key: 'address', why: '자재번호를 같이 주세요' },
+            'Tel':             { from: 'vendor', key: 'tel',     why: '자재번호를 같이 주세요' }
             // Customer·Rev.No·Page·Summary·Remark 는 적지 않았다 = 원본 유지
         }
     };
@@ -129,6 +129,14 @@
             return s ? { value: s, from: _t('Summary > ', 'summary > ') + rule.key, kind: 'app' }
                      : { value: '', from: _t('Summary 에 값 없음', 'no value in summary'), kind: 'miss' };
         }
+        if (rule.from === 'vendor') {
+            var vv = (ctx.vendor && ctx.vendor[rule.key]) || '';
+            vv = String(vv || '').trim();
+            if (vv) return { value: vv, from: _t('SAP 공급업체 > ', 'SAP supplier > ') + rule.key, kind: 'app' };
+            // ⚠️ 못 찾으면 **비운다** — 원본을 물려받으면 엉뚱한 업체가 그대로 올라간다.
+            return { value: '', from: _t('비움', 'blank'), kind: 'blank',
+                     note: ctx.material ? _t('SAP 에 공급업체 정보 없음', 'no supplier in SAP') : (rule.why || '') };
+        }
         if (rule.from === 'today') {
             var d0 = new Date();
             var W = ['일', '월', '화', '수', '목', '금', '토'][d0.getDay()];
@@ -183,7 +191,7 @@
 
         // 🏭 자재번호를 줬고 이 양식에 SAP 출처 칸이 있으면 **한 번만** 조회한다.
         //    칸마다 부르면 SAP 가 느려서 몇 분씩 걸린다(docs/sap-lookup.md 의 46초 사고와 같은 종류).
-        var ctx = { material: String(opts.material || '').trim(), sap: null };
+        var ctx = { material: String(opts.material || '').trim(), sap: null, vendor: null };
         var needSap = !opts.asIs && ctx.material
             && Object.keys(window.APPROVAL_FIELD_SOURCES[form] || {})
                  .some(function (k) { return (window.APPROVAL_FIELD_SOURCES[form][k] || {}).from === 'sap'; });
@@ -202,6 +210,28 @@
                 _toast('⚠️ ' + _t('SAP 조회 실패: ', 'SAP lookup failed: ') + (e && e.message ? e.message : e), 'error');
             }
         }
+        // 🏢 공급업체(상호·주소·전화) — js/04h 승인원 흐름이 쓰는 경로를 **그대로 재사용**한다
+        //    (ZMM006 → LIFNR → ZMM005). 처음엔 "중복 구현 피하자"고 비워뒀는데, 이미 있는
+        //    기능을 안 쓰는 셈이라 사람이 매번 손으로 넣어야 했다(사용자 지적 2026-10-22).
+        var needVendor = !opts.asIs && ctx.material
+            && Object.keys(window.APPROVAL_FIELD_SOURCES[form] || {})
+                 .some(function (k) { return (window.APPROVAL_FIELD_SOURCES[form][k] || {}).from === 'vendor'; });
+        if (needVendor) {
+            _toast('🏢 ' + _t('공급업체를 찾는 중입니다…', 'Looking up the supplier…'), 'info');
+            try {
+                var vr = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-vendor-info?material=' + encodeURIComponent(ctx.material)),
+                    90000, _t('공급업체 조회 시간 초과', 'Vendor lookup timed out'));
+                var vj = await vr.json();
+                ctx.vendor = (vj && vj.vendor) || null;
+                if (!ctx.vendor) _toast('⚠️ ' + _t('SAP 에 이 자재의 공급업체가 없습니다 — 그 칸은 비워둡니다. '
+                                                   + '협력사 승인원 표지(.docx)가 있으면 기존 "원자재 승인원 기안" 흐름이 거기서 읽습니다.',
+                                                   'No supplier in SAP for this material.'), 'error');
+            } catch (e) {
+                _toast('⚠️ ' + _t('공급업체 조회 실패: ', 'Vendor lookup failed: ') + (e && e.message ? e.message : e), 'error');
+            }
+        }
+
         // 새 기안에서 시스템이 채우는 칸은 애초에 다루지 않는다(원본 문서번호가 박힌다).
         var SKIP = ['문서번호', '작성일', '작성부서', '작성자', '제목', '기안부서', '기안자'];
         var rows = Object.keys(srcFields)
