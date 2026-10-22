@@ -15,6 +15,13 @@ window._makeDraggable = function(modalId, handleId) {
     //    곳만 고치면 앱 전체 모달의 모바일 드래그가 함께 고쳐진다.
     const startDrag = function(clientX, clientY, handle, modal) {
         isDragging = true;
+        // 🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "모달을 끌면 끊겨서 움직인다"]
+        //    드래그는 매 프레임 style.left/top 을 쓴다. 그런데 모달마다 style 속성을 보는
+        //    MutationObserver 가 걸려 있어(열릴 때 화면 안으로 보정하려고) **그 쓰기마다 깨어나
+        //    레이아웃을 다시 재고 테두리 색까지 다시 계산했다** — 실측: 마우스 이동 25회에
+        //    clamp 25회. 읽기/쓰기가 매 프레임 겹치니 끊긴다.
+        //    → 끄는 게 아니라 **드래그 중에만 쉬게 한다**(놓으면 아래 endDrag 에서 한 번 보정).
+        window._mreszDragging = true;
         const rect = modal.getBoundingClientRect();
         origLeft = rect.left; origTop = rect.top;
         modalW = rect.width; modalH = rect.height;
@@ -42,6 +49,14 @@ window._makeDraggable = function(modalId, handleId) {
     const endDrag = function() {
         if (!isDragging) return;
         isDragging = false;
+        if (window._mreszDragging) {
+            window._mreszDragging = false;
+            // 끌고 간 자리가 화면 밖이면 여기서 **한 번만** 안으로 들인다(드래그 중엔 안 건드린다).
+            const _m = document.getElementById(modalId);
+            if (_m && window._clampModalToViewport) {
+                requestAnimationFrame(function() { window._clampModalToViewport(_m); });
+            }
+        }
         const handle = document.getElementById(handleId);
         if (handle) handle.style.cursor = 'grab';
     };
@@ -364,6 +379,8 @@ window._makeResizable = function(boxId, _retry, handleId) {
     // 열릴 때마다 화면 안으로 — 모달마다 "무엇의 display를 바꿔 여는지"가 제각각이라(박스 자신일 수도,
     // 바깥 오버레이일 수도) 둘 다 관찰한다. _makeMinimizable이 ✕ 버튼에서 대상을 알아내는 것과 같은 사정.
     const onShown = function() {
+        // 드래그·리사이즈 중엔 style 이 매 프레임 바뀐다 — 그때마다 레이아웃을 다시 재면 끊긴다.
+        if (window._mreszDragging || window._mreszActive) return;
         if (!window._mreszIsShown(box)) return;
         requestAnimationFrame(function() {
             window._clampModalToViewport(box);
@@ -399,10 +416,26 @@ window._makeResizable = function(boxId, _retry, handleId) {
 //     갈아끼우므로, 그걸 지켜보다가 다시 칠한다(js/21 을 건드리지 않아도 된다).
 window._mreszHeaderIds = window._mreszHeaderIds || {};   // modalId → headerId
 
-/** 헤더(없으면 첫 자식)에서 **실제로 칠해진** 배경색을 찾는다 — 투명하면 위로 올라간다. */
+/** 첨부(기안 작성 모달)와 같은 틀 색 — **헤더 아래 경계선 색**을 쓴다.
+ *
+ *  ⚠️ 이게 "헤더 색"이다. 헤더 **배경**을 쓰면 안 된다 — 실측하면 둘이 다르고, 첨부의
+ *     테두리는 배경이 아니라 아래 경계선 쪽이다:
+ *       기안 작성 모달 : 헤더 배경 #e7f3ff / 아래선 #a5c8f0 ← 첨부의 테두리
+ *       공지·팔레트 등 : 헤더 배경 #fff8e6 / 아래선 #ffe08a
+ *     배경을 쓰면 테두리가 헤더보다 연해서 틀로 안 보인다(그래서 "새로운 스타일"이 됐다).
+ *     아래선을 쓰면 모달마다 **자기 헤더와 한 벌**인 틀이 되고, 첨부 모달은 지금 모습 그대로다.
+ *  경계선이 없으면 헤더 배경 → 팔레트 강조색 순으로 떨어진다.
+ */
 window._mreszHeaderBg = function(box, headerId) {
-    let el = (headerId && document.getElementById(headerId)) || box.firstElementChild || box;
+    const header = (headerId && document.getElementById(headerId)) || box.firstElementChild;
     const TRANSPARENT = /^rgba\(\s*0,\s*0,\s*0,\s*0\s*\)$|^transparent$/;
+    if (header) {
+        const hs = window.getComputedStyle(header);
+        const line = hs.borderBottomColor;
+        if (parseFloat(hs.borderBottomWidth) > 0 && hs.borderBottomStyle !== 'none'
+            && line && !TRANSPARENT.test(line)) return line;
+    }
+    let el = header || box;
     for (let hop = 0; el && hop < 4; hop++, el = el.parentElement) {
         const bg = window.getComputedStyle(el).backgroundColor;
         if (bg && !TRANSPARENT.test(bg)) return bg;
@@ -440,8 +473,8 @@ window._mreszEnsureBorderStyle = function() {
     if (document.getElementById('mresz-border-style')) return;
     const st = document.createElement('style');
     st.id = 'mresz-border-style';
-    // 색은 모달마다 다르므로(헤더 배경색) 여기선 **굵기·모양만** 정하고 색은 인라인으로 칠한다.
-    st.textContent = '.mresz-modal { border-width: 2px !important; border-style: solid !important;'
+    // 굵기·모양은 **첨부 모달과 같게** 1px solid. 색은 모달마다 다르므로 인라인으로 칠한다.
+    st.textContent = '.mresz-modal { border-width: 1px !important; border-style: solid !important;'
                    + ' box-sizing: border-box; }';
     document.head.appendChild(st);
     if (window._mreszWatchPalette) window._mreszWatchPalette();
@@ -484,7 +517,8 @@ window._installModalResizeHost = function() {
 
     let hoverEl = null;
     document.addEventListener('mousemove', function(e) {
-        if (window._mreszActive) return;                 // 리사이즈 중엔 박스 핸들러가 몰고 간다
+        // 리사이즈 중엔 박스 핸들러가 몰고 가고, 드래그 중엔 등록된 모달 전부를 훑을 이유가 없다
+        if (window._mreszActive || window._mreszDragging) return;
         const hit = pick(e.clientX, e.clientY);
         if (!hit) {
             // 🐛 [2026-10-22] 포인터가 **모달 안쪽**이면 커서는 박스 핸들러가 칠한다 — 여기서
