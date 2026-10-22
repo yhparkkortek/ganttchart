@@ -226,15 +226,29 @@ window.renderPanelCompareTab = async function() {
     const entries = selected.map(function(m) { return window.findPanelInLibrary(lib, m); });
     const totalCols = 1 + slotCount + 1; // 라벨 + 슬롯들 + Note
 
+    // 📄 [2026-10-22] 모델명을 누르면 **NAS에 그 패널 사양서가 있으면 그걸** 열고, 없을 때만
+    //    panelook.com 검색으로 간다(사용자 요청). 클릭 시점에 찾지 않고 **여기서 미리** 찾아
+    //    href에 박는다 — await 뒤에 window.open 하면 팝업 차단에 걸린다.
+    //    한 번의 목록 조회로 10칸을 다 맞춘다(_dsFindPanelSpecs). NAS가 없으면 빈 객체라
+    //    지금까지와 똑같이 동작한다.
+    let nasSpec = {};
+    if (window._dsFindPanelSpecs && selected.length) {
+        try { nasSpec = await window._dsFindPanelSpecs(selected); } catch (e) { nasSpec = {}; }
+    }
+
     let headHtml = '<tr>';
     headHtml += `<th style="min-width:140px;">Comparison table</th>`;
     for (let i = 0; i < slotCount; i++) {
         const m = selected[i];
         if (m) {
-            const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
+            const nasName = nasSpec[m];
+            const url = nasName && window._dsFileUrl
+                ? window._dsFileUrl('PANEL', nasName)
+                : 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
             const has = !!entries[i];
             headHtml += `<th style="min-width:120px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
-                <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
+                <a href="${url}" target="_blank" rel="noopener" title="${nasName ? (_en ? 'Open the spec on the NAS: ' : 'NAS 사양서 열기: ') + nasName
+                                 : (_en ? 'No spec on the NAS — open panelook.com search' : 'NAS에 사양서가 없어 panelook.com 검색을 엽니다')}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
                 <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">✏️</button>` : ''}
                     <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🔄</button>
@@ -528,11 +542,14 @@ window._pcRenderLibList = function(filterText) {
     const _en = window._currentLang === 'en';
     const lib = window._panelCompareLibCache || { panels: [] };
     const terms = (filterText || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const filtered = (lib.panels || []).filter(function(p) {
+    const matchAll = (lib.panels || []).filter(function(p) {
         if (!terms.length) return true;
         const hay = window._pcLibSearchHaystack(p);
         return terms.every(function(t) { return hay.indexOf(t) !== -1; });
-    }).slice(0, 30);
+    });
+    // ⚠️ 30개에서 자른다. 자른다는 말을 안 하면 라이브러리에 146개를 넣고도 "목록에 안 올라온다"로
+    //    보인다(2026-10-22 실제 지적) — 몇 개가 더 있는지 아래에 적는다.
+    const filtered = matchAll.slice(0, 30);
     if (!filtered.length) {
         list.innerHTML = `<div style="padding:8px; color:#999; font-size:12px;">${_en ? 'No matches in the library.' : '라이브러리에 일치하는 패널이 없습니다.'}</div>`;
         return;
@@ -548,7 +565,13 @@ window._pcRenderLibList = function(filterText) {
             <span><b>${escapeHtml(p.model)}</b> <span style="color:#888;">${escapeHtml(meta)}</span></span>
             <span style="color:#2c5f8a;">${_en ? '+ Add' : '+ 추가'}</span>
         </div>`;
-    }).join('');
+    }).join('')
+    + (matchAll.length > filtered.length
+        ? `<div style="padding:7px 8px; font-size:11.5px; color:#8a6d1f; background:#fff8e6; border-top:1px solid #ffe08a;">
+             ${_en ? 'Showing ' + filtered.length + ' of ' + matchAll.length + ' — type a model name to narrow it down.'
+                   : '전체 ' + matchAll.length + '개 중 ' + filtered.length + '개만 보입니다 — 모델명을 입력해서 찾으세요.'}
+           </div>`
+        : '');
 };
 
 // 💡 [2026-08-25 신규] 패널 데이터시트는 대부분 PDF라 텍스트 붙여넣기만으론 불편하다는 요청 —

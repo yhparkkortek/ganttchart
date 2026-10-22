@@ -215,8 +215,12 @@
             if (!(created && created.id)) return { ok: false, error: _t('라이브러리 파일을 만들지 못했습니다.', 'Could not create the library file.') };
             window._panelLibFileId = created.id;
         }
-        if (window._epLibCache) delete window._epLibCache.panel;   // 다음 읽기에서 최신본을 받게
-        return { ok: true, added: added, updated: updated, unchanged: unchanged, fieldsWritten: fieldsWritten };
+        // ⚠️ 캐시가 **두 벌**이다 — 비교표는 `_epLibCache.panel`, 추가 모달 목록은
+        //    `_panelCompareLibCache`(js/22d). 하나만 지우면 "넣었다는데 목록엔 없다"가 된다.
+        if (window._epLibCache) delete window._epLibCache.panel;
+        window._panelCompareLibCache = null;
+        return { ok: true, added: added, updated: updated, unchanged: unchanged,
+                 fieldsWritten: fieldsWritten, total: lib.panels.length };
     };
 
     /**
@@ -249,10 +253,21 @@
             if (window._elecView === 'panel' && window.renderPanelCompareTab) {
                 try { await window.renderPanelCompareTab(); } catch (e) { /* 표시 실패가 이식을 되돌리진 않는다 */ }
             }
+            // 추가 모달이 열려 있으면 그 목록도 — 안 하면 방금 넣은 게 안 보인다.
+            var addModal = document.getElementById('pc-add-modal');
+            if (addModal && addModal.style.display !== 'none' && window.loadPanelLibrary && window._pcRenderLibList) {
+                try {
+                    window._panelCompareLibCache = await window.loadPanelLibrary();
+                    var q = document.getElementById('pc-add-search');
+                    window._pcRenderLibList(q ? q.value : '');
+                } catch (e) { /* 목록 갱신 실패가 이식을 되돌리진 않는다 */ }
+            }
             var msg = '📚 ' + _t('패널 라이브러리에 넣었습니다 — 새로 ' + r.added + '개 · 갱신 ' + r.updated + '개'
-                                 + (r.unchanged ? ' · 그대로 ' + r.unchanged + '개' : '') + ' (칸 ' + r.fieldsWritten + '개)',
+                                 + (r.unchanged ? ' · 그대로 ' + r.unchanged + '개' : '') + ' (칸 ' + r.fieldsWritten + '개)'
+                                 + ' · 라이브러리 총 ' + r.total + '개',
                                  'Imported into the panel library — ' + r.added + ' new, ' + r.updated + ' updated'
-                                 + (r.unchanged ? ', ' + r.unchanged + ' unchanged' : '') + ' (' + r.fieldsWritten + ' fields)');
+                                 + (r.unchanged ? ', ' + r.unchanged + ' unchanged' : '') + ' (' + r.fieldsWritten + ' fields)'
+                                 + ' · ' + r.total + ' in the library');
             if (window.showToast) window.showToast(msg, 'success', 9000);
             // 못 읽은 라벨은 **드러낸다** — 조용히 빠지면 "왜 이 항목만 비어 있지"가 된다.
             if (parsed.unknownLabels.length) {

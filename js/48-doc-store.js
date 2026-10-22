@@ -81,9 +81,14 @@ window._dsFileOf = async function (folder, name) {
     return new File([await res.blob()], name);
 };
 
+/** 그 파일을 여는 주소 — `<a href>`에 그대로 박을 수 있다(클릭 시점에 찾지 않아도 되게) */
+window._dsFileUrl = function (folder, name) {
+    return DS + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name);
+};
+
 /** 브라우저에서 바로 열기(PDF 뷰어 등) — 받아서 여는 게 아니라 백엔드 URL을 그대로 연다 */
 window._dsOpenInNewTab = function (folder, name) {
-    window.open(DS + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name), '_blank');
+    window.open(window._dsFileUrl(folder, name), '_blank');
 };
 
 /**
@@ -146,6 +151,34 @@ window._dsFindPanelSpec = async function (pn, folder) {
         else if (!partial && (fk.indexOf(key) !== -1 || key.indexOf(fk) !== -1)) partial = f;
     });
     return exact || partial;
+};
+
+/**
+ * 여러 패널 PN의 사양서를 **한 번의 목록 조회**로 찾는다 → { PN: 파일명 }.
+ * 비교표 머리글 10칸마다 _dsFindPanelSpec 을 부르면 같은 목록을 10번 받는다.
+ * 백엔드가 꺼져 있거나 폴더가 없으면 **빈 객체** — 부르는 쪽이 기본 링크로 떨어지게 한다.
+ */
+window._dsFindPanelSpecs = async function (pns, folder) {
+    folder = folder || 'PANEL';
+    var out = {};
+    var list;
+    try { list = await window._dsList(folder); } catch (e) { return out; }
+    var files = (list && list.files) || [];
+    var byKey = {};
+    files.forEach(function (f) {
+        var fk = _pnKey(f.name.replace(/\.[^.]+$/, ''));
+        if (fk && !byKey[fk]) byKey[fk] = f.name;
+    });
+    var keys = Object.keys(byKey);
+    (pns || []).forEach(function (pn) {
+        var key = _pnKey(pn);
+        if (key.length < 4) return;
+        if (byKey[key]) { out[pn] = byKey[key]; return; }
+        for (var i = 0; i < keys.length; i++) {
+            if (keys[i].indexOf(key) !== -1 || key.indexOf(keys[i]) !== -1) { out[pn] = byKey[keys[i]]; return; }
+        }
+    });
+    return out;
 };
 
 window._dsOpenPanelSpec = async function (pn) {
@@ -285,7 +318,8 @@ window._dsOpenPicker = async function (opts) {
         + '       border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; display:flex; align-items:center; justify-content:center;">✕</button>'
         + '  </div>'
         + '  <div style="padding:9px 14px; border-bottom:1px solid #eee; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">'
-        + '    <span id="ds-pick-tabs" style="display:flex; gap:5px;"></span>'
+        // 구분이 13개라 한 줄에 안 들어간다 — 줄바꿈시키고, 모달 안 다른 버튼과 같은 꼴로 보인다.
+        + '    <span id="ds-pick-tabs" style="display:flex; gap:5px; flex-wrap:wrap; row-gap:5px; flex:1 1 100%;"></span>'
         + '    <input id="ds-pick-q" type="text" placeholder="' + _t('이름으로 검색', 'Search by name') + '" style="flex:1; min-width:140px; padding:5px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px;">'
         + '    <button onclick="window._dsPickUpload()" style="padding:5px 11px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">⬆ ' + _t('올리기', 'Upload') + '</button>'
         + '  </div>'
@@ -345,8 +379,8 @@ function _dsRenderTabs() {
     // 이름에 따옴표나 '/'가 들어와도 깨지지 않게 인자는 JSON으로 넘긴다(하위 폴더가 생겼다).
     document.getElementById('ds-pick-tabs').innerHTML = (_dsPick.folders || []).map(function (x) {
         var on = x.f === _dsPick.folder;
-        return '<span class="ds-tab" data-f="' + _esc(x.f) + '" title="' + _esc(x.f) + '" onclick="window._dsPickTab(' + _esc(JSON.stringify(x.f)) + ')" style="padding:4px 11px; border-radius:13px; font-size:11.5px; cursor:pointer; border:1px solid '
-            + (on ? '#1971c2; background:#e7f3ff; color:#1971c2; font-weight:bold;' : '#ddd; background:#fff; color:#666;') + '">' + _esc(x.label) + '</span>';
+        return '<span class="ds-tab" data-f="' + _esc(x.f) + '" title="' + _esc(x.f) + '" onclick="window._dsPickTab(' + _esc(JSON.stringify(x.f)) + ')" style="padding:6px 10px; border-radius:6px; font-size:11.5px; font-weight:bold; white-space:nowrap; cursor:pointer; transition:background .15s; border:1px solid '
+            + (on ? '#1971c2; background:#e7f3ff; color:#1971c2;' : '#d7dde2; background:#fafbfc; color:#5b6b76;') + '">' + _esc(x.label) + '</span>';
     }).join('');
 }
 
