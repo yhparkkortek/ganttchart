@@ -856,7 +856,19 @@ window._startMailAutoScheduler = function() {
     setInterval(function() {
         const intervalMin = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
         const lastAt = localStorage.getItem(MS_LAST_AUTO_FETCH_KEY);
-        const elapsedMin = lastAt ? (Date.now() - new Date(lastAt).getTime()) / 60000 : Infinity;
+        let elapsedMin = lastAt ? (Date.now() - new Date(lastAt).getTime()) / 60000 : Infinity;
+        // 🐛 [2026-10-22] 마지막 수집 시각이 **미래**면 elapsedMin 이 음수라 조건이 영영 참이 되지
+        //    않는다 — 자동수집이 조용히 멈춘 채 복구되지 않는다(시계가 뒤로 간 PC, 또는 값이
+        //    잘못 저장된 경우). 미래 값은 신뢰하지 않고 지워서 다음 틱에 바로 수집하게 한다.
+        if (lastAt && (isNaN(elapsedMin) || elapsedMin < 0)) {
+            console.warn('[메일 자동수집] 마지막 수집 시각이 미래이거나 손상됨 — 초기화합니다:', lastAt);
+            localStorage.removeItem(MS_LAST_AUTO_FETCH_KEY);
+            elapsedMin = Infinity;
+        }
+        // 지금 상태를 남겨 둔다 — "왜 아직 안 도는지"를 콘솔에서 바로 볼 수 있게(window._msAutoNext)
+        window._msAutoNext = { 주기분: intervalMin, 마지막수집: lastAt || '(없음)',
+                               경과분: elapsedMin === Infinity ? '∞' : Math.round(elapsedMin),
+                               남은분: elapsedMin === Infinity ? 0 : Math.max(0, Math.ceil(intervalMin - elapsedMin)) };
         if (elapsedMin >= intervalMin) window._autoMailFetchTick();
     }, 60 * 1000);
 };

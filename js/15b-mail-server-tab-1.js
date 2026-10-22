@@ -1267,18 +1267,42 @@ window._autoMailFetchTick = async function() {
     //    틱이 "끝날 때"만 갱신되므로, 이전 틱이 아직 안 끝난 상태에서 스케줄러가 또 틱을 실행시키면
     //    두 틱이 같은 신규 메일을 각자 중복 없다고 판단해 미분류 큐(_msResults)에 동시에 쌓는다.
     //    → 재진입 가드로 이전 틱이 실행 중이면 새 틱을 건너뛴다.
-    if (window._msAutoTickRunning) return;
+    // 🐛🐛 [2026-10-22, 사용자 제보 "자동 메일 수집이 안 된다"] 아래 조건들은 그동안 **조용히**
+    //    return 해서, 안 되는 이유를 사람도 나중의 나도 알 수 없었다(백엔드는 멀쩡한데 수집만 안 됨).
+    //    → 건너뛴 이유를 남긴다. 같은 이유가 반복될 땐 한 번만 적는다(콘솔 도배 방지).
+    //    `window._msAutoSkip` 에 마지막 상태가 남으므로 콘솔에서 바로 확인할 수 있다.
+    const _skip = function (why, detail) {
+        window._msAutoSkip = { why: why, detail: detail || '', at: new Date().toISOString() };
+        if (window._msAutoSkipLast !== why) {
+            window._msAutoSkipLast = why;
+            console.info('[메일 자동수집] 건너뜀 — ' + why + (detail ? ' (' + detail + ')' : ''));
+            if (window._issueLog) {
+                try {
+                    window._issueLog({ domain: 'mail', kind: 'auto_fetch_skipped', route: 'auto-tick',
+                                       result: { errorRaw: why }, env: { detail: String(detail || '') } });
+                } catch (e) { /* 기록 실패가 수집을 막지는 않는다 */ }
+            }
+        }
+        return undefined;
+    };
+    if (window._msAutoTickRunning) return _skip('이전 수집이 아직 진행 중');
     // 🐛 [2026-09-22 버그수정, 사용자 제보] "🔴 메일 자동배치 OFF"로 꺼놔도 이 백그라운드 틱은
     //    mail_mode를 전혀 확인하지 않아서 계속 POP3 조회 + 메일마다 AI 분석을 돌리고 있었다 —
     //    페이지를 열어만 둬도(로그인 정보 저장돼 있으면) 사람이 "오늘 쓴 적 없는데" AI 할당량이
     //    소진되는 원인 중 하나였음. OFF일 땐 조회 자체를 시작하지 않는다(등록 방식만 다르게
     //    하려던 mail_mode를 실제로 완전히 존중하도록 통일).
-    if (window.isMailAutoProcessEnabled && !window.isMailAutoProcessEnabled()) return;
+    if (window.isMailAutoProcessEnabled && !window.isMailAutoProcessEnabled()) {
+        return _skip('메일 자동배치가 꺼져 있음(🔴 OFF)', 'mail_mode=' + (localStorage.getItem('mail_mode') || '(기본 full)'));
+    }
     window._msAutoTickRunning = true;
     try {
     const savedUser = localStorage.getItem('ms_saved_userid');
     const savedPwB64 = localStorage.getItem('ms_saved_pw');
-    if (!savedUser || !savedPwB64) return; // 저장된 로그인 정보 없으면 자동수집 불가 → 조용히 스킵
+    if (!savedUser || !savedPwB64) {
+        // 메일서버 탭에서 [로그인 정보 저장]을 해둬야 백그라운드 수집이 된다.
+        return _skip('메일서버 로그인 정보가 저장돼 있지 않음', '메일 서버 탭에서 로그인 후 저장하세요');
+    }
+    window._msAutoSkip = null; window._msAutoSkipLast = '';   // 여기까지 왔으면 정상 진행
 
     let password = '';
     try { password = decodeURIComponent(escape(atob(savedPwB64))); }
