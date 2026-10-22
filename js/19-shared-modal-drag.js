@@ -89,7 +89,7 @@ window._makeDraggable = function(modalId, handleId) {
 
     // 💡 [2026-10-21 신규] 상하좌우 8방향 크기조절 + 화면 밖 이탈 방지.
     //    드래그를 등록하는 모든 모달에 자동으로 함께 적용된다(_makeMinimizable과 같은 방식).
-    window._makeResizable(modalId);
+    window._makeResizable(modalId, false, handleId);
 };
 
 // ══════════════════════════════════════════════════════════════════════
@@ -150,12 +150,12 @@ window._clampAllModals = function() {
     });
 };
 
-window._makeResizable = function(boxId, _retry) {
+window._makeResizable = function(boxId, _retry, handleId) {
     const box = document.getElementById(boxId);
     // 일부 모달은 박스를 나중에 만들면서 _makeDraggable을 먼저 부른다(드래그는 핸들러 안에서
     // getElementById를 해서 괜찮지만, 여기선 지금 요소가 있어야 한다) — 한 번만 미뤄 재시도.
     if (!box) {
-        if (!_retry) setTimeout(function() { window._makeResizable(boxId, true); }, 300);
+        if (!_retry) setTimeout(function() { window._makeResizable(boxId, true, handleId); }, 300);
         return;
     }
     if (box.dataset.mresz === '1') return;
@@ -165,8 +165,13 @@ window._makeResizable = function(boxId, _retry) {
     // 기존 CSS resize는 끈다 — 두 방식이 겹치면 모서리에서 네이티브가 먼저 먹어 서로 싸운다
     box.style.resize = 'none';
     if (window._installModalResizeHost) window._installModalResizeHost();
-    // 🎨 외곽 테두리(헤더 강조색) — 드래그를 등록하는 모달 전부에 자동 적용된다
-    if (window._mreszEnsureBorderStyle) { window._mreszEnsureBorderStyle(); box.classList.add('mresz-modal'); }
+    // 🎨 외곽 테두리(**헤더 배경색**) — 드래그를 등록하는 모달 전부에 자동 적용된다
+    if (window._mreszEnsureBorderStyle) {
+        window._mreszEnsureBorderStyle();
+        box.classList.add('mresz-modal');
+        window._mreszHeaderIds[boxId] = handleId || '';
+        window._mreszApplyBorder(boxId);
+    }
 
     // 🐛 [2026-10-21 버그수정, 사용자 제보 "버튼이 안 눌린다"]
     //    처음엔 8방향 손잡이를 <div>로 박스 안쪽 가장자리에 깔았다. 그 투명한 띠가 바로 아래에 있는
@@ -360,7 +365,11 @@ window._makeResizable = function(boxId, _retry) {
     // 바깥 오버레이일 수도) 둘 다 관찰한다. _makeMinimizable이 ✕ 버튼에서 대상을 알아내는 것과 같은 사정.
     const onShown = function() {
         if (!window._mreszIsShown(box)) return;
-        requestAnimationFrame(function() { window._clampModalToViewport(box); });
+        requestAnimationFrame(function() {
+            window._clampModalToViewport(box);
+            // 헤더가 열릴 때 그려지는 모달이 있어, 보일 때 색을 다시 읽는다(숨어 있으면 못 읽는다)
+            if (window._mreszApplyBorder) window._mreszApplyBorder(boxId);
+        });
     };
     try {
         new MutationObserver(onShown).observe(box, { attributes: true, attributeFilter: ['style', 'class'] });
@@ -381,22 +390,61 @@ window._makeResizable = function(boxId, _retry) {
 //    자기 커서를 따로 가진 요소(오버레이·버튼·입력칸 등) 위에서는 body 값이 **무시된다.**
 //    그래서 모달 밖 링에서는 커서가 바뀌는 자리와 안 바뀌는 자리가 섞여 "느리다/안 잡힌다"로
 //    느껴졌다. → `<html>` 에 클래스를 걸고 `!important` 로 **전부 덮는다**(드래그·리사이즈의 표준 방식).
-// 🎨 [2026-10-22 신규, 사용자 요청] 모달 **외곽 테두리**를 헤더 강조색으로 — 첨부 화면처럼.
+// 🎨 [2026-10-22 신규, 사용자 지정] 모달 **외곽 테두리 = 그 모달 헤더의 배경색.**
 //
-//  왜 각 모달의 헤더 배경을 읽지 않았나: 헤더 색이 모달마다 다르다(실측: 팔레트 모달·공지
-//  모달은 크림색 `rgb(255,248,230)`, AI 문답은 연파랑). 그걸 그대로 쓰면 테두리가 희미하거나
-//  모달마다 제각각이 된다. 첨부에서 보이는 건 **강조색** 테두리다.
-//  → 앱이 헤더 글자·강조에 쓰는 팔레트 변수 `--trans-text`(js/21 `_cpApplyLive` 가 설정)를 쓴다.
-//    **CSS 변수라 팔레트를 바꾸면 테두리도 저절로 따라간다** — 다시 칠하는 코드가 필요 없다.
-//  ⚠️ `!important` 인 이유: 모달 상당수가 인라인 style 로 자기 테두리를 갖고 있다.
+//  모달마다 헤더 색이 다르므로(팔레트·공지 모달은 크림색, AI 문답은 연파랑) 테두리도
+//  모달마다 다르다 — 그게 의도다. 헤더와 테두리가 한 벌로 보인다.
+//  ⚠️ 색이 **계산값**(computed)이라 CSS 변수처럼 저절로 따라가지 못한다 → 팔레트가 바뀌면
+//     다시 칠해야 한다. js/21 이 팔레트를 적용할 때마다 `<style id="cp-live-style">` 의 내용을
+//     갈아끼우므로, 그걸 지켜보다가 다시 칠한다(js/21 을 건드리지 않아도 된다).
+window._mreszHeaderIds = window._mreszHeaderIds || {};   // modalId → headerId
+
+/** 헤더(없으면 첫 자식)에서 **실제로 칠해진** 배경색을 찾는다 — 투명하면 위로 올라간다. */
+window._mreszHeaderBg = function(box, headerId) {
+    let el = (headerId && document.getElementById(headerId)) || box.firstElementChild || box;
+    const TRANSPARENT = /^rgba\(\s*0,\s*0,\s*0,\s*0\s*\)$|^transparent$/;
+    for (let hop = 0; el && hop < 4; hop++, el = el.parentElement) {
+        const bg = window.getComputedStyle(el).backgroundColor;
+        if (bg && !TRANSPARENT.test(bg)) return bg;
+        if (el === box) break;                    // 모달 자신까지 보고 그만둔다
+    }
+    return '';
+};
+
+window._mreszApplyBorder = function(boxId) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    const col = window._mreszHeaderBg(box, window._mreszHeaderIds[boxId]);
+    // 모달 상당수가 인라인 style 로 자기 테두리를 갖고 있어 `important` 가 필요하다.
+    box.style.setProperty('border-color', col || 'var(--trans-text, #00707d)', 'important');
+};
+
+window._mreszApplyAllBorders = function() {
+    (window._resizableBoxIds || []).forEach(function(id) { window._mreszApplyBorder(id); });
+};
+
+/** 팔레트가 바뀌면 다시 칠한다 — js/21 이 갈아끼우는 <style id="cp-live-style"> 을 지켜본다. */
+window._mreszWatchPalette = function() {
+    if (window._mreszPaletteWatched) return;
+    const tag = document.getElementById('cp-live-style');
+    if (!tag) { setTimeout(window._mreszWatchPalette, 500); return; }   // 아직 안 만들어졌으면 기다린다
+    window._mreszPaletteWatched = true;
+    let timer = null;
+    new MutationObserver(function() {
+        clearTimeout(timer);
+        timer = setTimeout(window._mreszApplyAllBorders, 60);   // 한 번 적용에 여러 번 바뀌므로 묶는다
+    }).observe(tag, { childList: true, characterData: true, subtree: true });
+};
+
 window._mreszEnsureBorderStyle = function() {
     if (document.getElementById('mresz-border-style')) return;
     const st = document.createElement('style');
     st.id = 'mresz-border-style';
-    st.textContent =
-        '.mresz-modal { border: 2px solid var(--trans-text, #00707d) !important;'
-        + ' box-sizing: border-box; }';
+    // 색은 모달마다 다르므로(헤더 배경색) 여기선 **굵기·모양만** 정하고 색은 인라인으로 칠한다.
+    st.textContent = '.mresz-modal { border-width: 2px !important; border-style: solid !important;'
+                   + ' box-sizing: border-box; }';
     document.head.appendChild(st);
+    if (window._mreszWatchPalette) window._mreszWatchPalette();
 };
 
 window._mreszSetCursor = function(cur) {
