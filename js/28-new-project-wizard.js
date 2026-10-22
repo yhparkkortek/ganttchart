@@ -477,8 +477,34 @@ function _fillSummaryFields() {
         units.forEach(function(u) {
             if (!window.tabData.mcRevisionsByUnit[u]) window.tabData.mcRevisionsByUnit[u] = {}; // 다른 곳과 동일하게 객체(리비전명→행)
         });
-        // 첫 번째 구분자를 활성으로 설정
-        if (units[0]) window.mcActiveUnit = units[0];
+        // 🐛 [2026-10-22 버그수정, 사용자 제보 "새 프로젝트로 등록하면 참조 엑셀을 기본으로 가져오는데
+        //    왜 Customer SPEC이 비어 있나"] — 참조 엑셀 적재와 제품구분자 설정이 경합한다.
+        //    _npwOpen이 시작한 참조 엑셀 적재는 tabData.briefSpec에 표준 서식을 넣는데, 그 시점엔
+        //    아직 제품구분자가 없어서 briefSpecByUnit의 **빈 키('')** 쪽에 담긴다.
+        //    그런데 바로 아래에서 mcActiveUnit을 'MVD' 등으로 바꾸면 js/43의 bsSyncAlias(force)가
+        //    td.briefSpec = briefSpecByUnit['MVD'](=[]) 로 **갈아끼워 표준 서식이 통째로 날아간다.**
+        //    → 구분자를 세우기 전에, 지금 들고 있는 서식을 첫 구분자 자리에 먼저 옮겨 심는다.
+        if (units[0]) {
+            try {
+                var _bsStore = window.tabData.briefSpecByUnit = window.tabData.briefSpecByUnit || {};
+                var _hasRows = function(a) {
+                    return Array.isArray(a) && a.some(function(r) {
+                        return r && (String(r.type || '').trim() || String(r.sub || '').trim());
+                    });
+                };
+                if (!_hasRows(_bsStore[units[0]])) {
+                    // 지금 화면이 들고 있는 것 → 그래도 없으면 다른 키에 담긴 것(보통 빈 키 '')에서 가져온다
+                    var _src = _hasRows(window.tabData.briefSpec) ? window.tabData.briefSpec : null;
+                    if (!_src) {
+                        Object.keys(_bsStore).forEach(function(k) {
+                            if (!_src && k !== units[0] && _hasRows(_bsStore[k])) _src = _bsStore[k];
+                        });
+                    }
+                    if (_src) _bsStore[units[0]] = _src.slice();
+                }
+            } catch (e) { console.warn('[새 프로젝트] Customer SPEC 서식 이관 실패(무시):', e); }
+            window.mcActiveUnit = units[0];
+        }
         if (window.mcRenderUnitTabs) window.mcRenderUnitTabs(); // 🐛 존재하지 않던 함수명(renderMcTabs) 수정
     }
 

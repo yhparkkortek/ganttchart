@@ -960,11 +960,25 @@
             //    → 여기서 먼저 막고, 무엇이 없고 어떻게 채우는지 알려준다.
             var _tplRows = cur.filter(function (r) { return String(r.type || '').trim() || String(r.sub || '').trim(); });
             if (!_tplRows.length) {
-                _toast('⚠️ ' + _t(
-                    '표준 서식(TYPE/TYPE2)이 비어 있어 AI 매핑을 할 수 없습니다. 이 기능은 "있는 항목의 빈칸만" 채웁니다 — 상단 [📥 참조 엑셀 가져오기]로 표준 서식을 먼저 불러온 뒤 다시 시도해주세요.',
-                    'The standard template (TYPE/TYPE2) is empty, so AI mapping cannot run. This feature only fills values into existing items — import the reference Excel first, then try again.'
-                ), 'error', 9000);
-                return;
+                // 🐛 [2026-10-22, 사용자 지적 "그냥 토스트만 띄우고 TYPE 정보는 안 가지고 오는데?"]
+                //    1차 수정은 경고만 띄우고 끝냈다 — 사람에게 "참조 엑셀을 불러오라"고 떠넘긴 셈인데,
+                //    그 버튼은 워크북을 통째로 불러와 Gantt·Summary까지 덮어쓰므로 기존 프로젝트에선
+                //    쓸 수도 없다. 그러니 여기서 **표준 서식만** 직접 가져와 채우고 그대로 진행한다.
+                _toast('📋 ' + _t('표준 서식(TYPE/TYPE2)이 없어 참조 엑셀에서 가져오는 중…',
+                                  'Standard template missing — fetching it from the reference Excel…'), 'info');
+                var _ens = window._bsEnsureStandardTemplate
+                    ? await window._bsEnsureStandardTemplate()
+                    : { ok: false, reason: 'no_helper' };
+                if (!_ens.ok) {
+                    _toast('⚠️ ' + _t(
+                        '표준 서식을 가져오지 못했습니다(' + _ens.reason + '). 이 기능은 "있는 항목의 빈칸만" 채우므로 서식이 꼭 필요합니다 — 구글 드라이브 연동을 확인해주세요.',
+                        'Could not fetch the standard template (' + _ens.reason + '). This feature only fills values into existing items, so the template is required — check the Google Drive connection.'
+                    ), 'error', 9000);
+                    return;
+                }
+                _toast('✅ ' + _t('표준 서식 ' + _ens.added + '항목을 불러왔습니다 — 이어서 AI 매핑을 진행합니다.',
+                                  'Loaded ' + _ens.added + ' template items — continuing with AI mapping.'), 'info');
+                cur = (spec.blocks[0].get() || []).map(function (r) { return r || {}; });
             }
             tpl = cur.map(function (r, i) {
                 var a = String(r.type || '').trim(), b2 = String(r.sub || '').trim();

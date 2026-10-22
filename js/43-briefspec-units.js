@@ -197,6 +197,115 @@
         if (window.populateTabData) { try { window.populateTabData(); } catch (e) { console.warn('[bs repaint]', e); } }
     };
 
+
+    // ══════════════════════════════════════════════════════════════════
+    // 📋 [2026-10-22 신규] Customer SPEC 표준 서식(TYPE/TYPE2)만 가져오기
+    //
+    //   왜: Customer SPEC [불러오기]의 AI 매핑은 mode:'fill' — **있는 항목의 빈칸만** 채운다.
+    //   표준 서식이 없으면 AI에게 줄 항목 목록이 없어 그냥 실패한다(사용자 제보 2026-10-21).
+    //   그 서식은 참조 엑셀(REFERENCE_SHEET_ID)에서 오는데, 새 프로젝트가 그 단계를 못 거치면
+    //   영영 비어 있게 된다.
+    //
+    //   ⚠️ autoImportReferenceExcel()을 쓰면 안 된다 — 그건 handleFiles()로 **워크북 전체**를
+    //   불러와서 Gantt·Summary·M.C까지 덮어쓴다. 이미 내용이 있는 프로젝트에 쓰면 사고다.
+    //   그래서 여기서는 같은 파일을 받아 **Customer SPEC 시트 하나만** 읽는다.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** 참조 엑셀에서 표준 서식 행만 뽑아온다 → [{type, sub}] (실패 시 null) */
+    window._bsFetchTemplateRows = async function () {
+        if (typeof XLSX === 'undefined' || !window.REFERENCE_SHEET_ID) return null;
+        var tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+        var token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return null;
+        var auth = { Authorization: 'Bearer ' + token };
+        var blob = null;
+        // 구글 시트면 export, 올려둔 xlsx면 alt=media — autoImportReferenceExcel과 같은 2단 시도
+        try {
+            var mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            var r1 = await fetch('https://www.googleapis.com/drive/v3/files/' + window.REFERENCE_SHEET_ID
+                + '/export?mimeType=' + encodeURIComponent(mime), { headers: auth });
+            if (r1.ok) blob = await r1.blob();
+        } catch (e) { /* 아래 alt=media로 재시도 */ }
+        if (!blob) {
+            try {
+                var r2 = await fetch('https://www.googleapis.com/drive/v3/files/' + window.REFERENCE_SHEET_ID
+                    + '?alt=media&supportsAllDrives=true', { headers: auth });
+                if (r2.ok) blob = await r2.blob();
+            } catch (e) { /* 실패는 아래에서 null */ }
+        }
+        if (!blob) return null;
+
+        var wb = XLSX.read(new Uint8Array(await blob.arrayBuffer()), { type: 'array' });
+        var name = wb.SheetNames.find(function (n) {
+            var t = String(n).trim();
+            // 시트명이 "Brief SPEC"이던 시절 파일도 계속 읽는다(_parseBriefSpecSheetFromWorkbook과 동일 기준)
+            return t === 'Customer SPEC' || t.indexOf('Customer SPEC') !== -1
+                || t === 'Brief SPEC' || t.indexOf('Brief SPEC') !== -1;
+        });
+        if (!name) return null;
+        var json = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' });
+        var out = [];
+        for (var i = 1; i < json.length; i++) {
+            var r = json[i] || [];
+            var type = String(r[1] || '').trim(), sub = String(r[2] || '').trim();
+            if (!type && !sub) continue;        // 값 칸은 가져오지 않는다 — 서식만 필요하다
+            out.push({ type: type, sub: sub });
+        }
+        return out.length ? out : null;
+    };
+
+    /**
+     * 지금 Customer SPEC에 표준 서식이 없으면 참조 엑셀에서 가져와 채운다.
+     * 기존 내용은 **버리지 않는다** — 항목이 일치하면 값을 옮겨 담고, 짝이 없는 행은 뒤에 남긴다.
+     * 반환: { ok, added, reason }
+     */
+    window._bsEnsureStandardTemplate = async function (force) {
+        var td = _td();
+        var cur = Array.isArray(td.briefSpec) ? td.briefSpec : [];
+        var hasTpl = cur.some(function (r) {
+            return r && (String(r.type || '').trim() || String(r.sub || '').trim());
+        });
+        if (hasTpl && !force) return { ok: true, added: 0, reason: 'already' };
+
+        var tpl = await window._bsFetchTemplateRows();
+        if (!tpl) return { ok: false, added: 0, reason: 'fetch_failed' };
+
+        // 항목(type+sub)으로 기존 값을 물려준다 — 대소문자/공백 차이는 무시
+        var key = function (r) {
+            return (String(r.type || '').trim() + '\u0000' + String(r.sub || '').trim()).toUpperCase();
+        };
+        var byKey = {}, orphans = [];
+        cur.forEach(function (r) {
+            if (!r) return;
+            var k = key(r);
+            if (k === '\u0000') { // 항목 없이 값만 있던 행 — 버리지 않고 뒤에 남긴다
+                if (String(r.modelA || '').trim() || String(r.note || '').trim()) orphans.push(r);
+                return;
+            }
+            byKey[k] = r;
+        });
+        var merged = tpl.map(function (t) {
+            var old = byKey[key(t)];
+            return {
+                type: t.type, sub: t.sub,
+                modelA: (old && old.modelA) || '',
+                note:   (old && old.note)   || ''
+            };
+        });
+        // 표준 서식에 없는 기존 항목도 살려 둔다(그 프로젝트에서만 쓰는 사양일 수 있다)
+        Object.keys(byKey).forEach(function (k) {
+            if (merged.some(function (m) { return key(m) === k; })) return;
+            merged.push(byKey[k]);
+        });
+        merged = merged.concat(orphans);
+
+        td.briefSpec = merged;
+        if (window.bsSyncAlias) window.bsSyncAlias();   // 제품구분자 저장소(briefSpecByUnit)와 다시 묶는다
+        if (window.populateTabData) window.populateTabData();
+        if (window._markDirty) window._markDirty();
+        return { ok: true, added: tpl.length, reason: hasTpl ? 'refreshed' : 'filled' };
+    };
+
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _install);
     else _install();
 })();
