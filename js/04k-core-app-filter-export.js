@@ -76,6 +76,70 @@
         }
         return missing;
     };
+    // ══════════════════════════════════════════════════════════════
+    // 📄 [2026-10-22] Elec Parts 시트 AOA — 전체 내보내기(위)와 페이지별 엑셀 저장(js/42)이
+    //    **같은 표**를 쓰도록 한 곳에 모았다. 실제 스펙은 팀 공용 라이브러리에 있고, 여기엔
+    //    "이 프로젝트가 무슨 모델을 골라뒀는지 + Note + 수정이력"만 담긴다.
+    //    읽기는 _parseElecPartsSheetFromWorkbook(js/22a)이 이 구조를 그대로 되읽는다.
+    // ══════════════════════════════════════════════════════════════
+    window._elecPartsToAoa = function () {
+        const tabData = (window.collectTabData ? window.collectTabData() : (window.tabData || {})) || {};
+            const epTypeLabel = { panel: 'PANEL', convbd: 'CONV', adbd: 'AD BD', touchctrl: 'TOUCH CTRL' };
+            const pc = tabData.panelCompare || { selectedModels: [], notes: {} };
+            const ecAll = tabData.elecCompare || {};
+            const selByType = {
+                panel: pc.selectedModels || [],
+                convbd: (ecAll.convbd && ecAll.convbd.selectedModels) || [],
+                adbd: (ecAll.adbd && ecAll.adbd.selectedModels) || [],
+                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.selectedModels) || []
+            };
+            const notesByType = {
+                panel: pc.notes || {},
+                convbd: (ecAll.convbd && ecAll.convbd.notes) || {},
+                adbd: (ecAll.adbd && ecAll.adbd.notes) || {},
+                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.notes) || {}
+            };
+            const logsByType = {
+                panel: tabData.panelCompareChangeLog || [],
+                convbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.convbd) || [],
+                adbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.adbd) || [],
+                touchctrl: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.touchctrl) || []
+            };
+            const epData = [
+                ['ELEC PARTS DATA'],
+                ['## SELECTED MODELS'],
+                ['TYPE', 'MODELS (comma-separated)'],
+                ['PANEL', selByType.panel.join(',')],
+                ['CONV', selByType.convbd.join(',')],
+                ['AD BD', selByType.adbd.join(',')],
+                ['TOUCH CTRL', selByType.touchctrl.join(',')],
+                [],
+                ['## NOTES'],
+                ['TYPE', 'LABEL', 'NOTE'],
+            ];
+            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
+                Object.keys(notesByType[t]).forEach(function(label) {
+                    const v = notesByType[t][label];
+                    if (v) epData.push([epTypeLabel[t], label, v]);
+                });
+            });
+            // 🌐 머리글은 지금 언어로 — 파서(js/22a)는 **0열이 'TYPE'인 줄**만 보고 건너뛰므로
+            //    나머지 칸을 번역해도 왕복이 깨지지 않는다. 구획 표시(## …)는 고정 ASCII 그대로.
+            const _tt = window._t || function (ko) { return ko; };
+            epData.push([], ['## CHANGE LOG'], ['TYPE', _tt('변경 일시', 'Changed at'), _tt('수정자', 'Changed by'),
+                                                _tt('항목', 'Item'), _tt('필드', 'Field'),
+                                                _tt('변경 전 (Old)', 'Old'), _tt('변경 후 (New)', 'New')]);
+            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
+                logsByType[t].forEach(function(log) {
+                    epData.push([epTypeLabel[t], log.time, log.userName || _tt('알 수 없음', 'Unknown'), log.row, log.field, log.oldVal, log.newVal]);
+                });
+            });
+            const hasAnyData = selByType.panel.length || selByType.convbd.length || selByType.adbd.length || selByType.touchctrl.length
+                || Object.keys(notesByType.panel).length || Object.keys(notesByType.convbd).length || Object.keys(notesByType.adbd).length || Object.keys(notesByType.touchctrl).length
+                || logsByType.panel.length || logsByType.convbd.length || logsByType.adbd.length || logsByType.touchctrl.length;
+            return { aoa: epData, hasData: !!hasAnyData };
+    };
+
     window.validateRequiredProjectInfo = function() {
         const draft = window._isDraftStageProject();
         const missing = window._draftRequiredMissing().concat(draft ? [] : window._dvRequiredMissing());
@@ -769,60 +833,15 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         //    여기 없으면 엑셀로 백업→복원 시 통째로 사라진다. ## 구획 표시로 섹션을 나누고,
         //    가져오기(_parseElecPartsSheetFromWorkbook)도 이 구조를 그대로 되읽는다.
         (function() {
-            const epTypeLabel = { panel: 'PANEL', convbd: 'CONV', adbd: 'AD BD', touchctrl: 'TOUCH CTRL' };
-            const pc = tabData.panelCompare || { selectedModels: [], notes: {} };
-            const ecAll = tabData.elecCompare || {};
-            const selByType = {
-                panel: pc.selectedModels || [],
-                convbd: (ecAll.convbd && ecAll.convbd.selectedModels) || [],
-                adbd: (ecAll.adbd && ecAll.adbd.selectedModels) || [],
-                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.selectedModels) || []
-            };
-            const notesByType = {
-                panel: pc.notes || {},
-                convbd: (ecAll.convbd && ecAll.convbd.notes) || {},
-                adbd: (ecAll.adbd && ecAll.adbd.notes) || {},
-                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.notes) || {}
-            };
-            const logsByType = {
-                panel: tabData.panelCompareChangeLog || [],
-                convbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.convbd) || [],
-                adbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.adbd) || [],
-                touchctrl: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.touchctrl) || []
-            };
-            const epData = [
-                ['ELEC PARTS DATA'],
-                ['## SELECTED MODELS'],
-                ['TYPE', 'MODELS (comma-separated)'],
-                ['PANEL', selByType.panel.join(',')],
-                ['CONV', selByType.convbd.join(',')],
-                ['AD BD', selByType.adbd.join(',')],
-                ['TOUCH CTRL', selByType.touchctrl.join(',')],
-                [],
-                ['## NOTES'],
-                ['TYPE', 'LABEL', 'NOTE'],
-            ];
-            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
-                Object.keys(notesByType[t]).forEach(function(label) {
-                    const v = notesByType[t][label];
-                    if (v) epData.push([epTypeLabel[t], label, v]);
-                });
-            });
-            epData.push([], ['## CHANGE LOG'], ['TYPE', '변경 일시', '수정자', '항목', '필드', '변경 전 (Old)', '변경 후 (New)']);
-            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
-                logsByType[t].forEach(function(log) {
-                    epData.push([epTypeLabel[t], log.time, log.userName || '알 수 없음', log.row, log.field, log.oldVal, log.newVal]);
-                });
-            });
-            const hasAnyData = selByType.panel.length || selByType.convbd.length || selByType.adbd.length || selByType.touchctrl.length
-                || Object.keys(notesByType.panel).length || Object.keys(notesByType.convbd).length || Object.keys(notesByType.adbd).length || Object.keys(notesByType.touchctrl).length
-                || logsByType.panel.length || logsByType.convbd.length || logsByType.adbd.length || logsByType.touchctrl.length;
-            if (hasAnyData) {
-                const wsEp = XLSX.utils.aoa_to_sheet(epData);
+            const ep = window._elecPartsToAoa();
+            if (ep.hasData) {
+                const wsEp = XLSX.utils.aoa_to_sheet(ep.aoa);
                 wsEp['!cols'] = [{wch: 10}, {wch: 40}, {wch: 16}, {wch: 20}, {wch: 12}, {wch: 26}, {wch: 26}];
                 XLSX.utils.book_append_sheet(wb, wsEp, "Elec Parts");
             }
         })();
+
+
 
         XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
 

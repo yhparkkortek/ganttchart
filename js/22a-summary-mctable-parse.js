@@ -388,6 +388,8 @@ function _parseMcChangeLogSheetFromWorkbook(workbook) {
 // 💡 [2026-08-28 신규] "Elec Parts" 시트(PANEL/CONV/AD BD 비교표의 선택 모델·Note·수정이력)를 읽어
 //    tabData.panelCompare / tabData.elecCompare로 복원. 내보내기(exportToExcel의 Elec Parts 시트 생성부)와
 //    정확히 같은 "## 구획 표시" 구조를 기대한다 — 구획이 바뀌면 이 파서도 같이 고쳐야 함.
+// 💡 [2026-10-22] js/42 의 페이지별 불러오기가 같은 파서를 쓰도록 노출한다.
+window._parseElecPartsSheetFromWorkbook = _parseElecPartsSheetFromWorkbook;
 function _parseElecPartsSheetFromWorkbook(workbook) {
     const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'Elec Parts'; });
     if (!sheetName) return false;

@@ -117,7 +117,10 @@
     };
 
     // ── 진입점 ─────────────────────────────────────────────────────────
-    window.apvComposeFrom = async function (docNum) {
+    //  opts.asIs = true 면 **매핑하지 않고 원본 값 그대로** 쓴다(= "그대로 복사").
+    //  확인 화면·적용 경로는 똑같이 쓴다 — 복사도 사람이 한 번 보고 넣는 게 맞다.
+    window.apvComposeFrom = async function (docNum, opts) {
+        opts = opts || {};
         docNum = String(docNum || '').trim();
         if (!docNum) { _toast('⚠️ ' + _t('참고할 문서번호가 필요합니다.', 'A source document number is required.'), 'error'); return; }
         if (window._gwEnsureLogin) {
@@ -144,10 +147,12 @@
         var rows = Object.keys(srcFields)
             .filter(function (k) { return SKIP.indexOf(k.replace(/\s/g, '')) === -1; })
             .map(function (k) {
-                var d = _resolveOne(form, k, srcFields[k]);
+                var d = opts.asIs
+                    ? { value: srcFields[k] || '', from: _t('원본 기안', 'source doc'), kind: 'source' }
+                    : _resolveOne(form, k, srcFields[k]);
                 return { label: k, srcValue: srcFields[k], value: d.value, from: d.from, kind: d.kind, note: d.note || '' };
             });
-        _apvOpen(docNum, src, form, rows);
+        _apvOpen(docNum, src, form, rows, opts.asIs);
     };
 
     // ── 미리보기 (칸마다 출처를 보여준다) ───────────────────────────────

@@ -950,6 +950,33 @@
                 } }]
         },
         {
+            // ⚡ [2026-10-22] Elec Parts — PANEL/CONV/AD BD/TOUCH CTRL **네 종류를 한 장에** 왕복한다.
+            //    이 페이지에 보이는 스펙 값은 팀 공용 라이브러리 소유라, 프로젝트가 가진 건
+            //    "무엇을 골랐는지 + Note + 수정이력" 세 가지뿐이다. 그래서 왕복 대상도 그 셋이고
+            //    비교표의 스펙 값은 넣지 않는다 — 되돌려 넣으면 라이브러리와 어긋난 값이 박힌다.
+            //    ⚠️ 종류별 '📊 엑셀 저장'(비교표 출력)과 **다른 것**이라 버튼 이름을 달리 둔다.
+            id: 'elecparts', tab: 'tab-elecparts', label: 'Elec Parts',
+            exportLabel: ['선택·Note 저장', 'Save picks'],
+            leadSep: true,
+            // 📁 NAS에서 불러올 때 먼저 열 폴더(js/48 _dsPageFolder).
+            nasFolder: 'ELEC',
+            // 이 탭엔 인쇄 버튼이 없다 — 헤더 맨 끝의 빈 자리표를 가리킨다.
+            anchorSelector: '#eh-pxio-anchor',
+            // BOM 모드에선 비교표가 화면에 없다(`_elecBomType`이 켜져 있으면 BOM).
+            visibleWhen: function () { return !window._elecBomType; },
+            repaint: ['_elecRepaintCurrent'],
+            blocks: [{ sheet: 'Elec Parts', kind: 'aoa',
+                // 표를 만드는 쪽은 **전체 내보내기와 같은 함수**(js/04k _elecPartsToAoa)다.
+                get: function () { return (window._elecPartsToAoa() || {}).aoa || [[]]; },
+                // 읽는 쪽도 **같은 파서**(js/22a)다 — 복제하면 한쪽만 고쳐져 "저장한 파일을
+                // 못 읽는" 사고가 난다. 파서가 워크북을 받으므로 이 한 장만 담아 넘긴다.
+                set: function (aoa) {
+                    var X = window.XLSX, wb = X.utils.book_new();
+                    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(aoa || [[]]), 'Elec Parts');
+                    window._parseElecPartsSheetFromWorkbook(wb);
+                } }]
+        },
+        {
             id: 'address', tab: 'tab-address', label: 'Address Book',
             repaint: ['renderAddressTable'],
             blocks: [{ sheet: 'Address', kind: 'rows',
@@ -1603,11 +1630,18 @@
             //    이름도 '엑셀 입력' → '불러오기'로. 주소록 탭의 '📂 불러오기'와 같은 말·같은 아이콘을 쓴다
             //    — 같은 일을 하는 버튼이 탭마다 다른 이름이면 같은 기능으로 안 보인다.
             holder.innerHTML =
-                '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
+                // 같은 줄에 **다른 성격의** 버튼 묶음이 이미 있는 페이지(Elec Parts의 비교표
+                // 출력)는 경계선을 앞에 둬서 여기부터가 왕복 버튼임을 보인다. 버튼이 숨으면
+                // 선도 같이 사라지므로 외톨이 선이 남지 않는다.
+                (spec.leadSep ? SEP : '')
+                + '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
                   + _esc(_t(_nm(spec.label) + ' 내용을 엑셀 파일로 저장합니다', 'Save ' + _nm(spec.label) + ' as an Excel file'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
                   // 저장만 있는 페이지(알람 등)에선 이 버튼이 마지막이라 인쇄 버튼과 붙지 않게 여백을 준다.
-                  + ' style="' + BTN + (spec.exportOnly ? ' margin-right:4px;' : '') + '">📊 ' + _t('엑셀 저장', 'Save') + '</button>'
+                  + ' style="' + BTN + (spec.exportOnly ? ' margin-right:4px;' : '') + '">📊 '
+                  // 기본은 '엑셀 저장'. 같은 줄에 성격이 다른 저장 버튼이 이미 있는 페이지만
+                  // spec.exportLabel(데이터)로 이름을 달리 준다.
+                  + (spec.exportLabel ? _nm(spec.exportLabel) : _t('엑셀 저장', 'Save')) + '</button>'
                 + (spec.exportOnly ? '' :
                     SEP
                   + '<button id="px-import-' + spec.id + '" onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'

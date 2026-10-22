@@ -268,6 +268,10 @@
     };
     window._elecModeSpec = function() { if (window._elecBomClose) window._elecBomClose(); };
 
+    // 📄↔📊 [2026-10-22] 지금 보고 있는 뷰만 다시 그린다 — js/42 왕복 불러오기의 repaint 대상.
+    //    `_switchElecView()`를 인자 없이 부르면 PANEL로 튕기므로(등록 안 된 뷰 폴백) 현재 뷰를 명시한다.
+    window._elecRepaintCurrent = function() { window._switchElecView(window._elecView || 'panel'); };
+
     // 새로고침해도 마지막 상태 복원
     try {
         if (localStorage.getItem('gantt_sidebar_collapsed') === '1') applySidebarState(true);
