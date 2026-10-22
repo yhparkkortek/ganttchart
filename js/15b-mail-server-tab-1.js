@@ -1663,7 +1663,18 @@ window._msQueueRowHint = function(type, r) {
     if (reason.startsWith('blocked_domain:')) return `차단 등록된 도메인(${reason.slice(15)})이라 자동폐기됨`;
     if (reason.startsWith('unknown_domain:')) return `주소록에 없는 발신자 도메인(${reason.slice(15)}) — 정상 거래처면 주소록에 추가 필요`;
     if (reason === 'whitelist_empty') return '주소록이 비어있어 전부 신규발신자로 분류됨';
-    if (type === 'unmatched') return r.matchReason || '등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음) — 이 메일은 옛날 버전 분석이라 상세 근거가 없습니다. 🔄 재분석 요청으로 다시 분석하면 근거가 표시됩니다.';
+    if (type === 'unmatched') {
+        var base = r.matchReason || '등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음) — 이 메일은 옛날 버전 분석이라 상세 근거가 없습니다. 🔄 재분석 요청으로 다시 분석하면 근거가 표시됩니다.';
+        // 💡 [2026-10-22] AI가 못 고른 진짜 이유가 "그 프로젝트가 앱에 아직 없어서"인 경우가 많다.
+        //    사내 프로젝트 사전(js/49, 사용자가 엑셀로 관리하던 목록)에서 결정론으로만 찾아 덧붙인다.
+        //    ⚠️ 제안일 뿐 자동 배정이 아니다 — 등록 안 된 곳에 꽂을 수는 없다.
+        try {
+            var hit = window._ppMatchText
+                ? window._ppMatchText((r.subject || '') + ' ' + (r.body || '')) : null;
+            if (hit) base += '\n🏷 사내 목록에 "' + hit.project.name + '"이(가) 있습니다 — 앱에 아직 등록되지 않은 프로젝트일 수 있습니다 (근거: ' + hit.why.join(', ') + ')';
+        } catch (e) { /* 사전이 없으면 기존 문구만 */ }
+        return base;
+    }
     return '';
 };
 

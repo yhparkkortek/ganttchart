@@ -238,7 +238,19 @@ function _renderStep3(body) {
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
         '<div style="font-size:11px; color:#aaa; margin-top:6px;">' +
         _t('▾ 를 누르면 등록된 고객사 목록이 나옵니다. 목록에 없으면 그냥 입력하세요.',
-           'Click ▾ for the registered customers. Not listed? Just type it.') + '</div>';
+           'Click ▾ for the registered customers. Not listed? Just type it.') + '</div>' +
+        // 🏷 [2026-10-22] 사내 프로젝트 사전(js/49) — 사용자가 엑셀("Panel Comparison Table"의
+        //    PROJECT 시트)로 이미 관리하던 목록이다. 고르면 고객사·모델명·메일키워드를 한 번에 채운다.
+        //    앱에 등록되지 않은 프로젝트가 거기 다 있어서, 손으로 다시 타이핑할 이유가 없다.
+        '<div style="margin-top:12px; padding-top:10px; border-top:1px dashed #dde;">' +
+        '<button type="button" onclick="window._npwPickFromDict()" ' +
+        'onmouseover="this.style.background=\'#d8e9fb\';" onmouseout="this.style.background=\'#e8f4fd\';" ' +
+        'style="padding:6px 13px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:7px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s;">🏷 ' +
+        _t('사내 프로젝트 목록에서 고르기', 'Pick from the in-house project list') + '</button>' +
+        '<div style="font-size:11px; color:#aaa; margin-top:5px;">' +
+        _t('공유 폴더의 Panel Comparison Table(PROJECT 시트)에서 읽어옵니다 — 고객사·모델명이 한 번에 채워집니다.',
+           'Reads the PROJECT sheet of the Panel Comparison Table on the share — fills customer and model at once.') +
+        '</div></div>';
     if (window.refreshCustomerDatalist) window.refreshCustomerDatalist();
     setTimeout(function() { const el = document.getElementById('npw-customer'); if (el) el.focus(); }, 50);
 }
@@ -558,6 +570,36 @@ window._npwOpen = function(prefill, statusVal) {
     const _tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const _hasToken = !!((_tokenObj && _tokenObj.access_token) || window.googleAccessToken);
     if (_hasToken && window.autoImportReferenceExcel) window.autoImportReferenceExcel();
+};
+
+/**
+ * 🏷 [2026-10-22] 사내 프로젝트 사전에서 고르기 → 고객사·모델명·메일키워드 pre-fill.
+ * 모델명은 Step 4 칸이라 지금은 _npwData 에만 담아두고, 그 단계로 가면 그대로 뜬다
+ * (_renderStep4 가 _npwData.model 을 먼저 본다).
+ */
+window._npwPickFromDict = function() {
+    if (!window._ppOpenPicker) {
+        alert(_t('사내 프로젝트 목록을 불러올 수 없습니다 — 문서 저장소 설정을 확인해주세요.',
+                 'Cannot load the in-house project list — check the document store settings.'));
+        return;
+    }
+    window._ppOpenPicker(function(p) {
+        window._npwData = window._npwData || {};
+        var cust = document.getElementById('npw-customer');
+        if (cust && p.customer) {
+            cust.value = p.customer;
+            cust.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        window._npwData.customer = p.customer || (cust ? cust.value : '');
+        window._npwData.model = p.model || p.name;
+        // 메일 키워드 씨앗 — 모델명 토큰 + 채택(●) 패널 PN. 다음 분석부터 바로 쓰인다.
+        var kw = String(p.model || '').split(/\s+/).filter(Boolean);
+        (p.panels || []).forEach(function(x) { if (x.chosen && kw.length < 10) kw.push(x.pn); });
+        window._npwData.keywords = kw.join(', ');
+        if (window.showToast) window.showToast(_t(
+            '🏷 "' + p.name + '" 을(를) 가져왔습니다 — 모델명과 메일 키워드는 다음 단계에 채워집니다.',
+            '🏷 Loaded "' + p.name + '" — model and mail keywords are filled in the next steps.'), 'info', 5000);
+    });
 };
 
 window._npwClose = function() {

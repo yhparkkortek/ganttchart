@@ -104,6 +104,13 @@ window._bcCustomerDict = function(projects) {
         var k = _bcNorm(c);
         if (k) set[k] = c;
     });
+    // 💡 [2026-10-22] 사내 프로젝트 사전(js/49)의 고객사도 넣는다 — 앱에 아직 **등록되지 않은**
+    //    프로젝트의 고객사(UNIDESA 등)는 project_index에 없어서 여기서 영영 안 잡혔다.
+    //    사용자가 엑셀로 관리하던 목록이 이미 있었고 앱만 그걸 몰랐다.
+    try {
+        var pp = window._ppCustomers ? window._ppCustomers() : {};
+        Object.keys(pp).forEach(function(k2) { if (!set[k2]) set[k2] = pp[k2]; });
+    } catch (e) { /* 사전이 없어도 기존 동작 그대로 */ }
     return set;
 };
 
