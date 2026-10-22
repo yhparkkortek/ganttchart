@@ -162,6 +162,28 @@
         return { value: srcValue || '', from: _t('원본 기안', 'source doc'), kind: 'source' };
     };
 
+    // 📄 제목 속 자재번호 바꾸기.
+    //    양식마다 제목 형식이 다르다(`Customer Approval Sheet[133015]_V01`, `[133015] 승인원`, …).
+    //    그래서 **형식을 알아내려 하지 않고**, 원본의 옛 자재번호가 제목 어디에 있든 새 번호로
+    //    바꾼다. 형식과 무관하게 동작하고, 옛 번호가 없으면 **아무것도 안 바꾼다**(추측 금지).
+    //    옛 번호는 원본의 Item Code 류 칸에서 찾고, 없으면 제목의 5~8자리 숫자를 쓴다.
+    var _subjectWithMaterial = function (subject, srcFields, newMat) {
+        subject = String(subject || '');
+        newMat = String(newMat || '').trim();
+        if (!subject || !newMat) return { value: subject, changed: false };
+        var oldMat = '';
+        var keys = ['Item Code', '자재코드', 'ItemCode'];
+        for (var i = 0; i < keys.length && !oldMat; i++) {
+            var v = String((srcFields || {})[keys[i]] || '').trim();
+            if (/^\d{5,8}$/.test(v)) oldMat = v;
+        }
+        if (!oldMat) oldMat = (subject.match(/\b\d{5,8}\b/) || [''])[0];
+        if (!oldMat || oldMat === newMat || subject.indexOf(oldMat) === -1) {
+            return { value: subject, changed: false, oldMat: oldMat };
+        }
+        return { value: subject.split(oldMat).join(newMat), changed: true, oldMat: oldMat };
+    };
+
     // ── 진입점 ─────────────────────────────────────────────────────────
     //  opts.asIs = true 면 **매핑하지 않고 원본 값 그대로** 쓴다(= "그대로 복사").
     //  확인 화면·적용 경로는 똑같이 쓴다 — 복사도 사람이 한 번 보고 넣는 게 맞다.
@@ -234,6 +256,15 @@
 
         // 새 기안에서 시스템이 채우는 칸은 애초에 다루지 않는다(원본 문서번호가 박힌다).
         var SKIP = ['문서번호', '작성일', '작성부서', '작성자', '제목', '기안부서', '기안자'];
+        // ⚠️ 제목은 그동안 미리보기에 **안 보이고 고칠 수도 없었다** — 그런데 저장은 됐다.
+        //    Item Code 는 새 자재인데 제목엔 옛 번호가 남아 결재선을 타는 상황이 된다(사용자 지적).
+        var _sub = opts.asIs ? { value: src.subject || '', changed: false }
+                             : _subjectWithMaterial(src.subject, srcFields, ctx.material);
+        var subjRow = { label: _t('제목', 'Subject'), srcValue: src.subject || '', value: _sub.value,
+                        from: _sub.changed ? (_t('자재번호 교체 ', 'material swapped ') + _sub.oldMat + '→' + ctx.material)
+                                           : _t('원본 기안', 'source doc'),
+                        kind: _sub.changed ? 'app' : 'source', note: '', isSubject: true };
+
         var rows = Object.keys(srcFields)
             .filter(function (k) { return SKIP.indexOf(k.replace(/\s/g, '')) === -1; })
             .map(function (k) {
@@ -242,6 +273,7 @@
                     : _resolveOne(form, k, srcFields[k], ctx);
                 return { label: k, srcValue: srcFields[k], value: d.value, from: d.from, kind: d.kind, note: d.note || '' };
             });
+        rows.unshift(subjRow);
         _apvOpen(docNum, src, form, rows, opts.asIs, ctx.material);
     };
 
@@ -384,10 +416,12 @@
 
     window._apvApply = async function () {
         var p = window._apvPending; if (!p) return;
-        var fields = {}, edited = 0;
+        var fields = {}, edited = 0, subject = null;
         p.rows.forEach(function (r, i) {
             var el = document.getElementById('apv-v-' + i);
             var v = el ? el.value : r.value;
+            // 제목은 **입력칸이 아니다** — fields 에 넣으면 'Subject' 라는 칸을 찾다 실패한다.
+            if (r.isSubject) { subject = v; return; }
             fields[r.label] = v;
             // 사람이 고친 값만 적립한다 — 자동으로 나온 값까지 저장하면 사전이 금방 오염된다.
             if (String(v) !== String(r.value)) { _learnPut(p.form, r.label, v); edited++; }
@@ -399,7 +433,8 @@
         try {
             var r = await fetch('http://127.0.0.1:5000/gw/approval/copy', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ docNum: p.docNum, fields: fields, dryRun: false })
+                body: JSON.stringify({ docNum: p.docNum, fields: fields,
+                                       subject: (subject === null ? undefined : subject), dryRun: false })
             });
             res = await r.json();
         } catch (e) { res = { ok: false, message: String(e && e.message || e) }; }
