@@ -82,62 +82,69 @@
     //    "이 프로젝트가 무슨 모델을 골라뒀는지 + Note + 수정이력"만 담긴다.
     //    읽기는 _parseElecPartsSheetFromWorkbook(js/22a)이 이 구조를 그대로 되읽는다.
     // ══════════════════════════════════════════════════════════════
+    // 📄 [2026-10-22] 이 시트가 다루는 부품 종류 목록 — **등록된 전부**다.
+    //    예전엔 panel/convbd/adbd/touchctrl 네 개를 코드에 박아서, 구분이 늘어나도(js/50이
+    //    주요자재 구분을 부품 종류로 등록한다) 그 선택·Note·이력이 엑셀에 조용히 안 실렸다.
+    //    ⚠️ 시트 TYPE 칸의 값은 파서(js/22a)가 되읽는 **키**다 — 그래서 라벨을 그대로 쓰고,
+    //    읽는 쪽도 이 함수로 같은 목록을 만든다. 두 곳에 적으면 한쪽만 고쳐진다.
+    window._elecPartsTypeList = function () {
+        const out = [{ key: 'panel', label: 'PANEL' }];
+        const pt = window.ELEC_PART_TYPES || {};
+        Object.keys(pt).forEach(function (k) {
+            if (k === 'panel') return;
+            out.push({ key: k, label: String((pt[k] && pt[k].label) || k) });
+        });
+        return out;
+    };
+
     window._elecPartsToAoa = function () {
         const tabData = (window.collectTabData ? window.collectTabData() : (window.tabData || {})) || {};
-            const epTypeLabel = { panel: 'PANEL', convbd: 'CONV', adbd: 'AD BD', touchctrl: 'TOUCH CTRL' };
-            const pc = tabData.panelCompare || { selectedModels: [], notes: {} };
-            const ecAll = tabData.elecCompare || {};
-            const selByType = {
-                panel: pc.selectedModels || [],
-                convbd: (ecAll.convbd && ecAll.convbd.selectedModels) || [],
-                adbd: (ecAll.adbd && ecAll.adbd.selectedModels) || [],
-                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.selectedModels) || []
-            };
-            const notesByType = {
-                panel: pc.notes || {},
-                convbd: (ecAll.convbd && ecAll.convbd.notes) || {},
-                adbd: (ecAll.adbd && ecAll.adbd.notes) || {},
-                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.notes) || {}
-            };
-            const logsByType = {
-                panel: tabData.panelCompareChangeLog || [],
-                convbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.convbd) || [],
-                adbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.adbd) || [],
-                touchctrl: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.touchctrl) || []
-            };
-            const epData = [
-                ['ELEC PARTS DATA'],
-                ['## SELECTED MODELS'],
-                ['TYPE', 'MODELS (comma-separated)'],
-                ['PANEL', selByType.panel.join(',')],
-                ['CONV', selByType.convbd.join(',')],
-                ['AD BD', selByType.adbd.join(',')],
-                ['TOUCH CTRL', selByType.touchctrl.join(',')],
-                [],
-                ['## NOTES'],
-                ['TYPE', 'LABEL', 'NOTE'],
-            ];
-            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
-                Object.keys(notesByType[t]).forEach(function(label) {
-                    const v = notesByType[t][label];
-                    if (v) epData.push([epTypeLabel[t], label, v]);
-                });
+        const types = window._elecPartsTypeList();
+        const pc = tabData.panelCompare || { selectedModels: [], notes: {} };
+        const ecAll = tabData.elecCompare || {};
+        const logAll = tabData.elecCompareChangeLog || {};
+        // PANEL만 저장 자리가 따로다(panelCompare) — 나머지는 elecCompare[키].
+        const selOf = function (t) {
+            if (t.key === 'panel') return pc.selectedModels || [];
+            return (ecAll[t.key] && ecAll[t.key].selectedModels) || [];
+        };
+        const notesOf = function (t) {
+            if (t.key === 'panel') return pc.notes || {};
+            return (ecAll[t.key] && ecAll[t.key].notes) || {};
+        };
+        const logsOf = function (t) {
+            if (t.key === 'panel') return tabData.panelCompareChangeLog || [];
+            return logAll[t.key] || [];
+        };
+
+        const epData = [['ELEC PARTS DATA'], ['## SELECTED MODELS'], ['TYPE', 'MODELS (comma-separated)']];
+        types.forEach(function (t) { epData.push([t.label, selOf(t).join(',')]); });
+
+        epData.push([], ['## NOTES'], ['TYPE', 'LABEL', 'NOTE']);
+        types.forEach(function (t) {
+            const notes = notesOf(t);
+            Object.keys(notes).forEach(function (label) {
+                if (notes[label]) epData.push([t.label, label, notes[label]]);
             });
-            // 🌐 머리글은 지금 언어로 — 파서(js/22a)는 **0열이 'TYPE'인 줄**만 보고 건너뛰므로
-            //    나머지 칸을 번역해도 왕복이 깨지지 않는다. 구획 표시(## …)는 고정 ASCII 그대로.
-            const _tt = window._t || function (ko) { return ko; };
-            epData.push([], ['## CHANGE LOG'], ['TYPE', _tt('변경 일시', 'Changed at'), _tt('수정자', 'Changed by'),
-                                                _tt('항목', 'Item'), _tt('필드', 'Field'),
-                                                _tt('변경 전 (Old)', 'Old'), _tt('변경 후 (New)', 'New')]);
-            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
-                logsByType[t].forEach(function(log) {
-                    epData.push([epTypeLabel[t], log.time, log.userName || _tt('알 수 없음', 'Unknown'), log.row, log.field, log.oldVal, log.newVal]);
-                });
+        });
+
+        // 🌐 머리글은 지금 언어로 — 파서(js/22a)는 **0열이 'TYPE'인 줄**만 보고 건너뛰므로
+        //    나머지 칸을 번역해도 왕복이 깨지지 않는다. 구획 표시(## …)는 고정 ASCII 그대로.
+        const _tt = window._t || function (ko) { return ko; };
+        epData.push([], ['## CHANGE LOG'], ['TYPE', _tt('변경 일시', 'Changed at'), _tt('수정자', 'Changed by'),
+                                            _tt('항목', 'Item'), _tt('필드', 'Field'),
+                                            _tt('변경 전 (Old)', 'Old'), _tt('변경 후 (New)', 'New')]);
+        types.forEach(function (t) {
+            logsOf(t).forEach(function (log) {
+                epData.push([t.label, log.time, log.userName || _tt('알 수 없음', 'Unknown'),
+                             log.row, log.field, log.oldVal, log.newVal]);
             });
-            const hasAnyData = selByType.panel.length || selByType.convbd.length || selByType.adbd.length || selByType.touchctrl.length
-                || Object.keys(notesByType.panel).length || Object.keys(notesByType.convbd).length || Object.keys(notesByType.adbd).length || Object.keys(notesByType.touchctrl).length
-                || logsByType.panel.length || logsByType.convbd.length || logsByType.adbd.length || logsByType.touchctrl.length;
-            return { aoa: epData, hasData: !!hasAnyData };
+        });
+
+        const hasAnyData = types.some(function (t) {
+            return selOf(t).length || Object.keys(notesOf(t)).length || logsOf(t).length;
+        });
+        return { aoa: epData, hasData: !!hasAnyData };
     };
 
     window.validateRequiredProjectInfo = function() {

@@ -156,11 +156,12 @@
     // ⚡ [2026-08-28 변경] PARTS 탭 부품 종류 선택 — 밑줄탭 3개 고정 대신 드롭다운으로 변경.
     // 🗂 [2026-10-22 확장] Summary "주요 자재" 구분을 **전부** 드롭다운에 올린다.
     //    예전엔 스펙표(도표)가 설계된 4개(PANEL/AD BD/CONV/TOUCH CTRL)만 나왔다 — 나머지 구분은
-    //    화면이 없으니 NAS 폴더도 없고, 사양서·사진을 둘 곳이 아예 없었다. 이제 모든 구분이 제
-    //    하위 화면을 갖고, 도표가 아직 없는 구분은 "도표까지만" 그린다(js/50 `_pcpRender`).
+    //    화면이 없으니 NAS 폴더도 없고, 사양서·사진을 둘 곳이 아예 없었다. 이제 모든 구분이
+    //    **AD BD와 같은 비교표 화면**을 갖는다 — 전용 도표가 없는 구분은 공용 기본 항목
+    //    (`GENERIC_PART_SPEC_SCHEMA`, js/22d)으로 쓰고, 화면은 AD BD를 복제해 만든다(js/50).
     //
     //    ⚠️ 구분명·아이콘·NAS 폴더 이름은 **데이터**다 — 새 구분이 생기면 여기 한 줄만 추가한다.
-    //      • `view` — 스펙 비교표가 설계된 구분만 적는다. 비우면 공용 화면(js/50)을 쓴다.
+    //      • `view` — **전용** 스펙 도표가 설계된 구분만 적는다. 비우면 공용 기본 항목을 쓴다.
     //      • `nas`  — NAS 하위 폴더 이름. 구분명에 Windows 폴더명으로 못 쓰는 글자(`/`)가 있어서
     //                 따로 적는다. 비워 두면 구분명에서 그 글자를 공백으로 바꿔 쓴다.
     window.ELEC_CATEGORY_META = {
@@ -185,17 +186,7 @@
         convbd:    { label: 'CONV',  icon: '🔌' },
         touchctrl: { label: 'TOUCH CTRL', icon: '👆' },
     };
-    // Summary 주요자재 구분명 → 비교표 뷰 키. 위 카탈로그에서 **뽑아낸다** — 두 곳에 적으면 엇나간다.
-    window.ELEC_CATEGORY_TO_VIEW = (function() {
-        const m = {};
-        Object.keys(window.ELEC_CATEGORY_META).forEach(function(cat) {
-            const v = window.ELEC_CATEGORY_META[cat].view;
-            if (v) m[cat] = v;
-        });
-        return m;
-    })();
-
-    // 도표가 없는 구분의 뷰 키 — localStorage에 남고 비교에도 쓰이므로 영숫자만 남긴다.
+    // 전용 도표가 없는 구분의 뷰 키 — localStorage에 남고 DOM id에도 들어가므로 영숫자만 남긴다.
     window._elecCatSlug = function(cat) {
         return 'cat_' + String(cat || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     };
@@ -204,6 +195,18 @@
         if (meta && meta.view && window.ELEC_VIEW_META[meta.view]) return meta.view;
         return window._elecCatSlug(cat);
     };
+
+    // Summary 주요자재 구분명 → 비교표 뷰 키. 위 카탈로그에서 **뽑아낸다** — 두 곳에 적으면 엇나간다.
+    //   ⚠️ 전용 도표가 없는 구분까지 **전부** 담는다. js/22e `_epProjectModelParts`와 js/38
+    //   `_elecBomItemCode`가 이 맵을 거꾸로 읽어 "이 비교표가 주요자재 어느 줄이냐"를 찾기
+    //   때문이다 — 4개만 담으면 나머지 구분에서 📥 주요자재에서·BOM 자재번호가 조용히 빈다.
+    //   사람이 나중에 넣은 구분은 `_getElecDropdownOptions()`가 돌 때 여기에 채워진다.
+    window.ELEC_CATEGORY_TO_VIEW = (function() {
+        const m = {};
+        (window.MATERIAL_FIXED_CATEGORIES || Object.keys(window.ELEC_CATEGORY_META))
+            .forEach(function(cat) { m[cat] = window._elecViewKeyOf(cat); });
+        return m;
+    })();
 
     // Summary 주요자재 순서대로 — 고정 13개 + 사람이 더 넣은 구분까지 **전부**.
     window._getElecDropdownOptions = function() {
@@ -219,13 +222,21 @@
             const key = window._elecViewKeyOf(cat);
             if (!key || key === 'cat_' || seen[key]) return;
             seen[key] = true;
+            window.ELEC_CATEGORY_TO_VIEW[cat] = key;   // 역방향 조회를 최신으로(위 주석 참고)
             const meta = window.ELEC_CATEGORY_META[cat] || {};
             const vm = window.ELEC_VIEW_META[key];
+            const icon = meta.icon || (vm && vm.icon) || '📄';
+            const label = (vm && vm.label) || cat;
+            // 전용 도표가 없는 구분은 공용 기본 항목으로 비교표를 쓸 수 있게 등록해 둔다(js/50).
+            // 등록을 여기서 부르는 이유: 구분 목록을 아는 곳이 여기 하나라서다.
+            if (!vm && window._pcpRegisterType) window._pcpRegisterType(key, cat, icon, label);
+            const pt = (window.ELEC_PART_TYPES || {})[key];
             out.push({
-                key: key, category: cat,
-                icon: meta.icon || (vm && vm.icon) || '📄',
-                label: (vm && vm.label) || cat,
-                hasSchema: !!vm
+                key: key, category: cat, icon: icon, label: label,
+                // 비교표를 그릴 수 있는가 — PANEL은 전용 엔진, 나머지는 ELEC_PART_TYPES 등록 여부.
+                hasSchema: !!(vm || pt),
+                // 전용 항목이 아니라 **공용 기본 항목**을 쓰는 중이라는 표시(드롭다운 꼬리표).
+                generic: !!(pt && pt.generic)
             });
         });
         return out;
@@ -268,11 +279,12 @@
         const _ddEn = window._currentLang === 'en';
         popup.innerHTML = options.map(function(o) {
             const active = o.key === window._elecView;
-            // 도표가 아직 없는 구분은 꼬리표를 붙인다 — 눌러본 뒤에 알게 되면 안 된다.
+            // 전용 도표가 아니라 공용 기본 항목을 쓰는 구분은 꼬리표를 붙인다 — 항목이
+            // 그 부품에 맞춰 설계된 게 아니라는 걸 눌러본 뒤에 알게 되면 안 된다.
             //   ⚠️ 중첩 템플릿 리터럴을 쓰지 않는다(백틱 하나로 파일 전체가 죽는 사고 이력).
-            const mark = o.hasSchema ? '' :
+            const mark = !o.generic ? '' :
                 '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">'
-                + (_ddEn ? 'table only' : '도표만') + '</span>';
+                + (_ddEn ? 'basic' : '기본항목') + '</span>';
             return `<div onclick="window._switchElecView('${o.key}'); document.getElementById('elec-view-dropdown').style.display='none';"
                          style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;
                                 background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
@@ -304,41 +316,26 @@
         let opt = window._elecOptionOf(view);
         if (!opt) { view = 'panel'; opt = window._elecOptionOf('panel') || { key: 'panel', category: 'PANEL', icon: '🖥️', label: 'PANEL', hasSchema: true }; }
         window._elecView = view;
-        const hasSchema = !!opt.hasSchema;
-        const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd', touchctrl: 'elec-view-touchctrl' };
+        // 🗂 전용 도표가 없는 구분은 AD BD 화면을 복제해 만든다(js/50) — **숨기기 전에** 만들어야
+        //    아래 querySelectorAll이 새 화면도 같이 집는다.
+        if (window._pcpEnsureView) window._pcpEnsureView(view);
         // BOM 서브뷰는 _elecBomOpen/_elecBomClose가 제어 — SPEC 전환 시 항상 숨긴다
         const bomView = document.getElementById('elec-view-bom');
         if (bomView) bomView.style.display = 'none';
-        const bomBtns = document.getElementById('eh-bom-btns');
-        if (bomBtns) bomBtns.style.display = 'none';
-        Object.keys(sections).forEach(function(v) {
-            const sec = document.getElementById(sections[v]);
-            if (sec) sec.style.display = (hasSchema && v === view) ? 'flex' : 'none'; // 💡 [2026-09-02] 'block'→'flex': CSS flex 레이아웃과 연동
+        // ⚠️ 화면 목록을 코드에 박지 않는다 — 구분이 런타임에 늘어난다(복제). 클래스로 집는다.
+        document.querySelectorAll('.elec-spec-view').forEach(function(sec) {
+            sec.style.display = (sec.id === 'elec-view-' + view) ? 'flex' : 'none'; // 💡 [2026-09-02] 'block'→'flex': CSS flex 레이아웃과 연동
         });
-        // 🗂 도표가 아직 없는 구분은 공용 화면 하나를 돌려 쓴다(js/50).
-        const generic = document.getElementById('elec-view-generic');
-        if (generic) generic.style.display = hasSchema ? 'none' : 'flex';
-        // SPEC↔BOM 토글은 비교표가 있는 구분에서만 뜻이 있다 — 없는 구분에선 숨긴다
-        // (누르면 자재번호도 라이브러리도 없는 빈 BOM 화면이 떠서 고장처럼 보인다).
-        const modeToggle = document.getElementById('elec-mode-toggle');
-        if (modeToggle) modeToggle.style.display = hasSchema ? 'flex' : 'none';
+        // 헤더 버튼 묶음도 같은 이유로 선택자로 집는다(eh-<키>-btns · eh-bom-btns).
+        document.querySelectorAll('[id^="eh-"][id$="-btns"]').forEach(function(sp) {
+            sp.style.display = (sp.id === 'eh-' + view + '-btns') ? 'contents' : 'none';
+        });
         const label = document.getElementById('elec-view-trigger-label');
         if (label) label.textContent = opt.icon + ' ' + opt.label;
-        const panelBtns = document.getElementById('eh-panel-btns');
-        const adbdBtns = document.getElementById('eh-adbd-btns');
-        const convbdBtns = document.getElementById('eh-convbd-btns');
-        const touchctrlBtns = document.getElementById('eh-touchctrl-btns');
-        if (panelBtns) panelBtns.style.display = (hasSchema && view === 'panel') ? 'contents' : 'none';
-        if (adbdBtns) adbdBtns.style.display = (hasSchema && view === 'adbd') ? 'contents' : 'none';
-        if (convbdBtns) convbdBtns.style.display = (hasSchema && view === 'convbd') ? 'contents' : 'none';
-        if (touchctrlBtns) touchctrlBtns.style.display = (hasSchema && view === 'touchctrl') ? 'contents' : 'none';
-        if (hasSchema) {
-            if (view === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
-            if (view === 'adbd' && window.renderElecCompareTab) window.renderElecCompareTab('adbd');
-            if (view === 'convbd' && window.renderElecCompareTab) window.renderElecCompareTab('convbd');
-            if (view === 'touchctrl' && window.renderElecCompareTab) window.renderElecCompareTab('touchctrl');
-        } else if (window._pcpRender) {
-            window._pcpRender(opt);
+        if (view === 'panel') {
+            if (window.renderPanelCompareTab) window.renderPanelCompareTab();
+        } else if ((window.ELEC_PART_TYPES || {})[view]) {
+            if (window.renderElecCompareTab) window.renderElecCompareTab(view);
         }
         try { localStorage.setItem('gantt_elec_view', view); } catch(e) {}
         if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('spec');

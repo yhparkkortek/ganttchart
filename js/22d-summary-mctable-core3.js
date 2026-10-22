@@ -1088,6 +1088,36 @@ window.TOUCH_CTRL_SPEC_SCHEMA = [
     ]},
 ];
 
+// 🗂 [2026-10-22] 공용 기본 스펙 항목 — **전용 도표가 아직 설계되지 않은 구분**이 쓴다
+//    (SLIM/CUT · TOUCH/GLASS · BLU · POWER · METAL · MOLD · DIE CAST · PACKING · ETC,
+//     그리고 사람이 주요자재에 직접 넣은 구분).
+//    예전엔 그 구분들이 화면조차 없었다. 이제 이 항목으로 **AD BD와 똑같은 비교표**를 쓴다 —
+//    추가/펼치기/엑셀 저장/AI 추출이 전부 기존 엔진(js/22e)에서 그냥 돌아간다.
+//    ⚠️ 여기에 특정 부품 전용 항목(해상도·스케일러 같은 것)을 더하지 말 것 — 여러 구분이
+//    **같이** 쓰는 표다. 전용 항목이 필요해지면 그 구분만 전용 스키마를 만들어
+//    ELEC_PART_TYPES에 꽂으면 되고, 그러면 이 공용 스키마를 안 쓴다.
+window.GENERIC_PART_SPEC_SCHEMA = [
+    { section: 'Basic Information', fields: [
+        ['Brand', 1], ['Item Code', 1], ['Part Name', 1], ['Maker P/N', 1],
+        ['Revision', 2], ['Item Description', 2],
+    ]},
+    { section: 'Specification', fields: [
+        ['Key Spec', 1], ['Material', 1], ['Dimension (WxDxH)', 1],
+        ['Weight', 2], ['Color / Finish', 2], ['Surface Treatment', 2],
+    ]},
+    { section: 'Quality / Compliance', fields: [
+        ['Standard / Certification', 2],
+        ['RoHS', 2, 'enum', ['Yes', 'No']],
+        ['Operating Temp.', 2],
+    ]},
+    { section: 'Supply', fields: [
+        ['Supplier', 1], ['MOQ', 2], ['Lead Time', 2],
+    ]},
+    { section: 'Other', fields: [
+        ['Expected Price', 1], ['Note', 1],
+    ]},
+];
+
 window.ELEC_PART_TYPES = {
     convbd: { label: 'CONV', icon: '🔌', domain: 'LED 드라이버/컨버터 보드', libFilename: 'ElecPartLib_CONVBD_Shared.json', schema: window.CONV_BD_SPEC_SCHEMA },
     adbd: { label: 'AD BD', icon: '🔲', domain: '스케일러(A/D) 보드', libFilename: 'ElecPartLib_ADBD_Shared.json', schema: window.AD_BD_SPEC_SCHEMA },

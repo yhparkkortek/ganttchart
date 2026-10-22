@@ -1464,7 +1464,10 @@
         // 🐛 [2026-08-30 버그 수정] 위 PANEL 서브뷰만 다시 그려주고 있어서, CONVERTER/AD BOARD 서브뷰를
         // 보고 있는 중에 언어를 전환하면 "🔌 보기"/"핀맵 보기" 등 버튼 문구가 예전 언어 그대로 남아있는
         // 문제가 있었음 — 같은 방식으로 두 서브뷰도 다시 그려서 즉시 반영되게 한다.
-        if (_pcTab && _pcTab.classList.contains('active') && (window._elecView === 'adbd' || window._elecView === 'convbd') && window.renderElecCompareTab) {
+        //    [2026-10-22] 종류를 코드에 박지 않는다 — TOUCH CTRL이 추가될 때 이미 빠뜨렸고,
+        //    이제 주요자재 구분마다 종류가 생긴다(js/50). 등록된 종류면 다시 그린다.
+        if (_pcTab && _pcTab.classList.contains('active') && window.renderElecCompareTab
+            && (window.ELEC_PART_TYPES || {})[window._elecView]) {
             window.renderElecCompareTab(window._elecView);
         }
 

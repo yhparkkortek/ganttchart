@@ -1119,19 +1119,18 @@
 
     window._elecBomOpen = function (type) {
         window._elecBomType = type;
-        ['panel', 'adbd', 'convbd', 'touchctrl'].forEach(function (v) {
-            var el = document.getElementById('elec-view-' + v);
-            if (el) el.style.display = 'none';
-        });
+        // ⚠️ [2026-10-22] 화면/버튼 목록을 코드에 박지 않는다 — 부품 구분이 런타임에 늘어난다
+        //    (js/50이 AD BD 화면을 복제한다). 네 개만 숨기면 새 구분의 비교표가 BOM 아래
+        //    그대로 남아 두 화면이 겹친다. js/23 `_switchElecView`와 같은 선택자를 쓴다.
+        document.querySelectorAll('.elec-spec-view').forEach(function (el) { el.style.display = 'none'; });
         var bomEl = document.getElementById('elec-view-bom');
         if (bomEl) bomEl.style.display = 'flex';
-        ['panel', 'adbd', 'convbd', 'touchctrl'].forEach(function (v) {
-            var el = document.getElementById('eh-' + v + '-btns');
-            if (el) el.style.display = 'none';
-        });
+        document.querySelectorAll('[id^="eh-"][id$="-btns"]').forEach(function (el) { el.style.display = 'none'; });
         var bomBtns = document.getElementById('eh-bom-btns');
         if (bomBtns) bomBtns.style.display = 'contents';
-        var meta = window.ELEC_VIEW_META && window.ELEC_VIEW_META[type];
+        // 전용 도표가 없는 구분은 ELEC_VIEW_META에 없다 — 등록된 부품 종류에서 받는다(js/50).
+        var meta = (window.ELEC_VIEW_META && window.ELEC_VIEW_META[type])
+                || (window.ELEC_PART_TYPES && window.ELEC_PART_TYPES[type]);
         var label = document.getElementById('elec-view-trigger-label');
         if (label && meta) label.textContent = meta.icon + ' ' + meta.label + ' BOM';
         var matEl = document.getElementById('ep-bom-material');

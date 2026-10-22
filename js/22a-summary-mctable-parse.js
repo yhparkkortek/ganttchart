@@ -396,10 +396,24 @@ function _parseElecPartsSheetFromWorkbook(workbook) {
     const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
     if (!json.length) return false;
 
-    const typeKeyOf = { 'PANEL': 'panel', 'CONV': 'convbd', 'AD BD': 'adbd', 'TOUCH CTRL': 'touchctrl' };
-    const selByType = { panel: [], convbd: [], adbd: [], touchctrl: [] };
-    const notesByType = { panel: {}, convbd: {}, adbd: {}, touchctrl: {} };
-    const logsByType = { panel: [], convbd: [], adbd: [], touchctrl: [] };
+    // 🔑 TYPE 칸 값 → 저장 키. 목록은 **쓰는 쪽과 같은 함수**에서 받는다(js/04k).
+    //    없으면(옛 로드 순서 등) 예전 네 개로 떨어진다 — 그 라벨은 바뀐 적이 없다.
+    const typeKeyOf = {};
+    const types = (window._elecPartsTypeList ? window._elecPartsTypeList()
+                                             : [{ key: 'panel', label: 'PANEL' }, { key: 'convbd', label: 'CONV' },
+                                                { key: 'adbd', label: 'AD BD' }, { key: 'touchctrl', label: 'TOUCH CTRL' }]);
+    types.forEach(function(t) { typeKeyOf[t.label] = t.key; });
+
+    const selByType = {}, notesByType = {}, logsByType = {};
+    // ⚠️ **파일에 나온 종류만** 되돌려 넣는다. 예전엔 네 개를 무조건 덮어썼는데, 종류가 늘어난
+    //    지금 그 방식이면 옛 파일(네 종류만 든)을 불러오는 순간 나머지 구분의 선택이 조용히
+    //    사라진다. 비우려면 그 종류의 칸을 빈 값으로 두면 된다(줄은 남긴다).
+    const seen = {};
+    const touch = function(k) {
+        if (seen[k]) return;
+        seen[k] = true;
+        selByType[k] = []; notesByType[k] = {}; logsByType[k] = [];
+    };
 
     let section = null;
     json.forEach(function(row) {
@@ -409,6 +423,7 @@ function _parseElecPartsSheetFromWorkbook(workbook) {
         if (c0 === 'ELEC PARTS DATA' || c0 === 'TYPE') return; // 제목/하위 헤더 행은 건너뜀
         const typeKey = typeKeyOf[c0];
         if (!typeKey) return;
+        touch(typeKey);
         if (section === '## SELECTED MODELS') {
             selByType[typeKey] = String(row[1] || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
         } else if (section === '## NOTES') {
@@ -418,18 +433,22 @@ function _parseElecPartsSheetFromWorkbook(workbook) {
             logsByType[typeKey].push({ time: row[1] || '', userName: row[2] || '알 수 없음', row: row[3] || '', field: row[4] || '', oldVal: row[5], newVal: row[6] });
         }
     });
+    if (!Object.keys(seen).length) return false;   // 'Elec Parts' 시트인데 종류가 하나도 없다
 
     window.tabData = window.tabData || {};
-    window.tabData.panelCompare = { selectedModels: selByType.panel, notes: notesByType.panel, lastAutoSeed: null };
     window.tabData.elecCompare = window.tabData.elecCompare || {};
-    window.tabData.elecCompare.convbd = { selectedModels: selByType.convbd, notes: notesByType.convbd };
-    window.tabData.elecCompare.adbd = { selectedModels: selByType.adbd, notes: notesByType.adbd };
-    window.tabData.elecCompare.touchctrl = { selectedModels: selByType.touchctrl, notes: notesByType.touchctrl };
-    window.tabData.panelCompareChangeLog = logsByType.panel;
     window.tabData.elecCompareChangeLog = window.tabData.elecCompareChangeLog || {};
-    window.tabData.elecCompareChangeLog.convbd = logsByType.convbd;
-    window.tabData.elecCompareChangeLog.adbd = logsByType.adbd;
-    window.tabData.elecCompareChangeLog.touchctrl = logsByType.touchctrl;
+    Object.keys(seen).forEach(function(k) {
+        if (k === 'panel') {
+            // PANEL만 저장 자리가 따로다. lastAutoSeed는 "주요자재에서 자동으로 올린 적 있다"는
+            // 표시라 파일에 없다 — 되돌려 넣을 때 비워야 다음에 다시 올려준다(기존 동작).
+            window.tabData.panelCompare = { selectedModels: selByType[k], notes: notesByType[k], lastAutoSeed: null };
+            window.tabData.panelCompareChangeLog = logsByType[k];
+            return;
+        }
+        window.tabData.elecCompare[k] = { selectedModels: selByType[k], notes: notesByType[k] };
+        window.tabData.elecCompareChangeLog[k] = logsByType[k];
+    });
     return true;
 }
 
