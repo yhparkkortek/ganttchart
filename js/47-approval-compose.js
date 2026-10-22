@@ -300,25 +300,40 @@
             + _esc(_t('칸마다 값이 어디서 왔는지 함께 표시했습니다. 고치면 그 값이 다음부터 이 양식에 먼저 제안됩니다.',
                       'Each field shows where its value came from. Edits are remembered for this form.'))
             + '</div><table style="border-collapse:collapse; width:100%; font-size:11.5px;"><thead><tr>'
-            + [_t('칸', 'Field'), _t('넣을 값', 'Value'), _t('출처', 'Source'), _t('원본 기안 값', 'Source doc')].map(function (h) {
+            + ['', _t('칸', 'Field'), _t('넣을 값', 'Value'), _t('출처', 'Source'), _t('원본 기안 값', 'Source doc')].map(function (h) {
                 return '<th style="background:#e7f3ff; border:1px solid #e9ecef; padding:4px 6px; text-align:left; white-space:nowrap;">' + _esc(h) + '</th>';
             }).join('') + '</tr></thead><tbody>';
 
+        // 🔁 원본과 **달라진 칸**을 한눈에 — 안 그러면 네 칸을 눈으로 비교해야 한다(사용자 요청).
+        //    바뀐 줄: 왼쪽에 ● 표시 + 줄 배경 + 값 칸 굵게 / 원본 값에 취소선.
+        var changed = 0;
         p.rows.forEach(function (r, i) {
             var st = KIND_STYLE[r.kind] || KIND_STYLE.source;
-            html += '<tr>'
+            var isDiff = String(r.value || '') !== String(r.srcValue || '');
+            if (isDiff) changed++;
+            html += '<tr style="background:' + (isDiff ? '#fffbe6' : 'transparent') + ';">'
+                + '<td style="border:1px solid #e9ecef; padding:3px 4px; text-align:center; width:18px; color:#e6a817; font-weight:bold;"'
+                + ' title="' + _esc(isDiff ? _t('원본과 다름', 'changed') : '') + '">' + (isDiff ? '●' : '') + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; white-space:nowrap; font-weight:bold;">' + _esc(r.label) + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:2px 4px;"><input type="text" id="apv-v-' + i + '" value="' + _esc(r.value)
-                + '" style="width:100%; box-sizing:border-box; padding:3px 5px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px;"></td>'
+                + '" style="width:100%; box-sizing:border-box; padding:3px 5px; border:1px solid ' + (isDiff ? '#e6a817' : '#ced4da')
+                + '; border-radius:4px; font-size:11.5px;' + (isDiff ? ' font-weight:bold;' : '') + '"></td>'
                 // ⚠️ nowrap 금지 — '자재가 바뀌면 공급업체도 달라집니다' 같은 긴 사유가
                 //    옆 칸(원본 기안 값)을 **덮어버린다**(실사용 화면에서 확인).
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; max-width:230px; word-break:break-word;'
                 + ' background:' + st.bg + '; color:' + st.fg + ';">'
                 + st.icon + ' ' + _esc(r.from) + (r.note ? ' <span style="opacity:.75;">(' + _esc(r.note) + ')</span>' : '') + '</td>'
-                + '<td style="border:1px solid #e9ecef; padding:3px 6px; color:#868e96; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"'
+                + '<td style="border:1px solid #e9ecef; padding:3px 6px; color:#868e96; max-width:220px; overflow:hidden;'
+                + ' text-overflow:ellipsis; white-space:nowrap;' + (isDiff ? ' text-decoration:line-through;' : '') + '"'
                 + ' title="' + _esc(r.srcValue) + '">' + _esc(r.srcValue || '-') + '</td></tr>';
         });
         html += '</tbody></table>';
+        // 표 위에 요약 한 줄 — 스크롤하지 않고도 "몇 칸이 바뀌는지" 알 수 있어야 한다.
+        html = '<div style="margin-bottom:6px; font-size:12px;">'
+            + '<span style="color:#e6a817; font-weight:bold;">●</span> '
+            + _esc(_t('원본과 달라지는 칸 ', 'changed from source: ')) + '<b>' + changed + '</b>'
+            + _esc(_t('개 / 전체 ', ' of ')) + p.rows.length + _esc(_t('개', ''))
+            + '</div>' + html;
 
         var miss = p.rows.filter(function (r) { return r.kind === 'miss'; }).length;
         var blank = p.rows.filter(function (r) { return r.kind === 'blank'; }).length;
