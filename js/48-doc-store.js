@@ -543,6 +543,15 @@ window._dsImportToPage = async function (pageId, folder) {
  * ⚠️ 기간은 최후 방어선일 뿐이다. 실측에서 신규발신자 큐에 한 달 넘게 남은 메일이 있었고,
  *    "프로젝트를 나중에 만들고 과거 메일을 재분류"가 이 앱의 정상 워크플로다.
  */
+/** 이 메일의 원본 .eml 이 NAS 에 보관돼 있는지 → {found, project, name, staged, size} */
+window._dsMailFind = function (fileName) {
+    return _api('/doc/mail-find?fileName=' + encodeURIComponent(fileName));
+};
+/** 그 .eml 을 받는 주소 — 새 창으로 열면 메일 프로그램이 첨부까지 열어 준다 */
+window._dsMailOpenUrl = function (fileName) {
+    return DS + '/doc/mail-open?fileName=' + encodeURIComponent(fileName);
+};
+
 window._dsMailGc = async function (apply) {
     var alive = [];
     var push = function (arr, get) {

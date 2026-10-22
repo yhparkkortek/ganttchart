@@ -1295,7 +1295,12 @@ window.showMailRawModal = function(r) {
             <textarea id="inbox-mailraw-body" readonly style="flex:1; margin:12px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; white-space:pre-wrap; word-break:break-word; tab-size:4; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; overflow:auto; line-height:1.5; background:#f8f9fa; color:#333;"></textarea>
             <div id="inbox-mailraw-translated" style="display:none; flex:1; margin:12px; font-size:12px; border:1px solid #ced4da; border-radius:6px; padding:10px; overflow:auto; line-height:1.5; background:#f8f9fa;"></div>
             <div style="padding:10px 16px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eee;">
+                <span style="display:inline-flex; align-items:center;">
                 <button id="inbox-mailraw-translate-btn" onclick="window._toggleMailRawTranslation()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="${_en ? 'AI translates each paragraph that is not Korean and shows the Korean translation right below it' : '한국어가 아닌 문단마다 AI가 번역한 한글을 바로 아래에 붙여서 보여줍니다'}" style="padding:7px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🌐 ${_en ? 'Show Translation' : '번역 보기'}</button>
+                <!-- 📎 [2026-10-22] 이 모달은 **본문만** 보여준다 — 수신 때 첨부는 메타만 남기고 버린다.
+                     NAS 에 .eml 통째로 보관된 게 있으면 그걸 열 수 있게 켠다(없으면 숨김). -->
+                <button id="inbox-mailraw-eml-btn" style="display:none; margin-left:6px; padding:7px 14px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#d8eedd'; this.style.borderColor='#8ccba1';" onmouseout="this.style.background='#eaf7ea'; this.style.borderColor='#a8dab8';">📎 ${_en ? 'Open original .eml' : '원본 .eml 열기'}</button>
+                </span>
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="padding:7px 18px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;">✖ ${_en ? 'Close' : '닫기'}</button>
             </div>
         </div>`;
@@ -1314,6 +1319,26 @@ window.showMailRawModal = function(r) {
     const _toCcHtml = _toCcParts.length ? ('&nbsp;&nbsp;|&nbsp;&nbsp;' + _toCcParts.join('&nbsp;&nbsp;|&nbsp;&nbsp;')) : '';
     document.getElementById('inbox-mailraw-meta').innerHTML =
         `<b>${_en2 ? 'Subject' : '제목'}</b>: ${escapeHtml(r.subject || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Sender' : '발신'}</b>: ${escapeHtml(r.sender || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Date' : '날짜'}</b>: ${escapeHtml(r.date || '-')}${_toCcHtml}`;
+    // 📎 [2026-10-22] 보관된 원본 .eml 이 있으면 버튼을 켠다. 없으면 **숨긴다** —
+    //    눌렀다가 "없습니다"를 보는 것보다 애초에 안 보이는 게 낫다(저장소 설정 전에 받은
+    //    메일엔 원본이 없고, 그게 흔하다). 백엔드가 꺼져 있어도 조용히 숨긴 채 지나간다.
+    (function() {
+        var emlBtn = document.getElementById('inbox-mailraw-eml-btn');
+        if (!emlBtn) return;
+        emlBtn.style.display = 'none';
+        emlBtn.onclick = null;
+        var fn = r && r.fileName;
+        if (!fn || !window._dsMailFind) return;
+        window._dsMailFind(fn).then(function(j) {
+            if (!j || !j.found) return;
+            emlBtn.style.display = '';
+            emlBtn.title = (_en2 ? 'Open the archived original (body + attachments)' : '보관된 원본을 엽니다 — 본문과 첨부가 다 들어 있습니다')
+                + '\n' + j.name
+                + (j.staged ? ('\n' + (_en2 ? '(not assigned to a project yet)' : '(아직 프로젝트 미확정 — staging)')) : ('\n' + j.project));
+            emlBtn.onclick = function() { window.open(window._dsMailOpenUrl(fn), '_blank'); };
+        }).catch(function() { /* 백엔드가 꺼져 있으면 버튼 없이 지금까지처럼 */ });
+    })();
+
     // 💡 [2026-09-09 신규] 첨부파일 목록 표시 — 실제 파일 내용은 가져오지 않고 메타데이터만 pill로 렌더링
     (function() {
         var attDiv = document.getElementById('inbox-mailraw-attachments');

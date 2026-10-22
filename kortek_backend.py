@@ -4856,6 +4856,65 @@ def doc_mail_gc():
     })
 
 
+def _mail_find_file(cfg, file_name):
+    """fileName → (폴더명, 파일명). 못 찾으면 (None, None).
+
+    보관 파일명은 `<키>__<sha8>.eml` 이고 **이동해도 이름이 안 바뀐다**(doc_mail_assign) —
+    그래서 키 접두어로 staging 과 프로젝트 폴더를 훑으면 찾을 수 있다.
+    ⚠️ 확정 보관본을 먼저 본다. 분류가 끝나도 같은 이름이 staging 에 남아 있을 수 있는데,
+       그걸 먼저 집으면 "분류했는데 왜 미분류에서 열리지"가 된다.
+    """
+    mr = _docstore_mail_root(cfg)
+    if not mr or not file_name:
+        return None, None
+    prefix = _mail_stage_key(file_name) + '__'
+    try:
+        projects = [n for n in sorted(os.listdir(mr))
+                    if n != DOCSTORE_MAIL_STAGE and os.path.isdir(os.path.join(mr, n))]
+    except Exception:
+        return None, None
+    for d in projects + [DOCSTORE_MAIL_STAGE]:
+        p = os.path.join(mr, d)
+        try:
+            hits = [n for n in os.listdir(p) if n.startswith(prefix)]
+        except Exception:
+            continue
+        if hits:
+            hits.sort(key=lambda n: os.path.getmtime(os.path.join(p, n)), reverse=True)
+            return d, hits[0]
+    return None, None
+
+
+@app.route('/doc/mail-find', methods=['GET'])
+def doc_mail_find():
+    """이 메일의 원본 .eml 이 보관돼 있는지 — 프런트가 버튼을 띄울지 정하는 데 쓴다.
+    없는 게 흔하다(저장소 설정 전에 받은 메일) — 오류가 아니라 found:false 로 돌려준다."""
+    cfg = _docstore_load()
+    d, n = _mail_find_file(cfg, request.args.get('fileName') or '')
+    if not n:
+        return jsonify({'ok': True, 'found': False})
+    fp = os.path.join(_docstore_mail_root(cfg), d, n)
+    try:
+        st = os.stat(fp)
+    except Exception:
+        return jsonify({'ok': True, 'found': False})
+    return jsonify({'ok': True, 'found': True, 'project': d, 'name': n,
+                    'staged': d == DOCSTORE_MAIL_STAGE, 'size': st.st_size,
+                    'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds')})
+
+
+@app.route('/doc/mail-open', methods=['GET'])
+def doc_mail_open():
+    """원본 .eml 내려주기 — 받으면 메일 프로그램이 연다(본문 + **첨부까지**).
+    앱 모달은 본문만 보여준다(수신 때 첨부는 메타만 남기고 버린다)."""
+    cfg = _docstore_load()
+    d, n = _mail_find_file(cfg, request.args.get('fileName') or '')
+    if not n:
+        return jsonify({'ok': False, 'error': '보관된 원본 .eml을 찾지 못했습니다.'}), 404
+    return send_file(os.path.join(_docstore_mail_root(cfg), d, n),
+                     mimetype='message/rfc822', as_attachment=True, download_name=n)
+
+
 @app.route('/doc/mail-list', methods=['GET'])
 def doc_mail_list():
     """프로젝트별 보관함 또는 staging 현황."""
