@@ -130,10 +130,23 @@ window._clampModalToViewport = function(box) {
     if (!box.style.maxHeight) box.style.maxHeight = 'none';
 };
 
+// 🐛🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "창 크기 바꾸면 모달이 안으로 들어오던 게 없어졌다"]
+//    "보이는가"를 `offsetParent !== null` 로 판정하고 있었다. 그런데 **`offsetParent` 는
+//    `position:fixed` 요소에서 항상 null 이다** — 이 앱의 모달은 전부 fixed 라, 모든 모달이
+//    "숨김"으로 떨어져 clamp 가 **한 번도 돌지 않았다**(실측: 화면 밖 276px 로 밀어내고
+//    _clampAllModals 를 불러도 꿈쩍 안 함). 열릴 때 보정(onShown)도 같은 이유로 죽어 있었다.
+//    → 크기와 display/visibility 로 판정한다.
+window._mreszIsShown = function(el) {
+    if (!el) return false;
+    if (!el.offsetWidth && !el.offsetHeight) return false;   // display:none 이면 둘 다 0
+    const cs = window.getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden';
+};
+
 window._clampAllModals = function() {
     window._resizableBoxIds.forEach(function(id) {
         const el = document.getElementById(id);
-        if (el && el.offsetParent !== null) window._clampModalToViewport(el);
+        if (window._mreszIsShown(el)) window._clampModalToViewport(el);
     });
 };
 
@@ -152,6 +165,8 @@ window._makeResizable = function(boxId, _retry) {
     // 기존 CSS resize는 끈다 — 두 방식이 겹치면 모서리에서 네이티브가 먼저 먹어 서로 싸운다
     box.style.resize = 'none';
     if (window._installModalResizeHost) window._installModalResizeHost();
+    // 🎨 외곽 테두리(헤더 강조색) — 드래그를 등록하는 모달 전부에 자동 적용된다
+    if (window._mreszEnsureBorderStyle) { window._mreszEnsureBorderStyle(); box.classList.add('mresz-modal'); }
 
     // 🐛 [2026-10-21 버그수정, 사용자 제보 "버튼이 안 눌린다"]
     //    처음엔 8방향 손잡이를 <div>로 박스 안쪽 가장자리에 깔았다. 그 투명한 띠가 바로 아래에 있는
@@ -344,7 +359,7 @@ window._makeResizable = function(boxId, _retry) {
     // 열릴 때마다 화면 안으로 — 모달마다 "무엇의 display를 바꿔 여는지"가 제각각이라(박스 자신일 수도,
     // 바깥 오버레이일 수도) 둘 다 관찰한다. _makeMinimizable이 ✕ 버튼에서 대상을 알아내는 것과 같은 사정.
     const onShown = function() {
-        if (box.offsetParent === null) return;
+        if (!window._mreszIsShown(box)) return;
         requestAnimationFrame(function() { window._clampModalToViewport(box); });
     };
     try {
@@ -366,6 +381,24 @@ window._makeResizable = function(boxId, _retry) {
 //    자기 커서를 따로 가진 요소(오버레이·버튼·입력칸 등) 위에서는 body 값이 **무시된다.**
 //    그래서 모달 밖 링에서는 커서가 바뀌는 자리와 안 바뀌는 자리가 섞여 "느리다/안 잡힌다"로
 //    느껴졌다. → `<html>` 에 클래스를 걸고 `!important` 로 **전부 덮는다**(드래그·리사이즈의 표준 방식).
+// 🎨 [2026-10-22 신규, 사용자 요청] 모달 **외곽 테두리**를 헤더 강조색으로 — 첨부 화면처럼.
+//
+//  왜 각 모달의 헤더 배경을 읽지 않았나: 헤더 색이 모달마다 다르다(실측: 팔레트 모달·공지
+//  모달은 크림색 `rgb(255,248,230)`, AI 문답은 연파랑). 그걸 그대로 쓰면 테두리가 희미하거나
+//  모달마다 제각각이 된다. 첨부에서 보이는 건 **강조색** 테두리다.
+//  → 앱이 헤더 글자·강조에 쓰는 팔레트 변수 `--trans-text`(js/21 `_cpApplyLive` 가 설정)를 쓴다.
+//    **CSS 변수라 팔레트를 바꾸면 테두리도 저절로 따라간다** — 다시 칠하는 코드가 필요 없다.
+//  ⚠️ `!important` 인 이유: 모달 상당수가 인라인 style 로 자기 테두리를 갖고 있다.
+window._mreszEnsureBorderStyle = function() {
+    if (document.getElementById('mresz-border-style')) return;
+    const st = document.createElement('style');
+    st.id = 'mresz-border-style';
+    st.textContent =
+        '.mresz-modal { border: 2px solid var(--trans-text, #00707d) !important;'
+        + ' box-sizing: border-box; }';
+    document.head.appendChild(st);
+};
+
 window._mreszSetCursor = function(cur) {
     const root = document.documentElement;
     if (!document.getElementById('mresz-cursor-style')) {
