@@ -5330,9 +5330,14 @@ ${docsJson}`;
                 // ⚠️ 자재번호도 같이 실어 보낸다 — 버튼을 누르는 시점엔 **원래 질문이 사라져** 있어서
                 //    "SAP 에서 132933 검색해서"를 다시 읽을 방법이 없다(실사용에서 그 부분이 무시됐다).
                 const _matSuffix = _gwDraftMat ? (' ' + _gwDraftMat) : '';
-                _opts.push({ label: '📝 ' + window._t('틀로 작성(현재 프로젝트 값)', 'Compose from it'),
+                // ⚠️ 두 버튼의 **차이를 라벨에서** 드러낸다. "그대로 복사"는 매핑을 통째로
+                //    건너뛰어 SAP·프로젝트를 **안 본다** — 라벨이 '그대로 복사'뿐이라
+                //    "SAP에서 132933 검색해서"라고 말한 사람이 이걸 눌렀다(실사용 제보).
+                _opts.push({ label: '📝 ' + (_gwDraftMat
+                                ? window._t('틀로 작성 — 프로젝트+SAP ' + _gwDraftMat, 'Compose — project + SAP ' + _gwDraftMat)
+                                : window._t('틀로 작성 — 현재 프로젝트 값', 'Compose — current project')),
                              value: '기안틀작성 ' + _docNo + _matSuffix });
-                _opts.push({ label: '📄 ' + window._t('그대로 복사', 'Copy as-is'),
+                _opts.push({ label: '📄 ' + window._t('그대로 복사 — 원본 값만', 'Copy as-is — source only'),
                              value: '기안그대로복사 ' + _docNo });
             }
             if (_gwDraftMat) {
@@ -5344,8 +5349,12 @@ ${docsJson}`;
                 '❓ ' + window._t('어떤 기안인지 알려주세요.', 'Which draft do you mean?') + _nl + _nl
                 + (_docNo
                     ? window._t('문서 ' + _docNo + ' 을 찾았습니다 — 그걸 틀로 쓸까요?' + _nl
-                                + '- 📝 **틀로 작성**: 양식만 가져오고 값은 **지금 열린 프로젝트**에서 채웁니다.' + _nl
-                                + '- 📄 **그대로 복사**: 원본 값을 그대로 옮깁니다.',
+                                + '- 📝 **틀로 작성**: 양식만 가져오고 값은 '
+                                + (_gwDraftMat ? '**지금 열린 프로젝트와 SAP(' + _gwDraftMat + ')**' : '**지금 열린 프로젝트**')
+                                + '에서 채웁니다.' + _nl
+                                + '- 📄 **그대로 복사**: 원본 값을 그대로 옮깁니다. '
+                                + (_gwDraftMat ? '⚠️ 이쪽은 **SAP ' + _gwDraftMat + ' 도, 프로젝트 값도 쓰지 않습니다.**'
+                                               : '⚠️ 이쪽은 **프로젝트 값을 쓰지 않습니다.**'),
                                 'Found ' + _docNo + ' — use it as the template?')
                     : window._t('기안은 양식마다 내용이 완전히 다릅니다. 둘 중 하나를 알려주세요 —' + _nl
                                 + '- **틀로 쓸 기존 문서번호** (예: RD3-2610-050). 그 문서를 읽어 지금 프로젝트 값으로 채웁니다.' + _nl
