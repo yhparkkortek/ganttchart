@@ -27,8 +27,9 @@
     //    → 메일이 영원히 미분류로 쌓였다(실측 미분류 31건 중 약 20건이 이 경로).
     //    게이트를 없애는 게 아니라 "필요해지는 시점"으로 옮긴다.
     //
-    //    ⚠️ 고객사·고객모델명을 계속 필수로 두는 이유는 이 둘이 실제로 파일명을 만들기 때문
-    //    ("고객사_모델_인치", updatePrintTitle 참고). 비면 "All_All_All"로 저장된다.
+    //    ⚠️ (2026-10-22 정정) 파일명의 기준은 **고객사>프로젝트명 한 칸**이다.
+    //    고객 모델명은 모델이 여럿일 때 어느 것을 쓸지 답이 없어 필수에서 뺐다
+    //    (_draftRequiredMissing 주석 참고). 비면 그 조각만 빠진다 — "All"을 끼워넣지 않는다.
     //    반대로 KTK모델명·프로젝트담당자는 파일명에 들어가지 않는다 — 기존 주석/마법사 안내의
     //    "파일명 생성에 필요"는 이 둘에 대해서는 사실과 달랐다.
     //
@@ -39,12 +40,19 @@
     window._isDraftStageProject = function() {
         return String((window.projectMeta || {}).완료여부 || '') === 'MP(EC)';
     };
-    /** 임시 단계에서도 반드시 필요한 것 — 파일명 조립에 실제로 쓰이는 두 개 */
+    /** 임시 단계에서도 반드시 필요한 것 — 파일명 조립에 실제로 쓰이는 값
+     *
+     *  💡 [2026-10-22 구조 변경, 사용자 요청] **고객 모델명을 필수에서 뺐다.**
+     *     왜: 한 프로젝트에 모델 카드가 여럿이면(MVD/TPR/TVD …) "어느 고객 모델명으로
+     *     파일명을 만들 것인가"에 답이 없다 — 전부 적을 수도 없고, 첫 번째를 고르면
+     *     자의적이다. 그래서 파일명의 기준을 **고객사>프로젝트명 한 칸**으로 옮겼다
+     *     (화면 라벨도 `고객사>프로젝트명`으로 바꿨다. 예: `LNW>STELLAR32`).
+     *     고객 모델명은 모델 카드에 그대로 남아 있고 입력도 되지만, 저장을 막지 않는다.
+     */
     window._draftRequiredMissing = function() {
         const pm = window.projectMeta || {};
         const missing = [];
-        if (!String(pm.고객사 || '').trim()) missing.push('고객사');
-        if (!String(pm.고객모델명 || '').trim()) missing.push('고객 모델명');
+        if (!String(pm.고객사 || '').trim()) missing.push('고객사>프로젝트명');
         return missing;
     };
     /** DV(정식 개발) 승격부터 추가로 필요한 것 */
@@ -75,7 +83,7 @@
         // 💡 [UX] 빈 줄을 줄여 한눈에 들어오게 — 예전엔 문단마다 \n\n이 들어가 모달이 불필요하게 길었다.
         const tail = draft
             ? '' // 임시 단계에서 막혔다면 남은 건 파일명용 두 개뿐이라 추가 설명이 필요 없다
-            : '\n\n💡 아직 KTK PN이 안 나온 단계(RFQ·견적·문의)라면, 프로젝트 상태를 🟢 MP(EC)(임시)로 바꾸면 고객사·고객 모델명만으로 등록할 수 있습니다. 나머지는 🔵 DV로 승격할 때 입력하면 됩니다.';
+            : '\n\n💡 아직 KTK PN이 안 나온 단계(RFQ·견적·문의)라면, 프로젝트 상태를 🟢 MP(EC)(임시)로 바꾸면 고객사>프로젝트명만으로 등록할 수 있습니다. 나머지는 🔵 DV로 승격할 때 입력하면 됩니다.';
         return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n(Summary 탭에서 입력 · 파일명 생성과 일정 자동계산에 필요)\n\n· ' + missing.join('\n· ') + tail;
     };
 
@@ -110,11 +118,14 @@
         try {
             // 💡 더 이상 엑셀 행/필터에서 찾지 않고, Summary(프로젝트 정보)에 입력된 값을 그대로 사용
             let customer = window.getSummaryCustomer() || "All";
-            let model = window.getSummaryModel() || "All";
+            let model = window.getSummaryModel();     // 💡 이제 비어 있을 수 있다(필수 아님)
             let inch = window.getSummaryInch();
             // 💡 담당자 이름은 화면 표시/파일명(xlsx·json·드라이브 저장·주간보고서 전부 공용) 어디에도 넣지 않음
 
-            const infoStr = inch ? `${customer}_${model}_${inch}` : `${customer}_${model}`; 
+            // 💡 [2026-10-22] 빈 칸은 **빼고** 잇는다 — 예전엔 고객 모델명이 비면 "All"을 끼워 넣어
+            //    `LNW_STELLAR32_All` 처럼 의미 없는 꼬리가 붙었다. 고객사>프로젝트명 한 칸만으로도
+            //    파일명이 성립하므로 없는 조각은 그냥 생략한다.
+            const infoStr = [customer, model, inch].filter(Boolean).join('_');
             const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_').replace(/[\x00-\x1F\x7F"*/:<>?\\|]/g, ''); 
             
             const tableInfoTextElem = document.getElementById('table-info-text'); 

@@ -227,8 +227,11 @@ function _validateStep2() {
 // ─── Step 3: 고객사 ───────────────────────────────────────────────────
 function _renderStep3(body) {
     const val = (window._npwData && window._npwData.customer) || _prefill.customer || '';
-    body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객사 <span style="color:#e03131;">*</span></div>' +
-        '<div style="font-size:11.5px; color:#888; margin-bottom:14px;">파일명 생성 및 메일 매칭에 사용됩니다.</div>' +
+    body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객사&gt;프로젝트명 <span style="color:#e03131;">*</span></div>' +
+        // 💡 [2026-10-22 사용자 요청] 이 한 칸이 **파일명의 기준**이다(고객 모델명은 필수에서 빠졌다).
+        '<div style="font-size:11.5px; color:#888; margin-bottom:14px;">' +
+        _t('파일명 생성 및 메일 매칭에 사용됩니다. 예: <b>LNW&gt;STELLAR32</b>',
+           'Used for the file name and mail matching. e.g. <b>LNW&gt;STELLAR32</b>') + '</div>' +
         // 💡 [2026-10-21 변경, 사용자 요청] 직접 타이핑 → 드롭다운.
         //    datalist를 쓰는 이유: 목록에서 고를 수 있으면서도 **목록에 없는 신규 고객사는 그대로
         //    입력**할 수 있다. <select>로 막으면 새 거래처를 등록할 방법이 사라진다.
@@ -237,8 +240,8 @@ function _renderStep3(body) {
         '<input id="npw-customer" type="text" list="customer-options" placeholder="' + _t('목록에서 고르거나 직접 입력', 'pick from the list or type a new one') + '" value="' + val + '" autocomplete="off" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
         '<div style="font-size:11px; color:#aaa; margin-top:6px;">' +
-        _t('▾ 를 누르면 등록된 고객사 목록이 나옵니다. 목록에 없으면 그냥 입력하세요.',
-           'Click ▾ for the registered customers. Not listed? Just type it.') + '</div>' +
+        _t('▾ 를 누르면 등록된 고객사 목록이 나옵니다. 목록에 없으면 그냥 입력하세요. 고른 뒤 <b>&gt;프로젝트명</b>을 이어 적어주세요.',
+           'Click ▾ for the registered customers. Not listed? Just type it. Then append <b>&gt;Project</b>.') + '</div>' +
         // 🏷 [2026-10-22] 사내 프로젝트 사전(js/49) — 사용자가 엑셀("Panel Comparison Table"의
         //    PROJECT 시트)로 이미 관리하던 목록이다. 고르면 고객사·모델명·메일키워드를 한 번에 채운다.
         //    앱에 등록되지 않은 프로젝트가 거기 다 있어서, 손으로 다시 타이핑할 이유가 없다.
@@ -281,7 +284,8 @@ function _collectStep3() {
 }
 function _validateStep3() {
     const v = (document.getElementById('npw-customer') || {}).value || '';
-    if (!v.trim()) { alert(_t('고객사를 입력해주세요.', 'Please enter the customer.')); return false; }
+    if (!v.trim()) { alert(_t('고객사>프로젝트명을 입력해주세요. (예: LNW>STELLAR32)',
+                              'Please enter Customer>Project. (e.g. LNW>STELLAR32)')); return false; }
     return true;
 }
 
@@ -289,7 +293,11 @@ function _validateStep3() {
 function _renderStep4(body) {
     const model  = (window._npwData && window._npwData.model)  || _prefill.model  || '';
     const ktkpn  = (window._npwData && window._npwData.ktkpn)  || _prefill.ktkpn  || '';
-    body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객 모델명 <span style="color:#e03131;">*</span></div>' +
+    // 💡 [2026-10-22 사용자 요청] 고객 모델명은 **필수가 아니다.** 모델이 여럿일 때
+    //    어느 것으로 파일명을 만들지 답이 없어서, 그 기준을 Step 2의 `고객사>프로젝트명`
+    //    한 칸으로 옮겼다(js/04k `_draftRequiredMissing` 주석 참고).
+    body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객 모델명' +
+        ' <span style="font-weight:normal; font-size:11px; color:#888;">(' + _t('선택', 'optional') + ')</span></div>' +
         '<input id="npw-model" type="text" placeholder="' + _t('예: STELLAR32, KV-43XH8596', 'e.g. STELLAR32, KV-43XH8596') + '" value="' + model + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
         // 🐛 [2026-10-21 수정] 예전엔 여기 빨간 * 가 붙어 있는데 _validateStep4는 검사하지 않았고,
@@ -321,9 +329,7 @@ function _collectStep4() {
     window._npwData.ktkpn = (document.getElementById('npw-ktkpn') || {}).value || '';
 }
 function _validateStep4() {
-    const v = (document.getElementById('npw-model') || {}).value || '';
-    if (!v.trim()) { alert(_t('고객 모델명을 입력해주세요.', 'Please enter the customer model name.')); return false; }
-    return true;
+    return true;   // 고객 모델명·KTK PN 모두 선택 입력 — 막지 않는다(2026-10-22)
 }
 
 // ─── Step 5: 담당자 + 메일 키워드 ────────────────────────────────────

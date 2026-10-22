@@ -273,8 +273,8 @@ window._renderModelCardHtml = function(model, idx) {
             _moveBtns + _delBtn +
         '</div>' +
         '<div class="concept-grid" style="grid-template-columns:140px 1fr 140px 1fr; padding:10px 12px;">' +
-            _lbl + '고객 모델명 <span style="color:#e03131;">*</span></label>' +
-            '<input type="text" class="u-input req-field" data-model-field="고객모델명" placeholder="예: STELLAR32" value="' + escapeHtml(model.고객모델명 || '') + '" oninput="window._checkRequiredField(this)">' +
+            _lbl + '고객 모델명</label>' +
+            '<input type="text" class="u-input" data-model-field="고객모델명" placeholder="예: STELLAR32" value="' + escapeHtml(model.고객모델명 || '') + '">' +
             _lbl + '프로젝트 코드</label>' +
             '<input type="text" class="u-input" data-model-field="프로젝트코드" placeholder="예: G2608OB" value="' + escapeHtml(model.프로젝트코드 || '') + '">' +
             _lbl + '프로젝트 명칭</label>' +
