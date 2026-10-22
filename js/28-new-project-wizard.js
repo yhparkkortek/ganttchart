@@ -251,8 +251,8 @@ function _renderStep3(body) {
         'style="padding:6px 13px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:7px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s;">🏷 ' +
         _t('사내 프로젝트 목록에서 고르기', 'Pick from the in-house project list') + '</button>' +
         '<div style="font-size:11px; color:#aaa; margin-top:5px;">' +
-        _t('공유 폴더의 Panel Comparison Table(PROJECT 시트)에서 읽어옵니다 — 고객사·모델명이 한 번에 채워집니다.',
-           'Reads the PROJECT sheet of the Panel Comparison Table on the share — fills customer and model at once.') +
+        _t('NAS의 Panel Comparison Table(PROJECT 시트)에서 읽어옵니다 — 고객사·모델명이 한 번에 채워집니다.',
+           'Reads the PROJECT sheet of the Panel Comparison Table on the NAS — fills customer and model at once.') +
         '</div></div>';
     if (window.refreshCustomerDatalist) window.refreshCustomerDatalist();
     setTimeout(function() { const el = document.getElementById('npw-customer'); if (el) el.focus(); }, 50);

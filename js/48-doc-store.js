@@ -152,7 +152,7 @@ window._dsOpenPanelSpec = async function (pn) {
     try {
         var hit = await window._dsFindPanelSpec(pn);
         if (!hit) {
-            _toast(_t('"' + pn + '" 사양서를 공유에서 찾지 못했습니다.', 'No spec found for "' + pn + '".'), 'error');
+            _toast(_t('"' + pn + '" 사양서를 NAS에서 찾지 못했습니다.', 'No spec found for "' + pn + '".'), 'error');
             return false;
         }
         window._dsOpenInNewTab('PANEL', hit.name);
@@ -191,12 +191,12 @@ window._dsOpenSettings = async function () {
         + ' background:#fff; border-radius:10px; width:var(--modal-w-md, 620px); max-width:94vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); overflow:hidden; min-width:360px; min-height:240px;">'
         + '  <div id="ds-cfg-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff;'
         + '       border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">'
-        + '    <span>📁 <span>' + _t('문서 저장소 설정', 'Document store settings') + '</span></span>'
+        + '    <span>📁 <span>' + _t('NAS 문서 저장소 설정', 'NAS document store settings') + '</span></span>'
         + '    <button onclick="document.getElementById(\'ds-cfg-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
         + '       border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; display:flex; align-items:center; justify-content:center;">✕</button>'
         + '  </div>'
         + '  <div style="padding:16px 18px;">'
-        + '    <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:5px;">' + _t('공유 폴더 경로', 'Share path') + '</div>'
+        + '    <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:5px;">' + _t('NAS 경로', 'NAS path') + '</div>'
         + '    <input id="ds-cfg-root" type="text" placeholder="\\\\서버\\공유\\...\\SPEC" style="width:100%; box-sizing:border-box; padding:8px 11px; border:1.5px solid #a5c8f0; border-radius:7px; font-size:12.5px; font-family:monospace;">'
         + '    <div style="font-size:11px; color:#888; margin-top:4px; line-height:1.6;">'
         + _t('이 PC에서 탐색기로 열리는 경로여야 합니다. 브라우저가 아니라 <b>로컬 백엔드</b>가 읽습니다.',
@@ -280,7 +280,7 @@ window._dsOpenPicker = async function (opts) {
         + ' box-shadow:0 8px 32px rgba(0,0,0,0.22); overflow:hidden; min-width:400px; min-height:320px;">'
         + '  <div id="ds-pick-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff;'
         + '       border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">'
-        + '    <span>📂 <span id="ds-pick-title">' + _t('공유에서 파일 고르기', 'Pick a file from the share') + '</span></span>'
+        + '    <span>📂 <span id="ds-pick-title">' + _t('NAS에서 파일 고르기', 'Pick a file from the NAS') + '</span></span>'
         + '    <button onclick="document.getElementById(\'ds-pick-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
         + '       border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; display:flex; align-items:center; justify-content:center;">✕</button>'
         + '  </div>'
@@ -408,7 +408,7 @@ window._dsPickUpload = function () {
 window._dsImportToPage = async function (pageId, folder) {
     window._dsOpenPicker({
         folder: folder || 'CUSTOMER',
-        title: _t('공유에서 불러오기', 'Import from the share'),
+        title: _t('NAS에서 불러오기', 'Import from the NAS'),
         onPick: async function (f, name) {
             try {
                 _toast('⏳ ' + _t('"' + name + '" 받는 중…', 'Fetching "' + name + '"…'), 'info');

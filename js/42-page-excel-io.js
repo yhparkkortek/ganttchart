@@ -1616,10 +1616,10 @@
                   //    필요 없이 팀이 올려둔 사양서를 바로 집어온다(js/48). 저장소가 설정 안 돼 있으면
                   //    고르기 창이 설정 안내를 띄우므로 버튼은 항상 보여도 된다.
                   + '<button id="px-share-' + spec.id + '" onclick="window._dsImportToPage && window._dsImportToPage(\'' + spec.id + '\')" title="'
-                  + _esc(_t('사내 공유 폴더에 올려둔 파일에서 바로 불러옵니다(내 PC로 받지 않아도 됩니다).',
-                            'Load directly from a file on the shared folder — no need to download it first.'))
+                  + _esc(_t('사내 NAS에 올려둔 파일에서 바로 불러옵니다(내 PC로 받지 않아도 됩니다).',
+                            'Load directly from a file on the NAS — no need to download it first.'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
-                  + ' style="' + BTN + ' margin-right:4px;">📁 ' + _t('공유에서', 'From share') + '</button>')
+                  + ' style="' + BTN + ' margin-right:4px;">📁 ' + _t('NAS', 'NAS') + '</button>')
                 + (hasUndo ?
                     '<button onclick="window.pageExcelUndo(\'' + spec.id + '\')" title="'
                   + _esc(_t('방금 불러오기 전으로 되돌립니다', 'Undo the import'))
