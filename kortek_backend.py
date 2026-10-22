@@ -3707,6 +3707,49 @@ def gw_communities():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/contacts', methods=['GET'])
+def gw_contacts():
+    """사내 주소록 검색. `keyword` 를 비우면 전체(이름 가나다순)."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '20')
+        page = request.args.get('page', '0')
+        r = gw_bridge.contacts_search(keyword=request.args.get('keyword') or '',
+                                      limit=int(limit) if str(limit).isdigit() else 20,
+                                      page=int(page) if str(page).isdigit() else 0)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/notifications', methods=['GET'])
+def gw_notifications():
+    """그룹웨어 알림. `category`=all|unread|approval|bbs|… (읽음 처리 안 함)."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '15')
+        r = gw_bridge.notifications(category=(request.args.get('category') or 'all').strip(),
+                                    limit=int(limit) if str(limit).isdigit() else 15)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/notes', methods=['GET'])
+def gw_notes():
+    """쪽지 목록(읽기 전용)."""
+    try:
+        import gw_bridge
+        limit = request.args.get('limit', '10')
+        r = gw_bridge.notes(limit=int(limit) if str(limit).isdigit() else 10)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/surveys', methods=['GET'])
 def gw_surveys():
     """설문 목록. `kind`=todo(응답 대기)|latest."""
@@ -4474,22 +4517,31 @@ def doc_list():
             since_ts = datetime.fromisoformat(since.replace('Z', '+00:00')).timestamp()
         except Exception:
             since_ts = 0.0
+    # ⚡ [2026-10-22] 파일 198개짜리 폴더가 **7초** 걸렸다(실측). 파일마다 SMB 왕복을 세 번씩
+    #    했기 때문이다 — os.path.isfile + os.stat + 텍스트 캐시 os.path.isfile.
+    #    os.scandir 은 디렉터리를 읽을 때 같이 받아 둔 정보를 재사용하므로 왕복이 사라지고,
+    #    텍스트 캐시는 파일마다 묻지 않고 **한 번에 목록으로** 받아 집합으로 맞춘다.
+    #    ⚠️ 네트워크 공유에서는 "파일 하나당 호출 하나"가 곧 체감 지연이다.
     text_dir = os.path.join(cfg['root'], DOCSTORE_TEXT_DIR)
+    try:
+        cached_texts = set(os.listdir(text_dir))
+    except Exception:
+        cached_texts = set()          # 캐시 폴더가 없으면 전부 '없음'으로 — 목록 자체는 내보낸다
+    text_prefix = _doc_text_key(folder) + '__'
     out = []
     try:
-        for n in sorted(os.listdir(path)):
-            fp = os.path.join(path, n)
-            if not os.path.isfile(fp):
-                continue
-            st = os.stat(fp)
+        with os.scandir(path) as it:
+            entries = [e for e in it if e.is_file()]
+        for e in sorted(entries, key=lambda x: x.name):
+            st = e.stat()
             if since_ts and st.st_mtime <= since_ts:
                 continue
             out.append({
-                'name': n,
+                'name': e.name,
                 'size': st.st_size,
                 'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds'),
                 # 추출 텍스트 캐시가 이미 있는지 — 프런트가 재추출 여부를 판단한다
-                'hasText': os.path.isfile(os.path.join(text_dir, _doc_text_key(folder) + '__' + n + '.txt'))
+                'hasText': (text_prefix + e.name + '.txt') in cached_texts
             })
     except Exception as e:
         return jsonify({'ok': False, 'error': f'목록 조회 실패: {e}'}), 500

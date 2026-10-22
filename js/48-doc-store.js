@@ -126,6 +126,7 @@ window._dsTextOf = async function (folder, name, onStep) {
 
 /** 업로드 — 같은 이름이 있으면 백엔드가 409로 막는다(팀 공유라 조용히 덮으면 복구가 어렵다) */
 window._dsPut = async function (folder, file, overwrite) {
+    if (window._dsInvalidateList) window._dsInvalidateList(folder);   // 방금 올린 파일이 바로 보이게
     var fd = new FormData();
     fd.append('file', file, file.name);
     var url = '/doc/put?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(file.name)
@@ -137,6 +138,22 @@ window._dsPut = async function (folder, file, overwrite) {
 //    파일명이 곧 패널 PN이라(DV320FHM-NN0.pdf, LC430EQZ-SHM1.pdf) 따로 색인이 필요 없다.
 //    표기 차이(점·하이픈·공백·대소문자)는 무시하고 맞춘다 — "G101EVN01.0" ↔ "G101EVN010".
 function _pnKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+// 📋 폴더 목록 짧은 캐시 — 같은 폴더를 연달아 묻는 화면용.
+//    ⚠️ NAS 목록은 네트워크 왕복이다. 백엔드를 고쳐 198개가 0.04초로 내려왔지만(2026-10-22,
+//    그전엔 7초), 그래도 그릴 때마다 부를 이유는 없다. 올리기·이식 직후엔 _dsInvalidateList 로 버린다.
+var _DS_LIST_TTL = 60000;
+var _dsListCache = {};
+async function _dsListCached(folder) {
+    var hit = _dsListCache[folder];
+    if (hit && (Date.now() - hit.at) < _DS_LIST_TTL) return hit.data;
+    var data = await window._dsList(folder);
+    _dsListCache[folder] = { at: Date.now(), data: data };
+    return data;
+}
+window._dsInvalidateList = function (folder) {
+    if (folder) delete _dsListCache[folder]; else _dsListCache = {};
+};
 
 window._dsFindPanelSpec = async function (pn, folder) {
     folder = folder || 'PANEL';
@@ -162,7 +179,9 @@ window._dsFindPanelSpecs = async function (pns, folder) {
     folder = folder || 'PANEL';
     var out = {};
     var list;
-    try { list = await window._dsList(folder); } catch (e) { return out; }
+    // 비교표는 뷰 전환·언어 전환·이식 직후마다 다시 그려진다 — 그때마다 같은 목록을 받지 않게
+    // 짧게 들고 있는다. 파일 고르기 창(_dsList 직접 호출)은 캐시를 안 타므로 늘 최신이다.
+    try { list = await _dsListCached(folder); } catch (e) { return out; }
     var files = (list && list.files) || [];
     var byKey = {};
     files.forEach(function (f) {

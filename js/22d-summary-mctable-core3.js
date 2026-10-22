@@ -472,7 +472,7 @@ window.panelCompareOpenAddModal = async function() {
             </div>
             <div style="padding:12px 16px; border-bottom:1px solid #eee; flex-shrink:0;">
                 <input id="pc-add-search" type="text" placeholder="${_en ? 'Search library by model name...' : '라이브러리에서 모델명 검색...'}" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px;" oninput="window._pcRenderLibList(this.value)">
-                <div id="pc-add-lib-list" style="margin-top:8px; max-height:160px; overflow-y:auto;"></div>
+                <div id="pc-add-lib-list" style="margin-top:8px; max-height:300px; overflow-y:auto; border:1px solid #eef1f3; border-radius:6px;"></div>
             </div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
                 <div id="pc-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new panel with AI' : '또는 새 패널을 AI로 추출'}</div>
@@ -542,14 +542,14 @@ window._pcRenderLibList = function(filterText) {
     const _en = window._currentLang === 'en';
     const lib = window._panelCompareLibCache || { panels: [] };
     const terms = (filterText || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const matchAll = (lib.panels || []).filter(function(p) {
+    // [2026-10-22] 예전엔 30개에서 잘랐다 — 146개를 넣고도 "목록에 안 올라온다"로 보였고,
+    //    사용자 요청으로 **전부 보여준다**. 목록 칸은 스크롤되고, 행 하나가 가벼워서
+    //    수백 개를 그려도 눈에 띄는 지연이 없다. 한참 더 커져서 느려지면 그때 가상 스크롤을 보면 된다.
+    const filtered = (lib.panels || []).filter(function(p) {
         if (!terms.length) return true;
         const hay = window._pcLibSearchHaystack(p);
         return terms.every(function(t) { return hay.indexOf(t) !== -1; });
     });
-    // ⚠️ 30개에서 자른다. 자른다는 말을 안 하면 라이브러리에 146개를 넣고도 "목록에 안 올라온다"로
-    //    보인다(2026-10-22 실제 지적) — 몇 개가 더 있는지 아래에 적는다.
-    const filtered = matchAll.slice(0, 30);
     if (!filtered.length) {
         list.innerHTML = `<div style="padding:8px; color:#999; font-size:12px;">${_en ? 'No matches in the library.' : '라이브러리에 일치하는 패널이 없습니다.'}</div>`;
         return;
@@ -566,12 +566,12 @@ window._pcRenderLibList = function(filterText) {
             <span style="color:#2c5f8a;">${_en ? '+ Add' : '+ 추가'}</span>
         </div>`;
     }).join('')
-    + (matchAll.length > filtered.length
-        ? `<div style="padding:7px 8px; font-size:11.5px; color:#8a6d1f; background:#fff8e6; border-top:1px solid #ffe08a;">
-             ${_en ? 'Showing ' + filtered.length + ' of ' + matchAll.length + ' — type a model name to narrow it down.'
-                   : '전체 ' + matchAll.length + '개 중 ' + filtered.length + '개만 보입니다 — 모델명을 입력해서 찾으세요.'}
-           </div>`
-        : '');
+    // 몇 개가 있는지는 보여준다 — 이제 자르지 않으니 "더 있나?" 하고 의심할 필요가 없다.
+    + `<div style="padding:6px 8px; font-size:11px; color:#888; border-top:1px solid #eee;">
+         ${_en ? filtered.length + ' panel(s)' + (terms.length ? ' of ' + (lib.panels || []).length : '')
+               : (terms.length ? '전체 ' + (lib.panels || []).length + '개 중 ' + filtered.length + '개'
+                               : filtered.length + '개')}
+       </div>`;
 };
 
 // 💡 [2026-08-25 신규] 패널 데이터시트는 대부분 PDF라 텍스트 붙여넣기만으론 불편하다는 요청 —

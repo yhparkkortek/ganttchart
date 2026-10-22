@@ -493,7 +493,7 @@ window.elecCompareOpenAddModal = async function(type) {
             </div>
             <div style="padding:12px 16px; border-bottom:1px solid #eee; flex-shrink:0;">
                 <input id="ep-add-search" type="text" placeholder="${_en ? 'Search library...' : '라이브러리에서 검색...'}" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px;" oninput="window._epRenderLibList(this.value)">
-                <div id="ep-add-lib-list" style="margin-top:8px; max-height:160px; overflow-y:auto;"></div>
+                <div id="ep-add-lib-list" style="margin-top:8px; max-height:300px; overflow-y:auto; border:1px solid #eef1f3; border-radius:6px;"></div>
             </div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
                 <div style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">📷 ${_en ? 'Photos (up to 2)' : '사진 (최대 2장)'}</div>
@@ -658,7 +658,8 @@ window._epRenderLibList = function(filterText) {
     const type = window._epActiveType;
     const lib = window._epLibCache[type] || { items: [] };
     const q = (filterText || '').trim().toLowerCase();
-    const filtered = (lib.items || []).filter(function(p) { return !q || (p.model || '').toLowerCase().indexOf(q) !== -1; }).slice(0, 30);
+    // [2026-10-22] 상한 제거 — PANEL 목록과 같은 이유(자르면 "안 올라온다"로 보인다).
+    const filtered = (lib.items || []).filter(function(p) { return !q || (p.model || '').toLowerCase().indexOf(q) !== -1; });
     if (!filtered.length) {
         list.innerHTML = `<div style="padding:8px; color:#999; font-size:12px;">${_en ? 'No matches in the library.' : '라이브러리에 일치하는 항목이 없습니다.'}</div>`;
         return;
