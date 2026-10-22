@@ -880,7 +880,9 @@
 
     // 파일 → 글자. PDF는 앱이 이미 쓰는 추출기(js/22d)를 그대로 쓴다 — 줄/열 순서를 좌표로
     // 복원해 둔 함수라, 표가 든 문서에서 값이 뒤섞이지 않는다(구매오더에서 검증됨).
-    var _pxExtractText = async function (file, wb) {
+    // 💡 [2026-10-22] 문서 저장소(js/48)가 공유 파일의 텍스트를 뽑아 캐시할 때 같은 추출기를 쓴다.
+    //    복제하면 "여기선 읽히는데 저기선 안 읽힌다"로 갈라지므로 하나만 둔다.
+    var _pxExtractText = window._pxExtractText = async function (file, wb) {
         var name = String(file.name || '');
         if (/\.pdf$/i.test(name)) {
             if (typeof window._pcExtractPdfText !== 'function') {
@@ -1417,7 +1419,15 @@
                   + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다.\n이 버튼 위로 엑셀 파일을 끌어다 놓아도 됩니다.',
                             'Load an edited Excel file — replaces current content; you can undo right after.\nYou can also drop an Excel file onto this button.'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
-                  + ' style="' + BTN + ' margin-right:4px;">📂 ' + _t('불러오기', 'Load') + '</button>')
+                  + ' style="' + BTN + ' margin-right:4px;">📂 ' + _t('불러오기', 'Load') + '</button>'
+                  // 📁 [2026-10-22] 같은 불러오기인데 출처가 **사내 공유**인 경우. 내 PC에 받아둘
+                  //    필요 없이 팀이 올려둔 사양서를 바로 집어온다(js/48). 저장소가 설정 안 돼 있으면
+                  //    고르기 창이 설정 안내를 띄우므로 버튼은 항상 보여도 된다.
+                  + '<button id="px-share-' + spec.id + '" onclick="window._dsImportToPage && window._dsImportToPage(\'' + spec.id + '\')" title="'
+                  + _esc(_t('사내 공유 폴더에 올려둔 파일에서 바로 불러옵니다(내 PC로 받지 않아도 됩니다).',
+                            'Load directly from a file on the shared folder — no need to download it first.'))
+                  + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
+                  + ' style="' + BTN + ' margin-right:4px;">📁 ' + _t('공유에서', 'From share') + '</button>')
                 + (hasUndo ?
                     '<button onclick="window.pageExcelUndo(\'' + spec.id + '\')" title="'
                   + _esc(_t('방금 불러오기 전으로 되돌립니다', 'Undo the import'))
