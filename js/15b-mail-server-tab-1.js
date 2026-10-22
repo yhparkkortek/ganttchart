@@ -1326,7 +1326,29 @@ window._autoMailFetchTick = async function() {
             })
         });
         const data = await res.json();
-        if (data.status !== 'success' || !data.data || !data.data.length) {
+        // 🐛🐛 [2026-10-22 실사용 버그수정] 백엔드가 **오류**를 돌려줘도 "새 메일 없음"과 똑같이
+        //    취급해 마지막 수집 시각만 갱신하고 끝냈다. 그래서 IMAP 권한 오류로 한 건도 못 받는
+        //    동안에도 화면상 "방금 수집함"으로 보였고, 사람은 **아무 신호도 받지 못했다**.
+        //    → 오류는 시각을 갱신하지 않고(다음 틱에서 같은 구간 재시도) 사유를 드러낸다.
+        if (data.status !== 'success') {
+            const _why = (data && data.message) ? String(data.message) : '메일 수집 실패(사유 미상)';
+            window._msAutoSkip = { why: _why, detail: 'backend', at: new Date().toISOString() };
+            console.warn('[메일 자동수집] 백엔드 오류:', _why);
+            if (window._issueLog) {
+                try {
+                    window._issueLog({ domain: 'mail', kind: 'auto_fetch_error', route: '/fetch-mail',
+                                       result: { errorRaw: _why } });
+                } catch (e) { /* 기록 실패가 흐름을 막지 않게 */ }
+            }
+            if (window.showToast) window.showToast('⚠️ ' + _why, 'error');
+            return;
+        }
+        // 📡 어느 경로로 받았는지 남긴다 — IMAP이 막혀 POP3로 넘어간 것을 사람이 알 수 있어야 한다.
+        if (data.proto) {
+            window._msAutoProto = { proto: data.proto, fallback: data.fallback || null, at: new Date().toISOString() };
+            if (data.fallback) console.info('[메일 자동수집] POP3로 폴백:', data.fallback);
+        }
+        if (!data.data || !data.data.length) {
             localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
             return;
         }
