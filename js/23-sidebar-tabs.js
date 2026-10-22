@@ -153,38 +153,108 @@
         }
     };
 
-    // ⚡ [2026-08-28 변경] Elec Parts 탭 부품 종류 선택 — 밑줄탭 3개 고정 대신 드롭다운으로 변경.
-    //    Summary "주요 자재"의 고정 13개 구분(MATERIAL_FIXED_CATEGORIES) 순서를 그대로 훑되, 그 중
-    //    실제로 스펙표(스키마)가 등록된 것만 드롭다운에 나타난다 — 지금은 PANEL/AD BOARD/CONVERTER
-    //    3개뿐(= Summary 주요자재에서 🔎 버튼이 뜨는 것과 정확히 같은 기준). 나머지 10개는 각자의
-    //    스펙표 정의(도표 설계)를 나중에 만들어서 아래 ELEC_CATEGORY_TO_VIEW에 한 줄만 추가하면
-    //    자동으로 드롭다운에 나타난다 — HTML/드롭다운 코드는 손댈 필요 없음.
+    // ⚡ [2026-08-28 변경] PARTS 탭 부품 종류 선택 — 밑줄탭 3개 고정 대신 드롭다운으로 변경.
+    // 🗂 [2026-10-22 확장] Summary "주요 자재" 구분을 **전부** 드롭다운에 올린다.
+    //    예전엔 스펙표(도표)가 설계된 4개(PANEL/AD BD/CONV/TOUCH CTRL)만 나왔다 — 나머지 구분은
+    //    화면이 없으니 NAS 폴더도 없고, 사양서·사진을 둘 곳이 아예 없었다. 이제 모든 구분이 제
+    //    하위 화면을 갖고, 도표가 아직 없는 구분은 "도표까지만" 그린다(js/50 `_pcpRender`).
+    //
+    //    ⚠️ 구분명·아이콘·NAS 폴더 이름은 **데이터**다 — 새 구분이 생기면 여기 한 줄만 추가한다.
+    //      • `view` — 스펙 비교표가 설계된 구분만 적는다. 비우면 공용 화면(js/50)을 쓴다.
+    //      • `nas`  — NAS 하위 폴더 이름. 구분명에 Windows 폴더명으로 못 쓰는 글자(`/`)가 있어서
+    //                 따로 적는다. 비워 두면 구분명에서 그 글자를 공백으로 바꿔 쓴다.
+    window.ELEC_CATEGORY_META = {
+        'PANEL':         { icon: '🖥️', view: 'panel',     nas: 'PANEL' },
+        'SLIM/CUT':      { icon: '✂️',                     nas: 'SLIM CUT' },
+        'TOUCH / GLASS': { icon: '🪟',                     nas: 'TOUCH GLASS' },
+        'TOUCH CTRL':    { icon: '👆', view: 'touchctrl',  nas: 'TOUCH CTRL' },
+        'AD BOARD':      { icon: '🔲', view: 'adbd',       nas: 'AD BD' },
+        'CONVERTER':     { icon: '🔌', view: 'convbd',     nas: 'CONV' },
+        'BLU':           { icon: '💡',                     nas: 'BLU' },
+        'POWER':         { icon: '🔋',                     nas: 'POWER' },
+        'METAL':         { icon: '🔩',                     nas: 'METAL' },
+        'MOLD':          { icon: '🧱',                     nas: 'MOLD' },
+        'DIE CAST':      { icon: '⚙️',                     nas: 'DIE CAST' },
+        'PACKING':       { icon: '📦',                     nas: 'PACKING' },
+        'ETC':           { icon: '🗃️',                     nas: 'ETC' },
+    };
+    // 스펙 비교표가 있는 뷰의 표시 이름 — 비교표 코드(js/22d·22e·38)가 이 이름을 쓴다.
     window.ELEC_VIEW_META = {
         panel:     { label: 'PANEL', icon: '🖥️' },
         adbd:      { label: 'AD BD', icon: '🔲' },
         convbd:    { label: 'CONV',  icon: '🔌' },
         touchctrl: { label: 'TOUCH CTRL', icon: '👆' },
     };
-    // Summary 주요자재 구분명 → Elec Parts 뷰 키. 아직 스펙표가 없는 구분(SLIM/CUT, TOUCH / GLASS,
-    // BLU, POWER, METAL, MOLD, DIE CAST, PACKING, ETC)은 의도적으로 비워둠.
-    window.ELEC_CATEGORY_TO_VIEW = {
-        'PANEL': 'panel',
-        'AD BOARD': 'adbd',
-        'CONVERTER': 'convbd',
-        'TOUCH CTRL': 'touchctrl',
+    // Summary 주요자재 구분명 → 비교표 뷰 키. 위 카탈로그에서 **뽑아낸다** — 두 곳에 적으면 엇나간다.
+    window.ELEC_CATEGORY_TO_VIEW = (function() {
+        const m = {};
+        Object.keys(window.ELEC_CATEGORY_META).forEach(function(cat) {
+            const v = window.ELEC_CATEGORY_META[cat].view;
+            if (v) m[cat] = v;
+        });
+        return m;
+    })();
+
+    // 도표가 없는 구분의 뷰 키 — localStorage에 남고 비교에도 쓰이므로 영숫자만 남긴다.
+    window._elecCatSlug = function(cat) {
+        return 'cat_' + String(cat || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
     };
-    // Summary 순서 기준으로, 실제 등록된(=ELEC_VIEW_META에 있는) 뷰만 걸러서 드롭다운 옵션 목록 생성
+    window._elecViewKeyOf = function(cat) {
+        const meta = window.ELEC_CATEGORY_META[cat];
+        if (meta && meta.view && window.ELEC_VIEW_META[meta.view]) return meta.view;
+        return window._elecCatSlug(cat);
+    };
+
+    // Summary 주요자재 순서대로 — 고정 13개 + 사람이 더 넣은 구분까지 **전부**.
     window._getElecDropdownOptions = function() {
-        const cats = window.MATERIAL_FIXED_CATEGORIES || Object.keys(window.ELEC_CATEGORY_TO_VIEW);
+        const cats = (window.MATERIAL_FIXED_CATEGORIES || Object.keys(window.ELEC_CATEGORY_META)).slice();
+        // 자유추가 구분("앞으로 파생될 것들")도 올린다 — 주요자재에 적는 순간 화면이 생긴다.
+        ((window.tabData && window.tabData.projectMaterials) || []).forEach(function(r) {
+            const c = String((r && r.category) || '').trim();
+            if (c && cats.indexOf(c) === -1) cats.push(c);
+        });
         const seen = {};
         const out = [];
         cats.forEach(function(cat) {
-            const key = window.ELEC_CATEGORY_TO_VIEW[cat];
-            if (!key || seen[key] || !window.ELEC_VIEW_META[key]) return;
+            const key = window._elecViewKeyOf(cat);
+            if (!key || key === 'cat_' || seen[key]) return;
             seen[key] = true;
-            out.push(Object.assign({ key: key }, window.ELEC_VIEW_META[key]));
+            const meta = window.ELEC_CATEGORY_META[cat] || {};
+            const vm = window.ELEC_VIEW_META[key];
+            out.push({
+                key: key, category: cat,
+                icon: meta.icon || (vm && vm.icon) || '📄',
+                label: (vm && vm.label) || cat,
+                hasSchema: !!vm
+            });
         });
         return out;
+    };
+    window._elecOptionOf = function(view) {
+        const opts = window._getElecDropdownOptions();
+        for (let i = 0; i < opts.length; i++) if (opts[i].key === view) return opts[i];
+        return null;
+    };
+
+    // 📁 NAS 폴더 — ELEC 아래에 구분별로 둔다(없으면 백엔드가 그 자리에서 만든다).
+    //    폴더명에 못 쓰는 글자는 목록으로 걸러낸다(정규식 안 백슬래시를 피한다).
+    const _NAS_BAD_CHARS = '/:*?"<>|' + String.fromCharCode(92);
+    window._elecNasFolder = function(view) {
+        const opt = window._elecOptionOf(view || window._elecView);
+        const meta = (opt && window.ELEC_CATEGORY_META[opt.category]) || {};
+        let sub = meta.nas || '';
+        if (!sub) {
+            sub = String((opt && opt.category) || '').split('').map(function(ch) {
+                return _NAS_BAD_CHARS.indexOf(ch) === -1 ? ch : ' ';
+            }).join('').replace(/ +/g, ' ').trim();
+        }
+        return sub ? ('ELEC/' + sub) : 'ELEC';
+    };
+    // 파일 고르기 창의 탭 목록 — 구분을 창 안에서 바로 바꿀 수 있게 전부 넘긴다.
+    window._elecNasFolders = function() {
+        return window._getElecDropdownOptions().map(function(o) {
+            return { f: window._elecNasFolder(o.key), label: o.icon + ' ' + o.label };
+        });
     };
     window._toggleElecViewDropdown = function(ev) {
         if (ev) ev.stopPropagation();
@@ -193,13 +263,19 @@
         if (!popup || !btn) return;
         if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
         const options = window._getElecDropdownOptions();
+        const _ddEn = window._currentLang === 'en';
         popup.innerHTML = options.map(function(o) {
             const active = o.key === window._elecView;
+            // 도표가 아직 없는 구분은 꼬리표를 붙인다 — 눌러본 뒤에 알게 되면 안 된다.
+            //   ⚠️ 중첩 템플릿 리터럴을 쓰지 않는다(백틱 하나로 파일 전체가 죽는 사고 이력).
+            const mark = o.hasSchema ? '' :
+                '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">'
+                + (_ddEn ? 'table only' : '도표만') + '</span>';
             return `<div onclick="window._switchElecView('${o.key}'); document.getElementById('elec-view-dropdown').style.display='none';"
                          style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;
                                 background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
                          onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
-                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}</div>`;
+                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}${mark}</div>`;
         }).join('');
         const rect = btn.getBoundingClientRect();
         popup.style.left = rect.left + 'px';
@@ -222,9 +298,11 @@
     //    하나씩(panel/adbd/convbd) 있지만, 헤더의 액션 버튼 묶음은 뷰마다 구성이 달라(대상 함수가 다름)
     //    eh-panel-btns/eh-convbd-btns 두 묶음만 display:contents ↔ none으로 토글한다(AD BD는 버튼 없음).
     window._switchElecView = function(view) {
-        // 💡 등록 안 된 뷰(예: 옛 localStorage 값이 가리키는 뷰가 사라졌거나 아직 없는 경우)는 PANEL로 폴백
-        if (!window.ELEC_VIEW_META[view]) view = 'panel';
+        // 💡 등록 안 된 뷰(옛 localStorage 값이 가리키는 구분이 사라진 경우 등)는 PANEL로 폴백
+        let opt = window._elecOptionOf(view);
+        if (!opt) { view = 'panel'; opt = window._elecOptionOf('panel') || { key: 'panel', category: 'PANEL', icon: '🖥️', label: 'PANEL', hasSchema: true }; }
         window._elecView = view;
+        const hasSchema = !!opt.hasSchema;
         const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd', touchctrl: 'elec-view-touchctrl' };
         // BOM 서브뷰는 _elecBomOpen/_elecBomClose가 제어 — SPEC 전환 시 항상 숨긴다
         const bomView = document.getElementById('elec-view-bom');
@@ -233,23 +311,33 @@
         if (bomBtns) bomBtns.style.display = 'none';
         Object.keys(sections).forEach(function(v) {
             const sec = document.getElementById(sections[v]);
-            if (sec) sec.style.display = (v === view) ? 'flex' : 'none'; // 💡 [2026-09-02] 'block'→'flex': CSS flex 레이아웃과 연동
+            if (sec) sec.style.display = (hasSchema && v === view) ? 'flex' : 'none'; // 💡 [2026-09-02] 'block'→'flex': CSS flex 레이아웃과 연동
         });
-        const meta = window.ELEC_VIEW_META[view];
+        // 🗂 도표가 아직 없는 구분은 공용 화면 하나를 돌려 쓴다(js/50).
+        const generic = document.getElementById('elec-view-generic');
+        if (generic) generic.style.display = hasSchema ? 'none' : 'flex';
+        // SPEC↔BOM 토글은 비교표가 있는 구분에서만 뜻이 있다 — 없는 구분에선 숨긴다
+        // (누르면 자재번호도 라이브러리도 없는 빈 BOM 화면이 떠서 고장처럼 보인다).
+        const modeToggle = document.getElementById('elec-mode-toggle');
+        if (modeToggle) modeToggle.style.display = hasSchema ? 'flex' : 'none';
         const label = document.getElementById('elec-view-trigger-label');
-        if (label && meta) label.textContent = meta.icon + ' ' + meta.label;
+        if (label) label.textContent = opt.icon + ' ' + opt.label;
         const panelBtns = document.getElementById('eh-panel-btns');
         const adbdBtns = document.getElementById('eh-adbd-btns');
         const convbdBtns = document.getElementById('eh-convbd-btns');
         const touchctrlBtns = document.getElementById('eh-touchctrl-btns');
-        if (panelBtns) panelBtns.style.display = (view === 'panel') ? 'contents' : 'none';
-        if (adbdBtns) adbdBtns.style.display = (view === 'adbd') ? 'contents' : 'none';
-        if (convbdBtns) convbdBtns.style.display = (view === 'convbd') ? 'contents' : 'none';
-        if (touchctrlBtns) touchctrlBtns.style.display = (view === 'touchctrl') ? 'contents' : 'none';
-        if (view === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
-        if (view === 'adbd' && window.renderElecCompareTab) window.renderElecCompareTab('adbd');
-        if (view === 'convbd' && window.renderElecCompareTab) window.renderElecCompareTab('convbd');
-        if (view === 'touchctrl' && window.renderElecCompareTab) window.renderElecCompareTab('touchctrl');
+        if (panelBtns) panelBtns.style.display = (hasSchema && view === 'panel') ? 'contents' : 'none';
+        if (adbdBtns) adbdBtns.style.display = (hasSchema && view === 'adbd') ? 'contents' : 'none';
+        if (convbdBtns) convbdBtns.style.display = (hasSchema && view === 'convbd') ? 'contents' : 'none';
+        if (touchctrlBtns) touchctrlBtns.style.display = (hasSchema && view === 'touchctrl') ? 'contents' : 'none';
+        if (hasSchema) {
+            if (view === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
+            if (view === 'adbd' && window.renderElecCompareTab) window.renderElecCompareTab('adbd');
+            if (view === 'convbd' && window.renderElecCompareTab) window.renderElecCompareTab('convbd');
+            if (view === 'touchctrl' && window.renderElecCompareTab) window.renderElecCompareTab('touchctrl');
+        } else if (window._pcpRender) {
+            window._pcpRender(opt);
+        }
         try { localStorage.setItem('gantt_elec_view', view); } catch(e) {}
         if (window._elecUpdateModeToggle) window._elecUpdateModeToggle('spec');
     };

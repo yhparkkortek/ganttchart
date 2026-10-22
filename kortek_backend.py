@@ -4354,6 +4354,7 @@ def _run_flask_with_port_retry(max_wait_sec=15):
 
 DOCSTORE_CONFIG_FILE = os.path.join(BASE_DIR, 'docstore_config.json')
 DOCSTORE_TEXT_DIR    = '_text'          # 추출 텍스트 캐시 폴더(설정 폴더 목록과 별개로 항상 허용)
+BACKSLASH            = chr(92)         # 경로 정규화용 — 리터럴 안 백슬래시를 피한다
 
 
 def _docstore_load():
@@ -4384,28 +4385,46 @@ def _docstore_safe_name(name):
     return base
 
 
+def _docstore_folder_segs(folder, cfg, allow_text=False):
+    """'ELEC/PANEL' → ['ELEC', 'PANEL']. 허용 안 되면 (None, 사유).
+
+    🗂 [2026-10-22] **한 단계 하위 폴더까지** 허용한다 — PARTS 탭이 부품 종류마다 자료를
+       갈라 두기 때문(ELEC/PANEL, ELEC/CONV …). 상위 폴더는 여전히 설정된 화이트리스트에
+       있어야 하고, 하위 이름은 파일명과 같은 규칙(_docstore_safe_name)으로 걸러 경로
+       탈출을 막는다. 두 단계 이상은 거부 — 깊이를 열어 둘 이유가 없다.
+    """
+    raw = str(folder or '').strip().replace(BACKSLASH, '/')
+    parts = [x for x in raw.split('/') if x not in ('', '.')]
+    if not parts or len(parts) > 2:
+        return None, '폴더 이름이 올바르지 않습니다.'
+    segs = [_docstore_safe_name(x) for x in parts]
+    if not all(segs):
+        return None, '폴더 이름이 올바르지 않습니다.'
+    allowed = list(cfg.get('folders') or [])
+    if allow_text:
+        allowed.append(DOCSTORE_TEXT_DIR)
+    if segs[0] not in allowed:
+        return None, f'허용되지 않은 폴더입니다: {segs[0]} (설정된 폴더: {", ".join(allowed) or "없음"})'
+    return segs, None
+
+
 def _docstore_dir(folder, cfg=None, allow_text=False):
-    """folder → 실제 경로. 설정에 없는 폴더는 거부(화이트리스트)."""
+    """folder → 실제 경로. 설정에 없는 폴더는 거부(화이트리스트). 하위 폴더 한 단계 허용."""
     cfg = cfg or _docstore_load()
     root = cfg.get('root') or ''
     if not root:
         return None, '문서 저장소 경로가 설정되지 않았습니다. (AI 도구 > 설정에서 공유 폴더 경로를 입력하세요)'
     if not os.path.isdir(root):
         return None, f'문서 저장소 경로에 접근할 수 없습니다: {root} (사내망/권한 확인)'
-    f = _docstore_safe_name(folder)
-    if not f:
-        return None, '폴더 이름이 올바르지 않습니다.'
-    allowed = list(cfg.get('folders') or [])
-    if allow_text:
-        allowed.append(DOCSTORE_TEXT_DIR)
-    if f not in allowed:
-        return None, f'허용되지 않은 폴더입니다: {f} (설정된 폴더: {", ".join(allowed) or "없음"})'
-    path = os.path.join(root, f)
+    segs, err = _docstore_folder_segs(folder, cfg, allow_text)
+    if err:
+        return None, err
+    path = os.path.join(root, *segs)
     if not os.path.isdir(path):
         try:
             os.makedirs(path, exist_ok=True)
         except Exception as e:
-            return None, f'폴더를 만들 수 없습니다: {f} ({e})'
+            return None, f'폴더를 만들 수 없습니다: {"/".join(segs)} ({e})'
     return path, None
 
 
@@ -4462,7 +4481,7 @@ def doc_list():
                 'size': st.st_size,
                 'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds'),
                 # 추출 텍스트 캐시가 이미 있는지 — 프런트가 재추출 여부를 판단한다
-                'hasText': os.path.isfile(os.path.join(text_dir, folder + '__' + n + '.txt'))
+                'hasText': os.path.isfile(os.path.join(text_dir, _doc_text_key(folder) + '__' + n + '.txt'))
             })
     except Exception as e:
         return jsonify({'ok': False, 'error': f'목록 조회 실패: {e}'}), 500
@@ -4510,8 +4529,15 @@ def doc_put():
     return jsonify({'ok': True, 'folder': folder, 'name': name, 'size': st.st_size})
 
 
+def _doc_text_key(folder):
+    """캐시 파일명에 쓸 폴더 키 — 'ELEC/PANEL' → 'ELEC_PANEL'.
+    ⚠️ 하위 폴더를 허용한 뒤로 folder 에 '/'가 들어올 수 있다. 그대로 붙이면 캐시 경로가
+       깨져서(또는 엉뚱한 폴더로 가서) 텍스트 캐시가 조용히 안 먹는다."""
+    return str(folder or '').replace(BACKSLASH, '/').replace('/', '_')
+
+
 def _doc_text_path(cfg, folder, name):
-    return os.path.join(cfg['root'], DOCSTORE_TEXT_DIR, folder + '__' + name + '.txt')
+    return os.path.join(cfg['root'], DOCSTORE_TEXT_DIR, _doc_text_key(folder) + '__' + name + '.txt')
 
 
 @app.route('/doc/text', methods=['GET'])

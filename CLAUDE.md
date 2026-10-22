@@ -142,6 +142,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `43-briefspec-units.js` | 🧩 Customer SPEC을 **제품구분자(모델)별**로 보관. `tabData.briefSpecByUnit[모델]`, `tabData.briefSpec`은 **지금 모델의 배열을 가리키는 별칭**(M.C의 `mcTable`↔`mcRevisions.R1`과 같은 방식)이라 기존 8개 파일은 손 안 댐. 제품구분자는 M.C/BOM과 **공유**(`mcActiveUnit`). 옛 Model A/B/C는 `bsMigrateFromModelCols()`가 열 이름(`bsColLabels`)을 모델명으로 삼아 자동 이전 — 파일 열 때마다 확인, 멱등. `mcSwitchUnit`·`collectTabData`·`populateTabData`를 **감싸서** 끼어든다 |
 | `45-mc-import.js` | 🧾 M.C Table — 협력사/사내 M.C 엑셀(R1 시트 **B~K 열**)을 **AI 없이** 읽는 고정 양식 파서 + 여러 파일/시트를 한꺼번에 받아 **어느 제품구분자에 넣을지 고르는** 선택 화면. 머리글은 **6행**, **M열부터는 전혀 다른 표**(패널 후보 비교)라 통째로 읽으면 안 됨, D열 '...COST' 계산행과 **라벨 없는 총합계 행** 제외, Revision 블록에서 끊음. 원가 쌍이 둘(Proto A·MP)뿐이라 PROTO B는 비움. 'MECH' 보조 시트도 잡히므로 기본 체크 꺼둠 |
 | `47-approval-compose.js` | 📝 기안 작성 — **기존 기안을 틀로, 값은 지금 열린 프로젝트**에서 채운다(원본 값 그대로 복사는 `gw_approval_copy`). 매핑은 `APPROVAL_FIELD_SOURCES`(데이터): `meta`/`spec`/`summary`/`user`/`blank`, 안 적으면 **원본 유지**. spec 라벨은 **별칭 목록**. ⚠️ 칸마다 **출처를 보여준다** — 틀린 값이 결재선을 타고 올라가는 게 제일 위험. 사람이 **고친 값만** 적립(자동값까지 저장하면 사전 오염). 상신 안 함 |
+| `50-parts-category-pages.js` | 🗂 **PARTS** 탭(옛 Elec Parts) — 주요자재 구분 **전부**를 드롭다운에 올리고, 스펙 도표가 아직 없는 구분은 "도표까지만" 그린다(주요자재 등록값 도표 + `ELEC/<구분>` NAS 자료). 구분·아이콘·NAS 폴더 이름은 `ELEC_CATEGORY_META`(`js/23`, 데이터) 한 곳. NAS 사양서 → AI 추출은 기존 "항목 추가 ▸ AI로 추출"(js/22d·22e)에 **파일만 꽂는다** — 추출기를 복제하지 않는다(`_pcpAiFromFile`). → `docs/doc-store.md` |
 | `41-qa-write-tools.js` | ✍️ 쓰기 도구 — **AI가 스스로 실행 안 함**. 초안→사람 확인 1회→자동. `verified:'pending'`은 요청 본문 미확정이라 실행 차단 |
 
 > `04`, `14`, `15`, `22`는 원래 하나의 거대 파일(최대 11,915줄)을 쪼갠 것.
@@ -288,6 +289,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - AI는 원본을 안 본다(`_pxExtractText`가 6만 자로 잘라 보냄) → 텍스트만 캐시하면 재분석·검색이 다 된다. 추출기는 `window._pxExtractText` **하나만** 쓸 것
 - `PANEL\` 은 **파일명이 곧 패널 PN** — 이름을 바꾸면 앱이 못 찾는다
 - 메일은 `.eml` 통째로(본문+첨부). 키는 `fileName`, 훅은 `_tpAppendMailSignal` **한 곳만** 감쌀 것
+- **(2026-10-22) `folder`는 `ELEC/PANEL`처럼 하위 한 단계까지** — 두 단계·상위 참조는 거부, 없으면 만든다. 폴더 이름은 `ELEC_CATEGORY_META[].nas`(js/23). ⚠️ 텍스트 캐시 키는 `_doc_text_key()`로 눕힐 것(안 하면 캐시가 조용히 안 먹는다)
 - staging 정리는 기간이 아니라 **큐 연동** — 실측에서 한 달 넘게 미분류로 남은 메일이 있었다. 기간(60일)은 최후 방어선
 
 ### `docs/ui-conventions.md` — 🌐 i18n / 🎨 팔레트 / 🪟 모달 컨벤션

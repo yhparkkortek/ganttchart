@@ -958,8 +958,16 @@
             id: 'elecparts', tab: 'tab-elecparts', label: 'Elec Parts',
             exportLabel: ['선택·Note 저장', 'Save picks'],
             leadSep: true,
-            // 📁 NAS에서 불러올 때 먼저 열 폴더(js/48 _dsPageFolder).
-            nasFolder: 'ELEC',
+            // 📁 NAS에서 불러올 때 열 폴더 — **지금 고른 부품 종류**의 하위 폴더다
+            //    (ELEC/PANEL, ELEC/CONV …). 고정 문자열이 아니라 함수인 이유가 그것이다.
+            nasFolder: function () { return window._elecNasFolder ? window._elecNasFolder() : 'ELEC'; },
+            // 고르기 창의 탭 — 창 안에서 다른 부품 종류로 바로 옮길 수 있게 전부 넘긴다.
+            nasFolders: function () { return window._elecNasFolders ? window._elecNasFolders() : null; },
+            // 🤖 규격 엑셀이 아닌 파일(사양서 PDF·TXT·HTML, 협력사 엑셀)은 이 페이지의 AI 추출로.
+            //    부품 종류마다 스펙 항목이 달라서 js/42의 공용 ai 블록(평평한 행 표)에 안 맞는다 —
+            //    대신 이미 있는 "항목 추가 ▸ AI로 추출" 흐름(js/22d·22e)에 파일만 꽂아 준다.
+            //    그 흐름엔 사람이 추출 결과를 보고 저장하는 단계가 이미 들어 있다.
+            onForeignFile: function (file) { return !!(window._pcpAiFromFile && window._pcpAiFromFile(file)); },
             // 이 탭엔 인쇄 버튼이 없다 — 헤더 맨 끝의 빈 자리표를 가리킨다.
             anchorSelector: '#eh-pxio-anchor',
             // BOM 모드에선 비교표가 화면에 없다(`_elecBomType`이 켜져 있으면 BOM).
@@ -1440,7 +1448,12 @@
 
         // 📄 규격 엑셀이 아닌 것(PDF·TXT·HTML)은 바로 AI 경로로. 엑셀이라도 **이 페이지의 시트가
         //    없으면** 아래에서 AI로 넘긴다 — 협력사가 보내온 제각각인 양식이 그렇다.
-        if (!_pxIsWorkbook(file)) return _pxAiImport(id, file);
+        // 🤖 [2026-10-22] 페이지가 자기 AI 경로를 갖고 있으면 그쪽이 먼저다 — 처리했다고
+        //    하면 여기서 끝낸다. 없으면 지금까지처럼 공용 AI 매핑으로 간다.
+        if (!_pxIsWorkbook(file)) {
+            if (spec.onForeignFile && spec.onForeignFile(file)) return;
+            return _pxAiImport(id, file);
+        }
 
         var wb;
         try {
@@ -1481,7 +1494,8 @@
             if (spec.blocks[0] && typeof spec.blocks[0].preParse === 'function') {
                 if (spec.blocks[0].preParse(wb, file.name)) return;
             }
-            // 🤖 그래도 모르겠으면 AI에게 넘긴다.
+            // 🤖 그래도 모르겠으면 AI에게 넘긴다 — 페이지 전용 경로가 있으면 그쪽이 먼저.
+            if (spec.onForeignFile && spec.onForeignFile(file)) return;
             if (_pxAiSpec(spec)) return _pxAiImport(id, file, wb);
             _toast('⚠️ ' + _t('이 페이지의 시트를 찾지 못했습니다. 필요한 시트: ', 'No matching sheet. Expected: ')
                    + spec.blocks.map(function (b) { return _nm(b.sheet); }).join(', '), 'error');

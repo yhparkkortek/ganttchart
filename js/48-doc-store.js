@@ -325,8 +325,13 @@ window._dsOpenPicker = async function (opts) {
             '<button onclick="window._dsOpenSettings()" style="margin-top:8px; padding:5px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; cursor:pointer;">📁 ' + _t('설정 열기', 'Open settings') + '</button>');
         return;
     }
-    _dsPick.folders = cfg.folders || [];
-    if (!_dsPick.folder || _dsPick.folders.indexOf(_dsPick.folder) === -1) _dsPick.folder = _dsPick.folders[0] || '';
+    // 📁 [2026-10-22] 부르는 쪽이 탭 목록을 줄 수 있다 — PARTS 탭은 부품 종류별 **하위**
+    //    폴더(ELEC/PANEL …)를 쓰는데 그 이름들은 설정(cfg.folders)에 없다. 문자열과
+    //    {f,label} 쌍을 둘 다 받아 {f,label}로 눕힌다(탭에 긴 경로 대신 이름을 보이게).
+    _dsPick.folders = ((_dsPick.folders && _dsPick.folders.length) ? _dsPick.folders : (cfg.folders || []))
+        .map(function (x) { return (typeof x === 'string') ? { f: x, label: x } : { f: x.f, label: x.label || x.f }; });
+    var _fkeys = _dsPick.folders.map(function (x) { return x.f; });
+    if (!_dsPick.folder || _fkeys.indexOf(_dsPick.folder) === -1) _dsPick.folder = _fkeys[0] || '';
     _dsRenderTabs();
     await _dsLoadFolder();
 };
@@ -337,10 +342,11 @@ function _dsErrHtml(msg, extra) {
 }
 
 function _dsRenderTabs() {
-    document.getElementById('ds-pick-tabs').innerHTML = (_dsPick.folders || []).map(function (f) {
-        var on = f === _dsPick.folder;
-        return '<span class="ds-tab" data-f="' + _esc(f) + '" onclick="window._dsPickTab(\'' + _esc(f) + '\')" style="padding:4px 11px; border-radius:13px; font-size:11.5px; cursor:pointer; border:1px solid '
-            + (on ? '#1971c2; background:#e7f3ff; color:#1971c2; font-weight:bold;' : '#ddd; background:#fff; color:#666;') + '">' + _esc(f) + '</span>';
+    // 이름에 따옴표나 '/'가 들어와도 깨지지 않게 인자는 JSON으로 넘긴다(하위 폴더가 생겼다).
+    document.getElementById('ds-pick-tabs').innerHTML = (_dsPick.folders || []).map(function (x) {
+        var on = x.f === _dsPick.folder;
+        return '<span class="ds-tab" data-f="' + _esc(x.f) + '" title="' + _esc(x.f) + '" onclick="window._dsPickTab(' + _esc(JSON.stringify(x.f)) + ')" style="padding:4px 11px; border-radius:13px; font-size:11.5px; cursor:pointer; border:1px solid '
+            + (on ? '#1971c2; background:#e7f3ff; color:#1971c2; font-weight:bold;' : '#ddd; background:#fff; color:#666;') + '">' + _esc(x.label) + '</span>';
     }).join('');
 }
 
@@ -411,14 +417,30 @@ window._dsPickUpload = function () {
 window._dsPageFolder = function (pageId) {
     try {
         var sp = (window.PAGE_EXCEL_SPECS || []).filter(function (s) { return s.id === pageId; })[0];
-        if (sp && sp.nasFolder) return sp.nasFolder;
+        // 📁 [2026-10-22] 화면 상태에 따라 폴더가 달라지는 페이지가 있다(PARTS 탭은 지금 고른
+        //    부품 종류의 하위 폴더로 들어간다) — 그래서 함수도 받는다.
+        var f = sp && sp.nasFolder;
+        if (typeof f === 'function') f = f();
+        if (f) return f;
     } catch (e) { /* 설정이 없으면 기본값 */ }
     return 'CUSTOMER';
+};
+
+/** 고르기 창에 띄울 탭 목록 — 페이지가 정해 주면 그걸, 아니면 null(설정된 폴더 전체) */
+window._dsPageFolders = function (pageId) {
+    try {
+        var sp = (window.PAGE_EXCEL_SPECS || []).filter(function (s) { return s.id === pageId; })[0];
+        var fs = sp && sp.nasFolders;
+        if (typeof fs === 'function') fs = fs();
+        if (fs && fs.length) return fs;
+    } catch (e) { /* 없으면 설정된 폴더로 */ }
+    return null;
 };
 
 window._dsImportToPage = async function (pageId, folder) {
     window._dsOpenPicker({
         folder: folder || window._dsPageFolder(pageId),
+        folders: window._dsPageFolders(pageId),
         title: _t('NAS에서 불러오기', 'Import from the NAS'),
         onPick: async function (f, name) {
             try {
@@ -440,7 +462,7 @@ window._dsImportToPage = async function (pageId, folder) {
     var _orig = window._tpAppendMailSignal;
     if (typeof _orig !== 'function') return;     // js/26 로드 전이면 감싸지 않는다
     window._tpAppendMailSignal = function (driveFileId, task, mailRaw) {
-        try { _orig.apply(this, arguments); } catch (e) { throw e; }   // 원래 동작이 최우선
+        _orig.apply(this, arguments);   // 원래 동작이 최우선 — 여기서 실패하면 그대로 올린다
         try {
             var fn = mailRaw && mailRaw.fileName;
             if (!fn || !driveFileId) return;
