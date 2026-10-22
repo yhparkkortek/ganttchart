@@ -118,18 +118,24 @@
         try {
             // 💡 더 이상 엑셀 행/필터에서 찾지 않고, Summary(프로젝트 정보)에 입력된 값을 그대로 사용
             let customer = window.getSummaryCustomer() || "All";
-            let model = window.getSummaryModel();     // 💡 이제 비어 있을 수 있다(필수 아님)
             let inch = window.getSummaryInch();
             // 💡 담당자 이름은 화면 표시/파일명(xlsx·json·드라이브 저장·주간보고서 전부 공용) 어디에도 넣지 않음
 
-            // 💡 [2026-10-22] 빈 칸은 **빼고** 잇는다 — 예전엔 고객 모델명이 비면 "All"을 끼워 넣어
-            //    `LNW_STELLAR32_All` 처럼 의미 없는 꼬리가 붙었다. 고객사>프로젝트명 한 칸만으로도
-            //    파일명이 성립하므로 없는 조각은 그냥 생략한다.
-            const infoStr = [customer, model, inch].filter(Boolean).join('_');
+            // 💡 [2026-10-22 사용자 결정] 파일명은 **날짜_고객사>프로젝트명_인치** 하나로 고정한다.
+            //    ⚠️ 고객 모델명은 **넣지 않는다** — 모델 카드가 여럿이면(MVD/TPR/TVD …) 어느 것을
+            //    쓸지 답이 없어서, 있는 프로젝트와 없는 프로젝트의 파일명 모양이 갈렸다
+            //    (`..._1641445-ALT1_57.4` vs `..._57.4`). 모양이 갈리면 정렬·검색·중복 판정이 흔들린다.
+            //    고객 모델명은 모델 카드에 그대로 남아 있고 Summary·주간보고 본문에서는 계속 보인다.
+            //    빈 조각은 "All"을 끼워 넣지 않고 그냥 생략한다.
+            const infoStr = [customer, inch].filter(Boolean).join('_');
             const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_').replace(/[\x00-\x1F\x7F"*/:<>?\\|]/g, ''); 
             
             const tableInfoTextElem = document.getElementById('table-info-text'); 
-            if (tableInfoTextElem) { tableInfoTextElem.textContent = infoStr.replace(/_/g, " > "); }
+            // 💡 [2026-10-22] 고객사 칸에 `LNW>STELLAR32` 처럼 `>` 가 들어오게 되면서, 화면 머리글이
+            //    `LNW>STELLAR32 > 57.4` 로 구분자가 두 모양이 됐다 — 양쪽 다 ` > ` 로 맞춘다.
+            if (tableInfoTextElem) {
+                tableInfoTextElem.textContent = infoStr.replace(/_/g, ' > ').replace(/\s*>\s*/g, ' > ');
+            }
             
             const today = new Date(); 
             const yy = String(today.getFullYear()).slice(-2); 
