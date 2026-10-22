@@ -332,8 +332,20 @@
             + _esc(_t('칸마다 값이 어디서 왔는지 함께 표시했습니다. 고치면 그 값이 다음부터 이 양식에 먼저 제안됩니다.',
                       'Each field shows where its value came from. Edits are remembered for this form.'))
             + '</div><table style="border-collapse:collapse; width:100%; font-size:11.5px;"><thead><tr>'
-            + ['', _t('칸', 'Field'), _t('넣을 값', 'Value'), _t('출처', 'Source'), _t('원본 기안 값', 'Source doc')].map(function (h) {
-                return '<th style="background:#e7f3ff; border:1px solid #e9ecef; padding:4px 6px; text-align:left; white-space:nowrap;">' + _esc(h) + '</th>';
+            // 🐛 [2026-10-22 사용자 지적 "인식용이니 열 너비가 넓을 필요 없다"]
+            //    ⚠️ 원인은 `styles.css` 의 전역 규칙 **`table { table-layout: fixed }`** 다.
+            //    고정 레이아웃에서는 폭을 안 준 열이 **똑같이 n등분**되므로, ● 하나만 담는 열이
+            //    '원본 기안 값' 열과 같은 폭을 차지했다(실측: 980px 표에서 5열 × 196px).
+            //    → ● 열에만 폭을 준다. 나머지 네 열이 남는 폭을 고르게 나눠 갖는다.
+            //    ⚠️ 여기서 다른 열에 `width:100%` 를 주면 **나머지가 0px 로 접힌다**(고정 레이아웃의
+            //      성질 — 실측으로 확인). 폭은 ● 열 하나만 못박을 것.
+            + [['', 'width:22px; padding:4px 2px;'],
+               [_t('칸', 'Field'), ''],
+               [_t('넣을 값', 'Value'), ''],
+               [_t('출처', 'Source'), ''],
+               [_t('원본 기안 값', 'Source doc'), '']].map(function (c) {
+                return '<th style="background:#e7f3ff; border:1px solid #e9ecef; padding:4px 6px; text-align:left;'
+                     + ' white-space:nowrap;' + c[1] + '">' + _esc(c[0]) + '</th>';
             }).join('') + '</tr></thead><tbody>';
 
         // 🔁 원본과 **달라진 칸**을 한눈에 — 안 그러면 네 칸을 눈으로 비교해야 한다(사용자 요청).
@@ -344,7 +356,7 @@
             var isDiff = String(r.value || '') !== String(r.srcValue || '');
             if (isDiff) changed++;
             html += '<tr style="background:' + (isDiff ? '#fffbe6' : 'transparent') + ';">'
-                + '<td style="border:1px solid #e9ecef; padding:3px 4px; text-align:center; width:18px; color:#e6a817; font-weight:bold;"'
+                + '<td style="border:1px solid #e9ecef; padding:3px 2px; text-align:center; width:22px; color:#e6a817; font-weight:bold;"'
                 + ' title="' + _esc(isDiff ? _t('원본과 다름', 'changed') : '') + '">' + (isDiff ? '●' : '') + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; white-space:nowrap; font-weight:bold;">' + _esc(r.label) + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:2px 4px;"><input type="text" id="apv-v-' + i + '" value="' + _esc(r.value)
