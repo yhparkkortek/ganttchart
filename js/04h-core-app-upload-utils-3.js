@@ -4210,6 +4210,18 @@ ${docsJson}`;
         let question = input.value.trim();
         if (!question) return;
 
+        // 🐛🐛 [2026-10-22 구조 수정, 사용자 제보 "자주 쓰는 질문이 저장이 안 된다"]
+        //    빈도 기록은 그동안 **블록마다 직접** 불러야 했다(아래 AI-free 로컬 명령이 수십 개다).
+        //    새 블록을 넣을 때마다 빠뜨렸고, 그때마다 "예전부터 안 되는 기능"처럼 보였다
+        //    (2026-09-23·2026-10-02에 각각 한 번씩 같은 버그를 고친 이력이 주석에 남아 있다).
+        //    → **여기 한 곳에서 먼저 기록한다.** 질문이 무엇이든, 어디서 return 하든 반드시 남는다.
+        //    흩어져 있는 기존 호출들은 아래 `_qaFreqMark` 의 1회 가드가 걸러 중복으로 세지 않는다.
+        //    ⚠️ 내부 명령(`__cartAdd__` 등 앞에 `__` 가 붙은 것)은 사람이 친 질문이 아니라
+        //       버튼이 넣은 것이라 기록하지 않는다.
+        if (question.indexOf('__') !== 0 && window._ganttQaRecordQuestionFreq) {
+            window._ganttQaRecordQuestionFreq(question);
+        }
+
         // 🧺 [2026-10-02] 자재 선택 팝업의 "담기" — SAP 조회가 아니라 로컬 장바구니 적재라
         //    AI/백엔드를 거치지 않고 여기서 바로 처리하고 끝낸다. 수량은 1로 담고
         //    보관함 모달에서 고친다(장바구니 통상 동작). 자재내역은 패턴조회가 캐시해 둔 게 있으면 쓴다.
@@ -9471,6 +9483,90 @@ ${docsJson}`;
     // [2026-10-02] v2 → v3: 시드는 플래그가 있으면 통째로 건너뛴다. 목록에 줄을 더할 땐
     //   **플래그도 같이 올릴 것** — 안 그러면 이미 돌린 PC엔 새 항목이 영영 안 들어간다.
     //   기존 항목은 pat 중복 검사로 걸러지니 재주입돼도 늘어나지 않는다.
+    // ══════════════════════════════════════════════════════════════════
+    // 📚 [2026-10-22 신규, 사용자 요청] 분류별 **레퍼런스 질문** 카탈로그.
+    //
+    //  왜: "자주 쓰는 질문" 드롭다운은 빈도 상위 12개만 보여줘서, 앱이 **무엇을 할 수 있는지**
+    //      알 길이 없었다(안 물어본 기능은 영영 안 뜬다 — 닭과 달걀). 분류해서 미리 쌓아 둔다.
+    //  ⚠️ **데이터다.** 질문을 더하고 싶으면 이 표에만 줄을 넣는다(CLAUDE.md 하드코딩 지양).
+    //      각 항목은 [한국어, 영어] 두 벌 — 화면 언어를 따라간다.
+    //  ⚠️ SAP 는 여기 적지 않는다. `SAP_CAPABILITIES[].ex`(js/32)가 이미 **실제 동작하는**
+    //      예시 문구를 들고 있어서 그걸 읽어 쓴다 — 복제하면 기능이 늘 때 한쪽만 낡는다.
+    // ══════════════════════════════════════════════════════════════════
+    window.QA_REF_QUESTIONS = window.QA_REF_QUESTIONS || [
+        { id: 'gantt', label: ['📅 간트·프로젝트', '📅 Gantt & Project'], items: [
+            ['지연된 업무가 있어?',                    'Any delayed tasks?'],
+            ['이번 주 마감인 업무 알려줘',             'Which tasks are due this week?'],
+            ['이 프로젝트 진행률이 어때?',             "What's this project's progress?"],
+            ['기구 담당자가 누구야?',                  'Who is in charge of mechanical design?'],
+            ['이 프로젝트 연간 수요량이 얼마야?',      "What's this project's annual demand volume?"],
+            ['MP 일정이 언제야?',                      'When is the MP date?'],
+            ['담당자별 업무 몇 건씩인지 알려줘',       'How many tasks does each owner have?'],
+            ['아직 시작 안 한 업무 보여줘',            'Show tasks that have not started'],
+            ['다음 마일스톤이 뭐야?',                  "What's the next milestone?"],
+            ['이번 달 끝난 업무 정리해줘',             'Summarise the tasks finished this month'],
+        ] },
+        { id: 'sap', label: ['🏭 SAP 조회', '🏭 SAP lookup'], fromSapCaps: true, items: [
+            ['현재 SAP 화면 상태 알려줘',              "What's the current SAP screen?"],
+            ['SAP 화면 덤프해줘',                      'Dump the current SAP screen'],
+            ['윈도우 화면 덤프해줘',                   'Dump the open Windows dialogs'],
+        ] },
+        { id: 'gw', label: ['🏢 그룹웨어', '🏢 Groupware'], items: [
+            ['그룹웨어 로그인 상태 확인해줘',          'Check the groupware login status'],
+            ['안 읽은 메일 보여줘',                    'Show my unread mail'],
+            ['오늘 받은 메일 알려줘',                  "Show today's mail"],
+            ['이번 주 게시판 새 글 요약해줘',          "Summarise this week's board posts"],
+            ['지난주 공지 알려줘',                     "What were last week's notices?"],
+            ['내 결재함에 뭐가 있어?',                 "What's in my approval box?"],
+            ['오늘 사내 일정 알려줘',                  "What's on the company calendar today?"],
+            ['회의실 목록 보여줘',                     'List the meeting rooms'],
+            ['내일 회의실 예약 현황 보여줘',           "Show tomorrow's room reservations"],
+            ['차량 예약 현황 알려줘',                  'Show the vehicle reservations'],
+            ['승인원 결재 문서 찾아줘',                'Find the approval documents'],
+        ] },
+        { id: 'insa', label: ['🧑‍💼 인사관리', '🧑‍💼 HR'], items: [
+            ['인사관리에서 뭘 볼 수 있어?',            'What can I see in the HR system?'],
+            ['내 연차 잔여일수 알려줘',                'How much annual leave do I have left?'],
+            ['이번 달 근무시간 알려줘',                "What are this month's working hours?"],
+            ['연장근무 신청내역 보여줘',               'Show my overtime requests'],
+            ['근무계획 수정내역 보여줘',               'Show my work-plan change requests'],
+            ['근무계획 수정 신청서 열어줘',            'Open the work-plan change form'],
+        ] },
+        { id: 'app', label: ['🛠 앱 기능', '🛠 App features'], items: [
+            ['조회 결과 엑셀로 저장해줘',              'Save the result to Excel'],
+            ['미분류 메일 몇 건이야?',                 'How many unclassified mails are there?'],
+            ['다른 프로젝트 열어줘',                   'Open another project'],
+            ['주간 업무 보고 만들어줘',                'Create the weekly report'],
+            ['업무 보관함 보여줘',                     'Show the task inbox'],
+            ['이 앱으로 뭘 할 수 있어?',               'What can this app do?'],
+        ] },
+    ];
+
+    /** 분류별 레퍼런스 질문 — SAP 는 SAP_CAPABILITIES[].ex 에서 끌어온다(복제 금지). */
+    window._qaRefGroups = function() {
+        const en = window._currentLang === 'en';
+        const pick = function(pair) { return Array.isArray(pair) ? (en ? (pair[1] || pair[0]) : pair[0]) : pair; };
+        return (window.QA_REF_QUESTIONS || []).map(function(g) {
+            let items = (g.items || []).map(pick);
+            if (g.fromSapCaps) {
+                // `ex` 는 "A / B" 처럼 여러 문구가 붙어 있는 경우가 있다 — 첫 문구만 쓴다.
+                // ⚠️ [알려진 한계] `ex` 는 **한국어뿐**이라 영문 화면에서도 한글로 나온다.
+                //    SAP 로컬 명령은 `SAP_CAPABILITIES[].kw` 로 판정하므로 동작에는 문제가 없다.
+                //    영문까지 맞추려면 js/32 카탈로그에 `exEn` 을 더하면 된다(그쪽 한 곳만 고치면 됨).
+                const caps = window.SAP_CAPABILITIES || [];
+                const fromCaps = caps.map(function(c) {
+                    const ex = String(c && c.ex || '').split('/')[0].trim();
+                    return (ex && ex.indexOf('🧺') !== 0) ? ex : '';
+                }).filter(Boolean);
+                items = items.concat(fromCaps);
+            }
+            // 같은 문구 중복 제거 — 순서는 유지
+            const seen = {};
+            items = items.filter(function(t) { if (!t || seen[t]) return false; seen[t] = 1; return true; });
+            return { id: g.id, label: pick(g.label), items: items };
+        }).filter(function(g) { return g.items.length; });
+    };
+
     const _QA_SAP_SEED_FLAG = 'gantt_qa_sap_seeds_v3';
     const _QA_SAP_SEED_LIST = [
         '현재 SAP 화면 상태 알려줘',
@@ -9516,7 +9612,17 @@ ${docsJson}`;
         }
     }
 
+    // 🛡️ [2026-10-22] 같은 질문을 **한 번 보낼 때 한 번만** 센다.
+    //    진입점(sendGanttQaMessage)에서 먼저 기록하도록 바꾸면서, 블록마다 흩어져 있던
+    //    기존 호출들이 전부 중복이 됐다. 그걸 다 지우는 대신(수십 곳 — 지우다 빠뜨리면 또
+    //    같은 종류의 버그다) 여기서 거른다. 가드는 "직전에 센 질문과 같고 2초 안"이면 건너뛴다.
+    //    2초: 사람이 같은 문장을 다시 쳐서 보낼 수 있는 가장 짧은 간격보다 넉넉히 짧다.
+    let _qaFreqLast = '', _qaFreqLastAt = 0;
     window._ganttQaRecordQuestionFreq = function(question, projectKey) {
+        const raw = String(question == null ? '' : question);
+        const now = Date.now();
+        if (raw === _qaFreqLast && (now - _qaFreqLastAt) < 2000) return;
+        _qaFreqLast = raw; _qaFreqLastAt = now;
         const norm = window._ganttQaNormalizeQ(question);
         if (!norm || norm.length < 2) return;
         _qaFreqEnsureMerged();
@@ -9772,9 +9878,30 @@ ${docsJson}`;
                 '이 프로젝트 연간 수요량이 얼마야?',
                 '기구 담당자가 누구야?',
               ];
-        const options = top.length ? top.map(function(t) { return t.sample; }) : examples;
+        // 📚 [2026-10-22 사용자 요청] 분류별 레퍼런스 질문을 **항상** 함께 보여준다.
+        //    예전엔 빈도 상위 12개만 떴고, 하나도 없을 때만 하드코딩 예시 목록으로 떨어졌다 —
+        //    그래서 "앱이 무엇을 할 수 있는지"를 드롭다운으로는 알 수 없었다(안 물어본 기능은
+        //    영영 안 뜬다). 이제 위에 실제 쌓인 질문, 아래에 분류 그룹을 optgroup 으로 깐다.
         const placeholderHtml = `<option value="">${_fqEn ? '(select a question)' : '(질문 선택하기)'}</option>`;
-        sel.innerHTML = placeholderHtml + options.map(function(t) { return `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; }).join('');
+        const opt = function(t) { return `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; };
+        const groupHtml = function(label, items) {
+            if (!items.length) return '';
+            return `<optgroup label="${escapeHtml(label)}">` + items.map(opt).join('') + '</optgroup>';
+        };
+
+        let html = placeholderHtml;
+        // ① 실제로 쌓인 질문 — 빈도순 상위 8개. 시드(count 1)보다 실제 질문이 먼저 온다
+        //    (정렬이 count 내림차순 → lastAsked 내림차순이라 동점이면 최근 것이 이긴다).
+        const used = top.slice(0, 8).map(function(t) { return t.sample; }).filter(Boolean);
+        html += groupHtml(_fqEn ? '💡 Frequently asked' : '💡 자주 쓰는 질문', used);
+        // ② 분류별 레퍼런스 — 무엇을 물을 수 있는지 보여주는 목록
+        const usedSet = {}; used.forEach(function(t) { usedSet[t] = 1; });
+        (window._qaRefGroups ? window._qaRefGroups() : []).forEach(function(g) {
+            html += groupHtml(g.label, g.items.filter(function(t) { return !usedSet[t]; }));
+        });
+        // 레퍼런스가 통째로 비는 상황(카탈로그 로드 실패)에서만 옛 예시 목록으로 떨어진다
+        if (html === placeholderHtml) html += examples.map(opt).join('');
+        sel.innerHTML = html;
     };
 
     // 🎙️ [2026-09-08 수정] "음성문답" 버튼 — 한 번 말하면 풀리던 것을 "모드"로 바꿔 고정시킴.
