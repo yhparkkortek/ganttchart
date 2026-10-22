@@ -40,6 +40,19 @@
             undoNote: '임시저장함에서 삭제하면 된다(상신 전이라 아무에게도 안 보인다).'
         },
         {
+            id: 'gw_approval_compose', mode: 'write', verified: 'live', danger: 'low',
+            title: '기안 작성 (기존 기안 틀 + 지금 프로젝트 값)',
+            desc: '기존 기안을 **틀로만** 쓰고, 값은 **지금 열린 프로젝트**(프로젝트코드·고객사·Customer SPEC 등)에서 채워 새 기안을 만든다. '
+                + '"RD3-2610-050 참고해서 이번 프로젝트로 기안 써줘" 같은 요청이 이것이다. '
+                + '원본 값을 **그대로** 복사하는 것은 gw_approval_copy 이고, 이 도구는 **지금 프로젝트에 맞게 바꿔** 채운다. '
+                + '칸마다 값이 어디서 왔는지 보여주는 확인 화면이 뜨고, 사람이 승인해야 임시저장된다. 상신은 하지 않는다.',
+            exec: 'approvalCompose',
+            params: [
+                { name: 'docNum', type: 'text', max: 30, req: true, desc: '틀로 쓸 기존 문서번호 (예: RD3-2610-050)' }
+            ],
+            undoNote: '임시저장함에서 삭제하면 된다(상신 전이라 아무에게도 안 보인다).'
+        },
+        {
             id: 'gw_approval_copy', mode: 'write', verified: 'live', danger: 'low',
             title: '기안 복사 (같은 내용으로 새 기안)',
             desc: '문서번호를 주면 그 문서를 읽어 **같은 양식의 새 기안에 똑같이 채워 임시저장**한다. '
@@ -338,6 +351,16 @@
         try {
             if (t.exec === 'approvalDraft') {
                 r = { ok: false, message: '이 도구는 기존 기안 흐름(04h)에서 실행합니다.' };
+            } else if (t.exec === 'approvalCompose') {
+                // ⚠️ 여기서 바로 쓰지 않는다 — **칸마다 출처를 보여주는 확인 화면**을 열고,
+                //    사람이 눌러야 임시저장된다(js/46). 값이 틀린 채 결재선을 타고 올라가는 게 제일 위험하다.
+                if (!window.apvComposeFrom) {
+                    r = { ok: false, message: '기안 작성 기능을 불러오지 못했습니다(js/46).' };
+                } else {
+                    window.apvComposeFrom((d.args || {}).docNum);
+                    r = { ok: true, id: t.id, args: d.args,
+                          data: { opened: true, message: '확인 화면을 열었습니다 — 칸을 확인하고 [이대로 임시저장]을 누르세요.' } };
+                }
             } else {
                 var res = await window._withTimeout(fetch(BACKEND + t.path, {
                     method: t.method || 'POST',
