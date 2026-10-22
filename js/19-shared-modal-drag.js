@@ -171,12 +171,18 @@ window._makeResizable = function(boxId, _retry) {
     //      화면 밖이라 잡을 수 없기 때문. 안쪽 띠에서는 예전처럼 isInteractive 가 양보한다.
     //    ⚠️ 바깥 링은 박스 밖이라 **박스에 건 리스너로는 안 잡힌다** — 그래서 아래 전역
     //      핸들러(_installModalResizeHost)가 document 에서 처리한다.
-    // 💡 [2026-10-22 2차, 사용자 제보 "엣지가 잘 안 잡힌다"] 8/5 → 16/10 으로 키웠다.
+    // 💡 [2026-10-22 3차, 사용자 제보 "커서가 바뀌는 구간이 모달 밖에 있다"]
+    //    16/10 은 바깥으로 치우쳐 있었다. 사람은 **모달 테두리 그 자체**를 잡는다고 생각하므로,
+    //    테두리가 띠의 **한가운데**여야 손이 가는 곳과 잡히는 곳이 일치한다. → 13/13 대칭.
+    //    (총 폭 26px 는 그대로 — 2차에서 넓힌 만큼은 유지하고 중심만 테두리로 옮긴 것이다.)
     //    ⚠️ 이 숫자는 **보이는 테두리가 아니라 투명한 판정 영역**이다 — 그려지는 것이 없고
-    //       모달 모양은 그대로다. 바깥 링은 박스 밖이라 넓혀도 버튼·스크롤바를 가리지 않는다.
-    //    모서리(대각선)는 두 축이 동시에 걸리는 지점이라 자동으로 16px 정사각형이 된다.
-    const EDGE_OUT = 16;                  // 박스 **바깥**으로 잡히는 두께(px) — 넓혀도 가리는 것이 없다
-    const EDGE_IN  = 10;                  // 박스 **안쪽**으로 잡히는 두께(px) — 버튼 위에서는 isInteractive 가 양보
+    //       모달 모양은 그대로다.
+    //    바깥 절반이 있어야 하는 이유: 안쪽 절반은 스크롤바에 덮일 수 있다(스크롤바 위를 누르면
+    //    페이지에 mousedown 이 오지 않는다 — 2026-10-22 1차 수정 주석 참고).
+    //    안쪽 절반이 있어야 하는 이유: 화면 가장자리에 붙은 모달은 바깥쪽이 화면 밖이라 못 잡는다.
+    //    모서리(대각선)는 두 축이 동시에 걸리는 지점이라 자동으로 26px 정사각형이 된다.
+    const EDGE_OUT = 13;                  // 박스 **바깥**으로 잡히는 두께(px)
+    const EDGE_IN  = 13;                  // 박스 **안쪽**으로 잡히는 두께(px) — 버튼 위에서는 isInteractive 가 양보
     const EDGE = 6;                       // (호환) 예전 상수 — dirAt 은 위 두 값을 쓴다
     const minW = parseInt(box.style.minWidth, 10)  || 280;
     const minH = parseInt(box.style.minHeight, 10) || 160;
@@ -205,10 +211,15 @@ window._makeResizable = function(boxId, _retry) {
         return x < r.left || x > r.right || y < r.top || y > r.bottom;
     };
     box._mreszProbe = function(x, y) {    // 전역 핸들러가 이 박스에게 묻는 창구
+        // ⚡ [2026-10-22] 등록된 모달이 13개쯤 되는데, 마우스를 움직일 때마다 전부에게 물어본다.
+        //    그래서 **싼 것부터** 본다: 크기(0이면 숨김) → 가장자리 판정 → 그제서야 getComputedStyle.
+        //    예전엔 포인터와 아무 상관 없는 모달까지 전부 style 계산을 돌렸다.
         if (box.offsetWidth === 0 && box.offsetHeight === 0) return '';
+        const d = dirAt(x, y);
+        if (!d) return '';
         const cs = window.getComputedStyle(box);
         if (cs.display === 'none' || cs.visibility === 'hidden') return '';
-        return dirAt(x, y);
+        return d;
     };
     box._mreszStart = function(dir, x, y) { startResize(dir, x, y); };
     box._mreszOutside = isOutside;
@@ -242,14 +253,19 @@ window._makeResizable = function(boxId, _retry) {
 
     box.addEventListener('mousemove', function(e) {
         if (rs) return;
-        const d = isInteractive(e.target) ? '' : dirAt(e.clientX, e.clientY);
-        if (d === hoverDir) return;
+        // ⚡ [2026-10-22] 순서를 바꿨다 — 예전엔 isInteractive 를 **먼저** 불러서, 가장자리 근처가
+        //    아닌 한복판에서도 마우스를 움직일 때마다 조상 사슬을 타고 getComputedStyle 을 돌렸다.
+        //    먼저 dirAt(사각형 비교 한 번)으로 거르고, 가장자리일 때만 비싼 검사를 한다.
+        const d0 = dirAt(e.clientX, e.clientY);
+        const d = (d0 && !isInteractive(e.target)) ? d0 : '';
         hoverDir = d;
-        box.style.cursor = cursorFor(d);   // 빈 문자열이면 원래 커서로 돌아간다
+        // ⚠️ 여기서 `d === hoverDir` 로 조기 반환하면 안 된다 — 전역 핸들러가 지운 뒤에도
+        //    기억만 같아서 다시 칠하지 못한다. 중복 호출은 _mreszSetCursor 가 알아서 걸러낸다.
+        window._mreszSetCursor(cursorFor(d));   // 빈 문자열이면 원래 커서로 돌아간다
     });
     box.addEventListener('mouseleave', function() {
         if (rs) return;
-        hoverDir = ''; box.style.cursor = '';
+        hoverDir = ''; window._mreszSetCursor('');
     });
 
     const startResize = function(dir, x, y) {
@@ -264,7 +280,7 @@ window._makeResizable = function(boxId, _retry) {
         document.body.style.userSelect = 'none';
         // 바깥 링 핸들러가 끼어들지 않게 — 끄는 쪽은 endResize 하나뿐이다
         window._mreszActive = true;
-        document.body.style.cursor = cursorFor(dir) || '';
+        window._mreszSetCursor(cursorFor(dir));
     };
     const moveResize = function(x, y) {
         if (!rs) return;
@@ -293,7 +309,7 @@ window._makeResizable = function(boxId, _retry) {
         if (!rs) return;
         rs = null;
         document.body.style.userSelect = '';
-        document.body.style.cursor = '';
+        window._mreszSetCursor('');
         window._mreszActive = false;
         box.style.cursor = '';
         hoverDir = '';
@@ -345,6 +361,27 @@ window._makeResizable = function(boxId, _retry) {
 //    안쪽 띠는 기존 박스 리스너가 그대로 처리하므로, 여기서는 **바깥일 때만** 끼어든다
 //    (두 경로가 같은 점을 두고 다투지 않게 하는 선이 `_mreszOutside`다).
 // ══════════════════════════════════════════════════════════════════════
+// 🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "잡히는 구간 진입이 살짝 느리다"]
+//    예전엔 `document.body.style.cursor` 로 커서를 바꿨다. 그런데 `cursor` 는 **상속**이라
+//    자기 커서를 따로 가진 요소(오버레이·버튼·입력칸 등) 위에서는 body 값이 **무시된다.**
+//    그래서 모달 밖 링에서는 커서가 바뀌는 자리와 안 바뀌는 자리가 섞여 "느리다/안 잡힌다"로
+//    느껴졌다. → `<html>` 에 클래스를 걸고 `!important` 로 **전부 덮는다**(드래그·리사이즈의 표준 방식).
+window._mreszSetCursor = function(cur) {
+    const root = document.documentElement;
+    if (!document.getElementById('mresz-cursor-style')) {
+        const st = document.createElement('style');
+        st.id = 'mresz-cursor-style';
+        st.textContent = ['ns-resize', 'ew-resize', 'nwse-resize', 'nesw-resize'].map(function(c) {
+            return 'html.mresz-' + c + ', html.mresz-' + c + ' * { cursor: ' + c + ' !important; }';
+        }).join('\n');
+        document.head.appendChild(st);
+    }
+    if (root._mreszCur === cur) return;          // 같은 커서면 DOM 을 건드리지 않는다
+    if (root._mreszCur) root.classList.remove('mresz-' + root._mreszCur);
+    if (cur) root.classList.add('mresz-' + cur);
+    root._mreszCur = cur || '';
+};
+
 window._installModalResizeHost = function() {
     if (window._mreszHostOn) return;
     window._mreszHostOn = true;
@@ -369,11 +406,20 @@ window._installModalResizeHost = function() {
         if (window._mreszActive) return;                 // 리사이즈 중엔 박스 핸들러가 몰고 간다
         const hit = pick(e.clientX, e.clientY);
         if (!hit) {
-            if (hoverEl) { document.body.style.cursor = ''; hoverEl = null; }
+            // 🐛 [2026-10-22] 포인터가 **모달 안쪽**이면 커서는 박스 핸들러가 칠한다 — 여기서
+            //    지우면 안 된다. 박스 리스너가 먼저(타깃 단계), 이 document 리스너가 나중에
+            //    울리므로, 그냥 지우면 **안쪽 절반에서 커서가 영영 안 바뀐다**(실측으로 잡음).
+            const inside = (window._resizableBoxIds || []).some(function(id) {
+                const el = document.getElementById(id);
+                return el && typeof el._mreszOutside === 'function'
+                    && (el.offsetWidth || el.offsetHeight)
+                    && !el._mreszOutside(e.clientX, e.clientY);
+            });
+            if (!inside && hoverEl !== null) { window._mreszSetCursor(''); hoverEl = null; }
             return;
         }
         hoverEl = hit.el;
-        document.body.style.cursor = hit.el._mreszCursorFor(hit.dir) || '';
+        window._mreszSetCursor(hit.el._mreszCursorFor(hit.dir) || '');
     });
 
     document.addEventListener('mousedown', function(e) {
@@ -384,7 +430,7 @@ window._installModalResizeHost = function() {
     }, true);                                             // capture — 뒤에 깔린 것이 먼저 먹지 않게
 
     document.addEventListener('mouseup', function() {
-        if (hoverEl) { document.body.style.cursor = ''; hoverEl = null; }
+        if (hoverEl) { window._mreszSetCursor(''); hoverEl = null; }
     });
 
     document.addEventListener('touchstart', function(e) {
