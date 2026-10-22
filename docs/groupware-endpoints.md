@@ -197,10 +197,78 @@ GET /api/todo/my
 
 `/api/report/form`
 
-## 주소록 — `/app/contact`
+## 주소록 — `/app/contact`  🟢 읽기 확정 + 앱 이식 (2026-10-22)
 
-진입만으로는 호출이 없다 — 하위 메뉴를 고르기 전까지 아무것도 안 불린다.
+진입만으로는 호출이 없다 — 그래서 **번들에서 경로를 뽑고 직접 호출해** 확정했다.
 
-**번들 추출**(호출 안 함):
+**관찰·호출 확정:**
 
-`/api/contact` · `/api/contact/` · `/api/contact/company/group` · `/api/contact/company/group/` · `/api/contact/contacts` · `/api/contact/contacts/group/` · `/api/contact/contacts/groups` · `/api/contact/copy/menu` · `/api/contact/dept/` · `/api/contact/group` · `/api/contact/import/dept` · `/api/contact/personal/contact` · `/api/contact/personal/contact/` · `/api/contact/personal/group` · `/api/contact/search` · `/api/contact/side`
+```
+GET /api/contact/search?page&offset&property&direction&ownerType&searchType&keyword
+      → 사내 주소록 375건. 레코드: name, positionName, departmentName, companyName,
+        email, mobileNo, office{tel,basicAddress}, photo, thumbSmall/Large, bookOwner
+GET /api/contact/side        → personalGroups / companyGroups / deptGroups
+      → 실측은 deptGroups 1건([{deptId:245, deptName:'개발3팀', groups:[]}])뿐이고
+        나머지는 0건이었다. 쓸 게 없어 **도구로 만들지 않았다.**
+```
+
+### ⚠️⚠️ `keyword` 는 `searchType=or` 가 없으면 조용히 **전건**을 준다
+
+파라미터 이름은 번들 `contact/collections/search_contact` 의 `default` 에서 확정했다
+(`keyword` `page` `offset` `property` `direction` `ownerType` `searchType`). 그런데 실측하면:
+
+| 보낸 것 | 결과 |
+|---|---|
+| `keyword=박` 단독 | **375건** (= 전건, 필터가 안 먹음) |
+| `keyword=박&searchType=and` | **375건** |
+| `keyword=박&searchType=or` | **18건** ✅ |
+| `name=박` / `searchWord=박` | 375건 (그런 파라미터 없음) |
+
+0건이면 "없나?" 하고 의심하지만 **전건은 "검색이 됐다"고 착각한다** — 메일 `keyWord` 사례보다
+위험하다. 그래서 `gw_bridge.contacts_search()` 가 `searchType=or` 를 **기본값으로 박아** 둔다.
+
+> `/api/contact/contacts` 는 `type` 이 필수다(인자 없이 호출 → **500** "require type!!").
+> `/api/contact/import/dept` · `/api/contact/copy/menu` 는 쓰기성으로 보여 **부르지 않았다.**
+
+**번들 추출**(호출 안 함): `/api/contact` · `/api/contact/` · `/api/contact/company/group` ·
+`/api/contact/company/group/` · `/api/contact/contacts/group/` · `/api/contact/contacts/groups`(405) ·
+`/api/contact/dept/` · `/api/contact/group` · `/api/contact/personal/contact` ·
+`/api/contact/personal/contact/` · `/api/contact/personal/group`
+
+## 알림 — `/app/noti`  🟢 읽기 확정 + 앱 이식 (2026-10-22)
+
+`/app/noti` 는 화면이 비어 있다(모듈 청크를 안 불러온다) — 번들 추출로 확정했다.
+
+**관찰·호출 확정:**
+
+```
+GET /api/my/noti?page&offset              → 전체 알림 (실측 196→198건)
+GET /api/my/noti/<카테고리>?page&offset     → 분류별 (approval 189 / bbs 9 / mail 0 / calendar 0)
+GET /api/home/noti?page&offset            → 같은 목록(홈 종 아이콘용, offset 기본 8)
+```
+
+- 레코드: `category` `sender` `message` `createdAt` `linkUrl` `profile` `id` `companyId`
+- 카테고리는 **경로의 일부**다(쿼리 아님): `approval` `asset` `bbs` `calendar` `channel`
+  `community` `docs` `ehr` `mail` `manager` `openapi` `report` `survey` `task` `todo`
+  `webfolder` `works`, 그리고 `unread`(= 안읽음 필터, 별도 경로가 아니라 같은 자리의 값).
+- **GET 목록 조회는 읽음 처리를 하지 않는다.** 읽음 처리 경로는 일부러 만들지 않았다.
+- `message` 에 `&#91;` 같은 숫자 엔티티가 섞여 온다 → `_unentity()` 를 거칠 것.
+
+## 쪽지 — `/app/note`  🟢 읽기 확정 + 앱 이식 (2026-10-22)
+
+쪽지는 **메일 시스템의 폴더 하나**(`__go_note__`)다 — 그래서 레코드가 메일과 같은 모양이다.
+
+```
+POST /api/mail/note/list   (JSON)  body: {page, offset, tabType, folder}
+      → 레코드: fromToSimple, sendToSimple, subject, preview, dateUtc, seen, size …
+```
+
+### ⚠️ 여기서 걸린 것 세 가지 (전부 실측)
+
+1. **GET 은 405.** 번들 goGrid 가 `method:"POST"` 로 부른다.
+2. **form-encoded 로 보내면 `tabType=__go_note__` 외에는 400** → 반드시 **JSON** 으로.
+3. **`keyWord` 를 서버가 무시한다**('추석'·없는 말 모두 전건 3건) → 도구에 검색 인자를 **안 넣었다.**
+   `offset` 도 무시한다(2를 줘도 3건) → 설문처럼 코드에서 자른다.
+
+> `tabType` 은 `__go_note__`(기본) / `inbox` / `sent` / `allBox` 모두 같은 결과였다. 다만 사내
+> 쪽지가 **3건뿐**이라 구분이 되는지 **확인하지 못했다** — 되는 것처럼 적지 않는다.

@@ -248,6 +248,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **게시판 조회/요약은 구현됨**(`gw_board_recent`, 읽기 전용) — 서버에 기간 필터가 없어 코드가 자른다. `date_to`는 **중단이 아니라 건너뛰기**(최신순이라 중단하면 "지난주"가 0건). "지난주"는 롤링 14일이 아니라 **달력 주**(`_gwPeriodRange`/`GW_PERIOD_WORDS`, js/32)
 - 사내 공지는 본문이 **이미지뿐**인 경우가 흔함(평문 0자) — 빈 문자열만 주면 "조회 실패"와 구분 불가라 `bodyNote`로 사유를 드러낼 것
 - 백엔드 라우트 검증은 `app.test_client()`로 — 사용자가 돌리는 5000번 프로세스를 죽이지 말 것(예약 발송·SAP 작업 중일 수 있음)
+- **(2026-10-22) 주소록·알림·쪽지 읽기 이식됨** — 도구 `gw_contacts`/`gw_notifications`/`gw_notes`(js/40, 읽기 전용), 브릿지 `contacts_search`/`notifications`/`notes`. 세 모듈 다 **진입만으론 호출이 0건**이라 번들 추출로 경로를 뽑아 확정했다. ⚠️ 함정: 주소록 `keyword`는 **`searchType=or`가 없으면 조용히 전건(375건)** · 쪽지는 **POST JSON**(GET 405, form은 400)이고 `keyWord`·`offset`을 서버가 무시 · 알림 분류는 쿼리가 아니라 **경로**. 상세는 docs/groupware.md 8-1절
+- **⚠️ 그룹웨어 조사 중 `/http-bind/`·`/api/bosh/*`는 기록하지 말 것** — 사내 메신저(XMPP) 채널이고 요청 본문에 **SASL PLAIN 인증 토큰**이 실린다(2026-10-22 덤프에 들어와 즉시 폐기)
 - **모듈별 엔드포인트 목록 → `docs/groupware-endpoints.md`**(관찰 확정 vs 번들 추출 구분). iframe 모듈은 메일·자료실뿐, 나머지는 최상위. 진입만으로 호출이 0건인 모듈(보고·주소록·Task)은 "API 없음"이 아니라 "아직 안 불림" — 랜딩 URL이 바뀌는 경우도 있어(`/app/todo`→`/app/report`) `location.href`를 같이 기록할 것
 
 ### `docs/insa-hr.md` — 🧑‍💼 인사관리(kInsa) 연동 (`http://insa.kortek.co.kr`)

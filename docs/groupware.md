@@ -616,6 +616,30 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 - 기안 블록은 **SAP 승인원표지/문서열람 블록보다 앞**에 둔다(구체적 의도 우선).
 - 로컬 명령 블록은 `return` 전에 `_ganttQaRecordQuestionFreq(question)` 호출 필수.
 
+### 8-1. 주소록·알림·쪽지 (2026-10-22 신규, 전부 읽기)
+
+| 도구(js/40) | 라우트 | 브릿지 |
+|---|---|---|
+| `gw_contacts` | `/gw/contacts?keyword&limit&page` | `contacts_search()` |
+| `gw_notifications` | `/gw/notifications?category&limit` | `notifications()` |
+| `gw_notes` | `/gw/notes?limit` | `notes()` |
+
+04h에 전용 블록을 **만들지 않았다** — 조회는 도구 루프가 더 잘한다(js/32 주석의 규칙 ②).
+그래서 `GW_CAPABILITIES`에도 넣지 않았다.
+
+#### ⚠️ 이 셋에서 실제로 걸린 함정 (상세·근거는 `docs/groupware-endpoints.md`)
+
+- **주소록 `keyword`는 `searchType=or`가 없으면 조용히 전건(375건)을 준다.** 0건이면 의심하지만
+  전건은 "검색됐다"고 착각한다 — 메일 `keyWord` 사례보다 위험. 브릿지가 기본값으로 박아 뒀다.
+- **쪽지는 POST JSON.** GET은 405, form-encoded는 `__go_note__` 외에 400. `keyWord`·`offset`은
+  서버가 **무시**하므로 검색 인자를 아예 안 만들고 건수는 코드에서 자른다.
+- **알림 카테고리는 쿼리가 아니라 경로**(`/api/my/noti/approval`). `unread`도 같은 자리의 값이다.
+- **진입만으로는 세 모듈 다 호출이 0건**이다(화면이 비어 있거나 청크를 안 부른다) → 번들 추출
+  + 직접 호출로 확정했다. "API가 없다"가 아니라 "아직 안 불렸다".
+- **⚠️ `/http-bind/`·`/api/bosh/*`는 조사 중에도 기록하지 말 것** — 사내 메신저(XMPP) 채널이고
+  요청 본문에 **SASL PLAIN 인증 토큰**이 실린다(2026-10-22 실측, 덤프에 들어와 즉시 폐기했다).
+  조사 스크립트의 제외 목록에 넣어 둘 것.
+
 ### 현재 흐름
 ```
 ① SAP 자재 조회        Item Group No / Item Code / Model / Sub Description
@@ -640,7 +664,7 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 | 파일 | 역할 |
 |---|---|
 | `gw_bridge.py` | CDP 제어 + 내부 API 호출 + 기안 작성 + 표지 파싱 (설계·안전원칙은 파일 상단 주석) |
-| `kortek_backend.py` | `/gw/status` `/gw/open` `/gw/login` `/gw/login-config` `/gw/calendars` `/gw/events` `/gw/approval/forms` `/gw/approval/draft` `/gw/approval/search` `/gw/approval/parse-cover` |
+| `kortek_backend.py` | `/gw/status` `/gw/open` `/gw/login` `/gw/login-config` `/gw/calendars` `/gw/events` `/gw/approval/forms` `/gw/approval/draft` `/gw/approval/search` `/gw/approval/parse-cover` `/gw/contacts` `/gw/notifications` `/gw/notes` |
 | `js/39-groupware-calendar.js` | Calendar 탭 전환·상태 표시 |
 | `js/32-sap-capabilities.js` | `GW_CAPABILITIES` 카탈로그 + `_gwCapKwHit` |
 | `js/47-approval-compose.js` | 기존 기안을 틀로 삼아 작성 — `APPROVAL_FIELD_SOURCES`(칸→값 출처) + 미리보기 |
@@ -663,9 +687,9 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 | `works` | 49 | 9 | 🟡 진입 확인(`/app/works/home/all`로 리다이렉트) |
 | `ehr` 인사관리 | 29 | 0 | ⬜ (외부 `insa.kortek.co.kr`로 빠짐) |
 | `board` 게시판 | 23 | 8 | 🟢 **읽기 완료 + 앱 이식 완료** |
-| `noti` 알림 | 21 | 0 | ⬜ |
+| `noti` 알림 | 21 | 0 | 🟢 **읽기 완료 + 앱 이식 완료** |
 | `community` | 21 | 7 | 🟡 진입 확인 |
-| `contact` 주소록 | 21 | 10 | 🟡 목록만 |
+| `contact` 주소록 | 21 | 10 | 🟢 **읽기 완료 + 앱 이식 완료** |
 | `report` 보고 | 21 | 3 | 🟡 경로만(`/api/report/form`) — 진입만으론 호출 없음 |
 | `task` | 18 | 5 | ⬜ (`/app/task`는 거의 빈 화면) |
 | `calendar` 캘린더 | 14 | 3 | 🟢 읽기 완료 |
@@ -673,7 +697,7 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 | `asset` 예약 | 11 | 4 | 🟢 읽기 완료 + 쓰기 화면 구조 실측 |
 | `survey` 설문 | 10 | 5 | 🟡 진입 확인 |
 | `sms` | 4 | 1 | ⬜ |
-| `note` 쪽지 | 3 | 1 | ⬜ |
+| `note` 쪽지 | 3 | 1 | 🟢 **읽기 완료 + 앱 이식 완료**(메일 폴더 `__go_note__`) |
 | `mail` 메일 | **1** | 0 | 🟢 **읽기 완료 + 앱 이식 완료**(상세는 의도적으로 안 씀) |
 
 > 📡 **모듈별 엔드포인트 목록은 `docs/groupware-endpoints.md`** — "관찰 확정"과 "번들 추출(미호출)"을 구분해 적어 뒀다.

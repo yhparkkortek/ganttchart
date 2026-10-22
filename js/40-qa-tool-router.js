@@ -282,6 +282,58 @@
                   desc: '1이면 제목에 승인원 표시가 있는 문서만 남긴다(승인원 Revision History 판단용). 일반 검색은 0.' }
             ]
         },
+        // ── 📇🔔💬 [2026-10-22 신규] 주소록 · 알림 · 쪽지 (전부 읽기) ─────────
+        //  조사 기록은 docs/groupware.md 11절. 경로·파라미터는 **번들과 실측으로 확정**했다.
+        {
+            id: 'gw_contacts', mode: 'read', requires: 'gw',
+            title: '사내 주소록 검색',
+            desc: '사내 주소록에서 사람을 찾는다 — 이름·직위·부서·회사·이메일·휴대폰·내선번호. '
+                + '"박성준 연락처 알려줘", "개발3팀 사람들 이메일", "홍길동 내선번호 뭐야?", '
+                + '"그 사람 메일주소 찾아줘" 같은 질문에 쓴다. '
+                + 'keyword 는 이름뿐 아니라 부서·회사·이메일에도 걸린다. 비우면 전체(가나다순)다. '
+                + '총 건수(total)가 limit 보다 크면 더 있다는 뜻이니, 사람을 특정해야 하면 keyword 를 좁혀서 다시 불러라. '
+                + '⚠️ 앱 안에도 자체 Address Book(주소록 탭)이 따로 있다 — 이 도구는 **그룹웨어** 쪽이다.',
+            path: '/gw/contacts', pick: 'contacts',
+            params: [
+                { name: 'keyword', type: 'text', max: 30, def: '',
+                  desc: '검색어(이름·부서·회사·이메일). 비우면 전체' },
+                { name: 'limit', type: 'int', min: 1, max: 100, def: 20, desc: '최대 건수' },
+                { name: 'page', type: 'int', min: 0, max: 50, def: 0, desc: '페이지(0부터)' }
+            ]
+        },
+        {
+            id: 'gw_notifications', mode: 'read', requires: 'gw',
+            title: '그룹웨어 알림',
+            desc: '그룹웨어 알림 목록 — 결재 도착/반려/회수, 게시글 등록, 참조자 등록 같은 소식이다. '
+                + '"알림 뭐 왔어?", "놓친 거 있어?", "결재 올 거 있나?", "안 읽은 알림 보여줘", '
+                + '"그룹웨어에 새 소식 있어?" 같은 질문에 쓴다. '
+                + 'category 로 모듈을 좁힌다: all(전체) · unread(안읽음) · approval(전자결재) · bbs(게시판) · '
+                + 'mail · calendar · asset(예약) · docs · survey · community · report · task · todo · works 등. '
+                + '실측상 대부분이 approval 이고 mail·calendar 는 0건일 수 있다 — 0건은 "그 모듈 알림이 없다"는 뜻이다. '
+                + '⚠️ 목록만 읽는다 — 읽음 처리는 하지 않으니 안심하고 불러도 된다.',
+            path: '/gw/notifications', pick: 'notifications',
+            params: [
+                { name: 'category', type: 'enum',
+                  enum: ['all', 'unread', 'approval', 'asset', 'bbs', 'calendar', 'channel',
+                         'community', 'docs', 'ehr', 'mail', 'manager', 'openapi', 'report',
+                         'survey', 'task', 'todo', 'webfolder', 'works'],
+                  def: 'all', desc: '알림 분류' },
+                { name: 'limit', type: 'int', min: 1, max: 60, def: 15, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_notes', mode: 'read', requires: 'gw',
+            title: '쪽지 목록',
+            desc: '그룹웨어 **쪽지**(메신저 쪽지함) 목록 — 보낸사람·받는사람·제목·본문 미리보기·날짜·읽음여부. '
+                + '"쪽지 뭐 왔어?", "쪽지함 보여줘", "안 읽은 쪽지 있어?" 같은 질문에 쓴다. '
+                + '⚠️ 메일(gw_mail)과 다른 것이다 — 쪽지는 사내 짧은 알림용이고 보통 건수가 아주 적다. '
+                + '서버가 검색어 필터를 지원하지 않아 **최근 목록만** 받아온다 — 특정 쪽지를 찾아야 하면 '
+                + '받아온 목록 안에서 골라라. 읽기 전용이다(보내기·삭제 경로는 만들지 않았다).',
+            path: '/gw/notes', pick: 'notes',
+            params: [
+                { name: 'limit', type: 'int', min: 1, max: 50, def: 10, desc: '최대 건수' }
+            ]
+        },
         // 📋 [2026-10-22] 기안 **양식(문서 종류)** 카탈로그 — 로컬 데이터라 그룹웨어를 안 거친다.
         //    왜 필요한가: 기안 요청은 양식마다 칸이 완전히 다른데, AI 에게 그 목록이 없어서
         //    "어떤 기안 올릴 수 있어?"에 답을 못 하고 양식을 **지어냈다**. 최근 문서를 실제로

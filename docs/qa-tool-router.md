@@ -130,11 +130,20 @@
 - **문서관리/설문의 "대기" 목록은 평소 0건이다.** 기능이 고장 난 것과 구분이 안 되므로
   0건일 때 "그 조건에 자료가 없다"를 명시적으로 AI에게 알려준다(`_qaToolResultsText`).
 
-## 등록된 도구 (15개, 전부 읽기)
+## 등록된 도구 (24개, 전부 읽기)
+
+> 세는 법: `grep -c "mode: 'read'" js/40-qa-tool-router.js`. 이 숫자는 손으로 적어 두면 금방 어긋난다 — 실제로 표가 14개라고 할 때 배열엔 21개가 있었다.
 
 | id | 무엇 |
 |---|---|
 | `gw_approval_forms` | 기안 양식(문서 종류)·칸 목록. **로컬 도구**(백엔드 안 거침) |
+| `gw_contacts` | 사내 주소록 검색(이름·부서·이메일·휴대폰·내선). ⚠️ `searchType=or` 없으면 전건 |
+| `gw_notifications` | 그룹웨어 알림(결재 도착·게시글 등록…). 분류는 **경로**, `unread`도 분류 |
+| `gw_notes` | 쪽지 목록. POST JSON·검색어 미지원(서버가 무시) |
+| `gw_status` | 그룹웨어 로그인 상태 |
+| `insa_menus` / `insa_screen` / `insa_workplan_form` | 인사관리 화면 목록 / 화면 조회 / 근무계획 폼 |
+| `gw_approval_read` | 전자결재 문서 하나를 문서번호로 열어 전부 읽기 |
+| `gw_asset_items` | 예약 자원의 항목(회의실 개별 등) |
 | `gw_mail` | 메일 목록(기간·폴더·안읽음·검색). 메일을 열지 않아 읽음 처리 안 됨 |
 | `gw_board` / `gw_board_list` / `gw_board_post` | 게시물 / 게시판 목록 / 게시물 본문 |
 | `gw_calendar` | 일정 |

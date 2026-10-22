@@ -30,6 +30,7 @@ import os
 import re
 import subprocess
 import time
+import urllib.parse
 
 import requests
 
@@ -1202,7 +1203,9 @@ def boards():
 #   검색어 키는 `keyWord` — 대문자 W. `keyword`로 주면 조용히 무시된다.
 # ⚠️ 이 POST는 조회 전용이라 아래 허용목록(_MAIL_POST_ALLOW)에 있는 경로만 부른다.
 #   쓰기(발송·삭제·읽음처리)는 **여기에 만들지 않는다** — 허용목록이 그 가드다.
-_MAIL_POST_ALLOW = ('/api/mail/message/list', '/api/mail/message/count')
+#   [2026-10-22] 쪽지(`/api/mail/note/list`)도 메일 시스템의 폴더(`__go_note__`)라 여기로 온다.
+_MAIL_POST_ALLOW = ('/api/mail/message/list', '/api/mail/message/count',
+                    '/api/mail/note/list')
 
 _MAIL_FOLDERS = {
     'inbox': 'Inbox', '받은': 'Inbox', '받은메일함': 'Inbox',
@@ -1453,6 +1456,100 @@ def webfolder_list(path='/', limit=30, scope='public'):
                     'size': f.get('size') or '', 'updatedAt': f.get('updatedAt') or ''})
     return {'path': d.get('currentPath') or p, 'total': d.get('total'),
             'count': len(out), 'items': out}
+
+
+# ── 📇 주소록 (읽기) ─────────────────────────────────────────────────
+# 조사 기록(2026-10-22 실측, docs/groupware.md 11절):
+#   · 경로는 `/api/contact/search` — 번들 `contact/collections/search_contact` 의 `default`
+#     객체에서 파라미터 이름을 확정했다(추측 아님):
+#     keyword / page / offset / property / direction / ownerType / searchType
+#   · `/api/contact/contacts` 는 `type` 이 필수라 인자 없이는 **500**("require type!!").
+#   · `/app/contact` 진입만으로는 목록 요청이 안 잡힌다 — 그래서 번들에서 경로를 뽑았다.
+#
+# ⚠️⚠️ **`keyword` 는 `searchType=or` 를 같이 보내야 동작한다.**
+#   keyword 만 주거나 `searchType=and` 로 주면 서버가 오류 없이 **전건(375건)** 을 돌려준다.
+#   0건이면 "없나?" 하고 의심하지만 전건은 "검색이 됐다"고 착각하게 되므로 더 위험하다
+#   (실측: keyword=박 단독 → 375건 / searchType=or 동반 → 18건).
+#   그래서 호출하는 쪽이 빼먹을 수 없게 **여기 기본값으로 박는다.**
+def contacts_search(keyword='', limit=20, page=0):
+    """사내 주소록 검색. keyword 를 비우면 전체(이름 가나다순)."""
+    qs = ('page=%d&offset=%d&property=nameInitialConsonant&direction=asc'
+          '&ownerType=&searchType=or&keyword=%s'
+          % (max(0, int(page)), max(1, int(limit)),
+             urllib.parse.quote(str(keyword or '').strip())))
+    j = gw_get('/api/contact/search?' + qs, timeout=60)
+    out = []
+    for c in (j or {}).get('data') or []:
+        off = c.get('office') or {}
+        out.append({
+            'name': c.get('name') or '',
+            'position': c.get('positionName') or '',
+            'dept': c.get('departmentName') or '',
+            'company': c.get('companyName') or '',
+            'email': c.get('email') or '',
+            'mobile': c.get('mobileNo') or '',
+            'tel': (off.get('tel') or '') if isinstance(off, dict) else '',
+            'address': (off.get('basicAddress') or '') if isinstance(off, dict) else '',
+        })
+    pg = (j or {}).get('page') or {}
+    return {'keyword': str(keyword or '').strip(), 'count': len(out),
+            'total': pg.get('total'), 'page': pg.get('page'), 'contacts': out}
+
+
+# ── 🔔 알림 (읽기) ───────────────────────────────────────────────────
+# `/api/my/noti` 가 전체, `/api/my/noti/<카테고리>` 가 필터다(실측: approval 187 / bbs 9 /
+# mail 0 / calendar 0, 전체 196). 카테고리 목록은 번들에서 뽑은 것이고 `unread` 도 같은
+# 자리에 있는 **필터 하나**다(별도 경로가 아님).
+# ⚠️ GET 목록 조회라 읽음 처리는 일어나지 않는다. 읽음 처리 경로는 **만들지 않았다**.
+_NOTI_CATEGORIES = ('all', 'unread', 'approval', 'asset', 'bbs', 'calendar', 'channel',
+                    'community', 'docs', 'ehr', 'mail', 'manager', 'openapi', 'report',
+                    'survey', 'task', 'todo', 'webfolder', 'works')
+
+
+def notifications(category='all', limit=15):
+    """그룹웨어 알림 목록. category=all(전체)/unread(안읽음)/모듈명."""
+    cat = str(category or 'all').strip().lower()
+    if cat not in _NOTI_CATEGORIES:
+        raise ValueError('알 수 없는 알림 분류입니다: %s (가능: %s)'
+                         % (cat, ', '.join(_NOTI_CATEGORIES)))
+    path = '/api/my/noti' if cat == 'all' else '/api/my/noti/%s' % cat
+    j = gw_get('%s?page=0&offset=%d' % (path, max(1, int(limit))), timeout=60)
+    out = []
+    for n in (j or {}).get('data') or []:
+        out.append({'category': n.get('category') or '',
+                    'sender': n.get('sender') or '',
+                    'message': _unentity(n.get('message')),
+                    'at': n.get('createdAt') or ''})
+    pg = (j or {}).get('page') or {}
+    return {'category': cat, 'count': len(out), 'total': pg.get('total'),
+            'notifications': out}
+
+
+# ── 💬 쪽지 (읽기) ───────────────────────────────────────────────────
+# 쪽지는 **메일 시스템의 폴더 하나**(`__go_note__`)다 — 그래서 레코드가 메일 모양이다.
+# `/api/mail/note/list` 는 **POST JSON**이다(번들 goGrid `method:"POST"`, GET 은 405).
+# ⚠️ form-encoded 로 보내면 `tabType=__go_note__` 외에는 **400** 이다 → JSON 으로 보낸다.
+# ⚠️ `keyWord` 는 서버가 **무시한다**(실측: '추석'·없는 말 모두 전건 3건) → 인자로 두지 않는다.
+#    `tabType` 도 inbox/sent/allBox 가 모두 같은 결과였는데, 사내 쪽지가 3건뿐이라
+#    **구분이 되는지 확인하지 못했다.** 되는 것처럼 적지 않는다.
+def notes(limit=10):
+    """쪽지 목록(받은 쪽지함). 읽기 전용 — 보내기·삭제 경로는 만들지 않았다."""
+    n = max(1, int(limit))
+    j = _mail_post('/api/mail/note/list',
+                   {'page': 0, 'offset': n, 'tabType': '__go_note__',
+                    'folder': '__go_note__'}, timeout=60)
+    out = []
+    for m in (j or {}).get('data') or []:
+        out.append({'from': m.get('fromToSimple') or '',
+                    'to': m.get('sendToSimple') or '',
+                    'subject': _unentity(m.get('subject')),
+                    'preview': _unentity(m.get('preview'))[:200],
+                    'at': m.get('dateUtc') or '',
+                    'read': bool(m.get('seen'))})
+    # ⚠️ 설문 목록과 같이 서버가 `offset` 을 **무시한다**(실측: offset=2 → 3건) → 여기서 자른다.
+    out = out[:n]
+    pg = (j or {}).get('page') or {}
+    return {'count': len(out), 'total': pg.get('total'), 'notes': out}
 
 
 _APPR_BOXES = {
