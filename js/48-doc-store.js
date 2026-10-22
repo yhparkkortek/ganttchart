@@ -202,7 +202,7 @@ window._dsOpenSettings = async function () {
         + _t('이 PC에서 탐색기로 열리는 경로여야 합니다. 브라우저가 아니라 <b>로컬 백엔드</b>가 읽습니다.',
              'Must be reachable from this PC. The <b>local backend</b> reads it, not the browser.') + '</div>'
         + '    <div style="font-size:12px; font-weight:bold; color:#333; margin:14px 0 5px;">' + _t('폴더 (쉼표로 구분)', 'Folders (comma separated)') + '</div>'
-        + '    <input id="ds-cfg-folders" type="text" placeholder="PANEL, CUSTOMER, ELEC" style="width:100%; box-sizing:border-box; padding:8px 11px; border:1.5px solid #a5c8f0; border-radius:7px; font-size:12.5px;">'
+        + '    <input id="ds-cfg-folders" type="text" placeholder="PANEL, CUSTOMER, PARTS, MC" style="width:100%; box-sizing:border-box; padding:8px 11px; border:1.5px solid #a5c8f0; border-radius:7px; font-size:12.5px;">'
         + '    <div style="font-size:11px; color:#888; margin-top:4px;">'
         + _t('사진 등 새 분류가 필요하면 여기에 이름만 추가하면 됩니다(폴더는 자동 생성).',
              'Add a name here for new categories such as photos (folders are created automatically).') + '</div>'
@@ -326,7 +326,7 @@ window._dsOpenPicker = async function (opts) {
         return;
     }
     // 📁 [2026-10-22] 부르는 쪽이 탭 목록을 줄 수 있다 — PARTS 탭은 부품 종류별 **하위**
-    //    폴더(ELEC/PANEL …)를 쓰는데 그 이름들은 설정(cfg.folders)에 없다. 문자열과
+    //    폴더(PARTS/PANEL …)를 쓰는데 그 이름들은 설정(cfg.folders)에 없다. 문자열과
     //    {f,label} 쌍을 둘 다 받아 {f,label}로 눕힌다(탭에 긴 경로 대신 이름을 보이게).
     _dsPick.folders = ((_dsPick.folders && _dsPick.folders.length) ? _dsPick.folders : (cfg.folders || []))
         .map(function (x) { return (typeof x === 'string') ? { f: x, label: x } : { f: x.f, label: x.label || x.f }; });

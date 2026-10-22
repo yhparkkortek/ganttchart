@@ -4345,7 +4345,7 @@ def _run_flask_with_port_retry(max_wait_sec=15):
 #   ⚠️ 경로를 코드에 박지 않는다. 이 저장소는 GitHub Pages로 **공개**돼 있어서 사내 IP를
 #   커밋하면 안 되고, NAS를 바꾸면 코드를 또 고쳐야 한다. → docstore_config.json(.gitignore).
 #
-#   ⚠️ 폴더 목록도 설정이다 — PANEL/CUSTOMER/ELEC 외에 사진 등을 추가할 때 코드를 안 고친다.
+#   ⚠️ 폴더 목록도 설정이다 — PANEL/CUSTOMER/PARTS/MC 외에 사진 등을 추가할 때 코드를 안 고친다.
 #
 #   텍스트 추출은 **브라우저가** 한다(pdf.js·XLSX가 이미 프런트에 있음, js/42 _pxExtractText).
 #   백엔드에 PDF 라이브러리를 새로 깔면 팀원 PC마다 설치 부담이 생긴다 — 추출은 프런트,
@@ -4355,6 +4355,11 @@ def _run_flask_with_port_retry(max_wait_sec=15):
 DOCSTORE_CONFIG_FILE = os.path.join(BASE_DIR, 'docstore_config.json')
 DOCSTORE_TEXT_DIR    = '_text'          # 추출 텍스트 캐시 폴더(설정 폴더 목록과 별개로 항상 허용)
 BACKSLASH            = chr(92)         # 경로 정규화용 — 리터럴 안 백슬래시를 피한다
+# 🗂 [2026-10-22] 앱이 페이지별로 쓰는 폴더 — **설정에 없어도 항상 허용**한다.
+#   왜: 폴더 목록은 PC마다 각자 저장되는데(docstore_config.json, .gitignore), 앱이 새 폴더를
+#   쓰거나 이름을 바꾸면 팀원 PC에서만 "허용되지 않은 폴더"가 난다(ELEC→PARTS가 그 경우).
+#   화이트리스트의 목적은 **경로 탈출 차단**이고, 앱이 정한 이름은 root 아래라 그 목적과 무관하다.
+DOCSTORE_APP_FOLDERS = ['CUSTOMER', 'PARTS', 'MC', 'PANEL']
 
 
 def _docstore_load():
@@ -4386,10 +4391,10 @@ def _docstore_safe_name(name):
 
 
 def _docstore_folder_segs(folder, cfg, allow_text=False):
-    """'ELEC/PANEL' → ['ELEC', 'PANEL']. 허용 안 되면 (None, 사유).
+    """'PARTS/PANEL' → ['PARTS', 'PANEL']. 허용 안 되면 (None, 사유).
 
     🗂 [2026-10-22] **한 단계 하위 폴더까지** 허용한다 — PARTS 탭이 부품 종류마다 자료를
-       갈라 두기 때문(ELEC/PANEL, ELEC/CONV …). 상위 폴더는 여전히 설정된 화이트리스트에
+       갈라 두기 때문(PARTS/PANEL, PARTS/CONV …). 상위 폴더는 여전히 화이트리스트(설정 +
        있어야 하고, 하위 이름은 파일명과 같은 규칙(_docstore_safe_name)으로 걸러 경로
        탈출을 막는다. 두 단계 이상은 거부 — 깊이를 열어 둘 이유가 없다.
     """
@@ -4400,7 +4405,8 @@ def _docstore_folder_segs(folder, cfg, allow_text=False):
     segs = [_docstore_safe_name(x) for x in parts]
     if not all(segs):
         return None, '폴더 이름이 올바르지 않습니다.'
-    allowed = list(cfg.get('folders') or [])
+    allowed = list(cfg.get('folders') or []) + [f for f in DOCSTORE_APP_FOLDERS
+                                               if f not in (cfg.get('folders') or [])]
     if allow_text:
         allowed.append(DOCSTORE_TEXT_DIR)
     if segs[0] not in allowed:
@@ -4432,8 +4438,10 @@ def _docstore_dir(folder, cfg=None, allow_text=False):
 def doc_config_get():
     cfg = _docstore_load()
     ok = bool(cfg['root']) and os.path.isdir(cfg['root'])
+    # 앱 폴더는 설정에 없어도 목록에 넣어 돌려준다 — 안 그러면 PC마다 고르기 창의 탭이 달라진다.
+    folders = list(cfg['folders']) + [f for f in DOCSTORE_APP_FOLDERS if f not in cfg['folders']]
     return jsonify({'ok': True, 'configured': bool(cfg['root']), 'reachable': ok,
-                    'root': cfg['root'], 'folders': cfg['folders']})
+                    'root': cfg['root'], 'folders': folders})
 
 
 @app.route('/doc/config', methods=['POST'])
@@ -4530,7 +4538,7 @@ def doc_put():
 
 
 def _doc_text_key(folder):
-    """캐시 파일명에 쓸 폴더 키 — 'ELEC/PANEL' → 'ELEC_PANEL'.
+    """캐시 파일명에 쓸 폴더 키 — 'PARTS/PANEL' → 'PARTS_PANEL'.
     ⚠️ 하위 폴더를 허용한 뒤로 folder 에 '/'가 들어올 수 있다. 그대로 붙이면 캐시 경로가
        깨져서(또는 엉뚱한 폴더로 가서) 텍스트 캐시가 조용히 안 먹는다."""
     return str(folder or '').replace(BACKSLASH, '/').replace('/', '_')

@@ -956,11 +956,16 @@
             //    비교표의 스펙 값은 넣지 않는다 — 되돌려 넣으면 라이브러리와 어긋난 값이 박힌다.
             //    ⚠️ 종류별 '📊 엑셀 저장'(비교표 출력)과 **다른 것**이라 버튼 이름을 달리 둔다.
             id: 'elecparts', tab: 'tab-elecparts', label: 'Elec Parts',
-            exportLabel: ['선택·Note 저장', 'Save picks'],
+            // 📊 이 페이지엔 **저장 버튼을 두지 않는다**(사용자 요청 2026-10-22). 이 블록이 내는
+            //    표에는 스펙 값이 없고(라이브러리 소유) "고른 모델 + Note + 이력"뿐이라, 같은 줄의
+            //    종류별 '📊 엑셀 저장'(스펙 전부가 든 비교표)과 헷갈리기만 했다.
+            //    📂 불러오기는 남긴다 — 프로젝트 전체 엑셀의 'Elec Parts' 시트를 되읽고,
+            //    📁 NAS로 고른 비규격 파일을 AI 추출로 넘기는 입구도 여기다.
+            importOnly: true,
             leadSep: true,
             // 📁 NAS에서 불러올 때 열 폴더 — **지금 고른 부품 종류**의 하위 폴더다
-            //    (ELEC/PANEL, ELEC/CONV …). 고정 문자열이 아니라 함수인 이유가 그것이다.
-            nasFolder: function () { return window._elecNasFolder ? window._elecNasFolder() : 'ELEC'; },
+            //    (PARTS/PANEL, PARTS/CONV …). 고정 문자열이 아니라 함수인 이유가 그것이다.
+            nasFolder: function () { return window._elecNasFolder ? window._elecNasFolder() : 'PARTS'; },
             // 고르기 창의 탭 — 창 안에서 다른 부품 종류로 바로 옮길 수 있게 전부 넘긴다.
             nasFolders: function () { return window._elecNasFolders ? window._elecNasFolders() : null; },
             // 🤖 규격 엑셀이 아닌 파일(사양서 PDF·TXT·HTML, 협력사 엑셀)은 이 페이지의 AI 추출로.
@@ -1643,21 +1648,23 @@
             // 📊 저장 → │ → 📂 불러오기 **순서**(사용자 요청 2026-10-21, 앱 전체 통일).
             //    이름도 '엑셀 입력' → '불러오기'로. 주소록 탭의 '📂 불러오기'와 같은 말·같은 아이콘을 쓴다
             //    — 같은 일을 하는 버튼이 탭마다 다른 이름이면 같은 기능으로 안 보인다.
+            // 저장 버튼이 없는 페이지(importOnly)도 있다 — 그러면 '불러오기' 앞 경계선도 빼야
+            // 선이 둘 연달아 찍힌다.
+            var _hasExport = !spec.importOnly;
             holder.innerHTML =
-                // 같은 줄에 **다른 성격의** 버튼 묶음이 이미 있는 페이지(Elec Parts의 비교표
-                // 출력)는 경계선을 앞에 둬서 여기부터가 왕복 버튼임을 보인다. 버튼이 숨으면
-                // 선도 같이 사라지므로 외톨이 선이 남지 않는다.
+                // 같은 줄에 **다른 성격의** 버튼 묶음이 이미 있는 페이지(PARTS의 비교표 출력)는
+                // 경계선을 앞에 둬서 여기부터가 왕복 버튼임을 보인다. 버튼이 숨으면 선도 같이
+                // 사라지므로 외톨이 선이 남지 않는다.
                 (spec.leadSep ? SEP : '')
-                + '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
+                + (!_hasExport ? '' :
+                    '<button onclick="window.pageExcelExport(\'' + spec.id + '\')" title="'
                   + _esc(_t(_nm(spec.label) + ' 내용을 엑셀 파일로 저장합니다', 'Save ' + _nm(spec.label) + ' as an Excel file'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
                   // 저장만 있는 페이지(알람 등)에선 이 버튼이 마지막이라 인쇄 버튼과 붙지 않게 여백을 준다.
                   + ' style="' + BTN + (spec.exportOnly ? ' margin-right:4px;' : '') + '">📊 '
-                  // 기본은 '엑셀 저장'. 같은 줄에 성격이 다른 저장 버튼이 이미 있는 페이지만
-                  // spec.exportLabel(데이터)로 이름을 달리 준다.
-                  + (spec.exportLabel ? _nm(spec.exportLabel) : _t('엑셀 저장', 'Save')) + '</button>'
+                  + _t('엑셀 저장', 'Save') + '</button>')
                 + (spec.exportOnly ? '' :
-                    SEP
+                    (_hasExport ? SEP : '')
                   + '<button id="px-import-' + spec.id + '" onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'
                   + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다.\n이 버튼 위로 엑셀 파일을 끌어다 놓아도 됩니다.',
                             'Load an edited Excel file — replaces current content; you can undo right after.\nYou can also drop an Excel file onto this button.'))

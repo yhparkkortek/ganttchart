@@ -34,7 +34,7 @@
 <공유>\개발자료실\
   PANEL\      패널 사양서 — ★ 파일명이 곧 패널 PN
   CUSTOMER\   고객 사양서
-  ELEC\       Elec Parts 자료
+  PARTS\      PARTS 탭 자료 — 부품 구분별 하위 폴더
   MAIL\
     _staging\   수신 중 .eml (분류 대기)
     <프로젝트>\  분류 확정분
@@ -100,21 +100,25 @@
 - 용량 상한 `DOCSTORE_GC_MAX_GB`(20) 초과분은 오래된 것부터 추가.
 - 기본 **dry-run** — 실제 용량을 보고 숫자를 조정한 뒤에 켠다(측정 먼저).
 
-### 🗂 하위 폴더 — `ELEC/<부품 구분>` (2026-10-22)
+### 🗂 하위 폴더 — `PARTS/<부품 구분>` (2026-10-22)
 
 PARTS 탭은 주요자재 구분마다 자료를 갈라 둔다. 그래서 `folder` 가 **한 단계 하위까지** 받는다:
-`ELEC/PANEL`, `ELEC/CONV`, `ELEC/SLIM CUT` …. 상위(`ELEC`)는 여전히 `docstore_config.json` 의
-화이트리스트에 있어야 하고, 하위 이름은 파일명과 같은 규칙(`_docstore_safe_name`)으로 걸러진다.
+`PARTS/PANEL`, `PARTS/CONV`, `PARTS/SLIM CUT` …. 상위(`PARTS`)는 화이트리스트에 있어야 한다
+(설정 `docstore_config.json` + `DOCSTORE_APP_FOLDERS`), 하위 이름은 파일명과 같은 규칙(`_docstore_safe_name`)으로 걸러진다.
 
-- **두 단계 이상은 거부**(`ELEC/A/B`)·**상위 참조도 거부**(`ELEC/../CUSTOMER`) — 깊이를 열어 둘
+- **두 단계 이상은 거부**(`PARTS/A/B`)·**상위 참조도 거부**(`PARTS/../CUSTOMER`) — 깊이를 열어 둘
   이유가 없고, 이 백엔드는 공유에 **쓰기 권한**이 있어서 경로 탈출이 곧 사고다. `_docstore_folder_segs`.
 - 없는 하위 폴더는 **첫 조회에서 만든다** — 13개 구분 폴더를 따로 만들어 둘 필요가 없다.
 - **폴더 이름은 `js/23` 의 `ELEC_CATEGORY_META[].nas`(데이터)가 정한다.** 구분명을 그대로 쓰지
   않는 이유는 `SLIM/CUT`·`TOUCH / GLASS` 처럼 Windows 폴더명에 못 쓰는 글자가 있기 때문이다.
   적어 두지 않은 구분(사람이 주요자재에 직접 넣은 것)은 그 글자를 공백으로 바꿔 쓴다.
-- ⚠️ **텍스트 캐시 파일명은 `_doc_text_key()` 로 눕힌다**(`ELEC/PANEL` → `ELEC_PANEL`). 안 그러면
-  `_text/ELEC/PANEL__x.pdf.txt` 로 가서 캐시가 **조용히** 안 먹는다(없는 폴더라 읽기도 쓰기도 실패).
+- ⚠️ **텍스트 캐시 파일명은 `_doc_text_key()` 로 눕힌다**(`PARTS/PANEL` → `PARTS_PANEL`). 안 그러면
+  `_text/PARTS/PANEL__x.pdf.txt` 로 가서 캐시가 **조용히** 안 먹는다(없는 폴더라 읽기도 쓰기도 실패).
   `/doc/list` 의 `hasText` 도 같은 키를 쓴다 — 한쪽만 고치면 "캐시 있는데 없다고 나온다".
+- **앱이 쓰는 폴더는 설정에 없어도 허용·노출한다**(`DOCSTORE_APP_FOLDERS`). 폴더 목록은 **PC마다**
+  각자 저장되므로(`.gitignore`), 앱이 폴더를 새로 쓰거나 이름을 바꾸면 팀원 PC에서만 "허용되지 않은
+  폴더"가 난다 — `ELEC`→`PARTS` 가 그 경우였다. 화이트리스트의 목적은 **경로 탈출 차단**이고,
+  앱이 정한 이름은 root 아래라 그 목적과 무관하다. `/doc/config` 응답에도 섞어서 돌려준다.
 - 고르기 창(`_dsOpenPicker`)은 부르는 쪽이 **탭 목록을 줄 수 있다**(`opts.folders`, 문자열 또는
   `{f,label}`). 하위 폴더 이름은 설정에 없으므로 `cfg.folders` 만 보면 탭이 안 뜬다.
   페이지별 기본 폴더(`PAGE_EXCEL_SPECS.nasFolder`)는 **함수**도 된다 — PARTS는 화면 상태(지금

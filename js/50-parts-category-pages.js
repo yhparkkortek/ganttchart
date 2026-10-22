@@ -8,7 +8,7 @@
 //  그래서 "도표까지만" 있는 공용 화면 하나를 만들어 구분마다 돌려 쓴다:
 //    ① 주요자재에 이미 적혀 있는 값(KTK PN·내역·원가)을 모델별로 보여주는 도표
 //       — **새로 저장하는 값이 없다.** 주요자재가 원본이고 여기는 보여주기만 한다.
-//    ② 그 구분의 NAS 폴더(ELEC/<구분>) 파일 목록 — 올리기·열기·AI 분석.
+//    ② 그 구분의 NAS 폴더(PARTS/<구분>) 파일 목록 — 올리기·열기·AI 분석.
 //
 //  스펙 항목을 설계해서 ELEC_PART_TYPES(js/22d)와 ELEC_CATEGORY_META(js/23)에 넣으면
 //  그 구분은 이 화면을 안 쓰고 **진짜 비교표**로 바뀐다 — 이 파일은 손댈 필요 없다.
@@ -87,7 +87,7 @@
         if (!host || !opt) return;
         _cur = {
             category: opt.category,
-            folder: window._elecNasFolder ? window._elecNasFolder(opt.key) : 'ELEC',
+            folder: window._elecNasFolder ? window._elecNasFolder(opt.key) : 'PARTS',
             icon: opt.icon || '📄', label: opt.label || opt.category
         };
         host.innerHTML =
@@ -206,7 +206,7 @@
             return;
         }
         window._dsOpenPicker({
-            folder: window._elecNasFolder ? window._elecNasFolder() : 'ELEC',
+            folder: window._elecNasFolder ? window._elecNasFolder() : 'PARTS',
             folders: window._elecNasFolders ? window._elecNasFolders() : null,
             title: _t('NAS에서 사양서 고르기 — AI 추출', 'Pick a datasheet from the NAS — AI extraction'),
             onPick: async function (folder, name) {

@@ -236,9 +236,11 @@
         return null;
     };
 
-    // 📁 NAS 폴더 — ELEC 아래에 구분별로 둔다(없으면 백엔드가 그 자리에서 만든다).
+    // 📁 NAS 폴더 — PARTS 아래에 구분별로 둔다(없으면 백엔드가 그 자리에서 만든다).
+    //    ⚠️ 상위 이름은 **탭 이름(PARTS)과 같게** 둔다 — 사람이 탐색기에서 찾을 때 헷갈리지 않게.
     //    폴더명에 못 쓰는 글자는 목록으로 걸러낸다(정규식 안 백슬래시를 피한다).
     const _NAS_BAD_CHARS = '/:*?"<>|' + String.fromCharCode(92);
+    const PARTS_NAS_ROOT = 'PARTS';   // 백엔드 화이트리스트(DOCSTORE_APP_FOLDERS)와 같은 이름
     window._elecNasFolder = function(view) {
         const opt = window._elecOptionOf(view || window._elecView);
         const meta = (opt && window.ELEC_CATEGORY_META[opt.category]) || {};
@@ -248,7 +250,7 @@
                 return _NAS_BAD_CHARS.indexOf(ch) === -1 ? ch : ' ';
             }).join('').replace(/ +/g, ' ').trim();
         }
-        return sub ? ('ELEC/' + sub) : 'ELEC';
+        return sub ? (PARTS_NAS_ROOT + '/' + sub) : PARTS_NAS_ROOT;
     };
     // 파일 고르기 창의 탭 목록 — 구분을 창 안에서 바로 바꿀 수 있게 전부 넘긴다.
     window._elecNasFolders = function() {
