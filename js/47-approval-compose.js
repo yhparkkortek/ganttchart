@@ -39,9 +39,12 @@
             '터치타입':       { from: 'spec', label: ['터치타입', 'Touch Type', 'TSP', 'Touch'] },
             'AD Board.':     { from: 'spec', label: ['AD Board', 'AD BD', 'ADBD', 'A/D Board'] },
             'Type&Optical':  { from: 'spec', label: ['Type&Optical', 'Optical', 'Optical Type'] },
-            // 👇 신규 채번 대상이라 **원본 값을 물려받으면 안 된다** — 비워서 사람이 넣게 한다
-            '자재코드':       { from: 'blank', why: '새로 채번할 코드라 비웁니다' },
-            'Description':   { from: 'blank', why: '새 모델 내역이라 비웁니다' }
+            // 🏭 자재번호를 같이 주면 SAP 에서 읽어 채운다. 안 주면 아래 fallback 대로
+            //    비우거나(자재코드) 원본을 유지한다 — **원본 값을 물려받으면 안 되는 칸**이다.
+            '자재코드':       { from: 'sap', key: 'self',  fallback: 'blank', why: '새로 채번할 코드라 비웁니다' },
+            'Description':   { from: 'sap', key: 'MAKTX', fallback: 'blank', why: '새 모델 내역이라 비웁니다' },
+            '자재그룹넘버':    { from: 'sap', key: 'MATKL', fallback: 'source' },
+            '자재내역2':      { from: 'sap', key: 'ZTEXT', fallback: 'source' }
             // 그 밖(자재그룹넘버·자재상태·생산지·오리진그룹 등)은 적지 않았다 =
             // **원본 기안 값을 그대로** 쓴다. 앱에 대응하는 데이터가 없는 칸들이다.
         }
@@ -82,7 +85,8 @@
 
     // 칸 하나의 값을 정한다 → {value, from, note}
     //   from 은 **사람에게 보여줄 출처**다. 비워 두지 말 것 — 출처가 안 보이면 다 맞다고 믿고 넘긴다.
-    var _resolveOne = function (form, label, srcValue) {
+    var _resolveOne = function (form, label, srcValue, ctx) {
+        ctx = ctx || {};
         var learned = _learnGet(form, label);
         if (learned !== undefined && learned !== null && String(learned).trim()) {
             return { value: String(learned), from: _t('지난번 수정값', 'learned'), kind: 'learn' };
@@ -107,6 +111,16 @@
             var s = (((window.tabData || {}).summary || {})[rule.key] || '').toString().trim();
             return s ? { value: s, from: _t('Summary > ', 'summary > ') + rule.key, kind: 'app' }
                      : { value: '', from: _t('Summary 에 값 없음', 'no value in summary'), kind: 'miss' };
+        }
+        if (rule.from === 'sap') {
+            // 자재번호를 안 줬거나 SAP 조회가 안 됐으면 fallback 으로 — 조용히 원본을 쓰지 않는다.
+            var sv2 = (rule.key === 'self') ? (ctx.material || '')
+                                            : ((ctx.sap && ctx.sap[rule.key]) || '');
+            sv2 = String(sv2 || '').trim();
+            if (sv2) return { value: sv2, from: _t('SAP > ', 'SAP > ') + rule.key, kind: 'app' };
+            if (rule.fallback === 'source') return { value: srcValue || '', from: _t('원본 기안(SAP 값 없음)', 'source doc'), kind: 'source' };
+            return { value: '', from: _t('비움', 'blank'), kind: 'blank',
+                     note: ctx.material ? _t('SAP 에 값 없음', 'not in SAP') : (rule.why || '') };
         }
         if (rule.from === 'spec') {
             var sv = _specFind(rule.label);
@@ -142,6 +156,28 @@
         }
         var form = ((src.meta || {}).formName || '').trim();
         var srcFields = src.fields || {};
+
+        // 🏭 자재번호를 줬고 이 양식에 SAP 출처 칸이 있으면 **한 번만** 조회한다.
+        //    칸마다 부르면 SAP 가 느려서 몇 분씩 걸린다(docs/sap-lookup.md 의 46초 사고와 같은 종류).
+        var ctx = { material: String(opts.material || '').trim(), sap: null };
+        var needSap = !opts.asIs && ctx.material
+            && Object.keys(window.APPROVAL_FIELD_SOURCES[form] || {})
+                 .some(function (k) { return (window.APPROVAL_FIELD_SOURCES[form][k] || {}).from === 'sap'; });
+        if (needSap) {
+            _toast('🏭 ' + _t('SAP 에서 ' + ctx.material + ' 을 읽는 중입니다…', 'Reading ' + ctx.material + ' from SAP…'), 'info');
+            try {
+                var sr = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-material-rows?materials=' + encodeURIComponent(ctx.material)),
+                    150000, _t('SAP 조회 시간 초과', 'SAP lookup timed out'));
+                var sj = await sr.json();
+                ctx.sap = (sj.materials || [])[0] || null;
+                if (!ctx.sap) _toast('⚠️ ' + _t('SAP 에서 ' + ctx.material + ' 을 못 찾았습니다 — 그 칸은 비워둡니다.',
+                                                'Material not found in SAP.'), 'error');
+            } catch (e) {
+                // 조용히 삼키지 않는다 — SAP 가 안 되면 그 칸이 왜 비었는지 알아야 한다.
+                _toast('⚠️ ' + _t('SAP 조회 실패: ', 'SAP lookup failed: ') + (e && e.message ? e.message : e), 'error');
+            }
+        }
         // 새 기안에서 시스템이 채우는 칸은 애초에 다루지 않는다(원본 문서번호가 박힌다).
         var SKIP = ['문서번호', '작성일', '작성부서', '작성자', '제목', '기안부서', '기안자'];
         var rows = Object.keys(srcFields)
@@ -149,7 +185,7 @@
             .map(function (k) {
                 var d = opts.asIs
                     ? { value: srcFields[k] || '', from: _t('원본 기안', 'source doc'), kind: 'source' }
-                    : _resolveOne(form, k, srcFields[k]);
+                    : _resolveOne(form, k, srcFields[k], ctx);
                 return { label: k, srcValue: srcFields[k], value: d.value, from: d.from, kind: d.kind, note: d.note || '' };
             });
         _apvOpen(docNum, src, form, rows, opts.asIs);
