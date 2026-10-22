@@ -49,6 +49,7 @@ window._makeDraggable = function(modalId, handleId) {
     };
     const endDrag = function() {
         if (!isDragging) return;
+        if (_dragRaf) { cancelAnimationFrame(_dragRaf); _dragRaf = 0; }
         isDragging = false;
         // 🐛 [2026-10-22] 놓을 때 화면 안으로 되돌리던 것을 **뺀다.** 드래그에는 이미 자기 규칙이
         //    있다 — DRAG_MARGIN(40px)만 남으면 일부러 화면 밖으로 내보낼 수 있다. 그런데
@@ -73,7 +74,15 @@ window._makeDraggable = function(modalId, handleId) {
         startDrag(e.clientX, e.clientY, handle, modal);
         e.preventDefault();
     });
-    document.addEventListener('mousemove', function(e) { moveDrag(e.clientX, e.clientY); });
+    // ⚡ [2026-10-22] 이동도 리사이즈와 같게 **프레임당 한 번**만 쓴다(rAF 묶음).
+    //    좌표는 마지막 것만 쓰므로 따라오는 정확도는 그대로다.
+    let _dragX = 0, _dragY = 0, _dragRaf = 0;
+    const _flushDrag = function() { _dragRaf = 0; moveDrag(_dragX, _dragY); };
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        _dragX = e.clientX; _dragY = e.clientY;
+        if (!_dragRaf) _dragRaf = requestAnimationFrame(_flushDrag);
+    });
     document.addEventListener('mouseup', endDrag);
 
     // 💡 터치 버전 — touchmove는 { passive:false }로 등록해야 드래그 중 e.preventDefault()로
@@ -353,6 +362,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
         box.style.height = h + 'px';
     };
     const endResize = function() {
+        if (_rafId) { cancelAnimationFrame(_rafId); _rafId = 0; }
         if (!rs) return;
         rs = null;
         document.body.style.userSelect = '';
@@ -378,7 +388,21 @@ window._makeResizable = function(boxId, _retry, handleId) {
         startResize(d, t.clientX, t.clientY);
     }, { passive: true });
 
-    document.addEventListener('mousemove', function(e) { if (rs) moveResize(e.clientX, e.clientY); });
+    // ⚡ [2026-10-22, 사용자 제보 "크기 변경이 부자연스럽다"] 마우스 이동마다 바로 쓰지 않고
+    //    **프레임당 한 번**만 쓴다(rAF 묶음). 이동은 위치만 바뀌지만 크기 변경은 모달 **내용 전체가
+    //    다시 배치**된다 — 브라우저는 mousemove 를 프레임보다 자주 줄 수 있어서, 그때마다 쓰면
+    //    한 프레임에 레이아웃이 여러 번 돈다. 좌표는 마지막 것만 쓰므로 따라오는 정확도는 그대로다
+    //    (실측: 기대값과 오차 0, 뒤로 가는 구간 없음).
+    let _pendX = 0, _pendY = 0, _rafId = 0;
+    const _flushResize = function() {
+        _rafId = 0;
+        if (rs) moveResize(_pendX, _pendY);
+    };
+    document.addEventListener('mousemove', function(e) {
+        if (!rs) return;
+        _pendX = e.clientX; _pendY = e.clientY;
+        if (!_rafId) _rafId = requestAnimationFrame(_flushResize);
+    });
     document.addEventListener('mouseup', endResize);
     document.addEventListener('touchmove', function(e) {
         if (!rs || !e.touches.length) return;
