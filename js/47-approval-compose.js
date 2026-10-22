@@ -64,6 +64,52 @@
             'Address':         { from: 'vendor', key: 'address', why: '자재번호를 같이 주세요' },
             'Tel':             { from: 'vendor', key: 'tel',     why: '자재번호를 같이 주세요' }
             // Customer·Rev.No·Page·Summary·Remark 는 적지 않았다 = 원본 유지
+        },
+        // 🧪 [2026-10-22] 아래 다섯 양식의 칸 이름은 최근 결재문서를 **실제로 읽어** 확인한 것이다
+        //    (근거 문서번호는 js/52 `APPROVAL_DOC_TYPES[].sampled`). 추측으로 적으면 미리보기에서
+        //    전부 '원본 기안'으로 떨어지고, 사람은 매핑이 있는 줄 알고 그냥 넘긴다.
+        //    코드등록 계열은 최근 50건 중 22건(44%)으로 가장 많이 쓰는 양식이라 먼저 매핑했다.
+        //    ⚠️ 칸 이름의 **공백도 그대로** 써야 한다 — '자재 코드'(여기)와 '자재코드'(제품코드
+        //       등록 신청서)는 서로 다른 양식의 다른 칸이다.
+        '프로젝트코드 등록 신청서': {
+            '프로젝트 코드':          { from: 'blank', why: '새로 채번할 코드라 비웁니다' },
+            '프로젝트 명칭':          { from: 'meta', key: '프로젝트명' },
+            '프로젝트 Description':  { from: 'meta', key: '모델명' },
+            '고객사':                { from: 'meta', key: '고객사' },
+            '착수년도':               { from: 'year' },
+            '과제리더':               { from: 'meta', key: '프로젝트담당자' }
+            // Level 1~4·F/S 코드·개발비 구분·개발팀장·참여연구원·Start 는 적지 않았다 = 원본 유지.
+            // 사내 분류 체계·인사 정보라 앱에 대응하는 데이터가 없다.
+        },
+        '원자재/반제품 코드등록신청서': {
+            '자재 코드':      { from: 'sap', key: 'self',  fallback: 'blank', why: '새로 채번할 코드라 비웁니다' },
+            'Description':   { from: 'sap', key: 'MAKTX', fallback: 'blank', why: '자재번호를 같이 주세요' },
+            '자재그룹 No.':   { from: 'sap', key: 'MATKL', fallback: 'source' },
+            '제조사':         { from: 'sap', key: 'MFRPN', fallback: 'source' },
+            '등록 요청자':    { from: 'user' }
+            // 구분·개발형태·내작/외작·단가·납기일·BOM 종속 예정일·도급/무상·비고 = 원본 유지(사람 판단)
+        },
+        '회로 원자재/PBA 코드 등록 신청서': {
+            '자재 코드':      { from: 'sap', key: 'self',  fallback: 'blank', why: '새로 채번할 코드라 비웁니다' },
+            'Description':   { from: 'sap', key: 'MAKTX', fallback: 'blank', why: '자재번호를 같이 주세요' },
+            '자재그룹 No.':   { from: 'sap', key: 'MATKL', fallback: 'source' },
+            '제조사':         { from: 'sap', key: 'MFRPN', fallback: 'source' },
+            // ⚠️ 공급사는 **자재마다 다르다** — 원본을 물려받으면 엉뚱한 업체로 결재가 올라간다.
+            '공급사':         { from: 'vendor', key: 'name', why: '자재번호를 같이 주세요' },
+            '공급사코드':      { from: 'blank', why: '공급사 코드(LIFNR)는 사람이 확인해주세요' },
+            '등록 요청자':    { from: 'user' }
+        },
+        'DMS 등록 신청서': {
+            '1. 자재/제품 번호': { from: 'sap', key: 'self',  fallback: 'source' },
+            '주요모델명':         { from: 'meta', key: '모델명' },
+            '2. DMS 문서번호':   { from: 'blank', why: 'DMS 문서번호는 등록 후에 생기므로 사람이 채워주세요' }
+        },
+        '개발품 자재상태 전환 요청서': {
+            '제품코드':             { from: 'sap', key: 'self',  fallback: 'blank', why: '제품코드를 같이 주세요' },
+            '제품 Description명':  { from: 'sap', key: 'MAKTX', fallback: 'blank', why: '제품코드를 같이 주세요' },
+            // 날짜는 일정 판단이라 비운다 — 원본의 지난 날짜가 그대로 올라가면 안 된다.
+            'P0 전환 예정일':       { from: 'blank', why: '전환 예정일은 사람이 정해주세요' },
+            '등록예정일':           { from: 'blank', why: '등록예정일은 사람이 정해주세요' }
         }
     };
 
@@ -144,6 +190,10 @@
             return { value: d0.getFullYear() + '-' + pad(d0.getMonth() + 1) + '-' + pad(d0.getDate()) + '(' + W + ')',
                      from: _t('오늘 날짜', 'today'), kind: 'app' };
         }
+        // 착수년도처럼 **연도만** 넣는 칸 — 'today' 형식(2026-10-22(수))을 넣으면 양식이 거부한다.
+        if (rule.from === 'year') {
+            return { value: String(new Date().getFullYear()), from: _t('올해', 'this year'), kind: 'app' };
+        }
         if (rule.from === 'sap') {
             // 자재번호를 안 줬거나 SAP 조회가 안 됐으면 fallback 으로 — 조용히 원본을 쓰지 않는다.
             var sv2 = (rule.key === 'self') ? (ctx.material || '')
@@ -172,7 +222,10 @@
         newMat = String(newMat || '').trim();
         if (!subject || !newMat) return { value: subject, changed: false };
         var oldMat = '';
-        var keys = ['Item Code', '자재코드', 'ItemCode'];
+        // 🧪 [2026-10-22] 양식마다 이 칸 이름이 다르다 — 실측으로 확인한 이름을 전부 적는다.
+        //    '자재 코드'(코드등록 계열)는 공백이 있어 기존 '자재코드'로는 안 걸렸다.
+        var keys = ['Item Code', '자재코드', '자재 코드', 'ItemCode',
+                    '제품코드', '1. 자재/제품 번호'];
         for (var i = 0; i < keys.length && !oldMat; i++) {
             var v = String((srcFields || {})[keys[i]] || '').trim();
             if (/^\d{5,8}$/.test(v)) oldMat = v;

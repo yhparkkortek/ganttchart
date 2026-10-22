@@ -5325,6 +5325,41 @@ ${docsJson}`;
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
             // 문서번호(RD3-2610-050 꼴)가 이미 있으면 그걸 틀로 쓰면 된다 — 바로 제안한다.
             const _docNo = (question.match(/\b[A-Z]{2,4}\d?-\d{4}-\d{3,4}\b/i) || [])[0];
+
+            // 🧭 [2026-10-22] 되묻기 **전에** 말에서 양식을 판정해 본다. 양식을 알면 틀로 쓸
+            //    문서는 결재함에서 찾을 수 있으므로, 사람이 매번 문서번호를 집어줄 필요가 없다
+            //    (실사용: "RD3-2610-046 문서 참고하고…", "RD3-2610-036 해봅시다" — 매번 수동).
+            //    ⚠️ 어휘·양식 목록은 **데이터**(js/52 APPROVAL_DOC_TYPES) — 여기 정규식으로 박지 말 것.
+            //    바로 작성에 들어가도 되는 이유: js/47 이 칸마다 출처를 보여주고 사람이
+            //    [이대로 임시저장]을 눌러야 저장되므로, 틀을 잘못 골라도 사람이 막을 수 있다.
+            const _apvType = (!_docNo && window._apvDocTypeHit) ? window._apvDocTypeHit(question) : null;
+            if (_apvType && window.apvComposeByForm) {
+                window._ganttQaHistory.push({ role: 'ai', pending: true,
+                    text: '📝 ' + window._t('"' + _apvType.form + '" 으로 보입니다 — 틀로 쓸 최근 문서를 찾는 중입니다…',
+                                            'Looks like "' + _apvType.form + '" — looking for a recent document to use as a template…') });
+                window._renderGanttQaMessages();
+                const _apvStep = function (m) { const h = window._ganttQaHistory, l = h[h.length - 1]; if (l && l.pending) { l.text = m; window._renderGanttQaMessages(); } };
+                const _apvR = await window.apvComposeByForm(_apvType.form, { material: _gwDraftMat || '', onStep: _apvStep });
+                window._ganttQaHistory.pop();
+                const _nl2 = String.fromCharCode(10);
+                if (_apvR && _apvR.ok) {
+                    window._ganttQaHistory.push({ role: 'ai',
+                        text: '📝 **' + _apvR.form + '**' + _nl2
+                            + window._t('틀: ' + _apvR.docNum + (_apvR.subject ? ' (' + _apvR.subject + ')' : ''),
+                                        'Template: ' + _apvR.docNum)
+                            + _nl2 + (_apvR.mapped
+                                ? window._t('확인 화면을 열었습니다 — 칸마다 값이 어디서 왔는지 보고 [이대로 임시저장]을 눌러주세요.',
+                                            'Review screen opened — check each field and press [이대로 임시저장].')
+                                : window._t('⚠️ 이 양식은 칸 매핑이 아직 없어 **원본 값이 그대로** 들어갑니다 — 미리보기에서 고쳐주세요.',
+                                            'No field mapping for this form yet — source values are carried over.')) });
+                } else {
+                    // 실패를 삼키지 않는다. 왜 못 했는지 말하고, 사람이 줄 수 있는 것을 묻는다.
+                    window._ganttQaHistory.push({ role: 'ai',
+                        text: '⚠️ ' + ((_apvR && _apvR.message) || window._t('틀을 찾지 못했습니다.', 'Could not find a template.')) });
+                }
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+
             const _opts = [];
             if (_docNo) {
                 // ⚠️ 자재번호도 같이 실어 보낸다 — 버튼을 누르는 시점엔 **원래 질문이 사라져** 있어서
@@ -5356,10 +5391,16 @@ ${docsJson}`;
                                 + (_gwDraftMat ? '⚠️ 이쪽은 **SAP ' + _gwDraftMat + ' 도, 프로젝트 값도 쓰지 않습니다.**'
                                                : '⚠️ 이쪽은 **프로젝트 값을 쓰지 않습니다.**'),
                                 'Found ' + _docNo + ' — use it as the template?')
-                    : window._t('기안은 양식마다 내용이 완전히 다릅니다. 둘 중 하나를 알려주세요 —' + _nl
-                                + '- **틀로 쓸 기존 문서번호** (예: RD3-2610-050). 그 문서를 읽어 지금 프로젝트 값으로 채웁니다.' + _nl
-                                + '- 또는 **원자재 승인원**이면 자재번호와 함께 "원자재 승인원 기안"이라고 말씀해주세요.',
-                                'Give a source document number, or say "원자재 승인원" with a material number.')),
+                    // 🧭 [2026-10-22] 양식 목록을 **보여준다** — 그냥 "알려주세요"라고만 하면
+                    //    사람이 사내 양식 이름을 기억해내야 한다. 목록은 데이터(js/52)에서 뽑는다.
+                    : window._t('기안은 양식마다 내용이 완전히 다릅니다. **양식 이름**을 말해주시면 그 양식의 '
+                                + '최근 문서를 찾아 틀로 씁니다 —' + _nl
+                                + ((window.APPROVAL_DOC_TYPES || []).map(function (t) {
+                                      return '- ' + t.form + (t.needs && t.needs !== '-' ? '  _(' + t.needs + ')_' : '');
+                                   }).join(_nl) || '- (양식 목록을 불러오지 못했습니다)') + _nl + _nl
+                                + '목록에 없는 양식이면 **틀로 쓸 기존 문서번호**(예: RD3-2610-050)를 알려주세요.',
+                                'Tell me the form name and I will find a recent document of that form to use as a template, '
+                                + 'or give a source document number (e.g. RD3-2610-050).')),
                 _opts);
             window._renderGanttQaMessages(); input.focus(); return;
         }

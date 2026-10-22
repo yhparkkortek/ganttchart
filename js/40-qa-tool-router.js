@@ -31,6 +31,9 @@
     // ── 도구 레지스트리 (데이터) ─────────────────────────────────────
     // 새 읽기 라우트를 만들면 **여기 한 줄만** 추가하면 AI가 쓸 수 있다.
     //   path   : BACKEND 아래 경로. 반드시 '/'로 시작. AI는 이 값을 못 고른다(id만 고름).
+    //   local  : path 대신 **브라우저 안 전역 함수 이름**. 앱이 이미 들고 있는 카탈로그를
+    //            돌려줄 때 쓴다(백엔드·그룹웨어를 안 거치므로 로그인도 필요 없다).
+    //            AI는 이 값도 못 고른다 — id만 고르고, 함수 이름은 여기 데이터에만 있다.
     //   params : name/type/desc(+enum/min/max/default). 스키마에 없는 인자는 **버린다**.
     //   requires: 'gw'면 그룹웨어 로그인 확인을 먼저 한다(실패 시 호출 자체를 안 한다).
     //   pick   : 응답에서 AI에게 넘길 배열 키(너무 큰 응답을 그대로 싣지 않기 위해).
@@ -278,6 +281,26 @@
                 { name: 'onlyApprovalForm', type: 'enum', enum: ['0', '1'], def: '0',
                   desc: '1이면 제목에 승인원 표시가 있는 문서만 남긴다(승인원 Revision History 판단용). 일반 검색은 0.' }
             ]
+        },
+        // 📋 [2026-10-22] 기안 **양식(문서 종류)** 카탈로그 — 로컬 데이터라 그룹웨어를 안 거친다.
+        //    왜 필요한가: 기안 요청은 양식마다 칸이 완전히 다른데, AI 에게 그 목록이 없어서
+        //    "어떤 기안 올릴 수 있어?"에 답을 못 하고 양식을 **지어냈다**. 최근 문서를 실제로
+        //    읽어 확인한 칸 이름이 js/52 카탈로그에 있으니 그걸 그대로 보여준다.
+        {
+            id: 'gw_approval_forms', mode: 'read',
+            title: '전자결재 기안 양식(문서 종류) 목록',
+            desc: '앱이 **칸 단위로 채울 수 있는** 전자결재 기안 양식 목록과, 양식마다 어떤 칸이 있고 '
+                + '무엇을 같이 줘야 채워지는지를 돌려준다. '
+                + '"어떤 기안 작성할 수 있어?", "기안 양식 뭐 있어?", "프로젝트코드 등록 신청서는 무슨 칸이 있어?", '
+                + '"원자재 코드등록 기안에 뭐가 필요해?" 같은 질문에 쓴다. '
+                + '사용자가 기안을 만들어 달라고 했는데 어느 양식인지 애매할 때도 이걸로 먼저 목록을 보여주고 고르게 하라. '
+                + '⚠️ 여기 없는 양식도 사내에 많다(97개) — 목록에 없으면 "앱이 칸까지 채우지는 못한다"는 뜻이지 '
+                + '"그런 양식이 없다"는 뜻이 아니다. 그때는 기존 문서를 틀로 삼아 복사하는 방법을 안내하라. '
+                + '칸을 "아직 안 읽음"으로 돌려주는 양식은 칸 목록을 **지어내지 말고** 그대로 모른다고 답하라.',
+            local: '_apvDocTypeTool', pick: 'forms',
+            params: [
+                { name: 'form', type: 'text', max: 40, desc: '특정 양식 이름(일부만도 됨). 비우면 전체 목록 + 양식별 칸 개수' }
+            ]
         }
     ];
 
@@ -395,10 +418,30 @@
         }
         // 🔒 읽기 전용 가드 — 쓰기 도구는 이 루프로 절대 실행하지 않는다
         if (tool.mode !== 'read') return { ok: false, id: id, message: '읽기 전용 루프에서는 실행할 수 없는 도구입니다: ' + id };
-        if (String(tool.path || '').charAt(0) !== '/') return { ok: false, id: id, message: '도구 경로가 잘못됐습니다.' };
+        if (!tool.local && String(tool.path || '').charAt(0) !== '/') return { ok: false, id: id, message: '도구 경로가 잘못됐습니다.' };
 
         var v = window._qaValidateToolArgs(tool, rawArgs);
         if (v.error) return { ok: false, id: id, message: v.error };
+
+        // 🗂 로컬 카탈로그 도구 — 앱이 이미 들고 있는 데이터라 네트워크를 안 탄다.
+        //    함수 이름은 **레지스트리(데이터)에만** 있다. AI가 임의 전역 함수를 부를 수는 없다.
+        if (tool.local) {
+            var fn = window[tool.local];
+            if (typeof fn !== 'function') {
+                // 조용히 빈 결과를 주지 않는다 — 스크립트가 안 실린 건 "데이터가 없다"와 다른 일이다.
+                return { ok: false, id: id, args: v.args, notes: v.notes,
+                         message: '로컬 도구가 로드되지 않았습니다: ' + tool.local };
+            }
+            try {
+                var ld = await fn(v.args);
+                var lrows = tool.pick ? ((ld || {})[tool.pick] || []) : ld;
+                return { ok: true, id: id, args: v.args, notes: v.notes, data: ld, rows: lrows,
+                         count: Array.isArray(lrows) ? lrows.length : null };
+            } catch (e2) {
+                return { ok: false, id: id, args: v.args, notes: v.notes,
+                         message: (e2 && e2.message) ? e2.message : String(e2) };
+            }
+        }
 
         var qs = Object.keys(v.args).map(function (k) {
             return encodeURIComponent(k) + '=' + encodeURIComponent(v.args[k]);
