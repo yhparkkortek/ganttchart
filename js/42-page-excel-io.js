@@ -979,6 +979,13 @@
             visibleWhen: function () { return !window._elecBomType; },
             repaint: ['_elecRepaintCurrent'],
             blocks: [{ sheet: 'Elec Parts', kind: 'aoa',
+                // 📚 [2026-10-22] 이 페이지 시트가 아니면서 **회사 패널 비교표**인 경우
+                //    (REFERENCE 시트) — AI 없이 패널 라이브러리로 일괄 이식한다(js/51).
+                //    AI 경로보다 먼저 불린다(js/42 pageExcelImport) → 결정론 우선.
+                preParse: function (wb, fileName) {
+                    return !!(window._pliLooksLikePanelTable && window._pliLooksLikePanelTable(wb)
+                              && window._pliImportFromWorkbook && window._pliImportFromWorkbook(wb, fileName));
+                },
                 // 표를 만드는 쪽은 **전체 내보내기와 같은 함수**(js/04k _elecPartsToAoa)다.
                 get: function () { return (window._elecPartsToAoa() || {}).aoa || [[]]; },
                 // 읽는 쪽도 **같은 파서**(js/22a)다 — 복제하면 한쪽만 고쳐져 "저장한 파일을
@@ -1100,8 +1107,10 @@
     //  AI는 "시트 이름이 안 맞거나 아예 엑셀이 아닐 때"만 부른다. 무료 키는 하루 한도가 있어서
     //  매번 때리면 금방 막힌다.
     var PX_ACCEPT = '.xlsx,.xls,.csv,.pdf,.txt,.html,.htm';
-    var PX_OK_RE  = /\.(xlsx|xls|csv|pdf|txt|html?)$/i;
-    var _pxIsWorkbook = function (f) { return /\.(xlsx|xls|csv)$/i.test(f && f.name || ''); };
+    var PX_OK_RE  = /\.(xlsx|xlsm|xls|csv|pdf|txt|html?)$/i;
+    // 📄 [2026-10-22] `.xlsm` 추가 — 회사 패널 비교표가 .xlsm 이다. 빠져 있는 동안은
+    //    "엑셀이 아닌 파일"로 분류돼 AI 경로로 샜다(이진 파일을 글자로 읽는 길).
+    var _pxIsWorkbook = function (f) { return /\.(xlsx|xlsm|xls|csv)$/i.test(f && f.name || ''); };
     var _pxAiSpec = function (spec) {
         // AI 매핑은 블록이 하나뿐인 rows 페이지에만 연다 — 여러 블록이면 어느 시트로 보낼지
         // 사람이 정해줘야 해서 지금 단계에선 다루지 않는다.

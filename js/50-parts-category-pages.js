@@ -103,9 +103,15 @@
      * js/42 `PAGE_EXCEL_SPECS.elecparts.onForeignFile`이 이 값을 보고 공용 AI 경로로
      * 넘길지 말지 정한다 — false면 js/42가 지금까지처럼 정직하게 "못 읽는다"고 말한다.
      */
+    // ⚠️ 엑셀은 AI 추출로 보내지 않는다 — `_pcProcessFile`/`_epProcessFile`이 pdf/html이 아니면
+    //    `file.text()`로 읽으므로, 이진 엑셀을 넣으면 **깨진 글자를 AI에 보낸다**(할당량만 날린다).
+    //    엑셀은 js/42가 워크북으로 읽어 preParse(js/51 패널 일괄 이식)로 보내는 게 맞는 길이다.
+    var WORKBOOK_RE = /\.(xlsx|xlsm|xls|csv)$/i;
+
     window._pcpAiFromFile = function (file) {
         var tgt = _aiTarget();
         if (!tgt || !file) return false;
+        if (WORKBOOK_RE.test(file.name || '')) return false;
         (async function () {
             try {
                 await tgt.open();
@@ -143,6 +149,21 @@
                 try {
                     if (window.showToast) window.showToast('⏳ ' + _t('"' + name + '" 받는 중…', 'Fetching "' + name + '"…'), 'info');
                     var file = await window._dsFileOf(folder, name);
+                    // 📚 엑셀을 골랐으면 데이터시트가 아니라 **비교표**일 가능성이 높다 —
+                    //    AI로 글자를 뽑는 대신 워크북으로 읽어 일괄 이식(js/51)에 넘긴다.
+                    if (WORKBOOK_RE.test(name) && window.XLSX && window._pliImportFromWorkbook) {
+                        var wb = window.XLSX.read(await file.arrayBuffer(), { type: 'array' });
+                        if (window._pliImportFromWorkbook(wb, name)) {
+                            var m = document.getElementById('ep-add-modal') || document.getElementById('pc-add-modal');
+                            if (m) m.style.display = 'none';
+                            return;
+                        }
+                        if (window.showToast) {
+                            window.showToast('⚠️ ' + _t('이 엑셀에서 비교표 꼴(머리행 "Comparison table")을 찾지 못했습니다.',
+                                                        'No comparison-table header ("Comparison table") found in this workbook.'), 'warning', 7000);
+                        }
+                        return;
+                    }
                     await tgt.feed(file);
                 } catch (e) {
                     if (window.showToast) window.showToast('❌ ' + e.message, 'error', 7000);
