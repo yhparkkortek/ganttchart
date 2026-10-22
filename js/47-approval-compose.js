@@ -45,8 +45,25 @@
             'Description':   { from: 'sap', key: 'MAKTX', fallback: 'blank', why: '새 모델 내역이라 비웁니다' },
             '자재그룹넘버':    { from: 'sap', key: 'MATKL', fallback: 'source' },
             '자재내역2':      { from: 'sap', key: 'ZTEXT', fallback: 'source' }
-            // 그 밖(자재그룹넘버·자재상태·생산지·오리진그룹 등)은 적지 않았다 =
+            // 그 밖(자재상태·생산지·오리진그룹 등)은 적지 않았다 =
             // **원본 기안 값을 그대로** 쓴다. 앱에 대응하는 데이터가 없는 칸들이다.
+        },
+        // 🧪 [2026-10-22] 칸 이름은 실제 문서(RD3-2610-046)를 읽어 확인한 것이다 — 추측 아님.
+        //    ⚠️ 이 양식은 js/04h 의 **전용 흐름**("132933 원자재 승인원 기안 작성해줘")이 공급업체
+        //       조회(ZMM006→LIFNR→ZMM005)까지 해 준다. 틀이 필요 없으면 그쪽이 더 완전하다.
+        //       여기 매핑은 "기존 문서를 틀로 쓰고 싶을 때"를 위한 것이다.
+        '원자재 승인 결과서': {
+            'Item Code':       { from: 'sap', key: 'self',  fallback: 'blank', why: '자재번호를 같이 주세요' },
+            'Model':           { from: 'sap', key: 'MAKTX', fallback: 'blank', why: '자재번호를 같이 주세요' },
+            'Item Group No':   { from: 'sap', key: 'MATKL', fallback: 'blank', why: '자재번호를 같이 주세요' },
+            'Sub Description': { from: 'sap', key: 'ZTEXT', fallback: 'blank', why: '자재번호를 같이 주세요' },
+            'Date':            { from: 'today' },
+            // ⚠️ 공급업체는 **자재마다 다르다** — 원본 값을 물려받으면 엉뚱한 업체가 그대로 올라간다.
+            //    SAP ZMM006 조회는 js/04h 전용 흐름에 있으니 여기선 비우고 사람이 확인하게 한다.
+            'Name':            { from: 'blank', why: '자재가 바뀌면 공급업체도 달라집니다 — 확인 후 입력' },
+            'Address':         { from: 'blank', why: '공급업체 주소 — 확인 후 입력' },
+            'Tel':             { from: 'blank', why: '공급업체 전화 — 확인 후 입력' }
+            // Customer·Rev.No·Page·Summary·Remark 는 적지 않았다 = 원본 유지
         }
     };
 
@@ -111,6 +128,13 @@
             var s = (((window.tabData || {}).summary || {})[rule.key] || '').toString().trim();
             return s ? { value: s, from: _t('Summary > ', 'summary > ') + rule.key, kind: 'app' }
                      : { value: '', from: _t('Summary 에 값 없음', 'no value in summary'), kind: 'miss' };
+        }
+        if (rule.from === 'today') {
+            var d0 = new Date();
+            var W = ['일', '월', '화', '수', '목', '금', '토'][d0.getDay()];
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            return { value: d0.getFullYear() + '-' + pad(d0.getMonth() + 1) + '-' + pad(d0.getDate()) + '(' + W + ')',
+                     from: _t('오늘 날짜', 'today'), kind: 'app' };
         }
         if (rule.from === 'sap') {
             // 자재번호를 안 줬거나 SAP 조회가 안 됐으면 fallback 으로 — 조용히 원본을 쓰지 않는다.
@@ -269,6 +293,16 @@
         html += '<div style="margin-top:8px; font-size:11px; color:#666;">'
             + _esc(_t('체크 항목은 원본 그대로 들어갑니다: ', 'Checkboxes copied as-is: ')) + (chk.length ? _esc(chk.join(', ')) : '-')
             + '</div>';
+        // ⚠️ 이 양식의 매핑이 아예 없으면 **모든 칸이 원본 그대로** 나온다 = 사실상 복사다.
+        //    말 안 하면 사용자는 "틀로 작성을 눌렀는데 SAP도 프로젝트도 안 쓴다"로만 보인다(실제 제보).
+        if (!p.asIs && !window.APPROVAL_FIELD_SOURCES[p.form]) {
+            html += '<div style="margin-top:8px; padding:6px 9px; background:#fbe4e2; border-left:3px solid #b1432f;'
+                + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#b1432f;">'
+                + _esc(_t('이 양식("' + p.form + '")은 아직 매핑이 없어 **모든 칸이 원본 그대로**입니다 — '
+                          + '프로젝트·SAP 값을 쓰지 않았습니다. 바꿀 칸은 직접 고쳐주세요.',
+                          'No mapping for "' + p.form + '" yet — every field is the source value.'))
+                + '</div>';
+        }
         if ((p.src.attachments || []).length) {
             html += '<div style="margin-top:4px; font-size:11px; color:#7a5210;">'
                 + _esc(_t('원본 첨부 ' + p.src.attachments.length + '건은 가져오지 않습니다 — 새로 올려주세요.',
