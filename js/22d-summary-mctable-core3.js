@@ -243,7 +243,7 @@ window.renderPanelCompareTab = async function() {
         if (m) {
             const nasName = nasSpec[m];
             const url = nasName && window._dsFileUrl
-                ? window._dsFileUrl('PANEL', nasName)
+                ? window._dsFileUrl(window._dsPanelFolder ? window._dsPanelFolder() : 'PARTS/PANEL', nasName)
                 : 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
             const has = !!entries[i];
             headHtml += `<th style="min-width:120px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">

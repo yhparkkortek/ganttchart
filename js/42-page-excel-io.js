@@ -633,6 +633,7 @@
     window.PAGE_EXCEL_SPECS = window.PAGE_EXCEL_SPECS || [
         {
             id: 'summary', tab: 'tab-summary', label: 'Summary',
+            nasFolder: 'SUMMARY',
             // 📄 한 장으로 — 개요·마일스톤·주요자재를 구역으로 쌓는다(화면과 같은 순서).
             //    불러오기는 `■ 개요` 같은 구역 머리글로 다시 쪼개므로 AI 없이 그대로 돌아온다.
             onePage: { sheet: ['Summary', 'Summary'], title: ['📝 Summary', '📝 Summary'] },
@@ -998,6 +999,7 @@
         },
         {
             id: 'address', tab: 'tab-address', label: 'Address Book',
+            nasFolder: 'ADDRESS',
             repaint: ['renderAddressTable'],
             blocks: [{ sheet: 'Address', kind: 'rows',
                 get: function () { return _td().addressBook || []; },
@@ -1007,6 +1009,11 @@
             // ⚠️ 알람과 공지는 **인쇄 버튼 하나를 공유**한다(onclick이 `_alarmView` 조건식).
             //    그대로 두면 두 쌍이 같이 붙어 헷갈린다 — 지금 보고 있는 쪽만 띄운다.
             id: 'notice', tab: 'tab-notice', label: ['공지', 'Notice'],
+            nasFolder: 'ALARM&NOTICE',
+            // ⚠️ [2026-10-22 수정] 예전엔 `#print-btn` 을 가리켰는데 그 버튼은 **간트 탭**에 있다
+            //    (tab-gantt 안, 알람 탭엔 인쇄 버튼이 없다). 그래서 공지 뷰로 바꾸면 공지용
+            //    엑셀 버튼이 엉뚱하게 간트 페이지에 떴다. 알람/공지 헤더로 옮긴다.
+            anchorSelector: '#alarm-header-box .btn-group',
             visibleWhen: function () { return window._alarmView === 'notice'; },
             repaint: ['renderNoticeTab'],
             blocks: [{ sheet: ['공지', 'Notice'], kind: 'rows',
@@ -1024,6 +1031,7 @@
             //       **프로젝트 드롭다운 메뉴 안의 '프로젝트 엑셀 저장' 항목**을 먼저 집어서 버튼 두 개가
             //       메뉴 안에 들어가 버렸다(사용자 지적). 화면에 하나뿐인 id로 잡을 것.
             id: 'gantt', label: 'Gantt chart',
+            nasFolder: 'GANTT',
             anchorSelector: '#print-btn',
             repaint: ['recalculateSchedules'],
             // 숫자·날짜·짧은 상태 칸은 가운데 정렬(사용자 요청) — 업무명/상세내용은 들여쓰기와

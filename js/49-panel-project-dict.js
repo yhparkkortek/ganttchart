@@ -26,7 +26,8 @@ var _en = function () { return window._currentLang === 'en'; };
 var _t  = function (ko, en) { return _en() ? en : ko; };
 
 // 📄 원본 파일 — 이름이 바뀌면 여기만 고친다(폴더 안에서 접두어로 찾으므로 날짜가 바뀌어도 된다)
-var PP_FOLDER = 'PANEL';
+// ⚠️ 2026-10-22에 루트 `PANEL\` 이 `PARTS\PANEL\` 안으로 옮겨졌다(js/48 PANEL_FOLDER와 같은 값).
+var PP_FOLDER = 'PARTS/PANEL';
 var PP_PREFIX = 'Panel Comparison Table';
 var PP_SHEET  = 'PROJECT';
 var PP_CACHE  = 'gantt_panel_proj_dict_v1';   // { mtime, items }

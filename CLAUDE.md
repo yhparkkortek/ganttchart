@@ -144,6 +144,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `47-approval-compose.js` | 📝 기안 작성 — **기존 기안을 틀로, 값은 지금 열린 프로젝트**에서 채운다(원본 값 그대로 복사는 `gw_approval_copy`). 매핑은 `APPROVAL_FIELD_SOURCES`(데이터): `meta`/`spec`/`summary`/`user`/`blank`, 안 적으면 **원본 유지**. spec 라벨은 **별칭 목록**. ⚠️ 칸마다 **출처를 보여준다** — 틀린 값이 결재선을 타고 올라가는 게 제일 위험. 사람이 **고친 값만** 적립(자동값까지 저장하면 사전 오염). 상신 안 함 |
 | `50-parts-category-pages.js` | 🗂 **PARTS** 탭(옛 Elec Parts) — 주요자재 구분 **전부**가 **AD BD와 같은 비교표**를 쓴다. 전용 도표가 없는 구분은 ① `ELEC_PART_TYPES`에 공용 기본 항목(`GENERIC_PART_SPEC_SCHEMA`, js/22d)으로 등록 ② 화면·헤더 버튼은 **AD BD 한 벌을 복제**하고 id 안 `adbd`만 치환(`_pcpEnsureView`) — HTML에 9벌 붙여넣지 않는다. 그래서 추가/펼치기/엑셀 저장/AI 추출이 기존 엔진(js/22e)에서 그냥 돈다. 구분·아이콘·NAS 폴더는 `ELEC_CATEGORY_META`(js/23, 데이터) 한 곳, NAS는 `PARTS/<구분>`. NAS 사양서 → AI 추출은 기존 "항목 추가 ▸ AI로 추출"에 **파일만 꽂는다**(`_pcpAiFromFile`) — 추출기를 복제하지 않는다. → `docs/doc-store.md` |
 | `51-panel-lib-import.js` | 📚 회사 **패널 비교표 엑셀(`REFERENCE` 시트) → 팀 공용 패널 라이브러리 일괄 이식**. AI 안 씀(라벨이 앱 항목과 이름까지 맞는다 — 실측 패널 146개·항목 109종·칸 9,981개). **읽기 1회+쓰기 1회**(146번 upsert면 Drive 왕복 292번), **항목 단위 병합**(파일에 없는 `Item Code` 등은 안 지움), 모델명 기준 멱등. 라벨 별칭은 `PLI_LABEL_ALIASES`(데이터). 진입은 js/42 `preParse`(AI보다 먼저)와 PANEL 추가 모달 `📁 NAS에서`. → `docs/doc-store.md` |
+| `53-page-nas.js` | 📁 **페이지별 NAS 자료실** — 엑셀 왕복이 없는 파생 뷰(알람·캘린더·주간보고)에도 `📁 NAS` 를 단다. 폴더는 `PAGE_NAS_FOLDERS`(데이터), 여는 건 **열기·올리기만 하는 탐색기**(`_dsOpenBrowser`, js/48). ⚠️ 같은 탭에 js/42 가 이미 달았으면(`#px-share-*`) **안 단다** — 두 개가 된다. 폴더 철자는 NAS에 있는 그대로(`CALENDER` 포함). → `docs/doc-store.md` |
 | `41-qa-write-tools.js` | ✍️ 쓰기 도구 — **AI가 스스로 실행 안 함**. 초안→사람 확인 1회→자동. `verified:'pending'`은 요청 본문 미확정이라 실행 차단 |
 | `47-approval-compose.js` | 📝 전자결재 **기안 작성** — 기존 기안을 틀로, 값은 지금 프로젝트/SAP에서. 칸→출처 매핑은 `APPROVAL_FIELD_SOURCES`(데이터, 7개 양식). 미리보기에서 사람 승인 후 임시저장, **상신은 안 함** |
 | `52-approval-doctypes.js` | 📋 전자결재 **문서 종류 카탈로그** `APPROVAL_DOC_TYPES` — 양식 이름·부르는 말·**실측 칸 이름**(최근 문서를 실제로 읽어 확인). 말에서 양식 판정(`_apvDocTypeHit`) → 그 양식의 최근 문서를 틀로(`apvComposeByForm`). ⚠️ 양식 이름끼리 **부분문자열**이라 포함 판정만 하면 엉뚱한 틀을 집는다(`제품코드등록신청서` ⊂ `원자재/반제품코드등록신청서`). 상세 → `docs/groupware.md` 8-0절 |
@@ -302,6 +303,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - AI는 원본을 안 본다(`_pxExtractText`가 6만 자로 잘라 보냄) → 텍스트만 캐시하면 재분석·검색이 다 된다. 추출기는 `window._pxExtractText` **하나만** 쓸 것
 - `PANEL\` 은 **파일명이 곧 패널 PN** — 이름을 바꾸면 앱이 못 찾는다
 - 메일은 `.eml` 통째로(본문+첨부). 키는 `fileName`, 훅은 `_tpAppendMailSignal` **한 곳만** 감쌀 것
+- **(2026-10-22) 페이지마다 제 NAS 폴더** — SUMMARY·CUSTOMER·MC·PARTS·ADDRESS·ALARM&NOTICE·CALENDER·GANTT·REPORT. 엑셀 왕복 있는 페이지는 js/42(`nasFolder`), 파생 뷰는 js/53(`PAGE_NAS_FOLDERS`). ⚠️ **PANEL 은 `PARTS/PANEL`** 로 옮겨졌고 경로를 보는 곳이 넷이다(js/23·48·22d·49) — 하나만 고치면 조용히 0건
 - **(2026-10-22) `folder`는 `PARTS/PANEL`처럼 하위 한 단계까지** — 두 단계·상위 참조는 거부, 없으면 만든다. 폴더 이름은 `ELEC_CATEGORY_META[].nas`(js/23). ⚠️ 텍스트 캐시 키는 `_doc_text_key()`로 눕힐 것(안 하면 캐시가 조용히 안 먹는다)
 - **앱이 쓰는 폴더는 설정에 없어도 허용**(`DOCSTORE_APP_FOLDERS`) — 폴더 목록이 PC마다 따로라, 폴더를 새로 쓰거나 이름을 바꾸면 팀원 PC에서만 터진다
 - staging 정리는 기간이 아니라 **큐 연동** — 실측에서 한 달 넘게 미분류로 남은 메일이 있었다. 기간(60일)은 최후 방어선

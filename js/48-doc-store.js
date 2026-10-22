@@ -139,6 +139,11 @@ window._dsPut = async function (folder, file, overwrite) {
 //    표기 차이(점·하이픈·공백·대소문자)는 무시하고 맞춘다 — "G101EVN01.0" ↔ "G101EVN010".
 function _pnKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
+// 📄 패널 데이터시트·비교표가 있는 폴더. 2026-10-22에 사람이 루트 `PANEL\` 을 `PARTS\PANEL\`
+//    안으로 옮겼다 — js/23 `ELEC_CATEGORY_META['PANEL'].nasFull` 과 js/49 `PP_FOLDER` 도 같은 값.
+var PANEL_FOLDER = 'PARTS/PANEL';
+window._dsPanelFolder = function () { return PANEL_FOLDER; };
+
 // 📋 폴더 목록 짧은 캐시 — 같은 폴더를 연달아 묻는 화면용.
 //    ⚠️ NAS 목록은 네트워크 왕복이다. 백엔드를 고쳐 198개가 0.04초로 내려왔지만(2026-10-22,
 //    그전엔 7초), 그래도 그릴 때마다 부를 이유는 없다. 올리기·이식 직후엔 _dsInvalidateList 로 버린다.
@@ -156,7 +161,7 @@ window._dsInvalidateList = function (folder) {
 };
 
 window._dsFindPanelSpec = async function (pn, folder) {
-    folder = folder || 'PANEL';
+    folder = folder || PANEL_FOLDER;
     var key = _pnKey(pn);
     if (key.length < 4) return null;                  // 너무 짧으면 아무거나 걸린다
     var j = await window._dsList(folder);
@@ -176,7 +181,7 @@ window._dsFindPanelSpec = async function (pn, folder) {
  * 백엔드가 꺼져 있거나 폴더가 없으면 **빈 객체** — 부르는 쪽이 기본 링크로 떨어지게 한다.
  */
 window._dsFindPanelSpecs = async function (pns, folder) {
-    folder = folder || 'PANEL';
+    folder = folder || PANEL_FOLDER;
     var out = {};
     var list;
     // 비교표는 뷰 전환·언어 전환·이식 직후마다 다시 그려진다 — 그때마다 같은 목록을 받지 않게
@@ -207,7 +212,7 @@ window._dsOpenPanelSpec = async function (pn) {
             _toast(_t('"' + pn + '" 사양서를 NAS에서 찾지 못했습니다.', 'No spec found for "' + pn + '".'), 'error');
             return false;
         }
-        window._dsOpenInNewTab('PANEL', hit.name);
+        window._dsOpenInNewTab(PANEL_FOLDER, hit.name);
         return true;
     } catch (e) {
         _toast('❌ ' + e.message, 'error', 7000);
@@ -340,7 +345,12 @@ window._dsOpenPicker = async function (opts) {
         // 구분이 13개라 한 줄에 안 들어간다 — 줄바꿈시키고, 모달 안 다른 버튼과 같은 꼴로 보인다.
         + '    <span id="ds-pick-tabs" style="display:flex; gap:5px; flex-wrap:wrap; row-gap:5px; flex:1 1 100%;"></span>'
         + '    <input id="ds-pick-q" type="text" placeholder="' + _t('이름으로 검색', 'Search by name') + '" style="flex:1; min-width:140px; padding:5px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px;">'
-        + '    <button onclick="window._dsPickUpload()" style="padding:5px 11px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">⬆ ' + _t('올리기', 'Upload') + '</button>'
+        // ⬆ 는 지금 폴더로, ▾ 는 다른 페이지 폴더를 골라서 — 탭을 옮기지 않고 넣을 수 있게.
+        + '    <span style="position:relative; display:inline-flex;">'
+        + '      <button onclick="window._dsPickUpload()" title="' + _t('지금 보고 있는 폴더에 올립니다', 'Upload to the folder shown') + '" style="padding:5px 9px 5px 11px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-right:none; border-radius:6px 0 0 6px; font-size:11.5px; font-weight:bold; cursor:pointer;">⬆ ' + _t('올리기', 'Upload') + '</button>'
+        + '      <button onclick="window._dsToggleUploadMenu(event)" title="' + _t('다른 폴더에 올리기', 'Upload to another folder') + '" style="padding:5px 7px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:0 6px 6px 0; font-size:10px; cursor:pointer;">▾</button>'
+        + '      <div id="ds-pick-upmenu" style="display:none; position:absolute; top:100%; right:0; margin-top:3px; background:#fff; border:1px solid #d7dde2; border-radius:7px; box-shadow:0 6px 18px rgba(0,0,0,0.14); padding:4px; z-index:9570; max-height:280px; overflow:auto;"></div>'
+        + '    </span>'
         + '  </div>'
         + '  <div id="ds-pick-body" style="overflow:auto; flex:1; background:#fafafa;"></div>'
         + '  <div id="ds-pick-foot" style="padding:8px 16px; border-top:1px solid #eee; font-size:11.5px; color:#666;"></div>'
@@ -438,7 +448,12 @@ function _dsRenderList() {
            _dsPick.folder + ' — ' + files.length + (q ? ' of ' + (_dsPick.files || []).length : ''));
 }
 
-window._dsPickUpload = function () {
+/**
+ * 파일 올리기. `folder` 를 주면 거기로, 안 주면 지금 보고 있는 탭으로.
+ * ⬆ 버튼 옆 ▾ 로 **다른 페이지 폴더에 바로** 넣을 수 있다 — 탭을 옮겨 다니지 않아도 되게.
+ */
+window._dsPickUpload = function (folder) {
+    var dest = folder || _dsPick.folder;
     var inp = document.createElement('input');
     inp.type = 'file'; inp.multiple = true;
     inp.onchange = async function () {
@@ -446,20 +461,82 @@ window._dsPickUpload = function () {
         if (!fs.length) return;
         var ok = 0, dup = [], fail = [];
         for (var i = 0; i < fs.length; i++) {
-            try { await window._dsPut(_dsPick.folder, fs[i]); ok++; }
+            try { await window._dsPut(dest, fs[i]); ok++; }
             catch (e) {
                 if (/이미 있습니다|already/.test(e.message)) dup.push(fs[i].name);
                 else fail.push(fs[i].name + ': ' + e.message);
             }
         }
-        var msg = '✅ ' + ok + _t('개 올렸습니다', ' uploaded');
+        var msg = '✅ ' + dest + ' — ' + ok + _t('개 올렸습니다', ' uploaded');
         if (dup.length) msg += ' · ' + _t('같은 이름이라 건너뜀 ' + dup.length + '개', dup.length + ' skipped (name exists)');
         if (fail.length) msg += ' · ❌ ' + fail.length;
         _toast(msg, fail.length ? 'warning' : 'info', 6000);
         if (fail.length) console.warn('[문서저장소] 업로드 실패:', fail);
-        await _dsLoadFolder();
+        // 보고 있는 폴더에 넣었을 때만 목록을 다시 받는다(다른 폴더면 화면이 안 바뀐다).
+        if (dest === _dsPick.folder) await _dsLoadFolder();
     };
     inp.click();
+};
+
+/** ⬆ 옆 ▾ — 어느 폴더에 올릴지 고르는 목록 */
+window._dsToggleUploadMenu = function (ev) {
+    if (ev) ev.stopPropagation();
+    var m = document.getElementById('ds-pick-upmenu');
+    if (!m) return;
+    if (m.style.display === 'block') { m.style.display = 'none'; return; }
+    var here = _dsPick.folder;
+    // 지금 창의 탭 + 페이지 폴더 전부 — 창이 한 페이지 것만 보여줘도 다른 데 넣을 수 있게.
+    var items = (_dsPick.folders || []).slice();
+    (window._dsAllPageFolders ? window._dsAllPageFolders() : []).forEach(function (f) {
+        if (!items.some(function (x) { return x.f === f.f; })) items.push(f);
+    });
+    m.innerHTML = items.map(function (x) {
+        var on = x.f === here;
+        return '<div onclick="document.getElementById(\'ds-pick-upmenu\').style.display=\'none\'; window._dsPickUpload('
+            + _esc(JSON.stringify(x.f)) + ')" style="padding:6px 11px; cursor:pointer; white-space:nowrap; font-size:12px; border-radius:4px;'
+            + (on ? ' font-weight:bold; color:#1f6a3a;' : ' color:#444;') + '"'
+            + ' onmouseover="this.style.background=\'#f1f3f5\'" onmouseout="this.style.background=\'transparent\'">'
+            + _esc(x.label) + (on ? ' ✓' : '') + '</div>';
+    }).join('');
+    m.style.display = 'block';
+    if (!window._dsUpMenuBound) {
+        window._dsUpMenuBound = true;
+        document.addEventListener('click', function () {
+            var mm = document.getElementById('ds-pick-upmenu');
+            if (mm) mm.style.display = 'none';
+        });
+    }
+};
+
+/** 페이지별 자료실 폴더 전부 — 올리기 목록용(js/42 스펙 + js/53 카탈로그) */
+window._dsAllPageFolders = function () {
+    var out = [], seen = {};
+    var add = function (f, label) {
+        if (!f || seen[f]) return;
+        seen[f] = true;
+        out.push({ f: f, label: label || f });
+    };
+    (window.PAGE_EXCEL_SPECS || []).forEach(function (sp) {
+        var f = sp.nasFolder;
+        if (typeof f === 'function') { try { f = f(); } catch (e) { f = null; } }
+        if (f) add(f);
+    });
+    (window.PAGE_NAS_FOLDERS || []).forEach(function (p) { add(p.folder); });
+    return out;
+};
+
+/**
+ * 📁 자료실로 열기 — 고르면 **새 창에서 연다**(페이지로 불러오지 않는다).
+ * 되돌려 넣을 곳이 없는 페이지(캘린더·주간보고·알람)가 쓴다.
+ */
+window._dsOpenBrowser = function (folder, opts) {
+    opts = opts || {};
+    window._dsOpenPicker({
+        folder: folder,
+        folders: opts.folders || null,
+        title: opts.title || _t('NAS 자료실', 'NAS files'),
+        onPick: function (f, name) { window._dsOpenInNewTab(f, name); }
+    });
 };
 
 // ── 🔗 Customer SPEC 불러오기와 연결 ──────────────────────────────────

@@ -192,6 +192,37 @@ PARTS는 js/42의 공용 `ai` 블록(평평한 행 표)을 **쓰지 않는다** 
   로 내려줌 → 메일 프로그램이 연다). `MAIL` 은 `/doc/get` 화이트리스트에 **넣지 않았다** — 넣으면
   모든 고르기 창에 `MAIL` 탭이 생긴다. 메일은 제 라우트를 쓴다.
 
+### 📁 페이지마다 제 자료실 (2026-10-22)
+
+사람이 NAS 루트에 **페이지 이름으로** 폴더를 만들어 뒀다. 페이지의 `📁 NAS` 는 그 폴더를 먼저 연다.
+
+| 페이지 | 폴더 | 어디서 정하나 |
+|---|---|---|
+| Summary | `SUMMARY` | `PAGE_EXCEL_SPECS.nasFolder`(js/42) |
+| Customer SPEC | `CUSTOMER` | 〃 |
+| M.C Table | `MC` | 〃 |
+| PARTS | `PARTS/<구분>` | `ELEC_CATEGORY_META`(js/23) |
+| Address Book | `ADDRESS` | js/42 |
+| Gantt | `GANTT` | js/42 |
+| 공지 | `ALARM&NOTICE` | js/42 |
+| 알람 · 캘린더 · 주간보고 | `ALARM&NOTICE` · `CALENDER` · `REPORT` | `PAGE_NAS_FOLDERS`(js/53) |
+
+- 엑셀 왕복이 있는 페이지는 js/42 가 버튼을 단다(고르면 **그 페이지로 불러온다**).
+  되돌려 넣을 곳이 없는 파생 뷰(알람·캘린더·주간보고)는 js/53 이 **열기·올리기만 하는 탐색기**로 연다
+  (`_dsOpenBrowser`). 같은 탭에 js/42 가 이미 달았으면 js/53 은 **안 단다** — 버튼이 두 개가 된다.
+- ⚠️ 폴더 철자는 **NAS에 있는 그대로**다. `CALENDER` 는 오타처럼 보이지만 사람이 그렇게 만든 폴더라
+  바꾸면 못 찾는다. `ALARM&NOTICE` 의 `&` 는 URL 에서 반드시 인코딩(`encodeURIComponent`).
+- 올리기는 `⬆ 올리기 ▾` — ⬆ 는 보고 있는 폴더로, ▾ 는 **다른 페이지 폴더**를 골라서 넣는다
+  (`_dsAllPageFolders` 가 js/42 스펙 + js/53 카탈로그를 합쳐 목록을 만든다).
+- BOM 탭은 폴더를 안 만들었다 — SAP 조회 화면이라 둘 문서가 없다. 그래서 버튼도 안 단다.
+
+#### ⚠️ PANEL 은 `PARTS/PANEL` 로 옮겨졌다
+
+2026-10-22에 사람이 루트 `PANEL\`(데이터시트 198개 + 비교표 엑셀)을 `PARTS\PANEL\` 안으로 옮겼다.
+경로를 보는 곳이 **넷**이다 — 하나만 고치면 조용히 0건이 된다:
+`ELEC_CATEGORY_META['PANEL'].nasFull`(js/23) · `PANEL_FOLDER`(js/48, `_dsPanelFolder()` 로 노출) ·
+비교표 머리글 링크(js/22d) · `PP_FOLDER`(js/49, Panel Comparison Table).
+
 ### 이 영역을 고칠 때 주의
 
 - `days=0`을 "지금 다 비우기"로 기대하지 말 것 — **NAS 시계가 PC보다 약 1초 앞서서**

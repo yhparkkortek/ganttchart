@@ -4420,7 +4420,8 @@ BACKSLASH            = chr(92)         # 경로 정규화용 — 리터럴 안 �
 #   왜: 폴더 목록은 PC마다 각자 저장되는데(docstore_config.json, .gitignore), 앱이 새 폴더를
 #   쓰거나 이름을 바꾸면 팀원 PC에서만 "허용되지 않은 폴더"가 난다(ELEC→PARTS가 그 경우).
 #   화이트리스트의 목적은 **경로 탈출 차단**이고, 앱이 정한 이름은 root 아래라 그 목적과 무관하다.
-DOCSTORE_APP_FOLDERS = ['CUSTOMER', 'PARTS', 'MC', 'PANEL']
+DOCSTORE_APP_FOLDERS = ['SUMMARY', 'CUSTOMER', 'MC', 'PARTS', 'ADDRESS',
+                        'ALARM&NOTICE', 'CALENDER', 'GANTT', 'REPORT']
 
 
 def _docstore_load():
