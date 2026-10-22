@@ -601,6 +601,12 @@
           //    '표지'가 있으면 SAP 쪽 기능이다. 코드(04h)에도 같은 판정이 있었지만, 데이터로도
           //    박아 둬야 04h:8561의 "그룹웨어가 매칭되면 양보" 분기가 표지 요청을 안 가져간다.
           notKw: ['표지'],
+          // 🧭 [2026-10-22] kw 만으로 결정론 실행에 들어가면 안 된다 — kw 에 '기안 작성'·'전자결재'
+          //    같은 **일반적인 말**이 있어서 어떤 기안 요청이든 이 양식(원자재 승인 결과서)으로 샌다.
+          //    실제로 "502573 제품코드 등록기안 작성해줘"가 승인원으로 만들어졌다(문서 220176).
+          //    strongKw = **이 양식을 특정하는 말**. 이게 있을 때만 04h 가 결정론으로 처리하고,
+          //    없으면 도구 루프(js/40·41)로 넘겨 AI 가 어느 기안인지 고르게 한다.
+          strongKw: ['승인원', '원자재', '승인 결과서'],
           needs: '자재번호', ex: '102202 원자재 승인원 기안 작성해줘' },
         // 🗓 일정 조회 — ⚠️ 이 kw는 지금 **소비처가 없다.** 04h에 일정 블록이 없어서 일정
         //    질문은 도구 루프(js/40 `gw_calendar`)로 간다. 거기가 기간 인자까지 다루므로 그게
@@ -781,6 +787,16 @@
         var hit = function (k) { return window._qaKwSeqHit(text, k); };
         if ((cap.notKw || []).some(hit)) return false;   // notKw도 같은 규칙(걸리면 더 안전한 쪽)
         return cap.kw.some(hit);
+    };
+
+    // 그 기능을 **특정하는** 말이 있는가 — 결정론으로 바로 실행해도 되는지의 판단 기준.
+    // strongKw 를 안 적은 기능은 기존대로 kw 만으로 판정한다(동작 안 바뀜).
+    window._gwCapStrongHit = function (text, capId) {
+        var cap = (window.GW_CAPABILITIES || []).find(function (c) { return c.id === capId; });
+        if (!cap) return false;
+        if (!cap.strongKw || !cap.strongKw.length) return window._gwCapKwHit(text, capId);
+        if ((cap.notKw || []).some(function (k) { return window._qaKwSeqHit(text, k); })) return false;
+        return cap.strongKw.some(function (k) { return window._qaKwSeqHit(text, k); });
     };
 
     window.APP_CAPABILITIES = window.APP_CAPABILITIES || [

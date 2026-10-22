@@ -5276,7 +5276,65 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
-        if (_gwDraftHit && _gwDraftMat) {
+        // 🧭 [2026-10-22] kw 가 걸렸다고 바로 실행하지 않는다. kw 에 '기안 작성'·'전자결재' 같은
+        //    **일반적인 말**이 들어 있어서, 어떤 기안 요청이든 이 양식(원자재 승인 결과서)으로 샜다
+        //    — "502573 제품코드 등록기안 작성해줘"가 승인원으로 만들어진 사고(문서 220176).
+        //    이 양식을 **특정하는 말**(strongKw: 승인원·원자재·승인 결과서)이 있을 때만 결정론으로 간다.
+        //    ⚠️ 어휘는 데이터(js/32)에 있다 — 여기에 정규식으로 박지 말 것.
+        const _gwDraftStrong = window._gwCapStrongHit
+            ? window._gwCapStrongHit(question, 'gw_approval_draft') : _gwDraftHit;
+
+        // 📝 기존 기안을 **틀로** 삼아 지금 프로젝트 값으로 작성 — js/47 이 칸마다 출처를 보여주고
+        //    사람이 승인해야 임시저장한다. 확인 버튼이 보내는 고정 형식이라 AI를 거칠 이유가 없다.
+        //    ⚠️ 이 블록은 아래 되묻기보다 **위**에 있어야 한다 — 아래로 가면 버튼이 되묻기를 다시
+        //       띄워 무한 반복된다(실제로 그럴 뻔했다).
+        if (/^기안틀작성\s+\S+/.test(question.trim())) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            const _tplNo = question.trim().replace(/^기안틀작성\s+/, '').trim();
+            if (!window.apvComposeFrom) {
+                window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('기안 작성 기능을 불러오지 못했습니다(js/47).', 'Compose feature not loaded (js/47).') });
+            } else {
+                window._ganttQaHistory.push({ role: 'ai',
+                    text: '📝 ' + window._t(_tplNo + ' 을 틀로 삼아 확인 화면을 엽니다 — 칸마다 값이 어디서 왔는지 보고 [이대로 임시저장]을 눌러주세요.',
+                                            'Opening the review screen based on ' + _tplNo + '.') });
+                try { window.apvComposeFrom(_tplNo); } catch (e) { /* 실패는 그 함수가 토스트로 알린다 */ }
+            }
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 기안 요청인데 **어느 양식인지 말이 없다** → 단정하지 말고 되묻는다.
+        // ⚠️ 그냥 흘려보내면 아래 도구 루프는 쓰기를 거부하므로 **아무 일도 안 일어난 채** 끝난다
+        //    — 사용자 눈엔 무시당한 것으로 보인다. 그래서 할 수 있는 선택지를 보여준다.
+        if (_gwDraftHit && !_gwDraftStrong && !_gwDraftGo) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            // 문서번호(RD3-2610-050 꼴)가 이미 있으면 그걸 틀로 쓰면 된다 — 바로 제안한다.
+            const _docNo = (question.match(/\b[A-Z]{2,4}\d?-\d{4}-\d{3,4}\b/i) || [])[0];
+            const _opts = [];
+            if (_docNo) {
+                _opts.push({ label: '📝 ' + window._t('틀로 작성(현재 프로젝트 값)', 'Compose from it'),
+                             value: '기안틀작성 ' + _docNo });
+            }
+            if (_gwDraftMat) {
+                _opts.push({ label: '🏢 ' + window._t('원자재 승인원 기안', 'Material approval draft'),
+                             value: _gwDraftMat + ' 원자재 승인원 기안 작성해줘' });
+            }
+            const _nl = String.fromCharCode(10);
+            window._ganttQaShowConfirmButtons(
+                '❓ ' + window._t('어떤 기안인지 알려주세요.', 'Which draft do you mean?') + _nl + _nl
+                + (_docNo
+                    ? window._t('문서 ' + _docNo + ' 을 찾았습니다 — 그걸 틀로 쓸까요?' + _nl
+                                + '- 📝 **틀로 작성**: 양식만 가져오고 값은 **지금 열린 프로젝트**에서 채웁니다.' + _nl
+                                + '- 📄 **그대로 복사**: 원본 값을 그대로 옮깁니다.',
+                                'Found ' + _docNo + ' — use it as the template?')
+                    : window._t('기안은 양식마다 내용이 완전히 다릅니다. 둘 중 하나를 알려주세요 —' + _nl
+                                + '- **틀로 쓸 기존 문서번호** (예: RD3-2610-050). 그 문서를 읽어 지금 프로젝트 값으로 채웁니다.' + _nl
+                                + '- 또는 **원자재 승인원**이면 자재번호와 함께 "원자재 승인원 기안"이라고 말씀해주세요.',
+                                'Give a source document number, or say "원자재 승인원" with a material number.')),
+                _opts);
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        if (_gwDraftHit && _gwDraftMat && _gwDraftStrong) {
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 자재 정보를 가져오는 중...', 'Fetching material info from SAP...'), pending: true });
             window._renderGanttQaMessages();
