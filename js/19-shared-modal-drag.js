@@ -22,6 +22,7 @@ window._makeDraggable = function(modalId, handleId) {
         //    clamp 25회. 읽기/쓰기가 매 프레임 겹치니 끊긴다.
         //    → 끄는 게 아니라 **드래그 중에만 쉬게 한다**(놓으면 아래 endDrag 에서 한 번 보정).
         window._mreszDragging = true;
+        if (window._mreszSetCursor) window._mreszSetCursor('');   // 리사이즈 커서를 걷어낸다
         const rect = modal.getBoundingClientRect();
         origLeft = rect.left; origTop = rect.top;
         modalW = rect.width; modalH = rect.height;
@@ -49,14 +50,12 @@ window._makeDraggable = function(modalId, handleId) {
     const endDrag = function() {
         if (!isDragging) return;
         isDragging = false;
-        if (window._mreszDragging) {
-            window._mreszDragging = false;
-            // 끌고 간 자리가 화면 밖이면 여기서 **한 번만** 안으로 들인다(드래그 중엔 안 건드린다).
-            const _m = document.getElementById(modalId);
-            if (_m && window._clampModalToViewport) {
-                requestAnimationFrame(function() { window._clampModalToViewport(_m); });
-            }
-        }
+        // 🐛 [2026-10-22] 놓을 때 화면 안으로 되돌리던 것을 **뺀다.** 드래그에는 이미 자기 규칙이
+        //    있다 — DRAG_MARGIN(40px)만 남으면 일부러 화면 밖으로 내보낼 수 있다. 그런데
+        //    _clampModalToViewport 는 **전부** 안으로 들이므로, 가장자리까지 끌고 가 놓으면
+        //    손을 떼는 순간 모달이 **되튀었다**. 두 규칙이 싸우면 사람이 둔 자리가 안 지켜진다.
+        //    화면 안으로 들이는 일은 "창 크기가 바뀌어 모달이 안 보이게 될 때"만 하면 된다.
+        window._mreszDragging = false;
         const handle = document.getElementById(handleId);
         if (handle) handle.style.cursor = 'grab';
     };
@@ -274,6 +273,15 @@ window._makeResizable = function(boxId, _retry, handleId) {
     //    **이미 손가락 커서인 요소면 무조건 양보**한다 — 눌릴 수 있게 만들어 둔 것은 전부 걸러진다.
     const isInteractive = function(t) {
         if (!t || !t.closest) return false;
+        // 🐛🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "모달 동작이 부자연스럽다"]
+        //    헤더는 **끌어서 옮기는 면**이다. 그런데 헤더(높이 55px)의 위쪽 13px 이 리사이즈 띠와
+        //    겹쳐서, 헤더를 잡으면 **드래그와 리사이즈가 동시에 시작**됐다(실측: 상단+3px·+10px 에서
+        //    _mreszActive=true). 둘이 매 프레임 같은 left/top/height 를 서로 다르게 쓰니 어색할 수밖에.
+        //    → 모달 **안쪽**에서는 헤더가 이긴다. 위쪽 변 리사이즈는 모달 **바깥** 절반에서 하면 된다
+        //      (바깥엔 헤더가 없다). 버튼에 양보하는 것과 같은 원리다.
+        const _hid = window._mreszHeaderIds && window._mreszHeaderIds[boxId];
+        const _h = _hid && document.getElementById(_hid);
+        if (_h && _h.contains(t)) return true;
         if (t.closest('button, input, select, textarea, a, label, summary, [onclick], [role="button"]')) return true;
         try {
             // 자기 자신부터 박스까지 올라가며 pointer 커서가 있으면 클릭 대상으로 본다
@@ -287,7 +295,11 @@ window._makeResizable = function(boxId, _retry, handleId) {
     };
 
     box.addEventListener('mousemove', function(e) {
-        if (rs) return;
+        // 🐛 [2026-10-22] `rs`(리사이즈 중)만 보고 **드래그 중은 안 봤다.** 헤더를 잡고 끌면
+        //    포인터가 모달 위쪽 13px(=리사이즈 띠) 안에 있기 십상인데, 그때마다 여기서
+        //    `ns-resize` 를 `!important` 로 덮어써서 드래그 커서(grabbing)와 **깜빡였다.**
+        //    모달이 포인터 밑에서 움직이니 매 프레임 바뀐다 — 끌 때 느껴지던 어색함의 정체.
+        if (rs || window._mreszDragging) return;
         // ⚡ [2026-10-22] 순서를 바꿨다 — 예전엔 isInteractive 를 **먼저** 불러서, 가장자리 근처가
         //    아닌 한복판에서도 마우스를 움직일 때마다 조상 사슬을 타고 getComputedStyle 을 돌렸다.
         //    먼저 dirAt(사각형 비교 한 번)으로 거르고, 가장자리일 때만 비싼 검사를 한다.
