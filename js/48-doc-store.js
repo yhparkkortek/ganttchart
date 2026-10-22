@@ -52,6 +52,14 @@ async function _api(path, opts) {
     }
     var j = null;
     try { j = await res.json(); } catch (e) { /* 바이너리 응답 */ }
+    // 🐛 [2026-10-22, 사용자 제보] 화면에 "HTTP 404"만 떠서 뭘 해야 할지 알 수 없었다.
+    //    /doc/* 에서 404는 거의 항상 **백엔드가 옛 버전**이라는 뜻이다(연결은 됐는데 라우트가 없음).
+    //    연결 실패(위 catch)와는 원인도 조치도 다르므로 갈라서 알려준다.
+    if (res.status === 404 && !(j && j.error)) {
+        throw new Error(_t(
+            '백엔드에 이 기능이 없습니다 — 실행 중인 백엔드가 옛 버전입니다. 백엔드를 재시작해주세요.',
+            'The backend does not have this endpoint — it is running an older version. Please restart it.'));
+    }
     if (!res.ok || (j && j.ok === false)) throw new Error((j && j.error) || ('HTTP ' + res.status));
     return j;
 }
@@ -260,6 +268,7 @@ var _dsPick = null;
 
 window._dsOpenPicker = async function (opts) {
     _dsPick = opts || {};
+    window._dsPickLast = _dsPick;   // ↻ 다시 시도에서 같은 조건(onPick 포함)으로 재진입
     var m = document.getElementById('ds-pick-modal');
     if (!m) {
         m = document.createElement('div');
@@ -303,7 +312,13 @@ window._dsOpenPicker = async function (opts) {
 
     var cfg;
     try { cfg = await window._dsConfig(); }
-    catch (e) { document.getElementById('ds-pick-body').innerHTML = _dsErrHtml(e.message); return; }
+    catch (e) {
+        // 백엔드를 켜거나 재시작한 뒤 창을 닫았다 다시 열어야만 했다 — 그 자리에서 다시 시도하게 한다
+        document.getElementById('ds-pick-body').innerHTML = _dsErrHtml(e.message,
+            '<button onclick="window._dsOpenPicker(window._dsPickLast)" style="margin-top:10px; padding:5px 13px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; cursor:pointer;">↻ '
+            + _t('다시 시도', 'Retry') + '</button>');
+        return;
+    }
     if (!cfg.configured) {
         document.getElementById('ds-pick-body').innerHTML = _dsErrHtml(
             _t('문서 저장소가 아직 설정되지 않았습니다.', 'The document store is not configured yet.'),
