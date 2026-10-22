@@ -223,6 +223,26 @@ PARTS는 js/42의 공용 `ai` 블록(평평한 행 표)을 **쓰지 않는다** 
 `ELEC_CATEGORY_META['PANEL'].nasFull`(js/23) · `PANEL_FOLDER`(js/48, `_dsPanelFolder()` 로 노출) ·
 비교표 머리글 링크(js/22d) · `PP_FOLDER`(js/49, Panel Comparison Table).
 
+#### 모달이 NAS 원본을 직접 읽는다 (2026-10-22)
+
+`📧 원문 보기` 가 들고 있는 건 수신 때 잘라 둔 **2000자 요약**이고 첨부는 **이름뿐**이다.
+보관된 `.eml` 이 있으면 모달을 열 때 거기서 **전문과 첨부 목록**을 읽어 채운다.
+
+- `GET /doc/mail-parse?fileName=` → 제목·발신·수신·본문 전문 + 첨부 목록(`idx`·이름·크기·타입·`inline`).
+  본문 추출은 **수신 경로와 같은 함수**(`extract_body`) — 표 칸 구분(│)까지 똑같이 나온다.
+- `GET /doc/mail-attach?fileName=&idx=` → 그 **첨부 하나만**. PDF·그림·텍스트는 브라우저에서 바로
+  보이게(inline), 나머지는 받아서 연다(.xlsx 를 inline 으로 줘 봐야 브라우저가 못 연다).
+  ⚠️ 번호는 `_mail_attachment_parts()` 의 순서다 — 목록 주는 쪽과 꺼내 주는 쪽이 **같은 함수**를
+  써야 안 어긋난다.
+- `POST /doc/mail-launch` → **백엔드가 `os.startfile` 로 NAS 원본을 연다**(아웃룩).
+  `/doc/mail-open` 은 파일을 받아서 넘기므로 다운로드 폴더에 사본이 쌓인다 — 이 라우트는 안 생긴다.
+  ⚠️ 경로를 요청에서 **안 받는다**. `fileName` 으로 `_mail_find_file` 이 찾은 MAIL 폴더 안 `.eml` 만
+  연다 — 임의 경로를 받으면 이 라우트가 곧 '아무 프로그램이나 실행'이 된다. Windows 전용.
+- 🖼 **서명 로고·붙여넣은 그림을 갈라 놓는다**(`inline`: Content-Disposition inline + Content-ID).
+  실측에서 한 메일에 23개가 전부 그것이었다 — 그대로 늘어놓으면 받아야 할 파일이 묻힌다.
+  진짜 첨부만 보이고, 그림은 `🖼 본문 그림 N개 ▾` 로 접어 둔다.
+- 응답이 늦게 올 수 있다 — `_mailRawOpenFile` 로 **지금 열려 있는 메일**인지 확인하고 덮어쓴다.
+
 ### 이 영역을 고칠 때 주의
 
 - `days=0`을 "지금 다 비우기"로 기대하지 말 것 — **NAS 시계가 PC보다 약 1초 앞서서**

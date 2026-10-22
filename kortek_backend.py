@@ -35,6 +35,7 @@
 
 import sys
 import os, json, re, poplib, imaplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess, shutil
+import io          # 첨부를 메모리에서 바로 내려줄 때(send_file + BytesIO)
 
 # 💡 [2026-09-14] sap_bridge_32.py에서 겪은 것과 같은 부류의 문제(콘솔이 실제 콘솔이 아니라
 #    파이프/다른 인코딩으로 연결되면 Windows에서 stdout이 cp949로 잡혀 한글 print()가
@@ -4914,6 +4915,133 @@ def doc_mail_open():
         return jsonify({'ok': False, 'error': '보관된 원본 .eml을 찾지 못했습니다.'}), 404
     return send_file(os.path.join(_docstore_mail_root(cfg), d, n),
                      mimetype='message/rfc822', as_attachment=True, download_name=n)
+
+
+def _mail_attachment_parts(msg):
+    """첨부로 볼 파트만 **순서대로**. 인덱스가 곧 이 순서다 — 목록을 주는 쪽(/doc/mail-parse)과
+    하나를 꺼내 주는 쪽(/doc/mail-attach)이 **같은 함수**를 써야 번호가 안 어긋난다."""
+    out = []
+    for part in msg.walk():
+        if part.get_content_maintype() == 'multipart':
+            continue
+        cd = str(part.get('Content-Disposition', '') or '').lower()
+        if not part.get_filename() and 'attachment' not in cd:
+            continue                      # 본문 파트
+        out.append(part)
+    return out
+
+
+def _mail_open_eml(cfg, file_name):
+    """보관된 .eml → (msg, 폴더, 파일명, 오류응답). 오류면 msg 가 None."""
+    d, n = _mail_find_file(cfg, file_name)
+    if not n:
+        return None, None, None, (jsonify({'ok': False, 'error': '보관된 원본 .eml을 찾지 못했습니다.'}), 404)
+    try:
+        with open(os.path.join(_docstore_mail_root(cfg), d, n), 'rb') as f:
+            return email.message_from_bytes(f.read()), d, n, None
+    except Exception as e:
+        return None, None, None, (jsonify({'ok': False, 'error': f'원본을 읽지 못했습니다: {e}'}), 500)
+
+
+MAIL_BODY_MAX = 300000      # 본문이 아무리 길어도 이만큼만 — 화면이 멈추지 않게
+
+
+@app.route('/doc/mail-parse', methods=['GET'])
+def doc_mail_parse():
+    """보관된 .eml 을 풀어 **전문 본문 + 첨부 목록**을 준다.
+
+    앱 모달이 들고 있는 건 수신 때 잘라 둔 2000자 요약이고 첨부는 이름뿐이다.
+    여기서 NAS 원본을 그대로 읽어 주므로, PC에 .eml 사본을 만들 필요가 없다.
+    본문 추출은 수신 경로와 **같은 함수**(extract_body)를 쓴다 — 표 칸 구분(│)까지 똑같이 나온다.
+    """
+    cfg = _docstore_load()
+    msg, d, n, err = _mail_open_eml(cfg, request.args.get('fileName') or '')
+    if err:
+        return err
+    body = extract_body(msg) or ''
+    atts = []
+    for i, part in enumerate(_mail_attachment_parts(msg)):
+        try:
+            payload = part.get_payload(decode=True) or b''
+        except Exception:
+            payload = b''
+        cd = str(part.get('Content-Disposition', '') or '').lower()
+        atts.append({
+            'idx': i,
+            'name': decode_str(part.get_filename() or '') or ('attachment_%d' % (i + 1)),
+            'size': len(payload),
+            'ctype': part.get_content_type() or 'application/octet-stream',
+            # 본문에 박힌 그림(로고·서명)은 '진짜 첨부'와 구분해 준다 — 목록이 그걸로 덮인다
+            'inline': ('inline' in cd) and bool(part.get('Content-ID')),
+        })
+    return jsonify({'ok': True, 'project': d, 'name': n, 'staged': d == DOCSTORE_MAIL_STAGE,
+                    'subject': decode_str(msg.get('Subject', '')),
+                    'from': decode_str(msg.get('From', '')),
+                    'to': decode_str(msg.get('To', '')),
+                    'cc': decode_str(msg.get('Cc', '')),
+                    'date': decode_str(msg.get('Date', '')),
+                    'body': body[:MAIL_BODY_MAX],
+                    'truncated': len(body) > MAIL_BODY_MAX,
+                    'attachments': atts})
+
+
+@app.route('/doc/mail-attach', methods=['GET'])
+def doc_mail_attach():
+    """첨부 **하나만** NAS 의 .eml 에서 꺼내 돌려준다.
+
+    PDF·그림·텍스트는 브라우저에서 바로 보이게(inline), 나머지는 받아서 해당 프로그램으로 연다
+    (.xlsx 를 inline 으로 줘 봐야 브라우저가 못 연다).
+    """
+    cfg = _docstore_load()
+    msg, _d, _n, err = _mail_open_eml(cfg, request.args.get('fileName') or '')
+    if err:
+        return err
+    try:
+        idx = int(request.args.get('idx'))
+    except Exception:
+        return jsonify({'ok': False, 'error': 'idx가 필요합니다.'}), 400
+    parts = _mail_attachment_parts(msg)
+    if idx < 0 or idx >= len(parts):
+        return jsonify({'ok': False, 'error': f'첨부 번호가 범위를 벗어났습니다(0~{len(parts) - 1}).'}), 404
+    part = parts[idx]
+    try:
+        payload = part.get_payload(decode=True) or b''
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'첨부를 꺼내지 못했습니다: {e}'}), 500
+    ctype = part.get_content_type() or 'application/octet-stream'
+    name = decode_str(part.get_filename() or '') or ('attachment_%d' % (idx + 1))
+    inline = ctype.startswith('image/') or ctype in ('application/pdf', 'text/plain')
+    return send_file(io.BytesIO(payload), mimetype=ctype,
+                     as_attachment=not inline, download_name=_docstore_safe_name(name) or 'attachment')
+
+
+@app.route('/doc/mail-launch', methods=['POST'])
+def doc_mail_launch():
+    """NAS 에 있는 .eml 을 **그 자리에서** 기본 메일 프로그램(아웃룩)으로 연다.
+
+    왜 백엔드가 여는가: 브라우저는 로컬 프로그램을 띄울 수 없어서 `/doc/mail-open` 은 파일을
+    **받아서** Windows 에 넘긴다 — 그래서 다운로드 폴더에 사본이 하나씩 쌓인다.
+    이 백엔드는 그 PC 에서 돌고 NAS 를 직접 보므로 `os.startfile` 로 원본을 바로 열 수 있다.
+
+    ⚠️ 경로를 요청에서 받지 않는다. `fileName` 으로 `_mail_find_file` 이 찾은 **MAIL 폴더 안**
+       파일만 연다 — 임의 경로를 받으면 이 라우트가 곧 '아무 프로그램이나 실행'이 된다.
+    ⚠️ Windows 전용(os.startfile). 다른 OS 면 못 한다고 정직하게 답한다.
+    """
+    if not hasattr(os, 'startfile'):
+        return jsonify({'ok': False, 'error': '이 기능은 Windows에서만 됩니다.'}), 400
+    cfg = _docstore_load()
+    req = request.get_json(force=True, silent=True) or {}
+    d, n = _mail_find_file(cfg, str(req.get('fileName') or ''))
+    if not n:
+        return jsonify({'ok': False, 'error': '보관된 원본 .eml을 찾지 못했습니다.'}), 404
+    path = os.path.join(_docstore_mail_root(cfg), d, n)
+    if not os.path.isfile(path) or not n.lower().endswith('.eml'):
+        return jsonify({'ok': False, 'error': '열 수 있는 .eml이 아닙니다.'}), 400
+    try:
+        os.startfile(path)          # noqa: S606 — 위에서 MAIL 폴더 안 .eml 로 한정했다
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'열지 못했습니다: {e}'}), 500
+    return jsonify({'ok': True, 'project': d, 'name': n})
 
 
 @app.route('/doc/mail-list', methods=['GET'])

@@ -624,7 +624,25 @@ window._dsImportToPage = async function (pageId, folder) {
 window._dsMailFind = function (fileName) {
     return _api('/doc/mail-find?fileName=' + encodeURIComponent(fileName));
 };
-/** 그 .eml 을 받는 주소 — 새 창으로 열면 메일 프로그램이 첨부까지 열어 준다 */
+/** 보관된 .eml 을 풀어 전문 본문 + 첨부 목록을 받는다(PC에 사본을 안 만든다) */
+window._dsMailParse = function (fileName) {
+    return _api('/doc/mail-parse?fileName=' + encodeURIComponent(fileName));
+};
+/** 첨부 하나를 NAS 원본에서 바로 여는 주소 — PDF·그림은 브라우저에서 그냥 보인다 */
+window._dsMailAttachUrl = function (fileName, idx) {
+    return DS + '/doc/mail-attach?fileName=' + encodeURIComponent(fileName) + '&idx=' + encodeURIComponent(idx);
+};
+
+/** NAS 원본을 **그 자리에서** 아웃룩으로 — 백엔드가 연다(다운로드 사본이 안 생긴다) */
+window._dsMailLaunch = function (fileName) {
+    return _api('/doc/mail-launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: fileName })
+    });
+};
+
+/** 그 .eml 을 통째로 받는 주소 — 메일 프로그램으로 열고 싶을 때(PC에 사본이 생긴다) */
 window._dsMailOpenUrl = function (fileName) {
     return DS + '/doc/mail-open?fileName=' + encodeURIComponent(fileName);
 };
