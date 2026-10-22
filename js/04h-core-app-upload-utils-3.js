@@ -5288,16 +5288,20 @@ ${docsJson}`;
         //    사람이 승인해야 임시저장한다. 확인 버튼이 보내는 고정 형식이라 AI를 거칠 이유가 없다.
         //    ⚠️ 이 블록은 아래 되묻기보다 **위**에 있어야 한다 — 아래로 가면 버튼이 되묻기를 다시
         //       띄워 무한 반복된다(실제로 그럴 뻔했다).
-        if (/^기안틀작성\s+\S+/.test(question.trim())) {
+        const _tplM = question.trim().match(/^(기안틀작성|기안그대로복사)\s+(\S+)/);
+        if (_tplM) {
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
-            const _tplNo = question.trim().replace(/^기안틀작성\s+/, '').trim();
+            const _asIs = _tplM[1] === '기안그대로복사';
+            const _tplNo = _tplM[2];
             if (!window.apvComposeFrom) {
                 window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('기안 작성 기능을 불러오지 못했습니다(js/47).', 'Compose feature not loaded (js/47).') });
             } else {
                 window._ganttQaHistory.push({ role: 'ai',
-                    text: '📝 ' + window._t(_tplNo + ' 을 틀로 삼아 확인 화면을 엽니다 — 칸마다 값이 어디서 왔는지 보고 [이대로 임시저장]을 눌러주세요.',
-                                            'Opening the review screen based on ' + _tplNo + '.') });
-                try { window.apvComposeFrom(_tplNo); } catch (e) { /* 실패는 그 함수가 토스트로 알린다 */ }
+                    text: (_asIs ? '📄 ' : '📝 ')
+                        + window._t(_tplNo + (_asIs ? ' 의 값을 그대로 옮겨' : ' 을 틀로 삼아')
+                                    + ' 확인 화면을 엽니다 — 칸마다 값이 어디서 왔는지 보고 [이대로 임시저장]을 눌러주세요.',
+                                    'Opening the review screen for ' + _tplNo + '.') });
+                try { window.apvComposeFrom(_tplNo, { asIs: _asIs }); } catch (e) { /* 실패는 그 함수가 토스트로 알린다 */ }
             }
             window._renderGanttQaMessages(); input.focus(); return;
         }
@@ -5313,6 +5317,8 @@ ${docsJson}`;
             if (_docNo) {
                 _opts.push({ label: '📝 ' + window._t('틀로 작성(현재 프로젝트 값)', 'Compose from it'),
                              value: '기안틀작성 ' + _docNo });
+                _opts.push({ label: '📄 ' + window._t('그대로 복사', 'Copy as-is'),
+                             value: '기안그대로복사 ' + _docNo });
             }
             if (_gwDraftMat) {
                 _opts.push({ label: '🏢 ' + window._t('원자재 승인원 기안', 'Material approval draft'),

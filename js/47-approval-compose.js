@@ -157,8 +157,8 @@
 
     // ── 미리보기 (칸마다 출처를 보여준다) ───────────────────────────────
     window._apvPending = null;
-    var _apvOpen = function (docNum, src, form, rows) {
-        window._apvPending = { docNum: docNum, src: src, form: form, rows: rows };
+    var _apvOpen = function (docNum, src, form, rows, asIs) {
+        window._apvPending = { docNum: docNum, src: src, form: form, rows: rows, asIs: !!asIs };
         var ov = document.getElementById('apv-overlay');
         if (!ov) {
             ov = document.createElement('div');
@@ -202,7 +202,7 @@
         var p = window._apvPending; if (!p) return;
         var pm = window.projectMeta || {};
         document.getElementById('apv-title').textContent =
-            '📝 ' + _t('기안 작성 — ', 'Compose draft — ') + p.form
+            (p.asIs ? '📄 ' + _t('그대로 복사 — ', 'Copy as-is — ') : '📝 ' + _t('기안 작성 — ', 'Compose draft — ')) + p.form
             + _t(' / 참고 ', ' / from ') + p.docNum
             + _t(' / 프로젝트 ', ' / project ') + (pm.프로젝트명 || pm.고객모델명 || _t('(안 열림)', '(none)'));
 
