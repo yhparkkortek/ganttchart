@@ -405,9 +405,20 @@ window._dsPickUpload = function () {
 
 // ── 🔗 Customer SPEC 불러오기와 연결 ──────────────────────────────────
 //    js/42의 pageExcelImport(id, file)가 File을 받으므로 공유 파일을 그대로 넣으면 된다.
+//    💡 [2026-10-22] 페이지마다 자료가 모여 있는 폴더가 다르다 — M.C Table을 열었는데 고객 사양서
+//    폴더가 뜨면 매번 탭을 옮겨야 한다. 어느 페이지가 어느 폴더를 먼저 보여줄지는 **데이터**다
+//    (PAGE_EXCEL_SPECS 의 nasFolder). 없으면 CUSTOMER로 떨어지고, 창에서 탭으로 옮기면 된다.
+window._dsPageFolder = function (pageId) {
+    try {
+        var sp = (window.PAGE_EXCEL_SPECS || []).filter(function (s) { return s.id === pageId; })[0];
+        if (sp && sp.nasFolder) return sp.nasFolder;
+    } catch (e) { /* 설정이 없으면 기본값 */ }
+    return 'CUSTOMER';
+};
+
 window._dsImportToPage = async function (pageId, folder) {
     window._dsOpenPicker({
-        folder: folder || 'CUSTOMER',
+        folder: folder || window._dsPageFolder(pageId),
         title: _t('NAS에서 불러오기', 'Import from the NAS'),
         onPick: async function (f, name) {
             try {

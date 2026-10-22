@@ -847,6 +847,7 @@
         },
         {
             id: 'briefspec', tab: 'tab-briefspec', label: 'Brief SPEC',
+            nasFolder: 'CUSTOMER',
             repaint: ['populateTabData'],
             blocks: [{ sheet: 'Brief SPEC', kind: 'rows',
                 get: function () { return _td().briefSpec || []; },
@@ -900,6 +901,8 @@
         },
         {
             id: 'mctable', tab: 'tab-mctable', label: 'M.C Table',
+            // 📁 [2026-10-22] NAS에서 불러올 때 먼저 열 폴더(js/48 _dsPageFolder). 데이터로 둔다.
+            nasFolder: 'MC',
             repaint: ['populateTabData'],
             // 리비전별로 보관되므로 **지금 보고 있는 리비전**만 왕복한다.
             blocks: [{ sheet: 'M.C Table',
