@@ -151,6 +151,7 @@ window._makeResizable = function(boxId, _retry) {
 
     // 기존 CSS resize는 끈다 — 두 방식이 겹치면 모서리에서 네이티브가 먼저 먹어 서로 싸운다
     box.style.resize = 'none';
+    if (window._installModalResizeHost) window._installModalResizeHost();
 
     // 🐛 [2026-10-21 버그수정, 사용자 제보 "버튼이 안 눌린다"]
     //    처음엔 8방향 손잡이를 <div>로 박스 안쪽 가장자리에 깔았다. 그 투명한 띠가 바로 아래에 있는
@@ -158,7 +159,21 @@ window._makeResizable = function(boxId, _retry) {
     //    → 덮개를 아예 두지 않는다. 박스 위에서 마우스가 "가장자리 몇 px 안"에 있는지를 그때그때
     //    계산해서 커서를 바꾸고, 그 상태에서 누를 때만 리사이즈로 가로챈다. 화면을 가리는 요소가
     //    없으므로 어떤 버튼도 막힐 수 없다. 게다가 버튼/입력 위에서는 아예 가로채지 않는다.
-    const EDGE = 6;                       // 가장자리로 인식할 두께(px)
+    // 🐛🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "상하좌우 늘리고 줄이기가 안 된다"]
+    //    띠를 박스 **안쪽**에만 두면, 내용이 넘쳐 스크롤바가 생긴 모달에서는 오른쪽·아래
+    //    6px이 통째로 **스크롤바에 덮인다.** 크롬(윈도우)의 고전 스크롤바는 15px 자리를
+    //    실제로 차지하고, 그 위를 누르면 **페이지에 mousedown 이 오지 않는다** — 그래서
+    //    리사이즈가 영영 시작되지 않는다(개발용 브라우저는 오버레이 스크롤바라 재현이 안 돼
+    //    "되는데요"가 나왔다. 실측 환경 차이를 먼저 의심할 것).
+    //    → 잡는 띠를 **박스 바깥 링**으로 옮긴다. 바깥엔 스크롤바도 버튼도 없으므로 아무것도
+    //      가리지 않고, 예전의 "버튼이 안 눌린다" 사고도 구조적으로 재발할 수 없다.
+    //      안쪽 띠는 아주 얇게(EDGE_IN) 남겨 둔다 — 화면 가장자리에 붙은 모달은 바깥 링이
+    //      화면 밖이라 잡을 수 없기 때문. 안쪽 띠에서는 예전처럼 isInteractive 가 양보한다.
+    //    ⚠️ 바깥 링은 박스 밖이라 **박스에 건 리스너로는 안 잡힌다** — 그래서 아래 전역
+    //      핸들러(_installModalResizeHost)가 document 에서 처리한다.
+    const EDGE_OUT = 8;                   // 박스 바깥으로 잡히는 두께(px)
+    const EDGE_IN  = 5;                   // 박스 안쪽으로 잡히는 두께(px)
+    const EDGE = 6;                       // (호환) 예전 상수 — dirAt 은 위 두 값을 쓴다
     const minW = parseInt(box.style.minWidth, 10)  || 280;
     const minH = parseInt(box.style.minHeight, 10) || 160;
     let hoverDir = '';
@@ -166,14 +181,35 @@ window._makeResizable = function(boxId, _retry) {
 
     const dirAt = function(x, y) {
         const r = box.getBoundingClientRect();
-        if (x < r.left - EDGE || x > r.right + EDGE || y < r.top - EDGE || y > r.bottom + EDGE) return '';
+        if (!r.width || !r.height) return '';
+        // 바깥 링 + 얇은 안쪽 띠. 박스 한가운데는 당연히 제외된다.
+        if (x < r.left - EDGE_OUT || x > r.right + EDGE_OUT ||
+            y < r.top  - EDGE_OUT || y > r.bottom + EDGE_OUT) return '';
+        const inX = x > r.left + EDGE_IN && x < r.right  - EDGE_IN;
+        const inY = y > r.top  + EDGE_IN && y < r.bottom - EDGE_IN;
+        if (inX && inY) return '';        // 내용 한복판 — 손대지 않는다
         let d = '';
-        if (y - r.top    <= EDGE) d += 'n';
-        if (r.bottom - y <= EDGE) d += 's';
-        if (x - r.left   <= EDGE) d += 'w';
-        if (r.right - x  <= EDGE) d += 'e';
+        if (y >= r.top    - EDGE_OUT && y <= r.top    + EDGE_IN) d += 'n';
+        if (y >= r.bottom - EDGE_IN  && y <= r.bottom + EDGE_OUT) d += 's';
+        if (x >= r.left   - EDGE_OUT && x <= r.left   + EDGE_IN) d += 'w';
+        if (x >= r.right  - EDGE_IN  && x <= r.right  + EDGE_OUT) d += 'e';
         return d;
     };
+    /** 그 점이 박스 **바깥**인가 — 바깥이면 버튼/스크롤바가 있을 수 없어 양보할 필요가 없다. */
+    const isOutside = function(x, y) {
+        const r = box.getBoundingClientRect();
+        return x < r.left || x > r.right || y < r.top || y > r.bottom;
+    };
+    box._mreszProbe = function(x, y) {    // 전역 핸들러가 이 박스에게 묻는 창구
+        if (box.offsetWidth === 0 && box.offsetHeight === 0) return '';
+        const cs = window.getComputedStyle(box);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return '';
+        return dirAt(x, y);
+    };
+    box._mreszStart = function(dir, x, y) { startResize(dir, x, y); };
+    box._mreszOutside = isOutside;
+    box._mreszInteractive = function(t) { return isInteractive(t); };
+    box._mreszCursorFor = function(d) { return cursorFor(d); };
     const cursorFor = function(d) {
         if (d === 'n' || d === 's') return 'ns-resize';
         if (d === 'e' || d === 'w') return 'ew-resize';
@@ -222,6 +258,9 @@ window._makeResizable = function(boxId, _retry) {
         box.style.maxWidth  = 'none';
         rs = { dir: dir, x: x, y: y, left: r.left, top: r.top, w: r.width, h: r.height };
         document.body.style.userSelect = 'none';
+        // 바깥 링 핸들러가 끼어들지 않게 — 끄는 쪽은 endResize 하나뿐이다
+        window._mreszActive = true;
+        document.body.style.cursor = cursorFor(dir) || '';
     };
     const moveResize = function(x, y) {
         if (!rs) return;
@@ -250,6 +289,8 @@ window._makeResizable = function(boxId, _retry) {
         if (!rs) return;
         rs = null;
         document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        window._mreszActive = false;
         box.style.cursor = '';
         hoverDir = '';
     };
@@ -293,6 +334,78 @@ window._makeResizable = function(boxId, _retry) {
         }
     } catch (e) { /* 구형 브라우저 — 창 크기 변경 시 보정은 아래에서 계속 동작 */ }
 };
+
+// ══════════════════════════════════════════════════════════════════════
+// 💡 [2026-10-22] 모달 **바깥 링**을 잡는 전역 핸들러.
+//    박스에 건 리스너는 박스 **안**에서만 울린다 — 바깥 링은 document 에서 받아야 한다.
+//    안쪽 띠는 기존 박스 리스너가 그대로 처리하므로, 여기서는 **바깥일 때만** 끼어든다
+//    (두 경로가 같은 점을 두고 다투지 않게 하는 선이 `_mreszOutside`다).
+// ══════════════════════════════════════════════════════════════════════
+window._installModalResizeHost = function() {
+    if (window._mreszHostOn) return;
+    window._mreszHostOn = true;
+
+    /** 그 점에서 잡을 수 있는 박스를 고른다 — 겹쳐 있으면 **위에 있는 것**(z-index). */
+    const pick = function(x, y) {
+        let best = null, bestZ = -Infinity;
+        (window._resizableBoxIds || []).forEach(function(id) {
+            const el = document.getElementById(id);
+            if (!el || typeof el._mreszProbe !== 'function') return;
+            if (!el._mreszOutside(x, y)) return;          // 안쪽은 박스 리스너 담당
+            const d = el._mreszProbe(x, y);
+            if (!d) return;
+            const z = parseInt(window.getComputedStyle(el).zIndex, 10) || 0;
+            if (z >= bestZ) { bestZ = z; best = { el: el, dir: d }; }
+        });
+        return best;
+    };
+
+    let hoverEl = null;
+    document.addEventListener('mousemove', function(e) {
+        if (window._mreszActive) return;                 // 리사이즈 중엔 박스 핸들러가 몰고 간다
+        const hit = pick(e.clientX, e.clientY);
+        if (!hit) {
+            if (hoverEl) { document.body.style.cursor = ''; hoverEl = null; }
+            return;
+        }
+        hoverEl = hit.el;
+        document.body.style.cursor = hit.el._mreszCursorFor(hit.dir) || '';
+    });
+
+    document.addEventListener('mousedown', function(e) {
+        const hit = pick(e.clientX, e.clientY);
+        if (!hit) return;
+        hit.el._mreszStart(hit.dir, e.clientX, e.clientY);
+        e.preventDefault();                               // 바깥 링엔 누를 것이 없다
+    }, true);                                             // capture — 뒤에 깔린 것이 먼저 먹지 않게
+
+    document.addEventListener('mouseup', function() {
+        if (hoverEl) { document.body.style.cursor = ''; hoverEl = null; }
+    });
+
+    document.addEventListener('touchstart', function(e) {
+        if (!e.touches.length) return;
+        const t = e.touches[0];
+        const hit = pick(t.clientX, t.clientY);
+        if (hit) hit.el._mreszStart(hit.dir, t.clientX, t.clientY);
+    }, { passive: true, capture: true });
+};
+
+// 파일이 다 읽히는 즉시 한 번 — _makeResizable 안의 호출은 그보다 먼저 일어날 수 있다.
+window._installModalResizeHost();
+
+// 💡 [2026-10-22] `_makeDraggable`을 거치지 않아 크기조절이 안 걸려 있던 모달들.
+//    **데이터로 적는다**(코드에 if 를 늘리지 않는다 — CLAUDE.md). 요소가 없으면 조용히 건너뛴다.
+window.RESIZABLE_EXTRA_MODALS = window.RESIZABLE_EXTRA_MODALS || [
+    'drive-file-modal',     // 구글 드라이브 프로젝트 열기
+    'inbox-dist-modal',     // 보관함 → 프로젝트 배분
+    'cal-sync-help-modal'   // 캘린더 동기화 도움말
+];
+document.addEventListener('DOMContentLoaded', function() {
+    (window.RESIZABLE_EXTRA_MODALS || []).forEach(function(id) {
+        if (document.getElementById(id)) window._makeResizable(id);
+    });
+});
 
 window.addEventListener('resize', function() {
     clearTimeout(window._clampModalsTimer);
