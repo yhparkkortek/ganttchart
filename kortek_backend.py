@@ -52,7 +52,7 @@ from datetime         import datetime, timezone, timedelta
 from urllib.parse     import quote
 
 import requests
-from flask      import Flask, request, jsonify, g
+from flask      import Flask, request, jsonify, g, send_file
 from flask_cors import CORS
 
 try:
@@ -4323,6 +4323,235 @@ def _run_flask_with_port_retry(max_wait_sec=15):
 
 
 # ══════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════════════
+# 📁 [2026-10-22 신규] 문서 저장소 — 사내 네트워크 공유(UNC)를 앱의 자료 보관처로
+#
+#   왜: 사양서 PDF·사진 등을 Google Drive에 쌓으면 용량이 걱정된다는 요청.
+#   실측해보니 사내 공유에 이미 패널 SPEC이 PN 파일명으로 정리돼 있었다
+#   (평균 1.5MB/건). 거기 그대로 두면 용량 문제가 애초에 없고 팀 공유도 이미 된다.
+#
+#   ⚠️ 브라우저는 UNC(\\서버\공유)를 직접 못 읽는다(Chrome이 차단). 그래서 이 백엔드가
+#   중계한다 — C:\SAP_DMS에 쓰고 읽는 기존 패턴과 같다.
+#
+#   ⚠️ 경로를 코드에 박지 않는다. 이 저장소는 GitHub Pages로 **공개**돼 있어서 사내 IP를
+#   커밋하면 안 되고, NAS를 바꾸면 코드를 또 고쳐야 한다. → docstore_config.json(.gitignore).
+#
+#   ⚠️ 폴더 목록도 설정이다 — PANEL/CUSTOMER/ELEC 외에 사진 등을 추가할 때 코드를 안 고친다.
+#
+#   텍스트 추출은 **브라우저가** 한다(pdf.js·XLSX가 이미 프런트에 있음, js/42 _pxExtractText).
+#   백엔드에 PDF 라이브러리를 새로 깔면 팀원 PC마다 설치 부담이 생긴다 — 추출은 프런트,
+#   캐시 저장만 여기(_text/).
+# ══════════════════════════════════════════════════════════════════════════
+
+DOCSTORE_CONFIG_FILE = os.path.join(BASE_DIR, 'docstore_config.json')
+DOCSTORE_TEXT_DIR    = '_text'          # 추출 텍스트 캐시 폴더(설정 폴더 목록과 별개로 항상 허용)
+
+
+def _docstore_load():
+    """{'root': UNC경로, 'folders': [...]} — 미설정이면 root가 빈 문자열"""
+    try:
+        if os.path.exists(DOCSTORE_CONFIG_FILE):
+            with open(DOCSTORE_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                cfg = json.load(f) or {}
+                return {
+                    'root': str(cfg.get('root') or ''),
+                    'folders': [str(x) for x in (cfg.get('folders') or []) if str(x).strip()]
+                }
+    except Exception as e:
+        print(f'[문서저장소] 설정 읽기 실패: {e}')
+    return {'root': '', 'folders': []}
+
+
+def _docstore_safe_name(name):
+    """파일명만 남긴다 — 경로 탈출(.., /, \\, C:) 차단.
+    ⚠️ 이 백엔드는 UNC 공유에 쓰기 권한이 있으므로, 이름을 그대로 믿으면 공유 어디에나
+       파일을 쓸 수 있게 된다. basename만 취하고 상위 참조를 거부한다."""
+    raw = str(name or '').strip().replace('\\', '/')
+    base = os.path.basename(raw)
+    if not base or base in ('.', '..'):
+        return ''
+    if '/' in base or '\\' in base or ':' in base:
+        return ''
+    return base
+
+
+def _docstore_dir(folder, cfg=None, allow_text=False):
+    """folder → 실제 경로. 설정에 없는 폴더는 거부(화이트리스트)."""
+    cfg = cfg or _docstore_load()
+    root = cfg.get('root') or ''
+    if not root:
+        return None, '문서 저장소 경로가 설정되지 않았습니다. (AI 도구 > 설정에서 공유 폴더 경로를 입력하세요)'
+    if not os.path.isdir(root):
+        return None, f'문서 저장소 경로에 접근할 수 없습니다: {root} (사내망/권한 확인)'
+    f = _docstore_safe_name(folder)
+    if not f:
+        return None, '폴더 이름이 올바르지 않습니다.'
+    allowed = list(cfg.get('folders') or [])
+    if allow_text:
+        allowed.append(DOCSTORE_TEXT_DIR)
+    if f not in allowed:
+        return None, f'허용되지 않은 폴더입니다: {f} (설정된 폴더: {", ".join(allowed) or "없음"})'
+    path = os.path.join(root, f)
+    if not os.path.isdir(path):
+        try:
+            os.makedirs(path, exist_ok=True)
+        except Exception as e:
+            return None, f'폴더를 만들 수 없습니다: {f} ({e})'
+    return path, None
+
+
+@app.route('/doc/config', methods=['GET'])
+def doc_config_get():
+    cfg = _docstore_load()
+    ok = bool(cfg['root']) and os.path.isdir(cfg['root'])
+    return jsonify({'ok': True, 'configured': bool(cfg['root']), 'reachable': ok,
+                    'root': cfg['root'], 'folders': cfg['folders']})
+
+
+@app.route('/doc/config', methods=['POST'])
+def doc_config_set():
+    req = request.get_json(force=True, silent=True) or {}
+    root = str(req.get('root') or '').strip()
+    folders = [str(x).strip() for x in (req.get('folders') or []) if str(x).strip()]
+    if root and not os.path.isdir(root):
+        return jsonify({'ok': False, 'error': f'경로에 접근할 수 없습니다: {root}'}), 400
+    try:
+        with open(DOCSTORE_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump({'root': root, 'folders': folders}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'설정 저장 실패: {e}'}), 500
+    return jsonify({'ok': True, 'root': root, 'folders': folders})
+
+
+@app.route('/doc/list', methods=['GET'])
+def doc_list():
+    """폴더 안 파일 목록. since(ISO)를 주면 그 이후 수정분만 — 자동 등록 스캔용."""
+    cfg = _docstore_load()
+    folder = request.args.get('folder') or ''
+    path, err = _docstore_dir(folder, cfg)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    since = (request.args.get('since') or '').strip()
+    since_ts = 0.0
+    if since:
+        try:
+            since_ts = datetime.fromisoformat(since.replace('Z', '+00:00')).timestamp()
+        except Exception:
+            since_ts = 0.0
+    text_dir = os.path.join(cfg['root'], DOCSTORE_TEXT_DIR)
+    out = []
+    try:
+        for n in sorted(os.listdir(path)):
+            fp = os.path.join(path, n)
+            if not os.path.isfile(fp):
+                continue
+            st = os.stat(fp)
+            if since_ts and st.st_mtime <= since_ts:
+                continue
+            out.append({
+                'name': n,
+                'size': st.st_size,
+                'mtime': datetime.fromtimestamp(st.st_mtime).isoformat(timespec='seconds'),
+                # 추출 텍스트 캐시가 이미 있는지 — 프런트가 재추출 여부를 판단한다
+                'hasText': os.path.isfile(os.path.join(text_dir, folder + '__' + n + '.txt'))
+            })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'목록 조회 실패: {e}'}), 500
+    return jsonify({'ok': True, 'folder': folder, 'count': len(out), 'files': out})
+
+
+@app.route('/doc/get', methods=['GET'])
+def doc_get():
+    """원본 파일 그대로 — 프런트가 pdf.js/XLSX로 읽거나 새 창으로 연다."""
+    folder = request.args.get('folder') or ''
+    path, err = _docstore_dir(folder)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    name = _docstore_safe_name(request.args.get('name'))
+    if not name:
+        return jsonify({'ok': False, 'error': '파일 이름이 올바르지 않습니다.'}), 400
+    fp = os.path.join(path, name)
+    if not os.path.isfile(fp):
+        return jsonify({'ok': False, 'error': f'파일이 없습니다: {name}'}), 404
+    return send_file(fp, as_attachment=False, download_name=name)
+
+
+@app.route('/doc/put', methods=['POST'])
+def doc_put():
+    """업로드. 같은 이름이 있으면 기본은 거부 — 덮어쓰려면 overwrite=1.
+    ⚠️ 팀 공유라 남의 파일을 조용히 덮어쓰면 복구가 어렵다."""
+    folder = request.args.get('folder') or ''
+    path, err = _docstore_dir(folder)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'ok': False, 'error': '파일이 없습니다(form-data의 file 필드).'}), 400
+    name = _docstore_safe_name(request.args.get('name') or f.filename)
+    if not name:
+        return jsonify({'ok': False, 'error': '파일 이름이 올바르지 않습니다.'}), 400
+    fp = os.path.join(path, name)
+    if os.path.isfile(fp) and (request.args.get('overwrite') or '') not in ('1', 'true', 'yes'):
+        return jsonify({'ok': False, 'error': f'같은 이름의 파일이 이미 있습니다: {name}', 'exists': True}), 409
+    try:
+        f.save(fp)
+        st = os.stat(fp)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'저장 실패: {e}'}), 500
+    return jsonify({'ok': True, 'folder': folder, 'name': name, 'size': st.st_size})
+
+
+def _doc_text_path(cfg, folder, name):
+    return os.path.join(cfg['root'], DOCSTORE_TEXT_DIR, folder + '__' + name + '.txt')
+
+
+@app.route('/doc/text', methods=['GET'])
+def doc_text_get():
+    """추출 텍스트 캐시 읽기 — 없으면 404(프런트가 원본을 받아 추출한 뒤 POST로 채운다)."""
+    cfg = _docstore_load()
+    folder = request.args.get('folder') or ''
+    _, err = _docstore_dir(folder, cfg)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    name = _docstore_safe_name(request.args.get('name'))
+    if not name:
+        return jsonify({'ok': False, 'error': '파일 이름이 올바르지 않습니다.'}), 400
+    tp = _doc_text_path(cfg, folder, name)
+    if not os.path.isfile(tp):
+        return jsonify({'ok': False, 'error': 'no_cache'}), 404
+    try:
+        with open(tp, 'r', encoding='utf-8') as f:
+            return jsonify({'ok': True, 'folder': folder, 'name': name, 'text': f.read()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'캐시 읽기 실패: {e}'}), 500
+
+
+@app.route('/doc/text', methods=['POST'])
+def doc_text_put():
+    """프런트가 pdf.js/XLSX로 뽑은 텍스트를 캐시에 저장. 팀원 누구나 재추출 없이 쓴다."""
+    cfg = _docstore_load()
+    req = request.get_json(force=True, silent=True) or {}
+    folder = str(req.get('folder') or '')
+    _, err = _docstore_dir(folder, cfg)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    name = _docstore_safe_name(req.get('name'))
+    if not name:
+        return jsonify({'ok': False, 'error': '파일 이름이 올바르지 않습니다.'}), 400
+    text = str(req.get('text') or '')
+    if not text.strip():
+        return jsonify({'ok': False, 'error': '저장할 텍스트가 비어 있습니다.'}), 400
+    tdir = os.path.join(cfg['root'], DOCSTORE_TEXT_DIR)
+    try:
+        os.makedirs(tdir, exist_ok=True)
+        with open(_doc_text_path(cfg, folder, name), 'w', encoding='utf-8') as f:
+            f.write(text)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'캐시 저장 실패: {e}'}), 500
+    return jsonify({'ok': True, 'folder': folder, 'name': name, 'chars': len(text)})
+
+
 if __name__ == '__main__':
     print("=" * 58)
     print("  KORTEK Backend v1.0")
