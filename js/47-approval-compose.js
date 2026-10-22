@@ -280,7 +280,10 @@
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; white-space:nowrap; font-weight:bold;">' + _esc(r.label) + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:2px 4px;"><input type="text" id="apv-v-' + i + '" value="' + _esc(r.value)
                 + '" style="width:100%; box-sizing:border-box; padding:3px 5px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px;"></td>'
-                + '<td style="border:1px solid #e9ecef; padding:3px 6px; white-space:nowrap; background:' + st.bg + '; color:' + st.fg + ';">'
+                // ⚠️ nowrap 금지 — '자재가 바뀌면 공급업체도 달라집니다' 같은 긴 사유가
+                //    옆 칸(원본 기안 값)을 **덮어버린다**(실사용 화면에서 확인).
+                + '<td style="border:1px solid #e9ecef; padding:3px 6px; max-width:230px; word-break:break-word;'
+                + ' background:' + st.bg + '; color:' + st.fg + ';">'
                 + st.icon + ' ' + _esc(r.from) + (r.note ? ' <span style="opacity:.75;">(' + _esc(r.note) + ')</span>' : '') + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; color:#868e96; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"'
                 + ' title="' + _esc(r.srcValue) + '">' + _esc(r.srcValue || '-') + '</td></tr>';
