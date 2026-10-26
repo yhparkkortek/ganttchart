@@ -143,18 +143,31 @@
             undoNote: '없다. 보내면 되돌릴 수 없다.'
         },
         {
-            id: 'gw_board_write', mode: 'write', verified: 'pending', danger: 'high',
+            id: 'gw_board_write', mode: 'write', verified: 'live', danger: 'high',
             title: '게시판 글 등록',
-            desc: '사내 게시판에 글을 올린다.',
+            desc: '사내 게시판에 글을 올린다 — **올리는 즉시 그 게시판을 보는 전사/부서원에게 공개된다.** '
+                + '⚠️ 제목 칸이 따로 없다 — body(=content) 첫 줄이 목록에서 제목처럼 보인다. '
+                + 'boardId를 모르면 gw_board_list(읽기)로 찾는다. 사람이 게시판을 명시하지 않으면 '
+                + '추측해서 전사 게시판에 올리지 말고 반드시 물어라.',
             method: 'POST', path: '/gw/board/write',
             params: [
-                { name: 'boardId', type: 'int', min: 1, max: 99999, req: true, desc: '게시판 id' },
-                { name: 'title', type: 'text', max: 150, req: true, desc: '제목' },
-                { name: 'body', type: 'text', max: 8000, req: true, desc: '본문' }
+                { name: 'boardId', type: 'int', min: 1, max: 99999, req: true, desc: '게시판 id (gw_boards로 확인)' },
+                { name: 'body', type: 'text', max: 8000, req: true, desc: '본문(첫 줄이 제목처럼 보임)' }
             ],
             confirmPhrase: '등록',
-            pendingWhy: '글 등록 요청 본문이 미확정입니다. 사내 게시판은 전사 공개라 우선순위를 낮게 뒀습니다.',
-            undoNote: '본인 글은 삭제할 수 있지만 그 전까지 전사에 보인다.'
+            undoNote: '본인 글은 gw_board_delete로 삭제할 수 있지만, 그 전까지는 전사/부서원에게 보인다.'
+        },
+        {
+            id: 'gw_board_delete', mode: 'write', verified: 'live', danger: 'medium',
+            title: '게시판 글 삭제',
+            desc: '게시판 글을 삭제한다. **되돌릴 수 없다.** postId/boardId는 gw_board_write 응답이나 '
+                + 'gw_board(읽기) 조회 결과의 id:/boardId: 값을 그대로 쓴다 — 추측 금지.',
+            method: 'POST', path: '/gw/board/delete',
+            params: [
+                { name: 'boardId', type: 'int', min: 1, max: 99999, req: true, desc: '게시판 id' },
+                { name: 'postId', type: 'int', min: 1, max: 999999999, req: true, desc: '삭제할 글 id' }
+            ],
+            undoNote: '없다. 삭제하면 되돌릴 수 없다.'
         },
         {
             id: 'insa_fill_workplan', mode: 'write', verified: 'live', danger: 'low', requires: 'insa',
@@ -203,6 +216,8 @@
           kw: ['그룹웨어로 메일 보내', '그룹웨어 메일 보내', '사내 메일 보내', '웹메일 보내'] },
         { tool: 'gw_board_write',
           kw: ['게시판에 올려', '게시판에 글', '게시판 글 등록', '공지 올려'] },
+        { tool: 'gw_board_delete',
+          kw: ['게시판 글 삭제', '게시판에서 삭제', '게시글 삭제해', '게시판 글 지워'] },
         // 인사관리 — "조회"와 갈리도록 **바꿔달라/신청해달라**는 동작 동사만 잡는다
         { tool: 'insa_fill_workplan',
           kw: ['근무계획 수정 신청', '근무시간 변경해', '퇴근시간 변경해', '출근시간 변경해',

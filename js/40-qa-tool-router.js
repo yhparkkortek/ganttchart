@@ -591,6 +591,7 @@
             //    쓰기 도구가 참조할 id/calendarId는 **반드시 텍스트로 보여야** AI가 베껴 쓸 수 있다.
             if (x.id !== undefined && x.id !== null && x.id !== '') parts.push('id:' + x.id);
             if (x.calendarId !== undefined && x.calendarId !== null && x.calendarId !== '') parts.push('calId:' + x.calendarId);
+            if (x.boardId !== undefined && x.boardId !== null && x.boardId !== '') parts.push('boardId:' + x.boardId);
             ['at', 'date', 'createdAt', 'start'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
             ['from', 'writer', 'drafterName', 'creator'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             ['boardName', 'folder', 'formName', 'calendar'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });

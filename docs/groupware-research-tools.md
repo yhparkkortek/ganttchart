@@ -21,7 +21,7 @@
 | 인사관리 근무계획 칸 채우기 | ✅ live |
 | 그룹웨어 일정 등록/삭제 (`gw_calendar_add`/`gw_calendar_delete`) | ✅ live (2026-10-26) — payload 확정 방법은 아래 2절 그대로, `gw_bridge.calendar_create_event`/`calendar_delete_event` |
 | 그룹웨어 메일 발송 (`gw_mail_send`) | ✅ live (2026-10-26) — SMTP/POP3와 무관(그룹웨어 세션으로 직접), `gw_bridge.mail_send` |
-| **게시판 글 등록** (`gw_board_write`) | 🚧 pending — 전사 공개라 우선순위 낮춤 |
+| 게시판 글 등록/삭제 (`gw_board_write`/`gw_board_delete`) | ✅ live (2026-10-26) — 제목 칸 없음(content 첫 줄이 제목), `gw_bridge.board_write`/`board_delete_post` |
 
 `verified:'pending'`은 **실행이 차단**되고 AI 프롬프트에도 노출되지 않는다.
 아래 2절 절차로 payload를 확정한 뒤 `verified:'live'`로 올리면 그때부터 AI가 쓴다.

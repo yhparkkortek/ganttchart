@@ -1373,6 +1373,61 @@ def boards():
     return out
 
 
+# ── 게시판 글 등록/삭제 (쓰기, 2026-10-26) ────────────────────────────
+# 팀 게시판(개발3팀 > 업무관련 확인사항 및 잡담, boardId 829)에 테스트 글을 직접 올렸다
+# 지우며 CDP Network로 확정했다(docs/groupware-research-tools.md 2절 절차).
+#   POST   /api/board/{boardId}/post/   body: {boardId, postId:"", content, status:"OPEN",
+#          notiMailFlag:false, notiPushFlag:false, attaches:[], links:[], publicWriter:false}
+#   DELETE /api/board/{boardId}/post/{postId}   본문 없음
+# ⚠️ **제목 칸이 따로 없다** — 빠른 글(피드) 작성 위젯은 `content` 하나만 받고, 읽을 때 쓰는
+#   `title`은 서버가 content에서 뽑아낸다(실측: 첫 줄이 그대로 title이 됨). title 파라미터를
+#   따로 추가하지 않는다 — 없는 칸을 있는 척하면 안 된다.
+
+
+def board_write(board_id, content):
+    """게시판에 글을 올린다. **전사/부서에 즉시 공개된다 — 되돌릴 수 없다**(삭제는 가능).
+
+    content 첫 줄이 목록에서 제목처럼 보인다. 첨부·링크는 아직 지원하지 않는다."""
+    if not content or not str(content).strip():
+        raise RuntimeError('내용이 비어 있습니다.')
+    body = {'boardId': str(int(board_id)), 'postId': '', 'content': str(content),
+            'status': 'OPEN', 'notiMailFlag': False, 'notiPushFlag': False,
+            'attaches': [], 'links': [], 'publicWriter': False}
+    js = r"""
+    (async (bid, payload) => {
+      const r = await fetch('/api/board/' + bid + '/post/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const ct = r.headers.get('content-type') || '';
+      const b = ct.includes('json') ? await r.json() : (await r.text()).slice(0, 300);
+      return { status: r.status, ok: r.ok, body: b };
+    })(%s, %s)
+    """ % (int(board_id), json.dumps(body, ensure_ascii=False))
+    res = eval_in_gw(js, timeout=45) or {}
+    if not res.get('ok'):
+        raise RuntimeError('게시판 글 등록 실패 (HTTP %s): %s' % (res.get('status'), str(res.get('body'))[:200]))
+    data = res.get('body') or {}
+    d = data.get('data') if isinstance(data.get('data'), dict) else data
+    return {'ok': True, 'boardId': int(board_id), 'postId': (d or {}).get('id'), 'content': content}
+
+
+def board_delete_post(board_id, post_id):
+    """게시판 글을 삭제한다. **되돌릴 수 없다** — 호출 전 사람 확인을 거칠 것."""
+    js = r"""
+    (async (bid, pid) => {
+      const r = await fetch('/api/board/' + bid + '/post/' + pid,
+                            { method: 'DELETE', credentials: 'same-origin' });
+      return { status: r.status, ok: r.ok };
+    })(%s, %s)
+    """ % (int(board_id), int(post_id))
+    res = eval_in_gw(js, timeout=30) or {}
+    if not res.get('ok'):
+        raise RuntimeError('게시판 글 삭제 실패 (HTTP %s)' % res.get('status'))
+    return {'ok': True}
+
+
 # ── 메일 (읽기 전용) ─────────────────────────────────────────────────
 # ⚠️⚠️ **메일을 열지 않는다.** 상세 조회는 서버에서 `읽음`으로 바꿔버린다 — 사용자 메일함의
 #   안읽음 배지가 조용히 줄어드는 건 조사·요약이 일으켜도 되는 변화가 아니다.

@@ -3980,6 +3980,36 @@ def gw_board_post():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/board/write', methods=['POST'])
+def gw_board_write_route():
+    """게시판 글 등록 (쓰기). **전사/부서에 즉시 공개된다** — 사람 확인 1회 후에만 호출된다."""
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        board_id = b.get('boardId')
+        content = b.get('body') or b.get('content') or ''
+        if not board_id or not str(content).strip():
+            return jsonify({'ok': False, 'message': 'boardId와 본문이 필요합니다.'}), 400
+        r = gw_bridge.board_write(board_id, content)
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/board/delete', methods=['POST'])
+def gw_board_delete_route():
+    """게시판 글 삭제 (쓰기). 되돌릴 수 없다 — 사람 확인 1회 후에만 호출된다."""
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        board_id, post_id = b.get('boardId'), b.get('postId')
+        if not board_id or not post_id:
+            return jsonify({'ok': False, 'message': 'boardId와 postId가 필요합니다.'}), 400
+        return jsonify(gw_bridge.board_delete_post(board_id, post_id))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/open-folder', methods=['POST'])
 def open_folder():
     data = request.get_json(silent=True) or {}

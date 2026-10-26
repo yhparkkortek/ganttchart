@@ -396,15 +396,38 @@ jsTree 포맷 **배열**이 그대로 온다: `[{data:{id:"FOLDER_61",title}, st
 빈 문자열만 돌려주면 받는 쪽에서 **"조회 실패"와 구분이 안 된다** → `board_post`가 `bodyNote`로
 사유(이미지 N장 / 첨부 파일명)를 드러낸다. 파싱 실패를 조용히 기본값으로 삼키지 말 것(CLAUDE.md).
 
-#### 앱 경로 (읽기 전용 — 글 작성·댓글 라우트는 **만들지 않았다**)
+#### 앱 경로 (읽기는 그대로 읽기 전용 — 댓글 라우트는 여전히 **안 만들었다**)
 ```
-GET /gw/board/recent?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=80[&boardId=N][&days=7]
-GET /gw/board/post?boardId=N&postId=N
-GET /gw/boards
+GET  /gw/board/recent?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=80[&boardId=N][&days=7]
+GET  /gw/board/post?boardId=N&postId=N
+GET  /gw/boards
+POST /gw/board/write    body: {boardId, body}
+POST /gw/board/delete   body: {boardId, postId}
 ```
 AI 문답 명령: `js/04h`의 `gw_board_recent` 블록 — 트리거 어휘는 `GW_CAPABILITIES`(js/32).
 **결정론 먼저**: 목록 표는 AI 없이 먼저 렌더하고, AI는 그 목록만 근거로 요약만 맡는다.
 AI가 실패해도 목록은 남고 실패 사유를 붙인다. 끝에 원문 링크를 붙인다.
+
+#### 게시판 글 등록/삭제 (쓰기, 2026-10-26) — ⚠️ 제목 칸이 없다
+
+```
+POST   /api/board/{boardId}/post/   body: {boardId, postId:"", content, status:"OPEN",
+                                            notiMailFlag:false, notiPushFlag:false,
+                                            attaches:[], links:[], publicWriter:false}
+DELETE /api/board/{boardId}/post/{postId}   (본문 없음)
+```
+개발3팀 전용 게시판(`업무관련 확인사항 및 잡담`, boardId 829 — **전사 공개가 아닌** 가장 좁은
+범위를 일부러 골랐다)에 테스트 글을 올렸다 지우며 CDP Network로 확정했다.
+**쓰는 화면의 "이야기 하기" 빠른글 위젯은 `content` 하나만 받는다** — 읽을 때 쓰는 `title`
+필드는 서버가 content에서 뽑아낸다(실측: 전체 content가 그대로 title이 됨). `gw_bridge.board_write()`에
+title 파라미터를 따로 안 만든 이유가 이거다 — 없는 칸을 있는 척하면 사람이 "제목이 왜 안 들어가지"로
+헤매게 된다.
+⚠️ **삭제 버튼은 호버해야 나타난다**(`.article:hover` 안 `.tool_bar`가 `width:0`→실제 크기로 바뀜) —
+CDP로 조작할 때 좌표를 바로 구하면 `{w:0,h:0}`가 나온다. `Input.dispatchMouseEvent`로 `mouseMoved`만
+먼저 보내 hover 상태를 만든 뒤 다시 좌표를 구해야 한다.
+AI 문답 쓰기 도구 `gw_board_write`(`js/41`) — **"올리는 즉시 전사/부서 공개"라 다른 쓰기 도구보다
+위험도가 높다.** boardId를 사람이 명시하지 않으면 멋대로 전사 게시판에 올리지 않고 반드시 되묻도록
+도구 설명에 못박아 뒀다. `gw_board_delete`로 삭제 가능(되돌릴 수 없음을 사람이 알아야 함).
 
 > 🧪 **검증 팁**: 백엔드를 재시작하지 않고 라우트만 확인하려면 `kortek_backend.app.test_client()`를
 > 쓴다 — 사용자가 돌리고 있는 5000번 프로세스를 건드리지 않는다(예약 발송·SAP 작업 중일 수 있음).
