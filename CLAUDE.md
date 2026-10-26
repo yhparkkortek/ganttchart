@@ -173,7 +173,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - Elec Parts 엑셀 시트는 `window._elecPartsTypeList()`(js/04k) 하나로 — 쓰는 쪽(js/04k)과 읽는 쪽(js/22a)이 같은 목록을 쓴다. 파서는 **파일에 나온 종류만** 덮어쓴다(옛 4종 파일이 새 구분을 지우지 않게).
 - 언어 전환 재렌더(js/04j)도 `ELEC_PART_TYPES[view]` 등록 여부로 판단 — 예전엔 adbd/convbd만 적어 TOUCH CTRL이 빠져 있었다.
 
-## 🔁 이어서 할 일이 있으면 먼저 — `docs/handover-2026-10-26.md`
+## 🔁 이어서 할 일이 있으면 먼저 — `docs/handover-2026-10-26-groupware.md`
 
 그룹웨어 전수 조사·전자결재 기안 작업의 **인계 메모**(어디까지 했고 뭐가 남았는지).
 남은 일: ① 기안 작성 앱에서 한 번 끝까지 ② 잘못 만든 기안 220176 정리 ③ 보고·works·task 모듈 조사
