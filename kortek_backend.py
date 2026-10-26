@@ -81,6 +81,8 @@ ALLOWED_ORIGINS = [
     "https://yhparkkortek.github.io",
     "http://127.0.0.1:5500",
     "http://localhost:5500",
+    "http://127.0.0.1:8934",
+    "http://localhost:8934",  # .claude/launch.json 로컬 테스트 서버(python -m http.server 8934)
     "null",   # 로컬 HTML 파일 (file://)
 ]
 

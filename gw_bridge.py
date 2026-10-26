@@ -568,7 +568,17 @@ def login_once():
 
 def session_info():
     """로그인 상태 + 내 계정 정보. 세션이 끊겼으면 ok=False."""
-    if not chrome_alive():
+    v = chrome_alive()
+    if not v:
+        # ⚠️ [2026-10-26 제보] /json/version 2초 타임아웃이 가끔 일시적으로 비어 "브라우저가
+        #    실행되고 있지 않습니다"를 반환했다(바로 다음 조회는 정상). 로컬 핑이라 계정
+        #    잠금과 무관 — 두 번 더 확인한 뒤에만 포기한다(로그인 재시도 금지와는 별개).
+        for _ in range(2):
+            time.sleep(0.4)
+            v = chrome_alive()
+            if v:
+                break
+    if not v:
         return {'ok': False, 'reason': 'chrome_down', 'message': '그룹웨어 브라우저가 실행되고 있지 않습니다.'}
     try:
         j = gw_get('/api/user/session', timeout=20)
@@ -726,6 +736,83 @@ def approval_forms():
         if f.get('formId'):
             out.append({'name': f.get('formName') or '', 'formId': f['formId'], 'deptId': f.get('deptId')})
     return out
+
+
+# ── 전사 결재양식 전체 카탈로그 (즐겨찾기에 없는 양식용 폴백, 2026-10-26) ──────────
+# 즐겨찾기(approval_forms)만 보면 "프로젝트코드 등록 신청서"처럼 안 즐겨찾은 양식은
+# 기안 복사/작성에서 영원히 "못 찾음"으로 막힌다(실사고: 임시저장 직전 쓰기확정에서 실패,
+# 즐겨찾기엔 9개뿐인데 조직 전체엔 97개). docs/groupware-forms.md 가 사람이 보는 색인이고,
+# ⚠️ 거기 "코드에 하드코딩하지 말 것"이라 적힌 그대로 — 여기서는 `/api/approval/apprform/tree`를
+# 그때그때 BFS로 읽는다(폴더 15개 왕복 ≈ 수 초). 폴더 구조는 전산팀만 바꾸므로 프로세스
+# 메모리에 짧게 캐시한다.
+_FORM_CATALOG_CACHE = {'at': 0.0, 'items': []}
+_FORM_CATALOG_TTL = 1800  # 30분
+
+
+def approval_form_catalog(force=False):
+    """전사 결재양식 전체 목록 [{name, formId, folderId}, …] — BFS, 프로세스 내 30분 캐시."""
+    now = time.time()
+    if not force and _FORM_CATALOG_CACHE['items'] and now - _FORM_CATALOG_CACHE['at'] < _FORM_CATALOG_TTL:
+        return _FORM_CATALOG_CACHE['items']
+    items = []
+    seen = set()
+    queue = []
+    for node in (gw_get('/api/approval/apprform/tree') or []):
+        attr = node.get('attr') or {}
+        if attr.get('rel') == 'FOLDER' and attr.get('nodeId') is not None:
+            queue.append(attr['nodeId'])
+    while queue:
+        fid = queue.pop(0)
+        if fid in seen:
+            continue
+        seen.add(fid)
+        try:
+            nodes = gw_get('/api/approval/apprform/tree?folderId=%d' % fid) or []
+        except Exception:
+            continue
+        for node in nodes:
+            attr = node.get('attr') or {}
+            nid = attr.get('nodeId')
+            if nid is None:
+                continue
+            if attr.get('rel') == 'FOLDER' and nid not in seen:
+                queue.append(nid)
+            elif attr.get('rel') == 'FORM':
+                items.append({'name': (attr.get('title') or '').strip(), 'formId': nid, 'folderId': fid})
+    _FORM_CATALOG_CACHE['items'] = items
+    _FORM_CATALOG_CACHE['at'] = now
+    return items
+
+
+def _default_dept_id():
+    """기안을 그릴 내 소속 부서 deptId — 팀마다 다르므로 그때그때 세션에서 얻는다(하드코딩 금지)."""
+    try:
+        side = gw_get('/api/approval/side') or {}
+        data = side.get('data') if isinstance(side.get('data'), dict) else side
+        folders = (data or {}).get('drafterDeptFolders') or []
+        if folders and folders[0].get('deptId'):
+            return folders[0]['deptId']
+    except Exception:
+        pass
+    forms = approval_forms()
+    return forms[0].get('deptId') if forms else None
+
+
+def resolve_form(form_name):
+    """양식 이름 → {name, formId, deptId}. 즐겨찾기 우선(빠름) → 없으면 전사 카탈로그 폴백."""
+    form_name = (form_name or '').strip()
+    hit = next((f for f in approval_forms() if (f.get('name') or '').strip() == form_name), None)
+    if hit:
+        return hit
+    catalog = approval_form_catalog()
+    chit = next((f for f in catalog if f.get('name') == form_name), None)
+    if not chit:
+        raise RuntimeError('"%s" 양식을 전사 결재양식 목록(%d건)에서도 찾지 못했습니다. '
+                            '양식 이름을 다시 확인해주세요.' % (form_name, len(catalog)))
+    dept_id = _default_dept_id()
+    if not dept_id:
+        raise RuntimeError('소속 부서(deptId)를 확인하지 못해 "%s" 양식을 열 수 없습니다.' % form_name)
+    return {'name': chit['name'], 'formId': chit['formId'], 'deptId': dept_id}
 
 
 # 작성 화면을 열고, 입력칸을 '열 머리글/행 라벨'로 찾아 채운 뒤 임시저장한다.
@@ -949,12 +1036,7 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
     if not form_name:
         raise RuntimeError('원본의 양식 이름을 알 수 없어 같은 양식을 열 수 없습니다.')
 
-    forms = approval_forms()
-    hit = next((f for f in forms if (f.get('name') or '').strip() == form_name), None)
-    if not hit:
-        raise RuntimeError('"%s" 양식을 자주 쓰는 양식 목록에서 못 찾았습니다. '
-                           '그룹웨어에서 그 양식을 즐겨찾기에 넣어주세요. (있는 것: %s)'
-                           % (form_name, ', '.join((f.get('name') or '') for f in forms)))
+    hit = resolve_form(form_name)
 
     src_fields = {k: v for k, v in (src.get('fields') or {}).items()
                   if k.replace(' ', '') not in _COPY_SKIP}
