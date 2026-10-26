@@ -657,6 +657,41 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 
 ---
 
+## 7-1. Works — 사내 저작도구 미니앱 (읽기 전용, 2026-10-26)
+
+전자결재와는 다른 **자체 양식 빌더**다. "IT 렌트"·"리조트 예약"·"법인카드 한도 증액 신청"·
+"출입카드 권한신청" 등 20여 개 미니앱이 사이드바 `Works`에 있는데, **전부 사람이 만든 것이라
+앱마다 입력 칸 구성이 완전히 다르다.** 그런데도 엔드포인트 모양은 하나다(제너릭 폼 엔진):
+
+```
+GET /api/works/applets                              # 내 앱 목록(id, name, desc)
+GET /api/works/applets/{appletId}/fields?p=true      # 그 앱의 칸 정의
+GET /api/works/applets/{appletId}/docs?q=&page=0&offset=N&property=create_date&direction=desc&ac=true
+                                                      # 등록 목록
+GET /api/works/applets/{appletId}/stats?...          # 차트용 집계(미사용)
+```
+
+`/fields` 응답: `[{cid:"_rc5t2hl08", label:"유형", fieldType:"select", options:[{value,displayText},...]}, ...]`
+— **칸 이름이 사람이 읽을 수 있는 `label`이 아니라 `cid`(예: `_rc5t2hl08`)로 저장된다.** `/docs`의
+`data[].values`는 `{cid: 값}` 모양이라, `/fields`로 받은 `cid→label` 매핑 없이는 뭐가 뭔지 알 수 없다
+— **매번 다시 받는다**(`_works_fields`가 프로세스 내에만 캐시, CLAUDE.md "하드코딩 지양" 그대로).
+
+값 모양도 칸 타입마다 다르다(실측, appletId=30 "IT 문의/요청" 기준):
+- `select` — 숫자 코드(`value`)로 온다 → `/fields`의 `options[].displayText`로 되짚어야 글자가 나온다.
+- `org`/`org_dept`(담당자·부서 선택) — 객체 **배열**로 온다 → `fullName`/`name`만 뽑는다.
+- `text`/`textarea` — 그냥 문자열.
+- `creator`/`updater` — 최상위 고정 칸, 객체 하나(배열 아님).
+
+`gw_bridge.works_apps()`/`works_list(appletId, limit, keyword)`가 이걸 전부 감싼다 — **20개 앱에
+코드를 따로 안 짜고 한 함수로 다 돈다.** AI 문답 읽기 도구 `gw_works_apps`/`gw_works_list`(js/40).
+
+⚠️ **쓰기(새 글 등록)는 아직 안 만들었다.** 다른 그룹웨어 기능(캘린더·메일·게시판)은 "엔드포인트
+하나만 확정하면 끝"이었지만, Works는 **앱마다 필수 칸·입력 검증 규칙이 다르다** — 하나 확정해도
+나머지 19개엔 안 맞는다. 실제로 특정 앱(예: "IT 렌트")에 쓰기가 필요해지면 **그 앱 하나**를
+gw_capture_write.py로 테스트해서 확정할 것 — 20개를 미리 다 만들지 않는다.
+
+---
+
 ## 8. AI 문답 연동
 
 ### 8-0. 문서 종류(양식) 카탈로그 — `js/52-approval-doctypes.js` (2026-10-22)
@@ -806,7 +841,7 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 | 모듈 | 화면 | 쓰기성 | 조사 |
 |---|---:|---:|---|
 | `approval` 전자결재 | 60 | 9 | 🟢 거의 완료(읽기 전부 + 번들 64경로) |
-| `works` | 49 | 9 | 🟡 진입 확인(`/app/works/home/all`로 리다이렉트) |
+| `works` | 49 | 9 | 🟢 **읽기 완료**(제너릭 폼 엔진 1벌로 20여 개 앱 전부 — 2026-10-26). 쓰기는 앱마다 달라 미착수 |
 | `ehr` 인사관리 | 29 | 0 | ⬜ (외부 `insa.kortek.co.kr`로 빠짐) |
 | `board` 게시판 | 23 | 8 | 🟢 **읽기 완료 + 앱 이식 완료** |
 | `noti` 알림 | 21 | 0 | 🟢 **읽기 완료 + 앱 이식 완료** |

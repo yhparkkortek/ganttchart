@@ -159,6 +159,26 @@
             ]
         },
         {
+            id: 'gw_works_apps', mode: 'read', requires: 'gw',
+            title: 'Works 앱(미니 폼) 목록',
+            desc: 'IT 렌트·리조트 예약·법인카드 한도증액 등 사내 Works 미니앱 목록과 id. '
+                + '특정 앱의 신청 내역을 보려면 먼저 이걸로 appletId를 찾는다.',
+            path: '/gw/works/apps', pick: 'apps', params: []
+        },
+        {
+            id: 'gw_works_list', mode: 'read', requires: 'gw',
+            title: 'Works 앱 신청 내역',
+            desc: 'Works 미니앱 하나의 최근 신청/등록 목록. 앱마다 칸 구성이 달라 응답의 각 항목은 '
+                + '그 앱의 실제 칸 이름(한글)을 키로 쓴다 — 고정된 스키마가 아니다. '
+                + 'appletId를 모르면 gw_works_apps로 먼저 찾는다.',
+            path: '/gw/works/list', pick: 'docs',
+            params: [
+                { name: 'appletId', type: 'int', min: 1, max: 99999, req: true, desc: 'Works 앱 id (gw_works_apps로 확인)' },
+                { name: 'limit', type: 'int', min: 1, max: 60, def: 20, desc: '최대 건수' },
+                { name: 'keyword', type: 'text', max: 100, desc: '검색어(제목 등)' }
+            ]
+        },
+        {
             id: 'gw_calendar', mode: 'read', requires: 'gw',
             title: '그룹웨어 일정',
             desc: '사내 캘린더 일정을 기간으로 조회한다.',
@@ -589,14 +609,28 @@
             // 🐛 [2026-10-26 제보] id가 안 보여서 AI가 "일정 삭제해줘"에 eventId를 자리번호(1)로
             //    지어냈다(쓰기확정에서 calendarId:1/eventId:1 — 실제 값 11716/2332와 전혀 다름).
             //    쓰기 도구가 참조할 id/calendarId는 **반드시 텍스트로 보여야** AI가 베껴 쓸 수 있다.
+            var idParts = parts.length;
             if (x.id !== undefined && x.id !== null && x.id !== '') parts.push('id:' + x.id);
             if (x.calendarId !== undefined && x.calendarId !== null && x.calendarId !== '') parts.push('calId:' + x.calendarId);
             if (x.boardId !== undefined && x.boardId !== null && x.boardId !== '') parts.push('boardId:' + x.boardId);
+            idParts = parts.length - idParts;   // id류만 붙은 개수 — 아래 "내용 없음" 판정에서 뺀다
             ['at', 'date', 'createdAt', 'start'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
             ['from', 'writer', 'drafterName', 'creator'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             ['boardName', 'folder', 'formName', 'calendar'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
             ['subject', 'title', 'name'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             if (x.seen === false) parts.push('[안읽음]');
+            // 🧩 [2026-10-26, Works 등 칸 이름이 앱마다 다른 소스용] 위 고정 키에 하나도 안 걸렸으면
+            //    (= id류만 붙은 상태) 그 행의 **나머지 키를 전부** 압축해서 보여준다 — 그래야
+            //    "제목"·"유형" 처럼 앱마다 다른 한글 키로 온 데이터도 AI에게 내용이 보인다.
+            if (parts.length === idParts) {
+                var known = { id: 1, calendarId: 1, boardId: 1, preview: 1, summary: 1, body: 1, bodyNote: 1 };
+                Object.keys(x).forEach(function (k) {
+                    if (known[k] || x[k] === undefined || x[k] === null || x[k] === '') return;
+                    var v = x[k];
+                    if (typeof v === 'object') return;      // 배열/객체는 건너뛴다(노이즈)
+                    parts.push(k + ':' + String(v).slice(0, 80));
+                });
+            }
             var head = (i + 1) + '. ' + parts.join(' ');
             var body = x.preview || x.summary || x.body || x.bodyNote || '';
             return body ? head + '\n   ' + String(body).slice(0, 300) : head;

@@ -3964,6 +3964,33 @@ def gw_mail_send_route():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/works/apps', methods=['GET'])
+def gw_works_apps():
+    """내가 쓸 수 있는 Works 앱(미니 폼) 목록."""
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, 'apps': gw_bridge.works_apps()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/works/list', methods=['GET'])
+def gw_works_list():
+    """Works 앱 한 개의 최근 등록 목록. appletId는 gw_works_apps로 먼저 찾는다."""
+    try:
+        import gw_bridge
+        aid = (request.args.get('appletId') or '').strip()
+        if not aid.isdigit():
+            return jsonify({'ok': False, 'message': 'appletId가 필요합니다.'}), 400
+        limit = request.args.get('limit', '20')
+        r = gw_bridge.works_list(int(aid), limit=int(limit) if str(limit).isdigit() else 20,
+                                  keyword=(request.args.get('keyword') or '').strip() or None)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/board/post', methods=['GET'])
 def gw_board_post():
     """게시물 1건 본문(평문). `boardId`·`postId` 필수."""

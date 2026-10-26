@@ -1635,6 +1635,83 @@ def mail_send(to, subject, body, *, cc='', bcc='', dry_run=False):
             'messageId': (d or {}).get('id') or (d or {}).get('messageId')}
 
 
+# ── Works (사내 저작도구 미니앱, 읽기 전용, 2026-10-26) ──────────────────
+# "Works"는 전자결재와 다른 **자체 양식 빌더**다 — IT 렌트·리조트 예약·법인카드 한도증액 등
+# 20여 개 앱이 전부 사람이 직접 만든 것이라, 앱마다 칸(필드) 구성이 완전히 다르다.
+# ⚠️⚠️ 그래도 **엔드포인트 모양은 전부 같다**(제너릭 폼 엔진) — `/api/works/applets/{id}/...`
+#   하나로 20개 앱을 전부 다룰 수 있다. 칸 이름은 `/fields`가 매번 알려주므로 앱마다 코드를
+#   따로 안 짠다(CLAUDE.md "하드코딩 지양" 그대로).
+#   실측(appletId=30, "IT 문의/요청"): GET .../fields?p=true → [{cid:"_rc5t2hl08", label:"유형",
+#   fieldType:"select", options:[{value,displayText}, ...]}, ...]. GET .../docs?q=&page=0&
+#   offset=N&property=create_date&direction=desc&ac=true → data[].values 에 {cid: 값} —
+#   select는 숫자 코드라 options로 되짚어야 글자가 나오고, 사람/부서 칸은 객체(배열)라
+#   이름만 뽑아야 한다.
+# ⚠️ 쓰기(새 글 등록)는 **아직 안 만들었다** — 앱마다 필수 칸·입력 규칙이 달라 한 앱씩 검증해야
+#   한다(캘린더/메일/게시판과 달리 "하나만 확정하면 끝"이 아니다). 실제로 특정 앱에 쓰기가
+#   필요해지면 그때 그 앱 하나를 테스트로 확정할 것 — 20개를 미리 다 만들지 않는다.
+_WORKS_FIELDS_CACHE = {}
+
+
+def works_apps():
+    """내가 쓸 수 있는 Works 앱(미니 폼) 목록 — appletId를 알아야 `works_list`를 부를 수 있다."""
+    j = gw_get('/api/works/applets')
+    out = []
+    for a in (j or {}).get('data') or []:
+        out.append({'id': a.get('id'), 'name': a.get('name') or '', 'desc': (a.get('desc') or '')[:200]})
+    return out
+
+
+def _works_fields(applet_id, force=False):
+    """그 앱의 칸 정의(cid→이름/타입/선택지) — 프로세스 내 캐시(앱 구조는 거의 안 바뀐다)."""
+    if not force and applet_id in _WORKS_FIELDS_CACHE:
+        return _WORKS_FIELDS_CACHE[applet_id]
+    j = gw_get(f'/api/works/applets/{int(applet_id)}/fields?p=true', timeout=45)
+    out = {}
+    for f in (j or {}).get('data') or []:
+        opts = {o.get('value'): o.get('displayText') for o in (f.get('options') or [])}
+        out[f.get('cid')] = {'label': f.get('label') or f.get('cid'),
+                             'type': f.get('fieldType') or '', 'options': opts}
+    _WORKS_FIELDS_CACHE[applet_id] = out
+    return out
+
+
+def _works_decode(v, finfo):
+    """select는 숫자 코드 → options로 글자를, 사람/부서는 객체(배열) → 이름만 뽑는다."""
+    if v is None or v == '':
+        return ''
+    if finfo and finfo.get('options') and v in finfo['options']:
+        return finfo['options'][v]
+    if isinstance(v, list):
+        names = [(x.get('fullName') or x.get('name') or '') if isinstance(x, dict) else str(x) for x in v]
+        return ', '.join(n for n in names if n)
+    if isinstance(v, dict):
+        return v.get('fullName') or v.get('name') or ''
+    return v
+
+
+def works_list(applet_id, limit=20, keyword=None):
+    """Works 앱 한 개의 최근 등록 목록. 칸 이름은 그 앱의 `/fields`로 매번 받아 맞춘다."""
+    fields = _works_fields(applet_id)
+    from urllib.parse import quote
+    qs = (f'/api/works/applets/{int(applet_id)}/docs?q={quote(keyword or "")}&page=0'
+          f'&offset={int(limit)}&property=create_date&direction=desc&ac=true')
+    j = gw_get(qs, timeout=60)
+    out = []
+    for d in (j or {}).get('data') or []:
+        rec = {'id': d.get('id'), 'status': (d.get('status') or {}).get('name') or ''}
+        for cid, v in (d.get('values') or {}).items():
+            if cid == 'creator':
+                rec['작성자'] = _works_decode(v, None)
+                continue
+            if cid in ('create_date', 'update_date', 'updater'):
+                continue        # 목록엔 과한 정보 — 필요하면 따로 추가
+            finfo = fields.get(cid)
+            rec[finfo['label'] if finfo else cid] = _works_decode(v, finfo)
+        out.append(rec)
+    return {'appletId': int(applet_id), 'total': ((j or {}).get('page') or {}).get('total'),
+            'count': len(out), 'docs': out}
+
+
 # ── 문서관리 / 예약 / 커뮤니티 / 설문 / 자료실 / 전자결재 문서함 (읽기 전용) ──
 # 필드 이름은 전수 조사(2026-10-19)로 실측 확인한 것만 쓴다 — 추측 금지.
 # 상세는 docs/groupware-endpoints.md.
