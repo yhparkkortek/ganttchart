@@ -1378,6 +1378,11 @@
                     const tsVals = run.map(function(x) { return x.ts; }).filter(function(t) { return t != null; });
                     candidates.push({
                         memberIdx: ids,
+                        // 💡 [2026-10-26, "한번에 묶기" 기능용] 인덱스는 다른 후보를 먼저 적용하는 순간
+                        //    전부 밀려서 못 쓰게 된다 — 행 "객체 참조"는 splice로 위치가 바뀌어도
+                        //    그대로이므로, 적용 시점에 globalData.indexOf(ref)로 현재 위치를 다시
+                        //    찾아내면 다른 후보를 몇 개를 먼저 적용했든 항상 정확하다.
+                        memberRows: ids.map(function(i) { return gd[i]; }),
                         suggestedName: bestTok || _wbsNormTitle(_wbsRowOwnTitle(gd[ids[0]])),
                         titles: ids.map(function(i) { return _wbsNormTitle(_wbsRowOwnTitle(gd[i])); }),
                         dateRangeLabel: tsVals.length ? (new Date(Math.min.apply(null, tsVals)).toISOString().slice(0, 10) + ' ~ ' + new Date(Math.max.apply(null, tsVals)).toISOString().slice(0, 10)) : ''
@@ -1420,6 +1425,10 @@
                 <span>🗂 ${_en ? `Group suggestions (${_n} found)` : `그룹 제안 (${_n}개 발견)`}</span>
                 <button onclick="document.getElementById('wbs-group-suggest-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
+            ${_n > 0 ? `<div style="padding:8px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <span style="font-size:11px; color:#888;">${_en ? 'Each card is pre-checked — uncheck what you don\'t want, then group all at once.' : '카드마다 기본 전부 체크돼 있습니다 — 묶지 않을 것만 체크 해제한 뒤 한번에 묶으세요.'}</span>
+                <button id="wbs-group-apply-all-btn" style="padding:6px 14px; background:#5a3680; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🗂 ${_en ? 'Group all' : '한번에 묶기'}</button>
+            </div>` : ''}
             <div style="padding:10px 16px; flex:1; overflow-y:auto;">
                 ${_n === 0
                     ? `<div style="padding:30px; text-align:center; color:#999; font-size:13px;">${_en ? 'No group candidates found — tasks under each parent look distinct enough already.' : '묶을 만한 후보를 찾지 못했습니다 — 같은 부모 밑 업무들이 이미 충분히 구분돼 보입니다.'}</div>`
@@ -1432,7 +1441,7 @@
                             </div>
                             ${c.dateRangeLabel ? `<div style="font-size:10.5px; color:#888; margin-bottom:5px;">📅 ${escapeHtml(c.dateRangeLabel)}</div>` : ''}
                             <div style="font-size:11.5px; color:#555; line-height:1.7;">${c.titles.map(function(t, ti) {
-                                return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wbs-group-member-chk" data-idx="${c.memberIdx[ti]}" checked>${escapeHtml(t)}</label>`;
+                                return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wbs-group-member-chk" data-idx="${c.memberIdx[ti]}" data-ord="${ti}" checked>${escapeHtml(t)}</label>`;
                             }).join('')}</div>
                             <div class="wbs-group-warn" style="display:none; font-size:10.5px; color:#b1432f; margin-top:4px;">${_en ? '⚠️ Uncheck items that don\'t belong — at least 2 must stay checked.' : '⚠️ 안 맞는 항목은 체크 해제하세요 — 최소 2개는 남아있어야 합니다.'}</div>
                         </div>`;
@@ -1464,6 +1473,36 @@
         modal.querySelectorAll('.wbs-group-ignore-btn').forEach(function(btn) {
             btn.addEventListener('click', function() { btn.closest('.wbs-group-cand').remove(); });
         });
+
+        // 🗂 [2026-10-26 신규, 사용자 요청] "한번에 묶기" — 카드마다 일일이 [묶기]를 누르지 않고,
+        //    기본 전부 체크된 상태에서 사람이 "안 맞는 것"만 체크 해제/무시한 뒤 한 번에 전부 적용.
+        //    인덱스가 아니라 memberRows(행 객체 참조)로 추적하므로, 앞선 카드를 적용해 뒤 카드들의
+        //    인덱스가 밀려도(위 메모 참고) globalData.indexOf(ref)로 매번 다시 찾아 항상 정확하다.
+        const applyAllBtn = document.getElementById('wbs-group-apply-all-btn');
+        if (applyAllBtn) {
+            applyAllBtn.addEventListener('click', function() {
+                const cards = Array.from(modal.querySelectorAll('.wbs-group-cand'));
+                let appliedGroups = 0, appliedTasks = 0, skipped = 0;
+                cards.forEach(function(card) {
+                    const ci = parseInt(card.dataset.ci, 10);
+                    const cand = candidates[ci];
+                    const name = card.querySelector('.wbs-group-name-input').value.trim();
+                    if (!cand || !name) { skipped++; return; }
+                    const checkedOrds = Array.from(card.querySelectorAll('.wbs-group-member-chk:checked')).map(function(cb) { return parseInt(cb.dataset.ord, 10); });
+                    if (checkedOrds.length < 2) { skipped++; return; }
+                    const refs = checkedOrds.map(function(o) { return cand.memberRows[o]; }).filter(Boolean);
+                    const curIdx = refs.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; });
+                    if (curIdx.length < 2) { skipped++; return; }
+                    window._selectedRows = new Set(curIdx);
+                    if (window.groupSelectedRows(name)) { appliedGroups++; appliedTasks += curIdx.length; }
+                    else skipped++;
+                });
+                window._renderWbsGroupSuggestModal(); // 전부 적용 후 통째로 다시 탐지+렌더(남은 후보만 보여줌)
+                if (window.showToast) window.showToast(_en
+                    ? `✅ Grouped ${appliedGroups} group(s), ${appliedTasks} task(s) at once.${skipped ? ` (${skipped} skipped)` : ''}`
+                    : `✅ ${appliedGroups}개 그룹(총 ${appliedTasks}개 업무)을 한번에 묶었습니다.${skipped ? ` (${skipped}개는 건너뜀)` : ''}`, 'info');
+            });
+        }
     };
 
     // 📥 GitHub raw 파일 강제 다운로드 (cross-origin에서 download 속성이 무시되는 문제 우회)
