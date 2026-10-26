@@ -1147,6 +1147,7 @@
                 const c = teamBody.style.display === 'none';
                 teamBody.style.display = c ? 'flex' : 'none';
                 teamArrow.textContent = c ? '▾' : '▸';
+                if (window._mreszRefit) window._mreszRefit('drive-file-modal');
             };
 
             // ── 프로젝트 서브 아코디온 ────────────────────────────────────────────────────
@@ -1173,6 +1174,7 @@
                     const c = projBody.style.display === 'none';
                     projBody.style.display = c ? 'flex' : 'none';
                     projArrow.textContent = c ? '▾' : '▸';
+                    if (window._mreszRefit) window._mreszRefit('drive-file-modal');
                 };
                 grp.files.forEach(function(file) {
                     const d = new Date(file.createdTime);
@@ -2087,6 +2089,7 @@
                 const c = teamBody.style.display === 'none';
                 teamBody.style.display = c ? 'flex' : 'none';
                 teamArrow.textContent = c ? '▾' : '▸';
+                if (window._mreszRefit) window._mreszRefit('drive-file-modal');
             };
 
             // ── PM 서브 아코디온 ────────────────────────────────────────────────────────
@@ -2128,6 +2131,7 @@
                     const c = pmBody.style.display === 'none';
                     pmBody.style.display = c ? 'flex' : 'none';
                     pmArrow.textContent = c ? '▾' : '▸';
+                    if (window._mreszRefit) window._mreszRefit('drive-file-modal');
                 };
                 pmFiles.forEach(function(file) { pmBody.appendChild(_makeFileRow(file)); });
                 pmWrap.appendChild(pmHdr); pmWrap.appendChild(pmBody);

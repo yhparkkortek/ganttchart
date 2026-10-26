@@ -173,6 +173,24 @@ window._clampAllModals = function() {
     });
 };
 
+// 💡 [2026-10-26 버그수정, 사용자 제보 "프로젝트 불러오기에서 담당자 펼쳐도 모달이 같이 안 늘어난다"]
+//    onShown(428~430행)은 박스 자신 또는 **바로 바깥 오버레이**의 style/class 변화만 본다 — 열릴 때
+//    한 번 `_clampModalToViewport`가 돌면서 그 순간의(아직 아코디온을 안 편) 작은 내용 높이를
+//    `height: auto` → 구체적 px로 **고정**해 버린다. 그 뒤 담당자/팀 아코디온을 펼쳐 내용이 늘어나도
+//    박스 자신의 style/class는 안 바뀌므로(내용은 자손 요소의 display만 바뀜) observer가 다시 안 돌고,
+//    박스는 그 작은 고정 높이에 계속 머문다 — 내용은 안쪽 스크롤로만 닿을 수 있어 "안 늘어난다"로 보인다.
+//    → 내용이 늘어나는 토글(팀/담당자 펼치기 등) 쪽에서 직접 호출: height를 다시 auto로 풀어
+//    CSS가 지금 내용 기준으로 재계산하게 하고, 화면 밖으로 넘치면 clamp가 다시 잡는다.
+window._mreszRefit = function(boxId) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    if (window._mreszDragging || window._mreszActive) return; // 드래그·리사이즈 중엔 건드리지 않는다
+    box.style.height = 'auto';
+    requestAnimationFrame(function() {
+        if (window._clampModalToViewport) window._clampModalToViewport(box);
+    });
+};
+
 window._makeResizable = function(boxId, _retry, handleId) {
     const box = document.getElementById(boxId);
     // 일부 모달은 박스를 나중에 만들면서 _makeDraggable을 먼저 부른다(드래그는 핸들러 안에서
