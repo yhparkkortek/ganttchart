@@ -741,14 +741,15 @@ window.deleteHistoryByDateRange = function() {
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-           <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(2,33px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
-    
+           <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(2,33px) 28px; gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
+
             <span id="rap-up"    class="rap-btn" title="위로 이동"><i class="ti ti-chevron-up"></i></span>
             <span id="rap-left"  class="rap-btn" title="WBS 레벨 올리기"><i class="ti ti-chevron-left"></i></span>
             <span id="rap-right" class="rap-btn" title="WBS 레벨 내리기"><i class="ti ti-chevron-right"></i></span>
             <span id="rap-dn"    class="rap-btn" title="아래로 이동"><i class="ti ti-chevron-down"></i></span>
             <span id="rap-add"   class="rap-btn rap-btn-add" title="행 추가"><i class="ti ti-plus"></i></span>
             <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제"><i class="ti ti-minus"></i></span>
+            <span id="rap-group" class="rap-btn rap-btn-group" title="선택한 업무들을 새 상위 그룹으로 묶기 (2개 이상 선택 시)" style="grid-column: span 3; width:100%; height:28px; font-size:11px; font-weight:bold; gap:4px;"><i class="ti ti-folder-plus" style="font-size:14px;"></i>그룹으로 묶기</span>
 
         </div>`;
         document.body.appendChild(popup);
@@ -810,6 +811,10 @@ window.deleteHistoryByDateRange = function() {
             popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
         },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        'rap-group': () => {
+            const ok = window.groupSelectedRows && window.groupSelectedRows();
+            if (ok) { popup.style.display = 'none'; window.clearRowHighlight(); }
+        },
     };
     Object.entries(actions).forEach(([id, fn]) => {
         let btn = document.getElementById(id);

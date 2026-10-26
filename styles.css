@@ -2047,6 +2047,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     /* 💡 [2026-08-30] 상하좌우＋－ 팝업의 "＋"(행 추가)만 다른 버튼들과 구분되게 초록 파스텔로 강조 */
     .rap-btn-add { border-color: #a8dab8; background: #e6f6ea; color: #1f7a3d; }
     .rap-btn-add:hover { background: #c9ecd3; border-color: #7cc494; }
+    /* 💡 [2026-10-26] "그룹으로 묶기" — 2개 이상 선택해 새 상위 그룹을 만드는 기능이라, 다른 버튼들과
+       구분되는 보라 파스텔로(이동/레벨=파랑, 추가=초록, 삭제=빨강과 겹치지 않는 네 번째 색) */
+    .rap-btn-group { border-color: #c0a0d8; background: #ede4f5; color: #5a3680; }
+    .rap-btn-group:hover { background: #ddc8ec; border-color: #ab83c8; }
 
     /* 행 액션 팝업 */
     .row-action-popup {

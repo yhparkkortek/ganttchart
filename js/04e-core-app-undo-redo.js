@@ -1119,6 +1119,92 @@
         return true;
     };
 
+    // 📌 [2026-10-26 신규] 선택한 업무들을 새 상위 그룹(WBS 레벨 하나 위)으로 묶기.
+    //    "모업무/자업무 그룹화가 안 된다" — 메일로 들어온 업무는 날짜만 보고 아무 데나 꽂히다 보니,
+    //    같은 주제(예: "DP 케이블", "밝기")의 업무들이 같은 레벨에 뿔뿔이 흩어진 채로 쌓인다
+    //    (LNW_STELLAR32_32.0 실측). 지금까지 "레벨 한 칸씩 조정"·"한 줄씩 이동"만 있고 "여러 개를
+    //    한 번에 새 상위 행 밑으로 묶기"는 아예 없었다 — 그 기능.
+    //    선택한 행(+하위 트리)을 전부 하나로 모아 바로 앞에 새 그룹 헤더를 만들고, 선택한 행 자신의
+    //    레벨은 그대로 둔다(이미 새 그룹의 자식 레벨과 같으므로 — 재레벨링 불필요, 물리적 재배치만).
+    function _rowOwnTitle(row) {
+        const lv = (row && typeof row._level === 'number') ? row._level : 4;
+        if (lv === 0) return row._origDev;
+        if (lv === 1) return row._origT1;
+        if (lv === 2) return row._origT2;
+        if (lv === 3) return row._origT3;
+        return row._origT4;
+    }
+    window.groupSelectedRows = function() {
+        const rows = globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const sel = window._selectedRows;
+        const _en = window._currentLang === 'en';
+        if (!sel || sel.size < 2) {
+            if (window.showToast) window.showToast(_en ? '⚠️ Select 2 or more tasks first (Shift/Ctrl+click).' : '⚠️ 먼저 2개 이상 업무를 선택해주세요 (Shift/Ctrl+클릭).', 'warning');
+            return false;
+        }
+        const topIdx = [...sel].sort((a, b) => a - b);
+        const levels = topIdx.map(i => lvOf(rows[i]));
+        const G = levels[0];
+        if (levels.some(l => l !== G)) {
+            alert(_en
+                ? '⚠️ Selected tasks are at different WBS levels. Please select tasks that are all at the same level.'
+                : '⚠️ 선택한 업무들의 WBS 레벨이 서로 달라 묶을 수 없습니다.\n같은 레벨끼리 선택해주세요.');
+            return false;
+        }
+        if (G === 0) {
+            alert(_en ? '⚠️ These are already top-level tasks — there is no level above to group them into.' : '⚠️ 이미 최상위 레벨이라 더 위로 묶을 수 없습니다.');
+            return false;
+        }
+
+        // 각 선택 행 + 하위 트리를 "블록"으로 확장 (moveSelectedRows/deleteSelectedRows와 동일 패턴)
+        const blocks = topIdx.map(idx => {
+            const L = lvOf(rows[idx]);
+            let end = idx + 1;
+            while (end < rows.length && lvOf(rows[end]) > L) end++;
+            return { start: idx, end };
+        });
+
+        const firstRow = rows[topIdx[0]];
+        const defaultName = (_rowOwnTitle(firstRow) || '').replace(/\s*[＊*]?AI📧\s*$/, '').trim();
+        const groupName = prompt(_en
+            ? `Name for the new group (will sit at WBS level ${G - 1}, above the ${topIdx.length} selected tasks):`
+            : `새 그룹(상위 업무, WBS 레벨 ${G - 1})의 이름을 입력하세요 — 선택한 업무 ${topIdx.length}개가 그 아래로 들어갑니다:`,
+            defaultName);
+        if (!groupName || !groupName.trim()) return false;
+
+        // 선택 블록들을 전부 꺼내 하나로 모음 (원래 상대 순서 유지), 뒤에서부터 원본에서 제거
+        const picked = [];
+        for (const b of blocks) for (let i = b.start; i < b.end; i++) picked.push(rows[i]);
+        for (let k = blocks.length - 1; k >= 0; k--) rows.splice(blocks[k].start, blocks[k].end - blocks[k].start);
+
+        // 새 그룹 헤더 행 생성 — 날짜는 강제하지 않는다(그룹행은 하위에서 waterfall로 계산됨, docs/gantt-internals.md)
+        const groupRow = new Array(rows[0].length).fill("");
+        groupRow._level = G - 1;
+        const gName = groupName.trim();
+        if (G - 1 === 0) groupRow._origDev = gName; else if (G - 1 === 1) groupRow._origT1 = gName;
+        else if (G - 1 === 2) groupRow._origT2 = gName; else groupRow._origT3 = gName;
+        groupRow._startForced = false; groupRow._planForced = false;
+        // 보기 좋도록 담당/고객/모델/인치는 선택한 첫 업무에서 승계(buildMailTaskRow의 refRow 승계와 동일 관례)
+        [colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch].forEach((ci) => {
+            if (ci !== -1 && firstRow) groupRow[ci] = firstRow[ci] || "";
+        });
+        if (colIdx.status !== -1) groupRow[colIdx.status] = "진행";
+
+        const insertAt = blocks[0].start; // 뒤에서부터 지웠으므로 첫 블록의 원래 시작 위치가 그대로 유효
+        rows.splice(insertAt, 0, groupRow, ...picked);
+
+        const newSel = new Set();
+        for (let k = 0; k < picked.length; k++) newSel.add(insertAt + 1 + k);
+        window._selectedRows = newSel;
+
+        logChange(insertAt, -1, '그룹 묶기', `"${gName}" 그룹으로 ${topIdx.length}개 업무 묶음`);
+        window.recalculateSchedules();
+        window.paintRowSelection();
+        if (window.showToast) window.showToast(_en ? `✅ Grouped ${topIdx.length} task(s) under "${gName}".` : `✅ "${gName}" 그룹으로 ${topIdx.length}개 업무를 묶었습니다.`, 'info');
+        return true;
+    };
+
     // 📥 GitHub raw 파일 강제 다운로드 (cross-origin에서 download 속성이 무시되는 문제 우회)
     window.downloadRawFile = async function(url, filename) {
         try {
