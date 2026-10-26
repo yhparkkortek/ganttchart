@@ -861,7 +861,20 @@ ${issRaw}
             ], { x: LX+PAD, y: CY+PAD, w: LW-PAD*2, h: 1.0, fontSize: 9.5, color: '333333', fontFace: 'Malgun Gothic', valign: 'top', lineSpacingMultiple: 1.35 });
 
             // ── 제품 사진 ─────────────────────────────────────────────────
-            const imgs  = ((window.tabData || {}).productImages || []).filter(Boolean);
+            // 🗂️ [2026-10-26] NAS 전환 이후 .data가 base64가 아니라 URL일 수 있다 — pptxgenjs의
+            //    addImage({data:...})는 base64만 받으므로(URL은 path 옵션), 여기서 미리 받아서
+            //    base64로 바꿔 둔다. 실패하면(백엔드 꺼짐 등) 그 사진만 건너뛴다.
+            const rawImgs = ((window.tabData || {}).productImages || []).filter(Boolean);
+            const imgs = [];
+            for (const entry of rawImgs) {
+                const src = (typeof entry === 'string') ? entry : entry.data;
+                if (!src) continue;
+                if (src.indexOf('data:') === 0) { imgs.push(entry); continue; }
+                try {
+                    const b64 = await window._dsUrlToDataUri(src);
+                    imgs.push(Object.assign({}, (typeof entry === 'string' ? {} : entry), { data: b64 }));
+                } catch (e) { console.warn('[주간보고 PPT] 제품 사진을 못 불러와 건너뜀:', e.message); }
+            }
             const imgY  = CY + 1.15, imgH = BOX_H - 1.15 - PAD;
             const MGAP  = 0.08;   // 이미지↔이미지, 이미지↔박스 여백
 

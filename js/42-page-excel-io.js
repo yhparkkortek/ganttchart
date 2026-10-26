@@ -834,8 +834,8 @@
                             o[_t('가로', 'Width')]      = (e && e.w) || '';
                             o[_t('세로', 'Height')]     = (e && e.h) || '';
                             o[_t('비고', 'Note')]       = has
-                                ? _t('그림은 엑셀에 담기지 않습니다 — 프로젝트 엑셀 저장을 쓰세요',
-                                     'Images are not embedded here — use the project Excel export')
+                                ? _t('그림은 이 엑셀에 담기지 않습니다 — NAS DATA나 프로젝트 엑셀 저장을 쓰세요',
+                                     'Images are not embedded here — use NAS DATA or the project Excel export')
                                 : '';
                             out.push(o);
                         }

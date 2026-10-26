@@ -696,35 +696,18 @@ window.populateTabData = function() {
         }
     }
 
-    // 💡 제품 사진 복원 — 슬롯 2개를 항상 먼저 초기화(비움)한 뒤, 있는 것만 채움
-    //    (이전 프로젝트 사진이 빈 슬롯에 남아있던 버그 수정)
-    for (let i = 0; i < 2; i++) {
-        const slot = document.getElementById('prod-img-slot-' + i);
-        if (!slot) continue;
-        const img = slot.querySelector('img.prod-preview');
-        const ph  = slot.querySelector('.prod-placeholder');
-        const del = slot.querySelector('.prod-del-btn');
-        if (img) { img.removeAttribute('src'); img.style.display = 'none'; }
-        if (ph)  ph.style.display = 'block';
-        if (del) del.style.display = 'none';
-    }
+    // 💡 제품 사진 복원 — 2026-10-26부터 NAS 전환으로 슬롯이 고정 2개가 아니라 tabData 길이만큼
+    //    동적으로 그려진다(_renderProductImageSlots, js/22i). 여기서는 다시 그리기만 호출한다.
+    if (window._renderProductImageSlots) window._renderProductImageSlots();
     if (td.productImages) {
-        td.productImages.forEach(function(entry, i) {
-            if (!entry) return;
-            const slot = document.getElementById('prod-img-slot-' + i);
-            if (!slot) return;
-            const img = slot.querySelector('img.prod-preview');
-            const ph  = slot.querySelector('.prod-placeholder');
-            const del = slot.querySelector('.prod-del-btn');
-            const src = (typeof entry === 'string') ? entry : entry.data;  // 구버전 호환
-            if (img) { img.src = src; img.style.display = 'block'; }
-            if (ph)  ph.style.display = 'none';
-            if (del) del.style.display = 'block';
+        td.productImages.forEach(function(entry) {
+            if (!entry || typeof entry !== 'object') return;
             // 구버전(w/h 없는) 데이터는 원본 크기를 다시 측정해서 채워 넣음 → PPT 내보내기 시 비율 유지
             if (!entry.w || !entry.h) {
+                const src = entry.data;
                 const measureImg = new Image();
                 measureImg.onload = function() {
-                    td.productImages[i] = { data: src, w: measureImg.naturalWidth, h: measureImg.naturalHeight };
+                    entry.w = measureImg.naturalWidth; entry.h = measureImg.naturalHeight;
                 };
                 measureImg.src = src;
             }

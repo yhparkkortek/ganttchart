@@ -386,3 +386,69 @@ AI까지 갔는데, 이제 그 갈림길에서 먼저 묻는다.
 - 설정값을 `or`로 읽지 말 것 — `days=0`이 falsy라 조용히 기본값으로 둔갑한다(테스트가 잡았다).
 - 경로를 바꾸려면 **`docstore_config.json` 한 줄**이면 된다(코드에 없다). 단 **팀원마다 각자
   설정**이므로, 공유 폴더 이름을 바꾸면 각 PC에서 다시 설정해야 한다.
+
+## 📷 Summary·PARTS 제품/부품 사진 — 구글 드라이브 → NAS (2026-10-26)
+
+"Summary·PARTS 사진도 NAS로 옮기고, 구글 드라이브 때문에 있던 용량·개수 제한을 풀어달라"(사용자
+요청). 두 탭은 저장 위치부터 서로 달랐다 — Summary는 **프로젝트 JSON 안**(`tabData.productImages`,
+드라이브에 그대로 실림), PARTS(Elec Parts)는 **팀 공용 라이브러리 파일**(`ElecPartLib_<구분>_Shared.json`,
+드라이브 `App_Config` 폴더, 프로젝트와 무관하게 부품 구분 전체가 공유)이었다. 그래서 NAS 폴더도 다르다:
+
+| | 폴더 | 비고 |
+|---|---|---|
+| Summary 제품사진 | `SUMMARY/<프로젝트>/PHOTOS` | 프로젝트별 |
+| PARTS 부품사진 | `PARTS/<구분>/PHOTOS` | 구분(부품 종류)별 — 프로젝트 무관, 파일명에 모델명을 넣어 구분 |
+
+### 핵심 설계: `.data`를 "base64 아니면 URL"로 그대로 쓴다
+
+기존 코드 전체가 `<img src="${entry.data}">` 식으로 `entry.data`를 **이미지 src 값**으로 직접 썼다
+(썸네일·순환보기·라이트박스·PPT 전부). base64 데이터 URI든 `/doc/get` URL이든 `<img src>`로는
+똑같이 동작하므로, **엔트리 모양을 바꾸지 않고 `data`에 넣는 값만 바꿨다** — 신규 업로드는
+`{data: NAS URL, w, h, nasFolder, nasName}`, 기존(레거시) 데이터는 그대로 `{data: base64, w, h}`.
+이 덕분에 썸네일·순환보기·라이트박스 렌더링 코드는 **단 한 줄도 안 건드렸다**.
+
+- `nasFolder`/`nasName`이 있으면 "이 항목을 지우면 NAS 파일도 지운다"의 판단 기준이 된다. 레거시
+  base64는 그 필드가 없으니 배열에서 빼는 것으로 끝(원래도 tabData/라이브러리 JSON 안에만 있었다).
+- **기존 사진은 안 건드린다** — 마이그레이션 스크립트 없음. 새로 올리는 사진부터 NAS로, 레거시는
+  base64인 채로 계속 보인다(이번 세션 전체의 원칙과 동일).
+- **원본 그대로 올린다** — 기존엔 가로/세로 1000px 초과 시 축소 + JPEG 품질 0.80 재압축을 거쳤는데,
+  NAS는 드라이브 같은 용량 걱정이 없으므로 그 단계를 없앴다(사용자가 명시적으로 요청한 "용량 제한
+  해제"). 리사이즈/압축 코드 자체를 지웠지 숫자만 올린 게 아니다.
+- **개수 제한도 없앴다** — 기존엔 슬롯 2개가 DOM에 고정으로 박혀 있어서 그게 곧 상한이었다. 두 탭
+  다 고정 슬롯 HTML을 지우고 "가진 사진 수만큼 그리기 + 맨 끝에 + 추가 타일"로 바꿨다
+  (Summary `js/22i` `_renderProductImageSlots`, PARTS `js/22e` `_epSyncImageSlotsUI`).
+
+### Summary (`js/22i-brief-mc-common-2.js`)
+
+- `window._prodImgFolder()` → `SUMMARY/<프로젝트>/PHOTOS`(프로젝트 미개설이면 null).
+- `window._uploadProductImage(file)` — 원본 그대로 `_dsPut`, 파일명은 `Date.now()+'_'+file.name`
+  (충돌 방지). 가로/세로는 업로드 **전** 로컬 blob URL로 먼저 측정(NAS 왕복 안 기다림).
+- `window._deleteProductImage(i)` — 배열에서 먼저 빼고 화면 갱신, NAS 삭제는 백그라운드(실패해도
+  화면은 이미 반영됨 — 사용자를 기다리게 하지 않는다).
+- 복원(`js/22g-name-autocomplete.js`)은 이제 `_renderProductImageSlots()` 한 번 호출로 끝난다 —
+  예전처럼 고정 2슬롯을 DOM에서 직접 비우고 채우는 코드가 없어졌다.
+- **PPT 내보내기**(`js/20-weekly-report.js`)는 pptxgenjs의 `addImage({data:...})`가 base64만
+  받으므로(URL은 `path` 옵션), NAS URL인 사진은 `window._dsUrlToDataUri()`로 미리 받아서 base64로
+  바꾼 뒤 넣는다. 슬라이드 레이아웃 자체는 그대로 **최대 2장**만 배치한다(사진 개수 제한이 아니라
+  고정 크기 슬라이드 영역의 한계 — 요청한 "제한 해제"는 저장 쪽이지 이 레이아웃이 아니다).
+- **프로젝트 전체 엑셀**(`js/04k`)의 "제품사진_원본데이터" 청크 저장 시트는 `.data`가 `data:`로
+  시작할 때만(레거시) 싣는다 — NAS 참조는 이미 영구 보관돼 있어 중복 저장할 이유가 없다.
+
+### PARTS / Elec Parts (`js/22e-summary-mctable-core4.js`)
+
+- 사진은 "항목 추가/수정" 모달에서 **저장(💾) 버튼을 눌러야** NAS에 올라간다 — 그 전까지는
+  `window._epPendingPhotos`(배열, `{entry:{data,w,h[,nasFolder,nasName]}, file:File|null}`)에
+  원본 File 객체를 들고 blob URL로 미리보기만 한다. 모델명이 저장 시점에야 확정되고(파일명에 쓴다),
+  취소하면 아무것도 NAS에 안 올라간 채로 끝나게 하려고 일부러 늦췄다.
+  - `file`이 있으면 "이번에 새로 고른 사진"(업로드 대상), 없으면 "안 건드린 기존 사진"(레거시
+    base64든 기존 NAS 참조든 그대로 유지) — 이 한 필드로 구분하므로 두 배열을 따로 안 맞춘다.
+- `window._epUploadPendingPhotos(type, model)` — 폴더는 `window._elecNasFolder(type) + '/PHOTOS'`,
+  파일명은 `<모델명>_<타임스탬프>_<순번>_<원본파일명>`(모델명의 `/\:`는 `_`로 치환).
+- **수정 중 빠진 기존 NAS 사진**은 저장 직후 고아로 안 남긴다 — 모달을 열 때
+  `window._epOriginalPhotoRefs`에 그 시점의 NAS 참조를 스냅샷해 두고, 저장된 최종 `images`와
+  비교해 없어진 것만 최선 시도로 지운다(`_dsDelete`, 실패해도 저장 자체는 막지 않는다).
+- **라이브러리 항목 전체 삭제**(`_epDeleteLibEntry`, 🗑)도 그 항목의 NAS 사진을 같이 지운다 —
+  안 그러면 항목은 없어졌는데 사진 파일만 `PARTS/<구분>/PHOTOS`에 영영 남는다.
+- 모달 HTML의 고정 2슬롯(`data-slot="0"/"1"`)을 지우고 `#ep-img-slots-container` 하나로 — 드래그
+  앤드롭은 "+ 추가" 타일에만 걸려 있다(`stopPropagation` 필수 — 안 걸면 전역 프로젝트-엑셀 드롭
+  핸들러까지 번진다는 사고가 바로 이 세션 안에서 NAS 고르기 창에도 있었다, 위 "드래그앤드롭" 절 참고).

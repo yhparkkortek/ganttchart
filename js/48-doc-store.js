@@ -148,6 +148,30 @@ window._dsPut = async function (folder, file, overwrite) {
     return _api(url, { method: 'POST', body: fd });
 };
 
+/** 파일 하나 삭제 — 확인창·토스트 없는 맨 버전(프로그램적으로 쓰는 곳용, 예: 사진 교체/제거).
+ *  사람이 직접 누르는 고르기 창의 🗑는 `_dsPickDelete`(확인창 포함)를 따로 쓴다. */
+window._dsDelete = function (folder, name) {
+    if (window._dsInvalidateList) window._dsInvalidateList(folder);
+    return _api('/doc/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: folder, name: name })
+    });
+};
+
+/** NAS 파일 URL(`/doc/get?...`)을 base64 data URI로 — PPT처럼 "그 자리에서 받아 올" 수 없고
+ *  base64 데이터 자체가 필요한 내보내기용(pptxgenjs의 addImage({data:...})는 URL을 못 받는다). */
+window._dsUrlToDataUri = async function (url) {
+    var res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var blob = await res.blob();
+    return await new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () { resolve(reader.result); };
+        reader.onerror = function () { reject(reader.error || new Error('read failed')); };
+        reader.readAsDataURL(blob);
+    });
+};
+
 // ── 🔎 패널 PN → 사양서 ───────────────────────────────────────────────
 //    파일명이 곧 패널 PN이라(DV320FHM-NN0.pdf, LC430EQZ-SHM1.pdf) 따로 색인이 필요 없다.
 //    표기 차이(점·하이픈·공백·대소문자)는 무시하고 맞춘다 — "G101EVN01.0" ↔ "G101EVN010".
@@ -708,11 +732,7 @@ window._dsPickDelete = async function (folder, name) {
     if (!confirm(_t('"' + name + '"을(를) NAS에서 영구 삭제할까요? 되돌릴 수 없습니다.',
                      'Permanently delete "' + name + '" from the NAS? This cannot be undone.'))) return;
     try {
-        await _api('/doc/delete', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: folder, name: name })
-        });
-        if (window._dsInvalidateList) window._dsInvalidateList(folder);
+        await window._dsDelete(folder, name);
         _toast('🗑 ' + name, 'info');
         if (folder === _dsPick.folder) await _dsLoadFolder();
     } catch (e) { _toast('❌ ' + e.message, 'error', 6000); }

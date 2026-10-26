@@ -895,12 +895,14 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         }
 
         // ── 제품사진_원본데이터 시트: 사진(base64)을 셀 글자수 제한(약 32,767자) 때문에 여러 행으로 나눠 저장 ──
+        //    🗂️ [2026-10-26] NAS 전환 이후 새 사진은 .data가 base64가 아니라 /doc/get URL이다 —
+        //    이미 NAS에 영구 보관돼 있으므로 여기 또 실을 필요가 없다(레거시 base64만 싣는다).
         const CHUNK_SIZE = 30000;
         const piRows = [['슬롯', '순번', '가로(w)', '세로(h)', '데이터(base64 조각)']];
         (tabData.productImages || []).forEach(function(entry, slotIdx) {
             if (!entry) return;
             const src = (typeof entry === 'string') ? entry : entry.data;
-            if (!src) return;
+            if (!src || src.indexOf('data:') !== 0) return;
             const w = (entry && entry.w) || '';
             const h = (entry && entry.h) || '';
             for (let c = 0; c * CHUNK_SIZE < src.length; c++) {

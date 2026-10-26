@@ -910,94 +910,113 @@ window.mcRenderComparisonTable = function() {
 };
 
 // 💡 [2026-08-27 신규] Summary 제품사진 크게 보기 — Elec Parts 표의 사진 라이트박스와 동일한 모달을
-//    재사용한다(_openImageLightbox 공용 코어). slotIndex는 클릭한 슬롯(0/1)이고, 빈 슬롯은 건너뛰어
-//    실제 채워진 사진들만 모아서 그 안에서의 위치를 계산한다.
-window.showProductPhotoLightbox = function(slotIndex) {
+//    재사용한다(_openImageLightbox 공용 코어).
+//    🗂️ [2026-10-26] NAS 전환 이후 productImages는 항상 빈 자리 없는 배열이라(_renderProductImageSlots가
+//    로드/추가/삭제마다 다시 다져 둔다) 더 이상 "빈 슬롯 건너뛰고 위치 계산" 과정이 필요 없다.
+window.showProductPhotoLightbox = function(i) {
     const _en = window._currentLang === 'en';
     const all = (window.tabData && window.tabData.productImages) || [];
-    const valid = all.filter(Boolean);
-    if (!valid.length) return;
-    let startIdx = 0, seen = 0;
-    for (let k = 0; k < all.length; k++) {
-        if (!all[k]) continue;
-        if (k === slotIndex) { startIdx = seen; break; }
-        seen++;
-    }
-    window._openImageLightbox(valid, startIdx, _en ? 'Product Photo' : '제품 사진');
+    if (!all.length) return;
+    window._openImageLightbox(all, i, _en ? 'Product Photo' : '제품 사진');
 };
 
-// 💡 제품 사진 업로드 슬롯 초기화
-window.initProductImageSlots = function() {
-    [0, 1].forEach(function(i) {
-        const slot = document.getElementById('prod-img-slot-' + i);
-        if (!slot) return;
-        const fileInput = slot.querySelector('input[type="file"]');
-        const img  = slot.querySelector('img.prod-preview');
-        const ph   = slot.querySelector('.prod-placeholder');
-        const del  = slot.querySelector('.prod-del-btn');
+// 🗂️ [2026-10-26] 제품 사진 저장소를 구글 드라이브(tabData 안 base64) → NAS로 옮겼다(사용자 요청 —
+// "구글 드라이브 용량/개수 제한을 NAS로 풀어달라"). 폴더는 SUMMARY/<프로젝트>/PHOTOS — 프로젝트별로
+// 갈린다(js/48 _dsCurrentProjectFolderName). 원본 그대로 올린다(리사이즈·JPEG 재압축 없음 — NAS라
+// 용량 제약이 없다). 레거시 데이터({data: base64,...})는 그대로 보여주기만 하고 고치지 않는다(기존
+// 파일을 건드리지 않는다는 이번 세션의 원칙 그대로) — 새로 올리는 사진부터 NAS 참조로 저장된다.
+window._prodImgFolder = function () {
+    const proj = window._dsCurrentProjectFolderName ? window._dsCurrentProjectFolderName() : null;
+    return proj ? ('SUMMARY/' + proj + '/PHOTOS') : null;
+};
 
-        // 슬롯 클릭 → 파일 선택 (삭제 버튼 클릭은 제외).
-        // 💡 [2026-08-27] 이미 사진이 있는 슬롯은 클릭으로 더 이상 파일 선택창을 바로 열지 않는다 —
-        //    열면 더블클릭(=크게 보기)의 첫 클릭에서 매번 파일 선택창이 뜨는 충돌이 생기기 때문.
-        //    사진 교체는 ✕로 먼저 지운 뒤 빈 슬롯을 클릭하면 된다.
-        slot.addEventListener('click', function(e) {
-            if (e.target === del) return;
-            if (img.style.display !== 'none' && img.src) return;
-            fileInput.click();
-        });
-        // 더블클릭 → 크게 보기(사진이 있을 때만)
-        img.title = window._currentLang === 'en' ? 'Double-click to enlarge' : '더블클릭하면 크게 보기';
-        img.addEventListener('dblclick', function(e) {
-            e.stopPropagation();
-            if (img.style.display === 'none' || !img.src) return;
-            window.showProductPhotoLightbox(i);
-        });
+function _prodImgMeasure(file) {
+    return new Promise(function (resolve) {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = function () { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+        img.onerror = function () { URL.revokeObjectURL(url); resolve({ w: 0, h: 0 }); };
+        img.src = url;
+    });
+}
 
-        // 파일 선택 → JPEG 압축 → 저장
-        fileInput.addEventListener('change', function() {
-            const file = fileInput.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(ev) {
-                const tempImg = new Image();
-                tempImg.onload = function() {
-                    const MAX = 1000;
-                    let w = tempImg.width, h = tempImg.height;
-                    if (w > MAX || h > MAX) {
-                        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
-                        else        { w = Math.round(w * MAX / h); h = MAX; }
-                    }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = w; canvas.height = h;
-                    canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
-                    const b64 = canvas.toDataURL('image/jpeg', 0.80);
-                    // tabData에 저장 — {data, w, h} 형식으로 원본 비율 보존
-                    window.tabData = window.tabData || {};
-                    window.tabData.productImages = window.tabData.productImages || [null, null, null];
-                    window.tabData.productImages[i] = { data: b64, w: w, h: h };
-                    // 미리보기 갱신
-                    img.src = b64; img.style.display = 'block';
-                    ph.style.display = 'none';
-                    del.style.display = 'block';
-                };
-                tempImg.src = ev.target.result;
-            };
-            reader.readAsDataURL(file);
-            fileInput.value = ''; // 같은 파일 재선택 허용
-        });
+window._uploadProductImage = async function (file) {
+    const _en = window._currentLang === 'en';
+    const folder = window._prodImgFolder();
+    if (!folder) { if (window.showToast) window.showToast('⚠️ ' + (_en ? 'Open a project first.' : '먼저 프로젝트를 열어야 합니다.'), 'error'); return; }
+    if (!window._dsPut) { if (window.showToast) window.showToast('⚠️ ' + (_en ? 'The document store is not available.' : '문서 저장소 기능을 불러오지 못했습니다.'), 'error'); return; }
+    const dims = await _prodImgMeasure(file);
+    // 같은 이름 충돌 방지 — 타임스탬프 접두(이 폴더 안에서만 유일하면 되므로 충분).
+    const safeName = Date.now() + '_' + file.name;
+    const renamed = new File([file], safeName, { type: file.type });
+    try {
+        if (window.showToast) window.showToast('⏳ ' + (_en ? 'Uploading…' : '올리는 중…'), 'info');
+        await window._dsPut(folder, renamed);
+    } catch (e) {
+        if (window.showToast) window.showToast('❌ ' + e.message, 'error', 7000);
+        return;
+    }
+    window.tabData = window.tabData || {};
+    window.tabData.productImages = (window.tabData.productImages || []).filter(Boolean);
+    window.tabData.productImages.push({
+        data: window._dsFileUrl(folder, safeName), w: dims.w, h: dims.h,
+        nasFolder: folder, nasName: safeName
+    });
+    window._renderProductImageSlots();
+};
 
-        // 삭제 버튼
-        del.addEventListener('click', function(e) {
-            e.stopPropagation();
-            window.tabData = window.tabData || {};
-            window.tabData.productImages = window.tabData.productImages || [null, null, null];
-            window.tabData.productImages[i] = null;
-            img.src = ''; img.style.display = 'none';
-            ph.style.display = '';
-            del.style.display = 'none';
-        });
+window._deleteProductImage = function (i) {
+    const imgs = window.tabData && window.tabData.productImages;
+    if (!imgs || !imgs[i]) return;
+    const entry = imgs[i];
+    imgs.splice(i, 1);
+    window._renderProductImageSlots();
+    // NAS 참조가 있는 사진만 실제 파일도 지운다(레거시 base64는 tabData 안에서 빼는 걸로 끝).
+    if (entry && entry.nasFolder && entry.nasName && window._dsDelete) {
+        window._dsDelete(entry.nasFolder, entry.nasName).catch(function () { /* 이미 없거나 백엔드가 꺼져 있어도 화면에선 이미 뺐다 */ });
+    }
+};
+
+// 💡 제품 사진 목록을 다시 그린다 — 개수 제한이 없어 고정 슬롯 2개 대신 tabData 길이만큼 그리고
+// 마지막에 "+ 추가" 타일을 하나 더 붙인다. 로드/추가/삭제 때마다 이 함수 하나로 다시 그린다.
+window._renderProductImageSlots = function () {
+    const list = document.getElementById('prod-img-list');
+    if (!list) return;
+    const _en = window._currentLang === 'en';
+    window.tabData = window.tabData || {};
+    // 레거시 저장분은 고정 3칸 배열이라 빈 자리가 null로 남아있을 수 있다 — 여기서 한 번 다져 둔다.
+    const imgs = window.tabData.productImages = (window.tabData.productImages || []).filter(Boolean);
+
+    let html = imgs.map(function (entry, i) {
+        const src = (typeof entry === 'string') ? entry : entry.data;
+        return '<div class="prod-img-slot" data-idx="' + i + '" style="cursor:default;">'
+            + '<img class="prod-preview" src="' + escapeHtml(src || '') + '" style="display:block;" alt="제품사진' + (i + 1) + '" title="' + (_en ? 'Double-click to enlarge' : '더블클릭하면 크게 보기') + '">'
+            + '<button class="prod-del-btn" title="' + (_en ? 'Delete' : '삭제') + '" style="display:block;">✕</button>'
+            + '</div>';
+    }).join('');
+    html += '<div class="prod-img-slot" id="prod-img-add" title="' + (_en ? 'Click to add photos' : '클릭하여 사진 추가') + '">'
+        + '<div class="prod-placeholder">📷<br>' + (_en ? 'Add photo' : '사진 추가') + '<br><span style="font-size:10px;">' + (_en ? '(several at once OK)' : '(여러 장 한꺼번에 가능)') + '</span></div>'
+        + '<input type="file" accept="image/*" multiple style="display:none;">'
+        + '</div>';
+    list.innerHTML = html;
+
+    list.querySelectorAll('.prod-img-slot[data-idx]').forEach(function (slot) {
+        const i = parseInt(slot.dataset.idx, 10);
+        slot.querySelector('img').addEventListener('dblclick', function (e) { e.stopPropagation(); window.showProductPhotoLightbox(i); });
+        slot.querySelector('.prod-del-btn').addEventListener('click', function (e) { e.stopPropagation(); window._deleteProductImage(i); });
+    });
+    const addSlot = document.getElementById('prod-img-add');
+    const addInput = addSlot.querySelector('input[type="file"]');
+    addSlot.addEventListener('click', function () { addInput.click(); });
+    addInput.addEventListener('change', function () {
+        const files = Array.prototype.slice.call(addInput.files || []);
+        addInput.value = '';
+        files.forEach(function (f) { window._uploadProductImage(f); });
     });
 };
+
+// 💡 [호환용] 예전 이름을 그대로 불러도 동작하게 — DOMContentLoaded 등 기존 호출부를 안 건드린다.
+window.initProductImageSlots = function() { window._renderProductImageSlots(); };
 
 document.addEventListener('DOMContentLoaded', function() {
     if (window.populateTabData) window.populateTabData();

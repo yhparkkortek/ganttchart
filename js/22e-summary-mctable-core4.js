@@ -447,7 +447,10 @@ window.elecCompareReextract = async function(type, model) {
     const lib = window._epLibCache[type] || await window.loadElecPartLibrary(type);
     const existing = window.findElecPartInLibrary(lib, model);
     if (existing && Array.isArray(existing.images) && existing.images.length) {
-        window._epPendingImages = [existing.images[0] || null, existing.images[1] || null];
+        window._epPendingPhotos = existing.images.filter(Boolean).map(function(im) { return { entry: im, file: null }; });
+        window._epOriginalPhotoRefs = window._epPendingPhotos
+            .filter(function(p) { return p.entry && p.entry.nasFolder && p.entry.nasName; })
+            .map(function(p) { return { nasFolder: p.entry.nasFolder, nasName: p.entry.nasName }; });
         window._epSyncImageSlotsUI();
     }
     window._epPendingReextractModel = model;
@@ -469,7 +472,10 @@ window.elecCompareOpenEditModal = async function(type, model) {
     window._epPendingReextractModel = entry.model;
     window._epEditingOriginalModel = entry.model;
     window._epPendingConnectors = entry.connectors || [];
-    window._epPendingImages = [(entry.images && entry.images[0]) || null, (entry.images && entry.images[1]) || null];
+    window._epPendingPhotos = (entry.images || []).filter(Boolean).map(function(im) { return { entry: im, file: null }; });
+    window._epOriginalPhotoRefs = window._epPendingPhotos
+        .filter(function(p) { return p.entry && p.entry.nasFolder && p.entry.nasName; })
+        .map(function(p) { return { nasFolder: p.entry.nasFolder, nasName: p.entry.nasName }; });
     window._epSyncImageSlotsUI();
     window._epRenderPreviewForm(type, entry.specs || {});
     if (window.showToast) window.showToast(_en ? `Loaded the current spec for "${entry.model}" — edit and save.` : `"${entry.model}"의 현재 스펙을 불러왔습니다 — 수정 후 저장하세요.`, 'info');
@@ -496,21 +502,8 @@ window.elecCompareOpenAddModal = async function(type) {
                 <div id="ep-add-lib-list" style="margin-top:8px; max-height:300px; overflow-y:auto; border:1px solid #eef1f3; border-radius:6px;"></div>
             </div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
-                <div style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">📷 ${_en ? 'Photos (up to 2)' : '사진 (최대 2장)'}</div>
-                <div style="display:flex; gap:8px; margin-bottom:12px; flex-shrink:0;">
-                    <div class="ep-img-slot" data-slot="0" style="position:relative; width:104px; height:78px; border:1.5px dashed #ced4da; border-radius:6px; cursor:pointer; overflow:hidden; background:#f8f9fa; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                        <input type="file" accept="image/*" style="display:none;">
-                        <img class="ep-img-preview" style="display:none; width:100%; height:100%; object-fit:cover;">
-                        <span class="ep-img-placeholder" style="font-size:22px; color:#bbb;">📷</span>
-                        <button type="button" class="ep-img-del-btn" style="display:none; position:absolute; top:2px; right:2px; width:18px; height:18px; border:none; border-radius:50%; background:rgba(177,67,47,0.85); color:#fff; font-size:11px; cursor:pointer; line-height:18px; padding:0;">✕</button>
-                    </div>
-                    <div class="ep-img-slot" data-slot="1" style="position:relative; width:104px; height:78px; border:1.5px dashed #ced4da; border-radius:6px; cursor:pointer; overflow:hidden; background:#f8f9fa; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                        <input type="file" accept="image/*" style="display:none;">
-                        <img class="ep-img-preview" style="display:none; width:100%; height:100%; object-fit:cover;">
-                        <span class="ep-img-placeholder" style="font-size:22px; color:#bbb;">📷</span>
-                        <button type="button" class="ep-img-del-btn" style="display:none; position:absolute; top:2px; right:2px; width:18px; height:18px; border:none; border-radius:50%; background:rgba(177,67,47,0.85); color:#fff; font-size:11px; cursor:pointer; line-height:18px; padding:0;">✕</button>
-                    </div>
-                </div>
+                <div style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">📷 ${_en ? 'Photos (saved to the NAS — no limit)' : '사진 (NAS에 저장 — 개수 제한 없음)'}</div>
+                <div id="ep-img-slots-container" style="display:flex; gap:8px; margin-bottom:12px; flex-shrink:0; flex-wrap:wrap;"></div>
                 <div id="ep-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new item with AI' : '또는 새 항목을 AI로 추출'}</div>
                 <input type="file" id="ep-add-file" accept=".pdf,.txt,.html,.htm" style="display:none;" onchange="window._epHandleFileUpload(this)">
                 <div id="ep-add-dropzone"
@@ -535,7 +528,6 @@ window.elecCompareOpenAddModal = async function(type) {
         window._makeDraggable('ep-add-box', 'ep-add-drag');
         window._bindClickToFront('ep-add-modal');
         modal.onclick = function() { modal.style.display = 'none'; };
-        window._epInitImageSlots();
     }
     const titleEl = document.getElementById('ep-add-title');
     if (titleEl) titleEl.textContent = cfg.icon + ' ' + (_en ? 'Add ' + cfg.label : cfg.label + ' 추가');
@@ -549,105 +541,91 @@ window.elecCompareOpenAddModal = async function(type) {
     const fileInputEl = document.getElementById('ep-add-file'); if (fileInputEl) fileInputEl.value = '';
     window._epEditingOriginalModel = null;
     window._epPendingConnectors = [];
-    window._epPendingImages = [null, null];
+    window._epPendingPhotos = [];        // [{entry:{data,w,h[,nasFolder,nasName]}, file:File|null}, ...]
+    window._epOriginalPhotoRefs = [];    // 수정 모달에서만 채움 — 저장 시 "없어진 NAS 사진" 찾기용
     window._epSyncImageSlotsUI();
     const lib = await window.loadElecPartLibrary(type);
     window._epRenderLibList('');
 };
 
-// 💡 [2026-08-26 신규] 사진 슬롯(최대 2장) — Summary 탭의 initProductImageSlots와 동일한 방식
-//    (업로드 시 최대 1000px로 리사이즈 + JPEG 0.8 압축해 base64로 tabData 대신 라이브러리 항목에 저장).
-//    모델과 무관하게 모달 DOM은 한 번만 만들어지므로, 리스너도 한 번만 붙이고 이후엔 항상
-//    window._epPendingImages(현재 편집 중인 항목의 사진)만 읽고 쓴다.
-// 💡 [2026-09-08 신규] 파일 하나(클릭으로 고른 것이든 드래그로 떨어뜨린 것이든)를 리사이즈+압축해서
-//    슬롯 i에 저장 — change 이벤트/드롭 이벤트 양쪽이 이 함수 하나만 공유하도록 리팩터링(원래는 change
-//    핸들러 안에 이 로직이 그대로 박혀있어서 드롭 경로가 재사용할 수 없었음).
-window._epProcessDroppedImage = function(file, i) {
+// 🗂️ [2026-10-26] 사진 저장소를 구글 드라이브(라이브러리 JSON 안 base64) → NAS로 옮겼다(사용자 요청).
+//    폴더는 PARTS/<구분>/PHOTOS — 부품 라이브러리 자체가 프로젝트 공용이라 프로젝트별이 아니라
+//    구분(부품 종류)별로 모인다. 개수 제한(기존 2장)도 없앴다 — 슬롯이 고정 2개가 아니라
+//    window._epPendingPhotos 길이만큼 동적으로 그려진다.
+//    업로드는 "저장" 버튼을 눌렀을 때(_epSaveNewItem)만 실제로 NAS에 올라간다 — 그래야 파일명에
+//    쓸 모델명이 확정돼 있고, 모달을 취소하면 아무것도 안 올라간 채로 끝난다. 그때까지는 원본
+//    File 객체를 들고 있다가(리사이즈·재압축 없음 — 원본 그대로) blob URL로 미리보기만 한다.
+window._epProcessDroppedImage = function(file, appendAt) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-        const tempImg = new Image();
-        tempImg.onload = function() {
-            const MAX = 1000;
-            let w = tempImg.width, h = tempImg.height;
-            if (w > MAX || h > MAX) {
-                if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
-                else        { w = Math.round(w * MAX / h); h = MAX; }
-            }
-            const canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
-            const b64 = canvas.toDataURL('image/jpeg', 0.80);
-            window._epPendingImages = window._epPendingImages || [null, null];
-            window._epPendingImages[i] = { data: b64, w: w, h: h };
-            window._epSyncImageSlotsUI();
-        };
-        tempImg.src = ev.target.result;
+    window._epPendingPhotos = window._epPendingPhotos || [];
+    const url = URL.createObjectURL(file);
+    const tempImg = new Image();
+    tempImg.onload = function() {
+        const item = { entry: { data: url, w: tempImg.naturalWidth, h: tempImg.naturalHeight }, file: file };
+        if (appendAt == null || appendAt >= window._epPendingPhotos.length) window._epPendingPhotos.push(item);
+        else window._epPendingPhotos[appendAt] = item;
+        window._epSyncImageSlotsUI();
     };
-    reader.readAsDataURL(file);
+    tempImg.src = url;
 };
 
-window._epInitImageSlots = function() {
-    document.querySelectorAll('#ep-add-modal .ep-img-slot').forEach(function(slot) {
-        const i = parseInt(slot.dataset.slot, 10);
-        const fileInput = slot.querySelector('input[type="file"]');
-        const del = slot.querySelector('.ep-img-del-btn');
-        slot.addEventListener('click', function(e) {
-            if (e.target === del) return;
-            fileInput.click();
-        });
-        fileInput.addEventListener('change', function() {
-            const file = fileInput.files[0];
-            if (file) window._epProcessDroppedImage(file, i);
-            fileInput.value = ''; // 같은 파일 재선택 허용
-        });
-        // 🐛 [2026-09-08 버그수정] "사진을 드래그해서 놓으면 관리자 비밀번호를 물어본다" — 이 슬롯엔
-        //    지금까지 드래그앤드롭 자체가 구현돼 있지 않아서(클릭해서 파일 선택만 가능), 사진을
-        //    드롭하면 이벤트가 그대로 버블링되어 04f-core-app-upload-utils-1.js의 전역
-        //    window.addEventListener("drop", ...)(엑셀 파일 로드용)까지 올라가 "엑셀로 프로젝트를
-        //    덮어쓰려는 시도"로 오인되고 있었다. stopPropagation()으로 버블링을 막고, 같은 change
-        //    핸들러가 쓰는 처리 로직(_epProcessDroppedImage)을 그대로 재사용해 실제 드래그앤드롭
-        //    업로드를 구현한다.
-        slot.addEventListener('dragover', function(e) {
-            e.preventDefault(); e.stopPropagation();
-            slot.style.borderColor = '#2c5f8a';
-            slot.style.background = '#e9eef3';
-        });
-        slot.addEventListener('dragleave', function(e) {
-            e.preventDefault(); e.stopPropagation();
-            slot.style.borderColor = '#ced4da';
-            slot.style.background = '#f8f9fa';
-        });
-        slot.addEventListener('drop', function(e) {
-            e.preventDefault(); e.stopPropagation();
-            slot.style.borderColor = '#ced4da';
-            slot.style.background = '#f8f9fa';
-            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-            if (file) window._epProcessDroppedImage(file, i);
-        });
-        del.addEventListener('click', function(e) {
+window._epDeletePendingPhoto = function(i) {
+    window._epPendingPhotos = window._epPendingPhotos || [];
+    window._epPendingPhotos.splice(i, 1);
+    window._epSyncImageSlotsUI();
+};
+
+// 💡 슬롯 목록을 다시 그린다 — 개수 제한이 없어 "+ 추가" 타일 하나를 항상 끝에 붙인다.
+//    클릭/드래그앤드롭 핸들러는 매번 다시 그릴 때 새로 붙인다(정적 DOM이 아니라서).
+window._epSyncImageSlotsUI = function() {
+    const container = document.getElementById('ep-img-slots-container');
+    if (!container) return;
+    const photos = window._epPendingPhotos = window._epPendingPhotos || [];
+    const SLOT = 'position:relative; width:104px; height:78px; border:1.5px dashed #ced4da; border-radius:6px; overflow:hidden; background:#f8f9fa; display:flex; align-items:center; justify-content:center; flex-shrink:0;';
+    let html = photos.map(function(p, i) {
+        const src = p.entry && p.entry.data;
+        return '<div class="ep-img-slot" data-idx="' + i + '" style="' + SLOT + '">'
+            + '<img class="ep-img-preview" src="' + escapeHtml(src || '') + '" style="width:100%; height:100%; object-fit:cover; display:block;">'
+            + '<button type="button" class="ep-img-del-btn" style="position:absolute; top:2px; right:2px; width:18px; height:18px; border:none; border-radius:50%; background:rgba(177,67,47,0.85); color:#fff; font-size:11px; cursor:pointer; line-height:18px; padding:0;">✕</button>'
+            + '</div>';
+    }).join('');
+    html += '<div class="ep-img-add" style="' + SLOT + ' cursor:pointer;">'
+        + '<input type="file" accept="image/*" multiple style="display:none;">'
+        + '<span style="font-size:22px; color:#bbb;">📷</span>'
+        + '</div>';
+    container.innerHTML = html;
+
+    container.querySelectorAll('.ep-img-slot').forEach(function(slot) {
+        const i = parseInt(slot.dataset.idx, 10);
+        slot.querySelector('.ep-img-del-btn').addEventListener('click', function(e) {
             e.stopPropagation();
-            window._epPendingImages = window._epPendingImages || [null, null];
-            window._epPendingImages[i] = null;
-            window._epSyncImageSlotsUI();
+            window._epDeletePendingPhoto(i);
         });
     });
-};
-window._epSyncImageSlotsUI = function() {
-    const imgs = window._epPendingImages || [null, null];
-    document.querySelectorAll('#ep-add-modal .ep-img-slot').forEach(function(slot) {
-        const i = parseInt(slot.dataset.slot, 10);
-        const img = slot.querySelector('.ep-img-preview');
-        const ph = slot.querySelector('.ep-img-placeholder');
-        const del = slot.querySelector('.ep-img-del-btn');
-        const data = imgs[i];
-        if (data && data.data) {
-            img.src = data.data; img.style.display = 'block';
-            ph.style.display = 'none'; del.style.display = 'block';
-        } else {
-            img.src = ''; img.style.display = 'none';
-            ph.style.display = 'flex'; del.style.display = 'none';
-        }
+    const addSlot = container.querySelector('.ep-img-add');
+    const addInput = addSlot.querySelector('input[type="file"]');
+    addSlot.addEventListener('click', function() { addInput.click(); });
+    addInput.addEventListener('change', function() {
+        const files = Array.prototype.slice.call(addInput.files || []);
+        addInput.value = '';
+        files.forEach(function(f) { window._epProcessDroppedImage(f); });
+    });
+    // 🐛 [2026-09-08 버그수정 유지] 드래그앤드롭 시 stopPropagation 안 하면 전역 프로젝트-엑셀
+    //    드롭 핸들러(js/04f)까지 번져 "비밀번호 창"이 겹쳐 뜬다(이번 세션에 NAS 창에서도 같은
+    //    사고가 재현됐다) — 추가 타일에도 꼭 걸어 둔다.
+    addSlot.addEventListener('dragover', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        addSlot.style.borderColor = '#2c5f8a'; addSlot.style.background = '#e9eef3';
+    });
+    addSlot.addEventListener('dragleave', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        addSlot.style.borderColor = '#ced4da'; addSlot.style.background = '#f8f9fa';
+    });
+    addSlot.addEventListener('drop', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        addSlot.style.borderColor = '#ced4da'; addSlot.style.background = '#f8f9fa';
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (files) Array.prototype.slice.call(files).forEach(function(f) { window._epProcessDroppedImage(f); });
     });
 };
 
@@ -697,6 +675,15 @@ window._epDeleteLibEntry = async function(type, model) {
         ? `Permanently delete "${displayName}" from the shared ${cfg.label} library?\nThis cannot be undone and affects everyone on the team.`
         : `공용 ${cfg.label} 라이브러리에서 "${displayName}"을(를) 완전히 삭제할까요?\n되돌릴 수 없으며 팀 전체에 영향을 줍니다.`);
     if (!ok) return;
+
+    // NAS에 올라간 사진도 같이 지운다(최선 시도 — 실패해도 라이브러리 항목 삭제 자체는 막지 않는다).
+    const beingDeleted = (function() {
+        const lib = window._epLibCache[type] || { items: [] };
+        return (lib.items || []).find(function(x) { return x.model === model; });
+    })();
+    (beingDeleted && beingDeleted.images || []).forEach(function(im) {
+        if (im && im.nasFolder && im.nasName && window._dsDelete) window._dsDelete(im.nasFolder, im.nasName).catch(function () {});
+    });
 
     const success = await window._epLibRemoveEntry(type, model);
     if (!success) {
@@ -866,6 +853,30 @@ window._epRenderPreviewForm = function(type, specs) {
     if (footer) footer.style.display = 'block';
 };
 
+// 🗂️ [2026-10-26] 저장 시점에만 실제로 NAS에 올린다(이 함수 전체 주석 참고) — "손 안 댄" 사진
+//    (file가 없는 항목, 레거시 base64 포함)은 그대로 둔다.
+window._epUploadPendingPhotos = async function(type, model) {
+    const _en = window._currentLang === 'en';
+    const photos = window._epPendingPhotos || [];
+    const baseFolder = (window._elecNasFolder ? window._elecNasFolder(type) : ('PARTS/' + type)) + '/PHOTOS';
+    const safeModel = String(model || '').replace(/[\/\\:]/g, '_');
+    const out = [];
+    for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        if (!p || !p.entry) continue;
+        if (!p.file || !window._dsPut) { out.push(p.entry); continue; }
+        const safeName = safeModel + '_' + Date.now() + '_' + i + '_' + p.file.name;
+        const renamed = new File([p.file], safeName, { type: p.file.type });
+        try {
+            await window._dsPut(baseFolder, renamed);
+            out.push({ data: window._dsFileUrl(baseFolder, safeName), w: p.entry.w, h: p.entry.h, nasFolder: baseFolder, nasName: safeName });
+        } catch (e) {
+            if (window.showToast) window.showToast('⚠️ ' + (_en ? 'Photo upload failed: ' : '사진 업로드 실패: ') + e.message, 'warning', 6000);
+        }
+    }
+    return out;
+};
+
 window._epSaveNewItem = async function(type) {
     const _en = window._currentLang === 'en';
     const modelInput = document.getElementById('ep-form-model');
@@ -873,7 +884,13 @@ window._epSaveNewItem = async function(type) {
     if (!model) { alert(_en ? 'Please enter the library key.' : '라이브러리 키를 입력해주세요.'); if (modelInput) modelInput.focus(); return; }
     const specs = {};
     document.querySelectorAll('#ep-add-preview [data-ep-field]').forEach(function(inp) { specs[inp.dataset.epField] = inp.value; });
-    const entry = { model: model, specs: specs, connectors: window._epPendingConnectors || [], images: (window._epPendingImages || []).filter(Boolean) };
+
+    const saveBtn = document.getElementById('ep-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = _en ? 'Uploading photos…' : '사진 올리는 중…'; }
+    const images = await window._epUploadPendingPhotos(type, model);
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = _en ? 'Save' : '저장'; }
+
+    const entry = { model: model, specs: specs, connectors: window._epPendingConnectors || [], images: images };
     const originalModel = window._epEditingOriginalModel;
     window._epEditingOriginalModel = null;
     const isRename = !!(originalModel && originalModel !== model);
@@ -881,6 +898,13 @@ window._epSaveNewItem = async function(type) {
     const ok = await window.upsertElecPartLibraryEntry(type, entry);
     if (!ok) return;
     if (isRename) await window._epLibRemoveEntry(type, originalModel);
+
+    // 수정 중 화면에서 빠진 기존 NAS 사진은 고아로 안 남긴다 — 최선 시도, 실패해도 저장은 이미 끝났다.
+    (window._epOriginalPhotoRefs || []).forEach(function(ref) {
+        const stillThere = images.some(function(im) { return im.nasFolder === ref.nasFolder && im.nasName === ref.nasName; });
+        if (!stillThere && window._dsDelete) window._dsDelete(ref.nasFolder, ref.nasName).catch(function () {});
+    });
+    window._epOriginalPhotoRefs = [];
 
     window.tabData = window.tabData || {};
     window.tabData.elecCompare = window.tabData.elecCompare || {};
