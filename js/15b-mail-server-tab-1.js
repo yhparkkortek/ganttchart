@@ -1658,8 +1658,17 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
         filterHtml = `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 필터링 중: ${_msQEsc(filter.value)}</span></div>`;
     }
 
+    // 💡 [2026-10-26 신규] "여긴 뭐고 언제 지워지나"를 매번 물어보지 않도록 안내 — 호버로만 보임(ℹ️).
+    //    docs/doc-store.md "staging 정리(GC)는 기간이 아니라 큐 연동" 절 요약.
+    const _gcInfo = 'ℹ️ 📁 저장 위치 안내\n\n' +
+        '이 목록의 메일 원본(.eml)은 Google Drive가 아니라 사내 NAS 공유의 MAIL/_staging 폴더에 보관됩니다.\n\n' +
+        '· 프로젝트에 배치되면 그 프로젝트 폴더로 옮겨져 영구 보관됩니다.\n' +
+        '· 여기(또는 업무 보관함 등 다른 대기 큐)에 남아있는 한 기간과 상관없이 계속 보관됩니다.\n' +
+        '· 60일이 지나고 모든 대기 큐에서도 사라진 것만 정리 대상이 됩니다 — 60일은 "최후 방어선"일 뿐,\n' +
+        '  자동으로 매일 돌지는 않고 필요 시 수동으로 실행합니다.';
     return `<div id="ms-queue-summary-inner" style="padding:10px 14px;background:#f8faff;border-bottom:1px solid #e3ecfa;font-size:11.5px;color:#333;">` +
-        `<div><span class="ms-queue-clear-filter" title="클릭하면 전체보기(필터 해제)" style="cursor:pointer;text-decoration:underline dotted;"><b>총 ${rows.length}건</b></span>${dateRange ? ' · ' + _msQEsc(dateRange) : ''}</div>` +
+        `<div><span class="ms-queue-clear-filter" title="클릭하면 전체보기(필터 해제)" style="cursor:pointer;text-decoration:underline dotted;"><b>총 ${rows.length}건</b></span>${dateRange ? ' · ' + _msQEsc(dateRange) : ''}` +
+        ` <span title="${_msQEsc(_gcInfo)}" style="cursor:help;color:#888;font-size:11px;">ℹ️ 원본 보관 안내</span></div>` +
         (domainTop.length ? `<div style="margin-top:6px;"><b>발신 도메인:</b> ${domainTop.map(e => chip(e[0], e[1], 'domain')).join('')}</div>` : '') +
         reasonHtml +
         filterHtml +
