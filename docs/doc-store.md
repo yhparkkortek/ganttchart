@@ -224,11 +224,11 @@ PARTS는 js/42의 공용 `ai` 블록(평평한 행 표)을 **쓰지 않는다** 
 (`window.currentDriveFileName`, `.json` 제거 + 폴더명에 못 쓰는 글자 공백 치환)으로 **[📌 프로젝트
 탭, 📁 전체 탭]** 두 개를 만들고, `_dsImportToPage`/`_dsOpenBrowser`가 기본으로 📌 프로젝트 탭을 연다.
 
-- **백엔드는 안 고쳤다** — `_docstore_folder_segs`가 이미 2026-10-22부터 1단계 하위 폴더(`<상위>/<하위>`)
-  를 허용하고 있었다(PARTS/<구분>용). 프런트가 하위 폴더 이름을 프로젝트명으로 쓰기만 하면 된다.
-- **PARTS는 적용 안 함** — `baseFolder`에 이미 `/`가 있으면(PARTS/<구분>) `null`을 돌려준다. 백엔드가
-  2단계까지만 허용해서 `PARTS/<구분>/<프로젝트>`(3단계)는 거부당한다. PARTS는 부품 구분으로 이미
-  갈라져 있으니 프로젝트 탭까지 더하려면 백엔드의 깊이 제한부터 올려야 한다(지금은 안 함).
+- **처음엔 백엔드를 안 고쳤다** — `_docstore_folder_segs`가 이미 2026-10-22부터 1단계 하위 폴더
+  (`<상위>/<하위>`)를 허용하고 있었다(PARTS/<구분>용). (⚠️ 같은 날 뒤에 깊이 제한을 6단계로 올렸다 —
+  아래 "폴더 트리를 동적으로 읽는 탐색기" 절 참고. 이 문단은 그 전 상태 기록으로 남겨 둠.)
+- **PARTS는 여전히 적용 안 함** — `baseFolder`에 이미 `/`가 있으면(PARTS/<구분>) `null`을 돌려준다.
+  깊이 제한은 올랐지만, PARTS는 이미 부품 구분으로 갈라져 있어 또 겹치면 복잡해진다는 판단은 그대로다.
 - 프로젝트가 안 열려 있으면(`currentDriveFileName` 없음) `null` — 기존 동작(단일 폴더) 그대로.
 - 기존에 루트에 쌓여 있던 파일은 **옮기지 않는다** — 📁 전체 탭에서 그대로 보인다. 새로 올리는
   파일부터 📌 프로젝트 탭(없으면 첫 조회/올리기에서 자동 생성)에 쌓인다.
@@ -253,12 +253,28 @@ PARTS는 js/42의 공용 `ai` 블록(평평한 행 표)을 **쓰지 않는다** 
 - **"새 폴더"(`📁+`) 버튼**은 지금 보고 있는 폴더 안에 `/doc/mkdir`로 하위 폴더를 만든다. 이름
   규칙은 업로드 파일명과 같다(`_docstore_safe_name`) — 생성 로직을 새로 두지 않고 `_docstore_dir`의
   "없으면 만든다"를 그대로 재사용했다.
-- `_dsProjectAwareFolders(baseFolder, categories)`에 `categories`가 생겼다 — Customer SPEC
-  (`js/42` `briefspec`)이 `[{f:'ELECTRICAL',...},{f:'MECHANICAL',...}]`을 넘겨 탭을
-  `CUSTOMER/<프로젝트>/ELECTRICAL` · `CUSTOMER/<프로젝트>/MECHANICAL` · `CUSTOMER(전체)` 세 개로
-  만든다. 다른 페이지(MC·SUMMARY 등)는 `categories` 없이 불러 기존 [📌 프로젝트 / 📁 전체] 두 탭
-  그대로다. **PARTS는 그대로 손 안 댐** — 이미 부품 구분 하위 폴더가 있어서 또 겹치면 복잡해진다.
+- `_dsProjectAwareFolders(baseFolder, opts)`의 `opts.categories`로 Customer SPEC(`js/42`
+  `briefspec`)이 `[{f:'ELECTRICAL',...},{f:'MECHANICAL',...}]`을 넘겨 탭을
+  `CUSTOMER/<프로젝트>/.../ELECTRICAL` · `.../MECHANICAL` · `CUSTOMER(전체)` 세 개로 만든다.
+  다른 페이지(SUMMARY·ADDRESS 등)는 `opts` 없이 불러 기존 [📌 프로젝트 / 📁 전체] 두 탭 그대로다.
+  **PARTS는 그대로 손 안 댐** — 이미 부품 구분 하위 폴더가 있어서 또 겹치면 복잡해진다.
 - 기존 루트 파일 위치는 안 건드렸다(2026-10-26 결정 그대로) — 깊이만 열었을 뿐 아무것도 옮기지 않았다.
+
+#### 📐 한 프로젝트 안 모델별 하위 폴더까지 (2026-10-26, 같은 날 추가)
+
+"하나의 프로젝트 내에서도 모델이 세분화되니 폴더도 세분화되어야 할 것 같다"(사용자 지적) —
+KONAMI_KGP-4 같은 프로젝트 하나에 MVD·TPR·TVD 같은 모델(제품구분자)이 여럿 걸려 있는 걸 보고 나온
+제안. `_dsProjectAwareFolders(baseFolder, opts)`에 `opts.useModel`을 추가해 풀었다.
+
+- `opts.useModel: true`면 `window.mcActiveUnit`(Customer SPEC·M.C·BOM이 공유하는 제품구분자,
+  `js/43` `briefSpecByUnit`) 값을 한 단계 더 끼워 넣는다 — `CUSTOMER/<프로젝트>/<모델>/ELECTRICAL`.
+  단일 모델 프로젝트(`mcActiveUnit === ''`)면 모델 단계 없이 예전과 같다 — **분기 없이 그냥 빈
+  문자열이 끼어들지 않게**(`model ? '/' + model : ''`) 처리했다.
+- 적용한 곳: Customer SPEC(`briefspec`, `categories`와 같이)과 M.C Table(`mctable`, 카테고리 없이
+  모델 탭만). **SUMMARY·ADDRESS·GANTT·알람·캘린더·주간보고는 안 씀** — 모델이 아니라 프로젝트
+  단위 자료라 `mcActiveUnit`을 끼워 넣으면 의미가 안 맞는다(그 페이지들에 있는 값은 사용자가 다른
+  화면에서 마지막으로 고른 모델일 뿐, 그 페이지 자체와는 무관).
+- PARTS는 이미 부품 구분 폴더가 있어 여기도 적용 안 함(위 절과 같은 이유).
 
 #### ⚠️ PANEL 은 `PARTS/PANEL` 로 옮겨졌다
 

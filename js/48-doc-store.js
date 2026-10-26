@@ -152,25 +152,35 @@ window._dsPanelFolder = function () { return PANEL_FOLDER; };
 //    ⚠️ 이미 하위 폴더가 있는 베이스(PARTS/<구분> 등)에는 적용하지 않는다 — 백엔드가 2단계까지만
 //    허용해서 `PARTS/<구분>/<프로젝트>`(3단계)는 거부당한다.
 var _NAS_PROJ_BAD = '/:*?"<>|' + String.fromCharCode(92);
-window._dsCurrentProjectFolderName = function () {
-    var raw = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
-    if (!raw) return null;
-    var safe = raw.split('').map(function (ch) { return _NAS_PROJ_BAD.indexOf(ch) === -1 ? ch : ' '; })
+function _dsSafeFolderSeg(raw) {
+    raw = String(raw || '').trim();
+    if (!raw) return '';
+    return raw.split('').map(function (ch) { return _NAS_PROJ_BAD.indexOf(ch) === -1 ? ch : ' '; })
         .join('').replace(/ +/g, ' ').trim();
-    return safe || null;
+}
+window._dsCurrentProjectFolderName = function () {
+    var raw = String(window.currentDriveFileName || '').replace(/\.json$/i, '');
+    return _dsSafeFolderSeg(raw) || null;
 };
 
 /** baseFolder가 아직 하위 폴더를 쓰지 않을 때만 탭을 만든다. 아니면 null
  *  (null이면 부르는 쪽이 기존 동작 그대로 — 탭 없이 baseFolder 하나).
- *  categories를 주면(예: Customer SPEC의 ELECTRICAL/MECHANICAL) 프로젝트 폴더 아래 그 구분별
- *  탭을 만들고, 안 주면 프로젝트 폴더 탭 하나만 만든다. 어느 쪽이든 끝에 "전체" 탭을 더한다. */
-window._dsProjectAwareFolders = function (baseFolder, categories) {
+ *  opts.categories를 주면(예: Customer SPEC의 ELECTRICAL/MECHANICAL) 프로젝트(·모델) 폴더 아래
+ *  그 구분별 탭을 만들고, 안 주면 프로젝트(·모델) 폴더 탭 하나만 만든다.
+ *  opts.useModel이 true면 **지금 선택된 모델**(window.mcActiveUnit — Customer SPEC·M.C·BOM이
+ *  공유하는 제품구분자, js/43)까지 한 단계 더 내려간다 — 한 프로젝트 안에도 모델이 여럿이라
+ *  모델별로 자료가 갈리기 때문(2026-10-26 사용자 지적). 단일 모델 프로젝트(mcActiveUnit='')면
+ *  모델 단계 없이 프로젝트 폴더 그대로. 어느 쪽이든 끝에 "전체" 탭을 더한다. */
+window._dsProjectAwareFolders = function (baseFolder, opts) {
     if (!baseFolder || baseFolder.indexOf('/') !== -1) return null;
     var proj = window._dsCurrentProjectFolderName();
     if (!proj) return null;
-    var tabs = (categories && categories.length)
-        ? categories.map(function (c) { return { f: baseFolder + '/' + proj + '/' + c.f, label: c.label }; })
-        : [{ f: baseFolder + '/' + proj, label: '📌 ' + proj }];
+    opts = opts || {};
+    var model = opts.useModel ? _dsSafeFolderSeg(window.mcActiveUnit) : '';
+    var prefix = baseFolder + '/' + proj + (model ? ('/' + model) : '');
+    var tabs = (opts.categories && opts.categories.length)
+        ? opts.categories.map(function (c) { return { f: prefix + '/' + c.f, label: c.label }; })
+        : [{ f: prefix, label: '📌 ' + proj + (model ? (' · ' + model) : '') }];
     tabs.push({ f: baseFolder, label: '📁 ' + baseFolder + ' (' + _t('전체', 'all') + ')' });
     return tabs;
 };

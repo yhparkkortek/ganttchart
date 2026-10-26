@@ -849,14 +849,19 @@
         {
             id: 'briefspec', tab: 'tab-briefspec', label: 'Brief SPEC',
             nasFolder: 'CUSTOMER',
-            // 📁 [2026-10-26] 전기/기구 구분으로 자료를 가른다(사용자 요청) — 지금 열린 프로젝트
-            // 아래 CUSTOMER/<프로젝트>/ELECTRICAL, CUSTOMER/<프로젝트>/MECHANICAL 두 탭 + 전체 탭.
+            // 📁 [2026-10-26] 전기/기구 구분으로 자료를 가른다(사용자 요청) — 지금 열린 프로젝트의
+            // **지금 선택된 모델**(mcActiveUnit) 아래 CUSTOMER/<프로젝트>/<모델>/ELECTRICAL,
+            // .../MECHANICAL 두 탭 + 전체 탭. 한 프로젝트 안에도 모델이 여럿이라 모델별로도
+            // 갈라야 한다는 지적(같은 날) — useModel:true로 그 단계를 더 넣는다.
             // 프로젝트가 안 열려 있으면 null → 기존처럼 CUSTOMER 폴더 하나만 보인다.
             nasFolders: function () {
-                return window._dsProjectAwareFolders ? window._dsProjectAwareFolders('CUSTOMER', [
-                    { f: 'ELECTRICAL', label: '⚡ ELECTRICAL' },
-                    { f: 'MECHANICAL', label: '🔧 MECHANICAL' }
-                ]) : null;
+                return window._dsProjectAwareFolders ? window._dsProjectAwareFolders('CUSTOMER', {
+                    useModel: true,
+                    categories: [
+                        { f: 'ELECTRICAL', label: '⚡ ELECTRICAL' },
+                        { f: 'MECHANICAL', label: '🔧 MECHANICAL' }
+                    ]
+                }) : null;
             },
             repaint: ['populateTabData'],
             blocks: [{ sheet: 'Brief SPEC', kind: 'rows',
@@ -913,6 +918,11 @@
             id: 'mctable', tab: 'tab-mctable', label: 'M.C Table',
             // 📁 [2026-10-22] NAS에서 불러올 때 먼저 열 폴더(js/48 _dsPageFolder). 데이터로 둔다.
             nasFolder: 'MC',
+            // 📁 [2026-10-26] M.C도 모델별로 갈린다(Customer SPEC과 같은 mcActiveUnit) —
+            // MC/<프로젝트>/<모델> + 전체 탭. 프로젝트 미개설이면 null → 기존 MC 폴더 하나.
+            nasFolders: function () {
+                return window._dsProjectAwareFolders ? window._dsProjectAwareFolders('MC', { useModel: true }) : null;
+            },
             repaint: ['populateTabData'],
             // 리비전별로 보관되므로 **지금 보고 있는 리비전**만 왕복한다.
             blocks: [{ sheet: 'M.C Table',
