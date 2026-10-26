@@ -1277,6 +1277,20 @@
         return null;
     }
     const _WBS_GROUP_MAX_GAP_DAYS = 30; // 같은 그룹으로 볼 수 있는 시작일 간 최대 간격(1차 기본값)
+    // 💡 [2026-10-26 추가, 사용자 지적] 업무명만 보면 "승인원 요청"처럼 짧고 뭉뚱그린 제목은 서로
+    //    다른 안건인데도 제목만으로는 구분이 안 된다 — 상세내용의 [핵심내용] 줄(AI가 메일 본문에서
+    //    뽑은 요약, 26-topic-profile.js가 같은 태그를 같은 방식으로 이미 쓰고 있음)에 모델코드·부품명
+    //    같은 더 구체적인 단서가 있다. 성능 걱정은 기우에 가깝다 — AI를 안 부르고 문자열만 자르므로
+    //    846개 행을 처리해도 체감상 즉시 끝난다(이 프로젝트 실측). 제목 토큰을 우선으로 쓰고,
+    //    그걸로 "안 흔한 키"를 못 찾을 때만 상세내용 토큰으로 보충한다 — 원문이 길고 더 잡음이
+    //    많으므로 제목이 이미 충분히 구체적이면 끼어들지 않게.
+    function _wbsContentTokens(row) {
+        if (!row || !colIdx || colIdx.content === -1) return [];
+        const raw = String(row[colIdx.content] || '');
+        const m = raw.match(/\[핵심내용\]([^\n]+)/);
+        if (!m) return [];
+        return _wbsTokenize(m[1]).slice(0, 20);
+    }
     window._wbsDetectGroupCandidates = function(gd) {
         gd = gd || globalData;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
@@ -1309,7 +1323,9 @@
             });
             if (leafIdxs.length < 2) return;
 
-            const tokLists = leafIdxs.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])); });
+            // 제목 토큰을 먼저 두고 상세내용([핵심내용]) 토큰을 뒤에 보충 — find()가 첫 번째로
+            // 안 흔한 토큰을 집으므로, 제목이 이미 구체적이면 상세내용은 끼어들지 않는다.
+            const tokLists = leafIdxs.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])).concat(_wbsContentTokens(gd[i])); });
             const freq = new Map();
             tokLists.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { freq.set(t, (freq.get(t) || 0) + 1); }); });
             // 💡 [2026-10-26 재조정, 실측 발견] 처음엔 "이 형제 묶음의 25% 넘게 등장하면 흔한 말"로

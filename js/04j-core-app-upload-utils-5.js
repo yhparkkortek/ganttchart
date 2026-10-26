@@ -1668,7 +1668,7 @@
                 // 📌 [2026-10-26 신규, 사용자 요청] "No." 헤더에 핀셋 아이콘 — 전체 업무 알림(📌)을
                 //    한 번에 켜거나 끈다(행마다 일일이 누를 필요 없이). 전체선택 체크박스와 같은
                 //    관례로, 하나라도 꺼져 있으면 전체 켜기·전부 켜져 있으면 전체 끄기.
-                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:flex; align-items:center; justify-content:center; gap:2px;"><span>${displayCell}</span><span onclick="window.wrToggleAllPins(event)" title="전체 업무 알림(📌) 켜기/끄기 — 하나라도 꺼져 있으면 전체 켜짐, 전부 켜져 있으면 전체 꺼짐" style="cursor:pointer; font-size:11px; line-height:1;">📌</span></div></th>`;
+                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:flex; align-items:center; justify-content:center; gap:2px;"><span onclick="window.wrToggleAllPins(event)" title="전체 업무 알림(📌) 켜기/끄기 — 하나라도 꺼져 있으면 전체 켜짐, 전부 켜져 있으면 전체 꺼짐" style="cursor:pointer; font-size:11px; line-height:1;">📌</span><span>${displayCell}</span></div></th>`;
             } else if (thClass === 'detail-th') {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass} cursor:pointer;" title="클릭: 상세내용 전체 펼치기/접기" onclick="window.toggleAllDetailExpand(this, event)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell} <span style="font-size:9px; color:#aaa;" id="detail-th-arrow">▼</span></div></th>`;
             } else {
