@@ -59,7 +59,9 @@
                     return;
                 }
                 window._dsOpenBrowser(p.folder, {
-                    title: '📁 ' + (Array.isArray(p.label) ? _t(p.label[0], p.label[1]) : p.label)
+                    // ⚠️ 모달 헤더에 📂 아이콘이 이미 붙어 있다(js/48 ds-pick-title) — 여기서 또
+                    // 📁를 붙이면 "📂 📁 캘린더"처럼 아이콘이 중복된다(2026-10-26 사용자 지적).
+                    title: Array.isArray(p.label) ? _t(p.label[0], p.label[1]) : p.label
                 });
             };
             at.parentNode.insertBefore(b, at);
