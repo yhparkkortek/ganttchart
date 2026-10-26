@@ -776,7 +776,9 @@ window._dsOpenBrowser = function (folder, opts) {
     window._dsOpenPicker({
         folder: openFolder,
         folders: folders,
-        title: opts.title || _t('NAS 자료실', 'NAS files'),
+        // 💡 [2026-10-26] 기본 제목도 _dsImportToPage와 같은 이름으로 통일(사용자 요청) —
+        // 부르는 쪽이 자기 페이지 이름을 주면(js/53) 그게 우선이고, 안 주면 이 기본값.
+        title: opts.title || 'NAS DATA',
         onPick: function (f, name) { window._dsOpenInNewTab(f, name); }
     });
 };
