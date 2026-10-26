@@ -586,6 +586,11 @@
         }
         return rows.slice(0, limit || 60).map(function (x, i) {
             var parts = [];
+            // 🐛 [2026-10-26 제보] id가 안 보여서 AI가 "일정 삭제해줘"에 eventId를 자리번호(1)로
+            //    지어냈다(쓰기확정에서 calendarId:1/eventId:1 — 실제 값 11716/2332와 전혀 다름).
+            //    쓰기 도구가 참조할 id/calendarId는 **반드시 텍스트로 보여야** AI가 베껴 쓸 수 있다.
+            if (x.id !== undefined && x.id !== null && x.id !== '') parts.push('id:' + x.id);
+            if (x.calendarId !== undefined && x.calendarId !== null && x.calendarId !== '') parts.push('calId:' + x.calendarId);
             ['at', 'date', 'createdAt', 'start'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
             ['from', 'writer', 'drafterName', 'creator'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             ['boardName', 'folder', 'formName', 'calendar'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });

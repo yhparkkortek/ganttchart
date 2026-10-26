@@ -116,7 +116,8 @@
             id: 'gw_calendar_delete', mode: 'write', verified: 'live', danger: 'medium',
             title: '그룹웨어 일정 삭제',
             desc: '캘린더 일정을 삭제한다. **되돌릴 수 없다.** eventId/calendarId는 gw_calendar_add 응답이나 '
-                + 'gw_calendar(읽기) 조회 결과에서 얻는다 — 추측해서 지우지 말 것.',
+                + 'gw_calendar(읽기) 조회 결과 각 줄의 `id:`/`calId:` 값을 **그대로 베껴 쓴다** — '
+                + '목록의 순번(1., 2., …)이 아니다. 지울 대상이 여러 건이면 사람에게 어느 것인지 먼저 확인한다.',
             method: 'POST', path: '/gw/calendar/event/delete',
             params: [
                 { name: 'calendarId', type: 'int', min: 1, max: 99999, req: true, desc: '캘린더 id' },
