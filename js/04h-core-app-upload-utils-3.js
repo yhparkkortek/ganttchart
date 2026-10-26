@@ -5264,7 +5264,15 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
-        const _gwDraftHit = window._gwCapKwHit ? window._gwCapKwHit(question, 'gw_approval_draft') : false;
+        // 🐛 [2026-10-26 제보] "프로젝트코드 등록 신청서(RD3-2609-077) 작성해줘"가 '기안'/'전자결재'
+        //    낱말이 없다는 이유로 이 게이트를 통과하지 못해 뒤쪽 SAP 프로젝트 코드 블록(*RD3*
+        //    패턴 조회)으로 새 나갔다. 결재양식은 전부 '~신청서/~요청서'라 불리는데 이 kw 목록엔
+        //    '기안'/'전자결재' 계열 낱말만 있었다. js/52 APPROVAL_DOC_TYPES 는 양식 이름 자체로
+        //    판정하므로(이미 좁고 구체적인 어휘) 여기서 먼저 걸리면 **그 자체로 강한 신호** —
+        //    gw_approval_draft kw 가 비어 있어도 이쪽이 맞으면 들여보낸다.
+        const _gwDraftFormHit = !!(window._apvDocTypeHit && window._apvDocTypeHit(question));
+        const _gwDraftHit = (window._gwCapKwHit ? window._gwCapKwHit(question, 'gw_approval_draft') : false)
+                             || _gwDraftFormHit;
         const _gwDraftMat = _gwDraftHit && (question.match(/\b\d{5,8}\b/) || [])[0];
         // 확인 버튼이 돌려보내는 확정 명령
         const _gwDraftGo = /^그룹웨어 기안 임시저장 확정/.test(question.trim());
