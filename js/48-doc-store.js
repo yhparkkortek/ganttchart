@@ -91,6 +91,20 @@ window._dsOpenInNewTab = function (folder, name) {
     window.open(window._dsFileUrl(folder, name), '_blank');
 };
 
+/** NAS 원본을 **그 자리에서** 연결 프로그램(엑셀·PDF뷰어·아웃룩 등)으로 — 백엔드가 os.startfile로
+ *  연다(다운로드 사본 없음, Windows 전용). 브라우저 새 탭은 "보기"만 되지만 이건 편집도 된다. */
+window._dsOpenNative = async function (folder, name) {
+    try {
+        await _api('/doc/open-native', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: folder, name: name })
+        });
+    } catch (e) {
+        _toast('⚠️ ' + e.message + ' — ' + _t('대신 새 탭에서 엽니다', 'opening in a new tab instead'), 'warning', 6000);
+        window._dsOpenInNewTab(folder, name);
+    }
+};
+
 /**
  * 추출 텍스트 — 캐시에 있으면 그걸 쓰고, 없으면 원본을 받아 뽑은 뒤 캐시에 넣는다.
  * 캐시는 공유에 있으므로 **팀원 중 한 사람만 뽑으면 나머지는 그냥 받아 쓴다.**
@@ -790,6 +804,10 @@ window._dsPageFolders = function (pageId) {
     return null;
 };
 
+// 📄 규격 엑셀(xlsx/xls/csv)이 아니면 js/42 pageExcelImport가 결국 AI로 보낸다
+//    (onForeignFile/_pxAiImport) — 그 갈림길에서 **AI를 쓸지 말지**를 사람에게 먼저 물어본다.
+var _DS_WORKBOOK_RE = /\.(xlsx|xlsm|xls|csv)$/i;
+
 window._dsImportToPage = async function (pageId, folder) {
     var base = folder || window._dsPageFolder(pageId);
     // 페이지가 직접 탭을 정해 주면(PARTS의 부품 구분별 하위 폴더) 그걸 그대로 쓰고,
@@ -801,11 +819,59 @@ window._dsImportToPage = async function (pageId, folder) {
         title: _t('NAS에서 불러오기', 'Import from the NAS'),
         onPick: async function (f, name) {
             try {
+                // 🤖💻 [2026-10-26] 규격 엑셀이면 그대로(결정론, 묻지 않는다) — 애매한 파일만 묻는다.
+                if (!_DS_WORKBOOK_RE.test(name)) {
+                    var choice = await window._dsAskAiOrNative(name);
+                    if (choice === 'cancel') return;
+                    if (choice === 'native') { await window._dsOpenNative(f, name); return; }
+                    // 'ai'면 아래로 계속 — 지금까지와 같은 흐름(pageExcelImport → onForeignFile/AI).
+                }
                 _toast('⏳ ' + _t('"' + name + '" 받는 중…', 'Fetching "' + name + '"…'), 'info');
                 var file = await window._dsFileOf(f, name);
                 if (window.pageExcelImport) await window.pageExcelImport(pageId, file);
             } catch (e) { _toast('❌ ' + e.message, 'error', 7000); }
         }
+    });
+};
+
+/**
+ * "AI로 분석할까요, 아니면 연결 프로그램으로 열까요?" — 규격 엑셀이 아닌 파일을 NAS에서
+ * 고르면 이제 자동으로 AI에 보내지 않고 먼저 묻는다(사용자 요청, 2026-10-26). AI 무료 키
+ * 하루 한도가 있는 데다, 그냥 눈으로 훑어보고 싶을 때도 있어서다.
+ * → Promise<'ai'|'native'|'cancel'>
+ */
+window._dsAskAiOrNative = function (name) {
+    return new Promise(function (resolve) {
+        var m = document.getElementById('ds-ask-modal');
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'ds-ask-modal';
+            m.style.cssText = 'display:none; position:fixed; inset:0; z-index:9580; pointer-events:none;';
+            m.innerHTML =
+              '<div id="ds-ask-box" onclick="event.stopPropagation()" style="pointer-events:auto; position:fixed; top:50%; left:50%;'
+            + ' transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:380px; max-width:90vw;'
+            + ' box-shadow:0 8px 32px rgba(0,0,0,0.25); padding:18px 20px;">'
+            + '  <div id="ds-ask-msg" style="font-size:13px; color:#333; margin-bottom:14px; line-height:1.6; overflow-wrap:anywhere; font-weight:bold;"></div>'
+            + '  <div style="display:flex; flex-direction:column; gap:8px;">'
+            + '    <button id="ds-ask-ai" style="padding:10px 13px; background:#eef5ff; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:7px; font-size:12.5px; font-weight:bold; cursor:pointer; text-align:left;"></button>'
+            + '    <button id="ds-ask-native" style="padding:10px 13px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:7px; font-size:12.5px; font-weight:bold; cursor:pointer; text-align:left;"></button>'
+            + '    <button id="ds-ask-cancel" style="padding:7px 13px; background:transparent; color:#888; border:none; font-size:11.5px; cursor:pointer;"></button>'
+            + '  </div>'
+            + '</div>';
+            document.body.appendChild(m);
+            if (window._bindClickToFront) window._bindClickToFront('ds-ask-modal');
+        }
+        document.getElementById('ds-ask-msg').textContent =
+            '"' + name + '" — ' + _t('어떻게 열까요?', 'What would you like to do?');
+        document.getElementById('ds-ask-ai').textContent = '🤖 ' + _t('AI로 분석해서 불러오기', 'Analyze with AI and import');
+        document.getElementById('ds-ask-native').textContent = '💻 ' + _t('연결 프로그램으로 열기 (가져오지 않음)', 'Open with the associated program (no import)');
+        document.getElementById('ds-ask-cancel').textContent = _t('취소', 'Cancel');
+        var close = function (result) { m.style.display = 'none'; resolve(result); };
+        document.getElementById('ds-ask-ai').onclick = function () { close('ai'); };
+        document.getElementById('ds-ask-native').onclick = function () { close('native'); };
+        document.getElementById('ds-ask-cancel').onclick = function () { close('cancel'); };
+        m.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('ds-ask-modal');
     });
 };
 

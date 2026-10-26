@@ -55,6 +55,7 @@
 | `GET /doc/list` | 목록(`files` + **`dirs`**, 2026-10-26). `since=ISO`면 그 이후 추가분만(자동 등록 스캔용) |
 | `POST /doc/mkdir` | 하위 폴더 만들기(탐색기 "새 폴더"). `_docstore_dir`가 이미 자동 생성해서 경로만 조립 |
 | `GET /doc/get` | 원본 그대로 |
+| `POST /doc/open-native` | NAS 원본을 `os.startfile`로 **그 자리에서** 연결 프로그램으로 엶(Windows 전용, `/doc/mail-launch`와 같은 패턴) |
 | `POST /doc/put` | 업로드. 같은 이름은 **409** (`overwrite=1`로만 덮어씀) |
 | `POST /doc/delete` | 파일 하나 삭제(되돌릴 수 없음). 고르기 창 각 행의 🗑 |
 | `POST /doc/export-zip` | 프로젝트 자료 zip 내보내기. `{folders:[...]}` 중 **있는 것만** 모음 — `_docstore_existing_dir`(makedirs 안 함) |
@@ -322,6 +323,29 @@ KONAMI_KGP-4 같은 프로젝트 하나에 MVD·TPR·TVD 같은 모델(제품구
 - `dragover`에서 반드시 `e.preventDefault()`를 불러야 `drop`이 온다(기본 동작은 "새 탭에서
   파일 열기"). 하이라이트는 초록 점선 `outline`(3px, `outlineOffset:-3px`로 안쪽에 그려 모달
   테두리와 안 겹침).
+
+#### 🤖💻 AI로 분석할지 연결 프로그램으로 열지 먼저 묻는다 (2026-10-26, 같은 날)
+
+"AI 분석할지 / 연결 프로그램으로 열어볼지 물어보고 갈래로 실행되면 좋겠다"(사용자 요청) —
+NAS 고르기 창에서 **규격 엑셀이 아닌 파일**(PDF·TXT·HTML 등)을 고르면, `js/42`
+`pageExcelImport`가 결국 `onForeignFile`/AI 매핑으로 보내는 갈림길이 있다. 지금까지는 자동으로
+AI까지 갔는데, 이제 그 갈림길에서 먼저 묻는다.
+
+- `js/48` `_dsImportToPage`의 `onPick`에서, 고른 파일 이름이 `_DS_WORKBOOK_RE`
+  (`xlsx/xlsm/xls/csv`)에 안 맞으면 `window._dsAskAiOrNative(name)`을 먼저 띄운다. **규격
+  엑셀은 그대로 묻지 않는다** — 결정론 경로라 애매할 게 없다.
+- 선택지 3개: `🤖 AI로 분석해서 불러오기`(기존 흐름 그대로 계속) · `💻 연결 프로그램으로 열기`
+  (가져오지 않고 `window._dsOpenNative`로 끝 — AI 무료 키 하루 한도를 안 쓰고 눈으로만 훑어볼
+  때) · `취소`.
+- `window._dsOpenNative(folder, name)`이 새 엔드포인트 `POST /doc/open-native`를 부른다 —
+  `/doc/mail-launch`와 같은 이유로 백엔드가 `os.startfile`로 그 자리에서 연다(다운로드 사본
+  없음, 편집도 가능). 백엔드가 꺼져 있거나 실패하면 조용히 `_dsOpenInNewTab`(브라우저 새 탭,
+  보기만 가능)으로 떨어진다 — 아예 못 보여주는 것보다 낫다는 기존 원칙과 같다.
+- 경로 검증은 기존 `/doc/get`과 **똑같이** `_docstore_dir` + `_docstore_safe_name`을 쓴다 —
+  새 검증 로직을 만들지 않았다(임의 경로를 받으면 "아무 프로그램이나 실행"이 되므로 검증을
+  한 곳에서만 하고 싶었다).
+- `_dsOpenBrowser`(js/53, 캘린더·주간보고·알람)는 **안 건드렸다** — 거긴 AI 추출 경로 자체가
+  없어서 "AI로 분석"이 뜻이 없다. 이 기능은 js/42 페이지(AI 매핑이 있는 곳)에만 있다.
 
 #### ⚠️ PANEL 은 `PARTS/PANEL` 로 옮겨졌다
 

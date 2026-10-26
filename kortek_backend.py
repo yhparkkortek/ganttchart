@@ -4614,6 +4614,37 @@ def doc_get():
     return send_file(fp, as_attachment=False, download_name=name)
 
 
+@app.route('/doc/open-native', methods=['POST'])
+def doc_open_native():
+    """NAS 원본을 **그 자리에서** 연결 프로그램(엑셀·PDF뷰어 등)으로 연다 — /doc/mail-launch와
+    같은 이유: 브라우저 새 탭은 받아서 보여주는 것뿐이라 편집은 못 한다. 이 백엔드는 그 PC에서
+    돌고 NAS를 직접 보므로 `os.startfile`로 원본을 바로 띄울 수 있다(다운로드 사본 없음).
+
+    ⚠️ 경로는 `folder`/`name`을 기존 `/doc/get`과 똑같이 화이트리스트+`_docstore_safe_name`으로
+       검증한다 — 임의 경로를 받으면 이 라우트가 곧 '아무 프로그램이나 실행'이 된다.
+    ⚠️ Windows 전용(os.startfile).
+    """
+    if not hasattr(os, 'startfile'):
+        return jsonify({'ok': False, 'error': '이 기능은 Windows에서만 됩니다.'}), 400
+    cfg = _docstore_load()
+    req = request.get_json(force=True, silent=True) or {}
+    folder = str(req.get('folder') or '')
+    path, err = _docstore_dir(folder, cfg)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    name = _docstore_safe_name(req.get('name'))
+    if not name:
+        return jsonify({'ok': False, 'error': '파일 이름이 올바르지 않습니다.'}), 400
+    fp = os.path.join(path, name)
+    if not os.path.isfile(fp):
+        return jsonify({'ok': False, 'error': f'파일이 없습니다: {name}'}), 404
+    try:
+        os.startfile(fp)          # noqa: S606 — 위에서 화이트리스트 폴더 안 파일로 한정했다
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'열지 못했습니다: {e}'}), 500
+    return jsonify({'ok': True, 'folder': folder, 'name': name})
+
+
 @app.route('/doc/put', methods=['POST'])
 def doc_put():
     """업로드. 같은 이름이 있으면 기본은 거부 — 덮어쓰려면 overwrite=1.
