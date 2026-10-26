@@ -1501,6 +1501,74 @@ def mail_recent(date_from=None, date_to=None, folder='Inbox', unread_only=False,
             'mails': out}
 
 
+# ── 메일 발송 (쓰기, 2026-10-26) ────────────────────────────────────────
+# 위 _mail_post/_MAIL_POST_ALLOW는 **조회 전용 가드**라 일부러 여기서 안 쓴다 — 발송은
+# 별도 함수로 분리(파일 상단 주석 "쓰기는 여기 만들지 않는다"와 같은 이유로 뒤집어).
+# payload는 추측이 아니라 실제 나에게 테스트 메일 하나를 그룹웨어 화면에서 직접 보내며
+# CDP Network로 관찰해 확정했다(docs/groupware-research-tools.md 2절 절차).
+#   POST /api/mail/message/send
+#   관찰된 필드 다수(attachsign/signSeq/sharedFlag 등)는 화면이 보내는 그대로이고,
+#   서명(attachsign)은 **일부러 끈다** — API로 보내는 메일에 개인 서명 템플릿을
+#   자동으로 끼워 넣는 게 더 위험하다(무슨 내용이 섞여 나가는지 안 보임).
+_MAIL_SEND_JS = r"""
+(async (payload) => {
+  const r = await fetch('/api/mail/message/send', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const ct = r.headers.get('content-type') || '';
+  const body = ct.includes('json') ? await r.json() : (await r.text()).slice(0, 300);
+  return { status: r.status, ok: r.ok, body };
+})(%s)
+"""
+
+
+def _mail_html_escape(text):
+    t = str(text or '')
+    t = t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    return '<p>' + t.replace('\r\n', '\n').replace('\n', '</p><p>') + '</p>'
+
+
+def mail_send(to, subject, body, *, cc='', bcc='', dry_run=False):
+    """그룹웨어 자체 메일로 발송한다. **상대방에게 실제로 간다 — 되돌릴 수 없다.**
+
+    to/cc/bcc: 쉼표로 구분한 이메일 주소(이름 없이 주소만 줘도 된다 — 실측상 받아들인다).
+    body: 일반 텍스트로 받아 문단으로 감싼다(HTML을 직접 넣고 싶으면 그대로 와도 된다 —
+          <, > 로 시작하면 이미 HTML로 보고 그대로 쓴다).
+    서명(개인 연락처 템플릿)은 자동으로 안 붙인다 — API로 보내는 메일에 뭐가 섞여
+    나가는지 안 보이는 채로 붙이는 게 더 위험하다."""
+    s = session_info()
+    if not s.get('ok'):
+        raise RuntimeError(s.get('message') or '그룹웨어 로그인이 필요합니다.')
+    if not to or not subject:
+        raise RuntimeError('받는사람과 제목은 필수입니다.')
+    content = str(body or '')
+    if not content.lstrip().startswith('<'):
+        content = _mail_html_escape(content)
+    payload = {
+        'senderEmail': s.get('email') or '', 'senderName': s.get('name') or '',
+        'sendType': 'normal', 'sendFlag': 'normal', 'charset': 'UTF-8',
+        'attachsign': False, 'attachSign': False, 'signSeq': '', 'signLocation': 'inside',
+        'bannerDisplay': False,
+        'to': to, 'cc': cc or '', 'bcc': bcc or '',
+        'massMode': False, 'senderMode': False, 'useAliasEmail': False,
+        'subject': subject, 'writeMode': 'html', 'content': content,
+        'receiveNoti': False, 'saveSent': True,
+        'attachList': '', 'bigAttachContent': '', 'bigAttachMode': False, 'bigAttachLinks': None,
+        'sharedFlag': 'user', 'sharedUserSeq': '0', 'sharedFolderName': '',
+    }
+    if dry_run:
+        return {'ok': True, 'dryRun': True, 'payload': payload}
+    res = eval_in_gw(_MAIL_SEND_JS % json.dumps(payload, ensure_ascii=False), timeout=45) or {}
+    if not res.get('ok'):
+        raise RuntimeError('메일 발송 실패 (HTTP %s): %s' % (res.get('status'), str(res.get('body'))[:200]))
+    data = res.get('body') or {}
+    d = data.get('data') if isinstance(data.get('data'), dict) else data
+    return {'ok': True, 'to': to, 'cc': cc or '', 'subject': subject,
+            'messageId': (d or {}).get('id') or (d or {}).get('messageId')}
+
+
 # ── 문서관리 / 예약 / 커뮤니티 / 설문 / 자료실 / 전자결재 문서함 (읽기 전용) ──
 # 필드 이름은 전수 조사(2026-10-19)로 실측 확인한 것만 쓴다 — 추측 금지.
 # 상세는 docs/groupware-endpoints.md.

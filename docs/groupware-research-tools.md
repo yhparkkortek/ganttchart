@@ -20,7 +20,7 @@
 | 회의실·차량 예약 / 예약 취소 | ✅ live |
 | 인사관리 근무계획 칸 채우기 | ✅ live |
 | 그룹웨어 일정 등록/삭제 (`gw_calendar_add`/`gw_calendar_delete`) | ✅ live (2026-10-26) — payload 확정 방법은 아래 2절 그대로, `gw_bridge.calendar_create_event`/`calendar_delete_event` |
-| **그룹웨어 메일 발송** (`gw_mail_send`) | 🚧 pending — 앱에 이미 SMTP 발송이 있어 필요성부터 판단할 것 |
+| 그룹웨어 메일 발송 (`gw_mail_send`) | ✅ live (2026-10-26) — SMTP/POP3와 무관(그룹웨어 세션으로 직접), `gw_bridge.mail_send` |
 | **게시판 글 등록** (`gw_board_write`) | 🚧 pending — 전사 공개라 우선순위 낮춤 |
 
 `verified:'pending'`은 **실행이 차단**되고 AI 프롬프트에도 노출되지 않는다.

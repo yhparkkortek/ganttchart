@@ -3943,6 +3943,27 @@ def gw_mail_recent():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/mail/send', methods=['POST'])
+def gw_mail_send_route():
+    """그룹웨어 메일 발송 (쓰기). 되돌릴 수 없다 — 사람 확인 1회 후에만 호출된다.
+
+    SMTP/POP3 설정과 무관하다 — 그룹웨어 로그인 세션으로 그룹웨어 내부 API를 직접 부른다.
+    """
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        to = (b.get('to') or '').strip()
+        subject = (b.get('subject') or '').strip()
+        body = b.get('body') or ''
+        if not to or not subject:
+            return jsonify({'ok': False, 'message': '받는사람과 제목은 필수입니다.'}), 400
+        r = gw_bridge.mail_send(to, subject, body,
+                                 cc=(b.get('cc') or '').strip(), bcc=(b.get('bcc') or '').strip())
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/board/post', methods=['GET'])
 def gw_board_post():
     """게시물 1건 본문(평문). `boardId`·`postId` 필수."""

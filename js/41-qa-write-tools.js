@@ -126,19 +126,20 @@
             undoNote: '없다. 삭제하면 되돌릴 수 없다.'
         },
         {
-            id: 'gw_mail_send', mode: 'write', verified: 'pending', danger: 'high',
+            id: 'gw_mail_send', mode: 'write', verified: 'live', danger: 'high',
             title: '그룹웨어 메일 발송',
-            desc: '사내 웹메일로 메일을 보낸다.',
+            desc: '그룹웨어 로그인 세션으로 사내 웹메일을 보낸다(SMTP/POP3 설정과 무관 — Gantt 앱의 '
+                + '기존 메일 발송과는 별개 경로). 서명은 자동으로 안 붙는다. to/cc/bcc는 이메일 주소만 '
+                + '쉼표로 구분(이름 없이도 된다).',
             method: 'POST', path: '/gw/mail/send',
             params: [
                 { name: 'to', type: 'text', max: 300, req: true, desc: '수신자(쉼표 구분)' },
                 { name: 'cc', type: 'text', max: 300, desc: '참조' },
                 { name: 'subject', type: 'text', max: 150, req: true, desc: '제목' },
-                { name: 'body', type: 'text', max: 8000, req: true, desc: '본문' }
+                { name: 'body', type: 'text', max: 8000, req: true, desc: '본문(일반 텍스트)' }
             ],
             // ⚠️ 발송은 되돌릴 수 없다 — 확인 한 번으로 끝내지 않고 문구 입력을 요구한다
             confirmPhrase: '발송',
-            pendingWhy: '발송 요청 본문이 미확정입니다. 앱에는 이미 SMTP 발송 기능이 있으니(메일 서버 탭) 그룹웨어 발송이 꼭 필요한지 먼저 정하는 게 좋습니다.',
             undoNote: '없다. 보내면 되돌릴 수 없다.'
         },
         {

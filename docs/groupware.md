@@ -233,18 +233,39 @@ POST /api/mail/setting/basic/pagebase   (form-urlencoded)   body: pageBase=20
 어느 화면에서든 된다** — `/app/todo`에 있는 상태로 `message/list`를 불러 확인했다.
 즉 요약 기능은 메일 화면을 열지 않고도 동작한다(화면을 옮기지 않으니 사용자 방해도 없다).
 
-#### 앱 경로 (읽기 전용 — 발송·삭제·읽음처리 라우트는 **만들지 않았다**)
+#### 앱 경로 (읽기는 그대로 읽기 전용 — 삭제·읽음처리 라우트는 여전히 **안 만들었다**)
 ```
-GET /gw/mail/recent?from=YYYY-MM-DD&to=YYYY-MM-DD&folder=Inbox&unread=1&keyword=..&limit=80
+GET  /gw/mail/recent?from=YYYY-MM-DD&to=YYYY-MM-DD&folder=Inbox&unread=1&keyword=..&limit=80
+POST /gw/mail/send   body: {to, cc, bcc, subject, body}
 ```
 `gw_bridge._mail_post`는 **허용목록(`_MAIL_POST_ALLOW`)에 있는 조회 경로만** 호출한다 —
-POST 헬퍼가 일반 쓰기 통로가 되지 않게 막는 가드다.
+POST 헬퍼가 일반 쓰기 통로가 되지 않게 막는 가드다. **발송은 그 함수를 안 쓴다** — 별도
+`gw_bridge.mail_send()`로 분리(파일 상단 "쓰기는 여기 만들지 않는다" 주석과 같은 이유).
 AI 문답 명령은 `js/04h`의 `gw_mail_recent` 블록, 폴더/안읽음 어휘는 `GW_MAIL_SCOPES`(js/32, 데이터).
 ⚠️ 발송 기능(`APP_CAPABILITIES.mail_draft`)과 "메일"을 공유한다 — 조회 kw에 `보내`류를 넣지 말 것.
 
+#### 메일 발송 (쓰기, 2026-10-26) — SMTP/POP3와 완전히 무관
+
+```
+POST /api/mail/message/send
+body(요약): {senderEmail, senderName, to, cc, bcc, subject,
+            writeMode:'html', content, attachsign:false, saveSent:true, receiveNoti:false, ...}
+```
+나에게 테스트 메일 하나를 그룹웨어 화면에서 직접 보내며 CDP Network로 관찰해 확정했다
+(`gw_capture_write.py`). `to`는 **이름 없이 주소만**(`a@b.com`)도 받는다 — 화면이 보내는
+`"이름" <a@b.com>` 형식을 흉내 낼 필요 없음, 실측 확인. `attachsign`(서명 첨부)은 **일부러 끈다** —
+API로 보내는 메일에 개인 서명 템플릿을 자동으로 끼워 넣는 건 뭐가 같이 나가는지 안 보이는
+채로 하는 것이라 더 위험하다고 판단. `content`는 평문으로 받아 `<p>` 로 감싸고(개행마다 새 문단),
+이미 `<`로 시작하면 HTML로 보고 그대로 둔다.
+AI 문답 쓰기 도구 `gw_mail_send`(`js/41`) — **되돌릴 수 없어서** 다른 쓰기 도구와 달리
+`confirmPhrase:'발송'`을 추가로 요구한다(확인 버튼 한 번이 아니라 "발송"이라는 말을 직접 입력).
+⚠️ **이 회사는 과거 SMTP 연결을 시도하다 Gantt 메일 분석(POP3 수신)이 먹통된 적이 있다** —
+그래서 이 기능은 SMTP/POP3 설정(`mail_config.json`)을 **전혀 건드리지 않고**, 그룹웨어
+로그인 세션(CDP, 이미 열려 있는 로그인된 브라우저)만으로 발송한다.
+
 #### 아직 못 푼 것
 - **메일 상세 조회 경로 미확인** — `/api/mail/message/{id}` 등 후보 5개 실패. 목록에서 메일을 클릭해 캡처하면 바로 나온다.
-- **발송 API 미확인** (의도적으로 실행하지 않음). 메일쓰기 창을 열어 캡처하면 폼 구조까지 확인 가능.
+- 첨부파일 발송(attachList 채우는 법), 회신/전달(기존 메일 참조), 삭제·읽음처리는 아직 안 함.
 
 #### ⚠️ 실무 발견 — 메일함 용량 초과
 ```
