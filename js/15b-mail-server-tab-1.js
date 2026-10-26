@@ -1053,6 +1053,7 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
                 const l0s = window.buildL0SectionInfo(globalData, colIdx);
                 const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
                 const built = window.buildMailTaskRow(task, undefined, undefined, mailRaw);
+                if (!built.row) return { ok: true, label: window._t('이미 배치됨', 'already placed'), alreadyPlaced: true };
                 if (setAlarm) built.row._알림 = true;
                 const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, task['시작일'], true, mailRaw && mailRaw.date);
                 const pos = posInfo.pos;
@@ -1110,6 +1111,7 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
 
         const built = window.buildMailTaskRow(task, rows, saveData.colIdx, mailRaw);
+        if (!built.row) return { ok: true, label: window._t('이미 배치됨', 'already placed'), alreadyPlaced: true };
         if (setAlarm) built.row._알림 = true; // 💡 커트라인 이상일 때만 자동알람(D-7/3/1) 대상으로 설정
 
         const posInfo = window.computeL0InsertPos(rows, saveData.colIdx, chosenL0, task['시작일'], true, mailRaw && mailRaw.date);

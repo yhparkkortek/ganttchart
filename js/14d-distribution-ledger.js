@@ -419,6 +419,10 @@ window.inboxDistExecute = async function(attempt) {
         // 행 생성 — 대상 프로젝트의 컬럼 구조(colIdx) 기준
         const tCol = ctx.saveData.colIdx;
         const built = window.buildMailTaskRow(ctx.task, ctx.rows, tCol, ctx.mailRaw);
+        if (!built.row) {
+            alert(window._t('⚠️ 이미 같은 메일이 대상 프로젝트에 등록돼 있어 전송하지 않았습니다.', '⚠️ The same mail is already registered in the target project — nothing was sent.'));
+            return;
+        }
         built.row._알림 = true; // ✅ 배분 업무는 대상 프로젝트에서 D-7/3/1 알림 대상으로 자동 설정
 
         // L0~4 구간 내 시작일 기준 최적 위치 계산 (자동 미충족 시 구간 끝 fallback)
@@ -559,6 +563,7 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
             const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '');
 
             const built = window.buildMailTaskRow(task, rows, tCol, opts.mailRaw);
+            if (!built.row) { failNames.push(fileName + ' (이미 등록된 메일)'); continue; }
             built.row._알림 = true;
             const posInfo = window.computeL0InsertPos(rows, tCol, chosenL0, task['시작일'], true, opts.mailRaw && opts.mailRaw.date);
             const pos = posInfo.pos;
@@ -731,6 +736,7 @@ window.mergeRemoteDistributions = async function(fileId) {
             //    남의 배분을 뒤늦게 merge할 때) 들어오는 행은 항상 "원문 보기" 버튼이 없었다 — 위
             //    distributions.push()들이 원장에 mailRaw를 같이 남기게 고쳤으니 여기서도 그대로 심어준다.
             const built = window.buildMailTaskRow(d.task, undefined, undefined, d.mailRaw || null);
+            if (!built.row) return; // 이미 등록된 메일 — 원장 엔트리는 위에서 이미 보존했으니 조용히 건너뜀
             built.row._알림 = true;
             const posInfo = window.computeL0InsertPos(globalData, colIdx, d.targetL0 || '__END__', d.task && d.task['시작일'], true, d.mailRaw && d.mailRaw.date);
             const pos = posInfo.pos;

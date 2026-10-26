@@ -2039,6 +2039,10 @@ window.inboxPlaceToCurrent = function(uid) {
     const useAuto = autoEl ? autoEl.checked : true;
 
     const built = window.buildMailTaskRow(r, undefined, undefined, it.mailRaw);
+    if (!built.row) {
+        if (window.showToast) window.showToast('⚠️ 이미 등록된 메일이라 배치하지 않았습니다 (중복).', 'warning');
+        return;
+    }
     const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, r['시작일'], useAuto, it.mailRaw && it.mailRaw.date);
     const pos = posInfo.pos;
     if (chosenL0 !== '__END__' && colIdx.devStage !== -1) {

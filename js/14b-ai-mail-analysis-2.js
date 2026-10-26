@@ -470,11 +470,35 @@ window._msGuessWbsLevel = function(taskName, gd) {
     return 3; // 완전히 새 제목 → 새 세부업무로
 };
 
+// 📌 [2026-10-26 버그수정] 메일 업무 중복 등록 방지 — 상세내용의 [출처] 태그("제목_날짜_발신자",
+//    메일 1통당 고유, js/15a·15c가 AI 원본을 지우고 코드가 직접 채워 넣음)로 이미 등록된 업무인지
+//    대조한다. 지금까지 _msAutoRegisterToProject(완전자동 배치 경로, js/15b)에만 있던 가드를
+//    buildMailTaskRow로 끌어올려 이 함수를 거치는 삽입 경로 전부에 적용 — 메일 스레드 회신/재분석이
+//    업무명까지 똑같이 다시 들어오면서 "레벨3 부모 + 레벨4 동일이름 자식" 쌍이나 완전 중복 행이
+//    쌓이던 문제(LNW_STELLAR32_32.0 실측: 업무명·날짜·상세내용 앞부분까지 전부 동일한 쌍이 다수)의
+//    근본 원인. [출처] 태그가 없는 업무(직접 입력 등)는 대조할 게 없어 그대로 통과한다.
+window._mailFindDupBySourceTag = function(detailText, gd, ci) {
+    const detail = String(detailText || '');
+    const tagIx = detail.indexOf('[출처]');
+    if (tagIx === -1) return null;
+    const srcTag = detail.slice(tagIx).split('\n')[0].trim();
+    if (!srcTag || !gd || !ci || ci.content === -1) return null;
+    for (let i = 1; i < gd.length; i++) {
+        const row = gd[i];
+        if (row && String(row[ci.content] || '').indexOf(srcTag) !== -1) return row;
+    }
+    return null;
+};
+
 // ✅ [공용] 분석 결과(r) → 간트 행 객체 생성 (개별 등록 / 보관함 배치 / 타 프로젝트 배분 공용)
 //    gd/ci 생략 시 현재 프로젝트(globalData/colIdx) 기준으로 동작
+//    반환값의 row는 중복으로 판단되면 null — 호출부는 반드시 확인 후 처리할 것.
 window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     gd = gd || globalData;
     ci = ci || colIdx;
+    if (window._mailFindDupBySourceTag(r['상세내용'], gd, ci)) {
+        return { row: null, taskName: (r['업무명'] || '새 업무'), duplicate: true };
+    }
     // 💡 사용자가 미리보기에서 드롭다운으로 직접 고른 값이거나(_wbsLevelUserSet) AI가 0~2(대분류~
     //    소분류2)로 판단한 경우는 그대로 존중. 그 외(3/4/미지정)는 실제 시트 기준으로 재추정.
     const _aiWbsLevel = parseInt(r['wbs레벨'] ?? 4);
@@ -823,6 +847,10 @@ window.insertMailTask = function() {
 
     const insertAfter = parseInt(document.getElementById('mail-insert-position').value);
     const built = window.buildMailTaskRow(r, undefined, undefined, window._mailParsedRaw);
+    if (!built.row) {
+        alert(window._t('⚠️ 이미 등록된 메일입니다. 같은 업무가 이미 있어 중복으로 추가하지 않았습니다.', '⚠️ This mail is already registered — a duplicate task already exists, so nothing new was added.'));
+        return;
+    }
 
     const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
     globalData.splice(pos, 0, built.row);

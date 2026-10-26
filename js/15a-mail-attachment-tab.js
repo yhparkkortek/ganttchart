@@ -1503,7 +1503,15 @@ window.mfBatchInsert = async function() {
 function mfDirectInsert(task, mailRaw, setAlarm) {
     if (!globalData || globalData.length <= 1) {
         alert(window._t('먼저 Gantt Chart 파일을 불러와주세요.', 'Please load a Gantt Chart file first.'));
-        return false; 
+        return false;
+    }
+
+    // 📌 [2026-10-26 버그수정] 이 함수는 buildMailTaskRow를 안 거치는 별도 구현이라 그쪽에 추가한
+    //    [출처] 태그 중복 방지(js/14b _mailFindDupBySourceTag)가 안 걸렸다 — 같은 가드를 여기도 적용.
+    if (window._mailFindDupBySourceTag && window._mailFindDupBySourceTag(task['상세내용'], globalData, colIdx)) {
+        if (window.showToast) window.showToast('⚠️ 이미 등록된 메일이라 추가하지 않았습니다 (중복).', 'warning');
+        else alert(window._t('⚠️ 이미 등록된 메일입니다. 같은 업무가 이미 있어 중복으로 추가하지 않았습니다.', '⚠️ This mail is already registered — a duplicate task already exists, so nothing new was added.'));
+        return false;
     }
 
     // 💡 AI 분석값(3 등)과 무관하게 항상 가장 낮은 레벨(4)로 등록
