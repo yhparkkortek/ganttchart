@@ -821,7 +821,10 @@ window._dsImportToPage = async function (pageId, folder) {
     window._dsOpenPicker({
         folder: folder || (folders && folders[0] && folders[0].f) || base,
         folders: folders,
-        title: _t('NAS에서 불러오기', 'Import from the NAS'),
+        // 💡 [2026-10-26] "NAS에서 불러오기"였다가 "NAS DATA"로 — 지금은 불러오기뿐 아니라
+        // 올리기·삭제·새 폴더·AI 분석/연결 프로그램 열기까지 다 되는 창이라 "불러오기"는
+        // 더 이상 포괄하는 이름이 아니다(사용자 요청).
+        title: 'NAS DATA',
         onPick: async function (f, name) {
             try {
                 // 🤖💻 [2026-10-26] 규격 엑셀이면 그대로(결정론, 묻지 않는다) — 애매한 파일만 묻는다.
