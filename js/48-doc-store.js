@@ -488,6 +488,10 @@ window._dsOpenPicker = async function (opts) {
         //    (사용자가 "드롭다운으로 올리기가 안 된다"고 한 게 실은 드래그앤드롭이 아예 없던
         //    것 — 말을 바로잡아 줬다). 모달 전체(ds-pick-box)에 건다: 파일 목록뿐 아니라
         //    탭·검색창 위에 놓아도 업로드되게.
+        //    ⚠️ [2026-10-26 정정] `stopPropagation` 없이 올렸더니, `js/04f`가 **window**에 걸어
+        //    둔 전역 드롭(프로젝트 엑셀 불러오기)까지 같이 불려서 "이미 열려있는 프로젝트를
+        //    덮어쓸까요?" 비밀번호 창이 겹쳐 떴다(사용자 스크린샷으로 제보). 네 이벤트 전부
+        //    `stopPropagation`으로 막아 이 모달 바깥(window)으로 못 새게 한다.
         var dsBox = document.getElementById('ds-pick-box');
         var dsDragDepth = 0;   // 자식 enter/leave가 섞여도 바깥 한 번만 하이라이트하려고 깊이를 센다
         function _dsSetDropHighlight(on) {
@@ -496,21 +500,22 @@ window._dsOpenPicker = async function (opts) {
         }
         dsBox.addEventListener('dragenter', function (e) {
             if (!e.dataTransfer || e.dataTransfer.types.indexOf('Files') === -1) return;
-            e.preventDefault();
+            e.preventDefault(); e.stopPropagation();
             dsDragDepth++;
             _dsSetDropHighlight(true);
         });
         dsBox.addEventListener('dragover', function (e) {
             if (!e.dataTransfer || e.dataTransfer.types.indexOf('Files') === -1) return;
-            e.preventDefault();   // 기본 동작(새 탭에서 열기)을 막아야 drop이 온다
+            e.preventDefault(); e.stopPropagation();   // 기본 동작(새 탭에서 열기)을 막아야 drop이 온다
         });
-        dsBox.addEventListener('dragleave', function () {
+        dsBox.addEventListener('dragleave', function (e) {
+            e.stopPropagation();
             dsDragDepth = Math.max(0, dsDragDepth - 1);
             if (dsDragDepth === 0) _dsSetDropHighlight(false);
         });
         dsBox.addEventListener('drop', function (e) {
             if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
-            e.preventDefault();
+            e.preventDefault(); e.stopPropagation();
             dsDragDepth = 0;
             _dsSetDropHighlight(false);
             _dsDoUpload(_dsPick.folder, e.dataTransfer.files);
