@@ -4990,7 +4990,16 @@ ${docsJson}`;
 
         // ✍️ [2026-10-19] 쓰기 초안 확정/취소 — **가장 먼저** 가로챈다.
         //    확인 버튼이 보낸 고정 형식이라 AI를 거칠 이유가 없다.
-        if (/^쓰기확정\s+w\d+_/.test(question.trim()) || question.trim() === '쓰기취소') {
+        // 🐛 [2026-10-26 제보] confirmPhrase 를 요구하는 도구(gw_mail_send 등 — "되돌릴 수 없으니
+        //    `발송`이라고 입력해주세요")가 **실제로는 한 번도 통과할 수 없었다.** "쓰기확정 nonce"
+        //    버튼 값엔 문구가 안 실리고, _qaExecWriteDraft엔 항상 빈 문자열(''))만 넘어갔다
+        //    (js/41의 검사: confirmPhrase && confirmText !== confirmPhrase → 매번 불일치).
+        //    그래서 ① 그 문구를 직접 타이핑하면 그대로 confirmText 로 넘기고,
+        //    ② confirmPhrase 가 있는 도구는 "실행" 버튼 자체를 안 보여준다(아래 7792행 근처).
+        var _pendingPhrase = window._qaPendingWrite && window._qaPendingWrite.tool
+                              && window._qaPendingWrite.tool.confirmPhrase;
+        if (/^쓰기확정\s+w\d+_/.test(question.trim()) || question.trim() === '쓰기취소'
+                || (_pendingPhrase && question.trim() === _pendingPhrase)) {
             if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
             if (question.trim() === '쓰기취소') {
                 window._qaPendingWrite = null;
@@ -4998,7 +5007,11 @@ ${docsJson}`;
                     text: '취소했습니다 — ' + window._t('아무것도 실행하지 않았습니다.', 'nothing was executed.') });
                 window._renderGanttQaMessages(); input.focus(); return;
             }
-            await window._qaConfirmWriteDraft(question.trim().replace(/^쓰기확정\s+/, ''), '');
+            if (_pendingPhrase && question.trim() === _pendingPhrase) {
+                await window._qaConfirmWriteDraft(window._qaPendingWrite.nonce, _pendingPhrase);
+            } else {
+                await window._qaConfirmWriteDraft(question.trim().replace(/^쓰기확정\s+/, ''), '');
+            }
             input.focus(); return;
         }
 
@@ -7787,10 +7800,17 @@ ${docsJson}`;
             //    (앱 공용 패턴: _ganttQaShowConfirmButtons → 버튼 value가 다시 질문으로 들어온다)
             if (_toolRes && _toolRes.draft && _toolRes.draft.ok && !_toolRes.draft.blocked) {
                 window._ganttQaHistory.pop();
+                // ⚠️ confirmPhrase 가 있는 도구(발송처럼 되돌릴 수 없는 것)는 "실행" 버튼을 안 보여준다
+                //    — 버튼 클릭은 문구를 안 실어 보내 항상 "문구 불일치"로 막혔다(위 04993행 주석).
+                //    대신 안내문대로 사람이 그 문구를 직접 타이핑해야 통과한다(의도된 추가 마찰).
+                var _cPhrase = _toolRes.draft.tool && _toolRes.draft.tool.confirmPhrase;
+                var _confirmBtns = _cPhrase
+                    ? [{ label: window._t('취소', 'Cancel'), value: '쓰기취소', style: 'cancel' }]
+                    : [{ label: '✅ ' + window._t('실행', 'Run'), value: '쓰기확정 ' + _toolRes.draft.nonce, style: 'confirm' },
+                       { label: window._t('취소', 'Cancel'), value: '쓰기취소', style: 'cancel' }];
                 window._ganttQaShowConfirmButtons(
                     _toolRes.reply + (window._qaToolCallsFooter ? window._qaToolCallsFooter(_toolRes.calls) : ''),
-                    [{ label: '✅ ' + window._t('실행', 'Run'), value: '쓰기확정 ' + _toolRes.draft.nonce, style: 'confirm' },
-                     { label: window._t('취소', 'Cancel'), value: '쓰기취소', style: 'cancel' }]);
+                    _confirmBtns);
                 window._ganttQaSending = false;
                 input.disabled = false;
                 if (sendBtn) {
