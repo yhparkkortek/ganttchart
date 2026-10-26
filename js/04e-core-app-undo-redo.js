@@ -1242,6 +1242,19 @@
         const toks = _wbsTokenize(t);
         return toks.length > 1 ? toks.slice(0, -1) : toks;
     }
+    // 💡 [2026-10-26 추가, 사용자 지적] 이름만 비슷하다고 묶으면 안 된다 — 7월 "밝기" 업무와
+    //    12월 "밝기" 업무는 주제가 같아도 서로 다른 작업일 가능성이 높다. recalculateSchedules()가
+    //    매번 다시 계산해 두는 _calcStartTs(화면에 실제 쓰이는 계산된 시작일)를 우선 쓰고, 아직
+    //    계산 전이면 원본 시작일 셀을 직접 파싱해서 폴백한다.
+    function _wbsRowStartTs(row) {
+        if (row && typeof row._calcStartTs === 'number') return row._calcStartTs;
+        if (colIdx && colIdx.start !== -1 && row && row[colIdx.start]) {
+            const t = new Date(row[colIdx.start]).getTime();
+            if (!isNaN(t)) return t;
+        }
+        return null;
+    }
+    const _WBS_GROUP_MAX_GAP_DAYS = 30; // 같은 그룹으로 볼 수 있는 시작일 간 최대 간격(1차 기본값)
     window._wbsDetectGroupCandidates = function(gd) {
         gd = gd || globalData;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
@@ -1297,15 +1310,41 @@
             });
             groups.forEach(function(members, bestTok) {
                 if (members.length < 2) return;
-                // 💡 이 부모의 자식 전부가 leaf이고 그 전부가 이번 클러스터 하나다 — 즉 부모가 이미
-                //    이 업무들만을 위한 전용 그룹이다(방금 묶기를 적용한 직후가 대표적). 그 상태에서
-                //    또 "한 단계 더 묶자"고 제안하면 의미 없이 레벨만 깊어지는 빈 중첩이 된다 — 건너뜀.
-                if (members.length === leafIdxs.length && leafIdxs.length === idxs.length) return;
-                candidates.push({
-                    memberIdx: members.sort(function(a, b) { return a - b; }),
-                    suggestedName: bestTok || _wbsNormTitle(_wbsRowOwnTitle(gd[members[0]])),
-                    titles: members.map(function(i) { return _wbsNormTitle(_wbsRowOwnTitle(gd[i])); })
+                // 3) 주제가 같아도 시기가 동떨어져 있으면 별개로 본다 — 시작일 기준으로 정렬한 뒤,
+                //    연속한 두 업무의 간격이 _WBS_GROUP_MAX_GAP_DAYS를 넘으면 거기서 끊는다(날짜를
+                //    모르는 업무는 끝으로 보내고 혼자 둠 — 비교할 기준이 없어 묶을 근거가 없다).
+                const withTs = members.map(function(i) { return { i: i, ts: _wbsRowStartTs(gd[i]) }; });
+                withTs.sort(function(a, b) {
+                    if (a.ts == null && b.ts == null) return 0;
+                    if (a.ts == null) return 1;
+                    if (b.ts == null) return -1;
+                    return a.ts - b.ts;
                 });
+                const maxGapMs = _WBS_GROUP_MAX_GAP_DAYS * 24 * 60 * 60 * 1000;
+                let run = [];
+                const flushRun = function() {
+                    if (run.length < 2) { run = []; return; }
+                    // 💡 이 부모의 자식 전부가 leaf이고 그 전부가 이번 클러스터(날짜로 쪼개기 전 기준)
+                    //    하나다 — 부모가 이미 이 업무들만을 위한 전용 그룹이라는 뜻. 그 상태에서 또
+                    //    한 단계 더 묶자고 제안하면 의미 없이 레벨만 깊어지는 빈 중첩이 된다 — 건너뜀.
+                    if (members.length === leafIdxs.length && leafIdxs.length === idxs.length && run.length === members.length) { run = []; return; }
+                    const ids = run.map(function(x) { return x.i; }).sort(function(a, b) { return a - b; });
+                    const tsVals = run.map(function(x) { return x.ts; }).filter(function(t) { return t != null; });
+                    candidates.push({
+                        memberIdx: ids,
+                        suggestedName: bestTok || _wbsNormTitle(_wbsRowOwnTitle(gd[ids[0]])),
+                        titles: ids.map(function(i) { return _wbsNormTitle(_wbsRowOwnTitle(gd[i])); }),
+                        dateRangeLabel: tsVals.length ? (new Date(Math.min.apply(null, tsVals)).toISOString().slice(0, 10) + ' ~ ' + new Date(Math.max.apply(null, tsVals)).toISOString().slice(0, 10)) : ''
+                    });
+                    run = [];
+                };
+                withTs.forEach(function(x) {
+                    if (!run.length) { run.push(x); return; }
+                    const prev = run[run.length - 1];
+                    if (prev.ts != null && x.ts != null && (x.ts - prev.ts) <= maxGapMs) run.push(x);
+                    else { flushRun(); run.push(x); }
+                });
+                flushRun();
             });
         });
         return candidates;
@@ -1340,11 +1379,12 @@
                     ? `<div style="padding:30px; text-align:center; color:#999; font-size:13px;">${_en ? 'No group candidates found — tasks under each parent look distinct enough already.' : '묶을 만한 후보를 찾지 못했습니다 — 같은 부모 밑 업무들이 이미 충분히 구분돼 보입니다.'}</div>`
                     : candidates.map(function(c, ci) {
                         return `<div class="wbs-group-cand" data-ci="${ci}" style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:10px;">
-                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:4px;">
                                 <input type="text" class="wbs-group-name-input" value="${escapeHtml(c.suggestedName)}" style="flex:1; padding:5px 8px; border:1px solid #c0a0d8; border-radius:5px; font-size:12.5px; font-weight:bold; color:#5a3680;">
                                 <button class="wbs-group-apply-btn" style="padding:6px 12px; background:#ede4f5; color:#5a3680; border:1px solid #c0a0d8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🗂 ${_en ? 'Group' : '묶기'}</button>
                                 <button class="wbs-group-ignore-btn" style="padding:6px 10px; background:#f8f9fa; color:#777; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">${_en ? 'Ignore' : '무시'}</button>
                             </div>
+                            ${c.dateRangeLabel ? `<div style="font-size:10.5px; color:#888; margin-bottom:5px;">📅 ${escapeHtml(c.dateRangeLabel)}</div>` : ''}
                             <div style="font-size:11.5px; color:#555; line-height:1.7;">${c.titles.map(function(t, ti) {
                                 return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wbs-group-member-chk" data-idx="${c.memberIdx[ti]}" checked>${escapeHtml(t)}</label>`;
                             }).join('')}</div>
