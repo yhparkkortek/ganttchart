@@ -423,24 +423,37 @@
             'SAP에서 자재 ' + matnr + '의 "' + docType + '" 문서를 여는 중...',
             'Opening "' + docType + '" document of material ' + matnr + ' in SAP...') });
         window._renderGanttQaMessages();
-        let reply;
+        let reply, rawHtml = false;
         try {
             const url = 'http://127.0.0.1:5000/sap-open-document?type=' + encodeURIComponent(docType)
                       + '&material=' + encodeURIComponent(matnr);
             const res = await window._withTimeout(fetch(url), 70000,
                 window._t('SAP 문서 열기 시간 초과', 'SAP document open timed out'));
             const data = await res.json();
-            reply = data.ok
-                ? '📂 ' + (data.message || window._t(
+            if (data.ok) {
+                reply = '📂 ' + (data.message || window._t(
                     '자재 ' + matnr + '의 "' + docType + '" 문서를 열었습니다.',
-                    'Opened "' + docType + '" document of material ' + matnr + '.'))
-                : '⚠️ ' + window._t('문서 열기 실패: ', 'Failed to open document: ')
+                    'Opened "' + docType + '" document of material ' + matnr + '.'));
+                // 📂 [2026-10-26 신규] "다운로드/열람 안내엔 폴더로 바로 가는 버튼" 관례인데, 이 경로만
+                //    빠져 있었다 — /sap-open-document(=sap_bridge_32.open_document())는 SAP가 자체적으로
+                //    임시폴더(C:\temp)에 내려받은 뒤 연결 프로그램으로 여는 방식이라 정확한 파일명은
+                //    돌려주지 않는다(코드 주석 확인). 그래도 **드롭 위치 자체는 고정**이므로, 정확한
+                //    파일을 못 짚어 줘도 그 폴더로 바로 가는 버튼은 달아준다 — C:\SAP_DMS가 아니라
+                //    열기 전용 /open-folder(경로 제한 없음)를 쓴다(저장과 달리 이건 AI가 지어낸 경로가
+                //    아니라 우리 코드가 하드코딩한 값이라 자동감지기의 SAP_DMS 제한을 거칠 필요 없음).
+                const _btnStyle = 'display:inline-block;margin-top:6px;padding:3px 10px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
+                reply += '\n\n<button style="' + _btnStyle + '" onclick="window._ganttQaOpenFolder(\'C:\\\\temp\')">📂 '
+                    + window._t('다운로드 폴더 열기', 'Open download folder') + ' (C:\\temp)</button>';
+                rawHtml = true;
+            } else {
+                reply = '⚠️ ' + window._t('문서 열기 실패: ', 'Failed to open document: ')
                     + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+            }
         } catch (e) {
             reply = '⚠️ ' + window._t('문서 열기 실패: ', 'Failed to open document: ') + (e && e.message ? e.message : e);
         }
         window._ganttQaHistory.pop();
-        window._ganttQaHistory.push({ role: 'ai', text: reply });
+        window._ganttQaHistory.push({ role: 'ai', text: reply, rawHtml: rawHtml });
         window._renderGanttQaMessages();
     };
 
@@ -6230,7 +6243,7 @@ ${docsJson}`;
             const sapOpenDocIsSave = !!sapOpenDocReq.save;
             window._ganttQaHistory.push({ role: 'user', text: question });
             // 💡 [2026-09-30] 맥락 추론: 저장/다운로드 의도 → ZDMSR004(C:\SAP_DMS 저장), 열람/열기 의도 → SAP 뷰어 열기
-            let pendingText, sapDocReply;
+            let pendingText, sapDocReply, sapDocReplyRawHtml = false;
             if (sapOpenDocIsSave && sapOpenDocMaterial) {
                 pendingText = window._t(
                     `ZDMSR004로 자재 "${sapOpenDocMaterial}"의 "${sapOpenDocType}" 문서를 C:\\SAP_DMS\\에 저장하는 중...`,
@@ -6272,15 +6285,24 @@ ${docsJson}`;
                             : window._t('SAP 문서 열기 50초 시간 초과', 'Opening the SAP document timed out after 50s')
                     );
                     const data = await res.json();
-                    sapDocReply = data.ok
-                        ? '📄 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 열었습니다.`, `Opened document "${sapOpenDocType}".`))
-                        : '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                    if (data.ok) {
+                        sapDocReply = '📄 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 열었습니다.`, `Opened document "${sapOpenDocType}".`));
+                        // 📂 [2026-10-26 신규] 열람(view) 의도도 위 "📂 문서 조회 결과 열기 버튼"
+                        //    (_sapOpenDocFromLookup)과 같은 /sap-open-document를 타므로 같은 이유로
+                        //    같은 자리(C:\temp)에 떨어진다 — 똑같이 폴더 바로가기 버튼을 단다.
+                        const _btnStyle = 'display:inline-block;margin-top:6px;padding:3px 10px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
+                        sapDocReply += '\n\n<button style="' + _btnStyle + '" onclick="window._ganttQaOpenFolder(\'C:\\\\temp\')">📂 '
+                            + window._t('다운로드 폴더 열기', 'Open download folder') + ' (C:\\temp)</button>';
+                        sapDocReplyRawHtml = true;
+                    } else {
+                        sapDocReply = '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                    }
                 } catch (e) {
                     sapDocReply = '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (e && e.message ? e.message : e);
                 }
             }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: sapDocReply });
+            window._ganttQaHistory.push({ role: 'ai', text: sapDocReply, rawHtml: sapDocReplyRawHtml });
             window._renderGanttQaMessages();
             input.focus();
             return;
