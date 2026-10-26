@@ -813,6 +813,8 @@
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.sortRowsByStartDate();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '📅 Sort by Date' : '📅 날짜순 정렬'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Keep dates as-is, reorder rows by start date' : '날짜는 그대로 두고, 표시 순서만 시작일순 정리'}</div></div>
                 <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.restoreAiTaskDateAll();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '📅 Restore AI-analyzed Dates (All)' : '📅 AI 분석 날짜로 복원 (전체)'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Restore original AI dates for every task that has a backup, in one go' : '백업이 있는 모든 업무의 날짜를 AI 분석 원본으로 한 번에 복원'}</div></div>
+                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
+                <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.openWbsGroupSuggestions();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '🗂 Find Group Suggestions' : '🗂 그룹 제안 찾기'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Scan for scattered same-topic tasks under each parent and suggest grouping them' : '같은 부모 밑에 흩어진 비슷한 주제의 업무를 찾아 그룹으로 묶을지 제안'}</div></div>
             `;
             document.body.appendChild(popup);
             document.addEventListener('click', function(e) {
@@ -1134,7 +1136,7 @@
         if (lv === 3) return row._origT3;
         return row._origT4;
     }
-    window.groupSelectedRows = function() {
+    window.groupSelectedRows = function(presetName) {
         const rows = globalData;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
         const sel = window._selectedRows;
@@ -1167,7 +1169,8 @@
 
         const firstRow = rows[topIdx[0]];
         const defaultName = (_rowOwnTitle(firstRow) || '').replace(/\s*[＊*]?AI📧\s*$/, '').trim();
-        const groupName = prompt(_en
+        // presetName이 오면(자동 그룹 제안에서 이미 사람이 확인한 이름) prompt() 없이 바로 사용
+        const groupName = presetName != null ? presetName : prompt(_en
             ? `Name for the new group (will sit at WBS level ${G - 1}, above the ${topIdx.length} selected tasks):`
             : `새 그룹(상위 업무, WBS 레벨 ${G - 1})의 이름을 입력하세요 — 선택한 업무 ${topIdx.length}개가 그 아래로 들어갑니다:`,
             defaultName);
@@ -1191,7 +1194,15 @@
         });
         if (colIdx.status !== -1) groupRow[colIdx.status] = "진행";
 
-        const insertAt = blocks[0].start; // 뒤에서부터 지웠으므로 첫 블록의 원래 시작 위치가 그대로 유효
+        // 🐛 [2026-10-26 버그수정, 그룹 제안 자동탐지 기능 개발 중 발견] 이 표의 트리는 "부모 = 바로
+        //    앞의 더 낮은 레벨 행"으로만 정해진다(명시적 부모 포인터가 없음) — 그래서 새 그룹(레벨 G-1)
+        //    바로 다음 행이 선택 안 한 레벨 G(이상) 행이면, 그 행도 새 그룹의 자식으로 조용히 딸려
+        //    들어간다(사람이 묶으려던 적 없는 업무가 엉뚱하게 편입됨). blocks[0].start에 그대로
+        //    꽂으면 이 사고가 날 수 있어, 거기서부터 앞으로 훑어 레벨이 G-1 이하인 첫 행(=지금 부모
+        //    범위의 경계) 바로 앞으로 삽입 위치를 옮긴다 — 그 경계 안쪽은 전부 이미 골라낸 행들뿐이라
+        //    안전하다.
+        let insertAt = blocks[0].start;
+        while (insertAt < rows.length && lvOf(rows[insertAt]) > G - 1) insertAt++;
         rows.splice(insertAt, 0, groupRow, ...picked);
 
         const newSel = new Set();
@@ -1203,6 +1214,175 @@
         window.paintRowSelection();
         if (window.showToast) window.showToast(_en ? `✅ Grouped ${topIdx.length} task(s) under "${gName}".` : `✅ "${gName}" 그룹으로 ${topIdx.length}개 업무를 묶었습니다.`, 'info');
         return true;
+    };
+
+    // 📌 [2026-10-26 신규] "매번 사람이 직접 찾아서 묶어야 하면 결국 자동화가 아니다" — 그룹으로
+    //    묶을 만한 후보(같은 부모 밑에 흩어진 "DP 케이블"류, "밝기"류 반복 주제)를 결정론적으로
+    //    스스로 찾아서 제안한다. CLAUDE.md 방향("결정론 먼저, AI는 임계치 초과 시만" · "사람 승인
+    //    후 적용")대로 AI 호출 없이 — 같은 부모의 형제(leaf) 업무명을 토큰화해서, 그 형제 묶음 안에서
+    //    너무 흔한 토큰(그 스코프 자체에서 빈도로 판정 — "확인"/"검토" 같은 말을 사전에 박아두지
+    //    않는다)은 걸러내고, 남는 의미있는 토큰을 공유하는 업무끼리 묶는다. 적용은 사람이 직접
+    //    openWbsGroupSuggestions() 모달에서 하나씩 확인하고 눌러야만 일어난다 — 스스로 적용 안 함.
+    function _wbsRowOwnTitle(row) {
+        const lv = (row && typeof row._level === 'number') ? row._level : 4;
+        return [row._origDev, row._origT1, row._origT2, row._origT3, row._origT4][lv] || '';
+    }
+    function _wbsNormTitle(t) {
+        return String(t || '').replace(/\s*[＊*]?AI📧\s*$/, '').replace(/\s*📧\s*$/, '').trim();
+    }
+    function _wbsTokenize(t) {
+        return _wbsNormTitle(t).split(/[\s/·,()[\]]+/).filter(function(s) { return s.length >= 2; });
+    }
+    // 💡 [실측 보정] 이 시트의 업무명은 "주제(명사) + 동작(확인/검토/요청/검증 등, 마지막 토큰)" 순서를
+    //    거의 항상 따른다 — 마지막 토큰만 떼고 비교하면, 토큰 빈도만으로 "흔한 말"을 걸러내려 할 때
+    //    생기던 오탐(예: "확인"이 22개 중 6개에 나와 임계치를 살짝 못 넘겨 전혀 무관한 업무들까지
+    //    한 덩어리로 묶이던 문제, 실측 LNW_STELLAR32_32.0 유사 데이터로 재현)을 훨씬 줄인다.
+    //    토큰이 1개뿐이면(예: "밝기증가") 그대로 둔다 — 떼면 비교할 게 없어진다.
+    function _wbsTopicTokens(t) {
+        const toks = _wbsTokenize(t);
+        return toks.length > 1 ? toks.slice(0, -1) : toks;
+    }
+    window._wbsDetectGroupCandidates = function(gd) {
+        gd = gd || globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+
+        // 1) 부모별 형제 묶음 구성 — "부모 = 바로 위의 더 낮은 레벨 행" (sortRowsByStartDate와 같은 방식)
+        const stack = [];
+        const siblingGroups = new Map();
+        for (let i = 1; i < gd.length; i++) {
+            const row = gd[i]; if (!row) continue;
+            const lv = lvOf(row);
+            while (stack.length && stack[stack.length - 1].level >= lv) stack.pop();
+            const parentKey = stack.length ? stack[stack.length - 1].idx : 'ROOT';
+            if (!siblingGroups.has(parentKey)) siblingGroups.set(parentKey, []);
+            siblingGroups.get(parentKey).push(i);
+            stack.push({ idx: i, level: lv });
+        }
+
+        const candidates = [];
+        siblingGroups.forEach(function(idxs) {
+            if (idxs.length < 2) return;
+            // 자식이 있는(=이미 그 자체로 그룹인) 행은 제외 — leaf 형제만 묶음 후보로 본다
+            const leafIdxs = idxs.filter(function(i) {
+                const lv = lvOf(gd[i]);
+                const next = gd[i + 1];
+                return !(next && lvOf(next) > lv);
+            });
+            if (leafIdxs.length < 2) return;
+
+            const tokLists = leafIdxs.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])); });
+            const freq = new Map();
+            tokLists.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { freq.set(t, (freq.get(t) || 0) + 1); }); });
+            const total = leafIdxs.length;
+            // 마지막(동작) 토큰을 뗀 "주제 토큰" 안에서도, 그 형제 묶음의 25% 넘게 등장하면 여전히
+            // "흔한 말"로 보고 제외 — 2중 안전장치(동적 불용어, 사전 없음)
+            const commonCut = Math.max(1, Math.ceil(total * 0.25));
+            const isCommon = function(t) { return (freq.get(t) || 0) > commonCut; };
+
+            // 2) 공유 토큰(흔하지 않은 것만) 기준 union-find 클러스터링
+            const parent = leafIdxs.map(function(_, k) { return k; });
+            function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+            function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+            for (let a = 0; a < leafIdxs.length; a++) {
+                for (let b = a + 1; b < leafIdxs.length; b++) {
+                    const shared = tokLists[a].some(function(t) { return !isCommon(t) && tokLists[b].indexOf(t) !== -1; });
+                    if (shared) union(a, b);
+                }
+            }
+            const groups = new Map();
+            leafIdxs.forEach(function(idx, k) {
+                const root = find(k);
+                if (!groups.has(root)) groups.set(root, []);
+                groups.get(root).push(idx);
+            });
+            groups.forEach(function(members) {
+                if (members.length < 2) return;
+                // 💡 이 부모의 자식 전부가 leaf이고 그 전부가 이번 클러스터 하나다 — 즉 부모가 이미
+                //    이 업무들만을 위한 전용 그룹이다(방금 묶기를 적용한 직후가 대표적). 그 상태에서
+                //    또 "한 단계 더 묶자"고 제안하면 의미 없이 레벨만 깊어지는 빈 중첩이 된다 — 건너뜀.
+                if (members.length === leafIdxs.length && leafIdxs.length === idxs.length) return;
+                const memberToks = members.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])).filter(function(t) { return !isCommon(t); }); });
+                const tcount = new Map();
+                memberToks.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { tcount.set(t, (tcount.get(t) || 0) + 1); }); });
+                let bestTok = '', bestCount = 0;
+                tcount.forEach(function(c, t) { if (c > bestCount || (c === bestCount && t.length > bestTok.length)) { bestCount = c; bestTok = t; } });
+                candidates.push({
+                    memberIdx: members.sort(function(a, b) { return a - b; }),
+                    suggestedName: bestTok || _wbsNormTitle(_wbsRowOwnTitle(gd[members[0]])),
+                    titles: members.map(function(i) { return _wbsNormTitle(_wbsRowOwnTitle(gd[i])); })
+                });
+            });
+        });
+        return candidates;
+    };
+
+    // 🗂 그룹 제안 검토 모달 — 후보를 하나 적용할 때마다 배열 인덱스가 전부 바뀌므로, 매번
+    //    처음부터 다시 탐지해서 다시 그린다(스테일 인덱스로 엉뚱한 행을 묶는 사고 방지).
+    window.openWbsGroupSuggestions = function() {
+        if (!globalData || globalData.length <= 1) { alert(window._t('먼저 프로젝트를 불러와주세요.', 'Please load a project first.')); return; }
+        window._renderWbsGroupSuggestModal();
+    };
+    window._renderWbsGroupSuggestModal = function() {
+        const _en = window._currentLang === 'en';
+        const candidates = window._wbsDetectGroupCandidates();
+        let modal = document.getElementById('wbs-group-suggest-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'wbs-group-suggest-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+            modal.onclick = function() { modal.style.display = 'none'; };
+            document.body.appendChild(modal);
+        }
+        const _n = candidates.length;
+        modal.innerHTML = `
+        <div id="wbs-group-suggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:8vh; left:50%; transform:translateX(-50%); resize:both; overflow:hidden; min-width:360px; min-height:200px;">
+            <div id="wbs-group-suggest-drag" style="padding:13px 18px; border-bottom:1px solid #c0a0d8; font-weight:bold; font-size:14px; background:#ede4f5; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#5a3680;">
+                <span>🗂 ${_en ? `Group suggestions (${_n} found)` : `그룹 제안 (${_n}개 발견)`}</span>
+                <button onclick="document.getElementById('wbs-group-suggest-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div style="padding:10px 16px; flex:1; overflow-y:auto;">
+                ${_n === 0
+                    ? `<div style="padding:30px; text-align:center; color:#999; font-size:13px;">${_en ? 'No group candidates found — tasks under each parent look distinct enough already.' : '묶을 만한 후보를 찾지 못했습니다 — 같은 부모 밑 업무들이 이미 충분히 구분돼 보입니다.'}</div>`
+                    : candidates.map(function(c, ci) {
+                        return `<div class="wbs-group-cand" data-ci="${ci}" style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:10px;">
+                            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+                                <input type="text" class="wbs-group-name-input" value="${escapeHtml(c.suggestedName)}" style="flex:1; padding:5px 8px; border:1px solid #c0a0d8; border-radius:5px; font-size:12.5px; font-weight:bold; color:#5a3680;">
+                                <button class="wbs-group-apply-btn" style="padding:6px 12px; background:#ede4f5; color:#5a3680; border:1px solid #c0a0d8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🗂 ${_en ? 'Group' : '묶기'}</button>
+                                <button class="wbs-group-ignore-btn" style="padding:6px 10px; background:#f8f9fa; color:#777; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">${_en ? 'Ignore' : '무시'}</button>
+                            </div>
+                            <div style="font-size:11.5px; color:#555; line-height:1.7;">${c.titles.map(function(t, ti) {
+                                return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wbs-group-member-chk" data-idx="${c.memberIdx[ti]}" checked>${escapeHtml(t)}</label>`;
+                            }).join('')}</div>
+                            <div class="wbs-group-warn" style="display:none; font-size:10.5px; color:#b1432f; margin-top:4px;">${_en ? '⚠️ Uncheck items that don\'t belong — at least 2 must stay checked.' : '⚠️ 안 맞는 항목은 체크 해제하세요 — 최소 2개는 남아있어야 합니다.'}</div>
+                        </div>`;
+                    }).join('')}
+            </div>
+        </div>`;
+        if (window._makeDraggable) window._makeDraggable('wbs-group-suggest-box', 'wbs-group-suggest-drag');
+        if (window._bindClickToFront) window._bindClickToFront('wbs-group-suggest-modal');
+        modal.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('wbs-group-suggest-modal');
+
+        modal.querySelectorAll('.wbs-group-apply-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const card = btn.closest('.wbs-group-cand');
+                const name = card.querySelector('.wbs-group-name-input').value.trim();
+                if (!name) return;
+                // 💡 체크 해제한 항목(오탐 멤버)은 빼고 묶는다 — 최소 2개는 남아있어야 함
+                const checkedIdx = Array.from(card.querySelectorAll('.wbs-group-member-chk:checked')).map(function(cb) { return parseInt(cb.dataset.idx, 10); });
+                if (checkedIdx.length < 2) {
+                    const warn = card.querySelector('.wbs-group-warn');
+                    if (warn) warn.style.display = 'block';
+                    return;
+                }
+                window._selectedRows = new Set(checkedIdx);
+                window.groupSelectedRows(name);
+                window._renderWbsGroupSuggestModal(); // 인덱스가 전부 바뀌므로 통째로 다시 탐지+렌더
+            });
+        });
+        modal.querySelectorAll('.wbs-group-ignore-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { btn.closest('.wbs-group-cand').remove(); });
+        });
     };
 
     // 📥 GitHub raw 파일 강제 다운로드 (cross-origin에서 download 속성이 무시되는 문제 우회)
