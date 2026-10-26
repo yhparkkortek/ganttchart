@@ -1508,6 +1508,10 @@ ${question}
                     <button onclick="document.getElementById('ai-mail-view-modal').style.display='none'" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
                 </div>
                 <div id="ai-mail-view-body" style="padding:14px 18px; flex:1; overflow-y:auto; font-size:12.5px; white-space:pre-wrap; line-height:1.6; color:#333;"></div>
+                <div id="ai-mail-view-attachments" style="display:none; padding:6px 18px; background:#f0f5ff; border-top:1px solid #d8e6ff; font-size:11px;"></div>
+                <div style="display:flex; justify-content:flex-end; padding:0 18px;">
+                    <button id="ai-mail-view-eml-btn" style="display:none; margin:8px 0; padding:6px 14px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;" onmouseover="this.style.background='#d8eedd'" onmouseout="this.style.background='#eaf7ea'">📧 ${_en ? 'Open in Outlook' : '아웃룩으로 열기'}</button>
+                </div>
             </div>`;
             document.body.appendChild(modal);
             if (window._makeDraggable) window._makeDraggable('ai-mail-view-box', 'ai-mail-view-drag');
@@ -1515,12 +1519,29 @@ ${question}
             modal.onclick = function() { modal.style.display = 'none'; };
         }
         const bodyEl = document.getElementById('ai-mail-view-body');
-        bodyEl.textContent = (_en ? 'Subject: ' : '제목: ') + (mr.subject || '-') + '\n'
-            + (_en ? 'Sender: ' : '발신: ') + (mr.sender || '-') + '\n'
-            + (_en ? 'Date: ' : '날짜: ') + (mr.date || '-') + '\n\n'
-            + (mr.body2000 || (_en ? '(No body)' : '(본문 없음)'));
+        function _aiMailViewFormat(bodyText) {
+            return (_en ? 'Subject: ' : '제목: ') + (mr.subject || '-') + '\n'
+                + (_en ? 'Sender: ' : '발신: ') + (mr.sender || '-') + '\n'
+                + (_en ? 'Date: ' : '날짜: ') + (mr.date || '-') + '\n\n'
+                + (bodyText || (_en ? '(No body)' : '(본문 없음)'));
+        }
+        bodyEl.textContent = _aiMailViewFormat(mr.body2000);
         modal.style.display = 'block';
         if (window.bringModalToFront) window.bringModalToFront('ai-mail-view-modal');
+
+        // 📎 [2026-10-26 신규] 프로젝트 배치 시 원본 .eml이 NAS에 자동 연결되는 기능과 이어붙임 —
+        //    mr.fileName이 있으면 2000자 요약 대신 NAS 원본 전문/첨부로 바꾸고 "아웃룩으로 열기"를 켠다.
+        const emlBtn = document.getElementById('ai-mail-view-eml-btn');
+        const attDiv = document.getElementById('ai-mail-view-attachments');
+        window._aiMailViewOpenFile = mr.fileName || null;
+        if (window._mailNasApplyAffordance) {
+            window._mailNasApplyAffordance(mr.fileName, {
+                setBody: function(text) { bodyEl.textContent = _aiMailViewFormat(text); },
+                attDiv: attDiv,
+                btnEl: emlBtn,
+                isStale: function() { return window._aiMailViewOpenFile !== mr.fileName; }
+            });
+        }
     };
 
     // 💡 [버그 수정] AI에게 마크다운(굵게/글머리 기호)으로 답하라고 프롬프트에 지시해도, 채팅창이

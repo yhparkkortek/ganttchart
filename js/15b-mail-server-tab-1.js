@@ -1834,7 +1834,7 @@ window._msRenderQueueModal = function(type) {
             const viewBtn = e.target.closest('.ms-queue-view-btn');
             if (viewBtn) {
                 const r = window._msQueueRows && window._msQueueRows[Number(viewBtn.dataset.idx)];
-                if (r && window.showMailRawModal) window.showMailRawModal({ subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body });
+                if (r && window.showMailRawModal) window.showMailRawModal({ subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName });
                 return;
             }
             // 💡 [2026-09-01 신규] "🔄 재분석 요청" — 미분류 사유를 읽고 사용자 의견(선택)을 남긴 뒤 그 메일만 다시 판단

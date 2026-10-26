@@ -184,20 +184,38 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
     }
     // 원본 메일
     const origBody = document.getElementById('mail-original-body');
-    if (origBody) {
-        // 💡 [2026-08-24 버그 수정] 백엔드/원문보기 모달은 15000자까지 보존하도록 이미 확장됐는데,
-        //    이 "▼ 원본 메일" 토글 섹션만 2000자로 재차 잘라서 표시하고 있었음(AI 입력용 2000자
-        //    캡과는 무관한 별개 변수인데 실수로 같은 숫자를 재사용한 것으로 보임) — 15000자로 통일.
-        const bodyFormatted = (body||'')
+    // 💡 [2026-08-24 버그 수정] 백엔드/원문보기 모달은 15000자까지 보존하도록 이미 확장됐는데,
+    //    이 "▼ 원본 메일" 토글 섹션만 2000자로 재차 잘라서 표시하고 있었음(AI 입력용 2000자
+    //    캡과는 무관한 별개 변수인데 실수로 같은 숫자를 재사용한 것으로 보임) — 15000자로 통일.
+    function _mailOrigFormat(rawBody) {
+        const bodyFormatted = (rawBody||'')
             .substring(0, 15000)
             .replace(/\. /g, '.\n')
             .replace(/([^\n])\[/g, '$1\n[')
             .trim();
-        origBody.textContent = `제목: ${subject}\n발신: ${sender||''}\n날짜: ${date||''}\n\n${bodyFormatted}`;
+        return `제목: ${subject}\n발신: ${sender||''}\n날짜: ${date||''}\n\n${bodyFormatted}`;
+    }
+    if (origBody) {
+        origBody.textContent = _mailOrigFormat(body);
         origBody.style.maxHeight = '600px';
         origBody.style.display = 'none';
         const arrow = document.getElementById('mail-original-arrow');
         if (arrow) arrow.textContent = '▼';
+    }
+    // 📎 [2026-10-26 신규] 프로젝트 배치 시 원본 .eml이 NAS에 자동 연결되는 기능은 이미 있었는데,
+    //    정작 "원본 메일 보기"에서는 안 쓰이고 있었다 — mailRaw.fileName이 있으면 2000자 요약 대신
+    //    NAS 원본 전문/첨부로 바꾸고 "아웃룩으로 열기" 버튼을 켠다. 원본이 없으면 지금까지처럼 요약만.
+    const emlBtn = document.getElementById('mail-original-eml-btn');
+    const attDiv = document.getElementById('mail-original-attachments');
+    const mailFileName = mailRaw && mailRaw.fileName;
+    window._mailOriginalOpenFile = mailFileName || null;
+    if (window._mailNasApplyAffordance) {
+        window._mailNasApplyAffordance(mailFileName, {
+            setBody: function(text) { if (origBody) origBody.textContent = _mailOrigFormat(text); },
+            attDiv: attDiv,
+            btnEl: emlBtn,
+            isStale: function() { return window._mailOriginalOpenFile !== mailFileName; }
+        });
     }
     // 분석결과 렌더링
     window._mailAnalyzedResult = JSON.parse(JSON.stringify(task));

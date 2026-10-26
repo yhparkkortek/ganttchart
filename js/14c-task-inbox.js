@@ -1267,6 +1267,108 @@ window.inboxBatchRegisterMatched = async function() {
     if (window.showToast) window.showToast(msg, fails.length ? 'error' : 'info'); else alert(msg);
 };
 
+// 📎 첨부 pill — `fileName`을 주면 **누를 수 있는** 링크가 된다(NAS 원본에서 그 첨부만 꺼내 옴).
+//    안 주면 지금까지처럼 이름만(수신 때 메타만 남겨 둔 경우).
+//    attDivOverride: 업무 보관함 모달(inbox-mailraw-attachments) 말고 다른 "원본 메일 보기"
+//    위치(메일 분석기 오른쪽 패널, AI 문답 원문 팝업 등)에서도 재사용하기 위한 선택 인자.
+//    💡 [2026-10-26] showMailRawModal() 안쪽 지역함수였던 걸 모듈 최상위로 끌어올림 — 그 모달을
+//    한 번도 연 적 없는 다른 "원본 메일 보기" 위치에서 먼저 호출하면 undefined였던 순서 문제 수정.
+window._mailRawRenderAtts = function(atts, fileName, attDivOverride) {
+    var attDiv = attDivOverride || document.getElementById('inbox-mailraw-attachments');
+    if (!attDiv) return;
+    var _e = window._currentLang === 'en';
+    if (!atts || !atts.length) { attDiv.style.display = 'none'; attDiv.innerHTML = ''; return; }
+    function fmtSize(bytes) {
+        if (!bytes || bytes <= 0) return '';
+        if (bytes >= 1048576) return ' (' + (bytes / 1048576).toFixed(1) + ' MB)';
+        if (bytes >= 1024)    return ' (' + Math.round(bytes / 1024) + ' KB)';
+        return ' (' + bytes + ' B)';
+    }
+    // 🖼 서명 로고·본문에 붙여넣은 그림은 '진짜 첨부'가 아니다 — 한 메일에 23개씩 들어 있어
+    //    그대로 늘어놓으면 정작 받아야 할 파일이 묻힌다(실측). 묶어서 접어 두고, 눌러야 편다.
+    var real = [], inl = [];
+    atts.forEach(function(a, i) {
+        if (a.idx === undefined) a.idx = i;
+        (a.inline ? inl : real).push(a);
+    });
+    var pillOf = function(a, i) {
+        var base = 'display:inline-flex;align-items:center;gap:3px;background:#e0ecff;border:1px solid #b8d0f8;'
+                 + 'border-radius:12px;padding:2px 9px;margin:2px 3px 2px 0;font-size:11px;color:#1c4fa0;white-space:nowrap;';
+        var inner = '📎 ' + escapeHtml(a.name || '(이름 없음)') + '<span style="color:#5585cc;">' + fmtSize(a.size) + '</span>';
+        if (!fileName || !window._dsMailAttachUrl) {
+            return '<span style="' + base + '">' + inner + '</span>';
+        }
+        var url = window._dsMailAttachUrl(fileName, (a.idx === undefined ? i : a.idx));
+        return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" title="'
+            + escapeHtml(_e ? 'Open this attachment from the NAS original' : 'NAS 원본에서 이 첨부만 열어 봅니다')
+            + '" style="' + base + 'cursor:pointer; text-decoration:none;"'
+            + ' onmouseover="this.style.background=\'#cfe0fb\'" onmouseout="this.style.background=\'#e0ecff\'">'
+            + inner + '</a>';
+    };
+    var pills = (real.length ? real : atts).map(pillOf).join('');
+    if (real.length && inl.length) {
+        pills += '<span id="mailraw-inline-more" onclick="window._mailRawShowInline()" title="'
+            + escapeHtml(_e ? 'Images embedded in the body (signatures, pasted screenshots)'
+                            : '본문에 들어간 그림입니다(서명·붙여넣은 화면)')
+            + '" style="display:inline-flex;align-items:center;gap:3px;background:#f1f3f5;border:1px dashed #c9cfd5;'
+            + 'border-radius:12px;padding:2px 9px;margin:2px 3px 2px 0;font-size:11px;color:#7b848c;cursor:pointer;white-space:nowrap;">'
+            + '🖼 ' + (_e ? inl.length + ' inline image(s)' : '본문 그림 ' + inl.length + '개') + ' ▾</span>';
+        window._mailRawShowInline = function() {
+            var more = document.getElementById('mailraw-inline-more');
+            if (more) more.outerHTML = inl.map(pillOf).join('');
+        };
+    }
+    var label = _e ? 'Attachments' : '첨부파일';
+    var shown = real.length ? real.length : atts.length;
+    attDiv.innerHTML = '<span style="font-weight:bold;color:#1c4fa0;margin-right:6px;">📎 ' + label + ' ' + shown + (_e ? '' : '개') + '</span>' + pills
+        + (fileName ? '' : '<span style="margin-left:6px; color:#7b93b8;">'
+            + escapeHtml(_e ? '(names only — the original is not archived)' : '(이름만 — 원본이 보관돼 있지 않습니다)') + '</span>');
+    attDiv.style.display = 'block';
+};
+
+// 📎 [2026-10-26 신규] 공용 NAS 원본 적용 — "원본 메일 보기"가 이 모달 말고도 여러 곳(메일
+//    분석기 오른쪽 패널 mailShowRightDetail, AI 문답 원문 팝업 _showAiTaskMailModal 등)에 따로
+//    구현돼 있는데, 지금까지 이 모달(showMailRawModal) 하나만 NAS 원본(_dsMailParse)을 불러와
+//    전문/첨부/"아웃룩으로 열기"를 붙였다. 같은 로직을 세 번 베껴 쓰지 않도록 분리.
+//    fileName이 없거나 백엔드가 꺼져 있거나 원본이 없으면 조용히 아무것도 안 바뀐다(기존 2000자
+//    요약 그대로) — 버튼을 눌렀다가 "없습니다"를 보는 것보다 애초에 안 보이는 게 낫다는 기존 원칙과 동일.
+//    opts: { setBody(text), attDiv, metaEl, btnEl, isStale() }
+window._mailNasApplyAffordance = function(fileName, opts) {
+    opts = opts || {};
+    if (opts.btnEl) { opts.btnEl.style.display = 'none'; opts.btnEl.onclick = null; }
+    if (opts.attDiv) { opts.attDiv.style.display = 'none'; opts.attDiv.innerHTML = ''; }
+    if (opts.metaEl) opts.metaEl.textContent = '';
+    if (!fileName || !window._dsMailParse) return;
+    var _en = window._currentLang === 'en';
+    window._dsMailParse(fileName).then(function(j) {
+        if (!j || !j.ok) return;
+        if (opts.isStale && opts.isStale()) return; // 그 사이 다른 메일을 열었으면 덮어쓰지 않는다
+        if (j.body && opts.setBody) {
+            opts.setBody(j.body + (j.truncated ? ('\n\n' + (_en ? '… (truncated)' : '… (너무 길어 잘랐습니다)')) : ''));
+        }
+        if (opts.attDiv && window._mailRawRenderAtts) window._mailRawRenderAtts(j.attachments || [], fileName, opts.attDiv);
+        if (opts.metaEl) {
+            opts.metaEl.innerHTML = '📎 ' + (_en ? 'NAS original' : 'NAS 원본') + (j.staged ? (_en ? ' (unassigned)' : ' (미분류)') : '');
+        }
+        if (opts.btnEl) {
+            opts.btnEl.style.display = opts.btnShowStyle || '';
+            opts.btnEl.title = (_en ? 'Opens the NAS original in your mail app — no copy is created' : '백엔드가 NAS 원본을 그대로 엽니다 — 사본이 안 생깁니다')
+                + '\n' + j.name + '\n' + (j.staged ? (_en ? '(not assigned yet)' : '(아직 프로젝트 미확정)') : j.project);
+            opts.btnEl.onclick = function(ev) {
+                // 💡 이 버튼이 토글 가능한 헤더(예: "📨 원본 메일 보기" 줄) 안에 있을 수 있어 —
+                //    여기서 직접 막아야 클릭이 부모로 번져 패널이 접히는 걸 막는다.
+                if (ev) ev.stopPropagation();
+                window._dsMailLaunch(fileName)
+                    .then(function() { if (window.showToast) window.showToast('📧 ' + (_en ? 'Opening in your mail app…' : '메일 프로그램에서 여는 중…'), 'info'); })
+                    .catch(function(e) {
+                        if (window.showToast) window.showToast('⚠️ ' + e.message + ' — ' + (_en ? 'downloading instead' : '내려받아서 엽니다'), 'warning', 6000);
+                        if (window._dsMailOpenUrl) window.open(window._dsMailOpenUrl(fileName), '_blank');
+                    });
+            };
+        }
+    }).catch(function() { /* 백엔드가 꺼져 있거나 원본이 없으면 지금까지처럼 요약만 */ });
+};
+
 window.showMailRawModal = function(r) {
     if (!r) return;
     const _en = window._currentLang === 'en';
@@ -1381,60 +1483,6 @@ window.showMailRawModal = function(r) {
         window._mailRawRenderAtts(atts, null);
     })();
 
-    // 📎 첨부 pill — `fileName`을 주면 **누를 수 있는** 링크가 된다(NAS 원본에서 그 첨부만 꺼내 옴).
-    //    안 주면 지금까지처럼 이름만(수신 때 메타만 남겨 둔 경우).
-    window._mailRawRenderAtts = function(atts, fileName) {
-        var attDiv = document.getElementById('inbox-mailraw-attachments');
-        if (!attDiv) return;
-        var _e = window._currentLang === 'en';
-        if (!atts || !atts.length) { attDiv.style.display = 'none'; attDiv.innerHTML = ''; return; }
-        function fmtSize(bytes) {
-            if (!bytes || bytes <= 0) return '';
-            if (bytes >= 1048576) return ' (' + (bytes / 1048576).toFixed(1) + ' MB)';
-            if (bytes >= 1024)    return ' (' + Math.round(bytes / 1024) + ' KB)';
-            return ' (' + bytes + ' B)';
-        }
-        // 🖼 서명 로고·본문에 붙여넣은 그림은 '진짜 첨부'가 아니다 — 한 메일에 23개씩 들어 있어
-        //    그대로 늘어놓으면 정작 받아야 할 파일이 묻힌다(실측). 묶어서 접어 두고, 눌러야 편다.
-        var real = [], inl = [];
-        atts.forEach(function(a, i) {
-            if (a.idx === undefined) a.idx = i;
-            (a.inline ? inl : real).push(a);
-        });
-        var pillOf = function(a, i) {
-            var base = 'display:inline-flex;align-items:center;gap:3px;background:#e0ecff;border:1px solid #b8d0f8;'
-                     + 'border-radius:12px;padding:2px 9px;margin:2px 3px 2px 0;font-size:11px;color:#1c4fa0;white-space:nowrap;';
-            var inner = '📎 ' + escapeHtml(a.name || '(이름 없음)') + '<span style="color:#5585cc;">' + fmtSize(a.size) + '</span>';
-            if (!fileName || !window._dsMailAttachUrl) {
-                return '<span style="' + base + '">' + inner + '</span>';
-            }
-            var url = window._dsMailAttachUrl(fileName, (a.idx === undefined ? i : a.idx));
-            return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" title="'
-                + escapeHtml(_e ? 'Open this attachment from the NAS original' : 'NAS 원본에서 이 첨부만 열어 봅니다')
-                + '" style="' + base + 'cursor:pointer; text-decoration:none;"'
-                + ' onmouseover="this.style.background=\'#cfe0fb\'" onmouseout="this.style.background=\'#e0ecff\'">'
-                + inner + '</a>';
-        };
-        var pills = (real.length ? real : atts).map(pillOf).join('');
-        if (real.length && inl.length) {
-            pills += '<span id="mailraw-inline-more" onclick="window._mailRawShowInline()" title="'
-                + escapeHtml(_e ? 'Images embedded in the body (signatures, pasted screenshots)'
-                                : '본문에 들어간 그림입니다(서명·붙여넣은 화면)')
-                + '" style="display:inline-flex;align-items:center;gap:3px;background:#f1f3f5;border:1px dashed #c9cfd5;'
-                + 'border-radius:12px;padding:2px 9px;margin:2px 3px 2px 0;font-size:11px;color:#7b848c;cursor:pointer;white-space:nowrap;">'
-                + '🖼 ' + (_e ? inl.length + ' inline image(s)' : '본문 그림 ' + inl.length + '개') + ' ▾</span>';
-            window._mailRawShowInline = function() {
-                var more = document.getElementById('mailraw-inline-more');
-                if (more) more.outerHTML = inl.map(pillOf).join('');
-            };
-        }
-        var label = _e ? 'Attachments' : '첨부파일';
-        var shown = real.length ? real.length : atts.length;
-        attDiv.innerHTML = '<span style="font-weight:bold;color:#1c4fa0;margin-right:6px;">📎 ' + label + ' ' + shown + (_e ? '' : '개') + '</span>' + pills
-            + (fileName ? '' : '<span style="margin-left:6px; color:#7b93b8;">'
-                + escapeHtml(_e ? '(names only — the original is not archived)' : '(이름만 — 원본이 보관돼 있지 않습니다)') + '</span>');
-        attDiv.style.display = 'block';
-    };
     window._mailRawOpenFile = (r && r.fileName) || null;
     document.getElementById('inbox-mailraw-body').value = r.body2000 || '';
     // 💡 [2026-09-12 신규] 다른 메일로 다시 열렸을 수 있으니, 번역 보기 상태로 남아있지 않도록
