@@ -444,7 +444,7 @@ window._dsOpenPicker = async function (opts) {
         + '    <button onclick="window._dsPickNewFolder()" title="' + _t('지금 보고 있는 폴더 안에 새 폴더를 만듭니다', 'Create a new folder inside the one shown') + '" style="padding:5px 9px; background:#fff7e6; color:#8a6300; border:1px solid #ffe08a; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; white-space:nowrap;">📁+ ' + _t('새 폴더', 'New folder') + '</button>'
         // ⬆ 는 지금 폴더로, ▾ 는 다른 페이지 폴더를 골라서 — 탭을 옮기지 않고 넣을 수 있게.
         + '    <span style="position:relative; display:inline-flex;">'
-        + '      <button onclick="window._dsPickUpload()" title="' + _t('지금 보고 있는 폴더에 올립니다', 'Upload to the folder shown') + '" style="padding:5px 9px 5px 11px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-right:none; border-radius:6px 0 0 6px; font-size:11.5px; font-weight:bold; cursor:pointer;">⬆ ' + _t('올리기', 'Upload') + '</button>'
+        + '      <button onclick="window._dsPickUpload()" title="' + _t('지금 보고 있는 폴더에 올립니다 (파일을 이 창에 끌어다 놓아도 됩니다)', 'Upload to the folder shown (you can also drag & drop files anywhere in this window)') + '" style="padding:5px 9px 5px 11px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-right:none; border-radius:6px 0 0 6px; font-size:11.5px; font-weight:bold; cursor:pointer;">⬆ ' + _t('올리기', 'Upload') + '</button>'
         + '      <button onclick="window._dsToggleUploadMenu(event)" title="' + _t('다른 폴더에 올리기', 'Upload to another folder') + '" style="padding:5px 7px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:0 6px 6px 0; font-size:10px; cursor:pointer;">▾</button>'
         + '      <div id="ds-pick-upmenu" style="display:none; position:absolute; top:100%; right:0; margin-top:3px; background:#fff; border:1px solid #d7dde2; border-radius:7px; box-shadow:0 6px 18px rgba(0,0,0,0.14); padding:4px; z-index:9570; max-height:280px; overflow:auto;"></div>'
         + '    </span>'
@@ -469,6 +469,37 @@ window._dsOpenPicker = async function (opts) {
             if (e.target.closest('.ds-del')) { window._dsPickDelete(_dsPick.folder, name); return; }
             document.getElementById('ds-pick-modal').style.display = 'none';
             if (_dsPick.onPick) _dsPick.onPick(_dsPick.folder, name);
+        });
+        // 🖱️➡📁 [2026-10-26] 창 어디에든 파일을 끌어다 놓으면 **지금 보고 있는 폴더**로 올린다
+        //    (사용자가 "드롭다운으로 올리기가 안 된다"고 한 게 실은 드래그앤드롭이 아예 없던
+        //    것 — 말을 바로잡아 줬다). 모달 전체(ds-pick-box)에 건다: 파일 목록뿐 아니라
+        //    탭·검색창 위에 놓아도 업로드되게.
+        var dsBox = document.getElementById('ds-pick-box');
+        var dsDragDepth = 0;   // 자식 enter/leave가 섞여도 바깥 한 번만 하이라이트하려고 깊이를 센다
+        function _dsSetDropHighlight(on) {
+            dsBox.style.outline = on ? '3px dashed #2f9e44' : '';
+            dsBox.style.outlineOffset = on ? '-3px' : '';
+        }
+        dsBox.addEventListener('dragenter', function (e) {
+            if (!e.dataTransfer || e.dataTransfer.types.indexOf('Files') === -1) return;
+            e.preventDefault();
+            dsDragDepth++;
+            _dsSetDropHighlight(true);
+        });
+        dsBox.addEventListener('dragover', function (e) {
+            if (!e.dataTransfer || e.dataTransfer.types.indexOf('Files') === -1) return;
+            e.preventDefault();   // 기본 동작(새 탭에서 열기)을 막아야 drop이 온다
+        });
+        dsBox.addEventListener('dragleave', function () {
+            dsDragDepth = Math.max(0, dsDragDepth - 1);
+            if (dsDragDepth === 0) _dsSetDropHighlight(false);
+        });
+        dsBox.addEventListener('drop', function (e) {
+            if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+            e.preventDefault();
+            dsDragDepth = 0;
+            _dsSetDropHighlight(false);
+            _dsDoUpload(_dsPick.folder, e.dataTransfer.files);
         });
     }
     m.style.display = 'block';
@@ -611,40 +642,45 @@ function _dsRenderList() {
 }
 
 /**
- * 파일 올리기. `folder` 를 주면 거기로, 안 주면 지금 보고 있는 탭으로.
+ * 실제 업로드 실행 — 파일 선택(input)·드래그앤드롭이 공유한다(2026-10-26, 전에는 input
+ * 경로에만 있었다). `dest`가 지금 보고 있는 폴더가 아니어도, 끝나면 그 폴더로 전환해
+ * 결과를 바로 보여준다(▾ 드롭다운으로 안 보이는 폴더에 올렸을 때 "안 됐다"고 오해하던
+ * 문제의 대응, 2026-10-26).
+ */
+async function _dsDoUpload(dest, fileList) {
+    var fs = Array.prototype.slice.call(fileList || []);
+    if (!fs.length) return;
+    var ok = 0, dup = [], fail = [];
+    for (var i = 0; i < fs.length; i++) {
+        try { await window._dsPut(dest, fs[i]); ok++; }
+        catch (e) {
+            if (/이미 있습니다|already/.test(e.message)) dup.push(fs[i].name);
+            else fail.push(fs[i].name + ': ' + e.message);
+        }
+    }
+    var msg = '✅ ' + dest + ' — ' + ok + _t('개 올렸습니다', ' uploaded');
+    if (dup.length) msg += ' · ' + _t('같은 이름이라 건너뜀 ' + dup.length + '개', dup.length + ' skipped (name exists)');
+    if (fail.length) msg += ' · ❌ ' + fail.length;
+    _toast(msg, fail.length ? 'warning' : 'info', 6000);
+    if (fail.length) console.warn('[문서저장소] 업로드 실패:', fail);
+    if (ok > 0) {
+        _dsPick.folder = dest;
+        _dsRenderTabs();
+        await _dsLoadFolder();
+    } else if (dest === _dsPick.folder) {
+        await _dsLoadFolder();
+    }
+}
+
+/**
+ * 파일 올리기(선택 창). `folder` 를 주면 거기로, 안 주면 지금 보고 있는 탭으로.
  * ⬆ 버튼 옆 ▾ 로 **다른 페이지 폴더에 바로** 넣을 수 있다 — 탭을 옮겨 다니지 않아도 되게.
  */
 window._dsPickUpload = function (folder) {
     var dest = folder || _dsPick.folder;
     var inp = document.createElement('input');
     inp.type = 'file'; inp.multiple = true;
-    inp.onchange = async function () {
-        var fs = Array.prototype.slice.call(inp.files || []);
-        if (!fs.length) return;
-        var ok = 0, dup = [], fail = [];
-        for (var i = 0; i < fs.length; i++) {
-            try { await window._dsPut(dest, fs[i]); ok++; }
-            catch (e) {
-                if (/이미 있습니다|already/.test(e.message)) dup.push(fs[i].name);
-                else fail.push(fs[i].name + ': ' + e.message);
-            }
-        }
-        var msg = '✅ ' + dest + ' — ' + ok + _t('개 올렸습니다', ' uploaded');
-        if (dup.length) msg += ' · ' + _t('같은 이름이라 건너뜀 ' + dup.length + '개', dup.length + ' skipped (name exists)');
-        if (fail.length) msg += ' · ❌ ' + fail.length;
-        _toast(msg, fail.length ? 'warning' : 'info', 6000);
-        if (fail.length) console.warn('[문서저장소] 업로드 실패:', fail);
-        // 💡 [2026-10-26] 최소 1개라도 올렸으면 **그 폴더로 바로 전환**한다 — ▾ 드롭다운으로
-        // 안 보이는 다른 폴더에 올렸을 때, 토스트를 놓치면 "업로드가 안 됐다"로 오해하기
-        // 쉽다는 지적(사용자). 보고 있던 폴더에 그대로 올렸을 때도 똑같이 새로고침된다.
-        if (ok > 0) {
-            _dsPick.folder = dest;
-            _dsRenderTabs();
-            await _dsLoadFolder();
-        } else if (dest === _dsPick.folder) {
-            await _dsLoadFolder();
-        }
-    };
+    inp.onchange = function () { _dsDoUpload(dest, inp.files); };
     inp.click();
 };
 
