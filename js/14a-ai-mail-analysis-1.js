@@ -880,9 +880,14 @@ window.refreshAiKeyPanel = function() {
 
 window.populateInsertPosition = function() {
     const select = document.getElementById('mail-insert-position');
-    select.innerHTML = '<option value="-1">' + (window._currentLang === 'en' ? 'Append at end' : '맨 마지막에 추가') + '</option>';
-    if (!globalData || globalData.length <= 1) return;
-    
+    const base = '<option value="-1">' + (window._currentLang === 'en' ? 'Append at end' : '맨 마지막에 추가') + '</option>';
+    if (!globalData || globalData.length <= 1) { select.innerHTML = base; return; }
+
+    // 💡 [2026-10-26 성능 수정] select.innerHTML += 를 루프 안에서 반복 호출하면 매번 전체
+    //    HTML을 다시 파싱/렌더링해 O(n²)이 되고, 간트 행이 많은 프로젝트에서는 목록 항목을
+    //    클릭할 때마다(mailShowRightDetail → populateInsertPosition) 수 초~"응답 없음"까지
+    //    걸렸다. 문자열을 배열에 모아 마지막에 innerHTML을 한 번만 설정하도록 변경.
+    const parts = [base];
     for (let i = 1; i < globalData.length; i++) {
         let row = globalData[i]; if (!row) continue;
         let level = row._level || 0;
@@ -899,8 +904,9 @@ window.populateInsertPosition = function() {
         let prefix = level === 0 ? '■ ' : (row._isLastChild ? '└ ' : '├ ');
         let levelBadge = `[L${level}]`;
 
-        select.innerHTML += `<option value="${i}">${i}행 ${indent}${prefix}${levelBadge} ${taskName}</option>`;
+        parts.push(`<option value="${i}">${i}행 ${indent}${prefix}${levelBadge} ${taskName}</option>`);
     }
+    select.innerHTML = parts.join('');
 };
 
 window.analyzeMailContent = async function() {
