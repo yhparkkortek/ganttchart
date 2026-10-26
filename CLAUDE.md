@@ -135,7 +135,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `35-material-cart.js` | 🧺 자재 보관함 — SAP 자재청구/입고(MB21 예약) 장바구니. **Phase 1 "업무 보관함"(14c)과 다른 것** |
 | `36-sap-login.js` | 🔑 SAP·그룹웨어 로그인 설정 모달. 그룹웨어 자동 로그인 게이트 `_gwEnsureLogin`(재시도 금지 가드)도 여기 |
 | `37-project-cache.js` | 프로젝트 데이터 3-Layer 캐시 |
-| `38-bom-tab.js` | 📋 BOM 탭 + **Elec Parts 내장 BOM**. SAP 텍스트 파서 `_bomParseSapText`(설치지점 연속 행 병합), 행 클릭 조회 `bomSelectComponent`, 엑셀 출력, `_elecBomItemCode`(주요자재에서 부품 코드) |
+| `38-bom-tab.js` | 📋 BOM 탭 + **Elec Parts 내장 BOM**. SAP 텍스트 파서 `_bomParseSapText`(설치지점 연속 행 병합), 행 클릭 조회 `bomSelectComponent`, 엑셀 출력, `_elecBomItemCode`(주요자재에서 부품 코드). ⚠️ **화면·엑셀은 한 가지 "뷰 상태"를 공유한다** — 가시행은 `_bomTreeRows`(접힘) → `_sortRows`(정렬은 **보이는 행만**) → `_bomVisibleRows`(둘을 합친 입구) 한 줄기로만 구한다. 렌더 2곳과 엑셀 2곳이 전부 이걸 쓰므로 **한쪽만 고치면 화면과 엑셀이 조용히 어긋난다**. 정렬이 접힘을 무시해 통째로 펼쳐지던 사고(2026-10-19) 대응. 헤더는 `flex-wrap:nowrap`이라 폭이 모자라면 줄바꿈이 아니라 **버튼 라벨이 2줄로 깨진다**(여유 7px뿐 — 요소 추가 시 다른 칸을 줄일 것) |
 | `39-groupware-calendar.js` | 그룹웨어 일정을 Calendar 탭에 겹쳐 표시 |
 | `40-qa-tool-router.js` | 🛠 AI 문답 도구 자율 호출 — `QA_TOOLS` 레지스트리(데이터)·인자 검증·에이전트 루프. **읽기 전용**. 새 조회 기능은 여기 한 줄 추가 → `docs/qa-tool-router.md` |
 | `42-page-excel-io.js` | 📄↔📊 페이지 ↔ 엑셀 왕복(출력 → 엑셀 수정 → 다시 불러오기). 인쇄 버튼 **왼쪽에 런타임 삽입**. 대상·시트 구성은 `PAGE_EXCEL_SPECS`(데이터) 한 곳 — 새 페이지는 항목 하나만 추가. 통째 교체 + 되돌리기. 파생 뷰(Calendar·주간보고·알람)는 되돌려 넣지 않음. **🤖 비규격 파일(PDF·TXT·HTML·남의 엑셀)은 AI가 매핑** — 블록의 `ai:{fields,labels,prompt}`(데이터)에 적고, 규격 파일은 AI를 **안 거친다**(결정론 우선 + 무료 키 하루 한도). 적용 전 미리보기 승인 필수. 현재 Customer SPEC만 연결됨. **📄 한 장 출력**: `spec.onePage`(데이터)를 달면 블록들을 **시트 하나**에 구역으로 쌓고 `■ 개요` 머리글로 다시 쪼개 불러온다(AI 없이 결정론 왕복, 옛 여러-시트 파일도 그대로 읽힘). 색은 `_cpXlsxRole` 팔레트 — Summary 적용 |
@@ -183,6 +183,10 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ## 📚 상세 문서(`docs/`) 색인 — 해당 작업을 할 때만 읽을 것
 
 **CLAUDE.md는 색인만 — 상세 기록은 `docs/*.md`에 추가. CLAUDE.md가 비대해지면 토큰 소비 재발.**
+
+### 🔁 `docs/session-handover-2026-10-26.md` — **임시 인계 메모 (읽고 처리했으면 이 줄과 파일을 지울 것)**
+- NAS 문서 저장소를 앱 전체에 붙인 세션의 인계. **백엔드 재시작이 아직 안 됐다**(`/doc/mail-parse` 404 실측).
+- ⚠️ 그 세션은 **브라우저가 막혀 화면을 한 번도 못 봤다** — 눈으로 확인할 목록이 그 문서에 있다.
 
 ### `docs/mail-pipeline.md` — 메일 분석/원문/번역/토픽 프로파일 재생성
 - **읽을 때**: 메일→업무 등록 경로, 다중 배분, 미분류 재분석, 번역, 보관함 삭제
@@ -337,6 +341,14 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **읽을 때**: 외부 라이브러리 도입 검토. star 수 실측 + 이 앱 제약(번들러 없음/전역 스코프/팀원 개인 PC) 기준 Tier A/B/C 판정
 - 권장: oxlint(커밋 훅 전체 파싱) · es-hangul(초성 검색) · pywinauto(SAP #32770 대화상자) · RapidFuzz(시그니처 군집)
 - **비권장 이유도 적어둠** — litellm은 이미 `js/14a`에 폴백·쿨다운·사용량 원장을 직접 만들어 둠, tui.calendar/tippy.js는 archived
+
+### `docs/handoff-zmm009-table-alarm-ui.md` — 🧾 ZMM009 조회 표 / 6자리 코드 조회 / 알람 도표 (2026-10-14~20)
+- **읽을 때**: ZMM009 조회 결과 컬럼·표 수정, 자재코드 목록 조회, AI 문답 표 엑셀 버튼, 알람 탭 UI
+- **"생산/검사 메모"는 `ZPTEXT`가 아니라 `FERTH`** (ZPTEXT는 빈 custom 필드), `EKGRP`는 ZTEXT 레이아웃에서 미조회. 단가는 `STPRS1÷PEINH1`
+- **자재코드 목록을 AI에 화면 덤프로 넘기면 환각이 난다** — 없는 납기일·제조사를 지어냈다. `/sap-material-rows`(구조화 컬럼)로 분리, 라우팅 가드는 `ZMM009_ROW_CAPS`(js/33)
+- 표는 `renderMatRows()`(js/33) 하나로 공용 — 컬럼 바꿀 땐 여기 + `_ZMM009_PATTERN_COLS` 두 곳
+- 알람 도표: **`table-layout:fixed` 없으면 nowrap 글자가 옆 칸을 덮는다**, 체크박스 중앙은 `text-align:center` 말고 **`margin:0 auto`**(서브픽셀로 0.5px 어긋남)
+- 미검증 항목 목록 있음 — 앱에서 6자리 코드 조회·엑셀 버튼·BOM 옵션 기본값은 사람이 한 번 돌려봐야 함
 
 ### 백엔드 파일
 | 파일 | 역할 |
