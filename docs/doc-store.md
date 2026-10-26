@@ -56,6 +56,8 @@
 | `POST /doc/mkdir` | 하위 폴더 만들기(탐색기 "새 폴더"). `_docstore_dir`가 이미 자동 생성해서 경로만 조립 |
 | `GET /doc/get` | 원본 그대로 |
 | `POST /doc/put` | 업로드. 같은 이름은 **409** (`overwrite=1`로만 덮어씀) |
+| `POST /doc/delete` | 파일 하나 삭제(되돌릴 수 없음). 고르기 창 각 행의 🗑 |
+| `POST /doc/export-zip` | 프로젝트 자료 zip 내보내기. `{folders:[...]}` 중 **있는 것만** 모음 — `_docstore_existing_dir`(makedirs 안 함) |
 | `GET/POST /doc/text` | 추출 텍스트 캐시 |
 | `POST /doc/mail-assign` | staging → `MAIL/<프로젝트>/` |
 | `POST /doc/mail-gc` | staging 정리 (기본 **dry-run**) |
@@ -275,6 +277,31 @@ KONAMI_KGP-4 같은 프로젝트 하나에 MVD·TPR·TVD 같은 모델(제품구
   단위 자료라 `mcActiveUnit`을 끼워 넣으면 의미가 안 맞는다(그 페이지들에 있는 값은 사용자가 다른
   화면에서 마지막으로 고른 모델일 뿐, 그 페이지 자체와는 무관).
 - PARTS는 이미 부품 구분 폴더가 있어 여기도 적용 안 함(위 절과 같은 이유).
+
+#### 📦 프로젝트 자료 전체 내보내기 + 🗑 삭제 + 드롭다운 업로드 확인 개선 (2026-10-26)
+
+"나중에 프로젝트 단위로 파일을 뽑아서 전달해야 할 때는?"(사용자 질문) — 폴더 구조를 프로젝트
+상위로 뒤집는 대신, **조회 시점에만 가상으로 묶어 zip으로 내려주는** 쪽을 택했다(기존 구조·관행
+안 건드림, 판단 과정은 대화 기록 참고). "📁 프로젝트" 메뉴에 `📦 자료 전체 내보내기(zip)` 추가.
+
+- `window._dsExportProjectZip()`(js/48)이 `SUMMARY/ADDRESS/ALARM&NOTICE/CALENDER/GANTT/REPORT`의
+  `<프로젝트>` 폴더 + `CUSTOMER`·`MC`의 **모든 모델**(`getMcUnits()`, 지금 보고 있는 모델 하나가
+  아니라 그 프로젝트에 등록된 전부)을 후보 목록으로 조립해 `POST /doc/export-zip`에 보낸다.
+- 백엔드는 `_docstore_existing_dir`(새 헬퍼, makedirs 안 함)로 **있는 것만** 재귀로 모아 묶는다 —
+  후보 목록 대부분은 실제로는 안 쓰인 조합이라, 기존 `_docstore_dir`(없으면 만듦)를 그대로 썼다간
+  내보내기 한 번에 빈 폴더가 NAS에 무더기로 생긴다.
+- **PARTS·MAIL은 후보에 안 넣는다** — PARTS는 프로젝트 전용이 아닌 공용 자료실(PANEL 사양서 등),
+  MAIL은 `/doc/get` 화이트리스트에도 일부러 안 넣어 둔 민감 영역이라 일반 내보내기에 섞으면 안 된다.
+- 응답 헤더 `X-File-Count`로 "0건"을 구분한다(빈 zip도 바이트 수는 0이 아니라서 blob 크기로는
+  못 가린다) — CORS 기본값은 커스텀 헤더를 JS에서 못 읽으므로 `Access-Control-Expose-Headers`에
+  추가해야 했다(안 하면 `res.headers.get('X-File-Count')`가 항상 `null`).
+- **삭제**: `POST /doc/delete` + 고르기 창 각 파일 행에 🗑 버튼(`_dsPickDelete`). 팀 공유 NAS에서
+  되돌릴 수 없는 작업이라 `confirm()`으로 한 번 더 확인한다(Task Inbox의 "확인창 생략" 관례와는
+  다른 영역 — 거긴 되돌리기 버퍼가 있고 여긴 없다).
+- **드롭다운(▾) 업로드가 "안 되는 것처럼 보이던" 문제**: 실제로는 올라가고 있었다 — `▾`로
+  **지금 보고 있지 않은 다른 폴더**에 올리면 토스트만 뜨고 화면은 그대로라, 토스트를 놓치면
+  "안 됐다"고 오해하기 쉬웠다(재현·검증 기록은 대화 참고). `_dsPickUpload`가 이제 업로드 성공 시
+  **그 폴더로 바로 전환**해서 결과가 바로 보인다.
 
 #### ⚠️ PANEL 은 `PARTS/PANEL` 로 옮겨졌다
 

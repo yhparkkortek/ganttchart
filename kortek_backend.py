@@ -36,6 +36,7 @@
 import sys
 import os, json, re, poplib, imaplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess, shutil
 import io          # 첨부를 메모리에서 바로 내려줄 때(send_file + BytesIO)
+import zipfile     # 프로젝트 자료 내보내기(/doc/export-zip) — 메모리에서 zip으로 묶어 내려줌
 
 # 💡 [2026-09-14] sap_bridge_32.py에서 겪은 것과 같은 부류의 문제(콘솔이 실제 콘솔이 아니라
 #    파이프/다른 인코딩으로 연결되면 Windows에서 stdout이 cp949로 잡혀 한글 print()가
@@ -90,6 +91,8 @@ def add_cors_headers(resp):
         resp.headers["Access-Control-Allow-Origin"]  = origin or "*"
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        # 📦 /doc/export-zip 이 내려주는 파일 개수 — 기본값은 커스텀 헤더를 JS에서 못 읽는다.
+        resp.headers["Access-Control-Expose-Headers"] = "X-File-Count"
     return resp
 
 # ── 공통 상수 ─────────────────────────────────────────────────
@@ -4634,6 +4637,76 @@ def doc_put():
     except Exception as e:
         return jsonify({'ok': False, 'error': f'저장 실패: {e}'}), 500
     return jsonify({'ok': True, 'folder': folder, 'name': name, 'size': st.st_size})
+
+
+@app.route('/doc/delete', methods=['POST'])
+def doc_delete():
+    """파일 하나 삭제 — 되돌릴 수 없다(팀 공유 NAS). 이름 규칙은 업로드와 같다."""
+    cfg = _docstore_load()
+    req = request.get_json(force=True, silent=True) or {}
+    folder = str(req.get('folder') or '')
+    path, err = _docstore_dir(folder, cfg)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    name = _docstore_safe_name(req.get('name'))
+    if not name:
+        return jsonify({'ok': False, 'error': '파일 이름이 올바르지 않습니다.'}), 400
+    fp = os.path.join(path, name)
+    if not os.path.isfile(fp):
+        return jsonify({'ok': False, 'error': f'파일이 없습니다: {name}'}), 404
+    try:
+        os.remove(fp)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'삭제 실패: {e}'}), 500
+    return jsonify({'ok': True, 'folder': folder, 'name': name})
+
+
+def _docstore_existing_dir(folder, cfg):
+    """`_docstore_dir`와 같은 경로 검증이지만 **없는 폴더를 만들지 않는다**(makedirs 안 함).
+    /doc/export-zip처럼 "있으면 가져오고 없으면 조용히 건너뛰는" 읽기 전용 용도 —
+    프런트가 조립해 보내는 후보 폴더 목록은 대부분 실제로는 안 쓰인 조합이라, 평범하게
+    `_docstore_dir`를 썼다간 내보내기 한 번에 빈 폴더가 NAS에 무더기로 생긴다.
+    돌려주는 값: (경로, None) 있으면 / (None, None) 없으면(오류 아님) / (None, 사유) 경로 자체가 잘못됨."""
+    root = cfg.get('root') or ''
+    if not root or not os.path.isdir(root):
+        return None, None
+    segs, err = _docstore_folder_segs(folder, cfg)
+    if err:
+        return None, err
+    path = os.path.join(root, *segs)
+    if not os.path.isdir(path):
+        return None, None
+    return path, None
+
+
+@app.route('/doc/export-zip', methods=['POST'])
+def doc_export_zip():
+    """프로젝트 자료 한꺼번에 내려받기 — 프런트가 이미 프로젝트/모델별로 조립해 보낸 폴더
+    목록(`_dsExportProjectZip`, js/48)을 하나씩 확인해, **있는 것만** 재귀로 모아 zip 하나로
+    묶는다. 폴더 구조 자체는 안 바꾸고 조회 시점에만 가상으로 합친다 — PARTS/PANEL 같은
+    프로젝트 전용이 아닌 공용 자료는 프런트가 애초에 목록에 안 넣는다."""
+    cfg = _docstore_load()
+    req = request.get_json(force=True, silent=True) or {}
+    folders = req.get('folders')
+    if not isinstance(folders, list) or not folders:
+        return jsonify({'ok': False, 'error': '내보낼 폴더 목록이 없습니다.'}), 400
+    buf = io.BytesIO()
+    file_count = 0
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for folder in folders[:64]:   # 방어적 상한 — 프런트가 보내는 목록은 보통 10개 안팎
+            path, _err = _docstore_existing_dir(str(folder), cfg)
+            if not path:
+                continue
+            for root_dir, _dirs, files in os.walk(path):
+                for fn in files:
+                    fp = os.path.join(root_dir, fn)
+                    arcname = str(folder).strip('/') + '/' + os.path.relpath(fp, path).replace(os.sep, '/')
+                    zf.write(fp, arcname)
+                    file_count += 1
+    buf.seek(0)
+    resp = send_file(buf, as_attachment=True, download_name='export.zip', mimetype='application/zip')
+    resp.headers['X-File-Count'] = str(file_count)
+    return resp
 
 
 def _doc_text_key(folder):

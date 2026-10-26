@@ -185,6 +185,61 @@ window._dsProjectAwareFolders = function (baseFolder, opts) {
     return tabs;
 };
 
+// ── 📦 프로젝트 자료 전체 내보내기 ──────────────────────────────────────
+//    "나중에 프로젝트 단위로 파일을 뽑아서 전달해야 할 때" (사용자 질문, 2026-10-26).
+//    폴더 구조는 문서종류가 상위(CUSTOMER/MC/…)라 한 프로젝트 자료가 여러 최상위 폴더에
+//    흩어져 있다 — 그래서 구조를 프로젝트-상위로 뒤집는 대신, **조회 시점에만** 이 프로젝트
+//    (모든 모델 포함) 몫을 모아 zip 하나로 묶어 준다. "📁 프로젝트" 메뉴의 "📦 자료 전체
+//    내보내기"가 이걸 부른다.
+//    ⚠️ PARTS(부품 구분 하위 폴더)·MAIL(원문 보관)은 안 들어간다 — PARTS는 프로젝트 전용이
+//    아닌 공용 자료실(PANEL 사양서 198개 등)이고, MAIL은 /doc/get 화이트리스트에도 일부러
+//    안 넣어 둔 민감 영역이라 일반 내보내기에 같이 섞으면 안 된다(docs/doc-store.md).
+window._dsExportProjectZip = async function () {
+    var proj = window._dsCurrentProjectFolderName();
+    if (!proj) {
+        _toast('⚠️ ' + _t('먼저 프로젝트를 열어야 합니다.', 'Open a project first.'), 'error');
+        return;
+    }
+    // 지금 보고 있는 모델 하나가 아니라 이 프로젝트에 등록된 모델 전부 — 모델 #1/#2/#3 전부 챙긴다.
+    var units = (window.getMcUnits ? window.getMcUnits() : []).slice();
+    if (!units.length) units = [''];   // 단일 모델 프로젝트
+    var folders = [];
+    ['SUMMARY', 'ADDRESS', 'ALARM&NOTICE', 'CALENDER', 'GANTT', 'REPORT'].forEach(function (b) {
+        folders.push(b + '/' + proj);
+    });
+    units.forEach(function (u) {
+        var seg = _dsSafeFolderSeg(u);
+        var cust = 'CUSTOMER/' + proj + (seg ? '/' + seg : '');
+        folders.push(cust + '/ELECTRICAL', cust + '/MECHANICAL');
+        folders.push('MC/' + proj + (seg ? '/' + seg : ''));
+    });
+    _toast('⏳ ' + _t('자료를 모으는 중…', 'Gathering files…'), 'info');
+    try {
+        var res = await fetch(DS + '/doc/export-zip', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folders: folders }),
+            signal: AbortSignal.timeout(180000)
+        });
+        if (!res.ok) {
+            var msg = '';
+            try { msg = (await res.json()).error; } catch (e) { /* 바이너리거나 본문 없음 */ }
+            throw new Error(msg || ('HTTP ' + res.status));
+        }
+        var count = Number(res.headers.get('X-File-Count') || '0');
+        if (!count) {
+            _toast('⚠️ ' + _t('이 프로젝트 몫으로 NAS에 올린 자료가 아직 없습니다.', 'No NAS files found for this project yet.'), 'warning', 6000);
+            return;
+        }
+        var blob = await res.blob();
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = proj + '.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(a.href);
+        _toast('✅ ' + _t(count + '개 파일을 내려받았습니다.', count + ' file(s) downloaded.'), 'info');
+    } catch (e) { _toast('❌ ' + e.message, 'error', 8000); }
+};
+
 // 📋 폴더 목록 짧은 캐시 — 같은 폴더를 연달아 묻는 화면용.
 //    ⚠️ NAS 목록은 네트워크 왕복이다. 백엔드를 고쳐 198개가 0.04초로 내려왔지만(2026-10-22,
 //    그전엔 7초), 그래도 그릴 때마다 부를 이유는 없다. 올리기·이식 직후엔 _dsInvalidateList 로 버린다.
@@ -411,6 +466,7 @@ window._dsOpenPicker = async function (opts) {
             if (!row) return;
             var name = row.dataset.name;
             if (e.target.closest('.ds-open')) { window._dsOpenInNewTab(_dsPick.folder, name); return; }
+            if (e.target.closest('.ds-del')) { window._dsPickDelete(_dsPick.folder, name); return; }
             document.getElementById('ds-pick-modal').style.display = 'none';
             if (_dsPick.onPick) _dsPick.onPick(_dsPick.folder, name);
         });
@@ -544,6 +600,7 @@ function _dsRenderList() {
                 + '<span style="font-size:11px; color:#aaa; flex-shrink:0;">' + _kb(f.size) + '</span>'
                 + '<span style="font-size:10.5px; color:#bbb; flex-shrink:0;">' + _esc(String(f.mtime || '').slice(0, 10)) + '</span>'
                 + '<button class="ds-open" title="' + _t('새 창에서 열기', 'Open in a new tab') + '" style="flex-shrink:0; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:5px; width:24px; height:24px; padding:0; cursor:pointer; font-size:11px;">↗</button>'
+                + '<button class="ds-del" title="' + _t('삭제(되돌릴 수 없음)', 'Delete (cannot be undone)') + '" style="flex-shrink:0; background:#fdeaea; border:1px solid #f3b7b7; color:#b42318; border-radius:5px; width:24px; height:24px; padding:0; cursor:pointer; font-size:11px;">🗑</button>'
                 + '</div>';
         }).join('');
     }
@@ -577,10 +634,33 @@ window._dsPickUpload = function (folder) {
         if (fail.length) msg += ' · ❌ ' + fail.length;
         _toast(msg, fail.length ? 'warning' : 'info', 6000);
         if (fail.length) console.warn('[문서저장소] 업로드 실패:', fail);
-        // 보고 있는 폴더에 넣었을 때만 목록을 다시 받는다(다른 폴더면 화면이 안 바뀐다).
-        if (dest === _dsPick.folder) await _dsLoadFolder();
+        // 💡 [2026-10-26] 최소 1개라도 올렸으면 **그 폴더로 바로 전환**한다 — ▾ 드롭다운으로
+        // 안 보이는 다른 폴더에 올렸을 때, 토스트를 놓치면 "업로드가 안 됐다"로 오해하기
+        // 쉽다는 지적(사용자). 보고 있던 폴더에 그대로 올렸을 때도 똑같이 새로고침된다.
+        if (ok > 0) {
+            _dsPick.folder = dest;
+            _dsRenderTabs();
+            await _dsLoadFolder();
+        } else if (dest === _dsPick.folder) {
+            await _dsLoadFolder();
+        }
     };
     inp.click();
+};
+
+/** 파일 하나를 영구 삭제 — 팀 공유 NAS라 되돌릴 수 없다는 걸 확인창으로 한 번 더 확인한다. */
+window._dsPickDelete = async function (folder, name) {
+    if (!confirm(_t('"' + name + '"을(를) NAS에서 영구 삭제할까요? 되돌릴 수 없습니다.',
+                     'Permanently delete "' + name + '" from the NAS? This cannot be undone.'))) return;
+    try {
+        await _api('/doc/delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: folder, name: name })
+        });
+        if (window._dsInvalidateList) window._dsInvalidateList(folder);
+        _toast('🗑 ' + name, 'info');
+        if (folder === _dsPick.folder) await _dsLoadFolder();
+    } catch (e) { _toast('❌ ' + e.message, 'error', 6000); }
 };
 
 /** ⬆ 옆 ▾ — 어느 폴더에 올릴지 고르는 목록 */
