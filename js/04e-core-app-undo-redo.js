@@ -1273,11 +1273,15 @@
         }
 
         const candidates = [];
-        siblingGroups.forEach(function(idxs) {
+        siblingGroups.forEach(function(idxs, parentKey) {
             if (idxs.length < 2) return;
-            // 자식이 있는(=이미 그 자체로 그룹인) 행은 제외 — leaf 형제만 묶음 후보로 본다
+            const parentTitle = parentKey !== 'ROOT' ? _wbsNormTitle(_wbsRowOwnTitle(gd[parentKey])) : '';
+            // 자식이 있는(=이미 그 자체로 그룹인) 행은 제외 — leaf 형제만 묶음 후보로 본다.
+            // 💡 [2026-10-26, 사용자 지적] 레벨 0~2(대분류~소분류2)는 이미 구분자가 정해진 구조라
+            //    자동으로 묶으면 안 된다 — 레벨 3·4(세부업무·하위업무)만 대상으로 한다.
             const leafIdxs = idxs.filter(function(i) {
                 const lv = lvOf(gd[i]);
+                if (lv < 3) return false;
                 const next = gd[i + 1];
                 return !(next && lvOf(next) > lv);
             });
@@ -1324,10 +1328,14 @@
                 let run = [];
                 const flushRun = function() {
                     if (run.length < 2) { run = []; return; }
-                    // 💡 이 부모의 자식 전부가 leaf이고 그 전부가 이번 클러스터(날짜로 쪼개기 전 기준)
-                    //    하나다 — 부모가 이미 이 업무들만을 위한 전용 그룹이라는 뜻. 그 상태에서 또
-                    //    한 단계 더 묶자고 제안하면 의미 없이 레벨만 깊어지는 빈 중첩이 된다 — 건너뜀.
-                    if (members.length === leafIdxs.length && leafIdxs.length === idxs.length && run.length === members.length) { run = []; return; }
+                    // 🐛 [2026-10-26 버그수정] 처음엔 "이 부모의 자식 전부가 이번 클러스터 하나"라는
+                    //    조건으로 건너뛰었는데, 그건 **우연히** 부모 자식이 2개뿐이고 그 2개가 한
+                    //    클러스터가 되는 모든 경우(레벨을 건너뛴 구조 등, 정상적인 첫 제안 상황도
+                    //    포함)까지 전부 숨겨버렸다 — 진짜로 막아야 할 건 "방금 이 묶음을 위해 만든
+                    //    그룹을 또 묶자고 제안하는 것"뿐이므로, **부모 행 자신의 이름에 이미 이
+                    //    주제어가 들어있는지**로 더 정확히 판정한다(그룹을 만들 때 그 주제어로
+                    //    이름을 지었을 테니).
+                    if (bestTok && parentTitle && parentTitle.indexOf(bestTok) !== -1) { run = []; return; }
                     const ids = run.map(function(x) { return x.i; }).sort(function(a, b) { return a - b; });
                     const tsVals = run.map(function(x) { return x.ts; }).filter(function(t) { return t != null; });
                     candidates.push({
