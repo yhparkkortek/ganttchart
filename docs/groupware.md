@@ -695,6 +695,35 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 
 ⚠️ 겹쳐 놨더니 하루 칩 상한(월간 10개)을 그룹웨어 일정이 선점해 **간트 업무가 통째로 잘려나갔다**(같은 날 그룹웨어 12건이면 간트 0건). 한 번에 하나만 보여주면 자리 경쟁이 사라진다. 선택은 `localStorage.gantt_cal_source`.
 
+### 9-1. 캘린더 일정 등록/삭제 (쓰기, 2026-10-26)
+
+AI 문답 쓰기 도구 `gw_calendar_add`/`gw_calendar_delete`(`js/41`) — 다른 쓰기 도구와 같은 "초안 →
+사람 확인 1회 → 자동 실행" 구조. payload는 추측이 아니라 **직접 테스트 일정 하나를 등록 →
+CDP Network로 관찰 → 즉시 삭제**하며 확정했다(`gw_capture_write.py`, `docs/groupware-research-tools.md`
+2절 그대로 — Aside/computer-use처럼 사람이 로그인해 둔 전용 크롬을 신뢰된 클릭으로 직접 조작).
+
+```
+POST /api/calendar/{calendarId}/event/
+body: { attendees:[{id,name,email,position}], creator:{id,position,name}, type:'normal',
+        visibility:'public', startTime, endTime(ISO+09:00), timeType:'timed'|'allday',
+        recurrence:'', reminders:[], timeZoneOffset:'+09:00', calendarId, summary,
+        location, description, assetReservationIds:[] }
+→ 응답 data.id 가 새 일정의 eventId
+
+DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
+```
+
+- `gw_bridge.calendar_create_event()`/`calendar_delete_event()`가 이 두 엔드포인트를 감싼다.
+- **참석자는 나 자신만** 들어간다(실측된 기본 동작 그대로) — 남을 참석자로 추가하는 건 아직
+  지원하지 않는다. `session_info()`가 이제 `name`/`position`도 돌려준다(`/api/user/session`
+  최상위 필드) — 참석자/작성자 칸에 필요해서 추가, 기존 호출부는 그대로 호환된다.
+- `calendar_id` 생략 시 `calendars()` 목록의 첫 번째(화면에서도 그게 기본 선택값).
+- 삭제는 **되돌릴 수 없다** — eventId/calendarId를 추측하지 말고 `gw_calendar_add`의 응답이나
+  `gw_calendar`(읽기) 조회 결과에서 얻을 것.
+- 검증: `app.test_client()`가 아니라 **별도 포트(5001)에 임시 인스턴스**를 띄워 실제 HTTP로
+  라우트까지 확인했다(5000번 운영 프로세스는 건드리지 않음) — 사용자가 돌리는 프로세스를
+  재시작해도 되는지 먼저 물어볼 것(예약 발송·SAP 작업 중일 수 있음).
+
 ---
 
 ## 10. 파일 맵
@@ -702,7 +731,7 @@ AI 문답에서 **첨부가 있으면 무조건 구매오더로 보내던 분기
 | 파일 | 역할 |
 |---|---|
 | `gw_bridge.py` | CDP 제어 + 내부 API 호출 + 기안 작성 + 표지 파싱 (설계·안전원칙은 파일 상단 주석) |
-| `kortek_backend.py` | `/gw/status` `/gw/open` `/gw/login` `/gw/login-config` `/gw/calendars` `/gw/events` `/gw/approval/forms` `/gw/approval/draft` `/gw/approval/search` `/gw/approval/parse-cover` `/gw/contacts` `/gw/notifications` `/gw/notes` |
+| `kortek_backend.py` | `/gw/status` `/gw/open` `/gw/login` `/gw/login-config` `/gw/calendars` `/gw/events` `/gw/calendar/event`(등록) `/gw/calendar/event/delete` `/gw/approval/forms` `/gw/approval/draft` `/gw/approval/search` `/gw/approval/parse-cover` `/gw/contacts` `/gw/notifications` `/gw/notes` |
 | `js/39-groupware-calendar.js` | Calendar 탭 전환·상태 표시 |
 | `js/32-sap-capabilities.js` | `GW_CAPABILITIES` 카탈로그 + `_gwCapKwHit` |
 | `js/47-approval-compose.js` | 기존 기안을 틀로 삼아 작성 — `APPROVAL_FIELD_SOURCES`(칸→값 출처) + 미리보기 |

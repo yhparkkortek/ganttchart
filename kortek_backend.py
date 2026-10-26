@@ -3628,6 +3628,51 @@ def gw_events():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/calendar/event', methods=['POST'])
+def gw_calendar_event_create():
+    """캘린더 일정 등록 (쓰기).
+
+    ⚠️ 앱은 **사람이 확인 카드를 1회 누른 뒤에만** 이 라우트를 부른다.
+       AI 자율 루프에서는 호출되지 않는다(읽기 전용 루프가 mode:'write'를 거부).
+    """
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        title = (b.get('title') or '').strip()
+        date = (b.get('date') or '').strip()
+        start = (b.get('start') or '').strip()
+        end = (b.get('end') or '').strip()
+        if not title or not date:
+            return jsonify({'ok': False, 'message': '제목과 날짜는 필수입니다.'}), 400
+        all_day = not start
+        if all_day:
+            start_v, end_v = date, date
+        else:
+            if not end:
+                return jsonify({'ok': False, 'message': '시작 시간을 주면 종료 시간도 필요합니다.'}), 400
+            start_v, end_v = f'{date} {start}', f'{date} {end}'
+        r = gw_bridge.calendar_create_event(
+            title, start_v, end_v, calendar_id=b.get('calendarId'),
+            location=(b.get('location') or '').strip(), all_day=all_day)
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/calendar/event/delete', methods=['POST'])
+def gw_calendar_event_delete():
+    """캘린더 일정 삭제 (쓰기). 되돌릴 수 없다 — 사람 확인 1회 후에만 호출된다."""
+    try:
+        import gw_bridge
+        b = request.get_json(silent=True) or {}
+        cal_id, event_id = b.get('calendarId'), b.get('eventId')
+        if not cal_id or not event_id:
+            return jsonify({'ok': False, 'message': 'calendarId와 eventId가 필요합니다.'}), 400
+        return jsonify(gw_bridge.calendar_delete_event(cal_id, event_id))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 # ── 게시판 (읽기 전용) ───────────────────────────────────────────────
 # 엔드포인트는 docs/groupware.md "게시판" 절. 글 작성·삭제 라우트는 **만들지 않는다.**
 

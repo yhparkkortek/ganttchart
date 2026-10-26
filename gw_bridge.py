@@ -589,7 +589,8 @@ def session_info():
         return {'ok': False, 'reason': 'no_session', 'message': '로그인이 필요합니다.'}
     comp = (d.get('companies') or [{}])[0]
     return {'ok': True, 'userId': d.get('id'), 'email': d.get('email'),
-            'loginId': comp.get('userLoginId'), 'company': comp.get('companyName')}
+            'loginId': comp.get('userLoginId'), 'company': comp.get('companyName'),
+            'name': d.get('name') or '', 'position': d.get('position') or ''}
 
 
 def calendars():
@@ -1130,6 +1131,101 @@ def events(date_from, date_to, calendar_ids=None):
             'description': (e.get('description') or '')[:500],
         })
     return out
+
+
+# ── 캘린더 일정 등록/삭제 (쓰기, 2026-10-26) ────────────────────────────
+# 공식 API 문의 결과를 기다리지 않고(별도로 확인 중), 읽기와 같은 방식(전용 크롬의 로그인
+# 세션으로 내부 REST를 직접 호출)으로 구현했다. payload는 추측이 아니라 실제 그룹웨어
+# 화면에서 테스트 일정 하나를 등록 → CDP Network로 요청 관찰 → 즉시 삭제하며 확정했다
+# (docs/groupware-research-tools.md 2절 절차, gw_capture_write.py 사용).
+#   POST /api/calendar/{calendarId}/event/   본문: attendees/creator/startTime/endTime/
+#        timeType/calendarId/summary/location/description/visibility/type/recurrence/
+#        reminders/timeZoneOffset/assetReservationIds (실측 그대로, 하드코딩 아님 — 아래 함수가
+#        매번 세션에서 내 이름·직책·참석자 정보를 읽어 채운다)
+#   DELETE /api/calendar/{calendarId}/event/{eventId}   본문 없음
+# ⚠️ 다른 사람을 참석자로 추가하는 기능은 아직 없다 — 나 자신만 참석자로 들어간다(실측 기본 동작).
+
+
+def _calendar_iso(value, end_of_day=False):
+    """'YYYY-MM-DD HH:MM' 또는 (종일이면) 'YYYY-MM-DD' → 그룹웨어가 쓰는 ISO+09:00."""
+    v = str(value).strip()
+    if len(v) == 10:
+        return v + ('T23:59:59.999+09:00' if end_of_day else 'T00:00:00.000+09:00')
+    d, t = v.split(' ', 1)
+    return '%sT%s:00.000+09:00' % (d, t.strip()[:5])
+
+
+def calendar_create_event(summary, start, end, *, calendar_id=None, location='', description='',
+                           all_day=False, dry_run=False):
+    """일정을 등록한다(임시저장 개념이 없다 — 등록하면 바로 캘린더에 남는다).
+
+    start/end: 'YYYY-MM-DD HH:MM'(시간 지정) 또는 all_day=True면 'YYYY-MM-DD'.
+    calendar_id 생략 시 내 캘린더 목록의 첫 번째(화면에서도 그게 기본 선택값이다).
+    dry_run=True면 실제로 호출하지 않고 보낼 본문만 돌려준다 — 호출 전 사람 확인용."""
+    s = session_info()
+    if not s.get('ok'):
+        raise RuntimeError(s.get('message') or '그룹웨어 로그인이 필요합니다.')
+    if calendar_id is None:
+        cals = calendars()
+        if not cals:
+            raise RuntimeError('등록할 캘린더를 찾지 못했습니다.')
+        calendar_id = cals[0]['id']
+
+    body = {
+        'attendees': [{'id': str(s['userId']), 'name': s.get('name') or '',
+                       'email': s.get('email') or '', 'position': s.get('position') or ''}],
+        'creator': {'id': s['userId'], 'position': s.get('position') or '', 'name': s.get('name') or ''},
+        'type': 'normal',
+        'visibility': 'public',
+        'startTime': _calendar_iso(start),
+        'endTime': _calendar_iso(end, end_of_day=all_day),
+        'timeType': 'allday' if all_day else 'timed',
+        'recurrence': '',
+        'reminders': [],
+        'timeZoneOffset': '+09:00',
+        'calendarId': int(calendar_id),
+        'summary': summary,
+        'location': location,
+        'description': description,
+        'assetReservationIds': [],
+    }
+    if dry_run:
+        return {'ok': True, 'dryRun': True, 'body': body}
+
+    js = r"""
+    (async (cid, payload) => {
+      const r = await fetch('/api/calendar/' + cid + '/event/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const ct = r.headers.get('content-type') || '';
+      const body = ct.includes('json') ? await r.json() : (await r.text()).slice(0, 300);
+      return { status: r.status, ok: r.ok, body };
+    })(%s, %s)
+    """ % (int(calendar_id), json.dumps(body, ensure_ascii=False))
+    res = eval_in_gw(js, timeout=45) or {}
+    if not res.get('ok'):
+        raise RuntimeError('일정 등록 실패 (HTTP %s): %s' % (res.get('status'), str(res.get('body'))[:200]))
+    data = res.get('body') or {}
+    ev = data.get('data') if isinstance(data.get('data'), dict) else data
+    return {'ok': True, 'eventId': ev.get('id'), 'calendarId': calendar_id, 'summary': summary,
+            'start': body['startTime'], 'end': body['endTime'], 'location': location}
+
+
+def calendar_delete_event(calendar_id, event_id):
+    """등록한 일정을 삭제한다. **되돌릴 수 없다** — 호출 전 사람 확인을 거칠 것."""
+    js = r"""
+    (async (cid, eid) => {
+      const r = await fetch('/api/calendar/' + cid + '/event/' + eid,
+                            { method: 'DELETE', credentials: 'same-origin' });
+      return { status: r.status, ok: r.ok };
+    })(%s, %s)
+    """ % (int(calendar_id), int(event_id))
+    res = eval_in_gw(js, timeout=30) or {}
+    if not res.get('ok'):
+        raise RuntimeError('일정 삭제 실패 (HTTP %s)' % res.get('status'))
+    return {'ok': True}
 
 
 # ── 게시판 (읽기 전용) ───────────────────────────────────────────────

@@ -96,19 +96,33 @@
             undoNote: '취소하면 되돌릴 수 없다(다시 예약해야 한다).'
         },
         {
-            id: 'gw_calendar_add', mode: 'write', verified: 'pending', danger: 'medium',
+            id: 'gw_calendar_add', mode: 'write', verified: 'live', danger: 'medium',
             title: '그룹웨어 일정 등록',
-            desc: '사내 캘린더에 일정을 추가한다.',
+            desc: '사내 캘린더에 일정을 추가한다. start를 생략하면 종일 일정이 된다. '
+                + '참석자는 나 자신만 들어간다(다른 사람 추가는 아직 지원 안 함 — 필요하면 등록 후 그룹웨어에서 직접 추가). '
+                + 'calendarId를 모르면 생략 — 내 기본 캘린더로 들어간다.',
             method: 'POST', path: '/gw/calendar/event',
             params: [
                 { name: 'title', type: 'text', max: 80, req: true, desc: '일정 제목' },
                 { name: 'date', type: 'date', req: true, desc: '날짜 YYYY-MM-DD' },
                 { name: 'start', type: 'time', desc: '시작 HH:MM (생략하면 종일)' },
-                { name: 'end', type: 'time', desc: '종료 HH:MM' },
-                { name: 'calendarId', type: 'int', min: 1, max: 99999, desc: '캘린더 id' }
+                { name: 'end', type: 'time', desc: '종료 HH:MM (start 있으면 필수)' },
+                { name: 'location', type: 'text', max: 80, desc: '장소' },
+                { name: 'calendarId', type: 'int', min: 1, max: 99999, desc: '캘린더 id (생략하면 내 기본 캘린더)' }
             ],
-            pendingWhy: '일정 등록 요청 본문이 미확정입니다. 일정을 한 번 직접 등록해 주시면 캡처해 확정합니다.',
-            undoNote: '캘린더에서 삭제할 수 있다.'
+            undoNote: '캘린더에서 삭제할 수 있다(gw_calendar_delete, eventId는 응답에 들어있다).'
+        },
+        {
+            id: 'gw_calendar_delete', mode: 'write', verified: 'live', danger: 'medium',
+            title: '그룹웨어 일정 삭제',
+            desc: '캘린더 일정을 삭제한다. **되돌릴 수 없다.** eventId/calendarId는 gw_calendar_add 응답이나 '
+                + 'gw_calendar(읽기) 조회 결과에서 얻는다 — 추측해서 지우지 말 것.',
+            method: 'POST', path: '/gw/calendar/event/delete',
+            params: [
+                { name: 'calendarId', type: 'int', min: 1, max: 99999, req: true, desc: '캘린더 id' },
+                { name: 'eventId', type: 'int', min: 1, max: 999999999, req: true, desc: '삭제할 일정 id' }
+            ],
+            undoNote: '없다. 삭제하면 되돌릴 수 없다.'
         },
         {
             id: 'gw_mail_send', mode: 'write', verified: 'pending', danger: 'high',
@@ -181,6 +195,8 @@
                '예약 잡아', '회의실 빌려'] },
         { tool: 'gw_calendar_add',
           kw: ['일정 등록해', '일정 추가해', '일정 넣어', '캘린더에 등록', '캘린더에 추가', '일정 잡아'] },
+        { tool: 'gw_calendar_delete',
+          kw: ['일정 삭제해', '일정 지워', '캘린더에서 삭제', '캘린더에서 지워', '일정 취소해'] },
         { tool: 'gw_mail_send',
           kw: ['그룹웨어로 메일 보내', '그룹웨어 메일 보내', '사내 메일 보내', '웹메일 보내'] },
         { tool: 'gw_board_write',
