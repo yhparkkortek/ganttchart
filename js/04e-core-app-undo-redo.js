@@ -1273,39 +1273,34 @@
             const tokLists = leafIdxs.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])); });
             const freq = new Map();
             tokLists.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { freq.set(t, (freq.get(t) || 0) + 1); }); });
-            const total = leafIdxs.length;
-            // 마지막(동작) 토큰을 뗀 "주제 토큰" 안에서도, 그 형제 묶음의 25% 넘게 등장하면 여전히
-            // "흔한 말"로 보고 제외 — 2중 안전장치(동적 불용어, 사전 없음)
-            const commonCut = Math.max(1, Math.ceil(total * 0.25));
-            const isCommon = function(t) { return (freq.get(t) || 0) > commonCut; };
+            // 💡 [2026-10-26 재조정, 실측 발견] 처음엔 "이 형제 묶음의 25% 넘게 등장하면 흔한 말"로
+            //    비율 기준을 썼는데, 형제가 수백 개로 큰 부모(실측 LNW_STELLAR32_32.0에 234개·135개
+            //    묶음이 있었음)에서는 "일정"/"자재" 같은 전혀 구체적이지 않은 말도 25%는 넘기기
+            //    어려워 그대로 새어나갔고, 공유 토큰 하나로 쌍쌍이 이어 붙는 union-find 특성상(연쇄
+            //    클러스터링) 그 새어나간 말 하나가 다리가 되어 서로 무관한 업무 수백 개가 한 덩어리로
+            //    뭉쳐버렸다. 비율이 아니라 **절대 횟수**로 바꾼다 — 진짜 구체적인 하위 주제라면
+            //    형제가 몇 개든 보통 손에 꼽을 만큼만(≈6개 이하) 반복되지, 수십 개씩 반복되는 말은
+            //    부모 크기와 무관하게 그냥 흔한 말이다.
+            const isCommon = function(t) { return (freq.get(t) || 0) > 6; };
 
-            // 2) 공유 토큰(흔하지 않은 것만) 기준 union-find 클러스터링
-            const parent = leafIdxs.map(function(_, k) { return k; });
-            function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
-            function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
-            for (let a = 0; a < leafIdxs.length; a++) {
-                for (let b = a + 1; b < leafIdxs.length; b++) {
-                    const shared = tokLists[a].some(function(t) { return !isCommon(t) && tokLists[b].indexOf(t) !== -1; });
-                    if (shared) union(a, b);
-                }
-            }
+            // 2) union-find(연쇄) 대신 "첫 번째로 안 흔한 주제 토큰"이 같은 업무끼리만 묶는다 —
+            //    공유 토큰 하나로 쌍쌍이 이어 붙이면 A-B, B-C가 서로 다른 말로 이어져도 A/B/C가
+            //    전부 한 덩어리가 되는 연쇄 문제가 생긴다(위와 같은 실측 사고). 대표 토큰 하나로
+            //    직접 묶으면 그 연쇄가 구조적으로 불가능하다 — 대신 어순이 다른 경우는 놓칠 수
+            //    있는데(재현율보다 정밀도 우선 — 틀린 묶음을 사람이 매번 걸러내야 하는 것보다 낫다).
             const groups = new Map();
             leafIdxs.forEach(function(idx, k) {
-                const root = find(k);
-                if (!groups.has(root)) groups.set(root, []);
-                groups.get(root).push(idx);
+                const key = tokLists[k].find(function(t) { return !isCommon(t); });
+                if (!key) return; // 전부 흔한 말뿐이면 묶을 근거가 없다 — 제외
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(idx);
             });
-            groups.forEach(function(members) {
+            groups.forEach(function(members, bestTok) {
                 if (members.length < 2) return;
                 // 💡 이 부모의 자식 전부가 leaf이고 그 전부가 이번 클러스터 하나다 — 즉 부모가 이미
                 //    이 업무들만을 위한 전용 그룹이다(방금 묶기를 적용한 직후가 대표적). 그 상태에서
                 //    또 "한 단계 더 묶자"고 제안하면 의미 없이 레벨만 깊어지는 빈 중첩이 된다 — 건너뜀.
                 if (members.length === leafIdxs.length && leafIdxs.length === idxs.length) return;
-                const memberToks = members.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])).filter(function(t) { return !isCommon(t); }); });
-                const tcount = new Map();
-                memberToks.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { tcount.set(t, (tcount.get(t) || 0) + 1); }); });
-                let bestTok = '', bestCount = 0;
-                tcount.forEach(function(c, t) { if (c > bestCount || (c === bestCount && t.length > bestTok.length)) { bestCount = c; bestTok = t; } });
                 candidates.push({
                     memberIdx: members.sort(function(a, b) { return a - b; }),
                     suggestedName: bestTok || _wbsNormTitle(_wbsRowOwnTitle(gd[members[0]])),
