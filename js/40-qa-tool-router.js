@@ -206,6 +206,23 @@
             ]
         },
         {
+            id: 'gw_todo_boards', mode: 'read', requires: 'gw',
+            title: 'ToDO+ 칸반 보드 목록',
+            desc: '내가 속한 ToDO+(칸반) 보드 이름과 id. 카드를 보려면 먼저 이걸로 boardId를 찾는다.',
+            path: '/gw/todo/boards', pick: 'boards', params: []
+        },
+        {
+            id: 'gw_todo_items', mode: 'read', requires: 'gw',
+            title: 'ToDO+ 카드 목록',
+            desc: 'ToDO+ 보드 1개의 카드(할일) 목록, 최신 수정순. boardId를 모르면 gw_todo_boards로 먼저 찾는다.',
+            path: '/gw/todo/items', pick: 'items',
+            params: [
+                { name: 'boardId', type: 'int', min: 1, max: 99999, req: true, desc: '보드 id (gw_todo_boards로 확인)' },
+                { name: 'limit', type: 'int', min: 1, max: 80, def: 30, desc: '최대 건수' },
+                { name: 'keyword', type: 'text', max: 100, desc: '검색어(카드 제목·칸 이름)' }
+            ]
+        },
+        {
             id: 'gw_calendar', mode: 'read', requires: 'gw',
             title: '그룹웨어 일정',
             desc: '사내 캘린더 일정을 기간으로 조회한다.',
@@ -641,10 +658,11 @@
             if (x.calendarId !== undefined && x.calendarId !== null && x.calendarId !== '') parts.push('calId:' + x.calendarId);
             if (x.boardId !== undefined && x.boardId !== null && x.boardId !== '') parts.push('boardId:' + x.boardId);
             idParts = parts.length - idParts;   // id류만 붙은 개수 — 아래 "내용 없음" 판정에서 뺀다
-            ['at', 'date', 'createdAt', 'start'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
-            ['from', 'writer', 'drafterName', 'creator'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
-            ['boardName', 'folder', 'formName', 'calendar'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
+            ['at', 'date', 'createdAt', 'start', 'dueDate'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
+            ['from', 'writer', 'drafterName', 'creator', 'reporter'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
+            ['boardName', 'folder', 'formName', 'calendar', 'category', 'dept'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
             ['subject', 'title', 'name'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
+            if (x.members) parts.push('👤' + x.members);
             if (x.seen === false) parts.push('[안읽음]');
             // 🧩 [2026-10-26, Works 등 칸 이름이 앱마다 다른 소스용] 위 고정 키에 하나도 안 걸렸으면
             //    (= id류만 붙은 상태) 그 행의 **나머지 키를 전부** 압축해서 보여준다 — 그래야

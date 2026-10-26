@@ -717,6 +717,35 @@ folder_id로 거를 수 있음) / `report_detail(report_id)`(본문, `_html_to_t
 
 ---
 
+## 7-3. ToDO+ (칸반 보드, 읽기 전용, 2026-10-26)
+
+사이드바 `ToDO+`(href=`/app/todo`)는 Works와 달리 **칸반(Trello류)** 이다. Works는 칸 이름이
+`cid`(예: `_rc5t2hl08`)로 오지만, ToDO+는 카드의 `todoCategoryId`가 그 보드의 **칸반 컬럼**
+(예: "LNW Cosmic_18.5\" iDeck") id를 가리킨다 — 보드마다 컬럼 구성이 완전히 다르다.
+
+```
+GET  /api/todo/my                     내 보드 목록(이 계정은 1개뿐: "LNW Project", id 726)
+GET  /api/todo/{boardId}              보드 상세 — categories(칸)·labels·members
+POST /api/todo/{boardId}/item/list    body {} — ⚠️ 페이징 없이 전체 카드를 한 번에 준다
+```
+
+⚠️ **`item/list`는 limit/offset을 안 받는다** — 실측(boardId 726)에서 카드 155개가
+`page.offset:0`에도 전부 왔다. `gw_bridge.todo_items`가 최신 수정순으로 정렬해 Python에서
+자른다(board_recent/works_list와 같은 사정).
+
+카드 필드: `title`·`content`(설명)·`dueDate`·`members`(배열, `fullName`)·`labels`·`attaches`·
+`checklists`. `gw_bridge.todo_boards()`/`_todo_categories(boardId)`(컬럼 id→이름, 캐시)/
+`todo_items(boardId, keyword, limit)`가 이걸 감싼다. AI 문답 읽기 도구: `gw_todo_boards`/
+`gw_todo_items`(js/40).
+
+💡 이 작업으로 `rowsToText`(js/40)의 고정 키 목록에 `dueDate`·`category`·`dept`·`reporter`·
+`members`를 추가했다 — **report·todo뿐 아니라 그 키를 쓰는 다른 모듈 출력도 같이 좋아졌다**
+(예: 보고 목록에 보고자·부서가 비로소 보인다).
+
+쓰기(카드 생성/이동)는 아직 안 만들었다 — 필요해지면 그때 gw_capture_write.py로 확정.
+
+---
+
 ## 8. AI 문답 연동
 
 ### 8-0. 문서 종류(양식) 카탈로그 — `js/52-approval-doctypes.js` (2026-10-22)
@@ -873,7 +902,7 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 | `community` | 21 | 7 | 🟡 진입 확인 |
 | `contact` 주소록 | 21 | 10 | 🟢 **읽기 완료 + 앱 이식 완료** |
 | `report` 보고 | 21 | 3 | 🟢 **읽기 완료 + 앱 이식 완료**(2026-10-26, 제출/반려 등 쓰기는 미착수) |
-| `task` | 18 | 5 | ⬜ (`/app/task`는 거의 빈 화면) |
+| `task`(ToDO+) | 18 | 5 | 🟢 **읽기 완료 + 앱 이식 완료**(2026-10-26, 칸반 보드. `/app/task`는 접근 제한 — 실제 메뉴는 `/app/todo`) |
 | `calendar` 캘린더 | 14 | 3 | 🟢 읽기 완료 |
 | `docs` 문서관리 | 14 | 5 | 🟡 진입 확인 |
 | `asset` 예약 | 11 | 4 | 🟢 읽기 완료 + 쓰기 화면 구조 실측 |
@@ -916,7 +945,7 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 
 ## 📌 아직 안 한 것 / 다음 거리
 
-- **전수 조사 진행 중** — 위 11절 표 참고. 캘린더·전자결재·게시판·Works·보고 완료, 메일/주소록 부분. 다음: `ToDo+` → `task` → `docs`.
+- **전수 조사 진행 중** — 위 11절 표 참고. 캘린더·전자결재·게시판·Works·보고·ToDO+ 완료, 메일/주소록 부분. 다음: `docs`(문서관리) → `community` → `survey`.
 - **메일 다음 단계**: 메일 클릭 → 상세 조회 경로 캡처, 메일쓰기 창 열어 발송 폼 구조 확인.
 - **전자결재 남은 것**: 쓰기(임시저장) REST 본문 미확인 — 지금은 UI 클릭으로 저장한다. 사용자가 실제로 저장할 때 캡처하면 된다.
 - 서명·날짜 칸(`editorForm_6~17`) 매핑 — `Written by`/`Checked by` 앵커로 가능하나 미구현.

@@ -4031,6 +4031,33 @@ def gw_report_detail():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/todo/boards', methods=['GET'])
+def gw_todo_boards():
+    """ToDO+ 칸반 보드 목록."""
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, 'boards': gw_bridge.todo_boards()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/todo/items', methods=['GET'])
+def gw_todo_items():
+    """ToDO+ 보드 1개의 카드 목록. boardId는 gw_todo_boards로 먼저 찾는다."""
+    try:
+        import gw_bridge
+        bid = (request.args.get('boardId') or '').strip()
+        if not bid.isdigit():
+            return jsonify({'ok': False, 'message': 'boardId가 필요합니다.'}), 400
+        limit = request.args.get('limit', '30')
+        r = gw_bridge.todo_items(int(bid), keyword=(request.args.get('keyword') or '').strip() or None,
+                                  limit=int(limit) if str(limit).isdigit() else 30)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/board/post', methods=['GET'])
 def gw_board_post():
     """게시물 1건 본문(평문). `boardId`·`postId` 필수."""

@@ -1783,6 +1783,76 @@ def report_detail(report_id, body_limit=4000):
     return rec
 
 
+# ── ToDO+ (칸반 보드, 읽기 전용, 2026-10-26) ─────────────────────────────
+# 사이드바 메뉴는 `ic_home_todo`(실측 href=/app/todo). Works와 달리 칸 이름(cid)이
+# 아니라 **칸반 컬럼(category)** 이 보드마다 다른 구조 — 카드의 `todoCategoryId`를
+# 그 보드의 `/api/todo/{id}` 응답 속 `categories[].title`로 되짚어야 사람이 읽을 수 있다.
+#   GET  /api/todo/my                내 보드 목록(이 계정은 보통 1~2개뿐)
+#   GET  /api/todo/{boardId}         보드 상세 — categories(칸)·labels·members
+#   POST /api/todo/{boardId}/item/list   body {} — **페이징 없이 전체 카드**를 한 번에 준다
+#        (실측: boardId 726 — 카드 155개가 `page.offset:0`에도 전부 옴. 그래서 여기서
+#        Python으로 최신순 정렬 후 자른다 — board_recent/works_list와 같은 사정)
+
+_TODO_CATS_CACHE = {}
+
+
+def todo_boards():
+    """ToDO+ 칸반 보드 목록 — board_id를 알아야 todo_items를 부를 수 있다."""
+    j = gw_get('/api/todo/my', timeout=45)
+    out = []
+    for b in (j or {}).get('data') or []:
+        out.append({'id': b.get('id'), 'title': (b.get('title') or '').strip(),
+                    'memberCount': len(b.get('members') or []) + 1,
+                    'categoryCount': len(b.get('categories') or [])})
+    return out
+
+
+def _todo_categories(board_id, force=False):
+    """그 보드의 칸반 컬럼 id→이름. 보드 구조는 거의 안 바뀌어 프로세스 내 캐시."""
+    if not force and board_id in _TODO_CATS_CACHE:
+        return _TODO_CATS_CACHE[board_id]
+    j = gw_get(f'/api/todo/{int(board_id)}', timeout=45)
+    out = {c.get('id'): (c.get('title') or '').strip()
+           for c in ((j or {}).get('data') or {}).get('categories') or []}
+    _TODO_CATS_CACHE[board_id] = out
+    return out
+
+
+def todo_items(board_id, keyword=None, limit=30):
+    """ToDO+ 보드 1개의 카드 목록 — 최신 수정순. 서버가 전체를 한 번에 주므로 여기서 자른다.
+
+    keyword를 주면 카드 제목이나 칸(컬럼) 이름에 그 글자가 있는 것만 먼저 거른다."""
+    cats = _todo_categories(board_id)
+    js = r"""
+    (async (bid) => {
+      const r = await fetch('/api/todo/' + bid + '/item/list', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: '{}'
+      });
+      return await r.json();
+    })(%s)
+    """ % int(board_id)
+    j = eval_in_gw(js, timeout=45) or {}
+    rows = [c for c in (j.get('data') or []) if c.get('deleteFlag') != 'Y']
+    kw = (keyword or '').strip()
+    if kw:
+        rows = [c for c in rows if kw in (c.get('title') or '') or kw in cats.get(c.get('todoCategoryId'), '')]
+    rows.sort(key=lambda c: c.get('updatedAt') or '', reverse=True)
+    out = []
+    for c in rows[:int(limit)]:
+        out.append({
+            'id': c.get('id'),
+            'title': (c.get('title') or '').strip(),
+            'category': cats.get(c.get('todoCategoryId'), ''),
+            'dueDate': (c.get('dueDate') or '')[:10],
+            'members': ', '.join((m.get('fullName') or m.get('name') or '') for m in (c.get('members') or [])),
+            'attachCount': len(c.get('attaches') or []),
+            'commentCount': c.get('commentCount') or 0,
+        })
+    return {'boardId': int(board_id), 'total': len(rows), 'count': len(out), 'items': out}
+
+
 # ── 문서관리 / 예약 / 커뮤니티 / 설문 / 자료실 / 전자결재 문서함 (읽기 전용) ──
 # 필드 이름은 전수 조사(2026-10-19)로 실측 확인한 것만 쓴다 — 추측 금지.
 # 상세는 docs/groupware-endpoints.md.
