@@ -337,6 +337,28 @@
             window.wrToggleAlarm(rowIndex, ev);
         }, 250);
     };
+    // 📌 [2026-10-26 신규, 사용자 요청] "No." 헤더의 핀셋 — 행마다 일일이 누르지 않고 전체 업무의
+    //    알림을 한 번에 켜거나 끈다. 전체선택 체크박스와 같은 관례: 하나라도 꺼져 있으면 전체 켜기,
+    //    전부 켜져 있으면 전체 끄기(눌렀을 때 "뭐가 되는지" 예측 가능하게).
+    window.wrToggleAllPins = function(ev) {
+        if (ev) ev.stopPropagation();
+        if (!globalData || globalData.length <= 1) return;
+        let anyOff = false;
+        for (let i = 1; i < globalData.length; i++) { if (globalData[i] && !globalData[i]._알림) { anyOff = true; break; } }
+        const newState = anyOff;
+        let count = 0;
+        for (let i = 1; i < globalData.length; i++) { if (globalData[i]) { globalData[i]._알림 = newState; count++; } }
+        logChange(0, -1, '알림 설정', (newState ? '전체 알림 켜짐' : '전체 알림 꺼짐') + ` (${count}건)`);
+        renderTable(globalData);
+        applyFilters();
+        if (window.paintRowSelection) window.paintRowSelection();
+        const alarmPanel = document.getElementById('tab-alarm');
+        if (alarmPanel && alarmPanel.classList.contains('active') && window.renderAlarmTab) window.renderAlarmTab();
+        if (window.showToast) window.showToast(window._t(
+            (newState ? `📌 전체 ${count}건 알림을 켰습니다.` : `📌 전체 ${count}건 알림을 껐습니다.`),
+            (newState ? `📌 Turned ON alarms for all ${count} task(s).` : `📌 Turned OFF alarms for all ${count} task(s).`)
+        ), 'info');
+    };
     window._wrPinDblClick = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
         if (window._wrPinClickTimer) { clearTimeout(window._wrPinClickTimer); window._wrPinClickTimer = null; }
