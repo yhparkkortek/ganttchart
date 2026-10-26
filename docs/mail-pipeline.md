@@ -404,3 +404,72 @@ Task Inbox "📧 원문 보기"의 🌐 번역 버튼(`js/14c-task-inbox.js`의 
   군집 494개 × 샘플 최대 10개가 매번 따라오므로 누적 자체가 비용이다. 크기를 같이 볼 것.
 - AI를 쓰는 새 백그라운드 경로를 만들 땐 "사람이 트리거한 적 없는데 도는 경로인지"를 먼저 따질 것.
   같은 유형의 선례가 위 "🔴 메일 자동배치 OFF가 백그라운드 AI 호출을 막지 못하던 버그" 절에 있다.
+
+
+## 📬 자동 메일 수집이 "도는 것 같은데 아무 일도 안 일어날" 때 (2026-10-22)
+
+**먼저 알 것: `ms_last_auto_fetch_at`(마지막 수집 시각)이 최근이라고 해서 메일을 받은 게 아니다.**
+그 시각을 찍는 경로가 넷인데 **셋은 "할 일이 없었다"** 이다:
+
+| 경로 | 뜻 |
+|---|---|
+| 서버가 아무것도 안 줌 | 시각만 갱신 |
+| 전부 중복(dedupe) | 시각만 갱신 |
+| 전부 Stage0 필터에 걸림(폐기/신규발신자) | 시각만 갱신 |
+| 실제 수집·분석 완료 | 시각 갱신 |
+
+그래서 "방금 수집함"처럼 보이는데 업무가 하나도 안 생기는 상태가 된다.
+
+### 🐛 IMAP 권한 거부를 비밀번호 오류로 단정해 POP3 폴백을 막고 있었다
+
+2026-10-16 에 수신이 **POP3 → IMAPS(993)** 로 바뀌었다(커밋 `9755ab7`). 이유는 평문 POP3(110)로
+비밀번호·본문이 오가던 것과, POP3가 **헤더만 못 받아** 날짜 하나 보려고 첨부까지 통째로 받아야
+했던 것. 그 커밋은 **"계정별로 IMAP이 막혀 있을 수 있으니 POP3 폴백을 남긴다"** 고 적어 뒀는데,
+정작 `except imaplib.IMAP4.error` 가 **모든** IMAP 오류를 "비밀번호가 틀린 것"으로 단정하고
+폴백 없이 중단했다 — **주석이 말한 바로 그 경우를 코드가 막고 있었다.**
+
+실제로 이 서버는 `have no permission.` 을 돌려준다 = 비밀번호가 아니라 **그 계정에 IMAP 사용
+권한이 없다**(다우오피스/TIMS 계열은 계정별로 관리자가 켠다). POP3로는 멀쩡히 되는 계정인데
+수집이 매번 거기서 끝났고, 사람에겐 "메일 계정/비밀번호를 확인해주세요"라는 **틀린 안내**가 나갔다.
+
+→ 권한/정책 거부(`permission`·`disabled`·`denied`·`not allowed`·`unavailable`…)면 **POP3로 폴백**한다.
+  **비밀번호 오류로 보일 때만** 중단한다 — 계정 잠금 위험이 있는 건 그쪽뿐(SAP·그룹웨어와 같은 원칙).
+
+⚠️ **폴백 POP3는 110 평문**이다(`poplib.POP3`, SSL 아님). 기능은 되지만 비밀번호·본문이 평문으로
+흐른다 — IMAP 전환의 핵심 동기가 그거였다. 권한을 받는 쪽이 정답이고, 안 되면 POP3S(995) 검토.
+
+### 조용히 삼키지 말 것 — 두 군데서 삼키고 있었다
+
+- 백엔드가 **오류**를 돌려줘도 프런트가 "새 메일 없음"과 같은 조건으로 묶어 **시각만 갱신**하고 끝냈다.
+  → 오류는 시각을 갱신하지 않고(다음 틱 재시도) 토스트·콘솔·`_issueLog(auto_fetch_error)` 로 드러낸다.
+  받은 경로는 `window._msAutoProto`(`proto`/`fallback`)에 남는다 — IMAP→POP3 전환이 보인다.
+- 틱의 조기 return 들(이전 수집 진행 중 / 자동배치 OFF / 로그인 정보 미저장)도 전부 조용했다.
+  → `window._msAutoSkip` 에 사유를 남기고 콘솔에 1회 적는다(`_issueLog(auto_fetch_skipped)`).
+
+### 🐛 마지막 수집 시각이 **미래**면 영구 정지한다
+
+`elapsedMin` 이 음수라 `elapsedMin >= intervalMin` 이 영영 참이 되지 않는다(PC 시계가 뒤로 간 경우,
+값 손상). 스케줄러가 미래/NaN 값을 지우고 다음 틱에 바로 수집한다. 지금 상태는
+`window._msAutoNext`(주기·마지막수집·경과분·남은분)에 남는다.
+
+### 🔎 점검 순서 (콘솔)
+
+```js
+JSON.stringify({건너뜀:window._msAutoSkip, 다음수집:window._msAutoNext, 경로:window._msAutoProto,
+ 모드:localStorage.mail_mode, 로그인저장:!!localStorage.ms_saved_userid,
+ 마지막수집:localStorage.ms_last_auto_fetch_at},null,1)
+```
+
+그래도 업무가 안 생기면 **걸러진 쪽**을 본다 — 화이트리스트는 **주소록**에서 만들어진다.
+
+```js
+const q=k=>{try{return JSON.parse(localStorage.getItem(k)||'[]')}catch(e){return []}};
+JSON.stringify({화이트리스트:window._msGetWhitelistDomains().size,
+ 보류:q('ms_new_sender_queue').length, 폐기:q('ms_discard_queue').length,
+ 분석결과큐:(window._msResults||[]).length},null,1)
+```
+
+- 보류 사유가 `whitelist_empty` → 주소록이 로드되기 전에 백그라운드 틱이 돈 것(판정 불가를 모르는
+  발신자와 같게 취급한 것이라 손봐야 한다). `unknown_domain` → 진짜로 주소록에 없는 발신자.
+- **보류·폐기된 메일은 dedupe 에 걸려 자동으로는 다시 처리되지 않는다.** 업무 보관함의
+  신규발신자/자동폐기 목록에서 각 행 **✅ 버튼**으로 그 자리에서 분석에 보내는 게 유일한 출구다.
