@@ -179,6 +179,33 @@
             ]
         },
         {
+            id: 'gw_report_folders', mode: 'read', requires: 'gw',
+            title: '그룹웨어 보고 시리즈 목록',
+            desc: '부서별 정기/비정기 보고(주간업무보고 등) 시리즈 이름과 folderId 목록. '
+                + '특정 보고만 보려면 먼저 이걸로 folderId를 찾는다.',
+            path: '/gw/report/folders', pick: 'folders', params: []
+        },
+        {
+            id: 'gw_report_list', mode: 'read', requires: 'gw',
+            title: '그룹웨어 보고 목록',
+            desc: '최근 제출된 보고(주간업무보고 등) 목록. folderId를 주면 그 시리즈만. '
+                + 'folderId를 모르면 gw_report_folders로 먼저 찾는다.',
+            path: '/gw/report/list', pick: 'reports',
+            params: [
+                { name: 'folderId', type: 'int', min: 1, max: 99999, desc: '보고 시리즈 id (gw_report_folders로 확인)' },
+                { name: 'limit', type: 'int', min: 1, max: 60, def: 20, desc: '최대 건수' }
+            ]
+        },
+        {
+            id: 'gw_report_detail', mode: 'read', requires: 'gw',
+            title: '그룹웨어 보고 본문',
+            desc: '보고 1건의 본문 전체. 발췌만으로 부족할 때만 쓴다. id는 gw_report_list로 찾는다.',
+            path: '/gw/report/detail',
+            params: [
+                { name: 'id', type: 'int', min: 1, max: 9999999, req: true, desc: '보고 id' }
+            ]
+        },
+        {
             id: 'gw_calendar', mode: 'read', requires: 'gw',
             title: '그룹웨어 일정',
             desc: '사내 캘린더 일정을 기간으로 조회한다.',

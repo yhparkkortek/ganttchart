@@ -1712,6 +1712,77 @@ def works_list(applet_id, limit=20, keyword=None):
             'count': len(out), 'docs': out}
 
 
+# ── 보고 (주간업무보고 등 정기/비정기 보고) (읽기 전용, 2026-10-26) ──────────
+# 제목 칸이 따로 없다 — 목록 화면에 보이는 "연구소 주간업무보고" 같은 이름은
+# series가 속한 report folder(=보고 시리즈)의 이름 + 그 안 회차 번호를 합친 것.
+#   GET /api/report/department           부서별 보고 폴더(시리즈) 목록 → folderId
+#   GET /api/report/done?offset=&page=0&property=submittedAt&direction=desc
+#       전사 최신 제출 보고 목록(제목·회차 없이 folder/series 객체로만 옴) — 서버에
+#       폴더 필터 파라미터가 없어 Python에서 걸러낸다(board_recent과 같은 사정).
+#   GET /api/report/{id}                 보고 1건 본문(content, HTML)
+
+def report_folders():
+    """부서별 보고 시리즈(정기/비정기) 목록 — report_list(folder_id=...)에 쓸 id를 찾는다."""
+    j = gw_get('/api/report/department', timeout=45)
+    out = []
+    for dept in (j or {}).get('data') or []:
+        for f in dept.get('folders') or []:
+            out.append({'id': f.get('id'), 'name': f.get('name') or '',
+                        'dept': dept.get('name') or '', 'type': f.get('type') or '',
+                        'totalCount': f.get('totalCount'), 'totalSeries': f.get('totalSeries')})
+    return out
+
+
+def report_list(folder_id=None, limit=20):
+    """최근 제출된 보고 목록. folder_id를 주면 그 시리즈만 걸러낸다(report_folders로 id 확인).
+
+    ⚠️ 서버에 폴더 필터가 없다 — 전체 최신순을 받아 Python에서 거르므로, 거를 게 있으면
+       더 넉넉히 받아야 한다(최대 200건)."""
+    want = int(limit)
+    page_size = want if not folder_id else min(want * 10, 200)
+    j = gw_get(f'/api/report/done?offset={page_size}&page=0&property=submittedAt&direction=desc',
+               timeout=60)
+    out = []
+    for d in (j or {}).get('data') or []:
+        folder = d.get('folder') or {}
+        if folder_id and folder.get('id') != int(folder_id):
+            continue
+        rep = d.get('reporter') or {}
+        series = d.get('series') or {}
+        out.append({
+            'id': d.get('id'),
+            'title': (f"{folder.get('name') or ''} {series.get('series') or ''}회").strip(),
+            'folderId': folder.get('id'),
+            'dept': (d.get('department') or {}).get('name') or '',
+            'reporter': rep.get('fullName') or rep.get('name') or '',
+            'submittedAt': d.get('submittedAt') or '',
+        })
+        if len(out) >= want:
+            break
+    return {'count': len(out), 'reports': out}
+
+
+def report_detail(report_id, body_limit=4000):
+    """보고 1건 본문. 요약·인용용 평문으로 돌려준다."""
+    j = gw_get(f'/api/report/{int(report_id)}', timeout=45)
+    d = (j or {}).get('data') or {}
+    folder = d.get('folder') or {}
+    series = d.get('series') or {}
+    rep = d.get('reporter') or {}
+    raw = d.get('content') or ''
+    rec = {
+        'id': d.get('id'),
+        'title': (f"{folder.get('name') or ''} {series.get('series') or ''}회").strip(),
+        'dept': (d.get('department') or {}).get('name') or '',
+        'reporter': rep.get('fullName') or rep.get('name') or '',
+        'submittedAt': d.get('submittedAt') or '',
+        'body': _html_to_text(raw, body_limit),
+    }
+    if not rec['body']:
+        rec['bodyNote'] = '본문에서 읽을 수 있는 글자를 찾지 못했습니다.' if raw else '본문이 비어 있습니다.'
+    return rec
+
+
 # ── 문서관리 / 예약 / 커뮤니티 / 설문 / 자료실 / 전자결재 문서함 (읽기 전용) ──
 # 필드 이름은 전수 조사(2026-10-19)로 실측 확인한 것만 쓴다 — 추측 금지.
 # 상세는 docs/groupware-endpoints.md.

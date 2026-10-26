@@ -3991,6 +3991,46 @@ def gw_works_list():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/report/folders', methods=['GET'])
+def gw_report_folders():
+    """부서별 보고 시리즈(정기/비정기) 목록."""
+    try:
+        import gw_bridge
+        return jsonify({'ok': True, 'folders': gw_bridge.report_folders()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/report/list', methods=['GET'])
+def gw_report_list():
+    """최근 제출된 보고 목록. folderId를 모르면 gw_report_folders로 먼저 찾는다."""
+    try:
+        import gw_bridge
+        fid = (request.args.get('folderId') or '').strip()
+        limit = request.args.get('limit', '20')
+        r = gw_bridge.report_list(folder_id=int(fid) if fid.isdigit() else None,
+                                   limit=int(limit) if str(limit).isdigit() else 20)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/gw/report/detail', methods=['GET'])
+def gw_report_detail():
+    """보고 1건 본문. id 필수."""
+    try:
+        import gw_bridge
+        rid = (request.args.get('id') or '').strip()
+        if not rid.isdigit():
+            return jsonify({'ok': False, 'message': 'id가 필요합니다.'}), 400
+        r = gw_bridge.report_detail(int(rid))
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/board/post', methods=['GET'])
 def gw_board_post():
     """게시물 1건 본문(평문). `boardId`·`postId` 필수."""

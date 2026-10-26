@@ -692,6 +692,31 @@ gw_capture_write.py로 테스트해서 확정할 것 — 20개를 미리 다 만
 
 ---
 
+## 7-2. 보고 (주간업무보고 등, 읽기 전용, 2026-10-26)
+
+**제목 칸이 따로 없다.** 목록 화면에 보이는 "연구소 주간업무보고"는 **보고 시리즈(폴더)
+이름**이고, 거기에 **회차 번호**(`series.series`)를 붙인 게 사람이 보는 제목이다
+(`gw_bridge.report_list`/`report_detail`이 `"{folder.name} {series.series}회"`로 합성).
+
+```
+GET /api/report/department                           # 부서별 보고 시리즈(폴더) 목록 → folderId
+GET /api/report/done?offset=&page=0&property=submittedAt&direction=desc
+                                                       # 전사 최신 제출 보고 목록
+GET /api/report/{id}                                  # 보고 1건 본문(content, HTML)
+```
+
+⚠️ `done` 목록에 **폴더 필터 파라미터가 없다** — `board_recent`와 같은 사정으로, 전체
+최신순을 받아 Python에서 `folder.id`로 걸러낸다(`folder_id`를 주면 `limit`의 최대 10배까지
+더 넉넉히 받는다).
+
+`gw_bridge.report_folders()`(시리즈 목록) / `report_list(folder_id, limit)`(최근 제출 목록,
+folder_id로 거를 수 있음) / `report_detail(report_id)`(본문, `_html_to_text`로 평문화)가
+이걸 감싼다. AI 문답 읽기 도구: `gw_report_folders`/`gw_report_list`/`gw_report_detail`(js/40).
+
+쓰기(제출/반려 등)는 아직 안 만들었다 — 필요해지면 그때 gw_capture_write.py로 확정.
+
+---
+
 ## 8. AI 문답 연동
 
 ### 8-0. 문서 종류(양식) 카탈로그 — `js/52-approval-doctypes.js` (2026-10-22)
@@ -847,7 +872,7 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 | `noti` 알림 | 21 | 0 | 🟢 **읽기 완료 + 앱 이식 완료** |
 | `community` | 21 | 7 | 🟡 진입 확인 |
 | `contact` 주소록 | 21 | 10 | 🟢 **읽기 완료 + 앱 이식 완료** |
-| `report` 보고 | 21 | 3 | 🟡 경로만(`/api/report/form`) — 진입만으론 호출 없음 |
+| `report` 보고 | 21 | 3 | 🟢 **읽기 완료 + 앱 이식 완료**(2026-10-26, 제출/반려 등 쓰기는 미착수) |
 | `task` | 18 | 5 | ⬜ (`/app/task`는 거의 빈 화면) |
 | `calendar` 캘린더 | 14 | 3 | 🟢 읽기 완료 |
 | `docs` 문서관리 | 14 | 5 | 🟡 진입 확인 |
@@ -891,7 +916,7 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 
 ## 📌 아직 안 한 것 / 다음 거리
 
-- **전수 조사 진행 중** — 위 11절 표 참고. 캘린더·전자결재 완료, 메일/주소록 부분. 다음: `works` → `board` → `report` → `task` → `docs`.
+- **전수 조사 진행 중** — 위 11절 표 참고. 캘린더·전자결재·게시판·Works·보고 완료, 메일/주소록 부분. 다음: `ToDo+` → `task` → `docs`.
 - **메일 다음 단계**: 메일 클릭 → 상세 조회 경로 캡처, 메일쓰기 창 열어 발송 폼 구조 확인.
 - **전자결재 남은 것**: 쓰기(임시저장) REST 본문 미확인 — 지금은 UI 클릭으로 저장한다. 사용자가 실제로 저장할 때 캡처하면 된다.
 - 서명·날짜 칸(`editorForm_6~17`) 매핑 — `Written by`/`Checked by` 앵커로 가능하나 미구현.
