@@ -378,6 +378,17 @@ jsTree 포맷 **배열**이 그대로 온다: `[{data:{id:"FOLDER_61",title}, st
 목록 항목 키: `id` `boardId` `boardName` `title` `writer{name,positionName}` `createdAt`
 `summary`(본문 발췌) `readCount` `commentsCount` `hasAttach`. 화면 경로는 `/app/board/{boardId}/post/{postId}`.
 
+#### ⚠️⚠️ `boardsWithIp`/`department/boards`의 바깥 `id`는 **트리 노드 id**다 — 진짜 게시판 id가 아니다
+
+두 API 모두 항목이 `{id, board:{id, name, ...}, nodeType, nodeValue, ...}` 모양이고, **바깥 `id`와
+`board.id`가 다른 값**이다(실측: "업무관련 확인사항 및 잡담" 바깥 581 / 진짜 829,
+"[디스플레이] 일간 뉴스" 바깥 80 / 진짜 130). `공지사항`(10=10)처럼 우연히 같은 것도 있어서
+`gw_bridge.boards()`가 바깥 `id`를 돌려주던 버그가 한참 안 걸렸다 — AI가 그 id로
+`gw_board_write`를 호출했을 때 403(`__go_checksum__`)으로 막혀서야 드러났다(2026-10-26).
+**지금은 `board.id`를 우선 읽는다.** `board_recent(board_id=…)`/`board_post(board_id=…)`도
+같은 `boards()`를 쓰므로, 특정 게시판 번호로 조회하는 과거 호출은 전부 조용히 틀린 id를
+썼을 수 있다 — "그 게시판 글이 없다"는 답을 봤다면 이 버그였을 가능성을 의심할 것.
+
 #### ⚠️ **기간 필터 파라미터가 없다**
 서버에 `from`/`to`가 없다. 최신순 목록을 받아 **코드에서** 잘라야 한다(`gw_bridge.board_recent`).
 - `date_from`보다 오래된 글이 나오면 그 자리에서 **페이징 중단**(최신순이므로 뒤는 전부 범위 밖).

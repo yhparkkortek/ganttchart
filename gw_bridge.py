@@ -1356,19 +1356,30 @@ def board_post(board_id, post_id, body_limit=4000):
 
 
 def boards():
-    """볼 수 있는 게시판 목록(전사 + 부서). 게시판 지정 조회용."""
+    """볼 수 있는 게시판 목록(전사 + 부서). 게시판 지정 조회용.
+
+    🐛 [2026-10-26 제보] 이 함수가 돌려주던 `id`는 **트리 노드 id**였지, 글 목록/등록/삭제
+    API가 쓰는 **진짜 게시판 id**가 아니었다(`/api/department/boards`·`/api/board/company/
+    boardsWithIp` 둘 다 바깥 `id`와 안쪽 `board.id`가 **다른 값** — 실측: 개발3팀 "업무관련
+    확인사항 및 잡담"은 바깥 581, 진짜 829; "[디스플레이] 일간 뉴스"는 바깥 80, 진짜 130).
+    공지사항처럼 두 값이 우연히 같은 경우(10=10)만 있어 지금까지 안 걸렸다 — AI가 이
+    함수로 찾은 id로 `gw_board_write`를 호출하자 403(__go_checksum__)으로 막혀서야 드러났다.
+    `board_recent(board_id=…)`/`board_post(board_id=…)`도 같은 함수를 쓰므로 특정 게시판
+    번호로 조회할 때 전부 조용히 틀린 id를 쓰고 있었을 것 — 지금 고친다."""
     out = []
     j = gw_get('/api/board/company/boardsWithIp', timeout=45)
     for b in ((j or {}).get('data') or {}).get('boards') or []:
         if b.get('nodeType') == 'FOLDER':
             continue                   # 폴더는 글이 없다
-        out.append({'id': b.get('id'), 'name': b.get('nodeValue') or '', 'scope': '전사'})
+        bid = (b.get('board') or {}).get('id') or b.get('id')
+        out.append({'id': bid, 'name': b.get('nodeValue') or '', 'scope': '전사'})
     j = gw_get('/api/department/boards', timeout=45)
     for dept in (j or {}).get('data') or []:
         for b in dept.get('boards') or []:
             if b.get('nodeType') == 'FOLDER':
                 continue
-            out.append({'id': b.get('id'), 'name': b.get('nodeValue') or '',
+            bid = (b.get('board') or {}).get('id') or b.get('id')
+            out.append({'id': bid, 'name': b.get('nodeValue') or '',
                         'scope': dept.get('deptName') or '부서'})
     return out
 
