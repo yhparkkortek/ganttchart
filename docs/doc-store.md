@@ -52,7 +52,8 @@
 | | |
 |---|---|
 | `GET/POST /doc/config` | 경로·폴더 목록 |
-| `GET /doc/list` | 목록. `since=ISO`면 그 이후 추가분만(자동 등록 스캔용) |
+| `GET /doc/list` | 목록(`files` + **`dirs`**, 2026-10-26). `since=ISO`면 그 이후 추가분만(자동 등록 스캔용) |
+| `POST /doc/mkdir` | 하위 폴더 만들기(탐색기 "새 폴더"). `_docstore_dir`가 이미 자동 생성해서 경로만 조립 |
 | `GET /doc/get` | 원본 그대로 |
 | `POST /doc/put` | 업로드. 같은 이름은 **409** (`overwrite=1`로만 덮어씀) |
 | `GET/POST /doc/text` | 추출 텍스트 캐시 |
@@ -233,6 +234,31 @@ PARTS는 js/42의 공용 `ai` 블록(평평한 행 표)을 **쓰지 않는다** 
   파일부터 📌 프로젝트 탭(없으면 첫 조회/올리기에서 자동 생성)에 쌓인다.
 - 올리기 드롭다운(`▾`)은 그대로 `_dsPick.folders`(지금 창의 탭) + `_dsAllPageFolders()`를 합치므로
   📌/📁 두 탭도 자동으로 거기 뜬다 — 따로 손 안 댐.
+
+#### 🌲 폴더 트리를 동적으로 읽는 탐색기 + Customer SPEC 전기/기구 구분 (2026-10-26)
+
+사용자 제안: "프로젝트 폴더 아래 사람이 임의로 폴더를 만들어도 앱이 그 트리를 읽어서 보여줄 수
+없나?" + "Customer SPEC은 ELECTRICAL/MECHANICAL로 나눠 관리해야 한다." 둘 다 한 메커니즘으로 푼다.
+
+- **깊이 제한을 2→6단계로 올렸다**(`_docstore_folder_segs`). 상위 폴더(세그먼트 0)는 여전히
+  화이트리스트, 나머지는 전부 `_docstore_safe_name`(경로 탈출 문자 거부)만 통과하면 된다 —
+  2026-10-22에 "두 단계 이상은 거부, 깊이를 열어 둘 이유가 없다"고 적어 뒀던 그 제한을
+  사용자 요청으로 다시 올린 것. 6단계는 안전 상한일 뿐 임의 깊이가 아니다.
+- `/doc/list`가 이제 `dirs`(하위 폴더 이름만, `_`/`.` 시작은 내부용이라 숨김)도 같이 준다.
+  프런트(`js/48` `_dsLoadFolder`/`_dsRenderList`)가 파일 목록 위에 📁 행으로 그리고, 누르면
+  `_dsPickEnterDir`가 그 경로로 들어간다 — **앱이 폴더 이름을 미리 몰라도** 보인다.
+- 탭 하나보다 더 깊이 들어가면 `#ds-pick-crumb` 빵부스러기(breadcrumb)가 나타나 상위 구간을
+  눌러 돌아갈 수 있다(`_dsPickCrumb`). 탭(`_dsRenderTabs`)은 여전히 "자주 가는 자리"로 남고,
+  빵부스러기는 "지금 어디 있는지 + 뒤로"를 맡는다 — 둘을 하나로 합치지 않았다.
+- **"새 폴더"(`📁+`) 버튼**은 지금 보고 있는 폴더 안에 `/doc/mkdir`로 하위 폴더를 만든다. 이름
+  규칙은 업로드 파일명과 같다(`_docstore_safe_name`) — 생성 로직을 새로 두지 않고 `_docstore_dir`의
+  "없으면 만든다"를 그대로 재사용했다.
+- `_dsProjectAwareFolders(baseFolder, categories)`에 `categories`가 생겼다 — Customer SPEC
+  (`js/42` `briefspec`)이 `[{f:'ELECTRICAL',...},{f:'MECHANICAL',...}]`을 넘겨 탭을
+  `CUSTOMER/<프로젝트>/ELECTRICAL` · `CUSTOMER/<프로젝트>/MECHANICAL` · `CUSTOMER(전체)` 세 개로
+  만든다. 다른 페이지(MC·SUMMARY 등)는 `categories` 없이 불러 기존 [📌 프로젝트 / 📁 전체] 두 탭
+  그대로다. **PARTS는 그대로 손 안 댐** — 이미 부품 구분 하위 폴더가 있어서 또 겹치면 복잡해진다.
+- 기존 루트 파일 위치는 안 건드렸다(2026-10-26 결정 그대로) — 깊이만 열었을 뿐 아무것도 옮기지 않았다.
 
 #### ⚠️ PANEL 은 `PARTS/PANEL` 로 옮겨졌다
 

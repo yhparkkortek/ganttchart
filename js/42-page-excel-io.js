@@ -849,6 +849,15 @@
         {
             id: 'briefspec', tab: 'tab-briefspec', label: 'Brief SPEC',
             nasFolder: 'CUSTOMER',
+            // 📁 [2026-10-26] 전기/기구 구분으로 자료를 가른다(사용자 요청) — 지금 열린 프로젝트
+            // 아래 CUSTOMER/<프로젝트>/ELECTRICAL, CUSTOMER/<프로젝트>/MECHANICAL 두 탭 + 전체 탭.
+            // 프로젝트가 안 열려 있으면 null → 기존처럼 CUSTOMER 폴더 하나만 보인다.
+            nasFolders: function () {
+                return window._dsProjectAwareFolders ? window._dsProjectAwareFolders('CUSTOMER', [
+                    { f: 'ELECTRICAL', label: '⚡ ELECTRICAL' },
+                    { f: 'MECHANICAL', label: '🔧 MECHANICAL' }
+                ]) : null;
+            },
             repaint: ['populateTabData'],
             blocks: [{ sheet: 'Brief SPEC', kind: 'rows',
                 get: function () { return _td().briefSpec || []; },

@@ -4454,16 +4454,19 @@ def _docstore_safe_name(name):
 
 
 def _docstore_folder_segs(folder, cfg, allow_text=False):
-    """'PARTS/PANEL' → ['PARTS', 'PANEL']. 허용 안 되면 (None, 사유).
+    """'CUSTOMER/KONAMI/ELECTRICAL' → ['CUSTOMER', 'KONAMI', 'ELECTRICAL']. 허용 안 되면 (None, 사유).
 
-    🗂 [2026-10-22] **한 단계 하위 폴더까지** 허용한다 — PARTS 탭이 부품 종류마다 자료를
-       갈라 두기 때문(PARTS/PANEL, PARTS/CONV …). 상위 폴더는 여전히 화이트리스트(설정 +
-       있어야 하고, 하위 이름은 파일명과 같은 규칙(_docstore_safe_name)으로 걸러 경로
-       탈출을 막는다. 두 단계 이상은 거부 — 깊이를 열어 둘 이유가 없다.
+    🗂 [2026-10-22] **한 단계 하위 폴더까지** 허용했다 — PARTS 탭이 부품 종류마다 자료를
+       갈라 두기 때문(PARTS/PANEL, PARTS/CONV …).
+    🗂 [2026-10-26] 깊이 제한을 2→6단계로 올렸다 — 프로젝트별 하위 폴더(CUSTOMER/<프로젝트>) 아래
+       사람이 NAS에서 직접 만드는 폴더(전기/기구 구분, 그 안의 세부 폴더)를 앱이 그대로 읽어
+       탐색기처럼 보여줘야 해서다. 상위 폴더는 여전히 화이트리스트(설정 + DOCSTORE_APP_FOLDERS)
+       여야 하고, 나머지 단계는 전부 파일명과 같은 규칙(_docstore_safe_name)으로 걸러 경로
+       탈출을 막는다. 6단계는 안전 상한일 뿐 — 깊이를 무제한으로 열어 둘 이유는 없다.
     """
     raw = str(folder or '').strip().replace(BACKSLASH, '/')
     parts = [x for x in raw.split('/') if x not in ('', '.')]
-    if not parts or len(parts) > 2:
+    if not parts or len(parts) > 6:
         return None, '폴더 이름이 올바르지 않습니다.'
     segs = [_docstore_safe_name(x) for x in parts]
     if not all(segs):
@@ -4549,10 +4552,18 @@ def doc_list():
         cached_texts = set()          # 캐시 폴더가 없으면 전부 '없음'으로 — 목록 자체는 내보낸다
     text_prefix = _doc_text_key(folder) + '__'
     out = []
+    dirs = []
     try:
         with os.scandir(path) as it:
-            entries = [e for e in it if e.is_file()]
-        for e in sorted(entries, key=lambda x: x.name):
+            scanned = list(it)
+        # 📁 [2026-10-26] 하위 폴더도 같이 내려준다 — 사람이 NAS에서 직접 만든 폴더를 앱이
+        #    탐색기처럼 읽어 보여주기 위해서다(프로젝트 아래 전기/기구 구분 등). `_`/`.`로 시작하는
+        #    이름은 캐시·staging 같은 내부용 자리라 숨긴다.
+        dir_entries = [e for e in scanned if e.is_dir() and not e.name.startswith(('.', '_'))]
+        for e in sorted(dir_entries, key=lambda x: x.name):
+            dirs.append({'name': e.name})
+        file_entries = [e for e in scanned if e.is_file()]
+        for e in sorted(file_entries, key=lambda x: x.name):
             st = e.stat()
             if since_ts and st.st_mtime <= since_ts:
                 continue
@@ -4565,7 +4576,23 @@ def doc_list():
             })
     except Exception as e:
         return jsonify({'ok': False, 'error': f'목록 조회 실패: {e}'}), 500
-    return jsonify({'ok': True, 'folder': folder, 'count': len(out), 'files': out})
+    return jsonify({'ok': True, 'folder': folder, 'count': len(out), 'files': out, 'dirs': dirs})
+
+
+@app.route('/doc/mkdir', methods=['POST'])
+def doc_mkdir():
+    """하위 폴더 만들기(탐색기의 '새 폴더'). `_docstore_dir`가 이미 없는 폴더를 만들어 주므로
+    여기선 경로를 조립해 그 함수에 넘기기만 한다 — 생성 로직을 따로 두지 않는다."""
+    req = request.get_json(force=True, silent=True) or {}
+    parent = str(req.get('folder') or '').strip()
+    name = _docstore_safe_name(req.get('name'))
+    if not name:
+        return jsonify({'ok': False, 'error': '폴더 이름이 올바르지 않습니다.'}), 400
+    full = (parent.rstrip('/') + '/' + name) if parent else name
+    _, err = _docstore_dir(full)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({'ok': True, 'folder': full})
 
 
 @app.route('/doc/get', methods=['GET'])

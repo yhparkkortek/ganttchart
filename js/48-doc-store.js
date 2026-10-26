@@ -160,16 +160,19 @@ window._dsCurrentProjectFolderName = function () {
     return safe || null;
 };
 
-/** baseFolder가 아직 하위 폴더를 쓰지 않을 때만 [프로젝트 탭, 전체 탭] 두 개를 만든다. 아니면 null
- *  (null이면 부르는 쪽이 기존 동작 그대로 — 탭 없이 baseFolder 하나). */
-window._dsProjectAwareFolders = function (baseFolder) {
+/** baseFolder가 아직 하위 폴더를 쓰지 않을 때만 탭을 만든다. 아니면 null
+ *  (null이면 부르는 쪽이 기존 동작 그대로 — 탭 없이 baseFolder 하나).
+ *  categories를 주면(예: Customer SPEC의 ELECTRICAL/MECHANICAL) 프로젝트 폴더 아래 그 구분별
+ *  탭을 만들고, 안 주면 프로젝트 폴더 탭 하나만 만든다. 어느 쪽이든 끝에 "전체" 탭을 더한다. */
+window._dsProjectAwareFolders = function (baseFolder, categories) {
     if (!baseFolder || baseFolder.indexOf('/') !== -1) return null;
     var proj = window._dsCurrentProjectFolderName();
     if (!proj) return null;
-    return [
-        { f: baseFolder + '/' + proj, label: '📌 ' + proj },
-        { f: baseFolder, label: '📁 ' + baseFolder + ' (' + _t('전체', 'all') + ')' }
-    ];
+    var tabs = (categories && categories.length)
+        ? categories.map(function (c) { return { f: baseFolder + '/' + proj + '/' + c.f, label: c.label }; })
+        : [{ f: baseFolder + '/' + proj, label: '📌 ' + proj }];
+    tabs.push({ f: baseFolder, label: '📁 ' + baseFolder + ' (' + _t('전체', 'all') + ')' });
+    return tabs;
 };
 
 // 📋 폴더 목록 짧은 캐시 — 같은 폴더를 연달아 묻는 화면용.
@@ -373,6 +376,7 @@ window._dsOpenPicker = async function (opts) {
         // 구분이 13개라 한 줄에 안 들어간다 — 줄바꿈시키고, 모달 안 다른 버튼과 같은 꼴로 보인다.
         + '    <span id="ds-pick-tabs" style="display:flex; gap:5px; flex-wrap:wrap; row-gap:5px; flex:1 1 100%;"></span>'
         + '    <input id="ds-pick-q" type="text" placeholder="' + _t('이름으로 검색', 'Search by name') + '" style="flex:1; min-width:140px; padding:5px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px;">'
+        + '    <button onclick="window._dsPickNewFolder()" title="' + _t('지금 보고 있는 폴더 안에 새 폴더를 만듭니다', 'Create a new folder inside the one shown') + '" style="padding:5px 9px; background:#fff7e6; color:#8a6300; border:1px solid #ffe08a; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; white-space:nowrap;">📁+ ' + _t('새 폴더', 'New folder') + '</button>'
         // ⬆ 는 지금 폴더로, ▾ 는 다른 페이지 폴더를 골라서 — 탭을 옮기지 않고 넣을 수 있게.
         + '    <span style="position:relative; display:inline-flex;">'
         + '      <button onclick="window._dsPickUpload()" title="' + _t('지금 보고 있는 폴더에 올립니다', 'Upload to the folder shown') + '" style="padding:5px 9px 5px 11px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-right:none; border-radius:6px 0 0 6px; font-size:11.5px; font-weight:bold; cursor:pointer;">⬆ ' + _t('올리기', 'Upload') + '</button>'
@@ -380,6 +384,9 @@ window._dsOpenPicker = async function (opts) {
         + '      <div id="ds-pick-upmenu" style="display:none; position:absolute; top:100%; right:0; margin-top:3px; background:#fff; border:1px solid #d7dde2; border-radius:7px; box-shadow:0 6px 18px rgba(0,0,0,0.14); padding:4px; z-index:9570; max-height:280px; overflow:auto;"></div>'
         + '    </span>'
         + '  </div>'
+        // 📂 [2026-10-26] 지금 보고 있는 폴더가 탭 하나보다 더 깊을 때(사람이 NAS에서 직접 만든
+        //    하위 폴더로 들어갔을 때)만 보인다 — 평소엔 탭만으로 충분하다.
+        + '  <div id="ds-pick-crumb" style="display:none; padding:6px 14px; font-size:11.5px; color:#666; border-bottom:1px solid #eee; background:#fcfcfc;"></div>'
         + '  <div id="ds-pick-body" style="overflow:auto; flex:1; background:#fafafa;"></div>'
         + '  <div id="ds-pick-foot" style="padding:8px 16px; border-top:1px solid #eee; font-size:11.5px; color:#666;"></div>'
         + '</div>';
@@ -388,6 +395,8 @@ window._dsOpenPicker = async function (opts) {
         if (window._bindClickToFront) window._bindClickToFront('ds-pick-modal');
         document.getElementById('ds-pick-q').addEventListener('input', function () { _dsRenderList(); });
         document.getElementById('ds-pick-body').addEventListener('click', function (e) {
+            var dirRow = e.target.closest ? e.target.closest('.ds-dir-row') : null;
+            if (dirRow) { window._dsPickEnterDir(dirRow.dataset.dir); return; }
             var row = e.target.closest ? e.target.closest('.ds-row') : null;
             if (!row) return;
             var name = row.dataset.name;
@@ -443,25 +452,82 @@ function _dsRenderTabs() {
 
 window._dsPickTab = async function (f) { _dsPick.folder = f; _dsRenderTabs(); await _dsLoadFolder(); };
 
+/** 폴더 행을 눌러 하위 폴더로 들어간다 — 사람이 NAS에서 직접 만든 폴더도 그대로 읽힌다. */
+window._dsPickEnterDir = async function (name) {
+    _dsPick.folder = (_dsPick.folder ? _dsPick.folder + '/' : '') + name;
+    _dsRenderTabs();   // 탭 중 하나와 더 이상 안 맞을 수 있으니 선택 표시를 지운다
+    await _dsLoadFolder();
+};
+
+/** 📂 빵부스러기(breadcrumb)에서 상위 구간을 눌러 그 자리로 돌아간다. */
+window._dsPickCrumb = async function (path) {
+    _dsPick.folder = path;
+    _dsRenderTabs();
+    await _dsLoadFolder();
+};
+
+function _dsRenderCrumb() {
+    var el = document.getElementById('ds-pick-crumb');
+    if (!el) return;
+    var segs = String(_dsPick.folder || '').split('/').filter(Boolean);
+    // 탭 하나가 이미 전체 경로를 보여주므로, 1~2단계(폴더 자신 혹은 그 바로 아래)까지는 굳이 안 보인다.
+    if (segs.length <= 2) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    var acc = '', parts = [];
+    segs.forEach(function (s, i) {
+        acc = acc ? (acc + '/' + s) : s;
+        var last = (i === segs.length - 1);
+        parts.push(last
+            ? '<span style="color:#555; font-weight:bold;">' + _esc(s) + '</span>'
+            : '<span onclick="window._dsPickCrumb(' + _esc(JSON.stringify(acc)) + ')" style="cursor:pointer; color:#1971c2; text-decoration:underline;">' + _esc(s) + '</span>');
+    });
+    el.style.display = 'block';
+    el.innerHTML = '📂 ' + parts.join('<span style="color:#aaa; margin:0 3px;">/</span>');
+}
+
+/** 지금 보고 있는 폴더 안에 하위 폴더를 만든다 — 만들고 나면 그 폴더는 ⬆ 올리기·파일 넣기 대상이 된다. */
+window._dsPickNewFolder = async function () {
+    var name = (prompt(_t('새 폴더 이름을 입력하세요.', 'Enter the new folder name.')) || '').trim();
+    if (!name) return;
+    try {
+        await _api('/doc/mkdir', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: _dsPick.folder, name: name })
+        });
+        if (window._dsInvalidateList) window._dsInvalidateList(_dsPick.folder);
+        await _dsLoadFolder();
+    } catch (e) { _toast('❌ ' + e.message, 'error', 6000); }
+};
+
 async function _dsLoadFolder() {
     var body = document.getElementById('ds-pick-body');
     body.innerHTML = '<div style="padding:20px; color:#888; font-size:12px;">⏳ ' + _t('목록을 받는 중…', 'Loading…') + '</div>';
     try {
         var j = await window._dsList(_dsPick.folder);
         _dsPick.files = j.files || [];
+        _dsPick.dirs = j.dirs || [];
+        _dsRenderCrumb();
         _dsRenderList();
     } catch (e) { body.innerHTML = _dsErrHtml(e.message); }
 }
 
 function _dsRenderList() {
     var q = (document.getElementById('ds-pick-q').value || '').trim().toLowerCase();
+    var dirs = (_dsPick.dirs || []).filter(function (d) { return !q || d.name.toLowerCase().indexOf(q) !== -1; });
     var files = (_dsPick.files || []).filter(function (f) { return !q || f.name.toLowerCase().indexOf(q) !== -1; });
     var body = document.getElementById('ds-pick-body');
-    if (!files.length) {
-        body.innerHTML = '<div style="padding:20px; color:#999; font-size:12px;">'
+    var html = dirs.map(function (d) {
+        // 📁 사람이 NAS에서 직접 만든 폴더 — 앱이 미리 아는 이름이 아니어도 그대로 보여주고 들어갈 수 있다.
+        return '<div class="ds-dir-row" data-dir="' + _esc(d.name) + '" style="display:flex; align-items:center; gap:8px; padding:6px 12px; border-bottom:1px solid #f0f0f0; background:#f3f8ff; cursor:pointer;">'
+            + '<span style="font-size:13px;">📁</span>'
+            + '<span style="flex:1; min-width:0; font-size:12px; font-weight:bold; color:#1971c2; overflow-wrap:anywhere;">' + _esc(d.name) + '</span>'
+            + '<span style="font-size:11px; color:#9bb3cc; flex-shrink:0;">▸</span>'
+            + '</div>';
+    }).join('');
+    if (!dirs.length && !files.length) {
+        html += '<div style="padding:20px; color:#999; font-size:12px;">'
             + (q ? _t('검색 결과가 없습니다.', 'No match.') : _t('이 폴더에 파일이 없습니다.', 'This folder is empty.')) + '</div>';
     } else {
-        body.innerHTML = files.map(function (f) {
+        html += files.map(function (f) {
             return '<div class="ds-row" data-name="' + _esc(f.name) + '" style="display:flex; align-items:center; gap:8px; padding:6px 12px; border-bottom:1px solid #f0f0f0; background:#fff; cursor:pointer;">'
                 + '<span style="flex:1; min-width:0; font-size:12px; overflow-wrap:anywhere;">' + _esc(f.name) + '</span>'
                 + (f.hasText ? '<span title="' + _t('텍스트 캐시 있음', 'text cached') + '" style="font-size:10px; color:#1f7a3d;">📝</span>' : '')
@@ -471,9 +537,10 @@ function _dsRenderList() {
                 + '</div>';
         }).join('');
     }
+    body.innerHTML = html;
     document.getElementById('ds-pick-foot').textContent =
-        _t(_dsPick.folder + ' — ' + files.length + '개' + (q ? ' (전체 ' + (_dsPick.files || []).length + ')' : ''),
-           _dsPick.folder + ' — ' + files.length + (q ? ' of ' + (_dsPick.files || []).length : ''));
+        _t(_dsPick.folder + ' — 폴더 ' + dirs.length + '개 · 파일 ' + files.length + '개' + (q ? ' (검색중)' : ''),
+           _dsPick.folder + ' — ' + dirs.length + ' folder(s) · ' + files.length + ' file(s)' + (q ? ' (filtered)' : ''));
 }
 
 /**
