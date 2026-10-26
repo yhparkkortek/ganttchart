@@ -713,6 +713,9 @@
 }
 #app-sidebar .sb-item:hover { background: #90cdd5; }
 #app-sidebar .sb-item.active { background: #72c0ca; border-left-color: #e67e22; font-weight: bold; }
+/* 🖱️ [2026-10-26] 메뉴 순서 끌어서 바꾸기 — 끌리는 동안 반투명 + 잡기 커서 */
+#app-sidebar .sb-item { cursor: grab; }
+#app-sidebar .sb-item.sb-dragging { opacity: 0.4; cursor: grabbing; }
 #app-sidebar.collapsed { width: var(--sb-w-collapsed); }
 #app-sidebar.collapsed .sb-label { opacity: 0; max-width: 0; }
 

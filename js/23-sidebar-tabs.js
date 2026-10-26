@@ -364,8 +364,67 @@
     //    `_switchElecView()`를 인자 없이 부르면 PANEL로 튕기므로(등록 안 된 뷰 폴백) 현재 뷰를 명시한다.
     window._elecRepaintCurrent = function() { window._switchElecView(window._elecView || 'panel'); };
 
+    // 🖱️ [2026-10-26 신규] 사이드바 메뉴를 마우스로 끌어서 순서를 바꿀 수 있게 — 사용자 취향이라
+    //    프로젝트 데이터(tabData)가 아니라 이 PC의 localStorage에 저장한다(접힘 상태와 같은 방식).
+    var SB_ORDER_KEY = 'gantt_sidebar_order_v1';
+
+    function _sbSaveOrder() {
+        var order = Array.prototype.map.call(
+            document.querySelectorAll('#sb-nav .sb-item[data-tab]'),
+            function (el) { return el.dataset.tab; }
+        );
+        try { localStorage.setItem(SB_ORDER_KEY, JSON.stringify(order)); } catch (e) { /* ignore */ }
+    }
+
+    // 저장된 순서대로 재배치 — 저장 목록에 없는(새로 생긴) 탭은 원래 자리 순서 그대로 끝에 남는다.
+    function _sbApplySavedOrder() {
+        var nav = document.getElementById('sb-nav');
+        if (!nav) return;
+        var saved;
+        try { saved = JSON.parse(localStorage.getItem(SB_ORDER_KEY) || 'null'); } catch (e) { saved = null; }
+        if (!saved || !saved.length) return;
+        var items = {};
+        nav.querySelectorAll('.sb-item[data-tab]').forEach(function (el) { items[el.dataset.tab] = el; });
+        saved.forEach(function (tab) {
+            if (items[tab]) { nav.appendChild(items[tab]); delete items[tab]; }
+        });
+        Object.keys(items).forEach(function (tab) { nav.appendChild(items[tab]); });
+    }
+
+    // 끌기 자체 — 드래그 중인 항목을 마우스가 걸쳐진 항목의 위/아래로 바로 옮겨서, 놓을 때 이미
+    // 제자리에 있게 한다(별도 미리보기 placeholder 없이 가장 단순한 방식).
+    function _sbInitDragReorder() {
+        var nav = document.getElementById('sb-nav');
+        if (!nav) return;
+        var dragEl = null;
+        nav.querySelectorAll('.sb-item[data-tab]').forEach(function (el) {
+            el.setAttribute('draggable', 'true');
+            el.addEventListener('dragstart', function (e) {
+                dragEl = el;
+                el.classList.add('sb-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', el.dataset.tab); } catch (err) { /* ignore */ }
+            });
+            el.addEventListener('dragend', function () {
+                el.classList.remove('sb-dragging');
+                dragEl = null;
+                _sbSaveOrder();
+            });
+            el.addEventListener('dragover', function (e) {
+                if (!dragEl || dragEl === el) return;
+                e.preventDefault();
+                var rect = el.getBoundingClientRect();
+                var before = (e.clientY - rect.top) < rect.height / 2;
+                nav.insertBefore(dragEl, before ? el : el.nextSibling);
+            });
+            el.addEventListener('drop', function (e) { e.preventDefault(); });
+        });
+    }
+
     // 새로고침해도 마지막 상태 복원
     try {
+        _sbApplySavedOrder();
+        _sbInitDragReorder();
         if (localStorage.getItem('gantt_sidebar_collapsed') === '1') applySidebarState(true);
         let lastTab = localStorage.getItem('gantt_active_tab');
         if (lastTab === 'notice') { lastTab = 'alarm'; try { localStorage.setItem('gantt_alarm_view', 'notice'); } catch(e) {} }
