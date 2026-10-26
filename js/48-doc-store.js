@@ -144,6 +144,34 @@ function _pnKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, 
 var PANEL_FOLDER = 'PARTS/PANEL';
 window._dsPanelFolder = function () { return PANEL_FOLDER; };
 
+// ── 📌 프로젝트별 하위 폴더 (2026-10-26) ────────────────────────────────
+//    메일(MAIL/<프로젝트>)처럼, 나머지 자료실 폴더(CUSTOMER·MC·SUMMARY 등)도 지금 열린
+//    프로젝트 이름으로 한 단계 하위 폴더를 쓴다. 백엔드는 이미 1단계 하위 폴더를 허용하므로
+//    (2026-10-22, PARTS/<구분>용 `_docstore_folder_segs`) 백엔드는 그대로 두고 프런트에서
+//    기본 폴더와 탭만 바꾼다.
+//    ⚠️ 이미 하위 폴더가 있는 베이스(PARTS/<구분> 등)에는 적용하지 않는다 — 백엔드가 2단계까지만
+//    허용해서 `PARTS/<구분>/<프로젝트>`(3단계)는 거부당한다.
+var _NAS_PROJ_BAD = '/:*?"<>|' + String.fromCharCode(92);
+window._dsCurrentProjectFolderName = function () {
+    var raw = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
+    if (!raw) return null;
+    var safe = raw.split('').map(function (ch) { return _NAS_PROJ_BAD.indexOf(ch) === -1 ? ch : ' '; })
+        .join('').replace(/ +/g, ' ').trim();
+    return safe || null;
+};
+
+/** baseFolder가 아직 하위 폴더를 쓰지 않을 때만 [프로젝트 탭, 전체 탭] 두 개를 만든다. 아니면 null
+ *  (null이면 부르는 쪽이 기존 동작 그대로 — 탭 없이 baseFolder 하나). */
+window._dsProjectAwareFolders = function (baseFolder) {
+    if (!baseFolder || baseFolder.indexOf('/') !== -1) return null;
+    var proj = window._dsCurrentProjectFolderName();
+    if (!proj) return null;
+    return [
+        { f: baseFolder + '/' + proj, label: '📌 ' + proj },
+        { f: baseFolder, label: '📁 ' + baseFolder + ' (' + _t('전체', 'all') + ')' }
+    ];
+};
+
 // 📋 폴더 목록 짧은 캐시 — 같은 폴더를 연달아 묻는 화면용.
 //    ⚠️ NAS 목록은 네트워크 왕복이다. 백엔드를 고쳐 198개가 0.04초로 내려왔지만(2026-10-22,
 //    그전엔 7초), 그래도 그릴 때마다 부를 이유는 없다. 올리기·이식 직후엔 _dsInvalidateList 로 버린다.
@@ -531,9 +559,11 @@ window._dsAllPageFolders = function () {
  */
 window._dsOpenBrowser = function (folder, opts) {
     opts = opts || {};
+    var folders = opts.folders || window._dsProjectAwareFolders(folder);
+    var openFolder = (folders && folders[0] && folders[0].f) || folder;
     window._dsOpenPicker({
-        folder: folder,
-        folders: opts.folders || null,
+        folder: openFolder,
+        folders: folders,
         title: opts.title || _t('NAS 자료실', 'NAS files'),
         onPick: function (f, name) { window._dsOpenInNewTab(f, name); }
     });
@@ -568,9 +598,13 @@ window._dsPageFolders = function (pageId) {
 };
 
 window._dsImportToPage = async function (pageId, folder) {
+    var base = folder || window._dsPageFolder(pageId);
+    // 페이지가 직접 탭을 정해 주면(PARTS의 부품 구분별 하위 폴더) 그걸 그대로 쓰고,
+    // 아니면 지금 열린 프로젝트 이름으로 [프로젝트 탭, 전체 탭]을 만든다.
+    var folders = window._dsPageFolders(pageId) || window._dsProjectAwareFolders(base);
     window._dsOpenPicker({
-        folder: folder || window._dsPageFolder(pageId),
-        folders: window._dsPageFolders(pageId),
+        folder: folder || (folders && folders[0] && folders[0].f) || base,
+        folders: folders,
         title: _t('NAS에서 불러오기', 'Import from the NAS'),
         onPick: async function (f, name) {
             try {
