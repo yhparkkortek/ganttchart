@@ -2590,7 +2590,19 @@ ${docsJson}`;
         var txt;
         if (r && r.ok) {
             var d = r.data || {};
-            txt = '✅ ' + window._t('완료했습니다.', 'Done.');
+            // 🐛 [2026-10-27 실사용 제보] 인사관리 칸 채우기(insa_fill_workplan/overtime)처럼
+            //    백엔드가 message/steps/dialogs 를 돌려주는 도구는 이 whitelist(reservationId 등
+            //    예약 전용 키)에 하나도 안 걸려서 **그냥 "완료했습니다."만 뜨고 끝났다** — 시작
+            //    시간이 사이트 검증에 걸려 안 채워졌는데도, 사람이 보기엔 전부 성공한 것처럼
+            //    보였다("조용히 틀린 답"). d.message(백엔드가 이미 만들어 둔 설명 — dialogs
+            //    포함)를 **우선** 쓰고, steps 가 있으면 그대로 덧붙인다.
+            txt = (typeof d.message === 'string' && d.message.trim())
+                ? '✅ ' + d.message
+                : '✅ ' + window._t('완료했습니다.', 'Done.');
+            if (d.steps && d.steps.length) {
+                txt += '\n\n' + window._t('진행 단계:', 'Steps:') + '\n'
+                     + d.steps.map(function (s) { return '- ' + s; }).join('\n');
+            }
             var bits = [];
             ['reservationId', 'item', 'date', 'start', 'end', 'purpose', 'attendee'].forEach(function (k) {
                 if (d[k] !== undefined && d[k] !== null && d[k] !== '') bits.push(k + ': ' + d[k]);

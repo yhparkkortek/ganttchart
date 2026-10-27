@@ -361,7 +361,12 @@
         (t.params || []).forEach(function (p) {
             var v = draft.args[p.name];
             if (v === undefined || v === '') return;
-            lines.push('- ' + p.name + ': `' + v + '`');
+            // 🐛 [2026-10-27 실사용 제보] rows 타입(days 등 객체 배열)을 그냥 문자열에 이어 붙이면
+            //    JS가 배열을 통째로 toString() 해서 "[object Object]"만 보인다 — 사람이 확인해야
+            //    할 초안 화면에서 실제로 뭐가 채워질지 안 보이는 상태였다. 배열/객체는 JSON으로 편다.
+            var shown = (p.type === 'rows' || (v && typeof v === 'object'))
+                      ? JSON.stringify(v) : v;
+            lines.push('- ' + p.name + ': `' + shown + '`');
         });
         if (!Object.keys(draft.args).length) lines.push('- (인자 없음)');
         if (draft.notes && draft.notes.length) {
