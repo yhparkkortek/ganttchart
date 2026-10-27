@@ -54,6 +54,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 `.claude/settings.json` **PreCompact 훅** — auto-compact 직전에 새 규칙/결정을 CLAUDE.md에 반영 지시.
 **(2026-09-21) 상세 기록은 `docs/*.md`에, CLAUDE.md에는 한 줄 요약만** (CLAUDE.md가 비대해지면 토큰 소비 재발).
 `/clear`는 훅 대상이 아님 — clear 전엔 직접 요청해서 정리.
+**(2026-10-27) PreCompact 훅은 `hookSpecificOutput.hookEventName`을 지원 안 함(스키마 오류로 매번 실패) — `systemMessage` 필드만 써야 통과한다.**
 
 ## ⚠️ 가장 중요한 규칙: 로딩 순서 = 전역 스코프 순서
 
