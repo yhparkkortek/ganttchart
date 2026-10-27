@@ -1175,7 +1175,13 @@
         if (lv === 3) return row._origT3;
         return row._origT4;
     }
-    window.groupSelectedRows = function(presetName) {
+    // 💡 [2026-10-27, 실사용 제보 대응] skipFinish=true면 recalculateSchedules()/paintRowSelection()/
+    //    토스트를 생략한다 — 자동 정리 마법사의 "일괄 적용"이 그룹 N개를 한 번에 묶을 때 매번
+    //    recalculateSchedules()(867행 전체 재계산)를 불러 N배로 느려지고 화면도 멎어 보였던 문제
+    //    대응(CLAUDE.md "대량 조작은 끝에 1회만" 원칙 위반을 뒤늦게 발견). 호출부가 전부 끝난 뒤 직접
+    //    한 번만 recalculateSchedules()를 부르게 책임을 넘긴다. 기존 단일 호출부(수동 묶기 버튼,
+    //    그룹 제안 모달의 개별 [묶기])는 인자를 안 주므로 그대로 매번 즉시 반영된다.
+    window.groupSelectedRows = function(presetName, skipFinish) {
         const rows = globalData;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
         const sel = window._selectedRows;
@@ -1249,9 +1255,11 @@
         window._selectedRows = newSel;
 
         logChange(insertAt, -1, '그룹 묶기', `"${gName}" 그룹으로 ${topIdx.length}개 업무 묶음`);
-        window.recalculateSchedules();
-        window.paintRowSelection();
-        if (window.showToast) window.showToast(_en ? `✅ Grouped ${topIdx.length} task(s) under "${gName}".` : `✅ "${gName}" 그룹으로 ${topIdx.length}개 업무를 묶었습니다.`, 'info');
+        if (!skipFinish) {
+            window.recalculateSchedules();
+            window.paintRowSelection();
+            if (window.showToast) window.showToast(_en ? `✅ Grouped ${topIdx.length} task(s) under "${gName}".` : `✅ "${gName}" 그룹으로 ${topIdx.length}개 업무를 묶었습니다.`, 'info');
+        }
         return true;
     };
 
@@ -1676,6 +1684,12 @@
             </div>
             <div style="padding:10px 16px; border-top:1px solid #eee; flex-shrink:0;">
                 <button id="wow-apply-all-btn" style="width:100%; padding:9px; background:#0f6b5c; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🧹 ${_en ? 'Apply checked items' : '선택한 항목 일괄 적용'}</button>
+                <div id="wow-apply-progress" style="display:none; margin-top:8px;">
+                    <div id="wow-apply-progress-label" style="font-size:11px; color:#0f6b5c; margin-bottom:4px; text-align:center;"></div>
+                    <div style="background:#e3f2f0; border-radius:4px; height:6px; overflow:hidden;">
+                        <div id="wow-apply-progress-fill" style="background:#0f6b5c; height:100%; width:0%; transition:width .15s;"></div>
+                    </div>
+                </div>
             </div>
         </div>`;
         if (window._makeDraggable) window._makeDraggable('gantt-organize-wizard-box', 'gantt-organize-wizard-drag');
@@ -1689,41 +1703,82 @@
 
         const applyBtn = document.getElementById('wow-apply-all-btn');
         if (applyBtn) {
-            applyBtn.addEventListener('click', function() {
+            applyBtn.addEventListener('click', async function() {
+                // 🐛 [2026-10-27, 실사용 제보] "눌렀는데 멎었는지 진행 중인지 알 수가 없다" — 원인은
+                //    둘이었다: ① 그룹을 N개 묶으면 groupSelectedRows()가 매번 recalculateSchedules()
+                //    (실측 867행 전체 재계산)를 불러 N배로 느려졌음(CLAUDE.md "대량 조작은 끝에 1회만"
+                //    위반 — skipFinish=true로 고침, 재계산은 맨 끝에 딱 한 번). ② 그 한 번의 동기 작업도
+                //    아무 표시 없이 돌아 "멎은 것처럼" 보였음 — 진행률 바 + 단계별 라벨을 추가하고,
+                //    매 단계 사이 setTimeout(0)으로 한 틱 양보해 브라우저가 실제로 그 상태를 그리게 함.
+                const progWrap = document.getElementById('wow-apply-progress');
+                const progLabel = document.getElementById('wow-apply-progress-label');
+                const progFill = document.getElementById('wow-apply-progress-fill');
+                const setProgress = function(label, pct) {
+                    if (progLabel) progLabel.textContent = label;
+                    if (progFill) progFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+                };
+                const yieldFrame = function() { return new Promise(function(r) { setTimeout(r, 0); }); };
+
+                applyBtn.disabled = true;
+                applyBtn.style.opacity = '0.5';
+                applyBtn.style.cursor = 'default';
+                if (progWrap) progWrap.style.display = 'block';
+                setProgress(_en ? 'Starting...' : '시작하는 중...', 3);
+                await yieldFrame();
+
                 let dupDeleted = 0, groupsApplied = 0, groupTasks = 0, sorted = false;
 
-                // 1) 중복 삭제 — 체크된 카드만, 각 카드는 첫 번째 행만 남기고 나머지 삭제
-                modal.querySelectorAll('.wow-dup-cand').forEach(function(card) {
-                    const chk = card.querySelector('.wow-dup-chk');
-                    if (!chk || !chk.checked) return;
-                    const di = parseInt(card.dataset.di, 10);
-                    const dup = dups[di];
-                    if (!dup || dup.memberRows.length < 2) return;
-                    const toDelete = dup.memberRows.slice(1);
-                    const idxs = toDelete.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; }).sort(function(a, b) { return b - a; });
-                    idxs.forEach(function(i) { globalData.splice(i, 1); dupDeleted++; });
+                // 1) 중복 삭제 — 체크된 카드만, 각 카드는 첫 번째 행만 남기고 나머지 삭제. recalculate는
+                //    아직 안 부른다(그룹까지 다 끝난 뒤 맨 마지막에 한 번만).
+                const checkedDupCards = Array.from(modal.querySelectorAll('.wow-dup-cand')).filter(function(c) {
+                    const chk = c.querySelector('.wow-dup-chk'); return chk && chk.checked;
                 });
-                if (dupDeleted > 0) { logChange(0, -1, '중복 정리', dupDeleted + '개 중복 업무 삭제'); window.recalculateSchedules(); }
+                if (checkedDupCards.length) {
+                    setProgress(_en ? 'Cleaning duplicates...' : '중복 정리 중...', 10);
+                    await yieldFrame();
+                    checkedDupCards.forEach(function(card) {
+                        const di = parseInt(card.dataset.di, 10);
+                        const dup = dups[di];
+                        if (!dup || dup.memberRows.length < 2) return;
+                        const toDelete = dup.memberRows.slice(1);
+                        const idxs = toDelete.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; }).sort(function(a, b) { return b - a; });
+                        idxs.forEach(function(i) { globalData.splice(i, 1); dupDeleted++; });
+                    });
+                    if (dupDeleted > 0) logChange(0, -1, '중복 정리', dupDeleted + '개 중복 업무 삭제');
+                }
 
-                // 2) 그룹 묶기 — 체크된 멤버가 2개 이상인 카드만
-                modal.querySelectorAll('.wow-group-cand').forEach(function(card) {
+                // 2) 그룹 묶기 — 체크된 멤버가 2개 이상인 카드만. skipFinish=true라 매 호출이 즉시 끝나고,
+                //    재계산은 맨 끝에서 딱 한 번만 돈다.
+                const toApplyGroups = Array.from(modal.querySelectorAll('.wow-group-cand')).map(function(card) {
                     const gi = parseInt(card.dataset.gi, 10);
                     const cand = groups[gi];
                     const nameInput = card.querySelector('.wow-group-name-input');
                     const name = nameInput ? nameInput.value.trim() : '';
-                    if (!cand || !name) return;
                     const checkedOrds = Array.from(card.querySelectorAll('.wow-group-member-chk:checked')).map(function(cb) { return parseInt(cb.dataset.ord, 10); });
-                    if (checkedOrds.length < 2) return;
-                    const refs = checkedOrds.map(function(o) { return cand.memberRows[o]; }).filter(Boolean);
-                    const curIdx = refs.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; });
-                    if (curIdx.length < 2) return;
-                    window._selectedRows = new Set(curIdx);
-                    if (window.groupSelectedRows(name)) { groupsApplied++; groupTasks += curIdx.length; }
-                });
+                    return { cand: cand, name: name, checkedOrds: checkedOrds };
+                }).filter(function(x) { return x.cand && x.name && x.checkedOrds.length >= 2; });
 
-                // 3) 순서 정리
+                for (let gi = 0; gi < toApplyGroups.length; gi++) {
+                    const g = toApplyGroups[gi];
+                    setProgress((_en ? 'Grouping... ' : '그룹 묶는 중... ') + (gi + 1) + '/' + toApplyGroups.length,
+                                15 + Math.round((gi / Math.max(1, toApplyGroups.length)) * 55));
+                    await yieldFrame();
+                    const refs = g.checkedOrds.map(function(o) { return g.cand.memberRows[o]; }).filter(Boolean);
+                    const curIdx = refs.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; });
+                    if (curIdx.length < 2) continue;
+                    window._selectedRows = new Set(curIdx);
+                    if (window.groupSelectedRows(g.name, true)) { groupsApplied++; groupTasks += curIdx.length; }
+                }
+
+                // 3) 순서 정리 또는 마무리 재계산 — 어느 쪽이든 여기서 전체가 "딱 한 번"만 재계산된다
+                setProgress(_en ? 'Recalculating schedule...' : '일정 재계산 중...', 85);
+                await yieldFrame();
                 const sortChk = document.getElementById('wow-sort-toggle');
                 if (sortChk && sortChk.checked && !sortChk.disabled) { window.sortRowsByStartDate(); sorted = true; }
+                else { window.recalculateSchedules(); }
+
+                setProgress(_en ? 'Done' : '완료', 100);
+                await yieldFrame();
 
                 window._renderGanttOrganizeWizard(); // 전부 적용 후 통째로 다시 진단+렌더(남은 것만 보여줌)
                 if (window.showToast) window.showToast(_en
