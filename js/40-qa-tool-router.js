@@ -685,12 +685,19 @@
         }
         return rows.slice(0, limit || 60).map(function (x, i) {
             var parts = [];
-            // 🐛 [2026-10-26 제보] id가 안 보여서 AI가 "일정 삭제해줘"에 eventId를 자리번호(1)로
-            //    지어냈다(쓰기확정에서 calendarId:1/eventId:1 — 실제 값 11716/2332와 전혀 다름).
-            //    쓰기 도구가 참조할 id/calendarId는 **반드시 텍스트로 보여야** AI가 베껴 쓸 수 있다.
+            // 🐛 [2026-10-26 제보, 2026-10-27 재발] id가 안 보여서 AI가 "일정 삭제해줘"에
+            //    eventId를 자리번호(1)로 지어냈다(calendarId:1/eventId:1 — 실제 값과 전혀 다름).
+            //    처음엔 id/calendarId/boardId만 하드코딩했는데, 그 뒤 itemId(회의실 예약)에서
+            //    **똑같은 사고가 재발했다** — "시드니 회의실"의 실제 itemId=22를 못 보고
+            //    AI가 또 1을 지어내 예약 API가 500을 돌려줬다. 특정 키 이름을 계속 추가하는
+            //    대신, **"...Id"로 끝나는 키는 전부** 자동으로 보여준다(id류는 계속 늘어난다
+            //    — calendarId/boardId/itemId/assetId/eventId/postId/reservationId...).
             if (x.id !== undefined && x.id !== null && x.id !== '') parts.push('id:' + x.id);
-            if (x.calendarId !== undefined && x.calendarId !== null && x.calendarId !== '') parts.push('calId:' + x.calendarId);
-            if (x.boardId !== undefined && x.boardId !== null && x.boardId !== '') parts.push('boardId:' + x.boardId);
+            Object.keys(x).sort().forEach(function (k) {
+                if (k === 'id' || !/Id$/.test(k)) return;
+                if (x[k] === undefined || x[k] === null || x[k] === '') return;
+                parts.push(k + ':' + x[k]);
+            });
             var gotDate = ['at', 'date', 'createdAt', 'start', 'dueDate'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
             var gotPerson = ['from', 'sender', 'writer', 'drafterName', 'creator', 'reporter'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             var gotCtx = ['boardName', 'folder', 'formName', 'calendar', 'category', 'dept'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
@@ -705,10 +712,10 @@
             //    방을 누가 예약했는지도 모르는 줄**만 받았다. 날짜 하나 걸린 걸로는 "식별됐다"고
             //    치지 않는다 — 제목/작성자/맥락 중 하나는 있어야 한다.
             if (!gotPerson && !gotCtx && !gotTitle) {
-                var known = { id: 1, calendarId: 1, boardId: 1, preview: 1, summary: 1, body: 1, bodyNote: 1 };
+                var known = { id: 1, preview: 1, summary: 1, body: 1, bodyNote: 1 };
                 if (gotDate) { ['at', 'date', 'createdAt', 'start', 'dueDate'].forEach(function (k) { known[k] = 1; }); }
                 Object.keys(x).forEach(function (k) {
-                    if (known[k] || x[k] === undefined || x[k] === null || x[k] === '') return;
+                    if (known[k] || /Id$/.test(k) || x[k] === undefined || x[k] === null || x[k] === '') return;
                     var v = x[k];
                     if (typeof v === 'object') return;      // 배열/객체는 건너뛴다(노이즈)
                     parts.push(k + ':' + String(v).slice(0, 80));

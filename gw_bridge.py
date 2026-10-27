@@ -1103,7 +1103,13 @@ def events(date_from, date_to, calendar_ids=None):
     """기간 내 일정. `date_from/to`는 'YYYY-MM-DD'.
 
     ⚠️ `calendarIds[]` 배열 파라미터가 **필수**다 — 빼면 서버가 500을 던진다(실측).
-       `includingAttendees=true`도 실제 화면이 보내는 그대로 맞춘다."""
+       `includingAttendees=true`도 실제 화면이 보내는 그대로 맞춘다.
+    ⚠️ [2026-10-27 실사용 제보] **"휴일일정"(calendarId=11)은 timeMin/timeMax를 무시한다** —
+       하루짜리 범위(예: 2026-10-28~2026-10-28)로 불러도 몇 달~1년 뒤 공휴일까지 11건이
+       그대로 섞여 왔다(아마 "다가오는 공휴일" 위젯처럼 서버가 범위와 무관하게 다음 N개를
+       주는 듯). 실제 요청한 날짜엔 그 공휴일이 없는데도 섞여 나와 AI가 "오늘 일정"에
+       엉뚱한 미래 공휴일을 끼워 넣을 수 있었다 — asset_reservations의 /items/daily와
+       같은 사정이라 여기서도 요청한 기간으로 직접 걸러낸다."""
     cals = calendar_ids if calendar_ids else [c['id'] for c in calendars()]
     if not cals:
         return []
@@ -1116,6 +1122,10 @@ def events(date_from, date_to, calendar_ids=None):
     j = gw_get(qs, timeout=60)
     out = []
     for e in (j or {}).get('data') or []:
+        start = e.get('startTime') or ''
+        end = e.get('endTime') or ''
+        if start[:10] > date_to or (end or start)[:10] < date_from:
+            continue        # 서버가 범위 밖까지 끼워 보낸 것 — 요청한 기간으로 다시 거른다
         out.append({
             'id':        str(e.get('id') or ''),
             'title':     e.get('summary') or '',
@@ -1123,8 +1133,8 @@ def events(date_from, date_to, calendar_ids=None):
             'calendarId': e.get('calendarId'),
             'color':     e.get('color') or '',
             'type':      e.get('type') or '',
-            'start':     e.get('startTime') or '',
-            'end':       e.get('endTime') or '',
+            'start':     start,
+            'end':       end,
             'allDay':    (e.get('timeType') == 'allday'),
             'location':  e.get('location') or '',
             'creator':   ((e.get('creator') or {}).get('name') or ''),
