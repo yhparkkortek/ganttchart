@@ -874,8 +874,11 @@
                 visIdx++;
                 var sp = '';
                 var ind = (r._level - 1) * 12;
+                // 🆕 [2026-10-27, 실사용 요청] 클릭 영역이 글자 그대로의 좁은 히트박스였음 —
+                // display:inline-block + 고정 width/height로 실제 클릭 가능 영역을 넓힌다
+                // (글자 자체도 13px로 키움). ROW_H(24px) 안에 들어가게 20px로 제한.
                 var tw = hasChild
-                    ? '<span onclick="event.stopPropagation(); window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '▸' : '▾') + '</span>'
+                    ? '<span onclick="event.stopPropagation(); window.bomToggleBranch(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand children')) + '" style="cursor:pointer; color:#00707d; user-select:none; display:inline-block; width:20px; height:20px; line-height:20px; text-align:center; font-size:13px; vertical-align:middle;">' + (collapsed ? '▸' : '▾') + '</span>'
                     : '<span style="color:#cfe3e5;">·</span>';
                 var nt = (st.notes && st.notes[r.IDNRK]) || '';
                 var me = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1497,8 +1500,9 @@
             var zcls = zebraClass(r._level, visIdx);
             visIdx++;
             var ind = (r._level - 1) * 12;
+            // 🆕 [2026-10-27, 실사용 요청] 메인 BOM 탭과 같은 이유로 클릭 영역 확대(js/38 878행 참고)
             var tw = hasChild
-                ? '<span onclick="event.stopPropagation(); window._elecBomToggle(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand')) + '" style="cursor:pointer; color:#00707d; user-select:none;">' + (collapsed ? '&#9658;' : '&#9660;') + '</span>'
+                ? '<span onclick="event.stopPropagation(); window._elecBomToggle(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand')) + '" style="cursor:pointer; color:#00707d; user-select:none; display:inline-block; width:20px; height:20px; line-height:20px; text-align:center; font-size:13px; vertical-align:middle;">' + (collapsed ? '&#9658;' : '&#9660;') + '</span>'
                 : '<span style="color:#cfe3e5;">&#183;</span>';
             var nt = (st.notes && st.notes[r.IDNRK]) || '';
             var meH = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
