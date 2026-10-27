@@ -1087,18 +1087,22 @@
     // 💡 [2026-10-27, 체감속도 개선 — "저장이 느리다" 신고] 편집 내용은 이미 메모리(globalData)에만
     //    있다가 "저장" 버튼을 누르는 순간에야 Drive로 올라간다. 지금까지는 그 버튼 클릭이 실제 Drive
     //    업로드(보통 7~8MB · 10~15초, 콘솔 [저장 계측] 실측)가 끝날 때까지 아무 반응 없이 멈춘 것처럼
-    //    보였다. 로컬(localStorage)에는 거의 즉시(수백 ms) 쓸 수 있으므로 — ① 그 자리에서 바로 로컬
-    //    스냅샷(_saveLocalBackup, 연결 끊김 복구와 동일한 안전망)을 남기고 ② "시작했다"는 신호만 즉시
-    //    보여준 뒤 ③ 실제 Drive 업로드는 기다리지 않고 뒤에서 진행한다("로컬 우선 + 저장 이벤트에만
-    //    서버 동기화"). 성공/실패/충돌 알림은 saveToGoogleDrive 내부(_saveToGoogleDriveRaw)가 그대로
-    //    처리하므로 여기서 중복으로 "완료" 토스트를 띄우지 않는다 — "시작"과 "완료"를 섞으면, 드물게
-    //    필수 정보 누락 등으로 검증에서 막히는 경우 "저장됨"→"입력하세요" 알림이 모순되게 이어진다.
-    //    ⚠️ saveToGoogleDrive() 자체(3분 자동저장·배치 신규 프로젝트 등록 등 내부 호출부)는 그대로
-    //    블로킹 유지 — 새 프로젝트 최초 등록처럼 실제 fileId를 받아야만 다음 단계로 갈 수 있는 경로가
-    //    있어서, 공개 함수의 동작 자체를 바꾸면 그 경로들이 깨진다. UI "저장" 버튼 전용 경로만 분리.
+    //    보였다. ① "시작했다"는 신호만 즉시 보여준 뒤 ② 실제 Drive 업로드는 기다리지 않고 뒤에서
+    //    진행한다("로컬 우선 + 저장 이벤트에만 서버 동기화"). 성공/실패/충돌 알림은 saveToGoogleDrive
+    //    내부(_saveToGoogleDriveRaw)가 그대로 처리하므로 여기서 중복으로 "완료" 토스트를 띄우지 않는다
+    //    — "시작"과 "완료"를 섞으면, 드물게 필수 정보 누락 등으로 검증에서 막히는 경우 "저장됨"→
+    //    "입력하세요" 알림이 모순되게 이어진다.
+    //    ⚠️ [2026-10-28 버그 수정] 처음엔 여기서 _saveLocalBackup()도 바로 호출해 "즉시 로컬 안전망"을
+    //    만들려 했는데, 이게 바로 "오늘 적용한 코드가 앱을 느리게 만들었다"의 실제 원인이었다 —
+    //    _saveLocalBackup()은 전체 프로젝트(이 저장소는 메일 원문까지 포함해 보통 7~8MB)를 매번
+    //    JSON.stringify + localStorage.setItem 하는, Drive 업로드 못지않게 무거운 동기 작업이다.
+    //    그걸 "클릭하는 바로 그 순간"에 동기로 실행해서 클릭 반응 자체를 몇 초씩 막아버렸다(정작 막으려던
+    //    문제를 다른 모양으로 재현한 것). 게다가 완전히 불필요한 중복이었다 — _saveToGoogleDriveRaw는
+    //    suppressAlert:true(이 함수의 모든 호출부가 항상 넘김)일 때 실패 경로에서 이미
+    //    _saveLocalBackup()을 호출한다(아래 catch/실패 분기 참고). 즉 "저장이 실제로 실패했을 때"의
+    //    안전망은 이미 있었는데, 그 위에 "클릭할 때마다 무조건" 한 번 더 얹은 셈이라 득 없이 손해만 봤다.
     window._saveToGoogleDriveOptimistic = function(opts) {
         opts = opts || {};
-        if (window._saveLocalBackup) window._saveLocalBackup('optimistic-save-pending');
         if (window.showToast) {
             window.showToast(window._t('💾 저장 시작 — Drive 동기화는 뒤에서 진행됩니다', '💾 Save started — syncing to Drive in the background'), 'info', 2500);
         }
@@ -1487,9 +1491,12 @@
                         //    충돌처리/직렬화처럼 "지금 이 시트여야만" 안전한 작업이 전부 끝난 뒤(업로드
                         //    시작 직전)에만 불린다 — 그 전에는 절대 전환하지 않으므로 다른 프로젝트
                         //    데이터가 섞이지 않는다. 실패 시 "그래도 이동?" 확인창은 더 못 띄우지만
-                        //    (전환이 이미 끝난 뒤라서), 실패 자체는 _saveToGoogleDriveRaw 내부가 토스트 +
-                        //    로컬 백업으로 그대로 알린다.
-                        if (window._saveLocalBackup) window._saveLocalBackup('switch-save-pending');
+                        //    (전환이 이미 끝난 뒤라서), 실패 자체는 _saveToGoogleDriveRaw 내부가
+                        //    suppressAlert:true 경로에서 이미 토스트 + _saveLocalBackup()으로 알린다.
+                        //    ⚠️ [2026-10-28 버그 수정] 여기서도 똑같이 _saveLocalBackup()을 미리 한 번
+                        //    더 불렀었는데, 바로 이게 "오늘 코드가 느려졌다"의 원인이었다 — 전체 프로젝트
+                        //    (7~8MB)를 매번 동기로 JSON.stringify+localStorage.setItem 해서 클릭(탭 전환)
+                        //    자체가 몇 초씩 멈췄다. _saveToGoogleDriveOptimistic과 같은 이유로 제거.
                         if (window.showToast) window.showToast(_en ? '💾 Saving in background...' : '💾 백그라운드로 저장 중...', 'info', 2500);
                         await new Promise(function(resolve) {
                             window._saveToGoogleDriveRaw({ suppressAlert: true, onSafeToSwitch: resolve })
@@ -1615,8 +1622,11 @@
                         //    탭이 닫히면 _sheets[]에서 그 항목이 사라지므로, 백그라운드 저장이 끝난 뒤
                         //    _saveToGoogleDriveRaw가 그 키를 찾아도 null이라 조용히 건너뛴다(기록할 탭이
                         //    더 없으니 정상) — 실패 시 "그래도 닫을까요?" 확인창은 못 띄우지만, 실패 자체는
-                        //    로컬 백업 + 토스트로 그대로 알린다.
-                        if (window._saveLocalBackup) window._saveLocalBackup('close-save-pending');
+                        //    _saveToGoogleDriveRaw 내부가 suppressAlert:true 경로에서 이미 토스트 +
+                        //    _saveLocalBackup()으로 알린다.
+                        //    ⚠️ [2026-10-28 버그 수정] 여기서도 미리 _saveLocalBackup()을 한 번 더
+                        //    불렀었는데, 전체 프로젝트(7~8MB)를 매번 동기로 stringify+저장해서 탭 닫기
+                        //    자체가 몇 초씩 멈추는 원인이었다 — 중복(이미 실패 경로가 처리)이라 제거.
                         if (window.showToast) window.showToast(_en ? '💾 Saving in background...' : '💾 백그라운드로 저장 중...', 'info', 2500);
                         await new Promise(function(resolve) {
                             window._saveToGoogleDriveRaw({ suppressAlert: true, onSafeToSwitch: resolve })

@@ -2,40 +2,20 @@
     const SOLID_GRAY = { 0: '#00a1b6', 1: '#828282', 2: '#b4b4b4', 3: '#e6e6e6', 4: '#ffffff' };
 
     // 💡 TEMP: 좌측 고정열 기능 비활성화 — 다른 탭(Summary/Brief SPEC/M.C Table)처럼 단순한 표로 통일
+    // ⚠️ [2026-10-28 버그 수정, "앱이 전반적으로 느림" 신고] 이 함수는 sticky-col/sticky-last 클래스와
+    //    관련 인라인 스타일을 "지운다"고만 돼 있는데, 그 고정열 기능이 비활성화된 뒤로는 js/ 전체를
+    //    찾아봐도 그 클래스·스타일을 "설정하는" 코드가 어디에도 없다(grep 확인) — 즉 이 함수는 한 번도
+    //    존재한 적 없는 걸 지우는 완전한 무의미한 작업이다. 그런데도 바로 아래 MutationObserver(표 안
+    //    어떤 셀이든 innerHTML이 바뀔 때마다, 즉 필터/접기/차트재생성/셀 편집마다 발동)와
+    //    focusin/focusout(셀 하나 클릭할 때마다 발동)이 매번 **표 전체의 th+td 전부**(1000행 프로젝트면
+    //    2만 개 이상)를 querySelectorAll로 긁어 각각 7개 스타일 속성을 리셋하고 있었다 — 실측 콘솔에
+    //    "[Violation] click handler took 2843ms/3794ms"로 나타난 유력한 원인. 아무것도 안 해도 되는
+    //    상태이므로 그냥 바로 반환한다(기존 호출부 — undo/redo 복원, 차트확장토글, 사이드바 전환 — 는
+    //    그대로 안전하게 호출해도 아무 일도 안 일어남, 기존과 동일하게 "지울 게 없으니" 결과도 동일).
     window.updateStickyPositions = function() {
-        const table = document.getElementById('myTable');
-        if (!table) return;
-        table.querySelectorAll('th, td').forEach(el => {
-            el.classList.remove('sticky-col', 'sticky-last');
-            el.style.position = '';
-            el.style.left = '';
-            el.style.backgroundColor = '';
-            el.style.backgroundImage = '';
-            el.style.zIndex = '';
-            el.style.borderRight = '';
-            el.style.borderLeft = '';
-            el.style.boxShadow = '';
-        });
+        return;
     };
-    // 💡 [버벅임 해결] 무한루프의 주범이었던 style 감지를 완벽하게 차단하고 오직 행이 바뀔 때만 작동하게 만듭니다.
-    if (!window._stickyObserver) {
-        window._stickyObserver = new MutationObserver((mutations) => {
-            let needsUpdate = false;
-            for (let m of mutations) {
-                if (m.type === 'childList') { needsUpdate = true; break; }
-            }
-            if (needsUpdate) { clearTimeout(window._stickyTimer); window._stickyTimer = setTimeout(window.updateStickyPositions, 30); }
-        });
-        setTimeout(() => {
-            const tableEl = document.getElementById('myTable');
-            // 💡 중요: 오직 childList만 감시하도록 경량화하여 무한루프 소지를 원천 봉쇄합니다.
-            if(tableEl) { window._stickyObserver.observe(tableEl, { childList: true, subtree: true }); window.updateStickyPositions(); }
-        }, 500);
-    }
+    // ⚠️ [2026-10-28] 위 함수가 완전한 no-op이 된 이상, 그걸 부르기 위해 표 전체를 MutationObserver로
+    //    감시하고(셀 하나 바뀔 때마다 발동) 클릭마다 focusin/focusout까지 거는 것 자체가 낭비다 —
+    //    옛 고정열 기능이 되살아나지 않는 한 이 감시 장치들이 할 일이 없다. 셋 다 제거.
 
-    // 💡 사용자가 칸에 커서를 올리거나 수정을 종료할 때 즉시 색상을 동기화시키는 장치
-    document.addEventListener('focusin', (e) => { if (e.target.tagName === 'TD') window.updateStickyPositions(); });
-    document.addEventListener('focusout', (e) => { if (e.target.tagName === 'TD') window.updateStickyPositions(); });
-    window.addEventListener('resize', () => { clearTimeout(window._stickyTimer); window._stickyTimer = setTimeout(window.updateStickyPositions, 50); });
-
-    
