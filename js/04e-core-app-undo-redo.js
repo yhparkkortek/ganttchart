@@ -1497,48 +1497,72 @@
         return candidates;
     };
 
-    // 📐 [2026-10-27 신규] 레벨 불일치 참고 탐지 — 같은 "대표 토픽 토큰"(그룹 제안과 같은 산출
-    //    방식)을 가진 리프 업무들이 레벨 3·4에 걸쳐 섞여 있으면 참고용으로만 보여준다. 어느 레벨이
-    //    "맞는" 레벨인지는 업무 성격에 달려 있어 결정론으로 못 정한다 — 그래서 자동 적용이 없다.
-    //    changeSelectedRowsLevel()로 사람이 직접 조정하도록 안내만 한다.
+    // 📐 [2026-10-27 신규, 2026-10-27 재조정] 레벨 불일치 참고 탐지 — 같은 "대표 토픽 토큰"(그룹
+    //    제안과 같은 산출 방식)을 가진 리프 업무들이 레벨 3·4에 걸쳐 섞여 있으면 참고용으로만
+    //    보여준다. 어느 레벨이 "맞는" 레벨인지는 업무 성격에 달려 있어 결정론으로 못 정한다 —
+    //    그래서 자동 적용이 없다. changeSelectedRowsLevel()로 사람이 직접 조정하도록 안내만 한다.
+    //    ⚠️ [실사용 제보] 처음엔 프로젝트 전체를 한 스코프로 토큰 비교해서 867행 규모에서 44건이
+    //    나왔는데, 서로 다른 소분류 밑 전혀 무관한 업무끼리 단어 하나 겹친 우연까지 다 잡혔다 —
+    //    CLAUDE.md "레벨 0~2는 이미 구분자가 결정된 구조" 원칙대로, 비교 범위를 "같은 레벨≤2
+    //    조상(소분류2 또는 그 위)" 안으로 좁힌다(그룹 제안이 "같은 부모"로 좁히는 것과 같은 정신,
+    //    한 단계 위). "흔한 말" 판정 빈도도 그 버킷 안에서만 세서(그룹 제안과 동일 원칙) 큰
+    //    프로젝트 전체로 희석되지 않게 한다. 각 항목에 바로 위 부모명도 같이 적어, 사람이 "이 행
+    //    보기"를 누르지 않아도 어디 있는 업무인지 바로 알 수 있게 한다.
     window._wbsDetectLevelInconsistencies = function(gd) {
         gd = gd || globalData;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
 
-        const leafIdxs = [];
+        const stack = [];
+        const leafInfo = [];
         for (let i = 1; i < gd.length; i++) {
             const row = gd[i]; if (!row) continue;
             const lv = lvOf(row);
+            while (stack.length && stack[stack.length - 1].level >= lv) stack.pop();
+            let bucketKey = 'ROOT';
+            for (let s = stack.length - 1; s >= 0; s--) { if (stack[s].level <= 2) { bucketKey = stack[s].idx; break; } }
+            const parentTitle = stack.length ? _wbsNormTitle(_wbsRowOwnTitle(gd[stack[stack.length - 1].idx])) : '';
+            stack.push({ idx: i, level: lv });
             if (lv < 3) continue;
             const next = gd[i + 1];
-            if (next && lvOf(next) > lv) continue;
-            leafIdxs.push(i);
+            if (next && lvOf(next) > lv) continue; // 리프만
+            leafInfo.push({ idx: i, bucketKey: bucketKey, parentTitle: parentTitle });
         }
-        if (leafIdxs.length < 2) return [];
+        if (leafInfo.length < 2) return [];
 
-        const tokLists = leafIdxs.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])).concat(_wbsContentTokens(gd[i])); });
-        const freq = new Map();
-        tokLists.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { freq.set(t, (freq.get(t) || 0) + 1); }); });
-        const isCommon = function(t) { return (freq.get(t) || 0) > 6; };
-
-        const byTok = new Map();
-        leafIdxs.forEach(function(idx, k) {
-            const key = tokLists[k].find(function(t) { return !isCommon(t); });
-            if (!key) return;
-            if (!byTok.has(key)) byTok.set(key, []);
-            byTok.get(key).push(idx);
+        const byBucket = new Map();
+        leafInfo.forEach(function(info) {
+            if (!byBucket.has(info.bucketKey)) byBucket.set(info.bucketKey, []);
+            byBucket.get(info.bucketKey).push(info);
         });
 
         const out = [];
-        byTok.forEach(function(idxs, tok) {
-            if (idxs.length < 2) return;
-            const levels = new Set(idxs.map(function(i) { return lvOf(gd[i]); }));
-            if (levels.size < 2) return;
-            out.push({
-                token: tok,
-                memberIdx: idxs,
-                memberRows: idxs.map(function(i) { return gd[i]; }),
-                titles: idxs.map(function(i) { return _wbsNormTitle(_wbsRowOwnTitle(gd[i])) + ' (Lv' + lvOf(gd[i]) + ')'; })
+        byBucket.forEach(function(infos) {
+            if (infos.length < 2) return;
+            const tokLists = infos.map(function(info) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[info.idx])).concat(_wbsContentTokens(gd[info.idx])); });
+            const freq = new Map();
+            tokLists.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { freq.set(t, (freq.get(t) || 0) + 1); }); });
+            const isCommon = function(t) { return (freq.get(t) || 0) > 6; };
+
+            const byTok = new Map();
+            infos.forEach(function(info, k) {
+                const key = tokLists[k].find(function(t) { return !isCommon(t); });
+                if (!key) return;
+                if (!byTok.has(key)) byTok.set(key, []);
+                byTok.get(key).push(info);
+            });
+
+            byTok.forEach(function(members, tok) {
+                if (members.length < 2) return;
+                const levels = new Set(members.map(function(m) { return lvOf(gd[m.idx]); }));
+                if (levels.size < 2) return;
+                out.push({
+                    token: tok,
+                    memberIdx: members.map(function(m) { return m.idx; }),
+                    memberRows: members.map(function(m) { return gd[m.idx]; }),
+                    titles: members.map(function(m) {
+                        return (m.parentTitle ? m.parentTitle + ' › ' : '') + _wbsNormTitle(_wbsRowOwnTitle(gd[m.idx])) + ' (Lv' + lvOf(gd[m.idx]) + ')';
+                    })
+                });
             });
         });
         return out;
@@ -1585,10 +1609,32 @@
         return outOfOrder;
     };
 
+    // 🐛 [2026-10-27, 실사용 제보] "이 행 보기를 눌러도 어떤 행인지 모르겠다" — 대상 행이 접힌
+    //    WBS 조상 아래 있으면 applyFilters()의 접기 숨김 로직(_wbsHideUntilLevel)이 그 행을
+    //    display:none 으로 숨겨버려서, 스크롤·깜빡임이 돌아도 아무것도 안 보였던 게 원인. 보기
+    //    전에 조상 체인을 전부 펼친다 — sibling/parent 판정과 같은 "부모 = 바로 앞의 더 낮은 레벨
+    //    행" 스택 방식을 거꾸로(뒤에서 앞으로) 훑는다.
+    window._wowExpandAncestorsOf = function(rowIndex) {
+        const row = globalData[rowIndex];
+        if (!row) return;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        let frontier = lvOf(row);
+        for (let i = rowIndex - 1; i >= 1 && frontier > 0; i--) {
+            const r = globalData[i]; if (!r) continue;
+            const lv = lvOf(r);
+            if (lv < frontier) {
+                if (r._wbsCollapsed) r._wbsCollapsed = false;
+                frontier = lv;
+            }
+        }
+    };
+
     // 🎯 [2026-10-27 신규] 간트 표에서 특정 행으로 이동+깜빡임 — 레벨 불일치 참고 목록의 "이 행 보기"용.
     //    메인 표 행은 data-row-index 속성을 갖고 있다(js/26-gantt-search.js와 동일 조회 방식).
     window._wowJumpToRow = function(rowIndex) {
         if (window.switchTab) window.switchTab('gantt');
+        window._wowExpandAncestorsOf(rowIndex);
+        if (typeof applyFilters === 'function') applyFilters();
         setTimeout(function() {
             const tr = document.querySelector('tr[data-row-index="' + rowIndex + '"]');
             if (!tr) {

@@ -1095,6 +1095,26 @@ window.deleteHistoryByDateRange = function() {
     window.sortRowsByStartDate = function() {
         if (!globalData || globalData.length <= 2) { alert(window._t('정렬할 데이터가 없습니다.', 'No data to sort.')); return; }
 
+        // 🔒 [2026-10-27, 실사용 제보 대응] "날짜는 그대로 두고 순서만 정리"라는 안내와 달리, 아직
+        //    "🔓 자동" 모드인(한 번도 고정된 적 없거나 사람이 일부러 자동으로 돌려둔) 리프 행은 이 뒤
+        //    recalculateSchedules()에서 "바로 앞 형제가 끝난 다음날"로 다시 사슬 계산되는데, 정렬이
+        //    그 "바로 앞 형제"를 바꿔버려 화면에 보이던 날짜가 실제로 밀리는 게 실측으로 확인됐다.
+        //    정렬 직전에 지금 화면에 보이는 계산값을 그대로 셀에 적어 넣고 고정시켜서, 재계산이
+        //    돌아도 전과 똑같은 날짜가 나오게 만든다 — "순서만 바뀌고 날짜는 안 바뀐다"를 말 그대로
+        //    지키게 하는 조치. (이후 그 행을 수동으로 다시 "🔓 자동"으로 돌리면 평소처럼 사슬 계산된다.)
+        let _wasFrozenCount = 0;
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i]; if (!row) continue;
+            const lv = (typeof row._level === 'number') ? row._level : 4;
+            const next = globalData[i + 1];
+            const isLeaf = !(next && (typeof next._level === 'number' ? next._level : 4) > lv);
+            if (!isLeaf || (row._startForced && row._planForced) || typeof row._calcStartTs !== 'number') continue;
+            if (colIdx.start !== -1) row[colIdx.start] = formatTsToYMD(row._calcStartTs);
+            if (colIdx.plan !== -1 && typeof row._calcPlanTs === 'number') row[colIdx.plan] = formatTsToYMD(row._calcPlanTs);
+            row._startForced = true; row._planForced = true;
+            _wasFrozenCount++;
+        }
+
         const header = globalData[0];
         const rows   = globalData.slice(1);
 
@@ -1144,8 +1164,14 @@ window.deleteHistoryByDateRange = function() {
         flatten(roots);
 
         globalData = [header, ...out];
-        logChange(0, -1, '날짜 정렬', '시작일 기준 정렬');
+        logChange(0, -1, '날짜 정렬', '시작일 기준 정렬' + (_wasFrozenCount ? ` (자동 모드 ${_wasFrozenCount}건 고정)` : ''));
         window.recalculateSchedules();
+        if (_wasFrozenCount && window.showToast) {
+            const _en = window._currentLang === 'en';
+            window.showToast(_en
+                ? `📌 Fixed ${_wasFrozenCount} auto-mode task date(s) in place so the reorder wouldn't shift them.`
+                : `📌 정렬로 날짜가 밀리지 않도록 자동 모드 업무 ${_wasFrozenCount}건의 날짜를 고정했습니다.`, 'info');
+        }
     };
 
     // ─── 🔀 [부분 정렬] 지정한 인덱스 구간(fromIdx~toIdx)만 시작일 기준으로 재정렬 ───
