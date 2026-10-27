@@ -459,6 +459,27 @@
         'sum-cutting-label': 'Cutting 담당자',
         'sum-tooling-label': 'Tooling 담당자'
     };
+    // 💡 [2026-10-27] 프로젝트 멤버-3(자유 추가)의 기본값 — 멤버-1,2(PM/기구/HW...)는 프로젝트마다
+    //    사람이 다르지만, 멤버-3에 들어가는 FA/영업/CS는 회사 조직상 프로젝트와 무관하게 거의 항상
+    //    같은 담당자라 매번 빈칸에서 새로 입력하게 두지 않고 기본값으로 미리 채워둔다. 레퍼런스가
+    //    없던 기존 프로젝트도 populateTabData에서 projectMembers3가 비어있으면 이 기본값으로 채워진다
+    //    — DEFAULT_MEMBER_LABELS와 동일한 "저장값 없으면 기본값" 관례.
+    //    ⚠️ 이 저장소는 GitHub Pages로 공개돼 있어 실명+이메일을 소스에 커밋할 수 없다 — 로컬 백엔드
+    //    (kortek_backend.py /team-defaults, team_defaults.json·.gitignore)에서만 받아오고, 재접속 시
+    //    바로 쓸 수 있도록 localStorage에 캐시한다. 백엔드 미실행/파일 미설정이면 빈 배열(기본값 없음).
+    window.DEFAULT_MEMBER3_ROWS = (function() {
+        try { return JSON.parse(localStorage.getItem('gantt_team_member3_defaults_v1') || '[]'); }
+        catch (e) { return []; }
+    })();
+    fetch('http://127.0.0.1:5000/team-defaults').then(function(r) { return r.json(); }).then(function(data) {
+        if (data && data.ok && Array.isArray(data.member3)) {
+            window.DEFAULT_MEMBER3_ROWS = data.member3;
+            try { localStorage.setItem('gantt_team_member3_defaults_v1', JSON.stringify(data.member3)); } catch (e) {}
+        }
+    }).catch(function() { /* 백엔드 미실행 — 조용히 무시, 기존 캐시/빈 배열 유지 */ });
+    window._cloneDefaultMember3Rows = function() {
+        return (window.DEFAULT_MEMBER3_ROWS || []).map(function(r) { return { role: r.role, name: r.name, email: r.email }; });
+    };
     // 💡 Summary/Brief SPEC/M.C Table/Address 탭 필드를 전부 비움 (populateTabData는 "채우기"만 하고
     //    비어있는 값은 건너뛰기 때문에, 새 프로젝트 시작 시 기존 값이 그대로 남는 문제를 방지)
     window.clearAllTabFields = function() {
@@ -472,7 +493,7 @@
         ['briefspec-body', 'address-table-body', 'mctable-body'].forEach(function(id) {
             const el = document.getElementById(id); if (el) el.innerHTML = '';
         });
-        if (window.renderMember3Rows) window.renderMember3Rows([]);
+        if (window.renderMember3Rows) window.renderMember3Rows(window._cloneDefaultMember3Rows());
         // 💡 Model A/B/C 헤더 커스텀 이름(bsColLabels)은 tbody가 아니라 thead에 있어서 위 innerHTML='' 로는
         //    안 지워짐 — 새 프로젝트 시작 시(이 시점엔 window.tabData가 이미 {}로 초기화됨) 기본값으로 복원.
         if (window.bsApplyColLabels) window.bsApplyColLabels();

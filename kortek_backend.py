@@ -103,6 +103,10 @@ BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE    = os.path.join(BASE_DIR, 'mail_config.json')
 TG_CONFIG_FILE = os.path.join(BASE_DIR, 'telegram_config.json')
 SCHEDULE_FILE  = os.path.join(BASE_DIR, 'schedule_rules.json')
+# 🆕 [2026-10-27] 프로젝트 멤버-3 기본값(FA/영업/CS 등 회사 조직상 고정 담당자, 실명+이메일) —
+#    이 저장소는 GitHub Pages로 공개돼 있어 소스에 커밋할 수 없다. sap_login_config.json 등과
+#    같은 패턴으로 로컬 전용 파일에서만 읽음(.gitignore). 팀원 각자 PC에 따로 둬야 함.
+TEAM_DEFAULTS_FILE = os.path.join(BASE_DIR, 'team_defaults.json')
 POP3_HOST      = "gw.kortek.co.kr"
 POP3_PORT      = 110
 # 🆕 [2026-10-16] 메일 수신 기본 경로는 IMAPS(993). 위 POP3는 IMAP이 막힌 계정용 폴백으로만 남는다.
@@ -798,6 +802,17 @@ def telegram_config_api():
         return jsonify({'ok': True, 'message': 'Telegram 설정 저장 완료'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── 프로젝트 멤버-3 기본값 (team_defaults.json, 로컬 전용·.gitignore) ──────
+@app.route('/team-defaults', methods=['GET'])
+def team_defaults_get():
+    try:
+        with open(TEAM_DEFAULTS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify({'ok': True, 'configured': True, 'member3': data.get('member3', [])})
+    except Exception:
+        return jsonify({'ok': True, 'configured': False, 'member3': []})
 
 
 # ── 팀원 관리 ─────────────────────────────────────────────────

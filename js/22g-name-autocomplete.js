@@ -617,8 +617,12 @@ window.populateTabData = function() {
     setLabelVal('sum-cutting-label', ml.Cutting담당자);
     setLabelVal('sum-tooling-label', ml.Tooling담당자);
 
-    // 💡 프로젝트 멤버-3 렌더링
-    if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
+    // 💡 프로젝트 멤버-3 렌더링 — 저장된 레퍼런스가 없으면(옛 프로젝트 등) 기본값으로 채움
+    if (window.renderMember3Rows) {
+        const m3 = (td.projectMembers3 && td.projectMembers3.length) ? td.projectMembers3
+            : (window._cloneDefaultMember3Rows ? window._cloneDefaultMember3Rows() : []);
+        window.renderMember3Rows(m3);
+    }
 
     // 💡 주요 자재 목록 렌더링 — 모델별 카드(모델 #1만 펼침). 구버전 저장본(전역 목록 1개)은
     //    _ensureModelMaterials()가 모델 #1로 이관하고, 자재가 없는 추가 모델엔 모델 #1 값을 복사한다.
