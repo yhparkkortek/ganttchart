@@ -512,25 +512,16 @@
             const choice = await window._showSaveChoiceModal(window.currentDriveFileName, 'open');
             if (choice === 'cancel') return;
             if (choice === 'save') {
-                window.showToast(_en ? "💾 Saving current project before opening the list..." : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
-                // 💡 [진단용 계측] "프로젝트 열기가 느리다"는 신고가 반복돼서, 다음에 또 느려질 때 정확히
-                //    어느 단계(전환 전 저장 vs 목록 조회 vs 파일 열기)가 느린지 바로 알 수 있게 시간을 잰다.
-                const _t0 = performance.now();
-                // 💡 [UX 수정] 저장이 막혀도 여기서 alert을 띄우지 않게 하고(suppressAlert), 사유만 받아온다.
-                //    예전엔 ①저장 실패 안내 alert + ②"그래도 목록을 여시겠습니까?" confirm — 모달이 두 번
-                //    연달아 떴고, 두 번째에서 취소하면 프로젝트 목록 자체를 못 열었다.
-                const saved = await window.saveToGoogleDrive({ suppressAlert: true });
-                const _saveMs = Math.round(performance.now() - _t0);
-                console.info(`[프로젝트 열기 계측] 전환 전 저장(saveToGoogleDrive): ${_saveMs}ms`);
-                if (_saveMs > 3000) console.warn(`[프로젝트 열기 계측] ⚠️ 전환 전 저장이 ${_saveMs}ms나 걸림 — Drive 응답 지연 또는 병합 처리가 원인일 수 있음`);
-                // 💡 저장이 막힌 경우(필수정보 미입력 / 새 프로젝트 비밀번호 미입력 등)에도 프로젝트 목록은
-                //    항상 열어준다 — 저장된 다른 프로젝트를 여는 것 자체는 막을 이유가 없고, 지금 화면 내용은
-                //    멀티시트 탭에 그대로 남아 있어 유실되지 않는다. 안내는 사유와 함께 "한 번만" 표시.
-                if (!saved) {
-                    const _why = window._lastSaveBlockReason || '';
-                    alert(_en
-                        ? (_why ? _why + '\n\n' : '') + '→ Skipping the save and opening the project list.\n(Current screen content stays in its sheet tab — nothing is lost.)'
-                        : (_why ? _why + '\n\n' : '') + '→ 저장은 건너뛰고 프로젝트 목록을 엽니다.\n(지금 화면 내용은 시트 탭에 그대로 남아 있어 사라지지 않습니다)');
+                // 💡 [2026-10-27, 체감속도 개선] 예전엔 여기서 저장 완료(9~15초)까지 기다려야 목록이 열렸다.
+                //    목록을 여는 건 지금 시트를 전환하는 게 아니라 "다른 창을 하나 더 띄우는" 것뿐이라
+                //    (globalData 등 현재 화면 전역은 안 바뀜) switchToSheetWithSave 같은 onSafeToSwitch
+                //    장치 없이도 안전하다 — 저장 버튼과 똑같이 로컬 우선 + 백그라운드로 보내고 목록은
+                //    곧바로 연다. 실패 시 안내는 _saveToGoogleDriveOptimistic/saveToGoogleDrive 내부가
+                //    토스트 + 로컬 백업으로 이미 처리하므로 여기서 따로 "그래도 열까요?" confirm 불필요.
+                if (window._saveToGoogleDriveOptimistic) {
+                    window._saveToGoogleDriveOptimistic({ suppressAlert: true });
+                } else {
+                    window.saveToGoogleDrive({ suppressAlert: true });
                 }
             }
             // choice === 'discard' → 저장 없이 그대로 목록을 엶
