@@ -616,6 +616,29 @@ id가 `editorForm_28_정식승인`처럼 **값이 뒤에 붙어** 있어서 이�
 
 ---
 
+### 🧹 임시저장한 기안을 테스트 후 지우는 법 (2026-10-27 실측)
+
+`gw_approval_tempsave`/`compose`/`copy` 전부 "임시저장함에서 삭제하면 된다"고 안내하지만,
+**API 레벨 삭제 도구가 없다** — `DELETE /api/approval/document/{id}`는 405(없는 경로, 추측
+금지 교훈 그대로). 지우려면 **문서 자체를 열어서 화면의 삭제 버튼**을 눌러야 한다:
+
+1. `https://gw.kortek.co.kr/app/approval/document/{id}` 로 이동(문서 id는 `approval_doclist`
+   결과의 `id` — `docNum`이 아니다. 임시저장 문서는 아직 `docNum`이 비어 있다).
+2. 상단 툴바의 **삭제** 버튼을 `click_in_gw`(신뢰된 클릭)로 누른다.
+3. "삭제하시겠습니까?" 확인창이 뜨고, **확인** 버튼을 한 번 더 누른다(다이얼로그가 아니라
+   페이지 안 모달이라 `Page.handleJavaScriptDialog` 대상이 아니다 — 좌표 클릭으로 닫는다).
+4. `approval_doclist(box='tempsave')`로 사라졌는지 확인.
+
+⚠️ `gw_approval_copy`의 **"그대로 복사"(asIs) 모드는 `subject` 를 안 받는다** — 버그가 아니라
+설계다. 미리보기 화면(`js/47`)의 모든 칸(제목 포함)이 `<input>`이라 **사람이 직접 고쳐 쓰는 것**
+을 전제한다. `subject` 파라미터는 `gw_approval_copy`의 **직접 API 경로**(`/gw/approval/copy`,
+QA_WRITE_TOOLS 레지스트리)에만 적용되고, 채팅에서 "RD3-xxx 복사해서 제목 OO로"라고 말하면
+**결정론 블록(js/04h `기안그대로복사`)이 먼저 가로채** 그 레지스트리 경로로 가지 않는다 —
+문서번호만 넘어가고 제목은 원본 그대로 열린다. 제목을 바꾸려면 미리보기가 뜬 뒤 그 칸을
+직접 고쳐야 한다.
+
+---
+
 ## 6. SAP 연계 — 승인원에 필요한 값
 
 ### 공급업체: ZMM006 → LIFNR → ZMM005
