@@ -314,13 +314,18 @@
     };
 
     function applyFilters() {
-        // 💡 [2026-10-28, 진단용 계측] "필터·접기/펴기가 느리다" 신고 — 둘 다 이 함수 하나를 거친다
-        //    (toggleWbsCollapse도 row._wbsCollapsed만 바꾸고 applyFilters()를 다시 부름). 의심 지점은
-        //    차트 막대 재생성(createStatusChart, getRowCompareInfo 포함)을 "보이는 모든 행"에 대해
-        //    매번 다시 돌린다는 것 — 필터/접기는 어느 행도 자기 자신의 일정·상태를 안 바꾸는데도 그렇다.
-        //    저장 성능 진단([저장 계측])과 같은 방식으로 콘솔에 남겨, 다음에 느릴 때 바로 실측 가능하게 한다.
+        // ⚠️ [2026-10-28 버그 수정, "앱이 전반적으로 느림" 신고 실측] 어제 추가한 [필터/접기 계측]
+        //    로그로 실제 측정해보니 1000행 프로젝트에서 applyFilters() 한 번에 1.5~3.8초가 걸렸는데,
+        //    그중 차트 막대 재생성(createStatusChart) 자체의 JS 실행 시간은 ~100ms뿐이었다 — 나머지
+        //    1.4~3.7초는 "보이는 행마다(최대 1000개) td.innerHTML을 새로 쓰는" 그 대입문 자체가 브라우저의
+        //    스타일/레이아웃 재계산을 유발하는 비용이었다(실측: 그 한 줄만 빼면 1500ms → 5ms로 줄어듦,
+        //    JS 코드만 봐서는 안 보이고 실제 브라우저에서 돌려봐야 드러나는 비용이었다).
+        //    이 재생성 자체가 **완전히 불필요**하다 — 필터를 바꾸거나 WBS를 접어도 어떤 행의
+        //    시작일·완료일·상태·레벨·계획비교는 전혀 안 바뀐다. 차트는 이미 그 값이 바뀌는 시점(최초
+        //    renderTable, 편집 후 recalculateSchedules, 비교계획 전환 시 toggleCompareSelection — 셋
+        //    다 renderTable()을 다시 불러 차트를 이미 새로 그린다)에 정확히 다시 그려진다. applyFilters는
+        //    보이기/숨기기·번호 재부여만 맡고, 차트는 건드리지 않는다.
         const _tApply0 = performance.now();
-        let _chartMs = 0, _chartCount = 0;
         try {
             const tbody = document.getElementById('table-body'); const trs = tbody.getElementsByTagName("tr"); let visibleCount = 1;
             let _wbsHideUntilLevel = null; // 💡 접힌 조상의 하위 트리인 동안 계속 숨김 처리하기 위한 추적 상태
@@ -363,27 +368,20 @@
                     // 💡 필터 적용 후 "보이는 행" 순서 기준으로 줄무늬 다시 매기기
                     tr.classList.remove('gantt-zebra-b');
                     if ((visibleCount - 1) % 2 === 1) tr.classList.add('gantt-zebra-b');
-                    let noTd = tr.querySelector('.no-td'); 
-                    if (noTd) { 
+                    let noTd = tr.querySelector('.no-td');
+                    if (noTd) {
                         let span = noTd.querySelector('.row-num-span');
-                        if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++; 
+                        if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++;
                     } else if (tr.cells.length > 0) { tr.cells[0].textContent = visibleCount++; }
-                    // 🔧 [버그수정] 차트 렌더링 오류가 외부 try-catch를 타면 이후 행들의 NO 번호 세팅이
-                    //    전부 중단됨 → 차트만 개별 보호해서 한 행이 실패해도 나머지 NO 번호는 보장
-                    let chartTd = tr.querySelector('.chart-td');
-                    if (chartTd) {
-                        const _tc0 = performance.now();
-                        try { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level, window.getRowCompareInfo ? window.getRowCompareInfo(rowData) : null); } catch(ce) { console.warn('chart render skip:', ce); }
-                        _chartMs += performance.now() - _tc0; _chartCount++;
-                    }
+                    // (차트 막대는 여기서 더 이상 다시 그리지 않음 — 위 2026-10-28 설명 참고)
                 } else { tr.style.display = "none"; }
             }
             // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
             if (typeof window.updatePrintTitle === 'function') window.updatePrintTitle();
             updateFilterVisibility();
+            // 💡 [2026-10-28] 차트 재생성을 뺀 뒤에도 느려지면 바로 보이도록 계측은 남겨 둔다(가벼워짐).
             const _applyMs = Math.round(performance.now() - _tApply0);
-            console.info(`[필터/접기 계측] applyFilters: ${_applyMs}ms · 전체행 ${trs.length} · 보이는행 ${visibleCount - 1} · 차트재생성 ${_chartCount}건/${Math.round(_chartMs)}ms`);
-            if (_applyMs > 200) console.warn(`[필터/접기 계측] ⚠️ ${_applyMs}ms — 클릭 반응이 느리게 느껴질 수 있는 수준(200ms 초과). 차트재생성(${Math.round(_chartMs)}ms)이 큰 비중이면 "보이는 행마다 매번 다시 그림"이 원인.`);
+            if (_applyMs > 200) console.warn(`[필터/접기 계측] ⚠️ ${_applyMs}ms · 전체행 ${trs.length} · 보이는행 ${visibleCount - 1} — 200ms 초과`);
         } catch(e) { console.error("Filter Apply Error: ", e); }
     }
 
