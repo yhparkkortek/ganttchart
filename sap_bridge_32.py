@@ -241,34 +241,86 @@ def _auto_login(cfg, session=None):
     raise RuntimeError('SAP 로그인 후 초기 화면으로 넘어가지 못했습니다(25초 대기) · 화면: ' + _sap_screen_info(session))
 
 
-def _sap_bring_windows_to_front():
-    """SAP GUI 프런트엔드 창(들)을 운영체제 전경으로 올린다. 🆕 [2026-10-27, 실사용 요청]
-    "SAP이 도는 걸 모니터링하는 창이 있던데 SAP 도는 상황엔 항상 보이게 해달라" —
-    브라우저(Chrome)가 화면을 덮고 있으면 SAP GUI가 실제로 자동화되는 과정이 taskbar
-    뒤에 숨어 안 보인다. `_sap_frontend_window()`(6163행 부근, pywinauto UIA)는 이미
-    있지만 호출마다 Desktop 전체를 UIA로 훑어 느리다 — 여긴 `dump_windows_dialogs`가
-    이미 쓰는 가벼운 win32gui.EnumWindows로 'SAP_FRONTEND_SESSION' 클래스(실사용 진단으로
-    확인된 SAP GUI 세션 창의 고정 클래스명)를 찾는다. `_get_sap_session()`은 모든 SAP
-    자동화 함수(49곳)의 공통 진입점이자 **이 앱의 SAP 호출은 전부 사용자가 버튼을 눌러
-    기다리는 동기 요청**(스케줄러로 백그라운드에서 도는 경우 없음, kortek_backend.py
-    /sap-* 라우트 확인)이라, 여기서 매번 올려도 사용자가 다른 작업 중에 불시에 포커스를
-    뺏기는 사고는 없다. 창을 못 찾거나 못 올려도 조회 자체는 계속 진행해야 하므로
-    예외는 전부 삼킨다(화면 전환 실패가 전체 조회 실패로 번지면 안 됨)."""
+# 🆕 [2026-10-27, 실사용 요청 3차] "아이콘에 마우스를 올리면 뜨는 작은 미리보기 같은 걸
+#    만들 수 없냐" — 그 taskbar hover-peek 자체는 explorer.exe가 그리는 내부 UI라 외부
+#    프로세스가 프로그램적으로 띄우는 공개 API가 없다(DWM 썸네일 합성으로 직접 그리는
+#    방법은 있지만 전용 창 + 메시지 루프가 필요한 훨씬 무거운 경로 — 아직 미검증).
+#    대신 **SAP 창 자체를 작게 줄여 화면 구석에 topmost로 고정**하는 실용적 대안을 쓴다 —
+#    1차(SetForegroundWindow, 화면을 덮어버림) → 2차(FlashWindowEx, 작업표시줄 아이콘만
+#    깜빡여 안 보임) → 이게 3차. 포커스는 SWP_NOACTIVATE로 전혀 안 뺏어서 다른 작업(Chrome
+#    타이핑 등)에 지장이 없고, 작게·항상 보이게라는 원 요청도 충족한다.
+_SAP_SHRINK_STATE = {'done': False, 'rects': []}  # [(hwnd, (l,t,r,b), was_iconic), ...]
+
+
+def _sap_shrink_to_corner():
+    """SAP GUI 프런트엔드 창(들)을 화면 오른쪽 아래 작은 크기로 옮기고 항상 위(topmost)로
+    띄운다 — `SWP_NOACTIVATE`로 OS 포커스는 전혀 안 건드린다. `_get_sap_session()`(49곳
+    모든 SAP 자동화 함수의 공통 진입점)에서 호출 — 한 스크립트 실행(=조회 1건) 동안은
+    한 번만 줄인다(`_SAP_SHRINK_STATE['done']`로 중복 방지, 여러 top-level 함수가 연달아
+    `_get_sap_session()`을 부르는 경우가 있어서). 원래 크기·위치·topmost 여부는
+    `main()`의 finally에서 `_sap_restore_window()`가 되돌린다 — 안 그러면 사용자가 나중에
+    SAP를 직접 쓸 때 계속 구석에 작게 붙어 있게 된다. 창을 못 찾거나 못 줄여도 조회
+    자체는 계속 진행해야 하므로 예외는 전부 삼킨다."""
+    if _SAP_SHRINK_STATE['done']:
+        return
     try:
-        import ctypes as _ct
+        import ctypes
         import win32gui as _wg
         import win32con as _wc
+
+        screen_w = ctypes.windll.user32.GetSystemMetrics(0)
+        screen_h = ctypes.windll.user32.GetSystemMetrics(1)
+        W, H = 420, 260
+        margin = 12
+        x = max(0, screen_w - W - margin)
+        y = max(0, screen_h - H - margin - 48)  # 작업표시줄 높이 대략 보정
+
+        hwnds = []
         def _cb(hwnd, _):
             try:
                 if _wg.GetClassName(hwnd) == 'SAP_FRONTEND_SESSION' and _wg.IsWindowVisible(hwnd):
-                    if _wg.IsIconic(hwnd):
-                        _wg.ShowWindow(hwnd, _wc.SW_RESTORE)
-                    _ct.windll.user32.SetForegroundWindow(hwnd)
+                    hwnds.append(hwnd)
             except Exception:
                 pass
         _wg.EnumWindows(_cb, None)
+
+        for hwnd in hwnds:
+            try:
+                orig_rect = _wg.GetWindowRect(hwnd)
+                was_iconic = bool(_wg.IsIconic(hwnd))
+                if was_iconic:
+                    _wg.ShowWindow(hwnd, _wc.SW_SHOWNOACTIVATE)
+                _wg.SetWindowPos(hwnd, _wc.HWND_TOPMOST, x, y, W, H, _wc.SWP_NOACTIVATE)
+                _SAP_SHRINK_STATE['rects'].append((hwnd, orig_rect, was_iconic))
+            except Exception:
+                pass
+        _SAP_SHRINK_STATE['done'] = True
     except Exception:
         pass
+
+
+def _sap_restore_window():
+    """`_sap_shrink_to_corner()`가 줄인 SAP 창(들)을 원래 크기·위치·topmost 여부로
+    되돌린다. `main()`의 finally에서 호출 — 성공/실패 어느 경로든 반드시 실행된다."""
+    if not _SAP_SHRINK_STATE['done']:
+        return
+    try:
+        import win32gui as _wg
+        import win32con as _wc
+        for hwnd, orig_rect, was_iconic in _SAP_SHRINK_STATE['rects']:
+            try:
+                left, top, right, bottom = orig_rect
+                _wg.SetWindowPos(hwnd, _wc.HWND_NOTOPMOST, left, top,
+                                  right - left, bottom - top, _wc.SWP_NOACTIVATE)
+                if was_iconic:
+                    _wg.ShowWindow(hwnd, _wc.SW_SHOWMINNOACTIVE)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    finally:
+        _SAP_SHRINK_STATE['done'] = False
+        _SAP_SHRINK_STATE['rects'] = []
 
 
 def _get_sap_session():
@@ -288,7 +340,7 @@ def _get_sap_session():
                 logged_in = True  # 판단 불가면 기존 동작 유지
             if not logged_in:
                 session = _auto_login(cfg, session)
-    _sap_bring_windows_to_front()
+    _sap_shrink_to_corner()
     return session
 
 
@@ -7795,6 +7847,9 @@ def main():
         except Exception:
             _sess = None
         print(json.dumps(_attach_failure_info({'ok': False, 'error': humanize_sap_error(e, _sess)}), ensure_ascii=False))
+    finally:
+        # 🆕 [2026-10-27] _sap_shrink_to_corner()가 줄였으면 성공/실패 어느 경로든 반드시 복구
+        _sap_restore_window()
 
 
 if __name__ == '__main__':
