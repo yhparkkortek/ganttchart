@@ -338,6 +338,11 @@
                         const sMap = (typeof LANG !== 'undefined' && window._currentLang && LANG[window._currentLang]) ? LANG[window._currentLang].statusMap : null;
                         cellValue = (sMap && sMap[cellValue]) || cellValue;
                     }
+                    // 🏷️ [2026-10-27 신규] 담당구분 필터 — -2는 colIdx 컬럼이 아니라 row._담당구분
+                    // 사이드카 속성을 가리키는 예약된 가상 인덱스(js/04f filterColumns 등록 참고).
+                    if (colIndex === -2) {
+                        cellValue = window._normalizeWbsDiscipline(rowData._담당구분 || window._extractDisciplineFromContent(rowData) || '');
+                    }
                     if (!filterSet.has(cellValue)) { showRow = false; break; }
                         }
                     }

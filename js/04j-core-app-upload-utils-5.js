@@ -140,6 +140,7 @@
                 'LEVEL(WBS)': 'LEVEL(WBS)',
                 '업무상태': '업무상태',
                 '개발단계': '개발단계',
+                '담당구분': '담당구분',
             },
             filterAll: '전체 (All)',
             i18n: {
@@ -440,6 +441,7 @@
                 'LEVEL(WBS)': 'LEVEL(WBS)',
                 '업무상태': 'Status',
                 '개발단계': 'Dev Stage',
+                '담당구분': 'Discipline',
             },
             filterAll: 'All',
             i18n: {

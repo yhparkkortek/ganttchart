@@ -145,8 +145,8 @@
             }
         }
 
-        // 필터 표시 순서 강제 조작 (LEVEL -> 업무상태 -> 개발단계)
-        const orderMap = { 'LEVEL(WBS)': 1, '업무상태': 2, '개발단계': 3 };
+        // 필터 표시 순서 강제 조작 (LEVEL -> 업무상태 -> 개발단계 -> 담당구분)
+        const orderMap = { 'LEVEL(WBS)': 1, '업무상태': 2, '개발단계': 3, '담당구분': 4 };
         filterColumns.sort((a, b) => (orderMap[a.name] || 99) - (orderMap[b.name] || 99));
 
         // 💡 [핵심] groupDiv를 배열에 수집 후 _buildWorkFilterPanel에 전달.
@@ -155,13 +155,20 @@
 
         filterColumns.forEach(col => {
             let uniqueValues = new Set();
-            for(let i = 1; i < data.length; i++) {
-                if (!data[i] || data[i].join('').trim() === '') continue;
-                let val = data[i][col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { uniqueValues.add(val.toString().trim()); }
+            // 🏷️ [2026-10-27] 담당구분은 colIdx 컬럼이 아니라 row._담당구분 사이드카 속성이라
+            //    data[i][col.index](=data[i][-2])를 스캔해봐야 항상 비어있다 — 스캔을 건너뛴다.
+            if (col.name !== '담당구분') {
+                for(let i = 1; i < data.length; i++) {
+                    if (!data[i] || data[i].join('').trim() === '') continue;
+                    let val = data[i][col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { uniqueValues.add(val.toString().trim()); }
+                }
             }
             let valuesArray = Array.from(uniqueValues);
             if (col.name === '개발단계') { valuesArray = existingDevStages; }
             else if (col.name === '업무상태') { valuesArray = ['진행', '완료', '대기', '지연']; }
+            // 🏷️ [2026-10-27] 업무상태처럼 실사용 여부와 무관하게 전체 분류를 항상 보여준다
+            //    (WBS_DISCIPLINE_CATEGORIES, js/04k) — 안 써본 구분도 "쓸지 안 쓸지" 고를 수 있어야 함.
+            else if (col.name === '담당구분') { valuesArray = window.WBS_DISCIPLINE_CATEGORIES || []; }
             else { valuesArray.sort(); }
 
             currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
@@ -234,8 +241,8 @@
         // 그려지는데(=build-once 고착 버그는 아님), 이 제목 줄에만 언어 분기가 아예 없어서 "Status"/
         // "Dev Stage" 등 나머지는 영문으로 바뀌어도 이 줄만 항상 한글로 남아있었음.
         title.textContent = (window._currentLang === 'en')
-            ? 'Task Filter (LEVEL · Status · Dev Stage)'
-            : '업무 필터 (LEVEL · 업무상태 · 개발단계)';
+            ? 'Task Filter (LEVEL · Status · Dev Stage · Discipline)'
+            : '업무 필터 (LEVEL · 업무상태 · 개발단계 · 담당구분)';
         panel.appendChild(title);
 
         // groups 배열을 순서대로 패널에 추가 (각 사이에 구분선)

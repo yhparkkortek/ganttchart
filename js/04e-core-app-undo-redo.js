@@ -772,6 +772,21 @@
         return (window._scheduleBaselines || []).find(function(b) { return b && b.isInitialPlan; }) || null;
     };
 
+    // 📐 [2026-10-27 신규] 비교 대상 기본값 — "계획 대비 진행 확인 불가 / 확정된 일정만 보는 구조"
+    //    지적 대응. 킥오프 계획이 있으면 "현재 vs 최초 계획" 비교(▲/▼ 배지 + 고스트 바, js/04j·js/06 —
+    //    둘 다 getRowCompareInfo()만 보고 그려지므로 그쪽은 한 줄도 안 건드림)를 상시 기본으로 켠다.
+    //    toggleCompareSelection()으로 사람이 끈(null로 되돌린) 선택은 존중해야 하므로, 프로젝트(key)당
+    //    "이미 한 번 기본값을 판단했는지"를 기억해 두 번 다시 켜지 않는다 — recalculateSchedules()가
+    //    편집할 때마다 불리므로 이 가드가 없으면 꺼도 꺼도 계속 되살아난다.
+    window._ensureDefaultCompareTarget = function() {
+        const key = (typeof _baselineStorageKey === 'function') ? _baselineStorageKey() : 'local';
+        if (window._compareAutoDefaultForKey === key) return;
+        window._compareAutoDefaultForKey = key;
+        if (window._compareTargetId) return;
+        const kickoff = window._getInitialKickoffBaseline();
+        if (kickoff) window._compareTargetId = kickoff.id;
+    };
+
     // 🆕 [2026-08-24] 이미 운용 중인(=새 프로젝트 등록 자동저장 시점을 놓친) 프로젝트를 위한 수동 지정 기능.
     //    _getInitialKickoffBaseline()이 라벨 문자열이 아니라 isInitialPlan 플래그로 찾기 때문에, 저장된
     //    계획 중 하나를 골라 이 플래그를 붙여주면 이름과 무관하게 동일하게 동작함(이름만 "최초 계획(킥오프)"로

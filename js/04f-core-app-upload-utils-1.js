@@ -140,6 +140,11 @@
                             else if (name === '개발단계' && colIdx.wbs !== -1) filterColumns.push({ index: colIdx.wbs, name: '개발단계' });
                             else if (name === '업무상태' && colIdx.status !== -1) filterColumns.push({ index: colIdx.status, name: '업무상태' });
                         });
+                        // 🏷️ [2026-10-27 신규] 담당구분(PM/ME/HW...) 필터 — colIdx 컬럼이 아니라 row._담당구분
+                        //    사이드카 속성이라 colIdx 기반 분기를 못 탄다. -1(없음)과 겹치지 않는 예약된
+                        //    가상 인덱스 -2를 쓴다 — js/10 generateFilters와 js/04k applyFilters가 이 값을
+                        //    특수 분기로 처리한다(docs 없음, 이 세 파일의 주석이 서로를 가리킴).
+                        filterColumns.push({ index: -2, name: '담당구분' });
                     }
                     
                     let stageSet = new Set(); let lastDev = "", lastT1 = "", lastT2 = "", lastT3 = "", lastT4 = "";
