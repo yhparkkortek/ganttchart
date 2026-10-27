@@ -1754,6 +1754,14 @@
         const groupHtml4 = buildGroupHtml(groups4, 'wow-group4-cand');
         const groupHtml3 = buildGroupHtml(groups3, 'wow-group3-cand');
 
+        // 🆕 (2026-10-27) 섹션별 "이 항목만 적용" 버튼 — 전체 일괄 적용 외에 각 기능을 단독 실행
+        const sectionHeader = function(color, icon, label, btnId, enabled, marginTop) {
+            return `<div style="display:flex; justify-content:space-between; align-items:center; margin:${marginTop || '0'} 0 4px;">
+                <div style="font-weight:bold; font-size:12.5px; color:${color};">${icon} ${label}</div>
+                <button id="${btnId}" ${enabled ? '' : 'disabled'} style="padding:3px 9px; background:${enabled ? '#eef7f5' : '#f2f2f2'}; border:1px solid ${enabled ? '#8fc4ba' : '#ddd'}; border-radius:5px; font-size:10.5px; cursor:${enabled ? 'pointer' : 'default'}; color:${enabled ? '#0f6b5c' : '#aaa'}; flex-shrink:0;">${_en ? 'Apply this only' : '이 항목만 적용'}</button>
+            </div>`;
+        };
+
         const levelHtml = levelIssues.length ? levelIssues.map(function(l) {
             return `<div style="border:1px solid #e8e0c8; border-radius:8px; padding:8px 12px; margin-bottom:8px; background:#fffdf5;">
                 <div style="font-size:11.5px; color:#8a6d1a; line-height:1.7;">${l.titles.map(function(t, ti) {
@@ -1769,22 +1777,22 @@
                 <button onclick="document.getElementById('gantt-organize-wizard-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
             <div style="padding:10px 16px; flex:1; overflow-y:auto;">
-                <div style="font-weight:bold; font-size:12.5px; color:#0f6b5c; margin-bottom:4px;">📐 ${_en ? 'Level normalization' : '레벨 정규화'}</div>
+                ${sectionHeader('#0f6b5c', '📐', (_en ? 'Level normalization' : '레벨 정규화'), 'wow-apply-demote-btn', level3Leaves.length > 0)}
                 <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #d0e8e2; border-radius:8px; cursor:pointer; font-size:12px; color:#333; margin-bottom:10px; ${level3Leaves.length === 0 ? 'opacity:0.5;' : ''}">
                     <input type="checkbox" id="wow-demote-toggle" ${level3Leaves.length > 0 ? 'checked' : 'disabled'}>
                     ${level3Leaves.length > 0
                         ? (_en ? `${level3Leaves.length} level-3 task(s) with no sub-items will be demoted to level-4` : `레벨3인데 하위업무가 없는 업무 ${level3Leaves.length}건을 레벨4로 강등합니다`)
                         : (_en ? 'No level-3 leaf tasks found' : '레벨3 리프 업무가 없습니다')}
                 </label>
-                <div style="font-weight:bold; font-size:12.5px; color:#b1432f; margin-bottom:4px;">🔁 ${_en ? `Suspected duplicates (${dups.length})` : `중복 의심 (${dups.length}건)`}</div>
+                ${sectionHeader('#b1432f', '🔁', (_en ? `Suspected duplicates (${dups.length})` : `중복 의심 (${dups.length}건)`), 'wow-apply-dup-btn', dups.length > 0)}
                 ${dupHtml}
-                <div style="font-weight:bold; font-size:12.5px; color:#5a3680; margin:10px 0 4px;">🗂 ${_en ? `Group suggestions — level 4 (${groups4.length})` : `그룹 제안 — 레벨4 하위업무 (${groups4.length}건)`}</div>
+                ${sectionHeader('#5a3680', '🗂', (_en ? `Group suggestions — level 4 (${groups4.length})` : `그룹 제안 — 레벨4 하위업무 (${groups4.length}건)`), 'wow-apply-group4-btn', groups4.length > 0, '10px')}
                 ${groupHtml4}
-                <div style="font-weight:bold; font-size:12.5px; color:#5a3680; margin:10px 0 4px;">🗂² ${_en ? `Group suggestions — level 3, when needed (${groups3.length})` : `그룹 제안 — 레벨3 세부업무, 드물게 필요 (${groups3.length}건)`}</div>
+                ${sectionHeader('#5a3680', '🗂²', (_en ? `Group suggestions — level 3, when needed (${groups3.length})` : `그룹 제안 — 레벨3 세부업무, 드물게 필요 (${groups3.length}건)`), 'wow-apply-group3-btn', groups3.length > 0, '10px')}
                 ${groupHtml3}
                 <div style="font-weight:bold; font-size:12.5px; color:#8a6d1a; margin:10px 0 4px;">📐 ${_en ? `Level inconsistencies — reference only (${levelIssues.length})` : `레벨 불일치 참고 (${levelIssues.length}건)`}</div>
                 ${levelHtml}
-                <div style="font-weight:bold; font-size:12.5px; color:#0f6b5c; margin:10px 0 4px;">📅 ${_en ? 'Sibling order' : '순서 정리'}</div>
+                ${sectionHeader('#0f6b5c', '📅', (_en ? 'Sibling order' : '순서 정리'), 'wow-apply-sort-btn', outOfOrder > 0, '10px')}
                 <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #d0e8e2; border-radius:8px; cursor:pointer; font-size:12px; color:#333; ${outOfOrder === 0 ? 'opacity:0.5;' : ''}">
                     <input type="checkbox" id="wow-sort-toggle" ${outOfOrder > 0 ? 'checked' : 'disabled'}>
                     ${outOfOrder > 0
@@ -1812,50 +1820,64 @@
         });
 
         const applyBtn = document.getElementById('wow-apply-all-btn');
-        if (applyBtn) {
-            applyBtn.addEventListener('click', async function() {
-                // 🐛 [2026-10-27, 실사용 제보] "눌렀는데 멎었는지 진행 중인지 알 수가 없다" — 원인은
-                //    둘이었다: ① 그룹을 N개 묶으면 groupSelectedRows()가 매번 recalculateSchedules()
-                //    (실측 867행 전체 재계산)를 불러 N배로 느려졌음(CLAUDE.md "대량 조작은 끝에 1회만"
-                //    위반 — skipFinish=true로 고침, 재계산은 맨 끝에 딱 한 번). ② 그 한 번의 동기 작업도
-                //    아무 표시 없이 돌아 "멎은 것처럼" 보였음 — 진행률 바 + 단계별 라벨을 추가하고,
-                //    매 단계 사이 setTimeout(0)으로 한 틱 양보해 브라우저가 실제로 그 상태를 그리게 함.
-                const progWrap = document.getElementById('wow-apply-progress');
-                const progLabel = document.getElementById('wow-apply-progress-label');
-                const progFill = document.getElementById('wow-apply-progress-fill');
-                const setProgress = function(label, pct) {
-                    if (progLabel) progLabel.textContent = label;
-                    if (progFill) progFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-                };
-                const yieldFrame = function() { return new Promise(function(r) { setTimeout(r, 0); }); };
+        const demoteBtn = document.getElementById('wow-apply-demote-btn');
+        const dupBtn = document.getElementById('wow-apply-dup-btn');
+        const group4Btn = document.getElementById('wow-apply-group4-btn');
+        const group3Btn = document.getElementById('wow-apply-group3-btn');
+        const sortBtn = document.getElementById('wow-apply-sort-btn');
+        const allApplyBtns = [applyBtn, demoteBtn, dupBtn, group4Btn, group3Btn, sortBtn].filter(Boolean);
 
-                applyBtn.disabled = true;
-                applyBtn.style.opacity = '0.5';
-                applyBtn.style.cursor = 'default';
-                if (progWrap) progWrap.style.display = 'block';
-                setProgress(_en ? 'Starting...' : '시작하는 중...', 3);
-                await yieldFrame();
+        // 🆕 (2026-10-27) scope별로 한 기능만 돌릴 수 있게 분리 — scope='all'이면 기존(체크박스 기준)
+        //    전체 일괄 적용과 동일하게 동작, 그 외 scope는 체크 여부와 무관하게 그 섹션만 실행한다.
+        //    🐛 [2026-10-27, 실사용 제보] "눌렀는데 멎었는지 진행 중인지 알 수가 없다" — 원인은
+        //    둘이었다: ① 그룹을 N개 묶으면 groupSelectedRows()가 매번 recalculateSchedules()
+        //    (실측 867행 전체 재계산)를 불러 N배로 느려졌음(CLAUDE.md "대량 조작은 끝에 1회만"
+        //    위반 — skipFinish=true로 고침, 재계산은 맨 끝에 딱 한 번). ② 그 한 번의 동기 작업도
+        //    아무 표시 없이 돌아 "멎은 것처럼" 보였음 — 진행률 바 + 단계별 라벨을 추가하고,
+        //    매 단계 사이 setTimeout(0)으로 한 틱 양보해 브라우저가 실제로 그 상태를 그리게 함.
+        const doApply = async function(scope) {
+            const progWrap = document.getElementById('wow-apply-progress');
+            const progLabel = document.getElementById('wow-apply-progress-label');
+            const progFill = document.getElementById('wow-apply-progress-fill');
+            const setProgress = function(label, pct) {
+                if (progLabel) progLabel.textContent = label;
+                if (progFill) progFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+            };
+            const yieldFrame = function() { return new Promise(function(r) { setTimeout(r, 0); }); };
 
-                let demoted = 0, dupDeleted = 0, groupsApplied = 0, groupTasks = 0, sorted = false;
+            allApplyBtns.forEach(function(b) { b.disabled = true; b.style.opacity = '0.5'; b.style.cursor = 'default'; });
+            if (progWrap) progWrap.style.display = 'block';
+            setProgress(_en ? 'Starting...' : '시작하는 중...', 3);
+            await yieldFrame();
 
-                // 0) 레벨 정규화 — 레벨3 리프를 레벨4로 강등. 제일 먼저 해야 이후 중복/그룹 판정이
-                //    "신규는 항상 레벨4"라는 새 규칙과 어긋나지 않는다. 이번 판에 새로 레벨4가 된
-                //    업무는 이번 그룹 묶기 후보 목록(groups4)엔 아직 안 잡혀 있다 — 다음 진단(재렌더)
-                //    에서 잡힌다.
+            let demoted = 0, dupDeleted = 0, groupsApplied = 0, groupTasks = 0, sorted = false;
+            const runDemote = scope === 'all' || scope === 'demote';
+            const runDup = scope === 'all' || scope === 'dup';
+            const runGroup4 = scope === 'all' || scope === 'group4';
+            const runGroup3 = scope === 'all' || scope === 'group3';
+            const runSort = scope === 'all' || scope === 'sort';
+
+            // 0) 레벨 정규화 — 레벨3 리프를 레벨4로 강등. 제일 먼저 해야 이후 중복/그룹 판정이
+            //    "신규는 항상 레벨4"라는 새 규칙과 어긋나지 않는다. 이번 판에 새로 레벨4가 된
+            //    업무는 이번 그룹 묶기 후보 목록(groups4)엔 아직 안 잡혀 있다 — 다음 진단(재렌더)
+            //    에서 잡힌다.
+            if (runDemote) {
                 const demoteChk = document.getElementById('wow-demote-toggle');
-                if (demoteChk && demoteChk.checked && !demoteChk.disabled) {
-                    setProgress(_en ? 'Normalizing levels...' : '레벨 정규화 중...', 6);
+                if (scope === 'demote' || (demoteChk && demoteChk.checked && !demoteChk.disabled)) {
+                    setProgress(_en ? 'Normalizing levels...' : '레벨 정규화 중...', 10);
                     await yieldFrame();
                     demoted = window._wbsApplyDemoteLevel3Leaves(level3Leaves);
                 }
+            }
 
-                // 1) 중복 삭제 — 체크된 카드만, 각 카드는 첫 번째 행만 남기고 나머지 삭제. recalculate는
-                //    아직 안 부른다(그룹까지 다 끝난 뒤 맨 마지막에 한 번만).
+            // 1) 중복 삭제 — 체크된 카드만, 각 카드는 첫 번째 행만 남기고 나머지 삭제. recalculate는
+            //    아직 안 부른다(그룹까지 다 끝난 뒤 맨 마지막에 한 번만).
+            if (runDup) {
                 const checkedDupCards = Array.from(modal.querySelectorAll('.wow-dup-cand')).filter(function(c) {
                     const chk = c.querySelector('.wow-dup-chk'); return chk && chk.checked;
                 });
                 if (checkedDupCards.length) {
-                    setProgress(_en ? 'Cleaning duplicates...' : '중복 정리 중...', 10);
+                    setProgress(_en ? 'Cleaning duplicates...' : '중복 정리 중...', 25);
                     await yieldFrame();
                     checkedDupCards.forEach(function(card) {
                         const di = parseInt(card.dataset.di, 10);
@@ -1867,10 +1889,12 @@
                     });
                     if (dupDeleted > 0) logChange(0, -1, '중복 정리', dupDeleted + '개 중복 업무 삭제');
                 }
+            }
 
-                // 2) 그룹 묶기 — 체크된 멤버가 2개 이상인 카드만. skipFinish=true라 매 호출이 즉시 끝나고,
-                //    재계산은 맨 끝에서 딱 한 번만 돈다. 레벨4(1차) 카드를 먼저 전부 처리한 뒤 레벨3
-                //    (2차) 카드를 처리한다 — "4번 묶고 필요한 경우 3번" 순서를 그대로 따른다.
+            // 2) 그룹 묶기 — 체크된 멤버가 2개 이상인 카드만. skipFinish=true라 매 호출이 즉시 끝나고,
+            //    재계산은 맨 끝에서 딱 한 번만 돈다. 레벨4(1차) 카드를 먼저 전부 처리한 뒤 레벨3
+            //    (2차) 카드를 처리한다 — "4번 묶고 필요한 경우 3번" 순서를 그대로 따른다.
+            if (runGroup4 || runGroup3) {
                 const collectGroupCards = function(selector, srcList) {
                     return Array.from(modal.querySelectorAll(selector)).map(function(card) {
                         const gi = parseInt(card.dataset.gi, 10);
@@ -1881,12 +1905,13 @@
                         return { cand: cand, name: name, checkedOrds: checkedOrds };
                     }).filter(function(x) { return x.cand && x.name && x.checkedOrds.length >= 2; });
                 };
-                const toApplyGroups = collectGroupCards('.wow-group4-cand', groups4).concat(collectGroupCards('.wow-group3-cand', groups3));
+                const toApplyGroups = (runGroup4 ? collectGroupCards('.wow-group4-cand', groups4) : [])
+                    .concat(runGroup3 ? collectGroupCards('.wow-group3-cand', groups3) : []);
 
                 for (let gi = 0; gi < toApplyGroups.length; gi++) {
                     const g = toApplyGroups[gi];
                     setProgress((_en ? 'Grouping... ' : '그룹 묶는 중... ') + (gi + 1) + '/' + toApplyGroups.length,
-                                15 + Math.round((gi / Math.max(1, toApplyGroups.length)) * 55));
+                                30 + Math.round((gi / Math.max(1, toApplyGroups.length)) * 50));
                     await yieldFrame();
                     const refs = g.checkedOrds.map(function(o) { return g.cand.memberRows[o]; }).filter(Boolean);
                     const curIdx = refs.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; });
@@ -1894,23 +1919,47 @@
                     window._selectedRows = new Set(curIdx);
                     if (window.groupSelectedRows(g.name, true)) { groupsApplied++; groupTasks += curIdx.length; }
                 }
+            }
 
-                // 3) 순서 정리 또는 마무리 재계산 — 어느 쪽이든 여기서 전체가 "딱 한 번"만 재계산된다
-                setProgress(_en ? 'Recalculating schedule...' : '일정 재계산 중...', 85);
-                await yieldFrame();
+            // scope가 특정 섹션인데 실제로 한 일이 없으면(체크 해제 등) 재계산/재렌더 없이 바로 안내
+            if (scope !== 'all') {
+                const nothingDone = (scope === 'demote' && demoted === 0)
+                    || (scope === 'dup' && dupDeleted === 0)
+                    || ((scope === 'group4' || scope === 'group3') && groupsApplied === 0);
+                if (nothingDone && scope !== 'sort') {
+                    if (progWrap) progWrap.style.display = 'none';
+                    window._renderGanttOrganizeWizard(); // 재렌더가 버튼 disabled 상태까지 전부 새로 그린다
+                    if (window.showToast) window.showToast(_en ? '⚠️ No checked items to apply.' : '⚠️ 선택된 항목이 없습니다.', 'warning');
+                    return;
+                }
+            }
+
+            // 3) 순서 정리 또는 마무리 재계산 — 어느 쪽이든 여기서 전체가 "딱 한 번"만 재계산된다
+            setProgress(_en ? 'Recalculating schedule...' : '일정 재계산 중...', 90);
+            await yieldFrame();
+            if (runSort) {
                 const sortChk = document.getElementById('wow-sort-toggle');
-                if (sortChk && sortChk.checked && !sortChk.disabled) { window.sortRowsByStartDate(); sorted = true; }
+                if (scope === 'sort' || (sortChk && sortChk.checked && !sortChk.disabled)) { window.sortRowsByStartDate(); sorted = true; }
                 else { window.recalculateSchedules(); }
+            } else {
+                window.recalculateSchedules();
+            }
 
-                setProgress(_en ? 'Done' : '완료', 100);
-                await yieldFrame();
+            setProgress(_en ? 'Done' : '완료', 100);
+            await yieldFrame();
 
-                window._renderGanttOrganizeWizard(); // 전부 적용 후 통째로 다시 진단+렌더(남은 것만 보여줌)
-                if (window.showToast) window.showToast(_en
-                    ? `✅ Normalized ${demoted} level(s), cleaned ${dupDeleted} duplicate(s), ${groupsApplied} group(s) (${groupTasks} task(s))${sorted ? ', reordered by date' : ''}.`
-                    : `✅ 레벨 정규화 ${demoted}건, 중복 ${dupDeleted}건 정리, ${groupsApplied}개 그룹(${groupTasks}개 업무) 묶음${sorted ? ', 날짜순 재정렬' : ''} 완료.`, 'info');
-            });
-        }
+            window._renderGanttOrganizeWizard(); // 적용 후 통째로 다시 진단+렌더(남은 것만 보여줌)
+            if (window.showToast) window.showToast(_en
+                ? `✅ Normalized ${demoted} level(s), cleaned ${dupDeleted} duplicate(s), ${groupsApplied} group(s) (${groupTasks} task(s))${sorted ? ', reordered by date' : ''}.`
+                : `✅ 레벨 정규화 ${demoted}건, 중복 ${dupDeleted}건 정리, ${groupsApplied}개 그룹(${groupTasks}개 업무) 묶음${sorted ? ', 날짜순 재정렬' : ''} 완료.`, 'info');
+        };
+
+        if (applyBtn) applyBtn.addEventListener('click', function() { doApply('all'); });
+        if (demoteBtn) demoteBtn.addEventListener('click', function() { doApply('demote'); });
+        if (dupBtn) dupBtn.addEventListener('click', function() { doApply('dup'); });
+        if (group4Btn) group4Btn.addEventListener('click', function() { doApply('group4'); });
+        if (group3Btn) group3Btn.addEventListener('click', function() { doApply('group3'); });
+        if (sortBtn) sortBtn.addEventListener('click', function() { doApply('sort'); });
     };
 
     // 🗂 그룹 제안 검토 모달 — 후보를 하나 적용할 때마다 배열 인덱스가 전부 바뀌므로, 매번
