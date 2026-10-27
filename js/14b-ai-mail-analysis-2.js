@@ -645,7 +645,10 @@ window.computeCalcDatesForRows = function(rows, ci) {
             else { node.endTs = node.startTs; }
             return;
         }
-        let currentWaterfallStart = node.startTs; let maxChildEnd = node.startTs; let groupStartTs = node.startTs; let isFirstValid = true;
+        // 🐛 [2026-10-27, js/04d와 동일 버그 동일 수정] maxChildEnd를 node.startTs로 초기화하면
+        //    자식들이 전부 그보다 일찍 끝날 때 한 번도 갱신 안 돼 "시작=완료" 하루짜리로 굳는다 —
+        //    null로 시작해 실제 자식이 있으면 그 값만 쓰고, 전부 explicitZero일 때만 폴백.
+        let currentWaterfallStart = node.startTs; let maxChildEnd = null; let groupStartTs = node.startTs; let isFirstValid = true;
         for (let i = 0; i < node.children.length; i++) {
             let child = node.children[i];
             if (child.row._isExplicitZero) { scheduleNode(child, currentWaterfallStart); continue; }
@@ -656,14 +659,14 @@ window.computeCalcDatesForRows = function(rows, ci) {
             scheduleNode(child, intendedStart);
             if (isFirstValid) { groupStartTs = child.startTs; isFirstValid = false; }
             else if (!child.isParallel) { groupStartTs = child.startTs; }
-            if (child.endTs > maxChildEnd) maxChildEnd = child.endTs;
+            if (maxChildEnd === null || child.endTs > maxChildEnd) maxChildEnd = child.endTs;
             currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
         }
-        node.endTs = maxChildEnd;
+        node.endTs = (maxChildEnd !== null) ? maxChildEnd : node.startTs;
     }
 
     let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0);
-    let maxL0End = currentL0Start; let groupL0StartTs = currentL0Start; let isFirstValidL0 = true;
+    let maxL0End = null; let groupL0StartTs = currentL0Start; let isFirstValidL0 = true;
     for (let i = 0; i < tree.length; i++) {
         let l0Node = tree[i];
         if (l0Node.row._isExplicitZero) { scheduleNode(l0Node, currentL0Start); continue; }
@@ -674,7 +677,7 @@ window.computeCalcDatesForRows = function(rows, ci) {
         scheduleNode(l0Node, intendedStart);
         if (isFirstValidL0) { groupL0StartTs = l0Node.startTs; isFirstValidL0 = false; }
         else if (!l0Node.isParallel) { groupL0StartTs = l0Node.startTs; }
-        if (l0Node.endTs > maxL0End) maxL0End = l0Node.endTs;
+        if (maxL0End === null || l0Node.endTs > maxL0End) maxL0End = l0Node.endTs;
         currentL0Start = addWorkingDays(maxL0End, 1);
     }
 

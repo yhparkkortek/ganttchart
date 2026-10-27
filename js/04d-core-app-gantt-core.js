@@ -462,59 +462,72 @@
                     return;
                 }
                 
-                let currentWaterfallStart = node.startTs; 
-                let maxChildEnd = node.startTs; 
-                let groupStartTs = node.startTs; 
+                let currentWaterfallStart = node.startTs;
+                // 🐛 [2026-10-27, 실사용 제보 "같은레벨끼리 날짜가 순환되고 있어서 일정이 하나도 안
+                //    맞음"] maxChildEnd를 node.startTs(부모 자신의, 앞 형제 워터폴로 밀린 "상속된"
+                //    시작일)로 초기화해 둬서, 자식들이 전부 그 날짜보다 "일찍" 끝나는 경우(부모 시작이
+                //    앞 형제 지연으로 뒤로 밀렸는데 이 가지의 자식들은 원래 이른 날짜로 고정돼 있던 경우,
+                //    실측 "DP 케이블 길이/연결 확인" 재현)에 `if (child.endTs > maxChildEnd)`가 단 한
+                //    번도 참이 되지 않아 자식 날짜를 전혀 반영 못하고 그룹 자신이 "시작=완료"인 하루짜리
+                //    유령 일정으로 굳어버렸다. 이 값이 다음 형제의 currentWaterfallStart로 그대로
+                //    이어지므로, 뒤이은 형제들의 날짜까지 연쇄적으로 틀어졌다(사용자가 본 "순환"의 정체).
+                //    null로 시작해 실제 자식이 하나라도 있으면 그 값으로만 채우고, 끝까지 하나도 못
+                //    채웠을 때만(전부 explicitZero) 기존처럼 node.startTs로 폴백한다.
+                let maxChildEnd = null;
+                let groupStartTs = node.startTs;
                 let isFirstValid = true;
 
                 for (let i = 0; i < node.children.length; i++) {
                     let child = node.children[i];
                     if (child.row._isExplicitZero) { scheduleNode(child, currentWaterfallStart); continue; }
-                    
+
                     let intendedStart;
                     if (isFirstValid) intendedStart = node.startTs;
                     else if (child.isParallel) intendedStart = groupStartTs;
                     else intendedStart = currentWaterfallStart;
-                    
+
                     scheduleNode(child, intendedStart);
-                    
+
                     if (isFirstValid) {
                         groupStartTs = child.startTs;
                         isFirstValid = false;
                     } else if (!child.isParallel) {
                         groupStartTs = child.startTs;
                     }
-                    
-                    if (child.endTs > maxChildEnd) maxChildEnd = child.endTs;
+
+                    if (maxChildEnd === null || child.endTs > maxChildEnd) maxChildEnd = child.endTs;
                     currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
                 }
-                node.endTs = maxChildEnd;
+                node.endTs = (maxChildEnd !== null) ? maxChildEnd : node.startTs;
             }
 
-            let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0); 
-            let maxL0End = currentL0Start; 
-            let groupL0StartTs = currentL0Start; 
+            let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0);
+            // 🐛 [2026-10-27] 위 maxChildEnd와 같은 이유로 null 시작 + 폴백으로 통일(루트 레벨0
+            //    형제 간 워터폴 체인도 같은 초기화 함정에 노출돼 있었다 — 여기선 특정 행의 endTs를
+            //    직접 정하진 않지만, 다음 L0 형제의 시작일 기준(currentL0Start)이 이 값에서 나온다).
+            let maxL0End = null;
+            let groupL0StartTs = currentL0Start;
             let isFirstValidL0 = true;
 
             for (let i = 0; i < tree.length; i++) {
                 let l0Node = tree[i];
                 if (l0Node.row._isExplicitZero) { scheduleNode(l0Node, currentL0Start); continue; }
-                
+
                 let intendedStart;
                 if (isFirstValidL0) intendedStart = currentL0Start;
                 else if (l0Node.isParallel) intendedStart = groupL0StartTs;
                 else intendedStart = currentL0Start;
-                
+
                 scheduleNode(l0Node, intendedStart);
-                
+
                 if (isFirstValidL0) {
                     groupL0StartTs = l0Node.startTs;
                     isFirstValidL0 = false;
                 } else if (!l0Node.isParallel) {
                     groupL0StartTs = l0Node.startTs;
                 }
-                
-                if (l0Node.endTs > maxL0End) maxL0End = l0Node.endTs;
+
+                if (maxL0End === null || l0Node.endTs > maxL0End) maxL0End = l0Node.endTs;
                 currentL0Start = addWorkingDays(maxL0End, 1);
             }
 
