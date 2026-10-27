@@ -474,6 +474,7 @@
                 //    null로 시작해 실제 자식이 하나라도 있으면 그 값으로만 채우고, 끝까지 하나도 못
                 //    채웠을 때만(전부 explicitZero) 기존처럼 node.startTs로 폴백한다.
                 let maxChildEnd = null;
+                let minChildStart = null;
                 let groupStartTs = node.startTs;
                 let isFirstValid = true;
 
@@ -495,10 +496,17 @@
                         groupStartTs = child.startTs;
                     }
 
+                    if (minChildStart === null || child.startTs < minChildStart) minChildStart = child.startTs;
                     if (maxChildEnd === null || child.endTs > maxChildEnd) maxChildEnd = child.endTs;
                     currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
                 }
                 node.endTs = (maxChildEnd !== null) ? maxChildEnd : node.startTs;
+                // 📐 [2026-10-27, 실사용 제보 "상위레벨 날짜가 같은레벨(형제 워터폴) 우선으로 계산된다"]
+                //    시작일도 종료일과 대칭으로 자식 기준 bottom-up이어야 한다 — 지금까지 node.startTs는
+                //    위(line 454)에서 "앞 형제한테서 물려받은" 값 그대로 남아있었다(자식이 실제로 그보다
+                //    일찍 시작하는 명시 일정을 갖고 있어도 전혀 반영 안 됨). 부모 자신이 명시/고정 시작일이
+                //    없는 한, 자식들을 전부 계산한 뒤 그중 가장 이른 시작일로 덮어쓴다.
+                if (!node.explicitStartTs && minChildStart !== null) node.startTs = minChildStart;
             }
 
             let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0);

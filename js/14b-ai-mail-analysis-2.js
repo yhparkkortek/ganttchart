@@ -646,7 +646,7 @@ window.computeCalcDatesForRows = function(rows, ci) {
         // 🐛 [2026-10-27, js/04d와 동일 버그 동일 수정] maxChildEnd를 node.startTs로 초기화하면
         //    자식들이 전부 그보다 일찍 끝날 때 한 번도 갱신 안 돼 "시작=완료" 하루짜리로 굳는다 —
         //    null로 시작해 실제 자식이 있으면 그 값만 쓰고, 전부 explicitZero일 때만 폴백.
-        let currentWaterfallStart = node.startTs; let maxChildEnd = null; let groupStartTs = node.startTs; let isFirstValid = true;
+        let currentWaterfallStart = node.startTs; let maxChildEnd = null; let minChildStart = null; let groupStartTs = node.startTs; let isFirstValid = true;
         for (let i = 0; i < node.children.length; i++) {
             let child = node.children[i];
             if (child.row._isExplicitZero) { scheduleNode(child, currentWaterfallStart); continue; }
@@ -657,10 +657,13 @@ window.computeCalcDatesForRows = function(rows, ci) {
             scheduleNode(child, intendedStart);
             if (isFirstValid) { groupStartTs = child.startTs; isFirstValid = false; }
             else if (!child.isParallel) { groupStartTs = child.startTs; }
+            if (minChildStart === null || child.startTs < minChildStart) minChildStart = child.startTs;
             if (maxChildEnd === null || child.endTs > maxChildEnd) maxChildEnd = child.endTs;
             currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
         }
         node.endTs = (maxChildEnd !== null) ? maxChildEnd : node.startTs;
+        // 📐 [2026-10-27, js/04d와 동일 수정] 시작일도 종료일과 대칭으로 자식 기준 bottom-up
+        if (!node.explicitStartTs && minChildStart !== null) node.startTs = minChildStart;
     }
 
     let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0);
