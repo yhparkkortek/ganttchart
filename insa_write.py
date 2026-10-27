@@ -47,7 +47,8 @@ import time
 
 import gw_bridge as gb
 
-REGFORM_PATH = '/workPlanEdit/regForm'
+REGFORM_PATH = '/workPlanEdit/regForm'        # 근무계획 수정 신청서
+OW_REGFORM_PATH = '/overWorkReq/regForm'      # 연장근무 신청서 — 2026-10-27, 아래 그 둘의 차이 참고
 
 #: 동기 XHR 이 끝나기를 기다려 주는 한계. 넘으면 실패로 보고한다(무한 대기 금지).
 IDLE_LIMIT = 30
@@ -57,8 +58,25 @@ class RendererBusy(RuntimeError):
     """렌더러 메인 스레드가 막혀 있다 — 동기 XHR 또는 대화상자."""
 
 
-def _regform_tab():
-    return gb._page_for(REGFORM_PATH, gb.INSA_ORIGIN + REGFORM_PATH)
+def _regform_tab(path=REGFORM_PATH):
+    """신청서 팝업 탭을 찾는다 — **없으면 새로 만들지 않는다**(순수 조회).
+
+    🐛 [2026-10-27] `gb._page_for`를 그대로 썼더니 없을 때 그 경로로 **GET 새 탭을 열어버렸다**
+       — 이 경로들은 POST 전용이라 Tomcat 405 오류 페이지가 뜨는데, 그 페이지 URL에도 경로
+       문자열이 그대로 남아 있어 "찾았다"고 오판했다. 그 뒤 `form_state()`가 그 오류 페이지에서
+       `myGrid`/jQuery 를 찾다 "Uncaught"로 실패 — 신청서를 **한 번도 연 적 없는 상태**에서
+       `/insa/workplan-form`을 부르면 매번 재현됐다(연장근무 신청 추가하며 뒤늦게 드러남).
+       열기는 반드시 open_regform/open_ow_regform(진짜 POST 트릭)으로만 하고, 여기서는
+       **이미 뜬 탭이 있는지만** 본다."""
+    import requests
+    try:
+        tabs = requests.get(gb.CDP_BASE + '/json/list', timeout=5).json()
+    except Exception:
+        return None
+    for t in tabs:
+        if t.get('type') == 'page' and path in (t.get('url') or ''):
+            return t
+    return None
 
 
 async def _eval_with_dialogs(ws_url, expr, timeout):
@@ -98,12 +116,15 @@ async def _eval_with_dialogs(ws_url, expr, timeout):
 _LAST_DIALOGS = []
 
 
-def _ev(expr, timeout=10):
-    """근무계획 수정 신청서 **팝업 탭**에서 JS 실행 (일반 조회 탭과 다른 창이다)."""
+def _ev(expr, timeout=10, path=REGFORM_PATH):
+    """신청서 **팝업 탭**에서 JS 실행 (일반 조회 탭과 다른 창이다).
+
+    `path` 로 어느 신청서 창인지 고른다 — 근무계획 수정/연장근무 신청 팝업이
+    동시에 열려 있어도 서로 안 섞이도록(2026-10-27, 연장근무 신청 추가하며 일반화)."""
     import asyncio
-    t = _regform_tab()
+    t = _regform_tab(path)
     if not t:
-        raise RuntimeError('근무계획 수정 신청서 창을 찾지 못했습니다 — 먼저 그 화면을 열어주세요.')
+        raise RuntimeError(f'{path} 창을 찾지 못했습니다 — 먼저 그 화면을 열어주세요.')
     val, dialogs = asyncio.new_event_loop().run_until_complete(
         _eval_with_dialogs(t['webSocketDebuggerUrl'], expr, timeout))
     if dialogs:
@@ -111,12 +132,12 @@ def _ev(expr, timeout=10):
     return val
 
 
-def _wait_idle(limit=IDLE_LIMIT):
+def _wait_idle(limit=IDLE_LIMIT, path=REGFORM_PATH):
     """렌더러가 다시 응답할 때까지 폴링. 돌아오면 True, 한계를 넘으면 False."""
     end = time.time() + limit
     while time.time() < end:
         try:
-            if _ev('1', timeout=2) == 1:
+            if _ev('1', timeout=2, path=path) == 1:
                 return True
         except RendererBusy:
             continue
@@ -125,21 +146,25 @@ def _wait_idle(limit=IDLE_LIMIT):
     return False
 
 
-def _fire(expr, limit=IDLE_LIMIT):
+def _fire(expr, limit=IDLE_LIMIT, path=REGFORM_PATH):
     """동기 XHR 을 유발할 수 있는 동작(일괄입력 버튼)을 **응답을 기다리지 않고** 보낸다.
 
     CDP 로 보낸 명령은 소켓을 닫아도 렌더러에서 실행된다. 그래서 짧게 보내 놓고,
     렌더러가 살아 돌아오는지를 따로 확인한다. 돌아오면 True.
     """
     try:
-        _ev(expr, timeout=3)
+        _ev(expr, timeout=3, path=path)
         return True
     except RendererBusy:
-        return _wait_idle(limit)
+        return _wait_idle(limit, path=path)
 
 
-def form_state():
-    """지금 폼에 뭐가 들어 있는지 — 채우기 전후 비교용(읽기만)."""
+def form_state(path=REGFORM_PATH):
+    """지금 폼에 뭐가 들어 있는지 — 채우기 전후 비교용(읽기만).
+
+    연장근무 신청서(OW_REGFORM_PATH)엔 `#req_subject`/`#req_content` 칸이 아예 없다 —
+    jQuery 는 없는 선택자에도 그냥 빈 jQuery 객체를 돌려주므로(예외 없음) subject/content 는
+    그 화면에서 그냥 빈 문자열로 나온다. 화면마다 분기하지 않는다."""
     expr = (
         "(function(){"
         " var g = (typeof myGrid !== 'undefined') ? myGrid : null;"
@@ -158,10 +183,10 @@ def form_state():
         " return { subject: ($('#req_subject').val()||''), content: ($('#req_content').val()||''),"
         "          rowCount: n, rows: out };"
         "})()")
-    return _ev(expr)
+    return _ev(expr, path=path)
 
 
-def _meal_options():
+def _meal_options(path=REGFORM_PATH):
     """식사유형 콤보가 **실제로 가진** 값을 화면에서 읽어 온다.
 
     코드표를 여기에 박지 않는다(하드코딩 지양 — CLAUDE.md). 실측값은
@@ -170,7 +195,7 @@ def _meal_options():
     raw = _ev("(function(){ var o = [];"
               " $('#iMealTypeLunch option').each(function(){"
               "   o.push({ v: this.value, t: $(this).text().trim() }); });"
-              " return JSON.stringify(o); })()") or '[]'
+              " return JSON.stringify(o); })()", path=path) or '[]'
     return [o for o in json.loads(raw) if o.get('v')]
 
 
@@ -188,23 +213,23 @@ def _meal_code(want, opts):
     return None
 
 
-def _row_ids():
+def _row_ids(path=REGFORM_PATH):
     raw = _ev("(function(){ return (typeof myGrid === 'undefined') ? ''"
-              "        : String(myGrid.getAllRowIds() || ''); })()") or ''
+              "        : String(myGrid.getAllRowIds() || ''); })()", path=path) or ''
     return [r for r in str(raw).split(',') if r]
 
 
-def _check_only(ids):
+def _check_only(ids, path=REGFORM_PATH):
     """지정한 행만 체크한다 — **일괄입력은 체크된 행에만 걸리므로** 이게 행 단위 제어의 전부다."""
     return _ev("(function(){ if (typeof myGrid === 'undefined') return false;"
                " var want = %s, ci = myGrid.getColIndexById('ch');"
                " String(myGrid.getAllRowIds()||'').split(',').forEach(function(id){"
                "   if (!id) return;"
                "   try { myGrid.cells(id, ci).setValue(want.indexOf(id) >= 0 ? 1 : 0); } catch(e){} });"
-               " return true; })()" % json.dumps([str(i) for i in ids]))
+               " return true; })()" % json.dumps([str(i) for i in ids]), path=path)
 
 
-def _row_get(row_id, cols):
+def _row_get(row_id, cols, path=REGFORM_PATH):
     """한 행에서 여러 열을 **한 번에** 읽는다(열마다 왕복하지 않는다)."""
     raw = _ev("(function(){ if (typeof myGrid === 'undefined') return '{}';"
               " var id = %s, out = {};"
@@ -212,7 +237,7 @@ def _row_get(row_id, cols):
               "   try { out[c] = myGrid.cells(id, myGrid.getColIndexById(c)).getValue(); }"
               "   catch(e){ out[c] = ''; } });"
               " return JSON.stringify(out); })()"
-              % (json.dumps(str(row_id)), json.dumps(list(cols)))) or '{}'
+              % (json.dumps(str(row_id)), json.dumps(list(cols))), path=path) or '{}'
     return json.loads(raw)
 
 
@@ -234,61 +259,32 @@ def _normalize_days(days, date, start, end, lunch, dinner, remark):
     return []
 
 
-def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=None, remark=None,
-                       lunch=None, dinner=None, days=None):
-    """근무계획 수정 신청서의 칸을 채운다. **등록은 누르지 않는다.**
+def _hhmm(v):
+    s = str(v or '').strip()
+    if not s:
+        return None, None
+    if ':' in s:
+        h, m = s.split(':', 1)
+    else:                       # "22" 처럼 시만 준 경우
+        h, m = s, '00'
+    return h.zfill(2), m.zfill(2)
 
-    days  [{date,start,end,lunch,dinner,remark}, ...]
-          **최종적으로 이런 행들이 있어야 한다**는 목록이다. 행 수를 여기에 맞춰
-          더하거나 지우므로 같은 요청을 두 번 보내도 행이 불어나지 않는다(멱등).
-          날짜마다 다른 시간·식사유형을 넣으려면 이쪽을 쓴다.
-    date/start/end/lunch/dinner/remark
-          날짜 하나짜리 **옛 호출 방식** — days 한 개와 같다.
-    subject / content       제목 / 신청 사유 (신청서 전체에 하나씩)
 
-    ⚠️ 한 날짜는 한 행뿐이다 — 같은 날짜를 두 번 주면 사이트가 막는다($.getPlanTimeDupChk).
+def _fill_rows(plan, before, steps, path=REGFORM_PATH):
+    """행 수를 맞추고(본인신청/삭제) 행마다 날짜·시간·식사유형·비고를 채운다.
 
-    반환: {'ok':…, 'before':…, 'after':…, 'steps':[…], 'dialogs':[…]}
+    근무계획 수정 신청서·연장근무 신청서가 **그리드 칸 이름까지 똑같아서**(2026-10-27 확인)
+    공용으로 뺐다 — 제목/내용(`req_subject`/`req_content`)처럼 화면마다 있고 없고가
+    갈리는 것만 호출하는 쪽에서 따로 처리한다.
+
+    반환: (ids, error_message_or_None, error_extra_or_None). 실패하면 ids 는 그때까지의 상태.
     """
-    def hhmm(v):
-        s = str(v or '').strip()
-        if not s:
-            return None, None
-        if ':' in s:
-            h, m = s.split(':', 1)
-        else:                       # "22" 처럼 시만 준 경우
-            h, m = s, '00'
-        return h.zfill(2), m.zfill(2)
-
-    global _LAST_DIALOGS
-    _LAST_DIALOGS = []          # 이번 채우기에서 뜬 안내창만 모은다
-    try:
-        before = form_state()
-    except RendererBusy as e:
-        return {'ok': False, 'busy': True, 'message':
-                f'인사관리 창이 응답하지 않습니다({e}). 근무계획 수정 신청서 창을 닫고 다시 열어주세요.'}
-    except Exception as e:
-        return {'ok': False, 'message': str(e)}
-
-    steps = []
-
-    def done(msg, ok=False, extra=None):
-        out = {'ok': ok, 'steps': steps, 'before': before,
-               'dialogs': list(_LAST_DIALOGS), 'message': msg}
-        if extra:
-            out.update(extra)
-        return out
-
-    plan = _normalize_days(days, date, start, end, lunch, dinner, remark)
-    if not plan:
-        return done('채울 내용이 없습니다 — 근무일자나 시간을 지정해주세요.')
-
     # ⚠️ 같은 사람·같은 날짜가 두 행이면 사이트가 막는다($.getPlanTimeDupChk) — 날짜는 서로 달라야 한다.
     _seen = []
     for _d in plan:
         _k = str(_d.get('date') or '')
         if _k and _k in _seen:
-            return done(f'같은 날짜({_k})가 두 번 들어왔습니다 — 이 화면은 한 날짜당 한 행만 받습니다.')
+            return None, f'같은 날짜({_k})가 두 번 들어왔습니다 — 이 화면은 한 날짜당 한 행만 받습니다.', None
         _seen.append(_k)
 
     # 🐛 [2026-10-21] 근무일자 일괄입력은 그 행의 식사유형을 **지운다**(소스 156~157행).
@@ -313,23 +309,22 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
     # 1) 행 수를 신청할 **날짜 수**에 맞춘다(모자라면 본인신청으로 더하고, 남으면 지운다).
     #    `days` 는 "최종적으로 이런 행들이 있어야 한다"는 목록이다 — 그래서 같은 요청을
     #    두 번 보내도 행이 불어나지 않는다(멱등).
-    ids = _row_ids()
+    ids = _row_ids(path=path)
     while len(ids) < len(plan):
-        if not _fire("(function(){ $('#addMeBtn').click(); return true; })()"):
-            return done('신청자 행 추가 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
-                        extra={'busy': True})
+        if not _fire("(function(){ $('#addMeBtn').click(); return true; })()", path=path):
+            return ids, '신청자 행 추가 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.', {'busy': True}
         time.sleep(1.0)
-        grown = _row_ids()
+        grown = _row_ids(path=path)
         if len(grown) <= len(ids):
-            return done('신청자 행이 늘지 않았습니다 — 화면을 확인해주세요.')
+            return ids, '신청자 행이 늘지 않았습니다 — 화면을 확인해주세요.', None
         ids = grown
         steps.append('본인신청(행 추가)')
     if len(ids) > len(plan):
         drop = ids[len(plan):]
-        _check_only(drop)          # 지우기도 **체크된 행** 기준이다($.deleteGridRow)
-        _fire("(function(){ $('#deleteGridRow').click(); return true; })()")
+        _check_only(drop, path=path)          # 지우기도 **체크된 행** 기준이다($.deleteGridRow)
+        _fire("(function(){ $('#deleteGridRow').click(); return true; })()", path=path)
         time.sleep(0.8)
-        ids = _row_ids()
+        ids = _row_ids(path=path)
         steps.append(f'남는 행 {len(drop)}개 삭제')
 
     meal_opts = None
@@ -341,28 +336,27 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
             break
         rid = ids[idx]
         tag = str(d.get('date') or '') or f'{idx + 1}번째 행'
-        _check_only([rid])
+        _check_only([rid], path=path)
 
         # 2-a) 근무일자 — ⚠️ 동기 XHR(getPlanTime). 기다리지 않고 보내고 폴링한다.
         if d.get('date'):
             if not _fire("(function(){ $('#date_from').val(%s); $('#inputAllDateBtn').click(); return true; })()"
-                         % json.dumps(str(d['date']))):
-                return done(f'근무일자({d["date"]}) 조회가 응답하지 않아 창이 멈췄습니다. '
-                            '인사관리 서버가 늦을 때 생기는 현상입니다 — 신청서 창을 닫고 다시 열어주세요.',
-                            extra={'busy': True})
+                         % json.dumps(str(d['date'])), path=path):
+                return ids, (f'근무일자({d["date"]}) 조회가 응답하지 않아 창이 멈췄습니다. '
+                            '인사관리 서버가 늦을 때 생기는 현상입니다 — 신청서 창을 닫고 다시 열어주세요.'), {'busy': True}
             time.sleep(1.0)
             steps.append(f'[{tag}] 근무일자')
 
         # 2-b) 근무시간 — 한쪽만 주면 사이트가 거부하므로 안 준 쪽은 **그 행의** 기존 계획으로.
-        sh, sm = hhmm(d.get('start'))
-        eh, em = hhmm(d.get('end'))
+        sh, sm = _hhmm(d.get('start'))
+        eh, em = _hhmm(d.get('end'))
         if (sh and not eh) or (eh and not sh):
-            cur = _row_get(rid, ['beSTime', 'beETime'])
+            cur = _row_get(rid, ['beSTime', 'beETime'], path=path)
             if not sh and cur.get('beSTime'):
-                sh, sm = hhmm(cur['beSTime'])
+                sh, sm = _hhmm(cur['beSTime'])
                 steps.append(f'[{tag}] 출근은 기존 계획 {sh}:{sm} 유지')
             if not eh and cur.get('beETime'):
-                eh, em = hhmm(cur['beETime'])
+                eh, em = _hhmm(cur['beETime'])
                 steps.append(f'[{tag}] 퇴근은 기존 계획 {eh}:{em} 유지')
         # 분은 00/30 만 받는다(콤보 옵션 실측) — 그 사이 값은 내림하고 사실을 알린다.
         for _lbl, _mm in (('출근', sm), ('퇴근', em)):
@@ -381,9 +375,8 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
             if eh:
                 parts.append("$('#iEndHour').val(%s); $('#iEndMin').val(%s);"
                              % (json.dumps(eh), json.dumps(em)))
-            if not _fire("(function(){ %s $('#inputAllTimeBtn').click(); return true; })()" % ' '.join(parts)):
-                return done(f'[{tag}] 근무시간 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
-                            extra={'busy': True})
+            if not _fire("(function(){ %s $('#inputAllTimeBtn').click(); return true; })()" % ' '.join(parts), path=path):
+                return ids, f'[{tag}] 근무시간 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.', {'busy': True}
             time.sleep(1.0)
             steps.append(f'[{tag}] 근무시간 ' + (f'{sh}:{sm}' if sh else '…')
                          + ' ~ ' + (f'{eh}:{em}' if eh else '…'))
@@ -394,20 +387,20 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
         #    · 점심·저녁 **둘 다** 골라야 한다 — 한쪽만 비면 거부한다(소스 233~241행).
         if d.get('lunch') is not None or d.get('dinner') is not None:
             if meal_opts is None:
-                meal_opts = _meal_options()
+                meal_opts = _meal_options(path=path)
             if not meal_opts:
-                return done('식사유형 선택값을 읽지 못했습니다.')
+                return ids, '식사유형 선택값을 읽지 못했습니다.', None
             names = ', '.join(o['v'] + '=' + o['t'] for o in meal_opts)
-            cur = _row_get(rid, ['o_lunch', 'o_dinner'])
+            cur = _row_get(rid, ['o_lunch', 'o_dinner'], path=path)
             lc = _meal_code(d['lunch'], meal_opts) if d.get('lunch') is not None else (cur.get('o_lunch') or None)
             dc = _meal_code(d['dinner'], meal_opts) if d.get('dinner') is not None else (cur.get('o_dinner') or None)
             if d.get('lunch') is not None and not lc:
-                return done(f'[{tag}] 식사유형(점심) "{d["lunch"]}" 를 알아볼 수 없습니다. 가능한 값: {names}')
+                return ids, f'[{tag}] 식사유형(점심) "{d["lunch"]}" 를 알아볼 수 없습니다. 가능한 값: {names}', None
             if d.get('dinner') is not None and not dc:
-                return done(f'[{tag}] 식사유형(저녁) "{d["dinner"]}" 를 알아볼 수 없습니다. 가능한 값: {names}')
+                return ids, f'[{tag}] 식사유형(저녁) "{d["dinner"]}" 를 알아볼 수 없습니다. 가능한 값: {names}', None
             if not lc or not dc:
-                return done(f'[{tag}] 이 화면은 식사유형 점심·저녁을 **둘 다** 받아야 적용합니다. '
-                            f'한쪽만 주셨고 기존값도 비어 있습니다. 가능한 값: {names}')
+                return ids, (f'[{tag}] 이 화면은 식사유형 점심·저녁을 **둘 다** 받아야 적용합니다. '
+                            f'한쪽만 주셨고 기존값도 비어 있습니다. 가능한 값: {names}'), None
             kept = d.get('_kept') or []
             if 'lunch' in kept:
                 steps.append(f'[{tag}] 점심은 앞서 넣은 값 유지')
@@ -419,9 +412,8 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
                 steps.append(f'[{tag}] 저녁은 기존값 유지')
             if not _fire("(function(){ $('#iMealTypeLunch').val(%s); $('#iMealTypeDinner').val(%s);"
                          " $('#inputAllMealBtn').click(); return true; })()"
-                         % (json.dumps(lc), json.dumps(dc))):
-                return done(f'[{tag}] 식사유형 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.',
-                            extra={'busy': True})
+                         % (json.dumps(lc), json.dumps(dc)), path=path):
+                return ids, f'[{tag}] 식사유형 입력 중에 창이 멈췄습니다 — 창을 닫고 다시 열어주세요.', {'busy': True}
             time.sleep(1.0)
             _lbl = {o['v']: o['t'] for o in meal_opts}
             steps.append(f'[{tag}] 식사유형 점심 {_lbl.get(lc, lc)} / 저녁 {_lbl.get(dc, dc)}')
@@ -430,10 +422,55 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
         if d.get('remark') is not None:
             _ev("(function(){ if (typeof myGrid === 'undefined') return false;"
                 " try { myGrid.cells(%s, myGrid.getColIndexById('remark')).setValue(%s); } catch(e){}"
-                " return true; })()" % (json.dumps(str(rid)), json.dumps(str(d['remark']))))
+                " return true; })()" % (json.dumps(str(rid)), json.dumps(str(d['remark']))), path=path)
             steps.append(f'[{tag}] 비고')
 
-    _check_only(ids)      # 끝나면 전부 체크해 둔다 — 사람이 보기에 자연스럽게
+    _check_only(ids, path=path)      # 끝나면 전부 체크해 둔다 — 사람이 보기에 자연스럽게
+    return ids, None, None
+
+
+def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=None, remark=None,
+                       lunch=None, dinner=None, days=None):
+    """근무계획 수정 신청서의 칸을 채운다. **등록은 누르지 않는다.**
+
+    days  [{date,start,end,lunch,dinner,remark}, ...]
+          **최종적으로 이런 행들이 있어야 한다**는 목록이다. 행 수를 여기에 맞춰
+          더하거나 지우므로 같은 요청을 두 번 보내도 행이 불어나지 않는다(멱등).
+          날짜마다 다른 시간·식사유형을 넣으려면 이쪽을 쓴다.
+    date/start/end/lunch/dinner/remark
+          날짜 하나짜리 **옛 호출 방식** — days 한 개와 같다.
+    subject / content       제목 / 신청 사유 (신청서 전체에 하나씩)
+
+    ⚠️ 한 날짜는 한 행뿐이다 — 같은 날짜를 두 번 주면 사이트가 막는다($.getPlanTimeDupChk).
+
+    반환: {'ok':…, 'before':…, 'after':…, 'steps':[…], 'dialogs':[…]}
+    """
+    global _LAST_DIALOGS
+    _LAST_DIALOGS = []          # 이번 채우기에서 뜬 안내창만 모은다
+    try:
+        before = form_state()
+    except RendererBusy as e:
+        return {'ok': False, 'busy': True, 'message':
+                f'인사관리 창이 응답하지 않습니다({e}). 근무계획 수정 신청서 창을 닫고 다시 열어주세요.'}
+    except Exception as e:
+        return {'ok': False, 'message': str(e)}
+
+    steps = []
+
+    def done(msg, ok=False, extra=None):
+        out = {'ok': ok, 'steps': steps, 'before': before,
+               'dialogs': list(_LAST_DIALOGS), 'message': msg}
+        if extra:
+            out.update(extra)
+        return out
+
+    plan = _normalize_days(days, date, start, end, lunch, dinner, remark)
+    if not plan:
+        return done('채울 내용이 없습니다 — 근무일자나 시간을 지정해주세요.')
+
+    _ids, _err, _extra = _fill_rows(plan, before, steps, path=REGFORM_PATH)
+    if _err:
+        return done(_err, extra=_extra)
 
     # 3) 제목 / 사유 — 신청서 전체에 하나씩
     if subject is not None:
@@ -458,6 +495,62 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
     return out
 
 
+def fill_overtime_request(date=None, start=None, end=None, remark=None,
+                          lunch=None, dinner=None, days=None):
+    """연장근무 신청서의 칸을 채운다. **등록은 누르지 않는다.**
+
+    근무계획 수정 신청서와 그리드 칸 이름이 완전히 같아 `_fill_rows`를 그대로 쓴다
+    (2026-10-27, 소스(`/overWorkReq/regForm` 인라인 JS) 대조로 확인). 다른 점 둘:
+    - **제목/내용 칸이 아예 없다** — 제목은 서버가 "연장근무 신청서"로 고정해서 보낸다
+      (`getReqMainData()`), 그래서 `subject`/`content` 인자를 받지 않는다.
+    - **사유는 행마다**(`remark` 그리드 칸) 넣는다 — 신청서 전체 공용 칸이 없다.
+
+    days / date·start·end·lunch·dinner·remark 의 뜻은 `fill_workplan_edit`과 같다.
+    ⚠️ 한 날짜는 한 행뿐이다 — 같은 날짜를 두 번 주면 사이트가 막는다($.getPlanTimeDupChk).
+
+    반환: {'ok':…, 'before':…, 'after':…, 'steps':[…], 'dialogs':[…]}
+    """
+    global _LAST_DIALOGS
+    _LAST_DIALOGS = []
+    try:
+        before = form_state(path=OW_REGFORM_PATH)
+    except RendererBusy as e:
+        return {'ok': False, 'busy': True, 'message':
+                f'인사관리 창이 응답하지 않습니다({e}). 연장근무 신청서 창을 닫고 다시 열어주세요.'}
+    except Exception as e:
+        return {'ok': False, 'message': str(e)}
+
+    steps = []
+
+    def done(msg, ok=False, extra=None):
+        out = {'ok': ok, 'steps': steps, 'before': before,
+               'dialogs': list(_LAST_DIALOGS), 'message': msg}
+        if extra:
+            out.update(extra)
+        return out
+
+    plan = _normalize_days(days, date, start, end, lunch, dinner, remark)
+    if not plan:
+        return done('채울 내용이 없습니다 — 근무일자나 시간을 지정해주세요.')
+
+    _ids, _err, _extra = _fill_rows(plan, before, steps, path=OW_REGFORM_PATH)
+    if _err:
+        return done(_err, extra=_extra)
+
+    try:
+        after = form_state(path=OW_REGFORM_PATH)
+    except Exception as e:
+        return done(f'채우기 뒤 상태를 읽지 못했습니다: {e}')
+
+    msg = ('칸을 채웠습니다 — 화면에서 확인한 뒤 **직접 [등록]을 눌러주세요.** '
+           '(이 기능은 등록을 누르지 않습니다)')
+    if _LAST_DIALOGS:
+        msg += '\n⚠️ 화면이 알린 내용: ' + ' / '.join(_LAST_DIALOGS)
+    out = done(msg, ok=True)
+    out['after'] = after
+    return out
+
+
 # ── 신청서 창 열기 ────────────────────────────────────────────────────────────
 # `/workPlanEdit/regForm` 은 **POST 전용**이다(GET 하면 Tomcat 405). 사이트는 이 화면을
 # window.open 팝업으로 띄우는데, CDP 로 띄운 window.open 은 **팝업 차단**에 막힌다
@@ -466,20 +559,22 @@ def fill_workplan_edit(date=None, start=None, end=None, subject=None, content=No
 #   만들어 POST 한다. 자기 탭을 이동시키는 폼 전송이라 팝업 차단과 무관하고,
 #   같은 출처라 세션 쿠키(SameSite=Lax)도 그대로 간다.
 
-def open_regform(timeout=25):
-    """근무계획 수정 신청서를 **새 탭**에 연다. 이미 열려 있으면 그걸 쓴다."""
+def _open_regform_at(path, timeout=25):
+    """`path` 의 신청서를 **새 탭**에 연다. 이미 열려 있으면 그걸 쓴다.
+
+    근무계획 수정/연장근무 신청 둘 다 같은 방식(`#addMeBtn` 마커)이라 공용으로 뺐다(2026-10-27)."""
     import asyncio
 
     import requests
     try:
-        if _ev("(!!document.getElementById('addMeBtn'))", timeout=4):
+        if _ev("(!!document.getElementById('addMeBtn'))", timeout=4, path=path):
             return {'ok': True, 'opened': False, 'message': '이미 열려 있는 신청서 창을 씁니다.'}
     except Exception:
         pass
 
     # 405 에러 페이지가 남아 있으면 치운다 — 안 치우면 조회 경로까지 이 탭을 집는다.
     for t in requests.get(gb.CDP_BASE + '/json/list', timeout=5).json():
-        if t.get('type') == 'page' and REGFORM_PATH in (t.get('url') or ''):
+        if t.get('type') == 'page' and path in (t.get('url') or ''):
             requests.get(gb.CDP_BASE + '/json/close/' + t['id'], timeout=10)
 
     tab = requests.put(gb.CDP_BASE + '/json/new?' + gb.INSA_ORIGIN + '/kInsa', timeout=15).json()
@@ -498,14 +593,24 @@ def open_regform(timeout=25):
         "(function(){ var f = document.createElement('form');"
         " f.method = 'POST'; f.action = %s;"
         " document.body.appendChild(f); f.submit(); return true; })()"
-        % json.dumps(REGFORM_PATH)), 10))
+        % json.dumps(path)), 10))
 
     end = time.time() + timeout
     while time.time() < end:                      # 폼이 뜨기를 기다린다
         time.sleep(1)
         try:
-            if _ev("(!!document.getElementById('addMeBtn'))", timeout=3):
+            if _ev("(!!document.getElementById('addMeBtn'))", timeout=3, path=path):
                 return {'ok': True, 'opened': True, 'message': '신청서 창을 새로 열었습니다.'}
         except Exception:
             pass
     return {'ok': False, 'message': '신청서 창을 열지 못했습니다(로그인이 끊겼을 수 있습니다).'}
+
+
+def open_regform(timeout=25):
+    """근무계획 수정 신청서를 **새 탭**에 연다. 이미 열려 있으면 그걸 쓴다."""
+    return _open_regform_at(REGFORM_PATH, timeout)
+
+
+def open_ow_regform(timeout=25):
+    """연장근무 신청서를 **새 탭**에 연다. 이미 열려 있으면 그걸 쓴다."""
+    return _open_regform_at(OW_REGFORM_PATH, timeout)

@@ -83,6 +83,18 @@
             params: []
         },
         {
+            id: 'insa_overtime_form', mode: 'read', requires: 'insa',
+            title: '연장근무 신청서 현재 내용',
+            // insa_workplan_form 과 같은 이유(2026-10-27) — insa_fill_overtime 의 days 도
+            // "최종 상태" 목록이라, 행을 더하려면 먼저 지금 행을 봐야 한다.
+            desc: '지금 열려 있는 연장근무 신청서에 **어떤 행이 들어 있는지** 읽는다'
+                + '(날짜·변경 후 출퇴근·식사유형·비고). '
+                + '"행 하나 추가해줘"처럼 **기존 내용에 더하는 요청이면 반드시 먼저 이걸 호출해** '
+                + '지금 행을 확인하고, insa_fill_overtime 의 days 에 **기존 행 + 새 행을 전부** 담아라.',
+            path: '/insa/overtime-form',
+            params: []
+        },
+        {
             id: 'insa_menus', mode: 'read', requires: 'insa',
             title: '인사관리 화면 목록',
             desc: '사내 인사관리(kInsa)에서 볼 수 있는 화면 목록을 돌려준다. '
