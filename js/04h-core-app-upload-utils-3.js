@@ -197,6 +197,12 @@
     // 고르지 않아도 예전과 동일하게 동작한다 — 이 목록에 없는 레이아웃이 나중에 더 생기면
     // 이 배열에 `{value, label}` 형태로 추가하면 됨.
     window._SAP_BOM_LAYOUT_OPTIONS = [
+        // 🆕 [2026-10-27] 전자부품 BOM(js/38 _ELEC_BOM_LAYOUT)이 설치지점(EBORT) 전용으로 쓰는
+        // 레이아웃을 메인 BOM 탭 드롭다운에도 추가 + 기본 선택으로 — 예전 기본값 /STD_MC엔
+        // EBORT 열이 없어 메인 BOM 탭만 Location을 못 가져오는 격차가 있었다(docs/sap-lookup.md
+        // "/KTK_LOC 레이아웃 신설" 절). 이미 레이아웃을 골라본 조회는 그 선택(st.layout)이
+        // 그대로 우선되므로, 이 기본값 변경은 처음 조회하는 경우에만 영향을 준다.
+        { value: '/KTK_LOC', label: '/KTK_LOC — 설치지점(EBORT) 포함 [기본값]' },
         { value: '/CDH', label: '/CDH — BOM전개 MC가' },
         { value: '/CH_1', label: '/CH_1 — BOM 전개-재고' },
         { value: '/CHKIM STD', label: '/CHKIM STD — BOM전개' },
@@ -249,7 +255,7 @@
         { value: '/SJ', label: '/SJ — BOM전개' },
         { value: '/SSS1', label: '/SSS1 — BOM/편집' },
         { value: '/ST', label: '/ST — BOM 전개-재고' },
-        { value: '/STD_MC', label: '/STD_MC — 임시 저장 (기본값)' },
+        { value: '/STD_MC', label: '/STD_MC — 임시 저장' },
         { value: '/YJM', label: '/YJM — BOM전개_단가' },
         { value: '/백준기', label: '/백준기 — BOM전개단가-GANTT' },
         { value: '/장정범', label: '/장정범 — 장정범' }

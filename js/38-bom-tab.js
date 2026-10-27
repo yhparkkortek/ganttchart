@@ -403,8 +403,11 @@
         // 백엔드 주소는 앱 전체가 로컬 고정(127.0.0.1:5000)을 그대로 쓴다 — js/04h의 다른 /sap-* 호출과 동일
         // `show_location=1` = ZPP033 초기화면 Option의 "Location Information" 체크 — 이걸 켜야
         // 설치지점(EBORT)이 들어온다. 단, 그 열을 실제로 보여주는 레이아웃을 골라야 한다
-        // (기본 `/STD_MC`엔 EBORT가 없고 `/LOC`엔 있다 — 실측 2026-10-16). 켜두면 손해는 없고,
-        // 레이아웃에 열이 있을 때만 `_locOf`가 그 값을 쓴다.
+        // (기본이던 `/STD_MC`엔 EBORT가 없다 — 실측 2026-10-16). 🆕 [2026-10-27] 드롭다운
+        // 기본 선택을 `/KTK_LOC`(EBORT 포함, 전자부품 BOM과 동일)로 바꿔서 메인 BOM 탭도
+        // 처음 조회부터 Location을 받아온다 — 예전엔 `/STD_MC`가 기본이라 메인 BOM 탭만
+        // Location이 안 나온다는 제보가 있었다(js/04h `_SAP_BOM_LAYOUT_OPTIONS`).
+        // 켜두면 손해는 없고, 레이아웃에 열이 있을 때만 `_locOf`가 그 값을 쓴다.
         var url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(material)
             + '&plant=1000&explosion=' + encodeURIComponent(explosion)
             + '&show_location=1'
@@ -1569,9 +1572,11 @@
         if (!sel || sel.dataset.filled === '1') return;
         var opts = window._SAP_BOM_LAYOUT_OPTIONS || [];
         if (!opts.length) return;
+        // 🆕 [2026-10-27] 기본 선택을 /STD_MC → /KTK_LOC로 변경 — EBORT(설치지점) 열이 있는
+        // 레이아웃이라 메인 BOM 탭도 처음 조회부터 Location을 받아온다(전자부품 BOM과 동일 레이아웃).
         sel.innerHTML = '<option value="">' + _esc(_t('(SAP 기본 레이아웃)', '(SAP default layout)')) + '</option>'
             + opts.map(function (o) {
-                return '<option value="' + _esc(o.value) + '"' + (o.value === '/STD_MC' ? ' selected' : '') + '>' + _esc(o.label) + '</option>';
+                return '<option value="' + _esc(o.value) + '"' + (o.value === '/KTK_LOC' ? ' selected' : '') + '>' + _esc(o.label) + '</option>';
             }).join('');
         sel.dataset.filled = '1';
     };
