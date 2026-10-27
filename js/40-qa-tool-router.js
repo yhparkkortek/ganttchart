@@ -438,6 +438,20 @@
             params: [
                 { name: 'form', type: 'text', max: 40, desc: '특정 양식 이름(일부만도 됨). 비우면 전체 목록 + 양식별 칸 개수' }
             ]
+        },
+        {
+            id: 'qa_unclassified_mail', mode: 'read',
+            title: '업무 보관함 미분류 메일 건수',
+            // ⚠️ [2026-10-27 실사용 제보] "미분류 메일 몇 건이야?"가 전용 도구가 없어 그룹웨어
+            //    안읽은 메일 수(완전히 다른 값)로 잘못 답했다. "미분류"는 이 앱 자체 개념
+            //    (업무 보관함 대기 큐 중 프로젝트 매칭이 안 된 것)이라 그룹웨어/SAP에는 없다 —
+            //    그룹웨어 메일/캘린더 도구와 절대 헷갈리지 말 것.
+            desc: '이 앱의 업무 보관함(메일 자동수집 큐) 중 **프로젝트로 안 걸린(미분류)** 메일 건수와 '
+                + '목록 일부를 돌려준다. "미분류 메일 몇 건이야?", "업무 보관함에 미분류 몇 개 있어?" '
+                + '같은 질문에 쓴다. **그룹웨어 안읽은 메일 수와는 다른 값이다** — 혼동해서 그룹웨어 '
+                + '메일 도구로 답하지 말 것. 메일 서버 탭을 연 적이 없으면 0건으로 나올 수 있다.',
+            local: '_qaUnclassifiedMailStatus', pick: 'mails',
+            params: []
         }
     ];
 
@@ -678,7 +692,7 @@
             if (x.calendarId !== undefined && x.calendarId !== null && x.calendarId !== '') parts.push('calId:' + x.calendarId);
             if (x.boardId !== undefined && x.boardId !== null && x.boardId !== '') parts.push('boardId:' + x.boardId);
             var gotDate = ['at', 'date', 'createdAt', 'start', 'dueDate'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
-            var gotPerson = ['from', 'writer', 'drafterName', 'creator', 'reporter'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
+            var gotPerson = ['from', 'sender', 'writer', 'drafterName', 'creator', 'reporter'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             var gotCtx = ['boardName', 'folder', 'formName', 'calendar', 'category', 'dept'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
             var gotTitle = ['subject', 'title', 'name'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             if (x.members) parts.push('👤' + x.members);
@@ -716,6 +730,7 @@
             if (r.count !== null) meta.push(r.count + '건');
             if (r.data && r.data.from) meta.push(r.data.from + (r.data.to ? ' ~ ' + r.data.to : ''));
             if (r.data && r.data.unreadTotal) meta.push('메일함 안읽음 총 ' + r.data.unreadTotal + '건');
+            if (r.data && r.data.unclassifiedCount !== undefined) meta.push('미분류 총 ' + r.data.unclassifiedCount + '건');
             if (r.notes && r.notes.length) meta.push(r.notes.join('; '));
             if (r.count === 0) return head + ' ' + meta.join(' · ') + '\n결과 0건 — 그 기간/조건에 자료가 없다.';
             return head + ' ' + meta.join(' · ') + '\n' + rowsToText(r, 60);

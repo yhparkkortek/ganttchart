@@ -1586,6 +1586,28 @@ window._msRefreshQueueBadges = function() {
     });
 };
 
+// 🤖 [2026-10-27 신규] AI 문답 "미분류 메일 몇 건이야?" — 자주 쓰는 질문 시드(js/04h)에만 있고
+//    실제 처리기가 없어서, AI가 엉뚱하게 그룹웨어 안읽은 메일 수(완전히 다른 숫자)로 답하던
+//    문제를 실측으로 잡았다. "미분류"는 이 앱 자체 개념(업무 보관함 대기 큐 중 프로젝트 매칭이
+//    안 된 것 — _msRefreshQueueBadges 와 정확히 같은 기준)이라 그룹웨어/SAP 어디에도 없다.
+//    window._msResults 는 DOMContentLoaded 때 localStorage(ms_pending_queue)에서 항상 로드되므로
+//    메일 서버 탭을 안 열어도 값이 있다. QA_TOOLS 에 local 도구로 등록(js/40, network 안 탐).
+window._qaUnclassifiedMailStatus = function() {
+    const all = window._msResults || [];
+    const unmatched = all.filter(r => !r.project);
+    const newSenderCount = (JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')).length;
+    const discardedCount = (JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]')).length;
+    return {
+        unclassifiedCount: unmatched.length,
+        newSenderCount: newSenderCount,
+        discardedCount: discardedCount,
+        totalQueueCount: all.length,
+        mails: unmatched.slice(0, 20).map(r => ({
+            fileName: r.fileName, subject: r.subject || '', sender: r.sender || '', date: r.date || ''
+        }))
+    };
+};
+
 const _msQEsc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // 💡 [2026-09-06 신규] 미분류/신규발신자/자동폐기 큐 상단에 붙는 집계 요약 — 사용자 피드백:
