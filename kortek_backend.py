@@ -3412,6 +3412,20 @@ def insa_screen():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/insa/annual-plan-status', methods=['GET'])
+def insa_annual_plan_status():
+    """연차휴가사용계획서 작성 대상 여부만 확인한다(읽기 전용) — **열거나 채우지 않는다.**
+
+    법정 연차 문서라 쓰기는 의도적으로 보류했다(docs/insa-hr.md). 작성이 필요하면
+    인사관리 화면에서 직접 하도록 안내만 한다.
+    """
+    try:
+        import gw_bridge
+        return jsonify(gw_bridge.insa_annual_plan_status())
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/insa/workplan-form', methods=['GET'])
 def insa_workplan_form():
     """근무계획 수정 신청서에 **지금 뭐가 들어 있는지** 읽는다(읽기 전용).

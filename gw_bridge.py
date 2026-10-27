@@ -2700,3 +2700,52 @@ def insa_read_screen(code_or_path, timeout=25):
     text = re.sub(r'\n{3,}', '\n\n', text)      # 빈 줄 정리는 여기서(파이썬 쪽이 안전하다)
     return {'ok': bool(text), 'label': hit.get('label', ''), 'code': code,
             'text': text[:8000], 'message': '' if text else '화면을 읽지 못했습니다.'}
+
+
+# ── 연차휴가사용계획서 작성 대상 여부 (읽기 전용, 2026-10-27) ──────────────
+# "근무 계획" 화면의 workCalendar.js에 있는 clickWriteAnnualPlan()의 게이트 체크만 그대로
+# 가져온다. ⚠️ **열거나 채우지 않는다** — /annual-plan/regForm 쓰기는 의도적으로 보류했다
+# (법정 연차 문서 + 빈 상태를 한 번도 못 봐서 그리드 동작을 실측하지 못함, docs/insa-hr.md).
+
+def insa_annual_plan_status():
+    """연차휴가사용계획서를 지금 써야 하는지/이미 썼는지 확인한다(읽기 전용).
+
+    사람이 인사관리에서 직접 작성하도록 안내만 한다 — 이 함수는 절대 신청서를 열지 않는다."""
+    st = insa_session_info()
+    if not st.get('ok'):
+        return {'ok': False, 'loggedOut': True,
+                'message': '인사관리 로그인이 풀려 있습니다 — 🔑에서 로그인한 뒤 다시 시도해주세요.'}
+    js = """
+      (async () => {
+        try {
+          const r = await fetch('/annual-plan/checkShouldWrite', { method: 'POST', credentials: 'same-origin' });
+          const ct = r.headers.get('content-type') || '';
+          const body = ct.includes('json') ? await r.json() : null;
+          return { status: r.status, body };
+        } catch (e) { return { error: String(e) }; }
+      })()
+    """
+    try:
+        res = eval_in_insa(js, timeout=20) or {}
+    except Exception as e:
+        return {'ok': False, 'message': f'확인하지 못했습니다: {e}'}
+    body = res.get('body') or {}
+    if res.get('error') or res.get('status') != 200 or not body:
+        return {'ok': False, 'message': '연차휴가사용계획서 작성 대상 여부를 확인하지 못했습니다.'}
+
+    has_written = bool(body.get('hasWritten'))
+    should_write = bool(body.get('shouldWrite'))
+    is_target = bool(body.get('isTarget'))
+    has_active_doc = bool(body.get('hasActiveDoc'))
+
+    if has_written:
+        msg = '이번 기(반기) 연차휴가사용계획서를 이미 작성했습니다 — 인사관리 "연차휴가사용계획서목록"에서 확인하세요.'
+    elif should_write:
+        msg = ('이번 기(반기) 연차휴가사용계획서를 아직 작성하지 않았습니다 — '
+               '인사관리 "근무 계획" 화면에서 직접 작성해주세요(이 앱은 대신 작성하지 않습니다).')
+    elif not is_target or not has_active_doc:
+        msg = '지금은 연차휴가사용계획서 작성 대상 기간이 아니거나 작성 권한이 없습니다.'
+    else:
+        msg = '상태를 판정하지 못했습니다 — 인사관리 화면에서 직접 확인해주세요.'
+    return {'ok': True, 'hasWritten': has_written, 'shouldWrite': should_write,
+            'isTarget': is_target, 'hasActiveDoc': has_active_doc, 'message': msg}

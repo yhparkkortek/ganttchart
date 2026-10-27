@@ -95,6 +95,15 @@
             params: []
         },
         {
+            id: 'insa_annual_plan_status', mode: 'read', requires: 'insa',
+            title: '연차휴가사용계획서 작성 대상 여부',
+            // ⚠️ 읽기 전용이다 — 열거나 채우지 않는다(법정 연차 문서라 쓰기 자체가 없음, docs/insa-hr.md).
+            desc: '이번 기(반기) 연차휴가사용계획서를 **써야 하는지/이미 썼는지**만 확인한다. '
+                + '작성이 필요하면 인사관리 화면에서 직접 하라고 안내한다(이 도구·앱은 대신 작성하지 않는다). '
+                + '"연차 계획서 써야 돼?", "연차 사용계획 제출했나?" 같은 질문에 쓴다.',
+            path: '/insa/annual-plan-status', params: []
+        },
+        {
             id: 'insa_menus', mode: 'read', requires: 'insa',
             title: '인사관리 화면 목록',
             desc: '사내 인사관리(kInsa)에서 볼 수 있는 화면 목록을 돌려준다. '
