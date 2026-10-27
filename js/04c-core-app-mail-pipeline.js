@@ -1042,6 +1042,30 @@
         return window._runSerialized(function() { return window._saveToGoogleDriveRaw(opts); });
     };
 
+    // 💡 [2026-10-27, 체감속도 개선 — "저장이 느리다" 신고] 편집 내용은 이미 메모리(globalData)에만
+    //    있다가 "저장" 버튼을 누르는 순간에야 Drive로 올라간다. 지금까지는 그 버튼 클릭이 실제 Drive
+    //    업로드(보통 7~8MB · 10~15초, 콘솔 [저장 계측] 실측)가 끝날 때까지 아무 반응 없이 멈춘 것처럼
+    //    보였다. 로컬(localStorage)에는 거의 즉시(수백 ms) 쓸 수 있으므로 — ① 그 자리에서 바로 로컬
+    //    스냅샷(_saveLocalBackup, 연결 끊김 복구와 동일한 안전망)을 남기고 ② "시작했다"는 신호만 즉시
+    //    보여준 뒤 ③ 실제 Drive 업로드는 기다리지 않고 뒤에서 진행한다("로컬 우선 + 저장 이벤트에만
+    //    서버 동기화"). 성공/실패/충돌 알림은 saveToGoogleDrive 내부(_saveToGoogleDriveRaw)가 그대로
+    //    처리하므로 여기서 중복으로 "완료" 토스트를 띄우지 않는다 — "시작"과 "완료"를 섞으면, 드물게
+    //    필수 정보 누락 등으로 검증에서 막히는 경우 "저장됨"→"입력하세요" 알림이 모순되게 이어진다.
+    //    ⚠️ saveToGoogleDrive() 자체(3분 자동저장·배치 신규 프로젝트 등록 등 내부 호출부)는 그대로
+    //    블로킹 유지 — 새 프로젝트 최초 등록처럼 실제 fileId를 받아야만 다음 단계로 갈 수 있는 경로가
+    //    있어서, 공개 함수의 동작 자체를 바꾸면 그 경로들이 깨진다. UI "저장" 버튼 전용 경로만 분리.
+    window._saveToGoogleDriveOptimistic = function(opts) {
+        opts = opts || {};
+        if (window._saveLocalBackup) window._saveLocalBackup('optimistic-save-pending');
+        if (window.showToast) {
+            window.showToast(window._t('💾 저장 시작 — Drive 동기화는 뒤에서 진행됩니다', '💾 Save started — syncing to Drive in the background'), 'info', 2500);
+        }
+        window.saveToGoogleDrive(opts).catch(function(e) {
+            console.error('[저장] 백그라운드 Drive 동기화 예외:', e);
+            if (window.showToast) window.showToast(window._t('⚠️ Drive 동기화 중 오류 — 잠시 후 다시 저장해주세요', '⚠️ Error syncing to Drive — please try saving again shortly'), 'error', 8000);
+        });
+    };
+
     // 💡 Backups 폴더의 백업 목록 조회
     window.loadBackupList = async function() {
         try {
