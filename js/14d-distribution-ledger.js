@@ -815,11 +815,16 @@ window._deserializeGlobalDataForMerge = function(savedArr) {
 // 다음 저장 때 3-way 병합의 base로 쓴다. 파일(fileId)별로 보관 — 멀티시트로 여러 프로젝트를 동시에
 // 열어놔도 서로 섞이지 않음.
 window._mergeBaselines = window._mergeBaselines || {};
-window._captureMergeBaseline = function(fileId) {
-    if (!fileId || !globalData) return;
+// 💡 [2026-10-27] gdOverride — 시트 전환/탭 닫기를 "저장 완료를 안 기다리고" 처리하게 되면서, 이 호출이
+//    실행되는 시점엔 이미 다른 시트로 넘어가 있어 live globalData가 그 저장과 무관한 데이터일 수 있다.
+//    백그라운드 저장(_saveToGoogleDriveRaw)은 전환 전에 캡처해 둔 globalData 참조를 명시로 넘긴다.
+//    인자를 안 주는 기존 호출부(executeLoadFile 등, 전환 중간에 끼어들 틈이 없는 경로)는 그대로 live globalData를 쓴다.
+window._captureMergeBaseline = function(fileId, gdOverride) {
+    const gd = gdOverride || globalData;
+    if (!fileId || !gd) return;
     const map = {};
-    for (let i = 1; i < globalData.length; i++) {
-        const row = globalData[i];
+    for (let i = 1; i < gd.length; i++) {
+        const row = gd[i];
         if (row && row._rowUid) map[row._rowUid] = Array.from(row);
     }
     window._mergeBaselines[fileId] = map;

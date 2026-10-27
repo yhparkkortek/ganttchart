@@ -649,6 +649,12 @@
     window._saveToGoogleDriveRaw = async function(opts) {
         opts = opts || {};
         window._lastSaveBlockReason = '';
+        // 💡 [2026-10-27, 시트 전환/탭 닫기 체감속도 개선] 이 저장을 "시작한" 시트를 기록해 둔다.
+        //    opts.onSafeToSwitch를 쓰는 호출부(switchToSheetWithSave/closeSheet)는 이 콜백이 불리는
+        //    즉시 다른 시트로 전환해버리므로, 그 뒤(업로드~후처리)에 실행되는 코드가 "지금 활성 시트가
+        //    여전히 이 저장을 시작한 시트인가"를 판단할 기준이 필요하다 — 아니면 전역(window.currentDriveFileId
+        //    등)을 건드려 지금 보고 있는 "다른" 프로젝트 상태를 오염시킨다.
+        const _savingSheetKey = window._activeSheetKey;
         // 💡 [성능 수정] "저장" 버튼엔 3분 자동저장과 달리 변경 여부 확인이 전혀 없어서, 아무것도 안
         //    바꾸고 그냥 다시 눌러도(예: 불안해서 여러 번 누르는 경우) 매번 백업 파일을 통째로 새로
         //    만들고 있었다 — 이 함수가 changeLogs/lastSavedLogCount를 갱신하기 "전"인 지금 시점의
@@ -850,6 +856,16 @@
 
             let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
 
+            // 💡 [2026-10-27] 지금까지(병합·충돌처리·직렬화)는 전부 "이 저장을 시작한 시트"의 live 전역을
+            //    읽어야만 맞는 구간이었다 — 여기가 그 구간의 끝이다. 이 시점의 globalData/changeLogs 길이를
+            //    캡처해 두면, 바로 다음에 호출자가 다른 시트로 전환해도(opts.onSafeToSwitch) 업로드~후처리는
+            //    여전히 "그 당시 옳았던" 값을 쓸 수 있다(live 전역은 전환 즉시 다른 시트 것으로 바뀌어버림).
+            const _gdForBaseline = globalData;
+            const _changeLogsCountAtSave = window.changeLogs ? window.changeLogs.length : 0;
+            // 💡 지금부터는 네트워크 업로드+후처리뿐이라 더 이상 "이 시트여야만" 하는 작업이 없다 — 이제
+            //    호출자(switchToSheetWithSave/closeSheet)가 안전하게 다른 시트로 넘어갈 수 있다는 신호.
+            if (opts.onSafeToSwitch) { try { opts.onSafeToSwitch(); } catch (_cbErr) { console.error('[저장] onSafeToSwitch 콜백 오류:', _cbErr); } }
+
             // 💡 [성능 수정] fields=id,modifiedTime을 붙여서 저장 응답에 modifiedTime을 함께 받는다 —
             //    mergeRemoteDistributions()가 "마지막으로 내가 저장한 시점" 캐시로 쓰기 위함(별도 호출 불필요).
             let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime';
@@ -888,39 +904,56 @@
             if (_upMs > 3000) console.warn(`[저장 계측] ⚠️ 업로드에만 ${_upMs}ms — 전송크기(${_upKB}KB) 대비 느리면 구글/네트워크 지연입니다.`);
 
             let file = await response.json();
-            window.currentDriveFileName = dynamicFileName;
-            window.updateCurrentFileLabel();
+            // 💡 [2026-10-27] onSafeToSwitch로 호출자가 이미 다른 시트로 넘어갔을 수 있다 — 그 경우
+            //    "지금 화면" 전역(currentDriveFileId 등)을 건드리면 지금 보고 있는 다른 프로젝트가
+            //    오염된다. 이 저장을 시작한 시트가 여전히 활성 상태일 때만 전역을 갱신한다.
+            const _stillOnSameSheet = (window._activeSheetKey === _savingSheetKey);
+            if (_stillOnSameSheet) {
+                window.currentDriveFileName = dynamicFileName;
+                window.updateCurrentFileLabel();
+            }
 
             if (response.ok && file && file.id) {
                 // 💡 [2026-08-25 신규] 방금 정상적으로 Drive에 저장됐으니, 이 프로젝트에 대해 남아있을 수
                 //    있는 로컬 백업(연결 끊김 등으로 저장 못 했던 시점의 스냅샷)은 이제 낡은 것이므로 정리.
                 //    저장 전 fileId(신규 프로젝트면 아직 null → 'new' 버킷)를 기준으로 지워야 정확히 맞는다.
                 window._clearLocalBackup(fileId);
-                window.currentDriveFileId = file.id;
-                window.lastSavedLogCount = window.changeLogs.length;
-                window._nonGanttDirty = false; // 💡 Summary 탭(주요자재 등) 편집도 저장됐으니 함께 리셋
-                // 💡 [2026-08-30] 방금 저장된 테마 색을 "저장된 기준값"으로 갱신 — 팔레트에서 색을
-                // 이리저리 바꿔보다가 결국 이 값으로 되돌아오면 dirty 취급하지 않기 위한 기준점.
-                window._cpSavedThemeHex = (window.tabData && window.tabData.themeColor) || null;
-                window._cpThemeDirty = false; // 방금 저장됐으니 테마 dirty도 같이 리셋
+                if (_stillOnSameSheet) {
+                    window.currentDriveFileId = file.id;
+                    window.lastSavedLogCount = _changeLogsCountAtSave;
+                    window._nonGanttDirty = false; // 💡 Summary 탭(주요자재 등) 편집도 저장됐으니 함께 리셋
+                    // 💡 [2026-08-30] 방금 저장된 테마 색을 "저장된 기준값"으로 갱신 — 팔레트에서 색을
+                    // 이리저리 바꿔보다가 결국 이 값으로 되돌아오면 dirty 취급하지 않기 위한 기준점.
+                    window._cpSavedThemeHex = (window.tabData && window.tabData.themeColor) || null;
+                    window._cpThemeDirty = false; // 방금 저장됐으니 테마 dirty도 같이 리셋
+                }
                 // 💡 [버그 수정] 새 프로젝트를 처음 저장하면 currentDriveFileId/Name은 바로 갱신되는데,
-                //    시트 탭 바가 읽는 window._sheets 배열의 해당 항목(fileId/fileName)은 안 바뀌었다 —
-                //    그 배열은 "다른 시트로 전환할 때"(_commitActiveSheet)만 동기화돼서, 저장 직후엔 탭이
-                //    여전히 "(새 프로젝트)"로 보이고 다른 시트로 갔다 와야만(그 전환 순간에) 파일명으로
-                //    바뀌었다. 저장 성공 시점에 지금 활성 시트 항목을 직접 갱신하고 탭 바를 다시 그린다.
-                const _activeSheet = window._sheets && window._activeSheetKey
-                    ? window._sheets.find(function(s) { return s.key === window._activeSheetKey; })
+                //    시트 탭 바가 읽는 window._sheets 배열의 해당 항목(fileId/fileName)은 안 바뀌었다.
+                //    ⚠️ [2026-10-27] "지금 활성 시트"가 아니라 "이 저장을 시작한 시트"(_savingSheetKey)를
+                //    키로 찾는다 — 전환 후 백그라운드로 끝난 저장이어도 올바른 탭에 fileId가 반영된다.
+                //    탭이 이미 닫혔으면(closeSheet) find가 조용히 null을 돌려줘 자연히 아무 일도 안 함.
+                const _savedSheetEntry = window._sheets
+                    ? window._sheets.find(function(s) { return s.key === _savingSheetKey; })
                     : null;
-                if (_activeSheet) {
-                    _activeSheet.fileId = file.id;
-                    _activeSheet.fileName = dynamicFileName;
+                if (_savedSheetEntry) {
+                    _savedSheetEntry.fileId = file.id;
+                    _savedSheetEntry.fileName = dynamicFileName;
+                    // 다른 시트로 이미 넘어간 상태라면, 나중에 이 시트로 "돌아올 때" 쓸 스냅샷에도
+                    // 저장 결과를 직접 적어 둔다 — 안 하면 _hasUnsavedChangesNow()가 이미 저장된 내용을
+                    // "아직 저장 안 함"으로 계속 오판해 beforeunload 경고가 멈추지 않는다.
+                    if (!_stillOnSameSheet && _savedSheetEntry.snapshot) {
+                        _savedSheetEntry.snapshot.currentDriveFileId = file.id;
+                        _savedSheetEntry.snapshot.currentDriveFileName = dynamicFileName;
+                        _savedSheetEntry.snapshot.lastSavedLogCount = _changeLogsCountAtSave;
+                    }
                     if (window.renderSheetTabsBar) window.renderSheetTabsBar();
                 }
                 // 💡 [성능 수정] 방금 내가 저장한 시점을 캐시해둬서, 다음 저장 때 mergeRemoteDistributions가
                 //    "그 사이 아무도 안 건드렸으면" 무거운 전체 다운로드를 건너뛸 수 있게 한다.
                 if (file.modifiedTime) { window._distMergeModifiedTime = window._distMergeModifiedTime || {}; window._distMergeModifiedTime[file.id] = file.modifiedTime; }
                 // 🔀 [2026-08-27 신규] 방금 저장한 내용을 다음 저장 때 3-way 병합의 base로 쓰도록 캡처.
-                window._captureMergeBaseline(file.id);
+                //    [2026-10-27] live globalData 대신 전환 전에 캡처해 둔 _gdForBaseline을 명시로 넘긴다.
+                window._captureMergeBaseline(file.id, _gdForBaseline);
                 // 💡 [성능 수정] 실제로 바뀐 내용이 있었을 때(또는 방금 처음 만든 새 파일일 때, !fileId)만
                 //    백업을 만든다 — 변경 없이 저장 버튼만 다시 누른 경우까지 전체 데이터를 통째로 한 번
                 //    더 업로드할 필요는 없다. (Backups 폴더는 실수 복구용이라, 내용이 같은 백업이 계속
@@ -938,10 +971,12 @@
                 // 💡 [2026-09-03 성능] 인덱스 관련 필드(모델명·고객사·담당자·키워드·완료여부·팀·
                 //    주요자재·토픽)가 실제로 바뀐 경우에만 project_index.json 갱신.
                 //    간트 행 편집(가장 흔한 저장 이유)과 무관하므로, 평상시 저장의 ~70%는 인덱스 업로드 생략.
+                //    ⚠️ [2026-10-27] live window.projectMeta/tabData 대신 saveData(업로드 전 캡처본)를
+                //    쓴다 — 전환 후엔 live 쪽이 "다른" 프로젝트 것으로 바뀌어 있을 수 있어서.
                 const _IDX_WATCH_FIELDS = ['모델명', '고객모델명', '고객사', '프로젝트담당자', '인치', '메일키워드', '완료여부', '팀', '개발팀'];
                 const _idxSnap = JSON.stringify({
-                    pm: _IDX_WATCH_FIELDS.map(function(f) { return (window.projectMeta || {})[f]; }),
-                    mat: ((window.tabData || {}).projectMaterials || []).filter(function(m) { return m && m.useForAnalysis; }).map(function(m) { return [m.ktkPn, m.description]; }),
+                    pm: _IDX_WATCH_FIELDS.map(function(f) { return (saveData.projectMeta || {})[f]; }),
+                    mat: ((saveData.tabData || {}).projectMaterials || []).filter(function(m) { return m && m.useForAnalysis; }).map(function(m) { return [m.ktkPn, m.description]; }),
                     topic: window._getTopicProfile ? window._getTopicProfile(file.id) : null
                 });
                 window._lastIndexedSnap = window._lastIndexedSnap || {};
@@ -960,13 +995,20 @@
                     });
                 }
                 // 💡 [팀 폴더] 기존 파일(fileId 있음) 재저장 시 — 팀 폴더로 이동 (fire-and-forget, 저장 결과에 영향 없음)
-                const _existingFileTeam = (window.projectMeta || {}).팀 || '';
+                //    [2026-10-27] live window.projectMeta 대신 saveData.projectMeta(캡처본) 사용.
+                const _existingFileTeam = (saveData.projectMeta || {}).팀 || '';
                 if (fileId && _existingFileTeam && window._moveFileToTeamFolder) {
                     window._moveFileToTeamFolder(token, file.id, _existingFileTeam);
                 }
-                window.showToast(window._currentLang === 'en'
-                    ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
-                    : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
+                // 💡 [2026-10-27] 전환/닫기로 이미 다른 프로젝트를 보고 있는 상태에서 끝난 백그라운드
+                //    저장은, 지금 화면과 무관한 성공임을 파일명으로 분명히 알려준다(혼동 방지).
+                window.showToast(_stillOnSameSheet
+                    ? (window._currentLang === 'en'
+                        ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
+                        : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`)
+                    : (window._currentLang === 'en'
+                        ? `🎉 Background save complete: [${dynamicFileName}]`
+                        : `🎉 [${dynamicFileName}] 백그라운드 저장 완료`));
                 return true;
             } else {
                 console.error("구글 저장 실패 상세 정보:", file);
@@ -1439,14 +1481,20 @@
                     const choice = await window._showSaveChoiceModal(cur && cur.fileName, 'switch');
                     if (choice === 'cancel') return;
                     if (choice === 'save') {
-                        if (window.showToast) window.showToast(_en ? '💾 Saving...' : '💾 변경사항 저장 중...', 'info');
-                        const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
-                        if (!ok) {
-                            const _why = window._lastSaveBlockReason || '';
-                            if (!confirm((_why ? _why + '\n\n' : '') + (_en
-                                ? 'Save failed. Move to another project anyway?\n(Current screen content is kept in memory)'
-                                : '저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)'))) return;
-                        }
+                        // 💡 [2026-10-27, 체감속도 개선] 예전엔 여기서 전체 업로드(보통 9~15초)가 끝날
+                        //    때까지 전환 자체가 멈췄다 — 저장 버튼에 적용한 것과 동일한 "로컬 우선 +
+                        //    백그라운드 동기화"로 바꾼다. _saveToGoogleDriveRaw의 onSafeToSwitch는 병합/
+                        //    충돌처리/직렬화처럼 "지금 이 시트여야만" 안전한 작업이 전부 끝난 뒤(업로드
+                        //    시작 직전)에만 불린다 — 그 전에는 절대 전환하지 않으므로 다른 프로젝트
+                        //    데이터가 섞이지 않는다. 실패 시 "그래도 이동?" 확인창은 더 못 띄우지만
+                        //    (전환이 이미 끝난 뒤라서), 실패 자체는 _saveToGoogleDriveRaw 내부가 토스트 +
+                        //    로컬 백업으로 그대로 알린다.
+                        if (window._saveLocalBackup) window._saveLocalBackup('switch-save-pending');
+                        if (window.showToast) window.showToast(_en ? '💾 Saving in background...' : '💾 백그라운드로 저장 중...', 'info', 2500);
+                        await new Promise(function(resolve) {
+                            window._saveToGoogleDriveRaw({ suppressAlert: true, onSafeToSwitch: resolve })
+                                .catch(function(e) { console.error('[시트 전환] 백그라운드 저장 예외:', e); });
+                        });
                     }
                     // choice === 'discard' → 저장 없이 그대로 이동
                 }
@@ -1562,14 +1610,18 @@
                     const choice = await window._showSaveChoiceModal(sheetEntry && sheetEntry.fileName, 'close');
                     if (choice === 'cancel') return;
                     if (choice === 'save') {
-                        if (window.showToast) window.showToast(_en ? '💾 Saving before close...' : '💾 저장 후 닫는 중...', 'info');
-                        const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
-                        if (!ok) {
-                            const _why = window._lastSaveBlockReason || '';
-                            if (!confirm((_why ? _why + '\n\n' : '') + (_en
-                                ? 'Save failed. Close this tab anyway?\n(Unsaved changes will be lost)'
-                                : '저장에 실패했습니다. 그래도 이 시트를 닫을까요?\n(저장하지 않은 변경사항은 사라집니다)'))) return;
-                        }
+                        // 💡 [2026-10-27, 체감속도 개선] switchToSheetWithSave와 동일 패턴 — 전체 업로드를
+                        //    기다리지 않고 "업로드 시작 직전(병합·직렬화 등 다 끝난 뒤)"에 닫기를 진행한다.
+                        //    탭이 닫히면 _sheets[]에서 그 항목이 사라지므로, 백그라운드 저장이 끝난 뒤
+                        //    _saveToGoogleDriveRaw가 그 키를 찾아도 null이라 조용히 건너뛴다(기록할 탭이
+                        //    더 없으니 정상) — 실패 시 "그래도 닫을까요?" 확인창은 못 띄우지만, 실패 자체는
+                        //    로컬 백업 + 토스트로 그대로 알린다.
+                        if (window._saveLocalBackup) window._saveLocalBackup('close-save-pending');
+                        if (window.showToast) window.showToast(_en ? '💾 Saving in background...' : '💾 백그라운드로 저장 중...', 'info', 2500);
+                        await new Promise(function(resolve) {
+                            window._saveToGoogleDriveRaw({ suppressAlert: true, onSafeToSwitch: resolve })
+                                .catch(function(e) { console.error('[시트 닫기] 백그라운드 저장 예외:', e); });
+                        });
                     }
                     // choice === 'discard' → 저장 없이 그대로 닫기 진행
                 }
