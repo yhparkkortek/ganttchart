@@ -1902,7 +1902,11 @@ def assets():
 def asset_reservations(asset_id=None, date=None):
     """해당 날짜의 예약 현황. asset_id를 생략하면 활성 자원 전부를 돈다.
 
-    ⚠️ `fromDate`는 ISO+09:00 형식이 필요하다('YYYY-MM-DDT00:00:00.000+09:00')."""
+    ⚠️ `fromDate`는 ISO+09:00 형식이 필요하다('YYYY-MM-DDT00:00:00.000+09:00').
+    ⚠️ [2026-10-27 실사용 제보] `/items/daily`는 이름과 달리 **그날 하루로 안 끊긴다** —
+       fromDate=2026-10-28 로 불러도 2026-10-29 예약까지 섞여 온다(실측: 47건 중 절반이
+       다음날). AI 문답에서 "내일 회의실 예약"을 물었더니 **오늘·내일이 섞인 47건**을
+       그대로 받아 대답이 날짜를 헷갈렸다 — 요청한 날짜로 여기서 걸러낸다."""
     day = str(date or datetime.datetime.now(_KST).strftime('%Y-%m-%d')).strip()
     if not _day_bounds(day, False):
         raise ValueError('date는 YYYY-MM-DD 형식입니다.')
@@ -1918,10 +1922,13 @@ def asset_reservations(asset_id=None, date=None):
             out.append({'asset': a.get('name') or a['id'], 'error': str(e)[:120]})
             continue
         for r in (j or {}).get('data') or []:
+            start = r.get('startTime') or ''
+            if start[:10] != day:          # 서버가 다음날 것까지 끼워 보낸다 — 요청한 날짜만 남긴다
+                continue
             u = r.get('user') or {}
             out.append({
                 'id': r.get('id'), 'asset': a.get('name') or '', 'item': r.get('itemName') or '',
-                'start': r.get('startTime') or '', 'end': r.get('endTime') or '',
+                'start': start, 'end': r.get('endTime') or '',
                 'allday': bool(r.get('allday')),
                 'user': u.get('name') or '', 'position': u.get('positionName') or '',
             })

@@ -674,22 +674,25 @@
             // 🐛 [2026-10-26 제보] id가 안 보여서 AI가 "일정 삭제해줘"에 eventId를 자리번호(1)로
             //    지어냈다(쓰기확정에서 calendarId:1/eventId:1 — 실제 값 11716/2332와 전혀 다름).
             //    쓰기 도구가 참조할 id/calendarId는 **반드시 텍스트로 보여야** AI가 베껴 쓸 수 있다.
-            var idParts = parts.length;
             if (x.id !== undefined && x.id !== null && x.id !== '') parts.push('id:' + x.id);
             if (x.calendarId !== undefined && x.calendarId !== null && x.calendarId !== '') parts.push('calId:' + x.calendarId);
             if (x.boardId !== undefined && x.boardId !== null && x.boardId !== '') parts.push('boardId:' + x.boardId);
-            idParts = parts.length - idParts;   // id류만 붙은 개수 — 아래 "내용 없음" 판정에서 뺀다
-            ['at', 'date', 'createdAt', 'start', 'dueDate'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
-            ['from', 'writer', 'drafterName', 'creator', 'reporter'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
-            ['boardName', 'folder', 'formName', 'calendar', 'category', 'dept'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
-            ['subject', 'title', 'name'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
+            var gotDate = ['at', 'date', 'createdAt', 'start', 'dueDate'].some(function (k) { if (x[k]) { parts.push(String(x[k]).slice(0, 16).replace('T', ' ')); return true; } return false; });
+            var gotPerson = ['from', 'writer', 'drafterName', 'creator', 'reporter'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
+            var gotCtx = ['boardName', 'folder', 'formName', 'calendar', 'category', 'dept'].some(function (k) { if (x[k]) { parts.push('(' + x[k] + ')'); return true; } return false; });
+            var gotTitle = ['subject', 'title', 'name'].some(function (k) { if (x[k]) { parts.push(String(x[k])); return true; } return false; });
             if (x.members) parts.push('👤' + x.members);
             if (x.seen === false) parts.push('[안읽음]');
-            // 🧩 [2026-10-26, Works 등 칸 이름이 앱마다 다른 소스용] 위 고정 키에 하나도 안 걸렸으면
-            //    (= id류만 붙은 상태) 그 행의 **나머지 키를 전부** 압축해서 보여준다 — 그래야
-            //    "제목"·"유형" 처럼 앱마다 다른 한글 키로 온 데이터도 AI에게 내용이 보인다.
-            if (parts.length === idParts) {
+            // 🧩 [2026-10-26, Works 등] 제목/작성자/맥락(위 세 그룹) 중 **사람이 "이게 뭔지" 알 수 있는
+            //    것이 하나도 안 걸렸으면** 그 행의 나머지 키를 전부 압축해서 보여준다.
+            //    ⚠️ [2026-10-27 실사용 제보] 원래는 "id류 말고 아무것도 안 걸렸을 때만"이었다 —
+            //    예약 조회(asset/item/user)처럼 **날짜만** 고정 키에 걸리는 데이터는 이 조건에서
+            //    제외돼("뭔가 걸렸다"고 오판) 사람이 "id:100288 — 2026-10-29 00:00"처럼 **어느
+            //    방을 누가 예약했는지도 모르는 줄**만 받았다. 날짜 하나 걸린 걸로는 "식별됐다"고
+            //    치지 않는다 — 제목/작성자/맥락 중 하나는 있어야 한다.
+            if (!gotPerson && !gotCtx && !gotTitle) {
                 var known = { id: 1, calendarId: 1, boardId: 1, preview: 1, summary: 1, body: 1, bodyNote: 1 };
+                if (gotDate) { ['at', 'date', 'createdAt', 'start', 'dueDate'].forEach(function (k) { known[k] = 1; }); }
                 Object.keys(x).forEach(function (k) {
                     if (known[k] || x[k] === undefined || x[k] === null || x[k] === '') return;
                     var v = x[k];
