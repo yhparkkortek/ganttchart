@@ -733,7 +733,14 @@
         var expEl = document.getElementById('bom-explosion');
         if (expEl && st && st.explosion) expEl.value = st.explosion;
         var layEl = document.getElementById('bom-layout');
-        if (layEl && st && st.layout) layEl.value = st.layout;
+        // 🆕 [2026-10-27, 실사용 제보] 이미 한 번 조회해본 자재는 st.layout에 그날의 기본값이
+        //    그대로 저장돼 있어, 오늘 드롭다운 기본값을 /STD_MC → /KTK_LOC로 바꿔도 여기서
+        //    매번 옛 값으로 되돌려 써서 전혀 안 먹혔다(실사용 재현: LNW_STELLAR_32.0/502574).
+        //    /STD_MC는 그 자체로 "사람이 일부러 고른 레이아웃"이 아니라 "예전 자동 기본값"일
+        //    뿐이므로, 복원 대신 새 기본값(/KTK_LOC)을 **명시적으로** 채운다 — "그냥 안 건드리기"로는
+        //    부족했다(드롭다운이 이미 다른 자재의 값을 보여주고 있던 상태라면 그 값이 그대로
+        //    남는 사고가 재현됨). 그 외(사람이 실제로 다른 레이아웃을 골랐던 기록)는 그대로 복원.
+        if (layEl && st && st.layout) layEl.value = (st.layout === '/STD_MC') ? '/KTK_LOC' : st.layout;
 
         // 컴팩트 규격 — 한 화면에 더 많은 행이 들어가도록 패딩/글자를 줄인다
         // 💡 [2026-10-15] 비고 <input>이 있는 행은 24px, 없는 모체·Σ 행은 21px로 높이가 달랐다.
