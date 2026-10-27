@@ -2462,3 +2462,20 @@ ZMM009 ALV **119개 컬럼 전수 확인 결과 통화 컬럼이 없다**(`WAERS
   된다 — `_zmm009_read_grid_rows`가 `ColumnOrder`에서 **있는 것만** 골라 읽는다(행 루프 밖 1회).
 - ⚠️ BOM 그리드의 `NETPR`(순가격, `show_price=1`로 나옴)은 구매 정보레코드 값이라 **표준가격과
   다른 숫자**다. "단가가 환종이 섞인 것 같다"는 인상은 이 열과 혼동했을 가능성이 있다.
+
+### 🖥 SAP GUI 창을 조회마다 OS 전경으로 (2026-10-27, 실사용 요청)
+사용자가 "SAP이 돌고 있는 걸 모니터링하는 창(taskbar의 'SAP Logon...'/'자재 List')이 있던데
+항상 보이게 해달라"고 요청 — 브라우저(Chrome)가 화면을 덮고 있으면 SAP GUI 자동화가 실제로
+도는 과정이 taskbar 뒤에 숨어 전혀 안 보인다.
+- `_sap_bring_windows_to_front()`(`sap_bridge_32.py`) — `win32gui.EnumWindows`로 클래스명이
+  `SAP_FRONTEND_SESSION`인 창(실사용 진단으로 확인된 SAP GUI 세션 창의 고정 클래스명,
+  `_sap_frontend_window()`가 이미 pywinauto로 썼던 것과 같은 값)을 찾아 `ShowWindow`로
+  최소화를 풀고 `SetForegroundWindow`로 전경에 올린다. 실패해도 조회는 계속 진행해야 하므로
+  예외는 전부 삼킨다.
+- **`_get_sap_session()`** — 49곳 모든 SAP 자동화 함수의 공통 진입점 — 끝에서 호출한다.
+  이 앱의 SAP 호출은 **전부 사용자가 버튼을 눌러 기다리는 동기 요청**이고 스케줄러로
+  백그라운드에서 도는 경우가 없다(`kortek_backend.py` 확인) — 그래서 호출마다 매번 올려도
+  사용자가 다른 작업 중 불시에 포커스를 뺏기는 사고는 없다.
+- 라이브 검증: Chrome이 전경인 상태에서 `_get_sap_session()`을 직접 호출 →
+  `SAP_FRONTEND_SESSION | Material List` 창이 전경으로 올라오는 것 확인(사용자가 말한
+  "자재 List" 창과 동일, SAP 로그인 계정 KKR034).

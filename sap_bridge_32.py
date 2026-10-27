@@ -241,20 +241,55 @@ def _auto_login(cfg, session=None):
     raise RuntimeError('SAP 로그인 후 초기 화면으로 넘어가지 못했습니다(25초 대기) · 화면: ' + _sap_screen_info(session))
 
 
+def _sap_bring_windows_to_front():
+    """SAP GUI 프런트엔드 창(들)을 운영체제 전경으로 올린다. 🆕 [2026-10-27, 실사용 요청]
+    "SAP이 도는 걸 모니터링하는 창이 있던데 SAP 도는 상황엔 항상 보이게 해달라" —
+    브라우저(Chrome)가 화면을 덮고 있으면 SAP GUI가 실제로 자동화되는 과정이 taskbar
+    뒤에 숨어 안 보인다. `_sap_frontend_window()`(6163행 부근, pywinauto UIA)는 이미
+    있지만 호출마다 Desktop 전체를 UIA로 훑어 느리다 — 여긴 `dump_windows_dialogs`가
+    이미 쓰는 가벼운 win32gui.EnumWindows로 'SAP_FRONTEND_SESSION' 클래스(실사용 진단으로
+    확인된 SAP GUI 세션 창의 고정 클래스명)를 찾는다. `_get_sap_session()`은 모든 SAP
+    자동화 함수(49곳)의 공통 진입점이자 **이 앱의 SAP 호출은 전부 사용자가 버튼을 눌러
+    기다리는 동기 요청**(스케줄러로 백그라운드에서 도는 경우 없음, kortek_backend.py
+    /sap-* 라우트 확인)이라, 여기서 매번 올려도 사용자가 다른 작업 중에 불시에 포커스를
+    뺏기는 사고는 없다. 창을 못 찾거나 못 올려도 조회 자체는 계속 진행해야 하므로
+    예외는 전부 삼킨다(화면 전환 실패가 전체 조회 실패로 번지면 안 됨)."""
+    try:
+        import ctypes as _ct
+        import win32gui as _wg
+        import win32con as _wc
+        def _cb(hwnd, _):
+            try:
+                if _wg.GetClassName(hwnd) == 'SAP_FRONTEND_SESSION' and _wg.IsWindowVisible(hwnd):
+                    if _wg.IsIconic(hwnd):
+                        _wg.ShowWindow(hwnd, _wc.SW_RESTORE)
+                    _ct.windll.user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+        _wg.EnumWindows(_cb, None)
+    except Exception:
+        pass
+
+
 def _get_sap_session():
     """SAP 세션을 돌려준다. 자동 로그인 설정이 있으면, 꺼져 있거나 로그아웃된 SAP는 먼저 로그인한다."""
     cfg = _load_login_config()
     if cfg is None:
-        return _get_sap_session_raw()
-    try:
         session = _get_sap_session_raw()
-    except RuntimeError:
-        return _auto_login(cfg, None)
-    try:
-        logged_in = bool((session.Info.User or '').strip())
-    except Exception:
-        logged_in = True  # 판단 불가면 기존 동작 유지
-    return session if logged_in else _auto_login(cfg, session)
+    else:
+        try:
+            session = _get_sap_session_raw()
+        except RuntimeError:
+            session = _auto_login(cfg, None)
+        else:
+            try:
+                logged_in = bool((session.Info.User or '').strip())
+            except Exception:
+                logged_in = True  # 판단 불가면 기존 동작 유지
+            if not logged_in:
+                session = _auto_login(cfg, session)
+    _sap_bring_windows_to_front()
+    return session
 
 
 def _get_sap_session_raw():
