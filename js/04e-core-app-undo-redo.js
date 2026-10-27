@@ -337,15 +337,17 @@
             window.wrToggleAlarm(rowIndex, ev);
         }, 250);
     };
-    // 📌 [2026-10-26 신규, 사용자 요청] "No." 헤더의 핀셋 — 행마다 일일이 누르지 않고 전체 업무의
-    //    알림을 한 번에 켜거나 끈다. 전체선택 체크박스와 같은 관례: 하나라도 꺼져 있으면 전체 켜기,
-    //    전부 켜져 있으면 전체 끄기(눌렀을 때 "뭐가 되는지" 예측 가능하게).
+    // 📌 [2026-10-26 신규, 2026-10-27 순서 정정 — 둘 다 사용자 요청] "No." 헤더의 핀셋 — 행마다
+    //    일일이 누르지 않고 전체 업무의 알림을 한 번에 켜거나 끈다.
+    //    ⚠️ [2026-10-27] 처음 누르면 **항상 전체 해제부터**, 한 번 더 누르면 전체 설정 — 하나라도
+    //    켜져 있으면(보통 그게 초기 상태) 끄는 쪽을 먼저 하도록 조건을 뒤집었다(이전엔 반대라
+    //    "하나라도 꺼져 있으면" 조건이 먼저 걸려 보통 상태에서 첫 클릭에 전체가 켜졌다).
     window.wrToggleAllPins = function(ev) {
         if (ev) ev.stopPropagation();
         if (!globalData || globalData.length <= 1) return;
-        let anyOff = false;
-        for (let i = 1; i < globalData.length; i++) { if (globalData[i] && !globalData[i]._알림) { anyOff = true; break; } }
-        const newState = anyOff;
+        let anyOn = false;
+        for (let i = 1; i < globalData.length; i++) { if (globalData[i] && globalData[i]._알림) { anyOn = true; break; } }
+        const newState = !anyOn;   // 하나라도 켜져 있으면(또는 전부 켜져 있으면) 먼저 전체 끄기
         let count = 0;
         for (let i = 1; i < globalData.length; i++) { if (globalData[i]) { globalData[i]._알림 = newState; count++; } }
         logChange(0, -1, '알림 설정', (newState ? '전체 알림 켜짐' : '전체 알림 꺼짐') + ` (${count}건)`);
