@@ -2463,32 +2463,27 @@ ZMM009 ALV **119개 컬럼 전수 확인 결과 통화 컬럼이 없다**(`WAERS
 - ⚠️ BOM 그리드의 `NETPR`(순가격, `show_price=1`로 나옴)은 구매 정보레코드 값이라 **표준가격과
   다른 숫자**다. "단가가 환종이 섞인 것 같다"는 인상은 이 열과 혼동했을 가능성이 있다.
 
-### 🖥 SAP 조회 중 SAP GUI 창을 화면 구석에 작게 띄우기 (2026-10-27, 실사용 요청 3차 반복)
+### 🖥 SAP 조회 중 "뭔가 보이게" — 세 번 시도 끝에 작업표시줄 아이콘 깜빡임으로 최종 확정 (2026-10-27)
 사용자가 "SAP이 돌고 있는 걸 모니터링하는 창(taskbar의 'SAP Logon...'/'자재 List')이 있던데
 항상 보이게 해달라"고 요청 — 브라우저(Chrome)가 화면을 덮고 있으면 SAP GUI 자동화가 실제로
-도는 과정이 taskbar 뒤에 숨어 전혀 안 보인다. 세 번 정정됨:
+도는 과정이 taskbar 뒤에 숨어 전혀 안 보인다. 세 번 시도 후 **사용자가 직접 트레이드오프를
+듣고 선택**:
 - **1차(철회)**: `SetForegroundWindow`+`ShowWindow(SW_RESTORE)` → SAP 창이 화면 절반을
   덮으며 튀어나와 보던 화면을 가려버림(사용자가 스크린샷으로 정정).
-- **2차(철회)**: `FlashWindowEx(FLASHW_TRAY|FLASHW_TIMERNOFG)`로 작업표시줄 아이콘만
-  깜빡임 → 사용자가 원한 건 "마우스를 올리면 뜨는 작은 미리보기 창처럼, 실제로 뭔가 작게
-  보이는 것"이었다 — 아이콘 깜빡임만으론 내용이 안 보여 부족했다.
-  **그 taskbar hover-peek 자체는 explorer.exe가 그리는 내부 UI라 외부 프로세스가
-  프로그램적으로 띄우는 공개 API가 없다**(DWM 썸네일 합성으로 직접 그리는 방법은 있지만
-  전용 창+메시지 루프가 필요한 훨씬 무거운 경로라 미채택).
-- **3차(현재)**: `_sap_shrink_to_corner()`(`sap_bridge_32.py`) — **SAP 창 자체를 420×260
-  크기로 줄여 화면 오른쪽 아래 구석에 `HWND_TOPMOST`로 고정**한다. `SWP_NOACTIVATE`로
-  OS 포커스는 전혀 안 뺏어서 Chrome 등 다른 작업에 지장이 없다(hover-peek과 같은 효과를
-  진짜 창 리사이즈로 실용적으로 대체). 최소화돼 있던 창은 `SW_SHOWNOACTIVATE`로
-  비활성 상태 그대로 펼친다. `main()`의 `finally`에서 `_sap_restore_window()`가 원래
-  크기·위치·최소화 여부·topmost 여부를 전부 되돌린다(성공/실패 어느 경로든) — 안 그러면
-  사용자가 나중에 SAP를 직접 쓸 때 계속 구석에 작게 붙어 있게 된다.
-- 대상 창은 `win32gui.EnumWindows`로 클래스명이 `SAP_FRONTEND_SESSION`인 것(실사용
-  진단으로 확인된 SAP GUI 세션 창의 고정 클래스명)을 찾는다. `_get_sap_session()`(49곳
-  모든 SAP 자동화 함수의 공통 진입점)에서 호출하며, 한 스크립트 실행(=조회 1건) 동안은
-  `_SAP_SHRINK_STATE['done']`으로 중복 축소를 막는다.
-- 라이브 검증(실제로 최소화돼 있던 SAP 세션으로 재현): 호출 전 `GetWindowRect` =
-  `(-32000,-32000,-31840,-31972)`(Windows가 최소화 창에 쓰는 표준 placeholder 좌표) →
-  `_sap_shrink_to_corner()` 후 `(2128,1120,2631,1380)`(작게, topmost=True)로 실제 보임 →
-  `_sap_restore_window()` 후 다시 원래 placeholder 좌표(topmost=False)로 정확히 복구.
-  전 과정에서 `GetForegroundWindow()`(Chrome)는 **단 한 번도 안 바뀜** — 포커스 무탈취
-  확인(SAP 로그인 계정 KKR034, 창 제목 "Material List" = 사용자가 말한 "자재 List" 창).
+- **2차(한 번 철회했다가 최종 채택)**: `FlashWindowEx(FLASHW_TRAY|FLASHW_TIMERNOFG)`로
+  작업표시줄 아이콘만 깜빡임. 처음엔 "마우스를 올리면 뜨는 작은 미리보기처럼 내용이
+  안 보여 부족하다"며 철회됐었다 — **그 taskbar hover-peek 자체는 explorer.exe가 그리는
+  내부 UI라 외부 프로세스가 프로그램적으로 띄우는 공개 API가 없다**(DWM 썸네일 합성으로
+  직접 그리는 방법은 있지만 전용 창+메시지 루프가 필요한 훨씬 무거운 경로라 미채택).
+- **3차(시도 후 철회)**: SAP 창 자체를 420×260으로 줄여 화면 구석에 `HWND_TOPMOST`로
+  고정(`SWP_NOACTIVATE`로 포커스는 안 뺏음) → 그래도 **그 구석에서 하던 다른 작업을
+  가려서 방해가 된다**고 재차 정정. "창을 어디 두든 화면 한구석은 겹칠 수밖에 없다"는
+  트레이드오프를 사용자에게 직접 설명 → **"작업표시줄 아이콘만 깜빡임(가장 덜 방해) +
+  궁금할 때 직접 마우스 호버"를 최종 선택** → 2차 구현으로 되돌림(현재 코드).
+- **최종(현재)**: `_sap_bring_windows_to_front()`(`sap_bridge_32.py`) — 작업표시줄 아이콘만
+  깜빡이고 창 크기·위치·표시 상태는 전혀 안 건드린다. `_get_sap_session()`(49곳 모든 SAP
+  자동화 함수의 공통 진입점)에서 호출. `main()`에 있던 복구용 `finally`(3차의 잔재)도
+  제거 — 더 이상 되돌릴 게 없다.
+- 라이브 검증: 호출 전/후 `GetWindowRect`·`IsIconic`·`WS_EX_TOPMOST`·
+  `GetForegroundWindow()` **전부 1비트도 안 바뀜** — 창을 조금도 안 건드리고 아이콘만
+  깜빡이는 동작임을 코드로 재확인(SAP 로그인 계정 KKR034).
