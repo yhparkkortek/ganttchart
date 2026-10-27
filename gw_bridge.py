@@ -711,7 +711,7 @@ def search_approval_docs(keyword, only_approval_form=True, limit=20):
       if (!r.ok) return { __err:true, status:r.status };
       const j = await r.json();
       return { total:(j.page && j.page.total) || 0,
-               items:(j.data||[]).map(x => ({ id:x.id, title:x.title||'', formName:x.formName||'',
+               items:(j.data||[]).map(x => ({ id:x.id, docNum:x.docNum||'', title:x.title||'', formName:x.formName||'',
                       drafter:x.drafterName||'', at:(x.draftedAt||'').slice(0,10), status:x.docStatus||'' })) };
     })(%s, %s)
     """ % (json.dumps(str(keyword)), int(limit))

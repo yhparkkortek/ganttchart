@@ -637,6 +637,20 @@ QA_WRITE_TOOLS 레지스트리)에만 적용되고, 채팅에서 "RD3-xxx 복사
 문서번호만 넘어가고 제목은 원본 그대로 열린다. 제목을 바꾸려면 미리보기가 뜬 뒤 그 칸을
 직접 고쳐야 한다.
 
+### 🐛 (2026-10-27 실사용 제보) `gw_approval_search` 결과에 `docNum`이 안 보이던 버그
+
+실측: "4.3 프로젝트" 참고 문서 중 하나가 `id:199533`로만 떴고, AI가 그 숫자를 `docNum`에
+넣어 `gw_approval_read`를 불렀다가 "문서번호 199533 를 어느 문서함에서도 찾지 못했습니다"로
+실패했다. 원인은 둘이 겹쳐 있었다:
+1. `search_approval_docs`(`gw_bridge.py`)가 `/api/search/approval` 응답에서 `id`/`title`/
+   `formName`/`drafterName`/`draftedAt`/`docStatus`만 뽑고 **`docNum`을 안 뽑았다** — 응답에
+   실제로는 있는데(8-? 절 "응답 항목 키" 참고) 코드가 빼먹은 것. → 매핑에 `docNum` 추가로 수정.
+2. (버그 아님, 설계 그대로) 진행 중/임시저장 문서는 **진짜로 `docNum`이 비어 있다** — 1번을
+   고친 뒤 재확인해도 `status:'INPROGRESS'`인 문서는 `docNum:''`로 나온다. 이건 맞는 동작이다.
+→ 결과: `docNum`이 비어 있고 `id`만 있는 행은 **아직 문서번호가 없는 문서**라는 뜻이다.
+그 숫자는 `gw_approval_read(docId=그 숫자)`로 넣어야 한다 — `docNum`에 넣으면 100% 실패한다.
+이 규칙은 `js/40` `gw_approval_read`의 `desc`에도 적어 AI가 스스로 구분하게 했다.
+
 ---
 
 ## 6. SAP 연계 — 승인원에 필요한 값
