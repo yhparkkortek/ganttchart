@@ -129,6 +129,50 @@
     };
     window._apvLearned = _learnAll;
 
+    // ── 🔎 [2026-10-27] 작성 전 사전 스캔 — "이 프로젝트에 채울 정보가 있는지" ────────────
+    //  양식이 APPROVAL_FIELD_SOURCES 에 등록 안 돼 있으면 _resolveOne 이 메타/스펙/서머리를
+    //  전혀 안 본다(모든 칸이 바로 '원본 기안'행으로 떨어진다) — 매핑이 없다고 **데이터까지
+    //  없는 건 아니다.** 사람이 "summary/spec 쪽만 보면 채울 수 있을 것 같은데" 물어본 질문
+    //  그대로: 칸 매핑과 무관하게, 지금 프로젝트에 **뭐가 있고 뭐가 없는지**만 먼저 보여준다.
+    //  읽기 전용 — 아무 칸에도 자동으로 채워 넣지 않는다(추측 금지 원칙은 그대로).
+    window._apvProjectFactScan = function () {
+        var meta = window.projectMeta || {};
+        var metaOut = {};
+        Object.keys(meta).forEach(function (k) {
+            if (/이메일$/.test(k)) return;              // 연락처 노이즈는 뺀다
+            var v = meta[k];
+            if (v === undefined || v === null || typeof v === 'object') return;
+            v = String(v).trim();
+            if (v) metaOut[k] = v;
+        });
+
+        var summary = ((window.tabData || {}).summary) || {};
+        var summaryOut = {};
+        Object.keys(summary).forEach(function (k) {
+            var v = summary[k];
+            if (v === undefined || v === null) return;
+            if (Array.isArray(v)) { if (v.length) summaryOut[k] = v.length + '건'; return; }
+            if (typeof v === 'object') return;
+            v = String(v).trim();
+            if (v) summaryOut[k] = v;
+        });
+
+        var rows = (window.tabData && window.tabData.briefSpec) || [];
+        var specOut = [];
+        rows.forEach(function (row) {
+            var label = (row.sub || row.type || '').toString().trim();
+            var val = (row.modelA || row.modelB || row.modelC || '').toString().trim();
+            if (label && val) specOut.push({ label: label, value: val });
+        });
+
+        return {
+            meta: metaOut, metaCount: Object.keys(metaOut).length,
+            summary: summaryOut, summaryCount: Object.keys(summaryOut).length,
+            spec: specOut, specCount: specOut.length,
+            note: specOut.length ? '' : 'Customer SPEC 이 비어 있습니다(이 프로젝트/제품구분자엔 아직 입력 안 됨).'
+        };
+    };
+
     // ── 현재 프로젝트에서 값 찾기 ───────────────────────────────────────
     // Customer SPEC 은 {type, sub, modelA/B/C, note} 행들이다. 지금 보는 제품구분자의
     // 열(modelA)을 먼저 보고, 라벨은 별칭·부분일치까지 허용한다.
