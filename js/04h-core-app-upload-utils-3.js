@@ -7857,6 +7857,18 @@ ${docsJson}`;
                 window._ganttQaHistory.push({ role: 'ai', route: _qaRoute,
                     text: _toolRes.reply + (window._qaToolCallsFooter
                         ? window._qaToolCallsFooter(_toolRes.calls) : '') });
+                // 🗂 [2026-10-27] wbs_group_suggestions가 후보를 찾았으면 그 모달을 바로 열 수 있는
+                //    버튼을 **별도 말풍선**으로 덧붙인다 — 같은 말풍선에 합치려고 AI 답변 전체를
+                //    _mdToHtml로 다시 돌렸더니 AI가 제목을 따옴표로 감싼 것이 깨져("DP케이블..."가
+                //    "&DP케이블...&"로, 날짜 끝자리도 잘려 보임) 실측으로 걸렸다. 원래 답변은
+                //    평소 렌더 경로(_mdToHtml, m.rawHtml 없음) 그대로 두고, 버튼만 rawHtml:true인
+                //    새 메시지로 뒤에 붙이면 그 변환을 두 번 타지 않는다.
+                const _wbsCall = (_toolRes.calls || []).find(function (c) { return c.id === 'wbs_group_suggestions' && c.ok && c.count > 0; });
+                if (_wbsCall) {
+                    window._ganttQaHistory.push({ role: 'ai', rawHtml: true,
+                        text: '<button style="display:inline-block;margin-top:2px;padding:3px 10px;border:1px solid #c0a0d8;border-radius:4px;cursor:pointer;font-size:12px;background:#ede4f5;color:#5a3680;" onclick="window.openWbsGroupSuggestions()">🗂 '
+                            + window._t('그룹 제안 모달 열기', 'Open group suggestions') + '</button>' });
+                }
                 window._ganttQaSending = false;
                 input.disabled = false;
                 if (sendBtn) {

@@ -1401,6 +1401,20 @@
         return candidates;
     };
 
+    // 🤖 [2026-10-27 신규] AI 문답 도구(js/40 QA_TOOLS) 등록용 래퍼 — 읽기 전용으로 후보만
+    //    돌려준다. 실제로 묶는 것은 항상 openWbsGroupSuggestions() 모달에서 사람이 확인하고
+    //    눌러야만 일어난다 — AI가 스스로 적용하지 않는다(CLAUDE.md "사람 승인 후 적용").
+    window._wbsQaSuggestTool = function() {
+        const candidates = window._wbsDetectGroupCandidates();
+        return {
+            candidateCount: candidates.length,
+            suggestions: candidates.slice(0, 15).map(function(c) {
+                return { name: c.suggestedName, date: c.dateRangeLabel,
+                         memberCount: c.memberIdx.length, summary: c.titles.join(' / ') };
+            })
+        };
+    };
+
     // 🗂 그룹 제안 검토 모달 — 후보를 하나 적용할 때마다 배열 인덱스가 전부 바뀌므로, 매번
     //    처음부터 다시 탐지해서 다시 그린다(스테일 인덱스로 엉뚱한 행을 묶는 사고 방지).
     window.openWbsGroupSuggestions = function() {
