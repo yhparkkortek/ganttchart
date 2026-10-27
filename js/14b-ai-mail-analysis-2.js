@@ -456,18 +456,16 @@ window.clearPromptLogs = function() {
 //    완전히 새 제목이면 L3(새 세부업무)"로, AI 추측 대신 실제 시트 데이터를 근거로 판정.
 //    recalculateSchedules()가 _origT1~T3를 각 행까지 forward-fill 해두므로, 레벨 상관없이 모든 행을
 //    훑으면 "현재 존재하는 L1~L3 제목 전체"를 얻을 수 있음.
+// 🐛 [2026-10-27, 실사용 제보 대응] "제목이 기존 L1~L3과 일치하면 L4, 완전히 새 제목이면 L3"로
+//    추정하던 방식을 되돌린다 — 이 추정이 자주 틀려서(제목이 살짝만 달라도 "새 제목"으로 보고
+//    L3를 만듦) 레벨 3·4가 뒤섞여 들어왔고, 오늘 "레벨 불일치 참고" 기능으로 실측 확인됨(44건,
+//    같은 소분류로 좁혀도 10건). 새 규칙: **신규 삽입은 항상 레벨4(하위업무, 리프)뿐** — 레벨3
+//    (세부업무, 그룹)은 오직 "비슷한 업무 묶기"(groupSelectedRows)로 레벨4를 묶을 때만 생성된다.
+//    이렇게 하면 "레벨3 = 항상 그룹(자식 있음), 레벨4 = 항상 리프(자식 없음)"가 구조적으로
+//    보장돼, 레벨 불일치 자체가 원천적으로 안 생긴다. (위 주석에 남아있듯 2026-08-20 이전에도
+//    "값 없으면 무조건 4"였다가 이 추정 로직으로 바뀌었던 것 — 그 이전 방식으로 복귀.)
 window._msGuessWbsLevel = function(taskName, gd) {
-    const norm = s => String(s || '').replace(/\s+/g, '').replace(/[＊*]?AI📧$/, '').toLowerCase();
-    const target = norm(taskName);
-    if (!target || !gd) return 3;
-    for (let i = 1; i < gd.length; i++) {
-        const row = gd[i];
-        if (!row) continue;
-        if (norm(row._origT1) === target || norm(row._origT2) === target || norm(row._origT3) === target) {
-            return 4; // 기존 제목과 일치 → 그 아래 하위업무로
-        }
-    }
-    return 3; // 완전히 새 제목 → 새 세부업무로
+    return 4;
 };
 
 // 📌 [2026-10-26 버그수정] 메일 업무 중복 등록 방지 — 상세내용의 [출처] 태그("제목_날짜_발신자",

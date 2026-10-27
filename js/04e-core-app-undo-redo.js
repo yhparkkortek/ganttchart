@@ -1316,8 +1316,14 @@
         if (!m) return [];
         return _wbsTokenize(m[1]).slice(0, 20);
     }
-    window._wbsDetectGroupCandidates = function(gd) {
+    // 📌 [2026-10-27 신규] targetLevel — "비슷한 업무 묶기"는 이제 2단계: 1차(기본값, targetLevel=4)
+    //    는 하위업무(리프)만 묶어 레벨3 그룹을 만든다. 2차(targetLevel=3)는 그렇게 만들어진(또는
+    //    원래 있던) 레벨3 그룹끼리 비슷하면 레벨2로 더 묶는다 — "4번 묶고 필요한 경우(공통으로
+    //    묶일 확률은 낮으니) 3번을 묶자"는 실사용 지침. 신규 업무는 이제 전부 레벨4로만 들어오므로
+    //    (js/14b _msGuessWbsLevel), 레벨3은 항상 "이미 그룹 역할"이라 자식 유무를 안 가린다.
+    window._wbsDetectGroupCandidates = function(gd, targetLevel) {
         gd = gd || globalData;
+        targetLevel = targetLevel || 4;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
 
         // 1) 부모별 형제 묶음 구성 — "부모 = 바로 위의 더 낮은 레벨 행" (sortRowsByStartDate와 같은 방식)
@@ -1337,12 +1343,14 @@
         siblingGroups.forEach(function(idxs, parentKey) {
             if (idxs.length < 2) return;
             const parentTitle = parentKey !== 'ROOT' ? _wbsNormTitle(_wbsRowOwnTitle(gd[parentKey])) : '';
-            // 자식이 있는(=이미 그 자체로 그룹인) 행은 제외 — leaf 형제만 묶음 후보로 본다.
             // 💡 [2026-10-26, 사용자 지적] 레벨 0~2(대분류~소분류2)는 이미 구분자가 정해진 구조라
-            //    자동으로 묶으면 안 된다 — 레벨 3·4(세부업무·하위업무)만 대상으로 한다.
+            //    자동으로 묶으면 안 된다. targetLevel===4(1차)는 리프(자식 없음)만 — 레벨4는 구조상
+            //    최하단이라 자식이 있을 수 없지만 방어적으로 유지. targetLevel===3(2차)는 자식 유무를
+            //    안 가린다 — 레벨3는 이제 항상 "그룹" 역할이라 자식이 있는 게 정상이다.
             const leafIdxs = idxs.filter(function(i) {
                 const lv = lvOf(gd[i]);
-                if (lv < 3) return false;
+                if (lv !== targetLevel) return false;
+                if (targetLevel !== 4) return true;
                 const next = gd[i + 1];
                 return !(next && lvOf(next) > lv);
             });
@@ -1438,6 +1446,43 @@
                          memberCount: c.memberIdx.length, summary: c.titles.join(' / ') };
             })
         };
+    };
+
+    // 📐 [2026-10-27 신규] 레벨 정규화 — "신규 업무는 항상 레벨4로만 들어온다"(js/14b
+    //    _msGuessWbsLevel) 규칙을 이 기능 적용 이전부터 있던 데이터에도 소급 적용한다. 자식이 없는
+    //    레벨3(=예전 추정 로직이 잘못 세부업무로 분류해 혼자 리프로 남은 것)을 레벨4로 강등 —
+    //    "레벨3=항상 그룹(자식 있음), 레벨4=항상 리프"가 구조적으로 보장되면 레벨 불일치 자체가
+    //    원천적으로 안 생긴다. 자식이 있는 레벨3(이미 그룹 역할)는 건드리지 않는다.
+    window._wbsDetectLevel3Leaves = function(gd) {
+        gd = gd || globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const out = [];
+        for (let i = 1; i < gd.length; i++) {
+            const row = gd[i]; if (!row) continue;
+            if (lvOf(row) !== 3) continue;
+            const next = gd[i + 1];
+            if (next && lvOf(next) > 3) continue; // 자식 있음 — 이미 그룹, 그대로 둠
+            out.push(i);
+        }
+        return out;
+    };
+    // idxs(레벨3 리프 인덱스 목록)를 레벨4로 강등 — changeSelectedRowsLevel과 같은 전환 방식이지만
+    // "2개 이상 선택" 제약이 없다(이 강등은 1건이어도 적용돼야 함).
+    window._wbsApplyDemoteLevel3Leaves = function(idxs) {
+        let changed = 0;
+        (idxs || []).forEach(function(i) {
+            const row = globalData[i];
+            if (!row || row._level !== 3) return;
+            const taskTxt = (row._origT3 || '').toString().trim() || '새로운 업무';
+            row._level = 4;
+            row._origDev = ''; row._origT1 = ''; row._origT2 = ''; row._origT3 = ''; row._origT4 = taskTxt;
+            const currentDur = row._finalDuration || 1;
+            if (colIdx.dur3 !== -1) row[colIdx.dur3] = '';
+            if (colIdx.dur4 !== -1) row[colIdx.dur4] = currentDur.toString();
+            changed++;
+        });
+        if (changed) logChange(0, -1, '레벨 정규화', '레벨3 리프 ' + changed + '건 → 레벨4 강등');
+        return changed;
     };
 
     // 🔁 [2026-10-27 신규] 중복 의심 업무 탐지 — _wbsDetectGroupCandidates와 같은 형제 순회를 쓰되,
@@ -1656,11 +1701,15 @@
     };
     window._renderGanttOrganizeWizard = function() {
         const _en = window._currentLang === 'en';
+        const level3Leaves = window._wbsDetectLevel3Leaves();
         const dups = window._wbsDetectDuplicateCandidates();
-        const groups = window._wbsDetectGroupCandidates();
+        // 📌 [2026-10-27] 2단계 그룹 묶기 — 1차(레벨4 하위업무, 주력) 먼저, 2차(레벨3 세부업무,
+        // "공통으로 묶일 확률이 낮으니" 필요한 경우만)는 별도 섹션으로 분리해서 보여준다.
+        const groups4 = window._wbsDetectGroupCandidates(null, 4);
+        const groups3 = window._wbsDetectGroupCandidates(null, 3);
         const levelIssues = window._wbsDetectLevelInconsistencies();
         const outOfOrder = window._wbsCountOutOfOrderSiblings();
-        const totalN = dups.length + groups.length + levelIssues.length + (outOfOrder > 0 ? 1 : 0);
+        const totalN = (level3Leaves.length > 0 ? 1 : 0) + dups.length + groups4.length + groups3.length + levelIssues.length + (outOfOrder > 0 ? 1 : 0);
 
         let modal = document.getElementById('gantt-organize-wizard-modal');
         if (!modal) {
@@ -1689,15 +1738,19 @@
             </div>`;
         }).join('') : `<div style="padding:10px; color:#999; font-size:11.5px;">${_en ? 'No suspected duplicates found.' : '중복 의심 업무를 찾지 못했습니다.'}</div>`;
 
-        const groupHtml = groups.length ? groups.map(function(c, ci) {
-            return `<div class="wow-group-cand" data-gi="${ci}" style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px;">
-                <input type="text" class="wow-group-name-input" value="${escapeHtml(c.suggestedName)}" style="width:100%; padding:5px 8px; border:1px solid #c0a0d8; border-radius:5px; font-size:12.5px; font-weight:bold; color:#5a3680; margin-bottom:4px;">
-                ${c.dateRangeLabel ? `<div style="font-size:10.5px; color:#888; margin-bottom:5px;">📅 ${escapeHtml(c.dateRangeLabel)}</div>` : ''}
-                <div style="font-size:11.5px; color:#555; line-height:1.7;">${c.titles.map(function(t, ti) {
-                    return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wow-group-member-chk" data-ord="${ti}" checked>${escapeHtml(t)}</label>`;
-                }).join('')}</div>
-            </div>`;
-        }).join('') : `<div style="padding:10px; color:#999; font-size:11.5px;">${_en ? 'No group candidates found.' : '그룹 제안 후보를 찾지 못했습니다.'}</div>`;
+        const buildGroupHtml = function(list, cardClass) {
+            return list.length ? list.map(function(c, ci) {
+                return `<div class="${cardClass}" data-gi="${ci}" style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+                    <input type="text" class="wow-group-name-input" value="${escapeHtml(c.suggestedName)}" style="width:100%; padding:5px 8px; border:1px solid #c0a0d8; border-radius:5px; font-size:12.5px; font-weight:bold; color:#5a3680; margin-bottom:4px;">
+                    ${c.dateRangeLabel ? `<div style="font-size:10.5px; color:#888; margin-bottom:5px;">📅 ${escapeHtml(c.dateRangeLabel)}</div>` : ''}
+                    <div style="font-size:11.5px; color:#555; line-height:1.7;">${c.titles.map(function(t, ti) {
+                        return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wow-group-member-chk" data-ord="${ti}" checked>${escapeHtml(t)}</label>`;
+                    }).join('')}</div>
+                </div>`;
+            }).join('') : `<div style="padding:10px; color:#999; font-size:11.5px;">${_en ? 'No group candidates found.' : '그룹 제안 후보를 찾지 못했습니다.'}</div>`;
+        };
+        const groupHtml4 = buildGroupHtml(groups4, 'wow-group4-cand');
+        const groupHtml3 = buildGroupHtml(groups3, 'wow-group3-cand');
 
         const levelHtml = levelIssues.length ? levelIssues.map(function(l) {
             return `<div style="border:1px solid #e8e0c8; border-radius:8px; padding:8px 12px; margin-bottom:8px; background:#fffdf5;">
@@ -1714,10 +1767,19 @@
                 <button onclick="document.getElementById('gantt-organize-wizard-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
             <div style="padding:10px 16px; flex:1; overflow-y:auto;">
+                <div style="font-weight:bold; font-size:12.5px; color:#0f6b5c; margin-bottom:4px;">📐 ${_en ? 'Level normalization' : '레벨 정규화'}</div>
+                <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #d0e8e2; border-radius:8px; cursor:pointer; font-size:12px; color:#333; margin-bottom:10px; ${level3Leaves.length === 0 ? 'opacity:0.5;' : ''}">
+                    <input type="checkbox" id="wow-demote-toggle" ${level3Leaves.length > 0 ? 'checked' : 'disabled'}>
+                    ${level3Leaves.length > 0
+                        ? (_en ? `${level3Leaves.length} level-3 task(s) with no sub-items will be demoted to level-4` : `레벨3인데 하위업무가 없는 업무 ${level3Leaves.length}건을 레벨4로 강등합니다`)
+                        : (_en ? 'No level-3 leaf tasks found' : '레벨3 리프 업무가 없습니다')}
+                </label>
                 <div style="font-weight:bold; font-size:12.5px; color:#b1432f; margin-bottom:4px;">🔁 ${_en ? `Suspected duplicates (${dups.length})` : `중복 의심 (${dups.length}건)`}</div>
                 ${dupHtml}
-                <div style="font-weight:bold; font-size:12.5px; color:#5a3680; margin:10px 0 4px;">🗂 ${_en ? `Group suggestions (${groups.length})` : `그룹 제안 (${groups.length}건)`}</div>
-                ${groupHtml}
+                <div style="font-weight:bold; font-size:12.5px; color:#5a3680; margin:10px 0 4px;">🗂 ${_en ? `Group suggestions — level 4 (${groups4.length})` : `그룹 제안 — 레벨4 하위업무 (${groups4.length}건)`}</div>
+                ${groupHtml4}
+                <div style="font-weight:bold; font-size:12.5px; color:#5a3680; margin:10px 0 4px;">🗂² ${_en ? `Group suggestions — level 3, when needed (${groups3.length})` : `그룹 제안 — 레벨3 세부업무, 드물게 필요 (${groups3.length}건)`}</div>
+                ${groupHtml3}
                 <div style="font-weight:bold; font-size:12.5px; color:#8a6d1a; margin:10px 0 4px;">📐 ${_en ? `Level inconsistencies — reference only (${levelIssues.length})` : `레벨 불일치 참고 (${levelIssues.length}건)`}</div>
                 ${levelHtml}
                 <div style="font-weight:bold; font-size:12.5px; color:#0f6b5c; margin:10px 0 4px;">📅 ${_en ? 'Sibling order' : '순서 정리'}</div>
@@ -1772,7 +1834,18 @@
                 setProgress(_en ? 'Starting...' : '시작하는 중...', 3);
                 await yieldFrame();
 
-                let dupDeleted = 0, groupsApplied = 0, groupTasks = 0, sorted = false;
+                let demoted = 0, dupDeleted = 0, groupsApplied = 0, groupTasks = 0, sorted = false;
+
+                // 0) 레벨 정규화 — 레벨3 리프를 레벨4로 강등. 제일 먼저 해야 이후 중복/그룹 판정이
+                //    "신규는 항상 레벨4"라는 새 규칙과 어긋나지 않는다. 이번 판에 새로 레벨4가 된
+                //    업무는 이번 그룹 묶기 후보 목록(groups4)엔 아직 안 잡혀 있다 — 다음 진단(재렌더)
+                //    에서 잡힌다.
+                const demoteChk = document.getElementById('wow-demote-toggle');
+                if (demoteChk && demoteChk.checked && !demoteChk.disabled) {
+                    setProgress(_en ? 'Normalizing levels...' : '레벨 정규화 중...', 6);
+                    await yieldFrame();
+                    demoted = window._wbsApplyDemoteLevel3Leaves(level3Leaves);
+                }
 
                 // 1) 중복 삭제 — 체크된 카드만, 각 카드는 첫 번째 행만 남기고 나머지 삭제. recalculate는
                 //    아직 안 부른다(그룹까지 다 끝난 뒤 맨 마지막에 한 번만).
@@ -1794,15 +1867,19 @@
                 }
 
                 // 2) 그룹 묶기 — 체크된 멤버가 2개 이상인 카드만. skipFinish=true라 매 호출이 즉시 끝나고,
-                //    재계산은 맨 끝에서 딱 한 번만 돈다.
-                const toApplyGroups = Array.from(modal.querySelectorAll('.wow-group-cand')).map(function(card) {
-                    const gi = parseInt(card.dataset.gi, 10);
-                    const cand = groups[gi];
-                    const nameInput = card.querySelector('.wow-group-name-input');
-                    const name = nameInput ? nameInput.value.trim() : '';
-                    const checkedOrds = Array.from(card.querySelectorAll('.wow-group-member-chk:checked')).map(function(cb) { return parseInt(cb.dataset.ord, 10); });
-                    return { cand: cand, name: name, checkedOrds: checkedOrds };
-                }).filter(function(x) { return x.cand && x.name && x.checkedOrds.length >= 2; });
+                //    재계산은 맨 끝에서 딱 한 번만 돈다. 레벨4(1차) 카드를 먼저 전부 처리한 뒤 레벨3
+                //    (2차) 카드를 처리한다 — "4번 묶고 필요한 경우 3번" 순서를 그대로 따른다.
+                const collectGroupCards = function(selector, srcList) {
+                    return Array.from(modal.querySelectorAll(selector)).map(function(card) {
+                        const gi = parseInt(card.dataset.gi, 10);
+                        const cand = srcList[gi];
+                        const nameInput = card.querySelector('.wow-group-name-input');
+                        const name = nameInput ? nameInput.value.trim() : '';
+                        const checkedOrds = Array.from(card.querySelectorAll('.wow-group-member-chk:checked')).map(function(cb) { return parseInt(cb.dataset.ord, 10); });
+                        return { cand: cand, name: name, checkedOrds: checkedOrds };
+                    }).filter(function(x) { return x.cand && x.name && x.checkedOrds.length >= 2; });
+                };
+                const toApplyGroups = collectGroupCards('.wow-group4-cand', groups4).concat(collectGroupCards('.wow-group3-cand', groups3));
 
                 for (let gi = 0; gi < toApplyGroups.length; gi++) {
                     const g = toApplyGroups[gi];
@@ -1828,8 +1905,8 @@
 
                 window._renderGanttOrganizeWizard(); // 전부 적용 후 통째로 다시 진단+렌더(남은 것만 보여줌)
                 if (window.showToast) window.showToast(_en
-                    ? `✅ Cleaned ${dupDeleted} duplicate(s), ${groupsApplied} group(s) (${groupTasks} task(s))${sorted ? ', reordered by date' : ''}.`
-                    : `✅ 중복 ${dupDeleted}건 정리, ${groupsApplied}개 그룹(${groupTasks}개 업무) 묶음${sorted ? ', 날짜순 재정렬' : ''} 완료.`, 'info');
+                    ? `✅ Normalized ${demoted} level(s), cleaned ${dupDeleted} duplicate(s), ${groupsApplied} group(s) (${groupTasks} task(s))${sorted ? ', reordered by date' : ''}.`
+                    : `✅ 레벨 정규화 ${demoted}건, 중복 ${dupDeleted}건 정리, ${groupsApplied}개 그룹(${groupTasks}개 업무) 묶음${sorted ? ', 날짜순 재정렬' : ''} 완료.`, 'info');
             });
         }
     };
