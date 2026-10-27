@@ -177,8 +177,8 @@
 
         var units = (window.getMcUnits ? window.getMcUnits() : (window.tabData && window.tabData.mcUnits) || []) || [];
         var html = '<div style="margin-bottom:8px; font-size:11.5px; color:#868e96;">'
-            + _esc(_t('각 표를 어느 제품구분자에 넣을지 고르세요. 체크한 것만 들어갑니다. 같은 이름이 이미 있으면 그 리비전을 덮어씁니다.',
-                      'Choose a target unit for each table. Only checked rows are imported; an existing unit/revision is replaced.'))
+            + _esc(_t('각 표를 어느 제품구분자에 넣을지 고르세요. 체크한 것만 들어갑니다. 리비전은 시트 이름에서 가져온 값인데 필요하면 직접 고칠 수 있습니다. 같은 이름이 이미 있으면 그 리비전을 덮어씁니다.',
+                      'Choose a target unit for each table. Only checked rows are imported. Revision is read from the sheet name but you can edit it. An existing unit/revision is replaced.'))
             + '</div><table style="border-collapse:collapse; width:100%; font-size:11.5px;"><thead><tr>'
             + ['', _t('파일', 'File'), _t('시트', 'Sheet'), _t('모델 표기', 'Model line'), _t('행', 'Rows'),
                'Proto A', 'MP', _t('리비전', 'Rev'), _t('넣을 제품구분자', 'Target unit')].map(function (h) {
@@ -198,7 +198,9 @@
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; text-align:right;">' + c.rows.length + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; text-align:right;">' + money(c.protoTotal) + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px; text-align:right;">' + money(c.mpTotal) + '</td>'
-                + '<td style="border:1px solid #e9ecef; padding:3px 6px; text-align:center;">' + _esc(c.rev) + '</td>'
+                + '<td style="border:1px solid #e9ecef; padding:3px 6px;"><input type="text" id="mc-imp-rev-' + i + '" value="' + _esc(c.rev)
+                + '" title="' + _esc(_t('시트 이름(' + c.sheet + ')에서 가져온 값 — 필요하면 고치세요', 'Taken from the sheet name (' + c.sheet + ') — edit if needed'))
+                + '" style="width:56px; box-sizing:border-box; padding:3px 5px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px; text-align:center;"></td>'
                 + '<td style="border:1px solid #e9ecef; padding:3px 6px;"><input type="text" id="mc-imp-tg-' + i + '" value="' + _esc(c.target)
                 + '" list="mc-imp-units" style="width:100%; box-sizing:border-box; padding:3px 5px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px;"></td>'
                 + '</tr>';
@@ -225,24 +227,39 @@
         cands.forEach(function (c, i) {
             var ck = document.getElementById('mc-imp-ck-' + i);
             var tg = document.getElementById('mc-imp-tg-' + i);
+            var rv = document.getElementById('mc-imp-rev-' + i);
             if (!ck || !ck.checked) return;
             var name = (tg ? tg.value : '').trim();
+            var rev = (rv ? rv.value : '').trim() || c.rev;   // 비워두면 원래 값(시트 이름에서 읽은 것)으로
             if (!name) return;
-            picked.push({ c: c, unit: name });
+            picked.push({ c: c, unit: name, rev: rev });
         });
         if (!picked.length) { _toast('⚠️ ' + _t('고른 표가 없습니다.', 'Nothing selected.'), 'error'); return; }
 
         // 같은 제품구분자+리비전을 두 번 넣으려 하면 먼저 막는다 — 조용히 덮어쓰면 한쪽이 사라진다.
         var seen = {}, dup = null;
         picked.forEach(function (p) {
-            var k = p.unit + '||' + p.c.rev;
-            if (seen[k]) dup = p.unit + ' / ' + p.c.rev; else seen[k] = 1;
+            var k = p.unit + '||' + p.rev;
+            if (seen[k]) dup = p.unit + ' / ' + p.rev; else seen[k] = 1;
         });
         if (dup) {
             _toast('⚠️ ' + _t('"' + dup + '"에 두 표를 넣을 수 없습니다 — 이름을 다르게 적어주세요.',
                               'Two tables target "' + dup + '" — give them different names.'), 'error');
             return;
         }
+
+        // 🛡️ [2026-10-27 신규] 되돌리기 번거로운 "덮어쓰기"라 적용 직전에 한 번 더 확인한다
+        //    (사용자 요청) — 리비전을 바로 고칠 수 있게 된 뒤로, 고친 걸 깜빡하고 그대로
+        //    누르면 엉뚱한 리비전에 들어갈 수 있어서 요약을 보여주고 승인받는다.
+        var summary = picked.map(function (p) {
+            return '· ' + p.unit + ' · ' + p.rev + ' (' + p.c.file + ' / ' + p.c.sheet + ', ' + p.c.rows.length + _t('행', ' rows') + ')';
+        }).join('\n');
+        var ok = confirm(_t(
+            '아래 내용으로 적용합니다 — 같은 제품구분자·리비전이 이미 있으면 덮어씁니다.\n\n' + summary
+                + '\n\n리비전과 넣을 제품구분자를 확인해주세요.',
+            'About to apply the following — an existing unit/revision will be overwritten.\n\n' + summary
+                + '\n\nPlease confirm the revision and target unit.'));
+        if (!ok) return;
 
         var td = window.tabData = window.tabData || {};
         td.mcRevisionsByUnit = td.mcRevisionsByUnit || {};
@@ -253,7 +270,7 @@
             var u = p.unit;
             td.mcRevisionsByUnit[u] = td.mcRevisionsByUnit[u] || {};
             td.mcSalesPriceDetailByUnit[u] = td.mcSalesPriceDetailByUnit[u] || {};
-            td.mcRevisionsByUnit[u][p.c.rev] = p.c.rows;
+            td.mcRevisionsByUnit[u][p.rev] = p.c.rows;
             if (td.mcUnits.indexOf(u) === -1) td.mcUnits.push(u);
         });
         // 이름 없는 임시 자리가 남아 있으면 치운다 — 두면 엑셀에 "이름 없음" 시트가 같이 나온다.
@@ -263,15 +280,15 @@
         window.mcActiveUnit = first.unit;
         td.mcRevisions = td.mcRevisionsByUnit[first.unit];
         td.mcSalesPriceDetail = td.mcSalesPriceDetailByUnit[first.unit];
-        td.mcActiveRevision = first.c.rev;
-        td.mcTable = td.mcRevisions[first.c.rev] || [];
+        td.mcActiveRevision = first.rev;
+        td.mcTable = td.mcRevisions[first.rev] || [];
 
         if (window.mcRenderUnitTabs) { try { window.mcRenderUnitTabs(); } catch (e) { /* 탭 재렌더 실패가 적용을 막지 않게 */ } }
         if (window.populateTabData) { try { window.populateTabData(); } catch (e) { /* 〃 */ } }
         if (window._markNonGanttDirty) { try { window._markNonGanttDirty(); } catch (e) { /* 〃 */ } }
 
         _toast('🧾 ' + _t('M.C 를 불러왔습니다 — ', 'M.C imported — ')
-            + picked.map(function (p) { return p.unit + '(' + p.c.rev + ') ' + p.c.rows.length + _t('행', ''); }).join(', '), 'success');
+            + picked.map(function (p) { return p.unit + '(' + p.rev + ') ' + p.c.rows.length + _t('행', ''); }).join(', '), 'success');
         window._mcImpClose();
     };
 })();
