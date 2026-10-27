@@ -898,6 +898,20 @@ window.showPanelSpecModal = async function(model, codeHint) {
     //    비교표 등 다른 곳으로 새어나가지 않게 분리함.
     const model_display = entry ? entry.model : (model || codeHint || '');
     const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model_display);
+    // 📄 [2026-10-27] NAS에 이 패널 PN의 사양서가 있으면 panelook.com 검색보다 그게 먼저 — 바로
+    //    원본 데이터시트를 열 수 있는데 굳이 캡차 있는 외부 검색으로 보낼 이유가 없다(사용자 요청).
+    //    비교표 헤더 링크(panelCompareRenderTab)와 같은 패턴 — `_dsFindPanelSpec` 하나만 쓴다.
+    let nasHit = null;
+    if (window._dsFindPanelSpec && model_display) {
+        try { nasHit = await window._dsFindPanelSpec(model_display); } catch (e) { nasHit = null; }
+    }
+    const nasUrl = (nasHit && window._dsFileUrl)
+        ? window._dsFileUrl(window._dsPanelFolder ? window._dsPanelFolder() : 'PARTS/PANEL', nasHit.name)
+        : null;
+    const specLinkHtml = nasUrl
+        ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="color:#1f7a3d; font-weight:bold;">📄 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a>`
+          + ` <a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#999; font-size:11px; margin-left:6px;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`
+        : `<a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`;
     if (!entry) {
         // 💡 [2026-08-25] 두 요소를 헷갈려서(링크=panelook.com 이동, 버튼=로컬 붙여넣기/AI추출) "추출하기를
         //    눌렀는데 홈페이지에서 멈춘다"는 문의가 있었음 — panelook.com은 자동화 접근을 막는 슬라이더
@@ -911,6 +925,7 @@ window.showPanelSpecModal = async function(model, codeHint) {
                     ? '① Go to the panelook.com page below (#1) — the model shown may not be the latest — click the <b>"+"</b> button next to the searched panel name to add it (it may already be checked), then click the <b>"compare"</b> button in the "Panel Compare" box at the top right of the page.<br>&nbsp;&nbsp;→ A "slide to verify you\'re human" check may appear — only a human can pass it, so this step cannot be automated.<br>&nbsp;&nbsp;→ After it passes you land on the spec comparison page. Press <b>Ctrl+S</b> there and save it as <mark style="background:#ffe066; color:#7a5210; padding:0 3px; border-radius:3px;">"Webpage, Complete"</mark>.<br>② Click the button below (#2), then attach the saved <b>.html file</b> (the file itself, not its folder) and extract — AI will process it.'
                     : '① 아래 #1 panelook.com 페이지로 접속해서(최신은 없을 수도 있음), 검색된 패널명 앞의 <b>"+"</b> 버튼을 눌러 추가한 뒤(이미 눌려져 있을 수도 있음), 페이지 오른쪽 상단 "Panel Compare" 상자의 <b>"compare"</b> 버튼을 클릭하세요.<br>&nbsp;&nbsp;→ "사람인지 확인" 슬라이드 캡차가 뜰 수 있는데, 사람만 통과할 수 있어 자동화할 수 없습니다.<br>&nbsp;&nbsp;→ 통과하면 스펙 비교 페이지로 이동합니다. 그 페이지에서 <b>Ctrl+S</b>를 눌러 <mark style="background:#ffe066; color:#7a5210; padding:0 3px; border-radius:3px;">"웹페이지,전부 HTML"</mark>으로 저장하세요.<br>② 아래 #2 버튼을 누른 뒤, 저장한 <b>.html 파일</b>(폴더 제외)을 첨부하여 추출하면, AI가 처리합니다.'}
             </div>
+            ${nasUrl ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="display:inline-block; margin-bottom:8px; color:#1f7a3d; font-weight:bold;">📄 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a><br>` : ''}
             <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 #1 panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
             <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model_display))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 #2 ${_en ? 'Attach the HTML file & extract with AI' : 'HTML 파일 첨부 후 AI로 추출'}</button>
         `;
@@ -919,7 +934,7 @@ window.showPanelSpecModal = async function(model, codeHint) {
     const inCompare = !!(window.tabData && window.tabData.panelCompare && window.tabData.panelCompare.selectedModels && window.tabData.panelCompare.selectedModels.indexOf(model_display) !== -1);
     let html = `<div style="font-size:13px; font-weight:bold; margin-bottom:2px;">${escapeHtml(entry.model)}</div>
         <div style="color:#888; margin-bottom:8px;">${escapeHtml(entry.brand || '')}</div>
-        <a href="${escapeHtml(entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>
+        ${specLinkHtml}
         <div style="margin:10px 0;">
             ${inCompare
                 ? `<span style="color:#2f9e44; font-weight:bold;">✓ ${_en ? 'Already in this project\'s comparison table' : '이 프로젝트 비교표에 있음'}</span>`
