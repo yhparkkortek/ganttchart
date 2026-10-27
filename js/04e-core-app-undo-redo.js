@@ -837,6 +837,8 @@
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.restoreAiTaskDateAll();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '📅 Restore AI-analyzed Dates (All)' : '📅 AI 분석 날짜로 복원 (전체)'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Restore original AI dates for every task that has a backup, in one go' : '백업이 있는 모든 업무의 날짜를 AI 분석 원본으로 한 번에 복원'}</div></div>
                 <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.openWbsGroupSuggestions();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '🗂 Find Group Suggestions' : '🗂 그룹 제안 찾기'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Scan for scattered same-topic tasks under each parent and suggest grouping them' : '같은 부모 밑에 흩어진 비슷한 주제의 업무를 찾아 그룹으로 묶을지 제안'}</div></div>
+                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
+                <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.openGanttOrganizeWizard();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px; font-weight:bold; color:#0f6b5c;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '🧹 Auto-organize (full diagnosis)' : '🧹 자동 정리 (전체 진단)'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Diagnose duplicates, groups, order and level at once, then apply what you approve' : '중복·그룹·순서·레벨을 한 번에 진단하고, 확인한 것만 일괄 정리'}</div></div>
             `;
             document.body.appendChild(popup);
             document.addEventListener('click', function(e) {
@@ -1413,6 +1415,307 @@
                          memberCount: c.memberIdx.length, summary: c.titles.join(' / ') };
             })
         };
+    };
+
+    // 🔁 [2026-10-27 신규] 중복 의심 업무 탐지 — _wbsDetectGroupCandidates와 같은 형제 순회를 쓰되,
+    //    "묶자"가 아니라 "이거 두 번 등록된 거 아니냐"는 훨씬 보수적인 판정. 삭제까지 이어지는 민감한
+    //    조작이라 유사도/퍼지 매칭은 일부러 안 쓴다 — 같은 부모 + 같은 레벨 + 정규화 제목 완전 일치 +
+    //    시작일 완전 일치(둘 다 없음도 일치로 침)일 때만 "중복 의심"으로 본다. 매주 반복되는 정기
+    //    업무처럼 제목만 같고 날짜가 다른 것은 걸러낸다(오탐 시 업무가 지워지는 게 그룹 오탐보다
+    //    훨씬 위험하므로 재현율보다 정밀도 우선 — 그룹 제안과 같은 원칙).
+    window._wbsDetectDuplicateCandidates = function(gd) {
+        gd = gd || globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+
+        const stack = [];
+        const siblingGroups = new Map();
+        for (let i = 1; i < gd.length; i++) {
+            const row = gd[i]; if (!row) continue;
+            const lv = lvOf(row);
+            while (stack.length && stack[stack.length - 1].level >= lv) stack.pop();
+            const parentKey = stack.length ? stack[stack.length - 1].idx : 'ROOT';
+            if (!siblingGroups.has(parentKey)) siblingGroups.set(parentKey, []);
+            siblingGroups.get(parentKey).push(i);
+            stack.push({ idx: i, level: lv });
+        }
+
+        const candidates = [];
+        siblingGroups.forEach(function(idxs) {
+            if (idxs.length < 2) return;
+            const leafIdxs = idxs.filter(function(i) {
+                const lv = lvOf(gd[i]);
+                if (lv < 3) return false;
+                const next = gd[i + 1];
+                return !(next && lvOf(next) > lv);
+            });
+            if (leafIdxs.length < 2) return;
+
+            const buckets = new Map();
+            leafIdxs.forEach(function(i) {
+                const row = gd[i];
+                const title = _wbsNormTitle(_wbsRowOwnTitle(row));
+                if (!title) return;
+                const ts = _wbsRowStartTs(row);
+                const key = lvOf(row) + '::' + title + '::' + (ts == null ? '' : ts);
+                if (!buckets.has(key)) buckets.set(key, []);
+                buckets.get(key).push(i);
+            });
+            buckets.forEach(function(members) {
+                if (members.length < 2) return;
+                const ts0 = _wbsRowStartTs(gd[members[0]]);
+                candidates.push({
+                    memberIdx: members,
+                    memberRows: members.map(function(i) { return gd[i]; }),
+                    title: _wbsNormTitle(_wbsRowOwnTitle(gd[members[0]])),
+                    dateLabel: ts0 == null ? '' : new Date(ts0).toISOString().slice(0, 10)
+                });
+            });
+        });
+        return candidates;
+    };
+
+    // 📐 [2026-10-27 신규] 레벨 불일치 참고 탐지 — 같은 "대표 토픽 토큰"(그룹 제안과 같은 산출
+    //    방식)을 가진 리프 업무들이 레벨 3·4에 걸쳐 섞여 있으면 참고용으로만 보여준다. 어느 레벨이
+    //    "맞는" 레벨인지는 업무 성격에 달려 있어 결정론으로 못 정한다 — 그래서 자동 적용이 없다.
+    //    changeSelectedRowsLevel()로 사람이 직접 조정하도록 안내만 한다.
+    window._wbsDetectLevelInconsistencies = function(gd) {
+        gd = gd || globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+
+        const leafIdxs = [];
+        for (let i = 1; i < gd.length; i++) {
+            const row = gd[i]; if (!row) continue;
+            const lv = lvOf(row);
+            if (lv < 3) continue;
+            const next = gd[i + 1];
+            if (next && lvOf(next) > lv) continue;
+            leafIdxs.push(i);
+        }
+        if (leafIdxs.length < 2) return [];
+
+        const tokLists = leafIdxs.map(function(i) { return _wbsTopicTokens(_wbsRowOwnTitle(gd[i])).concat(_wbsContentTokens(gd[i])); });
+        const freq = new Map();
+        tokLists.forEach(function(toks) { Array.from(new Set(toks)).forEach(function(t) { freq.set(t, (freq.get(t) || 0) + 1); }); });
+        const isCommon = function(t) { return (freq.get(t) || 0) > 6; };
+
+        const byTok = new Map();
+        leafIdxs.forEach(function(idx, k) {
+            const key = tokLists[k].find(function(t) { return !isCommon(t); });
+            if (!key) return;
+            if (!byTok.has(key)) byTok.set(key, []);
+            byTok.get(key).push(idx);
+        });
+
+        const out = [];
+        byTok.forEach(function(idxs, tok) {
+            if (idxs.length < 2) return;
+            const levels = new Set(idxs.map(function(i) { return lvOf(gd[i]); }));
+            if (levels.size < 2) return;
+            out.push({
+                token: tok,
+                memberIdx: idxs,
+                memberRows: idxs.map(function(i) { return gd[i]; }),
+                titles: idxs.map(function(i) { return _wbsNormTitle(_wbsRowOwnTitle(gd[i])) + ' (Lv' + lvOf(gd[i]) + ')'; })
+            });
+        });
+        return out;
+    };
+
+    // 📅 [2026-10-27 신규] "일괄 적용" 전 미리보기용 — sortRowsByStartDate()(js/04i)와 똑같은 트리
+    //    구성·effectiveTs 로직을 쓰되 mutate 없이 "지금 순서와 다른 형제 쌍이 몇 개인지"만 센다.
+    window._wbsCountOutOfOrderSiblings = function(gd) {
+        gd = gd || globalData;
+        if (!gd || gd.length <= 2) return 0;
+        const rows = gd.slice(1);
+        const startTs = (row) => (row && typeof row._calcStartTs === 'number') ? row._calcStartTs : Infinity;
+
+        const roots = [];
+        const stack = [];
+        for (const row of rows) {
+            const node = { row, children: [] };
+            const lv = (typeof row._level === 'number') ? row._level : 4;
+            while (stack.length && stack[stack.length - 1].level >= lv) stack.pop();
+            if (stack.length === 0) roots.push(node);
+            else stack[stack.length - 1].node.children.push(node);
+            stack.push({ node, level: lv });
+        }
+        const effectiveTs = (node) => {
+            if (node._sortKey !== undefined) return node._sortKey;
+            let key;
+            if (!node.children.length) key = startTs(node.row);
+            else {
+                key = Infinity;
+                for (const c of node.children) { const t = effectiveTs(c); if (t < key) key = t; }
+                if (key === Infinity) key = startTs(node.row);
+            }
+            node._sortKey = key;
+            return key;
+        };
+        let outOfOrder = 0;
+        const walk = (nodes) => {
+            for (let i = 1; i < nodes.length; i++) {
+                if (effectiveTs(nodes[i - 1]) > effectiveTs(nodes[i])) outOfOrder++;
+            }
+            for (const n of nodes) walk(n.children);
+        };
+        walk(roots);
+        return outOfOrder;
+    };
+
+    // 🎯 [2026-10-27 신규] 간트 표에서 특정 행으로 이동+깜빡임 — 레벨 불일치 참고 목록의 "이 행 보기"용.
+    //    메인 표 행은 data-row-index 속성을 갖고 있다(js/26-gantt-search.js와 동일 조회 방식).
+    window._wowJumpToRow = function(rowIndex) {
+        if (window.switchTab) window.switchTab('gantt');
+        setTimeout(function() {
+            const tr = document.querySelector('tr[data-row-index="' + rowIndex + '"]');
+            if (!tr) {
+                if (window.showToast) window.showToast(window._t('⚠️ 표에서 이 행을 찾지 못했습니다.', '⚠️ Could not find this row in the table.'), 'warning');
+                return;
+            }
+            if (window._aiFlashRow) window._aiFlashRow(tr); else tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 60);
+    };
+
+    // 🧹 [2026-10-27 신규] 자동 정리 엔진 — "일정이 뒤죽박죽" 요청으로 추가. 중복·그룹·순서·레벨을
+    //    한 화면에서 진단하고, 사람이 확인(체크)한 것만 [일괄 적용] 한 번으로 처리한다(CLAUDE.md
+    //    "사람 승인 후 적용"). _renderWbsGroupSuggestModal과 같은 틀(진단→카드→적용 뒤 재탐지)을
+    //    그대로 따른다. 기존 "🗂 그룹 제안 찾기" 단독 메뉴는 그대로 둔다 — 그룹만 빠르게 보고 싶을
+    //    때를 위해.
+    window.openGanttOrganizeWizard = function() {
+        if (!globalData || globalData.length <= 1) { alert(window._t('먼저 프로젝트를 불러와주세요.', 'Please load a project first.')); return; }
+        window._renderGanttOrganizeWizard();
+    };
+    window._renderGanttOrganizeWizard = function() {
+        const _en = window._currentLang === 'en';
+        const dups = window._wbsDetectDuplicateCandidates();
+        const groups = window._wbsDetectGroupCandidates();
+        const levelIssues = window._wbsDetectLevelInconsistencies();
+        const outOfOrder = window._wbsCountOutOfOrderSiblings();
+        const totalN = dups.length + groups.length + levelIssues.length + (outOfOrder > 0 ? 1 : 0);
+
+        let modal = document.getElementById('gantt-organize-wizard-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'gantt-organize-wizard-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+            modal.onclick = function() { modal.style.display = 'none'; };
+            document.body.appendChild(modal);
+        }
+
+        const rowPreview = function(row) {
+            const a = (colIdx.assignee !== -1 && row[colIdx.assignee]) ? escapeHtml(String(row[colIdx.assignee])) : '';
+            const c = (colIdx.content !== -1 && row[colIdx.content]) ? escapeHtml(String(row[colIdx.content]).slice(0, 50).replace(/\n/g, ' ')) : '';
+            return [a, c].filter(Boolean).join(' · ');
+        };
+
+        const dupHtml = dups.length ? dups.map(function(d, di) {
+            return `<div class="wow-dup-cand" data-di="${di}" style="border:1px solid #f0d0c8; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fff8f6;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:12.5px; color:#b1432f;">
+                    <input type="checkbox" class="wow-dup-chk">
+                    ${escapeHtml(d.title)} ${d.dateLabel ? `<span style="font-weight:normal; color:#999; font-size:10.5px;">📅 ${escapeHtml(d.dateLabel)}</span>` : ''}
+                </label>
+                <div style="margin-top:5px; font-size:11px; color:#666; line-height:1.6; padding-left:24px;">
+                    ${d.memberRows.map(function(r, ri) { return `<div>${ri === 0 ? (_en ? '✅ Keep: ' : '✅ 남김: ') : (_en ? '🗑️ Delete: ' : '🗑️ 삭제: ')}${rowPreview(r) || (_en ? '(no detail)' : '(상세 없음)')}</div>`; }).join('')}
+                </div>
+            </div>`;
+        }).join('') : `<div style="padding:10px; color:#999; font-size:11.5px;">${_en ? 'No suspected duplicates found.' : '중복 의심 업무를 찾지 못했습니다.'}</div>`;
+
+        const groupHtml = groups.length ? groups.map(function(c, ci) {
+            return `<div class="wow-group-cand" data-gi="${ci}" style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+                <input type="text" class="wow-group-name-input" value="${escapeHtml(c.suggestedName)}" style="width:100%; padding:5px 8px; border:1px solid #c0a0d8; border-radius:5px; font-size:12.5px; font-weight:bold; color:#5a3680; margin-bottom:4px;">
+                ${c.dateRangeLabel ? `<div style="font-size:10.5px; color:#888; margin-bottom:5px;">📅 ${escapeHtml(c.dateRangeLabel)}</div>` : ''}
+                <div style="font-size:11.5px; color:#555; line-height:1.7;">${c.titles.map(function(t, ti) {
+                    return `<label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" class="wow-group-member-chk" data-ord="${ti}" checked>${escapeHtml(t)}</label>`;
+                }).join('')}</div>
+            </div>`;
+        }).join('') : `<div style="padding:10px; color:#999; font-size:11.5px;">${_en ? 'No group candidates found.' : '그룹 제안 후보를 찾지 못했습니다.'}</div>`;
+
+        const levelHtml = levelIssues.length ? levelIssues.map(function(l) {
+            return `<div style="border:1px solid #e8e0c8; border-radius:8px; padding:8px 12px; margin-bottom:8px; background:#fffdf5;">
+                <div style="font-size:11.5px; color:#8a6d1a; line-height:1.7;">${l.titles.map(function(t, ti) {
+                    return `<div style="display:flex; justify-content:space-between; align-items:center;"><span>${escapeHtml(t)}</span><button class="wow-level-jump-btn" data-idx="${l.memberIdx[ti]}" style="padding:2px 8px; background:#fff3cd; border:1px solid #e8d088; border-radius:4px; font-size:10.5px; cursor:pointer; color:#8a6d1a;">${_en ? 'View' : '이 행 보기'}</button></div>`;
+                }).join('')}</div>
+            </div>`;
+        }).join('') : `<div style="padding:10px; color:#999; font-size:11.5px;">${_en ? 'No level inconsistencies found.' : '레벨 불일치를 찾지 못했습니다.'}</div>`;
+
+        modal.innerHTML = `
+        <div id="gantt-organize-wizard-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:84vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:6vh; left:50%; transform:translateX(-50%); resize:both; overflow:hidden; min-width:380px; min-height:260px;">
+            <div id="gantt-organize-wizard-drag" style="padding:13px 18px; border-bottom:1px solid #8fc4ba; font-weight:bold; font-size:14px; background:#e3f2f0; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#0f6b5c;">
+                <span>🧹 ${_en ? `Auto-organize diagnosis (${totalN} found)` : `자동 정리 진단 (${totalN}건)`}</span>
+                <button onclick="document.getElementById('gantt-organize-wizard-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div style="padding:10px 16px; flex:1; overflow-y:auto;">
+                <div style="font-weight:bold; font-size:12.5px; color:#b1432f; margin-bottom:4px;">🔁 ${_en ? `Suspected duplicates (${dups.length})` : `중복 의심 (${dups.length}건)`}</div>
+                ${dupHtml}
+                <div style="font-weight:bold; font-size:12.5px; color:#5a3680; margin:10px 0 4px;">🗂 ${_en ? `Group suggestions (${groups.length})` : `그룹 제안 (${groups.length}건)`}</div>
+                ${groupHtml}
+                <div style="font-weight:bold; font-size:12.5px; color:#8a6d1a; margin:10px 0 4px;">📐 ${_en ? `Level inconsistencies — reference only (${levelIssues.length})` : `레벨 불일치 참고 (${levelIssues.length}건)`}</div>
+                ${levelHtml}
+                <div style="font-weight:bold; font-size:12.5px; color:#0f6b5c; margin:10px 0 4px;">📅 ${_en ? 'Sibling order' : '순서 정리'}</div>
+                <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #d0e8e2; border-radius:8px; cursor:pointer; font-size:12px; color:#333; ${outOfOrder === 0 ? 'opacity:0.5;' : ''}">
+                    <input type="checkbox" id="wow-sort-toggle" ${outOfOrder > 0 ? 'checked' : 'disabled'}>
+                    ${outOfOrder > 0
+                        ? (_en ? `${outOfOrder} sibling pair(s) are out of date order` : `형제 업무 ${outOfOrder}쌍의 순서가 날짜순과 어긋나 있습니다`)
+                        : (_en ? 'All siblings are already in date order' : '이미 모든 형제 업무가 날짜순입니다')}
+                </label>
+            </div>
+            <div style="padding:10px 16px; border-top:1px solid #eee; flex-shrink:0;">
+                <button id="wow-apply-all-btn" style="width:100%; padding:9px; background:#0f6b5c; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🧹 ${_en ? 'Apply checked items' : '선택한 항목 일괄 적용'}</button>
+            </div>
+        </div>`;
+        if (window._makeDraggable) window._makeDraggable('gantt-organize-wizard-box', 'gantt-organize-wizard-drag');
+        if (window._bindClickToFront) window._bindClickToFront('gantt-organize-wizard-modal');
+        modal.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('gantt-organize-wizard-modal');
+
+        modal.querySelectorAll('.wow-level-jump-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { window._wowJumpToRow(parseInt(btn.dataset.idx, 10)); });
+        });
+
+        const applyBtn = document.getElementById('wow-apply-all-btn');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function() {
+                let dupDeleted = 0, groupsApplied = 0, groupTasks = 0, sorted = false;
+
+                // 1) 중복 삭제 — 체크된 카드만, 각 카드는 첫 번째 행만 남기고 나머지 삭제
+                modal.querySelectorAll('.wow-dup-cand').forEach(function(card) {
+                    const chk = card.querySelector('.wow-dup-chk');
+                    if (!chk || !chk.checked) return;
+                    const di = parseInt(card.dataset.di, 10);
+                    const dup = dups[di];
+                    if (!dup || dup.memberRows.length < 2) return;
+                    const toDelete = dup.memberRows.slice(1);
+                    const idxs = toDelete.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; }).sort(function(a, b) { return b - a; });
+                    idxs.forEach(function(i) { globalData.splice(i, 1); dupDeleted++; });
+                });
+                if (dupDeleted > 0) { logChange(0, -1, '중복 정리', dupDeleted + '개 중복 업무 삭제'); window.recalculateSchedules(); }
+
+                // 2) 그룹 묶기 — 체크된 멤버가 2개 이상인 카드만
+                modal.querySelectorAll('.wow-group-cand').forEach(function(card) {
+                    const gi = parseInt(card.dataset.gi, 10);
+                    const cand = groups[gi];
+                    const nameInput = card.querySelector('.wow-group-name-input');
+                    const name = nameInput ? nameInput.value.trim() : '';
+                    if (!cand || !name) return;
+                    const checkedOrds = Array.from(card.querySelectorAll('.wow-group-member-chk:checked')).map(function(cb) { return parseInt(cb.dataset.ord, 10); });
+                    if (checkedOrds.length < 2) return;
+                    const refs = checkedOrds.map(function(o) { return cand.memberRows[o]; }).filter(Boolean);
+                    const curIdx = refs.map(function(r) { return globalData.indexOf(r); }).filter(function(i) { return i !== -1; });
+                    if (curIdx.length < 2) return;
+                    window._selectedRows = new Set(curIdx);
+                    if (window.groupSelectedRows(name)) { groupsApplied++; groupTasks += curIdx.length; }
+                });
+
+                // 3) 순서 정리
+                const sortChk = document.getElementById('wow-sort-toggle');
+                if (sortChk && sortChk.checked && !sortChk.disabled) { window.sortRowsByStartDate(); sorted = true; }
+
+                window._renderGanttOrganizeWizard(); // 전부 적용 후 통째로 다시 진단+렌더(남은 것만 보여줌)
+                if (window.showToast) window.showToast(_en
+                    ? `✅ Cleaned ${dupDeleted} duplicate(s), ${groupsApplied} group(s) (${groupTasks} task(s))${sorted ? ', reordered by date' : ''}.`
+                    : `✅ 중복 ${dupDeleted}건 정리, ${groupsApplied}개 그룹(${groupTasks}개 업무) 묶음${sorted ? ', 날짜순 재정렬' : ''} 완료.`, 'info');
+            });
+        }
     };
 
     // 🗂 그룹 제안 검토 모달 — 후보를 하나 적용할 때마다 배열 인덱스가 전부 바뀌므로, 매번
