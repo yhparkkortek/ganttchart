@@ -2603,9 +2603,23 @@ ${docsJson}`;
                 txt += '\n\n' + window._t('진행 단계:', 'Steps:') + '\n'
                      + d.steps.map(function (s) { return '- ' + s; }).join('\n');
             }
+            var shown = { ok: 1, message: 1, steps: 1, dialogs: 1, before: 1, after: 1, openedWindow: 1, args: 1, data: 1 };
             var bits = [];
-            ['reservationId', 'item', 'date', 'start', 'end', 'purpose', 'attendee'].forEach(function (k) {
-                if (d[k] !== undefined && d[k] !== null && d[k] !== '') bits.push(k + ': ' + d[k]);
+            ['reservationId', 'item', 'date', 'start', 'end', 'purpose', 'attendee',
+             'eventId', 'calendarId', 'postId', 'boardId', 'docno'].forEach(function (k) {
+                if (d[k] !== undefined && d[k] !== null && d[k] !== '') { bits.push(k + ': ' + d[k]); shown[k] = 1; }
+            });
+            // 🐛 [2026-10-27 실사용 제보] 캘린더 등록 성공 응답엔 eventId/calendarId 가 실제로 왔는데
+            //    위 whitelist에 그 키가 없어서(그때는 예약 전용 키만 있었다) 안 보였다 — 등록은
+            //    됐는데 **나중에 "그 일정 지워줘" 할 때 쓸 eventId 를 사람도 AI도 알 수 없는 상태**
+            //    였다. id가 "제목"만 보여주는 식으로 끝없이 특정 키를 추가하는 대신, 읽기 쪽
+            //    rowsToText와 같은 원칙으로 **남은 원시 키를 전부** 보여준다(새 쓰기 도구가 생겨도
+            //    따로 안 고쳐도 되게).
+            Object.keys(d).forEach(function (k) {
+                if (shown[k] || d[k] === undefined || d[k] === null || d[k] === '') return;
+                var v = d[k];
+                if (typeof v === 'object') return;      // 배열/객체는 노이즈라 건너뛴다
+                bits.push(k + ': ' + v);
             });
             if (bits.length) txt += '\n\n' + bits.map(function (b) { return '- ' + b; }).join('\n');
             if (d.reservationId) {
