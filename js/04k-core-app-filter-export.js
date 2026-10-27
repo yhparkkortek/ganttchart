@@ -314,6 +314,13 @@
     };
 
     function applyFilters() {
+        // 💡 [2026-10-28, 진단용 계측] "필터·접기/펴기가 느리다" 신고 — 둘 다 이 함수 하나를 거친다
+        //    (toggleWbsCollapse도 row._wbsCollapsed만 바꾸고 applyFilters()를 다시 부름). 의심 지점은
+        //    차트 막대 재생성(createStatusChart, getRowCompareInfo 포함)을 "보이는 모든 행"에 대해
+        //    매번 다시 돌린다는 것 — 필터/접기는 어느 행도 자기 자신의 일정·상태를 안 바꾸는데도 그렇다.
+        //    저장 성능 진단([저장 계측])과 같은 방식으로 콘솔에 남겨, 다음에 느릴 때 바로 실측 가능하게 한다.
+        const _tApply0 = performance.now();
+        let _chartMs = 0, _chartCount = 0;
         try {
             const tbody = document.getElementById('table-body'); const trs = tbody.getElementsByTagName("tr"); let visibleCount = 1;
             let _wbsHideUntilLevel = null; // 💡 접힌 조상의 하위 트리인 동안 계속 숨김 처리하기 위한 추적 상태
@@ -364,12 +371,19 @@
                     // 🔧 [버그수정] 차트 렌더링 오류가 외부 try-catch를 타면 이후 행들의 NO 번호 세팅이
                     //    전부 중단됨 → 차트만 개별 보호해서 한 행이 실패해도 나머지 NO 번호는 보장
                     let chartTd = tr.querySelector('.chart-td');
-                    if (chartTd) { try { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level, window.getRowCompareInfo ? window.getRowCompareInfo(rowData) : null); } catch(ce) { console.warn('chart render skip:', ce); } }
+                    if (chartTd) {
+                        const _tc0 = performance.now();
+                        try { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level, window.getRowCompareInfo ? window.getRowCompareInfo(rowData) : null); } catch(ce) { console.warn('chart render skip:', ce); }
+                        _chartMs += performance.now() - _tc0; _chartCount++;
+                    }
                 } else { tr.style.display = "none"; }
             }
             // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
-            if (typeof window.updatePrintTitle === 'function') window.updatePrintTitle(); 
+            if (typeof window.updatePrintTitle === 'function') window.updatePrintTitle();
             updateFilterVisibility();
+            const _applyMs = Math.round(performance.now() - _tApply0);
+            console.info(`[필터/접기 계측] applyFilters: ${_applyMs}ms · 전체행 ${trs.length} · 보이는행 ${visibleCount - 1} · 차트재생성 ${_chartCount}건/${Math.round(_chartMs)}ms`);
+            if (_applyMs > 200) console.warn(`[필터/접기 계측] ⚠️ ${_applyMs}ms — 클릭 반응이 느리게 느껴질 수 있는 수준(200ms 초과). 차트재생성(${Math.round(_chartMs)}ms)이 큰 비중이면 "보이는 행마다 매번 다시 그림"이 원인.`);
         } catch(e) { console.error("Filter Apply Error: ", e); }
     }
 
