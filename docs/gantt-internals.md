@@ -162,3 +162,37 @@ justify-content:center;`인 `<div>` 안에 📌(알림 핀, 클릭 시 `window._
    "값 교체(불변)"로 다루는 편이 안전하다.
 4. Undo는 여전히 행 객체 참조를 **바꾼다**(복원 시 새 배열). 행 참조를 들고 있는 선택 Set 같은 건
    복원 후 무효가 된다 — 예전부터 동일.
+
+### ⚡ 표 렌더링 성능 — 숨은 행 지연 렌더 + 무거운 마크업 정리 (2026-10-28, "앱 전반이 느리다")
+
+**실측(실데이터 LNW_STELLAR32, 853행, 프로젝트 JSON 9.9MB)**: `renderTable()` 한 번이 만드는 tbody HTML이
+**9.96MB · 노드 5만 개**, innerHTML 파싱 634ms + 레이아웃 910ms. 프로젝트 열기·시트 전환·편집 후 재계산마다
+이 비용이 그대로 났다(시트 전환 1.2~1.4초). 그런데 WBS 기본 접힘에선 **853행 중 16행만 보인다.**
+
+**고친 것**
+1. **숨은 행 지연 렌더** (js/04j `renderTable` / js/04k `_ganttComputeRowVisibility`):
+   보일지 말지(WBS 접힘 + 필터 + 알람 필터)를 `globalData`만 보고 판정하는 함수 하나를 `applyFilters()`와
+   `renderTable()`이 같이 쓴다. 숨을 행은 `<tr data-row-index data-lazy style="display:none">` **빈 자리표시**만
+   남기고, 보이게 되는 순간 `_ganttHydrateRow(tr)`가 그 행 셀만 채운다(셀 HTML은 `_ganttRowCellsHtml` 한 곳).
+   한꺼번에 40행 넘게 보이게 되면(전체 펼치기) 행별로 채우지 않고 `renderTable()` 한 번으로 그린다.
+   → 결과: tbody 9.6MB → 207KB, 렌더+레이아웃 ~1.5s → ~40ms, 시트 전환 1.2~1.4s → 100~130ms.
+2. 상세내용 🌐 번역 버튼 `onclick`에 칸 전체 텍스트를 URL 인코딩해 한 벌 더 싣던 것 제거 — `toggleTranslation(this, null, …)`이
+   칸의 `data-raw`에서 읽는다(WBS 칸 번역 버튼은 짧아서 그대로).
+3. 담당구분 `<select>`는 선택값 하나 + 숨은 "가장 긴 값" 옵션만 그리고(폭 유지), 누르거나 포커스될 때
+   `_wbsDisciplineFillOpts()`가 목록을 채운다(전체 펼침 시 옵션 노드 1만 개 이상이었다).
+4. `populateTabData()` 이중 호출 제거 — `mcNormalizeAfterLoad()`가 이미 끝에서 부른다(Summary·BOM·자재·주소록 탭을 두 번 그렸다).
+5. `isHoliday()` 메모이즈 — 재계산 1회에 1.3만 번 불리며 매번 localStorage JSON 파싱 + 배열 선형 탐색.
+   추가 휴일 원문/`KOR_HOLIDAYS`가 바뀌면 캐시를 버린다.
+6. `updateFilterVisibility()`의 행 전체 `join('')`을 필터 열마다 반복하던 것 → 1회.
+7. 저장 시 Drive 백업을 브라우저 재업로드(~10MB) 대신 **Drive 서버 복사**(`files/{id}/copy`)로. 실패 시 예전 업로드로 대체.
+
+**⚠️ 이후 코드가 지켜야 할 것**
+- **표 행을 보이게 만드는 새 코드는 `tr.style.display = ''` 전에 `window._ganttHydrateRow(tr)`** 를 부를 것 —
+  안 그러면 빈 행이 보인다. 지금 이걸 하는 곳: `applyFilters()`(js/04k), `_applySearch()`(js/26).
+- 보이기/숨기기 규칙을 바꿀 땐 `_ganttComputeRowVisibility` **한 곳만** 고칠 것(렌더와 필터가 같이 쓴다).
+- 행 하나를 직접 고치는 패치 함수(`_patchPinRowDom`·`_patchStatusRowDom` 등)는 자리표시 행에선 셀을 못 찾아
+  조용히 넘어간다 — 괜찮다, 채울 때 항상 최신 `globalData`로 그린다.
+- 검색을 지우면 이제 `applyFilters()`로 돌아간다(예전엔 전 행을 보이게 해서 접어둔 WBS가 전부 펼쳐졌다).
+
+**남은 병목(데이터 구조 결정 필요)**: 프로젝트 JSON 9.9MB 중 **`_mailRaw`(메일 원문)가 6MB(60%)**,
+`distributions` 1.2MB. 열기 다운로드·저장 업로드는 이 크기에 비례한다(네트워크).

@@ -344,6 +344,20 @@
     //    이제 값을 "쓰는" 시점(등록 시)과 "읽는" 시점(배지 표시) 양쪽 모두 이 별칭표를 거치도록 통일한다.
     //    (SA→SAL: "SA"만으로는 Sales인지 직관적으로 안 와닿는다는 지적 — Sales의 알파벳 3글자라 더 바로 읽힘)
     window.WBS_DISCIPLINE_CATEGORIES = ['PM','ME','HW','FW','BLU','TSP','LCM','TOOL','SAL','CS','FA','ETC'];
+    // ⚡ [2026-10-28] 담당구분 드롭다운은 표에 "선택된 값 하나"만 그려두고(js/04j renderTable), 실제로
+    //    누르거나 키보드로 포커스할 때 목록을 채운다 — 옵션이 없으면 열어도 고를 게 없으므로 이 두 시점이
+    //    목록이 필요한 유일한 순간이다. 목록에 없는 옛 값은 예전처럼 맨 끝에 붙여 선택 상태로 둔다.
+    window._wbsDisciplineFillOpts = function(sel) {
+        if (!sel || sel.dataset.filled) return;
+        sel.dataset.filled = '1';
+        const cur = sel.value;
+        const cats = window.WBS_DISCIPLINE_CATEGORIES;
+        sel.innerHTML = cats.map(c => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('')
+            + (cats.indexOf(cur) === -1 ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(cur)}</option>` : '');
+    };
+    window._wbsDisciplineWidest = function() {
+        return window.WBS_DISCIPLINE_CATEGORIES.reduce((a, b) => (b.length > a.length ? b : a), '');
+    };
     window._WBS_DISCIPLINE_ALIASES = {
         '기구': 'ME', '영업': 'SAL', 'Tooling': 'TOOL', '미분류': 'ETC',
         'Slimming': 'LCM', 'Cutting': 'LCM' // 💡 별도 항목 삭제, 의미는 LCM으로 이동
@@ -410,10 +424,57 @@
         const _tApply0 = performance.now();
         try {
             const tbody = document.getElementById('table-body'); const trs = tbody.getElementsByTagName("tr"); let visibleCount = 1;
-            let _wbsHideUntilLevel = null; // 💡 접힌 조상의 하위 트리인 동안 계속 숨김 처리하기 위한 추적 상태
+            // ⚡ [2026-10-28] 보이기/숨기기 판정은 renderTable()의 지연 렌더와 같은 함수 하나로 한다 —
+            //    둘이 따로 판정하면 "보여야 하는데 빈 자리표시 행"이 생길 수 있다.
+            const _vis = window._ganttComputeRowVisibility(globalData);
+            // ⚡ 한꺼번에 많이 보이게 되면(전체 펼치기·필터 해제) 행마다 따로 채우는 것보다 표를 한 번에
+            //    다시 그리는 게 훨씬 빠르다(실측 837행: 행별 1.6s+레이아웃 → 일괄 렌더). renderTable()은
+            //    같은 판정으로 보일 행만 그리므로 아래 루프에선 남은 일이 번호·줄무늬뿐이다.
+            let _toHydrate = 0;
+            for (let i = 0; i < trs.length && _toHydrate <= 40; i++) {
+                if (trs[i].hasAttribute('data-lazy') && _vis[parseInt(trs[i].dataset.rowIndex, 10)]) _toHydrate++;
+            }
+            if (_toHydrate > 40) {
+                renderTable(globalData);
+                if (typeof window.syncRowHighlight === 'function') window.syncRowHighlight();
+            }
             for (let i = 0; i < trs.length; i++) {
                 let tr = trs[i]; let rowIndex = parseInt(tr.dataset.rowIndex, 10); if (isNaN(rowIndex)) continue;
                 let rowData = globalData[rowIndex]; if (!rowData) continue;
+                let showRow = !!_vis[rowIndex];
+
+                if (showRow) {
+                    if (tr.hasAttribute('data-lazy')) window._ganttHydrateRow(tr); // ⚡ 처음 보이게 되는 행만 이제 그린다
+                    tr.style.display = "";
+                    // 💡 필터 적용 후 "보이는 행" 순서 기준으로 줄무늬 다시 매기기
+                    tr.classList.remove('gantt-zebra-b');
+                    if ((visibleCount - 1) % 2 === 1) tr.classList.add('gantt-zebra-b');
+                    let noTd = tr.querySelector('.no-td');
+                    if (noTd) {
+                        let span = noTd.querySelector('.row-num-span');
+                        if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++;
+                    } else if (tr.cells.length > 0) { tr.cells[0].textContent = visibleCount++; }
+                    // (차트 막대는 여기서 더 이상 다시 그리지 않음 — 위 2026-10-28 설명 참고)
+                } else { tr.style.display = "none"; }
+            }
+            // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
+            if (typeof window.updatePrintTitle === 'function') window.updatePrintTitle();
+            updateFilterVisibility();
+            // 💡 [2026-10-28] 차트 재생성을 뺀 뒤에도 느려지면 바로 보이도록 계측은 남겨 둔다(가벼워짐).
+            const _applyMs = Math.round(performance.now() - _tApply0);
+            if (_applyMs > 200) console.warn(`[필터/접기 계측] ⚠️ ${_applyMs}ms · 전체행 ${trs.length} · 보이는행 ${visibleCount - 1} — 200ms 초과`);
+        } catch(e) { console.error("Filter Apply Error: ", e); }
+    }
+
+    // ⚡ [2026-10-28] 행마다 "지금 보여야 하는가"(WBS 접힘 + 필터 + 알람 필터)를 globalData만 보고 판정.
+    //    applyFilters()와 renderTable()의 지연 렌더(js/04j)가 같이 쓴다 — 판정 규칙은 여기 한 곳에만.
+    //    반환: 인덱스별 1/0 (Uint8Array, globalData와 같은 길이 · 0번 헤더는 0).
+    window._ganttComputeRowVisibility = function(data) {
+        const vis = new Uint8Array(data ? data.length : 0);
+        if (!data) return vis;
+        let _wbsHideUntilLevel = null; // 💡 접힌 조상의 하위 트리인 동안 계속 숨김 처리하기 위한 추적 상태
+        for (let rowIndex = 1; rowIndex < data.length; rowIndex++) {
+                let rowData = data[rowIndex]; if (!rowData) continue;
                 let showRow = true;
 
                 // 💡 WBS 접기 상태 확인 — 필터보다 먼저 판정해서 AND로 결합(접혔으면 필터 통과 여부와 무관하게 숨김)
@@ -445,27 +506,10 @@
                 //    currentFilters AND 조건: 기존 필터 통과한 행 중 _알림이 없으면 추가로 숨김.
                 if (showRow && window._ganttAlarmFilterActive && !rowData._알림) showRow = false;
 
-                if (showRow) {
-                    tr.style.display = "";
-                    // 💡 필터 적용 후 "보이는 행" 순서 기준으로 줄무늬 다시 매기기
-                    tr.classList.remove('gantt-zebra-b');
-                    if ((visibleCount - 1) % 2 === 1) tr.classList.add('gantt-zebra-b');
-                    let noTd = tr.querySelector('.no-td');
-                    if (noTd) {
-                        let span = noTd.querySelector('.row-num-span');
-                        if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++;
-                    } else if (tr.cells.length > 0) { tr.cells[0].textContent = visibleCount++; }
-                    // (차트 막대는 여기서 더 이상 다시 그리지 않음 — 위 2026-10-28 설명 참고)
-                } else { tr.style.display = "none"; }
-            }
-            // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
-            if (typeof window.updatePrintTitle === 'function') window.updatePrintTitle();
-            updateFilterVisibility();
-            // 💡 [2026-10-28] 차트 재생성을 뺀 뒤에도 느려지면 바로 보이도록 계측은 남겨 둔다(가벼워짐).
-            const _applyMs = Math.round(performance.now() - _tApply0);
-            if (_applyMs > 200) console.warn(`[필터/접기 계측] ⚠️ ${_applyMs}ms · 전체행 ${trs.length} · 보이는행 ${visibleCount - 1} — 200ms 초과`);
-        } catch(e) { console.error("Filter Apply Error: ", e); }
-    }
+                vis[rowIndex] = showRow ? 1 : 0;
+        }
+        return vis;
+    };
 
     // 💡 [2026-09-12 신규] AI 문답 로컬 명령 "알람" / "alarm" 으로 호출 — 알람이 설정된(_알림=true)
     //    업무만 Gantt 에 표시하거나 원래대로 복귀. 화면 우하단에 주황색 배지를 띄워 필터 상태를 알리고,
@@ -503,10 +547,17 @@
     };
 
     function updateFilterVisibility() {
+        // ⚡ [2026-10-28] "빈 행" 판정(행 전체 join — 상세내용·메일 원문 붙은 긴 행)을 필터 열마다 반복하지
+        //    않고 한 번만 한다(853행 × 필터 열 수만큼 큰 문자열을 만들고 있었다).
+        const _nonEmptyRows = [];
+        for (let i = 1; i < globalData.length; i++) {
+            const r = globalData[i];
+            if (r && r.some(v => v !== undefined && v !== null && String(v).trim() !== '')) _nonEmptyRows.push(r);
+        }
         filterColumns.forEach(col => {
             let validValues = new Set();
-            for (let i = 1; i < globalData.length; i++) {
-                let rowData = globalData[i]; if (!rowData || rowData.join('').trim() === '') continue;
+            for (let k = 0; k < _nonEmptyRows.length; k++) {
+                let rowData = _nonEmptyRows[k];
                 let val = rowData[col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { validValues.add(val.toString().trim()); }
             }
             const groupDiv = document.getElementById('filter-group-' + col.index);

@@ -145,7 +145,8 @@
         window.projectDistributions = data.distributions || window.projectDistributions;
         if (data.scheduleBaselines && data.scheduleBaselines.length) window._scheduleBaselines = data.scheduleBaselines;
         if (window.mcNormalizeAfterLoad) window.mcNormalizeAfterLoad();
-        if (window.populateTabData) window.populateTabData();
+        else if (window.populateTabData) window.populateTabData();
+        // ⚡ [2026-10-28] populateTabData()는 mcNormalizeAfterLoad() 끝에서 이미 부른다 — 여기서 또 부르면 Summary·BOM·자재·주소록 탭을 매번 두 번 그렸다(시트 전환 실측 최대 457ms 중 절반).
         window.recalculateSchedules();
         // ✅ [AI 학습 Phase 1] 재배치 대기 알림 — 이 프로젝트로 재배치 요청이 와 있으면 배너 표시
         if (window._checkReassignQueueOnLoad) window._checkReassignQueueOnLoad();
@@ -961,7 +962,10 @@
     };
 
     // 💡 저장 시마다 드라이브 Backups 폴더에 타임스탬프 백업 파일 생성 + 7일 지난 백업 자동 삭제
-    window.backupToDrive = async function(saveData, baseName) {
+    //    ⚡ [2026-10-28] sourceFileId(방금 저장한 원본 파일)를 주면 브라우저에서 같은 내용을 한 번 더
+    //    올리지 않고 Drive 서버 안에서 복사한다(files.copy) — 큰 프로젝트는 원본이 ~10MB라 저장할 때마다
+    //    업로드 대역폭이 두 배였다. 복사가 실패하면 예전처럼 saveData를 직접 올린다.
+    window.backupToDrive = async function(saveData, baseName, sourceFileId) {
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -980,15 +984,29 @@
             const boundary = 'backup_boundary';
             // 💡 [2026-08-30 신규] 복원 목록에서도 저장된 테마 색을 바로 보여주기 위해 appProperties에 같이 태움.
             const metadata = { name: backupName, mimeType: 'application/json', parents: [folderId], appProperties: { themeColor: (saveData && saveData.tabData && saveData.tabData.themeColor) || '' } };
-            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
-                + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
-                + "\r\n--" + boundary + "--";
+            let _copied = false;
+            if (sourceFileId) {
+                try {
+                    const _cpRes = await fetch(`https://www.googleapis.com/drive/v3/files/${sourceFileId}/copy?supportsAllDrives=true&fields=id`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(metadata)
+                    });
+                    _copied = _cpRes.ok;
+                    if (!_copied) console.warn('[백업] Drive 서버 복사 실패(HTTP ' + _cpRes.status + ') — 직접 업로드로 대체');
+                } catch (e) { console.warn('[백업] Drive 서버 복사 예외 — 직접 업로드로 대체:', e.message || e); }
+            }
+            if (!_copied) {
+                const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
+                    + "\r\n--" + boundary + "--";
 
-            await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
-                body: body
-            });
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                    body: body
+                });
+            }
 
             // 💡 48시간(172800000ms) 지난 백업은 자동 정리 (변경: 7일 → 48시간)
             const listQ = `'${folderId}' in parents and trashed=false`;

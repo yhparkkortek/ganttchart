@@ -23,12 +23,28 @@
         try { return JSON.parse(localStorage.getItem('gantt_custom_holidays') || '[]'); }
         catch (e) { return []; }
     };
+    // ⚡ [2026-10-28] 재계산 한 번에 1.3만 번 불린다(실측, 853행) — 매번 localStorage JSON을 다시 파싱하고
+    //    공휴일 배열을 처음부터 훑었다. 날짜별 결과를 기억하되, 저장된 추가 휴일 원문이나 KOR_HOLIDAYS가
+    //    바뀌면(휴일 등록 모달·다른 탭·불러오기 어느 경로든) 그 즉시 통째로 버린다 — 원문 비교라 놓칠 수 없다.
+    let _holCacheRaw = null, _holCacheKor = null, _holCacheKorLen = -1, _holCacheKorSet = null, _holCacheList = [], _holCacheMemo = new Map();
     window.isHoliday = function(dateStr) {
-        if (window.KOR_HOLIDAYS.includes(dateStr)) return true;
-        return window.getCustomHolidays().some(function(h) {
+        let raw = null;
+        try { raw = localStorage.getItem('gantt_custom_holidays'); } catch (e) { /* 접근 불가 = 추가 휴일 없음 */ }
+        const kor = window.KOR_HOLIDAYS;
+        if (raw !== _holCacheRaw || kor !== _holCacheKor || kor.length !== _holCacheKorLen) {
+            _holCacheRaw = raw; _holCacheKor = kor; _holCacheKorLen = kor.length;
+            _holCacheKorSet = new Set(kor);
+            try { _holCacheList = JSON.parse(raw || '[]'); } catch (e) { _holCacheList = []; }
+            _holCacheMemo = new Map();
+        }
+        let hit = _holCacheMemo.get(dateStr);
+        if (hit !== undefined) return hit;
+        hit = _holCacheKorSet.has(dateStr) || _holCacheList.some(function(h) {
             const end = h.endDate || h.date;
             return dateStr >= h.date && dateStr <= end; // "YYYY-MM-DD" 문자열은 그대로 비교해도 날짜 순서와 일치함
         });
+        _holCacheMemo.set(dateStr, hit);
+        return hit;
     };
 
     function addWorkingDays(startDateTs, daysToAdd) {

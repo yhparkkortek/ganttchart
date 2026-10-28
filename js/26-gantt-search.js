@@ -412,6 +412,9 @@
             var idx = parseInt(tr.getAttribute('data-row-index'), 10);
             var gRow = (typeof globalData !== 'undefined') ? globalData[idx] : null;
             var matches = !active || _rowMatches(gRow, kw, isProject, isAiAll, isAlarm);
+            // ⚡ [2026-10-28] 아래에서 보이게 될 행이 지연 렌더 자리표시(js/04j)면 먼저 채운다 —
+            //    빈 행이 보이거나 글자 하이라이트가 빈 행에 걸리는 일이 없게.
+            if (tr.hasAttribute('data-lazy') && !(active && !matches && _mode === 'filter') && window._ganttHydrateRow) window._ganttHydrateRow(tr);
 
             // 하이라이트/필터
             if (active) {
@@ -432,11 +435,13 @@
                 }
             } else {
                 tr.classList.remove('gantt-search-match', 'gantt-search-dim');
-                tr.style.display = '';
+                // ⚡ [2026-10-28] 검색이 꺼지면 보이기/숨기기는 applyFilters()에 맡긴다(아래 루프 뒤) —
+                //    예전엔 여기서 전 행을 보이게 해서 검색을 지우면 접어둔 WBS가 전부 펼쳐졌고,
+                //    지연 렌더(js/04j) 이후엔 숨은 행 전체를 한꺼번에 그리는 비용까지 붙는다.
             }
 
             // 매칭 행은 항상 보이게
-            if (!active || matches) tr.style.display = '';
+            if (active && matches) tr.style.display = '';
 
             // 체크박스
             _updateRowCheckbox(tr, idx, matches && active);
@@ -461,7 +466,8 @@
         // 🐛 [2026-09-13 버그수정] 검색이 tr.style.display를 직접 바꾸지만 applyFilters()를
         //    호출하지 않아서 .row-num-span 번호가 갱신되지 않는 버그 → 검색 후 보이는 행만
         //    순서대로 번호를 다시 매긴다(applyFilters 전체 재호출보다 가볍고 충돌 없음).
-        _gsRenumberRows();
+        if (!active && typeof applyFilters === 'function') applyFilters(); // 검색 해제 → WBS 접힘·필터 상태로 복귀(번호도 여기서)
+        else _gsRenumberRows();
     }
 
     // 현재 화면에 보이는 행만 순서대로 No. 번호 재할당

@@ -1728,6 +1728,16 @@
         headHtml += '</tr>'; thead.innerHTML = headHtml;
         if (window.updateChartHeaderAxis) window.updateChartHeaderAxis();
 
+        // ⚡ [2026-10-28 성능, "앱 전반이 느리다" 실측] 숨은 행 지연 렌더링. 실데이터(LNW_STELLAR32,
+        //    853행)에서 이 함수가 만드는 tbody HTML이 **9.96MB · 노드 5만 개**였고 innerHTML 파싱 634ms +
+        //    레이아웃 910ms가 걸렸다(프로젝트 열기·시트 전환·가지 펼치기마다). 그런데 WBS 기본 접힘 상태에선
+        //    853행 중 **16행만 보인다** — 안 보이는 837행을 매번 통째로 만들고 파싱하고 있었던 것.
+        //    이제 applyFilters()와 **같은 판정**(_ganttComputeRowVisibility, js/04k)으로 숨을 행은 빈 자리표시
+        //    <tr data-lazy> 만 남기고, 보이게 되는 순간(applyFilters·검색) _ganttHydrateRow()가 그 행만 채운다.
+        //    tr 자체(data-row-index·클래스)는 그대로 있으므로 tr을 찾는 기존 코드는 영향 없음 — 셀을 찾는
+        //    패치 함수들은 이미 null 가드가 있고, 채울 때 항상 최신 globalData로 그리므로 어긋날 일이 없다.
+        let _vis = null; // 판정 실패 시엔 예전처럼 전부 그린다(느릴 뿐 틀리지 않음)
+        try { if (window._ganttComputeRowVisibility) _vis = window._ganttComputeRowVisibility(data); } catch (e) { console.error('[renderTable] 지연 렌더 판정 실패 — 전체 렌더로 대체:', e); }
         let bodyHtml = '';
         let ganttZebraIdx = 0; // 💡 보이는 행 기준 줄무늬 카운터
         for(let i = 1; i < data.length; i++) {
@@ -1750,8 +1760,48 @@
                     trClass = trClass.replace('class="', 'class="status-pending ');
                 }
             }
-            bodyHtml += `<tr data-row-index="${i}" ${trClass}>`;
-            
+            if (_vis && !_vis[i]) {
+                bodyHtml += `<tr data-row-index="${i}" ${trClass} data-lazy="1" style="display:none"></tr>`;
+                continue;
+            }
+            bodyHtml += `<tr data-row-index="${i}" ${trClass}>` + _ganttRowCellsHtml(data, i) + `</tr>`;
+        }
+        
+        tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
+
+        // 💡 [버그 수정] "상세내용 헤더 클릭 → 전체 펼치기"는 DOM class(detail-td-expanded)로만 표시돼서,
+        //    WBS 상하좌우/+-/삭제 등 다른 액션이 renderTable()을 다시 부르며 thead/tbody를 통째로 새로
+        //    그릴 때마다(바로 위 tbody.innerHTML 대입, 헤더도 위에서 매번 새로 그려짐) 상태가 사라져
+        //    매번 다시 헤더를 클릭해야 했다. 전체 펼치기 여부를 window._allDetailExpanded에 별도로
+        //    저장해두고, 렌더링될 때마다 여기서 다시 적용해 재렌더링을 넘나들며 유지되게 한다.
+        if (window._allDetailExpanded) {
+            document.querySelectorAll('td.detail-td').forEach(el => el.classList.add('detail-td-expanded'));
+            const arrowEl = document.getElementById('detail-th-arrow');
+            if (arrowEl) arrowEl.textContent = '▲';
+        }
+
+        // 💡 페이지를 새로고침한 뒤 최초 1회만 "오늘" 행으로 스크롤 (편집/필터 등으로 인한 재렌더링 시엔 스크롤 위치를 건드리지 않음)
+        // 🐛 [2026-09-13] Gantt 탭이 안 보이는 상태거나(다른 탭이 복원됨) 레이아웃이 아직 안 잡힌 상태면
+        //    scrollToTodayRow()가 false를 반환하며 조용히 실패할 수 있다 — 성공했을 때만 플래그를 세우고,
+        //    페이지 로드 직후 몇 차례(레이아웃이 늦게 자리잡는 경우 대비) 짧게 재시도한다. 그래도 실패하면
+        //    (=Gantt 탭 자체가 안 보이는 상태) window.switchTab('gantt')이 탭이 보일 때 마저 재시도한다.
+        if (!window._didInitialScrollToToday && data && data.length > 1) {
+            [50, 300, 800].forEach(function(delay) {
+                setTimeout(function() {
+                    if (window._didInitialScrollToToday) return; // 이미 성공했으면 나머지 재시도는 건너뜀
+                    if (window.scrollToTodayRow()) window._didInitialScrollToToday = true;
+                }, delay);
+            });
+        }
+    }
+
+    // ⚡ [2026-10-28] renderTable()의 한 행 셀 HTML — 최초 렌더와 지연 렌더(_ganttHydrateRow)가 반드시 같은
+    //    결과를 내도록 한 곳에서만 만든다(예전엔 renderTable 루프 안에 그대로 있었음).
+    function _ganttRowCellsHtml(data, i) {
+        const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';
+        const hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs, colIdx.answer];
+        const row = data[i];
+        let bodyHtml = '';
             for(let cellIndex = 0; cellIndex < data[0].length; cellIndex++) {
                 if (hiddenCols.includes(cellIndex)) continue; 
                 let cell = (row[cellIndex] !== undefined && row[cellIndex] !== null) ? row[cellIndex] : "";
@@ -1920,9 +1970,11 @@
                         //    그대로 저장돼 있던 과거/현재 데이터도 여기서 한 번 더 정규화해서, 드롭다운에
                         //    "SAL"과 "영업"이 별개 값처럼 중복 표시되지 않게 한다(_normalizeWbsDiscipline 참고).
                         const _wbsDiscipline = window._normalizeWbsDiscipline(row._담당구분) || window._extractDisciplineFromContent(row) || 'ETC';
-                        const _wbsDisciplineOpts = window.WBS_DISCIPLINE_CATEGORIES.map(c => `<option value="${c}" ${c === _wbsDiscipline ? 'selected' : ''}>${c}</option>`).join('')
-                            + (window.WBS_DISCIPLINE_CATEGORIES.indexOf(_wbsDiscipline) === -1 ? `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option>` : '');
-                        const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Select discipline' : '담당구분 선택'}" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
+                        // ⚡ [2026-10-28] 선택된 값 하나만 그리고, 목록 전체는 처음 누르거나 포커스될 때 채운다
+                        //    (_wbsDisciplineFillOpts, js/04k) — 행마다 옵션 12개씩, 전체 펼치면 1만 개 넘는 노드였다.
+                        //    숨은 "가장 긴 값" 옵션은 폭을 채운 뒤와 똑같이 맞추려는 것(누를 때 배지가 안 움직이게).
+                        const _wbsDisciplineOpts = `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option><option hidden disabled>${window._wbsDisciplineWidest()}</option>`;
+                        const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onfocus="window._wbsDisciplineFillOpts(this)" onclick="event.stopPropagation();" onmousedown="window._wbsDisciplineFillOpts(this); event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Select discipline' : '담당구분 선택'}" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
                         const _levelConnectorHtml = row._level > 0
                             ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '';
@@ -1971,7 +2023,8 @@
                         // 💡 [2026-08-27] "업무 상세내용"(colIdx.content)만 [대괄호] Bold 처리 끔 — 답변(colIdx.answer)은 그대로 유지.
                         let boldBrackets = cellIndex !== colIdx.content;
                         if (transMode > 0) {
-                            let safeText = encodeURIComponent(cellText).replace(/'/g, "%27").replace(/\\/g, "\\\\");
+                            // ⚡ [2026-10-28] 번역 원문은 onclick에 또 싣지 않고 이 칸의 data-raw에서 읽는다(toggleTranslation) —
+                            //    상세내용 전체가 URL 인코딩돼 행마다 한 벌 더 붙어 표 HTML을 수 MB씩 불리던 원인 중 하나.
                             let displayHtml = linkifyAndEscape(cellText, boldBrackets);
                             if (cellIndex === colIdx.content) displayHtml = injectMailRawBtn(displayHtml, row, i);
                             tdStyle += " position: relative; padding-left: 22px;";
@@ -1982,7 +2035,7 @@
                             //    renderTable()이 다시 그려질 때마다 개별로 펼쳐뒀던 칸이 매번 접혀 보였다.
                             const _hadExpandedClass = / class="[^"]*\bdetail-td-expanded\b[^"]*"/.test(tdAttrs);
                             tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans${_hadExpandedClass ? ' detail-td-expanded' : ''}"`;
-                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 3.6px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
+                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 3.6px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, null, ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
@@ -1996,36 +2049,21 @@
 
                 bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${(cellIndex === colIdx.content || cellIndex === colIdx.answer) ? '<div class="detail-td-inner">' + tdHtml + '</div>' : tdHtml}</td>`;
             }
-            bodyHtml += `</tr>`;
-        }
-        
-        tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
-
-        // 💡 [버그 수정] "상세내용 헤더 클릭 → 전체 펼치기"는 DOM class(detail-td-expanded)로만 표시돼서,
-        //    WBS 상하좌우/+-/삭제 등 다른 액션이 renderTable()을 다시 부르며 thead/tbody를 통째로 새로
-        //    그릴 때마다(바로 위 tbody.innerHTML 대입, 헤더도 위에서 매번 새로 그려짐) 상태가 사라져
-        //    매번 다시 헤더를 클릭해야 했다. 전체 펼치기 여부를 window._allDetailExpanded에 별도로
-        //    저장해두고, 렌더링될 때마다 여기서 다시 적용해 재렌더링을 넘나들며 유지되게 한다.
-        if (window._allDetailExpanded) {
-            document.querySelectorAll('td.detail-td').forEach(el => el.classList.add('detail-td-expanded'));
-            const arrowEl = document.getElementById('detail-th-arrow');
-            if (arrowEl) arrowEl.textContent = '▲';
-        }
-
-        // 💡 페이지를 새로고침한 뒤 최초 1회만 "오늘" 행으로 스크롤 (편집/필터 등으로 인한 재렌더링 시엔 스크롤 위치를 건드리지 않음)
-        // 🐛 [2026-09-13] Gantt 탭이 안 보이는 상태거나(다른 탭이 복원됨) 레이아웃이 아직 안 잡힌 상태면
-        //    scrollToTodayRow()가 false를 반환하며 조용히 실패할 수 있다 — 성공했을 때만 플래그를 세우고,
-        //    페이지 로드 직후 몇 차례(레이아웃이 늦게 자리잡는 경우 대비) 짧게 재시도한다. 그래도 실패하면
-        //    (=Gantt 탭 자체가 안 보이는 상태) window.switchTab('gantt')이 탭이 보일 때 마저 재시도한다.
-        if (!window._didInitialScrollToToday && data && data.length > 1) {
-            [50, 300, 800].forEach(function(delay) {
-                setTimeout(function() {
-                    if (window._didInitialScrollToToday) return; // 이미 성공했으면 나머지 재시도는 건너뜀
-                    if (window.scrollToTodayRow()) window._didInitialScrollToToday = true;
-                }, delay);
-            });
-        }
+        return bodyHtml;
     }
+
+    // ⚡ [2026-10-28] 지연 렌더된 자리표시 행(<tr data-lazy>)을 실제 셀로 채운다 — 보이게 만드는 쪽
+    //    (applyFilters, js/26 검색)이 tr.style.display를 풀기 직전에 부른다. tr 요소는 그대로 두고 안만
+    //    채우므로 그 tr에 이미 붙은 클래스(하이라이트·다중선택·검색표시)는 유지된다.
+    window._ganttHydrateRow = function(tr) {
+        if (!tr || !tr.hasAttribute('data-lazy')) return tr;
+        tr.removeAttribute('data-lazy');
+        const i = parseInt(tr.dataset.rowIndex, 10);
+        if (isNaN(i) || !globalData[i] || !globalData[0]) return tr;
+        tr.innerHTML = _ganttRowCellsHtml(globalData, i);
+        if (window._allDetailExpanded) tr.querySelectorAll('td.detail-td').forEach(el => el.classList.add('detail-td-expanded'));
+        return tr;
+    };
 
     // 💡 [공용] 0레벨 업무 목록({name, startTs})에서 PROTO/ES/PP 9개 마일스톤 날짜를 계산.
     //    실적(현재 Gantt 기준)과 계획(최초 킥오프 baseline 기준) 양쪽에서 동일한 규칙으로 재사용.
@@ -2116,7 +2154,9 @@
         if (btn.dataset.expanded === "true") { contentSpan.innerHTML = contentSpan.dataset.origHtml; btn.dataset.expanded = "false"; btn.style.backgroundColor = "transparent"; return; }
         if (contentSpan.dataset.transHtml) { contentSpan.innerHTML = contentSpan.dataset.transHtml; btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; return; }
         btn.style.pointerEvents = 'none'; btn.style.opacity = '0.5';
-        let text = decodeURIComponent(encodedText); let targetLang = transMode === 1 ? 'en' : 'ko'; let labelPrefix = transMode === 1 ? 'ENG' : '한글';
+        // ⚡ encodedText가 null이면(2026-10-28 이후 렌더) 칸의 data-raw(편집이 반영된 원문)에서 읽는다.
+        let _rawTd = encodedText == null ? btn.closest('td') : null;
+        let text = encodedText != null ? decodeURIComponent(encodedText) : decodeURIComponent((_rawTd && _rawTd.dataset.raw) || '').trim(); let targetLang = transMode === 1 ? 'en' : 'ko'; let labelPrefix = transMode === 1 ? 'ENG' : '한글';
         let urls = [];
         let placeholderText = text.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gim, function(match) { urls.push(match); return ` ZXZX${urls.length - 1}ZXZX `; });
         placeholderText = placeholderText.replace(/(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim, function(match) { urls.push(match); return ` ZXZX${urls.length - 1}ZXZX `; });

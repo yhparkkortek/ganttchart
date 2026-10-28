@@ -967,7 +967,9 @@
                 if (_preSaveHadChanges || !fileId) {
                     // 💡 [2026-09-03 성능] 주 저장 업로드 직후 즉시 백업을 올리면 같은 대역폭을 두 요청이
                     //    경쟁해 둘 다 느려진다. 5초 뒤로 미뤄서 대역폭을 분산한다.
-                    setTimeout(function() { window.backupToDrive(saveData, dynamicFileName); }, 5000); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (48시간 보관)
+                    //    ⚡ [2026-10-28] 이제 백업은 방금 저장한 파일(file.id)을 Drive 안에서 복사한다(업로드 없음).
+                    //    지연을 길게 두면 그사이 다른 저장이 끼어 다른 내용이 복사될 수 있으니 짧게 둔다.
+                    setTimeout(function() { window.backupToDrive(saveData, dynamicFileName, file.id); }, 300); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (48시간 보관)
                 } else {
                     console.info('[저장 계측] 변경사항 없음 — 백업 생략');
                 }
@@ -1365,7 +1367,7 @@
                 window.tabData = saveData.tabData || window.tabData || {};
                 window.projectDistributions = saveData.distributions || [];
                 window.mcNormalizeAfterLoad();
-                if (window.populateTabData) window.populateTabData();
+                // ⚡ [2026-10-28] populateTabData()는 mcNormalizeAfterLoad() 끝에서 이미 부른다 — 여기서 또 부르면 Summary·BOM·자재·주소록 탭을 매번 두 번 그렸다(시트 전환 실측 최대 457ms 중 절반).
                 window.currentDriveFileId = existingFileId; // 있으면 그 파일로 갱신 저장, 없으면(null) 저장 시 새 파일 생성
                 window.currentDriveFileName = origName;
                 window.updateCurrentFileLabel();
@@ -1429,7 +1431,7 @@
         if (window.loadScheduleBaselines) window.loadScheduleBaselines();
 
         window.mcNormalizeAfterLoad();
-        if (window.populateTabData) window.populateTabData();
+        // ⚡ [2026-10-28] populateTabData()는 mcNormalizeAfterLoad() 끝에서 이미 부른다 — 여기서 또 부르면 Summary·BOM·자재·주소록 탭을 매번 두 번 그렸다(시트 전환 실측 최대 457ms 중 절반).
         window.updateCurrentFileLabel();
         window.recalculateSchedules();
         if (typeof renderTable === 'function') renderTable(globalData);
@@ -1943,7 +1945,7 @@
                 window.tabData = saveData.tabData || window.tabData || {};
                 window.projectDistributions = saveData.distributions || []; // 📥 [Phase 2.5] 배분 원장 보관 (병합 기준점)
                 window.mcNormalizeAfterLoad();
-                if (window.populateTabData) window.populateTabData();
+                // ⚡ [2026-10-28] populateTabData()는 mcNormalizeAfterLoad() 끝에서 이미 부른다 — 여기서 또 부르면 Summary·BOM·자재·주소록 탭을 매번 두 번 그렸다(시트 전환 실측 최대 457ms 중 절반).
                 window.currentDriveFileId = fileId;
                 window.currentDriveFileName = fileName;
                 window.updateCurrentFileLabel();
