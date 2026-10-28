@@ -1162,31 +1162,34 @@ window.deleteHistoryByDateRange = function() {
             });
         });
 
-        // 🐛 [2026-10-28 버그 수정, 실사용 제보 "이동하면서 계산하나? 엄청느림"] dragover는 마우스가
-        //    1px만 움직여도 초당 수십~수백 번 발동한다. 매번 getBoundingClientRect()(레이아웃 강제
-        //    계산 — 1000행짜리 표에서 비쌈, c8edee5에서 실측한 것과 같은 종류의 비용)를 부르고 그
-        //    직후 classList까지 건드리니, 변경→강제 레이아웃이 매 틱마다 반복되는 "레이아웃 스래싱"
-        //    이었다. preventDefault()(drop을 허용하려면 매 이벤트마다 동기로 꼭 불러야 함)만 즉시 하고,
-        //    실제로 무거운 계산(rect 읽기·classList·_findAnchor)은 requestAnimationFrame으로 묶어서
-        //    초당 최대 60번(그마저도 레이아웃이 실제로 필요할 때만)으로 줄인다.
+        // 🐛 [2026-10-28 버그 수정 2차, 실사용 제보 "그래도 느림 — 이동 중엔 UI만 움직이고 연산은
+        //    나중에 하면 더 빠르지 않을까"] requestAnimationFrame(1차 수정)만으로는 부족했다 — 초당
+        //    60번으로 줄었어도, 매 프레임 "레이아웃 읽기(getBoundingClientRect) → 쓰기(classList)"를
+        //    반복하면 그 다음 프레임의 읽기가 직전 프레임의 쓰기 때문에 다시 레이아웃을 강제한다
+        //    (read-after-write가 프레임마다 반복 = 사실상 매 프레임 리플로우, 스로틀은 "몇 번" 줄였을
+        //    뿐 "읽기-직후-쓰기"라는 패턴 자체는 그대로였다). 진짜 해결책은 사용자 제안대로 **커서가
+        //    가리키는 행이 바뀔 때만** 다시 계산하는 것 — 네이티브 드래그는 ev.target이 이미 "지금
+        //    커서 아래 있는 행"을 공짜로 알려주므로(브라우저가 히트테스트를 대신 해줌), 그 행이 직전
+        //    프레임과 같으면(= 같은 행 안에서 커서만 움직임) 레이아웃 읽기·classList 쓰기를 **아예
+        //    건너뛴다**. 같은 행 안에서 위/아래 절반을 더 정밀하게 구분 못 하게 되는 대가를 치르지만,
+        //    "드래그 내내 매 프레임 리플로우"가 없어지는 게 체감 성능에 훨씬 크다.
         let _dragRafPending = false, _dragPendingY = 0, _dragPendingTarget = null;
         function _processDragOverFrame() {
             _dragRafPending = false;
             if (!_dragSrcIndices || !_dragPendingTarget) return;
             const tr = _dragPendingTarget.closest ? _dragPendingTarget.closest('tr[data-row-index]') : null;
             if (!tr) { _clearDropHighlight(); return; }
+            if (tr === _lastOverTr) return; // 같은 행 안 — 레이아웃 재계산·DOM 쓰기 자체를 건너뜀
             const idx = parseInt(tr.dataset.rowIndex, 10);
             if (isNaN(idx)) { _clearDropHighlight(); return; }
 
-            const rect = tr.getBoundingClientRect();
+            const rect = tr.getBoundingClientRect(); // 이 행에 처음 들어온 프레임에서만 1회
             const before = (_dragPendingY - rect.top) < rect.height / 2;
             const anchorInfo = _findAnchor(idx, _dragLevel);
             const cls = anchorInfo ? (before ? 'gantt-drop-before' : 'gantt-drop-after') : 'gantt-drop-invalid';
-            if (_lastOverTr !== tr || _lastOverCls !== cls) {
-                _clearDropHighlight();
-                tr.classList.add(cls);
-                _lastOverTr = tr; _lastOverCls = cls;
-            }
+            _clearDropHighlight();
+            tr.classList.add(cls);
+            _lastOverTr = tr; _lastOverCls = cls;
         }
         document.addEventListener('dragover', function(ev) {
             if (!_dragSrcIndices) return;
