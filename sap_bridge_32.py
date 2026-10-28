@@ -7134,7 +7134,13 @@ def post_goods_receipt(ebeln, dump_only=False):
     try:
         grid = wnd.findById('shellcont/shell')
     except Exception as e:
-        raise RuntimeError(f'입고 처리 입력 화면(그리드)을 찾지 못했습니다: {e}')
+        # [2026-10-28 실측] 입고 대기 품목이 하나도 없으면(이미 전부 입고 처리됨) ZMM062가
+        # 그리드 자체를 안 그려서 이 예외가 난다 — "그리드를 못 찾음"이 아니라 "이미 처리됨"
+        # 쪽이 실제 원인일 가능성이 높으므로 그 쪽 메시지로 안내한다.
+        raise RuntimeError(
+            f'구매오더 "{ebeln}"에 대해 입고 대기 중인 품목을 찾지 못했습니다 — '
+            f'이미 전부 입고 처리됐거나 오더번호를 확인해주세요. (화면 상세: {e})'
+        )
 
     try:
         row_count = grid.RowCount
@@ -7324,30 +7330,100 @@ def post_goods_receipt(ebeln, dump_only=False):
     except Exception:
         pass
 
-    # ── 저장: btn[5] → 팝업 → btn[12] (단일 패스, V01 VBS 기준)
+    # ── 저장: btn[5] → "결과 확인" 팝업 → btn[12](닫기) (단일 패스, V01 VBS 기준)
     try:
         wnd.findById('tbar[1]/btn[5]').press()
         time.sleep(2.0)
     except Exception as e:
         raise RuntimeError(f'입고처리 btn[5] 오류: {e} [debug={_debug_steps}]')
+
+    # [2026-10-28 버그수정] btn[5]를 누르면 SAP이 즉시 전기하고, 그 결과(문서번호/행별
+    # 성공여부)는 상태바가 아니라 "결과 확인" 팝업 안의 그리드(wnd[1]/shellcont[1]/shell,
+    # 컬럼: STATUS/LIFNR/EBELN/EBELP/MBLNR/MESSAGE)에 담겨 온다. 옛 코드는 이 팝업을
+    # usr/txtMESSAGE 같은 텍스트 라벨에서 찾았는데 실제로는 그런 라벨이 없어 늘 빈 값이었고,
+    # 팝업을 닫고 난 뒤의 메인화면 상태바(wnd[0]/sbar)도 비어 있어("" 실측, 2026-10-28
+    # PO 9100019756/자재문서 5000870670 생성 라이브 확인) "확인 못 함"으로만 보고됐다 —
+    # 실제로는 정상 전기됐는데도 성공으로 보이지 않는 버그였다. 이제 팝업 그리드를 직접 읽는다.
+    _result_rows = []
+    _mat_doc_no = None
+    _popup_grid_read_ok = False
     try:
         _w1 = session.findById('wnd[1]')
-        _pt2 = ''
-        for _pid in ['usr/txtMESSAGE', 'usr/lbl[1,2]', 'usr/lbl[2,2]']:
+        try:
+            _rgrid = _w1.findById('shellcont[1]/shell')
+            _rcols = list(_rgrid.ColumnOrder)
+            for _rr in range(_rgrid.RowCount):
+                _row = {}
+                for _rc in _rcols:
+                    try:
+                        _row[_rc] = str(_rgrid.GetCellValue(_rr, _rc)).strip()
+                    except Exception:
+                        _row[_rc] = ''
+                _result_rows.append(_row)
+                _msg = _row.get('MESSAGE', '')
+                if _msg:
+                    _popup_texts.append(f"{ebeln}/{_row.get('EBELP','?')}: {_msg}")
+                _mdoc_m = re.search(r'\b(\d{10})\b', _row.get('MBLNR', '') + ' ' + _msg)
+                if _mdoc_m and not _mat_doc_no:
+                    _mat_doc_no = _mdoc_m.group(1)
+            _popup_grid_read_ok = True
+        except Exception as _rge:
+            _popup_texts.append(f'결과팝업 그리드 읽기 실패: {_rge}')
+            # 구형 레이아웃 폴백 — 텍스트 라벨에서 찾기
+            for _pid in ['usr/txtMESSAGE', 'usr/lbl[1,2]', 'usr/lbl[2,2]']:
+                try:
+                    _pt2 = (_w1.findById(_pid).Text or '').strip()
+                    if _pt2:
+                        _popup_texts.append(f'팝업: {_pt2}')
+                        break
+                except Exception:
+                    pass
+        # 닫기 — "결과 확인" 팝업은 btn[12](닫기)뿐, 폴백으로 btn[0]/Enter도 시도
+        _closed = False
+        for _close_try in [lambda: _w1.findById('tbar[0]/btn[12]').press(),
+                            lambda: _w1.findById('tbar[0]/btn[0]').press(),
+                            lambda: session.findById('wnd[1]').sendVKey(0)]:
             try:
-                _pt2 = (_w1.findById(_pid).Text or '').strip()
-                if _pt2: break
+                _close_try()
+                _closed = True
+                break
             except Exception:
                 pass
-        if _pt2:
-            _popup_texts.append(f'팝업: {_pt2}')
-        _w1.findById('tbar[0]/btn[12]').press()
-        time.sleep(2.0)  # 팝업 confirm 후 SAP 전기 완료까지 충분히 대기
+        time.sleep(1.5)
     except Exception:
-        pass
+        pass  # wnd[1]이 없으면 팝업 없이 바로 전기된 경우 — 아래 sbar 폴백으로 판정
 
-    # 상태바 확인 — 전기 성공 여부 판정
-    # SAP이 전기 후 상태바를 채우는 데 시간이 걸릴 수 있으므로 최대 4회 재시도
+    # 행별 결과 판정 — STATUS 아이콘 @5B@(녹색/성공) 기준, 그 외(@5C@/@5D@ 등 또는
+    # 오류 키워드 포함 MESSAGE)는 실패로 간주
+    _fail_rows = [r for r in _result_rows
+                  if ('5B' not in r.get('STATUS', ''))
+                  or any(kw in r.get('MESSAGE', '') for kw in ['오류', '불가', '실패', 'Error'])]
+    _ok_rows = [r for r in _result_rows if r not in _fail_rows]
+
+    if _result_rows:
+        qty_summary = ', '.join(order_qtys) if len(order_qtys) > 1 else (order_qtys[0] if order_qtys else '?')
+        if _fail_rows and not _ok_rows:
+            return {
+                'ok': False,
+                'ebeln': ebeln,
+                'error': f'구매오더 "{ebeln}" 입고 처리 중 오류 — ' + '; '.join(_popup_texts),
+                'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts, 'resultRows': _result_rows},
+            }
+        row_label = f'{len(_ok_rows)}건' if len(_ok_rows) != 1 else '1건'
+        mat_doc_label = f', 자재문서: {_mat_doc_no}' if _mat_doc_no else ''
+        partial_note = f' (단, {len(_fail_rows)}건은 오류 — {"; ".join(p for p in _popup_texts if any(kw in p for kw in ["오류","불가","실패","Error"]))})' if _fail_rows else ''
+        return {
+            'ok': True,
+            'ebeln': ebeln,
+            'rowCount': len(_ok_rows),
+            'orderQtys': order_qtys,
+            'goodsReceiptDate': today,
+            'matDocNo': _mat_doc_no,
+            'message': f'구매오더 "{ebeln}" 자재 입고 처리를 완료했습니다 ({row_label}, 수량: {qty_summary}, 입고일자: {today}{mat_doc_label}){partial_note}.',
+            'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts, 'resultRows': _result_rows},
+        }
+
+    # ── 결과팝업 그리드를 못 읽은 경우에만 — 기존 상태바 폴백 판정
     status_text = ''
     for _sbar_try in range(4):
         try:
@@ -7358,11 +7434,9 @@ def post_goods_receipt(ebeln, dump_only=False):
             break
         time.sleep(0.8)
 
-    # "자재 문서 XXXXXXXXXX이(가) 전기되었습니다" 패턴 → 확실한 성공
     _mat_doc_m = re.search(r'자재\s*문서\s*(\d{10})', status_text)
     _mat_doc_no = _mat_doc_m.group(1) if _mat_doc_m else None
 
-    # 오류 키워드 확인
     _sbar_mtype = ''
     try:
         _sbar_mtype = (session.findById('wnd[0]/sbar').MessageType or '').strip()
@@ -7381,7 +7455,6 @@ def post_goods_receipt(ebeln, dump_only=False):
         }
 
     if not status_text:
-        # 팝업까지 확인했으면 전기는 거의 확실히 됐으나 문서번호 확인 불가
         return {
             'ok': True,
             'ebeln': ebeln,
@@ -7389,7 +7462,7 @@ def post_goods_receipt(ebeln, dump_only=False):
             'orderQtys': order_qtys,
             'goodsReceiptDate': today,
             'statusText': '',
-            'message': f'구매오더 "{ebeln}" 입고 처리 저장까지 진행됐습니다 ({len(processed_rows)}건). SAP 상태표시줄이 비어 있어 자재문서 번호를 확인하지 못했습니다 — SAP에서 자재문서가 생성됐는지 직접 확인해주세요.',
+            'message': f'구매오더 "{ebeln}" 입고 처리 저장까지 진행됐습니다 ({len(processed_rows)}건). 결과 팝업도 상태표시줄도 읽지 못해 자재문서 번호를 확인할 수 없습니다 — SAP에서 자재문서가 생성됐는지 직접 확인해주세요.',
             'debug': {'debugSteps': _debug_steps, 'popupTexts': _popup_texts},
         }
 
