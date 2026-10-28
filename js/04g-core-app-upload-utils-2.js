@@ -2242,7 +2242,11 @@ ${question}
         const oldStatus = row[colIdx.status] || '';
         row[colIdx.status] = status;
         logChange(rowIndex, colIdx.status, '상태 변경', `${oldStatus} → ${status}`, 'AI 문답으로 변경');
-        window.recalculateSchedules();
+        // 💡 [2026-10-28] 상태 하나는 날짜에 영향이 없어 recalculateSchedules() 전체(표 전체 재생성)가
+        //    필요 없음 — js/04i updateStatus와 동일하게 바뀐 이 행만 패치(js/04j _patchStatusRowDom).
+        if (window._patchStatusRowDom) window._patchStatusRowDom(rowIndex);
+        if (typeof applyFilters === 'function') applyFilters();
+        if (window.pushUndoSnapshot) window.pushUndoSnapshot();
         return { ok: true, taskName: label, from: oldStatus, to: status };
     };
 
