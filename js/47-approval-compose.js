@@ -284,10 +284,15 @@
     // ── 진입점 ─────────────────────────────────────────────────────────
     //  opts.asIs = true 면 **매핑하지 않고 원본 값 그대로** 쓴다(= "그대로 복사").
     //  확인 화면·적용 경로는 똑같이 쓴다 — 복사도 사람이 한 번 보고 넣는 게 맞다.
+    //  🔎 [2026-10-28] docNum 없이 docId 만으로도 돌 수 있다(opts.docId) — 검색 결과에
+    //  docNum 이 비어 있는 문서(임시저장/진행중)를 "id:12345"로만 본 뒤 복사해 달라고 하면
+    //  이 경로다. docNum 자리에 id 숫자를 넣으면 100% 실패한다(docs/groupware.md 참고) —
+    //  그래서 여기서 **아예 다른 쿼리 파라미터**로 보낸다.
     window.apvComposeFrom = async function (docNum, opts) {
         opts = opts || {};
         docNum = String(docNum || '').trim();
-        if (!docNum) { _toast('⚠️ ' + _t('참고할 문서번호가 필요합니다.', 'A source document number is required.'), 'error'); return; }
+        var docId = String(opts.docId || '').trim();
+        if (!docNum && !docId) { _toast('⚠️ ' + _t('참고할 문서번호가 필요합니다.', 'A source document number is required.'), 'error'); return; }
         if (window._gwEnsureLogin) {
             var g = await window._gwEnsureLogin();
             if (!g || !g.ok) { _toast('🔒 ' + ((g && g.message) || _t('그룹웨어 로그인이 필요합니다.', 'Groupware login required.')), 'error'); return; }
@@ -297,12 +302,13 @@
         _toast('📄 ' + _t('원본 기안을 읽는 중입니다…', 'Reading the source document…'), 'info');
         var src;
         try {
-            var r = await fetch('http://127.0.0.1:5000/gw/approval/read?docNum=' + encodeURIComponent(docNum));
+            var q = docNum ? ('docNum=' + encodeURIComponent(docNum)) : ('docId=' + encodeURIComponent(docId));
+            var r = await fetch('http://127.0.0.1:5000/gw/approval/read?' + q);
             src = await r.json();
         } catch (e) { src = { ok: false, message: String(e && e.message || e) }; }
         if (!src || !src.ok) {
             _toast('⚠️ ' + _t('원본을 읽지 못했습니다: ', 'Could not read the source: ') + ((src && src.message) || ''), 'error');
-            if (window._issueLog) { try { window._issueLog('approval-compose', { docNum: docNum, err: (src && src.message) || '' }); } catch (e2) { /* 기록 실패가 흐름을 막지 않게 */ } }
+            if (window._issueLog) { try { window._issueLog('approval-compose', { docNum: docNum, docId: docId, err: (src && src.message) || '' }); } catch (e2) { /* 기록 실패가 흐름을 막지 않게 */ } }
             return;
         }
         var form = ((src.meta || {}).formName || '').trim();
@@ -371,13 +377,13 @@
                 return { label: k, srcValue: srcFields[k], value: d.value, from: d.from, kind: d.kind, note: d.note || '' };
             });
         rows.unshift(subjRow);
-        _apvOpen(docNum, src, form, rows, opts.asIs, ctx.material);
+        _apvOpen(docNum, docId, src, form, rows, opts.asIs, ctx.material);
     };
 
     // ── 미리보기 (칸마다 출처를 보여준다) ───────────────────────────────
     window._apvPending = null;
-    var _apvOpen = function (docNum, src, form, rows, asIs, material) {
-        window._apvPending = { docNum: docNum, src: src, form: form, rows: rows, asIs: !!asIs, material: material || '' };
+    var _apvOpen = function (docNum, docId, src, form, rows, asIs, material) {
+        window._apvPending = { docNum: docNum, docId: docId, src: src, form: form, rows: rows, asIs: !!asIs, material: material || '' };
         var ov = document.getElementById('apv-overlay');
         if (!ov) {
             ov = document.createElement('div');
@@ -422,7 +428,7 @@
         var pm = window.projectMeta || {};
         document.getElementById('apv-title').textContent =
             (p.asIs ? '📄 ' + _t('그대로 복사 — ', 'Copy as-is — ') : '📝 ' + _t('기안 작성 — ', 'Compose draft — ')) + p.form
-            + _t(' / 참고 ', ' / from ') + p.docNum
+            + _t(' / 참고 ', ' / from ') + (p.docNum || ('id:' + p.docId))
             + _t(' / 프로젝트 ', ' / project ') + (pm.프로젝트명 || pm.고객모델명 || _t('(안 열림)', '(none)'));
 
         var html = '<div style="margin-bottom:8px; font-size:11.5px; color:#868e96;">'
@@ -493,7 +499,7 @@
             html += '<div style="margin-top:8px; padding:6px 9px; background:#fff3cd; border-left:3px solid #e6a817;'
                 + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#7a5210;">🏭 '
                 + _esc(_t('자재번호를 안 받아서 SAP 조회를 하지 않았습니다 — Item Code·Model 같은 칸이 비어 있습니다. '
-                          + '자재번호를 넣어 다시 요청하시면(예: "' + p.docNum + ' 참고하고 132933 로 기안 작성해줘") 채워집니다.',
+                          + '자재번호를 넣어 다시 요청하시면(예: "' + (p.docNum || p.docId) + ' 참고하고 132933 로 기안 작성해줘") 채워집니다.',
                           'No material number given, so SAP was not queried.'))
                 + '</div>';
         }
@@ -542,7 +548,10 @@
         try {
             var r = await fetch('http://127.0.0.1:5000/gw/approval/copy', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ docNum: p.docNum, fields: fields,
+                // 🔎 [2026-10-28] docNum 이 비어 있는 문서(임시저장/진행중)는 docId 로 보낸다 —
+                // id 숫자를 docNum 자리에 넣으면 "문서번호를 찾지 못했습니다"로 100% 실패한다.
+                body: JSON.stringify({ docNum: p.docNum || undefined, docId: p.docNum ? undefined : p.docId,
+                                       fields: fields,
                                        subject: (subject === null ? undefined : subject), dryRun: false })
             });
             res = await r.json();
@@ -551,7 +560,7 @@
 
         if (!res || !res.ok) {
             _toast('⚠️ ' + _t('임시저장 실패: ', 'Draft save failed: ') + ((res && res.message) || ''), 'error');
-            if (window._issueLog) { try { window._issueLog('approval-compose', { docNum: p.docNum, form: p.form, err: (res && res.message) || '' }); } catch (e2) { /* 〃 */ } }
+            if (window._issueLog) { try { window._issueLog('approval-compose', { docNum: p.docNum, docId: p.docId, form: p.form, err: (res && res.message) || '' }); } catch (e2) { /* 〃 */ } }
             return;
         }
         // 못 채운 칸은 조용히 넘기지 않는다 — 어느 칸이 비었는지 사람이 알아야 한다.

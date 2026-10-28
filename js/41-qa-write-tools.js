@@ -45,10 +45,13 @@
             desc: '기존 기안을 **틀로만** 쓰고, 값은 **지금 열린 프로젝트**(프로젝트코드·고객사·Customer SPEC 등)에서 채워 새 기안을 만든다. '
                 + '"RD3-2610-050 참고해서 이번 프로젝트로 기안 써줘" 같은 요청이 이것이다. '
                 + '원본 값을 **그대로** 복사하는 것은 gw_approval_copy 이고, 이 도구는 **지금 프로젝트에 맞게 바꿔** 채운다. '
-                + '칸마다 값이 어디서 왔는지 보여주는 확인 화면이 뜨고, 사람이 승인해야 임시저장된다. 상신은 하지 않는다.',
+                + '칸마다 값이 어디서 왔는지 보여주는 확인 화면이 뜨고, 사람이 승인해야 임시저장된다. 상신은 하지 않는다. '
+                + '⚠️ (2026-10-28) 검색 결과에 docNum 없이 id:12345 만 보였다면 그 숫자를 docNum 에 넣지 말 것 — '
+                + '그 문서는 아직 문서번호가 없다(임시저장/진행중). 그 숫자는 docId 에 넣어라.',
             exec: 'approvalCompose',
             params: [
-                { name: 'docNum', type: 'text', max: 30, req: true, desc: '틀로 쓸 기존 문서번호 (예: RD3-2610-050)' }
+                { name: 'docNum', type: 'text', max: 30, desc: '틀로 쓸 기존 문서번호 (예: RD3-2610-050). 검색 결과에 docNum이 비어 있으면 여기 쓰지 말 것' },
+                { name: 'docId', type: 'text', max: 20, desc: '문서 id — docNum이 없을 때 쓴다(검색 결과의 id:숫자 값을 그대로)' }
             ],
             undoNote: '임시저장함에서 삭제하면 된다(상신 전이라 아무에게도 안 보인다).'
         },
@@ -59,10 +62,13 @@
                 + '상신은 하지 않는다 — 사람이 열어서 필요한 곳만 고치고 직접 올린다. '
                 + '⚠️ 첨부파일은 가져오지 않는다(몇 건이었는지만 알려준다). '
                 + '결재선은 새 기안의 기본값을 쓰고, 원본 결재선을 같이 보여주니 다르면 사람이 고친다. '
-                + 'subject/fields 를 같이 주면 그 값이 원본을 덮는다.',
+                + 'subject/fields 를 같이 주면 그 값이 원본을 덮는다. '
+                + '⚠️ (2026-10-28) 검색 결과에 docNum 없이 id:12345 만 보였다면 그 숫자를 docNum 에 넣지 말 것 — '
+                + '그 문서는 아직 문서번호가 없다(임시저장/진행중). 그 숫자는 docId 에 넣어라.',
             method: 'POST', path: '/gw/approval/copy',
             params: [
-                { name: 'docNum', type: 'text', max: 30, req: true, desc: '복사할 원본 문서번호 (예: RD3-2610-050)' },
+                { name: 'docNum', type: 'text', max: 30, desc: '복사할 원본 문서번호 (예: RD3-2610-050). 검색 결과에 docNum이 비어 있으면 여기 쓰지 말 것' },
+                { name: 'docId', type: 'text', max: 20, desc: '문서 id — docNum이 없을 때 쓴다(검색 결과의 id:숫자 값을 그대로)' },
                 { name: 'subject', type: 'text', max: 200, desc: '새 기안 제목 — 비우면 원본 제목 그대로' }
             ],
             undoNote: '임시저장함에서 삭제하면 된다(상신 전이라 아무에게도 안 보인다).'
@@ -425,7 +431,7 @@
                 if (!window.apvComposeFrom) {
                     r = { ok: false, message: '기안 작성 기능을 불러오지 못했습니다(js/46).' };
                 } else {
-                    window.apvComposeFrom((d.args || {}).docNum);
+                    window.apvComposeFrom((d.args || {}).docNum, { docId: (d.args || {}).docId });
                     r = { ok: true, id: t.id, args: d.args,
                           data: { opened: true, message: '확인 화면을 열었습니다 — 칸을 확인하고 [이대로 임시저장]을 누르세요.' } };
                 }
