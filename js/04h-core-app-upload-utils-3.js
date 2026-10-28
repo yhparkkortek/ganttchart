@@ -5352,6 +5352,41 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // 🔑 [2026-10-28 버그 수정, 실사용 제보 "그룹웨어 로그인해줘 해도 안 됨"] 메일/게시판
+        //    조회처럼 다른 목적이 딸린 그룹웨어 명령은 전부 _gwEnsureLogin을 직접 불러 로그인까지
+        //    하는데, "로그인"만 딱 떼어 요청하면 걸리는 로컬 명령이 하나도 없어서 결국 읽기 전용
+        //    gw_status 도구(js/40)로 샜다 — 그 도구는 /gw/status만 조회할 뿐 로그인은 시도하지
+        //    않아서, "브라우저가 꺼져 있습니다"만 반복해서 답하고 끝났다(APP_CAPABILITIES의
+        //    gw_login 항목은 지금까지 AI 프롬프트용 설명 문구일 뿐 실행 코드가 없었다). 여기서
+        //    _qaMatchAppCapabilities로 "로그인 자체가 요청의 핵심"인지 판정해 직접 실행한다 —
+        //    _gwEnsureLogin → 백엔드 login_once()가 그룹웨어 전용 크롬이 꺼져 있으면 띄우는 것까지
+        //    포함해서 하므로(gw_bridge.py), 여기서 그 결과를 그대로 보여주기만 하면 된다.
+        const _gwLoginCaps = window._qaMatchAppCapabilities ? window._qaMatchAppCapabilities(question) : [];
+        if (_gwLoginCaps[0] && _gwLoginCaps[0].id === 'gw_login' && _gwLoginCaps[0].score >= 0.5) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            window._ganttQaHistory.push({ role: 'ai', pending: true,
+                text: '⏳ ' + window._t('그룹웨어 로그인 상태 확인 중...', 'Checking groupware session...') });
+            window._renderGanttQaMessages();
+            let _loginReply;
+            try {
+                const _gwStepL = function (m) { const h = window._ganttQaHistory, l = h[h.length - 1]; if (l && l.pending) { l.text = m; window._renderGanttQaMessages(); } };
+                const _gwL = window._gwEnsureLogin ? await window._gwEnsureLogin(_gwStepL)
+                    : { ok: false, message: window._t('로그인 게이트를 불러오지 못했습니다(페이지를 새로고침해주세요).', 'Login gate not loaded (please refresh the page).') };
+                // 💡 실패 메시지(_gwL.message)는 _gwEnsureLogin(js/36)이 이미 상황에 맞는 이모지를
+                //    붙여서 돌려준다(🔑 미등록/🔒 로그인 실패/⚠️ 백엔드 연결 불가) — 여기서 또
+                //    붙이면 이모지가 두 번 겹친다(기존 메일/게시판/기안 블록과 동일하게 그대로 씀).
+                _loginReply = _gwL.ok
+                    ? '✅ ' + window._t('그룹웨어 로그인 확인됨', 'Groupware session confirmed')
+                        + (_gwL.session && _gwL.session.name ? ' — ' + _gwL.session.name : '')
+                    : _gwL.message;
+            } catch (e) {
+                _loginReply = '⚠️ ' + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: _loginReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 🐛 [2026-10-26 제보] "프로젝트코드 등록 신청서(RD3-2609-077) 작성해줘"가 '기안'/'전자결재'
         //    낱말이 없다는 이유로 이 게이트를 통과하지 못해 뒤쪽 SAP 프로젝트 코드 블록(*RD3*
         //    패턴 조회)으로 새 나갔다. 결재양식은 전부 '~신청서/~요청서'라 불리는데 이 kw 목록엔
