@@ -40,7 +40,7 @@
   └ Drive 업로더 ── 사용자·월별 샤드 파일 ──▶  Drive/Backups/SAP_Issues/issues_<이름>_<YYYYMM>.json
                                                                         │
  31-issue-report.js (관리자 모달) ◀── 전 샤드 병합·군집·순위 ◀───────────┘
-  └ [내보내기] ─▶ POST /issue-export ─▶ C:\SAP_DMS\SAP이슈\digest_<날짜>.json ─▶ Claude가 읽고 수정
+  └ [내보내기] ─▶ POST /issue-export ─▶ C:\SAP_DMS\이슈리포트\digest_<날짜>.json ─▶ Claude가 읽고 수정
 ```
 
 **왜 백엔드가 직접 Drive에 안 쓰나**: Drive OAuth 토큰은 브라우저에만 있다. 그래서 백엔드는 로컬 JSONL "우편함(outbox)"만
@@ -139,7 +139,7 @@
 ## 7. 반영 루프(주기적 수동)
 
 1. 관리자가 **🧾 이슈 리포트 모달**(31번 파일)을 연다 → 모든 샤드 병합·군집·순위 표시.
-2. **[내보내기]** → 백엔드 `/issue-export`가 `C:\SAP_DMS\SAP이슈\digest_<날짜>.json`에 저장(브라우저 다운로드 금지 원칙 준수).
+2. **[내보내기]** → 백엔드 `/issue-export`가 `C:\SAP_DMS\이슈리포트\digest_<날짜>.json`에 저장(브라우저 다운로드 금지 원칙 준수).
 3. Claude에게 "이슈 정리해줘" → Claude가 그 파일을 읽어 군집별 원인 진단 + 수정안 제시.
 4. 층별 처리:
    - ③ 코드: Claude가 수정 → 사용자가 검토 후 `main` 반영(현행 운영 방식 그대로).
@@ -222,7 +222,7 @@
 
 ### 12-4. 주기적 운영 (당신 → Claude)
 1. ⚙️ 설정 → **🧾 SAP·AI 이슈 리포트**(관리자 비밀번호) → 군집·순위 확인 → **📤 내보내기**.
-2. Claude에게 "이슈 정리해줘" → `C:\SAP_DMS\SAP이슈\digest_<날짜>.json`을 읽고 군집별 원인 진단·수정 제안.
+2. Claude에게 "이슈 정리해줘" → `C:\SAP_DMS\이슈리포트\digest_<날짜>.json`을 읽고 군집별 원인 진단·수정 제안.
 3. 수정·반영 후 해당 군집의 **해결됨** 버튼 → 이후 같은 시그니처가 다시 나오면 🔁 재발 표시.
 - 수집을 즉시 끄기: 브라우저 콘솔에서 `localStorage.setItem('gantt_issue_collect_off','1')`.
 
@@ -235,7 +235,7 @@
 ### 12-6. 실운영 첫 결과와 후속 수정 (2026-09-21)
 - 실환경에서 첫 이벤트가 수집됨: SAP GUI가 꺼진 상태의 `/sap-fetch` 실패(COM -2147221020) → **수집 → Drive 샤드 → 리포트 → 내보내기 전 구간이 실제로 동작**함을 확인.
 - 이 사례로 두 가지를 고침: ① 하이픈 없는 10자리 숫자(COM 오류코드)가 `#biz`로 오마스킹되던 것 → 하이픈 형태(`123-45-67890`)만 `#biz`, 나머지는 `#` ② **사용자 환경 문제**(SAP 미실행/미로그인/스크립팅 미설정/32비트 런타임)를 "환경(코드 문제 아님)"으로 분류하고 순위 점수를 ×0.3로 낮춤(digest에 `isEnvIssue`).
-- 내보내기를 **로컬(`C:\SAP_DMS\SAP이슈\`, Claude가 읽는 파일) + Drive(`Backups/SAP_Issues/digest_<날짜>.json`, 팀 공용) 양쪽**에 저장(같은 날은 덮어쓰기, 한쪽 실패해도 다른 쪽 진행). 원본 이벤트 샤드는 처음부터 Drive에 있음.
+- 내보내기를 **로컬(`C:\SAP_DMS\이슈리포트\`, Claude가 읽는 파일) + Drive(`Backups/SAP_Issues/digest_<날짜>.json`, 팀 공용) 양쪽**에 저장(같은 날은 덮어쓰기, 한쪽 실패해도 다른 쪽 진행). 원본 이벤트 샤드는 처음부터 Drive에 있음.
 - **첫 "이슈 정리" 결과(2026-09-21, 이벤트 1건/군집 1개)**: `/sap-fetch` COM 오류 -2147221020 = 환경 이슈. 이 오류는 "SAP GUI 미실행"과 "실행 중이지만 스크립팅 꺼짐"에서 똑같이 나와 기존 안내(스크립팅 설정)가 전자에서 오안내였음 →
   `_sap_gui_process_running()`(tasklist에서 saplogon/sapgui/saplgpad 확인, 판정 불가면 True=기존 안내 유지)로 구분해 "SAP Logon을 실행해 로그인해주세요"를 따로 안내. 실패 경로에서만 동작(정상 조회 영향 없음). 실제 SAP가 꺼진 상태의 라이브 재현은 아직 안 함.
 - 원본 샤드가 Drive `Backups/SAP_Issues/issues_박용훈_202609.json`에 실제 생성된 것을 Drive 커넥터로 확인(폴더 부모 = `Backups`).
@@ -257,7 +257,7 @@ Claude는 Drive의 `_resolved.json` / `sap_learning.json`에 접근할 수 없�
 **판단은 Claude, 승인 클릭은 사람** — 기존 [해결]/[구현됨] 버튼의 일괄 버전이다.
 
 ```
-C:\SAP_DMS\SAP이슈esolved_patch.json
+C:\SAP_DMS\이슈리포트esolved_patch.json
 {
   "generatedBy": "Claude (Opus 5)", "generatedAt": "...", "source": "digest_20260923.json",
   "issues":   [{ "sig": "<군집 시그니처 그대로>", "note": "고친 내용 한 줄", "commit": "abc1234" }],
@@ -281,12 +281,12 @@ C:\SAP_DMS\SAP이슈esolved_patch.json
 **해결**: AI 문답 창 헤더에 🧾 버튼 추가(`js/04h` — 🔑/📝 버튼 옆). 관리자 비밀번호 확인 후 `js/31`의
 `loadAll()`(Drive 샤드 로드+군집) → `_issueExportDigest()`(기존 [📤 내보내기]와 완전히 같은 함수)를 그대로
 호출한다 — **새 수집/군집/저장 로직은 추가하지 않음**, 진입 경로만 하나 늘렸다. 산출물도 완전히 동일:
-로컬 `C:\SAP_DMS\SAP이슈\digest_<날짜>.json`(Claude가 읽는 파일, 이 경로는 JSON 유지 — TXT보다 구조화돼 있어
+로컬 `C:\SAP_DMS\이슈리포트\digest_<날짜>.json`(Claude가 읽는 파일, 이 경로는 JSON 유지 — TXT보다 구조화돼 있어
 Claude가 파싱하기 쉽고, 기존 파이프라인과도 100% 호환) + Drive `Backups/SAP_Issues/` 사본.
 
 **사용법**: AI 문답 창 🧾 클릭(관리자 비밀번호) → "AI 문답 디버깅 기록 확인해서 수정해줘" 같은 자연어로 Claude에게
 요청(고정된 명령어 불필요 — Claude가 자연어를 이해하므로 "이슈 정리해줘" 등 어떤 표현이든 무방). Claude는
-`C:\SAP_DMS\SAP이슈\` 안에서 가장 최근 `digest_*.json`을 찾아 읽고 군집별 원인을 진단한다.
+`C:\SAP_DMS\이슈리포트\` 안에서 가장 최근 `digest_*.json`을 찾아 읽고 군집별 원인을 진단한다.
 
 ### 🚩이 언제 보이는가 (2026-10-28, 사용자 문의)
 AI 문답 답변 말풍선 아래 👍/👎/🚩 줄은 다음 조건을 **모두** 만족할 때만 렌더링된다(`js/04g` `feedbackHtml`):

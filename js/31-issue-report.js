@@ -2,8 +2,9 @@
    Phase 10 — 이슈 리포트 (관리자 모달) (2026-09-21)
    설계: docs/phase10-issue-learning-design.md §6~§7
    - Drive `Backups/SAP_Issues/`의 사용자·월별 샤드를 모두 읽어 병합 → 결정론적 시그니처로 군집 → 순위.
-   - [내보내기]는 백엔드 /issue-export로 C:\SAP_DMS\SAP이슈\digest_<날짜>.json 에 저장(브라우저 다운로드 금지 원칙).
-     Claude에게 "이슈 정리해줘"라고 하면 그 파일을 읽어 원인 진단·수정을 진행한다.
+   - [내보내기]는 백엔드 /issue-export로 C:\SAP_DMS\이슈리포트\digest_<날짜>.json(+ 같은 이름 .md 요약) 에
+     저장(브라우저 다운로드 금지 원칙). Claude에게 "이슈 정리해줘"라고 하면 .json을 읽어 원인 진단·수정을
+     진행한다. .md는 사람이 직접 열어보기 위한 것(2026-10-28, "JSON은 사람이 못 본다" 피드백 반영).
    - 군집·순위 계산(_issueCluster)은 순수 함수라 화면과 분리돼 있다(테스트 가능).
    ════════════════════════════════════════════════════════════════════ */
 (function () {
@@ -186,6 +187,51 @@
             })
         };
     }
+    // 💡 [2026-10-28, 사용자 요청 "JSON은 사람이 못 본다"] digest와 완전히 같은 데이터를 사람이 바로
+    //    열어 읽을 수 있는 형태로도 만든다 — 새로 계산하지 않고 buildDigest()가 이미 만든 값만 그대로
+    //    옮겨 적는다(진단용 .json과 내용이 어긋날 일이 없음).
+    function fmtTs(ts) { try { return String(ts || '').replace('T', ' ').slice(0, 16); } catch (e) { return ts || ''; } }
+    function buildMarkdown(digest) {
+        var L = [];
+        L.push('# 🧾 이슈·버그 리포트 (' + (digest.generatedAt || '').slice(0, 10) + ')');
+        L.push('');
+        L.push('생성자: ' + (digest.generatedBy || '(미상)') + ' · 조회범위: 최근 ' + digest.range.months + '개월 · 원본 샤드 ' + digest.shards + '개 · 이벤트 ' + digest.totals.events + '건 · 군집 ' + digest.totals.clusters + '개');
+        L.push('');
+        L.push('> ' + digest.note);
+        L.push('');
+        L.push('---');
+        L.push('');
+        L.push('## 이슈/버그 군집 (발생 많고 최근 것, 영향 사용자 많은 순)');
+        (digest.clusters || []).forEach(function (c) {
+            var status = c.resolved ? (c.recurred ? '🔁 재발(이전 해결 ' + fmtTs(c.resolved.at) + ')' : '✅ 해결됨(' + fmtTs(c.resolved.at) + ')') : '🔲 미해결';
+            L.push('### ' + c.rank + '. ' + (c.layerHint || '미분류') + (c.isEnvIssue ? ' ⚠️환경' : ''));
+            L.push('- 구분: `' + [c.domain, c.kind, c.route].filter(Boolean).join(' / ') + '`' + (c.tcode ? ' · tcode `' + c.tcode + '`' : ''));
+            L.push('- 건수 ' + c.count + '건(최근14일 ' + c.recentCount + '건) · 영향 사용자 ' + c.users + '명 · 점수 ' + c.score + ' · 상태 ' + status);
+            L.push('- 최초 ' + fmtTs(c.first) + ' · 최근 ' + fmtTs(c.last));
+            if (c.errorNorm) L.push('- 내용: ' + c.errorNorm);
+            if (c.samples && c.samples.length) {
+                L.push('- 사례:');
+                c.samples.forEach(function (s) {
+                    var txt = s.errorRaw || (s.params && JSON.stringify(s.params)) || '';
+                    L.push('  - (' + (s.user || '?') + ', ' + fmtTs(s.ts) + ') ' + txt);
+                });
+            }
+            L.push('');
+        });
+        if (digest.learning && digest.learning.length) {
+            L.push('---');
+            L.push('');
+            L.push('## 학습 적립 (SAP/앱 기능 요청 등)');
+            digest.learning.forEach(function (c) {
+                L.push('### ' + c.rank + '. ' + (c.key || c.sig) + ' — ' + (c.status || 'new'));
+                L.push('- 요청 ' + (c.featureRequests || c.count) + '건 · 사용자 ' + c.users + '명 · 최초 ' + fmtTs(c.first) + ' · 최근 ' + fmtTs(c.last));
+                if (c.topCapability) L.push('- 가장 비슷한 기존 기능: ' + c.topCapability + (c.topCapabilityScore != null ? ' (유사도 ' + c.topCapabilityScore + ')' : ''));
+                if (c.hypothesis) L.push('- 가설: ' + c.hypothesis);
+                L.push('');
+            });
+        }
+        return L.join('\n');
+    }
     /** Drive 폴더 안의 같은 이름 파일을 갱신(없으면 생성) — digest를 하루 1개로 덮어쓴다. */
     async function driveUpsertJson(token, folderId, name, obj) {
         var files = await driveList(token, "name='" + name + "' and trashed=false and '" + folderId + "' in parents");
@@ -200,17 +246,20 @@
         }
         if (!r.ok) throw new Error('HTTP ' + r.status);
     }
-    /** 내보내기 — ① 로컬 C:\SAP_DMS\SAP이슈\(Claude가 읽는 파일) ② Google Drive Backups/SAP_Issues/(팀 공용). 한쪽이 실패해도 다른 쪽은 진행한다. */
+    /** 내보내기 — ① 로컬 C:\SAP_DMS\이슈리포트\(.json은 Claude가 읽는 파일, 같은 이름 .md는 사람이 읽는 요약)
+     *  ② Google Drive Backups/SAP_Issues/(팀 공용, .json만). 한쪽이 실패해도 다른 쪽은 진행한다. */
     window._issueExportDigest = async function () {
         var d = new Date(), p = function (n) { return n < 10 ? '0' + n : '' + n; };
         var fileName = 'digest_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
-        var digest = buildDigest(); digest.learning = learnDigest(); var localPath = null, localErr = null, driveOk = false, driveErr = null;
+        var digest = buildDigest(); digest.learning = learnDigest();
+        var markdown = buildMarkdown(digest);
+        var localPath = null, localMdPath = null, localErr = null, driveOk = false, driveErr = null;
         try {
-            var r = await fetch(API + '/issue-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: fileName, data: digest }) });
+            var r = await fetch(API + '/issue-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: fileName, data: digest, markdown: markdown }) });
             if ((r.headers.get('content-type') || '').indexOf('json') < 0) throw new Error(t('백엔드가 구버전이거나 꺼져 있습니다 — kortek_backend.bat을 다시 실행해주세요.', 'Backend is outdated or offline — restart kortek_backend.bat.'));
             var j = await r.json();
             if (!j.ok) throw new Error(j.error || 'export failed');
-            localPath = j.path;
+            localPath = j.path; localMdPath = j.mdPath;
         } catch (e) { localErr = e.message || String(e); }
         try {
             var token = getToken();
@@ -221,7 +270,7 @@
         } catch (e) { driveErr = e.message || String(e); }
         if (!localPath && !driveOk) { alert(t('내보내기 실패\n\n로컬: ', 'Export failed\nLocal: ') + localErr + '\nDrive: ' + driveErr); return; }
         var parts = [];
-        if (localPath) parts.push(t('로컬 ', 'Local ') + localPath);
+        if (localPath) parts.push(t('로컬 ', 'Local ') + localPath + (localMdPath ? t(' (+ 사람이 읽는 요약 .md 같이 저장, 폴더가 자동으로 열립니다)', ' (+ human-readable .md saved too, folder opens automatically)') : ''));
         if (driveOk) parts.push('Google Drive(Backups/SAP_Issues/' + fileName + ')');
         if (window.showToast) window.showToast(t('✅ 리포트 저장 — ', '✅ Report saved — ') + parts.join(' + ') + (localErr ? t(' (로컬 실패: ', ' (local failed: ') + localErr + ')' : '') + (driveErr ? t(' (Drive 실패: ', ' (Drive failed: ') + driveErr + ')' : ''), 'info');
     };
@@ -230,7 +279,8 @@
     //    모달을 열고 🔄 새로고침 → 📤 내보내기 두 단계를 거칠 필요 없이, AI 문답 창의 🧾 버튼 하나로
     //    로드+군집+내보내기까지 한 번에 끝낸다. 산출물은 openIssueReportModal의 [📤 내보내기]와 완전히
     //    같다(같은 loadAll/buildDigest/_issueExportDigest 재사용 — 로직 중복 없음) — 로컬
-    //    C:\SAP_DMS\SAP이슈\digest_<날짜>.json(Claude가 읽는 파일) + Drive Backups/SAP_Issues/ 사본.
+    //    C:\SAP_DMS\이슈리포트\digest_<날짜>.json(Claude가 읽는 파일, 같은 이름 .md는 사람이 읽는 요약)
+    //    + Drive Backups/SAP_Issues/ 사본.
     window._issueQuickExportFromQa = async function () {
         try {
             if (window.verifyAdminPassword && !window.verifyAdminPassword(t('🔒 디버깅 기록을 저장하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to save the debug log.\n(case-insensitive)'))) return;

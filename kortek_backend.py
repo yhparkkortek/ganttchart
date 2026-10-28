@@ -1848,7 +1848,7 @@ def _approval_group_name(matkl):
 # ══════════════════════════════════════════════════════════════
 _ISSUE_FILE        = os.path.join(BASE_DIR, 'issue_events.jsonl')
 _ISSUE_CURSOR_FILE = os.path.join(BASE_DIR, 'issue_events.cursor')
-_ISSUE_EXPORT_DIR  = r'C:\SAP_DMS\SAP이슈'
+_ISSUE_EXPORT_DIR  = r'C:\SAP_DMS\이슈리포트'   # 💡 [2026-10-28, 사용자 요청] "SAP이슈" → 범용 이름으로 변경(SAP 외 일반 버그 기록도 여기 쌓임). 저장 루트(C:\SAP_DMS)는 사용자가 2026-09-16 "SAP 관련 저장 경로는 C:\SAP_DMS로 통일" 요청대로 유지 — /sap-open-folder·/open-sap-folder의 "C:\SAP_DMS 하위만 허용" 제한과도 호환.
 _ISSUE_MAX_BYTES   = 5 * 1024 * 1024
 _ISSUE_SLOW_MS     = 60000
 _ISSUE_LOCK        = threading.Lock()
@@ -2077,8 +2077,11 @@ def issue_ack():
 
 @app.route('/issue-export', methods=['POST'])
 def issue_export():
-    """이슈 리포트(군집 요약 JSON)를 C:\\SAP_DMS\\SAP이슈\\ 에 저장 — 브라우저 다운로드가 아니라
-    서버 저장으로 다른 SAP 기능들과 저장 위치를 통일한다."""
+    """이슈 리포트(군집 요약 JSON + 사람이 읽는 .md 요약)를 C:\\SAP_DMS\\이슈리포트\\ 에 저장 —
+    브라우저 다운로드가 아니라 서버 저장으로 다른 SAP 기능들과 저장 위치를 통일한다.
+    💡 [2026-10-28, 사용자 요청 "사람이 못 보잖아"] JSON은 Claude가 읽기엔 좋지만 사람이 직접 열어보기엔
+    불편하다는 지적 — 같은 digest를 프런트(js/31)가 markdown으로도 만들어 보내면, 같은 폴더에 같은
+    파일명으로 .md를 나란히 저장한다(markdown 생략 시 .json만, 기존 호출부와 호환)."""
     try:
         body = request.get_json(silent=True) or {}
         data = body.get('data')
@@ -2091,11 +2094,17 @@ def issue_export():
         path = os.path.join(_ISSUE_EXPORT_DIR, name)
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=1)
+        md_path = None
+        markdown = body.get('markdown')
+        if markdown:
+            md_path = os.path.join(_ISSUE_EXPORT_DIR, os.path.splitext(name)[0] + '.md')
+            with open(md_path, 'w', encoding='utf-8') as f:
+                f.write(str(markdown))
         try:
             os.startfile(_ISSUE_EXPORT_DIR)
         except Exception:
             pass
-        return jsonify({'ok': True, 'path': path})
+        return jsonify({'ok': True, 'path': path, 'mdPath': md_path})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -2565,7 +2574,7 @@ SAP_FOLDER_REGISTRY = [
     {'key': 'approval', 'path': r'C:\SAP_DMS\승인원표지',    'label': '승인원 표지',                   'kw': ['승인원']},
     {'key': 'po',       'path': r'C:\SAP_DMS\구매오더',      'label': '발주서 / 구매오더',             'kw': ['발주서', '구매오더', 'po', '발주']},
     {'key': 'export',   'path': r'C:\SAP_DMS\SAP조회',       'label': 'SAP 조회 엑셀 내보내기',        'kw': ['엑셀', '조회', 'sap조회', '내보내기']},
-    {'key': 'issue',    'path': r'C:\SAP_DMS\SAP이슈',       'label': '이슈 리포트',                   'kw': ['이슈', '오류리포트', '학습리포트']},
+    {'key': 'issue',    'path': r'C:\SAP_DMS\이슈리포트',     'label': '이슈 리포트',                   'kw': ['이슈', '버그', '오류리포트', '학습리포트']},
     {'key': 'dump',     'path': r'C:\SAP_DMS\SAP_화면덤프',  'label': 'SAP 화면 덤프',                 'kw': ['덤프', '화면덤프', '트리덤프']},
 ]
 
