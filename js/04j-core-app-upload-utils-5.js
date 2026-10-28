@@ -5,6 +5,7 @@
         const oldVal = globalData[rowIndex][colIndex];
         logChange(rowIndex, colIndex, oldVal, newVal);
         globalData[rowIndex][colIndex] = newVal;
+        const affected = [rowIndex]; // 💡 [2026-10-28] 실제로 바뀐 행 번호를 돌려줘서 호출부가 그 행만 패치할 수 있게 함
         // 하위 행 순회 (현재 행보다 레벨이 높은 연속된 행들)
         const parentLevel = row._level || 0;
         for (let i = rowIndex + 1; i < globalData.length; i++) {
@@ -14,14 +15,52 @@
             const childOld = childRow[colIndex];
             logChange(i, colIndex, childOld, newVal);
             globalData[i][colIndex] = newVal;
+            affected.push(i);
+        }
+        return affected;
+    };
+
+    // 💡 [2026-10-28 버그 수정, "상태 설정 느림" 실사용 신고] 상태 변경은 클릭한 행(+하위가 있으면
+    //    그 하위)만 바뀌는데, renderTable()은 호출될 때마다 표 전체(최대 1000행, 차트 막대 포함)를
+    //    통째로 다시 그린다 — applyFilters()에서 이미 실측한 것과 같은 종류의 비용(표 전체 innerHTML
+    //    교체가 유발하는 브라우저 스타일/레이아웃 재계산)이 상태 하나 바꿀 때마다 반복됐다. 실제로
+    //    바뀐 행만 DOM에서 직접 고친다 — renderTable()의 상태→tr클래스/차트 변환과 반드시 같은 결과를
+    //    내도록 그 로직을 그대로 맞춰 재사용.
+    window._patchStatusRowDom = function(rowIndex) {
+        const row = globalData[rowIndex];
+        if (!row || colIdx.status === -1) return;
+        const tr = document.querySelector(`#table-body tr[data-row-index="${rowIndex}"]`);
+        if (!tr) return; // 필터로 숨겨진 행 등 — 다음 전체 렌더에서 자연히 맞음
+        const newVal = row[colIdx.status];
+
+        const statusTd = tr.querySelector('.status-td');
+        if (statusTd) {
+            statusTd.setAttribute('data-raw', encodeURIComponent(newVal));
+            const sel = statusTd.querySelector('select');
+            if (sel) sel.value = newVal;
+        }
+
+        tr.classList.remove('status-done', 'status-delay', 'status-pending');
+        const _rawSt = (newVal || '').toString().trim();
+        const _koMap = LANG['ko'].statusMap;
+        const _koKey = Object.keys(_koMap).find(k => k.toLowerCase() === _rawSt.toLowerCase());
+        const _normSt = (_koKey ? _koMap[_koKey] : _rawSt);
+        if (_normSt === '완료') tr.classList.add('status-done');
+        else if (_normSt === '지연' || _normSt === '보류') tr.classList.add('status-delay');
+        else if (_normSt === '대기') tr.classList.add('status-pending');
+
+        const chartTd = tr.querySelector('.chart-td');
+        if (chartTd && typeof createStatusChart === 'function') {
+            chartTd.innerHTML = createStatusChart(row._calcStartTs, row._calcPlanTs, newVal, row._level, window.getRowCompareInfo ? window.getRowCompareInfo(row) : null);
         }
     };
 
     window.setStatusDone = function(select, rowIndex, colIndex) {
         const oldVal = globalData[rowIndex][colIndex];
         if (oldVal === '완료') return;
-        window.applyStatusToChildren(rowIndex, colIndex, '완료');
-        renderTable(globalData); applyFilters();
+        const affected = window.applyStatusToChildren(rowIndex, colIndex, '완료');
+        affected.forEach(i => window._patchStatusRowDom(i));
+        applyFilters();
     };
 
     const LANG = {
@@ -1784,7 +1823,8 @@
                                 startBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
-                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${startBadge}`;
+                        const startSrcMark = row._isGroupStartSrc ? `<span title="${window._t('하위 업무 중 시작일이 가장 빠른 행', 'Earliest start among sub-tasks')}" style="font-size:9px; color:#2f9e44; font-weight:bold; margin-right:2px; vertical-align:middle;">S</span>` : '';
+                        tdHtml = `${startSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${startBadge}`;
                     } 
                     else if (cellIndex === colIdx.plan) { 
                         let tsArg = row._calcPlanTs || new Date().getTime();
@@ -1801,7 +1841,8 @@
                                 planBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
-                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${planBadge}`;
+                        const endSrcMark = row._isGroupEndSrc ? `<span title="${window._t('하위 업무 중 완료일이 가장 느린 행', 'Latest finish among sub-tasks')}" style="font-size:9px; color:#e03131; font-weight:bold; margin-right:2px; vertical-align:middle;">E</span>` : '';
+                        tdHtml = `${endSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${planBadge}`;
                         bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시

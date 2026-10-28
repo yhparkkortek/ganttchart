@@ -392,7 +392,10 @@
                 row._origT3 = curT3; if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = curT3;
                 row._origT4 = curT4; if (colIdx.taskType4 !== -1) row[colIdx.taskType4] = curT4;
                 if (colIdx.wbs !== -1 && colIdx.devStage === -1) row[colIdx.wbs] = curD0; // 💡 단일 WBS 열 모드: 0레벨 그룹명을 하위 행까지 다시 채워서 개발단계 필터가 최신 상태로 갱신되게 함
-                if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level; 
+                if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level;
+                // 🆕 [2026-10-28] 그룹 시작/완료일의 "근거 행" S/E 표시 — 매 재계산마다 초기화 후 scheduleNode에서 다시 세팅
+                row._isGroupStartSrc = false;
+                row._isGroupEndSrc = false;
             }
 
             generateFilters(globalData);
@@ -477,6 +480,9 @@
                 let minChildStart = null;
                 let groupStartTs = node.startTs;
                 let isFirstValid = true;
+                // 🆕 [2026-10-28] S/E 표시용 — 같은 날짜가 여러 행이면 시작(S)은 맨 위 행, 완료(E)는 맨 아래 행 하나만
+                let startSrcChild = null;
+                let endSrcChild = null;
 
                 for (let i = 0; i < node.children.length; i++) {
                     let child = node.children[i];
@@ -498,9 +504,13 @@
 
                     if (minChildStart === null || child.startTs < minChildStart) minChildStart = child.startTs;
                     if (maxChildEnd === null || child.endTs > maxChildEnd) maxChildEnd = child.endTs;
+                    if (startSrcChild === null || child.startTs < startSrcChild.startTs) startSrcChild = child; // 동일 최소값이면 먼저(맨 위) 온 행 유지
+                    if (endSrcChild === null || child.endTs >= endSrcChild.endTs) endSrcChild = child; // 동일 최대값이면 나중(맨 아래) 온 행으로 계속 교체
                     currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
                 }
                 node.endTs = (maxChildEnd !== null) ? maxChildEnd : node.startTs;
+                if (startSrcChild) startSrcChild.row._isGroupStartSrc = true;
+                if (endSrcChild) endSrcChild.row._isGroupEndSrc = true;
                 // 📐 [2026-10-27, 실사용 제보 "상위레벨 날짜가 같은레벨(형제 워터폴) 우선으로 계산된다"]
                 //    시작일도 종료일과 대칭으로 자식 기준 bottom-up이어야 한다 — 지금까지 node.startTs는
                 //    위(line 454)에서 "앞 형제한테서 물려받은" 값 그대로 남아있었다(자식이 실제로 그보다
