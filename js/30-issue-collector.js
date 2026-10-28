@@ -62,6 +62,16 @@
         } catch (e) { return ''; }
     }
     function newId() { return 'ev_' + Date.now().toString(16) + '_' + Math.random().toString(16).slice(2, 6); }
+    // 💡 [2026-10-28, 사용자 요청] 수동 버그 기록의 "자동 분류"용 — 지금 보고 있는 탭을 사람이 고르지
+    //    않아도 자동으로 붙인다. js/23 switchTab()이 남기는 DOM class(가장 정확, 숨은 모달 탭 포함)를
+    //    우선 보고, 없으면 같은 곳이 남기는 localStorage로 대체.
+    function currentTab() {
+        try {
+            var el = document.querySelector('.tab-panel.active');
+            if (el && el.id) return el.id.replace(/^tab-/, '');
+            return localStorage.getItem('gantt_active_tab') || '';
+        } catch (e) { return ''; }
+    }
     function getToken() {
         try {
             var tokenObj = window.gapi && gapi.client && gapi.client.getToken && gapi.client.getToken();
@@ -275,6 +285,25 @@
         } catch (e) { return null; }
     };
 
+    // 💡 [2026-10-28 신규, 사용자 요청] "SAP/AI 답변에 한정되지 않는" 독립형 버그 기록. _issueLogQa와
+    //    달리 uid(특정 답변)가 전혀 필요 없다 — 지금 이 순간 겪고 있는 문제를 자유 텍스트로 즉시 남긴다.
+    //    "자동 분류"는 새 로직을 만들지 않고 기존 결정론 군집(_issueCluster의 sigOf)을 그대로 태운다:
+    //    ① note를 result.errorRaw로 넣으면 _issueLog가 항상 하던 마스킹+정규화(errorNorm)가 그대로
+    //       적용돼 "비슷한 문구"끼리 자동으로 같은 시그니처로 묶이고, ② route에 "tab:<현재 탭>"을 넣어
+    //       "같은 화면에서 난 문제"끼리도 함께 묶인다 — 둘 다 신고 때 사람이 고를 필요가 없다.
+    window._issueLogBugReport = function (note, extra) {
+        try {
+            var x = extra || {};
+            var tab = x.tab || currentTab();
+            var rids = recentRids(10);
+            return window._issueLog({
+                domain: 'app', kind: 'bug_report', rid: rids.length ? rids[rids.length - 1] : '', route: tab ? ('tab:' + tab) : '',
+                params: { tab: tab, rids: rids },
+                result: { ok: false, errorRaw: note || '(내용 없음)' }
+            });
+        } catch (e) { return null; }
+    };
+
     function wrapWhenReady(name, wrapper, tries) {
         try {
             if (typeof window[name] === 'function') { window[name] = wrapper(window[name]); return; }
@@ -332,28 +361,42 @@
                 document.body.appendChild(modal);
                 if (window._makeDraggable) { try { window._makeDraggable('issue-report-box', 'issue-report-handle'); } catch (e) { /* ignore */ } }
             }
-            document.getElementById('issue-report-title').textContent = t('🚩 문제 신고', '🚩 Report a problem');
-            document.getElementById('issue-report-hint').textContent = t(
-                '어떤 점이 문제였나요? 짧게 적어주세요(선택). 자재번호 등 숫자·이메일은 저장 전에 자동으로 가려집니다. 팀 이슈 리포트에 반영됩니다.',
-                'What went wrong? A short note is enough (optional). Long numbers and emails are masked before saving. It will appear in the team issue report.');
+            // 💡 [2026-10-28] uid가 있으면(AI 답변 옆 🚩) 그 답변 전용 분류를 먼저 보여주고, uid가 없으면
+            //    (AI 문답 창 🐛 "지금 바로 기록" 버튼) 특정 답변을 가리킬 수 없으니 그 두 항목은 뺀다.
+            //    공통으로 🐛 일반 버그 항목을 추가 — 예전엔 "SAP 기능요청/SAP 외 연결요청"뿐이라 평범한
+            //    버그(화면 깨짐·계산 오류 등)를 적을 칸이 없었다.
+            document.getElementById('issue-report-title').textContent = uid ? t('🚩 문제 신고', '🚩 Report a problem') : t('🐛 버그/문제 기록', '🐛 Log a bug/problem');
+            document.getElementById('issue-report-hint').textContent = uid
+                ? t('어떤 점이 문제였나요? 짧게 적어주세요(선택). 자재번호 등 숫자·이메일은 저장 전에 자동으로 가려집니다. 팀 이슈 리포트에 반영됩니다.',
+                    'What went wrong? A short note is enough (optional). Long numbers and emails are masked before saving. It will appear in the team issue report.')
+                : t('지금 보고 있는 화면(탭)은 자동으로 같이 기록됩니다. 숫자·이메일은 저장 전에 자동으로 가려집니다. 팀 이슈 리포트에 반영됩니다.',
+                    'The screen (tab) you are currently on is recorded automatically. Long numbers/emails are masked before saving. It will appear in the team issue report.');
             document.getElementById('issue-report-note').value = '';
             var catEl = document.getElementById('issue-report-cat'), noteEl = document.getElementById('issue-report-note');
-            catEl.innerHTML = '<option value="flag">' + t('답변이 틀렸거나 이상함', 'The answer was wrong or odd') + '</option>' +
-                '<option value="route">' + t('질문을 잘못 이해함 (SAP/프로젝트/추론 분류)', 'Misunderstood the question type (SAP/project/general)') + '</option>' +
-                '<option value="feature">' + t('🏭 SAP에서 이것도 해줬으면 (새 기능 요청)', '🏭 Please add this SAP capability (feature request)') + '</option>' +
-                '<option value="app">' + t('🧩 SAP 외 새 기능 / 연결 요청 (예: 조회 결과를 메일·프로젝트·Gantt로 연결)', '🧩 New non-SAP feature / linking request (e.g. send lookup results by email, register to a project/Gantt)') + '</option>';
-            var setPh = function () { noteEl.placeholder = catEl.value === 'app' ? t('어떤 기능을 어떻게 연결하고 싶은지 적어주세요 — 예: SAP 조회 결과를 엑셀로 만들어 담당자에게 메일 발송, 조회한 자재를 Gantt 업무로 등록', 'What feature or link do you want? e.g. email the lookup Excel to a teammate, register looked-up materials as Gantt tasks') : catEl.value === 'feature' ? t('어느 화면(tcode)에서 어떻게 하시는지 적어주세요 — 예: MB51에서 자재번호로 이동내역 조회', 'Which screen (tcode) and steps? e.g. MB51 material movements by material') : ''; };
+            var bugOpt = '<option value="bug">' + t('🐛 버그/오류 (화면이 깨짐·계산이 틀림·반응 없음 등)', '🐛 Bug/problem (broken display, wrong calculation, unresponsive, etc.)') + '</option>';
+            var featureOpts = '<option value="feature">' + t('🏭 SAP에서 이것도 해줬으면 (새 기능 요청)', '🏭 Please add this SAP capability (feature request)') + '</option>' +
+                '<option value="app">' + t('🧩 새 기능 / 연결 요청 (예: 조회 결과를 메일·프로젝트·Gantt로 연결)', '🧩 New feature / linking request (e.g. send lookup results by email, register to a project/Gantt)') + '</option>';
+            catEl.innerHTML = (uid
+                ? '<option value="flag">' + t('이 답변이 틀렸거나 이상함', 'This answer was wrong or odd') + '</option>' +
+                  '<option value="route">' + t('질문을 잘못 이해함 (SAP/프로젝트/추론 분류)', 'Misunderstood the question type (SAP/project/general)') + '</option>'
+                : '') + bugOpt + featureOpts;
+            var setPh = function () { noteEl.placeholder = catEl.value === 'app' ? t('어떤 기능을 어떻게 연결하고 싶은지 적어주세요 — 예: SAP 조회 결과를 엑셀로 만들어 담당자에게 메일 발송, 조회한 자재를 Gantt 업무로 등록', 'What feature or link do you want? e.g. email the lookup Excel to a teammate, register looked-up materials as Gantt tasks') : catEl.value === 'feature' ? t('어느 화면(tcode)에서 어떻게 하시는지 적어주세요 — 예: MB51에서 자재번호로 이동내역 조회', 'Which screen (tcode) and steps? e.g. MB51 material movements by material') : catEl.value === 'bug' ? t('무엇을 하다가, 어떤 화면에서, 무슨 문제가 있었는지 적어주세요', 'What were you doing, on which screen, and what went wrong?') : ''; };
             catEl.onchange = setPh; setPh();
             document.getElementById('issue-report-cancel').textContent = t('취소', 'Cancel');
-            document.getElementById('issue-report-submit').textContent = t('신고', 'Report');
+            document.getElementById('issue-report-submit').textContent = uid ? t('신고', 'Report') : t('기록', 'Log it');
             document.getElementById('issue-report-cancel').onclick = function () { modal.style.display = 'none'; };
             document.getElementById('issue-report-submit').onclick = function () {
                 var note = document.getElementById('issue-report-note').value || '';
-                var kindMap = { flag: 'user_flag', route: 'route_wrong', feature: 'sap_feature_request', app: 'feature_request' };
-                window._issueLogQa(kindMap[catEl.value] || 'user_flag', { uid: uid, note: note, cat: catEl.value });
+                var cat = catEl.value;
                 modal.style.display = 'none';
+                if (cat === 'bug') {
+                    window._issueLogBugReport(note, { tab: currentTab() });
+                } else {
+                    var kindMap = { flag: 'user_flag', route: 'route_wrong', feature: 'sap_feature_request', app: 'feature_request' };
+                    window._issueLogQa(kindMap[cat] || 'user_flag', { uid: uid, note: note, cat: cat });
+                }
                 scheduleFlush(3000);
-                if (window.showToast) window.showToast(t('🚩 신고가 접수되었습니다. 팀 이슈 리포트에 반영됩니다.', '🚩 Reported. It will appear in the team issue report.'), 'info');
+                if (window.showToast) window.showToast(t('✅ 기록되었습니다. 팀 이슈 리포트에 반영됩니다.', '✅ Logged. It will appear in the team issue report.'), 'info');
             };
             modal.style.display = 'block';
             if (window.bringModalToFront) window.bringModalToFront('issue-report-modal');

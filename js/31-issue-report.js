@@ -47,6 +47,7 @@
         if (c.snapshot && c.snapshot.windows >= 2) return t('③ 코드: 팝업 잔존 처리', '③ code: leftover popup');
         if (/찾지 못|없습니다|필드|컨트롤/.test(n)) return t('③ 코드: 필드/컨트롤 탐색', '③ code: field/control lookup');
         if (c.kind === 'reaction') return t('② 프롬프트/UX', '② prompt/UX');
+        if (c.kind === 'bug_report') return t('🐛 사용자 직접 기록(①②③ 중 사람이 판단)', '🐛 User-logged bug (human judges ①/②/③)');
         return t('미분류(사람이 판단)', 'Unclassified');
     }
     /** events → 순위가 매겨진 군집 배열. resolved = {sig: {at, note}} */
@@ -624,7 +625,7 @@
                 if (window._makeDraggable) { try { window._makeDraggable('issue-rpt-box', 'issue-rpt-handle'); } catch (e) { /* ignore */ } }
                 if (window._bindClickToFront) { try { window._bindClickToFront('issue-rpt-modal'); } catch (e) { /* ignore */ } }
             }
-            document.getElementById('issue-rpt-title').textContent = t('🧾 SAP·AI 문답 이슈 리포트', '🧾 SAP / AI Q&A Issue Report');
+            document.getElementById('issue-rpt-title').textContent = t('🧾 이슈·버그 리포트 (SAP·AI 문답·앱 전반)', '🧾 Issue/Bug Report (SAP · AI Q&A · app-wide)');
             document.getElementById('issue-rpt-reload').textContent = t('🔄 새로고침', '🔄 Reload');
             document.getElementById('issue-rpt-export').textContent = t('📤 내보내기', '📤 Export');
             document.getElementById('issue-rpt-patch').textContent = t('📥 처리결과 반영', '📥 Apply patch');
