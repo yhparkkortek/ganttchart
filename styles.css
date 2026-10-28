@@ -387,12 +387,16 @@
        이기도록 함. */
     #myTable tbody tr.gantt-zebra-b.parent-row td { background: #fff8e6 !important; }
 
-    /* 🖱️ [2026-10-28 신규] 업무 행 드래그 재배치 — js/04e-core-app-undo-redo.js _gdDrag* 참고.
+    /* 🖱️ [2026-10-28 신규 → 3차 수정에서 네이티브 HTML5 드래그 폐기, 마우스 이벤트로 교체]
+       업무 행 드래그 재배치 — js/04i-core-app-upload-utils-4.js moveRow 바로 아래 IIFE 참고.
        td에 이미 border:1px !important가 있어(391행) tr에 직접 주는 border는 안 보이므로 td에 건다.
        outline이 아니라 border-top/bottom만 쓰는 이유: outline은 네 변 전체만 가능해 위/아래를
        구분 못함(드롭 위치가 "이 행 위"인지 "이 행 아래"인지 알려줘야 함). */
     .no-td .row-drag-handle { cursor: grab; }
     .no-td .row-drag-handle:active { cursor: grabbing; }
+    /* 드래그가 실제로 시작되면(mousemove가 임계값을 넘으면) body에 이 클래스가 붙는다 — 마우스가
+       손잡이를 벗어나 다른 행 위로 가도 grabbing 커서 유지 + 드래그 중 본문 텍스트가 선택되는 것 방지. */
+    body.gantt-row-drag-active, body.gantt-row-drag-active * { cursor: grabbing !important; user-select: none !important; }
     #myTable tbody tr.gantt-row-dragging td { opacity: 0.4; }
     #myTable tbody tr.gantt-drop-before td { border-top: 3px solid #1971c2 !important; }
     #myTable tbody tr.gantt-drop-after td { border-bottom: 3px solid #1971c2 !important; }

@@ -1122,21 +1122,18 @@ window.deleteHistoryByDateRange = function() {
             for (let j = anchor + 1; j < rows.length; j++) { if (_lvOf(rows[j]) > draggedLevel) anchorEnd = j; else break; }
             return { anchor: anchor, anchorEnd: anchorEnd };
         }
-        function _rowFromEvent(ev) {
-            const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-row-index]') : null;
-            if (!tr) return null;
-            const idx = parseInt(tr.dataset.rowIndex, 10);
-            return isNaN(idx) ? null : { tr: tr, idx: idx };
-        }
+        // 🐛 [2026-10-28 버그 수정 3차, 실사용 제보 "그래도 느림 / 직접 해봤어?"] 네이티브 HTML5
+        //    드래그(dragstart/dragover/drop)를 완전히 버리고 마우스 이벤트(mousedown/mousemove/
+        //    mouseup)로 직접 구현한다. 1·2차 수정(rAF 스로틀, 같은 행이면 재계산 생략)은 전부
+        //    JS 핸들러 쪽만 고친 것이었는데, 네이티브 드래그는 그 핸들러 바깥에서 **브라우저 자체가**
+        //    드래그 고스트 이미지 생성·커서 합성 등을 계속 돌린다 — 이건 JS에서 전혀 손댈 수 없는
+        //    비용이라 1·2차 수정으로는 원천적으로 못 줄였다(합성 DragEvent로 시뮬레이션한 이전 검증은
+        //    이 비용 자체가 빠진 반쪽짜리 테스트였음 — 실제 브라우저 드래그를 직접 켜본 적이 없었다).
+        //    마우스 이벤트는 순수하게 이 코드가 전부 제어하므로 그런 숨은 비용이 없다.
+        let _pendingSrcIdx = null, _dragActive = false, _downX = 0, _downY = 0;
+        const DRAG_THRESHOLD = 4; // px — 손잡이를 살짝 누르기만 해도 드래그가 시작되는 것 방지
 
-        document.addEventListener('dragstart', function(ev) {
-            const handle = ev.target.closest && ev.target.closest('.row-drag-handle');
-            if (!handle) return;
-            const tr = handle.closest('tr[data-row-index]');
-            const idx = tr ? parseInt(tr.dataset.rowIndex, 10) : NaN;
-            if (isNaN(idx) || !globalData[idx]) { ev.preventDefault(); return; }
-
-            // Ctrl/Shift로 여러 행이 선택돼 있고 그 중 하나를 끄는 경우 — 선택된 행 전부를 같이 옮긴다
+        function _beginDrag(idx) {
             const sel = window._selectedRows;
             const srcIndices = (sel && sel.size >= 2 && sel.has(idx)) ? Array.from(sel) : [idx];
             const expanded = _expandBlocks(srcIndices);
@@ -1145,90 +1142,97 @@ window.deleteHistoryByDateRange = function() {
             // 으로 맞춰야 할지 애매해서 1차 범위(같은 레벨만) 밖. 기존 화살표 버튼은 그대로 쓸 수 있음.
             const sameLevel = srcIndices.every((i) => _lvOf(globalData[i]) === level);
             if (!sameLevel) {
-                ev.preventDefault();
                 if (window.showToast) window.showToast(window._t(
                     '⚠️ 서로 다른 레벨이 섞여 있으면 드래그 이동을 지원하지 않습니다 — 화살표 버튼을 이용해주세요.',
                     '⚠️ Drag reorder is not supported when the selection mixes levels — use the move buttons instead.'
                 ), 'warning');
-                return;
+                return false;
             }
-
             _dragSrcIndices = expanded; _dragLevel = level;
-            ev.dataTransfer.effectAllowed = 'move';
-            try { ev.dataTransfer.setData('text/plain', String(idx)); } catch (e) {} // Firefox 호환용
+            document.body.classList.add('gantt-row-drag-active'); // 커서·텍스트선택 차단(styles.css)
             _dragSrcIndices.forEach(function(i) {
                 const r = document.querySelector('#table-body tr[data-row-index="' + i + '"]');
                 if (r) r.classList.add('gantt-row-dragging');
             });
-        });
-
-        // 🐛 [2026-10-28 버그 수정 2차, 실사용 제보 "그래도 느림 — 이동 중엔 UI만 움직이고 연산은
-        //    나중에 하면 더 빠르지 않을까"] requestAnimationFrame(1차 수정)만으로는 부족했다 — 초당
-        //    60번으로 줄었어도, 매 프레임 "레이아웃 읽기(getBoundingClientRect) → 쓰기(classList)"를
-        //    반복하면 그 다음 프레임의 읽기가 직전 프레임의 쓰기 때문에 다시 레이아웃을 강제한다
-        //    (read-after-write가 프레임마다 반복 = 사실상 매 프레임 리플로우, 스로틀은 "몇 번" 줄였을
-        //    뿐 "읽기-직후-쓰기"라는 패턴 자체는 그대로였다). 진짜 해결책은 사용자 제안대로 **커서가
-        //    가리키는 행이 바뀔 때만** 다시 계산하는 것 — 네이티브 드래그는 ev.target이 이미 "지금
-        //    커서 아래 있는 행"을 공짜로 알려주므로(브라우저가 히트테스트를 대신 해줌), 그 행이 직전
-        //    프레임과 같으면(= 같은 행 안에서 커서만 움직임) 레이아웃 읽기·classList 쓰기를 **아예
-        //    건너뛴다**. 같은 행 안에서 위/아래 절반을 더 정밀하게 구분 못 하게 되는 대가를 치르지만,
-        //    "드래그 내내 매 프레임 리플로우"가 없어지는 게 체감 성능에 훨씬 크다.
-        let _dragRafPending = false, _dragPendingY = 0, _dragPendingTarget = null;
-        function _processDragOverFrame() {
-            _dragRafPending = false;
-            if (!_dragSrcIndices || !_dragPendingTarget) return;
-            const tr = _dragPendingTarget.closest ? _dragPendingTarget.closest('tr[data-row-index]') : null;
-            if (!tr) { _clearDropHighlight(); return; }
-            if (tr === _lastOverTr) return; // 같은 행 안 — 레이아웃 재계산·DOM 쓰기 자체를 건너뜀
-            const idx = parseInt(tr.dataset.rowIndex, 10);
-            if (isNaN(idx)) { _clearDropHighlight(); return; }
-
-            const rect = tr.getBoundingClientRect(); // 이 행에 처음 들어온 프레임에서만 1회
-            const before = (_dragPendingY - rect.top) < rect.height / 2;
-            const anchorInfo = _findAnchor(idx, _dragLevel);
-            const cls = anchorInfo ? (before ? 'gantt-drop-before' : 'gantt-drop-after') : 'gantt-drop-invalid';
-            _clearDropHighlight();
-            tr.classList.add(cls);
-            _lastOverTr = tr; _lastOverCls = cls;
+            return true;
         }
-        document.addEventListener('dragover', function(ev) {
-            if (!_dragSrcIndices) return;
-            ev.preventDefault(); // 막아야 drop 이벤트가 옴 — 매 틱 동기 호출 필수(여기만)
-            ev.dataTransfer.dropEffect = 'move'; // 정확한 값(move/none)은 다음 프레임에 갱신됨 — 한 프레임 지연은 무해
-            _dragPendingY = ev.clientY;
-            _dragPendingTarget = ev.target;
-            if (_dragRafPending) return;
-            _dragRafPending = true;
-            requestAnimationFrame(_processDragOverFrame);
-        });
 
-        document.addEventListener('drop', function(ev) {
-            if (!_dragSrcIndices) return;
-            ev.preventDefault();
-            const hit = _rowFromEvent(ev);
-            _clearDropHighlight();
-            const srcIndices = _dragSrcIndices, draggedLevel = _dragLevel;
-            _dragSrcIndices = null; _dragLevel = null;
-            if (!hit) return;
-
-            const rect = hit.tr.getBoundingClientRect();
-            const before = (ev.clientY - rect.top) < rect.height / 2;
-            const anchorInfo = _findAnchor(hit.idx, draggedLevel);
-            if (!anchorInfo) return; // 유효하지 않은 자리 — 아무 것도 안 함
-
-            const moved = window._dragReorderRows(srcIndices, anchorInfo, before);
-            if (moved) window.recalculateSchedules();
-        });
-
-        document.addEventListener('dragend', function() {
+        function _endDrag(doMove, finalTr, finalClientY) {
+            document.body.classList.remove('gantt-row-drag-active');
             if (_dragSrcIndices) {
                 _dragSrcIndices.forEach(function(i) {
                     const r = document.querySelector('#table-body tr[data-row-index="' + i + '"]');
                     if (r) r.classList.remove('gantt-row-dragging');
                 });
             }
-            _dragSrcIndices = null; _dragLevel = null;
             _clearDropHighlight();
+            const srcIndices = _dragSrcIndices, draggedLevel = _dragLevel;
+            _dragSrcIndices = null; _dragLevel = null;
+
+            if (!doMove || !finalTr) return;
+            const idx = parseInt(finalTr.dataset.rowIndex, 10);
+            if (isNaN(idx)) return;
+            const rect = finalTr.getBoundingClientRect(); // 끝에 1회만 — 핫패스 아님
+            const before = (finalClientY - rect.top) < rect.height / 2;
+            const anchorInfo = _findAnchor(idx, draggedLevel);
+            if (!anchorInfo) return; // 유효하지 않은 자리 — 아무 것도 안 함
+            const moved = window._dragReorderRows(srcIndices, anchorInfo, before);
+            if (moved) window.recalculateSchedules();
+        }
+
+        // 1·2차 수정에서 확인된 핵심 — 레이아웃 읽기(getBoundingClientRect)는 **커서가 가리키는
+        // 행이 바뀔 때만** 하고, requestAnimationFrame으로 초당 최대 60번까지만 처리한다. 이번엔
+        // 네이티브 드래그 자체의 숨은 비용이 없으니 이 두 가지만으로 충분히 가벼워야 정상이다.
+        let _rafPending = false, _pendingY = 0, _pendingTarget = null;
+        function _processMoveFrame() {
+            _rafPending = false;
+            if (!_dragSrcIndices || !_pendingTarget) return;
+            const tr = _pendingTarget.closest ? _pendingTarget.closest('tr[data-row-index]') : null;
+            if (!tr) { _clearDropHighlight(); return; }
+            if (tr === _lastOverTr) return; // 같은 행 안 — 레이아웃 재계산·DOM 쓰기 자체를 건너뜀
+            const idx = parseInt(tr.dataset.rowIndex, 10);
+            if (isNaN(idx)) { _clearDropHighlight(); return; }
+
+            const rect = tr.getBoundingClientRect(); // 이 행에 처음 들어온 프레임에서만 1회
+            const before = (_pendingY - rect.top) < rect.height / 2;
+            const anchorInfo = _findAnchor(idx, _dragLevel);
+            const cls = anchorInfo ? (before ? 'gantt-drop-before' : 'gantt-drop-after') : 'gantt-drop-invalid';
+            _clearDropHighlight();
+            tr.classList.add(cls);
+            _lastOverTr = tr; _lastOverCls = cls;
+        }
+
+        document.addEventListener('mousedown', function(ev) {
+            if (ev.button !== 0) return; // 좌클릭만
+            const handle = ev.target.closest && ev.target.closest('.row-drag-handle');
+            if (!handle) return;
+            const tr = handle.closest('tr[data-row-index]');
+            const idx = tr ? parseInt(tr.dataset.rowIndex, 10) : NaN;
+            if (isNaN(idx) || !globalData[idx]) return;
+            ev.preventDefault(); // 텍스트 선택 등 기본 동작 방지
+            _pendingSrcIdx = idx; _downX = ev.clientX; _downY = ev.clientY; _dragActive = false;
+        });
+
+        document.addEventListener('mousemove', function(ev) {
+            if (_pendingSrcIdx === null) return;
+            if (!_dragActive) {
+                if (Math.abs(ev.clientX - _downX) < DRAG_THRESHOLD && Math.abs(ev.clientY - _downY) < DRAG_THRESHOLD) return;
+                _dragActive = _beginDrag(_pendingSrcIdx);
+                if (!_dragActive) { _pendingSrcIdx = null; return; }
+            }
+            _pendingY = ev.clientY; _pendingTarget = ev.target;
+            if (_rafPending) return;
+            _rafPending = true;
+            requestAnimationFrame(_processMoveFrame);
+        });
+
+        document.addEventListener('mouseup', function(ev) {
+            if (_pendingSrcIdx === null) return;
+            if (_dragActive) {
+                const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-row-index]') : null;
+                _endDrag(true, tr, ev.clientY);
+            }
+            _pendingSrcIdx = null; _dragActive = false;
         });
     })();
 
