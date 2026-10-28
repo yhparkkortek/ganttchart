@@ -173,12 +173,31 @@
         }
     }
 
+    // 💡 [2026-10-28, 사용자 지적 "다른 AI 모델에게 디버깅을 요청하면 상황이 달라지는거 아닌가"]
+    //    처리결과 되먹임(resolved_patch.json)은 지금까지 CLAUDE.md/docs에만 적힌 규약이라, 이 저장소
+    //    맥락이 없는 AI(다른 세션의 Claude 포함·다른 모델·채팅창에 파일 내용만 붙여넣어진 경우)는 이
+    //    규약 자체를 모른다 — 알아서 되먹임이 안 되고, 사람이 매번 "이것도 적어줘"라고 다시 알려줘야
+    //    했다. **규약을 외부 문서가 아니라 digest 데이터 자체에 실어서** 어떤 AI가 이 파일을 읽든(파일
+    //    접근 권한이 있든 없든) 같은 폴더에 resolved_patch.json을 만들면 된다는 것과 정확한 스키마를
+    //    바로 알 수 있게 한다. 파일을 못 쓰는 AI(채팅에 내용만 붙여넣어진 경우)를 위한 대안도 명시 —
+    //    "이 시그니처들을 고쳤다"고 사람에게 말해주면, 사람이 리포트 화면에서 직접 [해결됨]을 누르는
+    //    경로는 어떤 AI가 진단했든 항상 동작한다(기존에도 있던 버튼, 새로 안 만듦).
+    var HOW_TO_REPORT_FIX = {
+        summary: '이 파일을 분석해 군집(클러스터)의 원인을 찾아 고쳤다면, 아래 스키마로 "resolved_patch.json"을 만들어 이 digest 파일과 같은 폴더에 저장하세요. 어떤 AI 모델을 쓰든 상관없이 이 규약을 그대로 따르면 됩니다.',
+        fileName: 'resolved_patch.json', saveLocation: '이 digest 파일(.json)과 같은 폴더',
+        schema: { generatedBy: '<이 작업을 한 AI 모델 이름>', generatedAt: '<ISO 시각>', source: '<이 digest 파일명>',
+            issues: [{ sig: '<고친 군집의 sig 값을 clusters[].sig에서 그대로 복사>', note: '<고친 내용 한 줄 요약>', commit: '<관련 git 커밋 해시(있다면)>' }] },
+        afterSaving: '사람이 앱의 "🧾 이슈·버그 리포트" 모달 → [📥 처리결과 반영]에서 이 파일을 선택하면, 미리보기 후 한 번에 Drive의 _resolved.json에 반영됩니다. 그 이후 같은 sig가 다시 발생하면 자동으로 "재발(recurred)"로 표시됩니다.',
+        ifYouCannotWriteFiles: '파일을 직접 쓸 수 없는 환경(예: 채팅창에 내용만 붙여넣어진 경우)이라면, 위 스키마의 JSON을 답변에 그대로 출력해서 사람이 직접 파일로 저장하게 하거나, 더 간단히는 "이 sig는 해결됨"이라고 말로 알려주면 사람이 리포트 화면에서 해당 군집의 [해결됨] 버튼을 직접 눌러도 됩니다 — 이 경로는 어떤 AI가 진단했든 항상 동작합니다.',
+        important: 'git 커밋 이력은 "무엇을 왜 고쳤는지"는 남기지만 이 이슈 리포트의 재발 감지와는 별개입니다 — resolved_patch.json을 적용하거나 [해결됨] 버튼을 누르지 않으면, 코드를 고쳤어도 이 리포트에는 계속 "미해결"로 남습니다.'
+    };
     // ── 내보내기 (Claude가 읽는 digest) ────────────────────────────────
     function buildDigest() {
         return {
             generatedAt: new Date().toISOString(), generatedBy: window.currentUserName || '', range: { months: LOAD_MONTHS }, shards: _state.shardCount || 0,
             totals: { events: _state.events.length, clusters: _state.clusters.length },
             note: '이벤트는 마스킹됨(자재/사업자/메일/사용자경로). 스냅샷은 화면 구조만(필드 값 없음). resolved.at 이후 재발 여부는 recurred.',
+            howToReportFix: HOW_TO_REPORT_FIX,
             clusters: _state.clusters.map(function (c, i) {
                 return { rank: i + 1, sig: c.sig, kind: c.kind, domain: c.domain, route: c.route, stage: c.stage, errorNorm: c.errorNorm, tcode: c.tcode,
                     count: c.count, recentCount: c.recentCount, users: c.userCount, first: c.first, last: c.last, score: Math.round(c.score * 10) / 10,
@@ -199,6 +218,17 @@
         L.push('');
         L.push('> ' + digest.note);
         L.push('');
+        if (digest.howToReportFix) {
+            var h = digest.howToReportFix;
+            L.push('## 🤖 AI에게 — 디버깅 결과를 다시 기록하는 방법');
+            L.push(h.summary);
+            L.push('- 저장 위치: ' + h.saveLocation + ' · 파일명: `' + h.fileName + '`');
+            L.push('- 스키마: `' + JSON.stringify(h.schema) + '`');
+            L.push('- 저장 후: ' + h.afterSaving);
+            L.push('- 파일을 못 쓰는 경우: ' + h.ifYouCannotWriteFiles);
+            L.push('- ⚠️ ' + h.important);
+            L.push('');
+        }
         L.push('---');
         L.push('');
         L.push('## 이슈/버그 군집 (발생 많고 최근 것, 영향 사용자 많은 순)');
