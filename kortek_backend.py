@@ -659,6 +659,8 @@ def _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
         for i in range(num_messages, num_messages - limit, -1):
             try:
                 status, item = _mail_parse_entry(
+                    # 💡 파싱은 LF로 붙인 그대로 둔다(추출 본문의 줄바꿈이 바뀌면 다른 기능에 번진다).
+                    #    NAS에 보관할 .eml 만 _stage_raw_mail 이 CRLF로 바꿔 쓴다(2026-10-28 아웃룩 한글 깨짐).
                     b"\n".join(M.retr(i)[1]), mail_user, start_dt, end_dt,
                     keyword, keyword_from, keyword_body, stage_dir)
                 if status == 'old':
@@ -5153,18 +5155,48 @@ def _mail_stage_key(file_name):
     return base or 'mail'
 
 
+def _eml_crlf(raw):
+    """.eml 바이트의 줄바꿈을 CRLF로 맞춘다(이미 CRLF인 줄은 그대로).
+
+    ⚠️ [2026-10-28] 2026-10-22~28에 보관된 .eml 은 전부 LF뿐이었다(POP3 줄을 LF로 붙였음).
+       아웃룩은 그런 파일의 quoted-printable 이음표(`=`+줄바꿈)를 풀지 못해 `=EC`, `=nbsp;` 같은
+       조각이 남고 한글이 깨진다. 첨부는 base64(글자)라 줄바꿈을 바꿔도 내용이 안 변한다."""
+    return re.sub(rb'\r?\n', b'\r\n', raw or b'')
+
+
+def _eml_heal_file(path):
+    """LF뿐인 보관 .eml 을 그 자리에서 CRLF로 고친다(열기 직전에 부른다). 고쳤으면 True.
+    임시 파일에 쓰고 바꿔치기해서, 도중에 실패해도 원본이 반쯤 쓰인 채 남지 않는다."""
+    try:
+        with open(path, 'rb') as f:
+            raw = f.read()
+        fixed = _eml_crlf(raw)
+        if fixed == raw:
+            return False
+        tmp = path + '.crlf.tmp'
+        with open(tmp, 'wb') as f:
+            f.write(fixed)
+        os.replace(tmp, path)
+        return True
+    except Exception as e:
+        print(f'[메일보관] CRLF 교정 실패(원본 그대로 엶): {path} · {e}')
+        return False
+
+
 def _stage_raw_mail(stage_dir, file_name, raw):
     """원본 .eml을 staging에 저장. 이미 있으면 건너뛴다. 실패해도 예외를 올리지 않는다."""
     if not stage_dir or not raw:
         return None
     try:
         key = _mail_stage_key(file_name)
-        h = hashlib.sha1(raw).hexdigest()[:8]      # 같은 날·같은 제목 충돌 방지
+        # 같은 날·같은 제목 충돌 방지. 해시는 **줄바꿈을 LF로 맞춘 내용**으로 낸다 — CRLF로 바꾼 뒤에도
+        # 같은 메일이면 예전(LF 시절) 파일과 이름이 같아야 중복 보관이 안 생긴다.
+        h = hashlib.sha1(raw.replace(b'\r\n', b'\n')).hexdigest()[:8]
         name = f'{key}__{h}.eml'
         path = os.path.join(stage_dir, name)
         if not os.path.exists(path):
             with open(path, 'wb') as f:
-                f.write(raw)
+                f.write(_eml_crlf(raw))
         return name
     except Exception as e:
         print(f'[메일보관] staging 저장 실패(무시): {e}')
@@ -5342,8 +5374,9 @@ def doc_mail_open():
     d, n = _mail_find_file(cfg, request.args.get('fileName') or '')
     if not n:
         return jsonify({'ok': False, 'error': '보관된 원본 .eml을 찾지 못했습니다.'}), 404
-    return send_file(os.path.join(_docstore_mail_root(cfg), d, n),
-                     mimetype='message/rfc822', as_attachment=True, download_name=n)
+    path = os.path.join(_docstore_mail_root(cfg), d, n)
+    _eml_heal_file(path)   # LF뿐인 옛 보관본이면 CRLF로 고쳐서 내려준다(아웃룩 한글 깨짐)
+    return send_file(path, mimetype='message/rfc822', as_attachment=True, download_name=n)
 
 
 def _mail_attachment_parts(msg):
@@ -5466,6 +5499,7 @@ def doc_mail_launch():
     path = os.path.join(_docstore_mail_root(cfg), d, n)
     if not os.path.isfile(path) or not n.lower().endswith('.eml'):
         return jsonify({'ok': False, 'error': '열 수 있는 .eml이 아닙니다.'}), 400
+    _eml_heal_file(path)   # LF뿐인 옛 보관본이면 CRLF로 고쳐서 연다(아웃룩 한글 깨짐)
     try:
         os.startfile(path)          # noqa: S606 — 위에서 MAIL 폴더 안 .eml 로 한정했다
     except Exception as e:
