@@ -253,7 +253,11 @@
     // ── ZMM009 조회 결과 표(패턴 조회·자재코드 복수 조회 공용) ───────────
     // 백엔드 `_ZMM009_PATTERN_COLS`가 돌려주는 구조화 컬럼을 그대로 렌더링한다. 두 경로가
     // 같은 표를 쓰므로 컬럼을 바꿀 때 여기 한 곳만 고치면 된다.
-    function renderMatRows(rows) {
+    // 🐛 [2026-10-28 버그 수정, 실사용 제보 "엑셀도 150건만 보여줌"] exportRows 추가 — 표에는 여전히
+    //    (보통 잘라낸) rows만 그리지만, "엑셀로 열기" 버튼은 exportRows(생략 시 rows)를 통째로 저장한다.
+    //    예전엔 호출부가 잘라낸 표시용 rows를 그대로 _qaMatRowsStore에 넣어서, 화면 150건 제한이
+    //    엑셀 파일까지 그대로 옮겨붙었다 — 채팅 표는 보기 편하게 자르더라도 엑셀은 자를 이유가 없다.
+    function renderMatRows(rows, exportRows) {
         var _esc = function (v) { return (v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
         var _tr = function (v, n) { var s = v || ''; return s.length > n ? s.slice(0, n) + '…' : s; };
         var _unitPrice = function (stprs, peinh) {
@@ -295,7 +299,7 @@
         //    AI 재호출도 SAP 재조회도 없다(BOM 쪽은 입력창에 명령을 넣어 다시 보내는 방식).
         var exId = 'matrows_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
         window._qaMatRowsStore = window._qaMatRowsStore || {};
-        window._qaMatRowsStore[exId] = rows;
+        window._qaMatRowsStore[exId] = exportRows || rows;
         tbl += '<div style="margin-top:5px; text-align:right;">'
             + '<button onclick="window._sapExportMatRows(\'' + exId + '\')" '
             + 'style="font-size:11.5px; padding:3px 10px; border:1px solid #bbb; border-radius:4px; background:#f5f7fa; cursor:pointer;">📊 '
@@ -423,16 +427,23 @@
             pushAi(reply, question, route);
         } else {
             // 행을 클릭하면 조회 기능 선택 드롭다운이 표시되는 인터랙티브 표
-            var shown = list.slice(0, 150);
+            // 🐛 [2026-10-28 버그 수정, 실사용 제보 "실제 DATA 대비 적은 수량만 보여주네 / 엑셀도
+            //    150건만 보여주고"] 채팅 표는 너무 길면 스크롤이 불편해 여전히 자르지만(500건 —
+            //    기존 150은 160건짜리 평범한 조회도 잘릴 만큼 낮았다. 이 표는 차트/대량 DOM 조작이
+            //    없는 평범한 <tr> 나열이라 500건도 1000행 간트표 재렌더(c8edee5 실측)보다 훨씬 가볍다),
+            //    "엑셀로 열기"는 renderMatRows의 두 번째 인자로 **잘리지 않은 전체 list**를 넘겨 자른
+            //    적이 없는 것처럼 전부 내보낸다.
+            var _MAT_SHOW_CAP = 500;
+            var shown = list.slice(0, _MAT_SHOW_CAP);
             cacheDesc(list);
             var hdr = '<div style="font-size:12px; margin-bottom:6px;">🔎 '
                 + T('자재내역 "' + pattern + '" 패턴 매치 ' + list.length + '건', 'Description pattern "' + pattern + '" matched ' + list.length + ' material(s)')
-                + (list.length > shown.length ? ' ' + T('(150건만 표시)', '(first 150 shown)') : '')
+                + (list.length > shown.length ? ' ' + T('(화면엔 ' + _MAT_SHOW_CAP + '건만 표시 — 엑셀은 전체 포함)', ' (showing first ' + _MAT_SHOW_CAP + ' — Excel export includes all)') : '')
                 + '</div>'
                 + '<div style="font-size:11px; color:#5577aa; margin-bottom:5px;">💡 '
                 + T('행을 클릭하면 조회 기능을 선택할 수 있습니다', 'Click a row to select an action')
                 + '</div>';
-            var tbl = renderMatRows(shown);
+            var tbl = renderMatRows(shown, list);
             var apInfo = '<div style="margin-top:6px; font-size:11px; color:#888;">💡 '
                 + T('승인원(P01): "' + pattern + '로 조회된 아이템 승인원 다운로드해줘"', 'P01 docs: "download approval docs for items matching ' + pattern + '"')
                 + '</div>';
