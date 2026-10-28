@@ -1536,6 +1536,7 @@ ${question}
         window._aiMailViewOpenFile = mr.fileName || null;
         if (window._mailNasApplyAffordance) {
             window._mailNasApplyAffordance(mr.fileName, {
+                mailRaw: mr, // 📧 NAS가 안 되면 Drive 사본으로(js/54)
                 setBody: function(text) { bodyEl.textContent = _aiMailViewFormat(text); },
                 attDiv: attDiv,
                 btnEl: emlBtn,

@@ -1338,10 +1338,21 @@ window._mailNasApplyAffordance = function(fileName, opts) {
     if (opts.btnEl) { opts.btnEl.style.display = 'none'; opts.btnEl.onclick = null; }
     if (opts.attDiv) { opts.attDiv.style.display = 'none'; opts.attDiv.innerHTML = ''; }
     if (opts.metaEl) opts.metaEl.textContent = '';
-    if (!fileName || !window._dsMailParse) return;
     var _en = window._currentLang === 'en';
+    // 📧 [2026-10-28] NAS가 안 되면(외부 접속·백엔드 꺼짐·10/22 이전 메일) 프로젝트 파일 밖으로 옮겨 둔
+    //    Drive 사본으로 전문을 채운다(js/54). opts.mailRaw를 넘긴 호출부만 해당.
+    var _driveFallback = function() {
+        var mr = opts.mailRaw;
+        if (!mr || !window._mbIsTrimmed || !window._mbIsTrimmed(mr) || !opts.setBody) return;
+        window._mbReadDriveBody(mr.bodyRef).then(function(body) {
+            if (body == null || (opts.isStale && opts.isStale())) return;
+            opts.setBody(body);
+            if (opts.metaEl) opts.metaEl.textContent = '☁️ ' + (_en ? 'Drive copy (NAS not reachable)' : 'Drive 사본 (NAS 연결 안 됨)');
+        }).catch(function(e) { console.warn('[메일 원문] Drive 사본 읽기 실패 — 앞부분만 표시:', e.message || e); });
+    };
+    if (!fileName || !window._dsMailParse) { _driveFallback(); return; }
     window._dsMailParse(fileName).then(function(j) {
-        if (!j || !j.ok) return;
+        if (!j || !j.ok) { _driveFallback(); return; }
         if (opts.isStale && opts.isStale()) return; // 그 사이 다른 메일을 열었으면 덮어쓰지 않는다
         if (j.body && opts.setBody) {
             opts.setBody(j.body + (j.truncated ? ('\n\n' + (_en ? '… (truncated)' : '… (너무 길어 잘랐습니다)')) : ''));
@@ -1366,7 +1377,7 @@ window._mailNasApplyAffordance = function(fileName, opts) {
                     });
             };
         }
-    }).catch(function() { /* 백엔드가 꺼져 있거나 원본이 없으면 지금까지처럼 요약만 */ });
+    }).catch(function() { _driveFallback(); /* 백엔드가 꺼져 있거나 원본이 없으면 Drive 사본, 그것도 없으면 요약만 */ });
 };
 
 window.showMailRawModal = function(r) {
@@ -1432,10 +1443,24 @@ window.showMailRawModal = function(r) {
         emlBtn.style.display = 'none';
         emlBtn.onclick = null;
         var fn = r && r.fileName;
-        if (!fn || !window._dsMailParse) return;
         var metaEl = document.getElementById('inbox-mailraw-meta');
+        // 📧 [2026-10-28] NAS 원본을 못 읽으면(외부 접속·백엔드 꺼짐·10/22 이전 메일) 프로젝트 파일 밖으로
+        //    옮겨 둔 Drive 사본으로 전문을 채운다(js/54). 그것도 없으면 지금처럼 앞부분만.
+        var _openToken = {};
+        window._mailRawOpenToken = _openToken;
+        var _driveFallback = function() {
+            if (!window._mbIsTrimmed || !window._mbIsTrimmed(r)) return;
+            window._mbReadDriveBody(r.bodyRef).then(function(body) {
+                if (body == null || window._mailRawOpenToken !== _openToken) return;
+                var ta = document.getElementById('inbox-mailraw-body');
+                if (ta) ta.value = body;
+                if (metaEl) metaEl.innerHTML += '&nbsp;&nbsp;|&nbsp;&nbsp;<span style="color:#1971c2; font-weight:bold;">☁️ '
+                    + (_en2 ? 'Drive copy (NAS not reachable — no attachments)' : 'Drive 사본 (NAS 연결 안 됨 — 첨부 없음)') + '</span>';
+            }).catch(function(e) { console.warn('[메일 원문] Drive 사본 읽기 실패 — 앞부분만 표시:', e.message || e); });
+        };
+        if (!fn || !window._dsMailParse) { _driveFallback(); return; }
         window._dsMailParse(fn).then(function(j) {
-            if (!j || !j.ok) return;
+            if (!j || !j.ok) { _driveFallback(); return; }
             // 다른 메일을 그 사이에 열었으면 덮어쓰지 않는다(요청이 늦게 올 수 있다).
             if (!window._mailRawOpenFile || window._mailRawOpenFile !== fn) return;
 
@@ -1466,7 +1491,7 @@ window.showMailRawModal = function(r) {
                         if (window._dsMailOpenUrl) window.open(window._dsMailOpenUrl(fn), '_blank');
                     });
             };
-        }).catch(function() { /* 백엔드가 꺼져 있거나 원본이 없으면 지금까지처럼 */ });
+        }).catch(function() { _driveFallback(); /* 백엔드가 꺼져 있거나 원본이 없으면 Drive 사본 */ });
     })();
 
     // 💡 [2026-09-09 신규] 첨부파일 목록 표시 — 실제 파일 내용은 가져오지 않고 메타데이터만 pill로 렌더링

@@ -568,7 +568,7 @@
         //      → 각 쿼리는 단일 폴더 조건이라 Drive가 즉시 처리
         //      → 네트워크 왕복 1회분의 시간 안에 모든 폴더 결과를 합산 → 약 300~600ms로 단축
         //      _getChildFolderIds 결과는 이미 localStorage 캐시 → 추가 API 호출 없음
-        var childIds = await window._getChildFolderIds(SHARED_FOLDER_ID, ['Backups', 'App_Config']);
+        var childIds = await window._getChildFolderIds(SHARED_FOLDER_ID, ['Backups', 'App_Config', 'MailBodies']); // 📧 MailBodies: 메일 원문 사본(js/54, text/plain이라 어차피 안 걸리지만 조회 자체를 뺀다)
         var allFolderIds = [SHARED_FOLDER_ID].concat(childIds);
         var _fileQ = `mimeType='application/json' and trashed=false`;
         var _listOpts = { fields: 'files(id, name, modifiedTime, appProperties)', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true };
