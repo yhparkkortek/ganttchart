@@ -8,13 +8,37 @@
    붙어서 이 파일의 모든 규칙보다 나중에 적용되도록 JS가 보장한다).
    ================================================================ */
 
-/* 스크롤바 숨김 — 스크롤은 동작하되 스크롤바 UI는 표시 안 함 */
+/* 스크롤바 — 기본은 투명(안 보임), 그 영역에 마우스를 올리면 나타나고 벗어나면 다시 사라짐
+   [2026-10-28 변경, 사용자 요청] 예전엔 display:none으로 완전히 숨겼으나, 그러면 스크롤바
+   자체가 없어서 "옆으로 마우스를 가져가면 보이게" 할 방법이 없다 — 너비는 그대로 두고
+   thumb/track 색만 투명↔반투명으로 바꿔 똑같이 "안 보이는 스크롤"을 유지하면서 호버로
+   드러나게 한다. :hover는 스크롤 영역 안 어디에 있어도(자식 포함) 걸리므로 그 패널에
+   마우스가 들어와 있는 동안만 해당 스크롤바가 보인다. */
 * {
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: thin; /* Firefox — 두께는 고정, 색만 바뀜 */
+  scrollbar-color: transparent transparent;
   -ms-overflow-style: none; /* 레거시 Edge/IE */
 }
+*:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.35) transparent;
+}
 *::-webkit-scrollbar {
-  display: none; /* Chrome/Safari/Edge(Chromium) */
+  width: 8px; /* Chrome/Safari/Edge(Chromium) */
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.35);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 /* ───── 1. head 메인 스타일시트 (:root 변수 등) (원본 줄 31~1085) ───── */
