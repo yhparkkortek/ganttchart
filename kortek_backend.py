@@ -4314,6 +4314,21 @@ def po_goods_receipt():
     return jsonify(data_out), status
 
 
+@app.route('/po-goods-receipt-status', methods=['POST'])
+def po_goods_receipt_status():
+    # 📦🔍 [2026-10-28 신규, 사용자 요청] 입고 처리(ZMM062)는 "선택 사항"이 기본 미완료라서
+    #    이미 처리된 오더를 조회하면 그리드 자체가 안 뜬다("이미 처리됐는데 안 보이는" 원인) —
+    #    완료/전체를 선택해 조회하는 읽기 전용 조회. 전기(POSTING) 없음.
+    #    sap_bridge_32.py의 check_goods_receipt_status() 참고.
+    data = request.get_json(silent=True) or {}
+    ebeln = (data.get('ebeln') or '').strip()
+    if not ebeln:
+        return jsonify({'ok': False, 'error': 'ebeln(구매오더 번호)이 필요합니다.'}), 400
+    mode = (data.get('mode') or '전체').strip()
+    data_out, status = _run_sap_bridge(['check_goods_receipt_status', ebeln, mode], 40, 'SAP 입고 상태 조회')
+    return jsonify(data_out), status
+
+
 # ── [2026-10-02] A안 전환: mcp-sap-gui 런타임 폴백 경로 제거 ─────────────────────
 # MCP는 "새 SAP 기능을 만들 때 화면을 탐색하는 개발 도구"로만 쓴다(사람이 PC에서 직접 실행).
 # 런타임은 항상 결정론적 sap_bridge_32.py 경로만 사용 — CLAUDE.md "결정론 먼저" 원칙.

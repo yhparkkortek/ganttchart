@@ -408,8 +408,12 @@
           kw: ['지금 화면', '현재 화면', '열려있는 화면', '열려 있는 화면', '화면 내용', '화면에 보이는'], needs: '없음(SAP에 미리 로그인)', ex: 'SAP 지금 화면 내용 요약해줘' },
         { id: 'teambudget', title: '팀 운영비/복리후생비 조회', titleEn: 'Team budget lookup', tcode: 'ZCO021', mode: 'read', verified: 'live',
           kw: ['팀비', '팀운영비', '팀 운영비', '복리후생비'], needs: '팀 이름(없으면 드롭다운으로 물어봄)', ex: '개발3팀 팀운영비 확인해줘' },
-        { id: 'goodsreceipt', title: '자재 입고 처리', titleEn: 'Goods receipt processing', tcode: 'ZMM062', mode: 'write', verified: 'unverified',
+        { id: 'goodsreceipt', title: '자재 입고 처리', titleEn: 'Goods receipt processing', tcode: 'ZMM062', mode: 'write', verified: 'live',
           kw: ['입고 처리', '입고처리'], needs: '구매오더 번호(없으면 직전 발주 목록에서 고르거나 물어봄)', ex: '9100019479 입고 처리해줘' },
+        { id: 'goodsreceiptstatus', title: '입고 처리 상태 조회', titleEn: 'Goods receipt status check', tcode: 'ZMM062', mode: 'read', verified: 'live',
+          kw: ['입고 확인', '입고확인', '입고 조회', '입고 상태', '입고 됐', '입고 되었', '입고처리 확인', '입고처리 조회'],
+          needs: '구매오더 번호(없으면 직전 발주 목록에서 고르거나 물어봄) + 선택사항(미완료/완료/전체, 기본 전체)',
+          ex: '9100019756 입고 확인해줘 / 9100019756 입고 처리 됐는지 확인해줘' },
         // 🗣 [2026-09-28] 트리거 어휘는 **여기(데이터)에만** 둔다 — 예전엔 js/04h 안에 정규식으로
         //    박혀 있어서 "SAP 덤프해줘"처럼 조금만 달리 말하면 못 알아들었다(사용자 지적).
         //    새 표현이 나오면 이 kw 배열에 한 줄만 추가하면 로컬 명령이 바로 따라온다.

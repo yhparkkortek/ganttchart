@@ -7482,6 +7482,81 @@ def post_goods_receipt(ebeln, dump_only=False):
     }
 
 
+def check_goods_receipt_status(ebeln, mode='전체'):
+    """ZMM062 조회조건의 "선택 사항"(미완료/완료/전체/취소 라디오버튼)을 지정해 구매오더의
+    입고 상태를 읽기만 한다 — 전기(POSTING) 없음, post_goods_receipt와 무관한 조회 전용 함수.
+
+    [2026-10-28 신규, 사용자 요청] "선택 사항에 미완료를 선택하고 조회해서 안 보인거고 완료를
+    선택하고 조회하면 완료된 상태를 볼 수 있음"이라는 사용자 관찰에서 추가. post_goods_receipt가
+    여는 화면은 "선택 사항"이 기본값 미완료(P_RB1)라서, 이미 입고 처리가 끝난 오더를 조회하면
+    그리드 자체가 안 뜬다(RowCount 예외) — 그래서 처리 성공 여부를 눈으로 확인하려면 완료(P_RB2)나
+    전체(P_RB3)를 직접 선택해야 한다는 걸 라이브로 확인(PO 9100019756, 완료 선택 시 9건 전부
+    STATUS=@5B@로 조회됨). 기본값을 '전체'로 둬서 미완료/완료 품목을 한 화면에서 같이 보여준다.
+    """
+    ebeln = (ebeln or '').strip()
+    if not ebeln:
+        raise RuntimeError('구매오더 번호(EBELN)를 지정해주세요.')
+    radio_map = {'미완료': 'P_RB1', '완료': 'P_RB2', '전체': 'P_RB3', '취소': 'P_RB4'}
+    mode = (mode or '전체').strip()
+    radio_id = radio_map.get(mode, 'P_RB3')
+    if radio_id == 'P_RB3':
+        mode = '전체'  # 인식 못한 값은 전체로 정규화
+
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    try:
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM062'
+        session.findById('wnd[0]').sendVKey(0)
+        time.sleep(1.0)
+    except Exception as e:
+        raise RuntimeError(f'ZMM062 진입 실패: {e}')
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('usr/ctxtS_EBELN-LOW').text = ebeln
+        wnd.findById(f'usr/rad{radio_id}').select()
+        time.sleep(0.2)
+        wnd.findById('tbar[1]/btn[8]').press()
+        time.sleep(1.5)
+    except Exception as e:
+        raise RuntimeError(f'ZMM062 조회 조건 입력/실행 오류: {e}')
+
+    wnd = session.findById('wnd[0]')
+    try:
+        grid = wnd.findById('shellcont/shell')
+        row_count = grid.RowCount
+    except Exception:
+        # 그리드가 안 뜨면 그 선택사항에 해당하는 품목이 없다는 뜻(예외 아님 — 정상 결과)
+        return {
+            'ok': True, 'ebeln': ebeln, 'mode': mode, 'rowCount': 0, 'rows': [],
+            'message': f'구매오더 "{ebeln}" — "{mode}" 조건에 해당하는 품목이 없습니다.',
+        }
+
+    cols = ['EBELP', 'MATNR', 'MAKTX', 'MENGE', 'MEINS', 'STATUS', 'INQTY', 'INDAT', 'WEMPF']
+    rows = []
+    for r in range(row_count):
+        row = {}
+        for c in cols:
+            try:
+                v = str(grid.GetCellValue(r, c)).strip()
+                if v:
+                    row[c] = v
+            except Exception:
+                pass
+        rows.append(row)
+
+    done_count = sum(1 for r in rows if '5B' in r.get('STATUS', ''))
+    return {
+        'ok': True,
+        'ebeln': ebeln,
+        'mode': mode,
+        'rowCount': row_count,
+        'doneCount': done_count,
+        'rows': rows,
+        'message': f'구매오더 "{ebeln}" "{mode}" 조회: {row_count}건 (완료 표시 {done_count}건).',
+    }
+
+
 def display_reservation(rsnum):
     """MB23 - 예약 번호로 예약 조회."""
     session = _get_sap_session()
@@ -7884,6 +7959,10 @@ def main():
             ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
             _dump_flag = '--dump-only' in sys.argv
             result = post_goods_receipt(ebeln, dump_only=_dump_flag)
+        elif action == 'check_goods_receipt_status':
+            ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
+            mode_arg = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '전체'
+            result = check_goods_receipt_status(ebeln, mode=mode_arg)
         elif action == 'fetch_vendor_by_stcd2':
             stcd2_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             result = fetch_vendor_by_stcd2(stcd2_arg)

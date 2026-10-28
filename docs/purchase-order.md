@@ -731,3 +731,40 @@ SAP GUI "기록 및 재생" 매크로("자재 입고 처리(ZMM062).vbs")를 기
   수정은 그 관찰을 그대로 코드화함(그리드 컬럼명·STATUS 아이콘값·팝업 경로 전부 실측
   기반). **단, 수정된 코드 경로 자체(그리드 읽기)는 다음 실제 입고 처리 건에서 재확인 필요**
   — 이번 건은 이미 9100019756이 전부 입고 처리되어 재시도로 수정 코드를 직접 못 돌려봄.
+
+## 🔍 입고 처리 상태 조회(읽기 전용) — ZMM062 "선택 사항" 라디오버튼 (2026-10-26)
+
+**발견 경위**: 바로 위 버그를 고치고 나서도 사용자가 "입고처리는 안되는데"라고 재차 확인을
+요청 — 실제로는 자재문서 5000870670이 정상 생성돼 있었는데, 같은 오더로 ZMM062를 다시 열어
+조회하면 그리드 자체가 안 뜨는 현상이 있었다. 사용자가 "선택 사항에 미완료를 선택하고 조회해서
+안 보인 거고, 완료를 선택하고 조회하면 완료된 상태를 볼 수 있다"고 직접 짚어줬고, 라이브로
+확인해보니 **정확히 그 말대로였다**.
+
+**구조**: ZMM062 초기 화면의 "선택 사항" 박스(`%B002011_BLOCK_1000`)에 라디오버튼 4개가 있다 —
+`radP_RB1`=미완료(기본 선택), `radP_RB2`=완료, `radP_RB3`=전체, `radP_RB4`=취소. `post_goods_receipt`
+(실제 전기)는 이 라디오를 건드리지 않고 기본값(미완료)으로만 조회하므로, **이미 처리된 오더를
+다시 입력하면 그리드가 안 뜬다** — 이건 버그가 아니라 정상 동작(입고 대기 품목이 없으니까)이지만,
+"완료됐는지 확인"하려는 사용자 입장에선 "안 된다"처럼 보인다.
+
+**이식**: 전기 없이 상태만 보는 별도 함수/경로를 추가했다 — 쓰기(전기) 경로와 완전히 분리.
+- `sap_bridge_32.py`의 `check_goods_receipt_status(ebeln, mode='전체')` — `mode`는
+  `미완료`/`완료`/`전체`/`취소` 중 하나(기본 전체 = 미완료+완료 한 화면에 같이 보여줌). 그리드
+  컬럼 `EBELP/MATNR/MAKTX/MENGE/MEINS/STATUS/INQTY/INDAT/WEMPF`를 읽어 반환, `STATUS`에
+  `5B`(녹색)가 있으면 완료로 판정(`doneCount`). 그리드가 안 뜨면(해당 조건에 품목 없음)
+  예외가 아니라 `rowCount:0`의 정상 결과로 반환.
+- dispatcher 등록: `elif action == 'check_goods_receipt_status':`
+- `kortek_backend.py`의 `/po-goods-receipt-status`(POST, body `{ebeln, mode?}`)
+- `js/04h-core-app-upload-utils-3.js`의 `window._ganttQaCheckGoodsReceiptStatus(ebeln, mode)` +
+  AI 문답 로컬 명령 트리거(🚫🤖, `_ganttQaRunGoodsReceipt` 쓰기 트리거 **바로 위**에 둬서
+  "입고 처리 됐는지 확인해줘" 같은 문장이 실제 전기 트리거로 새지 않게 함) — 정규식
+  `/입고\s*(처리)?\s*(확인|조회|상태|됐|되었|보여)/`이되 `입고 처리 해/할/하/해줘/해줄`은 제외.
+  오더번호가 문장에 없으면 직전 발주 후보(`_ganttQaLastGrCandidates`)가 1개면 그걸 쓰고,
+  아니면 번호를 물어본다(`window._ganttQaPendingGrStatusAsk` — 기존 쓰기용
+  `_ganttQaPendingGrEbelnAsk`와는 별도 플래그라 다음 숫자 답이 실수로 전기로 안 간다).
+- `js/32-sap-capabilities.js`에 `goodsreceiptstatus`(read) 항목 등록, `goodsreceipt`(write)도
+  이번에 실환경 검증 완료로 `verified: 'live'`로 올림.
+- **검증**: `check_goods_receipt_status('9100019756', '전체')`를 CLI로 직접 실행해 9건 전부
+  `STATUS=@5B@`(완료)로 정확히 조회됨을 확인. **JS 트리거 자체는 브라우저 라이브 테스트
+  미실시** — 다음 실사용 시 확인 필요. 백엔드(`kortek_backend.py`)는 새 라우트 추가 후
+  **재시작해야** `/po-goods-receipt-status`가 잡힌다(기존에 떠 있던 프로세스는 코드만 바꿔도
+  새 라우트를 못 읽음 — `docs/backend-auto-update.md` 참고).

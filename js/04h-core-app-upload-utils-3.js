@@ -599,6 +599,48 @@
         window._renderGanttQaMessages();
     };
 
+    // 🔍 [2026-10-28 신규, 사용자 요청] "입고 처리 확인/조회" — 전기 없는 읽기 전용.
+    //    사용자가 "선택 사항에서 미완료를 선택해서 안 보인거고 완료를 선택하면 보인다"고 직접
+    //    확인해줘서 발견한 패턴: post_goods_receipt가 쓰는 ZMM062 화면은 "선택 사항" 기본값이
+    //    미완료라, 이미 처리된 오더를 조회하면 그리드 자체가 안 뜬다. 완료/전체를 선택해 조회하는
+    //    경로를 분리해 추가 — check_goods_receipt_status(sap_bridge_32.py), /po-goods-receipt-status.
+    window._ganttQaCheckGoodsReceiptStatus = async function(ebeln, mode) {
+        mode = mode || '전체';
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+            `구매오더 "${ebeln}" 입고 상태 조회 중... (${mode})`,
+            `Checking goods receipt status for PO "${ebeln}"... (${mode})`
+        ), pending: true });
+        window._renderGanttQaMessages();
+        let reply;
+        try {
+            const res = await fetch('http://127.0.0.1:5000/po-goods-receipt-status', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ebeln: ebeln, mode: mode })
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                reply = '⚠️ ' + (data.error || window._t('입고 상태 조회 실패', 'Status check failed'));
+            } else if (!data.rowCount) {
+                reply = 'ℹ️ ' + (data.message || window._t(`"${mode}" 조건에 해당하는 품목이 없습니다.`, `No items match "${mode}".`));
+            } else {
+                const lines = (data.rows || []).map(function (r) {
+                    const done = (r.STATUS || '').indexOf('5B') >= 0;
+                    const mark = done ? '✅' : '⏳';
+                    return `${mark} #${r.EBELP || '?'} ${r.MATNR || ''} ${r.MAKTX || ''} (${r.MENGE || '?'}${r.MEINS || ''})`;
+                });
+                reply = window._t(
+                    `📦 구매오더 "${ebeln}" 입고 상태 (${mode}, ${data.rowCount}건 중 완료 ${data.doneCount}건)\n`,
+                    `📦 PO "${ebeln}" goods receipt status (${mode}, ${data.doneCount}/${data.rowCount} done)\n`
+                ) + lines.join('\n');
+            }
+        } catch (e) {
+            reply = '⚠️ ' + window._t('입고 상태 조회 실패: ', 'Status check failed: ') + (e && e.message ? e.message : e);
+        }
+        window._ganttQaHistory.pop();
+        window._ganttQaHistory.push({ role: 'ai', text: reply });
+        window._renderGanttQaMessages();
+    };
+
     // 🛒 [2026-09-15 신규] "구매오더 요청" — AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면
     //    항목을 추출해 "연구소 구매오더,기타출고 제안 BDC Upload양식"(사용자 제공
     //    Z38MMR060.xls) 엑셀을 만들고, ZMMR060에 업로드→F8→협력사/세금코드/단가 입력까지
@@ -4686,7 +4728,7 @@ ${docsJson}`;
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
             window._ganttQaPendingChoiceDropdown ||
             (window._ganttQaPendingConfirmButtons && !window._ganttQaPendingConfirmButtons.persistent) ||
-            window._ganttQaPendingGrEbelnAsk || window._ganttQaApprovalAllFieldsForm ||
+            window._ganttQaPendingGrEbelnAsk || window._ganttQaPendingGrStatusAsk || window._ganttQaApprovalAllFieldsForm ||
             window._ganttQaGrEbelnForm || window._ganttQaOperationInFlight);
         if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
             try { window._issueLogInterrupt && window._issueLogInterrupt(); } catch (e) { /* Phase 10 수집 — 실패해도 무시 */ }
@@ -4710,6 +4752,7 @@ ${docsJson}`;
             window._ganttQaPendingChoiceDropdown = null;
             window._ganttQaPendingConfirmButtons = null;
             window._ganttQaPendingGrEbelnAsk = false;
+            window._ganttQaPendingGrStatusAsk = false;
             window._ganttQaApprovalAllFieldsForm = null;
             window._ganttQaGrEbelnForm = null;
             window._ganttQaHistory.push({ role: 'user', text: question });
@@ -7447,6 +7490,43 @@ ${docsJson}`;
                 return;
             }
             // 숫자가 아니면 답이 아니라 다른 질문일 수 있으므로 pending만 풀고 계속 진행.
+        }
+        // 🔍🚫🤖 [2026-10-28 신규] "입고 확인/조회/됐어" — 전기 없는 읽기 전용 상태 조회.
+        //    "입고 처리" 쓰기 트리거(바로 아래)보다 먼저 검사해야 "입고 처리 됐는지 확인해줘"
+        //    같은 문장이 실수로 전기 트리거로 안 빠진다. 선택사항(미완료/완료/전체)은 문장에
+        //    있으면 그대로 쓰고, 없으면 기본 전체로 미완료/완료 품목을 한 화면에 같이 보여준다.
+        if (/입고\s*(처리)?\s*(확인|조회|상태|됐|되었|보여)/.test(question) && !/입고\s*처리\s*(해|할|하|해줘|해줄)/.test(question)) {
+            if (!_skipUserHistoryPush && window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            const _grStatusEbeln = (question.match(/\b\d{8,12}\b/) || [])[0] ||
+                (window._ganttQaLastGrCandidates && window._ganttQaLastGrCandidates.length === 1 ? window._ganttQaLastGrCandidates[0] : null);
+            if (_grStatusEbeln) {
+                const _grMode = /완료(?!.*미완료)/.test(question) ? '완료' : (/미완료/.test(question) ? '미완료' : '전체');
+                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+                await window._ganttQaCheckGoodsReceiptStatus(_grStatusEbeln, _grMode);
+                input.focus();
+                return;
+            }
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                '🔍 어느 구매오더 번호의 입고 상태를 확인할까요? (번호를 알려주세요)',
+                '🔍 Which purchase order number should I check goods receipt status for?'
+            )});
+            window._ganttQaPendingGrStatusAsk = true; // ⚠️ _ganttQaPendingGrEbelnAsk(쓰기용)는 켜지 않는다 —
+                // 그걸 켜면 위쪽(이미 지나간) pendingGrEbelnAsk 분기가 다음 메시지를 "입고 처리"로
+                // 가로채 버린다. 숫자 답은 아래 pendingGrStatusAsk 블록이 받는다.
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+        if (window._ganttQaPendingGrStatusAsk) {
+            const _ebelnAnswer2 = (question.match(/\b\d{8,12}\b/) || [])[0];
+            window._ganttQaPendingGrStatusAsk = false;
+            if (_ebelnAnswer2) {
+                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+                await window._ganttQaCheckGoodsReceiptStatus(_ebelnAnswer2, '전체');
+                input.focus();
+                return;
+            }
         }
         if (/입고\s*처리|입고처리/.test(question)) {
             if (!_skipUserHistoryPush && window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // 위 BOM 블록과 같은 이유(2026-09-23) — 순수 숫자 답변(위 pendingGrEbelnAsk 분기)은 기록 안 함
