@@ -1408,13 +1408,21 @@
     };
 
     // 스냅샷을 전역 변수에 다시 꽂아넣고 화면을 그 시점으로 되돌림 (executeLoadFile 성공 시 하던 일과 동일)
-    window._restoreSheetSnapshot = function(snap) {
+    // 🆕 [2026-10-28] isFreshOpen — switchToSheet/closeSheet처럼 "이미 열려있던 탭끼리 전환"할 때는
+    //    false(기본값)로 호출해 보던 그대로(WBS 펼침 상태 포함) 유지한다. 파일 목록에서 "진짜 새로
+    //    프로젝트를 열" 때(37-project-cache.js 캐시 히트 경로)만 true로 호출 — 그 스냅샷은 Drive에서
+    //    막 받아왔거나(Layer3 pre-fetch) 예전에 이 파일을 닫을 때의 펼침 상태를 그대로 들고 있을 수
+    //    있어(Layer1 캐시), "닫았다 다시 열면 0레벨만" 요구사항대로 강제로 접는다.
+    window._restoreSheetSnapshot = function(snap, isFreshOpen) {
         globalData = snap.globalData; colIdx = snap.colIdx; filterColumns = snap.filterColumns;
         currentFilters = snap.currentFilters; existingDevStages = snap.existingDevStages;
         window.projectMeta = snap.projectMeta; window.tabData = snap.tabData;
         window.projectDistributions = snap.projectDistributions;
         window.changeLogs = snap.changeLogs; window.lastSavedLogCount = snap.lastSavedLogCount;
         window.currentDriveFileId = snap.currentDriveFileId; window.currentDriveFileName = snap.currentDriveFileName;
+        if (isFreshOpen && globalData) {
+            for (let i = 1; i < globalData.length; i++) { if (globalData[i]) delete globalData[i]._wbsCollapsed; }
+        }
         // 💡 [버그 수정] 계획(Baseline)은 프로젝트별로 분리 저장되므로, 시트를 전환하면 그 시트(프로젝트) 것으로 다시 로드
         //    (예전엔 브라우저 전체에 계획 목록이 하나뿐이라, 시트를 바꿔도 같은 계획이 그대로 보였음)
         window._compareTargetId = null;

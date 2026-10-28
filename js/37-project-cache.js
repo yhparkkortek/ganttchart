@@ -23,7 +23,10 @@
     function _deserializeGlobalData(driveArr) {
         return (driveArr || []).map(function(obj) {
             var row = obj.data ? Array.from(obj.data) : [];
-            for (var k in obj) { if (k !== 'data') row[k] = obj[k]; }
+            // 💡 [2026-10-28] _wbsCollapsed(WBS 접힘 화면 상태)는 제외 — 04c _serializeGD 주석 참고.
+            //    여기서 만든 스냅샷은 Layer3 pre-fetch로 "아직 한 번도 안 연" 프로젝트를 캐시해두는
+            //    용도라, 옛 저장분에 그 값이 남아있어도 무시해야 다음에 열 때 0레벨로 시작한다.
+            for (var k in obj) { if (k !== 'data' && k !== '_wbsCollapsed') row[k] = obj[k]; }
             return row;
         });
     }
@@ -108,7 +111,9 @@
                 window.closeDriveModal && window.closeDriveModal();
                 // 새 시트 슬롯 등록 후 스냅샷 복원
                 window._openAsNewSheet && window._openAsNewSheet(fileId, fileId, fileName || cached.fileName);
-                window._restoreSheetSnapshot && window._restoreSheetSnapshot(cached.snapshot);
+                // 💡 [2026-10-28] 두 번째 인자 true = "진짜 새로 프로젝트 열기" — WBS 접힘 상태를 강제로
+                //    초기화한다(이 캐시가 Layer1처럼 "방금 닫을 때의 펼침 상태"를 그대로 들고 있어도).
+                window._restoreSheetSnapshot && window._restoreSheetSnapshot(cached.snapshot, true);
                 // executeLoadFile에서 하는 추가 초기화
                 if (window._ensureRowUids) window._ensureRowUids();
                 if (window._captureMergeBaseline) window._captureMergeBaseline(fileId);
