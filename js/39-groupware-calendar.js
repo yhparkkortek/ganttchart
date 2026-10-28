@@ -22,8 +22,11 @@
     //    겹쳐 놨더니 하루 칩 상한(월간 10개)을 그룹웨어 일정이 선점해 내 간트 업무가
     //    통째로 잘려나갔다(실측: 그룹웨어 12건이면 간트 0건). 한 번에 하나만 보여주면
     //    자리 경쟁 자체가 없어지고, 무엇을 보고 있는지도 분명해진다.
+    // 💡 [2026-10-28 사용자 요청] 기본값을 'gw'로 변경 — 단, 이 값은 사용자가 토글을 한 번이라도
+    //    누르면(_gwToggleOverlay) localStorage(GW_MODE_KEY)에 그 선택이 저장되고 아래에서 그 값을
+    //    우선하므로, 이미 토글을 써본 사람의 선택은 그대로 유지된다. 처음 쓰는 사람에게만 적용됨.
     window._gwState = window._gwState || {
-        mode: 'gantt',        // 'gantt' = 내 프로젝트 업무 | 'gw' = 그룹웨어 일정
+        mode: 'gw',            // 'gantt' = 내 프로젝트 업무 | 'gw' = 그룹웨어 일정(기본값)
         events: [],
         status: null,         // 마지막 /gw/status 결과
         loading: false,
@@ -136,6 +139,18 @@
         window._gwState.error = null;
         window._gwSetStatus(_t('그룹웨어 일정을 불러오는 중…', 'Loading groupware events…'), 'busy');
         try {
+            // 🔑 [2026-10-28 사용자 요청] 로그인이 안 돼 있으면 여기서 먼저 시도한다 — js/36
+            //    _gwEnsureLogin은 이미 로그인돼 있으면 /gw/login을 아예 안 부르고, 실패하면
+            //    이 페이지 세션 동안 다시 시도하지 않는다(계정 잠금 방지 가드가 그 안에 있음).
+            if (window._gwEnsureLogin) {
+                var login = await window._gwEnsureLogin(function (msg) { window._gwSetStatus(msg, 'busy'); });
+                if (!login.ok) {
+                    window._gwState.events = [];
+                    window._gwState.error = login.message;
+                    window._gwSetStatus(login.message, 'error');
+                    return;
+                }
+            }
             var rg = _range();
             var r = await fetch('http://127.0.0.1:5000/gw/events?from=' + rg.from + '&to=' + rg.to);
             var d = await r.json();
@@ -174,15 +189,20 @@
         else { window._gwSetStatus(''); if (window.calRender) window.calRender(); }
     };
 
-    // 버튼에는 **지금 보고 있는 것**을 적고, 누르면 반대쪽으로 넘어간다고 알려준다.
+    // 🐛 [2026-10-28 버그 수정, 사용자 지적] "버튼엔 지금 보는 걸 적는다"는 원래 설계가 오히려
+    //    헷갈렸음 — 버튼 글자가 "Gantt 일정"이면 눌렀을 때 Gantt를 보게 될 거라고 읽히는 게 자연스러움.
+    //    버튼 색(채워짐=지금 보고 있는 모드)은 그대로 두고, **글자만 "누르면 바뀔 대상"으로 뒤집는다.**
     window._gwSyncToggleBtn = function () {
         var b = document.getElementById('gw-cal-toggle-btn');
         if (!b) return;
         var gw = window._gwState.mode === 'gw';
-        b.style.background = gw ? '#5b3fa3' : '#e0f5f7';
-        b.style.color = gw ? '#fff' : '#00707d';
-        b.textContent = gw ? ('🏢 ' + _t('그룹웨어 일정', 'Groupware'))
-                           : ('📊 ' + _t('Gantt 일정', 'Gantt'));
+        // 🎨 [2026-10-28 버그 수정, 사용자 지적 "보라색 하드코딩"] 팔레트 롤(js/21 CP_CURRENT_NAV·
+        //    CP_CURRENT_TEAL)로 교체 — _cpApplyLive()가 이 정확한 hex 문자열을 찾아 테마색으로
+        //    바꿔치기하므로(bgRoles에 둘 다 등록돼 있음), 어떤 테마를 고르든 이 버튼도 같이 바뀐다.
+        b.style.background = gw ? window.CP_CURRENT_NAV.active : window.CP_CURRENT_TEAL.bg;
+        b.style.color = gw ? '#fff' : window.CP_CURRENT_TEAL.darkText;
+        b.textContent = gw ? ('📊 ' + _t('Gantt 일정', 'Gantt'))
+                           : ('🏢 ' + _t('그룹웨어 일정', 'Groupware'));
         b.setAttribute('aria-pressed', gw ? 'true' : 'false');
         b.title = gw
             ? _t('지금 그룹웨어 일정을 보는 중 — 누르면 Gantt 업무로 전환합니다',
