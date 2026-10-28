@@ -189,9 +189,10 @@
         else { window._gwSetStatus(''); if (window.calRender) window.calRender(); }
     };
 
-    // 🐛 [2026-10-28 버그 수정, 사용자 지적] "버튼엔 지금 보는 걸 적는다"는 원래 설계가 오히려
-    //    헷갈렸음 — 버튼 글자가 "Gantt 일정"이면 눌렀을 때 Gantt를 보게 될 거라고 읽히는 게 자연스러움.
-    //    버튼 색(채워짐=지금 보고 있는 모드)은 그대로 두고, **글자만 "누르면 바뀔 대상"으로 뒤집는다.**
+    // 💡 [2026-10-28, 사용자 재지적] 글자를 "누르면 바뀔 대상"으로 뒤집어봤더니, 색(채워짐=지금
+    //    보는 모드)과 글자가 서로 다른 걸 가리켜서 오히려 더 헷갈렸다 — 채워진 강조색 위에
+    //    "Gantt 일정"이라고 적혀 있으면 그게 지금 활성 상태처럼 보임. **글자는 다시 "지금 보는
+    //    것"으로 되돌리고**, 색과 글자가 항상 같은 걸 가리키게 통일한다.
     window._gwSyncToggleBtn = function () {
         var b = document.getElementById('gw-cal-toggle-btn');
         if (!b) return;
@@ -199,16 +200,24 @@
         // 🎨 [2026-10-28 버그 수정, 사용자 지적 "보라색 하드코딩"] 팔레트 롤(js/21 CP_CURRENT_NAV·
         //    CP_CURRENT_TEAL)로 교체 — _cpApplyLive()가 이 정확한 hex 문자열을 찾아 테마색으로
         //    바꿔치기하므로(bgRoles에 둘 다 등록돼 있음), 어떤 테마를 고르든 이 버튼도 같이 바뀐다.
-        b.style.background = gw ? window.CP_CURRENT_NAV.active : window.CP_CURRENT_TEAL.bg;
+        var baseBg = gw ? window.CP_CURRENT_NAV.active : window.CP_CURRENT_TEAL.bg;
+        var hoverBg = gw ? window.CP_CURRENT_NAV.hover : window.CP_CURRENT_TEAL.hoverBg;
+        b.style.background = baseBg;
         b.style.color = gw ? '#fff' : window.CP_CURRENT_TEAL.darkText;
-        b.textContent = gw ? ('📊 ' + _t('Gantt 일정', 'Gantt'))
-                           : ('🏢 ' + _t('그룹웨어 일정', 'Groupware'));
+        b.textContent = gw ? ('🏢 ' + _t('그룹웨어 일정', 'Groupware'))
+                           : ('📊 ' + _t('Gantt 일정', 'Gantt'));
         b.setAttribute('aria-pressed', gw ? 'true' : 'false');
         b.title = gw
             ? _t('지금 그룹웨어 일정을 보는 중 — 누르면 Gantt 업무로 전환합니다',
                  'Showing groupware events — click to switch to Gantt tasks')
             : _t('지금 Gantt 업무를 보는 중 — 누르면 그룹웨어 일정으로 전환합니다 (읽기 전용, 로그인은 AI 문답 창의 🔑)',
                  'Showing Gantt tasks — click to switch to groupware events (read-only; sign in from the 🔑 in AI chat)');
+        // 🐛 [2026-10-28 버그 수정, 사용자 지적 "호버가 Gantt 쪽에만 적용돼 있음"] 옆의 "오늘"/
+        //    "내보내기" 버튼처럼 onmouseover/out을 쓰되, 이 버튼은 상태에 따라 배경이 2가지라
+        //    정적 색을 못 박는 대신 매번 이 함수가 돌 때(상태 바뀔 때마다) 그 상태 기준 호버색으로
+        //    다시 걸어준다 — 두 상태 다 호버가 먹는다.
+        b.onmouseover = function () { b.style.background = hoverBg; };
+        b.onmouseout = function () { b.style.background = baseBg; };
     };
 
     // 간트 업무는 마감일 하루에만 찍히지만, 그룹웨어 일정은 기간 전체에 걸쳐 표시한다.
