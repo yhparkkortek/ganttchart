@@ -225,6 +225,24 @@
         if (window.showToast) window.showToast(t('✅ 리포트 저장 — ', '✅ Report saved — ') + parts.join(' + ') + (localErr ? t(' (로컬 실패: ', ' (local failed: ') + localErr + ')' : '') + (driveErr ? t(' (Drive 실패: ', ' (Drive failed: ') + driveErr + ')' : ''), 'info');
     };
 
+    // 💡 [2026-10-28, 사용자 요청] "AI 문답 디버깅 기록 확인해서 수정해줘" 같은 요청을 위해 — 관리자
+    //    모달을 열고 🔄 새로고침 → 📤 내보내기 두 단계를 거칠 필요 없이, AI 문답 창의 🧾 버튼 하나로
+    //    로드+군집+내보내기까지 한 번에 끝낸다. 산출물은 openIssueReportModal의 [📤 내보내기]와 완전히
+    //    같다(같은 loadAll/buildDigest/_issueExportDigest 재사용 — 로직 중복 없음) — 로컬
+    //    C:\SAP_DMS\SAP이슈\digest_<날짜>.json(Claude가 읽는 파일) + Drive Backups/SAP_Issues/ 사본.
+    window._issueQuickExportFromQa = async function () {
+        try {
+            if (window.verifyAdminPassword && !window.verifyAdminPassword(t('🔒 디버깅 기록을 저장하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to save the debug log.\n(case-insensitive)'))) return;
+            if (window.showToast) window.showToast(t('🧾 디버깅 기록 모으는 중...', '🧾 Gathering debug log...'), 'info', 4000);
+            await loadAll();
+            await window._issueExportDigest();
+        } catch (e) {
+            console.warn('[이슈 리포트] 빠른 내보내기 실패:', e);
+            var msg = t('❌ 디버깅 기록 저장 실패: ', '❌ Failed to save debug log: ') + (e.message || e);
+            if (window.showToast) window.showToast(msg, 'error', 6000); else alert(msg);
+        }
+    };
+
     // ── 화면 ───────────────────────────────────────────────────────────
     function fmt(ts) { try { var d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); } catch (e) { return ts || ''; } }
     function renderIssues() {
