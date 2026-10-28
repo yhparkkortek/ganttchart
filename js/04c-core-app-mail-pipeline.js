@@ -750,10 +750,16 @@
             }
 
             // merge가 첫 gapi await로 넘어간 사이 CPU 직렬화 실행 (동기 블로킹 — 네트워크 대기 시간 재활용)
+            // 🐛 [2026-10-28 버그 수정, 실사용 제보 "새로 프로젝트 열어도 이전 저장 상태(펼침) 유지됨"]
+            //    _wbsCollapsed는 순수 로컬 화면 상태인데 이 "_로 시작하면 전부 저장" 규칙에 걸려 Drive
+            //    JSON에 같이 저장되고 있었다 — 그래서 "완전히 닫고 다시 열기" 기본 접힘 가드(js/04e
+            //    _ensureDefaultWbsCollapse, undefined인 행만 접음)를 아무리 고쳐도, 다시 열 때 로드되는
+            //    값 자체가 이미 true/false로 박혀 있어 효과가 없었다. 앞으로는 아예 저장하지 않는다
+            //    (기존에 이미 저장된 파일은 executeLoadFile·37-project-cache.js 쪽에서 로드 시 무시).
             const _serializeGD = function() {
                 return globalData.map(function(row) {
                     let obj = { data: Array.from(row) };
-                    for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
+                    for (let key in row) { if (key.startsWith('_') && key !== '_wbsCollapsed') obj[key] = row[key]; }
                     return obj;
                 });
             };
@@ -1080,8 +1086,37 @@
 
     // 💡 공개 진입점 — 실제로는 항상 대기열을 거쳐서, 다른 저장/시트전환 작업과 절대 안 겹치게 함
     //    (3분 자동저장 타이머 등 기존 호출부는 전부 그대로 이 이름을 부르므로 별도 수정 불필요)
+    // 💡 [2026-10-28, "탭 이동이 느리다" 신고 대응] 예전엔 대기열 슬롯을 _saveToGoogleDriveRaw의
+    //    "완료"(=네트워크 업로드까지 전부 끝남, 실측 9~15초/7~8MB)까지 통째로 쥐고 있었다. 그래서
+    //    3분 자동저장이나 30초 편집 디바운스(37-project-cache.js _pcScheduleSave)가 업로드 중인
+    //    바로 그 순간 사용자가 다른 프로젝트 시트 탭을 클릭하면, switchToSheetWithSave도 같은
+    //    _runSerialized 대기열에 묶여 그 업로드가 끝날 때까지 탭 전환 자체가 멈춘 것처럼 보였다.
+    //    switchToSheetWithSave/closeSheet의 "저장하고 전환" 경로는 2026-10-27에 이미
+    //    _saveToGoogleDriveRaw의 onSafeToSwitch 콜백(병합·충돌처리·직렬화 — "이 시트여야만 하는"
+    //    작업 — 이 끝나는 시점, 업로드 시작 직전)으로 똑같은 문제를 풀어뒀다. 여기서는 그 콜백을
+    //    공개 진입점에도 그대로 연결해 대기열을 같은 시점에 풀어주고, 실제 업로드는 대기열 밖에서
+    //    계속 진행한다. 호출자가 await로 받는 반환 Promise는 여전히 "진짜 완료"(성공/실패) 시점에만
+    //    resolve/reject하므로 기존 호출부(결과를 기다리는 14c/15b/44 등)는 그대로 동작한다.
     window.saveToGoogleDrive = function(opts) {
-        return window._runSerialized(function() { return window._saveToGoogleDriveRaw(opts); });
+        opts = opts || {};
+        const _callerOnSafe = opts.onSafeToSwitch;
+        let _resolveResult, _rejectResult;
+        const resultPromise = new Promise(function(res, rej) { _resolveResult = res; _rejectResult = rej; });
+        window._runSerialized(function() {
+            return new Promise(function(releaseQueue) {
+                let _released = false;
+                const _release = function() { if (_released) return; _released = true; releaseQueue(); };
+                const rawPromise = window._saveToGoogleDriveRaw(Object.assign({}, opts, {
+                    onSafeToSwitch: function() {
+                        if (_callerOnSafe) { try { _callerOnSafe(); } catch (e) { console.error('[저장] onSafeToSwitch 콜백 오류:', e); } }
+                        _release(); // 대기열은 여기서 즉시 풀어줌 — 업로드는 대기열 밖에서 계속 진행
+                    }
+                }));
+                rawPromise.then(function(ok) { _release(); _resolveResult(ok); },
+                                 function(err) { _release(); _rejectResult(err); });
+            });
+        });
+        return resultPromise;
     };
 
     // 💡 [2026-10-27, 체감속도 개선 — "저장이 느리다" 신고] 편집 내용은 이미 메모리(globalData)에만
@@ -1316,7 +1351,9 @@
 
                 globalData = saveData.globalData.map(function(obj) {
                     let row = obj.data;
-                    for (let key in obj) { if (key !== 'data') row[key] = obj[key]; }
+                    // 💡 [2026-10-28] 새 시트로 여는 진짜 "프로젝트 열기"라 WBS 접힘(_wbsCollapsed)은
+                    //    옛 저장분에 남아있어도 무시 — 04c _serializeGD 주석 참고.
+                    for (let key in obj) { if (key !== 'data' && key !== '_wbsCollapsed') row[key] = obj[key]; }
                     return row;
                 });
                 window.changeLogs = saveData.changeLogs || [];
@@ -1884,7 +1921,9 @@
                 window._openAsNewSheet(fileId, fileId, fileName); // 💡 [멀티시트] 지금 보던 시트를 저장하고 새 시트로 등록
                 globalData = saveData.globalData.map(obj => {
                     let row = obj.data;
-                    for (let key in obj) { if (key !== 'data') row[key] = obj[key]; }
+                    // 💡 [2026-10-28] 새 시트로 여는 진짜 "프로젝트 열기"라 WBS 접힘(_wbsCollapsed)은
+                    //    옛 저장분에 남아있어도 무시 — _serializeGD 주석 참고.
+                    for (let key in obj) { if (key !== 'data' && key !== '_wbsCollapsed') row[key] = obj[key]; }
                     return row;
                 });
                 window.changeLogs = saveData.changeLogs || [];
