@@ -10301,31 +10301,26 @@ ${docsJson}`;
             <div id="gantt-qa-box" onclick="event.stopPropagation()" ondragover="window._ganttQaHandleDragOver(event)" ondragleave="window._ganttQaHandleDragLeave(event)" ondrop="window._ganttQaHandleDrop(event)" style="pointer-events:all; position:fixed; background:#ffffff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
                 <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 <span id="gantt-qa-title">${_qEn ? 'AI Q&A' : 'AI 문답'}</span></span>
-                    <div style="display:flex; gap:5px; align-items:center;">
-                        <!-- 💡 [2026-09-13 버그수정] 기본 배경을 다른 모달의 헤더 버튼(예: AI 업무 분석 프롬프트
-                             편집창의 🕒 이력 버튼)과 동일한 톤(#e8f4fd, 테두리 없음)으로 맞춰 헤더(#e7f3ff)
-                             위에서 튀지 않게 통일 — 예전엔 #d8edfb로 더 진하게 박혀 있어 다른 모달과 이질적이었음. -->
-                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🔇</button>
+                    <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:26px; height:26px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
+                </div>
+                <!-- 🛠 [2026-10-28, 사용자 요청 "버튼 모아서 메인 헤더처럼"] 제목줄에 다 몰아놨던 아이콘
+                     버튼 6개(🔇·🔑·📝·🐛·🧾·🪟)를 제목줄에서 빼서, 라벨을 가진 전용 둘째 줄(메인 헤더의
+                     툴바와 같은 패턴 — 이 모달 안에서도 "📂 질문 대상"/"💡 자주 쓰는 질문" 라벨+컨트롤
+                     줄과 같은 관례)로 옮겼다. 🔇(음성 답변 끄기/켜기)는 더 이상 여기 없음 — 성격이 같은
+                     🎙️ 음성문답 버튼 옆(하단 72px 칸)으로 옮겼다(바로 아래 참고). 투명도(🪟)는 오른쪽
+                     끝에 분리해 둔다(사용 빈도가 달라 한 묶음으로 섞으면 오히려 찾기 어려움). -->
+                <div id="gantt-qa-toolbar" style="padding:6px 14px; display:flex; align-items:center; gap:5px; flex-wrap:wrap; background:#f6f8fa; border-bottom:1px solid #d0dde8;">
+                    <span style="font-size:10.5px; color:#888; font-weight:bold; white-space:nowrap; margin-right:1px;">${_qEn ? '🛠 Tools' : '🛠 도구'}</span>
 <button id="gantt-qa-sap-login-btn" onclick="event.stopPropagation(); window.openSapLoginSettings && window.openSapLoginSettings()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="${_qEn ? 'Auto-login settings (SAP · Groupware)' : '자동 로그인 설정 (SAP · 그룹웨어)'}" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🔑</button>
 <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
-                        <!-- 🐛/🧾 [2026-10-28, 사용자 요청] 디버깅 기록 묶음 — ① 🐛 "지금 바로 기록"은
-                             Phase 10(js/30)의 🚩 신고 모달을 uid 없이 그대로 열어, 특정 AI 답변과 무관하게
-                             지금 겪는 문제를 즉시 남긴다(현재 탭 자동 첨부 — 분류를 사람이 고르지 않아도 됨).
-                             ② 🧾 "내보내기"는 쌓인 기록 전체를 js/31의 기존 [📤 내보내기]와 완전히 같은
-                             경로로 묶어서 Claude가 읽는 파일로 저장한다. 두 버튼 다 새 저장 로직 없이
-                             기존 Phase 10 파이프라인만 재사용. -->
-                        <button id="gantt-qa-bug-report-btn" onclick="event.stopPropagation(); window._issueOpenReport && window._issueOpenReport()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="${_qEn ? 'Log a bug/problem right now (current screen is attached automatically)' : '지금 겪는 문제 바로 기록하기 (현재 화면 자동 첨부)'}" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🐛</button>
-                        <button id="gantt-qa-debug-export-btn" onclick="event.stopPropagation(); window._issueQuickExportFromQa && window._issueQuickExportFromQa()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="${_qEn ? 'Save all logged records for Claude (admin password) — writes digest_<date>.json locally and to Drive' : '쌓인 기록 전체 내보내기 (관리자 비밀번호) — digest_<날짜>.json을 로컬·Drive에 저장'}" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🧾</button>
-                        <!-- 💡 [2026-09-13 신규] 투명도 슬라이더 — 드래그해서 창 배경 투명도 실시간 조절.
-                             배경도 위 두 버튼과 같은 개념(#e8f4fd, 테두리 없음)으로 통일. -->
-                        <div onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:3px; background:#e8f4fd; border-radius:6px; padding:2px 6px; border:none;" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
-                            <span style="font-size:11px; color:#5585a8; user-select:none;">🪟</span>
-                            <input type="range" id="gantt-qa-opacity-slider" min="20" max="100" value="100" step="5"
-                                   oninput="window._ganttQaSetBgAlpha(this.value)"
-                                   style="width:55px; height:14px; cursor:pointer; accent-color:#1971c2; vertical-align:middle;">
-                            <span id="gantt-qa-opacity-label" style="font-size:10px; color:#5585a8; min-width:28px; text-align:right; user-select:none;">100%</span>
-                        </div>
-                        <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:26px; height:26px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
+                    <button id="gantt-qa-bug-report-btn" onclick="event.stopPropagation(); window._issueOpenReport && window._issueOpenReport()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="${_qEn ? 'Log a bug/problem right now (current screen is attached automatically)' : '지금 겪는 문제 바로 기록하기 (현재 화면 자동 첨부)'}" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🐛</button>
+                    <button id="gantt-qa-debug-export-btn" onclick="event.stopPropagation(); window._issueQuickExportFromQa && window._issueQuickExportFromQa()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="${_qEn ? 'Save all logged records for Claude (admin password) — writes digest_<date>.json locally and to Drive' : '쌓인 기록 전체 내보내기 (관리자 비밀번호) — digest_<날짜>.json을 로컬·Drive에 저장'}" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🧾</button>
+                    <div onclick="event.stopPropagation()" style="margin-left:auto; display:flex; align-items:center; gap:3px; background:#e8f4fd; border-radius:6px; padding:2px 6px; border:none;" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
+                        <span style="font-size:11px; color:#5585a8; user-select:none;">🪟</span>
+                        <input type="range" id="gantt-qa-opacity-slider" min="20" max="100" value="100" step="5"
+                               oninput="window._ganttQaSetBgAlpha(this.value)"
+                               style="width:55px; height:14px; cursor:pointer; accent-color:#1971c2; vertical-align:middle;">
+                        <span id="gantt-qa-opacity-label" style="font-size:10px; color:#5585a8; min-width:28px; text-align:right; user-select:none;">100%</span>
                     </div>
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px; background:transparent;"></div>
@@ -10359,6 +10354,11 @@ ${docsJson}`;
                         </div>
                     </div>
                     <div style="flex:0 0 72px; display:flex; flex-direction:column; gap:6px; align-items:stretch;">
+                        <!-- 🔇/🔊 [2026-10-28, 사용자 요청 "스피커 뮤트 옵션은 음성문답 버튼으로 위치 이동"]
+                             제목줄에 있던 음성 답변 끄기/켜기 버튼을 음성문답(음성 입력) 버튼 바로 위로
+                             이동 — 음성 관련 두 버튼이 한 칸에 모임. id·onclick·_ganttQaUpdateVoiceBtn()의
+                             textContent/title 갱신 로직은 그대로 두고 위치만 옮겼다(동작 변경 없음). -->
+                        <button id="gantt-qa-voice-toggle-btn" onclick="window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="flex:0 0 auto; width:100%; box-sizing:border-box; background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:1px 4px; height:22px; line-height:1; transition:background .15s;">🔇</button>
                         <button id="gantt-qa-mic-btn2" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Voice' : '음성문답'}</button>
                         <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear Chat' : '대화삭제'}</button>
                     </div>
