@@ -494,6 +494,64 @@
         }
     ];
 
+    // ── 🔗 [2026-10-28] 목록형 도구 결과 → 행 클릭 칩 메뉴 (데이터) ─────────────
+    //  SAP 자재 조회 표(js/04g `_sapSelectMaterial`/`renderMatRows`, js/33)와 같은 패턴을
+    //  그룹웨어 목록에도 적용한다 — 사람 제안(2026-10-27): "SAP처럼 표로 보여주고 행 클릭하면
+    //  칩 명령어가 나오게 하면 어떤가". AI가 "8번 문서"처럼 사람 말을 다시 숫자로 옮기다
+    //  id/docNum을 혼동하거나(217788을 docNum 자리에) 엉뚱한 기능으로 오라우팅되는 사고
+    //  (SAP 자재조회로 샘) 가 이 세션에서 반복됐는데, 행 클릭은 **그 행의 진짜 식별자를
+    //  그대로** 넘기므로 자유 문장에서 숫자를 다시 추출/추측하는 단계 자체가 없어진다.
+    //  렌더링·클릭 처리는 js/04h(`_qaBuildRowChipTable`/`_qaRowChipClick`) — 여기는 "어떤
+    //  도구 결과를 어떤 모양으로 보여줄지"만 데이터로 정한다. 새 모듈을 추가하려면
+    //  QA_ROW_CHIPS 에 한 줄, 필요하면 QA_ROW_CHIP_KINDS 에 kind 하나만 추가하면 된다.
+    window.QA_ROW_CHIP_KINDS = window.QA_ROW_CHIP_KINDS || {
+        approval: {
+            cols: [
+                { label: '제목', get: function (r) { return r.title || r.subject || ''; } },
+                { label: '양식', get: function (r) { return (r.formName || '').replace(/<[^>]+>/g, ''); } },
+                { label: '기안자', get: function (r) { return r.drafter || r.drafterName || ''; } },
+                { label: '날짜', get: function (r) { return (r.at || r.draftedAt || '').slice(0, 10); } },
+                { label: '문서번호', get: function (r) { return r.docNum || ('id:' + r.id); } }
+            ],
+            header: function (r) {
+                return (r.title || r.subject || '') + ' — ' + window._t('무엇을 할까요?', 'What would you like to do?');
+            },
+            // ⚠️ docNum이 있으면 n:, 없으면(임시저장/진행중) i:(=docId) — docs/groupware.md
+            // "docNum 없이 id만 있으면 docId로" 규칙과 동일한 구분을 여기서도 지킨다.
+            menu: function (r) {
+                var ref = r.docNum ? ('n:' + r.docNum) : ('i:' + r.id);
+                return [
+                    { label: '📄 ' + window._t('내용 보기', 'View content'), value: '__gwApprovalRead__' + ref },
+                    { label: '✍️ ' + window._t('그대로 복사', 'Copy as-is'), value: '__gwApprovalCopy__' + ref },
+                    { label: '📝 ' + window._t('지금 프로젝트로 기안 작성', 'Compose with this project'), value: '__gwApprovalCompose__' + ref }
+                ];
+            }
+        },
+        board: {
+            cols: [
+                { label: '게시판', get: function (r) { return r.boardName || ''; } },
+                { label: '제목', get: function (r) { return r.title || ''; } },
+                { label: '작성자', get: function (r) { return r.writer || ''; } },
+                { label: '날짜', get: function (r) { return (r.createdAt || '').slice(0, 10); } }
+            ],
+            header: function (r) { return (r.title || '') + ' — ' + window._t('무엇을 할까요?', 'What would you like to do?'); },
+            menu: function (r) {
+                return [{ label: '📰 ' + window._t('본문 보기', 'View post'), value: '__gwBoardRead__' + r.boardId + ':' + r.id }];
+            }
+        }
+    };
+
+    // 도구 id → kind. 메일(gw_mail)·인사관리(insa_menus/insa_screen)는 일부러 안 넣었다 —
+    // 메일은 "문서 하나 읽기" 같은 단건 상세 도구가 아직 없고(목록 preview가 전부라 칩으로
+    // 할 수 있는 다음 동작이 없다), 인사관리는 결과가 행 목록이 아니라 메뉴/화면 텍스트라
+    // 이 "행+칩" 모양 자체가 안 맞는다. 두 모듈에 단건 상세 도구가 생기면 그때 kind를
+    // 추가해 한 줄만 보태면 된다.
+    window.QA_ROW_CHIPS = window.QA_ROW_CHIPS || {
+        gw_approval_search: { kind: 'approval' },
+        gw_approval_box: { kind: 'approval' },
+        gw_board: { kind: 'board' }
+    };
+
 
     // ── 호출 기록 (Phase 10 학습 신호) ───────────────────────────────
     // 조용히 삼키지 않는다 — 어떤 질문이 어떤 도구로 갔고 성공했는지 남겨야

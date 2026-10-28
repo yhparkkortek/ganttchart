@@ -1071,6 +1071,49 @@
         window._ganttQaHistory.push({ role: 'ai', confirmButtonsId: id, text: text });
     };
 
+    // ── 🔗 [2026-10-28] 목록형 도구 결과 → 행 클릭 표 (SAP 자재 조회 표와 같은 패턴) ──────
+    //  모양은 js/33 `renderMatRows`를 참고했고, "어떤 도구가 이 표를 쓰는지/행마다 뭘 보여줄지"
+    //  는 js/40 `QA_ROW_CHIP_KINDS`/`QA_ROW_CHIPS`(데이터) — 여기는 그 데이터를 그대로
+    //  그린다. 행 클릭 → `_ganttQaShowConfirmButtons`로 그 행 전용 칩 메뉴를 띄우는 것까지
+    //  기존 공용 경로를 그대로 쓴다(새 UI 패턴을 만들지 않는다).
+    window._qaRowChipStore = {};
+    window._qaBuildRowChipTable = function (kind, rows) {
+        const cfg = (window.QA_ROW_CHIP_KINDS || {})[kind];
+        if (!cfg || !rows || !rows.length) return '';
+        const esc = function (v) { return (v == null ? '' : String(v)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+        const tableId = 'qarows_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        window._qaRowChipStore[tableId] = rows;
+        const thS = 'padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
+        const tdS = 'padding:4px 7px; border-bottom:1px solid #eef0f3; max-width:220px; overflow:hidden; text-overflow:ellipsis;';
+        let html = '<div style="font-size:11px;color:#5577aa;margin-bottom:4px;">💡 '
+            + window._t('행을 클릭하면 할 수 있는 작업이 나옵니다', 'Click a row to see what you can do') + '</div>'
+            + '<div style="max-height:260px; overflow:auto; border:1px solid #dde4ec; border-radius:5px;">'
+            + '<table style="border-collapse:collapse; font-size:12px; width:100%;"><thead><tr>'
+            + cfg.cols.map(function (c) { return '<th style="' + thS + '">' + esc(c.label) + '</th>'; }).join('')
+            + '</tr></thead><tbody>';
+        rows.forEach(function (r, i) {
+            const bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
+            html += '<tr style="background:' + bg + '; cursor:pointer;" '
+                + 'onclick="window._qaRowChipClick(\'' + kind + '\',\'' + tableId + '\',' + i + ')" '
+                + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
+                + cfg.cols.map(function (c) {
+                    const v = c.get(r) || '';
+                    return '<td style="' + tdS + '" title="' + esc(v) + '">' + esc(v) + '</td>';
+                }).join('')
+                + '</tr>';
+        });
+        html += '</tbody></table></div>';
+        return html;
+    };
+    window._qaRowChipClick = function (kind, tableId, idx) {
+        const rows = window._qaRowChipStore[tableId];
+        const row = rows && rows[idx];
+        const cfg = (window.QA_ROW_CHIP_KINDS || {})[kind];
+        if (!row || !cfg || !cfg.menu) return;
+        window._ganttQaShowConfirmButtons(cfg.header(row), cfg.menu(row), { persistent: true });
+        window._renderGanttQaMessages();
+    };
+
     // 🆕 [2026-09-28 신규, 사용자 요청] 구매오더 필수 입력 통합 폼 — 사번/프로젝트코드/요청사유/목적을
     // 여러 턴에 나눠 물어보는 대신, 한 번에 모두 입력할 수 있는 통합 폼을 보여준다.
     // ask_buyer → ask_fields 순차 질문 흐름을 이 하나의 폼으로 대체.
@@ -4338,6 +4381,78 @@ ${docsJson}`;
                 // 폴백: 드롭다운 함수가 아직 로드 안 됐으면 문서 종류 없이 보냄
                 input.value = _docMat + (_isLookup ? ' 문서 조회해줘' : ' 문서 저장해줘');
                 window.sendGanttQaMessage();
+            }
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 📄✍️📝 [2026-10-28] 그룹웨어 행 클릭 칩 — 전자결재 목록 표에서 행을 클릭해 고른 것.
+        //    ref 는 'n:M3T-2609-016'(docNum 있음) 또는 'i:220640'(docNum 없음, docId로).
+        //    AI 텍스트 해석을 거치지 않고 정확한 식별자로 바로 부른다 — "8번 문서 복사해줘"
+        //    같은 말을 다시 숫자로 옮기다 id/docNum을 혼동하거나 SAP 쪽으로 오라우팅되는
+        //    사고(docs/groupware.md 2026-10-28 기록)를 구조적으로 막는다.
+        if (question.indexOf('__gwApprovalRead__') === 0) {
+            const _ref = question.replace(/^__gwApprovalRead__/, '');
+            input.value = '';
+            window._ganttQaHistory.push({ role: 'ai', pending: true,
+                text: '⏳ ' + window._t('문서 내용을 읽는 중...', 'Reading the document...') });
+            window._renderGanttQaMessages();
+            let _arRes;
+            try {
+                const _arQ = _ref.indexOf('n:') === 0 ? ('docNum=' + encodeURIComponent(_ref.slice(2)))
+                                                       : ('docId=' + encodeURIComponent(_ref.slice(2)));
+                _arRes = await fetch('http://127.0.0.1:5000/gw/approval/read?' + _arQ).then(function (r) { return r.json(); });
+            } catch (e) { _arRes = { ok: false, message: String(e && e.message || e) }; }
+            window._ganttQaHistory.pop();
+            if (!_arRes || !_arRes.ok) {
+                window._ganttQaHistory.push({ role: 'ai', error: true,
+                    text: '⚠️ ' + window._t('문서를 읽지 못했습니다: ', 'Could not read the document: ') + ((_arRes && _arRes.message) || '') });
+            } else {
+                const _arLines = Object.keys(_arRes.fields || {})
+                    .filter(function (k) { return String(_arRes.fields[k] || '').trim(); })
+                    .map(function (k) { return '- ' + k + ': ' + _arRes.fields[k]; });
+                const _arChecks = (_arRes.checks || []).length
+                    ? ('\n' + window._t('체크된 항목: ', 'Checked: ') + _arRes.checks.join(', ')) : '';
+                window._ganttQaHistory.push({ role: 'ai',
+                    text: '📄 ' + (_arRes.subject || '') + '\n\n' + _arLines.join('\n') + _arChecks });
+            }
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+        if (question.indexOf('__gwApprovalCopy__') === 0 || question.indexOf('__gwApprovalCompose__') === 0) {
+            const _isAsIs = question.indexOf('__gwApprovalCopy__') === 0;
+            const _acRef = question.replace(/^__gwApproval(Copy|Compose)__/, '');
+            input.value = '';
+            const _acOpts = _isAsIs ? { asIs: true } : {};
+            if (_acRef.indexOf('n:') === 0) {
+                if (window.apvComposeFrom) window.apvComposeFrom(_acRef.slice(2), _acOpts);
+            } else {
+                _acOpts.docId = _acRef.slice(2);
+                if (window.apvComposeFrom) window.apvComposeFrom('', _acOpts);
+            }
+            input.focus();
+            return;
+        }
+        if (question.indexOf('__gwBoardRead__') === 0) {
+            const _brParts = question.replace(/^__gwBoardRead__/, '').split(':');
+            input.value = '';
+            window._ganttQaHistory.push({ role: 'ai', pending: true,
+                text: '⏳ ' + window._t('게시물 본문을 읽는 중...', 'Reading the post...') });
+            window._renderGanttQaMessages();
+            let _brRes;
+            try {
+                _brRes = await fetch('http://127.0.0.1:5000/gw/board/post?boardId=' + encodeURIComponent(_brParts[0])
+                    + '&postId=' + encodeURIComponent(_brParts[1])).then(function (r) { return r.json(); });
+            } catch (e) { _brRes = { ok: false, message: String(e && e.message || e) }; }
+            window._ganttQaHistory.pop();
+            if (!_brRes || !_brRes.ok) {
+                window._ganttQaHistory.push({ role: 'ai', error: true,
+                    text: '⚠️ ' + window._t('게시물을 읽지 못했습니다: ', 'Could not read the post: ') + ((_brRes && _brRes.message) || '') });
+            } else {
+                const _brNote = _brRes.bodyNote ? ('\n\n(' + _brRes.bodyNote + ')') : '';
+                window._ganttQaHistory.push({ role: 'ai', text: '📰 ' + (_brRes.title || '') + '\n\n' + (_brRes.body || '') + _brNote });
             }
             window._renderGanttQaMessages();
             input.focus();
@@ -7990,6 +8105,15 @@ ${docsJson}`;
                         text: '<button style="display:inline-block;margin-top:2px;padding:3px 10px;border:1px solid #c0a0d8;border-radius:4px;cursor:pointer;font-size:12px;background:#ede4f5;color:#5a3680;" onclick="window.openWbsGroupSuggestions()">🗂 '
                             + window._t('그룹 제안 모달 열기', 'Open group suggestions') + '</button>' });
                 }
+                // 🔗 [2026-10-28] 목록형 도구 결과는 행 클릭 칩 표를 별도 말풍선으로 덧붙인다 —
+                //    AI의 번호 매긴 설명과, 사람이 정확한 식별자로 바로 이어갈 수 있는 표를 같이 둔다.
+                (_toolRes.calls || []).forEach(function (c) {
+                    if (!c.ok || !Array.isArray(c.rows) || !c.rows.length) return;
+                    var _rcCfg = (window.QA_ROW_CHIPS || {})[c.id];
+                    if (!_rcCfg || !window._qaBuildRowChipTable) return;
+                    var _rcHtml = window._qaBuildRowChipTable(_rcCfg.kind, c.rows);
+                    if (_rcHtml) window._ganttQaHistory.push({ role: 'ai', rawHtml: true, text: _rcHtml });
+                });
                 window._ganttQaSending = false;
                 input.disabled = false;
                 if (sendBtn) {
