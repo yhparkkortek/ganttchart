@@ -5961,13 +5961,28 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
         raise RuntimeError(f'1번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e}')
 
     # ── 행 0에서 채워진 LIFNR/MWSKZ 값 읽기 (Ctrl+C에 해당) ──────────────────
-    lifnr_filled = ''
-    mwskz_filled = ''
-    try:
-        lifnr_filled = str(grid.GetCellValue(0, 'LIFNR')).strip()
-        mwskz_filled = str(grid.GetCellValue(0, 'MWSKZ')).strip()
-    except Exception:
-        pass  # 읽기 실패 시 이후 행도 F4 폴백
+    # 🐛 [2026-10-28 실사용 버그수정] F4 선택 직후 바로 GetCellValue로 읽으면 SAP 그리드가
+    # 아직 값을 커밋하기 전이라 **빈 문자열**이 읽힐 때가 있다(LIFNR는 대체로 바로 반영되지만
+    # MWSKZ는 더 늦게 반영되는 것으로 실사용에서 확인됨). 그러면 아래 "if mwskz_filled:" 가
+    # 거짓이 되어 행 1~N 전체에 세금코드 복사가 통째로 스킵되고, 그 상태로도 그리드/업로드
+    # 자체는 ok:true를 반환해 **저장(SAVE) 단계에서야** SAP이 "데이터가 존재하지 않습니다"로
+    # 막는 사고가 났다("엑셀 업로드 후 결과 그리드를 찾지 못했습니다" 오류로 잘못 보고됨 —
+    # 실제로는 그리드는 있었고 세금코드만 8/9행이 비어 있었음, confirm_save_po가 그 상태에서
+    # 저장을 누르면 "User confirm"이 아니라 별도의 오류 안내 팝업이 뜨고 btnBUTTON_1이 없어
+    # 그 팝업을 못 넘겨 EBELN도 못 읽음 — 이중 증상이었다). 최대 5회(0.3초 간격) 재시도 후에도
+    # 비어 있으면 그제서야 포기하고 아래 행별 F4 폴백에 맡긴다.
+    def _read_cell_retry(row, col, tries=5, delay=0.3):
+        for _ in range(tries):
+            try:
+                v = str(grid.GetCellValue(row, col)).strip()
+            except Exception:
+                v = ''
+            if v:
+                return v
+            time.sleep(delay)
+        return ''
+    lifnr_filled = _read_cell_retry(0, 'LIFNR')
+    mwskz_filled = _read_cell_retry(0, 'MWSKZ')
 
     # ── 행 1~N: Ctrl+V에 해당 — 이미 검증된 값을 modifyCell로 직접 씀 ─────────
     for idx in range(1, len(items)):
@@ -6011,6 +6026,37 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
                     time.sleep(0.5)
                 except Exception as e2:
                     raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e2}')
+
+    # 🐛 [2026-10-28 실사용 버그수정] 위 복사 루프가 예외 없이 "성공"해도 SAP 그리드가 조용히
+    # 반영을 안 받아들인 행이 있을 수 있다(오늘 실사용에서 MWSKZ 8/9행이 바로 이 증상이었다 —
+    # modifyCell은 예외를 던지지 않았는데 실제로는 안 먹음). 저장을 누르기 전에 전 행을 다시
+    # 읽어 빈 셀이 남아있으면 여기서 한 번 더 복구를 시도한다 — 이 관문을 통과 못 하면 저장
+    # 시점에 "데이터가 존재하지 않습니다"로 막히고, 그마저 못 잡으면 EBELN도 못 읽는 이중
+    # 실패로 이어지므로(오늘 실제로 겪은 증상) 여기서 미리 잡는 게 훨씬 안전하다.
+    if lifnr_filled or mwskz_filled:
+        for idx in range(1, len(items)):
+            if lifnr_filled and not _read_cell_retry(idx, 'LIFNR', tries=2, delay=0.3):
+                try:
+                    grid.modifyCell(idx, 'LIFNR', lifnr_filled)
+                except Exception:
+                    pass
+            if mwskz_filled and not _read_cell_retry(idx, 'MWSKZ', tries=2, delay=0.3):
+                try:
+                    grid.modifyCell(idx, 'MWSKZ', mwskz_filled)
+                except Exception:
+                    pass
+        # 복구 시도 후에도 비어있는 행이 있으면 여기서 분명하게 실패시킨다 — 조용히 넘어가면
+        # 저장 시점에야 "데이터가 존재하지 않습니다"로 막히고 원인 추적이 훨씬 어려워진다.
+        still_blank = []
+        for idx in range(1, len(items)):
+            if lifnr_filled and not _read_cell_retry(idx, 'LIFNR', tries=1, delay=0):
+                still_blank.append(f'{idx + 1}행 협력사')
+            if mwskz_filled and not _read_cell_retry(idx, 'MWSKZ', tries=1, delay=0):
+                still_blank.append(f'{idx + 1}행 세금코드')
+        if still_blank:
+            raise RuntimeError('품목 행에 협력사/세금코드가 채워지지 않았습니다(복구 재시도 후에도): '
+                                + ', '.join(still_blank) + ' — 저장하면 SAP이 "데이터가 존재하지'
+                                ' 않습니다"로 막을 수 있으니 저장 전에 확인이 필요합니다.')
 
     # 품목별 단가(NETPR)/EPEIN — PDF에서 추출한 값을 행 순서대로 입력.
     # [2026-09-30 버그수정] 소수점 단가(예: 321.94)를 NETPR에 그대로 쓰면 SAP KRW 필드가
@@ -6121,6 +6167,9 @@ def confirm_save_po(purchasing_org='9000', plant='1000', currency='KRW'):
     화면(그리드에 협력사/단가가 채워진 채 저장 대기 중)이어야 한다 — 그 사이 사람이나
     다른 스크립트가 화면을 바꿨으면 예상 못한 상태에서 저장이 실행될 위험이 있다."""
     session = _get_sap_session()
+    # 🐛 [2026-10-28] 직전 저장 시도가 오류 팝업을 남긴 채 끝났을 수 있다(바로 위 두 버그가
+    # 그런 상태를 만들었다) — prepare_po_from_excel과 동일하게 시작 전에 정리한다.
+    _sap_close_stray_popups(session)
 
     try:
         session.findById('wnd[0]/tbar[1]/btn[5]').press()  # 저장
@@ -6141,11 +6190,40 @@ def confirm_save_po(purchasing_org='9000', plant='1000', currency='KRW'):
         pass
 
     # 저장 확인 팝업이 뜨면 확인(매크로에서 확인된 패턴) — 안 뜨면 조용히 건너뜀.
+    # 🐛 [2026-10-28 실사용 버그수정] 이 팝업을 항상 "저장하시겠습니까? 예/아니요" 확인창으로
+    # 가정하고 btnBUTTON_1을 바로 눌렀는데, 실제로는 **저장이 막혔을 때 뜨는 오류 안내 팝업**
+    # ("정보" / "처리전 오류내용을 확인하십시오", 구조가 달라 usr/btnBUTTON_1이 아예 없음 —
+    # usr/txtMESSTXT1에 메시지가 있음)일 수도 있다는 게 오늘 실사용에서 확인됐다. 그 경우
+    # btnBUTTON_1 찾기가 예외를 던지고 바로 위 except가 조용히 삼켜서, **실제로는 저장이
+    # 하나도 안 됐는데** 아래 로직이 "저장됐지만 오더번호를 못 읽었다"는 오해의 소지가 있는
+    # 메시지를 내보내는 이중 사고로 이어졌다. 이제 팝업이 있으면 먼저 종류를 구분한다.
     try:
-        session.findById('wnd[1]/usr/btnBUTTON_1').press()
-        time.sleep(0.8)
-    except Exception:
-        pass
+        w1 = session.findById('wnd[1]')
+        try:
+            session.findById('wnd[1]/usr/btnBUTTON_1').press()  # 정상 확인창
+            time.sleep(0.8)
+        except Exception:
+            # btnBUTTON_1이 없는 팝업 — 오류/안내성 팝업일 가능성이 높음. 메시지를 최대한
+            # 읽어서 실패를 분명하게 보고한다(조용히 삼키지 않음).
+            _popup_msg = ''
+            try:
+                _popup_msg = (w1.findById('usr/txtMESSTXT1').Text or '').strip()
+            except Exception:
+                pass
+            _popup_title = ''
+            try:
+                _popup_title = (w1.Text or '').strip()
+            except Exception:
+                pass
+            raise RuntimeError(
+                f'저장(SAVE) 후 예상과 다른 팝업이 떴습니다(제목: "{_popup_title}"'
+                + (f', 내용: "{_popup_msg}"' if _popup_msg else '')
+                + ') — 실제로 저장되지 않았을 가능성이 높습니다. SAP 화면을 직접 확인해주세요.'
+            )
+    except Exception as _e:
+        if isinstance(_e, RuntimeError):
+            raise
+        pass  # wnd[1] 자체가 없음(팝업 없이 바로 저장된 경우) — 정상 흐름
 
     # 팝업 확인 후 상태표시줄 재확인 (아직 못 읽었을 경우)
     if not po_number:
