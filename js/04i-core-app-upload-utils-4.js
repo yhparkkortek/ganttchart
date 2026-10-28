@@ -1735,9 +1735,11 @@ window.deleteHistoryByDateRange = function() {
         const newVal = select.value;
         const oldVal = decodeURIComponent(select.closest('td').getAttribute('data-raw') || '');
         if (newVal !== oldVal) {
-            // 하위 행도 함께 변경
-            window.applyStatusToChildren(rowIndex, colIndex, newVal);
-            renderTable(globalData); applyFilters();
+            // 💡 [2026-10-28 버그 수정, "상태 설정 느림" 실사용 신고] renderTable() 전체 재생성(최대
+            //    1000행) 대신 실제로 바뀐 행(클릭한 행 + 하위)만 패치 — js/04j _patchStatusRowDom 참고.
+            const affected = window.applyStatusToChildren(rowIndex, colIndex, newVal); // 하위 행도 함께 변경
+            affected.forEach(i => window._patchStatusRowDom(i));
+            applyFilters();
             window.pushUndoSnapshot();
         }
     };

@@ -275,6 +275,29 @@
     }
 
     // 행별 알림 필요 여부 토글 (추후 자동 메일 발송 트리거용 데이터만 저장 — 발송 로직은 별도)
+    // 💡 [2026-10-28 버그 수정, "핀셋 느림" 실사용 신고] 핀(📌) 토글은 그 행의 알림 여부만 바뀌고
+    //    날짜·차트·내용 등 다른 칸은 전혀 안 바뀐다 — renderTable() 전체 재생성(최대 1000행) 대신
+    //    그 행의 DOM만 직접 고쳐서 클릭이 즉시 반응하게 한다. renderTable()이 만드는 핀 아이콘
+    //    HTML(js/04j)과 반드시 같은 결과를 내도록 그대로 맞춰 재사용.
+    window._patchPinRowDom = function(rowIndex) {
+        const row = globalData[rowIndex];
+        if (!row) return;
+        const tr = document.querySelector(`#table-body tr[data-row-index="${rowIndex}"]`);
+        if (!tr) return; // 필터로 숨겨진 행 등 — 다음 전체 렌더에서 자연히 맞음
+        const alarmOn = !!row._알림;
+        tr.classList.toggle('alarm-on', alarmOn);
+        const noTd = tr.querySelector('.no-td');
+        const pinSpan = noTd ? noTd.querySelector('span') : null;
+        if (pinSpan) {
+            pinSpan.style.cssText = `font-size:13px; cursor:pointer; flex-shrink:0; ${alarmOn
+                ? 'opacity:1; filter:grayscale(1) sepia(1) saturate(6) hue-rotate(180deg) brightness(0.9); transform:scale(1.3);'
+                : 'opacity:1; transform:scale(1.0);'}`;
+            pinSpan.title = alarmOn
+                ? '알림 켜짐 (클릭하여 끄기 · 더블클릭하면 알람 목록의 이 업무로 이동 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'
+                : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)';
+        }
+    };
+
     window.wrToggleAlarm = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
         const row = globalData[rowIndex];
@@ -299,20 +322,23 @@
 
         // 이미 여러 행이 선택되어 있고, 그 중 한 행의 핀을 '일반 클릭'했다면 → 선택된 행 전체를 같은 상태로 일괄 토글
         const isBulk = window._selectedRows && window._selectedRows.size > 1 && window._selectedRows.has(rowIndex);
+        let affected;
 
         if (isBulk) {
             const newState = !row._알림; // 클릭한 행 기준으로 전체를 동일하게 맞춤
-            window._selectedRows.forEach(idx => {
+            affected = Array.from(window._selectedRows);
+            affected.forEach(idx => {
                 const r = globalData[idx];
                 if (r) r._알림 = newState;
             });
             logChange(rowIndex, -1, '알림 설정', (newState ? '알림 일괄 켜짐' : '알림 일괄 꺼짐') + ` (${window._selectedRows.size}건)`);
         } else {
             row._알림 = !row._알림;
+            affected = [rowIndex];
             logChange(rowIndex, -1, '알림 설정', row._알림 ? '알림 켜짐' : '알림 꺼짐');
         }
 
-        renderTable(globalData);
+        affected.forEach(idx => window._patchPinRowDom(idx));
         applyFilters();
         if (window.paintRowSelection) window.paintRowSelection(); // 토글 후에도 선택 하이라이트 유지
         // 알람 탭이 열려 있으면 즉시 갱신
@@ -349,9 +375,8 @@
         for (let i = 1; i < globalData.length; i++) { if (globalData[i] && globalData[i]._알림) { anyOn = true; break; } }
         const newState = !anyOn;   // 하나라도 켜져 있으면(또는 전부 켜져 있으면) 먼저 전체 끄기
         let count = 0;
-        for (let i = 1; i < globalData.length; i++) { if (globalData[i]) { globalData[i]._알림 = newState; count++; } }
+        for (let i = 1; i < globalData.length; i++) { if (globalData[i]) { globalData[i]._알림 = newState; count++; window._patchPinRowDom(i); } }
         logChange(0, -1, '알림 설정', (newState ? '전체 알림 켜짐' : '전체 알림 꺼짐') + ` (${count}건)`);
-        renderTable(globalData);
         applyFilters();
         if (window.paintRowSelection) window.paintRowSelection();
         const alarmPanel = document.getElementById('tab-alarm');
