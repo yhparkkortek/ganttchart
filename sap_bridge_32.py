@@ -1555,6 +1555,11 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
         raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
     # 사용자 지적대로 Shift+F12(클립보드 붙여넣기)로 채운다 — 몇 줄이든 SAP가 알아서 스크롤하며
     # 다 채워주므로, 팝업 한 화면에 보이는 행 수(visible_rows)에 갇히지 않는다.
+    # 🐛 [2026-10-28 버그 수정, 실사용 제보 "Excel 클립보드 팝업"] 붙여넣기(sendVKey)가 실패하면
+    #    예전엔 여기서 바로 raise해서 아래 _clear_windows_clipboard()를 건너뛰었다 — 자재번호 목록
+    #    (큰 경우 수백 줄)이 클립보드에 그대로 남아, 나중에 아무 Excel 파일이나 열었다 닫을 때
+    #    "클립보드에 많은 양의 내용이 들어 있습니다" 팝업으로 튀어나왔다. try/finally로 묶어서
+    #    성공하든 실패하든 클립보드는 반드시 비운다.
     try:
         _set_windows_clipboard_text('\r\n'.join(mat_list))
     except Exception as e:
@@ -1562,10 +1567,11 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
     try:
         table.SetFocus()
         session.findById('wnd[1]').sendVKey(24)  # Shift+F12 = 클립보드에서 붙여넣기
+        time.sleep(0.5 + 0.05 * len(mat_list))  # 자재 수가 많으면 SAP가 표를 채우는 데도 시간이 더 걸림
     except Exception as e:
         raise RuntimeError(f'"자재코드 복수 선택" 팝업에 클립보드 붙여넣기(Shift+F12)를 실행하지 못했습니다: {e}')
-    time.sleep(0.5 + 0.05 * len(mat_list))  # 자재 수가 많으면 SAP가 표를 채우는 데도 시간이 더 걸림
-    _clear_windows_clipboard()  # 붙여넣기 후 클립보드 비움 — 나중에 Excel이 열릴 때 팝업 방지
+    finally:
+        _clear_windows_clipboard()  # 붙여넣기 후(성공이든 실패든) 클립보드 비움 — Excel 팝업 방지
 
     try:
         session.findById('wnd[1]/tbar[0]/btn[24]').press()
@@ -1765,6 +1771,9 @@ def resolve_materials_via_zmm009(materials, lgort='1000'):
         raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
     # Shift+F12(클립보드 붙여넣기) — SAP가 스크롤까지 알아서 처리해 건수 제한이 없다.
     # fetch_zmm009_material_list의 2026-09-23 버그수정 주석 참고(FirstVisibleRow는 안 먹는다).
+    # 🐛 [2026-10-28 버그 수정, 실사용 제보 "Excel 클립보드 팝업"] fetch_zmm009_material_list와
+    #    같은 버그 — 붙여넣기 실패 시 raise가 _clear_windows_clipboard()를 건너뛰어 자재번호 목록이
+    #    클립보드에 남았다. try/finally로 성공·실패 모두 반드시 비우게 함.
     try:
         _set_windows_clipboard_text('\r\n'.join(mat_list))
     except Exception as e:
@@ -1772,10 +1781,11 @@ def resolve_materials_via_zmm009(materials, lgort='1000'):
     try:
         table.SetFocus()
         session.findById('wnd[1]').sendVKey(24)
+        time.sleep(0.5 + 0.05 * len(mat_list))
     except Exception as e:
         raise RuntimeError(f'"자재코드 복수 선택" 팝업에 클립보드 붙여넣기(Shift+F12)를 실행하지 못했습니다: {e}')
-    time.sleep(0.5 + 0.05 * len(mat_list))
-    _clear_windows_clipboard()
+    finally:
+        _clear_windows_clipboard()
 
     try:
         session.findById('wnd[1]/tbar[0]/btn[24]').press()
