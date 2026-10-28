@@ -604,6 +604,10 @@
             // 📐 [2026-10-27] 비교 대상 기본값 보장 — recomputeGanttViewRange/렌더보다 먼저 호출해야
             //    이번 재계산의 첫 화면부터 배지/고스트 바가 반영된다(js/04e 참고).
             if (window._ensureDefaultCompareTarget) window._ensureDefaultCompareTarget();
+            // 📂 [2026-10-28 신규, "처음부터 다 펼쳐져 있어 복잡함" 지적 대응] WBS 기본 접힘 — 프로젝트를
+            //    새로 열 때 1회만 자식 있는 행을 전부 접어서 0레벨만 보이게 한다(js/04e 참고). renderTable()
+            //    보다 먼저 호출해야 이번 렌더부터 화살표(▶)가 접힌 상태로 그려진다.
+            if (window._ensureDefaultWbsCollapse) window._ensureDefaultWbsCollapse();
             // 💡 축 범위(현재 일정 + 비교 계획 포함) 재계산 — window.recomputeGanttViewRange()로 분리됨
             window.recomputeGanttViewRange();
 

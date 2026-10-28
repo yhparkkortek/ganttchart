@@ -1722,7 +1722,7 @@
                 const headerLockSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
                 headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="🔒 전체 업무 일정 고정 (클릭 시 현재 상태와 무관하게 항상 전체 잠금 · 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
-                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);">${wbsLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);"><span onclick="window.wrToggleAllWbsCollapse(event)" title="${window._currentLang === 'en' ? 'Expand/collapse all (expand all if any group is collapsed, otherwise collapse all)' : '전체 펼치기/접기 (하나라도 접혀 있으면 전체 펼치기, 전부 펼쳐져 있으면 전체 접기)'}" style="cursor:pointer; margin-right:3px; vertical-align:middle;">⊞</span>${wbsLabel}</th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
@@ -1902,7 +1902,7 @@
                         //    보고 처리한다(필터와 동시에 적용돼도 서로 안 꼬이도록 한 곳에서 같이 판정).
                         const _wbsHasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
                         const wbsToggleHtml = _wbsHasChildren
-                            ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand' : '펼치기') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
+                            ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" ondblclick="window.toggleWbsCollapseRecursive(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand (double-click: expand this branch fully)' : '펼치기 (더블클릭: 이 가지 전체 펼치기)') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
                             : `<span style="display:inline-block; width:11px;"></span>`;
                         // 💡 [2026-08-28 신규 → 뒤쪽 배치 → 드롭다운으로 변경] 담당구분(PM/ME/HW/...) 선택 배지 —
                         //    업무명 "뒤"에 작은 드롭다운(select)으로 붙여서 목록에서 바로 골라 지정한다(기존엔

@@ -245,6 +245,63 @@
         applyFilters();
     };
 
+    // 🌳 [2026-10-28 신규] 화살표 더블클릭 — 한 레벨씩 말고 이 가지(이 행 + 모든 하위 레벨)를 한 번에
+    //    끝까지 펼친다. 화살표는 업무명 셀(ondblclick="makeEditable(this)") 안에 있는 <span>이라,
+    //    stopPropagation 없이는 더블클릭이 셀까지 버블링돼 동시에 글자수정 모드로 들어간다 — 반드시 멈출 것.
+    //    (더블클릭은 항상 단일클릭 2번 + dblclick 순서로 오므로 toggleWbsCollapse가 먼저 두 번 토글되지만,
+    //    최종 상태는 여기서 결정적으로 false로 못박으므로 결과는 항상 "전체 펼침"으로 끝난다.)
+    window.toggleWbsCollapseRecursive = function(rowIndex, ev) {
+        if (ev) ev.stopPropagation();
+        const row = globalData[rowIndex];
+        if (!row) return;
+        const parentLevel = row._level || 0;
+        const expandLabel = window._currentLang === 'en' ? 'Collapse' : '접기';
+        row._wbsCollapsed = false;
+        for (let i = rowIndex; i < globalData.length; i++) {
+            if (i > rowIndex) {
+                const child = globalData[i];
+                if (!child) continue;
+                if ((child._level || 0) <= parentLevel) break;
+                child._wbsCollapsed = false;
+            }
+            const tr = document.querySelector(`tr[data-row-index="${i}"]`);
+            const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
+            if (arrow) { arrow.textContent = '▼'; arrow.title = expandLabel; }
+        }
+        applyFilters();
+    };
+
+    // 📂 [2026-10-28 신규] "개발업무(WBS)" 헤더 아이콘 — 행마다 화살표를 일일이 누르지 않고 전체를
+    //    한 번에 펼치거나 접는다. No.헤더 📌(wrToggleAllPins)·소요일헤더 🔒(wrToggleAllScheduleLock)와
+    //    같은 관례. 하나라도 접혀 있으면 전체 펼치기부터, 전부 펼쳐져 있으면 전체 접기.
+    window.wrToggleAllWbsCollapse = function(ev) {
+        if (ev) ev.stopPropagation();
+        if (!globalData || globalData.length <= 1) return;
+        const _en = window._currentLang === 'en';
+        let anyCollapsed = false;
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i]; if (!row) continue;
+            const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
+            if (hasChildren && row._wbsCollapsed) { anyCollapsed = true; break; }
+        }
+        const newState = anyCollapsed ? false : true;
+        let count = 0;
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i]; if (!row) continue;
+            const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
+            if (!hasChildren) continue;
+            row._wbsCollapsed = newState; count++;
+            const tr = document.querySelector(`tr[data-row-index="${i}"]`);
+            const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
+            if (arrow) { arrow.textContent = newState ? '▶' : '▼'; arrow.title = newState ? (_en ? 'Expand' : '펼치기') : (_en ? 'Collapse' : '접기'); }
+        }
+        applyFilters();
+        if (window.showToast) window.showToast(window._t(
+            newState ? `📂 전체 ${count}건을 접었습니다.` : `📂 전체 ${count}건을 펼쳤습니다.`,
+            newState ? `📂 Collapsed all ${count} group(s).` : `📂 Expanded all ${count} group(s).`
+        ), 'info');
+    };
+
     // ═══════════════════════════════════════════════════════════
     // 💡 [2026-08-28 신규 → 같은 날 개편] WBS 업무명 앞 "담당구분" 순환 토글 배지 — 클릭할 때마다
     //    담당구분 목록을 순서대로 한 칸씩 돌려가며 row._담당구분을 바꾼다. 원래는 AI 업무분석 프롬프트

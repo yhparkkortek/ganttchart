@@ -814,6 +814,23 @@
         if (kickoff) window._compareTargetId = kickoff.id;
     };
 
+    // 📂 [2026-10-28 신규, "처음 열면 다 펼쳐져 있어서 복잡함" 지적 대응] WBS 기본 접힘 — 프로젝트를
+    //    새로 열 때 1회만, 자식이 있는 모든 행을 접어서 0레벨만 보이게 한다. row._wbsCollapsed는 저장되지
+    //    않는 세션 상태(배열에 매단 속성이라 JSON 직렬화에 안 실림)라서 매번 새로 켜지만, 사용자가 그 뒤
+    //    직접 펼치거나 접은 상태는 존중해야 한다 — recalculateSchedules()가 편집마다 돌기 때문에 가드가
+    //    없으면 매번 되돌아간다. _ensureDefaultCompareTarget()과 같은 "프로젝트 키당 1회" 가드를 그대로 씀.
+    window._ensureDefaultWbsCollapse = function() {
+        const key = (typeof _baselineStorageKey === 'function') ? _baselineStorageKey() : 'local';
+        if (window._wbsDefaultCollapseAppliedForKey === key) return;
+        window._wbsDefaultCollapseAppliedForKey = key;
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i];
+            if (!row) continue;
+            const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
+            if (hasChildren && row._wbsCollapsed === undefined) row._wbsCollapsed = true;
+        }
+    };
+
     // 🆕 [2026-08-24] 이미 운용 중인(=새 프로젝트 등록 자동저장 시점을 놓친) 프로젝트를 위한 수동 지정 기능.
     //    _getInitialKickoffBaseline()이 라벨 문자열이 아니라 isInitialPlan 플래그로 찾기 때문에, 저장된
     //    계획 중 하나를 골라 이 플래그를 붙여주면 이름과 무관하게 동일하게 동작함(이름만 "최초 계획(킥오프)"로
