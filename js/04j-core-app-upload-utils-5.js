@@ -1926,10 +1926,19 @@
                             ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '';
                         let prefix = _wbsHasChildren
-                            ? `<span onclick="window.toggleWbsCollapse(${i}, event);" ondblclick="window.toggleWbsCollapseRecursive(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand (double-click: expand this branch fully)' : '펼치기 (더블클릭: 이 가지 전체 펼치기)') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; cursor:pointer; padding:2px 6px 2px 0; vertical-align:middle;">${_wbsToggleArrowGlyph}${_levelConnectorHtml}</span>`
+                            ? `<span onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand one level' : '한 단계 펼치기') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; cursor:pointer; padding:2px 6px 2px 0; vertical-align:middle;">${_wbsToggleArrowGlyph}${_levelConnectorHtml}</span>`
                             : `${_wbsToggleArrowGlyph}${_levelConnectorHtml}`;
+                        // 🔽 [2026-10-28 버그 수정 → 재설계] 더블클릭 방식은 화살표 히트존을 넓혀도 실사용에서
+                        //    여전히 글자수정으로 새는 경우가 있어 포기(사용자 피드백) — 대신 셀 오른쪽 끝에
+                        //    별도 ▼/▲ 아이콘을 둬서 "이 가지 전체 펼치기/접기"를 단일클릭으로 분리한다.
+                        //    "업무 상세내용" 헤더 화살표와 같은 모양, 현재 이 가지가 끝까지 펼쳐진 상태인지는
+                        //    window._wbsIsBranchFullyExpanded()로 매 렌더마다 다시 판정(js/04k).
+                        const _wbsBranchFullyExpanded = _wbsHasChildren && window._wbsIsBranchFullyExpanded(i);
+                        const wbsBranchArrowHtml = _wbsHasChildren
+                            ? `<span class="wbs-branch-arrow" onclick="window.toggleWbsBranchFull(${i}, event); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Expand/collapse this branch fully' : '이 가지 전체 펼치기/접기'}" style="position:absolute; right:3px; top:50%; transform:translateY(-50%); cursor:pointer; color:#aaa; font-size:9px; user-select:none;">${_wbsBranchFullyExpanded ? '▲' : '▼'}</span>`
+                            : '';
                         let indentEm = (row._level || 0) * 1.2;
-                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; ${_wbsHasChildren ? 'padding-right: 16px !important; position: relative;' : ''} font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
                         if (wbsColIdx === -1 && colIdx.wbs !== -1) wbsColIdx = colIdx.wbs; // 💡 단일 "개발업무(WBS)" 열 모드 대응
                         let wbsRawValue = encodeURIComponent(taskTxt);
@@ -1944,7 +1953,7 @@
                         } else {
                             wbsInnerHtml = prefix + escapeHtml(taskTxt) + wbsDisciplineBadge;
                         }
-                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}</td>`;
+                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}${wbsBranchArrowHtml}</td>`;
                         continue; 
                     } 
                     else if (cellIndex === colIdx.period) {

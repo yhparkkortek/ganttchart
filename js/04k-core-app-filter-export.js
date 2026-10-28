@@ -240,40 +240,51 @@
         const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
         if (arrow) {
             arrow.textContent = row._wbsCollapsed ? '▶' : '▼';
-            // 💡 [2026-10-28] 타이틀(펼치기/더블클릭 안내)은 화살표를 감싼 넓은 클릭존(부모 span)에 있음
             if (arrow.parentElement) arrow.parentElement.title = row._wbsCollapsed
-                ? (window._currentLang === 'en' ? 'Expand (double-click: expand this branch fully)' : '펼치기 (더블클릭: 이 가지 전체 펼치기)')
+                ? (window._currentLang === 'en' ? 'Expand one level' : '한 단계 펼치기')
                 : (window._currentLang === 'en' ? 'Collapse' : '접기');
         }
         applyFilters();
     };
 
-    // 🌳 [2026-10-28 신규] 화살표 더블클릭 — 한 레벨씩 말고 이 가지(이 행 + 모든 하위 레벨)를 한 번에
-    //    끝까지 펼친다. 화살표는 업무명 셀(ondblclick="makeEditable(this)") 안에 있는 <span>이라,
-    //    stopPropagation 없이는 더블클릭이 셀까지 버블링돼 동시에 글자수정 모드로 들어간다 — 반드시 멈출 것.
-    //    (더블클릭은 항상 단일클릭 2번 + dblclick 순서로 오므로 toggleWbsCollapse가 먼저 두 번 토글되지만,
-    //    최종 상태는 여기서 결정적으로 false로 못박으므로 결과는 항상 "전체 펼침"으로 끝난다.)
-    window.toggleWbsCollapseRecursive = function(rowIndex, ev) {
+    // 🌳 [2026-10-28 신규 → 같은 날 더블클릭 폐기 후 재설계] 이 가지(이 행 + 모든 하위 레벨)가 끝까지
+    //    펼쳐진 상태인지 판정 — 행 자신이 접혀 있거나, 자식이 있는 하위 행 중 하나라도 접혀 있으면
+    //    "아니오". renderTable()의 오른쪽 끝 ▼/▲ 아이콘 렌더링과 toggleWbsBranchFull() 양쪽에서 같이 씀.
+    window._wbsIsBranchFullyExpanded = function(rowIndex) {
+        const row = globalData[rowIndex];
+        if (!row || row._wbsCollapsed) return false;
+        const parentLevel = row._level || 0;
+        for (let i = rowIndex + 1; i < globalData.length; i++) {
+            const child = globalData[i];
+            if (!child) continue;
+            if ((child._level || 0) <= parentLevel) break;
+            const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (child._level || 0));
+            if (hasChildren && child._wbsCollapsed) return false;
+        }
+        return true;
+    };
+
+    // 🔽 [2026-10-28 신규, 더블클릭 대신] 업무명 셀 오른쪽 끝 ▼/▲ 아이콘 — 이 가지(이 행 + 모든 하위
+    //    레벨)를 한 번에 끝까지 펼치거나, 끝까지 펼쳐진 상태면 다시 이 행 하나만 남기고 접는다.
+    //    더블클릭 방식(화살표 위에 올려서 클릭 두 번)은 히트존을 넓혀도 실사용에서 여전히 글자수정
+    //    으로 새는 사례가 있어 포기 — 전용 아이콘을 셀 오른쪽에 별도 배치해 단일클릭으로 분리했다.
+    //    renderTable() 전체를 다시 그리는 이유: 이 행 하위 전부(및 그 각각의 ▼/▲ 아이콘 표시)가 한꺼번에
+    //    바뀌는 드문 명시적 조작이라 pin/status처럼 매 클릭 핫패스가 아님(c8edee5·9bb25ca와 다른 경우).
+    window.toggleWbsBranchFull = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
         const row = globalData[rowIndex];
         if (!row) return;
         const parentLevel = row._level || 0;
-        const expandLabel = window._currentLang === 'en' ? 'Collapse' : '접기';
-        row._wbsCollapsed = false;
-        for (let i = rowIndex; i < globalData.length; i++) {
-            if (i > rowIndex) {
-                const child = globalData[i];
-                if (!child) continue;
-                if ((child._level || 0) <= parentLevel) break;
-                child._wbsCollapsed = false;
-            }
-            const tr = document.querySelector(`tr[data-row-index="${i}"]`);
-            const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
-            if (arrow) {
-                arrow.textContent = '▼';
-                if (arrow.parentElement) arrow.parentElement.title = expandLabel;
-            }
+        const expand = !window._wbsIsBranchFullyExpanded(rowIndex);
+        row._wbsCollapsed = !expand;
+        for (let i = rowIndex + 1; i < globalData.length; i++) {
+            const child = globalData[i];
+            if (!child) continue;
+            if ((child._level || 0) <= parentLevel) break;
+            const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (child._level || 0));
+            if (hasChildren) child._wbsCollapsed = !expand;
         }
+        renderTable(globalData);
         applyFilters();
     };
 
