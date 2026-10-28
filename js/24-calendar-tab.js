@@ -5,7 +5,44 @@
 // 3) Gantt의 🔔 알림(_알림) 표시와 동기화
 // 4) Google Calendar 연동: .ics 파일로 내보내기 (구글 캘린더에서 가져오기로 바로 추가 가능)
 // ════════════════════════════════════════════════════
-window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null, viewMode: 'month', weekStart: null, levelFilter: [3, 4] };
+window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null, viewMode: 'month', weekStart: null, levelFilter: [3, 4], taskMode: 'pin' };
+
+// 📌 [2026-10-28 신규, 사용자 요청] 캘린더 기본 표시를 "핀셋(📌 알림) 처리된 업무"로 좁히고,
+//    필요하면 LEVEL(WBS) 필터 버튼 옆 아이콘으로 기존 방식(WBS 레벨 기준 전체 업무)과 토글한다.
+//    'pin' = 핀셋된 업무만(레벨 필터 무시 — 핀은 레벨과 무관하게 사용자가 직접 고른 항목이므로)
+//    'wbs' = 기존 방식 그대로(LEVEL(WBS) 필터 기준)
+var CAL_TASK_MODE_KEY = 'gantt_cal_task_mode';
+try {
+    var _savedTaskMode = localStorage.getItem(CAL_TASK_MODE_KEY);
+    if (_savedTaskMode === 'pin' || _savedTaskMode === 'wbs') window.calState.taskMode = _savedTaskMode;
+} catch (e) {}
+
+window.calToggleTaskMode = function() {
+    window.calState.taskMode = (window.calState.taskMode === 'pin') ? 'wbs' : 'pin';
+    try { localStorage.setItem(CAL_TASK_MODE_KEY, window.calState.taskMode); } catch (e) {}
+    window.calSyncTaskModeBtn();
+    window.calRender();
+};
+
+// 버튼엔 **지금 보고 있는 것**을 표시(그룹웨어 토글과 같은 결론 — 색과 글자가 같은 걸 가리켜야 안 헷갈림).
+window.calSyncTaskModeBtn = function() {
+    var b = document.getElementById('cal-task-mode-btn');
+    if (!b) return;
+    var pin = window.calState.taskMode === 'pin';
+    var baseBg = pin ? window.CP_CURRENT_NAV.active : window.CP_CURRENT_TEAL.bg;
+    var hoverBg = pin ? window.CP_CURRENT_NAV.hover : window.CP_CURRENT_TEAL.hoverBg;
+    b.style.background = baseBg;
+    b.style.color = pin ? '#fff' : window.CP_CURRENT_TEAL.darkText;
+    b.textContent = pin ? ('📌 ' + window._t('핀셋 업무', 'Pinned')) : ('🗂 ' + window._t('WBS 업무', 'WBS'));
+    b.setAttribute('aria-pressed', pin ? 'true' : 'false');
+    b.title = pin
+        ? window._t('지금 핀셋(📌) 처리된 업무만 보는 중 — 누르면 LEVEL(WBS) 필터 기준 전체 업무로 전환합니다',
+                     'Showing pinned (📌) tasks only — click to switch to all tasks by the LEVEL(WBS) filter')
+        : window._t('지금 LEVEL(WBS) 필터 기준 전체 업무를 보는 중 — 누르면 핀셋(📌) 처리된 업무만 보기로 전환합니다',
+                     'Showing all tasks by the LEVEL(WBS) filter — click to switch to pinned (📌) tasks only');
+    b.onmouseover = function() { b.style.background = hoverBg; };
+    b.onmouseout = function() { b.style.background = baseBg; };
+};
 
 // 💡 [2026-08-21][WBS 레벨 필터] 캘린더에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
 //    (Gantt 차트 상단의 LEVEL(WBS) 필터와 동일한 filter-group/filter-label/btn 스타일을 그대로 사용)
@@ -69,8 +106,12 @@ function calBuildEvents() {
         const nextLevel = (nextRow && typeof nextRow._level === 'number') ? nextRow._level : -1;
         const isLeaf = !(nextRow && nextLevel > myLevel);
         if (!isLeaf) continue;
-        // 💡 [WBS 레벨 필터] 선택한 레벨(기본 L3/L4)에 해당하는 업무만 캘린더에 표시
-        if (window.calState.levelFilter && window.calState.levelFilter.indexOf(myLevel) === -1) continue;
+        // 📌 [2026-10-28 신규] 기본 모드는 핀셋(📌 알림) 처리된 업무만 — 레벨과 무관하게 사용자가
+        //    직접 고른 항목이므로 LEVEL(WBS) 필터를 적용하지 않는다. "wbs" 모드일 때만 기존 방식대로
+        //    LEVEL(WBS) 필터(기본 L3/L4)를 적용한다.
+        if (window.calState.taskMode === 'pin') {
+            if (!row._알림) continue;
+        } else if (window.calState.levelFilter && window.calState.levelFilter.indexOf(myLevel) === -1) continue;
         const name = (typeof wrTaskName === 'function') ? wrTaskName(row) : '';
         if (!name) continue;
         const s = row._calcStartTs;
@@ -475,6 +516,7 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
 
 window.calRender = function() {
     window.calSyncLevelFilterUI(); // 💡 [드롭다운화] 탭을 열 때마다 트리거 버튼 강조 상태를 현재 필터와 맞춤
+    window.calSyncTaskModeBtn(); // 📌 핀셋/WBS 업무 토글 버튼도 매번 현재 모드와 맞춤
     const container = document.getElementById('cal-page');
     if (!container) return;
     const baseY = window.calState.year, baseM = window.calState.month;

@@ -10330,42 +10330,34 @@ ${docsJson}`;
             //    복원하고, 투명도는 헤더 슬라이더로 사용자가 직접 조절하는 방식으로 변경.
             modal.innerHTML = `
             <div id="gantt-qa-box" onclick="event.stopPropagation()" ondragover="window._ganttQaHandleDragOver(event)" ondragleave="window._ganttQaHandleDragLeave(event)" ondrop="window._ganttQaHandleDrop(event)" style="pointer-events:all; position:fixed; background:#ffffff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
+                <!-- 🛠/🪟 [2026-10-28, 사용자 요청 "원래 위치(모달 헤더)로 이동"] 도구 드롭다운과 투명도
+                     슬라이더를 전용 둘째 줄로 뺐었는데, 사용자가 제목줄(여기)로 되돌려달라고 함 — 아래
+                     "🛠 도구" 드롭다운(메인 헤더 📁 프로젝트/🤖 AI 도구 드롭다운과 같은 상호작용이지만,
+                     window.toggleTopbarMenu의 #app-topbar z-index 부수효과를 피하려고 이 모달 전용
+                     토글로 구현 — window._ganttQaToggleToolsMenu/_ganttQaCloseToolsMenu, 아래 정의)
+                     자체는 그대로 두고 위치만 제목줄로 옮겼다. 🔇(음성 답변 끄기/켜기)는 여기 없음 —
+                     성격이 같은 🎙️ 음성 버튼 옆(하단 72px 칸)에 그대로 둔다. -->
                 <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 <span id="gantt-qa-title">${_qEn ? 'AI Q&A' : 'AI 문답'}</span></span>
-                    <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:26px; height:26px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
-                </div>
-                <!-- 🛠 [2026-10-28, 사용자 요청 "메인 헤더 📁 프로젝트/🤖 AI 도구 드롭다운 같은 스타일"]
-                     처음엔 아이콘들을 한 줄에 나란히 늘어놓았는데, 사용자가 원한 건 상단 메인 헤더처럼
-                     "버튼 하나 → 클릭하면 세로 목록 드롭다운" 형태였다. 같은 상호작용(버튼 클릭 → 패널
-                     토글 → 바깥 클릭 시 닫힘·항목 클릭 시 자동 닫힘)을 재현하되, 전역 .topbar-popup
-                     클래스는 그대로 재사용하지 않는다 — window.toggleTopbarMenu가 열릴 때마다
-                     #app-topbar의 z-index를 전체 최상단으로 올리는 부수효과(js/04e _topbarSyncZ, 모달
-                     위로 메인 헤더 드롭다운을 띄우기 위한 것)가 있어서, 이 모달 안에서 그대로 쓰면 AI
-                     문답이 열려 있는 동안 메인 헤더까지 같이 최상단으로 튀어 오른다. 그래서 겉모습(흰
-                     패널·항목 행·구분선)만 .topbar-popup/.topbar-menu-item과 동일하게 맞추고(색만 이
-                     모달의 기존 파란 톤에 맞춤), 토글 로직은 이 모달 전용으로 별도 구현했다
-                     (window._ganttQaToggleToolsMenu/_ganttQaCloseToolsMenu, 아래 정의).
-                     🔇(음성 답변 끄기/켜기)는 이 드롭다운에 없음 — 성격이 같은 🎙️ 음성문답 버튼 옆
-                     (하단 72px 칸)으로 옮겼다. 🪟 투명도는 드롭다운 밖에 그대로 둔다 — 슬라이더는 매번
-                     열고 닫는 메뉴 항목이 아니라 계속 보이며 조절하는 컨트롤이라 메뉴에 넣으면 오히려
-                     불편하다. -->
-                <div id="gantt-qa-toolbar" style="padding:6px 14px; display:flex; align-items:center; gap:6px; background:#f6f8fa; border-bottom:1px solid #d0dde8;">
-                    <div style="position:relative; display:inline-block;">
-                        <button id="gantt-qa-tools-btn" onclick="event.stopPropagation(); window._ganttQaToggleToolsMenu()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="display:inline-flex; align-items:center; gap:3px; background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:12px; font-weight:bold; cursor:pointer; padding:0 10px; height:26px; white-space:nowrap; transition:background .15s;">🛠 ${_qEn ? 'Tools' : '도구'} <span style="font-size:9px;">▾</span></button>
-                        <div id="gantt-qa-tools-popup" onclick="event.stopPropagation()" style="display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:50; background:#fff; border:1px solid #a5c8f0; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.18); padding:6px; min-width:210px;">
-                            <button onclick="window.openSapLoginSettings && window.openSapLoginSettings(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">🔑 ${_qEn ? 'Auto-login settings (SAP · Groupware)' : '자동 로그인 설정 (SAP·그룹웨어)'}</button>
-                            <button onclick="window.openGanttQaPromptModal(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">📝 ${_qEn ? 'Edit AI Q&A prompt' : 'AI 문답 프롬프트 편집'}</button>
-                            <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
-                            <button onclick="window._issueOpenReport && window._issueOpenReport(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">🐛 ${_qEn ? 'Log a bug/problem now' : '지금 겪는 문제 바로 기록하기'}</button>
-                            <button onclick="window._issueQuickExportFromQa && window._issueQuickExportFromQa(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">🧾 ${_qEn ? 'Export all logged records (admin password)' : '쌓인 기록 전체 내보내기 (관리자 비밀번호)'}</button>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <div style="position:relative; display:inline-block;">
+                            <button id="gantt-qa-tools-btn" onclick="event.stopPropagation(); window._ganttQaToggleToolsMenu()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="display:inline-flex; align-items:center; gap:3px; background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:12px; font-weight:bold; cursor:pointer; padding:0 10px; height:26px; white-space:nowrap; transition:background .15s;">🛠 ${_qEn ? 'Tools' : '도구'} <span style="font-size:9px;">▾</span></button>
+                            <div id="gantt-qa-tools-popup" onclick="event.stopPropagation()" style="display:none; position:absolute; top:calc(100% + 4px); right:0; z-index:50; background:#fff; border:1px solid #a5c8f0; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.18); padding:6px; min-width:210px;">
+                                <button onclick="window.openSapLoginSettings && window.openSapLoginSettings(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">🔑 ${_qEn ? 'Auto-login settings (SAP · Groupware)' : '자동 로그인 설정 (SAP·그룹웨어)'}</button>
+                                <button onclick="window.openGanttQaPromptModal(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">📝 ${_qEn ? 'Edit AI Q&A prompt' : 'AI 문답 프롬프트 편집'}</button>
+                                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
+                                <button onclick="window._issueOpenReport && window._issueOpenReport(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">🐛 ${_qEn ? 'Log a bug/problem now' : '지금 겪는 문제 바로 기록하기'}</button>
+                                <button onclick="window._issueQuickExportFromQa && window._issueQuickExportFromQa(); window._ganttQaCloseToolsMenu();" onmouseover="this.style.background='#f1f3f5';" onmouseout="this.style.background='transparent';" style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:7px 10px; margin:0; border-radius:4px; background:transparent; border:none; font-size:12.5px; color:#333; cursor:pointer; white-space:nowrap;">🧾 ${_qEn ? 'Export all logged records (admin password)' : '쌓인 기록 전체 내보내기 (관리자 비밀번호)'}</button>
+                            </div>
                         </div>
-                    </div>
-                    <div onclick="event.stopPropagation()" style="margin-left:auto; display:flex; align-items:center; gap:3px; background:#e8f4fd; border-radius:6px; padding:2px 6px; border:none;" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
-                        <span style="font-size:11px; color:#5585a8; user-select:none;">🪟</span>
-                        <input type="range" id="gantt-qa-opacity-slider" min="20" max="100" value="100" step="5"
-                               oninput="window._ganttQaSetBgAlpha(this.value)"
-                               style="width:55px; height:14px; cursor:pointer; accent-color:#1971c2; vertical-align:middle;">
-                        <span id="gantt-qa-opacity-label" style="font-size:10px; color:#5585a8; min-width:28px; text-align:right; user-select:none;">100%</span>
+                        <div onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:3px; background:#e8f4fd; border-radius:6px; padding:2px 6px; border:none;" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
+                            <span style="font-size:11px; color:#5585a8; user-select:none;">🪟</span>
+                            <input type="range" id="gantt-qa-opacity-slider" min="20" max="100" value="100" step="5"
+                                   oninput="window._ganttQaSetBgAlpha(this.value)"
+                                   style="width:55px; height:14px; cursor:pointer; accent-color:#1971c2; vertical-align:middle;">
+                            <span id="gantt-qa-opacity-label" style="font-size:10px; color:#5585a8; min-width:28px; text-align:right; user-select:none;">100%</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:26px; height:26px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px; background:transparent;"></div>
