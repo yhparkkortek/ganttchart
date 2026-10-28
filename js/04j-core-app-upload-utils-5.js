@@ -1824,7 +1824,7 @@
                             }
                         }
                         const startSrcMark = row._isGroupStartSrc ? `<span title="${window._t('하위 업무 중 시작일이 가장 빠른 행', 'Earliest start among sub-tasks')}" style="font-size:9px; color:#2f9e44; font-weight:bold; margin-right:2px; vertical-align:middle;">S</span>` : '';
-                        tdHtml = `${startSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${startBadge}`;
+                        tdHtml = `${startSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" ondblclick="if(window._ganttJumpToGroupDateSrc(${i}, 'start')) event.stopPropagation();" title="클릭하여 달력으로 날짜 변경 · 더블클릭: 그룹이면 S 근거 행으로 이동">${displayDate}</span>${startBadge}`;
                     } 
                     else if (cellIndex === colIdx.plan) { 
                         let tsArg = row._calcPlanTs || new Date().getTime();
@@ -1842,7 +1842,7 @@
                             }
                         }
                         const endSrcMark = row._isGroupEndSrc ? `<span title="${window._t('하위 업무 중 완료일이 가장 느린 행', 'Latest finish among sub-tasks')}" style="font-size:9px; color:#e03131; font-weight:bold; margin-right:2px; vertical-align:middle;">E</span>` : '';
-                        tdHtml = `${endSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${planBadge}`;
+                        tdHtml = `${endSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" ondblclick="if(window._ganttJumpToGroupDateSrc(${i}, 'end')) event.stopPropagation();" title="클릭하여 달력으로 날짜 변경 · 더블클릭: 그룹이면 E 근거 행으로 이동">${displayDate}</span>${planBadge}`;
                         bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시

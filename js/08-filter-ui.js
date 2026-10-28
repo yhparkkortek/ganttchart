@@ -227,6 +227,23 @@
         setTimeout(jumpToDetail, 50);
     };
 
+    // 🆕 [2026-10-28] 그룹(상위레벨) 시작/완료일 더블클릭 → 그 날짜의 근거가 된 S/E 표시 행(실제
+    //    업무 리프 행)으로 이동. js/04d scheduleNode가 매 재계산마다 모든 그룹 행(레벨 0~3)에
+    //    row._groupStartSrcIdx / _groupEndSrcIdx로 "최종 근거 리프 행의 전역 인덱스"를 직접 저장해
+    //    두므로(중간 레벨을 거치며 직계 자식만 따라가지 않고 끝까지 전파됨) 그대로 쓴다.
+    //    반환값 true=점프 성공(호출부가 stopPropagation해서 날짜 셀의 "더블클릭=텍스트 수정"을 막음),
+    //    false=리프 행이라 근거가 없음(이 경우 기존 더블클릭 동작을 그대로 둠).
+    window._ganttJumpToGroupDateSrc = function(rowIndex, kind) {
+        const rows = globalData;
+        const row = rows && rows[rowIndex];
+        if (!row) return false;
+        const idxKey = kind === 'end' ? '_groupEndSrcIdx' : '_groupStartSrcIdx';
+        const targetIdx = row[idxKey];
+        if (targetIdx === null || targetIdx === undefined || targetIdx === rowIndex) return false;
+        if (window._aiJumpToRow) window._aiJumpToRow(targetIdx);
+        return true;
+    };
+
     // 💡 [2026-08-30 신규] 임시로 tr에 반짝임 효과만 주고(영구 선택 상태 X) 자동으로 사라지게 하는
     //    공용 헬퍼 — Gantt의 highlighted-row(수동 해제 전까지 유지)와 달리 M.C Table/Customer SPEC
     //    행은 별도의 "선택 해제" 개념이 없어서 일정 시간 후 스스로 사라지는 방식이 더 맞다.

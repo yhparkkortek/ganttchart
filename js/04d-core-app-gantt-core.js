@@ -396,14 +396,16 @@
                 // 🆕 [2026-10-28] 그룹 시작/완료일의 "근거 행" S/E 표시 — 매 재계산마다 초기화 후 scheduleNode에서 다시 세팅
                 row._isGroupStartSrc = false;
                 row._isGroupEndSrc = false;
+                row._groupStartSrcIdx = null;
+                row._groupEndSrcIdx = null;
             }
 
             generateFilters(globalData);
 
-            let validRows = globalData.slice(1);
             let tree = []; let stack = {}; let fileGlobalStartTs = null;
 
-            for (let row of validRows) {
+            for (let rowIdx = 1; rowIdx < globalData.length; rowIdx++) {
+                let row = globalData[rowIdx]; if (!row) continue;
                 let rawStart = colIdx.start !== -1 ? row[colIdx.start] : ""; let pDateStart = parseDateValue(rawStart); let parsedStartTs = pDateStart ? pDateStart.ts : null;
                 let rawPlan = colIdx.plan !== -1 ? row[colIdx.plan] : ""; let pDatePlan = parseDateValue(rawPlan); let parsedPlanTs = pDatePlan ? pDatePlan.ts : null;
                 let dur1 = colIdx.dur1 !== -1 ? getDurationDays(row[colIdx.dur1]) : null; let dur2 = colIdx.dur2 !== -1 ? getDurationDays(row[colIdx.dur2]) : null; let dur3 = colIdx.dur3 !== -1 ? getDurationDays(row[colIdx.dur3]) : null; let dur4 = colIdx.dur4 !== -1 ? getDurationDays(row[colIdx.dur4]) : null; let pDur = colIdx.period !== -1 ? getDurationDays(row[colIdx.period]) : null;
@@ -430,7 +432,7 @@
                 let contentStr = colIdx.content !== -1 ? (row[colIdx.content] || "").toString() : "";
                 row._isParallel = taskName.includes('*') || taskName.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
 
-                let node = { row: row, level: row._level, isParallel: row._isParallel, explicitStartTs: row._explicitStartTs, explicitPlanTs: row._explicitPlanTs, duration: row._finalDuration, children: [], startTs: null, endTs: null };
+                let node = { row: row, rowIdx: rowIdx, level: row._level, isParallel: row._isParallel, explicitStartTs: row._explicitStartTs, explicitPlanTs: row._explicitPlanTs, duration: row._finalDuration, children: [], startTs: null, endTs: null };
 
                 if (node.level === 0) { tree.push(node); stack[0] = node; stack[1] = null; stack[2] = null; stack[3] = null; stack[4] = null; } 
                 else {
@@ -462,6 +464,10 @@
                     } else if (dur > 0) {
                         node.endTs = addWorkingDays(node.startTs, dur - 1);
                     } else { node.endTs = node.startTs; }
+                    // 🆕 [2026-10-28] 리프(자식 없는) 행은 자기 날짜의 근거가 자기 자신이다 — 이 값이
+                    //    조상 쪽으로 그대로 전파되어, 결국 실제 업무 행 하나에만 S/E가 찍히게 된다.
+                    node.startSrcIdx = node.rowIdx;
+                    node.endSrcIdx = node.rowIdx;
                     return;
                 }
                 
@@ -480,9 +486,13 @@
                 let minChildStart = null;
                 let groupStartTs = node.startTs;
                 let isFirstValid = true;
-                // 🆕 [2026-10-28] S/E 표시용 — 같은 날짜가 여러 행이면 시작(S)은 맨 위 행, 완료(E)는 맨 아래 행 하나만
-                let startSrcChild = null;
-                let endSrcChild = null;
+                // 🆕 [2026-10-28] S/E 표시용 — "직계 자식"이 아니라 자식이 물려받은 실제 리프 행 인덱스를
+                //    그대로 이어받는다(startSrcIdx/endSrcIdx, 리프 branch에서 세팅). 레벨마다 직계 자식을
+                //    표시하면 0→1→2→3→4가 한 가지(동일 분기)로 이어질 때 레벨마다 전부 S/E가 찍혀
+                //    "계단식으로 여러 줄이 반복 표시"되는 버그가 났다(2026-10-28 실사용 제보) — 항상
+                //    "실제 업무(리프) 행 단 하나"를 가리키도록 전파해서 해결.
+                let startSrcTs = null, startSrcIdx = null;
+                let endSrcTs = null, endSrcIdx = null;
 
                 for (let i = 0; i < node.children.length; i++) {
                     let child = node.children[i];
@@ -504,13 +514,19 @@
 
                     if (minChildStart === null || child.startTs < minChildStart) minChildStart = child.startTs;
                     if (maxChildEnd === null || child.endTs > maxChildEnd) maxChildEnd = child.endTs;
-                    if (startSrcChild === null || child.startTs < startSrcChild.startTs) startSrcChild = child; // 동일 최소값이면 먼저(맨 위) 온 행 유지
-                    if (endSrcChild === null || child.endTs >= endSrcChild.endTs) endSrcChild = child; // 동일 최대값이면 나중(맨 아래) 온 행으로 계속 교체
+                    // 동일 최소값이면 먼저(맨 위) 온 자식의 리프를 유지, 동일 최대값이면 나중(맨 아래) 온 자식의 리프로 계속 교체
+                    if (startSrcTs === null || child.startTs < startSrcTs) { startSrcTs = child.startTs; startSrcIdx = child.startSrcIdx; }
+                    if (endSrcTs === null || child.endTs >= endSrcTs) { endSrcTs = child.endTs; endSrcIdx = child.endSrcIdx; }
                     currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
                 }
                 node.endTs = (maxChildEnd !== null) ? maxChildEnd : node.startTs;
-                if (startSrcChild) startSrcChild.row._isGroupStartSrc = true;
-                if (endSrcChild) endSrcChild.row._isGroupEndSrc = true;
+                node.startSrcIdx = startSrcIdx;
+                node.endSrcIdx = endSrcIdx;
+                // 이 그룹(행)의 더블클릭 이동용 — 레벨과 무관하게 항상 실제 근거 리프 행의 인덱스를 가리킴
+                node.row._groupStartSrcIdx = startSrcIdx;
+                node.row._groupEndSrcIdx = endSrcIdx;
+                if (startSrcIdx !== null && globalData[startSrcIdx]) globalData[startSrcIdx]._isGroupStartSrc = true;
+                if (endSrcIdx !== null && globalData[endSrcIdx]) globalData[endSrcIdx]._isGroupEndSrc = true;
                 // 📐 [2026-10-27, 실사용 제보 "상위레벨 날짜가 같은레벨(형제 워터폴) 우선으로 계산된다"]
                 //    시작일도 종료일과 대칭으로 자식 기준 bottom-up이어야 한다 — 지금까지 node.startTs는
                 //    위(line 454)에서 "앞 형제한테서 물려받은" 값 그대로 남아있었다(자식이 실제로 그보다
