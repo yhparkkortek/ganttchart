@@ -1162,22 +1162,41 @@ window.deleteHistoryByDateRange = function() {
             });
         });
 
+        // 🐛 [2026-10-28 버그 수정, 실사용 제보 "이동하면서 계산하나? 엄청느림"] dragover는 마우스가
+        //    1px만 움직여도 초당 수십~수백 번 발동한다. 매번 getBoundingClientRect()(레이아웃 강제
+        //    계산 — 1000행짜리 표에서 비쌈, c8edee5에서 실측한 것과 같은 종류의 비용)를 부르고 그
+        //    직후 classList까지 건드리니, 변경→강제 레이아웃이 매 틱마다 반복되는 "레이아웃 스래싱"
+        //    이었다. preventDefault()(drop을 허용하려면 매 이벤트마다 동기로 꼭 불러야 함)만 즉시 하고,
+        //    실제로 무거운 계산(rect 읽기·classList·_findAnchor)은 requestAnimationFrame으로 묶어서
+        //    초당 최대 60번(그마저도 레이아웃이 실제로 필요할 때만)으로 줄인다.
+        let _dragRafPending = false, _dragPendingY = 0, _dragPendingTarget = null;
+        function _processDragOverFrame() {
+            _dragRafPending = false;
+            if (!_dragSrcIndices || !_dragPendingTarget) return;
+            const tr = _dragPendingTarget.closest ? _dragPendingTarget.closest('tr[data-row-index]') : null;
+            if (!tr) { _clearDropHighlight(); return; }
+            const idx = parseInt(tr.dataset.rowIndex, 10);
+            if (isNaN(idx)) { _clearDropHighlight(); return; }
+
+            const rect = tr.getBoundingClientRect();
+            const before = (_dragPendingY - rect.top) < rect.height / 2;
+            const anchorInfo = _findAnchor(idx, _dragLevel);
+            const cls = anchorInfo ? (before ? 'gantt-drop-before' : 'gantt-drop-after') : 'gantt-drop-invalid';
+            if (_lastOverTr !== tr || _lastOverCls !== cls) {
+                _clearDropHighlight();
+                tr.classList.add(cls);
+                _lastOverTr = tr; _lastOverCls = cls;
+            }
+        }
         document.addEventListener('dragover', function(ev) {
             if (!_dragSrcIndices) return;
-            const hit = _rowFromEvent(ev);
-            if (!hit) { _clearDropHighlight(); return; }
-            ev.preventDefault(); // 막아야 drop 이벤트가 옴 — 유효성 최종 판정은 class로만 표시
-
-            const rect = hit.tr.getBoundingClientRect();
-            const before = (ev.clientY - rect.top) < rect.height / 2;
-            const anchorInfo = _findAnchor(hit.idx, _dragLevel);
-            const cls = anchorInfo ? (before ? 'gantt-drop-before' : 'gantt-drop-after') : 'gantt-drop-invalid';
-            if (_lastOverTr !== hit.tr || _lastOverCls !== cls) {
-                _clearDropHighlight();
-                hit.tr.classList.add(cls);
-                _lastOverTr = hit.tr; _lastOverCls = cls;
-            }
-            ev.dataTransfer.dropEffect = anchorInfo ? 'move' : 'none';
+            ev.preventDefault(); // 막아야 drop 이벤트가 옴 — 매 틱 동기 호출 필수(여기만)
+            ev.dataTransfer.dropEffect = 'move'; // 정확한 값(move/none)은 다음 프레임에 갱신됨 — 한 프레임 지연은 무해
+            _dragPendingY = ev.clientY;
+            _dragPendingTarget = ev.target;
+            if (_dragRafPending) return;
+            _dragRafPending = true;
+            requestAnimationFrame(_processDragOverFrame);
         });
 
         document.addEventListener('drop', function(ev) {
