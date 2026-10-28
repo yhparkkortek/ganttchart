@@ -1083,6 +1083,159 @@ window.deleteHistoryByDateRange = function() {
         return newStart;
     };
 
+    // 🖱️ [2026-10-28 신규, 사용자 요청] 업무 행을 마우스로 끌어다 순서 바꾸기 — 1차 범위는 **같은
+    //    WBS 레벨 안에서만**(다른 레벨로 끌어다 놓는 재부모화는 다음 단계로 분리). moveRow/
+    //    moveSelectedRows의 "블록(행+하위 전부) 통째 추출 → 재삽입" 패턴을 그대로 재사용하되,
+    //    ±1칸이 아니라 마우스로 놓은 자리까지 한 번에 계산한다.
+    //    ⚠️ 이벤트는 renderTable()이 매번 행을 통째로 새로 그리기 전에 한 번만, document에
+    //    위임(delegation)한다 — 행마다 리스너를 달면 다시 그릴 때마다 또 달아줘야 하는데, 네이티브
+    //    드래그는 draggable 엘리먼트(.row-drag-handle, js/04j No.열)에서 시작된 dragstart가 그대로
+    //    버블링되므로 위임이 문제없이 동작한다. 이미 있는 pin(📌)/WBS 토글 화살표와 같은 "작은 전용
+    //    손잡이" 원칙(히트존을 셀 전체가 아니라 좁게 잡아 글자수정/선택 등 기존 동작과 안 겹치게).
+    (function() {
+        let _dragSrcIndices = null;   // 드래그 시작 시점 소스 행 인덱스(선택된 행 여러 개 포함 가능)
+        let _dragLevel = null;        // 드래그 중인 블록의 레벨 — 같은 레벨만 유효한 드롭 대상
+        let _lastOverTr = null, _lastOverCls = null; // 불필요한 classList 재계산 방지
+
+        const _lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+
+        function _clearDropHighlight() {
+            if (_lastOverTr) _lastOverTr.classList.remove('gantt-drop-before', 'gantt-drop-after', 'gantt-drop-invalid');
+            _lastOverTr = null; _lastOverCls = null;
+        }
+        // moveSelectedRows와 동일한 "선택 행 + 각자의 하위 전부" 확장
+        function _expandBlocks(indices) {
+            const rows = globalData; const expanded = new Set();
+            indices.forEach(function(idx) {
+                const L = _lvOf(rows[idx]); expanded.add(idx);
+                for (let j = idx + 1; j < rows.length; j++) { if (_lvOf(rows[j]) > L) expanded.add(j); else break; }
+            });
+            return Array.from(expanded).sort((a, b) => a - b);
+        }
+        // target 위치에서 draggedLevel과 같은 레벨의 경계(조상/자기 자신)를 찾는다. target이 더
+        // 깊으면(하위 항목 위에 드롭) 그 조상까지 거슬러 올라가고, 더 얕으면(상위 그룹 위) 무효(null).
+        function _findAnchor(targetIdx, draggedLevel) {
+            const rows = globalData; let anchor = targetIdx;
+            while (anchor > 0 && _lvOf(rows[anchor]) > draggedLevel) anchor--;
+            if (_lvOf(rows[anchor]) !== draggedLevel) return null;
+            let anchorEnd = anchor;
+            for (let j = anchor + 1; j < rows.length; j++) { if (_lvOf(rows[j]) > draggedLevel) anchorEnd = j; else break; }
+            return { anchor: anchor, anchorEnd: anchorEnd };
+        }
+        function _rowFromEvent(ev) {
+            const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-row-index]') : null;
+            if (!tr) return null;
+            const idx = parseInt(tr.dataset.rowIndex, 10);
+            return isNaN(idx) ? null : { tr: tr, idx: idx };
+        }
+
+        document.addEventListener('dragstart', function(ev) {
+            const handle = ev.target.closest && ev.target.closest('.row-drag-handle');
+            if (!handle) return;
+            const tr = handle.closest('tr[data-row-index]');
+            const idx = tr ? parseInt(tr.dataset.rowIndex, 10) : NaN;
+            if (isNaN(idx) || !globalData[idx]) { ev.preventDefault(); return; }
+
+            // Ctrl/Shift로 여러 행이 선택돼 있고 그 중 하나를 끄는 경우 — 선택된 행 전부를 같이 옮긴다
+            const sel = window._selectedRows;
+            const srcIndices = (sel && sel.size >= 2 && sel.has(idx)) ? Array.from(sel) : [idx];
+            const expanded = _expandBlocks(srcIndices);
+            const level = _lvOf(globalData[expanded[0]]);
+            // 선택된 행들이 서로 다른 레벨이면(예: L1과 L3을 같이 선택) 드래그는 포기 — 어느 레벨 기준
+            // 으로 맞춰야 할지 애매해서 1차 범위(같은 레벨만) 밖. 기존 화살표 버튼은 그대로 쓸 수 있음.
+            const sameLevel = srcIndices.every((i) => _lvOf(globalData[i]) === level);
+            if (!sameLevel) {
+                ev.preventDefault();
+                if (window.showToast) window.showToast(window._t(
+                    '⚠️ 서로 다른 레벨이 섞여 있으면 드래그 이동을 지원하지 않습니다 — 화살표 버튼을 이용해주세요.',
+                    '⚠️ Drag reorder is not supported when the selection mixes levels — use the move buttons instead.'
+                ), 'warning');
+                return;
+            }
+
+            _dragSrcIndices = expanded; _dragLevel = level;
+            ev.dataTransfer.effectAllowed = 'move';
+            try { ev.dataTransfer.setData('text/plain', String(idx)); } catch (e) {} // Firefox 호환용
+            _dragSrcIndices.forEach(function(i) {
+                const r = document.querySelector('#table-body tr[data-row-index="' + i + '"]');
+                if (r) r.classList.add('gantt-row-dragging');
+            });
+        });
+
+        document.addEventListener('dragover', function(ev) {
+            if (!_dragSrcIndices) return;
+            const hit = _rowFromEvent(ev);
+            if (!hit) { _clearDropHighlight(); return; }
+            ev.preventDefault(); // 막아야 drop 이벤트가 옴 — 유효성 최종 판정은 class로만 표시
+
+            const rect = hit.tr.getBoundingClientRect();
+            const before = (ev.clientY - rect.top) < rect.height / 2;
+            const anchorInfo = _findAnchor(hit.idx, _dragLevel);
+            const cls = anchorInfo ? (before ? 'gantt-drop-before' : 'gantt-drop-after') : 'gantt-drop-invalid';
+            if (_lastOverTr !== hit.tr || _lastOverCls !== cls) {
+                _clearDropHighlight();
+                hit.tr.classList.add(cls);
+                _lastOverTr = hit.tr; _lastOverCls = cls;
+            }
+            ev.dataTransfer.dropEffect = anchorInfo ? 'move' : 'none';
+        });
+
+        document.addEventListener('drop', function(ev) {
+            if (!_dragSrcIndices) return;
+            ev.preventDefault();
+            const hit = _rowFromEvent(ev);
+            _clearDropHighlight();
+            const srcIndices = _dragSrcIndices, draggedLevel = _dragLevel;
+            _dragSrcIndices = null; _dragLevel = null;
+            if (!hit) return;
+
+            const rect = hit.tr.getBoundingClientRect();
+            const before = (ev.clientY - rect.top) < rect.height / 2;
+            const anchorInfo = _findAnchor(hit.idx, draggedLevel);
+            if (!anchorInfo) return; // 유효하지 않은 자리 — 아무 것도 안 함
+
+            const moved = window._dragReorderRows(srcIndices, anchorInfo, before);
+            if (moved) window.recalculateSchedules();
+        });
+
+        document.addEventListener('dragend', function() {
+            if (_dragSrcIndices) {
+                _dragSrcIndices.forEach(function(i) {
+                    const r = document.querySelector('#table-body tr[data-row-index="' + i + '"]');
+                    if (r) r.classList.remove('gantt-row-dragging');
+                });
+            }
+            _dragSrcIndices = null; _dragLevel = null;
+            _clearDropHighlight();
+        });
+    })();
+
+    // 실제 재배치 수행 — 추출한 블록(들)을 anchor(같은 레벨) 앞/뒤로 재삽입. moveSelectedRows와 같은
+    // "추출 → 인덱스 보정 → 재삽입" 패턴이지만, 목표가 ±1이 아니라 드롭한 임의의 anchor라는 점만 다름.
+    window._dragReorderRows = function(selIdx, anchorInfo, before) {
+        const rows = globalData;
+        let insertAt = before ? anchorInfo.anchor : anchorInfo.anchorEnd + 1;
+
+        // 제자리 드롭(이동 없음) 감지 — selIdx가 연속 구간이고 insertAt이 그 구간의 시작/끝과 같으면
+        // 실제로는 아무것도 안 바뀐다. 분산된 다중 선택(비연속)은 이 지름길을 안 타고 아래 일반 로직으로.
+        const isContiguous = selIdx.every((v, k) => k === 0 || v === selIdx[k - 1] + 1);
+        if (isContiguous && (insertAt === selIdx[0] || insertAt === selIdx[selIdx.length - 1] + 1)) return false;
+
+        const picked = selIdx.map((i) => rows[i]);
+        for (let k = selIdx.length - 1; k >= 0; k--) rows.splice(selIdx[k], 1);
+        insertAt -= selIdx.filter((i) => i < insertAt).length;
+        rows.splice(insertAt, 0, ...picked);
+
+        if (window._selectedRows && window._selectedRows.size >= 2) {
+            const newSel = new Set();
+            for (let k = 0; k < picked.length; k++) newSel.add(insertAt + k);
+            window._selectedRows = newSel;
+            if (window.paintRowSelection) window.paintRowSelection();
+        }
+        logChange(insertAt, -1, '행 이동', (selIdx.length > 1 ? `${selIdx.length}개 ` : '') + '드래그로 위치 이동(하위 포함)');
+        return true;
+    };
+
     // ─── 시작일 기준 정렬 (WBS 계층 유지) ──────────────────────────
     // 🐛 [2026-09-13 버그수정] "하위 그룹(T1~T3 등, 자식이 있는 행)이 있으면 날짜순 정렬이 안 먹힌다"는
     //    제보 — 원인은 그룹행의 _calcStartTs가 "그 그룹 안 실제 업무들 중 가장 이른 날짜"가 아니라,

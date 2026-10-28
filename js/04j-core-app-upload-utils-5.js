@@ -1784,6 +1784,7 @@
                         : 'opacity:1; transform:scale(1.0);';
                     tdHtml = `
                         <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative;">
+                            <span class="row-drag-handle" draggable="true" title="${window._currentLang === 'en' ? 'Drag to reorder (within the same WBS level)' : '드래그해서 순서 바꾸기 (같은 WBS 레벨 안에서만)'}" style="font-size:11px; color:#aaa; flex-shrink:0; user-select:none;">⠿</span>
                             <span onclick="window._wrPinClick(${i}, event)" ondblclick="window._wrPinDblClick(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기 · 더블클릭하면 알람 목록의 이 업무로 이동 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)' : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'}"
                                 style="font-size:13px; cursor:pointer; flex-shrink:0; ${alarmStyle}">📌</span>
                             <span class="row-num-span"></span>
