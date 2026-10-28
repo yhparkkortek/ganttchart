@@ -1722,7 +1722,7 @@
                 const headerLockSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
                 headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="🔒 전체 업무 일정 고정 (클릭 시 현재 상태와 무관하게 항상 전체 잠금 · 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
-                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);"><span onclick="window.wrToggleAllWbsCollapse(event)" title="${window._currentLang === 'en' ? 'Expand/collapse all (expand all if any group is collapsed, otherwise collapse all)' : '전체 펼치기/접기 (하나라도 접혀 있으면 전체 펼치기, 전부 펼쳐져 있으면 전체 접기)'}" style="cursor:pointer; margin-right:3px; vertical-align:middle;">⊞</span>${wbsLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs); cursor:pointer;" title="${window._currentLang === 'en' ? 'Expand/collapse all (expand all if any group is collapsed, otherwise collapse all)' : '전체 펼치기/접기 (하나라도 접혀 있으면 전체 펼치기, 전부 펼쳐져 있으면 전체 접기)'}" onclick="window.wrToggleAllWbsCollapse(event)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${wbsLabel} <span style="font-size:9px; color:#aaa;" id="wbs-th-arrow">▼</span></div></th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
@@ -1901,8 +1901,15 @@
                         //    ▶/▼ 삼각형)을 재사용. 실제 숨기고 보이기는 applyFilters()가 row._wbsCollapsed를
                         //    보고 처리한다(필터와 동시에 적용돼도 서로 안 꼬이도록 한 곳에서 같이 판정).
                         const _wbsHasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
-                        const wbsToggleHtml = _wbsHasChildren
-                            ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" ondblclick="window.toggleWbsCollapseRecursive(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand (double-click: expand this branch fully)' : '펼치기 (더블클릭: 이 가지 전체 펼치기)') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
+                        // 🐛 [2026-10-28 버그 수정, 실사용 제보 "더블클릭이 글자수정으로 들어감"] 화살표
+                        //    글자 자체는 9px/11px 폭이라 더블클릭 두 번째 클릭이 쉽게 빗나가고, 빗나가면
+                        //    바로 바깥 wbs-cell 전체의 ondblclick="makeEditable(this)"(1926행)로 버블링돼
+                        //    글자수정 모드가 열린다(toggleWbsCollapseRecursive의 stopPropagation은 애초에
+                        //    이벤트가 이 화살표에 안 떨어지면 무용지물). 화살표+레벨표시+연결선("1 ├ ")을
+                        //    통째로 하나의 클릭존으로 묶어 눈에 보이는 삼각형보다 훨씬 넓은 영역에서 한
+                        //    번/두 번 클릭을 받게 한다. 아래 _levelConnectorHtml도 이 존 안으로 들어간다.
+                        const _wbsToggleArrowGlyph = _wbsHasChildren
+                            ? `<span class="wbs-toggle-arrow" style="display:inline-block; width:11px; text-align:center; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
                             : `<span style="display:inline-block; width:11px;"></span>`;
                         // 💡 [2026-08-28 신규 → 뒤쪽 배치 → 드롭다운으로 변경] 담당구분(PM/ME/HW/...) 선택 배지 —
                         //    업무명 "뒤"에 작은 드롭다운(select)으로 붙여서 목록에서 바로 골라 지정한다(기존엔
@@ -1915,9 +1922,12 @@
                         const _wbsDisciplineOpts = window.WBS_DISCIPLINE_CATEGORIES.map(c => `<option value="${c}" ${c === _wbsDiscipline ? 'selected' : ''}>${c}</option>`).join('')
                             + (window.WBS_DISCIPLINE_CATEGORIES.indexOf(_wbsDiscipline) === -1 ? `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option>` : '');
                         const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Select discipline' : '담당구분 선택'}" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
-                        let prefix = wbsToggleHtml + (row._level > 0
+                        const _levelConnectorHtml = row._level > 0
                             ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
-                            : '');
+                            : '';
+                        let prefix = _wbsHasChildren
+                            ? `<span onclick="window.toggleWbsCollapse(${i}, event);" ondblclick="window.toggleWbsCollapseRecursive(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand (double-click: expand this branch fully)' : '펼치기 (더블클릭: 이 가지 전체 펼치기)') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; cursor:pointer; padding:2px 6px 2px 0; vertical-align:middle;">${_wbsToggleArrowGlyph}${_levelConnectorHtml}</span>`
+                            : `${_wbsToggleArrowGlyph}${_levelConnectorHtml}`;
                         let indentEm = (row._level || 0) * 1.2;
                         let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));

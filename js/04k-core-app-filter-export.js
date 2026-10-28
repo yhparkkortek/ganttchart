@@ -240,7 +240,10 @@
         const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
         if (arrow) {
             arrow.textContent = row._wbsCollapsed ? '▶' : '▼';
-            arrow.title = row._wbsCollapsed ? '펼치기' : '접기';
+            // 💡 [2026-10-28] 타이틀(펼치기/더블클릭 안내)은 화살표를 감싼 넓은 클릭존(부모 span)에 있음
+            if (arrow.parentElement) arrow.parentElement.title = row._wbsCollapsed
+                ? (window._currentLang === 'en' ? 'Expand (double-click: expand this branch fully)' : '펼치기 (더블클릭: 이 가지 전체 펼치기)')
+                : (window._currentLang === 'en' ? 'Collapse' : '접기');
         }
         applyFilters();
     };
@@ -266,14 +269,19 @@
             }
             const tr = document.querySelector(`tr[data-row-index="${i}"]`);
             const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
-            if (arrow) { arrow.textContent = '▼'; arrow.title = expandLabel; }
+            if (arrow) {
+                arrow.textContent = '▼';
+                if (arrow.parentElement) arrow.parentElement.title = expandLabel;
+            }
         }
         applyFilters();
     };
 
     // 📂 [2026-10-28 신규] "개발업무(WBS)" 헤더 아이콘 — 행마다 화살표를 일일이 누르지 않고 전체를
-    //    한 번에 펼치거나 접는다. No.헤더 📌(wrToggleAllPins)·소요일헤더 🔒(wrToggleAllScheduleLock)와
-    //    같은 관례. 하나라도 접혀 있으면 전체 펼치기부터, 전부 펼쳐져 있으면 전체 접기.
+    //    한 번에 펼치거나 접는다. "업무 상세내용" 헤더의 #detail-th-arrow(▼ 접힘/▲ 펼침, 라벨 오른쪽
+    //    배치)와 같은 모양·위치로 맞춤(사용자 요청, 2026-10-28). No.헤더 📌·소요일헤더 🔒처럼 헤더
+    //    아이콘 하나로 전체를 다루는 관례는 그대로. 하나라도 접혀 있으면 전체 펼치기부터, 전부
+    //    펼쳐져 있으면 전체 접기.
     window.wrToggleAllWbsCollapse = function(ev) {
         if (ev) ev.stopPropagation();
         if (!globalData || globalData.length <= 1) return;
@@ -284,7 +292,7 @@
             const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
             if (hasChildren && row._wbsCollapsed) { anyCollapsed = true; break; }
         }
-        const newState = anyCollapsed ? false : true;
+        const newState = anyCollapsed ? false : true; // true = 지금부터 "전체 접기"를 적용
         let count = 0;
         for (let i = 1; i < globalData.length; i++) {
             const row = globalData[i]; if (!row) continue;
@@ -293,8 +301,14 @@
             row._wbsCollapsed = newState; count++;
             const tr = document.querySelector(`tr[data-row-index="${i}"]`);
             const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
-            if (arrow) { arrow.textContent = newState ? '▶' : '▼'; arrow.title = newState ? (_en ? 'Expand' : '펼치기') : (_en ? 'Collapse' : '접기'); }
+            if (arrow) {
+                arrow.textContent = newState ? '▶' : '▼';
+                if (arrow.parentElement) arrow.parentElement.title = newState ? (_en ? 'Expand' : '펼치기') : (_en ? 'Collapse' : '접기');
+            }
         }
+        // 헤더 아이콘 자체도 상태 반영: ▼(접힘 상태 — 누르면 전체 펼치기) / ▲(펼침 상태 — 누르면 전체 접기)
+        const headerArrow = document.getElementById('wbs-th-arrow');
+        if (headerArrow) headerArrow.textContent = newState ? '▼' : '▲';
         applyFilters();
         if (window.showToast) window.showToast(window._t(
             newState ? `📂 전체 ${count}건을 접었습니다.` : `📂 전체 ${count}건을 펼쳤습니다.`,

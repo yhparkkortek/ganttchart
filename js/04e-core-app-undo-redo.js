@@ -814,15 +814,16 @@
         if (kickoff) window._compareTargetId = kickoff.id;
     };
 
-    // 📂 [2026-10-28 신규, "처음 열면 다 펼쳐져 있어서 복잡함" 지적 대응] WBS 기본 접힘 — 프로젝트를
-    //    새로 열 때 1회만, 자식이 있는 모든 행을 접어서 0레벨만 보이게 한다. row._wbsCollapsed는 저장되지
-    //    않는 세션 상태(배열에 매단 속성이라 JSON 직렬화에 안 실림)라서 매번 새로 켜지만, 사용자가 그 뒤
-    //    직접 펼치거나 접은 상태는 존중해야 한다 — recalculateSchedules()가 편집마다 돌기 때문에 가드가
-    //    없으면 매번 되돌아간다. _ensureDefaultCompareTarget()과 같은 "프로젝트 키당 1회" 가드를 그대로 씀.
+    // 📂 [2026-10-28 신규, "처음 열면 다 펼쳐져 있어서 복잡함" 지적 대응] WBS 기본 접힘 — 자식이 있는
+    //    행 중 "한 번도 손 안 댄"(row._wbsCollapsed === undefined) 행만 접는다. row._wbsCollapsed는
+    //    저장 안 되는 세션 상태(배열에 매단 속성이라 JSON 직렬화에 안 실림)라서, 진짜 새 프로젝트를
+    //    열 때는 행 객체 자체가 새로 생기니(undefined) 자동으로 다시 접힌다 — "완전히 닫고 다시
+    //    열기"에 키 기반 가드(한 번 본 키는 영원히 건너뜀)를 썼다가, 프로젝트 A→B→A처럼 사이에 다른
+    //    프로젝트를 안 거치고 A만 닫았다 바로 다시 열면 재적용이 안 되는 사각지대가 있었다(실사용
+    //    지적). 반면 사용자가 직접 펼치거나 접은 행, 또는 코드가 의도적으로 펼친 행(예: "이 행 보기"
+    //    — 1701행 — 가 숨겨진 조상을 펼치는 경우)은 이미 true/false가 박혀 있어 이 조건을 비켜가므로
+    //    recalculateSchedules()가 편집마다 다시 불러도 되돌아가지 않는다. 가드 자체가 필요 없어짐.
     window._ensureDefaultWbsCollapse = function() {
-        const key = (typeof _baselineStorageKey === 'function') ? _baselineStorageKey() : 'local';
-        if (window._wbsDefaultCollapseAppliedForKey === key) return;
-        window._wbsDefaultCollapseAppliedForKey = key;
         for (let i = 1; i < globalData.length; i++) {
             const row = globalData[i];
             if (!row) continue;
