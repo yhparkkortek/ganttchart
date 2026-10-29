@@ -869,7 +869,7 @@
         'pl-btn-add':     ['➕ 행 추가',        '➕ Add row'],
         'pl-btn-import':  ['📥 엑셀 불러오기', '📥 Import Excel'],
         'pl-btn-export':  ['📊 엑셀 저장',     '📊 Export Excel'],
-        'pl-btn-nas':     ['📁 NAS 백업',      '📁 Backup to NAS'],
+        'pl-btn-nas':     ['📁 NAS',           '📁 NAS'],
         'pl-btn-cols':    ['🔁 열',            '🔁 Columns'],
         'pl-btn-print':   ['🖨️ 인쇄 (PDF)',    '🖨️ Print (PDF)'],
         'pl-btn-reset':   ['↺',                '↺']
@@ -877,8 +877,8 @@
     window.PL_UI_TITLE = window.PL_UI_TITLE || {
         'pl-btn-reset': ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
         'pl-btn-cols':  ['숨긴 열 되돌리기',      'Restore hidden columns'],
-        'pl-btn-nas':   ['지금 표 전체(91열)를 엑셀 한 벌로 만들어 NAS 폴더에 날짜 이름으로 백업합니다 — 평소 저장은 자동이라 누를 필요가 없고, 월말 스냅샷이나 사외 공유용입니다',
-                         'Backs up the whole table (91 columns) to the NAS folder as a dated Excel. Normal saving is automatic — this is for monthly snapshots or sharing outside.'],
+        'pl-btn-nas':   ['NAS 자료실 — 목록(JSON)·백업과 고객 도면을 열고, 올리고, 불러오고, AI로 분석합니다',
+                         'NAS files — open, upload, import and AI-analyze the team list (JSON), backups and customer drawings'],
         'pl-team':      ['이 목록을 관리하는 팀 — 팀마다 목록이 따로 저장됩니다',
                          'Team that owns this list — each team has its own list']
     };
@@ -1459,16 +1459,17 @@
     //    결정론으로 못 푸는 일(사람이 쓴 문서에서 값 찾기)이라 AI를 쓰되, **사람 승인 후에만** 적용한다.
     window.PL_DOC_AI_FIELDS = window.PL_DOC_AI_FIELDS || ['agileRev', 'prodRev', 'pn', 'desc2', 'desc3', 'panel', 'panelMfr'];
 
-    window.plAnalyzeDoc = async function (id, fileName) {
+    window.plAnalyzeDoc = async function (id, fileName, folder) {
+        var FD = folder || NAS_FOLDER;
         var r = _rowById(id); if (!r) return;
         var key = window.getActiveAiKey && window.getActiveAiKey();
         if (!key) { _toast('🔑 ' + _t('AI 키가 없습니다 — [AI 도구 > AI 분석 설정]에서 먼저 등록해주세요.', 'No AI key — register one under [AI Tools > AI Analysis Settings].'), 'error', 7000); return; }
         _toast('🤖 ' + _t('문서를 읽는 중…', 'Reading the document…'), 'info');
         var text = '';
         try {
-            if (window._dsTextOf) text = await window._dsTextOf(NAS_FOLDER, fileName);
+            if (window._dsTextOf) text = await window._dsTextOf(FD, fileName);
             if (!String(text || '').trim() && window._dsFileOf && window._pxExtractText) {
-                var file = await window._dsFileOf(NAS_FOLDER, fileName);
+                var file = await window._dsFileOf(FD, fileName);
                 text = await window._pxExtractText(file, null);
             }
         } catch (e) { _toast('⚠️ ' + _t('문서에서 글자를 뽑지 못했습니다: ', 'Could not extract text: ') + (e && e.message ? e.message : e), 'error', 8000); return; }
@@ -1695,7 +1696,79 @@
         _toast('📊 ' + name + _t(' 로 저장했습니다.', ' saved.'), 'success');
     };
 
-    /** 지금 표를 NAS 에 엑셀로 보관 — 스냅샷(월말 백업 등) */
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📁 NAS — 다른 페이지(js/42 `_dsImportToPage`)와 **같은 창, 같은 조작**을 쓴다.
+    //    목록/열기/올리기/삭제/새 폴더/드래그앤드롭/연결 프로그램 열기가 전부 공용 창에 들어 있어서,
+    //    이 페이지만 따로 만들면 생김새도 동작도 어긋난다(사용자 요청 "다른 페이지처럼 상속").
+    //    여기서 더하는 것은 **고른 파일을 무엇으로 볼지** 하나뿐:
+    //      · .json  → 이 표 자체(팀 목록) 불러오기
+    //      · 엑셀/CSV → 제품 목록 엑셀로 불러오기(교체/합치기)
+    //      · 그 외(PDF·도면 등) → 파일명 앞 숫자로 **그 제품 행을 찾아** AI 분석에 건다
+    // ══════════════════════════════════════════════════════════════════════════
+    window.plOpenNas = function () {
+        if (!window._dsOpenPicker) {
+            _toast('⚠️ ' + _t('문서 저장소를 불러오지 못했습니다(백엔드 확인).', 'Document store unavailable (check the backend).'), 'error');
+            return;
+        }
+        window._dsOpenPicker({
+            folder: NAS_DATA_FOLDER,
+            folders: [
+                { f: NAS_DATA_FOLDER, label: '📒 ' + _t('목록·백업', 'List & backups') },
+                { f: NAS_FOLDER,      label: '📐 ' + _t('고객 도면', 'Customer drawings') }
+            ],
+            title: 'NAS DATA',
+            onPick: function (f, name) { window.plNasPick(f, name); }
+        });
+    };
+
+    window.plNasPick = async function (folder, name) {
+        var low = String(name || '').toLowerCase();
+        try {
+            // ① 팀 목록 JSON — 이 표를 통째로 되돌리거나 다른 팀 파일을 들여다볼 때
+            if (/\.json$/.test(low)) {
+                var jf = await window._dsFileOf(folder, name);
+                var o = JSON.parse(await jf.text());
+                if (!o || !Array.isArray(o.rows)) { _toast('⚠️ ' + _t('제품 목록 JSON이 아닙니다.', 'Not a project-list JSON.'), 'error'); return; }
+                if (!confirm(_t('"' + name + '" 의 ' + o.rows.length + '건으로 지금 표(' + (D().rows || []).length + '건)를 교체할까요?',
+                                'Replace the current table (' + (D().rows || []).length + ' rows) with ' + o.rows.length + ' rows from "' + name + '"?'))) return;
+                window._plData = { rows: o.rows, history: Array.isArray(o.history) ? o.history : (D().history || []) };
+                _plPushHistory({ ktkPn: '-', desc: name }, 'no', '', _t('NAS JSON 불러오기 ', 'loaded from NAS JSON ') + o.rows.length + _t('건', ' rows'));
+                _persist(); window.plRender();
+                _toast('✅ ' + name + ' — ' + o.rows.length + _t('건을 불러왔습니다.', ' rows loaded.'), 'success', 6000);
+                return;
+            }
+            // ② 제품 목록 엑셀 — 지금까지의 [엑셀 불러오기]와 똑같은 흐름(교체/합치기)
+            if (/\.(xlsx|xlsm|xls|csv)$/.test(low)) {
+                _toast('⏳ ' + _t('"' + name + '" 받는 중…', 'Fetching "' + name + '"…'), 'info');
+                var xf = await window._dsFileOf(folder, name);
+                window._plApplyWorkbook(await xf.arrayBuffer(), name);
+                return;
+            }
+            // ③ 그 밖의 파일(도면 PDF 등) — 공용 창과 같은 질문을 먼저 한다(AI 한도 때문에).
+            var choice = window._dsAskAiOrNative ? await window._dsAskAiOrNative(name) : 'native';
+            if (choice === 'cancel') return;
+            if (choice !== 'ai') { await window._dsOpenNative(folder, name); return; }
+            // AI 분석은 **행에 걸어야** 의미가 있다 — 파일명 앞 숫자로 그 제품을 찾는다.
+            var p = window._plParseDocName(name);
+            var row = null;
+            if (p) {
+                row = (D().rows || []).filter(function (r) { return window._plRowDocNums(r).indexOf(p.num) !== -1; })[0] || null;
+            }
+            if (!row) {
+                _toast('⚠️ ' + _t('이 파일의 앞 숫자(' + ((p && p.num) || '?') + ')와 맞는 제품 행이 없습니다 — 먼저 그 행의 PN을 채워주세요.',
+                                  'No product row matches this file\'s leading number (' + ((p && p.num) || '?') + ') — fill that row\'s PN first.'), 'warning', 9000);
+                return;
+            }
+            if (folder !== NAS_FOLDER) {
+                _toast('ℹ️ ' + _t('고객 도면 폴더의 파일이 아니라 분석만 합니다.', 'Analyzing only — this file is outside the drawings folder.'), 'info');
+            }
+            await window.plAnalyzeDoc(row._id, name, folder);
+        } catch (e) {
+            _toast('❌ ' + (e && e.message ? e.message : e), 'error', 8000);
+        }
+    };
+
+    /** 지금 표를 NAS 에 엑셀로 보관 — 스냅샷(월말 백업 등). 토스트 메뉴 없이 함수로만 쓴다. */
     window.plSaveToNas = async function () {
         if (!window._dsPut) { _toast(_t('문서 저장소를 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return; }
         var cols = window.PL_COLUMNS, rows = D().rows || [];
