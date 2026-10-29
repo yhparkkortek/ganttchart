@@ -341,11 +341,63 @@ def load_login_config():
 
 
 # 로그인 폼을 채우고 제출한 뒤 **결과만** 돌려준다. 재시도는 절대 하지 않는다.
+# 로그인 화면이 준비됐는지만 보는 **짧은** 확인 — 이동은 절대 하지 않는다(아래 주석 참고).
+_LOGIN_READY_JS = """
+(() => {
+  const u = document.querySelector('#username');
+  const cap = document.querySelector('#captcha');
+  return { path: location.pathname, ready: !!u, readyState: document.readyState,
+           captcha: !!(cap && cap.offsetParent !== null) };
+})()
+"""
+
+
+def _ensure_login_page(timeout=25):
+    """로그인 폼이 뜬 화면까지 **파이썬이** 데려다 놓는다. 돌려주는 값: {ok, captcha} 또는 {ok:False, result, message}
+
+    ⚠️⚠️ [2026-10-29 실사용 제보 — "설정창에서 누르면 되는데 AI 문답에서는 안 된다"]
+       예전엔 `_LOGIN_JS` **안에서** `location.href='/login'` 으로 이동했다. 그런데 이 파일이
+       이미 두 번이나 적어 둔 그대로 — **페이지가 이동하면 그 JS 의 실행 컨텍스트가 통째로
+       죽는다.** 그래서 아이디/비번을 채우기도 전에 eval 이 예외로 끝났는데, 바깥에서는 그걸
+       `'submitted'`(제출됨)로 잘못 보고 20초를 기다린 뒤 "로그인 실패"라고 답했다.
+       서버엔 요청이 **간 적도 없는데** 프런트 게이트(js/36)는 "실패했으니 재시도 금지"로
+       영구히 잠겼다. 설정창 버튼이 되는 것처럼 보였던 이유도 이것이다 — **첫 시도(AI 문답)가
+       이동 비용을 치르고 죽고, 그 이동 덕분에 두 번째 시도(설정창)는 이미 /login 에 있어서
+       곧바로 성공**했다. 둘은 같은 `login_once()` 를 부르므로 "방법이 다른" 게 아니었다.
+    → 이동은 CDP `Page.navigate`(파이썬)로 하고, 준비 확인은 **짧은 eval 을 여러 번** 한다.
+       eval 하나하나가 자기 컨텍스트에서 끝나므로 이동에 휘말리지 않는다.
+    """
+    t = _gw_page()
+    if not t:
+        return {'ok': False, 'result': 'chrome',
+                'message': '그룹웨어 탭을 열지 못했습니다 — 크롬이 떠 있는지 확인해주세요.'}
+    ws = t['webSocketDebuggerUrl']
+    deadline, navigated = time.time() + timeout, False
+    while time.time() < deadline:
+        try:
+            st = asyncio.run(_eval(ws, _LOGIN_READY_JS, timeout=10)) or {}
+        except Exception:
+            st = {}                       # 이동 중엔 잠깐 평가가 안 된다 — 기다렸다 다시 본다
+        if st.get('ready'):
+            return {'ok': True, 'captcha': bool(st.get('captcha'))}
+        if not navigated:                 # 이동은 **한 번만** 건다(새로고침 반복 방지)
+            navigated = True
+            try:
+                asyncio.run(_navigate(ws, GW_ORIGIN + '/login'))
+            except Exception as e:
+                return {'ok': False, 'result': 'nav_failed',
+                        'message': f'로그인 화면으로 이동하지 못했습니다 ({e}).'}
+        time.sleep(0.6)
+    return {'ok': False, 'result': 'no_form',
+            'message': '로그인 화면(아이디 입력칸)이 뜨지 않았습니다.'}
+
+
+# ⚠️ 이 JS 는 **이미 /login 에 있는 상태**에서만 불린다(_ensure_login_page 가 보장).
+#    여기서 절대 이동하지 말 것 — 이동하는 순간 이 JS 자신이 죽는다(위 주석).
 _LOGIN_JS = """
 (async (user, pw) => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  if (!location.pathname.startsWith('/login')) location.href = '/login';
-  for (let i = 0; i < 40 && !document.querySelector('#username'); i++) await sleep(250);
+  for (let i = 0; i < 12 && !document.querySelector('#username'); i++) await sleep(250);
 
   const u = document.querySelector('#username');
   const p = document.querySelector('#password');
@@ -457,11 +509,16 @@ def login_once():
       already   이미 로그인돼 있음(아무것도 하지 않음)
       ok        로그인 성공
       그 외     실패 — **재시도하지 않고** 사람에게 넘긴다(창은 열어둔 채로)
+
+    ⚠️ `retryable` 도 같이 돌려준다 — **자격증명이 서버까지 간 적이 없는 실패**(크롬이 안 떠
+       있음·로그인 화면에 도달 못함·클릭 자체를 못 보냄)는 계정 잠금과 무관하므로 프런트
+       게이트(js/36 `_gwEnsureLogin`)가 영구히 잠그면 안 된다. 반대로 `failed`/`captcha_*`
+       는 실패가 **쌓이는** 실패라 `retryable=False` — 자동 재시도 금지 그대로다.
     """
     if not chrome_alive():
         ok, msg = launch_chrome()
         if not ok:
-            return {'ok': False, 'result': 'chrome', 'message': msg}
+            return {'ok': False, 'result': 'chrome', 'retryable': True, 'message': msg}
 
     s = session_info()
     if s.get('ok'):
@@ -469,13 +526,13 @@ def login_once():
 
     cfg = load_login_config()
     if not cfg:
-        return {'ok': False, 'result': 'not_configured',
+        return {'ok': False, 'result': 'not_configured', 'retryable': True,
                 'message': '저장된 그룹웨어 로그인 정보가 없습니다 — 🔑에서 먼저 등록해주세요.'}
 
     try:
         pw = _dpapi_decrypt_b64(cfg['pw_dpapi'])
     except Exception as e:
-        return {'ok': False, 'result': 'decrypt', 'message': str(e)}
+        return {'ok': False, 'result': 'decrypt', 'retryable': True, 'message': str(e)}
 
     # ⚠️⚠️ **창을 먼저 복원한다 — 좌표를 재기 전에.**
     #   최소화된 창에서는 신뢰된 클릭이 조용히 빗나간다(`gw_window_state` 주석에 실측 근거).
@@ -486,6 +543,21 @@ def login_once():
         prev_win = gw_window_state('normal')
     except Exception:
         pass
+
+    # 🆕 [2026-10-29] 로그인 화면까지는 **파이썬이** 데려다 놓는다(_ensure_login_page 주석 참고).
+    #    여기서 실패하면 **아이디/비번을 보낸 적이 없다** → retryable.
+    ready = _ensure_login_page()
+    if not ready.get('ok'):
+        pw = None
+        return {'ok': False, 'result': ready.get('result') or 'no_form', 'retryable': True,
+                'handoff': True,
+                'message': (ready.get('message') or '로그인 화면을 찾지 못했습니다.')
+                           + ' — 아직 로그인 시도를 보내지 않았습니다(계정 잠금과 무관).'}
+    if ready.get('captcha'):
+        pw = None
+        return {'ok': False, 'result': 'captcha_blocked', 'retryable': False, 'handoff': True,
+                'message': '이미 보안문자(CAPTCHA)가 떠 있습니다 — 자동 로그인을 시도하지 '
+                           '않았습니다. 열린 창에서 직접 로그인해주세요.'}
 
     try:
         r = eval_in_gw(_LOGIN_JS % (json.dumps(cfg['user']), json.dumps(pw)), timeout=60) or {}
@@ -513,9 +585,10 @@ def login_once():
                            " return true; })()", timeout=20)
                 res = 'submitted'
             except Exception:
-                return {'ok': False, 'result': 'click_failed', 'handoff': True,
+                # 제출이 안 일어났으니 실패로 **쌓이지 않는다** → retryable(계정 잠금과 무관).
+                return {'ok': False, 'result': 'click_failed', 'retryable': True, 'handoff': True,
                         'message': f'로그인 버튼을 누르지 못했습니다 ({e}) — '
-                                   '재시도하지 않습니다. 열린 창에서 직접 로그인해주세요.'}
+                                   '자격증명을 보낸 적은 없습니다. 열린 창에서 직접 로그인해주세요.'}
 
     # 제출했으면 결과는 **바깥에서** 확인한다(페이지 이동으로 JS 컨텍스트가 죽기 때문).
     if res == 'submitted':
@@ -549,12 +622,17 @@ def login_once():
         except Exception:
             st = {}
         res = 'captcha_appeared' if st.get('captcha') else 'failed'
-        r['message'] = st.get('msg') or ''
+        # ⚠️ [2026-10-29] `[class*=error]`가 로그인 화면의 **빈 오류 자리표시자**를 집어
+        #    "(서버 메시지: !)" 같은 쓸모없는 꼬리말을 달았다(실측). 글자가 거의 없는 건
+        #    서버 문구가 아니므로 버린다 — 사람에게 보여줄 값이 아니다.
+        _msg = (st.get('msg') or '').strip()
+        r['message'] = _msg if len(re.sub(r'[\s!·.…·:;*\-]+', '', _msg)) >= 2 else ''
 
     if res == 'ok':
         return {'ok': True, 'result': 'ok', 'message': '로그인했습니다.', 'session': session_info()}
 
-    # ⚠️ 여기부터는 전부 실패 경로 — 어떤 경우에도 다시 시도하지 않는다.
+    # ⚠️ 여기부터는 전부 실패 경로 — **자동** 재시도는 하지 않는다.
+    #    단 `retryable` 로 "자격증명이 서버까지 갔는가"를 구분해 알려준다(위 docstring).
     human = {
         'captcha_blocked':  '이미 보안문자(CAPTCHA)가 떠 있습니다 — 자동 로그인을 시도하지 않았습니다. 열린 창에서 직접 로그인해주세요.',
         'captcha_appeared': '로그인에 실패해 보안문자(CAPTCHA)가 나타났습니다 — 계정 잠금을 막기 위해 재시도하지 않습니다. 열린 창에서 직접 로그인해주세요.',
@@ -563,7 +641,9 @@ def login_once():
     }.get(res, '로그인하지 못했습니다 — 열린 창에서 직접 로그인해주세요.')
     if r.get('message'):
         human += f' (서버 메시지: {r["message"]})'
-    return {'ok': False, 'result': res or 'failed', 'message': human, 'handoff': True}
+    # `no_form` 은 폼이 없어 **채우지도 못한** 경우다 — 제출이 없었으니 잠금과 무관.
+    return {'ok': False, 'result': res or 'failed', 'handoff': True, 'message': human,
+            'retryable': res in ('no_form', 'nav_failed', 'chrome')}
 
 
 def session_info():

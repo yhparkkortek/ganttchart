@@ -224,6 +224,9 @@
         try {
             var d = await fetch(BASE + '/gw/login', { method: 'POST' }).then(function (r) { return r.json(); });
             if (d.ok) {
+                // 🔓 [2026-10-29] 사람이 여기서 성공시켰으면 AI 문답 게이트의 잠금도 푼다 —
+                //    안 풀면 같은 탭에서 AI 문답은 계속 옛 실패 메시지만 돌려준다(실사용 제보).
+                if (window._gwResetLoginGate) window._gwResetLoginGate();
                 var em = (d.session && d.session.email) || '';
                 gwStatus('✅ ' + (d.result === 'already'
                     ? T('이미 로그인되어 있습니다. ', 'Already signed in. ')
@@ -413,9 +416,25 @@
     //       반복될 수는 없다(한 번 실패하면 잠기고, 푸는 건 성공뿐이다).
     //     · 이미 로그인돼 있으면 /gw/login을 **아예 부르지 않는다**(상태 조회로 끝).
     //
+    //     · ⚠️ [2026-10-29 실사용 제보] 단 **"자격증명이 서버까지 간 적이 없는 실패"까지**
+    //       영구히 잠그면 안 된다 — 크롬이 안 떠 있거나 로그인 화면에 도달하지 못한 것은
+    //       실패가 **쌓이지 않는다**(CAPTCHA도 안 뜬다). 그런데 예전엔 그것까지 한 번에
+    //       잠가 버려서, 같은 `login_once()` 를 부르는데도 "설정창에서는 되고 AI 문답에서는
+    //       안 되는" 증상이 났다(첫 시도가 로그인 화면 이동 때문에 죽고 → 영구 잠금 →
+    //       사람이 설정창에서 누르면 그땐 이미 /login 이라 성공). 백엔드가 `retryable` 로
+    //       그 구분을 알려주므로, 그 경우만 상한(_GW_SAFE_RETRY_MAX)까지 다시 받아준다.
+    //       `failed`/`captcha_*`(=서버까지 간 실패)는 예전처럼 **영구 금지** 그대로다.
+    //
     // 반환: { ok:true, session } | { ok:false, message:'사용자에게 보여줄 한 줄' }
     var _gwAutoTried  = false;   // 이 페이지 세션에서 자동 로그인을 시도했는가
     var _gwAutoFailMsg = '';     // 실패 사유(재사용 — 같은 이유로 다시 시도하지 않는다)
+    var _gwSafeRetries = 0;      // 잠금과 무관한 실패를 몇 번 받아줬나
+    var _GW_SAFE_RETRY_MAX = 3;  // 그래도 무한 반복은 막는다(백엔드가 계속 못 뜨는 경우)
+
+    // 설정창에서 사람이 직접 로그인에 성공했을 때 등, 게이트를 풀어 주는 공용 입구.
+    window._gwResetLoginGate = function () {
+        _gwAutoTried = false; _gwAutoFailMsg = ''; _gwSafeRetries = 0;
+    };
 
     window._gwEnsureLogin = async function (onStep) {
         var say = (typeof onStep === 'function') ? onStep : function () {};
@@ -444,16 +463,26 @@
             _gwAutoFailMsg = '⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.');
             return { ok: false, message: _gwAutoFailMsg };
         }
-        if (d && d.ok) { _gwAutoTried = false; return { ok: true, session: d.session }; }
+        if (d && d.ok) { window._gwResetLoginGate(); return { ok: true, session: d.session }; }
 
+        // 🔎 서버까지 간 실패인가? 백엔드가 `retryable:true`를 주면 **자격증명을 보낸 적이
+        //    없는 실패**(크롬 미실행·로그인 화면 미도달·클릭 실패)라 잠금과 무관하다.
+        var _safe = !!(d && d.retryable);
         _gwAutoFailMsg = (d && d.result === 'not_configured')
             ? ('🔑 ' + (d.message || T('저장된 그룹웨어 로그인 정보가 없습니다 — AI 문답 창의 🔑에서 등록해주세요.',
                                        'No saved groupware login — register it with the 🔑 here.')))
             : ('🔒 ' + (d && d.message ? d.message
                                        : T('그룹웨어 로그인에 실패했습니다 — AI 문답 창의 🔑에서 직접 로그인해주세요.',
                                            'Groupware sign-in failed — use the 🔑 here.'))
-               + ' ' + T('(계정 잠금을 막기 위해 자동 재시도는 하지 않습니다)',
-                         '(no automatic retry, to avoid account lockout)'));
+               + ' ' + (_safe
+                   ? T('(아직 로그인 시도가 서버까지 가지 않아 다음 명령에서 한 번 더 시도합니다)',
+                       '(nothing was sent to the server yet — will try once more on the next command)')
+                   : T('(계정 잠금을 막기 위해 자동 재시도는 하지 않습니다)',
+                       '(no automatic retry, to avoid account lockout)')));
+        if (_safe && _gwSafeRetries < _GW_SAFE_RETRY_MAX) {
+            _gwSafeRetries++;
+            _gwAutoTried = false;      // 잠금과 무관한 실패 — 다음 명령에서 한 번 더 받아준다
+        }
         return { ok: false, message: _gwAutoFailMsg };
     };
 
