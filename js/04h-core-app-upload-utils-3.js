@@ -1105,6 +1105,23 @@
         html += '</tbody></table></div>';
         return html;
     };
+    // 도구 루프 결과(calls)에서 "표로 보여줄 것"만 골라 말풍선으로 덧붙인다.
+    // ⚠️ [2026-10-29] `calls` 에 `rows` 가 실려 있어야 한다 — js/40 이 표를 쓰는 도구일 때만
+    //    같이 실어 보낸다. 예전엔 요약만 담겨 있어 이 표가 **한 번도 안 그려졌다**(실사용 제보).
+    window._qaAttachRowChips = function (calls) {
+        var out = 0;
+        (calls || []).forEach(function (c) {
+            if (!c || !c.ok || !Array.isArray(c.rows) || !c.rows.length) return;
+            var cfg = (window.QA_ROW_CHIPS || {})[c.id];
+            if (!cfg || !window._qaBuildRowChipTable) return;
+            var html = window._qaBuildRowChipTable(cfg.kind, c.rows);
+            if (!html) return;
+            window._ganttQaHistory.push({ role: 'ai', rawHtml: true, text: html });
+            out++;
+        });
+        return out;
+    };
+
     window._qaRowChipClick = function (kind, tableId, idx) {
         const rows = window._qaRowChipStore[tableId];
         const row = rows && rows[idx];
@@ -8107,13 +8124,7 @@ ${docsJson}`;
                 }
                 // 🔗 [2026-10-28] 목록형 도구 결과는 행 클릭 칩 표를 별도 말풍선으로 덧붙인다 —
                 //    AI의 번호 매긴 설명과, 사람이 정확한 식별자로 바로 이어갈 수 있는 표를 같이 둔다.
-                (_toolRes.calls || []).forEach(function (c) {
-                    if (!c.ok || !Array.isArray(c.rows) || !c.rows.length) return;
-                    var _rcCfg = (window.QA_ROW_CHIPS || {})[c.id];
-                    if (!_rcCfg || !window._qaBuildRowChipTable) return;
-                    var _rcHtml = window._qaBuildRowChipTable(_rcCfg.kind, c.rows);
-                    if (_rcHtml) window._ganttQaHistory.push({ role: 'ai', rawHtml: true, text: _rcHtml });
-                });
+                window._qaAttachRowChips(_toolRes.calls);
                 window._ganttQaSending = false;
                 input.disabled = false;
                 if (sendBtn) {

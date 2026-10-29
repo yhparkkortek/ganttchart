@@ -967,8 +967,19 @@
                                          'Running ' + wanted[i].id + '...'));
                 var r = await window._qaRunTool(wanted[i].id, wanted[i].args);
                 steps.push(r);
-                calls.push({ id: r.id, args: r.args || {}, ok: r.ok,
-                             count: r.count, message: r.message || '' });
+                // 🔗 [2026-10-29 실사용 제보] 행 클릭 칩 표(js/04h)는 **원본 행**이 있어야
+                //    그린다. 그런데 `calls`는 푸터용 요약(id/인자/건수)만 담고 있어서,
+                //    `QA_ROW_CHIPS`에 등록해 둔 도구도 표가 **한 번도 안 그려졌다**
+                //    (기능이 붙은 줄 알았는데 목록이 계속 평문으로만 나왔다).
+                //    ⚠️ 전부 싣지는 않는다 — 메일 80건처럼 큰 결과까지 들고 다니게 된다.
+                //       표를 쓰는 도구일 때만 그 행을 같이 넘긴다.
+                var _call = { id: r.id, args: r.args || {}, ok: r.ok,
+                              count: r.count, message: r.message || '' };
+                if (r.ok && (window.QA_ROW_CHIPS || {})[r.id]
+                        && Array.isArray(r.rows) && r.rows.length) {
+                    _call.rows = r.rows;
+                }
+                calls.push(_call);
                 if (window._qaLogToolCall) window._qaLogToolCall(question, r);
             }
             if (calls.length >= MAX_CALLS) break;
