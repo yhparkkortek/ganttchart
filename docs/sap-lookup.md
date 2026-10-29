@@ -2487,3 +2487,144 @@ ZMM009 ALV **119개 컬럼 전수 확인 결과 통화 컬럼이 없다**(`WAERS
 - 라이브 검증: 호출 전/후 `GetWindowRect`·`IsIconic`·`WS_EX_TOPMOST`·
   `GetForegroundWindow()` **전부 1비트도 안 바뀜** — 창을 조금도 안 건드리고 아이콘만
   깜빡이는 동작임을 코드로 재확인(SAP 로그인 계정 KKR034).
+
+---
+
+## ⚡ 속도 — COM 왕복 비용 실측 (2026-10-29)
+
+**정확도가 1순위, 속도가 2순위**라는 전제에서 측정한 수치. 추측으로 sleep을 줄이지 말고
+여기 숫자를 근거로 삼을 것. 재측정 스크립트 패턴은 아래 "측정 방법".
+
+### 측정 환경
+32비트 Python 3.15 / SAP GUI Scripting / 실제 로그인된 사내 세션, 화면 = SAP Easy Access.
+
+### 1) 프로세스 고정 비용 — 요청 1건당 ~0.75초
+
+| 항목 | 실측 |
+|---|---|
+| `py -3-32 -c pass` (인터프리터 기동) | 0.43 s |
+| `+ import win32com.client` | 0.72 s (import만 0.25 s) |
+| `GetObject("SAPGUI")` → session 획득 | 0.05 s |
+| `tasklist /NH` (`_sap_gui_process_running`) | 0.50 s |
+| `EnumWindows` 1회 (`_sap_bring_windows_to_front`, 창 369개) | 0.001 s |
+
+→ `/sap-*` 요청 1건마다 **SAP을 건드리기도 전에 0.75초**가 든다. 자재 N건을 프런트에서
+루프로 호출하면(가격 조회 최대 3건, 승인원 생성은 품목 수만큼 `_run_sap_bridge` 재호출)
+그만큼 곱해진다.
+
+### 2) ⚠️ 가장 중요 — `findById`가 비용의 대부분이다 (경로 해석 ~2.8 ms)
+
+| 호출 | 실측 1회 |
+|---|---|
+| `session.findById('wnd[0]/sbar').Text` (매번 해석) | **3.14 ms** |
+| `sbar.Text` (참조 캐시 후) | **0.35 ms** → **9배 빠름** |
+| `session.Info.ScreenNumber` (매번) | 3.04 ms |
+| `info.ScreenNumber` (`info = session.Info` 캐시 후) | **0.30 ms** → **10배 빠름** |
+| `session.findById('wnd[0]')` | 1.65 ms |
+| `container.Children` + `.Count` | 2.74 ms |
+| `session.Busy` | **0.24 ms** |
+| 없는 컨트롤 `findById` → 예외 | 0.86 ms |
+| 없는 메서드 호출 → 예외 | 1.91 ms |
+
+읽는 값이 비싼 게 아니라 **경로를 해석하는 게 비싸다.** 루프 안에서 같은 경로를 다시
+`findById` 하는 코드(실측 71곳)는 전부 참조를 루프 밖으로 올리면 그대로 9~10배가 된다.
+`'wnd[0]'`은 소스에 128번, `'wnd[0]/tbar[0]/okcd'`는 33번, `'wnd[0]/sbar'`는 16번 나온다.
+
+### 3) 트리 순회는 1회 ~1.2초 — 빈 화면에서도
+
+`_sap_dump_fields(wnd)`를 **필드가 0개인 Easy Access 화면**에서 돌려도 **1.17초**.
+노드당 `Children`(2.7 ms) + `Type` + `Text`를 다 왕복하기 때문이다. 자재가 열린 MM03처럼
+노드가 수백 개인 화면은 이보다 더 든다 — CLAUDE.md의 "필드마다 트리 순회 금지(46초 사고)"가
+바로 이 수치다. `_find_by_id_substring`·`_scan_screen`·`_sap_dump_fields`는 모두 같은 비용.
+`_select_tab_with_retry(attempts=6)`는 최악의 경우 이 순회를 **6번** 한다.
+
+### 4) 🔑 `sendVKey`/`press`는 **완전 동기** — 뒤에 붙은 고정 sleep은 대부분 순수 낭비
+
+조회 트랜잭션 4개로 측정(선택화면 진입까지, F8 미실행):
+
+| 트랜잭션 | `sendVKey(0)`가 반환하기까지 | 반환 후 화면 안정화에 더 걸린 시간 | `session.Busy`가 True로 관측된 적 |
+|---|---|---|---|
+| ZMM005 | 142.9 ms | 9.0 ms | 없음 |
+| ZMM006 | 168.3 ms | 1.2 ms | 없음 |
+| MM03 | 133.9 ms | 2.8 ms | 없음 |
+| ZMM009 | 135.1 ms | 1.8 ms | 없음 |
+
+**`sendVKey`가 리턴한 시점에 이미 목표 트랜잭션 화면이다**(`session.Info.Transaction`이
+바뀌어 있고 `Busy`는 False). 그런데 코드는 그 뒤에 `time.sleep(1.0)`을 더 기다린다 →
+전환 1회마다 약 1초가 그냥 버려진다.
+
+전체 정적 sleep: **215곳 / 합계 171.8초**. 함수별 상위:
+
+| 함수 | sleep 합계 | 개수 |
+|---|---|---|
+| `post_goods_receipt` | 14.1 s | 19 |
+| `create_reservation` | 8.0 s | 12 |
+| `print_po_via_zmm018` | 7.3 s | 4 |
+| `_migo_post_by_reservation` | 7.0 s | 9 |
+| `print_reservation_zmm019` | 6.9 s | 6 |
+| `download_documents_batch` | 6.3 s | 8 |
+| `fetch_project_codes` | 5.1 s | 7 |
+| `fetch_team_budget` / `resolve_materials_via_zmm009` / `fetch_zmm009_material_list` | 4.9 / 4.2 / 4.2 s | 5 each |
+
+### ⚠️ 그래도 sleep을 통째로 지우면 안 되는 이유
+
+동기인 건 **SAP 서버 왕복**이고, 다음 세 가지는 왕복이 끝난 뒤에 비동기로 일어난다:
+① ALV 그리드의 행 렌더링(`firstVisibleRow` 스윕이 필요한 이유) ② `PressToolbarButton`으로
+뜨는 레이아웃/검색도움말 **팝업** ③ SAP 창이 아닌 **Windows 대화상자**(ZMM019 인쇄창 등).
+그래서 안전한 치환은 "삭제"가 아니라 **"기대하는 신호를 폴링, 상한은 기존 sleep 값"**이다:
+
+```python
+def _settle(session, cond, budget, poll=0.02):
+    """cond()가 True가 될 때까지 폴링. 상한은 기존 sleep 값과 같게 준다 —
+    최악의 경우 오늘과 동일, 보통은 10배 가까이 빠르다. 신호를 보고 기다리므로
+    SAP이 느린 날엔 오늘보다 **더 정확하다**(오늘은 눈 감고 1초만 기다린다)."""
+    t0 = time.time()
+    while time.time() - t0 < budget:
+        try:
+            if not session.Busy and cond():
+                return True
+        except Exception:
+            pass
+        time.sleep(poll)
+    return False
+```
+`session.Busy` 폴링 단가가 0.24 ms라 20 ms 간격 폴링은 사실상 무료다.
+조건은 화면마다 다르게 준다 — 트랜잭션 전환이면 `info.Transaction == 'ZMM005'`,
+실행(F8)이면 `_sap_find_grid(wnd) is not None` 또는 `sbar.Text != ''`,
+팝업 대기면 `session.findById('wnd[1]')`이 예외를 안 던지는 것.
+**조건을 못 만들겠으면 그 자리의 sleep은 건드리지 말 것** — 추측 조건이 거짓 통과하면
+정확도가 깨진다(F4가 씹히던 2026-10-12 사고가 그 부류).
+
+### 5) 그리드 읽기 — 컬럼 수가 곧 시간
+
+`GetCellValue` 1칸도 결국 COM 왕복이다. `_sap_dump_grid`는 `ColumnOrder` **전체**를 읽어서,
+ZMM009(컬럼 119개)를 범용 덤프로 넘기면 행당 119 왕복이 된다. 필요한 컬럼만 읽는
+`_zmm009_read_grid_rows`(`_ZMM009_PATTERN_COLS`) 방식이 정답 — 범용 덤프 경로에도
+"필요 컬럼만" 옵션이 필요하다. BOM 실측치(2000행 ≈ 51초 = 행당 25 ms)는 컬럼 10개 기준.
+
+부수적으로 `_sap_dump_grid`의 `shell.GetColumnTitle(cid)`는 **존재하지 않는 메서드라 항상
+예외**(의도된 폴백 — 위 "한글이 깨져서 나온다" 절 참고)인데, 예외 1회가 1.91 ms라
+컬럼 119개면 227 ms를 예외 생성에만 쓴다. 첫 컬럼에서 한 번 던지면 나머지는 폴백으로
+건너뛰면 된다(동작 동일).
+
+### 6) `firstVisibleRow` 스윕 폭은 실측 `VisibleRowCount`로
+
+`_SCROLL_STEP = 30`은 고정값이다. 뷰포트가 30행보다 **작으면** 각 구간의 끝 행들이
+렌더링되지 않아 빈 값으로 조용히 들어오고(정확도 문제), **크면** 불필요하게 자주
+스크롤한다(속도 문제). `grid.VisibleRowCount`를 읽어 그 값을 스텝으로 쓰면 둘 다 해결된다.
+행마다 붙은 `time.sleep(0.08)`도 2000행이면 67회 = 5.4초다.
+
+### 측정 방법
+
+읽기 전용 스크립트를 `py -3-32`로 직접 돌린다(백엔드를 거치지 않는다 — 5000번 프로세스를
+죽이면 예약 발송·SAP 작업이 날아간다). 패턴:
+
+```python
+import win32com.client, time
+session = win32com.client.GetObject("SAPGUI").GetScriptingEngine.Children(0).Children(0)
+t0 = time.time()
+for _ in range(200):
+    _ = session.findById('wnd[0]/sbar').Text
+print((time.time() - t0) / 200 * 1000, 'ms/call')
+```
+화면 상태를 바꾸는 측정(트랜잭션 전환)은 **끝에 `/n`으로 메뉴 복귀**까지 넣을 것.
