@@ -61,6 +61,8 @@
         }
         // Weekly Report 탭은 매번 최신 기준주로 다시 그린다
         if (tabName === 'weekly' && window.showWeeklyReport) window.showWeeklyReport();
+        // 📒 Project list — 들어올 때마다 다시 그리고, 첫 진입에선 Drive 최신본/NAS 문서 개수를 받아온다
+        if (tabName === 'projectlist' && window.plOnTabShown) window.plOnTabShown();
         // Summary 탭은 Gantt chart Level 0 데이터와 연동된 타임라인을 매번 다시 그린다
         if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
         // Summary 탭 진입 시 필수 항목(고객사/모델명/KTK PN/담당자) 미입력 하이라이트 갱신

@@ -4832,7 +4832,10 @@ BACKSLASH            = chr(92)         # 경로 정규화용 — 리터럴 안 �
 #   쓰거나 이름을 바꾸면 팀원 PC에서만 "허용되지 않은 폴더"가 난다(ELEC→PARTS가 그 경우).
 #   화이트리스트의 목적은 **경로 탈출 차단**이고, 앱이 정한 이름은 root 아래라 그 목적과 무관하다.
 DOCSTORE_APP_FOLDERS = ['SUMMARY', 'CUSTOMER', 'MC', 'PARTS', 'ADDRESS',
-                        'ALARM&NOTICE', 'CALENDER', 'GANTT', 'REPORT']
+                        'ALARM&NOTICE', 'CALENDER', 'GANTT', 'REPORT',
+                        # 📒 [2026-10-29] Project list 페이지(js/55)의 제품별 문서함 —
+                        #    파일명은 "<KTK PN>__<원래이름>"(PN 마다 폴더를 만들면 수백 개가 된다)
+                        'PROJECTLIST']
 
 
 def _docstore_load():
