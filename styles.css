@@ -1328,6 +1328,11 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
 .cal-event-chip.chip-delay   { background:#ffeef0; color:#c0392b; border-left-color:#e03131; }
 .cal-event-chip.chip-pending { background:#fff4e6; color:#c96a00; border-left-color:#e67e22; }
 .cal-event-chip.cal-alarm-on { background:#fff3cd; border-left-color:#e67e22; color:#7a5210; }
+/* 🖱 [2026-10-29] 상태·핀셋 칩에도 호버 — 위 색 지정이 기본 칩 :hover보다 뒤라 덮어써 색이 고정돼 보였다 */
+.cal-event-chip.chip-done:hover    { background:#e2e2e2; }
+.cal-event-chip.chip-delay:hover   { background:#ffdde1; }
+.cal-event-chip.chip-pending:hover { background:#ffe6c7; }
+.cal-event-chip.cal-alarm-on:hover { background:#ffe69c; }
 .cal-event-chip.cal-selected { background:#2c5f8a !important; color:#fff !important; border-left-color:#1c3f5c !important; font-weight:bold; }
 /* 💡 [기간 막대 개선] 예전엔 얇고(3px) 반투명해서 눈에 잘 안 띄었음 — 두껍고(6px) 진한 알약모양
    막대 + 시작/종료일엔 작은 원형 마커를 찍어서 "여기서 시작/여기서 끝"이 한눈에 보이게 함.
@@ -1350,6 +1355,7 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
 .cal-day-popup-item { padding:8px 10px; border:1px solid #cfe3e5; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; transition:background .15s, border-color .15s; }
 .cal-day-popup-item:hover { background:#eef6f7; border-color:#52a5af; }
 .cal-day-popup-item.cal-alarm-on { background:#fff3cd; border-color:#ffe08a; }
+.cal-day-popup-item.cal-alarm-on:hover { background:#ffe69c; border-color:#e6b84a; }
 tr.alarm-on > td { background-color: #e8f4fd !important; }
 tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 

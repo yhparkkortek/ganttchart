@@ -333,6 +333,8 @@ window._cpApplyLive = function(hex, skipSave) {
         // 💡 [2026-08-30 추가] "핀셋 알람"/"이번달·이번주 강조"는 테마색이 아니라 그 보색(위 compGen)으로
         // — 업무 상자(테마색)와는 확실히 구분되면서, 어떤 테마를 고르든 항상 대비되는 색이 나오게 함.
         + '.cal-event-chip.cal-alarm-on { background: ' + compGen.headerTint + ' !important; border-left-color: ' + compGen.hoverBorder + ' !important; color: ' + compGen.darkText + ' !important; }\n'
+        // 🖱 [2026-10-29] 핀셋 칩 호버 — 팝업 항목(아래)엔 있는데 칩엔 빠져 색이 고정돼 보였다
+        + '.cal-event-chip.cal-alarm-on:hover { background: ' + compGen.hoverBg + ' !important; }\n'
         + '.cal-month-block.cal-month-current { background: ' + compGen.headerTint + ' !important; outline-color: ' + compGen.hoverBorder + ' !important; }\n'
         + '.cal-month-block.cal-month-current .cal-month-title { color: ' + compGen.darkText + ' !important; }\n'
         // 🧩 [2026-10-21] 제품구분자(MVD/TVD/TPR…) 전환 버튼 — M.C Table·BOM·Customer SPEC 세 곳이
