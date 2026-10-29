@@ -1446,8 +1446,13 @@
                  + ' onclick="document.getElementById(\'pl-doc-file\').click()">'
                  + '⬆️ ' + _esc(_t('여기에 파일을 끌어다 놓거나 눌러서 고르세요 (NAS에 바로 올라갑니다)',
                                    'Drop files here, or click to choose — uploaded straight to NAS'))
-                 + '<input type="file" id="pl-doc-file" multiple style="display:none;" onchange="window.plUploadDocs(\'' + id + '\')"></div>'
-                 + '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">'
+                 + '<input type="file" id="pl-doc-file" multiple style="display:none;" onchange="window.plStageDocs(\'' + id + '\')"></div>'
+                 // 💾 고른 파일을 **바로 올리지 않고** 여기 모아 뒀다가 [저장]을 눌러 올린다(사용자 요청).
+                 //    끌어다 놓은 파일도 같은 자리에 모인다 — 올리기 전에 무엇이 올라가는지 보이게.
+                 + '<div id="pl-doc-staged" style="margin-top:8px; font-size:11.5px; color:#2b7a45; display:none;"></div>'
+                 + '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">'
+                 + '<button id="pl-doc-save" onclick="window.plUploadDocs(\'' + id + '\')" disabled'
+                 + ' style="padding:5px 13px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer; opacity:.45;">💾 ' + _t('저장', 'Save') + '</button>'
                  + '<button onclick="window._dsOpenBrowser && window._dsOpenBrowser(\'' + NAS_FOLDER + '\')" style="padding:5px 11px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📁 ' + _t('폴더 열기', 'Open folder') + '</button>'
                  + '<button onclick="window.plRefreshDocCache(false)" style="padding:5px 11px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:12px; cursor:pointer;">🔄 ' + _t('목록 새로고침', 'Refresh') + '</button>'
                  + '</div>'
@@ -1471,6 +1476,31 @@
         return (nums[0] || '') + ' ' + fileName;
     };
 
+    // 💾 올리기 전 대기열 — 고르거나 끌어다 놓은 파일을 모아 두고 [저장]에서 한 번에 올린다.
+    window._plStaged = window._plStaged || [];
+    var _renderStaged = function () {
+        var box = document.getElementById('pl-doc-staged');
+        var btn = document.getElementById('pl-doc-save');
+        var n = window._plStaged.length;
+        if (box) {
+            box.style.display = n ? 'block' : 'none';
+            box.innerHTML = n
+                ? '📎 ' + _esc(_t('저장 대기 ' + n + '개: ', n + ' file(s) waiting: '))
+                  + _esc(window._plStaged.map(function (f) { return f.name; }).join(', ')).slice(0, 300)
+                  + ' <span onclick="window.plClearStaged()" style="cursor:pointer; color:#b1432f;">✕ ' + _t('비우기', 'clear') + '</span>'
+                : '';
+        }
+        if (btn) { btn.disabled = !n; btn.style.opacity = n ? '1' : '.45'; }
+    };
+    window.plClearStaged = function () { window._plStaged = []; _renderStaged(); };
+
+    window.plStageDocs = function (id) {
+        var inp = document.getElementById('pl-doc-file');
+        var files = inp && inp.files ? Array.prototype.slice.call(inp.files) : [];
+        if (!files.length) return;
+        window._plStaged = window._plStaged.concat(files);
+        _renderStaged();
+    };
     window.plDropDocs = function (ev, id) {
         ev.preventDefault();
         ev.stopPropagation();                       // 〃 window 전역 드롭 핸들러(js/04f)로 새지 않게
@@ -1478,13 +1508,15 @@
         var box = document.getElementById('pl-doc-drop');
         if (box) box.style.background = '#fbfdfd';
         var files = ev.dataTransfer && ev.dataTransfer.files ? Array.prototype.slice.call(ev.dataTransfer.files) : [];
-        if (files.length) window._plPutDocs(id, files);
+        if (!files.length) return;
+        window._plStaged = window._plStaged.concat(files);
+        _renderStaged();
     };
-    window.plUploadDocs = function (id) {
-        var inp = document.getElementById('pl-doc-file');
-        var files = inp && inp.files ? Array.prototype.slice.call(inp.files) : [];
-        if (!files.length) { _toast(_t('올릴 파일을 먼저 고르세요.', 'Choose files first.'), 'warning'); return; }
-        window._plPutDocs(id, files);
+    window.plUploadDocs = async function (id) {
+        var files = window._plStaged.slice();
+        if (!files.length) { _toast(_t('저장할 파일을 먼저 고르거나 끌어다 놓으세요.', 'Choose or drop files first.'), 'warning'); return; }
+        window._plStaged = []; _renderStaged();
+        await window._plPutDocs(id, files);
     };
     window._plPutDocs = async function (id, files) {
         var r = _rowById(id); if (!r) return;
@@ -1635,15 +1667,100 @@
         catch (e) { _toast('⚠️ ' + _t('도면에서 글자를 뽑지 못했습니다: ', 'Could not extract text: ') + (e && e.message ? e.message : e), 'error', 8000); return; }
         if (!String(text || '').trim()) { _toast('⚠️ ' + _t('도면에 읽을 글자가 없습니다(스캔 이미지일 수 있습니다).', 'No readable text (it may be a scanned image).'), 'error', 7000); return; }
 
-        var det = window.plExtractDwg(text, r);
-        var picks = Object.keys(det).filter(function (k) { return String(det[k]) !== String(r[k] || ''); });
-        if (!picks.length) {
-            _popup('📐 ' + _t('도면 분석 결과', 'Drawing analysis'),
-                '<div style="color:#888;">' + _t('도면에서 읽은 값이 이미 표와 같습니다.', 'Everything read from the drawing already matches the table.') + '</div>'
-              + window._plAiMoreBtn(id, fileName, FD));
-            return;
-        }
-        window._plShowDocPreview(id, fileName, det, picks, _t('📐 도면에서 그대로 읽음(AI 안 씀)', '📐 Read directly from the drawing (no AI)'), FD);
+        window.plShowDwgInfo(id, fileName, FD, window.plExtractDwg(text, r), text);
+    };
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📐 도면 정보 모달 — **표와 별개로**, 그 도면 한 장에서 뽑을 수 있는 정보를 전부 정리해 보여준다.
+    //    (2026-10-29 사용자 요청: "바로 분석해서 테이블에 넣는 게 아니고, 정리된 모달을 먼저 보고
+    //     그 정보를 기준으로 취사선택해서 테이블에 자동등록")
+    //    · 읽힌 항목만이 아니라 **카탈로그 30개 전부**를 보여준다 — 뭘 못 읽었는지도 정보다.
+    //    · 표에 등록할 수 있는 항목만 체크박스를 준다. 기본 체크는 "표가 비었고 도면엔 있는" 칸.
+    //    · 표 값과 다르면 ⚠️ 로 나란히 보여주고, 그건 **기본 체크를 안 한다**(사람이 판단).
+    // ══════════════════════════════════════════════════════════════════════════
+    window.plShowDwgInfo = function (id, fileName, folder, det, rawText) {
+        var r = _rowById(id); if (!r) return;
+        window._plDwgInfo = { id: id, file: fileName, folder: folder, det: det, text: rawText || '' };
+
+        var items = window.PL_DOC_ITEMS || [];
+        var gotN = items.filter(function (it) { return det[it.k]; }).length;
+
+        var rowsHtml = items.map(function (it, i) {
+            var v = det[it.k] == null ? '' : String(det[it.k]);
+            var cur = String(r[it.k] == null ? '' : r[it.k]).trim();         // 도면 전용 칸의 현재 값
+            var cmpCol = it.cmp ? _colByKey[it.cmp] : null;
+            var cmpVal = cmpCol ? String(r[it.cmp] == null ? '' : r[it.cmp]).trim() : '';
+            var clash = v && cmpVal
+                && v.toUpperCase().indexOf(cmpVal.toUpperCase()) === -1
+                && cmpVal.toUpperCase().indexOf(v.toUpperCase()) === -1;
+            var same = v && cur && v === cur;
+            var canPick = !!v && !same;
+            var checked = canPick && !clash;                                  // 충돌하면 사람이 직접 고르게
+            return '<tr style="border-bottom:1px solid #f1f3f5;' + (clash ? ' background:#fff7e6;' : (v ? '' : ' color:#bbb;')) + '">'
+                 + '<td style="padding:4px 6px; text-align:center;">'
+                 + (canPick ? '<input type="checkbox" class="pl-dwg-ck" data-k="' + it.k + '"' + (checked ? ' checked' : '') + '>' : (same ? '✔' : ''))
+                 + '</td>'
+                 + '<td style="padding:4px 6px; color:#555; white-space:nowrap;">' + _esc(window._currentLang === 'en' ? it.en : it.ko) + '</td>'
+                 + '<td style="padding:4px 6px; font-weight:' + (v ? 'bold' : 'normal') + '; color:' + (v ? '#1971c2' : '#bbb') + '; word-break:break-all;">'
+                 + _esc(v || _t('(도면에 없음)', '(not in drawing)')) + '</td>'
+                 + '<td style="padding:4px 6px; color:#888; font-size:10.5px; word-break:break-all;">'
+                 + (cmpCol ? _esc(window._currentLang === 'en' ? cmpCol.en : cmpCol.ko) + ': ' + _esc(cmpVal || '-') : '')
+                 + (clash ? ' <b style="color:#b1432f;">⚠️ ' + _t('다름', 'differs') + '</b>' : '')
+                 + '</td></tr>';
+        }).join('');
+
+        _popup('📐 ' + _esc(fileName) + ' — ' + _t('도면에서 읽은 정보', 'information read from this drawing'),
+            '<div style="display:flex; gap:10px; align-items:center; margin-bottom:9px; font-size:11.5px; color:#555;">'
+          + '<span>' + _t('읽은 항목 ', 'Read ') + '<b style="color:#1971c2;">' + gotN + '</b> / ' + items.length + '</span>'
+          + '<span style="color:#9aa5a9;">·</span><span>' + _t('AI 안 씀(규칙으로 읽음)', 'no AI — rule-based') + '</span>'
+          + '<span style="margin-left:auto;">'
+          + '<a href="#" onclick="window.plDwgCheckAll(true); return false;" style="color:#1971c2; text-decoration:none;">' + _t('모두 선택', 'select all') + '</a> · '
+          + '<a href="#" onclick="window.plDwgCheckAll(false); return false;" style="color:#868e96; text-decoration:none;">' + _t('모두 해제', 'none') + '</a>'
+          + '</span></div>'
+          + '<div style="max-height:46vh; overflow:auto; border:1px solid #e3e6ea; border-radius:6px;">'
+          + '<table style="width:100%; font-size:11.5px; border-collapse:collapse;">'
+          + '<tr style="background:#f1f3f5; position:sticky; top:0;"><th style="width:30px;"></th>'
+          + '<th style="text-align:left; padding:5px 6px;">' + _t('항목', 'Item') + '</th>'
+          + '<th style="text-align:left; padding:5px 6px;">' + _t('도면에서 읽은 값', 'Value from drawing') + '</th>'
+          + '<th style="text-align:left; padding:5px 6px;">' + _t('표의 값', 'Table value') + '</th></tr>'
+          + rowsHtml + '</table></div>'
+          + '<div style="margin-top:11px; display:flex; gap:6px; align-items:center;">'
+          + window._plAiMoreBtn(id, fileName, folder)
+          + '<button onclick="window.plClosePopup()" style="padding:6px 12px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6; border-radius:6px; font-size:12px; cursor:pointer;">' + _t('닫기', 'Close') + '</button>'
+          + '<button onclick="window.plRegisterDwg()" style="padding:6px 14px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ '
+          + _t('선택 항목 표에 등록', 'Register selected into the table') + '</button>'
+          + '</div>'
+          + '<div style="margin-top:8px; color:#888; font-size:11px; line-height:1.5;">'
+          + _esc(_t('· 체크한 항목만 이 행에 들어갑니다 — 모달을 닫으면 표는 그대로입니다.',
+                    '· Only checked items are written to this row — closing changes nothing.'))
+          + '<br>' + _esc(_t('· 표의 값과 다른 항목(⚠️)은 기본으로 해제해 뒀습니다.',
+                             '· Items that differ from the table (⚠️) are unchecked by default.')) + '</div>', true);
+    };
+
+    window.plDwgCheckAll = function (on) {
+        Array.prototype.forEach.call(document.querySelectorAll('.pl-dwg-ck'), function (c) { c.checked = !!on; });
+    };
+
+    /** 체크한 항목만 이 행에 등록 */
+    window.plRegisterDwg = function () {
+        var p = window._plDwgInfo; if (!p) return;
+        var r = _rowById(p.id); if (!r) { window.plClosePopup(); return; }
+        var n = 0;
+        Array.prototype.forEach.call(document.querySelectorAll('.pl-dwg-ck'), function (c) {
+            if (!c.checked) return;
+            var k = c.getAttribute('data-k');
+            var v = p.det[k];
+            if (v == null || !_colByKey[k]) return;
+            var before = r[k] == null ? '' : String(r[k]);
+            if (before === String(v)) return;
+            r[k] = String(v);
+            _plPushHistory(r, k, before, r[k]);
+            n++;
+        });
+        if (!n) { _toast(_t('선택된 항목이 없습니다.', 'Nothing selected.'), 'warning'); return; }
+        _view.groups.dwg = true; _saveView();          // 등록한 값이 바로 보이게 그룹을 켠다
+        _persist(); window.plClosePopup(); window.plRender();
+        _toast('✅ ' + n + _t('개 항목을 표에 등록했습니다(도면: ', ' item(s) registered (drawing: ') + p.file + ').', 'success', 6000);
     };
 
     /** 미리보기 — 결정론/AI 결과를 같은 모양으로 보여준다. 엑셀 값과 다르면 "표≠도면" 으로 표시. */
@@ -1770,47 +1887,91 @@
                               'No row has a linked drawing — refresh the NAS list or fill in PNs first.'), 'warning', 8000);
             return;
         }
-        if (!confirm(_t(rows.length + '개 행의 도면을 읽어 "도면분석" 칸을 채웁니다(AI 안 씀).\n계속할까요?',
-                        'Read drawings for ' + rows.length + ' rows and fill the "From drawing" columns (no AI).\nContinue?'))) return;
+        _toast('📐 ' + rows.length + _t('개 행의 도면을 읽는 중… (AI 안 씀)', ' rows: reading drawings… (no AI)'), 'info', 4000);
 
-        var ok = 0, miss = 0, filled = 0, i = 0;
+        // ⚠️ 여기서 표를 고치지 않는다 — 읽기만 하고 **목록으로 보여준 뒤** 고른 행만 등록한다
+        //    (사용자 요청: "바로 분석해서 테이블에 넣는 게 아니고, 정리된 걸 보고 취사선택").
+        var results = [], miss = 0, i = 0;
         for (i = 0; i < rows.length; i++) {
             var r = rows[i];
-            if (i % 5 === 0) _toast('📐 ' + (i + 1) + '/' + rows.length + _t(' 도면 읽는 중…', ' reading drawings…'), 'info', 1500);
-            // 리비전 문자열이 가장 큰 것 = 가장 최근 도면
+            if (i % 5 === 0) _toast('📐 ' + (i + 1) + '/' + rows.length + _t(' 도면 읽는 중…', ' reading drawings…'), 'info', 1200);
             var docs = window._plDocsOf(r).slice().sort(function (a, b) { return String(b.rev).localeCompare(String(a.rev), 'en'); });
             var text = '';
             try { text = await window._plDocText(NAS_FOLDER, docs[0].name); }
             catch (e) { miss++; continue; }
             if (!String(text || '').trim()) { miss++; continue; }
             var det = window.plExtractDwg(text, r);
-            var n = 0;
-            Object.keys(det).forEach(function (k) {
-                if (!_colByKey[k]) return;
-                var before = r[k] == null ? '' : String(r[k]);
-                if (before === String(det[k])) return;
-                // 사람이 손으로 적어 둔 값은 덮지 않는다 — 비어 있는 칸만 채운다.
-                if (before.trim() && String(k).indexOf('dwg') !== 0) return;
-                r[k] = String(det[k]);
-                _plPushHistory(r, k, before, r[k]);
-                n++;
+            var newKeys = Object.keys(det).filter(function (k) {
+                return _colByKey[k] && String(det[k]) !== String(r[k] == null ? '' : r[k]);
             });
-            if (n) { filled += n; ok++; }
+            if (newKeys.length) results.push({ id: r._id, file: docs[0].name, det: det, keys: newKeys, row: r });
         }
-        _persist();
-        // 도면 분석 결과를 바로 볼 수 있게 그룹을 켠다
+        if (!results.length) {
+            _popup('📐 ' + _t('도면 읽기 결과', 'Drawing scan'),
+                '<div style="color:#888;">' + _t('표에 새로 넣을 값을 찾지 못했습니다.', 'Nothing new found.') + '</div>');
+            return;
+        }
+        window._plBatch = results;
+        var listHtml = results.map(function (x, n) {
+            return '<tr style="border-bottom:1px solid #f1f3f5;">'
+                 + '<td style="padding:4px 6px; text-align:center;"><input type="checkbox" class="pl-batch-ck" data-i="' + n + '" checked></td>'
+                 + '<td style="padding:4px 6px; white-space:nowrap;">' + _esc(x.row.ktkPn || x.row.no || '-') + '</td>'
+                 + '<td style="padding:4px 6px; color:#666;">' + _esc(String(x.row.desc || '').slice(0, 26)) + '</td>'
+                 + '<td style="padding:4px 6px; color:#888; word-break:break-all;">' + _esc(x.file) + '</td>'
+                 + '<td style="padding:4px 6px; text-align:right;"><b style="color:#1971c2;">' + x.keys.length + '</b></td>'
+                 + '<td style="padding:4px 6px;"><button onclick="window.plBatchOpen(' + n + ')" style="padding:2px 8px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:11px; cursor:pointer;">'
+                 + _t('보기', 'View') + '</button></td></tr>';
+        }).join('');
+        _popup('📐 ' + _t('도면에서 읽은 정보 — 등록할 행을 골라주세요', 'Read from drawings — choose rows to register'),
+            '<div style="margin-bottom:9px; font-size:11.5px; color:#555;">'
+          + _t('대상 ', 'Scanned ') + rows.length + _t('행 중 ', ' rows; ') + results.length + _t('행에서 새 값을 찾았습니다.', ' have new values.')
+          + (miss ? ' <span style="color:#b1432f;">' + _t('글자를 못 읽은 도면 ', 'unreadable: ') + miss + '</span>' : '')
+          + '</div>'
+          + '<div style="max-height:46vh; overflow:auto; border:1px solid #e3e6ea; border-radius:6px;">'
+          + '<table style="width:100%; font-size:11.5px; border-collapse:collapse;">'
+          + '<tr style="background:#f1f3f5; position:sticky; top:0;"><th style="width:30px;"></th>'
+          + '<th style="text-align:left; padding:5px 6px;">KTK PN</th>'
+          + '<th style="text-align:left; padding:5px 6px;">' + _t('설명', 'Description') + '</th>'
+          + '<th style="text-align:left; padding:5px 6px;">' + _t('도면', 'Drawing') + '</th>'
+          + '<th style="text-align:right; padding:5px 6px;">' + _t('새 값', 'New') + '</th><th></th></tr>'
+          + listHtml + '</table></div>'
+          + '<div style="margin-top:11px; display:flex; gap:6px; justify-content:flex-end;">'
+          + '<button onclick="window.plClosePopup()" style="padding:6px 12px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6; border-radius:6px; font-size:12px; cursor:pointer;">' + _t('닫기', 'Close') + '</button>'
+          + '<button onclick="window.plBatchRegister()" style="padding:6px 14px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ '
+          + _t('선택한 행 등록', 'Register selected rows') + '</button></div>'
+          + '<div style="margin-top:8px; color:#888; font-size:11px;">'
+          + _esc(_t('· [보기]를 누르면 그 도면에서 읽은 항목을 하나씩 골라 등록할 수 있습니다.',
+                    '· [View] lets you pick items one by one for that drawing.')) + '</div>', true);
+    };
+
+    /** 목록에서 [보기] — 그 행의 도면 정보 모달을 열어 항목별로 골라 등록한다 */
+    window.plBatchOpen = function (i) {
+        var x = (window._plBatch || [])[i]; if (!x) return;
+        window.plShowDwgInfo(x.id, x.file, NAS_FOLDER, x.det, '');
+    };
+
+    /** 체크한 행만 — 그 행에서 새로 읽힌 값을 등록한다(사람이 적어 둔 엑셀 칸은 안 덮는다) */
+    window.plBatchRegister = function () {
+        var list = window._plBatch || [];
+        var n = 0, rowsN = 0;
+        Array.prototype.forEach.call(document.querySelectorAll('.pl-batch-ck'), function (c) {
+            if (!c.checked) return;
+            var x = list[parseInt(c.getAttribute('data-i'), 10)]; if (!x) return;
+            var r = _rowById(x.id); if (!r) return;
+            var k2 = 0;
+            x.keys.forEach(function (k) {
+                var before = r[k] == null ? '' : String(r[k]);
+                if (before.trim() && String(k).indexOf('dwg') !== 0) return;   // 엑셀 칸은 빈칸만
+                r[k] = String(x.det[k]);
+                _plPushHistory(r, k, before, r[k]);
+                k2++;
+            });
+            if (k2) { n += k2; rowsN++; }
+        });
+        if (!n) { _toast(_t('등록할 값이 없습니다.', 'Nothing to register.'), 'warning'); return; }
         _view.groups.dwg = true; _saveView();
-        window.plRender();
-        _popup('📐 ' + _t('도면 전체 분석 결과', 'Drawing batch analysis'),
-            '<div style="line-height:1.8; font-size:12.5px;">'
-          + _t('· 대상 행: ', '· Rows: ') + rows.length + '<br>'
-          + _t('· 값이 채워진 행: ', '· Rows updated: ') + ok + '<br>'
-          + _t('· 채운 칸 수: ', '· Cells filled: ') + filled + '<br>'
-          + _t('· 글자를 못 읽은 도면: ', '· Unreadable drawings: ') + miss
-          + '</div><div style="margin-top:9px; color:#888; font-size:11px;">'
-          + _t('"도면분석" 열 그룹을 켜 두었습니다. 표의 기존 값은 덮지 않고 빈칸만 채웠습니다 — 도면 전용 칸(dwg…)은 항상 최신 도면 값으로 갱신됩니다.',
-               'The "From drawing" column group is now on. Existing table values were kept; only blanks were filled — drawing-only columns are always refreshed.')
-          + '</div>');
+        _persist(); window.plClosePopup(); window.plRender();
+        _toast('✅ ' + rowsN + _t('개 행에 ', ' row(s), ') + n + _t('개 항목을 등록했습니다.', ' item(s) registered.'), 'success', 6000);
     };
 
     window.plApplyAi = function () {
