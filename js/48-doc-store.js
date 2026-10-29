@@ -47,8 +47,10 @@ async function _api(path, opts) {
     try {
         res = await fetch(DS + path, Object.assign({ signal: AbortSignal.timeout(30000) }, opts || {}));
     } catch (e) {
-        throw new Error(_t('로컬 백엔드(127.0.0.1:5000)에 연결할 수 없습니다 — 실행 중인지 확인해주세요.',
-                           'Cannot reach the local backend (127.0.0.1:5000) — is it running?'));
+        var off = new Error(_t('로컬 백엔드(127.0.0.1:5000)에 연결할 수 없습니다 — 실행 중인지 확인해주세요.',
+                               'Cannot reach the local backend (127.0.0.1:5000) — is it running?'));
+        off.offline = true;   // 부르는 쪽이 "원본 없음"과 "백엔드 꺼짐"을 갈라 안내할 수 있게
+        throw off;
     }
     var j = null;
     try { j = await res.json(); } catch (e) { /* 바이너리 응답 */ }
@@ -56,9 +58,11 @@ async function _api(path, opts) {
     //    /doc/* 에서 404는 거의 항상 **백엔드가 옛 버전**이라는 뜻이다(연결은 됐는데 라우트가 없음).
     //    연결 실패(위 catch)와는 원인도 조치도 다르므로 갈라서 알려준다.
     if (res.status === 404 && !(j && j.error)) {
-        throw new Error(_t(
+        var old = new Error(_t(
             '백엔드에 이 기능이 없습니다 — 실행 중인 백엔드가 옛 버전입니다. 백엔드를 재시작해주세요.',
             'The backend does not have this endpoint — it is running an older version. Please restart it.'));
+        old.outdated = true;
+        throw old;
     }
     if (!res.ok || (j && j.ok === false)) throw new Error((j && j.error) || ('HTTP ' + res.status));
     return j;

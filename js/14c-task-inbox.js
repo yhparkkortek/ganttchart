@@ -1333,6 +1333,26 @@ window._mailRawRenderAtts = function(atts, fileName, attDivOverride) {
 //    fileName이 없거나 백엔드가 꺼져 있거나 원본이 없으면 조용히 아무것도 안 바뀐다(기존 2000자
 //    요약 그대로) — 버튼을 눌렀다가 "없습니다"를 보는 것보다 애초에 안 보이는 게 낫다는 기존 원칙과 동일.
 //    opts: { setBody(text), attDiv, metaEl, btnEl, isStale() }
+// 📎 NAS 원본(.eml)을 왜 못 여는지 한 줄로 — "백엔드 꺼짐 / 옛 백엔드 / 원본 없음"은 조치가 다르다.
+//    retry=true면 "↻ 다시 시도" 버튼(.mailnas-retry)을 붙인다(부르는 쪽이 onclick을 단다).
+window._mailNasReasonHtml = function(e, en, retry) {
+    var msg, color = '#b35c00';
+    if (e && e.offline) {
+        msg = en ? '🔌 Local backend is not running — cannot open the NAS original (.eml). Start kortek_backend and retry.'
+                 : '🔌 로컬 백엔드가 꺼져 있어 NAS 원본(.eml)을 열 수 없습니다 — kortek_backend 를 실행한 뒤 다시 시도하세요.';
+    } else if (e && e.outdated) {
+        msg = en ? '⚠️ The backend is outdated — restart it to open the NAS original.' : '⚠️ 백엔드가 옛 버전입니다 — 재시작해야 NAS 원본을 열 수 있습니다.';
+    } else {
+        color = '#868e96';
+        msg = en ? '📭 No stored original (.eml) for this mail — mails before NAS storage started have none.'
+                 : '📭 이 메일은 보관된 원본(.eml)이 없습니다 — NAS 보관(10/22) 이전 메일이면 정상입니다.';
+    }
+    var btn = (retry && e && (e.offline || e.outdated))
+        ? ' <button type="button" class="mailnas-retry" style="margin-left:4px; padding:1px 8px; font-size:11px; border:1px solid #e0b070; background:#fff7e8; color:#8a4b00; border-radius:4px; cursor:pointer;">↻ ' + (en ? 'Retry' : '다시 시도') + '</button>'
+        : '';
+    return '<span style="color:' + color + '; font-weight:bold;">' + msg + '</span>' + btn;
+};
+
 window._mailNasApplyAffordance = function(fileName, opts) {
     opts = opts || {};
     if (opts.btnEl) { opts.btnEl.style.display = 'none'; opts.btnEl.onclick = null; }
@@ -1377,7 +1397,13 @@ window._mailNasApplyAffordance = function(fileName, opts) {
                     });
             };
         }
-    }).catch(function() { _driveFallback(); /* 백엔드가 꺼져 있거나 원본이 없으면 Drive 사본, 그것도 없으면 요약만 */ });
+    }).catch(function(e) {
+        // 백엔드 꺼짐은 사람이 고칠 수 있는 문제라 알린다(원본 없음은 흔하고 정상이라 조용히).
+        if (opts.metaEl && e && (e.offline || e.outdated) && !(opts.isStale && opts.isStale()) && window._mailNasReasonHtml) {
+            opts.metaEl.innerHTML = window._mailNasReasonHtml(e, _en, false);
+        }
+        _driveFallback(); /* 백엔드가 꺼져 있거나 원본이 없으면 Drive 사본, 그것도 없으면 요약만 */
+    });
 };
 
 window.showMailRawModal = function(r) {
@@ -1491,7 +1517,18 @@ window.showMailRawModal = function(r) {
                         if (window._dsMailOpenUrl) window.open(window._dsMailOpenUrl(fn), '_blank');
                     });
             };
-        }).catch(function() { _driveFallback(); /* 백엔드가 꺼져 있거나 원본이 없으면 Drive 사본 */ });
+        }).catch(function(e) {
+            // 🐛 [2026-10-29 사용자 제보 "보관함 원문보기에서 eml 을 못 봄"] 실측 원인은 **백엔드가 꺼져 있던 것**
+            //    (보관함 24건 중 23건은 NAS 원본이 멀쩡했다). 그런데 이 창은 실패를 조용히 숨겨서 버튼·첨부가
+            //    그냥 사라져 보였다 — 왜 못 여는지 알려주고, 백엔드를 켠 뒤 바로 다시 열 수 있게 한다.
+            if (window._mailRawOpenFile !== fn) return;
+            if (metaEl && window._mailNasReasonHtml) {
+                metaEl.insertAdjacentHTML('beforeend', '&nbsp;&nbsp;|&nbsp;&nbsp;' + window._mailNasReasonHtml(e, _en2, true));
+                var rb = metaEl.querySelector('.mailnas-retry');
+                if (rb) rb.onclick = function(ev) { ev.stopPropagation(); window.showMailRawModal(r); };
+            }
+            _driveFallback(); /* 백엔드가 꺼져 있거나 원본이 없으면 Drive 사본 */
+        });
     })();
 
     // 💡 [2026-09-09 신규] 첨부파일 목록 표시 — 실제 파일 내용은 가져오지 않고 메타데이터만 pill로 렌더링
