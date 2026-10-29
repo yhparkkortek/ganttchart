@@ -2614,6 +2614,49 @@ ZMM009(컬럼 119개)를 범용 덤프로 넘기면 행당 119 왕복이 된다.
 스크롤한다(속도 문제). `grid.VisibleRowCount`를 읽어 그 값을 스텝으로 쓰면 둘 다 해결된다.
 행마다 붙은 `time.sleep(0.08)`도 2000행이면 67회 = 5.4초다.
 
+### ✅ 적용됨 — 무위험 구간 (2026-10-29)
+
+사용자 결정: **"무위험 구간만"** — 동작이 바뀌지 않는 것만 적용했다. **sleep은 한 줄도 건드리지
+않았고**, `_SCROLL_STEP`/`VisibleRowCount`·상주 워커·리프 캐시(화면 전환을 끼는 참조 재사용)는
+**적용하지 않았다**(동작이 바뀔 수 있어 별건으로 남김).
+
+적용 내용:
+1. **메뉴 서브트리 가지치기** — `_sap_find_grid` · `_sap_find_shell_any` · `_sap_dump_fields` ·
+   `_find_by_id_substring` · `_find_all_by_id_substring`. id 검색 쪽은 **이미 읽은 `cid`로 판정**해
+   추가 COM 왕복이 0이다. 안전성 증명은 `_menu_prunable` docstring에 적었다.
+   ⚠️ 진단용 전체 트리 덤프(`dump_screen_tree`)는 예전부터 `_DUMP_SKIP_DESCEND =
+   ('GuiMenubar','GuiStatusbar')`로 메뉴를 건너뛰고 있었다(8초 예산 때문) — 새 가정이 아니라
+   같은 근거를 조회 경로로 옮긴 것.
+2. **무자식 타입 재귀 생략**(`_NO_CHILD_TYPES`) — 실측 4화면 174건 전부 `Children` 접근이 COM
+   예외였던 9개 타입만. 기존 코드도 "예외 → 즉시 return"이라 결과가 같고 예외 1건(~1~2ms)을 아낀다.
+   **실측으로 못 본 타입(GuiComboBox 등)은 일부러 넣지 않았다.**
+3. **`GetColumnTitle` 1회 판정**(`_sap_dump_grid`) — 항상 예외인 걸 첫 컬럼에서 한 번만 확인하고
+   나머지는 바로 코드명 폴백. 119컬럼이면 예외 생성에만 쓰던 227ms가 사라진다.
+
+**동등성 검증**(불일치 0건) — 패치 함수 vs 패치 전 원본 로직을 5개 화면
+(SESSION_MANAGER/MM03/ZMM006/MB23/ZMM009)에서 1:1 비교. 검색어 12개
+(`RMMG1-MATNR`,`COBL-AUFNR`,`MATNR`,`txtRESB-SGTXT`,`CTL_FILES`,`tabsTABSPR1`,
+`%_S_MATNR_%_APP_%-VALU_PUSH`,`WERKS-LOW`,`sbar`, 그리고 **가지치기 대상이 아니어야 하는**
+`menu`/`mbar`/`usr`) × `_find_by_id_substring`/`_find_all_by_id_substring` 반환 id,
+`_sap_dump_fields` 반환 리스트 전체, `_sap_find_grid`/`_sap_find_shell_any` 반환 객체 id까지 전부 일치.
+
+| 화면 | `_sap_dump_fields` | id 검색 12건 |
+|---|---|---|
+| SESSION_MANAGER/100 | 1.571 → 0.233 s (6.7×) | 16.48 → 3.06 s (5.4×) |
+| MM03/60 | 1.334 → 0.168 s (8.0×) | 14.61 → 2.05 s (7.1×) |
+| ZMM006/1000 | 1.729 → 0.414 s (4.2×) | 15.25 → 3.52 s (4.3×) |
+| MB23/560 | 2.403 → 0.172 s (14.0×) | 20.57 → 3.17 s (6.5×) |
+| ZMM009/1000 | 1.827 → 0.514 s (3.6×) | 19.17 → 5.15 s (3.7×) |
+
+호출처가 많아(`_sap_find_grid` 22곳, `_find_by_id_substring` 32곳, `_sap_dump_fields` 11곳,
+`_find_all_by_id_substring` 13곳, `_sap_find_shell_any` 4곳) 조회 1건마다 이 순회가 여러 번 돈다.
+
+**남은(미적용) 후보** — 적용 전에 반드시 다시 실측할 것:
+- 고정 sleep 215곳 / 171.8초 → "기대 신호 폴링, 상한은 기존 sleep 값"(위 4절)
+- `_SCROLL_STEP=30` → `grid.VisibleRowCount` (정확도도 같이 좋아지지만 **동작이 바뀐다**)
+- 범용 그리드 덤프의 컬럼 선별(ZMM009 119컬럼)
+- 요청당 0.75초 프로세스 고정비용 → 상주 32비트 워커(구조 변경)
+
 ### 측정 방법
 
 읽기 전용 스크립트를 `py -3-32`로 직접 돌린다(백엔드를 거치지 않는다 — 5000번 프로세스를

@@ -336,6 +336,54 @@ def _get_sap_session_raw():
     return connection.Children(0)
 
 
+# ══════════════════════════════════════════════════════════════
+# ⚡ [2026-10-29] 트리 순회 공용 가지치기 — **동작은 그대로, 왕복만 줄인다.**
+#   실측 근거표: docs/sap-lookup.md "속도 — COM 왕복 비용 실측".
+#
+# ① `wnd[0]`의 **첫 번째** 자식이 `mbar`(메뉴 모음)다. 그래서 아래 순회 함수들은 전부
+#    화면 필드(`usr`)에 닿기 전에 메뉴 트리를 통째로 훑고 있었다 — ZMM006 선택화면 실측에서
+#    **전체 206노드 중 118노드, 1.434초 중 0.986초(69%)가 메뉴였다**(메뉴 제외 시 0.416초).
+#    GuiMenubar/GuiMenu의 자손은 GuiMenu뿐이고 그 id는 `mbar/menu[i]/menu[j]` 꼴이므로,
+#    그리드/셸/라벨·입력필드를 찾는 순회에서는 **건너뛰어도 결과가 같다**.
+# ② 아래 타입들은 `Children` 접근 자체가 COM 예외를 던진다(= 자식이 없다). 실측 4화면
+#    (SESSION_MANAGER/MM03/MB23/ZMM006) 174건이 전부 그랬다. 기존 코드도 "예외 → 즉시
+#    return"이라 **결과가 같고**, 예외 1건당 ~1~2ms(예외 생성이 COM 왕복보다 비싸다)를 아낀다.
+#    ⚠️ 실측으로 확인한 타입만 넣을 것 — GuiComboBox 등 못 본 타입은 일부러 빼뒀다.
+_NO_CHILD_TYPES = frozenset((
+    'GuiLabel', 'GuiTextField', 'GuiCTextField', 'GuiCheckBox', 'GuiRadioButton',
+    'GuiButton', 'GuiOkCodeField', 'GuiStatusPane', 'GuiBox',
+))
+_MENU_TYPES = frozenset(('GuiMenubar', 'GuiMenu'))
+
+# 메뉴 서브트리 id에 등장할 수 있는 글자 전체(`.../wnd[0]/mbar/menu[0]/menu[3]`).
+# 이 집합을 벗어난 글자가 검색어에 하나라도 있으면 그 검색어는 메뉴 id와 **절대** 매치될 수
+# 없다(대문자·'-'·'_'·'%'·'$' 등) → 그럴 때만 메뉴를 건너뛴다. 보수적인 판정이라 매치가
+# 있을 수 있는 가지는 절대 자르지 않는다. 실제 호출부 검색어(`RMMG1-MATNR`,`COBL-AUFNR`,
+# `txtRESB-SGTXT`,`CTL_FILES`…)는 전부 가지치기 대상이고, 'menu' 같은 검색어는 기존대로 전부 훑는다.
+_MENU_ID_CHARS = frozenset('mbar/menu[]0123456789')
+
+
+def _tree_skip(ctype):
+    """이 노드 아래로 더 내려갈 필요가 없는가(자식이 없거나, 메뉴 트리거나)."""
+    return ctype in _NO_CHILD_TYPES or ctype in _MENU_TYPES
+
+
+def _menu_prunable(substring):
+    """id 부분문자열 검색에서 메뉴 서브트리를 건너뛰어도 **매치를 놓칠 수 없는** 검색어인가.
+
+    메뉴 노드의 id는 `P + S` 꼴이다 — `P`는 메뉴 모음의 전체 경로(`…/wnd[0]/mbar`),
+    `S`는 `/menu[i]/menu[j]…`. 검색어 N이 거기에 매치되는 경우는 셋뿐이고 전부 막힌다:
+      ⓐ N ⊆ S  → `_MENU_ID_CHARS` 밖 글자가 있으면 불가능.
+      ⓑ N이 경계를 걸침 → N은 `P`의 꼬리(`…wnd[0]/mbar`)로 시작해야 하므로,
+         메뉴 글자 집합을 벗어나는 글자를 포함하려면 **반드시 `mbar`를 품는다** → 아래에서 제외.
+      ⓒ N ⊆ P  → 이 경우는 가지치기 전에 이미 그 노드 자체가 매치로 반환된다.
+    그래서 보수적으로 판정하며, 조건이 애매하면 **가지치기하지 않는다**(기존대로 전부 훑음)."""
+    s = str(substring or '')
+    if not s or 'mbar' in s.lower():
+        return False
+    return any(c not in _MENU_ID_CHARS for c in s)
+
+
 def _sap_find_grid(container, depth=0):
     """창 트리를 재귀 탐색해 첫 번째 ALV 그리드(GuiShell, SubType=GridView)를 찾는다."""
     if depth > 12:
@@ -348,11 +396,15 @@ def _sap_find_grid(container, depth=0):
         return None
     for i in range(children.Count):
         child = children.Item(i)
+        ctype = None
         try:
-            if child.Type == 'GuiShell' and child.SubType == 'GridView':
+            ctype = child.Type
+            if ctype == 'GuiShell' and child.SubType == 'GridView':
                 return child
         except Exception:
             pass
+        if ctype is not None and _tree_skip(ctype):
+            continue  # ⚡ 메뉴·무자식 노드는 내려가지 않는다(결과 동일) — 위 주석 참고
         found = _sap_find_grid(child, depth + 1)
         if found is not None:
             return found
@@ -406,11 +458,20 @@ def _sap_dump_grid(shell):
         col_ids = []
     if not col_ids:
         return None
+    # ⚡ [2026-10-29] `GetColumnTitle`은 위 docstring대로 **존재하지 않는 메서드라 항상 예외**다.
+    #    예외 1건이 1.91ms(COM 왕복보다 비싸다)라 119컬럼짜리 ZMM009면 227ms를 예외 생성에만
+    #    썼다. 첫 컬럼에서 한 번만 던져보고, 없는 메서드로 판명되면 나머지는 바로 폴백한다 —
+    #    결과(코드명으로 폴백)는 기존과 완전히 동일하다.
     titles = []
+    _title_api = True
     for cid in col_ids:
+        if not _title_api:
+            titles.append(cid)
+            continue
         try:
             titles.append(shell.GetColumnTitle(cid) or cid)
         except Exception:
+            _title_api = False
             titles.append(cid)
     total_rows = shell.RowCount
     # ⚠️ [2026-10-19] 응답 크기 보호용 행 상한. **SAP의 제한이 아니라 우리 상한이다** —
@@ -466,6 +527,8 @@ def _sap_dump_fields(container, depth=0, max_depth=10):
                     lines.append(text)
             except Exception:
                 pass
+        if _tree_skip(ctype):
+            continue  # ⚡ 메뉴 자손은 GuiMenu뿐이라 여기서 모으는 타입이 없다(결과 동일)
         lines.extend(_sap_dump_fields(child, depth + 1, max_depth))
     return lines
 
@@ -486,11 +549,15 @@ def _sap_find_shell_any(container, depth=0):
         return None
     for i in range(children.Count):
         child = children.Item(i)
+        ctype = None
         try:
-            if child.Type == 'GuiShell':
+            ctype = child.Type
+            if ctype == 'GuiShell':
                 return child
         except Exception:
             pass
+        if ctype is not None and _tree_skip(ctype):
+            continue  # ⚡ 메뉴·무자식 노드는 내려가지 않는다(결과 동일)
         found = _sap_find_shell_any(child, depth + 1)
         if found is not None:
             return found
@@ -2285,6 +2352,11 @@ def _find_by_id_substring(container, substring, depth=0, max_depth=30, require_t
         type_ok = (require_type is None) or (getattr(container, 'Type', None) == require_type)
         if substring in cid and type_ok:
             return container
+        # ⚡ [2026-10-29] 메뉴 모음 서브트리 가지치기 — `cid`는 이미 읽었으니 **추가 COM 왕복이 0**.
+        #    `mbar`가 wnd[0]의 첫 자식이라 예전엔 모든 검색이 메뉴 118노드(≈1초)를 먼저 훑었다.
+        #    판정 근거와 안전성 증명은 `_menu_prunable` docstring 참고.
+        if '/mbar' in cid and _menu_prunable(substring):
+            return None
     except Exception:
         pass
     if depth > max_depth:
@@ -2319,6 +2391,8 @@ def _find_all_by_id_substring(container, substring, depth=0, max_depth=30, resul
         cid = container.Id or ''
         if substring in cid:
             results.append(container)
+        elif '/mbar' in cid and _menu_prunable(substring):
+            return results  # ⚡ 메뉴 서브트리 가지치기 — `_find_by_id_substring`과 같은 근거
     except Exception:
         pass
     if depth > max_depth:
