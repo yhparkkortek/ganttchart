@@ -861,7 +861,14 @@
 /* 값이 길면 줄임표로 — 셀을 누르면 입력칸이 열려 전체가 보인다 */
 .pl-table td .pl-v { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
 .pl-table td .pl-ico { margin-left: 3px; cursor: pointer; opacity: .55; font-size: 11px; }
-.pl-table td .pl-ico:hover { opacity: 1; }
+.pl-table td .pl-ico:hover { opacity: 1 !important; }
+/* 📄 자료·참조 아이콘은 칸 오른쪽 끝에 **고정**한다 — 값 뒤에 흘려 두면 긴 PN 에 밀려 잘려서
+   아예 안 보였다(실측). 값 쪽은 그만큼 자리를 비워 둬야 글자가 아이콘 밑으로 들어가지 않는다. */
+.pl-table td.pl-has-ico { position: relative; padding-right: 22px; }
+.pl-table td.pl-has-ico .pl-ico-fix {
+    position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+    margin: 0; font-size: 12px; line-height: 1; white-space: nowrap;
+}
 .pl-table td.pl-no { color: #888; font-size: 11px; }
 
 /* Alarm 탭: 추가 #alarm-view-alarm 래퍼가 사이에 있어 별도 처리.

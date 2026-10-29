@@ -44,6 +44,27 @@
     //    앞 숫자로 색인한다(앱이 파일을 다시 이름 짓지 않는다 — 사람이 NAS를 직접 열어 쓰는 폴더다).
     var NAS_FOLDER = 'PROJECT LIST/CUSTOMER';
 
+    // 🎨 테마 팔레트 — 행 배경·머리글처럼 **JS 가 인라인으로 칠하는 곳**은 팔레트를 직접 읽어야 한다.
+    //    (인라인 style 은 팔레트가 주입하는 <style id="cp-live-style"> 규칙보다 항상 세서, 안 읽으면
+    //     테마를 바꿔도 이 표만 청록으로 남는다 — docs/ui-conventions.md 의 그 패턴)
+    var _pal = function () {
+        var T = window.CP_CURRENT_TEAL || {};
+        var get = function (role, fallback) {
+            try { return (window._cpRoleHex ? window._cpRoleHex(role) : '') || fallback; }
+            catch (e) { return fallback; }
+        };
+        return {
+            bg:          get('bg',          T.bg          || '#e0f5f7'),
+            headerTint:  get('headerTint',  T.headerTint  || '#eef6f7'),
+            border:      get('border',      T.border      || '#cfe3e5'),
+            zebraB:      get('zebraB',      T.zebraB      || '#e8f2f3'),
+            darkText:    get('darkText',    T.darkText    || '#00707d'),
+            hoverBg:     get('hoverBg',     T.hoverBg     || '#a3d9e0'),
+            hoverBorder: get('hoverBorder', T.hoverBorder || '#52a5af')
+        };
+    };
+    window._plPal = _pal;
+
     // ── 팀별 관리 ─────────────────────────────────────────────────────────────
     //    이 표는 팀마다 다른 제품을 들고 있다. 그래서 공용 파일을 팀 이름으로 나눠 둔다
     //    (App_Config/ProjectList_<팀>.json). 팀을 바꾸면 그 팀 파일만 읽고 쓴다.
@@ -79,7 +100,7 @@
     var C = function (k, ko, en, g, w, type) { return { k: k, ko: ko, en: en, g: g, w: w || 110, type: type || '' }; };
 
     window.PL_COLUMNS = window.PL_COLUMNS || [
-        C('no',          'No',                'No',                  'basic', 44),
+        C('no',          'No',                'No',                  'basic', 54),
         C('ktkPn',       'KTK PN',            'KTK PN',              'basic', 78,  'sap'),
         C('customer',    'CUSTOMER',          'CUSTOMER',            'basic', 78,  'sel'),
         C('factory',     'Factory',           'Factory',             'basic', 62,  'sel'),
@@ -97,7 +118,7 @@
         C('ownerHw',     '회로담당(PM)',      'HW owner (PM)',       'owner', 92,  'person'),
         C('ownerFw',     '펌웨어담당',        'FW owner',            'owner', 92,  'person'),
         C('ownerMech',   '기구담당',          'Mech owner',          'owner', 92,  'person'),
-        C('ownerTouch',  '터치담당',          'Touch owner',         'owner', 140, 'person'),
+        C('ownerTouch',  '터치담당',          'Touch owner',         'owner', 92,  'person'),
 
         C('panelMfr',    'Panel Mfr.',        'Panel Mfr.',          'panel', 72,  'sel'),
         C('panel',       'Panel',             'Panel',               'panel', 140, 'panel'),
@@ -353,7 +374,12 @@
         scheduleDriveSync: function (data) {
             var self = this;
             if (self._syncTimer) clearTimeout(self._syncTimer);
-            self._syncTimer = setTimeout(function () { self.syncToDrive(data); }, 3000);
+            // 💾 NAS(주) 와 Drive(보조)에 같이 쓴다 — NAS 는 구글 로그인이 없어도 되고,
+            //    Drive 는 연동돼 있을 때만 쓰인다(syncToDrive 가 토큰 없으면 조용히 빠진다).
+            self._syncTimer = setTimeout(function () {
+                if (window.plSaveToNasJson) window.plSaveToNasJson(data);
+                self.syncToDrive(data);
+            }, 3000);
         },
         syncToDrive: async function (data) {
             var tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
@@ -421,6 +447,76 @@
         }
     };
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 💾 NAS JSON — **주 저장소**(2026-10-29 사용자 제안).
+    //    도면이 이미 NAS 에 있고, NAS 는 구글 로그인 없이 팀 전체가 닿는다. 그래서 표 자체도
+    //    같은 자리에 가벼운 JSON 한 벌로 둔다: `PROJECT LIST/ProjectList_<팀>.json`.
+    //    읽는 순서: **NAS → Drive → 이 PC 캐시**. 셋 다 없으면 빈 표 + "엑셀 불러오기" 안내.
+    //    쓰기: NAS 에 쓰고, 구글 연동이 돼 있으면 Drive 에도 같은 내용을 남긴다(사외/백업용).
+    //    ⚠️ 경로(루트 UNC)는 코드에 적지 않는다 — 각 PC 의 docstore_config.json 에만 있다(저장소 공개).
+    // ══════════════════════════════════════════════════════════════════════════
+    var NAS_DATA_FOLDER = 'PROJECT LIST';
+    var _nasDataName = function () { return 'ProjectList_' + _team() + '.json'; };
+    window._plNasSavedAt = null;
+
+    window.plLoadFromNas = async function () {
+        if (!window._dsFileOf) return null;
+        try {
+            var f = await window._dsFileOf(NAS_DATA_FOLDER, _nasDataName());
+            var o = JSON.parse(await f.text());
+            if (!o || !Array.isArray(o.rows)) return null;
+            window._plNasSavedAt = o.savedAt || null;
+            return { rows: o.rows, history: Array.isArray(o.history) ? o.history : [] };
+        } catch (e) {
+            // 파일이 아직 없는 건 오류가 아니다(처음 쓰는 팀) — 폴더 권한 문제만 밖으로 알린다.
+            var m = (e && e.message) ? e.message : '';
+            if (/허용되지 않은 폴더|not allowed/i.test(m)) window._plDocCache.error = m;
+            return null;
+        }
+    };
+
+    window.plSaveToNasJson = async function (data) {
+        if (!window._dsPut) return false;
+        try {
+            // 낙관적 동시성 — 내가 마지막으로 본 savedAt 과 지금 파일의 savedAt 이 다르면
+            // 그 사이 다른 팀원이 저장한 것이다. 내 화면으로 덮지 않고 최신본을 가져온다.
+            var mine = window._plNasSavedAtMine;
+            if (mine) {
+                var cur = await window.plLoadFromNas();      // _plNasSavedAt 을 지금 값으로 갱신한다
+                if (cur && window._plNasSavedAt && window._plNasSavedAt !== mine) {
+                    _toast('⚠️ ' + _t('다른 팀원이 방금 저장해서, 덮어쓰지 않고 최신본을 불러왔습니다. 방금 바꾼 내용은 다시 입력해주세요.',
+                                      'Another member just saved — reloaded the latest instead of overwriting. Please re-enter your recent change.'), 'warning', 8000);
+                    window._plData = cur;
+                    window._plNasSavedAtMine = window._plNasSavedAt;
+                    window.ProjectList.save(cur, true);       // 로컬 캐시만 갱신
+                    window.plRender();
+                    return false;
+                }
+            }
+            var savedAt = new Date().toISOString();
+            var payload = {
+                team: _team(), savedAt: savedAt,
+                by: window.currentUserName || '-',
+                rows: data.rows || [], history: (data.history || []).slice(-3000)
+            };
+            var file = new File([JSON.stringify(payload)], _nasDataName(), { type: 'application/json' });
+            await window._dsPut(NAS_DATA_FOLDER, file, true);
+            window._plNasSavedAt = savedAt;
+            window._plNasSavedAtMine = savedAt;
+            if (window._plSetSavedMark) window._plSetSavedMark(savedAt, 'NAS');
+            return true;
+        } catch (e) {
+            var msg = (e && e.message) ? e.message : String(e);
+            if (/허용되지 않은 폴더|not allowed/i.test(msg)) {
+                msg = _t('백엔드를 다시 시작해야 NAS 저장이 됩니다.', 'Restart the backend to enable NAS saving.');
+            }
+            console.warn('[Project list] NAS 저장 실패:', msg);
+            var el = document.getElementById('pl-saved-mark');
+            if (el) { el.textContent = '⚠️ ' + msg; el.style.color = '#b1432f'; }
+            return false;
+        }
+    };
+
     /** 팀 전환 — 지금 팀 내용을 먼저 저장하고(디바운스 중일 수 있다) 그 팀 파일로 갈아탄다 */
     window.plSwitchTeam = async function (team) {
         if (!team || team === _team()) return;
@@ -451,7 +547,8 @@
         if (!_plDirty) return;
         var PL = window.ProjectList;
         if (PL._syncTimer) { clearTimeout(PL._syncTimer); PL._syncTimer = null; }
-        try { PL.syncToDrive(D()); } catch (e) { console.warn('[Project list] 즉시 저장 실패:', e && e.message); }
+        try { if (window.plSaveToNasJson) window.plSaveToNasJson(D()); } catch (e) { console.warn('[Project list] NAS 즉시 저장 실패:', e && e.message); }
+        try { PL.syncToDrive(D()); } catch (e) { console.warn('[Project list] Drive 즉시 저장 실패:', e && e.message); }
     };
 
     var _plMarkDirty = function () {
@@ -463,12 +560,13 @@
     };
 
     /** Drive 에 올라간 시각 — 여기까지 와야 "팀원도 볼 수 있는 저장"이다. */
-    window._plSetSavedMark = function (iso) {
+    window._plSetSavedMark = function (iso, where) {
         if (window._plClearDirty) window._plClearDirty();
         var el = document.getElementById('pl-saved-mark');
         if (!el) return;
         var d = iso ? new Date(iso) : new Date();
-        el.textContent = '☁️ ' + _t('드라이브 저장 ', 'saved to Drive ') + d.toLocaleString(window._currentLang === 'en' ? 'en-US' : 'ko-KR');
+        var tag = (where === 'NAS') ? '🗄️ ' + _t('NAS 저장 ', 'saved to NAS ') : '☁️ ' + _t('드라이브 저장 ', 'saved to Drive ');
+        el.textContent = tag + d.toLocaleString(window._currentLang === 'en' ? 'en-US' : 'ko-KR');
         el.style.color = '#2b7a45';
         el.title = _t('팀 공용 파일(App_Config/ProjectList_' + _team() + '.json)에 반영된 시각입니다.',
                       'Time this was written to the shared team file (App_Config/ProjectList_' + _team() + '.json).');
@@ -563,10 +661,30 @@
         });
         var s = _view.sort || {};
         if (s.k) {
-            var isNum = (_colByKey[s.k] || {}).type === 'num';
+            // 🔢 숫자 칸은 숫자로 — 글자로 비교하면 1, 10, 100, 2 순이 된다(사용자 지적).
+            //    No·판매량만이 아니라 **값이 전부 숫자인 칸**이면 숫자로 본다(KTK PN 등).
+            var col = _colByKey[s.k] || {};
+            var isNum = col.type === 'num' || s.k === 'no';
+            if (!isNum) {
+                var seen = 0, allNum = true;
+                for (var qi = 0; qi < rows.length && qi < 60; qi++) {
+                    var sv = String(rows[qi][s.k] == null ? '' : rows[qi][s.k]).trim();
+                    if (!sv) continue;
+                    seen++;
+                    if (!/^-?\d+(\.\d+)?$/.test(sv)) { allNum = false; break; }
+                }
+                isNum = allNum && seen > 0;
+            }
             rows.sort(function (a, b) {
                 var x = a[s.k], y = b[s.k];
-                if (isNum) { x = parseFloat(String(x).replace(/[^\d.-]/g, '')) || 0; y = parseFloat(String(y).replace(/[^\d.-]/g, '')) || 0; return (x - y) * s.dir; }
+                if (isNum) {
+                    var nx = parseFloat(String(x == null ? '' : x).replace(/[^\d.-]/g, ''));
+                    var ny = parseFloat(String(y == null ? '' : y).replace(/[^\d.-]/g, ''));
+                    if (isNaN(nx)) nx = -Infinity;        // 빈칸은 항상 끝쪽으로
+                    if (isNaN(ny)) ny = -Infinity;
+                    if (nx !== ny) return (nx - ny) * s.dir;
+                    return 0;
+                }
                 return String(x == null ? '' : x).localeCompare(String(y == null ? '' : y), 'ko') * s.dir;
             });
         }
@@ -601,6 +719,7 @@
         var wrap = document.getElementById('pl-table-wrap');
         if (!wrap) return;
         var cols = _visibleCols(), rows = _visibleRows();
+        var P = _pal();          // 🎨 테마 색 — 아래 인라인 배경(머리글/제브라/고정행)에 그대로 쓴다
 
         var left = 0, leftOf = {};
         cols.forEach(function (c) { if (STICKY.indexOf(c.k) !== -1) { leftOf[c.k] = left; left += c.w; } });
@@ -612,7 +731,7 @@
 
         var th = cols.map(function (c) {
             var sticky = leftOf[c.k] !== undefined
-                ? 'position:sticky; left:' + leftOf[c.k] + 'px; z-index:5; background:var(--pl-head-bg,#e0f5f7);' : '';
+                ? 'position:sticky; left:' + leftOf[c.k] + 'px; z-index:5; background:' + P.headerTint + ';' : '';
             var s = _view.sort || {};
             var mark = s.k === c.k ? (s.dir > 0 ? ' ▲' : ' ▼') : '';
             // 말풍선엔 **원래 이름**을 먼저 — 줄임말만 보고는 무슨 열인지 모르기 때문(사용자 요청).
@@ -628,7 +747,7 @@
             // 🦓 제브라 — 한 줄 건너 연한 배경. sticky 칸은 자기 배경을 따로 들고 있어야
             //    가로 스크롤 때 밑줄이 비쳐 보이지 않는다(배경 없는 sticky 는 투명이다).
             var zebra = (ri % 2 === 1);
-            var rowBg = pinned ? '#fffbe6' : (zebra ? '#f7fafb' : '#fff');
+            var rowBg = pinned ? '#fff8e1' : (zebra ? P.zebraB : '#fff');
             var tds = cols.map(function (c) {
                 var v = r[c.k] == null ? '' : String(r[c.k]);
                 var sticky = leftOf[c.k] !== undefined
@@ -638,7 +757,7 @@
                 if (c.k === 'no') {
                     // 숫자가 주인공이다 — 예전엔 📌 아이콘이 44px 칸을 먹어 번호가 잘려 보였다(사용자 지적).
                     //    고정(📌)은 행 메뉴 안으로 옮겼고, 여기선 고정된 행만 작게 표시한다.
-                    return '<td class="pl-td pl-no" style="' + sticky + ' text-align:center; cursor:pointer; font-weight:bold; color:#2c5f8a;"'
+                    return '<td class="pl-td pl-no" style="' + sticky + ' text-align:center; cursor:pointer; font-weight:bold; color:' + P.darkText + ';"'
                          + ' onclick="event.stopPropagation(); window.plOpenRowMenu(\'' + r._id + '\', event)"'
                          + ' title="' + _esc(_t('클릭: 행 메뉴(위/아래 추가·삭제·상세)', 'Click: row menu (insert/delete/detail)')) + '">'
                          + (pinned ? '<span style="font-size:9px;">📌</span>' : '') + _esc(v) + '</td>';
@@ -651,10 +770,14 @@
                 // 특수 열 — 값 옆에 작은 아이콘, 아이콘을 눌러야 창이 뜬다(글자 수정과 안 겹치게)
                 var ico = '';
                 if (c.type === 'doc') {
+                    // 📄 아이콘은 **칸 오른쪽 끝에 고정**한다(값 뒤에 붙여 두면 긴 PN 에 밀려 잘려서 안 보였다 —
+                    //    사용자 지적 "말줄임 아이콘 안 보임"). 자료가 있으면 개수를 파랗게, 없으면 흐리게.
                     var n = window._plDocCount ? window._plDocCount(r) : 0;
-                    ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenDocBox(\'' + r._id + '\')"'
-                        + ' title="' + _esc(_t('NAS 문서함 — 올리기/열기/AI 분석', 'NAS documents — upload/open/AI analysis')) + '">📎'
-                        + (n ? '<b style="color:#1971c2;">' + n + '</b>' : '') + '</span>';
+                    ico = '<span class="pl-ico pl-ico-fix" onclick="event.stopPropagation(); window.plOpenDocBox(\'' + r._id + '\')"'
+                        + ' style="' + (n ? 'opacity:1;' : 'opacity:.35;') + '"'
+                        + ' title="' + _esc(n ? (n + _t('개 NAS 자료 — 열기/올리기/AI 분석', ' NAS file(s) — open/upload/AI analysis'))
+                                              : _t('NAS 자료 없음 — 눌러서 올리기', 'No NAS file — click to upload')) + '">'
+                        + (n ? '<b style="color:#1971c2; font-size:10px;">' + n + '</b>' : '') + '🗎</span>';
                 } else if (c.type === 'panel') {
                     ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPanelCard(\'' + r._id + '\')"'
                         + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔎</span>';
@@ -668,8 +791,10 @@
                     ico = v ? '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPartCard(\'' + r._id + '\',\'' + c.k + '\',\'' + String(c.type).slice(5) + '\')"'
                         + ' title="' + _esc(_t('PARTS 라이브러리에서 보기', 'Open in PARTS library')) + '">🔎</span>' : '';
                 }
+                // 아이콘이 있는 칸은 오른쪽에 자리를 비워 두고(padding-right) 그 자리에 아이콘을 고정한다.
+                if (ico) { cls += ' pl-has-ico'; }
                 return '<td class="' + cls + '" data-id="' + r._id + '" data-k="' + c.k + '"'
-                     + (cut ? ' title="' + _esc(v) + '"' : '')
+                     + ((cut || ico) ? ' title="' + _esc(v || '') + '"' : '')
                      + ' onclick="window.plEditCell(this)" style="' + sticky + extra + '">'
                      + '<span class="pl-v">' + _esc(shown).replace(/\n/g, ' ') + '</span>' + ico + '</td>';
             }).join('');
@@ -696,17 +821,18 @@
     window.plRenderChips = function () {
         var box = document.getElementById('pl-group-chips');
         if (box) {
+            var CP = _pal();
             box.innerHTML = window.PL_GROUPS.map(function (g) {
                 var on = !!_view.groups[g.k];
                 return '<span onclick="window.plToggleGroup(\'' + g.k + '\')" style="cursor:pointer; user-select:none; padding:3px 9px; margin-right:4px;'
-                     + ' border-radius:12px; font-size:11.5px; font-weight:bold; border:1px solid ' + (on ? '#52a5af' : '#dde3e5') + ';'
-                     + ' background:' + (on ? '#d4eef1' : '#f6f8f9') + '; color:' + (on ? '#00707d' : '#9aa5a9') + ';">'
+                     + ' border-radius:12px; font-size:11.5px; font-weight:bold; border:1px solid ' + (on ? CP.hoverBorder : '#dde3e5') + ';'
+                     + ' background:' + (on ? CP.bg : '#f6f8f9') + '; color:' + (on ? CP.darkText : '#9aa5a9') + ';">'
                      + (on ? '☑ ' : '☐ ') + _esc(window._currentLang === 'en' ? g.en : g.ko) + '</span>';
             }).join('');
         }
         var fb = document.getElementById('pl-filter-box');
         if (fb) {
-            var FKEYS = ['customer', 'factory', 'project', 'type', 'status', 'panelMfr'];
+            var FKEYS = ['customer', 'factory', 'project', 'type', 'status', 'cabinet', 'panelMfr'];
             fb.innerHTML = FKEYS.map(function (k) {
                 var c = _colByKey[k]; if (!c) return '';
                 var vals = {}, rows = D().rows || [];
@@ -743,7 +869,7 @@
         'pl-btn-add':     ['➕ 행 추가',        '➕ Add row'],
         'pl-btn-import':  ['📥 엑셀 불러오기', '📥 Import Excel'],
         'pl-btn-export':  ['📊 엑셀 저장',     '📊 Export Excel'],
-        'pl-btn-nas':     ['📁 NAS 보관',      '📁 Save to NAS'],
+        'pl-btn-nas':     ['📁 NAS 백업',      '📁 Backup to NAS'],
         'pl-btn-cols':    ['🔁 열',            '🔁 Columns'],
         'pl-btn-print':   ['🖨️ 인쇄 (PDF)',    '🖨️ Print (PDF)'],
         'pl-btn-reset':   ['↺',                '↺']
@@ -751,7 +877,8 @@
     window.PL_UI_TITLE = window.PL_UI_TITLE || {
         'pl-btn-reset': ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
         'pl-btn-cols':  ['숨긴 열 되돌리기',      'Restore hidden columns'],
-        'pl-btn-nas':   ['지금 표를 엑셀로 만들어 NAS 자료실에 보관', 'Save the current table to the NAS folder as Excel'],
+        'pl-btn-nas':   ['지금 표 전체(91열)를 엑셀 한 벌로 만들어 NAS 폴더에 날짜 이름으로 백업합니다 — 평소 저장은 자동이라 누를 필요가 없고, 월말 스냅샷이나 사외 공유용입니다',
+                         'Backs up the whole table (91 columns) to the NAS folder as a dated Excel. Normal saving is automatic — this is for monthly snapshots or sharing outside.'],
         'pl-team':      ['이 목록을 관리하는 팀 — 팀마다 목록이 따로 저장됩니다',
                          'Team that owns this list — each team has its own list']
     };
@@ -865,30 +992,40 @@
             box.onclick = function (e) { e.stopPropagation(); };
             document.body.appendChild(box);
         }
-        var B = 'width:34px; height:28px; border:1px solid #cfe3e5; border-radius:7px; background:#fff; cursor:pointer;'
-              + ' font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;';
-        box.style.cssText = 'position:fixed; z-index:100001; background:#f4fbfc; border:1px solid #a3d9e0; border-radius:10px;'
-                          + ' box-shadow:0 6px 18px rgba(0,0,0,.18); padding:7px;';
+        // 🎨 모양은 사용자가 준 디자인 그대로 — 흰 라운드 상자 안에 **파스텔 라운드 사각형 2×2**.
+        //    ⌃⌄(파랑) 이동 · ＋(초록) 추가 · －(빨강) 삭제. 통일성 때문에 다른 팝업도 이 톤을 쓴다.
+        var _b = function (bg, bd, fg) {
+            return 'width:42px; height:36px; border:1px solid ' + bd + '; border-radius:9px; background:' + bg + ';'
+                 + ' color:' + fg + '; cursor:pointer; font-size:15px; font-weight:bold; line-height:1;'
+                 + ' display:flex; align-items:center; justify-content:center; transition:filter .12s;';
+        };
+        var BLUE = _b('#e8f1fd', '#c7ddf7', '#4a7fd4');
+        var GREEN = _b('#e9f7ec', '#bfe6c9', '#35a35a');
+        var RED = _b('#fdeceb', '#f6c9c5', '#d4584f');
+        var SMALL = 'flex:1; padding:5px 0; border:1px solid #dde6ea; border-radius:9px; background:#fff; cursor:pointer;'
+                  + ' font-size:11px; color:#5b6b73;';
+        box.style.cssText = 'position:fixed; z-index:100001; background:#fff; border:1px solid #e3eaed; border-radius:14px;'
+                          + ' box-shadow:0 8px 22px rgba(0,0,0,.16); padding:9px;';
         box.innerHTML =
-            '<div style="font-size:10.5px; color:#00707d; font-weight:bold; text-align:center; margin-bottom:5px;">'
+            '<div style="font-size:10.5px; color:#9aa5a9; text-align:center; margin-bottom:6px;">'
           + _esc(_t('행 ', 'Row ') + (r.no || '')) + '</div>'
-          + '<div style="display:grid; grid-template-columns:repeat(2,34px); gap:5px;">'
-          + '<button title="' + _esc(_t('위로 이동', 'Move up')) + '" onclick="window.plMoveRow(\'' + id + '\',-1)" style="' + B + ' color:#2c5f8a;">⌃</button>'
-          + '<button title="' + _esc(_t('아래로 이동', 'Move down')) + '" onclick="window.plMoveRow(\'' + id + '\',1)" style="' + B + ' color:#2c5f8a;">⌄</button>'
-          + '<button title="' + _esc(_t('위에 행 추가', 'Insert above')) + '" onclick="window.plInsertRow(\'' + id + '\',0)" style="' + B + ' color:#2b7a45;">＋↑</button>'
-          + '<button title="' + _esc(_t('아래에 행 추가', 'Insert below')) + '" onclick="window.plInsertRow(\'' + id + '\',1)" style="' + B + ' color:#2b7a45;">＋↓</button>'
-          + '<button title="' + _esc(_t('이 행 삭제', 'Delete row')) + '" onclick="window.plDeleteRow(\'' + id + '\')" style="' + B + ' color:#b1432f;">－</button>'
-          + '<button title="' + _esc(pinned ? _t('고정 해제', 'Unpin') : _t('맨 위에 고정', 'Pin to top')) + '" onclick="window.plTogglePin(\'' + id + '\'); window.plCloseRowMenu();" style="' + B + (pinned ? ' background:#fff3bf;' : '') + '">📌</button>'
+          + '<div style="display:grid; grid-template-columns:repeat(2,42px); gap:7px;">'
+          + '<button title="' + _esc(_t('위로 이동', 'Move up')) + '" onclick="window.plMoveRow(\'' + id + '\',-1)" style="' + BLUE + '">⌃</button>'
+          + '<button title="' + _esc(_t('아래로 이동', 'Move down')) + '" onclick="window.plMoveRow(\'' + id + '\',1)" style="' + BLUE + '">⌄</button>'
+          + '<button title="' + _esc(_t('아래에 행 추가', 'Insert row below')) + '" onclick="window.plInsertRow(\'' + id + '\',1)" style="' + GREEN + '">＋</button>'
+          + '<button title="' + _esc(_t('이 행 삭제', 'Delete row')) + '" onclick="window.plDeleteRow(\'' + id + '\')" style="' + RED + '">－</button>'
           + '</div>'
-          + '<button onclick="window.plCloseRowMenu(); window.plOpenDetail(\'' + id + '\')" style="margin-top:5px; width:100%; padding:4px 0;'
-          + ' border:1px solid #cfe3e5; border-radius:7px; background:#fff; cursor:pointer; font-size:11px; color:#00707d;">'
-          + _esc(_t('📄 상세', '📄 Detail')) + '</button>';
+          + '<div style="display:flex; gap:6px; margin-top:7px;">'
+          + '<button title="' + _esc(_t('위에 행 추가', 'Insert row above')) + '" onclick="window.plInsertRow(\'' + id + '\',0)" style="' + SMALL + '">＋↑</button>'
+          + '<button title="' + _esc(pinned ? _t('고정 해제', 'Unpin') : _t('맨 위에 고정', 'Pin to top')) + '" onclick="window.plTogglePin(\'' + id + '\'); window.plCloseRowMenu();" style="' + SMALL + (pinned ? ' background:#fff8e1; border-color:#f2dfa0;' : '') + '">📌</button>'
+          + '<button title="' + _esc(_t('상세 보기', 'Detail')) + '" onclick="window.plCloseRowMenu(); window.plOpenDetail(\'' + id + '\')" style="' + SMALL + '">🗎</button>'
+          + '</div>';
         box.style.display = 'block';
         // 화면 밖으로 나가지 않게 — 아래/오른쪽이 모자라면 위/왼쪽으로 붙인다
         var x = ev ? ev.clientX : 100, y = ev ? ev.clientY : 100;
-        var w = 100, h = 150;
-        box.style.left = Math.min(x + 6, window.innerWidth - w - 8) + 'px';
-        box.style.top = Math.min(y + 6, window.innerHeight - h - 8) + 'px';
+        var w = box.offsetWidth || 115, h = box.offsetHeight || 150;
+        box.style.left = Math.max(6, Math.min(x + 6, window.innerWidth - w - 8)) + 'px';
+        box.style.top = Math.max(6, Math.min(y + 6, window.innerHeight - h - 8)) + 'px';
     };
     window.plCloseRowMenu = function () { var b = document.getElementById('pl-rowmenu'); if (b) b.style.display = 'none'; };
 
@@ -1196,8 +1333,14 @@
             if (!silent) window.plRender();
         } catch (e) {
             var msg = (e && e.message) ? e.message : String(e);
+            // "허용되지 않은 폴더" = 백엔드가 아직 옛 버전이라는 뜻이다(폴더 목록이 코드에 있다).
+            //    원문만 보여주면 사람이 NAS 를 뒤지게 되므로, 무엇을 하면 되는지로 바꿔 말한다.
+            if (/허용되지 않은 폴더|not allowed/i.test(msg)) {
+                msg = _t('백엔드를 다시 시작해야 합니다 — "' + NAS_FOLDER + '" 폴더 사용 권한이 최신 백엔드에만 있습니다.',
+                         'Restart the backend — the "' + NAS_FOLDER + '" folder is only allowed in the updated backend.');
+            }
             window._plDocCache.error = msg;
-            if (!silent) _toast('⚠️ ' + _t('NAS 자료실을 읽지 못했습니다: ', 'Could not read the NAS folder: ') + msg, 'warning', 7000);
+            if (!silent) _toast('⚠️ ' + msg, 'warning', 9000);
         }
     };
 
@@ -1279,6 +1422,8 @@
 
     window.plDropDocs = function (ev, id) {
         ev.preventDefault();
+        ev.stopPropagation();                       // 〃 window 전역 드롭 핸들러(js/04f)로 새지 않게
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
         var box = document.getElementById('pl-doc-drop');
         if (box) box.style.background = '#fbfdfd';
         var files = ev.dataTransfer && ev.dataTransfer.files ? Array.prototype.slice.call(ev.dataTransfer.files) : [];
@@ -1573,13 +1718,29 @@
     // ──────────────────────────────────────────────────────────────────────────
     window.plOnTabShown = function () {
         window.plRender();
-        if (!window._plDriveLoaded) {
-            window._plDriveLoaded = true;
-            window.ProjectList.loadFromDrive().then(function (d) {
-                if (d) { window._plData = d; window.plRender(); }
-            });
-            window.plRefreshDocCache(true).then(function () { window.plRender(); });
-        }
+        if (window._plLoadedOnce) return;
+        window._plLoadedOnce = true;
+        (async function () {
+            // 1순위 NAS — 도면과 같은 자리에 있고 구글 로그인이 필요 없다.
+            var nas = await window.plLoadFromNas();
+            if (nas && nas.rows.length) {
+                window._plData = nas;
+                window._plNasSavedAtMine = window._plNasSavedAt;
+                window.ProjectList.save(nas, true);        // 로컬 캐시만(방금 읽은 걸 되쓰지 않게)
+                window.plRender();
+                if (window._plSetSavedMark) window._plSetSavedMark(window._plNasSavedAt, 'NAS');
+            } else {
+                // 2순위 Drive — NAS 가 막혀 있거나(백엔드 미재시작) 아직 파일이 없을 때
+                var drv = await window.ProjectList.loadFromDrive();
+                if (drv && drv.rows.length) { window._plData = drv; window.plRender(); }
+                else if (!(D().rows || []).length) {
+                    _toast('📥 ' + _t('아직 자료가 없습니다 — [엑셀 불러오기]로 제품 목록을 넣어주세요.',
+                                      'No data yet — use [Import Excel] to load the product list.'), 'info', 7000);
+                }
+            }
+            await window.plRefreshDocCache(true);          // 📄 배지용 NAS 파일 목록
+            window.plRender();
+        })();
     };
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1675,9 +1836,21 @@
             var files = e.dataTransfer && e.dataTransfer.files ? Array.prototype.slice.call(e.dataTransfer.files) : [];
             if (!files.length) return;
             e.preventDefault();
+            // ⚠️ 전파를 반드시 끊는다 — js/04f 가 **window 에** 드롭 핸들러를 걸어 두고 "페이지 어디에
+            //    떨어뜨려도 간트 엑셀로 불러오기"를 한다. 안 끊으면 여기서 받은 도면 PDF 가 그대로
+            //    그쪽으로 흘러가 엑셀 파서를 타고(또는 덮어쓰기 비밀번호를 물으며) 실패한다.
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
             _markDropRow(null);
-            var id = _dropRowId; _dropRowId = null;
-            if (!id) return;
+            // 떨어뜨린 지점에서 직접 행을 찾는다 — dragover 때 기억해 둔 값(_dropRowId)은 보조다.
+            //    (dragover 가 한 번도 안 뜬 채 drop 만 오는 경우가 있어 그때 아무 일도 안 일어났다)
+            var tgt = e.target && e.target.closest ? e.target.closest('tr[data-id]') : null;
+            var id = (tgt && tgt.getAttribute('data-id')) || _dropRowId;
+            _dropRowId = null;
+            if (!id) {
+                _toast('⚠️ ' + _t('제품 행 위에 떨어뜨려주세요.', 'Drop the file onto a product row.'), 'warning');
+                return;
+            }
             var r = _rowById(id);
             if (!r) return;
             if (!window._plRowDocNums(r).length) {

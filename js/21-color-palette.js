@@ -461,6 +461,9 @@ window._cpApplyLive = function(hex, skipSave) {
     //    모두 정의 안 됨 → 테마 팔레트 기능 완전 먹통. null 가드로 방어.
     if (window._cpUpdateApplyStatus) window._cpUpdateApplyStatus();
     if (window.renderSheetTabsBar) window.renderSheetTabsBar(); // 💡 이미 그려진 시트 탭도 새 테마색으로 다시 그림
+    // 📒 [2026-10-29] Project list — 행 배경(제브라/고정)·머리글·그룹 칩을 JS 가 **인라인으로** 칠하므로
+    //    여기서 다시 그려야 테마가 따라온다(인라인 style 은 cp-live-style 규칙이 못 이긴다).
+    if (window.plRender && document.getElementById('pl-table-wrap')) window.plRender();
     // 💡 [2026-09-07] 업무필터/일정도구/AI검색/인쇄 버튼 통일화 — 테마가 바뀔 때마다 즉시 같이 갱신.
     if (window._paintActionBarButtons) window._paintActionBarButtons();
     if (window.updateWorkFilterBtnState) window.updateWorkFilterBtnState();
