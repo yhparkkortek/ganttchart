@@ -438,13 +438,40 @@
 
     window._plData = window._plData || window.ProjectList.load();
     var D = function () { window._plData = window._plData || { rows: [], history: [] }; return window._plData; };
-    var _persist = function () { window.ProjectList.save(D()); };
+    // 💾 저장 경로는 두 갈래다.
+    //    ① localStorage — 고치는 즉시(동기). 창이 죽어도 이 PC 에는 남는다.
+    //    ② Drive 공용 파일 — 3초 디바운스(팀원이 같이 쓰는 파일이라 타자마다 올리면 안 된다).
+    //    ⚠️ ②가 뜨기 전에 창을 닫으면 그 수정은 **나만 갖고 있게 된다**. 그래서 화면을 벗어나는
+    //    모든 길목(탭 숨김·페이지 이탈·앱 안에서 다른 탭으로)에서 _plFlushSave() 로 즉시 밀어 올린다.
+    var _plDirty = false;
+    var _persist = function () { _plDirty = true; _plMarkDirty(); window.ProjectList.save(D()); };
 
+    /** 디바운스를 기다리지 않고 지금 올린다(이탈 직전용). */
+    window.plFlushSave = function () {
+        if (!_plDirty) return;
+        var PL = window.ProjectList;
+        if (PL._syncTimer) { clearTimeout(PL._syncTimer); PL._syncTimer = null; }
+        try { PL.syncToDrive(D()); } catch (e) { console.warn('[Project list] 즉시 저장 실패:', e && e.message); }
+    };
+
+    var _plMarkDirty = function () {
+        var el = document.getElementById('pl-saved-mark');
+        if (el) {
+            el.textContent = '● ' + _t('저장 중…', 'saving…');
+            el.style.color = '#b98900';
+        }
+    };
+
+    /** Drive 에 올라간 시각 — 여기까지 와야 "팀원도 볼 수 있는 저장"이다. */
     window._plSetSavedMark = function (iso) {
+        if (window._plClearDirty) window._plClearDirty();
         var el = document.getElementById('pl-saved-mark');
         if (!el) return;
         var d = iso ? new Date(iso) : new Date();
-        el.textContent = '☁️ ' + d.toLocaleString(window._currentLang === 'en' ? 'en-US' : 'ko-KR');
+        el.textContent = '☁️ ' + _t('드라이브 저장 ', 'saved to Drive ') + d.toLocaleString(window._currentLang === 'en' ? 'en-US' : 'ko-KR');
+        el.style.color = '#2b7a45';
+        el.title = _t('팀 공용 파일(App_Config/ProjectList_' + _team() + '.json)에 반영된 시각입니다.',
+                      'Time this was written to the shared team file (App_Config/ProjectList_' + _team() + '.json).');
     };
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1668,4 +1695,14 @@
         if (document.getElementById('pl-table-wrap')) window.plRender();
     });
     document.addEventListener('click', function () { /* 팝업 바깥 클릭 닫기 */ window.plClosePopup(); window.plCloseRowMenu(); });
+
+    // 💾 이탈 직전 플러시 — 3초 디바운스가 뜨기 전에 닫으면 그 수정이 내 PC 에만 남기 때문.
+    //    visibilitychange(hidden) 이 탭 전환·최소화·닫기에서 가장 확실히 뜨는 신호다(모바일 포함).
+    //    pagehide/beforeunload 는 보조 — 셋 다 _plDirty 가 있을 때만 실제로 움직인다.
+    window._plClearDirty = function () { _plDirty = false; };
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') window.plFlushSave();
+    });
+    window.addEventListener('pagehide', function () { window.plFlushSave(); });
+    window.addEventListener('beforeunload', function () { window.plFlushSave(); });
 })();

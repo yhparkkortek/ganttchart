@@ -63,6 +63,9 @@
         if (tabName === 'weekly' && window.showWeeklyReport) window.showWeeklyReport();
         // 📒 Project list — 들어올 때마다 다시 그리고, 첫 진입에선 Drive 최신본/NAS 문서 개수를 받아온다
         if (tabName === 'projectlist' && window.plOnTabShown) window.plOnTabShown();
+        // 💾 Project list 를 **떠날 때**는 3초 디바운스를 기다리지 말고 바로 Drive 에 올린다 —
+        //    표를 고치자마자 다른 탭으로 넘어가 창을 닫으면 그 수정이 내 PC 에만 남기 때문.
+        if (prevTab === 'projectlist' && tabName !== 'projectlist' && window.plFlushSave) window.plFlushSave();
         // Summary 탭은 Gantt chart Level 0 데이터와 연동된 타임라인을 매번 다시 그린다
         if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
         // Summary 탭 진입 시 필수 항목(고객사/모델명/KTK PN/담당자) 미입력 하이라이트 갱신
