@@ -37,6 +37,7 @@ write_capture.json
 # 조용히 통과한다(커밋을 막지는 않음).
 node_modules/
 docstore_config.json
+sap_cleanup_config.json
 
 # [2026-10-27] 프로젝트 멤버-3 기본값(실명+이메일) — public 저장소라 커밋 불가, PC마다 따로 둠
 team_defaults.json

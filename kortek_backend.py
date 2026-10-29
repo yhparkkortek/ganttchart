@@ -1477,6 +1477,10 @@ def _scheduler_loop():
             _scheduler_tick()
         except Exception as e:
             print(f"[예약발송 스케줄러 오류] {e}")
+        try:
+            _sap_cleanup_daily_tick()
+        except Exception as e:
+            print(f"[SAP_DMS 자동정리 스케줄러 오류] {e}")
         time.sleep(60)
 
 
@@ -2578,6 +2582,10 @@ SAP_FOLDER_REGISTRY = [
     {'key': 'export',   'path': r'C:\SAP_DMS\SAP조회',       'label': 'SAP 조회 엑셀 내보내기',        'kw': ['엑셀', '조회', 'sap조회', '내보내기']},
     {'key': 'issue',    'path': r'C:\SAP_DMS\이슈리포트',     'label': '이슈 리포트',                   'kw': ['이슈', '버그', '오류리포트', '학습리포트']},
     {'key': 'dump',     'path': r'C:\SAP_DMS\SAP_화면덤프',  'label': 'SAP 화면 덤프',                 'kw': ['덤프', '화면덤프', '트리덤프']},
+    # 🆕 [2026-10-29 버그 수정, 사용자 제보 "SAP DMS 폴더가 뒤죽박죽"] _RSV_PDF_OUT_DIR
+    # (sap_bridge_32.py, MB21 예약 청구서 PDF)이 실제로 쓰는 폴더인데 여기 레지스트리엔
+    # 빠져 있었다 — "저장경로 열어줘" 같은 AI 문답 요청이 이 폴더만 찾지 못했다.
+    {'key': 'reserve',  'path': r'C:\SAP_DMS\계정대체청구서', 'label': '자재 예약 청구서 (MB21/ZMM019)', 'kw': ['계정대체청구서', '예약', '청구서', 'mb21', 'zmm019']},
 ]
 
 
@@ -2611,6 +2619,102 @@ def open_sap_folder():
     except Exception as ex:
         return jsonify({'ok': False, 'error': f'폴더를 열지 못했습니다: {path} — {ex}'}), 500
     return jsonify({'ok': True, 'path': path, 'label': label})
+
+
+# ── 🧹 SAP_DMS 보존기간 자동 정리 (2026-10-29 신규, 사용자 요청) ───────────────
+# "조회 저장하고 나면 불필요한데 계속 저장할 필요 없을 것 같다" — **조회/진단성 산출물만**
+# 대상이다. 실제 업무 문서(구매오더·승인원표지·계정대체청구서·ZDMSR004 문서 다운로드)는
+# 재발급이 번거롭거나 증빙 성격이라 자동 정리 대상에서 **의도적으로 제외**한다.
+SAP_CLEANUP_CONFIG_FILE = 'sap_cleanup_config.json'
+_SAP_CLEANUP_DEFAULT_DAYS = max(1, int(os.environ.get('KORTEK_SAP_CLEANUP_DAYS') or 30))
+# 폴더명이 아니라 SAP_FOLDER_REGISTRY의 key로 적어서, 폴더 경로가 바뀌어도 한 곳만 보면 됨.
+_SAP_CLEANUP_TARGET_KEYS = ['export', 'dump', 'issue']
+
+
+def _load_sap_cleanup_days():
+    try:
+        with open(SAP_CLEANUP_CONFIG_FILE, 'r', encoding='utf-8') as f:
+            d = json.load(f)
+            return max(1, int(d.get('retentionDays', _SAP_CLEANUP_DEFAULT_DAYS)))
+    except Exception:
+        return _SAP_CLEANUP_DEFAULT_DAYS
+
+
+def _save_sap_cleanup_days(days):
+    with open(SAP_CLEANUP_CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'retentionDays': int(days)}, f, ensure_ascii=False, indent=2)
+
+
+def _sap_folder_cleanup(retention_days=None, dry_run=False):
+    """_SAP_CLEANUP_TARGET_KEYS 폴더에서 retention_days보다 오래된 파일/폴더를 지운다.
+    dry_run=True면 지우지 않고 대상 목록만 돌려준다(AI 문답 미리보기·수동 점검용)."""
+    days = int(retention_days) if retention_days is not None else _load_sap_cleanup_days()
+    cutoff = time.time() - days * 86400
+    folders = [e['path'] for e in SAP_FOLDER_REGISTRY if e['key'] in _SAP_CLEANUP_TARGET_KEYS]
+    deleted, errors = [], []
+    for folder in folders:
+        if not os.path.isdir(folder):
+            continue
+        for name in os.listdir(folder):
+            p = os.path.join(folder, name)
+            try:
+                mtime = os.path.getmtime(p)
+                if mtime >= cutoff:
+                    continue
+                size = os.path.getsize(p) if os.path.isfile(p) else None
+                if not dry_run:
+                    if os.path.isdir(p):
+                        shutil.rmtree(p)
+                    else:
+                        os.remove(p)
+                deleted.append({'path': p, 'ageDays': round((time.time() - mtime) / 86400, 1), 'size': size})
+            except Exception as e:
+                errors.append({'path': p, 'error': str(e)})
+    return {'deleted': deleted, 'errors': errors, 'retentionDays': days, 'dryRun': dry_run,
+            'folders': folders}
+
+
+_sap_cleanup_last_run_date = None
+
+
+def _sap_cleanup_daily_tick():
+    """하루 1회만 실제로 정리를 돈다 — _scheduler_loop()의 1분 루프에 얹혀서 호출됨
+    (새 스레드를 또 안 띄우고 이미 있는 하트비트를 재사용)."""
+    global _sap_cleanup_last_run_date
+    today = datetime.now(KST).date()
+    if _sap_cleanup_last_run_date == today:
+        return
+    _sap_cleanup_last_run_date = today
+    try:
+        result = _sap_folder_cleanup()
+        if result['deleted']:
+            print(f"[SAP_DMS 자동정리] {len(result['deleted'])}건 삭제(보존기간 {result['retentionDays']}일)")
+        if result['errors']:
+            print(f"[SAP_DMS 자동정리] {len(result['errors'])}건 삭제 실패")
+    except Exception as e:
+        print(f"[SAP_DMS 자동정리 오류] {e}")
+
+
+@app.route('/sap-folder-cleanup', methods=['GET', 'POST'])
+def sap_folder_cleanup_route():
+    # GET: 현재 보존기간 설정만 조회. POST: 정리 실행(days로 이번만 다른 기간 지정 가능,
+    # persistDays로 보존기간 자체를 영구 변경, dryRun=true면 지우지 않고 대상만 미리보기).
+    if request.method == 'GET':
+        return jsonify({'ok': True, 'retentionDays': _load_sap_cleanup_days(),
+                        'targetFolders': [e['path'] for e in SAP_FOLDER_REGISTRY if e['key'] in _SAP_CLEANUP_TARGET_KEYS]})
+    data = request.get_json(silent=True) or {}
+    if data.get('persistDays') is not None:
+        try:
+            _save_sap_cleanup_days(int(data['persistDays']))
+        except Exception as e:
+            return jsonify({'ok': False, 'error': f'보존기간 저장 실패: {e}'}), 500
+    days = data.get('days')
+    try:
+        days = int(days) if days is not None else None
+    except Exception:
+        days = None
+    result = _sap_folder_cleanup(retention_days=days, dry_run=bool(data.get('dryRun')))
+    return jsonify({'ok': True, **result})
 
 
 @app.route('/close-sap-folder', methods=['POST'])

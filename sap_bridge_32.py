@@ -3437,6 +3437,14 @@ def download_documents_batch(materials, doc_type='P01'):
             dst_name = f'{matnr}_{doknr}'
             dst = os.path.join(base_dir, dst_name)
             if os.path.isdir(dst):
+                # 이미 <자재번호>_<문서번호> 폴더가 있다 — src는 같은 문서번호(doknr)를 SAP에서
+                # 다시 받은 것뿐이라 내용이 매번 동일한 중복이다. 그대로 두면 재실행마다 고아
+                # 폴더가 쌓인다(2026-10-29, SAP_DMS 루트에서 실측 — 중복 폴더 다수 발견).
+                try:
+                    import shutil
+                    shutil.rmtree(src)
+                except Exception:
+                    pass
                 continue
             try:
                 os.rename(src, dst)
