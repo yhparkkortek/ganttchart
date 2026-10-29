@@ -998,7 +998,21 @@ _READ_JS = r"""
 (async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const norm = s => String(s||'').trim().replace(/\s+/g,' ');
-  for (let i = 0; i < 60 && !document.querySelector('[id^=editorForm_]'); i++) await sleep(300);
+  // ⚠️ 양식에 따라 입력칸(editorForm_*)이 **하나도 없다** — 본문이 contentViewer iframe 안에
+  //    통째로 들어 있는 자유 서식 기안이 그렇다(2026-10-29 실측, 기안서/시제품 제작의뢰서).
+  //    그런 문서에서 editorForm 만 기다리면 18초를 버리고 결국 본문도 못 읽는다.
+  //    둘 중 **먼저 오는 쪽**을 기다린다.
+  const viewerDoc = () => {
+    for (const f of [...document.querySelectorAll('iframe')]) {
+      let d = null; try { d = f.contentDocument; } catch (e) { d = null; }
+      if (d && d.body && String(d.body.innerText || '').trim()) return d;
+    }
+    return null;
+  };
+  for (let i = 0; i < 60; i++) {
+    if (document.querySelector('[id^=editorForm_]') || viewerDoc()) break;
+    await sleep(300);
+  }
   await sleep(800);
 
   // 칸마다 '열 머리글'과 '행 라벨' — _DRAFT_JS 와 같은 계산
@@ -1050,6 +1064,44 @@ _READ_JS = r"""
       });
     });
   });
+  // ── 본문(자유 서식) ───────────────────────────────────────────────
+  // 본문이 contentViewer iframe 안의 **클래스 없는 표**인 양식이 있다(2026-10-29 실측).
+  // subjectColumn/detailColumn 이 없으니 라벨/값은 **칸 배경색**으로 가른다(라벨=칠해짐, 값=투명).
+  // 못 가르는 칸은 짐작하지 말고 bodyRows 에 글자 그대로 남긴다 — 거짓 값보다 원문이 낫다.
+  const bodyFields = {}; const bodyRows = []; let bodyText = '';
+  const bd = viewerDoc();
+  if (bd) {
+    const win = bd.defaultView;
+    const painted = td => {
+      const m = String(win.getComputedStyle(td).backgroundColor || '').match(/rgba?\(([^)]+)\)/);
+      if (!m) return false;
+      const p = m[1].split(',').map(x => parseFloat(x));
+      if (p.length > 3 && !(p[3] > 0)) return false;        // 완전 투명 = 값 칸
+      return !(p[0] > 250 && p[1] > 250 && p[2] > 250);      // 흰색도 값 칸으로 본다
+    };
+    const putB = (k, v) => { k = norm(k); v = norm(v);
+      if (k && v && k !== v && k.length <= 24 && !bodyFields[k]) bodyFields[k] = v; };
+    [...bd.querySelectorAll('table')].forEach(tb => {
+      let colHead = null;
+      [...tb.rows].forEach(tr => {
+        const cells = [...tr.children];
+        const texts = cells.map(c => norm(c.innerText));
+        if (bodyRows.length < 200) bodyRows.push(texts);
+        if (cells.length < 2) { colHead = null; return; }     // 구역 머리글 — 여기서 표가 바뀐다
+        const pa = cells.map(painted);
+        if (pa.every(Boolean)) { colHead = texts; return; }   // 전부 칠해짐 = 열 머리글 줄
+        if (colHead && pa[0] && colHead.length === cells.length) {
+          for (let j = 1; j < cells.length; j++) if (!pa[j]) putB(texts[0] + ' ' + (colHead[j] || ''), texts[j]);
+          return;
+        }
+        for (let i = 0; i + 1 < cells.length; i++) if (pa[i] && !pa[i + 1]) putB(texts[i], texts[i + 1]);
+      });
+    });
+    // 표를 줄글로 옮길 땐 innerText 를 쓰지 않는다 — 칸 사이가 빈 줄·탭으로 벌어져 읽기 어렵다.
+    bodyText = bodyRows.map(r => r.filter(Boolean).join(' | ')).filter(Boolean).join('\n').slice(0, 8000);
+    if (!bodyText) bodyText = String(bd.body.innerText || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
+  }
+
   // 머리 정보 — 라벨/값이 번갈아 오는 표
   const head = {};
   const ht = document.querySelector('table.detailSection, table.tb_doc_info');
@@ -1065,6 +1117,7 @@ _READ_JS = r"""
 
   return { url: location.href, subject: norm((document.getElementById('subject')||{}).value) || head['제목'] || '',
            head, fields, checks, apprLine: asides[0] || '', docInfo: asides[1] || '',
+           body: bodyText, bodyFields, bodyRows,
            attachments: [...new Set(attach)] };
 })()
 """
@@ -1127,6 +1180,17 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
     r = approval_draft(form_id=hit['formId'], dept_id=hit['deptId'],
                        subject=(subject if subject is not None else src.get('subject') or ''),
                        fields=merged, dry_run=bool(dry_run), checks=src.get('checks') or [])
+
+    _notes = []
+    if src.get('attachments'):
+        _notes.append('첨부 %d건은 가져오지 않았습니다 — 새로 올려주세요: %s'
+                      % (len(src['attachments']), ', '.join(src['attachments'])))
+    # ⚠️ 본문이 **자유 서식**(contentViewer 안의 표)인 양식은 입력칸(editorForm_*)이 없어
+    #    칸 단위로 못 채운다. 조용히 "칸 0개"로 끝내면 본문이 빈 기안이 올라간다 — 꼭 알린다.
+    if (src.get('body') or '').strip() and not src_fields:
+        _notes.append('원본 본문은 **자유 서식 표**라 새 기안의 칸에 자동으로 안 들어갑니다'
+                      '(읽은 칸 %d개는 아래 본문에 그대로 있습니다) — 본문은 직접 옮겨 주세요.'
+                      % len(src.get('bodyFields') or {}))
     return {
         'source': {'docNum': meta.get('docNum') or doc_num, 'docId': src.get('docId'),
                    'formName': form_name, 'formId': hit['formId'], 'deptId': hit['deptId'],
@@ -1135,11 +1199,11 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
                    'attachments': src.get('attachments') or []},
         'filled': {'subject': (subject if subject is not None else src.get('subject') or ''),
                    'fields': merged, 'checks': src.get('checks') or []},
+        'body': {'text': src.get('body') or '', 'fields': src.get('bodyFields') or {},
+                 'rows': src.get('bodyRows') or []},
         'dryRun': bool(dry_run),
         'draft': r,
-        'notes': ([('첨부 %d건은 가져오지 않았습니다 — 새로 올려주세요: %s'
-                    % (len(src.get('attachments') or []), ', '.join(src.get('attachments') or [])))]
-                  if src.get('attachments') else []),
+        'notes': _notes,
     }
 
 

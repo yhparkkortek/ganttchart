@@ -1083,12 +1083,21 @@
         const esc = function (v) { return (v == null ? '' : String(v)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
         const tableId = 'qarows_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
         window._qaRowChipStore[tableId] = rows;
-        const thS = 'padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
-        const tdS = 'padding:4px 7px; border-bottom:1px solid #eef0f3; max-width:220px; overflow:hidden; text-overflow:ellipsis;';
+        const thS = 'box-sizing:border-box; padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; white-space:nowrap; position:sticky; top:0; background:#eef3fa;';
+        // ⚠️ 너비를 주려면 `table-layout:fixed` 가 **반드시** 같이 있어야 한다 —
+        //    없으면 브라우저가 내용에 맞춰 열을 다시 벌려 nowrap 글자가 옆 칸을 덮는다
+        //    (알람 도표에서 먼저 겪은 것과 같은 함정, docs/handoff-zmm009-table-alarm-ui.md).
+        //    너비는 js/40 `QA_ROW_CHIP_KINDS[].cols[].w`(데이터) — 안 적은 열이 남는 폭을 먹는다.
+        const tdS = 'box-sizing:border-box; padding:4px 7px; border-bottom:1px solid #eef0f3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+        const hasW = cfg.cols.some(function (c) { return c.w; });
         let html = '<div style="font-size:11px;color:#5577aa;margin-bottom:4px;">💡 '
             + window._t('행을 클릭하면 할 수 있는 작업이 나옵니다', 'Click a row to see what you can do') + '</div>'
             + '<div style="max-height:260px; overflow:auto; border:1px solid #dde4ec; border-radius:5px;">'
-            + '<table style="border-collapse:collapse; font-size:12px; width:100%;"><thead><tr>'
+            + '<table style="border-collapse:collapse; font-size:12px; width:100%;' + (hasW ? ' table-layout:fixed;' : '') + '">'
+            + (hasW ? '<colgroup>' + cfg.cols.map(function (c) {
+                return '<col' + (c.w ? ' style="width:' + esc(c.w) + ';"' : '') + '>';
+            }).join('') + '</colgroup>' : '')
+            + '<thead><tr>'
             + cfg.cols.map(function (c) { return '<th style="' + thS + '">' + esc(c.label) + '</th>'; }).join('')
             + '</tr></thead><tbody>';
         rows.forEach(function (r, i) {
@@ -1098,7 +1107,8 @@
                 + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
                 + cfg.cols.map(function (c) {
                     const v = c.get(r) || '';
-                    return '<td style="' + tdS + '" title="' + esc(v) + '">' + esc(v) + '</td>';
+                    const tip = c.title ? (c.title(r) || v) : v;
+                    return '<td style="' + tdS + '" title="' + esc(tip) + '">' + esc(v) + '</td>';
                 }).join('')
                 + '</tr>';
         });
@@ -4431,8 +4441,18 @@ ${docsJson}`;
                     .map(function (k) { return '- ' + k + ': ' + _arRes.fields[k]; });
                 const _arChecks = (_arRes.checks || []).length
                     ? ('\n' + window._t('체크된 항목: ', 'Checked: ') + _arRes.checks.join(', ')) : '';
+                // 📋 [2026-10-29] 본문 — 양식에 따라 입력칸이 아니라 **본문 표**에 내용이 다 있다.
+                //    예전엔 이 부분을 아예 안 읽어서 머리 정보(제목·작성자)만 보였다.
+                const _arBody = String(_arRes.body || '').trim();
+                const _arBodyTxt = _arBody
+                    ? ('\n\n📋 ' + window._t('본문', 'Body') + '\n'
+                       + (_arBody.length > 3000 ? _arBody.slice(0, 3000) + '\n…' : _arBody))
+                    : '';
+                const _arAtt = (_arRes.attachments || []).length
+                    ? ('\n\n📎 ' + window._t('첨부 ', 'Attachments ') + _arRes.attachments.length
+                       + window._t('건: ', ': ') + _arRes.attachments.join(', ')) : '';
                 window._ganttQaHistory.push({ role: 'ai',
-                    text: '📄 ' + (_arRes.subject || '') + '\n\n' + _arLines.join('\n') + _arChecks });
+                    text: '📄 ' + (_arRes.subject || '') + '\n\n' + _arLines.join('\n') + _arChecks + _arBodyTxt + _arAtt });
             }
             window._renderGanttQaMessages();
             input.focus();

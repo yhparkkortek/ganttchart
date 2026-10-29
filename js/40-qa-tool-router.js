@@ -505,13 +505,27 @@
     //  도구 결과를 어떤 모양으로 보여줄지"만 데이터로 정한다. 새 모듈을 추가하려면
     //  QA_ROW_CHIPS 에 한 줄, 필요하면 QA_ROW_CHIP_KINDS 에 kind 하나만 추가하면 된다.
     window.QA_ROW_CHIP_KINDS = window.QA_ROW_CHIP_KINDS || {
+        // `w`(열 너비)를 안 적은 열이 남는 폭을 가져간다 — 제목처럼 길이를 모르는 열에만 비워 둔다.
+        // 기안자·날짜·문서번호는 글자 수가 거의 정해져 있어 고정폭으로 잡는다(사용자 요청 2026-10-29).
         approval: {
             cols: [
                 { label: '제목', get: function (r) { return r.title || r.subject || ''; } },
-                { label: '양식', get: function (r) { return (r.formName || '').replace(/<[^>]+>/g, ''); } },
-                { label: '기안자', get: function (r) { return r.drafter || r.drafterName || ''; } },
-                { label: '날짜', get: function (r) { return (r.at || r.draftedAt || '').slice(0, 10); } },
-                { label: '문서번호', get: function (r) { return r.docNum || ('id:' + r.id); } }
+                { label: '양식', w: '130px', get: function (r) { return (r.formName || '').replace(/<[^>]+>/g, ''); } },
+                { label: '기안자', w: '72px', get: function (r) { return r.drafter || r.drafterName || ''; } },
+                { label: '날짜', w: '84px', get: function (r) { return (r.at || r.draftedAt || '').slice(0, 10); } },
+                // ⚠️ 문서번호는 **결재가 끝나야 채번된다** — 진행중/임시저장 문서는 원본 화면의
+                //    문서번호 칸도 비어 있다. 없는 번호를 내부 id로 메워 보여주면 그 숫자를
+                //    문서번호로 착각해 조회가 샌다(이 세션에서 실제로 났다). 비었으면 비었다고
+                //    쓰고, 내부 id 는 툴팁으로만 알린다(클릭 명령은 i: 로 그 id 를 그대로 쓴다).
+                {
+                    label: '문서번호', w: '104px',
+                    get: function (r) { return r.docNum || '—'; },
+                    title: function (r) {
+                        return r.docNum || window._t(
+                            '아직 채번 전입니다(결재 진행 중) · 내부 id ' + r.id,
+                            'Not numbered yet (in progress) · internal id ' + r.id);
+                    }
+                }
             ],
             header: function (r) {
                 return (r.title || r.subject || '') + ' — ' + window._t('무엇을 할까요?', 'What would you like to do?');
@@ -529,10 +543,10 @@
         },
         board: {
             cols: [
-                { label: '게시판', get: function (r) { return r.boardName || ''; } },
+                { label: '게시판', w: '116px', get: function (r) { return r.boardName || ''; } },
                 { label: '제목', get: function (r) { return r.title || ''; } },
-                { label: '작성자', get: function (r) { return r.writer || ''; } },
-                { label: '날짜', get: function (r) { return (r.createdAt || '').slice(0, 10); } }
+                { label: '작성자', w: '72px', get: function (r) { return r.writer || ''; } },
+                { label: '날짜', w: '84px', get: function (r) { return (r.createdAt || '').slice(0, 10); } }
             ],
             header: function (r) { return (r.title || '') + ' — ' + window._t('무엇을 할까요?', 'What would you like to do?'); },
             menu: function (r) {

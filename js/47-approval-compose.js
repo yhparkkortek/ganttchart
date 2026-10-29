@@ -516,6 +516,21 @@
                 + _esc(_t('원본 첨부 ' + p.src.attachments.length + '건은 가져오지 않습니다 — 새로 올려주세요.',
                           p.src.attachments.length + ' attachment(s) are not copied.')) + '</div>';
         }
+        // ⚠️ [2026-10-29] 본문이 **자유 서식 표**인 양식(기안서 계열) — 입력칸(editorForm_*)이
+        //    하나도 없어 칸 단위로 못 채운다. 그냥 "전체 1개"로 끝내면 제목만 든 빈 기안이
+        //    올라간다(사용자 제보). 못 채운다는 사실과 **원본 본문**을 같이 보여준다.
+        var _bodyTxt = String(p.src.body || '').trim();
+        if (_bodyTxt) {
+            html += '<div style="margin-top:8px; padding:6px 9px; background:#fff3cd; border-left:3px solid #e6a817;'
+                + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#7a5210;">📋 '
+                + _esc(_t('이 양식은 본문이 자유 서식(표)이라 칸 단위로 채워 넣지 못합니다 — 읽어온 본문을 '
+                          + '아래에 그대로 두니 직접 옮겨 주세요.',
+                          'This form keeps its content as a free-form table, so the fields cannot be filled automatically — the source body is shown below.'))
+                + '</div>'
+                + '<pre style="margin:6px 0 0; padding:7px 9px; background:#f8f9fa; border:1px solid #e9ecef;'
+                + ' border-radius:4px; font-size:11px; line-height:1.5; max-height:220px; overflow:auto;'
+                + ' white-space:pre-wrap; word-break:break-word;">' + _esc(_bodyTxt.slice(0, 4000)) + '</pre>';
+        }
         document.getElementById('apv-body').innerHTML = html;
         document.getElementById('apv-warn').textContent =
             (miss ? _t('프로젝트에서 못 찾은 칸 ' + miss + '개', miss + ' field(s) not found') : '')
