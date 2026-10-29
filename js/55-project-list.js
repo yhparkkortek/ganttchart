@@ -39,7 +39,22 @@
      *  통째로 안 들어왔다). 양쪽을 같은 규칙으로 지우므로 "Panel inch" 같은 열도 그대로 맞는다. */
     var _norm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, '').replace(/\.$/, '').trim().toLowerCase(); };
 
-    var NAS_FOLDER = 'PROJECTLIST';
+    // 📁 고객 도면/사양서가 실제로 쌓여 있는 NAS 폴더 — **철자/띄어쓰기는 NAS 그대로**('PROJECT LIST').
+    //    실측 66개 파일이 전부 "7자리 고객PN + 구분자 + (REV) + 리비전" 이름이라, 파일을 **이름 그대로 두고**
+    //    앞 숫자로 색인한다(앱이 파일을 다시 이름 짓지 않는다 — 사람이 NAS를 직접 열어 쓰는 폴더다).
+    var NAS_FOLDER = 'PROJECT LIST/CUSTOMER';
+
+    // ── 팀별 관리 ─────────────────────────────────────────────────────────────
+    //    이 표는 팀마다 다른 제품을 들고 있다. 그래서 공용 파일을 팀 이름으로 나눠 둔다
+    //    (App_Config/ProjectList_<팀>.json). 팀을 바꾸면 그 팀 파일만 읽고 쓴다.
+    window.PL_TEAMS = window.PL_TEAMS || ['개발1팀', '개발2팀', '개발3팀', '시제품팀'];
+    var TEAM_KEY = 'gantt_pl_team';
+    var _team = function () {
+        var t = '';
+        try { t = localStorage.getItem(TEAM_KEY) || ''; } catch (e) { /* 비공개 모드 */ }
+        return t || '개발3팀';          // 기본 배정(2026-10-29 사용자 요청)
+    };
+    window._plTeam = _team;
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. 열 카탈로그(데이터)
@@ -261,6 +276,10 @@
         sales27:     ["'27",       "'27"]
     };
 
+    // ✂️ 칸에 보여줄 최대 글자 수(데이터) — 넘치면 …로 자르고 말풍선에 전문을 둔다.
+    //    설명 1·2·3 은 한 칸에 문장이 통째로 들어와 표를 밀어내므로 20자로 끊는다(2026-10-29 사용자 요청).
+    window.PL_CELL_MAX = window.PL_CELL_MAX || { desc: 20, desc2: 20, desc3: 20 };
+
     var _colByKey = {};
     window.PL_COLUMNS.forEach(function (c) { _colByKey[c.k] = c; });
     window.PL_COL_BY_KEY = _colByKey;
@@ -297,8 +316,9 @@
     //    (주소록이 365명 → 빈 배열로 반복 붕괴했던 사고가 있었다 — js/22f 주석 참고)
     // ──────────────────────────────────────────────────────────────────────────
     window.ProjectList = window.ProjectList || {
-        KEY: 'gantt_project_list_shared',
-        FILE_NAME: 'ProjectList_Shared.json',
+        // 팀마다 파일이 다르다 — 키/파일명은 고정값이 아니라 지금 팀에서 만든다.
+        get KEY() { return 'gantt_project_list_' + _team(); },
+        get FILE_NAME() { return 'ProjectList_' + _team() + '.json'; },
         _driveFileId: null,
         _syncTimer: null,
         _lastKnownServerCount: 0,
@@ -399,6 +419,21 @@
                 return out;
             } catch (e) { console.warn('[Project list] Drive 조회 실패:', e.message); return null; }
         }
+    };
+
+    /** 팀 전환 — 지금 팀 내용을 먼저 저장하고(디바운스 중일 수 있다) 그 팀 파일로 갈아탄다 */
+    window.plSwitchTeam = async function (team) {
+        if (!team || team === _team()) return;
+        try { window.ProjectList.syncToDrive(window._plData || { rows: [], history: [] }); } catch (e) { /* 저장 실패가 전환을 막지 않게 */ }
+        try { localStorage.setItem(TEAM_KEY, team); } catch (e) { /* 〃 */ }
+        window.ProjectList._driveFileId = null;          // 팀이 바뀌면 파일도 다른 파일이다
+        window.ProjectList._lastKnownSavedAt = null;
+        window.ProjectList._lastKnownServerCount = 0;
+        window._plData = window.ProjectList.load();      // 그 팀의 로컬 캐시 먼저
+        window.plRender();
+        _toast('👥 ' + team + _t(' 목록으로 바꿨습니다.', ' list loaded.'), 'info');
+        var fresh = await window.ProjectList.loadFromDrive();
+        if (fresh) { window._plData = fresh; window.plRender(); }
     };
 
     window._plData = window._plData || window.ProjectList.load();
@@ -533,7 +568,9 @@
     // ──────────────────────────────────────────────────────────────────────────
     var STICKY = ['no', 'ktkPn'];   // 가로 스크롤해도 남는 열
 
-    window.plRender = function () {
+    /** @param {boolean} light 검색어 타자처럼 "표만" 다시 그리면 되는 경우 true —
+     *  필터 드롭다운(값마다 건수를 다시 세고 <select> 를 새로 만든다)을 건너뛴다. */
+    window.plRender = function (light) {
         var wrap = document.getElementById('pl-table-wrap');
         if (!wrap) return;
         var cols = _visibleCols(), rows = _visibleRows();
@@ -559,21 +596,31 @@
                  + _esc(_headShort(c)) + mark + '</th>';
         }).join('');
 
-        var body = rows.map(function (r) {
+        var body = rows.map(function (r, ri) {
             var pinned = (_view.pins || []).indexOf(r._id) !== -1;
+            // 🦓 제브라 — 한 줄 건너 연한 배경. sticky 칸은 자기 배경을 따로 들고 있어야
+            //    가로 스크롤 때 밑줄이 비쳐 보이지 않는다(배경 없는 sticky 는 투명이다).
+            var zebra = (ri % 2 === 1);
+            var rowBg = pinned ? '#fffbe6' : (zebra ? '#f7fafb' : '#fff');
             var tds = cols.map(function (c) {
                 var v = r[c.k] == null ? '' : String(r[c.k]);
                 var sticky = leftOf[c.k] !== undefined
-                    ? 'position:sticky; left:' + leftOf[c.k] + 'px; z-index:3; background:#fff;' : '';
+                    ? 'position:sticky; left:' + leftOf[c.k] + 'px; z-index:3; background:' + rowBg + ';' : '';
                 var extra = '', cls = 'pl-td';
                 if (c.type === 'num') extra += 'text-align:right;';
                 if (c.k === 'no') {
-                    return '<td class="pl-td pl-no" style="' + sticky + ' text-align:center; cursor:pointer;"'
-                         + ' onclick="window.plOpenDetail(\'' + r._id + '\')"'
-                         + ' title="' + _esc(_t('클릭: 상세 보기', 'Click: detail view')) + '">'
-                         + '<span class="pl-pin" onclick="event.stopPropagation(); window.plTogglePin(\'' + r._id + '\')" style="cursor:pointer; opacity:' + (pinned ? '1' : '.25') + ';">📌</span> '
-                         + _esc(v) + '</td>';
+                    // 숫자가 주인공이다 — 예전엔 📌 아이콘이 44px 칸을 먹어 번호가 잘려 보였다(사용자 지적).
+                    //    고정(📌)은 행 메뉴 안으로 옮겼고, 여기선 고정된 행만 작게 표시한다.
+                    return '<td class="pl-td pl-no" style="' + sticky + ' text-align:center; cursor:pointer; font-weight:bold; color:#2c5f8a;"'
+                         + ' onclick="event.stopPropagation(); window.plOpenRowMenu(\'' + r._id + '\', event)"'
+                         + ' title="' + _esc(_t('클릭: 행 메뉴(위/아래 추가·삭제·상세)', 'Click: row menu (insert/delete/detail)')) + '">'
+                         + (pinned ? '<span style="font-size:9px;">📌</span>' : '') + _esc(v) + '</td>';
                 }
+                // ✂️ 긴 글은 정해진 글자 수까지만 — 설명 1·2·3 처럼 한 칸에 문장이 들어오는 열(사용자 요청 20자).
+                //    잘린 건 말풍선에 전문이 들어 있고, 칸을 누르면 입력칸에서 전체가 보인다.
+                var shown = v, cut = false;
+                var lim = window.PL_CELL_MAX[c.k];
+                if (lim && v.length > lim) { shown = v.slice(0, lim) + '…'; cut = true; }
                 // 특수 열 — 값 옆에 작은 아이콘, 아이콘을 눌러야 창이 뜬다(글자 수정과 안 겹치게)
                 var ico = '';
                 if (c.type === 'doc') {
@@ -595,10 +642,12 @@
                         + ' title="' + _esc(_t('PARTS 라이브러리에서 보기', 'Open in PARTS library')) + '">🔎</span>' : '';
                 }
                 return '<td class="' + cls + '" data-id="' + r._id + '" data-k="' + c.k + '"'
+                     + (cut ? ' title="' + _esc(v) + '"' : '')
                      + ' onclick="window.plEditCell(this)" style="' + sticky + extra + '">'
-                     + '<span class="pl-v">' + _esc(v).replace(/\n/g, '<br>') + '</span>' + ico + '</td>';
+                     + '<span class="pl-v">' + _esc(shown).replace(/\n/g, ' ') + '</span>' + ico + '</td>';
             }).join('');
-            return '<tr data-id="' + r._id + '"' + (pinned ? ' style="background:#fffbe6;"' : '') + '>' + tds + '</tr>';
+            return '<tr data-id="' + r._id + '" class="' + (zebra ? 'pl-zebra' : '') + (pinned ? ' pl-pinned' : '') + '"'
+                 + ' style="background:' + rowBg + ';">' + tds + '</tr>';
         }).join('');
 
         wrap.innerHTML = '<table id="pl-table" class="concept-table pl-table" style="width:' + totalW + 'px;"><thead><tr>' + th + '</tr></thead><tbody>'
@@ -609,8 +658,10 @@
 
         var cnt = document.getElementById('pl-count');
         if (cnt) cnt.textContent = rows.length + ' / ' + (D().rows || []).length + _t('건', '');
-        window.plRenderChips();
+        if (!light) window.plRenderChips();
         window.plRenderStats();
+        window._plBindTableDnd();
+        window.plRefreshLang();
         if (window._cpApplyLive) { try { window._cpApplyLive(); } catch (e) { /* 팔레트 미초기화 시 무시 */ } }
     };
 
@@ -658,6 +709,48 @@
                      + ' &nbsp;|&nbsp; <b>' + _t('상태', 'Status') + '</b> ' + by('status');
     };
 
+    // 🌐 머리글 바 문구 — docs/ui-conventions.md 규칙대로 **JS 한 곳에서** 한/영을 만든다.
+    //    정적 HTML 에 한글을 박아 두면 언어를 바꿔도 이 페이지만 한글로 남는다(그 사고가 반복됐다).
+    //    언어 전환(toggleLang)에서도 불러 주므로, 이미 그려진 화면도 같이 따라간다.
+    window.PL_UI_TEXT = window.PL_UI_TEXT || {
+        'pl-btn-add':     ['➕ 행 추가',        '➕ Add row'],
+        'pl-btn-import':  ['📥 엑셀 불러오기', '📥 Import Excel'],
+        'pl-btn-export':  ['📊 엑셀 저장',     '📊 Export Excel'],
+        'pl-btn-nas':     ['📁 NAS 보관',      '📁 Save to NAS'],
+        'pl-btn-cols':    ['🔁 열',            '🔁 Columns'],
+        'pl-btn-print':   ['🖨️ 인쇄 (PDF)',    '🖨️ Print (PDF)'],
+        'pl-btn-reset':   ['↺',                '↺']
+    };
+    window.PL_UI_TITLE = window.PL_UI_TITLE || {
+        'pl-btn-reset': ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
+        'pl-btn-cols':  ['숨긴 열 되돌리기',      'Restore hidden columns'],
+        'pl-btn-nas':   ['지금 표를 엑셀로 만들어 NAS 자료실에 보관', 'Save the current table to the NAS folder as Excel'],
+        'pl-team':      ['이 목록을 관리하는 팀 — 팀마다 목록이 따로 저장됩니다',
+                         'Team that owns this list — each team has its own list']
+    };
+    window.plRefreshLang = function () {
+        var en = window._currentLang === 'en';
+        Object.keys(window.PL_UI_TEXT).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = window.PL_UI_TEXT[id][en ? 1 : 0];
+        });
+        Object.keys(window.PL_UI_TITLE).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.title = window.PL_UI_TITLE[id][en ? 1 : 0];
+        });
+        var h2 = document.querySelector('#pl-header-box h2');
+        if (h2) h2.textContent = '📒 ' + (en ? 'Project list' : 'Project list');
+        var si = document.getElementById('pl-search');
+        if (si) si.placeholder = en ? '🔍 Search (all cells)' : '🔍 검색 (모든 칸)';
+        var sel = document.getElementById('pl-team');
+        if (sel && !sel._plFilled) {
+            sel._plFilled = true;
+            sel.innerHTML = window.PL_TEAMS.map(function (t) {
+                return '<option value="' + _esc(t) + '"' + (t === _team() ? ' selected' : '') + '>👥 ' + _esc(t) + '</option>';
+            }).join('');
+        }
+    };
+
     window.plToggleGroup = function (g) { _view.groups[g] = !_view.groups[g]; _saveView(); window.plRender(); };
     window.plHideCol = function (k) {
         _view.hidden[k] = true; _saveView(); window.plRender();
@@ -670,7 +763,14 @@
         _saveView(); window.plRender();
     };
     window.plSetFilter = function (k, v) { _view.filters = _view.filters || {}; _view.filters[k] = v; _saveView(); window.plRender(); };
-    window.plSearch = function (v) { _view.search = v; _saveView(); window.plRender(); };
+    // ⚡ 검색은 **타자마다** 부르면 느리다 — 164행 × 91열 재렌더가 한 번에 112ms 라(실측)
+    //    글자를 칠 때마다 화면이 밀린다. 입력이 멎고 나서 한 번만 그린다(필터 목록은 건너뛴다).
+    var _searchTimer = null;
+    window.plSearch = function (v) {
+        _view.search = v;
+        if (_searchTimer) clearTimeout(_searchTimer);
+        _searchTimer = setTimeout(function () { _saveView(); window.plRender(true); }, 160);
+    };
     window.plClearFilters = function () {
         _view.filters = {}; _view.search = ''; _view.sort = { k: '', dir: 1 };
         var si = document.getElementById('pl-search'); if (si) si.value = '';
@@ -725,6 +825,74 @@
     // ──────────────────────────────────────────────────────────────────────────
     // 7. 행 추가/복제/삭제
     // ──────────────────────────────────────────────────────────────────────────
+    // 🔢 NO 숫자를 누르면 뜨는 행 메뉴 — 위/아래로 이동, 위/아래에 행 추가, 삭제, 고정, 상세.
+    //    누른 자리 바로 옆에 작게 띄운다(표가 길어 화면 가운데 모달은 되레 불편하다).
+    window.plOpenRowMenu = function (id, ev) {
+        if (ev) { ev.stopPropagation(); }
+        var r = _rowById(id); if (!r) return;
+        var pinned = (_view.pins || []).indexOf(id) !== -1;
+        var box = document.getElementById('pl-rowmenu');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'pl-rowmenu';
+            box.onclick = function (e) { e.stopPropagation(); };
+            document.body.appendChild(box);
+        }
+        var B = 'width:34px; height:28px; border:1px solid #cfe3e5; border-radius:7px; background:#fff; cursor:pointer;'
+              + ' font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;';
+        box.style.cssText = 'position:fixed; z-index:100001; background:#f4fbfc; border:1px solid #a3d9e0; border-radius:10px;'
+                          + ' box-shadow:0 6px 18px rgba(0,0,0,.18); padding:7px;';
+        box.innerHTML =
+            '<div style="font-size:10.5px; color:#00707d; font-weight:bold; text-align:center; margin-bottom:5px;">'
+          + _esc(_t('행 ', 'Row ') + (r.no || '')) + '</div>'
+          + '<div style="display:grid; grid-template-columns:repeat(2,34px); gap:5px;">'
+          + '<button title="' + _esc(_t('위로 이동', 'Move up')) + '" onclick="window.plMoveRow(\'' + id + '\',-1)" style="' + B + ' color:#2c5f8a;">⌃</button>'
+          + '<button title="' + _esc(_t('아래로 이동', 'Move down')) + '" onclick="window.plMoveRow(\'' + id + '\',1)" style="' + B + ' color:#2c5f8a;">⌄</button>'
+          + '<button title="' + _esc(_t('위에 행 추가', 'Insert above')) + '" onclick="window.plInsertRow(\'' + id + '\',0)" style="' + B + ' color:#2b7a45;">＋↑</button>'
+          + '<button title="' + _esc(_t('아래에 행 추가', 'Insert below')) + '" onclick="window.plInsertRow(\'' + id + '\',1)" style="' + B + ' color:#2b7a45;">＋↓</button>'
+          + '<button title="' + _esc(_t('이 행 삭제', 'Delete row')) + '" onclick="window.plDeleteRow(\'' + id + '\')" style="' + B + ' color:#b1432f;">－</button>'
+          + '<button title="' + _esc(pinned ? _t('고정 해제', 'Unpin') : _t('맨 위에 고정', 'Pin to top')) + '" onclick="window.plTogglePin(\'' + id + '\'); window.plCloseRowMenu();" style="' + B + (pinned ? ' background:#fff3bf;' : '') + '">📌</button>'
+          + '</div>'
+          + '<button onclick="window.plCloseRowMenu(); window.plOpenDetail(\'' + id + '\')" style="margin-top:5px; width:100%; padding:4px 0;'
+          + ' border:1px solid #cfe3e5; border-radius:7px; background:#fff; cursor:pointer; font-size:11px; color:#00707d;">'
+          + _esc(_t('📄 상세', '📄 Detail')) + '</button>';
+        box.style.display = 'block';
+        // 화면 밖으로 나가지 않게 — 아래/오른쪽이 모자라면 위/왼쪽으로 붙인다
+        var x = ev ? ev.clientX : 100, y = ev ? ev.clientY : 100;
+        var w = 100, h = 150;
+        box.style.left = Math.min(x + 6, window.innerWidth - w - 8) + 'px';
+        box.style.top = Math.min(y + 6, window.innerHeight - h - 8) + 'px';
+    };
+    window.plCloseRowMenu = function () { var b = document.getElementById('pl-rowmenu'); if (b) b.style.display = 'none'; };
+
+    /** 행 순서 바꾸기 — 보이는 순서가 아니라 **원본 배열**에서 옮긴다(정렬/필터가 걸려 있어도 결과가 같게) */
+    window.plMoveRow = function (id, dir) {
+        var rows = D().rows || [];
+        var i = rows.findIndex(function (x) { return x._id === id; });
+        var j = i + dir;
+        if (i < 0 || j < 0 || j >= rows.length) return;
+        var t = rows[i]; rows[i] = rows[j]; rows[j] = t;
+        _plPushHistory(t, 'no', _t('순서 ', 'order ') + (i + 1), _t('순서 ', 'order ') + (j + 1));
+        _persist(); window.plRender(); window.plCloseRowMenu();
+    };
+    /** 위(0)/아래(1)에 빈 행 추가 */
+    window.plInsertRow = function (id, below) {
+        var rows = D().rows || [];
+        var i = rows.findIndex(function (x) { return x._id === id; });
+        if (i < 0) return;
+        var at = i + (below ? 1 : 0);
+        var r = { _id: _newId(), no: '' };
+        rows.splice(at, 0, r);
+        _plRenumber();
+        _plPushHistory(r, 'no', '', (below ? _t('아래에 추가', 'inserted below') : _t('위에 추가', 'inserted above')));
+        _persist(); window.plRender(); window.plCloseRowMenu();
+    };
+    /** No 다시 매기기 — 끼워 넣거나 지운 뒤 번호가 어긋나지 않게 */
+    var _plRenumber = function () {
+        (D().rows || []).forEach(function (r, i) { r.no = String(i + 1); });
+    };
+    window._plRenumber = _plRenumber;
+
     window.plAddRow = function () {
         var rows = D().rows;
         var maxNo = 0;
@@ -755,7 +923,8 @@
                         'Delete this product row?\n' + (r.ktkPn || '') + ' ' + (r.desc || '')))) return;
         D().rows = (D().rows || []).filter(function (x) { return x._id !== id; });
         _plPushHistory(r, 'no', r.no, _t('(삭제됨)', '(deleted)'));
-        _persist(); window.plRender(); window.plCloseDetail();
+        _plRenumber();
+        _persist(); window.plRender(); window.plCloseDetail(); window.plCloseRowMenu();
         _toast('🗑️ ' + _t('삭제했습니다.', 'Deleted.'), 'info');
     };
 
@@ -937,87 +1106,181 @@
     //    폴더를 PN 마다 만들지 않는 이유: 제품이 수백 개라 폴더가 폭발하고, 문서함 목록을
     //    한 번의 목록 조회로 전부 가져와 행마다 개수를 표시할 수 없게 된다.
     // ──────────────────────────────────────────────────────────────────────────
-    var _docPrefix = function (r) { return String(r.ktkPn || r.pn || r._id || '').trim().replace(/[\\/:*?"<>|]/g, '_'); };
-    window._plDocCache = window._plDocCache || { at: 0, names: [] };
-
-    window._plDocCount = function (r) {
-        var p = _docPrefix(r);
-        if (!p) return 0;
-        return (window._plDocCache.names || []).filter(function (n) { return n.indexOf(p + '__') === 0; }).length;
+    // 📇 색인 규칙(실측 66개 파일에서 뽑음)
+    //    파일명: "<숫자> [구분자] [REV] <리비전>" — 구분자는 공백/밑줄/하이픈, REV 글자는 있을 수도 없을 수도,
+    //    뒤의 "(1)" "(2)" 는 같은 리비전의 중복본 표시다.
+    //      1555073 REV K.pdf · 1555073_REV J4.pdf · 1570704_H.pdf · 1627291-A.2 (1).pdf
+    //      1617498-revB (2).PDF · 1569779 UPPER DISPLAY REV E.pdf
+    //    ⚠️ 리비전을 "숫자 바로 뒤 글자"로 잡으면 안 된다 — "1569779 UPPER DISPLAY REV E" 가 U 가 된다.
+    //       REV 라는 말이 있으면 그걸 먼저 찾고, 없을 때만 "구분자 + 리비전 하나"로 본다.
+    window._plParseDocName = function (name) {
+        var base = String(name || '').replace(/\.[A-Za-z0-9]{1,5}$/, '');   // 확장자
+        base = base.replace(/\s*\(\d+\)\s*$/, '').trim();                   // (1) (2) 중복본 표시
+        var m = base.match(/^(\d{6,8})/);
+        if (!m) return null;
+        var num = m[1], rest = base.slice(num.length);
+        var rev = '';
+        var mv = rest.match(/rev\.?\s*([A-Za-z](?:\.?\d+)?)/i);             // "REV K" / "revB" / "REV J4"
+        if (mv) rev = mv[1];
+        else {
+            var mt = rest.match(/^[\s_-]+([A-Za-z](?:\.?\d+)?)\s*$/);       // "_H" / "-B" / "-A.2"
+            if (mt) rev = mt[1];
+        }
+        return { num: num, rev: rev.replace(/\./g, '').toUpperCase(), name: name };
     };
-    /** 문서함 목록을 한 번만 받아 와 캐시 — 행마다 📎 숫자를 그리기 위한 것(없으면 0으로 그린다) */
+
+    /** 이 행이 가진 색인 번호들 — PN 칸의 7자리(여러 개일 수 있다) + KTK PN 6자리.
+     *  사용자 질문("6자리 숫자도 분류가 필요한데")에 대한 답: 폴더를 나누지 않고 **번호 길이로** 가른다.
+     *  7자리는 고객 PN(=지금 쌓여 있는 도면들), 6자리는 KTK 자재코드로 각각 맞춰 본다. */
+    window._plRowDocNums = function (r) {
+        var out = [];
+        String(r.pn || '').replace(/\d{6,8}/g, function (m) { out.push(m); return m; });
+        var k = String(r.ktkPn || '').trim();
+        if (/^\d{6,8}$/.test(k)) out.push(k);
+        return out.filter(function (v, i, a) { return a.indexOf(v) === i; });
+    };
+
+    window._plDocCache = window._plDocCache || { at: 0, byNum: {}, total: 0, error: '' };
+
+    window._plDocsOf = function (r) {
+        var nums = window._plRowDocNums(r), out = [];
+        nums.forEach(function (n) { (window._plDocCache.byNum[n] || []).forEach(function (f) { out.push(f); }); });
+        return out;
+    };
+    window._plDocCount = function (r) { return window._plDocsOf(r).length; };
+
+    /** 폴더 목록을 한 번 받아 번호별로 묶어 둔다 — 행마다 다시 묻지 않기 위해(164행 × 왕복은 못 쓴다) */
     window.plRefreshDocCache = async function (silent) {
         if (!window._dsList) return;
         try {
             var j = await window._dsList(NAS_FOLDER);
             var files = (j && (j.files || j.items || j.list)) || [];
-            window._plDocCache = { at: Date.now(), names: files.map(function (f) { return String(f.name || f); }) };
+            var byNum = {};
+            files.forEach(function (f) {
+                var nm = String(f && f.name ? f.name : f);
+                var p = window._plParseDocName(nm);
+                if (!p) return;
+                (byNum[p.num] = byNum[p.num] || []).push({ name: nm, rev: p.rev, num: p.num });
+            });
+            Object.keys(byNum).forEach(function (n) {
+                byNum[n].sort(function (a, b) { return String(b.rev).localeCompare(String(a.rev), 'en'); });
+            });
+            window._plDocCache = { at: Date.now(), byNum: byNum, total: files.length, error: '' };
             if (!silent) window.plRender();
         } catch (e) {
-            if (!silent) _toast('⚠️ ' + _t('NAS 문서함을 읽지 못했습니다: ', 'Could not read the NAS folder: ') + e.message, 'warning', 6000);
+            var msg = (e && e.message) ? e.message : String(e);
+            window._plDocCache.error = msg;
+            if (!silent) _toast('⚠️ ' + _t('NAS 자료실을 읽지 못했습니다: ', 'Could not read the NAS folder: ') + msg, 'warning', 7000);
         }
     };
 
     window.plOpenDocBox = async function (id) {
         var r = _rowById(id); if (!r) return;
-        var p = _docPrefix(r);
-        if (!p) { _toast(_t('KTK PN(또는 PN)을 먼저 입력해주세요 — 문서를 그 번호로 보관합니다.', 'Enter KTK PN (or PN) first — documents are filed under it.'), 'warning', 6000); return; }
-        _popup('📎 ' + _esc(p) + ' ' + _t('문서함', 'documents')
-             + ' <span style="font-weight:normal; color:#666; font-size:11.5px;">PN: ' + _esc(String(r.pn || '').split('\n')[0]) + '</span>',
+        var nums = window._plRowDocNums(r);
+        if (!nums.length) {
+            _toast(_t('PN(7자리) 또는 KTK PN(6자리)을 먼저 입력해주세요 — 그 번호로 NAS 파일을 찾습니다.',
+                      'Enter a PN (7-digit) or KTK PN (6-digit) first — files are matched by that number.'), 'warning', 7000);
+            return;
+        }
+        _popup('📎 ' + _esc(nums.join(' / ')) + ' ' + _t('자료', 'documents')
+             + ' <span style="font-weight:normal; color:#666; font-size:11.5px;">' + _esc(String(r.desc || '').slice(0, 40)) + '</span>',
             '<div id="pl-doc-body" style="color:#888;">' + _t('목록을 불러오는 중…', 'Loading…') + '</div>', true);
-        await window.plRefreshDocCache(true);
+        if (!window._plDocCache.at) await window.plRefreshDocCache(true);
         window._plRenderDocBody(id);
     };
 
     window._plRenderDocBody = function (id) {
         var r = _rowById(id); if (!r) return;
-        var p = _docPrefix(r);
-        var mine = (window._plDocCache.names || []).filter(function (n) { return n.indexOf(p + '__') === 0; });
+        var nums = window._plRowDocNums(r);
+        var mine = window._plDocsOf(r);
+        // 지금 REV — 생산 REV 와 Agile REV 에서 글자를 뽑아 "현재" 표시를 단다(어느 도면이 지금 것인지가 제일 중요)
+        var curRevs = [];
+        [r.prodRev, r.agileRev].forEach(function (v) {
+            String(v || '').replace(/[A-Za-z](?:\.?\d+)?/g, function (m) { curRevs.push(m.replace(/\./g, '').toUpperCase()); return m; });
+        });
         var list = mine.length
-            ? mine.map(function (n) {
-                var shown = n.slice(p.length + 2);
-                return '<div style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid #f1f3f5;">'
-                     + '<span style="flex:1; word-break:break-all;">📄 ' + _esc(shown) + '</span>'
-                     + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(n) + '\')" style="padding:3px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:11px; cursor:pointer;">' + _t('열기', 'Open') + '</button>'
-                     + '<button onclick="window.plAnalyzeDoc(\'' + id + '\',\'' + _esc(n) + '\')" style="padding:3px 8px; background:#efe6fb; color:#6741d9; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🤖 ' + _t('분석', 'Analyze') + '</button>'
+            ? mine.map(function (f) {
+                var isCur = f.rev && curRevs.indexOf(f.rev) !== -1;
+                return '<div style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid #f1f3f5;'
+                     + (isCur ? ' background:#f1fbf3;' : '') + '">'
+                     + '<span style="width:52px; flex:none; font-weight:bold; color:' + (isCur ? '#2b7a45' : '#868e96') + ';">'
+                     + (f.rev ? 'REV ' + _esc(f.rev) : '-') + '</span>'
+                     + (isCur ? '<span title="' + _esc(_t('표의 REV와 같은 도면', 'matches the REV in the table')) + '">✅</span>' : '')
+                     + '<span style="flex:1; word-break:break-all; color:#444;">' + _esc(f.name) + '</span>'
+                     + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:11px; cursor:pointer;">' + _t('열기', 'Open') + '</button>'
+                     + '<button onclick="window._dsOpenNative && window._dsOpenNative(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" title="' + _esc(_t('NAS 원본을 연결 프로그램으로', 'Open the NAS original in its app')) + '" style="padding:3px 8px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🖥️</button>'
+                     + '<button onclick="window.plAnalyzeDoc(\'' + id + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#efe6fb; color:#6741d9; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🤖 ' + _t('분석', 'Analyze') + '</button>'
                      + '</div>';
             }).join('')
-            : '<div style="color:#888; padding:10px 2px;">' + _t('보관된 문서가 없습니다.', 'No documents yet.') + '</div>';
+            : '<div style="color:#888; padding:10px 2px;">'
+              + (window._plDocCache.error
+                 ? '⚠️ ' + _esc(window._plDocCache.error)
+                 : _t('이 번호로 된 파일이 NAS에 없습니다.', 'No file in NAS starts with this number.')) + '</div>';
 
-        var html = '<div style="border:1px solid #e3e6ea; border-radius:6px; margin-bottom:10px; max-height:240px; overflow:auto;">' + list + '</div>'
-                 + '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">'
-                 + '<input type="file" id="pl-doc-file" multiple style="font-size:11.5px; max-width:300px;">'
-                 + '<button onclick="window.plUploadDocs(\'' + id + '\')" style="padding:5px 11px; background:#d4f3dd; color:#2b7a45; border:none; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">⬆️ ' + _t('NAS에 올리기', 'Upload to NAS') + '</button>'
+        var html = '<div style="border:1px solid #e3e6ea; border-radius:6px; margin-bottom:10px; max-height:260px; overflow:auto;">' + list + '</div>'
+                 + '<div id="pl-doc-drop" ondragover="event.preventDefault(); this.style.background=\'#eaf8ea\';"'
+                 + ' ondragleave="this.style.background=\'#fbfdfd\';"'
+                 + ' ondrop="window.plDropDocs(event, \'' + id + '\')"'
+                 + ' style="border:2px dashed #a3d9e0; border-radius:8px; background:#fbfdfd; padding:12px; text-align:center; color:#5a8a92; font-size:12px; cursor:pointer;"'
+                 + ' onclick="document.getElementById(\'pl-doc-file\').click()">'
+                 + '⬆️ ' + _esc(_t('여기에 파일을 끌어다 놓거나 눌러서 고르세요 (NAS에 바로 올라갑니다)',
+                                   'Drop files here, or click to choose — uploaded straight to NAS'))
+                 + '<input type="file" id="pl-doc-file" multiple style="display:none;" onchange="window.plUploadDocs(\'' + id + '\')"></div>'
+                 + '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">'
                  + '<button onclick="window._dsOpenBrowser && window._dsOpenBrowser(\'' + NAS_FOLDER + '\')" style="padding:5px 11px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📁 ' + _t('폴더 열기', 'Open folder') + '</button>'
+                 + '<button onclick="window.plRefreshDocCache(false)" style="padding:5px 11px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:12px; cursor:pointer;">🔄 ' + _t('목록 새로고침', 'Refresh') + '</button>'
                  + '</div>'
-                 + '<div style="margin-top:9px; color:#888; font-size:11px; line-height:1.5;">'
-                 + _t('· 문서는 NAS ', '· Files are stored in NAS ') + NAS_FOLDER + _t(' 폴더에 "' + p + '__원래이름"으로 보관됩니다.', ' as "' + p + '__originalname".')
-                 + '<br>' + _t('· 🤖 분석은 문서에서 REV·PN·변경점을 읽어 이 행의 칸을 채워줍니다(미리보기 후 적용).',
-                               '· 🤖 Analyze reads REV/PN/changes from the document and fills this row (with preview).') + '</div>';
+                 + '<div style="margin-top:9px; color:#888; font-size:11px; line-height:1.55;">'
+                 + _esc(_t('· 파일은 이름을 바꾸지 않고 그대로 올립니다 — 앞 숫자(' + nums.join(', ') + ')로 이 행과 이어집니다.',
+                           '· Files keep their names — they link to this row by the leading number (' + nums.join(', ') + ').'))
+                 + '<br>' + _esc(_t('· 앞 숫자가 없는 파일은 "' + (nums[0] || '') + ' " 를 앞에 붙여 올립니다.',
+                                    '· A file without a leading number is uploaded with "' + (nums[0] || '') + ' " prefixed.'))
+                 + '<br>' + _esc(_t('· 🤖 분석은 도면에서 REV·PN 등을 읽어 이 행의 칸을 채웁니다(미리보기 후 적용).',
+                                    '· 🤖 Analyze reads REV/PN from the drawing and fills this row (with preview).')) + '</div>';
         var b = document.getElementById('pl-doc-body');
         if (b) { b.style.color = ''; b.innerHTML = html; }
     };
 
-    window.plUploadDocs = async function (id) {
-        var r = _rowById(id); if (!r) return;
+    /** 올릴 때 이름 규칙 — 이미 이 행의 번호로 시작하면 **그대로**, 아니면 번호만 앞에 붙인다.
+     *  (사람이 NAS 폴더를 직접 열어 쓰기 때문에 앱이 이름을 헤집어 놓으면 안 된다) */
+    var _uploadName = function (r, fileName) {
+        var nums = window._plRowDocNums(r);
+        var m = String(fileName).match(/^(\d{6,8})/);
+        if (m && nums.indexOf(m[1]) !== -1) return fileName;
+        return (nums[0] || '') + ' ' + fileName;
+    };
+
+    window.plDropDocs = function (ev, id) {
+        ev.preventDefault();
+        var box = document.getElementById('pl-doc-drop');
+        if (box) box.style.background = '#fbfdfd';
+        var files = ev.dataTransfer && ev.dataTransfer.files ? Array.prototype.slice.call(ev.dataTransfer.files) : [];
+        if (files.length) window._plPutDocs(id, files);
+    };
+    window.plUploadDocs = function (id) {
         var inp = document.getElementById('pl-doc-file');
         var files = inp && inp.files ? Array.prototype.slice.call(inp.files) : [];
         if (!files.length) { _toast(_t('올릴 파일을 먼저 고르세요.', 'Choose files first.'), 'warning'); return; }
-        if (!window._dsPut) { _toast(_t('문서 저장소를 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return; }
-        var p = _docPrefix(r), ok = 0, fail = [];
+        window._plPutDocs(id, files);
+    };
+    window._plPutDocs = async function (id, files) {
+        var r = _rowById(id); if (!r) return;
+        if (!window._dsPut) { _toast(_t('문서 저장소를 불러오지 못했습니다(백엔드 확인).', 'Document store unavailable (check the backend).'), 'error'); return; }
+        var ok = 0, fail = [];
+        _toast('⬆️ ' + files.length + _t('개 올리는 중…', ' file(s) uploading…'), 'info');
         for (var i = 0; i < files.length; i++) {
             var f = files[i];
             try {
-                var named = new File([f], p + '__' + f.name, { type: f.type });
-                await window._dsPut(NAS_FOLDER, named, true);
+                var nm = _uploadName(r, f.name);
+                await window._dsPut(NAS_FOLDER, (nm === f.name) ? f : new File([f], nm, { type: f.type }), true);
                 ok++;
             } catch (e) { fail.push(f.name + ': ' + (e && e.message ? e.message : e)); }
         }
         await window.plRefreshDocCache(true);
-        window._plRenderDocBody(id);
+        if (document.getElementById('pl-doc-body')) window._plRenderDocBody(id);
         window.plRender();
-        if (ok) _toast('⬆️ ' + ok + _t('개 파일을 NAS에 올렸습니다.', ' file(s) uploaded to NAS.'), 'success');
-        if (fail.length) _toast('⚠️ ' + fail.join(' / '), 'error', 8000);
+        if (ok) _toast('✅ ' + ok + _t('개 파일을 NAS에 올렸습니다.', ' file(s) uploaded to NAS.'), 'success');
+        if (fail.length) _toast('⚠️ ' + fail.join(' / '), 'error', 9000);
     };
 
     // 🤖 문서 분석 — NAS 문서의 글자를 뽑아 AI에게 "이 행에 넣을 값"을 묻는다.
@@ -1361,10 +1624,48 @@
         });
     })();
 
+    // 🖐 표 위로 파일을 끌어다 놓으면 **그 행의** 자료로 올라간다 — 문서함을 열지 않아도 되게.
+    //    행 위에 있는 동안 그 행을 초록 테두리로 표시해, 어디에 떨어지는지 눈으로 보이게 한다.
+    var _dropRowId = null;
+    var _markDropRow = function (tr) {
+        if (window._plDropMarked && window._plDropMarked !== tr) window._plDropMarked.style.outline = '';
+        window._plDropMarked = tr || null;
+        if (tr) tr.style.outline = '2px solid #2b7a45';
+    };
+    window._plBindTableDnd = function () {
+        var wrap = document.getElementById('pl-table-wrap');
+        if (!wrap || wrap._plDnd) return;
+        wrap._plDnd = true;
+        wrap.addEventListener('dragover', function (e) {
+            if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
+            e.preventDefault();
+            var tr = e.target && e.target.closest ? e.target.closest('tr[data-id]') : null;
+            _dropRowId = tr ? tr.getAttribute('data-id') : null;
+            _markDropRow(tr);
+        });
+        wrap.addEventListener('dragleave', function (e) { if (e.target === wrap) _markDropRow(null); });
+        wrap.addEventListener('drop', function (e) {
+            var files = e.dataTransfer && e.dataTransfer.files ? Array.prototype.slice.call(e.dataTransfer.files) : [];
+            if (!files.length) return;
+            e.preventDefault();
+            _markDropRow(null);
+            var id = _dropRowId; _dropRowId = null;
+            if (!id) return;
+            var r = _rowById(id);
+            if (!r) return;
+            if (!window._plRowDocNums(r).length) {
+                _toast('⚠️ ' + _t('이 행에 PN(7자리)이나 KTK PN(6자리)이 없어 파일을 이어줄 수 없습니다.',
+                                  'This row has no PN/KTK PN, so files cannot be linked.'), 'warning', 7000);
+                return;
+            }
+            window._plPutDocs(id, files);
+        });
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         var si = document.getElementById('pl-search');
         if (si) si.value = _view.search || '';
         if (document.getElementById('pl-table-wrap')) window.plRender();
     });
-    document.addEventListener('click', function () { /* 팝업 바깥 클릭 닫기 */ window.plClosePopup(); });
+    document.addEventListener('click', function () { /* 팝업 바깥 클릭 닫기 */ window.plClosePopup(); window.plCloseRowMenu(); });
 })();

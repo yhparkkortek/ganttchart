@@ -145,7 +145,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `47-approval-compose.js` | 📝 기안 작성 — **기존 기안을 틀로, 값은 지금 열린 프로젝트**에서 채운다(원본 값 그대로 복사는 `gw_approval_copy`). 매핑은 `APPROVAL_FIELD_SOURCES`(데이터): `meta`/`spec`/`summary`/`user`/`blank`, 안 적으면 **원본 유지**. spec 라벨은 **별칭 목록**. ⚠️ 칸마다 **출처를 보여준다** — 틀린 값이 결재선을 타고 올라가는 게 제일 위험. 사람이 **고친 값만** 적립(자동값까지 저장하면 사전 오염). 상신 안 함 |
 | `50-parts-category-pages.js` | 🗂 **PARTS** 탭(옛 Elec Parts) — 주요자재 구분 **전부**가 **AD BD와 같은 비교표**를 쓴다. 전용 도표가 없는 구분은 ① `ELEC_PART_TYPES`에 공용 기본 항목(`GENERIC_PART_SPEC_SCHEMA`, js/22d)으로 등록 ② 화면·헤더 버튼은 **AD BD 한 벌을 복제**하고 id 안 `adbd`만 치환(`_pcpEnsureView`) — HTML에 9벌 붙여넣지 않는다. 그래서 추가/펼치기/엑셀 저장/AI 추출이 기존 엔진(js/22e)에서 그냥 돈다. 구분·아이콘·NAS 폴더는 `ELEC_CATEGORY_META`(js/23, 데이터) 한 곳, NAS는 `PARTS/<구분>`. NAS 사양서 → AI 추출은 기존 "항목 추가 ▸ AI로 추출"에 **파일만 꽂는다**(`_pcpAiFromFile`) — 추출기를 복제하지 않는다. → `docs/doc-store.md` |
 | `51-panel-lib-import.js` | 📚 회사 **패널 비교표 엑셀(`REFERENCE` 시트) → 팀 공용 패널 라이브러리 일괄 이식**. AI 안 씀(라벨이 앱 항목과 이름까지 맞는다 — 실측 패널 146개·항목 109종·칸 9,981개). **읽기 1회+쓰기 1회**(146번 upsert면 Drive 왕복 292번), **항목 단위 병합**(파일에 없는 `Item Code` 등은 안 지움), 모델명 기준 멱등. 라벨 별칭은 `PLI_LABEL_ALIASES`(데이터). 진입은 js/42 `preParse`(AI보다 먼저)와 PANEL 추가 모달 `📁 NAS에서`. → `docs/doc-store.md` |
-| `55-project-list.js` | 📒 **Project list** — 제품(모델) 전수 목록(사내 "제품 SPEC" 엑셀 91열). 프로젝트를 가로지르는 표라 저장은 주소록과 같은 공용 파일(`App_Config/ProjectList_Shared.json`, 빈-덮어쓰기·`savedAt` 동시성 가드 포함). 열은 전부 `PL_COLUMNS`(데이터) — 새 열은 한 줄이면 표·상세·엑셀·필터·AI도구가 따라온다. 머리글은 **한 줄 고정 + 줄임말(`PL_SHORT`) + 말풍선**. 참조: 담당자↔주소록 · Panel↔패널 라이브러리/NAS 사양서 · PN↔NAS 문서함(`PROJECTLIST/<KTK PN>__파일명`)+AI 분석 · KTK PN↔SAP(AI 문답 경로 재사용). ⚠️ **실제 데이터는 저장소에 안 넣는다**(GitHub Pages 공개) → `docs/project-list.md` |
+| `55-project-list.js` | 📒 **Project list** — 제품(모델) 전수 목록(사내 "제품 SPEC" 엑셀 91열). **팀별 관리**(`App_Config/ProjectList_<팀>.json`, 기본 개발3팀) — 주소록과 같은 빈-덮어쓰기·`savedAt` 동시성 가드. 열·줄임말·셀 글자수는 전부 데이터(`PL_COLUMNS`/`PL_SHORT`/`PL_CELL_MAX`). 머리글은 **한 줄 + 줄임말 + 말풍선**. NO 숫자 클릭 = 행 메뉴(위아래 이동·추가·삭제·📌고정). ⚠️ **NAS 자료는 파일 이름을 안 바꾸고 앞 숫자로 색인**(`PROJECT LIST/CUSTOMER`, 7자리=고객PN·6자리=KTK PN) + 행 위로 드래그앤드롭. ⚠️ 검색은 디바운스 필수(타자마다 전체 재렌더가 112ms였다). ⚠️ **실제 데이터는 저장소에 안 넣는다**(GitHub Pages 공개) → `docs/project-list.md` |
 | `54-mail-body-store.js` | 📧 **메일 원문 본문을 프로젝트 파일 밖으로**(2026-10-28) — 프로젝트엔 앞 2,000자 + `_mailRaw.bodyRef`, 전문은 Drive `MailBodies/<key>.txt`(1건 1파일, text/plain). 읽기는 `_mbFullBody`: **NAS .eml → Drive → 앞부분**. 옮기기는 `_mbOffloadSweep`(열고 20초 뒤·10분마다, 업로드 확인된 행만 줄임). **열려 있지 않은 프로젝트는 `_mbOffloadAllProjects`**(켜고 2분 뒤·30분마다, 열린 시트는 절대 안 건드림), 배분 원장은 행에 이미 있는 메일이면 300자. ⚠️ 전문이 필요하면 `body2000` 직접 읽지 말 것 → `docs/mail-pipeline.md` |
 | `53-page-nas.js` | 📁 **페이지별 NAS 자료실** — 엑셀 왕복이 없는 파생 뷰(알람·캘린더·주간보고)에도 `📁 NAS` 를 단다. 폴더는 `PAGE_NAS_FOLDERS`(데이터), 여는 건 **열기·올리기만 하는 탐색기**(`_dsOpenBrowser`, js/48). ⚠️ 같은 탭에 js/42 가 이미 달았으면(`#px-share-*`) **안 단다** — 두 개가 된다. 폴더 철자는 NAS에 있는 그대로(`CALENDER` 포함). → `docs/doc-store.md` |
 | `41-qa-write-tools.js` | ✍️ 쓰기 도구 — **AI가 스스로 실행 안 함**. 초안→사람 확인 1회→자동. `verified:'pending'`은 요청 본문 미확정이라 실행 차단 |
@@ -314,8 +314,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - ⚠️ **실제 제품 데이터를 저장소에 커밋하지 말 것** — GitHub Pages 공개. 코드엔 빈 표 + 불러오기만
 - 머리글 대조는 공백을 **지운다**(한 칸으로 줄이면 `회로담당\n(PM)` 이 안 맞아 열이 통째로 빠진다)
 - `table-layout:fixed` 는 **표 폭**을 줘야 열 폭이 지켜진다(안 주면 28열이 전부 35px)
-- NAS 문서함은 **PN 열**, 폴더는 `PROJECTLIST` 하나 + 파일명 `<KTK PN>__원래이름`(PN마다 폴더 만들면 수백 개)
-- 백엔드 `DOCSTORE_APP_FOLDERS` 에 `PROJECTLIST` 추가됨 → **백엔드 재시작 전엔 문서함만 400**
+- NAS 자료는 **PN 열**, 폴더 `PROJECT LIST/CUSTOMER`(띄어쓰기 그대로) — **이름 안 바꾸고 앞 숫자로 색인**(7자리=고객PN, 6자리=KTK PN)
+- 백엔드 `DOCSTORE_APP_FOLDERS` 에 `'PROJECT LIST'` 추가됨 → **백엔드 재시작 전엔 자료 연결만 400**
 
 ### `docs/backend-auto-update.md` — 🔄 백엔드 자동 업데이트/재시작
 - **읽을 때**: `/self-check-update`·`/self-update`, `kortek_backend.zip`, `.bat`/`.vbs` 변경

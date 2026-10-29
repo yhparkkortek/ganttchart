@@ -1565,6 +1565,9 @@
         // 배지도 같은 이유로 같이 갱신.
         if (document.getElementById('inbox-list') && window.renderTaskInbox) window.renderTaskInbox();
         if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();
+        // 📒 [2026-10-29] Project list — 머리글 바 문구와 표 머리글(줄임말)이 전부 JS 생성이라,
+        //    여기서 다시 그리지 않으면 이 페이지만 옛 언어로 남는다(docs/ui-conventions.md 의 그 패턴).
+        if (document.getElementById('pl-table-wrap') && window.plRender) window.plRender();
 
         if (globalData) {
             renderTable(globalData);

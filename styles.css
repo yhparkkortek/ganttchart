@@ -854,8 +854,10 @@
     padding: 3px 6px; vertical-align: top; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; cursor: text;
 }
-.pl-table td.pl-td:hover { background: #f3fbfc; }
-.pl-table tbody tr:hover td { background: #f7fcfd; }
+/* 🦓 제브라는 JS 가 행마다 배경을 직접 준다(가로 스크롤에 남는 sticky 칸까지 같은 색이어야 해서).
+   그래서 hover 는 !important 로 그 위에 덮는다 — 안 그러면 마우스를 올려도 색이 안 바뀐다. */
+.pl-table tbody tr:hover td { background: #e8f6f9 !important; }
+.pl-table td.pl-td:hover { background: #d8f0f5 !important; }
 /* 값이 길면 줄임표로 — 셀을 누르면 입력칸이 열려 전체가 보인다 */
 .pl-table td .pl-v { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
 .pl-table td .pl-ico { margin-left: 3px; cursor: pointer; opacity: .55; font-size: 11px; }

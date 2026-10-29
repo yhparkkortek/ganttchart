@@ -4833,9 +4833,11 @@ BACKSLASH            = chr(92)         # 경로 정규화용 — 리터럴 안 �
 #   화이트리스트의 목적은 **경로 탈출 차단**이고, 앱이 정한 이름은 root 아래라 그 목적과 무관하다.
 DOCSTORE_APP_FOLDERS = ['SUMMARY', 'CUSTOMER', 'MC', 'PARTS', 'ADDRESS',
                         'ALARM&NOTICE', 'CALENDER', 'GANTT', 'REPORT',
-                        # 📒 [2026-10-29] Project list 페이지(js/55)의 제품별 문서함 —
-                        #    파일명은 "<KTK PN>__<원래이름>"(PN 마다 폴더를 만들면 수백 개가 된다)
-                        'PROJECTLIST']
+                        # 📒 [2026-10-29] Project list 페이지(js/55)가 읽는 고객 도면 폴더.
+                        #    ⚠️ 철자/띄어쓰기는 NAS 에 있는 그대로다('PROJECT LIST', 공백 포함) —
+                        #    'PROJECTLIST' 로 적으면 실제 폴더를 못 찾는다(실측에서 FileNotFound).
+                        #    실제 파일은 그 아래 'PROJECT LIST/CUSTOMER' 에 있다(하위 한 단계까지 허용).
+                        'PROJECT LIST']
 
 
 def _docstore_load():
