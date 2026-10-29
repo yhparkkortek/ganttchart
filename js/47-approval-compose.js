@@ -516,16 +516,17 @@
                 + _esc(_t('원본 첨부 ' + p.src.attachments.length + '건은 가져오지 않습니다 — 새로 올려주세요.',
                           p.src.attachments.length + ' attachment(s) are not copied.')) + '</div>';
         }
-        // ⚠️ [2026-10-29] 본문이 **자유 서식 표**인 양식(기안서 계열) — 입력칸(editorForm_*)이
-        //    하나도 없어 칸 단위로 못 채운다. 그냥 "전체 1개"로 끝내면 제목만 든 빈 기안이
-        //    올라간다(사용자 제보). 못 채운다는 사실과 **원본 본문**을 같이 보여준다.
+        // 📋 [2026-10-29] 본문(자유 서식) — 이 양식의 본문은 입력칸들의 모음이 아니라
+        //    **DEXT5 에디터 한 덩어리**라 칸마다 쪼개 보여줄 수가 없다(docs/groupware.md 8-0-3).
+        //    대신 "원본 그대로 들어간다"는 사실과 **들어갈 내용 전부**를 보여준다 — 칸마다
+        //    출처를 보여주는 이 모달의 원칙을 본문에서도 지키려면 이게 최선이다.
         var _bodyTxt = String(p.src.body || '').trim();
         if (_bodyTxt) {
-            html += '<div style="margin-top:8px; padding:6px 9px; background:#fff3cd; border-left:3px solid #e6a817;'
-                + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#7a5210;">📋 '
-                + _esc(_t('이 양식은 본문이 자유 서식(표)이라 칸 단위로 채워 넣지 못합니다 — 읽어온 본문을 '
-                          + '아래에 그대로 두니 직접 옮겨 주세요.',
-                          'This form keeps its content as a free-form table, so the fields cannot be filled automatically — the source body is shown below.'))
+            html += '<div style="margin-top:8px; padding:6px 9px; background:#e8f4fd; border-left:3px solid #1a4f7a;'
+                + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#1a4f7a;">📋 '
+                + _esc(_t('본문은 칸이 아니라 에디터 한 덩어리라, 아래 내용이 원본 그대로 새 기안 본문에 들어갑니다'
+                          + (p.asIs ? '.' : ' — 프로젝트 값으로 바꾸지 않으니 임시저장 뒤 그룹웨어에서 고쳐 주세요.'),
+                          'The body is one editor block, so it is copied into the new draft exactly as shown below.'))
                 + '</div>'
                 + '<pre style="margin:6px 0 0; padding:7px 9px; background:#f8f9fa; border:1px solid #e9ecef;'
                 + ' border-radius:4px; font-size:11px; line-height:1.5; max-height:220px; overflow:auto;'
@@ -581,7 +582,10 @@
         // 못 채운 칸은 조용히 넘기지 않는다 — 어느 칸이 비었는지 사람이 알아야 한다.
         var log = ((res.draft || {}).log) || [];
         var failed = log.filter(function (x) { return !x.ok; }).map(function (x) { return x.field; });
+        // 본문은 '칸'이 아니라 위 failed 목록만으로는 들어갔는지가 안 보인다 — 따로 알린다.
+        var bodyNote = ((res.notes || []).filter(function (n) { return /본문/.test(String(n)); })[0] || '');
         _toast('📝 ' + _t('임시저장했습니다 — ', 'Saved as draft — ') + p.form
+            + (bodyNote ? ' / ' + bodyNote : '')
             + (edited ? _t(' / 고친 칸 ' + edited + '개는 다음에 먼저 제안됩니다', '') : '')
             + (failed.length ? _t(' / 못 채운 칸: ', ' / not filled: ') + failed.join(', ') : ''), 'success');
         window._apvClose();

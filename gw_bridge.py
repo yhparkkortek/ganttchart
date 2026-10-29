@@ -968,6 +968,33 @@ _DRAFT_JS = r"""
     setVal(hit.el, value);
     log.push({ field: label, id: hit.id, ok: hit.el.value === value, val: hit.el.value });
   }
+
+  // 4-b) 📋 본문(자유 서식) — 이 양식의 본문은 입력칸들의 모음이 아니라 **DEXT5 에디터 하나**다.
+  //      editorForm_N 의 N 은 양식마다 다르므로 이름을 박지 말고, `dext_frame_<id>` 프레임이
+  //      실제로 붙어 있는 칸만 고른다(docs/groupware.md 8-0-3 실측).
+  //      실패를 조용히 넘기지 않는다 — 본문이 빈 기안이 올라가는 게 제일 나쁘다.
+  if (cfg.bodyHtml) {
+    const edId = [...document.querySelectorAll('[id^=editorForm_]')].map(e => e.id)
+      .find(id => document.getElementById('dext_frame_' + id));
+    if (!edId) {
+      log.push({ field: '본문', ok: false, why: 'DEXT5 본문 에디터를 찾지 못했습니다.' });
+    } else if (typeof window.DEXT5 === 'undefined' || typeof DEXT5.setBodyValue !== 'function') {
+      log.push({ field: '본문', ok: false, why: 'DEXT5 API 가 없습니다.' });
+    } else {
+      try {
+        const plain = h => String(h).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, '');
+        const before = String(DEXT5.getBodyValue(edId) || '');
+        DEXT5.setBodyValue(cfg.bodyHtml, edId);
+        await sleep(1500);
+        const got = String(DEXT5.getBodyValue(edId) || '');
+        const want = plain(cfg.bodyHtml).slice(0, 30);
+        log.push({ field: '본문', id: edId, len: got.length,
+                   ok: got !== before && (!want || plain(got).indexOf(want) >= 0) });
+      } catch (e) {
+        log.push({ field: '본문', id: edId, ok: false, why: String(e && e.message || e) });
+      }
+    }
+  }
   await sleep(800);
 
   if (cfg.dryRun) return { ok:true, step:'filled', dryRun:true, log, url: location.href };
@@ -1068,7 +1095,7 @@ _READ_JS = r"""
   // 본문이 contentViewer iframe 안의 **클래스 없는 표**인 양식이 있다(2026-10-29 실측).
   // subjectColumn/detailColumn 이 없으니 라벨/값은 **칸 배경색**으로 가른다(라벨=칠해짐, 값=투명).
   // 못 가르는 칸은 짐작하지 말고 bodyRows 에 글자 그대로 남긴다 — 거짓 값보다 원문이 낫다.
-  const bodyFields = {}; const bodyRows = []; let bodyText = '';
+  const bodyFields = {}; const bodyRows = []; let bodyText = ''; let bodyHtml = '';
   const bd = viewerDoc();
   if (bd) {
     const win = bd.defaultView;
@@ -1100,6 +1127,9 @@ _READ_JS = r"""
     // 표를 줄글로 옮길 땐 innerText 를 쓰지 않는다 — 칸 사이가 빈 줄·탭으로 벌어져 읽기 어렵다.
     bodyText = bodyRows.map(r => r.filter(Boolean).join(' | ')).filter(Boolean).join('\n').slice(0, 8000);
     if (!bodyText) bodyText = String(bd.body.innerText || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
+    // 원문 HTML — 그대로 복사할 때 새 기안의 DEXT5 에디터에 그대로 넣는다(docs/groupware.md 8-0-3).
+    // ⚠️ 수만 자라 평소 응답엔 안 싣는다 — 파이썬이 with_html 일 때만 돌려준다.
+    bodyHtml = String(bd.body.innerHTML || '');
   }
 
   // 머리 정보 — 라벨/값이 번갈아 오는 표
@@ -1117,13 +1147,13 @@ _READ_JS = r"""
 
   return { url: location.href, subject: norm((document.getElementById('subject')||{}).value) || head['제목'] || '',
            head, fields, checks, apprLine: asides[0] || '', docInfo: asides[1] || '',
-           body: bodyText, bodyFields, bodyRows,
+           body: bodyText, bodyFields, bodyRows, bodyHtml,
            attachments: [...new Set(attach)] };
 })()
 """
 
 
-def approval_read(doc_num=None, doc_id=None):
+def approval_read(doc_num=None, doc_id=None, with_html=False):
     """기존 전자결재 문서를 읽는다(읽기 전용) — 복사 기안의 재료.
 
     `doc_num`('RD3-2610-050')이면 전 문서함에서 찾아 id 를 얻는다.
@@ -1149,26 +1179,64 @@ def approval_read(doc_num=None, doc_id=None):
     dismiss_intro()
     out = eval_in_gw(_READ_JS, timeout=90) or {}
     out['docId'] = doc_id
+
+    # 📡 양식 이름·문서번호·본문 원문은 **화면이 아니라 문서 API** 에서 받는다.
+    #    (2026-10-29 CDP Network 관찰 확정: 보기 화면이 GET /api/approval/document/{id} 를 부른다.)
+    #    화면엔 양식 이름이 아예 없어서(head/docInfo 실측 확인), 문서번호가 없는 문서
+    #    — 결재 진행중/임시저장 — 는 이것 없이는 "양식을 알 수 없어" 복사가 통째로 막힌다.
+    try:
+        _j = gw_get('/api/approval/document/%s' % doc_id, timeout=60) or {}
+        _doc = ((_j.get('data') or {}).get('document')) or {}
+    except Exception as e:
+        _doc = {}
+        out['metaError'] = str(e)          # 조용히 삼키지 않는다 — 왜 양식을 모르는지 남긴다
+    if _doc:
+        meta = dict(meta or {})
+        meta['id'] = meta.get('id') or _doc.get('documentId') or _doc.get('id')
+        meta['docNum'] = meta.get('docNum') or _doc.get('docNum') or ''
+        meta['formName'] = _clean_form_name(meta.get('formName')) or _clean_form_name(_doc.get('formName'))
+        meta['title'] = meta.get('title') or _doc.get('title') or ''
+        meta['status'] = meta.get('status') or _doc.get('docStatusName') or ''
+        # ⚠️ 이 API 의 `docBodyContent` 를 본문으로 쓰면 안 된다 — 그건 **다 그려진 문서 한 장**이라
+        #    제목·결재선 서명·문서번호·작성자까지 통째로 들어 있다(실측 56,586자,
+        #    sign_member 12개, 황정욱/문서번호 포함). 그걸 새 기안 본문에 넣으면 **남의 결재 서명과
+        #    원본 작성일이 박힌 문서**가 올라간다. 에디터가 들고 있는 건 '본문'뿐이므로
+        #    본문 HTML 은 contentViewer DOM(표 1개, 1,137자)에서 읽은 것을 그대로 쓴다.
+
+    # ⚠️ 본문 HTML 은 수만 자다(실측 220640 = 43,787자). 복사처럼 **정말 쓸 때만** 돌려준다 —
+    #    평소 조회 응답에 끼워 보내면 화면·로그·프로젝트 파일이 같이 비대해진다.
+    if not with_html:
+        out.pop('bodyHtml', None)
     if meta:
         out['meta'] = meta
     return out
+
+
+def _clean_form_name(v):
+    """문서함 검색 결과의 `formName` 에는 검색어 강조 태그(<em> 등)가 섞여 온다 —
+    그대로 `resolve_form` 에 넘기면 양식을 못 찾는다."""
+    return re.sub(r'<[^>]+>', '', str(v or '')).strip()
 
 
 # 새 기안에서 **시스템이 알아서 채우는** 칸 — 복사해 넣으면 안 된다(원본의 문서번호·작성자가 박힌다).
 _COPY_SKIP = {'문서번호', '작성일', '작성부서', '작성자', '제목', '기안부서', '기안자'}
 
 
-def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=True):
+def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=True, copy_body=True):
     """기존 문서를 읽어 **같은 양식의 새 기안에 채워 임시저장**한다. 상신은 하지 않는다.
 
     첨부파일은 가져오지 않는다(사용자 결정 2026-10-21) — 몇 건 있었는지만 알려준다.
     결재선은 새 기안의 기본값을 쓰고, 원본 결재선을 같이 돌려줘 **다른지 눈으로 보게** 한다.
     `subject`/`fields` 를 주면 그 값이 원본을 덮는다(필요한 부분만 고쳐 쓰는 용도)."""
-    src = approval_read(doc_num=doc_num, doc_id=doc_id)
+    src = approval_read(doc_num=doc_num, doc_id=doc_id, with_html=bool(copy_body))
     meta = src.get('meta') or {}
-    form_name = (meta.get('formName') or '').strip()
+    form_name = _clean_form_name(meta.get('formName'))
+    # ⚠️ 문서번호가 **아직 없는 문서**(결재 진행중/임시저장)는 docNum 으로 못 찾아 문서함 meta 가
+    #    비어 있다. 그러면 양식 이름을 몰라 복사가 통째로 막힌다 — 사용자가 행 클릭으로 고른
+    #    문서가 딱 이 경우였다(2026-10-29). 그래서 approval_read 가 문서 API 로 meta 를 채운다.
     if not form_name:
-        raise RuntimeError('원본의 양식 이름을 알 수 없어 같은 양식을 열 수 없습니다.')
+        raise RuntimeError('원본의 양식 이름을 알 수 없어 같은 양식을 열 수 없습니다 — %s'
+                           % (src.get('metaError') or '문서 API 가 양식 이름을 주지 않았습니다.'))
 
     hit = resolve_form(form_name)
 
@@ -1179,18 +1247,26 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
 
     r = approval_draft(form_id=hit['formId'], dept_id=hit['deptId'],
                        subject=(subject if subject is not None else src.get('subject') or ''),
-                       fields=merged, dry_run=bool(dry_run), checks=src.get('checks') or [])
+                       fields=merged, dry_run=bool(dry_run), checks=src.get('checks') or [],
+                       body_html=(src.get('bodyHtml') if copy_body else None))
 
     _notes = []
     if src.get('attachments'):
         _notes.append('첨부 %d건은 가져오지 않았습니다 — 새로 올려주세요: %s'
                       % (len(src['attachments']), ', '.join(src['attachments'])))
-    # ⚠️ 본문이 **자유 서식**(contentViewer 안의 표)인 양식은 입력칸(editorForm_*)이 없어
-    #    칸 단위로 못 채운다. 조용히 "칸 0개"로 끝내면 본문이 빈 기안이 올라간다 — 꼭 알린다.
-    if (src.get('body') or '').strip() and not src_fields:
-        _notes.append('원본 본문은 **자유 서식 표**라 새 기안의 칸에 자동으로 안 들어갑니다'
-                      '(읽은 칸 %d개는 아래 본문에 그대로 있습니다) — 본문은 직접 옮겨 주세요.'
-                      % len(src.get('bodyFields') or {}))
+    # 📋 본문(자유 서식)은 칸이 아니라 DEXT5 에디터에 통째로 넣는다(8-0-3).
+    #    들어갔는지/못 들어갔는지를 조용히 넘기지 않는다 — 본문이 빈 기안이 제일 나쁘다.
+    if (src.get('body') or '').strip():
+        _hit = [x for x in ((r or {}).get('log') or []) if x.get('field') == '본문']
+        if not copy_body:
+            _notes.append('원본 본문은 가져오지 않았습니다(copy_body=false).')
+        elif _hit and _hit[0].get('ok'):
+            _notes.append('원본 본문을 그대로 새 기안 본문에 넣었습니다.')
+        elif _hit:
+            _notes.append('원본 본문을 못 넣었습니다: %s — 본문은 직접 옮겨 주세요.'
+                          % (_hit[0].get('why') or '원인 미상'))
+        elif not dry_run:
+            _notes.append('원본 본문이 새 기안에 들어갔는지 확인하지 못했습니다 — 눈으로 봐 주세요.')
     return {
         'source': {'docNum': meta.get('docNum') or doc_num, 'docId': src.get('docId'),
                    'formName': form_name, 'formId': hit['formId'], 'deptId': hit['deptId'],
@@ -1200,14 +1276,15 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
         'filled': {'subject': (subject if subject is not None else src.get('subject') or ''),
                    'fields': merged, 'checks': src.get('checks') or []},
         'body': {'text': src.get('body') or '', 'fields': src.get('bodyFields') or {},
-                 'rows': src.get('bodyRows') or []},
+                 'rows': src.get('bodyRows') or [], 'copied': bool(copy_body),
+                 'htmlLen': len(src.get('bodyHtml') or '')},
         'dryRun': bool(dry_run),
         'draft': r,
         'notes': _notes,
     }
 
 
-def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None):
+def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None, body_html=None):
     """결재 양식에 값을 채우고 **임시저장**한다. 상신(결재요청)은 하지 않는다.
 
     fields: {'Item Code': '102202', 'Model': '...', 'Name': '삼완전자'} 처럼
@@ -1228,7 +1305,8 @@ def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None
     dismiss_intro()
 
     cfg = json.dumps({'subject': subject, 'fields': fields or {},
-                      'checks': checks or [], 'dryRun': bool(dry_run)},
+                      'checks': checks or [], 'dryRun': bool(dry_run),
+                      'bodyHtml': body_html or ''},
                      ensure_ascii=False)
     return eval_in_gw(_DRAFT_JS % cfg, timeout=120)
 

@@ -1046,16 +1046,42 @@ POST /api/todo/{boardId}/item/list    body {} — ⚠️ 페이징 없이 전체
 원래 값으로 되돌렸다: 본문 126자 → 280자, `<table>` 포함 확인, 복구 후 126자 일치.
 `window.onbeforeunload` 는 등록돼 있지 않아 **작성 화면을 떠날 때 확인창이 안 뜬다**(실측).
 
-**구현하려면** (아직 안 함)
-1. `approval_read` 가 본문 **HTML**(viewer iframe 표의 `outerHTML`)도 줄 수 있어야 한다.
-   ⚠️ 220640 기준 **43,787자** — 모든 읽기에 끼워 보내지 말고 `with_html` 같은 플래그로
-   **복사할 때만** 받을 것(프로젝트 파일 비대화 전력이 있다).
-2. `approval_draft` 가 `fields` 와 별개로 `body_html` 을 받아,
-   `editorForm_*` 가 **하나뿐이고 그게 DEXT5 프레임이면** `DEXT5.setBodyValue` 로 넣는다.
-   하드코딩 금지 — `dext_frame_<id>` 존재 여부로 판정할 것(양식마다 N 이 다르다).
-3. 미리보기에서 사람이 승인하기 전엔 넣지 않는다. 상신은 여전히 안 한다(임시저장까지만).
+**구현됨 (2026-10-29)**
+1. `approval_read(..., with_html=True)` → `bodyHtml`(contentViewer DOM 의 `body.innerHTML`).
+   ⚠️ 220640 기준 **43,930자** — 기본은 안 준다. 라우트는 `/gw/approval/read?withHtml=1`.
+2. `approval_draft(..., body_html=...)` → `_DRAFT_JS` 4-b 단계가 `dext_frame_<id>` 가 붙어 있는
+   `editorForm_*` 를 찾아 `DEXT5.setBodyValue` 로 넣고, **되읽어 확인**해 `log` 에 남긴다
+   (`{field:'본문', id:'editorForm_5', len, ok}`). id 하드코딩 없음 — 양식마다 N 이 다르다.
+3. `approval_copy(..., copy_body=True)` 가 둘을 잇는다(`/gw/approval/copy` 의 `copyBody`).
+   본문이 들어갔는지/왜 못 들어갔는지는 **notes 로 항상 밝힌다** — 본문이 빈 기안이 제일 나쁘다.
+4. 미리보기(js/47)는 "원본 그대로 들어갑니다" + 들어갈 내용 전부를 보여준다. 상신은 여전히 안 한다.
 
-⚠️ 조사 중 작성 화면을 열면 **그 순간 서버가 문서 id 를 발급한다**(기존 주석 그대로).
+실측(dry_run, 저장 안 함): 220640 → 기안서(formId 5138) 작성 화면, 본문 43,930자 주입 →
+에디터 44,043자·표 1개·"시제품 제작의뢰서 프로젝트 코드 G26LWTN …" 확인.
+
+### ⚠️ 함정 두 개 (둘 다 실측으로 걸렸다)
+
+**(1) 양식 이름은 화면에 없다 — 문서 API 로 받는다.**
+문서번호가 없는 문서(진행중/임시저장)는 문서함을 docNum 으로 못 찾아 `meta` 가 비고, 그러면
+"원본의 양식 이름을 알 수 없어" 복사가 **통째로 막힌다**. 사용자가 행 클릭으로 고른 문서가 딱
+이 경우였다. 보기 화면 어디에도 양식 이름이 없다(head·docInfo 실측). 제목으로 문서함을 찾는
+폴백도 **0건**이었다(제목에 `[`·`"`·`>` 가 섞여 있다). → CDP Network 로 관찰해 확정한
+**`GET /api/approval/document/{id}`** 를 쓴다. `data.document` 에 `formName`·`docNum`·`title`·
+`docStatusName` 이 있다. 이제 `approval_read` 가 항상 이걸로 `meta` 를 채운다.
+
+**(2) 그 API 의 `docBodyContent` 를 본문으로 쓰면 안 된다.**
+이름만 보면 "본문"이지만 실제로는 **다 그려진 문서 한 장**이다. 실측 비교(220640):
+
+| | 길이 | `<table>` | `sign_member` | 문서번호·황정욱 |
+|---|---|---|---|---|
+| contentViewer DOM | 43,930 | 1 | 0 | 없음 |
+| `docBodyContent` | 56,586 | 3 | 12 | 있음 |
+
+처음에 `docBodyContent` 를 쓰도록 했더니 새 기안 본문에 **원본의 결재선 서명(황정욱·송승기…)과
+원본 작성일·작성자**가 통째로 들어갔다(에디터에서 눈으로 확인). 그대로 상신됐으면 남의 서명이
+박힌 문서가 올라간다. → 본문은 **contentViewer DOM** 에서 읽은 것만 쓴다.
+
+⚠️ 작성 화면을 열면 **그 순간 서버가 문서 id 를 발급한다**(기존 주석 그대로).
 저장을 안 하면 문서함엔 안 남지만, 필요 이상으로 열지 말 것.
 
 ### 8-1. 주소록·알림·쪽지 (2026-10-22 신규, 전부 읽기)

@@ -3727,7 +3727,9 @@ def gw_approval_read():
         did = (request.args.get('docId') or '').strip()
         if not num and not did:
             return jsonify({'ok': False, 'message': 'docNum 또는 docId 가 필요합니다.'}), 400
-        r = gw_bridge.approval_read(doc_num=num or None, doc_id=did or None)
+        # 본문 HTML 은 수만 자라 기본은 안 준다 — 복사처럼 정말 쓸 때만 withHtml=1
+        r = gw_bridge.approval_read(doc_num=num or None, doc_id=did or None,
+                                    with_html=(request.args.get('withHtml') in ('1', 'true', 'yes')))
         r['ok'] = True
         return jsonify(r)
     except Exception as e:
@@ -3751,7 +3753,8 @@ def gw_approval_copy():
         r = gw_bridge.approval_copy(
             doc_num=num or None, doc_id=did or None,
             subject=d.get('subject'), fields=d.get('fields') or None,
-            dry_run=(d.get('dryRun', True) is not False))
+            dry_run=(d.get('dryRun', True) is not False),
+            copy_body=(d.get('copyBody', True) is not False))
         r['ok'] = True
         return jsonify(r)
     except Exception as e:
