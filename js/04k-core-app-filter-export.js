@@ -244,7 +244,52 @@
                 ? (window._currentLang === 'en' ? 'Expand one level' : '한 단계 펼치기')
                 : (window._currentLang === 'en' ? 'Collapse' : '접기');
         }
+        // 🔢 [2026-10-29] 오른쪽 끝 "가지 전체 펼치기" 삼각형(이 행 자신의 _wbsCollapsed로 판정됨)과
+        //    숨은 자식 수 배지도 같이 갱신 — renderTable() 전체 재호출 없이 이 가벼운 경로에서 바로
+        //    반영한다(toggleWbsBranchFull처럼 renderTable()을 부르면 느려짐, 2026-10-28 설계 유지).
+        window._wbsSyncRowRightIcons(rowIndex, tr);
         applyFilters();
+    };
+
+    // 🔢 [2026-10-29 신규, 사용자 요청] 접힌 가지 아래 숨겨진 하위 업무 총 개수(모든 레벨 재귀) —
+    //    "업무명" 셀 오른쪽 끝, 가지 전체 펼치기 삼각형(wbs-branch-arrow) 바로 왼쪽에 파란 숫자로 표시.
+    //    이 행이 접혀 있을 때만 의미가 있다(펼쳐져 있으면 자식이 직접 보이므로 배지를 숨긴다) — 더
+    //    펼쳐서 들어가면 그 안의 접힌 자식 행이 "자기 자신의" 숨은 개수를 똑같은 규칙으로 보여준다.
+    //    즉 0레벨만 보고 있으면(전부 접힘) 레벨0 배지가 전체 하위 개수를, 1레벨까지 펼치면 그 안의
+    //    (아직 접힌) 1레벨 행들이 각자의 하위 개수를 보여주는 식으로 자연히 이어진다.
+    window._wbsHiddenDescendantCount = function(rowIndex) {
+        const row = globalData[rowIndex];
+        if (!row) return 0;
+        const parentLevel = row._level || 0;
+        let count = 0;
+        for (let i = rowIndex + 1; i < globalData.length; i++) {
+            const child = globalData[i];
+            if (!child) continue;
+            if ((child._level || 0) <= parentLevel) break;
+            count++;
+        }
+        return count;
+    };
+
+    // 🔁 [2026-10-29 신규] 위 toggleWbsCollapse·아래 wrToggleAllWbsCollapse가 공유하는 "이 행의 오른쪽 끝
+    //    아이콘 2개(가지 전체 펼치기 ▲/▼ + 숨은 자식 수 배지)를 현재 _wbsCollapsed 상태에 맞게 갱신"
+    //    — 한 곳에서만 고치면 둘 다 따라오게.
+    window._wbsSyncRowRightIcons = function(rowIndex, tr) {
+        tr = tr || document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (!tr) return;
+        const row = globalData[rowIndex];
+        if (!row) return;
+        const branchArrow = tr.querySelector('.wbs-branch-arrow');
+        if (branchArrow) branchArrow.textContent = window._wbsIsBranchFullyExpanded(rowIndex) ? '▲' : '▼';
+        const countBadge = tr.querySelector('.wbs-hidden-count');
+        if (countBadge) {
+            if (row._wbsCollapsed) {
+                countBadge.textContent = window._wbsHiddenDescendantCount(rowIndex);
+                countBadge.style.display = '';
+            } else {
+                countBadge.style.display = 'none';
+            }
+        }
     };
 
     // 🌳 [2026-10-28 신규 → 같은 날 더블클릭 폐기 후 재설계] 이 가지(이 행 + 모든 하위 레벨)가 끝까지
@@ -316,6 +361,7 @@
                 arrow.textContent = newState ? '▶' : '▼';
                 if (arrow.parentElement) arrow.parentElement.title = newState ? (_en ? 'Expand' : '펼치기') : (_en ? 'Collapse' : '접기');
             }
+            window._wbsSyncRowRightIcons(i, tr);  // 🔢 [2026-10-29] 가지 전체 펼치기 삼각형 + 숨은 자식 수 배지도 같이
         }
         // 헤더 아이콘 자체도 상태 반영: ▼(접힘 상태 — 누르면 전체 펼치기) / ▲(펼침 상태 — 누르면 전체 접기)
         const headerArrow = document.getElementById('wbs-th-arrow');

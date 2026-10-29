@@ -1990,8 +1990,16 @@
                         const wbsBranchArrowHtml = _wbsHasChildren
                             ? `<span class="wbs-branch-arrow" onclick="window.toggleWbsBranchFull(${i}, event); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Expand/collapse this branch fully' : '이 가지 전체 펼치기/접기'}" style="position:absolute; right:3px; top:50%; transform:translateY(-50%); cursor:pointer; color:#aaa; font-size:9px; user-select:none;">${_wbsBranchFullyExpanded ? '▲' : '▼'}</span>`
                             : '';
+                        // 🔢 [2026-10-29 신규, 사용자 요청] "자식 업무가 몇 개인지" — 가지 전체 펼치기 삼각형
+                        //    바로 왼쪽에 파란 숫자로 표시. 이 행이 접혀 있을 때만 보인다(=그 아래 숨겨진
+                        //    하위 업무 전체 개수, 모든 레벨 재귀). 펼치면 사라지고, 그 안의 접힌 자식 행이
+                        //    각자 자기 몫의 숫자를 같은 규칙으로 보여준다 — window._wbsHiddenDescendantCount.
+                        const _wbsHiddenCount = _wbsHasChildren ? window._wbsHiddenDescendantCount(i) : 0;
+                        const wbsHiddenCountHtml = _wbsHasChildren
+                            ? `<span class="wbs-hidden-count" title="${window._currentLang === 'en' ? 'Hidden child rows' : '숨겨진 하위 업무 수'}" style="position:absolute; right:15px; top:50%; transform:translateY(-50%); color:#1971c2; font-size:9px; font-weight:bold; user-select:none; display:${row._wbsCollapsed ? 'inline' : 'none'};">${_wbsHiddenCount}</span>`
+                            : '';
                         let indentEm = (row._level || 0) * 1.2;
-                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; ${_wbsHasChildren ? 'padding-right: 16px !important; position: relative;' : ''} font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; ${_wbsHasChildren ? 'padding-right: 30px !important; position: relative;' : ''} font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
                         if (wbsColIdx === -1 && colIdx.wbs !== -1) wbsColIdx = colIdx.wbs; // 💡 단일 "개발업무(WBS)" 열 모드 대응
                         let wbsRawValue = encodeURIComponent(taskTxt);
@@ -2006,7 +2014,7 @@
                         } else {
                             wbsInnerHtml = prefix + escapeHtml(taskTxt) + wbsDisciplineBadge;
                         }
-                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}${wbsBranchArrowHtml}</td>`;
+                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}${wbsHiddenCountHtml}${wbsBranchArrowHtml}</td>`;
                         continue; 
                     } 
                     else if (cellIndex === colIdx.period) {
