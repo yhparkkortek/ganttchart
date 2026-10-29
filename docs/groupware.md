@@ -1024,6 +1024,40 @@ POST /api/todo/{boardId}/item/list    body {} — ⚠️ 페이징 없이 전체
   fixed 가 없으면 브라우저가 내용에 맞춰 열을 다시 벌려 nowrap 글자가 옆 칸을 덮고,
   border-box 가 없으면 선언한 폭에 좌우 패딩이 **더해져** 표가 컨테이너를 넘친다(실측에서 둘 다 났다).
 
+### 8-0-3. 자유 서식 본문을 **쓰는** 경로 — DEXT5 에디터 (2026-10-29 조사, 실측)
+
+8-0-1 의 "남은 것"(자유 서식 본문을 새 기안에 써 넣기)을 조사한 결과. **쓸 수 있다.**
+
+**작성 화면 구조** (`기안서`, formId=5138 deptId=245, `/app/approval/document/new/245/5138`)
+
+| 확인한 것 | 값 |
+|---|---|
+| `editorForm_*` 개수 | **1개 — `editorForm_5`** (보기 화면엔 0개였다) |
+| 그 칸의 정체 | `<iframe id="dext_frame_editorForm_5" src=".../dext5editor/pages/editor_release.html?ver=3.5.…">` |
+| 에디터 | **DEXT5 3.5** — 전역 `window.DEXT5`, `Dext5editor`, `G_CURREDITOR` |
+| 쓰기 API | `DEXT5.setBodyValue(html, 'editorForm_5')` (실제 시그니처 `(html, editorName, …)`) |
+| 읽기 API | `DEXT5.getBodyValue('editorForm_5')` · 편집기 객체는 `DEXT5.getEditorByName(name)` |
+| 새 기안의 초기 본문 | 빈 문단 하나(126자) |
+
+즉 **8-0 의 "열 머리글/행 라벨로 역매핑" 방식이 통하지 않는 게 당연하다** — 이 양식의 본문은
+입력칸들의 모음이 아니라 **에디터 하나**다. 채울 "칸"이 없으니 `fields` 로는 영원히 0개다.
+
+**실측 검증(저장 안 함)** — 작성 화면에서 `setBodyValue` 로 표 HTML을 넣어 보고 되읽은 뒤
+원래 값으로 되돌렸다: 본문 126자 → 280자, `<table>` 포함 확인, 복구 후 126자 일치.
+`window.onbeforeunload` 는 등록돼 있지 않아 **작성 화면을 떠날 때 확인창이 안 뜬다**(실측).
+
+**구현하려면** (아직 안 함)
+1. `approval_read` 가 본문 **HTML**(viewer iframe 표의 `outerHTML`)도 줄 수 있어야 한다.
+   ⚠️ 220640 기준 **43,787자** — 모든 읽기에 끼워 보내지 말고 `with_html` 같은 플래그로
+   **복사할 때만** 받을 것(프로젝트 파일 비대화 전력이 있다).
+2. `approval_draft` 가 `fields` 와 별개로 `body_html` 을 받아,
+   `editorForm_*` 가 **하나뿐이고 그게 DEXT5 프레임이면** `DEXT5.setBodyValue` 로 넣는다.
+   하드코딩 금지 — `dext_frame_<id>` 존재 여부로 판정할 것(양식마다 N 이 다르다).
+3. 미리보기에서 사람이 승인하기 전엔 넣지 않는다. 상신은 여전히 안 한다(임시저장까지만).
+
+⚠️ 조사 중 작성 화면을 열면 **그 순간 서버가 문서 id 를 발급한다**(기존 주석 그대로).
+저장을 안 하면 문서함엔 안 남지만, 필요 이상으로 열지 말 것.
+
 ### 8-1. 주소록·알림·쪽지 (2026-10-22 신규, 전부 읽기)
 
 | 도구(js/40) | 라우트 | 브릿지 |
