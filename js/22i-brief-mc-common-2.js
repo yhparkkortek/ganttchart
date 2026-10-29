@@ -972,8 +972,75 @@ window._deleteProductImage = function (i) {
     imgs.splice(i, 1);
     window._renderProductImageSlots();
     // NAS 참조가 있는 사진만 실제 파일도 지운다(레거시 base64는 tabData 안에서 빼는 걸로 끝).
-    if (entry && entry.nasFolder && entry.nasName && window._dsDelete) {
+    // 레거시 이전 파일은 내용 해시 이름이라 같은 사진 두 장이 한 파일을 같이 쓸 수 있다 — 남은 쪽이 쓰면 안 지운다.
+    const shared = imgs.some(function (o) { return o && o.nasFolder === entry.nasFolder && o.nasName === entry.nasName; });
+    if (entry && entry.nasFolder && entry.nasName && !shared && window._dsDelete) {
         window._dsDelete(entry.nasFolder, entry.nasName).catch(function () { /* 이미 없거나 백엔드가 꺼져 있어도 화면에선 이미 뺐다 */ });
+    }
+};
+
+// 🗂️ [2026-10-29] 레거시 base64 사진 → NAS 이전(사용자 요청 "프로젝트 파일 용량 줄이기").
+//    밖에서(스크립트로) Drive 파일만 고치면 **그 프로젝트를 열어 둔 앱이 메모리의 옛 base64로 다시
+//    저장해 되돌린다**(실측 — STELLAR가 4분 만에 되돌아감). 그래서 열린 앱이 스스로 옮기고, 평소
+//    저장(_nonGanttDirty)으로 반영한다. 파일 이름은 내용 해시라 두 PC가 동시에 돌아도 한 장만
+//    남는다(409 = 이미 있음 = 같은 사진). NAS(백엔드)가 없으면 아무것도 안 하고 base64 그대로 둔다.
+function _prodImgHash(str) {
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) {
+        const ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+}
+let _prodImgMigrating = false;
+window._prodImgMigrateLegacy = async function () {
+    if (_prodImgMigrating || !window._dsPut || !window._dsFileUrl) return;
+    const folder = window._prodImgFolder();
+    const imgs = window.tabData && window.tabData.productImages;
+    if (!folder || !Array.isArray(imgs)) return;
+    const isLegacy = function (e) {
+        const src = (typeof e === 'string') ? e : (e && e.data);
+        return typeof src === 'string' && src.indexOf('data:') === 0;
+    };
+    if (!imgs.some(isLegacy)) return;
+    _prodImgMigrating = true;
+    const fileId = window.currentDriveFileId;
+    let moved = 0;
+    try {
+        for (let i = 0; i < imgs.length; i++) {
+            const e = imgs[i];
+            if (!isLegacy(e)) continue;
+            const src = (typeof e === 'string') ? e : e.data;
+            const m = /^data:([^;,]+)/.exec(src);
+            const ext = ({ 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp' })[(m ? m[1] : '').toLowerCase()] || 'img';
+            const name = 'legacy_' + _prodImgHash(src) + '.' + ext;
+            try {
+                const blob = await (await fetch(src)).blob();
+                await window._dsPut(folder, new File([blob], name, { type: blob.type }));
+            } catch (err) {
+                if (!/이미 있습니다|already exists/i.test(String(err && err.message))) throw err;
+            }
+            // 올리는 사이 다른 프로젝트로 바뀌었거나 그 사진이 지워졌으면 손대지 않는다.
+            if (window.currentDriveFileId !== fileId || window.tabData.productImages !== imgs || imgs[i] !== e) return;
+            const next = { data: window._dsFileUrl(folder, name), nasFolder: folder, nasName: name };
+            if (e && typeof e === 'object') { if (e.w) next.w = e.w; if (e.h) next.h = e.h; }
+            imgs[i] = next;
+            moved++;
+        }
+    } catch (err) {
+        // 외부 접속·백엔드 꺼짐은 흔하다 — base64 그대로 두고 다음에 다시 시도(조용히 삼키지 않고 기록만)
+        console.warn('[제품 사진 NAS 이전] 보류:', err && err.message);
+        if (window._issueLog) { try { window._issueLog({ domain: 'docstore', kind: 'photo_migrate_fail', rid: '', route: 'prodimg', result: { ok: false, http: 0, durMs: 0, errorRaw: String(err && err.message || err) } }); } catch (e2) { /* 수집 실패 무시 */ } }
+    } finally {
+        _prodImgMigrating = false;
+        if (moved) {
+            window._nonGanttDirty = true;   // 다음 자동 저장에 실려 프로젝트 파일에서 base64가 빠진다
+            console.info('[제품 사진 NAS 이전] ' + moved + '장 — 다음 저장 때 프로젝트 파일에서 빠집니다');
+            window._renderProductImageSlots();
+        }
     }
 };
 
@@ -1013,6 +1080,8 @@ window._renderProductImageSlots = function () {
         addInput.value = '';
         files.forEach(function (f) { window._uploadProductImage(f); });
     });
+    // 프로젝트를 열 때마다 여기를 지난다(populateTabData) — 옛 base64가 남아 있으면 NAS로 옮긴다.
+    setTimeout(function () { window._prodImgMigrateLegacy(); }, 3000);
 };
 
 // 💡 [호환용] 예전 이름을 그대로 불러도 동작하게 — DOMContentLoaded 등 기존 호출부를 안 건드린다.

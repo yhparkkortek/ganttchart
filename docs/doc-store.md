@@ -453,6 +453,23 @@ AI까지 갔는데, 이제 그 갈림길에서 먼저 묻는다.
   앤드롭은 "+ 추가" 타일에만 걸려 있다(`stopPropagation` 필수 — 안 걸면 전역 프로젝트-엑셀 드롭
   핸들러까지 번진다는 사고가 바로 이 세션 안에서 NAS 고르기 창에도 있었다, 위 "드래그앤드롭" 절 참고).
 
+### 📦 레거시 base64 사진 이전 (2026-10-29)
+
+10-26 이전에 올린 사진은 base64로 파일 안에 남아 있었다(실측: 프로젝트 2개에 3장 165KB, PARTS
+라이브러리 3개에 13장 1.74MB — 프로젝트 파일 용량의 원인은 아니었다. 원인은 메일 본문, mail-pipeline.md).
+
+- **PARTS 라이브러리 13장**: 1회성 스크립트로 NAS(`PARTS/<구분>/PHOTOS/<모델>_<ts>_<i>_legacy.jpg`)에
+  올리고 Drive JSON의 참조를 바꿨다. ADBD 1.09MB→38KB, CONVBD 483KB→14KB, TOUCHCTRL 221KB→1KB.
+  라이브러리는 `upsertElecPartLibraryEntry`가 **쓰기 직전 Drive에서 다시 읽으므로** 열린 앱이 되돌리지 않는다.
+- **⚠️ 프로젝트 파일은 스크립트로 고치면 되돌아간다** — STELLAR를 고친 4분 뒤, 그 프로젝트를 열어 둔 앱이
+  메모리의 옛 `tabData`(base64)로 자동 저장해 원상복구됐다(3-way 병합은 행 셀만 본다). 그래서 프로젝트 쪽은
+  **열린 앱이 스스로 옮긴다**: `_prodImgMigrateLegacy`(js/22i) — `_renderProductImageSlots`(프로젝트 열 때
+  `populateTabData`가 부름) 3초 뒤. 파일 이름은 **내용 해시**(`legacy_<hash>.<ext>`)라 두 PC가 동시에
+  돌아도 한 장만 남고, 409(이미 있음)는 성공으로 본다. 끝나면 `_nonGanttDirty` → 다음 자동 저장에 실린다.
+  백엔드가 없으면(외부 접속) base64 그대로 두고 `_issueLog`(`photo_migrate_fail`)만 남긴다.
+- 해시 이름이라 같은 사진 두 항목이 한 파일을 공유할 수 있다 → `_deleteProductImage`는 남은 항목이
+  같은 파일을 쓰면 NAS 파일을 지우지 않는다.
+
 ### 🔤 보관 .eml 을 아웃룩으로 열면 한글이 깨지던 문제 — 줄바꿈 LF (2026-10-28)
 
 **증상**: `📧 아웃룩으로 열기`로 연 메일 본문에 `=EC니다`, `=nbsp;`, `<= class=MsoNormal` 같은 조각이 남고 한글이 깨짐.

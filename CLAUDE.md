@@ -329,6 +329,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **(2026-10-22) 페이지마다 제 NAS 폴더** — SUMMARY·CUSTOMER·MC·PARTS·ADDRESS·ALARM&NOTICE·CALENDER·GANTT·REPORT. 엑셀 왕복 있는 페이지는 js/42(`nasFolder`), 파생 뷰는 js/53(`PAGE_NAS_FOLDERS`). ⚠️ **PANEL 은 `PARTS/PANEL`** 로 옮겨졌고 경로를 보는 곳이 넷이다(js/23·48·22d·49) — 하나만 고치면 조용히 0건
 - **(2026-10-22) `folder`는 `PARTS/PANEL`처럼 하위 한 단계까지** — 두 단계·상위 참조는 거부, 없으면 만든다. 폴더 이름은 `ELEC_CATEGORY_META[].nas`(js/23). ⚠️ 텍스트 캐시 키는 `_doc_text_key()`로 눕힐 것(안 하면 캐시가 조용히 안 먹는다)
 - **앱이 쓰는 폴더는 설정에 없어도 허용**(`DOCSTORE_APP_FOLDERS`) — 폴더 목록이 PC마다 따로라, 폴더를 새로 쓰거나 이름을 바꾸면 팀원 PC에서만 터진다
+- **⚠️ (2026-10-29) 프로젝트 JSON을 Drive에서 스크립트로 직접 고치지 말 것 — 그 프로젝트를 열어 둔 앱이 메모리의 옛 값으로 저장해 되돌린다**(사진 이전이 4분 만에 원복). 데이터 이전은 **열린 앱이 스스로** 하게(`_mbOffloadSweep`·`_prodImgMigrateLegacy` 방식). 라이브러리(`ElecPartLib_*`)는 쓰기 직전 재읽기라 안전
 - staging 정리는 기간이 아니라 **큐 연동** — 실측에서 한 달 넘게 미분류로 남은 메일이 있었다. 기간(60일)은 최후 방어선
 
 ### `docs/modal-ux.md` — 🪟 모달 이동·크기조절·테두리 (`js/19`)
