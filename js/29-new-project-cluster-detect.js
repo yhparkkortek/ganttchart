@@ -28,6 +28,19 @@
     var _NCD_THRESHOLD       = 5;     // 같은 군집으로 묶이는 미분류 메일 건수 기준
     var _NCD_FLUSH_DELAY_MS  = 30000; // project_index.json 갱신 디바운스 (토픽 신호와 동일 관례)
 
+    // 📦 [2026-10-29] 상태별 예시 메일 보관 개수 — project_index.json 이 830KB까지 커졌고 그중 예시가
+    //    654KB였다(군집 610개). 이 파일은 메일 처리·AI 업무 분석 모달마다 통째로 오간다.
+    //    판정이 끝난 군집은 예시가 더 필요 없다 — 단 reviewed_no 는 묶음 정리(js/44)가 앞 2건을 쓴다.
+    //    표에 없는 상태는 건드리지 않는다(모르는 상태의 자료를 지우지 않게).
+    var _NCD_SAMPLE_KEEP = { pending: 10, suggested: 10, reviewed_no: 2, merged: 2, dismissed: 0, created: 0 };
+    function _ncdCompactClusters(list) {
+        (list || []).forEach(function(c) {
+            if (!c || !Array.isArray(c.samples)) return;
+            var keep = _NCD_SAMPLE_KEEP[c.status];
+            if (typeof keep === 'number' && c.samples.length > keep) c.samples = c.samples.slice(0, keep);
+        });
+    }
+
     // 🐛🐛 [2026-10-21 실사용 버그수정, 사용자 사용량 원장 제보] 임계치를 10→5로 내리고 군집 묶기를
     //    고친 직후(커밋 1ac63b7), 몇 주간 쌓여 있던 pending 군집 **백로그가 한꺼번에** 판정됐다.
     //    아래 루프에 간격도 상한도 없어서 **76연발**이 나갔고 — 그날 AI 호출 153회의 49% —
@@ -207,6 +220,7 @@
                 entry.samples = (entry.samples || []).concat(incoming.samples).slice(-10);
                 entry.lastSeen = incoming.lastSeen;
             });
+            _ncdCompactClusters(indexData.unmatchedClusters);
             await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId + '?uploadType=media&supportsAllDrives=true', {
                 method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(indexData)
             });
@@ -286,6 +300,7 @@
                 }
             }
             if (!_judged) { window._ncdRenderBanner(clusters); return; } // 판정한 게 없으면 Drive를 건드리지 않는다
+            _ncdCompactClusters(indexData.unmatchedClusters);
             await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId + '?uploadType=media&supportsAllDrives=true', {
                 method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(indexData)
             });
@@ -428,6 +443,7 @@
                 var m = (indexData.unmatchedClusters || []).find(function(x) { return x.key === k; });
                 if (m && m !== cluster) { m.status = 'dismissed'; m.dismissedAt = cluster.dismissedAt; }
             });
+            _ncdCompactClusters(indexData.unmatchedClusters);
             await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId + '?uploadType=media&supportsAllDrives=true', {
                 method: 'PATCH', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(indexData)
             });
