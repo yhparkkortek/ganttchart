@@ -502,6 +502,99 @@ def _sap_dump_grid(shell):
     return '\n'.join(lines)
 
 
+# ══════════════════════════════════════════════════════════════
+# ⚡ [2026-10-29] 적응형 대기 — 고정 sleep을 "기대 신호 폴링"으로 바꾼다.
+#
+# 왜 되는가: SAP GUI Scripting의 `sendVKey`/`press`는 **완전 동기**다. 실측(조회 4개
+# 트랜잭션)에서 `sendVKey(0)`는 134~168ms에 반환하고 **그 시점에 이미 목표 화면**이었다
+# (`session.Busy`가 True로 관측된 적이 한 번도 없다). F8 직후도 그리드와 상태바가
+# **0.003초**에 이미 존재한다. 그런데 기존 코드는 그 뒤에 1.0~2.0초를 더 기다렸다.
+#
+# ⚠️ 정확도가 1순위다. 그래서 **상한(budget)은 치환 전 고정 sleep 값 그대로** 준다:
+#   · 신호를 보면 즉시 반환 → 보통 수 ms.
+#   · 신호를 못 보면 budget을 다 쓰고 False → **오늘과 완전히 동일한 대기**.
+#   · 신호를 보고 기다리므로 SAP이 느린 날엔 오늘보다 **더 정확**하다(오늘은 눈 감고 넘어간다).
+# 즉 "더 빨리 포기"하는 게 아니라 "준비됐으면 일찍 간다"다.
+#
+# ⚠️ 신호를 만들 수 없는 자리는 **건드리지 않았다** — ALV 행 렌더(`firstVisibleRow` 뒤),
+#    Windows 대화상자, 재시도 루프 백오프, F4 재진입 전 여유. 분류표는 docs/sap-lookup.md
+#    "sleep 215곳 분류" 참고.
+_SETTLE_POLL = 0.02     # `session.Busy` 읽기가 0.24ms라 20ms 폴링은 사실상 무료다
+
+
+def _settle(session, cond, budget, poll=_SETTLE_POLL):
+    """`cond()`가 참이 될 때까지 폴링한다. 상한은 `budget`(= 치환 전 sleep 값).
+    반환: 신호를 봤으면 True, budget을 다 썼으면 False(호출부는 둘 다 그냥 진행한다 —
+    기존 고정 sleep도 성공/실패를 구분하지 않았으므로 **동작이 그대로**다)."""
+    t0 = time.time()
+    while True:
+        left = budget - (time.time() - t0)
+        if left <= 0:
+            return False
+        try:
+            if not session.Busy and cond():
+                return True
+        except Exception:
+            pass
+        time.sleep(min(poll, left))
+
+
+def _has_popup(session):
+    """모달 팝업(`wnd[1]`)이 떠 있는가 — 없으면 `findById`가 예외를 던진다."""
+    try:
+        session.findById('wnd[1]')
+        return True
+    except Exception:
+        return False
+
+
+def _settle_tcode(session, tcode, budget):
+    """`/n<TCODE>` + `sendVKey(0)` 뒤 — 목표 트랜잭션 화면이 떴는가.
+    팝업이 떠서 막힌 경우도 '더 기다려도 소용없음'으로 보고 즉시 반환한다(기존 고정 sleep도
+    그냥 넘어갔다 — 예: MM03 재진입 시 "뷰 선택" 팝업)."""
+    want = str(tcode or '').strip().upper()
+    if not want:
+        return False
+    info = session.Info      # ⚡ Info 참조를 캐시 — 매번 `session.Info`면 10배 비싸다(3.04ms→0.30ms)
+
+    def _ok():
+        try:
+            if (info.Transaction or '').strip().upper() == want:
+                return True
+        except Exception:
+            pass
+        return _has_popup(session)
+    return _settle(session, _ok, budget)
+
+
+def _settle_result(session, budget):
+    """실행(F8 등) 뒤 — 결과가 **그리드**로 왔는지 / **상태바 메시지**로 왔는지 / **팝업**으로 왔는지.
+    ⚠️ 셋을 반드시 OR로 둔다 — 그리드만 조건으로 삼으면 "0건 + 상태바 메시지"로 끝나는 조회가
+    상한까지 기다린다. 싼 것부터 본다(상태바 3ms → 팝업 1ms → 그리드 탐색).
+    그리드 탐색은 남은 시간이 그보다 짧으면 건너뛴다 — 어차피 budget을 넘기면 안 되고,
+    못 보고 끝나는 경우의 동작은 기존 고정 sleep과 같다."""
+    sbar = None
+    try:
+        sbar = session.findById('wnd[0]/sbar')   # ⚡ 참조 캐시(3.14ms→0.35ms)
+    except Exception:
+        pass
+
+    def _ok():
+        if sbar is not None:
+            try:
+                if (sbar.Text or '').strip():
+                    return True
+            except Exception:
+                pass
+        if _has_popup(session):
+            return True
+        try:
+            return _sap_find_grid(session.findById('wnd[0]')) is not None
+        except Exception:
+            return False
+    return _settle(session, _ok, budget)
+
+
 def _sap_dump_fields(container, depth=0, max_depth=10):
     """그리드가 없는 화면(선택화면/상세화면 등)을 위한 대체 경로 — 라벨/입력필드 텍스트를
     보이는 순서대로 모아 평문으로 만든다."""
@@ -993,7 +1086,7 @@ def navigate_and_dump(tcode, save_dir=None):
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/n' + tcode
     wnd.sendVKey(0)
-    time.sleep(1.2)
+    _settle_tcode(session, tcode, 1.2)
     return dump_screen_tree(save_dir)
 
 
@@ -1114,7 +1207,7 @@ def _navigate_to_bom_screen(session, wnd, materials, plant='1000', use_single_tc
 
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZPP033' if use_single_tcode else '/nZPP038'
     wnd.sendVKey(0)
-    time.sleep(0.6)
+    _settle_tcode(session, ('ZPP033' if use_single_tcode else 'ZPP038'), 0.6)
     wnd = session.findById('wnd[0]')
 
     # 💡⚠️ [2026-09-15 실사용에서 확인] "WERKS" 문자열이 "플랜트" 라벨 컨트롤
@@ -1303,7 +1396,7 @@ def _navigate_to_where_used_screen(session, wnd, material, plant='1000'):
     멈춰있는 실제 SAP 세션에 직접 접속해 화면을 덤프하고 라이브로 값을 넣어보며 확정함."""
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nCS15'
     wnd.sendVKey(0)
-    time.sleep(0.6)
+    _settle_tcode(session, 'CS15', 0.6)
 
     candidates = _find_all_by_id_substring(wnd, 'MATNR')
     matnr_field = None
@@ -1449,7 +1542,7 @@ def fetch_where_used_batch(materials, plant='1000'):
 
     session = _get_sap_session()
     session.StartTransaction('ZPP046')
-    time.sleep(0.6)
+    _settle_tcode(session, 'ZPP046', 0.6)
     wnd = session.findById('wnd[0]')
 
     try:
@@ -1603,7 +1696,7 @@ def fetch_zmm009_material_list(materials, storage_location='1000', layout_varian
 
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM009'
     wnd.sendVKey(0)
-    time.sleep(0.8)
+    _settle_tcode(session, 'ZMM009', 0.8)
     wnd = session.findById('wnd[0]')
 
     loc_field = _set_text_on_best_candidate(wnd, 'P_LGORT-LOW', storage_location)
@@ -1708,7 +1801,7 @@ def resolve_pattern_via_zmm009(pattern, lgort='1000'):
     # ZMM009 진입
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM009'
     wnd.sendVKey(0)
-    time.sleep(0.8)
+    _settle_tcode(session, 'ZMM009', 0.8)
     wnd = session.findById('wnd[0]')
 
     # 저장위치 설정 (ctxtP_LGORT-LOW) — 매크로(ZMM009.vbs)와 동일하게 "1000"
@@ -1818,7 +1911,7 @@ def resolve_materials_via_zmm009(materials, lgort='1000'):
 
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM009'
     wnd.sendVKey(0)
-    time.sleep(0.8)
+    _settle_tcode(session, 'ZMM009', 0.8)
     wnd = session.findById('wnd[0]')
 
     try:
@@ -1960,7 +2053,7 @@ def _approval_read_one_material(session, wnd, material):
             # StartTransaction이 없는 구버전 SAP GUI 대비 폴백(이 프로젝트의 기존 방식).
             session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
             wnd.sendVKey(0)
-        time.sleep(0.6)
+        _settle_tcode(session, 'MM03', 0.6)
 
         candidates = _find_all_by_id_substring(wnd, 'RMMG1-MATNR')
         matnr_field = None
@@ -2041,7 +2134,7 @@ def fetch_vendor_by_stcd2(stcd2):
     # ZMM005 선택 화면으로 이동
     session.findById('wnd[0]/tbar[0]/okcd').Text = '/nZMM005'
     session.findById('wnd[0]').sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'ZMM005', 1.0)
 
     wnd = session.findById('wnd[0]')
     # S_STCD2-LOW는 GuiTextField (덤프 확인 — GuiCTextField가 아님)
@@ -2050,7 +2143,7 @@ def fetch_vendor_by_stcd2(stcd2):
 
     # F8 실행
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(1.5)
+    _settle_result(session, 1.5)
 
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
@@ -2105,7 +2198,7 @@ def fetch_lifnr_from_zmm006(material):
     session = _get_sap_session()
     session.findById('wnd[0]/tbar[0]/okcd').Text = '/nZMM006'
     session.findById('wnd[0]').sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'ZMM006', 1.0)
 
     wnd = session.findById('wnd[0]')
     try:
@@ -2113,7 +2206,7 @@ def fetch_lifnr_from_zmm006(material):
     except Exception as e:
         raise RuntimeError(f'ZMM006 자재번호 입력 필드를 찾지 못했습니다: {e}')
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(1.5)
+    _settle_result(session, 1.5)
 
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
@@ -2142,7 +2235,7 @@ def fetch_lifnr_by_material_zmm006(material, porg='1000', plant='1000'):
     _sap_close_stray_popups(session)
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM006'
     session.findById('wnd[0]').sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'ZMM006', 1.0)
     wnd = session.findById('wnd[0]')
     try:
         wnd.findById('usr/ctxtS_MATNR-LOW').text = material
@@ -2151,7 +2244,7 @@ def fetch_lifnr_by_material_zmm006(material, porg='1000', plant='1000'):
     except Exception as e:
         raise RuntimeError(f'ZMM006 검색 조건 입력 실패: {e}')
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(1.6)
+    _settle_result(session, 1.6)
 
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
@@ -2185,7 +2278,7 @@ def fetch_vendor_by_lifnr(lifnr):
     session = _get_sap_session()
     session.findById('wnd[0]/tbar[0]/okcd').Text = '/nZMM005'
     session.findById('wnd[0]').sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'ZMM005', 1.0)
 
     wnd = session.findById('wnd[0]')
     try:
@@ -2193,7 +2286,7 @@ def fetch_vendor_by_lifnr(lifnr):
     except Exception as e:
         raise RuntimeError(f'ZMM005 LIFNR 입력 필드를 찾지 못했습니다: {e}')
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(1.5)
+    _settle_result(session, 1.5)
 
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
@@ -2584,7 +2677,7 @@ def _navigate_to_material_screen(session, wnd, material):
     if not _open_material_from_current_list(wnd, material):
         session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
         wnd.sendVKey(0)
-        time.sleep(0.6)
+        _settle_tcode(session, 'MM03', 0.6)
 
         candidates = _find_all_by_id_substring(wnd, 'RMMG1-MATNR')
         if not candidates:
@@ -3228,7 +3321,7 @@ def download_documents_batch(materials, doc_type='P01'):
 
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZDMSR004'
     wnd.sendVKey(0)
-    time.sleep(0.8)
+    _settle_tcode(session, 'ZDMSR004', 0.8)
 
     # 자재코드 "복수 선택" 팝업 열기(실사용 매크로에서 확인된 정확한 버튼 ID).
     multi_btn = _find_by_id_substring(wnd, '%_S_MATNR_%_APP_%-VALU_PUSH')
@@ -3395,7 +3488,7 @@ def lookup_documents_batch(materials, doc_type='P02'):
 
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZDMSR004'
     wnd.sendVKey(0)
-    time.sleep(0.8)
+    _settle_tcode(session, 'ZDMSR004', 0.8)
 
     multi_btn = _find_by_id_substring(wnd, '%_S_MATNR_%_APP_%-VALU_PUSH')
     if multi_btn is None:
@@ -3761,7 +3854,7 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
 
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM60'
     wnd.sendVKey(0)
-    time.sleep(0.8)
+    _settle_tcode(session, 'MM60', 0.8)
 
     matnr_field = _find_by_id_substring(wnd, 'ctxtMS_MATNR-LOW')
     if matnr_field is None:
@@ -3873,7 +3966,7 @@ def fetch_project_codes(pattern, bwart=None, werks=None, max_results=120, rsdat=
 
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB21'
     wnd.sendVKey(0)
-    time.sleep(0.8)
+    _settle_tcode(session, 'MB21', 0.8)
     wnd = session.findById('wnd[0]')
 
     # 🐛 [2026-09-28 실사용 확인] MB21 초기화면의 필요일(RSDAT)/이동유형(BWART)/플랜트(WERKS)는
@@ -5555,7 +5648,7 @@ def fetch_team_budget(team, fperbl='1', tperbl='12'):
 
     session = _get_sap_session()
     session.StartTransaction('ZCO021')
-    time.sleep(0.8)
+    _settle_tcode(session, 'ZCO021', 0.8)
 
     # 리포트(변형) 선택 팝업 — 위 주석 ① 참고. 없는 세션도 있을 수 있어 조용히 건너뛴다.
     try:
@@ -6695,7 +6788,7 @@ def _query_stock_via_mb52(matnr_list, werks='1000'):
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB52'
     wnd = session.findById('wnd[0]')
     wnd.sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'MB52', 1.0)
     wnd = session.findById('wnd[0]')
 
     entered = _mb52_multi_select(session, wnd, matnr_list)
@@ -7591,7 +7684,7 @@ def check_goods_receipt_status(ebeln, mode='전체'):
     try:
         session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM062'
         session.findById('wnd[0]').sendVKey(0)
-        time.sleep(1.0)
+        _settle_tcode(session, 'ZMM062', 1.0)
     except Exception as e:
         raise RuntimeError(f'ZMM062 진입 실패: {e}')
 
@@ -7601,7 +7694,7 @@ def check_goods_receipt_status(ebeln, mode='전체'):
         wnd.findById(f'usr/rad{radio_id}').select()
         time.sleep(0.2)
         wnd.findById('tbar[1]/btn[8]').press()
-        time.sleep(1.5)
+        _settle_result(session, 1.5)
     except Exception as e:
         raise RuntimeError(f'ZMM062 조회 조건 입력/실행 오류: {e}')
 
@@ -7648,11 +7741,11 @@ def display_reservation(rsnum):
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nMB23'
     wnd.sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'MB23', 1.0)
     wnd = session.findById('wnd[0]')
     wnd.findById('usr/ctxtRM07M-RSNUM').text = str(rsnum).strip()
     wnd.findById('tbar[1]/btn[5]').press()
-    time.sleep(1.2)
+    _settle_result(session, 1.2)
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
     if grid:
@@ -7672,7 +7765,7 @@ def compare_bom(mat1, mat2, plant='1000', mode='diff'):
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nCS14'
     wnd.sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'CS14', 1.0)
     wnd = session.findById('wnd[0]')
     usr = wnd.findById('usr')
     usr.findById('subINC1:SAPMC29V:0130/ctxtMATNR1').text = str(mat1).strip()
@@ -7714,7 +7807,7 @@ def fetch_material_change_history(material, plant='1000', date_from=None, date_t
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZCO037'
     wnd.sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'ZCO037', 1.0)
     wnd = session.findById('wnd[0]')
 
     def _set(field_id, value):
@@ -7748,7 +7841,7 @@ def fetch_material_change_history(material, plant='1000', date_from=None, date_t
         _set(_f, '')
 
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(1.5)
+    _settle_result(session, 1.5)
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
     if grid:
@@ -7770,7 +7863,7 @@ def fetch_delivery_history(material, vendor=None, date_from=None, date_to=None):
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZSD027'
     wnd.sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'ZSD027', 1.0)
     wnd = session.findById('wnd[0]')
     wnd.findById('usr/ctxtP_MATNR-LOW').text = str(material).strip()
     if vendor:
@@ -7780,7 +7873,7 @@ def fetch_delivery_history(material, vendor=None, date_from=None, date_to=None):
     if date_to:
         wnd.findById('usr/ctxtP_LFDAT-HIGH').text = str(date_to).strip()
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(1.5)
+    _settle_result(session, 1.5)
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
     if grid:
@@ -7799,7 +7892,7 @@ def fetch_purchase_info_records(material, vendor=None, porg='1000', key_date=Non
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM006'
     wnd.sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'ZMM006', 1.0)
     wnd = session.findById('wnd[0]')
     wnd.findById('usr/ctxtS_MATNR-LOW').text = str(material).strip()
     if vendor:
@@ -7808,7 +7901,7 @@ def fetch_purchase_info_records(material, vendor=None, porg='1000', key_date=Non
     if key_date:
         wnd.findById('usr/ctxtP_KEYDT').text = str(key_date).strip()
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(1.5)
+    _settle_result(session, 1.5)
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
     if grid:
@@ -7827,11 +7920,11 @@ def display_production_order(aufnr):
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nCO03'
     wnd.sendVKey(0)
-    time.sleep(1.0)
+    _settle_tcode(session, 'CO03', 1.0)
     wnd = session.findById('wnd[0]')
     wnd.findById('usr/ctxtCAUFVD-AUFNR').text = str(aufnr).strip()
     wnd.findById('tbar[1]/btn[5]').press()
-    time.sleep(1.5)
+    _settle_result(session, 1.5)
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
     if grid:
@@ -7855,7 +7948,7 @@ def fetch_production_orders(material=None, aufnr=None, date_from=None, date_to=N
     wnd = session.findById('wnd[0]')
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nCOOIS'
     wnd.sendVKey(0)
-    time.sleep(1.2)
+    _settle_tcode(session, 'COOIS', 1.2)
     wnd = session.findById('wnd[0]')
     _sel_base = 'usr/tabsTABSTRIP_SELBLOCK/tabpSEL_00/ssub%_SUBSCREEN_SELBLOCK:PPIO_ENTRY:1200/'
     if material:
@@ -7867,7 +7960,7 @@ def fetch_production_orders(material=None, aufnr=None, date_from=None, date_to=N
     if date_to:
         wnd.findById(_sel_base + 'ctxtS_ECKST-HIGH').text = str(date_to).strip()
     wnd.findById('tbar[1]/btn[8]').press()
-    time.sleep(2.0)
+    _settle_result(session, 2.0)
     wnd = session.findById('wnd[0]')
     grid = _sap_find_grid(wnd)
     if grid:
