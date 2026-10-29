@@ -488,6 +488,7 @@ JSON.stringify({화이트리스트:window._msGetWhitelistDomains().size,
   메일마다 통째 재업로드라 같은 문제가 반복된다). `text/plain`이라 프로젝트 목록 조회(application/json)에 안 섞이고,
   목록 조회 제외 폴더에도 넣었다(js/04b). `key`는 메일 내용 해시라 같은 메일은 이름 검색 한 번으로 재사용(중복 업로드 없음).
 - NAS: 2026-10-22 이후 메일은 `.eml` 원본(전문+첨부)이 이미 있다.
+- **분리한 본문의 NAS 사본은 만들지 않는다**(사용자 결정 2026-10-29, 현상 유지). 10/22 이전 메일은 NAS에 `.eml`이 없어 **내부에서도 Drive 사본**으로 읽는다 — 첨부가 원래 없던 메일이라 보이는 내용은 같다. NAS에도 두려면 백엔드 쓰기 라우트(`MAIL/_bodies/`)가 필요하다.
 
 **읽기 순서** (`_mbFullBody`, 원문 창 `showMailRawModal`·`_mailNasApplyAffordance`): NAS `.eml` → Drive 사본 → 앞 2,000자.
 외부 접속에선 Drive 사본이라 **첨부는 안 보인다**(창에 "☁️ Drive 사본 (NAS 연결 안 됨 — 첨부 없음)" 표시).
