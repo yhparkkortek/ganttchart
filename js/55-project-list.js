@@ -94,7 +94,8 @@
         { k: 'touch', ko: '터치',      en: 'Touch',       on: false },
         { k: 'mech',  ko: '기구/포장', en: 'Mech/Pack',   on: false },
         { k: 'cert',  ko: '인증',      en: 'Certs',       on: false },
-        { k: 'sales', ko: '판매량',    en: 'Sales',       on: false }
+        { k: 'sales', ko: '판매량',    en: 'Sales',       on: false },
+        { k: 'dwg',   ko: '도면분석',  en: 'From drawing', on: false }
     ];
 
     var C = function (k, ko, en, g, w, type) { return { k: k, ko: ko, en: en, g: g, w: w || 110, type: type || '' }; };
@@ -297,9 +298,56 @@
         sales27:     ["'27",       "'27"]
     };
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📐 도면 분석 항목 카탈로그(데이터) — NAS 고객 도면 67개를 **실제로 전부 읽어** 뽑은 목록이다
+    //    (2026-10-29. 엑셀 91열에 없는 것까지 포함하라는 사용자 요청).
+    //    cov = 67개 중 그 항목이 실제로 들어 있던 도면 수(실측). 낮다고 빼지 않는다 —
+    //    있는 도면에서는 읽어야 하고, 없으면 그냥 빈칸으로 둔다.
+    //    cmp = 엑셀에서 온 기존 열. 값이 다르면 상세보기에서 "도면≠표" 로 표시해 준다.
+    //    ⚠️ 값은 대부분 **정규식으로 결정론 추출**한다(_plExtractDwg) — AI 는 못 뽑은 것만 맡는다
+    //       (CLAUDE.md "결정론 먼저" + 무료 키 하루 한도).
+    // ══════════════════════════════════════════════════════════════════════════
+    window.PL_DOC_ITEMS = window.PL_DOC_ITEMS || [
+        { k: 'dwgNo',      ko: '도면번호',        en: 'Drawing no.',      w: 80,  cov: 66, cmp: 'pn' },
+        { k: 'dwgTitle',   ko: '도면 제목',       en: 'Drawing title',    w: 190, cov: 66, cmp: 'desc2' },
+        { k: 'dwgRev',     ko: '도면 REV',        en: 'Drawing REV',      w: 64,  cov: 66, cmp: 'prodRev' },
+        { k: 'dwgRevDesc', ko: '최신 REV 변경내용', en: 'Latest REV note', w: 220, cov: 66 },
+        { k: 'dwgRevDate', ko: '최신 REV 일자',   en: 'Latest REV date',  w: 84,  cov: 56 },
+        { k: 'dwgDrawnBy', ko: '작성자',          en: 'Drawn by',         w: 90,  cov: 66 },
+        { k: 'dwgEngineer',ko: '설계 담당(ENG)',  en: 'Engineer',         w: 70,  cov: 66 },
+        { k: 'dwgSize',    ko: '도면 크기',       en: 'Dwg size',         w: 56,  cov: 66 },
+        { k: 'dwgScale',   ko: '축척',            en: 'Scale',            w: 56,  cov: 66 },
+        { k: 'dwgSheets',  ko: '시트 수',         en: 'Sheets',           w: 60,  cov: 66 },
+        { k: 'dwgUnit',    ko: '단위',            en: 'Units',            w: 56,  cov: 27 },
+        { k: 'dwgTol',     ko: '일반 공차',       en: 'Tolerances',       w: 110, cov: 66 },
+        { k: 'dwgWeight',  ko: '조립 중량',       en: 'Assembly weight',  w: 90,  cov: 2  },
+        { k: 'dwgCustomer',ko: '도면 발행사',     en: 'Issuing company',  w: 110, cov: 66, cmp: 'customer' },
+        { k: 'dwgSupplier',ko: '지정 공급사',     en: 'Named supplier',   w: 90,  cov: 64 },
+        { k: 'dwgPanel',   ko: '도면 패널 모델',  en: 'Panel (in dwg)',   w: 130, cov: 62, cmp: 'panel' },
+        { k: 'dwgTsp',     ko: '도면 TSP',        en: 'TSP (in dwg)',     w: 130, cov: 39, cmp: 'tsp' },
+        { k: 'dwgTouchCtrl', ko: '도면 터치 CTRL', en: 'Touch CTRL (dwg)', w: 140, cov: 40, cmp: 'touchCtrl' },
+        { k: 'dwgTouchFw', ko: '도면 터치 F/W',   en: 'Touch F/W (dwg)',  w: 80,  cov: 49, cmp: 'touchFw' },
+        { k: 'dwgKtkModel',ko: '도면 KTK 모델',   en: 'KTK model (dwg)',  w: 120, cov: 29 },
+        { k: 'dwgAltLegend', ko: 'ALT 구성 범례', en: 'ALT legend',       w: 220, cov: 21 },
+        { k: 'dwgBomCount',ko: 'BOM 품목 수',     en: 'BOM items',        w: 70,  cov: 63 },
+        { k: 'dwgBomTop',  ko: 'BOM 주요 품목',   en: 'BOM highlights',   w: 220, cov: 50 },
+        { k: 'dwgEnv',     ko: '환경 규제',       en: 'Environmental',    w: 130, cov: 51 },
+        { k: 'dwgMarking', ko: '식별 표기 요구',  en: 'Marking required', w: 160, cov: 63 },
+        { k: 'dwgTamper',  ko: '탬퍼 씰',         en: 'Tamper seal',      w: 70,  cov: 52, cmp: 'tamperLabel' },
+        { k: 'dwgPacking', ko: '포장 요구',       en: 'Packaging',        w: 140, cov: 41 },
+        { k: 'dwgTorque',  ko: '체결 토크',       en: 'Torque',           w: 110, cov: 39 },
+        { k: 'dwgSpecRefs',ko: '참조 규격',       en: 'Referenced specs', w: 120, cov: 56 },
+        { k: 'dwgBright',  ko: '도면 밝기',       en: 'Brightness (dwg)', w: 90,  cov: 46, cmp: 'luminance' }
+    ];
+    // 카탈로그를 그대로 **열**로도 쓴다 — 기본은 꺼둔 그룹이라 평소 표는 그대로고, 켜면 비교가 된다.
+    window.PL_COLUMNS = window.PL_COLUMNS.concat(window.PL_DOC_ITEMS.map(function (it) {
+        return { k: it.k, ko: it.ko, en: it.en, g: 'dwg', w: it.w, type: '' };
+    }));
+
     // ✂️ 칸에 보여줄 최대 글자 수(데이터) — 넘치면 …로 자르고 말풍선에 전문을 둔다.
     //    설명 1·2·3 은 한 칸에 문장이 통째로 들어와 표를 밀어내므로 20자로 끊는다(2026-10-29 사용자 요청).
-    window.PL_CELL_MAX = window.PL_CELL_MAX || { desc: 20, desc2: 20, desc3: 20 };
+    window.PL_CELL_MAX = window.PL_CELL_MAX || { desc: 20, desc2: 20, desc3: 20,
+        dwgTitle: 24, dwgRevDesc: 24, dwgAltLegend: 24, dwgBomTop: 24, dwgMarking: 20, dwgPacking: 20 };
 
     var _colByKey = {};
     window.PL_COLUMNS.forEach(function (c) { _colByKey[c.k] = c; });
@@ -777,7 +825,7 @@
                         + ' style="' + (n ? 'opacity:1;' : 'opacity:.35;') + '"'
                         + ' title="' + _esc(n ? (n + _t('개 NAS 자료 — 열기/올리기/AI 분석', ' NAS file(s) — open/upload/AI analysis'))
                                               : _t('NAS 자료 없음 — 눌러서 올리기', 'No NAS file — click to upload')) + '">'
-                        + (n ? '<b style="color:#1971c2; font-size:10px;">' + n + '</b>' : '') + '🗎</span>';
+                        + (n ? '<b style="color:#1971c2; font-size:10px;">' + n + '</b>' : '') + '📄</span>';
                 } else if (c.type === 'panel') {
                     ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPanelCard(\'' + r._id + '\')"'
                         + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔎</span>';
@@ -870,6 +918,7 @@
         'pl-btn-import':  ['📥 엑셀 불러오기', '📥 Import Excel'],
         'pl-btn-export':  ['📊 엑셀 저장',     '📊 Export Excel'],
         'pl-btn-nas':     ['📁 NAS',           '📁 NAS'],
+        'pl-btn-dwg':     ['📐 도면 분석',     '📐 Analyze drawings'],
         'pl-btn-cols':    ['🔁 열',            '🔁 Columns'],
         'pl-btn-print':   ['🖨️ 인쇄 (PDF)',    '🖨️ Print (PDF)'],
         'pl-btn-reset':   ['↺',                '↺']
@@ -877,6 +926,8 @@
     window.PL_UI_TITLE = window.PL_UI_TITLE || {
         'pl-btn-reset': ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
         'pl-btn-cols':  ['숨긴 열 되돌리기',      'Restore hidden columns'],
+        'pl-btn-dwg':   ['NAS에 저장된 도면을 전부 읽어 "도면분석" 칸을 채웁니다 — AI를 쓰지 않습니다',
+                         'Reads every linked NAS drawing and fills the "From drawing" columns — no AI used'],
         'pl-btn-nas':   ['NAS 자료실 — 목록(JSON)·백업과 고객 도면을 열고, 올리고, 불러오고, AI로 분석합니다',
                          'NAS files — open, upload, import and AI-analyze the team list (JSON), backups and customer drawings'],
         'pl-team':      ['이 목록을 관리하는 팀 — 팀마다 목록이 따로 저장됩니다',
@@ -1018,7 +1069,7 @@
           + '<div style="display:flex; gap:6px; margin-top:7px;">'
           + '<button title="' + _esc(_t('위에 행 추가', 'Insert row above')) + '" onclick="window.plInsertRow(\'' + id + '\',0)" style="' + SMALL + '">＋↑</button>'
           + '<button title="' + _esc(pinned ? _t('고정 해제', 'Unpin') : _t('맨 위에 고정', 'Pin to top')) + '" onclick="window.plTogglePin(\'' + id + '\'); window.plCloseRowMenu();" style="' + SMALL + (pinned ? ' background:#fff8e1; border-color:#f2dfa0;' : '') + '">📌</button>'
-          + '<button title="' + _esc(_t('상세 보기', 'Detail')) + '" onclick="window.plCloseRowMenu(); window.plOpenDetail(\'' + id + '\')" style="' + SMALL + '">🗎</button>'
+          + '<button title="' + _esc(_t('상세 보기', 'Detail')) + '" onclick="window.plCloseRowMenu(); window.plOpenDetail(\'' + id + '\')" style="' + SMALL + '">📋</button>'
           + '</div>';
         box.style.display = 'block';
         // 화면 밖으로 나가지 않게 — 아래/오른쪽이 모자라면 위/왼쪽으로 붙인다
@@ -1273,9 +1324,9 @@
     // 📇 색인 규칙(실측 66개 파일에서 뽑음)
     //    파일명: "<숫자> [구분자] [REV] <리비전>" — 구분자는 공백/밑줄/하이픈, REV 글자는 있을 수도 없을 수도,
     //    뒤의 "(1)" "(2)" 는 같은 리비전의 중복본 표시다.
-    //      1555073 REV K.pdf · 1555073_REV J4.pdf · 1570704_H.pdf · 1627291-A.2 (1).pdf
-    //      1617498-revB (2).PDF · 1569779 UPPER DISPLAY REV E.pdf
-    //    ⚠️ 리비전을 "숫자 바로 뒤 글자"로 잡으면 안 된다 — "1569779 UPPER DISPLAY REV E" 가 U 가 된다.
+    //      1234567 REV K.pdf · 1234567_REV J4.pdf · 1234568_H.pdf · 1234569-A.2 (1).pdf
+    //      1234570-revB (2).PDF · 1234571 UPPER DISPLAY REV E.pdf
+    //    ⚠️ 리비전을 "숫자 바로 뒤 글자"로 잡으면 안 된다 — "1234571 UPPER DISPLAY REV E" 가 U 가 된다.
     //       REV 라는 말이 있으면 그걸 먼저 찾고, 없을 때만 "구분자 + 리비전 하나"로 본다.
     window._plParseDocName = function (name) {
         var base = String(name || '').replace(/\.[A-Za-z0-9]{1,5}$/, '');   // 확장자
@@ -1352,7 +1403,7 @@
                       'Enter a PN (7-digit) or KTK PN (6-digit) first — files are matched by that number.'), 'warning', 7000);
             return;
         }
-        _popup('📎 ' + _esc(nums.join(' / ')) + ' ' + _t('자료', 'documents')
+        _popup('📄 ' + _esc(nums.join(' / ')) + ' ' + _t('자료', 'documents')
              + ' <span style="font-weight:normal; color:#666; font-size:11.5px;">' + _esc(String(r.desc || '').slice(0, 40)) + '</span>',
             '<div id="pl-doc-body" style="color:#888;">' + _t('목록을 불러오는 중…', 'Loading…') + '</div>', true);
         if (!window._plDocCache.at) await window.plRefreshDocCache(true);
@@ -1379,7 +1430,7 @@
                      + '<span style="flex:1; word-break:break-all; color:#444;">' + _esc(f.name) + '</span>'
                      + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:11px; cursor:pointer;">' + _t('열기', 'Open') + '</button>'
                      + '<button onclick="window._dsOpenNative && window._dsOpenNative(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" title="' + _esc(_t('NAS 원본을 연결 프로그램으로', 'Open the NAS original in its app')) + '" style="padding:3px 8px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🖥️</button>'
-                     + '<button onclick="window.plAnalyzeDoc(\'' + id + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#efe6fb; color:#6741d9; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🤖 ' + _t('분석', 'Analyze') + '</button>'
+                     + '<button onclick="window.plAnalyzeDoc(\'' + id + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#efe6fb; color:#6741d9; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🔍 ' + _t('분석', 'Analyze') + '</button>'
                      + '</div>';
             }).join('')
             : '<div style="color:#888; padding:10px 2px;">'
@@ -1455,31 +1506,209 @@
         if (fail.length) _toast('⚠️ ' + fail.join(' / '), 'error', 9000);
     };
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📐 결정론 추출기 — 도면 글자에서 **AI 없이** 읽어낸다.
+    //    NAS 도면 67개를 실제로 전부 열어 보고 만든 규칙이라, 대부분의 항목이 여기서 끝난다
+    //    (AI 는 못 읽은 칸만 맡는다 — 무료 키 하루 한도 + 결정론 먼저).
+    //    ⚠️ 한 줄씩 끊긴 PDF 텍스트라 "라벨 옆 값"이 아니라 **라벨 다음 줄들**에서 찾아야 한다.
+    // ══════════════════════════════════════════════════════════════════════════
+    var _one = function (re, t, g) { var m = t.match(re); return m ? String(m[g || 1]).trim() : ''; };
+    var _all = function (re, t, g) {
+        var out = [], m, rx = new RegExp(re.source, re.flags.indexOf('g') === -1 ? re.flags + 'g' : re.flags);
+        while ((m = rx.exec(t)) !== null) { var v = String(m[g || 1]).trim(); if (v && out.indexOf(v) === -1) out.push(v); }
+        return out;
+    };
+
+    window.plExtractDwg = function (text, row) {
+        // ⚠️ PDF 글자는 **CRLF** 로 온다 — 줄 끝을 \n 으로 보고 짠 규칙이 전부 빗나간다
+        //    (실측: 도면 제목이 67개 중 한 건도 안 잡혔다). 맨 먼저 눕혀 두고 시작한다.
+        var t = String(text || '').replace(/\r\n?/g, '\n');
+        var U = t.toUpperCase();
+        var o = {};
+
+        o.dwgNo = _one(/\b(1\d{6})\b/, t);
+        // 제목 — "DISPLAY ASSY, K-43, SK-1" 처럼 대문자 + 쉼표로 이어진 줄
+        o.dwgTitle = _one(/(?:^|\n)((?:DISPLAY|TOPPER|MONITOR|BUTTON|IDECK|PANEL|ASSY|ASSEMBLY|LCD)[A-Z0-9 ,.\/&-]{6,60})(?:\n|$)/, U);
+        // REVISION 라벨 다음에 오는 한 글자(+소수) 리비전
+        o.dwgRev = _one(/REVISION\s*\n+\s*([A-Z](?:\.\d+)?)\s*(?:\n|$)/, U) || _one(/\n([A-Z](?:\.\d+)?)\s*\nDWG\s*SIZE/, U);
+        o.dwgSize = _one(/DWG\s*SIZE\s*\n+\s*([A-Z0-9]{1,3})\s*(?:\n|$)/, U) || _one(/\n([A-D])\s*\nSHEET/, U);
+        o.dwgScale = _one(/\b(\d{1,3}\s*:\s*\d{1,3})\b/, t).replace(/\s+/g, '');
+        o.dwgSheets = _one(/\b(\d+\s*OF\s*\d+)\b/, U).replace(/\s+/g, ' ');
+        o.dwgUnit = /\bMM\b/.test(U) ? (/\bINCH\b/.test(U) ? 'MM / INCH' : 'MM') : (/\bINCH\b/.test(U) ? 'INCH' : '');
+        // 설계 담당은 'ENGINEER' 라벨 **옆이 아니다** — 라벨 뒤엔 기밀 문구가 길게 붙고,
+        //    실제 값은 표제란 순서로 들어온다(실측): <도면 제목> / <7자리 도면번호> / <담당 이니셜>
+        var tb = U.match(/\n([A-Z0-9][A-Z0-9 ,.\/&()-]{5,60})\n(1\d{6})\n([A-Z]{2,5})\n/);
+        if (tb) {
+            // 표제란이 **정답**이다 — 위의 느슨한 규칙은 주석(예: "DISPLAY SHALL HAVE AN ASSEMBLED
+            // WEIGHT…")을 제목으로 집는 경우가 있어서, 표제란이 잡히면 그걸로 덮는다.
+            o.dwgTitle = tb[1].trim();
+            o.dwgNo = tb[2];
+            o.dwgEngineer = tb[3];
+        }
+
+        // 리비전 이력 — "<REV> <설명…> <사람> <m/d/yyyy>" 가 줄로 쪼개져 들어온다. 날짜를 기준으로 뒤에서 센다.
+        var dates = _all(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/, t);
+        if (dates.length) {
+            var last = dates[dates.length - 1];
+            o.dwgRevDate = last;
+            var at = t.lastIndexOf(last);
+            var before = t.slice(Math.max(0, at - 420), at).split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+            o.dwgDrawnBy = '';
+            for (var i = before.length - 1; i >= 0 && i >= before.length - 3; i--) {
+                if (/^[A-Z]\.\s?[A-Z][A-Za-z]+$/.test(before[i]) || /^[A-Z][a-z]+\s+[A-Z][a-z]+$/.test(before[i])) { o.dwgDrawnBy = before[i]; break; }
+            }
+            var desc = before.filter(function (x) { return x.length > 12 && /[A-Z]{3}/.test(x.toUpperCase()); });
+            o.dwgRevDesc = desc.length ? desc[desc.length - 1].slice(0, 180) : '';
+        }
+
+        var tols = _all(/±\s*([\d.]+)/, t);
+        if (tols.length) o.dwgTol = '±' + tols.slice(0, 4).join(' / ±');
+        o.dwgWeight = _one(/(\d{1,3}(?:\.\d+)?\s*-\s*\d{1,3}(?:\.\d+)?\s*(?:LBS|KG))/, U) || _one(/\b(\d{1,3}(?:\.\d+)?\s*(?:LBS|KG))\b/, U);
+
+        var cust = [];
+        if (/LIGHT\s*&\s*WONDER/.test(U)) cust.push('Light & Wonder');
+        if (/SCIENTIFIC\s+GAMES/.test(U)) cust.push('Scientific Games');
+        if (/\bBALLY\b/.test(U)) cust.push('Bally');
+        o.dwgCustomer = cust.join(' / ');
+        o.dwgSupplier = _all(/\b(KORTEK|TOVIS|INNOLUX|BOE|AUO|LG\s?DISPLAY)\b/, U).slice(0, 4).join(', ');
+
+        o.dwgPanel = _all(/\b((?:LC|DV|MV|LD|LM|P\d|T\d|G\d)[A-Z0-9][A-Z0-9-]{5,})\b/, U).slice(0, 3).join(', ');
+        o.dwgTsp = _all(/\b(XP[0-9A-Z]{6,})\b/, U).slice(0, 3).join(', ');
+        o.dwgTouchCtrl = _all(/\b(PP[0-9A-Z]{8,})\b/, U).slice(0, 3).join(', ');
+        o.dwgTouchFw = _all(/\b(V\d+\.\d+)\b/, U).slice(0, 4).join(', ');
+        o.dwgKtkModel = _all(/\b(KT[CKBR][0-9A-Z]{3,})\b/, U).slice(0, 3).join(', ');
+
+        var alts = _all(/(ALT\s*[1-4]\s*:\s*[A-Z0-9 \/&.-]{2,40})/, U);
+        var vars_ = _all(/(VAR\s*:\s*[A-Z0-9 \/&.-]{2,40})/, U);
+        o.dwgAltLegend = alts.concat(vars_).join(' · ').replace(/\s+/g, ' ');
+
+        // BOM — "품번 + 설명" 쌍이 반복된다. 개수와 눈에 띄는 것 몇 개만.
+        var bom = _all(/\b((?:PCA\d{6,7}|NLS-[A-Z0-9-]{6,}|LSPP-[A-Z0-9-]{6,}|\d{7}-[A-Z0-9-]{2,}))\b/, U);
+        if (bom.length) { o.dwgBomCount = String(bom.length); o.dwgBomTop = bom.slice(0, 6).join(', '); }
+
+        var env = [];
+        if (/ROHS/.test(U)) env.push('RoHS');
+        if (/REACH/.test(U)) env.push('REACH');
+        if (/CONFLICT\s+MINERALS/.test(U)) env.push('Conflict Minerals');
+        o.dwgEnv = env.join(', ');
+
+        var mk = [];
+        if (/COUNTRY\s+OF\s+ORIGIN/.test(U)) mk.push(_t('원산지', 'Country of origin'));
+        if (/DATE\s*CODE/.test(U)) mk.push(_t('제조일 코드', 'Date code'));
+        if (/VENDOR\s*I\.?D\.?/.test(U)) mk.push(_t('벤더 ID', 'Vendor ID'));
+        if (/REVISION\s+LETTER/.test(U)) mk.push(_t('리비전 문자', 'Revision letter'));
+        o.dwgMarking = mk.join(', ');
+
+        o.dwgTamper = /TAMPER/.test(U) ? 'O' : '';
+        o.dwgPacking = /PACKAG/.test(U) ? _one(/((?:PARTS|PRODUCT)[A-Z ,]{0,30}PACK[A-Z ,]{0,60})/, U).slice(0, 120) || 'O' : '';
+        o.dwgTorque = _one(/(TORQUE[^\n]{0,60})/, U).replace(/\s+/g, ' ').slice(0, 110);
+        o.dwgSpecRefs = _all(/\b(20\d{4})\b/, t).slice(0, 6).join(', ');
+        o.dwgBright = _one(/(\d{2,4}\s*(?:NITS|CD\/M))/, U);
+
+        // 빈 값은 아예 빼서 "못 읽음"과 "빈칸"을 구분한다
+        Object.keys(o).forEach(function (k) { if (!String(o[k] || '').trim()) delete o[k]; });
+        return o;
+    };
+
     // 🤖 문서 분석 — NAS 문서의 글자를 뽑아 AI에게 "이 행에 넣을 값"을 묻는다.
     //    결정론으로 못 푸는 일(사람이 쓴 문서에서 값 찾기)이라 AI를 쓰되, **사람 승인 후에만** 적용한다.
     window.PL_DOC_AI_FIELDS = window.PL_DOC_AI_FIELDS || ['agileRev', 'prodRev', 'pn', 'desc2', 'desc3', 'panel', 'panelMfr'];
 
+    /** 도면 글자 받아오기 — 서버 캐시(_dsTextOf)가 있으면 그걸 쓰고, 없으면 원본을 받아 뽑는다 */
+    window._plDocText = async function (folder, fileName) {
+        var text = '';
+        if (window._dsTextOf) { try { text = await window._dsTextOf(folder, fileName); } catch (e) { /* 아래에서 원본으로 */ } }
+        if (!String(text || '').trim() && window._dsFileOf && window._pxExtractText) {
+            var file = await window._dsFileOf(folder, fileName);
+            text = await window._pxExtractText(file, null);
+        }
+        return text || '';
+    };
+
+    /** 📐 결정론 분석 — AI 한 번도 안 쓰고 도면에서 30개 항목을 읽어 미리보기로 보여준다(기본 경로). */
     window.plAnalyzeDoc = async function (id, fileName, folder) {
+        var FD = folder || NAS_FOLDER;
+        var r = _rowById(id); if (!r) return;
+        _toast('📐 ' + _t('도면을 읽는 중…', 'Reading the drawing…'), 'info');
+        var text = '';
+        try { text = await window._plDocText(FD, fileName); }
+        catch (e) { _toast('⚠️ ' + _t('도면에서 글자를 뽑지 못했습니다: ', 'Could not extract text: ') + (e && e.message ? e.message : e), 'error', 8000); return; }
+        if (!String(text || '').trim()) { _toast('⚠️ ' + _t('도면에 읽을 글자가 없습니다(스캔 이미지일 수 있습니다).', 'No readable text (it may be a scanned image).'), 'error', 7000); return; }
+
+        var det = window.plExtractDwg(text, r);
+        var picks = Object.keys(det).filter(function (k) { return String(det[k]) !== String(r[k] || ''); });
+        if (!picks.length) {
+            _popup('📐 ' + _t('도면 분석 결과', 'Drawing analysis'),
+                '<div style="color:#888;">' + _t('도면에서 읽은 값이 이미 표와 같습니다.', 'Everything read from the drawing already matches the table.') + '</div>'
+              + window._plAiMoreBtn(id, fileName, FD));
+            return;
+        }
+        window._plShowDocPreview(id, fileName, det, picks, _t('📐 도면에서 그대로 읽음(AI 안 씀)', '📐 Read directly from the drawing (no AI)'), FD);
+    };
+
+    /** 미리보기 — 결정론/AI 결과를 같은 모양으로 보여준다. 엑셀 값과 다르면 "표≠도면" 으로 표시. */
+    window._plShowDocPreview = function (id, fileName, obj, picks, note, folder) {
+        var r = _rowById(id); if (!r) return;
+        window._plAiPending = { id: id, obj: obj, picks: picks, file: fileName };
+        var rowsHtml = picks.map(function (k, i) {
+            var c = _colByKey[k] || { ko: k, en: k };
+            var it = (window.PL_DOC_ITEMS || []).filter(function (x) { return x.k === k; })[0];
+            var cmpCol = it && it.cmp ? _colByKey[it.cmp] : null;
+            var cmpVal = cmpCol ? String(r[it.cmp] == null ? '' : r[it.cmp]).trim() : '';
+            var clash = cmpVal && String(obj[k]).trim().toUpperCase().indexOf(cmpVal.toUpperCase()) === -1
+                                && cmpVal.toUpperCase().indexOf(String(obj[k]).trim().toUpperCase()) === -1;
+            return '<tr' + (clash ? ' style="background:#fff7e6;"' : '') + '>'
+                 + '<td style="padding:4px 6px;"><input type="checkbox" checked data-i="' + i + '" class="pl-ai-ck"></td>'
+                 + '<td style="padding:4px 6px; color:#666;">' + _esc(window._currentLang === 'en' ? c.en : c.ko) + '</td>'
+                 + '<td style="padding:4px 6px; color:#b1432f;">' + _esc(String(r[k] || '(빈칸)').slice(0, 60)) + '</td>'
+                 + '<td style="padding:4px 6px; color:#1971c2; font-weight:bold;">' + _esc(String(obj[k]).slice(0, 80)) + '</td>'
+                 + '<td style="padding:4px 6px; font-size:10.5px; color:#9a6b00;">'
+                 + (clash ? '⚠️ ' + _esc(window._currentLang === 'en' ? cmpCol.en : cmpCol.ko) + ': ' + _esc(cmpVal.slice(0, 30)) : '') + '</td></tr>';
+        }).join('');
+        _popup('📐 ' + _esc(fileName) + ' — ' + _t('적용할 값을 확인해주세요', 'confirm what to apply'),
+            '<div style="margin-bottom:8px; color:#2b7a45; font-size:11.5px;">' + _esc(note) + '</div>'
+          + '<table style="width:100%; font-size:11.5px; border-collapse:collapse;">'
+          + '<tr style="background:#f1f3f5;"><th style="width:26px;"></th><th style="text-align:left;">' + _t('항목', 'Field') + '</th>'
+          + '<th style="text-align:left;">' + _t('현재', 'Current') + '</th><th style="text-align:left;">' + _t('도면에서 읽은 값', 'From drawing') + '</th>'
+          + '<th style="text-align:left;">' + _t('표와 비교', 'vs table') + '</th></tr>' + rowsHtml + '</table>'
+          + '<div style="margin-top:11px; display:flex; gap:6px; justify-content:flex-end; align-items:center;">'
+          + window._plAiMoreBtn(id, fileName, folder)
+          + '<button onclick="window.plClosePopup()" style="padding:6px 12px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6; border-radius:6px; font-size:12px; cursor:pointer;">' + _t('취소', 'Cancel') + '</button>'
+          + '<button onclick="window.plApplyAi()" style="padding:6px 14px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ ' + _t('선택 항목 적용', 'Apply selected') + '</button>'
+          + '</div>', true);
+    };
+    window._plAiMoreBtn = function (id, fileName, folder) {
+        return '<button onclick="window.plAnalyzeDocAi(\'' + id + '\',\'' + _esc(fileName) + '\',\'' + _esc(folder || NAS_FOLDER) + '\')"'
+             + ' title="' + _esc(_t('정규식이 못 읽은 칸을 AI에게 맡깁니다(무료 키 하루 한도를 씁니다)', 'Ask AI for what the rules could not read (uses your daily AI quota)')) + '"'
+             + ' style="margin-right:auto; padding:6px 12px; background:#efe6fb; color:#6741d9; border:1px solid #d6c8f0; border-radius:6px; font-size:12px; cursor:pointer;">🤖 '
+             + _t('AI로 더 읽기', 'Ask AI for more') + '</button>';
+    };
+
+    // 🤖 AI 분석 — 결정론이 못 읽은 칸만 맡긴다(아래 프롬프트는 카탈로그에서 만든다).
+    window.plAnalyzeDocAi = async function (id, fileName, folder) {
         var FD = folder || NAS_FOLDER;
         var r = _rowById(id); if (!r) return;
         var key = window.getActiveAiKey && window.getActiveAiKey();
         if (!key) { _toast('🔑 ' + _t('AI 키가 없습니다 — [AI 도구 > AI 분석 설정]에서 먼저 등록해주세요.', 'No AI key — register one under [AI Tools > AI Analysis Settings].'), 'error', 7000); return; }
+        window.plClosePopup();
         _toast('🤖 ' + _t('문서를 읽는 중…', 'Reading the document…'), 'info');
         var text = '';
-        try {
-            if (window._dsTextOf) text = await window._dsTextOf(FD, fileName);
-            if (!String(text || '').trim() && window._dsFileOf && window._pxExtractText) {
-                var file = await window._dsFileOf(FD, fileName);
-                text = await window._pxExtractText(file, null);
-            }
-        } catch (e) { _toast('⚠️ ' + _t('문서에서 글자를 뽑지 못했습니다: ', 'Could not extract text: ') + (e && e.message ? e.message : e), 'error', 8000); return; }
-        if (!String(text || '').trim()) { _toast('⚠️ ' + _t('문서에 읽을 글자가 없습니다(스캔 이미지일 수 있습니다).', 'No readable text (it may be a scanned image).'), 'error', 7000); return; }
+        try { text = await window._plDocText(FD, fileName); }
+        catch (e) { _toast('⚠️ ' + (e && e.message ? e.message : e), 'error', 8000); return; }
+        if (!String(text || '').trim()) { _toast('⚠️ ' + _t('문서에 읽을 글자가 없습니다.', 'No readable text.'), 'error'); return; }
         if (text.length > 60000) text = text.slice(0, 60000);
 
-        var fields = window.PL_DOC_AI_FIELDS.map(function (k) {
+        // 채울 칸 = 엑셀 열 일부 + 도면 분석 카탈로그 전체. 결정론이 이미 읽은 칸은 빼서
+        // AI 가 '모르는 것'에만 집중하게 한다(한도 절약 + 환각 줄이기).
+        var _already = {};
+        try { Object.keys(window.plExtractDwg(text, r)).forEach(function (k) { _already[k] = 1; }); } catch (e) { /* 추출 실패해도 AI 는 돌린다 */ }
+        var _askKeys = ['agileRev', 'prodRev', 'pn', 'desc2', 'desc3', 'panel', 'panelMfr']
+            .concat((window.PL_DOC_ITEMS || []).map(function (it) { return it.k; }))
+            .filter(function (k, i, arr) { return arr.indexOf(k) === i && !_already[k]; });
+        var fields = _askKeys.map(function (k) {
             var c = _colByKey[k]; return c ? (k + ' = ' + c.ko) : k;
         }).join(', ');
-        var cur = window.PL_DOC_AI_FIELDS.map(function (k) { return k + ': ' + (r[k] || '(빈칸)'); }).join('\n');
+        var cur = _askKeys.map(function (k) { return k + ': ' + (r[k] || '(빈칸)'); }).join(String.fromCharCode(10));
         var prompt = '너는 디스플레이 제품 문서를 읽고 제품 목록표의 칸을 채우는 도우미다.\n'
                    + '아래 문서에서 이 제품(KTK PN ' + (r.ktkPn || '-') + ', ' + (r.desc || '') + ')에 해당하는 값만 찾아라.\n\n'
                    + '[채울 칸]\n' + fields + '\n\n'
@@ -1524,24 +1753,64 @@
                                                  'No new values found (already identical or absent in the document).') + '</div>');
             return;
         }
-        window._plAiPending = { id: id, obj: obj, picks: picks, file: fileName };
-        var rowsHtml = picks.map(function (k, i) {
-            var c = _colByKey[k];
-            return '<tr><td style="padding:4px 6px;"><input type="checkbox" checked data-i="' + i + '" class="pl-ai-ck"></td>'
-                 + '<td style="padding:4px 6px; color:#666;">' + _esc(window._currentLang === 'en' ? c.en : c.ko) + '</td>'
-                 + '<td style="padding:4px 6px; color:#b1432f;">' + _esc(r[k] || '(빈칸)') + '</td>'
-                 + '<td style="padding:4px 6px; color:#1971c2; font-weight:bold;">' + _esc(obj[k]) + '</td></tr>';
-        }).join('');
-        _popup('🤖 ' + _t('문서 분석 결과 — 적용할 값을 확인해주세요', 'Analysis result — confirm what to apply'),
-            (summary ? '<div style="margin-bottom:9px; padding:8px 10px; background:#f8f9fa; border-radius:6px; color:#444;">' + _esc(summary) + '</div>' : '')
-          + '<table style="width:100%; font-size:11.5px; border-collapse:collapse;">'
-          + '<tr style="background:#f1f3f5;"><th style="width:28px;"></th><th style="text-align:left;">' + _t('항목', 'Field') + '</th>'
-          + '<th style="text-align:left;">' + _t('현재', 'Current') + '</th><th style="text-align:left;">' + _t('문서에서 읽은 값', 'From document') + '</th></tr>'
-          + rowsHtml + '</table>'
-          + '<div style="margin-top:11px; text-align:right;">'
-          + '<button onclick="window.plClosePopup()" style="padding:6px 12px; margin-right:6px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6; border-radius:6px; font-size:12px; cursor:pointer;">' + _t('취소', 'Cancel') + '</button>'
-          + '<button onclick="window.plApplyAi()" style="padding:6px 14px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ ' + _t('선택 항목 적용', 'Apply selected') + '</button>'
-          + '</div>', true);
+        window._plShowDocPreview(id, fileName, obj, picks,
+            (summary ? '🤖 ' + summary : _t('🤖 AI가 읽음', '🤖 Read by AI')), folder);
+    };
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📐📐 저장된 도면 **전체** 분석 — AI 를 한 번도 안 쓰고 결정론으로만 돌린다.
+    //    NAS 도면 67개를 직접 읽어 만든 규칙이라 30개 항목이 그대로 채워진다(실측 커버리지는
+    //    docs/project-list.md 표 참고). 한 행에 도면이 여러 벌이면 **리비전이 가장 최근인 것**
+    //    하나만 본다(옛 리비전이 최신 값을 덮어쓰지 않게).
+    // ══════════════════════════════════════════════════════════════════════════
+    window.plAnalyzeAll = async function () {
+        var rows = (D().rows || []).filter(function (r) { return window._plDocCount(r) > 0; });
+        if (!rows.length) {
+            _toast('⚠️ ' + _t('도면이 연결된 행이 없습니다 — NAS 목록을 먼저 새로고침하거나 PN을 채워주세요.',
+                              'No row has a linked drawing — refresh the NAS list or fill in PNs first.'), 'warning', 8000);
+            return;
+        }
+        if (!confirm(_t(rows.length + '개 행의 도면을 읽어 "도면분석" 칸을 채웁니다(AI 안 씀).\n계속할까요?',
+                        'Read drawings for ' + rows.length + ' rows and fill the "From drawing" columns (no AI).\nContinue?'))) return;
+
+        var ok = 0, miss = 0, filled = 0, i = 0;
+        for (i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            if (i % 5 === 0) _toast('📐 ' + (i + 1) + '/' + rows.length + _t(' 도면 읽는 중…', ' reading drawings…'), 'info', 1500);
+            // 리비전 문자열이 가장 큰 것 = 가장 최근 도면
+            var docs = window._plDocsOf(r).slice().sort(function (a, b) { return String(b.rev).localeCompare(String(a.rev), 'en'); });
+            var text = '';
+            try { text = await window._plDocText(NAS_FOLDER, docs[0].name); }
+            catch (e) { miss++; continue; }
+            if (!String(text || '').trim()) { miss++; continue; }
+            var det = window.plExtractDwg(text, r);
+            var n = 0;
+            Object.keys(det).forEach(function (k) {
+                if (!_colByKey[k]) return;
+                var before = r[k] == null ? '' : String(r[k]);
+                if (before === String(det[k])) return;
+                // 사람이 손으로 적어 둔 값은 덮지 않는다 — 비어 있는 칸만 채운다.
+                if (before.trim() && String(k).indexOf('dwg') !== 0) return;
+                r[k] = String(det[k]);
+                _plPushHistory(r, k, before, r[k]);
+                n++;
+            });
+            if (n) { filled += n; ok++; }
+        }
+        _persist();
+        // 도면 분석 결과를 바로 볼 수 있게 그룹을 켠다
+        _view.groups.dwg = true; _saveView();
+        window.plRender();
+        _popup('📐 ' + _t('도면 전체 분석 결과', 'Drawing batch analysis'),
+            '<div style="line-height:1.8; font-size:12.5px;">'
+          + _t('· 대상 행: ', '· Rows: ') + rows.length + '<br>'
+          + _t('· 값이 채워진 행: ', '· Rows updated: ') + ok + '<br>'
+          + _t('· 채운 칸 수: ', '· Cells filled: ') + filled + '<br>'
+          + _t('· 글자를 못 읽은 도면: ', '· Unreadable drawings: ') + miss
+          + '</div><div style="margin-top:9px; color:#888; font-size:11px;">'
+          + _t('"도면분석" 열 그룹을 켜 두었습니다. 표의 기존 값은 덮지 않고 빈칸만 채웠습니다 — 도면 전용 칸(dwg…)은 항상 최신 도면 값으로 갱신됩니다.',
+               'The "From drawing" column group is now on. Existing table values were kept; only blanks were filled — drawing-only columns are always refreshed.')
+          + '</div>');
     };
 
     window.plApplyAi = function () {
