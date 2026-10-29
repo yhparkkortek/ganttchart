@@ -128,7 +128,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `23-sidebar-tabs.js` | 사이드바 접기/펴기 + 탭 전환 |
 | `24-calendar-tab.js` | Calendar 탭 — 간트 업무 월간 캘린더 |
 | `25-ai-learning.js` | Phase 3 학습 로그 + Phase 4 재시도 엔진(`_alTriggerRetry`, `getAiRetryAutoEnabled`) |
-| `26-topic-profile.js` | Phase 6 토픽 프로파일. `_tpMaybeAutoRegen(fileId,rows,colIdx,projectMeta)`로 헤드리스 프로젝트 자동 재생성(fileId별 독립 쿨다운) |
+| `26-topic-profile.js` | Phase 6 토픽 프로파일. `_tpMaybeAutoRegen(fileId,rows,colIdx,projectMeta)`로 헤드리스 프로젝트 자동 재생성(fileId별 독립 쿨다운). **뷰어에서 항목 ×삭제/클릭 수정/추가** — 사람 편집은 `profile.human`(removed/added/summary/editedAt)에 따로 적혀 재생성·메일 신호가 못 되살린다. Drive/캐시에서 들일 땐 **`_tpAdoptStoredProfile` 필수**(통째로 덮으면 사람 편집 소실). ⚠️ **사람 이름은 keywords/distinguishers 금지**(오매칭 원흉, 2026-10-29) — 주소록·담당자 기준 `_tpStripPersonNames` |
 | `27-topic-contamination.js` | Phase 8 토픽 오염 감지·AI 자가진단(`_tcRunDiagnosis`, `_tcApplyFix`) |
 | `26-gantt-search.js` | 간트차트 내 키워드 검색 |
 | `28-new-project-wizard.js` | 새 프로젝트 마법사. `_npwOpen(prefill, 'MP(EC)')` — 미분류 메일 AI pre-fill 지원 |

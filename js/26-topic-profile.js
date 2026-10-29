@@ -54,6 +54,91 @@
         return !!_TP_GENERIC_SET[_tpNormalize(norm)] || (!!stem && !!_TP_GENERIC_SET[_tpNormalize(stem)]);
     };
 
+    // ── [2026-10-29 신규, 사용자 지적 "프로파일에 사람 이름이 들어가면 안 됨 — 오매칭 원흉"] ──────
+    //    담당자는 여러 프로젝트를 동시에 맡는다. 이름이 keywords/distinguishers에 들어가면 그 사람이
+    //    보낸·받은 메일이 전부 이 프로젝트로 끌려온다. 프롬프트가 오히려 "고객측 담당자명을 keywords
+    //    후보로 우선 사용"하라고 시키고 있었다(원흉). → 프롬프트에서 금지 + 저장 직전 결정론 필터.
+    //    판정 근거는 **데이터**: 주소록(공유본+이 프로젝트) 이름/영문명 + projectMeta의 담당자·멤버 칸.
+    //    주소록에 없는 이름도 "직함/존칭이 붙은 형태"(박용훈 책임, 김철수님, Mr. Smith)면 이름으로 본다.
+    //    사람이 뷰어에서 직접 넣은 항목(human.added)은 사람 결정이므로 건드리지 않는다.
+    function _tpPersonNameSet(pm) {
+        var set = {};
+        var put = function(n) {
+            n = String(n || '').trim();
+            if (n.length >= 2) set[n.toLowerCase().replace(/\s+/g, ' ')] = true;
+        };
+        var books = [];
+        try { if (window.AddressBook && window.AddressBook.load) books.push(window.AddressBook.load()); } catch(e) {}
+        books.push((window.tabData && window.tabData.addressBook) || []);
+        books.forEach(function(list) {
+            (list || []).forEach(function(p) {
+                if (!p) return;
+                put(p.name);
+                if (p.nameEn) {
+                    put(p.nameEn);
+                    var first = String(p.nameEn).trim().split(/\s+/)[0];
+                    if (first && first.length >= 3) put(first);           // 메일엔 이름(first name)만 쓰는 경우가 많다
+                }
+            });
+        });
+        pm = pm || window.projectMeta || {};
+        Object.keys(pm).forEach(function(k) {
+            if (!/담당|멤버|member|PM|owner/i.test(k)) return;
+            var v = pm[k];
+            var parts = window._addrSplitNames ? window._addrSplitNames(v) : String(v || '').split(/[,\/]/);
+            parts.forEach(function(n) { put(window._addrStripTitleSuffix ? window._addrStripTitleSuffix(n) : n); });
+        });
+        return set;
+    }
+    window._tpIsPersonName = function(kw, nameSet) {
+        var s = String(kw || '').trim();
+        if (!s) return false;
+        nameSet = nameSet || _tpPersonNameSet();
+        var low = s.toLowerCase().replace(/\s+/g, ' ');
+        if (nameSet[low]) return true;
+        var stripped = window._addrStripTitleSuffix ? window._addrStripTitleSuffix(s) : s.replace(/\s*(님|씨)\s*$/, '');
+        if (stripped && stripped !== s) {
+            if (nameSet[stripped.toLowerCase().replace(/\s+/g, ' ')]) return true;
+            // 직함/존칭이 붙어 있었고 남은 게 한글 2~4자 또는 영문 1~2단어면 사람 이름이다
+            if (/^[가-힣]{2,4}$/.test(stripped) || /^[A-Za-z][a-z]+( [A-Za-z][a-z]+)?$/.test(stripped)) return true;
+        }
+        return false;
+    };
+    /** 배열에서 사람 이름 제거 — keep(사람이 직접 넣은 항목)은 남긴다. { list, dropped } 반환 */
+    function _tpDropPersonNames(arr, keep, nameSet) {
+        var dropped = [];
+        var list = (arr || []).filter(function(x) {
+            if (_tpHas(keep, x)) return true;
+            if (window._tpIsPersonName(x, nameSet)) { dropped.push(x); return false; }
+            return true;
+        });
+        return { list: list, dropped: dropped };
+    }
+    /** 프로파일의 keywords·distinguishers에서 사람 이름 제거(제자리 수정) — 지운 개수 반환 */
+    window._tpStripPersonNames = function(p, pm) {
+        if (!p) return 0;
+        var nameSet = _tpPersonNameSet(pm);
+        var n = 0;
+        // distinguishers는 문장("박용훈 발신 메일")이라 일치가 아니라 **포함**으로 본다 — 주소록·담당자에
+        // 있는 이름(3자 이상)만 대상으로 해서 일반 단어가 걸리지 않게 한다.
+        var known = Object.keys(nameSet).filter(function(n) { return n.length >= 3; });
+        ['keywords', 'distinguishers'].forEach(function(f) {
+            if (!Array.isArray(p[f]) || !p[f].length) return;
+            var r = _tpDropPersonNames(p[f], _tpAddedOf(p, f), nameSet);
+            if (f === 'distinguishers') {
+                var keep2 = _tpAddedOf(p, f);
+                r.list = r.list.filter(function(x) {
+                    var low = String(x || '').toLowerCase();
+                    if (_tpHas(keep2, x) || !known.some(function(n) { return low.indexOf(n) !== -1; })) return true;
+                    r.dropped.push(x);
+                    return false;
+                });
+            }
+            if (r.dropped.length) { p[f] = r.list; n += r.dropped.length; console.info('[토픽 프로파일] 사람 이름 제외(' + f + '):', r.dropped); }
+        });
+        return n;
+    };
+
     /** 저장된 토픽 프로파일 반환 (없으면 null) */
     window._getTopicProfile = function(key) {
         key = key || _currentKey();
@@ -86,6 +171,126 @@
         var store = _getStore();
         delete store[key];
         _saveStore(store);
+    };
+
+    // ── [2026-10-29 신규] 사람 편집 덧씌우기(profile.human) ──────────────────────
+    //    사람이 뷰어에서 지우거나 고친 항목을 AI 결과와 **따로** 적어 둔다:
+    //      human.removed[field] = 사람이 지운 항목  → 재생성·메일 신호가 다시 넣어도 걸러낸다
+    //      human.added[field]   = 사람이 넣은(고친) 항목 → 재생성이 빠뜨려도 다시 붙인다
+    //      human.summary        = 사람이 고친 요약(문자열이면 AI 요약보다 우선)
+    //      human.editedAt       = 마지막 편집 시각 — Drive 사본과 이 PC 사본 중 무엇을 살릴지 판정
+    //    keywords/topics/patterns 배열 자체는 항상 "적용된 결과"로 저장하므로, 프로파일을 읽는
+    //    다른 곳(스니펫·매칭 후보·project_index)은 손대지 않아도 사람 편집을 그대로 본다.
+    var _TP_EDIT_FIELDS = ['keywords', 'topics', 'patterns'];
+    function _tpEq(a, b) { return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); }
+    function _tpHas(arr, v) { return (arr || []).some(function(x) { return _tpEq(x, v); }); }
+    function _tpRemovedOf(p, field) { return (p && p.human && p.human.removed && p.human.removed[field]) || []; }
+    function _tpAddedOf(p, field)   { return (p && p.human && p.human.added   && p.human.added[field])   || []; }
+
+    /** profile.human을 배열/요약에 적용(멱등) — 같은 객체를 고쳐서 돌려준다 */
+    window._tpApplyHuman = function(p) {
+        if (!p || !p.human) return p;
+        _TP_EDIT_FIELDS.forEach(function(f) {
+            var rm = _tpRemovedOf(p, f), add = _tpAddedOf(p, f);
+            if (!rm.length && !add.length) return;
+            var arr = (p[f] || []).filter(function(x) { return !_tpHas(rm, x); });
+            add.forEach(function(x) { if (!_tpHas(arr, x)) arr.push(x); });
+            p[f] = arr;
+        });
+        if (typeof p.human.summary === 'string') p.summary = p.human.summary;
+        return p;
+    };
+
+    /**
+     * 뷰어 편집 진입점. op: 'del' | 'add' | 'edit' | 'unrm'(지운 항목 되살리기) | 'summary'.
+     * 반환: 고친 profile (변화 없으면 null). 지금 열린 프로젝트면 다음 저장에 Drive로 실리도록 dirty 표시.
+     */
+    window._tpEditProfile = function(key, field, op, oldVal, newVal) {
+        var store = _getStore();
+        var p = store[key];
+        if (!p) return null;
+        var h = p.human = p.human || {};
+        h.removed = h.removed || {};
+        h.added   = h.added   || {};
+        var nv = String(newVal == null ? '' : newVal).trim();
+
+        if (op === 'summary') {
+            if (nv === String(p.summary || '').trim()) return null;
+            h.summary = nv;
+            p.summary = nv;
+        } else {
+            if (_TP_EDIT_FIELDS.indexOf(field) === -1) return null;
+            var arr = (p[field] || []).slice();
+            var rm  = (h.removed[field] || []).slice();
+            var add = (h.added[field]   || []).slice();
+            var idx = -1;
+            if (op === 'edit' && _tpEq(oldVal, nv) && String(oldVal).trim() === nv) return null;
+            if (op === 'edit' && !nv) return null;
+            if (op === 'del' || op === 'edit') {
+                for (var i = 0; i < arr.length; i++) { if (_tpEq(arr[i], oldVal)) { idx = i; break; } }
+                if (op === 'del' && idx >= 0) arr.splice(idx, 1);
+                // 사람이 넣었던 항목이면 added에서만 빼면 끝 — AI가 낸 항목이면 removed에 적어 둬야
+                // 다음 재생성이 같은 걸 또 내도 되살아나지 않는다.
+                if (_tpHas(add, oldVal)) add = add.filter(function(x) { return !_tpEq(x, oldVal); });
+                else if (!_tpHas(rm, oldVal)) rm.push(String(oldVal).trim());
+            }
+            if (op === 'add' || op === 'edit') {
+                if (!nv) return null;
+                rm = rm.filter(function(x) { return !_tpEq(x, nv); });
+                if (!_tpHas(add, nv)) add.push(nv);
+                if (op === 'edit' && idx >= 0) {
+                    var dup = -1;
+                    for (var j = 0; j < arr.length; j++) { if (j !== idx && _tpEq(arr[j], nv)) { dup = j; break; } }
+                    if (dup >= 0) arr.splice(idx, 1); else arr[idx] = nv;   // 이미 있는 값으로 고치면 하나로 합친다
+                } else if (!_tpHas(arr, nv)) {
+                    arr.push(nv);
+                } else if (op === 'add') {
+                    return null;                                            // 이미 있는 항목
+                }
+            }
+            if (op === 'unrm') {
+                rm = rm.filter(function(x) { return !_tpEq(x, oldVal); });
+                if (!_tpHas(arr, oldVal)) arr.push(String(oldVal).trim());
+            }
+            p[field] = arr;
+            h.removed[field] = rm;
+            h.added[field]   = add;
+        }
+        h.editedAt = new Date().toISOString();
+        store[key] = p;
+        _saveStore(store);
+        // Drive에는 따로 PATCH하지 않는다 — 열린 프로젝트는 다음 저장(saveData.topicProfile)에 실리고,
+        // 다른 프로젝트는 그 프로젝트를 열 때 _tpAdoptStoredProfile이 이 PC 편집을 살려 dirty로 올린다
+        // (남의 파일을 여기서 덮어쓰면 그 사이 다른 사람이 저장한 업무가 날아갈 수 있다).
+        if (key === _currentKey()) {
+            if (window._markNonGanttDirty) window._markNonGanttDirty(); else window._nonGanttDirty = true;
+            if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();
+        }
+        return p;
+    };
+
+    /**
+     * Drive JSON/프로젝트 캐시에서 받은 프로파일을 localStorage에 들일 때 반드시 이걸 쓸 것.
+     * 이 PC에 **더 최근의 사람 편집**이 있으면(다른 프로젝트를 보면서 고친 경우 등) 그 편집을 살려
+     * 받아온 프로파일 위에 다시 적용하고 true를 돌려준다 — 호출부는 그때 dirty를 올려 다음 저장에
+     * 실리게 한다. 예전처럼 통째로 덮으면 열지 않은 프로젝트에서 고친 내용이 열자마자 사라진다.
+     */
+    window._tpAdoptStoredProfile = function(fileId, incoming) {
+        if (!fileId || !incoming) return false;
+        var store = _getStore();
+        var local = store[fileId];
+        var inc;
+        try { inc = JSON.parse(JSON.stringify(incoming)); } catch(e) { inc = incoming; }
+        var lAt = (local && local.human && local.human.editedAt) || '';
+        var iAt = (inc.human && inc.human.editedAt) || '';
+        var keepLocal = !!lAt && lAt > iAt;
+        if (keepLocal) inc.human = local.human;
+        window._tpStripPersonNames(inc);   // 예전에 이름이 들어간 채 저장된 프로파일도 열 때 정리된다
+        window._tpApplyHuman(inc);
+        store[fileId] = inc;
+        _saveStore(store);
+        if (keepLocal) console.log('[토픽 프로파일] 이 PC의 사람 편집이 더 최근 → 유지하고 다음 저장에 반영:', fileId);
+        return keepLocal;
     };
 
     /**
@@ -227,6 +432,10 @@
                 var _oldProf = _getStore()[key];
                 _piKws = (_oldProf && _oldProf.keywords) ? _oldProf.keywords.slice() : [];
             }
+            // 사람이 지운 키워드·사람 이름은 참고 목록으로도 주지 않는다(AI가 그대로 베껴 되살린다)
+            var _rmKw = _tpRemovedOf(_getStore()[key], 'keywords');
+            var _nmSet = _tpPersonNameSet(pmCtx);
+            _piKws = _piKws.filter(function(k) { return !_tpHas(_rmKw, k) && !window._tpIsPersonName(k, _nmSet); });
             if (_piKws.length) {
                 mailSignalLine = '\n\n※ 참고: 실제 수신된 메일에서 이 프로젝트와 연관되어 관찰된 키워드 (mail 신호, Drive 누적):\n' +
                     _piKws.join(', ') + '\n위 키워드를 keywords 생성 시 참고하되, 간트 업무 목록이 우선입니다.';
@@ -306,6 +515,12 @@
             }
         })();
 
+        // ③-3 [2026-10-29] 사람이 뷰어에서 지운 키워드 — 다시 내지 말라고 알려준다(저장 직전 필터가 최종 방어선)
+        var _hrm = _tpRemovedOf(_getStore()[key], 'keywords');
+        var humanRemovedLine = _hrm.length
+            ? '   → ⛔ 사람이 이 프로젝트에 맞지 않는다고 직접 삭제한 키워드 — 다시 넣지 마세요: ' + _hrm.slice(0, 40).join(', ') + '\n'
+            : '';
+
         // ④ 프롬프트 조립 — 전체 업무(식별자용) + 최근 90일 업무(현 단계용) 분리
         var recentLabel = recentTaskNames.length
             ? '【최근 ' + _RECENT_DAYS + '일 이내 업무 — 현재 단계 파악용 (' + recentTaskNames.length + '개)】\n' +
@@ -324,7 +539,11 @@
             '     METAL, PLASTIC, BLU, TSP, LCM, RFQ, RFI, NRE, AWARD, KICK-OFF, DESIGN, SAMPLE, EVT, DVT, PVT, FAI,\n' +
             '     PP, SOP, MP, EC, RMA, EOL, 신뢰성, 인증, 견적, 검토, 승인, 발주, 회의.\n' +
             '   → 아래 "실제 수신 메일 핵심내용 샘플"이 있다면 거기 등장하는 진짜 고유 명칭(부품 코드, 특이 사양,\n' +
-            '     고객측 담당자명 등)을 keywords 후보로 우선 사용하세요 — 업무 목록(WBS)보다 신뢰도가 높습니다.\n' +
+            '     프로젝트 전용 명칭 등)을 keywords 후보로 우선 사용하세요 — 업무 목록(WBS)보다 신뢰도가 높습니다.\n' +
+            '   → ⛔ 사람 이름(사내·고객측 담당자, 발신자/수신자, 영문 이름 포함)은 keywords와 distinguishers에\n' +
+            '     절대 넣지 마세요 — 한 사람이 여러 프로젝트를 맡기 때문에 이름은 프로젝트를 구분하지 못하고\n' +
+            '     다른 프로젝트 메일을 끌어오는 오매칭의 원인이 됩니다.\n' +
+            humanRemovedLine +
             '② current_phase는 【최근 ' + _RECENT_DAYS + '일 이내 업무】 섹션을 기준으로 현재 어느 단계인지 서술해 주세요.\n' +
             '③ distinguishers에는 수신 메일에서 이 프로젝트임을 판별하는 구체적 단서를 적어주세요.\n\n' +
             '【전체 업무 목록 — 고유 식별자·키워드 추출용(WBS 단계명 위주라 일반 용어가 많음, ' + taskNames.length + '개)】\n' +
@@ -400,7 +619,14 @@
             to:           new Date().toISOString().slice(0, 10)
         };
 
+        // 💡 [2026-10-29] 사람 이름 제외(결정론) + 사람 편집 이어받기 — 재생성이 사람이 지운 키워드를
+        //    되살리거나 사람이 고친 요약/항목을 덮어쓰지 않게, 직전 프로파일의 human을 새 결과 위에 다시 적용.
+        //    (await 이후라 store를 지금 다시 읽는다 — 그 사이 뷰어에서 고쳤을 수 있다)
         var store = _getStore();
+        var _prevProf = store[key];
+        if (_prevProf && _prevProf.human) profile.human = _prevProf.human;
+        window._tpStripPersonNames(profile, pmCtx);
+        window._tpApplyHuman(profile);
         store[key] = profile;
         _saveStore(store);
 
@@ -485,7 +711,7 @@
         // 남은 카드 없으면 빈 상태 표시
         var body = document.getElementById('tp-viewer-body');
         if (body && !body.querySelector('[id^="tp-card-"]')) {
-            body.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px;">⚪ 저장된 토픽 프로파일이 없습니다.</div>';
+            body.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px;">⚪ ' + window._t('저장된 토픽 프로파일이 없습니다.', 'No saved topic profiles.') + '</div>';
         }
     };
     window._tpClearAll = function() {
@@ -508,12 +734,17 @@
         Object.keys(store).forEach(function(k) {
             var p = store[k];
             if (!p || !p.keywords || !p.keywords.length) return;
+            // [2026-10-29] 사람 이름도 함께 정리 — 이 프로젝트 projectMeta는 열려 있을 때만 알 수 있어 주소록 기준
+            var _nm = window._tpStripPersonNames(p, k === _currentKey() ? window.projectMeta : {});
             var before = p.keywords.slice();
-            var after = before.filter(function(kw) { return !window._tpIsGenericKeyword(kw); });
-            if (!after.length || after.length === before.length) return; // 전부 제거되면 과잉 필터링으로 보고 원본 유지
-            p.keywords = after;
+            var _keep = _tpAddedOf(p, 'keywords');   // 사람이 직접 넣은 건 범용어여도 사람 결정
+            var after = before.filter(function(kw) { return _tpHas(_keep, kw) || !window._tpIsGenericKeyword(kw); });
+            var _genOk = after.length && after.length !== before.length; // 전부 제거되면 과잉 필터링으로 보고 원본 유지
+            if (_genOk) p.keywords = after;
+            if (!_genOk && !_nm) return;
             changedCount++;
-            removedCount += before.length - after.length;
+            removedCount += (_genOk ? before.length - after.length : 0) + _nm;
+            if (k === _currentKey() && window._markNonGanttDirty) window._markNonGanttDirty();
         });
         if (changedCount) _saveStore(store);
         return { changed: changedCount, removed: removedCount };
@@ -635,68 +866,22 @@
         hdr.appendChild(closeBtn);
         box.appendChild(hdr);
 
-        // ── 드래그 이동 ──
-        (function() {
-            var dragging = false, ox = 0, oy = 0;
-            hdr.addEventListener('mousedown', function(e) {
-                if (e.target === closeBtn) return;
-                // transform 제거 후 절대 좌표로 전환
-                var r = box.getBoundingClientRect();
-                box.style.left = r.left + 'px';
-                box.style.top  = r.top  + 'px';
-                box.style.transform = 'none';
-                dragging = true;
-                ox = e.clientX - r.left;
-                oy = e.clientY - r.top;
-                hdr.style.cursor = 'grabbing';
-                e.preventDefault();
-            });
-            document.addEventListener('mousemove', function(e) {
-                if (!dragging) return;
-                var nx = e.clientX - ox;
-                var ny = e.clientY - oy;
-                // 화면 경계 clamp
-                nx = Math.max(0, Math.min(nx, window.innerWidth  - box.offsetWidth));
-                ny = Math.max(0, Math.min(ny, window.innerHeight - box.offsetHeight));
-                box.style.left = nx + 'px';
-                box.style.top  = ny + 'px';
-            });
-            document.addEventListener('mouseup', function() {
-                if (dragging) { dragging = false; hdr.style.cursor = 'grab'; }
-            });
-        })();
-
-        // ── 우측 하단 리사이즈 핸들 ──
-        // 💡 [2026-09-04] 평면 삼각형 → SVG 그립 2선 + 테마색 적용
-        var resizer = document.createElement('div');
-        var _rsColor = window._cpRoleHex ? window._cpRoleHex('hoverBorder') : '#7fb0dd';
-        resizer.style.cssText = 'position:absolute;right:0;bottom:0;width:22px;height:22px;cursor:se-resize;z-index:2;' +
-            'display:flex;align-items:flex-end;justify-content:flex-end;padding:4px 4px;box-sizing:border-box;';
-        resizer.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-            '<line x1="9.5" y1="2" x2="2" y2="9.5" stroke="' + _rsColor + '" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>' +
-            '<line x1="9.5" y1="6" x2="6" y2="9.5" stroke="' + _rsColor + '" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>' +
-            '</svg>';
-        box.appendChild(resizer);
-        (function() {
-            var resizing = false, startW, startH, startX, startY;
-            resizer.addEventListener('mousedown', function(e) {
-                resizing = true;
-                var r = box.getBoundingClientRect();
-                startW = r.width; startH = r.height;
-                startX = e.clientX; startY = e.clientY;
-                e.preventDefault(); e.stopPropagation();
-            });
-            document.addEventListener('mousemove', function(e) {
-                if (!resizing) return;
-                var nw = Math.max(320, startW + (e.clientX - startX));
-                var nh = Math.max(200, startH + (e.clientY - startY));
-                box.style.width  = Math.min(nw, window.innerWidth  * 0.95) + 'px';
-                box.style.height = Math.min(nh, window.innerHeight * 0.95) + 'px';
-                box.style.maxHeight = 'none';
-                box.style.maxWidth  = 'none';
-            });
-            document.addEventListener('mouseup', function() { resizing = false; });
-        })();
+        // ── 이동·크기조절·최소화·맨 앞으로 — 공용 모달 컨벤션(js/19, js/14c) ──
+        //    [2026-10-29] 예전엔 이 모달만 자체 드래그/우하단 리사이즈를 따로 들고 있었다(열 때마다
+        //    document 리스너가 새로 쌓였다). 공용 함수로 바꿔 8방향 크기조절·최소화도 같이 받는다.
+        //    드래그 리스너는 id로 그때그때 찾으므로 한 번만 등록하고, 박스별로 붙는 것만 매번 붙인다.
+        box.id = 'tp-viewer-box';
+        hdr.id = 'tp-viewer-hdr';
+        document.body.appendChild(overlay);
+        if (!window._tpViewerDragBound && window._makeDraggable) {
+            window._tpViewerDragBound = true;
+            window._makeDraggable('tp-viewer-box', 'tp-viewer-hdr');
+        } else {
+            if (window._makeMinimizable) window._makeMinimizable('tp-viewer-box', 'tp-viewer-hdr');
+            if (window._makeResizable)   window._makeResizable('tp-viewer-box', false, 'tp-viewer-hdr');
+        }
+        if (window._bindClickToFront)  window._bindClickToFront('tp-viewer-overlay');
+        if (window.bringModalToFront)  window.bringModalToFront('tp-viewer-overlay');
 
         // ── 스크롤 영역 ──
         var body = document.createElement('div');
@@ -730,7 +915,6 @@
             body.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px;">⚪ ' + (_en ? 'No saved topic profiles.' : '저장된 토픽 프로파일이 없습니다.') + '<br><br>' +
                 '<button onclick="window._generateTopicProfile && window._generateTopicProfile()" ' +
                 'style="padding:8px 18px;background:#eaf7ea;color:#1f6a3a;border:1px solid #a8dab8;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;">📊 ' + (_en ? 'Generate profile for current project' : '현재 프로젝트 프로파일 생성') + '</button></div>';
-            document.body.appendChild(overlay);
             return;
         }
 
@@ -742,52 +926,198 @@
             return 0;
         });
 
-        var html = '';
-        keys.forEach(function(k) {
-            var p = store[k];
-            if (!p) return;
-            var isCur = k === curKey;
-            var projName = nameMap[k] || k;
-            var d = p.ts ? new Date(p.ts) : null;
-            var ago = d ? (function() {
-                var min = Math.round((Date.now() - d) / 60000);
-                return _en
-                    ? (min < 60 ? min + 'm ago' : min < 1440 ? Math.round(min/60) + 'h ago' : Math.round(min/1440) + 'd ago')
-                    : (min < 60 ? min + '분 전' : min < 1440 ? Math.round(min/60) + '시간 전' : Math.round(min/1440) + '일 전');
-            })() : '';
-            var kwChips = (p.keywords || []).map(function(kw) {
-                return '<span style="display:inline-block;padding:2px 8px;margin:2px 2px 2px 0;background:#e8f4fd;color:#1a4f7a;border-radius:10px;font-size:11.5px;">' + kw + '</span>';
-            }).join('');
-            var topics = (p.topics || []).map(function(t) {
-                return '<span style="display:block;font-size:12px;color:#333;padding:2px 0;">• ' + t + '</span>';
-            }).join('');
-            var patterns = (p.patterns || []).map(function(t) {
-                return '<span style="display:block;font-size:11.5px;color:#666;padding:2px 0;">↳ ' + t + '</span>';
-            }).join('');
-
-            // 키 타입 판별: Google Drive fileId = 33자 이상 영문숫자, 그 외는 fileName
-            var _isFileId = /^[A-Za-z0-9_\-]{25,}$/.test(k);
-            var _keyBadge = _isFileId
-                ? '<span style="font-size:9px;color:#888;background:#e8f0fe;border:1px solid #c5d5f8;border-radius:4px;padding:1px 5px;margin-left:4px;" title="Drive fileId: ' + k + '">ID</span>'
-                : '<span style="font-size:9px;color:#a05000;background:#fff3e0;border:1px solid #ffcc80;border-radius:4px;padding:1px 5px;margin-left:4px;" title="' + (_en ? 'Legacy fileName key: ' : '구버전 fileName 키: ') + k + '">' + (_en ? '⚠️filename' : '⚠️파일명') + '</span>';
-            var safeCardId = 'tp-card-' + k.replace(/[^a-zA-Z0-9]/g, '_');
-            var agoText = ago ? (_en ? 'Created ' + ago : ago + ' 생성') : '';
-            var taskCountText = p.taskCount ? (_en ? ' · ' + p.taskCount + ' task(s)' : ' · ' + p.taskCount + '개 업무') : '';
-            html += '<div id="' + safeCardId + '" style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
-                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
-                  '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + projName + _keyBadge + '</span>' +
-                  '<button onclick="window._tpDeleteOne(\'' + k.replace(/'/g, '') + '\')" title="' + (_en ? 'Delete this profile' : '이 프로파일 삭제') + '" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;">🗑 ' + (_en ? 'Delete' : '삭제') + '</button>' +
-                  '<span style="font-size:10px;color:#aaa;">' + agoText + taskCountText + '</span>' +
-                '</div>' +
-                (p.summary ? '<div style="font-size:12px;color:#2c5f8a;background:#e7f3ff;padding:6px 10px;border-radius:6px;margin-bottom:8px;">' + p.summary + '</div>' : '') +
-                (kwChips ? '<div style="margin-bottom:6px;"><div style="font-size:11px;color:#888;margin-bottom:3px;">🔑 ' + (_en ? 'Keywords' : '키워드') + '</div>' + kwChips + '</div>' : '') +
-                (topics ? '<div style="margin-bottom:4px;"><div style="font-size:11px;color:#888;margin-bottom:2px;">📂 ' + (_en ? 'Task Types' : '업무 유형') + '</div>' + topics + '</div>' : '') +
-                (patterns ? '<div><div style="font-size:11px;color:#888;margin-bottom:2px;">💡 ' + (_en ? 'Patterns' : '패턴') + '</div>' + patterns + '</div>' : '') +
-                '</div>';
-        });
-        body.innerHTML = html;
-        document.body.appendChild(overlay);
+        _tpViewerCtx = { nameMap: nameMap, curKey: curKey, en: _en };
+        body.innerHTML = keys.map(function(k) { return _tpCardHtml(k, store[k]); }).join('');
+        _tpBindViewerEditing(body);
     };
+
+    // ── [2026-10-29 신규] 뷰어 카드 — 항목별 × 삭제 / 클릭해서 그 자리 수정 / 섹션별 추가 ──────────
+    //    편집은 전부 _tpEditProfile 한 곳으로 — 사람 편집은 profile.human에 따로 적혀 재생성이 못 덮는다.
+    var _tpViewerCtx = { nameMap: {}, curKey: '', en: false };
+    function _tpEsc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function _tpCardId(k) { return 'tp-card-' + String(k).replace(/[^a-zA-Z0-9]/g, '_'); }
+    // 섹션 정의(데이터) — 새 편집 대상 필드는 여기 한 줄 추가(_TP_EDIT_FIELDS에도)
+    var _TP_SECTIONS = [
+        { f: 'keywords', icon: '🔑', ko: '키워드',    en: 'Keywords',   chip: true  },
+        { f: 'topics',   icon: '📂', ko: '업무 유형', en: 'Task Types', chip: false },
+        { f: 'patterns', icon: '💡', ko: '패턴',      en: 'Patterns',   chip: false }
+    ];
+
+    function _tpCardHtml(k, p) {
+        if (!p) return '';
+        var _en = _tpViewerCtx.en;
+        var isCur = k === _tpViewerCtx.curKey;
+        var projName = _tpViewerCtx.nameMap[k] || k;
+        var d = p.ts ? new Date(p.ts) : null;
+        var ago = d ? (function() {
+            var min = Math.round((Date.now() - d) / 60000);
+            return _en
+                ? (min < 60 ? min + 'm ago' : min < 1440 ? Math.round(min/60) + 'h ago' : Math.round(min/1440) + 'd ago')
+                : (min < 60 ? min + '분 전' : min < 1440 ? Math.round(min/60) + '시간 전' : Math.round(min/1440) + '일 전');
+        })() : '';
+        var kAttr = _tpEsc(k);
+
+        // 키 타입 판별: Google Drive fileId = 33자 이상 영문숫자, 그 외는 fileName
+        var _isFileId = /^[A-Za-z0-9_\-]{25,}$/.test(k);
+        var _keyBadge = _isFileId
+            ? '<span style="font-size:9px;color:#888;background:#e8f0fe;border:1px solid #c5d5f8;border-radius:4px;padding:1px 5px;margin-left:4px;" title="Drive fileId: ' + kAttr + '">ID</span>'
+            : '<span style="font-size:9px;color:#a05000;background:#fff3e0;border:1px solid #ffcc80;border-radius:4px;padding:1px 5px;margin-left:4px;" title="' + (_en ? 'Legacy fileName key: ' : '구버전 fileName 키: ') + kAttr + '">' + (_en ? '⚠️filename' : '⚠️파일명') + '</span>';
+        var agoText = ago ? (_en ? 'Created ' + ago : ago + ' 생성') : '';
+        var taskCountText = p.taskCount ? (_en ? ' · ' + p.taskCount + ' task(s)' : ' · ' + p.taskCount + '개 업무') : '';
+        var h = p.human || null;
+        var editBadge = (h && h.editedAt)
+            ? '<span style="font-size:9.5px;color:#7048e8;background:#f3f0ff;border:1px solid #d0bfff;border-radius:4px;padding:1px 5px;margin-left:4px;" title="' +
+              (_en ? 'Edited by a person — auto-regeneration keeps these edits' : '사람이 고친 프로파일 — 자동 재생성이 이 편집을 덮어쓰지 않습니다') + '">✏️ ' + (_en ? 'edited' : '사람 편집') + '</span>'
+            : '';
+
+        var html = '<div id="' + _tpCardId(k) + '" data-tp-key="' + kAttr + '" style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+              '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + _tpEsc(projName) + _keyBadge + editBadge + '</span>' +
+              '<button data-tp-act="delprofile" title="' + (_en ? 'Delete this profile' : '이 프로파일 삭제') + '" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;white-space:nowrap;flex-shrink:0;">🗑 ' + (_en ? 'Delete' : '삭제') + '</button>' +
+              '<span style="font-size:10px;color:#aaa;white-space:nowrap;flex-shrink:0;">' + agoText + taskCountText + '</span>' +
+            '</div>';
+        if (!isCur) {
+            html += '<div style="font-size:10.5px;color:#a05000;margin:-4px 0 6px;">' + (_en
+                ? 'ⓘ Not the open project — edits are saved on this PC and go to Drive the next time you open that project.'
+                : 'ⓘ 지금 열린 프로젝트가 아님 — 편집은 이 PC에 저장되고, 그 프로젝트를 열면 Drive에 반영됩니다.') + '</div>';
+        }
+        // 요약 — 클릭해서 수정
+        html += '<div data-tp-edit="summary" title="' + (_en ? 'Click to edit' : '클릭해서 수정') + '" style="font-size:12px;color:#2c5f8a;background:#e7f3ff;padding:6px 10px;border-radius:6px;margin-bottom:8px;cursor:text;white-space:pre-wrap;">' +
+            (p.summary ? _tpEsc(p.summary) : '<span style="color:#9bb;">' + (_en ? '+ Add a summary' : '+ 요약 추가') + '</span>') + '</div>';
+
+        _TP_SECTIONS.forEach(function(sec) {
+            var arr = p[sec.f] || [];
+            var added = _tpAddedOf(p, sec.f);
+            var removed = _tpRemovedOf(p, sec.f);
+            var items = arr.map(function(t, i) {
+                var mine = _tpHas(added, t);
+                var tip = mine ? (_en ? 'Added/edited by a person — click to edit' : '사람이 추가·수정한 항목 — 클릭해서 수정') : (_en ? 'Click to edit' : '클릭해서 수정');
+                var xBtn = '<button data-tp-act="del" data-f="' + sec.f + '" data-i="' + i + '" title="' + (_en ? 'Remove' : '삭제') + '" ' +
+                    'style="border:none;background:none;color:#c92a2a;cursor:pointer;font-size:13px;line-height:1;padding:0 0 0 4px;">×</button>';
+                var txt = '<span data-tp-edit="' + sec.f + '" data-i="' + i + '" title="' + tip + '" style="cursor:text;">' + _tpEsc(t) + '</span>';
+                return sec.chip
+                    ? '<span style="display:inline-flex;align-items:center;padding:2px 6px 2px 8px;margin:2px 2px 2px 0;background:' + (mine ? '#f3f0ff' : '#e8f4fd') + ';color:' + (mine ? '#5f3dc4' : '#1a4f7a') + ';border-radius:10px;font-size:11.5px;">' + txt + xBtn + '</span>'
+                    : '<div style="display:flex;align-items:flex-start;gap:3px;font-size:' + (sec.f === 'patterns' ? '11.5px;color:#666' : '12px;color:#333') + ';padding:2px 0;">' +
+                        '<span style="flex-shrink:0;">' + (sec.f === 'patterns' ? '↳' : '•') + '</span>' +
+                        '<span style="flex:1;' + (mine ? 'color:#5f3dc4;' : '') + '">' + txt + '</span>' + xBtn + '</div>';
+            }).join('');
+            var addInput = '<input data-tp-add="' + sec.f + '" placeholder="' + (_en ? '+ Add (Enter)' : '+ 추가 (Enter)') + '" ' +
+                'style="' + (sec.chip ? 'width:110px;margin:2px 0;' : 'width:100%;box-sizing:border-box;margin-top:2px;') + 'font-size:11px;padding:2px 6px;border:1px dashed #b6c8dc;border-radius:8px;background:#fff;outline:none;">';
+            var rmLine = removed.length
+                ? '<div style="font-size:10.5px;color:#999;margin-top:2px;">🚫 ' + (_en ? "Removed by a person (won't come back on regeneration): " : '사람이 지운 항목(재생성해도 안 돌아옴): ') +
+                    removed.map(function(t, i) {
+                        return '<span style="text-decoration:line-through;">' + _tpEsc(t) + '</span>' +
+                            '<button data-tp-act="unrm" data-f="' + sec.f + '" data-i="' + i + '" title="' + (_en ? 'Restore' : '되살리기') + '" style="border:none;background:none;color:#1971c2;cursor:pointer;font-size:11px;padding:0 4px 0 2px;">↺</button>';
+                    }).join(' ') + '</div>'
+                : '';
+            html += '<div style="margin-bottom:6px;"><div style="font-size:11px;color:#888;margin-bottom:2px;">' + sec.icon + ' ' + (_en ? sec.en : sec.ko) + '</div>' +
+                items + (sec.chip ? addInput : '<div>' + addInput + '</div>') + rmLine + '</div>';
+        });
+        return html + '</div>';
+    }
+
+    function _tpRerenderCard(k) {
+        var card = document.getElementById(_tpCardId(k));
+        var p = window._getTopicProfile(k);
+        if (!card || !p) return;
+        var tmp = document.createElement('div');
+        tmp.innerHTML = _tpCardHtml(k, p);
+        card.replaceWith(tmp.firstChild);
+    }
+
+    var _tpOtherNoteShown = {};
+    function _tpAfterEdit(k, changed) {
+        _tpRerenderCard(k);
+        if (changed && k !== _currentKey() && !_tpOtherNoteShown[k] && window.showToast) {
+            _tpOtherNoteShown[k] = true;
+            window.showToast(_tpViewerCtx.en
+                ? '✏️ Saved on this PC — it will be sent to Drive when you open that project.'
+                : '✏️ 이 PC에 저장됨 — 그 프로젝트를 열면 Drive에 반영됩니다.', 'info', 4000);
+        }
+    }
+
+    function _tpBindViewerEditing(body) {
+        if (body.dataset.tpBound === '1') return;
+        body.dataset.tpBound = '1';
+        var keyOf = function(el) { var c = el.closest('[data-tp-key]'); return c ? c.getAttribute('data-tp-key') : ''; };
+
+        body.addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-tp-act]');
+            if (btn) {
+                e.stopPropagation();
+                var k = keyOf(btn), act = btn.getAttribute('data-tp-act');
+                if (act === 'delprofile') { window._tpDeleteOne(k); return; }
+                var p = window._getTopicProfile(k);
+                if (!p) return;
+                var f = btn.getAttribute('data-f'), i = +btn.getAttribute('data-i');
+                if (act === 'del')  _tpAfterEdit(k, window._tpEditProfile(k, f, 'del',  (p[f] || [])[i]));
+                if (act === 'unrm') _tpAfterEdit(k, window._tpEditProfile(k, f, 'unrm', _tpRemovedOf(p, f)[i]));
+                return;
+            }
+            var ed = e.target.closest('[data-tp-edit]');
+            if (ed && !ed.querySelector('input,textarea')) _tpStartInlineEdit(ed, keyOf(ed));
+        });
+        body.addEventListener('keydown', function(e) {
+            var inp = e.target.closest('[data-tp-add]');
+            if (!inp) return;
+            if (e.key === 'Enter' && !e.isComposing) {
+                e.preventDefault();
+                var k = keyOf(inp), f = inp.getAttribute('data-tp-add'), v = inp.value.trim();
+                if (!v) return;
+                var r = window._tpEditProfile(k, f, 'add', null, v);
+                if (!r && window.showToast) window.showToast(_tpViewerCtx.en ? 'Already in the list' : '이미 있는 항목입니다', 'info', 2000);
+                _tpAfterEdit(k, r);
+                // 연달아 추가할 수 있게 같은 섹션 입력란에 다시 커서
+                var card = document.getElementById(_tpCardId(k));
+                var again = card && card.querySelector('[data-tp-add="' + f + '"]');
+                if (again) again.focus();
+            } else if (e.key === 'Escape') {
+                inp.value = ''; inp.blur();
+            }
+        });
+    }
+
+    /** 항목/요약 그 자리 수정 — Enter 저장 · Esc 취소 · 바깥 클릭(blur) 저장. 요약은 Shift+Enter 줄바꿈. */
+    function _tpStartInlineEdit(el, k) {
+        var p = window._getTopicProfile(k);
+        if (!p) return;
+        var f = el.getAttribute('data-tp-edit');
+        var isSummary = f === 'summary';
+        var i = +el.getAttribute('data-i');
+        var oldVal = isSummary ? (p.summary || '') : (p[f] || [])[i];
+        if (oldVal == null) return;
+        var inp = document.createElement(f === 'keywords' ? 'input' : 'textarea');
+        inp.value = oldVal;
+        inp.style.cssText = 'font:inherit;color:#222;width:' + (f === 'keywords' ? Math.max(80, String(oldVal).length * 8) + 'px' : '100%') +
+            ';box-sizing:border-box;padding:1px 4px;border:1px solid #74c0fc;border-radius:4px;background:#fff;outline:none;resize:vertical;';
+        if (inp.tagName === 'TEXTAREA') inp.rows = isSummary ? 3 : 2;
+        el.textContent = '';
+        el.appendChild(inp);
+        inp.focus();
+        inp.select();
+        var done = false;
+        var finish = function(save) {
+            if (done) return;
+            done = true;
+            var v = inp.value.trim();
+            var r = null;
+            if (save && v !== String(oldVal).trim()) {
+                r = isSummary ? window._tpEditProfile(k, 'summary', 'summary', null, v)
+                    : (v ? window._tpEditProfile(k, f, 'edit', oldVal, v) : null);  // 비우면 취소(삭제는 × 버튼)
+            }
+            _tpAfterEdit(k, r);
+        };
+        inp.addEventListener('keydown', function(e) {
+            e.stopPropagation();
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); finish(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        });
+        inp.addEventListener('blur', function() { finish(true); });
+        inp.addEventListener('click', function(e) { e.stopPropagation(); });
+    }
+
 
     // ── 메일 매칭 신호 → project_index.json 실시간 갱신 ────────────────────────
     // 메일이 Project X에 배치될 때마다 키워드를 Drive에 기록 → PC꺼도 소멸 없음.
@@ -814,6 +1144,11 @@
     window._tpAppendMailSignal = function(driveFileId, task, mailRaw) {
         if (!driveFileId) return;
         var kws = _tpExtractMailKw(task, mailRaw);
+        // [2026-10-29] 사람 이름·사람이 지운 키워드는 메일 신호로도 되살리지 않는다
+        var _sigProf = _getStore()[driveFileId];
+        var _sigRm = _tpRemovedOf(_sigProf, 'keywords');
+        var _sigNames = _tpPersonNameSet();
+        kws = kws.filter(function(k) { return !_tpHas(_sigRm, k) && !window._tpIsPersonName(k, _sigNames); });
         if (!kws.length) return;
         _tpSignalBuffer[driveFileId] = _tpSignalBuffer[driveFileId] || new Set();
         kws.forEach(function(k) { _tpSignalBuffer[driveFileId].add(k); });
@@ -824,6 +1159,7 @@
                 var m = new Set(store[driveFileId].keywords || []);
                 kws.forEach(function(k) { m.add(k); });
                 store[driveFileId].keywords = Array.from(m).slice(0, 15);
+                window._tpApplyHuman(store[driveFileId]);   // 15개 자르기로 사람이 넣은 키워드가 밀려나지 않게
                 localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(store));
             }
         } catch(e) {}
@@ -848,12 +1184,17 @@
             var indexData = await res.json();
             if (!indexData || !Array.isArray(indexData.projects)) return;
             var changed = false;
+            var _flNames = _tpPersonNameSet();
             fids.forEach(function(fid) {
                 var entry = indexData.projects.find(function(p) { return p.drive_file_id === fid; });
                 if (!entry) return;
                 var merged = new Set(entry.topicKeywords || []);
                 buf[fid].forEach(function(k) { merged.add(k); });
-                entry.topicKeywords = Array.from(merged).slice(0, 15);
+                // [2026-10-29] 예전에 쌓인 사람 이름·사람이 지운 키워드도 이 기회에 걷어낸다
+                var _fRm = _tpRemovedOf(_getStore()[fid], 'keywords');
+                entry.topicKeywords = Array.from(merged).filter(function(k) {
+                    return !_tpHas(_fRm, k) && !window._tpIsPersonName(k, _flNames);
+                }).slice(0, 15);
                 changed = true;
             });
             if (!changed) return;

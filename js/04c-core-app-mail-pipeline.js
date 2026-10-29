@@ -1995,9 +1995,15 @@
                 //    처음 로딩·마지막 저장은 Drive(server), 실제 동작은 캐시 — 추가 Drive 호출 없음
                 if (saveData.topicProfile && fileId) {
                     try {
-                        var _tpCacheLoad = JSON.parse(localStorage.getItem('gantt_topic_profile_v1')) || {};
-                        _tpCacheLoad[fileId] = saveData.topicProfile;
-                        localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(_tpCacheLoad));
+                        // 💡 [2026-10-29] 통째로 덮지 않는다 — 이 PC에 더 최근의 사람 편집(js/26 뷰어)이
+                        //    있으면 살리고 dirty로 올려 다음 저장에 Drive로 실리게 한다.
+                        if (window._tpAdoptStoredProfile) {
+                            if (window._tpAdoptStoredProfile(fileId, saveData.topicProfile)) window._nonGanttDirty = true;
+                        } else {
+                            var _tpCacheLoad = JSON.parse(localStorage.getItem('gantt_topic_profile_v1')) || {};
+                            _tpCacheLoad[fileId] = saveData.topicProfile;
+                            localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(_tpCacheLoad));
+                        }
                         console.log('[토픽 프로파일] Drive JSON → 캐시 복원:', fileId, '키워드 수:', (saveData.topicProfile.keywords || []).length);
                     } catch(_tpE) { console.warn('[토픽 프로파일] 캐시 복원 실패', _tpE); }
                     if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();

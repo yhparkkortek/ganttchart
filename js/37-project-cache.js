@@ -136,9 +136,14 @@
                 }
                 if (snap.topicProfile && fileId) {
                     try {
-                        var _tpC = JSON.parse(localStorage.getItem('gantt_topic_profile_v1') || '{}');
-                        _tpC[fileId] = snap.topicProfile;
-                        localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(_tpC));
+                        // 💡 [2026-10-29] 캐시 스냅샷은 사람 편집보다 오래됐을 수 있다 — js/26이 더 최근 쪽을 고른다
+                        if (window._tpAdoptStoredProfile) {
+                            if (window._tpAdoptStoredProfile(fileId, snap.topicProfile)) window._nonGanttDirty = true;
+                        } else {
+                            var _tpC = JSON.parse(localStorage.getItem('gantt_topic_profile_v1') || '{}');
+                            _tpC[fileId] = snap.topicProfile;
+                            localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(_tpC));
+                        }
                     } catch(e) {}
                     window._refreshTopicProfileBadge && window._refreshTopicProfileBadge();
                 }
