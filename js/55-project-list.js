@@ -969,9 +969,11 @@
             el.style.background = bg; el.style.color = fg;
             el.style.border = '1px solid ' + bd;
         };
-        ['pl-btn-reset', 'pl-btn-add', 'pl-btn-import', 'pl-btn-export', 'pl-btn-nas', 'pl-btn-cols', 'pl-btn-print']
+        // 🎯 [2026-10-30] "도면 분석"도 **옆 버튼과 똑같이** 칠한다(사용자 지적: 혼자 튄다).
+        //    처음엔 한 단계 진한 색으로 구분했는데, 띠 안에서 저 혼자 눈에 띌 이유가 없다 —
+        //    자주 쓰는 버튼도 아니고 위험한 버튼도 아니다(AI 안 쓰고, 표를 바로 고치지도 않는다).
+        ['pl-btn-reset', 'pl-btn-add', 'pl-btn-import', 'pl-btn-export', 'pl-btn-nas', 'pl-btn-dwg', 'pl-btn-cols', 'pl-btn-print']
             .forEach(function (id) { paint(id, P.bg, P.darkText, P.border); });
-        paint('pl-btn-dwg', P.hoverBg, P.darkText, P.hoverBorder);
     };
 
     window.plRender = function (light) {
