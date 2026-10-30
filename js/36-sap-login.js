@@ -184,8 +184,19 @@
             var cfg = await fetch(BASE + '/gw/login-config').then(function (r) { return r.json(); });
             if (cfg.configured) {
                 document.getElementById('gwlogin-user').value = cfg.user || '';
-                if (pwEl) pwEl.placeholder = T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
-                if (st) { st.textContent = T('· 설정됨', '· configured'); st.style.color = '#1f7a3d'; }
+                // 📧 [2026-10-30] 메일 서버 설정에서 가져온 경우를 구분해 보여준다 — 둘 다 "설정됨"으로
+                //    보이면 여기서 지워도 자동 로그인이 계속 되는 이유를 알 수 없다.
+                var _fromMail = cfg.source === 'mail';
+                if (pwEl) {
+                    pwEl.placeholder = _fromMail
+                        ? T('(메일 설정의 비밀번호를 씁니다 — 따로 쓰려면 입력)', '(uses the mail password — type to override)')
+                        : T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
+                }
+                if (st) {
+                    st.textContent = _fromMail ? T('· 메일 설정 사용 중', '· using mail settings')
+                                               : T('· 설정됨', '· configured');
+                    st.style.color = _fromMail ? '#1971c2' : '#1f7a3d';
+                }
             } else if (st) {
                 st.textContent = T('· 미설정', '· not set'); st.style.color = '#999';
             }

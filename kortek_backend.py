@@ -472,7 +472,10 @@ def update_smtp_config():
             json.dump({'host': SMTP_HOST, 'port': SMTP_PORT,
                        'user': SMTP_USER, 'pass': SMTP_PASS},
                       f, ensure_ascii=False)
-        return jsonify({'ok': True})
+        # 🔑 그룹웨어 자동 로그인에도 같이 저장(사용자 요청 2026-10-30) — 같은 통합 계정이다.
+        #    실패해도 메일 저장은 유지하고, 결과만 응답에 실어 보여준다.
+        gw_ok, gw_msg = _sync_gw_from_mail()
+        return jsonify({'ok': True, 'syncedGroupware': gw_ok, 'syncMessage': gw_msg})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -3347,6 +3350,79 @@ def gw_open():
 _GW_LOGIN_CFG_PATH = os.path.join(BASE_DIR, 'gw_login_config.json')
 
 
+# ══ 📧🔑 메일 설정 ↔ 그룹웨어 로그인 정보 동기화 (2026-10-30, 사용자 요청) ══════════
+#  "이메일 서버 설정과 그룹웨어 자동 로그인이 같은 아이디 비밀번호를 사용하니까 (…)
+#   그룹웨어 정보를 등록하면 이메일 서버 설정값도 동시 저장되고 반대도"
+#
+#  실측(2026-10-30)으로 전제를 확인하고 들어갔다: 메일 `user`의 **'@' 앞부분이 그룹웨어
+#  `user`와 정확히 일치**했다(인사관리는 사번 10자리라 **별개** — 여기에 섞지 말 것).
+#
+#  ⚠️⚠️ **Drive 불러오기(`/mail/decrypt`·`/all/decrypt`)에는 일부러 연결하지 않았다.**
+#     `mail_secure.enc`는 백업 폴더의 **팀 공용 파일 한 개**라, 관리자("팀") 비밀번호를 아는
+#     팀원 누구나 불러온다. 거기에 그룹웨어 동기화를 붙이면 **한 사람의 그룹웨어 계정이
+#     팀원 PC마다 깔려** 남의 이름으로 자동 로그인되고, 비밀번호가 바뀐 뒤엔 여러 PC가
+#     동시에 실패를 쌓아 **계정이 잠긴다**(그룹웨어가 잠기면 메일·전자결재까지 멈춘다).
+#     동기화는 **그 PC에서 사람이 직접 저장할 때만** 일어난다.
+#
+#  ⚠️ 동기화 실패는 원래 저장을 깨지 않는다 — 결과만 응답에 실어 보여준다(조용히 삼키지 않음).
+_MAIL_HOST_PREFIXES = ('kmail.', 'mail.', 'smtp.', 'pop.', 'pop3.', 'imap.', 'webmail.')
+
+
+def _mail_domain_guess():
+    """메일 도메인을 알아낸다 — ① 지금 저장된 메일 주소의 '@' 뒤 ② SMTP 호스트에서
+    메일 서버 접두어를 뗀 것. 둘 다 안 되면 None(그때는 동기화를 안 한다)."""
+    try:
+        if SMTP_USER and '@' in SMTP_USER:
+            dom = SMTP_USER.split('@', 1)[1].strip()
+            if dom:
+                return dom
+    except Exception:
+        pass
+    host = str(SMTP_HOST or '').strip().lower()
+    for pre in _MAIL_HOST_PREFIXES:
+        if host.startswith(pre):
+            return host[len(pre):]
+    return host.split('.', 1)[1] if host.count('.') >= 2 else (host or None)
+
+
+def _sync_gw_from_mail():
+    """메일 설정 → 그룹웨어 로그인 정보(DPAPI). 반환 (ok, 메시지)."""
+    user = str(SMTP_USER or '').strip()
+    pw = str(SMTP_PASS or '')
+    if not user or not pw:
+        return False, '메일 아이디/비밀번호가 비어 있어 그룹웨어에 동기화하지 않았습니다.'
+    gw_user = user.split('@')[0].strip()
+    if not gw_user:
+        return False, '메일 아이디에서 그룹웨어 아이디를 뽑지 못했습니다.'
+    try:
+        enc = _dpapi_encrypt_b64(pw)
+        with open(_GW_LOGIN_CFG_PATH, 'w', encoding='utf-8') as f:
+            json.dump({'user': gw_user, 'pw_dpapi': enc}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return False, f'그룹웨어 동기화 실패: {e}'
+    return True, f'그룹웨어 로그인 정보도 같이 저장했습니다({gw_user}).'
+
+
+def _sync_mail_from_gw(gw_user, pw):
+    """그룹웨어 로그인 정보 → 메일 설정. host/port는 건드리지 않는다. 반환 (ok, 메시지)."""
+    global SMTP_USER, SMTP_PASS
+    gw_user = str(gw_user or '').strip()
+    if not gw_user or not pw:
+        return False, '그룹웨어 아이디/비밀번호가 비어 있어 메일 설정에 동기화하지 않았습니다.'
+    dom = _mail_domain_guess()
+    if not dom:
+        return False, '메일 도메인을 알 수 없어 메일 설정에 동기화하지 않았습니다(메일 설정을 먼저 한 번 저장해주세요).'
+    mail_user = gw_user if '@' in gw_user else (gw_user + '@' + dom)
+    try:
+        SMTP_USER, SMTP_PASS = mail_user, pw
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump({'host': SMTP_HOST, 'port': SMTP_PORT,
+                       'user': SMTP_USER, 'pass': SMTP_PASS}, f, ensure_ascii=False)
+    except Exception as e:
+        return False, f'메일 설정 동기화 실패: {e}'
+    return True, f'메일 서버 설정도 같이 저장했습니다({mail_user}).'
+
+
 @app.route('/gw/login-config', methods=['GET'])
 def gw_login_config_get():
     cfg = {}
@@ -3355,9 +3431,15 @@ def gw_login_config_get():
             cfg = json.load(f) or {}
     except Exception:
         pass
-    return jsonify({'ok': True,
-                    'configured': bool(cfg.get('user') and cfg.get('pw_dpapi')),
-                    'user': cfg.get('user', '')})
+    if cfg.get('user') and cfg.get('pw_dpapi'):
+        return jsonify({'ok': True, 'configured': True, 'source': 'gw', 'user': cfg.get('user', '')})
+    # 그룹웨어 전용 설정이 없으면 메일 설정에서 가져다 쓴다(gw_bridge.load_login_config와 같은 규칙).
+    mail_user = str(SMTP_USER or '').strip()
+    if mail_user and SMTP_PASS:
+        return jsonify({'ok': True, 'configured': True, 'source': 'mail',
+                        'user': mail_user.split('@')[0],
+                        'message': '메일 서버 설정의 계정을 그대로 씁니다.'})
+    return jsonify({'ok': True, 'configured': False, 'source': None, 'user': ''})
 
 
 @app.route('/gw/login-config', methods=['POST'])
@@ -3378,7 +3460,11 @@ def gw_login_config_save():
             json.dump({'user': user, 'pw_dpapi': enc}, f, ensure_ascii=False, indent=2)
     except Exception as e:
         return jsonify({'ok': False, 'message': f'설정 저장 실패: {e}'}), 500
-    return jsonify({'ok': True, 'message': '그룹웨어 로그인 정보를 저장했습니다.', 'user': user})
+    # 📧 메일 서버 설정에도 같이 저장(사용자 요청) — 실패해도 그룹웨어 저장은 유지한다.
+    mail_ok, mail_msg = _sync_mail_from_gw(user, (request.get_json(silent=True) or {}).get('pw') or '')
+    return jsonify({'ok': True, 'user': user,
+                    'message': '그룹웨어 로그인 정보를 저장했습니다. ' + mail_msg,
+                    'syncedMail': mail_ok, 'syncMessage': mail_msg})
 
 
 @app.route('/gw/login-config', methods=['DELETE'])

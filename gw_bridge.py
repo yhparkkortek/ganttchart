@@ -329,15 +329,50 @@ def _dpapi_decrypt_b64(b64):
         ctypes.windll.kernel32.LocalFree(bout.pbData)
 
 
+# 📧 [2026-10-30 신규, 사용자 요청] 사내 메일과 그룹웨어는 **같은 통합 계정**이다 —
+#   "이메일 서버 설정과 그룹웨어 자동 로그인이 같은 아이디 비밀번호를 사용하니까".
+#   실측(2026-10-30)으로 확인: 메일 `user`의 **'@' 앞부분이 그룹웨어 `user`와 정확히 일치**했다
+#   (인사관리는 사번이라 별개 — 여기에 섞지 말 것).
+#   그래서 그룹웨어 계정이 따로 저장돼 있지 않으면 메일 설정에서 가져다 쓴다.
+#   ⚠️ 이건 **읽기 폴백**이다 — 파일을 새로 쓰지 않는다. 저장 쪽 동기화는 kortek_backend.py에 있다.
+#   ⚠️ `mail_config.json`의 비밀번호는 **평문**이라 DPAPI 복호화가 필요 없다(그래서 `pw_plain`).
+MAIL_CFG_FOR_LOGIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mail_config.json')
+
+
+def _mail_login_fallback():
+    """메일 서버 설정에서 그룹웨어 계정을 유추한다. 못 하면 None."""
+    try:
+        with open(MAIL_CFG_FOR_LOGIN, 'r', encoding='utf-8') as f:
+            m = json.load(f) or {}
+    except Exception:
+        return None
+    user = str(m.get('user') or '').strip()
+    pw = str(m.get('pass') or '')
+    if not user or not pw:
+        return None
+    return {'user': user.split('@')[0].strip(), 'pw_plain': pw, 'source': 'mail'}
+
+
+def cfg_password(cfg):
+    """저장 방식(DPAPI / 메일 평문)에 상관없이 비밀번호를 돌려준다.
+    ⚠️ 반환값을 로그·응답·명령줄에 절대 싣지 말 것."""
+    if cfg.get('pw_plain'):
+        return cfg['pw_plain']
+    return _dpapi_decrypt_b64(cfg['pw_dpapi'])
+
+
 def load_login_config():
+    """그룹웨어 전용 설정이 있으면 그것, 없으면 메일 설정 폴백(위 주석)."""
+    cfg = None
     try:
         with open(GW_LOGIN_CFG, 'r', encoding='utf-8') as f:
             cfg = json.load(f)
     except Exception:
-        return None
-    if not isinstance(cfg, dict) or not cfg.get('user') or not cfg.get('pw_dpapi'):
-        return None
-    return cfg
+        cfg = None
+    if isinstance(cfg, dict) and cfg.get('user') and cfg.get('pw_dpapi'):
+        cfg['source'] = 'gw'
+        return cfg
+    return _mail_login_fallback()
 
 
 # 로그인 폼을 채우고 제출한 뒤 **결과만** 돌려준다. 재시도는 절대 하지 않는다.
@@ -530,7 +565,7 @@ def login_once():
                 'message': '저장된 그룹웨어 로그인 정보가 없습니다 — 🔑에서 먼저 등록해주세요.'}
 
     try:
-        pw = _dpapi_decrypt_b64(cfg['pw_dpapi'])
+        pw = cfg_password(cfg)   # 그룹웨어 저장분(DPAPI) 또는 메일 설정 폴백(평문)
     except Exception as e:
         return {'ok': False, 'result': 'decrypt', 'retryable': True, 'message': str(e)}
 
