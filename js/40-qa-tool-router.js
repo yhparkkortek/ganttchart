@@ -79,6 +79,7 @@
                 + '이런 질문에 쓴다: "내 입고 대상 보여줘", "입고처리할 구매오더 찾아줘", '
                 + '"수령인으로 조회해줘", "내가 받을 자재 뭐 있어?".',
             path: '/po-goods-receipt-by-recipient',
+            pick: 'orders',   // 행 클릭 칩 표(QA_ROW_CHIPS)가 쓸 원본 행이 이 키에 있다
             params: [
                 { name: 'recipient', type: 'string', required: false },
                 { name: 'mode', type: 'string', required: false, enum: ['미완료', '완료', '전체', '취소'], def: '미완료' }
@@ -560,6 +561,41 @@
                 ];
             }
         },
+        // 📦 [2026-10-30] 수령인으로 찾은 입고 대상 구매오더 — 번호만 보여주면 고를 수가 없다.
+        //    실측에서 한 사람의 미완료 10건이 2021~2024년 오더라, 업체·자재·등록일을 같이 봐야
+        //    어느 게 지금 입고할 건지 구분된다. 칩은 기존 공용 경로를 그대로 쓴다(값이 평문이면
+        //    _ganttQaSubmitConfirmButton 이 그대로 다시 보내므로 입고처리 블록이 받는다).
+        goodsreceipt: {
+            // ⚠️ 폭 합계를 표 폭 안에 둘 것 — 실측(2026-10-30) AI 문답 말풍선 안 표 폭은 **462px**이다.
+            //    처음엔 6열에 고정폭 444px을 줬다가 **자재 열이 17px로 뭉개져** 글자가 2개만 보였다
+            //    (화면으로 확인하고 고침). 고정폭은 글자 수가 정해진 열에만 주고, 업체·자재는
+            //    남는 폭을 나눠 갖게 비워 둔다. 수량·품목은 폭을 먹느니 **툴팁**으로 뺀다.
+            cols: [
+                { label: '구매오더', w: '86px', get: function (r) { return r.ebeln || ''; },
+                  title: function (r) {
+                      return window._t('구매오더 ' + (r.ebeln || '') + ' · 품목 ' + (r.items || 0) + '건 중 완료 ' + (r.doneItems || 0) + '건',
+                                       'PO ' + (r.ebeln || '') + ' · ' + (r.doneItems || 0) + ' of ' + (r.items || 0) + ' items done');
+                  } },
+                { label: '업체', get: function (r) { return r.name1 || r.lifnr || ''; },
+                  title: function (r) { return ((r.name1 || '') + ' ' + (r.lifnr ? '(' + r.lifnr + ')' : '')).trim(); } },
+                { label: '자재', get: function (r) { return r.maktx || r.matnr || ''; },
+                  title: function (r) { return ((r.matnr || '') + ' ' + (r.maktx || '')).trim(); } },
+                { label: '수량', w: '56px', get: function (r) { return (r.menge || '') + (r.meins ? ' ' + r.meins : ''); } },
+                { label: '등록일', w: '78px', get: function (r) { return r.aedat || ''; } }
+            ],
+            header: function (r) {
+                return window._t('구매오더 ' + (r.ebeln || '') + ' — 무엇을 할까요?',
+                                 'PO ' + (r.ebeln || '') + ' — what would you like to do?');
+            },
+            // ⚠️ 입고 처리는 전기(쓰기)다 — 칩을 눌러도 입고처리 블록이 번호를 다시 확인한 뒤
+            //    진행한다(_ganttQaGrPrecheck). 이미 완료된 오더면 전기하지 않고 안내만 한다.
+            menu: function (r) {
+                return [
+                    { label: '📦 ' + window._t('입고 처리', 'Post goods receipt'), value: (r.ebeln || '') + ' 입고 처리해줘' },
+                    { label: '🔍 ' + window._t('입고 상태 보기', 'View receipt status'), value: (r.ebeln || '') + ' 입고 확인해줘' }
+                ];
+            }
+        },
         board: {
             cols: [
                 { label: '게시판', w: '116px', get: function (r) { return r.boardName || ''; } },
@@ -582,7 +618,8 @@
     window.QA_ROW_CHIPS = window.QA_ROW_CHIPS || {
         gw_approval_search: { kind: 'approval' },
         gw_approval_box: { kind: 'approval' },
-        gw_board: { kind: 'board' }
+        gw_board: { kind: 'board' },
+        sap_goods_receipt_targets: { kind: 'goodsreceipt' }
     };
 
 

@@ -494,12 +494,23 @@
             )});
             return false;
         }
-        window._ganttQaShowGrEbelnDropdown(orders, { title: window._t(
-            '📦 수령인 "' + _name + '" 기준 입고 대상 ' + orders.length + '건입니다 — 어느 구매오더를 입고 처리할까요?'
-                + (data.truncated ? ' (최근 건만 표시)' : ''),
-            '📦 ' + orders.length + ' goods receipt target(s) for recipient "' + _name + '" — which purchase order?'
-                + (data.truncated ? ' (most recent only)' : '')
+        // 📊 [2026-10-30, 사용자 지적] 번호만 나열하는 드롭다운이 아니라 **표 + 행 클릭 칩**으로
+        //    보여준다 — 여러 건이 나오면 번호만으로는 고를 수가 없다. 표/칩은 전자결재·게시판이
+        //    쓰는 공용 경로를 그대로 쓴다(`_qaBuildRowChipTable` + `QA_ROW_CHIP_KINDS.goodsreceipt`,
+        //    js/40 데이터) — 새 UI 패턴을 만들지 않는다.
+        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+            '📦 수령인 "' + _name + '" 기준 입고 대상 ' + orders.length + '건입니다'
+                + (data.truncated ? ' (최근 건만 표시)' : '') + '.',
+            '📦 ' + orders.length + ' goods receipt target(s) for recipient "' + _name + '"'
+                + (data.truncated ? ' (most recent only)' : '') + '.'
         )});
+        var _grTable = window._qaBuildRowChipTable ? window._qaBuildRowChipTable('goodsreceipt', orders) : '';
+        if (_grTable) {
+            window._ganttQaHistory.push({ role: 'ai', rawHtml: true, text: _grTable });
+        } else {
+            // 표를 못 그리는 구버전이면 기존 드롭다운으로 폴백(고를 수는 있어야 한다)
+            window._ganttQaShowGrEbelnDropdown(orders);
+        }
         return true;
     };
 
