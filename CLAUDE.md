@@ -160,14 +160,13 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `42-page-excel-io.js` | 📄↔📊 페이지 ↔ 엑셀 왕복(출력 → 엑셀 수정 → 다시 불러오기). 인쇄 버튼 **왼쪽에 런타임 삽입**. 대상·시트 구성은 `PAGE_EXCEL_SPECS`(데이터) 한 곳 — 새 페이지는 항목 하나만 추가. 통째 교체 + 되돌리기. 파생 뷰(Calendar·주간보고·알람)는 되돌려 넣지 않음. **🤖 비규격 파일(PDF·TXT·HTML·남의 엑셀)은 AI가 매핑** — 블록의 `ai:{fields,labels,prompt}`(데이터)에 적고, 규격 파일은 AI를 **안 거친다**(결정론 우선 + 무료 키 하루 한도). 적용 전 미리보기 승인 필수. 현재 Customer SPEC만 연결됨. **📄 한 장 출력**: `spec.onePage`(데이터)를 달면 블록들을 **시트 하나**에 구역으로 쌓고 `■ 개요` 머리글로 다시 쪼개 불러온다(AI 없이 결정론 왕복, 옛 여러-시트 파일도 그대로 읽힘). 색은 `_cpXlsxRole` 팔레트 — Summary 적용 |
 | `43-briefspec-units.js` | 🧩 Customer SPEC을 **제품구분자(모델)별**로 보관. `tabData.briefSpecByUnit[모델]`, `tabData.briefSpec`은 **지금 모델의 배열을 가리키는 별칭**(M.C의 `mcTable`↔`mcRevisions.R1`과 같은 방식)이라 기존 8개 파일은 손 안 댐. 제품구분자는 M.C/BOM과 **공유**(`mcActiveUnit`). 옛 Model A/B/C는 `bsMigrateFromModelCols()`가 열 이름(`bsColLabels`)을 모델명으로 삼아 자동 이전 — 파일 열 때마다 확인, 멱등. `mcSwitchUnit`·`collectTabData`·`populateTabData`를 **감싸서** 끼어든다 |
 | `45-mc-import.js` | 🧾 M.C Table — 협력사/사내 M.C 엑셀(R1 시트 **B~K 열**)을 **AI 없이** 읽는 고정 양식 파서 + 여러 파일/시트를 한꺼번에 받아 **어느 제품구분자에 넣을지 고르는** 선택 화면. 머리글은 **6행**, **M열부터는 전혀 다른 표**(패널 후보 비교)라 통째로 읽으면 안 됨, D열 '...COST' 계산행과 **라벨 없는 총합계 행** 제외, Revision 블록에서 끊음. 원가 쌍이 둘(Proto A·MP)뿐이라 PROTO B는 비움. 'MECH' 보조 시트도 잡히므로 기본 체크 꺼둠 |
-| `47-approval-compose.js` | 📝 기안 작성 — **기존 기안을 틀로, 값은 지금 열린 프로젝트**에서 채운다(원본 값 그대로 복사는 `gw_approval_copy`). 매핑은 `APPROVAL_FIELD_SOURCES`(데이터): `meta`/`spec`/`summary`/`user`/`blank`, 안 적으면 **원본 유지**. spec 라벨은 **별칭 목록**. ⚠️ 칸마다 **출처를 보여준다** — 틀린 값이 결재선을 타고 올라가는 게 제일 위험. 사람이 **고친 값만** 적립(자동값까지 저장하면 사전 오염). 상신 안 함 |
+| `47-approval-compose.js` | 📝 기안 작성 — **기존 기안을 틀로, 값은 지금 열린 프로젝트**에서 채운다(원본 값 그대로 복사는 `gw_approval_copy`). 매핑은 `APPROVAL_FIELD_SOURCES`(데이터): `meta`/`spec`/`summary`/`user`/`blank`, 안 적으면 **원본 유지**. spec 라벨은 **별칭 목록**. ⚠️ 칸마다 **출처를 보여준다** — 틀린 값이 결재선을 타고 올라가는 게 제일 위험. 사람이 **고친 값만** 적립(자동값까지 저장하면 사전 오염). 매핑은 현재 **7개 양식**. 본문이 자유 서식인 양식은 **본문 HTML까지 복사**한다(`docs/groupware.md` 8-0-3). 미리보기 승인 후 임시저장, **상신 안 함** |
 | `50-parts-category-pages.js` | 🗂 **PARTS** 탭(옛 Elec Parts) — 주요자재 구분 **전부**가 **AD BD와 같은 비교표**를 쓴다. 전용 도표가 없는 구분은 ① `ELEC_PART_TYPES`에 공용 기본 항목(`GENERIC_PART_SPEC_SCHEMA`, js/22d)으로 등록 ② 화면·헤더 버튼은 **AD BD 한 벌을 복제**하고 id 안 `adbd`만 치환(`_pcpEnsureView`) — HTML에 9벌 붙여넣지 않는다. 그래서 추가/펼치기/엑셀 저장/AI 추출이 기존 엔진(js/22e)에서 그냥 돈다. 구분·아이콘·NAS 폴더는 `ELEC_CATEGORY_META`(js/23, 데이터) 한 곳, NAS는 `PARTS/<구분>`. NAS 사양서 → AI 추출은 기존 "항목 추가 ▸ AI로 추출"에 **파일만 꽂는다**(`_pcpAiFromFile`) — 추출기를 복제하지 않는다. → `docs/doc-store.md` |
 | `51-panel-lib-import.js` | 📚 회사 **패널 비교표 엑셀(`REFERENCE` 시트) → 팀 공용 패널 라이브러리 일괄 이식**. AI 안 씀(라벨이 앱 항목과 이름까지 맞는다 — 실측 패널 146개·항목 109종·칸 9,981개). **읽기 1회+쓰기 1회**(146번 upsert면 Drive 왕복 292번), **항목 단위 병합**(파일에 없는 `Item Code` 등은 안 지움), 모델명 기준 멱등. 라벨 별칭은 `PLI_LABEL_ALIASES`(데이터). 진입은 js/42 `preParse`(AI보다 먼저)와 PANEL 추가 모달 `📁 NAS에서`. → `docs/doc-store.md` |
 | `55-project-list.js` | 📒 **Project list** — 제품(모델) 전수 목록(사내 "제품 SPEC" 엑셀 91열). **팀별 관리**(`App_Config/ProjectList_<팀>.json`, 기본 개발3팀) — 주소록과 같은 빈-덮어쓰기·`savedAt` 동시성 가드. 열·줄임말·셀 글자수는 전부 데이터(`PL_COLUMNS`/`PL_SHORT`/`PL_CELL_MAX`). 머리글은 **한 줄 + 줄임말 + 말풍선**. NO 숫자 클릭 = 행 메뉴(위아래 이동·추가·삭제·📌고정). ⚠️ **NAS 자료는 파일 이름을 안 바꾸고 앞 숫자로 색인**(`PROJECT LIST/CUSTOMER`, 7자리=고객PN·6자리=KTK PN) + 행 위로 드래그앤드롭. ⚠️ 검색은 디바운스 필수(타자마다 전체 재렌더가 112ms였다). **탭 진입 175~250ms → 38~57ms**(2026-10-30) — ① 바뀜 게 없으면 안 그림(`plRenderIfStale`/`_plViewStale`) ② 칸마다 달던 onclick·고정열 style 을 **위임 핸들러 + 열 단위 CSS** 로 ③ **자리표시 행**(`data-lazy`, 인쇄 전엔 `_plHydrateAll`). ⚠️ `content-visibility:auto` 는 **배경 탭에서만 빨라 보이는 착시**였다 — 렌더 수치는 보이는 창에서 자식 배치까지 강제해 재라. 📜 도면에서 읽는 건 **REVISIONS / DISPLAY INFORMATION MATRIX 두 표뿐**(`plOpenRevisions`, Agile REV 칸의 📜·문서함 [📜 이력]) — 옵 30개 항목 추출·`dwg*` 열·[도면 분석] 버튼은 **2026-10-30에 통째로 삭제**(사용자 의도와 달랐다). ⚠️ **실제 데이터는 저장소에 안 넣는다**(GitHub Pages 공개) → `docs/project-list.md` |
 | `54-mail-body-store.js` | 📧 **메일 원문 본문을 프로젝트 파일 밖으로**(2026-10-28) — 프로젝트엔 앞 2,000자 + `_mailRaw.bodyRef`, 전문은 Drive `MailBodies/<key>.txt`(1건 1파일, text/plain). 읽기는 `_mbFullBody`: **NAS .eml → Drive → 앞부분**. 옮기기는 `_mbOffloadSweep`(열고 20초 뒤·10분마다, 업로드 확인된 행만 줄임). **열려 있지 않은 프로젝트는 `_mbOffloadAllProjects`**(켜고 2분 뒤·30분마다, 열린 시트는 절대 안 건드림), 배분 원장은 행에 이미 있는 메일이면 300자. ⚠️ 전문이 필요하면 `body2000` 직접 읽지 말 것 → `docs/mail-pipeline.md` |
 | `53-page-nas.js` | 📁 **페이지별 NAS 자료실** — 엑셀 왕복이 없는 파생 뷰(알람·캘린더·주간보고)에도 `📁 NAS` 를 단다. 폴더는 `PAGE_NAS_FOLDERS`(데이터), 여는 건 **열기·올리기만 하는 탐색기**(`_dsOpenBrowser`, js/48). ⚠️ 같은 탭에 js/42 가 이미 달았으면(`#px-share-*`) **안 단다** — 두 개가 된다. 폴더 철자는 NAS에 있는 그대로(`CALENDER` 포함). → `docs/doc-store.md` |
 | `41-qa-write-tools.js` | ✍️ 쓰기 도구 — **AI가 스스로 실행 안 함**. 초안→사람 확인 1회→자동. `verified:'pending'`은 요청 본문 미확정이라 실행 차단 |
-| `47-approval-compose.js` | 📝 전자결재 **기안 작성** — 기존 기안을 틀로, 값은 지금 프로젝트/SAP에서. 칸→출처 매핑은 `APPROVAL_FIELD_SOURCES`(데이터, 7개 양식). 미리보기에서 사람 승인 후 임시저장, **상신은 안 함** |
 | `52-approval-doctypes.js` | 📋 전자결재 **문서 종류 카탈로그** `APPROVAL_DOC_TYPES` — 양식 이름·부르는 말·**실측 칸 이름**(최근 문서를 실제로 읽어 확인). 말에서 양식 판정(`_apvDocTypeHit`) → 그 양식의 최근 문서를 틀로(`apvComposeByForm`). ⚠️ 양식 이름끼리 **부분문자열**이라 포함 판정만 하면 엉뚱한 틀을 집는다(`제품코드등록신청서` ⊂ `원자재/반제품코드등록신청서`). 상세 → `docs/groupware.md` 8-0절 |
 
 > `04`, `14`, `15`, `22`는 원래 하나의 거대 파일(최대 11,915줄)을 쪼갠 것.
@@ -205,9 +204,16 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 **CLAUDE.md는 색인만 — 상세 기록은 `docs/*.md`에 추가. CLAUDE.md가 비대해지면 토큰 소비 재발.**
 
-### 🔁 `docs/session-handover-2026-10-26.md` — **임시 인계 메모 (읽고 처리했으면 이 줄과 파일을 지울 것)**
-- NAS 문서 저장소를 앱 전체에 붙인 세션의 인계. **백엔드 재시작이 아직 안 됐다**(`/doc/mail-parse` 404 실측).
-- ⚠️ 그 세션은 **브라우저가 막혀 화면을 한 번도 못 봤다** — 눈으로 확인할 목록이 그 문서에 있다.
+### 🔁 인계 메모 3건 — **공통 블로커는 하나, 백엔드 재시작** (처리되면 이 줄과 파일을 함께 지울 것)
+- `docs/session-handover-2026-10-26.md` — NAS 문서 저장소를 앱 전체에 붙인 세션. 재시작 전엔 `/doc/mail-parse` 404(실측). ⚠️ 그 세션은 **브라우저가 막혀 화면을 한 번도 못 봤다** — 눈으로 확인할 목록이 그 문서에 있다
+- `docs/handover-2026-10-26.md` — 사람이 해야 할 일(백엔드 재시작·IMAP 권한·보류 큐 179건)과 하다 만 것
+- `docs/handover-2026-10-26-groupware.md` — 전자결재 기안 작업 인계(위 "🔁 이어서 할 일" 절의 그 문서)
+
+### `docs/ai-harness-environment.md` — 🤖 AI 자율 하네스 환경 (설계 노트, 2026-10-30)
+- **읽을 때**: "AI가 이 일을 혼자 돌게 하려면 뭐가 필요한가"를 설계할 때, 앱에 실행 루프를 붙일 때
+- 자율성은 모델이 아니라 **환경의 성질**. 여섯 부품(지도·눈·관문·기록·바닥·분업)과 현재 자가진단
+- ⚠️ **AI에게 판정을 맡기지 말고 후보를 고르게 할 것** — 판정은 코드. 실행 루프엔 **상한 필수**
+- 실행 루프(런타임)와 수정 루프(개발)를 섞지 말 것 — 앱은 자기 소스를 못 고친다
 
 ### `docs/mail-pipeline.md` — 메일 분석/원문/번역/토픽 프로파일 재생성
 - **읽을 때**: 메일→업무 등록 경로, 다중 배분, 미분류 재분석, 번역, 보관함 삭제
@@ -376,8 +382,6 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **`offsetParent` 로 "보이는가"를 판정하지 말 것 — `position:fixed` 는 항상 null** 이라 화면-안-보정이 한 번도 돈 적 없었다
 - 테두리 색은 헤더 **배경이 아니라 아래 경계선**. 계산값이라 팔레트 바뀌면 다시 칠해야 함
 
-### `docs/handover-2026-10-26.md` — 🤝 세션 인계장
-- **읽을 때**: 이어받은 직후 한 번. 사람이 해야 할 일(백엔드 재시작·IMAP 권한·보류 큐 179건)과 하다 만 것
 
 ### `docs/ui-conventions.md` — 🌐 i18n / 🎨 팔레트 / 🪟 모달 컨벤션
 - **읽을 때**: 새 UI 컴포넌트, 언어 대응, 테마 팔레트, 모달 구조, **엑셀/PPT 출력물**
