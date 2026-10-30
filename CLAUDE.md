@@ -285,6 +285,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - "승인원"은 SAP **표지**와 그룹웨어 **기안**이 공유하는 단어 — `기안/결재/상신`이면 그룹웨어, `표지`면 SAP, 둘 다 없으면 **되묻는다**
 - **(2026-10-22) 기안은 양식(문서 종류)을 먼저 판정한다 — `APPROVAL_DOC_TYPES`(js/52)**. `kw`에 `기안 작성` 같은 일반어가 있어 어떤 요청이든 양식 하나로 샜고(사고 문서 220176), strongKw만 두니 나머지 양식은 전부 되묻기로 떨어져 사람이 매번 참고 문서번호를 집어줬다. 이제 양식을 알면 **그 양식의 최근 문서를 결재함에서 찾아** 틀로 쓴다. 칸 이름은 **문서를 실제로 읽어** 적을 것(추측하면 미리보기에서 전부 '원본 기안'으로 떨어진다). 8-0절 참고
 - **(2026-10-29) 기안 본문이 `editorForm_*`이 아니라 `contentViewer` iframe 안의 표인 양식이 있다** — 그래서 "그대로 복사"가 제목 한 칸만 보여줬다. 이제 iframe을 같이 읽고 **칸 배경색**으로 라벨/값을 가른다(`body`/`bodyFields`/`bodyRows`). ⚠️ `bodyFields`를 `fields`에 합치지 말 것 — 채울 칸이 없는데 채운다고 약속하게 된다. 목록 표의 문서번호는 **채번 전이면 `—`**(내부 id는 툴팁). **본문 복사 구현됨** — 작성 화면의 본문은 입력칸이 아니라 **DEXT5 에디터 하나**라 `DEXT5.setBodyValue(html, id)` 로 넣는다(`approval_read(with_html)` → `approval_draft(body_html)`). ⚠️ 양식 이름은 화면에 없어 **`GET /api/approval/document/{id}`** 로 받고, 그 API 의 `docBodyContent` 는 **결재선 서명까지 든 문서 한 장**이라 본문으로 쓰면 안 된다 (본문은 contentViewer DOM). 상세 → `docs/groupware.md` 8-0-1~8-0-3절
+- **(2026-10-30) 기안 작성에 실행 루프가 붙었다** — 사람이 "이대로 임시저장"을 **한 번** 누르면 판정 실패를 스스로 고쳐 다시 채운다. **판정은 코드**(`approval_draft` 가 되읽어 찍는 `log`), **AI 는 화면에 실제로 있는 칸(`fieldNames`) 중에서만** 고르고 목록 밖 이름은 버린다, **상한은 `APV_LOOP.maxRetries`**(기본 2, js/47 데이터). ⚠️ 다시 채울 땐 `/gw/approval/draft-fill`(`reuseScreen`) — `copy` 를 또 부르면 **원본 문서로 이동해 작성 화면을 떠나고 문서 id 가 또 생긴다**. 검증은 `tests/approval-loop.browser.js` → `docs/ai-harness-environment.md` 4절
 - **모듈마다 구조가 다르다** — 메일은 `iframe#mail-viewer` 안(최상위 body 10자, 그래서 클릭이 다 빗나간다), 전자결재는 최상위. 조사 전에 iframe 여부 확인
 - **요청 형식도 모듈마다 다르다** — 메일 `message/list`는 POST JSON(`keyWord` 대문자 W), 전자결재 `doclist`는 GET 쿼리스트링
 - **양식 트리(`apprform/tree`)만 `{data:…}` 래핑이 아니다** — jsTree 배열 그대로. `j.data`로 받으면 0건. 양식 97개 카탈로그 → `docs/groupware-forms.md`(런타임 하드코딩 금지)
@@ -438,6 +439,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ## 작업 팁
 
+- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, 브라우저 콘솔에 `tests/approval-loop.browser.js` 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
 - 특정 기능 수정 시 파일 맵에서 바로 지정. 못 찾겠으면 `grep -rn "함수명" js/`.
 - 민감 파일(`mail_config.json`, `telegram_config.json`, `schedule_rules.json`, `.env`)은 `.gitignore` — 로컬에만 존재.
 - 코드 주석의 `js/파일명.js:줄번호` 참조는 파일 이동/분리 시 같이 업데이트.

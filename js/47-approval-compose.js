@@ -545,6 +545,113 @@
         window._apvPending = null;
     };
 
+    // ── 🔁 실행 루프 (docs/ai-harness-environment.md 4절) ────────────────────
+    //  사람이 "이대로 임시저장"을 **한 번** 누르면, 거기서부터는 판정 실패를 스스로 고쳐 본다.
+    //  원칙 셋 — 하나라도 빼면 자율이 아니라 사고가 된다:
+    //   · **판정은 코드가 한다.** AI 에게 "확인해 줘"라고 묻지 않는다 — 자기가 만든 걸 자기가 본다.
+    //     판정의 실물은 `approval_draft` 가 넣고 **되읽어** 찍는 `log` 다.
+    //   · **AI 는 후보 중에서 고르기만 한다.** 화면에 실제로 없는 칸 이름을 돌려주면 버린다.
+    //   · **상한이 반드시 있다.** 상한 없이 자동 판정을 돌렸다가 한 스윕 76연발로
+    //     하루 AI 한도를 태운 적이 있다(2026-10-21).
+    window.APV_LOOP = window.APV_LOOP || {
+        maxRetries: 2,
+        // 실패 사유 → 종류. 코드에 정규식을 박지 말고 **여기 한 줄** 추가할 것.
+        //  structure = 다시 해도 같다(재시도 금지) · label/value = 값만 바꾸면 될 수 있다.
+        kinds: [
+            { kind: 'structure', re: /에디터를 찾지 못했|API 가 없습니다|작성 화면이 열리지|버튼을 찾지 못했/ },
+            { kind: 'label', re: /해당 칸 없음|해당 체크박스 없음/ }
+        ],
+        fallback: 'value'
+    };
+
+    var _apvFailKind = function (why) {
+        var cfg = window.APV_LOOP || {};
+        var w = String(why || '');
+        var hit = (cfg.kinds || []).filter(function (k) { return k.re.test(w); })[0];
+        return hit ? hit.kind : (cfg.fallback || 'value');
+    };
+
+    var _apvAiText = function (res) {
+        if (window._extractGanttQaAiText) {
+            try { var t = window._extractGanttQaAiText(res); if (t) return String(t); } catch (e) { /* 아래 경로로 */ }
+        }
+        try { return String(res.data.result.candidates[0].content.parts[0].text || ''); } catch (e) { return ''; }
+    };
+
+    // 못 채운 칸을 어떻게 메울지 AI 에게 **후보 중에서** 고르게 한다.
+    // ⚠️ 돌려받은 칸 이름이 화면에 실제로 없으면 버린다 — 지어낸 값이 결재선을 타면 안 된다.
+    var _apvAskAiForFields = async function (failed, fieldNames, facts) {
+        var key = window.getActiveAiKey && window.getActiveAiKey();
+        if (!key || !window.callAiBackend) return { picked: {}, dropped: [], why: _t('AI 키가 없습니다', 'no AI key') };
+        var lines = [];
+        lines.push('전자결재 기안의 칸 채우기를 고치는 중입니다.');
+        lines.push('');
+        lines.push('[못 채운 항목]');
+        failed.forEach(function (f) { lines.push('- ' + f.field + ' : ' + (f.why || '원인 미상')); });
+        lines.push('');
+        lines.push('[이 양식 화면에 실제로 있는 칸 이름]');
+        lines.push(fieldNames.join(' / '));
+        lines.push('');
+        lines.push('[지금 열려 있는 프로젝트에서 쓸 수 있는 값]');
+        lines.push(JSON.stringify(facts));
+        lines.push('');
+        lines.push('규칙:');
+        lines.push('1. 칸 이름은 위 "실제로 있는 칸 이름" 목록에 있는 것만 쓸 것. 새로 지어내지 말 것.');
+        lines.push('2. 값은 위 프로젝트 값에서 가져올 것. 확실하지 않으면 그 칸을 아예 넣지 말 것.');
+        lines.push('3. 설명 없이 JSON 객체 하나만 답할 것.');
+        lines.push('4. 채울 수 있는 칸이 없으면 빈 객체로 답할 것.');
+        var raw = '';
+        try {
+            var res = await window._withTimeout(
+                window.callAiBackend(key, lines.join('\n'), { feature: 'approval-loop' }),
+                60000, _t('AI 응답 시간 초과', 'AI timed out'));
+            if (!res || !res.ok) {
+                return { picked: {}, dropped: [], why: String((res && res.error && res.error.message) || 'AI 호출 실패') };
+            }
+            raw = _apvAiText(res);
+        } catch (e) { return { picked: {}, dropped: [], why: String(e && e.message || e) }; }
+
+        var m = String(raw || '').match(/\{[\s\S]*\}/);
+        if (!m) return { picked: {}, dropped: [], why: _t('AI 응답에서 JSON을 못 찾음', 'no JSON in AI reply') };
+        var ans;
+        try { ans = JSON.parse(m[0]); } catch (e) {
+            return { picked: {}, dropped: [], why: _t('AI 응답이 JSON 이 아님', 'AI reply was not JSON') };
+        }
+        var picked = {}, dropped = [];
+        Object.keys(ans || {}).forEach(function (k) {
+            var name = String(k).trim();
+            var v = ans[k];
+            if (typeof v !== 'string' && typeof v !== 'number') return;
+            v = String(v).trim();
+            if (!v || v.length > 200) return;
+            if (fieldNames.indexOf(name) === -1) { dropped.push(name); return; }   // 목록 밖은 버린다
+            picked[name] = v;
+        });
+        return { picked: picked, dropped: dropped, why: '' };
+    };
+
+    var _apvPost = async function (path, body) {
+        try {
+            var r = await fetch('http://127.0.0.1:5000' + path, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return await r.json();
+        } catch (e) { return { ok: false, message: String(e && e.message || e) }; }
+    };
+
+    var _apvReportFail = function (p, res, where) {
+        _toast('⚠️ ' + _t('임시저장 실패: ', 'Draft save failed: ') + ((res && res.message) || ''), 'error');
+        if (window._issueLog) {
+            try {
+                window._issueLog('approval-compose', {
+                    docNum: p.docNum, docId: p.docId, form: p.form,
+                    where: where, err: (res && res.message) || ''
+                });
+            } catch (e) { /* 기록 실패가 흐름을 막지 않게 */ }
+        }
+    };
+
     window._apvApply = async function () {
         var p = window._apvPending; if (!p) return;
         var fields = {}, edited = 0, subject = null;
@@ -555,39 +662,112 @@
             if (r.isSubject) { subject = v; return; }
             fields[r.label] = v;
             // 사람이 고친 값만 적립한다 — 자동으로 나온 값까지 저장하면 사전이 금방 오염된다.
+            // ⚠️ 아래 루프에서 AI 가 고른 값은 **적립하지 않는다**(같은 이유).
             if (String(v) !== String(r.value)) { _learnPut(p.form, r.label, v); edited++; }
         });
 
         var btn = document.getElementById('apv-apply');
-        if (btn) { btn.disabled = true; btn.textContent = _t('⏳ 임시저장 중…', '⏳ Saving…'); }
-        var res;
-        try {
-            var r = await fetch('http://127.0.0.1:5000/gw/approval/copy', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                // 🔎 [2026-10-28] docNum 이 비어 있는 문서(임시저장/진행중)는 docId 로 보낸다 —
-                // id 숫자를 docNum 자리에 넣으면 "문서번호를 찾지 못했습니다"로 100% 실패한다.
-                body: JSON.stringify({ docNum: p.docNum || undefined, docId: p.docNum ? undefined : p.docId,
-                                       fields: fields,
-                                       subject: (subject === null ? undefined : subject), dryRun: false })
-            });
-            res = await r.json();
-        } catch (e) { res = { ok: false, message: String(e && e.message || e) }; }
-        if (btn) { btn.disabled = false; btn.textContent = '✅ ' + _t('이대로 임시저장', 'Save as draft'); }
+        var warn = document.getElementById('apv-warn');
+        var _say = function (t) { if (warn) warn.textContent = t || ''; };
+        var _busy = function (t) { if (btn) { btn.disabled = true; btn.textContent = t; } };
+        var _free = function () {
+            if (btn) { btn.disabled = false; btn.textContent = '✅ ' + _t('이대로 임시저장', 'Save as draft'); }
+        };
+        var _sub = (subject === null ? undefined : subject);
 
-        if (!res || !res.ok) {
-            _toast('⚠️ ' + _t('임시저장 실패: ', 'Draft save failed: ') + ((res && res.message) || ''), 'error');
-            if (window._issueLog) { try { window._issueLog('approval-compose', { docNum: p.docNum, docId: p.docId, form: p.form, err: (res && res.message) || '' }); } catch (e2) { /* 〃 */ } }
-            return;
+        // 1) 작성 화면을 **한 번만** 열고 채운다. 아직 저장하지 않는다 — 판정이 먼저다.
+        _busy(_t('⏳ 채우는 중…', '⏳ Filling…'));
+        var first = await _apvPost('/gw/approval/copy', {
+            docNum: p.docNum || undefined, docId: p.docNum ? undefined : p.docId,
+            fields: fields, subject: _sub, dryRun: true
+        });
+        if (!first || !first.ok) { _free(); _say(''); _apvReportFail(p, first, 'fill'); return; }
+
+        var src = first.source || {};
+        var notes = first.notes || [];
+        var draft = first.draft || {};
+        var MAX = (window.APV_LOOP || {}).maxRetries || 0;
+        var tries = 0, loopNote = '', aiUsed = 0, aiDropped = 0;
+
+        // 2) 판정 → 고치기 → 다시 채우기. **상한까지만.**
+        while (true) {
+            var log = draft.log || [];
+            var names = draft.fieldNames || [];
+            var failed = log.filter(function (x) { return !x.ok; });
+            if (!failed.length) break;
+
+            var structural = failed.filter(function (x) { return _apvFailKind(x.why) === 'structure'; });
+            if (structural.length) {
+                // 구조 문제는 백 번 해도 같다 — 재시도하지 않고 사실대로 알린다.
+                loopNote = _t('구조 문제라 재시도 안 함: ', 'structural, not retried: ')
+                    + structural.map(function (x) { return x.field; }).join(', ');
+                break;
+            }
+            if (tries >= MAX || !names.length) {
+                loopNote = tries ? _t('자동으로 ' + tries + '번 고쳐 봤지만 남았습니다',
+                                      tries + ' auto-retries, still failing') : '';
+                break;
+            }
+            tries++;
+            _busy(_t('🤖 빈 칸 메우는 중… (' + tries + '/' + MAX + ')', '🤖 Retrying… (' + tries + '/' + MAX + ')'));
+            _say(_t('못 채운 칸 ' + failed.length + '개 — AI에게 후보를 물어보는 중',
+                    failed.length + ' unfilled — asking AI for candidates'));
+
+            var facts = window._apvProjectFactScan ? window._apvProjectFactScan() : {};
+            var got = await _apvAskAiForFields(failed, names, facts);
+            aiDropped += (got.dropped || []).length;
+            var keys = Object.keys(got.picked || {});
+            if (!keys.length) {
+                loopNote = _t('AI가 채울 칸을 못 찾았습니다', 'AI found nothing to fill')
+                    + (got.why ? ' (' + got.why + ')' : '');
+                break;
+            }
+            keys.forEach(function (k) { fields[k] = got.picked[k]; });
+            aiUsed += keys.length;
+            _say(_t('AI 제안 ' + keys.length + '개 적용 — 다시 채우는 중', 'applying ' + keys.length + ' — refilling'));
+
+            // ⚠️ 여기서 /gw/approval/copy 를 다시 부르면 **원본 문서로 이동해 작성 화면을 떠난다.**
+            //    지금 화면만 다시 채우는 draft-fill 을 쓴다(문서 id 도 더 안 생긴다).
+            var again = await _apvPost('/gw/approval/draft-fill', {
+                formId: src.formId, deptId: src.deptId, subject: _sub,
+                fields: fields, dryRun: true, reuseScreen: true
+            });
+            if (!again || !again.ok) { _free(); _say(''); _apvReportFail(p, again, 'refill'); return; }
+            draft = again;
         }
+
+        // 3) 여기까지 왔으면 저장한다. **상신은 하지 않는다.**
+        _busy(_t('⏳ 임시저장 중…', '⏳ Saving…'));
+        _say('');
+        var saved = await _apvPost('/gw/approval/draft-fill', {
+            formId: src.formId, deptId: src.deptId, subject: _sub,
+            fields: fields, dryRun: false, reuseScreen: true
+        });
+        _free();
+        if (!saved || !saved.ok) { _apvReportFail(p, saved, 'save'); return; }
+
         // 못 채운 칸은 조용히 넘기지 않는다 — 어느 칸이 비었는지 사람이 알아야 한다.
-        var log = ((res.draft || {}).log) || [];
-        var failed = log.filter(function (x) { return !x.ok; }).map(function (x) { return x.field; });
-        // 본문은 '칸'이 아니라 위 failed 목록만으로는 들어갔는지가 안 보인다 — 따로 알린다.
-        var bodyNote = ((res.notes || []).filter(function (n) { return /본문/.test(String(n)); })[0] || '');
+        var finalFailed = (saved.log || []).filter(function (x) { return !x.ok; })
+            .map(function (x) { return x.field; });
+        // 본문은 '칸'이 아니라 위 목록만으로는 들어갔는지가 안 보인다 — 따로 알린다.
+        var bodyNote = (notes.filter(function (n) { return /본문/.test(String(n)); })[0] || '');
+
+        if (finalFailed.length && window._issueLog) {
+            try {
+                window._issueLog('approval-compose', {
+                    docNum: p.docNum, docId: p.docId, form: p.form,
+                    where: 'loop', tries: tries, unfilled: finalFailed, note: loopNote
+                });
+            } catch (e) { /* 〃 */ }
+        }
+
         _toast('📝 ' + _t('임시저장했습니다 — ', 'Saved as draft — ') + p.form
             + (bodyNote ? ' / ' + bodyNote : '')
+            + (aiUsed ? _t(' / AI가 ' + aiUsed + '칸을 메웠습니다', ' / AI filled ' + aiUsed) : '')
+            + (aiDropped ? _t(' / 없는 칸 ' + aiDropped + '개는 버렸습니다', ' / dropped ' + aiDropped) : '')
             + (edited ? _t(' / 고친 칸 ' + edited + '개는 다음에 먼저 제안됩니다', '') : '')
-            + (failed.length ? _t(' / 못 채운 칸: ', ' / not filled: ') + failed.join(', ') : ''), 'success');
+            + (finalFailed.length ? _t(' / 못 채운 칸: ', ' / not filled: ') + finalFailed.join(', ') : '')
+            + (loopNote ? ' / ' + loopNote : ''), finalFailed.length ? 'info' : 'success');
         window._apvClose();
     };
 })();

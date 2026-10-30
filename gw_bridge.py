@@ -958,7 +958,8 @@ _DRAFT_JS = r"""
       }
       if (tr.children.length) rowLabel = (tr.children[0].innerText||'').trim().replace(/\s+/g,' ');
     }
-    map.push({ el, id: el.id, type: el.type, header: norm(header), rowLabel: norm(rowLabel) });
+    map.push({ el, id: el.id, type: el.type, header: norm(header), rowLabel: norm(rowLabel),
+               headerRaw: header, rowLabelRaw: rowLabel });
   });
 
   const setVal = (el, v) => {
@@ -1032,7 +1033,18 @@ _DRAFT_JS = r"""
   }
   await sleep(800);
 
-  if (cfg.dryRun) return { ok:true, step:'filled', dryRun:true, log, url: location.href };
+  // 화면에 **실제로 있는** 칸 이름 — 라벨이 안 맞아 못 채웠을 때, 다시 시도하는 쪽이
+  // 여기서 고른다. 이름을 지어내지 못하게 하는 후보 목록이기도 하다.
+  const fieldNames = [];
+  map.forEach(m => {
+    if (m.type !== 'text') return;
+    [m.headerRaw, m.rowLabelRaw].forEach(n => {
+      n = String(n || '').trim();
+      if (n && n.length <= 30 && fieldNames.indexOf(n) === -1) fieldNames.push(n);
+    });
+  });
+
+  if (cfg.dryRun) return { ok:true, step:'filled', dryRun:true, log, fieldNames, url: location.href };
 
   // 5) '임시저장'만 누른다 — '결재요청'은 찾지도 않는다
   const btn = [...document.querySelectorAll('button,a,input[type=button]')]
@@ -1047,7 +1059,7 @@ _DRAFT_JS = r"""
   if (conf) { conf.click(); await sleep(3000); }
 
   const m = location.href.match(/\/document\/(\d+)/);
-  return { ok: !!m, step:'saved', docId: m ? m[1] : null, url: location.href, log };
+  return { ok: !!m, step:'saved', docId: m ? m[1] : null, url: location.href, log, fieldNames };
 })(%s)
 """
 
@@ -1319,7 +1331,8 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
     }
 
 
-def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None, body_html=None):
+def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None, body_html=None,
+                   reuse_screen=False):
     """결재 양식에 값을 채우고 **임시저장**한다. 상신(결재요청)은 하지 않는다.
 
     fields: {'Item Code': '102202', 'Model': '...', 'Name': '삼완전자'} 처럼
@@ -1332,12 +1345,15 @@ def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None
     if not t:
         raise RuntimeError('그룹웨어 탭을 열지 못했습니다.')
 
-    # 작성 화면으로 이동 — 이 시점에 서버가 문서 ID를 발급한다
-    url = f'{GW_ORIGIN}/app/approval/document/new/{int(dept_id)}/{int(form_id)}'
-    asyncio.run(_navigate(t['webSocketDebuggerUrl'], url))
-    time.sleep(2.0)
-    # 소개 투어가 떠 있으면 입력칸을 가려 채우기가 실패한다 — 들어오자마자 한 번 닫는다
-    dismiss_intro()
+    # 작성 화면으로 이동 — 이 시점에 서버가 문서 ID를 발급한다.
+    # ⚠️ 그래서 **다시 채울 때는 이동하지 않는다**(reuse_screen) — 한 번 더 열면 문서 id 가
+    #    하나 더 발급되고, 쓰지도 않을 빈 문서가 늘어난다. 실행 루프가 여러 번 채우는 경우가 그렇다.
+    if not reuse_screen:
+        url = f'{GW_ORIGIN}/app/approval/document/new/{int(dept_id)}/{int(form_id)}'
+        asyncio.run(_navigate(t['webSocketDebuggerUrl'], url))
+        time.sleep(2.0)
+        # 소개 투어가 떠 있으면 입력칸을 가려 채우기가 실패한다 — 들어오자마자 한 번 닫는다
+        dismiss_intro()
 
     cfg = json.dumps({'subject': subject, 'fields': fields or {},
                       'checks': checks or [], 'dryRun': bool(dry_run),

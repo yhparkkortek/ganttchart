@@ -3822,6 +3822,33 @@ def gw_approval_read():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/approval/draft-fill', methods=['POST'])
+def gw_approval_draft_fill():
+    """이미 열려 있는 작성 화면을 **다시 채운다**(실행 루프용). 원본 문서를 다시 읽지 않는다.
+
+    ⚠️ `/gw/approval/copy` 는 호출할 때마다 원본 문서로 이동해 읽으므로, 작성 화면을
+    떠나 버린다. 루프가 값을 고쳐 다시 넣을 때는 이 라우트를 쓴다.
+    `reuseScreen`(기본 true)이면 작성 화면으로 이동하지 않아 문서 id 가 더 발급되지 않는다.
+    `dryRun`(기본 true)이면 채우기만 하고 임시저장하지 않는다. 상신은 어느 경우에도 안 한다."""
+    try:
+        import gw_bridge
+        d = request.get_json(silent=True) or {}
+        form_id, dept_id = d.get('formId'), d.get('deptId')
+        if not form_id or not dept_id:
+            return jsonify({'ok': False, 'message': 'formId / deptId 가 필요합니다.'}), 400
+        r = gw_bridge.approval_draft(
+            form_id=form_id, dept_id=dept_id,
+            subject=d.get('subject'), fields=d.get('fields') or {},
+            dry_run=(d.get('dryRun', True) is not False),
+            checks=d.get('checks') or None,
+            body_html=d.get('bodyHtml') or None,
+            reuse_screen=(d.get('reuseScreen', True) is not False))
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/approval/copy', methods=['POST'])
 def gw_approval_copy():
     """기존 문서를 **같은 양식의 새 기안에 채워 임시저장**한다. 상신은 하지 않는다.
