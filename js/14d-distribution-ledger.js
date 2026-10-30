@@ -133,7 +133,7 @@ window.inboxOpenDistribute = async function(uid) {
             //    +체크마크로 시각적으로 확실히 다르게 하고, 마우스를 치워도(mouseout) 선택 상태는 유지한다.
             div.style.cssText = 'padding:8px 10px; border:2px solid #ced4da; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
             div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'
-                + '<span class="dist-file-check" style="display:none; color:#1971c2;">✅ </span>📄 ' + escapeHtml(f.name) + '</span>'
+                + '<span class="dist-file-check" style="display:none; color:#1971c2;">✅ </span>📜 ' + escapeHtml(f.name) + '</span>'
                 + '<span style="color:#999; white-space:nowrap; margin-left:8px; font-size:11px;">' + d.toLocaleString() + '</span>';
             const checkEl = div.querySelector('.dist-file-check');
             const applyStyle = function() {

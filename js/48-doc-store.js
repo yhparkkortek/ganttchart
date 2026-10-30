@@ -181,7 +181,7 @@ window._dsUrlToDataUri = async function (url) {
 //    표기 차이(점·하이픈·공백·대소문자)는 무시하고 맞춘다 — "G101EVN01.0" ↔ "G101EVN010".
 function _pnKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
-// 📄 패널 데이터시트·비교표가 있는 폴더. 2026-10-22에 사람이 루트 `PANEL\` 을 `PARTS\PANEL\`
+// 📜 패널 데이터시트·비교표가 있는 폴더. 2026-10-22에 사람이 루트 `PANEL\` 을 `PARTS\PANEL\`
 //    안으로 옮겼다 — js/23 `ELEC_CATEGORY_META['PANEL'].nasFull` 과 js/49 `PP_FOLDER` 도 같은 값.
 var PANEL_FOLDER = 'PARTS/PANEL';
 window._dsPanelFolder = function () { return PANEL_FOLDER; };
@@ -399,7 +399,7 @@ window._dsOpenPanelSpec = async function (pn) {
             folder: PANEL_FOLDER,
             folders: [{ f: PANEL_FOLDER, label: 'PANEL' }],
             q: pn,
-            title: '📄 ' + pn + ' — ' + _t(all.length + '개 파일', all.length + ' files'),
+            title: '📜 ' + pn + ' — ' + _t(all.length + '개 파일', all.length + ' files'),
             onPick: function (f, name) { window._dsOpenInNewTab(f, name); }
         });
         return true;
@@ -905,7 +905,7 @@ window._dsPageFolders = function (pageId) {
     return null;
 };
 
-// 📄 규격 엑셀(xlsx/xls/csv)이 아니면 js/42 pageExcelImport가 결국 AI로 보낸다
+// 📜 규격 엑셀(xlsx/xls/csv)이 아니면 js/42 pageExcelImport가 결국 AI로 보낸다
 //    (onForeignFile/_pxAiImport) — 그 갈림길에서 **AI를 쓸지 말지**를 사람에게 먼저 물어본다.
 var _DS_WORKBOOK_RE = /\.(xlsx|xlsm|xls|csv)$/i;
 

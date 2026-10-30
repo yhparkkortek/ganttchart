@@ -35,7 +35,7 @@
         if (window.ELEC_PART_TYPES[key]) return;
         window.ELEC_PART_TYPES[key] = {
             label: label || category,
-            icon: icon || '📄',
+            icon: icon || '📜',
             // `domain`은 AI 추출 프롬프트가 "무슨 부품인지" 알려주는 유일한 단서다(js/22e).
             domain: category,
             // 팀 공용 라이브러리 파일 — 구분마다 따로. 처음 쓸 때 Drive에 만들어진다.

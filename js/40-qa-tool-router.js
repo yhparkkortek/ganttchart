@@ -535,7 +535,7 @@
             menu: function (r) {
                 var ref = r.docNum ? ('n:' + r.docNum) : ('i:' + r.id);
                 return [
-                    { label: '📄 ' + window._t('내용 보기', 'View content'), value: '__gwApprovalRead__' + ref },
+                    { label: '📜 ' + window._t('내용 보기', 'View content'), value: '__gwApprovalRead__' + ref },
                     { label: '✍️ ' + window._t('그대로 복사', 'Copy as-is'), value: '__gwApprovalCopy__' + ref },
                     { label: '📝 ' + window._t('지금 프로젝트로 기안 작성', 'Compose with this project'), value: '__gwApprovalCompose__' + ref }
                 ];

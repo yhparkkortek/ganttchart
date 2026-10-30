@@ -226,7 +226,7 @@ window.renderPanelCompareTab = async function() {
     const entries = selected.map(function(m) { return window.findPanelInLibrary(lib, m); });
     const totalCols = 1 + slotCount + 1; // 라벨 + 슬롯들 + Note
 
-    // 📄 [2026-10-22] 모델명을 누르면 **NAS에 그 패널 사양서가 있으면 그걸** 열고, 없을 때만
+    // 📜 [2026-10-22] 모델명을 누르면 **NAS에 그 패널 사양서가 있으면 그걸** 열고, 없을 때만
     //    panelook.com 검색으로 간다(사용자 요청). 클릭 시점에 찾지 않고 **여기서 미리** 찾아
     //    href에 박는다 — await 뒤에 window.open 하면 팝업 차단에 걸린다.
     //    한 번의 목록 조회로 10칸을 다 맞춘다(_dsFindPanelSpecs). NAS가 없으면 빈 객체라
@@ -242,14 +242,14 @@ window.renderPanelCompareTab = async function() {
         const m = selected[i];
         if (m) {
             const nasName = nasSpec[m];
-            // 📄 [2026-10-30] 걸린 파일이 여러 장이면 한 장을 열지 않고 **전부 보여주는 창**을 띄운다.
+            // 📜 [2026-10-30] 걸린 파일이 여러 장이면 한 장을 열지 않고 **전부 보여주는 창**을 띄운다.
             const nasCnt = (nasSpec._counts && nasSpec._counts[m]) || 0;
             const url = nasName && window._dsFileUrl
                 ? window._dsFileUrl(window._dsPanelFolder ? window._dsPanelFolder() : 'PARTS/PANEL', nasName)
                 : 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
             const has = !!entries[i];
             const nameLink = (nasCnt > 1)
-                ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(m))})" title="${_en ? `NAS spec files: ${nasCnt}` : `NAS 사양서 ${nasCnt}개 — 골라서 열기`}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)} <span style="font-size:9.5px; color:#1f7a3d;">📄${nasCnt}</span></a>`
+                ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(m))})" title="${_en ? `NAS spec files: ${nasCnt}` : `NAS 사양서 ${nasCnt}개 — 골라서 열기`}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)} <span style="font-size:9.5px; color:#1f7a3d;">📜${nasCnt}</span></a>`
                 : `<a href="${url}" target="_blank" rel="noopener" title="${nasName ? (_en ? 'Open the spec on the NAS: ' : 'NAS 사양서 열기: ') + nasName
                                  : (_en ? 'No spec on the NAS — open panelook.com search' : 'NAS에 사양서가 없어 panelook.com 검색을 엽니다')}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>`;
             headHtml += `<th style="min-width:120px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
@@ -488,7 +488,7 @@ window.panelCompareOpenAddModal = async function() {
                      ondragover="event.preventDefault(); this.style.background='#e9eef3';"
                      ondragleave="this.style.background='#f8f9fa';"
                      ondrop="event.preventDefault(); event.stopPropagation(); this.style.background='#f8f9fa'; window._pcHandleFileDrop(event.dataTransfer.files);">
-                    <button type="button" id="pc-add-file-btn" onclick="event.stopPropagation(); document.getElementById('pc-add-file').click()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex-shrink:0; padding:6px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📄 ${_en ? 'Attach PDF/TXT/HTML' : 'PDF/TXT/HTML 첨부'}</button>
+                    <button type="button" id="pc-add-file-btn" onclick="event.stopPropagation(); document.getElementById('pc-add-file').click()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex-shrink:0; padding:6px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📜 ${_en ? 'Attach PDF/TXT/HTML' : 'PDF/TXT/HTML 첨부'}</button>
                     <button type="button" onclick="event.stopPropagation(); window._pcpPickNasForAi && window._pcpPickNasForAi()" title="${_en ? 'Pick a datasheet already on the NAS and extract it with AI' : 'NAS에 올려둔 사양서를 골라 바로 AI로 추출합니다(내 PC로 받지 않아도 됩니다)'}" onmouseover="this.style.background='#d8eef0';" onmouseout="this.style.background='#eaf7ea';" style="flex-shrink:0; padding:6px 10px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s;">📁 ${_en ? 'From NAS' : 'NAS에서'}</button>
                     <span id="pc-add-file-name" style="font-size:11px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_en ? 'or drag & drop a file here' : '또는 파일을 여기로 드래그하세요'}</span>
                 </div>
@@ -700,7 +700,7 @@ window._pcProcessFile = async function(file) {
     const paste = document.getElementById('pc-add-paste');
     const fileNameEl = document.getElementById('pc-add-file-name');
     const ext = (file.name.split('.').pop() || '').toLowerCase();
-    if (fileNameEl) fileNameEl.textContent = '📄 ' + file.name;
+    if (fileNameEl) fileNameEl.textContent = '📜 ' + file.name;
     try {
         let text = '';
         if (ext === 'pdf') {
@@ -728,7 +728,7 @@ window._pcProcessFile = async function(file) {
         if (paste) paste.value = cleaned;
         const savedChars = text.length - cleaned.length;
         if (window.showToast) {
-            window.showToast((_en ? '📄 Loaded text from "' : '📄 "') + file.name + (_en ? '"' : '"에서 텍스트를 불러왔습니다')
+            window.showToast((_en ? '📜 Loaded text from "' : '📜 "') + file.name + (_en ? '"' : '"에서 텍스트를 불러왔습니다')
                 + (savedChars > 200 ? (_en ? ` (removed ${savedChars.toLocaleString()} repeated chars)` : ` (반복 ${savedChars.toLocaleString()}자 정리됨)`) : ''), 'info');
         }
     } catch (e) {
@@ -903,10 +903,10 @@ window.showPanelSpecModal = async function(model, codeHint) {
     //    비교표 등 다른 곳으로 새어나가지 않게 분리함.
     const model_display = entry ? entry.model : (model || codeHint || '');
     const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model_display);
-    // 📄 [2026-10-27] NAS에 이 패널 PN의 사양서가 있으면 panelook.com 검색보다 그게 먼저 — 바로
+    // 📜 [2026-10-27] NAS에 이 패널 PN의 사양서가 있으면 panelook.com 검색보다 그게 먼저 — 바로
     //    원본 데이터시트를 열 수 있는데 굳이 캡차 있는 외부 검색으로 보낼 이유가 없다(사용자 요청).
     //    비교표 헤더 링크(panelCompareRenderTab)와 같은 패턴 — `_dsFindPanelSpec` 하나만 쓴다.
-    //    📄 [2026-10-30] 걸리는 파일이 **여러 장이면 전부** 보여준다(사용자 요청) — 데이터시트·
+    //    📜 [2026-10-30] 걸리는 파일이 **여러 장이면 전부** 보여준다(사용자 요청) — 데이터시트·
     //    도면·시험성적서가 따로 올라와 있는데 한 장만 열어 주면 나머지는 없는 것처럼 보였다.
     let nasAll = [];
     if (window._dsFindPanelSpecAll && model_display) {
@@ -918,12 +918,12 @@ window.showPanelSpecModal = async function(model, codeHint) {
         : null;
     // 여러 장이면 링크가 아니라 공용 창을 띄우는 버튼으로 — 그 창이 키워드로 걸린 파일을 다 보여준다.
     const nasManyHtml = (nasAll.length > 1)
-        ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(model_display))})" style="color:#1f7a3d; font-weight:bold;">📄 ${_en ? `NAS spec files (${nasAll.length})` : `NAS 사양서 ${nasAll.length}개`}</a>`
+        ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(model_display))})" style="color:#1f7a3d; font-weight:bold;">📜 ${_en ? `NAS spec files (${nasAll.length})` : `NAS 사양서 ${nasAll.length}개`}</a>`
         : '';
     const specLinkHtml = nasManyHtml
         ? nasManyHtml + ` <a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#999; font-size:11px; margin-left:6px;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`
         : nasUrl
-        ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="color:#1f7a3d; font-weight:bold;">📄 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a>`
+        ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="color:#1f7a3d; font-weight:bold;">📜 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a>`
           + ` <a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#999; font-size:11px; margin-left:6px;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`
         : `<a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`;
     if (!entry) {
@@ -940,7 +940,7 @@ window.showPanelSpecModal = async function(model, codeHint) {
                     : '① 아래 #1 panelook.com 페이지로 접속해서(최신은 없을 수도 있음), 검색된 패널명 앞의 <b>"+"</b> 버튼을 눌러 추가한 뒤(이미 눌려져 있을 수도 있음), 페이지 오른쪽 상단 "Panel Compare" 상자의 <b>"compare"</b> 버튼을 클릭하세요.<br>&nbsp;&nbsp;→ "사람인지 확인" 슬라이드 캡차가 뜰 수 있는데, 사람만 통과할 수 있어 자동화할 수 없습니다.<br>&nbsp;&nbsp;→ 통과하면 스펙 비교 페이지로 이동합니다. 그 페이지에서 <b>Ctrl+S</b>를 눌러 <mark style="background:#ffe066; color:#7a5210; padding:0 3px; border-radius:3px;">"웹페이지,전부 HTML"</mark>으로 저장하세요.<br>② 아래 #2 버튼을 누른 뒤, 저장한 <b>.html 파일</b>(폴더 제외)을 첨부하여 추출하면, AI가 처리합니다.'}
             </div>
             ${nasManyHtml ? `<div style="margin-bottom:8px;">${nasManyHtml}</div>`
-              : nasUrl ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="display:inline-block; margin-bottom:8px; color:#1f7a3d; font-weight:bold;">📄 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a><br>` : ''}
+              : nasUrl ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="display:inline-block; margin-bottom:8px; color:#1f7a3d; font-weight:bold;">📜 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a><br>` : ''}
             <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 #1 panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
             <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model_display))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 #2 ${_en ? 'Attach the HTML file & extract with AI' : 'HTML 파일 첨부 후 AI로 추출'}</button>
         `;

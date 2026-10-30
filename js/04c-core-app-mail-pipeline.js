@@ -1293,7 +1293,7 @@
                 projArrow.textContent = '▸';
                 const projLbl = document.createElement('span');
                 // 담당자(PM)가 있으면 괄호 안에 표시
-                projLbl.textContent = '📄 ' + origName + ' (' + grp.files.length + ')' + (grp.pm ? ' · 👤 ' + grp.pm : '');
+                projLbl.textContent = '📜 ' + origName + ' (' + grp.files.length + ')' + (grp.pm ? ' · 👤 ' + grp.pm : '');
                 projHdr.appendChild(projArrow);
                 projHdr.appendChild(projLbl);
                 const projBody = document.createElement('div');
@@ -1762,7 +1762,7 @@
                 style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px; transition:background .15s, border-color .15s;
                        background:${bg}; color:${_cpHexFor('darkText', sheetThemeHex)}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${border}; border-bottom:1px solid ${bg}; margin-bottom:-1px;">
-                <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
+                <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📜 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
                     onmouseover="event.stopPropagation(); this.style.background='${hoverBg}'; this.style.color='${_cpHexFor('darkText', sheetThemeHex)}';"
                     onmouseout="this.style.background='transparent'; this.style.color='${hoverBorder}';"
@@ -2179,7 +2179,7 @@
                 fileBtn.style.cssText = 'padding:9px 14px; border:1px solid ' + delBorder + '; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; background:' + delBg + '; transition:background .15s, border-color .15s;';
                 const infoWrap = document.createElement('div');
                 infoWrap.style.cssText = 'flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:12px;';
-                infoWrap.innerHTML = '<div style="font-weight:bold; color:#333; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96; flex-shrink:0;">' + dateStr + '</div>';
+                infoWrap.innerHTML = '<div style="font-weight:bold; color:#333; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📜 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96; flex-shrink:0;">' + dateStr + '</div>';
                 const delBtn = document.createElement('button');
                 delBtn.textContent = _dmEn ? '🗑 Delete' : '🗑 삭제';
                 delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;';
@@ -2194,7 +2194,7 @@
                 fileBtn.onmouseover = function() { this.style.background = openHoverBg; this.style.borderColor = openHoverBorder; };
                 fileBtn.onmouseout  = function() { this.style.background = openBg;      this.style.borderColor = openBorder; };
                 fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
-                fileBtn.innerHTML = '<div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📄 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96;">' + dateStr + '</div>';
+                fileBtn.innerHTML = '<div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📜 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96;">' + dateStr + '</div>';
             }
             return fileBtn;
         }

@@ -535,7 +535,7 @@
 
     // 💡 상단바 현재 프로젝트 파일명 표시 갱신 — 로드된 파일이 없으면 아예 숨김
     // 💾 [2026-10-20] "💾 프로젝트 저장 : <파일명>" 형태. 이 칩은 이제 **저장 버튼**이라
-    //    무엇을 하는 버튼인지 글자로 보여준다(예전엔 📄 + 파일명뿐이라 눌러야 알 수 있었다).
+    //    무엇을 하는 버튼인지 글자로 보여준다(예전엔 📜 + 파일명뿐이라 눌러야 알 수 있었다).
     //    확장자(.json)는 떼고 파일명만 — 사람이 쓰는 이름은 거기까지다.
     //    ⚠️ 언어가 바뀌면 다시 불러야 한다 — toggleLang() 끝에서 호출한다(js/04j).
     window.updateCurrentFileLabel = function() {
@@ -695,8 +695,8 @@
         }
         // ② 최종 confirm — 삭제 대상 파일명을 명시하여 실수 방지 (타이핑 불필요)
         const ok = confirm(_en
-            ? `⚠️ Delete this project?\n\n📄 ${file.name}\n\nThe file will be moved to Google Drive Trash (recoverable for 30 days).`
-            : `⚠️ 이 프로젝트를 삭제할까요?\n\n📄 ${file.name}\n\n구글 드라이브 휴지통으로 이동합니다 (30일 내 복구 가능).`);
+            ? `⚠️ Delete this project?\n\n📜 ${file.name}\n\nThe file will be moved to Google Drive Trash (recoverable for 30 days).`
+            : `⚠️ 이 프로젝트를 삭제할까요?\n\n📜 ${file.name}\n\n구글 드라이브 휴지통으로 이동합니다 (30일 내 복구 가능).`);
         if (!ok) return;
         try {
             const tokenObj = gapi.client.getToken();

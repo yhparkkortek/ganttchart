@@ -224,7 +224,7 @@
                 + '<span style="flex:1;"></span>'
                 + '<button id="matcart-submit" onclick="window._mcSubmit()" onmouseover="this.style.filter=\'brightness(.95)\'" onmouseout="this.style.filter=\'\'"'
                 + ' style="padding:8px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0;'
-                + ' border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">📄 '
+                + ' border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">📜 '
                 + T('청구서 만들기', 'Create reservation') + '</button>'
                 + '</div></div>';
             document.body.appendChild(wrap);
@@ -362,7 +362,7 @@
         html += '<div style="margin-top:8px; font-size:11.5px; color:#666;">'
             + '💡 ' + T('사유 칸에서 → (오른쪽 방향키)를 누르면 예시가 채워집니다.', 'Press → in the Reason box to fill the example.') + '<br>'
             + '🏭 ' + T('플랜트 ', 'Plant ') + plant() + T(' 고정', ' (fixed)')
-            + '  ·  📄 ' + T('만들어진 예약은 ZMM019(계정대체청구서)에서 PDF로 출력합니다.', 'Reservations are printed as PDF from ZMM019.')
+            + '  ·  📜 ' + T('만들어진 예약은 ZMM019(계정대체청구서)에서 PDF로 출력합니다.', 'Reservations are printed as PDF from ZMM019.')
             + '</div>';
         body.innerHTML = html;
     }
@@ -488,7 +488,7 @@
                 } catch (e) { failed.push(e && e.message ? e.message : String(e)); }
             }
         } finally {
-            if (btn) { btn.disabled = false; btn.textContent = '📄 ' + T('청구서 만들기', 'Create reservation'); }
+            if (btn) { btn.disabled = false; btn.textContent = '📜 ' + T('청구서 만들기', 'Create reservation'); }
         }
 
         // 🔗 [2026-10-02 제보 "MB21까지 하고 멈춤"] 예약만 만들고 끊지 않는다.

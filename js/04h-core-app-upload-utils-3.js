@@ -493,8 +493,8 @@
         window._ganttQaHistory.push({
             role: 'ai', choiceDropdownId: id,
             text: _en
-                ? '📄 Which document type for material "' + mats + '"? (multi-select available)'
-                : '📄 자재 "' + mats + '"의 문서 종류를 선택해주세요 (여러 개 선택 가능)'
+                ? '📜 Which document type for material "' + mats + '"? (multi-select available)'
+                : '📜 자재 "' + mats + '"의 문서 종류를 선택해주세요 (여러 개 선택 가능)'
         });
     };
 
@@ -1492,7 +1492,7 @@
             (_en ? '🧑 Checked by' : '🧑 담당자'),
             (_en ? '👔 Approved by' : '👔 팀장'),
             'Rev', 'Remark',
-            (_en ? '📄 Format' : '📄 출력'),
+            (_en ? '📜 Format' : '📜 출력'),
             (_en ? '📋 Type' : '📋 가승인')
         ];
         for (var hi = 0; hi < headers.length; hi++) {
@@ -1642,7 +1642,7 @@
                 if (window._ganttQaOpToken !== myToken) { window._ganttQaHistory.pop(); window._ganttQaOperationInFlight = false; window._renderGanttQaMessages(); return; }
                 var gdata = await gres.json();
                 if (gdata.ok) {
-                    finalReply = '📄 ' + (gdata.message || (_en ? 'Approval cover generated.' : '승인원 표지가 생성되었습니다.'));
+                    finalReply = '📜 ' + (gdata.message || (_en ? 'Approval cover generated.' : '승인원 표지가 생성되었습니다.'));
                     if (failItems.length) {
                         finalReply += '\n\n' + (_en ? '⚠️ Excluded (lookup failed): ' : '⚠️ 조회 실패 제외: ')
                             + failItems.map(function(f) { return f.code + (f.err ? '(' + f.err + ')' : ''); }).join(', ');
@@ -2072,8 +2072,8 @@ ${_sourceSection}`;
             }
         }
         const header = window._t(
-            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}${currencyLine}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}${checksumSection}`,
-            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}${currencyLine}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}${checksumSection}`
+            `📜 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}${currencyLine}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}${checksumSection}`,
+            `📜 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}${currencyLine}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}${checksumSection}`
         );
         if (noInstructions) return header;
         return header + window._t(
@@ -4414,7 +4414,7 @@ ${docsJson}`;
             return;
         }
 
-        // 📄✍️📝 [2026-10-28] 그룹웨어 행 클릭 칩 — 전자결재 목록 표에서 행을 클릭해 고른 것.
+        // 📜✍️📝 [2026-10-28] 그룹웨어 행 클릭 칩 — 전자결재 목록 표에서 행을 클릭해 고른 것.
         //    ref 는 'n:M3T-2609-016'(docNum 있음) 또는 'i:220640'(docNum 없음, docId로).
         //    AI 텍스트 해석을 거치지 않고 정확한 식별자로 바로 부른다 — "8번 문서 복사해줘"
         //    같은 말을 다시 숫자로 옮기다 id/docNum을 혼동하거나 SAP 쪽으로 오라우팅되는
@@ -4452,7 +4452,7 @@ ${docsJson}`;
                     ? ('\n\n📎 ' + window._t('첨부 ', 'Attachments ') + _arRes.attachments.length
                        + window._t('건: ', ': ') + _arRes.attachments.join(', ')) : '';
                 window._ganttQaHistory.push({ role: 'ai',
-                    text: '📄 ' + (_arRes.subject || '') + '\n\n' + _arLines.join('\n') + _arChecks + _arBodyTxt + _arAtt });
+                    text: '📜 ' + (_arRes.subject || '') + '\n\n' + _arLines.join('\n') + _arChecks + _arBodyTxt + _arAtt });
             }
             window._renderGanttQaMessages();
             input.focus();
@@ -5605,7 +5605,7 @@ ${docsJson}`;
                 window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('기안 작성 기능을 불러오지 못했습니다(js/47).', 'Compose feature not loaded (js/47).') });
             } else {
                 window._ganttQaHistory.push({ role: 'ai',
-                    text: (_asIs ? '📄 ' : '📝 ')
+                    text: (_asIs ? '📜 ' : '📝 ')
                         + window._t(_tplNo + (_asIs ? ' 의 값을 그대로 옮겨' : ' 을 틀로 삼아')
                                     + ' 확인 화면을 엽니다 — 칸마다 값이 어디서 왔는지 보고 [이대로 임시저장]을 눌러주세요.',
                                     'Opening the review screen for ' + _tplNo + '.') });
@@ -5668,7 +5668,7 @@ ${docsJson}`;
                                 ? window._t('틀로 작성 — 프로젝트+SAP ' + _gwDraftMat, 'Compose — project + SAP ' + _gwDraftMat)
                                 : window._t('틀로 작성 — 현재 프로젝트 값', 'Compose — current project')),
                              value: '기안틀작성 ' + _docNo + _matSuffix });
-                _opts.push({ label: '📄 ' + window._t('그대로 복사 — 원본 값만', 'Copy as-is — source only'),
+                _opts.push({ label: '📜 ' + window._t('그대로 복사 — 원본 값만', 'Copy as-is — source only'),
                              value: '기안그대로복사 ' + _docNo });
             }
             if (_gwDraftMat) {
@@ -5683,7 +5683,7 @@ ${docsJson}`;
                                 + '- 📝 **틀로 작성**: 양식만 가져오고 값은 '
                                 + (_gwDraftMat ? '**지금 열린 프로젝트와 SAP(' + _gwDraftMat + ')**' : '**지금 열린 프로젝트**')
                                 + '에서 채웁니다.' + _nl
-                                + '- 📄 **그대로 복사**: 원본 값을 그대로 옮깁니다. '
+                                + '- 📜 **그대로 복사**: 원본 값을 그대로 옮깁니다. '
                                 + (_gwDraftMat ? '⚠️ 이쪽은 **SAP ' + _gwDraftMat + ' 도, 프로젝트 값도 쓰지 않습니다.**'
                                                : '⚠️ 이쪽은 **프로젝트 값을 쓰지 않습니다.**'),
                                 'Found ' + _docNo + ' — use it as the template?')
@@ -5727,7 +5727,7 @@ ${docsJson}`;
                 const m = (md.materials || [])[0];
                 if (!m) throw new Error(_gwDraftMat + window._t(' 자재 정보를 SAP에서 찾지 못했습니다.', ' not found in SAP.'));
 
-                // 📄 제목은 사내 관례를 따른다 — 기존 문서 실측(219538): `Customer Approval Sheet[133015]_V01`
+                // 📜 제목은 사내 관례를 따른다 — 기존 문서 실측(219538): `Customer Approval Sheet[133015]_V01`
                 // 표지에 Revision이 적혀 있으면 아래에서 그 값으로 바꾼다 → let
                 let subject = 'Customer Approval Sheet[' + _gwDraftMat + ']_V01';
                 const fields = { 'Item Code': _gwDraftMat, 'Model': m.MAKTX || '' };
@@ -5945,7 +5945,7 @@ ${docsJson}`;
                     if (window._ganttQaOpToken !== _txMyToken) { window._ganttQaHistory.pop(); window._ganttQaOperationInFlight = false; window._renderGanttQaMessages(); return; }
                     const gdata = await gres.json();
                     if (gdata.ok) {
-                        finalReply = '📄 ' + (gdata.message || window._t('승인원 표지가 생성되었습니다.', 'Approval cover generated.'));
+                        finalReply = '📜 ' + (gdata.message || window._t('승인원 표지가 생성되었습니다.', 'Approval cover generated.'));
                         if (failItems.length) {
                             finalReply += '\n\n' + window._t('⚠️ 조회 실패해서 제외된 자재: ', '⚠️ Materials excluded due to lookup failure: ')
                                 + failItems.map(function(f) { return f.code + (f.err ? '(' + f.err + ')' : ''); }).join(', ');
@@ -5995,8 +5995,8 @@ ${docsJson}`;
                         input.value = '';
                         clarify.stage = 'docType';
                         window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                            `📄 어떤 문서 타입을 저장할까요? (예: P01) — 어떤 문서가 있는지 먼저 보고 싶으시면 "목록"이라고 말씀해주세요.`,
-                            `📄 Which document type would you like to save? (e.g. P01) — If you'd like to see what's available first, just say "list".`
+                            `📜 어떤 문서 타입을 저장할까요? (예: P01) — 어떤 문서가 있는지 먼저 보고 싶으시면 "목록"이라고 말씀해주세요.`,
+                            `📜 Which document type would you like to save? (e.g. P01) — If you'd like to see what's available first, just say "list".`
                         )});
                         window._renderGanttQaMessages();
                         input.focus();
@@ -6024,8 +6024,8 @@ ${docsJson}`;
                         window._ganttQaHistory.push({ role: 'user', text: question });
                         input.value = '';
                         window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                            `📄 문서 타입을 못 알아들었어요 — "P01"처럼 알파벳+숫자 형식으로 다시 말씀해주시거나 "목록"이라고 해주세요.`,
-                            `📄 I couldn't recognize that document type — please reply with a format like "P01", or say "list".`
+                            `📜 문서 타입을 못 알아들었어요 — "P01"처럼 알파벳+숫자 형식으로 다시 말씀해주시거나 "목록"이라고 해주세요.`,
+                            `📜 I couldn't recognize that document type — please reply with a format like "P01", or say "list".`
                         )});
                         window._renderGanttQaMessages();
                         input.focus();
@@ -6041,7 +6041,7 @@ ${docsJson}`;
                 window._ganttQaSapDocClarify = { materials: ambiguousMats, stage: 'action' };
                 const matLabel = ambiguousMats.join(', ');
                 window._ganttQaShowConfirmButtons(
-                    window._t(`📄 자재 "${matLabel}"의 문서, 어떻게 도와드릴까요?`, `📄 What would you like me to do with the document(s) for material "${matLabel}"?`),
+                    window._t(`📜 자재 "${matLabel}"의 문서, 어떻게 도와드릴까요?`, `📜 What would you like me to do with the document(s) for material "${matLabel}"?`),
                     [
                         { label: window._t('💾 저장(다운로드)', '💾 Save (download)'), value: window._t('저장해줘', 'save'), style: 'confirm' },
                         { label: window._t('📋 목록만 보기', '📋 Show list only'), value: window._t('목록 보여줘', 'show list'), style: 'neutral' }
@@ -6514,7 +6514,7 @@ ${docsJson}`;
             return;
         }
 
-        // 📄 [2026-09-14 신규, 2026-09-15 자재번호 직접조회 지원] "SAP에서 P01 문서 열어줘" 로컬
+        // 📜 [2026-09-14 신규, 2026-09-15 자재번호 직접조회 지원] "SAP에서 P01 문서 열어줘" 로컬
         //    명령 — AI 호출 없이, MM03에서 이미 열어둔 자재의 "문서 데이터" 탭에서 해당 문서 타입을
         //    찾아 열고 원본 파일을 다운로드+실행한다. 질문에 자재번호(예: "106188")가 같이 있으면
         //    사람이 화면을 미리 열어둘 필요 없이 백엔드가 직접 MM03으로 이동해 조회한다. 비동기
@@ -6569,7 +6569,7 @@ ${docsJson}`;
                     );
                     const data = await res.json();
                     if (data.ok) {
-                        sapDocReply = '📄 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 열었습니다.`, `Opened document "${sapOpenDocType}".`));
+                        sapDocReply = '📜 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 열었습니다.`, `Opened document "${sapOpenDocType}".`));
                         // 📂 [2026-10-26 신규] 열람(view) 의도도 위 "📂 문서 조회 결과 열기 버튼"
                         //    (_sapOpenDocFromLookup)과 같은 /sap-open-document를 타므로 같은 이유로
                         //    같은 자리(C:\temp)에 떨어진다 — 똑같이 폴더 바로가기 버튼을 단다.
@@ -6591,7 +6591,7 @@ ${docsJson}`;
             return;
         }
 
-        // 📄 [2026-09-15 신규] 자재번호는 있지만 문서 타입 코드(P01 등)를 모른 채 말한 경우 —
+        // 📜 [2026-09-15 신규] 자재번호는 있지만 문서 타입 코드(P01 등)를 모른 채 말한 경우 —
         //    위 sapOpenDocReq가 null이었을 때만 여기로 온다(순서 중요). 특정 문서를 열지 않고
         //    먼저 그 자재의 "문서 데이터" 화면을 그대로 읽어와 보여준 뒤, 원하는 타입을 골라
         //    다시 물어보라고 안내한다.
@@ -9164,7 +9164,7 @@ ${docsJson}`;
         return draft;
     };
 
-    // 📄 [2026-09-14 신규] "SAP에서 P01 문서 열어줘/다운로드해줘" — 질문 문자열만 보고 로컬에서
+    // 📜 [2026-09-14 신규] "SAP에서 P01 문서 열어줘/다운로드해줘" — 질문 문자열만 보고 로컬에서
     //    바로 판정(문서 타입 코드를 추출)한다. 실제 실행은 비동기(백엔드 왕복)라 sendGanttQaMessage
     //    쪽에서 이 반환값을 보고 별도 async 블록으로 처리한다(다른 로컬 명령들처럼 여기서 바로
     //    답변 문자열까지 만들지 않는 이유). 문서 타입 코드는 이 회사 SAP의 실제 문서 타입
@@ -9175,7 +9175,7 @@ ${docsJson}`;
     //    받아들이고, 1자리면 앞에 0을 채워 표준형(P1→P01)으로 맞춘다. 문서 타입 판정이 필요한
     //    모든 곳(단일 열기/배치 다운로드)이 이 함수 하나를 공유 — 정규식을 각자 따로 두면 나중에
     //    한쪽만 고치고 다른 쪽을 빠뜨리는 실수가 재발하기 쉬움.
-    // 📄 [2026-09-22] "문서/파일" 대신 문서 별칭(승인원 등, js/32 SAP_DOC_ALIASES 데이터)으로 말해도 문서 요청으로 인정
+    // 📜 [2026-09-22] "문서/파일" 대신 문서 별칭(승인원 등, js/32 SAP_DOC_ALIASES 데이터)으로 말해도 문서 요청으로 인정
     window._sapDocAliasHit = function(text) {
         var list = window.SAP_DOC_ALIASES || [];
         for (var i = 0; i < list.length; i++) { if (list[i] && list[i].word && text.indexOf(list[i].word) !== -1) return list[i]; }
@@ -9245,7 +9245,7 @@ ${docsJson}`;
         return { docType: docType, material: matM ? matM[1] : null, save: isSave };
     };
 
-    // 📄 [2026-09-15 신규] "SAP에서 106188 품번 정보 및 파일 열어줘"처럼 자재번호는 있지만
+    // 📜 [2026-09-15 신규] "SAP에서 106188 품번 정보 및 파일 열어줘"처럼 자재번호는 있지만
     //    정확한 문서 타입 코드(P01 등)를 모른 채 말했을 때 — 위
     //    _ganttQaExtractSapOpenDocRequest는 문서 타입 코드가 없으면 null을 반환하고 넘어가므로,
     //    그 다음으로 이 함수가 "자재번호만으로 문서 목록을 보여달라"는 요청인지 판정한다.

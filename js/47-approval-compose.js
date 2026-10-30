@@ -256,7 +256,7 @@
         return { value: srcValue || '', from: _t('원본 기안', 'source doc'), kind: 'source' };
     };
 
-    // 📄 제목 속 자재번호 바꾸기.
+    // 📜 제목 속 자재번호 바꾸기.
     //    양식마다 제목 형식이 다르다(`Customer Approval Sheet[133015]_V01`, `[133015] 승인원`, …).
     //    그래서 **형식을 알아내려 하지 않고**, 원본의 옛 자재번호가 제목 어디에 있든 새 번호로
     //    바꾼다. 형식과 무관하게 동작하고, 옛 번호가 없으면 **아무것도 안 바꾼다**(추측 금지).
@@ -299,7 +299,7 @@
         }
         if (window.collectTabData) { try { window.collectTabData(); } catch (e) { /* 수집 실패해도 있는 값으로 */ } }
 
-        _toast('📄 ' + _t('원본 기안을 읽는 중입니다…', 'Reading the source document…'), 'info');
+        _toast('📜 ' + _t('원본 기안을 읽는 중입니다…', 'Reading the source document…'), 'info');
         var src;
         try {
             var q = docNum ? ('docNum=' + encodeURIComponent(docNum)) : ('docId=' + encodeURIComponent(docId));
@@ -418,7 +418,7 @@
     var KIND_STYLE = {
         app:    { bg: '#e6f6ea', fg: '#1f7a3d', icon: '📘' },
         learn:  { bg: '#e8f4fd', fg: '#1a4f7a', icon: '🧠' },
-        source: { bg: '#f1f3f5', fg: '#495057', icon: '📄' },
+        source: { bg: '#f1f3f5', fg: '#495057', icon: '📜' },
         blank:  { bg: '#fff8e6', fg: '#7a5210', icon: '✏️' },
         miss:   { bg: '#fbe4e2', fg: '#b1432f', icon: '⚠️' }
     };
@@ -427,7 +427,7 @@
         var p = window._apvPending; if (!p) return;
         var pm = window.projectMeta || {};
         document.getElementById('apv-title').textContent =
-            (p.asIs ? '📄 ' + _t('그대로 복사 — ', 'Copy as-is — ') : '📝 ' + _t('기안 작성 — ', 'Compose draft — ')) + p.form
+            (p.asIs ? '📜 ' + _t('그대로 복사 — ', 'Copy as-is — ') : '📝 ' + _t('기안 작성 — ', 'Compose draft — ')) + p.form
             + _t(' / 참고 ', ' / from ') + (p.docNum || ('id:' + p.docId))
             + _t(' / 프로젝트 ', ' / project ') + (pm.프로젝트명 || pm.고객모델명 || _t('(안 열림)', '(none)'));
 

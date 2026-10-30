@@ -1,4 +1,4 @@
-/* 📄↔📊 [2026-10-20 신규] 페이지 ↔ 엑셀 왕복 (출력 → 엑셀에서 수정 → 다시 불러오기)
+/* 📜↔📊 [2026-10-20 신규] 페이지 ↔ 엑셀 왕복 (출력 → 엑셀에서 수정 → 다시 불러오기)
  *
  * 왜 만들었나 (사용자 요청)
  * ─────────────────────────
@@ -145,7 +145,7 @@
         return out;
     };
 
-    // ══ 📄 한 장으로 내보내기 (spec.onePage) ═══════════════════════════
+    // ══ 📜 한 장으로 내보내기 (spec.onePage) ═══════════════════════════
     //
     // 왜 이런 모양인가 — 사용자가 "시트로 나뉜 걸 한 페이지로, 웹 UI처럼 예쁘게"를 원했다.
     // ⚠️ 그런데 **규격 엑셀은 AI를 안 거치고 시트 이름으로 블록을 찾는다**(pageExcelImport).
@@ -634,7 +634,7 @@
         {
             id: 'summary', tab: 'tab-summary', label: 'Summary',
             nasFolder: 'SUMMARY',
-            // 📄 한 장으로 — 개요·마일스톤·주요자재를 구역으로 쌓는다(화면과 같은 순서).
+            // 📜 한 장으로 — 개요·마일스톤·주요자재를 구역으로 쌓는다(화면과 같은 순서).
             //    불러오기는 `■ 개요` 같은 구역 머리글로 다시 쪼개므로 AI 없이 그대로 돌아온다.
             onePage: { sheet: ['Summary', 'Summary'], title: ['📝 Summary', '📝 Summary'] },
             repaint: ['populateTabData', 'renderProjectModels', 'renderMaterialModelsContainer', 'renderSummaryTimeline'],
@@ -1080,7 +1080,7 @@
         try { if (window.collectTabData) window.collectTabData(); } catch (e) { /* 수집 실패해도 있는 값으로 내보낸다 */ }
 
         var wb = window.XLSX.utils.book_new(), empty = 0;
-        // 📄 한 장 모드 — 블록들을 구역으로 나란히 쌓아 **시트 하나**로 낸다(불러오기는 구역 머리글로 복원).
+        // 📜 한 장 모드 — 블록들을 구역으로 나란히 쌓아 **시트 하나**로 낸다(불러오기는 구역 머리글로 복원).
         if (spec.onePage) {
             var one = _pxBuildOnePage(spec);
             if (one) {
@@ -1135,7 +1135,7 @@
     //  매번 때리면 금방 막힌다.
     var PX_ACCEPT = '.xlsx,.xls,.csv,.pdf,.txt,.html,.htm';
     var PX_OK_RE  = /\.(xlsx|xlsm|xls|csv|pdf|txt|html?)$/i;
-    // 📄 [2026-10-22] `.xlsm` 추가 — 회사 패널 비교표가 .xlsm 이다. 빠져 있는 동안은
+    // 📜 [2026-10-22] `.xlsm` 추가 — 회사 패널 비교표가 .xlsm 이다. 빠져 있는 동안은
     //    "엑셀이 아닌 파일"로 분류돼 AI 경로로 샜다(이진 파일을 글자로 읽는 길).
     var _pxIsWorkbook = function (f) { return /\.(xlsx|xlsm|xls|csv)$/i.test(f && f.name || ''); };
     var _pxAiSpec = function (spec) {
@@ -1487,7 +1487,7 @@
         var spec = _specById(id);
         if (!spec || spec.exportOnly || !window.XLSX) return;
 
-        // 📄 규격 엑셀이 아닌 것(PDF·TXT·HTML)은 바로 AI 경로로. 엑셀이라도 **이 페이지의 시트가
+        // 📜 규격 엑셀이 아닌 것(PDF·TXT·HTML)은 바로 AI 경로로. 엑셀이라도 **이 페이지의 시트가
         //    없으면** 아래에서 AI로 넘긴다 — 협력사가 보내온 제각각인 양식이 그렇다.
         // 🤖 [2026-10-22] 페이지가 자기 AI 경로를 갖고 있으면 그쪽이 먼저다 — 처리했다고
         //    하면 여기서 끝낸다. 없으면 지금까지처럼 공용 AI 매핑으로 간다.
@@ -1507,7 +1507,7 @@
 
         // 어떤 시트가 어느 블록인지 — 이름이 정확히 같은 것만 받는다(엉뚱한 시트를 밀어넣지 않게).
         var matched = [], missing = [];
-        // 📄 한 장으로 낸 파일이면 **구역 머리글**로 쪼개 블록에 나눠 준다.
+        // 📜 한 장으로 낸 파일이면 **구역 머리글**로 쪼개 블록에 나눠 준다.
         //    옛 여러-시트 파일도 그대로 읽히도록, 한 장 시트를 **못 찾았을 때만** 아래 경로로 간다.
         if (spec.onePage) {
             var oneSh = null;

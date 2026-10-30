@@ -645,7 +645,7 @@
     //    ⚠️ ②가 뜨기 전에 창을 닫으면 그 수정은 **나만 갖고 있게 된다**. 그래서 화면을 벗어나는
     //    모든 길목(탭 숨김·페이지 이탈·앱 안에서 다른 탭으로)에서 _plFlushSave() 로 즉시 밀어 올린다.
     var _plDirty = false;
-    var _persist = function () { _plDirty = true; _plMarkDirty(); window.ProjectList.save(D()); };
+    var _persist = function () { _plDirty = true; window._plViewStale = true; _plMarkDirty(); window.ProjectList.save(D()); };
 
     /** 디바운스를 기다리지 않고 지금 올린다(이탈 직전용). */
     window.plFlushSave = function () {
@@ -820,6 +820,145 @@
 
     /** @param {boolean} light 검색어 타자처럼 "표만" 다시 그리면 되는 경우 true —
      *  필터 드롭다운(값마다 건수를 다시 세고 <select> 를 새로 만든다)을 건너뛴다. */
+    // ── 행 조립 ────────────────────────────────────────────
+    //    자리표시 행을 나중에 채울 때도 **같은 함수**로 만든다 — 두 벌을 두면 한쪽만 고쳐 조용히 어긋난다.
+    var _PL_EAGER = 60;              // 한 화면에 들어가는 행의 두배쳫 — 여기까지는 바로 그린다
+    var _PL_ROW_H = 30;              // 자리표시 행 높이(실측 평균). 첫 렌더 뒤 진짜 높이로 고쳐 쓴다.
+    var _plCtx = null;               // 지금 렌더의 열·고정열·팔레트
+
+    var _plRowMeta = function (r, ri) {
+        var pinned = (_view.pins || []).indexOf(r._id) !== -1;
+        // 🦓 제브라 — 한 줄 건너 연한 배경. sticky 칸은 자기 배경을 따로 들고 있어야
+        //    가로 스크롤 때 밑줄이 비쳐 보이지 않는다(배경 없는 sticky 는 투명이다).
+        var zebra = (ri % 2 === 1);
+        return { pinned: pinned, zebra: zebra, bg: pinned ? '#fff8e1' : (zebra ? _plCtx.P.zebraB : '#fff') };
+    };
+
+    var _plCellsHtml = function (r, ri, m) {
+        var cols = _plCtx.cols, leftOf = _plCtx.leftOf, P = _plCtx.P, rowBg = m.bg, pinned = m.pinned;
+        return cols.map(function (c) {
+            var v = r[c.k] == null ? '' : String(r[c.k]);
+            // ⚡ 고정 열의 position/left 는 **칸마다 적지 않는다** — 열 2개 × 164행이면 같은 문장을
+            //    328번 쓰게 된다. 아래 _plStickyCss() 가 열 단위 CSS 규칙으로 한 번만 내보낸다.
+            //    배경만 행마다 다르므로(제브라·고정행) 그것만 남긴다.
+            var sticky = leftOf[c.k] !== undefined ? 'background:' + rowBg + ';' : '';
+            var extra = '', cls = 'pl-td';
+            if (c.type === 'num') extra += 'text-align:right;';
+            if (c.k === 'no') {
+                // 숫자가 주인공이다 — 예전엔 📌 아이콘이 44px 칸을 먹어 번호가 잘려 보였다(사용자 지적).
+                //    고정(📌)은 행 메뉴 안으로 옮겼고, 여기선 고정된 행만 작게 표시한다.
+                return '<td class="pl-td pl-no" data-id="' + r._id + '" data-k="' + c.k + '" style="' + sticky + '"'
+                     + ' title="' + _esc(_t('클릭: 행 메뉴(위/아래 추가·삭제·상세)', 'Click: row menu (insert/delete/detail)')) + '">'
+                     + (pinned ? '<span style="font-size:9px;">📌</span>' : '') + _esc(v) + '</td>';
+            }
+            // ✂️ 긴 글은 정해진 글자 수까지만 — 설명 1·2·3 처럼 한 칸에 문장이 들어오는 열(사용자 요청 20자).
+            //    잘린 건 말풍선에 전문이 들어 있고, 칸을 누르면 입력칸에서 전체가 보인다.
+            var shown = v, cut = false;
+            var lim = window.PL_CELL_MAX[c.k];
+            if (lim && v.length > lim) { shown = v.slice(0, lim) + '…'; cut = true; }
+            // 특수 열 — 값 옆에 작은 아이콘, 아이콘을 눌러야 창이 뜬다(글자 수정과 안 겹치게)
+            var ico = '';
+            if (c.type === 'doc') {
+                // 📜 아이콘은 **칸 오른쪽 끝에 고정**한다(값 뒤에 붙여 두면 긴 PN 에 밀려 잘려서 안 보였다 —
+                //    사용자 지적 "말줄임 아이콘 안 보임"). 자료가 있으면 개수를 파랗게, 없으면 흐리게.
+                var n = window._plDocCount ? window._plDocCount(r) : 0;
+                ico = '<span class="pl-ico pl-ico-fix" onclick="event.stopPropagation(); window.plOpenDocBox(\'' + r._id + '\')"'
+                    + ' style="' + (n ? 'opacity:1;' : 'opacity:.35;') + '"'
+                    + ' title="' + _esc(n ? (n + _t('개 NAS 자료 — 열기/올리기/AI 분석', ' NAS file(s) — open/upload/AI analysis'))
+                                          : _t('NAS 자료 없음 — 눌러서 올리기', 'No NAS file — click to upload')) + '">'
+                    + (n ? '<b style="color:#1971c2; font-size:10px;">' + n + '</b>' : '') + '📜</span>';
+            } else if (c.type === 'rev') {
+                // 📜 Agile REV — 누르면 그 도면의 REVISIONS 표를 그대로 보여 준다(값을 쓰는 게 아니라 보는 것)
+                var dn = window._plDocCount ? window._plDocCount(r) : 0;
+                ico = '<span class="pl-ico pl-ico-fix" onclick="event.stopPropagation(); window.plOpenRevisions(\'' + r._id + '\')"'
+                    + ' style="' + (dn ? 'opacity:1;' : 'opacity:.35;') + '"'
+                    + ' title="' + _esc(dn ? _t('도면의 REVISIONS 이력 보기', 'View the drawing\'s REVISIONS table')
+                                           : _t('연결된 도면이 없습니다 — PN을 확인하세요', 'No linked drawing — check the PN')) + '">📜</span>';
+            } else if (c.type === 'panel') {
+                ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPanelCard(\'' + r._id + '\')"'
+                    + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔎</span>';
+            } else if (c.type === 'sap') {
+                ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPnMenu(\'' + r._id + '\')"'
+                    + ' title="' + _esc(_t('SAP 조회 · 프로젝트 열기', 'SAP lookup / open project')) + '">🏭</span>';
+            } else if (c.type === 'person') {
+                ico = v ? '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPersonCard(\'' + r._id + '\',\'' + c.k + '\')"'
+                    + ' title="' + _esc(_t('담당자 정보 · 이 담당자 제품만 보기', 'Owner info / filter by this owner')) + '">👤</span>' : '';
+            } else if (String(c.type).indexOf('part:') === 0) {
+                ico = v ? '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPartCard(\'' + r._id + '\',\'' + c.k + '\',\'' + String(c.type).slice(5) + '\')"'
+                    + ' title="' + _esc(_t('PARTS 라이브러리에서 보기', 'Open in PARTS library')) + '">🔎</span>' : '';
+            }
+            // 아이콘이 있는 칸은 오른쪽에 자리를 비워 두고(padding-right) 그 자리에 아이콘을 고정한다.
+            if (ico) { cls += ' pl-has-ico'; }
+            // ⚡ onclick 을 칸마다 달지 않는다 — 4,592칸이면 같은 문장이 4,592번 실려 HTML 이
+            //    통째로 커진다(실측 935KB 중 약 175KB). 표 하나에 건 위임 핸들러가 받는다.
+            return '<td class="' + cls + '" data-id="' + r._id + '" data-k="' + c.k + '"'
+                 + ((cut || ico) ? ' title="' + _esc(v || '') + '"' : '')
+                 + ' style="' + sticky + extra + '">'
+                 + '<span class="pl-v">' + _esc(shown).replace(/\n/g, ' ') + '</span>' + ico + '</td>';
+        }).join('');
+    };
+
+    var _plTrOpen = function (r, ri, m, lazy) {
+        return '<tr data-id="' + r._id + '" data-ri="' + ri + '"' + (lazy ? ' data-lazy="1"' : '')
+             + ' class="' + (m.zebra ? 'pl-zebra' : '') + (m.pinned ? ' pl-pinned' : '') + '"'
+             + ' style="background:' + m.bg + ';">';
+    };
+    var _plRowHtml = function (r, ri) {
+        var m = _plRowMeta(r, ri);
+        return _plTrOpen(r, ri, m, false) + _plCellsHtml(r, ri, m) + '</tr>';
+    };
+    var _plLazyRowHtml = function (r, ri) {
+        var m = _plRowMeta(r, ri);
+        return _plTrOpen(r, ri, m, true)
+             + '<td colspan="' + _plCtx.cols.length + '" style="height:' + _PL_ROW_H + 'px; padding:0;"></td></tr>';
+    };
+
+    /** 자리표시 행 하나를 진짜 칸으로 바꾼다. 보이기 전에 불러야 빈 행이 눈에 띄지 않는다. */
+    window._plHydrateRow = function (tr) {
+        if (!tr || !tr.getAttribute('data-lazy') || !_plCtx) return false;
+        var r = _rowById(tr.getAttribute('data-id'));
+        if (!r) return false;
+        var ri = parseInt(tr.getAttribute('data-ri'), 10) || 0;
+        tr.innerHTML = _plCellsHtml(r, ri, _plRowMeta(r, ri));
+        tr.removeAttribute('data-lazy');
+        return true;
+    };
+
+    /** 남은 자리표시 행을 전부 채운다 — 인쇄처럼 **화면 밖까지 다 써야 하는** 길목용. */
+    window._plHydrateAll = function () {
+        var n = 0;
+        document.querySelectorAll('#pl-table tbody tr[data-lazy]').forEach(function (tr) { if (window._plHydrateRow(tr)) n++; });
+        return n;
+    };
+    // 🖨️ 인쇄·PDF 는 화면 밖 행까지 종이에 나와야 한다 — 자리표시인 채로 찍히면 빈 줄이 된다.
+    window.addEventListener('beforeprint', function () { try { window._plHydrateAll(); } catch (e) { /* 인쇄를 막지 않게 */ } });
+
+    /** 스크롤을 따라 눈앞의 행만 채운다. 표를 다시 그릴 때마다 붙이지 않게 한 번만 건다. */
+    window._plBindLazyScroll = function () {
+        var wrap = document.getElementById('pl-table-wrap');
+        if (!wrap || wrap._plLazyBound) return;
+        wrap._plLazyBound = true;
+        var pending = false;
+        var sweep = function () {
+            pending = false;
+            var top = wrap.scrollTop - 600, bottom = wrap.scrollTop + wrap.clientHeight + 600;
+            var trs = wrap.querySelectorAll('#pl-table tbody tr[data-lazy]');
+            for (var i = 0; i < trs.length; i++) {
+                var y = trs[i].offsetTop;
+                if (y > bottom) break;                 // 행은 위에서 아래 순서라 더 볼 필요가 없다
+                if (y + trs[i].offsetHeight >= top) window._plHydrateRow(trs[i]);
+            }
+        };
+        var onScroll = function () {
+            if (pending) return;
+            pending = true;
+            requestAnimationFrame(sweep);
+        };
+        wrap.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll);
+        wrap._plLazySweep = sweep;
+    };
+
     // 🎨 머리띠 버튼 칠하기 — HTML 에 인라인으로 박힌 색은 팔레트 <style> 보다 세서, 테마를 바꿔도
     //    이 띠만 옛 색으로 남는다. 특히 "📐 도면 분석"은 보라색이 박혀 있어 혼자 튀었다(2026-10-30 지적).
     //    기본 버튼은 팔레트 bg/darkText, 도면 분석만 한 단계 진한 hoverBg 로 구분한다(색은 전부 팔레트).
@@ -851,8 +990,7 @@
         var totalW = cols.reduce(function (s, c) { return s + c.w; }, 0);
 
         var th = cols.map(function (c) {
-            var sticky = leftOf[c.k] !== undefined
-                ? 'position:sticky; left:' + leftOf[c.k] + 'px; z-index:5; background:' + P.headerTint + ';' : '';
+            var sticky = '';                     // 고정 열 규칙은 위 stickyCss 가 열 단위로 내보낸다
             var s = _view.sort || {};
             var mark = s.k === c.k ? (s.dir > 0 ? ' ▲' : ' ▼') : '';
             // 말풍선엔 **원래 이름**을 먼저 — 줄임말만 보고는 무슨 열인지 모르기 때문(사용자 요청).
@@ -863,74 +1001,22 @@
                  + _esc(_headShort(c)) + mark + '</th>';
         }).join('');
 
+
+        _plCtx = { cols: cols, leftOf: leftOf, P: P };
+        // ⚡ 처음부터 164행을 다 그리지 않는다 — 4,592칸을 배치하느라 탭을 열 때마다 150ms 가 들었다.
+        //    위에서 _PL_EAGER 개만 채워 내고, 나머지는 **자리표시 행**으로 두었다가 눈에 들어올 때 채운다
+        //    (간트차트의 data-lazy 행과 같은 방식 — docs/gantt-internals.md).
         var body = rows.map(function (r, ri) {
-            var pinned = (_view.pins || []).indexOf(r._id) !== -1;
-            // 🦓 제브라 — 한 줄 건너 연한 배경. sticky 칸은 자기 배경을 따로 들고 있어야
-            //    가로 스크롤 때 밑줄이 비쳐 보이지 않는다(배경 없는 sticky 는 투명이다).
-            var zebra = (ri % 2 === 1);
-            var rowBg = pinned ? '#fff8e1' : (zebra ? P.zebraB : '#fff');
-            var tds = cols.map(function (c) {
-                var v = r[c.k] == null ? '' : String(r[c.k]);
-                var sticky = leftOf[c.k] !== undefined
-                    ? 'position:sticky; left:' + leftOf[c.k] + 'px; z-index:3; background:' + rowBg + ';' : '';
-                var extra = '', cls = 'pl-td';
-                if (c.type === 'num') extra += 'text-align:right;';
-                if (c.k === 'no') {
-                    // 숫자가 주인공이다 — 예전엔 📌 아이콘이 44px 칸을 먹어 번호가 잘려 보였다(사용자 지적).
-                    //    고정(📌)은 행 메뉴 안으로 옮겼고, 여기선 고정된 행만 작게 표시한다.
-                    return '<td class="pl-td pl-no" style="' + sticky + ' text-align:center; cursor:pointer; font-weight:bold; color:' + P.darkText + ';"'
-                         + ' onclick="event.stopPropagation(); window.plOpenRowMenu(\'' + r._id + '\', event)"'
-                         + ' title="' + _esc(_t('클릭: 행 메뉴(위/아래 추가·삭제·상세)', 'Click: row menu (insert/delete/detail)')) + '">'
-                         + (pinned ? '<span style="font-size:9px;">📌</span>' : '') + _esc(v) + '</td>';
-                }
-                // ✂️ 긴 글은 정해진 글자 수까지만 — 설명 1·2·3 처럼 한 칸에 문장이 들어오는 열(사용자 요청 20자).
-                //    잘린 건 말풍선에 전문이 들어 있고, 칸을 누르면 입력칸에서 전체가 보인다.
-                var shown = v, cut = false;
-                var lim = window.PL_CELL_MAX[c.k];
-                if (lim && v.length > lim) { shown = v.slice(0, lim) + '…'; cut = true; }
-                // 특수 열 — 값 옆에 작은 아이콘, 아이콘을 눌러야 창이 뜬다(글자 수정과 안 겹치게)
-                var ico = '';
-                if (c.type === 'doc') {
-                    // 📄 아이콘은 **칸 오른쪽 끝에 고정**한다(값 뒤에 붙여 두면 긴 PN 에 밀려 잘려서 안 보였다 —
-                    //    사용자 지적 "말줄임 아이콘 안 보임"). 자료가 있으면 개수를 파랗게, 없으면 흐리게.
-                    var n = window._plDocCount ? window._plDocCount(r) : 0;
-                    ico = '<span class="pl-ico pl-ico-fix" onclick="event.stopPropagation(); window.plOpenDocBox(\'' + r._id + '\')"'
-                        + ' style="' + (n ? 'opacity:1;' : 'opacity:.35;') + '"'
-                        + ' title="' + _esc(n ? (n + _t('개 NAS 자료 — 열기/올리기/AI 분석', ' NAS file(s) — open/upload/AI analysis'))
-                                              : _t('NAS 자료 없음 — 눌러서 올리기', 'No NAS file — click to upload')) + '">'
-                        + (n ? '<b style="color:#1971c2; font-size:10px;">' + n + '</b>' : '') + '📄</span>';
-                } else if (c.type === 'rev') {
-                    // 📜 Agile REV — 누르면 그 도면의 REVISIONS 표를 그대로 보여 준다(값을 쓰는 게 아니라 보는 것)
-                    var dn = window._plDocCount ? window._plDocCount(r) : 0;
-                    ico = '<span class="pl-ico pl-ico-fix" onclick="event.stopPropagation(); window.plOpenRevisions(\'' + r._id + '\')"'
-                        + ' style="' + (dn ? 'opacity:1;' : 'opacity:.35;') + '"'
-                        + ' title="' + _esc(dn ? _t('도면의 REVISIONS 이력 보기', 'View the drawing\'s REVISIONS table')
-                                               : _t('연결된 도면이 없습니다 — PN을 확인하세요', 'No linked drawing — check the PN')) + '">📜</span>';
-                } else if (c.type === 'panel') {
-                    ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPanelCard(\'' + r._id + '\')"'
-                        + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔎</span>';
-                } else if (c.type === 'sap') {
-                    ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPnMenu(\'' + r._id + '\')"'
-                        + ' title="' + _esc(_t('SAP 조회 · 프로젝트 열기', 'SAP lookup / open project')) + '">🏭</span>';
-                } else if (c.type === 'person') {
-                    ico = v ? '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPersonCard(\'' + r._id + '\',\'' + c.k + '\')"'
-                        + ' title="' + _esc(_t('담당자 정보 · 이 담당자 제품만 보기', 'Owner info / filter by this owner')) + '">👤</span>' : '';
-                } else if (String(c.type).indexOf('part:') === 0) {
-                    ico = v ? '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPartCard(\'' + r._id + '\',\'' + c.k + '\',\'' + String(c.type).slice(5) + '\')"'
-                        + ' title="' + _esc(_t('PARTS 라이브러리에서 보기', 'Open in PARTS library')) + '">🔎</span>' : '';
-                }
-                // 아이콘이 있는 칸은 오른쪽에 자리를 비워 두고(padding-right) 그 자리에 아이콘을 고정한다.
-                if (ico) { cls += ' pl-has-ico'; }
-                return '<td class="' + cls + '" data-id="' + r._id + '" data-k="' + c.k + '"'
-                     + ((cut || ico) ? ' title="' + _esc(v || '') + '"' : '')
-                     + ' onclick="window.plEditCell(this)" style="' + sticky + extra + '">'
-                     + '<span class="pl-v">' + _esc(shown).replace(/\n/g, ' ') + '</span>' + ico + '</td>';
-            }).join('');
-            return '<tr data-id="' + r._id + '" class="' + (zebra ? 'pl-zebra' : '') + (pinned ? ' pl-pinned' : '') + '"'
-                 + ' style="background:' + rowBg + ';">' + tds + '</tr>';
+            return (ri < _PL_EAGER) ? _plRowHtml(r, ri) : _plLazyRowHtml(r, ri);
         }).join('');
 
-        wrap.innerHTML = '<table id="pl-table" class="concept-table pl-table" style="width:' + totalW + 'px;"><thead><tr>' + th + '</tr></thead><tbody>'
+        // ⚡ 고정 열 규칙은 **열 하나에 한 줄** — 칸마다 쓰면 같은 문장이 수백 번 실린다.
+        var stickyCss = '<style>' + Object.keys(leftOf).map(function (k) {
+            return '#pl-table td[data-k="' + k + '"]{position:sticky;left:' + leftOf[k] + 'px;z-index:3;}'
+                 + '#pl-table th[data-k="' + k + '"]{position:sticky;left:' + leftOf[k] + 'px;z-index:5;background:' + P.headerTint + ';}';
+        }).join('') + '#pl-table td.pl-no{text-align:center;cursor:pointer;font-weight:bold;color:' + P.darkText + ';}</style>';
+
+        wrap.innerHTML = stickyCss + '<table id="pl-table" class="concept-table pl-table" style="width:' + totalW + 'px;"><thead><tr>' + th + '</tr></thead><tbody>'
                        + (body || '<tr><td colspan="' + cols.length + '" style="padding:30px; text-align:center; color:#888;">'
                           + _esc(_t('표가 비어 있습니다 — [📥 엑셀 불러오기]로 제품 목록 엑셀을 넣어주세요.',
                                     'The table is empty — use [📥 Import Excel] to load the product list.')) + '</td></tr>')
@@ -941,9 +1027,41 @@
         if (!light) window.plRenderChips();
         window.plRenderStats();
         window._plBindTableDnd();
+        window._plBindTableClicks();
+        window._plBindLazyScroll();
+        // 첫 화면이 자리표시로 남지 않게 — 창이 크면 _PL_EAGER 보다 더 보일 수 있다.
+        if (wrap._plLazySweep) wrap._plLazySweep();
         window.plRefreshLang();
-        if (window._cpApplyLive) { try { window._cpApplyLive(); } catch (e) { /* 팔레트 미초기화 시 무시 */ } }
+        // ⚠️ 예전엔 여기서 `_cpApplyLive()` 를 **인자 없이** 불렀다 — 그 함수는 hex 가 없으면 첫 줄에서
+        //    바로 던진다(실측 TypeError). 그래서 아무 일도 안 하면서 그릴 때마다 예외를 하나씩 만들었고,
+        //    그게 "팔레트 → plRender → 팔레트" 무한재귀를 **우연히** 막고 있었다. 색은 이미 _pal() 이
+        //    팔레트에서 직접 읽어 칠하므로 이 호출은 필요 없다.
+        window._plViewStale = false;             // 지금 화면 = 지금 자료. 탭에 다시 들어와도 안 다시 그린다.
     };
+
+    // ⚡ 칸 클릭은 **표 하나에 건 위임 핸들러**가 받는다(2026-10-30).
+    //    예전엔 칸마다 onclick 을 달았다 — 164행 × 28열이면 같은 문장이 4,592번 실려서
+    //    HTML 이 935KB 가 됐고, 탭에 들어올 때마다 그걸 다시 만들어 붙였다.
+    window._plBindTableClicks = function () {
+        var wrap = document.getElementById('pl-table-wrap');
+        if (!wrap || wrap._plClickBound) return;
+        wrap._plClickBound = true;
+        wrap.addEventListener('click', function (e) {
+            var ico = e.target.closest ? e.target.closest('.pl-ico') : null;
+            if (ico) return;                     // 아이콘은 자기 onclick 이 따로 있다
+            var td = e.target.closest ? e.target.closest('td.pl-td') : null;
+            if (!td) return;
+            if (td.classList.contains('pl-no')) { window.plOpenRowMenu(td.getAttribute('data-id'), e); return; }
+            window.plEditCell(td);
+        });
+    };
+
+    /** 탭에 들어올 때 쓰는 그리기 — 바뀐 게 없으면 **그대로 둔다**(표를 다시 만들면 150ms 가 든다). */
+    window.plRenderIfStale = function () {
+        if (window._plViewStale !== false || !document.getElementById('pl-table')) { window.plRender(); return true; }
+        return false;
+    };
+    window._plMarkViewStale = function () { window._plViewStale = true; };
 
     // 열 그룹 칩 + 필터 드롭다운
     window.plRenderChips = function () {
@@ -1304,7 +1422,7 @@
         } catch (e) { html += '<div style="color:#b1432f;">' + _t('라이브러리 조회 실패: ', 'Library lookup failed: ') + _esc(e.message) + '</div>'; }
 
         html += '<div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">'
-             + '<button onclick="window.plOpenPanelSpec(\'' + _esc(model) + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📄 ' + _t('NAS 사양서 열기', 'Open NAS spec') + '</button>'
+             + '<button onclick="window.plOpenPanelSpec(\'' + _esc(model) + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📜 ' + _t('NAS 사양서 열기', 'Open NAS spec') + '</button>'
              + '<button onclick="window.plFilterByPanel(\'' + _esc(model) + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📒 ' + _t('이 패널 쓰는 제품 ', 'Products using this panel ') + same + _t('건 보기', '') + '</button>'
              + '<button onclick="window.switchTab(\'elecparts\'); window.plClosePopup();" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">⚡ ' + _t('PARTS 탭으로', 'Go to PARTS') + '</button>'
              + '</div>';
@@ -1493,6 +1611,7 @@
             var all = files.map(function (f) { return String(f && f.name ? f.name : f); });
             window._plDocCache = { at: Date.now(), byNum: byNum, all: all, total: files.length, error: '' };
             window._plDocsOfCache = {};
+            window._plViewStale = true;      // 배지 숫자가 바뀜을 수 있다
             if (!silent) window.plRender();
         } catch (e) {
             var msg = (e && e.message) ? e.message : String(e);
@@ -1515,7 +1634,7 @@
                       'Enter a PN (7-digit) or KTK PN (6-digit) first — files are matched by that number.'), 'warning', 7000);
             return;
         }
-        _popup('📄 ' + _esc(nums.join(' / ')) + ' ' + _t('자료', 'documents')
+        _popup('📜 ' + _esc(nums.join(' / ')) + ' ' + _t('자료', 'documents')
              + ' <span style="font-weight:normal; color:#666; font-size:11.5px;">' + _esc(String(r.desc || '').slice(0, 40)) + '</span>',
             '<div id="pl-doc-body" style="color:#888;">' + _t('목록을 불러오는 중…', 'Loading…') + '</div>', true);
         if (!window._plDocCache.at) await window.plRefreshDocCache(true);
@@ -2146,7 +2265,7 @@
               ? '<button onclick="window.plUseLatestRev()" style="padding:6px 12px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ '
                 + _t('최신 REV(', 'Use latest REV (') + _esc(revs[revs.length - 1].rev) + _t(')를 이 행에 넣기', ') for this row') + '</button>'
               : '')
-          + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(pick) + '\')" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:12px; cursor:pointer;">📄 ' + _t('도면 열기', 'Open drawing') + '</button>'
+          + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(pick) + '\')" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:12px; cursor:pointer;">📜 ' + _t('도면 열기', 'Open drawing') + '</button>'
           + '<button onclick="window.plOpenDocBox(\'' + id + '\')" style="padding:6px 12px; background:#eef2f5; color:#495057; border:none; border-radius:6px; font-size:12px; cursor:pointer;">📁 ' + _t('문서함', 'Documents') + '</button>'
           + '<span style="margin-left:auto;"><button onclick="window.plClosePopup()" style="padding:6px 12px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6; border-radius:6px; font-size:12px; cursor:pointer;">' + _t('닫기', 'Close') + '</button></span>'
           + '</div>';
@@ -2502,7 +2621,7 @@
             return '<div style="margin-bottom:12px;"><div style="font-weight:bold; color:#2c5f8a; font-size:12.5px; margin-bottom:4px;">'
                  + _esc(window._currentLang === 'en' ? g.en : g.ko) + '</div>' + cells + '</div>';
         }).join('');
-        _popup('📄 ' + _esc(r.ktkPn || '-') + ' <span style="font-weight:normal; color:#555;">' + _esc(r.desc || '') + '</span>',
+        _popup('📜 ' + _esc(r.ktkPn || '-') + ' <span style="font-weight:normal; color:#555;">' + _esc(r.desc || '') + '</span>',
             '<div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">'
           + '<button onclick="window.plOpenDocBox(\'' + id + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📎 ' + _t('문서함', 'Documents') + '</button>'
           + '<button onclick="window.plOpenPnMenu(\'' + id + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">🏭 SAP</button>'
@@ -2763,8 +2882,8 @@
                     }
                 }
                 window._plLoadedAt = Date.now();
-                await window.plRefreshDocCache(true);                   // 📄 배지용 NAS 파일 목록
-                window.plRender();
+                await window.plRefreshDocCache(true);                   // 📜 배지용 NAS 파일 목록
+                window.plRenderIfStale();
             } finally {
                 window._plLoadInflight = null;
             }
@@ -2787,7 +2906,7 @@
     };
 
     window.plOnTabShown = function () {
-        window.plRender();
+        window.plRenderIfStale();        // ⚡ 바뀐 게 없으면 그대로 둔다 — 표를 다시 만들면 150ms 가 든다
         window.plEnsureLoaded(false);
     };
 

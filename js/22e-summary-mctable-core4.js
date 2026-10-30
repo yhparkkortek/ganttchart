@@ -512,7 +512,7 @@ window.elecCompareOpenAddModal = async function(type) {
                      ondragover="event.preventDefault(); this.style.background='#e9eef3';"
                      ondragleave="this.style.background='#f8f9fa';"
                      ondrop="event.preventDefault(); event.stopPropagation(); this.style.background='#f8f9fa'; window._epHandleFileDrop(event.dataTransfer.files);">
-                    <button type="button" id="ep-add-file-btn" onclick="event.stopPropagation(); document.getElementById('ep-add-file').click()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex-shrink:0; padding:6px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📄 ${_en ? 'Attach PDF/TXT/HTML' : 'PDF/TXT/HTML 첨부'}</button>
+                    <button type="button" id="ep-add-file-btn" onclick="event.stopPropagation(); document.getElementById('ep-add-file').click()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex-shrink:0; padding:6px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📜 ${_en ? 'Attach PDF/TXT/HTML' : 'PDF/TXT/HTML 첨부'}</button>
                     <button type="button" onclick="event.stopPropagation(); window._pcpPickNasForAi && window._pcpPickNasForAi()" title="${_en ? 'Pick a datasheet already on the NAS and extract it with AI' : 'NAS에 올려둔 사양서를 골라 바로 AI로 추출합니다(내 PC로 받지 않아도 됩니다)'}" onmouseover="this.style.background='#d8eef0';" onmouseout="this.style.background='#eaf7ea';" style="flex-shrink:0; padding:6px 10px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s;">📁 ${_en ? 'From NAS' : 'NAS에서'}</button>
                     <span id="ep-add-file-name" style="font-size:11px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_en ? 'or drag & drop a file here' : '또는 파일을 여기로 드래그하세요'}</span>
                 </div>
@@ -726,7 +726,7 @@ window._epProcessFile = async function(file) {
     const paste = document.getElementById('ep-add-paste');
     const fileNameEl = document.getElementById('ep-add-file-name');
     const ext = (file.name.split('.').pop() || '').toLowerCase();
-    if (fileNameEl) fileNameEl.textContent = '📄 ' + file.name;
+    if (fileNameEl) fileNameEl.textContent = '📜 ' + file.name;
     try {
         let text = '';
         if (ext === 'pdf') {
@@ -746,7 +746,7 @@ window._epProcessFile = async function(file) {
         if (paste) paste.value = cleaned;
         const savedChars = text.length - cleaned.length;
         if (window.showToast) {
-            window.showToast((_en ? '📄 Loaded text from "' : '📄 "') + file.name + (_en ? '"' : '"에서 텍스트를 불러왔습니다')
+            window.showToast((_en ? '📜 Loaded text from "' : '📜 "') + file.name + (_en ? '"' : '"에서 텍스트를 불러왔습니다')
                 + (savedChars > 200 ? (_en ? ` (removed ${savedChars.toLocaleString()} repeated chars)` : ` (반복 ${savedChars.toLocaleString()}자 정리됨)`) : ''), 'info');
         }
     } catch (e) {

@@ -234,7 +234,7 @@
             window.ELEC_CATEGORY_TO_VIEW[cat] = key;   // 역방향 조회를 최신으로(위 주석 참고)
             const meta = window.ELEC_CATEGORY_META[cat] || {};
             const vm = window.ELEC_VIEW_META[key];
-            const icon = meta.icon || (vm && vm.icon) || '📄';
+            const icon = meta.icon || (vm && vm.icon) || '📜';
             const label = (vm && vm.label) || cat;
             // 전용 도표가 없는 구분은 공용 기본 항목으로 비교표를 쓸 수 있게 등록해 둔다(js/50).
             // 등록을 여기서 부르는 이유: 구분 목록을 아는 곳이 여기 하나라서다.
@@ -365,7 +365,7 @@
     };
     window._elecModeSpec = function() { if (window._elecBomClose) window._elecBomClose(); };
 
-    // 📄↔📊 [2026-10-22] 지금 보고 있는 뷰만 다시 그린다 — js/42 왕복 불러오기의 repaint 대상.
+    // 📜↔📊 [2026-10-22] 지금 보고 있는 뷰만 다시 그린다 — js/42 왕복 불러오기의 repaint 대상.
     //    `_switchElecView()`를 인자 없이 부르면 PANEL로 튕기므로(등록 안 된 뷰 폴백) 현재 뷰를 명시한다.
     window._elecRepaintCurrent = function() { window._switchElecView(window._elecView || 'panel'); };
 

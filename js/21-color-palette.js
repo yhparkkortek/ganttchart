@@ -238,7 +238,7 @@ window._cpApplyLive = function(hex, skipSave) {
         // 평소엔 버튼 박스 자체가 상단바에 묻혀 안 보이고 "한글"/"ENG" 글자로만 상태가 구분되게 한다.
         + '.topbar-btn.lang-active { background: ' + genNav.base + ' !important; color: ' + genNav.text + ' !important; }\n'
         + '.topbar-btn.lang-active:hover { background: ' + genNav.hover + ' !important; }\n'
-        // 💡 [2026-08-30 추가] 상단바의 "📄 현재 프로젝트 파일명" 표시가 옛 고정 청록(글자/호버 배경
+        // 💡 [2026-08-30 추가] 상단바의 "📜 현재 프로젝트 파일명" 표시가 옛 고정 청록(글자/호버 배경
         // 둘 다)이라 테마가 안 먹혔음 — 같은 상단바 안의 .topbar-btn과 같은 톤(genNav)으로 통일.
         + '#current-project-filename { color: ' + genNav.text + ' !important; }\n'
         + '#current-project-filename:hover { background: ' + genNav.hover + ' !important; }\n'

@@ -839,6 +839,11 @@
 #tab-projectlist > .concept-tab-wrap > .concept-section.pl-section {
     flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0 !important;
 }
+/* ⚠️ [2026-10-30] 여기에 `content-visibility:auto` 를 주지 말 것 — 재 보면 150ms 가 4ms 로
+   줄어든 것처럼 보이지만, 그건 **배경 탭이라 프레임이 안 돈 탓**이고 화면이 보이면 표 전체가
+   그대로 배치된다(강제 레이아웃까지 재면 190ms 대 211ms). 게다가 배치 전엔 scrollHeight 가
+   자리표시 크기(316px)로 나와서 "그 행으로 스크롤" 같은 코드가 조용히 빗나간다.
+   진짜 해법은 행을 적게 그리는 것 — js/55 의 자리표시 행(data-lazy) 참고. */
 .pl-table-wrap { flex: 1; min-height: 0; overflow: auto; background: #fff; border: 1px solid #cfe3e5; border-radius: 6px; }
 .pl-table { border-collapse: separate; border-spacing: 0; font-size: 11.5px; table-layout: fixed; }
 /* 머리글은 **한 줄 고정** — 열이 90개라 두세 줄로 접히면 표가 세로로 뚱뚱해진다.

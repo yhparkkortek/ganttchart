@@ -2101,7 +2101,7 @@ ${question}
                     });
                     (m.savePaths.pdfPaths || []).forEach(function(p) {
                         const fn = p.split('\\').pop() || p;
-                        _btns.push('<button onclick="window._ganttQaOpenFolder(\'' + p.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + escapeHtml(p) + '" style="font-size:11px; padding:3px 9px; border:1px solid #a0b8d8; background:#e6eff8; color:#1a3a6a; border-radius:5px; cursor:pointer; margin:2px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle;">📄 ' + escapeHtml(fn) + '</button>');
+                        _btns.push('<button onclick="window._ganttQaOpenFolder(\'' + p.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + escapeHtml(p) + '" style="font-size:11px; padding:3px 9px; border:1px solid #a0b8d8; background:#e6eff8; color:#1a3a6a; border-radius:5px; cursor:pointer; margin:2px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle;">📜 ' + escapeHtml(fn) + '</button>');
                     });
                     if (!_btns.length) return '';
                     return '<div style="margin-top:5px; padding:5px 8px; background:#f8fcf6; border:1px solid #d0e8c8; border-radius:6px;">'
