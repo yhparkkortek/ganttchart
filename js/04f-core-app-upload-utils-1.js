@@ -9,7 +9,7 @@
     // ✅ 페이지 어디에 드롭해도(표의 빈 안내 문구 영역 포함) 엑셀 로드가 동작하도록 처리
     window.addEventListener("drop", function(e) {
         e.preventDefault();
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             document.getElementById('file-input').value = '';
             handleFiles({ target: { files: e.dataTransfer.files } });
         }
@@ -22,7 +22,36 @@
     });
 
         function handleFiles(e) {
-        const files = e.target.files; if (!files || files.length === 0) return;
+        let files = e.target.files; if (!files || files.length === 0) return;
+
+        // 📂 [2026-10-30] 파일은 무엇이든 받는다(고르기 창에 더 이상 확장자 제한이 없다).
+        //    다만 이 길목은 **간트 일정표 엑셀**을 여는 자리라, 엑셀이 아니면 비밀번호를 묻기 전에
+        //    무엇이 잘못됐는지 먼저 알려준다. 예전엔 XLSX.read 가 안에서 터져 "아무 일도 안 일어난 것"
+        //    처럼 보였다. 확장자 목록은 js/42 의 DOC_FILE_KINDS 한 곳만 본다.
+        if (window._docIsWorkbook) {
+            const books = Array.prototype.filter.call(files, f => window._docIsWorkbook(f.name));
+            if (!books.length) {
+                const n = files[0] && files[0].name || '';
+                const msg = window._t(
+                    '⚠️ "' + n + '" 은(는) 간트 일정표 엑셀이 아닙니다.\n\n여기(상단 바)에 놓는 파일은 .xlsx/.xls/.csv 여야 합니다.\n' +
+                    '• 도면·사양서라면 → 해당 페이지의 [📁 NAS] 나 [📜 분석] 으로 넣어주세요.\n' +
+                    '• 메일 파일(.eml)이라면 → [메일 파일 첨부] 탭으로 넣어주세요.',
+                    '⚠️ "' + n + '" is not a Gantt schedule Excel file.\n\nFiles dropped here must be .xlsx/.xls/.csv.\n' +
+                    '• Drawings or specs → use [📁 NAS] or [📜 Analyze] on the relevant page.\n' +
+                    '• Mail files (.eml) → use the mail attachment tab.');
+                if (window.showToast) window.showToast(msg.split('\n')[0], 'error', 9000);
+                alert(msg);
+                const fi = document.getElementById('file-input'); if (fi) fi.value = '';
+                return;
+            }
+            if (books.length !== files.length) {
+                const skipped = Array.prototype.filter.call(files, f => !window._docIsWorkbook(f.name)).map(f => f.name);
+                if (window.showToast) {
+                    window.showToast(window._t('엑셀이 아닌 파일은 건너뜁니다: ', 'Skipping non-Excel file(s): ') + skipped.join(', '), 'warning', 8000);
+                }
+                files = books;      // 엑셀만 추려서 진행 — 나머지는 위에서 밝혔다
+            }
+        }
 
         // ✅ 이미 로드된 프로젝트(파일 연결됨) 또는 화면에 이미 실제 Gantt 데이터가 있는 상태에서
         //    엑셀을 드래그하면 "그 내용을 덮어쓰는" 것이므로 비밀번호로 막는다.

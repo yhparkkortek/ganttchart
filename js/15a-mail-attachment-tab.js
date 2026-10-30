@@ -442,13 +442,22 @@ window.mfHandleFiles = function(files) {
     if (!files || files.length === 0) return;
 
     // 💡 추가: MSG 파일 걸러내기 (경고 알림 후 해당 파일만 목록에서 제외)
+    // 📂 [2026-10-30] 고르기 창의 확장자 제한을 없앴다(무엇이든 고를 수 있다) — 대신 여기서
+    //    읽을 수 없는 파일을 **이유와 함께** 걸러낸다. 확장자 목록은 js/42 DOC_FILE_KINDS 한 곳만 본다.
+    const _skipped = [];
     const validFiles = Array.from(files).filter(f => {
         if (f.name.toLowerCase().endsWith('.msg')) {
             alert(`⚠️ '${f.name}'은 MSG 파일입니다.\nMSG 파일은 '메일 서버 탭'을 이용해 주세요.`);
             return false; // 목록에서 제외
         }
+        const hint = window._docReadHint ? window._docReadHint(f.name) : '';
+        if (hint) { _skipped.push(hint); return false; }
         return true;
     });
+    if (_skipped.length) {
+        alert(_skipped.join('\n\n') + '\n\n'
+            + window._t('메일 파일은 .eml / .html / .txt 를 넣어주세요.', 'Mail files should be .eml / .html / .txt.'));
+    }
 
     if (validFiles.length === 0) return; // 유효한 파일이 없으면 종료
 

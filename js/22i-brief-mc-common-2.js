@@ -942,6 +942,16 @@ function _prodImgMeasure(file) {
 
 window._uploadProductImage = async function (file) {
     const _en = window._currentLang === 'en';
+    // 📂 [2026-10-30] 고르기 창의 확장자 제한을 없앴다 — 대신 사진이 아니면 여기서 이유를 말해 준다.
+    //    (예전엔 accept 가 막아 "왜 내 파일이 회색이지?"만 보였고, 끌어다 놓으면 조용히 무시됐다.)
+    if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+        if (window.showToast) {
+            window.showToast(_en
+                ? '⚠️ "' + (file && file.name) + '" is not an image — this slot takes photos only (JPG/PNG/GIF/WEBP). For documents use [📁 NAS] on the relevant page.'
+                : '⚠️ "' + (file && file.name) + '" 은(는) 이미지가 아닙니다 — 이 자리에는 사진(JPG·PNG·GIF·WEBP)만 넣을 수 있습니다. 문서라면 해당 페이지의 [📁 NAS] 로 넣어주세요.', 'warning', 9000);
+        }
+        return;
+    }
     const folder = window._prodImgFolder();
     if (!folder) { if (window.showToast) window.showToast('⚠️ ' + (_en ? 'Open a project first.' : '먼저 프로젝트를 열어야 합니다.'), 'error'); return; }
     if (!window._dsPut) { if (window.showToast) window.showToast('⚠️ ' + (_en ? 'The document store is not available.' : '문서 저장소 기능을 불러오지 못했습니다.'), 'error'); return; }
@@ -1063,7 +1073,7 @@ window._renderProductImageSlots = function () {
     }).join('');
     html += '<div class="prod-img-slot" id="prod-img-add" title="' + (_en ? 'Click to add photos' : '클릭하여 사진 추가') + '">'
         + '<div class="prod-placeholder">📷<br>' + (_en ? 'Add photo' : '사진 추가') + '<br><span style="font-size:10px;">' + (_en ? '(several at once OK)' : '(여러 장 한꺼번에 가능)') + '</span></div>'
-        + '<input type="file" accept="image/*" multiple style="display:none;">'
+        + '<input type="file" multiple style="display:none;">'
         + '</div>';
     list.innerHTML = html;
 

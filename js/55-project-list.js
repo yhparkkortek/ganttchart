@@ -2638,10 +2638,15 @@
     window.plImportExcel = function () {
         var inp = document.createElement('input');
         inp.type = 'file';
-        inp.accept = '.xlsx,.xls,.csv';
+        // 📂 [2026-10-30] 무엇이든 고를 수 있게 — 엑셀이 아니면 아래에서 이유를 말해 준다.
         inp.onchange = async function () {
             var f = inp.files && inp.files[0];
             if (!f) return;
+            if (window._docIsWorkbook && !window._docIsWorkbook(f.name)) {
+                _toast('⚠️ ' + _t('"' + f.name + '" 은(는) 엑셀이 아닙니다 — 제품 목록은 .xlsx/.xls/.csv 로 넣어주세요. (도면·사양서는 행의 📜 자료 버튼으로)',
+                                  '"' + f.name + '" is not an Excel file — the product list needs .xlsx/.xls/.csv. (Drawings go to the row\'s 📜 documents button.)'), 'error', 9000);
+                return;
+            }
             try {
                 var buf = await f.arrayBuffer();
                 window._plApplyWorkbook(buf, f.name);

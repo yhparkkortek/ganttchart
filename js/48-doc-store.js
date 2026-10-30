@@ -907,7 +907,7 @@ window._dsPageFolders = function (pageId) {
 
 // 📜 규격 엑셀(xlsx/xls/csv)이 아니면 js/42 pageExcelImport가 결국 AI로 보낸다
 //    (onForeignFile/_pxAiImport) — 그 갈림길에서 **AI를 쓸지 말지**를 사람에게 먼저 물어본다.
-var _DS_WORKBOOK_RE = /\.(xlsx|xlsm|xls|csv)$/i;
+var _DS_WORKBOOK_RE = { test: function (n) { return window._docIsWorkbook ? window._docIsWorkbook(n) : /\.(xlsx|xlsm|xls|csv)$/i.test(n); } };
 
 window._dsImportToPage = async function (pageId, folder) {
     var base = folder || window._dsPageFolder(pageId);

@@ -338,6 +338,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 브라우저는 UNC를 못 읽는다 → **로컬 백엔드가 중계**(`C:\SAP_DMS` 패턴과 동일). 폴더 목록은 설정이라 새 분류는 이름만 추가
 - AI는 원본을 안 본다(`_pxExtractText`가 6만 자로 잘라 보냄) → 텍스트만 캐시하면 재분석·검색이 다 된다. 추출기는 `window._pxExtractText` **하나만** 쓸 것
 - `PANEL\` 은 **파일명이 곧 패널 PN** — 이름을 바꾸면 앱이 못 찾는다
+- **(2026-10-30) 파일 고르기·드래그는 무엇이든 받는다** — `accept` 는 앱 전체에서 비웠고, 못 읽는 파일은 **이유+해결방법**을 띄운다. 카탈로그는 `DOC_FILE_KINDS`(js/42, 데이터) 한 곳 — 확장자를 코드에 박지 말 것. 헬퍼: `_docKindOf`/`_docCanRead`/`_docReadHint`/`_docIsWorkbook`/`_docLooksBinary`. ⚠️ 모르는 확장자는 막지 말고 **내용을 보고** 판단(이진이면 AI 로 안 보냈다 — 할당량만 날렸다). AI 문답 첨부도 엑셀·HTML·텍스트까지 넓혔다
 - **(2026-10-30) 키워드로 걸리는 파일은 모두 보여준다** — `_dsFindPanelSpecAll`(전부), `_dsFindPanelSpecs`의 `_counts`(비교표 머리글 `📄N`), 2건 이상이면 공용 고르기 창을 `q` 채워 띄운다. 창 검색은 **글자 그대로 + 기호 뗀 모양** 둘 다(`_dsNameMatch`) — 하이픈 하나로 "있는 파일이 0건"이 났다
 - 메일은 `.eml` 통째로(본문+첨부). 키는 `fileName`, 훅은 `_tpAppendMailSignal` **한 곳만** 감쌀 것
 - **(2026-10-22) 페이지마다 제 NAS 폴더** — SUMMARY·CUSTOMER·MC·PARTS·ADDRESS·ALARM&NOTICE·CALENDER·GANTT·REPORT. 엑셀 왕복 있는 페이지는 js/42(`nasFolder`), 파생 뷰는 js/53(`PAGE_NAS_FOLDERS`). ⚠️ **PANEL 은 `PARTS/PANEL`** 로 옮겨졌고 경로를 보는 곳이 넷이다(js/23·48·22d·49) — 하나만 고치면 조용히 0건

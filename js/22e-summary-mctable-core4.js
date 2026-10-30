@@ -505,7 +505,7 @@ window.elecCompareOpenAddModal = async function(type) {
                 <div style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">📷 ${_en ? 'Photos (saved to the NAS — no limit)' : '사진 (NAS에 저장 — 개수 제한 없음)'}</div>
                 <div id="ep-img-slots-container" style="display:flex; gap:8px; margin-bottom:12px; flex-shrink:0; flex-wrap:wrap;"></div>
                 <div id="ep-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new item with AI' : '또는 새 항목을 AI로 추출'}</div>
-                <input type="file" id="ep-add-file" accept=".pdf,.txt,.html,.htm" style="display:none;" onchange="window._epHandleFileUpload(this)">
+                <input type="file" id="ep-add-file" style="display:none;" onchange="window._epHandleFileUpload(this)">
                 <div id="ep-add-dropzone"
                      style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-shrink:0; padding:8px 10px; border:1.5px dashed #2c5f8a; border-radius:6px; background:#f8f9fa; cursor:pointer; transition:0.15s;"
                      onclick="document.getElementById('ep-add-file').click()"
@@ -556,7 +556,16 @@ window.elecCompareOpenAddModal = async function(type) {
 //    쓸 모델명이 확정돼 있고, 모달을 취소하면 아무것도 안 올라간 채로 끝난다. 그때까지는 원본
 //    File 객체를 들고 있다가(리사이즈·재압축 없음 — 원본 그대로) blob URL로 미리보기만 한다.
 window._epProcessDroppedImage = function(file, appendAt) {
-    if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
+    if (!file) return;
+    // 📂 [2026-10-30] 예전엔 이미지가 아니면 **조용히 아무 일도 안 일어났다** — 사람은 왜 안 되는지
+    //    알 수 없었다. 여기는 사진 자리라 이미지만 들어가는 게 맞고, 그 사실을 말해 준다.
+    if (!file.type || file.type.indexOf('image/') !== 0) {
+        if (window.showToast) {
+            window.showToast(window._t('⚠️ "' + file.name + '" 은(는) 이미지가 아닙니다 — 이 자리에는 사진(JPG·PNG·GIF·WEBP)만 넣을 수 있습니다. 문서라면 해당 페이지의 [📁 NAS] 로 넣어주세요.',
+                                       '⚠️ "' + file.name + '" is not an image — this slot takes photos only (JPG/PNG/GIF/WEBP). For documents use [📁 NAS] on the relevant page.'), 'warning', 9000);
+        }
+        return;
+    }
     window._epPendingPhotos = window._epPendingPhotos || [];
     const url = URL.createObjectURL(file);
     const tempImg = new Image();
@@ -590,7 +599,7 @@ window._epSyncImageSlotsUI = function() {
             + '</div>';
     }).join('');
     html += '<div class="ep-img-add" style="' + SLOT + ' cursor:pointer;">'
-        + '<input type="file" accept="image/*" multiple style="display:none;">'
+        + '<input type="file" multiple style="display:none;">'
         + '<span style="font-size:22px; color:#bbb;">📷</span>'
         + '</div>';
     container.innerHTML = html;
@@ -714,11 +723,7 @@ window._epHandleFileDrop = async function(fileList) {
     const _en = window._currentLang === 'en';
     const file = fileList && fileList[0];
     if (!file) return;
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
-    if (['pdf', 'txt', 'html', 'htm'].indexOf(ext) === -1) {
-        alert(_en ? '⚠️ Only PDF/TXT/HTML files are supported.' : '⚠️ PDF/TXT/HTML 파일만 지원합니다.');
-        return;
-    }
+    // 📂 [2026-10-30] 무엇을 떨구든 받는다 — 못 읽는 종류면 _epProcessFile 이 이유를 말해 준다.
     await window._epProcessFile(file);
 };
 window._epProcessFile = async function(file) {
@@ -727,6 +732,9 @@ window._epProcessFile = async function(file) {
     const fileNameEl = document.getElementById('ep-add-file-name');
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     if (fileNameEl) fileNameEl.textContent = '📜 ' + file.name;
+    // 📂 [2026-10-30] 고르기·끌어놓기 두 길이 모두 지나는 길목 — 못 읽는 종류면 여기서 이유를 말해 준다.
+    const _hint = window._docReadHint ? window._docReadHint(file.name) : '';
+    if (_hint) { alert(_hint); if (fileNameEl) fileNameEl.textContent = ''; return; }
     try {
         let text = '';
         if (ext === 'pdf') {
@@ -740,6 +748,11 @@ window._epProcessFile = async function(file) {
             const htmlStr = await file.text();
             text = window._pcExtractHtmlText(htmlStr);
         } else {
+            // 모르는 확장자는 막지 않고 **내용을 들추어 본다** — 이진이면 깨진 글자를 AI 로 보내지 않는다.
+            if (window._docLooksBinary && !window._docKindOf(file.name) && await window._docLooksBinary(file)) {
+                throw new Error(_en ? 'This looks like a binary file, not text — upload a text-bearing original (PDF, Excel or text).'
+                                    : '이 파일은 글자가 아니라 이진 파일로 보입니다 — 글자가 든 원본(PDF·엑셀·텍스트)을 올려주세요.');
+            }
             text = await file.text();
         }
         const cleaned = window._pcCleanExtractedText(text);

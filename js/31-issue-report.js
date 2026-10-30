@@ -595,7 +595,9 @@
         var inp = document.getElementById('issue-rpt-patch-file');
         if (!inp) {
             inp = document.createElement('input');
-            inp.type = 'file'; inp.accept = 'application/json,.json'; inp.id = 'issue-rpt-patch-file';
+            // 📂 [2026-10-30] 확장자 제한 없이 고를 수 있게 — JSON 이 아니면 아래 parse 에서
+            //    "JSON을 읽지 못했습니다"로 이유가 그대로 나온다.
+            inp.type = 'file'; inp.id = 'issue-rpt-patch-file';
             inp.style.display = 'none';
             inp.addEventListener('change', function () {
                 var f = inp.files && inp.files[0]; if (!f) return;

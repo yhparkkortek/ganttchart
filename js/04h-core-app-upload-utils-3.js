@@ -682,7 +682,9 @@
     window._ganttQaProcessAttachedFiles = async function(fileList) {
         const files = Array.from(fileList || []);
         if (!files.length) return;
-        if (typeof window._pcExtractPdfText !== 'function') {
+        // ⚠️ [2026-10-30] 이 확인은 **PDF 일 때만** 해야 한다 — 예전엔 맨 위에서 걸러서,
+        //    pdf.js 가 아직 안 올라왔으면 .txt·.xlsx 첨부까지 전부 막혔다.
+        if (typeof window._pcExtractPdfText !== 'function' && files.some(function (f) { return /\.pdf$/i.test(f.name); })) {
             if (window.showToast) window.showToast(window._t('⚠️ PDF 읽기 기능을 아직 불러오지 못했습니다 — 잠시 후 다시 시도해주세요.', '⚠️ The PDF reader hasn\'t loaded yet — please try again in a moment.'), 'warning');
             return;
         }
@@ -702,8 +704,28 @@
                 }
                 continue;
             }
+            // 📂 [2026-10-30 사용자 요청] PDF·DOCX 말고도 **글자를 뽑을 수 있는 파일은 전부** 받는다.
+            //    엑셀은 시트를 글자로 펴고, HTML·TXT·그 밖의 글자 파일은 그대로 읽는다.
+            //    못 읽는 종류(이미지·압축·CAD·영상…)는 조용히 건너뛰지 않고 **왜 안 되는지** 말해 준다.
             if (!/\.pdf$/i.test(file.name)) {
-                if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}"은(는) PDF/DOCX가 아니라 건너뜁니다.`, `⚠️ Skipping "${file.name}" — not a PDF or DOCX.`), 'warning');
+                const _hint = window._docReadHint ? window._docReadHint(file.name) : '';
+                if (_hint) { if (window.showToast) window.showToast(_hint, 'warning', 9000); continue; }
+                try {
+                    let _wb = null;
+                    if (window._docIsWorkbook && window._docIsWorkbook(file.name) && window.XLSX) {
+                        _wb = window.XLSX.read(await file.arrayBuffer(), { type: 'array' });
+                    }
+                    const _txt = await window._pxExtractText(file, _wb);
+                    if (!String(_txt || '').trim()) {
+                        if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}"에서 읽을 글자가 없습니다.`, `⚠️ No text found in "${file.name}".`), 'warning');
+                        continue;
+                    }
+                    window._ganttQaPendingAttachments.push({ name: file.name, text: _txt });
+                    if (window.showToast) window.showToast(window._t(`📎 "${file.name}" 첨부됨 — ${_txt.length.toLocaleString()}자를 읽었습니다.`,
+                                                                    `📎 "${file.name}" attached — ${_txt.length.toLocaleString()} characters read.`));
+                } catch (e) {
+                    if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : e), 'error', 9000);
+                }
                 continue;
             }
             try {
@@ -10677,8 +10699,8 @@ ${docsJson}`;
                 <div style="padding:8px 14px 10px; display:flex; gap:8px; align-items:stretch;">
                     <!-- 📎 [2026-09-15 UI 변경] 첨부파일·자동 버튼을 96px 컬럼으로 세로 묶음 → textarea 왼쪽 끝이 자주쓰는질문 select와 정렬됨 -->
                     <div style="flex:0 0 96px; display:flex; flex-direction:column; gap:6px; min-width:0;">
-                        <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a PDF (e.g. tax invoice/quote) — used for Purchase Order requests' : 'PDF 첨부(전자세금계산서/견적서 등) — 구매오더 요청에 사용됩니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach File' : '첨부파일'}</button>
-                        <input type="file" id="gantt-qa-file-input" accept=".pdf,application/pdf" multiple style="display:none;" onchange="window._ganttQaHandleFileSelect(this)">
+                        <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a file (PDF, Excel, HTML, text…) — its text is sent with your question' : '파일 첨부(PDF·엑셀·HTML·텍스트…) — 글자를 읽어 질문과 함께 보냅니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach File' : '첨부파일'}</button>
+                        <input type="file" id="gantt-qa-file-input" multiple style="display:none;" onchange="window._ganttQaHandleFileSelect(this)">
                         <div id="gantt-qa-route-col" style="flex:1; min-width:0; min-height:0;"></div>
                     </div>
                     <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line, ↑↓=History)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈, ↑↓=이전 질문)'}" style="flex:1; min-width:0; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="window._ganttQaHandleInputKeydown(event)"></textarea>

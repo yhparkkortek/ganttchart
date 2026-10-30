@@ -481,7 +481,7 @@ window.panelCompareOpenAddModal = async function() {
             </div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
                 <div id="pc-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new panel with AI' : '또는 새 패널을 AI로 추출'}</div>
-                <input type="file" id="pc-add-file" accept=".pdf,.txt,.html,.htm" style="display:none;" onchange="window._pcHandleFileUpload(this)">
+                <input type="file" id="pc-add-file" style="display:none;" onchange="window._pcHandleFileUpload(this)">
                 <div id="pc-add-dropzone"
                      style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-shrink:0; padding:8px 10px; border:1.5px dashed #2c5f8a; border-radius:6px; background:#f8f9fa; cursor:pointer; transition:0.15s;"
                      onclick="document.getElementById('pc-add-file').click()"
@@ -701,6 +701,10 @@ window._pcProcessFile = async function(file) {
     const fileNameEl = document.getElementById('pc-add-file-name');
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     if (fileNameEl) fileNameEl.textContent = '📜 ' + file.name;
+    // 📂 [2026-10-30] 고르는 창은 무엇이든 받는다 — 못 읽는 종류면 여기서 이유를 말해 준다.
+    //    (여기가 선택·드래그 두 길이 모두 지나는 길목이다.)
+    const _hint = window._docReadHint ? window._docReadHint(file.name) : '';
+    if (_hint) { alert(_hint); if (fileNameEl) fileNameEl.textContent = ''; return; }
     try {
         let text = '';
         if (ext === 'pdf') {
@@ -720,6 +724,11 @@ window._pcProcessFile = async function(file) {
             const htmlStr = await file.text();
             text = window._pcExtractHtmlText(htmlStr);
         } else {
+            // 모르는 확장자는 막지 않고 **내용을 들춰 본다** — 이진이면 깨진 글자를 AI 로 보내지 않는다.
+            if (window._docLooksBinary && !window._docKindOf(file.name) && await window._docLooksBinary(file)) {
+                throw new Error(_en ? 'This looks like a binary file, not text — upload a text-bearing original (PDF, Excel or text).'
+                                    : '이 파일은 글자가 아니라 이진 파일로 보입니다 — 글자가 든 원본(PDF·엑셀·텍스트)을 올려주세요.');
+            }
             text = await file.text();
         }
         // 💡 PDF는 페이지마다 반복되는 머리말/꼬리말이 그대로 다 붙어나와 글자수만 불필요하게 늘리는
@@ -754,11 +763,10 @@ window._pcHandleFileDrop = async function(fileList) {
     const _en = window._currentLang === 'en';
     const file = fileList && fileList[0];
     if (!file) return;
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
-    if (['pdf', 'txt', 'html', 'htm'].indexOf(ext) === -1) {
-        alert(_en ? '⚠️ Only PDF/TXT/HTML files are supported.' : '⚠️ PDF/TXT/HTML 파일만 지원합니다.');
-        return;
-    }
+    // 📂 [2026-10-30] 무엇을 떨구든 받는다 — 못 읽는 종류면 **왜 안 되는지**를 알려 준다.
+    //    확장자 목록을 여기 박아 두면 js/42 카탈로그와 조용히 어긋난다(DOC_FILE_KINDS 한 곳만 본다).
+    const hint = window._docReadHint ? window._docReadHint(file.name) : '';
+    if (hint) { alert(hint); return; }
     await window._pcProcessFile(file);
 };
 

@@ -1133,11 +1133,90 @@
     //  규격 엑셀(우리가 낸 파일)은 **AI 없이** 그대로 붙인다 — 결정론 먼저(CLAUDE.md 원칙 4).
     //  AI는 "시트 이름이 안 맞거나 아예 엑셀이 아닐 때"만 부른다. 무료 키는 하루 한도가 있어서
     //  매번 때리면 금방 막힌다.
-    var PX_ACCEPT = '.xlsx,.xls,.csv,.pdf,.txt,.html,.htm';
-    var PX_OK_RE  = /\.(xlsx|xlsm|xls|csv|pdf|txt|html?)$/i;
+    // ══ 📂 파일 종류 카탈로그 — "무엇을 글자로 읽을 수 있는가"를 **데이터로** 한 곳에 ══
+    //  [2026-10-30 사용자 요청] "모든 파일을 다 불러올 수 있게 하고, 분석이 불가한 파일이면 안내문을 보여줘."
+    //  예전엔 파일 고르기 창의 `accept` 와 드롭 핸들러의 정규식이 **파일을 아예 못 고르게** 막았다.
+    //  그래서 사람은 "왜 내 파일이 회색이지?"만 보고 이유를 알 수 없었다. 이제 **무엇이든 받고**,
+    //  읽을 수 없으면 **왜 안 되는지와 무엇을 하면 되는지**를 말해 준다.
+    //  ⚠️ 새 형식 지원은 여기 한 줄 추가 — 코드에 확장자를 박지 말 것.
+    window.DOC_FILE_KINDS = window.DOC_FILE_KINDS || [
+        { k: 'excel', read: 'workbook', re: /\.(xlsx|xlsm|xlsb|xls|csv|tsv)$/i },
+        { k: 'pdf',   read: 'pdf',      re: /\.pdf$/i },
+        { k: 'html',  read: 'html',     re: /\.(html?|xhtml|mht|mhtml)$/i },
+        { k: 'text',  read: 'text',     re: /\.(txt|md|markdown|log|json|xml|ya?ml|ini|cfg|conf|properties|eml|msg|srt|vtt|sql|js|ts|css|py|bat|ps1|sh|c|h|cpp|cs|java|vbs|gcode|nc)$/i },
+        // ↓ 여기부터는 **읽을 수 없는 것** — 사람이 다음에 뭘 하면 되는지까지 적는다.
+        { k: 'word',  re: /\.(docx?|dotx?|rtf|odt)$/i,
+          ko: 'Word 문서는 아직 글자를 뽑지 못합니다 — Word에서 [다른 이름으로 저장 → PDF]로 바꿔 올려주세요.',
+          en: 'Word files cannot be read yet — save as PDF in Word ([Save As → PDF]) and try again.' },
+        { k: 'ppt',   re: /\.(pptx?|potx?|odp)$/i,
+          ko: 'PowerPoint 는 아직 글자를 뽑지 못합니다 — [다른 이름으로 저장 → PDF]로 바꿔 올려주세요.',
+          en: 'PowerPoint files cannot be read yet — save as PDF and try again.' },
+        { k: 'hwp',   re: /\.(hwpx?)$/i,
+          ko: '한글(HWP) 문서는 아직 글자를 뽑지 못합니다 — 한글에서 [PDF로 저장]한 뒤 올려주세요.',
+          en: 'HWP files cannot be read yet — save as PDF from Hancom Office and try again.' },
+        { k: 'image', re: /\.(png|jpe?g|gif|bmp|webp|tiff?|heic|heif|ico|svg)$/i,
+          ko: '이미지에는 글자 레이어가 없어서 읽을 수 없습니다 — 글자가 든 원본(PDF·엑셀)을 올리거나, 내용을 복사해 붙여넣어 주세요.',
+          en: 'Images carry no text layer — upload the original (PDF/Excel) or paste the text instead.' },
+        { k: 'archive', re: /\.(zip|7z|rar|tar|gz|bz2|alz|egg)$/i,
+          ko: '압축 파일은 그대로 읽을 수 없습니다 — 풀어서 안에 있는 파일을 넣어주세요.',
+          en: 'Archives cannot be read as-is — unzip it and add the file inside.' },
+        { k: 'cad',   re: /\.(dwg|dxf|step|stp|ig[se]s?|sld(prt|asm)|catpart|x_t|3dm|stl)$/i,
+          ko: '도면·3D 파일은 글자로 읽을 수 없습니다 — 도면 뷰어에서 [PDF로 내보내기] 한 뒤 올려주세요.',
+          en: 'CAD/3D files cannot be read as text — export to PDF from your CAD viewer and try again.' },
+        { k: 'media', re: /\.(mp4|avi|mov|mkv|wmv|mp3|wav|m4a|flac|ogg)$/i,
+          ko: '영상·음성 파일은 읽을 수 없습니다.',
+          en: 'Audio and video files cannot be read.' },
+        { k: 'exe',   re: /\.(exe|dll|msi|bin|iso|apk|lnk)$/i,
+          ko: '실행 파일은 읽지 않습니다.',
+          en: 'Executable files are not read.' }
+    ];
+
+    /** 이 이름이 어느 종류인가 — 모르는 확장자는 null(그때는 내용을 보고 판단한다). */
+    window._docKindOf = function (name) {
+        var n = String(name || '');
+        for (var i = 0; i < window.DOC_FILE_KINDS.length; i++) {
+            if (window.DOC_FILE_KINDS[i].re.test(n)) return window.DOC_FILE_KINDS[i];
+        }
+        return null;
+    };
+    /** 글자로 읽을 수 있는가. 모르는 확장자는 **일단 그렇다**고 본다 — 내용을 보고 거른다. */
+    window._docCanRead = function (name) {
+        var k = window._docKindOf(name);
+        return !k || !!k.read;
+    };
+    /** 왜 안 되는지 + 무엇을 하면 되는지. 읽을 수 있으면 빈 문자열. */
+    window._docReadHint = function (name) {
+        var k = window._docKindOf(name);
+        if (!k || k.read) return '';
+        var ext = (String(name || '').split('.').pop() || '').toLowerCase();
+        return '⚠️ ' + (String(name || '')) + ' — ' + _t(k.ko, k.en)
+             + _t('  (지금 읽을 수 있는 것: 엑셀·PDF·HTML·텍스트 계열)', '  (Readable now: Excel, PDF, HTML and text files)')
+             + (ext ? '' : '');
+    };
+    /** 엑셀 계열인가 — 엑셀만 받는 길목(간트 일정표 불러오기 등)이 같은 목록을 보게 한다. */
+    window._docIsWorkbook = function (name) {
+        var k = window._docKindOf(name);
+        return !!k && k.k === 'excel';
+    };
+    /** 내용이 이진인가 — 확장자를 모를 때 쓴다. NUL 이 있거나 제어문자가 많으면 글자가 아니다. */
+    window._docLooksBinary = async function (file) {
+        try {
+            var buf = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
+            if (!buf.length) return false;
+            var ctrl = 0;
+            for (var i = 0; i < buf.length; i++) {
+                var b = buf[i];
+                if (b === 0) return true;                                   // NUL 하나면 이진이다
+                if (b < 32 && b !== 9 && b !== 10 && b !== 13) ctrl++;
+            }
+            return (ctrl / buf.length) > 0.1;
+        } catch (e) { return false; }
+    };
+
+    var PX_ACCEPT = '';                     // 🚪 무엇이든 고를 수 있게 — 막는 대신 안내문으로 알려준다
     // 📜 [2026-10-22] `.xlsm` 추가 — 회사 패널 비교표가 .xlsm 이다. 빠져 있는 동안은
     //    "엑셀이 아닌 파일"로 분류돼 AI 경로로 샜다(이진 파일을 글자로 읽는 길).
-    var _pxIsWorkbook = function (f) { return /\.(xlsx|xlsm|xls|csv)$/i.test(f && f.name || ''); };
+    var _pxIsWorkbook = function (f) { return window._docIsWorkbook(f && f.name || ''); };
     var _pxAiSpec = function (spec) {
         // AI 매핑은 블록이 하나뿐인 rows 페이지에만 연다 — 여러 블록이면 어느 시트로 보낼지
         // 사람이 정해줘야 해서 지금 단계에선 다루지 않는다.
@@ -1173,7 +1252,15 @@
                 return '### ' + n + '\n' + window.XLSX.utils.sheet_to_csv(wb.Sheets[n]);
             }).join('\n\n');
         }
-        return await file.text();   // .txt (붙여넣은 메일 본문 등)
+        // 📂 [2026-10-30] 여기까지 왔으면 글자 계열이거나 **모르는 확장자**다.
+        //    모른다고 막지 않는다 — 다만 내용을 먼저 들춰 보고, 이진이면 깨진 글자를 넘기지 않는다.
+        var hint = window._docReadHint(name);
+        if (hint) throw new Error(hint);
+        if (!window._docKindOf(name) && await window._docLooksBinary(file)) {
+            throw new Error(_t('이 파일은 글자가 아니라 이진 파일로 보여서 읽지 못했습니다 — 글자가 든 원본(PDF·엑셀·텍스트)을 올려주세요.',
+                               'This looks like a binary file, not text — please upload a text-bearing original (PDF, Excel or text).'));
+        }
+        return await file.text();   // .txt·.md·.json… 그리고 글자로 읽히는 모르는 확장자
     };
 
     // 응답에서 JSON 배열만 떼어낸다 — 모델이 ```json 울타리나 설명을 같이 붙이는 일이 흔하다.
@@ -1186,15 +1273,11 @@
 
     var _pxAiImport = async function (id, file, wb) {
         var spec = _specById(id), ai = _pxAiSpec(spec);
-        // ⚠️ 여기서 **확장자를 한 번 더 막는다.** 드롭 핸들러에서 거르긴 하지만 이 함수는
-        //    파일 선택창에서도 불리고, accept 목록은 브라우저가 지키지 않는 경우가 있다.
-        //    안 막으면 .png 같은 이진 파일을 file.text()로 읽어 **깨진 글자를 AI에 보낸다**
-        //    (실측에서 실제로 그랬다 — 사용자 AI 할당량만 날린다).
-        if (!PX_OK_RE.test(String(file && file.name || ''))) {
-            _toast('⚠️ ' + _t('받을 수 있는 형식이 아닙니다 — 엑셀(.xlsx/.xls/.csv), PDF, TXT, HTML만 됩니다.',
-                              'Unsupported file — only Excel (.xlsx/.xls/.csv), PDF, TXT and HTML are accepted.'), 'error');
-            return;
-        }
+        // ⚠️ 파일은 무엇이든 받지만, **읽을 수 없는 것을 AI 에 보내지는 않는다.**
+        //    안 막으면 .png 같은 이진 파일을 file.text()로 읽어 깨진 글자를 AI 에 보낸다
+        //    (실측에서 실제로 그랬다 — 사용자 AI 할당량만 날린다). 대신 왜 안 되는지를 말해 준다.
+        var hint = window._docReadHint(file && file.name);
+        if (hint) { _toast(hint, 'error', 9000); return; }
         if (!ai) {
             _toast('⚠️ ' + _t('이 페이지는 아직 비규격 파일을 읽지 못합니다 — 엑셀 저장으로 받은 파일만 넣어주세요.',
                               'This page cannot read free-form files yet — use a file produced by Export.'), 'error');
@@ -1632,14 +1715,16 @@
         btn.addEventListener('drop', function (e) {
             stop(e); cool();
             var files = (e.dataTransfer && e.dataTransfer.files) || [];
-            // 엑셀뿐 아니라 PDF·TXT·HTML도 받는다 — 규격이 아니면 AI가 읽어서 매핑한다.
-            var OK = /\.(xlsx|xls|csv|pdf|txt|html?)$/i;
-            var ok = [];
-            for (var i = 0; i < files.length; i++) if (OK.test(files[i].name)) ok.push(files[i]);
-            if (!ok.length) {
-                _toast('⚠️ ' + _t('받을 수 있는 형식이 아닙니다 — 엑셀(.xlsx/.xls/.csv), PDF, TXT, HTML만 됩니다.',
-                                  'Unsupported file — only Excel (.xlsx/.xls/.csv), PDF, TXT and HTML are accepted.'), 'error');
-                return;
+            // 무엇을 떨구든 받는다 — 규격 엑셀이 아니면 AI 가 읽어서 매핑하고,
+            // 아예 글자를 못 뽑는 종류면 **왜 안 되는지**를 알려 준다(조용히 무시하지 않는다).
+            var ok = [], bad = [];
+            for (var i = 0; i < files.length; i++) {
+                (window._docCanRead(files[i].name) ? ok : bad).push(files[i]);
+            }
+            if (!ok.length) { _toast(window._docReadHint(bad[0] && bad[0].name), 'error', 9000); return; }
+            if (bad.length) {
+                _toast(_t(bad.length + '개 파일은 읽을 수 없어 건너뜁니다: ', 'Skipping ' + bad.length + ' unreadable file(s): ')
+                     + bad.map(function (f) { return f.name; }).join(', '), 'warning', 8000);
             }
             // 📚 여러 개를 떨궜을 때: 그 페이지가 여러 파일을 다룰 수 있으면 **전부** 넘긴다
             //    (M.C 는 파일 하나 = 모델 하나라 3개를 한 번에 받아 어디에 넣을지 고르게 한다).

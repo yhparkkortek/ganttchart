@@ -106,7 +106,8 @@
     // ⚠️ 엑셀은 AI 추출로 보내지 않는다 — `_pcProcessFile`/`_epProcessFile`이 pdf/html이 아니면
     //    `file.text()`로 읽으므로, 이진 엑셀을 넣으면 **깨진 글자를 AI에 보낸다**(할당량만 날린다).
     //    엑셀은 js/42가 워크북으로 읽어 preParse(js/51 패널 일괄 이식)로 보내는 게 맞는 길이다.
-    var WORKBOOK_RE = /\.(xlsx|xlsm|xls|csv)$/i;
+    //    확장자 목록은 js/42 DOC_FILE_KINDS 한 곳만 본다(2026-10-30) — 세 군데에 따로 적어 두면 조용히 어긋난다.
+    var WORKBOOK_RE = { test: function (n) { return window._docIsWorkbook ? window._docIsWorkbook(n) : /\.(xlsx|xlsm|xls|csv)$/i.test(n); } };
 
     window._pcpAiFromFile = function (file) {
         var tgt = _aiTarget();
