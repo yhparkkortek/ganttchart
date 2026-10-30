@@ -4438,6 +4438,25 @@ def po_goods_receipt_status():
     return jsonify(data_out), status
 
 
+@app.route('/po-goods-receipt-by-recipient', methods=['GET', 'POST'])
+def po_goods_receipt_by_recipient():
+    # 📦🔍 [2026-10-30 신규, 사용자 요청] "구매오더 번호 또는 필요한 정보가 정확하지 않은경우
+    #    수령인(현재 접속자 이름으로 조회)으로 조회해줘" — 발주와 입고를 따로 할 때 오더번호를
+    #    기억 못 하는 게 보통이라, 수령인만으로 입고 대상 오더를 찾는 **읽기 전용** 조회.
+    #    전기(POSTING) 없음. sap_bridge_32.py의 lookup_goods_receipt_by_recipient() 참고.
+    #    ⚠️ 결과를 자동으로 입고처리하지 않는다 — 미완료 목록에는 수년 전 오더까지 섞여 나온다
+    #       (실측 2026-10-30: 수령인 1명의 미완료 10건이 2021~2024년 오더였다). 사람이 고른다.
+    #    GET도 받는다 — AI 문답 도구 루프(js/40 QA_TOOLS)는 GET만 호출한다.
+    data = request.get_json(silent=True) or {}
+    recipient = (data.get('recipient') or request.args.get('recipient') or '').strip()
+    if not recipient:
+        return jsonify({'ok': False, 'error': 'recipient(수령인 이름)이 필요합니다.'}), 400
+    mode = (data.get('mode') or request.args.get('mode') or '미완료').strip()
+    data_out, status = _run_sap_bridge(
+        ['lookup_goods_receipt_by_recipient', recipient, mode], 60, 'SAP 수령인별 입고대상 조회')
+    return jsonify(data_out), status
+
+
 # ── [2026-10-02] A안 전환: mcp-sap-gui 런타임 폴백 경로 제거 ─────────────────────
 # MCP는 "새 SAP 기능을 만들 때 화면을 탐색하는 개발 도구"로만 쓴다(사람이 PC에서 직접 실행).
 # 런타임은 항상 결정론적 sap_bridge_32.py 경로만 사용 — CLAUDE.md "결정론 먼저" 원칙.

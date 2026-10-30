@@ -7742,6 +7742,121 @@ def check_goods_receipt_status(ebeln, mode='전체'):
     }
 
 
+# 📦 [2026-10-30 신규, 사용자 요청] 입고처리할 구매오더를 **수령인(WEMPF)으로** 찾는다.
+#   사용자 요청: "구매오더 번호 또는 필요한 정보가 정확하지 않은경우 수령인(현재 접속자 이름으로
+#   조회)으로 조회해줘". 발주와 입고를 따로 할 때 오더번호를 기억 못 하는 게 보통이라 필요하다.
+#
+# ⚠️ **읽기 전용이다 — 전기(POSTING)를 하지 않는다.** ZMM062 선택화면에 오더번호를 비우고
+#   수령인만 넣어 F8로 조회하고 결과 그리드만 읽는다.
+# ⚠️ 이 함수는 **자동으로 입고처리하지 않는다.** 미완료 목록에는 수년 전 오더까지 섞여 나오므로
+#   (실측: 수령인 "박용훈" 미완료 10건에 9100006433 같은 옛 오더 포함) 사람이 골라야 한다.
+#   그래서 오더번호 내림차순(= 최근 순)으로 돌려주고, 고르는 건 프런트 몫이다.
+#
+# 실측(2026-10-30, 읽기 전용 조회로 확인):
+#   · 선택화면 수령인 칸 = `usr/txtS_WEMPF-LOW`(GuiTextField, 라벨 "수령인"), 범위용 `-HIGH`도 있음.
+#   · WEMPF 값은 **SAP 계정 ID가 아니라 한글 실명**이다(계정 KKR034 ↔ WEMPF "박용훈").
+#     그래서 프런트가 `window.getActiveUserName()`(Drive 로그인 실명)을 넘겨야 한다.
+#   · 결과 그리드 컬럼에 EBELN·LIFNR·NAME1·MATNR·MAKTX·MENGE·MEINS·STATUS·AEDAT·GRDAT 가 있다.
+_ZMM062_RECIPIENT_COLS = ['EBELN', 'EBELP', 'MATNR', 'MAKTX', 'MENGE', 'MEINS',
+                          'STATUS', 'WEMPF', 'LIFNR', 'NAME1', 'AEDAT', 'GRDAT']
+_ZMM062_RADIO = {'미완료': 'P_RB1', '완료': 'P_RB2', '전체': 'P_RB3', '취소': 'P_RB4'}
+_ZMM062_RECIPIENT_ROW_CAP = 300
+
+
+def lookup_goods_receipt_by_recipient(wempf, mode='미완료', max_orders=30):
+    """ZMM062를 **수령인만으로** 조회해 입고 대상 구매오더 목록을 돌려준다(읽기 전용).
+
+    반환: {'ok', 'recipient', 'mode', 'rowCount', 'orderCount', 'orders': [
+             {'ebeln', 'items', 'lifnr', 'name1', 'matnr', 'maktx', 'menge', 'meins',
+              'aedat', 'doneItems'} ...  # 오더번호 내림차순(최근 순)
+           ], 'truncated', 'message'}
+    품목이 0건이면 예외가 아니라 `rowCount: 0`으로 정상 반환한다 — 호출부가 "구매오더 정보를
+    확인해 주세요"로 안내하고 대기 상태로 돌아갈 수 있어야 하기 때문이다.
+    """
+    wempf = (wempf or '').strip()
+    if not wempf:
+        raise RuntimeError('수령인 이름을 지정해주세요(현재 접속자 이름).')
+    mode = (mode or '미완료').strip()
+    radio_id = _ZMM062_RADIO.get(mode)
+    if radio_id is None:
+        mode, radio_id = '미완료', 'P_RB1'
+
+    session = _get_sap_session()
+    _sap_close_stray_popups(session)
+    try:
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM062'
+        session.findById('wnd[0]').sendVKey(0)
+        _settle_tcode(session, 'ZMM062', 1.0)
+    except Exception as e:
+        raise RuntimeError(f'ZMM062 진입 실패: {e}')
+
+    wnd = session.findById('wnd[0]')
+    try:
+        try:
+            wnd.findById('usr/ctxtS_EBELN-LOW').text = ''   # 오더번호는 비운다(수령인만으로 조회)
+        except Exception:
+            pass
+        wnd.findById('usr/txtS_WEMPF-LOW').text = wempf
+        wnd.findById('usr/rad' + radio_id).select()
+        time.sleep(0.2)
+        wnd.findById('tbar[1]/btn[8]').press()
+        _settle_result(session, 2.0)
+    except Exception as e:
+        raise RuntimeError(f'ZMM062 수령인 조회 조건 입력/실행 오류: {e} / {_sap_screen_info(session)}')
+
+    wnd = session.findById('wnd[0]')
+    try:
+        grid = wnd.findById('shellcont/shell')
+        total_rows = int(grid.RowCount)
+    except Exception:
+        return {'ok': True, 'recipient': wempf, 'mode': mode, 'rowCount': 0,
+                'orderCount': 0, 'orders': [], 'truncated': False,
+                'message': f'수령인 "{wempf}" — "{mode}" 조건에 해당하는 품목이 없습니다.'}
+
+    try:
+        avail = [str(c) for c in list(grid.ColumnOrder)]
+    except Exception:
+        avail = []
+    cols = [c for c in _ZMM062_RECIPIENT_COLS if (not avail) or c in avail]
+    row_count = min(total_rows, _ZMM062_RECIPIENT_ROW_CAP)
+
+    by_order = {}
+    order_seq = []
+    for r in range(row_count):
+        row = {}
+        for c in cols:
+            try:
+                row[c] = str(grid.GetCellValue(r, c)).strip()
+            except Exception:
+                row[c] = ''
+        ebeln = row.get('EBELN', '')
+        if not ebeln:
+            continue
+        if ebeln not in by_order:
+            by_order[ebeln] = {'ebeln': ebeln, 'items': 0, 'doneItems': 0,
+                               'lifnr': row.get('LIFNR', ''), 'name1': row.get('NAME1', ''),
+                               'matnr': row.get('MATNR', ''), 'maktx': row.get('MAKTX', ''),
+                               'menge': row.get('MENGE', ''), 'meins': row.get('MEINS', ''),
+                               'aedat': row.get('AEDAT', '')}
+            order_seq.append(ebeln)
+        o = by_order[ebeln]
+        o['items'] += 1
+        if '5B' in row.get('STATUS', ''):
+            o['doneItems'] += 1
+
+    # 오더번호 내림차순 = 최근 순. 옛 미완료 오더가 위로 올라와 잘못 골라지는 걸 막는다.
+    orders = sorted(by_order.values(), key=lambda o: o['ebeln'], reverse=True)
+    truncated = len(orders) > max_orders or total_rows > row_count
+    orders = orders[:max_orders]
+    return {
+        'ok': True, 'recipient': wempf, 'mode': mode,
+        'rowCount': total_rows, 'orderCount': len(by_order), 'orders': orders,
+        'truncated': truncated,
+        'message': (f'수령인 "{wempf}" "{mode}" 조회: 품목 {total_rows}건 / 구매오더 {len(by_order)}건'
+                    + (f' (최근 {len(orders)}건만 표시)' if truncated else '') + '.'),
+    }
+
+
 def display_reservation(rsnum):
     """MB23 - 예약 번호로 예약 조회."""
     session = _get_sap_session()
@@ -8144,6 +8259,11 @@ def main():
             ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
             _dump_flag = '--dump-only' in sys.argv
             result = post_goods_receipt(ebeln, dump_only=_dump_flag)
+        elif action == 'lookup_goods_receipt_by_recipient':
+            # 📦 [2026-10-30] 수령인(실명)으로 입고 대상 구매오더 찾기 — 읽기 전용.
+            _wempf = sys.argv[2] if len(sys.argv) > 2 else ''
+            _gr_mode = sys.argv[3] if len(sys.argv) > 3 else '미완료'
+            result = lookup_goods_receipt_by_recipient(_wempf, mode=_gr_mode)
         elif action == 'check_goods_receipt_status':
             ebeln = sys.argv[2] if len(sys.argv) > 2 else ''
             mode_arg = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3].strip() else '전체'

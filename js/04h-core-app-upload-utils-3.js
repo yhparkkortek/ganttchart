@@ -402,18 +402,105 @@
     //    한다(조회 아님). window._ganttQaLastGrCandidates(직전 발주 배치의 성공 오더번호)가
     //    여러 개면 드롭다운으로 고르게 하고, 하나면 바로 쓰고(호출부에서 처리), 없으면 번호를
     //    직접 물어본다(window._ganttQaPendingGrEbelnAsk).
-    window._ganttQaShowGrEbelnDropdown = function(candidates) {
-        const _en = window._currentLang === 'en';
+    //  [2026-10-30 확장] candidates는 **문자열(오더번호)** 또는 **객체**를 받는다.
+    //  수령인으로 찾은 목록은 번호만 보여주면 고를 수가 없다 — 업체·자재·등록일을 같이 보여준다.
+    //  (실측 2026-10-30: 한 사람의 미완료 10건이 2021~2024년 오더였다. 번호만 보면 어느 게
+    //   지금 입고할 건지 구분이 안 된다.) 고른 값(value)은 그대로 오더번호다.
+    window._ganttQaShowGrEbelnDropdown = function(candidates, opts) {
+        opts = opts || {};
         const id = 'gr-ebeln-' + Date.now();
         window._ganttQaPendingChoiceDropdown = {
             id: id, multi: false,
-            options: candidates.map(function(n) { return { value: n, label: n }; }),
+            options: (candidates || []).map(function(c) {
+                if (typeof c === 'string') return { value: c, label: c };
+                const bits = [c.ebeln];
+                if (c.name1) bits.push(c.name1);
+                if (c.maktx) bits.push(String(c.maktx).slice(0, 30));
+                if (c.aedat) bits.push(c.aedat);
+                if (c.items) bits.push(window._t('품목 ' + c.items, c.items + ' items')
+                    + (c.doneItems ? window._t('/완료 ' + c.doneItems, '/' + c.doneItems + ' done') : ''));
+                return { value: c.ebeln, label: bits.join(' · ') };
+            }),
             buildAnswerText: function(sel) { return sel[0] ? (sel[0] + ' 입고 처리해줘') : ''; }
         };
-        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
+        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: opts.title || window._t(
             '📦 어느 구매오더의 자재 입고 처리를 할까요?',
             '📦 Which purchase order should I process goods receipt for?'
         )});
+    };
+
+    // 📦🔍 [2026-10-30 신규, 사용자 요청] 전기 **전에** 오더번호가 쓸 만한지 읽기 전용으로 확인.
+    //    사용자 요청이 "구매오더 번호 또는 필요한 정보가 정확하지 않은경우 수령인으로 조회"인데,
+    //    "정확하지 않은지"를 알려면 먼저 확인해야 한다. 정확도가 1순위라 왕복 한 번(≈2초)을 쓴다.
+    //    반환: 'post'(미완료 품목 있음 → 전기) | 'done'(전부 완료) | 'unknown'(ZMM062에서 못 찾음)
+    //          | 'error'(조회 자체 실패)
+    window._ganttQaGrPrecheck = async function(ebeln) {
+        try {
+            const res = await fetch('http://127.0.0.1:5000/po-goods-receipt-status', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ebeln: ebeln, mode: '전체' })
+            });
+            const d = await res.json();
+            if (!d.ok) return { verdict: 'error', error: d.error || '' };
+            if (!d.rowCount) return { verdict: 'unknown' };
+            if (d.doneCount >= d.rowCount) return { verdict: 'done', rowCount: d.rowCount };
+            return { verdict: 'post', rowCount: d.rowCount, doneCount: d.doneCount };
+        } catch (e) {
+            return { verdict: 'error', error: (e && e.message) ? e.message : String(e) };
+        }
+    };
+
+    // 📦🔍 [2026-10-30 신규, 사용자 요청] 수령인(현재 접속자 이름)으로 입고 대상 오더를 찾는다.
+    //    ⚠️ 찾아도 **자동으로 입고처리하지 않는다** — 1건이어도 사람이 고르게 한다. 미완료
+    //       목록에 수년 전 오더가 섞여 나오므로, 1건이라고 그게 지금 입고할 오더라는 보장이 없다.
+    //    못 찾으면 "구매오더 정보를 확인해 주세요"로 끝내고 **대기 상태로 돌아간다**(사용자 요청) —
+    //    pending 플래그를 켜지 않으므로 다음 메시지를 입고처리로 가로채지 않는다.
+    //    반환: true(목록을 보여줬다) | false(안내만 하고 끝냈다)
+    window._ganttQaGrLookupByRecipient = async function(mode) {
+        const _name = (window.getActiveUserName ? window.getActiveUserName() : (window.currentUserName || '')) || '';
+        const _bad = !_name || _name === '비로그인 (로컬)' || _name === '익명 사용자' || _name === '로컬 사용자';
+        if (_bad) {
+            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t(
+                '구매오더 정보를 확인해 주세요. (수령인으로 조회하려면 Google 로그인이 필요합니다 — 지금은 접속자 이름을 알 수 없습니다.)',
+                'Please check the purchase order information. (Recipient lookup needs Google sign-in — the current user name is unknown.)'
+            )});
+            return false;
+        }
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+            '구매오더 번호가 확실하지 않아 수령인 "' + _name + '"으로 입고 대상을 조회하는 중...',
+            'Purchase order number unclear — looking up goods receipt targets for recipient "' + _name + '"...'
+        ), pending: true });
+        window._renderGanttQaMessages();
+        let data = null, err = null;
+        try {
+            const res = await window._withTimeout(
+                fetch('http://127.0.0.1:5000/po-goods-receipt-by-recipient?recipient='
+                    + encodeURIComponent(_name) + '&mode=' + encodeURIComponent(mode || '미완료')),
+                120000, window._t('수령인 조회 시간 초과', 'Recipient lookup timed out'));
+            data = await res.json();
+        } catch (e) {
+            err = (e && e.message) ? e.message : String(e);
+        }
+        window._ganttQaHistory.pop();
+        const orders = (data && data.ok && data.orders) ? data.orders : [];
+        if (!orders.length) {
+            // ⚠️ 실패 사유를 삼키지 않는다(CLAUDE.md "신호") — 안내 문구는 사용자가 정한 그대로.
+            const why = err ? ('(' + err + ')')
+                : (data && !data.ok ? ('(' + (data.error || '') + ')')
+                : (data && data.message ? ('(' + data.message + ')') : ''));
+            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t(
+                '구매오더 정보를 확인해 주세요. ' + why,
+                'Please check the purchase order information. ' + why
+            )});
+            return false;
+        }
+        window._ganttQaShowGrEbelnDropdown(orders, { title: window._t(
+            '📦 수령인 "' + _name + '" 기준 입고 대상 ' + orders.length + '건입니다 — 어느 구매오더를 입고 처리할까요?'
+                + (data.truncated ? ' (최근 건만 표시)' : ''),
+            '📦 ' + orders.length + ' goods receipt target(s) for recipient "' + _name + '" — which purchase order?'
+                + (data.truncated ? ' (most recent only)' : '')
+        )});
+        return true;
     };
 
     // 📂 [2026-10-02 신규, 사용자 요청] 🔍 문서 조회 결과 표의 행별 "열기" 버튼 핸들러.
@@ -7737,33 +7824,74 @@ ${docsJson}`;
                 return;
             }
         }
-        if (/입고\s*처리|입고처리/.test(question)) {
+        // 📦🚫🤖 [2026-10-30 재작성, 사용자 요청] **발주와 입고를 따로** 할 때의 단독 명령.
+        //    사용자 요청 그대로의 3단 사슬:
+        //      ① 구매오더 번호가 정확하면 → 입고 처리한다.
+        //      ② 번호가 없거나 정확하지 않으면 → **수령인(현재 접속자 이름)으로 조회**해 고르게 한다.
+        //      ③ 그래도 못 찾으면 → "구매오더 정보를 확인해 주세요" 하고 **대기 상태로 돌아간다**.
+        //    ⚠️ 트리거 어휘는 `SAP_CAPABILITIES[].kw`(js/32, 데이터) — 코드에 정규식을 박지 않는다
+        //       (CLAUDE.md). `_sapCapKwHit`이 없는 구버전 대비 폴백만 정규식으로 남긴다.
+        //    ⚠️ ②에서 1건이 나와도 **자동 전기하지 않는다** — 미완료 목록에는 수년 전 오더가 섞여
+        //       나오므로(실측 2026-10-30: 한 사람의 미완료 10건이 2021~2024년) 1건이라고 그게 지금
+        //       입고할 오더라는 보장이 없다. 직전 발주 배치 후보(_ganttQaLastGrCandidates)는 방금
+        //       만든 오더라 기존대로 1건이면 바로 쓴다 — 출처가 다르다.
+        const _grHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'goodsreceipt')
+            : /입고\s*처리|입고처리/.test(question);
+        if (_grHit) {
             if (!_skipUserHistoryPush && window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); // 위 BOM 블록과 같은 이유(2026-09-23) — 순수 숫자 답변(위 pendingGrEbelnAsk 분기)은 기록 안 함
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
             const _ebelnMatch = (question.match(/\b\d{8,12}\b/) || [])[0];
             if (_ebelnMatch) {
-                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
-                await window._ganttQaRunGoodsReceipt(_ebelnMatch);
+                // ① 번호가 있으면 전기 **전에** 읽기 전용으로 확인한다(정확도 우선).
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(
+                    '구매오더 "' + _ebelnMatch + '" 확인 중...',
+                    'Verifying purchase order "' + _ebelnMatch + '"...'
+                ), pending: true });
+                window._renderGanttQaMessages();
+                const _pre = await window._ganttQaGrPrecheck(_ebelnMatch);
+                window._ganttQaHistory.pop();
+                if (_pre.verdict === 'post') {
+                    await window._ganttQaRunGoodsReceipt(_ebelnMatch);
+                    input.focus();
+                    return;
+                }
+                if (_pre.verdict === 'done') {
+                    // 이미 끝난 오더를 또 전기하면 안 된다 — 안내만 하고 대기로 돌아간다.
+                    window._ganttQaHistory.push({ role: 'ai', text: 'ℹ️ ' + window._t(
+                        '구매오더 "' + _ebelnMatch + '"는 이미 입고 처리가 완료된 상태입니다(' + _pre.rowCount + '건 전부 완료). 입고 처리를 실행하지 않았습니다.',
+                        'PO "' + _ebelnMatch + '" is already fully received (' + _pre.rowCount + ' items done). No goods receipt was posted.'
+                    )});
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+                // 'unknown'(ZMM062에서 못 찾음) / 'error'(조회 실패) → ② 수령인 폴백
+                window._ganttQaHistory.push({ role: 'ai', text: 'ℹ️ ' + window._t(
+                    '구매오더 "' + _ebelnMatch + '"를 ZMM062 입고 대상에서 찾지 못했습니다'
+                        + (_pre.error ? ' (' + _pre.error + ')' : '') + '.',
+                    'Could not find PO "' + _ebelnMatch + '" among ZMM062 goods receipt targets'
+                        + (_pre.error ? ' (' + _pre.error + ')' : '') + '.'
+                )});
+                await window._ganttQaGrLookupByRecipient('미완료');
+                window._renderGanttQaMessages();
                 input.focus();
                 return;
             }
+            // 번호가 없을 때: 직전 발주 배치에서 막 만든 오더가 있으면 그걸 쓴다(기존 동작).
             const _grCandidates = window._ganttQaLastGrCandidates || [];
             if (_grCandidates.length === 1) {
-                if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
                 await window._ganttQaRunGoodsReceipt(_grCandidates[0]);
                 input.focus();
                 return;
             }
-            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
             if (_grCandidates.length > 1) {
                 window._ganttQaShowGrEbelnDropdown(_grCandidates);
-            } else {
-                const _grEbelnFormId = 'grf-' + Date.now();
-                window._ganttQaGrEbelnForm = { id: _grEbelnFormId };
-                window._ganttQaHistory.push({ role: 'ai', grEbelnFormId: _grEbelnFormId, text: window._t(
-                    '📦 어느 구매오더 번호의 자재 입고 처리를 할까요?',
-                    '📦 Which purchase order number should I process goods receipt for?'
-                )});
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
             }
+            // ② 직전 후보도 없으면 수령인으로 조회 → ③ 그래도 없으면 안내만 하고 대기.
+            await window._ganttQaGrLookupByRecipient('미완료');
             window._renderGanttQaMessages();
             input.focus();
             return;
