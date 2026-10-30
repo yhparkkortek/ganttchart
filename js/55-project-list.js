@@ -114,7 +114,7 @@
         C('prodRev',     '생산 REV',          'Prod. REV',           'basic', 64),
         C('desc2',       'Description2',      'Description2',        'basic', 200),
         C('desc3',       'Description3',      'Description3',        'basic', 200),
-        C('agileRev',    'LNW Agile REV',     'LNW Agile REV',       'basic', 130),
+        C('agileRev',    'LNW Agile REV',     'LNW Agile REV',       'basic', 130, 'rev'),
 
         C('ownerHw',     '회로담당(PM)',      'HW owner (PM)',       'owner', 92,  'person'),
         C('ownerFw',     '펌웨어담당',        'FW owner',            'owner', 92,  'person'),
@@ -826,6 +826,13 @@
                         + ' title="' + _esc(n ? (n + _t('개 NAS 자료 — 열기/올리기/AI 분석', ' NAS file(s) — open/upload/AI analysis'))
                                               : _t('NAS 자료 없음 — 눌러서 올리기', 'No NAS file — click to upload')) + '">'
                         + (n ? '<b style="color:#1971c2; font-size:10px;">' + n + '</b>' : '') + '📄</span>';
+                } else if (c.type === 'rev') {
+                    // 📜 Agile REV — 누르면 그 도면의 REVISIONS 표를 그대로 보여 준다(값을 쓰는 게 아니라 보는 것)
+                    var dn = window._plDocCount ? window._plDocCount(r) : 0;
+                    ico = '<span class="pl-ico pl-ico-fix" onclick="event.stopPropagation(); window.plOpenRevisions(\'' + r._id + '\')"'
+                        + ' style="' + (dn ? 'opacity:1;' : 'opacity:.35;') + '"'
+                        + ' title="' + _esc(dn ? _t('도면의 REVISIONS 이력 보기', 'View the drawing\'s REVISIONS table')
+                                               : _t('연결된 도면이 없습니다 — PN을 확인하세요', 'No linked drawing — check the PN')) + '">📜</span>';
                 } else if (c.type === 'panel') {
                     ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPanelCard(\'' + r._id + '\')"'
                         + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔎</span>';
@@ -1430,6 +1437,8 @@
                      + '<span style="flex:1; word-break:break-all; color:#444;">' + _esc(f.name) + '</span>'
                      + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:11px; cursor:pointer;">' + _t('열기', 'Open') + '</button>'
                      + '<button onclick="window._dsOpenNative && window._dsOpenNative(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" title="' + _esc(_t('NAS 원본을 연결 프로그램으로', 'Open the NAS original in its app')) + '" style="padding:3px 8px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🖥️</button>'
+                     // 💾 이 파일 하나를 내 PC 로 받는다 — 열기/연결프로그램/분석과 같은 줄에 둔다(사용자 지적: 위치가 틀렸다)
+                     + '<button onclick="window.plDownloadDoc(\'' + _esc(f.name) + '\')" title="' + _esc(_t('이 파일을 내 PC에 저장', 'Save this file to my PC')) + '" style="padding:3px 8px; background:#eef7ef; color:#2b7a45; border:none; border-radius:5px; font-size:11px; cursor:pointer;">💾</button>'
                      + '<button onclick="window.plAnalyzeDoc(\'' + id + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#efe6fb; color:#6741d9; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🔍 ' + _t('분석', 'Analyze') + '</button>'
                      + '</div>';
             }).join('')
@@ -1452,7 +1461,7 @@
                  + '<div id="pl-doc-staged" style="margin-top:8px; font-size:11.5px; color:#2b7a45; display:none;"></div>'
                  + '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">'
                  + '<button id="pl-doc-save" onclick="window.plUploadDocs(\'' + id + '\')" disabled'
-                 + ' style="padding:5px 13px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer; opacity:.45;">💾 ' + _t('저장', 'Save') + '</button>'
+                 + ' style="padding:5px 13px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer; opacity:.45;">⬆️ ' + _t('NAS에 올리기', 'Upload to NAS') + '</button>'
                  + '<button onclick="window._dsOpenBrowser && window._dsOpenBrowser(\'' + NAS_FOLDER + '\')" style="padding:5px 11px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📁 ' + _t('폴더 열기', 'Open folder') + '</button>'
                  + '<button onclick="window.plRefreshDocCache(false)" style="padding:5px 11px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:12px; cursor:pointer;">🔄 ' + _t('목록 새로고침', 'Refresh') + '</button>'
                  + '</div>'
@@ -1493,6 +1502,16 @@
         if (btn) { btn.disabled = !n; btn.style.opacity = n ? '1' : '.45'; }
     };
     window.plClearStaged = function () { window._plStaged = []; _renderStaged(); };
+
+    /** 💾 NAS 파일 하나를 내 PC 로 — 백엔드 URL 을 그대로 내려받는다(사본이 NAS 를 건드리지 않는다) */
+    window.plDownloadDoc = function (name) {
+        if (!window._dsFileUrl) { _toast(_t('문서 저장소를 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return; }
+        var a = document.createElement('a');
+        a.href = window._dsFileUrl(NAS_FOLDER, name);
+        a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        _toast('💾 ' + _esc(name) + _t(' 내려받는 중…', ' downloading…'), 'info');
+    };
 
     window.plStageDocs = function (id) {
         var inp = document.getElementById('pl-doc-file');
@@ -1549,6 +1568,151 @@
         var out = [], m, rx = new RegExp(re.source, re.flags.indexOf('g') === -1 ? re.flags + 'g' : re.flags);
         while ((m = rx.exec(t)) !== null) { var v = String(m[g || 1]).trim(); if (v && out.indexOf(v) === -1) out.push(v); }
         return out;
+    };
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📜 도면 안의 **표 두 개**를 그대로 읽어 온다 — 이게 사람이 실제로 보고 싶어 하는 것이다
+    //    (2026-10-30 사용자 정정: "Agile REV 열을 누르면 그 도면의 REVISIONS 정보를 바로 보고 싶었다").
+    //
+    //    ① REVISIONS      : REV. | DESCRIPTION | DRAWN BY | DATE
+    //    ② DISPLAY INFORMATION MATRIX
+    //                     : REVISION | MFR PN | PART NUMBER | VENDOR | TOUCH CTRL | TOUCH SENSOR | F/W | PANEL
+    //
+    //    PDF 글자는 칸 단위로 줄이 쪼개져 들어온다. 그래서 **끝나는 신호**를 기준으로 끊는다 —
+    //    REVISIONS 는 날짜(m/d/yyyy), MATRIX 는 터치 F/W(V0.02 같은 것). 그 앞뒤로 칸을 센다.
+    // ══════════════════════════════════════════════════════════════════════════
+    var _lines = function (t) {
+        return String(t || '').replace(/\r\n?/g, '\n').split('\n')
+            .map(function (x) { return x.replace(/\s+/g, ' ').trim(); });
+    };
+    // 날짜 모양이 도면마다 다르다(실측 4종): `6/15/2021` · `06/06/22` · `12-FEB-25` · `16 JAN 26`
+    var _isDate = function (s) {
+        return /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)
+            || /^\d{1,2}\s*-\s*[A-Z]{3}\s*-\s*\d{2,4}$/i.test(s)
+            || /^\d{1,2}\s+[A-Z]{3}\s+\d{2,4}$/i.test(s);
+    };
+    var _isRev = function (s) { return /^[A-Z](?:\.\d+)?$/.test(s); };
+    var _isPerson = function (s) {
+        // "A. SMITH" · "B.LEE" · "C.KIM" · "D,PARK"(쉼표도 쓴다) · "John Smith"
+        return /^[A-Z][.,]\s?[A-Z][A-Za-z'-]+$/.test(s) || /^[A-Z][a-z]+\s+[A-Z][A-Za-z'-]+$/.test(s);
+    };
+
+    /** 리비전 칸 모양 — 한 개(`K`, `J.4`) 또는 범위(`G.3-G.5`, `H-K`, `A-E.2`) */
+    var _isRevCell = function (s) { return /^[A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?$/.test(s); };
+
+    /** ① REVISIONS 표 → [{rev, desc, by, date}] (도면에 적힌 순서 그대로)
+     *  ⚠️ 양식이 두 가지다(실측):
+     *     A) `REV. | DESCRIPTION | DRAWN BY | DATE` — 작성자와 날짜가 **각각 한 줄**
+     *     B) `REVISION | DESCRIPTION | BY/ DATE`   — 둘이 **한 줄**("JG 06/06/22")
+     *     그래서 "날짜로 끝난다"를 두 모양 다 받는다. */
+    window.plParseRevisions = function (text) {
+        var L = _lines(text);
+        var start = -1;
+        for (var i = 0; i < L.length; i++) {
+            if (/^REVISIONS?$/i.test(L[i]) || /^REV\.?\s+DESCRIPTION/i.test(L[i])) { start = i; break; }
+        }
+        if (start < 0) return [];
+        var HEAD = /^(REV\.?|REVISIONS?|REVISION|DESCRIPTION|DRAWN\s*BY|DATE|BY\s*\/?\s*DATE|REV\.?\s+DESCRIPTION)$/i;
+        var out = [], buf = [];
+        var push = function (by, date) {
+            if (!buf.length) { buf = []; return; }
+            var head = buf[0], rev = '', rest = buf.slice(1);
+            var m = head.match(/^([A-Z](?:\.\d+)?)(?:\s+(.*))?$/);
+            if (m) { rev = m[1]; if (m[2]) rest.unshift(m[2]); }
+            else rest.unshift(head);
+            out.push({ rev: rev, desc: rest.join(' ').replace(/\s+/g, ' ').trim(), by: by, date: date });
+            buf = [];
+        };
+        for (var j = start + 1; j < L.length && out.length < 80; j++) {
+            var s = L[j];
+            if (!s || HEAD.test(s)) continue;
+            if (_isDate(s)) {                                   // 양식 A — 날짜만 있는 줄
+                var by = (buf.length && _isPerson(buf[buf.length - 1])) ? buf.pop() : '';
+                push(by, s);
+                continue;
+            }
+            var mb = s.match(/^([A-Z][A-Za-z.,\s'-]{0,18}?)\s+(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{1,2}-[A-Z]{3}-\d{2,4})$/i);
+            if (mb) { push(mb[1].trim(), mb[2]); continue; }     // 양식 B — "JG 06/06/22"
+            if (/^(DISPLAY INFORMATION MATRIX|NOTES\b|PART NUMBER LEGEND)/i.test(s) && out.length) break;
+            buf.push(s);
+            if (buf.length > 14) buf.shift();                   // 표 밖 글이 섞여도 폭주하지 않게
+        }
+        return out;
+    };
+
+    // DISPLAY INFORMATION MATRIX 의 **열 이름 사전**(데이터) — PDF 는 머리글도 줄바꿈으로 쪼개 주므로
+    // 머리글 줄을 전부 이어 붙인 뒤 이 목록으로 **긴 것부터** 끊어 읽는다. 양식마다 열 구성이 다르다.
+    window.PL_MATRIX_COLS = window.PL_MATRIX_COLS || [
+        'MANUFACTURER PART NUMBER', 'TOUCH SCREEN CONTROLLER', 'MANUFACTURING PART NUMBER',
+        'TOUCH SCREEN', 'TOUCH SENSOR', 'TOUCH F/W', 'VIDEO F/W', 'VENDOR P/N', 'MFG P/N',
+        'PART NUMBER', 'REVISION', 'VENDOR', 'PANEL', 'DISPLAY', 'NOTES'
+    ];
+
+    /** ② DISPLAY INFORMATION MATRIX → {headers:[…], rows:[[셀…]]}
+     *  행은 **리비전 칸으로 시작한다**는 규칙으로 끊는다(F/W 로 끊으면 N/A 인 옛 양식을 놓친다). */
+    window.plParseDisplayMatrix = function (text) {
+        var L = _lines(text);
+        var at = -1;
+        for (var i = 0; i < L.length; i++) {
+            if (/DISPLAY INFORMATION MATRIX/i.test(L[i])) { at = i; break; }
+        }
+        if (at < 0) return { headers: [], rows: [] };
+
+        // 머리글 — 첫 리비전 칸이 나오기 전까지
+        var hLines = [], k = at + 1;
+        for (; k < L.length && hLines.length < 16; k++) {
+            if (!L[k]) continue;
+            if (_isRevCell(L[k])) break;
+            hLines.push(L[k]);
+        }
+        var joined = hLines.join(' ').replace(/\s+/g, ' ').trim().toUpperCase();
+        var vocab = (window.PL_MATRIX_COLS || []).slice().sort(function (a, b) { return b.length - a.length; });
+        var headers = [], guard = 0;
+        while (joined && guard++ < 40) {
+            var hit = '';
+            for (var v = 0; v < vocab.length; v++) {
+                if (joined.indexOf(vocab[v]) === 0) { hit = vocab[v]; break; }
+            }
+            if (hit) { headers.push(hit); joined = joined.slice(hit.length).trim(); }
+            else {                                   // 사전에 없는 말은 한 토막만 떼어 낸다
+                var sp = joined.indexOf(' ');
+                if (sp < 0) { headers.push(joined); joined = ''; }
+                else { headers.push(joined.slice(0, sp)); joined = joined.slice(sp + 1); }
+            }
+        }
+
+        // 본문 — 리비전 칸에서 다음 리비전 칸 전까지가 한 행
+        var rows = [], cur = null;
+        for (; k < L.length; k++) {
+            var s = L[k];
+            if (!s) continue;
+            // 도면 테두리의 좌표 글자(1, A, B…)나 표제란이 나오면 표가 끝난 것
+            if (/^(DESCRIPTION|PART NUMBER|ENGINEER|NOTES)$/i.test(s)) break;
+            if (/^\d{1,2}$/.test(s) && cur && cur.length >= headers.length) break;
+            if (_isRevCell(s)) {
+                if (cur && cur.length > 1) rows.push(cur);
+                cur = [s.replace(/\s*-\s*/, '-')];
+                continue;
+            }
+            if (!cur) continue;
+            // 한 줄에 두 칸이 붙어 온 경우("ABC123XYZ-SV 1234567-XXX-ALT1")는 쪼갠다
+            if (cur.length + 1 < headers.length && /^\S+\s\S+$/.test(s) && /-/.test(s)) {
+                var p2 = s.split(' ');
+                cur.push(p2[0]); cur.push(p2[1]);
+            } else cur.push(s);
+            if (cur.length > headers.length + 2) { rows.push(cur); cur = null; }
+        }
+        if (cur && cur.length > 1) rows.push(cur);
+        // 칸 수를 머리글에 맞춰 다듬는다(모자라면 빈칸, 넘치면 마지막 칸에 합친다)
+        rows = rows.map(function (r) {
+            if (!headers.length) return r;
+            if (r.length > headers.length) {
+                return r.slice(0, headers.length - 1).concat([r.slice(headers.length - 1).join(' ')]);
+            }
+            while (r.length < headers.length) r.push('');
+            return r;
+        });
+        return { headers: headers, rows: rows };
     };
 
     window.plExtractDwg = function (text, row) {
@@ -1678,6 +1842,136 @@
     //    · 표에 등록할 수 있는 항목만 체크박스를 준다. 기본 체크는 "표가 비었고 도면엔 있는" 칸.
     //    · 표 값과 다르면 ⚠️ 로 나란히 보여주고, 그건 **기본 체크를 안 한다**(사람이 판단).
     // ══════════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📜 Agile REV 셀을 누르면 뜨는 창 — **그 도면의 REVISIONS 표**를 그대로 보여 준다.
+    //    (2026-10-30 사용자 정정: 이게 처음부터 원했던 것. 표에 값을 채우는 게 아니라 "보는" 것.)
+    //    같이 있는 DISPLAY INFORMATION MATRIX 도 함께 보여 준다 — 그 리비전에서 어떤 패널/터치가
+    //    쓰이는지가 바로 이 표에 있어서, REVISIONS 와 늘 같이 본다.
+    // ══════════════════════════════════════════════════════════════════════════
+    window.plOpenRevisions = async function (id, fileName) {
+        var r = _rowById(id); if (!r) return;
+        var docs = window._plDocsOf(r);
+        if (!docs.length) {
+            _toast('⚠️ ' + _t('이 행에 연결된 도면이 없습니다 — PN을 확인하거나 NAS 목록을 새로고침해주세요.',
+                              'No drawing linked to this row — check the PN or refresh the NAS list.'), 'warning', 8000);
+            return;
+        }
+        var pick = fileName || docs.slice().sort(function (a, b) { return String(b.rev).localeCompare(String(a.rev), 'en'); })[0].name;
+        _popup('📜 ' + _esc(pick), '<div id="pl-rev-body" style="color:#888;">' + _t('도면을 읽는 중…', 'Reading the drawing…') + '</div>', true);
+        var text = '';
+        try { text = await window._plDocText(NAS_FOLDER, pick); }
+        catch (e) {
+            var b0 = document.getElementById('pl-rev-body');
+            if (b0) b0.innerHTML = '<div style="color:#b1432f;">' + _esc(e && e.message ? e.message : e) + '</div>';
+            return;
+        }
+        window._plRevCache = { id: id, file: pick, text: text };
+        window._plRenderRevBody(id, pick, text, docs);
+    };
+
+    window._plRenderRevBody = function (id, pick, text, docs) {
+        var r = _rowById(id) || {};
+        var revs = window.plParseRevisions(text);
+        var mat = window.plParseDisplayMatrix(text);
+
+        // 표에 적힌 REV(생산REV·Agile REV)와 같은 줄을 찾아 표시한다 — "지금 우리가 쓰는 리비전"
+        var mine = [];
+        [r.prodRev, r.agileRev].forEach(function (v) {
+            String(v || '').replace(/[A-Z](?:\.\d+)?/g, function (m) { mine.push(m.toUpperCase()); return m; });
+        });
+        var isMine = function (rv) {
+            rv = String(rv || '').toUpperCase();
+            if (!rv) return false;
+            if (mine.indexOf(rv) !== -1) return true;
+            var m = rv.match(/^([A-Z](?:\.\d+)?)\s*-\s*([A-Z](?:\.\d+)?)$/);   // 범위 칸(G.5-J.4)
+            if (!m) return false;
+            return mine.some(function (x) { return x >= m[1] && x <= m[2]; });
+        };
+
+        var pickSel = (docs && docs.length > 1)
+            ? '<select onchange="window.plOpenRevisions(\'' + id + '\', this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">'
+              + docs.slice().sort(function (a, b) { return String(b.rev).localeCompare(String(a.rev), 'en'); }).map(function (d) {
+                  return '<option value="' + _esc(d.name) + '"' + (d.name === pick ? ' selected' : '') + '>'
+                       + (d.rev ? 'REV ' + _esc(d.rev) + ' · ' : '') + _esc(d.name) + '</option>';
+              }).join('') + '</select>'
+            : '';
+
+        var revHtml = revs.length
+            ? '<table style="width:100%; font-size:11.5px; border-collapse:collapse;">'
+              + '<tr style="background:#f1f3f5; position:sticky; top:0;">'
+              + '<th style="text-align:left; padding:5px 6px; width:56px;">REV</th>'
+              + '<th style="text-align:left; padding:5px 6px;">' + _t('변경 내용', 'Description') + '</th>'
+              + '<th style="text-align:left; padding:5px 6px; width:96px;">' + _t('작성자', 'Drawn by') + '</th>'
+              + '<th style="text-align:left; padding:5px 6px; width:84px;">' + _t('일자', 'Date') + '</th></tr>'
+              + revs.map(function (x) {
+                  var hit = isMine(x.rev);
+                  return '<tr style="border-bottom:1px solid #f1f3f5;' + (hit ? ' background:#eefbf1;' : '') + '">'
+                       + '<td style="padding:4px 6px; font-weight:bold; color:' + (hit ? '#2b7a45' : '#1971c2') + '; white-space:nowrap;">'
+                       + _esc(x.rev) + (hit ? ' ◀' : '') + '</td>'
+                       + '<td style="padding:4px 6px; color:#444;">' + _esc(x.desc) + '</td>'
+                       + '<td style="padding:4px 6px; color:#666; white-space:nowrap;">' + _esc(x.by) + '</td>'
+                       + '<td style="padding:4px 6px; color:#666; white-space:nowrap;">' + _esc(x.date) + '</td></tr>';
+              }).join('') + '</table>'
+            : '<div style="padding:12px; color:#888;">' + _t('이 도면에서 REVISIONS 표를 찾지 못했습니다.', 'No REVISIONS table found in this drawing.') + '</div>';
+
+        var matHtml = (mat.rows && mat.rows.length)
+            ? '<table style="width:100%; font-size:11px; border-collapse:collapse;">'
+              + '<tr style="background:#f1f3f5;">' + mat.headers.map(function (h) {
+                  return '<th style="text-align:left; padding:4px 5px; white-space:nowrap;">' + _esc(h) + '</th>';
+              }).join('') + '</tr>'
+              + mat.rows.map(function (row) {
+                  var hit = isMine(row[0]);
+                  var ktk = /KORTEK/i.test(row.join(' '));
+                  return '<tr style="border-bottom:1px solid #f1f3f5;' + (hit && ktk ? ' background:#eefbf1;' : (ktk ? ' background:#fcfdff;' : '')) + '">'
+                       + row.map(function (c, ci) {
+                           return '<td style="padding:3px 5px; white-space:nowrap;' + (ci === 0 ? ' font-weight:bold; color:#1971c2;' : ' color:#444;') + '">'
+                                + _esc(c) + '</td>';
+                       }).join('') + '</tr>';
+              }).join('') + '</table>'
+            : '';
+
+        var html =
+            '<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; font-size:11.5px; color:#555; flex-wrap:wrap;">'
+          + '<b style="color:#2c5f8a;">' + _t('REVISIONS', 'REVISIONS') + '</b>'
+          + '<span>' + revs.length + _t('건', ' rows') + '</span>'
+          + (mine.length ? '<span style="color:#2b7a45;">◀ ' + _t('표의 REV: ', 'REV in table: ') + _esc(mine.join(', ')) + '</span>' : '')
+          + '<span style="margin-left:auto;">' + pickSel + '</span>'
+          + '</div>'
+          + '<div style="max-height:40vh; overflow:auto; border:1px solid #e3e6ea; border-radius:6px;">' + revHtml + '</div>'
+          + (matHtml
+              ? '<div style="margin:12px 0 6px; font-size:11.5px;"><b style="color:#2c5f8a;">DISPLAY INFORMATION MATRIX</b>'
+                + ' <span style="color:#888;">' + mat.rows.length + _t('건 · KORTEK 행은 연한 배경', ' rows · KORTEK rows tinted') + '</span></div>'
+                + '<div style="max-height:30vh; overflow:auto; border:1px solid #e3e6ea; border-radius:6px;">' + matHtml + '</div>'
+              : '')
+          + '<div style="margin-top:11px; display:flex; gap:6px; align-items:center;">'
+          + (revs.length
+              ? '<button onclick="window.plUseLatestRev()" style="padding:6px 12px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ '
+                + _t('최신 REV(', 'Use latest REV (') + _esc(revs[revs.length - 1].rev) + _t(')를 이 행에 넣기', ') for this row') + '</button>'
+              : '')
+          + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(pick) + '\')" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:12px; cursor:pointer;">📄 ' + _t('도면 열기', 'Open drawing') + '</button>'
+          + '<button onclick="window.plOpenDocBox(\'' + id + '\')" style="padding:6px 12px; background:#eef2f5; color:#495057; border:none; border-radius:6px; font-size:12px; cursor:pointer;">📁 ' + _t('문서함', 'Documents') + '</button>'
+          + '<span style="margin-left:auto;"><button onclick="window.plClosePopup()" style="padding:6px 12px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6; border-radius:6px; font-size:12px; cursor:pointer;">' + _t('닫기', 'Close') + '</button></span>'
+          + '</div>';
+        var b = document.getElementById('pl-rev-body');
+        if (b) { b.style.color = ''; b.innerHTML = html; }
+    };
+
+    /** 도면의 최신 REV 를 이 행의 Agile REV 칸에 넣는다(사람이 눌렀을 때만) */
+    window.plUseLatestRev = function () {
+        var c = window._plRevCache; if (!c) return;
+        var r = _rowById(c.id); if (!r) return;
+        var revs = window.plParseRevisions(c.text);
+        if (!revs.length) return;
+        var last = revs[revs.length - 1];
+        var before = r.agileRev == null ? '' : String(r.agileRev);
+        var after = last.rev + (last.date ? ' (' + last.date + ')' : '');
+        if (before === after) { _toast(_t('이미 같은 값입니다.', 'Already the same.'), 'info'); return; }
+        r.agileRev = after;
+        _plPushHistory(r, 'agileRev', before, after);
+        _persist(); window.plClosePopup(); window.plRender();
+        _toast('✅ Agile REV → ' + after, 'success', 5000);
+    };
+
     window.plShowDwgInfo = function (id, fileName, folder, det, rawText) {
         var r = _rowById(id); if (!r) return;
         window._plDwgInfo = { id: id, file: fileName, folder: folder, det: det, text: rawText || '' };
@@ -2247,7 +2541,7 @@
     };
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 13. AI 문답 도구 — "LNW 제품 몇 개야?", "DV430QUB-P10 쓰는 모델 알려줘" 처럼
+    // 13. AI 문답 도구 — "LNW 제품 몇 개야?", "ABC430XYZ-P10 쓰는 모델 알려줘" 처럼
     //     이 표를 근거로 답하게 한다. 읽기 전용이고 네트워크를 안 탄다(local 도구).
     //     ⚠️ 돌려주는 행은 **상한을 둔다** — 164행 × 91열을 그대로 실으면 프롬프트가 터진다.
     // ──────────────────────────────────────────────────────────────────────────
@@ -2299,7 +2593,7 @@
             title: 'Project list(제품 전수 목록) 조회',
             desc: '앱의 📒 Project list 페이지에 들어 있는 **제품(모델) 전수 목록**을 검색한다. '
                 + '고객사·공장·프로젝트·TYPE·제품상태·KTK PN·PN·패널 모델/제조사·담당자·판매량이 들어 있다. '
-                + '"LNW 제품 몇 개야?", "EU 고객 모델 보여줘", "DV430QUB-P10 쓰는 모델 알려줘", '
+                + '"LNW 제품 몇 개야?", "EU 고객 모델 보여줘", "ABC430XYZ-P10 쓰는 모델 알려줘", '
                 + '"박용훈이 회로담당인 제품", "KASCADA43 캐비닛 제품 목록", "502270 어떤 제품이야?" '
                 + '같은 질문에 쓴다. '
                 + '⚠️ 이 목록은 사람이 엑셀로 올려 둔 것이라 비어 있을 수도 있다 — 전체건수가 0이면 '
