@@ -486,7 +486,7 @@
                 if (!this._driveFileId) return null;
                 var res = await gapi.client.drive.files.get({ fileId: this._driveFileId, alt: 'media', supportsAllDrives: true });
                 var d = res.result || {};
-                var out = { rows: Array.isArray(d.rows) ? d.rows : [], history: Array.isArray(d.history) ? d.history : [] };
+                var out = { rows: Array.isArray(d.rows) ? d.rows : [], history: Array.isArray(d.history) ? d.history : [], savedAt: d.savedAt || null };
                 this._lastKnownServerCount = Math.max(this._lastKnownServerCount, out.rows.length);
                 if (d.savedAt) { this._lastKnownSavedAt = d.savedAt; if (window._plSetSavedMark) window._plSetSavedMark(d.savedAt); }
                 this.save(out, true);
@@ -504,17 +504,74 @@
     //    ⚠️ 경로(루트 UNC)는 코드에 적지 않는다 — 각 PC 의 docstore_config.json 에만 있다(저장소 공개).
     // ══════════════════════════════════════════════════════════════════════════
     var NAS_DATA_FOLDER = 'PROJECT LIST';
+    // 파일 이름은 팀 이름 그대로(`ProjectList_개발3팀.json`). 사람이 NAS 폴더에서 보고
+    //    알 수 있어야 하고, 실제로 UTF-8 그대로 오갔다(2026-10-30 확인).
+    //    ⚠️ 단, **이름이 정확히 같아야 찾는 방식에 의지하지 않는다** — 사람이 복사본을 두거나
+    //    이름을 조금 바꿀 수 있으니, 못 찾으면 폴더 목록에서 **키워드로** 고른다(_plFindNasDataFile).
+    window.PL_TEAM_SLUG = window.PL_TEAM_SLUG || {
+        '개발1팀': 'dev1', '개발2팀': 'dev2', '개발3팀': 'dev3', '개발4팀': 'dev4', '시제품팀': 'proto'
+    };
+    var _teamSlug = function (t) {
+        t = t || _team();
+        return window.PL_TEAM_SLUG[t] || String(t).replace(/[^A-Za-z0-9]+/g, '') || 'team';
+    };
     var _nasDataName = function () { return 'ProjectList_' + _team() + '.json'; };
     window._plNasSavedAt = null;
+
+    /** 파일명 키워드 매칭 — 사람이 지은 이름은 띄어쓰기·하이픈·대소문자가 제각이다.
+     *  → 양쪽에서 글자·숫자만 남기고 소발로 낮춘 뒤 "들어 있는가"만 본다. */
+    window._plNameHit = function (name, kw) {
+        var flat = function (v) { return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9가-힣]+/g, ''); };
+        var k = flat(kw);
+        if (!k) return false;
+        // ⚠️ 숫자 키워드는 **앞뒤가 숫자면 안 된다** — 6자리 KTK PN "303222" 가 7자리 고객 PN
+        //    "1303222" 안에 그대로 들어 있어, 그냥 "들어 있나"로 보면 남의 도면을 끌어온다.
+        //    그래서 숫자일 때만 구분자를 '-' 로 **남겨** 둔다: "1555073-1 사양서"(파생본)는 걸리고
+        //    "11555073"(남의 번호)은 안 걸린다. 글자 키워드는 반대로 구분자를 떼야 한다
+        //    (사람이 "AB123XY-Z1" 로 치고 파일은 "AB123XY Z1 도면.pdf" 인 경우).
+        if (/^\d+$/.test(k)) {
+            var dashed = String(name == null ? '' : name).toLowerCase().replace(/[^a-z0-9가-힣]+/g, '-');
+            for (var i = dashed.indexOf(k); i !== -1; i = dashed.indexOf(k, i + 1)) {
+                var before = i > 0 ? dashed.charAt(i - 1) : '';
+                var after = dashed.charAt(i + k.length);
+                if (!/\d/.test(before) && !/\d/.test(after)) return true;
+            }
+            return false;
+        }
+        return flat(name).indexOf(k) !== -1;
+    };
+
+    /** 팀 목록 JSON 고르기 — 이름이 정확히 같은 파일이 없으면 폴더를 뒤지다.
+     *  사람이 "ProjectList_개발3팀 (1).json" 처럼 복사본을 뇨도 찾아지게 하기 위해. 최신본을 고른다. */
+    window._plFindNasDataFile = async function () {
+        var exact = _nasDataName();
+        if (!window._dsList) return exact;
+        try {
+            var j = await window._dsList(NAS_DATA_FOLDER);
+            var files = (j && (j.files || j.items || j.list)) || [];
+            var names = files.map(function (f) { return (f && f.name) ? f : { name: String(f) }; });
+            if (names.some(function (f) { return f.name === exact; })) return exact;
+            var team = _team(), slug = _teamSlug(team);
+            var cand = names.filter(function (f) {
+                return /\.json$/i.test(f.name) && window._plNameHit(f.name, 'projectlist')
+                    && (window._plNameHit(f.name, team) || window._plNameHit(f.name, slug));
+            });
+            if (!cand.length) return exact;
+            cand.sort(function (a, b) { return String(b.mtime || '').localeCompare(String(a.mtime || '')); });
+            return cand[0].name;
+        } catch (e) { return exact; }
+    };
 
     window.plLoadFromNas = async function () {
         if (!window._dsFileOf) return null;
         try {
-            var f = await window._dsFileOf(NAS_DATA_FOLDER, _nasDataName());
+            var nm = await window._plFindNasDataFile();
+            var f = await window._dsFileOf(NAS_DATA_FOLDER, nm);
             var o = JSON.parse(await f.text());
             if (!o || !Array.isArray(o.rows)) return null;
             window._plNasSavedAt = o.savedAt || null;
-            return { rows: o.rows, history: Array.isArray(o.history) ? o.history : [] };
+            window._plNasLoadedName = nm;
+            return { rows: o.rows, history: Array.isArray(o.history) ? o.history : [], savedAt: o.savedAt || null };
         } catch (e) {
             // 파일이 아직 없는 건 오류가 아니다(처음 쓰는 팀) — 폴더 권한 문제만 밖으로 알린다.
             var m = (e && e.message) ? e.message : '';
@@ -763,9 +820,25 @@
 
     /** @param {boolean} light 검색어 타자처럼 "표만" 다시 그리면 되는 경우 true —
      *  필터 드롭다운(값마다 건수를 다시 세고 <select> 를 새로 만든다)을 건너뛴다. */
+    // 🎨 머리띠 버튼 칠하기 — HTML 에 인라인으로 박힌 색은 팔레트 <style> 보다 세서, 테마를 바꿔도
+    //    이 띠만 옛 색으로 남는다. 특히 "📐 도면 분석"은 보라색이 박혀 있어 혼자 튀었다(2026-10-30 지적).
+    //    기본 버튼은 팔레트 bg/darkText, 도면 분석만 한 단계 진한 hoverBg 로 구분한다(색은 전부 팔레트).
+    window._plPaintHeaderButtons = function () {
+        var P = _pal();
+        var paint = function (id, bg, fg, bd) {
+            var el = document.getElementById(id); if (!el) return;
+            el.style.background = bg; el.style.color = fg;
+            el.style.border = '1px solid ' + bd;
+        };
+        ['pl-btn-reset', 'pl-btn-add', 'pl-btn-import', 'pl-btn-export', 'pl-btn-nas', 'pl-btn-cols', 'pl-btn-print']
+            .forEach(function (id) { paint(id, P.bg, P.darkText, P.border); });
+        paint('pl-btn-dwg', P.hoverBg, P.darkText, P.hoverBorder);
+    };
+
     window.plRender = function (light) {
         var wrap = document.getElementById('pl-table-wrap');
         if (!wrap) return;
+        window._plPaintHeaderButtons();
         var cols = _visibleCols(), rows = _visibleRows();
         var P = _pal();          // 🎨 테마 색 — 아래 인라인 배경(머리글/제브라/고정행)에 그대로 쓴다
 
@@ -1362,12 +1435,41 @@
         return out.filter(function (v, i, a) { return a.indexOf(v) === i; });
     };
 
-    window._plDocCache = window._plDocCache || { at: 0, byNum: {}, total: 0, error: '' };
+    window._plDocCache = window._plDocCache || { at: 0, byNum: {}, all: [], total: 0, error: '' };
 
+    // ⚠️ 색인은 "앞 숫자"만으로 보지 않는다(2026-10-30 사용자 지적).
+    //    "고객 도면은 매번 파일명을 수정해서 올릴 수 없으니, 키워드가 들어간 파일은 모두 표시해줘."
+    //    → 앞 숫자가 아니라 **파일명에 그 번호가 들어 있는가**로 본다. 그래서
+    //      "LNW UPPER 1234567 rev K.pdf" · "1234567-1 사양서.pdf" 처럼 아무 자리에 있어도 걸린다.
+    //    앞 숫자 색인(byNum)은 리비전 정렬이 정확하니 그대로 두고, 키워드 히트를 **합친다**.
     window._plDocsOf = function (r) {
-        var nums = window._plRowDocNums(r), out = [];
-        nums.forEach(function (n) { (window._plDocCache.byNum[n] || []).forEach(function (f) { out.push(f); }); });
+        var nums = window._plRowDocNums(r);
+        if (!nums.length) return [];
+        var ck = window._plDocCache.at + '|' + nums.join(',');
+        window._plDocsOfCache = window._plDocsOfCache || {};
+        if (window._plDocsOfCache[ck]) return window._plDocsOfCache[ck];
+
+        var out = [], seen = {};
+        var push = function (f) { if (f && !seen[f.name]) { seen[f.name] = 1; out.push(f); } };
+        nums.forEach(function (n) { (window._plDocCache.byNum[n] || []).forEach(push); });
+        (window._plDocCache.all || []).forEach(function (nm) {
+            for (var i = 0; i < nums.length; i++) {
+                if (window._plNameHit(nm, nums[i])) {
+                    var p = window._plParseDocName(nm);
+                    push({ name: nm, num: nums[i], rev: (p && p.rev) || _plRevFromName(nm) });
+                    return;
+                }
+            }
+        });
+        out.sort(function (a, b) { return String(b.rev).localeCompare(String(a.rev), 'en'); });
+        window._plDocsOfCache[ck] = out;
         return out;
+    };
+
+    /** 앞 숫자 규칙에 안 맞는 이름에서도 리비전만은 건져 본다 — "… rev K.pdf" / "…_REV J4.pdf" */
+    var _plRevFromName = function (nm) {
+        var m = String(nm || '').match(/rev\.?\s*([A-Za-z](?:\.?\d+)?)/i);
+        return m ? m[1].replace(/\./g, '').toUpperCase() : '';
     };
     window._plDocCount = function (r) { return window._plDocsOf(r).length; };
 
@@ -1387,7 +1489,10 @@
             Object.keys(byNum).forEach(function (n) {
                 byNum[n].sort(function (a, b) { return String(b.rev).localeCompare(String(a.rev), 'en'); });
             });
-            window._plDocCache = { at: Date.now(), byNum: byNum, total: files.length, error: '' };
+            // all = 이름 전부. 앞 숫자 규칙에 안 맞는 파일도 키워드로 걸리게 하려면 원본 목록이 필요하다.
+            var all = files.map(function (f) { return String(f && f.name ? f.name : f); });
+            window._plDocCache = { at: Date.now(), byNum: byNum, all: all, total: files.length, error: '' };
+            window._plDocsOfCache = {};
             if (!silent) window.plRender();
         } catch (e) {
             var msg = (e && e.message) ? e.message : String(e);
@@ -1439,7 +1544,9 @@
                      + '<button onclick="window._dsOpenNative && window._dsOpenNative(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" title="' + _esc(_t('NAS 원본을 연결 프로그램으로', 'Open the NAS original in its app')) + '" style="padding:3px 8px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🖥️</button>'
                      // 💾 이 파일 하나를 내 PC 로 받는다 — 열기/연결프로그램/분석과 같은 줄에 둔다(사용자 지적: 위치가 틀렸다)
                      + '<button onclick="window.plDownloadDoc(\'' + _esc(f.name) + '\')" title="' + _esc(_t('이 파일을 내 PC에 저장', 'Save this file to my PC')) + '" style="padding:3px 8px; background:#eef7ef; color:#2b7a45; border:none; border-radius:5px; font-size:11px; cursor:pointer;">💾</button>'
-                     + '<button onclick="window.plAnalyzeDoc(\'' + id + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#efe6fb; color:#6741d9; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🔍 ' + _t('분석', 'Analyze') + '</button>'
+                     // 🔍 분석은 **AI 를 안 쓰는** 결정론 추출이라 팔레트 색을 따른다. 보라색은
+                     //    AI 한도를 쓰는 "🤖 AI로 더 읽기" 전용으로 남겨 둔다(색이 곧 경고다).
+                     + '<button onclick="window.plAnalyzeDoc(\'' + id + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:' + _pal().hoverBg + '; color:' + _pal().darkText + '; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🔍 ' + _t('분석', 'Analyze') + '</button>'
                      + '</div>';
             }).join('')
             : '<div style="color:#888; padding:10px 2px;">'
@@ -1600,6 +1707,90 @@
     /** 리비전 칸 모양 — 한 개(`K`, `J.4`) 또는 범위(`G.3-G.5`, `H-K`, `A-E.2`) */
     var _isRevCell = function (s) { return /^[A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?$/.test(s); };
 
+    // ⚠️⚠️ 글자를 뽑는 도구가 **둘**이고 결과 모양이 전혀 다르다(2026-10-30 실측 사고).
+    //    · pdf.js(앱이 실제로 쓰는 것, `_pxExtractText`) : **한 줄 = 표의 한 행**.
+    //        "G.3 ADDED -ALT1 SUFFIX … J. SMITH 6/15/2021" 처럼 칸이 공백으로 이어지고,
+    //        줄 끝에는 도면 다른 영역의 글자가 섞여 들어온다.
+    //    · PyMuPDF(내가 검증할 때 쓴 것) : **한 줄 = 표의 한 칸**.
+    //    처음엔 PyMuPDF 모양만 보고 규칙을 짜서, 앱에서는 표가 통째로 뭉개져 보였다.
+    //    그래서 **줄-행 모양을 먼저 시도하고**, 안 나오면 칸-줄 모양으로 떨어진다.
+    var _VENDORS = ['TOVIS', 'KORTEK', 'AUO', 'BOE', 'INNOLUX', 'AXIOMTEK', 'LGD', 'TXD', 'INX'];
+    var _DATE_RE = /(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{1,2}\s*-\s*[A-Z]{3}\s*-\s*\d{2,4}|\d{1,2}\s+[A-Z]{3}\s+\d{2,4})/i;
+    var _HEAD_RE = /^(REV\.?\s+DESCRIPTION|DRAWN\s*BY|REVISIONS?|DATE|BY\s*\/?\s*DATE)\b/i;
+    var _REVCELL_RE = /^[A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?\s+\S/;
+
+    /** 설명 조각인가 — 치수·도면 좌표·BOM 행·매트릭스 행은 아니어야 한다 */
+    var _isDescFrag = function (s) {
+        if (!s || s.length < 6 || _HEAD_RE.test(s)) return false;
+        if (_DATE_RE.test(s)) return false;
+        if (/^[\d\s.,°R()+-]+$/.test(s)) return false;                 // 605.214 · 228.2 · R3048
+        if (/^\d+\s+\d+\s+\S/.test(s)) return false;                   // BOM 행 "8 1 1554302-00-0 …"
+        var up = s.toUpperCase();
+        if (_REVCELL_RE.test(s) && _VENDORS.some(function (v) { return up.indexOf(v) !== -1; })) return false;
+        return (s.match(/[A-Za-z]/g) || []).length >= 6;
+    };
+
+    /** pdf.js 모양(한 줄 = 한 행) 전용 REVISIONS 읽기. 못 읽으면 빈 배열. */
+    var _revFromLineRows = function (L) {
+        var PERSON = /([A-Z][.,]\s?[A-Z][A-Za-z'-]+|[A-Z]{2,4})\s*$/;
+        var recs = [];
+        for (var i = 0; i < L.length; i++) {
+            var m = L[i].match(new RegExp(_DATE_RE.source + '\\s*$', 'i'));
+            if (!m) continue;
+            var before = L[i].slice(0, m.index).trim();
+            var mp = before.match(PERSON);
+            var by = mp ? mp[1] : '';
+            var rest = mp ? before.slice(0, mp.index).trim() : before;
+            var mr = rest.match(/^([A-Z](?:\.\d+)?)\b\s*/);
+            recs.push({ i: i, rev: mr ? mr[1] : '', inline: mr ? rest.slice(mr[0].length).trim() : rest,
+                        by: by, date: m[1], pre: [], post: [] });
+        }
+        if (recs.length < 2) return [];
+        // 설명 조각은 **가장 가까운 기록**에 붙인다 — 앞 기록이 뒤 기록 설명을 가져가면 표가 어긋난다.
+        var at = recs.map(function (r) { return r.i; });
+        for (var j = 0; j < L.length; j++) {
+            if (at.indexOf(j) !== -1 || !_isDescFrag(L[j])) continue;
+            var best = -1, bd = 99;
+            for (var k = 0; k < at.length; k++) {
+                var d = Math.abs(at[k] - j);
+                if (d < bd || (d === bd && at[k] > j)) { best = k; bd = d; }
+            }
+            if (best < 0 || bd > 2) continue;
+            (j < recs[best].i ? recs[best].pre : recs[best].post).push(L[j]);
+        }
+        return recs.map(function (r) {
+            var desc = r.pre.concat(r.inline ? [r.inline] : []).concat(r.post).join(' ');
+            desc = desc.replace(/\s+/g, ' ').trim().replace(/^[A-Z]\s+(?=[A-Z]{2})/, '');
+            return { rev: r.rev, desc: desc, by: r.by, date: r.date };
+        });
+    };
+
+    /** pdf.js 모양 전용 MATRIX 읽기 — 행은 리비전 칸으로 시작하고, VENDOR 자리로 양식을 가른다 */
+    var _matFromLineRows = function (L) {
+        var A = ['REVISION', 'MANUFACTURER PART NUMBER', 'PART NUMBER', 'VENDOR',
+                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL'];
+        var B = ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
+                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
+        var headers = null, rows = [];
+        for (var i = 0; i < L.length; i++) {
+            var m = L[i].match(/^([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(.*)$/);
+            if (!m) continue;
+            var toks = m[2].split(/\s+/);
+            var vi = -1;
+            for (var k = 0; k < toks.length && k < 5; k++) {
+                if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { vi = k; break; }
+            }
+            if (vi < 0) continue;
+            var cols = (vi === 2) ? A : (vi === 1 ? B : null);
+            if (!cols) continue;
+            if (!headers) headers = cols;
+            if (headers !== cols) continue;                       // 한 도면에 양식이 섞이진 않는다
+            rows.push([m[1].replace(/\s*-\s*/, '-')].concat(toks.slice(0, cols.length - 1)));
+            if (rows.length > 40) break;
+        }
+        return rows.length ? { headers: headers, rows: rows } : null;
+    };
+
     /** ① REVISIONS 표 → [{rev, desc, by, date}] (도면에 적힌 순서 그대로)
      *  ⚠️ 양식이 두 가지다(실측):
      *     A) `REV. | DESCRIPTION | DRAWN BY | DATE` — 작성자와 날짜가 **각각 한 줄**
@@ -1607,6 +1798,8 @@
      *     그래서 "날짜로 끝난다"를 두 모양 다 받는다. */
     window.plParseRevisions = function (text) {
         var L = _lines(text);
+        var byLine = _revFromLineRows(L);          // pdf.js 모양 먼저(앱이 실제로 받는 글자)
+        if (byLine.length) return byLine;
         var start = -1;
         for (var i = 0; i < L.length; i++) {
             if (/^REVISIONS?$/i.test(L[i]) || /^REV\.?\s+DESCRIPTION/i.test(L[i])) { start = i; break; }
@@ -1652,6 +1845,8 @@
      *  행은 **리비전 칸으로 시작한다**는 규칙으로 끊는다(F/W 로 끊으면 N/A 인 옛 양식을 놓친다). */
     window.plParseDisplayMatrix = function (text) {
         var L = _lines(text);
+        var byLine = _matFromLineRows(L);          // pdf.js 모양 먼저
+        if (byLine) return byLine;
         var at = -1;
         for (var i = 0; i < L.length; i++) {
             if (/DISPLAY INFORMATION MATRIX/i.test(L[i])) { at = i; break; }
@@ -2492,6 +2687,13 @@
         }
     };
 
+    /** NAS 엑셀 한 장을 불러오기 — 표가 비어 있을 때의 자동 구제도 사람이 고를 때와 같은 길을 쓴다.
+     *  표가 비어 있으면 _plApplyWorkbook 은 물어보지 않는다(cur===0 이면 강제 교체) — 부트 중 확인창이 뜨지 않게. */
+    window.plImportNasExcel = async function (name) {
+        var f = await window._dsFileOf(NAS_DATA_FOLDER, name);
+        window._plApplyWorkbook(await f.arrayBuffer(), name);
+    };
+
     /** 지금 표를 NAS 에 엑셀로 보관 — 스냅샷(월말 백업 등). 토스트 메뉴 없이 함수로만 쓴다. */
     window.plSaveToNas = async function () {
         if (!window._dsPut) { _toast(_t('문서 저장소를 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return; }
@@ -2513,32 +2715,92 @@
     // ──────────────────────────────────────────────────────────────────────────
     // 12. 초기화 — 탭이 열릴 때 그리고, Drive 에서 최신본을 한 번 받아온다.
     // ──────────────────────────────────────────────────────────────────────────
+    // 📥 목록 자동 불러오기 — 한 군데에서만.
+    //    사용자 지적(2026-10-30): "구글 드라이브 접속하고 프로젝트 파일 열면 NAS 최신 파일을 띄워달라".
+    //    전엔 **Project list 탭을 눌렀을 때 딱 한 번**만 불렀고, 그런데 그게 다른 사정으로
+    //    실패하면(백엔드가 아직 안 떠 있었다면) 다시 안 불러서 로컬 캐시(1행)만 보여 줌다.
+    //    → ① 떠고 3초 뒤 ② 프로젝트 파일을 여는 새 길바닥(populateTabData) ③ 탭 진입, 세 길 모두에서 부른다.
+    //    NAS 는 **구글 로그인이 필요 없다** — 그래서 연동 전에도 목록이 뜨는 게 맞다.
+    //    ⚠️ 어느 것을 샴 것인가는 **savedAt 이 가장 늦은 쪽** — "NAS 가 비에있지 않으면 NAS"로
+    //       놓으면 드라이부에 더 새 본이 있어도 역전된다.
+    var _PL_RELOAD_MS = 2 * 60 * 1000;
+    window._plLoadedAt = window._plLoadedAt || 0;
+
+    window.plEnsureLoaded = function (force) {
+        if (window._plLoadInflight) return window._plLoadInflight;
+        if (!force && window._plLoadedAt && Date.now() - window._plLoadedAt < _PL_RELOAD_MS) return Promise.resolve(false);
+        window._plLoadInflight = (async function () {
+            var changed = false;
+            try {
+                var nas = await window.plLoadFromNas();
+                var drv = await window.ProjectList.loadFromDrive();     // 토튰 없으면 조용히 null
+                var best = null, bestAt = '';
+                [[nas, 'NAS'], [drv, 'Drive']].forEach(function (pair) {
+                    var d = pair[0];
+                    if (!d || !(d.rows || []).length) return;
+                    var at = String(d.savedAt || '');
+                    if (!best || at > bestAt) { best = d; bestAt = at; best._src = pair[1]; }
+                });
+                if (best) {
+                    window._plData = { rows: best.rows, history: best.history || [] };
+                    if (best._src === 'NAS') window._plNasSavedAtMine = window._plNasSavedAt;
+                    window.ProjectList.save(window._plData, true);      // 로컬 캐시만(방금 읽은 걸 되쓰지 않게)
+                    if (window._plSetSavedMark) window._plSetSavedMark(bestAt, best._src);
+                    changed = true;
+                } else if (!(D().rows || []).length) {
+                    // 어디에도 목록이 없다 — NAS 에 엘셀은 있는가(사람이 올려만 남긴 경우)
+                    var xl = await window._plNewestNasExcel();
+                    if (xl) {
+                        _toast('📥 ' + _t('NAS에서 가장 최신 엘셀을 읽고 있습니다: ', 'Importing the newest Excel from NAS: ') + xl, 'info', 6000);
+                        try { await window.plImportNasExcel(xl); changed = true; }
+                        catch (e) { console.warn('[Project list] NAS 엘셀 자동 불러오기 실패:', e && e.message); }
+                    } else {
+                        _toast('📥 ' + _t('아직 자료가 없습니다 — [엘셀 불러오기]로 제품 목록을 넣어주세요.',
+                                          'No data yet — use [Import Excel] to load the product list.'), 'info', 7000);
+                    }
+                }
+                window._plLoadedAt = Date.now();
+                await window.plRefreshDocCache(true);                   // 📄 배지용 NAS 파일 목록
+                window.plRender();
+            } finally {
+                window._plLoadInflight = null;
+            }
+            return changed;
+        })();
+        return window._plLoadInflight;
+    };
+
+    /** NAS 폴더의 가장 최신 엘셀 한 장 — 사람이 JSON 없이 엘셀만 올렸을 때의 구제 */
+    window._plNewestNasExcel = async function () {
+        if (!window._dsList) return '';
+        try {
+            var j = await window._dsList(NAS_DATA_FOLDER);
+            var files = ((j && (j.files || j.items || j.list)) || []).map(function (f) { return (f && f.name) ? f : { name: String(f) }; });
+            var xl = files.filter(function (f) { return /\.xlsx?$/i.test(f.name); });
+            if (!xl.length) return '';
+            xl.sort(function (a, b) { return String(b.mtime || '').localeCompare(String(a.mtime || '')); });
+            return xl[0].name;
+        } catch (e) { return ''; }
+    };
+
     window.plOnTabShown = function () {
         window.plRender();
-        if (window._plLoadedOnce) return;
-        window._plLoadedOnce = true;
-        (async function () {
-            // 1순위 NAS — 도면과 같은 자리에 있고 구글 로그인이 필요 없다.
-            var nas = await window.plLoadFromNas();
-            if (nas && nas.rows.length) {
-                window._plData = nas;
-                window._plNasSavedAtMine = window._plNasSavedAt;
-                window.ProjectList.save(nas, true);        // 로컬 캐시만(방금 읽은 걸 되쓰지 않게)
-                window.plRender();
-                if (window._plSetSavedMark) window._plSetSavedMark(window._plNasSavedAt, 'NAS');
-            } else {
-                // 2순위 Drive — NAS 가 막혀 있거나(백엔드 미재시작) 아직 파일이 없을 때
-                var drv = await window.ProjectList.loadFromDrive();
-                if (drv && drv.rows.length) { window._plData = drv; window.plRender(); }
-                else if (!(D().rows || []).length) {
-                    _toast('📥 ' + _t('아직 자료가 없습니다 — [엑셀 불러오기]로 제품 목록을 넣어주세요.',
-                                      'No data yet — use [Import Excel] to load the product list.'), 'info', 7000);
-                }
-            }
-            await window.plRefreshDocCache(true);          // 📄 배지용 NAS 파일 목록
-            window.plRender();
-        })();
+        window.plEnsureLoaded(false);
     };
+
+    // ① 떠고 3초 — 구글 연동을 기다리지 않는다(NAS 는 로그인 부요).
+    setTimeout(function () { window.plEnsureLoaded(false); }, 3000);
+    // ② 프로젝트 파일을 여는 모든 길(드라이다 불러오기·새 시트·백업 복원)은 populateTabData 를 거친다.
+    //    시트 전환마다 네트워크를 타면 안 되니 _PL_RELOAD_MS 사이 간경은 그상 지나간다.
+    (function () {
+        var orig = window.populateTabData;
+        if (typeof orig !== 'function') return;
+        window.populateTabData = function () {
+            var r = orig.apply(this, arguments);
+            try { window.plEnsureLoaded(false); } catch (e) { /* 목록 불러오기 실패가 시트 렌더를 맑지 않게 */ }
+            return r;
+        };
+    })();
 
     // ──────────────────────────────────────────────────────────────────────────
     // 13. AI 문답 도구 — "LNW 제품 몇 개야?", "ABC430XYZ-P10 쓰는 모델 알려줘" 처럼

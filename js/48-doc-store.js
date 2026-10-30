@@ -332,25 +332,76 @@ window._dsFindPanelSpecs = async function (pns, folder) {
         if (fk && !byKey[fk]) byKey[fk] = f.name;
     });
     var keys = Object.keys(byKey);
+    // 🔎 [2026-10-30] 몇 장이 걸렸는지도 같이 센다(_counts) — 부르는 쪽이 "여러 장이면 고르게"
+    //    할 수 있어야 한다. 값은 PN 으로만 찾으므로 `_counts` 키를 같이 담아도 안전하다.
+    var counts = {};
     (pns || []).forEach(function (pn) {
         var key = _pnKey(pn);
         if (key.length < 4) return;
-        if (byKey[key]) { out[pn] = byKey[key]; return; }
-        for (var i = 0; i < keys.length; i++) {
-            if (keys[i].indexOf(key) !== -1 || key.indexOf(keys[i]) !== -1) { out[pn] = byKey[keys[i]]; return; }
-        }
+        // 개수는 **파일 단위**로 센다 — 이름이 눕혀 놓고 보면 같은 파일도 있어서(대소문자·공백)
+        // 키 개수로 세면 적게 나온다.
+        var hitFiles = files.filter(function (f) {
+            var fk = _pnKey(String(f.name).replace(/\.[^.]+$/, ''));
+            return fk && (fk === key || fk.indexOf(key) !== -1 || key.indexOf(fk) !== -1);
+        });
+        if (!hitFiles.length) return;
+        var hits = keys.filter(function (k) { return k === key || k.indexOf(key) !== -1 || key.indexOf(k) !== -1; });
+        hits.sort(function (a, b) {
+            var ra = (a === key) ? 0 : (a.indexOf(key) === 0 ? 1 : 2);
+            var rb = (b === key) ? 0 : (b.indexOf(key) === 0 ? 1 : 2);
+            return ra - rb;
+        });
+        out[pn] = byKey[hits[0]];
+        counts[pn] = hitFiles.length;
     });
+    out._counts = counts;
     return out;
+};
+
+/**
+ * 🔎 [2026-10-30] 키워드가 들어간 **모든** 파일. 사용자 지적:
+ *    "PARTS>PANEL 에서도 패널명 키워드가 들어간 파일은 모두 표시해줘."
+ * 패널 하나에 데이터시트·도면·시험성적서·개정본이 여러 장 있는데, `_dsFindPanelSpec` 은
+ * 처음 걸린 한 장만 돌려줘서 나머지는 **있는데도 없는 것처럼** 보였다.
+ * 정렬: 이름이 꼭 같은 것 → 키워드로 시작하는 것 → 그 밖(모두 최신 파일 먼저).
+ */
+window._dsFindPanelSpecAll = async function (pn, folder) {
+    folder = folder || PANEL_FOLDER;
+    var key = _pnKey(pn);
+    if (key.length < 4) return [];                    // 너무 짧으면 아무거나 걸린다
+    var j = await window._dsList(folder);
+    var files = (j && j.files) || [];
+    var hits = [];
+    files.forEach(function (f) {
+        var fk = _pnKey(String(f.name).replace(/\.[^.]+$/, ''));
+        if (!fk) return;
+        var rank = (fk === key) ? 0 : (fk.indexOf(key) === 0 ? 1 : (fk.indexOf(key) !== -1 ? 2 : (key.indexOf(fk) !== -1 ? 3 : -1)));
+        if (rank < 0) return;
+        hits.push({ f: f, rank: rank });
+    });
+    hits.sort(function (a, b) {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        return String(b.f.mtime || '').localeCompare(String(a.f.mtime || ''));
+    });
+    return hits.map(function (h) { return h.f; });
 };
 
 window._dsOpenPanelSpec = async function (pn) {
     try {
-        var hit = await window._dsFindPanelSpec(pn);
-        if (!hit) {
+        var all = await window._dsFindPanelSpecAll(pn);
+        if (!all.length) {
             _toast(_t('"' + pn + '" 사양서를 NAS에서 찾지 못했습니다.', 'No spec found for "' + pn + '".'), 'error');
             return false;
         }
-        window._dsOpenInNewTab(PANEL_FOLDER, hit.name);
+        if (all.length === 1) { window._dsOpenInNewTab(PANEL_FOLDER, all[0].name); return true; }
+        // 여러 장이면 고르게 한다 — 공용 창에 검색어를 넣어 **걸린 파일 전부**를 보여준다.
+        window._dsOpenPicker({
+            folder: PANEL_FOLDER,
+            folders: [{ f: PANEL_FOLDER, label: 'PANEL' }],
+            q: pn,
+            title: '📄 ' + pn + ' — ' + _t(all.length + '개 파일', all.length + ' files'),
+            onPick: function (f, name) { window._dsOpenInNewTab(f, name); }
+        });
         return true;
     } catch (e) {
         _toast('❌ ' + e.message, 'error', 7000);
@@ -577,6 +628,10 @@ window._dsOpenPicker = async function (opts) {
     var _fkeys = _dsPick.folders.map(function (x) { return x.f; });
     if (!_dsPick.folder || _fkeys.indexOf(_dsPick.folder) === -1) _dsPick.folder = _fkeys[0] || '';
     _dsRenderTabs();
+    // 🔎 [2026-10-30] 부르는 쪽이 검색어를 미리 넣을 수 있다 — "키워드가 들어간 파일은 모두
+    //    보여줘"(사용자 요청)를 새 창을 만들지 않고 이 창 하나로 끝내기 위해서다.
+    var qEl = document.getElementById('ds-pick-q');
+    if (qEl) qEl.value = _dsPick.q || '';
     await _dsLoadFolder();
 };
 
@@ -654,10 +709,25 @@ async function _dsLoadFolder() {
     } catch (e) { body.innerHTML = _dsErrHtml(e.message); }
 }
 
+// 🔎 [2026-10-30] 검색은 **글자 그대로**와 **기호를 뗀 모양** 둘 다로 본다.
+//    사용자 지적: "파일명 키워드로 불러올 때, 키워드로 걸리는 파일은 모두 보여줘."
+//    사람이 치는 패널명·PN 은 하이픈·공백·대소문자가 제각각이라("AB-123" vs "AB123 사양서.pdf")
+//    글자 그대로만 보면 **있는 파일이 0건으로** 나왔다. 띄어 쓴 낱말은 모두 들어가야 한다(AND).
+function _dsNameMatch(name, q) {
+    if (!q) return true;
+    var raw = String(name || '').toLowerCase();
+    var flat = raw.replace(/[^a-z0-9가-힣]+/g, '');
+    return q.split(/\s+/).filter(Boolean).every(function (tk) {
+        if (raw.indexOf(tk) !== -1) return true;
+        var f = tk.replace(/[^a-z0-9가-힣]+/g, '');
+        return !!f && flat.indexOf(f) !== -1;
+    });
+}
+
 function _dsRenderList() {
     var q = (document.getElementById('ds-pick-q').value || '').trim().toLowerCase();
-    var dirs = (_dsPick.dirs || []).filter(function (d) { return !q || d.name.toLowerCase().indexOf(q) !== -1; });
-    var files = (_dsPick.files || []).filter(function (f) { return !q || f.name.toLowerCase().indexOf(q) !== -1; });
+    var dirs = (_dsPick.dirs || []).filter(function (d) { return _dsNameMatch(d.name, q); });
+    var files = (_dsPick.files || []).filter(function (f) { return _dsNameMatch(f.name, q); });
     var body = document.getElementById('ds-pick-body');
     var html = dirs.map(function (d) {
         // 📁 사람이 NAS에서 직접 만든 폴더 — 앱이 미리 아는 이름이 아니어도 그대로 보여주고 들어갈 수 있다.

@@ -242,13 +242,18 @@ window.renderPanelCompareTab = async function() {
         const m = selected[i];
         if (m) {
             const nasName = nasSpec[m];
+            // 📄 [2026-10-30] 걸린 파일이 여러 장이면 한 장을 열지 않고 **전부 보여주는 창**을 띄운다.
+            const nasCnt = (nasSpec._counts && nasSpec._counts[m]) || 0;
             const url = nasName && window._dsFileUrl
                 ? window._dsFileUrl(window._dsPanelFolder ? window._dsPanelFolder() : 'PARTS/PANEL', nasName)
                 : 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
             const has = !!entries[i];
+            const nameLink = (nasCnt > 1)
+                ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(m))})" title="${_en ? `NAS spec files: ${nasCnt}` : `NAS 사양서 ${nasCnt}개 — 골라서 열기`}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)} <span style="font-size:9.5px; color:#1f7a3d;">📄${nasCnt}</span></a>`
+                : `<a href="${url}" target="_blank" rel="noopener" title="${nasName ? (_en ? 'Open the spec on the NAS: ' : 'NAS 사양서 열기: ') + nasName
+                                 : (_en ? 'No spec on the NAS — open panelook.com search' : 'NAS에 사양서가 없어 panelook.com 검색을 엽니다')}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>`;
             headHtml += `<th style="min-width:120px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
-                <a href="${url}" target="_blank" rel="noopener" title="${nasName ? (_en ? 'Open the spec on the NAS: ' : 'NAS 사양서 열기: ') + nasName
-                                 : (_en ? 'No spec on the NAS — open panelook.com search' : 'NAS에 사양서가 없어 panelook.com 검색을 엽니다')}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
+                ${nameLink}
                 <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">✏️</button>` : ''}
                     <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🔄</button>
@@ -901,14 +906,23 @@ window.showPanelSpecModal = async function(model, codeHint) {
     // 📄 [2026-10-27] NAS에 이 패널 PN의 사양서가 있으면 panelook.com 검색보다 그게 먼저 — 바로
     //    원본 데이터시트를 열 수 있는데 굳이 캡차 있는 외부 검색으로 보낼 이유가 없다(사용자 요청).
     //    비교표 헤더 링크(panelCompareRenderTab)와 같은 패턴 — `_dsFindPanelSpec` 하나만 쓴다.
-    let nasHit = null;
-    if (window._dsFindPanelSpec && model_display) {
-        try { nasHit = await window._dsFindPanelSpec(model_display); } catch (e) { nasHit = null; }
+    //    📄 [2026-10-30] 걸리는 파일이 **여러 장이면 전부** 보여준다(사용자 요청) — 데이터시트·
+    //    도면·시험성적서가 따로 올라와 있는데 한 장만 열어 주면 나머지는 없는 것처럼 보였다.
+    let nasAll = [];
+    if (window._dsFindPanelSpecAll && model_display) {
+        try { nasAll = await window._dsFindPanelSpecAll(model_display); } catch (e) { nasAll = []; }
     }
+    const nasHit = nasAll[0] || null;
     const nasUrl = (nasHit && window._dsFileUrl)
         ? window._dsFileUrl(window._dsPanelFolder ? window._dsPanelFolder() : 'PARTS/PANEL', nasHit.name)
         : null;
-    const specLinkHtml = nasUrl
+    // 여러 장이면 링크가 아니라 공용 창을 띄우는 버튼으로 — 그 창이 키워드로 걸린 파일을 다 보여준다.
+    const nasManyHtml = (nasAll.length > 1)
+        ? `<a href="javascript:void(0)" onclick="window._dsOpenPanelSpec(${escapeHtml(JSON.stringify(model_display))})" style="color:#1f7a3d; font-weight:bold;">📄 ${_en ? `NAS spec files (${nasAll.length})` : `NAS 사양서 ${nasAll.length}개`}</a>`
+        : '';
+    const specLinkHtml = nasManyHtml
+        ? nasManyHtml + ` <a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#999; font-size:11px; margin-left:6px;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`
+        : nasUrl
         ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="color:#1f7a3d; font-weight:bold;">📄 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a>`
           + ` <a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#999; font-size:11px; margin-left:6px;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`
         : `<a href="${escapeHtml(entry && entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>`;
@@ -925,7 +939,8 @@ window.showPanelSpecModal = async function(model, codeHint) {
                     ? '① Go to the panelook.com page below (#1) — the model shown may not be the latest — click the <b>"+"</b> button next to the searched panel name to add it (it may already be checked), then click the <b>"compare"</b> button in the "Panel Compare" box at the top right of the page.<br>&nbsp;&nbsp;→ A "slide to verify you\'re human" check may appear — only a human can pass it, so this step cannot be automated.<br>&nbsp;&nbsp;→ After it passes you land on the spec comparison page. Press <b>Ctrl+S</b> there and save it as <mark style="background:#ffe066; color:#7a5210; padding:0 3px; border-radius:3px;">"Webpage, Complete"</mark>.<br>② Click the button below (#2), then attach the saved <b>.html file</b> (the file itself, not its folder) and extract — AI will process it.'
                     : '① 아래 #1 panelook.com 페이지로 접속해서(최신은 없을 수도 있음), 검색된 패널명 앞의 <b>"+"</b> 버튼을 눌러 추가한 뒤(이미 눌려져 있을 수도 있음), 페이지 오른쪽 상단 "Panel Compare" 상자의 <b>"compare"</b> 버튼을 클릭하세요.<br>&nbsp;&nbsp;→ "사람인지 확인" 슬라이드 캡차가 뜰 수 있는데, 사람만 통과할 수 있어 자동화할 수 없습니다.<br>&nbsp;&nbsp;→ 통과하면 스펙 비교 페이지로 이동합니다. 그 페이지에서 <b>Ctrl+S</b>를 눌러 <mark style="background:#ffe066; color:#7a5210; padding:0 3px; border-radius:3px;">"웹페이지,전부 HTML"</mark>으로 저장하세요.<br>② 아래 #2 버튼을 누른 뒤, 저장한 <b>.html 파일</b>(폴더 제외)을 첨부하여 추출하면, AI가 처리합니다.'}
             </div>
-            ${nasUrl ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="display:inline-block; margin-bottom:8px; color:#1f7a3d; font-weight:bold;">📄 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a><br>` : ''}
+            ${nasManyHtml ? `<div style="margin-bottom:8px;">${nasManyHtml}</div>`
+              : nasUrl ? `<a href="${escapeHtml(nasUrl)}" target="_blank" rel="noopener" title="${escapeHtml(nasHit.name)}" style="display:inline-block; margin-bottom:8px; color:#1f7a3d; font-weight:bold;">📄 ${_en ? 'Open NAS spec file' : 'NAS 사양서 열기'}</a><br>` : ''}
             <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 #1 panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
             <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model_display))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 #2 ${_en ? 'Attach the HTML file & extract with AI' : 'HTML 파일 첨부 후 AI로 추출'}</button>
         `;
