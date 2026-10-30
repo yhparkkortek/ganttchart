@@ -2092,7 +2092,7 @@
             : '';
 
         var revHtml = revs.length
-            ? '<table style="width:100%; font-size:11.5px; border-collapse:collapse;">'
+            ? '<table style="width:100%; font-size:11.5px; border-collapse:collapse; table-layout:fixed;">'
               + '<tr style="background:#f1f3f5; position:sticky; top:0;">'
               + '<th style="text-align:left; padding:5px 6px; width:56px;">REV</th>'
               + '<th style="text-align:left; padding:5px 6px;">' + _t('변경 내용', 'Description') + '</th>'
@@ -2104,22 +2104,25 @@
                        + '<td style="padding:4px 6px; font-weight:bold; color:' + (hit ? '#2b7a45' : '#1971c2') + '; white-space:nowrap;">'
                        + _esc(x.rev) + (hit ? ' ◀' : '') + '</td>'
                        + '<td style="padding:4px 6px; color:#444;">' + _esc(x.desc) + '</td>'
-                       + '<td style="padding:4px 6px; color:#666; white-space:nowrap;">' + _esc(x.by) + '</td>'
+                       + '<td style="padding:4px 6px; color:#666; overflow-wrap:anywhere;">' + _esc(x.by) + '</td>'
                        + '<td style="padding:4px 6px; color:#666; white-space:nowrap;">' + _esc(x.date) + '</td></tr>';
               }).join('') + '</table>'
             : '<div style="padding:12px; color:#888;">' + _t('이 도면에서 REVISIONS 표를 찾지 못했습니다.', 'No REVISIONS table found in this drawing.') + '</div>';
 
         var matHtml = (mat.rows && mat.rows.length)
-            ? '<table style="width:100%; font-size:11px; border-collapse:collapse;">'
+            // ⚠️ `table-layout:fixed` 가 없으면 nowrap 글자가 **옆 칸을 덮는다**(알람 도표와 같은 함정).
+            //    매트릭스는 칸 값이 길어서(부품번호·펌웨어) 실제로 겹쳐 읽을 수 없었다 — 2026-10-30.
+            //    칸 폭은 머리글 수로 고르게 나누고, 넘치는 글자는 **줄을 바꾼다**(잘라내면 PN 을 못 읽는다).
+            ? '<table style="width:100%; font-size:11px; border-collapse:collapse; table-layout:fixed;">'
               + '<tr style="background:#f1f3f5;">' + mat.headers.map(function (h) {
-                  return '<th style="text-align:left; padding:4px 5px; white-space:nowrap;">' + _esc(h) + '</th>';
+                  return '<th style="text-align:left; padding:4px 5px; overflow-wrap:anywhere; word-break:break-word;">' + _esc(h) + '</th>';
               }).join('') + '</tr>'
               + mat.rows.map(function (row) {
                   var hit = isMine(row[0]);
                   var ktk = /KORTEK/i.test(row.join(' '));
                   return '<tr style="border-bottom:1px solid #f1f3f5;' + (hit && ktk ? ' background:#eefbf1;' : (ktk ? ' background:#fcfdff;' : '')) + '">'
                        + row.map(function (c, ci) {
-                           return '<td style="padding:3px 5px; white-space:nowrap;' + (ci === 0 ? ' font-weight:bold; color:#1971c2;' : ' color:#444;') + '">'
+                           return '<td style="padding:3px 5px; overflow-wrap:anywhere; word-break:break-word;' + (ci === 0 ? ' font-weight:bold; color:#1971c2;' : ' color:#444;') + '">'
                                 + _esc(c) + '</td>';
                        }).join('') + '</tr>';
               }).join('') + '</table>'
