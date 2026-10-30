@@ -1513,6 +1513,16 @@
     //      1234570-revB (2).PDF · 1234571 UPPER DISPLAY REV E.pdf
     //    ⚠️ 리비전을 "숫자 바로 뒤 글자"로 잡으면 안 된다 — "1234571 UPPER DISPLAY REV E" 가 U 가 된다.
     //       REV 라는 말이 있으면 그걸 먼저 찾고, 없을 때만 "구분자 + 리비전 하나"로 본다.
+    // 📐 [2026-10-30, 사용자 지적] 파일명 리비전("REV J4")과 문서 안 REVISIONS 표 표기("J.4")가
+    //    서로 다른 모양이라 못 알아봤다 — 점을 지우지 말고 **문서 표기(점 있는 모양)로 통일**한다.
+    //    "J4"/"J.4"/"j 4" 전부 "J.4" 하나로 모여야 표·prodRev/agileRev 칸과 같은 모양으로 비교된다.
+    var _plNormRev = function (rv) {
+        var m = String(rv || '').toUpperCase().replace(/\s+/g, '').match(/^([A-Z])\.?(\d+)?$/);
+        if (!m) return String(rv || '').toUpperCase();
+        return m[2] ? (m[1] + '.' + m[2]) : m[1];
+    };
+    window._plNormRev = _plNormRev;
+
     window._plParseDocName = function (name) {
         var base = String(name || '').replace(/\.[A-Za-z0-9]{1,5}$/, '');   // 확장자
         base = base.replace(/\s*\(\d+\)\s*$/, '').trim();                   // (1) (2) 중복본 표시
@@ -1526,7 +1536,7 @@
             var mt = rest.match(/^[\s_-]+([A-Za-z](?:\.?\d+)?)\s*$/);       // "_H" / "-B" / "-A.2"
             if (mt) rev = mt[1];
         }
-        return { num: num, rev: rev.replace(/\./g, '').toUpperCase(), name: name };
+        return { num: num, rev: _plNormRev(rev), name: name };
     };
 
     /** 이 행이 가진 색인 번호들 — PN 칸의 7자리(여러 개일 수 있다) + KTK PN 6자리.
@@ -1574,7 +1584,7 @@
     /** 앞 숫자 규칙에 안 맞는 이름에서도 리비전만은 건져 본다 — "… rev K.pdf" / "…_REV J4.pdf" */
     var _plRevFromName = function (nm) {
         var m = String(nm || '').match(/rev\.?\s*([A-Za-z](?:\.?\d+)?)/i);
-        return m ? m[1].replace(/\./g, '').toUpperCase() : '';
+        return m ? _plNormRev(m[1]) : '';
     };
     window._plDocCount = function (r) { return window._plDocsOf(r).length; };
 
@@ -1635,7 +1645,7 @@
         // 지금 REV — 생산 REV 와 Agile REV 에서 글자를 뽑아 "현재" 표시를 단다(어느 도면이 지금 것인지가 제일 중요)
         var curRevs = [];
         [r.prodRev, r.agileRev].forEach(function (v) {
-            String(v || '').replace(/[A-Za-z](?:\.?\d+)?/g, function (m) { curRevs.push(m.replace(/\./g, '').toUpperCase()); return m; });
+            String(v || '').replace(/[A-Za-z](?:\.?\d+)?/g, function (m) { curRevs.push(_plNormRev(m)); return m; });
         });
         var list = mine.length
             ? mine.map(function (f) {
