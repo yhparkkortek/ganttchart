@@ -595,6 +595,36 @@
         if (fresh) { window._plData = fresh; window.plRender(); }
     };
 
+    // 🧹 [2026-10-30] 옛 "도면 분석 30개 항목"이 남긴 `dwg*` 칸을 걷어낸다.
+    //    그 기능은 지웠지만 이미 등록해 둔 값이 행에 남아 있었다(실측 1행 27칸). 사용자 요청으로 정리.
+    //    ⚠️ NAS/Drive 의 JSON 을 **스크립트로 직접 고치지 않는다** — 그 파일을 열어 둔 앱이 메모리의
+    //       옛 값으로 되돌려 쓴다(docs/doc-store.md 의 사진 이전 사고). 그래서 **앱이 스스로** 지운다.
+    //    지울 게 없으면 아무것도 저장하지 않으므로, 각자의 PC 에서 딱 한 번씩만 돈다.
+    window._plPurgeDwgFields = function (data) {
+        var d = data || window._plData;
+        if (!d || !Array.isArray(d.rows)) return 0;
+        var cells = 0, rows = 0;
+        d.rows.forEach(function (r) {
+            var hit = Object.keys(r).filter(function (k) { return k.indexOf('dwg') === 0; });
+            if (!hit.length) return;
+            rows++;
+            hit.forEach(function (k) { if (String(r[k] == null ? '' : r[k]).trim()) cells++; delete r[k]; });
+        });
+        // 변경 이력에도 그 칸을 가리키는 줄이 있으면 같이 뺀다(지금 파일엔 0건이지만 팀원 파일은 다를 수 있다).
+        if (Array.isArray(d.history)) {
+            var before = d.history.length;
+            d.history = d.history.filter(function (h) { return String(h && h.col || '').indexOf('dwg') !== 0; });
+            if (d.history.length !== before) cells += (before - d.history.length);
+        }
+        if (!rows && !cells) return 0;
+        _plPushHistory({ ktkPn: '-', desc: _t('도면분석 칸 정리', 'Removed drawing-analysis fields') }, 'no', rows + _t('행', ' rows'), _t('삭제됨', 'deleted'));
+        _persist();
+        if (window.plRender) window.plRender();
+        _toast('🧹 ' + _t('옛 도면분석 칸 ' + cells + '개를 지웠습니다(' + rows + '행).',
+                          'Removed ' + cells + ' leftover drawing-analysis value(s) from ' + rows + ' row(s).'), 'info', 7000);
+        return cells;
+    };
+
     window._plData = window._plData || window.ProjectList.load();
     var D = function () { window._plData = window._plData || { rows: [], history: [] }; return window._plData; };
     // 💾 저장 경로는 두 갈래다.
@@ -2406,6 +2436,8 @@
                     }
                 }
                 window._plLoadedAt = Date.now();
+                // 🧹 옛 도면분석 칸 정리 — 어느 경로로 들어온 자료든(NAS·Drive·로컬 캐시) 한 번 훑는다.
+                try { window._plPurgeDwgFields(); } catch (e) { console.warn('[Project list] dwg 정리 실패:', e && e.message); }
                 await window.plRefreshDocCache(true);                   // 📜 배지용 NAS 파일 목록
                 window.plRenderIfStale();
             } finally {
