@@ -826,6 +826,16 @@
             'as-tg-recv-label':        { ko:'👥 메신저 수신자',                   en:'👥 Messenger Recipients' },
             'as-tg-recv-sub':          { ko:'(Summary 멤버 자동 반영)',           en:'(Auto from Summary members)' },
             'as-tg-addr-guide':        { ko:'📋 텔레그램 ID는 주소록 탭에서 관리합니다.', en:'📋 Telegram IDs are managed in the Address Book tab.' },
+            // 📧➡️💬 [2026-11-02] 새 메일 → 텔레그램 알림
+            'as-mw-label':             { ko:'📧 새 메일 알림',                    en:'📧 New-mail alerts' },
+            'as-mw-sub':               { ko:'(그룹웨어 메일이 오면 텔레그램으로)', en:'(groupware mail → Telegram)' },
+            'as-mw-enabled-lbl':       { ko:'켜기 — 백엔드가 새 메일을 확인해 요약을 보냅니다',
+                                         en:'On — the backend checks for new mail and sends a digest' },
+            'as-mw-interval-lbl':      { ko:'확인 간격(분)',                      en:'Check every (min)' },
+            'as-mw-quiet-lbl':         { ko:'조용한 시간',                        en:'Quiet hours' },
+            'as-mw-test-btn':          { ko:'📨 지금 보내보기',                   en:'📨 Send now' },
+            'as-mw-note':              { ko:'조용한 시간에는 모아 뒀다가 끝나면 한 번에 보냅니다. 메일은 열지 않습니다(읽음 처리 방지). 자동알림·광고는 제외합니다. 깊은 요약은 AI 문답의 메일 표에서 🤖 칩으로 하세요.',
+                                         en:'Mail arriving in quiet hours is held and sent afterwards. Mail is never opened (so it stays unread). Auto-notifications and ads are skipped. For a deeper summary use the 🤖 chip on the mail table in AI Q&A.' },
             'as-modal-save-btn':       { ko:'저장',                               en:'Save' },
             'as-modal-close-btn':      { ko:'닫기',                               en:'Close' },
             // 💡 [2026-09-12 신규] "외부 도메인 발송 허용" 섹션 — sec-server/email/messenger처럼

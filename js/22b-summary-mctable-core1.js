@@ -870,6 +870,90 @@ window.sendTelegramAlarm = async function(message, opts = {}) {
     }
 };
 
+// ── 📧➡️💬 [2026-11-02 신규] 새 메일 → 텔레그램 알림 (설정은 백엔드가 들고 있다) ──────
+//  왜 백엔드인가: 브라우저가 꺼져 있어도 돌아야 "메일이 오면 알려준다"가 성립한다.
+//  그래서 이 화면은 **설정을 보여주고 저장만** 한다 — 판단·발송은 kortek_backend 의 루프.
+//  ⚠️ 백엔드가 꺼져 있으면 저장도 안 된다 — 조용히 넘어가지 말고 그 사실을 적는다.
+window._mwErrText = function (e) {
+    return (e && e.message === '__OUTDATED__')
+        ? window._t('백엔드가 구버전입니다 — kortek_backend 를 재시작해 주세요(이 기능이 아직 없는 빌드).',
+                        'Backend is outdated — please restart kortek_backend (this feature is not in that build).')
+        : window._t('로컬 백엔드(kortek_backend)가 꺼져 있습니다.', 'Local backend is not running.');
+};
+window.mwLoadConfig = async function () {
+    const $ = function (id) { return document.getElementById(id); };
+    if (!$('as-mw-enabled')) return;                 // 설정 모달이 아직 안 그려졌으면 패스
+    try {
+        const r = await fetch('http://127.0.0.1:5000/mail-watch/config');
+        //  404 = 백엔드는 켜져 있는데 **구버전**이다(이 기능이 없는 빌드). 꺼진 것과
+        //  구분해 말해야 사람이 무엇을 해야 할지 안다 — Notice 탭 'outdated'와 같은 처리.
+        if (r.status === 404) throw new Error('__OUTDATED__');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.message || 'load failed');
+        const c = d.config || {};
+        $('as-mw-enabled').checked = !!c.enabled;
+        $('as-mw-interval').value = c.intervalMin || 10;
+        $('as-mw-quiet-from').value = c.quietFrom || '22:00';
+        $('as-mw-quiet-to').value = c.quietTo || '07:30';
+        const msg = $('as-mw-msg');
+        if (msg) {
+            msg.style.color = c.lastError ? '#e67e22' : '#888';
+            msg.textContent = c.lastError
+                ? '⚠ ' + c.lastError
+                : (c.lastSentAt
+                    ? window._t('마지막 발송: ', 'Last sent: ') + String(c.lastSentAt).replace('T', ' ').slice(0, 16)
+                      + (d.quietNow ? window._t(' · 지금은 조용한 시간', ' · quiet hours now') : '')
+                    : (c.enabled ? window._t('켜져 있습니다 — 새 메일이 오면 보냅니다.', 'On — you will get new mail here.') : ''));
+        }
+    } catch (e) {
+        const msg = $('as-mw-msg');
+        if (msg) { msg.style.color = '#e67e22'; msg.textContent = '⚠ ' + window._mwErrText(e); }
+    }
+};
+window.mwSaveConfig = async function () {
+    const $ = function (id) { return document.getElementById(id); };
+    const msg = $('as-mw-msg');
+    const body = {
+        enabled: !!$('as-mw-enabled').checked,
+        intervalMin: parseInt($('as-mw-interval').value, 10) || 10,
+        quietFrom: $('as-mw-quiet-from').value || '22:00',
+        quietTo: $('as-mw-quiet-to').value || '07:30'
+    };
+    try {
+        const r = await fetch('http://127.0.0.1:5000/mail-watch/config', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        if (r.status === 404) throw new Error('__OUTDATED__');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.message || 'save failed');
+        if (msg) {
+            msg.style.color = '#27ae60';
+            msg.textContent = body.enabled
+                ? '✓ ' + window._t('켰습니다 — 지금 이후에 오는 메일부터 알립니다.',
+                                   'On — you will be notified about mail arriving from now on.')
+                : '✓ ' + window._t('껐습니다.', 'Off.');
+        }
+    } catch (e) {
+        if (msg) { msg.style.color = '#e67e22'; msg.textContent = '⚠ ' + window._mwErrText(e); }
+    }
+};
+window.mwTestNow = async function () {
+    const msg = document.getElementById('as-mw-msg');
+    if (msg) { msg.style.color = '#888'; msg.textContent = '⏳ ' + window._t('확인 중...', 'Checking...'); }
+    try {
+        const r = await fetch('http://127.0.0.1:5000/mail-watch/test', { method: 'POST' });
+        if (r.status === 404) throw new Error('__OUTDATED__');
+        const d = await r.json();
+        if (!msg) return;
+        if (d.ok && d.sent) { msg.style.color = '#27ae60'; msg.textContent = '✓ ' + window._t(d.sent + '건을 텔레그램으로 보냈습니다.', 'Sent ' + d.sent + ' mail(s) to Telegram.'); }
+        else if (d.ok && d.skipped === 'first-run') { msg.style.color = '#27ae60'; msg.textContent = '✓ ' + window._t('기준점을 잡았습니다 — 다음에 오는 메일부터 알립니다.', 'Baseline set — new mail from now on will be sent.'); }
+        else if (d.ok) { msg.style.color = '#888'; msg.textContent = window._t('새로 온 메일이 없습니다.', 'No new mail.'); }
+        else { msg.style.color = '#e67e22'; msg.textContent = '⚠ ' + (d.message || window._t('실패', 'failed')); }
+    } catch (e) {
+        if (msg) { msg.style.color = '#e67e22'; msg.textContent = '⚠ ' + window._mwErrText(e); }
+    }
+};
+
 // SMTP 서버에 저장 (즉시 적용)
 window.saveSmtpConfig = async function() {
     const cfg = {
@@ -1201,6 +1285,8 @@ window.openAlarmSettings = function() {
     //    ('block'으로 열면 CSS의 display:flex가 인라인 스타일에 덮여 무효화됨 — notice-modal과 동일 이슈)
     document.getElementById('alarm-settings-modal').style.display  = 'flex';
     window.bringModalToFront('alarm-settings-modal');
+    // 📧➡️💬 새 메일 알림 현재 상태(백엔드가 들고 있다)를 채운다 — 실패해도 모달은 열린 채로 둔다
+    if (window.mwLoadConfig) window.mwLoadConfig();
 };
 
 // 💡 [2026-08-31 신규] "이메일 수신자 선택"(기본수신 CC 명단)을 알람 설정 모달에서 빼서, 업무별

@@ -1484,7 +1484,213 @@ def _scheduler_loop():
             _sap_cleanup_daily_tick()
         except Exception as e:
             print(f"[SAP_DMS 자동정리 스케줄러 오류] {e}")
+        try:
+            _mail_watch_tick()
+        except Exception as e:
+            print(f"[메일 알림 스케줄러 오류] {e}")
         time.sleep(60)
+
+
+# ══════════════════════════════════════════════════════════════
+# 📧➡️💬 새 메일 → 텔레그램 알림 (2026-11-02, 사용자 요청)
+# ══════════════════════════════════════════════════════════════
+#  왜 백엔드인가: 브라우저가 꺼져 있어도 돌아야 "메일이 오면 알려준다"가 성립한다.
+#  이 프로세스는 PC 시작 시 자동 실행(최소화)되므로 여기가 유일하게 맞는 자리다.
+#
+#  ⚠️ 메일을 **열지 않는다** — 목록 조회(mail_recent)만 쓴다. 상세 조회는 서버가
+#     읽음 처리를 해 안읽음 배지를 줄인다(docs/mail-pipeline.md와 같은 원칙).
+#  ⚠️ **로그인을 시도하지 않는다** — 끊겨 있으면 그냥 건너뛴다. 백그라운드 루프가
+#     로그인을 반복하면 CAPTCHA가 뜨고 사내 계정이 잠긴다(docs/groupware.md).
+#     로그인은 사람이 앱에서 1회 하는 것이고, 그 가드는 프런트(_gwEnsureLogin)에 있다.
+#  ⚠️ 요약은 **AI 없이** 만든다. AI 키는 프런트에만 있고(무료 키는 하루 20회),
+#     메일마다 AI를 부르면 하루 한도를 알림이 다 먹는다. 제목+보낸이+발췌 한 줄이면
+#     "지금 봐야 하나"는 판단이 선다 — 깊은 요약은 앱에서 🤖 칩으로 한다.
+MAIL_WATCH_FILE = os.path.join(BASE_DIR, 'mail_watch_config.json')
+
+#  설정·상태 한 파일. 어휘·임계치는 전부 **데이터**다(코드에 박지 말 것 — CLAUDE.md).
+_MAIL_WATCH_DEFAULTS = {
+    'enabled':     False,
+    'intervalMin': 10,          # 폴링 간격(분)
+    'chatId':      '',          # 비우면 telegram_config.json 의 기본 Chat ID
+    'folder':      'Inbox',
+    'unreadOnly':  True,        # 이미 읽은 메일은 알릴 필요가 없다
+    'quietFrom':   '22:00',     # 조용한 시간 — 그동안은 **모아 뒀다가** 끝나면 한 번에 보낸다
+    'quietTo':     '07:30',
+    'maxPerMsg':   10,          # 한 번에 적을 최대 건수(나머지는 "외 N건")
+    'previewChars': 120,
+    # 자동알림·광고는 기본으로 뺀다. 제목/보낸이에 이 말이 있으면 안 보낸다.
+    'skipKeywords': ['스팸', 'Quota Warning', '광고', '[무료]', 'no-reply', 'noreply'],
+    # 상태(사람이 건드릴 것 아님)
+    'lastId':      0,
+    'lastSentAt':  '',
+    'lastError':   '',
+    'lastCheckAt': ''
+}
+
+
+def _mail_watch_load():
+    cfg = dict(_MAIL_WATCH_DEFAULTS)
+    try:
+        if os.path.exists(MAIL_WATCH_FILE):
+            with open(MAIL_WATCH_FILE, 'r', encoding='utf-8') as f:
+                cfg.update(json.load(f) or {})
+    except Exception as e:
+        print(f"[메일 알림] 설정 로드 실패: {e}")
+    return cfg
+
+
+def _mail_watch_save(cfg):
+    try:
+        with open(MAIL_WATCH_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"[메일 알림] 설정 저장 실패: {e}")
+        return False
+
+
+def _hhmm_to_min(s, fallback):
+    try:
+        h, m = str(s).split(':')
+        return int(h) * 60 + int(m)
+    except Exception:
+        return fallback
+
+
+def _mail_watch_is_quiet(cfg, now=None):
+    """조용한 시간인가. 22:00~07:30 처럼 **자정을 넘는** 구간을 그대로 받는다."""
+    now = now or datetime.now(KST)
+    cur = now.hour * 60 + now.minute
+    a = _hhmm_to_min(cfg.get('quietFrom'), 22 * 60)
+    b = _hhmm_to_min(cfg.get('quietTo'), 7 * 60 + 30)
+    if a == b:
+        return False                       # 같은 시각이면 조용한 시간 없음
+    return (cur >= a or cur < b) if a > b else (a <= cur < b)
+
+
+def _mail_watch_skip(m, cfg):
+    hay = (str(m.get('subject') or '') + ' ' + str(m.get('from') or '')).lower()
+    return any(str(k).lower() in hay for k in (cfg.get('skipKeywords') or []) if str(k).strip())
+
+
+def _mail_watch_digest(mails, cfg):
+    """텔레그램 본문(HTML). ⚠️ parse_mode=HTML 이라 escape 를 빼면 제목 하나로 반송된다."""
+    n = int(cfg.get('maxPerMsg') or 10)
+    pv = int(cfg.get('previewChars') or 120)
+    head = f"📧 <b>새 메일 {len(mails)}건</b> ({datetime.now(KST).strftime('%m-%d %H:%M')})"
+    lines = [head, '']
+    for i, m in enumerate(mails[:n], 1):
+        when = str(m.get('at') or '')[5:16].replace('T', ' ')
+        lines.append(f"{i}. <b>{html.escape(str(m.get('subject') or ''))}</b>")
+        lines.append(f"   {html.escape(str(m.get('from') or ''))} · {html.escape(when)}")
+        prev = str(m.get('preview') or '').strip()
+        if prev:
+            lines.append(f"   {html.escape(prev[:pv])}")
+    if len(mails) > n:
+        lines.append(f"… 외 {len(mails) - n}건")
+    return '\n'.join(lines)
+
+
+def _mail_watch_collect(cfg):
+    """새 메일 목록을 돌려준다. (mails, error) — 로그인 안 돼 있으면 (None, 사유)."""
+    try:
+        import gw_bridge
+    except Exception as e:
+        return None, f'gw_bridge 로드 실패: {e}'
+    try:
+        info = gw_bridge.session_info()
+    except Exception as e:
+        return None, f'그룹웨어 상태 확인 실패: {e}'
+    if not (info or {}).get('ok'):
+        # 로그인하지 않는다 — 사람이 앱에서 로그인할 때까지 조용히 건너뛴다.
+        return None, '그룹웨어 로그인 안 됨(앱에서 1회 로그인해 주세요)'
+    try:
+        yesterday = (datetime.now(KST) - timedelta(days=1)).strftime('%Y-%m-%d')
+        r = gw_bridge.mail_recent(date_from=yesterday,
+                                  folder=cfg.get('folder') or 'Inbox',
+                                  unread_only=bool(cfg.get('unreadOnly')),
+                                  limit=30)
+        return (r or {}).get('mails') or [], ''
+    except Exception as e:
+        return None, f'메일 조회 실패: {e}'
+
+
+def _mail_watch_tick(force=False):
+    """1분마다 불린다. 보낼 게 있으면 보내고 상태를 적는다. 반환값은 /mail-watch/test 용."""
+    cfg = _mail_watch_load()
+    if not force and not cfg.get('enabled'):
+        return {'ok': True, 'skipped': 'disabled'}
+    now = datetime.now(KST)
+    if not force:
+        if _mail_watch_is_quiet(cfg, now):
+            return {'ok': True, 'skipped': 'quiet'}     # 모아 뒀다가 조용한 시간이 끝나면 나간다
+        last = cfg.get('lastCheckAt') or ''
+        try:
+            if last and (now - datetime.fromisoformat(last)).total_seconds() < int(cfg.get('intervalMin') or 10) * 60:
+                return {'ok': True, 'skipped': 'interval'}
+        except Exception:
+            pass
+    cfg['lastCheckAt'] = now.isoformat()
+
+    mails, err = _mail_watch_collect(cfg)
+    if mails is None:
+        cfg['lastError'] = err
+        _mail_watch_save(cfg)
+        return {'ok': False, 'message': err}
+    cfg['lastError'] = ''
+
+    last_id = int(cfg.get('lastId') or 0)
+    fresh = [m for m in mails if int(m.get('id') or 0) > last_id and not _mail_watch_skip(m, cfg)]
+    top_id = max([int(m.get('id') or 0) for m in mails] + [last_id])
+
+    # 처음 켠 직후엔 **보내지 않는다** — 받은메일함에 쌓인 것이 한꺼번에 날아가면 알림이 아니라 소음이다.
+    if last_id == 0 and not force:
+        cfg['lastId'] = top_id
+        _mail_watch_save(cfg)
+        return {'ok': True, 'skipped': 'first-run', 'baseline': top_id}
+
+    if not fresh:
+        cfg['lastId'] = top_id
+        _mail_watch_save(cfg)
+        return {'ok': True, 'sent': 0}
+
+    res = send_telegram_msg(_mail_watch_digest(fresh, cfg), cfg.get('chatId') or None)
+    if not (res or {}).get('ok'):
+        cfg['lastError'] = f"텔레그램 발송 실패: {(res or {}).get('description') or (res or {}).get('error') or res}"
+        _mail_watch_save(cfg)       # lastId 는 **안 올린다** — 다음 틱에 다시 보낸다
+        return {'ok': False, 'message': cfg['lastError'], 'count': len(fresh)}
+    cfg['lastId'] = top_id
+    cfg['lastSentAt'] = now.isoformat()
+    _mail_watch_save(cfg)
+    print(f"[메일 알림] 새 메일 {len(fresh)}건 텔레그램 발송")
+    return {'ok': True, 'sent': len(fresh)}
+
+
+@app.route('/mail-watch/config', methods=['GET', 'POST'])
+def mail_watch_config_api():
+    """새 메일 → 텔레그램 알림 설정. GET 은 현재 값(+상태), POST 는 부분 수정."""
+    cfg = _mail_watch_load()
+    if request.method == 'GET':
+        return jsonify({'ok': True, 'config': cfg, 'quietNow': _mail_watch_is_quiet(cfg)})
+    body = request.get_json(force=True, silent=True) or {}
+    for k in ('enabled', 'intervalMin', 'chatId', 'folder', 'unreadOnly',
+              'quietFrom', 'quietTo', 'maxPerMsg', 'previewChars', 'skipKeywords'):
+        if k in body:
+            cfg[k] = body[k]
+    # 켜는 순간 기준점을 다시 잡는다 — 껐던 동안 쌓인 메일이 한꺼번에 나가지 않게.
+    if body.get('enabled') and not body.get('keepBaseline'):
+        cfg['lastId'] = 0
+    _mail_watch_save(cfg)
+    return jsonify({'ok': True, 'config': cfg})
+
+
+@app.route('/mail-watch/test', methods=['POST'])
+def mail_watch_test_api():
+    """지금 바로 한 번 돌린다(설정이 꺼져 있어도, 조용한 시간이어도). 설정 화면의 [지금 보내보기]."""
+    try:
+        return jsonify(_mail_watch_tick(force=True))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
 
 
 # ── 설정 암호화 (Google Drive 저장용) ────────────────────────

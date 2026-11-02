@@ -2,6 +2,7 @@
 mail_config.json
 telegram_config.json
 schedule_rules.json
+mail_watch_config.json
 google_service_account*.json
 .env
 
