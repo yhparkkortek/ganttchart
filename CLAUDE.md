@@ -371,6 +371,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 브라우저는 UNC를 못 읽는다 → **로컬 백엔드가 중계**(`C:\SAP_DMS` 패턴과 동일). 폴더 목록은 설정이라 새 분류는 이름만 추가
 - AI는 원본을 안 본다(`_pxExtractText`가 6만 자로 잘라 보냄) → 텍스트만 캐시하면 재분석·검색이 다 된다. 추출기는 `window._pxExtractText` **하나만** 쓸 것
 - `PANEL\` 은 **파일명이 곧 패널 PN** — 이름을 바꾸면 앱이 못 찾는다
+- **(2026-11-02) 팝업이 막히면 `_dsOpenInNewTab` 이 연결 프로그램으로 넘긴다**(`_dsOpenNative`) — 그전엔 `window.open` 이 null 을 줘도 "새 창에서 열었습니다"라고 하고 **아무 일도 안 났다**. ⚠️ 둘이 서로 부르면 무한 재귀라 폴백엔 `noTabFallback` 필수. 반환값(`true`=새 창)으로 부르는 쪽이 문구를 맞춘다 → `docs/doc-store.md`
 - **(2026-10-30) 파일 고르기·드래그는 무엇이든 받는다** — `accept` 는 앱 전체에서 비웠고, 못 읽는 파일은 **이유+해결방법**을 띄운다. 카탈로그는 `DOC_FILE_KINDS`(js/42, 데이터) 한 곳 — 확장자를 코드에 박지 말 것. 헬퍼: `_docKindOf`/`_docCanRead`/`_docReadHint`/`_docIsWorkbook`/`_docLooksBinary`. ⚠️ 모르는 확장자는 막지 말고 **내용을 보고** 판단(이진이면 AI 로 안 보냈다 — 할당량만 날렸다). AI 문답 첨부도 엑셀·HTML·텍스트까지 넓혔다
 - **(2026-10-30) 키워드로 걸리는 파일은 모두 보여준다** — `_dsFindPanelSpecAll`(전부), `_dsFindPanelSpecs`의 `_counts`(비교표 머리글 `📄N`), 2건 이상이면 공용 고르기 창을 `q` 채워 띄운다. 창 검색은 **글자 그대로 + 기호 뗀 모양** 둘 다(`_dsNameMatch`) — 하이픈 하나로 "있는 파일이 0건"이 났다
 - 메일은 `.eml` 통째로(본문+첨부). 키는 `fileName`, 훅은 `_tpAppendMailSignal` **한 곳만** 감쌀 것
@@ -445,7 +446,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ## 작업 팁
 
-- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`·`tests/bom-part-chips.browser.js` 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
+- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`(25건)·`tests/bom-part-chips.browser.js`(31건) 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
 - 특정 기능 수정 시 파일 맵에서 바로 지정. 못 찾겠으면 `grep -rn "함수명" js/`.
 - 민감 파일(`mail_config.json`, `telegram_config.json`, `schedule_rules.json`, `.env`)은 `.gitignore` — 로컬에만 존재.
 - 코드 주석의 `js/파일명.js:줄번호` 참조는 파일 이동/분리 시 같이 업데이트.

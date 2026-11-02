@@ -361,8 +361,10 @@
             fs.forEach(function (f) { hits.push({ folder: folders[i].folder, name: f.name }); });
         }
         if (hits.length === 1 && window._dsOpenInNewTab) {
-            window._dsOpenInNewTab(hits[0].folder, hits[0].name);
-            return { opened: true, hits: hits, searched: searched };
+            //  팝업이 막히면 `_dsOpenInNewTab` 이 연결 프로그램으로 넘기고 false 를 준다 —
+            //  "새 창에서 열었습니다"라고 **거짓말하지 않도록** 어디로 열렸는지 같이 돌려준다.
+            var viaTab = window._dsOpenInNewTab(hits[0].folder, hits[0].name);
+            return { opened: true, viaNative: !viaTab, hits: hits, searched: searched };
         }
         if (hits.length > 1 && window._dsOpenPicker) {
             // 여러 장이면 공용 고르기 창에 **검색어를 넣어** 걸린 파일 전부를 보여준다(js/48 와 같은 방식).

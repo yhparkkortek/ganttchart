@@ -4748,10 +4748,15 @@ ${docsJson}`;
                 try {
                     const _bpcR = await window._bomPartOpenSpec(_bpcRow);
                     if (_bpcR.opened) {
+                        //  어디로 열렸는지 그대로 쓴다 — 팝업이 막히면 연결 프로그램으로 넘어간다.
+                        const _bpcWhere = _bpcR.hits.length !== 1 ? ''
+                            : (_bpcR.viaNative ? window._t('을 연결 프로그램으로 열었습니다(팝업이 차단돼 있습니다).',
+                                                           ' opened with the local app (popups are blocked).')
+                                               : window._t('을 새 창에서 열었습니다.', ' opened in a new tab.'));
                         _bpcMsg = '📄 ' + window._t(_bpcName + ' — NAS 파일 ' + _bpcR.hits.length + '건'
-                                                    + (_bpcR.hits.length === 1 ? '을 새 창에서 열었습니다.' : ' 중에서 고르세요.'),
+                                                    + (_bpcR.hits.length === 1 ? _bpcWhere : ' 중에서 고르세요.'),
                                                     _bpcName + ' — ' + _bpcR.hits.length + ' file(s) on NAS'
-                                                    + (_bpcR.hits.length === 1 ? ' opened in a new tab.' : ' — pick one.'));
+                                                    + (_bpcR.hits.length === 1 ? _bpcWhere : ' — pick one.'));
                     } else {
                         // 조용히 0건으로 끝내지 않는다 — **어느 폴더를 뒤졌는지** 밝힌다.
                         _bpcMsg = 'ℹ️ ' + window._t('"' + _bpcName + '" 이(가) 들어간 파일을 NAS 에서 찾지 못했습니다.',

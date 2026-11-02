@@ -90,22 +90,50 @@ window._dsFileUrl = function (folder, name) {
     return DS + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name);
 };
 
-/** 브라우저에서 바로 열기(PDF 뷰어 등) — 받아서 여는 게 아니라 백엔드 URL을 그대로 연다 */
-window._dsOpenInNewTab = function (folder, name) {
-    window.open(window._dsFileUrl(folder, name), '_blank');
+/**
+ * 브라우저에서 바로 열기(PDF 뷰어 등) — 받아서 여는 게 아니라 백엔드 URL을 그대로 연다.
+ *
+ * ⚠️ [2026-11-02 사용자 요청] **팝업이 막히면 조용히 아무 일도 안 난다.** 부르는 쪽은
+ *    "열었습니다"라고 말해 놓고 화면엔 아무것도 없다(검증 중 실제로 그 상태를 봤다 —
+ *    파일 URL 은 200·PDF·1.8MB 로 멀쩡했는데 창만 안 떴다). 막히면 **연결 프로그램**으로 연다
+ *    (`_dsOpenNative`, 백엔드 os.startfile).
+ * ⚠️ `_dsOpenNative` 는 실패하면 다시 이 함수를 부른다 — 서로 부르면 **무한 재귀**다.
+ *    그래서 폴백으로 들어갈 땐 `noTabFallback` 을 달아 되돌아오지 못하게 한다.
+ *
+ * @returns {boolean} 새 창으로 열렸으면 true, 연결 프로그램으로 넘겼으면 false.
+ */
+window._dsOpenInNewTab = function (folder, name, opts) {
+    var w = null;
+    try { w = window.open(window._dsFileUrl(folder, name), '_blank'); } catch (e) { w = null; }
+    if (w) return true;
+    if (opts && opts.noNative) {
+        _toast(_t('팝업이 차단돼 파일을 열지 못했습니다 — 이 사이트의 팝업을 허용해 주세요.',
+                  'Popup blocked — please allow popups for this site.'), 'error', 7000);
+        return false;
+    }
+    if (window._dsOpenNative) window._dsOpenNative(folder, name, { noTabFallback: true });
+    return false;
 };
 
 /** NAS 원본을 **그 자리에서** 연결 프로그램(엑셀·PDF뷰어·아웃룩 등)으로 — 백엔드가 os.startfile로
  *  연다(다운로드 사본 없음, Windows 전용). 브라우저 새 탭은 "보기"만 되지만 이건 편집도 된다. */
-window._dsOpenNative = async function (folder, name) {
+window._dsOpenNative = async function (folder, name, opts) {
     try {
         await _api('/doc/open-native', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ folder: folder, name: name })
         });
+        return true;
     } catch (e) {
+        // ⚠️ 팝업이 막혀서 여기로 넘어온 경우엔 **새 탭으로 되돌리지 않는다**(서로 부르면 무한 재귀).
+        //    그때는 왜 못 열었는지만 정직하게 띄운다 — 조용히 끝내면 "눌렀는데 아무 일도 안 난다"가 된다.
+        if (opts && opts.noTabFallback) {
+            _toast('⚠️ ' + _t('팝업이 차단됐고 연결 프로그램으로도 열지 못했습니다: ',
+                               'Popup blocked and could not open with the local app: ') + e.message, 'error', 8000);
+            return false;
+        }
         _toast('⚠️ ' + e.message + ' — ' + _t('대신 새 탭에서 엽니다', 'opening in a new tab instead'), 'warning', 6000);
-        window._dsOpenInNewTab(folder, name);
+        return window._dsOpenInNewTab(folder, name, { noNative: true });
     }
 };
 

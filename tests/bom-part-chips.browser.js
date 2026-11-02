@@ -12,7 +12,9 @@
  *   · `fetch`                     — /sap-bom 은 가짜 BOM 텍스트, 그 밖의 주소는 **전부 차단**
  *                                   (차단해 둬야 칩을 눌러도 SAP·그룹웨어로 실제 요청이 안 간다)
  *   · `_dsList`                   — NAS 파일 목록(사양서 찾기 안쪽 코드는 진짜로 돈다)
- *   · `_dsOpenInNewTab`/`_dsOpenPicker` — 창을 띄우는 자리
+ *   · `window.open`/`_dsOpenNative`/`_dsOpenPicker` — 창을 띄우는 자리
+ *                                   (⚠️ `_dsOpenInNewTab` 은 **진짜**로 돌린다 — 팝업 차단 폴백이
+ *                                    거기 있어서, 그걸 가짜로 바꾸면 새 코드를 안 지나간다)
  *   · `_sapSelectMaterial`        — 기존 SAP 자재 메뉴(메뉴 자체는 js/04g 기존 기능)
  *   · `switchTab`/`plSearch`      — Project list 페이지
  *   · `navigator.clipboard.writeText`
@@ -58,17 +60,18 @@
 
     const orig = {
         fetch: window.fetch, hist: window._ganttQaHistory, dsList: window._dsList,
-        openTab: window._dsOpenInNewTab, picker: window._dsOpenPicker,
+        open: window.open, native: window._dsOpenNative, picker: window._dsOpenPicker,
         sap: window._sapSelectMaterial, tab: window.switchTab, plSearch: window.plSearch,
         clip: (navigator.clipboard && navigator.clipboard.writeText) || null
     };
     let bomCalls = 0, blocked = [], opened = null, picked = null, sapOpened = null,
-        plWanted = null, copied = null, clipOk = false;
+        plWanted = null, copied = null, clipOk = false,
+        popupBlocked = false, opens = 0, nativeCall = null;
 
     const seed = async () => {
         window._ganttQaHistory = [];
         bomCalls = 0; blocked = []; opened = null; picked = null;
-        sapOpened = null; plWanted = null; copied = null;
+        sapOpened = null; plWanted = null; copied = null; opens = 0; nativeCall = null;
         window._ganttQaPendingConfirmButtons = null;
         input.value = '999001 제품에 사용된 패널명 확인해줘';
         await window.sendGanttQaMessage();
@@ -93,7 +96,15 @@
             return { ok: true, json: async () => ({ ok: false, error: '(하네스: 네트워크 차단) ' + u }) };
         };
         window._dsList = async (folder) => ({ ok: true, files: NAS[folder] || [], dirs: [] });
-        window._dsOpenInNewTab = (f, n) => { opened = f + '/' + n; };
+        //  창을 띄우는 **바깥 경계**만 가짜 — `_dsOpenInNewTab` 자체는 진짜로 돌아야
+        //  팝업 차단 폴백(2026-11-02)이 검증된다. `popupBlocked` 로 차단을 재현한다.
+        window.open = (u) => {
+            opens++;
+            if (popupBlocked) return null;               // 크롬은 막히면 null 을 준다
+            opened = decodeURIComponent(String(u).replace(/^.*folder=/, '').replace(/&name=/, '/'));
+            return { focus: function () { /* 창 객체 흉내 */ } };
+        };
+        window._dsOpenNative = async (f, n, o) => { nativeCall = { f: f, n: n, o: o }; return true; };
         window._dsOpenPicker = (o) => { picked = o; };
         window._sapSelectMaterial = (m) => { sapOpened = m; };
         window.switchTab = () => {};
@@ -150,6 +161,28 @@
         ok(!!picked && picked.q === 'ZZ999PANEL-X9' && picked.folder === 'PARTS/PANEL',
            '여러 장이면 고르기 창을 띄운다', JSON.stringify(picked && picked.q));
 
+        // ③-b 팝업이 막혔을 때 — 조용히 아무 일도 안 나면 안 된다(2026-11-02 사용자 요청)
+        console.log('%c③-b 팝업 차단 → 연결 프로그램', 'font-weight:bold');
+        NAS['PARTS/PANEL'] = [{ name: 'ZZ999PANEL-X9_DATASHEET.pdf', mtime: '2026-10-01T00:00:00' }];
+        popupBlocked = true;
+        await seed(); await press(chip(clickRow(0), '__bomPartSpec__'));
+        ok(!!nativeCall && nativeCall.n === 'ZZ999PANEL-X9_DATASHEET.pdf',
+           '연결 프로그램으로 넘긴다', JSON.stringify(nativeCall && nativeCall.n));
+        ok(!!nativeCall && nativeCall.o && nativeCall.o.noTabFallback === true,
+           '되돌아오지 못하게 막는다(무한 재귀 방지)');
+        ok(/연결 프로그램|local app/.test(lastAi().text || ''),
+           '"새 창에서 열었다"고 거짓말하지 않는다', flat(lastAi().text));
+        // 팝업도 막히고 연결 프로그램도 실패하면 — 한 번만 시도하고 사유를 밝힌다
+        window._dsOpenNative = async () => { throw new Error('(하네스) 백엔드 꺼짐'); };
+        opens = 0;
+        let threw = null;
+        try { await window._dsOpenInNewTab('PARTS/PANEL', 'ZZ999PANEL-X9_DATASHEET.pdf'); }
+        catch (e) { threw = String(e); }
+        await new Promise(r => setTimeout(r, 300));
+        ok(opens === 1 && !threw, '둘 다 안 되면 한 번만 시도하고 멈춘다 (open ' + opens + '회)', threw);
+        window._dsOpenNative = async (f, n, o) => { nativeCall = { f: f, n: n, o: o }; return true; };
+        popupBlocked = false;
+
         // ④ 📋 복사 · 📒 Project list
         console.log('%c④ 복사 · Project list', 'font-weight:bold');
         await seed(); await press(chip(clickRow(0), '__bomPartCopy__'));
@@ -189,7 +222,7 @@
         fails++; console.error('❌ 하네스가 예외로 멈췄다:', e);
     } finally {
         window.fetch = orig.fetch; window._ganttQaHistory = orig.hist;
-        window._dsList = orig.dsList; window._dsOpenInNewTab = orig.openTab;
+        window._dsList = orig.dsList; window.open = orig.open; window._dsOpenNative = orig.native;
         window._dsOpenPicker = orig.picker; window._sapSelectMaterial = orig.sap;
         window.switchTab = orig.tab; window.plSearch = orig.plSearch;
         if (clipOk && orig.clip) { try { navigator.clipboard.writeText = orig.clip; } catch (e) { /* 되돌릴 수 없으면 둔다 */ } }
