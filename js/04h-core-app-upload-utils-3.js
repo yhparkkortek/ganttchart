@@ -2778,7 +2778,7 @@ ${docsJson}`;
                 let tcodeParam = 'auto', explosionParam = 'single', priceParam = '0', locParam = '0';
                 const bomKey = bomNums.slice().sort().join(',');
                 const resolvedOpts = window._ganttQaBomResolvedOptions;
-                let layoutParam = ''; // 🆕 비어있으면 백엔드가 기존 기본값(/STD_MC)을 그대로 씀
+                let layoutParam = ''; // 🆕 비어있으면 백엔드가 팀 표준 기본값(/KTK_LOC)을 그대로 씀(2026-11-02 — sap_bridge_32.py _BOM_LAYOUT_VARIANT)
                 if (resolvedOpts && resolvedOpts.materialsKey === bomKey) {
                     tcodeParam = resolvedOpts.useSingleTcode === true ? 'single' : (resolvedOpts.useSingleTcode === false ? 'multi' : 'auto');
                     explosionParam = resolvedOpts.explosion || 'single';

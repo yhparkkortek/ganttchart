@@ -1109,7 +1109,14 @@ def navigate_and_dump(tcode, save_dir=None):
 # ZPP038에도 이런 고정 레이아웃이 필요해지면, 그 화면에 맞는 전역 레이아웃 이름을 별도로
 # 확인해서 `_BOM_MULTI_LAYOUT_VARIANT` 같은 새 상수로 추가할 것 — 지금은 사용자가 실제로
 # 보여준 화면(ZPP033 단일 자재)만 커버함.
-_BOM_LAYOUT_VARIANT = '/STD_MC'  # 이 이름을 바꾸면 그 즉시 새 레이아웃이 강제 적용됨
+# 🆕 [2026-11-02 버그 수정, 사용자 제보 "BOM이 이상하게 정렬되어 있음"] `/STD_MC`는 2026-10-27에
+# 팀이 `/KTK_LOC`(EBORT 포함 + 정렬 없음, docs/sap-lookup.md "/KTK_LOC 레이아웃 신설" 절)로
+# 교체했는데, 이 백엔드 기본값만 안 바뀌어 있었다 — js/38(메인 BOM 탭·전자부품 BOM)은 매번
+# `/KTK_LOC`를 명시해서 보내 괜찮았지만, **레이아웃을 명시하지 않는 호출**(js/04h AI 문답이
+# BOM 옵션을 미리 안 물어본 경우, js/56 BOM 부품 찾기)은 이 상수로 조용히 폴백해 옛 `/STD_MC`
+# (EBORT 없음)를 계속 받고 있었다. 호출부를 전부 찾아 고치는 대신 **여기 하나만 바꾸면**
+# 레이아웃을 생략한 모든 단일 자재 조회가 팀 표준을 쓰게 된다.
+_BOM_LAYOUT_VARIANT = '/KTK_LOC'  # 이 이름을 바꾸면 그 즉시 새 레이아웃이 강제 적용됨
 
 
 def _sap_select_alv_layout(session, grid, variant_name):
