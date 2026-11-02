@@ -7863,11 +7863,18 @@ ${docsJson}`;
         }
 
         // 🔀🚫🤖 [2026-10-01 신규] BOM 비교 (CS14) — "자재1 자재2 BOM 비교"
-        // 🔎🚫🤖 [2026-11-02 신규, 사용자 요청] "501823 제품에 사용된 패널명 확인해줘"
+        // 🔎🚫🤖 [2026-11-02 신규, 사용자 요청] "999001 제품에 사용된 패널명 확인해줘"
         //    BOM 을 **다단계로** 전개해 그 종류의 부품만 집어 준다(AI 안 씀 — 자재그룹으로 가른다).
         //    ⚠️ BOM 전개 블록(_aiFetchSapContext 의 bomMatch)보다 **먼저** 와야 한다. 안 그러면
         //       494행짜리 BOM 전체가 AI 에게 넘어가고, 사람이 물은 한 줄은 그 안에 묻힌다.
-        const _bpKind = window._bomPartKindHit ? window._bomPartKindHit(question) : null;
+        let _bpKind = window._bomPartKindHit ? window._bomPartKindHit(question) : null;
+        //  🔤 [2026-11-02] 종류 어휘에 없으면 **내역 구분자 이름**으로도 받는다 — 사람이 실제로
+        //     쓰는 말이 그쪽이다("HN VBY1 명 확인해줘"). 어휘를 박지 않고 기존 카탈로그
+        //     `MATGROUP_NAME_POS`(구분자 860개)를 그대로 쓴다.
+        if (!_bpKind && window._bomSepHit) {
+            const _bpSep = window._bomSepHit(question);
+            if (_bpSep) _bpKind = window._bomSepKind(_bpSep);
+        }
         const _bpIntent = window._sapCapKwHit ? window._sapCapKwHit(question, 'bom_part') : false;
         const _bpMat = (_bpKind && _bpIntent) ? ((question.match(/\b\d{5,8}\b/) || [])[0] || '') : '';
         if (_bpKind && _bpIntent && _bpMat) {

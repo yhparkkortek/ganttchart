@@ -82,6 +82,63 @@
     //      한 쪽을 찍었다가 `RFT/S` 가 모델명 대신 `4M 여부`(`-`)를 이름이라고 내놓았다.
     window.MATGROUP_NAME_POS = window.MATGROUP_NAME_POS || {"ABS":-1,"ABS+GF20":-1,"ACQ AD BD":0,"AD BD":1,"AD CONV":2,"ADAPTOR":1,"ADHESIVE TAPE":6,"AL/COIL":-1,"AL/SHEET":-1,"ANT/S":-1,"ARCADE":0,"ASA":-1,"ATC":0,"ATC-S":0,"ATM":0,"ATM-C":0,"AUDIO AMP":3,"AUDIO PROCESSOR":2,"AVIONICS AD BD":0,"B/CVR":-1,"BACK ASSY":-1,"BACK ASSY(D)":-1,"BACK ASSY(E)":-1,"BACK ASSY(M)":-1,"BACK ASSY(P)":-1,"BACK MOD(D)":-1,"BACK MOD(E)":-1,"BACK MOD(M)":-1,"BACK MOD(P)":-1,"BACK(D)":3,"BACK(E)":3,"BACK(M)":3,"BACK(P)":3,"BACK(P)_MP":1,"BACK_PL(D)":3,"BACK_PL(E)":3,"BACK_PL(M)":3,"BACK_PL(P)":3,"BACK_PL(P)_MP":1,"BACK_SUB(D)":3,"BACK_SUB(E)":3,"BACK_SUB(M)":3,"BACK_SUB(P)":3,"BACK_SUB(P)_MP":1,"BADGE":3,"BAG":-1,"BASE(D)":3,"BASE(E)":3,"BASE(M)":3,"BASE(P)":3,"BASE(P)_MP":1,"BATT":-1,"BATT HOLDER":3,"BD REWORK":1,"BEAD":3,"BEAD DIP":3,"BEAD SMD":0,"BIMETAL":1,"BKT":-1,"BKT ASSY":-1,"BKT BASE":-1,"BKT CHASSIS":-1,"BKT CLAMP":-1,"BKT CORNER":-1,"BKT COVER":-1,"BKT CTRL":-1,"BKT GLASS":-1,"BKT HANDLE":-1,"BKT HINGE":-1,"BKT INV":-1,"BKT JACK":-1,"BKT KEY":-1,"BKT LINK":-1,"BKT MOD":-1,"BKT MOUNT":-1,"BKT MOUNT_MP":-1,"BKT PANEL":-1,"BKT PC":-1,"BKT PCB":-1,"BKT PCB_MP":-1,"BKT PSU":-1,"BKT SUB":-1,"BKT SUB(M)_MP":-1,"BKT SUB_MP":-1,"BKT WALL":-1,"BLU CCFL ASSY":0,"BLU CUSTOM ASSY":-1,"BLU LED ASSY":-1,"BLU SUB MATERIAL":0,"BM":1,"BM CS":-1,"BONDING":2,"BOX ACC":-1,"BOX ANGLE":-1,"BOX CAP":-1,"BOX CTN":-1,"BOX SYS":-1,"BTM_COVER(D)":3,"BTM_COVER(E)":3,"BTM_COVER(M)":3,"BTM_COVER(P)":3,"BTM_COVER(P)_MP":1,"BTN":0,"BTN DECK":0,"BTN-C":0,"BTN-P":0,"BUFFER":0,"BUSHING":1,"BUTTON(M)":-1,"BUZZER":2,"C/BTM ASSY":-1,"C/BTM MOD":-1,"C/BTM(D)":3,"C/BTM(E)":3,"C/BTM(M)":3,"C/BTM(P)":3,"C/BTM(P)_MP":1,"C/TOP ASSY":-1,"C/TOP MOD":-1,"C/TOP(D)":3,"C/TOP(E)":3,"C/TOP(M)":3,"C/TOP(P)":3,"C/TOP(P)_MP":1,"CABLE TIE":-1,"CAM MOD":1,"CAP":4,"CAP DIP":4,"CAP DIP EL":0,"CAP DIP POLY":0,"CAP SMD":4,"CAP SMD EL":0,"CAP SMD POLY":0,"CAP SMD TANTAL":0,"CB ANTENA":1,"CB BNC":2,"CB DP":2,"CB DP+DVI":2,"CB DP+VGA":2,"CB DSUB":3,"CB DVI":4,"CB DVI+HDMI":2,"CB DVI+VGA":2,"CB HDMI":3,"CB LAN":2,"CB STEREO":3,"CB USB":9,"CB VGA":3,"CBN BTN":0,"CBN SUB":0,"CBN WRAP":0,"CBN-G":0,"CBN-L":0,"CD":-1,"CHARGER":1,"CLAMP CABLE":-1,"CLAMP PCB SUPPORT":-1,"CLINCH NUT":-1,"CLINICAL →CR":0,"CLK DRV":2,"CLK SYNTH":2,"CLUSTER CENTER FASCIA → CAR":0,"CNV/INV":0,"CON":2,"CON AN":3,"CON HOU":2,"CON SR":2,"CONV":1,"CONV SIG":0,"CORE CLIP":0,"CORE RING":0,"COVER MOD":-1,"COVER(D)":3,"COVER(E)":3,"COVER(M)":3,"COVER(P)":3,"COVER(P)_MP":1,"CPS/S":-1,"CPU DUAL":1,"CRT":0,"CTRL MOD/HOU":1,"CUSHION(EPS)":-1,"CUSHION(PE FOAM)":-1,"CVR":-1,"CVR2":-1,"CVT C/S (D)":-1,"CVT C/S (E)":-1,"CVT C/S (M)":-1,"CVT C/S (P)":-1,"CVT C/S MOD":-1,"D-BLU":-1,"D/CVR":-1,"DA CONV":2,"DANPLA":-1,"DB ASSY":0,"DBEF":-1,"DC CORD":0,"DDC MANAGER":0,"DDR":0,"DDR2":0,"DDR3":0,"DDR4":0,"DEBUG BD":0,"DECAL":3,"DELETE":-1,"DEMUX(IO-EXTENDER)":2,"DFF/P":-1,"DFF/S":-1,"DIAGNOSTIC →DN":0,"DIFF ASSY":-1,"DIFF. RX":1,"DIFFUSION(M)":-1,"DIODE":3,"DIODE DIP":3,"DIODE DIP TVS":7,"DIODE SMD":2,"DIODE SMD SCH":2,"DIODE SMD TVS":3,"DIODE SMD ZENER":3,"DIODE TVS":7,"DIODE ZEN":3,"DIV ASSY":1,"DIV MOD/HOU":1,"DOUBLE TAPE":6,"DP CONV":1,"E-BLU":-1,"EDGE BOX":0,"EEPROM":2,"EMI TAPE":-1,"EPROM":2,"ETC":0,"ETC PART":0,"EXT BD ASSY":0,"FAN":0,"FAN ASSY":0,"FET":3,"FIFO":3,"FLEX DISPLAY":0,"FLT":2,"FLT DIP":0,"FLT SMD":2,"FOAM TAPE":6,"FOAM TAPE ASSY":4,"FOG":0,"FOG ASSY":0,"FOG CURVED":0,"FOG DB":0,"FOG FFS":0,"FOG IPS":0,"FOG KTMP":0,"FOG KTTP":0,"FOG PLS":0,"FOG RESIZED":0,"FOG TN":0,"FOG VA":0,"FPCB":0,"FPCB BD":0,"FPD":0,"FPGA":2,"FRAME ASSY":2,"FRAME ASSY(D)":-1,"FRAME ASSY(M)":-1,"FRAME ASSY(P)":-1,"FRAME MOD(D)":-1,"FRAME MOD(E)":-1,"FRAME MOD(M)":-1,"FRAME MOD(P)":-1,"FRAME(D)":3,"FRAME(E)":3,"FRAME(M)":3,"FRAME(M)_MP":-1,"FRAME(P)":3,"FRAME(P)_MP":1,"FRC BD":0,"FRM":-1,"FRONT ASSY":-1,"FRONT ASSY(D)":-1,"FRONT ASSY(E)":-1,"FRONT ASSY(M)":-1,"FRONT ASSY(P)":-1,"FRONT MOD(D)":-1,"FRONT MOD(E)":-1,"FRONT MOD(M)":-1,"FRONT MOD(P)":-1,"FRONT(D)":3,"FRONT(E)":3,"FRONT(M)":3,"FRONT(P)":3,"FRONT(P)_MP":1,"FRT/PART":-1,"FUSE":-1,"FUSE DIP":0,"FUSE HOLDER":1,"FUSE SMD":3,"FUSE/BREAKER":0,"G/PNL ASSY":-1,"G/PNL MOD":-1,"G/PNL MOD(M)_MP":-1,"G/PNL(D)":3,"G/PNL(E)":3,"G/PNL(M)":3,"G/PNL(P)":3,"GAME AS":-1,"GAME CS":-1,"GAME CS → GAME SET CS":-1,"GASKET EMI":7,"GENDER BD":-1,"GENERAL AD BD":0,"GENESIS WFRC BD":0,"GENESIS WOFRC BD":0,"GLASS CHEM":-1,"GLASS EMI FLT":2,"GLASS NON":-1,"GLASS SEMI":-1,"GLASS TEMP":-1,"GUIDE(M)":-1,"HANDLE(D)":3,"HANDLE(M)":3,"HDD SATA":1,"HDMI DUST CAP":0,"HDMI EXPANDER":2,"HDMI RX":1,"HDMI SWC":2,"HDMI TX":1,"HEAT SINK":-1,"HLD":-1,"HMI EV":0,"HN AC":-1,"HN ACIO":-1,"HN AD_PWR":-1,"HN BTB":-1,"HN BTW":-1,"HN FFC":-1,"HN INV":-1,"HN LVDS":-1,"HN MULTI":-1,"HN VBY1":-1,"HN WIRE":-1,"I/S PROCESS":-1,"I2C DRV":2,"IC SOCKET":1,"IC_A-AMP":3,"IC_A-PRO":2,"IC_ADC":2,"IC_CLOCK":2,"IC_CTRL":3,"IC_DAC":2,"IC_DIFRX":1,"IC_DPCNV":1,"IC_EPROM":2,"IC_EXPAN":2,"IC_FPGA":2,"IC_FRAM":3,"IC_HDMRX":1,"IC_HDMSW":2,"IC_HDMTX":1,"IC_HDSDI":7,"IC_LAN":1,"IC_LEDRV":2,"IC_LINEDRV":2,"IC_LINEQ":2,"IC_LOGIC":3,"IC_MICOM":2,"IC_OPAMP":2,"IC_PHOTO":3,"IC_PMIC":2,"IC_PROSR":2,"IC_PWRSW":3,"IC_RAM":3,"IC_REG":4,"IC_RESET":2,"IC_RS232":3,"IC_RS485":3,"IC_RTC":2,"IC_SCALR":1,"IC_SHUNT":1,"IC_SWC":3,"IC_TCH":3,"IC_TIMER":2,"IC_UART":2,"IC_USBCT":2,"IC_V-AMP":2,"IC_V-CNV":2,"IC_V-MUX":2,"IC_V-SNC":1,"IC_VIDEO COMP":2,"IDB":0,"IFP AD BD":0,"IFPD":0,"IGS":0,"INDU":4,"INDU DIP":4,"INDU SMD":0,"INNER BOX":-1,"INSERT":-1,"INSULATE(M)":-1,"INSULATOR":7,"INTERFACE BD":0,"INV":1,"IO EXPANDER":2,"IO SWITCHER ASSY":0,"IO SWITCHER BD":-1,"IR CAP":3,"IR RX":1,"IRIS ASSY":-1,"IRX ASSY":0,"IRX CONTR BD":-1,"IT MONITOR":0,"IWB AD BD":0,"JACK BD":0,"JACK BNC":4,"JACK COUPLER":2,"JACK D-SUB":4,"JACK DC":3,"JACK DIN":4,"JACK DP":3,"JACK DVI":4,"JACK HDMI":5,"JACK MULTI":2,"JACK PHONE":4,"JACK PUSH TML":3,"JACK RCA":3,"JACK RJ11":2,"JACK RJ45":3,"JACK SCSI":3,"JACK USB":9,"JACK VGA":3,"JIG BACK LIGHT":0,"JIG BTN":0,"JIG TSP → JIG":0,"JOYSTICK BD":-1,"KBD":0,"KD LCM":0,"KD OCM":-1,"KD OTM":-1,"KD-LCM":0,"KD-OCM":0,"KD-OSM":0,"KD-OTM":0,"KE LCM":0,"KE-LCM":0,"KNOB":3,"LABEL PLATE":-1,"LABEL STICKER":-1,"LAN CARD":0,"LAN CONTR":1,"LCM":0,"LCM 3D":0,"LCM ASSY CURVED":0,"LCM ASSY KTMP":0,"LCM ASSY KTTM":0,"LCM ASSY KTTP":0,"LCM ASSY MLD":0,"LCM ASSY RESIZED":0,"LCM ASSY STD":0,"LCM DB":0,"LCM FFS":0,"LCM IPS":0,"LCM PLS":0,"LCM TN":0,"LCM VA":0,"LCM+TSP ASSY":0,"LED":-1,"LED ACCESSARY":-1,"LED ASSY":0,"LED BD":-1,"LED DIP":4,"LED DISPLAY CS":-1,"LED DRV":2,"LED KIT":0,"LED MOD":1,"LED MOD/HOU":1,"LED PIPE(M)":3,"LED SMD":3,"LED-ASM":-1,"LED-MD":0,"LED-OD":0,"LED-SUB":-1,"LED/ARR":0,"LED/ARR ASSY":-1,"LED/HSG ASSY":-1,"LED/HSG MOD":-1,"LED/HSG(D)":3,"LED/HSG(E)":3,"LED/HSG(M)":3,"LED/HSG(P)":3,"LEDIS":-1,"LENS":-1,"LEVER(M)":-1,"LGP":3,"LGP ASSY":-1,"LGP MOD":-1,"LICENSE KEY":-1,"LINE EQ":2,"LOGIC":3,"LOT":0,"M-SCREW":-1,"M-TAP SCREW":-1,"MAGNET":-1,"MAIN BD":-1,"MANGANESE BATT":0,"MANUAL":-1,"MASK FILM":-1,"MB":1,"MED AS":-1,"MED CS":-1,"MEMBRANE SWC":1,"MEMORY STICK BD":-1,"MIC":1,"MIC ASSY":0,"MICOM":2,"MILITARY → MIL":0,"MLCC":4,"MLF":-1,"MNT":0,"MNT ASSY BTN":0,"MNT ASSY MVD":0,"MNT ASSY MVD-C":0,"MNT ASSY PTD":0,"MNT ASSY TVD":0,"MNT ASSY TVD-C":0,"MNT WFRC BD":0,"MNT WOFRC BD":0,"MONITOR AD BD":0,"MOUNT STAND":1,"MOUNT WALL → MOUNT":3,"MOUNT(D)":3,"MOUNT(E)":3,"MOUNT(M)":3,"MOUNT(P)":3,"MOUNT(P)_MP":1,"MPPO":-1,"MSTAR WFRC BD":0,"MSTAR WOFRC BD":0,"MULTI AD BD":0,"MVD":0,"MVD-C":0,"MVD-E":0,"MVD-P":0,"NAND FLASH":3,"NOISE FLT":2,"NOR FLASH":0,"NOVATEK WFRC BD":0,"NOVATEK WOFRC BD":0,"NUT":-1,"O/S PROCESS":-1,"OBM":0,"OCM/C":-1,"OD":0,"OLD":-1,"OLED":0,"OLED ASSY STD":0,"OP AMP":2,"OPTICAL FILM LAMI":-1,"OPTICAL FLT":3,"OPTICAL GLASS":0,"OPTICAL GLASS ASSY":-1,"OPTICAL SHEET":-1,"OS LICENSE LABEL":0,"OSC":3,"OSC DIP":3,"OSD BD":0,"OSD SMD":3,"P-CON":0,"P-CORD":3,"P-SOCKET":0,"PACKING ASSY":-1,"PAD":-1,"PAD THERMAL":-1,"PALLET":-1,"PAPER CARD":-1,"PAPER PRINT":-1,"PATIENT MONITOR":0,"PBA-AD":1,"PBA-B":1,"PBA-CNV":1,"PBA-FRC":1,"PBA-LED":-1,"PBA-M":1,"PBA-OSD":-1,"PBA-S":-1,"PBA-T":0,"PBM AD":1,"PBM FRC":1,"PBM OSD":1,"PBM PDLC":1,"PBM SUB":1,"PBM TCH-CAM":1,"PBM TCH-CON":1,"PBM TCON":1,"PC":1,"PC ASSY":0,"PC+GF10":-1,"PC+GF20":-1,"PC/ABS":-1,"PCB JIG":0,"PCB MAIN":0,"PCB OSD":0,"PCB PWR":0,"PCB SUB":0,"PCB SUPPORT":7,"PCB TCH":0,"PCB USB":0,"PCM/COIL":-1,"PCM/SHEET":-1,"PD AS":-1,"PD CS":-1,"PDP":0,"PDP BUFFER PBM":0,"PDP IMG PBM":0,"PDP LOGIC PBM":0,"PDP MAIN PBM":0,"PDP MAIN+BUFFER PBM":0,"PDP PBM":0,"PDP POWER PBM":0,"PDP SKD PBM":0,"PDP → PDP SET":0,"PEN":-1,"PHOTOCOUPLER":3,"PIXELWORKS WFRC BD":0,"PIXELWORKS WOFRC BD":0,"PLD":2,"PODIUM":0,"PODIUM AD BD":0,"POLARIZER":4,"POLYSW":4,"POLYSW SMD":4,"POM":-1,"POM+GF20":-1,"POTENTIOMETER":1,"PPE/PS+GF10":-1,"PROCESSOR":2,"PROM":2,"PROTECTION FILM":-1,"PROTECTION WRAP":0,"PRS/S":-1,"PS_PART":3,"PTD":0,"PWR ASSY":0,"PWR BD":-1,"RACK(M)":-1,"RAM MOD":3,"REALTEK WFRC BD":0,"REALTEK WOFRC BD":0,"REG":0,"REG BOOST":0,"REG BUCK":4,"REG INVERT":3,"REG PMIC":2,"RELAY":1,"REMOCON":1,"RES":5,"RES DIP":5,"RES DIP AR":0,"RES MOR":0,"RES SMD":4,"RES SMD AR":4,"RES VR":0,"RES WIRE WOUND":0,"RESET IC":2,"RESIZED":0,"RESONATOR DIP":2,"RFT/S":-1,"RIVET":-1,"RS232DRV":3,"RS485DRV":3,"RTC":2,"RTC BATT":-1,"RUBBER":-1,"RUGGED COMM":0,"S/BAR(E)":-1,"S/BAR(P)":-1,"S/RFT":2,"SAMPLE 사용금지]":-1,"SCREW MACHINE":-1,"SCREW SPECIAL":-1,"SCREW TAPPING":-1,"SCREW TAPTITE":-1,"SDRAM":3,"SECC/COIL":-1,"SECC/SHEET":-1,"SENSOR AMB":1,"SENSOR BD":0,"SENSOR GYRO":1,"SENSOR IMG":1,"SENSOR MAG":1,"SENSOR TCH":1,"SENSOR TMP":1,"SENSOR TOF":1,"SERVICE":-1,"SGCC/COIL":-1,"SGCC/SHEET":-1,"SGI AD BD":0,"SHD":-1,"SILICAGEL":0,"SKD-ETC":-1,"SMPS":2,"SMPS MOD":0,"SMPS O/F(OPEN FRAME)":2,"SMT NUT":0,"SOFTWARE":1,"SPCC/COIL":-1,"SPCC/SHEET":-1,"SPEAKER":0,"SPEAKER ASSY":0,"SPECIAL AD BD":0,"SPECIAL SCREW":-1,"SPRING":6,"SPT/P":3,"SRAM":3,"SRC C/S MOD":-1,"SRC C/S(D)":-1,"SRC C/S(E)":-1,"SRC C/S(M)":-1,"SRC C/S(P)":-1,"SSD":0,"STAND MOD(D)":-1,"STAND MOD(E)":-1,"STAND MOD(M)":-1,"STAND MOD(P)":-1,"STAND OFF":-1,"STAND(D)":3,"STAND(E)":3,"STAND(M)":3,"STAND(P)":3,"STAND(P)_MP":1,"STFN(D)":3,"STFN(E)":3,"STFN(M)":3,"STFN(P)":3,"STIFFENER(P)_MP":1,"STS/COIL":-1,"STS/SHEET":-1,"STUD":-1,"SUB":0,"SUB BD":-1,"SUB MATERIAL":0,"SUB WORKING":0,"SUB(D)":3,"SUB(E)":3,"SUB(M)":3,"SUB(P)":3,"SUB(P)_MP":1,"SUB-P":0,"SUB-SG":0,"SUBSTRATE FILM":-1,"SURGICAL →SG":0,"SW/PUSH-BTN":0,"SWC ANALOG":3,"SWC BUS":0,"SWC DIP":1,"SWC MICRO":1,"SWC POWER":0,"SWC PUSH-BTN":1,"SWC ROTARY":1,"SWC SLIDE":1,"SWC TACT":1,"SWC USB PWR":3,"SYSTEM TMR":2,"T-CON C/S MOD":-1,"T-CON C/S(D)":-1,"T-CON C/S(E)":-1,"T-CON C/S(M)":-1,"T-CON C/S(P)":-1,"T-UPDATE TOOL → UPDATE TOOL":0,"T/CVR":-1,"TABLE TCH AD BD":0,"TABLE TOUCH → TABLE":0,"TAPE EMI":6,"TAPE THERMAL":6,"TAPPING SCREW":-1,"TCD":0,"TCH IC":3,"THERMAL PAD":-1,"THERMAL TAPE":6,"THERMISTOR":3,"TOP DISPLAY → MRI":0,"TOP_COVER(D)":3,"TOP_COVER(E)":3,"TOP_COVER(M)":3,"TOP_COVER(P)":3,"TOP_COVER(P)_MP":1,"TPR":0,"TPR-P":0,"TPR-S":0,"TPU":-1,"TR":4,"TRANS":1,"TSP ACTUATOR":1,"TSP ACTUATOR ASSY":0,"TSP CAM":2,"TSP CAM ASSY":3,"TSP CAP":1,"TSP CAP ASSY":0,"TSP CURVED":1,"TSP CURVED ASSY":0,"TSP INF":1,"TSP INF ASSY":0,"TSP MCT":0,"TSP MCT ASSY":0,"TSP OPT":1,"TSP OPT ASSY":0,"TSP PCT":1,"TSP PCT ASSY":0,"TSP PCT TSB":1,"TSP RES":1,"TSP RES ASSY":0,"TSP SAW":1,"TSP SAW ASSY":0,"TUBE":0,"TUNER":1,"TV AD BD":0,"TVD":0,"TVD-C":0,"TVD-P":0,"UART":2,"UGA":0,"UGA 1.2":0,"UGA 2.0":0,"US":0,"US AD BD":0,"US CTRL →USCP":0,"US HCU":0,"US I/O BOX":0,"USB BD":-1,"USB CONTR":2,"VARISTOR":2,"VARISTOR DIP":2,"VARISTOR SMD":1,"VGA CARD":1,"VIDEO AMP":2,"VIDEO COMP":2,"VIDEO DECODER → IC_V-DEC":2,"VIDEO ENCODER":0,"VIDEO EQ":2,"VIDEO HD SDI":7,"VIDEO LVDS":2,"VIDEO MUX":2,"VIDEO OSD":2,"VIDEO RAM":3,"VIDEO SCALER":1,"VIDEO SYNC":1,"VIDEOWALL → VW":0,"WASHER":-1,"WIN":-1,"WIRELESS MOD":0,"WOODEN BOX":-1,"WRAP(D)":3,"WRAP(E)":3,"WRAP(M)":3,"WRAP(P)":3,"WRAPPER(P)_MP":1,"X-TAL":5,"X-TAL DIP":5,"X-TAL SMD":4,"개발용 신규 DISPLAY":-1,"개발용 신규 기구자재":-1,"개발용 신규 전장자재":-1,"개발용 신규 포장자재":-1,"개발용 신규 회로자재":-1};
 
+    // ── 데이터 ③ 구분자 이름으로 바로 물을 때 ─────────────────────────────────
+    //  사용자 실제 질문(2026-11-02): "999001 제품에 사용된 **HN VBY1** 명 확인해줘".
+    //  `HN VBY1` 은 부품 **종류**가 아니라 내역 **구분자**다. kw 에 없어서 이 기능이 안 걸렸고,
+    //  질문이 SAP 일반 경로로 새서 494행 BOM 이 통째로 AI 에게 갈 뻔했다.
+    //  → 어휘를 한 줄 더 박지 않는다. **이미 데이터로 있는 구분자 860개**(MATGROUP_NAME_POS 의 키)를
+    //    그대로 어휘로 쓴다. 사내에서 부품을 부르는 말이 원래 이것이다.
+    //  ⚠️ 짧은 키(`PC`·`SUB`·`BM`·`ETC`)는 아무 문장에나 걸린다 — 길이 하한 + 앞뒤가 영숫자면 제외
+    //     (js/55 에서 `654321` 이 `1654321` 안에 걸려 남의 도면을 끌어온 것과 같은 가드).
+    window.BOM_SEP_MIN = window.BOM_SEP_MIN || 4;
+    //  부품 이름이 될 수 없는 구분자(표에는 있지만 공정·관리용) — 데이터.
+    window.BOM_SEP_STOPWORDS = window.BOM_SEP_STOPWORDS || [
+        'DELETE', 'SERVICE', 'ETC', 'ETC PART', 'OLD', 'SUB WORKING', 'I/S PROCESS',
+        'O/S PROCESS', 'LICENSE KEY', 'SOFTWARE', 'BD REWORK', 'SAMPLE 사용금지]'
+    ];
+
+    /** 질문 안의 **구분자 이름**(가장 긴 것). 없으면 null. */
+    window._bomSepHit = function (q) {
+        var s = String(q || '').toUpperCase().replace(/\s+/g, ' ');
+        var POS = window.MATGROUP_NAME_POS || {};
+        var stop = window.BOM_SEP_STOPWORDS, best = '';
+        for (var k in POS) {
+            if (k.length < window.BOM_SEP_MIN || k.length <= best.length) continue;
+            if (stop.indexOf(k) >= 0) continue;
+            var i = s.indexOf(k);
+            if (i < 0) continue;
+            var before = i > 0 ? s.charAt(i - 1) : ' ';
+            var after = s.charAt(i + k.length) || ' ';
+            if (/[A-Z0-9]/.test(before) || /[A-Z0-9]/.test(after)) continue;   // 남의 말 안에 걸린 것
+            best = k;
+        }
+        return best || null;
+    };
+
+    /** 구분자 하나를 종류처럼 쓰는 임시 종류. `seps` 가 있으면 자재그룹이 아니라 **내역 구분자**로 가른다. */
+    window._bomSepKind = function (sep) {
+        return { id: 'sep_' + sep, ko: sep, en: sep, kw: [], groups: [], seps: [sep] };
+    };
+
+    /** 내역(`<구분자>><값…>`)의 구분자가 그중 하나인가. `FOG` 로 물으면 `FOG IPS` 도 받는다. */
+    window._bomDescSepIs = function (ojtxp, seps) {
+        var s = String(ojtxp || '');
+        var gt = s.indexOf('>');
+        if (gt <= 0) return false;
+        var sep = s.slice(0, gt).trim().toUpperCase().replace(/\s+/g, ' ');
+        return (seps || []).some(function (p) {
+            var P = String(p).toUpperCase().trim();
+            return sep === P || sep.indexOf(P + ' ') === 0;
+        });
+    };
+
+    /** 이 자재그룹이 속하는 **진짜** 종류(칩의 NAS 사양서 폴더를 고르는 데 쓴다). */
+    window._bomRealKindFor = function (group) {
+        return (window.BOM_PART_KINDS || []).filter(function (k) {
+            return window._bomGroupIsKind(group, k);
+        })[0] || null;
+    };
+
     // ── 판정·추출 ────────────────────────────────────────────────────────────
 
     /** 질문에서 부품 종류 찾기 — 카탈로그 kw 로만 본다(코드에 낱말을 박지 않는다). */
@@ -166,14 +223,20 @@
     /** 그 종류의 행만. 같은 자재가 여러 번 나오면(여러 상위에 물림) 한 번만. */
     window._bomPickParts = function (text, kind) {
         var seen = {}, out = [];
+        //  구분자로 물었으면(`seps`) 내역 구분자로, 아니면 자재그룹으로 가른다.
+        var bySep = !!(kind && kind.seps && kind.seps.length);
         window._bomTextRows(text).forEach(function (r) {
-            if (!window._bomGroupIsKind(r.group, kind)) return;
+            var hit = bySep ? window._bomDescSepIs(r.desc, kind.seps)
+                            : window._bomGroupIsKind(r.group, kind);
+            if (!hit) return;
             if (seen[r.code]) return;
             seen[r.code] = 1;
             r.name = window._bomPartNameOf(r.desc);
             //  칩 메뉴(js/40 `QA_ROW_CHIP_KINDS.bompart`)는 행 하나만 받는다 — 그 행이 어떤
             //  종류로 걸린 건지 알아야 사양서 폴더를 고를 수 있어서 종류를 행에 달아 둔다.
-            r.kind = kind;
+            //  구분자로 물었을 땐 그 임시 종류엔 PARTS 구분이 없으므로 **자재그룹으로 진짜 종류**를
+            //  찾아 단다(그래야 `FOG IPS` 로 물어도 📄 사양서 칩이 나온다).
+            r.kind = bySep ? (window._bomRealKindFor(r.group) || kind) : kind;
             out.push(r);
         });
         return out;
@@ -203,12 +266,23 @@
     window.bomPartLookupText = function (r) {
         var kindName = (window._currentLang === 'en') ? r.kind.en : r.kind.ko;
         if (!r.hits.length) {
-            var groups = {};
-            window._bomTextRows(r.raw).forEach(function (x) { groups[x.group] = (groups[x.group] || 0) + 1; });
-            var list = Object.keys(groups).sort().slice(0, 40).join(' · ');
+            //  "없음"과 "못 찾음"을 사람이 가를 수 있게 **그 BOM 에 실제로 있던 것**을 보여준다.
+            //  구분자로 물었으면 구분자 목록을(그 말이 맞는지 봐야 하니까), 아니면 자재그룹 목록을.
+            var bySep = !!(r.kind && r.kind.seps && r.kind.seps.length);
+            var seen = {};
+            window._bomTextRows(r.raw).forEach(function (x) {
+                var key = x.group;
+                if (bySep) {
+                    var gt = String(x.desc || '').indexOf('>');
+                    key = gt > 0 ? String(x.desc).slice(0, gt).trim().toUpperCase().replace(/\s+/g, ' ') : '';
+                }
+                if (key) seen[key] = (seen[key] || 0) + 1;
+            });
+            var list = Object.keys(seen).sort().slice(0, 40).join(' · ');
             return '⚠️ ' + _t(r.material + ' BOM(' + r.total + '행)에 **' + kindName + '**(으)로 분류된 자재가 없습니다.',
                               'No **' + kindName + '** material in the BOM of ' + r.material + ' (' + r.total + ' rows).')
-                 + '\n\n' + _t('이 BOM 에 있는 자재그룹: ', 'Material groups in this BOM: ') + list;
+                 + '\n\n' + (bySep ? _t('이 BOM 에 있는 구분자: ', 'Separators in this BOM: ')
+                                   : _t('이 BOM 에 있는 자재그룹: ', 'Material groups in this BOM: ')) + list;
         }
         return window.bomPartLookupHeader(r) + '\n\n' + window.bomPartMarkdownTable(r);
     };

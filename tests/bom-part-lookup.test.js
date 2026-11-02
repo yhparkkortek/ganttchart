@@ -78,6 +78,23 @@ eq('패널명 확인', (window._bomPartKindHit('999001 제품에 사용된 패�
 eq('터치', (window._bomPartKindHit('999001 에 들어간 터치 뭐야') || {}).id, 'touch');
 eq('부품 말이 없으면 안 걸린다', window._bomPartKindHit('999001 BOM 보여줘'), null);
 
+console.log('[4-b] 구분자 이름으로 바로 묻기 (2026-11-02 사용자 실제 질문)');
+// "999001 제품에 사용된 HN VBY1 명 확인해줘" — HN VBY1 은 종류가 아니라 **내역 구분자**다.
+// kw 에 없어서 이 기능이 아예 안 걸렸고 질문이 SAP 일반 경로로 샜다(앱에서 실측).
+eq('구분자 이름을 집는다', window._bomSepHit('999001 제품에 사용된 HN VBY1 명 확인해줘'), 'HN VBY1');
+eq('가장 긴 구분자를 고른다', window._bomSepHit('999001 에 쓰인 TSP CURVED ASSY 뭐야'), 'TSP CURVED ASSY');
+eq('짧은 키는 아무 문장에나 걸리지 않는다(PC·BM·ETC)', window._bomSepHit('이 제품 PC 랑 BM 알려줘'), null);
+eq('남의 말 안에 걸린 건 제외', window._bomSepHit('FOGGY 한 화면'), null);
+eq('공정·관리용 구분자는 제외', window._bomSepHit('999001 SERVICE 내역'), null);
+// 구분자로 고르면 자재그룹이 아니라 **내역 구분자**로 가른다.
+const sepKind = window._bomSepKind('FOG IPS');
+eq('구분자로 그 행만 고른다', window._bomPickParts(BOM, sepKind).map(h => h.code), ['900106']);
+eq('구분자는 접두어로도 받는다(FOG → FOG IPS)',
+   window._bomPickParts(BOM, window._bomSepKind('FOG')).map(h => h.name), ['ZZ999PANEL-X9']);
+// 임시 종류엔 PARTS 구분이 없다 → 자재그룹으로 **진짜 종류**를 찾아 행에 달아야 📄 사양서 칩이 나온다.
+eq('행에는 진짜 종류가 달린다', window._bomPickParts(BOM, sepKind)[0].kind.id, 'panel');
+eq('자재그룹 → 종류 되찾기', (window._bomRealKindFor('전장자재/FAN') || {}).id, 'fan');
+
 console.log('[5] 결과 글');
 const r = { material: '999001', kind: kindOf('panel'), hits: window._bomPickParts(BOM, kindOf('panel')), total: 8, raw: BOM };
 const txt = window.bomPartLookupText(r);
