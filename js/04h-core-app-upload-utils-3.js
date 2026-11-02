@@ -7788,6 +7788,36 @@ ${docsJson}`;
         }
 
         // 🔀🚫🤖 [2026-10-01 신규] BOM 비교 (CS14) — "자재1 자재2 BOM 비교"
+        // 🔎🚫🤖 [2026-11-02 신규, 사용자 요청] "501823 제품에 사용된 패널명 확인해줘"
+        //    BOM 을 **다단계로** 전개해 그 종류의 부품만 집어 준다(AI 안 씀 — 자재그룹으로 가른다).
+        //    ⚠️ BOM 전개 블록(_aiFetchSapContext 의 bomMatch)보다 **먼저** 와야 한다. 안 그러면
+        //       494행짜리 BOM 전체가 AI 에게 넘어가고, 사람이 물은 한 줄은 그 안에 묻힌다.
+        const _bpKind = window._bomPartKindHit ? window._bomPartKindHit(question) : null;
+        const _bpIntent = window._sapCapKwHit ? window._sapCapKwHit(question, 'bom_part') : false;
+        const _bpMat = (_bpKind && _bpIntent) ? ((question.match(/\b\d{5,8}\b/) || [])[0] || '') : '';
+        if (_bpKind && _bpIntent && _bpMat) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question); }
+            const _bpName = (window._currentLang === 'en') ? _bpKind.en : _bpKind.ko;
+            window._ganttQaHistory.push({ role: 'ai', pending: true,
+                text: '⏳ ' + window._t(_bpMat + ' BOM 다단계 전개 중… (30~90초) — ' + _bpName + '을(를) 찾습니다',
+                                        'Exploding the BOM of ' + _bpMat + ' (multi-level, 30–90s) — looking for the ' + _bpName) });
+            window._renderGanttQaMessages();
+            let _bpReply;
+            try {
+                const _bpRes = await window.sapBomPartLookup(_bpMat, _bpKind, function (m) {
+                    const last = window._ganttQaHistory[window._ganttQaHistory.length - 1];
+                    if (last && last.pending) { last.text = '⏳ ' + m; window._renderGanttQaMessages(); }
+                });
+                _bpReply = window.bomPartLookupText(_bpRes);
+            } catch (e) {
+                _bpReply = '⚠️ ' + (e && e.message ? e.message : e);
+                if (window._issueLog) window._issueLog('sap-bom-part', { material: _bpMat, kind: _bpKind.id, error: String(e && e.message || e) });
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: _bpReply });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         const _bomCompareHit = window._sapCapKwHit ? window._sapCapKwHit(question, 'bom_compare') : false;
         const _bomCompareMats = _bomCompareHit ? (question.match(/\b[A-Z0-9]{5,18}\b/g) || []).filter(function(m) { return !/^\d+$/.test(m) || m.length >= 7; }) : [];
         if (_bomCompareHit && _bomCompareMats.length >= 2) {

@@ -380,6 +380,13 @@
           needs: '담아둔 자재 + 오더 + 코스트센터', ex: '🧺 담기로 모은 뒤 "청구서 만들기"' },
         { id: 'bom', title: 'BOM 전개', titleEn: 'BOM explosion', tcode: 'ZPP033 / ZPP038', mode: 'read', verified: 'live',
           kw: ['bom', '구성품', '부품구성', '전개', 'explosion'], needs: '자재번호', ex: '502572 BOM 보여줘' },
+        // 🔎 [2026-11-02] "999001 제품에 사용된 패널명 확인해줘" — BOM 에서 **특정 부품 종류만** 집어 준다.
+        //    ⚠️ 반드시 다단계 전개다. 패널은 완제품 바로 아래가 아니라 5단계 아래에 있다(실측).
+        //    부품 종류 어휘는 `BOM_PART_KINDS`(js/56, 데이터)에 따로 있다 — 여긴 "무엇이 쓰였나"라는 의도만 본다.
+        { id: 'bom_part', title: 'BOM 부품 찾기', titleEn: 'Find a part in the BOM', tcode: 'ZPP033', mode: 'read', verified: 'live',
+          kw: ['사용된', '사용한', '사용되는', '쓰인', '쓴', '들어간', '들어가는', '적용된', '적용한', '뭐 쓰', '뭐쓰', 'used in', 'which'],
+          notKw: ['가격', '단가', '재고', '납기', '사용처', '역전개', '비교', '변경이력'],
+          needs: '자재번호 + 부품 종류(패널·터치·BLU·보드…)', ex: '999001 제품에 사용된 패널명 확인해줘' },
         { id: 'whereused', title: '사용처(역전개)', titleEn: 'Where-used', tcode: 'CS15 / ZPP046', mode: 'read', verified: 'live',
           kw: ['사용처', '역전개', '어디에 쓰', '어디 쓰', 'where-used', 'whereused'], needs: '자재번호', ex: '104446 사용처 조회해줘' },
         { id: 'matlist', title: '자재 리스트 조회', titleEn: 'Material list', tcode: 'ZMM009', mode: 'read', verified: 'live',
@@ -527,10 +534,15 @@
         var qFlat = q.replace(/\s+/g, '');
         var cap = (window.SAP_CAPABILITIES || []).find(function (c) { return c.id === capId; });
         if (!cap) return false;
-        return cap.kw.some(function (k) {
+        var has = function (k) {
             var kk = String(k).toLowerCase();
             return q.indexOf(kk) >= 0 || qFlat.indexOf(kk.replace(/\s+/g, '')) >= 0;
-        });
+        };
+        // 🚫 [2026-11-02] `notKw`(데이터) — 그 말이 있으면 이 기능이 아니다.
+        //    "사용된/확인" 같은 일반어를 kw 로 쓰는 기능은 이게 없으면 남의 질문까지 가로챈다
+        //    ("999001 패널 **가격**" 은 가격 조회지 BOM 부품 찾기가 아니다).
+        if ((cap.notKw || []).some(has)) return false;
+        return cap.kw.some(has);
     };
 
     var STOP = {};
