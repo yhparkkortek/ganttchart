@@ -63,6 +63,16 @@ eq('표에 없는 구분자는 지어내지 않는다', window._bomPartNameOf('Z
 eq('`>` 가 없으면 null', window._bomPartNameOf('그냥 글자'), null);
 eq('접두어가 더 긴 구분자를 먼저 맞춘다', window._bomPartNameOf('FOG>AA,BB'), 'AA');
 
+console.log('[3-b] 이름이라고 내놓으면 안 되는 것 (2026-11-02 사용자 지적으로 보강)');
+// 아래 구분자들은 **실제 카탈로그에 있는 값**이다 — 표가 정한 대로 동작하는지 본다.
+eq('보드명이 0번째인 PBA-T', window._bomPartNameOf('PBA-T>ZZBOARD-9,R0,V20'), 'ZZBOARD-9');
+// 예전엔 PBA-T 가 표에 이름 칸이 없다고 보고 **접두어 `PBA` 규칙을 끌어다** PCB 버전(V20)을 답했다.
+eq('이름 칸 없는 구분자는 접두어로 끌어오지 않는다(기구물)', window._bomPartNameOf('G/PNL MOD>PC+GF10%,-,-,-,BLK,PAD'), null);
+// `조립부품명`이 "품명"으로, `제조사`가 "제조사 품명"으로 오탐돼 PAD·제조사코드를 이름이라 답했었다.
+eq('제조사만 있는 칸은 이름이 아니다(BLU)', window._bomPartNameOf('LGP MOD>ZZMFR,PMMA,LENTI,2.0T'), null);
+eq('빈 칸 표시 `-` 는 이름이 아니다', window._bomPartNameOf('FOG IPS>-,3840X2160,-'), null);
+eq('ALV 가 자른 조각(끝의 =)은 이름이 아니다', window._bomPartNameOf('FOG IPS>ZZTRUNCA='), null);
+
 console.log('[4] 질문에서 종류 찾기');
 eq('패널명 확인', (window._bomPartKindHit('999001 제품에 사용된 패널명 확인해줘') || {}).id, 'panel');
 eq('터치', (window._bomPartKindHit('999001 에 들어간 터치 뭐야') || {}).id, 'touch');
