@@ -1597,13 +1597,15 @@ ${question}
             + '<table style="border-collapse:collapse; font-size:11.5px; width:100%;"><thead><tr>'
             + head.map(function(h) { return '<th style="' + thS + '">' + h + '</th>'; }).join('')
             + '</tr></thead><tbody>'
-            + body.map(function(r) {
+            + body.map(function(r, i) {
                 var tds = '';
                 for (var c = 0; c < head.length; c++) {
                     tds += '<td style="' + tdS + (colNoWrap[c] ? ' white-space:nowrap;' : '') + '">'
                          + (r[c] === undefined ? '' : r[c]) + '</td>';
                 }
-                return '<tr>' + tds + '</tr>';
+                // 🦓 줄무늬(제브라) — 칩 표(_qaBuildRowChipTable)와 **같은 두 색**을 쓴다.
+                //    표가 두 종류라도 눈에는 한 가지로 보여야 한다(행을 따라가다 줄을 놓치지 않게).
+                return '<tr style="background:' + (i % 2 === 0 ? '#fff' : '#f7f9fc') + ';">' + tds + '</tr>';
             }).join('')
             + '</tbody></table></div>';
         return { html: html, end: j - 1 };

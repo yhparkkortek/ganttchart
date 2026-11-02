@@ -596,6 +596,54 @@
                 ];
             }
         },
+        // 📧 [2026-11-02 신규, 사용자 요청 "전자결재처럼 도표 클릭해서 다른 기능 연결"]
+        //    메일 한 줄에서 갈 수 있는 곳을 **전부** 모아 둔다. 예전엔 "단건 상세 도구가 없어서
+        //    칩으로 할 게 없다"고 적어 두었는데(아래 QA_ROW_CHIPS 주석), 그 사이 텔레그램 전송·
+        //    SAP 자재 메뉴·간트 추가·메일 발송이 다 생겨서 **연결할 곳이 생겼다**.
+        //  ⚠️ 메일을 **열지 않는다**는 원칙은 그대로다 — 칩도 목록의 preview(발췌)만 쓴다.
+        //     서버 상세 조회는 읽음 처리를 해 안읽음 배지를 줄인다(docs/mail-pipeline.md).
+        //  ⚠️ 폭은 실측 표 폭(462px) 안에 둔다 — 고정폭 합계 218px, 제목이 나머지를 갖는다.
+        gwmail: {
+            cols: [
+                //  ⚠️ 시각 78px 은 "11-02 10:48"이 **잘렸다**(화면으로 확인, 글자 70px + 안쪽
+                //     여백 14px). 폭을 줄일 땐 이 칸부터 보지 말 것 — 잘리면 분 단위를 못 읽는다.
+                { label: '시각', w: '92px',
+                  get: function (r) { return String(r.at || '').slice(5, 16).replace('T', ' '); },
+                  title: function (r) { return String(r.at || '').replace('T', ' ').slice(0, 19); } },
+                { label: '보낸이', w: '92px', get: function (r) { return r.from || ''; },
+                  title: function (r) { return (r.from || '') + (r.to ? ' → ' + r.to : ''); } },
+                { label: '제목', get: function (r) { return r.subject || ''; },
+                  title: function (r) { return (r.subject || '') + (r.preview ? '\n\n' + String(r.preview).slice(0, 200) : ''); } },
+                { label: '안읽음', w: '34px', get: function (r) { return r.seen ? '' : '●'; },
+                  title: function (r) { return r.seen ? window._t('읽음', 'read') : window._t('안읽음', 'unread'); } }
+            ],
+            header: function (r) {
+                return (r.subject || '') + ' — ' + window._t('무엇을 할까요?', 'What would you like to do?');
+            },
+            //  ⚠️ 메뉴는 **행마다 다르다** — 보낸이가 주소가 아니면 답장을 못 쓰고(이름만 오는
+            //     메일이 흔하다), 메일에 번호가 없으면 SAP 조회를 걸 데가 없다. 할 수 없는 칩을
+            //     보여주면 "눌렀는데 아무 일도 안 난다"가 된다.
+            menu: function (r) {
+                var t = window._t;
+                window._qaMailRowStore = window._qaMailRowStore || {};
+                window._qaMailRowStore[r.id] = r;          // 칩이 쓸 원본 행(값에 본문을 실을 수 없다)
+                var out = [
+                    { label: '📄 ' + t('본문 발췌', 'Excerpt'),        value: '__gwMailBody__' + r.id },
+                    { label: '🤖 ' + t('요약·조치 제안', 'Summarize'), value: '__gwMailAsk__' + r.id },
+                    { label: '💬 ' + t('텔레그램으로', 'To Telegram'), value: '__gwMailTg__' + r.id },
+                    { label: '📋 ' + t('업무로 등록', 'Add as task'),  value: '__gwMailTask__' + r.id },
+                    { label: '📅 ' + t('일정 등록', 'To calendar'),    value: '__gwMailCal__' + r.id }
+                ];
+                if (String(r.from || '').indexOf('@') >= 0) {
+                    out.push({ label: '✉️ ' + t('답장 쓰기', 'Reply'), value: '__gwMailReply__' + r.id });
+                }
+                out.push({ label: '🔎 ' + t('이 보낸이 메일', 'From this sender'), value: '__gwMailFrom__' + r.id });
+                if ((window._qaMailSapNums ? window._qaMailSapNums(r) : []).length) {
+                    out.push({ label: '🏭 ' + t('메일 속 자재/오더', 'SAP lookup'), value: '__gwMailSap__' + r.id, style: 'sap' });
+                }
+                return out;
+            }
+        },
         board: {
             cols: [
                 { label: '게시판', w: '116px', get: function (r) { return r.boardName || ''; } },
@@ -610,16 +658,46 @@
         }
     };
 
-    // 도구 id → kind. 메일(gw_mail)·인사관리(insa_menus/insa_screen)는 일부러 안 넣었다 —
-    // 메일은 "문서 하나 읽기" 같은 단건 상세 도구가 아직 없고(목록 preview가 전부라 칩으로
-    // 할 수 있는 다음 동작이 없다), 인사관리는 결과가 행 목록이 아니라 메뉴/화면 텍스트라
-    // 이 "행+칩" 모양 자체가 안 맞는다. 두 모듈에 단건 상세 도구가 생기면 그때 kind를
-    // 추가해 한 줄만 보태면 된다.
+    // 도구 id → kind.
+    //  📧 [2026-11-02] 메일(gw_mail)이 들어왔다. 예전 주석은 "메일은 단건 상세 도구가 없어
+    //     칩으로 할 다음 동작이 없다"였는데, 그 사이 텔레그램 전송·SAP 자재 메뉴·간트 추가·
+    //     메일 발송이 생겨 **연결할 곳이 7~8개**가 됐다(gwmail kind 참고). 상세 조회는 여전히
+    //     안 한다 — 목록의 preview 로만 움직인다.
+    //  인사관리(insa_menus/insa_screen)는 그대로 뺀다 — 결과가 행 목록이 아니라 메뉴/화면
+    //  텍스트라 이 "행+칩" 모양 자체가 안 맞는다.
     window.QA_ROW_CHIPS = window.QA_ROW_CHIPS || {
         gw_approval_search: { kind: 'approval' },
         gw_approval_box: { kind: 'approval' },
         gw_board: { kind: 'board' },
+        gw_mail: { kind: 'gwmail' },
         sap_goods_receipt_targets: { kind: 'goodsreceipt' }
+    };
+
+    // 🏭 메일 글자에서 SAP 조회로 이어 줄 번호 후보 — **데이터로 관리**한다(코드에 자릿수를
+    //    박지 말 것). 메일 제목/발췌에 섞인 자재번호·구매오더를 집어 SAP 메뉴로 넘긴다.
+    //  ⚠️ 날짜(20261102)·전화번호·금액이 섞이지 않게 **앞뒤가 숫자면 제외**하고(js/55에서
+    //     "654321이 1654321 안에 걸려 남의 도면을 끌어온" 사고와 같은 가드), 자릿수를 벗어난
+    //     긴 숫자는 버린다.
+    window.QA_MAIL_SAP_NUMS = window.QA_MAIL_SAP_NUMS || [
+        { kind: 'order',    label: '구매오더', re: /(?<![0-9])4[0-9]{9}(?![0-9])/g },
+        { kind: 'material', label: '자재',     re: /(?<![0-9])[1-9][0-9]{5,7}(?![0-9])/g }
+    ];
+    window._qaMailSapNums = function (r) {
+        var s = String((r && r.subject) || '') + ' ' + String((r && r.preview) || '');
+        var out = [], seen = {};
+        (window.QA_MAIL_SAP_NUMS || []).forEach(function (p) {
+            var re = new RegExp(p.re.source, 'g'), m;
+            while ((m = re.exec(s)) !== null) {
+                var v = m[0];
+                // 날짜로 읽히는 8자리(20261102 등)는 자재번호가 아니다
+                if (/^20[0-9]{6}$/.test(v)) continue;
+                if (seen[v]) continue;
+                seen[v] = 1;
+                out.push({ num: v, kind: p.kind, label: p.label });
+                if (out.length >= 8) return;
+            }
+        });
+        return out;
     };
 
 

@@ -1252,6 +1252,34 @@
         return out;
     };
 
+    // 📧 [2026-11-02] 메일 목록을 **행 클릭 칩 표**로 말풍선에 넣는다 — 결정론 블록(아래 메일
+    //    조회)과 칩의 "이 보낸이 메일" 두 경로가 **같은 함수**를 쓴다(표를 두 번 만들지 않는다).
+    //  ⚠️ 칩 표는 rawHtml 이라 그대로는 텔레그램으로 못 보낸다 — 같은 내용을 마크다운으로도
+    //     담아 `tgText` 에 둔다("텔레그램으로 보내줘"가 이걸 집어 간다). 안 두면 사람이 보는
+    //     것과 보내지는 것이 달라진다(HTML 태그가 글자로 나간다).
+    window._qaMailMarkdownTable = function (mails) {
+        var rows = (mails || []).map(function (m) {
+            return '| ' + String(m.at || '').slice(5, 16).replace('T', ' ')
+                 + ' | ' + String(m.from || '').split('|').join('/').slice(0, 24)
+                 + ' | ' + String(m.subject || '').split('|').join('/')
+                 + ' | ' + (m.seen ? '' : '●') + ' |';
+        }).join('\n');
+        return '| ' + window._t('시각', 'When') + ' | ' + window._t('보낸이', 'From')
+             + ' | ' + window._t('제목', 'Subject') + ' | ' + window._t('안읽음', 'New') + ' |\n'
+             + '|---|---|---|---|\n' + rows;
+    };
+    window._qaMailPushTable = function (headerMd, mails) {
+        var md = window._qaMailMarkdownTable(mails);
+        var html = window._qaBuildRowChipTable ? window._qaBuildRowChipTable('gwmail', mails) : '';
+        if (!html) {                       // 칩 표를 못 만들면 마크다운 표로 — 렌더러가 표로 그린다
+            window._ganttQaHistory.push({ role: 'ai', text: headerMd + '\n\n' + md });
+            return false;
+        }
+        window._ganttQaHistory.push({ role: 'ai', rawHtml: true,
+            text: window._mdToHtml(headerMd) + html, tgText: headerMd + '\n\n' + md });
+        return true;
+    };
+
     window._qaRowChipClick = function (kind, tableId, idx) {
         const rows = window._qaRowChipStore[tableId];
         const row = rows && rows[idx];
@@ -4517,6 +4545,165 @@ ${docsJson}`;
             return;
         }
 
+        // 📧 [2026-11-02 신규, 사용자 요청] 메일 표 행 클릭 칩 — 한 줄에서 다른 기능으로 잇는다.
+        //    전자결재 표(`__gwApprovalRead__` 등)와 **같은 패턴**이고, 칩 목록은 js/40
+        //    `QA_ROW_CHIP_KINDS.gwmail`(데이터)에 있다. 여기는 그 값을 받아 실행만 한다.
+        //  ⚠️ 메일을 **열지 않는다**(상세 조회는 읽음 처리를 한다) — 쓰는 건 목록의 발췌뿐이다.
+        //  ⚠️ 본문을 버튼 value 에 실을 수 없어(메일 한 통이 수백 자) 행은 `_qaMailRowStore`에
+        //     두고 id 만 넘긴다. 새로고침하면 비므로 "다시 조회해달라"고 정직하게 답한다.
+        if (question.indexOf('__gwMail') === 0) {
+            const _gmM = question.match(/^__gwMail([A-Za-z]+)__(.+)$/);
+            const _gmAct = _gmM ? _gmM[1] : '';
+            const _gmRow = _gmM ? ((window._qaMailRowStore || {})[_gmM[2]]) : null;
+            input.value = '';
+            if (!_gmRow) {
+                window._ganttQaHistory.push({ role: 'ai', error: true,
+                    text: '⚠️ ' + window._t('그 메일 정보를 찾지 못했습니다 — 메일 목록을 다시 조회해 주세요.',
+                                             'Could not find that mail — please look up the mail list again.') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            const _gmWhen = String(_gmRow.at || '').replace('T', ' ').slice(0, 16);
+            const _gmHead = '📧 **' + (_gmRow.subject || '') + '**\n'
+                          + (_gmRow.from || '') + (_gmRow.to ? ' → ' + _gmRow.to : '') + ' · ' + _gmWhen;
+            //  AI/쓰기 경로로 넘길 땐 **기존 자연어 명령 그대로** 다시 태운다 — 새 경로를 만들지
+            //  않는다(초안→확인 가드가 그 경로 안에 있다).
+            const _gmSend = function (q) { input.value = q; return window.sendGanttQaMessage(); };
+            if (_gmAct === 'Body') {
+                window._ganttQaHistory.push({ role: 'ai',
+                    text: _gmHead + '\n\n' + (_gmRow.preview || window._t('(발췌가 비어 있습니다)', '(no excerpt)'))
+                        + '\n\n' + window._t('※ 목록의 본문 발췌입니다 — 메일을 열지 않았습니다(읽음 처리 방지).',
+                                             '※ Excerpt from the list — the mail was not opened.') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            if (_gmAct === 'Tg') {
+                await window._qaTelegramDeliver(
+                    _gmHead + '\n\n' + (_gmRow.preview || ''),
+                    { label: window._t('내 텔레그램', 'my Telegram') });
+                input.focus(); return;
+            }
+            if (_gmAct === 'Ask') {
+                //  ⚠️ [2026-11-02 실측 버그] 처음엔 "아래 메일을 요약해줘 …"를 입력창에 넣어
+                //     **다시 보냈는데**, 그 문장에 '메일'이 들어 있어 위 메일 **목록** 블록
+                //     (`gw_mail_recent`)이 가로챘다 — 한 통을 요약해 달라고 눌렀는데 오늘 메일
+                //     17건을 다시 조회해 전부 요약했다. 그래서 되돌려 보내지 않고 **여기서 직접**
+                //     AI를 부른다(프롬프트에 그 메일 한 통만 넣는다).
+                const _gmKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+                if (!_gmKey) {
+                    window._ganttQaHistory.push({ role: 'ai', error: true,
+                        text: '⚠️ ' + window._t('AI 키가 없어 요약할 수 없습니다 — 설정에서 키를 등록해 주세요.',
+                                                 'No AI key — please register one in settings.') });
+                    window._renderGanttQaMessages(); input.focus(); return;
+                }
+                window._ganttQaHistory.push({ role: 'user', text: '🤖 ' + window._t('이 메일 요약·조치 제안', 'Summarize this mail') + ': ' + (_gmRow.subject || '') });
+                window._ganttQaHistory.push({ role: 'ai', pending: true,
+                    text: '⏳ ' + window._t('메일을 읽고 요약하는 중...', 'Summarizing the mail...') });
+                window._renderGanttQaMessages();
+                let _gmAns;
+                try {
+                    const _gmP = '아래는 사내 그룹웨어 메일 **한 통**이다(목록의 본문 발췌).\n\n'
+                        + '[제목] ' + (_gmRow.subject || '') + '\n'
+                        + '[보낸이] ' + (_gmRow.from || '') + '\n'
+                        + '[받는이] ' + (_gmRow.to || '') + '\n'
+                        + '[시각] ' + _gmWhen + '\n'
+                        + '[본문 발췌] ' + (_gmRow.preview || '(없음)') + '\n\n'
+                        + '요청: 한국어로 ① 무슨 내용인지 2~3줄로 요약하고 ② 내가 해야 할 조치가 있으면 '
+                        + '글머리표로 적어라(기한이 보이면 함께). 발췌에 없는 내용을 지어내지 말고, '
+                        + '발췌가 잘려 판단이 어려우면 그렇다고 밝혀라. 표는 만들지 마라.';
+                    const _gmR = await window._withTimeout(window.callAiBackend(_gmKey, _gmP, {}), 60000,
+                        window._t('AI 요약 시간 초과', 'AI summary timed out'));
+                    const _gmT = (_gmR && _gmR.ok) ? window._extractGanttQaAiText(_gmR) : '';
+                    _gmAns = (_gmT && _gmT.trim())
+                        ? (_gmHead + '\n\n---\n\n' + _gmT.trim())
+                        : ('⚠️ ' + window._t('AI 요약에 실패했습니다(본문 발췌는 📄 버튼으로 볼 수 있습니다).',
+                                              'AI summary failed (the excerpt is still available via 📄).'));
+                } catch (e) { _gmAns = '⚠️ ' + (e && e.message ? e.message : e); }
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: _gmAns });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            if (_gmAct === 'Task') {
+                return _gmSend(window._t('간트에 업무 추가해줘', 'Add a Gantt task')
+                    + ': ' + (_gmRow.subject || '')
+                    + ' (' + window._t('메일', 'mail') + ' ' + (_gmRow.from || '') + ', ' + _gmWhen + ')');
+            }
+            if (_gmAct === 'Cal') {
+                return _gmSend((_gmRow.date || '') + ' ' + window._t('일정 등록해줘', 'add a calendar event')
+                    + ': ' + (_gmRow.subject || ''));
+            }
+            if (_gmAct === 'Reply') {
+                return _gmSend(window._t('그룹웨어 메일 보내줘', 'Send a groupware mail')
+                    + ' — ' + window._t('받는사람', 'to') + ' ' + (_gmRow.from || '')
+                    + ', ' + window._t('제목', 'subject') + ' "RE: ' + (_gmRow.subject || '') + '"'
+                    + ', ' + window._t('본문은 아래 메일에 대한 짧은 회신으로 써줘.',
+                                       'write a short reply to the mail below.')
+                    + '\n\n[' + window._t('원문 발췌', 'original excerpt') + '] ' + (_gmRow.preview || ''));
+            }
+            if (_gmAct === 'Sap') {
+                const _gmNums = window._qaMailSapNums ? window._qaMailSapNums(_gmRow) : [];
+                if (!_gmNums.length) {
+                    window._ganttQaHistory.push({ role: 'ai',
+                        text: 'ℹ️ ' + window._t('이 메일에서 자재번호·구매오더로 보이는 번호를 찾지 못했습니다.',
+                                                 'No material/PO number found in this mail.') });
+                    window._renderGanttQaMessages(); input.focus(); return;
+                }
+                //  자재 하나면 바로 SAP 자재 메뉴(기존 공용 경로)를 띄운다 — 메뉴를 새로 만들지 않는다.
+                if (_gmNums.length === 1 && _gmNums[0].kind === 'material' && window._sapSelectMaterial) {
+                    window._sapSelectMaterial(_gmNums[0].num);
+                    input.focus(); return;
+                }
+                window._ganttQaShowConfirmButtons(
+                    '🏭 ' + window._t('메일에서 찾은 번호 — 어느 것을 조회할까요?',
+                                      'Numbers found in this mail — which one?'),
+                    _gmNums.map(function (n) {
+                        return { label: (n.kind === 'order' ? '🛒 ' : '🔧 ') + n.label + ' ' + n.num,
+                                 value: n.kind === 'order' ? (n.num + ' 입고 확인해줘') : ('__sapPickMat__' + n.num),
+                                 style: 'sap' };
+                    }), { persistent: true });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            if (_gmAct === 'From') {
+                const _gmWho = _gmRow.from || '';
+                window._ganttQaHistory.push({ role: 'ai', pending: true,
+                    text: '⏳ ' + window._t(_gmWho + ' 이(가) 보낸 메일을 찾는 중...', 'Searching mail from ' + _gmWho + '...') });
+                window._renderGanttQaMessages();
+                let _gmReply = '', _gmRows = null;
+                try {
+                    //  keyword 검색은 서버가 **전체 폴더**를 본다(gw_bridge.mail_recent) — 기간을
+                    //  넉넉히 열어야 "최근 하루"로 잘려 0건이 되지 않는다.
+                    const _gmFrom = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+                    const _gmRes = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/gw/mail/recent?limit=40&from=' + _gmFrom
+                              + '&keyword=' + encodeURIComponent(_gmWho)),
+                        120000, window._t('메일 조회 시간 초과', 'Mail lookup timed out'));
+                    const _gmD = await _gmRes.json();
+                    if (!_gmD.ok) throw new Error(_gmD.message || window._t('메일 조회 실패', 'Mail lookup failed'));
+                    _gmRows = _gmD.mails || [];
+                    _gmReply = '🔎 **' + _gmWho + '** ' + window._t('관련 메일 ', 'related mail ')
+                             + _gmRows.length + window._t('건', '') + ' (' + _gmD.from + ' ~ ' + window._t('오늘', 'today') + ')';
+                    if (!_gmRows.length) _gmReply += '\n\n' + window._t('검색 결과가 없습니다.', 'No results.');
+                } catch (e) { _gmReply = '⚠️ ' + (e && e.message ? e.message : e); }
+                window._ganttQaHistory.pop();
+                if (_gmRows && _gmRows.length && window._qaMailPushTable) {
+                    window._qaMailPushTable(_gmReply, _gmRows);
+                } else {
+                    window._ganttQaHistory.push({ role: 'ai', text: _gmReply });
+                }
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            window._ganttQaHistory.push({ role: 'ai', error: true,
+                text: '⚠️ ' + window._t('모르는 메일 동작입니다: ', 'Unknown mail action: ') + _gmAct });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
+        // 🔧 [2026-11-02] 메일에서 찾은 자재번호 칩 — SAP 자재 메뉴(기존 공용 경로)로 넘긴다.
+        if (question.indexOf('__sapPickMat__') === 0) {
+            const _spMat = question.replace(/^__sapPickMat__/, '').trim();
+            input.value = '';
+            if (window._sapSelectMaterial) window._sapSelectMaterial(_spMat);
+            else { input.value = _spMat + ' 자재 조회해줘'; return window.sendGanttQaMessage(); }
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 💬 [2026-11-02] "텔레그램으로 보내기" 확인 버튼 — 보낼 내용은 `_qaTgPending`에 있다.
         //    (내용을 버튼 value에 실을 수 없다 — 메일 표 하나가 수천 자다)
         if (question.indexOf('__tgSendConfirm__') === 0 || question.indexOf('__tgSendCancel__') === 0) {
@@ -4927,6 +5114,13 @@ ${docsJson}`;
                 for (let i = window._ganttQaHistory.length - 1; i >= 0; i--) {
                     const m = window._ganttQaHistory[i];
                     if (!m || m.role !== 'ai' || m.pending || m.error || m.tgResult || m.confirmButtonsId) continue;
+                    // 📧 [2026-11-02] 칩 표 말풍선은 rawHtml 이다 — 그대로 보내면 태그가 글자로
+                    //    나간다. 같은 내용의 마크다운(`tgText`)을 같이 실어 두므로 그걸 보낸다.
+                    //    tgText 가 없는 rawHtml(버튼·폼 등)은 보낼 것이 아니므로 건너뛴다.
+                    if (m.rawHtml) {
+                        if (String(m.tgText || '').trim()) { _tgSrc = m.tgText; break; }
+                        continue;
+                    }
                     if (String(m.text || '').trim()) { _tgSrc = m.text; break; }
                 }
             }
@@ -5561,7 +5755,7 @@ ${docsJson}`;
                 text: '⏳ ' + window._t('그룹웨어 메일함에서 ' + _mPer.label + ' 메일을 가져오는 중...',
                                         'Fetching mail (' + _mPer.label + ')...') });
             window._renderGanttQaMessages();
-            let _mReply;
+            let _mReply = '', _mHeader = '', _mTableRows = null;
             try {
                 // [2026-10-20] 끊겨 있으면 저장된 계정으로 **1회만** 자동 로그인한다.
                 //   재시도 금지 가드는 _gwEnsureLogin(js/36) 안 — 실패를 반복하면 CAPTCHA가
@@ -5588,20 +5782,14 @@ ${docsJson}`;
                             + ' (' + d.from + (d.to ? ' ~ ' + d.to : '') + ')';
                 } else {
                     // ① 결정론 먼저 — 목록은 AI 없이 그대로 보여준다(AI가 죽어도 쓸 수 있어야 한다)
-                    const _rows = mails.map(function (m) {
-                        return '| ' + String(m.at || '').slice(5, 16).replace('T', ' ')
-                             + ' | ' + String(m.from || '').split('|').join('/').slice(0, 16)
-                             + ' | ' + String(m.subject || '').split('|').join('/')
-                             + ' | ' + (m.seen ? '' : '●') + ' |';
-                    }).join('\n');
-                    const _table = '| ' + window._t('시각', 'When') + ' | ' + window._t('보낸이', 'From')
-                        + ' | ' + window._t('제목', 'Subject') + ' | ' + window._t('안읽음', 'New') + ' |\n'
-                        + '|---|---|---|---|\n' + _rows;
-                    _mReply = '📧 **' + _mPer.label + ' ' + _scopeTxt + window._t('메일', 'mail') + ' '
+                    //    [2026-11-02] 마크다운 표 → **행 클릭 칩 표**(전자결재 표와 같은 패턴).
+                    //    행을 누르면 본문 발췌·요약·텔레그램·업무 등록·일정·답장·SAP 조회로 이어진다
+                    //    (칩 목록은 js/40 QA_ROW_CHIP_KINDS.gwmail, 데이터).
+                    _mTableRows = mails;
+                    _mHeader = '📧 **' + _mPer.label + ' ' + _scopeTxt + window._t('메일', 'mail') + ' '
                             + mails.length + window._t('건**', '')
                             + ' (' + d.from + (d.to ? ' ~ ' + d.to : '') + ')'
-                            + (d.unreadTotal ? '  ·  ' + window._t('메일함 안읽음 총 ', 'unread in folder: ') + d.unreadTotal + window._t('건', '') : '')
-                            + '\n\n' + _table;
+                            + (d.unreadTotal ? '  ·  ' + window._t('메일함 안읽음 총 ', 'unread in folder: ') + d.unreadTotal + window._t('건', '') : '');
 
                     // ② AI 요약 — 목록만 근거로. 실패해도 목록은 남고 사유를 붙인다.
                     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
@@ -5638,9 +5826,16 @@ ${docsJson}`;
                     _mReply += '\n\n' + window._t('※ 메일을 열지 않았습니다(읽음 처리 방지) — 본문 발췌만으로 요약했습니다.',
                                                       'Mail was not opened (to avoid marking it read) — summarized from previews only.');
                 }
-            } catch (e) { _mReply = '⚠️ ' + (e && e.message ? e.message : e); }
+            } catch (e) { _mReply = '⚠️ ' + (e && e.message ? e.message : e); _mTableRows = null; }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: _mReply });
+            if (_mTableRows && _mTableRows.length) {
+                // 표(헤더 + 행 클릭 칩 표)가 먼저, AI 요약은 그 아래 **별도 말풍선**이다 —
+                // 칩 표는 rawHtml 이라 마크다운 요약과 한 덩어리로 묶을 수 없다.
+                window._qaMailPushTable(_mHeader, _mTableRows);
+                if (_mReply.trim()) window._ganttQaHistory.push({ role: 'ai', text: _mReply.trim() });
+            } else {
+                window._ganttQaHistory.push({ role: 'ai', text: _mReply || _mHeader });
+            }
             window._renderGanttQaMessages(); input.focus(); return;
         }
 

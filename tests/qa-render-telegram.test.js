@@ -95,8 +95,11 @@ W._renderGanttQaMessages();
 const html = box.innerHTML;
 ok(html.length > 0, '렌더러가 무언가를 그렸다 (' + html.length + '자)');
 ok(html.indexOf('<table') !== -1, '<table> 이 들어 있다');
-const rowCount = (html.match(/<tr><td/g) || []).length;       // 본문 행만(머리글 행은 <tr><th)
+const rowCount = (html.match(/<tr[^>]*><td/g) || []).length;  // 본문 행만(머리글 행은 <tr><th)
 ok(rowCount === 10, '본문 행이 10개다 (실제 ' + rowCount + ')');
+// 🦓 줄무늬 — 칩 표와 같은 두 색
+ok(/<tr style="background:#fff;"><td/.test(html) && /<tr style="background:#f7f9fc;"><td/.test(html),
+   '행 배경이 줄무늬(제브라)로 번갈아 칠해진다');
 ok(html.indexOf('<th') !== -1 && html.indexOf('보낸이') !== -1, '머리글 셀(보낸이)이 <th>로 나온다');
 ok(html.indexOf('|---|') === -1, '구분선 `|---|` 이 글자로 남아 있지 않다');
 ok(!/<div[^>]*>\|\s*11-02/.test(html), '표 행이 파이프 글자로 찍히지 않았다');

@@ -86,7 +86,7 @@
         seed();
         const boxHtml = document.getElementById('gantt-qa-messages').innerHTML;
         ok(boxHtml.indexOf('<table') !== -1, '답변이 <table> 로 그려졌다');
-        ok((boxHtml.match(/<tr><td/g) || []).length === 2, '메일 2건이 표 2행이다');
+        ok((boxHtml.match(/<tr[^>]*><td/g) || []).length === 2, '메일 2건이 표 2행이다');
         ok(boxHtml.indexOf('|---|') === -1, '구분선이 글자로 남지 않았다');
 
         // ② "텔레그램으로 요약본 보내줘" — 실측 실패 사례. 확인 없이 바로 가야 한다.
