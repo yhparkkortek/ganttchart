@@ -2451,6 +2451,20 @@ ALV 레이아웃은 **그 계정 기준으로 SAP에 영구 저장되는 상태*
   "not_in_catalog" 진단이 뜨면, 위 절차를 그대로 반복해서 새로 만들 것(이번엔 기록이 있으니
   훨씬 빠르다).
 
+### 🆕 (2026-11-02) `/KTK_LOC`가 한 군데 더 빠져 있었다 — 백엔드 폴백 상수
+
+위 10-27 교체는 `js/38`(메인 BOM 탭·전자부품 BOM)만 고쳤다 — **레이아웃을 아예 명시하지
+않는 호출**은 `sap_bridge_32.py`의 `_BOM_LAYOUT_VARIANT`(ZPP033 단일 자재 전용 폴백)로
+조용히 떨어지는데, 이 상수가 옛 `/STD_MC`(EBORT 없음)로 남아 있었다. 실제로 이 경로를
+타는 호출: AI 문답이 BOM 옵션 사전질문을 안 거친 경우(`js/04h`, `layoutParam=''`),
+`js/56` BOM 부품 찾기(레이아웃 인자 자체가 없음). "오늘 BOM 열었는데 이상하게 정렬돼
+있다"는 제보로 발견 — `_BOM_LAYOUT_VARIANT`를 `/KTK_LOC`로 바꿔 해결(호출부를 일일이
+찾아 고치는 대신 **폴백 한 곳만** 바꿨다). 실제 `/sap-bom` 엔드포인트로 라이브 검증:
+`layoutApplied: true, layoutRequested: /KTK_LOC`.
+⚠️ 새 BOM 관련 레이아웃을 또 바꾸게 되면 **세 곳**(`js/38 _ELEC_BOM_LAYOUT`,
+`js/38 bomFillLayoutOptions`/복원 로직, `sap_bridge_32.py _BOM_LAYOUT_VARIANT`)을 전부
+확인할 것 — 이번 사고가 "한 곳만 고치고 나머지를 놓침"의 반복이었다.
+
 ### 단가의 환종(통화) — ZMM009엔 통화 컬럼이 아예 없다
 ZMM009 ALV **119개 컬럼 전수 확인 결과 통화 컬럼이 없다**(`WAERS`/`WAERS1`/`STWAE`/`HWAER`/
 `WAERS_1` 모두 부재). `STPRS1`은 SAP 표준가격이라 **전사 통화(KRW) 고정**이어서 SAP이 환종을
