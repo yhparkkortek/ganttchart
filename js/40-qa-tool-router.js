@@ -644,6 +644,61 @@
                 return out;
             }
         },
+        // 🔎 [2026-11-02 신규, 사용자 요청 "부품 찾았으면 칩 버튼 기능 구현해줘"]
+        //    BOM 에서 찾은 부품 한 줄(js/56 `_bomPickParts` 의 행) → 다음에 할 일.
+        //  ⚠️ 깊은 SAP 조회는 **기존 자재 메뉴**(js/04g `_sapSelectMaterial`)로 넘긴다 —
+        //     BOM·재고·품목내역·문서·승인원·공급업체·구매정보·변경이력·🧺담기가 거기 다 있다.
+        //     여기에 다시 나열하면 같은 메뉴가 두 벌이 되고 한쪽만 고쳐지게 된다.
+        //  ⚠️ 이름이 없는 행(DESC' RULE 에 이름 칸이 없는 구분자)은 이름을 쓰는 칩을 **안 낸다**.
+        //     지어낸 이름으로 사양서를 뒤지면 "있는데 못 찾았다"가 아니라 남의 파일이 걸린다.
+        bompart: {
+            //  폭 합계는 말풍선 안 표 폭(실측 462px) 안에 둔다 — 고정 136px, 이름·내역이
+            //  남는 폭을 반씩 나눈다. 자재그룹·단계는 폭을 먹느니 **툴팁**으로 뺀다
+            //  (입고 표에서 6열에 고정폭을 다 줬다가 자재 칸이 17px 로 뭉개진 전례).
+            //  🌐 머리글을 **함수로** 적는다 — 이 카탈로그는 로드 때 한 번 만들어져서 여기서
+            //     `_t(...)` 를 바로 부르면 그때 언어로 굳는다(영어로 바꿔도 안 바뀐다).
+            cols: [
+                { label: function () { return window._t('이름', 'Name'); }, get: function (r) { return r.name || '—'; },
+                  title: function (r) {
+                      return (r.name || window._t('(내역에 이름 칸이 없는 구분자입니다)', '(no name field in this rule)'))
+                           + '\n\n' + window._t('내역', 'Desc') + ': ' + (r.desc || '')
+                           + '\n' + window._t('자재그룹', 'Group') + ': ' + (r.group || '')
+                           + ' · ' + window._t('단계', 'Lv') + ' ' + (r.level || '');
+                  } },
+                //  ⚠️ 내역을 **보이는 칸으로** 유지한다 — 이름 칸이 종류에 따라 제조사이거나
+                //     ALV 가 자른 조각일 수 있어서, 이름만 보여주면 그게 조용한 오답이 된다.
+                { label: function () { return window._t('내역(SAP)', 'Desc (SAP)'); }, get: function (r) { return r.desc || ''; },
+                  title: function (r) { return r.desc || ''; } },
+                { label: function () { return window._t('자재코드', 'Material'); }, w: '76px', get: function (r) { return r.code || ''; },
+                  title: function (r) { return (r.code || '') + ' · ' + (r.group || ''); } },
+                { label: function () { return window._t('수량', 'Qty'); }, w: '60px', get: function (r) { return (r.qty || '') + (r.unit ? ' ' + r.unit : ''); },
+                  title: function (r) { return window._t('단계', 'Level') + ' ' + (r.level || ''); } }
+            ],
+            header: function (r) {
+                return (r.name || r.code || '') + ' — ' + window._t('무엇을 할까요?', 'What would you like to do?');
+            },
+            menu: function (r) {
+                var t = window._t;
+                window._qaBomPartStore = window._qaBomPartStore || {};
+                window._qaBomPartStore[r.code] = r;      // 칩이 쓸 원본 행(종류·내역이 값에 안 실린다)
+                var out = [];
+                //  📄 사양서는 그 종류에 PARTS 폴더가 있을 때만(js/56 `_bomPartNasFolders`).
+                if (r.name && window._bomPartNasFolders && window._bomPartNasFolders(r.kind).length) {
+                    out.push({ label: '📄 ' + t('NAS 사양서', 'NAS spec sheet'), value: '__bomPartSpec__' + r.code });
+                }
+                //  ⚠️ **라벨만** 번역한다 — value 는 한국어 명령 그대로다. 이건 사람이 읽는 글이
+                //     아니라 기존 조회 블록이 받는 **명령어**이고, 그 블록의 어휘 카탈로그가
+                //     `사용처`·`가격`이다(영어로 옮기면 `where-used` 와 안 맞아 조용히 샌다).
+                out.push({ label: '🔄 ' + t('이 부품 사용처', 'Where used'), value: r.code + ' 사용처 조회해줘', style: 'sap' });
+                out.push({ label: '💰 ' + t('가격 확인', 'Price'), value: r.code + ' 가격 확인해줘', style: 'sap' });
+                out.push({ label: '🏭 ' + t('SAP 자재 메뉴', 'SAP material menu'), value: '__sapPickMat__' + r.code, style: 'sap' });
+                if (r.name) {
+                    out.push({ label: '📒 ' + t('Project list 에서 찾기', 'Find in Project list'), value: '__bomPartPl__' + r.code });
+                    out.push({ label: '📋 ' + t('이름 복사', 'Copy name'), value: '__bomPartCopy__' + r.code });
+                }
+                return out;
+            }
+        },
         board: {
             cols: [
                 { label: '게시판', w: '116px', get: function (r) { return r.boardName || ''; } },

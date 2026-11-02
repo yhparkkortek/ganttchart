@@ -1218,7 +1218,11 @@
                 return '<col' + (c.w ? ' style="width:' + esc(c.w) + ';"' : '') + '>';
             }).join('') + '</colgroup>' : '')
             + '<thead><tr>'
-            + cfg.cols.map(function (c) { return '<th style="' + thS + '">' + esc(c.label) + '</th>'; }).join('')
+            //  🌐 머리글은 **함수도 받는다** — 카탈로그는 로드 때 한 번 만들어지므로 거기서
+            //     `_t(...)`를 부르면 그때 언어로 **굳는다**. 함수로 적으면 그릴 때마다 정해진다.
+            + cfg.cols.map(function (c) {
+                return '<th style="' + thS + '">' + esc(typeof c.label === 'function' ? c.label() : c.label) + '</th>';
+            }).join('')
             + '</tr></thead><tbody>';
         rows.forEach(function (r, i) {
             const bg = i % 2 === 0 ? '#fff' : '#f7f9fc';
@@ -4695,6 +4699,77 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // 🔎 [2026-11-02 신규, 사용자 요청] BOM 에서 찾은 부품 표 행 클릭 칩.
+        //    칩 목록은 js/40 `QA_ROW_CHIP_KINDS.bompart`(데이터), 동작은 js/56 — 여기는 그 값을
+        //    받아 실행만 한다. SAP 조회 칩은 평문이라 이 블록에 안 오고 기존 조회 경로로 간다
+        //    (`사용처`·`가격`은 bom_part 의 notKw 라 이 기능이 자기 질문으로 다시 집지 않는다).
+        //  ⚠️ 내역·종류를 버튼 value 에 실을 수 없어 행은 `_qaBomPartStore`에 두고 자재코드만
+        //     넘긴다. 새로고침하면 비므로 "다시 조회해달라"고 정직하게 답한다.
+        if (question.indexOf('__bomPart') === 0) {
+            const _bpcM = question.match(/^__bomPart([A-Za-z]+)__(.+)$/);
+            const _bpcAct = _bpcM ? _bpcM[1] : '';
+            const _bpcRow = _bpcM ? ((window._qaBomPartStore || {})[_bpcM[2]]) : null;
+            input.value = '';
+            if (!_bpcRow) {
+                window._ganttQaHistory.push({ role: 'ai', error: true,
+                    text: '⚠️ ' + window._t('그 부품 정보를 찾지 못했습니다 — 부품을 다시 조회해 주세요.',
+                                             'Could not find that part — please run the part lookup again.') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            const _bpcName = _bpcRow.name || '';
+            if (_bpcAct === 'Copy') {
+                let _bpcOk = false;
+                try { await navigator.clipboard.writeText(_bpcName); _bpcOk = true; } catch (e) { _bpcOk = false; }
+                if (!_bpcOk) input.value = _bpcName;        // 클립보드가 막히면 입력창에 — 사람이 집어 쓴다
+                if (window.showToast) {
+                    window.showToast(_bpcOk ? ('📋 ' + window._t('복사: ', 'Copied: ') + _bpcName)
+                                            : window._t('클립보드가 막혀 입력창에 넣었습니다.', 'Clipboard blocked — put it in the input box.'),
+                                     _bpcOk ? 'success' : 'error');
+                }
+                input.focus(); return;
+            }
+            if (_bpcAct === 'Pl') {
+                const _bpcHit = window._bomPartFindInProjectList ? window._bomPartFindInProjectList(_bpcName) : false;
+                if (window.showToast) {
+                    window.showToast(_bpcHit
+                        ? ('📒 ' + window._t('Project list 에서 "' + _bpcName + '" 검색 — 이 창을 닫고 보세요.',
+                                             'Searching Project list for "' + _bpcName + '" — close this window to see it.'))
+                        : window._t('Project list 탭을 먼저 열어 주세요.', 'Please open the Project list tab first.'),
+                        _bpcHit ? 'success' : 'error');
+                }
+                input.focus(); return;
+            }
+            if (_bpcAct === 'Spec') {
+                window._ganttQaHistory.push({ role: 'ai', pending: true,
+                    text: '⏳ ' + window._t('NAS 에서 "' + _bpcName + '" 사양서를 찾는 중...',
+                                            'Searching NAS for the "' + _bpcName + '" spec sheet...') });
+                window._renderGanttQaMessages();
+                let _bpcMsg = '';
+                try {
+                    const _bpcR = await window._bomPartOpenSpec(_bpcRow);
+                    if (_bpcR.opened) {
+                        _bpcMsg = '📄 ' + window._t(_bpcName + ' — NAS 파일 ' + _bpcR.hits.length + '건'
+                                                    + (_bpcR.hits.length === 1 ? '을 새 창에서 열었습니다.' : ' 중에서 고르세요.'),
+                                                    _bpcName + ' — ' + _bpcR.hits.length + ' file(s) on NAS'
+                                                    + (_bpcR.hits.length === 1 ? ' opened in a new tab.' : ' — pick one.'));
+                    } else {
+                        // 조용히 0건으로 끝내지 않는다 — **어느 폴더를 뒤졌는지** 밝힌다.
+                        _bpcMsg = 'ℹ️ ' + window._t('"' + _bpcName + '" 이(가) 들어간 파일을 NAS 에서 찾지 못했습니다.',
+                                                     'No NAS file matching "' + _bpcName + '".')
+                                + '\n\n' + window._t('뒤진 폴더: ', 'Searched: ') + (_bpcR.searched.join(' · ') || '—')
+                                + '\n' + window._t('※ 하위 폴더는 보지 않습니다 — PARTS 탭의 📁 NAS 에서 직접 찾아보세요.',
+                                                   '※ Subfolders are not searched — use 📁 NAS in the PARTS tab.');
+                    }
+                } catch (e) { _bpcMsg = '⚠️ ' + (e && e.message ? e.message : e); }
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: _bpcMsg });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            window._ganttQaHistory.push({ role: 'ai', error: true,
+                text: '⚠️ ' + window._t('모르는 부품 동작입니다: ', 'Unknown part action: ') + _bpcAct });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 🔧 [2026-11-02] 메일에서 찾은 자재번호 칩 — SAP 자재 메뉴(기존 공용 경로)로 넘긴다.
         if (question.indexOf('__sapPickMat__') === 0) {
             const _spMat = question.replace(/^__sapPickMat__/, '').trim();
@@ -7802,19 +7877,22 @@ ${docsJson}`;
                 text: '⏳ ' + window._t(_bpMat + ' BOM 다단계 전개 중… (30~90초) — ' + _bpName + '을(를) 찾습니다',
                                         'Exploding the BOM of ' + _bpMat + ' (multi-level, 30–90s) — looking for the ' + _bpName) });
             window._renderGanttQaMessages();
-            let _bpReply;
+            let _bpReply = '', _bpFound = null;
             try {
                 const _bpRes = await window.sapBomPartLookup(_bpMat, _bpKind, function (m) {
                     const last = window._ganttQaHistory[window._ganttQaHistory.length - 1];
                     if (last && last.pending) { last.text = '⏳ ' + m; window._renderGanttQaMessages(); }
                 });
-                _bpReply = window.bomPartLookupText(_bpRes);
+                //  찾았으면 **행 클릭 칩 표**로(사용자 요청 2026-11-02) — 0건·오류는 글 그대로.
+                if (_bpRes && _bpRes.hits && _bpRes.hits.length) _bpFound = _bpRes;
+                else _bpReply = window.bomPartLookupText(_bpRes);
             } catch (e) {
                 _bpReply = '⚠️ ' + (e && e.message ? e.message : e);
                 if (window._issueLog) window._issueLog('sap-bom-part', { material: _bpMat, kind: _bpKind.id, error: String(e && e.message || e) });
             }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: _bpReply });
+            if (_bpFound && window._bomPartPushTable) window._bomPartPushTable(_bpFound);
+            else window._ganttQaHistory.push({ role: 'ai', text: _bpReply || window.bomPartLookupText(_bpFound) });
             window._renderGanttQaMessages(); input.focus(); return;
         }
 

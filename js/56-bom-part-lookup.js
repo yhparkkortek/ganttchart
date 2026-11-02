@@ -31,22 +31,27 @@
     //   kw     : 사람이 쓰는 말(이 말이 질문에 있으면 그 종류로 본다)
     //   groups : 자재그룹(WGBEZ60) 패턴. `대분류/중분류` 전체, 또는 `대분류/`(그 대분류 전부),
     //            또는 중분류 이름만(대분류 무관). 자재그룹표 R100 의 실제 이름을 쓴다.
+    //   cats   : 찾은 부품의 사양서가 있는 **PARTS 구분**(js/23 `ELEC_CATEGORY_META` 의 키).
+    //            여기에 경로를 적지 않는 이유 — NAS 경로를 보는 곳이 이미 넷이라 한 곳만 고치면
+    //            조용히 0건이 된다(CLAUDE.md). 경로는 그 카탈로그에서 **읽어 온다**.
+    //            적지 않은 종류는 📄 사양서 칩을 **안 보여준다**(누르면 아무 일도 안 나는 칩 금지).
     window.BOM_PART_KINDS = window.BOM_PART_KINDS || [
         { id: 'panel',   ko: '패널',      en: 'Panel',
           kw: ['패널', 'panel', 'lcd', 'lcm', 'fog', '액정', '디스플레이', 'display'],
-          groups: ['DISPLAY/'] },
+          groups: ['DISPLAY/'], cats: ['PANEL'] },
         { id: 'touch',   ko: '터치',      en: 'Touch',
           kw: ['터치', 'touch', 'tsp', '터치스크린'],
-          groups: ['TOUCH SCREEN MODULE', 'TOUCH SCREEN ASSY', 'TOUCH CONTROLLER', 'IC-TOUCH CONTROLLER'] },
+          groups: ['TOUCH SCREEN MODULE', 'TOUCH SCREEN ASSY', 'TOUCH CONTROLLER', 'IC-TOUCH CONTROLLER'],
+          cats: ['TOUCH CTRL', 'TOUCH / GLASS'] },
         { id: 'blu',     ko: 'BLU',       en: 'BLU',
           kw: ['blu', '백라이트', 'backlight', '광원', 'bm'],
-          groups: ['BLU MODULE', 'BM PART MODULE', 'BM PART(ASSY)', 'LED MODULE'] },
+          groups: ['BLU MODULE', 'BM PART MODULE', 'BM PART(ASSY)', 'LED MODULE'], cats: ['BLU'] },
         { id: 'board',   ko: '보드',      en: 'Board',
           kw: ['보드', 'pba', 'pcb', '기판', 'board', 'ad bd', '에이디보드'],
-          groups: ['BD 반제품/', 'BARE PCB'] },
+          groups: ['BD 반제품/', 'BARE PCB'], cats: ['AD BOARD', 'CONVERTER'] },
         { id: 'power',   ko: '파워',      en: 'Power',
           kw: ['파워', '전원', 'power', 'smps', '아답타', '어댑터', 'adapter'],
-          groups: ['전장자재/POWER', 'POWER ASSY', 'CONVERTER'] },
+          groups: ['전장자재/POWER', 'POWER ASSY', 'CONVERTER'], cats: ['POWER'] },
         { id: 'harness', ko: '케이블',    en: 'Cable',
           kw: ['케이블', '하네스', 'harness', 'cable', '배선'],
           groups: ['HARNESS'] },
@@ -61,10 +66,10 @@
           groups: ['기구자재/OPTICAL', 'FOG ASSY', 'LCM ASSY'] },
         { id: 'packing', ko: '포장재',    en: 'Packaging',
           kw: ['포장', '박스', 'box', 'packing', '완충', '팔레트'],
-          groups: ['포장자재/'] },
+          groups: ['포장자재/'], cats: ['PACKING'] },
         { id: 'mech',    ko: '기구물',    en: 'Mechanical',
           kw: ['기구', '사출', '프레스', 'mech', '브라켓', 'bracket'],
-          groups: ['기구자재/', '기구반제품/'] }
+          groups: ['기구자재/', '기구반제품/'], cats: ['METAL', 'MOLD', 'DIE CAST'] }
     ];
 
     // ── 데이터 ② 구분자 → "제조사 품명" 이 몇 번째 값인가(0부터) ───────────────
@@ -166,6 +171,9 @@
             if (seen[r.code]) return;
             seen[r.code] = 1;
             r.name = window._bomPartNameOf(r.desc);
+            //  칩 메뉴(js/40 `QA_ROW_CHIP_KINDS.bompart`)는 행 하나만 받는다 — 그 행이 어떤
+            //  종류로 걸린 건지 알아야 사양서 폴더를 고를 수 있어서 종류를 행에 달아 둔다.
+            r.kind = kind;
             out.push(r);
         });
         return out;
@@ -202,25 +210,128 @@
                               'No **' + kindName + '** material in the BOM of ' + r.material + ' (' + r.total + ' rows).')
                  + '\n\n' + _t('이 BOM 에 있는 자재그룹: ', 'Material groups in this BOM: ') + list;
         }
-        var head = '🔎 **' + r.material + '** ' + _t('에 사용된 ', ' — ') + kindName
-                 + ' ' + r.hits.length + _t('건', '')
-                 + _t('  (BOM ' + r.total + '행 다단계 전개)', '  (multi-level BOM, ' + r.total + ' rows)') + '\n\n';
-        // ⚠️ 이름 옆에 **내역을 항상 같이** 보여준다. DESC' RULE 의 "제조사 품명" 자리가
-        //    부품 종류에 따라 모델명이 아니라 제조사(예: BLU 의 `제조사,재질,…`)일 수 있고,
-        //    ALV 가 내역을 잘라 보내기도 한다(끝의 `=`). 이름만 보여주면 그게 **조용한 오답**이 된다.
+        return window.bomPartLookupHeader(r) + '\n\n' + window.bomPartMarkdownTable(r);
+    };
+
+    /** 머리글 한 줄 — 칩 표와 마크다운 표가 **같은 글**을 쓴다(두 군데 적지 않는다). */
+    window.bomPartLookupHeader = function (r) {
+        var kindName = (window._currentLang === 'en') ? r.kind.en : r.kind.ko;
+        return '🔎 **' + r.material + '** ' + _t('에 사용된 ', ' — ') + kindName
+             + ' ' + r.hits.length + _t('건', '')
+             + _t('  (BOM ' + r.total + '행 다단계 전개)', '  (multi-level BOM, ' + r.total + ' rows)');
+    };
+
+    /**
+     * 마크다운 표 — 칩 표를 못 그릴 때의 폴백이고, **텔레그램으로 보낼 때 쓰는 글**이다
+     * (칩 표는 rawHtml 이라 그대로 보내면 태그가 글자로 나간다 — 메일 표에서 겪은 그 자리).
+     * ⚠️ 이름 옆에 **내역을 항상 같이** 보여준다. DESC' RULE 의 "제조사 품명" 자리가
+     *    부품 종류에 따라 모델명이 아니라 제조사(예: BLU 의 `제조사,재질,…`)일 수 있고,
+     *    ALV 가 내역을 잘라 보내기도 한다(끝의 `=`). 이름만 보여주면 그게 **조용한 오답**이 된다.
+     */
+    window.bomPartMarkdownTable = function (r) {
         var body = ['| ' + _t('이름', 'Name') + ' | ' + _t('내역(SAP)', 'Description (SAP)') + ' | ' + _t('자재코드', 'Material')
                   + ' | ' + _t('자재그룹', 'Group') + ' | ' + _t('단계', 'Lv') + ' | ' + _t('수량', 'Qty') + ' |',
                     '|---|---|---|---|---|---|'];
-        var cut = 0;
         r.hits.forEach(function (h) {
             var d = h.desc;
-            if (d.slice(-1) === '=') { cut++; d = d.slice(0, -1) + '…'; }
+            if (d.slice(-1) === '=') d = d.slice(0, -1) + '…';
             if (d.length > 42) d = d.slice(0, 42) + '…';   // 좁은 모달에서 이름 칸을 밀어내지 않게
             body.push('| ' + (h.name || '—') + ' | ' + d + ' | ' + h.code
                     + ' | ' + h.group + ' | ' + h.level + ' | ' + h.qty + ' ' + h.unit + ' |');
         });
-        var note = cut ? ('\n\n' + _t('※ 내역 끝의 …는 SAP 화면이 글자를 자른 것입니다(' + cut + '건).',
-                                      '※ … means SAP truncated the description (' + cut + ' row(s)).')) : '';
-        return head + body.join('\n') + note;
+        return body.join('\n') + window.bomPartCutNote(r);
+    };
+
+    /** ALV 가 자른 행이 몇 건인지 — 자른 사실을 숨기지 않는다. */
+    window.bomPartCutNote = function (r) {
+        var cut = (r.hits || []).filter(function (h) { return String(h.desc || '').slice(-1) === '='; }).length;
+        if (!cut) return '';
+        return '\n\n' + _t('※ 내역 끝의 …는 SAP 화면이 글자를 자른 것입니다(' + cut + '건).',
+                           '※ … means SAP truncated the description (' + cut + ' row(s)).');
+    };
+
+    // ── 🔗 찾은 부품 → 다른 기능 (행 클릭 칩) ─────────────────────────────────
+    //  사용자 요청(2026-11-02): "부품 찾았으면 칩 버튼 기능 구현해줘".
+    //  표를 **행 클릭 칩 표**(js/04h `_qaBuildRowChipTable`, 전자결재·메일과 같은 공용 경로)로
+    //  바꾼다 — 칩 목록은 js/40 `QA_ROW_CHIP_KINDS.bompart`(데이터), 실행은 js/04h.
+    //  여기 있는 건 칩이 부르는 **동작 두 개**(사양서 열기 · Project list 에서 찾기)뿐이다.
+
+    /**
+     * 그 종류의 사양서가 있는 NAS 폴더 — **경로를 여기 적지 않는다**.
+     * js/23 `ELEC_CATEGORY_META`(PARTS 구분 카탈로그)에서 읽어 온다. 구분 이름이 바뀌면
+     * 칩이 **사라진다**(엉뚱한 폴더를 0건으로 뒤지는 것보다 낫다).
+     */
+    window._bomPartNasFolders = function (kind) {
+        var meta = window.ELEC_CATEGORY_META || {};
+        return ((kind && kind.cats) || []).map(function (cat) {
+            var m = meta[cat];
+            if (!m) return null;
+            return { folder: m.nasFull || ('PARTS/' + (m.nas || cat)), label: cat };
+        }).filter(Boolean);
+    };
+
+    /**
+     * 📄 찾은 부품 이름으로 NAS 사양서 열기. 1건이면 바로 열고, 여러 건이면 고르게 하고,
+     * 0건이면 **어느 폴더를 몇 장 뒤졌는지** 밝힌다(조용히 0건으로 끝내지 않는다).
+     * 반환: `{opened, hits, searched}` — 부르는 쪽이 채팅에 적을 수 있게.
+     */
+    window._bomPartOpenSpec = async function (row) {
+        var folders = window._bomPartNasFolders(row && row.kind);
+        var name = (row && row.name) || '';
+        if (!name || !folders.length || !window._dsFindPanelSpecAll) return { opened: false, hits: [], searched: [] };
+        var hits = [], searched = [];
+        for (var i = 0; i < folders.length; i++) {
+            var fs = [];
+            try { fs = await window._dsFindPanelSpecAll(name, folders[i].folder); } catch (e) { fs = []; }
+            searched.push(folders[i].folder);
+            fs.forEach(function (f) { hits.push({ folder: folders[i].folder, name: f.name }); });
+        }
+        if (hits.length === 1 && window._dsOpenInNewTab) {
+            window._dsOpenInNewTab(hits[0].folder, hits[0].name);
+            return { opened: true, hits: hits, searched: searched };
+        }
+        if (hits.length > 1 && window._dsOpenPicker) {
+            // 여러 장이면 공용 고르기 창에 **검색어를 넣어** 걸린 파일 전부를 보여준다(js/48 와 같은 방식).
+            window._dsOpenPicker({
+                folder: hits[0].folder,
+                folders: folders.map(function (f) { return { f: f.folder, label: f.label }; }),
+                q: name,
+                title: '📄 ' + name + ' — ' + _t(hits.length + '개 파일', hits.length + ' files'),
+                onPick: function (f, n) { window._dsOpenInNewTab(f, n); }
+            });
+            return { opened: true, hits: hits, searched: searched };
+        }
+        return { opened: false, hits: hits, searched: searched };
+    };
+
+    /** 📒 Project list 탭으로 가서 그 이름으로 검색 — "이 부품을 쓰는 다른 제품"을 사람이 본다. */
+    window._bomPartFindInProjectList = function (name) {
+        if (!name) return false;
+        if (window.switchTab) window.switchTab('projectlist');
+        var si = document.getElementById('pl-search');
+        if (si) si.value = name;
+        if (window.plSearch) window.plSearch(name);
+        else if (window.plRender) window.plRender(true);
+        return !!si;
+    };
+
+    /**
+     * 결과를 **칩 표**로 말풍선에 넣는다. 칩 표를 못 만들면 마크다운 표로 떨어진다
+     * (렌더러가 표로 그린다 — 사람이 보는 게 사라지지 않게).
+     */
+    window._bomPartPushTable = function (r) {
+        var header = window.bomPartLookupHeader(r);
+        var md = window.bomPartMarkdownTable(r);
+        var html = window._qaBuildRowChipTable ? window._qaBuildRowChipTable('bompart', r.hits) : '';
+        if (!html) {
+            window._ganttQaHistory.push({ role: 'ai', text: header + '\n\n' + md });
+            return false;
+        }
+        window._ganttQaHistory.push({
+            role: 'ai', rawHtml: true,
+            text: window._mdToHtml(header + window.bomPartCutNote(r)) + html,
+            tgText: header + '\n\n' + md
+        });
+        return true;
     };
 })();
