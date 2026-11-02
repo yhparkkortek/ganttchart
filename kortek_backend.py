@@ -689,6 +689,13 @@ def fetch_mail():
     keyword_from    = req.get('keywordFrom', '')
     keyword_body    = req.get('keywordBody', '')
     max_count  = req.get('maxCount', 200)
+    # 🆕 [2026-11-02, 사용자 제보 "IMAP 안 쓰고 POP3 쓰는데?"] 계정에 IMAP 권한이 없는 게 아니라
+    #    처음부터 POP3 전용으로 운영하기로 한 계정도 있다 — 그런데도 매번 IMAP 인증을 먼저
+    #    시도했고, 서버가 돌려주는 거부 문구가 아래 _PERMISSION_HINTS 목록에 없는 변형이면
+    #    그대로 "계정/비밀번호를 확인해주세요" 오류가 떴다(권한거부를 비번오류로 오판한 2026-10-26
+    #    사고와 같은 종류 — 이번엔 "아예 IMAP을 안 쓴다"는 경우까지 커버). 프런트(알람 설정의
+    #    "POP3만 사용" 체크, js/22b)가 켜져 있으면 IMAP 시도 자체를 건너뛴다.
+    force_proto = str(req.get('protocol', '') or '').strip().lower()
 
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=KST)
@@ -702,36 +709,41 @@ def fetch_mail():
         # IMAPS 우선 — 실패하면 POP3로 폴백한다. 폴백은 "조용히" 하지 않고 `proto`/`fallback`에
         # 담아 올려보내, 어느 경로로 받았고 왜 넘어갔는지 화면에서 확인할 수 있게 한다.
         proto, fallback_reason = 'imaps', None
-        try:
-            results = _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                       keyword, keyword_from, keyword_body, _stage_dir)
-        except imaplib.IMAP4.error as e:
-            # 🐛🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "자동 메일 수집이 안 된다"]
-            #    여기서 IMAP4.error 를 **전부 "비밀번호가 틀린 것"으로 단정**해 POP3 폴백을 막고 있었다.
-            #    그런데 이 서버가 돌려준 건 `have no permission.` — 비밀번호가 아니라 **그 계정에
-            #    IMAP 사용 권한이 없다**는 뜻이다(다우오피스/TIMS 계열은 계정별로 관리자가 켠다).
-            #    바로 위 주석이 "계정별로 IMAP이 막혀 있을 수 있어 POP3 폴백을 남긴다"고 적어 둔
-            #    **그 경우인데, 코드가 그 길을 막고 있었다**(의도와 코드가 어긋남).
-            #    결과: 10-16 IMAPS 전환 이후 수집이 매번 여기서 끝났고, 사람에겐 "계정/비밀번호를
-            #    확인해주세요"라는 **틀린 안내**가 나갔다. POP3로는 멀쩡히 되는 계정인데도.
-            #    → 권한/정책 거부로 보이면 POP3 로 폴백한다. **비밀번호 오류로 보일 때만** 중단한다
-            #      (잠금 위험이 있는 건 그쪽뿐이다 — SAP·그룹웨어 로그인과 같은 원칙).
-            _msg = str(e)
-            _low = _msg.lower()
-            _PERMISSION_HINTS = ('permission', 'not allowed', 'disabled', 'denied',
-                                 'not enabled', 'forbidden', 'unavailable')
-            if any(h in _low for h in _PERMISSION_HINTS):
-                proto = 'pop3'
-                fallback_reason = f'IMAP 권한 없음({_msg}) — POP3로 전환'
-                results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                           keyword, keyword_from, keyword_body, _stage_dir)
-            else:
-                return jsonify({"status": "error",
-                                "message": f"IMAP 인증 실패: {_msg} — 메일 계정/비밀번호를 확인해주세요."})
-        except Exception as e:
-            proto, fallback_reason = 'pop3', f'{type(e).__name__}: {e}'
+        if force_proto == 'pop3':
+            proto, fallback_reason = 'pop3', '사용자 설정(수신은 POP3만 사용)'
             results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
                                        keyword, keyword_from, keyword_body, _stage_dir)
+        else:
+            try:
+                results = _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
+                                           keyword, keyword_from, keyword_body, _stage_dir)
+            except imaplib.IMAP4.error as e:
+                # 🐛🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "자동 메일 수집이 안 된다"]
+                #    여기서 IMAP4.error 를 **전부 "비밀번호가 틀린 것"으로 단정**해 POP3 폴백을 막고 있었다.
+                #    그런데 이 서버가 돌려준 건 `have no permission.` — 비밀번호가 아니라 **그 계정에
+                #    IMAP 사용 권한이 없다**는 뜻이다(다우오피스/TIMS 계열은 계정별로 관리자가 켠다).
+                #    바로 위 주석이 "계정별로 IMAP이 막혀 있을 수 있어 POP3 폴백을 남긴다"고 적어 둔
+                #    **그 경우인데, 코드가 그 길을 막고 있었다**(의도와 코드가 어긋남).
+                #    결과: 10-16 IMAPS 전환 이후 수집이 매번 여기서 끝났고, 사람에겐 "계정/비밀번호를
+                #    확인해주세요"라는 **틀린 안내**가 나갔다. POP3로는 멀쩡히 되는 계정인데도.
+                #    → 권한/정책 거부로 보이면 POP3 로 폴백한다. **비밀번호 오류로 보일 때만** 중단한다
+                #      (잠금 위험이 있는 건 그쪽뿐이다 — SAP·그룹웨어 로그인과 같은 원칙).
+                _msg = str(e)
+                _low = _msg.lower()
+                _PERMISSION_HINTS = ('permission', 'not allowed', 'disabled', 'denied',
+                                     'not enabled', 'forbidden', 'unavailable')
+                if any(h in _low for h in _PERMISSION_HINTS):
+                    proto = 'pop3'
+                    fallback_reason = f'IMAP 권한 없음({_msg}) — POP3로 전환'
+                    results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
+                                               keyword, keyword_from, keyword_body, _stage_dir)
+                else:
+                    return jsonify({"status": "error",
+                                    "message": f"IMAP 인증 실패: {_msg} — 메일 계정/비밀번호를 확인해주세요."})
+            except Exception as e:
+                proto, fallback_reason = 'pop3', f'{type(e).__name__}: {e}'
+                results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
+                                           keyword, keyword_from, keyword_body, _stage_dir)
 
         resp = {
             "status":  "success",

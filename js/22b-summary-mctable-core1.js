@@ -968,8 +968,12 @@ window.saveSmtpConfig = async function() {
     const msgEl = document.getElementById('as-smtp-save-msg');
 
     // ✅ host/port/user/pass 모두 로컬 저장 — 다음에 열 때 자동으로 채워짐
+    // 🆕 [2026-11-02, 사용자 제보 "IMAP 안 쓰고 POP3 쓰는데?"] forcePop3는 수신(/fetch-mail) 전용
+    //    설정이라 발송 서버(/config)에는 보내지 않는다 — 로컬에만 저장해 두고 js/15b가 메일 수집
+    //    요청마다 읽어서 백엔드에 protocol:'pop3'로 넘긴다(IMAP 시도 자체를 건너뜀).
+    const forcePop3 = !!document.getElementById('as-smtp-forcepop3')?.checked;
     const localCfg = window.loadAlarmSettings();
-    localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user, pass: cfg.pass };
+    localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user, pass: cfg.pass, forcePop3: forcePop3 };
     localStorage.setItem('gantt_alarm_settings', JSON.stringify(localCfg));
     // 💡 AI 업무 분석 탭의 메일 서버 계정 표시도 같은 계정을 공유하므로 즉시 갱신
     if (window._msRefreshServerAccountStatus) window._msRefreshServerAccountStatus();
@@ -1278,6 +1282,7 @@ window.openAlarmSettings = function() {
     document.getElementById('as-smtp-port').value = smtp.port || 25;
     document.getElementById('as-smtp-user').value = smtp.user || '';
     document.getElementById('as-smtp-pass').value = smtp.pass || '';
+    document.getElementById('as-smtp-forcepop3').checked = !!smtp.forcePop3;
     window.refreshAlarmAutoButtons(cfg.autoSend !== false);
     window.renderAlarmDomainList();
     document.getElementById('alarm-settings-overlay').style.display = 'flex';

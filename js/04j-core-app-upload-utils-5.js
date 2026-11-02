@@ -812,6 +812,7 @@
             'as-lbl-port':             { ko:'포트',                               en:'Port' },
             'as-lbl-user':             { ko:'계정',                               en:'Account' },
             'as-lbl-pass':             { ko:'비밀번호',                           en:'Password' },
+            'as-smtp-forcepop3-label': { ko:'수신(받기)은 POP3만 사용 — 계정에 IMAP 권한이 없을 때 체크', en:'Receive via POP3 only — check this if your account has no IMAP permission' },
             'as-smtp-privacy-note':    { ko:'🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장', en:'🔒 Stored in this browser · Not recommended on shared PCs' },
             'as-smtp-save-btn':        { ko:'💾 저장',                            en:'💾 Save' },
             'sec-messenger-label':     { ko:'💬 메신저 서버 설정',                en:'💬 Messenger Server Settings' },

@@ -438,6 +438,21 @@ Task Inbox "📧 원문 보기"의 🌐 번역 버튼(`js/14c-task-inbox.js`의 
 ⚠️ **폴백 POP3는 110 평문**이다(`poplib.POP3`, SSL 아님). 기능은 되지만 비밀번호·본문이 평문으로
 흐른다 — IMAP 전환의 핵심 동기가 그거였다. 권한을 받는 쪽이 정답이고, 안 되면 POP3S(995) 검토.
 
+### 🆕 (2026-11-02) "IMAP 안 쓰고 POP3 쓰는데?" — 거부 문구가 매번 다를 수 있다, 그래서 수동 강제 옵션을 추가
+
+위 폴백은 **서버가 돌려주는 거부 문구가 `_PERMISSION_HINTS` 목록에 있을 때만** 작동한다. 그런데
+이 계정은 처음부터 **관리자가 IMAP을 영구 비활성화**해 둔 계정이라, IMAP 인증 거부 문구가 그
+목록에 없는 변형으로 올 수도 있다 — 그러면 똑같이 "계정/비밀번호를 확인해주세요" 오류 토스트가
+뜬다(2026-10-26 사고와 증상은 같지만 원인은 "아직 못 잡은 또 다른 거부 문구"일 수 있어 목록을
+늘리는 식으로는 끝이 없다). → **IMAP 시도 자체를 건너뛰는 수동 스위치**를 추가했다: 알람 설정 ▸
+🖥️ 이메일 서버 설정에 `수신(받기)은 POP3만 사용` 체크박스(`#as-smtp-forcepop3`, `js/22b`
+`saveSmtpConfig`/`openAlarmSettings`) → `gantt_alarm_settings.smtp.forcePop3`에 로컬 저장 →
+`js/15b`의 수동 수집(`msFetchMail`)·자동수집 틱(`_msAutoTick`) 둘 다 `window._msShouldForcePop3()`로
+읽어 `/fetch-mail` 요청에 `protocol:'pop3'`를 실어 보낸다 → 백엔드(`fetch_mail`, `kortek_backend.py`)가
+`force_proto=='pop3'`면 `_fetch_mail_imap` 호출 자체를 건너뛰고 곧장 `_fetch_mail_pop3`로 간다.
+⚠️ **백엔드는 상시 실행 프로세스**(`sap_bridge_32.py`와 다름 — 매 호출 서브프로세스 아님)라
+이 수정은 **`kortek_backend.bat` 재시작 전까지 적용되지 않는다**.
+
 ### 조용히 삼키지 말 것 — 두 군데서 삼키고 있었다
 
 - 백엔드가 **오류**를 돌려줘도 프런트가 "새 메일 없음"과 같은 조건으로 묶어 **시각만 갱신**하고 끝냈다.

@@ -8,6 +8,15 @@ const MS_SERVER_URL = 'http://127.0.0.1:5000';
 window._msResults   = [];
 window._msCurrentIdx = -1;
 
+// 🆕 [2026-11-02, 사용자 제보 "IMAP 안 쓰고 POP3 쓰는데?"] 이 계정은 IMAP을 아예 안 쓰기로
+//    되어 있는데도 매번 IMAP 인증을 먼저 시도했다 — 거부 문구가 백엔드의 권한거부 목록
+//    (permission/denied/...)에 없는 변형으로 오면 그대로 "계정/비밀번호를 확인해주세요" 오류
+//    토스트가 떴다. 알람 설정의 "POP3만 사용" 체크를 켜두면 IMAP 시도 자체를 건너뛴다.
+window._msShouldForcePop3 = function() {
+    try { return !!((window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {}).forcePop3; }
+    catch (e) { return false; }
+};
+
 // 🔽 필터 조건 접기/펴기 — 자주 안 쓰는 영역이라 기본 접힘(2026-10-07)
 window.toggleMsFilter = function() {
     const body = document.getElementById('ms-filter-body');
@@ -157,7 +166,8 @@ window.msFetchMail = async function() {
             keyword:      document.getElementById('ms-keyword')?.value?.trim() || '',
             keywordFrom:  document.getElementById('ms-keyword-from')?.value?.trim() || '',
             keywordBody:  document.getElementById('ms-keyword-body')?.value?.trim() || '',
-            maxCount:     500
+            maxCount:     500,
+            protocol:     window._msShouldForcePop3() ? 'pop3' : ''
             })
         });
         const data = await res.json();
@@ -1324,7 +1334,8 @@ window._autoMailFetchTick = async function() {
                 mailUser: savedUser, mailPw: password,
                 startDate, endDate,
                 keyword: '', keywordFrom: '', keywordBody: '',
-                maxCount: 500
+                maxCount: 500,
+                protocol: window._msShouldForcePop3() ? 'pop3' : ''
             })
         });
         const data = await res.json();
