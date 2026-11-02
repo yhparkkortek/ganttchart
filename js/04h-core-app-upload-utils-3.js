@@ -4517,6 +4517,29 @@ ${docsJson}`;
             return;
         }
 
+        // 💬 [2026-11-02] "텔레그램으로 보내기" 확인 버튼 — 보낼 내용은 `_qaTgPending`에 있다.
+        //    (내용을 버튼 value에 실을 수 없다 — 메일 표 하나가 수천 자다)
+        if (question.indexOf('__tgSendConfirm__') === 0 || question.indexOf('__tgSendCancel__') === 0) {
+            const _tgGo = question.indexOf('__tgSendConfirm__') === 0;
+            input.value = '';
+            const _tgP = window._qaTgPending;
+            window._qaTgPending = null;              // 재전송 방지 — 먼저 비운다
+            if (!_tgGo) {
+                window._ganttQaHistory.push({ role: 'ai', tgResult: true,
+                    text: window._t('취소했습니다 — 보내지 않았습니다.', 'Cancelled — nothing was sent.') });
+                window._renderGanttQaMessages();
+            } else if (!_tgP || !_tgP.text) {
+                window._ganttQaHistory.push({ role: 'ai', error: true, tgResult: true,
+                    text: '⚠️ ' + window._t('보낼 내용을 찾지 못했습니다(이미 보냈거나 만료됨).',
+                                             'Could not find the content to send (already sent or expired).') });
+                window._renderGanttQaMessages();
+            } else {
+                await window._qaTelegramDeliver(_tgP.text, { chatId: _tgP.chatId, label: _tgP.label });
+            }
+            input.focus();
+            return;
+        }
+
         // 🔍📥 [2026-10-01] 자재 선택 팝업의 "문서 조회"/"문서 저장" — 문서 종류 드롭다운을 띄우고 종료
         if (question.indexOf('__docLookup__') === 0 || question.indexOf('__docSave__') === 0) {
             const _isLookup = question.indexOf('__docLookup__') === 0;
@@ -4811,6 +4834,9 @@ ${docsJson}`;
         //    등 클릭으로 삽입된 Q/A 번호 참조를 해석해 해당 메시지 컨텍스트(자재번호·내용)를 주입한다.
         //    _qaNavM 위의 "A45번 대화로 돌아가서" 패턴은 이미 위에서 처리했으므로 여기서는
         //    그 이외의 참조 명령("Q1 내용 메일로", "Q1에서 H1 조회" 등)만 다룬다.
+        //    💬 [2026-11-02] 텔레그램 전송은 **발췌가 아니라 전문**을 보내야 하므로 question에
+        //       끼워 넣지 않고 이 변수로 아래 텔레그램 블록에 그대로 넘긴다.
+        let _tgRefText = '';
         const _qaRefM = question.match(/^([AaQq])(\d+)\s*번?\s*(?:에서|의|내용|아이템|자재|항목)?\s*/);
         if (_qaRefM) {
             const _qaRefRole = /^[Aa]$/.test(_qaRefM[1]) ? 'ai' : 'user';
@@ -4843,6 +4869,10 @@ ${docsJson}`;
                     if (_refNums2.length > 0 && !(_restCmd2.match(/\b\d{5,8}\b/g) || []).length) {
                         // 명령에 자재번호 없음 → 참조에서 추출한 번호를 앞에 주입
                         question = _refNums2.join(' ') + ' ' + _restCmd2;
+                    } else if (window._qaTelegramCmdHit && window._qaTelegramCmdHit(_restCmd2)) {
+                        // "A1 텔레그램으로 보내줘" — 그 답변 **전문**을 보낸다(아래 텔레그램 블록)
+                        _tgRefText = ((_qaRefRole === 'ai') ? _refMsg2 : (_pairMsg2 || _refMsg2)).text || '';
+                        question = _restCmd2;
                     } else if (/메일|mail/i.test(_restCmd2)) {
                         // "내용 메일로 보내줘" → 참조 답변 내용을 컨텍스트로 AI에게 전달
                         const _refSnip = (_pairMsg2 || _refMsg2).text.substring(0, 500);
@@ -4853,6 +4883,81 @@ ${docsJson}`;
                     // question 교체 완료 → 아래 기존 처리 흐름으로 계속 (return 없음)
                 }
             }
+        }
+
+        // 💬 [2026-11-02 신규, 사용자 제보 "텔레그램으로 요약본 보내줘가 실행 안 된다"]
+        //    직전 답변(표·요약 포함)을 텔레그램으로 보낸다.
+        //  ⚠️ 도구 루프(js/40)에 맡기면 안 된다 — 루프 프롬프트의 최근 대화는 **250자로 잘려**
+        //     있어(_qaToolStepPrompt) 메일 10건 표를 복원할 수 없고, 실측에선 루프가
+        //     gw_mail_send(메일 발송)를 집었다가 "조회 태그로는 못 부른다"며 포기했다.
+        //     보낼 내용은 AI가 다시 만들 것이 아니라 **히스토리에 이미 있는 전문**이다.
+        //  어휘·filler·notKw는 QA_TELEGRAM_SEND(js/32, 데이터) — 여기 정규식 박지 말 것.
+        const _tgAddrBook = ((window.tabData || {}).addressBook || []);
+        const _tgCmd = window._qaTelegramCmdHit
+            ? window._qaTelegramCmdHit(question, _tgAddrBook.map(function (p) { return (p && p.name) || ''; }))
+            : null;
+        if (_tgCmd) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            // ① 수신자 — 주소록 이름이 질문에 나오면 그 사람, 없으면 나.
+            //    (이름 목록도 주소록이 원장이다 — 코드에 사람 이름을 박지 않는다)
+            const _tgMyName = String(window.currentUserName || '').trim();
+            const _tgQFlat = question.replace(/\s+/g, '');
+            let _tgTo = null;
+            _tgAddrBook.forEach(function (p) {
+                if (_tgTo || !p || !p.name) return;
+                const n = String(p.name).trim();
+                if (n.length < 2 || n === _tgMyName) return;
+                if (_tgQFlat.indexOf(n) >= 0) _tgTo = p;
+            });
+            const _tgMe = (!_tgTo && _tgMyName && window._addrFindByName) ? window._addrFindByName(_tgMyName) : null;
+            //    내 ID가 주소록에 없으면 chatId를 비워 보낸다 — 백엔드가 알람 설정의 기본 Chat ID로 보낸다.
+            const _tgChatId = _tgTo ? String(_tgTo.telegramId || '') : (_tgMe ? String(_tgMe.telegramId || '') : '');
+            const _tgLabel = _tgTo ? String(_tgTo.name) : window._t('내 텔레그램', 'my Telegram');
+            if (_tgTo && !_tgChatId) {
+                window._ganttQaHistory.push({ role: 'ai', error: true, tgResult: true,
+                    text: '⚠️ ' + window._t('주소록에 ' + _tgLabel + '의 텔레그램 ID가 없습니다 — 주소록 탭에서 등록해 주세요.',
+                                             'No Telegram ID for ' + _tgLabel + ' in the Address Book — please add it there.') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            // ② 보낼 내용 — A#/Q# 로 가리킨 답변이 있으면 그것, 없으면 **직전 AI 답변 전문**.
+            //    발송 결과 메시지(tgResult)·확인 카드는 건너뛴다 — 안 그러면 두 번째 요청이
+            //    "✅ 텔레그램으로 보냈습니다"를 다시 보낸다.
+            let _tgSrc = _tgRefText || '';
+            if (!_tgSrc) {
+                for (let i = window._ganttQaHistory.length - 1; i >= 0; i--) {
+                    const m = window._ganttQaHistory[i];
+                    if (!m || m.role !== 'ai' || m.pending || m.error || m.tgResult || m.confirmButtonsId) continue;
+                    if (String(m.text || '').trim()) { _tgSrc = m.text; break; }
+                }
+            }
+            if (!_tgSrc) {
+                window._ganttQaHistory.push({ role: 'ai', tgResult: true,
+                    text: 'ℹ️ ' + window._t('텔레그램으로는 **직전 답변**을 보냅니다 — 먼저 조회나 질문을 하신 뒤 "텔레그램으로 보내줘"라고 해주세요.',
+                                             'Telegram sends **the previous answer** — ask or look something up first, then say "send it on Telegram".') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            // ③ "요약본만" → 답변의 🤖 요약 절부터 끝까지(표는 빼고). 요약 절이 없으면 전문 그대로.
+            if (_tgCmd.summaryOnly) {
+                const _tgSumAt = _tgSrc.indexOf('🤖');
+                if (_tgSumAt > 0) _tgSrc = _tgSrc.slice(_tgSumAt);
+            }
+            // ④ 내용이 뻔하면(그냥 "텔레그램으로 보내줘") 바로 보낸다. 다른 말이 섞여 있거나
+            //    남에게 보내는 것이면 **확인 1회** — 엉뚱한 답변이 남에게 나가는 게 제일 위험하다.
+            if (_tgCmd.bare && !_tgTo) {
+                await window._qaTelegramDeliver(_tgSrc, { chatId: _tgChatId, label: _tgLabel });
+                input.focus(); return;
+            }
+            window._qaTgPending = { text: _tgSrc, chatId: _tgChatId, label: _tgLabel };
+            const _tgPrev = _tgSrc.replace(/\s+/g, ' ').trim().slice(0, 140);
+            window._ganttQaShowConfirmButtons(
+                '💬 **' + _tgLabel + '** ' + window._t('(으)로 보낼 내용', '— content to send')
+                + ' (' + _tgSrc.length + window._t('자', ' chars') + ')\n\n> ' + _tgPrev
+                + (_tgSrc.length > 140 ? ' …' : '')
+                + '\n\n' + window._t('텔레그램으로는 **직전 답변**을 보냅니다. 다른 내용을 보내려면 그 내용을 먼저 조회·질문해 주세요.',
+                                     'Telegram sends **the previous answer**. To send something else, look it up or ask for it first.'),
+                [{ label: '💬 ' + window._t('텔레그램으로 보내기', 'Send on Telegram'), value: '__tgSendConfirm__', style: 'confirm' },
+                 { label: window._t('취소', 'Cancel'), value: '__tgSendCancel__', style: 'cancel' }]);
+            window._renderGanttQaMessages(); input.focus(); return;
         }
 
         // 🌏❌ [2026-09-23 신규] 앱 범위 밖 질문(날씨·환율·뉴스) — AI 호출 없이 즉답.

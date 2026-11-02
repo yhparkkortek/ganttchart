@@ -1551,6 +1551,64 @@ ${question}
     //    기호가 실제로 정리되어 보이려면 여기서 최소한의 마크다운을 HTML로 변환해줘야 함.
     //    보안: escapeHtml을 먼저 거친 뒤 그 결과 위에서만 **...**/글머리 기호 패턴을 치환하므로,
     //    AI 응답에 <script> 등이 섞여 있어도 이미 이스케이프된 텍스트라 안전함.
+    // 📊 [2026-11-02 버그수정, 사용자 제보 "표 형식으로 보여주기로 했는데 정리가 안 된 채로 보인다"]
+    //    04h의 결정론 블록들(그룹웨어 메일·게시판 목록)은 **마크다운 파이프 표**를 만들어
+    //    내보내는데, 정작 채팅 렌더러(_mdToHtml)가 표를 몰라서 `| 시각 | 보낸이 |…`와
+    //    `|---|---|` 구분선이 글자 그대로 찍히고 있었다. 표를 만드는 쪽을 고치는 게 아니라
+    //    **렌더러가 표를 알아보게** 한다 — 그러면 AI가 스스로 만든 표도 같이 정리돼 보이고,
+    //    새 조회 기능이 표를 내보낼 때 따로 손볼 것이 없다.
+    //    ⚠️ _mdToHtml은 escapeHtml 이후에 치환하므로 셀 안엔 이미 안전한 텍스트만 있다
+    //    (**굵게** → <b> 치환도 끝난 상태라 셀에 그대로 넣는다).
+    var _MD_TABLE_SEP_RE = /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/;
+    window._mdRowCells = function(line) {
+        var s = String(line == null ? '' : line).trim();
+        if (s.charAt(0) !== '|' || s.length < 2) return null;
+        s = s.replace(/^\|/, '').replace(/\|\s*$/, '');
+        return s.split('|').map(function(c) { return c.trim(); });
+    };
+    //  i번째 줄에서 표가 시작하면 { html, end }, 아니면 null.
+    //  표의 조건: 파이프로 시작하는 줄 + 바로 다음 줄이 `|---|---|` 구분선.
+    //  (구분선이 없으면 표가 아니다 — 본문에 우연히 섞인 파이프 한 줄을 표로 만들지 않는다)
+    window._mdTableBlockAt = function(lines, i) {
+        var head = window._mdRowCells(lines[i]);
+        if (!head || head.length < 2) return null;
+        var sepCells = window._mdRowCells(lines[i + 1]);
+        if (!sepCells || !_MD_TABLE_SEP_RE.test(String(lines[i + 1] || ''))) return null;
+        var body = [], j = i + 2;
+        for (; j < lines.length; j++) {
+            var cells = window._mdRowCells(lines[j]);
+            if (!cells) break;
+            body.push(cells);
+        }
+        // ⚠️ 짧은 열(날짜·플래그 등)까지 줄바꿈을 허용하면 브라우저가 폭을 고르게 나눠
+        //    **긴 제목 열만 바늘처럼 좁아진다**(좁은 모달에서 실측). 열마다 가장 긴 칸을 보고
+        //    짧은 열은 nowrap으로 묶어, 남는 폭이 긴 열로 가게 한다.
+        var colNoWrap = head.map(function(h, c) {
+            var max = String(h).replace(/<[^>]*>/g, '').length;
+            body.forEach(function(r) {
+                var v = String(r[c] === undefined ? '' : r[c]).replace(/<[^>]*>/g, '');
+                if (v.length > max) max = v.length;
+            });
+            return max <= 14;
+        });
+        var thS = 'padding:4px 7px; text-align:left; border-bottom:1px solid #cdd7e3; background:#eef3fa; position:sticky; top:0; font-weight:bold; white-space:nowrap;';
+        var tdS = 'padding:4px 7px; border-bottom:1px solid #eef0f3; vertical-align:top; word-break:break-word;';
+        var html = '<div style="overflow:auto; max-height:420px; margin:6px 0; border:1px solid #dde4ec; border-radius:5px;">'
+            + '<table style="border-collapse:collapse; font-size:11.5px; width:100%;"><thead><tr>'
+            + head.map(function(h) { return '<th style="' + thS + '">' + h + '</th>'; }).join('')
+            + '</tr></thead><tbody>'
+            + body.map(function(r) {
+                var tds = '';
+                for (var c = 0; c < head.length; c++) {
+                    tds += '<td style="' + tdS + (colNoWrap[c] ? ' white-space:nowrap;' : '') + '">'
+                         + (r[c] === undefined ? '' : r[c]) + '</td>';
+                }
+                return '<tr>' + tds + '</tr>';
+            }).join('')
+            + '</tbody></table></div>';
+        return { html: html, end: j - 1 };
+    };
+
     window._mdToHtml = function(raw) {
         let escaped = escapeHtml(raw || '');
         escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
@@ -1582,7 +1640,7 @@ ${question}
         //    "(날짜) 내용..." 형태로 나오던 것을 "내용... (날짜)" 형태로 바꿈. per-line 적용이라
         //    여러 업무를 동시 인용하는 줄도 각 날짜가 그 줄 끝에 함께 붙는다.
         const _moveDates = window._moveRefDateBadgesToEnd || function(h) { return h; };
-        return lines.map(function(line) {
+        const renderLine = function(line) {
             const heading = line.match(/^(#{1,4})\s+(.*)$/);
             if (heading) return _moveDates(`<div style="font-weight:bold; margin:8px 0 3px;">${heading[2]}</div>`);
             const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
@@ -1615,7 +1673,124 @@ ${question}
                 return _moveDates(`<div style="${wsStyle}margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`);
             }
             return _moveDates(`<div style="${wsStyle}margin-bottom:2px;">${line}</div>`);
-        }).join('');
+        };
+        // 📊 표(파이프 표)는 여러 줄이 한 덩어리라 줄 단위 렌더러로는 못 만든다 — 먼저 가져간다.
+        //    구분선(`|---|`)이 뒤따르지 않으면 표가 아니므로 그냥 평소 줄로 흘러간다.
+        const out = [];
+        for (let li = 0; li < lines.length; li++) {
+            const tbl = window._mdTableBlockAt(lines, li);
+            if (tbl) { out.push(tbl.html); li = tbl.end; continue; }
+            // 가로줄(--- / ***) — AI 답변과 04h 결정론 답변이 구역 구분에 쓴다(글자 그대로 찍히던 것)
+            if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(lines[li])) {
+                out.push('<div style="border-top:1px solid #e3e7ec; margin:8px 0 6px;"></div>');
+                continue;
+            }
+            out.push(renderLine(lines[li]));
+        }
+        return out.join('');
+    };
+
+    // ── 💬 [2026-11-02 신규] 답변을 텔레그램으로 보내기 ────────────────────────────
+    //  왜 변환기가 따로 필요한가: 백엔드 `/send-telegram`은 항상 `parse_mode: HTML`로 보낸다
+    //  (kortek_backend.py send_telegram_msg). 그래서 ① `<`·`&`를 먼저 escape 하지 않으면
+    //  메일 제목 하나로 메시지 전체가 "can't parse entities" 오류로 반송되고, ② 화면용
+    //  마크다운 표(`| … |`)를 그대로 보내면 텔레그램에선 줄이 접혀 못 읽는다.
+    //  → 표는 **행마다 한 줄**로 펴고, 굵게만 <b>로 남긴다.
+    window._mdToTelegramText = function (raw) {
+        var esc = function (s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
+        var md = String(raw == null ? '' : raw).split('\n');
+        var out = [];
+        for (var i = 0; i < md.length; i++) {
+            // 표: 머리글 한 줄(굵게) + 행마다 "• 셀 | 셀 | 셀"
+            var head = window._mdRowCells(md[i]);
+            var sepOk = head && head.length >= 2 && window._mdRowCells(md[i + 1])
+                     && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(String(md[i + 1] || ''));
+            if (sepOk) {
+                out.push('<b>' + esc(head.join(' | ')) + '</b>');
+                var j = i + 2;
+                for (; j < md.length; j++) {
+                    var cells = window._mdRowCells(md[j]);
+                    if (!cells) break;
+                    out.push('• ' + esc(cells.filter(function (c) { return c !== ''; }).join(' | ')));
+                }
+                i = j - 1;
+                continue;
+            }
+            var line = esc(md[i]);
+            if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(md[i])) { out.push('—'); continue; }
+            line = line.replace(/^(#{1,4})\s+(.*)$/, function (_m, _h, t) { return '<b>' + t + '</b>'; });
+            line = line.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+            line = line.replace(/==([^=\n]+?)==/g, '$1');
+            line = line.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+            line = line.replace(/^(\s*)[-*]\s+/, '$1• ');
+            out.push(line);
+        }
+        return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    };
+
+    //  텔레그램 한 메시지 상한은 4,096자다 — 길면 줄 경계로 쪼개 순서대로 보낸다.
+    //  ⚠️ 줄 **안에서** 자르면 <b>가 열린 채 끊겨 parse_mode HTML이 메시지를 반송한다.
+    //     그래서 한 줄이 상한을 넘을 때만 태그를 떼고 자른다(내용은 남고 서식만 잃는다).
+    var _TG_CHUNK = 3500;
+    window._qaTelegramSendText = async function (text, chatId) {
+        var lines = String(text == null ? '' : text).split('\n'), parts = [], cur = '';
+        var flush = function () { if (cur) { parts.push(cur); cur = ''; } };
+        lines.forEach(function (l) {
+            if (l.length > _TG_CHUNK) {
+                flush();
+                var plain = l.replace(/<\/?(?:b|i|u|s|code|pre)>/g, '');
+                while (plain.length > _TG_CHUNK) {
+                    var at = plain.lastIndexOf(' ', _TG_CHUNK);
+                    if (at < _TG_CHUNK * 0.5) at = _TG_CHUNK;
+                    parts.push(plain.slice(0, at));
+                    plain = plain.slice(at);
+                }
+                cur = plain;
+                return;
+            }
+            if ((cur + '\n' + l).length > _TG_CHUNK) flush();
+            cur = cur ? cur + '\n' + l : l;
+        });
+        flush();
+        if (!parts.length) return { ok: false, sent: 0, total: 0, errDesc: window._t('보낼 내용이 없습니다', 'nothing to send') };
+        if (!window.sendTelegramAlarm) return { ok: false, sent: 0, total: parts.length, errDesc: 'sendTelegramAlarm 미로드' };
+        var sent = 0, errDesc = '';
+        for (var i = 0; i < parts.length; i++) {
+            var head = parts.length > 1 ? '(' + (i + 1) + '/' + parts.length + ')\n' : '';
+            var r = await window.sendTelegramAlarm(head + parts[i], chatId ? { chatId: chatId } : {});
+            if (r && r.ok) { sent++; } else { errDesc = (r && r.errDesc) || window._t('전송 실패', 'send failed'); break; }
+        }
+        return { ok: sent === parts.length, sent: sent, total: parts.length, errDesc: errDesc };
+    };
+
+    //  보내고 결과를 채팅에 적는다 — 실패 사유를 삼키지 않고 고치는 방법까지 같이 적는다.
+    //  (04h의 자연어 명령과 확인 버튼 두 경로가 **같은 함수**를 쓴다)
+    window._qaTelegramDeliver = async function (src, opts) {
+        opts = opts || {};
+        var msg = window._mdToTelegramText(src);
+        var who = opts.label || window._t('내 텔레그램', 'my Telegram');
+        window._ganttQaHistory.push({ role: 'ai', pending: true,
+            text: '⏳ ' + window._t(who + '(으)로 보내는 중...', 'Sending to ' + who + '...') });
+        window._renderGanttQaMessages();
+        var r = await window._qaTelegramSendText(msg, opts.chatId);
+        window._ganttQaHistory.pop();
+        if (r.ok) {
+            window._ganttQaHistory.push({ role: 'ai', tgResult: true,
+                text: '✅ ' + window._t('텔레그램으로 보냈습니다', 'Sent on Telegram')
+                    + ' — ' + who + ' (' + msg.length + window._t('자', ' chars')
+                    + (r.total > 1 ? ', ' + r.total + window._t('개 메시지로 분할', ' messages') : '') + ')' });
+        } else {
+            window._ganttQaHistory.push({ role: 'ai', error: true, tgResult: true,
+                text: '⚠️ ' + window._t('텔레그램 발송 실패: ', 'Telegram send failed: ') + (r.errDesc || '')
+                    + (r.sent ? ' (' + window._t(r.sent + '개까지는 보냈습니다', r.sent + ' message(s) went out') + ')' : '')
+                    + '\n' + window._t(
+                        '확인할 것: ① 로컬 백엔드(kortek_backend)가 켜져 있는지 ② 알람 설정 ▸ Telegram 탭에 봇 토큰/Chat ID가 있는지 ③ 주소록에 내 텔레그램 ID가 있는지',
+                        'Check: (1) local backend running, (2) bot token / Chat ID in Alarm settings ▸ Telegram, (3) your Telegram ID in the Address Book') });
+        }
+        window._renderGanttQaMessages();
+        return r;
     };
 
     // 상단 "자주 쓰는 질문" 드롭다운(#gantt-qa-freq-select, window._ganttQaPopulateFreqSelect@04h)에서

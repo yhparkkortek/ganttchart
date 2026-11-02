@@ -815,11 +815,64 @@
         return cap.strongKw.some(function (k) { return window._qaKwSeqHit(text, k); });
     };
 
+    // 💬 [2026-11-02 신규, 사용자 제보 "텔레그램으로 요약본 보내줘가 실행 안 된다"]
+    //    "방금 그 답변을 텔레그램으로 보내줘" 어휘 — **데이터**로 관리한다(코드 정규식 금지).
+    //  왜 결정론(04h)인가: 보낼 내용은 **직전 답변 전문**이다. 도구 루프(js/40)에 맡기면
+    //    프롬프트에 실리는 최근 대화가 **250자로 잘려** 있어(_qaToolStepPrompt) 메일 10건
+    //    표를 통째로 다시 만들 수가 없다 — 실측에선 루프가 gw_mail_send(메일 발송)를 집었고
+    //    조회 태그로는 못 부르는 도구라 "지원하지 않습니다"로 끝났다.
+    //  ⚠️ kw는 토큰 2개 이상으로 적는다 — `_qaKwSeqHit`이 토큰 사이 gap자까지 벌어져도 잡으므로
+    //    '텔레그램 보내' 하나로 "텔레그램으로 요약본 보내줘"·"텔레그램에 좀 보내줘"까지 걸린다.
+    //    조사·띄어쓰기 변형을 손으로 적지 말 것(변형 흡수는 코드가 한다).
+    window.QA_TELEGRAM_SEND = window.QA_TELEGRAM_SEND || {
+        gap: 8,
+        kw: ['텔레그램 보내', '텔레그램 전송', '텔레그램 발송', '텔레그램 알려', '텔레그램 공유',
+             '텔레그램 쏴', '텔레그램 넣어', 'telegram 보내', 'telegram 전송', 'telegram 공유'],
+        // 알람 **설정**은 다른 기능이다(알람 탭) — 보내기 명령으로 가져오지 않는다.
+        notKw: ['알람 설정', '알람 켜', '알람 꺼', '알람 해제', 'id 등록', '아이디 등록', '봇 토큰'],
+        // "요약본만" → 답변의 🤖 요약 절만 보낸다(표 전체가 아니라)
+        summaryKw: ['요약'],
+        // 아래 말만 남으면 "직전 답변을 그대로 보내라"는 뜻 → 확인 없이 바로 보낸다.
+        // 다른 말이 남아 있으면(예: "오늘 일정 텔레그램으로 알려줘") 무엇을 보낼지 확인을 받는다.
+        filler: ['텔레그램', 'telegram', '요약본', '요약', '내용', '본문', '전문', '답변', '결과',
+                 '이거', '이걸', '이것', '그거', '그걸', '그것', '위', '방금', '아까', '전체',
+                 '다시', '그대로', '지금', '좀', '바로', '부탁', '보내', '전송', '발송', '알려',
+                 '공유', '쏴', '넣어', '나한테', '나에게', '내게', '저한테', '저에게', '제게',
+                 '본인', '나', '저', '내', '제', '메시지', '메세지', '톡', '으로', '로', '에게',
+                 '한테', '에', '을', '를', '은', '는', '이', '가', '의', '도', '만', '해', '줘',
+                 '주세요', '해줘', '요']
+    };
+    // 걸렸으면 { kw, rest, bare, summaryOnly } — rest는 어휘·filler·이름을 뗀 나머지(없으면 bare).
+    //  ⚠️ 이름 제거는 호출부(04h)가 주소록 기준으로 한다(여기서 사람 이름을 알 수 없다).
+    window._qaTelegramCmdHit = function (text, dropWords) {
+        var cfg = window.QA_TELEGRAM_SEND || {};
+        var q = String(text || '').toLowerCase();
+        if (!q.trim()) return null;
+        var hit = function (k) { return window._qaKwSeqHit(text, k, cfg.gap); };
+        if ((cfg.notKw || []).some(hit)) return null;
+        var kwHit = (cfg.kw || []).filter(hit);
+        if (!kwHit.length) return null;
+        var rest = q.replace(/\s+/g, '');
+        // ⚠️ 긴 말부터 뗀다 — '요약'을 먼저 떼면 '요약본'이 '본'만 남아 bare 판정이 깨진다.
+        (dropWords || []).concat(cfg.filler || []).slice().sort(function (a, b) {
+            return String(b).length - String(a).length;
+        }).forEach(function (w) {
+            var ww = String(w || '').toLowerCase().replace(/\s+/g, '');
+            if (ww) rest = rest.split(ww).join('');
+        });
+        rest = rest.replace(/[^0-9a-z가-힣]/g, '');
+        return { kw: kwHit[0], rest: rest, bare: rest.length === 0,
+                 summaryOnly: (cfg.summaryKw || []).some(function (w) { return q.indexOf(w) >= 0; }) };
+    };
+
     window.APP_CAPABILITIES = window.APP_CAPABILITIES || [
         { id: 'mail_draft',  title: '메일 작성/발송(AI 문답 초안 → 확인 → 발송)', kw: ['메일 보내', '메일로 보내', '메일 작성', '메일 발송', '이메일 보내'], how: 'AI 문답 [[ACTION:MAIL_DRAFT]] → SEND_MAIL' },
         { id: 'gantt_add',   title: 'Gantt 업무 추가(초안 → 확인)',              kw: ['간트에 추가', '간트에 등록', '업무 추가', '업무 등록', 'gantt에 추가'], how: 'AI 문답 GANTT_ADD_DRAFT → APPLY_GANTT_ADD' },
         { id: 'gantt_edit',  title: 'Gantt 업무 수정(초안 → 확인)',              kw: ['업무 수정', '일정 변경', '담당자 변경', '상태 변경', '마감일 변경'], how: 'AI 문답 GANTT_EDIT_DRAFT → APPLY_GANTT_EDIT' },
-        { id: 'alarm',       title: '알람 설정/해제(업무별)',                    kw: ['알람 설정', '알람 켜', '알람 꺼', '알람 해제'], how: 'AI 문답 SET_ALARM / CLEAR_ALARM' },
+        // 💬 [2026-11-02] "텔레그램으로 보내줘" — 직전 답변(표·요약 포함)을 내 텔레그램으로.
+        //    어휘는 QA_TELEGRAM_SEND(위)에 있고, 여기 kw는 "이 기능이 있나?" 판정용이다.
+        { id: 'telegram_send', title: '직전 답변을 텔레그램으로 보내기', kw: ['텔레그램으로 보내', '텔레그램 보내', '텔레그램으로 전송', '텔레그램 공유'], how: 'AI 문답에 "텔레그램으로 보내줘" → 직전 답변을 텔레그램으로 발송(상대 지정 시 확인 1회). 수신자는 주소록 텔레그램 ID, 없으면 알람 설정의 기본 Chat ID' },
+        { id: 'alarm',       title: '알람 설정/해제(업무별)',                  kw: ['알람 설정', '알람 켜', '알람 꺼', '알람 해제'], how: 'AI 문답 SET_ALARM / CLEAR_ALARM' },
         { id: 'notice',      title: '공지 등록',                                 kw: ['공지 등록', '공지 올려', '공지사항'], how: 'AI 문답 NOTICE_DRAFT → REGISTER_NOTICE' },
         { id: 'project_open',title: '다른 프로젝트 조회/열기',                    kw: ['다른 프로젝트', '프로젝트 열어', '프로젝트 전환'], how: 'AI 문답 질문 대상 선택 / OPEN_PROJECT_TO_EDIT' },
         { id: 'inbox',       title: '업무 보관함 → 프로젝트 배분(다중 선택)',      kw: ['보관함', '다른 프로젝트로 전송', '배분'], how: 'AI 업무 보관함 [다른 프로젝트로 전송]' },

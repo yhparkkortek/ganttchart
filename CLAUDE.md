@@ -237,6 +237,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 필수 규칙은 `_buildGanttQaPrompt` 치환 이후 append 구간에 추가 — `gantt_qa_prompt`가 기본 템플릿 통째 대체함
 - AI-free 로컬 명령 블록: `return` 전에 `_ganttQaRecordQuestionFreq(question)` 직접 호출 — AI 호출 직전 한 곳에서만 기록되므로 생략 시 "자주 쓰는 질문"에 안 쌓임
 - `_ganttQaPatternKey`(빈도 집계, 4자리+ 숫자 제외) vs `_ganttQaNormalizeQ`(재질문 감지, 숫자 다르면 다른 질문) — 정반대 요구사항, 절대 합치지 말 것
+- **(2026-11-02) 답변 속 마크다운 파이프 표는 렌더러(`_mdToHtml`, js/04g)가 `<table>`로 그린다** — 표를 만드는 04h 블록이 아니라 렌더러를 고쳤다(AI가 만든 표도 같이 정리됨). 구분선 `|---|` 이 뒤따를 때만 표로 본다. 짧은 열은 nowrap(안 그러면 긴 제목 열만 바늘처럼 좁아진다)
+- **(2026-11-02) "텔레그램으로 보내줘" = 직전 답변 전문을 텔레그램으로** — 도구 루프에 맡기지 말 것(프롬프트의 최근 대화가 250자로 잘려 표를 복원 못 한다, 실측에선 `gw_mail_send`를 집고 포기). 어휘는 `QA_TELEGRAM_SEND`(js/32, 데이터), 수신자는 주소록 ID. ⚠️ 백엔드가 `parse_mode: HTML`이라 `<`·`&` escape 필수 + 4,096자 분할은 줄 경계로만(태그가 끊기면 메시지가 반송된다)
 - ZMM009 ALV 컬럼은 계정별 레이아웃 — 없는 게 아니라 숨겨진 것일 수 있음. 헤더로 실제 확인 후 없을 때만 MM03 폴백
 
 ### `docs/sap-lookup.md` — 🏭 SAP 조회 연동 (`sap_bridge_32.py`, `/sap-*`)
@@ -439,7 +441,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ## 작업 팁
 
-- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, 브라우저 콘솔에 `tests/approval-loop.browser.js` 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
+- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `node tests/qa-render-telegram.test.js`, 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js` 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
 - 특정 기능 수정 시 파일 맵에서 바로 지정. 못 찾겠으면 `grep -rn "함수명" js/`.
 - 민감 파일(`mail_config.json`, `telegram_config.json`, `schedule_rules.json`, `.env`)은 `.gitignore` — 로컬에만 존재.
 - 코드 주석의 `js/파일명.js:줄번호` 참조는 파일 이동/분리 시 같이 업데이트.
