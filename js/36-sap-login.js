@@ -54,7 +54,7 @@
             wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
             wrap.innerHTML =
                 '<div id="saplogin-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
-                + ' width:min(440px,94vw); background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+                + ' width:min(440px,94vw); max-height:90vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
                 + ' display:flex; flex-direction:column;">'
                 // SAP 계열 → 하늘색 헤더(ui-conventions)
                 + '<div id="saplogin-drag" style="padding:10px 14px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2;'
@@ -64,7 +64,12 @@
                 + '<button onclick="document.getElementById(\'saplogin-modal\').style.display=\'none\'"'
                 + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
                 + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
-                + '<div style="padding:14px 16px;">'
+                // ⚠️⚠️ 본문은 **스크롤돼야 한다.** 섹션이 넷(SAP·그룹웨어·인사·NAS)이라 내용이
+                //    화면보다 길다. 바깥 상자가 `overflow:hidden` 이라 그냥 두면 아래가 **잘리고
+                //    스크롤도 안 된다** — 저장 버튼에 손이 안 닿는다(실측: 본문 1198px / 상자 756px).
+                //    `min-height:0` 이 같이 있어야 한다 — flex 항목은 기본이 `min-height:auto` 라
+                //    안 줄어들고, 그러면 `overflow-y:auto` 가 일할 자리가 없어 스크롤바가 안 생긴다.
+                + '<div style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto;">'
                 + '<div style="font-size:11.5px; color:#666; margin-bottom:12px; line-height:1.5;">'
                 + T('SAP이 꺼져 있거나 로그아웃된 상태에서 SAP 질문을 하면 이 계정으로 자동 로그인한 뒤 명령을 수행합니다. '
                     + '비밀번호는 <b>이 PC의 Windows 계정에 묶여 암호화</b>되어 저장되며(다른 PC/계정에선 복호화 불가) 화면·로그에 다시 나오지 않습니다.',
@@ -697,8 +702,12 @@
             var lg = await nasApi('/nas/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
             await window._nasLoginRefresh();
             if (lg.ok) {
-                nasStatus('✅ ' + T('접속됐습니다.', 'Connected.') + ' '
-                          + T('앱 폴더가 비어 있으면 <b>찾기</b>로 골라주세요.', 'If the app folder is empty, pick it with <b>Browse</b>.'), 'ok');
+                // 앱 폴더가 이미 정해져 있는데 "골라주세요"라고 하면 사람이 뭘 더 해야 하나 싶어진다.
+                // 안내는 **정말 비어 있을 때만** 한다.
+                var needRoot = !document.getElementById('naslogin-root').value.trim();
+                nasStatus('✅ ' + T('접속됐습니다.', 'Connected.')
+                          + (needRoot ? (' ' + T('이제 <b>📂 찾기</b>로 앱 폴더를 골라주세요.',
+                                                 'Now pick the app folder with <b>📂 Browse</b>.')) : ''), 'ok');
             } else {
                 nasStatus('❌ ' + esc(lg.message || T('접속하지 못했습니다.', 'Could not connect.'))
                           + '<br>' + T('⚠️ 다시 시도하지 않습니다 — 아이디·비밀번호를 고쳐 <b>다시 저장</b>해주세요.',
