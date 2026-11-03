@@ -611,11 +611,11 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
 
 
 def _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                     keyword, keyword_from, keyword_body, stage_dir=None):
+                     keyword, keyword_from, keyword_body, stage_dir=None, host=None):
     """IMAPS로 받는다. 서버 SEARCH로 날짜를 먼저 걸러 받을 통수를 줄인다.
     ⚠️ 키워드는 서버에 맡기지 않고 기존 matches_keyword로 거른다 — IMAP SEARCH의 한글
     charset 처리가 서버마다 달라서, 검색 결과가 조용히 달라지는 위험을 피한다."""
-    M = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=20)
+    M = imaplib.IMAP4_SSL(host or IMAP_HOST, IMAP_PORT, timeout=20)
     try:
         M.login(mail_user, mail_pw)
         # readonly=True — 사람의 실제 메일함에 읽음 표시를 남기지 않는다
@@ -650,9 +650,9 @@ def _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
 
 
 def _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                     keyword, keyword_from, keyword_body, stage_dir=None):
+                     keyword, keyword_from, keyword_body, stage_dir=None, host=None):
     """POP3 폴백 — IMAP이 막힌 계정/서버용. 동작은 전환 전과 동일하다."""
-    M = poplib.POP3(POP3_HOST, POP3_PORT, timeout=15)
+    M = poplib.POP3(host or POP3_HOST, POP3_PORT, timeout=15)
     try:
         M.user(mail_user)
         M.pass_(mail_pw)
@@ -696,6 +696,13 @@ def fetch_mail():
     #    사고와 같은 종류 — 이번엔 "아예 IMAP을 안 쓴다"는 경우까지 커버). 프런트(알람 설정의
     #    "POP3만 사용" 체크, js/22b)가 켜져 있으면 IMAP 시도 자체를 건너뛴다.
     force_proto = str(req.get('protocol', '') or '').strip().lower()
+    # 🆕 [2026-11-03, 사용자 제보 "체크박스 켜도 계속 invalid user or password"] 진짜 원인은 프로토콜이
+    #    아니라 **서버 주소**였다 — IMAP_HOST/POP3_HOST가 gw.kortek.co.kr로 하드코딩돼 있어, 알람
+    #    설정에 kmail.kortek.co.kr처럼 다른 서버 주소를 적어 넣어도 수신(IMAP/POP3)은 그 설정을
+    #    무시하고 항상 gw.kortek.co.kr로 로그인을 시도했다(발송/SMTP는 이미 설정값을 쓰고 있었다 —
+    #    수신 쪽만 빠져 있었음). 그러니 계정은 멀쩡해도 "그 서버엔 이 계정이 없다"는 뜻으로
+    #    invalid user or password가 떴다 — 프로토콜을 POP3로 강제해도 똑같이 gw로 가서 똑같이 실패.
+    mail_host = str(req.get('mailHost', '') or '').strip() or None
 
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=KST)
@@ -712,11 +719,11 @@ def fetch_mail():
         if force_proto == 'pop3':
             proto, fallback_reason = 'pop3', '사용자 설정(수신은 POP3만 사용)'
             results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                       keyword, keyword_from, keyword_body, _stage_dir)
+                                       keyword, keyword_from, keyword_body, _stage_dir, mail_host)
         else:
             try:
                 results = _fetch_mail_imap(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                           keyword, keyword_from, keyword_body, _stage_dir)
+                                           keyword, keyword_from, keyword_body, _stage_dir, mail_host)
             except imaplib.IMAP4.error as e:
                 # 🐛🐛 [2026-10-22 실사용 버그수정, 사용자 제보 "자동 메일 수집이 안 된다"]
                 #    여기서 IMAP4.error 를 **전부 "비밀번호가 틀린 것"으로 단정**해 POP3 폴백을 막고 있었다.
@@ -736,14 +743,14 @@ def fetch_mail():
                     proto = 'pop3'
                     fallback_reason = f'IMAP 권한 없음({_msg}) — POP3로 전환'
                     results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                               keyword, keyword_from, keyword_body, _stage_dir)
+                                               keyword, keyword_from, keyword_body, _stage_dir, mail_host)
                 else:
                     return jsonify({"status": "error",
                                     "message": f"IMAP 인증 실패: {_msg} — 메일 계정/비밀번호를 확인해주세요."})
             except Exception as e:
                 proto, fallback_reason = 'pop3', f'{type(e).__name__}: {e}'
                 results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
-                                           keyword, keyword_from, keyword_body, _stage_dir)
+                                           keyword, keyword_from, keyword_body, _stage_dir, mail_host)
 
         resp = {
             "status":  "success",

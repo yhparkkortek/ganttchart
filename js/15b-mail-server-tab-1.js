@@ -132,6 +132,7 @@ window.msFetchMail = async function() {
     const smtp = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
     const userid   = (smtp.user || '').trim();
     const password = smtp.pass || '';
+    const mailHost = (smtp.host || '').trim();
     const startDate = document.getElementById('ms-start-date').value;
     const endDate   = document.getElementById('ms-end-date').value;
 
@@ -167,7 +168,8 @@ window.msFetchMail = async function() {
             keywordFrom:  document.getElementById('ms-keyword-from')?.value?.trim() || '',
             keywordBody:  document.getElementById('ms-keyword-body')?.value?.trim() || '',
             maxCount:     500,
-            protocol:     window._msShouldForcePop3() ? 'pop3' : ''
+            protocol:     window._msShouldForcePop3() ? 'pop3' : '',
+            mailHost:     mailHost
             })
         });
         const data = await res.json();
@@ -1335,7 +1337,8 @@ window._autoMailFetchTick = async function() {
                 startDate, endDate,
                 keyword: '', keywordFrom: '', keywordBody: '',
                 maxCount: 500,
-                protocol: window._msShouldForcePop3() ? 'pop3' : ''
+                protocol: window._msShouldForcePop3() ? 'pop3' : '',
+                mailHost: ((window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {}).host || ''
             })
         });
         const data = await res.json();
