@@ -155,16 +155,32 @@ def load_config():
     return None
 
 
+def _raw_config():
+    """완결성 검사 없이 파일 그대로. `load_config()` 는 로그인 정보가 다 있어야 돌려주므로,
+    **아직 로그인 전이라도 `root` 는 지켜야 하는** 저장 경로에서는 이쪽을 쓴다."""
+    try:
+        with open(NAS_LOGIN_CFG, 'r', encoding='utf-8') as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+
 def save_config(host, port, use_https, user, password):
-    """비밀번호를 비워 보내면 기존 값을 유지한다(다른 항목만 수정)."""
-    old = load_config() or {}
-    pw_enc = old.get('pw_dpapi')
+    """비밀번호를 비워 보내면 기존 값을 유지한다(다른 항목만 수정).
+
+    ⚠️⚠️ **기존 값을 통째로 갈아엎지 말 것.** 처음엔 새 dict 를 만들어 썼는데, 그러면
+       같은 파일에 들어 있는 `root`/`team_root`(앱 폴더 위치)가 **조용히 지워진다**.
+       로그인만 다시 저장했을 뿐인데 다음 저장이 "앱 루트가 설정되어 있지 않습니다"로
+       죽는다. 모르는 키도 그대로 두고 **아는 키만 덮어쓴다**.
+    """
+    cfg = _raw_config()
+    pw_enc = cfg.get('pw_dpapi')
     if password:
         pw_enc = _dpapi_encrypt_b64(password)
     if not pw_enc:
         raise ValueError('비밀번호가 필요합니다.')
-    cfg = {'host': str(host).strip(), 'port': int(port), 'https': bool(use_https),
-           'user': str(user).strip(), 'pw_dpapi': pw_enc}
+    cfg.update({'host': str(host).strip(), 'port': int(port), 'https': bool(use_https),
+                'user': str(user).strip(), 'pw_dpapi': pw_enc})
     with open(NAS_LOGIN_CFG, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
     reset_block()          # 설정을 다시 저장했으면 "사람이 다시 시킨 것" → 잠금 해제
@@ -463,6 +479,75 @@ def roots():
     team = str(cfg.get('team_root') or '').replace(chr(92), '/').rstrip('/')
     return root, (team if team.startswith('/') else root)
 
+
+
+def set_roots(root=None, team_root=None, make=True):
+    """앱 폴더 위치를 저장한다. CLI(`nas_set_root.py`)와 설정 화면이 **같은 함수**를 쓴다.
+
+    ⚠️ 여기서도 기존 키를 보존한다 — 로그인 정보가 같은 파일에 들어 있다.
+    ⚠️ `root` 는 `/공유이름/하위폴더` 형태여야 한다. 공유 루트 자체(`/공유`)를 앱 폴더로
+       삼으면 남의 자료와 섞이고, 임시 폴더 청소 같은 동작이 **남의 폴더를 건드리게 된다**.
+    """
+    cfg = _raw_config()
+    out = {}
+    if root is not None:
+        r = str(root).replace(chr(92), '/').rstrip('/')
+        if not r.startswith('/') or r.count('/') < 2:
+            raise ValueError('앱 폴더는 /공유이름/하위폴더 형태의 절대경로여야 합니다.')
+        if make:
+            ensure_folder(r)          # 없으면 만든다(권한이 없으면 여기서 정직하게 실패한다)
+        cfg['root'] = r
+        out['root'] = r
+    if team_root is not None:
+        t = str(team_root).replace(chr(92), '/').rstrip('/')
+        if t and not t.startswith('/'):
+            raise ValueError('팀 폴더 부모는 절대경로여야 합니다(또는 비움).')
+        cfg['team_root'] = t
+        out['team_root'] = t
+    with open(NAS_LOGIN_CFG, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    return out
+
+
+def _acl_rights(perm):
+    acl = (perm or {}).get('acl') or {}
+    if not acl:
+        return ''
+    return '%s%s%s' % ('R' if acl.get('read') else '-',
+                       'W' if acl.get('write') else '-',
+                       'A' if acl.get('append') else '-')
+
+
+def writable_candidates(limit_per_share=300):
+    """앱 폴더로 쓸 수 있는 곳(= 쓰기 권한이 보이는 폴더) 목록.
+
+    설정 화면과 `nas_set_root.py --list` 가 **같은 목록**을 본다 — 두 벌로 두면
+    "CLI 에선 보이는데 화면에선 안 보인다" 같은 것이 생긴다.
+    ⚠️ 권한 없는 공유는 애초에 목록에 안 나오고, 권한 없는 하위 폴더는 보이지만 열면 407 이다.
+       그래서 `list` 의 perm 이 비어 오면 `path_info` 로 한 번 더 묻는다.
+    """
+    out = []
+    for s in list_shares():
+        try:
+            top = list_folder(s['path'], limit=limit_per_share)
+        except Exception:
+            continue                     # 못 여는 공유는 건너뛴다(정상 동작이다)
+        subs = [i for i in top['items'] if i['isdir'] and not i['name'].startswith('#')]
+        need = [i['path'] for i in subs if not isinstance(i.get('perm'), dict)]
+        if need:
+            try:
+                got = {x['path']: x.get('perm') for x in path_info(need)}
+                for i in subs:
+                    if got.get(i['path']):
+                        i['perm'] = got[i['path']]
+            except Exception:
+                pass
+        for i in subs:
+            rt = _acl_rights(i.get('perm'))
+            if 'W' in rt or 'A' in rt:
+                out.append({'path': i['path'], 'name': i['name'],
+                            'share': s['name'], 'rights': rt})
+    return out
 
 def abs_path(rel, team=None):
     """앱 루트 기준 상대경로 → NAS 절대경로. team 을 주면 팀 파일 경로로 만든다."""

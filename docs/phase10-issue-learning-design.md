@@ -159,7 +159,7 @@
 | `docs/phase10-…md` | 이 문서 | |
 
 - `_SELF_UPDATE_FILES`/zip 목록: `kortek_backend.py` 변경분만 해당(신규 배포 파일 없음). `.gitignore`에 `issue_events.jsonl` 추가.
-- `GANTT_CHART_V02_Color.html`: script 2개 추가 + 캐시버스터 갱신(관례).
+- `kortek_pm.html`: script 2개 추가 + 캐시버스터 갱신(관례).
 
 ## 9. 위험 / 함정 (미리 알고 있는 것들)
 
@@ -257,7 +257,8 @@ Claude는 Drive의 `_resolved.json` / `sap_learning.json`에 접근할 수 없�
 **판단은 Claude, 승인 클릭은 사람** — 기존 [해결]/[구현됨] 버튼의 일괄 버전이다.
 
 ```
-C:\SAP_DMS\이슈리포트esolved_patch.json
+C:\SAP_DMS\이슈리포트
+esolved_patch.json
 {
   "generatedBy": "Claude (Opus 5)", "generatedAt": "...", "source": "digest_20260923.json",
   "issues":   [{ "sig": "<군집 시그니처 그대로>", "note": "고친 내용 한 줄", "commit": "abc1234" }],

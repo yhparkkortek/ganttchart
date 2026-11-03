@@ -439,7 +439,7 @@ window._cpApplyLive = function(hex, skipSave) {
     document.body.appendChild(styleTag);
     styleTag.textContent = css;
     // 💡 [2026-09-04 FOUC 방지] 적용된 CSS를 localStorage에 캐시 — <head>의 인라인 스크립트
-    //    (GANTT_CHART_V02_Color.html)가 다음 페이지 로드 시 styles.css 이후, body 렌더 이전에
+    //    (kortek_pm.html)가 다음 페이지 로드 시 styles.css 이후, body 렌더 이전에
     //    이 CSS를 즉시 주입해 "청록 → 파랑" 깜빡임을 원천 차단한다.
     try { localStorage.setItem('gantt_theme_css_v1', css); } catch(e) {}
 

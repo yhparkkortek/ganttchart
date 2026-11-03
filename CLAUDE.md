@@ -9,7 +9,7 @@
 KORTEK 사내용 간트차트(Gantt Chart) 웹앱 — 프로젝트 일정 관리 + 메일 자동 분석/발송 +
 Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에서 제공합니다.
 
-- **프런트엔드**: `GANTT_CHART_V02_Color.html` 하나의 정적 HTML + `js/` 아래 다수의 `<script>` 태그.
+- **프런트엔드**: `kortek_pm.html` 하나의 정적 HTML + `js/` 아래 다수의 `<script>` 태그.
   **번들러/빌드 과정 없음.** React/Vue 같은 프레임워크도, ES 모듈(`import`/`export`)도 쓰지 않는
   순수 vanilla JS이며, 모든 `<script>` 태그가 **하나의 전역 스코프를 공유**합니다.
 - **백엔드**: `kortek_backend.py` (Flask, 포트 5000 고정) — 메일 발송/수신(SMTP/POP3), Telegram 알람,
@@ -387,7 +387,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - ⚠️⚠️ **DSM 은 "없는 파일" 다운로드에도 502 + "페이지를 찾을 수 없습니다" HTML** 을 준다 — 그걸 보고 "다운로드가 전역으로 죽었다"고 **오진**했다(실제론 내 put 버그). 502 면 **먼저 그 경로가 있는지 물을 것**. 그 HTML 을 바이트로 돌려주면 호출한 쪽이 **파일 내용으로 저장한다**
 - ⚠️⚠️ **`getinfo` 는 없는 경로도 항목으로 돌려준다**(`code` 가 실림) — 안 걸러서 `exists()` 가 항상 True 였고 "썼는지 확인"이 무력했다. **`Delete` 도 성공을 주면서 안 지우는 경우가 있다**(코드 900, ACL 은 전부 허용인데도). **반환값은 증거가 아니다** — 쓰고 나서 한 번 더 물을 것(`_verify_written`)
 - ⚡ 원자적 쓰기 1KB **348ms**(512KB 477ms). 임시 폴더를 **프로세스당 하나 재사용**(`.ganttput-<pid>-<rand>`) + `ensure_folder` 캐시로 **543→323ms**. 검증 9건은 `tests/nas-write-probe.py`(동시 쓰기에서 **완전한 JSON** 확인 포함)
-- 🔌 **라우트(검증 18/18, `tests/nas-routes-probe.py`)**: 조회는 절대경로(`/nas/list` `/nas/get`), **쓰기는 `rel`+`team` 상대경로만**(`/nas/app/put|mkdir|delete|sweep`, `/nas/paths`). ⚠️ 쓰기가 절대경로를 안 받는 이유 둘 — 프런트 버그가 NAS 아무 데나 못 쓰게, 그리고 **사내 경로가 프런트 코드에 안 들어가게**. ⚠️ 임시 폴더는 프로세스가 죽으면 남는다 → `sweep` 은 **내 태그 또는 비어있고 오래된 것만**(남이 쓰는 중일 수 있다). ⚠️ 검증은 `app.test_client()`(5000번 프로세스를 죽이지 말 것), **재시작 전엔 404**
+- 🔌 **라우트(검증 33/33, `tests/nas-routes-probe.py`)**: 조회는 절대경로(`/nas/list` `/nas/get`), **쓰기는 `rel`+`team` 상대경로만**(`/nas/app/put|mkdir|delete|sweep`, `/nas/paths`). ⚠️ 쓰기가 절대경로를 안 받는 이유 둘 — 프런트 버그가 NAS 아무 데나 못 쓰게, 그리고 **사내 경로가 프런트 코드에 안 들어가게**. ⚠️ 임시 폴더는 프로세스가 죽으면 남는다 → `sweep` 은 **내 태그 또는 비어있고 오래된 것만**(남이 쓰는 중일 수 있다). ⚠️ 검증은 `app.test_client()`(5000번 프로세스를 죽이지 말 것), **재시작 전엔 404**
+- 🔑 **NAS 로그인 설정 화면은 🔑 모달(js/36)에 있다**(2026-11-04) — `/nas/config`·`/nas/root`·`/nas/root-candidates`. 앱 폴더 고르기는 CLI 와 **같은 함수**(`set_roots`/`writable_candidates`) — 두 벌로 두면 "CLI 엔 보이는데 화면엔 안 보인다"가 생긴다. ⚠️⚠️ **`save_config` 가 앱 폴더(`root`)를 지우고 있었다** — 로그인과 `root` 가 같은 파일에 사는데 새 dict 를 만들어 써서, 로그인만 다시 저장해도 다음 저장이 "앱 루트가 없다"로 죽었다(아는 키만 덮어쓰게 고침, `_raw_config`). ⚠️ "연결 테스트"는 비밀번호를 새로 받지 않는다 — 테스트라는 이름으로 실패를 쌓으면 그게 곧 IP 차단이다. ⚠️ 새 섹션을 다른 섹션의 **버튼 행(flex) 안**에 붙였다가 글자가 한 자씩 세로로 깨졌다 — 문법도 콘솔도 조용했고 **스크린샷을 찍어서야** 보였다. ⚠️ 구버전 백엔드에서 `Unexpected token '<'` — 404 HTML 을 `.json()` 한 것. `nasApi()` 로 모아 "안 돌고 있다"와 "돌지만 구버전"을 나눠 말한다
 - ⚠️ 사내 IP·경로는 코드·문서에 쓰지 말 것 — `nas_login_config.json`(.gitignore)에만
 
 ### `docs/doc-store.md` — 📁 문서 저장소 (사내 공유 UNC · `/doc/*`)
@@ -475,5 +476,5 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 특정 기능 수정 시 파일 맵에서 바로 지정. 못 찾겠으면 `grep -rn "함수명" js/`.
 - 민감 파일(`mail_config.json`, `telegram_config.json`, `schedule_rules.json`, `.env`)은 `.gitignore` — 로컬에만 존재.
 - 코드 주석의 `js/파일명.js:줄번호` 참조는 파일 이동/분리 시 같이 업데이트.
-- **⚠️ `js/*.js` 수정 시 `GANTT_CHART_V02_Color.html`의 캐시버스터 `?v=YYYYMMDDx`도 같이 올릴 것** — 전체 `<script>` 태그가 같은 값을 공유하므로 Python으로 일괄 치환: `python -c "d=open('GANTT_CHART_V02_Color.html','rb').read(); open('GANTT_CHART_V02_Color.html','wb').write(d.replace(b'v=OLD',b'v=NEW'))"`
+- **⚠️ `js/*.js` 수정 시 `kortek_pm.html`의 캐시버스터 `?v=YYYYMMDDx`도 같이 올릴 것** — 전체 `<script>` 태그가 같은 값을 공유하므로 Python으로 일괄 치환: `python -c "d=open('kortek_pm.html','rb').read(); open('kortek_pm.html','wb').write(d.replace(b'v=OLD',b'v=NEW'))"`
 - **⚠️ HTML 파일은 절대 PowerShell `Set-Content`/`Out-File`로 수정 금지** — UTF-8 한국어 바이트 `?` 치환·태그 깨짐. Python `open(...,'wb')` 또는 `[System.IO.File]::WriteAllText(..., Encoding::UTF8)` 사용. 손상 복구 → `docs/html-corruption-recovery.md`.

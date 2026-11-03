@@ -14,7 +14,7 @@ JS SyntaxError에 의한 아이콘 깨짐(→ `docs/gantt-internals.md`)과 구�
 
 ## 원인
 
-PowerShell `Set-Content` 또는 `Out-File` 로 `GANTT_CHART_V02_Color.html`을 덮어쓸 때 발생.
+PowerShell `Set-Content` 또는 `Out-File` 로 `kortek_pm.html`을 덮어쓸 때 발생.
 
 ```powershell
 # 이렇게 하면 안 됨 (UTF-8 손상)
@@ -36,12 +36,12 @@ PowerShell 기본 인코딩(Windows-1252/cp1252)으로 읽어서 UTF-8 멀티바
 # Python으로만 수정 (UTF-8 안전)
 import re
 
-with open('GANTT_CHART_V02_Color.html', 'rb') as f:
+with open('kortek_pm.html', 'rb') as f:
     data = f.read()
 
 data = re.sub(rb'v=\d{8}[a-z]', b'v=20260930z', data)
 
-with open('GANTT_CHART_V02_Color.html', 'wb') as f:
+with open('kortek_pm.html', 'wb') as f:
     f.write(data)
 ```
 
@@ -49,9 +49,9 @@ with open('GANTT_CHART_V02_Color.html', 'wb') as f:
 
 ```powershell
 # UTF-8 명시 필수
-$text = [System.IO.File]::ReadAllText('GANTT_CHART_V02_Color.html', [System.Text.Encoding]::UTF8)
+$text = [System.IO.File]::ReadAllText('kortek_pm.html', [System.Text.Encoding]::UTF8)
 $text = $text -replace 'v=20260930x', 'v=20260930z'
-[System.IO.File]::WriteAllText('GANTT_CHART_V02_Color.html', $text, [System.Text.Encoding]::UTF8)
+[System.IO.File]::WriteAllText('kortek_pm.html', $text, [System.Text.Encoding]::UTF8)
 ```
 
 ## 복구 절차
@@ -59,7 +59,7 @@ $text = $text -replace 'v=20260930x', 'v=20260930z'
 ### 1단계: 손상 여부 확인
 
 ```python
-with open('GANTT_CHART_V02_Color.html', 'rb') as f:
+with open('kortek_pm.html', 'rb') as f:
     data = f.read()
 try:
     data.decode('utf-8')
@@ -73,7 +73,7 @@ except UnicodeDecodeError as e:
 ```bash
 # 최근 커밋들의 HTML UTF-8 유효성 확인
 git log --oneline -20 | while read hash msg; do
-  git show $hash:GANTT_CHART_V02_Color.html 2>/dev/null | python3 -c "
+  git show $hash:kortek_pm.html 2>/dev/null | python3 -c "
 import sys
 try:
     sys.stdin.buffer.read().decode('utf-8')
@@ -93,14 +93,14 @@ import subprocess, re
 GOOD_COMMIT = '6fa2c08'
 NEW_BUSTER = b'v=20260930z'
 
-result = subprocess.run(['git', 'show', f'{GOOD_COMMIT}:GANTT_CHART_V02_Color.html'],
+result = subprocess.run(['git', 'show', f'{GOOD_COMMIT}:kortek_pm.html'],
                         capture_output=True)
 html = result.stdout  # bytes, clean UTF-8
 
 # 캐시버스터 교체
 html = re.sub(rb'v=\d{8}[a-z]', NEW_BUSTER, html)
 
-with open('GANTT_CHART_V02_Color.html', 'wb') as f:
+with open('kortek_pm.html', 'wb') as f:
     f.write(html)
 
 print('복원 완료')
@@ -113,9 +113,9 @@ print('복원 완료')
 ```python
 import subprocess, re
 
-good = subprocess.run(['git', 'show', 'GOOD_HASH:GANTT_CHART_V02_Color.html'],
+good = subprocess.run(['git', 'show', 'GOOD_HASH:kortek_pm.html'],
                       capture_output=True).stdout.decode('utf-8')
-bad  = subprocess.run(['git', 'show', 'LATEST_CORRUPT:GANTT_CHART_V02_Color.html'],
+bad  = subprocess.run(['git', 'show', 'LATEST_CORRUPT:kortek_pm.html'],
                       capture_output=True).stdout.decode('latin-1')
 
 good_scripts = set(re.findall(r'src="(js/[^"?]+)', good))
@@ -129,4 +129,4 @@ print('제거된 script:', good_scripts - bad_scripts)
 
 1. **HTML 파일은 Python `open(..., 'rb'/'wb')`으로만 수정** — PostToolUse 훅, 수동 작업 모두 동일
 2. **`Set-Content` / `Out-File` 사용 금지** — `.claude/settings.json` 훅 코드에서 PowerShell을 쓴다면 `[System.IO.File]::WriteAllText(..., Encoding::UTF8)` 강제
-3. **커밋 전 UTF-8 검증**: `python3 -c "open('GANTT_CHART_V02_Color.html','rb').read().decode('utf-8'); print('OK')"`
+3. **커밋 전 UTF-8 검증**: `python3 -c "open('kortek_pm.html','rb').read().decode('utf-8'); print('OK')"`

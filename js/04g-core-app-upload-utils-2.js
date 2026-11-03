@@ -2490,7 +2490,7 @@ ${question}
     };
 
     // 🗂️ [2026-09-08 신규] "Summary 탭 보여줘"처럼 Gantt 업무와 무관하게 다른 탭 자체를 열어달라는
-    //    요청 — 사이드바 탭 버튼(GANTT_CHART_V02_Color.html의 data-tab)을 클릭했을 때와 완전히 동일한
+    //    요청 — 사이드바 탭 버튼(kortek_pm.html의 data-tab)을 클릭했을 때와 완전히 동일한
     //    window.switchTab(23-sidebar-tabs.js)을 그대로 재사용. 목록에 없는 이름이 오면(AI가 잘못된
     //    영문명을 지어낸 경우 대비) 실행하지 않고 실패로 반환.
     window._aiAssistSwitchTab = function(tabName) {

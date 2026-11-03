@@ -16,7 +16,7 @@
 추가할 때 아래 중 어디에 해당하는지부터 정할 것 — 안 그러면 "다른 UI는 다 영문인데 이 문구만
 한글로 남아있다"는 버그가 반복 발생함(전수 점검이 2차까지 필요했던 이유):
 
-- **정적 HTML 텍스트**(`GANTT_CHART_V02_Color.html`에 그대로 박힌 문구): `data-i18n="키"` 부여 +
+- **정적 HTML 텍스트**(`kortek_pm.html`에 그대로 박힌 문구): `data-i18n="키"` 부여 +
   `LANG.ko.i18n`/`LANG.en.i18n`에 등록 (textContent 교체).
 - **정적 HTML의 `placeholder`**: `data-i18n-placeholder="키"` + `i18nPlaceholder` 맵.
 - **정적 HTML의 `title`(툴팁)**: `data-i18n-title="키"` + `i18nTitle` 맵.
@@ -105,7 +105,7 @@ s58/l94, `darkText` s100/l25, `hoverBg` s48/l75 등)에 그 hue를 대입해 "�
 파스텔 규칙**이 유지된다. `_cpApplyLive(hex)`가 이 역할색들로 `<style id="cp-live-style">`를 매번
 새로 만들어 `document.body` 끝에 붙이는 방식으로 실시간 적용하고(페이지 로드 시엔
 `_cpApplyStoredTheme`가 저장된 hex로 동일 함수를 호출), 결과 CSS 텍스트를 `localStorage
-('gantt_theme_css_v1')`에도 캐시해 다음 로드 때 FOUC 없이 즉시 재주입한다(`GANTT_CHART_V02_Color.html`
+('gantt_theme_css_v1')`에도 캐시해 다음 로드 때 FOUC 없이 즉시 재주입한다(`kortek_pm.html`
 `<head>`의 인라인 스크립트 참고).
 
 **새 UI가 팔레트를 따라가게 만드는 두 가지 방법 — 되도록 ①을 먼저 시도할 것:**

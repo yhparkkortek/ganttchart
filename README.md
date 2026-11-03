@@ -9,7 +9,7 @@ KORTEK 사내 프로젝트 일정 관리 웹앱.
 
 ```
 ganttchart/
-├── GANTT_CHART_V02_Color.html  # 앱 본체 (단일 HTML)
+├── kortek_pm.html  # 앱 본체 (단일 HTML)
 ├── styles.css                  # 전역 스타일
 ├── js/                         # 기능별 JS 모듈 (로딩 순서 = 실행 순서)
 ├── kortek_backend.py           # Flask 백엔드 (포트 5000)
@@ -59,10 +59,10 @@ cd ganttchart
 ```bash
 # 방법 A: 로컬 정적 서버로 열기 (권장)
 python -m http.server 8934
-# 브라우저에서 http://localhost:8934/GANTT_CHART_V02_Color.html
+# 브라우저에서 http://localhost:8934/kortek_pm.html
 
 # 방법 B: 파일을 바로 열기
-# GANTT_CHART_V02_Color.html 더블클릭
+# kortek_pm.html 더블클릭
 ```
 
 > 백엔드(포트 5000)가 먼저 실행 중이어야 메일·Telegram·SAP 기능이 동작합니다.
@@ -136,6 +136,6 @@ SAP GUI Scripting을 통해 자재 조회·구매오더·MB21 예약 등을 자�
 ## 개발 관련
 
 - **빌드 없음** — 순수 vanilla JS, `<script src="js/...">` 태그 로딩 순서 = 실행 순서
-- **JS 수정 후** `GANTT_CHART_V02_Color.html`의 캐시버스터 `?v=YYYYMMDDx`를 올려야 팀원 브라우저에 반영됩니다
+- **JS 수정 후** `kortek_pm.html`의 캐시버스터 `?v=YYYYMMDDx`를 올려야 팀원 브라우저에 반영됩니다
 - **HTML 수정**은 Python `open(..., 'wb')`으로만 — PowerShell `Set-Content` 사용 시 한국어 깨짐
 - AI 작업 지침: `CLAUDE.md` / 기능별 상세: `docs/*.md`

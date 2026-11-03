@@ -147,6 +147,29 @@ def main():
         check('404 + 사람이 읽는 사유', r.status_code == 404 and '없습니다' in msg,
               '· HTTP %s · %s' % (r.status_code, msg[:70]))
 
+        print('\n== ⑨ 설정 화면이 쓰는 라우트 — 거부돼야 하는 입력 ==')
+        # ⚠ 여기서는 설정을 **바꾸지 않는다** — 검증이 사람 설정을 망가뜨리면 안 된다.
+        st, _ = jpost(c, '/nas/config', {'host': '', 'user': 'x', 'password': 'y'})
+        check('주소 없으면 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/config', {'host': 'h', 'user': '', 'password': 'y'})
+        check('아이디 없으면 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/config', {'host': 'h', 'user': 'u', 'port': 'abc', 'password': 'y'})
+        check('포트가 숫자가 아니면 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/root', {})
+        check('앱 폴더를 안 주면 거부', st == 400, '· HTTP %s' % st)
+        st, d9 = jpost(c, '/nas/root', {'root': 'relative/path'})
+        check('상대경로 거부', st == 400, '· %s' % (d9 or {}).get('message', ''))
+        # ⚠ 공유 루트 자체(`/공유`)를 앱 폴더로 삼으면 남의 자료와 섞이고,
+        #   임시폴더 청소 같은 동작이 **남의 폴더를 건드리게 된다**.
+        st, _ = jpost(c, '/nas/root', {'root': '/공유루트만'})
+        check('공유 루트 자체 거부', st == 400, '· HTTP %s' % st)
+        r = c.get('/nas/root-candidates')
+        d9 = r.get_json() or {}
+        check('앱 폴더 후보 목록(읽기 전용)', r.status_code == 200 and d9.get('ok'),
+              '· %d건' % len(d9.get('items') or []))
+        body = c.get('/nas/status').get_data(as_text=True)
+        check('status 응답에 비밀번호가 안 실린다', 'pw_dpapi' not in body)
+
     finally:
         print('\n== 뒷정리 ==')
         st, dd = jpost(c, '/nas/app/delete', {'rel': DIR})

@@ -114,7 +114,7 @@ IMAP_HOST      = "gw.kortek.co.kr"
 IMAP_PORT      = 993
 
 # ── 업무별(개별 태스크) 예약 알람 — 구글드라이브 서비스계정 읽기전용 접근 ──
-#    GANTT_CHART_V02_Color.html(js/04a-core-app-globals.js의 SHARED_FOLDER_ID)과 동일한 폴더.
+#    kortek_pm.html(js/04a-core-app-globals.js의 SHARED_FOLDER_ID)과 동일한 폴더.
 #    이 폴더 밑에 프로젝트 파일들과 App_Config/AddressBook_Shared.json이 들어있다.
 GANTT_SHARED_FOLDER_ID     = '1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS'
 GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get(
@@ -1001,7 +1001,7 @@ def schedule_delete_api(rule_id):
 
 # ══════════════════════════════════════════════════════════════
 # 📂 업무별(개별 태스크) 알람용 — 구글드라이브 실시간 조회 (서비스계정, 읽기전용)
-#    GANTT_CHART_V02_Color.html은 구글시트가 아니라, 이 폴더(GANTT_SHARED_FOLDER_ID) 안의
+#    kortek_pm.html은 구글시트가 아니라, 이 폴더(GANTT_SHARED_FOLDER_ID) 안의
 #    JSON 파일 1개(프로젝트당 1개)에 전체 데이터를 저장한다 — js/04a~04k-core-app-*.js 참고.
 #    여기서는 그 JSON을 그대로 읽어 collectAlarmItems()(js/22c-summary-mctable-core2.js:3)와
 #    동등한 로직으로 딱 한 업무(행)의 "지금 이 순간" 상태를 재계산한다.
@@ -5324,6 +5324,63 @@ def nas_unblock():
     except Exception as e:
         return jsonify({'ok': False, 'message': str(e)})
 
+
+
+# ── 🔑 NAS 로그인/앱 폴더 설정 (설정 화면이 쓰는 쓰기 라우트) ───────────────────
+#   ⚠️ 비밀번호는 **POST 본문으로만** 받는다. 쿼리스트링에 실으면 NAS·프록시의
+#      access log 에 그대로 남는다(SAP·그룹웨어와 같은 규칙).
+#   ⚠️ 어떤 응답에도 비밀번호를 **돌려주지 않는다.** 저장돼 있는지 여부만 알려준다.
+#   ⚠️ 저장은 Windows DPAPI 로 이 PC 에서만 풀린다(`nas_login_config.json`, .gitignore).
+@app.route('/nas/config', methods=['POST'])
+def nas_config_save():
+    req = request.get_json(force=True, silent=True) or {}
+    host = str(req.get('host') or '').strip()
+    user = str(req.get('user') or '').strip()
+    pw = req.get('password') or ''
+    if not host or not user:
+        return jsonify({'ok': False, 'message': '주소와 아이디가 필요합니다.'}), 400
+    try:
+        port = int(req.get('port') or (5001 if req.get('https') else 5000))
+    except Exception:
+        return jsonify({'ok': False, 'message': '포트는 숫자여야 합니다.'}), 400
+    try:
+        saved = _nas().save_config(host, port, bool(req.get('https')), user, pw)
+        # save_config 가 잠금을 풀어 준다(= 사람이 설정을 다시 저장했다는 뜻).
+        return jsonify({'ok': True, 'saved': saved})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 400
+
+
+@app.route('/nas/config', methods=['DELETE'])
+def nas_config_clear():
+    try:
+        _nas().clear_config()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
+@app.route('/nas/root', methods=['POST'])
+def nas_root_set():
+    """앱 폴더 위치. CLI(`nas_set_root.py`)와 **같은 함수**를 쓴다."""
+    req = request.get_json(force=True, silent=True) or {}
+    if 'root' not in req and 'teamRoot' not in req:
+        return jsonify({'ok': False, 'message': 'root 또는 teamRoot 가 필요합니다.'}), 400
+    try:
+        out = _nas().set_roots(root=req.get('root'),
+                               team_root=req.get('teamRoot') if 'teamRoot' in req else None)
+        return jsonify(dict(out, ok=True))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 400
+
+
+@app.route('/nas/root-candidates', methods=['GET'])
+def nas_root_candidates():
+    """앱 폴더로 쓸 수 있는 곳. 로그인되어 있어야 한다(로그인 시도는 하지 않는다)."""
+    try:
+        return jsonify({'ok': True, 'items': _nas().writable_candidates()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 403
 
 @app.route('/nas/shares', methods=['GET'])
 def nas_shares():

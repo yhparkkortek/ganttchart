@@ -132,7 +132,49 @@
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._insaLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._insaLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
-                + '</div></div></div>';
+                + '</div>'   // ⚠ 인사 버튼 행(flex)을 **여기서 닫는다** — 안 닫고 다음 섹션을 붙였다가
+                             //   모든 글자가 flex 항목이 돼 **한 자씩 세로로** 깨졌다(화면으로 확인).
+                // ── 🗄️ NAS(사내 저장소) 로그인 ─────────────────────────────────
+                //  ⚠️ 이건 "또 하나의 외부 시스템"이 아니라 **앱 데이터가 사는 곳**이다.
+                //     여기 계정이 곧 신원이고, 무엇을 볼 수 있는지는 **NAS 폴더 권한**이 정한다
+                //     (앱 쪽 게이트는 장식이다 — 사람은 자기 PC를 제어한다).
+                //  ⚠️ DSM 은 비밀번호 실패가 쌓이면 계정이 아니라 **이 PC 의 IP 를 차단한다.**
+                //     그래서 한 번 실패하면 잠그고, 사람이 설정을 다시 저장할 때까지 재시도하지 않는다.
+                + '<div style="border-top:1px solid #e5e5e5; margin:14px 0 12px;"></div>'
+                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
+                + '<strong style="font-size:13px; color:#6741d9;">🗄️ ' + T('NAS(사내 저장소) 로그인', 'NAS (in-house storage) login') + '</strong>'
+                + '<span id="naslogin-state" style="font-size:11px; color:#888;"></span></div>'
+                + '<div style="font-size:11.5px; color:#666; margin-bottom:10px; line-height:1.5;">'
+                + T('사내 NAS 계정입니다. 앱 데이터(프로젝트 파일·설정·백업)가 여기에 저장됩니다. '
+                    + '<b>볼 수 있는 범위는 NAS 폴더 권한이 정합니다</b> — 본인 팀 폴더와 공용 폴더만 열립니다. '
+                    + '⚠️ 비밀번호가 몇 번 틀리면 계정이 아니라 <b>이 PC 의 접속 자체가 차단</b>되므로, '
+                    + '<b>한 번만</b> 시도하고 실패하면 다시 시도하지 않습니다. '
+                    + '비밀번호는 이 PC 의 Windows 계정에서만 풀리는 형태로 저장되고 브라우저에는 남지 않습니다.',
+                    'Your in-house NAS account. App data (project files, settings, backups) lives here. '
+                    + '<b>What you can see is decided by NAS folder permissions</b> — your own team folder and the shared one. '
+                    + '⚠️ Repeated wrong passwords block <b>this PC</b>, not just the account, so it is tried '
+                    + '<b>once</b> and never retried. The password is stored so that only this PC can decrypt it.')
+                + '</div>'
+                + fieldRow(T('주소', 'Address'),
+                    '<input id="naslogin-host" autocomplete="off" style="' + inputSt + '" placeholder="' + T('예: nas.사내주소', 'e.g. nas.internal') + '">'
+                    + '<span style="font-size:11px; color:#777;">:</span>'
+                    + '<input id="naslogin-port" inputmode="numeric" style="width:62px; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="5001">'
+                    + '<label style="display:flex; align-items:center; gap:4px; font-size:11.5px; color:#555; white-space:nowrap;">'
+                    + '<input type="checkbox" id="naslogin-https" checked> HTTPS</label>')
+                + fieldRow(T('아이디', 'ID'), '<input id="naslogin-user" autocomplete="off" style="' + inputSt + '">')
+                + fieldRow(T('비밀번호', 'Password'), '<input id="naslogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
+                + fieldRow(T('앱 폴더', 'App folder'),
+                    '<input id="naslogin-root" autocomplete="off" style="' + inputSt + '" placeholder="/공유폴더/KortekGantt">'
+                    + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
+                + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
+                + '<div id="naslogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
+                + '<div style="display:flex; gap:8px;">'
+                + '<button onclick="window._nasLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<span style="flex:1;"></span>'
+                + '<button onclick="window._nasLoginTest()" style="' + btnSt + '">🔌 ' + T('연결 테스트', 'Test') + '</button>'
+                + '<button onclick="window._nasLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
+                + '</div>'
+                + '</div></div>';
             document.body.appendChild(wrap);
             if (window._makeDraggable) window._makeDraggable('saplogin-box', 'saplogin-drag');
             if (window._bindClickToFront) window._bindClickToFront('saplogin-modal');
@@ -164,6 +206,7 @@
         }
         window._gwLoginRefresh();
         window._insaLoginRefresh();
+        window._nasLoginRefresh();
     };
 
     // ── 🏢 그룹웨어 자동 로그인 ───────────────────────────────────────
@@ -549,4 +592,215 @@
             setStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
         }
     };
+
+    // ══ 🗄️ NAS(사내 저장소) 로그인 ══════════════════════════════════════
+    //  ⚠️⚠️ 실패하면 **다시 시도하지 않는다.** DSM 은 비밀번호 실패가 쌓이면 계정이 아니라
+    //     이 PC 의 IP 를 차단한다(그룹웨어·인사와 같은 규칙, 결과는 더 넓다).
+    //     백엔드가 한 번 실패를 기록하면 잠그고, **설정을 다시 저장해야** 풀린다.
+    //  ⚠️ 비밀번호는 입력칸에만 잠깐 있다가 저장 즉시 지운다 — localStorage 에 안 남긴다.
+    //  ⚠️⚠️ 응답을 **바로 .json() 하지 말 것.** 구버전 백엔드는 이 경로가 없어서 404 HTML 을
+    //     돌려주는데, 그걸 파싱하면 사람에게 `Unexpected token '<'` 라고 말하게 된다 —
+    //     원인이 "재시작 안 함"인데 사람은 자기 아이디·비밀번호를 의심한다(실제로 그렇게 나왔다).
+    //     "안 돌고 있다"와 "돌지만 구버전"도 **다른 고장**이라 따로 말한다.
+    var nasApi = async function (path, opts) {
+        var res;
+        try {
+            res = await fetch(BASE + path, opts);
+        } catch (e) {
+            throw new Error(T('백엔드(kortek_backend)가 실행 중이 아닙니다 — kortek_backend.bat 을 실행해주세요.',
+                              'The backend is not running — start kortek_backend.bat.'));
+        }
+        if (res.status === 404) {
+            throw new Error(T('백엔드가 구버전입니다 — 창을 닫고 kortek_backend.bat 을 다시 실행해주세요.',
+                              'The backend is outdated — restart kortek_backend.bat.'));
+        }
+        var j = null;
+        try { j = await res.json(); } catch (e) { /* 본문이 JSON 이 아닐 수 있다 */ }
+        if (!j) throw new Error(T('백엔드 응답을 읽지 못했습니다(HTTP ', 'Could not read the backend response (HTTP ') + res.status + ')');
+        return j;
+    };
+
+    var nasStatus = function (msg, kind) {
+        var el = document.getElementById('naslogin-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'ok' ? '#1f7a3d' : (kind === 'err' ? '#b1432f' : '#555');
+        el.innerHTML = msg || '';
+    };
+
+    window._nasLoginRefresh = async function () {
+        var st = document.getElementById('naslogin-state');
+        var pwEl = document.getElementById('naslogin-pw');
+        if (pwEl) pwEl.value = '';
+        nasStatus('', '');
+        var cands = document.getElementById('naslogin-cands');
+        if (cands) cands.style.display = 'none';
+        try {
+            var s = await nasApi('/nas/status');
+            if (s.configured) {
+                document.getElementById('naslogin-host').value = s.host || '';
+                document.getElementById('naslogin-port').value = s.port || '';
+                document.getElementById('naslogin-https').checked = !!s.https;
+                document.getElementById('naslogin-user').value = s.user || '';
+                if (pwEl) pwEl.placeholder = T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
+            }
+            // 앱 폴더는 따로 묻는다 — 로그인은 됐는데 폴더만 안 정해진 상태가 흔하다.
+            var p = await nasApi('/nas/paths');
+            if (p.configured) document.getElementById('naslogin-root').value = p.root || '';
+            if (st) {
+                if (!s.configured) { st.textContent = T('· 미설정', '· not set'); st.style.color = '#888'; }
+                else if (s.reason === 'blocked') {
+                    st.textContent = T('· 잠김', '· locked'); st.style.color = '#b1432f';
+                    nasStatus('⛔ ' + T('로그인 실패로 잠겨 있습니다 — 아이디·비밀번호를 확인하고 <b>다시 저장</b>하면 풀립니다.',
+                                        'Locked after a failed login — check the ID/password and <b>save again</b> to unlock.')
+                              + '<br>' + esc(s.message || ''), 'err');
+                } else if (s.ok) {
+                    st.textContent = p.configured ? T('· 연결됨', '· connected')
+                                                  : T('· 연결됨(앱 폴더 미지정)', '· connected (no app folder)');
+                    st.style.color = p.configured ? '#1f7a3d' : '#b06b00';
+                } else { st.textContent = T('· 설정됨(미접속)', '· configured (not connected)'); st.style.color = '#1971c2'; }
+            }
+            return s;
+        } catch (e) {
+            if (st) { st.textContent = T('· 백엔드 없음', '· backend down'); st.style.color = '#b1432f'; }
+            return null;
+        }
+    };
+
+    window._nasLoginSave = async function () {
+        var host = document.getElementById('naslogin-host').value.trim();
+        var user = document.getElementById('naslogin-user').value.trim();
+        var pw = document.getElementById('naslogin-pw').value;
+        var https = document.getElementById('naslogin-https').checked;
+        var port = document.getElementById('naslogin-port').value.trim();
+        if (!host || !user) { nasStatus('⚠️ ' + T('주소와 아이디를 입력해주세요.', 'Enter the address and ID.'), 'err'); return; }
+        // ⚠️ 주소를 통째로 붙여넣는 사람이 많다 — http://host:5000 에서 알아서 떼어 준다.
+        var m = /^\s*(https?):\/\/([^/:\s]+)(?::(\d+))?/i.exec(host);
+        if (m) {
+            https = m[1].toLowerCase() === 'https';
+            host = m[2];
+            if (m[3]) port = m[3];
+            document.getElementById('naslogin-host').value = host;
+            document.getElementById('naslogin-https').checked = https;
+            if (port) document.getElementById('naslogin-port').value = port;
+        }
+        if (!port) port = https ? '5001' : '5000';
+        nasStatus('⏳ ' + T('저장하고 한 번만 접속해 봅니다…', 'Saving and trying once…'), '');
+        try {
+            var r = await nasApi('/nas/config', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ host: host, port: Number(port), https: https, user: user, password: pw })
+            });
+            if (!r.ok) { nasStatus('⚠️ ' + esc(r.message || ''), 'err'); return; }
+            document.getElementById('naslogin-pw').value = '';
+            // 저장 직후 **딱 한 번** 접속해 본다. 실패하면 백엔드가 잠그고 다시 안 한다.
+            var lg = await nasApi('/nas/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            await window._nasLoginRefresh();
+            if (lg.ok) {
+                nasStatus('✅ ' + T('접속됐습니다.', 'Connected.') + ' '
+                          + T('앱 폴더가 비어 있으면 <b>찾기</b>로 골라주세요.', 'If the app folder is empty, pick it with <b>Browse</b>.'), 'ok');
+            } else {
+                nasStatus('❌ ' + esc(lg.message || T('접속하지 못했습니다.', 'Could not connect.'))
+                          + '<br>' + T('⚠️ 다시 시도하지 않습니다 — 아이디·비밀번호를 고쳐 <b>다시 저장</b>해주세요.',
+                                       '⚠️ It will not retry — fix the ID/password and <b>save again</b>.'), 'err');
+            }
+        } catch (e) {
+            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
+        }
+    };
+
+    //  "연결 테스트"는 **이미 저장된 계정으로** 한 번 붙어 보는 것뿐이다.
+    //  비밀번호를 새로 받지 않는다 — 테스트라는 이름으로 실패를 쌓지 않기 위해서다.
+    window._nasLoginTest = async function () {
+        nasStatus('⏳ ' + T('접속해 봅니다…', 'Trying…'), '');
+        try {
+            var s = await nasApi('/nas/status');
+            if (!s.configured) { nasStatus('⚠️ ' + T('먼저 저장해주세요.', 'Save first.'), 'err'); return; }
+            if (s.reason === 'blocked') {
+                nasStatus('⛔ ' + T('잠겨 있습니다 — 설정을 <b>다시 저장</b>해야 풀립니다.',
+                                    'Locked — <b>save again</b> to unlock.'), 'err');
+                return;
+            }
+            var lg = s.ok ? { ok: true }
+                          : await nasApi('/nas/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            await window._nasLoginRefresh();
+            nasStatus(lg.ok ? ('✅ ' + T('접속됩니다.', 'Connected.'))
+                            : ('❌ ' + esc(lg.message || '') + '<br>'
+                               + T('⚠️ 다시 시도하지 않습니다 — 설정을 고쳐 다시 저장해주세요.',
+                                   '⚠️ It will not retry — fix the settings and save again.')), lg.ok ? 'ok' : 'err');
+        } catch (e) {
+            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
+        }
+    };
+
+    //  앱 폴더 고르기 — 쓰기 권한이 **실제로 보이는** 곳만 보여준다.
+    //  ⚠️ 공유 루트 자체는 고르지 못하게 한다(백엔드가 거절한다) — 남의 자료와 섞인다.
+    window._nasPickRoot = async function () {
+        var box = document.getElementById('naslogin-cands');
+        if (!box) return;
+        box.style.display = 'block';
+        box.innerHTML = '<div style="padding:8px; color:#777;">⏳ ' + T('찾는 중…', 'Looking…') + '</div>';
+        try {
+            var r = await nasApi('/nas/root-candidates');
+            if (!r.ok) {
+                box.innerHTML = '<div style="padding:8px; color:#b1432f;">' + esc(r.message || '') + '</div>';
+                return;
+            }
+            var items = r.items || [];
+            if (!items.length) {
+                box.innerHTML = '<div style="padding:8px; color:#b1432f;">'
+                    + T('쓰기 권한이 있는 폴더가 보이지 않습니다 — NAS 관리자에게 문의해주세요.',
+                        'No writable folder is visible — ask your NAS administrator.') + '</div>';
+                return;
+            }
+            box.innerHTML = items.map(function (i) {
+                var suggested = i.path + '/KortekGantt';
+                return '<div data-root="' + esc(suggested) + '" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f0f0f0;">'
+                    + '<span style="color:#6741d9;">📂</span> ' + esc(i.path)
+                    + '<span style="color:#999;">/KortekGantt</span>'
+                    + '<span style="float:right; color:#aaa; font-size:10.5px;">' + esc(i.rights) + '</span></div>';
+            }).join('');
+            box.onclick = function (ev) {
+                var row = ev.target.closest('[data-root]');
+                if (!row) return;
+                document.getElementById('naslogin-root').value = row.getAttribute('data-root');
+                box.style.display = 'none';
+                window._nasRootSave();
+            };
+        } catch (e) {
+            box.innerHTML = '<div style="padding:8px; color:#b1432f;">' + esc(e && e.message ? e.message : e) + '</div>';
+        }
+    };
+
+    window._nasRootSave = async function () {
+        var root = document.getElementById('naslogin-root').value.trim();
+        if (!root) return;
+        nasStatus('⏳ ' + T('앱 폴더를 설정합니다…', 'Setting the app folder…'), '');
+        try {
+            var r = await nasApi('/nas/root', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ root: root })
+            });
+            await window._nasLoginRefresh();
+            nasStatus(r.ok ? ('✅ ' + T('앱 폴더: ', 'App folder: ') + esc(r.root || root))
+                           : ('⚠️ ' + esc(r.message || '')), r.ok ? 'ok' : 'err');
+        } catch (e) {
+            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
+        }
+    };
+
+    window._nasLoginDelete = async function () {
+        if (!confirm(T('저장된 NAS 로그인 정보를 삭제할까요? (앱 폴더 설정도 같이 지워집니다)',
+                       'Delete the saved NAS login? (the app folder setting goes too)'))) return;
+        try {
+            await nasApi('/nas/config', { method: 'DELETE' });
+            ['naslogin-host', 'naslogin-port', 'naslogin-user', 'naslogin-pw', 'naslogin-root']
+                .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+            await window._nasLoginRefresh();
+            nasStatus('🗑 ' + T('삭제했습니다.', 'Deleted.'), 'ok');
+        } catch (e) {
+            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
+        }
+    };
+
 })();
