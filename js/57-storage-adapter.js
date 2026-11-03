@@ -11,12 +11,19 @@
 //   이 두 곳이 Drive 데이터 접근의 전부다(나머지 gapi 사용은 getToken/setToken,
 //   즉 인증이라 데이터와 무관하다).
 //
-// ⚠️⚠️ 플래그가 'nas' 가 아니면 **아무것도 감싸지 않는다.** 파일을 읽어 들이기만 하고
+// ⚠️⚠️ 플래그가 꺼져 있으면 **아무것도 감싸지 않는다.** 파일을 읽어 들이기만 하고
 //    즉시 return 한다 — 플래그를 안 켠 사람의 코드 경로는 이 파일이 없을 때와 **완전히 동일**하다.
 //    (지금 앱을 쓰는 사람들이 있다 — 이 파일 하나로 그 사람들 저장이 바뀌면 안 된다)
 //
-//    켜기:  localStorage.setItem('gantt_storage_backend', 'nas')   → 새로고침
-//    끄기:  localStorage.removeItem('gantt_storage_backend')       → 새로고침
+//    모드 세 가지 (`localStorage.gantt_storage_backend`):
+//      없음 / 'drive' — 지금과 완전히 같다.
+//      'mirror'       — 🪞 Drive 에 쓸 때 NAS 에도 **같이** 쓴다. 읽기는 전부 Drive.
+//                        NAS 실패는 앱에 전달되지 않는다 — Drive 가 계속 정답이다.
+//                        (되돌릴 기준을 남긴 채 실데이터로 NAS 쓰기를 검증하는 단계)
+//      'nas'          — 읽기·쓰기 모두 NAS. Drive 를 전혀 부르지 않는다.
+//
+//    켜기:  localStorage.setItem('gantt_storage_backend', 'mirror')  → 새로고침
+//    끄기:  localStorage.removeItem('gantt_storage_backend')         → 새로고침
 //           (= 비상 탈출구. 어댑터가 뭘 잘못해도 이 한 줄로 Drive 로 돌아간다)
 //
 // ⚠️ NAS 는 **브라우저가 직접 못 부른다**(DSM 이 CORS 헤더를 안 준다). 그래서 로컬
@@ -232,13 +239,17 @@
     //    **먼저 로드돼 이미 메모리로 읽어 갔기** 때문이다. 실제로 그렇게 한 번 틀렸다 —
     //    localStorage 는 비었는데 목록은 여전히 옛 Drive id 로 나갔다.
     //    그래서 키마다 **메모리 무효화 함수**를 같이 적는다(없으면 키만 지운다).
+    // ⚠️ 비교는 모드 이름이 아니라 **id 공간**으로 한다. `mirror` 는 읽기를 Drive 로 하므로
+    //    캐시에 든 Drive id 가 그대로 유효하다 — drive↔mirror 전환에 캐시를 버리면
+    //    멀쩡한 캐시를 매번 날려 느려지기만 한다.
+    function idSpace(mode) { return mode === 'nas' ? 'nas' : 'drive'; }
     var MARK_KEY = 'gantt_storage_backend_active';
     var BACKEND_SCOPED_CACHES = [          // 새 캐시가 생기면 여기 한 줄 — 데이터로 둔다
         { key: 'gantt_folder_cache_v1', invalidate: '_clearFolderCache' }
     ];
     try {
-        var mark = localStorage.getItem(MARK_KEY) || 'drive';
-        if (mark !== currentBackend()) {
+        var mark = idSpace(localStorage.getItem(MARK_KEY) || 'drive');
+        if (mark !== idSpace(currentBackend())) {
             BACKEND_SCOPED_CACHES.forEach(function (c) {
                 try { localStorage.removeItem(c.key); } catch (e) { /* ignore */ }
                 var fn = c.invalidate && window[c.invalidate];
@@ -252,10 +263,11 @@
     } catch (e) { /* localStorage 가 막힌 환경 — 캐시도 없으니 할 일이 없다 */ }
 
     // ⚠️ 여기서 끝. 플래그가 꺼져 있으면 **아무것도 감싸지 않는다.**
-    if (currentBackend() !== 'nas') return;
+    var MODE = currentBackend();
+    if (MODE !== 'nas' && MODE !== 'mirror') return;
 
     // ───────────────────────────────────────────────────────────────────────
-    // 여기서부터는 플래그가 켜졌을 때만 돈다.
+    // 여기서부터는 플래그가 켜졌을 때만 돈다. (nas = NAS 로 갈아끼움 / mirror = 같이 쓰기)
     // ───────────────────────────────────────────────────────────────────────
 
     var _origFetch = window.fetch.bind(window);
@@ -462,6 +474,213 @@
     // ── fetch 가로채기 ─────────────────────────────────────────────────────
     var DRIVE_RE = /^https?:\/\/(?:www\.)?googleapis\.com\/(upload\/)?drive\/v3\/files(\/([^/?#]+))?(\/(copy|export))?/;
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🪞 미러 모드 — Drive 에 쓸 때 NAS 에도 같이 쓴다. **읽기는 전부 Drive.**
+    //
+    // 왜 이 단계가 있나: 바로 갈아타면 뭐가 틀렸을 때 **되돌릴 기준이 없다.**
+    //   미러 동안은 Drive 가 계속 정답이라, 실데이터로 NAS 쓰기가 검증되는 동안에도
+    //   앱은 지금과 똑같이 돈다. 어느 시점에 읽기만 NAS 로 돌리면 이사가 끝난다.
+    //
+    // ⚠️⚠️ **불변식 하나: 미러는 앱에 절대 영향을 주지 않는다.**
+    //    ① Drive 응답을 **그대로** 돌려준다(손대지 않는다)
+    //    ② Drive 가 실패하면 미러하지 않는다
+    //    ③ NAS 쪽 실패는 **던지지 않는다** — 세고, 적고, 콘솔에 경고만 한다
+    //    ④ 응답을 **기다리게 하지 않는다**(쓰기가 NAS 왕복만큼 느려지면 안 된다)
+    //    ⚠️ 그래서 `res.clone()` 을 쓴다 — 본문은 한 번만 읽을 수 있고, 그 한 번은
+    //       **앱 몫**이다. 원본을 읽으면 앱이 빈 본문을 받는다.
+    // ⚠️ 기다리지 않는 대신 **경로별로 줄을 세운다** — 자동저장(1분)과 수동 저장이
+    //    겹치면 순서가 뒤집혀 옛 내용이 나중에 쓰일 수 있다.
+    // ═══════════════════════════════════════════════════════════════════════
+    //  ⚠ `baseFetch` 는 **검증용 경계 주입구**다. 평상엔 진짜 `fetch` 가 들어간다.
+    //    Drive 는 로그인 없이 못 부르는데, 그렇다고 검증을 건너뛰면 안 된다 —
+    //    가짜는 **바깥 경계(Drive)에만** 두고 안쪽(경로 해석·줄 세우기·NAS 쓰기)은 진짜로 돌린다.
+    //    NAS 쪽은 `nasJson`/`writeRel` 이 모듈 밖 `_origFetch` 를 써서 **항상 진짜**다.
+    function installMirror(baseFetch) {
+        var bfetch = baseFetch || _origFetch;
+        var stats = { ok: 0, fail: 0, skip: 0, pending: 0, lastError: null, lastOkAt: null };
+        var chains = {};            // 키별 직렬 체인 — 순서 보장
+        var folderRelCache = {};    // Drive 폴더 id → 앱 루트 기준 상대경로
+        var MAX_HOPS = 6;
+
+        function driveToken() {
+            try {
+                var t = window.gapi && gapi.client && gapi.client.getToken && gapi.client.getToken();
+                return (t && t.access_token) || null;
+            } catch (e) { return null; }
+        }
+
+        async function driveMeta(fileId) {
+            // ⚠ 토큰이 없다고 **미리 막지 않는다** — 진짜 Drive 는 401 로 분명히 말해 주고,
+            //   경계를 가짜로 바꿔 돌리는 검증에서는 토큰이 아예 없다.
+            var t = driveToken();
+            var r = await bfetch('https://www.googleapis.com/drive/v3/files/' +
+                encodeURIComponent(fileId) + '?fields=name,parents,mimeType&supportsAllDrives=true',
+                t ? { headers: { Authorization: 'Bearer ' + t } } : undefined);
+            if (!r.ok) throw new Error('Drive 메타 조회 실패(HTTP ' + r.status + '): ' + fileId);
+            return await r.json();
+        }
+
+        /** Drive 폴더 id → 앱 루트 기준 상대경로. 앱 루트까지 **반드시 올라가야** 한다. */
+        async function folderRel(folderId) {
+            if (!folderId) throw new Error('부모 폴더 id 가 없습니다');
+            if (folderId === rootId()) return '';
+            if (folderRelCache[folderId] !== undefined) return folderRelCache[folderId];
+            var names = [], cur = folderId, hops = 0;
+            while (cur && cur !== rootId()) {
+                if (++hops > MAX_HOPS) throw new Error('앱 루트까지 못 올라갔습니다: ' + folderId);
+                var meta = await driveMeta(cur);
+                names.unshift(meta.name);
+                cur = (meta.parents || [])[0];
+            }
+            // ⚠️ 여기서 멈추지 않으면 **앱과 무관한 폴더가 앱 루트로 접힌다.**
+            //    (올라가다 Drive 최상위에 닿으면 cur 이 undefined 가 된다)
+            if (cur !== rootId()) throw new Error('OUTSIDE:앱 폴더 밖입니다 — 미러하지 않습니다');
+            var rel = names.join('/');
+            folderRelCache[folderId] = rel;
+            return rel;
+        }
+
+        async function relOfDriveFile(fileId) {
+            var meta = await driveMeta(fileId);
+            return joinRel(await folderRel((meta.parents || [])[0]), meta.name);
+        }
+
+        /** 키별로 줄을 세워 실행. **절대 던지지 않는다.** */
+        function enqueue(key, label, fn) {
+            stats.pending++;
+            var prev = chains[key] || Promise.resolve();
+            var next = prev.then(fn).then(function () {
+                stats.ok++; stats.lastOkAt = Date.now();
+                note('mirror-ok', label);
+            }, function (e) {
+                var why = String((e && e.message) || e);
+                if (why.indexOf('OUTSIDE:') === 0) {       // 앱 폴더 밖 — 고장이 아니다
+                    stats.skip++; note('mirror-skip', { label: label, why: why.slice(8) });
+                } else {
+                    stats.fail++; stats.lastError = why;
+                    note('mirror-fail', { label: label, why: why });
+                    console.warn('[storage-adapter] 🪞 미러 실패 — **앱에는 영향 없습니다**(Drive 가 정답):',
+                                 label, why);
+                }
+            }).then(function () { stats.pending--; });
+            chains[key] = next;
+            return next;
+        }
+
+        async function mirrorMove(fromRel, toRel) {
+            var res = await readRel(fromRel);
+            var buf = await res.arrayBuffer();
+            await writeRel(toRel, bytesToB64(buf), true);
+            await nasJson('POST', '/nas/app/delete', { rel: fromRel });
+        }
+
+        window.fetch = async function (input, init) {
+            var url = (typeof input === 'string') ? input : (input && input.url) || '';
+            var m = DRIVE_RE.exec(url);
+            if (!m) return bfetch(input, init);
+
+            var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+            if (method === 'GET') return bfetch(input, init);   // 읽기는 그대로 Drive
+
+            var isUpload = !!m[1];
+            var sub = m[5] || '';
+            var fileId = m[3] ? decodeURIComponent(m[3]) : '';
+            var body = (init && init.body) || null;
+            var ctype = ((init && init.headers && (init.headers['Content-Type'] ||
+                          (init.headers.get && init.headers.get('Content-Type')))) || '');
+
+            // ⚠️ 지우거나 옮기기 **전에** 지금 경로를 알아 둬야 한다 — Drive 가 먼저 바꾸면
+            //    어디 있던 파일인지 물어볼 데가 없다.
+            var beforeRel = null;
+            if ((method === 'DELETE' || (method === 'PATCH' && !isUpload) || sub === 'copy') && fileId) {
+                try { beforeRel = await relOfDriveFile(fileId); } catch (e) { beforeRel = null; }
+            }
+
+            var res = await bfetch(input, init);
+            if (!res.ok) return res;        // Drive 가 실패했으면 미러할 것도 없다
+
+            try {
+                if (sub === 'copy') {
+                    // 백업의 서버 사본. 새 파일 id 는 **응답**에 있다 → clone 해서 읽는다.
+                    var src = beforeRel;
+                    enqueue('copy:' + fileId, 'copy ' + fileId, async function () {
+                        if (!src) throw new Error('OUTSIDE:원본 경로를 못 찾았습니다');
+                        var j = await res.clone().json();
+                        if (!j || !j.id) throw new Error('사본 응답에 id 가 없습니다');
+                        var destRel = await relOfDriveFile(j.id);
+                        var r = await readRel(src);
+                        await writeRel(destRel, bytesToB64(await r.arrayBuffer()), true);
+                    });
+                } else if (isUpload) {
+                    var mp = parseMultipart(body, ctype);
+                    if (mp) {
+                        if (method === 'POST') {
+                            // ⚠⚠ 여기서 한 번 틀렸다 — `relFromMeta` 는 **NAS id**(`nas_d_…`) 를 기대하는
+                            //    함수다. 미러 모드의 `parents` 는 **진짜 Drive 폴더 id** 라 전부
+                            //    '모르는 부모 폴더 id' 로 떨어졌고, NAS 에 한 건도 안 올라갔다.
+                            //    모드마다 **id 공간이 다르다** — 미러는 `folderRel` 로 풀어야 한다.
+                            var meta = mp.meta, pid = (meta.parents || [])[0];
+                            enqueue('new:' + pid + '/' + meta.name, 'create ' + meta.name, async function () {
+                                var relNew = joinRel(await folderRel(pid), meta.name);
+                                return writeRel(relNew, mp.media, mp.mediaIsB64);
+                            });
+                        } else if (fileId) {
+                            enqueue(fileId, 'update ' + fileId, async function () {
+                                return writeRel(await relOfDriveFile(fileId), mp.media, mp.mediaIsB64);
+                            });
+                        }
+                    }
+                } else if (method === 'POST') {
+                    var meta0 = {};
+                    try { meta0 = JSON.parse(body); } catch (e) { /* ignore */ }
+                    if (meta0 && meta0.mimeType === FOLDER_MIME && meta0.name) {
+                        var fpid = (meta0.parents || [])[0];
+                        enqueue('mkdir:' + fpid + '/' + meta0.name, 'mkdir ' + meta0.name, async function () {
+                            var frel = joinRel(await folderRel(fpid), meta0.name);
+                            return nasJson('POST', '/nas/app/mkdir', { rel: frel });
+                        });
+                    }
+                } else if (method === 'PATCH' && fileId) {
+                    var was = beforeRel;
+                    enqueue(fileId, 'move/rename ' + fileId, async function () {
+                        if (!was) throw new Error('OUTSIDE:옮기기 전 경로를 못 찾았습니다');
+                        var now = await relOfDriveFile(fileId);
+                        if (now !== was) await mirrorMove(was, now);
+                    });
+                } else if (method === 'DELETE' && fileId) {
+                    var del = beforeRel;
+                    enqueue(fileId, 'delete ' + fileId, function () {
+                        if (!del) throw new Error('OUTSIDE:지우기 전 경로를 못 찾았습니다');
+                        return nasJson('POST', '/nas/app/delete', { rel: del });
+                    });
+                }
+            } catch (e) {
+                // 미러를 **거는 것**조차 실패해도 앱은 그대로 간다.
+                stats.fail++; stats.lastError = String((e && e.message) || e);
+                note('mirror-fail', { label: method + ' ' + url, why: stats.lastError });
+                console.warn('[storage-adapter] 🪞 미러 예약 실패 — 앱에는 영향 없습니다:', e);
+            }
+            return res;        // ⚠️ Drive 응답을 **손대지 않고** 그대로
+        };
+
+        window.STORAGE_ADAPTER.installed = true;
+        window.STORAGE_ADAPTER.mode = 'mirror';
+        window.STORAGE_ADAPTER.log = function () { return _log.slice(); };
+        window.STORAGE_ADAPTER.mirror = {
+            stats: function () { return JSON.parse(JSON.stringify(stats)); },
+            /** 줄 선 미러 쓰기가 다 끝날 때까지 — 검증·수동 확인용. */
+            drain: function () { return Promise.all(Object.keys(chains).map(function (k) { return chains[k]; })); },
+            _fn: { folderRel: folderRel, relOfDriveFile: relOfDriveFile, enqueue: enqueue },
+            /** 검증 전용 — Drive 경계를 가짜로 바꾸어 다시 깜. 사용 후 새로고침할 것. */
+            _reinstall: function (fakeDriveFetch) { installMirror(fakeDriveFetch); }
+        };
+        console.warn('[storage-adapter] 🪞 미러 모드 — Drive 에 쓰면서 NAS 에도 같이 씁니다.' +
+                     ' 읽기는 전부 Drive 이고, NAS 실패는 앱에 영향을 주지 않습니다.' +
+                     ' 상태: STORAGE_ADAPTER.mirror.stats()');
+    }
+
+    if (MODE === 'mirror') { installMirror(); return; }
+
     window.fetch = async function (input, init) {
         var url = (typeof input === 'string') ? input : (input && input.url) || '';
         var m = DRIVE_RE.exec(url);
@@ -596,6 +815,7 @@
     setInterval(implant, 1000);   // ③ 백스톱 — 위 둘이 다 빗나가도 1초 안에 되돌린다
 
     window.STORAGE_ADAPTER.installed = true;
+    window.STORAGE_ADAPTER.mode = 'nas';
     window.STORAGE_ADAPTER.log = function () { return _log.slice(); };
     window.STORAGE_ADAPTER._io = {
         listRel: listRel, readRel: readRel, writeRel: writeRel,
