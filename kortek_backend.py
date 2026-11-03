@@ -4935,6 +4935,7 @@ _SELF_UPDATE_FILES = [
     'insa_write.py',
     'nas_dsm.py',
     'nas_set_login.py',
+    'nas_set_root.py',
     'kortek_backend.bat',
     'kortek_backend_install.bat',
     'kortek_backend_start_minimized.vbs',

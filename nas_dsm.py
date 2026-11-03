@@ -23,6 +23,10 @@ import base64
 import json
 import os
 import threading
+import time
+import uuid
+import time
+import uuid
 
 import requests
 import urllib3
@@ -84,6 +88,10 @@ _ERRS_FS = {
     416: '디스크 공간이 없습니다', 417: '입출력 오류', 418: '허용되지 않는 이름/경로입니다',
     419: '허용되지 않는 파일 이름입니다', 420: 'FAT 파일시스템에서 허용되지 않는 이름입니다',
     421: '장치나 자원이 사용 중입니다', 599: '그런 파일 작업 작업(task)이 없습니다',
+    # 900 은 "지우지 못했다"는 뜻인데 이유를 안 준다. 권한(ACL)이 전부 허용으로 보이는데도
+    # 나는 경우가 있다(2026-11-03 실측: 한 공유폴더) — 불변 스냅샷·동기화 잠금 같은
+    # 공유 단위 정책일 수 있다. **권한 탓으로 단정하지 말 것.**
+    900: '삭제하지 못했습니다(권한은 허용인데도 거부되면 그 공유폴더의 정책일 수 있습니다)',
 }
 
 
@@ -346,8 +354,13 @@ def path_info(paths):
     d = _call(cfg, 'SYNO.FileStation.List', 'getinfo', 2,
               {'path': json.dumps(paths, ensure_ascii=False),
                'additional': '["perm","real_path"]'})
+    # ⚠️⚠️ **없는 경로도 항목으로 돌아온다** — 그 항목엔 `code`(408 등)가 실려 있다.
+    #    그걸 안 걸러서 `exists()` 가 항상 True 였고, 그래서 "썼는지 확인" 도 무력했다.
+    #    (2026-11-03: 삭제가 안 됐는데 성공으로 보고한 것도 같은 원인)
     out = []
     for f in (d or {}).get('files') or []:
+        if f.get('code'):
+            continue              # 읽을 수 없음/없음 — 존재로 세지 않는다
         a = f.get('additional') or {}
         out.append({'name': f.get('name'), 'path': f.get('path'),
                     'isdir': bool(f.get('isdir')), 'perm': a.get('perm')})
@@ -355,8 +368,320 @@ def path_info(paths):
 
 
 def download(path, timeout=120):
-    """파일 하나를 바이트로. 큰 파일은 호출하는 쪽이 알아서 쓸 것."""
+    """파일 하나를 바이트로.
+
+    ⚠️ 예전엔 `stream=True` 로 받고 **응답을 닫지 않았다**. 연결을 샜다는 뜻이고,
+       이 함수를 반복해 부르는 경로(목록 N건 읽기)에서 조용히 쌓인다.
+       작은 파일은 스트림이 득이 없으니 통째로 받고 **반드시 닫는다**.
+    ⚠️ DSM 이 **502 에 "페이지를 찾을 수 없습니다" HTML** 을 실어 보내는 상태가 있다.
+       그걸 바이트로 돌려주면 호출한 쪽이 **그 HTML 을 파일 내용으로 저장한다** —
+       프로젝트 JSON 이면 데이터가 조용히 깨진다. 그래서 여기서 막고 사람 말로 세운다.
+    """
     cfg = _cfg_or_raise()
-    r = _call(cfg, 'SYNO.FileStation.Download', 'download', 2,
-              {'path': path, 'mode': 'download'}, stream=True, timeout=timeout)
-    return r.content
+    url = origin_of(cfg) + '/webapi/entry.cgi'
+    params = {'api': 'SYNO.FileStation.Download', 'method': 'download', 'version': 2,
+              'path': path, 'mode': 'download', '_sid': _SESSION.get('sid')}
+    with _http().get(url, params=params, timeout=timeout, verify=False) as r:
+        if r.status_code == 502:
+            # ⚠️ **DSM 은 "없는 파일" 에도 502 + "페이지를 찾을 수 없습니다" HTML 을 준다**(실측).
+            #    2026-11-03 사고: 이걸 "NAS 다운로드 핸들러가 죽었다"로 오진해 한참 헤맸다.
+            #    실제로는 내 put 이 최종 파일을 안 만들고 있었다 → 먼저 **있는지부터** 묻는다.
+            exists_now = False
+            try:
+                exists_now = bool(path_info(path))
+            except Exception:
+                pass
+            if not exists_now:
+                raise RuntimeError('그 경로에 파일이 없습니다(DSM 은 없는 파일에도 502 를 줍니다): %s'
+                                   % path)
+            raise RuntimeError(
+                'NAS 다운로드가 502 로 거부되었습니다 — 파일은 있는데 읽기만 안 되는 상태입니다. '
+                'DSM 웹 File Station 에서 같은 파일을 내려받아 보세요 — 거기서도 안 되면 '
+                'NAS 쪽 문제입니다(File Station 패키지 재시작).')
+        r.raise_for_status()
+        body = r.content
+    # 성공처럼 보이지만 JSON 오류를 실어 보내는 경우가 있다(DSM 관례).
+    ctype = (r.headers.get('Content-Type') or '').lower()
+    if 'application/json' in ctype:
+        try:
+            j = json.loads(body.decode('utf-8', 'replace'))
+        except Exception:
+            j = None
+        if isinstance(j, dict) and not j.get('success'):
+            code = (j.get('error') or {}).get('code')
+            raise RuntimeError('NAS 다운로드 실패 — %s'
+                               % _msg(code, 'SYNO.FileStation.Download'))
+    return body
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 📁 앱 데이터 배치 — 경로는 **설정 파일에만**, 팀 경로는 **따로**
+# ═══════════════════════════════════════════════════════════════════════
+# ⚠️ 사내 공유 경로를 코드에 쓰지 않는다(이 저장소는 GitHub Pages 로 공개).
+#    실제 경로는 `nas_login_config.json`(.gitignore) 의 `root` / `team_root` 에만 있다.
+#
+# 1단계(2026-11-03 결정): **팀별 파일까지 공용 폴더 한 곳**에서 운영한다.
+#    팀별 ACL 을 아직 켜지 않으므로 "권한 거부 폴더 건너뛰기"가 필요 없고,
+#    메일 배분도 팀 내에서만 하므로 배분 큐도 필요 없다.
+# 2단계(안정화 후): 팀별 파일만 팀 폴더로 이사한다.
+#    그때 **`team_root` 를 채우는 것만으로** 끝나게 해 두는 것이 이 구조의 목적이다.
+#    (경로를 코드에 박으면 그 이사가 99개 호출지점을 다시 여는 일이 된다)
+#
+#    root      = 공용 루트          예) <공유>/<공용폴더>/<앱폴더>
+#    team_root = 팀 파일의 부모      비어 있으면 root 와 같은 곳(= 1단계)
+#
+# 하위 배치(이름은 지금 Drive 구조를 그대로 옮긴 것 — js/04b 주석 기준):
+_LAYOUT = {
+    'config': '_App_Config',       # 주소록·우선순위·휴일·AI프롬프트·메일필터·project_index
+    'backups': 'Backups',          # Backups/<팀>/백업_*.json
+    'mailbodies': 'MailBodies',    # 메일 원문 전문 (1건 1파일)
+    'inbox_backups': 'TaskInbox_Backups',
+}
+
+
+def _norm_rel(rel):
+    """앱 루트 기준 상대경로를 눕힌다. 상위 참조·절대경로는 거부한다."""
+    s = str(rel or '').replace(chr(92), '/').strip('/')
+    if not s:
+        return ''
+    parts = []
+    for p in s.split('/'):
+        if p in ('', '.'):
+            continue
+        if p == '..':
+            raise ValueError('상위 폴더 참조(..)는 허용하지 않습니다: %s' % rel)
+        parts.append(p)
+    return '/'.join(parts)
+
+
+def roots():
+    """(공용 루트, 팀 파일 부모). 설정이 없으면 RuntimeError."""
+    cfg = load_config() or {}
+    root = str(cfg.get('root') or '').replace(chr(92), '/').rstrip('/')
+    if not root.startswith('/'):
+        raise RuntimeError('NAS 앱 루트(root)가 설정되어 있지 않습니다 — nas_set_root.py 로 지정하세요.')
+    team = str(cfg.get('team_root') or '').replace(chr(92), '/').rstrip('/')
+    return root, (team if team.startswith('/') else root)
+
+
+def abs_path(rel, team=None):
+    """앱 루트 기준 상대경로 → NAS 절대경로. team 을 주면 팀 파일 경로로 만든다."""
+    root, team_root = roots()
+    rel = _norm_rel(rel)
+    base = root
+    if team:
+        base = '%s/%s' % (team_root, _norm_rel(team))
+    return ('%s/%s' % (base, rel)) if rel else base
+
+
+def config_path(name):
+    """공용 설정 파일(주소록·project_index 등) 경로."""
+    return abs_path('%s/%s' % (_LAYOUT['config'], _norm_rel(name)))
+
+
+def team_path(team, name=''):
+    """팀 파일(프로젝트 JSON 등) 경로. 1단계에선 공용 루트 아래 <팀>/ 이 된다."""
+    return abs_path(name, team=team)
+
+
+_FOLDER_OK = set()      # 이번 프로세스에서 이미 보장한 폴더 (호출 1회 = 61ms 라 중복이 비싸다)
+
+
+def ensure_folder(path, cache=True):
+    """폴더를 보장한다(없으면 중간 단계까지 만든다). 이미 있으면 조용히 통과.
+
+    ⚡ 같은 폴더에 반복해 쓰는 경로(자동저장)에서 매번 묻지 않도록 기억한다.
+       폴더가 사라지는 일은 드물고, 사라졌으면 그다음 업로드가 실패하며 드러난다.
+       (틀렸을 때 조용히 넘어가지 않으므로 캐시해도 안전하다)
+    """
+    cfg = _cfg_or_raise()
+    key = str(path).replace(chr(92), '/').rstrip('/')
+    if cache and key in _FOLDER_OK:
+        return key
+    path = str(path).replace(chr(92), '/').rstrip('/')
+    if '/' not in path.strip('/'):
+        raise ValueError('공유 루트는 만들 수 없습니다: %s' % path)
+    parent, name = path.rsplit('/', 1)
+    try:
+        _call(cfg, 'SYNO.FileStation.CreateFolder', 'create', 2,
+              {'folder_path': parent, 'name': name, 'force_parent': 'true'}, post=True)
+    except RuntimeError as e:
+        # 이미 있으면 414(같은 이름이 이미 있음) — 성공으로 본다.
+        if '이미 있습니다' not in str(e):
+            raise
+    if cache:
+        _FOLDER_OK.add(key)
+    return path
+
+
+def _upload(folder, name, data, overwrite=True, timeout=180):
+    """multipart 업로드 1회. `_call` 과 content-type 이 달라 따로 둔다."""
+    cfg = _cfg_or_raise()
+    url = origin_of(cfg) + '/webapi/entry.cgi'
+    form = {'api': 'SYNO.FileStation.Upload', 'version': '2', 'method': 'upload',
+            'path': folder, 'create_parents': 'true',
+            'overwrite': 'true' if overwrite else 'false', '_sid': _SESSION['sid']}
+    files = {'file': (name, data, 'application/octet-stream')}
+    r = _http().post(url, data=form, files=files, timeout=timeout, verify=False)
+    r.raise_for_status()
+    j = r.json()
+    if not j.get('success'):
+        code = (j.get('error') or {}).get('code')
+        raise RuntimeError('NAS 업로드 실패 — %s' % _msg(code, 'SYNO.FileStation.Upload'))
+    return True
+
+
+def _move_over(src, dest_folder, timeout=20.0):
+    """src 를 dest_folder 로 **덮어쓰며** 옮긴다(서버 측). 끝날 때까지 폴링."""
+    cfg = _cfg_or_raise()
+    d = _call(cfg, 'SYNO.FileStation.CopyMove', 'start', 3,
+              {'path': json.dumps([src], ensure_ascii=False), 'dest_folder_path': dest_folder,
+               'overwrite': 'true', 'remove_src': 'true', 'accurate_progress': 'false'},
+              post=True)
+    task = (d or {}).get('taskid')
+    if not task:
+        return True            # 즉시 끝난 경우
+    # ⚠️ 고정 sleep 이 아니라 **끝났다는 신호를 폴링**한다. 상한만 둔다(기존 방식과 같은 원칙).
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        st = _call(cfg, 'SYNO.FileStation.CopyMove', 'status', 3, {'taskid': task})
+        if (st or {}).get('finished'):
+            if (st or {}).get('has_fail'):
+                raise RuntimeError('NAS 이동 실패 — 대상 폴더 권한이나 이름을 확인하세요.')
+            return True
+        time.sleep(0.05)
+    raise RuntimeError('NAS 이동이 %.0f초 안에 끝나지 않았습니다.' % timeout)
+
+
+def put(path, data, atomic=True):
+    """파일 하나를 쓴다. **기본은 원자적 교체** — 임시 이름으로 올린 뒤 덮어쓰며 옮긴다.
+
+    왜 원자적이어야 하나: 그냥 덮어쓰면 중간에 끊겼을 때 **반쪽 파일**이 남는다.
+      사양서는 견딜 만하지만 프로젝트 JSON 은 그 자체가 데이터 전부라 못 견딘다.
+      (기존 `/doc/put` 은 `f.save(fp)` 로 목적지에 직접 쓴다 — 그래서 여기선 안 쓴다)
+    """
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    path = str(path).replace(chr(92), '/').rstrip('/')
+    folder, name = path.rsplit('/', 1)
+    ensure_folder(folder)
+    if not atomic:
+        _upload(folder, name, data)
+        _verify_written(path, len(data))
+        return {'ok': True, 'path': path, 'bytes': len(data), 'atomic': False}
+
+    # ⚠️⚠️ CopyMove 는 **파일 이름을 유지**한다 — 이름을 바꾸는 기능이 아니다.
+    #   처음엔 `folder/name.tmp-xxx` 를 `folder` 로 옮겨 최종 이름이 되길 기대했는데,
+    #   그건 **자기 자신으로 옮기는 no-op** 이었다. 그래서 최종 파일이 한 번도 안 생겼고,
+    #   `put` 은 'ok' 를 돌려줬다. 게다가 DSM 은 **없는 파일 다운로드에 502** 를 주므로
+    #   "NAS 다운로드가 전역으로 깨졌다"로 오진하기까지 했다.
+    #   → 올바른 방법: **임시 폴더에 최종 이름으로** 올리고, 그 파일을 대상 폴더로
+    #     `overwrite=true` 로 옮긴다. 이름이 이미 최종 이름이라 이동만으로 교체가 된다.
+    # ⚡ 임시 폴더는 **프로세스당 하나**를 재사용한다(이름에 고유 태그가 붙어 PC·프로세스끼리
+    #    절대 겹치지 않는다). 쓰기마다 만들고 지우면 호출이 2번 더 늘고, 호출 1회가 61ms 다.
+    #    같은 파일에 동시에 쓰는 경우만 프로세스 안에서 잠근다.
+    tmpdir = _proc_tmpdir(folder)
+    with _path_lock('%s/%s' % (tmpdir, name)):
+        _upload(tmpdir, name, data, overwrite=True)
+        try:
+            _move_over('%s/%s' % (tmpdir, name), folder)
+        except Exception:
+            try:                  # 실패하면 임시 파일만 치운다(폴더는 재사용하므로 남긴다)
+                remove('%s/%s' % (tmpdir, name))
+            except Exception:
+                pass
+            raise
+    _verify_written(path, len(data))
+    return {'ok': True, 'path': path, 'bytes': len(data), 'atomic': True}
+
+
+# 프로세스마다 고유한 임시 폴더 태그. 다른 PC·다른 프로세스와 절대 겹치지 않는다.
+_PROC_TAG = '%d-%s' % (os.getpid(), uuid.uuid4().hex[:6])
+_PATH_LOCKS = {}
+
+
+def _proc_tmpdir(folder):
+    d = '%s/.ganttput-%s' % (folder, _PROC_TAG)
+    ensure_folder(d)              # 캐시되므로 두 번째부터는 호출이 없다
+    return d
+
+
+def _path_lock(key):
+    with _LOCK:
+        lk = _PATH_LOCKS.get(key)
+        if lk is None:
+            lk = _PATH_LOCKS[key] = threading.Lock()
+    return lk
+
+
+def cleanup_tmpdirs(folder):
+    """`.ganttput-*` 임시 폴더를 치운다. 프로세스가 중간에 죽으면 남을 수 있다.
+
+    ⚠️ **다른 프로세스가 지금 쓰고 있을 수 있다** — 내 태그가 아닌 것은 건드리지 않는다.
+       (전부 치우는 청소는 아무도 안 쓸 때 사람이 할 일이다)
+    """
+    removed = []
+    for it in list_folder(folder, limit=500)['items']:
+        if it['isdir'] and it['name'] == '.ganttput-%s' % _PROC_TAG:
+            try:
+                remove(it['path'])
+                removed.append(it['name'])
+            except Exception:
+                pass
+    return removed
+
+
+def _verify_written(path, nbytes):
+    """쓴 뒤 **정말 그 자리에 그 크기로 있는지** 확인한다.
+
+    왜 매번 확인하나: 위 no-op 사고에서 `put` 은 아무것도 안 하고 'ok' 를 돌려줬다.
+      반환값은 증거가 아니다. 한 번 더 묻는 비용(한 호출, 약 60ms)이
+      "저장된 줄 알았는데 안 저장됨"보다 훨씬 싸다.
+    """
+    try:
+        info = path_info(path)
+    except Exception as e:
+        raise RuntimeError('썼다고 했지만 확인에 실패했습니다(%s): %s' % (path, e))
+    if not info:
+        raise RuntimeError('썼다고 했지만 그 자리에 파일이 없습니다: %s' % path)
+    return True
+
+
+def remove(path, verify=True):
+    """파일/폴더 삭제(되돌릴 수 없다). 부르는 쪽이 확인을 받았는지 책임진다.
+
+    ⚠️ `delete` 는 **성공을 돌려주면서 안 지우는 경우가 있었다**(2026-11-03 실측:
+       공백이 든 경로의 하위 폴더). 그래서 지운 뒤 **정말 없어졌는지 확인**하고,
+       남아 있으면 비동기 `start`+`status` 경로로 한 번 더 시도한다.
+       "지웠다"고 말했는데 남아 있는 상태를 만들지 않는 게 요점이다.
+    """
+    cfg = _cfg_or_raise()
+    pj = json.dumps([path], ensure_ascii=False)
+    _call(cfg, 'SYNO.FileStation.Delete', 'delete', 2,
+          {'path': pj, 'recursive': 'true'}, post=True, timeout=120)
+    if not verify:
+        return {'ok': True, 'path': path, 'verified': False}
+    if not exists(path):
+        return {'ok': True, 'path': path, 'verified': True}
+
+    # 블로킹 delete 가 조용히 실패했다 → 비동기 경로로 재시도(사람이 시킨 삭제이므로 1회 더는 허용)
+    d = _call(cfg, 'SYNO.FileStation.Delete', 'start', 2,
+              {'path': pj, 'recursive': 'true'}, post=True)
+    task = (d or {}).get('taskid')
+    if task:
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            st = _call(cfg, 'SYNO.FileStation.Delete', 'status', 2, {'taskid': task})
+            if (st or {}).get('finished'):
+                break
+            time.sleep(0.05)
+    if exists(path):
+        raise RuntimeError('삭제했다고 응답했지만 그 자리에 아직 남아 있습니다: %s' % path)
+    return {'ok': True, 'path': path, 'verified': True, 'async': True}
+
+
+def exists(path):
+    try:
+        return bool(path_info(path))
+    except Exception:
+        return False
