@@ -36,15 +36,32 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _LOCK = threading.Lock()
 _SESSION = {'sid': None, 'user': None, 'origin': None}
+
+# ⚠️⚠️ 로그인 조합은 **실측으로 확정한 것**이다(2026-11-03). 추측으로 바꾸지 말 것.
+#   `session` 은 아무 이름이나 되는 게 아니다 — DSM 은 이 값으로 "어느 응용 프로그램에
+#   로그인하는가"를 판정하고 그 응용 프로그램에 대한 계정 권한을 본다. 처음에 임의로
+#   `KortekGantt` 라고 넣었더니 **402(계정 권한 없음)** 가 나왔고, 그걸 NAS 쪽 권한 설정
+#   문제로 오진해 사용자에게 관리자 화면을 뒤지게 만들었다. v7/v6/v3 전부 402 였던 것도
+#   원인이 버전이 아니라 session 이름이었기 때문이다.
+#   `auth.cgi` + v3 + `session=FileStation` 에서 **한 번에 성공**. (Synology FileStation 문서의 조합)
+#   바꿔야 하면 `tests/nas-login-probe.py` 로 재확인하고, 402 이외 코드가 나오면 멈출 것.
+_LOGIN = {'path': 'auth.cgi', 'version': 3, 'session': 'FileStation'}
 # 실패가 쌓이면 IP 가 차단되므로, 한 번 실패하면 "사람이 다시 시킬 때까지" 잠근다.
 _BLOCKED = {'reason': None}
 
-# DSM 오류코드 → 사람이 읽는 말. 모르는 코드는 숫자를 그대로 보여준다(삼키지 말 것).
-_ERRS = {
+# ⚠️⚠️ **같은 숫자가 API 마다 전혀 다른 뜻이다.** 한 표로 합치면 안 된다.
+#   2026-11-03 사고: 400~411 을 로그인(Auth) 기준 하나로만 적어 뒀더니, 권한 없는 팀 폴더를
+#   조회했을 때 FileStation 의 407(권한 없음)이 **"이 IP 가 차단되었습니다"** 로 찍혔다.
+#   차단된 적이 없는데 차단됐다고 보고한 셈이고, 사람을 엉뚱한 복구 작업으로 보낼 문구다.
+#   → 새 코드를 넣을 때 **어느 API 의 표인지** 반드시 확인할 것.
+_ERRS_COMMON = {
     100: '알 수 없는 오류', 101: '잘못된 요청', 102: '그런 API 가 없습니다',
     103: '그런 기능(method)이 없습니다', 104: 'NAS 가 이 버전을 지원하지 않습니다',
     105: '권한이 없습니다', 106: '세션이 만료되었습니다', 107: '다른 곳에서 로그인해 세션이 끊겼습니다',
     119: '세션이 없거나 만료되었습니다(로그인 필요)',
+}
+# SYNO.API.Auth 전용
+_ERRS_AUTH = {
     400: '아이디 또는 비밀번호가 올바르지 않습니다',
     401: '계정이 비활성화되었습니다', 402: '계정 권한이 없습니다',
     403: '2단계 인증(OTP) 코드가 필요합니다', 404: '2단계 인증 코드가 올바르지 않습니다',
@@ -52,10 +69,30 @@ _ERRS = {
     408: '비밀번호가 만료되었습니다', 409: '비밀번호가 만료되어 변경해야 합니다',
     410: '비밀번호를 변경해야 합니다', 411: '계정이 잠겼습니다',
 }
+# SYNO.FileStation.* 전용
+_ERRS_FS = {
+    400: '파일 작업 인자가 잘못되었습니다', 401: '파일 작업 중 알 수 없는 오류',
+    402: 'NAS 가 너무 바쁩니다', 403: '이 사용자는 이 파일 작업을 할 수 없습니다',
+    404: '이 그룹은 이 파일 작업을 할 수 없습니다',
+    405: '이 사용자·그룹은 이 파일 작업을 할 수 없습니다',
+    406: '계정 서버에서 사용자/그룹 정보를 가져오지 못했습니다',
+    407: '권한이 없습니다(폴더 ACL 거부)',
+    408: '그런 파일이나 폴더가 없습니다', 409: '지원하지 않는 파일 시스템입니다',
+    410: '외부 파일 시스템 연결에 실패했습니다', 411: '읽기 전용 파일 시스템입니다',
+    412: '파일 이름이 너무 깁니다', 413: '파일 이름이 너무 깁니다(암호화 폴더)',
+    414: '같은 이름의 파일이 이미 있습니다', 415: '디스크 할당량을 넘었습니다',
+    416: '디스크 공간이 없습니다', 417: '입출력 오류', 418: '허용되지 않는 이름/경로입니다',
+    419: '허용되지 않는 파일 이름입니다', 420: 'FAT 파일시스템에서 허용되지 않는 이름입니다',
+    421: '장치나 자원이 사용 중입니다', 599: '그런 파일 작업 작업(task)이 없습니다',
+}
 
 
-def _msg(code):
-    return _ERRS.get(code, '오류 코드 %s' % code)
+def _msg(code, api=None):
+    """오류 코드를 사람 말로. **어느 API 인지**에 따라 같은 숫자의 뜻이 달라진다."""
+    if code in _ERRS_COMMON:
+        return _ERRS_COMMON[code]
+    table = _ERRS_FS if (api or '').startswith('SYNO.FileStation') else _ERRS_AUTH
+    return table.get(code, '오류 코드 %s' % code)
 
 
 # ── 설정 저장/읽기 (DPAPI) ───────────────────────────────────────────
@@ -141,22 +178,40 @@ def origin_of(cfg):
 
 
 # ── API 호출 ─────────────────────────────────────────────────────────
-def _call(cfg, api, method, version, params=None, post=False, stream=False, timeout=60):
-    """entry.cgi 한 번. 성공하면 data, 실패하면 RuntimeError(사람이 읽는 말)."""
-    url = origin_of(cfg) + '/webapi/entry.cgi'
+# ⚡ 연결을 재사용한다(HTTP keep-alive). 매번 `requests.post()` 를 쓰면 **요청마다 TCP+TLS
+#   핸드셰이크를 새로 한다** — 실측에서 호출 1회 고정비가 116ms 였고, 그 대부분이 이것이었다.
+#   앱이 프로젝트 목록을 훑을 땐 호출이 수십 번이라 이 고정비가 곧 체감 속도가 된다.
+#   (수치·측정법 → docs/nas-dsm.md "속도")
+_HTTP = {'s': None}
+
+
+def _http():
+    s = _HTTP.get('s')
+    if s is None:
+        s = requests.Session()
+        s.verify = False
+        _HTTP['s'] = s
+    return s
+
+
+def _call(cfg, api, method, version, params=None, post=False, stream=False, timeout=60,
+          path='entry.cgi'):
+    """webapi 한 번. 성공하면 data, 실패하면 RuntimeError(사람이 읽는 말)."""
+    url = '%s/webapi/%s' % (origin_of(cfg), path)
     body = dict(params or {})
     body.update({'api': api, 'method': method, 'version': version})
     if _SESSION.get('sid'):
         body['_sid'] = _SESSION['sid']
     kw = {'timeout': timeout, 'verify': False, 'stream': stream}
-    r = requests.post(url, data=body, **kw) if post else requests.get(url, params=body, **kw)
+    s = _http()
+    r = s.post(url, data=body, **kw) if post else s.get(url, params=body, **kw)
     r.raise_for_status()
     if stream:
         return r
     j = r.json()
     if not j.get('success'):
         code = ((j.get('error') or {}).get('code'))
-        raise RuntimeError('NAS %s.%s 실패 — %s' % (api, method, _msg(code)))
+        raise RuntimeError('NAS %s.%s 실패 — %s' % (api, method, _msg(code, api)))
     return j.get('data')
 
 
@@ -213,12 +268,14 @@ def login_once(otp=None):
         except Exception as e:
             return {'ok': False, 'result': 'decrypt', 'retryable': True, 'message': str(e)}
 
-        params = {'account': cfg['user'], 'passwd': pw, 'session': 'KortekGantt', 'format': 'sid'}
+        params = {'account': cfg['user'], 'passwd': pw,
+                  'session': _LOGIN['session'], 'format': 'sid'}
         if otp:
             params['otp_code'] = str(otp)
         try:
             # ⚠️ 반드시 POST — GET 이면 비밀번호가 NAS 접근로그(nginx)에 통째로 남는다.
-            data = _call(cfg, 'SYNO.API.Auth', 'login', 6, params, post=True, timeout=30)
+            data = _call(cfg, 'SYNO.API.Auth', 'login', _LOGIN['version'], params,
+                         post=True, timeout=30, path=_LOGIN['path'])
         except requests.RequestException as e:
             # 서버까지 못 갔다 = 실패가 쌓이지 않는다 → 잠그지 않는다.
             return {'ok': False, 'result': 'unreachable', 'retryable': True,
@@ -236,7 +293,8 @@ def logout():
     cfg = load_config()
     if cfg and _SESSION.get('sid'):
         try:
-            _call(cfg, 'SYNO.API.Auth', 'logout', 6, {'session': 'KortekGantt'}, post=True, timeout=15)
+            _call(cfg, 'SYNO.API.Auth', 'logout', _LOGIN['version'],
+                  {'session': _LOGIN['session']}, post=True, timeout=15, path=_LOGIN['path'])
         except Exception:
             pass
     _SESSION.update({'sid': None, 'user': None, 'origin': None})
