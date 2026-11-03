@@ -118,6 +118,10 @@ console.log('\n   ⚠ 모르는 절은 **무시하지 않고 신고**한다 (무
 q = F.parseQ("fullText contains 'x' and '" + T + "' in parents");
 check('모르는 절을 unknown 에 담는다', q.unknown.length === 1, JSON.stringify(q.unknown));
 eq('그래도 아는 절은 읽는다', q.parents, [T]);
+// ⚠️ 신고 문구는 **사람이 읽을 수 있어야** 한다. 내부 자리표시(\u0000N\u0000)가 그대로
+//    새어 나가 "fullText contains \u00000\u0000" 이라고 찍힌 적이 있다(2026-11-03 실측).
+eq('신고 문구에 원래 글자가 보인다', q.unknown[0], "fullText contains 'x'");
+check('내부 자리표시가 안 샌다', q.unknown[0].indexOf('\u0000') < 0);
 
 console.log('\n== ⑤ multipart 업로드 본문 파싱 — 앱이 손으로 조립한 **그 모양** ==');
 // js/04b backupToDrive 가 만드는 모양 그대로(앞에 \r\n 이 붙고, 머리글에 charset 이 있다)

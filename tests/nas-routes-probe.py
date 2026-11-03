@@ -118,6 +118,29 @@ def main():
         check('목록에 쓴 파일이 보임', '검증.json' in names and 'bin.dat' in names,
               '· %s' % names)
 
+        print('\n== ⑦-2 앱 루트 자체 조회 — 이게 400 이면 프로젝트 목록이 통째로 빈다 ==')
+        # ⚠⚠ 실제로 여기서 터졌다(2026-11-03). `_listProjectFiles` 는 **루트 직속**
+        #    프로젝트 파일을 읽는다 — 빈 rel 을 거절하면 그 길이 통째로 막힌다.
+        #    더 나빌 건 어댑터가 그 400 을 'ACL 거부'로 삼켜 **목록이 조용히 0건**이 됐다는 것.
+        r = c.get('/nas/app/list?rel=')
+        check('빈 rel = 앱 루트 목록(200)', r.status_code == 200, '· HTTP %s' % r.status_code)
+        r = c.get('/nas/app/list')
+        check('rel 아예 없어도 앱 루트(200)', r.status_code == 200, '· HTTP %s' % r.status_code)
+        rootnames = [i['name'] for i in ((r.get_json() or {}).get('items') or [])]
+        check('루트 목록에 검증 폴더가 보인다', DIR in rootnames, '· %s' % rootnames)
+
+        print('\n== ⑦-3 그래도 **쓰기·삭제는 루트를 받으면 안 된다** ==')
+        # 빈 rel 을 삭제에 허용하면 **앱 데이터를 통째로 지운다.** 그래서
+        # 읽기(list/get)와 임시폴더 청소(sweep)만 루트를 받는다.
+        st, _ = jpost(c, '/nas/app/delete', {'rel': ''})
+        check('빈 rel 삭제 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/app/delete', {})
+        check('rel 없는 삭제 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/app/put', {'rel': '', 'text': 'x'})
+        check('빈 rel 쓰기 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/app/mkdir', {'rel': ''})
+        check('빈 rel 폴더생성 거부', st == 400, '· HTTP %s' % st)
+
         print('\n== ⑧ 없는 파일 읽기 — 404 로 정직하게 ==')
         r = c.get('/nas/app/get?rel=%s/없는파일zzz.json' % DIR)
         msg = ((r.get_json() or {}).get('message') or '') if r.status_code != 200 else ''

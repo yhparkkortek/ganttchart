@@ -137,7 +137,11 @@
                     return;
                 }
                 if (/^trashed\s*=\s*(false|true)$/i.test(c)) return;   // NAS 엔 휴지통이 없다
-                out.unknown.push(c);
+                // 신고할 땐 자리표시를 **원래 글자로 되돌린다** — 안 그러면 오류 메시지에
+                // `fullText contains \u00000\u0000` 같은 내부 표시가 새어 나가 사람이 못 읽는다.
+                out.unknown.push(c.replace(/\u0000(\d+)\u0000/g, function (_, n) {
+                    return "'" + lits[+n] + "'";
+                }));
             });
         });
         return out;
@@ -243,8 +247,10 @@
         var j = null;
         try { j = await res.json(); } catch (e) { /* 본문이 JSON 이 아닐 수 있다 */ }
         if (!res.ok || (j && j.ok === false)) {
-            throw new Error('NAS ' + route + ' 실패(HTTP ' + res.status + '): ' +
-                            ((j && j.message) || '사유 없음'));
+            var err = new Error('NAS ' + route + ' 실패(HTTP ' + res.status + '): ' +
+                                ((j && j.message) || '사유 없음'));
+            err.status = res.status;   // 호출한 쪽이 "권한 거부"와 "내 잘못"을 가르려면 필요하다
+            throw err;
         }
         return j || {};
     }
@@ -301,10 +307,17 @@
             var items;
             try { items = await listRel(pr.rel); }
             catch (e) {
-                // ⚠️ 권한이 없는 폴더는 **건너뛴다**. 통째로 실패하면 목록이 0건이 된다
+                // ⚠️ 권한이 없는 폴더(403)는 **건너뛴다** — 통째로 실패하면 목록이 0건이 된다
                 //    (팀별 폴더는 서로 열람 권한이 없는 게 정상이다).
-                note('list-skip', { rel: pr.rel, why: String(e.message || e) });
-                continue;
+                // ⚠️⚠️ 그런데 **아무 실패나 건너뛰면 안 된다.** 처음엔 전부 건너뛰었더니
+                //    백엔드가 루트 조회를 400 으로 거절하는 버그를 '권한 거부'로 삼켜
+                //    프로젝트 목록이 **조용히 0건**이 됐다(2026-11-03 실측).
+                //    400/500 은 내 잘못이니 던진다.
+                if (e && e.status === 403) {
+                    note('list-skip', { rel: pr.rel, why: String(e.message || e) });
+                    continue;
+                }
+                throw e;
             }
             for (var k = 0; k < items.length; k++) {
                 var f = toDriveFile(items[k], pr.rel);
@@ -466,7 +479,10 @@
                 var d = relOf(fileId);
                 if (!d) throw new Error('모르는 파일 id: ' + fileId);
                 await nasJson('POST', '/nas/app/delete', { rel: d.rel });
-                return new Response('', { status: 204 });
+                // ⚠️ 204 는 **본문을 가질 수 없다** — `new Response('', …)` 는 빈 문자열도
+                //    본문으로 쳐서 TypeError 를 던진다. 실제로 삭제는 됐는데 그 뒤에서 터져
+                //    "500 실패"로 보고됐다(2026-11-03 실측). 반드시 null.
+                return new Response(null, { status: 204 });
             }
             throw new Error('아직 안 만든 경로: ' + method + ' ' + url);
         } catch (e) {

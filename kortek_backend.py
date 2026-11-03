@@ -5367,11 +5367,19 @@ def nas_get():
 #      (읽기 `/nas/list`·`/nas/get` 은 조회라 절대경로를 받지만, 그쪽도 NAS ACL 이 막는다)
 #   ⚠️ 사내 공유 경로가 **프런트 코드에 들어가지 않는다** — 프런트는 `_App_Config/...`,
 #      `<팀>/project.json` 같은 상대경로만 쓰고, 실제 경로는 백엔드 설정에서 붙는다.
-def _nas_target(src):
-    """{rel, team} → NAS 절대경로. 잘못된 입력은 (None, 메시지)."""
+def _nas_target(src, allow_root=False):
+    """{rel, team} → NAS 절대경로. 잘못된 입력은 (None, 메시지).
+
+    ⚠️⚠️ `allow_root` 를 기본 False 로 둔 이유 — **빈 rel 은 앱 루트 전체**다.
+       삭제에 빈 rel 이 들어오면 앱 데이터를 통째로 지운다. 그래서 **읽기(list/get)와
+       임시폴더 청소(sweep)만** 루트를 허용하고, 쓰기·폴더생성·삭제는 계속 거부한다.
+    ⚠️ 처음엔 모두 거부했는데, 그러면 **앱 루트 목록 조회가 400** 이라
+       `_listProjectFiles`(루트 직속 프로젝트 파일)가 통째로 빈다. 실제로 검증에서 잡혔다
+       (어댑터가 그걸 'ACL 거부'로 보고 조용히 건너뛰어서 더 나빴다, 2026-11-03).
+    """
     rel = (src.get('rel') or '').strip()
     team = (src.get('team') or '').strip() or None
-    if not rel and not team:
+    if not rel and not team and not allow_root:
         return None, 'rel(앱 루트 기준 상대경로)이 필요합니다.'
     if rel.startswith('/'):
         return None, 'rel 은 앱 루트 기준 상대경로여야 합니다(/로 시작하지 않음).'
@@ -5399,7 +5407,8 @@ def nas_paths():
 
 @app.route('/nas/app/list', methods=['GET'])
 def nas_app_list():
-    path, err = _nas_target(request.args)
+    # 앱 루트 목록은 정상 동작이다(루트 직속 프로젝트 파일)
+    path, err = _nas_target(request.args, allow_root=True)
     if err:
         return jsonify({'ok': False, 'message': err}), 400
     try:
@@ -5410,7 +5419,7 @@ def nas_app_list():
 
 @app.route('/nas/app/get', methods=['GET'])
 def nas_app_get():
-    path, err = _nas_target(request.args)
+    path, err = _nas_target(request.args, allow_root=True)
     if err:
         return jsonify({'ok': False, 'message': err}), 400
     try:
@@ -5483,7 +5492,7 @@ def nas_app_sweep():
        (팀원 PC 들이 각자 쓰므로 "전부 지우기"는 절대 하지 않는다)
     """
     req = request.get_json(force=True, silent=True) or {}
-    path, err = _nas_target(req)
+    path, err = _nas_target(req, allow_root=True)   # 루트의 임시폴더도 치운다
     if err:
         return jsonify({'ok': False, 'message': err}), 400
     # staleSec: "비어 있고 이만큼 오래된" 것만 지운다. 기본 10분.
