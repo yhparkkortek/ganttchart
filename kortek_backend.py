@@ -4926,6 +4926,8 @@ _SELF_UPDATE_FILES = [
     'sap_bridge_32.py',
     'gw_bridge.py',
     'insa_write.py',
+    'nas_dsm.py',
+    'nas_set_login.py',
     'kortek_backend.bat',
     'kortek_backend_install.bat',
     'kortek_backend_start_minimized.vbs',
@@ -5263,6 +5265,92 @@ def _docstore_dir(folder, cfg=None, allow_text=False):
         except Exception as e:
             return None, f'폴더를 만들 수 없습니다: {"/".join(segs)} ({e})'
     return path, None
+
+
+# ══════════════════════════════════════════════════════════════
+# 🗄️ [2026-11-03 신규] NAS(Synology DSM) 연동 — 읽기 전용 1단계
+#   왜: 접속 권한을 **사내 계정**으로 옮기기 위해서다. DSM 계정으로 로그인하면 파일 접근이
+#       그 사람 권한으로 일어나므로, 팀별 폴더 권한을 NAS 가 강제한다(앱을 고쳐도 우회 불가).
+#   SMB 경유 `/doc/*` 와 다른 점: HTTP API 라 **모바일·사외에서도** 쓸 수 있는 길이 열린다.
+#   ⚠️ 로그인은 1회만 — DSM 은 실패가 쌓이면 **IP** 를 차단한다. 재시도 금지 가드는 nas_dsm.py.
+#   ⚠️ 비밀번호는 이 파일을 지나가지 않는다 — 저장은 `python nas_set_login.py`(getpass + DPAPI).
+# ══════════════════════════════════════════════════════════════
+def _nas():
+    import nas_dsm
+    return nas_dsm
+
+
+@app.route('/nas/status', methods=['GET'])
+def nas_status():
+    """로그인 상태만 본다 — 로그인 시도는 하지 않는다."""
+    try:
+        return jsonify(dict(_nas().status(), ok_module=True))
+    except Exception as e:
+        return jsonify({'ok': False, 'reason': 'module', 'message': f'nas_dsm 로드 실패: {e}'})
+
+
+@app.route('/nas/login', methods=['POST'])
+def nas_login():
+    """저장된 계정으로 **한 번만** 로그인. 실패하면 사람이 다시 시킬 때까지 잠근다."""
+    try:
+        req = request.get_json(force=True, silent=True) or {}
+        return jsonify(_nas().login_once(otp=req.get('otp')))
+    except Exception as e:
+        return jsonify({'ok': False, 'result': 'error', 'message': str(e)})
+
+
+@app.route('/nas/login', methods=['DELETE'])
+def nas_logout():
+    try:
+        return jsonify(_nas().logout())
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/nas/unblock', methods=['POST'])
+def nas_unblock():
+    """로그인 실패 잠금을 사람이 직접 푼다(설정을 고친 뒤에만 쓸 것)."""
+    try:
+        _nas().reset_block()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/nas/shares', methods=['GET'])
+def nas_shares():
+    """내 계정이 볼 수 있는 공유폴더. 권한 없는 공유는 애초에 안 나온다."""
+    try:
+        return jsonify({'ok': True, 'shares': _nas().list_shares()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 403
+
+
+@app.route('/nas/list', methods=['GET'])
+def nas_list():
+    path = request.args.get('path') or ''
+    if not path.startswith('/'):
+        return jsonify({'ok': False, 'message': '경로는 /로 시작해야 합니다.'}), 400
+    try:
+        return jsonify(dict(_nas().list_folder(path), ok=True))
+    except Exception as e:
+        # 권한 없음(105)도 여기로 온다 — 그건 오류가 아니라 **정상 동작**이므로 그대로 알린다.
+        return jsonify({'ok': False, 'message': str(e)}), 403
+
+
+@app.route('/nas/get', methods=['GET'])
+def nas_get():
+    path = request.args.get('path') or ''
+    if not path.startswith('/'):
+        return jsonify({'ok': False, 'message': '경로는 /로 시작해야 합니다.'}), 400
+    try:
+        data = _nas().download(path)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 403
+    from flask import make_response
+    resp = make_response(data)
+    resp.headers['Content-Type'] = 'application/octet-stream'
+    return resp
 
 
 @app.route('/doc/config', methods=['GET'])
