@@ -790,16 +790,45 @@
                 if (!row) return;
                 document.getElementById('naslogin-root').value = row.getAttribute('data-root');
                 box.style.display = 'none';
-                window._nasRootSave();
+                window._nasRootSave();          // ⚠️ 바꾸기 전에 확인을 받는다(아래)
             };
         } catch (e) {
             box.innerHTML = '<div style="padding:8px; color:#b1432f;">' + esc(e && e.message ? e.message : e) + '</div>';
         }
     };
 
+    // ⚠️⚠️ 앱 폴더를 바꾸는 건 **데이터가 사는 곳을 통째로 옮겨 가리키는 일**이다.
+    //    예전엔 후보를 한 번 클릭하면 아무것도 묻지 않고 바로 바뀌었다 — 실제로 그렇게
+    //    옛 js 가 캐시된 창에서 후보를 고르는 바람에, **데이터가 든 폴더를 가리키던 설정이
+    //    빈 폴더로 조용히 바뀌었다**(앱에서는 프로젝트가 사라진 것처럼 보였을 것이다).
+    //    그래서 ① 지금 폴더에 내용이 있으면 **그 사실을 보여주고** ② 사람 확인을 받는다.
     window._nasRootSave = async function () {
         var root = document.getElementById('naslogin-root').value.trim();
         if (!root) return;
+        try {
+            var cur = await nasApi('/nas/paths');
+            if (cur.configured && cur.root && cur.root !== root) {
+                var n = 0;
+                try {
+                    var lst = await nasApi('/nas/app/list?rel=');
+                    n = (lst.items || []).length;
+                } catch (e) { /* 못 읽으면 0 으로 본다 */ }
+                var warn = T('앱 폴더를 바꿉니다.', 'Change the app folder?') + '\n\n'
+                    + T('지금: ', 'Now: ') + cur.root + (n ? ('  (' + n + T('개 항목 들어 있음', ' items inside') + ')') : '') + '\n'
+                    + T('바꿀 곳: ', 'New: ') + root + '\n\n'
+                    + (n ? T('⚠️ 지금 폴더에 데이터가 있습니다. 바꾸면 앱이 그 데이터를 더 이상 보지 않습니다(지워지지는 않습니다).',
+                             '⚠️ The current folder has data. After the change the app will no longer see it (it is not deleted).')
+                         : T('지금 폴더는 비어 있습니다.', 'The current folder is empty.'));
+                if (!confirm(warn)) {
+                    // ⚠️ 칸에 바뀐 값을 남겨 두면 **실제와 어긋나 보인다** — 취소했는데도
+                    //    "바뀐 것 같은" 화면이 된다. 지금 값으로 되돌린다.
+                    document.getElementById('naslogin-root').value = cur.root;
+                    nasStatus(T('그대로 두었습니다 — 앱 폴더는 ', 'Left unchanged — the app folder is still ')
+                              + esc(cur.root), '');
+                    return;
+                }
+            }
+        } catch (e) { /* 확인을 못 해도 아래에서 백엔드가 막는다 */ }
         nasStatus('⏳ ' + T('앱 폴더를 설정합니다…', 'Setting the app folder…'), '');
         try {
             var r = await nasApi('/nas/root', {
