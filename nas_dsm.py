@@ -331,8 +331,27 @@ def list_folder(path, limit=1000):
         a = f.get('additional') or {}
         out.append({'name': f.get('name'), 'path': f.get('path'), 'isdir': bool(f.get('isdir')),
                     'size': (a.get('size') if not f.get('isdir') else None),
-                    'mtime': (a.get('time') or {}).get('mtime')})
+                    'mtime': (a.get('time') or {}).get('mtime'),
+                    # ⚠️ perm 을 버리지 말 것 — "여기에 쓸 수 있나"를 이것으로 판정한다.
+                    #    예전엔 요청만 하고 응답에서 떨궈서 ACL 지도가 전부 '?' 로 나왔다.
+                    'perm': a.get('perm')})
     return {'path': path, 'count': len(out), 'items': out, 'total': (d or {}).get('total')}
+
+
+def path_info(paths):
+    """경로 여러 개의 유효 권한을 한 번에. `list` 의 perm 이 비어 올 때 쓴다(폴더 자신의 권한)."""
+    cfg = _cfg_or_raise()
+    if isinstance(paths, str):
+        paths = [paths]
+    d = _call(cfg, 'SYNO.FileStation.List', 'getinfo', 2,
+              {'path': json.dumps(paths, ensure_ascii=False),
+               'additional': '["perm","real_path"]'})
+    out = []
+    for f in (d or {}).get('files') or []:
+        a = f.get('additional') or {}
+        out.append({'name': f.get('name'), 'path': f.get('path'),
+                    'isdir': bool(f.get('isdir')), 'perm': a.get('perm')})
+    return out
 
 
 def download(path, timeout=120):
