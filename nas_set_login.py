@@ -16,6 +16,10 @@
    → 그래서 여기서는 ① y/n 을 IME 변형(ㅛ/ㅜ)까지 받아 주고, 틀린 답은 **되묻고**
      ② 비밀번호는 **두 번** 받아 맞춰 보고 ③ 값은 숨긴 채 **한글이 섞였는지 알려준다**.
      판정을 사람의 눈에 맡기면 안 되는 자리라 코드가 센다.
+
+🖱️ `python nas_set_login.py --clip` — **타이핑 없이** 클립보드에 복사해 둔 비밀번호로 저장한다.
+   (터미널에 입력이 안 들어가는 환경이 있었다. 붙여넣기도 IME 를 안 거치므로 위 사고도 안 난다)
+   저장된 주소/포트/계정은 그대로 쓰고 비밀번호만 바꾼다. 성공하면 **클립보드를 비운다**.
 """
 import getpass
 import sys
@@ -56,13 +60,13 @@ def ask_host(default=''):
             print('  ↑ 주소가 필요합니다.')
             continue
         if '://' in s or '/' in s:
-            print('  ↑ 주소만 적어주세요 — http:// 나 경로는 빼고 (예: 192.168.1.211)')
+            print('  ↑ 주소만 적어주세요 — http:// 나 경로는 빼고 (예: nas.사내도메인 또는 192.168.x.x)')
             continue
         if ':' in s:
             print('  ↑ 포트는 다음에 따로 물어봅니다. 주소만 적어주세요.')
             continue
         if s.isdigit():
-            print('  ↑ "%s" 는 주소가 아니라 포트 같습니다. 주소를 적어주세요 (예: 192.168.1.211)' % s)
+            print('  ↑ "%s" 는 주소가 아니라 포트 같습니다. 주소를 적어주세요 (예: nas.사내도메인 또는 192.168.x.x)' % s)
             continue
         return s
 
@@ -112,6 +116,98 @@ def ask_password(has_old):
             if not ask_yn('  그래도 이 값으로 저장할까요?', default=False):
                 continue
         return pw
+
+
+def _clipboard_text():
+    """Windows 클립보드의 글자. 값은 **돌려주기만** 하고 어디에도 찍지 않는다."""
+    import ctypes
+    from ctypes import wintypes
+    CF_UNICODETEXT = 13
+    u32, k32 = ctypes.windll.user32, ctypes.windll.kernel32
+    # ⚠️ argtypes 를 안 적으면 핸들(64비트 포인터)이 기본 c_int 로 넘어가
+    #    "int too long to convert" 로 터진다. 전부 명시할 것.
+    u32.OpenClipboard.argtypes = [wintypes.HWND]
+    u32.IsClipboardFormatAvailable.argtypes = [wintypes.UINT]
+    u32.GetClipboardData.argtypes = [wintypes.UINT]
+    u32.GetClipboardData.restype = wintypes.HANDLE
+    k32.GlobalLock.argtypes = [wintypes.HANDLE]
+    k32.GlobalLock.restype = ctypes.c_void_p
+    k32.GlobalUnlock.argtypes = [wintypes.HANDLE]
+    if not u32.OpenClipboard(None):
+        raise RuntimeError('클립보드를 열지 못했습니다 — 다른 프로그램이 잡고 있을 수 있습니다.')
+    try:
+        if not u32.IsClipboardFormatAvailable(CF_UNICODETEXT):
+            raise RuntimeError('클립보드에 글자가 없습니다 — 비밀번호를 복사(Ctrl+C)한 뒤 다시 실행하세요.')
+        h = u32.GetClipboardData(CF_UNICODETEXT)
+        p = k32.GlobalLock(h) if h else None
+        if not p:
+            raise RuntimeError('클립보드 내용을 읽지 못했습니다.')
+        try:
+            return ctypes.wstring_at(p)
+        finally:
+            k32.GlobalUnlock(h)
+    finally:
+        u32.CloseClipboard()
+
+
+def _clipboard_clear():
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+    u32.OpenClipboard.argtypes = [wintypes.HWND]
+    if u32.OpenClipboard(None):
+        try:
+            u32.EmptyClipboard()
+        finally:
+            u32.CloseClipboard()
+
+
+def from_clipboard():
+    """저장된 주소/계정은 그대로, 비밀번호만 클립보드에서 받아 저장하고 1회 로그인."""
+    old = nas_dsm.load_config() or {}
+    if not old.get('host') or not old.get('user'):
+        print('❌ 주소/계정이 아직 없습니다 — 먼저 `python nas_set_login.py` 로 한 번 등록하세요.')
+        return 1
+    try:
+        pw = _clipboard_text()
+    except Exception as e:
+        print('❌ %s' % e)
+        return 1
+    raw_len = len(pw)
+    pw = pw.strip('\r\n')
+    if not pw:
+        print('❌ 클립보드가 비어 있습니다 — 비밀번호를 복사한 뒤 다시 실행하세요.')
+        return 1
+    han, nonascii = _pw_shape(pw)
+    print('클립보드에서 받았습니다: %d자 · 한글/자모 %d자 · ASCII 밖 %d자%s'
+          % (len(pw), han, nonascii, ' (줄바꿈 제거)' if raw_len != len(pw) else ''))
+    if han:
+        print('⚠️ 한글이 섞여 있습니다 — 복사한 값이 정말 비밀번호인지 확인하세요.')
+    try:
+        saved = nas_dsm.save_config(old['host'], old.get('port') or 5001,
+                                   old.get('https', True), old['user'], pw)
+    finally:
+        pw = None
+    print('저장했습니다: %s://%s:%s · 계정 %s'
+          % ('https' if saved['https'] else 'http', saved['host'], saved['port'], saved['user']))
+
+    print('\n로그인을 **한 번만** 시도합니다...')
+    r = try_login_once()
+    if not r.get('ok'):
+        print('\n  실패했습니다 — 다시 시도하기 전에 값을 확인하세요'
+              ' (반복 실패하면 NAS 가 이 PC 의 IP 를 차단합니다).')
+        print('   · DSM 웹(%s://%s:%s)에 같은 값으로 직접 로그인되는지가 가장 빠른 확인입니다'
+              % ('https' if saved['https'] else 'http', saved['host'], saved['port']))
+        return 1
+    _clipboard_clear()
+    print('  (클립보드를 비웠습니다 — 비밀번호가 남아 있지 않게)')
+
+    shares = nas_dsm.list_shares()
+    print('\n이 계정이 볼 수 있는 공유폴더 %d개:' % len(shares))
+    for s in shares:
+        print('  · %s  (%s)' % (s['name'], s['path']))
+    print('\n다음: python tests/nas-dsm-probe.py  — 팀별 폴더 권한과 속도를 잽니다.')
+    return 0
 
 
 def try_login_once():
@@ -180,4 +276,6 @@ def main():
 
 
 if __name__ == '__main__':
+    if '--clip' in sys.argv[1:]:
+        raise SystemExit(from_clipboard())
     raise SystemExit(main())
