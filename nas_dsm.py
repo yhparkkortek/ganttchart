@@ -787,3 +787,24 @@ def exists(path):
         return bool(path_info(path))
     except Exception:
         return False
+
+
+def rename(path, new_name):
+    """이름만 바꾼다. 내용은 **건드리지 않는다**(서버 쪽 한 번의 호출이라 즉시 끝난다).
+
+    ⚠️ `CopyMove` 로는 이름을 못 바꾼다 — 그건 **이름을 유지한 채 옮기는** 것이다
+       (2026-11-03에 그걸 몰라 원자적 쓰기가 no-op 였다). 이름 바꾸기는 `Rename` 이다.
+    ⚠️ 바꾼 뒤 **정말 그 이름으로 있는지 확인**한다. "바꿨다"는 응답은 증거가 아니다.
+    """
+    cfg = _cfg_or_raise()
+    new_name = str(new_name).strip()
+    if not new_name or '/' in new_name or chr(92) in new_name:
+        raise ValueError('새 이름에 경로 구분자를 넣을 수 없습니다: %s' % new_name)
+    _call(cfg, 'SYNO.FileStation.Rename', 'rename', 2,
+          {'path': path, 'name': new_name}, post=True)
+    parent = path.rstrip('/').rsplit('/', 1)[0]
+    dest = parent + '/' + new_name
+    if not exists(dest):
+        raise RuntimeError('이름을 바꿨다고 응답했지만 그 이름이 없습니다: %s' % dest)
+    _FOLDER_OK.discard(path)
+    return dest

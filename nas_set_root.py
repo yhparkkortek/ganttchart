@@ -70,7 +70,7 @@ def show_candidates():
     if not found:
         print('  (없음 — 쓰기 권한이 있는 폴더가 보이지 않습니다)')
     print('\n→ 앱 폴더를 그 아래 하나 만들어 쓰는 것을 권합니다(다른 자료와 섞이지 않게):')
-    print('   python nas_set_root.py --root "<위 경로 중 하나>/KortekGantt"')
+    print('   python nas_set_root.py --root "<위 경로 중 하나>/kortek_pm"')
     return 0
 
 

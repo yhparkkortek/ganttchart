@@ -169,10 +169,26 @@
                 + fieldRow(T('아이디', 'ID'), '<input id="naslogin-user" autocomplete="off" style="' + inputSt + '">')
                 + fieldRow(T('비밀번호', 'Password'), '<input id="naslogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + fieldRow(T('앱 폴더', 'App folder'),
-                    '<input id="naslogin-root" autocomplete="off" style="' + inputSt + '" placeholder="/공유폴더/KortekGantt">'
+                    '<input id="naslogin-root" autocomplete="off" style="' + inputSt + '" placeholder="/공유폴더/kortek_pm">'
                     + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
                 + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
                 + '<div id="naslogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
+                // 📦 이사 — 앱 데이터를 Drive 에서 NAS 로 한 번에 옮긴다(js/58).
+                //    ⚠️ 미러는 "쓸 때만" 옮기므로 **아무도 안 여는 프로젝트는 영영 안 옮겨진다** —
+                //       이사를 끝내려면 이 버튼이 한 번은 돌아야 한다.
+                + '<div style="font-size:11.5px; color:#666; margin:-2px 0 8px; line-height:1.5;">'
+                + T('Drive 에 있던 앱 데이터를 NAS 로 옮기려면 아래 <b>이사</b>를 누르세요. '
+                    + 'Drive 는 <b>읽기만</b> 하고 그대로 남습니다. 중간에 끊겨도 다시 누르면 이어서 합니다.',
+                    'Press <b>Migrate</b> to copy the app data from Drive to NAS. '
+                    + 'Drive is <b>only read</b> and stays as is. You can press again to resume.')
+                + '</div>'
+                + '<div style="display:flex; gap:8px; margin-bottom:8px;">'
+                + '<button onclick="window.nasMigrateUI()" style="' + btnSt
+                + ' background:#f3f0ff; color:#5f3dc4; border-color:#d0bfff; font-weight:bold;">📦 '
+                + T('Drive → NAS 이사', 'Migrate Drive → NAS') + '</button>'
+                + '<button onclick="window.nasMigrate && window.nasMigrate.stop()" style="' + btnSt
+                + ' padding:7px 10px;">⏹</button>'
+                + '</div>'
                 + '<div style="display:flex; gap:8px;">'
                 + '<button onclick="window._nasLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
@@ -763,10 +779,10 @@
                 return;
             }
             box.innerHTML = items.map(function (i) {
-                var suggested = i.path + '/KortekGantt';
+                var suggested = i.path + '/kortek_pm';
                 return '<div data-root="' + esc(suggested) + '" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f0f0f0;">'
                     + '<span style="color:#6741d9;">📂</span> ' + esc(i.path)
-                    + '<span style="color:#999;">/KortekGantt</span>'
+                    + '<span style="color:#999;">/kortek_pm</span>'
                     + '<span style="float:right; color:#aaa; font-size:10.5px;">' + esc(i.rights) + '</span></div>';
             }).join('');
             box.onclick = function (ev) {
