@@ -151,6 +151,21 @@
         check('오류로 돌려준다', !weird.ok && !!(wj.error && /못 읽는/.test(wj.error.message)),
               (wj.error && wj.error.message) || String(weird.status));
 
+        out('\n== ⑦-2 옛 Drive id 가 섞이면 — 조용히 넘어가면 안 된다 ==');
+        // ⚠️ 실사용 브라우저에는 `gantt_folder_cache_v1` 에 **Drive 폴더 id** 가 남아 있다.
+        //    예전엔 그걸 건너뛰어서 **팀 폴더가 통째로 빠진 짧은 목록**이 나왔다(재현 확인).
+        check('저장소 표식이 nas 로 적혔다',
+              localStorage.getItem('gantt_storage_backend_active') === 'nas',
+              String(localStorage.getItem('gantt_storage_backend_active')));
+        var stale = await fetch('https://www.googleapis.com/drive/v3/files?q=' +
+                                encodeURIComponent("'1XxDriveFolderIdAAA' in parents and trashed=false"));
+        var sj = await stale.json();
+        check('Drive 폴더 id 가 오면 오류로 떨어진다',
+              !stale.ok && !!(sj.error && /Drive 폴더 id/.test(sj.error.message)),
+              (sj.error && sj.error.message) || ('HTTP ' + stale.status));
+        out('   (캐시 자동 비우기는 새로고침 때 도므로 여기서 못 본다 — 확인하려면:');
+        out("    localStorage.setItem('gantt_folder_cache_v1','{}'); 를 Drive 모드로 바꾼 뒤 새로고침)");
+
         out('\n== ⑧ 삭제 ==');
         var del = await fetch('https://www.googleapis.com/drive/v3/files/' + created.id, { method: 'DELETE' });
         check('DELETE 204', del.status === 204, 'HTTP ' + del.status);

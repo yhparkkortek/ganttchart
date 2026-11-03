@@ -215,6 +215,42 @@
         }
     };
 
+    // ───────────────────────────────────────────────────────────────────────
+    // 🔖 저장소 표식 — 저장소를 바꾸면 **저장소에 매인 캐시**를 버려야 한다
+    //
+    // ⚠️⚠️ 실측으로 잡은 사고(2026-11-03): `gantt_folder_cache_v1` 에는 **Drive 폴더 id** 가
+    //    localStorage 에 영속된다(js/04b `_getChildFolderIds`). NAS 로 켜면 그 옛 id 들이
+    //    `'<driveId>' in parents` 로 들어오고, 그건 NAS 경로로 못 바꾸니 결과가 **오류가 아니라
+    //    팀 폴더가 통째로 빠진 짧은 목록**이 된다. 실사용 브라우저는 이 캐시가 꽉 차 있으므로
+    //    켜는 순간 **모든 팀 프로젝트가 조용히 사라진다.** 재현·확인했다.
+    //
+    // ⚠️ 이 블록은 **플래그 검사보다 위**에 있다. Drive 로 되돌릴 때도 반대 방향으로 썩은
+    //    캐시를 버려야 하기 때문이다(킬스위치가 제대로 들으려면 필요하다).
+    //    플래그를 한 번도 안 켠 사람은 표식이 없어 'drive' 로 읽히고 지금과 같으므로
+    //    **아무 일도 일어나지 않는다**(쓰기도 안 한다).
+    // ⚠️⚠️ localStorage 만 지우면 **안 지워진다.** 그 캐시를 쓰는 파일(js/04b)이 이 파일보다
+    //    **먼저 로드돼 이미 메모리로 읽어 갔기** 때문이다. 실제로 그렇게 한 번 틀렸다 —
+    //    localStorage 는 비었는데 목록은 여전히 옛 Drive id 로 나갔다.
+    //    그래서 키마다 **메모리 무효화 함수**를 같이 적는다(없으면 키만 지운다).
+    var MARK_KEY = 'gantt_storage_backend_active';
+    var BACKEND_SCOPED_CACHES = [          // 새 캐시가 생기면 여기 한 줄 — 데이터로 둔다
+        { key: 'gantt_folder_cache_v1', invalidate: '_clearFolderCache' }
+    ];
+    try {
+        var mark = localStorage.getItem(MARK_KEY) || 'drive';
+        if (mark !== currentBackend()) {
+            BACKEND_SCOPED_CACHES.forEach(function (c) {
+                try { localStorage.removeItem(c.key); } catch (e) { /* ignore */ }
+                var fn = c.invalidate && window[c.invalidate];
+                if (typeof fn === 'function') { try { fn(); } catch (e) { /* ignore */ } }
+            });
+            localStorage.setItem(MARK_KEY, currentBackend());
+            console.warn('[storage-adapter] 저장소가 ' + mark + ' → ' + currentBackend() +
+                         ' 로 바뀌어 저장소에 매인 캐시를 비웠습니다: ' +
+                         BACKEND_SCOPED_CACHES.map(function (c) { return c.key; }).join(', '));
+        }
+    } catch (e) { /* localStorage 가 막힌 환경 — 캐시도 없으니 할 일이 없다 */ }
+
     // ⚠️ 여기서 끝. 플래그가 꺼져 있으면 **아무것도 감싸지 않는다.**
     if (currentBackend() !== 'nas') return;
 
@@ -303,7 +339,15 @@
         var seen = {}, files = [];
         for (var i = 0; i < parentIds.length; i++) {
             var pr = relOf(parentIds[i]);
-            if (!pr) { note('list-unknown-parent', parentIds[i]); continue; }
+            if (!pr) {
+                // ⚠️⚠️ 모르는 부모 id 를 **건너뛰지 않는다.** 건너뛰면 결과가 오류가 아니라
+                //    "그 폴더만 빠진 짧은 목록"이 되고, 그건 사람이 절대 못 알아챈다.
+                //    거의 전부 **옛 Drive id 가 어딘가에 남아 있다**는 뜻이다(캐시·저장된 id).
+                note('list-unknown-parent', parentIds[i]);
+                throw new Error('NAS 모드인데 Drive 폴더 id 가 들어왔습니다: ' + parentIds[i] +
+                                ' — 저장소에 매인 캐시가 남아 있습니다. ' +
+                                'localStorage.removeItem("gantt_folder_cache_v1") 후 새로고침하세요.');
+            }
             var items;
             try { items = await listRel(pr.rel); }
             catch (e) {
@@ -320,6 +364,9 @@
                 throw e;
             }
             for (var k = 0; k < items.length; k++) {
+                // 원자적 쓰기가 쓰는 임시 폴더는 **저장소 배관**이지 앱 데이터가 아니다.
+                // 숨기지 않으면 폴더 캐시에 들어가 매번 쓸데없는 왕복(61ms)을 더 한다.
+                if (items[k].isdir && items[k].name.indexOf('.ganttput-') === 0) continue;
                 var f = toDriveFile(items[k], pr.rel);
                 if (parsed.name !== null && f.name !== parsed.name) continue;
                 if (parsed.mime !== null && f.mimeType !== parsed.mime) continue;
