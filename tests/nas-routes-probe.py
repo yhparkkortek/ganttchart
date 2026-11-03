@@ -1,0 +1,152 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""🔌 /nas/* 라우트 검증 — 앱이 실제로 부르는 HTTP 경로를 통과시킨다
+   (python tests/nas-routes-probe.py)
+
+왜 있나: `nas_dsm` 함수가 되는 것과 **라우트가 되는 것은 다른 일**이다. 2026-10-29 칩 표
+  사고가 바로 그 교훈이었다 — 렌더러만 직접 불러 "된다"고 보고했는데 깨져 있던 건 연결부였다.
+  그래서 여기서는 `app.test_client()` 로 **라우트를 통해** 쓰고 읽고 지운다.
+
+⚠️ 사용자가 돌리는 5000번 프로세스를 **죽이지 않는다** — `app.test_client()` 만 쓴다
+   (예약 발송·SAP 작업이 돌고 있을 수 있다).
+⚠️ 테스트는 앱 루트 아래 `_route_probe/` 안에서만 하고 **끝나면 지운다**(실패해도).
+⚠️ 가드레일도 같이 시험한다 — 절대경로·상위참조가 **거부되는지**. 거부돼야 정상이다.
+"""
+import base64
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from kortek_backend import app  # noqa: E402
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
+DIR = '_route_probe'
+TEAM = '개발3팀'
+ok_n = 0
+bad_n = 0
+
+
+def check(label, cond, detail=''):
+    global ok_n, bad_n
+    if cond:
+        ok_n += 1
+        print('  ✅ %s %s' % (label, detail))
+    else:
+        bad_n += 1
+        print('  ❌ %s %s' % (label, detail))
+    return cond
+
+
+def jpost(c, url, payload):
+    r = c.post(url, data=json.dumps(payload), content_type='application/json')
+    try:
+        return r.status_code, r.get_json()
+    except Exception:
+        return r.status_code, None
+
+
+def main():
+    c = app.test_client()
+
+    print('== ① /nas/paths — 앱 루트가 정해져 있나 ==')
+    r = c.get('/nas/paths')
+    d = r.get_json() or {}
+    if not check('configured', d.get('configured'), '· %s' % (d.get('message') or '')):
+        print('   → python nas_set_root.py --list  로 후보를 보고 --root 로 지정하세요.')
+        return 1
+    print('     root=%s · 팀 분리=%s' % (d.get('root'), d.get('teamSeparate')))
+    check('layout 이름 옴', isinstance(d.get('layout'), dict),
+          '· %s' % sorted((d.get('layout') or {}).keys()))
+
+    try:
+        print('\n== ② 가드레일 — 거부돼야 하는 입력 ==')
+        st, _ = jpost(c, '/nas/app/put', {'rel': '/RND_ETC/아무데나.json', 'text': 'x'})
+        check('절대경로 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/app/put', {'rel': '../밖으로.json', 'text': 'x'})
+        check('상위참조(..) 거부', st == 400, '· HTTP %s' % st)
+        st, _ = jpost(c, '/nas/app/put', {'rel': '%s/x.json' % DIR})
+        check('본문 없으면 거부', st == 400, '· HTTP %s' % st)
+
+        print('\n== ③ 쓰기 → 읽기 (텍스트, 한글) ==')
+        rel = '%s/검증.json' % DIR
+        body = '{"안녕":"하세요","n":1}'
+        st, d1 = jpost(c, '/nas/app/put', {'rel': rel, 'text': body})
+        check('put 성공', st == 200 and (d1 or {}).get('ok'),
+              '· HTTP %s · 원자적=%s' % (st, (d1 or {}).get('atomic')))
+        r = c.get('/nas/app/get?rel=%s' % rel)
+        got = r.data.decode('utf-8') if r.status_code == 200 else None
+        check('get 이 같은 내용', got == body,
+              '· HTTP %s%s' % (r.status_code, '' if got == body else ' · 받은 값 %r' % (got or '')[:60]))
+
+        print('\n== ④ 덮어쓰기 ==')
+        body2 = '{"안녕":"또 왔습니다","n":2}'
+        jpost(c, '/nas/app/put', {'rel': rel, 'text': body2})
+        r = c.get('/nas/app/get?rel=%s' % rel)
+        got2 = r.data.decode('utf-8') if r.status_code == 200 else ''
+        check('새 내용으로 바뀜', got2 == body2)
+        check('옛 내용이 안 섞임', bool(got2) and '"n":1' not in got2)
+
+        print('\n== ⑤ 이진 파일 (b64) ==')
+        blob = bytes(range(256)) * 4
+        relb = '%s/bin.dat' % DIR
+        st, _ = jpost(c, '/nas/app/put',
+                      {'rel': relb, 'b64': base64.b64encode(blob).decode('ascii')})
+        r = c.get('/nas/app/get?rel=%s' % relb)
+        check('이진 왕복 바이트 동일', st == 200 and r.data == blob,
+              '· %d바이트 보냄 / %d바이트 받음' % (len(blob), len(r.data)))
+
+        print('\n== ⑥ 팀 경로 — 1단계에선 앱 루트 아래 <팀>/ ==')
+        st, dt = jpost(c, '/nas/app/put',
+                       {'rel': 'project_test.json', 'team': TEAM, 'text': '{"team":1}'})
+        check('팀 파일 쓰기', st == 200 and (dt or {}).get('ok'), '· HTTP %s' % st)
+        if dt and dt.get('path'):
+            check('경로에 팀 이름이 들어감', TEAM in dt['path'], '· %s' % dt['path'])
+        r = c.get('/nas/app/get?rel=project_test.json&team=%s' % TEAM)
+        check('팀 파일 읽기', r.status_code == 200 and r.data == b'{"team":1}',
+              '· HTTP %s' % r.status_code)
+
+        print('\n== ⑦ 목록 ==')
+        r = c.get('/nas/app/list?rel=%s' % DIR)
+        dl = r.get_json() or {}
+        names = [i['name'] for i in (dl.get('items') or [])]
+        check('목록에 쓴 파일이 보임', '검증.json' in names and 'bin.dat' in names,
+              '· %s' % names)
+
+        print('\n== ⑧ 없는 파일 읽기 — 404 로 정직하게 ==')
+        r = c.get('/nas/app/get?rel=%s/없는파일zzz.json' % DIR)
+        msg = ((r.get_json() or {}).get('message') or '') if r.status_code != 200 else ''
+        check('404 + 사람이 읽는 사유', r.status_code == 404 and '없습니다' in msg,
+              '· HTTP %s · %s' % (r.status_code, msg[:70]))
+
+    finally:
+        print('\n== 뒷정리 ==')
+        st, dd = jpost(c, '/nas/app/delete', {'rel': DIR})
+        check('테스트 폴더 삭제(확인까지)', st == 200 and (dd or {}).get('verified'),
+              '· HTTP %s · %s' % (st, (dd or {}).get('message') or ''))
+        st2, dd2 = jpost(c, '/nas/app/delete', {'rel': 'project_test.json', 'team': TEAM})
+        check('팀 테스트 파일 삭제', st2 == 200 and (dd2 or {}).get('verified'),
+              '· HTTP %s · %s' % (st2, (dd2 or {}).get('message') or ''))
+        # 임시 폴더는 이 프로세스가 만든 것이므로 sweep 이 지워야 한다(그 라우트도 같이 검증).
+        # staleSec=0 — 검증이 끝났으니 앞선 실행이 남긴 것까지 치운다.
+        # (업로드가 create_parents=true 라, 남의 임시 폴더를 지워도 그쪽 다음 업로드가 다시 만든다)
+        st3, ds3 = jpost(c, '/nas/app/sweep', {'rel': '', 'team': TEAM, 'staleSec': 0})
+        r3 = c.get('/nas/app/list?rel=&team=%s' % TEAM)
+        left = [i['name'] for i in ((r3.get_json() or {}).get('items') or [])
+                if i['name'].startswith('.ganttput-')]
+        check('/nas/app/sweep 이 임시 폴더를 치움', st3 == 200 and not left,
+              '· 치움 %s · 남음 %s' % ((ds3 or {}).get('removed'), left))
+
+    print('\n통과 %d · 실패 %d' % (ok_n, bad_n))
+    print('⚠️ 이 검증은 test_client 로 돈다 — 사용자가 돌리는 5000번 프로세스에는'
+          ' **백엔드를 재시작해야** 이 라우트가 생긴다.')
+    return 1 if bad_n else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

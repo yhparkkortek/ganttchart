@@ -614,21 +614,38 @@ def _path_lock(key):
     return lk
 
 
-def cleanup_tmpdirs(folder):
-    """`.ganttput-*` 임시 폴더를 치운다. 프로세스가 중간에 죽으면 남을 수 있다.
+def cleanup_tmpdirs(folder, stale_sec=600):
+    """`.ganttput-*` 임시 폴더를 치운다. 프로세스가 중간에 죽으면 남는다(실측 확인).
 
-    ⚠️ **다른 프로세스가 지금 쓰고 있을 수 있다** — 내 태그가 아닌 것은 건드리지 않는다.
-       (전부 치우는 청소는 아무도 안 쓸 때 사람이 할 일이다)
+    ⚠️ **다른 프로세스가 지금 쓰고 있을 수 있다.** 그래서 지우는 건 둘뿐이다:
+       ① 내 태그 (내가 만든 것)
+       ② **비어 있고** 마지막 수정이 `stale_sec` 보다 오래된 것
+          — 쓰기 중인 임시 폴더는 1초 미만 동안만 파일을 들고 있으므로,
+            "비었고 오래됐다"면 쓰는 중일 수 없다. 둘 중 하나라도 아니면 건드리지 않는다.
+       (내 태그만 지우던 처음 판은 **죽은 프로세스의 폴더를 영원히 남겼다**)
     """
-    removed = []
+    removed, kept = [], []
+    now = time.time()
     for it in list_folder(folder, limit=500)['items']:
-        if it['isdir'] and it['name'] == '.ganttput-%s' % _PROC_TAG:
+        if not it['isdir'] or not it['name'].startswith('.ganttput-'):
+            continue
+        mine = it['name'] == '.ganttput-%s' % _PROC_TAG
+        if not mine:
             try:
-                remove(it['path'])
-                removed.append(it['name'])
+                inside = list_folder(it['path'], limit=5)['items']
             except Exception:
-                pass
-    return removed
+                kept.append(it['name'])
+                continue
+            mt = it.get('mtime') or 0
+            if inside or (mt and (now - mt) < stale_sec):
+                kept.append(it['name'])     # 비지 않았거나 최근 = 쓰는 중일 수 있다
+                continue
+        try:
+            remove(it['path'])
+            removed.append(it['name'])
+        except Exception:
+            kept.append(it['name'])
+    return {'removed': removed, 'kept': kept}
 
 
 def _verify_written(path, nbytes):

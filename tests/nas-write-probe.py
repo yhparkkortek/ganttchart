@@ -113,8 +113,11 @@ def main():
             inside = nas_dsm.list_folder(mine[0]['path'], limit=50)['items']
             check('임시 폴더가 비어 있음', not inside,
                   '' if not inside else '· 남음: %s' % [i['name'] for i in inside])
-        removed = nas_dsm.cleanup_tmpdirs(base)
-        print('     (cleanup_tmpdirs 로 %d개 치움 — 프로세스가 죽어 남은 것 대비)' % len(removed))
+        swept = nas_dsm.cleanup_tmpdirs(base, stale_sec=0)
+        check('임시 폴더 청소됨', not nas_dsm.list_folder(base, limit=50)['items']
+              or all(not i['name'].startswith('.ganttput-')
+                     for i in nas_dsm.list_folder(base, limit=50)['items']),
+              '· 치움 %s · 남김 %s' % (swept['removed'], swept['kept']))
 
         print('\n== ④ 하위 폴더 자동 생성 ==')
         p2 = '%s/깊은/폴더/안에.txt' % base

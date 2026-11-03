@@ -5361,6 +5361,144 @@ def nas_get():
     return resp
 
 
+# ── 앱 데이터 읽기·쓰기 (앱 루트 기준 **상대경로만**) ──────────────
+#   ⚠️ 쓰기는 **절대경로를 받지 않는다.** 앱 루트 밖은 애초에 가리킬 수 없게 한다 —
+#      프런트 버그 하나가 NAS 아무 폴더나 덮어쓰는 길을 만들지 않기 위해서다.
+#      (읽기 `/nas/list`·`/nas/get` 은 조회라 절대경로를 받지만, 그쪽도 NAS ACL 이 막는다)
+#   ⚠️ 사내 공유 경로가 **프런트 코드에 들어가지 않는다** — 프런트는 `_App_Config/...`,
+#      `<팀>/project.json` 같은 상대경로만 쓰고, 실제 경로는 백엔드 설정에서 붙는다.
+def _nas_target(src):
+    """{rel, team} → NAS 절대경로. 잘못된 입력은 (None, 메시지)."""
+    rel = (src.get('rel') or '').strip()
+    team = (src.get('team') or '').strip() or None
+    if not rel and not team:
+        return None, 'rel(앱 루트 기준 상대경로)이 필요합니다.'
+    if rel.startswith('/'):
+        return None, 'rel 은 앱 루트 기준 상대경로여야 합니다(/로 시작하지 않음).'
+    try:
+        return _nas().abs_path(rel, team=team), None
+    except Exception as e:
+        return None, str(e)
+
+
+@app.route('/nas/paths', methods=['GET'])
+def nas_paths():
+    """앱 루트가 정해져 있는지 + 하위 배치 이름. 프런트가 경로를 만들 때 쓴다."""
+    try:
+        n = _nas()
+        try:
+            root, team_root = n.roots()
+        except Exception as e:
+            return jsonify({'ok': False, 'configured': False, 'message': str(e)})
+        return jsonify({'ok': True, 'configured': True, 'root': root,
+                        'teamRoot': team_root, 'teamSeparate': team_root != root,
+                        'layout': dict(n._LAYOUT)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'nas_dsm 로드 실패: {e}'})
+
+
+@app.route('/nas/app/list', methods=['GET'])
+def nas_app_list():
+    path, err = _nas_target(request.args)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    try:
+        return jsonify(dict(_nas().list_folder(path), ok=True))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 403
+
+
+@app.route('/nas/app/get', methods=['GET'])
+def nas_app_get():
+    path, err = _nas_target(request.args)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    try:
+        data = _nas().download(path)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 404
+    from flask import make_response
+    resp = make_response(data)
+    resp.headers['Content-Type'] = 'application/octet-stream'
+    return resp
+
+
+@app.route('/nas/app/put', methods=['POST'])
+def nas_app_put():
+    """원자적 쓰기. 본문 JSON: {rel, team?, text} 또는 {rel, team?, b64}.
+
+    ⚠️ `nas_dsm.put` 이 쓴 뒤 **정말 그 자리에 있는지 확인**하고 돌려준다 —
+       "저장했다"고 말했는데 안 된 상태를 만들지 않는다(2026-11-03 사고 대응).
+    """
+    req = request.get_json(force=True, silent=True) or {}
+    path, err = _nas_target(req)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    if 'text' in req:
+        data = str(req.get('text') or '').encode('utf-8')
+    elif 'b64' in req:
+        try:
+            data = base64.b64decode(req.get('b64') or '')
+        except Exception as e:
+            return jsonify({'ok': False, 'message': f'b64 디코드 실패: {e}'}), 400
+    else:
+        return jsonify({'ok': False, 'message': 'text 또는 b64 가 필요합니다.'}), 400
+    try:
+        return jsonify(dict(_nas().put(path, data), rel=req.get('rel')))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
+@app.route('/nas/app/mkdir', methods=['POST'])
+def nas_app_mkdir():
+    req = request.get_json(force=True, silent=True) or {}
+    path, err = _nas_target(req)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    try:
+        return jsonify({'ok': True, 'path': _nas().ensure_folder(path)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
+@app.route('/nas/app/delete', methods=['POST'])
+def nas_app_delete():
+    """삭제는 되돌릴 수 없다 — 사람 확인은 **부르는 쪽**이 받는다.
+    `nas_dsm.remove` 가 지운 뒤 확인하고, 남아 있으면 정직하게 실패한다."""
+    req = request.get_json(force=True, silent=True) or {}
+    path, err = _nas_target(req)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    try:
+        return jsonify(_nas().remove(path))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
+@app.route('/nas/app/sweep', methods=['POST'])
+def nas_app_sweep():
+    """`.ganttput-*` 임시 폴더 청소. 프로세스가 중간에 죽으면 남는다(실측).
+
+    ⚠️ 쓰는 중인 폴더는 건드리지 않는다 — 내 태그이거나, **비어 있고 오래된** 것만 지운다.
+       (팀원 PC 들이 각자 쓰므로 "전부 지우기"는 절대 하지 않는다)
+    """
+    req = request.get_json(force=True, silent=True) or {}
+    path, err = _nas_target(req)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    # staleSec: "비어 있고 이만큼 오래된" 것만 지운다. 기본 10분.
+    #   0 으로 내려도 안전한 이유 — 업로드가 `create_parents=true` 라, 다른 프로세스의
+    #   임시 폴더를 지워도 그쪽의 다음 업로드가 **폴더를 다시 만든다**(실측 확인).
+    try:
+        stale = int(req.get('staleSec', 600))
+    except Exception:
+        stale = 600
+    try:
+        return jsonify(dict(_nas().cleanup_tmpdirs(path, stale_sec=max(0, stale)), ok=True))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
 @app.route('/doc/config', methods=['GET'])
 def doc_config_get():
     cfg = _docstore_load()
