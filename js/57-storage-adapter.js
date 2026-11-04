@@ -1030,10 +1030,15 @@
             //    **프로젝트를 못 불러왔다** — 저장소만 바꾸고 "로그인했나" 검사는
             //    Drive 기준 그대로 뒀던 것이다(`gapi.client.getToken()` 검사가 40곳 넘는다).
             //    NAS 모드에서 신원은 **NAS 계정**이다. 그러니 **항상** 덮어쓴다.
-            if (!window.gapi.client.__nasToken) {
-                window.gapi.client.getToken = function () { return { access_token: 'nas' }; };
+            // ⚠️⚠️ 표시는 **함수 자체**에 단다. 예전엔 `gapi.client.__nasToken` 에 달았는데,
+            //    gapi 가 그 뒤에 `getToken` 만 덮어써도 표시는 그대로 남아 **다시 안 넣었다** —
+            //    그래서 몇 초 뒤엔 다시 null 이 돼 "로그인 안 함"으로 돌아갔다(실측).
+            //    가드는 "했는지"가 아니라 **"지금 내 것인지"** 를 봐야 한다.
+            if (!window.gapi.client.getToken || !window.gapi.client.getToken.__nas) {
+                var _tok = function () { return { access_token: 'nas' }; };
+                _tok.__nas = true;
+                window.gapi.client.getToken = _tok;
                 window.gapi.client.setToken = function () { };
-                window.gapi.client.__nasToken = true;
             }
             // 앱의 "연결됨" 상태도 같이 맞춘다 — 이걸 보는 가드가 따로 또 있다(`selectProject` 등).
             // ⚠️ 거짓으로 켜는 게 아니라 **NAS 에 실제로 붙어 있을 때만** 켠다(아래 _nasIdentity).
@@ -1069,6 +1074,24 @@
         implant();          // 상태를 알아낸 뒤 한 번 더 — 그 사이 가드가 돌았을 수 있다
         if (window._updateDriveConnBadge) { try { window._updateDriveConnBadge(); } catch (e) { /* ignore */ } }
     })();
+    // ⚠️⚠️ **구글 OAuth 창을 띄우지 않는다**(2026-11-04 신고: "구글 OAuth 팝업창 뜨고…").
+    //    NAS 모드에선 구글 계정이 아예 필요 없는데, 자동 로그인(`gantt_auto_drive_login`)과
+    //    배지/버튼이 `handleAuthClick` 을 불러 팝업이 떴다. 사람 입장에선 "NAS 로 바꿨는데
+    //    왜 구글 로그인을 시키나" 가 된다. 토큰 갱신 루프도 같이 멈춘다.
+    //    ⚠️ 조용히 없애지 않고 **왜 안 뜨는지 말해 준다** — 안 그러면 "버튼이 고장났다"가 된다.
+    (function blockGoogleAuth() {
+        var en = function () { return window._currentLang === 'en'; };
+        window.handleAuthClick = function () {
+            if (window.showToast) {
+                window.showToast(en() ? 'NAS mode — Google sign-in is not needed.'
+                                      : '🗄️ NAS 모드입니다 — 구글 로그인이 필요 없습니다.');
+            }
+            console.info('[storage-adapter] NAS 모드라 구글 로그인을 띄우지 않습니다.');
+        };
+        window.startSilentTokenRefresh = function () { };      // 토큰 갱신 루프도 멈춘다
+        window._handleDriveDisconnected = function () { };     // "드라이브 끊김" 경보도 안 띄운다
+    })();
+
     implant();
     // ② gapi 초기화가 끝나는 **그 순간** 다시 심는다(폴링을 기다리지 않는다).
     if (typeof window.intializeGapiClient === 'function') {
