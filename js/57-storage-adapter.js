@@ -555,9 +555,23 @@
     }
 
     /** 백엔드 중계 호출. 실패는 **삼키지 않는다** — 던져서 호출한 쪽이 알게 한다. */
+    //  🛡️🛡️ [2026-11-04] NAS 읽기는 **절대 캐시에서 오면 안 된다.**
+    //    이 앱은 여러 파일을 "읽고 → 고쳐서 → 통째로 다시 쓴다"(프로젝트 색인·보관함·주소록…).
+    //    읽기가 옛 사본이면 그 위에 쓰는 순간 **그 사이 바뀐 내용이 조용히 되돌아간다.**
+    //    실제로 그렇게 색인의 projects 가 0건이 됐다(실측: 같은 순간 디스크 721,649 바이트 /
+    //    브라우저가 준 것 489,543 바이트).
+    //    백엔드에도 Cache-Control: no-store 를 달았지만 **구버전 백엔드가 도는 PC**가 있으므로
+    //    프런트에서도 막는다 — 둘 다 걸어 두는 쪽이 맞다.
+    //    ⚠️ cache:'no-store' 는 그 요청만 막는다. 이미 캐시에 들어앉은 항목까지 피하려면
+    //       **URL 을 다르게** 해야 해서 _cb 도 같이 붙인다.
     async function nas(method, route, payload) {
         var url = BACKEND + route;
         var opts = { method: method };
+        if (method === 'GET') {
+            url += (route.indexOf('?') >= 0 ? '&' : '?') + '_cb=' + Date.now()
+                 + '_' + Math.random().toString(36).slice(2, 8);
+            opts.cache = 'no-store';
+        }
         if (payload !== undefined && method !== 'GET') {
             opts.headers = { 'Content-Type': 'application/json' };
             opts.body = JSON.stringify(payload);

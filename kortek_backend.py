@@ -5626,6 +5626,14 @@ def nas_get():
     from flask import make_response
     resp = make_response(data)
     resp.headers['Content-Type'] = 'application/octet-stream'
+    # 🛡️🛡️ [2026-11-04] **캐시 금지.** 이게 없어서 브라우저가 이 응답을 캐시했고,
+    #   앱이 "읽고 → 고쳐서 → 통째로 다시 쓰는" 파일(project_index.json 등)에서
+    #   **옛 사본 위에 쓰는** 일이 벌어졌다 — 그 사이 바뀐 내용이 오류 하나 없이
+    #   되돌아간다(실측: 같은 순간 디스크 721,649 바이트 / 브라우저 489,543 바이트).
+    #   그렇게 프로젝트 색인의 projects 가 통째로 0건이 됐다.
+    #   ⚠️ 이 파일들은 작고 사내망이라 캐시해서 얻을 게 거의 없다 — 정확도가 먼저다.
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
     return resp
 
 
@@ -5697,6 +5705,14 @@ def nas_app_get():
     from flask import make_response
     resp = make_response(data)
     resp.headers['Content-Type'] = 'application/octet-stream'
+    # 🛡️🛡️ [2026-11-04] **캐시 금지.** 이게 없어서 브라우저가 이 응답을 캐시했고,
+    #   앱이 "읽고 → 고쳐서 → 통째로 다시 쓰는" 파일(project_index.json 등)에서
+    #   **옛 사본 위에 쓰는** 일이 벌어졌다 — 그 사이 바뀐 내용이 오류 하나 없이
+    #   되돌아간다(실측: 같은 순간 디스크 721,649 바이트 / 브라우저 489,543 바이트).
+    #   그렇게 프로젝트 색인의 projects 가 통째로 0건이 됐다.
+    #   ⚠️ 이 파일들은 작고 사내망이라 캐시해서 얻을 게 거의 없다 — 정확도가 먼저다.
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
     return resp
 
 
