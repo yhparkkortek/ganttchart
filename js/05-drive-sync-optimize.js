@@ -46,6 +46,41 @@
 //    ② 실패해도 계정선택/동의화면으로 절대 확전하지 않으며(사용자 클릭 없이 뜨는 팝업은 브라우저가
 //       차단할 수도 있고, 예고 없이 튀어나오면 UX도 나쁨) 그냥 지금까지처럼 수동 버튼을 눌러야 하는
 //       상태로 조용히 남는다. 일반 클릭(silentOnly 생략)의 기존 동작은 전혀 바뀌지 않는다.
+// 🔌 [2026-11-04 신규] "저장소가 붙은 뒤 한 번 하는 일" — Drive 든 NAS 든 **같은 함수**를 쓴다.
+//    왜 뺐나: 이 두 묶음이 `onAuthSuccess`(구글 OAuth 성공 콜백) 안에만 있어서, NAS 모드에선
+//    **한 번도 돌지 않았다.** 그래서 🗄️ 배지는 떠 있는데 [📂 프로젝트 열기] 가 HTML 의
+//    `disabled` 그대로 회색이었다(실사용 신고 2026-11-04). 토큰 가드를 고친 것과는 **별개의 문턱**이다.
+//    ⚠️ 이 목록을 js/57 로 복사하지 말 것 — 복사하면 Drive 쪽에 하나 추가할 때 NAS 모드만
+//       조용히 빠진다. 그게 바로 이 사고의 모양이다.
+window._storageEnableDataButtons = function () {
+    ['drive_save_btn', 'drive_load_btn', 'backup_restore_btn', 'project-select-btn'].forEach(function (id) {
+        var b = document.getElementById(id);
+        if (b) b.disabled = false;
+    });
+};
+// 팀 공용 데이터(AI 프롬프트/공휴일/비밀번호 동기화/업무 보관함/주소록) 최신본 당겨오기.
+// ⚠️ 프로젝트 목록 **모달은 여기서 열지 않는다** — 사람이 연동 버튼을 누른 흐름에서만 여는 것이
+//    맞다. NAS 모드는 페이지를 열 때마다 이 함수가 도므로, 여기서 열면 매번 팝업이 튀어나온다.
+window._storageLoadSharedData = function () {
+    if (typeof window.loadPromptFromDrive === 'function') window.loadPromptFromDrive();
+    if (typeof window.loadProjectSummaryPromptFromDrive === 'function') window.loadProjectSummaryPromptFromDrive();
+    if (typeof window.loadGanttQaPromptFromDrive === 'function') window.loadGanttQaPromptFromDrive();
+    if (typeof window.loadHolidaysFromDrive === 'function') window.loadHolidaysFromDrive();
+    setTimeout(function () { if (typeof window.checkPasswordSync === 'function') window.checkPasswordSync(); }, 1500);
+    if (window.TaskInbox && window.TaskInbox.loadFromDrive) window.TaskInbox.loadFromDrive();
+    if (window.AddressBook && window.AddressBook.loadFromDrive) {
+        window.tabData = window.tabData || {};
+        window.tabData.addressBook = window.AddressBook.load();
+        // 💡 [2026-09-07] "내 팀" 자동 인식 1차 시도 — 로컬 캐시 주소록 기준
+        if (window._autoDetectMyTeam) window._autoDetectMyTeam();
+        window.AddressBook.loadFromDrive().then(function (list) {
+            if (list) { window.tabData.addressBook = list; if (window.renderAddressTable) window.renderAddressTable(); }
+            // 💡 최신 주소록 기준으로 재시도(로컬 캐시가 없거나 오래됐을 수 있어서)
+            if (window._autoDetectMyTeam) window._autoDetectMyTeam();
+        });
+    }
+};
+
 window.handleAuthClick = function(event, silentOnly) {
         if (!tokenClient) {
             if (silentOnly) { setTimeout(function() { window.handleAuthClick(null, true); }, 500); return; }
@@ -126,10 +161,7 @@ window.handleAuthClick = function(event, silentOnly) {
                 //    테두리가 남아있는 모순된 모습이 됨).
                 authBtn.style.borderColor = '';
                 authBtn.style.color = '';
-                document.getElementById('drive_save_btn').disabled = false;
-                document.getElementById('drive_load_btn').disabled = false;
-                const bkBtn2 = document.getElementById('backup_restore_btn'); if (bkBtn2) bkBtn2.disabled = false;
-                const psBtn = document.getElementById('project-select-btn'); if (psBtn) psBtn.disabled = false;
+                window._storageEnableDataButtons(); // 💾 저장/열기/복원/프로젝트선택 (NAS 모드와 공용)
                 window.isDriveConnected = true; // ✅ 연동 완료 플래그
                 // 💡 [2026-08-25 신규] 이 함수(두 번째로 정의된 handleAuthClick)가 실제로 쓰이는 버전인데,
                 //    startSilentTokenRefresh() 호출이 빠져 있어서 45분 주기 조용한 토큰 갱신이 지금까지
@@ -145,23 +177,7 @@ window.handleAuthClick = function(event, silentOnly) {
                 // 🐛 [버그 수정] 첫 번째(지금은 이 함수에 덮어써져 죽은) handleAuthClick 정의에는 있던
                 // 로그인 성공 시 자동 동기화(팀 공용 AI 프롬프트/공휴일/비밀번호 동기화/개인 업무 보관함/
                 // 공용 주소록)가 이 실제 동작 버전에는 빠져 있었음 — 되살림.
-                if (typeof window.loadPromptFromDrive === 'function') window.loadPromptFromDrive();
-                if (typeof window.loadProjectSummaryPromptFromDrive === 'function') window.loadProjectSummaryPromptFromDrive();
-            if (typeof window.loadGanttQaPromptFromDrive === 'function') window.loadGanttQaPromptFromDrive();
-                if (typeof window.loadHolidaysFromDrive === 'function') window.loadHolidaysFromDrive();
-                setTimeout(() => { if (typeof window.checkPasswordSync === 'function') window.checkPasswordSync(); }, 1500);
-                if (window.TaskInbox && window.TaskInbox.loadFromDrive) window.TaskInbox.loadFromDrive();
-                if (window.AddressBook && window.AddressBook.loadFromDrive) {
-                    window.tabData = window.tabData || {};
-                    window.tabData.addressBook = window.AddressBook.load();
-                    // 💡 [2026-09-07 신규] "내 팀" 자동 인식 1차 시도 — 로컬 캐시 주소록 기준
-                    if (window._autoDetectMyTeam) window._autoDetectMyTeam();
-                    window.AddressBook.loadFromDrive().then(function(list) {
-                        if (list) { window.tabData.addressBook = list; if (window.renderAddressTable) window.renderAddressTable(); }
-                        // 💡 Drive 최신 주소록 기준으로 재시도(로컬 캐시가 없거나 오래됐을 수 있어서)
-                        if (window._autoDetectMyTeam) window._autoDetectMyTeam();
-                    });
-                }
+                window._storageLoadSharedData(); // 📥 팀 공용 데이터 최신본 (NAS 모드와 공용)
 
                 // 💡 [2026-09-03] 600ms → 50ms: 팀 폴더 도입 이후 캐시 워밍을 about.get과 병렬로
                 //    올려서 파일 목록까지의 직렬 지연이 크게 줄었다. 50ms는 버튼 상태 업데이트가

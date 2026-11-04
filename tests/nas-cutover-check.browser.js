@@ -33,6 +33,16 @@
     check('헤더 배지가 🗄️ 다', !!badge && badge.textContent.indexOf('🗄') === 0,
           badge ? (badge.textContent || '(빈칸)') : '(배지 없음)');
 
+    // ⚠️ [2026-11-04 추가] **배지가 🗄️ 인데 버튼은 회색**이던 사고가 있었다.
+    //    버튼 활성화가 구글 OAuth 성공 콜백 안에만 있어서 NAS 모드에선 한 번도 안 돌았다.
+    //    `fetch` 로만 검증하면 절대 안 잡힌다 — 사람이 누르는 건 **버튼**이다.
+    var gray = ['drive_load_btn', 'drive_save_btn', 'backup_restore_btn'].filter(function (id) {
+        var b = document.getElementById(id);
+        return b && b.disabled;      // 없는 버튼(구버전 HTML)은 통과시킨다
+    });
+    check('프로젝트 열기/저장/복원 버튼이 눌린다', gray.length === 0,
+          gray.length ? ('회색: ' + gray.join(', ')) : '');
+
     out('\n── ① 백엔드·앱 폴더 ──');
     var paths = null;
     try { paths = await (await fetch(BK + '/nas/paths')).json(); }

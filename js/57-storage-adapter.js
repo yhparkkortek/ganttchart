@@ -1073,7 +1073,30 @@
         }
         implant();          // 상태를 알아낸 뒤 한 번 더 — 그 사이 가드가 돌았을 수 있다
         if (window._updateDriveConnBadge) { try { window._updateDriveConnBadge(); } catch (e) { /* ignore */ } }
+        if (_nasOnline) nasMarkConnected();
     })();
+
+    // 🔌 **"붙었다"를 앱에 알린다.** 이게 빠져서 🗄️ 배지는 떠 있는데
+    //    [📂 프로젝트 열기] 가 HTML 의 `disabled` 그대로 회색이었다(실사용 신고 2026-11-04).
+    //    버튼 활성화와 팀 공용 데이터 당겨오기는 **구글 OAuth 성공 콜백 안에만** 있었다 —
+    //    토큰 가드를 고친 것과는 별개의 문턱이었고, 내가 `fetch` 로만 검증해서 못 봤다.
+    //    ⚠️ 목록을 여기 베끼지 않는다 — js/05 의 `_storageEnableDataButtons`/`_storageLoadSharedData`
+    //       **그 함수를 부른다**. 베끼면 Drive 쪽에 하나 늘 때 NAS 모드만 조용히 빠진다.
+    function nasMarkConnected() {
+        try {
+            if (window._storageEnableDataButtons) window._storageEnableDataButtons();
+            // 연동 버튼은 NAS 모드에서 할 일이 없다 — 누르면 안내만 나온다(blockGoogleAuth).
+            // 그래도 "🔵 드라이브 연동하기" 로 남겨두면 **아직 로그인 안 한 것처럼** 보인다.
+            var ab = document.getElementById('auth_button');
+            if (ab) {
+                ab.innerText = '🗄️ ' + (window.currentUserName || 'NAS');
+                ab.style.borderColor = '';
+                ab.style.color = '';
+            }
+            if (window._storageLoadSharedData) window._storageLoadSharedData();
+            note('nas-connected-ui', '');
+        } catch (e) { console.error('[storage-adapter] 연결 후처리 실패', e); }
+    }
     // ⚠️⚠️ **구글 OAuth 창을 띄우지 않는다**(2026-11-04 신고: "구글 OAuth 팝업창 뜨고…").
     //    NAS 모드에선 구글 계정이 아예 필요 없는데, 자동 로그인(`gantt_auto_drive_login`)과
     //    배지/버튼이 `handleAuthClick` 을 불러 팝업이 떴다. 사람 입장에선 "NAS 로 바꿨는데
