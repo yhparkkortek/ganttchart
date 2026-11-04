@@ -182,6 +182,16 @@
                 + '<span id="storage-mode-now" style="flex:1; min-width:0; color:#333;"></span>'
                 + '<button onclick="window.storageOpenSwitcher && window.storageOpenSwitcher(this)" style="' + btnSt
                 + ' padding:6px 10px;">🔀 ' + T('바꾸기', 'Change') + '</button></label>'
+                // 📁 문서 저장소(사양서·도면) — **메뉴 어디에도 들어가는 길이 없었다.**
+                //    `_dsOpenSettings()` 는 있는데 부르는 곳이 js/48 의 오류 화면뿐이라,
+                //    자료실이 NAS 로 옮겨간 뒤 팀원이 경로를 바꿀 방법이 없었다(2026-11-04).
+                //    NAS 설정과 한 화면에 둔다 — 팀원이 볼 곳이 하나여야 한다.
+                + '<label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;">'
+                + '<span style="width:92px; flex:0 0 auto; color:#555;">' + T('문서 저장소', 'Doc store') + '</span>'
+                + '<span id="docstore-root-now" style="flex:1; min-width:0; color:#333; overflow:hidden;'
+                + ' text-overflow:ellipsis; white-space:nowrap;" title=""></span>'
+                + '<button onclick="window._dsOpenSettings && window._dsOpenSettings()" style="' + btnSt
+                + ' padding:6px 10px;">📁 ' + T('설정', 'Settings') + '</button></label>'
                 // 📦 이사 — 앱 데이터를 Drive 에서 NAS 로 한 번에 옮긴다(js/58).
                 //    ⚠️ 미러는 "쓸 때만" 옮기므로 **아무도 안 여는 프로젝트는 영영 안 옮겨진다** —
                 //       이사를 끝내려면 이 버튼이 한 번은 돌아야 한다.
@@ -670,6 +680,30 @@
                       nas: '🗄️ ' + T('사내 NAS', 'In-house NAS') }[m] || m;
         el.textContent = label;
         el.style.color = (m === 'nas') ? '#1f7a3d' : (m === 'mirror' ? '#1971c2' : '#555');
+        paintDocStoreNow();
+    }
+
+    // 📁 사양서·도면이 **지금 어디서 오는지**를 같이 보여준다.
+    //    ⚠️ 저장소 모드(위 줄)와 **다른 설정**이다 — 앱 데이터는 NAS 인데 자료실은
+    //       아직 옛 파일 서버인 상태가 될 수 있다. 둘을 나란히 둬야 그게 눈에 띈다.
+    function paintDocStoreNow() {
+        var el = document.getElementById('docstore-root-now');
+        if (!el) return;
+        el.textContent = T('확인 중…', 'Checking…');
+        el.title = '';
+        if (!window._dsConfig) { el.textContent = T('(문서 저장소 모듈 없음)', '(module missing)'); return; }
+        window._dsConfig().then(function (c) {
+            var root = (c && c.root) || '';
+            if (!root) { el.textContent = T('설정 안 됨', 'Not set'); el.style.color = '#c00'; return; }
+            // 전체 경로는 말풍선으로 — 사내 경로가 길어 한 줄을 다 먹는다.
+            el.title = root;
+            var tail = root.replace(/[\\/]+$/, '').split(/[\\/]/).slice(-2).join('\\');
+            el.textContent = (c.reachable === false ? '⚠️ ' : '') + tail;
+            el.style.color = (c.reachable === false) ? '#c00' : '#333';
+        }).catch(function () {
+            el.textContent = T('(백엔드 응답 없음)', '(no backend)');
+            el.style.color = '#c00';
+        });
     }
 
     window._nasLoginRefresh = async function () {
