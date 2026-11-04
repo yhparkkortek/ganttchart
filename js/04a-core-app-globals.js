@@ -241,35 +241,9 @@ ${mailText}`;
         //    때마다 일어난다 — 그래서 "한 번만"을 코드가 지켜야 한다(`_projectListAutoOpened`).
         autoOpenProjectList: true
     };
-
-    // 🏷 지금 저장소를 **사람 말로**. 화면 문구는 이걸 쓴다 — "구글 드라이브"가 문자열로
-    //   박혀 있으면 NAS 로 옮긴 뒤 **틀린 안내**가 된다("드라이브 연동하기를 누르세요" 같은:
-    //   NAS 모드엔 그런 버튼이 없다). ⚠️ 245곳을 전부 바꾸지는 않는다 — 대부분은 주석이고,
-    //   일부는 **진짜로 Drive 를 가리키는 말**이라 바꾸면 거꾸로 틀린다(모드 고르기 경고 등).
-    //   사람이 자주 보는 자리만 이 함수로 바꾼다.
-    window._storeName = function (en) {
-        var m = 'drive';
-        try { m = (localStorage.getItem('gantt_storage_backend') || '').toLowerCase(); } catch (e) { /* ignore */ }
-        if (m !== 'drive' && m !== 'mirror' && m !== 'nas') {
-            m = (window.STORAGE_POLICY || {}).nasOnly ? 'nas' : 'drive';
-        }
-        if (en === undefined) en = (window._currentLang === 'en');
-        if (m === 'nas') return en ? 'the in-house NAS' : '사내 NAS';
-        if (m === 'mirror') return en ? 'Drive + NAS' : '드라이브+NAS';
-        return en ? 'Google Drive' : '구글 드라이브';
-    };
-
-    // 🔌 "아직 연결 안 됐을 때 어디로 가라" — 모드마다 가는 곳이 다르다.
-    window._storeConnectHint = function (en) {
-        var nas = window._storeName(false) === '사내 NAS';
-        if (en === undefined) en = (window._currentLang === 'en');
-        if (nas) {
-            return en ? 'Open 🔑 Settings ▸ NAS and sign in (ID and password only).'
-                      : '🔑 설정 ▸ NAS 에서 로그인해주세요(사번·비밀번호만 넣으면 됩니다).';
-        }
-        return en ? 'Please connect Google Drive first (📁 Project ▸ Connect Drive).'
-                  : '먼저 [📁 프로젝트 → 🔵 드라이브 연동하기]로 연결해주세요.';
-    };
+    // ⚠️ [2026-11-04] 이 두 함수는 한때 이 파일에 **똑같은 내용으로 두 번** 들어 있었다
+    //    (NAS 전환 중 붙여넣기 사고). 동작은 같았지만 앞 복사본을 고쳐도 뒤 것이 이기므로
+    //    "고첼는데 안 바뀜다"가 될 수 있어 한 벌만 남긴다.
 
     // 🏷 지금 저장소를 **사람 말로**. 화면 문구는 이걸 쓴다 — "구글 드라이브"가 문자열로
     //   박혀 있으면 NAS 로 옮긴 뒤 **틀린 안내**가 된다("드라이브 연동하기를 누르세요" 같은:

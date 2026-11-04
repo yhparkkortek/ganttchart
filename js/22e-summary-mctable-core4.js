@@ -1129,42 +1129,8 @@ window.epRenderHistoryTable = function(type) {
     html += '</tbody>';
     table.innerHTML = html;
 };
-window.deleteEpHistoryByDateRange = function(type) {
-    const pwEl = document.getElementById('ep-' + type + '-history-del-pw');
-    const pw = pwEl ? pwEl.value : '';
-    if (!adminPwMatches(pw)) { { const _m = adminPwGateFailMessage(); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
-    const fromStr = (document.getElementById('ep-' + type + '-history-del-from') || {}).value;
-    const toStr = (document.getElementById('ep-' + type + '-history-del-to') || {}).value;
-    if (!fromStr || !toStr) { { const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
-    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
-    const toTs = new Date(toStr + 'T23:59:59').getTime();
-    if (fromTs > toTs) { { const _m = window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
-    const parseKoDateTime = function(str) {
-        const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-        if (!m) return null;
-        let h = parseInt(m[5], 10);
-        if (m[4] === '오후' && h < 12) h += 12;
-        if (m[4] === '오전' && h === 12) h = 0;
-        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
-    };
-    const inRange = function(log) { const ts = parseKoDateTime(log.time); return ts !== null && ts >= fromTs && ts <= toTs; };
-    const doDelete = function() {
-        let removedCount = 0;
-        const logs = window.tabData && window.tabData.elecCompareChangeLog && window.tabData.elecCompareChangeLog[type];
-        if (logs && logs.length) {
-            const before = logs.length;
-            window.tabData.elecCompareChangeLog[type] = logs.filter(function(log) { return !inRange(log); });
-            removedCount = before - window.tabData.elecCompareChangeLog[type].length;
-        }
-        if (pwEl) pwEl.value = '';
-        window.epRenderHistoryTable(type);
-        const msg = removedCount + '건의 수정이력을 삭제했습니다.';
-        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
-    };
-    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
-    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
-    else if (confirm(confirmMsg)) doDelete();
-};
+// 📜 수정이력 구간 삭제 — 공용 엔진(js/04i HISTORY_SCOPES)으로 위임.
+window.deleteEpHistoryByDateRange = function(type) { return window.deleteHistoryByScope('ep', type); };
 
 // ── 엑셀로 내보내기 (Panel Compare의 exportPanelCompareToExcel과 동일 패턴) ──
 window.exportElecCompareToExcel = async function(type) {
@@ -1271,41 +1237,8 @@ window.sumRenderHistoryTable = function() {
     table.innerHTML = html;
 };
 
-window.deleteSumHistoryByDateRange = function() {
-    const pwEl = document.getElementById('sum-history-del-pw');
-    const pw = pwEl ? pwEl.value : '';
-    if (!adminPwMatches(pw)) { { const _m = adminPwGateFailMessage(); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
-    const fromStr = (document.getElementById('sum-history-del-from') || {}).value;
-    const toStr = (document.getElementById('sum-history-del-to') || {}).value;
-    if (!fromStr || !toStr) { { const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
-    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
-    const toTs = new Date(toStr + 'T23:59:59').getTime();
-    if (fromTs > toTs) { { const _m = window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
-    const parseKoDateTime = function(str) {
-        const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-        if (!m) return null;
-        let h = parseInt(m[5], 10);
-        if (m[4] === '오후' && h < 12) h += 12;
-        if (m[4] === '오전' && h === 12) h = 0;
-        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
-    };
-    const inRange = function(log) { const ts = parseKoDateTime(log.time); return ts !== null && ts >= fromTs && ts <= toTs; };
-    const doDelete = function() {
-        let removedCount = 0;
-        if (window.tabData && window.tabData.sumChangeLog && window.tabData.sumChangeLog.length) {
-            const before = window.tabData.sumChangeLog.length;
-            window.tabData.sumChangeLog = window.tabData.sumChangeLog.filter(function(log) { return !inRange(log); });
-            removedCount = before - window.tabData.sumChangeLog.length;
-        }
-        if (pwEl) pwEl.value = '';
-        if (window.sumRenderHistoryTable) window.sumRenderHistoryTable();
-        const msg = removedCount + '건의 Summary 수정이력을 삭제했습니다.';
-        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
-    };
-    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 Summary 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
-    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
-    else if (confirm(confirmMsg)) doDelete();
-};
+// 📜 수정이력 구간 삭제 — 공용 엔진(js/04i HISTORY_SCOPES)으로 위임.
+window.deleteSumHistoryByDateRange = function() { return window.deleteHistoryByScope('sum'); };
 
 // 💡 Summary 입력칸 변경 감지 (탭 전체에 이벤트 위임 — 필드별 data-field 구조가 제각각이라 유형별로 라벨을 찾아냄)
 (function() {

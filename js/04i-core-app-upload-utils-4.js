@@ -627,29 +627,22 @@
     };
 
 
-    // 💡 수정이력 — 비밀번호 확인 후 날짜 구간 내 기록 삭제 (Gantt changeLogs + M.C Table mcChangeLog 둘 다 정리)
-window.deleteHistoryByDateRange = function() {
-    const pwEl = document.getElementById('history-del-pw');
-    const pw = pwEl ? pwEl.value : '';
-    if (!adminPwMatches(pw)) {
-        { const _m = adminPwGateFailMessage(); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
-        return;
-    }
-    const fromStr = (document.getElementById('history-del-from') || {}).value;
-    const toStr = (document.getElementById('history-del-to') || {}).value;
-    if (!fromStr || !toStr) {
-        { const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
-        return;
-    }
-    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
-    const toTs = new Date(toStr + 'T23:59:59').getTime();
-    if (fromTs > toTs) {
-        { const _m = window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
-        return;
-    }
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📜 [공용] 수정이력 구간 삭제 — 화면마다 따로 있던 7벌을 하나로 (2026-11-04)
+    //
+    //   · 왜: Gantt·Summary·Customer SPEC·M.C·Address·Panel Compare·PARTS 일곱 군데에
+    //     똑같은 함수가 300줄에 걸쳐 복사돼 있었다. 날짜 파서(parseKoDateTime)만 7벌이라,
+    //     한 곳을 고쳐도 나머지 6곳은 그대로 남는 구조였다.
+    //   · 차이는 네 가지뿐이다 — 어느 입력칸(prefix) / 어느 로그 배열(logs) /
+    //     어떤 표를 다시 그리나(rerender) / 뭐라고 부르나(label). 그 넷만
+    //     HISTORY_SCOPES(데이터)에 적고 엔진 하나가 돌게 했다.
+    //   · ⚠️ gantt 범위는 예전부터 changeLogs 와 tabData.mcChangeLog 둘 다 지운다 —
+    //     동작을 바꾸지 않고 그대로 옮겨놨다(logs 가 두 개인 이유).
+    //   · 검증: tests/history-delete.browser.js (7범위 전부, 진짜 함수를 부른다)
+    // ═══════════════════════════════════════════════════════════════════════
 
-    // 💡 "2026. 6. 28. 오후 3:24:00" 형식(toLocaleString('ko-KR'))의 시각 문자열을 직접 파싱
-    const parseKoDateTime = function(str) {
+    /** "2026. 6. 28. 오후 3:24:00" 형식(toLocaleString('ko-KR'))의 시각 문자열 → ts (못 읽으면 null) */
+    window._histParseKoDateTime = function(str) {
         const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
         if (!m) return null;
         let h = parseInt(m[5], 10);
@@ -657,33 +650,119 @@ window.deleteHistoryByDateRange = function() {
         if (m[4] === '오전' && h === 12) h = 0;
         return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
     };
-    const inRange = function(log) {
-        const ts = parseKoDateTime(log.time);
-        return ts !== null && ts >= fromTs && ts <= toTs;
+
+    /** tabData 의 배열 하나를 가리키는 읽기/쓰기 짝 */
+    function _tabLog(key) {
+        return {
+            get: function() { return window.tabData ? window.tabData[key] : null; },
+            set: function(v) { if (window.tabData) window.tabData[key] = v; }
+        };
+    }
+
+    // 📋 데이터 — 새 이력 화면은 여기 한 줄만 추가하면 된다.
+    window.HISTORY_SCOPES = {
+        gantt: {
+            prefix: 'history-del-',
+            label: '기록',
+            logs: [
+                { get: function() { return window.changeLogs; }, set: function(v) { window.changeLogs = v; } },
+                _tabLog('mcChangeLog')
+            ],
+            rerender: function() { if (window.showHistoryModal) window.showHistoryModal(); }
+        },
+        sum: {
+            prefix: 'sum-history-del-', label: 'Summary 수정이력',
+            logs: [_tabLog('sumChangeLog')],
+            rerender: function() { if (window.sumRenderHistoryTable) window.sumRenderHistoryTable(); }
+        },
+        bs: {
+            prefix: 'bs-history-del-', label: 'Customer SPEC 수정이력',
+            logs: [_tabLog('bsChangeLog')],
+            rerender: function() { if (window.bsRenderHistoryTable) window.bsRenderHistoryTable(); }
+        },
+        mc: {
+            prefix: 'mc-history-del-', label: '견적 수정이력',
+            logs: [_tabLog('mcChangeLog')],
+            rerender: function() { if (window.mcRenderHistoryTable) window.mcRenderHistoryTable(); }
+        },
+        addr: {
+            prefix: 'addr-history-del-', label: '주소록 수정이력',
+            logs: [_tabLog('addressChangeLog')],
+            rerender: function() { if (window.addrRenderHistoryTable) window.addrRenderHistoryTable(); }
+        },
+        pc: {
+            prefix: 'pc-history-del-', label: 'Panel Compare 수정이력',
+            logs: [_tabLog('panelCompareChangeLog')],
+            rerender: function() { if (window.pcRenderHistoryTable) window.pcRenderHistoryTable(); }
+        },
+        // PARTS 비교표는 구분(type)마다 따로 — 범위를 인자로 만든다.
+        ep: function(type) {
+            return {
+                prefix: 'ep-' + type + '-history-del-', label: '수정이력',
+                logs: [{
+                    get: function() {
+                        const all = window.tabData && window.tabData.elecCompareChangeLog;
+                        return all ? all[type] : null;
+                    },
+                    set: function(v) {
+                        if (window.tabData && window.tabData.elecCompareChangeLog) window.tabData.elecCompareChangeLog[type] = v;
+                    }
+                }],
+                rerender: function() { if (window.epRenderHistoryTable) window.epRenderHistoryTable(type); }
+            };
+        }
     };
 
-    const doDelete = function() {
-        let removedCount = 0;
-        if (window.changeLogs && window.changeLogs.length) {
-            const before = window.changeLogs.length;
-            window.changeLogs = window.changeLogs.filter(function(log) { return !inRange(log); });
-            removedCount += before - window.changeLogs.length;
-        }
-        if (window.tabData && window.tabData.mcChangeLog && window.tabData.mcChangeLog.length) {
-            const before2 = window.tabData.mcChangeLog.length;
-            window.tabData.mcChangeLog = window.tabData.mcChangeLog.filter(function(log) { return !inRange(log); });
-            removedCount += before2 - window.tabData.mcChangeLog.length;
-        }
-        if (pwEl) pwEl.value = '';
-        window.showHistoryModal();
-        const msg = removedCount + '건의 기록을 삭제했습니다.';
-        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+    /**
+     * 수정이력 구간 삭제 엔진 — 비밀번호 확인 → 날짜 검사 → 확인창 → 삭제 → 다시 그리기.
+     * @param {string} scopeKey HISTORY_SCOPES 의 키
+     * @param {*} arg 범위가 함수일 때 넘길 인자(PARTS 의 type)
+     */
+    window.deleteHistoryByScope = function(scopeKey, arg) {
+        let scope = window.HISTORY_SCOPES[scopeKey];
+        if (typeof scope === 'function') scope = scope(arg);
+        if (!scope) { console.error('[history] 모르는 이력 범위:', scopeKey); return; }
+
+        const pwEl = document.getElementById(scope.prefix + 'pw');
+        const pw = pwEl ? pwEl.value : '';
+        const say = function(m) { if (window.bmAlertModal) window.bmAlertModal(m); else alert(m); };
+        if (!adminPwMatches(pw)) { say(adminPwGateFailMessage()); return; }
+
+        const fromStr = (document.getElementById(scope.prefix + 'from') || {}).value;
+        const toStr = (document.getElementById(scope.prefix + 'to') || {}).value;
+        if (!fromStr || !toStr) { say(window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.')); return; }
+        const fromTs = new Date(fromStr + 'T00:00:00').getTime();
+        const toTs = new Date(toStr + 'T23:59:59').getTime();
+        if (fromTs > toTs) { say(window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.')); return; }
+
+        const inRange = function(log) {
+            const ts = window._histParseKoDateTime(log && log.time);
+            return ts !== null && ts >= fromTs && ts <= toTs;
+        };
+
+        const doDelete = function() {
+            let removedCount = 0;
+            scope.logs.forEach(function(slot) {
+                const arr = slot.get();
+                if (!arr || !arr.length) return;
+                const before = arr.length;
+                const kept = arr.filter(function(log) { return !inRange(log); });
+                slot.set(kept);
+                removedCount += before - kept.length;
+            });
+            if (pwEl) pwEl.value = '';
+            if (scope.rerender) scope.rerender();
+            say(removedCount + '건의 ' + scope.label + '을 삭제했습니다.');
+        };
+
+        const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 ' + scope.label + '을 삭제하시겠습니까? (되돌릴 수 없습니다)';
+        if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
+        else if (confirm(confirmMsg)) doDelete();
     };
 
-    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
-    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
-    else if (confirm(confirmMsg)) doDelete();
-};
+    // ↓ 화면마다 붙어 있는 onclick 은 그대로 — 이름만 엔진으로 넘긴다.
+    window.deleteHistoryByDateRange = function() { return window.deleteHistoryByScope('gantt'); };
+
 
     window.showHistoryModal = function() {
         let content = document.getElementById('history-content');
@@ -729,9 +808,14 @@ window.deleteHistoryByDateRange = function() {
         }
     };
 
+    // 💡 [2026-11-04] #history-overlay 모달은 지웠다(같은 id를 쓰는 펼침 박스에 가려 열려도 동작
+    //    할 수 없었고, 여는 코드도 없었다 — kortek_pm.html의 주석 참고). 이름만 남겨 두는 이유는
+    //    예전 onclick이나 외부 호출이 남아 있어도 터지지 않게 하기 위함이다.
     window.closeHistoryModal = function(e) {
-        if (e && e.target !== document.getElementById('history-overlay')) return;
-        document.getElementById('history-overlay').style.display = 'none';
+        const ov = document.getElementById('history-overlay');
+        if (!ov) return;
+        if (e && e.target !== ov) return;
+        ov.style.display = 'none';
     };
 
     window.toggleRowActions = function(td, rowIndex) {

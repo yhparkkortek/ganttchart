@@ -575,7 +575,10 @@ window._npwOpen = function(prefill, statusVal) {
     //    (미연동이면 매번 "연동하시겠습니까?" 확인창이 뜨는 걸 피하기 위해 평소처럼 건너뜀).
     const _tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const _hasToken = !!((_tokenObj && _tokenObj.access_token) || window.googleAccessToken);
-    if (_hasToken && window.autoImportReferenceExcel) window.autoImportReferenceExcel();
+    //    ⚠️ [2026-11-04] silent=true 로 부른다 — NAS 모드에선 참조 엑셀(구글 시트)을 가져올 수
+    //    없는데, 위자드를 열 때마다 사람에게 알릴 일은 아니다(자동 호출이라 사람이 요청한 적이 없다).
+    //    조용히 건너뛰는 판단은 autoImportReferenceExcel() 안에 있다.
+    if (_hasToken && window.autoImportReferenceExcel) window.autoImportReferenceExcel(true);
 };
 
 /**

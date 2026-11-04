@@ -296,6 +296,32 @@ window.handleAuthClick = function(event, silentOnly) {
             ? (isEn ? '🟢 Auto Sign-in ON'  : '🟢 자동로그인 ON')
             : (isEn ? '🔴 Auto Sign-in OFF' : '🔴 자동로그인 OFF');
     };
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🙈 [2026-11-04] 드라이브 전용 설정은 NAS 모드에서 숨긴다.
+    //
+    //   · 왜: 저장소가 NAS 하나가 된 뒤에도 설정 메뉴 맨 위에 "🔴 자동로그인 OFF"가 있었다.
+    //     NAS 모드에선 어댑터가 isDriveConnected 를 true 로 맞춰 두므로 _tryAutoLogin() 은
+    //     첫 줄에서 바로 return 한다 — 켜도 꺼도 아무 일이 일어나지 않는 스위치였다.
+    //     "👤 사용자 추가"도 마찬가지로 구글 OAuth 콘솔을 열어, NAS 계정과는 무관하다.
+    //   · 지우지 않고 숨기는 이유: 비상 탈출구(localStorage.gantt_storage_backend='drive')로
+    //     드라이브 모드에 들어간 사람에겐 둘 다 여전히 진짜 설정이다.
+    //   · 목록은 데이터(DRIVE_ONLY_SETTINGS) — 드라이브 전용 항목이 생기면 여기 한 줄 추가.
+    // ═══════════════════════════════════════════════════════════════════════
+    window.DRIVE_ONLY_SETTINGS = ['auto-login-toggle-btn', 'add-user-btn'];
+    window._syncDriveOnlySettings = function() {
+        let mode = 'nas';
+        try { mode = localStorage.getItem('gantt_storage_backend') || (window.STORAGE_POLICY && window.STORAGE_POLICY.nasOnly ? 'nas' : 'drive'); } catch (e) {}
+        const isDriveMode = (mode === 'drive' || mode === 'mirror');
+        window.DRIVE_ONLY_SETTINGS.forEach(function(id) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = isDriveMode ? '' : 'none';
+        });
+        return isDriveMode;
+    };
+    // 메뉴가 그려진 뒤 한 번 — 설정 메뉴는 처음부터 DOM 에 있으므로 부트 때 맞춰 두면 된다.
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window._syncDriveOnlySettings);
+    else window._syncDriveOnlySettings();
+
     /** 페이지 로드 시 1회 호출 — DOMContentLoaded 초기화 블록(22a-summary-mctable-parse.js)에서 실행 */
     window._tryAutoLogin = function() {
         if (window.isDriveConnected) return; // 이미 연결됨

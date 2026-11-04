@@ -214,6 +214,23 @@
     /** 참조 엑셀에서 표준 서식 행만 뽑아온다 → [{type, sub}] (실패 시 null) */
     window._bsFetchTemplateRows = async function () {
         if (typeof XLSX === 'undefined' || !window.REFERENCE_SHEET_ID) return null;
+
+        // ⚠️ [2026-11-04] NAS 모드에서는 애초에 시도하지 않는다.
+        //    참조 엑셀(REFERENCE_SHEET_ID)은 **구글 시트**라, 저장소가 NAS 로 넘어간 뒤에는
+        //    어댑터(js/57)가 "NAS 모드에서는 Google 시트 내보내기를 쓸 수 없습니다"로 막는다.
+        //    막는 건 맞지만, 그 거절이 console.error 로 찍혀서 **새 프로젝트 마법사를 열 때마다**
+        //    빨간 오류가 하나씩 올라왔다(실측). 기능이 없는 것과 고장난 것은 다르게 보여야 한다.
+        //    → 여기서 조용히 건너뛰고, 왜 비어 있는지는 info 한 줄로 남긴다.
+        //    ⛔ 아직 해결된 게 아니다 — 참조 엑셀을 NAS 로 옮기기 전까지 Customer SPEC 표준
+        //       서식은 NAS 모드에서 자동으로 채워지지 않는다(docs/nas-dsm.md 에 남겨둠).
+        var mode = '';
+        try { mode = (localStorage.getItem('gantt_storage_backend') || '').toLowerCase(); } catch (e) { /* ignore */ }
+        if (!mode) mode = (window.STORAGE_POLICY || {}).nasOnly ? 'nas' : 'drive';
+        if (mode === 'nas') {
+            console.info('[Customer SPEC] 표준 서식 자동 채우기는 건너뜁니다 — 참조 엑셀이 아직 구글 드라이브에만 있습니다.');
+            return null;
+        }
+
         var tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
         var token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return null;

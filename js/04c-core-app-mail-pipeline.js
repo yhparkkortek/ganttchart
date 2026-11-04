@@ -381,8 +381,37 @@
     //    파이프라인을 그대로 재사용 — 드래그로 불러온 것과 완전히 동일하게 처리됨)
     // ═══════════════════════════════════════════════════════════
     window.REFERENCE_SHEET_ID = '1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T';
-    window.autoImportReferenceExcel = async function() {
+    window.autoImportReferenceExcel = async function(silent) {
         const btn = document.getElementById('new-project-auto-import-btn');
+
+        // ⚠️ [2026-11-04] NAS 모드에서는 시도조차 하지 않는다.
+        //
+        //   · 증상: 새 프로젝트 마법사를 열 때마다 콘솔에 빨간 오류가 하나씩 올라왔다(실측).
+        //     참조 엑셀은 **구글 시트**라, 저장소가 NAS 로 넘어간 뒤엔 어댑터(js/57)가
+        //     "NAS 모드에서는 Google 시트 내보내기를 쓸 수 없습니다"로 막는다.
+        //   · 왜 안 걸러졌나: js/28 의 위자드는 "토큰이 있으면 드라이브에 연동된 것"으로 보고
+        //     조용히 이 함수를 부르는데, **NAS 모드에선 어댑터가 토큰을 가짜로 채워 둔다**
+        //     (그래야 앱의 로그인 검사 40여 곳이 통과한다). 그래서 그 검사가 늘 참이 됐다.
+        //     → "토큰이 있나"가 아니라 "저장소가 드라이브인가"를 물어야 한다.
+        //   · 조용히 부른 경우(silent)는 말없이 돌아가고, 사람이 버튼을 누른 경우에만 알린다 —
+        //     기능이 없는 것과 고장난 것은 다르게 보여야 한다.
+        //   ⛔ 아직 해결된 게 아니다: 참조 엑셀을 NAS 로 옮기기 전까지 NAS 모드에선 아래
+        //      "참조 엑셀 다운로드"로 받아 화면에 끌어다 놓는 수동 경로를 써야 한다.
+        let _mode = '';
+        try { _mode = (localStorage.getItem('gantt_storage_backend') || '').toLowerCase(); } catch (e) { /* ignore */ }
+        if (!_mode) _mode = (window.STORAGE_POLICY || {}).nasOnly ? 'nas' : 'drive';
+        if (_mode === 'nas') {
+            if (!silent) {
+                const _m = window._t(
+                    '⚠️ 참조 엑셀은 아직 구글 드라이브에만 있어 자동으로 가져올 수 없습니다.\n아래 "참조 엑셀 다운로드"로 받으신 뒤, 작성해서 화면에 끌어다 놓아주세요.',
+                    '⚠️ The reference Excel still lives only on Google Drive, so it cannot be imported automatically.\nUse "Download Reference Excel" below, fill it in, and drag it onto the page.');
+                if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m);
+            } else {
+                console.info('[새 프로젝트] 참조 엑셀 자동 가져오기는 건너뜁니다 — 참조 엑셀이 아직 구글 드라이브에만 있습니다.');
+            }
+            return;
+        }
+
         const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
 

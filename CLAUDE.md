@@ -443,6 +443,21 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 📜 **섹션을 더하면 모달이 조용히 잘린다**(2026-11-04) — 🔑 설정 모달이 본문 1,198px / 상자 756px 이 돼 `overflow:hidden` 에 가려 **저장 버튼에 손이 안 닿았다**(오류·콘솔 경고 없음). 상자에 `max-height:90vh`, 본문에 `flex:1; min-height:0; overflow-y:auto`. ⚠️ **`min-height:0` 이 빠지면 스크롤바가 안 생긴다** — flex 항목 기본이 `min-height:auto` 라 안 줄어든다. ⚠️ 새 섹션은 **어느 div 안에 들어가는지** 보고 넣을 것 (버튼 행 flex 안에 붙였다가 글자가 한 자씩 세로로 깨졌다 — 스크린샷을 찍어서야 보였다)
 
 
+### `docs/user-manual.md` — 📘 사용 설명서 (사용자용, 2026-11-04 시작)
+- **읽을 때**: 사용자에게 기능을 설명해야 할 때, "이 기능 어디 있어요?" 질문을 받을 때
+- **개발자용은 CLAUDE.md·docs/*, 사용자용은 이 문서** — 둘을 섞지 말 것
+- ⚠️ **직접 눌러본 것만 적는다** — 확인 못 한 기능은 맨 아래 "아직 확인 못 한 것"에 모아둔다(SAP·그룹웨어·인사관리·메일 실동작·엑셀 왕복 등이 아직 거기 있다). 확인할 때마다 본문으로 옮긴다
+
+### 🧹 중복 정리 이력 (2026-11-04 전수 점검)
+- **수정이력 "구간 삭제"가 7벌이었다 → 엔진 1개 + `HISTORY_SCOPES`(데이터, js/04i)**. Gantt·Summary·Customer SPEC·M.C·Address·Panel Compare·PARTS 가 **날짜 파서까지 각자 복사**해 300줄이었다(한 곳을 고쳐도 6곳은 그대로 남는 구조). 차이는 **입력칸 prefix·로그 배열·다시 그리기·라벨 넷뿐**이라 그것만 데이터로 뺐다. ⚠️ gantt 범위는 예전부터 `changeLogs`+`mcChangeLog` **둘 다** 지운다(동작 보존, `logs` 가 2개인 이유). 새 이력 화면은 **레지스트리에 한 줄**. 검증 `tests/history-delete.browser.js` 50/0 + 돌연변이 3종(prefix 어긋남·배열 오지정·rerender 누락)이 **실제로 실패하는 것까지 확인**
+- **Gantt 변경 이력 화면이 두 벌이었다 → `#history-overlay` 모달 삭제**. 펼침 박스(`#gantt-history-box`)와 모달이 **같은 id**(`history-del-from/-to/-pw`·`history-content`)를 써서 `getElementById` 가 항상 앞의 펼침 박스를 집었다 — 모달 입력칸은 **열려도 동작할 수 없었고 여는 코드도 없었다**. 중복 id 4건이 함께 사라져 **문서 내 중복 id 0**
+- **`_storeName`/`_storeConnectHint` 가 js/04a 에 똑같이 두 번** 들어 있었다(NAS 전환 중 붙여넣기 사고) → 한 벌만. ⚠️ 동작은 같아 조용했지만 **앞 복사본을 고치면 뒤가 이겨서** "고쳤는데 안 바뀐다"가 날 자리였다
+- ⚠️ **파일이 다른 중복은 대부분 의도된 덮어쓰기다**(js/57 이 `_updateDriveConnBadge` 를, js/43 이 `mcSwitchUnit` 을 감싸는 식) — **같은 파일 안 중복만** 사고다. 검사는 `window.X = function` 을 파일별로 센다
+- **⚙️ 설정 메뉴 12개가 한 줄로 섞여 있었다 → 5구역**(계정·저장소 / 알림 / 메일 / 일정 / 진단·도움말). 버튼은 **id·onclick·title 그대로 두고 순서만** 바꿨다. 구역 제목은 `.tb-menu-label`(`pointer-events:none` — 제목을 눌러 메뉴가 닫히면 안 된다)
+- **드라이브 전용 설정은 NAS 모드에서 숨긴다** — `DRIVE_ONLY_SETTINGS`(데이터, js/05). "🔴 자동로그인"은 NAS 모드에서 어댑터가 `isDriveConnected=true` 로 맞춰 두니 `_tryAutoLogin()` 이 **첫 줄에서 return** 하는 죽은 스위치였고(설정 메뉴 맨 위에 있었다), "👤 사용자 추가"는 구글 OAuth 콘솔을 연다. **지우지 않고 숨기는** 이유는 비상 탈출구로 drive 모드에 간 사람에겐 진짜 설정이기 때문
+- **🆕 NAS 모드에서 새 프로젝트 마법사가 열릴 때마다 콘솔 오류**(실측) — 참조 엑셀(`REFERENCE_SHEET_ID`)이 **구글 시트**라 어댑터가 막는데, js/28 이 "토큰이 있으면 드라이브 연동됨"으로 보고 조용히 불렀다. ⚠️ **NAS 모드에선 어댑터가 토큰을 가짜로 채운다**(로그인 검사 40여 곳을 통과시키려고) → "토큰이 있나"가 아니라 **"저장소가 드라이브인가"** 를 물어야 한다. 이제 `autoImportReferenceExcel(silent)`·`_bsFetchTemplateRows` 가 NAS 모드면 시도하지 않는다(자동 호출은 조용히, 버튼은 안내). ⛔ **기능 자체는 아직 미해결** — 참조 엑셀을 NAS 로 옮기기 전까진 Customer SPEC 표준 서식이 NAS 모드에서 자동으로 안 채워진다
+- ⚠️⚠️ **파이썬으로 소스를 고칠 땐 "인코딩 먼저, 쓰기는 원자적으로"** — 이 점검에서 **두 번** 파일을 날렸다. ① `io.open(p,'w')` 로 열어만 두고 **close 를 안 해** 뒤 반복에서 예외가 나자 22d(1,409줄)가 **0바이트**가 됐다 ② `io.open(p,'wb')` 는 **여는 순간 자른다** — `.write(text.encode())` 가 뒤에서 `UnicodeEncodeError` 를 내자 `kortek_pm.html` 이 **0바이트**가 됐다(원인은 `u'📜'` 같은 **서러게이트 쌍 이스케이프** — 파이썬3에선 인코딩 불가. 이모지는 **실제 문자**나 `\U0001F4DC` 로). → **`encode()` 를 먼저 하고, 임시파일+`os.replace`** 로 쓸 것. 되돌릴 백업을 먼저 떠둘 것(`git checkout` 은 막혀 있다)
+
 ### `docs/ui-conventions.md` — 🌐 i18n / 🎨 팔레트 / 🪟 모달 컨벤션
 - **읽을 때**: 새 UI 컴포넌트, 언어 대응, 테마 팔레트, 모달 구조, **엑셀/PPT 출력물**
 - 새 UI 완료 기준 3가지: 영문 대응(`_t`/`data-i18n`) + 팔레트 대응(`_cpApplyLive` 좁은 셀렉터) + 모달 컨벤션(`_makeDraggable`·`_bindClickToFront`·`bringModalToFront` 호출)
@@ -498,7 +513,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ## 작업 팁
 
-- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, `node tests/storage-adapter.test.js`, `python tests/test_mail_recv_host.py`, `python tests/test_mail_auth_block.py`, `py -3 tests/mail-server-probe.py`(로그인 없이 서버 능력만), `python tests/test_nas_login_budget.py`, `python tests/test_nas_setup_route.py`, 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`(25건), `tests/storage-adapter.browser.js`·`tests/storage-mirror.browser.js`·`tests/storage-migrate.browser.js`·`tests/nas-cutover-check.browser.js`(전환 직후 점검)·`tests/bom-part-chips.browser.js`(31건) 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
+- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, `node tests/storage-adapter.test.js`, `python tests/test_mail_recv_host.py`, `python tests/test_mail_auth_block.py`, `py -3 tests/mail-server-probe.py`(로그인 없이 서버 능력만), `python tests/test_nas_login_budget.py`, `python tests/test_nas_setup_route.py`, 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`(25건), `tests/storage-adapter.browser.js`·`tests/storage-mirror.browser.js`·`tests/storage-migrate.browser.js`·`tests/nas-cutover-check.browser.js`(전환 직후 점검)·`tests/bom-part-chips.browser.js`(31건)·`tests/history-delete.browser.js`(수정이력 구간삭제 7범위, 50건) 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
 - 특정 기능 수정 시 파일 맵에서 바로 지정. 못 찾겠으면 `grep -rn "함수명" js/`.
 - 민감 파일(`mail_config.json`, `telegram_config.json`, `schedule_rules.json`, `.env`)은 `.gitignore` — 로컬에만 존재.
 - 코드 주석의 `js/파일명.js:줄번호` 참조는 파일 이동/분리 시 같이 업데이트.

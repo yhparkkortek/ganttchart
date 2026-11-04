@@ -2181,6 +2181,20 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     .topbar-menu-item:disabled { color: #adb5bd; cursor: not-allowed; }
     .tb-menu-sep { border-top: 1px solid #e9ecef; margin: 4px 0; }
 
+    /* ⚙️ [2026-11-04] 설정 메뉴 구역 제목 — 12개가 한 줄로 섞여 있던 메뉴를 성격별로 묶으면서 추가.
+       클릭 대상이 아니므로 pointer-events 를 꺼서, 제목을 눌러도 메뉴가 닫히지 않게 한다. */
+    .tb-menu-label {
+        padding: 6px 12px 3px;
+        font-size: 11px;
+        font-weight: bold;
+        color: #868e96;
+        letter-spacing: .02em;
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+    }
+    .tb-menu-label:first-child { padding-top: 2px; }
+
     /* 📌 [추가] 필터 영역(WBS, 상태, 개발단계)을 한 줄로 연결하여 공백 최소화 */
     #dynamic-filters {
         display: flex !important;
