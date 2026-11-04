@@ -292,6 +292,40 @@
     var MODE = currentBackend();
     if (MODE !== 'nas' && MODE !== 'mirror') return;
 
+    // ── 🏷 지금 데이터가 어디 있는지 **화면에 보여준다** ──────────────────
+    //  ⚠️⚠️ 안 보여주면 사람이 알 수가 없다. 실제로 "이 주소를 쓰면 NAS 인가요?"라는
+    //     질문을 받았다 — 주소로는 안 정해지고(플래그는 **브라우저마다** 따로다),
+    //     앱은 NAS 모드에서도 헤더 배지에 **"구글 드라이브 연결됨"** 이라고 말하고 있었다.
+    //     저장 위치를 잘못 알면 "어디에 저장됐는지 모르는" 상태가 된다.
+    //  ⚠️ 기존 배지 함수(js/04b)를 **감싼다** — 그 함수가 여러 곳에서 불리므로 한 곳만 고치면 된다.
+    var BADGE = {
+        nas:    { icon: '🗄️', ko: '사내 NAS 에 저장됩니다 (구글 드라이브를 쓰지 않습니다)',
+                  en: 'Saving to the in-house NAS (Google Drive is not used)' },
+        mirror: { icon: '🪞', ko: '구글 드라이브에 저장하면서 사내 NAS 에도 같이 씁니다 (읽기는 드라이브)',
+                  en: 'Saving to Google Drive and mirroring to the in-house NAS (reads come from Drive)' }
+    }[MODE];
+    (function paintBadge() {
+        function paint() {
+            var el = document.getElementById('drive-conn-badge');
+            if (!el) return;
+            el.textContent = BADGE.icon;
+            el.title = (window._currentLang === 'en' ? BADGE.en : BADGE.ko);
+            el.style.display = 'inline-flex';
+            el.style.cursor = 'default';
+            el.onclick = null;
+        }
+        var orig = window._updateDriveConnBadge;
+        window._updateDriveConnBadge = function () {
+            if (typeof orig === 'function') { try { orig.apply(this, arguments); } catch (e) { /* ignore */ } }
+            paint();          // ⚠️ 원래 함수가 무슨 말을 했든 **마지막에 덮어쓴다**
+        };
+        // 배지가 아직 안 그려졌을 수 있다(부팅 순서) — 잠깐 지켜보다 한 번 칠하고 끝낸다.
+        var tries = 0;
+        var iv = setInterval(function () { paint(); if (++tries > 20) clearInterval(iv); }, 500);
+        if (document.readyState !== 'loading') paint();
+        else document.addEventListener('DOMContentLoaded', paint);
+    })();
+
     // ───────────────────────────────────────────────────────────────────────
     // 여기서부터는 플래그가 켜졌을 때만 돈다. (nas = NAS 로 갈아끼움 / mirror = 같이 쓰기)
     // ───────────────────────────────────────────────────────────────────────
