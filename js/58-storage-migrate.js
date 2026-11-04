@@ -295,9 +295,20 @@
                     + ' · ' + T('실패 ', 'failed ') + res.failed
                     + ' · ' + fmtBytes(res.bytes) + ' · ' + secs + T('초', 's')
                     + '<br>' + T('대조: ', 'Verify: ') + v.ok + '/' + v.total
-                    + (v.missing.length ? ('<br>❌ ' + T('NAS 에 없음 ', 'missing ') + v.missing.length + T('건: ', ': ')
-                                           + v.missing.slice(0, 5).join(', ')) : '')
-                    + (v.sizeDiff.length ? ('<br>❌ ' + T('크기 다름 ', 'size differs ') + v.sizeDiff.length + T('건', '')) : '')
+                    + (v.missing.length ? ('<br>❌ ' + T('NAS 에 없음 ', 'missing ') + v.missing.length + T('건:<br>', ':<br>')
+                                           + v.missing.slice(0, 5).map(function (x) { return '· ' + x; }).join('<br>')
+                                           + (v.missing.length > 5 ? ('<br>… ' + (v.missing.length - 5) + T('건 더', ' more')) : '')) : '')
+                    // ⚠️ 건수만 보여주면 **어느 파일인지 알 수가 없다** — 사람이 다음 수를 못 정한다.
+                    //    실제로 1,498건 중 1건이 어긋났는데 화면엔 "1건"뿐이라 추적할 수가 없었다.
+                    //    (대개는 **옮기는 동안 그 파일이 Drive 에서 또 저장된 것**이다 — 자동저장이 1분마다 돈다.
+                    //     다시 누르면 크기가 다르니 그 1건만 새로 옮겨 간다)
+                    + (v.sizeDiff.length ? ('<br>❌ ' + T('크기 다름 ', 'size differs ') + v.sizeDiff.length + T('건', '') + ':<br>'
+                        + v.sizeDiff.slice(0, 5).map(function (x) {
+                            return '· ' + x.rel + ' (Drive ' + fmtBytes(x.drive) + ' / NAS ' + fmtBytes(x.nas) + ')';
+                        }).join('<br>')
+                        + (v.sizeDiff.length > 5 ? ('<br>… ' + (v.sizeDiff.length - 5) + T('건 더', ' more')) : '')
+                        + '<br>' + T('↻ <b>이사</b>를 다시 누르면 이 파일만 새로 옮깁니다(옮기는 중 Drive 에서 또 저장되면 생깁니다).',
+                                     'Press <b>Migrate</b> again to re-copy just these.')) : '')
                     + (res.aborted ? ('<br>⏹ ' + T('중단됨 — 다시 누르면 이어서 합니다.', 'Stopped — press again to resume.')) : '');
             if (res.errors.length) {
                 out += '<br>' + res.errors.slice(0, 3).map(function (e) { return '· ' + e.rel + ' — ' + e.why; }).join('<br>');
