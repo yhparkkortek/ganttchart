@@ -435,16 +435,26 @@
         '</div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:4px;">' + esc(T('간트에서 불러오기', 'From Gantt')) + ' <span style="color:#bbb;">' + esc(T('(AI 호출 없음 — 메일 분석 결과를 그대로 씁니다)', '(no AI call — reuses mail analysis)')) + '</span></div>' +
         '<div style="max-height:150px; overflow-y:auto; margin-bottom:14px;">' + candHtml + '</div>' +
+        (_doc.aiDone
+          ? '<div style="margin-bottom:10px;">' +
+              '<div style="font-size:12.5px; font-weight:bold; color:#1971c2; margin-bottom:3px;">🤖 ' + esc(T('오늘 한 일 (AI 정리본 — 고쳐도 됩니다)', 'Done today (AI draft — editable)')) + '</div>' +
+              '<textarea rows="4" oninput="window._dailyField(\'aiDone\', this.value)" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #a5c8f0; background:#f7fbff; border-radius:6px; font-size:12px; font-family:inherit; resize:vertical;">' + esc(_doc.aiDone) + '</textarea>' +
+            '</div>'
+          : '') +
         window.DAILY_FIELDS.filter(function (f) { return f.src === 'human'; }).map(function (f) {
             return '<div style="margin-bottom:10px;">' +
               '<div style="font-size:12.5px; font-weight:bold; color:#333; margin-bottom:3px;">' + esc(window._currentLang === 'en' ? f.en : f.ko) + '</div>' +
               '<textarea rows="' + f.rows + '" oninput="window._dailyField(\'' + f.key + '\', this.value)" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ddd; border-radius:6px; font-size:12px; font-family:inherit; resize:vertical;">' + esc(_doc[f.key] || '') + '</textarea>' +
+              (f.key === 'issue'
+                ? '<button onclick="window.dailyPromoteIssue()" title="' + esc(T('이 이슈를 업무의 [문제점] 줄로 넣습니다 — 주간보고 문제점 표에 자동으로 올라옵니다', 'Writes this issue into the task as a [문제점] line — it then shows up in the Weekly Report')) + '" style="margin-top:4px; padding:4px 10px; border:1px solid #cfe3e5; background:#eef6f7; color:#2c5f8a; border-radius:5px; font-size:11.5px; cursor:pointer;">↗️ ' + esc(T('이 이슈를 업무에 반영', 'Attach issue to task')) + '</button>'
+                : '') +
             '</div>';
         }).join('')
     ) +
   '</div>' +
   '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; align-items:center; gap:8px;">' +
     '<span style="flex:1; font-size:11px; color:#999;">' + esc(_doc.savedAt ? T('마지막 저장 ', 'Saved ') + new Date(_doc.savedAt).toLocaleString('ko-KR') : T('아직 저장 안 됨', 'Not saved yet')) + '</span>' +
+    (exempt ? '' : '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" style="padding:6px 13px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>') +
     '<button onclick="window.dailyCloseModal()" style="padding:6px 14px; border:1px solid #ccc; background:#fff; color:#555; border-radius:6px; font-size:12.5px; cursor:pointer;">' + esc(T('닫기', 'Close')) + '</button>' +
     '<button id="daily-save-btn" onclick="window._dailySave()" style="padding:6px 20px; border:none; background:#19c3d6; color:#fff; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
   '</div>' +
@@ -505,6 +515,88 @@
     // ══════════════════════════════════════════════════════════════════════
 
     window._dailyTabDate = null;
+    window._dailyView = 'day';       // 'day' | 'month'
+
+    /** 하루 보기 ↔ 월 보기 */
+    window.dailyToggleView = function () {
+        window._dailyView = (window._dailyView === 'day') ? 'month' : 'day';
+        window.dailyRenderTab();
+    };
+
+    /** 그 달 전체를 **목록 1콜**로 — 칸을 누를 때만 그 날 파일을 읽는다. */
+    window.dailyLoadMonth = async function (dateStr) {
+        var items = await window.nasAppFile.list(window.DAILY_PATHS.month(dateStr));
+        var by = {};                                 // key → { ymd: true }
+        items.forEach(function (it) {
+            var p = window.DAILY_PATHS.parse(it && it.name);
+            if (!p) return;
+            (by[p.key] = by[p.key] || {})[p.ymd] = it.mtime || 1;
+        });
+        return by;
+    };
+
+    function monthDays(dateStr) {
+        var y = +dateStr.slice(0, 4), m = +dateStr.slice(5, 7);
+        var n = new Date(y, m, 0).getDate(), out = [];
+        for (var i = 1; i <= n; i++) {
+            out.push(dateStr.slice(0, 8) + String(i).padStart(2, '0'));
+        }
+        return out;
+    }
+    /** 쉬는 날이면 칸을 비워 둔다 — 주말·공휴일을 "미작성"으로 칠하면 표가 빨갛기만 하다. */
+    function offDay(s) {
+        var w = new Date(s + 'T00:00:00').getDay();
+        if (w === 0 || w === 6) return true;
+        return !!(window.isHoliday && window.isHoliday(s));
+    }
+    window._dailyOffDay = offDay;
+
+    // ── 📊 엑셀 출력 (1·2단계는 **출력만** — 되돌려 넣지 않는다) ─────────────
+    // ⚠️ 되돌려 넣기를 만들면 **남의 하루 파일을 내 브라우저가 쓰게** 되어
+    //    "한 파일에 쓰는 사람은 한 명" 불변식이 깨진다. 그래서 일부러 단방향이다.
+    window.dailyExportExcel = async function () {
+        if (typeof XLSX === 'undefined') { toast(T('엑셀 라이브러리를 불러오지 못했습니다.', 'Excel library not loaded.'), 'error'); return; }
+        var date = window._dailyTabDate || ymd();
+        var en = window._currentLang === 'en';
+        var wb = XLSX.utils.book_new();
+        try {
+            if (window._dailyView === 'month') {
+                var by = await window.dailyLoadMonth(date);
+                var roster = await window.dailyLoadRoster();
+                var people = (roster && roster.length) ? roster.filter(function (m) { return m.active !== false; })
+                                                      : Object.keys(by).map(function (k) { return { key: k, name: k }; });
+                var days = monthDays(date);
+                var head = [en ? 'Name' : '이름'].concat(days.map(function (d) { return +d.slice(8); }));
+                var aoa = [head].concat(people.map(function (p) {
+                    return [p.name || p.key].concat(days.map(function (d) {
+                        if (offDay(d)) return '';
+                        return (by[p.key] && by[p.key][d]) ? 'O' : 'X';
+                    }));
+                }));
+                var ws = XLSX.utils.aoa_to_sheet(aoa);
+                ws['!cols'] = [{ wch: 12 }].concat(days.map(function () { return { wch: 3 }; }));
+                XLSX.utils.book_append_sheet(wb, ws, en ? 'Monthly' : '월간');
+            } else {
+                var docs = await window.dailyLoadDay(date);
+                var rows = [[en ? 'Name' : '이름', en ? 'Type' : '종류', en ? 'Done' : '오늘 한 일',
+                             en ? 'Tomorrow' : '내일 할 일', en ? 'Issues' : '막힌 것', en ? 'Saved' : '작성시각']];
+                docs.forEach(function (d) {
+                    var t = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
+                    rows.push([d.name || d.key, (en ? t.en : t.ko) || '',
+                        String(d.aiDone || '').trim() || (d.items || []).map(function (i) { return '• ' + i.name + (i.note ? ' — ' + i.note : ''); }).join('\n'),
+                        d.next || '', d.issue || '', d.savedAt ? new Date(d.savedAt).toLocaleString('ko-KR') : '']);
+                });
+                var ws2 = XLSX.utils.aoa_to_sheet(rows);
+                ws2['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 52 }, { wch: 28 }, { wch: 28 }, { wch: 20 }];
+                XLSX.utils.book_append_sheet(wb, ws2, en ? 'Daily' : '일일보고');
+            }
+            var fn = (en ? 'DailyReport_' : '일일업무보고_') + (window._dailyView === 'month' ? date.slice(0, 7) : date) + '.xlsx';
+            XLSX.writeFile(wb, fn);
+            toast('📊 ' + T(fn + ' 로 저장했습니다.', 'Saved as ' + fn), 'success');
+        } catch (e) {
+            toast('⚠️ ' + T('엑셀 출력 실패: ', 'Excel export failed: ') + e.message, 'error', 8000);
+        }
+    };
 
     window.dailyShiftDay = function (n) {
         var d = new Date((window._dailyTabDate || ymd()) + 'T00:00:00');
@@ -513,10 +605,217 @@
         window.dailyRenderTab();
     };
 
+    window._dailyGoDay = function (d) {
+        window._dailyTabDate = d;
+        window._dailyView = 'day';
+        window.dailyRenderTab();
+    };
+
     window.dailyOnTabShown = function () {
         if (!window._dailyTabDate) window._dailyTabDate = ymd();
         window.dailyRenderTab();
     };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7-A. [2단계] AI 사다리 2단 — 다듬기. **사람이 누를 때만, 하루 1회.**
+    // ══════════════════════════════════════════════════════════════════════
+    // ⚠️ 모달을 여는 것만으로는 절대 호출하지 않는다 — Phase 9 가 "모달 열 때마다"
+    //    AI 를 내보내 하루 한도를 태운 적이 있다(2026-10-21).
+    // ⚠️ 원문 전문을 싣지 않는다 — 이미 요약된 글([핵심내용])을 또 요약하는 건 한도만 먹는다.
+    var AI_USED_KEY = 'gantt_daily_ai_used_v1';
+
+    function aiUsedToday(date) {
+        try {
+            var o = JSON.parse(localStorage.getItem(AI_USED_KEY) || '{}');
+            return (o && o[date]) || 0;
+        } catch (e) { return 0; }
+    }
+    function aiMarkUsed(date) {
+        try {
+            var o = JSON.parse(localStorage.getItem(AI_USED_KEY) || '{}');
+            o[date] = (o[date] || 0) + 1;
+            // 오래된 날짜는 버린다(이 키가 무한히 자라지 않게)
+            Object.keys(o).forEach(function (k) { if (k < date.slice(0, 8) + '01') delete o[k]; });
+            localStorage.setItem(AI_USED_KEY, JSON.stringify(o));
+        } catch (e) { /* 저장소가 꽉 찬 건 js/34 가 다룬다 */ }
+    }
+
+    /** 1단 초안 → 보고 문장. 실패·키없음·쿨다운이면 **1단 결과를 그대로 둔다.** */
+    window.dailyAiTidy = async function () {
+        var btn = document.getElementById('daily-ai-btn');
+        var date = _date;
+        if (aiUsedToday(date) >= (window.DAILY_POLICY.aiPerDay || 1)) {
+            toast(T('오늘은 이미 AI로 정리했습니다 — 그대로 고쳐 쓰세요.',
+                    'Already tidied with AI today — edit the text instead.'), 'info', 6000);
+            return;
+        }
+        var key = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        if (!key) {
+            toast(T('AI 키가 없습니다 — 간트에서 불러온 내용을 그대로 쓰세요.',
+                    'No AI key — use the drafted items as they are.'), 'warning', 6000);
+            return;
+        }
+        if (!(_doc.items || []).length && !_doc.next && !_doc.issue) {
+            toast(T('정리할 내용이 없습니다 — 먼저 업무를 담아주세요.', 'Nothing to tidy yet.'), 'info');
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ ' + T('정리 중…', 'Tidying…'); }
+
+        var lines = (_doc.items || []).map(function (it, i) {
+            return (i + 1) + '. ' + it.name + (it.project ? ' (' + it.project + ')' : '')
+                 + (it.note ? '\n   조치: ' + String(it.note).slice(0, 160) : '');
+        }).join('\n') || '(없음)';
+
+        var prompt = '당신은 일일 업무보고 작성 어시스턴트입니다.\n'
+            + '아래는 오늘 처리한 업무 목록입니다(메일 분석으로 자동 등록된 것 포함).\n\n'
+            + '[오늘 한 일 후보]\n' + lines + '\n\n'
+            + '[내일 할 일(사람이 적은 것)]\n' + (_doc.next || '(없음)') + '\n\n'
+            + '[이슈(사람이 적은 것)]\n' + (_doc.issue || '(없음)') + '\n\n'
+            + '규칙:\n'
+            + '- 위 목록에 없는 업무/수치/날짜/사람 이름을 절대 만들지 마세요. 쓸 내용이 없으면 "해당 없음"이라고만 쓰세요.\n'
+            + '- 비슷한 업무는 한 줄로 묶고, 보고 가치가 낮은 것은 생략하세요.\n'
+            + '- 각 줄은 "• " 로 시작하고 한 줄에 한 문장. 프로젝트명이 있으면 괄호로 끝에 붙이세요.\n'
+            + '- 수치·모델코드는 위 목록에 적힌 것만 그대로 인용하세요.\n'
+            + '- 응답은 아래 구분자를 그대로 사용해 3개 구역으로만 구성하세요.\n\n'
+            + '===오늘한일===\n===내일할일===\n===이슈===\n===끝===';
+        if (window._currentLang === 'en') {
+            prompt += '\n\n[Output language] Write the content in English. Keep the delimiters exactly as shown.';
+        }
+
+        try {
+            var res = await window.callAiBackend(key, prompt, { feature: 'daily-report' });
+            if (!res || !res.ok) throw (res && res.error) || new Error(T('AI 응답 오류', 'AI error'));
+            var text = (window._extractGanttQaAiText ? window._extractGanttQaAiText(res) : '') ||
+                       (res.data && res.data.result && res.data.result.candidates &&
+                        res.data.result.candidates[0].content.parts[0].text) || '';
+            var seg = function (a, b) {
+                var m = text.match(new RegExp('===' + a + '===\\s*([\\s\\S]*?)(?====' + b + '===|===끝===)'));
+                return m ? m[1].trim() : '';
+            };
+            var done = seg('오늘한일', '내일할일'), next = seg('내일할일', '이슈'), iss = seg('이슈', '끝');
+            if (!done && !next && !iss) throw new Error(T('AI 응답을 알아볼 수 없습니다', 'Could not parse the AI response'));
+            // ⚠️ 사람이 고칠 수 있게 **칸에 넣어 줄 뿐** 저장하지 않는다. 저장은 사람이 [저장] 을 누를 때.
+            _doc.aiDone = done;
+            if (next) _doc.next = next;
+            if (iss) _doc.issue = iss;
+            aiMarkUsed(date);
+            saveDraftLocal();
+            render();
+            toast('🤖 ' + T('AI가 정리했습니다 — 확인하고 고친 뒤 저장하세요.',
+                            'AI tidied it — review, edit, then save.'), 'success', 6000);
+        } catch (e) {
+            // 1단 결과를 그대로 둔다 — 사다리의 아래 단은 항상 살아 있어야 한다.
+            toast('⚠️ ' + T('AI 정리 실패 — 불러온 내용 그대로 쓰시면 됩니다. ', 'AI tidy failed — use the drafted items. ')
+                  + (e && e.message ? e.message : ''), 'warning', 8000);
+            if (window._issueLog) {
+                try { window._issueLog({ domain: 'daily-report', kind: 'ai_tidy_failed', result: { errorRaw: String(e && e.message) } }); }
+                catch (e2) { /* 기록 실패는 무시 */ }
+            }
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '🤖 ' + T('AI로 정리', 'Tidy with AI'); }
+        }
+    };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7-B. [2단계] 이슈 → 업무 행에 반영 → **주간보고에 자동으로 뜬다**
+    // ══════════════════════════════════════════════════════════════════════
+    // 주간보고(js/20)는 content 의 `[문제점]`/`[대책]` 줄만 읽는다. 그러니 그 줄을 심으면
+    // js/20 은 **한 줄도 안 고치고** 일일 이슈가 주간보고 문제점 표에 올라온다.
+    window.dailyPromoteIssue = function () {
+        var txt = String(_doc.issue || '').trim();
+        if (!txt) { toast(T('반영할 이슈가 없습니다.', 'No issue to promote.'), 'info'); return; }
+        var gd = window.globalData, ci = window.colIdx || {};
+        if (!Array.isArray(gd) || gd.length < 2 || ci.content == null || ci.content === -1) {
+            toast(T('이 프로젝트를 먼저 열어주세요 — 이슈를 적을 업무 행이 필요합니다.',
+                    'Open the project first — the issue needs a task row.'), 'warning', 7000);
+            return;
+        }
+        // 담긴 업무 중 **지금 열린 프로젝트의 행**만 대상으로 한다(행 번호가 아니라 이름으로 다시 찾는다 —
+        // 행은 정렬·추가로 움직인다. 2026-11-04 에 _rowUid 가 통째로 바뀐 걸 봤으니 인덱스는 더더욱 못 믿는다)
+        var cands = (_doc.items || []).filter(function (it) {
+            return !it.promoted && it.project && it.project === (window.currentDriveFileName || '');
+        });
+        var target = null, label = '';
+        for (var c = 0; c < cands.length && !target; c++) {
+            for (var i = 1; i < gd.length; i++) {
+                if (gd[i] && rowName(gd[i]) === cands[c].name) { target = gd[i]; label = cands[c].name; cands[c].promoted = true; break; }
+            }
+        }
+        if (!target) {
+            toast(T('이슈를 붙일 업무를 찾지 못했습니다 — 이 프로젝트의 업무를 하나 담아주세요.',
+                    'Could not find a task in this project to attach the issue to.'), 'warning', 8000);
+            return;
+        }
+        var cur = String(target[ci.content] || '');
+        if (cur.indexOf('[문제점]') !== -1) {
+            toast(T('그 업무엔 이미 [문제점]이 적혀 있습니다 — 간트에서 직접 고쳐주세요.',
+                    'That task already has an issue line — edit it in the Gantt.'), 'warning', 8000);
+            return;
+        }
+        target[ci.content] = (cur ? cur.replace(/\s*$/, '') + '\n' : '') + '[문제점]' + txt.replace(/\n/g, ' ');
+        if (window.changeLogs) {
+            window.changeLogs.push({ time: new Date().toLocaleString('ko-KR'),
+                userName: window.currentUserName || '', rowName: label, colName: '업무 상세내용',
+                oldVal: '(없음)', newVal: '[문제점] 일일보고에서 반영' });
+        }
+        if (window.recalculateSchedules) window.recalculateSchedules();
+        if (window.renderTable) window.renderTable();
+        saveDraftLocal();
+        toast('✅ ' + T('이슈를 「' + label + '」에 반영했습니다 — 주간보고 문제점 표에 올라옵니다. 프로젝트를 저장해주세요.',
+                        'Issue attached to "' + label + '" — it will appear in the Weekly Report. Please save the project.'), 'success', 9000);
+    };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7-C. [2단계] 프로젝트를 저장할 때 **오늘 내가 손댄 업무**를 자동 적립
+    // ══════════════════════════════════════════════════════════════════════
+    // 사람이 이미 하는 동작(저장)에 올라타므로, 프로젝트를 다시 열지 않아도
+    // 크로스 프로젝트가 채워진다.
+    // ⚠️ 저장을 **기다리게 하지 않고**, 실패를 **저장 실패로 올리지 않는다**(미러 모드 불변식과 같다).
+    var _accrueAt = 0;
+    var ACCRUE_GAP = 5 * 60 * 1000;      // 자동저장이 3분마다 돈다 — 매번 NAS 에 쓰지 않는다
+
+    window.dailyAccrueTouched = async function (force) {
+        if (!force && Date.now() - _accrueAt < ACCRUE_GAP) return;
+        if (window._storageMode && window._storageMode() !== 'nas') return;
+        _accrueAt = Date.now();
+        var date = ymd();
+        try {
+            await window.dailyLoadRoster();
+            var d = window.dailyBuildDraft(date);
+            if (!d.touched.length) return;
+            var doc = await window.dailyLoad(date) || emptyDoc(date);
+            var have = {};
+            (doc.items || []).forEach(function (it) { have[it.name] = 1; });
+            var added = 0;
+            d.touched.forEach(function (t) {
+                if (have[t.name]) return;
+                doc.items.push({ name: t.name, project: t.project, note: '', auto: true });
+                have[t.name] = 1; added++;
+            });
+            if (!added) return;
+            await window.dailySave(doc);
+            if (_doc && _doc.date === date) _doc = doc;
+            toast('📔 ' + T('오늘 손댄 업무 ' + added + '건을 일일보고에 담았습니다.',
+                            'Added ' + added + ' task(s) you touched today to your daily report.'), 'info', 5000);
+        } catch (e) {
+            // 조용히 접는다 — 프로젝트 저장을 방해하지 않는 게 더 중요하다.
+            console.warn('[일일보고] 자동 적립 건너뜀:', e.message);
+        }
+    };
+
+    (function hookSave() {
+        var orig = window.saveToGoogleDrive;
+        if (typeof orig !== 'function') return;          // 아직 없으면 그냥 안 건다
+        window.saveToGoogleDrive = function () {
+            var out = orig.apply(this, arguments);
+            try {
+                Promise.resolve(out).then(function (ok) {
+                    if (ok !== false) setTimeout(function () { window.dailyAccrueTouched(); }, 1200);
+                }).catch(function () { /* 저장 실패는 저장 쪽 문제다 */ });
+            } catch (e) { /* 적립 때문에 저장이 깨지면 안 된다 */ }
+            return out;
+        };
+    })();
 
     window.dailyRenderTab = async function () {
         var box = document.getElementById('daily-report-page');
@@ -530,6 +829,42 @@
             return;
         }
         box.innerHTML = '<div style="padding:18px; color:#888; font-size:12.5px;">⏳ ' + esc(T('불러오는 중…', 'Loading…')) + '</div>';
+
+        // ── 월 보기 — 목록 1콜로 격자만 그리고, 칸을 누를 때 그 날로 간다 ──────────
+        if (window._dailyView === 'month') {
+            var byKeyM, rosterM;
+            try {
+                rosterM = await window.dailyLoadRoster(true);
+                byKeyM = await window.dailyLoadMonth(date);
+            } catch (e2) {
+                box.innerHTML = '<div style="padding:18px; color:#b1432f; font-size:13px;">⚠️ ' + esc(e2.message) + '</div>';
+                return;
+            }
+            var peopleM = (rosterM && rosterM.length) ? rosterM.filter(function (m) { return m && m.active !== false; })
+                : Object.keys(byKeyM).map(function (k) { return { key: k, name: k }; });
+            var daysM = monthDays(date);
+            var th = '<th style="padding:5px 7px; border:1px solid #cfe3e5; font-size:11.5px; color:#2c5f8a; white-space:nowrap;">' + esc(T('이름', 'Name')) + '</th>'
+                + daysM.map(function (d) {
+                    var off = offDay(d);
+                    return '<th style="padding:4px 2px; border:1px solid #cfe3e5; font-size:10.5px; color:' + (off ? '#c0c0c0' : '#2c5f8a') + ';">' + (+d.slice(8)) + '</th>';
+                }).join('');
+            var trs = peopleM.map(function (p) {
+                return '<tr><td style="padding:5px 7px; border:1px solid #e3e6ea; font-size:12px; font-weight:bold; white-space:nowrap;">' + esc(p.name || p.key) + '</td>'
+                    + daysM.map(function (d) {
+                        var off = offDay(d), has = !!(byKeyM[p.key] && byKeyM[p.key][d]);
+                        var bg = off ? '#f6f7f8' : (has ? '#eaf6ec' : '#fdf0ee');
+                        var mk = off ? '' : (has ? '✓' : '·');
+                        return '<td onclick="window._dailyGoDay(\'' + d + '\')" title="' + d + '" style="cursor:pointer; text-align:center; padding:3px 0; border:1px solid #e3e6ea; background:' + bg + '; font-size:11px; color:' + (has ? '#2f7d3a' : '#b1432f') + ';">' + mk + '</td>';
+                    }).join('') + '</tr>';
+            }).join('');
+            box.innerHTML =
+                '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' + esc(T('월 보기 — 칸을 누르면 그 날로 갑니다. 회색은 주말·공휴일입니다.',
+                    'Month view — click a cell to open that day. Grey = weekend/holiday.')) + '</div>' +
+                '<div style="overflow-x:auto;"><table style="border-collapse:collapse;"><thead><tr style="background:#eef6f7;">' + th + '</tr></thead>' +
+                '<tbody>' + (trs || '<tr><td style="padding:16px; color:#aaa;">' + esc(T('이 달에 작성된 보고가 없습니다.', 'No reports this month.')) + '</td></tr>') + '</tbody></table></div>';
+            return;
+        }
+
         var roster, docs;
         try {
             roster = await window.dailyLoadRoster(true);
@@ -549,9 +884,10 @@
             var d = byKey[String(p.key || '').toLowerCase()];
             var typ = d ? (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === d.dayType; })[0] || {}) : null;
             var typeTxt = typ ? (window._currentLang === 'en' ? typ.en : typ.ko) : '';
-            var done = d ? (d.items || []).map(function (it) {
+            // ⚠️ AI 정리본이 있으면 그걸 보여준다 — 사람이 마지막으로 고친 글이 곧 보고 내용이다.
+            var done = d ? (String(d.aiDone || '').trim() || (d.items || []).map(function (it) {
                 return '• ' + it.name + (it.note ? ' — ' + it.note : '');
-            }).join('\n') : '';
+            }).join('\n')) : '';
             var td = 'padding:7px 9px; border:1px solid #e3e6ea; vertical-align:top; font-size:12px;';
             if (!d) {
                 return '<tr style="background:#fff8f8;"><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
