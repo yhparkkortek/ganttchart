@@ -213,42 +213,21 @@
 
     /** 참조 엑셀에서 표준 서식 행만 뽑아온다 → [{type, sub}] (실패 시 null) */
     window._bsFetchTemplateRows = async function () {
-        if (typeof XLSX === 'undefined' || !window.REFERENCE_SHEET_ID) return null;
+        if (typeof XLSX === 'undefined') return null;
 
-        // ⚠️ [2026-11-04] NAS 모드에서는 애초에 시도하지 않는다.
-        //    참조 엑셀(REFERENCE_SHEET_ID)은 **구글 시트**라, 저장소가 NAS 로 넘어간 뒤에는
-        //    어댑터(js/57)가 "NAS 모드에서는 Google 시트 내보내기를 쓸 수 없습니다"로 막는다.
-        //    막는 건 맞지만, 그 거절이 console.error 로 찍혀서 **새 프로젝트 마법사를 열 때마다**
-        //    빨간 오류가 하나씩 올라왔다(실측). 기능이 없는 것과 고장난 것은 다르게 보여야 한다.
-        //    → 여기서 조용히 건너뛰고, 왜 비어 있는지는 info 한 줄로 남긴다.
-        //    ⛔ 아직 해결된 게 아니다 — 참조 엑셀을 NAS 로 옮기기 전까지 Customer SPEC 표준
-        //       서식은 NAS 모드에서 자동으로 채워지지 않는다(docs/nas-dsm.md 에 남겨둠).
-        var mode = '';
-        try { mode = (localStorage.getItem('gantt_storage_backend') || '').toLowerCase(); } catch (e) { /* ignore */ }
-        if (!mode) mode = (window.STORAGE_POLICY || {}).nasOnly ? 'nas' : 'drive';
-        if (mode === 'nas') {
-            console.info('[Customer SPEC] 표준 서식 자동 채우기는 건너뜁니다 — 참조 엑셀이 아직 구글 드라이브에만 있습니다.');
-            return null;
-        }
-
-        var tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
-        var token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!token) return null;
-        var auth = { Authorization: 'Bearer ' + token };
+        // 📗 [2026-11-04] 참조 엑셀을 받는 일은 _refExcelBlob()(js/04c) 하나가 한다 —
+        //    NAS 모드면 NAS 에서(Reference/Reference.xlsx), 드라이브 모드면 예전처럼 드라이브에서.
+        //    예전엔 여기서 드라이브를 직접 불러, 저장소가 NAS 로 넘어간 뒤 **이 경로가 통째로
+        //    조용히 실패**했다(Customer SPEC 표준 서식이 영영 비어 있게 된다).
+        //    ⚠️ 여기서는 **실패해도 조용히 null** 이다 — 사람이 요청한 적 없는 자동 보완이라,
+        //       못 채웠다고 창을 띄우면 방해만 된다. 대신 왜 비었는지 콘솔에 한 줄 남긴다.
+        if (typeof window._refExcelBlob !== 'function') return null;
         var blob = null;
-        // 구글 시트면 export, 올려둔 xlsx면 alt=media — autoImportReferenceExcel과 같은 2단 시도
         try {
-            var mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-            var r1 = await fetch('https://www.googleapis.com/drive/v3/files/' + window.REFERENCE_SHEET_ID
-                + '/export?mimeType=' + encodeURIComponent(mime), { headers: auth });
-            if (r1.ok) blob = await r1.blob();
-        } catch (e) { /* 아래 alt=media로 재시도 */ }
-        if (!blob) {
-            try {
-                var r2 = await fetch('https://www.googleapis.com/drive/v3/files/' + window.REFERENCE_SHEET_ID
-                    + '?alt=media&supportsAllDrives=true', { headers: auth });
-                if (r2.ok) blob = await r2.blob();
-            } catch (e) { /* 실패는 아래에서 null */ }
+            blob = await window._refExcelBlob();
+        } catch (e) {
+            console.info('[Customer SPEC] 표준 서식 자동 채우기를 건너뜁니다 —', (e && e.message) || e);
+            return null;
         }
         if (!blob) return null;
 

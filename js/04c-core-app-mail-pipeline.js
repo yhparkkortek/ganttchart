@@ -380,91 +380,136 @@
     //    반영할 수 있게 한다. (다운로드/재업로드 왕복 없이, 이미 화면에 있는 handleFiles() 가져오기
     //    파이프라인을 그대로 재사용 — 드래그로 불러온 것과 완전히 동일하게 처리됨)
     // ═══════════════════════════════════════════════════════════
-    window.REFERENCE_SHEET_ID = '1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T';
-    window.autoImportReferenceExcel = async function(silent) {
-        const btn = document.getElementById('new-project-auto-import-btn');
+    window.REFERENCE_SHEET_ID = '1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T';   // 드라이브 모드(옛 경로)
+    window.REFERENCE_NAS_REL  = 'Reference/Reference.xlsx';            // NAS 모드 — 옮기면 여기만 고친다
 
-        // ⚠️ [2026-11-04] NAS 모드에서는 시도조차 하지 않는다.
-        //
-        //   · 증상: 새 프로젝트 마법사를 열 때마다 콘솔에 빨간 오류가 하나씩 올라왔다(실측).
-        //     참조 엑셀은 **구글 시트**라, 저장소가 NAS 로 넘어간 뒤엔 어댑터(js/57)가
-        //     "NAS 모드에서는 Google 시트 내보내기를 쓸 수 없습니다"로 막는다.
-        //   · 왜 안 걸러졌나: js/28 의 위자드는 "토큰이 있으면 드라이브에 연동된 것"으로 보고
-        //     조용히 이 함수를 부르는데, **NAS 모드에선 어댑터가 토큰을 가짜로 채워 둔다**
-        //     (그래야 앱의 로그인 검사 40여 곳이 통과한다). 그래서 그 검사가 늘 참이 됐다.
-        //     → "토큰이 있나"가 아니라 "저장소가 드라이브인가"를 물어야 한다.
-        //   · 조용히 부른 경우(silent)는 말없이 돌아가고, 사람이 버튼을 누른 경우에만 알린다 —
-        //     기능이 없는 것과 고장난 것은 다르게 보여야 한다.
-        //   ⛔ 아직 해결된 게 아니다: 참조 엑셀을 NAS 로 옮기기 전까지 NAS 모드에선 아래
-        //      "참조 엑셀 다운로드"로 받아 화면에 끌어다 놓는 수동 경로를 써야 한다.
-        let _mode = '';
-        try { _mode = (localStorage.getItem('gantt_storage_backend') || '').toLowerCase(); } catch (e) { /* ignore */ }
-        if (!_mode) _mode = (window.STORAGE_POLICY || {}).nasOnly ? 'nas' : 'drive';
-        if (_mode === 'nas') {
-            if (!silent) {
-                const _m = window._t(
-                    '⚠️ 참조 엑셀은 아직 구글 드라이브에만 있어 자동으로 가져올 수 없습니다.\n아래 "참조 엑셀 다운로드"로 받으신 뒤, 작성해서 화면에 끌어다 놓아주세요.',
-                    '⚠️ The reference Excel still lives only on Google Drive, so it cannot be imported automatically.\nUse "Download Reference Excel" below, fill it in, and drag it onto the page.');
-                if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m);
-            } else {
-                console.info('[새 프로젝트] 참조 엑셀 자동 가져오기는 건너뜁니다 — 참조 엑셀이 아직 구글 드라이브에만 있습니다.');
+    // ═══════════════════════════════════════════════════════════════════════
+    // 📗 [2026-11-04] 참조 엑셀 **한 곳에서만** 받아온다 — NAS 우선, 드라이브는 옛 모드용.
+    //
+    //   · 왜: 참조 엑셀을 쓰는 곳이 둘이다 — 새 프로젝트 "🚀 자동으로 가져오기"(워크북 전체)와
+    //     Customer SPEC 표준 서식 채우기(js/43, 시트 하나만). 둘이 **각자 드라이브를 불렀고**,
+    //     저장소가 NAS 로 넘어간 뒤 **양쪽 다 조용히 실패**했다(2026-11-04).
+    //   · 받는 방법은 모드마다 다르지만 **결과는 같은 xlsx Blob** 이라, 그 차이만 여기서 흡수한다.
+    //   · ⚠️ NAS 읽기는 캐시하지 않는다(`no-store` + `_cb` 난수) — 브라우저가 옛 사본을 돌려줘
+    //     색인이 통째로 날아간 적이 있다(docs/nas-dsm.md).
+    //   · ⚠️ 받은 바이트가 정말 xlsx 인지 **앞 2바이트(PK)로 확인**한다. DSM 은 없는 파일에도
+    //     HTML 오류 페이지를 돌려주는 버릇이 있어, 그대로 넘기면 XLSX.read 가 엉뚱한 오류를 낸다.
+    //   · 실패는 **사람이 읽을 문장**으로 던진다 — 부르는 쪽이 그대로 보여준다.
+    // ═══════════════════════════════════════════════════════════════════════
+    window._refExcelBlob = async function() {
+        const mode = window._storageMode ? window._storageMode() : 'drive';
+
+        if (mode === 'nas') {
+            const url = 'http://127.0.0.1:5000/nas/app/get?rel='
+                      + encodeURIComponent(window.REFERENCE_NAS_REL) + '&_cb=' + Math.random().toString(36).slice(2);
+            let res;
+            try {
+                res = await fetch(url, { cache: 'no-store' });
+            } catch (e) {
+                throw new Error(window._t(
+                    '백엔드가 꺼져 있어 참조 엑셀을 받지 못했습니다(kortek_backend 를 실행해주세요).',
+                    'The backend is not running, so the reference Excel could not be fetched.'));
             }
-            return;
+            if (!res.ok) {
+                let detail = '';
+                try { const j = await res.json(); detail = (j && j.message) || ''; } catch (e) { /* ignore */ }
+                throw new Error(window._t(
+                    'NAS 에서 참조 엑셀을 찾지 못했습니다 (' + window.REFERENCE_NAS_REL + ')' + (detail ? ' — ' + detail : ''),
+                    'The reference Excel was not found on the NAS (' + window.REFERENCE_NAS_REL + ')' + (detail ? ' — ' + detail : '')));
+            }
+            const blob = await res.blob();
+            const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+            if (head[0] !== 0x50 || head[1] !== 0x4B) {   // 'PK' = xlsx(zip)
+                throw new Error(window._t(
+                    'NAS 에서 받은 참조 엑셀이 엑셀 파일이 아닙니다 — 경로를 확인해주세요 (' + window.REFERENCE_NAS_REL + ')',
+                    'What came back from the NAS is not an Excel file — check the path (' + window.REFERENCE_NAS_REL + ')'));
+            }
+            return blob;
         }
 
+        // ── 드라이브(또는 미러) 모드 — 옛 경로 그대로 ──────────────────────────
         const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) throw new Error('NO_DRIVE_TOKEN');
 
-        // 💡 구글 드라이브 미연동 상태면 자동 가져오기가 불가능 — 연동을 제안하고, 원치 않으면
-        //    기존처럼 아래 "참조 엑셀 다운로드" 링크로 수동 진행하면 됨(이 버튼은 아무것도 건드리지 않음)
-        if (!token) {
-            if (confirm(window._t(
-                '자동으로 가져오려면 먼저 구글 드라이브 연동이 필요합니다.\n지금 연동하시겠습니까? (연동 후 이 버튼을 다시 눌러주세요)',
-                'Connecting Google Drive is required to auto-import.\nConnect now? (After connecting, click this button again.)'
-            ))) {
-                if (window.handleAuthClick) window.handleAuthClick();
-            }
-            return;
-        }
-
-        if (btn) { btn.disabled = true; btn.textContent = window._t('⏳ 가져오는 중...', '⏳ Importing...'); }
-
-        // 💡 응답 실패 시 Drive가 돌려준 실제 오류 메시지(권한 없음/파일 없음 등)까지 최대한 뽑아냄 —
-        //    "HTTP 403"만으로는 원인 파악이 안 돼서, 이 앱의 다른 Drive 호출부(주소록 불러오기 등)와
-        //    동일하게 error.message까지 붙여서 보여준다.
+        const authHeader = { 'Authorization': `Bearer ${token}` };
         async function describeFailure(resp) {
             let detail = '';
             try { const j = await resp.json(); detail = (j && j.error && j.error.message) || ''; } catch (e) {}
             return 'HTTP ' + resp.status + (detail ? ' - ' + detail : '');
         }
+        let blob = null, lastErr = '';
+        // 1차: 구글 시트(네이티브 문서)로 보고 xlsx 로 변환(export)해서 받는다.
+        try {
+            const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            const resp1 = await fetch(`https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}/export?mimeType=${encodeURIComponent(mimeType)}`, { headers: authHeader });
+            if (resp1.ok) blob = await resp1.blob(); else lastErr = await describeFailure(resp1);
+        } catch (e) { lastErr = e.message; }
+        // 2차: 사실은 올려둔 xlsx 원본이면 export 가 아니라 alt=media 가 맞다.
+        if (!blob) {
+            try {
+                const resp2 = await fetch(`https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}?alt=media&supportsAllDrives=true`, { headers: authHeader });
+                if (resp2.ok) blob = await resp2.blob(); else lastErr += ' / ' + await describeFailure(resp2);
+            } catch (e) { lastErr += ' / ' + e.message; }
+        }
+        if (!blob) throw new Error(lastErr || '알 수 없는 오류');
+        return blob;
+    };
+
+    // 🔗 [2026-11-04] "📥 참조 엑셀 다운로드" 링크와 버튼 설명을 **지금 저장소에 맞게** 고친다.
+    //
+    //   · 왜: 그 링크는 docs.google.com 을 가리키고 있었다. 저장소를 NAS 로 옮긴 뒤에는
+    //     ① 팀원이 드라이브 접근 권한이 없을 수 있고 ② 드라이브 사본과 NAS 사본이 **갈라진다**
+    //     (한쪽만 고치면 사람마다 다른 서식을 받는다). 받는 곳은 한 곳이어야 한다.
+    //   · 버튼 title 의 "구글 드라이브에 연동되어 있으면…"도 NAS 모드에선 틀린 안내다.
+    //   · ⚠️ 드라이브/미러 모드는 **건드리지 않는다** — 그 모드에선 옛 링크가 여전히 맞다.
+    window._syncRefExcelLink = function() {
+        if (!window._storageMode || window._storageMode() !== 'nas') return false;
+        const a = document.getElementById('ref-excel-download-link');
+        if (a) {
+            a.href = 'http://127.0.0.1:5000/nas/app/get?rel=' + encodeURIComponent(window.REFERENCE_NAS_REL);
+            a.setAttribute('download', '참조_엑셀.xlsx');
+            a.removeAttribute('target');          // 다운로드라 새 탭이 필요 없다(빈 탭만 남는다)
+            a.title = window._t('사내 NAS 에서 참조 엑셀을 받습니다', 'Downloads the reference Excel from the in-house NAS');
+        }
+        const btn = document.getElementById('new-project-auto-import-btn');
+        if (btn) {
+            btn.title = window._t('사내 NAS 의 참조 엑셀을 가져와 바로 화면에 반영합니다',
+                                  'Imports the reference Excel from the in-house NAS straight into the page');
+            btn.removeAttribute('data-i18n-title');   // i18n 맵이 옛 문구로 다시 덮어쓰지 않게
+        }
+        return true;
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window._syncRefExcelLink);
+    else window._syncRefExcelLink();
+
+    window.autoImportReferenceExcel = async function(silent) {
+        const btn = document.getElementById('new-project-auto-import-btn');
+
+        if (btn) { btn.disabled = true; btn.textContent = window._t('⏳ 가져오는 중...', '⏳ Importing...'); }
 
         try {
-            const authHeader = { 'Authorization': `Bearer ${token}` };
-            let blob = null; let lastErr = '';
-
-            // 1차: 참조 파일이 "구글 시트"(네이티브 문서)라고 가정하고 xlsx로 변환(export)해서 받는다.
-            //    docs.google.com/.../export 링크(수동 다운로드용)는 브라우저 직접 이동만 되고 CORS 때문에
-            //    fetch()로는 못 읽으므로, 이미 연동된 OAuth 토큰으로 Drive REST API를 직접 호출한다.
+            // 📗 [2026-11-04] 받는 일은 _refExcelBlob() 하나가 한다(NAS 우선, 드라이브는 옛 모드용).
+            //    예전엔 이 안에서 직접 드라이브를 불렀고, 저장소가 NAS 로 넘어간 뒤 그대로 실패했다.
+            let blob;
             try {
-                const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                const exportUrl = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}/export?mimeType=${encodeURIComponent(mimeType)}`;
-                const resp1 = await fetch(exportUrl, { headers: authHeader });
-                if (resp1.ok) blob = await resp1.blob();
-                else lastErr = await describeFailure(resp1);
-            } catch (e) { lastErr = e.message; }
-
-            // 2차 폴백: 만약 참조 파일이 실제로는 이미 업로드된 xlsx 원본이라면(구글 시트가 아니라면)
-            //    export가 아니라 원본 그대로 받는 alt=media가 맞다 — 이 앱의 주소록 불러오기와 동일 패턴.
-            if (!blob) {
-                try {
-                    const mediaUrl = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}?alt=media&supportsAllDrives=true`;
-                    const resp2 = await fetch(mediaUrl, { headers: authHeader });
-                    if (resp2.ok) blob = await resp2.blob();
-                    else lastErr += ' / ' + await describeFailure(resp2);
-                } catch (e) { lastErr += ' / ' + e.message; }
+                blob = await window._refExcelBlob();
+            } catch (e) {
+                // 드라이브 모드인데 아직 연동 전이면, 예전처럼 연동을 제안한다.
+                // ⚠️ 단 silent(위자드가 조용히 부른 경우)면 확인창을 띄우지 않는다 —
+                //    사람이 요청한 적 없는 일로 창을 띄우면 위자드를 열 때마다 방해가 된다.
+                if (String(e && e.message) === 'NO_DRIVE_TOKEN') {
+                    if (silent) return;
+                    if (confirm(window._t(
+                        '자동으로 가져오려면 먼저 구글 드라이브 연동이 필요합니다.\n지금 연동하시겠습니까? (연동 후 이 버튼을 다시 눌러주세요)',
+                        'Connecting Google Drive is required to auto-import.\nConnect now? (After connecting, click this button again.)'
+                    ))) {
+                        if (window.handleAuthClick) window.handleAuthClick();
+                    }
+                    return;
+                }
+                throw e;
             }
-
-            if (!blob) throw new Error(lastErr || '알 수 없는 오류');
 
             const file = new File([blob], '참조_엑셀.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
@@ -476,6 +521,12 @@
                 '📥 Reference Excel imported automatically. Fill it in to continue.'
             ));
         } catch (err) {
+            // ⚠️ 조용히 부른 경우(위자드 진입)는 경고창을 띄우지 않는다 — 사람이 요청한 적이 없다.
+            //    대신 콘솔에 남겨서 "왜 서식이 비었나"를 추적할 수 있게 한다.
+            if (silent) {
+                console.warn('[새 프로젝트] 참조 엑셀 자동 가져오기 실패:', (err && err.message) || err);
+                return;
+            }
             console.error('참조 엑셀 자동 가져오기 실패:', err);
             alert(window._t(
                 '⚠️ 참조 엑셀을 자동으로 가져오지 못했습니다.\n(' + err.message + ')\n\n아래 "참조 엑셀 다운로드" 링크로 수동 진행해주세요.',
