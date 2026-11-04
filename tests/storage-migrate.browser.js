@@ -144,7 +144,8 @@
         var plan = {
             files: planAll.files.filter(function (f) { return notMany(f.rel); }),
             folders: planAll.folders.filter(notMany),
-            duplicates: planAll.duplicates, tooDeep: planAll.tooDeep
+            duplicates: planAll.duplicates, tooDeep: planAll.tooDeep,
+            aliases: planAll.aliases          // ⚠️ 빠뜨리면 밀려난 id 가 지도에 안 들어간다
         };
         out('   (복사 대상 ' + plan.files.length + '건 — many/ 는 조사까지만)');
         var res = await window.nasMigrate.run(plan);
@@ -180,6 +181,22 @@
         check('바뀐 1건만 다시 옮긴다', res3.copied === 1, '옮김 ' + res3.copied);
         var gotA = await nasGet(DIR + '/a.json');
         check('원래 내용으로 되돌아왔다', gotA && new TextDecoder().decode(gotA) === '{"n":1}');
+
+        out('\n== ⑨ 🗺 id 지도 — 밀려난 중복 id 까지 들어가야 한다 ==');
+        // ⚠️⚠️ 실데이터에서 잡혔다: Drive 에 같은 이름 파일이 둘이면 하나만 옮겨지는데,
+        //    **밀려난 id 를 들고 있는 데이터**가 NAS 모드에서 "모르는 파일 id" 로 막힌다.
+        //    (project_index 의 프로젝트 한 건이 정확히 그랬다)
+        // ⚠⚠ 진짜 지도(`App_Config/nas_id_map.json`)를 건드리지 않는다 —
+        //    검증용 경로에 쓴다. 예전엔 이걸 안 나눠 **진짜 1,498건을 4건으로 덮어썼다.**
+        var MAP_PROBE = DIR + '/_id_map_probe.json';
+        var mapN = await window.nasMigrate.writeIdMap(plan, MAP_PROBE);
+        var mj = await (await realFetch(BK + '/nas/app/get?rel=' + encodeURIComponent(MAP_PROBE))).json();
+        check('지도가 NAS 에 저장됐다', mj && mj.map && Object.keys(mj.map).length === mapN,
+              mapN + '건');
+        check('살아남은 쪽(x5)이 제 경로로', mj.map['x5'] === DIR + '/개발9팀/dup.json', mj.map['x5']);
+        check('**밀려난 쪽(x4)도 같은 파일을 가리킨다**', mj.map['x4'] === DIR + '/개발9팀/dup.json',
+              mj.map['x4'] || '없음 — 이러면 그 id 를 쓰던 데이터가 막힌다');
+        check('이진 파일도 지도에', mj.map['x2'] === DIR + '/bin.enc', mj.map['x2']);
 
         out('\n== ⑧ NAS 모드에서는 거부한다 ==');
         // ⚠️ NAS 모드면 Drive 호출이 어댑터에 가로채여 "NAS 에서 읽어 NAS 에 쓰기"가 된다 —

@@ -102,7 +102,7 @@
         var rootId = (typeof SHARED_FOLDER_ID !== 'undefined') ? SHARED_FOLDER_ID : null;
         if (!rootId) throw new Error('SHARED_FOLDER_ID 를 찾지 못했습니다.');
 
-        var files = [], folders = [''], dups = [], deep = [];
+        var files = [], folders = [''], dups = [], deep = [], aliases = {};
         var queue = [{ id: rootId, rel: '', depth: 0 }];
         while (queue.length) {
             var cur = queue.shift();
@@ -118,10 +118,18 @@
                     continue;
                 }
                 // 같은 폴더에 같은 이름이 둘 이상 — NAS 엔 한 자리뿐이다. 신고하고 최신만 남긴다.
+                // ⚠️⚠️ **버려진 id 도 지도에 넣는다**(별칭). 안 넣으면 그 id 를 들고 있던
+                //    데이터가 NAS 모드에서 "모르는 파일 id" 로 막힌다 — 실제로 project_index 의
+                //    프로젝트 한 건이 그랬다(같은 이름 파일이 Drive 에 둘이었다).
+                //    둘 다 같은 이름이었으니 **살아남은 그 파일**을 가리키게 하는 게 맞다.
                 var key = f.name;
                 if (seen[key]) {
                     dups.push({ rel: joinRel(cur.rel, f.name), ids: [seen[key].id, f.id] });
-                    if ((f.modifiedTime || '') <= (seen[key].modifiedTime || '')) continue;
+                    if ((f.modifiedTime || '') <= (seen[key].modifiedTime || '')) {
+                        aliases[f.id] = joinRel(cur.rel, f.name);          // 지금 것이 더 옛것
+                        continue;
+                    }
+                    aliases[seen[key].id] = joinRel(cur.rel, f.name);      // 앞의 것이 밀려남
                     files = files.filter(function (x) { return x.id !== seen[key].id; });
                 }
                 seen[key] = f;
@@ -132,7 +140,7 @@
         }
         var bytes = files.reduce(function (a, b) { return a + (b.size || 0); }, 0);
         return { files: files, folders: folders, duplicates: dups, tooDeep: deep,
-                 totalBytes: bytes, byFolder: countByFolder(files) };
+                 aliases: aliases, totalBytes: bytes, byFolder: countByFolder(files) };
     }
 
     function countByFolder(files) {
@@ -240,11 +248,16 @@
      */
     var ID_MAP_REL = 'App_Config/nas_id_map.json';
 
-    async function writeIdMap(plan) {
+    // ⚠️⚠️ `relOverride` 는 **검증 전용**이다. 이게 없던 판에서는 검증 하네스가 부르면
+    //    **진짜 지도(1,498건)를 검증용 4건으로 덮어썼다.** 지도가 망가지면 NAS 모드에서
+    //    옛 id 가 전부 안 풀려 조용히 틀린다 — 검증이 운영 데이터를 망가뜨리면 안 된다.
+    async function writeIdMap(plan, relOverride) {
         var map = {};
         plan.files.forEach(function (f) { if (f.id) map[f.id] = f.rel; });
+        // 같은 이름이라 밀린 id 도 **살아남은 그 파일**을 가리키게 한다.
+        Object.keys(plan.aliases || {}).forEach(function (k) { if (!map[k]) map[k] = plan.aliases[k]; });
         var body = JSON.stringify({ version: 1, builtAt: new Date().toISOString(), map: map });
-        await nasJson('POST', '/nas/app/put', { rel: ID_MAP_REL, text: body });
+        await nasJson('POST', '/nas/app/put', { rel: relOverride || ID_MAP_REL, text: body });
         return Object.keys(map).length;
     }
 
