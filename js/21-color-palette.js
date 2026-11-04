@@ -363,8 +363,11 @@ window._cpApplyLive = function(hex, skipSave) {
     const isBlueTheme = _pickedRgb.b >= _pickedRgb.r && _pickedRgb.b >= _pickedRgb.g;
     const alarmBg = isBlueTheme ? '#fbe4e2' : '#e3f2fd';
     const alarmAccent = isBlueTheme ? '#e03131' : '#4285f4';
+    // 📌→▌ [2026-11-05] 예전엔 `td:first-child`의 inset box-shadow로 좌측 막대를 그렸는데, 이제
+    //    막대가 **진짜 요소**(.row-pin-bar, js/04j)라서 배경색으로 칠한다 — 클릭 대상이 돼야 해서.
     css += '#myTable tbody tr.alarm-on td { background-color: ' + alarmBg + ' !important; }\n'
-        + '#myTable tbody tr.alarm-on td:first-child { box-shadow: inset 3px 0 0 0 ' + alarmAccent + ' !important; }\n';
+        + '#myTable tbody tr.alarm-on .row-pin-bar { background: ' + alarmAccent + ' !important; }\n'
+        + '#myTable .row-pin-bar:hover { background: ' + alarmAccent + ' !important; opacity: 0.5; }\n';
 
     // 💡 [2026-08-30 추가] 셀 안 번역(🌐) 버튼/번역 결과 글자색이 옛 고정 파랑(#0056b3)이었음 —
     // "완료" 행에서만 회색으로 바뀌는 예외는 더 구체적인 선택자라 그대로 유지됨.

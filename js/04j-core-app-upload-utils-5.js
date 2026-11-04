@@ -1731,10 +1731,14 @@
                     <div class="chart-th-axis" style="position:relative; height:12px; overflow:visible; margin:0 20px; box-sizing:border-box;"></div>
                 </th>`;
             } else if (colStr === 'no') {
-                // 📌 [2026-10-26 신규, 사용자 요청] "No." 헤더에 핀셋 아이콘 — 전체 업무 알림(📌)을
-                //    한 번에 켜거나 끈다(행마다 일일이 누를 필요 없이). 전체선택 체크박스와 같은
-                //    관례로, 하나라도 꺼져 있으면 전체 켜기·전부 켜져 있으면 전체 끄기.
-                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:flex; align-items:center; justify-content:center; gap:2px;"><span onclick="window.wrToggleAllPins(event)" title="전체 업무 알림(📌) 켜기/끄기 — 하나라도 꺼져 있으면 전체 켜짐, 전부 켜져 있으면 전체 꺼짐" style="cursor:pointer; font-size:11px; line-height:1;">📌</span><span>${displayCell}</span></div></th>`;
+                // 📌 [2026-10-26 신규, 사용자 요청] "No." 헤더에 전체 알람 토글 — 행마다 일일이 누를
+                //    필요 없이 한 번에 켜거나 끈다. 전체선택 체크박스와 같은 관례로, 하나라도 꺼져
+                //    있으면 전체 켜기·전부 켜져 있으면 전체 끄기.
+                //    📌→▌ [2026-11-05] 아이콘을 없애고 행과 같은 모양의 세로 막대로 통일.
+                const _allPinTitle = window._currentLang === 'en'
+                    ? 'Turn the alarm on/off for every task — turns all on if any is off, otherwise turns all off'
+                    : '전체 업무 알람 켜기/끄기 — 하나라도 꺼져 있으면 전체 켜짐, 전부 켜져 있으면 전체 꺼짐';
+                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:flex; align-items:center; justify-content:center; gap:3px;"><span class="row-pin-bar pin-bar-head" onclick="window.wrToggleAllPins(event)" title="${escapeHtml(_allPinTitle)}"></span><span>${displayCell}</span></div></th>`;
             } else if (thClass === 'detail-th') {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass} cursor:pointer;" title="클릭: 상세내용 전체 펼치기/접기" onclick="window.toggleAllDetailExpand(this, event)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell} <span style="font-size:9px; color:#aaa;" id="detail-th-arrow">▼</span></div></th>`;
             } else {
@@ -1851,17 +1855,21 @@
 
                 let tdStyle = ""; let tdHtml = '';
                 
-                if (cellIndex === colIdx.no) { 
+                if (cellIndex === colIdx.no) {
                     tdAttrs += ` class="no-td"`;
+                    // 📌→▌ [2026-11-05, 사용자 요청] 핀셋(알람) 토글을 No. 칸 맨 왼쪽의 **세로 막대**가
+                    //    맡는다 — 예전엔 알람이 켜진 행에만 보이던 빨간 막대(styles.css의 box-shadow)와
+                    //    그 옆의 📌 아이콘이 따로 있었는데, 막대가 곧 그 상태 표시였으므로 막대를 항상
+                    //    보이게(꺼짐=연회색) 하고 클릭 대상으로 만든 뒤 아이콘을 없앴다.
+                    //    ⚠️ 막대는 flex 컨테이너 **바깥**에 absolute로 둔다 — 안에 넣으면 셀 높이가
+                    //    아니라 글자 한 줄 높이(≈17px)밖에 안 된다(td는 확정 높이가 없어 height:100%가
+                    //    안 먹는다, 실측). 대신 flex 쪽에 padding-left를 줘서 AI 검색 체크박스(js/26)가
+                    //    끼어들어도 내용이 막대 위로 올라오지 않게 한다.
                     const alarmOn = !!row._알림;
-                    const alarmStyle = alarmOn
-                        ? 'opacity:1; filter:grayscale(1) sepia(1) saturate(6) hue-rotate(180deg) brightness(0.9); transform:scale(1.3);'
-                        : 'opacity:1; transform:scale(1.0);';
                     tdHtml = `
-                        <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative;">
+                        <span class="row-pin-bar${alarmOn ? ' on' : ''}" onclick="window._wrPinClick(${i}, event)" ondblclick="window._wrPinDblClick(${i}, event)" title="${escapeHtml(window._pinBarTitle(alarmOn))}"></span>
+                        <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative; padding-left:7px;">
                             <span class="row-drag-handle" title="${window._currentLang === 'en' ? 'Drag to reorder (within the same WBS level)' : '드래그해서 순서 바꾸기 (같은 WBS 레벨 안에서만)'}" style="font-size:11px; color:#aaa; flex-shrink:0; user-select:none;">⠿</span>
-                            <span onclick="window._wrPinClick(${i}, event)" ondblclick="window._wrPinDblClick(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기 · 더블클릭하면 알람 목록의 이 업무로 이동 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)' : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'}"
-                                style="font-size:13px; cursor:pointer; flex-shrink:0; ${alarmStyle}">📌</span>
                             <span class="row-num-span"></span>
                         </div>`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {

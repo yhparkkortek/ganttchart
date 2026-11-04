@@ -279,6 +279,20 @@
     //    날짜·차트·내용 등 다른 칸은 전혀 안 바뀐다 — renderTable() 전체 재생성(최대 1000행) 대신
     //    그 행의 DOM만 직접 고쳐서 클릭이 즉시 반응하게 한다. renderTable()이 만드는 핀 아이콘
     //    HTML(js/04j)과 반드시 같은 결과를 내도록 그대로 맞춰 재사용.
+    // 📌→▌ [2026-11-05] 핀셋(알람) 토글 막대의 말풍선 — 렌더(js/04j)와 아래 부분 갱신이 같은 문구를
+    //    쓰도록 한 곳에 둔다(예전엔 두 곳에 따로 적혀 있어 한쪽만 고쳐질 위험이 있었다).
+    window._pinBarTitle = function(alarmOn) {
+        const _en = window._currentLang === 'en';
+        if (alarmOn) {
+            return _en
+                ? 'Alarm ON — click to turn off · double-click to jump to this task in the alarm list · Ctrl/Shift+click toggles all selected rows'
+                : '🔔 알람 켜짐 — 클릭하면 끄기 · 더블클릭하면 알람 목록의 이 업무로 이동 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글';
+        }
+        return _en
+            ? 'Alarm OFF — click to turn on · Ctrl/Shift+click toggles all selected rows'
+            : '🔕 알람 꺼짐 — 클릭하면 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글';
+    };
+
     window._patchPinRowDom = function(rowIndex) {
         const row = globalData[rowIndex];
         if (!row) return;
@@ -286,15 +300,15 @@
         if (!tr) return; // 필터로 숨겨진 행 등 — 다음 전체 렌더에서 자연히 맞음
         const alarmOn = !!row._알림;
         tr.classList.toggle('alarm-on', alarmOn);
-        const noTd = tr.querySelector('.no-td');
-        const pinSpan = noTd ? noTd.querySelector('span') : null;
-        if (pinSpan) {
-            pinSpan.style.cssText = `font-size:13px; cursor:pointer; flex-shrink:0; ${alarmOn
-                ? 'opacity:1; filter:grayscale(1) sepia(1) saturate(6) hue-rotate(180deg) brightness(0.9); transform:scale(1.3);'
-                : 'opacity:1; transform:scale(1.0);'}`;
-            pinSpan.title = alarmOn
-                ? '알림 켜짐 (클릭하여 끄기 · 더블클릭하면 알람 목록의 이 업무로 이동 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'
-                : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)';
+        // 🐛 [2026-11-05 버그 수정, "핀셋 알람 설정이 동작하지 않는다" 실사용 신고] 예전엔 여기서
+        //    `noTd.querySelector('span')`로 **첫 번째** span을 집었는데, 2026-10-28에 그 앞에 드래그
+        //    손잡이(⠿, .row-drag-handle)가 추가되면서 핀이 아니라 **손잡이**가 켜짐 스타일을 뒤집어쓰고
+        //    핀 아이콘은 영영 꺼진 모습으로 남았다 — 데이터(_알림)와 행 색은 멀쩡히 바뀌는데 아이콘만
+        //    안 바뀌니 "눌러도 아무 일도 안 난다"로 보였다. 이제 클래스로 정확히 집는다.
+        const bar = tr.querySelector('.no-td .row-pin-bar');
+        if (bar) {
+            bar.classList.toggle('on', alarmOn);
+            bar.title = window._pinBarTitle(alarmOn);
         }
     };
 
@@ -355,11 +369,20 @@
     // 아예 인식하지 못한다 — 그래서 클릭을 250ms 살짝 지연시켜, 그 사이 두 번째 클릭(dblclick)이 오면
     // 토글을 취소하고 이동만 실행하는 방식으로 처리한다(알람 탭 목록 행의 동일 패턴과 통일).
     window._wrPinClickTimer = null;
+    window._wrPinClickRow = null;
     window._wrPinClick = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
-        if (window._wrPinClickTimer) { clearTimeout(window._wrPinClickTimer); window._wrPinClickTimer = null; return; }
+        // 🐛 [2026-11-05 버그 수정] 대기 중인 타이머가 "어느 행 것인지"를 안 보고 무조건 취소해서,
+        //    서로 **다른 두 행**을 250ms 안에 연달아 누르면 둘 다 토글되지 않고 조용히 사라졌다.
+        //    같은 행을 다시 눌렀을 때만 더블클릭으로 본다.
+        if (window._wrPinClickTimer && window._wrPinClickRow === rowIndex) {
+            clearTimeout(window._wrPinClickTimer);
+            window._wrPinClickTimer = null; window._wrPinClickRow = null;
+            return;
+        }
+        window._wrPinClickRow = rowIndex;
         window._wrPinClickTimer = setTimeout(function() {
-            window._wrPinClickTimer = null;
+            window._wrPinClickTimer = null; window._wrPinClickRow = null;
             window.wrToggleAlarm(rowIndex, ev);
         }, 250);
     };
@@ -388,7 +411,7 @@
     };
     window._wrPinDblClick = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
-        if (window._wrPinClickTimer) { clearTimeout(window._wrPinClickTimer); window._wrPinClickTimer = null; }
+        if (window._wrPinClickTimer) { clearTimeout(window._wrPinClickTimer); window._wrPinClickTimer = null; window._wrPinClickRow = null; }
         if (window._jumpToAlarmRow) window._jumpToAlarmRow(rowIndex);
     };
     // 💡 Gantt 표의 핀셋(📌) 더블클릭 → Alarm/Notice 탭의 "알람" 뷰로 전환한 뒤, collectAlarmItems()가

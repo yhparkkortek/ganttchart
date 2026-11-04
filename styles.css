@@ -602,8 +602,31 @@
     #myTable tbody tr.alarm-on td {
         background-color: #e3f2fd !important;
     }
-    #myTable tbody tr.alarm-on td:first-child {
-        box-shadow: inset 3px 0 0 0 #4285f4;
+
+    /* 📌→▌ [2026-11-05, 사용자 요청] 핀셋(알람) 토글 막대 — No. 칸 맨 왼쪽의 세로 막대가 곧
+       "이 업무에 알람이 걸려 있다"는 표시이자 켜기/끄기 버튼이다(예전의 📌 아이콘을 대체).
+       예전엔 켜진 행에만 `box-shadow: inset 3px`로 그렸는데, 꺼진 행에는 아무것도 없어 누를
+       곳이 없으므로 **항상** 그리고 꺼짐은 연회색으로 둔다.
+       ⚠️ 색(.on/hover)은 js/21-color-palette.js가 팔레트 보색으로 덮어쓴다 — 여기 값은 테마를
+          한 번도 안 바꾼 사람이 보는 기본값. */
+    .no-td .row-pin-bar {
+        position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+        border-radius: 0 2px 2px 0; cursor: pointer;
+        background: #dfe4e9; transition: background .15s, opacity .15s;
+    }
+    .no-td .row-pin-bar:hover { background: #4285f4; opacity: 0.5; }
+    #myTable tbody tr.alarm-on .row-pin-bar { background: #4285f4; }
+    /* 헤더(No.)의 전체 토글 — 행과 같은 모양이되 th엔 기준 높이가 없어 고정 크기 인라인 막대로 */
+    .row-pin-bar.pin-bar-head {
+        position: static; width: 5px; height: 13px; border-radius: 2px;
+        flex-shrink: 0; cursor: pointer;
+        background: #c3ccd4; transition: background .15s, opacity .15s;
+    }
+    .row-pin-bar.pin-bar-head:hover { background: #4285f4; opacity: 0.5; }
+    /* 인쇄물에서는 "꺼진" 회색 막대가 모든 행에 줄줄이 찍히면 잡음이라 켜진 것만 남긴다 */
+    @media print {
+        .no-td .row-pin-bar:not(.on) { display: none !important; }
+        .row-pin-bar.pin-bar-head { display: none !important; }
     }
 
     /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
@@ -2049,8 +2072,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     #myTable tbody tr.alarm-on td {
         background-color: #e3f2fd !important;
     }
-    #myTable tbody tr.alarm-on td:first-child {
-        box-shadow: inset 3px 0 0 0 #4285f4;
+    #myTable tbody tr.alarm-on .row-pin-bar {
+        background: #4285f4;
     }
 
     /* 🖨️ 인쇄 모드 완전히 처음부터 다시 잡기 (화면 모드에는 영향 0%) */

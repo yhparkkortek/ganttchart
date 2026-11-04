@@ -238,6 +238,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 그룹행 날짜순 정렬은 하위 전체 재귀 최솟값(`effectiveTs`)으로 — 배열 순서 부산물 아님
 - 체크박스 다중 선택은 배열 인덱스 말고 **행 객체 참조 Set** — 배경 재렌더로 인덱스 어긋남
 - **(2026-10-28) 숨은 행은 빈 자리표시 `<tr data-lazy>`로 렌더된다** — 행을 보이게 하는 새 코드는 `display` 풀기 전에 `_ganttHydrateRow(tr)` 필수(안 하면 빈 행). 보이기 규칙은 `_ganttComputeRowVisibility` 한 곳
+- **▌ (2026-11-05) "No. 칸의 빨간 바"가 곧 핀셋(알람) 표시였다 — 이제 그 막대 자체가 토글이고 📌 아이콘은 없앴다**(사용자 요청). 막대는 `.row-pin-bar`(js/04j), 꺼짐=연회색·켜짐=팔레트 **보색**(js/21 — 파랑 테마면 빨강). ⚠️ 막대는 flex **바깥**에 absolute 로 둔다 — flex 안에 넣으면 칸 높이가 아니라 글자 한 줄(≈17px)만 덮는다(td 에 확정 높이가 없어 `height:100%`가 안 먹는다). 겹침은 flex 쪽 `padding-left:7px` 로 막는다. 🐞 함께 신고된 **"핀셋 알람 설정이 동작 안 한다"의 진짜 원인**: `_patchPinRowDom`(js/04e)이 `noTd.querySelector('span')`로 **첫 번째** span 을 집었는데 2026-10-28 에 그 앞에 드래그 손잡이(⠿)가 생기면서 **손잡이가 켜짐 스타일을 뒤집어쓰고** 아이콘은 영영 꺼진 모습이었다(데이터·행 색은 멀쩡) → **렌더러가 만든 DOM 을 "몇 번째 자식"으로 집지 말 것**. 검증 `tests/pin-bar.browser.js` 27/27 + 돌연변이 3종 → `docs/gantt-internals.md`
 
 ### `docs/ai-qa.md` — 💬 AI 문답 (`04g`/`04h`/`04j`)
 - **읽을 때**: AI 문답 프롬프트·로컬 명령·`[[ACTION]]` 태그·드롭다운·히스토리
@@ -461,7 +462,11 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **📗 참조 엑셀 NAS 이전 완료**(2026-11-04) — NAS `Reference/Reference.xlsx`(97KB·14시트, 11-03 이사 때 이미 와 있었다). 받는 곳을 **`window._refExcelBlob()` 하나**(js/04c)로 모았다: NAS 모드면 `/nas/app/get`, 드라이브/미러면 옛 2단 시도(export → alt=media). 쓰는 곳 둘(`autoImportReferenceExcel` 워크북 전체, `_bsFetchTemplateRows` js/43 시트 하나)이 각자 드라이브를 부르던 걸 이 하나로 바꿨다 — **js/43 은 실패해도 조용히 null** 이라 Customer SPEC 표준 서식이 영영 비어 있어도 아무 말이 없었다(사람이 못 알아챈다). 경로는 데이터 `REFERENCE_NAS_REL`. ⚠️ **"📥 참조 엑셀 다운로드" 링크도 NAS 로 돌렸다**(`_syncRefExcelLink`) — docs.google.com 을 가리킨 채 두면 **사본이 갈라지고**(한쪽만 고치면 사람마다 다른 서식) 드라이브 권한 없는 팀원은 아예 못 받는다. 버튼 title 의 "구글 드라이브에 연동되어 있으면…"도 틀린 안내라 함께 고쳤다(`data-i18n-title` 을 **떼야** i18n 맵이 옛 문구로 덮어쓰지 않는다). ⚠️ NAS 읽기는 `no-store`+`_cb` 난수 필수, 받은 바이트는 **앞 2바이트 PK 로 확인**(DSM 은 없는 파일에 HTML 을 준다). 검증 `tests/reference-excel.browser.js` 19/0(성공 경로는 진짜 NAS·진짜 파일, 가짜는 fetch·handleFiles·_storageMode 경계만) + 돌연변이 2종 확인
 - ⚠️⚠️ **파이썬으로 소스를 고칠 땐 "인코딩 먼저, 쓰기는 원자적으로"** — 이 점검에서 **두 번** 파일을 날렸다. ① `io.open(p,'w')` 로 열어만 두고 **close 를 안 해** 뒤 반복에서 예외가 나자 22d(1,409줄)가 **0바이트**가 됐다 ② `io.open(p,'wb')` 는 **여는 순간 자른다** — `.write(text.encode())` 가 뒤에서 `UnicodeEncodeError` 를 내자 `kortek_pm.html` 이 **0바이트**가 됐다(원인은 `u'📜'` 같은 **서러게이트 쌍 이스케이프** — 파이썬3에선 인코딩 불가. 이모지는 **실제 문자**나 `\U0001F4DC` 로). → **`encode()` 를 먼저 하고, 임시파일+`os.replace`** 로 쓸 것. 되돌릴 백업을 먼저 떠둘 것(`git checkout` 은 막혀 있다)
 
-### `docs/daily-report-design.md` — 📔 일일 업무보고 **설계 검토서**(2026-11-04, 아직 미구현)
+### `docs/daily-report-handover.md` — 📔 일일 업무보고 **인계 메모**(2026-11-04, 처리되면 파일과 함께 지울 것)
+- **읽을 때**: 일일보고가 덜 도는 것 같을 때. **사람이 할 일 둘**(① 백엔드 재시작 — 안 하면 `/daily/*` 가 404 라 텔레그램 입력·미작성 알림이 안 돈다 ② 👥 명단 채우기 — 없으면 미작성 표시도 텔레그램 입력도 안 된다, 📣 담당은 **반드시 한 명**)
+- 확인한 것 / **확인 못 한 것**(실제 AI 호출·실제 텔레그램 왕복·엑셀 버튼) 표가 있다. 재시작 뒤 5분 점검 순서도
+
+### `docs/daily-report-design.md` — 📔 일일 업무보고 **설계서**(2026-11-04, 1~4단계 구현 완료)
 - **읽을 때**: 일일보고를 만들기 전. 8개 항목(주간보고 관계·간트 연동·저장/동시성·화면·집계·알림·단계·안 할 것) + **사람에게 물을 것 10개**
 - 핵심 판단: 주간보고(프로젝트×주)와 일일보고(사람×날짜)는 **직교** — 접점은 `[이슈를 업무에 반영]` 버튼 하나(그 행 `content` 에 `[문제점]`/`[대책]` 줄을 넣으면 주간보고가 **원래 그 줄만 읽으므로** js/20 무수정)
 - 저장은 **사람×날짜 파일 1개**(`App_Config/DailyReport/<YYYY-MM>/<날짜>__<계정id>.json`) — 쓰는 사람이 파일마다 **한 명**이라 11-04 색인 사고의 전제(다중 작성자 read-modify-write)가 성립하지 않는다. 팀 1파일 upsert 는 **안 한다**
@@ -536,6 +541,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `gas/Code.gs` | AI 프록시(Google Apps Script 웹앱) 소스 사본. 수정 후 Apps Script 편집기에서 **기존 배포 편집 → 새 버전**으로 배포(새 배포 만들면 URL 바뀜) |
 | `kortek_backend.py` | Flask 서버. 메일 SMTP/POP3, Telegram, 암복호화, 예약 발송 스케줄러 |
 | `sap_bridge_32.py` | SAP GUI 32비트 브릿지 — `py -3-32` 서브프로세스. `kortek_backend.zip`에도 반드시 포함 |
+| `nas_dsm.py` | 🗄️ NAS(Synology DSM) API. ⚠️ `ensure_folder` 는 `name`/`folder_path` 를 **JSON 배열**로 보낸다 — 평문이면 **숫자로 시작하는 폴더가 안 만들어진다**(2026-11-04 실측, 일일보고 월 폴더가 여기서 막혔다) |
 | `insa_write.py` | ✍️ 인사관리 **쓰기** — 근무계획 수정 신청서 칸 채우기(`open_regform`/`fill_workplan_edit`). **등록은 안 누른다.** 읽기(`gw_bridge.insa_*`)와 모듈 분리 |
 | `kortek_backend.bat` | 백엔드 실행. SAP용 32비트 Python/pywin32 최초 1회 자동 설치 |
 | `kortek_backend_install.bat` | 원클릭 설치 — 시작프로그램 자동등록 + 즉시 최소화 실행. 임시 `.ps1`로 따옴표 이스케이프 우회 |
@@ -554,7 +560,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ## 작업 팁
 
-- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, `node tests/storage-adapter.test.js`, `python tests/test_mail_recv_host.py`, `python tests/test_mail_auth_block.py`, `py -3 tests/mail-server-probe.py`(로그인 없이 서버 능력만), `python tests/test_nas_login_budget.py`, `python tests/test_nas_setup_route.py`, `python tests/gw-read-probe.py`(그룹웨어 조회 25종 전수, **로그인은 안 한다**), 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`(25건), `tests/storage-adapter.browser.js`·`tests/storage-mirror.browser.js`·`tests/storage-migrate.browser.js`·`tests/nas-cutover-check.browser.js`(전환 직후 점검)·`tests/bom-part-chips.browser.js`(31건)·`tests/history-delete.browser.js`(수정이력 구간삭제 7범위, 50건)·`tests/reference-excel.browser.js`(참조 엑셀 NAS 이전, 19건)·`tests/page-excel-roundtrip.browser.js`(📄↔📊 왕복 7페이지, 45건 — **1회 돌릴 때마다 새로고침 필수**)·`tests/weekly-ppt-export.browser.js`(주간보고 PPT 출력, 11건 — 만든 pptx 를 zip 으로 뜯어 슬라이드·글자까지 확인, AI 키 없이 돈다) 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
+- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, `node tests/storage-adapter.test.js`, `python tests/test_mail_recv_host.py`, `python tests/test_mail_auth_block.py`, `py -3 tests/mail-server-probe.py`(로그인 없이 서버 능력만), `python tests/test_nas_login_budget.py`, `python tests/test_nas_setup_route.py`, `python tests/test_daily_report_backend.py`(일일보고 수신·알림 31건), `node tests/daily-report.test.js`(일일보고 34건), `node tests/gantt-excel-meta-loss.test.js`(간트 엑셀 왕복이 행 메타를 날리는지 9건), `python tests/gw-read-probe.py`(그룹웨어 조회 25종 전수, **로그인은 안 한다**), 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`(25건), `tests/storage-adapter.browser.js`·`tests/storage-mirror.browser.js`·`tests/storage-migrate.browser.js`·`tests/nas-cutover-check.browser.js`(전환 직후 점검)·`tests/bom-part-chips.browser.js`(31건)·`tests/pin-bar.browser.js`(핀셋 토글 막대, 27건 — 저장은 킬스위치로 막고 끝나면 원상복구)·`tests/history-delete.browser.js`(수정이력 구간삭제 7범위, 50건)·`tests/reference-excel.browser.js`(참조 엑셀 NAS 이전, 19건)·`tests/page-excel-roundtrip.browser.js`(📄↔📊 왕복 7페이지, 45건 — **1회 돌릴 때마다 새로고침 필수**)·`tests/weekly-ppt-export.browser.js`(주간보고 PPT 출력, 11건 — 만든 pptx 를 zip 으로 뜯어 슬라이드·글자까지 확인, AI 키 없이 돈다) 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
 - 특정 기능 수정 시 파일 맵에서 바로 지정. 못 찾겠으면 `grep -rn "함수명" js/`.
 - 민감 파일(`mail_config.json`, `telegram_config.json`, `schedule_rules.json`, `.env`)은 `.gitignore` — 로컬에만 존재.
 - 코드 주석의 `js/파일명.js:줄번호` 참조는 파일 이동/분리 시 같이 업데이트.
