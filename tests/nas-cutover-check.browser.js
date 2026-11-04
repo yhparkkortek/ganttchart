@@ -30,8 +30,15 @@
         return;
     }
     var badge = document.getElementById('drive-conn-badge');
-    check('헤더 배지가 🗄️ 다', !!badge && badge.textContent.indexOf('🗄') === 0,
-          badge ? (badge.textContent || '(빈칸)') : '(배지 없음)');
+    // 🏷 [2026-11-04] 저장소가 하나뿐이라 배지는 **안 띄운다**(늘 같은 답이라 말할 가치가 없다).
+    //    ⚠️ 중요한 건 "숨었다"가 아니라 **"드라이브라고 말하지 않는다"** 이다 — 그 자리를
+    //       원래 함수(js/04b)가 다시 그려 "구글 드라이브 연결됨"이 되는 게 진짜 사고였다.
+    check('헤더 배지를 숨긴다',
+          !badge || getComputedStyle(badge).display === 'none',
+          badge ? ('보임: ' + (badge.textContent || '(빈칸)')) : '(배지 없음)');
+    check('배지가 드라이브라고 말하지 않는다',
+          !badge || !/드라이브|Drive/.test((badge.title || '') + (badge.textContent || '')),
+          badge ? ((badge.title || '') + ' / ' + (badge.textContent || '')) : '');
 
     // ⚠️ [2026-11-04 추가] **배지가 🗄️ 인데 버튼은 회색**이던 사고가 있었다.
     //    버튼 활성화가 구글 OAuth 성공 콜백 안에만 있어서 NAS 모드에선 한 번도 안 돌았다.
@@ -161,6 +168,10 @@
           '플래그=' + _savedFlag + ' (drive/mirror 면 비상 탈출구를 쓴 상태다)');
     var _badge = document.getElementById('drive-conn-badge');
     check('배지는 눌러도 안 바뀐다(고르기 없음)', !(_badge && _badge.onclick));
+    // 📂 앱을 열 때 프로젝트 불러오기 창을 **한 번만** 띄운다(사용자 요청 2026-11-04).
+    check('목록 자동 열기가 켜져 있다', !!pol.autoOpenProjectList, JSON.stringify(pol));
+    check('이 페이지에서 한 번만 열렸다', window._projectListAutoOpened === true,
+          '열린 적 없음 — 이미 프로젝트가 열려 있었거나 연결이 늦었을 수 있다');
     check('배너 함수가 있다', typeof window._storageBanner === 'function');
     check('🚀 간편 전환으로 가는 길이 있다', typeof window.storageOpenQuickSwitch === 'function');
     check('📥 설치 안내로 가는 길이 있다', typeof window.storageOpenBackendGuide === 'function');

@@ -512,9 +512,14 @@
     //     앱은 NAS 모드에서도 헤더 배지에 **"구글 드라이브 연결됨"** 이라고 말하고 있었다.
     //     저장 위치를 잘못 알면 "어디에 저장됐는지 모르는" 상태가 된다.
     //  ⚠️ 기존 배지 함수(js/04b)를 **감싼다** — 그 함수가 여러 곳에서 불리므로 한 곳만 고치면 된다.
+    //  🏷 [2026-11-04] **NAS 모드에선 배지를 아예 안 띄운다.**
+    //    저장소가 하나뿐이면 "지금 어디에 저장되는지"는 늘 같은 답이라 말할 가치가 없다.
+    //    ⚠️⚠️ 그렇다고 이 블록을 **지우면 안 된다.** 배지를 그리는 원래 함수(js/04b
+    //       `_updateDriveConnBadge`)가 그 자리에 **"구글 드라이브 연결됨"** 을 다시 그린다 —
+    //       그게 2026-11-04 에 고쳤던 바로 그 버그다(NAS 에 저장하면서 드라이브라고 말함).
+    //       그래서 여기서 **끝까지 감싸서 숨긴다.**
+    //    ⚠️ 미러는 비정상 상태라 **계속 보여준다** — 그건 말할 가치가 있다.
     var BADGE = {
-        nas:    { icon: '🗄️', ko: '사내 NAS 에 저장됩니다 (구글 드라이브를 쓰지 않습니다)',
-                  en: 'Saving to the in-house NAS (Google Drive is not used)' },
         mirror: { icon: '🪞', ko: '구글 드라이브에 저장하면서 사내 NAS 에도 같이 씁니다 (읽기는 드라이브)',
                   en: 'Saving to Google Drive and mirroring to the in-house NAS (reads come from Drive)' }
     }[MODE];
@@ -522,9 +527,13 @@
         function paint() {
             var el = document.getElementById('drive-conn-badge');
             if (!el) return;
+            if (!BADGE) {                     // nas — 숨긴다(지우는 게 아니라 덮어쓴다)
+                el.style.display = 'none';
+                el.onclick = null;
+                el.title = '';
+                return;
+            }
             el.textContent = BADGE.icon;
-            // ⚠️ [2026-11-04] **누르면 바뀌지 않는다.** 저장소는 더 이상 고르는 것이 아니다 —
-            //    배지는 "지금 어디에 저장되는지"만 말한다(그래도 이건 반드시 보여야 한다).
             el.title = (window._currentLang === 'en' ? BADGE.en : BADGE.ko);
             el.style.display = 'inline-flex';
             el.style.cursor = 'default';
@@ -1393,6 +1402,20 @@
                 ab.style.color = '';
             }
             if (window._storageLoadSharedData) window._storageLoadSharedData();
+            // 📂 [2026-11-04] 프로젝트 불러오기 창을 **이 페이지에서 한 번만** 띄운다.
+            //    ⚠️ 한 번만인 이유: 이 함수는 연결이 확인될 때 불리는데, NAS 모드에서 그건
+            //       **페이지를 열 때마다**다. 가드가 없으면 다른 일로 앱을 열어도 매번 뜬다.
+            //    ⚠️ 이미 프로젝트를 연 상태면 띄우지 않는다(저장 후 돌아온 경우 등).
+            //    끄려면 js/04a 의 `STORAGE_POLICY.autoOpenProjectList` 를 false 로.
+            if ((window.STORAGE_POLICY || {}).autoOpenProjectList
+                && !window._projectListAutoOpened
+                && !window.currentDriveFileId
+                && typeof window.loadFromGoogleDrive === 'function') {
+                window._projectListAutoOpened = true;
+                setTimeout(function () {
+                    try { window.loadFromGoogleDrive(); } catch (e) { console.warn('[storage] 목록 자동 열기 실패', e); }
+                }, 300);
+            }
             note('nas-connected-ui', '');
         } catch (e) { console.error('[storage-adapter] 연결 후처리 실패', e); }
     }
