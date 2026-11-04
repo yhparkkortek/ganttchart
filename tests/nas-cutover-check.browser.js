@@ -149,6 +149,39 @@
         } catch (e) { note('점검 폴더를 못 지웠습니다 — 앱 폴더의 ' + DIR + ' 을 직접 지워주세요'); }
     }
 
+    // ── 📢 전환 선언(2026-11-04) — 안 옮긴 팀원이 "지금 어디에 저장되는지" 알 수 있는가
+    var pol = window.STORAGE_POLICY || {};
+    check('전환 선언이 데이터로 있다(STORAGE_POLICY)', !!pol.cutover, JSON.stringify(pol));
+    check('배너 함수가 있다', typeof window._storageBanner === 'function');
+    check('🚀 간편 전환으로 가는 길이 있다', typeof window.storageOpenQuickSwitch === 'function');
+    check('📥 설치 안내로 가는 길이 있다', typeof window.storageOpenBackendGuide === 'function');
+    // 모드 목록: 미러는 내려가고, 드라이브엔 경고가 붙어야 한다
+    try {
+        window.storageOpenSwitcher(document.body);
+        var pop = document.getElementById('storage-switch-pop');
+        var rows = [].slice.call(pop.querySelectorAll('[data-mode]')).map(function (b) {
+            return { mode: b.getAttribute('data-mode'), text: b.innerText };
+        });
+        pop.remove();
+        var ids = rows.map(function (r) { return r.mode; });
+        check('미러는 목록에서 내려갔다', ids.indexOf('mirror') < 0, ids.join(','));
+        var dr = rows.filter(function (r) { return r.mode === 'drive'; })[0];
+        check('드라이브에 경고가 붙었다', !!dr && /⚠️/.test(dr.text), dr && dr.text);
+    } catch (e) {
+        check('모드 목록', false, String(e && e.message || e));
+    }
+    // NAS → Drive 되돌리기는 **데이터가 갈라지는 일**이라고 말하는가 (실제로 바꾸지는 않는다)
+    try {
+        var seen = null, oc = window.confirm;
+        window.confirm = function (m) { seen = m; return false; };
+        window.storageSetMode('drive');
+        window.confirm = oc;
+        check('되돌릴 때 갈라짐을 경고한다', !!seen && /팀원에게 안 보이/.test(seen), seen);
+        check('confirm 문구에 마크다운이 안 남았다', !!seen && seen.indexOf('**') < 0, seen);
+    } catch (e) {
+        check('되돌리기 경고', false, String(e && e.message || e));
+    }
+
     out('\n════ 통과 ' + ok + ' · 실패 ' + bad + (warn ? (' · 주의 ' + warn) : '') + ' ════');
     if (bad === 0) {
         out('✅ 읽기·id·쓰기 경로가 살아 있습니다.');

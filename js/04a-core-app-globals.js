@@ -215,6 +215,20 @@ ${mailText}`;
         '개발자료실'        // 사양서·도면 저장소(문서 저장소 root). 파일이 수만 건이라 절대 뒤지면 안 된다.
     ];
 
+
+
+    // 🗄️ [2026-11-04] **이 팀의 정본은 어디인가** — 전환 선언. 코드가 아니라 데이터다.
+    //   왜 저장소(이 파일)에 두나: 아직 안 옮긴 팀원은 Drive 모드라 NAS 를 못 읽는다. 그래서
+    //   "이제 NAS 가 정본"이라는 사실만은 **앱 코드와 같이** 와야 한다(GitHub Pages 라 새로고침
+    //   한 번이면 받는다). ⚠️ 사내 주소는 여기 쓰지 않는다 — 공개 저장소다. 주소는 설정 코드로.
+    //   `cutover` 를 끄면 경고는 전부 사라진다(되돌릴 때 코드를 뜯지 않아도 되게).
+    window.STORAGE_POLICY = {
+        cutover: true,              // 팀 전체가 NAS 로 넘어왔는가
+        since: '2026-11-04',        // 그날 이후 Drive 에 쓴 내용은 팀에 안 보인다
+        target: 'nas',
+        hideMirror: true            // 미러는 이사 중간 단계였다 — 끝났으면 목록에서 내린다
+    };
+
     let tokenClient;
     let gapiInited = false;
     let gisInited = false;

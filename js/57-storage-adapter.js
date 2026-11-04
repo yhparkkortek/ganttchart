@@ -299,10 +299,19 @@
         { id: 'drive', icon: '☁️',
           ko: '구글 드라이브', en: 'Google Drive',
           koDesc: '지금까지 쓰던 방식', enDesc: 'What you have been using',
+          // 전환 선언이 켜지면 이 줄로 바뀐다 — "쓸 수 있다"와 "써도 된다"는 다르다.
+          koDescAfter: '⚠️ 전환 전까지만 — 여기서 만든 내용은 팀에 안 보입니다',
+          enDescAfter: '⚠️ Only until you switch — what you save here is invisible to the team',
+          koWarnAfter: '⚠️ 이 팀의 데이터는 이제 사내 NAS 에 있습니다.\n\n'
+                     + '드라이브로 돌아가면 「여기서 저장한 새 내용은 팀원에게 안 보이고」 '
+                     + '팀원이 NAS 에 저장한 내용도 나에게 안 보입니다.\n\n'
+                     + '백엔드가 꺼져서 급히 보기만 하려는 경우가 아니라면 되돌리지 마세요.',
+          enWarnAfter: 'The team data now lives on the in-house NAS. If you go back to Drive, '
+                     + 'what you save here will not be visible to your team, and vice versa.',
           koWarn: '구글 드라이브로 돌아갑니다.\n\n⚠️ NAS 모드에서 저장한 내용은 NAS 에만 있습니다 — '
                 + '드라이브에는 그때까지의 내용만 있습니다.',
           enWarn: 'Switch back to Google Drive.\n\nAnything saved while in NAS mode lives only on the NAS.' },
-        { id: 'mirror', icon: '🪞',
+        { id: 'mirror', icon: '🪞', afterCutover: 'hide',   // 이사 중간 단계 — 끝났으면 안 보인다
           ko: '미러 (둘 다)', en: 'Mirror (both)',
           koDesc: '드라이브에 저장하면서 NAS 에도 같이 씀 · 읽기는 드라이브',
           enDesc: 'Save to Drive and mirror to NAS · reads from Drive',
@@ -319,6 +328,12 @@
           enWarn: 'All reads and writes go to the in-house NAS. The local backend must be running.' }
     ];
 
+    /** 전환 선언이 켜져 있나 — 데이터(js/04a `STORAGE_POLICY`)만 본다. */
+    function cutover() {
+        var p = window.STORAGE_POLICY || {};
+        return !!p.cutover;
+    }
+
     /** 모드를 바꾼다. **어디에 저장되는지가 바뀌는 일**이라 반드시 물어보고 바꾼다. */
     //  opts.silent — **이미 사람 확인을 받은 경로**에서만 쓴다(🚀 간편 전환). 확인창을 두 번
     //  띄우면 두 번째를 읽지 않고 누르게 되고, 그러면 확인창이 있는 의미가 없어진다.
@@ -329,8 +344,10 @@
         if (now === id) return;
         var en = window._currentLang === 'en';
         var head = (en ? 'Switch storage to ' : '저장소를 바꿉니다 → ') + m.icon + ' ' + (en ? m.en : m.ko);
+        // 전환이 끝난 뒤 Drive 로 되돌리는 건 **데이터가 갈라지는 일**이다 — 문구를 바꿔 말한다.
+        var warn = (cutover() && (en ? m.enWarnAfter : m.koWarnAfter)) || (en ? m.enWarn : m.koWarn);
         if (!(opts && opts.silent)
-            && !confirm(head + '\n\n' + (en ? m.enWarn : m.koWarn) + '\n\n'
+            && !confirm(head + '\n\n' + warn + '\n\n'
                         + (en ? 'The page will reload.' : '페이지를 새로고침합니다.'))) return;
         try {
             if (id === 'drive') localStorage.removeItem('gantt_storage_backend');
@@ -357,8 +374,12 @@
             + ' font-size:12px; color:#333;';
         pop.innerHTML = '<div style="padding:5px 8px 7px; color:#777; font-size:11px;">'
             + (en ? 'Where the app saves' : '앱 데이터를 어디에 저장할까요') + '</div>'
-            + STORAGE_MODES.map(function (m) {
+            + STORAGE_MODES.filter(function (m) {
+                // 지금 쓰고 있는 모드는 숨기지 않는다 — 내가 어디 있는지는 항상 보여야 한다.
+                return !(cutover() && m.afterCutover === 'hide' && m.id !== now);
+            }).map(function (m) {
                 var cur = m.id === now;
+                var desc = (cutover() && (en ? m.enDescAfter : m.koDescAfter)) || (en ? m.enDesc : m.koDesc);
                 return '<button data-mode="' + m.id + '"' + (cur ? ' disabled' : '')
                     + ' style="display:block; width:100%; box-sizing:border-box; text-align:left;'
                     + ' padding:7px 9px; margin:0 0 2px; border:none; border-radius:6px;'
@@ -366,8 +387,9 @@
                     + '<span style="font-size:14px;">' + m.icon + '</span> '
                     + '<b style="color:' + (cur ? '#1971c2' : '#333') + ';">' + (en ? m.en : m.ko) + '</b>'
                     + (cur ? ('<span style="color:#1971c2;"> ● ' + (en ? 'now' : '지금') + '</span>') : '')
-                    + '<div style="color:#777; font-size:11px; margin-top:2px; line-height:1.45;">'
-                    + (en ? m.enDesc : m.koDesc) + '</div></button>';
+                    + '<div style="color:' + (/⚠️/.test(desc) ? '#b1432f' : '#777')
+                    + '; font-size:11px; margin-top:2px; line-height:1.45;">'
+                    + desc + '</div></button>';
             }).join('');
         document.body.appendChild(pop);
         var r = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : { left: 20, bottom: 40 };
@@ -389,9 +411,92 @@
         }, 0);
     };
 
-    // ⚠️ 여기서 끝. 플래그가 꺼져 있으면 **아무것도 감싸지 않는다.**
+    // ═══ 📢 배너 ═════════════════════════════════════════════════════════
+    //  ⚠️ 조용한 실패가 제일 나쁘다 — 둘 다 "모르고 지나가는" 상태를 없애려는 것이다:
+    //     ① Drive 모드인데 팀은 NAS 로 넘어간 상태(새 데이터가 갈라진다)
+    //     ② NAS 모드인데 백엔드/로그인이 없는 상태(버튼이 회색인 이유를 사람이 모른다)
+    function storageBanner(id, bg, bd, fg, html, buttons) {
+        if (document.getElementById(id)) return;
+        var go = function () {
+            if (document.getElementById(id)) return;
+            var el = document.createElement('div');
+            el.id = id;
+            el.style.cssText = 'position:fixed; top:12px; left:50%; transform:translateX(-50%);'
+                + ' z-index:999997; display:flex; align-items:center; gap:10px; padding:10px 16px;'
+                + ' background:' + bg + '; border:1px solid ' + bd + '; border-radius:8px; color:' + fg + ';'
+                + ' font-size:12px; font-weight:bold; box-shadow:0 4px 14px rgba(0,0,0,.18);'
+                + ' max-width:92vw; flex-wrap:wrap;';
+            var bs = 'padding:4px 12px; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;';
+            el.innerHTML = '<span style="font-weight:normal;">' + html + '</span>'
+                + (buttons || []).map(function (b, i) {
+                    return '<button data-i="' + i + '" style="' + bs + ' border:1px solid ' + bd + ';'
+                        + ' background:' + (b.primary ? fg : 'transparent') + ';'
+                        + ' color:' + (b.primary ? '#fff' : fg) + ';">' + b.label + '</button>';
+                }).join('')
+                + '<button data-close="1" style="' + bs + ' border:none; background:transparent; color:' + fg + ';">✕</button>';
+            el.addEventListener('click', function (ev) {
+                var t = ev.target.closest('button');
+                if (!t) return;
+                if (t.getAttribute('data-close')) { el.remove(); return; }   // 이 창에서만 숨김
+                var b = (buttons || [])[Number(t.getAttribute('data-i'))];
+                if (b && b.onClick) b.onClick();
+            });
+            document.body.appendChild(el);
+        };
+        if (document.body) go(); else document.addEventListener('DOMContentLoaded', go);
+    }
+
+    //  하네스가 배너 모양을 볼 수 있게 내놓는다(화면만 그린다 — 저장 경로와 무관).
+    window._storageBanner = storageBanner;
+
+    /** 🔑 설정을 열고 🚀 간편 전환 패널까지 펼쳐 준다 — "어디서 하나"를 묻지 않게. */
+    window.storageOpenQuickSwitch = async function () {
+        if (!window.openSapLoginSettings) { alert('설정 화면을 찾지 못했습니다.'); return; }
+        await window.openSapLoginSettings();
+        setTimeout(function () {
+            var box = document.getElementById('naslogin-quick');
+            if (box && box.style.display === 'none' && window._nasQuickToggle) window._nasQuickToggle();
+            if (box && box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+        }, 700);
+    };
+
+    /** 📥 백엔드 설치 안내(알람 설정 안의 섹션)를 펼쳐 준다. */
+    window.storageOpenBackendGuide = function () {
+        if (window.openAlarmSettings) window.openAlarmSettings();
+        setTimeout(function () {
+            var sec = document.getElementById('sec-server');
+            if (sec && sec.style.display === 'none' && window._toggleAlarmSection) {
+                window._toggleAlarmSection('sec-server');
+            }
+            if (sec && sec.scrollIntoView) sec.scrollIntoView({ block: 'center' });
+        }, 500);
+    };
+
+    // ⚠️ 여기서 끝. 플래그가 꺼져 있으면 **저장 경로는 아무것도 감싸지 않는다.**
+    //    (2026-11-04 보탬: 경로는 그대로 두되, 전환 선언이 켜졌으면 **안내만** 한다 —
+    //     안 옮긴 팀원이 "지금 어디에 저장되고 있는지" 모르는 게 이 단계의 제일 큰 위험이다.)
     var MODE = currentBackend();
-    if (MODE !== 'nas' && MODE !== 'mirror') return;
+    if (MODE !== 'nas' && MODE !== 'mirror') {
+        if (cutover()) {
+            var en0 = window._currentLang === 'en';
+            storageBanner('storage-cutover-banner', '#fff8e6', '#e6a817', '#7a5210',
+                en0 ? ('This team saves to the in-house NAS since ' + ((window.STORAGE_POLICY || {}).since || '')
+                       + '. You are still on Google Drive — <b>what you save here is not visible to the team.</b>')
+                    : ('이 팀의 데이터는 ' + ((window.STORAGE_POLICY || {}).since || '') + ' 부터 <b>사내 NAS</b> 에 있습니다. '
+                       + '지금은 ☁️ 구글 드라이브에 저장되고 있어 <b>여기서 만든 내용이 팀원에게 보이지 않습니다.</b>'),
+                [{ label: '🚀 ' + (en0 ? 'Switch now' : '지금 전환'), primary: true,
+                   onClick: function () { window.storageOpenQuickSwitch(); } }]);
+        }
+        return;
+    }
+    if (MODE === 'mirror' && cutover()) {
+        var en1 = window._currentLang === 'en';
+        storageBanner('storage-mirror-banner', '#fff8e6', '#e6a817', '#7a5210',
+            en1 ? 'Mirror mode reads from Drive — you may not see what the team saved on the NAS.'
+                : '🪞 미러 모드는 <b>읽기가 드라이브</b>라, 팀원이 NAS 에 저장한 내용이 안 보일 수 있습니다.',
+            [{ label: '🚀 ' + (en1 ? 'Switch to NAS' : 'NAS 로 전환'), primary: true,
+               onClick: function () { window.storageSetMode('nas'); } }]);
+    }
 
     // ── 🏷 지금 데이터가 어디 있는지 **화면에 보여준다** ──────────────────
     //  ⚠️⚠️ 안 보여주면 사람이 알 수가 없다. 실제로 "이 주소를 쓰면 NAS 인가요?"라는
@@ -1120,15 +1225,45 @@
                 note('nas-offline', (s && s.message) || '');
                 console.warn('[storage-adapter] NAS 에 붙어 있지 않습니다 — 🔑 설정에서 로그인해주세요.',
                              (s && s.message) || '');
+                // ⚠️ 전엔 콘솔에만 적었다 — 사람 눈엔 **[📂 프로젝트 열기] 가 회색인 것**만 보이고
+                //    왜 그런지는 알 길이 없었다. 사유별로 다르게 말한다(고치는 방법이 다르다).
+                nasOfflineBanner(s || {});
             }
         } catch (e) {
             note('nas-offline', String((e && e.message) || e));
             console.warn('[storage-adapter] 백엔드에 못 붙었습니다 — kortek_backend.bat 이 떠 있는지 확인하세요.');
+            nasOfflineBanner({ reason: 'backend' });
         }
         implant();          // 상태를 알아낸 뒤 한 번 더 — 그 사이 가드가 돌았을 수 있다
         if (window._updateDriveConnBadge) { try { window._updateDriveConnBadge(); } catch (e) { /* ignore */ } }
         if (_nasOnline) nasMarkConnected();
     })();
+
+    /** NAS 모드인데 못 붙은 상태 — **사유마다 할 일이 다르다.** */
+    function nasOfflineBanner(s) {
+        var en = window._currentLang === 'en';
+        var reason = s.reason || '';
+        var msg, btn;
+        if (reason === 'backend' || reason === 'module') {
+            msg = en ? 'The local backend is not running, so the app cannot read the NAS.'
+                     : '🗄️ 사내 NAS 에 연결하지 못했습니다 — <b>백엔드(kortek_backend)가 꺼져 있습니다.</b> '
+                       + '작업 표시줄에 검은 창이 있는지 확인하거나, 설치 안내를 보세요.';
+            btn = { label: '📥 ' + (en ? 'Setup guide' : '설치 안내'), primary: true,
+                    onClick: function () { window.storageOpenBackendGuide(); } };
+        } else if (reason === 'blocked') {
+            msg = en ? 'NAS login is locked after failed attempts — fix the password and save again.'
+                     : '⛔ NAS 로그인이 <b>잠겨 있습니다</b> — 🔑 설정에서 비밀번호를 고쳐 다시 저장하면 풀립니다.';
+            btn = { label: '🔑 ' + (en ? 'Settings' : '설정 열기'), primary: true,
+                    onClick: function () { window.storageOpenQuickSwitch(); } };
+        } else {
+            msg = en ? 'Not signed in to the NAS yet.'
+                     : '🗄️ 아직 사내 NAS 에 로그인하지 않았습니다 — 아이디·비밀번호만 넣으면 됩니다.';
+            btn = { label: '🚀 ' + (en ? 'Sign in' : '로그인'), primary: true,
+                    onClick: function () { window.storageOpenQuickSwitch(); } };
+        }
+        storageBanner('storage-nas-offline-banner', '#fdecea', '#e05c4a', '#a3281c', msg, [btn]);
+    }
+    window._storageNasOfflineBanner = nasOfflineBanner;   // 하네스용(백엔드를 끌 수 없으므로)
 
     // 🔌 **"붙었다"를 앱에 알린다.** 이게 빠져서 🗄️ 배지는 떠 있는데
     //    [📂 프로젝트 열기] 가 HTML 의 `disabled` 그대로 회색이었다(실사용 신고 2026-11-04).
