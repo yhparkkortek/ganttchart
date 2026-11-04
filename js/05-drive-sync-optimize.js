@@ -140,7 +140,7 @@ window.handleAuthClick = function(event, silentOnly) {
                 //    붙어 ~400ms가 추가됐다. localStorage 캐시가 있으면 이 Promise는 즉시 resolve
                 //    되고, 없어도 about.get과 병렬로 실행되어 숨겨진 시간에 처리된다.
                 var _folderCacheWarm = (window._getChildFolderIds && typeof SHARED_FOLDER_ID !== 'undefined')
-                    ? window._getChildFolderIds(SHARED_FOLDER_ID, ['Backups', 'App_Config']).catch(function(){})
+                    ? window._getChildFolderIds(SHARED_FOLDER_ID, window.APP_NON_PROJECT_FOLDERS).catch(function(){})
                     : Promise.resolve();
                 let [aboutResp] = await Promise.all([
                     gapi.client.drive.about.get({fields: 'user'}),

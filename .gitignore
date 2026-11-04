@@ -45,3 +45,6 @@ team_defaults.json
 
 # [2026-11-03] NAS(Synology DSM) 로그인 — 비밀번호를 DPAPI로 암호화해 두는 PC 전용 파일
 nas_login_config.json
+
+# 📦 개발자료실 이사 robocopy 로그 (tools/docstore-to-nas.ps1)
+.docstore-move/

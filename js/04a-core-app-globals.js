@@ -201,7 +201,19 @@ ${mailText}`;
     const CLIENT_ID = '107026313229-jh5qm0pbkhe505gt3pvgbpbjurg1v0ej.apps.googleusercontent.com';
     const API_KEY = 'AIzaSyCYavFb6m88K8T7rhKQwnfv5ygpwG9ah48';
     const SHARED_FOLDER_ID = '1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS';
-    const SCOPES = 'https://www.googleapis.com/auth/drive'; 
+    const SCOPES = 'https://www.googleapis.com/auth/drive';
+
+    // 📁 앱 루트 바로 아래에 있지만 **프로젝트 폴더가 아닌** 것들 — 목록 조회에서 뺀다.
+    //    왜 데이터로 빼나: 예전엔 호출하는 곳마다 배열을 직접 적어서 js/04b 는 3개,
+    //    js/05 는 2개로 **서로 달랐다.** 폴더가 하나 늘 때 한쪽만 고치면, 그 폴더를 매번
+    //    쓸데없이 뒤지고(왕복 1회) 그 안의 `.json` 이 프로젝트인 척 목록에 끼어든다.
+    //    ⚠️ 새 폴더를 앱 루트에 만들면 **여기 한 줄 추가**할 것.
+    window.APP_NON_PROJECT_FOLDERS = [
+        'Backups',          // 자동 백업
+        'App_Config',       // 팀 공용 설정(주소록·공휴일·프롬프트·project_index …)
+        'MailBodies',       // 메일 원문 사본(js/54) — text/plain 이라 어차피 안 걸리지만 조회 자체를 뺀다
+        '개발자료실'        // 사양서·도면 저장소(문서 저장소 root). 파일이 수만 건이라 절대 뒤지면 안 된다.
+    ];
 
     let tokenClient;
     let gapiInited = false;
