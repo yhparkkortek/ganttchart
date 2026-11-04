@@ -1104,6 +1104,22 @@
     }
     setInterval(implant, 1000);   // ③ 백스톱 — 위 둘이 다 빗나가도 1초 안에 되돌린다
 
+    // ⚠️⚠️ **어댑터보다 먼저 로드된 파일이 `window.fetch` 를 잡아 두면 우회가 생긴다.**
+    //    js/30(이슈 수집)이 로드 시점에 원본 fetch 를 잡아 두고 그걸로 Drive 를 부른다 —
+    //    NAS 모드에서 그대로 구글로 나가 **401 이 반복**됐다(실측 콘솔).
+    //    다행히 js/30 에 모킹용 이음새(`_issueRawFetch`)가 있어 거기 꽂는다.
+    //    ⚠️ 통째로 우리 fetch 를 꽂으면 **무한 재귀**다 — 우리 `_origFetch` 가 바로 js/30 의
+    //       래퍼이기 때문이다. 그래서 **Drive 주소만** 어댑터로 보내고 나머지는 원래대로 둔다.
+    //    (저장소 전체를 훑어 이렇게 fetch 를 미리 잡는 곳은 js/30 하나뿐인 것을 확인했다)
+    if (typeof window._issueRawFetch === 'function') {
+        var _issueOrig = window._issueRawFetch;
+        window._issueRawFetch = function (input, init) {
+            var u = (typeof input === 'string') ? input : (input && input.url) || '';
+            if (DRIVE_RE.test(u)) return window.fetch(input, init);
+            return _issueOrig(input, init);
+        };
+    }
+
     window.STORAGE_ADAPTER.installed = true;
     window.STORAGE_ADAPTER.mode = 'nas';
     window.STORAGE_ADAPTER.log = function () { return _log.slice(); };
