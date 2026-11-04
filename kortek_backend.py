@@ -5215,6 +5215,45 @@ def _docstore_load():
     return {'root': '', 'folders': []}
 
 
+# 🔒 [2026-11-04] 공유 접속이 **자격증명 실패**로 막히면 더 두드리지 않는다.
+#   왜: `os.path.isdir(root)` 한 번이 SMB **로그온 한 번**이다. 앱은 페이지를 열 때마다
+#   `/doc/list` 를 여러 번 부르므로(PARTS/PANEL·PROJECT LIST…), 저장된 비밀번호가 낡은 PC 는
+#   **쓰는 내내 실패 로그온을 쌓는다** → 계정 잠금. 실측(2026-11-04): 자격증명은 Windows 자격
+#   증명 관리자에 남아 있는데 WinError 1326(사용자 이름 또는 암호가 올바르지 않습니다)이었다.
+#   이 저장소는 같은 이유로 DSM·그룹웨어·인사관리에 전부 "1회 실패 후 금지" 가드를 두고 있다 —
+#   공유 폴더에만 없었다.
+#   ⚠️ **네트워크가 안 닿는 것은 자격증명 문제가 아니다**(53/64/1231 등) — 그건 막지 않는다.
+#      사내망 밖에 있다가 돌아오면 저절로 되어야 하니까.
+#   ⚠️ 풀리는 때: 백엔드 재시작, 또는 설정 화면에서 경로를 다시 저장할 때(`/doc/config` POST).
+_DOCSTORE_AUTH_BLOCK = {'code': 0, 'message': ''}
+#   1326 로그온 실패 · 1327 계정 제한 · 1330/1907 암호 만료 · 1331 계정 사용 안 함 ·
+#   1909 계정 잠김 · 86 암호 틀림 · 1219 같은 서버에 다른 자격증명으로 이미 연결됨
+_DOCSTORE_AUTH_CODES = {86, 1219, 1326, 1327, 1330, 1331, 1907, 1909}
+
+
+def _docstore_probe_root(root):
+    """root 에 닿는지 본다. (ok, 사유) — 자격증명 실패면 그 뒤로는 안 두드린다."""
+    if _DOCSTORE_AUTH_BLOCK['code']:
+        return False, _DOCSTORE_AUTH_BLOCK['message']
+    try:
+        os.stat(root)          # isdir() 은 실패 '이유'를 안 알려준다 — stat 은 winerror 를 준다
+        return True, None
+    except OSError as e:
+        code = getattr(e, 'winerror', 0) or 0
+        if code in _DOCSTORE_AUTH_CODES:
+            msg = (f'문서 저장소에 로그인하지 못했습니다 (Windows 오류 {code}). '
+                   '저장된 자격 증명이 낡았을 수 있습니다. '
+                   '탐색기에서 그 공유 폴더를 한 번 열어 계정/비밀번호를 다시 입력해 주세요'
+                   '(자격 증명 기억 체크). '
+                   '⚠️ 계정이 잠길 수 있어 백엔드는 더 이상 자동으로 시도하지 않습니다 — '
+                   '고치신 뒤 백엔드를 재시작하거나 설정에서 경로를 다시 저장하세요.')
+            _DOCSTORE_AUTH_BLOCK['code'] = code
+            _DOCSTORE_AUTH_BLOCK['message'] = msg
+            print(f'[문서저장소] 자격증명 실패(WinError {code}) — 자동 재시도를 멈춥니다.')
+            return False, msg
+        return False, f'문서 저장소 경로에 접근할 수 없습니다: {root} (사내망/권한 확인)'
+
+
 def _docstore_safe_name(name):
     """파일명만 남긴다 — 경로 탈출(.., /, \\, C:) 차단.
     ⚠️ 이 백엔드는 UNC 공유에 쓰기 권한이 있으므로, 이름을 그대로 믿으면 공유 어디에나
@@ -5261,8 +5300,9 @@ def _docstore_dir(folder, cfg=None, allow_text=False):
     root = cfg.get('root') or ''
     if not root:
         return None, '문서 저장소 경로가 설정되지 않았습니다. (AI 도구 > 설정에서 공유 폴더 경로를 입력하세요)'
-    if not os.path.isdir(root):
-        return None, f'문서 저장소 경로에 접근할 수 없습니다: {root} (사내망/권한 확인)'
+    ok, err = _docstore_probe_root(root)
+    if not ok:
+        return None, err
     segs, err = _docstore_folder_segs(folder, cfg, allow_text)
     if err:
         return None, err
@@ -5580,8 +5620,13 @@ def doc_config_set():
     req = request.get_json(force=True, silent=True) or {}
     root = str(req.get('root') or '').strip()
     folders = [str(x).strip() for x in (req.get('folders') or []) if str(x).strip()]
-    if root and not os.path.isdir(root):
-        return jsonify({'ok': False, 'error': f'경로에 접근할 수 없습니다: {root}'}), 400
+    # 사람이 설정을 다시 저장하는 건 "고쳤으니 다시 해 봐"라는 뜻이다 — 자격증명 잠금을 푼다.
+    _DOCSTORE_AUTH_BLOCK['code'] = 0
+    _DOCSTORE_AUTH_BLOCK['message'] = ''
+    if root:
+        ok, perr = _docstore_probe_root(root)
+        if not ok:
+            return jsonify({'ok': False, 'error': perr}), 400
     try:
         with open(DOCSTORE_CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump({'root': root, 'folders': folders}, f, ensure_ascii=False, indent=2)
@@ -5761,7 +5806,8 @@ def _docstore_existing_dir(folder, cfg):
     `_docstore_dir`를 썼다간 내보내기 한 번에 빈 폴더가 NAS에 무더기로 생긴다.
     돌려주는 값: (경로, None) 있으면 / (None, None) 없으면(오류 아님) / (None, 사유) 경로 자체가 잘못됨."""
     root = cfg.get('root') or ''
-    if not root or not os.path.isdir(root):
+    # 🔒 여기도 로그온 한 번이다 — 자격증명이 막혔으면 두드리지 않는다(_docstore_probe_root)
+    if not root or not _docstore_probe_root(root)[0]:
         return None, None
     segs, err = _docstore_folder_segs(folder, cfg)
     if err:
@@ -5888,7 +5934,8 @@ def _docstore_mail_root(cfg=None):
     """<root>/MAIL — 없으면 만든다. 저장소 미설정이면 None."""
     cfg = cfg or _docstore_load()
     root = cfg.get('root') or ''
-    if not root or not os.path.isdir(root):
+    # 🔒 여기도 로그온 한 번이다 — 자격증명이 막혔으면 두드리지 않는다(_docstore_probe_root)
+    if not root or not _docstore_probe_root(root)[0]:
         return None
     p = os.path.join(root, DOCSTORE_MAIL_DIR)
     try:
