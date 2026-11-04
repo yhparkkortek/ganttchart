@@ -1,0 +1,144 @@
+/* 🚦 NAS 전환 직후 점검 — 콘솔에 붙여넣고 Enter
+   (`localStorage.setItem('gantt_storage_backend','nas'); location.reload();` 한 뒤)
+
+왜 있나: 전환은 한 줄이지만 **틀렸을 때 조용하다.** 목록이 짧게 나오거나, 옛 id 가 안 풀리거나,
+  쓰기만 막혀 있어도 앱은 평소처럼 보인다. 그래서 전환 직후에 **읽기·id·쓰기**를 한 번에 본다.
+
+⚠️ 진짜 프로젝트 파일은 **읽기만** 한다 — 고치지 않는다.
+⚠️ 쓰기는 `_cutover_check/` 안에만 하고 끝나면 지운다.
+⚠️ 여기서 다 통과해도 **"앱에서 프로젝트를 고치고 저장"은 사람이 한 번 해 봐야 한다.**
+   이 스크립트는 저장 경로가 살아 있다는 것까지만 말한다.
+*/
+(async function () {
+    'use strict';
+    var BK = 'http://127.0.0.1:5000';
+    var DIR = '_cutover_check';
+    var ok = 0, bad = 0, warn = 0;
+    function out(s) { console.log(s); }
+    function check(label, cond, detail) {
+        if (cond) { ok++; out('  ✅ ' + label + (detail ? ' · ' + detail : '')); }
+        else { bad++; out('  ❌ ' + label + (detail ? ' · ' + detail : '')); }
+        return cond;
+    }
+    function note(label, detail) { warn++; out('  ⚠️ ' + label + (detail ? ' · ' + detail : '')); }
+
+    out('════ NAS 전환 점검 ════');
+    var SA = window.STORAGE_ADAPTER;
+    if (!SA) { out('❌ js/57 이 안 떠 있습니다 — Ctrl+Shift+R 로 새로고침하세요.'); return; }
+    if (!check('NAS 모드다', SA.mode === 'nas', '지금: ' + (SA.mode || SA.backend))) {
+        out("   → localStorage.setItem('gantt_storage_backend','nas'); location.reload();");
+        return;
+    }
+    var badge = document.getElementById('drive-conn-badge');
+    check('헤더 배지가 🗄️ 다', !!badge && badge.textContent.indexOf('🗄') === 0,
+          badge ? (badge.textContent || '(빈칸)') : '(배지 없음)');
+
+    out('\n── ① 백엔드·앱 폴더 ──');
+    var paths = null;
+    try { paths = await (await fetch(BK + '/nas/paths')).json(); }
+    catch (e) { check('백엔드 연결', false, '실행 중이 아닙니다 — kortek_backend.bat'); return; }
+    if (!check('앱 폴더가 정해져 있다', !!(paths && paths.configured), (paths && paths.root) || '')) return;
+
+    out('\n── ② 🗺 옛 id 지도 ──');
+    var mapN = 0;
+    try {
+        var mr = await fetch(BK + '/nas/app/get?rel=' + encodeURIComponent('App_Config/nas_id_map.json'));
+        var mj = mr.ok ? JSON.parse(await mr.text()) : null;
+        mapN = mj && mj.map ? Object.keys(mj.map).length : 0;
+    } catch (e) { /* 아래에서 잡힌다 */ }
+    if (!check('지도가 있다', mapN > 0, mapN + '건')) {
+        out('   → 🔑 로그인·저장소 설정 ▸ 📦 Drive → NAS 이사 를 한 번 누르면 만들어집니다.');
+    }
+
+    out('\n── ③ 프로젝트 목록 (앱 자신의 함수) ──');
+    var files = null;
+    try { files = await window._listProjectFiles(); }
+    catch (e) { check('목록 조회', false, String(e && e.message || e)); }
+    if (files) {
+        check('프로젝트가 보인다', files.length > 0, files.length + '건');
+        var gen = files.filter(function (f) { return String(f.id).indexOf('nas_') === 0; });
+        // ⚠️ 이사해 온 파일은 **옛 Drive id** 로 와야 한다. 새로 만든 id 가 섞이면
+        //    그 프로젝트를 가리키던 저장된 참조(메일 배분·보관함)가 안 맞는다.
+        check('id 가 전부 옛 Drive id 다', gen.length === 0,
+              gen.length ? ('새 id ' + gen.length + '건: ' + gen.slice(0, 3).map(function (f) { return f.name; }).join(', ')) : '');
+        files.slice(0, 20).forEach(function (f) { out('     · ' + f.name); });
+    }
+
+    out('\n── ④ project_index 의 id 가 전부 풀리나 ──');
+    try {
+        var ir = await fetch(BK + '/nas/app/get?rel=' + encodeURIComponent('App_Config/project_index.json'));
+        var idx = JSON.parse(await ir.text());
+        var projs = (idx.projects || []);
+        var unresolved = [];
+        for (var i = 0; i < projs.length; i++) {
+            var fid = projs[i].drive_file_id;
+            if (!fid) continue;
+            if (!SA._fn.relOf(fid)) unresolved.push(projs[i].file_name || fid);
+        }
+        check('프로젝트 id 가 전부 풀린다', unresolved.length === 0,
+              projs.length + '건 중 못 푼 것: ' + (unresolved.join(', ') || '없음'));
+    } catch (e) {
+        check('project_index 읽기', false, String(e && e.message || e));
+    }
+
+    out('\n── ⑤ 실제 프로젝트 파일을 열어 본다 (읽기만) ──');
+    if (files && files.length) {
+        var target = files[0];
+        try {
+            var pr = await fetch('https://www.googleapis.com/drive/v3/files/' +
+                                 encodeURIComponent(target.id) + '?alt=media&supportsAllDrives=true');
+            var txt = await pr.text();
+            var pj = JSON.parse(txt);
+            check('열린다 + JSON 이 온전하다', !!pj, target.name + ' · ' +
+                  Math.round(txt.length / 1024) + 'KB');
+            check('프로젝트 구조가 맞다', !!(pj.globalData || pj.tabData),
+                  Object.keys(pj).slice(0, 6).join(', '));
+        } catch (e) {
+            check('프로젝트 열기', false, String(e && e.message || e));
+        }
+    }
+
+    out('\n── ⑥ 설정 파일들 ──');
+    var cfgOk = 0, cfgBad = [];
+    for (var nm of ['AddressBook_Shared.json', 'Holidays_Shared.json', 'PriorityScore_Shared.json',
+                    'MailFilterRules_Shared.json', 'AI_Prompt_Shared.json']) {
+        try {
+            var cr = await fetch(BK + '/nas/app/get?rel=' + encodeURIComponent('App_Config/' + nm));
+            JSON.parse(await cr.text()); cfgOk++;
+        } catch (e) { cfgBad.push(nm); }
+    }
+    check('설정 파일이 읽힌다', cfgBad.length === 0, cfgOk + '/5' + (cfgBad.length ? (' · 실패: ' + cfgBad.join(', ')) : ''));
+
+    out('\n── ⑦ 쓰기가 되나 (진짜 데이터는 안 건드림) ──');
+    var probeRel = DIR + '/probe_' + Date.now() + '.json';
+    var probeBody = JSON.stringify({ 점검: '쓰기', t: Date.now() });
+    try {
+        var wr = await fetch(BK + '/nas/app/put', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rel: probeRel, text: probeBody })
+        });
+        var wj = await wr.json();
+        check('NAS 에 쓴다', !!wj.ok, wj.message || '');
+        var rb = await fetch(BK + '/nas/app/get?rel=' + encodeURIComponent(probeRel));
+        check('쓴 그대로 읽힌다', rb.ok && (await rb.text()) === probeBody);
+    } catch (e) {
+        check('쓰기', false, String(e && e.message || e));
+    } finally {
+        try {
+            await fetch(BK + '/nas/app/delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rel: DIR })
+            });
+        } catch (e) { note('점검 폴더를 못 지웠습니다 — 앱 폴더의 ' + DIR + ' 을 직접 지워주세요'); }
+    }
+
+    out('\n════ 통과 ' + ok + ' · 실패 ' + bad + (warn ? (' · 주의 ' + warn) : '') + ' ════');
+    if (bad === 0) {
+        out('✅ 읽기·id·쓰기 경로가 살아 있습니다.');
+        out('⚠️ 다만 **앱에서 프로젝트를 고치고 저장 → 새로고침 → 남아 있는지**는');
+        out('   사람이 한 번 해 봐야 합니다. 이 점검은 거기까지는 못 봅니다.');
+    } else {
+        out('❌ 되돌리려면: localStorage.removeItem("gantt_storage_backend"); location.reload();');
+        out('   Drive 원본은 그대로 있습니다.');
+    }
+})();
