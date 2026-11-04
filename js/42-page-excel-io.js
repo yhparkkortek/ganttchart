@@ -600,6 +600,22 @@
             // ⚠️ 기존 행이 있으면 그 배열을 바탕으로 덮어쓴다 — colIdx에 이름이 없는 칸(차트 내부
             //    값 등)을 날리지 않기 위해서다. 새로 늘어난 행만 빈 배열에서 시작한다.
             var base = (old[i] && old[i].slice) ? old[i].slice() : [];
+            // ⚠️⚠️ [2026-11-04 유실 사고] `slice()` 는 **인덱스 요소만** 복사한다 — 행 배열에
+            //    붙어 있는 `_` 속성(`_level`·`_origDev`·`_origT1~4`·`_mailRaw`·`_담당구분`·
+            //    `_rowUid`·`_aiRegistered` …)은 **따라오지 않는다**. 그래서 간트 엑셀
+            //    불러오기 한 번에 STELLAR32 의 903행에서 업무명·WBS 레벨·메일 원문·AI 학습
+            //    표식이 통째로 사라졌다(칸 값만 남아서 "데이터는 있는데 이름이 없는" 상태가
+            //    됐고, 오류는 하나도 안 났다). 업무명 칸은 `recalculateSchedules` 가
+            //    `_orig*` 에서 다시 베껴 넣으므로, `_level`/`_orig*` 가 없으면 **빈칸**이 된다.
+            //    → `_serializeGD`(js/04c)와 같은 규칙으로 `_` 속성을 같이 옮긴다.
+            //    회귀: `node tests/gantt-excel-meta-loss.test.js`
+            if (old[i]) {
+                for (var mk in old[i]) {
+                    if (mk.charAt(0) === '_' && Object.prototype.hasOwnProperty.call(old[i], mk)) {
+                        base[mk] = old[i][mk];
+                    }
+                }
+            }
             while (base.length < width) base.push('');
             keys.forEach(function (k) { if (o[k] !== undefined) base[ci[k]] = o[k]; });
             return base;
