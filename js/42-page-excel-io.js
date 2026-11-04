@@ -111,6 +111,26 @@
         });
         return aoa;
     };
+    // ⚠️⚠️ [2026-11-04] 엑셀에서 돌아온 'true'/'false'는 **불리언으로 되돌린다.**
+    //
+    //   왜: 내보낼 때 불리언은 엑셀의 불리언 칸으로 나가는데, 읽을 때 `raw:false`라
+    //   **글자 'TRUE'/'FALSE'** 로 돌아온다. 그걸 그대로 문자열로 넣으면, 받는 쪽이
+    //   `!!r.useForAnalysis` 로 보는 순간 **'false'도 참**이 된다(빈 문자열이 아니므로).
+    //   실측(2026-11-04 왕복 검사): Summary ▸ 주요자재 39행 중 체크된 9개가 **39개 전부**로
+    //   켜졌다. 화면엔 오류가 안 뜨고, 그 상태로 저장되면 조용히 굳는다.
+    //
+    //   ⚠️ 글자가 정확히 true/false(대소문자 무시, 앞뒤 공백 제거)일 때만 바꾼다 —
+    //      사람이 적은 문장을 건드리지 않기 위해서다.
+    //   검증: tests/page-excel-roundtrip.browser.js
+    var _pxCellValue = function (v) {
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'boolean') return v;
+        var s = String(v);
+        var t = s.trim().toLowerCase();
+        if (t === 'true') return true;
+        if (t === 'false') return false;
+        return s;
+    };
     // 2차원 배열 → 행 배열. 머리글이 비었거나 값이 전부 빈 행은 버린다.
     var aoaToRows = function (aoa) {
         if (!aoa || !aoa.length) return [];
@@ -120,7 +140,7 @@
             var line = aoa[i] || [];
             if (!line.some(function (v) { return String(v == null ? '' : v).trim(); })) continue;
             var o = {};
-            cols.forEach(function (c, j) { if (c) o[c] = (line[j] == null ? '' : String(line[j])); });
+            cols.forEach(function (c, j) { if (c) o[c] = _pxCellValue(line[j]); });
             out.push(o);
         }
         return out;
@@ -963,9 +983,32 @@
                     var rev = _td().mcActiveRevision || 'R1';
                     _td().mcRevisions = _td().mcRevisions || {};
                     // 계산 행은 되돌려 넣지 않는다 — 화면이 다시 계산하므로 넣으면 중복된다.
-                    _td().mcRevisions[rev] = (rows || [])
+                    var prev = _mcRows().filter(function (r) { return !_mcIsCalcRow(r); });
+                    var next = (rows || [])
                         .filter(function (r) { return !_mcIsCalcRow(r); })
                         .map(_mcRowFromSheet);
+
+                    // ⚠️⚠️ [2026-11-04] **시트에 없는 칸은 건드리지 않는다.**
+                    //
+                    //   `_mcRowFromSheet`는 `_MC_COLS`에 적힌 열만 남기고 나머지를 버린다.
+                    //   그런데 M.C 행에는 엑셀로 내보내지 않는 칸이 있다(실측: `category` = 'LCM').
+                    //   그대로 두면 **엑셀 왕복 한 번에 그 칸이 사라지고**, 더 나쁘게는
+                    //   ↩되돌리기도 같은 set()을 거치므로 **되돌려도 안 돌아왔다**.
+                    //   → 행 수가 그대로일 때만(= 사람이 엑셀에서 행을 더하거나 지우지 않았을 때)
+                    //     같은 자리의 옛 행에서 **시트가 안 가진 칸만** 물려준다.
+                    //     행 수가 달라졌으면 어느 행이 어느 행인지 알 수 없으므로 **아무 것도 추측하지 않는다**.
+                    if (prev.length === next.length) {
+                        next = next.map(function (o, i) {
+                            var old = prev[i];
+                            if (!old || typeof old !== 'object') return o;
+                            Object.keys(old).forEach(function (k) {
+                                if (!(k in o)) o[k] = old[k];   // 시트가 가져온 칸은 그대로 두고, 없던 칸만 되살린다
+                            });
+                            return o;
+                        });
+                    }
+
+                    _td().mcRevisions[rev] = next;
                     if (rev === 'R1') _td().mcTable = _td().mcRevisions[rev];   // 저장 호환용 별칭
                 } }]
         },

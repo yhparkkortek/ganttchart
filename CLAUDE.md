@@ -470,6 +470,29 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - ⚠️ 알림은 **모르면 안 보낸다** — 백엔드는 `KOR_HOLIDAYS`(js/04d 안)를 모르므로 앱이 `_nonworkdays.json` 을 내보내야 하고, 그 파일이 없거나 NAS 조회가 실패하면 발송 0건(조회 실패를 "미작성"으로 읽으면 전원에게 오발송)
 - 선결 과제: 어댑터의 `readRel/writeRel/listRel` 이 `window` 에 없어 새 팀공용 기능이 fetch 를 **네 번째로 베낀다** → `window.nasAppFile` 공개
 
+### 📄↔📊 페이지 ↔ 엑셀 왕복 — 실측으로 찾은 버그 2건 (2026-11-04)
+
+- ⚠️⚠️ **엑셀에서 돌아온 불리언이 전부 참이 됐다** — 내보낼 땐 불리언 칸으로 나가는데 읽을 땐
+  `raw:false` 라 글자 `TRUE/FALSE` 로 온다. 받는 쪽이 `!!r.useForAnalysis` 로 보는 순간
+  **`'false'` 도 참**이다(빈 문자열이 아니므로). 실측: Summary ▸ 주요자재 39행 중 체크 **9개 → 39개 전부**.
+  화면엔 오류가 없고 그대로 저장되면 굳는다. → `_pxCellValue`(js/42)가 정확히 `true`/`false`
+  글자만 불리언으로 되돌린다(사람이 쓴 문장은 안 건드린다).
+- ⚠️ **M.C 는 시트에 없는 칸을 버렸다** — `_mcRowFromSheet` 가 `_MC_COLS` 에 적힌 열만 남긴다.
+  실측으로 `category`('LCM')가 왕복 한 번에 사라졌고, **↩되돌리기도 같은 set() 을 거쳐서**
+  되돌려도 안 돌아왔다. → **행 수가 같을 때만** 같은 자리 옛 행에서 *시트가 안 가진 칸만* 물려준다
+  (행 수가 달라졌으면 짝을 모르므로 아무 것도 추측하지 않는다).
+- ✅ **가짜 실패로 판명된 것** — 하네스를 먼저 의심하라는 규칙이 그대로 들어맞았다:
+  ① gantt 업무명(wbs)은 `_ganttSet` 이 **일부러 안 받는다**(표시 전용, 원본은 레벨별 열) ·
+  ② aoa 블록의 라벨(마일스톤 '계획/실적', Elec Parts '## CHANGE LOG')과 모델 블록의 열 머리글은
+  **현재 언어로 다시 그려지는 게 정상** · ③ M.C 금액 `$109.00`→`109` 는 **의도된 정리**(통화기호를
+  JSON 에 쌓지 않으려고) · ④ PARTS 는 **탭을 한 번 열어야** 표가 다 만들어진다(29행 → 38행).
+- ⚠️ 그래서 교차 언어는 **값이 아니라 "언어를 바꿔도 그 시트를 찾아 읽는가"** 로 판정한다.
+- ⚠️⚠️ **이 하네스는 1회 돌릴 때마다 새로고침해야 한다** — 같은 페이지에서 연달아 돌리면
+  두 번째부터 모든 내보내기가 "writeFile 이 안 불렸다"로 떨어지고 언어가 en 으로 남는다(실측).
+  **그 실패는 앱이 아니라 하네스 탓**이다.
+- 검증 `tests/page-excel-roundtrip.browser.js` **31/0**, 돌연변이(옛 불리언 버그 재현)는
+  **새 페이지에서** 정확히 Summary 2건만 실패하는 것까지 확인. 저장 경로는 킬스위치로 막고 돈다.
+
 ### `docs/ui-conventions.md` — 🌐 i18n / 🎨 팔레트 / 🪟 모달 컨벤션
 - **읽을 때**: 새 UI 컴포넌트, 언어 대응, 테마 팔레트, 모달 구조, **엑셀/PPT 출력물**
 - 새 UI 완료 기준 3가지: 영문 대응(`_t`/`data-i18n`) + 팔레트 대응(`_cpApplyLive` 좁은 셀렉터) + 모달 컨벤션(`_makeDraggable`·`_bindClickToFront`·`bringModalToFront` 호출)
@@ -525,7 +548,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ## 작업 팁
 
-- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, `node tests/storage-adapter.test.js`, `python tests/test_mail_recv_host.py`, `python tests/test_mail_auth_block.py`, `py -3 tests/mail-server-probe.py`(로그인 없이 서버 능력만), `python tests/test_nas_login_budget.py`, `python tests/test_nas_setup_route.py`, 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`(25건), `tests/storage-adapter.browser.js`·`tests/storage-mirror.browser.js`·`tests/storage-migrate.browser.js`·`tests/nas-cutover-check.browser.js`(전환 직후 점검)·`tests/bom-part-chips.browser.js`(31건)·`tests/history-delete.browser.js`(수정이력 구간삭제 7범위, 50건)·`tests/reference-excel.browser.js`(참조 엑셀 NAS 이전, 19건) 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
+- **검증 하네스는 `tests/` 에 남긴다** — 러너는 없다(사람이 직접 돌린다). `python tests/test_approval_reuse_branch.py`, `python tests/test_mail_watch.py`, `node tests/qa-render-telegram.test.js`, `node tests/bom-part-lookup.test.js`, `node tests/storage-adapter.test.js`, `python tests/test_mail_recv_host.py`, `python tests/test_mail_auth_block.py`, `py -3 tests/mail-server-probe.py`(로그인 없이 서버 능력만), `python tests/test_nas_login_budget.py`, `python tests/test_nas_setup_route.py`, 브라우저 콘솔에 `tests/approval-loop.browser.js`·`tests/qa-telegram.browser.js`·`tests/qa-mail-chips.browser.js`(25건), `tests/storage-adapter.browser.js`·`tests/storage-mirror.browser.js`·`tests/storage-migrate.browser.js`·`tests/nas-cutover-check.browser.js`(전환 직후 점검)·`tests/bom-part-chips.browser.js`(31건)·`tests/history-delete.browser.js`(수정이력 구간삭제 7범위, 50건)·`tests/reference-excel.browser.js`(참조 엑셀 NAS 이전, 19건)·`tests/page-excel-roundtrip.browser.js`(📄↔📊 왕복 7페이지, 31건 — **1회 돌릴 때마다 새로고침 필수**) 붙여넣기. 그룹웨어·AI 키 없이 돈다(가짜는 **바깥 경계에만**).
 - 특정 기능 수정 시 파일 맵에서 바로 지정. 못 찾겠으면 `grep -rn "함수명" js/`.
 - 민감 파일(`mail_config.json`, `telegram_config.json`, `schedule_rules.json`, `.env`)은 `.gitignore` — 로컬에만 존재.
 - 코드 주석의 `js/파일명.js:줄번호` 참조는 파일 이동/분리 시 같이 업데이트.
