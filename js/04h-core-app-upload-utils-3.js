@@ -4513,11 +4513,72 @@ ${docsJson}`;
         }
     };
 
+    // 🎙️ [2026-11-04 신규, 사용자 요청 "음성으로 *를 부르기 어렵다"] SAP 와일드카드 패턴
+    //    ("*KT*55*LNW*")은 js/32의 projectcode/descpattern 등 여러 로컬 명령이 이미 "*" 포함
+    //    여부로 판정한다 — 그런데 음성으로 "별표"를 매번 말하긴 번거롭다. 여기서 **그 로컬
+    //    명령 판정들보다 먼저** 문장을 정규화해서, 이후 코드는 손댈 필요 없이 그대로 "*"를
+    //    받아본다(단일 지점 치환 — 각 capability 블록에 따로 손대지 않음).
+    //    1) "KT 별표 55 별표 LNW 별표"처럼 구분자(SAP_WILDCARD_SEPARATORS, js/32 데이터)가 "매
+    //       토큰 뒤에" 2번 이상 반복되면 → "*KT*55*LNW*"로 그 부분만 치환. ⚠️ 단어 단위로만
+    //       본다(공백 기준 split) — 정규식으로 통째로 긁으면 "...LNW 별표 조회해줘"에서 "조회해줘"
+    //       까지 패턴에 딸려 들어가는 사고가 났다(2026-11-04 실측: 와일드카드 뒤 Korean 문자
+    //       클래스가 다음 단어와 경계 없이 이어 매치됨) — 그래서 "토큰 바로 뒤에 구분자가 있는
+    //       경우만" 확정으로 편입한다(구분자 없이 끝나는 마지막 토큰은 모호하므로 포함 안 함 —
+    //       차라리 일부만 와일드카드되는 쪽이 동사를 통째로 삼키는 것보다 안전).
+    //    2) 이미 "*"가 있으면(직접 타이핑했거나 위에서 처리됐으면) 더 손대지 않음.
+    //    3) 이미 "*"가 하나도 없고 "SAP" 언급 + 조회류 동사가 있는 문장에 **대문자 3자 이상
+    //       영문 토큰이 정확히 1개**뿐이면 → 그 토큰만 "*토큰*"으로 감싼다(프로젝트 코드 블록의
+    //       기존 단일토큰 자동감싸기와 같은 기준 — "프로젝트"란 말이 없어도 작동하도록 더 이르게
+    //       적용). ⚠️ 트랜잭션코드처럼 보이는 토큰(MM03·MB21 같은 영문2~4+숫자2~3 모양)은
+    //       조회 화면 코드지 검색 패턴이 아니므로 제외.
+    window._ganttQaNormalizeSapWildcard = function(text) {
+        var s = String(text || '');
+        if (!/sap/i.test(s)) return s;
+        var sepList = window.SAP_WILDCARD_SEPARATORS || ['별표', '엔드'];
+        var isSep = function(w) { return sepList.indexOf(w) !== -1; };
+        var words = s.split(/\s+/).filter(Boolean);
+        var bestStart = -1, bestEnd = -1, bestToks = null;
+        for (var i = 0; i < words.length; i++) {
+            if (isSep(words[i])) continue;
+            var toks = [];
+            var p = i;
+            // 🔒 "내용어 바로 뒤에 구분자"인 쌍만 확정으로 편입 — 투기적으로 먼저 넣고 나중에
+            //    취소하지 않는다(그게 바로 위 사고 원인). 구분자 없이 끝나는 토큰은 절대 안 넣음.
+            while (p < words.length && !isSep(words[p]) && (p + 1) < words.length && isSep(words[p + 1])) {
+                toks.push(words[p]);
+                p += 2;
+            }
+            var end = p - 1; // 마지막으로 확정 편입한 구분자의 단어 인덱스
+            if (toks.length >= 2 && end > bestEnd) { bestStart = i; bestEnd = end; bestToks = toks; }
+        }
+        if (bestToks) {
+            var before = words.slice(0, bestStart);
+            var after = words.slice(bestEnd + 1);
+            return before.concat(['*' + bestToks.join('*') + '*']).concat(after).join(' ');
+        }
+        if (s.indexOf('*') !== -1) return s;
+        if (!/(조회|찾아|검색|확인)/.test(s)) return s;
+        var isTcodeLike = /^[A-Z]{2,4}\d{2,3}$/;
+        var exclude = /^(SAP|PROJECT|CODE|FIND|SEARCH|LOOKUP|THE|AND|OR|FOR|OF|IN|BY|TO)$/i;
+        var toks2 = (s.match(/\b[A-Z][A-Za-z0-9]{2,}\b/g) || []).filter(function(t) {
+            return !exclude.test(t) && !isTcodeLike.test(t);
+        });
+        if (toks2.length === 1) {
+            var tok = toks2[0];
+            var tokRe = new RegExp('\\b' + tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+            return s.replace(tokRe, '*' + tok + '*');
+        }
+        return s;
+    };
+
     window.sendGanttQaMessage = async function() {
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
         let question = input.value.trim();
         if (!question) return;
+        if (question.indexOf('__') !== 0 && window._ganttQaNormalizeSapWildcard) {
+            question = window._ganttQaNormalizeSapWildcard(question);
+        }
 
         // 🐛🐛 [2026-10-22 구조 수정, 사용자 제보 "자주 쓰는 질문이 저장이 안 된다"]
         //    빈도 기록은 그동안 **블록마다 직접** 불러야 했다(아래 AI-free 로컬 명령이 수십 개다).

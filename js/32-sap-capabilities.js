@@ -23,6 +23,13 @@
         { word: '승인원', docType: 'P01' }
     ];
 
+    // 🎙️ [2026-11-04 신규, 사용자 요청] SAP 와일드카드 패턴("*KT*55*LNW*")은 음성으로 "별표"를
+    //    매번 말하기 어렵다 — 이 단어들을 토큰 사이에서 말하면 "*"로 바꿔 이어붙인다
+    //    (js/04h `_ganttQaNormalizeSapWildcard`). "별표"는 기호 이름 그대로라 가장 직관적이고,
+    //    "엔드"는 사용자가 처음 제안한 말. "그리고"/"점"은 평소 문장에도 자연스럽게 섞여 나오는
+    //    흔한 말이라 오탐 위험이 커서 일부러 뺐다 — 새 구분자 말이 필요하면 여기 한 줄만 추가.
+    window.SAP_WILDCARD_SEPARATORS = window.SAP_WILDCARD_SEPARATORS || ['별표', '엔드'];
+
     // 📋 [2026-09-29 신규] 회사 SAP DMS 문서 종류 목록 (데이터) — 사용자가 제공한 화면 기준.
     //    inactive: true = "(미사용)" 항목. 새 종류가 추가/변경되면 코드가 아니라 이 목록만 갱신.
     //    — 트리거 인식(_sapHasDocCode), 드롭다운(_ganttQaShowDocTypeDropdown) 모두 이 목록 사용.
