@@ -97,12 +97,13 @@
     // ── 명단(roster) — 계정 id ↔ 실명 ↔ 역할 별칭. **PM 한 명만 쓴다.** ─────────
     // ⚠️ 간트에는 담당자 열이 **아예 없다**(실측 12/12). 그래서 "이게 내 일인가"는
     //    역할(`_담당구분`) → `projectMeta.<역할>담당자` → 이 명단으로 잇는다.
-    var _roster = null;
+    var _roster = null, _rosterRev = null;
     window.dailyLoadRoster = async function (force) {
         if (_roster && !force) return _roster;
         try {
             var o = await window.nasAppFile.get(window.DAILY_PATHS.roster, { json: true });
             _roster = (o && Array.isArray(o.members)) ? o.members : [];
+            _rosterRev = (o && o.rev) || 0;
         } catch (e) {
             console.warn('[일일보고] 명단 조회 실패:', e.message);
             _roster = [];
@@ -605,6 +606,147 @@
         window.dailyRenderTab();
     };
 
+    // ══════════════════════════════════════════════════════════════════════
+    // 7-D. [3단계] 비근무일 파일 — **앱이 써 주고 백엔드가 읽는다**
+    // ══════════════════════════════════════════════════════════════════════
+    // 백엔드는 `KOR_HOLIDAYS`(js/04d 안)를 모른다. 백엔드에 공휴일을 복사하면
+    // ① 하드코딩이고 ② 두 벌이 갈라진다. 그래서 판정 **결과**만 내보낸다.
+    // ⚠️ 백엔드는 이 파일이 없거나 `until` 이 지났으면 **알림을 안 보낸다**(안전쪽).
+    var NONWORK_REL = 'App_Config/DailyReport/_nonworkdays.json';
+    var NONWORK_AHEAD = 120;        // 넉넉히 넉 달
+
+    window.dailyPublishNonWorkdays = async function (force) {
+        if (window._storageMode && window._storageMode() !== 'nas') return null;
+        if (!window.isHoliday) return null;
+        var d = new Date(), days = [], until = '';
+        for (var i = 0; i < NONWORK_AHEAD; i++) {
+            var s = ymd(d);
+            if (window.isHoliday(s)) days.push(s);     // 주말은 백엔드가 직접 판단한다
+            until = s;
+            d.setDate(d.getDate() + 1);
+        }
+        var doc = { days: days, until: until, savedAt: new Date().toISOString(), by: myKey() };
+        try {
+            var cur = await window.nasAppFile.get(NONWORK_REL, { json: true });
+            // 내용이 같으면 안 쓴다 — 사람마다 앱을 열 때마다 NAS 에 쓸 이유가 없다.
+            if (!force && cur && cur.until === doc.until &&
+                JSON.stringify(cur.days || []) === JSON.stringify(days)) return cur;
+            await window.nasAppFile.put(NONWORK_REL, doc);
+            return doc;
+        } catch (e) {
+            console.warn('[일일보고] 비근무일 파일 발행 실패:', e.message);
+            return null;
+        }
+    };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7-E. [3단계] 명단(roster) 편집 — 알림·텔레그램 입력이 여기 매여 있다
+    // ══════════════════════════════════════════════════════════════════════
+    // ⚠️ 팀 공용 파일이라 **쓰는 사람이 여럿이 될 수 있는 유일한 자리**다.
+    //    그래서 `rev` 로 막고, 빈 명단 덮어쓰기를 거부한다. 보통은 PM 혼자 만진다.
+    window.dailyOpenRoster = async function () {
+        if (window._storageMode && window._storageMode() !== 'nas') {
+            toast(T('NAS 저장소에서만 쓸 수 있습니다.', 'NAS storage only.'), 'warning'); return;
+        }
+        await window.dailyLoadRoster(true);
+        var list = (_roster || []).slice();
+        if (!list.length) list = [{ key: myKey(), name: '', aliases: [], team: '', tgChatId: '', active: true, notifier: true }];
+        window._dailyRosterDraft = JSON.parse(JSON.stringify(list));
+        renderRoster();
+    };
+
+    function renderRoster() {
+        var wrap = document.getElementById('daily-roster-modal');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.id = 'daily-roster-modal';
+            wrap.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9450; pointer-events:none; background:none;';
+            document.body.appendChild(wrap);
+        }
+        var L = window._dailyRosterDraft || [];
+        var rows = L.map(function (m, i) {
+            var inp = function (k, ph, w) {
+                return '<input value="' + esc(m[k] == null ? '' : m[k]) + '" placeholder="' + esc(ph) + '" oninput="window._dailyRosterSet(' + i + ',\'' + k + '\',this.value)" style="width:' + w + '; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:11.5px;">';
+            };
+            return '<tr>' +
+              '<td style="padding:3px;">' + inp('key', '계정id', '90px') + '</td>' +
+              '<td style="padding:3px;">' + inp('name', '실명', '80px') + '</td>' +
+              '<td style="padding:3px;"><input value="' + esc((m.aliases || []).join(', ')) + '" placeholder="별칭,별칭" oninput="window._dailyRosterSet(' + i + ',\'aliases\',this.value)" style="width:110px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:11.5px;"></td>' +
+              '<td style="padding:3px;">' + inp('team', '팀', '72px') + '</td>' +
+              '<td style="padding:3px;">' + inp('tgChatId', '텔레그램 ID', '100px') + '</td>' +
+              '<td style="padding:3px; text-align:center;"><input type="checkbox" ' + (m.active !== false ? 'checked' : '') + ' onchange="window._dailyRosterSet(' + i + ',\'active\',this.checked)"></td>' +
+              '<td style="padding:3px; text-align:center;"><input type="radio" name="dr-notifier" ' + (m.notifier ? 'checked' : '') + ' onchange="window._dailyRosterNotifier(' + i + ')"></td>' +
+              '<td style="padding:3px;"><button onclick="window._dailyRosterDrop(' + i + ')" style="width:22px; height:22px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:4px; cursor:pointer; font-size:11px;">✕</button></td>' +
+            '</tr>';
+        }).join('');
+        wrap.innerHTML =
+'<div id="daily-roster-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(860px,95vw); max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.22); overflow:hidden;">' +
+ '<div id="daily-roster-drag" style="flex-shrink:0; padding:12px 17px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#2c5f8a; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; cursor:grab; user-select:none;">' +
+   '<span>👥 ' + esc(T('일일보고 명단 (팀 공용)', 'Daily report roster (team-shared)')) + '</span>' +
+   '<button onclick="document.getElementById(\'daily-roster-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer;">✕</button></div>' +
+ '<div style="flex:1; min-height:0; overflow:auto; padding:13px 17px;">' +
+   '<div style="font-size:11.5px; color:#777; margin-bottom:8px; line-height:1.6;">' +
+     esc(T('· 계정id = NAS 로그인 계정(파일 이름에 쓰입니다) · 별칭은 간트 담당자 이름과 맞추는 데 씁니다',
+           '· key = NAS login account (used in file names) · aliases match Gantt owner names')) + '<br>' +
+     esc(T('· 📣 = 알림·텔레그램 수신을 담당할 PC 한 대. 반드시 한 명만 — 여러 대가 동시에 받으면 보고가 흩어집니다.',
+           '· 📣 = the one PC that polls Telegram and sends reminders. Exactly one.')) + '</div>' +
+   '<table style="border-collapse:collapse; font-size:11.5px;"><thead><tr style="background:#f4f6f8;">' +
+     ['계정id|key', '실명|Name', '별칭|Aliases', '팀|Team', '텔레그램 ID|Telegram ID', '사용|On', '📣', ''].map(function (h) {
+        var p = h.split('|');
+        return '<th style="padding:5px 6px; border:1px solid #e3e6ea; color:#2c5f8a;">' + esc(window._currentLang === 'en' ? (p[1] || p[0]) : p[0]) + '</th>';
+     }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+   '<button onclick="window._dailyRosterAdd()" style="margin-top:8px; padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('사람 추가', 'Add person')) + '</button>' +
+ '</div>' +
+ '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; gap:8px; justify-content:flex-end;">' +
+   '<button onclick="document.getElementById(\'daily-roster-modal\').style.display=\'none\'" style="padding:6px 14px; border:1px solid #ccc; background:#fff; color:#555; border-radius:6px; font-size:12.5px; cursor:pointer;">' + esc(T('닫기', 'Close')) + '</button>' +
+   '<button onclick="window.dailySaveRoster()" style="padding:6px 20px; border:none; background:#19c3d6; color:#fff; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
+ '</div></div>';
+        wrap.style.display = 'flex';
+        if (window._makeDraggable) window._makeDraggable('daily-roster-box', 'daily-roster-drag');
+        if (window.bringModalToFront) window.bringModalToFront('daily-roster-modal');
+    }
+
+    window._dailyRosterSet = function (i, k, v) {
+        var m = window._dailyRosterDraft[i]; if (!m) return;
+        m[k] = (k === 'aliases') ? String(v).split(',').map(function (x) { return x.trim(); }).filter(Boolean) : v;
+    };
+    window._dailyRosterNotifier = function (i) {
+        window._dailyRosterDraft.forEach(function (m, j) { m.notifier = (i === j); });
+    };
+    window._dailyRosterAdd = function () {
+        window._dailyRosterDraft.push({ key: '', name: '', aliases: [], team: '', tgChatId: '', active: true });
+        renderRoster();
+    };
+    window._dailyRosterDrop = function (i) { window._dailyRosterDraft.splice(i, 1); renderRoster(); };
+
+    window.dailySaveRoster = async function () {
+        var list = (window._dailyRosterDraft || []).filter(function (m) { return String(m.key || '').trim(); });
+        if (!list.length) { toast(T('계정id가 있는 사람이 한 명도 없습니다.', 'No one has a key.'), 'warning'); return; }
+        if (list.filter(function (m) { return m.notifier; }).length > 1) {
+            toast(T('📣 담당은 한 명만 고를 수 있습니다.', 'Only one 📣 notifier allowed.'), 'warning'); return;
+        }
+        try {
+            var cur = await window.nasAppFile.get(window.DAILY_PATHS.roster, { json: true });
+            // ⚠️ 빈 명단으로 덮어쓰기 금지 + rev 충돌 거부(이 파일만 여럿이 쓸 수 있다)
+            if (cur && (cur.members || []).length && !list.length) throw new Error(T('빈 명단으로 덮을 수 없습니다.', 'Refusing to overwrite with an empty roster.'));
+            if (cur && _rosterRev != null && (cur.rev || 0) !== _rosterRev) {
+                _roster = cur.members || []; _rosterRev = cur.rev || 0;
+                window._dailyRosterDraft = JSON.parse(JSON.stringify(_roster));
+                renderRoster();
+                throw new Error(T('다른 사람이 먼저 저장했습니다 — 최신본을 불러왔습니다. 다시 확인해주세요.',
+                                  'Someone saved first — reloaded the latest. Please re-check.'));
+            }
+            var doc = { members: list, rev: ((cur && cur.rev) || 0) + 1, savedAt: new Date().toISOString(), by: myKey() };
+            await window.nasAppFile.put(window.DAILY_PATHS.roster, doc);
+            _roster = list; _rosterRev = doc.rev;
+            document.getElementById('daily-roster-modal').style.display = 'none';
+            toast('✅ ' + T('명단을 저장했습니다.', 'Roster saved.'), 'success');
+            window.dailyRenderTab();
+        } catch (e) {
+            toast('⚠️ ' + e.message, 'warning', 8000);
+        }
+    };
+
     window._dailyGoDay = function (d) {
         window._dailyTabDate = d;
         window._dailyView = 'day';
@@ -615,6 +757,112 @@
         if (!window._dailyTabDate) window._dailyTabDate = ymd();
         window.dailyRenderTab();
     };
+
+    /** 알림·수신 담당 PC 에서 1회 확인(사람이 누를 때). 백엔드가 구버전이면 404 로 구분된다. */
+    window.dailyNotifyTest = async function () {
+        try {
+            var r = await fetch('http://127.0.0.1:5000/daily/tick',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ force: true }) });
+            if (r.status === 404) {
+                toast(T('백엔드가 구버전입니다 — kortek_backend 를 재시작해주세요.',
+                        'Backend is outdated — please restart kortek_backend.'), 'warning', 9000);
+                return;
+            }
+            var j = await r.json();
+            var n = (j.notify && j.notify.sent || []).length, h = (j.inbound && j.inbound.handled) || 0;
+            toast('📔 ' + T('알림 ' + n + '건 발송 · 수신 ' + h + '건 처리' +
+                            ((j.notify && j.notify.message) ? ' — ' + j.notify.message : ''),
+                            'Sent ' + n + ' reminder(s), handled ' + h + ' inbound'), 'info', 9000);
+        } catch (e) {
+            toast(T('백엔드에 연결하지 못했습니다 — kortek_backend 가 떠 있는지 확인해주세요.',
+                    'Could not reach the backend.'), 'warning', 8000);
+        }
+    };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 8. [4단계] AI 사다리 3단 — 주간보고 합류
+    // ══════════════════════════════════════════════════════════════════════
+    // 주간보고(js/20)는 지금 **간트 일정만** 보고 PPT 초안을 만든다. 그 주에 사람이
+    // 실제로 적은 글(일일보고)을 같이 주면 훨씬 정확하다.
+    // ⚠️ js/20 의 함수 시그니처를 **바꾸지 않는다** — `_wrFmtTasksForAi` 가 만든 글 뒤에
+    //    덧붙이기만 한다(감싸기). 주간보고는 자기 계약을 그대로 유지한다.
+    // ⚠️ 네트워크를 타므로 **미리 받아 둔 것만** 쓴다(동기 함수를 async 로 바꾸지 않는다).
+    window._dailyWeekCache = { key: '', text: '' };
+
+    /** 그 주(월~금) 일일보고를 한 덩어리 글로. 주간보고 모달을 열기 전에 받아 둔다. */
+    window.dailyWeekDigest = async function (baseDate) {
+        if (window._storageMode && window._storageMode() !== 'nas') return '';
+        var d = new Date(baseDate || new Date());
+        var day = d.getDay(), diff = (day === 0) ? -6 : (1 - day);
+        var mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+        var dates = [];
+        for (var i = 0; i < 5; i++) {
+            var x = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i);
+            dates.push(ymd(x));
+        }
+        var ck = dates[0] + '~' + dates[4];
+        if (window._dailyWeekCache.key === ck) return window._dailyWeekCache.text;
+        var out = [];
+        try {
+            // 월 폴더가 걸칠 수 있다(월말 주) — 두 달 다 본다.
+            var months = {}; dates.forEach(function (s) { months[window.DAILY_PATHS.month(s)] = 1; });
+            var files = [];
+            for (var mk in months) {
+                if (!Object.prototype.hasOwnProperty.call(months, mk)) continue;
+                var items = await window.nasAppFile.list(mk);
+                items.forEach(function (it) {
+                    var p = window.DAILY_PATHS.parse(it && it.name);
+                    if (p && dates.indexOf(p.ymd) !== -1) files.push(p);
+                });
+            }
+            for (var f = 0; f < files.length; f++) {
+                var doc = await window.dailyLoad(files[f].ymd, files[f].key);
+                if (!doc) continue;
+                var body = String(doc.aiDone || '').trim() ||
+                    (doc.items || []).map(function (it) { return '• ' + it.name + (it.note ? ' — ' + it.note : ''); }).join('\n');
+                if (!body && !doc.issue) continue;
+                out.push('[' + files[f].ymd + ' ' + (doc.name || files[f].key) + ']\n' + body +
+                         (doc.issue ? '\n  (이슈) ' + doc.issue : ''));
+            }
+        } catch (e) {
+            console.warn('[일일보고] 주간 묶기 실패:', e.message);
+            return '';
+        }
+        var text = out.join('\n');
+        window._dailyWeekCache = { key: ck, text: text };
+        return text;
+    };
+
+    (function hookWeekly() {
+        // 주간보고 PPT 미리보기를 열기 **직전에** 그 주 일일보고를 받아 두고,
+        // AI 프롬프트에 들어갈 "이번 주 업무 목록" 뒤에 덧붙인다.
+        var origPreview = window._wrShowAiPreviewModal;
+        if (typeof origPreview !== 'function') return;     // js/20 이 없으면 아무것도 안 한다
+        window._wrShowAiPreviewModal = async function (data, issueRows) {
+            try {
+                var digest = await window.dailyWeekDigest(window.wrBaseDate || new Date());
+                if (digest) {
+                    // `_wrFmtTasksForAi` 는 js/20 안의 지역 함수라 못 건드린다 —
+                    // 대신 **데이터에 한 줄 더 실어** 그 함수가 그대로 받아 가게 한다.
+                    data = Object.assign({}, data, {
+                        thisList: (data.thisList || []).concat([{
+                            idx: -1, row: {},
+                            text: '— 이번 주 일일보고에 적힌 내용 —\n' + digest
+                        }])
+                    });
+                    toast('📔 ' + T('이번 주 일일보고를 주간보고 초안에 같이 넣었습니다.',
+                                    'Added this week\'s daily reports to the weekly draft.'), 'info', 5000);
+                }
+            } catch (e) { /* 합류 실패가 주간보고를 막으면 안 된다 */ }
+            return origPreview.call(this, data, issueRows);
+        };
+    })();
+
+    // ── 부팅 1회: 비근무일 목록을 올려 둔다(없으면 백엔드가 알림을 안 보낸다) ──
+    setTimeout(function () {
+        try { window.dailyPublishNonWorkdays(); } catch (e) { /* 부팅을 막지 않는다 */ }
+    }, 8000);
 
     // ══════════════════════════════════════════════════════════════════════
     // 7-A. [2단계] AI 사다리 2단 — 다듬기. **사람이 누를 때만, 하루 1회.**

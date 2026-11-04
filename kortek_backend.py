@@ -988,6 +988,331 @@ def telegram_test():
 #                           [2026-08-31] 이메일만 담던 ccMailsSnapshot(문자열)을 대체 — 텔레그램도 발송.
 #   allowedExternalDomainsSnapshot — 위와 동일한 이유로 스냅샷하는 "외부 도메인 발송 허용" 목록
 
+
+# ══════════════════════════════════════════════════════════════
+# 📔 일일 업무보고 — 텔레그램 입력 수신 + 미작성 알림 (2026-11-04)
+# ══════════════════════════════════════════════════════════════
+#  왜 백엔드인가: ① 휴대폰에서 앱이 **아예 못 돈다**(이 백엔드가 127.0.0.1 바인드 +
+#  앱이 https Pages 라 사설IP http 호출은 혼합콘텐츠로 막힌다). 그래서 입력 통로를
+#  텔레그램 봇 답장으로 둔다. ② 미작성 알림은 브라우저가 꺼져 있어도 돌아야 한다.
+#
+#  ⚠️⚠️ `getUpdates` 는 **한 프로세스만** 불러야 한다 — 팀원 PC 백엔드가 다 폴링하면
+#     서로 업데이트를 빼앗아 보고가 임의의 PC 로 흩어진다. 그래서 명단(roster)에서
+#     `notifier: true` 인 사람의 PC(= NAS 계정이 그 key 와 같은 PC)에서만 돈다.
+#  ⚠️ webhook 은 못 쓴다(사내 PC 에 공개 URL 이 없다) — 폴링만.
+#  ⚠️ 모르는 chat_id 에는 **답하지 않는다** — 답하면 이 봇이 누구 것인지 알려 주는 셈이다.
+#  ⚠️ 쓰기에 실패하면 `offset` 을 올리지 않는다(다음 틱 재시도) — `_mail_watch_tick` 와 같은 규칙.
+#  ⚠️⚠️ 조회 실패를 "미작성"으로 읽으면 **전원에게 잘못 보낸다** → 실패하면 발송 0건.
+
+DAILY_TG_STATE = os.path.join(BASE_DIR, 'daily_tg_state.json')
+
+# 어휘는 데이터 — 줄 머리에 이 말이 있으면 그 칸으로. 없으면 전부 "오늘 한 일".
+DAILY_TG_TAGS = {
+    'done':  ['한 일', '실적', '오늘', 'done'],
+    'next':  ['내일', '계획', 'next', 'tomorrow'],
+    'issue': ['이슈', '문제', '막힘', 'issue', 'blocker'],
+}
+# 한 단어만 보내면 그 날 종류로 기록하고 끝낸다(휴가 등은 보고할 일이 없다).
+DAILY_TG_DAYTYPES = {'휴가': 'leave', '반차': 'half', '출장': 'trip', '교육': 'training', '근무': 'work'}
+
+
+def _daily_state():
+    try:
+        with open(DAILY_TG_STATE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _daily_state_save(st):
+    try:
+        with open(DAILY_TG_STATE, 'w', encoding='utf-8') as f:
+            json.dump(st, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("[일일보고] 상태 저장 실패: %s" % e)
+
+
+def _daily_rel(date_str, key):
+    """프런트(js/59 DAILY_PATHS)와 **같은 규칙**이어야 한다. 월 폴더는 밑줄이다 —
+    DSM 이 숫자로 시작하는 폴더 이름을 거부한 실측 때문(nas_dsm.ensure_folder 주석)."""
+    return 'App_Config/DailyReport/%s/%s__%s.json' % (date_str[:7].replace('-', '_'), date_str, key)
+
+
+def _daily_nas_json(rel):
+    """없으면 None. 읽기 실패는 **예외로 올린다** — "없다"와 "못 읽었다"를 섞으면
+    미작성 판정이 조용히 틀린다."""
+    n = _nas()
+    try:
+        raw = n.download(n.abs_path(rel))
+    except Exception as e:
+        txt = str(e)
+        if ('없' in txt) or ('404' in txt) or ('not found' in txt.lower()) or ('502' in txt):
+            return None
+        raise
+    try:
+        return json.loads(raw.decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _daily_roster():
+    """명단. 못 읽으면 **None**(빈 목록이 아니다) — 그 차이로 발송을 멈춘다."""
+    try:
+        r = _daily_nas_json('App_Config/DailyReport/_roster.json') or {}
+        return [m for m in (r.get('members') or []) if m.get('key')]
+    except Exception as e:
+        print("[일일보고] 명단 조회 실패: %s" % e)
+        return None
+
+
+def _daily_is_notifier():
+    """이 PC 가 담당인가. 명단에 notifier 가 없으면 **아무도 안 한다** — 기본값을
+    "나"로 두면 팀원 PC 가 전부 폴링해 서로 메시지를 빼앗는다."""
+    roster = _daily_roster()
+    if not roster:
+        return False, roster
+    try:
+        import nas_dsm as _nd
+        me = (_nd.load_config() or {}).get('user') or ''
+    except Exception:
+        me = ''
+    for m in roster:
+        if m.get('notifier') and str(m.get('key', '')).lower() == str(me).lower():
+            return True, roster
+    return False, roster
+
+
+def _daily_nonworkday(date_str):
+    """비근무일인가. **모르면 True**(= 안 보낸다). 백엔드는 KOR_HOLIDAYS(js/04d 안)를
+    모르므로 앱이 `_nonworkdays.json` 을 써 두고 여기서 읽는다."""
+    try:
+        d = datetime.strptime(date_str, '%Y-%m-%d')
+    except Exception:
+        return True
+    if d.weekday() >= 5:
+        return True
+    try:
+        doc = _daily_nas_json('App_Config/DailyReport/_nonworkdays.json') or {}
+    except Exception:
+        return True
+    days, until = doc.get('days') or [], doc.get('until') or ''
+    # ⚠️ 신선도는 `until` 로만 본다 — `days` 가 **비어 있는 건 정상**이다(그 기간에
+    #    추가 공휴일이 없을 뿐). 처음엔 빈 목록을 "목록 없음"으로 보고 전부 비근무일로
+    #    판정해, 평일에도 알림이 영영 안 나갔다(하네스가 잡았다).
+    if not until or date_str > until:
+        return True          # 목록이 없거나 낡았으면 안 보낸다
+    return date_str in days
+
+
+def _daily_apply_text(doc, text):
+    """자유 텍스트를 칸에 담는다. 태그가 없으면 **전부 '오늘 한 일'** —
+    서식을 외우게 만들면 아무도 안 쓴다."""
+    buckets = {'done': [], 'next': [], 'issue': []}
+    cur = 'done'
+    for raw in str(text or '').split('\n'):
+        line = raw.strip()
+        if not line:
+            continue
+        hit = None
+        low = line.lower()
+        for key, words in DAILY_TG_TAGS.items():
+            for w in words:
+                wl = w.lower()
+                if low.startswith(wl + ':') or low.startswith(wl + ' :') or low.startswith(wl + ')'):
+                    rest = line.split(':', 1)[1].strip() if ':' in line else line[len(w) + 1:].strip()
+                    hit = (key, rest)
+                    break
+            if hit:
+                break
+        if hit:
+            cur = hit[0]
+            if hit[1]:
+                buckets[cur].append(hit[1])
+        else:
+            buckets[cur].append(line)
+    for one in buckets['done']:
+        doc.setdefault('items', []).append({'name': one, 'project': '', 'note': '', 'via': 'telegram'})
+    for k in ('next', 'issue'):
+        if buckets[k]:
+            prev = (doc.get(k) or '').strip()
+            doc[k] = (prev + '\n' if prev else '') + '\n'.join(buckets[k])
+    return doc
+
+
+def _daily_summary_text(doc):
+    """"썼다"가 아니라 **쓰인 것을 되읽어** 보여준다(반환값은 증거가 아니다)."""
+    lines = ['\U0001F4D4 <b>%s</b> 일일보고' % html.escape(str(doc.get('date', '')))]
+    t = {'work': '근무', 'leave': '휴가', 'half': '반차', 'trip': '출장', 'training': '교육'}.get(doc.get('dayType'), '')
+    if t and t != '근무':
+        lines.append('· 일 종류: %s' % t)
+    for it in (doc.get('items') or []):
+        nm = html.escape(str(it.get('name', '')))
+        note = (' — ' + html.escape(str(it.get('note')))) if it.get('note') else ''
+        lines.append('• %s%s' % (nm, note))
+    if doc.get('next'):
+        lines.append('')
+        lines.append('[내일] ' + html.escape(str(doc['next'])))
+    if doc.get('issue'):
+        lines.append('[이슈] ' + html.escape(str(doc['issue'])))
+    lines.append('')
+    lines.append('(지금 저장된 내용입니다 — 더 보내면 이어 붙습니다)')
+    return '\n'.join(lines)
+
+
+def _daily_tg_tick(force=False):
+    """텔레그램 DM → 그 사람의 하루 파일. 폴링은 담당 PC 한 대에서만."""
+    ok, roster = _daily_is_notifier()
+    if not ok and not force:
+        return {'ok': True, 'skipped': 'not-notifier'}
+    if not TELEGRAM_TOKEN:
+        return {'ok': False, 'message': '텔레그램 토큰이 없습니다'}
+    if not roster:
+        return {'ok': False, 'message': '명단을 읽지 못했습니다 — 처리하지 않습니다'}
+    by_chat = {}
+    for m in roster:
+        if m.get('tgChatId'):
+            by_chat[str(m['tgChatId'])] = m
+    st = _daily_state()
+    offset = st.get('offset') or 0
+    try:
+        r = requests.get('https://api.telegram.org/bot%s/getUpdates' % TELEGRAM_TOKEN,
+                         params={'offset': offset, 'timeout': 0, 'limit': 50}, timeout=20)
+        j = r.json()
+    except Exception as e:
+        return {'ok': False, 'message': '수신 실패: %s' % e}
+    if not j.get('ok'):
+        return {'ok': False, 'message': str(j)[:200]}
+    handled, ignored, last = 0, 0, offset
+    for up in (j.get('result') or []):
+        uid = up.get('update_id') or 0
+        msg = up.get('message') or up.get('edited_message') or {}
+        text = (msg.get('text') or '').strip()
+        chat = str(((msg.get('chat') or {}).get('id')) or '')
+        if not text or not chat:
+            last = max(last, uid + 1)
+            continue
+        person = by_chat.get(chat)
+        if not person:
+            print("[일일보고] 등록되지 않은 chat_id 메시지 무시")
+            ignored += 1
+            last = max(last, uid + 1)
+            continue
+        date_str = datetime.now(KST).strftime('%Y-%m-%d')
+        rel = _daily_rel(date_str, person['key'])
+        try:
+            doc = _daily_nas_json(rel) or {
+                'date': date_str, 'key': person['key'], 'name': person.get('name', ''),
+                'team': person.get('team', ''), 'dayType': 'work',
+                'items': [], 'next': '', 'issue': '', 'rev': 0}
+            word = text.strip()
+            if word in DAILY_TG_DAYTYPES:
+                doc['dayType'] = DAILY_TG_DAYTYPES[word]
+            elif word in ('/다시', '/reset'):
+                doc['items'], doc['next'], doc['issue'] = [], '', ''
+            else:
+                doc = _daily_apply_text(doc, text)
+            doc['rev'] = (doc.get('rev') or 0) + 1
+            doc['savedAt'] = datetime.now(KST).isoformat()
+            n = _nas()
+            n.put(n.abs_path(rel), json.dumps(doc, ensure_ascii=False, indent=2).encode('utf-8'))
+            back = _daily_nas_json(rel) or doc
+            send_telegram_msg(_daily_summary_text(back), chat)
+            handled += 1
+            last = max(last, uid + 1)
+        except Exception as e:
+            print("[일일보고] 수신 처리 실패(다음 틱 재시도): %s" % e)
+            break
+    if last != offset:
+        st['offset'] = last
+        _daily_state_save(st)
+    return {'ok': True, 'handled': handled, 'ignored': ignored, 'offset': last}
+
+
+def _daily_report_tick(force=False):
+    """미작성 알림. **모르면 안 보낸다.**"""
+    ok, roster = _daily_is_notifier()
+    if not ok and not force:
+        return {'ok': True, 'skipped': 'not-notifier'}
+    if not roster:
+        return {'ok': False, 'message': '명단을 읽지 못해 발송하지 않습니다'}
+    now = datetime.now(KST)
+    date_str = now.strftime('%Y-%m-%d')
+    if _daily_nonworkday(date_str):
+        return {'ok': True, 'skipped': 'non-workday'}
+    cfg = _daily_state()
+    try:
+        dh, dm = [int(x) for x in str(cfg.get('dueAt') or '17:00').split(':')]
+    except Exception:
+        dh, dm = 17, 0
+    if (now.hour, now.minute) < (dh, dm):
+        return {'ok': True, 'skipped': 'before-due'}
+    sent, skipped = [], []
+    # ⚠️⚠️ **먼저 전부 읽고, 그다음 보낸다.** 읽기와 보내기를 한 루프에 섞으면
+    #    뒤쪽 사람의 조회가 실패해도 **앞사람에게는 이미 나간 뒤**다(하네스가 잡았다).
+    #    "모르면 안 보낸다"는 한 명이라도 모르면 0건이어야 성립한다.
+    targets = []
+    for m in roster:
+        if m.get('active') is False or not m.get('tgChatId'):
+            continue
+        if (cfg.get('lastFired') or {}).get(m['key']) == date_str:
+            continue
+        on_leave = any(str(l.get('from', '')) <= date_str <= str(l.get('to', l.get('from', '')))
+                       for l in (m.get('leave') or []))
+        if on_leave:
+            skipped.append([m['key'], 'leave'])
+            continue
+        try:
+            doc = _daily_nas_json(_daily_rel(date_str, m['key']))
+        except Exception as e:
+            print("[일일보고] 조회 실패 — 아무에게도 보내지 않습니다: %s" % e)
+            return {'ok': False, 'message': '조회 실패로 발송 중단: %s' % e}
+        if doc:
+            if doc.get('dayType') in ('leave', 'trip', 'training') or \
+               doc.get('items') or doc.get('next') or doc.get('issue'):
+                skipped.append([m['key'], 'written'])
+                continue
+        targets.append(m)
+
+    for m in targets:
+        res = send_telegram_msg(
+            '\U0001F4D4 <b>일일 업무보고</b>\n오늘(%s) 보고가 아직 없습니다.\n'
+            '이 대화에 그냥 적어 보내시면 그대로 저장됩니다. (휴가면 "휴가" 한 단어만)' % date_str,
+            m['tgChatId'])
+        if res.get('ok'):
+            cfg.setdefault('lastFired', {})[m['key']] = date_str
+            sent.append(m['key'])
+        else:
+            print("[일일보고] 알림 발송 실패(%s): %s" % (m['key'], res))
+    _daily_state_save(cfg)
+    return {'ok': True, 'sent': sent, 'skipped': skipped}
+
+
+@app.route('/daily/tick', methods=['POST'])
+def daily_tick_api():
+    """사람이 눌러 1회 확인(force). 자동 틱은 스케줄러가 돌린다."""
+    data = request.json or {}
+    out = {}
+    if data.get('inbound', True):
+        out['inbound'] = _daily_tg_tick(force=bool(data.get('force')))
+    if data.get('notify', True):
+        out['notify'] = _daily_report_tick(force=bool(data.get('force')))
+    out['ok'] = True
+    return jsonify(out)
+
+
+@app.route('/daily/config', methods=['GET', 'POST'])
+def daily_config_api():
+    st = _daily_state()
+    if request.method == 'POST':
+        d = request.json or {}
+        if 'dueAt' in d:
+            st['dueAt'] = str(d['dueAt'])[:5]
+        _daily_state_save(st)
+    ok, roster = _daily_is_notifier()
+    return jsonify({'ok': True, 'dueAt': st.get('dueAt') or '17:00', 'isNotifier': ok,
+                    'rosterCount': len(roster or []), 'offset': st.get('offset') or 0})
+
+
 @app.route('/schedule', methods=['GET', 'POST'])
 def schedule_api():
     global SCHEDULE_RULES
@@ -1563,6 +1888,15 @@ def _scheduler_loop():
             _mail_watch_tick()
         except Exception as e:
             print(f"[메일 알림 스케줄러 오류] {e}")
+        # 📔 일일보고 — 텔레그램 수신(입력) + 미작성 알림. 담당 PC 한 대에서만 돈다.
+        try:
+            _daily_tg_tick()
+        except Exception as e:
+            print(f"[일일보고 수신 스케줄러 오류] {e}")
+        try:
+            _daily_report_tick()
+        except Exception as e:
+            print(f"[일일보고 알림 스케줄러 오류] {e}")
         time.sleep(60)
 
 

@@ -49,3 +49,6 @@ nas_login_config.json
 # 📦 개발자료실 이사 robocopy 로그 (tools/docstore-to-nas.ps1)
 .docstore-move/
 nas_defaults.json
+
+# 📔 일일보고 텔레그램 수신 상태(offset·마감시각·발송기록) — PC 전용
+daily_tg_state.json
