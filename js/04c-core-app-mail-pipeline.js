@@ -297,7 +297,17 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const loaded = await res.json();
-                if (loaded && Array.isArray(loaded.projects)) indexData = loaded;
+                // 🛡️ [2026-11-04] 못 읽었으면 **쓰지 않는다.** 예전엔 읽기에 실패해도
+                //    `{projects: []}` 를 그대로 들고 내려가 **파일 전체를 덮어썼다** —
+                //    다른 프로젝트 항목과 군집 기록이 통째로 날아가는 길이었다(실제로
+                //    NAS 색인이 projects 0건이 된 사고가 있었다). 읽기는 됐는데 모양이
+                //    아니어도 마찬가지다 — 그건 "비었다"가 아니라 "모르겠다"이다.
+                if (!loaded || !Array.isArray(loaded.projects)) {
+                    console.error('project_index.json 을 읽지 못해 갱신을 건너뜁니다 — '
+                                + '빈 색인으로 덮어쓰지 않습니다(저장 자체는 정상 완료).');
+                    return false;
+                }
+                indexData = loaded;
             }
 
             const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot);

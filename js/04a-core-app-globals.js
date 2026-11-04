@@ -226,7 +226,16 @@ ${mailText}`;
         cutover: true,              // 팀 전체가 NAS 로 넘어왔는가
         since: '2026-11-04',        // 그날 이후 Drive 에 쓴 내용은 팀에 안 보인다
         target: 'nas',
-        hideMirror: true            // 미러는 이사 중간 단계였다 — 끝났으면 목록에서 내린다
+        hideMirror: true,           // 미러는 이사 중간 단계였다 — 끝났으면 목록에서 내린다
+        // 🗄️ [2026-11-04] **고르게 하지 않는다.** 플래그가 없으면 사내 NAS 다.
+        //   왜: 저장소는 팀 전체가 같은 곳이어야 의미가 있다. 한 사람이 드라이브에 남으면
+        //   그 사람 것만 조용히 갈라진다 — 고를 수 있게 둔 것 자체가 사고의 입구였다.
+        //   ⚠️ 비상 탈출구는 남긴다: 콘솔에서
+        //        localStorage.setItem('gantt_storage_backend','drive'); location.reload();
+        //      NAS·백엔드가 죽었을 때 드라이브의 **옛 사본**을 열어 보는 용도다
+        //      (거기 저장하면 팀과 갈라진다 — 배너가 그렇게 말해 준다).
+        //   되돌리려면 이 한 줄을 false 로. 코드를 뜯을 필요 없다.
+        nasOnly: true
     };
 
     let tokenClient;

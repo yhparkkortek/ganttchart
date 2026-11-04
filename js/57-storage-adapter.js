@@ -48,9 +48,17 @@
     var BACKEND = 'http://127.0.0.1:5000';
     var FOLDER_MIME = 'application/vnd.google-apps.folder';
 
+    //  🗄️ [2026-11-04] **플래그가 없으면 사내 NAS 다**(STORAGE_POLICY.nasOnly, js/04a).
+    //    그전엔 없으면 'drive' 였다 — 즉 아무것도 안 한 사람은 드라이브에 남았고, 그 사람
+    //    것만 조용히 갈라졌다. 이제 아무것도 안 하면 팀과 같은 곳(NAS)에 저장된다.
+    //    ⚠️ **명시적으로 저장된 값은 그대로 존중한다** — 콘솔에서 'drive' 를 넣어 둔 사람은
+    //       비상 탈출구를 쓴 것이다. 그 사람에겐 "드라이브에 저장되고 있다" 배너가 뜬다.
     function currentBackend() {
-        try { return (localStorage.getItem(FLAG_KEY) || 'drive').toLowerCase(); }
-        catch (e) { return 'drive'; }   // 시크릿 모드 등에서 localStorage 가 던질 수 있다
+        var saved = '';
+        try { saved = String(localStorage.getItem(FLAG_KEY) || '').toLowerCase(); }
+        catch (e) { saved = ''; }       // 시크릿 모드 등에서 localStorage 가 던질 수 있다
+        if (saved === 'drive' || saved === 'mirror' || saved === 'nas') return saved;
+        return ((window.STORAGE_POLICY || {}).nasOnly) ? 'nas' : 'drive';
     }
 
     // ───────────────────────────────────────────────────────────────────────
@@ -515,12 +523,12 @@
             var el = document.getElementById('drive-conn-badge');
             if (!el) return;
             el.textContent = BADGE.icon;
-            // 눌러서 바꿀 수 있다는 걸 말풍선에 적는다 — 아이콘만 보고는 아무도 안 누른다.
-            el.title = (window._currentLang === 'en' ? BADGE.en : BADGE.ko)
-                     + (window._currentLang === 'en' ? '\n(click to change storage)' : '\n(클릭하면 저장소를 바꿉니다)');
+            // ⚠️ [2026-11-04] **누르면 바뀌지 않는다.** 저장소는 더 이상 고르는 것이 아니다 —
+            //    배지는 "지금 어디에 저장되는지"만 말한다(그래도 이건 반드시 보여야 한다).
+            el.title = (window._currentLang === 'en' ? BADGE.en : BADGE.ko);
             el.style.display = 'inline-flex';
-            el.style.cursor = 'pointer';
-            el.onclick = function (ev) { ev.stopPropagation(); window.storageOpenSwitcher(el); };
+            el.style.cursor = 'default';
+            el.onclick = null;
         }
         var orig = window._updateDriveConnBadge;
         window._updateDriveConnBadge = function () {
@@ -609,10 +617,53 @@
         return res;
     }
 
+    //  🛡 [2026-11-04] **색인을 빈 채로 덮어쓰지 못하게 한다.**
+    //    실제로 당했다: NAS 의 `project_index.json` 이 `projects: []` 가 된 채
+    //    `unmatchedClusters` 746건만 남았다. 이 파일은 메일 자동배분의 색인이고,
+    //    담당자·팀·완료·테마색(Drive 의 appProperties 대용)이 전부 여기서 나온다.
+    //    비어도 **오류가 나지 않는다** — 분류가 조용히 풀리고 배분이 빗나갈 뿐이다.
+    //    ⚠️ 이 파일을 통째로 다시 쓰는 코드가 여럿이다(저장 시 upsert, 군집 감지 flush,
+    //       삭제 정리…). 그중 누가 범인인지와 **무관하게** 막으려면 그들을 하나씩 고칠 게
+    //       아니라 **쓰기 경계 한 곳**에서 막아야 한다. 여기가 그 한 곳이다.
+    //    ⚠️ 평소에는 아무 비용도 들지 않는다 — 들어온 내용이 **0건일 때만** 현재 파일을 읽어 본다.
+    async function guardIndexWrite(rel, text) {
+        if (rel !== IDX_REL || typeof text !== 'string') return null;
+        var incoming;
+        try { incoming = JSON.parse(text); } catch (e) { return null; }   // 색인이 아니면 통과
+        if (!incoming || !Array.isArray(incoming.projects)) return null;
+        if (incoming.projects.length > 0) return null;                    // 정상적인 쓰기
+        var now = [];
+        try {
+            var res = await nas('GET', '/nas/app/get' + qs(IDX_REL));
+            if (res.ok) now = (JSON.parse(await res.text()).projects) || [];
+        } catch (e) { return null; }      // 지금 것을 못 읽으면 판단 못 한다 — 막지 않는다
+        if (!now.length) return null;     // 원래도 비어 있었다 — 이 쓰기가 범인은 아니다
+        var msg = '프로젝트 색인을 0건으로 덮어쓰려 해서 막았습니다(지금 ' + now.length + '건). '
+                + '담당자 분류·메일 자동배분이 조용히 풀리는 변경입니다.';
+        console.error('[storage-adapter] ⛔ ' + msg);
+        if (window._issueLog) {
+            try {
+                window._issueLog({ domain: 'storage', kind: 'index_wipe_blocked', route: '/nas/app/put',
+                                   result: { errorRaw: msg }, env: { had: now.length } });
+            } catch (e) { /* 기록 실패가 가드를 막지는 않는다 */ }
+        }
+        if (window.showToast) {
+            try { window.showToast('⛔ ' + msg, 'warning', 12000); } catch (e) { /* ignore */ }
+        }
+        return { ok: false, blocked: 'index-wipe', message: msg };
+    }
+
+    //  하네스용 — **읽기만 하는 함수다**(막을지 말지를 판단할 뿐 쓰지 않는다).
+    window._storageGuardIndexWrite = guardIndexWrite;
+
     async function writeRel(rel, media, isB64) {
         var payload = { rel: normRel(rel) };
         if (isB64) payload.b64 = media; else payload.text = String(media === null || media === undefined ? '' : media);
-        if (payload.rel === IDX_REL) _idxAt = 0;   // 📇 꼬리표 출처가 바뀌었다 — 캐시 버림
+        if (payload.rel === IDX_REL) {
+            var blocked = await guardIndexWrite(payload.rel, payload.text);
+            if (blocked) return blocked;
+            _idxAt = 0;   // 📇 꼬리표 출처가 바뀌었다 — 캐시 버림
+        }
         return await nasJson('POST', '/nas/app/put', payload);
     }
 
@@ -1244,6 +1295,16 @@
         var en = window._currentLang === 'en';
         var reason = s.reason || '';
         var msg, btn;
+        // 📱 휴대폰·태블릿에는 이 PC 백엔드(127.0.0.1:5000)가 **존재할 수 없다.**
+        //    그런데 "백엔드가 꺼져 있습니다 / 설치 안내"라고 하면 사람을 할 수 없는 일로 보낸다.
+        var isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        if (isPhone && (reason === 'backend' || reason === 'module')) {
+            storageBanner('storage-nas-offline-banner', '#fdecea', '#e05c4a', '#a3281c',
+                en ? 'On a phone or tablet the app cannot reach the in-house NAS — it needs the backend running on your PC.'
+                   : '📱 휴대폰·태블릿에서는 사내 NAS 에 붙을 수 없습니다 — PC 에서 도는 백엔드가 있어야 합니다. '
+                     + 'PC 에서 열어주세요.', []);
+            return;
+        }
         if (reason === 'backend' || reason === 'module') {
             msg = en ? 'The local backend is not running, so the app cannot read the NAS.'
                      : '🗄️ 사내 NAS 에 연결하지 못했습니다 — <b>백엔드(kortek_backend)가 꺼져 있습니다.</b> '

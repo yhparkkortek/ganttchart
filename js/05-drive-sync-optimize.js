@@ -53,7 +53,10 @@
 //    ⚠️ 이 목록을 js/57 로 복사하지 말 것 — 복사하면 Drive 쪽에 하나 추가할 때 NAS 모드만
 //       조용히 빠진다. 그게 바로 이 사고의 모양이다.
 window._storageEnableDataButtons = function () {
-    ['drive_save_btn', 'drive_load_btn', 'backup_restore_btn', 'project-select-btn'].forEach(function (id) {
+    // ⚠️ 여기 있는 id 는 **실제로 화면에 있는 것만** 적을 것 — 없는 id 를 적어 두면
+    //    "목록에 있으니 됐겠지" 하고 넘어가게 된다(`project-select-btn` 이 그랬다. 진짜
+    //    [📂 프로젝트 열기] 는 `drive_load_btn` 이다).
+    ['drive_save_btn', 'drive_load_btn', 'backup_restore_btn', 'delete-project-btn'].forEach(function (id) {
         var b = document.getElementById(id);
         if (b) b.disabled = false;
     });

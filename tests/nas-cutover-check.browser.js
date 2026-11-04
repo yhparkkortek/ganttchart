@@ -152,6 +152,15 @@
     // ── 📢 전환 선언(2026-11-04) — 안 옮긴 팀원이 "지금 어디에 저장되는지" 알 수 있는가
     var pol = window.STORAGE_POLICY || {};
     check('전환 선언이 데이터로 있다(STORAGE_POLICY)', !!pol.cutover, JSON.stringify(pol));
+    // 🗄️ 고르게 하지 않는다 — 플래그가 없어도 NAS 여야 한다(아무것도 안 한 팀원이 기준).
+    check('기본값이 사내 NAS 다(nasOnly)', !!pol.nasOnly, JSON.stringify(pol));
+    var _savedFlag = null;
+    try { _savedFlag = localStorage.getItem('gantt_storage_backend'); } catch (e) { /* ignore */ }
+    check('플래그 없이도 NAS 로 돌고 있다',
+          _savedFlag === null || _savedFlag === 'nas',
+          '플래그=' + _savedFlag + ' (drive/mirror 면 비상 탈출구를 쓴 상태다)');
+    var _badge = document.getElementById('drive-conn-badge');
+    check('배지는 눌러도 안 바뀐다(고르기 없음)', !(_badge && _badge.onclick));
     check('배너 함수가 있다', typeof window._storageBanner === 'function');
     check('🚀 간편 전환으로 가는 길이 있다', typeof window.storageOpenQuickSwitch === 'function');
     check('📥 설치 안내로 가는 길이 있다', typeof window.storageOpenBackendGuide === 'function');
@@ -180,6 +189,30 @@
         check('confirm 문구에 마크다운이 안 남았다', !!seen && seen.indexOf('**') < 0, seen);
     } catch (e) {
         check('되돌리기 경고', false, String(e && e.message || e));
+    }
+
+    // 🛡 색인을 0건으로 덮어쓰려는 쓰기를 막는가 — **이 검사는 아무것도 쓰지 않는다**
+    //    (가드 함수는 막을지 말지 판단만 하고 쓰지 않는다). 지금 색인이 비어 있으면 판단할
+    //    수 없으므로 건너뛰고 **그 사실을 말한다** — "통과"로 적으면 안 본 걸 봤다고 하는 것이다.
+    try {
+        if (typeof window._storageGuardIndexWrite !== 'function') {
+            check('색인 덮어쓰기 가드가 있다', false, '함수 없음');
+        } else {
+            var idxNow = await (await fetch(BK + '/nas/app/get?rel='
+                + encodeURIComponent('App_Config/project_index.json'))).json();
+            var have = (idxNow.projects || []).length;
+            var verdict = await window._storageGuardIndexWrite(
+                'App_Config/project_index.json', JSON.stringify({ projects: [] }));
+            if (!have) {
+                note('색인이 지금 0건이라 "빈 덮어쓰기 차단"을 확인할 수 없습니다 — '
+                   + 'tools/restore-project-index.py 로 되살린 뒤 다시 돌려주세요');
+            } else {
+                check('색인을 0건으로 덮어쓰면 막는다', !!(verdict && verdict.blocked),
+                      '지금 ' + have + '건인데 가드가 통과시켰다');
+            }
+        }
+    } catch (e) {
+        check('색인 덮어쓰기 가드', false, String(e && e.message || e));
     }
 
     out('\n════ 통과 ' + ok + ' · 실패 ' + bad + (warn ? (' · 주의 ' + warn) : '') + ' ════');

@@ -211,7 +211,9 @@
                 + '<label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;">'
                 + '<span style="width:92px; flex:0 0 auto; color:#555;">' + T('저장소', 'Storage') + '</span>'
                 + '<span id="storage-mode-now" style="flex:1; min-width:0; color:#333;"></span>'
-                + '<button onclick="window.storageOpenSwitcher && window.storageOpenSwitcher(this)" style="' + btnSt
+                // 🗄️ [2026-11-04] 고르기 버튼을 뺐다 — 저장소는 팀 전체가 같은 곳이어야 한다.
+                //    (비상 탈출구는 콘솔 한 줄로 남겨 뒀다 — docs/nas-dsm.md)
+                + '<button hidden style="' + btnSt
                 + ' padding:6px 10px;">🔀 ' + T('바꾸기', 'Change') + '</button></label>'
                 // 📁 문서 저장소(사양서·도면) — **메뉴 어디에도 들어가는 길이 없었다.**
                 //    `_dsOpenSettings()` 는 있는데 부르는 곳이 js/48 의 오류 화면뿐이라,
@@ -1107,14 +1109,16 @@
                     + '계정을 넣은 뒤, 위 <b>문서 저장소 ▸ 📁 설정</b>에서 경로를 다시 저장하세요.',
                     'The spec/drawing folder is not reachable yet — open that share once in Explorer, '
                     + 'then save the path again under <b>Doc store ▸ Settings</b>.')
-                + '</div><div style="margin-top:6px;"><button onclick="window.storageSetMode(\'nas\', {silent:true})" style="'
-                + btnSt + ' font-weight:bold;">🗄️ ' + T('그래도 NAS 로 전환', 'Switch to NAS anyway') + '</button></div>');
+                + '</div><div style="margin-top:6px;"><button onclick="location.reload()" style="'
+                + btnSt + ' font-weight:bold;">🗄️ ' + T('그래도 계속하기', 'Continue anyway') + '</button></div>');
             nasStatus('⚠️ ' + T('앱 데이터는 준비됐습니다. 자료실만 남았습니다.',
                                 'App data is ready. Only the doc store is left.'), 'err');
             return;
         }
         nasStatus('✅ ' + T('준비됐습니다 — 새로고침합니다.', 'Ready — reloading.'), 'ok');
-        setTimeout(function () { window.storageSetMode('nas', { silent: true }); }, 900);
+        // ⚠️ `storageSetMode('nas')` 를 부르지 않는다 — 기본값이 이미 nas 라 "지금 그 모드"로
+        //    보고 **아무 일도 하지 않는다**(그래서 새로고침이 안 됐다). 그냥 다시 읽는다.
+        setTimeout(function () { location.reload(); }, 900);
     };
 
     window._nasLoginDelete = async function () {
