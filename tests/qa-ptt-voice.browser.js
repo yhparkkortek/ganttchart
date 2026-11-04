@@ -61,13 +61,13 @@
         window.SpeechRecognition = origSR; window.webkitSpeechRecognition = origWSR;
     };
 
-    // ── 1) 누르면 즉시 "듣는 중" 상태로 바뀐다 ──────────────────────────────
+    // ── 1) 누르면 즉시 "듣는 중" 상태(🔴 아이콘만, 2026-11-04부터 글자 없음)로 바뀐다 ──
     useFake('자재 재고 알려줘');
     input.value = '';
     window._ganttQaPttDown();
     await sleep(20);
     ok(window._ganttQaPttActive === true, '누르면 _ganttQaPttActive=true');
-    ok(/듣는 중|Listening/.test(btn.innerHTML), '누르면 버튼 라벨이 "듣는 중"으로 바뀜', btn.innerHTML);
+    ok(btn.innerHTML === '🔴', '누르면 버튼이 🔴 아이콘만 보임(글자 없음)', btn.innerHTML);
 
     // ── 2) 떼면 인식을 멈추고, 받아쓴 내용을 sendGanttQaMessage로 그대로 보낸다 ──
     let sentWith = null;
@@ -75,7 +75,7 @@
     window._ganttQaPttUp();
     await sleep(80);
     ok(window._ganttQaPttActive === false, '떼면 _ganttQaPttActive=false로 돌아옴');
-    ok(!/듣는 중|Listening/.test(btn.innerHTML), '떼면 버튼 라벨이 원래대로 돌아옴', btn.innerHTML);
+    ok(btn.innerHTML !== '🔴', '떼면 버튼 라벨이 원래대로 돌아옴', btn.innerHTML);
     ok(sentWith === '자재 재고 알려줘', '받아쓴 문장을 그대로 전송 호출에 실음', sentWith);
 
     // ── 3) 말 없이 바로 떼면(짧게 탭) 전송을 호출하지 않는다 ──────────────────

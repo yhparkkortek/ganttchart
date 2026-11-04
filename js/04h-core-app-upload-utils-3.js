@@ -10930,7 +10930,10 @@ ${docsJson}`;
             const isBottom = id === 'gantt-qa-mic-btn2';
             // 💡 [2026-10-28, 버튼 폭 절반 축소에 맞춤] 라벨을 "음성문답"/"글자문답" → "음성"/"글자"로
             //    줄임(오른쪽에 뮤트 버튼이 나란히 들어와 폭이 절반으로 줄었음, 아이콘으로 문맥 보충).
-            btn.innerHTML = on ? (isBottom ? (_mEn ? '🔴 Listening' : '🔴 듣는 중') : (_mEn ? '⌨️ Text' : '⌨️ 글자문답'))
+            // 💡 [2026-11-04, 사용자 제보 "듣는 글자는 지워줘"] PTT로 누르고 있는 동안은 글자 없이
+            //    🔴 아이콘만 — 누르는 즉시 배경색(#c9ecd3)도 같이 바뀌어서 글자가 없어도 듣는 중임을
+            //    알 수 있다.
+            btn.innerHTML = on ? (isBottom ? '🔴' : (_mEn ? '⌨️ Text' : '⌨️ 글자문답'))
                                : (isBottom ? (_mEn ? 'Voice' : '음성') : (_mEn ? '🎙️ Voice' : '🎙️ 음성문답'));
             btn.style.background = on ? '#c9ecd3' : (isBottom ? '#e6f6ea' : '#e8f4fd');
             btn.style.color = on ? '#1f7a3d' : (isBottom ? '#1f7a3d' : '#1a4f7a');
