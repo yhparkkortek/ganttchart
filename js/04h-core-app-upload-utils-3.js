@@ -10917,22 +10917,28 @@ ${docsJson}`;
     window._ganttQaIsMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
     window._ganttQaVoiceMode = false;
 
+    // 📏 [2026-11-04, 사용자 제보 "잡음/타이밍 맞추기 어려움"] 아래 _mic-btn2_ 버튼은 이제 클릭 토글이
+    //    아니라 누르고 있는 동안만 듣는 PTT(Push-To-Talk, _ganttQaPttDown/_ganttQaPttUp 참고) — 이
+    //    함수는 그 버튼이 지금 듣고 있는지(_ganttQaPttActive)를 표시한다. 타이핑으로 "음성문답 모드
+    //    켜줘"를 친 경우에 쓰는 옛 연속모드(_ganttQaVoiceMode)도 같은 버튼을 같이 쓰므로 둘 다 본다.
     window._ganttQaUpdateMicBtn = function() {
         const _mEn = window._currentLang === 'en';
-        const on = window._ganttQaVoiceMode;
+        const on = window._ganttQaVoiceMode || window._ganttQaPttActive;
         ['gantt-qa-mic-btn2'].forEach(function(id) {
             const btn = document.getElementById(id);
             if (!btn) return;
             const isBottom = id === 'gantt-qa-mic-btn2';
             // 💡 [2026-10-28, 버튼 폭 절반 축소에 맞춤] 라벨을 "음성문답"/"글자문답" → "음성"/"글자"로
             //    줄임(오른쪽에 뮤트 버튼이 나란히 들어와 폭이 절반으로 줄었음, 아이콘으로 문맥 보충).
-            btn.innerHTML = on ? (isBottom ? (_mEn ? '⌨️ Text' : '⌨️ 글자') : (_mEn ? '⌨️ Text' : '⌨️ 글자문답'))
+            btn.innerHTML = on ? (isBottom ? (_mEn ? '🔴 Listening' : '🔴 듣는 중') : (_mEn ? '⌨️ Text' : '⌨️ 글자문답'))
                                : (isBottom ? (_mEn ? 'Voice' : '음성') : (_mEn ? '🎙️ Voice' : '🎙️ 음성문답'));
             btn.style.background = on ? '#c9ecd3' : (isBottom ? '#e6f6ea' : '#e8f4fd');
             btn.style.color = on ? '#1f7a3d' : (isBottom ? '#1f7a3d' : '#1a4f7a');
-            btn.title = on
-                ? (_mEn ? 'Voice Q&A is ON — click to switch back to typing' : '음성문답 모드 켜짐 — 클릭하면 글자로 묻는 방식으로 돌아갑니다')
-                : (_mEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다');
+            btn.title = isBottom
+                ? (_mEn ? 'Hold to talk — speak while pressing, release to send' : '누르고 있는 동안 말하고, 손을 떼면 바로 전송됩니다')
+                : (on
+                    ? (_mEn ? 'Voice Q&A is ON — click to switch back to typing' : '음성문답 모드 켜짐 — 클릭하면 글자로 묻는 방식으로 돌아갑니다')
+                    : (_mEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'));
         });
     };
 
@@ -11064,11 +11070,93 @@ ${docsJson}`;
         }
     };
 
-    // ✕ 닫기 — 모달을 닫을 때 켜져 있던 음성문답 모드/읽어주던 음성도 함께 정리
+    // 🎙️ [2026-11-04, 사용자 제보 "음성 버튼 누르면 잡음/타이밍 맞추기 어려움"] 위 토글+연속듣기
+    //    방식(_ganttQaToggleMic/_ganttQaStartListening, 침묵 3초로 "다 말했다"를 추측)은 주변 소음이나
+    //    "언제 끝났다고 볼지" 타이밍이 어긋나는 문제가 있었다. 음성 버튼(gantt-qa-mic-btn2)은 이제
+    //    "누르고 있는 동안만 듣는" PTT(Push-To-Talk)로 바뀐다 — 종료 시점을 침묵 타이머가 아니라
+    //    사람이 손을 떼는 순간으로 직접 정하므로, 그 추측 자체가 필요 없어진다. 타이핑으로 "음성문답
+    //    모드 켜줘"라고 치는 옛 연속모드 경로(_ganttQaToggleMic)는 그대로 남겨둔다(건드리지 않음).
+    //    포인터 이벤트(마우스+터치 통합)로 한 벌만 구현 — setPointerCapture로 버튼 밖에서 손을 떼도
+    //    놓치지 않는다.
+    window._ganttQaPttRecognition = null;
+    window._ganttQaPttActive = false;
+
+    window._ganttQaPttDown = function(e) {
+        if (window._ganttQaPttActive || window._ganttQaVoiceMode) return; // 이미 듣는 중이면 무시
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) {
+            alert(window._currentLang === 'en'
+                ? '⚠️ This browser does not support voice input. Please use Chrome or Edge.'
+                : '⚠️ 이 브라우저는 음성 인식을 지원하지 않습니다. Chrome이나 Edge를 사용해주세요.');
+            return;
+        }
+        if (e) {
+            e.preventDefault(); // 길게 누를 때 모바일 콘텍스트 메뉴/스크롤 방지
+            try { e.target.setPointerCapture(e.pointerId); } catch (_e) {}
+        }
+        window._ganttQaPttActive = true;
+        window._ganttQaUpdateMicBtn();
+
+        const rec = new SR();
+        rec.lang = window._currentLang === 'en' ? 'en-US' : 'ko-KR';
+        rec.interimResults = true;
+        rec.continuous = true; // 손을 떼기 전엔 끊지 않는다 — 종료는 침묵 타이머가 아니라 _ganttQaPttUp이 정함
+        rec.maxAlternatives = 1;
+        let finalSegments = [];
+        rec.onresult = function(ev) {
+            let interim = '';
+            for (let i = 0; i < ev.results.length; i++) {
+                const t = ev.results[i][0].transcript;
+                if (ev.results[i].isFinal) finalSegments[i] = t;
+                else interim += t;
+            }
+            const input = document.getElementById('gantt-qa-input');
+            if (input) input.value = finalSegments.join('') + interim;
+        };
+        rec.onerror = function(ev) {
+            // 🐛 [2026-11-04] 권한 거부 등 치명적 오류는 브라우저에 따라 onend가 뒤이어 안 올 수도
+            //    있다 — active를 여기서도 꺼 두지 않으면 버튼이 "듣는 중"에 영구히 멈춘다(onend에서
+            //    또 꺼도 중복 실행은 무해하다, finalTranscript가 비어 있어 전송도 안 됨).
+            if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed' || ev.error === 'audio-capture') {
+                window._ganttQaPttActive = false;
+                window._ganttQaUpdateMicBtn();
+                alert(window._currentLang === 'en'
+                    ? '⚠️ Microphone access was denied (or no microphone found).'
+                    : '⚠️ 마이크 권한이 거부되었거나 마이크를 찾을 수 없습니다.');
+            } else if (ev.error !== 'aborted' && ev.error !== 'no-speech' && window.showToast) {
+                window.showToast((window._currentLang === 'en' ? '🎤 Voice recognition error: ' : '🎤 음성 인식 오류: ') + ev.error, 'error');
+            }
+        };
+        rec.onend = async function() {
+            window._ganttQaPttActive = false;
+            window._ganttQaUpdateMicBtn();
+            const input = document.getElementById('gantt-qa-input');
+            const finalTranscript = finalSegments.join('').trim();
+            if (finalTranscript && input) {
+                input.value = finalTranscript;
+                await window.sendGanttQaMessage();
+            }
+        };
+        window._ganttQaPttRecognition = rec;
+        try { rec.start(); } catch (_e) { window._ganttQaPttActive = false; window._ganttQaUpdateMicBtn(); }
+    };
+
+    window._ganttQaPttUp = function(e) {
+        if (e) { try { e.target.releasePointerCapture(e.pointerId); } catch (_e) {} }
+        if (window._ganttQaPttRecognition) {
+            try { window._ganttQaPttRecognition.stop(); } catch (_e) {} // 남은 결과 처리 후 onend에서 전송
+        }
+    };
+
+    // ✕ 닫기 — 모달을 닫을 때 켜져 있던 음성문답 모드/PTT 듣기/읽어주던 음성도 함께 정리
     window._ganttQaCloseModal = function() {
         if (window._ganttQaVoiceMode) {
             window._ganttQaVoiceMode = false;
             if (window._ganttQaRecognition) { try { window._ganttQaRecognition.onend = null; window._ganttQaRecognition.stop(); } catch (e) {} }
+        }
+        if (window._ganttQaPttActive && window._ganttQaPttRecognition) {
+            try { window._ganttQaPttRecognition.onend = null; window._ganttQaPttRecognition.stop(); } catch (e) {}
+            window._ganttQaPttActive = false;
         }
         if (window.speechSynthesis) window.speechSynthesis.cancel();
         const modal = document.getElementById('gantt-qa-modal');
@@ -11247,10 +11335,21 @@ ${docsJson}`;
                              나란히(음성문답 라벨을 "음성"으로 줄여 폭 절반 + 오른쪽에 뮤트 버튼) 두는
                              것이었다 — 원래 음성문답 버튼 높이(flex:1, 72px 칸의 절반)를 그대로 유지.
                              id·onclick·_ganttQaUpdateVoiceBtn()의 textContent/title 갱신 로직은 그대로
-                             두고 위치/크기만 옮겼다(동작 변경 없음). -->
+                             두고 위치/크기만 옮겼다(동작 변경 없음).
+                             📏 [2026-11-04, 사용자 제보 "스피커 박스가 음성 버튼보다 높이가 다름(음성
+                             버튼 크기로 맞춰달라)"] 원인은 패딩이 아니라 styles.css:187의 전역 규칙(버튼
+                             inline style에 "height:" 글자가 없으면 min-height:28px 적용) — 🔇 버튼은
+                             "height:" 글자를 inline style에 전혀 안 가지고 있어 28px로 커지는데, 음성
+                             버튼은 line-height:1.25의 "height:" 부분 문자열에 우연히 걸려 그 규칙을
+                             피해가며 25px로 작게 나온다(의도한 동작 아님). 음성 버튼 크기(25px)가 기준이므로
+                             🔇 버튼에 명시적 min-height:0을 줘서 전역 규칙을 끄고 25px로 맞췄다(음성
+                             버튼은 그대로, 키우지 않음). -->
                         <div style="flex:1; display:flex; gap:4px; align-items:stretch; min-height:0;">
-                            <button id="gantt-qa-mic-btn2" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex:1; min-width:0; box-sizing:border-box; padding:0 2px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Voice' : '음성'}</button>
-                            <button id="gantt-qa-voice-toggle-btn" onclick="window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="flex:1; min-width:0; box-sizing:border-box; display:flex; align-items:center; justify-content:center; background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; cursor:pointer; padding:0; transition:background .15s;">🔇</button>
+                            <!-- 🎙️ [2026-11-04] PTT(누르고 있는 동안만 듣기) — onclick 토글 대신
+                                 pointerdown/pointerup. 손을 뗄 때 버튼 밖이어도 놓치지 않도록
+                                 pointerdown에서 setPointerCapture(_ganttQaPttDown 안에서 처리). -->
+                            <button id="gantt-qa-mic-btn2" onpointerdown="window._ganttQaPttDown(event)" onpointerup="window._ganttQaPttUp(event)" onpointercancel="window._ganttQaPttUp(event)" title="${_qEn ? 'Hold to talk — speak while pressing, release to send' : '누르고 있는 동안 말하고, 손을 떼면 바로 전송됩니다'}" style="flex:1; min-width:0; box-sizing:border-box; padding:0 2px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s; touch-action:none; user-select:none; -webkit-user-select:none;" onmouseover="if(!window._ganttQaPttActive){ this.style.background='#c9ecd3'; this.style.borderColor='#7cc494'; }" onmouseout="if(!window._ganttQaPttActive){ this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8'; }">${_qEn ? 'Voice' : '음성'}</button>
+                            <button id="gantt-qa-voice-toggle-btn" onclick="window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="flex:1; min-width:0; box-sizing:border-box; min-height:0; display:flex; align-items:center; justify-content:center; background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; cursor:pointer; padding:0; transition:background .15s;">🔇</button>
                         </div>
                         <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear Chat' : '대화삭제'}</button>
                     </div>
