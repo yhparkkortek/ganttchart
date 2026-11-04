@@ -173,6 +173,45 @@ def _dpapi_decrypt_b64(b64):
         ctypes.windll.kernel32.LocalFree(bout.pbData)
 
 
+NAS_DEFAULTS = os.path.join(BASE_DIR, 'nas_defaults.json')
+
+
+def load_defaults():
+    """팀 공용 **기본값**(주소·포트·HTTPS·앱 폴더). 없으면 {}.
+
+    🔑 [2026-11-04] 왜 이런 파일이 따로 있나 — "그냥 주소를 코드에 박으면 되지 않나"의 답이다.
+       이 저장소는 **GitHub Pages 로 공개**돼 있다(실측 확인: public). 사내 IP·공유 경로를
+       코드에 박으면 그대로 인터넷에 올라간다. 그렇다고 팀원마다 주소를 손으로 치게 하면
+       오타가 나고, 그 오타는 **로그인 실패 → IP 차단**으로 이어진다.
+       → 주소는 **저장소를 거치지 않는 길**로 옮긴다: 이 파일(.gitignore)을 설치 폴더에
+         같이 두면 앱이 알아서 채운다. 팀원은 **사번·비밀번호만** 넣는다.
+    ⚠️ **비밀번호는 여기 넣지 않는다.** 비밀번호는 DPAPI 로 그 PC 에서만 풀리게
+       `nas_login_config.json` 에만 들어간다(이 파일은 평문이고 여러 PC 를 돌아다닌다).
+    """
+    try:
+        with open(NAS_DEFAULTS, 'r', encoding='utf-8') as f:
+            d = json.load(f) or {}
+    except Exception:
+        return {}
+    out = {}
+    if d.get('host'):
+        out['host'] = str(d['host']).strip()
+    if d.get('port'):
+        try:
+            out['port'] = int(d['port'])
+        except Exception:
+            pass
+    if 'https' in d:
+        out['https'] = bool(d['https'])
+    if d.get('root'):
+        out['root'] = str(d['root']).strip()
+    if d.get('docRoot'):
+        out['docRoot'] = str(d['docRoot']).strip()
+    out.pop('pw', None)               # 혹시 넣었더라도 절대 안 쓴다
+    out.pop('password', None)
+    return out
+
+
 def load_config():
     """{'host','port','https','user','pw_dpapi'} 또는 None."""
     try:

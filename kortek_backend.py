@@ -5388,7 +5388,10 @@ def _nas():
 def nas_status():
     """로그인 상태만 본다 — 로그인 시도는 하지 않는다."""
     try:
-        return jsonify(dict(_nas().status(), ok_module=True))
+        nas = _nas()
+        # 🔑 아직 설정 전이면 **기본값**을 같이 내려 화면이 채워 놓는다(nas_defaults.json,
+        #    .gitignore — 사내 주소를 공개 저장소에 넣지 않으려는 것). 비밀번호는 안 들어간다.
+        return jsonify(dict(nas.status(), ok_module=True, defaults=nas.load_defaults()))
     except Exception as e:
         return jsonify({'ok': False, 'reason': 'module', 'message': f'nas_dsm 로드 실패: {e}'})
 
@@ -5489,10 +5492,15 @@ def nas_setup():
     ⚠️ 로그인 실패는 `nas_dsm` 의 예산(기본 3회)이 관리한다 — 여기서 재시도하지 않는다.
     """
     req = request.get_json(force=True, silent=True) or {}
-    host = str(req.get('host') or '').strip()
+    steps = []
+    try:
+        _dflt = _nas().load_defaults()
+    except Exception:
+        _dflt = {}
+    # 🔑 빈 칸은 팀 공용 기본값으로 메운다 — 팀원이 칠 것은 사번·비밀번호뿐이어야 한다.
+    host = str(req.get('host') or _dflt.get('host') or '').strip()
     user = str(req.get('user') or '').strip()
     pw = req.get('password') or ''
-    steps = []
 
     def step(name, ok, message='', **extra):
         steps.append(dict({'step': name, 'ok': bool(ok), 'message': message}, **extra))
@@ -5506,9 +5514,9 @@ def nas_setup():
     if not host or not user:
         return jsonify({'ok': False, 'steps': [{'step': 'input', 'ok': False,
                                                 'message': '주소와 아이디가 필요합니다.'}]}), 400
-    https = bool(req.get('https', True))
+    https = bool(req.get('https', _dflt.get('https', True)))
     try:
-        port = int(req.get('port') or (5001 if https else 5000))
+        port = int(req.get('port') or _dflt.get('port') or (5001 if https else 5000))
     except Exception:
         return jsonify({'ok': False, 'steps': [{'step': 'input', 'ok': False,
                                                 'message': '포트는 숫자여야 합니다.'}]}), 400
@@ -5529,7 +5537,7 @@ def nas_setup():
         return jsonify({'ok': False, 'steps': steps, 'budget': lg.get('budget')})
 
     # 3) 앱 폴더 — 안 주면 찾아본다. 1건일 때만 스스로 정한다.
-    root = str(req.get('root') or '').replace(chr(92), '/').strip()
+    root = str(req.get('root') or _dflt.get('root') or '').replace(chr(92), '/').strip()
     if not root:
         try:
             f = nas.find_app_folder()
@@ -5557,7 +5565,7 @@ def nas_setup():
     # 4) 문서 저장소(사양서·도면) — 윈도가 직접 읽는 UNC 경로. 앱 폴더에서 만들어 쓴다.
     #    ⚠️ 여기서 실패해도 전환은 성공으로 본다 — 앱 데이터는 이미 NAS 를 보고 있고,
     #       자료실만 못 닿는 상태는 사람이 나중에 고칠 수 있다(둘은 다른 설정이다).
-    doc_root = str(req.get('docRoot') or '').strip()
+    doc_root = str(req.get('docRoot') or _dflt.get('docRoot') or '').strip()
     if not doc_root:
         doc_root = nas.unc_of(root.rstrip('/') + '/' + NAS_DOCSTORE_FOLDER)
     if doc_root:

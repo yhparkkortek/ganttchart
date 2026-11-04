@@ -48,3 +48,4 @@ nas_login_config.json
 
 # 📦 개발자료실 이사 robocopy 로그 (tools/docstore-to-nas.ps1)
 .docstore-move/
+nas_defaults.json

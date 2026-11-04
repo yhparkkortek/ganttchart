@@ -198,6 +198,10 @@
                 + ' oninput="window._nasQuickApplyCode()" style="' + inputSt + ' margin-bottom:8px;">'
                 + '<div id="nasq-log" style="display:none; font-size:11.5px; line-height:1.6; margin:0 0 8px;"></div>'
                 + '<div style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">'
+                + '<button onclick="window._nasSaveDefaultsFile()" style="' + btnSt + ' padding:5px 9px;" title="'
+                + T('설치 폴더에 같이 둘 nas_defaults.json 을 내려받습니다(비밀번호는 안 들어갑니다)',
+                    'Download nas_defaults.json to place next to the installer (no password inside)') + '">📄 '
+                + T('기본설정 파일', 'Defaults file') + '</button>'
                 + '<button onclick="window._nasShareCode()" style="' + btnSt + ' padding:5px 9px;" title="'
                 + T('지금 이 PC 설정을 팀원에게 전달할 코드로 복사합니다(비밀번호는 들어가지 않습니다)',
                     'Copy this PC settings as a code for teammates (no password included)') + '">📤 '
@@ -977,6 +981,12 @@
         }
         nasApi('/nas/status').then(function (s) {
             window._nasQuickConfigured = !!(s && s.configured);
+            // 🔑 [2026-11-04] 아직 설정 전이면 **팀 공용 기본값**으로 주소를 채운다.
+            //    (`nas_defaults.json` — 설치 폴더에 같이 둔다. 저장소엔 안 들어간다:
+            //     이 저장소는 공개라 사내 주소를 박을 수 없다.) 팀원이 칠 것은 사번·비밀번호뿐.
+            var d = (s && s.defaults) || {};
+            if (h && !h.value && d.host) h.value = d.host;
+            if (d.host) window._nasQuickCode = Object.assign({}, d, window._nasQuickCode || {});
             if (s && s.configured) {
                 if (h && !h.value) h.value = s.host || '';
                 if (u && s.user) u.value = s.user;
@@ -1006,6 +1016,41 @@
             nasStatus((ok ? '📤 ' + T('설정 코드를 복사했습니다 — 팀원에게 전달하세요.', 'Setup code copied — send it to your teammates.')
                           : '📤 ' + T('아래 칸의 코드를 복사해 팀원에게 전달하세요.', 'Copy the code in the box below and send it.'))
                       + '<br><span style="color:#888;">' + T('비밀번호는 들어 있지 않습니다.', 'It contains no password.') + '</span>', 'ok');
+        } catch (e) {
+            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
+        }
+    };
+
+    //  📄 팀 공용 기본값 파일 — **주소·폴더만.** 비밀번호·아이디는 안 들어간다.
+    //    이 파일을 백엔드 설치 폴더(kortek_backend.py 옆)에 두면 그 PC 의 간편 전환이
+    //    주소를 미리 채운다. 저장소에는 넣지 않는다(공개 저장소 + .gitignore).
+    window._nasSaveDefaultsFile = async function () {
+        try {
+            var s = await nasApi('/nas/status');
+            var p = await nasApi('/nas/paths');
+            var doc = window._dsConfig ? await window._dsConfig() : null;
+            if (!s || !s.configured) {
+                nasStatus('⚠️ ' + T('먼저 이 PC 의 NAS 설정을 저장해주세요.', 'Save this PC NAS settings first.'), 'err');
+                return;
+            }
+            var payload = {
+                _주의: '비밀번호는 여기 넣지 마세요. 이 파일은 평문이고 여러 PC 를 돌아다닙니다.',
+                host: s.host, port: s.port, https: !!s.https,
+                root: (p && p.root) || '', docRoot: (doc && doc.root) || ''
+            };
+            var blobUrl = URL.createObjectURL(new Blob(
+                [JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+            var a = document.createElement('a');
+            a.href = blobUrl; a.download = 'nas_defaults.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+            nasStatus('📄 ' + T('nas_defaults.json 을 받았습니다 — <b>설치 파일(KORTEK_설치.bat) 옆</b>에 같이 두고 '
+                                + '팀원에게 폴더째 전달하세요. 그러면 팀원은 사번·비밀번호만 넣으면 됩니다.',
+                                'Saved nas_defaults.json — put it next to the installer and share the folder. '
+                                + 'Teammates then only type their ID and password.')
+                      + '<br><span style="color:#888;">'
+                      + T('비밀번호는 들어 있지 않습니다. 저장소에는 올리지 마세요.',
+                          'It contains no password. Do not commit it.') + '</span>', 'ok');
         } catch (e) {
             nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
         }

@@ -113,6 +113,14 @@ if defined SELFTEST echo         [자가점검] 서버는 띄우지 않습니다
 if defined SELFTEST goto :skiprun
 start "" wscript.exe "%DEST%\kortek_backend_start_minimized.vbs"
 :skiprun
+::   📄 설치 파일 **옆에** nas_defaults.json 이 있으면 같이 깐다 — 그러면 그 PC 의 간편 전환이
+::   주소·앱 폴더를 미리 채운다(팀원은 사번·비밀번호만 넣는다). 비밀번호는 안 들어 있다.
+::   ⚠️ 저장소에는 없는 파일이다 — 이 저장소는 공개라 사내 주소를 올릴 수 없다.
+if defined DRY goto :skipdefaults
+if not exist "%~dp0nas_defaults.json" goto :skipdefaults
+copy /y "%~dp0nas_defaults.json" "%DEST%\nas_defaults.json" > nul
+echo         기본설정(nas_defaults.json)도 같이 두었습니다 — 주소를 칠 필요가 없습니다.
+:skipdefaults
 
 :: ── (5) 정말 떴는지 확인 ────────────────────────────────────
 echo  [5/5] 서버가 뜨는지 확인 중... ^(최초 1회는 패키지 설치로 몇 분 걸립니다^)

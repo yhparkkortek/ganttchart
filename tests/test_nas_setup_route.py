@@ -36,6 +36,9 @@ class FakeNas(object):
 
     APP_FOLDER_NAMES = ['KORTEK_PM']
 
+    def load_defaults(self):
+        return {}
+
     def __init__(self, login_ok=True, hits=None, truncated=False, raise_on=None):
         self.calls = []
         self.login_ok = login_ok
@@ -183,6 +186,44 @@ f = FakeNas()
 setup(f)
 d, _ = post(dict(BODY, password='s3cr3t-should-not-appear'))
 check('본문 어디에도 없다', 's3cr3t' not in json.dumps(d, ensure_ascii=False), d)
+
+print('\n[11] 팀 공용 기본값(nas_defaults.json) — 팀원은 사번·비밀번호만 넣는다')
+#    왜 이 파일이 있나: 이 저장소는 **공개**라 사내 주소를 코드에 박을 수 없다. 그렇다고
+#    팀원마다 손으로 치게 하면 오타가 나고, 그 오타는 로그인 실패 → IP 차단으로 이어진다.
+f = FakeNas()
+setup(f)
+bk._nas = lambda: f
+f.load_defaults = lambda: {'host': 'nas.default', 'port': 5011, 'https': False,
+                           'root': '/DEF/KORTEK_PM', 'docRoot': '\\\\nas.default\\DEF\\doc'}
+d, _ = post({'user': 'tester', 'password': 'pw'})          # 주소를 **안 준다**
+check('ok', d['ok'] is True, d)
+check('주소를 기본값에서 가져왔다', f.saved['host'] == 'nas.default', f.saved)
+check('포트·HTTPS 도 기본값', f.saved['port'] == 5011 and f.saved['https'] is False, f.saved)
+check('앱 폴더도 기본값 — 찾지 않는다', d['root'] == '/DEF/KORTEK_PM' and 'find_app_folder' not in f.calls,
+      (d.get('root'), f.calls))
+check('자료실 경로도 기본값', d['docRoot'].endswith('doc'), d)
+
+f = FakeNas()
+setup(f)
+bk._nas = lambda: f
+f.load_defaults = lambda: {'host': 'nas.default'}
+d, _ = post({'host': 'typed.by.hand', 'user': 'tester', 'password': 'pw'})
+check('사람이 적은 값이 기본값을 이긴다', f.saved['host'] == 'typed.by.hand', f.saved)
+
+print('\n[12] 기본값 파일에 비밀번호를 넣어도 쓰지 않는다')
+import nas_dsm as _nd
+import json as _json
+import tempfile as _tf
+_p = os.path.join(_tf.mkdtemp(), 'nas_defaults.json')
+open(_p, 'w', encoding='utf-8').write(_json.dumps(
+    {'host': 'h', 'port': 1, 'https': True, 'root': '/a/b', 'pw': 'secret', 'password': 'secret2'}))
+_old = _nd.NAS_DEFAULTS
+_nd.NAS_DEFAULTS = _p
+got = _nd.load_defaults()
+_nd.NAS_DEFAULTS = _old
+check('주소는 읽는다', got.get('host') == 'h' and got.get('root') == '/a/b', got)
+check('비밀번호 비슷한 키는 안 돌려준다', 'pw' not in got and 'password' not in got, got)
+check('파일이 없으면 빈 dict', _nd.load_defaults() == {} or isinstance(_nd.load_defaults(), dict))
 
 print('\n%d/%d 통과' % (len(PASS), len(PASS) + len(FAIL)))
 if FAIL:
