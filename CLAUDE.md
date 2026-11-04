@@ -459,6 +459,14 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - **📗 참조 엑셀 NAS 이전 완료**(2026-11-04) — NAS `Reference/Reference.xlsx`(97KB·14시트, 11-03 이사 때 이미 와 있었다). 받는 곳을 **`window._refExcelBlob()` 하나**(js/04c)로 모았다: NAS 모드면 `/nas/app/get`, 드라이브/미러면 옛 2단 시도(export → alt=media). 쓰는 곳 둘(`autoImportReferenceExcel` 워크북 전체, `_bsFetchTemplateRows` js/43 시트 하나)이 각자 드라이브를 부르던 걸 이 하나로 바꿨다 — **js/43 은 실패해도 조용히 null** 이라 Customer SPEC 표준 서식이 영영 비어 있어도 아무 말이 없었다(사람이 못 알아챈다). 경로는 데이터 `REFERENCE_NAS_REL`. ⚠️ **"📥 참조 엑셀 다운로드" 링크도 NAS 로 돌렸다**(`_syncRefExcelLink`) — docs.google.com 을 가리킨 채 두면 **사본이 갈라지고**(한쪽만 고치면 사람마다 다른 서식) 드라이브 권한 없는 팀원은 아예 못 받는다. 버튼 title 의 "구글 드라이브에 연동되어 있으면…"도 틀린 안내라 함께 고쳤다(`data-i18n-title` 을 **떼야** i18n 맵이 옛 문구로 덮어쓰지 않는다). ⚠️ NAS 읽기는 `no-store`+`_cb` 난수 필수, 받은 바이트는 **앞 2바이트 PK 로 확인**(DSM 은 없는 파일에 HTML 을 준다). 검증 `tests/reference-excel.browser.js` 19/0(성공 경로는 진짜 NAS·진짜 파일, 가짜는 fetch·handleFiles·_storageMode 경계만) + 돌연변이 2종 확인
 - ⚠️⚠️ **파이썬으로 소스를 고칠 땐 "인코딩 먼저, 쓰기는 원자적으로"** — 이 점검에서 **두 번** 파일을 날렸다. ① `io.open(p,'w')` 로 열어만 두고 **close 를 안 해** 뒤 반복에서 예외가 나자 22d(1,409줄)가 **0바이트**가 됐다 ② `io.open(p,'wb')` 는 **여는 순간 자른다** — `.write(text.encode())` 가 뒤에서 `UnicodeEncodeError` 를 내자 `kortek_pm.html` 이 **0바이트**가 됐다(원인은 `u'📜'` 같은 **서러게이트 쌍 이스케이프** — 파이썬3에선 인코딩 불가. 이모지는 **실제 문자**나 `\U0001F4DC` 로). → **`encode()` 를 먼저 하고, 임시파일+`os.replace`** 로 쓸 것. 되돌릴 백업을 먼저 떠둘 것(`git checkout` 은 막혀 있다)
 
+### `docs/daily-report-design.md` — 📔 일일 업무보고 **설계 검토서**(2026-11-04, 아직 미구현)
+- **읽을 때**: 일일보고를 만들기 전. 8개 항목(주간보고 관계·간트 연동·저장/동시성·화면·집계·알림·단계·안 할 것) + **사람에게 물을 것 10개**
+- 핵심 판단: 주간보고(프로젝트×주)와 일일보고(사람×날짜)는 **직교** — 접점은 `[이슈를 업무에 반영]` 버튼 하나(그 행 `content` 에 `[문제점]`/`[대책]` 줄을 넣으면 주간보고가 **원래 그 줄만 읽으므로** js/20 무수정)
+- 저장은 **사람×날짜 파일 1개**(`App_Config/DailyReport/<YYYY-MM>/<날짜>__<계정id>.json`) — 쓰는 사람이 파일마다 **한 명**이라 11-04 색인 사고의 전제(다중 작성자 read-modify-write)가 성립하지 않는다. 팀 1파일 upsert 는 **안 한다**
+- ⚠️ 착수 전 답이 필요한 둘: **휴대폰에서 쓸 건가**(NAS 는 PC 백엔드가 있어야 닿는다 → 답에 따라 설계가 바뀜) · **간트 담당자 칸이 실제로 채워져 있나**(자동 초안 품질이 거기 달림)
+- ⚠️ 알림은 **모르면 안 보낸다** — 백엔드는 `KOR_HOLIDAYS`(js/04d 안)를 모르므로 앱이 `_nonworkdays.json` 을 내보내야 하고, 그 파일이 없거나 NAS 조회가 실패하면 발송 0건(조회 실패를 "미작성"으로 읽으면 전원에게 오발송)
+- 선결 과제: 어댑터의 `readRel/writeRel/listRel` 이 `window` 에 없어 새 팀공용 기능이 fetch 를 **네 번째로 베낀다** → `window.nasAppFile` 공개
+
 ### `docs/ui-conventions.md` — 🌐 i18n / 🎨 팔레트 / 🪟 모달 컨벤션
 - **읽을 때**: 새 UI 컴포넌트, 언어 대응, 테마 팔레트, 모달 구조, **엑셀/PPT 출력물**
 - 새 UI 완료 기준 3가지: 영문 대응(`_t`/`data-i18n`) + 팔레트 대응(`_cpApplyLive` 좁은 셀렉터) + 모달 컨벤션(`_makeDraggable`·`_bindClickToFront`·`bringModalToFront` 호출)
