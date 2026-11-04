@@ -779,7 +779,11 @@ def fetch_mail():
                     results = _fetch_mail_pop3(mail_user, mail_pw, start_dt, end_dt, scan_limit,
                                                keyword, keyword_from, keyword_body, _stage_dir, mail_host)
                 else:
-                    return jsonify({"status": "error",
+                    # 🔒 [2026-11-04] `auth` 플래그를 같이 준다 — 프런트가 **한국어 문구를
+                    #    문자열로 뒤져서** 인증 실패를 알아내게 두면, 문구 한 번 다듬을 때
+                    #    조용히 안 걸리게 된다. 이 플래그를 보고 자동수집을 **멈춘다**.
+                    return jsonify({"status": "error", "auth": True, "proto": "imaps",
+                                    "host": mail_host or IMAP_HOST,
                                     "message": f"IMAP 인증 실패: {_msg} — 메일 계정/비밀번호를 확인해주세요."})
             except Exception as e:
                 proto, fallback_reason = 'pop3', f'{type(e).__name__}: {e}'
@@ -802,7 +806,14 @@ def fetch_mail():
             resp["ignoredMailHost"] = _ignored_mail_host
         return jsonify(resp)
     except poplib.error_proto as e:
-        return jsonify({"status": "error", "message": f"POP3 인증 실패: {str(e)}"})
+        # ⚠️ `-ERR invalid user or password` 는 "비밀번호가 틀렸다"가 아니라 **"그 서버가 이
+        #    조합을 거부했다"** 는 뜻이다 — 아이디 형식·프로토콜 권한·비밀번호 어느 것이어도
+        #    같은 문구가 온다. 그래서 어느 서버에 어떤 계정으로 붙었는지를 같이 적는다.
+        _u = (mail_user or '')
+        _um = (_u[:2] + '***' + ('@' + _u.split('@')[1] if '@' in _u else '')) if _u else '(없음)'
+        return jsonify({"status": "error", "auth": True, "proto": "pop3",
+                        "host": mail_host or POP3_HOST,
+                        "message": f"POP3 인증 실패({mail_host or POP3_HOST}:{POP3_PORT}, 계정 {_um}): {str(e)}"})
     except OSError as e:
         # 연결 자체가 안 된 경우 — 어느 서버/포트인지 밝힌다(위 humanize_mail_conn_error 주석)
         _p = 'POP3' if (locals().get('proto') == 'pop3') else 'IMAP'

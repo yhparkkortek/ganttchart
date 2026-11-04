@@ -129,9 +129,9 @@ window.msOpenEmailServerSettings = function() {
 window.msFetchMail = async function() {
     // 💡 아이디/비번은 더 이상 이 탭에서 따로 입력받지 않고, 알람 설정(이메일 서버 설정)의 SMTP
     //    계정을 그대로 재사용한다 — 같은 메일 계정이 POP3(수신)/SMTP(발송) 둘 다에 로그인됨을 확인함.
-    const smtp = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
-    const userid   = (smtp.user || '').trim();
-    const password = smtp.pass || '';
+    const _c = window._msCredentials();
+    const userid   = _c.user;
+    const password = _c.pass;
     // 🆕 [2026-11-04] 수신 서버 주소는 발송(SMTP) 주소와 **다른 칸**이다 — 사내에서도 두 장비가
     //    갈라져 있어(보내는 쪽만 465/25, 받는 쪽만 993/995/110/143) 발송 주소를 수신에 물려주면
     //    연결 거부가 반복됐다. 비우면 백엔드 기본 수신 서버를 쓴다.
@@ -177,7 +177,12 @@ window.msFetchMail = async function() {
         });
         const data = await res.json();
 
-        if (data.status !== 'success') throw new Error(data.message);
+        if (data.status !== 'success') {
+            // ⚠️ 사람이 직접 누른 것이라 **수동은 막지 않는다.** 다만 서버가 거부했다면
+            //    배경 자동수집은 멈춘다 — 1분마다 같은 거부를 반복하는 게 계정 잠금의 길이다.
+            if (data.auth) window._msSetAuthBlock(String(data.message || ''));
+            throw new Error(data.message);
+        }
 
         document.getElementById('ms-prog-bar').style.width  = '30%';
         document.getElementById('ms-prog-text').textContent = _msEn0 ? `${data.count} collected — AI analyzing...` : `${data.count}개 수집 완료 — AI 분석 중...`;
@@ -347,8 +352,58 @@ const MS_FILTER_RULES_KEY = 'ms_filter_rules';
 //    ⚠️ 사내 도메인을 코드에 박지 않는다 — 팀원마다 계정이 다르고 법인도 여럿(kortek.vn 등)이라
 //    하드코딩하면 다른 PC에서 같은 사고가 또 난다. 저장된 메일 계정에서 유도하고, 사용자가
 //    📬 필터 설정에서 추가·삭제할 수 있게 규칙 데이터로 둔다.
+// 🔑🔑 [2026-11-04 근본원인] **메일 계정의 출처는 여기 하나뿐이다.**
+//   2026-08-31(5c776a7)에 메일 서버 탭의 로그인 입력칸을 없애고 알람 설정의 계정으로
+//   통합하면서 `ms_saved_userid`/`ms_saved_pw` 를 **쓰는 코드만 지우고 읽는 코드는 셋이나
+//   남겼다.** 그 뒤로:
+//     · 그 전에 저장해 둔 PC → 백그라운드 자동수집이 **그때 비밀번호로 영원히** 로그인 시도
+//       → 비밀번호를 바꾼 뒤부터 `-ERR invalid user or password` 가 **1분마다** 반복
+//         (수동 수집은 새 계정을 쓰므로 멀쩡 → "에러가 바꿔가며 난다"의 정체)
+//     · 저장한 적 없는 PC → 자동수집이 **조용히 건너뛰어** 아예 안 돈다
+//     · 사내 도메인 noreply 면제도 빈 배열이 돼 사내 알림이 걸러진다
+//   ⚠️ 계정을 읽는 새 코드는 **반드시 이 함수**를 쓸 것. localStorage 를 직접 읽지 말 것.
+window._msCredentials = function () {
+    const smtp = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
+    const user = String(smtp.user || '').trim();
+    const pass = String(smtp.pass || '');
+    return { user: user, pass: pass, ok: !!(user && pass),
+             recvHost: String(smtp.recvHost || '').trim(),
+             forcePop3: !!smtp.forcePop3 };
+};
+
+// 🧹 죽은 저장소를 지운다 — 남겨두면 "어느 비밀번호로 로그인했는지" 알 수 없게 만든다.
+//    (2026-08-31 이후로 **쓰는 코드가 없다** — 값이 있다면 그때 이전의 낡은 비밀번호다)
+(function _msPurgeDeadCreds() {
+    try {
+        if (localStorage.getItem('ms_saved_pw') || localStorage.getItem('ms_saved_userid')) {
+            console.warn('[메일] 2026-08-31 이전의 낡은 계정 저장소(ms_saved_*)를 지웁니다 — '
+                       + '자동수집이 그 옛 비밀번호로 로그인하고 있었습니다.');
+            localStorage.removeItem('ms_saved_pw');
+            localStorage.removeItem('ms_saved_userid');
+        }
+    } catch (e) { /* localStorage 가 막힌 환경 */ }
+})();
+
+// 🔒 인증 실패 잠금 — 메일 서버도 실패가 쌓이면 계정이 잠긴다(SAP·그룹웨어·NAS 와 같은 규칙).
+//    그런데 자동수집만 **1분마다 무한 재시도**하고 있었다. 한 번 거부당하면 사람이 설정을
+//    다시 저장할 때까지 멈춘다. 푸는 곳은 알람 설정 저장(`saveSmtpConfig`) 한 곳.
+window.MS_AUTH_BLOCK_KEY = 'ms_auth_block_v1';
+window._msAuthBlock = function () {
+    try { return JSON.parse(localStorage.getItem(window.MS_AUTH_BLOCK_KEY) || 'null'); }
+    catch (e) { return null; }
+};
+window._msSetAuthBlock = function (why) {
+    try {
+        localStorage.setItem(window.MS_AUTH_BLOCK_KEY,
+            JSON.stringify({ why: String(why || ''), at: new Date().toISOString() }));
+    } catch (e) { /* ignore */ }
+};
+window._msClearAuthBlock = function () {
+    try { localStorage.removeItem(window.MS_AUTH_BLOCK_KEY); } catch (e) { /* ignore */ }
+};
+
 window._msDefaultNoreplyExemptDomains = function() {
-    const own = (localStorage.getItem('ms_saved_userid') || '').split('@')[1];
+    const own = (window._msCredentials().user || '').split('@')[1];
     return own ? [own.toLowerCase()] : [];
 };
 
@@ -1313,17 +1368,20 @@ window._autoMailFetchTick = async function() {
     }
     window._msAutoTickRunning = true;
     try {
-    const savedUser = localStorage.getItem('ms_saved_userid');
-    const savedPwB64 = localStorage.getItem('ms_saved_pw');
-    if (!savedUser || !savedPwB64) {
-        // 메일서버 탭에서 [로그인 정보 저장]을 해둬야 백그라운드 수집이 된다.
-        return _skip('메일서버 로그인 정보가 저장돼 있지 않음', '메일 서버 탭에서 로그인 후 저장하세요');
+    // 🔑 [2026-11-04] 수동 수집과 **같은 계정**을 쓴다. 예전엔 여기만 2026-08-31 에 죽은
+    //    `ms_saved_*` 를 읽어서, 그때 저장해 둔 낡은 비밀번호로 1분마다 로그인하고 있었다.
+    const _cred = window._msCredentials();
+    const savedUser = _cred.user;
+    const password = _cred.pass;
+    if (!_cred.ok) {
+        return _skip('메일 계정이 설정돼 있지 않음', '알람 설정 ▸ 이메일 서버 설정에서 계정·비밀번호를 저장하세요');
+    }
+    // 🔒 한 번 거부당했으면 사람이 설정을 다시 저장할 때까지 **더 두드리지 않는다**(계정 잠금).
+    const _blk = window._msAuthBlock();
+    if (_blk) {
+        return _skip('메일 로그인이 거부되어 자동수집을 멈춤', (_blk.why || '') + ' — 알람 설정에서 계정을 다시 저장하면 다시 시도합니다');
     }
     window._msAutoSkip = null; window._msAutoSkipLast = '';   // 여기까지 왔으면 정상 진행
-
-    let password = '';
-    try { password = decodeURIComponent(escape(atob(savedPwB64))); }
-    catch(e) { password = savedPwB64; }
 
     // 마지막 자동수집 시각 이후 ~ 오늘까지 (없으면 오늘 하루만)
     const lastAt = localStorage.getItem(MS_LAST_AUTO_FETCH_KEY);
@@ -1351,6 +1409,17 @@ window._autoMailFetchTick = async function() {
         //    → 오류는 시각을 갱신하지 않고(다음 틱에서 같은 구간 재시도) 사유를 드러낸다.
         if (data.status !== 'success') {
             const _why = (data && data.message) ? String(data.message) : '메일 수집 실패(사유 미상)';
+            // ⚠️ 인증 거부는 **다음 틱에 또 하면 안 된다** — 서버가 실패를 세고 있을 수 있다.
+            //    문구가 아니라 백엔드가 준 `auth` 플래그로 판단한다(문구는 바뀐다).
+            if (data && data.auth) {
+                window._msSetAuthBlock(_why);
+                if (window.showToast) {
+                    window.showToast('⛔ ' + window._t(
+                        '메일 로그인이 거부되어 자동수집을 멈췄습니다 — 알람 설정 ▸ 이메일 서버 설정에서 계정을 확인하고 다시 저장해주세요.',
+                        'Mail login was rejected; auto-collection stopped — check the account in Alarm Settings and save again.'),
+                        'warning', 12000);
+                }
+            }
             window._msAutoSkip = { why: _why, detail: 'backend', at: new Date().toISOString() };
             console.warn('[메일 자동수집] 백엔드 오류:', _why);
             if (window._issueLog) {

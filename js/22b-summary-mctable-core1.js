@@ -979,6 +979,9 @@ window.saveSmtpConfig = async function() {
     localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user, pass: cfg.pass,
                       forcePop3: forcePop3, recvHost: recvHost };
     localStorage.setItem('gantt_alarm_settings', JSON.stringify(localCfg));
+    // 🔒 [2026-11-04] 계정을 다시 저장했다 = "고쳤으니 다시 해 봐" → 자동수집 잠금 해제.
+    //    (푸는 곳은 여기 하나다 — 여러 곳에서 풀면 거부가 반복되는 길이 다시 생긴다)
+    if (window._msClearAuthBlock) window._msClearAuthBlock();
     // 💡 AI 업무 분석 탭의 메일 서버 계정 표시도 같은 계정을 공유하므로 즉시 갱신
     if (window._msRefreshServerAccountStatus) window._msRefreshServerAccountStatus();
 
@@ -1287,6 +1290,19 @@ window.openAlarmSettings = function() {
     document.getElementById('as-smtp-user').value = smtp.user || '';
     document.getElementById('as-smtp-pass').value = smtp.pass || '';
     document.getElementById('as-smtp-forcepop3').checked = !!smtp.forcePop3;
+    // ⛔ 로그인이 거부되어 자동수집이 멈춰 있으면 **그 사실을 여기서 보여준다** —
+    //    안 보이면 "메일이 안 들어온다"의 이유를 사람이 알 수가 없다.
+    const _ab = document.getElementById('as-smtp-authblock');
+    const _blk = window._msAuthBlock ? window._msAuthBlock() : null;
+    if (_ab) {
+        _ab.style.display = _blk ? 'block' : 'none';
+        if (_blk) {
+            _ab.innerHTML = '⛔ ' + window._t(
+                '메일 로그인이 거부되어 <b>자동수집이 멈춰 있습니다.</b> 계정·비밀번호를 확인하고 아래 [저장]을 누르면 다시 시작합니다.',
+                'Mail login was rejected, so <b>auto-collection is paused.</b> Check the account and press [Save] to resume.')
+                + '<br><span style="color:#888;">' + String(_blk.why || '').replace(/[<>&]/g, '') + '</span>';
+        }
+    }
     const _rh = document.getElementById('as-smtp-recvhost');
     if (_rh) _rh.value = smtp.recvHost || '';
     window.refreshAlarmAutoButtons(cfg.autoSend !== false);
