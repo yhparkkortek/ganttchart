@@ -288,6 +288,103 @@
         }
     } catch (e) { /* localStorage 가 막힌 환경 — 캐시도 없으니 할 일이 없다 */ }
 
+    // ═══ 🔀 저장소 바꾸기 UI ═══════════════════════════════════════════════
+    //  ⚠️ 이 블록은 **플래그 검사보다 위**에 있지만, 부르기 전에는 아무 일도 하지 않는다 —
+    //     함수를 내놓을 뿐 화면도 네트워크도 건드리지 않는다. 그래서 "플래그 OFF 면
+    //     지금과 동일" 이라는 약속은 그대로다.
+    //  ⚠️ **Drive 모드에서는 배지를 안 띄운다.** 아직 안 옮긴 팀원 화면에 못 보던 아이콘이
+    //     생기면 그것만으로 연락이 온다. Drive 에서 들어가는 길은 🔑 설정 모달 쪽에 둔다.
+    var STORAGE_MODES = [
+        { id: 'drive', icon: '☁️',
+          ko: '구글 드라이브', en: 'Google Drive',
+          koDesc: '지금까지 쓰던 방식', enDesc: 'What you have been using',
+          koWarn: '구글 드라이브로 돌아갑니다.\n\n⚠️ NAS 모드에서 저장한 내용은 NAS 에만 있습니다 — '
+                + '드라이브에는 그때까지의 내용만 있습니다.',
+          enWarn: 'Switch back to Google Drive.\n\nAnything saved while in NAS mode lives only on the NAS.' },
+        { id: 'mirror', icon: '🪞',
+          ko: '미러 (둘 다)', en: 'Mirror (both)',
+          koDesc: '드라이브에 저장하면서 NAS 에도 같이 씀 · 읽기는 드라이브',
+          enDesc: 'Save to Drive and mirror to NAS · reads from Drive',
+          koWarn: '드라이브에 저장하면서 NAS 에도 같이 씁니다.\n\n읽기는 드라이브이고, '
+                + 'NAS 쪽이 실패해도 앱은 그대로 돌아갑니다.',
+          enWarn: 'Saves to Drive and mirrors to the NAS. Reads still come from Drive.' },
+        { id: 'nas', icon: '🗄️',
+          ko: '사내 NAS', en: 'In-house NAS',
+          koDesc: '읽기·쓰기 모두 NAS · 구글 드라이브를 쓰지 않음',
+          enDesc: 'Reads and writes on the NAS · Google Drive not used',
+          koWarn: '이제부터 읽기·쓰기가 모두 사내 NAS 로 갑니다.\n\n'
+                + '⚠️ 백엔드(kortek_backend)가 꺼져 있으면 데이터를 읽을 수 없습니다.\n'
+                + '⚠️ 여기서 저장한 내용은 구글 드라이브에 남지 않습니다.',
+          enWarn: 'All reads and writes go to the in-house NAS. The local backend must be running.' }
+    ];
+
+    /** 모드를 바꾼다. **어디에 저장되는지가 바뀌는 일**이라 반드시 물어보고 바꾼다. */
+    window.storageSetMode = function (id) {
+        var m = STORAGE_MODES.filter(function (x) { return x.id === id; })[0];
+        if (!m) return;
+        var now = currentBackend();
+        if (now === id) return;
+        var en = window._currentLang === 'en';
+        var head = (en ? 'Switch storage to ' : '저장소를 바꿉니다 → ') + m.icon + ' ' + (en ? m.en : m.ko);
+        if (!confirm(head + '\n\n' + (en ? m.enWarn : m.koWarn) + '\n\n'
+                     + (en ? 'The page will reload.' : '페이지를 새로고침합니다.'))) return;
+        try {
+            if (id === 'drive') localStorage.removeItem('gantt_storage_backend');
+            else localStorage.setItem('gantt_storage_backend', id);
+        } catch (e) {
+            alert(en ? 'Could not save the setting (localStorage blocked).'
+                     : '설정을 저장하지 못했습니다(localStorage 가 막혀 있습니다).');
+            return;
+        }
+        location.reload();
+    };
+
+    /** 작은 고르기 창. 바로 토글하지 않고 **세 가지를 보여주고 고르게** 한다 —
+     *  돌려 가며 누르다 엉뚱한 모드에 멈추면 그게 제일 나쁘다. */
+    window.storageOpenSwitcher = function (anchor) {
+        var old = document.getElementById('storage-switch-pop');
+        if (old) { old.remove(); return; }                 // 한 번 더 누르면 닫힘
+        var en = window._currentLang === 'en';
+        var now = currentBackend();
+        var pop = document.createElement('div');
+        pop.id = 'storage-switch-pop';
+        pop.style.cssText = 'position:fixed; z-index:100000; background:#fff; border:1px solid #d0d0d0;'
+            + ' border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,.18); padding:6px; min-width:288px;'
+            + ' font-size:12px; color:#333;';
+        pop.innerHTML = '<div style="padding:5px 8px 7px; color:#777; font-size:11px;">'
+            + (en ? 'Where the app saves' : '앱 데이터를 어디에 저장할까요') + '</div>'
+            + STORAGE_MODES.map(function (m) {
+                var cur = m.id === now;
+                return '<button data-mode="' + m.id + '"' + (cur ? ' disabled' : '')
+                    + ' style="display:block; width:100%; box-sizing:border-box; text-align:left;'
+                    + ' padding:7px 9px; margin:0 0 2px; border:none; border-radius:6px;'
+                    + ' background:' + (cur ? '#eef3ff' : 'transparent') + '; cursor:' + (cur ? 'default' : 'pointer') + ';">'
+                    + '<span style="font-size:14px;">' + m.icon + '</span> '
+                    + '<b style="color:' + (cur ? '#1971c2' : '#333') + ';">' + (en ? m.en : m.ko) + '</b>'
+                    + (cur ? ('<span style="color:#1971c2;"> ● ' + (en ? 'now' : '지금') + '</span>') : '')
+                    + '<div style="color:#777; font-size:11px; margin-top:2px; line-height:1.45;">'
+                    + (en ? m.enDesc : m.koDesc) + '</div></button>';
+            }).join('');
+        document.body.appendChild(pop);
+        var r = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : { left: 20, bottom: 40 };
+        // 화면 밖으로 나가지 않게 — 배지는 헤더 오른쪽에 있을 수 있다
+        pop.style.top = Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
+        pop.style.left = Math.max(8, Math.min(r.left - 8, window.innerWidth - pop.offsetWidth - 10)) + 'px';
+        pop.addEventListener('click', function (ev) {
+            var b = ev.target.closest('[data-mode]');
+            if (!b || b.disabled) return;
+            pop.remove();
+            window.storageSetMode(b.getAttribute('data-mode'));
+        });
+        setTimeout(function () {
+            document.addEventListener('mousedown', function closer(ev) {
+                if (pop.contains(ev.target)) return;
+                pop.remove();
+                document.removeEventListener('mousedown', closer);
+            });
+        }, 0);
+    };
+
     // ⚠️ 여기서 끝. 플래그가 꺼져 있으면 **아무것도 감싸지 않는다.**
     var MODE = currentBackend();
     if (MODE !== 'nas' && MODE !== 'mirror') return;
@@ -309,10 +406,12 @@
             var el = document.getElementById('drive-conn-badge');
             if (!el) return;
             el.textContent = BADGE.icon;
-            el.title = (window._currentLang === 'en' ? BADGE.en : BADGE.ko);
+            // 눌러서 바꿀 수 있다는 걸 말풍선에 적는다 — 아이콘만 보고는 아무도 안 누른다.
+            el.title = (window._currentLang === 'en' ? BADGE.en : BADGE.ko)
+                     + (window._currentLang === 'en' ? '\n(click to change storage)' : '\n(클릭하면 저장소를 바꿉니다)');
             el.style.display = 'inline-flex';
-            el.style.cursor = 'default';
-            el.onclick = null;
+            el.style.cursor = 'pointer';
+            el.onclick = function (ev) { ev.stopPropagation(); window.storageOpenSwitcher(el); };
         }
         var orig = window._updateDriveConnBadge;
         window._updateDriveConnBadge = function () {

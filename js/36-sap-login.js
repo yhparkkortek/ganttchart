@@ -173,6 +173,15 @@
                     + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
                 + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
                 + '<div id="naslogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
+                // 🔀 저장소 고르기 — Drive 모드에서 **들어가는 길**은 여기뿐이다.
+                //    (헤더 배지는 nas/mirror 일 때만 뜬다 — 아직 안 옮긴 팀원 화면에
+                //     못 보던 아이콘이 생기면 그것만으로 연락이 온다)
+                + '<div style="border-top:1px dashed #e5e5e5; margin:10px 0 9px;"></div>'
+                + '<label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;">'
+                + '<span style="width:92px; flex:0 0 auto; color:#555;">' + T('저장소', 'Storage') + '</span>'
+                + '<span id="storage-mode-now" style="flex:1; min-width:0; color:#333;"></span>'
+                + '<button onclick="window.storageOpenSwitcher && window.storageOpenSwitcher(this)" style="' + btnSt
+                + ' padding:6px 10px;">🔀 ' + T('바꾸기', 'Change') + '</button></label>'
                 // 📦 이사 — 앱 데이터를 Drive 에서 NAS 로 한 번에 옮긴다(js/58).
                 //    ⚠️ 미러는 "쓸 때만" 옮기므로 **아무도 안 여는 프로젝트는 영영 안 옮겨진다** —
                 //       이사를 끝내려면 이 버튼이 한 번은 돌아야 한다.
@@ -649,7 +658,22 @@
         el.innerHTML = msg || '';
     };
 
+    // 지금 어느 저장소인지 설정창에도 적어 둔다 — 헤더 배지는 Drive 모드엔 안 뜨므로,
+    // Drive 를 쓰는 사람에게는 **여기가 유일하게 확인할 수 있는 자리**다.
+    function paintStorageNow() {
+        var el = document.getElementById('storage-mode-now');
+        if (!el) return;
+        var m = 'drive';
+        try { m = (localStorage.getItem('gantt_storage_backend') || 'drive').toLowerCase(); } catch (e) { /* ignore */ }
+        var label = { drive: '☁️ ' + T('구글 드라이브', 'Google Drive'),
+                      mirror: '🪞 ' + T('미러 — 드라이브 + NAS', 'Mirror — Drive + NAS'),
+                      nas: '🗄️ ' + T('사내 NAS', 'In-house NAS') }[m] || m;
+        el.textContent = label;
+        el.style.color = (m === 'nas') ? '#1f7a3d' : (m === 'mirror' ? '#1971c2' : '#555');
+    }
+
     window._nasLoginRefresh = async function () {
+        paintStorageNow();
         var st = document.getElementById('naslogin-state');
         var pwEl = document.getElementById('naslogin-pw');
         if (pwEl) pwEl.value = '';
