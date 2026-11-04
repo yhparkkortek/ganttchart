@@ -8,3 +8,10 @@
 # 런타임에도 항상 CRLF로 정규화해서 쓰도록 별도로 방어하고 있다.
 *.bat text eol=crlf
 *.vbs text eol=crlf
+
+# ⚠️ [2026-11-04] 이 파일은 **앱이 raw.githubusercontent 에서 받아 사람에게 내려주는**
+#   설치 스크립트다. 위 `*.bat text eol=crlf` 규칙은 저장소에는 LF 로 넣고 체크아웃할 때
+#   CRLF 로 바꿔 주는 것이라, **raw 로 받으면 LF 짜리가 간다** — cmd 가 IF/ELSE 를
+#   오동작시킨다(2026-09-16 사고와 같은 종류). 그래서 이 파일만 바이너리로 둬서
+#   저장소 안 바이트가 그대로(CRLF) 나가게 한다.
+kortek_setup.bat -text

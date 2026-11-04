@@ -917,7 +917,14 @@
         });
         const _igSetup = document.getElementById('ig-content-setup');
         if (_igSetup) _igSetup.innerHTML = _en
-            ? '<div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">🌐 <b>Chrome browser is recommended.</b> Some features (e.g. mail import) may not work in IE · Edge.</div>'
+            ? '<div style="background:#eaf3ff; border:1px solid #9ec5ef; border-radius:6px; padding:11px 13px; margin-bottom:12px;">'
+            + '<b style="font-size:12.5px; color:#1a4f7a;">🚀 One-click install (recommended)</b><br>'
+            + '　Download the file below and <b>double-click</b> it — it checks/installs Python, '
+            + 'fetches the backend files, registers auto-start and launches the server for you.<br>'
+            + '　<a href="javascript:void(0)" onclick="window.downloadSetupBat()" style="display:inline-block; margin:7px 0 4px; padding:5px 14px; background:#1a73e8; color:#fff; border-radius:5px; text-decoration:none; font-size:12px; font-weight:bold;">⬇️ Get the installer</a><br>'
+            + '　<span style="color:#777;">⚠️ If Chrome warns that the file is not commonly downloaded, choose <b>Keep</b>.<br>'
+            + '　　 If it is blocked, follow <b>Step 1~4</b> below instead (same result).</span></div>'
+            + '<div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">🌐 <b>Chrome browser is recommended.</b> Some features (e.g. mail import) may not work in IE · Edge.</div>'
             + '<b>Step 1.</b> Install Python <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">python.org →</a><br>'
             + '　　Check <b>"Add Python to PATH"</b> during install (required — server won\'t run without it)<br><br>'
             + '<b>Step 2.</b> Install KORTEK Backend files<br>'

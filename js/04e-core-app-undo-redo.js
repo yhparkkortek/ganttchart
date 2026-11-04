@@ -2128,6 +2128,39 @@
         }
     };
 
+    // 🚀 [2026-11-04] 백엔드 한 번에 설치 — 설치 스크립트를 받아 준다.
+    //   ⚠️ 브라우저는 PC 에서 프로그램을 **실행할 수 없다**(샌드박스). 그래서 "앱에서 버튼
+    //      한 번에 설치"는 원리상 불가능하고, 가장 가까운 것이 **버튼 → 받은 파일 더블클릭**이다.
+    //      그 한 번이 Python 확인·파일 설치·자동시작 등록·확인까지 다 한다(kortek_setup.bat).
+    //   ⚠️⚠️ raw.githubusercontent 는 줄끝을 **LF** 로 준다 — LF 만 있는 .bat 은 cmd 의
+    //      IF/ELSE 를 오동작시킨다(이 저장소 2026-09-16 사고). 저장 직전에 CRLF 로 되돌린다.
+    //      (.gitattributes 에서도 이 파일만 바이너리로 묶어 뒀다 — 둘 다 걸어 둔다)
+    window.downloadSetupBat = async function () {
+        const url = 'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_setup.bat';
+        const name = 'KORTEK_설치.bat';
+        try {
+            const res = await fetch(url + '?cb=' + Date.now());
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            let text = await res.text();
+            text = text.replace(/\r?\n/g, '\r\n');
+            const blobUrl = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
+            const a = document.createElement('a');
+            a.href = blobUrl; a.download = name;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+            if (window.showToast) {
+                window.showToast(window._t(
+                    '⬇️ ' + name + ' 을 받았습니다 — 그 파일을 더블클릭하면 설치가 끝납니다. (크롬이 물으면 [유지])',
+                    'Downloaded ' + name + ' — double-click it to finish the install. (If Chrome asks, choose Keep.)'),
+                    'success', 9000);
+            }
+        } catch (e) {
+            alert(window._t(
+                '설치 파일을 받지 못했습니다: ' + e.message + '\n\n아래 주소를 새 탭에서 열어 저장해주세요:\n' + url,
+                'Could not download the setup file: ' + e.message + '\n\nOpen this URL in a new tab and save it:\n' + url));
+        }
+    };
+
     // 📋 다운로드가 보안 정책으로 막힐 때 대비 — 클립보드 복사 + 수동 저장 안내
     window.copyRawFileToClipboard = async function(url, filename) {
         try {
