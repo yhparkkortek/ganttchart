@@ -578,6 +578,45 @@ HTML 에 `disabled` 로 박혀 있고, 그걸 푸는 코드가 **구글 OAuth �
 그 동안 나간 요청은 **전부 `127.0.0.1:5000/nas/*`** — googleapis 는 한 건도 없었다.
 주소록 394건도 같이 들어왔다.
 
+### 📇 파일 꼬리표(`appProperties`) — NAS 엔 그런 자리가 없다 (2026-11-04)
+
+사용자 신고: *"담당자 분류가 풀렸음"* — 목록이 **개발3팀 ▸ 미지정(12)** 한 덭어리가 됐다.
+
+Drive 는 파일 메타데이터에 작은 꼬리표를 달아 준다. 앱은 그걸로 **네 가지**를 가른다:
+
+| 꼬리표 | 쓰는 곳 |
+|---|---|
+| `pm` | 목록·원장의 **담당자 그룹** |
+| `team` | 팀 그룹 (이쪽은 원래부터 index 폴백이 있어 무사했다) |
+| `completed` | ✅ 완료 배지 |
+| `themeColor` | 목록 행 색 (js/21 `_driveRowThemeColors`) |
+
+NAS 엔 그 자리가 없어서 어댑터가 빈 채로 돌려줬고, 팀만 폴백으로 살아남았다.
+
+**고친 방식 — 새 저장소를 안 만든다.** 같은 값이 이미 `App_Config/project_index.json` 에
+있고, 그건 **저장할 때마다** 갱신된다. 꼬리표용 파일을 따로 두면 저장마다 왕복이 하나 늘고,
+두 사람이 동시에 저장할 때 서로 덮어쓰는 자리가 하나 더 생긴다.
+
+```
+project_index.json          →  appProperties
+  assignee                  →    pm
+  team                      →    team
+  completed (불리언)        →    completed ('1' / '')   ← Drive 는 문자열만 담았다
+  themeColor (신규)        →    themeColor
+```
+
+⚠⚠ **붙이는 곳은 어댑터 한 곳이다.** 목록 모달(js/04c)·배분 원장(js/14d)·행 색(js/21)이
+전부 `file.appProperties` 를 읽는다 — 화면마다 폴백을 달면 **고친 화면만 살고** 나머지는
+조용히 "미지정" 으로 남는다. 목록 한 번에 폴더를 여러 개 훑으므로 인덱스는 5초 캐시하고,
+그 파일을 쓸 때 캐시를 버린다.
+
+⚠️ **`themeColor` 는 인덱스에 이번에 새로 실었다** — 기존 항목엔 없으니 그 프로젝트를
+한 번 저장해야 색이 돌아온다(저절로 나아진다). **백업 목록 색**은 백업이 인덱스에 없어
+그대로 비어 있다 — 꾸미는 것이라 그냥 두었다.
+
+✅ 실제 경로로 확인: 목록 모달이 **담당자 5명(1+1+5+2+3=12)** 으로 다시 갈린다.
+회귀는 `tests/nas-cutover-check.browser.js` 에 "담당자가 붙어 있다" 추가(13 → **14건**).
+
 ### 📝 저장하면 파일 이름이 바뀜다 — 이건 앱 동작이지 어댑터 탓이 아니다
 
 열어 둔 파일은 `LNW_POLED_21.0.json` 인데 저장 이름(`driveSaveFilenameStr`)은 `LNW_21.0`.
@@ -592,7 +631,7 @@ HTML 에 `disabled` 로 박혀 있고, 그걸 푸는 코드가 **구글 OAuth �
 |---|---|---|
 | `node tests/storage-adapter.test.js` | 번역기(id·q 파서·multipart 파서·응답 모양·id 지도) | **63/0** |
 | 콘솔에 `tests/storage-adapter.browser.js` | 앱이 지나는 경로로 NAS 까지 왕복 | **17/0** |
-| 콘솔에 `tests/nas-cutover-check.browser.js` | 전환 직후 점검 — 읽기·id·쓰기·**버튼** | **13/0** |
+| 콘솔에 `tests/nas-cutover-check.browser.js` | 전환 직후 점검 — 읽기·id·쓰기·**버튼**·**담당자** | **14/0** |
 | 앱 자신의 `_listProjectFiles()` | 흔내낸 호출이 아닌 **진짜 앱 함수** | ✅ NAS 에서 1건 조회 |
 | 콘솔에 `tests/storage-mirror.browser.js` | 미러 — Drive 는 경계에서만 가짜, NAS 는 진짜 | **16/0** |
 | 콘솔에 `tests/storage-migrate.browser.js` | 이사 — Drive 는 경계에서만 가짜, NAS 는 진짜 | **19/0** |

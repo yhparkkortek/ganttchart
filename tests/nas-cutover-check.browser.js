@@ -71,6 +71,13 @@
         //    그 프로젝트를 가리키던 저장된 참조(메일 배분·보관함)가 안 맞는다.
         check('id 가 전부 옛 Drive id 다', gen.length === 0,
               gen.length ? ('새 id ' + gen.length + '건: ' + gen.slice(0, 3).map(function (f) { return f.name; }).join(', ')) : '');
+        // ⚠️ [2026-11-04 추가] NAS 엔 Drive 의 파일 꼬리표(appProperties)가 없다.
+        //    없으면 목록이 통째로 "미지정" 으로 묶인다(실사용 신고: "담당자 분류가 풀렸음").
+        //    어댑터가 project_index 에서 채워 넣는다 — 목록이 보이는 것과 **다른 문제**다.
+        var noPm = files.filter(function (f) { return !(f.appProperties && f.appProperties.pm); });
+        check('담당자(appProperties.pm)가 붙어 있다', noPm.length === 0,
+              noPm.length ? (noPm.length + '건 비어 있음: ' + noPm.slice(0, 3).map(function (f) { return f.name; }).join(', ')
+                             + ' (그 프로젝트를 한 번 저장하면 채워진다)') : (files.length + '건'));
         files.slice(0, 20).forEach(function (f) { out('     · ' + f.name); });
     }
 

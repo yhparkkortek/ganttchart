@@ -223,6 +223,10 @@
             //    나중에 폴더 분리가 확정되면 이 필드 값을 기준으로 일괄 이동(migration)하면 된다.
             //    Summary 탭 "팀" 항목(pm.팀 또는 pm.개발팀)이 있으면 그 값을 사용한다.
             team: pm.팀 || pm.개발팀 || '',
+            // 🎨 [2026-11-04 신규] 목록에서 보여주는 프로젝트 테마색.
+            //    Drive 는 이 값을 파일 꼬리표(appProperties)에 달아 뒀는데 NAS 엔 그런 자리가 없다.
+            //    여기 같이 실어 두면 저장소가 뭐든 같은 자리에서 읽힌다(NAS 는 js/57 이 여기서 읽는다).
+            themeColor: (window.tabData || {}).themeColor || '',
             updated_at: new Date().toISOString(),
             // ✅ [토픽 프로파일] project_index.json에 키워드 압축 저장 — 메일 분류 시 추가 Drive 조회 없이 활용
             topicKeywords: (_topicProf && _topicProf.keywords && _topicProf.keywords.length)

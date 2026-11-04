@@ -504,7 +504,57 @@
     async function writeRel(rel, media, isB64) {
         var payload = { rel: normRel(rel) };
         if (isB64) payload.b64 = media; else payload.text = String(media === null || media === undefined ? '' : media);
+        if (payload.rel === IDX_REL) _idxAt = 0;   // 📇 꼬리표 출처가 바뀌었다 — 캐시 버림
         return await nasJson('POST', '/nas/app/put', payload);
+    }
+
+    // ── 📇 appProperties — Drive 가 파일에 붙여 주던 작은 꼬리표 ─────────────────
+    // NAS 엔 그런 게 없다. 그런데 앱은 그걸로 **담당자·팀·완료·테마색**을 가른다.
+    // 없으면 목록이 통째로 "미지정" 으로 묶인다(2026-11-04 신고: "담당자 분류가 풀렸음").
+    //
+    // ⚠️ 새 저장소를 만들지 않는다 — 같은 값이 이미 `App_Config/project_index.json` 에 있고
+    //    그건 **저장할 때마다** 갱신된다. 꼬리표용 파일을 따로 두면 저장마다 왕복이 하나 늘고,
+    //    두 사람이 동시에 저장할 때 서로 덮어쓰는 자리가 하나 더 생긴다.
+    // ⚠️⚠️ 붙이는 곳은 **어댑터 한 곳**이다. 목록 모달(js/04c)·배분 원장(js/14d)·
+    //    복원 목록 색(js/21)이 전부 `file.appProperties` 를 읽는다 — 화면마다 고치면
+    //    고친 화면만 살고 나머지는 조용히 "미지정" 으로 남는다.
+    var IDX_REL = 'App_Config/project_index.json';
+    var _idxCache = null, _idxAt = 0;
+    var IDX_TTL = 5000;                 // 목록 한 번에 폴더를 여러 개 훑는다 — 그 사이엔 한 번만 읽는다
+
+    async function loadIndexProps() {
+        if (_idxCache && (Date.now() - _idxAt) < IDX_TTL) return _idxCache;
+        var map = {};
+        try {
+            var res = await nas('GET', '/nas/app/get' + qs(IDX_REL));
+            if (res.ok) {
+                var idx = JSON.parse(await res.text());
+                (idx.projects || []).forEach(function (p) {
+                    if (!p || !p.drive_file_id) return;
+                    map[p.drive_file_id] = {
+                        pm: p.assignee || '',
+                        team: p.team || '',
+                        completed: p.completed ? '1' : '',   // Drive 는 문자열만 담았다 — 읽는 쪽이 '1' 을 본다
+                        themeColor: p.themeColor || ''
+                    };
+                });
+            }
+        } catch (e) {
+            // 꼬리표가 없어도 목록 자체는 보여야 한다 — 여기서 던지면 프로젝트를 못 연다.
+            note('appprops-skip', String((e && e.message) || e));
+        }
+        _idxCache = map; _idxAt = Date.now();
+        return map;
+    }
+
+    async function attachAppProps(files) {
+        if (!files.length) return files;
+        var map = await loadIndexProps();
+        for (var i = 0; i < files.length; i++) {
+            var p = map[files[i].id];
+            if (p) files[i].appProperties = p;
+        }
+        return files;
     }
 
     /** Drive 흉내 JSON 응답. 앱은 res.ok / res.status / res.json() 을 본다. */
@@ -574,6 +624,7 @@
         } else if (/\bname\b/i.test(params.orderBy || '')) {
             files.sort(function (a, b) { return a.name.localeCompare(b.name); });
         }
+        await attachAppProps(files);    // 📇 담당자·팀·완료·테마색
         return { files: files, incompleteSearch: false };
     }
 
