@@ -225,6 +225,29 @@
                  missing: missing, sizeDiff: sizeDiff };
     }
 
+    /**
+     * ④ id 지도 — **옛 Drive 파일 id 를 그대로 살린다.**
+     *
+     * ⚠️⚠️ 이게 없으면 NAS 로 전환하는 순간 **조용히 틀린다.** 앱 데이터 안에 Drive 파일 id 가
+     *    박혀 있기 때문이다 — 실측으로 **5,089곳**(프로젝트 파일 3,214 · TaskInbox 백업 1,862 ·
+     *    project_index 13). 코드도 `drive_file_id === window.currentDriveFileId` 처럼 **같은지
+     *    비교**하는 자리가 40곳 가까이다. id 체계가 바뀌면 그 비교가 전부 빗나가고,
+     *    오류가 아니라 **메일 배분·보관함 배치·중복 검사가 조용히 안 맞는다.**
+     *
+     * 왜 데이터를 고쳐 쓰지 않았나: 5,089곳을 바꾸는 건 되돌리기 어렵고, Drive 로 돌아갈 길도
+     *    같이 끊긴다. 대신 **id → 경로 지도**를 한 장 만들어 두면 옛 id 가 계속 통한다.
+     *    어댑터가 이 지도를 읽어 ① 옛 id 를 경로로 풀고 ② 목록에도 **그 옛 id 를 그대로** 실어 준다.
+     */
+    var ID_MAP_REL = 'App_Config/nas_id_map.json';
+
+    async function writeIdMap(plan) {
+        var map = {};
+        plan.files.forEach(function (f) { if (f.id) map[f.id] = f.rel; });
+        var body = JSON.stringify({ version: 1, builtAt: new Date().toISOString(), map: map });
+        await nasJson('POST', '/nas/app/put', { rel: ID_MAP_REL, text: body });
+        return Object.keys(map).length;
+    }
+
     function fmtBytes(n) {
         if (n < 1024) return n + 'B';
         if (n < 1024 * 1024) return (n / 1024).toFixed(1) + 'KB';
@@ -232,7 +255,7 @@
     }
 
     window.nasMigrate = {
-        scan: scan, run: run, verify: verify,
+        scan: scan, run: run, verify: verify, writeIdMap: writeIdMap, ID_MAP_REL: ID_MAP_REL,
         stop: function () { state.abort = true; },
         isRunning: function () { return state.running; },
         fmtBytes: fmtBytes
@@ -241,6 +264,8 @@
     // ── 🔑 설정 모달에서 쓰는 진행 화면 ────────────────────────────────────
     //   ⚠️ 조사 결과를 **먼저 보여주고 사람이 확인한 뒤** 복사한다. 수백 건을 말없이
     //      옮기기 시작하면 무엇이 옮겨지는지 아무도 모른 채 끝난다.
+    function esc0(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]; }); }
+
     function say(html, kind) {
         var el = document.getElementById('naslogin-status');
         if (!el) { console.log(String(html).replace(/<[^>]+>/g, '')); return; }
@@ -287,6 +312,11 @@
             var res = await run(plan, function (s) { say('⏳ ' + T('옮기는 중 ', 'Copying ') + s, ''); });
             say('⏳ ' + T('옮긴 뒤 대조하는 중…', 'Verifying…'), '');
             var v = await verify(plan, function (s) { say('⏳ ' + s, ''); });
+            // ⚠ 대조가 끝나면 **항상** id 지도를 다시 써둔다 — 전부 건너뛰었을 때도.
+            //   이게 없으면 NAS 모드에서 옛 Drive id 가 안 풀려 조용히 틀린다.
+            var mapN = 0, mapErr = null;
+            try { mapN = await writeIdMap(plan); }
+            catch (e) { mapErr = String((e && e.message) || e); }
 
             var secs = Math.round((Date.now() - t0) / 1000);
             var ok = res.failed === 0 && v.missing.length === 0 && v.sizeDiff.length === 0;
@@ -309,7 +339,12 @@
                         + (v.sizeDiff.length > 5 ? ('<br>… ' + (v.sizeDiff.length - 5) + T('건 더', ' more')) : '')
                         + '<br>' + T('↻ <b>이사</b>를 다시 누르면 이 파일만 새로 옮깁니다(옮기는 중 Drive 에서 또 저장되면 생깁니다).',
                                      'Press <b>Migrate</b> again to re-copy just these.')) : '')
-                    + (res.aborted ? ('<br>⏹ ' + T('중단됨 — 다시 누르면 이어서 합니다.', 'Stopped — press again to resume.')) : '');
+                    + (res.aborted ? ('<br>⏹ ' + T('중단됨 — 다시 누르면 이어서 합니다.', 'Stopped — press again to resume.')) : '')
+                    + (mapErr
+                        ? ('<br>❌ ' + T('id 지도를 못 썼습니다 — NAS 모드에서 옛 id 가 안 풀립니다: ',
+                                        'Could not write the id map: ') + esc0(mapErr))
+                        : ('<br>🗺 ' + T('옛 id 지도 ' + mapN + '건 저장 — 전환 후에도 옛 id 가 그대로 통합니다.',
+                                        'Saved ' + mapN + ' legacy id mappings.')));
             if (res.errors.length) {
                 out += '<br>' + res.errors.slice(0, 3).map(function (e) { return '· ' + e.rel + ' — ' + e.why; }).join('<br>');
             }

@@ -76,17 +76,43 @@
         catch (e) { return ''; }
     }
 
-    /** 상대경로 → Drive 흉내 fileId. rel 이 비면 루트 id. */
+    // ═══ 🗺 옛 Drive id 지도 ═══════════════════════════════════════════════
+    //  ⚠️⚠️ 앱 **데이터 안에 Drive 파일 id 가 박혀 있다** — 실측 5,089곳(프로젝트 파일 3,214 ·
+    //     TaskInbox 백업 1,862 · project_index 13). 코드도 `drive_file_id === currentDriveFileId`
+    //     처럼 **같은지 비교**하는 자리가 40곳 가까이다. id 체계가 바뀌면 그 비교가 전부
+    //     빗나가고, 오류가 아니라 **메일 배분·보관함 배치·중복 검사가 조용히 안 맞는다.**
+    //  → 그래서 데이터를 고쳐 쓰는 대신 **옛 id 를 그대로 살린다**: 이사 때 만든 지도
+    //     (`App_Config/nas_id_map.json`)를 읽어 ① 옛 id 를 경로로 풀고 ② 목록에도 **그 옛 id 를
+    //     그대로** 실어 준다. 그러면 저장된 모든 참조가 계속 맞는다.
+    //  ⚠️ 지도가 없어도 돌아간다(경로에서 만든 id 를 쓴다) — 다만 그 경우 위 비교들이 빗나간다.
+    var _idMap = {};         // 옛 Drive id → 상대경로
+    var _relToOldId = {};    // 상대경로 → 옛 Drive id
+
+    function adoptIdMap(obj) {
+        var m = (obj && obj.map) || {};
+        _idMap = {}; _relToOldId = {};
+        Object.keys(m).forEach(function (k) {
+            var rel = String(m[k] || '');
+            if (!rel) return;
+            _idMap[k] = rel;
+            _relToOldId[rel] = k;
+        });
+        return Object.keys(_idMap).length;
+    }
+
+    /** 상대경로 → fileId. **이사해 온 파일은 옛 Drive id 를 그대로 돌려준다.** */
     function idOf(rel, isdir) {
         rel = normRel(rel);
         if (!rel) return rootId();
+        if (!isdir && _relToOldId[rel]) return _relToOldId[rel];
         return 'nas_' + (isdir ? 'd' : 'f') + '_' + b64urlEncode(rel);
     }
 
-    /** fileId → {rel, isdir}. 우리가 만든 id 가 아니면 null(= 우리 것이 아니니 건드리지 않는다). */
+    /** fileId → {rel, isdir}. 우리가 만든 id 도, 지도에 있는 옛 id 도 받는다. */
     function relOf(id) {
         id = String(id || '');
         if (id && id === rootId()) return { rel: '', isdir: true };
+        if (_idMap[id]) return { rel: _idMap[id], isdir: false };
         var m = /^nas_([df])_(.+)$/.exec(id);
         if (!m) return null;
         try { return { rel: normRel(b64urlDecode(m[2])), isdir: m[1] === 'd' }; }
@@ -217,7 +243,7 @@
         _fn: {
             b64urlEncode: b64urlEncode, b64urlDecode: b64urlDecode,
             idOf: idOf, relOf: relOf, normRel: normRel, joinRel: joinRel,
-            parseQ: parseQ, parseMultipart: parseMultipart,
+            parseQ: parseQ, adoptIdMap: adoptIdMap, parseMultipart: parseMultipart,
             mimeOf: mimeOf, toDriveFile: toDriveFile, rootId: rootId
         }
     };
@@ -304,6 +330,27 @@
     }
 
     function qs(rel) { return '?rel=' + encodeURIComponent(normRel(rel)); }
+
+    // 🗺 옛 id 지도를 **한 번만** 읽는다. 없으면 없는 대로 간다(그땐 경로에서 만든 id 를 쓴다).
+    // ⚠️ 모든 입구에서 `await` 해야 한다 — 목록을 먼저 그려 버리면 그 목록의 id 가
+    //    새 id 라서, 저장된 옛 id 와 **그 한 번만** 안 맞는 꼬임이 생긴다.
+    var _idMapOnce = null;
+    function ensureIdMap() {
+        if (_idMapOnce) return _idMapOnce;
+        _idMapOnce = (async function () {
+            try {
+                var res = await nas('GET', '/nas/app/get' + qs('App_Config/nas_id_map.json'));
+                if (!res.ok) { note('idmap-none', 'HTTP ' + res.status); return 0; }
+                var n = adoptIdMap(JSON.parse(await res.text()));
+                note('idmap', n + '건');
+                return n;
+            } catch (e) {
+                note('idmap-fail', String((e && e.message) || e));
+                return 0;
+            }
+        })();
+        return _idMapOnce;
+    }
 
     async function listRel(rel) {
         var j = await nasJson('GET', '/nas/app/list' + qs(rel));
@@ -686,6 +733,7 @@
         var m = DRIVE_RE.exec(url);
         if (!m) return _origFetch(input, init);
 
+        await ensureIdMap();                     // 🗺 옛 id 를 풀 수 있게 먼저 읽어 둔다
         var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
         var sub = m[5] || '';                    // copy / export
         var fileId = m[3] ? decodeURIComponent(m[3]) : '';
@@ -766,8 +814,12 @@
     // gapi 가 나중에 `gapi.client.init` 으로 drive 를 다시 심으므로 **덮였는지 지켜본다**.
     var stub = {
         files: {
-            list: async function (p) { return { result: await driveList(p || {}), status: 200 }; },
+            list: async function (p) {
+                await ensureIdMap();
+                return { result: await driveList(p || {}), status: 200 };
+            },
             get: async function (p) {
+                await ensureIdMap();
                 p = p || {};
                 var g = relOf(p.fileId);
                 if (!g) throw new Error('모르는 파일 id: ' + p.fileId);

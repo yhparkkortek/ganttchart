@@ -166,6 +166,48 @@
         out('   (캐시 자동 비우기는 새로고침 때 도므로 여기서 못 본다 — 확인하려면:');
         out("    localStorage.setItem('gantt_folder_cache_v1','{}'); 를 Drive 모드로 바꾼 뒤 새로고침)");
 
+        out('\n== ⑦-3 🗺 옛 Drive id 가 실제로 통하는가 ==');
+        // ⚠️⚠️ 앱 데이터에 Drive 파일 id 가 5,089곳 박혀 있다. 지도가 없으면 전환 순간
+        //    `drive_file_id === currentDriveFileId` 비교가 전부 빗나가 **조용히** 틀린다.
+        //    여기서는 지도를 실제로 NAS 에 써 두고, **앱이 쓰는 그대로** 옛 id 로 읽어 본다.
+        var OLD = '1TestLegacyDriveId0000000000';
+        var mapRel = 'App_Config/nas_id_map.json';
+        var hadMap = null;
+        try {
+            var prev = await fetch('http://127.0.0.1:5000' + '/nas/app/get?rel=' + encodeURIComponent(mapRel));
+            if (prev.ok) hadMap = await prev.text();      // 진짜 지도가 있으면 되돌려 놓는다
+        } catch (e) { /* 없으면 그만 */ }
+        var m2 = {}; m2[OLD] = DIR + '/' + tok + '.json';   // ①~④ 에서 쓴 그 파일
+        await fetch('http://127.0.0.1:5000' + '/nas/app/put', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rel: mapRel, text: JSON.stringify({ version: 1, map: m2 }) })
+        });
+        SA._fn.adoptIdMap({ map: m2 });                   // 이미 읽어 둔 지도를 이 자리에서 바꾼다
+        var byOld = await fetch('https://www.googleapis.com/drive/v3/files/' + OLD + '?alt=media');
+        var oldTxt = byOld.ok ? await byOld.text() : null;
+        check('옛 id 로 내용을 읽는다', oldTxt === content2,
+              byOld.ok ? '' : ('HTTP ' + byOld.status));
+        var lst2 = await gapi.client.drive.files.list({
+            q: "'" + probeDirId + "' in parents and trashed=false", fields: 'files(id, name)'
+        });
+        var mine2 = (lst2.result.files || []).filter(function (f) { return f.name === tok + '.json'; })[0];
+        check('목록도 **옛 id** 로 돌려준다', mine2 && mine2.id === OLD, mine2 && mine2.id);
+        // 되돌리기 — 진짜 지도를 덮어쓴 채로 두면 앱이 망가진다
+        if (hadMap !== null) {
+            await fetch('http://127.0.0.1:5000' + '/nas/app/put', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rel: mapRel, text: hadMap })
+            });
+            try { SA._fn.adoptIdMap(JSON.parse(hadMap)); } catch (e) { /* ignore */ }
+            out('   (원래 id 지도를 되돌렸습니다)');
+        } else {
+            await fetch('http://127.0.0.1:5000' + '/nas/app/delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rel: mapRel })
+            });
+            SA._fn.adoptIdMap({ map: {} });
+        }
+
         out('\n== ⑧ 삭제 ==');
         var del = await fetch('https://www.googleapis.com/drive/v3/files/' + created.id, { method: 'DELETE' });
         check('DELETE 204', del.status === 204, 'HTTP ' + del.status);

@@ -69,6 +69,23 @@ check('폴더/파일 구분이 살아 있다', F.relOf(F.idOf('a/b', true)).isdi
 check('Drive 의 남의 id 는 건드리지 않는다(null)', F.relOf('1AbCdEfGhIjKlMnOpQrStUv') === null);
 check('빈 id 도 null', F.relOf('') === null);
 
+console.log('\n== ②-2 🗺 옛 Drive id 지도 — 전환해도 저장된 id 가 그대로 통해야 한다 ==');
+// ⚠️⚠️ 이게 이 기능의 전부다. 앱 데이터 안에 Drive 파일 id 가 **5,089곳** 박혀 있고
+//    코드는 `drive_file_id === currentDriveFileId` 처럼 **같은지 비교**한다.
+//    id 체계가 바뀌면 그 비교가 전부 빗나가고, 오류가 아니라 **조용히 안 맞는다.**
+const OLD_ID = '1AbCdEfGhIjKlMnOpQrStUvWxYz01234';
+const n = F.adoptIdMap({ version: 1, map: { [OLD_ID]: '개발3팀/LNW_27.0.json' } });
+eq('지도 1건을 들였다', n, 1);
+eq('옛 id 가 경로로 풀린다', F.relOf(OLD_ID), { rel: '개발3팀/LNW_27.0.json', isdir: false });
+eq('그 경로는 **옛 id 를 그대로** 돌려준다', F.idOf('개발3팀/LNW_27.0.json', false), OLD_ID);
+check('목록 항목에도 옛 id 가 실린다',
+      F.toDriveFile({ name: 'LNW_27.0.json', isdir: false, size: 10 }, '개발3팀').id === OLD_ID);
+check('지도에 없는 파일은 여전히 만든 id', F.idOf('개발3팀/다른.json', false).indexOf('nas_f_') === 0);
+check('폴더는 지도를 안 탄다', F.idOf('개발3팀/LNW_27.0.json', true).indexOf('nas_d_') === 0);
+check('지도에 없는 남의 Drive id 는 그대로 null', F.relOf('1ZZZzzzNotInTheMapAtAll999') === null);
+eq('지도를 비우면 원래대로', F.adoptIdMap({ map: {} }), 0);
+check('비운 뒤엔 만든 id', F.idOf('개발3팀/LNW_27.0.json', false).indexOf('nas_f_') === 0);
+
 console.log('\n== ③ 경로 가드 ==');
 let threw = false;
 try { F.normRel('../밖으로.json'); } catch (e) { threw = true; }
