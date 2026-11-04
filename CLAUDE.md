@@ -357,8 +357,9 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - NAS 한글 파일 이름은 **멀쩡하다** — CP949로 보이면 시험한 터미널(cp949 `curl`)을 의심할 것
 - 백엔드 `DOCSTORE_APP_FOLDERS` 에 `'PROJECT LIST'` 추가됨 → **백엔드 재시작 전엔 자료 연결만 400**
 
-### `docs/backend-auto-update.md` — 🔄 백엔드 자동 업데이트/재시작
-- **읽을 때**: `/self-check-update`·`/self-update`, `kortek_backend.zip`, `.bat`/`.vbs` 변경
+### `docs/backend-auto-update.md` — 🔄 백엔드 자동 업데이트/재시작 + 🚀 처음 설치
+- **읽을 때**: `/self-check-update`·`/self-update`, `kortek_backend.zip`, `.bat`/`.vbs` 변경, **처음 설치(`kortek_setup.bat`)**
+- **🚀 (2026-11-04) 처음 설치는 `kortek_setup.bat` 하나** — 앱의 [⬇️ 설치 파일 받기](설치 안내 맨 위) → 받은 파일 더블클릭. 이미 설치된 폴더 찾기(바로가기에서) · Python 없으면 winget 사용자범위 · zip 받기/풀기 · 시작프로그램 등록 · `/health` 확인까지. ⚠️ **브라우저는 프로그램을 실행 못 한다** — "버튼 한 번"은 원리상 불가능하고 2클릭이 바닥. ⚠️⚠️ 이 파일에 **괄호 IF 블록 금지**(PowerShell 한 줄의 `)` 가 블록을 닫아 **조용히 잘린다** — 돌려보고서야 알았다) · 임시 `.ps1` 금지(삭제 타이밍 충돌) · **`.gitattributes` 에서 이 파일만 `-text`**(raw 로 받으면 LF 가 가서 cmd 가 깨진다). 검증은 `/dryrun`·`/selftest <폴더>`
 - 새 배포 파일 추가 시: `_SELF_UPDATE_FILES` + `.claude/settings.json` zip 목록 **둘 다** 갱신
 - **`/self-update`는 쓰기 전에 검증**(0바이트·`.py` 문법) + 하나라도 실패하면 전부 중단 + `.bak` 백업 — 깨진 파일이 main에 올라가 팀원 PC가 같이 죽은 사고(2026-10-02) 대응
 - **백엔드 `.py` 커밋 전 `py -3-32 -m py_compile` 필수** — 그 한 줄이면 위 사고는 안 났다
