@@ -232,7 +232,7 @@ Write-Host '✅ robocopy 가 성공으로 끝났습니다.'
 if (-not $DryRun) {
     Write-Host ''
     Write-Host '다음: 대조하세요 →  tools/docstore-to-nas.ps1 -VerifyOnly'
-    Write-Host '그 다음: 설정의 문서 저장소 경로를 대상으로 바꾸고 백엔드를 재시작하세요.'
+    Write-Host '그 다음: 설정의 문서 저장소 경로를 대상으로 바꾸세요. (백엔드 재시작은 필요 없습니다 — 설정을 부를 때마다 다시 읽습니다)'
     Write-Host '⚠️ 그 설정은 PC마다 따로입니다 — 팀원 PC 에서도 각각 바꿔야 합니다.'
 }
 exit 0
