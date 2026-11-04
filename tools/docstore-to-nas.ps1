@@ -63,7 +63,8 @@ if (-not $Source) {
 }
 if (-not $Dest) {
     # NAS 설정의 `root` 는 DSM 경로(`/공유/폴더/...`)다. SMB 로는 그게 그대로 UNC 가 된다:
-    #   /RND_ETC/a/b  →  \\<host>\RND_ETC\a\b   (SMB 는 대소문자를 안 가린다)
+    #   /<공유>/a/b  →  \\<host>\<공유>\a\b   (SMB 는 대소문자를 안 가린다)
+    #   ⚠️ 실제 공유 이름은 여기 쓰지 않는다 — 이 저장소는 공개다(설정 파일에만 둔다).
     $nas = Read-JsonFile (Join-Path $repo 'nas_login_config.json')
     if (-not $nas -or -not $nas.host -or -not $nas.root) {
         throw ("대상을 모르겠습니다. nas_login_config.json 에 host/root 가 없습니다 — " +

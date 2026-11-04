@@ -1277,9 +1277,44 @@
     //    ⚠️ 무조건 "연결됨"으로 켜면 백엔드가 꺼져 있을 때도 앱이 멀쩡한 척하게 된다 —
     //       그러면 저장이 조용히 실패한다. 붙어 있을 때만 켠다.
     var _nasOnline = false;
+
+    /** 저장된 계정으로 **딱 한 번** 로그인한다.
+     *
+     *  🔌 [2026-11-04] 왜 필요한가 — `/nas/status` 는 **로그인을 시도하지 않는다**(그게 맞다).
+     *     그래서 백엔드를 재시작하면 세션이 없고, 그때까지 로그인을 거는 곳은 🔑 설정 화면
+     *     뿐이었다. 저장소가 NAS 하나뿐인 지금은 **재시작할 때마다 사람이 설정을 열어
+     *     버튼을 눌러야** 앱이 살아나는 셈이다 — 그건 고장이다.
+     *  ⚠️⚠️ 재시도는 하지 않는다. 한 페이지에 **한 번**이고, 실패가 쌓이면 그 PC 의 IP 가
+     *     차단된다. 횟수 관리는 백엔드 예산(_LOGIN_POLICY, 기본 3회)이 한다 — 거기서
+     *     잠기면 `reason:'blocked'` 로 오므로 여기서는 **시도조차 하지 않는다.**
+     */
+    var _loginTried = false;
+    async function nasLoginOnce(s) {
+        if (_loginTried) return s;
+        if (!s || !s.configured) return s;          // 계정이 없으면 할 일이 없다
+        if (s.ok) return s;                         // 이미 붙어 있다
+        if (s.reason === 'blocked') return s;       // 잠겨 있다 — 더 두드리지 않는다
+        if (s.budget && s.budget.left === 0) return s;
+        _loginTried = true;
+        try {
+            var lg = await (await nas('POST', '/nas/login', {})).json();
+            if (!lg || !lg.ok) {
+                note('nas-login-failed', (lg && lg.message) || '');
+                return Object.assign({}, s, { message: (lg && lg.message) || s.message,
+                                              budget: (lg && lg.budget) || s.budget });
+            }
+            return await (await nas('GET', '/nas/status')).json();
+        } catch (e) {
+            note('nas-login-error', String((e && e.message) || e));
+            return s;
+        }
+    }
+
     (async function _nasIdentity() {
         try {
             var s = await (await nas('GET', '/nas/status')).json();
+            // 백엔드가 막 떴으면 세션이 없다 — 저장된 계정으로 한 번만 붙어 본다.
+            if (s && s.configured && !s.ok && s.reason === 'no_session') s = await nasLoginOnce(s);
             if (s && s.ok) {
                 _nasOnline = true;
                 if (s.user && (!window.currentUserName || /비로그인|익명|알 수 없는/.test(window.currentUserName))) {

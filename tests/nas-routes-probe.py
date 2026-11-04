@@ -66,7 +66,7 @@ def main():
 
     try:
         print('\n== ② 가드레일 — 거부돼야 하는 입력 ==')
-        st, _ = jpost(c, '/nas/app/put', {'rel': '/RND_ETC/아무데나.json', 'text': 'x'})
+        st, _ = jpost(c, '/nas/app/put', {'rel': '/어떤공유/아무데나.json', 'text': 'x'})
         check('절대경로 거부', st == 400, '· HTTP %s' % st)
         st, _ = jpost(c, '/nas/app/put', {'rel': '../밖으로.json', 'text': 'x'})
         check('상위참조(..) 거부', st == 400, '· HTTP %s' % st)
