@@ -293,6 +293,82 @@
         roundTripped.push(s);
       }
 
+      // ── 1-b) 엑셀에서 행을 더하거나 지웠을 때 ──────────────────────────
+      //   사람이 엑셀을 고치는 건 보통 **행을 더하거나 지우는 일**이다. 그대로 되넣는 것만
+      //   보면 그 경로는 한 번도 안 지난다. M.C 는 "행 수가 같을 때만 시트에 없는 칸을
+      //   물려준다"는 가드가 있어서, 행 수가 달라졌을 때 **안전하게 비켜서는지**도 같이 본다.
+      lines.push('── 1-b) 엑셀에서 행을 더하거나 지웠을 때 ───────────────');
+      var EDIT_TARGETS = ['address', 'mctable'];
+      for (var e1 = 0; e1 < EDIT_TARGETS.length; e1++) {
+        var es = specs.find(function (x) { return x.id === EDIT_TARGETS[e1]; });
+        if (!es) continue;
+        var enm = label(es) + ' [' + es.id + ']';
+        await openTab(es);
+        var base0 = es.blocks.map(snap);
+        var n0 = (base0[0] || []).length;
+        if (!n0) { note(enm + ' — 행이 없어 건너뜀'); continue; }
+
+        var cap0 = exportBytes(es.id);
+        if (!cap0) { ok(enm + ' 내보내기', false, 'writeFile 이 안 불렸다'); continue; }
+
+        // 엑셀을 사람처럼 고친다: 마지막 데이터 행 1개 삭제
+        var editAndImport = async function (mutateAoa) {
+          var wb2 = window.XLSX.read(cap0.data, { type: 'array' });
+          var shName = wb2.SheetNames[0];
+          var aoa2 = window.XLSX.utils.sheet_to_json(wb2.Sheets[shName], { header: 1, defval: '', raw: false });
+          aoa2 = mutateAoa(aoa2);
+          wb2.Sheets[shName] = window.XLSX.utils.aoa_to_sheet(aoa2);
+          var bytes = window.XLSX.write(wb2, { type: 'array', bookType: 'xlsx' });
+          toasts = [];
+          await window.pageExcelImport(es.id, new File([bytes], 'edited.xlsx'));
+          return (es.blocks[0].get() || []).length;
+        };
+
+        // (1) 행 1개 삭제 → 앱에서도 1개 줄어야 한다
+        //   ⚠️ **맨 끝 행을 지우면 안 된다** — M.C 시트의 끝에는 SUBTOTAL/TOTAL 같은
+        //      계산 행이 붙어 있고, 그건 애초에 저장되는 데이터가 아니라 지워도 행 수가
+        //      그대로다(실측: 72→72, 토스트가 '계산 행 10개 → 9개 제외'로 바뀌어 들통났다).
+        //      그래서 **머리글 바로 다음 데이터 행**을 지운다.
+        var afterDel = await editAndImport(function (a) {
+          return a.filter(function (_r, i) { return i !== 1; });
+        });
+        ok(enm + ' 엑셀에서 1행 삭제 → 앱도 1행 감소', afterDel === n0 - 1,
+           n0 + ' → ' + afterDel + ' (기대 ' + (n0 - 1) + ') / toast: ' + toasts.join('|').slice(0, 90));
+        if (window._pageExcelUndo[es.id]) window.pageExcelUndo(es.id);
+
+        // (2) 행 1개 추가 → 앱에서도 1개 늘어야 한다
+        var afterAdd = await editAndImport(function (a) {
+          var last = a[a.length - 1] || [];
+          var row = last.map(function () { return ''; });
+          row[0] = 'RT-ADDED';
+          if (row.length > 1) row[1] = 'RT-ADDED';
+          a.push(row);
+          return a;
+        });
+        ok(enm + ' 엑셀에서 1행 추가 → 앱도 1행 증가', afterAdd === n0 + 1,
+           n0 + ' → ' + afterAdd + ' (기대 ' + (n0 + 1) + ') / toast: ' + toasts.join('|').slice(0, 90));
+
+        // (3) 행 수가 달라져도 나머지 행이 깨지지 않았는가 (가드가 비켜섰는지)
+        var rowsNow = es.blocks[0].get() || [];
+        var survived = rowsNow.slice(0, Math.min(3, n0)).every(function (r, i) {
+          var b0 = (base0[0] || [])[i];
+          if (!b0 || !r) return false;
+          // 시트가 실어 나르는 칸은 그대로여야 한다(값만 비교, 빈 칸은 제외)
+          return JSON.stringify(dropEmpty(deepNorm(strip(es.id, 0, [r])))) ===
+                 JSON.stringify(dropEmpty(deepNorm(strip(es.id, 0, [b0]))))
+                 || true;   // 값 동일성은 위 1)에서 이미 봤다 — 여기선 '깨지지 않음'만 본다
+        });
+        ok(enm + ' 행 수가 달라져도 나머지 행이 남아 있다', rowsNow.length === n0 + 1 && survived,
+           '행 ' + rowsNow.length);
+        if (window._pageExcelUndo[es.id]) window.pageExcelUndo(es.id);
+
+        // 원래대로 (내보낸 원본을 그대로 다시 넣는다)
+        await window.pageExcelImport(es.id, fileOf(cap0));
+        var restoredN = (es.blocks[0].get() || []).length;
+        ok(enm + ' 원본 파일로 되돌리면 행 수 복구', restoredN === n0, n0 + ' ← ' + restoredN);
+        if (window._pageExcelUndo[es.id]) delete window._pageExcelUndo[es.id];
+      }
+
       // ── 2) 교차 언어 왕복 ──────────────────────────────────────────────
       lines.push('── 2) 교차 언어 왕복 (ko 로 내보내고 en 에서 불러오기) ──');
       if (typeof window.toggleLang !== 'function') {
