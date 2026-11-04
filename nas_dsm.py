@@ -752,8 +752,15 @@ def ensure_folder(path, cache=True):
         raise ValueError('공유 루트는 만들 수 없습니다: %s' % path)
     parent, name = path.rsplit('/', 1)
     try:
+        # ⚠⚠ [2026-11-04] `name` 은 **JSON 배열**로 보내야 한다(DSM 문서 형식).
+        #    평문 문자열로 보내면 **숫자로 시작하는 이름**이 조용히 거부된다 —
+        #    실측: `testfolder`·`abc-def`·`m2026-11`·`2026_11` 은 되고
+        #    **`2026`·`202611`·`2026-11` 은 전부 "파일 작업 인자가 잘못되었습니다"** 로 죽는다.
+        #    날짜로 폴더를 가르는 기능(일일보고 월 폴더 등)이 여기서 통째로 막혔다.
+        #    배열로 보내면 같은 이름이 그대로 만들어진다(실측 확인).
         _call(cfg, 'SYNO.FileStation.CreateFolder', 'create', 2,
-              {'folder_path': parent, 'name': name, 'force_parent': 'true'}, post=True)
+              {'folder_path': json.dumps([parent]), 'name': json.dumps([name]),
+               'force_parent': 'true'}, post=True)
     except RuntimeError as e:
         # 이미 있으면 414(같은 이름이 이미 있음) — 성공으로 본다.
         if '이미 있습니다' not in str(e):

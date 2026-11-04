@@ -61,6 +61,8 @@
         }
         // Weekly Report 탭은 매번 최신 기준주로 다시 그린다
         if (tabName === 'weekly' && window.showWeeklyReport) window.showWeeklyReport();
+        // 📔 Daily Report — 들어올 때마다 그 날짜의 팀 전체를 NAS 에서 다시 읽는다(목록 1콜 + 필요한 파일만)
+        if (tabName === 'daily' && window.dailyOnTabShown) window.dailyOnTabShown();
         // 📒 Project list — 들어올 때마다 다시 그리고, 첫 진입에선 Drive 최신본/NAS 문서 개수를 받아온다
         if (tabName === 'projectlist' && window.plOnTabShown) window.plOnTabShown();
         // 💾 Project list 를 **떠날 때**는 3초 디바운스를 기다리지 말고 바로 Drive 에 올린다 —

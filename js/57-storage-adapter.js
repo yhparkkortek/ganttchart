@@ -690,6 +690,49 @@
         return await nasJson('POST', '/nas/app/put', payload);
     }
 
+    // ── 📄 팀 공용 파일 헬퍼 — **새 기능이 fetch 를 또 베끼지 않게** ────────────────
+    // ⚠️ 이게 없어서 `/nas/app/*` 를 부르는 곳마다 `no-store`·`_cb` 난수·403/404 구분을
+    //    각자 다시 짰다(js/36·js/58). 네 번째가 생기기 전에 한 곳으로 모은다 —
+    //    "목록을 베끼면 한쪽만 살고 나머지는 조용히 빠진다"가 2026-11-04 의 반복 교훈이다.
+    // ⚠️ 앱 루트 기준 **상대경로만** 받는다(백엔드가 절대경로 쓰기를 거부하는 이유와 같다:
+    //    프런트 버그가 NAS 아무 데나 못 쓰게 + 사내 경로가 프런트 코드에 안 들어가게).
+    // ⚠️ `get` 은 **없으면 null**(404 를 오류로 올리지 않는다 — "아직 안 쓴 파일"이 정상인
+    //    기능이 많다). 권한 거부(403)는 그대로 던진다 — 그걸 null 로 삼키면 "없다"와
+    //    "못 본다"가 섞여 조용한 오답이 된다.
+    window.nasAppFile = {
+        /** 텍스트로 읽는다. 없으면 null. JSON 이면 `json:true` 로 파싱까지. */
+        get: async function (rel, opts) {
+            opts = opts || {};
+            var res = await nas('GET', '/nas/app/get' + qs(rel));
+            if (res.status === 404) return null;
+            if (!res.ok) {
+                var e = new Error('NAS 읽기 실패(HTTP ' + res.status + '): ' + normRel(rel));
+                e.status = res.status;
+                throw e;
+            }
+            var txt = await res.text();
+            if (!opts.json) return txt;
+            try { return JSON.parse(txt); }
+            catch (err) { throw new Error('JSON 이 아니다: ' + normRel(rel) + ' — ' + err.message); }
+        },
+        /** 통째로 쓴다(원자적). 객체를 주면 JSON 으로. */
+        put: async function (rel, body) {
+            var text = (typeof body === 'string') ? body : JSON.stringify(body, null, 2);
+            return await writeRel(rel, text, false);
+        },
+        /** 폴더 목록. 없거나 권한 없으면 빈 배열(목록은 "없음"과 "못 봄"을 같게 취급해도 안전하다). */
+        list: async function (rel) {
+            try { return await listRel(rel); }
+            catch (e) { return []; }
+        },
+        /** 있는지만. */
+        exists: async function (rel) {
+            var items = await this.list(normRel(rel).split('/').slice(0, -1).join('/'));
+            var name = normRel(rel).split('/').pop();
+            return items.some(function (it) { return it && it.name === name; });
+        }
+    };
+
     // ── 📇 appProperties — Drive 가 파일에 붙여 주던 작은 꼬리표 ─────────────────
     // NAS 엔 그런 게 없다. 그런데 앱은 그걸로 **담당자·팀·완료·테마색**을 가른다.
     // 없으면 목록이 통째로 "미지정" 으로 묶인다(2026-11-04 신고: "담당자 분류가 풀렸음").

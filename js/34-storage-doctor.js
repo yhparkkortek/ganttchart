@@ -29,6 +29,9 @@
         //    "자주 쓰는 질문이 저장이 안 된다"로 이어질 수 있어서, 🧹 정리 대상에 포함시킨다(로그류이므로 확인 후 정리).
         { key: 'gantt_qa_question_freq_v2',       label: '자주 쓰는 질문 기록(프로젝트별)',  labelEn: 'Frequent questions log',  cls: 'log',   strategy: { type: 'byProject', perProject: 60, maxProjects: 30 } },
         { key: 'gantt_ai_learning_v1',            label: 'AI 학습 로그(프로젝트별)',         labelEn: 'AI learning log',         cls: 'log',   strategy: { type: 'byProject', perProject: 60, maxProjects: 30 } },
+        // 📔 [2026-11-04] 일일보고 저장 전 초안(js/59) — 창이 닫혀도 글이 안 날아가게 남기는 것 하나뿐이다.
+        //    저장에 성공하면 코드가 스스로 지운다. 사람이 쓴 글이라 cache 가 아니라 log 로 둔다.
+        { key: 'gantt_daily_draft_v1',            label: '일일보고 저장 전 초안',            labelEn: 'Daily report draft',      cls: 'log',   strategy: { type: 'drop' } },
         { key: 'gantt_qa_feedback',               label: 'AI 문답 피드백(질문·답변 포함)',   labelEn: 'AI Q&A feedback',         cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },
         { key: 'gantt_project_summary_feedback',  label: 'AI 요약 피드백',                   labelEn: 'AI summary feedback',     cls: 'log',   strategy: { type: 'array', keep: 60, order: 'newest-first' } },
         // ⭐ [2026-09-23 신규] 보관함 삭제 묘비 — 기기 간 "지운 건"을 전파하는 기록(uid+시각).
