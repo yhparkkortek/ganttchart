@@ -177,6 +177,40 @@
     return vals.sort();
   }
 
+  /* ══ 🕳 숨은 메타 속성(`_`) ═══════════════════════════════════════════════
+     ⚠️⚠️ **이 하네스의 맹점이었다.** 처음 판은 블록의 `get()` 출력만 비교했는데,
+     `rowsToAoa` 는 `_` 로 시작하는 키를 **일부러 안 내보낸다**. 그래서 간트 행 배열에
+     붙어 있는 `_level`·`_origDev`·`_origT1~4`·`_mailRaw`·`_rowUid` 같은 속성은
+     비교에 **아예 들어오지 않았고**, 2026-11-04 에 `_ganttSet` 의 `slice()` 가 그걸
+     통째로 날리는 사고가 났는데도 이 하네스는 "왕복 후 내용 동일 ✅"이라고 말했다.
+     (칸 값만 남아 "데이터는 있는데 업무명이 없는" 상태가 됐고 오류는 하나도 안 났다.)
+
+     → 그래서 **원본 배열의 `_` 속성까지** 따로 떠서 비교한다.
+       눈에 보이는 값이 아니라 **앱이 실제로 쓰는 상태**를 봐야 한다. */
+  function metaSnapshot() {
+    var gd = window.globalData || [];
+    return gd.map(function (row) {
+      if (!row || typeof row !== 'object') return null;
+      var o = {};
+      Object.keys(row).forEach(function (k) {
+        if (k.charAt(0) !== '_') return;
+        var v = row[k];
+        o[k] = (v && typeof v === 'object') ? ('obj:' + Object.keys(v).length) : String(v);
+      });
+      return o;
+    });
+  }
+  function metaSummary(snapshot) {
+    var keys = {}, rowsWithMeta = 0;
+    (snapshot || []).forEach(function (o) {
+      if (!o) return;
+      var ks = Object.keys(o);
+      if (ks.length) rowsWithMeta++;
+      ks.forEach(function (k) { keys[k] = (keys[k] || 0) + 1; });
+    });
+    return { rowsWithMeta: rowsWithMeta, keys: keys };
+  }
+
   return (async function () {
     try {
       if (!window.PAGE_EXCEL_SPECS || !window.XLSX) {
@@ -220,6 +254,7 @@
 
         await openTab(s);          // ⚠️ 그 탭을 한 번 그려 둔다 — aoa 블록은 화면을 보고 만든다
         before = s.blocks.map(snap);   // 탭을 연 뒤의 상태가 진짜 기준이다
+        var metaBefore = metaSnapshot();   // 🕳 눈에 안 보이는 `_` 속성까지
         var cap = exportBytes(s.id);
         if (!cap) { ok(nm + ' 내보내기', false, 'writeFile 이 안 불렸다'); continue; }
         ok(nm + ' 내보내기 (' + Math.round(cap.data.byteLength / 1024) + 'KB)', cap.data.byteLength > 0);
@@ -233,6 +268,16 @@
         var same = JSON.stringify(dropEmpty(deepNorm(sb))) === JSON.stringify(dropEmpty(deepNorm(sa)));
         ok(nm + ' 왕복 후 내용 동일', same, same ? '' : firstDiff(dropEmpty(deepNorm(sb)), dropEmpty(deepNorm(sa)), ''));
         if (!same) lines.push('       toast: ' + toasts.join(' | ').slice(0, 160));
+
+        // 🕳 숨은 메타 속성이 살아남았는가 — 간트처럼 원본 배열에 `_` 가 붙는 페이지가 대상이다.
+        //    (내보내기에서 제외되는 값이라 위의 내용 비교로는 **절대 안 잡힌다**)
+        var mb = metaSummary(metaBefore), ma = metaSummary(metaSnapshot());
+        if (mb.rowsWithMeta) {
+          ok(nm + ' 숨은 메타(_) 속성 보존 (' + mb.rowsWithMeta + '행)',
+             JSON.stringify(mb) === JSON.stringify(ma),
+             '행 ' + mb.rowsWithMeta + '→' + ma.rowsWithMeta
+             + ' / 키 ' + JSON.stringify(mb.keys) + ' → ' + JSON.stringify(ma.keys));
+        }
 
         // 되돌리기도 진짜로 돌려 본다
         if (window._pageExcelUndo && window._pageExcelUndo[s.id]) {
