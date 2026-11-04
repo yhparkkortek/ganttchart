@@ -114,6 +114,16 @@
         check('modifiedTime 이 ISO 로 온다', !!(mine && /^\d{4}-\d\d-\d\dT/.test(mine.modifiedTime)),
               mine && mine.modifiedTime);
 
+        out('\n== ③-2 ⚠️ 앱이 프로젝트를 여는 그 호출 — gapi…get({alt:"media"}) ==');
+        // ⚠️⚠️ 여기가 하네스의 구멍이었다(2026-11-04). `fetch(...alt=media)` 만 확인하고
+        //    **앱이 실제로 쓰는 `gapi.client.drive.files.get`** 은 안 봤다.
+        //    진짜 gapi 는 JSON 이면 파싱한 객체를 `result` 에 담아 주는데 stub 은 `body` 만 줬고,
+        //    앱은 `response.result` 를 읽으므로 **오류 하나 없이 프로젝트가 안 열렸다.**
+        var gm = await gapi.client.drive.files.get({ fileId: created.id, alt: 'media', supportsAllDrives: true });
+        check('body 가 온다', gm && gm.body === content, (gm && typeof gm.body));
+        check('**result 에 파싱된 객체**가 온다', !!(gm && gm.result && gm.result.tok === tok),
+              gm && gm.result ? JSON.stringify(gm.result).slice(0, 60) : '없음 — 이러면 프로젝트가 안 열린다');
+
         out('\n== ④ 덮어쓰기 (PATCH + multipart) — 원자적 교체 ==');
         var content2 = JSON.stringify({ 안녕: '또 왔습니다', tok: tok, n: 2, pad: '가'.repeat(300) });
         var body2 = '\r\n--' + bd + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' +

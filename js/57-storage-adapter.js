@@ -85,6 +85,7 @@
     //     (`App_Config/nas_id_map.json`)를 읽어 ① 옛 id 를 경로로 풀고 ② 목록에도 **그 옛 id 를
     //     그대로** 실어 준다. 그러면 저장된 모든 참조가 계속 맞는다.
     //  ⚠️ 지도가 없어도 돌아간다(경로에서 만든 id 를 쓴다) — 다만 그 경우 위 비교들이 빗나간다.
+    var ID_MAP_REL_ADAPTER = 'App_Config/nas_id_map.json';   // js/58 이 만드는 그 파일
     var _idMap = {};         // 옛 Drive id → 상대경로
     var _relToOldId = {};    // 상대경로 → 옛 Drive id
 
@@ -637,10 +638,43 @@
                 await writeRel(newRel, bytesToB64(buf), true);
                 await nasJson('POST', '/nas/app/delete', { rel: cur.rel });
                 note('moved', { from: cur.rel, to: newRel });
+                // ⚠️⚠️ **지도를 같이 옮겨야 한다**(2026-11-04 실사고).
+                //    Drive 는 이름이 바뀌어도 fileId 가 **그대로**라 아무것도 안 깨진다.
+                //    우리 지도는 id→**경로**라, 이름이 바뀌면 그 id 가 허공을 가리킨다.
+                //    앱은 저장할 때 파일명을 다시 조립하므로(고객_모델_인치) 이름은 **실제로 바뀐다** —
+                //    실측에서 저장 한 번에 `KGI_dimension EC_75.0.json` → `KGI_75.0.json` 이 됐고,
+                //    그 순간 project_index 가 들고 있던 id 가 안 풀렸다.
+                await remapIdPath(cur.rel, newRel);
                 return await driveGetMeta(newRel, false);
             }
         }
         return await driveGetMeta(cur.rel, false);
+    }
+
+    /** 파일이 옮겨지면 지도도 같이 옮긴다 — 메모리와 NAS 파일 둘 다.
+     *  ⚠️ 실패해도 **저장을 깨뜨리지 않는다**(저장은 이미 끝났다). 대신 시끄럽게 남긴다. */
+    async function remapIdPath(oldRel, newRel) {
+        var moved = [];
+        Object.keys(_idMap).forEach(function (id) {
+            if (_idMap[id] === oldRel) { _idMap[id] = newRel; moved.push(id); }
+        });
+        if (!moved.length) return 0;
+        delete _relToOldId[oldRel];
+        _relToOldId[newRel] = moved[0];
+        try {
+            var res = await nas('GET', '/nas/app/get' + qs(ID_MAP_REL_ADAPTER));
+            var doc = res.ok ? JSON.parse(await res.text()) : { version: 1, map: {} };
+            moved.forEach(function (id) { doc.map[id] = newRel; });
+            doc.movedAt = new Date().toISOString();
+            await nasJson('POST', '/nas/app/put', { rel: ID_MAP_REL_ADAPTER, text: JSON.stringify(doc) });
+            note('idmap-remap', { from: oldRel, to: newRel, ids: moved.length });
+        } catch (e) {
+            note('idmap-remap-fail', String((e && e.message) || e));
+            console.warn('[storage-adapter] 파일은 옮겼는데 **id 지도를 못 고쳤습니다** — '
+                + '그 프로젝트를 id 로 여는 경로가 막힙니다. 🔑 설정 ▸ 📦 이사 를 한 번 누르면 지도가 다시 만들어집니다.',
+                oldRel, '→', newRel, e);
+        }
+        return moved.length;
     }
 
     function bytesToB64(buf) {
@@ -957,8 +991,18 @@
                 var g = relOf(p.fileId);
                 if (!g) throw new Error('모르는 파일 id: ' + p.fileId);
                 if (p.alt === 'media') {
+                    // ⚠️⚠️ **`result` 를 같이 줘야 한다**(2026-11-04 실사고).
+                    //    진짜 gapi 는 JSON 본문이면 파싱한 객체를 `result` 에 담아 준다.
+                    //    앱은 `response.result` 를 읽고 `if (saveData && saveData.globalData)` 로
+                    //    넘어가므로, `body` 만 주면 **오류 하나 없이 조용히 아무것도 안 열린다.**
+                    //    (🗄️ 배지는 떠 있고 목록도 12건 보이는데 프로젝트만 안 열렸다)
+                    //    ⚠️ 하네스가 이걸 놓친 이유: `fetch(...alt=media)` 로만 확인하고
+                    //       **`gapi.client.drive.files.get` 쪽은 안 봤다** — 앱이 쓰는 건 이쪽이다.
                     var res = await readRel(g.rel);
-                    return { body: await res.text(), status: 200 };
+                    var txt = await res.text();
+                    var parsed;
+                    try { parsed = JSON.parse(txt); } catch (e) { parsed = undefined; }
+                    return { body: txt, result: parsed, status: 200 };
                 }
                 return { result: await driveGetMeta(g.rel, g.isdir), status: 200 };
             }
@@ -980,13 +1024,51 @@
                     });
                 } catch (e) { window.gapi.client.drive = stub; }
             }
-            if (typeof window.gapi.client.getToken !== 'function') {
-                // NAS 모드엔 Drive 토큰이 없다. 앱이 "연결됨"으로 보도록 가짜 토큰을 준다.
+            // ⚠️⚠️ **여기서 한 번 크게 틀렸다**(2026-11-04): "없으면 넣는다"로만 둬서,
+            //    gapi 가 나중에 로드되며 **진짜 `getToken`(=null 을 돌려주는)** 을 깔면
+            //    앱 전체가 "구글 로그인 안 함"으로 판정했다. 🗄️ 배지는 떠 있는데
+            //    **프로젝트를 못 불러왔다** — 저장소만 바꾸고 "로그인했나" 검사는
+            //    Drive 기준 그대로 뒀던 것이다(`gapi.client.getToken()` 검사가 40곳 넘는다).
+            //    NAS 모드에서 신원은 **NAS 계정**이다. 그러니 **항상** 덮어쓴다.
+            if (!window.gapi.client.__nasToken) {
                 window.gapi.client.getToken = function () { return { access_token: 'nas' }; };
                 window.gapi.client.setToken = function () { };
+                window.gapi.client.__nasToken = true;
+            }
+            // 앱의 "연결됨" 상태도 같이 맞춘다 — 이걸 보는 가드가 따로 또 있다(`selectProject` 등).
+            // ⚠️ 거짓으로 켜는 게 아니라 **NAS 에 실제로 붙어 있을 때만** 켠다(아래 _nasIdentity).
+            if (_nasOnline) {
+                window.isDriveConnected = true;
+                window._driveWasEverConnected = true;
             }
         } catch (e) { console.error('[storage-adapter] gapi 심기 실패', e); }
     }
+
+    // 🪪 NAS 계정이 곧 신원이다. 붙어 있는지 **실제로 물어보고**, 사용자 이름도 그쪽에서 가져온다.
+    //    ⚠️ 무조건 "연결됨"으로 켜면 백엔드가 꺼져 있을 때도 앱이 멀쩡한 척하게 된다 —
+    //       그러면 저장이 조용히 실패한다. 붙어 있을 때만 켠다.
+    var _nasOnline = false;
+    (async function _nasIdentity() {
+        try {
+            var s = await (await nas('GET', '/nas/status')).json();
+            if (s && s.ok) {
+                _nasOnline = true;
+                if (s.user && (!window.currentUserName || /비로그인|익명|알 수 없는/.test(window.currentUserName))) {
+                    window.currentUserName = s.user;
+                }
+                note('nas-identity', s.user || '(이름 없음)');
+            } else {
+                note('nas-offline', (s && s.message) || '');
+                console.warn('[storage-adapter] NAS 에 붙어 있지 않습니다 — 🔑 설정에서 로그인해주세요.',
+                             (s && s.message) || '');
+            }
+        } catch (e) {
+            note('nas-offline', String((e && e.message) || e));
+            console.warn('[storage-adapter] 백엔드에 못 붙었습니다 — kortek_backend.bat 이 떠 있는지 확인하세요.');
+        }
+        implant();          // 상태를 알아낸 뒤 한 번 더 — 그 사이 가드가 돌았을 수 있다
+        if (window._updateDriveConnBadge) { try { window._updateDriveConnBadge(); } catch (e) { /* ignore */ } }
+    })();
     implant();
     // ② gapi 초기화가 끝나는 **그 순간** 다시 심는다(폴링을 기다리지 않는다).
     if (typeof window.intializeGapiClient === 'function') {
