@@ -37,6 +37,9 @@ param(
     [string]$Dest,
     [switch]$DryRun,
     [switch]$VerifyOnly,
+    [switch]$DeleteSourceAfterVerify,
+    [switch]$Force,
+    [int]$HashSample = 20,
     [int]$Threads = 16
 )
 
@@ -108,6 +111,88 @@ if ($VerifyOnly) {
         Write-Host ("`n⚠️ 다릅니다 — 파일 {0:N0} 개, {1:N0} 바이트 차이. " -f
                     ($a.Files - $b.Files), ($a.Bytes - $b.Bytes))
         Write-Host '   이사를 한 번 더 돌리면 모자란 것만 채웁니다(같은 파일은 건너뜁니다).'
+    }
+    exit 0
+}
+
+# ── 원본 지우기 (이사의 마지막 단계) ───────────────────────
+# ⚠⚠ 복사와 삭제를 한 명령으로 안 묶는다. 묶으면 "복사하고 바로 지우는" 일이 되는데,
+#    그 사이에 **사람이 새 위치를 한 번 써 보는** 시간이 필요하다(앱 경로 변경·팀원 PC).
+#    그래서 지우는 건 **따로 부르는 단계**다.
+if ($DeleteSourceAfterVerify) {
+    Write-Host '-- 원본 지우기 — 먼저 대조부터 --'
+    $a = Measure-Tree $Source; $b = Measure-Tree $Dest
+    Write-Host (Show-Size $a '원본'); Write-Host (Show-Size $b '대상')
+    if ($a.Files -ne $b.Files -or $a.Bytes -ne $b.Bytes) {
+        Write-Host ''
+        Write-Host '❌ 양쪽이 다릅니다 — 아무것도 지우지 않습니다.'
+        Write-Host '   이사를 한 번 더 돌려 채운 뒤에 다시 오세요.'
+        exit 1
+    }
+
+    # 파일 하나하나 짝을 맞춘다. 합계만 같고 **내용이 엇갈릴** 수도 있다.
+    Write-Host ''
+    Write-Host '짝 맞추는 중...'
+    $missing = New-Object System.Collections.Generic.List[string]
+    $pairs   = New-Object System.Collections.Generic.List[object]
+    $srcLen  = $Source.Length
+    Get-ChildItem -LiteralPath $Source -Recurse -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
+        $rel  = $_.FullName.Substring($srcLen).TrimStart([char]92)
+        $cand = Join-Path $Dest $rel
+        $di   = Get-Item -LiteralPath $cand -Force -ErrorAction SilentlyContinue
+        if ((-not $di) -or $di.Length -ne $_.Length) { $missing.Add($rel) }
+        else { $pairs.Add([pscustomobject]@{ Src = $_.FullName; Dst = $cand; Rel = $rel }) }
+    }
+    if ($missing.Count -gt 0) {
+        Write-Host ("❌ 대상에 없거나 크기가 다른 파일 {0:N0} 개 — 아무것도 지우지 않습니다." -f $missing.Count)
+        $missing | Select-Object -First 10 | ForEach-Object { Write-Host "   - $_" }
+        exit 1
+    }
+    Write-Host ("  OK {0:N0} 개 전부 짝이 맞고 크기도 같습니다." -f $pairs.Count)
+
+    # 크기가 같아도 내용이 같다는 보장은 아니다. 전수 해시는 수십 GB 에 몇 시간이라
+    # **무작위 표본**만 양쪽 해시해 비교한다. 전수를 본 것처럼 말하지 않는다.
+    if ($HashSample -gt 0 -and $pairs.Count -gt 0) {
+        $n = [Math]::Min($HashSample, $pairs.Count)
+        Write-Host ''
+        Write-Host ("표본 {0} 개를 해시로 비교합니다 (전수 검사가 아닙니다)..." -f $n)
+        $bad = 0
+        Get-Random -InputObject $pairs -Count $n | ForEach-Object {
+            $h1 = (Get-FileHash -LiteralPath $_.Src -Algorithm SHA256).Hash
+            $h2 = (Get-FileHash -LiteralPath $_.Dst -Algorithm SHA256).Hash
+            if ($h1 -ne $h2) { $bad++; Write-Host ("   ❌ 내용이 다릅니다: " + $_.Rel) }
+        }
+        if ($bad -gt 0) { Write-Host '❌ 아무것도 지우지 않습니다.'; exit 1 }
+        Write-Host '  OK 표본은 전부 같습니다.'
+    }
+
+    Write-Host ''
+    Write-Host ("지울 것: {0:N0} 개 · {1:N1} GB" -f $pairs.Count, ($a.Bytes / 1GB))
+    Write-Host "  $Source"
+    Write-Host '⚠️ 되돌릴 수 없습니다. 새 위치를 앱에서 한 번 써 보셨나요?'
+    Write-Host '   (문서 저장소 경로 변경 + 백엔드 재시작 — 팀원 PC 도)'
+    if (-not $Force) {
+        $ans = Read-Host '지울까요? (yes 라고 써야 지웁니다)'
+        if ($ans -ne 'yes') { Write-Host '취소했습니다 — 아무것도 안 지우고 끝냅니다.'; exit 0 }
+    }
+
+    $del = 0
+    foreach ($pr in $pairs) {
+        Remove-Item -LiteralPath $pr.Src -Force -ErrorAction SilentlyContinue
+        $del++
+    }
+    # 빈 폴더 정리 — 깊은 것부터(경로 길이 역순으로)
+    Get-ChildItem -LiteralPath $Source -Recurse -Directory -Force -ErrorAction SilentlyContinue |
+        Sort-Object { $_.FullName.Length } -Descending |
+        ForEach-Object {
+            if (-not (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue)) {
+                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+            }
+        }
+    $left = Measure-Tree $Source
+    Write-Host ("OK {0:N0} 개 지웠습니다. 원본에 남은 파일: {1:N0} 개" -f $del, $left.Files)
+    if ($left.Files -gt 0) {
+        Write-Host '⚠️ 못 지운 게 있습니다(사용 중이거나 권한) — 탐색기에서 확인하세요.'
     }
     exit 0
 }
