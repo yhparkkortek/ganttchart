@@ -113,6 +113,28 @@ POP3_PORT      = 110
 IMAP_HOST      = "gw.kortek.co.kr"
 IMAP_PORT      = 993
 
+
+def humanize_mail_conn_error(e, host, port, proto):
+    """받는 중 난 연결 오류를 사람이 읽는 말로. ⚠️ 어디로 붙다 실패했는지를 밝힌다.
+
+    🐛 [2026-11-04, 사용자 제보 "토스트가 계속 나오는데 이건 뭐지요?"] 이전엔
+       `[WinError 10061] 대상 컴퓨터에서 연결을 거부했으므로...` 만 그대로 실려서,
+       **어느 서버인지가 안 찍히니** 사람은 비밀번호 문제로 읽는다. 받는 서버 주소가
+       포트를 안 열어 둔 장비를 가리키고 있으면 계정은 멀쩡하다.
+    """
+    code = getattr(e, 'winerror', 0) or getattr(e, 'errno', 0) or 0
+    where = '%s %s:%s' % (proto, host, port)
+    if code in (10061, 111):            # ECONNREFUSED
+        return (where + ' 연결 거부 — 그 서버는 이 포트를 안 엽니다. '
+                '보내는(SMTP) 서버와 받는(IMAP/POP3) 서버가 다른 장비일 수 있습니다 — '
+                '알람 설정 ▸ 이메일 서버 설정의 "받는 서버 주소"를 확인해 주세요. '
+                '(비밀번호 문제가 아닙니다)')
+    if code in (11001, 11004, -2, -3):  # 이름 해석 실패
+        return where + ' 주소를 찾을 수 없습니다 — 서버 주소 철자와 사내망 연결을 확인해 주세요.'
+    if code in (10060, 110) or isinstance(e, TimeoutError):
+        return where + ' 연결 시간 초과 — 사내망/VPN 연결을 확인해 주세요.'
+    return '%s 연결 실패 — %s: %s' % (where, type(e).__name__, e)
+
 # ── 업무별(개별 태스크) 예약 알람 — 구글드라이브 서비스계정 읽기전용 접근 ──
 #    kortek_pm.html(js/04a-core-app-globals.js의 SHARED_FOLDER_ID)과 동일한 폴더.
 #    이 폴더 밑에 프로젝트 파일들과 App_Config/AddressBook_Shared.json이 들어있다.
@@ -702,7 +724,19 @@ def fetch_mail():
     #    무시하고 항상 gw.kortek.co.kr로 로그인을 시도했다(발송/SMTP는 이미 설정값을 쓰고 있었다 —
     #    수신 쪽만 빠져 있었음). 그러니 계정은 멀쩡해도 "그 서버엔 이 계정이 없다"는 뜻으로
     #    invalid user or password가 떴다 — 프로토콜을 POP3로 강제해도 똑같이 gw로 가서 똑같이 실패.
-    mail_host = str(req.get('mailHost', '') or '').strip() or None
+    #
+    # 🐛🐛 [2026-11-04 정정, 사용자 제보 "토스트가 계속 나오는데 이건 뭐지요? [WinError 10061]"]
+    #    바로 위 11-03 수정은 **원인을 잘못 짚었다.** 포트를 찍어 보니 보내는 서버와 받는 서버가
+    #    아예 다른 장비였다 — 알람 설정에 적는 그 주소(SMTP)는 465/25만 열려 있고 993/995/110/143은
+    #    전부 거부한다. 그래서 수신에 그 주소를 물려주자 "invalid user or password"가 **연결 거부**로
+    #    바뀌었을 뿐이고(60초마다 재시도 → 토스트 반복), 원래 인증 오류의 진짜 원인은 아직 모른다.
+    #    → 수신 서버 주소는 **따로 받는다**(`recvHost`). 비어 있으면 IMAP_HOST/POP3_HOST 기본값.
+    #      발송 주소(`mailHost`)를 수신에 물려주는 길은 **끊는다** — 다른 장비일 수 있으므로
+    #      "안 적었으면 발송 주소로 간다"는 추측이 바로 이 사고였다. 구버전 프런트가 보내는
+    #      mailHost 는 조용히 무시하지 않고 `ignoredMailHost` 로 응답에 드러낸다.
+    recv_host  = str(req.get('recvHost', '') or '').strip() or None
+    mail_host  = recv_host
+    _ignored_mail_host = str(req.get('mailHost', '') or '').strip() or None
 
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=KST)
@@ -762,9 +796,20 @@ def fetch_mail():
         }
         if fallback_reason:
             resp["fallback"] = fallback_reason
+        resp["recvHost"] = mail_host or IMAP_HOST
+        if _ignored_mail_host and _ignored_mail_host != (mail_host or ''):
+            # 구버전 프런트 — 발송 주소를 수신에 쓰지 않았다는 사실을 화면에서 볼 수 있게
+            resp["ignoredMailHost"] = _ignored_mail_host
         return jsonify(resp)
     except poplib.error_proto as e:
         return jsonify({"status": "error", "message": f"POP3 인증 실패: {str(e)}"})
+    except OSError as e:
+        # 연결 자체가 안 된 경우 — 어느 서버/포트인지 밝힌다(위 humanize_mail_conn_error 주석)
+        _p = 'POP3' if (locals().get('proto') == 'pop3') else 'IMAP'
+        _h = mail_host or (POP3_HOST if _p == 'POP3' else IMAP_HOST)
+        _pt = POP3_PORT if _p == 'POP3' else IMAP_PORT
+        return jsonify({"status": "error",
+                        "message": humanize_mail_conn_error(e, _h, _pt, _p)})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
@@ -5414,11 +5459,126 @@ def nas_root_set():
         return jsonify({'ok': False, 'message': str(e)}), 400
 
 
+#  자료실 폴더 이름 — 앱 폴더 밑에 이 이름으로 있다(데이터).
+NAS_DOCSTORE_FOLDER = '개발자료실'
+
+
+@app.route('/nas/setup', methods=['POST'])
+def nas_setup():
+    """🚀 간편 전환 — **아이디·비밀번호만** 받고 나머지는 서버가 정한다. (2026-11-04)
+
+    왜 한 라우트인가: 전환이 5단계(백엔드 업데이트 → NAS 로그인 → 앱 폴더 → 자료실 경로 →
+    모드)였고, 팀원이 그 순서를 지켜야 했다. 중간에 하나만 빠뜨리면 "🗄️ 는 뜨는데 프로젝트가
+    안 열린다" 같은 상태가 된다(2026-11-04 사고들이 전부 이 모양이었다). 순서를 사람이 아니라
+    **코드가** 지킨다.
+
+    ⚠️ 단계마다 결과를 `steps` 로 돌려준다 — "했다"가 아니라 **무엇이 됐고 무엇이 안 됐는지**를
+       화면이 그대로 보여줘야 한다(CLAUDE.md "고쳤다"의 정의).
+    ⚠️ 비밀번호는 POST 본문으로만 받고 응답·로그에 싣지 않는다.
+    ⚠️ 로그인 실패는 `nas_dsm` 의 예산(기본 3회)이 관리한다 — 여기서 재시도하지 않는다.
+    """
+    req = request.get_json(force=True, silent=True) or {}
+    host = str(req.get('host') or '').strip()
+    user = str(req.get('user') or '').strip()
+    pw = req.get('password') or ''
+    steps = []
+
+    def step(name, ok, message='', **extra):
+        steps.append(dict({'step': name, 'ok': bool(ok), 'message': message}, **extra))
+        return steps[-1]
+
+    try:
+        nas = _nas()
+    except Exception as e:
+        return jsonify({'ok': False, 'steps': [{'step': 'module', 'ok': False,
+                                                'message': f'nas_dsm 로드 실패: {e}'}]})
+    if not host or not user:
+        return jsonify({'ok': False, 'steps': [{'step': 'input', 'ok': False,
+                                                'message': '주소와 아이디가 필요합니다.'}]}), 400
+    https = bool(req.get('https', True))
+    try:
+        port = int(req.get('port') or (5001 if https else 5000))
+    except Exception:
+        return jsonify({'ok': False, 'steps': [{'step': 'input', 'ok': False,
+                                                'message': '포트는 숫자여야 합니다.'}]}), 400
+
+    # 1) 계정 저장 (잠금도 함께 풀린다 — 사람이 다시 시킨 것이므로)
+    try:
+        nas.save_config(host, port, https, user, pw)
+        step('config', True, f'{host}:{port} / {user}')
+    except Exception as e:
+        step('config', False, str(e))
+        return jsonify({'ok': False, 'steps': steps})
+
+    # 2) 로그인 — 한 번만. 실패하면 남은 횟수를 그대로 알려준다.
+    lg = nas.login_once(otp=req.get('otp'))
+    step('login', lg.get('ok'), lg.get('message') or '', budget=lg.get('budget'),
+         code=lg.get('code'), result=lg.get('result'))
+    if not lg.get('ok'):
+        return jsonify({'ok': False, 'steps': steps, 'budget': lg.get('budget')})
+
+    # 3) 앱 폴더 — 안 주면 찾아본다. 1건일 때만 스스로 정한다.
+    root = str(req.get('root') or '').replace(chr(92), '/').strip()
+    if not root:
+        try:
+            f = nas.find_app_folder()
+            if len(f['hits']) == 1:
+                root = f['hits'][0]
+                step('find-root', True, f'{root} (폴더 {f["looked"]}곳 확인)')
+            else:
+                why = ('앱 폴더를 자동으로 찾지 못했습니다 — 아래에서 직접 골라주세요.'
+                       if not f['hits'] else '같은 이름이 여러 곳에 있습니다 — 직접 골라주세요.')
+                if f.get('truncated'):
+                    # ⚠️ "없다"와 "덜 봤다"는 다른 사실이다 — 섞으면 사람이 엉뚱한 곳을 의심한다.
+                    why += ' (폴더 %d곳까지만 확인했습니다)' % f['looked']
+                step('find-root', False, why, hits=f['hits'])
+                return jsonify({'ok': False, 'steps': steps, 'rootHits': f['hits']})
+        except Exception as e:
+            step('find-root', False, str(e))
+            return jsonify({'ok': False, 'steps': steps})
+    try:
+        nas.set_roots(root=root)
+        step('root', True, root)
+    except Exception as e:
+        step('root', False, str(e))
+        return jsonify({'ok': False, 'steps': steps})
+
+    # 4) 문서 저장소(사양서·도면) — 윈도가 직접 읽는 UNC 경로. 앱 폴더에서 만들어 쓴다.
+    #    ⚠️ 여기서 실패해도 전환은 성공으로 본다 — 앱 데이터는 이미 NAS 를 보고 있고,
+    #       자료실만 못 닿는 상태는 사람이 나중에 고칠 수 있다(둘은 다른 설정이다).
+    doc_root = str(req.get('docRoot') or '').strip()
+    if not doc_root:
+        doc_root = nas.unc_of(root.rstrip('/') + '/' + NAS_DOCSTORE_FOLDER)
+    if doc_root:
+        okp, perr = _docstore_probe_root(doc_root)
+        if okp:
+            cfg0 = _docstore_load()
+            try:
+                with open(DOCSTORE_CONFIG_FILE, 'w', encoding='utf-8') as f:
+                    json.dump({'root': doc_root, 'folders': cfg0['folders']}, f,
+                              ensure_ascii=False, indent=2)
+                _DOCSTORE_AUTH_BLOCK['code'] = 0
+                _DOCSTORE_AUTH_BLOCK['message'] = ''
+                step('docstore', True, doc_root)
+            except Exception as e:
+                step('docstore', False, f'설정 저장 실패: {e}', root=doc_root)
+        else:
+            step('docstore', False, perr or '', root=doc_root)
+
+    return jsonify({'ok': True, 'steps': steps, 'root': root,
+                    'docRoot': doc_root, 'user': user,
+                    'host': host, 'port': port, 'https': https})
+
+
 @app.route('/nas/root-candidates', methods=['GET'])
 def nas_root_candidates():
     """앱 폴더로 쓸 수 있는 곳. 로그인되어 있어야 한다(로그인 시도는 하지 않는다)."""
     try:
-        return jsonify({'ok': True, 'items': _nas().writable_candidates()})
+        # 폴더 이름(`KORTEK_PM`)은 **nas_dsm 한 곳**에만 있다 — 화면이 자기 문자열을 따로
+        # 들고 있으면 이름을 바꿀 때 한쪽만 바뀌어 "대소문자가 다른 빈 폴더"가 생긴다
+        # (2026-11-04 유령 `kortek_pm` 폴더 사고).
+        return jsonify({'ok': True, 'items': _nas().writable_candidates(),
+                        'appFolderNames': list(_nas().APP_FOLDER_NAMES)})
     except Exception as e:
         return jsonify({'ok': False, 'message': str(e)}), 403
 

@@ -320,15 +320,18 @@
     ];
 
     /** 모드를 바꾼다. **어디에 저장되는지가 바뀌는 일**이라 반드시 물어보고 바꾼다. */
-    window.storageSetMode = function (id) {
+    //  opts.silent — **이미 사람 확인을 받은 경로**에서만 쓴다(🚀 간편 전환). 확인창을 두 번
+    //  띄우면 두 번째를 읽지 않고 누르게 되고, 그러면 확인창이 있는 의미가 없어진다.
+    window.storageSetMode = function (id, opts) {
         var m = STORAGE_MODES.filter(function (x) { return x.id === id; })[0];
         if (!m) return;
         var now = currentBackend();
         if (now === id) return;
         var en = window._currentLang === 'en';
         var head = (en ? 'Switch storage to ' : '저장소를 바꿉니다 → ') + m.icon + ' ' + (en ? m.en : m.ko);
-        if (!confirm(head + '\n\n' + (en ? m.enWarn : m.koWarn) + '\n\n'
-                     + (en ? 'The page will reload.' : '페이지를 새로고침합니다.'))) return;
+        if (!(opts && opts.silent)
+            && !confirm(head + '\n\n' + (en ? m.enWarn : m.koWarn) + '\n\n'
+                        + (en ? 'The page will reload.' : '페이지를 새로고침합니다.'))) return;
         try {
             if (id === 'drive') localStorage.removeItem('gantt_storage_backend');
             else localStorage.setItem('gantt_storage_backend', id);

@@ -50,8 +50,38 @@ _SESSION = {'sid': None, 'user': None, 'origin': None}
 #   `auth.cgi` + v3 + `session=FileStation` 에서 **한 번에 성공**. (Synology FileStation 문서의 조합)
 #   바꿔야 하면 `tests/nas-login-probe.py` 로 재확인하고, 402 이외 코드가 나오면 멈출 것.
 _LOGIN = {'path': 'auth.cgi', 'version': 3, 'session': 'FileStation'}
-# 실패가 쌓이면 IP 가 차단되므로, 한 번 실패하면 "사람이 다시 시킬 때까지" 잠근다.
-_BLOCKED = {'reason': None}
+# 실패가 쌓이면 IP 가 차단되므로, 몇 번까지만 해 보고 "사람이 고칠 때까지" 잠근다.
+#
+# 🔁 [2026-11-04] 처음엔 **1회**였다 — 팀원이 비밀번호를 한 글자 틀리면 그 PC 가 바로 막히는
+#    셈이어서(한글 IME 로 `y`→`ㅛ` 가 들어간 사고 이력도 있다) 사람이 쓰기엔 너무 날카로웠다.
+#    ⚠️ **진짜 IP 차단은 DSM 의 "자동 차단" 설정이 한다**(실패 N회/분 → 차단). 그 값을 코드가
+#       읽어서 맞추고 싶었지만 `SYNO.Core.Security.AutoBlock` 은 **관리자만** 읽을 수 있다
+#       (실측 2026-11-04: 105 권한 없음 — `tests/nas-autoblock-probe.py`). 그래서 아래 숫자는
+#       "읽어서 맞춘 값"이 아니라 **보수적으로 정한 값**이다. 늘리려면 NAS 관리자에게
+#       자동 차단 임계값을 확인하고 그보다 넉넉히 작게 둘 것.
+_LOGIN_POLICY = {'maxFails': 3}
+_BLOCKED = {'reason': None, 'fails': 0}
+
+# ⚠️ **모든 실패가 차단 카운터에 쌓이는 건 아니다.** 자격증명을 틀린 것만 쌓인다(docs/nas-dsm.md).
+#    그래서 "권한이 없다/계정이 비활성이다" 같은 설정 문제는 예산을 깎지 않는다 — 깎으면
+#    고칠 수도 없는 이유로 예산이 사라져서, 정작 비밀번호를 고쳐 넣을 기회가 없어진다.
+_AUTH_COUNTED   = {400, 404}            # 비밀번호/OTP 틀림 — 쌓인다
+_AUTH_HARD_STOP = {407, 411}            # 이미 IP 차단 / 계정 잠김 — 즉시 멈춘다(더 두드리면 악화)
+#   그 밖의 코드(401 비활성·402 권한없음·403/406 OTP 설정·408~410 비밀번호 만료)는
+#   쌓이지 않으므로 잠그지 않는다. 사람이 원인을 고치면 그냥 된다.
+
+
+class NasApiError(RuntimeError):
+    """DSM 이 돌려준 오류 — 사람이 읽는 문구 + **코드**를 같이 들고 있다.
+
+    코드를 버리면 "비밀번호 틀림(400)"과 "권한 없음(402)"을 구분할 수 없어, 위 분류가
+    전부 무의미해진다. RuntimeError 를 상속하므로 기존 `except Exception` 들은 그대로 돈다.
+    """
+
+    def __init__(self, message, code=None, api=None):
+        super().__init__(message)
+        self.code = code
+        self.api = api
 
 # ⚠️⚠️ **같은 숫자가 API 마다 전혀 다른 뜻이다.** 한 표로 합치면 안 된다.
 #   2026-11-03 사고: 400~411 을 로그인(Auth) 기준 하나로만 적어 뒀더니, 권한 없는 팀 폴더를
@@ -235,7 +265,7 @@ def _call(cfg, api, method, version, params=None, post=False, stream=False, time
     j = r.json()
     if not j.get('success'):
         code = ((j.get('error') or {}).get('code'))
-        raise RuntimeError('NAS %s.%s 실패 — %s' % (api, method, _msg(code, api)))
+        raise NasApiError('NAS %s.%s 실패 — %s' % (api, method, _msg(code, api)), code, api)
     return j.get('data')
 
 
@@ -243,8 +273,16 @@ def is_blocked():
     return _BLOCKED['reason']
 
 
+def login_budget():
+    """남은 시도 횟수. 화면이 "N번 남았습니다"를 말할 수 있게 밖으로 낸다."""
+    used = int(_BLOCKED.get('fails') or 0)
+    return {'max': _LOGIN_POLICY['maxFails'], 'used': used,
+            'left': max(0, _LOGIN_POLICY['maxFails'] - used)}
+
+
 def reset_block():
     _BLOCKED['reason'] = None
+    _BLOCKED['fails'] = 0
 
 
 def status():
@@ -255,6 +293,7 @@ def status():
                 'message': 'NAS 로그인 정보가 저장되어 있지 않습니다.'}
     out = {'configured': True, 'host': cfg['host'], 'port': cfg['port'],
            'https': cfg['https'], 'user': cfg['user']}
+    out['budget'] = login_budget()
     if _BLOCKED['reason']:
         out.update({'ok': False, 'reason': 'blocked', 'message': _BLOCKED['reason']})
         return out
@@ -272,10 +311,12 @@ def status():
 
 
 def login_once(otp=None):
-    """저장된 계정으로 **한 번만** 로그인한다.
+    """저장된 계정으로 로그인한다. **자동 재시도는 없다** — 한 번 부르면 한 번 시도한다.
 
-    ⚠️ 실패하면 `_BLOCKED` 에 적고 다시 시도하지 않는다 — DSM 은 실패가 쌓이면 IP 를 차단한다.
-       사람이 설정을 다시 저장하거나 `reset_block()` 을 부를 때까지 잠긴 채로 둔다.
+    ⚠️ 비밀번호를 틀린 실패는 `_LOGIN_POLICY['maxFails']` 번까지만 허용하고, 그 뒤엔
+       `_BLOCKED` 에 적어 사람이 설정을 다시 저장할 때까지 잠근다 — DSM 은 실패가 쌓이면
+       **계정이 아니라 그 PC 의 IP** 를 차단한다. 권한·만료처럼 카운터에 쌓이지 않는
+       실패는 예산을 깎지 않는다(위 `_AUTH_COUNTED` 주석).
     """
     with _LOCK:
         if _BLOCKED['reason']:
@@ -304,9 +345,31 @@ def login_once(otp=None):
             # 서버까지 못 갔다 = 실패가 쌓이지 않는다 → 잠그지 않는다.
             return {'ok': False, 'result': 'unreachable', 'retryable': True,
                     'message': 'NAS 에 닿지 못했습니다: %s' % e}
+        except NasApiError as e:
+            code = e.code
+            if code in _AUTH_HARD_STOP:
+                _BLOCKED['reason'] = str(e)
+                return {'ok': False, 'result': 'failed', 'retryable': False,
+                        'code': code, 'budget': login_budget(), 'message': str(e)}
+            if code in _AUTH_COUNTED:
+                _BLOCKED['fails'] = int(_BLOCKED.get('fails') or 0) + 1
+                b = login_budget()
+                if b['left'] <= 0:
+                    _BLOCKED['reason'] = (str(e) +
+                        ' — %d번 틀려서 더 시도하지 않습니다. 설정에서 비밀번호를 다시 저장하면 풀립니다.'
+                        % b['max'])
+                    return {'ok': False, 'result': 'failed', 'retryable': False,
+                            'code': code, 'budget': b, 'message': _BLOCKED['reason']}
+                return {'ok': False, 'result': 'bad_credentials', 'retryable': True,
+                        'code': code, 'budget': b,
+                        'message': str(e) + ' — %d번 더 시도할 수 있습니다.' % b['left']}
+            # 쌓이지 않는 실패(권한·비활성·만료·OTP 설정) — 잠그지 않는다
+            return {'ok': False, 'result': 'rejected', 'retryable': True,
+                    'code': code, 'budget': login_budget(), 'message': str(e)}
         except Exception as e:
             _BLOCKED['reason'] = str(e)
-            return {'ok': False, 'result': 'failed', 'retryable': False, 'message': str(e)}
+            return {'ok': False, 'result': 'failed', 'retryable': False,
+                    'budget': login_budget(), 'message': str(e)}
         finally:
             pw = None
         _SESSION.update({'sid': data.get('sid'), 'user': cfg['user'], 'origin': origin_of(cfg)})
@@ -548,6 +611,67 @@ def writable_candidates(limit_per_share=300):
                 out.append({'path': i['path'], 'name': i['name'],
                             'share': s['name'], 'rights': rt})
     return out
+
+# 🔎 [2026-11-04] 앱 폴더를 **사람에게 묻지 않고** 찾는다 — 팀원 전환을 "아이디·비밀번호만"
+#    으로 줄이기 위한 것. 이름은 **데이터**다(코드에 박지 말 것). ⚠️ DSM 은 대소문자를 가리므로
+#    후보 이름도 대소문자까지 그대로 비교한다 — `kortek_pm` 과 `KORTEK_PM` 은 다른 폴더다.
+APP_FOLDER_NAMES = ['KORTEK_PM']
+#    공유 바로 아래가 아니라 한 단계 더 들어가 있는 경우가 흔하다(`/공유/100_연구공통/KORTEK_PM`).
+#    ⚠️ 깊이·조회 상한을 둔다 — 공유가 많은 NAS 에서 전수 조회는 수백 번 왕복이 된다(1회 61ms).
+#    ⚠️ 실측(2026-11-04, 이 회사 NAS): 폴더 31곳을 열어 2.4초에 1건을 찾았다 — 상한이 40 이면
+#    여유가 9곳뿐이라 공유가 조금만 늘어도 조용히 못 찾는다. 80 으로 두고, 상한에 걸렸으면
+#    `truncated` 로 **밝힌다**(못 찾은 것과 덜 본 것은 다른 사실이다).
+_APP_FIND = {'depth': 2, 'maxListings': 80}
+
+
+def find_app_folder(names=None):
+    """앱 폴더 후보를 찾아 돌려준다. {'hits': [경로…], 'looked': n}
+
+    판정은 **코드**가 한다 — 1건이면 그걸 쓰고, 0건이나 2건 이상이면 사람에게 고르게 한다.
+    (AI 에게 고르게 하지 않는다 — docs/ai-harness-environment.md)
+    """
+    want = list(names or APP_FOLDER_NAMES)
+    hits, looked = [], 0
+    level = []
+    for s in list_shares():
+        level.append(s['path'])
+    for depth in range(_APP_FIND['depth']):
+        nxt = []
+        for p in level:
+            if looked >= _APP_FIND['maxListings']:
+                break
+            looked += 1
+            try:
+                items = list_folder(p, limit=300)['items']
+            except Exception:
+                continue                       # 권한 없는 폴더는 건너뛰고 계속(ACL 은 정상 동작)
+            for i in items:
+                if not i['isdir'] or i['name'].startswith('#'):
+                    continue
+                if i['name'] in want:
+                    rt = _acl_rights(i.get('perm'))
+                    if (not rt) or 'W' in rt or 'A' in rt:
+                        if i['path'] not in hits:
+                            hits.append(i['path'])
+                else:
+                    nxt.append(i['path'])
+        level = nxt
+    return {'hits': hits, 'looked': looked,
+            'truncated': looked >= _APP_FIND['maxListings']}
+
+
+def unc_of(path):
+    """NAS 절대경로(`/공유/하위…`) → 윈도 UNC(`\\호스트\공유\하위…`).
+
+    문서 저장소(사양서·도면)는 브라우저가 아니라 **윈도가 직접 읽는** 경로라서, 같은 폴더를
+    두 가지 주소로 가리킨다. 사람이 둘을 따로 적게 하지 않는다 — 하나에서 만든다.
+    """
+    p = str(path or '').replace(chr(92), '/').strip('/')
+    cfg = load_config()
+    if not cfg or not p:
+        return ''
+    return (chr(92) * 2) + cfg['host'] + chr(92) + p.replace('/', chr(92))
+
 
 def abs_path(rel, team=None):
     """앱 루트 기준 상대경로 → NAS 절대경로. team 을 주면 팀 파일 경로로 만든다."""

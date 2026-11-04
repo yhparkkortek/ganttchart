@@ -173,6 +173,37 @@
                     + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
                 + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
                 + '<div id="naslogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
+                // 🚀 [2026-11-04] 간편 전환 — 팀원이 해야 할 일을 **아이디·비밀번호 두 칸**으로 줄인다.
+                //    전환이 5단계(백엔드 → 로그인 → 앱 폴더 → 자료실 경로 → 모드)였고, 하나만
+                //    빠뜨려도 "🗄️ 는 뜨는데 프로젝트가 안 열린다"가 됐다. 순서는 백엔드
+                //    `/nas/setup` 이 지킨다 — 화면은 단계별 결과를 그대로 보여줄 뿐이다.
+                + '<div style="border:1px dashed #b197fc; background:#f8f5ff; border-radius:8px; padding:9px 10px; margin:0 0 12px;">'
+                + '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
+                + '<b style="font-size:12px; color:#5f3dc4;">🚀 ' + T('간편 전환', 'Quick switch') + '</b>'
+                + '<button id="nasq-toggle" onclick="window._nasQuickToggle()" style="' + btnSt + ' padding:5px 10px; font-weight:bold;">'
+                + T('열기', 'Open') + '</button></div>'
+                + '<div style="font-size:11px; color:#666; margin-top:5px; line-height:1.5;">'
+                + T('아이디·비밀번호만 넣으면 <b>앱 폴더·자료실 경로·저장소 모드</b>까지 한 번에 맞춥니다.',
+                    'Enter just your ID and password — the app folder, doc-store path and storage mode are set for you.')
+                + '</div>'
+                + '<div id="naslogin-quick" style="display:none; margin-top:9px;">'
+                + fieldRow(T('아이디', 'ID'), '<input id="nasq-user" autocomplete="off" style="' + inputSt + '">')
+                + fieldRow(T('비밀번호', 'Password'), '<input id="nasq-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
+                + fieldRow(T('NAS 주소', 'NAS address'),
+                    '<input id="nasq-host" autocomplete="off" style="' + inputSt + '" placeholder="' + T('담당자가 알려준 주소', 'the address you were given') + '">')
+                + '<div style="font-size:11px; color:#888; margin:-4px 0 8px;">'
+                + T('주소를 모르면 담당자가 준 <b>설정 코드</b>를 아래에 붙여넣으세요.',
+                    'If you do not know the address, paste the <b>setup code</b> below.') + '</div>'
+                + '<input id="nasq-code" placeholder="' + T('설정 코드 붙여넣기(선택)', 'Paste setup code (optional)') + '"'
+                + ' oninput="window._nasQuickApplyCode()" style="' + inputSt + ' margin-bottom:8px;">'
+                + '<div id="nasq-log" style="display:none; font-size:11.5px; line-height:1.6; margin:0 0 8px;"></div>'
+                + '<div style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">'
+                + '<button onclick="window._nasShareCode()" style="' + btnSt + ' padding:5px 9px;" title="'
+                + T('지금 이 PC 설정을 팀원에게 전달할 코드로 복사합니다(비밀번호는 들어가지 않습니다)',
+                    'Copy this PC settings as a code for teammates (no password included)') + '">📤 '
+                + T('설정 코드 복사', 'Copy setup code') + '</button>'
+                + '<button onclick="window._nasQuickRun()" style="' + btnSt + ' font-weight:bold; background:#efe6ff; border-color:#b197fc; color:#5f3dc4;">🚀 '
+                + T('전환', 'Switch') + '</button></div></div></div>'
                 // 🔀 저장소 고르기 — Drive 모드에서 **들어가는 길**은 여기뿐이다.
                 //    (헤더 배지는 nas/mirror 일 때만 뜬다 — 아직 안 옮긴 팀원 화면에
                 //     못 보던 아이콘이 생기면 그것만으로 연락이 온다)
@@ -836,11 +867,15 @@
                         'No writable folder is visible — ask your NAS administrator.') + '</div>';
                 return;
             }
+            // ⚠️ 폴더 이름을 화면이 따로 들고 있으면 안 된다 — 여기엔 `kortek_pm`(소문자)이
+            //    박혀 있었고, **DSM 은 대소문자를 가리므로** 이름을 `KORTEK_PM` 으로 바꾼 뒤에도
+            //    이 버튼은 계속 빈 소문자 폴더를 만들 제안을 하고 있었다(유령 폴더 사고와 같은 뿌리).
+            var APPNAME = (r.appFolderNames && r.appFolderNames[0]) || 'KORTEK_PM';
             box.innerHTML = items.map(function (i) {
-                var suggested = i.path + '/kortek_pm';
+                var suggested = i.path + '/' + APPNAME;
                 return '<div data-root="' + esc(suggested) + '" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f0f0f0;">'
                     + '<span style="color:#6741d9;">📂</span> ' + esc(i.path)
-                    + '<span style="color:#999;">/kortek_pm</span>'
+                    + '<span style="color:#999;">/' + esc(APPNAME) + '</span>'
                     + '<span style="float:right; color:#aaa; font-size:10.5px;">' + esc(i.rights) + '</span></div>';
             }).join('');
             box.onclick = function (ev) {
@@ -899,6 +934,187 @@
         } catch (e) {
             nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
         }
+    };
+
+    // ══ 🚀 간편 전환 ══════════════════════════════════════════════════
+    //  ⚠️ 비밀번호는 입력칸에만 잠깐 있다가 보내고 즉시 지운다. 코드(설정 코드)에도 넣지 않는다.
+    //  ⚠️ 실패해도 **재시도하지 않는다** — 남은 횟수는 백엔드 예산(기본 3회)이 말해 준다.
+    var CODE_PREFIX = 'KPMNAS1:';
+
+    function b64e(s) {
+        var bytes = new TextEncoder().encode(s), out = '';
+        for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+        return btoa(out);
+    }
+
+    function b64d(s) {
+        var bin = atob(s), arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return new TextDecoder().decode(arr);
+    }
+
+    window._nasQuickToggle = function () {
+        var box = document.getElementById('naslogin-quick');
+        if (!box) return;
+        var open = box.style.display === 'none';
+        box.style.display = open ? 'block' : 'none';
+        var tb = document.getElementById('nasq-toggle');
+        if (tb) tb.textContent = open ? T('닫기', 'Close') : T('열기', 'Open');
+        if (!open) return;
+        // 아이디는 **짐작해서 채워 둔다** — 사내 NAS 아이디는 그룹웨어/메일 아이디와 같다
+        // (실측: 메일 user 의 @ 앞부분 = 그룹웨어 user). 틀리면 사람이 고치면 된다.
+        var u = document.getElementById('nasq-user');
+        var h = document.getElementById('nasq-host');
+        if (u && !u.value) {
+            var guess = '';
+            try {
+                var s = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
+                guess = String(s.user || '').split('@')[0];
+            } catch (e) { /* 설정이 없으면 비워 둔다 */ }
+            u.value = guess;
+        }
+        nasApi('/nas/status').then(function (s) {
+            window._nasQuickConfigured = !!(s && s.configured);
+            if (s && s.configured) {
+                if (h && !h.value) h.value = s.host || '';
+                if (u && s.user) u.value = s.user;
+                var pe = document.getElementById('nasq-pw');
+                // 이미 저장된 PC 는 비밀번호를 **다시 받지 않는다** — 테스트 삼아 다시 누를 때
+                // 비밀번호를 또 적게 하면, 그 자리가 곧 오타가 쌓이는 자리가 된다.
+                if (pe) pe.placeholder = T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
+            }
+        }).catch(function () { /* 백엔드가 없으면 전환 때 그대로 알려준다 */ });
+    };
+
+    //  설정 코드 — 주소·포트·앱 폴더·자료실 경로만. **비밀번호·아이디는 안 들어간다.**
+    //  (사내 주소는 저장소에 못 쓴다 — GitHub Pages 로 공개돼 있다. 그래서 코드로 전달한다.)
+    window._nasShareCode = async function () {
+        try {
+            var s = await nasApi('/nas/status');
+            var p = await nasApi('/nas/paths');
+            var doc = window._dsConfig ? await window._dsConfig() : null;
+            if (!s || !s.configured) { nasStatus('⚠️ ' + T('먼저 이 PC 의 NAS 설정을 저장해주세요.', 'Save this PC NAS settings first.'), 'err'); return; }
+            var payload = { host: s.host, port: s.port, https: !!s.https,
+                            root: (p && p.root) || '', docRoot: (doc && doc.root) || '' };
+            var code = CODE_PREFIX + b64e(JSON.stringify(payload));
+            var ok = false;
+            try { await navigator.clipboard.writeText(code); ok = true; } catch (e) { /* 권한 없으면 아래에 보여준다 */ }
+            var el = document.getElementById('nasq-code');
+            if (el) el.value = code;
+            nasStatus((ok ? '📤 ' + T('설정 코드를 복사했습니다 — 팀원에게 전달하세요.', 'Setup code copied — send it to your teammates.')
+                          : '📤 ' + T('아래 칸의 코드를 복사해 팀원에게 전달하세요.', 'Copy the code in the box below and send it.'))
+                      + '<br><span style="color:#888;">' + T('비밀번호는 들어 있지 않습니다.', 'It contains no password.') + '</span>', 'ok');
+        } catch (e) {
+            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
+        }
+    };
+
+    window._nasQuickApplyCode = function () {
+        var el = document.getElementById('nasq-code');
+        if (!el) return;
+        var raw = (el.value || '').trim();
+        if (!raw) return;
+        var json = null;
+        try {
+            json = JSON.parse(raw.indexOf(CODE_PREFIX) === 0 ? b64d(raw.slice(CODE_PREFIX.length)) : raw);
+        } catch (e) { return; }           // 붙여넣는 중일 수 있다 — 조용히 넘긴다
+        if (!json || !json.host) return;
+        window._nasQuickCode = json;
+        var h = document.getElementById('nasq-host');
+        if (h) h.value = json.host;
+        nasStatus('✅ ' + T('설정 코드를 읽었습니다 — 아이디·비밀번호만 넣고 <b>전환</b>을 누르세요.',
+                            'Setup code read — enter your ID and password, then press <b>Switch</b>.'), 'ok');
+    };
+
+    var STEP_LABEL = {
+        config:      [ '계정 저장', 'Account saved' ],
+        login:       [ 'NAS 로그인', 'NAS login' ],
+        'find-root': [ '앱 폴더 찾기', 'Find app folder' ],
+        root:        [ '앱 폴더', 'App folder' ],
+        docstore:    [ '문서 저장소(사양서·도면)', 'Doc store' ],
+        input:       [ '입력 확인', 'Input' ],
+        module:      [ '백엔드 모듈', 'Backend module' ]
+    };
+
+    function quickLog(steps, extra) {
+        var el = document.getElementById('nasq-log');
+        if (!el) return;
+        el.style.display = 'block';
+        el.innerHTML = (steps || []).map(function (s) {
+            var lab = STEP_LABEL[s.step] || [ s.step, s.step ];
+            return '<div style="color:' + (s.ok ? '#1f7a3d' : '#b1432f') + ';">'
+                + (s.ok ? '✅ ' : '❌ ') + esc(T(lab[0], lab[1]))
+                + (s.message ? ('<span style="color:#777;"> — ' + esc(s.message) + '</span>') : '')
+                + '</div>';
+        }).join('') + (extra || '');
+    }
+
+    window._nasQuickRun = async function () {
+        var user = (document.getElementById('nasq-user') || {}).value || '';
+        var pw = (document.getElementById('nasq-pw') || {}).value || '';
+        var host = (document.getElementById('nasq-host') || {}).value || '';
+        var code = window._nasQuickCode || {};
+        user = user.trim(); host = host.trim();
+        // 주소를 통째로 붙여넣는 사람이 많다 — http://host:5001 에서 떼어 준다.
+        var https = (code.https === undefined) ? true : !!code.https;
+        var port = code.port || '';
+        var m = /^\s*(https?):\/\/([^/:\s]+)(?::(\d+))?/i.exec(host);
+        if (m) { https = m[1].toLowerCase() === 'https'; host = m[2]; if (m[3]) port = m[3]; }
+        if (!host || !user || (!pw && !window._nasQuickConfigured)) {
+            nasStatus('⚠️ ' + T('아이디·비밀번호·주소를 모두 넣어주세요.', 'Enter the ID, password and address.'), 'err');
+            return;
+        }
+        nasStatus('⏳ ' + T('맞추는 중입니다… (앱 폴더를 찾는 데 몇 초 걸립니다)',
+                            'Setting up… (finding the app folder takes a few seconds)'), '');
+        quickLog([]);
+        var r;
+        try {
+            r = await nasApi('/nas/setup', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ host: host, port: port ? Number(port) : undefined, https: https,
+                                       user: user, password: pw,
+                                       root: code.root || '', docRoot: code.docRoot || '' })
+            });
+        } catch (e) {
+            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
+            return;
+        } finally {
+            var pwEl = document.getElementById('nasq-pw');
+            if (pwEl) pwEl.value = '';        // 비밀번호는 칸에 남기지 않는다
+        }
+        quickLog(r.steps);
+        await window._nasLoginRefresh();
+        if (!r.ok) {
+            var b = (r.budget || {});
+            var tail = (b.left !== undefined && b.left > 0)
+                ? ('<br>' + T('비밀번호를 고쳐 다시 눌러주세요 — ', 'Fix the password and press again — ')
+                   + b.left + T('번 더 할 수 있습니다.', ' attempt(s) left.'))
+                : (b.left === 0 ? ('<br>' + T('⛔ 더 시도하지 않습니다 — 담당자에게 알려주세요.',
+                                              '⛔ No more attempts — contact the administrator.')) : '');
+            // 앱 폴더를 못 찾은 경우엔 후보를 바로 보여준다(사람이 고르면 끝난다)
+            if (r.rootHits && r.rootHits.length) {
+                tail += '<br>' + T('후보: ', 'Candidates: ') + esc(r.rootHits.join(', '));
+            }
+            nasStatus('❌ ' + T('전환하지 못했습니다.', 'Could not switch.') + tail, 'err');
+            return;
+        }
+        var docFail = (r.steps || []).filter(function (s) { return s.step === 'docstore' && !s.ok; })[0];
+        if (docFail) {
+            // ⚠️ 자료실만 못 닿는 상태 — 앱 데이터는 이미 NAS 다. 전환을 막을 이유는 없지만
+            //    **조용히 넘기지도 않는다**(사양서·도면이 안 열리는 이유가 이것이다).
+            quickLog(r.steps, '<div style="margin-top:6px; color:#b06b00;">⚠️ '
+                + T('사양서·도면 폴더에는 아직 못 닿았습니다 — 탐색기에서 그 공유를 한 번 열어 '
+                    + '계정을 넣은 뒤, 위 <b>문서 저장소 ▸ 📁 설정</b>에서 경로를 다시 저장하세요.',
+                    'The spec/drawing folder is not reachable yet — open that share once in Explorer, '
+                    + 'then save the path again under <b>Doc store ▸ Settings</b>.')
+                + '</div><div style="margin-top:6px;"><button onclick="window.storageSetMode(\'nas\', {silent:true})" style="'
+                + btnSt + ' font-weight:bold;">🗄️ ' + T('그래도 NAS 로 전환', 'Switch to NAS anyway') + '</button></div>');
+            nasStatus('⚠️ ' + T('앱 데이터는 준비됐습니다. 자료실만 남았습니다.',
+                                'App data is ready. Only the doc store is left.'), 'err');
+            return;
+        }
+        nasStatus('✅ ' + T('준비됐습니다 — 새로고침합니다.', 'Ready — reloading.'), 'ok');
+        setTimeout(function () { window.storageSetMode('nas', { silent: true }); }, 900);
     };
 
     window._nasLoginDelete = async function () {

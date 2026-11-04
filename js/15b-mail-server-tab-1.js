@@ -132,7 +132,10 @@ window.msFetchMail = async function() {
     const smtp = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
     const userid   = (smtp.user || '').trim();
     const password = smtp.pass || '';
-    const mailHost = (smtp.host || '').trim();
+    // 🆕 [2026-11-04] 수신 서버 주소는 발송(SMTP) 주소와 **다른 칸**이다 — 사내에서도 두 장비가
+    //    갈라져 있어(보내는 쪽만 465/25, 받는 쪽만 993/995/110/143) 발송 주소를 수신에 물려주면
+    //    연결 거부가 반복됐다. 비우면 백엔드 기본 수신 서버를 쓴다.
+    const recvHost = (smtp.recvHost || '').trim();
     const startDate = document.getElementById('ms-start-date').value;
     const endDate   = document.getElementById('ms-end-date').value;
 
@@ -169,7 +172,7 @@ window.msFetchMail = async function() {
             keywordBody:  document.getElementById('ms-keyword-body')?.value?.trim() || '',
             maxCount:     500,
             protocol:     window._msShouldForcePop3() ? 'pop3' : '',
-            mailHost:     mailHost
+            recvHost:     recvHost
             })
         });
         const data = await res.json();
@@ -1338,7 +1341,7 @@ window._autoMailFetchTick = async function() {
                 keyword: '', keywordFrom: '', keywordBody: '',
                 maxCount: 500,
                 protocol: window._msShouldForcePop3() ? 'pop3' : '',
-                mailHost: ((window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {}).host || ''
+                recvHost: ((window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {}).recvHost || ''
             })
         });
         const data = await res.json();

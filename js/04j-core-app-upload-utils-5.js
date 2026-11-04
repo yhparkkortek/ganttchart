@@ -815,6 +815,8 @@
             'as-lbl-user':             { ko:'계정',                               en:'Account' },
             'as-lbl-pass':             { ko:'비밀번호',                           en:'Password' },
             'as-smtp-forcepop3-label': { ko:'수신(받기)은 POP3만 사용 — 계정에 IMAP 권한이 없을 때 체크', en:'Receive via POP3 only — check this if your account has no IMAP permission' },
+            'as-lbl-recvhost': { ko:'받는 서버', en:'Receive host' },
+            'as-smtp-recvhost-note': { ko:'받는(IMAP/POP3) 서버가 보내는(SMTP) 서버와 다를 때만 입력 — 비우면 기본 수신 서버를 씁니다.', en:'Fill in only if the receive (IMAP/POP3) host differs from the send (SMTP) host — blank uses the default receive host.' },
             'as-smtp-privacy-note':    { ko:'🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장', en:'🔒 Stored in this browser · Not recommended on shared PCs' },
             'as-smtp-save-btn':        { ko:'💾 저장',                            en:'💾 Save' },
             'sec-messenger-label':     { ko:'💬 메신저 서버 설정',                en:'💬 Messenger Server Settings' },
