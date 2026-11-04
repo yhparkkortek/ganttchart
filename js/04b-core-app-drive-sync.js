@@ -500,7 +500,10 @@
     // 💡 "프로젝트 선택": 현재 프로젝트를 먼저 저장한 뒤에만 다른 프로젝트 목록을 연다 (미저장 유실 방지)
     window.selectProject = async function() {
         if (!window.isDriveConnected) {
-            alert(window._t("🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.", "🔒 Please connect Google Drive first."));
+            // ⚠️ 모드마다 가는 곳이 다르다 — NAS 모드에서 "드라이브 연동하기를 누르세요"는
+            //    **있지도 않은 버튼**을 가리키는 안내다(js/04a `_storeConnectHint`).
+            alert('🔒 ' + (window._storeConnectHint ? window._storeConnectHint()
+                  : window._t('먼저 연결해주세요.', 'Please connect first.')));
             return;
         }
         window.closeAllTopbarMenus();
@@ -629,7 +632,8 @@
     window.deleteProjectFlow = async function() {
         const _en = window._currentLang === 'en';
         if (!window.isDriveConnected) {
-            alert(_en ? "🔒 Please connect Google Drive first." : "🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.");
+            alert('🔒 ' + (window._storeConnectHint ? window._storeConnectHint(_en)
+                  : (_en ? 'Please connect first.' : '먼저 연결해주세요.')));
             return;
         }
         window.closeAllTopbarMenus();

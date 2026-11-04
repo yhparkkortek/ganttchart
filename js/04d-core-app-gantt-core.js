@@ -131,9 +131,9 @@
         // ✅ 팀 공용 드라이브 파일에도 반영
         if (window.isDriveConnected) {
             const ok = await window.saveHolidaysToDrive(list);
-            if (!ok) alert(window._t('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.', '⚠️ Failed to save to Drive. Please try again.'));
+            if (!ok) alert('⚠️ ' + window._storeName() + window._t(' 저장에 실패했습니다. 다시 시도해주세요.', ' save failed. Please try again.'));
         } else {
-            alert(window._t('⚠️ 구글 드라이브 미연동 상태라 팀과 공유되지 않습니다.\n[파일 → 🔵 드라이브 연동하기] 후 다시 등록해주세요.', '⚠️ Google Drive is not connected, so this is not shared with the team.\nPlease connect via [File → 🔵 Connect Drive] and register again.'));
+            alert('⚠️ ' + window._storeName() + window._t(' 에 연결되지 않아 팀과 공유되지 않습니다.\n', ' is not connected, so this is not shared with the team.\n') + (window._storeConnectHint ? window._storeConnectHint() : ''));
         }
     };
 
@@ -146,7 +146,7 @@
 
         if (window.isDriveConnected) {
             const ok = await window.saveHolidaysToDrive(list);
-            if (!ok) alert(window._t('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.', '⚠️ Failed to save to Drive. Please try again.'));
+            if (!ok) alert('⚠️ ' + window._storeName() + window._t(' 저장에 실패했습니다. 다시 시도해주세요.', ' save failed. Please try again.'));
         }
     };
 
