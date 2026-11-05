@@ -609,20 +609,43 @@
        곳이 없으므로 **항상** 그리고 꺼짐은 연회색으로 둔다.
        ⚠️ 색(.on/hover)은 js/21-color-palette.js가 팔레트 보색으로 덮어쓴다 — 여기 값은 테마를
           한 번도 안 바꾼 사람이 보는 기본값. */
+    /* ⚠️⚠️ [2026-11-05 두 번째 수정, "막대 잡기가 어렵다" 실사용 신고] 막대는 **보이는데 눌리지
+       않았다** — 실측: 칸 1,260픽셀 중 막대가 집히는 건 76픽셀, 그나마 **맨 왼쪽 1px 열**과
+       위아래 얇은 띠뿐이고 **사람이 노리는 "보이는 막대의 중앙"은 0%**였다(document.elementFromPoint).
+       범인은 바로 뒤에 오는 flex <div> — 배경이 투명해도 **클릭은 그대로 먹는다**. 둘 다
+       positioned인데 z-index가 없어 **DOM 순서가 늦은 쪽(div)이 위**였다.
+         ① z-index로 막대를 div 위로 올린다.
+         ② 투명 테두리로 "손가락 여유"를 붙여 실제 클릭 폭을 6px → 14px로 넓힌다
+            (배경은 background-clip:padding-box로 보이는 6px까지만 — 겉모습은 그대로).
+         ③ 대신 같은 칸의 손잡이·번호·AI검색 체크박스는 z-index를 더 줘서 자기 클릭을 지킨다
+            (그래서 ②를 넓혀도 다른 조작을 잡아먹지 않는다 — 여백만 가져간다).
+       ⚠️ 색은 `background-color`로만 쓸 것 — `background` 단축 속성은 background-clip을
+          border-box로 되돌려 투명 테두리까지 칠해 버린다(막대가 14px로 뚱뚱해 보인다). */
     .no-td .row-pin-bar {
-        position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
-        border-radius: 0 2px 2px 0; cursor: pointer;
-        background: #dfe4e9; transition: background .15s, opacity .15s;
+        position: absolute; left: 0; top: 0; bottom: 0;
+        width: 6px;                             /* 눈에 보이는 막대 */
+        border-right: 8px solid transparent;    /* 안 보이는 클릭 여유 → 합계 14px */
+        box-sizing: content-box;                /* width=6 을 배경 폭 그대로 유지 */
+        background-clip: padding-box;
+        z-index: 1;
+        cursor: pointer;
+        background-color: #dfe4e9; transition: background-color .15s, opacity .15s;
     }
-    .no-td .row-pin-bar:hover { background: #4285f4; opacity: 0.5; }
-    #myTable tbody tr.alarm-on .row-pin-bar { background: #4285f4; }
+    .no-td > div > * { position: relative; z-index: 2; }
+    .no-td .row-pin-bar:hover { background-color: #4285f4; opacity: 0.5; }
+    #myTable tbody tr.alarm-on .row-pin-bar { background-color: #4285f4; }
     /* 헤더(No.)의 전체 토글 — 행과 같은 모양이되 th엔 기준 높이가 없어 고정 크기 인라인 막대로 */
     .row-pin-bar.pin-bar-head {
-        position: static; width: 5px; height: 13px; border-radius: 2px;
+        position: relative; width: 5px; height: 13px; border-radius: 2px;
         flex-shrink: 0; cursor: pointer;
-        background: #c3ccd4; transition: background .15s, opacity .15s;
+        background-color: #c3ccd4; transition: background-color .15s, opacity .15s;
     }
-    .row-pin-bar.pin-bar-head:hover { background: #4285f4; opacity: 0.5; }
+    /* 헤더 막대도 5×13px이라 잡기 어렵다 — 겹치는 요소가 없는 **왼쪽·위아래**로만 보이지 않는
+       클릭 여유를 덧댄다(::after 오버레이라 th 높이는 안 늘어난다, 오른쪽 "No." 글자도 안 먹음) */
+    .row-pin-bar.pin-bar-head::after {
+        content: ''; position: absolute; top: -6px; bottom: -6px; left: -7px; right: -2px;
+    }
+    .row-pin-bar.pin-bar-head:hover { background-color: #4285f4; opacity: 0.5; }
     /* 인쇄물에서는 "꺼진" 회색 막대가 모든 행에 줄줄이 찍히면 잡음이라 켜진 것만 남긴다 */
     @media print {
         .no-td .row-pin-bar:not(.on) { display: none !important; }
@@ -2073,7 +2096,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         background-color: #e3f2fd !important;
     }
     #myTable tbody tr.alarm-on .row-pin-bar {
-        background: #4285f4;
+        /* ⚠️ `background` 단축 속성 금지 — background-clip이 되돌아가 투명 테두리까지 칠해진다 */
+        background-color: #4285f4;
     }
 
     /* 🖨️ 인쇄 모드 완전히 처음부터 다시 잡기 (화면 모드에는 영향 0%) */

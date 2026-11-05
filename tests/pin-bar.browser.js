@@ -41,6 +41,27 @@
         .filter(t => t.querySelector('.row-pin-bar') && t.getBoundingClientRect().height > 0);
     const barOf = idx => document.querySelector('#table-body tr[data-row-index="' + idx + '"] .row-pin-bar');
 
+    // ⚠️ [2026-11-05 2차] 적중 검사(elementFromPoint)용 행은 **진짜 눌리는 자리**에 있어야 한다 —
+    //    처음엔 "보이는 첫 행"을 집었다가 그 행이 **고정 머리글 밑에 깔려 있어서** 뭘 찍어도
+    //    sticky 컨테이너가 나왔고, 하마터면 "막대가 아예 안 눌린다"는 **가짜 실패**를 믿을 뻔했다.
+    //    → 칸 한가운데를 찍어 그 칸 안의 요소가 나오는 행만 쓴다.
+    const hitTestableTr = () => visTrs().find(t => {
+        const td = t.querySelector('.no-td'); if (!td) return null;
+        const r = td.getBoundingClientRect();
+        if (r.top < 0 || r.bottom > innerHeight) return false;
+        const el = document.elementFromPoint(r.left + r.width - 4, r.top + r.height / 2);
+        return !!(el && td.contains(el));
+    });
+    // 그 요소가 **실제 마우스 클릭을 받는 픽셀**이 몇 개인지 — 보이는 넓이가 아니라 '잡히는' 넓이
+    const hitPixels = (el, pad) => {
+        const r = el.getBoundingClientRect(); pad = pad || 0;
+        let n = 0;
+        for (let x = -pad; x < r.width + pad; x++)
+            for (let y = -pad; y < r.height + pad; y++)
+                if (document.elementFromPoint(r.left + x + 0.5, r.top + y + 0.5) === el) n++;
+        return n;
+    };
+
     try {
         if (window.switchTab) window.switchTab('gantt');
         await sleep(250);
@@ -60,24 +81,72 @@
             // 막대는 글자 한 줄이 아니라 **칸 높이**를 덮어야 한다(td 는 확정 높이가 없어 flex 안에
             // 넣으면 17px 밖에 안 된다 — 그래서 absolute 로 뒀다. 이 검사가 그 결정을 지킨다).
             ok('T1-d 막대가 칸 높이를 덮는다', rb.height >= r0.height - 3, rb.height.toFixed(1) + ' / ' + r0.height.toFixed(1));
-            const dh = td0.querySelector('.row-drag-handle').getBoundingClientRect();
-            ok('T1-e 드래그 손잡이와 안 겹친다', dh.left >= rb.right, '손잡이 ' + (dh.left - r0.left).toFixed(1) + 'px, 막대끝 ' + (rb.right - r0.left).toFixed(1) + 'px');
         }
         ok('T1-f 헤더에도 전체 토글 막대가 있다', !!document.querySelector('#myTable thead .row-pin-bar.pin-bar-head'));
         ok('T1-g 헤더에 📌 아이콘이 없다', !/📌/.test((document.querySelector('#myTable thead th.no-th, #myTable thead tr') || {}).innerHTML || ''));
 
-        // ── T2 AI 검색 체크박스(js/26)가 끼어들어도 막대를 안 덮는다 ────────
+        // ── T1-h~l 🖱 **진짜로 눌리는가** (2026-11-05 2차 신고 "막대 잡기가 어렵다") ──────────
+        //    막대는 보이는데 눌리지 않았다 — 바로 뒤에 오는 flex <div>가(배경이 투명해도 클릭은
+        //    그대로 먹는다) 위에 깔려서, 실측 1,260픽셀 중 76픽셀만 막대였고 **사람이 노리는
+        //    "보이는 막대의 중앙"은 0%**였다. 눈으로도 콘솔로도 안 보이는 고장이라 아래 검사가
+        //    유일한 방어선이다. ⚠️ bar.click()은 적중 검사를 **통과해 버리므로**(합성 클릭은
+        //    히트테스트를 건너뛴다) 1차 하네스 27/27이 이걸 못 잡았다.
         {
-            const flex = td0.querySelector(':scope > div');
+            const tr = hitTestableTr();
+            ok('T1-h 적중 검사용 행을 찾았다(고정 머리글 밑이 아닌)', !!tr, tr ? 'row ' + tr.dataset.rowIndex : '없음');
+            if (tr) {
+                const td = tr.querySelector('.no-td');
+                const bar = td.querySelector('.row-pin-bar');
+                const rb = bar.getBoundingClientRect();
+                const seen = parseFloat(getComputedStyle(bar).width);   // 보이는 폭(테두리 제외)
+                const mid = document.elementFromPoint(rb.left + seen / 2, rb.top + rb.height / 2);
+                ok('T1-i 보이는 막대의 한가운데가 실제로 막대에 집힌다', mid === bar,
+                    mid ? mid.tagName.toLowerCase() + '.' + (mid.className || '') : 'null');
+                ok('T1-j 클릭 영역이 보이는 폭보다 넓다(손가락 여유)', rb.width >= seen + 6,
+                    '보임 ' + seen + 'px / 클릭 ' + rb.width.toFixed(0) + 'px');
+                ok('T1-k 겉모습은 그대로 가는 막대다', seen <= 8, seen + 'px');
+                const dh = td.querySelector('.row-drag-handle');
+                const dhR = dh.getBoundingClientRect();
+                const dhHit = document.elementFromPoint(dhR.left + dhR.width / 2, dhR.top + dhR.height / 2);
+                // 넓힌 클릭 영역이 손잡이를 **잡아먹으면** 안 된다(겹쳐도 손잡이가 이겨야 한다)
+                ok('T1-l 드래그 손잡이는 자기 클릭을 지킨다', dhHit === dh || dh.contains(dhHit),
+                    dhHit ? dhHit.tagName.toLowerCase() + '.' + (dhHit.className || '') : 'null');
+            }
+        }
+        // ── T1-m 헤더 막대(전체 토글)도 보이는 5×13px보다 넓게 잡힌다 ──────
+        {
+            const head = document.querySelector('#myTable thead .pin-bar-head');
+            const hr = head.getBoundingClientRect();
+            const inside = hitPixels(head, 0);
+            const around = hitPixels(head, 9);            // ::after 로 덧댄 여유까지
+            ok('T1-m 헤더 막대도 보이는 넓이보다 넓게 잡힌다', around >= inside * 2 && around >= 200,
+                '보임 ' + (hr.width * hr.height).toFixed(0) + 'px² / 잡힘 ' + around + 'px²');
+            const th = head.closest('th');
+            const label = [...th.querySelectorAll('span')].find(s => s !== head);
+            const lr = label.getBoundingClientRect();
+            ok('T1-n 헤더 "No." 글자까지 잡아먹지는 않는다',
+                document.elementFromPoint(lr.left + lr.width / 2, lr.top + lr.height / 2) !== head);
+        }
+
+        // ── T2 AI 검색 체크박스(js/26)가 끼어들어도 서로 클릭을 뺏지 않는다 ──
+        //    ⚠️ 예전 검사는 "체크박스가 막대 오른쪽에 있다"(좌표 비교)였는데, 이제 막대의 클릭
+        //    영역이 투명하게 넓어져 **겹치는 게 정상**이다 — 지켜야 할 건 위치가 아니라 "누가
+        //    그 픽셀의 클릭을 받는가"다.
+        {
+            const tr = hitTestableTr() || trs[0];
+            const td = tr.querySelector('.no-td');
+            const flex = td.querySelector(':scope > div');
             const cb = document.createElement('input');
             cb.type = 'checkbox'; cb.className = 'gantt-ai-cb';
             cb.style.cssText = 'width:14px;height:14px;flex-shrink:0;';
             flex.insertBefore(cb, flex.firstChild);           // js/26 _updateRowCheckbox 와 같은 삽입
-            const r0 = td0.getBoundingClientRect();
-            const rb = td0.querySelector('.row-pin-bar').getBoundingClientRect();
-            const rc = cb.getBoundingClientRect();
-            ok('T2 체크박스가 막대 위로 안 올라온다', rc.left >= rb.right,
-                '체크박스 ' + (rc.left - r0.left).toFixed(1) + 'px, 막대끝 ' + (rb.right - r0.left).toFixed(1) + 'px');
+            const bar = td.querySelector('.row-pin-bar');
+            const rc = cb.getBoundingClientRect(), rb = bar.getBoundingClientRect();
+            const seen = parseFloat(getComputedStyle(bar).width);
+            ok('T2-a 체크박스가 자기 클릭을 지킨다',
+                document.elementFromPoint(rc.left + rc.width / 2, rc.top + rc.height / 2) === cb);
+            ok('T2-b 체크박스가 생겨도 보이는 막대는 여전히 눌린다',
+                document.elementFromPoint(rb.left + seen / 2, rb.top + rb.height / 2) === bar);
             cb.remove();
         }
 
@@ -85,7 +154,14 @@
         {
             const idx = trs[0].dataset.rowIndex;
             const was = !!G()[idx]._알림;
-            barOf(idx).click(); await sleep(420);
+            barOf(idx).click();
+            // ⚡ [2026-11-05 2차] 데이터 토글은 더블클릭을 가리느라 250ms 뒤인데, 그 동안 화면이
+            //    아무 반응도 안 하면 사람은 "안 눌렸다"며 한 번 더 누르고 — 그 두 번째 클릭이
+            //    더블클릭으로 잡혀 토글이 취소되고 알람 목록으로 튄다(="눌러도 안 된다").
+            await sleep(40);
+            ok('T3-g 누르자마자 막대 색이 먼저 바뀐다(데이터는 아직)',
+                barOf(idx).classList.contains('on') === !was && !!G()[idx]._알림 === was);
+            await sleep(400);
             const b = barOf(idx);
             ok('T3-a 클릭하면 _알림 이 뒤집힌다', !!G()[idx]._알림 === !was);
             ok('T3-b 막대에 on 클래스가 따라붙는다', b.classList.contains('on') === !was, b.className);
@@ -126,6 +202,9 @@
             ok('T6-b 더블클릭은 알람을 끄지 않는다', !!G()[idx]._알림 === onBefore);
             if (window.switchTab) window.switchTab('gantt');
             await sleep(250);
+            // 첫 클릭에 미리 칠해 둔 색이 더블클릭으로 취소된 뒤에도 남아 있으면 데이터와 어긋난다
+            ok('T6-c 더블클릭 뒤 막대 색이 데이터와 다시 맞는다',
+                barOf(idx).classList.contains('on') === !!G()[idx]._알림);
         }
 
         // ── T7 헤더 막대 = 전체 토글 ────────────────────────────────────────

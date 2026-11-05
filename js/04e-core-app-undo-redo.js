@@ -293,12 +293,13 @@
             : '🔕 알람 꺼짐 — 클릭하면 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글';
     };
 
-    window._patchPinRowDom = function(rowIndex) {
-        const row = globalData[rowIndex];
-        if (!row) return;
+    // ▌ [2026-11-05] 한 행의 "알람 켜짐" 모습만 칠한다 — 데이터 기준 갱신(_patchPinRowDom)과
+    //    클릭 즉시 선반영(_wrPinClick)이 **같은 코드**를 쓰도록 분리했다(두 곳에 따로 적으면
+    //    한쪽만 고쳐질 위험이 그대로 남는다 — 아래 2026-11-05 버그가 바로 그 모양이었다).
+    window._pinBarPaint = function(rowIndex, alarmOn) {
         const tr = document.querySelector(`#table-body tr[data-row-index="${rowIndex}"]`);
         if (!tr) return; // 필터로 숨겨진 행 등 — 다음 전체 렌더에서 자연히 맞음
-        const alarmOn = !!row._알림;
+        alarmOn = !!alarmOn;
         tr.classList.toggle('alarm-on', alarmOn);
         // 🐛 [2026-11-05 버그 수정, "핀셋 알람 설정이 동작하지 않는다" 실사용 신고] 예전엔 여기서
         //    `noTd.querySelector('span')`로 **첫 번째** span을 집었는데, 2026-10-28에 그 앞에 드래그
@@ -310,6 +311,12 @@
             bar.classList.toggle('on', alarmOn);
             bar.title = window._pinBarTitle(alarmOn);
         }
+    };
+
+    window._patchPinRowDom = function(rowIndex) {
+        const row = globalData[rowIndex];
+        if (!row) return;
+        window._pinBarPaint(rowIndex, !!row._알림);
     };
 
     window.wrToggleAlarm = function(rowIndex, ev) {
@@ -378,8 +385,16 @@
         if (window._wrPinClickTimer && window._wrPinClickRow === rowIndex) {
             clearTimeout(window._wrPinClickTimer);
             window._wrPinClickTimer = null; window._wrPinClickRow = null;
+            window._patchPinRowDom(rowIndex);   // 선반영해 둔 색을 데이터 기준으로 되돌림
             return;
         }
+        // ⚡ [2026-11-05, "막대 잡기가 어렵다" 신고에 포함된 두 번째 원인] 데이터 토글은 더블클릭을
+        //    가리느라 250ms 뒤에 일어나는데, 그 동안 **화면이 아무 반응도 안 했다** — 사람은 "안
+        //    눌렸다"고 보고 한 번 더 누르고, 그 두 번째 클릭이 더블클릭으로 잡혀 토글은 취소되고
+        //    알람 목록으로 튀어 버린다(="눌러도 안 된다"). 색만 먼저 뒤집어 즉시 반응하게 한다 —
+        //    데이터는 그대로 250ms 뒤에, 취소되면 위에서 원래 색으로 되돌린다.
+        const _cur = globalData[rowIndex];
+        if (_cur) window._pinBarPaint(rowIndex, !_cur._알림);
         window._wrPinClickRow = rowIndex;
         window._wrPinClickTimer = setTimeout(function() {
             window._wrPinClickTimer = null; window._wrPinClickRow = null;
@@ -412,6 +427,7 @@
     window._wrPinDblClick = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
         if (window._wrPinClickTimer) { clearTimeout(window._wrPinClickTimer); window._wrPinClickTimer = null; window._wrPinClickRow = null; }
+        window._patchPinRowDom(rowIndex);   // 첫 클릭에 선반영해 둔 색을 되돌림(더블클릭은 토글이 아니다)
         if (window._jumpToAlarmRow) window._jumpToAlarmRow(rowIndex);
     };
     // 💡 Gantt 표의 핀셋(📌) 더블클릭 → Alarm/Notice 탭의 "알람" 뷰로 전환한 뒤, collectAlarmItems()가

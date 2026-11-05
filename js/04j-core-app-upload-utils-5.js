@@ -1888,13 +1888,15 @@
                     //    아니라 글자 한 줄 높이(≈17px)밖에 안 된다(td는 확정 높이가 없어 height:100%가
                     //    안 먹는다, 실측). 대신 flex 쪽에 padding-left를 줘서 AI 검색 체크박스(js/26)가
                     //    끼어들어도 내용이 막대 위로 올라오지 않게 한다.
+                    //    ⚠️⚠️ 그 대가로 **아래 flex div가 막대를 덮어 클릭이 안 됐다**(2026-11-05 2차 신고,
+                    //    실측 "보이는 막대 중앙" 적중률 0%) — 투명한 div도 클릭은 그대로 먹고, 둘 다
+                    //    positioned면 **DOM 순서가 늦은 쪽이 위**다. 해결은 styles.css의 z-index·투명
+                    //    테두리(.row-pin-bar / .no-td > div > *)에 있으니 **거기 주석을 같이 볼 것**.
                     const alarmOn = !!row._알림;
-                    tdHtml = `
-                        <span class="row-pin-bar${alarmOn ? ' on' : ''}" onclick="window._wrPinClick(${i}, event)" ondblclick="window._wrPinDblClick(${i}, event)" title="${escapeHtml(window._pinBarTitle(alarmOn))}"></span>
-                        <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative; padding-left:7px;">
-                            <span class="row-drag-handle" title="${window._currentLang === 'en' ? 'Drag to reorder (within the same WBS level)' : '드래그해서 순서 바꾸기 (같은 WBS 레벨 안에서만)'}" style="font-size:11px; color:#aaa; flex-shrink:0; user-select:none;">⠿</span>
-                            <span class="row-num-span"></span>
-                        </div>`;
+                    // ⚡ [2026-11-05] 스타일은 styles.css(.no-td-inner / .no-td .row-drag-handle)로 옮겼고
+                    //    템플릿 리터럴의 줄바꿈·들여쓰기도 뺐다 — 행마다 쓸모없이 따라오던 바이트다.
+                    tdHtml = `<span class="row-pin-bar${alarmOn ? ' on' : ''}" onclick="window._wrPinClick(${i}, event)" ondblclick="window._wrPinDblClick(${i}, event)" title="${escapeHtml(window._pinBarTitle(alarmOn))}"></span>`
+                        + `<div class="no-td-inner"><span class="row-drag-handle" title="${_RT.dragTitle}">⠿</span><span class="row-num-span"></span></div>`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                     if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) {
