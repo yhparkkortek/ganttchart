@@ -1075,6 +1075,24 @@
                         + 'In SAP ALV open [Change Layout…] ▸ "Sort Order", clear it, save under the same name (' + _lay + '), then re-run the lookup.'))
                 + '</div>';
         }
+        // 📍 [2026-11-05 사용자 제보 "location 못 가져온다"] 데이터는 멀쩡한데 **안 보이는** 경우.
+        //    실측(자재 502627): 설치지점은 **레벨2(부품)에만** 있다 — 레벨1 61행 0건 / 레벨2 157행 140건.
+        //    다단계는 기본이 접힘이라 레벨1만 그려지고, 그 행들엔 설치지점이 원래 없다
+        //    (접힘 62행 → Loc 채워진 칸 0개, 펼치면 219행 → 140개). 계층이 깨져 있던 동안에는
+        //    레벨2가 섞여 보여서 Loc이 보였던 터라 "고치고 나니 사라졌다"로 읽힌다.
+        //    → 조용히 빈칸으로 두지 말고, 어디에 있는지와 보는 방법을 말해준다.
+        if ((st.cols || []).indexOf('EBORT') >= 0) {
+            var _locTotal = st.rows.filter(function (r) { return String(r.EBORT || '').trim(); }).length;
+            var _visRows = window._bomVisibleRows(st) || [];
+            var _locVisible = _visRows.filter(function (r) { return String(r.EBORT || '').trim(); }).length;
+            if (_locTotal && !_locVisible) {
+                html += '<div style="font-size:11px; color:#00707d; margin-top:2px;">📍 '
+                    + _esc(_t('설치지점 ' + _locTotal + '건은 하위 레벨(부품)에 있습니다 — 지금은 접혀 있어 안 보입니다. ',
+                        'All ' + _locTotal + ' locations are on lower levels (components), hidden while collapsed. '))
+                    + '<a href="javascript:void(0)" onclick="window.bomToggleAll(false)" style="color:#00707d; text-decoration:underline;">'
+                    + _esc(_t('▾ 펼쳐서 보기', '▾ Expand to see them')) + '</a></div>';
+            }
+        }
         // 설치지점(EBORT) 연속 행이 주인을 못 찾은 경우 — 같은 "정렬이 걸렸다"의 다른 증상이다.
         // (전엔 전자부품 BOM에만 이 경고가 있었다 — 메인 탭은 값을 저장조차 안 했다.)
         if (st.locOverflow) {
