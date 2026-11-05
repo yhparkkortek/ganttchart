@@ -118,11 +118,48 @@
         if (c.loc) return _locOf(st, r) || '';
         return r[c.key] || '';
     };
+    // ⚠️⚠️ [2026-11-05 사용자 제보 "모 품목·자 품목 연결이 뒤죽박죽"] 계층(모자 관계)이 성립하는지를
+    //   **저장된 플래그가 아니라 행에서 직접** 판정한다. 파서는 2026-10-20부터 `hierarchyOk`를
+    //   계산하고 있었고 렌더러도 그걸 읽고 있었는데, **정작 조회가 그 값을 store에 안 실어 줘서**
+    //   화면에선 항상 `undefined`(= "계층 정상")였다 — 그래서 ALV에 정렬이 걸린 응답을 받아도
+    //   경고 한 줄 없이 **남의 부모 밑에 자식을 그렸다**(조용한 오답). 같은 실수를 또 하지 않도록,
+    //   판정은 한 곳에서 `st.rows`를 보고 그 자리에서 한다(이미 저장된 옛 프로젝트 파일도 같이 고쳐짐).
+    //   정상(깊이 우선)이면 ① 첫 데이터가 레벨1, ② 레벨이 한 번에 2 이상 깊어지지 않는다.
+    window._bomHierarchyOk = function (rows) {
+        var firstDataLevel = 0, ok = true, prevLevel = 0;
+        (rows || []).forEach(function (r) {
+            if (typeof r._level !== 'number') return;
+            if (!firstDataLevel) { firstDataLevel = r._level; if (r._level !== 1) ok = false; }
+            else if (r._level > prevLevel + 1) ok = false;
+            prevLevel = r._level;
+        });
+        return ok;
+    };
+    window._bomHierOk = function (st) {
+        return (!st || !st.rows) ? true : window._bomHierarchyOk(st.rows);
+    };
+    // 계층이 깨졌을 때의 "뷰 상태" — 레벨 블록으로만 묶는다(bomRender의 폴백 렌더와 같은 규칙).
+    // ⚠️ 이 모드에서 `_collapsed` 키는 **행 인덱스가 아니라 레벨**이다(`bomToggleLevel`).
+    //    트리 필터를 그대로 쓰면 레벨 2가 접혔을 때 **행 인덱스 2**가 접힌 것으로 읽혀 엉뚱한
+    //    행이 엑셀에서 사라진다 — 화면과 엑셀이 조용히 어긋나는 그 사고(CLAUDE.md js/38 항목).
+    window._bomLevelGroups = function (st) {
+        var byLevel = {};
+        (st && st.rows || []).forEach(function (r) { (byLevel[r._level] = byLevel[r._level] || []).push(r); });
+        var levels = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
+        return { byLevel: byLevel, levels: levels };
+    };
+    var _bomLevelBlockRows = function (st) {
+        var collapsed = st._collapsed || {};
+        var g = window._bomLevelGroups(st), out = [];
+        g.levels.forEach(function (lv) { if (!collapsed[lv]) out = out.concat(g.byLevel[lv]); });
+        return out;
+    };
     // 접힘을 반영한 "화면에 보이는 행" — 정렬과 무관한 순수 트리 필터.
     // ⚠️ 접힌 가지의 자식은 뺀다. 이 규칙은 bomRender / _elecBomRender 의 가시행 루프와
     //    **같아야 한다** — 한쪽만 고치면 화면과 엑셀이 조용히 어긋난다.
     var _bomTreeRows = function (st) {
         if (!st || !st.rows) return [];
+        if (!window._bomHierOk(st)) return _bomLevelBlockRows(st);
         var collapsed = st._collapsed || {};
         var out = [], hidden = -1;
         st.rows.forEach(function (r, i) {
@@ -283,17 +320,11 @@
 
         var parent = null, rows = [], totals = [];
         var locOverflow = 0;   // 수량 초과로 못 붙인 설치지점 행 수(부품과 어긋났다는 신호)
-        var firstDataLevel = 0, hierarchyOk = true, prevLevel = 0;
         raw.forEach(function (o) {
             var stufe = iStufe === -1 ? '' : (o.STUFE || '');
             var lv = (stufe.match(/(\d+)/) || [])[1];
             if (lv) {
                 o._level = Number(lv);
-                // 계층 성립 여부 검증 — ALV에 정렬이 걸려 있으면 순서가 섞여 모자 관계를 못 쓴다.
-                // 정상(깊이 우선)이면 ① 첫 데이터가 레벨1, ② 레벨이 한 번에 2 이상 깊어지지 않는다.
-                if (!firstDataLevel) { firstDataLevel = o._level; if (o._level !== 1) hierarchyOk = false; }
-                else if (o._level > prevLevel + 1) hierarchyOk = false;
-                prevLevel = o._level;
                 rows.push(o);
                 return;
             }
@@ -333,8 +364,10 @@
             if (o.IDNRK) { if (!parent) parent = o; }
             else if (o.MENGE || o.MMEIN) totals.push(o);
         });
+        // 계층 성립 여부 — ALV에 정렬이 걸려 있으면 순서가 섞여 모자 관계를 못 쓴다.
+        // 판정은 `_bomHierarchyOk` 한 곳(위 선언부 주석 참고)에서만 한다.
         return { cols: cols, parent: parent, rows: rows, totals: totals, truncated: truncated,
-                 totalRows: totalRows, hierarchyOk: hierarchyOk, locOverflow: locOverflow };
+                 totalRows: totalRows, hierarchyOk: window._bomHierarchyOk(rows), locOverflow: locOverflow };
     };
 
     // ─── ZMM009 보강 ───────────────────────────────────────────────────
@@ -456,6 +489,13 @@
                 _collapsed: initCollapsed,
                 material: material, plant: '1000', explosion: explosion,
                 layout: layout || (data.layoutRequested || ''), layoutApplied: data.layoutApplied,
+                // ⚠️ [2026-11-05] 아래 세 신호를 **반드시 들고 있는다.** 전엔 파서가 계산해 준
+                //    `hierarchyOk`/`locOverflow`를 여기서 통째로 버려서, 정렬된 응답이 와도
+                //    화면이 아무 말 없이 "계층 정상"으로 그렸다(모자 관계가 뒤섞인 표).
+                //    렌더러는 이제 행에서 직접 판정하지만(`_bomHierOk`), 메타 줄은 이 값들로 말한다.
+                hierarchyOk: parsed.hierarchyOk,
+                locOverflow: parsed.locOverflow || 0,
+                layoutDiag: data.layoutDiag || '',
                 tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
                 cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
                 truncated: parsed.truncated, totalRows: parsed.totalRows,
@@ -584,7 +624,7 @@
         }
         st._collapsed = {};
         if (collapse) {
-            if (st.hierarchyOk !== false) {
+            if (window._bomHierOk(st)) {
                 // 계층 모드: 자식을 가진 행(= 그 다음 행이 더 깊은 레벨)을 모두 접는다
                 st.rows.forEach(function (r, i) {
                     var next = st.rows[i + 1];
@@ -854,7 +894,7 @@
             return;
         }
 
-        if (st.hierarchyOk !== false) {
+        if (window._bomHierOk(st)) {
             // ── 계층 정상(깊이 우선) — 진짜 모자 관계를 그린다 ──────────────
             // 💡 [2026-10-15] 레벨1 행은 테마 틴트로 경계 역할을 하고, 그 아래 하위 행들은
             //    제브라로 읽기를 돕는다. 제브라는 **실제로 화면에 그려지는 행** 기준이라
@@ -913,9 +953,8 @@
         }
 
         // ── 계층이 깨진 경우(ALV 정렬) — 레벨 블록으로만 묶는다 ──────────────
-        var byLevel = {};
-        st.rows.forEach(function (r) { (byLevel[r._level] = byLevel[r._level] || []).push(r); });
-        var levels = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
+        //    묶는 규칙은 `_bomLevelGroups` 한 곳 — 엑셀(`_bomVisibleRows`)도 같은 걸 쓴다.
+        var _g = window._bomLevelGroups(st), byLevel = _g.byLevel, levels = _g.levels;
 
         var visIdx2 = 0;
         levels.forEach(function (lv) {
@@ -1008,10 +1047,27 @@
                 + '</div>';
         }
         // 계층이 깨진 경우에만 경고 — ALV에 정렬이 걸려 있으면 모자 관계를 복원할 수 없다.
-        if (st.hierarchyOk === false) {
+        if (!window._bomHierOk(st)) {
+            // ⚠️ 원인을 **구체적으로** 적는다 — 2026-11-05 제보("모 품목·자 품목 연결이 뒤죽박죽")에서
+            //    레이아웃은 `/KTK_LOC`로 제대로 적용됐는데도 결과가 정렬돼 있었다. SAP ID가 팀 공용이라
+            //    레이아웃은 **계정 기준으로 SAP에 저장된 상태**이고, 누가 그 레이아웃에 정렬을 넣으면
+            //    다음 조회부터 모두에게 그대로 반영된다(docs/sap-lookup.md "/KTK_LOC 레이아웃 신설").
+            var _lay = st.layout || '/KTK_LOC';
             html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
-                + _esc(_t('SAP 결과가 정렬된 상태로 와서 상·하위 관계를 복원할 수 없어 레벨별로만 묶었습니다. SAP ALV에서 "레이아웃 관리"로 정렬 없는 레이아웃을 적용한 뒤 다시 조회하면 계층이 그대로 나옵니다.',
-                    'The SAP result came back sorted, so parent-child links cannot be restored and rows are grouped by level only. Apply an unsorted layout via "Layout management" in SAP ALV and re-run the lookup to get the real hierarchy.'))
+                + _esc(_t('SAP 결과가 정렬된 상태로 와서 상·하위 관계를 복원할 수 없어 레벨별로만 묶었습니다'
+                        + '. 레이아웃 "' + _lay + '"에 정렬이 걸렸을 수 있습니다 — 팀 공용 SAP 계정이라 누가 레이아웃을 바꾸면 모두에게 반영됩니다. '
+                        + 'SAP ALV에서 [레이아웃 변경…] ▸ "정렬 순서" 탭을 비우고 같은 이름(' + _lay + ')으로 저장한 뒤 다시 조회하세요.',
+                    'The SAP result came back sorted, so parent-child links cannot be restored and rows are grouped by level only. '
+                        + 'Layout "' + _lay + '" may now carry a sort — the SAP account is shared, so a layout change by anyone applies to everyone. '
+                        + 'In SAP ALV open [Change Layout…] ▸ "Sort Order", clear it, save under the same name (' + _lay + '), then re-run the lookup.'))
+                + '</div>';
+        }
+        // 설치지점(EBORT) 연속 행이 주인을 못 찾은 경우 — 같은 "정렬이 걸렸다"의 다른 증상이다.
+        // (전엔 전자부품 BOM에만 이 경고가 있었다 — 메인 탭은 값을 저장조차 안 했다.)
+        if (st.locOverflow) {
+            html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
+                + _esc(_t('설치지점 ' + st.locOverflow + '건이 어느 부품 것인지 확인되지 않아 버렸습니다 — 그리드에 정렬이 걸린 레이아웃일 수 있습니다. 표의 설치지점은 부품별 수량만큼만 채워져 있습니다.',
+                    st.locOverflow + ' location rows could not be matched to a component (the grid layout may be sorted); shown locations are capped at each component quantity.'))
                 + '</div>';
         }
         if (st.truncated) {
@@ -1368,6 +1424,7 @@
                 // 설치지점이 제대로 붙었는지 판단할 신호 두 가지.
                 hasEbort: (parsed.cols || []).indexOf('EBORT') >= 0,
                 locOverflow: parsed.locOverflow || 0,
+                hierarchyOk: parsed.hierarchyOk,
                 layoutDiag: data.layoutDiag || '',
                 cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
                 truncated: parsed.truncated, totalRows: parsed.totalRows,
@@ -1490,16 +1547,20 @@
             return;
         }
 
+        // ⚠️ [2026-11-05] 계층이 깨진 응답(ALV에 정렬이 걸린 경우)에서는 **모자 관계를 그리지 않는다** —
+        //    접기 화살표와 들여쓰기가 곧 "이 행이 저 행의 자식"이라는 주장이라, 그대로 두면
+        //    메인 BOM 탭에서 났던 그 조용한 오답(뒤섞인 모자 관계)이 여기서 그대로 재현된다.
+        var _hier = window._bomHierOk(st);
         var hidden = -1, visIdx = 0;
         st.rows.forEach(function (r, i) {
             if (hidden !== -1) { if (r._level > hidden) return; hidden = -1; }
             var next = st.rows[i + 1];
-            var hasChild = !!(next && next._level > r._level);
+            var hasChild = _hier && !!(next && next._level > r._level);
             var collapsed = !!st._collapsed[i];
             if (hasChild && collapsed) hidden = r._level;
             var zcls = zebraClass(r._level, visIdx);
             visIdx++;
-            var ind = (r._level - 1) * 12;
+            var ind = _hier ? (r._level - 1) * 12 : 0;
             // 🆕 [2026-10-27, 실사용 요청] 메인 BOM 탭과 같은 이유로 클릭 영역 확대(js/38 878행 참고)
             var tw = hasChild
                 ? '<span onclick="event.stopPropagation(); window._elecBomToggle(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand')) + '" style="cursor:pointer; color:#00707d; user-select:none; display:inline-block; width:20px; height:20px; line-height:20px; text-align:center; font-size:13px; vertical-align:middle;">' + (collapsed ? '&#9658;' : '&#9660;') + '</span>'
@@ -1552,7 +1613,13 @@
         // ⚠️ 이 뷰는 **설치지점이 목적**이므로, 레이아웃이 안 먹었으면 조용히 넘기지 않고
         //    무엇을 해야 하는지까지 말해준다. `/LOC`은 ZPP033(단일 레벨)에서 확인된 레이아웃이고,
         //    레이아웃 목록은 tcode마다 다르다(ZPP038엔 아예 없을 수 있음 — CLAUDE.md).
-        if (st.layoutApplied === false) {
+        if (!window._bomHierOk(st)) {
+            // 계층이 깨진 건 설치지점 문제보다 **먼저** 말한다 — 표 자체를 믿으면 안 되는 상태다.
+            var _lay2 = st.layout || '/KTK_LOC';
+            window._elecBomSetStatus('⚠️ ' + _t(
+                'SAP 결과가 정렬된 채로 와서 상·하위 관계를 복원할 수 없습니다(레벨만 믿을 수 있습니다). 레이아웃 "' + _lay2 + '"에 정렬이 걸렸을 수 있습니다 — SAP ALV [레이아웃 변경…] ▸ "정렬 순서" 탭을 비우고 같은 이름으로 저장한 뒤 다시 조회하세요.',
+                'The SAP result came back sorted, so parent-child links cannot be restored (only levels are trustworthy). Layout "' + _lay2 + '" may carry a sort — in SAP ALV open [Change Layout…] ▸ "Sort Order", clear it, save under the same name, then re-run.'), 'error');
+        } else if (st.layoutApplied === false) {
             window._elecBomSetStatus('⚠️ ' + _t(
                 '설치지점(Loc.)은 "' + st.layout + '" 레이아웃이 있어야 나오는데 적용에 실패해 SAP 기본 레이아웃으로 조회됐습니다'
                     + (st.layoutDiag ? ' (' + st.layoutDiag + ')' : '')
