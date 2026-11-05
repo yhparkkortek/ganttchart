@@ -229,22 +229,6 @@
                 + ' text-overflow:ellipsis; white-space:nowrap;" title=""></span>'
                 + '<button onclick="window._dsOpenSettings && window._dsOpenSettings()" style="' + btnSt
                 + ' padding:6px 10px;">📁 ' + T('설정', 'Settings') + '</button></label>'
-                // 📦 이사 — 앱 데이터를 Drive 에서 NAS 로 한 번에 옮긴다(js/58).
-                //    ⚠️ 미러는 "쓸 때만" 옮기므로 **아무도 안 여는 프로젝트는 영영 안 옮겨진다** —
-                //       이사를 끝내려면 이 버튼이 한 번은 돌아야 한다.
-                + '<div style="font-size:11.5px; color:#666; margin:-2px 0 8px; line-height:1.5;">'
-                + T('Drive 에 있던 앱 데이터를 NAS 로 옮기려면 아래 <b>이사</b>를 누르세요. '
-                    + 'Drive 는 <b>읽기만</b> 하고 그대로 남습니다. 중간에 끊겨도 다시 누르면 이어서 합니다.',
-                    'Press <b>Migrate</b> to copy the app data from Drive to NAS. '
-                    + 'Drive is <b>only read</b> and stays as is. You can press again to resume.')
-                + '</div>'
-                + '<div style="display:flex; gap:8px; margin-bottom:8px;">'
-                + '<button onclick="window.nasMigrateUI()" style="' + btnSt
-                + ' background:#f3f0ff; color:#5f3dc4; border-color:#d0bfff; font-weight:bold;">📦 '
-                + T('Drive → NAS 이사', 'Migrate Drive → NAS') + '</button>'
-                + '<button onclick="window.nasMigrate && window.nasMigrate.stop()" style="' + btnSt
-                + ' padding:7px 10px;">⏹</button>'
-                + '</div>'
                 + '<div style="display:flex; gap:8px;">'
                 + '<button onclick="window._nasLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
