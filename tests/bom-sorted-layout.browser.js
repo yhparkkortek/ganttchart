@@ -144,30 +144,23 @@
         ok('메인 탭도 그 사실을 말한다(전엔 저장조차 안 했다)', metaTxt().indexOf('설치지점 3건') !== -1,
             metaTxt().slice(0, 200));
 
-        sec('[6] 📍 설치지점이 "안 나온다"의 정체 — 레벨2에 있는데 기본이 접힘');
-        // 실측(자재 502627): 레벨1 61행 0건 / 레벨2 157행 140건, 접힘 상태의 Loc 채워진 칸 0개.
+        sec('[6] 📍 설치지점은 레벨2(부품)에만 있다 — 접으면 안 보이는 게 정상');
+        // 실측(자재 502627): 레벨1 61행 0건 / 레벨2 157행 140건 — 접힘 62행이면 Loc 칸이 0개다.
+        // "location 을 못 가져온다"는 제보의 정체가 이것이었다(데이터는 멀쩡했다).
+        // ⚠️ 안내 문구는 **일부러 안 띄운다**(사용자 요청, 2026-11-05) — [▾ 펼치기] 버튼이 이미 있다.
         var pl = window._bomParseSapText(NATURAL);
         var stL = put(pl, { hierarchyOk: true });
         stL._collapsed = {}; window.bomRender();
-        ok('펼쳐져 있으면 안내가 안 뜬다', metaTxt().indexOf('하위 레벨(부품)에 있습니다') === -1);
         var locFilled = function () {
             return [...document.querySelectorAll('#bom-body input[data-bom-loc]')]
                 .filter(function (i) { return i.value.trim(); }).length;
         };
         ok('펼친 상태에선 설치지점 칸이 채워져 있다', locFilled() === 3, 'filled=' + locFilled());
         window.bomToggleAll(true);   // 레벨1만 보이게 접기
-        ok('접으면 설치지점 칸이 하나도 안 보인다', locFilled() === 0, 'filled=' + locFilled());
-        ok('그때 "하위 레벨에 있다"고 알려준다', metaTxt().indexOf('하위 레벨(부품)에 있습니다') !== -1,
-            metaTxt().slice(0, 240));
-        ok('몇 건인지도 말한다', metaTxt().indexOf('설치지점 3건') !== -1);
-        // EBORT 열이 아예 없는 레이아웃(/STD_MC 같은)에서는 안내하지 않는다 — 접혀 있든 아니든.
-        var noEb = window._bomParseSapText(NATURAL.split('\n').map(function (l) {
-            return l.split('\t').slice(0, 7).join('\t');   // EBORT 열 제거
-        }).join('\n'));
-        var stN = put(noEb, {});
-        window.bomToggleAll(true);
-        ok('EBORT 열이 없으면 안내하지 않는다', metaTxt().indexOf('하위 레벨(부품)에 있습니다') === -1,
-            'cols=' + stN.cols.join(','));
+        ok('접으면 설치지점 칸이 하나도 안 보인다(레벨1엔 원래 없다)', locFilled() === 0, 'filled=' + locFilled());
+        ok('그래도 데이터는 그대로다', stL.rows.filter(function (r) { return (r.EBORT || '').trim(); }).length === 3);
+        ok('접혀 있다는 안내 줄은 띄우지 않는다', metaTxt().indexOf('하위 레벨(부품)에 있습니다') === -1,
+            metaTxt().slice(0, 200));
 
         sec('[7] 조회 경로가 신호를 store 에 싣는가(연결부)');
         // `bomFetch` 는 SAP 이 필요해 여기서 못 돌린다 → 소스에서 그 대입이 살아 있는지를 본다.
