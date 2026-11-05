@@ -1009,8 +1009,8 @@ DAILY_TG_STATE = os.path.join(BASE_DIR, 'daily_tg_state.json')
 # 어휘는 데이터 — 줄 머리에 이 말이 있으면 그 칸으로. 없으면 전부 "오늘 한 일".
 DAILY_TG_TAGS = {
     'done':  ['한 일', '실적', '오늘', 'done'],
-    'next':  ['내일', '계획', 'next', 'tomorrow'],
-    'issue': ['이슈', '문제', '막힘', 'issue', 'blocker'],
+    'next':  ['해야 할 일', '해야할일', '해야', '할 일', '할일', '내일', '계획', 'next', 'tomorrow', 'todo'],
+    'issue': ['막힌 일', '막힌일', '막힌', '이슈', '문제', '막힘', 'issue', 'blocker'],
 }
 # 한 단어만 보내면 그 날 종류로 기록하고 끝낸다(휴가 등은 보고할 일이 없다).
 DAILY_TG_DAYTYPES = {'휴가': 'leave', '반차': 'half', '출장': 'trip', '교육': 'training', '근무': 'work'}
@@ -1237,15 +1237,17 @@ def _daily_summary_text(doc):
     for it in (doc.get('items') or []):
         nm = html.escape(str(it.get('name', '')))
         note = (' — ' + html.escape(str(it.get('note')))) if it.get('note') else ''
-        lines.append('• %s%s' % (nm, note))
+        cat = str(it.get('cat') or '').strip()
+        tag = ('[%s] ' % html.escape(cat)) if cat else ''
+        lines.append('• %s%s%s' % (tag, nm, note))
     fl = doc.get('files') or []
     if fl:
         lines.append('📎 ' + ', '.join(html.escape(str(f.get('name', ''))) for f in fl))
     if doc.get('next'):
         lines.append('')
-        lines.append('[내일] ' + html.escape(str(doc['next'])))
+        lines.append('[해야 할 일] ' + html.escape(str(doc['next'])))
     if doc.get('issue'):
-        lines.append('[이슈] ' + html.escape(str(doc['issue'])))
+        lines.append('[막힌 일] ' + html.escape(str(doc['issue'])))
     lines.append('')
     lines.append('(지금 저장된 내용입니다 — 더 보내면 이어 붙습니다)')
     return '\n'.join(lines)

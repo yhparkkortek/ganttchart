@@ -426,6 +426,85 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('없는 파일은 열지도 받지도 않는다',
         r5 === false && !opened.length && !downloaded.length, { r5, opened, downloaded });
 
+
+    // ══ 칸 이름 · 프로젝트 · 업무 구분 (2026-11-05 요청) ═══════════════════
+    console.log('\n■ 칸 이름은 데이터 한 곳 — 표 머리글·엑셀이 여기서 읽는다');
+    ok('해야 할 일 / 막힌 일 로 바뀌었다',
+        win.DAILY_FIELDS.map((f) => f.ko).join(',') === '오늘 한 일,해야 할 일,막힌 일',
+        win.DAILY_FIELDS.map((f) => f.ko).join(','));
+    ok('영문도 같이 바뀌었다',
+        win.DAILY_FIELDS.map((f) => f.en).join(',') === 'Done today,To do,Blockers',
+        win.DAILY_FIELDS.map((f) => f.en).join(','));
+
+    console.log('\n■ 업무 구분(HW·FW·ME…)은 간트에서 따라온다');
+    win._dailyRosterSet = [{ key: 'yhpark', name: '박용훈', aliases: [], team: '개발3팀', active: true }];
+    const dcat = win.dailyBuildDraft(today);
+    const all = [].concat(dcat.mine, dcat.others);
+    const byName = {};
+    all.forEach((c) => { byName[c.name.replace(/\s*＊AI📧?\s*$/, '')] = c; });
+    ok('내 일에 구분이 실린다', (byName['인증비용 문의'] || {}).cat === 'PM', (byName['인증비용 문의'] || {}).cat);
+    ok('남의 일에도 실린다', (byName['사출물 견적'] || {}).cat === 'HW', (byName['사출물 견적'] || {}).cat);
+    ok('정규화를 거친다(영업 → SAL)', (byName['영업 확인'] || {}).cat === 'SAL', (byName['영업 확인'] || {}).cat);
+    ok('프로젝트 이름에서 .json 을 뗀다',
+        all.every((c) => !/\.json$/i.test(c.project)) && all[0].project === 'LNW_STELLAR32_32.0',
+        all[0] && all[0].project);
+
+    console.log('\n■ 항목 한 줄 — 화면과 엑셀이 같은 함수를 쓴다');
+    ok('구분·프로젝트·메모가 한 줄에',
+        win._dailyItemLine({ name: 'A', cat: 'HW', project: 'P.json', note: 'n' }) === '• [HW] A (P) — n',
+        win._dailyItemLine({ name: 'A', cat: 'HW', project: 'P.json', note: 'n' }));
+    ok('구분이 없으면 대괄호도 없다',
+        win._dailyItemLine({ name: 'A', project: 'P' }) === '• A (P)',
+        win._dailyItemLine({ name: 'A', project: 'P' }));
+    ok('빈 항목에도 안 터진다', typeof win._dailyItemLine({}) === 'string');
+
+    console.log('\n■ 행 더블클릭 — 내 행에서만 열린다');
+    const realOpen = win.dailyOpenModal;
+    let dblOpened = 0;
+    win.dailyOpenModal = async () => { dblOpened++; };
+    win._dailyTabDate = today;
+    win._dailyRowDbl('jschoi');
+    ok('남의 행에서는 안 연다(한 파일에 쓰는 사람은 한 명)', dblOpened === 0, dblOpened);
+    win._dailyRowDbl('yhpark');
+    ok('내 행에서는 연다', dblOpened === 1, dblOpened);
+    win._dailyRowDbl('YHPARK');
+    ok('대소문자가 달라도 내 행이다', dblOpened === 2, dblOpened);
+    win.dailyOpenModal = realOpen;
+
+
+    // ══ 저장 전 초안 — **통째로 덮지 않는다** ═════════════════════════════
+    //  ⚠️ 2026-11-05: 오늘 보고에서 사진 참조가 사라진 걸 보고 이 경로를 들여다봤다.
+    //     초안은 "이 브라우저가 마지막으로 본 모습"일 뿐이라, 그 사이 텔레그램으로 들어온
+    //     항목·사진이 저장 때 조용히 사라진다(읽고-고쳐-통째로 쓰기).
+    console.log('\n■ 초안 되살리기는 합치기다');
+    const ddate = '2026-11-21';
+    nas[win.DAILY_PATHS.file(ddate, 'yhpark')] = JSON.stringify({
+        date: ddate, key: 'yhpark', dayType: 'work', rev: 7, savedAt: '2026-11-21T01:00:00.000Z',
+        items: [{ name: '텔레그램으로 온 업무', via: 'telegram' }],
+        files: [{ name: 'photo.jpg', safe: 'photo.jpg', rel: 'r', size: 9 }],
+        next: '', issue: ''
+    });
+    // 사람이 그 전에 모달을 열어 두고 친 글(= 사진·텔레그램 항목을 모르는 초안)
+    localStorage.setItem(win.DAILY_POLICY.draftKey, JSON.stringify({
+        at: Date.parse('2026-11-21T02:00:00.000Z'),
+        doc: { date: ddate, key: 'yhpark', dayType: 'work', rev: 0, savedAt: '',
+               items: [{ name: '내가 적은 업무' }], files: [], next: '손으로 친 글', issue: '' }
+    }));
+    await win.dailyOpenModal(ddate);
+    const merged = JSON.parse(nas[win.DAILY_PATHS.file(ddate, 'yhpark')]);   // 아직 저장 전
+    await win._dailySave();
+    const after = JSON.parse(nas[win.DAILY_PATHS.file(ddate, 'yhpark')]);
+    ok('사람이 친 글은 초안이 이긴다', after.next === '손으로 친 글', after.next);
+    ok('📎 사진이 살아남는다(전엔 조용히 사라졌다)',
+        (after.files || []).length === 1 && after.files[0].name === 'photo.jpg', after.files);
+    ok('그 사이 들어온 텔레그램 항목도 살아남는다',
+        (after.items || []).some((i) => i.name === '텔레그램으로 온 업무'), (after.items || []).map((i) => i.name));
+    ok('내가 적은 업무도 그대로',
+        (after.items || []).some((i) => i.name === '내가 적은 업무'), (after.items || []).map((i) => i.name));
+    ok('rev 는 NAS 기준으로 올라간다(충돌 가드가 쓴다)', after.rev === 8, after.rev);
+    ok('초안은 저장 뒤 지워진다', !localStorage.getItem(win.DAILY_POLICY.draftKey));
+    void merged;
+
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');
     process.exit(fail ? 1 : 0);

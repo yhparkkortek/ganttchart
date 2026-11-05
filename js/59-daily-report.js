@@ -39,8 +39,8 @@
     /** 입력 칸. 늘리려면 여기 한 줄. `src`=auto 는 간트에서 초안이 채워지는 칸. */
     window.DAILY_FIELDS = window.DAILY_FIELDS || [
         { key: 'done',  ko: '오늘 한 일',   en: 'Done today',  src: 'auto',  rows: 3 },
-        { key: 'next',  ko: '내일 할 일',   en: 'Tomorrow',    src: 'human', rows: 2 },
-        { key: 'issue', ko: '막힌 것·이슈', en: 'Issues',      src: 'human', rows: 2 }
+        { key: 'next',  ko: '해야 할 일',   en: 'To do',       src: 'human', rows: 2 },
+        { key: 'issue', ko: '막힌 일',      en: 'Blockers',    src: 'human', rows: 2 }
     ];
 
     window.DAILY_POLICY = window.DAILY_POLICY || {
@@ -232,6 +232,38 @@
         };
     };
 
+    /** 지금 열린 프로젝트 이름. ⚠️ 파일 이름이라 `.json` 이 붙어 있다 — 사람에게 보일 땐 뗀다. */
+    function projName() {
+        var s = window.currentDriveFileName
+             || (window.projectMeta && window.projectMeta.프로젝트명) || '';
+        return String(s).replace(/\.json$/i, '').trim();
+    }
+    window._dailyProjName = projName;
+
+    /** 간트 행의 업무 구분(HW·FW·ME…). ⚠️ `SAL`↔`영업` 처럼 같은 뜻 다른 글자가 섞여 있어
+     *  반드시 `_normalizeWbsDiscipline` 을 거친다(js/04k, 별칭표도 거기 데이터). */
+    function catOf(row) {
+        var raw = (row && row._담당구분) || '';
+        if (!raw && typeof window._extractDisciplineFromContent === 'function') {
+            try { raw = window._extractDisciplineFromContent(row) || ''; } catch (e) { raw = ''; }
+        }
+        if (!raw) return '';
+        return (typeof window._normalizeWbsDiscipline === 'function')
+            ? String(window._normalizeWbsDiscipline(raw) || '').trim()
+            : String(raw).trim();
+    }
+
+    /** 항목 한 줄 — **화면·엑셀이 같은 모양**을 쓰도록 한 곳에서 만든다. */
+    function itemLine(it) {
+        var cat = String((it && it.cat) || '').trim();
+        var pj = String((it && it.project) || '').replace(/\.json$/i, '').trim();
+        var s = '• ' + (cat ? '[' + cat + '] ' : '') + String((it && it.name) || '');
+        if (pj) s += ' (' + pj + ')';
+        if (it && it.note) s += ' — ' + it.note;
+        return s;
+    }
+    window._dailyItemLine = itemLine;
+
     /** 보고 한 줄로 쓸 만큼만 — 첫 문장(또는 n자). */
     function oneLine(s, n) {
         s = String(s || '').replace(/\s+/g, ' ').trim();
@@ -287,7 +319,8 @@
         if (!Array.isArray(gd) || gd.length < 2) return out;
         var day = new Date((dateStr || ymd()) + 'T00:00:00').getTime();
         var dayEnd = day + 86400000 - 1;
-        var proj = window.currentDriveFileName || (window.projectMeta && window.projectMeta.프로젝트명) || '';
+        var proj = projName();
+        var catByName = {};        // 업무명 → 구분 (아래 '손댄 업무'가 다시 쓴다)
 
         for (var i = 1; i < gd.length; i++) {
             var row = gd[i];
@@ -301,10 +334,11 @@
             if (!((s || e) <= dayEnd && (e || s) >= day)) continue;
             var nm = rowName(row);
             if (!nm) continue;
+            if (!catByName[nm]) catByName[nm] = catOf(row);
             var content = (ci.content != null && ci.content !== -1) ? String(row[ci.content] || '') : '';
             var p = window._mailContentParse(content);
             var item = {
-                idx: i, name: nm, project: proj,
+                idx: i, name: nm, project: proj, cat: catByName[nm] || '',
                 status: (ci.status != null && ci.status !== -1) ? String(row[ci.status] || '') : '',
                 core: oneLine(p.core, 140),
                 todo: oneLine(p.todo, 120),
@@ -328,7 +362,9 @@
             var rn = String(L.rowName || '').replace(/\s*＊AI📧?\s*$/, '').trim();
             if (!rn || seen[rn]) continue;
             seen[rn] = 1;
-            out.touched.push({ name: rn, project: proj, col: String(L.colName || '') });
+            // ⚠️ 변경이력엔 구분이 없다 — 위에서 만든 업무명 지도로 잇는다(없으면 빈 값).
+            out.touched.push({ name: rn, project: proj, cat: catByName[rn] || '',
+                               col: String(L.colName || '') });
         }
         return out;
     };
@@ -457,8 +493,23 @@
         try {
             var d = JSON.parse(localStorage.getItem(window.DAILY_POLICY.draftKey) || 'null');
             if (d && d.doc && d.doc.date === _date && (!_doc.savedAt || Date.parse(_doc.savedAt) < d.at)) {
+                // ⚠️⚠️ 초안으로 **통째로 바꾸지 않는다.** 초안은 이 브라우저가 마지막으로 본
+                //    모습일 뿐이라, 그 사이 텔레그램으로 들어온 항목·사진이 저장 때 **조용히
+                //    사라진다**(읽고-고쳐-통째로 쓰기 = 2026-11-04 색인 유실과 같은 모양).
+                //    규칙: 사람이 친 글은 초안이 이기고, **NAS 에만 있는 것은 가져온다.**
+                var fromNas = _doc;
                 _doc = d.doc;
-                toast(T('저장 전 초안을 되살렸습니다.', 'Restored your unsaved draft.'), 'info');
+                _doc.rev = fromNas.rev || 0;                   // rev 는 NAS 기준(충돌 가드가 쓴다)
+                _doc.savedAt = fromNas.savedAt || '';
+                _doc.files = (fromNas.files || []).slice();    // 📎 바이트는 NAS 가 진실
+                if (!Array.isArray(_doc.items)) _doc.items = [];
+                var seen = {};
+                _doc.items.forEach(function (it) { seen[String(it && it.name)] = 1; });
+                (fromNas.items || []).forEach(function (it) {
+                    if (!seen[String(it && it.name)]) { _doc.items.push(it); seen[String(it && it.name)] = 1; }
+                });
+                toast(T('저장 전 초안을 되살렸습니다(그 사이 들어온 내용도 같이 담았습니다).',
+                        'Restored your unsaved draft (and merged anything that arrived meanwhile).'), 'info');
             }
         } catch (e) { /* 초안이 깨졌으면 무시 */ }
         await markMissing(_doc);   // 📎 참조가 가리키는 파일이 정말 있는가 (목록 1콜)
@@ -473,6 +524,10 @@
             wrap.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9400; pointer-events:none; background:none;';
             document.body.appendChild(wrap);
         }
+        // 🐞 [2026-11-05 신고] 닫기가 `display:none` 으로 두고 가는데 `flex` 는 **처음 만들
+        //    때만** 줬다 — 그래서 한 번 닫은 뒤로는 모달이 영영 안 보였다(DOM 엔 있는데).
+        //    여는 건 render 하나뿐이니 **열 때마다 다시 켠다.**
+        wrap.style.display = 'flex';
         var draft = window.dailyBuildDraft(_date);
         var types = window.DAILY_DAY_TYPES.map(function (t) {
             var on = _doc.dayType === t.key;
@@ -487,8 +542,11 @@
             return '<div style="display:flex; gap:7px; align-items:flex-start; padding:5px 0; border-bottom:1px solid #f2f2f2;">' +
                    '<button onclick="window._dailyDropItem(' + i + ')" title="' + esc(T('빼기', 'Remove')) + '" style="flex-shrink:0; width:20px; height:20px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:4px; cursor:pointer; font-size:11px; line-height:1;">✕</button>' +
                    '<div style="flex:1; min-width:0;">' +
-                     '<div style="font-size:12.5px; font-weight:bold; color:#222;">' + esc(it.name) +
-                       (it.project ? ' <span style="font-weight:normal; color:#888; font-size:11px;">(' + esc(it.project) + ')</span>' : '') + '</div>' +
+                     '<div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">' +
+                       catSelect(i, it.cat) +
+                       '<span style="font-size:12.5px; font-weight:bold; color:#222;">' + esc(it.name) + '</span>' +
+                       (it.project ? '<span style="color:#888; font-size:11px;">(' + esc(String(it.project).replace(/\.json$/i, '')) + ')</span>' : '') +
+                     '</div>' +
                      '<input value="' + esc(it.note || '') + '" oninput="window._dailyNote(' + i + ', this.value)" placeholder="' + esc(T('한 줄 덧붙이기(선택)', 'Add a line (optional)')) + '" ' +
                        'style="width:100%; box-sizing:border-box; margin-top:3px; padding:4px 7px; border:1px solid #e0e0e0; border-radius:5px; font-size:12px;">' +
                    '</div></div>';
@@ -500,7 +558,7 @@
         var candHtml = cand.length ? cand.slice(0, 25).map(function (c, i) {
             return '<div onclick="window._dailyAdd(' + i + ')" style="cursor:pointer; padding:5px 7px; border:1px solid #eee; border-radius:5px; margin-bottom:4px; background:#fafbfc;" ' +
                    'onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fafbfc\';">' +
-                   '<div style="font-size:12px; font-weight:bold; color:#2c5f8a;">+ ' + esc(c.name) +
+                   '<div style="font-size:12px; font-weight:bold; color:#2c5f8a;">+ ' + catBadge(c.cat) + esc(c.name) +
                      (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '') +
                      (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '') + '</div>' +
                    (c.core ? '<div style="font-size:11px; color:#666; margin-top:2px;">' + esc(c.core) + '</div>' : '') +
@@ -574,19 +632,23 @@
     };
     window._dailySetType = function (k) { _doc.dayType = k; saveDraftLocal(); render(); };
     window._dailyNote = function (i, v) { if (_doc.items[i]) { _doc.items[i].note = v; saveDraftLocal(); } };
+    window._dailyItemCat = function (i, v) {
+        if (_doc.items[i]) { _doc.items[i].cat = String(v || '').trim(); saveDraftLocal(); render(); }
+    };
     window._dailyField = function (k, v) { _doc[k] = v; saveDraftLocal(); };
     window._dailyDropItem = function (i) { _doc.items.splice(i, 1); saveDraftLocal(); render(); };
     window._dailyAdd = function (i) {
         var c = (window._dailyCand || [])[i];
         if (!c) return;
-        _doc.items.push({ name: c.name, project: c.project, note: c.todo || '', fromMail: !!c.isMail, rowIdx: c.idx });
+        _doc.items.push({ name: c.name, project: c.project, cat: c.cat || '',
+                          note: c.todo || '', fromMail: !!c.isMail, rowIdx: c.idx });
         saveDraftLocal(); render();
     };
     window._dailyAddManual = function () {
         var el = document.getElementById('daily-manual');
         var v = el ? el.value.trim() : '';
         if (!v) return;
-        _doc.items.push({ name: v, project: window.currentDriveFileName || '', note: '' });
+        _doc.items.push({ name: v, project: projName(), cat: '', note: '' });
         if (el) el.value = '';
         saveDraftLocal(); render();
     };
@@ -729,6 +791,50 @@
     }
 
     /** 고른 파일들을 올리고 참조를 담는다. 한 개가 실패해도 나머지는 올린다. */
+
+    // ══ 업무 구분(HW·FW·ME…) ══════════════════════════════════════════════
+    //  목록은 `window.WBS_DISCIPLINE_CATEGORIES`(js/04k, 데이터) 하나 — 여기 박지 않는다.
+    //  ⚠️ 그 목록에 없는 값(옛 데이터·AI가 적은 값)이 와도 **지우지 않고** 선택지에 더한다.
+    function catList(cur) {
+        var base = (window.WBS_DISCIPLINE_CATEGORIES || []).slice();
+        var c = String(cur || '').trim();
+        if (c && base.indexOf(c) < 0) base.push(c);
+        return base;
+    }
+    function catBadge(cat) {
+        cat = String(cat || '').trim();
+        if (!cat) return '';
+        return '<span style="display:inline-block; padding:0 5px; margin-right:4px; border-radius:3px; '
+             + 'background:#eef2f6; color:#50616f; font-size:10px; font-weight:bold; vertical-align:middle;">'
+             + esc(cat) + '</span>';
+    }
+    function catSelect(i, cur) {
+        var opts = ['<option value="">' + esc(T('구분', 'Cat.')) + '</option>'];
+        catList(cur).forEach(function (c) {
+            opts.push('<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>');
+        });
+        return '<select onchange="window._dailyItemCat(' + i + ', this.value)" '
+             + 'title="' + esc(T('업무 구분 — 간트차트의 담당구분과 같은 값입니다', 'Discipline — same values as the Gantt chart')) + '" '
+             + 'style="padding:1px 3px; border:1px solid ' + (cur ? '#a5c8f0' : '#ddd') + '; border-radius:4px; '
+             + 'background:' + (cur ? '#eef6ff' : '#fff') + '; color:#50616f; font-size:10.5px;">'
+             + opts.join('') + '</select>';
+    }
+
+    /**
+     * 하루 보기 표에서 행을 **더블클릭** — 내 보고 쓰기를 연다(2026-11-05 요청).
+     * ⚠️ 남의 행에서는 열지 않는다 — 한 파일에 쓰는 사람이 하나라는 게 이 설계의 불변식이고,
+     *    열어 주면 "고칠 수 있다"고 약속하는 꼴이 된다. 대신 왜 안 되는지 말한다.
+     */
+    window._dailyRowDbl = function (key) {
+        var mine = String(key || '').toLowerCase() === String(myKey() || '').toLowerCase();
+        if (!mine) {
+            toast(T('내 보고만 쓸 수 있습니다 — 하루 파일 하나에 쓰는 사람은 한 명입니다.',
+                    'You can only edit your own report — one writer per daily file.'), 'info', 6000);
+            return;
+        }
+        window.dailyOpenModal(window._dailyTabDate || ymd());
+    };
+
     /** 모달이 열릴 때 부르는 그 함수 그대로 — 하네스도 이걸 부른다(두 벌로 두지 않는다). */
     window.dailyMarkMissingFiles = markMissing;
 
@@ -1037,12 +1143,14 @@
                 XLSX.utils.book_append_sheet(wb, ws, en ? 'Monthly' : '월간');
             } else {
                 var docs = await window.dailyLoadDay(date);
-                var rows = [[en ? 'Name' : '이름', en ? 'Type' : '종류', en ? 'Done' : '오늘 한 일',
-                             en ? 'Tomorrow' : '내일 할 일', en ? 'Issues' : '막힌 것', en ? 'Attachments' : '첨부', en ? 'Saved' : '작성시각']];
+                var hdr = [en ? 'Name' : '이름', en ? 'Type' : '종류'];
+                window.DAILY_FIELDS.forEach(function (f) { hdr.push(en ? f.en : f.ko); });
+                hdr.push(en ? 'Attachments' : '첨부', en ? 'Saved' : '작성시각');
+                var rows = [hdr];
                 docs.forEach(function (d) {
                     var t = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
                     rows.push([d.name || d.key, (en ? t.en : t.ko) || '',
-                        String(d.aiDone || '').trim() || (d.items || []).map(function (i) { return '• ' + i.name + (i.note ? ' — ' + i.note : ''); }).join('\n'),
+                        String(d.aiDone || '').trim() || (d.items || []).map(itemLine).join('\n'),
                         d.next || '', d.issue || '',
                         (d.files || []).map(function (f) { return f.name; }).join(', '),
                         d.savedAt ? new Date(d.savedAt).toLocaleString('ko-KR') : '']);
@@ -1124,6 +1232,8 @@
             wrap.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9450; pointer-events:none; background:none;';
             document.body.appendChild(wrap);
         }
+        // 🐞 보고 모달과 **같은 버그** — 닫기가 `display:none` 으로 두고 가므로 열 때마다 켠다.
+        wrap.style.display = 'flex';
         var L = window._dailyRosterDraft || [];
         var rows = L.map(function (m, i) {
             var inp = function (k, ph, w) {
@@ -1147,6 +1257,9 @@
    '<button onclick="document.getElementById(\'daily-roster-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer;">✕</button></div>' +
  '<div style="flex:1; min-height:0; overflow:auto; padding:13px 17px;">' +
    '<div style="font-size:11.5px; color:#777; margin-bottom:8px; line-height:1.6;">' +
+     '<b>' + esc(T('이 표에 누가 나오는지를 정하는 명단입니다.', 'This roster decides who appears in the table.')) + '</b> ' +
+     esc(T('여기 없는 사람은 \'미작성\' 으로도 안 보이고, 텔레그램으로 보내도 받아 주지 않습니다.',
+           'People not listed never show as \'not written\', and their Telegram messages are ignored.')) + '<br>' +
      esc(T('· 계정id = NAS 로그인 계정(파일 이름에 쓰입니다) · 별칭은 간트 담당자 이름과 맞추는 데 씁니다',
            '· key = NAS login account (used in file names) · aliases match Gantt owner names')) + '<br>' +
      esc(T('· 📣 = 알림·텔레그램 수신을 담당할 PC 한 대. 반드시 한 명만 — 여러 대가 동시에 받으면 보고가 흩어집니다.',
@@ -1214,12 +1327,90 @@
         window.dailyRenderTab();
     };
 
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7-F. 탭이 스스로 그려지게 + 자동 갱신
+    // ══════════════════════════════════════════════════════════════════════
+
+    // 🐞 [2026-11-05 신고] "처음엔 목록이 안 보이고 다른 페이지 갔다 오면 보인다."
+    //    범인은 **로딩 순서**다 — 마지막 탭을 되살리는 js/23 의 IIFE 가 js/59 **보다 먼저**
+    //    돌아서, 그 순간 `window.dailyOnTabShown` 이 아직 없었다(그래서 조용히 건너뛴다).
+    //    파일 순서를 바꾸는 대신 **이 파일이 자기 탭이 이미 켜져 있는지 스스로 본다.**
+    // ⚠️ 바로 그리면 NAS 로그인이 아직이라 "못 읽었다"가 뜬다 — 사람은 그걸 고장으로 읽는다.
+    //    계정이 잡힐 때까지 짧게 몇 번만 기다린다(상한 있음).
+    (function bootRenderIfActive() {
+        var BOOT_TRIES = 4, BOOT_WAIT = 2000;
+        async function go(n) {
+            var panel = document.getElementById('tab-daily');
+            if (!panel || !panel.classList.contains('active')) return;
+            if (window._storageMode && window._storageMode() !== 'nas') return;
+            var ok = false;
+            try { ok = !!(await window.dailyEnsureIdentity()); } catch (e) { ok = false; }
+            if (!ok && n < BOOT_TRIES) { setTimeout(function () { go(n + 1); }, BOOT_WAIT); return; }
+            window.dailyOnTabShown();
+        }
+        function start() { setTimeout(function () { go(0); }, 900); }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+        else start();
+    })();
+
+    // 🔄 자동 갱신 — 텔레그램으로 들어온 보고·나간 알림이 **탭을 다시 열지 않아도** 보이게.
+    //    ⚠️ 통째로 다시 그리지 않는다: 그 달 폴더 **목록 1콜**로 서명을 만들어 **달라졌을 때만** 그린다
+    //       (사람이 글을 쓰고 있는데 화면이 깜빡이면 그게 더 나쁘다).
+    //    ⚠️ 탭이 안 보이면 **네트워크도 안 쓴다** — 배경 탭이 1분마다 NAS 를 두드릴 이유가 없다.
+    //    주기는 백엔드 수신 틱과 같은 60초(`DAILY_POLL_MS`, 데이터).
+    var DAILY_POLL_MS = 60000;
+    var _pollTimer = null, _pollSig = null, _pollBusy = false;
+
+    async function pollTick() {
+        if (_pollBusy) return;
+        var panel = document.getElementById('tab-daily');
+        if (!panel || !panel.classList.contains('active')) return;
+        if (window._storageMode && window._storageMode() !== 'nas') return;
+        if (window._dailyView === 'month') return;      // 월 보기는 O/X 라 1분마다 볼 값이 아니다
+        var date = window._dailyTabDate || ymd();
+        _pollBusy = true;
+        try {
+            var items = await window.nasAppFile.list(window.DAILY_PATHS.month(date));
+            var sig = (items || []).filter(function (it) {
+                var p = window.DAILY_PATHS.parse(it && it.name);
+                return p && p.ymd === date;
+            }).map(function (it) {
+                return it.name + ':' + (it.size || '') + ':' + (it.mtime || '');
+            }).sort().join('|');
+            if (_pollSig === null) { _pollSig = sig; return; }    // 첫 바퀴는 기준만 잡는다
+            if (sig === _pollSig) return;
+            _pollSig = sig;
+            await window.dailyRenderTab();
+            toast('🔄 ' + T('일일보고가 갱신되었습니다.', 'Daily report updated.'), 'info', 3500);
+        } catch (e) {
+            // 조용히 접는다 — 자동 갱신이 안 됐다고 화면을 어지럽히지 않는다(다음 바퀴에 또 본다).
+            console.warn('[일일보고] 자동 갱신 건너뜀:', e.message);
+        } finally {
+            _pollBusy = false;
+        }
+    }
+
+    /** 하네스·사람이 **60초를 기다리지 않고** 한 바퀴 돌려 보려고 드러낸다. */
+    window._dailyPollTick = pollTick;
+
+    /** 다음 바퀴에 무조건 다시 그리게 한다(저장·알림 확인 직후처럼 내가 바꾼 걸 알 때). */
+    window._dailyPollReset = function () { _pollSig = null; };
+
+    (function startPoll() {
+        if (_pollTimer) return;
+        _pollTimer = setInterval(pollTick, DAILY_POLL_MS);
+    })();
+
     window.dailyOnTabShown = function () {
         if (!window._dailyTabDate) window._dailyTabDate = ymd();
+        _pollSig = null;                 // 지금 그리니 다음 바퀴는 이 상태를 기준으로
         window.dailyRenderTab();
     };
 
-    /** 알림·수신 담당 PC 에서 1회 확인(사람이 누를 때). 백엔드가 구버전이면 404 로 구분된다. */
+    /** 알림·수신 담당 PC 에서 1회 확인(사람이 누를 때). 백엔드가 구버전이면 404 로 구분된다.
+     *  ⚠️ 돌린 **결과를 화면에도 반영**한다 — 전엔 토스트만 띄우고 표는 그대로여서,
+     *     방금 들어온 보고를 보려면 탭을 다시 열어야 했다. */
     window.dailyNotifyTest = async function () {
         try {
             var r = await fetch('http://127.0.0.1:5000/daily/tick',
@@ -1235,6 +1426,9 @@
             toast('📔 ' + T('알림 ' + n + '건 발송 · 수신 ' + h + '건 처리' +
                             ((j.notify && j.notify.message) ? ' — ' + j.notify.message : ''),
                             'Sent ' + n + ' reminder(s), handled ' + h + ' inbound'), 'info', 9000);
+            // 방금 들어온 보고가 **지금 표에 보이게** 한다(전엔 탭을 다시 열어야 했다).
+            _pollSig = null;
+            await window.dailyRenderTab();
         } catch (e) {
             toast(T('백엔드에 연결하지 못했습니다 — kortek_backend 가 떠 있는지 확인해주세요.',
                     'Could not reach the backend.'), 'warning', 8000);
@@ -1498,7 +1692,7 @@
             var added = 0;
             d.touched.forEach(function (t) {
                 if (have[t.name]) return;
-                doc.items.push({ name: t.name, project: t.project, note: '', auto: true });
+                doc.items.push({ name: t.name, project: t.project, cat: t.cat || '', note: '', auto: true });
                 have[t.name] = 1; added++;
             });
             if (!added) return;
@@ -1535,6 +1729,11 @@
         // 🗓️ 보기 토글 버튼 라벨은 **js/59 가 맡는다** — 그래서 HTML 에 `data-i18n` 을 달지 않았다.
         //    (i18n 맵은 HTML 라벨을 덮어쓰므로, 맵에 맡기면 '하루 보기'가 다시 '월 보기'로 되돌아간다)
         //    ⚠️ 전엔 아무도 안 고쳐서 **월 보기로 바꿔도 버튼이 계속 '월 보기'** 였다.
+        var rb = document.querySelector('[data-i18n="btn-daily-roster"]');
+        if (rb) {
+            rb.title = T('이 표에 나올 팀원 명단 — 누가 \'미작성\' 으로 보일지, 텔레그램으로 온 보고를 누구 것으로 담을지(chat_id)를 정합니다.',
+                         'Team roster for this table — who shows as \'not written\', and whose report an incoming Telegram message belongs to (chat_id).');
+        }
         var vb = document.getElementById('daily-view-btn');
         if (vb) {
             vb.textContent = (window._dailyView === 'month')
@@ -1620,15 +1819,15 @@
             var typ = d ? (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === d.dayType; })[0] || {}) : null;
             var typeTxt = typ ? (window._currentLang === 'en' ? typ.en : typ.ko) : '';
             // ⚠️ AI 정리본이 있으면 그걸 보여준다 — 사람이 마지막으로 고친 글이 곧 보고 내용이다.
-            var done = d ? (String(d.aiDone || '').trim() || (d.items || []).map(function (it) {
-                return '• ' + it.name + (it.note ? ' — ' + it.note : '');
-            }).join('\n')) : '';
+            var done = d ? (String(d.aiDone || '').trim() || (d.items || []).map(itemLine).join('\n')) : '';
             var td = 'padding:7px 9px; border:1px solid #e3e6ea; vertical-align:top; font-size:12px;';
+            var dbl = ' ondblclick="window._dailyRowDbl(\'' + esc(String(p.key || '')) + '\')"'
+                    + ' title="' + esc(T('더블클릭하면 내 보고 쓰기가 열립니다', 'Double-click to open your report')) + '"';
             if (!d) {
-                return '<tr style="background:#fff8f8;"><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
+                return '<tr style="background:#fff8f8; cursor:pointer;"' + dbl + '><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
                        '<td style="' + td + '" colspan="4"><span style="color:#b1432f; font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
             }
-            return '<tr><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
+            return '<tr style="cursor:pointer;"' + dbl + '><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
                    '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
                    '<td style="' + td + ' white-space:pre-line;">' + esc(done || '-') + dayChips(d) + '</td>' +
                    '<td style="' + td + ' white-space:pre-line;">' + esc(d.next || '-') + '</td>' +
@@ -1644,9 +1843,10 @@
           '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
             '<colgroup><col style="width:90px;"><col style="width:62px;"><col><col style="width:22%;"><col style="width:22%;"></colgroup>' +
             '<thead><tr style="background:#eef6f7;">' +
-              ['이름|Name', '종류|Type', '오늘 한 일|Done', '내일 할 일|Tomorrow', '막힌 것|Issues'].map(function (h) {
-                  var p = h.split('|');
-                  return '<th style="padding:7px 9px; border:1px solid #cfe3e5; font-size:12px; color:#2c5f8a;">' + esc(window._currentLang === 'en' ? p[1] : p[0]) + '</th>';
+              // 머리글은 `DAILY_FIELDS`(데이터)에서 — 칸 이름을 바꿀 때 여기도 고치는 일이 없게.
+              [['이름', 'Name'], ['종류', 'Type']].concat(window.DAILY_FIELDS.map(function (f) { return [f.ko, f.en]; }))
+                .map(function (hp) {
+                  return '<th style="padding:7px 9px; border:1px solid #cfe3e5; font-size:12px; color:#2c5f8a;">' + esc(window._currentLang === 'en' ? hp[1] : hp[0]) + '</th>';
               }).join('') +
             '</tr></thead><tbody>' + (rows || '<tr><td colspan="5" style="padding:16px; text-align:center; color:#aaa; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
     };
