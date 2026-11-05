@@ -151,7 +151,6 @@
                 'chart-expand-btn-on': '📊 기본 보기',
                 
                 'excel-btn':      '🟩 프로젝트 엑셀 저장',
-                'print-btn':      '🖨️ 인쇄 (PDF)',
                 'date-sort-btn':  '📅 날짜순 정렬',
                 'file-status-default': '파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)',
                 'file-status-updated': '✅ 일정이 업데이트 되었습니다.',
@@ -194,7 +193,6 @@
                 'btn-alarm-send-selected': '📤 선택 발송',
                 'btn-addr-load':      '📂 불러오기',
                 'btn-sync-gantt':     '🔄 Gantt 실적 연동',
-                'btn-print':          '🖨️ 인쇄 (PDF)',
                 'btn-prev':           '◀ 이전',
                 'btn-next':           '다음 ▶',
                 'btn-today':          '오늘',
@@ -461,7 +459,6 @@
                 'chart-expand-btn-on': '📊 Basic View',
                
                 'excel-btn':      '🟩 Save Project Excel',
-                'print-btn':      '🖨️ Print (PDF)',
                 'date-sort-btn':  '📅 Sort by Date',
                 'file-status-default': 'Select a file or drag & drop an Excel file here. (Double-click any item to edit)',
                 'file-status-updated': '✅ Schedule has been updated.',
@@ -504,7 +501,6 @@
                 'btn-alarm-send-selected': '📤 Send Selected',
                 'btn-addr-load':      '📂 Load',
                 'btn-sync-gantt':     '🔄 Sync from Gantt',
-                'btn-print':          '🖨️ Print (PDF)',
                 'btn-prev':           '◀ Prev',
                 'btn-next':           'Next ▶',
                 'btn-today':          'Today',

@@ -38,12 +38,13 @@
             var id = 'pn-nas-' + p.tab;
             if (document.getElementById(id)) return;
 
+            // ⚠️ [2026-11-05] 예전엔 그 탭의 인쇄(PDF) 버튼 **앞**에 끼웠는데 인쇄 버튼이
+            //    전부 삭제됐다(브라우저 인쇄 사용). 인쇄 버튼은 `.concept-header-box` 의
+            //    **마지막 자식**이었으므로 헤더에 append 하면 자리가 그대로다.
             var at = p.anchor ? document.querySelector(p.anchor) : null;
-            if (!at) {
-                var all = tabEl.querySelectorAll('button[onclick*="printTabSection"]');
-                at = all.length ? all[0] : null;
-            }
-            if (!at || !at.parentNode) return;
+            var mode = at ? 'before' : 'append';
+            if (!at) at = tabEl.querySelector('.concept-header-box');
+            if (!at || (mode === 'before' && !at.parentNode)) return;
 
             var b = document.createElement('button');
             b.id = id;
@@ -64,7 +65,8 @@
                     title: Array.isArray(p.label) ? _t(p.label[0], p.label[1]) : p.label
                 });
             };
-            at.parentNode.insertBefore(b, at);
+            if (mode === 'append') at.appendChild(b);
+            else at.parentNode.insertBefore(b, at);
         });
     }
 

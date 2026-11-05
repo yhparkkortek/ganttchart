@@ -168,8 +168,12 @@
             } else {
                 window._gwState.events = d.events || [];
                 window._gwState.fetchedAt = Date.now();
-                window._gwSetStatus('🏢 ' + _t('그룹웨어 일정 ', 'Groupware events ') + (d.count || 0)
-                                    + _t('건', ''), 'ok');
+                // 🙈 [2026-11-05 사용자 요청] 성공했을 때의 "🏢 그룹웨어 일정 N건"은 **안 띄운다** —
+                //    바로 옆 토글 버튼이 이미 채워진 색 + "🏢 그룹웨어 일정"로 같은 말을 하고 있어
+                //    머리말 줄만 비좁아졌다. 건수는 버튼 말풍선(_gwSyncToggleBtn)으로 옮겼다.
+                //    ⚠️ 실패·로그인 필요·불러오는 중은 **그대로 보여준다** — 조용히 삼키면
+                //    "일정이 없는 것"과 "못 불러온 것"을 구분할 방법이 없다.
+                window._gwSetStatus('');
             }
         } catch (e) {
             window._gwState.events = [];
@@ -177,6 +181,8 @@
             window._gwSetStatus('⚠️ ' + window._gwState.error, 'error');
         } finally {
             window._gwState.loading = false;
+            // 건수는 머리말에서 뺐으니 버튼 말풍선에 싣는다(위 주석 참고).
+            if (window._gwSyncToggleBtn) window._gwSyncToggleBtn();
             if (window.calRender) window.calRender();
         }
     };
@@ -207,9 +213,11 @@
         b.textContent = gw ? ('🏢 ' + _t('그룹웨어 일정', 'Groupware'))
                            : ('📊 ' + _t('Gantt 일정', 'Gantt'));
         b.setAttribute('aria-pressed', gw ? 'true' : 'false');
+        // 🏢 건수는 머리말 대신 여기(말풍선)에 — 0건이면 "없다"는 것도 알려줘야 하므로 늘 붙인다.
+        var cnt = (window._gwState.events || []).length;
         b.title = gw
-            ? _t('지금 그룹웨어 일정을 보는 중 — 누르면 Gantt 업무로 전환합니다',
-                 'Showing groupware events — click to switch to Gantt tasks')
+            ? _t('지금 그룹웨어 일정 ' + cnt + '건을 보는 중 — 누르면 Gantt 업무로 전환합니다',
+                 'Showing ' + cnt + ' groupware event(s) — click to switch to Gantt tasks')
             : _t('지금 Gantt 업무를 보는 중 — 누르면 그룹웨어 일정으로 전환합니다 (읽기 전용, 로그인은 AI 문답 창의 🔑)',
                  'Showing Gantt tasks — click to switch to groupware events (read-only; sign in from the 🔑 in AI chat)');
         // 🐛 [2026-10-28 버그 수정, 사용자 지적 "호버가 Gantt 쪽에만 적용돼 있음"] 옆의 "오늘"/

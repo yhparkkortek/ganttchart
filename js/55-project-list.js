@@ -960,7 +960,7 @@
         // 🎯 [2026-10-30] "도면 분석"도 **옆 버튼과 똑같이** 칠한다(사용자 지적: 혼자 튄다).
         //    처음엔 한 단계 진한 색으로 구분했는데, 띠 안에서 저 혼자 눈에 띌 이유가 없다 —
         //    자주 쓰는 버튼도 아니고 위험한 버튼도 아니다(AI 안 쓰고, 표를 바로 고치지도 않는다).
-        ['pl-btn-reset', 'pl-btn-add', 'pl-btn-import', 'pl-btn-export', 'pl-btn-nas', 'pl-btn-cols', 'pl-btn-print']
+        ['pl-btn-reset', 'pl-btn-add', 'pl-btn-import', 'pl-btn-export', 'pl-btn-nas', 'pl-btn-cols']
             .forEach(function (id) { paint(id, P.bg, P.darkText, P.border); });
     };
 
@@ -1107,7 +1107,6 @@
         'pl-btn-export':  ['📊 엑셀 저장',     '📊 Export Excel'],
         'pl-btn-nas':     ['📁 NAS',           '📁 NAS'],
         'pl-btn-cols':    ['🔁 열',            '🔁 Columns'],
-        'pl-btn-print':   ['🖨️ 인쇄 (PDF)',    '🖨️ Print (PDF)'],
         'pl-btn-reset':   ['↺',                '↺']
     };
     window.PL_UI_TITLE = window.PL_UI_TITLE || {

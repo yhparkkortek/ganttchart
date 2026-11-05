@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>kortek_pm</title>
 
-<script src="js/01-gapi-gis-stub.js?v=20261105j"></script>
+<script src="js/01-gapi-gis-stub.js?v=20261105k"></script>
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <!-- 🖥️ [Panel Compare] PDF 데이터시트에서 텍스트를 뽑아 AI 추출 입력으로 쓰기 위한 pdf.js (UMD, 전역 pdfjsLib) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-<script src="js/02-pdfjs-worker-init.js?v=20261105j"></script>
+<script src="js/02-pdfjs-worker-init.js?v=20261105k"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=20261105j">
+<link rel="stylesheet" href="styles.css?v=20261105k">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -199,9 +199,6 @@
         <button id="btn-alarm-send-selected" data-i18n="btn-alarm-send-selected" onclick="window.sendSelectedAlarms()"
           class="action-btn solid c-success" style="display:none;">📤 선택 발송</button>
       </div>
-      <button data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')"
-        onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-        style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
     </div>
 
     <!-- 알람 목록 테이블 -->
@@ -848,9 +845,9 @@
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-left:4px;">🔍 AI검색</button>
     </div>
 
-    <div class="btn-group" style="margin-left: auto;">
-        <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;">🖨️ 인쇄 (PDF)</button>
-    </div>
+    <!-- 🖨️ 인쇄 버튼은 2026-11-05 에 삭제됐다(브라우저 인쇄 사용). 이 빈 묶음은
+         js/42 의 📊 엑셀 버튼이 붙는 자리라 지우면 안 된다 — anchorSelector 가 이 id 를 본다. -->
+    <div class="btn-group" id="gantt-toolbar-end" style="margin-left: auto;"></div>
     </div>
 
     <div id="dynamic-filters"></div>
@@ -1140,7 +1137,6 @@
                  헤더 박스 맨 오른쪽에 고정시키는데, Address 탭에만 이게 빠져 있어서 인쇄 버튼이 검색창
                  바로 옆에 붙어 있었다 — 다른 페이지와 동일하게 오른쪽 끝으로 이동. -->
             <div class="btn-group"></div>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-address')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="addr-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px));">
@@ -1202,7 +1198,6 @@
                 <button id="pl-btn-export" onclick="window.plExportExcel()" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-right:4px;"></button>
                 <button id="pl-btn-nas" onclick="window.plOpenNas()" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-right:4px;"></button>
                 <button id="pl-btn-cols" onclick="window.plResetCols()" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-right:4px;"></button>
-                <button id="pl-btn-print" onclick="window.printTabSection('tab-projectlist')" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;"></button>
             </div>
         </div>
         <div class="concept-section pl-section" style="background:#e0f5f7; border-color:#a3d9e0;">
@@ -1245,7 +1240,6 @@
                 <option value="완료">🔴 EOL</option>
             </select>
             <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 Gantt 실적 연동</button></div>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <!-- 💡 [2026-09-03 수정] "바깥 박스는 고정 크기, 안쪽 내용만 스크롤, 변경 이력 확인은 스크롤에서
              제외하고 하단에 고정" 요청 — #summary-table-scroll을 max-height(내용에 맞춰 줄어드는 방식)
@@ -1413,7 +1407,6 @@
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <button id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin:0; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔽 펼치기</button>
             <div class="btn-group"></div>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-briefspec')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="briefspec-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px));">
@@ -1489,8 +1482,6 @@
             <button id="bom-toggle-btn" class="concept-add-row-btn" onclick="window.bomToggleAll()" title="하위 구성품 모두 접기" data-i18n-title="bom-toggle-all" style="margin:0; padding:6px 8px; min-width:auto; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12.5px; font-weight:bold; white-space:nowrap;">▸ 접기</button>
             <div class="btn-group"></div>
             <button id="bom-excel-btn" onclick="window.bomExportExcel()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="표에 보이는 BOM을 엑셀로 저장 (C:\SAP_DMS\SAP조회)" data-i18n-title="bom-excel" style="white-space:nowrap; margin-left:auto; margin-right:4px; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📊 엑셀 저장</button>
-            <button onclick="window.printTabSection('tab-bom')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                    data-i18n="btn-print" style="white-space:nowrap; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="bom-meta" style="margin-bottom:8px;"></div>
@@ -1529,7 +1520,6 @@
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <button id="mc-clear-price-btn" class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" data-i18n-title="amount-delete-all" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f;">금액삭제</button>
             <div class="btn-group"></div>
-            <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-mctable')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="mc-normal-section">
@@ -1815,7 +1805,6 @@
             <button id="gw-cal-toggle-btn" onclick="window._gwToggleOverlay()" title="그룹웨어(다우오피스) 일정을 캘린더에 겹쳐 봅니다 — 읽기 전용. 로그인은 AI 문답 창의 🔑에서."
                     style="padding:6px 12px; margin-right:8px; background:#72c0ca; border:none; color:#fff; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;" onmouseover="this.style.background='#90cdd5';" onmouseout="this.style.background='#72c0ca';">🏢 그룹웨어 일정</button>
             <button data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서" data-i18n-title="ics-sync-hint">📤 내보내기/동기화</button>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div id="calendar-table-scroll" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px)); background:#e0f5f7; border-color:#a3d9e0;">
             <div id="cal-page"></div>
@@ -1845,7 +1834,6 @@
                      한다 (exportWeeklyReportPPT() 안 _showPptColorChoiceModal 참고). -->
                 <button data-i18n="btn-ppt-export" data-i18n="btn-ppt-export" onclick="window.exportWeeklyReportPPT()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📥 PPT 출력</button>
             </div>
-            <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-weekly')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
        <div id="weekly-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px)); background:#e0f5f7; border-color:#a3d9e0;"></div>
     </div>
@@ -1867,7 +1855,6 @@
             <button data-i18n="btn-daily-notify" onclick="window.dailyNotifyTest()" title="알림·텔레그램 수신을 지금 한 번 돌려봅니다(담당 PC 전용)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; margin-left:8px;">📣 알림 확인</button>
             <button id="daily-view-btn" onclick="window.dailyToggleView()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; margin-left:8px;">🗓️ 월 보기</button>
             <button data-i18n="btn-daily-excel" onclick="window.dailyExportExcel()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; margin-left:8px;">📊 엑셀 출력</button>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-daily')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div id="daily-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px)); background:#e0f5f7; border-color:#a3d9e0;"></div>
     </div>
@@ -1954,45 +1941,45 @@
         </div>
     </div>
 
-<script src="js/03-drive-modal-drag.js?v=20261105j"></script>
+<script src="js/03-drive-modal-drag.js?v=20261105k"></script>
 
 <!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/04a-core-app-globals.js?v=20261105j"></script>
-<script src="js/04b-core-app-drive-sync.js?v=20261105j"></script>
-<script src="js/04c-core-app-mail-pipeline.js?v=20261105j"></script>
-<script src="js/04d-core-app-gantt-core.js?v=20261105j"></script>
-<script src="js/04e-core-app-undo-redo.js?v=20261105j"></script>
-<script src="js/04f-core-app-upload-utils-1.js?v=20261105j"></script>
-<script src="js/04g-core-app-upload-utils-2.js?v=20261105j"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=20261105j"></script>
-<script src="js/04i-core-app-upload-utils-4.js?v=20261105j"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=20261105j"></script>
-<script src="js/04k-core-app-filter-export.js?v=20261105j"></script>
+<script src="js/04a-core-app-globals.js?v=20261105k"></script>
+<script src="js/04b-core-app-drive-sync.js?v=20261105k"></script>
+<script src="js/04c-core-app-mail-pipeline.js?v=20261105k"></script>
+<script src="js/04d-core-app-gantt-core.js?v=20261105k"></script>
+<script src="js/04e-core-app-undo-redo.js?v=20261105k"></script>
+<script src="js/04f-core-app-upload-utils-1.js?v=20261105k"></script>
+<script src="js/04g-core-app-upload-utils-2.js?v=20261105k"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=20261105k"></script>
+<script src="js/04i-core-app-upload-utils-4.js?v=20261105k"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=20261105k"></script>
+<script src="js/04k-core-app-filter-export.js?v=20261105k"></script>
 
-<script src="js/05-drive-sync-optimize.js?v=20261105j"></script>
+<script src="js/05-drive-sync-optimize.js?v=20261105k"></script>
 
-<script src="js/06-theme-color-chart.js?v=20261105j"></script>
+<script src="js/06-theme-color-chart.js?v=20261105k"></script>
 
-<script src="js/07-data-loss-safeguard.js?v=20261105j"></script>
+<script src="js/07-data-loss-safeguard.js?v=20261105k"></script>
 
-<script src="js/08-filter-ui.js?v=20261105j"></script>
+<script src="js/08-filter-ui.js?v=20261105k"></script>
 
-<script src="js/09-autosave-user-id.js?v=20261105j"></script>
+<script src="js/09-autosave-user-id.js?v=20261105k"></script>
 
-<script src="js/10-gantt-filter-date-ui.js?v=20261105j"></script>
+<script src="js/10-gantt-filter-date-ui.js?v=20261105k"></script>
 
-<script src="js/11-mobile-detect.js?v=20261105j"></script>
+<script src="js/11-mobile-detect.js?v=20261105k"></script>
 
-<script src="js/12-mobile-longpress.js?v=20261105j"></script>
+<script src="js/12-mobile-longpress.js?v=20261105k"></script>
 
 
-<script src="js/13-mobile-touch-timer.js?v=20261105j"></script>
+<script src="js/13-mobile-touch-timer.js?v=20261105k"></script>
 
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/14a-ai-mail-analysis-1.js?v=20261105j"></script>
-<script src="js/14b-ai-mail-analysis-2.js?v=20261105j"></script>
-<script src="js/14c-task-inbox.js?v=20261105j"></script>
-<script src="js/14d-distribution-ledger.js?v=20261105j"></script>
+<script src="js/14a-ai-mail-analysis-1.js?v=20261105k"></script>
+<script src="js/14b-ai-mail-analysis-2.js?v=20261105k"></script>
+<script src="js/14c-task-inbox.js?v=20261105k"></script>
+<script src="js/14d-distribution-ledger.js?v=20261105k"></script>
 
 
 
@@ -2565,22 +2552,22 @@
 </div>
 
 <!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/15a-mail-attachment-tab.js?v=20261105j"></script>
-<script src="js/15b-mail-server-tab-1.js?v=20261105j"></script>
-<script src="js/15c-mail-server-tab-2.js?v=20261105j"></script>
+<script src="js/15a-mail-attachment-tab.js?v=20261105k"></script>
+<script src="js/15b-mail-server-tab-1.js?v=20261105k"></script>
+<script src="js/15c-mail-server-tab-2.js?v=20261105k"></script>
 
 
 
 
-<script src="js/16-wbs-level-colors.js?v=20261105j"></script>
+<script src="js/16-wbs-level-colors.js?v=20261105k"></script>
 
-<script src="js/17-weekly-report-modal-drag.js?v=20261105j"></script>
+<script src="js/17-weekly-report-modal-drag.js?v=20261105k"></script>
 
-<script src="js/18-mail-analyzer-modal-drag.js?v=20261105j"></script>
+<script src="js/18-mail-analyzer-modal-drag.js?v=20261105k"></script>
 
-<script src="js/19-shared-modal-drag.js?v=20261105j"></script>
+<script src="js/19-shared-modal-drag.js?v=20261105k"></script>
 
-<script src="js/20-weekly-report.js?v=20261105j"></script>
+<script src="js/20-weekly-report.js?v=20261105k"></script>
 
 </div> <!-- /#app-main -->
 
@@ -2621,72 +2608,72 @@
     </div>
 </div>
 
-<script src="js/21-color-palette.js?v=20261105j"></script>
+<script src="js/21-color-palette.js?v=20261105k"></script>
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/22a-summary-mctable-parse.js?v=20261105j"></script>
-<script src="js/22b-summary-mctable-core1.js?v=20261105j"></script>
-<script src="js/22c-summary-mctable-core2.js?v=20261105j"></script>
-<script src="js/22d-summary-mctable-core3.js?v=20261105j"></script>
-<script src="js/22e-summary-mctable-core4.js?v=20261105j"></script>
-<script src="js/22f-address-book.js?v=20261105j"></script>
-<script src="js/22g-name-autocomplete.js?v=20261105j"></script>
-<script src="js/22h-brief-mc-common-1.js?v=20261105j"></script>
-<script src="js/22i-brief-mc-common-2.js?v=20261105j"></script>
+<script src="js/22a-summary-mctable-parse.js?v=20261105k"></script>
+<script src="js/22b-summary-mctable-core1.js?v=20261105k"></script>
+<script src="js/22c-summary-mctable-core2.js?v=20261105k"></script>
+<script src="js/22d-summary-mctable-core3.js?v=20261105k"></script>
+<script src="js/22e-summary-mctable-core4.js?v=20261105k"></script>
+<script src="js/22f-address-book.js?v=20261105k"></script>
+<script src="js/22g-name-autocomplete.js?v=20261105k"></script>
+<script src="js/22h-brief-mc-common-1.js?v=20261105k"></script>
+<script src="js/22i-brief-mc-common-2.js?v=20261105k"></script>
 
-<script src="js/23-sidebar-tabs.js?v=20261105j"></script>
+<script src="js/23-sidebar-tabs.js?v=20261105k"></script>
 
-<script src="js/24-calendar-tab.js?v=20261105j"></script>
+<script src="js/24-calendar-tab.js?v=20261105k"></script>
 
-<script src="js/25-ai-learning.js?v=20261105j"></script>
+<script src="js/25-ai-learning.js?v=20261105k"></script>
 
-<script src="js/26-topic-profile.js?v=20261105j"></script>
+<script src="js/26-topic-profile.js?v=20261105k"></script>
 
-<script src="js/27-topic-contamination.js?v=20261105j"></script>
+<script src="js/27-topic-contamination.js?v=20261105k"></script>
 
-<script src="js/26-gantt-search.js?v=20261105j"></script>
+<script src="js/26-gantt-search.js?v=20261105k"></script>
 
-<script src="js/28-new-project-wizard.js?v=20261105j"></script>
+<script src="js/28-new-project-wizard.js?v=20261105k"></script>
 
-<script src="js/29-new-project-cluster-detect.js?v=20261105j"></script>
+<script src="js/29-new-project-cluster-detect.js?v=20261105k"></script>
 
-<script src="js/30-issue-collector.js?v=20261105j"></script>
+<script src="js/30-issue-collector.js?v=20261105k"></script>
 
-<script src="js/31-issue-report.js?v=20261105j"></script>
+<script src="js/31-issue-report.js?v=20261105k"></script>
 
-<script src="js/32-sap-capabilities.js?v=20261105j"></script>
+<script src="js/32-sap-capabilities.js?v=20261105k"></script>
 
-<script src="js/33-qa-router.js?v=20261105j"></script>
+<script src="js/33-qa-router.js?v=20261105k"></script>
 
-<script src="js/34-storage-doctor.js?v=20261105j"></script>
-    <script src="js/35-material-cart.js?v=20261105j"></script>
-    <script src="js/36-sap-login.js?v=20261105j"></script>
-    <script src="js/37-project-cache.js?v=20261105j"></script>
-    <script src="js/38-bom-tab.js?v=20261105j"></script>
-    <script src="js/39-groupware-calendar.js?v=20261105j"></script>
-    <script src="js/40-qa-tool-router.js?v=20261105j"></script>
-    <script src="js/41-qa-write-tools.js?v=20261105j"></script>
-    <script src="js/42-page-excel-io.js?v=20261105j"></script>
-    <script src="js/45-mc-import.js?v=20261105j"></script>
-    <script src="js/47-approval-compose.js?v=20261105j"></script>
-    <script src="js/43-briefspec-units.js?v=20261105j"></script>
-    <script src="js/44-backlog-consolidate.js?v=20261105j"></script>
-    <script src="js/46-model-name-builder.js?v=20261105j"></script>
-    <script src="js/48-doc-store.js?v=20261105j"></script>
-    <script src="js/49-panel-project-dict.js?v=20261105j"></script>
-    <script src="js/50-parts-category-pages.js?v=20261105j"></script>
-    <script src="js/51-panel-lib-import.js?v=20261105j"></script>
-    <script src="js/53-page-nas.js?v=20261105j"></script>
-    <script src="js/52-approval-doctypes.js?v=20261105j"></script>
-    <script src="js/54-mail-body-store.js?v=20261105j"></script>
-    <script src="js/55-project-list.js?v=20261105j"></script>
+<script src="js/34-storage-doctor.js?v=20261105k"></script>
+    <script src="js/35-material-cart.js?v=20261105k"></script>
+    <script src="js/36-sap-login.js?v=20261105k"></script>
+    <script src="js/37-project-cache.js?v=20261105k"></script>
+    <script src="js/38-bom-tab.js?v=20261105k"></script>
+    <script src="js/39-groupware-calendar.js?v=20261105k"></script>
+    <script src="js/40-qa-tool-router.js?v=20261105k"></script>
+    <script src="js/41-qa-write-tools.js?v=20261105k"></script>
+    <script src="js/42-page-excel-io.js?v=20261105k"></script>
+    <script src="js/45-mc-import.js?v=20261105k"></script>
+    <script src="js/47-approval-compose.js?v=20261105k"></script>
+    <script src="js/43-briefspec-units.js?v=20261105k"></script>
+    <script src="js/44-backlog-consolidate.js?v=20261105k"></script>
+    <script src="js/46-model-name-builder.js?v=20261105k"></script>
+    <script src="js/48-doc-store.js?v=20261105k"></script>
+    <script src="js/49-panel-project-dict.js?v=20261105k"></script>
+    <script src="js/50-parts-category-pages.js?v=20261105k"></script>
+    <script src="js/51-panel-lib-import.js?v=20261105k"></script>
+    <script src="js/53-page-nas.js?v=20261105k"></script>
+    <script src="js/52-approval-doctypes.js?v=20261105k"></script>
+    <script src="js/54-mail-body-store.js?v=20261105k"></script>
+    <script src="js/55-project-list.js?v=20261105k"></script>
     <!-- 🔎 BOM 에서 특정 부품 찾기(패널·터치…) — 사내 자점그룹표 R100 기반 -->
-    <script src="js/56-bom-part-lookup.js?v=20261105j"></script>
+    <script src="js/56-bom-part-lookup.js?v=20261105k"></script>
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
-    <script src="js/57-storage-adapter.js?v=20261105j"></script>
+    <script src="js/57-storage-adapter.js?v=20261105k"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/58-storage-migrate.js?v=20261105j"></script>
-    <script src="js/59-daily-report.js?v=20261105j"></script>
+    <script src="js/58-storage-migrate.js?v=20261105k"></script>
+    <script src="js/59-daily-report.js?v=20261105k"></script>
 
 </body>
 </html>

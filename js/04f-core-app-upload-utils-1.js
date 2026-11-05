@@ -302,9 +302,14 @@
     
     // 🔒 [수정] 표를 깨끗한 사본으로 복제해서 별도 인쇄 전용 영역에 넣고, 그 영역만 인쇄
     //    화면의 스크롤 박스/필터 숨김 등에 전혀 영향받지 않음 (필터링된 행 전체가 항상 그대로 인쇄됨)
-    window.smartPrint = function() {
+    // 🖨️ [2026-11-05] 화면의 "인쇄 (PDF)" 버튼을 전부 없애고 **브라우저 인쇄**(Ctrl+P)로 통일했다.
+    //    그래서 "사본을 만드는 일"과 "실제로 인쇄를 띄우는 일"을 갈라 둔다 —
+    //    준비(_preparePrint*)는 beforeprint 에서 부르고, window.print() 는 브라우저가 알아서 한다.
+    //    (beforeprint 안에서 window.print() 를 또 부르면 무한 재귀다.)
+    //    반환값 true = 인쇄 전용 사본을 만들었다 / false = 못 만들었다(원본 그대로 인쇄됨).
+    window._preparePrintGantt = function() {
         const sourceTable = document.getElementById('myTable');
-        if (!sourceTable) { window.print(); return; }
+        if (!sourceTable) return false;
         // ⚡ [2026-11-05] 스크롤 가상화 — 화면 밖 행은 **높이만 가진 자리표시**다(js/04j).
         //    표를 통째로 복제하기 **전에** 전부 채우지 않으면 종이에 빈 줄로 찍힌다.
         if (window._ganttHydrateAll) { try { window._ganttHydrateAll(); } catch (e) { console.warn('[smartPrint] 행 채우기 실패', e); } }
@@ -348,15 +353,20 @@
         tableClone.appendChild(ganttFooterTfoot);
 
         document.body.classList.add('gantt-printing-mode');
-        window.print();
+        return true;
     };
+    // 옛 이름 — 버튼은 사라졌지만 다른 코드가 부를 수 있어 남겨 둔다.
+    window.smartPrint = function() { window._preparePrintGantt(); window.print(); };
 
     // 💡 인쇄가 끝나면(취소 포함) 인쇄 전용 사본을 정리 — 단, afterprint가 미리보기 직후 너무 빨리
     //    발생하는 브라우저(Chrome 등)에서 사본이 미리보기 도중 비워지지 않도록 약간 지연시킴
-    window.printTabSection = function(tabId) {
+    window._preparePrintTab = function(tabId) {
         const tabEl = document.getElementById(tabId);
-        const source = tabEl ? tabEl.querySelector('.concept-tab-wrap') : null;
-        if (!source) { window.print(); return; }
+        // 💡 [2026-11-05] `.concept-tab-wrap` 이 없는 탭(Notice — tab-alarm 안에 들어 있다)은
+        //    예전엔 그냥 window.print() 로 떨어져 **백지**가 나왔다(인쇄 CSS가 사본 말고 전부 숨김).
+        //    그런 탭은 탭 요소 자체를 사본의 원본으로 쓴다.
+        const source = tabEl ? (tabEl.querySelector('.concept-tab-wrap') || tabEl) : null;
+        if (!source) return false;
 
         let printArea = document.getElementById('tab-print-area');
         if (!printArea) { printArea = document.createElement('div'); printArea.id = 'tab-print-area'; document.body.appendChild(printArea); }
@@ -725,8 +735,42 @@
             printArea.style.display = '';
         }
 
-        window.print();
+        return true;
     };
+    // 옛 이름 — 버튼은 사라졌지만 다른 코드가 부를 수 있어 남겨 둔다.
+    window.printTabSection = function(tabId) { window._preparePrintTab(tabId); window.print(); };
+
+    // 🖨️ [2026-11-05] 브라우저 인쇄(Ctrl+P · 메뉴 · PDF로 저장)에도 **같은 인쇄 사본**이 나가게 한다.
+    //    인쇄 CSS(styles.css 11절)는 body.*-printing-mode 일 때 사본 말고 전부 숨기므로,
+    //    준비를 안 하면 화면 그대로(어수선하게) 찍힌다 — 그래서 여기서 지금 보고 있는 탭을 준비한다.
+    //    ⚠️ 이 핸들러 안에서 window.print() 를 부르면 무한 재귀다. 준비만 한다.
+    //    ⚠️ 행 채우기(_ganttHydrateAll/_plHydrateAll)는 js/04j·js/55 의 beforeprint 가 따로 하는데
+    //       그 파일들이 **이 파일보다 늦게** 로드돼 리스너 순서가 뒤라, 여기서 직접 부른다
+    //       (안 그러면 자리표시 행이 그대로 복제돼 종이에 빈 줄이 찍힌다).
+    window.addEventListener('beforeprint', function() {
+        try {
+            // 버튼으로 이미 준비해 둔 상태면(옛 경로) 건드리지 않는다.
+            if (document.body.classList.contains('gantt-printing-mode')
+             || document.body.classList.contains('tab-printing-mode')
+             || document.body.classList.contains('ai-summary-printing-mode')) return;
+
+            const active = document.querySelector('.tab-panel.active');
+            const tabId = active ? active.id : 'tab-gantt';
+
+            if (tabId === 'tab-gantt') {
+                window._preparePrintGantt();
+                return;
+            }
+            if (tabId === 'tab-projectlist' && window._plHydrateAll) {
+                try { window._plHydrateAll(); } catch (e) { /* 인쇄를 막지 않게 */ }
+            }
+            // 알람 탭은 한 탭 안에 Alarm/Notice 두 화면이 들어 있다 — 지금 보이는 쪽을 찍는다.
+            window._preparePrintTab(tabId === 'tab-alarm' && window._alarmView === 'notice'
+                                    ? 'tab-notice' : tabId);
+        } catch (e) {
+            console.warn('[print] 인쇄 사본 준비 실패 — 화면 그대로 인쇄됩니다', e);
+        }
+    });
 
     // 💡 [공용화] afterprint/포커스 복귀 양쪽에서 똑같이 쓰는 정리 로직 — 인쇄 미리보기 중에만 화면에서
     //    숨겨야 하는 요소(사이드바/상단바/시트탭바 등 — CSS가 body.tab-printing-mode 기준으로 숨김)를
@@ -742,6 +786,11 @@
         document.body.classList.remove('printing-tab-calendar');
         document.body.classList.remove('printing-tab-weekly');
         document.body.classList.remove('printing-tab-alarm');
+        // 🐛 [2026-11-05] `printing-tab-notice` 가 이 목록에서 **빠져 있었다** — printTabSection 은
+        //    붙이는데 지우는 데가 없어 한 번 공지를 인쇄하면 그 클래스가 그대로 남고, 그 뒤
+        //    다른 탭 인쇄에 공지용 레이아웃(A4 세로·40행)이 얹혔다. 버튼이 사라지고 브라우저
+        //    인쇄가 기본이 된 지금은 사람이 Ctrl+P 를 누를 때마다 걸릴 수 있어 더 눈에 띈다.
+        document.body.classList.remove('printing-tab-notice');
         document.body.classList.remove('printing-tab-address');
 
         // 💡 Gantt 인쇄 전용 사본도 같이 정리 (안 지우면 다음 인쇄 때 다른 탭과 겹쳐 보임)

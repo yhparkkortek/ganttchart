@@ -1103,14 +1103,18 @@
                 } }]
         },
         {
-            // 🗓 Gantt chart — 이 페이지엔 인쇄 버튼이 **없어서** 탭으로 자리를 못 찾는다.
-            //    대신 **간트 툴바의 인쇄(PDF) 버튼**(`#print-btn`) 앞에 붙인다 — 다른 페이지와 같은 자리다.
+            // 🗓 Gantt chart — 이 페이지엔 `.concept-header-box` 가 없어서 탭으로 자리를 못 찾는다.
+            //    대신 **간트 툴바 오른쪽 끝의 빈 버튼 묶음**(`#gantt-toolbar-end`) 안에 넣는다.
+            //    ⚠️ [2026-11-05] 예전엔 그 자리에 있던 인쇄(PDF) 버튼(`#print-btn`) 앞에 끼웠는데
+            //       인쇄 버튼이 전부 삭제돼(브라우저 인쇄 사용) 묶음 자체를 앵커로 바꿨다 —
+            //       `margin-left:auto` 가 그 묶음에 걸려 있으니 **안쪽에 append** 해야 오른쪽 끝에 선다.
             //    ⚠️ [2026-10-20 수정] 처음엔 `button[onclick*="exportToExcel"]`로 잡았는데, 그 선택자가
             //       **프로젝트 드롭다운 메뉴 안의 '프로젝트 엑셀 저장' 항목**을 먼저 집어서 버튼 두 개가
             //       메뉴 안에 들어가 버렸다(사용자 지적). 화면에 하나뿐인 id로 잡을 것.
             id: 'gantt', label: 'Gantt chart',
             nasFolder: 'GANTT',
-            anchorSelector: '#print-btn',
+            anchorSelector: '#gantt-toolbar-end',
+            anchorMode: 'append',
             repaint: ['recalculateSchedules'],
             // 숫자·날짜·짧은 상태 칸은 가운데 정렬(사용자 요청) — 업무명/상세내용은 들여쓰기와
             // 긴 문장이라 왼쪽 그대로 둔다.
@@ -1884,19 +1888,33 @@
         });
     };
 
+    var _pxAnchorWarned = {};   // 앵커 실패는 id 당 한 번만 알린다(클릭마다 다시 도니까)
+
     function _pxRenderButtons() {
         (window.PAGE_EXCEL_SPECS || []).forEach(function (spec) {
-            // 자리를 찾는다 — 기본은 그 탭의 인쇄 버튼, 인쇄 버튼이 없는 페이지는 anchorSelector.
-            var printBtn = null;
+            // 자리를 찾는다 — anchorSelector 가 있으면 그것, 없으면 그 탭 헤더 맨 끝.
+            // ⚠️ [2026-11-05] 예전엔 **그 탭의 인쇄(PDF) 버튼 앞**에 끼웠는데, 그 버튼이
+            //    전부 삭제됐다(브라우저 인쇄 사용). 인쇄 버튼은 어느 탭에서든 `.concept-header-box`
+            //    의 **마지막 자식**이었으므로, 헤더에 그냥 append 하면 자리가 그대로다.
+            //    앵커를 못 찾으면 **조용히 사라지지 말고** 콘솔에 남긴다 — 엑셀 버튼이 통째로
+            //    안 보이는 건 사람이 알아채기 전까지 티가 안 난다.
+            var anchor = null, mode = 'before';
             if (spec.anchorSelector) {
-                printBtn = document.querySelector(spec.anchorSelector);
-            } else {
-                var all = document.querySelectorAll('button[onclick*="printTabSection"]');
-                for (var i = 0; i < all.length; i++) {
-                    if ((all[i].getAttribute('onclick') || '').indexOf("'" + spec.tab + "'") !== -1) { printBtn = all[i]; break; }
-                }
+                anchor = document.querySelector(spec.anchorSelector);
+                if (spec.anchorMode === 'append') mode = 'append';
             }
-            if (!printBtn || !printBtn.parentNode) return;
+            if (!anchor && spec.tab) {
+                anchor = document.querySelector('#' + spec.tab + ' .concept-header-box');
+                mode = 'append';
+            }
+            if (!anchor || (mode === 'before' && !anchor.parentNode)) {
+                if (!_pxAnchorWarned[spec.id]) {
+                    _pxAnchorWarned[spec.id] = 1;
+                    console.warn('[page-excel] 버튼 자리를 못 찾음:', spec.id, spec.anchorSelector || spec.tab);
+                }
+                return;
+            }
+            var printBtn = anchor;   // 아래 삽입 지점 — mode 에 따라 앞/안쪽
             var show = (typeof spec.visibleWhen === 'function') ? !!spec.visibleWhen() : true;
 
             var holderId = 'px-btns-' + spec.id;
@@ -1906,7 +1924,8 @@
                 holder = document.createElement('span');
                 holder.id = holderId;
                 holder.style.cssText = 'display:inline-flex; align-items:center;';
-                printBtn.parentNode.insertBefore(holder, printBtn);   // ← 인쇄 버튼 앞
+                if (mode === 'append') printBtn.appendChild(holder);              // ← 헤더(또는 버튼 묶음) 안쪽 맨 끝
+                else printBtn.parentNode.insertBefore(holder, printBtn);          // ← 앵커 앞
             }
             var hasUndo = !!window._pageExcelUndo[spec.id];
             // 📊 저장 → │ → 📂 불러오기 **순서**(사용자 요청 2026-10-21, 앱 전체 통일).
