@@ -374,6 +374,14 @@ window._cpApplyLive = function(hex, skipSave) {
 
     // 💡 [2026-08-30 추가] 셀 안 번역(🌐) 버튼/번역 결과 글자색이 옛 고정 파랑(#0056b3)이었음 —
     // "완료" 행에서만 회색으로 바뀌는 예외는 더 구체적인 선택자라 그대로 유지됨.
+    // 📔 [2026-11-05 요청] 일일보고 하루 보기 표 — 구분 열을 회색으로 두면 테마를 바꿔도 이 표만
+    //    안 바뀐다. 구분 열은 테마색(headerTint/darkText), '미작성' 은 캘린더 알람 칩과 같은 규칙으로
+    //    **보색**(compGen) — 어떤 테마를 골라도 "지금 테마와 대비되는" 색이 자동으로 나온다.
+    //    기본값(팔레트 미적용)은 styles.css 에 같은 선택자로 있다.
+    css += '.daily-cat-cell { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '.daily-none-row > td { background: ' + compGen.bg + ' !important; }\n'
+        + '.daily-none-txt { color: ' + compGen.darkText + ' !important; }\n';
+
     css += '.trans-btn-hide-print { color: ' + gen.darkText + ' !important; }\n';
     document.documentElement.style.setProperty('--trans-text', gen.darkText);
     // 💡 [2026-09-02 추가] 하단 taskbar 칩(최소화된 모달 칩 + 기본 바로가기 런처)이 프로젝트/테마 전환

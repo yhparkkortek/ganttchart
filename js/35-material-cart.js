@@ -166,6 +166,72 @@
      *  수령인 자동기입처럼 저장 전에만 존재하는 기본값도 여기서 그대로 보인다. */
     window._mcHdr   = function () { var h = hdr(); return JSON.parse(JSON.stringify(h)); };
 
+    // ── 🖱 [2026-11-05 요청] 칩을 **마우스로 잡아 옮긴다** ──────────────────
+    //  자리는 이 PC 에 기억한다(화면이 저마다 다르고, 칩이 가리는 것도 사람마다 다르다).
+    //  ⚠️ 누르기와 끌기를 **갈라야 한다** — 안 가르면 놓는 순간 click 이 따라 들어와 모달이
+    //     같이 열린다. 5px 넘게 움직였을 때만 드래그로 보고, 그때는 그 다음 click 한 번을 삼킨다.
+    //  ⚠️ 옮길 땐 **left/top 으로 바꿔 쓴다** — 칩은 원래 right/bottom 기준이라 그대로 더하면
+    //     마우스와 **반대로** 움직인다.
+    //  ⚠️ 창을 줄이면 저장해 둔 자리가 화면 밖일 수 있다 → 쓸 때마다 화면 안으로 되돌린다.
+    var CHIP_POS_KEY = 'matcart_chip_pos_v1';
+
+    function chipPos() {
+        try {
+            var o = JSON.parse(localStorage.getItem(CHIP_POS_KEY) || 'null');
+            return (o && isFinite(o.left) && isFinite(o.top)) ? o : null;
+        } catch (e) { return null; }
+    }
+
+    function clampChip(bar) {
+        var p = chipPos();
+        if (!p) return;                       // 한 번도 안 옮겼으면 원래 자리(right/bottom) 그대로
+        var w = bar.offsetWidth || 130, h = bar.offsetHeight || 34;
+        var l = Math.max(4, Math.min(p.left, (window.innerWidth || 1200) - w - 4));
+        var tp = Math.max(4, Math.min(p.top, (window.innerHeight || 800) - h - 4));
+        bar.style.left = l + 'px';
+        bar.style.top = tp + 'px';
+        bar.style.right = 'auto';
+        bar.style.bottom = 'auto';
+    }
+
+    function makeChipDraggable(bar) {
+        if (bar._mcDragBound) return;         // innerHTML 은 매번 갈지만 bar 자신은 그대로다
+        bar._mcDragBound = true;
+        bar.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            var r = bar.getBoundingClientRect();
+            var dx = e.clientX - r.left, dy = e.clientY - r.top, moved = false;
+            function mv(ev) {
+                if (!moved && Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) < 5) return;
+                moved = true;
+                bar.style.left = (ev.clientX - dx) + 'px';
+                bar.style.top = (ev.clientY - dy) + 'px';
+                bar.style.right = 'auto';
+                bar.style.bottom = 'auto';
+                ev.preventDefault();          // 끄는 동안 글자가 선택되지 않게
+            }
+            function up() {
+                document.removeEventListener('mousemove', mv, true);
+                document.removeEventListener('mouseup', up, true);
+                if (!moved) return;           // 그냥 누른 것 — 모달이 열려야 한다
+                try {
+                    localStorage.setItem(CHIP_POS_KEY, JSON.stringify({
+                        left: parseFloat(bar.style.left) || 0,
+                        top: parseFloat(bar.style.top) || 0
+                    }));
+                } catch (e2) { /* 저장 공간이 꽉 차도 옮기는 것 자체는 되게 둔다 */ }
+                document.addEventListener('click', function swallow(ev2) {
+                    ev2.stopPropagation();
+                    ev2.preventDefault();
+                    document.removeEventListener('click', swallow, true);
+                }, true);
+            }
+            document.addEventListener('mousemove', mv, true);
+            document.addEventListener('mouseup', up, true);
+        });
+        window.addEventListener('resize', function () { clampChip(bar); });
+    }
+
     // ── 우하단 칩 — 담긴 게 있을 때만 "자재청구/자재입고"가 활성화된다 ──
     function refreshChip() {
         var n = items().length;
@@ -178,12 +244,16 @@
             document.body.appendChild(bar);
         }
         bar.style.display = 'flex';
+        makeChipDraggable(bar);
+        clampChip(bar);
         // [2026-10-02 사용자 요청] 자재청구/자재입고 칩은 뺐다 — 이동유형은 모달 안 드롭다운(84종)에서
         //   고르면 되고, 칩이 둘 더 있으면 같은 선택을 두 군데서 하게 돼 헷갈린다.
         bar.innerHTML =
             '<button onclick="window._mcOpen()" style="padding:7px 13px; background:#fff3e0;'
             + ' border:1px solid #e8b974; border-radius:20px; cursor:pointer; font-size:12.5px;'
             + ' font-weight:bold; color:#8a5a12; box-shadow:0 2px 8px rgba(0,0,0,.18);"'
+            + ' title="' + T('끌어서 자리를 옮길 수 있습니다',
+                             'Drag to move') + '"'
             + ' onmouseover="this.style.filter=\'brightness(.96)\'" onmouseout="this.style.filter=\'\'">'
             + '🧺 ' + T('자재 보관함 ', 'Cart ') + n + T('건', '') + '</button>';
     }

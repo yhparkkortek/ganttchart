@@ -1447,7 +1447,7 @@
                 var pj = String((it && it.project) || '').replace(/\.json$/i, '');
                 var fs = filesOf(d, it.name);
                 return '<tr>' +
-                  '<td style="' + td + ' text-align:center; color:#50616f; background:#fafbfc; white-space:nowrap;">' + esc(it.cat || '-') + '</td>' +
+                  '<td class="daily-cat-cell" style="' + td + '">' + esc(it.cat || '-') + '</td>' +
                   '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
                     (pj ? '<div style="color:#9aa3ab; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' + esc(pj) + '</div>' : '') +
                   '</td>' +
@@ -2310,8 +2310,9 @@
         //    업무 하나가 한 줄이고, 이름·종류는 `rowspan` 으로 묶는다.
         //    ⚠️ 그래서 `rows` 는 사람당 **여러 줄**이다(전엔 한 줄이었다).
         var td = 'padding:5px 8px; border:1px solid #e3e6ea; vertical-align:top; font-size:12px;';
-        // 🎨 [2026-11-05 요청] 구분 열은 **모든 줄에서 같은 배경**으로(업무·기타 가리지 않고).
-        var CAT_BG = ' text-align:center; color:#50616f; background:#f3f6f8; white-space:nowrap;';
+        // 🎨 [2026-11-05 요청] 구분 열은 **모든 줄에서 같은 배경**, 그리고 **회색이 아니라 팔레트 테마색**.
+        //    ⚠️ 색을 여기 인라인으로 박으면 팔레트를 바꿔도 이 표만 안 바뀐다(표를 다시 그려야 하니까).
+        //    → 클래스만 달고 색은 styles.css(기본 청록) + js/21 `_cpApplyLive`(라이브)가 정한다.
         var rows = people.map(function (p) {
             var d = byKey[String(p.key || '').toLowerCase()];
             var dbl = ' ondblclick="window._dailyRowDbl(\'' + esc(String(p.key || '')) + '\')"'
@@ -2321,9 +2322,10 @@
                        esc(p.name || p.key) + '</td>';
             };
             if (!d) {
-                return '<tr style="background:#fff8f8; cursor:pointer;"' + dbl + '>' + nameTd(1) +
+                // 🎨 '미작성' 은 테마색이 아니라 그 **보색** — 한눈에 테마와 갈려 보여야 한다(js/21).
+                return '<tr class="daily-none-row" style="cursor:pointer;"' + dbl + '>' + nameTd(1) +
                        '<td style="' + td + '" colspan="' + (DAY_COLS.length - 1) + '">' +
-                       '<span style="color:#b1432f; font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
+                       '<span class="daily-none-txt" style="font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
             }
             var typ = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
             var typeTxt = window._currentLang === 'en' ? (typ.en || '') : (typ.ko || '');
@@ -2350,7 +2352,7 @@
                 var fs = filesOf(d, it.name);
                 out.push('<tr style="cursor:pointer;"' + dbl + '>' +
                     (n === 0 ? nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' : '') +
-                    '<td style="' + td + CAT_BG + '">' + esc(it.cat || '-') + '</td>' +
+                    '<td class="daily-cat-cell" style="' + td + '">' + esc(it.cat || '-') + '</td>' +
                     '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
                       (pj ? '<div style="color:#9aa3ab; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' + esc(pj) + '</div>' : '') +
                     '</td>' +
@@ -2364,7 +2366,7 @@
             if (hasEtc) {
                 out.push('<tr style="cursor:pointer;"' + dbl + '>' +
                     (items.length ? '' : nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>') +
-                    '<td style="' + td + CAT_BG + '">-</td>' +
+                    '<td class="daily-cat-cell" style="' + td + '">-</td>' +
                     '<td style="' + td + ' color:#888;">' + esc(T('(기타)', '(other)')) + '</td>' +
                     '<td style="' + td + ' white-space:pre-line;" colspan="' + window.DAILY_FIELDS.length + '">' + esc(etcTxt || '-') + '</td>' +
                     '<td style="' + td + ' text-align:center;">' + (etcFiles.length ? fileChips(etcFiles) : '<span style="color:#ccc;">-</span>') + '</td>' +

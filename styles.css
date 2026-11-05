@@ -2547,3 +2547,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
    테마가 바뀌면 같이 바뀐다). ⚠️ 배경은 일부러 안 건드린다 — 행 클래스(.parent-row 등)가 칠한
    색이 그대로 보여야 빠르게 스크롤할 때 "빈 구멍"이 아니라 아직 안 그려진 줄로 보인다. */
 #myTable td.gantt-lazy-td { height: var(--gantt-row-h, 24px); padding: 0; }
+
+/* 📔 [2026-11-05 요청] 일일보고 표 — 구분 열은 팔레트 **테마색**, '미작성' 은 그 **보색**.
+   ⚠️ 여기 값은 팔레트를 한 번도 안 건드린 기본 청록 상태의 값이고, 색을 고르면 js/21 의
+      `_cpApplyLive` 가 같은 선택자를 !important 로 다시 선언해 이긴다 — 두 곳 중 하나만
+      고치면 "기본 테마에서만 색이 안 바뀐다" 가 된다(클래스 규칙이라 인라인 hex 매칭으로는
+      절대 안 잡힌다). 되돌리기(`_cpRevertLive`)는 라이브 <style> 을 비우므로 여기로 돌아온다. */
+.daily-cat-cell { text-align: center; white-space: nowrap; background: #e7f7f9; color: #007280; }
+.daily-none-row > td { background: #f9e9e7; }
+.daily-none-txt { color: #800d00; }
