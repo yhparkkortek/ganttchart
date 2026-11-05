@@ -35,7 +35,8 @@ win._t = (ko) => ko;
 win.escapeHtml = (s) => String(s == null ? '' : s);
 win.showToast = () => {};
 win._storageMode = () => 'nas';
-win.currentUserName = 'yhpark';
+win._nasAccount = 'yhpark';          // 🪪 파일 이름의 근거는 **NAS 계정**(js/57 이 드러낸다)
+win.currentUserName = '박용훈';       // 표시용 이름 — 파일 이름에 쓰면 안 된다(아래 시험)
 win.currentDriveFileName = 'LNW_STELLAR32_32.0.json';
 
 // js/20 의 진짜 파서를 쓴다고 설계했으므로, 그 전역이 있는 상태를 재현한다.
@@ -104,9 +105,25 @@ ok('월 폴더', win.DAILY_PATHS.month('2026-11-04') === 'App_Config/DailyReport
 const pr = win.DAILY_PATHS.parse('2026-11-04__yhpark.json');
 ok('파일명 역파싱', pr && pr.ymd === '2026-11-04' && pr.key === 'yhpark');
 ok('엉뚱한 이름은 null', win.DAILY_PATHS.parse('_roster.json') === null);
-ok('계정 id 에 꼬리가 붙어도 키가 같다', (function () {
-    win.currentUserName = '박용훈 (PC)'; const a = win._dailyMyKey();
-    win.currentUserName = 'yhpark'; return a !== '' && win._dailyMyKey() === 'yhpark';
+// 🪪 [2026-11-05 실측 사고 회귀] 파일 이름의 근거는 **NAS 계정** 하나다.
+//    예전엔 `currentUserName`(표시용)을 썼다 — 한글 실명·'비로그인 (로컬)' 이 ascii 치환에서
+//    전부 깎여 `'unknown'` 이 되고, 그 결과 **팀원 전원이 한 파일을 함께 썼다.**
+ok('키는 NAS 계정에서 온다(표시용 한글 이름을 쓰지 않는다)', win._dailyMyKey() === 'yhpark', win._dailyMyKey());
+ok('계정을 모르면 키가 빈 값이다 — unknown 으로 떨어지지 않는다', (function () {
+    const a = win._nasAccount; win._nasAccount = '';
+    win.currentUserName = '비로그인 (로컬)';
+    const k = win._dailyMyKey();
+    win._nasAccount = a; win.currentUserName = '박용훈';
+    return k === '';
+})(), '키=' + (function () {
+    const a = win._nasAccount; win._nasAccount = ''; const k = win._dailyMyKey(); win._nasAccount = a; return JSON.stringify(k);
+})());
+ok('계정을 모르면 쓰기가 거부된다', (function () {
+    const a = win._nasAccount; win._nasAccount = '';
+    let threw = false;
+    try { win._dailyRequireKey(); } catch (e) { threw = /계정/.test(e.message); }
+    win._nasAccount = a;
+    return threw;
 })());
 
 // ══ 3. 자동 초안 — 간트에서 꺼내 쓴다(AI 호출 0회) ═══════════════════════════

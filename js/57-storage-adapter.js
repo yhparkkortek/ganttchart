@@ -1369,6 +1369,12 @@
             if (s && s.configured && !s.ok && s.reason === 'no_session') s = await nasLoginOnce(s);
             if (s && s.ok) {
                 _nasOnline = true;
+                // 🪪 [2026-11-05] 계정 id 를 **그 자체로** 드러낸다.
+                //    `currentUserName` 은 **표시용**이라 아래 조건에 걸리지 않으면 덮지 않고,
+                //    사람이 js/09 로 넣은 한글 실명·'로컬 사용자 (PC)' 가 그대로 남는다.
+                //    그걸 파일 이름의 근거로 쓴 곳이 있었다(일일보고) → 한글이 깎여 **전원이
+                //    한 파일(`__unknown.json`)** 에 몰렸다. 파일 이름은 이 값을 쓸 것.
+                if (s.user) window._nasAccount = String(s.user);
                 if (s.user && (!window.currentUserName || /비로그인|익명|알 수 없는/.test(window.currentUserName))) {
                     window.currentUserName = s.user;
                 }

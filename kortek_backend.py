@@ -1174,6 +1174,13 @@ def _daily_tg_tick(force=False):
             by_chat[str(m['tgChatId'])] = m
     st = _daily_state()
     offset = st.get('offset') or 0
+    # ⚠️⚠️ [2026-11-05] **처음 켤 땐 쌓인 것을 보고로 집어넣지 않는다.**
+    #    텔레그램은 안 읽은 업데이트를 ~24시간 들고 있고, 이 봇은 알람에도 쓰여서
+    #    사람들이 답장을 보낸 적이 있다. `offset` 이 없는 첫 틱에서 그걸 다 가져오면
+    #    **옛 잡담이 오늘 보고에 들어가고 되읽기 메시지까지 쏟아진다.**
+    #    (메일 감시에 이미 같은 가드가 있다 — `_mail_watch_tick` 의 "처음 켤 땐 안 보냄")
+    #    → 첫 틱은 오프셋만 넘기고 **아무것도 쓰지 않는다.** 다음 틱부터 받는다.
+    first_run = not st.get('primed')
     try:
         r = requests.get('https://api.telegram.org/bot%s/getUpdates' % TELEGRAM_TOKEN,
                          params={'offset': offset, 'timeout': 0, 'limit': 50}, timeout=20)
@@ -1182,6 +1189,17 @@ def _daily_tg_tick(force=False):
         return {'ok': False, 'message': '수신 실패: %s' % e}
     if not j.get('ok'):
         return {'ok': False, 'message': str(j)[:200]}
+    if first_run:
+        skip_last = offset
+        for up in (j.get('result') or []):
+            skip_last = max(skip_last, (up.get('update_id') or 0) + 1)
+        st['primed'] = True
+        st['offset'] = skip_last
+        _daily_state_save(st)
+        print("[일일보고] 첫 수신 틱 — 쌓여 있던 %d건은 보고로 넣지 않고 넘겼습니다."
+              % len(j.get('result') or []))
+        return {'ok': True, 'handled': 0, 'ignored': 0, 'primed': True,
+                'skippedBacklog': len(j.get('result') or []), 'offset': skip_last}
     handled, ignored, last = 0, 0, offset
     for up in (j.get('result') or []):
         uid = up.get('update_id') or 0

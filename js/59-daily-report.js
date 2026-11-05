@@ -78,21 +78,70 @@
         d = d || new Date();
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
+    // 요일 이름은 **데이터**로 — 코드에 한글만 박아 두면 영문 모드에서 `2026-11-05 (목)` 이 남는다.
+    var DAY_NAMES = { ko: ['일', '월', '화', '수', '목', '금', '토'],
+                      en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] };
     function dayLabel(s) {
         var d = new Date(s + 'T00:00:00');
-        return s + ' (' + ['일', '월', '화', '수', '목', '금', '토'][d.getDay()] + ')';
+        var names = DAY_NAMES[window._currentLang === 'en' ? 'en' : 'ko'];
+        return s + ' (' + names[d.getDay()] + ')';
     }
     window._dailyYmd = ymd;
 
-    /** 파일 이름에 쓸 내 키 — 사내 계정 id. 파일명에 못 쓰는 글자는 뺀다. */
+    // 🪪 NAS 계정 id — 파일 이름의 **유일한** 근거. 한 번 확인하면 들고 있는다.
+    var _acct = null;
+
+    /**
+     * 파일 이름에 쓸 내 키 — **NAS 계정 id**. 모르면 **빈 문자열**(쓰지 않는다).
+     *
+     * ⚠️⚠️ [2026-11-05 실측 사고] 전엔 `window.currentUserName` 을 썼다. 그건 **표시용 이름**이라
+     *   ① NAS 신원 확보가 늦거나 실패하면 `'비로그인 (로컬)'` 이 그대로 들어오고
+     *   ② js/09 로 사람이 넣은 **한글 실명**('박용훈', '로컬 사용자 (PC)')이 들어온다.
+     *   둘 다 아래 ascii 치환에서 **전부 깎여** 빈 문자열이 되고, 예전 코드는 그걸
+     *   `'unknown'` 으로 떨어뜨렸다 → 파일이 `<날짜>__unknown.json` 하나가 되어
+     *   **팀원 전원이 한 파일을 함께 쓴다.** 이 설계의 단 하나뿐인 불변식
+     *   ("한 파일에 쓰는 사람은 한 명")이 조용히 깨지는 모양이고,
+     *   그게 바로 11-04 에 `project_index.json` 을 날린 그 모양이다.
+     *   → 근거는 `window._nasAccount`(js/57 이 `/nas/status` 에서 받아 드러낸다) 하나.
+     *     **모르면 'unknown' 으로 떨어지지 않고 빈 값을 주고, 쓰기 쪽이 거부한다.**
+     */
     function myKey() {
-        var raw = String(window.currentUserName || '').trim();
-        // "홍길동 (PC)" 처럼 꼬리가 붙는 경로가 있다(js/09 getActiveUserName) — 떼고 쓴다.
-        raw = raw.replace(/\s*\(PC\)\s*$/, '').trim();
+        var raw = String(_acct || window._nasAccount || '').trim();
         var k = raw.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-        return k || 'unknown';
+        return k;
     }
     window._dailyMyKey = myKey;
+
+    /**
+     * NAS 계정을 확보한다(1회·캐시). **쓰기·초안·화면 전에 반드시 await.**
+     * 어댑터가 부팅 때 못 받았을 수 있다(백엔드가 그 순간 재시작 중이면 실제로 그렇다 — 실측).
+     * 그래서 여기서 한 번 더 묻는다. 그래도 모르면 빈 문자열을 돌려준다(막는 건 부르는 쪽).
+     */
+    window.dailyEnsureIdentity = async function () {
+        if (myKey()) return myKey();
+        try {
+            var r = await fetch('http://127.0.0.1:5000/nas/status?_cb=' + Date.now(), { cache: 'no-store' });
+            var s = await r.json();
+            if (s && s.ok && s.user) {
+                _acct = String(s.user);
+                if (!window._nasAccount) window._nasAccount = _acct;
+            }
+        } catch (e) {
+            console.warn('[일일보고] 계정 확인 실패:', e.message);
+        }
+        return myKey();
+    };
+
+    /** 쓰기 직전 관문 — 계정을 모르면 **쓰지 않는다**. */
+    function requireKey() {
+        var k = myKey();
+        if (!k) {
+            throw new Error(T('내 계정을 알 수 없어 저장하지 않았습니다 — NAS 에 로그인됐는지 🔑 설정에서 확인하고 새로고침해주세요.',
+                              'Not saved: your account is unknown. Check the NAS login (🔑 settings) and reload.'));
+        }
+        return k;
+    }
+    window._dailyRequireKey = requireKey;
 
     // ── 명단(roster) — 계정 id ↔ 실명 ↔ 역할 별칭. **PM 한 명만 쓴다.** ─────────
     // ⚠️ 간트에는 담당자 열이 **아예 없다**(실측 12/12). 그래서 "이게 내 일인가"는
@@ -268,7 +317,11 @@
     }
 
     window.dailyLoad = async function (dateStr, key) {
-        var rel = window.DAILY_PATHS.file(dateStr, key || myKey());
+        var k = key || myKey();
+        // ⚠️ 계정을 모르면 **경로를 만들지 않는다** — `…__.json` 을 읽으러 가면
+        //    "없다"로 보이고, 그 뒤 저장이 빈 파일을 새로 만든다.
+        if (!k) return null;
+        var rel = window.DAILY_PATHS.file(dateStr, k);
         try {
             var o = await window.nasAppFile.get(rel, { json: true });
             if (!o) return null;
@@ -287,7 +340,11 @@
      *   (project_index 를 0건으로 덮어 날린 그 사고와 같은 모양을 미리 막는다)
      */
     window.dailySave = async function (doc) {
-        var rel = window.DAILY_PATHS.file(doc.date, doc.key || myKey());
+        // ⚠️ 이 함수는 **내 파일만** 쓴다(그게 이 설계의 불변식이다). 그래서 `doc.key` 를
+        //    믿지 않고 덮어쓴다 — 옛 초안(localStorage)에 `'unknown'` 이 남아 있을 수 있다.
+        var _k = requireKey();
+        doc.key = _k;
+        var rel = window.DAILY_PATHS.file(doc.date, _k);
         var cur = null;
         try { cur = await window.nasAppFile.get(rel, { json: true }); } catch (e) { cur = undefined; }
         if (cur === undefined) {
@@ -354,6 +411,13 @@
             return;
         }
         _date = dateStr || ymd();
+        // 🪪 계정을 모르면 쓸 파일이 정해지지 않는다 — 열기 전에 한 번 확보하고,
+        //    그래도 모르면 **모달을 열지 않고** 왜 안 되는지 말한다.
+        if (!await window.dailyEnsureIdentity()) {
+            toast('⚠️ ' + T('내 계정을 알 수 없어 보고를 열 수 없습니다 — NAS 에 로그인됐는지 🔑 설정에서 확인하고 새로고침해주세요.',
+                             'Cannot open: your account is unknown. Check the NAS login (🔑 settings) and reload.'), 'warning', 9000);
+            return;
+        }
         await window.dailyLoadRoster();
         try {
             _doc = await window.dailyLoad(_date) || emptyDoc(_date);
@@ -648,6 +712,7 @@
         if (window._storageMode && window._storageMode() !== 'nas') {
             toast(T('NAS 저장소에서만 쓸 수 있습니다.', 'NAS storage only.'), 'warning'); return;
         }
+        await window.dailyEnsureIdentity();   // 씨앗 행의 계정id 를 채우려면 먼저 알아야 한다
         await window.dailyLoadRoster(true);
         var list = (_roster || []).slice();
         if (!list.length) list = [{ key: myKey(), name: '', aliases: [], team: '', tgChatId: '', active: true, notifier: true }];
@@ -1071,12 +1136,23 @@
         var date = window._dailyTabDate || ymd();
         var lbl = document.getElementById('daily-day-label');
         if (lbl) lbl.textContent = dayLabel(date);
+        // 🗓️ 보기 토글 버튼 라벨은 **js/59 가 맡는다** — 그래서 HTML 에 `data-i18n` 을 달지 않았다.
+        //    (i18n 맵은 HTML 라벨을 덮어쓰므로, 맵에 맡기면 '하루 보기'가 다시 '월 보기'로 되돌아간다)
+        //    ⚠️ 전엔 아무도 안 고쳐서 **월 보기로 바꿔도 버튼이 계속 '월 보기'** 였다.
+        var vb = document.getElementById('daily-view-btn');
+        if (vb) {
+            vb.textContent = (window._dailyView === 'month')
+                ? '📅 ' + T('하루 보기', 'Day')
+                : '🗓️ ' + T('월 보기', 'Month');
+        }
         if (window._storageMode && window._storageMode() !== 'nas') {
             box.innerHTML = '<div style="padding:18px; color:#b1432f; font-size:13px;">' +
                 esc(T('일일보고는 사내 NAS 저장소에서만 동작합니다.', 'Daily report requires the NAS storage backend.')) + '</div>';
             return;
         }
         box.innerHTML = '<div style="padding:18px; color:#888; font-size:12.5px;">⏳ ' + esc(T('불러오는 중…', 'Loading…')) + '</div>';
+        // 🪪 "내 보고"를 가리려면 내 계정을 알아야 한다. 부팅 때 못 받았을 수 있다(실측).
+        await window.dailyEnsureIdentity();
 
         // ── 월 보기 — 목록 1콜로 격자만 그리고, 칸을 누를 때 그 날로 간다 ──────────
         if (window._dailyView === 'month') {

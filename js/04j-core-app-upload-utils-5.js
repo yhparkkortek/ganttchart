@@ -198,6 +198,14 @@
                 'btn-prev':           '◀ 이전',
                 'btn-next':           '다음 ▶',
                 'btn-today':          '오늘',
+                // 📔 일일 업무보고 (js/59) — HTML 에 키만 있고 맵에 없어서 영문 모드에서 한글로 남아 있었다
+                'btn-prev-day':       '◀ 이전날',
+                'btn-next-day':       '다음날 ▶',
+                'btn-daily-write':    '✏️ 내 보고 쓰기',
+                'btn-daily-roster':   '👥 명단',
+                'btn-daily-notify':   '📣 알림 확인',
+                'btn-daily-view':     '🗓️ 월 보기',
+                'btn-daily-excel':    '📊 엑셀 출력',
                 'btn-prev-week':      '◀ 이전주',
                 'btn-next-week':      '다음주 ▶',
                 'btn-cal-export':     '📤 내보내기/동기화',
@@ -500,6 +508,14 @@
                 'btn-prev':           '◀ Prev',
                 'btn-next':           'Next ▶',
                 'btn-today':          'Today',
+                // 📔 Daily report (js/59)
+                'btn-prev-day':       '◀ Prev Day',
+                'btn-next-day':       'Next Day ▶',
+                'btn-daily-write':    '✏️ Write Mine',
+                'btn-daily-roster':   '👥 Roster',
+                'btn-daily-notify':   '📣 Check Alerts',
+                'btn-daily-view':     '🗓️ Month',
+                'btn-daily-excel':    '📊 Export Excel',
                 'btn-prev-week':      '◀ Prev Week',
                 'btn-next-week':      'Next Week ▶',
                 'btn-cal-export':     '📤 Export/Sync',
@@ -872,6 +888,13 @@
         // 발견). 실제 텍스트 맵/갱신 로직은 15c-mail-server-tab-2.js의 _macRefreshLang()에 있음
         // (모달을 처음 열 때도 같은 함수를 호출해서 "영문 모드에서 처음 여는" 경우도 커버).
         if (window._macRefreshLang) window._macRefreshLang();
+
+        // 📔 일일 업무보고 — 표·일 종류·집계 문구는 js/59 가 그리므로 다시 그려야 바뀐다.
+        //    (전엔 언어를 바꿔도 탭 안이 한글로 남아 있다가, 날짜를 옮기면 그제서야 영문이 됐다)
+        const _dailyPanel = document.getElementById('tab-daily');
+        if (window.dailyRenderTab && _dailyPanel && _dailyPanel.classList.contains('active')) {
+            window.dailyRenderTab();
+        }
 
         // [TG Chat ID 안내] 번역
         const _tgGuideArrow = document.getElementById('tg-chatid-guide-arrow');

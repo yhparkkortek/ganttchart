@@ -83,7 +83,10 @@ STATE = os.path.join(os.path.dirname(B.DAILY_TG_STATE), '_test_daily_state.json'
 B.DAILY_TG_STATE = STATE
 
 
-def reset(roster=None, nonwork=None, state=None):
+def reset(roster=None, nonwork=None, state=None, primed=True):
+    """primed=True(기본) — **이미 한 번 켜 본 상태**를 재현한다.
+    첫 틱은 쌓인 것을 보고로 넣지 않고 넘기므로(2026-11-05 가드),
+    수신 동작을 보려면 그 단계를 지난 상태여야 한다. 가드 자체는 primed=False 로 시험한다."""
     NAS.files.clear()
     NAS.fail_read.clear()
     NAS.fail_write = False
@@ -97,9 +100,12 @@ def reset(roster=None, nonwork=None, state=None):
         os.remove(STATE)
     except OSError:
         pass
-    if state:
+    st = dict(state or {})
+    if primed:
+        st['primed'] = True
+    if st:
         with open(STATE, 'w', encoding='utf-8') as f:
-            json.dump(state, f)
+            json.dump(st, f)
 
 
 ME = 'yhpark'
@@ -188,6 +194,26 @@ ok('마감 전에는 안 보낸다', r.get('skipped') == 'before-due', r)
 reset(ROSTER, None, {'dueAt': '00:00'})
 r = B._daily_report_tick()
 ok('비근무일 판정을 못 하면 안 보낸다', r.get('skipped') == 'non-workday' and len(SENT) == 0, r)
+
+print('\n■ 텔레그램 수신 — 처음 켤 때 쌓인 것 (2026-11-05 가드)')
+# ⚠️ 봇은 알람에도 쓰여서 사람들이 답장을 보낸 적이 있다. 텔레그램은 안 읽은 업데이트를
+#    ~24시간 들고 있으므로, 가드가 없으면 **옛 잡담이 오늘 보고에 들어간다.**
+reset(ROSTER, FRESH, primed=False)
+UPDATES.extend([
+    {'update_id': 5, 'message': {'chat': {'id': 111}, 'text': '어제 하던 잡담'}},
+    {'update_id': 6, 'message': {'chat': {'id': 111}, 'text': '이것도 옛것'}},
+])
+r = B._daily_tg_tick()
+ok('첫 틱은 쌓인 것을 보고로 넣지 않는다',
+   r.get('skippedBacklog') == 2 and B._daily_rel(TODAY, ME) not in NAS.files, r)
+ok('첫 틱은 되읽기 메시지도 안 보낸다', len(SENT) == 0, SENT)
+ok('첫 틱이 offset 을 쌓인 것 뒤로 넘긴다', B._daily_state().get('offset') == 7, B._daily_state())
+ok('첫 틱 뒤에는 primed 로 적힌다', B._daily_state().get('primed') is True, B._daily_state())
+# 같은 상태에서 두 번째 틱은 **정상으로 받는다**
+del UPDATES[:]
+UPDATES.extend([{'update_id': 7, 'message': {'chat': {'id': 111}, 'text': '이제부터 받는다'}}])
+r2 = B._daily_tg_tick()
+ok('두 번째 틱부터는 정상 수신', r2.get('handled') == 1 and B._daily_rel(TODAY, ME) in NAS.files, r2)
 
 print('\n■ 텔레그램 수신')
 reset(ROSTER, FRESH)
