@@ -131,10 +131,16 @@
      *   → 근거는 `window._nasAccount`(js/57 이 `/nas/status` 에서 받아 드러낸다) 하나.
      *     **모르면 'unknown' 으로 떨어지지 않고 빈 값을 주고, 쓰기 쪽이 거부한다.**
      */
+    /** 계정id 로 쓸 수 있게 눕힌다. ⚠️ 주소록에서 메일로 추정할 때도 **같은 함수**를 쓴다 —
+     *  두 벌이면 `Y.Park` 과 `y-park` 처럼 갈라져 같은 사람이 두 줄로 보인다. */
+    function keyClean(raw) {
+        return String(raw || '').trim().toLowerCase()
+            .replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+    window._dailyKeyClean = keyClean;
+
     function myKey() {
-        var raw = String(_acct || window._nasAccount || '').trim();
-        var k = raw.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-        return k;
+        return keyClean(_acct || window._nasAccount || '');
     }
     window._dailyMyKey = myKey;
 
@@ -169,6 +175,99 @@
     }
     window._dailyRequireKey = requireKey;
 
+    // ══ 📒 명단은 **주소록에서 저절로** 만들어진다 (2026-11-05 요청) ═══════════
+    //  "팀원이 전부 기본으로 보여줘야 함" · "텔레그램 chat id 는 주소록에 이미 적었다".
+    //  맞다 — 같은 값을 두 곳에 적게 하면 **한쪽은 반드시 낡는다.** 주소록이 원본이고
+    //  `_roster.json` 은 **거기 없는 것만** 든다(📣 담당·사용 안 함·별칭·계정id 교정).
+    //
+    //  실측(2026-11-05, 실제 주소록 394명):
+    //   ⚠️ 주소록은 **전사**다 — 부서로 거르지 않으면 남의 팀 380명이 전부 '미작성'으로 뜬다.
+    //   ⚠️ 이름이 부서와 같은 행은 사람이 아니라 **그룹 메일 주소**다(`개발3팀`).
+    //   ⚠️ 계정id 는 **메일 @ 앞부분**으로 본다 — 메일·그룹웨어가 같은 체계라는 건 이미
+    //      확인된 전제이고(docs/groupware.md), NAS 계정도 같다(실측: 박용훈 → `yhpark`,
+    //      이 PC 의 `window._nasAccount` 와 일치). **한 명으로 확인한 규칙**이므로,
+    //      틀렸을 때 조용하지 않도록 하루 보기가 **명단에 없는 작성자도** 같이 보여 준다.
+    window.DAILY_ROSTER_SRC = window.DAILY_ROSTER_SRC || {
+        teamField: 'dept',          // 주소록의 부서 칸
+        mailField: 'email',
+        tgField: 'telegramId',      // 사람이 이미 적어 둔 텔레그램 chat id
+        /** 사람이 아닌 행(그룹 주소)인가. */
+        isGroupRow: function (p) {
+            var n = String((p && p.name) || '').trim();
+            var d = String((p && p.dept) || '').trim();
+            return !n || (!!d && n === d);
+        }
+    };
+
+    function addrRows() {
+        var ab = (window.tabData && window.tabData.addressBook);
+        if (!Array.isArray(ab) || !ab.length) {
+            try { ab = (window.AddressBook && window.AddressBook.load) ? window.AddressBook.load() : []; }
+            catch (e) { ab = []; }
+        }
+        return Array.isArray(ab) ? ab : [];
+    }
+
+    function keyFromMail(mail) {
+        return keyClean(String(mail || '').split('@')[0]);
+    }
+
+    /** 내 팀 — 주소록에서 내 계정으로 찾는다. 못 찾으면 명단 파일에 적힌 값. */
+    function myTeam(filed) {
+        var k = myKey();
+        if (k) {
+            var rows = addrRows();
+            for (var i = 0; i < rows.length; i++) {
+                if (keyFromMail(rows[i] && rows[i][window.DAILY_ROSTER_SRC.mailField]) === k) {
+                    return String(rows[i][window.DAILY_ROSTER_SRC.teamField] || '').trim();
+                }
+            }
+        }
+        var mine = (filed || []).filter(function (m) {
+            return m && String(m.key || '').toLowerCase() === k;
+        })[0];
+        return (mine && String(mine.team || '').trim()) || '';
+    }
+
+    /** 주소록 → 우리 팀 사람들. 팀을 모르면 **아무도 안 넣는다**(전사 394명을 띄울 순 없다). */
+    window.dailyRosterFromAddressBook = function (team) {
+        var S = window.DAILY_ROSTER_SRC;
+        var t = String(team || '').trim();
+        if (!t) return [];
+        var out = [];
+        addrRows().forEach(function (p) {
+            if (!p || S.isGroupRow(p)) return;
+            if (String(p[S.teamField] || '').trim() !== t) return;
+            var k = keyFromMail(p[S.mailField]);
+            if (!k) return;                       // 메일이 없으면 파일 이름을 못 만든다
+            out.push({
+                key: k, name: String(p.name || '').trim(), team: t,
+                aliases: [], tgChatId: String(p[S.tgField] || '').trim(),
+                active: true, fromAddr: true
+            });
+        });
+        return out;
+    };
+
+    /**
+     * 명단 파일 + 주소록을 합친다.
+     * ⚠️ **사람이 적은 값이 이긴다** — 파일에 있는 항목은 빈 칸만 주소록으로 채운다
+     *    (📣·사용 안 함·별칭·교정한 계정id 를 덮으면 그 설정이 조용히 사라진다).
+     */
+    function mergeRoster(filed) {
+        var out = (filed || []).map(function (m) { return Object.assign({}, m); });
+        var byKey = {};
+        out.forEach(function (m) { byKey[String(m.key || '').toLowerCase()] = m; });
+        window.dailyRosterFromAddressBook(myTeam(filed)).forEach(function (a) {
+            var hit = byKey[a.key];
+            if (!hit) { out.push(a); byKey[a.key] = a; return; }
+            if (!String(hit.name || '').trim()) hit.name = a.name;
+            if (!String(hit.team || '').trim()) hit.team = a.team;
+            if (!String(hit.tgChatId || '').trim()) hit.tgChatId = a.tgChatId;
+        });
+        return out;
+    }
+
     // ── 명단(roster) — 계정 id ↔ 실명 ↔ 역할 별칭. **PM 한 명만 쓴다.** ─────────
     // ⚠️ 간트에는 담당자 열이 **아예 없다**(실측 12/12). 그래서 "이게 내 일인가"는
     //    역할(`_담당구분`) → `projectMeta.<역할>담당자` → 이 명단으로 잇는다.
@@ -177,15 +276,60 @@
         if (_roster && !force) return _roster;
         try {
             var o = await window.nasAppFile.get(window.DAILY_PATHS.roster, { json: true });
-            _roster = (o && Array.isArray(o.members)) ? o.members : [];
+            _roster = mergeRoster((o && Array.isArray(o.members)) ? o.members : []);
             _rosterRev = (o && o.rev) || 0;
         } catch (e) {
-            console.warn('[일일보고] 명단 조회 실패:', e.message);
-            _roster = [];
+            // 파일을 못 읽어도 **주소록만으로** 팀원을 보여 준다(화면이 비는 것보다 낫다).
+            console.warn('[일일보고] 명단 조회 실패 — 주소록만으로 꾸립니다:', e.message);
+            _roster = mergeRoster([]);
         }
         return _roster;
     };
     window._dailyRoster = function () { return _roster || []; };
+
+    /**
+     * 📣 담당 PC 에서만, 한 페이지에 한 번 — 주소록에서 새로 들어온 팀원을 **명단 파일에 적는다.**
+     *
+     * ⚠️ 화면은 합쳐서 바로 보이지만 **백엔드는 파일만 본다** — 안 적으면 그 사람이 텔레그램으로
+     *    보낸 보고가 "등록되지 않은 chat_id" 로 버려지고, 미작성 알림도 안 간다.
+     * ⚠️ 쓰는 PC 를 한 대로 묶는 이유: 팀 공용 파일에 여러 브라우저가 동시에 쓰는 것이 곧
+     *    2026-11-04 색인 유실의 전제였다. 📣 는 정의상 한 대다.
+     * ⚠️ **더하기만** 한다. rev 가 안 맞으면(남이 먼저 썼으면) 조용히 넘어간다 — 다음에 또 온다.
+     */
+    var _rosterSynced = false;
+    window.dailyRosterSyncIfNotifier = async function () {
+        if (_rosterSynced) return null;
+        _rosterSynced = true;
+        var list = _roster || [];
+        var k = myKey();
+        var mine = list.filter(function (m) { return String(m.key || '').toLowerCase() === k; })[0];
+        if (!mine || !mine.notifier) return null;              // 📣 담당 PC 가 아니면 안 쓴다
+        var added = list.filter(function (m) { return m && m.fromAddr; });
+        if (!added.length) return null;                        // 더할 게 없으면 안 쓴다
+        try {
+            var cur = await window.nasAppFile.get(window.DAILY_PATHS.roster, { json: true });
+            if (cur && _rosterRev != null && (cur.rev || 0) !== _rosterRev) return null;
+            var members = list.map(function (m) {
+                var c = Object.assign({}, m);
+                delete c.fromAddr;                             // 파생 표식은 파일에 안 남긴다
+                return c;
+            });
+            if (!members.length) return null;
+            var doc = { members: members, rev: ((cur && cur.rev) || 0) + 1,
+                        savedAt: new Date().toISOString(), by: k, fromAddressBook: true };
+            await window.nasAppFile.put(window.DAILY_PATHS.roster, doc);
+            _roster = members;
+            _rosterRev = doc.rev;
+            toast('👥 ' + T('주소록에서 팀원 ' + added.length + '명을 명단에 담았습니다.',
+                            'Added ' + added.length + ' teammate(s) from the Address Book.'), 'info', 6000);
+            return doc;
+        } catch (e) {
+            console.warn('[일일보고] 명단 자동 반영 건너뜀:', e.message);
+            return null;
+        }
+    };
+
+
 
     /** 내 명단 항목(없으면 계정 id 만 든 임시 항목). */
     function me() {
@@ -1258,6 +1402,8 @@
  '<div style="flex:1; min-height:0; overflow:auto; padding:13px 17px;">' +
    '<div style="font-size:11.5px; color:#777; margin-bottom:8px; line-height:1.6;">' +
      '<b>' + esc(T('이 표에 누가 나오는지를 정하는 명단입니다.', 'This roster decides who appears in the table.')) + '</b> ' +
+     esc(T('우리 팀 사람은 📒 주소록(부서·메일·텔레그램 ID)에서 저절로 채워집니다 — 여기선 📣 담당·사용 안 함·별칭처럼 주소록에 없는 것만 손봅니다.',
+           'Teammates are filled in from the Address Book (dept / mail / Telegram ID) — set only what the Address Book cannot hold: 📣, off, aliases.')) + '<br>' +
      esc(T('여기 없는 사람은 \'미작성\' 으로도 안 보이고, 텔레그램으로 보내도 받아 주지 않습니다.',
            'People not listed never show as \'not written\', and their Telegram messages are ignored.')) + '<br>' +
      esc(T('· 계정id = NAS 로그인 계정(파일 이름에 쓰입니다) · 별칭은 간트 담당자 이름과 맞추는 데 씁니다',
@@ -1294,7 +1440,9 @@
     window._dailyRosterDrop = function (i) { window._dailyRosterDraft.splice(i, 1); renderRoster(); };
 
     window.dailySaveRoster = async function () {
-        var list = (window._dailyRosterDraft || []).filter(function (m) { return String(m.key || '').trim(); });
+        var list = (window._dailyRosterDraft || [])
+            .filter(function (m) { return String(m.key || '').trim(); })
+            .map(function (m) { var c = Object.assign({}, m); delete c.fromAddr; return c; });
         if (!list.length) { toast(T('계정id가 있는 사람이 한 명도 없습니다.', 'No one has a key.'), 'warning'); return; }
         if (list.filter(function (m) { return m.notifier; }).length > 1) {
             toast(T('📣 담당은 한 명만 고를 수 있습니다.', 'Only one 📣 notifier allowed.'), 'warning'); return;
@@ -1787,6 +1935,7 @@
         var roster, docs;
         try {
             roster = await window.dailyLoadRoster(true);
+            window.dailyRosterSyncIfNotifier();   // 기다리지 않는다 — 화면은 이미 합쳐져 있다
             docs = await window.dailyLoadDay(date);
         } catch (e) {
             box.innerHTML = '<div style="padding:18px; color:#b1432f; font-size:13px;">⚠️ ' + esc(e.message) + '</div>';
@@ -1798,6 +1947,18 @@
         var people = (roster && roster.length)
             ? roster.filter(function (m) { return m && m.active !== false; })
             : docs.map(function (d) { return { key: d.key, name: d.name || d.key, team: d.team || '' }; });
+        // ⚠️ 계정id 는 주소록 메일에서 **추정**한 값이다(한 명으로만 확인한 규칙).
+        //    틀리면 그 사람 보고가 '미작성'으로 남고 아무도 모른다 — 그래서 **명단에 없는
+        //    작성자**를 뒤에 붙여, 보고를 쓴 사람이 화면에서 사라지는 일은 없게 한다.
+        var known = {};
+        people.forEach(function (m) { known[String(m.key || '').toLowerCase()] = 1; });
+        docs.forEach(function (d) {
+            var k = String(d.key || '').toLowerCase();
+            if (k && !known[k]) {
+                known[k] = 1;
+                people.push({ key: d.key, name: (d.name || d.key) + ' *', team: d.team || '', _stray: true });
+            }
+        });
 
         // 📎 남의 보고 첨부는 **인덱스로만** 여다 — 파일 이름이 onclick 속으로
         //    들어가지 않게 한다(이름엔 따옴표·괄호가 섭일 수 있다).

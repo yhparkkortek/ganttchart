@@ -505,6 +505,56 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('초안은 저장 뒤 지워진다', !localStorage.getItem(win.DAILY_POLICY.draftKey));
     void merged;
 
+
+    // ══ 📒 명단은 주소록에서 (2026-11-05 요청) ════════════════════════════
+    //  ⚠️ 주소록은 **전사**다(실측 394명) — 부서로 거르지 않으면 남의 팀이 전부 '미작성'이 된다.
+    console.log('\n■ 명단을 주소록에서 꾸린다');
+    win.tabData = win.tabData || {};
+    win.tabData.addressBook = [
+        { name: '박용훈', dept: '개발3팀', email: 'yhpark@x.co.kr', telegramId: '8790493335' },
+        { name: '최종석', dept: '개발3팀', email: 'jschoi@x.co.kr', telegramId: '' },
+        { name: '장영익', dept: '개발3팀', email: 'yijang@x.co.kr', telegramId: '111' },
+        { name: '개발3팀', dept: '개발3팀', email: 'dev3@x.co.kr', telegramId: '' },   // 그룹 메일 주소
+        { name: '메일없음', dept: '개발3팀', email: '', telegramId: '' },               // 계정을 못 만든다
+        { name: '남의팀', dept: '개발6팀', email: 'other@x.co.kr', telegramId: '222' }
+    ];
+
+    const fromAb = win.dailyRosterFromAddressBook('개발3팀');
+    ok('우리 팀만 뽑는다', fromAb.length === 3, fromAb.map((m) => m.name).join(','));
+    ok('이름이 부서와 같은 행(그룹 주소)은 사람이 아니다',
+        !fromAb.some((m) => m.name === '개발3팀'), fromAb.map((m) => m.name).join(','));
+    ok('메일이 없으면 넣지 않는다(파일 이름을 못 만든다)',
+        !fromAb.some((m) => m.name === '메일없음'), fromAb.map((m) => m.name).join(','));
+    ok('계정id 는 메일 @ 앞부분', fromAb.map((m) => m.key).sort().join(',') === 'jschoi,yhpark,yijang',
+        fromAb.map((m) => m.key).join(','));
+    ok('텔레그램 chat id 를 주소록에서 가져온다(두 번 적지 않는다)',
+        (fromAb.filter((m) => m.key === 'yhpark')[0] || {}).tgChatId === '8790493335');
+    ok('팀을 모르면 아무도 안 넣는다(전사 394명을 띄울 순 없다)',
+        win.dailyRosterFromAddressBook('').length === 0 && win.dailyRosterFromAddressBook(null).length === 0);
+    ok('계정id 눕히는 규칙이 myKey 와 같다',
+        win._dailyKeyClean('Y.Park@x') === 'y.park-x' && win._dailyKeyClean('  AB  ') === 'ab',
+        win._dailyKeyClean('Y.Park@x'));
+
+    console.log('\n■ 합칠 때 사람이 적은 값이 이긴다');
+    nas[win.DAILY_PATHS.roster] = JSON.stringify({
+        rev: 3,
+        members: [
+            { key: 'yhpark', name: '박용훈', team: '개발3팀', aliases: ['PM박'], tgChatId: '8790493335',
+              active: true, notifier: true },
+            { key: 'jschoi', name: '', team: '', aliases: [], tgChatId: '', active: false }
+        ]
+    });
+    const merged2 = await win.dailyLoadRoster(true);
+    const byK = {};
+    merged2.forEach((m) => { byK[m.key] = m; });
+    ok('파일에 없던 팀원이 더해진다', !!byK['yijang'], Object.keys(byK).join(','));
+    ok('📣 담당 표시가 살아남는다', byK['yhpark'].notifier === true);
+    ok('사용 안 함 표시가 살아남는다(주소록이 되살리지 않는다)', byK['jschoi'].active === false);
+    ok('별칭이 살아남는다', (byK['yhpark'].aliases || []).join(',') === 'PM박');
+    ok('빈 칸만 주소록으로 채운다', byK['jschoi'].name === '최종석' && byK['jschoi'].team === '개발3팀',
+        JSON.stringify(byK['jschoi']));
+    ok('남의 팀은 안 들어온다', !byK['other'], Object.keys(byK).join(','));
+
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');
     process.exit(fail ? 1 : 0);
