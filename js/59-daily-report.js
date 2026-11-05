@@ -38,9 +38,12 @@
 
     /** 입력 칸. 늘리려면 여기 한 줄. `src`=auto 는 간트에서 초안이 채워지는 칸. */
     window.DAILY_FIELDS = window.DAILY_FIELDS || [
-        { key: 'done',  ko: '오늘 한 일',   en: 'Done today',  src: 'auto',  rows: 3 },
-        { key: 'next',  ko: '해야 할 일',   en: 'To do',       src: 'human', rows: 2 },
-        { key: 'issue', ko: '막힌 일',      en: 'Blockers',    src: 'human', rows: 2 }
+        // `itemKey` = **업무 하나**에서 쓰는 칸 이름(2026-11-05: 보고는 업무별로 쪼갰다).
+        //  ⚠️ `done` 만 이름이 다르다 — 항목에 이미 `note` 로 들어가 있던 칸이라
+        //     이름을 바꾸면 **옛 보고의 글이 통째로 안 보인다.**
+        { key: 'done',  itemKey: 'note',  ko: '오늘 한 일',   en: 'Done today',  src: 'auto',  rows: 3 },
+        { key: 'next',  itemKey: 'next',  ko: '해야 할 일',   en: 'To do',       src: 'human', rows: 2 },
+        { key: 'issue', itemKey: 'issue', ko: '막힌 일',      en: 'Blockers',    src: 'human', rows: 2 }
     ];
 
     window.DAILY_POLICY = window.DAILY_POLICY || {
@@ -704,7 +707,18 @@
         var exempt = (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === _doc.dayType; })[0] || {}).exempt;
 
         var chk = _doc.items.map(function (it, i) {
-            return '<div style="display:flex; gap:7px; align-items:flex-start; padding:5px 0; border-bottom:1px solid #f2f2f2;">' +
+            // 📝 업무 하나가 카드 하나 — 오늘 한 일 / 해야 할 일 / 막힌 일 / 📎 를 **그 업무 밑에** 둔다.
+            //    [2026-11-05 요청] 전엔 셋이 보고 전체에 하나씩이라, 업무가 여럿이면 누구 것인지 몰랐다.
+            var fields = window.DAILY_FIELDS.map(function (f) {
+                return '<div style="display:flex; align-items:center; gap:6px; margin-top:3px;">' +
+                       '<span style="flex-shrink:0; width:58px; font-size:10.5px; color:#8a8a8a; text-align:right;">' +
+                         esc(window._currentLang === 'en' ? f.en : f.ko) + '</span>' +
+                       '<input value="' + esc(it[f.itemKey] || '') + '" ' +
+                         'oninput="window._dailyItemField(' + i + ', \'' + f.itemKey + '\', this.value)" ' +
+                         'style="flex:1; min-width:0; padding:3px 7px; border:1px solid #e3e6ea; border-radius:5px; font-size:11.5px;">' +
+                       '</div>';
+            }).join('');
+            return '<div style="display:flex; gap:7px; align-items:flex-start; padding:7px 0; border-bottom:1px solid #f2f2f2;">' +
                    '<button onclick="window._dailyDropItem(' + i + ')" title="' + esc(T('빼기', 'Remove')) + '" style="flex-shrink:0; width:20px; height:20px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:4px; cursor:pointer; font-size:11px; line-height:1;">✕</button>' +
                    '<div style="flex:1; min-width:0;">' +
                      '<div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">' +
@@ -712,8 +726,8 @@
                        '<span style="font-size:12.5px; font-weight:bold; color:#222;">' + esc(it.name) + '</span>' +
                        (it.project ? '<span style="color:#888; font-size:11px;">(' + esc(String(it.project).replace(/\.json$/i, '')) + ')</span>' : '') +
                      '</div>' +
-                     '<input value="' + esc(it.note || '') + '" oninput="window._dailyNote(' + i + ', this.value)" placeholder="' + esc(T('한 줄 덧붙이기(선택)', 'Add a line (optional)')) + '" ' +
-                       'style="width:100%; box-sizing:border-box; margin-top:3px; padding:4px 7px; border:1px solid #e0e0e0; border-radius:5px; font-size:12px;">' +
+                     fields +
+                     filesHtml(it.name, true) +
                    '</div></div>';
         }).join('') || '<div style="color:#aaa; font-size:12px; padding:6px 0;">' + esc(T('아래에서 골라 담거나 직접 추가하세요.', 'Pick below or add manually.')) + '</div>';
 
@@ -768,7 +782,7 @@
             '</div>';
         }).join('')
     ) +
-    filesHtml() +
+    fileInputHtml() + filesHtml('') +
   '</div>' +
   '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; align-items:center; gap:8px;">' +
     '<span style="flex:1; font-size:11px; color:#999;">' + esc(_doc.savedAt ? T('마지막 저장 ', 'Saved ') + new Date(_doc.savedAt).toLocaleString('ko-KR') : T('아직 저장 안 됨', 'Not saved yet')) + '</span>' +
@@ -797,6 +811,10 @@
     };
     window._dailySetType = function (k) { _doc.dayType = k; saveDraftLocal(); render(); };
     window._dailyNote = function (i, v) { if (_doc.items[i]) { _doc.items[i].note = v; saveDraftLocal(); } };
+    /** 업무 하나의 칸(오늘 한 일·해야 할 일·막힌 일). 다시 그리지 **않는다** — 타이핑 중이다. */
+    window._dailyItemField = function (i, key, v) {
+        if (_doc.items[i]) { _doc.items[i][key] = v; saveDraftLocal(); }
+    };
     window._dailyItemCat = function (i, v) {
         if (_doc.items[i]) { _doc.items[i].cat = String(v || '').trim(); saveDraftLocal(); render(); }
     };
@@ -1003,7 +1021,9 @@
     /** 모달이 열릴 때 부르는 그 함수 그대로 — 하네스도 이걸 부른다(두 벌로 두지 않는다). */
     window.dailyMarkMissingFiles = markMissing;
 
-    window.dailyAttachFiles = async function (list) {
+    /** `task` = 이 파일이 붙을 업무명(비면 보고 전체). ⚠️ 배열은 `_doc.files` 하나 그대로 —
+     *  항목 안으로 옮기면 **옛 보고의 사진이 통째로 안 보인다**(꼬리표가 없는 게 곧 전체다). */
+    window.dailyAttachFiles = async function (list, task) {
         if (!_doc) return;
         var files = [].slice.call(list || []).filter(Boolean);
         if (!files.length) return;
@@ -1033,6 +1053,7 @@
                 var res = await window.nasAppFile.putBytes(rel, await toB64(prep.blob));
                 if (res && res.ok === false) throw new Error(res.message || 'NAS 쓰기 실패');
                 _doc.files.push({ name: prep.name, safe: safe, rel: rel, size: prep.blob.size,
+                                  task: String(task || ''),
                                   via: 'app', addedAt: new Date().toISOString() });
                 added++;
             } catch (e) {
@@ -1171,31 +1192,68 @@
     }
 
     /** 모달 안 첨부 영역 HTML. 일 종류가 면제여도 보여준다(출장 사진 같은 게 있다). */
-    function filesHtml() {
-        var fl = (_doc.files || []);
+    /** 어느 업무로 담을지 기억해 두고 고르기 창을 연다. */
+    window._dailyPickFiles = function (task) {
+        window._dailyPickTask = String(task || '');
+        var el = document.getElementById('daily-file-input');
+        if (el) el.click();
+    };
+
+    /** 고르기 창은 **문서에 하나만** — 업무마다 만들면 id 가 겹쳐 늘 첫 번째만 열린다. */
+    function fileInputHtml() {
+        return '<input type="file" id="daily-file-input" multiple style="display:none;" ' +
+               'onchange="window.dailyAttachFiles(this.files, window._dailyPickTask || \'\'); this.value=\'\';">';
+    }
+
+    /**
+     * `task` 가 있으면 **그 업무에 붙은 것만**, 없으면 꼬리표 없는 것(보고 전체)만.
+     * ⚠️ 카드의 인덱스는 **`_doc.files` 안의 진짜 자리**여야 한다 — 걸러 낸 목록의 번호를 쓰면
+     *    두 번째 업무의 사진을 지울 때 **첫 번째 업무의 사진이 지워진다.**
+     */
+    function filesHtml(task, compact) {
+        var only = String(task || '');
+        var all = _doc.files || [];
+        var fl = [];
+        all.forEach(function (f, gi) {
+            if (String((f && f.task) || '') === only) fl.push({ f: f, gi: gi });
+        });
         var maxN = +window.DAILY_POLICY.filesMax || 12;
         var mb = +window.DAILY_POLICY.fileMaxMB || 20;
         var px = +window.DAILY_POLICY.imgMaxPx || 0;
-        var cards = fl.map(function (f, i) {
+        var w = compact ? 78 : 104;
+        var h = compact ? 46 : 62;
+        var cards = fl.map(function (x) {
+            var f = x.f, gi = x.gi;
             var th = isImg(f.name) && !f.missing
-                ? '<div id="daily-th-' + i + '" style="width:100%; height:62px; border-radius:5px 5px 0 0; background:#f1f3f5 center/cover no-repeat; display:flex; align-items:center; justify-content:center; font-size:18px; color:#bbb;">🖼️</div>'
-                : '<div style="width:100%; height:62px; border-radius:5px 5px 0 0; background:#f6f7f9; display:flex; align-items:center; justify-content:center; font-size:24px;">' + (f.missing ? '⚠️' : fileIcon(f.name)) + '</div>';
-            return '<div style="width:104px; border:1px solid ' + (f.missing ? '#eeb0ac' : '#e4e7ea') + '; border-radius:6px; overflow:hidden; background:#fff; position:relative;">' +
-                     '<button onclick="window.dailyDropFile(' + i + ')" title="' + esc(T('지우기', 'Delete')) + '" style="position:absolute; top:3px; right:3px; width:19px; height:19px; border:1px solid #eeb0ac; background:rgba(251,228,226,.95); color:#b1432f; border-radius:4px; cursor:pointer; font-size:10px; line-height:1; padding:0;">✕</button>' +
-                     '<div onclick="window.dailyOpenFile(' + i + ')" title="' + esc(f.name + (f.missing ? ' — ' + T('NAS 에 없습니다', 'missing on NAS') : '')) + '" style="cursor:pointer;">' + th +
-                       '<div style="padding:4px 5px;">' +
-                         '<div style="font-size:10.5px; color:#333; line-height:1.25; word-break:break-all; max-height:26px; overflow:hidden;">' + esc(f.name) + '</div>' +
-                         '<div style="font-size:9.5px; color:#aaa; margin-top:1px;">' + esc(sizeTxt(f.size)) + (f.via === 'telegram' ? ' 📱' : '') + '</div>' +
+                ? '<div id="daily-th-' + gi + '" style="width:100%; height:' + h + 'px; border-radius:5px 5px 0 0; background:#f1f3f5 center/cover no-repeat; display:flex; align-items:center; justify-content:center; font-size:16px; color:#bbb;">🖼️</div>'
+                : '<div style="width:100%; height:' + h + 'px; border-radius:5px 5px 0 0; background:#f6f7f9; display:flex; align-items:center; justify-content:center; font-size:' + (compact ? 18 : 24) + 'px;">' + (f.missing ? '⚠️' : fileIcon(f.name)) + '</div>';
+            return '<div style="width:' + w + 'px; border:1px solid ' + (f.missing ? '#eeb0ac' : '#e4e7ea') + '; border-radius:6px; overflow:hidden; background:#fff; position:relative;">' +
+                     '<button onclick="window.dailyDropFile(' + gi + ')" title="' + esc(T('지우기', 'Delete')) + '" style="position:absolute; top:2px; right:2px; width:17px; height:17px; border:1px solid #eeb0ac; background:rgba(251,228,226,.95); color:#b1432f; border-radius:4px; cursor:pointer; font-size:9px; line-height:1; padding:0;">✕</button>' +
+                     '<div onclick="window.dailyOpenFile(' + gi + ')" title="' + esc(f.name + (f.missing ? ' — ' + T('NAS 에 없습니다', 'missing on NAS') : '')) + '" style="cursor:pointer;">' + th +
+                       '<div style="padding:3px 4px;">' +
+                         '<div style="font-size:9.5px; color:#333; line-height:1.2; word-break:break-all; max-height:22px; overflow:hidden;">' + esc(f.name) + '</div>' +
+                         (compact ? '' : '<div style="font-size:9.5px; color:#aaa; margin-top:1px;">' + esc(sizeTxt(f.size)) + (f.via === 'telegram' ? ' 📱' : '') + '</div>') +
                        '</div>' +
                      '</div>' +
                    '</div>';
         }).join('');
+        var pick = '<button onclick="window._dailyPickFiles(' + JSON.stringify(only).replace(/"/g, '&quot;') + ')" ' +
+                   'style="padding:' + (compact ? '1px 7px' : '4px 11px') + '; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:' + (compact ? '10.5px' : '11.5px') + '; font-weight:bold; cursor:pointer;">📎 ' +
+                   esc(compact ? T('사진·파일', 'Files') : T('파일 고르기', 'Add files')) + '</button>';
+        if (compact) {
+            // 업무 카드 안 — 머리글·안내문 없이 한 줄로(카드가 길어지면 읽기 어렵다)
+            return '<div style="display:flex; align-items:flex-start; gap:6px; margin-top:4px;">' +
+                     '<span style="flex-shrink:0; width:58px;"></span>' +   // 칸 라벨과 줄 맞춤
+                     '<div style="flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:5px; align-items:center;">' +
+                       pick + cards +
+                     '</div>' +
+                   '</div>';
+        }
         return '<div style="margin-top:4px; padding-top:11px; border-top:1px solid #f0f0f0;">' +
                  '<div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:5px;">' +
-                   '<span style="font-size:12.5px; font-weight:bold; color:#333;">📎 ' + esc(T('사진·파일', 'Photos & files')) + '</span>' +
+                   '<span style="font-size:12.5px; font-weight:bold; color:#333;">📎 ' + esc(T('사진·파일 (업무에 안 붙는 것)', 'Photos & files (not tied to a task)')) + '</span>' +
                    '<span style="font-size:11px; color:#aaa;">' + fl.length + ' / ' + maxN + '</span>' +
-                   '<button onclick="var el=document.getElementById(\'daily-file-input\'); if(el) el.click();" style="padding:4px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">+ ' + esc(T('파일 고르기', 'Add files')) + '</button>' +
-                   '<input type="file" id="daily-file-input" multiple style="display:none;" onchange="window.dailyAttachFiles(this.files); this.value=\'\';">' +
+                   pick +
                  '</div>' +
                  '<div style="font-size:11px; color:#999; margin-bottom:' + (fl.length ? '7px' : '0') + ';">' +
                    esc(T('여기로 끌어다 놓거나 Ctrl+V 로 붙여넣어도 됩니다. 한 파일 ' + mb + 'MB 까지' + (px ? ', 사진은 긴 변 ' + px + 'px 로 줄여 올립니다' : '') + '.',
@@ -1263,26 +1321,65 @@
      * ⚠️ 전엔 `• [HW] 이름 (프로젝트)` 한 줄이라 구분이 글 안에 묻혔다.
      * ⚠️ 한 사람 행 안에 항목이 여럿이라 바깥 표에 열을 더할 수 없다 — **안에 작은 표**를 둔다.
      */
+    /** 그 업무에 붙은 사진·파일. 꼬리표(`task`)로 가른다. */
+    function filesOf(d, task) {
+        return ((d && d.files) || []).filter(function (f) {
+            return String((f && f.task) || '') === String(task || '');
+        });
+    }
+
+    /**
+     * "업무별 보고" 칸 — 한 업무가 **한 줄**이고 칸이 열로 갈린다.
+     *   구분 | 업무(+프로젝트) | 오늘 한 일 | 해야 할 일 | 막힌 일 | 📎
+     * ⚠️ 바깥 표에 열을 더할 수 없다(한 사람 행에 업무가 여럿) → **안에 표**를 둔다.
+     * ⚠️ 머리글은 `DAILY_FIELDS`(데이터)에서 — 칸 이름을 바꿀 때 여기도 고치는 일이 없게.
+     */
     function itemsCell(d) {
         var ai = String((d && d.aiDone) || '').trim();
         var items = keepItems(d && d.items);
         var head = ai ? '<div style="white-space:pre-line; margin-bottom:' + (items.length ? '5px' : '0') + ';">' + esc(ai) + '</div>' : '';
         if (!items.length) return head || '';
-        var td = 'padding:2px 6px; border:1px solid #eef1f4; font-size:11.5px; vertical-align:top;';
-        return head + '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
-            '<colgroup><col style="width:46px;"><col><col style="width:30%;"></colgroup>' +
+        var th = 'padding:2px 5px; border:1px solid #e3eaef; background:#f3f7f9; font-size:10.5px; color:#2c5f8a; font-weight:normal;';
+        var td = 'padding:3px 5px; border:1px solid #eef1f4; font-size:11.5px; vertical-align:top; white-space:pre-line;';
+        var cols = window.DAILY_FIELDS;
+        return head +
+          '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
+            '<colgroup><col style="width:42px;"><col style="width:26%;">' +
+              cols.map(function () { return '<col>'; }).join('') +
+              '<col style="width:66px;"></colgroup>' +
+            '<thead><tr>' +
+              '<th style="' + th + '">' + esc(T('구분', 'Cat.')) + '</th>' +
+              '<th style="' + th + '">' + esc(T('업무', 'Task')) + '</th>' +
+              cols.map(function (f) {
+                  return '<th style="' + th + '">' + esc(window._currentLang === 'en' ? f.en : f.ko) + '</th>';
+              }).join('') +
+              '<th style="' + th + '">📎</th>' +
+            '</tr></thead><tbody>' +
             items.map(function (it) {
                 var pj = String((it && it.project) || '').replace(/\.json$/i, '');
+                var fs = filesOf(d, it.name);
                 return '<tr>' +
-                  '<td style="' + td + ' text-align:center; color:#50616f; background:#f7f9fb; white-space:nowrap;">' +
-                    esc(it.cat || '-') + '</td>' +
-                  '<td style="' + td + '">' + esc(it.name) +
-                    (it.note ? '<div style="color:#8a8a8a; font-size:10.5px; margin-top:1px;">' + esc(it.note) + '</div>' : '') +
+                  '<td style="' + td + ' text-align:center; color:#50616f; background:#fafbfc; white-space:nowrap;">' + esc(it.cat || '-') + '</td>' +
+                  '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
+                    (pj ? '<div style="color:#9aa3ab; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' + esc(pj) + '</div>' : '') +
                   '</td>' +
-                  '<td style="' + td + ' color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' +
-                    esc(pj || '-') + '</td>' +
+                  cols.map(function (f) {
+                      var v = String(it[f.itemKey] || '').trim();
+                      return '<td style="' + td + (f.key === 'issue' && v ? ' background:#fffaf0;' : '') + '">' + esc(v || '-') + '</td>';
+                  }).join('') +
+                  '<td style="' + td + ' text-align:center;">' + (fs.length ? fileChips(fs) : '<span style="color:#ccc;">-</span>') + '</td>' +
                 '</tr>';
-            }).join('') + '</table>';
+            }).join('') +
+          '</tbody></table>';
+    }
+
+    /** 파일 칩 — **인덱스로만** 연다(파일 이름이 onclick 속성에 들어가지 않게). */
+    function fileChips(list) {
+        return list.map(function (f) {
+            var gi = window._dailyDayFiles.push({ rel: f.rel, name: f.name }) - 1;
+            return '<span onclick="window.dailyOpenDayFile(' + gi + ')" title="' + esc(f.name) + '" ' +
+                   'style="cursor:pointer; margin:0 1px; font-size:13px;">' + fileIcon(f.name) + '</span>';
+        }).join('');
     }
 
     window.dailySetFilter = function (k, v) {
@@ -1389,20 +1486,38 @@
                 XLSX.utils.book_append_sheet(wb, ws, en ? 'Monthly' : '월간');
             } else {
                 var docs = await window.dailyLoadDay(date);
-                var hdr = [en ? 'Name' : '이름', en ? 'Type' : '종류'];
+                // 📊 보고가 업무별이 됐으니 **한 업무가 한 줄**이다(2026-11-05).
+                //    전엔 사람 한 줄에 업무를 전부 뭉쳐 넣어, 엑셀에서 거르거나 정렬할 수가 없었다.
+                var hdr = [en ? 'Name' : '이름', en ? 'Type' : '종류', en ? 'Cat.' : '구분',
+                           en ? 'Task' : '업무', en ? 'Project' : '프로젝트'];
                 window.DAILY_FIELDS.forEach(function (f) { hdr.push(en ? f.en : f.ko); });
                 hdr.push(en ? 'Attachments' : '첨부', en ? 'Saved' : '작성시각');
                 var rows = [hdr];
                 docs.forEach(function (d) {
-                    var t = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
-                    rows.push([d.name || d.key, (en ? t.en : t.ko) || '',
-                        String(d.aiDone || '').trim() || (d.items || []).map(itemLine).join('\n'),
-                        d.next || '', d.issue || '',
-                        (d.files || []).map(function (f) { return f.name; }).join(', '),
-                        d.savedAt ? new Date(d.savedAt).toLocaleString('ko-KR') : '']);
+                    var ty = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
+                    var who = d.name || d.key, tyTxt = (en ? ty.en : ty.ko) || '';
+                    var when = d.savedAt ? new Date(d.savedAt).toLocaleString('ko-KR') : '';
+                    var att = function (task) {
+                        return ((d.files || []).filter(function (f) { return String((f && f.task) || '') === task; })
+                            .map(function (f) { return f.name; }).join(', '));
+                    };
+                    (d.items || []).forEach(function (it) {
+                        var r = [who, tyTxt, it.cat || '', it.name || '',
+                                 String(it.project || '').replace(/\.json$/i, '')];
+                        window.DAILY_FIELDS.forEach(function (f) { r.push(it[f.itemKey] || ''); });
+                        r.push(att(it.name), when);
+                        rows.push(r);
+                    });
+                    // 업무에 안 붙는 것(옛 보고의 보고-단위 글 포함)은 한 줄로 따로.
+                    var etc = [String(d.next || '').trim(), String(d.issue || '').trim()].filter(Boolean);
+                    if (etc.length || att('') || !(d.items || []).length) {
+                        rows.push([who, tyTxt, '', en ? '(other)' : '(기타)', '',
+                                   String(d.aiDone || '').trim(), d.next || '', d.issue || '', att(''), when]);
+                    }
                 });
                 var ws2 = XLSX.utils.aoa_to_sheet(rows);
-                ws2['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 52 }, { wch: 28 }, { wch: 28 }, { wch: 24 }, { wch: 20 }];
+                ws2['!cols'] = [{ wch: 11 }, { wch: 7 }, { wch: 6 }, { wch: 30 }, { wch: 20 },
+                                { wch: 34 }, { wch: 26 }, { wch: 26 }, { wch: 22 }, { wch: 19 }];
                 XLSX.utils.book_append_sheet(wb, ws2, en ? 'Daily' : '일일보고');
             }
             var fn = (en ? 'DailyReport_' : '일일업무보고_') + (window._dailyView === 'month' ? date.slice(0, 7) : date) + '.xlsx';
@@ -2065,7 +2180,7 @@
         // 📎 남의 보고 첨부는 **인덱스로만** 여다 — 파일 이름이 onclick 속으로
         //    들어가지 않게 한다(이름엔 따옴표·괄호가 섭일 수 있다).
         window._dailyDayFiles = [];
-        function dayChips(d) {
+        function dayChipsUnused(d) {
             var fl = (d && d.files) || [];
             if (!fl.length) return '';
             return '<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">' + fl.map(function (f) {
@@ -2100,13 +2215,17 @@
                     + ' title="' + esc(T('더블클릭하면 내 보고 쓰기가 열립니다', 'Double-click to open your report')) + '"';
             if (!d) {
                 return '<tr style="background:#fff8f8; cursor:pointer;"' + dbl + '><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
-                       '<td style="' + td + '" colspan="4"><span style="color:#b1432f; font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
+                       '<td style="' + td + '" colspan="3"><span style="color:#b1432f; font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
             }
+            // 🧺 기타 = **업무에 안 붙는 것**(옛 보고의 보고-단위 글과 꼬리표 없는 사진도 여기로).
+            var etcTxt = [String(d.next || '').trim(), String(d.issue || '').trim()]
+                .filter(Boolean).join('\n');
+            var etcFiles = filesOf(d, '');
             return '<tr style="cursor:pointer;"' + dbl + '><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
                    '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
-                   '<td style="' + td + '">' + (done || '-') + dayChips(d) + '</td>' +
-                   '<td style="' + td + ' white-space:pre-line;">' + esc(d.next || '-') + '</td>' +
-                   '<td style="' + td + ' white-space:pre-line;' + (d.issue ? ' background:#fffaf0;' : '') + '">' + esc(d.issue || '-') + '</td></tr>';
+                   '<td style="' + td + '">' + (done || '-') + '</td>' +
+                   '<td style="' + td + ' white-space:pre-line;">' + esc(etcTxt || '-') +
+                     (etcFiles.length ? '<div style="margin-top:3px;">' + fileChips(etcFiles) + '</div>' : '') + '</td></tr>';
         }).join('');
 
         var written = people.filter(function (p) { return byKey[String(p.key || '').toLowerCase()]; }).length;
@@ -2118,13 +2237,13 @@
             (roster && roster.length ? '' : ' <span style="color:#b1432f;">' + esc(T('(명단 파일이 없어 쓴 사람만 보입니다)', '(no roster file — showing authors only)')) + '</span>') +
           '</div>' +
           '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
-            '<colgroup><col style="width:90px;"><col style="width:62px;"><col><col style="width:22%;"><col style="width:22%;"></colgroup>' +
+            '<colgroup><col style="width:88px;"><col style="width:56px;"><col><col style="width:16%;"></colgroup>' +
             '<thead><tr style="background:#eef6f7;">' +
-              // 머리글은 `DAILY_FIELDS`(데이터)에서 — 칸 이름을 바꿀 때 여기도 고치는 일이 없게.
-              [['이름', 'Name'], ['종류', 'Type']].concat(window.DAILY_FIELDS.map(function (f) { return [f.ko, f.en]; }))
+              // 바깥은 사람 단위 — 칸 이름들은 **안쪽 표**가 쓴다(업무별이라서).
+              [['이름', 'Name'], ['종류', 'Type'], ['업무별 보고', 'Per task'], ['기타', 'Other']]
                 .map(function (hp) {
                   return '<th style="padding:7px 9px; border:1px solid #cfe3e5; font-size:12px; color:#2c5f8a;">' + esc(window._currentLang === 'en' ? hp[1] : hp[0]) + '</th>';
               }).join('') +
-            '</tr></thead><tbody>' + (rows || '<tr><td colspan="5" style="padding:16px; text-align:center; color:#aaa; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
+            '</tr></thead><tbody>' + (rows || '<tr><td colspan="4" style="padding:16px; text-align:center; color:#aaa; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
     };
 })();

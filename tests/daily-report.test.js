@@ -572,6 +572,58 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
         JSON.stringify(byK['jschoi']));
     ok('남의 팀은 안 들어온다', !byK['other'], Object.keys(byK).join(','));
 
+
+    // ══ 업무별 보고 (2026-11-05 요청) ═════════════════════════════════════
+    console.log('\n■ 해야 할 일·막힌 일·사진이 업무마다 붙는다');
+    ok('칸 정의에 항목 이름이 같이 있다',
+        win.DAILY_FIELDS.map((f) => f.key + '→' + f.itemKey).join(',') === 'done→note,next→next,issue→issue',
+        win.DAILY_FIELDS.map((f) => f.itemKey).join(','));
+    ok('done 만 항목에선 note 다(옛 보고의 글이 안 사라지게)',
+        win.DAILY_FIELDS[0].itemKey === 'note');
+
+    const pdate = '2026-11-24';
+    delete nas[win.DAILY_PATHS.file(pdate, 'yhpark')];
+    await win.dailyOpenModal(pdate);
+    document.getElementById = (id) => (id === 'daily-manual' ? { value: 'A 업무' } : null);
+    win._dailyAddManual();
+    document.getElementById = (id) => (id === 'daily-manual' ? { value: 'B 업무' } : null);
+    win._dailyAddManual();
+    document.getElementById = () => null;
+    win._dailyItemField(0, 'note', 'A 를 했다');
+    win._dailyItemField(0, 'next', 'A 를 더 한다');
+    win._dailyItemField(1, 'issue', 'B 가 막혔다');
+    await win._dailySave();
+    const pd = JSON.parse(nas[win.DAILY_PATHS.file(pdate, 'yhpark')]);
+    ok('업무마다 세 칸이 따로 저장된다',
+        pd.items[0].note === 'A 를 했다' && pd.items[0].next === 'A 를 더 한다'
+        && !pd.items[1].next && pd.items[1].issue === 'B 가 막혔다',
+        JSON.stringify(pd.items));
+    ok('보고 전체 칸은 비어 있다(업무에 붙었으니)', !pd.next && !pd.issue, [pd.next, pd.issue].join('|'));
+
+    console.log('\n■ 사진도 업무에 붙는다 — 꼬리표(task)로');
+    await win.dailyAttachFiles([mkFile('a.pdf', 10, 'QUJD')], 'A 업무');
+    await win.dailyAttachFiles([mkFile('b.pdf', 10, 'WFla')], 'B 업무');
+    await win.dailyAttachFiles([mkFile('c.pdf', 10, 'Q0NO')], '');
+    await win._dailySave();
+    const pf = JSON.parse(nas[win.DAILY_PATHS.file(pdate, 'yhpark')]);
+    const tag = {};
+    (pf.files || []).forEach((f) => { tag[f.name] = String(f.task || '(없음)'); });
+    ok('파일이 제 업무에 붙는다', tag['a.pdf'] === 'A 업무' && tag['b.pdf'] === 'B 업무',
+        JSON.stringify(tag));
+    ok('꼬리표 없는 것은 보고 전체(기타)', tag['c.pdf'] === '(없음)', JSON.stringify(tag));
+    ok('배열은 하나 그대로다(옛 보고가 안 깨진다)', Array.isArray(pf.files) && pf.files.length === 3,
+        (pf.files || []).length);
+
+    // ⚠️ 카드에 보이는 번호는 걸러 낸 목록의 번호가 아니라 **_doc.files 안의 진짜 자리**여야 한다.
+    //    아니면 두 번째 업무의 사진을 지울 때 첫 번째 업무 것이 지워진다.
+    const idxB = pf.files.findIndex((f) => f.name === 'b.pdf');
+    await win.dailyDropFile(idxB);
+    await win._dailySave();
+    const pf2 = JSON.parse(nas[win.DAILY_PATHS.file(pdate, 'yhpark')]);
+    ok('지우면 그 업무 것만 사라진다',
+        pf2.files.map((f) => f.name).sort().join(',') === 'a.pdf,c.pdf',
+        pf2.files.map((f) => f.name).join(','));
+
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');
     process.exit(fail ? 1 : 0);
