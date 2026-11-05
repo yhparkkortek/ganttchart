@@ -240,6 +240,127 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     const day2 = await win.dailyLoadDay(today);
     ok('같은 달 다른 날짜를 걸러낸다', day2.length === 2, '모인 수 ' + day2.length);
 
+
+    // ══ 📎 사진·파일 첨부 ══════════════════════════════════════════════════
+    //  ⚠️ 사진 줄이기(canvas)는 여기서 **안 본다** — 브라우저만 있는 것이다.
+    //     여기선 문서(.pdf)로 돌려 "바이트가 NAS 로 가고 참조가 남는가"만 본다.
+    console.log('\n■ 📎 첨부 — 이름 눕히기(백엔드 _daily_safe_name 과 같은 결과여야 한다)');
+    const BS = String.fromCharCode(92);
+    ok('경로 구분자를 지운다', win.DAILY_PATHS.safeName('a/b' + BS + 'c.jpg') === 'a_b_c.jpg',
+        win.DAILY_PATHS.safeName('a/b' + BS + 'c.jpg'));
+    const bad = win.DAILY_PATHS.safeName('..' + BS + 'pw.txt');
+    ok('경로 탈출도 숨은 파일도 나오지 않는다',
+        bad.indexOf('/') < 0 && bad.indexOf(BS) < 0 && bad[0] !== '.' && bad === '_pw.txt', bad);
+    ok('금지 문자를 밑줄로', win.DAILY_PATHS.safeName('a:b*c?.pdf') === 'a_b_c_.pdf',
+        win.DAILY_PATHS.safeName('a:b*c?.pdf'));
+    ok('빈 이름은 file', win.DAILY_PATHS.safeName('') === 'file');
+    ok('긴 이름도 확장자를 지킨다', (function () {
+        const s = win.DAILY_PATHS.safeName('x'.repeat(120) + '.xlsx');
+        return s.length <= 90 && /\.xlsx$/.test(s);
+    })());
+    ok('한글 이름은 그대로', win.DAILY_PATHS.safeName('현장 사진.JPG') === '현장 사진.JPG');
+
+    const frel = win.DAILY_PATHS.fileRel('2026-11-05', 'yhpark', '현장.jpg');
+    ok('첨부 폴더는 글자로 시작한다(files)', frel.split('/')[2] === '2026_11' && frel.indexOf('/files/') > 0, frel);
+    ok('첨부 이름에 날짜·계정이 들어간다', /2026-11-05__yhpark__현장\.jpg$/.test(frel), frel);
+
+    console.log('\n■ 📎 올리기 — 바이트는 NAS, 보고엔 참조만');
+    // 바깥 경계 셋: 파일 읽기(FileReader) · 종류 판정(js/42) · NAS 이진 왕복
+    global.FileReader = function () {
+        this.readAsDataURL = (blob) => {
+            this.result = 'data:application/octet-stream;base64,' + (blob && blob._b64 ? blob._b64 : '');
+            setTimeout(() => this.onload && this.onload(), 0);
+        };
+    };
+    win.FileReader = global.FileReader;
+    global.URL = { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} };
+    win.URL = global.URL;
+    win._docKindOf = (n) => (/\.(png|jpe?g)$/i.test(n) ? { k: 'image' } : (/\.pdf$/i.test(n) ? { k: 'pdf' } : null));
+    const bytes = {};                       // rel → b64 (이진 전용 가짜 저장소)
+    const deleted = [];
+    win.nasAppFile.putBytes = async (rel, b64) => { bytes[rel] = b64; nas[rel] = '(binary)'; return { ok: true }; };
+    win.nasAppFile.del = async (rel) => { deleted.push(rel); delete bytes[rel]; delete nas[rel]; return { ok: true }; };
+    win.nasAppFile.getBlob = async (rel) => (rel in bytes ? { _b64: bytes[rel] } : null);
+    const mkFile = (name, size, b64) => ({ name: name, size: size, _b64: b64 || 'QUJD' });
+
+    // 모달을 거쳐야 `_doc` 이 선다 — 사람이 지나는 입구 그대로 쓴다.
+    const attachDate = today;
+    delete nas[win.DAILY_PATHS.file(attachDate, 'yhpark')];
+    await win.dailyOpenModal(attachDate);
+    await win.dailyAttachFiles([mkFile('사양서.pdf', 1234, 'QUJD')]);
+    const relPdf = win.DAILY_PATHS.fileRel(attachDate, 'yhpark', '사양서.pdf');
+    ok('바이트가 NAS 로 갔다', bytes[relPdf] === 'QUJD', Object.keys(bytes));
+    await win._dailySave();
+    const saved0 = JSON.parse(nas[win.DAILY_PATHS.file(attachDate, 'yhpark')]);
+    ok('보고엔 참조만 남는다(바이트가 안 들어간다)',
+        (saved0.files || []).length === 1 && saved0.files[0].rel === relPdf
+        && JSON.stringify(saved0).indexOf('QUJD') < 0, JSON.stringify(saved0.files));
+    ok('누가 올렸는지(via)·크기가 적힌다',
+        saved0.files[0].via === 'app' && saved0.files[0].size === 1234, saved0.files[0]);
+
+    await win.dailyAttachFiles([mkFile('사양서.pdf', 50, 'WFla')]);
+    const saved1 = (function () { return win.DAILY_PATHS.fileRel(attachDate, 'yhpark', '사양서-2.pdf'); })();
+    ok('같은 이름은 번호가 붙는다(먼저 올린 게 안 덮인다)',
+        bytes[saved1] === 'WFla' && bytes[relPdf] === 'QUJD', Object.keys(bytes));
+
+    const before = Object.keys(bytes).length;
+    await win.dailyAttachFiles([mkFile('대형.pdf', (win.DAILY_POLICY.fileMaxMB + 1) * 1048576, 'QQ==')]);
+    ok('상한을 넘는 파일은 올리지 않는다', Object.keys(bytes).length === before, Object.keys(bytes));
+
+    console.log('\n■ 📎 지우기 — 바이트를 먼저, 그 다음 참조');
+    await win._dailySave();            // _doc 을 NAS 와 먼저 맞춘다 — 안 맞춘 상태로
+    //    세면 "저장 안 한 2개" vs "저장된 1개" 를 비교해 하네스가 거짓 실패를 낸다.
+    win.nasAppFile.del = async () => { throw new Error('권한 거부(403)'); };
+    const nBefore = (await win.dailyLoad(attachDate)).files.length;
+    await win.dailyDropFile(0);
+    await win._dailySave();
+    ok('바이트를 못 지우면 참조도 그대로 둔다(지웠다고 거짓말하지 않는다)',
+        (JSON.parse(nas[win.DAILY_PATHS.file(attachDate, 'yhpark')]).files || []).length === nBefore,
+        JSON.parse(nas[win.DAILY_PATHS.file(attachDate, 'yhpark')]).files);
+    win.nasAppFile.del = async (rel) => { deleted.push(rel); delete bytes[rel]; delete nas[rel]; return { ok: true }; };
+    await win.dailyDropFile(0);
+    ok('지우면 NAS 바이트가 먼저 사라진다', deleted.indexOf(relPdf) >= 0 && !(relPdf in bytes), deleted);
+
+    console.log('\n■ 📎 사진만 달린 보고를 "빈 것"으로 보지 않는다');
+    const fdate = '2026-11-07';
+    nas[win.DAILY_PATHS.file(fdate, 'yhpark')] = JSON.stringify({
+        date: fdate, key: 'yhpark', items: [], files: [{ name: 'a.pdf', safe: 'a.pdf', rel: 'r', size: 1 }],
+        next: '', issue: '', rev: 2
+    });
+    let wiped = null;
+    try {
+        await win.dailySave({ date: fdate, key: 'yhpark', items: [], files: [], next: '', issue: '', rev: 2 });
+        wiped = 'saved';
+    } catch (e) { wiped = e.message; }
+    ok('첨부만 있던 보고를 빈 것으로 덮지 못한다', wiped !== 'saved' && /비어/.test(wiped), wiped);
+    const keep = await win.dailySave({ date: fdate, key: 'yhpark', items: [],
+        files: [{ name: 'b.pdf', safe: 'b.pdf', rel: 'r2', size: 2 }], next: '', issue: '', rev: 2 });
+    ok('첨부만 바꾸는 저장은 통과한다', keep && keep.rev === 3, keep && keep.rev);
+
+    console.log('\n■ 📎 참조가 가리키는 파일이 없으면 화면에 드러낸다');
+    // ⚠️ 모달이 열릴 때 부르는 그 함수를 그대로 부른다(`window.dailyMarkMissingFiles`).
+    const mdate = '2026-11-08';
+    nas[win.DAILY_PATHS.fileRel(mdate, 'yhpark', '있다.pdf')] = '(binary)';
+    const mdoc = {
+        date: mdate, key: 'yhpark', items: [{ name: 'A' }], next: '', issue: '', rev: 1,
+        files: [{ name: '있다.pdf', safe: '있다.pdf', rel: win.DAILY_PATHS.fileRel(mdate, 'yhpark', '있다.pdf'), size: 1 },
+                { name: '없다.pdf', safe: '없다.pdf', rel: win.DAILY_PATHS.fileRel(mdate, 'yhpark', '없다.pdf'), size: 1 }]
+    };
+    await win.dailyMarkMissingFiles(mdoc);
+    ok('없는 파일만 ⚠️ 로 표시된다',
+        mdoc.files[0].missing === false && mdoc.files[1].missing === true,
+        mdoc.files.map((f) => f.name + ':' + f.missing).join(','));
+
+    // 폴더 목록을 못 보는 경우(권한 거부는 **빈 배열**로 온다) — "없다"고 단정하면 안 된다
+    const realList = win.nasAppFile.list;
+    win.nasAppFile.list = async () => [];
+    const mdoc2 = JSON.parse(JSON.stringify(mdoc));
+    mdoc2.files.forEach((f) => { delete f.missing; });
+    await win.dailyMarkMissingFiles(mdoc2);
+    ok('목록을 못 보면 아무것도 ⚠️ 로 만들지 않는다',
+        !mdoc2.files.some((f) => f.missing), mdoc2.files.map((f) => f.name + ':' + f.missing).join(','));
+    win.nasAppFile.list = realList;
+
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');
     process.exit(fail ? 1 : 0);

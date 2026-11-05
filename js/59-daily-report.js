@@ -48,7 +48,11 @@
         autoOpenModal: false,    // ⚠️ 켜면 프로젝트 목록 자동열기(STORAGE_POLICY)와 팝업이 겹친다
         draftKey: 'gantt_daily_draft_v1',
         keepMonths: 24,
-        aiPerDay: 1              // 2단계에서 쓸 상한(1단계는 AI 호출이 없다)
+        aiPerDay: 1,             // 2단계에서 쓸 상한(1단계는 AI 호출이 없다)
+        // 📎 첨부 — 한계값은 전부 여기(코드에 박지 않는다)
+        fileMaxMB: 20,           // 한 파일 상한. 텔레그램 봇 내려받기도 20MB 가 천장이다
+        filesMax: 12,            // 한 보고당 개수 상한
+        imgMaxPx: 2000           // 사진은 긴 변을 이만큼으로 줄여 올린다(0 = 원본 그대로)
     };
 
     window.DAILY_PATHS = window.DAILY_PATHS || {
@@ -64,6 +68,28 @@
         //      밑줄 이름은 **고치기 전/후 둘 다** 되므로 재시작을 기다리지 않아도 된다.
         month: function (ymd) { return window.DAILY_PATHS.root + '/' + String(ymd).slice(0, 7).replace('-', '_'); },
         file: function (ymd, key) { return window.DAILY_PATHS.month(ymd) + '/' + ymd + '__' + key + '.json'; },
+        // 📎 첨부 **바이트는 보고 JSON 밖**에 둔다 — 메일 원문을 밖으로 뺀 js/54 와 같은 이유다.
+        //    JSON 에 base64 로 넣으면 한 사람 하루 파일이 수 MB 가 되고, 그만큼이
+        //    "읽고‑고쳐‑통째로 쓰기" 한 번에 날아갈 양이 된다(2026-11-04 색인 유실의 모양).
+        // ⚠️ 폴더 이름은 `files` — **글자로 시작한다.** 날짜로 폴더를 만들면
+        //    위 월 폴더 주석의 그 함정(숫자로 시작하는 폴더는 DSM 이 거부)을 다시 밟는다.
+        //    그래서 폴더는 한 달에 하나뿐이고, 파일 이름에 날짜·계정을 싣는다.
+        filesDir: function (ymd) { return window.DAILY_PATHS.month(ymd) + '/files'; },
+        fileRel: function (ymd, key, safeName) {
+            return window.DAILY_PATHS.filesDir(ymd) + '/' + ymd + '__' + key + '__' + safeName;
+        },
+        /** NAS 가 받아들이는 이름으로 눕힌다. 확장자는 지킨다(종류 판정이 이름을 본다). */
+        safeName: function (name) {
+            var n = String(name || '').replace(/[\\/]+/g, '_').replace(/[\x00-\x1f]/g, '')
+                      .replace(/["*:<>?|]/g, '_').replace(/^\.+/, '').trim();
+            if (!n) n = 'file';
+            if (n.length > 90) {                       // 긴 이름은 확장자를 살려 두고 자른다
+                var dot = n.lastIndexOf('.');
+                var ext = (dot > 0 && n.length - dot <= 12) ? n.slice(dot) : '';
+                n = n.slice(0, 90 - ext.length) + ext;
+            }
+            return n;
+        },
         parse: function (name) {            // `2026-11-04__yhpark.json` → {ymd, key}
             var m = String(name || '').match(/^(\d{4}-\d{2}-\d{2})__(.+)\.json$/);
             return m ? { ymd: m[1], key: m[2] } : null;
@@ -313,7 +339,7 @@
 
     function emptyDoc(dateStr) {
         return { date: dateStr, key: myKey(), name: me().name || '', team: me().team || '',
-                 dayType: 'work', items: [], next: '', issue: '', rev: 0, savedAt: '' };
+                 dayType: 'work', items: [], files: [], next: '', issue: '', rev: 0, savedAt: '' };
     }
 
     window.dailyLoad = async function (dateStr, key) {
@@ -326,6 +352,7 @@
             var o = await window.nasAppFile.get(rel, { json: true });
             if (!o) return null;
             if (!Array.isArray(o.items)) o.items = [];
+            if (!Array.isArray(o.files)) o.files = [];
             return o;
         } catch (e) {
             console.warn('[일일보고] 읽기 실패:', rel, e.message);
@@ -357,8 +384,9 @@
             err.conflict = cur;
             throw err;
         }
-        var hadContent = !!(cur && ((cur.items || []).length || cur.next || cur.issue));
-        var hasContent = !!((doc.items || []).length || doc.next || doc.issue);
+        // 📎 첨부도 내용이다 — 사진만 달아 둔 보고를 "번 것"으로 보면 못 지킨다.
+        var hadContent = !!(cur && ((cur.items || []).length || (cur.files || []).length || cur.next || cur.issue));
+        var hasContent = !!((doc.items || []).length || (doc.files || []).length || doc.next || doc.issue);
         var exempt = (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === doc.dayType; })[0] || {}).exempt;
         if (hadContent && !hasContent && !exempt) {
             throw new Error(T('내용이 비어 있어 저장을 막았습니다 — 지우려면 항목을 하나씩 지워주세요.',
@@ -433,6 +461,7 @@
                 toast(T('저장 전 초안을 되살렸습니다.', 'Restored your unsaved draft.'), 'info');
             }
         } catch (e) { /* 초안이 깨졌으면 무시 */ }
+        await markMissing(_doc);   // 📎 참조가 가리키는 파일이 정말 있는가 (목록 1콜)
         render();
     };
 
@@ -516,6 +545,7 @@
             '</div>';
         }).join('')
     ) +
+    filesHtml() +
   '</div>' +
   '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; align-items:center; gap:8px;">' +
     '<span style="flex:1; font-size:11px; color:#999;">' + esc(_doc.savedAt ? T('마지막 저장 ', 'Saved ') + new Date(_doc.savedAt).toLocaleString('ko-KR') : T('아직 저장 안 됨', 'Not saved yet')) + '</span>' +
@@ -525,6 +555,8 @@
   '</div>' +
 '</div>';
 
+        bindFileDrop();
+        paintThumbs();
         if (window._makeDraggable) window._makeDraggable('daily-box', 'daily-drag');
         if (window._bindClickToFront) window._bindClickToFront('daily-modal');
         if (window.bringModalToFront) window.bringModalToFront('daily-modal');
@@ -532,6 +564,11 @@
 
     window.dailyCloseModal = function () {
         saveDraftLocal();
+        // 📎 여기서 돌려주지 않으면 사진 blob 이 탭을 여닫는 동안 계속 샘는다.
+        Object.keys(_fileUrls).forEach(function (r) {
+            try { URL.revokeObjectURL(_fileUrls[r]); } catch (e) { /* 무시 */ }
+            delete _fileUrls[r];
+        });
         var m = document.getElementById('daily-modal');
         if (m) m.style.display = 'none';
     };
@@ -574,6 +611,326 @@
             if (btn) { btn.disabled = false; btn.textContent = '✅ ' + T('저장', 'Save'); }
         }
     };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 6-B. 📎 사진·파일 첨부 — 바이트는 보고 JSON **밖**에
+    // ══════════════════════════════════════════════════════════════════════
+    // 보고엔 참조만 남기고 바이트는 `DAILY_PATHS.filesDir` 에 둔다(메일 원문을 밖으로
+    // 뺀 js/54 와 같은 이유 — JSON 이 커지면 "읽고‑고쳐‑통째로 쓰기" 한 번에 날아갈 양이 커진다).
+    //
+    // ⚠️ 올리기는 **고른 즉시** 한다. 저장 버튼까지 들고 있으면 모달을 닫는 순간 사라진다.
+    //    대신 "저장 안 한 보고 + 이미 올라간 바이트"가 잠깐 생긴다(고아 바이트).
+    //    고아는 해롭지 않다 — 해로운 건 **참조가 가리키는 파일이 없는 쪽**이고, 그건
+    //    조용한 거짓말이라 모달을 열 때 폴더 목록 1콜로 대조해 화면에 드러낸다(`missing`).
+
+    /** 종류별 아이콘. 종류 판정은 js/42 `DOC_FILE_KINDS`(데이터) 하나만 쓴다. */
+    var DAILY_FILE_ICONS = {
+        image: '🖼️', pdf: '📕', excel: '📊', word: '📘', ppt: '📙', hwp: '📗',
+        text: '📄', html: '🌐', archive: '🗜️', cad: '📐', media: '🎬', exe: '⛔'
+    };
+    var _fileUrls = {};          // rel → objectURL (다시 그릴 때 또 내려받지 않게)
+
+    function fileKind(name) { return window._docKindOf ? window._docKindOf(name) : null; }
+    function fileIcon(name) { var k = fileKind(name); return (k && DAILY_FILE_ICONS[k.k]) || '📎'; }
+    function isImg(name) { var k = fileKind(name); return !!(k && k.k === 'image'); }
+
+    function sizeTxt(n) {
+        n = +n || 0;
+        if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+        if (n >= 1024) return Math.round(n / 1024) + ' KB';
+        return n + ' B';
+    }
+
+    function toB64(blob) {
+        return new Promise(function (resolve, reject) {
+            var fr = new FileReader();
+            fr.onload = function () {
+                var s = String(fr.result || '');
+                var i = s.indexOf(',');                 // `data:…;base64,` 접두어를 뗀다
+                resolve(i >= 0 ? s.slice(i + 1) : s);
+            };
+            fr.onerror = function () { reject(new Error(T('파일을 읽지 못했습니다', 'Could not read the file'))); };
+            fr.readAsDataURL(blob);
+        });
+    }
+
+    /**
+     * 📐 **사진만** 줄인다 — 현장 사진은 긴 변 2000px 이면 보고용으로 충분하고,
+     *    원본이면 8MB 사진 하나가 base64 11MB 로 올라가 사람이 그만큼 기다린다.
+     * ⚠️ 문서(PDF·엑셀·도면)는 **건드리지 않는다** — 내용이 달라진다.
+     * ⚠️ 줄여서 더 커지면(이미 압축된 jpg 등) 원본을 쓴다.
+     */
+    async function prepare(file) {
+        var out = { blob: file, name: String(file.name || 'file') };
+        var max = +window.DAILY_POLICY.imgMaxPx || 0;
+        if (!max || !isImg(out.name) || /\.(svg|gif)$/i.test(out.name)) return out;
+        var url = '';
+        try {
+            url = URL.createObjectURL(file);
+            var img = await new Promise(function (res, rej) {
+                var im = new Image();
+                im.onload = function () { res(im); };
+                im.onerror = function () { rej(new Error('이미지를 열지 못했습니다')); };
+                im.src = url;
+            });
+            var w = img.naturalWidth, h = img.naturalHeight, lng = Math.max(w, h);
+            if (!lng || lng <= max) return out;
+            var r = max / lng;
+            var cv = document.createElement('canvas');
+            cv.width = Math.round(w * r);
+            cv.height = Math.round(h * r);
+            cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+            var blob = await new Promise(function (res) { cv.toBlob(res, 'image/jpeg', 0.88); });
+            if (blob && blob.size < file.size) {
+                out.blob = blob;
+                out.name = out.name.replace(/\.(png|bmp|tiff?|webp|heic|heif)$/i, '.jpg');
+            }
+        } catch (e) {
+            console.warn('[일일보고] 사진 줄이기 실패 — 원본으로 올립니다:', e.message);
+        } finally {
+            if (url) { try { URL.revokeObjectURL(url); } catch (e2) { /* 무시 */ } }
+        }
+        return out;
+    }
+
+    /** 이 보고에서 안 쓰인 이름으로 — 겹치면 먼저 올린 사진이 조용히 덮인다. */
+    function uniqueSafeName(files, rawName) {
+        var base = window.DAILY_PATHS.safeName(rawName);
+        var taken = {};
+        (files || []).forEach(function (f) { if (f && f.safe) taken[f.safe] = 1; });
+        if (!taken[base]) return base;
+        var dot = base.lastIndexOf('.');
+        var stem = dot > 0 ? base.slice(0, dot) : base;
+        var ext = dot > 0 ? base.slice(dot) : '';
+        for (var n = 2; n < 999; n++) {
+            if (!taken[stem + '-' + n + ext]) return stem + '-' + n + ext;
+        }
+        return stem + '-' + Date.now() + ext;
+    }
+
+    /**
+     * 참조가 가리키는 파일이 **정말 있는지** 폴더 목록 1콜로 대조한다.
+     * ⚠️ 목록이 비면 **판정하지 않는다** — `nasAppFile.list` 는 권한 거부·오류를
+     *    빈 배열로 돌려주므로(의도된 설계), 그걸 "없다"로 읽으면 멀쩡한 첨부가
+     *    전부 ⚠️ 로 보인다("없음"과 "못 봄"을 섞지 말 것).
+     */
+    async function markMissing(doc) {
+        if (!doc || !(doc.files || []).length) return doc;
+        try {
+            var items = await window.nasAppFile.list(window.DAILY_PATHS.filesDir(doc.date));
+            if (!items || !items.length) return doc;
+            var have = {};
+            items.forEach(function (it) { if (it && it.name) have[it.name] = 1; });
+            doc.files.forEach(function (f) {
+                f.missing = !have[String(f.rel || '').split('/').pop()];
+            });
+        } catch (e) { /* 못 보면 아무 말도 안 한다 */ }
+        return doc;
+    }
+
+    /** 고른 파일들을 올리고 참조를 담는다. 한 개가 실패해도 나머지는 올린다. */
+    /** 모달이 열릴 때 부르는 그 함수 그대로 — 하네스도 이걸 부른다(두 벌로 두지 않는다). */
+    window.dailyMarkMissingFiles = markMissing;
+
+    window.dailyAttachFiles = async function (list) {
+        if (!_doc) return;
+        var files = [].slice.call(list || []).filter(Boolean);
+        if (!files.length) return;
+        var k;
+        try { k = requireKey(); } catch (e) { toast('⚠️ ' + e.message, 'warning', 9000); return; }
+        _doc.files = _doc.files || [];
+        var maxN = +window.DAILY_POLICY.filesMax || 12;
+        var maxB = (+window.DAILY_POLICY.fileMaxMB || 20) * 1048576;
+        var added = 0, bad = [];
+        toast('⏳ ' + T(files.length + '개 올리는 중…', 'Uploading ' + files.length + '…'), 'info', 3000);
+        for (var i = 0; i < files.length; i++) {
+            var f = files[i];
+            if (_doc.files.length >= maxN) {
+                bad.push(T('개수 상한 ' + maxN + '개를 넘겨 나머지는 올리지 않았습니다',
+                           'Stopped at the limit of ' + maxN + ' files'));
+                break;
+            }
+            if (f.size > maxB) {
+                bad.push((f.name || '?') + ' — ' + T('한 파일 ' + window.DAILY_POLICY.fileMaxMB + 'MB 까지입니다',
+                                                     'over the ' + window.DAILY_POLICY.fileMaxMB + 'MB limit'));
+                continue;
+            }
+            try {
+                var prep = await prepare(f);
+                var safe = uniqueSafeName(_doc.files, prep.name);
+                var rel = window.DAILY_PATHS.fileRel(_doc.date, k, safe);
+                var res = await window.nasAppFile.putBytes(rel, await toB64(prep.blob));
+                if (res && res.ok === false) throw new Error(res.message || 'NAS 쓰기 실패');
+                _doc.files.push({ name: prep.name, safe: safe, rel: rel, size: prep.blob.size,
+                                  via: 'app', addedAt: new Date().toISOString() });
+                added++;
+            } catch (e) {
+                bad.push((f.name || '?') + ' — ' + e.message);
+                if (window._issueLog) {
+                    try { window._issueLog({ domain: 'daily-report', kind: 'attach_failed', result: { errorRaw: e.message } }); }
+                    catch (e2) { /* 기록 실패가 올리기를 막지는 않는다 */ }
+                }
+            }
+        }
+        if (added) { saveDraftLocal(); render(); }
+        if (added && !bad.length) {
+            toast('📎 ' + T(added + '개 올렸습니다 — 저장을 누르면 보고에 남습니다.',
+                            added + ' uploaded — press Save to keep them in the report.'), 'success', 6000);
+        } else if (bad.length) {
+            toast((added ? '📎 ' + added + T('개만 올렸습니다. ', ' uploaded. ') : '⚠️ ') + bad.join(' / '), 'warning', 10000);
+        }
+    };
+
+    /** 첨부 지우기 — 바이트를 **먼저** 지운다(거꾸로면 지웠다고 말한 사진이 NAS 에 남는다). */
+    window.dailyDropFile = async function (i) {
+        var f = (_doc && _doc.files || [])[i];
+        if (!f) return;
+        if (!f.missing) {
+            try {
+                await window.nasAppFile.del(f.rel);
+            } catch (e) {
+                toast('⚠️ ' + T('파일을 지우지 못했습니다: ', 'Could not delete the file: ') + e.message, 'warning', 9000);
+                return;
+            }
+        }
+        if (_fileUrls[f.rel]) {
+            try { URL.revokeObjectURL(_fileUrls[f.rel]); } catch (e2) { /* 무시 */ }
+            delete _fileUrls[f.rel];
+        }
+        _doc.files.splice(i, 1);
+        saveDraftLocal();
+        render();
+        toast(T('첨부를 지웠습니다 — 저장을 눌러야 보고에서도 빠집니다.',
+                'Attachment deleted — press Save to update the report.'), 'info', 6000);
+    };
+
+    async function fileUrl(rel) {
+        if (_fileUrls[rel]) return _fileUrls[rel];
+        var blob = await window.nasAppFile.getBlob(rel);
+        if (!blob) return null;
+        _fileUrls[rel] = URL.createObjectURL(blob);
+        return _fileUrls[rel];
+    }
+
+    /**
+     * 첨부 열기. 팝업이 막히면 **내려받기로 넘긴다** —
+     * 그전 사고(js/48)처럼 "새 창에서 열었습니다"라고 말하고 아무 일도 안 나면 안 된다.
+     */
+    window.dailyOpenRel = async function (rel, name) {
+        try {
+            var u = await fileUrl(rel);
+            if (!u) {
+                toast('⚠️ ' + T('NAS 에 그 파일이 없습니다 — 올리는 중에 끊겼을 수 있습니다.',
+                                 'That file is not on the NAS — the upload may have failed.'), 'warning', 8000);
+                return false;
+            }
+            var w = window.open(u, '_blank');
+            if (w) return true;
+            var a = document.createElement('a');
+            a.href = u;
+            a.download = String(name || 'file');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            toast(T('새 창이 막혀 내려받았습니다.', 'Popup blocked — downloaded instead.'), 'info', 5000);
+            return false;
+        } catch (e) {
+            toast('⚠️ ' + e.message, 'error', 8000);
+            return false;
+        }
+    };
+    window.dailyOpenFile = function (i) {
+        var f = (_doc && _doc.files || [])[i];
+        if (f) return window.dailyOpenRel(f.rel, f.name);
+    };
+    /** 남의 보고 첨부 — 인덱스로만 받는다(파일 이름이 onclick 에 들어가지 않게). */
+    window.dailyOpenDayFile = function (i) {
+        var f = (window._dailyDayFiles || [])[i];
+        if (f) return window.dailyOpenRel(f.rel, f.name);
+    };
+
+    /** 썸네일은 그린 **뒤에** 채운다 — 렌더를 막지 않는다. */
+    function paintThumbs() {
+        (_doc && _doc.files || []).forEach(function (f, i) {
+            if (!isImg(f.name) || f.missing) return;
+            var el = document.getElementById('daily-th-' + i);
+            if (!el || el.getAttribute('data-done')) return;
+            el.setAttribute('data-done', '1');
+            fileUrl(f.rel).then(function (u) {
+                if (u) { el.style.backgroundImage = 'url("' + u + '")'; el.textContent = ''; }
+            }).catch(function () { /* 썸네일 하나 못 그려도 목록은 쓴다 */ });
+        });
+    }
+
+    /** 모달 안 첨부 영역 HTML. 일 종류가 면제여도 보여준다(출장 사진 같은 게 있다). */
+    function filesHtml() {
+        var fl = (_doc.files || []);
+        var maxN = +window.DAILY_POLICY.filesMax || 12;
+        var mb = +window.DAILY_POLICY.fileMaxMB || 20;
+        var px = +window.DAILY_POLICY.imgMaxPx || 0;
+        var cards = fl.map(function (f, i) {
+            var th = isImg(f.name) && !f.missing
+                ? '<div id="daily-th-' + i + '" style="width:100%; height:62px; border-radius:5px 5px 0 0; background:#f1f3f5 center/cover no-repeat; display:flex; align-items:center; justify-content:center; font-size:18px; color:#bbb;">🖼️</div>'
+                : '<div style="width:100%; height:62px; border-radius:5px 5px 0 0; background:#f6f7f9; display:flex; align-items:center; justify-content:center; font-size:24px;">' + (f.missing ? '⚠️' : fileIcon(f.name)) + '</div>';
+            return '<div style="width:104px; border:1px solid ' + (f.missing ? '#eeb0ac' : '#e4e7ea') + '; border-radius:6px; overflow:hidden; background:#fff; position:relative;">' +
+                     '<button onclick="window.dailyDropFile(' + i + ')" title="' + esc(T('지우기', 'Delete')) + '" style="position:absolute; top:3px; right:3px; width:19px; height:19px; border:1px solid #eeb0ac; background:rgba(251,228,226,.95); color:#b1432f; border-radius:4px; cursor:pointer; font-size:10px; line-height:1; padding:0;">✕</button>' +
+                     '<div onclick="window.dailyOpenFile(' + i + ')" title="' + esc(f.name + (f.missing ? ' — ' + T('NAS 에 없습니다', 'missing on NAS') : '')) + '" style="cursor:pointer;">' + th +
+                       '<div style="padding:4px 5px;">' +
+                         '<div style="font-size:10.5px; color:#333; line-height:1.25; word-break:break-all; max-height:26px; overflow:hidden;">' + esc(f.name) + '</div>' +
+                         '<div style="font-size:9.5px; color:#aaa; margin-top:1px;">' + esc(sizeTxt(f.size)) + (f.via === 'telegram' ? ' 📱' : '') + '</div>' +
+                       '</div>' +
+                     '</div>' +
+                   '</div>';
+        }).join('');
+        return '<div style="margin-top:4px; padding-top:11px; border-top:1px solid #f0f0f0;">' +
+                 '<div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:5px;">' +
+                   '<span style="font-size:12.5px; font-weight:bold; color:#333;">📎 ' + esc(T('사진·파일', 'Photos & files')) + '</span>' +
+                   '<span style="font-size:11px; color:#aaa;">' + fl.length + ' / ' + maxN + '</span>' +
+                   '<button onclick="var el=document.getElementById(\'daily-file-input\'); if(el) el.click();" style="padding:4px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">+ ' + esc(T('파일 고르기', 'Add files')) + '</button>' +
+                   '<input type="file" id="daily-file-input" multiple style="display:none;" onchange="window.dailyAttachFiles(this.files); this.value=\'\';">' +
+                 '</div>' +
+                 '<div style="font-size:11px; color:#999; margin-bottom:' + (fl.length ? '7px' : '0') + ';">' +
+                   esc(T('여기로 끌어다 놓거나 Ctrl+V 로 붙여넣어도 됩니다. 한 파일 ' + mb + 'MB 까지' + (px ? ', 사진은 긴 변 ' + px + 'px 로 줄여 올립니다' : '') + '.',
+                         'Drag files here or paste with Ctrl+V. Up to ' + mb + 'MB each' + (px ? '; photos are resized to ' + px + 'px on the long side' : '') + '.')) +
+                 '</div>' +
+                 (fl.length ? '<div style="display:flex; flex-wrap:wrap; gap:7px;">' + cards + '</div>' : '') +
+               '</div>';
+    }
+
+    /** 끌어다 놓기 · 붙여넣기 — 렌더마다 상자가 새로 생기므로 그 상자에 다시 건다. */
+    function bindFileDrop() {
+        var box = document.getElementById('daily-box');
+        if (!box || box._dailyDnd) return;
+        box._dailyDnd = 1;
+        box.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); });
+        box.addEventListener('drop', function (e) {
+            var fs = e.dataTransfer && e.dataTransfer.files;
+            if (!fs || !fs.length) return;
+            e.preventDefault(); e.stopPropagation();
+            window.dailyAttachFiles(fs);
+        });
+        box.addEventListener('paste', function (e) {
+            var items = (e.clipboardData && e.clipboardData.items) || [];
+            var out = [];
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].kind !== 'file') continue;
+                var f = items[i].getAsFile();
+                if (!f) continue;
+                // 📋 화면 캡처는 이름이 없다(또는 전부 `image.png`) — 날짜로 지어 준다.
+                var nm = String(f.name || '');
+                if (!nm || nm === 'image.png' || nm === 'blob') {
+                    try {
+                        f = new File([f], 'capture_' + ymd() + '_' + String(Date.now()).slice(-6) + '.png',
+                                     { type: f.type || 'image/png' });
+                    } catch (e2) { /* File 생성이 막히면 원본 이름으로 간다 */ }
+                }
+                out.push(f);
+            }
+            if (!out.length) return;          // 글자 붙여넣기는 그대로 입력칸으로 간다
+            e.preventDefault();
+            window.dailyAttachFiles(out);
+        });
+    }
 
     // ══════════════════════════════════════════════════════════════════════
     // 7. 팀 하루 보기 탭
@@ -644,15 +1001,17 @@
             } else {
                 var docs = await window.dailyLoadDay(date);
                 var rows = [[en ? 'Name' : '이름', en ? 'Type' : '종류', en ? 'Done' : '오늘 한 일',
-                             en ? 'Tomorrow' : '내일 할 일', en ? 'Issues' : '막힌 것', en ? 'Saved' : '작성시각']];
+                             en ? 'Tomorrow' : '내일 할 일', en ? 'Issues' : '막힌 것', en ? 'Attachments' : '첨부', en ? 'Saved' : '작성시각']];
                 docs.forEach(function (d) {
                     var t = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
                     rows.push([d.name || d.key, (en ? t.en : t.ko) || '',
                         String(d.aiDone || '').trim() || (d.items || []).map(function (i) { return '• ' + i.name + (i.note ? ' — ' + i.note : ''); }).join('\n'),
-                        d.next || '', d.issue || '', d.savedAt ? new Date(d.savedAt).toLocaleString('ko-KR') : '']);
+                        d.next || '', d.issue || '',
+                        (d.files || []).map(function (f) { return f.name; }).join(', '),
+                        d.savedAt ? new Date(d.savedAt).toLocaleString('ko-KR') : '']);
                 });
                 var ws2 = XLSX.utils.aoa_to_sheet(rows);
-                ws2['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 52 }, { wch: 28 }, { wch: 28 }, { wch: 20 }];
+                ws2['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 52 }, { wch: 28 }, { wch: 28 }, { wch: 24 }, { wch: 20 }];
                 XLSX.utils.book_append_sheet(wb, ws2, en ? 'Daily' : '일일보고');
             }
             var fn = (en ? 'DailyReport_' : '일일업무보고_') + (window._dailyView === 'month' ? date.slice(0, 7) : date) + '.xlsx';
@@ -1204,6 +1563,21 @@
             ? roster.filter(function (m) { return m && m.active !== false; })
             : docs.map(function (d) { return { key: d.key, name: d.name || d.key, team: d.team || '' }; });
 
+        // 📎 남의 보고 첨부는 **인덱스로만** 여다 — 파일 이름이 onclick 속으로
+        //    들어가지 않게 한다(이름엔 따옴표·괄호가 섭일 수 있다).
+        window._dailyDayFiles = [];
+        function dayChips(d) {
+            var fl = (d && d.files) || [];
+            if (!fl.length) return '';
+            return '<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">' + fl.map(function (f) {
+                var gi = window._dailyDayFiles.push({ rel: f.rel, name: f.name }) - 1;
+                return '<span onclick="window.dailyOpenDayFile(' + gi + ')" title="' + esc(f.name) + '" '
+                     + 'style="cursor:pointer; display:inline-block; max-width:160px; overflow:hidden; text-overflow:ellipsis; '
+                     + 'white-space:nowrap; padding:1px 7px; border:1px solid #cfe3e5; background:#f2f9fa; color:#2c5f8a; '
+                     + 'border-radius:9px; font-size:10.5px;">' + fileIcon(f.name) + ' ' + esc(f.name) + '</span>';
+            }).join('') + '</div>';
+        }
+
         var rows = people.map(function (p) {
             var d = byKey[String(p.key || '').toLowerCase()];
             var typ = d ? (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === d.dayType; })[0] || {}) : null;
@@ -1219,7 +1593,7 @@
             }
             return '<tr><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
                    '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
-                   '<td style="' + td + ' white-space:pre-line;">' + esc(done || '-') + '</td>' +
+                   '<td style="' + td + ' white-space:pre-line;">' + esc(done || '-') + dayChips(d) + '</td>' +
                    '<td style="' + td + ' white-space:pre-line;">' + esc(d.next || '-') + '</td>' +
                    '<td style="' + td + ' white-space:pre-line;' + (d.issue ? ' background:#fffaf0;' : '') + '">' + esc(d.issue || '-') + '</td></tr>';
         }).join('');

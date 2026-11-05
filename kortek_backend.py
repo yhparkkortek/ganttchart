@@ -1016,6 +1016,95 @@ DAILY_TG_TAGS = {
 DAILY_TG_DAYTYPES = {'휴가': 'leave', '반차': 'half', '출장': 'trip', '교육': 'training', '근무': 'work'}
 
 
+# 📎 텔레그램으로 온 사진·문서. 바이트는 보고 JSON 밖(월 폴더의 `files/`)에 둔다 —
+#    프런트(js/59)와 **같은 규칙**이어야 한다. 두 쪽이 갈라지면 같은 파일을 서로 다른
+#    이름으로 찾게 되고, 그건 오류 없이 "첨부가 없다"로 보인다.
+# ⚠️ 20MB 는 봇 API 가 내려주는 천장이다(그 위는 `getFile` 이 거부한다) —
+#    js/59 `DAILY_POLICY.fileMaxMB` 와 같은 값.
+DAILY_TG_FILE_MAX_MB = 20
+# 받을 종류 — 코드에 박지 않고 여기 한 줄. (kind, 이름 없을 때 붙일 확장자)
+DAILY_TG_FILE_KINDS = (('document', ''), ('video', '.mp4'), ('audio', '.mp3'), ('voice', '.ogg'))
+
+
+def _daily_safe_name(name):
+    """프런트 `DAILY_PATHS.safeName` 과 같은 규칙으로 눕힌다. 확장자는 지킨다."""
+    n = re.sub(r'[\\/]+', '_', str(name or ''))
+    n = re.sub(r'[\x00-\x1f]', '', n)
+    n = re.sub(r'["*:<>?|]', '_', n)
+    n = re.sub(r'^\.+', '', n).strip()
+    if not n:
+        n = 'file'
+    if len(n) > 90:
+        dot = n.rfind('.')
+        ext = n[dot:] if (0 < dot and len(n) - dot <= 12) else ''
+        n = n[:90 - len(ext)] + ext
+    return n
+
+
+def _daily_files_rel(date_str, key, safe):
+    """js/59 `DAILY_PATHS.fileRel` 과 같은 규칙. 폴더는 `files` — **글자로 시작한다**
+    (숫자로 시작하는 폴더를 DSM 이 거부한 실측 때문, nas_dsm.ensure_folder 주석)."""
+    return 'App_Config/DailyReport/%s/files/%s__%s__%s' % (
+        date_str[:7].replace('-', '_'), date_str, key, safe)
+
+
+def _tg_attachment(msg):
+    """메시지에서 받을 것 하나를 고른다. 없으면 None.
+
+    ⚠️ `photo` 는 **크기별 배열**이라 가장 큰 것을 집는다 — 작은 걸 집으면
+       흐릿한 섬네일이 보고에 남는다(원본은 다시 받을 수 없다).
+    """
+    ph = msg.get('photo') or []
+    if ph:
+        big = max(ph, key=lambda x: ((x.get('file_size') or 0), (x.get('width') or 0)))
+        return {'file_id': big.get('file_id'), 'size': big.get('file_size') or 0,
+                'name': 'photo_%s.jpg' % datetime.now(KST).strftime('%H%M%S'),
+                'mime': 'image/jpeg'}
+    for kind, ext in DAILY_TG_FILE_KINDS:
+        o = msg.get(kind)
+        if not o:
+            continue
+        nm = o.get('file_name') or ('%s_%s%s' % (kind, datetime.now(KST).strftime('%H%M%S'), ext))
+        return {'file_id': o.get('file_id'), 'size': o.get('file_size') or 0,
+                'name': nm, 'mime': o.get('mime_type') or ''}
+    return None
+
+
+def _daily_tg_save_file(att, date_str, key, taken):
+    """봇에서 내려받아 NAS 에 둔다. 돌려주는 건 보고 JSON 에 넣을 **참조**다.
+
+    ⚠️ 상한을 **받기 전에** 본다 — 20MB 넘는 걸 받아 보고 실패하면 그 시간만 버린다.
+    ⚠️ `put` 은 쓴 뒤 정말 있는지 확인하고 돌려준다(nas_dsm) — 반환값은 증거가 아니다.
+    """
+    cap = DAILY_TG_FILE_MAX_MB * 1048576
+    if (att.get('size') or 0) > cap:
+        raise ValueError('파일이 %dMB 를 넘습니다(텔레그램 봇이 못 내려줍니다)' % DAILY_TG_FILE_MAX_MB)
+    r = requests.get('https://api.telegram.org/bot%s/getFile' % TELEGRAM_TOKEN,
+                     params={'file_id': att.get('file_id')}, timeout=20)
+    j = r.json()
+    if not j.get('ok'):
+        raise RuntimeError('getFile 실패: %s' % str(j.get('description') or j)[:160])
+    fp = (j.get('result') or {}).get('file_path')
+    if not fp:
+        raise RuntimeError('file_path 가 없습니다')
+    dl = requests.get('https://api.telegram.org/file/bot%s/%s' % (TELEGRAM_TOKEN, fp), timeout=90)
+    if dl.status_code != 200 or not dl.content:
+        raise RuntimeError('내려받기 실패(HTTP %s)' % dl.status_code)
+    if len(dl.content) > cap:
+        raise ValueError('파일이 %dMB 를 넘습니다' % DAILY_TG_FILE_MAX_MB)
+    safe = _daily_safe_name(att.get('name'))
+    base, i = safe, 2
+    while safe in (taken or ()):
+        dot = base.rfind('.')
+        safe = ('%s-%d%s' % (base[:dot], i, base[dot:])) if dot > 0 else '%s-%d' % (base, i)
+        i += 1
+    rel = _daily_files_rel(date_str, key, safe)
+    nas = _nas()
+    nas.put(nas.abs_path(rel), dl.content)
+    return {'name': att.get('name'), 'safe': safe, 'rel': rel, 'size': len(dl.content),
+            'via': 'telegram', 'addedAt': datetime.now(KST).isoformat()}
+
+
 def _daily_state():
     try:
         with open(DAILY_TG_STATE, 'r', encoding='utf-8') as f:
@@ -1149,6 +1238,9 @@ def _daily_summary_text(doc):
         nm = html.escape(str(it.get('name', '')))
         note = (' — ' + html.escape(str(it.get('note')))) if it.get('note') else ''
         lines.append('• %s%s' % (nm, note))
+    fl = doc.get('files') or []
+    if fl:
+        lines.append('📎 ' + ', '.join(html.escape(str(f.get('name', ''))) for f in fl))
     if doc.get('next'):
         lines.append('')
         lines.append('[내일] ' + html.escape(str(doc['next'])))
@@ -1204,9 +1296,12 @@ def _daily_tg_tick(force=False):
     for up in (j.get('result') or []):
         uid = up.get('update_id') or 0
         msg = up.get('message') or up.get('edited_message') or {}
-        text = (msg.get('text') or '').strip()
+        # 📎 사진엔 `text` 가 없다 — 설명은 `caption` 으로 온다.
+        #    옛 코드는 그래서 사진·문서를 조용히 버렸다.
+        text = (msg.get('text') or msg.get('caption') or '').strip()
+        att = _tg_attachment(msg)
         chat = str(((msg.get('chat') or {}).get('id')) or '')
-        if not text or not chat:
+        if (not text and not att) or not chat:
             last = max(last, uid + 1)
             continue
         person = by_chat.get(chat)
@@ -1221,11 +1316,33 @@ def _daily_tg_tick(force=False):
             doc = _daily_nas_json(rel) or {
                 'date': date_str, 'key': person['key'], 'name': person.get('name', ''),
                 'team': person.get('team', ''), 'dayType': 'work',
-                'items': [], 'next': '', 'issue': '', 'rev': 0}
+                'items': [], 'files': [], 'next': '', 'issue': '', 'rev': 0}
+            # 📎 첨부 하나가 실패해도 **큐를 막지 않는다.** 밖에 있는 `except` 의
+            #    `break` 로 떨어지면 다음 핅이 같은 업데이트를 또 받아 **사진 한 장이
+            #    그 뒤 모든 사람의 보고를 옆구혀 세운다.**
+            att_err = ''
+            if att:
+                try:
+                    taken = set(f.get('safe') for f in (doc.get('files') or []) if f.get('safe'))
+                    doc.setdefault('files', []).append(
+                        _daily_tg_save_file(att, date_str, person['key'], taken))
+                except Exception as fe:
+                    att_err = str(fe)
+                    print("[일일보고] 첨부 저장 실패(글만 기록): %s" % att_err)
             word = text.strip()
-            if word in DAILY_TG_DAYTYPES:
+            if not word and (not att or att_err):
+                # 쓸 게 없다 — `rev` 를 공에 올리지 않고 사유만 돌려줌다.
+                if att_err:
+                    send_telegram_msg('⚠️ 첨부를 저장하지 못했습니다 — ' + html.escape(att_err), chat)
+                last = max(last, uid + 1)
+                continue
+            if not word:
+                pass                 # 📎 사진만 왔다 — 글은 손대지 않는다
+            elif word in DAILY_TG_DAYTYPES:
                 doc['dayType'] = DAILY_TG_DAYTYPES[word]
             elif word in ('/다시', '/reset'):
+                # ⚠️ 글만 지운다 — 사진까지 지우면 NAS 에 고아 바이트가 남고
+                #    되돌릴 수도 없다(사진은 화면에서 하나지 지운다).
                 doc['items'], doc['next'], doc['issue'] = [], '', ''
             else:
                 doc = _daily_apply_text(doc, text)
@@ -1235,6 +1352,8 @@ def _daily_tg_tick(force=False):
             n.put(n.abs_path(rel), json.dumps(doc, ensure_ascii=False, indent=2).encode('utf-8'))
             back = _daily_nas_json(rel) or doc
             send_telegram_msg(_daily_summary_text(back), chat)
+            if att_err:
+                send_telegram_msg('⚠️ 첨부는 저장하지 못했습니다 — ' + html.escape(att_err), chat)
             handled += 1
             last = max(last, uid + 1)
         except Exception as e:

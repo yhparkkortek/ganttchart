@@ -720,6 +720,29 @@
             var text = (typeof body === 'string') ? body : JSON.stringify(body, null, 2);
             return await writeRel(rel, text, false);
         },
+        /** 이진을 쓴다 — base64 문자열(접두어 없이)을 준다. 사진·문서 첨부가 이 길이다.
+         *  ⚠️ 텍스트로 보내면 바이트가 바뀐다(js/58 이사에서 실측) — 이진은 **반드시 b64**. */
+        putBytes: async function (rel, b64) {
+            return await writeRel(rel, String(b64 || ''), true);
+        },
+        /** 바이트를 Blob 으로 읽는다. 없으면 null.
+         *  ⚠️ DSM 은 **없는 파일에도 502 + "페이지를 찾을 수 없습니다" HTML** 을 준다 —
+         *     백엔드가 404 로 바꿔 주지만, 그래도 받은 것이 HTML 이면 파일로 저장하면 안 된다
+         *     (그 HTML 을 바이트로 돌려줘서 "파일 내용"으로 저장한 전력이 있다). */
+        getBlob: async function (rel) {
+            var res = await nas('GET', '/nas/app/get' + qs(rel));
+            if (res.status === 404) return null;
+            if (!res.ok) {
+                var e = new Error('NAS 읽기 실패(HTTP ' + res.status + '): ' + normRel(rel));
+                e.status = res.status;
+                throw e;
+            }
+            return await res.blob();
+        },
+        /** 지운다. ⚠️ 되돌릴 수 없다 — 사람 확인은 **부르는 쪽**이 받는다. */
+        del: async function (rel) {
+            return await nasJson('POST', '/nas/app/delete', { rel: normRel(rel) });
+        },
         /** 폴더 목록. 없거나 권한 없으면 빈 배열(목록은 "없음"과 "못 봄"을 같게 취급해도 안전하다). */
         list: async function (rel) {
             try { return await listRel(rel); }

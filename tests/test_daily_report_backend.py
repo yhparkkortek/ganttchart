@@ -51,12 +51,19 @@ class FakeNas(object):
             raise RuntimeError('권한 거부(403)')
         if rel not in self.files:
             raise RuntimeError('파일을 찾을 수 없습니다 (404)')
-        return self.files[rel].encode('utf-8')
+        v = self.files[rel]
+        return v if isinstance(v, bytes) else v.encode('utf-8')
 
     def put(self, path, data):
         if self.fail_write:
             raise RuntimeError('쓰기 실패')
-        self.files[path.replace('/ROOT/', '')] = data.decode('utf-8')
+        # 📎 JSON 은 지금처럼 글자로, 사진 바이트는 **바이트 그대로** 둔다 —
+        #    여기서 decode 를 강제하면 진짜 이진이 하네스에서만 터진다.
+        rel = path.replace('/ROOT/', '')
+        try:
+            self.files[rel] = data.decode('utf-8')
+        except Exception:
+            self.files[rel] = data
         return {'ok': True}
 
 
@@ -77,7 +84,34 @@ class _Resp(object):
         return self._p
 
 
-B.requests.get = lambda url, **kw: _Resp({'ok': True, 'result': list(UPDATES)})
+class _Bin(object):
+    """파일 내려받기 응답 — `.content`·`.status_code` 만 쓴다."""
+    def __init__(self, content, status=200):
+        self.content = content
+        self.status_code = status
+
+
+GETFILE_CALLS = []
+DOWNLOAD_CALLS = []
+DOWNLOAD_BYTES = [b'']
+DOWNLOAD_STATUS = [200]
+GETFILE_REPLY = [{'ok': True, 'result': {'file_path': 'photos/f_1.jpg'}}]
+
+
+def _fake_get(url, **kw):
+    """텔레그램은 **주소가 세 가지**다 — 한 덯으로 답하면 엉뚱한 것을 재는다."""
+    if '/getUpdates' in url:
+        return _Resp({'ok': True, 'result': list(UPDATES)})
+    if '/getFile' in url:
+        GETFILE_CALLS.append(kw.get('params') or {})
+        return _Resp(GETFILE_REPLY[0])
+    if '/file/bot' in url:
+        DOWNLOAD_CALLS.append(url)
+        return _Bin(DOWNLOAD_BYTES[0], DOWNLOAD_STATUS[0])
+    return _Resp({'ok': False, 'description': '하네스가 모를 주소: ' + url})
+
+
+B.requests.get = _fake_get
 
 STATE = os.path.join(os.path.dirname(B.DAILY_TG_STATE), '_test_daily_state.json')
 B.DAILY_TG_STATE = STATE
@@ -258,6 +292,153 @@ reset(ROSTER, FRESH, {'dueAt': '00:00'})
 res = c.post('/daily/tick', json={'force': True})
 j = res.get_json()
 ok('/daily/tick 이 수신·알림을 둘 다 돈다', j.get('ok') and 'inbound' in j and 'notify' in j, j)
+
+print('\n■ 📎 텔레그램 사진·문서 첨부')
+
+PNG = b'\x89PNG\r\n\x1a\n' + bytes(range(200)) * 3          # utf-8 로 안 읽히는 진짜 이진
+
+
+def tg_reset(photo_size=4096, status=200, blob=None, getfile=None):
+    """첨부 한 건이 오는 상태를 꾸민다. 돌려주는 건 그 update 하나."""
+    GETFILE_CALLS[:] = []
+    DOWNLOAD_CALLS[:] = []
+    DOWNLOAD_BYTES[0] = blob if blob is not None else PNG
+    DOWNLOAD_STATUS[0] = status
+    GETFILE_REPLY[0] = getfile if getfile is not None else {'ok': True, 'result': {'file_path': 'photos/f_1.jpg'}}
+    return photo_size
+
+
+# ── 이름 눕히기 — 프런트와 **같은 규칙**이어야 한다 ─────────────────────────
+ok('경로 구분자를 지운다', B._daily_safe_name('a/b' + chr(92) + 'c.jpg') == 'a_b_c.jpg',
+   B._daily_safe_name('a/b' + chr(92) + 'c.jpg'))
+_bad = B._daily_safe_name('..' + chr(92) + 'pw.txt')
+# ↑ 구분자를 먼저 밑줄로 바꾸니 `.._pw.txt` → 앞 점을 떼면 `_pw.txt` — 파이썬·JS 나란히 같다.
+ok('경로 탈출도 숨은 파일도 나오지 않는다',
+   '/' not in _bad and chr(92) not in _bad and not _bad.startswith('.') and _bad == '_pw.txt', _bad)
+ok('금지 문자를 밑줄로', B._daily_safe_name('a:b*c?.pdf') == 'a_b_c_.pdf', B._daily_safe_name('a:b*c?.pdf'))
+ok('빈 이름은 file', B._daily_safe_name('') == 'file')
+ok('긴 이름도 확장자를 지킨다', B._daily_safe_name('x' * 120 + '.xlsx').endswith('.xlsx')
+   and len(B._daily_safe_name('x' * 120 + '.xlsx')) <= 90)
+ok('한글 이름은 그대로', B._daily_safe_name('현장 사진.JPG') == '현장 사진.JPG')
+
+rel = B._daily_files_rel('2026-11-05', 'yhpark', '현장.jpg')
+ok('첨부 폴더는 글자로 시작한다(files)', '/files/' in rel and rel.split('/')[2] == '2026_11', rel)
+ok('첨부 이름에 날짜·계정이 들어간다', rel.endswith('2026-11-05__yhpark__현장.jpg'), rel)
+
+# ── 어느 것을 받을지 고르기 ────────────────────────────────────────────────
+att = B._tg_attachment({'photo': [{'file_id': 'small', 'file_size': 100, 'width': 90},
+                                  {'file_id': 'big', 'file_size': 9000, 'width': 1280}]})
+ok('사진은 **가장 큰 것**을 집는다', att and att['file_id'] == 'big', att)
+att_d = B._tg_attachment({'document': {'file_id': 'd1', 'file_name': '사양서.pdf', 'file_size': 10}})
+ok('문서는 파일 이름을 그대로 쓴다', att_d and att_d['name'] == '사양서.pdf', att_d)
+att_v = B._tg_attachment({'voice': {'file_id': 'v1', 'file_size': 10}})
+ok('이름 없는 음성에도 확장자를 붙인다', att_v and att_v['name'].endswith('.ogg'), att_v)
+ok('글만 온 메시지는 첨부가 없다', B._tg_attachment({'text': '안녕'}) is None)
+
+# ── 사진 한 장 + 설명 → 파일은 NAS, 설명은 업무 ────────────────────────────
+sz = tg_reset()
+reset(ROSTER, FRESH)
+UPDATES[:] = [{'update_id': 11, 'message': {
+    'chat': {'id': '111'}, 'caption': '현장 치수 확인',
+    'photo': [{'file_id': 'ph1', 'file_size': sz, 'width': 1280}]}}]
+r = B._daily_tg_tick(force=True)
+doc = json.loads(NAS.files.get(B._daily_rel(TODAY, ME), '{}'))
+saved = [k for k in NAS.files if '/files/' in k]
+ok('사진 한 장을 받았다', r.get('handled') == 1, r)
+ok('바이트가 NAS 에 들어갔다', len(saved) == 1, saved)
+ok('바이트가 **그대로**다(글자로 바뀌지 않았다)',
+   saved and NAS.files[saved[0]] == PNG, type(NAS.files[saved[0]]) if saved else None)
+ok('보고에 참조가 남았다', len(doc.get('files') or []) == 1 and doc['files'][0]['via'] == 'telegram',
+   doc.get('files'))
+ok('참조의 rel 이 그 파일을 가리킨다', saved and doc['files'][0]['rel'] == saved[0], doc.get('files'))
+ok('크기는 받은 바이트 수다', doc['files'][0]['size'] == len(PNG), doc['files'][0]['size'])
+ok('caption 은 업무로 들어갔다',
+   any(i['name'] == '현장 치수 확인' for i in (doc.get('items') or [])), doc.get('items'))
+ok('되읽기 답장에 📎 가 있다', SENT and '📎' in SENT[-1][1], SENT[-1][1] if SENT else None)
+ok('getFile 을 한 번만 불렀다', len(GETFILE_CALLS) == 1, GETFILE_CALLS)
+
+# ── 설명 없는 사진 — 글은 손대지 않는다 ────────────────────────────────────
+tg_reset()
+reset(ROSTER, FRESH)
+NAS.files[B._daily_rel(TODAY, ME)] = json.dumps(
+    {'date': TODAY, 'key': ME, 'items': [{'name': '기존 업무'}], 'next': '', 'issue': '', 'rev': 3},
+    ensure_ascii=False)
+UPDATES[:] = [{'update_id': 21, 'message': {
+    'chat': {'id': '111'}, 'photo': [{'file_id': 'ph2', 'file_size': 10, 'width': 800}]}}]
+B._daily_tg_tick(force=True)
+doc = json.loads(NAS.files[B._daily_rel(TODAY, ME)])
+ok('사진만 와도 기존 업무는 그대로', [i['name'] for i in doc['items']] == ['기존 업무'], doc['items'])
+ok('사진만 와도 첨부는 담긴다', len(doc.get('files') or []) == 1, doc.get('files'))
+ok('rev 가 올라갔다', doc['rev'] == 4, doc['rev'])
+
+# ── 같은 이름이 두 번 — 덮지 않는다 ───────────────────────────────────────
+tg_reset()
+reset(ROSTER, FRESH)
+NAS.files[B._daily_rel(TODAY, ME)] = json.dumps(
+    {'date': TODAY, 'key': ME, 'items': [], 'next': '', 'issue': '', 'rev': 1,
+     'files': [{'name': '도면.pdf', 'safe': '도면.pdf', 'rel': 'x', 'size': 1}]}, ensure_ascii=False)
+UPDATES[:] = [{'update_id': 31, 'message': {
+    'chat': {'id': '111'}, 'document': {'file_id': 'd2', 'file_name': '도면.pdf', 'file_size': 10}}}]
+B._daily_tg_tick(force=True)
+doc = json.loads(NAS.files[B._daily_rel(TODAY, ME)])
+ok('같은 이름은 번호가 붙는다(먼저 올린 게 안 덮인다)',
+   len(doc['files']) == 2 and doc['files'][1]['safe'] == '도면-2.pdf', doc.get('files'))
+
+# ── 🚨 큐를 막지 않는다 — 20MB 넘는 사진 한 장이 뒤를 다 멈추면 안 된다 ────
+tg_reset()
+reset(ROSTER, FRESH)
+UPDATES[:] = [
+    {'update_id': 41, 'message': {'chat': {'id': '111'},
+                                  'photo': [{'file_id': 'huge', 'file_size': 99 * 1048576, 'width': 4000}]}},
+    {'update_id': 42, 'message': {'chat': {'id': '111'}, 'text': '뒤에 온 보고'}},
+]
+r = B._daily_tg_tick(force=True)
+doc = json.loads(NAS.files.get(B._daily_rel(TODAY, ME), '{}'))
+st = B._daily_state()
+ok('너무 큰 사진은 내려받으러 가지도 않는다', len(DOWNLOAD_CALLS) == 0 and len(GETFILE_CALLS) == 0,
+   (GETFILE_CALLS, DOWNLOAD_CALLS))
+ok('뒤에 온 보고는 그대로 처리된다',
+   any(i['name'] == '뒤에 온 보고' for i in (doc.get('items') or [])), doc.get('items'))
+ok('오프셋이 넘어갔다(다음 틱에 같은 걸 또 받지 않는다)', st.get('offset') == 43, st)
+ok('왜 안 됐는지 사람에게 말한다',
+   any('첨부' in m and 'MB' in m for _, m in SENT), [m for _, m in SENT])
+
+# ── 내려받기가 실패하면 — 글은 살리고 사유를 말한다 ────────────────────────
+tg_reset(status=502, blob=b'')
+reset(ROSTER, FRESH)
+UPDATES[:] = [{'update_id': 51, 'message': {
+    'chat': {'id': '111'}, 'caption': '사진 첨부 시도',
+    'photo': [{'file_id': 'ph3', 'file_size': 10, 'width': 800}]}}]
+B._daily_tg_tick(force=True)
+doc = json.loads(NAS.files.get(B._daily_rel(TODAY, ME), '{}'))
+ok('내려받기 실패에도 글은 기록된다',
+   any(i['name'] == '사진 첨부 시도' for i in (doc.get('items') or [])), doc.get('items'))
+ok('첨부는 담기지 않는다', not (doc.get('files') or []), doc.get('files'))
+ok('바이트도 안 남는다', not [k for k in NAS.files if '/files/' in k])
+ok('실패를 알린다', any('첨부' in m for _, m in SENT), [m for _, m in SENT])
+
+# ── 명단에 없는 사람의 사진은 받지 않는다 ─────────────────────────────────
+tg_reset()
+reset(ROSTER, FRESH)
+UPDATES[:] = [{'update_id': 61, 'message': {
+    'chat': {'id': '999'}, 'photo': [{'file_id': 'ph4', 'file_size': 10, 'width': 800}]}}]
+r = B._daily_tg_tick(force=True)
+ok('등록되지 않은 chat 은 무시한다', r.get('ignored') == 1 and r.get('handled') == 0, r)
+ok('내려받지도 않는다', len(GETFILE_CALLS) == 0 and len(DOWNLOAD_CALLS) == 0)
+ok('파일도 안 생긴다', not [k for k in NAS.files if '/files/' in k])
+
+# ── /다시 는 글만 지운다 ──────────────────────────────────────────────────
+tg_reset()
+reset(ROSTER, FRESH)
+NAS.files[B._daily_rel(TODAY, ME)] = json.dumps(
+    {'date': TODAY, 'key': ME, 'items': [{'name': 'A'}], 'next': 'B', 'issue': 'C', 'rev': 2,
+     'files': [{'name': '사진.jpg', 'safe': '사진.jpg', 'rel': 'r', 'size': 9}]}, ensure_ascii=False)
+UPDATES[:] = [{'update_id': 71, 'message': {'chat': {'id': '111'}, 'text': '/다시'}}]
+B._daily_tg_tick(force=True)
+doc = json.loads(NAS.files[B._daily_rel(TODAY, ME)])
+ok('/다시 가 글을 지운다', not doc['items'] and not doc['next'] and not doc['issue'], doc)
+ok('/다시 가 사진은 **안** 지운다(되돌릴 수 없다)', len(doc.get('files') or []) == 1, doc.get('files'))
+
 
 try:
     os.remove(STATE)
