@@ -240,8 +240,31 @@
             trashed: false
         };
         if (item.mtime) f.modifiedTime = new Date(item.mtime * 1000).toISOString();
+        // 🗓 [2026-11-05] `createdTime` 도 채운다 — Drive 는 주던 값이고 **복원 목록이 그걸로
+        //    백업 시각을 찍는다**(js/04c `new Date(file.createdTime)`). NAS 엔 없어서
+        //    `Invalid Date` 가 떴다(실측: 백업 502건 전부 createdTime 없음 → 날짜 칸이 깨짐).
+        //    ⚠️ 백업은 **파일 이름의 타임스탬프가 가장 정확하다.** mtime 은 11-03 이사 때
+        //       전부 복사 시각으로 바뀌어서, 그걸 쓰면 502건이 전부 같은 날로 보인다.
+        var stamp = backupStampOf(item.name);
+        f.createdTime = stamp || f.modifiedTime || undefined;
+        if (f.createdTime === undefined) delete f.createdTime;
         if (item.size !== null && item.size !== undefined) f.size = String(item.size);
         return f;
+    }
+
+    /** `백업_<원본>_<YYYYMMDD>_<HHMM>.json` → ISO 시각. 백업이 아니면 ''. */
+    function backupStampOf(name) {
+        var m = /_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})\.json$/i.exec(String(name || ''));
+        if (!m) return '';
+        var d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+        return isNaN(d.getTime()) ? '' : d.toISOString();
+    }
+
+    /** `백업_<원본>_<YYYYMMDD>_<HHMM>.json` → `<원본>.json`. 백업이 아니면 ''. */
+    function backupOrigNameOf(name) {
+        var s = String(name || '');
+        if (!/^백업_/.test(s) || !/_\d{8}_\d{4}\.json$/i.test(s)) return '';
+        return s.replace(/^백업_/, '').replace(/_\d{8}_\d{4}\.json$/i, '') + '.json';
     }
 
     // 순수 함수는 플래그와 무관하게 내놓는다 — 검증 하네스(tests/)가 이걸 쓴다.
@@ -253,7 +276,8 @@
             b64urlEncode: b64urlEncode, b64urlDecode: b64urlDecode,
             idOf: idOf, relOf: relOf, normRel: normRel, joinRel: joinRel,
             parseQ: parseQ, adoptIdMap: adoptIdMap, parseMultipart: parseMultipart,
-            mimeOf: mimeOf, toDriveFile: toDriveFile, rootId: rootId
+            mimeOf: mimeOf, toDriveFile: toDriveFile, rootId: rootId,
+            backupStampOf: backupStampOf, backupOrigNameOf: backupOrigNameOf
         }
     };
 
@@ -787,12 +811,17 @@
                 var idx = JSON.parse(await res.text());
                 (idx.projects || []).forEach(function (p) {
                     if (!p || !p.drive_file_id) return;
-                    map[p.drive_file_id] = {
+                    var props = {
                         pm: p.assignee || '',
                         team: p.team || '',
                         completed: p.completed ? '1' : '',   // Drive 는 문자열만 담았다 — 읽는 쪽이 '1' 을 본다
                         themeColor: p.themeColor || ''
                     };
+                    map[p.drive_file_id] = props;
+                    // 🗄 [2026-11-05] **이름으로도** 찾게 해 둔다 — 백업 파일(`Backups/…`)은
+                    //    Drive id 가 없어 id 로는 영영 못 맞춘다. 그래서 복원 목록이 팀·담당자·
+                    //    테마색을 통째로 잃고 "미지정" 한 덩어리로 보였다(실측 502건 전부).
+                    if (p.file_name) map['name:' + p.file_name] = props;
                 });
             }
         } catch (e) {
@@ -808,6 +837,12 @@
         var map = await loadIndexProps();
         for (var i = 0; i < files.length; i++) {
             var p = map[files[i].id];
+            if (!p) {
+                // 백업이면 **원본 프로젝트**의 꼬리표를 물려준다 — 같은 프로젝트의 과거 모습이니
+                // 같은 색·같은 담당자로 묶이는 게 맞다(복원 목록이 그걸로 그룹을 만든다).
+                var orig = backupOrigNameOf(files[i].name);
+                if (orig) p = map['name:' + orig];
+            }
             if (p) files[i].appProperties = p;
         }
         return files;

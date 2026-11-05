@@ -183,6 +183,29 @@ eq('.eml', F.mimeOf('a.eml', false), 'message/rfc822');
 eq('.enc', F.mimeOf('mail_secure.enc', false), 'application/octet-stream');
 eq('모르는 확장자', F.mimeOf('a.zzz', false), 'application/octet-stream');
 
+console.log('\n== ⑦ 백업 파일 — 날짜·원본이름 (2026-11-05) ==');
+// 복원 목록은 날짜를 `file.createdTime` 으로 찍는데 NAS 엔 그 값이 없어서
+// 실측 502건이 전부 `Invalid Date` 였다(날짜 칸이 비어 보임).
+// ⚠️ mtime 은 11-03 이사 때 전부 **복사 시각**으로 바뀌었다 — 그걸 쓰면 502건이
+//    같은 날로 보인다. 진짜 백업 시각은 **파일 이름의 도장**뿐이다.
+const BK = '백업_LNW_Digital Wheel Back-Box Display_32.0_20261020_1029.json';
+const dd = new Date(F.backupStampOf(BK));
+eq('연', dd.getFullYear(), 2026);
+eq('월', dd.getMonth() + 1, 10);
+eq('일', dd.getDate(), 20);
+eq('시', dd.getHours(), 10);
+eq('분', dd.getMinutes(), 29);
+eq('원본 이름을 되찾는다', F.backupOrigNameOf(BK),
+   'LNW_Digital Wheel Back-Box Display_32.0.json');
+eq('백업이 아니면 빈 문자열', F.backupOrigNameOf('LNW_POLED_21.0.json'), '');
+eq('도장 없는 이름은 빈 문자열', F.backupStampOf('project.json'), '');
+const bf = F.toDriveFile({ name: BK, isdir: false, size: 10, mtime: 1762000000 }, 'Backups/개발3팀');
+check('백업의 createdTime 은 **이름 기준**(복사 시각 mtime 이 아니다)',
+      bf.createdTime.slice(0, 4) === '2026' && bf.createdTime !== bf.modifiedTime,
+      { createdTime: bf.createdTime, modifiedTime: bf.modifiedTime });
+const pf = F.toDriveFile({ name: 'project.json', isdir: false, mtime: 1762000000 }, '개발3팀');
+eq('보통 파일은 mtime 을 물려받는다', pf.createdTime, pf.modifiedTime);
+
 console.log('\n통과 ' + ok + ' · 실패 ' + bad);
 console.log('⚠ 번역기만 검증했다. 앱이 NAS 로 저장하는지는 브라우저에서 확인해야 한다' +
             ' (tests/storage-adapter.browser.js).');
