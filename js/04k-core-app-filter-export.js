@@ -479,36 +479,36 @@
             // ⚡ [2026-10-28] 보이기/숨기기 판정은 renderTable()의 지연 렌더와 같은 함수 하나로 한다 —
             //    둘이 따로 판정하면 "보여야 하는데 빈 자리표시 행"이 생길 수 있다.
             const _vis = window._ganttComputeRowVisibility(globalData);
-            // ⚡ 한꺼번에 많이 보이게 되면(전체 펼치기·필터 해제) 행마다 따로 채우는 것보다 표를 한 번에
-            //    다시 그리는 게 훨씬 빠르다(실측 837행: 행별 1.6s+레이아웃 → 일괄 렌더). renderTable()은
-            //    같은 판정으로 보일 행만 그리므로 아래 루프에선 남은 일이 번호·줄무늬뿐이다.
-            let _toHydrate = 0;
-            for (let i = 0; i < trs.length && _toHydrate <= 40; i++) {
-                if (trs[i].hasAttribute('data-lazy') && _vis[parseInt(trs[i].dataset.rowIndex, 10)]) _toHydrate++;
-            }
-            if (_toHydrate > 40) {
-                renderTable(globalData);
-                if (typeof window.syncRowHighlight === 'function') window.syncRowHighlight();
-            }
+            // ⚡⚡ [2026-11-05] 예전엔 "한꺼번에 40행 넘게 보이게 되면 표를 통째로 다시 그린다"는
+            //    지름길이 있었다(행별로 채우는 것보다 빨라서). 이제 스크롤 가상화(js/04j)가 들어와
+            //    **보이게 되는 행도 화면 밖이면 안 채우므로** 그 지름길이 필요 없다 — 아래 루프는
+            //    보이기/숨기기·번호·줄무늬만 하고, 실제로 칸을 만드는 건 끝에서 _ganttLazySweep()이
+            //    **화면에 걸친 행에만** 한다. (전체 펼치기가 908행을 다 만들던 자리다.)
             for (let i = 0; i < trs.length; i++) {
                 let tr = trs[i]; let rowIndex = parseInt(tr.dataset.rowIndex, 10); if (isNaN(rowIndex)) continue;
                 let rowData = globalData[rowIndex]; if (!rowData) continue;
                 let showRow = !!_vis[rowIndex];
 
                 if (showRow) {
-                    if (tr.hasAttribute('data-lazy')) window._ganttHydrateRow(tr); // ⚡ 처음 보이게 되는 행만 이제 그린다
                     tr.style.display = "";
                     // 💡 필터 적용 후 "보이는 행" 순서 기준으로 줄무늬 다시 매기기
                     tr.classList.remove('gantt-zebra-b');
                     if ((visibleCount - 1) % 2 === 1) tr.classList.add('gantt-zebra-b');
+                    // 🔢 "표시 No."는 **tr 에도** 적어 둔다 — 자리표시 행엔 번호 칸이 없고(js/04j),
+                    //    AI 문답이 "42번 행"을 실제 인덱스로 바꿀 때 이 값을 본다(js/04g·js/04h).
+                    //    채울 때 _ganttHydrateRow 가 이 값을 번호 칸에 넣는다.
+                    tr.dataset.vno = visibleCount;
                     let noTd = tr.querySelector('.no-td');
                     if (noTd) {
                         let span = noTd.querySelector('.row-num-span');
-                        if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++;
-                    } else if (tr.cells.length > 0) { tr.cells[0].textContent = visibleCount++; }
+                        if(span) span.textContent = visibleCount; else noTd.textContent = visibleCount;
+                    } else if (!tr.hasAttribute('data-lazy') && tr.cells.length > 0) { tr.cells[0].textContent = visibleCount; }
+                    visibleCount++;
                     // (차트 막대는 여기서 더 이상 다시 그리지 않음 — 위 2026-10-28 설명 참고)
                 } else { tr.style.display = "none"; }
             }
+            // ⚡ [2026-11-05] 보이게 된 행 중 **화면에 걸친 것만** 이제 칸을 만든다(js/04j).
+            if (window._ganttLazySweep) window._ganttLazySweep();
             // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
             if (typeof window.updatePrintTitle === 'function') window.updatePrintTitle();
             updateFilterVisibility();

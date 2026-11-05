@@ -305,6 +305,9 @@
     window.smartPrint = function() {
         const sourceTable = document.getElementById('myTable');
         if (!sourceTable) { window.print(); return; }
+        // ⚡ [2026-11-05] 스크롤 가상화 — 화면 밖 행은 **높이만 가진 자리표시**다(js/04j).
+        //    표를 통째로 복제하기 **전에** 전부 채우지 않으면 종이에 빈 줄로 찍힌다.
+        if (window._ganttHydrateAll) { try { window._ganttHydrateAll(); } catch (e) { console.warn('[smartPrint] 행 채우기 실패', e); } }
 
         // 인쇄 전용 컨테이너가 이미 있으면 비우고, 없으면 새로 생성
         let printArea = document.getElementById('gantt-print-area');

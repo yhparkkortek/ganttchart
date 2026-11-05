@@ -2533,3 +2533,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
    그대로 유지하려면 여기서 **명시**해야 한다 — 안 적으면 상속돼서 레벨1 이 굵어진다. */
 .status-select { font-weight: normal; }
 .parent-row .status-select { font-weight: bold; }
+
+/* ⚡⚡ 스크롤 가상화 자리표시 행 (2026-11-05) — 화면 밖 행은 칸을 안 만들고 **높이만** 차지한다.
+   높이는 js/04j `_ganttMeasureRowH()` 가 실제 행을 재어 `--gantt-row-h` 로 넣는다(글자 크기·
+   테마가 바뀌면 같이 바뀐다). ⚠️ 배경은 일부러 안 건드린다 — 행 클래스(.parent-row 등)가 칠한
+   색이 그대로 보여야 빠르게 스크롤할 때 "빈 구멍"이 아니라 아직 안 그려진 줄로 보인다. */
+#myTable td.gantt-lazy-td { height: var(--gantt-row-h, 24px); padding: 0; }

@@ -1791,6 +1791,17 @@
         let _vis = null; // 판정 실패 시엔 예전처럼 전부 그린다(느릴 뿐 틀리지 않음)
         try { if (window._ganttComputeRowVisibility) _vis = window._ganttComputeRowVisibility(data); } catch (e) { console.error('[renderTable] 지연 렌더 판정 실패 — 전체 렌더로 대체:', e); }
         const _RTH = _rtCtx(data);   // header/lang 의존 값은 렉더 당 한 번만
+        // ⚡⚡ [2026-11-05] 스크롤 가상화 — **눈앞에 있는 행만** 칸을 만든다.
+        //    2026-10-28 지연 렌더는 "접혀서 안 보이는 행"만 건너뛰었는데, 사람이 펼치면 908행이
+        //    전부 DOM 에 올라와 파싱+레이아웃만 ~920ms 가 바닥이었다(실측). 이제 보이는 행 중에서도
+        //    화면 범위 밖이면 **높이만 가진 자리표시**로 둔다 — 스크롤 막대 길이와 위치는 그대로다.
+        //    범위는 "몇 번째 보이는 행인가"로 어림한다(아직 안 그린 행은 픽셀을 잴 수 없다).
+        //    ⚠️ 어림이 빗나가도 괜찮다 — 그린 직후 `_ganttLazySweep()` 이 **진짜 픽셀**로 다시 재서
+        //       화면에 걸친 자리표시를 바로 채운다. 어림은 첫 묶음을 고르는 용도일 뿐이다.
+        const _nTh = (headHtml.match(/<th[\s>]/g) || []).length || 20;
+        const _lazyTd = `<td colspan="${_nTh}" class="gantt-lazy-td"></td>`;
+        const _vp = window._ganttViewportOrdinalRange();
+        let _visOrd = 0;
         let bodyHtml = '';
         let ganttZebraIdx = 0; // 💡 보이는 행 기준 줄무늬 카운터
         for(let i = 1; i < data.length; i++) {
@@ -1811,14 +1822,23 @@
                     trClass = trClass.replace('class="', 'class="status-pending ');
                 }
             }
-            if (_vis && !_vis[i]) {
-                bodyHtml += `<tr data-row-index="${i}" ${trClass} data-lazy="1" style="display:none"></tr>`;
+            const _hidden = !!(_vis && !_vis[i]);
+            if (!_hidden) _visOrd++;
+            if (_hidden || _visOrd < _vp.from || _visOrd > _vp.to) {
+                // 자리표시 — 숨은 행이든 화면 밖 행이든 **같은 모양**으로 둔다. 숨은 행이 나중에
+                // 보이게 될 때 높이가 0 이면 스크롤 막대가 튀므로, 칸(높이)은 항상 들려 보낸다.
+                bodyHtml += `<tr data-row-index="${i}" ${trClass} data-lazy="1"${_hidden ? ' style="display:none"' : ''}>${_lazyTd}</tr>`;
                 continue;
             }
             bodyHtml += `<tr data-row-index="${i}" ${trClass}>` + _ganttRowCellsHtml(data, i) + `</tr>`;
         }
         
         tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
+        // ⚡ 자리표시 높이를 실제 행 높이에 맞추고(글자 크기·테마가 바뀌면 달라진다), 스크롤을
+        //    따라 채우는 감시자를 건 뒤, **진짜 픽셀로** 화면에 걸친 자리표시를 메운다.
+        window._ganttMeasureRowH();
+        window._ganttBindLazyScroll();
+        window._ganttLazySweep();
 
         // 💡 [버그 수정] "상세내용 헤더 클릭 → 전체 펼치기"는 DOM class(detail-td-expanded)로만 표시돼서,
         //    WBS 상하좌우/+-/삭제 등 다른 액션이 renderTable()을 다시 부르며 thead/tbody를 통째로 새로
@@ -2171,8 +2191,102 @@
         if (isNaN(i) || !globalData[i] || !globalData[0]) return tr;
         tr.innerHTML = _ganttRowCellsHtml(globalData, i);
         if (window._allDetailExpanded) tr.querySelectorAll('td.detail-td').forEach(el => el.classList.add('detail-td-expanded'));
+        // 🔢 "표시 No."는 applyFilters 가 **보이는 순서**로 매겨 tr 에 적어 둔다(data-vno) —
+        //    자리표시엔 번호 칸 자체가 없으니, 채우는 이 순간 그 값을 넣어 준다.
+        if (tr.dataset.vno) {
+            const _span = tr.querySelector('.no-td .row-num-span');
+            if (_span) _span.textContent = tr.dataset.vno;
+        }
         return tr;
     };
+
+    // ⚡⚡ ─── 스크롤 가상화 (2026-11-05) ───────────────────────────────────────
+    //  왜: 행 908개를 전부 DOM 에 올려 두면 파싱+레이아웃만 ~920ms 가 바닥이다(실측). 사람이 한
+    //      번에 보는 건 20~40행뿐이라, 그만큼만 칸을 만들고 나머지는 **높이만 가진 빈 행**으로 둔다.
+    //  ⚠️ 한 번 채운 행은 **되돌리지 않는다**(js/55 Project list 와 같은 방식). 되돌리면 위로
+    //     스크롤할 때 높이가 다시 어림값으로 바뀌어 화면이 튄다. 대신 다음 renderTable 이 다시
+    //     "보이는 만큼"으로 리셋하므로 노드가 무한히 쌓이지 않는다.
+    //  ⚠️ 표를 **읽어서 쓰는** 길(인쇄·PDF)은 화면 밖까지 필요하다 → `_ganttHydrateAll()` 을 먼저.
+
+    window._ganttRowH = window._ganttRowH || 24;   // 자리표시 높이(px). 렌더마다 실제 값으로 고친다.
+
+    /** 지금 그려진 행에서 실제 행 높이를 재어 자리표시 높이(--gantt-row-h)에 반영한다. */
+    window._ganttMeasureRowH = function() {
+        const tbody = document.getElementById('table-body');
+        if (!tbody) return window._ganttRowH;
+        const real = tbody.querySelector('tr:not([data-lazy])');
+        const h = real ? Math.round(real.offsetHeight) : 0;
+        if (h >= 10 && h <= 200 && h !== window._ganttRowH) {
+            window._ganttRowH = h;
+            document.documentElement.style.setProperty('--gantt-row-h', h + 'px');
+        } else if (h >= 10 && h <= 200) {
+            document.documentElement.style.setProperty('--gantt-row-h', h + 'px');
+        }
+        return window._ganttRowH;
+    };
+
+    /** "몇 번째 보이는 행부터 몇 번째까지" 칸을 만들까 — 아직 안 그린 행은 픽셀을 못 재니 어림한다. */
+    window._ganttViewportOrdinalRange = function() {
+        const box = document.getElementById('gantt-table-scroll');
+        const h = window._ganttRowH || 24;
+        // 레이아웃이 아직 없거나(탭이 안 보임) 너무 작으면 첫 화면치만 그린다 — 그래도 sweep 이 메운다.
+        if (!box || !box.clientHeight) return { from: 0, to: 60 };
+        const pad = 25 * h;                       // 위아래 25행쯤 여유(스크롤을 조금 굴려도 안 비게)
+        const top = Math.max(0, box.scrollTop - pad);
+        const bottom = box.scrollTop + box.clientHeight + pad;
+        return { from: Math.floor(top / h), to: Math.ceil(bottom / h) + 1 };
+    };
+
+    /** 지금 **화면에 걸쳐 있는** 자리표시 행을 진짜 칸으로 채운다(진짜 픽셀 기준). */
+    window._ganttLazySweep = function() {
+        const box = document.getElementById('gantt-table-scroll');
+        const tbody = document.getElementById('table-body');
+        if (!box || !tbody) return 0;
+        const pad = 400;
+        const top = box.scrollTop - pad, bottom = box.scrollTop + box.clientHeight + pad;
+        const trs = tbody.querySelectorAll('tr[data-lazy]');
+        // ⚠️ **읽기 먼저, 쓰기 나중.** 한 루프 안에서 offsetTop 을 읽고 바로 채우면, 채울 때마다
+        //    레이아웃이 무효화돼 다음 offsetTop 읽기가 매번 강제 재계산을 일으킨다(행이 많으면
+        //    그것만으로 수백 ms). 그래서 범위를 먼저 전부 고른 뒤 한꺼번에 채운다.
+        const todo = [];
+        for (let k = 0; k < trs.length; k++) {
+            const tr = trs[k];
+            if (tr.style.display === 'none') continue;        // 숨은 행은 채울 필요가 없다
+            const y = tr.offsetTop;
+            if (y > bottom) break;                             // 행은 위→아래 순서라 더 볼 필요 없음
+            if (y + tr.offsetHeight >= top) todo.push(tr);
+        }
+        for (let k = 0; k < todo.length; k++) window._ganttHydrateRow(todo[k]);
+        return todo.length;
+    };
+
+    /** 남은 자리표시를 전부 채운다 — 인쇄처럼 **화면 밖까지 다 써야 하는** 길목용. */
+    window._ganttHydrateAll = function() {
+        const tbody = document.getElementById('table-body');
+        if (!tbody) return 0;
+        const trs = tbody.querySelectorAll('tr[data-lazy]');
+        trs.forEach(tr => window._ganttHydrateRow(tr));
+        return trs.length;
+    };
+
+    /** 스크롤을 따라 눈앞의 행만 채운다. 표를 다시 그려도 한 번만 걸리게 한다. */
+    window._ganttBindLazyScroll = function() {
+        const box = document.getElementById('gantt-table-scroll');
+        if (!box || box._ganttLazyBound) return;
+        box._ganttLazyBound = true;
+        let pending = false;
+        box.addEventListener('scroll', function() {
+            if (pending) return;
+            pending = true;
+            requestAnimationFrame(function() { pending = false; window._ganttLazySweep(); });
+        }, { passive: true });
+    };
+
+    // 🖨️ 인쇄·PDF 는 화면 밖 행까지 종이에 나와야 한다 — 자리표시인 채로 찍히면 빈 줄이 된다.
+    //    smartPrint(js/04f)는 표를 통째로 복제하므로 거기서도 따로 부른다.
+    window.addEventListener('beforeprint', function() {
+        try { window._ganttHydrateAll(); } catch (e) { /* 인쇄 자체를 막지 않게 */ }
+    });
 
     // 💡 [공용] 0레벨 업무 목록({name, startTs})에서 PROTO/ES/PP 9개 마일스톤 날짜를 계산.
     //    실적(현재 Gantt 기준)과 계획(최초 킥오프 baseline 기준) 양쪽에서 동일한 규칙으로 재사용.

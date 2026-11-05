@@ -525,8 +525,13 @@
                 if (tr.style.display === 'none') continue; // 필터/WBS접힘으로 숨겨진 행은 "표시 No." 자체가 없음
                 const realIdx = parseInt(tr.dataset.rowIndex, 10);
                 if (isNaN(realIdx)) continue;
-                const span = tr.querySelector('.no-td .row-num-span');
-                const visibleNo = span && span.textContent ? parseInt(span.textContent, 10) : NaN;
+                // ⚡ [2026-11-05] 화면 밖 행은 **칸이 아직 없는 자리표시**라 번호 span 도 없다
+                //    (스크롤 가상화, js/04j) → applyFilters 가 tr 에 적어 둔 data-vno 를 먼저 본다.
+                let visibleNo = parseInt(tr.dataset.vno, 10);
+                if (isNaN(visibleNo)) {
+                    const span = tr.querySelector('.no-td .row-num-span');
+                    visibleNo = span && span.textContent ? parseInt(span.textContent, 10) : NaN;
+                }
                 if (!isNaN(visibleNo)) map[realIdx] = visibleNo;
             }
             return map;
