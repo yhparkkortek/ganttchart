@@ -1230,6 +1230,90 @@
           en: 'Executable files are not read.' }
     ];
 
+    // ══ 📄 확장자 → MIME · "브라우저가 그대로 보여줄 수 있는가" ════════════════════
+    //  [2026-11-05 실사용 신고] 일일보고 첨부를 눌렀더니 `242b6110-c875-…`(확장자 없음)로
+    //  **받아졌다.** 범인은 `blob:` URL 이다 — 거기엔 **파일 이름이 실리지 않는다.**
+    //  브라우저는 blob 의 `type` 만 보고 "보여줄지 받을지"를 정하고, 비어 있거나
+    //  `application/octet-stream` 이면 **무조건 받는다.** 그때 이름은 blob 의 UUID 가 된다.
+    //  → 보여줄 수 있는 종류면 `type` 을 제대로 달아 새 탭으로, 아니면 `<a download>` 로
+    //    **이름을 붙여** 내려받는다. 새 형식은 여기 한 줄 추가.
+    //  ⚠️ svg 는 일부러 `view:false` — `blob:` 로 열면 그 문서의 스크립트가 **우리 출처에서**
+    //     돈다. 남이 올린 파일에 그 길을 열어 줄 이유가 없다(받아서 열면 된다).
+    window.DOC_FILE_MIME = window.DOC_FILE_MIME || [
+        { re: /\.jpe?g$/i,        mime: 'image/jpeg',        view: true },
+        { re: /\.png$/i,          mime: 'image/png',         view: true },
+        { re: /\.gif$/i,          mime: 'image/gif',         view: true },
+        { re: /\.webp$/i,         mime: 'image/webp',        view: true },
+        { re: /\.bmp$/i,          mime: 'image/bmp',         view: true },
+        { re: /\.(tiff?|heic|heif)$/i, mime: 'image/tiff',   view: false },  // 브라우저가 못 그린다
+        { re: /\.svg$/i,          mime: 'image/svg+xml',     view: false },  // ↑ 위 주의
+        { re: /\.pdf$/i,          mime: 'application/pdf',   view: true },
+        { re: /\.(txt|md|log)$/i, mime: 'text/plain;charset=utf-8', view: true },
+        { re: /\.html?$/i,        mime: 'text/html;charset=utf-8',  view: false }, // svg 와 같은 이유
+        { re: /\.(mp4|webm)$/i,   mime: 'video/mp4',         view: true },
+        { re: /\.(mp3|m4a)$/i,    mime: 'audio/mpeg',        view: true },
+        { re: /\.(wav)$/i,        mime: 'audio/wav',         view: true },
+        { re: /\.(ogg|oga)$/i,    mime: 'audio/ogg',         view: true },
+        { re: /\.(csv|tsv)$/i,    mime: 'text/csv;charset=utf-8', view: false }, // 엑셀로 여는 게 낫다
+        { re: /\.xlsx?$/i,        mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', view: false },
+        { re: /\.docx?$/i,        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', view: false },
+        { re: /\.pptx?$/i,        mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', view: false },
+        { re: /\.zip$/i,          mime: 'application/zip',   view: false }
+    ];
+
+    /** 이름 → `{mime, view}`. 모르는 확장자는 `{mime:'', view:false}` — 받게 둔다(이름은 붙는다). */
+    window._docMimeOf = function (name) {
+        var n = String(name || '');
+        for (var i = 0; i < window.DOC_FILE_MIME.length; i++) {
+            if (window.DOC_FILE_MIME[i].re.test(n)) {
+                return { mime: window.DOC_FILE_MIME[i].mime, view: !!window.DOC_FILE_MIME[i].view };
+            }
+        }
+        return { mime: '', view: false };
+    };
+
+    // ══ 📄 확장자 → MIME · "브라우저가 그대로 보여줄 수 있는가" ════════════════════
+    //  [2026-11-05 실사용 신고] 일일보고 첨부를 눌렀더니 `242b6110-c875-…`(확장자 없음)로
+    //  **받아졌다.** 범인은 `blob:` URL 이다 — 거기엔 **파일 이름이 실리지 않는다.**
+    //  브라우저는 blob 의 `type` 만 보고 "보여줄지 받을지"를 정하고, 비어 있거나
+    //  `application/octet-stream` 이면 **무조건 받는다.** 그때 이름은 blob 의 UUID 가 된다.
+    //  → 보여줄 수 있는 종류면 `type` 을 제대로 달아 새 탭으로, 아니면 `<a download>` 로
+    //    **이름을 붙여** 내려받는다. 새 형식은 여기 한 줄 추가.
+    //  ⚠️ svg 는 일부러 `view:false` — `blob:` 로 열면 그 문서의 스크립트가 **우리 출처에서**
+    //     돈다. 남이 올린 파일에 그 길을 열어 줄 이유가 없다(받아서 열면 된다).
+    window.DOC_FILE_MIME = window.DOC_FILE_MIME || [
+        { re: /\.jpe?g$/i,        mime: 'image/jpeg',        view: true },
+        { re: /\.png$/i,          mime: 'image/png',         view: true },
+        { re: /\.gif$/i,          mime: 'image/gif',         view: true },
+        { re: /\.webp$/i,         mime: 'image/webp',        view: true },
+        { re: /\.bmp$/i,          mime: 'image/bmp',         view: true },
+        { re: /\.(tiff?|heic|heif)$/i, mime: 'image/tiff',   view: false },  // 브라우저가 못 그린다
+        { re: /\.svg$/i,          mime: 'image/svg+xml',     view: false },  // ↑ 위 주의
+        { re: /\.pdf$/i,          mime: 'application/pdf',   view: true },
+        { re: /\.(txt|md|log)$/i, mime: 'text/plain;charset=utf-8', view: true },
+        { re: /\.html?$/i,        mime: 'text/html;charset=utf-8',  view: false }, // svg 와 같은 이유
+        { re: /\.(mp4|webm)$/i,   mime: 'video/mp4',         view: true },
+        { re: /\.(mp3|m4a)$/i,    mime: 'audio/mpeg',        view: true },
+        { re: /\.(wav)$/i,        mime: 'audio/wav',         view: true },
+        { re: /\.(ogg|oga)$/i,    mime: 'audio/ogg',         view: true },
+        { re: /\.(csv|tsv)$/i,    mime: 'text/csv;charset=utf-8', view: false }, // 엑셀로 여는 게 낫다
+        { re: /\.xlsx?$/i,        mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', view: false },
+        { re: /\.docx?$/i,        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', view: false },
+        { re: /\.pptx?$/i,        mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', view: false },
+        { re: /\.zip$/i,          mime: 'application/zip',   view: false }
+    ];
+
+    /** 이름 → `{mime, view}`. 모르는 확장자는 `{mime:'', view:false}` — 받게 둔다(이름은 붙는다). */
+    window._docMimeOf = function (name) {
+        var n = String(name || '');
+        for (var i = 0; i < window.DOC_FILE_MIME.length; i++) {
+            if (window.DOC_FILE_MIME[i].re.test(n)) {
+                return { mime: window.DOC_FILE_MIME[i].mime, view: !!window.DOC_FILE_MIME[i].view };
+            }
+        }
+        return { mime: '', view: false };
+    };
+
     /** 이 이름이 어느 종류인가 — 모르는 확장자는 null(그때는 내용을 보고 판단한다). */
     window._docKindOf = function (name) {
         var n = String(name || '');

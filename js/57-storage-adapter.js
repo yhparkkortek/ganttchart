@@ -739,6 +739,14 @@
             }
             return await res.blob();
         },
+        /** NAS 원본을 **그 자리에서** 연결 프로그램으로 연다(사진 뷰어·PDF·엑셀).
+         *  ⚠️ 브라우저로 여는 `blob:` URL 은 **파일 이름을 못 싣는다** — 받아 보면
+         *     확장자 없는 GUID 가 된다(2026-11-05 실사용 신고). 그래서 보기는 이 길이 기본이다.
+         *  ⚠️ Windows + SMB 전용이고, 공유가 안 보이면 404 로 **정직하게 실패한다** —
+         *     부르는 쪽이 브라우저로 되돌리라고. 여기서 삼키면 "눌렀는데 아무 일도 안 난다"가 된다. */
+        openNative: async function (rel) {
+            return await nasJson('POST', '/nas/app/open-native', { rel: normRel(rel) });
+        },
         /** 지운다. ⚠️ 되돌릴 수 없다 — 사람 확인은 **부르는 쪽**이 받는다. */
         del: async function (rel) {
             return await nasJson('POST', '/nas/app/delete', { rel: normRel(rel) });

@@ -361,6 +361,71 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
         !mdoc2.files.some((f) => f.missing), mdoc2.files.map((f) => f.name + ':' + f.missing).join(','));
     win.nasAppFile.list = realList;
 
+
+    // ══ 📎 열기 — 연결 프로그램 → 새 탭 → 이름 붙여 내려받기 ═══════════════════════
+    //  ⚠️ 2026-11-05 실사용 신고: 사진을 눌렀더니 `242b6110-…`(확장자 없음)로 받아졌다.
+    //     `blob:` URL 엔 **이름이 실리지 않는다**는 것이 원인이고, 아래가 그 세 갈래다.
+    console.log('\n■ 📎 첨부 열기');
+    const opened = [], downloaded = [], natived = [];
+    let popupOk = true, nativeOk = true;
+    global.Blob = global.Blob || function (parts, o) { return { parts, type: (o || {}).type }; };
+    global.URL.createObjectURL = (b) => 'blob:fake#' + ((b && b.type) || 'none');
+    global.URL.revokeObjectURL = () => {};
+    win.URL = global.URL;
+    win.open = (u) => { opened.push(u); return popupOk ? {} : null; };
+    win.nasAppFile.openNative = async (rel) => {
+        natived.push(rel);
+        if (!nativeOk) throw new Error('그 파일이 공유에서 안 보입니다');
+        return { ok: true, rel };
+    };
+    // js/42 는 바깥이다 — 종류 판정은 거기 카탈로그가 하고, 여기선 경계로 둔다.
+    win._docMimeOf = (n) => (/\.jpe?g$/i.test(n) ? { mime: 'image/jpeg', view: true }
+                          : (/\.xlsx$/i.test(n) ? { mime: 'application/vnd…sheet', view: false }
+                          : { mime: '', view: false }));
+    const realCreate = global.document.createElement;
+    global.document.createElement = (tag) => (tag === 'a'
+        ? { href: '', download: '', style: {}, click() { downloaded.push({ href: this.href, name: this.download }); }, remove() {} }
+        : realCreate(tag));
+    global.document.body.appendChild = () => {};
+    win.document = global.document;
+
+    const relJpg = win.DAILY_PATHS.fileRel('2026-11-09', 'yhpark', 'photo_115659.jpg');
+    const relXls = win.DAILY_PATHS.fileRel('2026-11-09', 'yhpark', '원가.xlsx');
+    nas[relJpg] = '(binary)'; nas[relXls] = '(binary)';
+    win.nasAppFile.getBlob = async (rel) => (rel in nas ? { _b64: 'QQ==' } : null);
+
+    // ① 연결 프로그램이 되면 거기서 끝 — 받지도, 새 탭을 열지도 않는다
+    const r1 = await win.dailyOpenRel(relJpg, 'photo_115659.jpg');
+    ok('연결 프로그램으로 연다', r1 === true && natived.length === 1, { r1, natived });
+    ok('그때는 받지 않는다', downloaded.length === 0 && opened.length === 0, { downloaded, opened });
+
+    // ② 연결 프로그램이 안 되면 — 볼 수 있는 종류는 새 탭, 그것도 **MIME 을 달아서**
+    nativeOk = false;
+    const r2 = await win.dailyOpenRel(relJpg, 'photo_115659.jpg');
+    ok('못 열면 새 탭으로 되돌린다', r2 === true && opened.length === 1, { r2, opened });
+    ok('blob 에 MIME 이 붙는다(안 붙이면 전부 받아진다)',
+        opened[0].indexOf('image/jpeg') > 0, opened[0]);
+    ok('새 탭으로 열렸으면 받지 않는다', downloaded.length === 0, downloaded);
+
+    // ③ 팝업이 막히면 — **이름을 붙여** 내려받는다(GUID 가 아니라)
+    popupOk = false;
+    const r3 = await win.dailyOpenRel(relJpg, 'photo_115659.jpg');
+    ok('팝업이 막히면 내려받는다', r3 === false && downloaded.length === 1, { r3, downloaded });
+    ok('받는 이름에 확장자가 붙는다', downloaded[0].name === 'photo_115659.jpg', downloaded[0]);
+
+    // ④ 브라우저가 못 보는 종류는 **새 탭으로 보내지 않는다**(그게 그 신고의 증상이었다)
+    popupOk = true;
+    opened.length = 0; downloaded.length = 0;
+    const r4 = await win.dailyOpenRel(relXls, '원가.xlsx');
+    ok('엑셀은 새 탭으로 안 보낸다', opened.length === 0, opened);
+    ok('엑셀은 이름을 붙여 받는다', r4 === false && downloaded[0] && downloaded[0].name === '원가.xlsx', downloaded);
+
+    // ⑤ 없는 파일은 조용히 넘어가지 않는다
+    opened.length = 0; downloaded.length = 0;
+    const r5 = await win.dailyOpenRel(win.DAILY_PATHS.fileRel('2026-11-09', 'yhpark', '없다.jpg'), '없다.jpg');
+    ok('없는 파일은 열지도 받지도 않는다',
+        r5 === false && !opened.length && !downloaded.length, { r5, opened, downloaded });
+
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');
     process.exit(fail ? 1 : 0);

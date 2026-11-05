@@ -6282,6 +6282,41 @@ def nas_app_delete():
         return jsonify({'ok': False, 'message': str(e)}), 500
 
 
+@app.route('/nas/app/open-native', methods=['POST'])
+def nas_app_open_native():
+    """NAS 원본을 **그 자리에서** 연결 프로그램으로 연다(사진 뷰어·PDF·엑셀).
+
+    ⚠️ 왜 이 길이 기본인가 — 브라우저로 여는 길은 `blob:` URL 이라 **파일 이름을 못 싣는다.**
+       2026-11-05 실사용 신고: 일일보고 첨부를 누르니 `242b6110-c875-…`(확장자 없음)로
+       받아졌다. 이름이 필요하면 `<a download>` 로 내려받는 수밖에 없는데, 사람이 원한 건
+       "받기"가 아니라 "보기"였다.
+    ⚠️ 경로는 `/nas/app/put` 과 **같은 `_nas_target`** 으로 앱 루트 안으로 한정한다 —
+       임의 경로를 받으면 이 라우트가 곧 "아무 파일이나 실행"이 된다(`..` 는 nas_dsm 이 거부).
+    ⚠️ Windows + SMB 전용. 공유가 안 보이면 404 로 정직하게 실패하고, 부르는 쪽이
+       브라우저로 되돌린다(여기서 조용히 성공을 돌려주면 "눌렀는데 아무 일도 안 난다"가 된다).
+    """
+    if not hasattr(os, 'startfile'):
+        return jsonify({'ok': False, 'message': '이 기능은 Windows 에서만 됩니다.'}), 400
+    req = request.get_json(force=True, silent=True) or {}
+    path, err = _nas_target(req)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    try:
+        unc = _nas().unc_of(path)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': 'UNC 경로를 만들지 못했습니다: %s' % e}), 500
+    if not unc:
+        return jsonify({'ok': False, 'message': 'NAS 설정(호스트)이 없어 경로를 만들지 못했습니다.'}), 400
+    if not os.path.isfile(unc):
+        return jsonify({'ok': False, 'message': '그 파일이 공유에서 안 보입니다: %s'
+                        % os.path.basename(unc)}), 404
+    try:
+        os.startfile(unc)        # noqa: S606 — 위에서 앱 루트 안의 파일로 한정했다
+    except Exception as e:
+        return jsonify({'ok': False, 'message': '열지 못했습니다: %s' % e}), 500
+    return jsonify({'ok': True, 'rel': req.get('rel')})
+
+
 @app.route('/nas/app/sweep', methods=['POST'])
 def nas_app_sweep():
     """`.ganttput-*` 임시 폴더 청소. 프로세스가 중간에 죽으면 남는다(실측).

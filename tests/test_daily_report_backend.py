@@ -440,6 +440,69 @@ ok('/다시 가 글을 지운다', not doc['items'] and not doc['next'] and not 
 ok('/다시 가 사진은 **안** 지운다(되돌릴 수 없다)', len(doc.get('files') or []) == 1, doc.get('files'))
 
 
+print('\n■ 🖥️ /nas/app/open-native — 연결 프로그램으로 열기')
+
+# 경계 가짜: UNC 변환 · 파일 존재 · os.startfile
+STARTED = []
+ISFILE = [True]
+UNC = ['//KPMNAS/share/app']
+
+
+def _fake_unc(path):
+    return (UNC[0] + str(path).replace('/ROOT', '')) if UNC[0] else ''
+
+
+def _fake_abs(rel, team=None):
+    # 진짜 `nas_dsm.abs_path` 는 `_norm_rel` 로 상위 참조를 **거부한다**(ValueError).
+    # 쓰기 라우트들이 이미 그 가드에 기대고 있으므로 여기서도 같은 모양으로 둔다.
+    if '..' in str(rel).split('/'):
+        raise ValueError('상위 폴더 참조(..)는 허용하지 않습니다')
+    return '/ROOT/' + str(rel)
+
+
+NAS.unc_of = _fake_unc
+NAS.abs_path = _fake_abs
+_real_isfile = B.os.path.isfile
+_real_startfile = getattr(B.os, 'startfile', None)
+B.os.path.isfile = lambda p: ISFILE[0]
+B.os.startfile = lambda p: STARTED.append(p)
+
+c2 = B.app.test_client()
+REL = 'App_Config/DailyReport/2026_11/files/2026-11-05__yhpark__photo.jpg'
+
+del STARTED[:]
+r = c2.post('/nas/app/open-native', json={'rel': REL})
+ok('정상이면 200', r.status_code == 200 and r.get_json().get('ok') is True, r.get_json())
+ok('그 UNC 경로를 연다', STARTED == ['//KPMNAS/share/app/' + REL], STARTED)
+
+del STARTED[:]
+r = c2.post('/nas/app/open-native', json={})
+ok('rel 이 없으면 400', r.status_code == 400, r.status_code)
+ok('그때 아무것도 실행하지 않는다', not STARTED, STARTED)
+
+r = c2.post('/nas/app/open-native', json={'rel': '../../Windows/System32/calc.exe'})
+ok('상위 폴더 참조는 400 (아무 파일이나 실행되면 안 된다)', r.status_code == 400, r.get_json())
+ok('그때도 아무것도 실행하지 않는다', not STARTED, STARTED)
+
+r = c2.post('/nas/app/open-native', json={'rel': '/etc/passwd'})
+ok('절대경로도 400', r.status_code == 400, r.get_json())
+
+ISFILE[0] = False
+r = c2.post('/nas/app/open-native', json={'rel': REL})
+ok('공유에서 안 보이면 404 (조용히 성공하지 않는다)', r.status_code == 404, r.get_json())
+ok('없는 파일을 실행하지 않는다', not STARTED, STARTED)
+ISFILE[0] = True
+
+UNC[0] = ''
+r = c2.post('/nas/app/open-native', json={'rel': REL})
+ok('NAS 설정이 없으면 400', r.status_code == 400, r.get_json())
+UNC[0] = '//KPMNAS/share/app'
+
+B.os.path.isfile = _real_isfile
+if _real_startfile is not None:
+    B.os.startfile = _real_startfile
+
+
 try:
     os.remove(STATE)
 except OSError:

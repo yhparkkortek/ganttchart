@@ -804,37 +804,74 @@
                 'Attachment deleted — press Save to update the report.'), 'info', 6000);
     };
 
-    async function fileUrl(rel) {
+    /** blob 에 **이름에서 뽑은 MIME** 을 달아 준다 — 이 값이 "보여줄지 받을지"를 가른다. */
+    function typedBlob(blob, name) {
+        var m = window._docMimeOf ? window._docMimeOf(name) : { mime: '' };
+        if (!m.mime || blob.type === m.mime) return blob;
+        try { return new Blob([blob], { type: m.mime }); } catch (e) { return blob; }
+    }
+
+    function revokeLater(u) {
+        setTimeout(function () { try { URL.revokeObjectURL(u); } catch (e) { /* 무시 */ } }, 60000);
+    }
+
+    /** 썸네일용 — 캐시한다(모달을 닫을 때 한꺼번에 돌려준다). */
+    async function fileUrl(rel, name) {
         if (_fileUrls[rel]) return _fileUrls[rel];
         var blob = await window.nasAppFile.getBlob(rel);
         if (!blob) return null;
-        _fileUrls[rel] = URL.createObjectURL(blob);
+        _fileUrls[rel] = URL.createObjectURL(typedBlob(blob, name));
         return _fileUrls[rel];
     }
 
     /**
-     * 첨부 열기. 팝업이 막히면 **내려받기로 넘긴다** —
-     * 그전 사고(js/48)처럼 "새 창에서 열었습니다"라고 말하고 아무 일도 안 나면 안 된다.
+     * 첨부 열기 — ① 연결 프로그램 → ② 새 탭 → ③ 이름 붙여 내려받기.
+     *
+     * ⚠️⚠️ ①이 기본인 이유(2026-11-05 실사용 신고): 브라우저로 여는 길은 `blob:` URL 이라
+     *    **파일 이름이 실리지 않는다.** 그래서 사진을 눌렀더니 `242b6110-c875-…`(확장자 없음)로
+     *    받아졌다 — 보려던 사람에게 "받기"가, 그것도 **못 여는 이름으로** 일어난 것이다.
+     *    백엔드가 NAS 원본을 그 자리에서 열면 사진은 사진 뷰어, 엑셀은 엑셀로 간다.
+     * ⚠️ ①이 안 되는 자리가 있다(Windows 아님·공유가 안 보임·구버전 백엔드) → ②로 내려온다.
+     *    ②도 **볼 수 있는 종류만** 간다(`_docMimeOf().view`) — 못 보는 종류를 새 탭으로 보내면
+     *    그게 바로 ①을 만들게 한 그 증상이다.
+     * ⚠️ 이름을 실을 수 있는 자리는 ③ 하나뿐이다(`<a download>`).
      */
     window.dailyOpenRel = async function (rel, name) {
         try {
-            var u = await fileUrl(rel);
-            if (!u) {
+            var r = await window.nasAppFile.openNative(rel);
+            if (r && r.ok !== false) {
+                toast('🖥️ ' + T('연결 프로그램으로 열었습니다.', 'Opened in its app.'), 'success', 4000);
+                return true;
+            }
+        } catch (e) {
+            console.warn('[일일보고] 연결 프로그램으로 못 열어 브라우저로 돌립니다:', e.message);
+        }
+        var u = '';
+        try {
+            var blob = await window.nasAppFile.getBlob(rel);
+            if (!blob) {
                 toast('⚠️ ' + T('NAS 에 그 파일이 없습니다 — 올리는 중에 끊겼을 수 있습니다.',
                                  'That file is not on the NAS — the upload may have failed.'), 'warning', 8000);
                 return false;
             }
-            var w = window.open(u, '_blank');
-            if (w) return true;
+            var m = window._docMimeOf ? window._docMimeOf(name) : { mime: '', view: false };
+            u = URL.createObjectURL(typedBlob(blob, name));
+            if (m.view) {
+                var w = window.open(u, '_blank');
+                if (w) { revokeLater(u); return true; }
+            }
             var a = document.createElement('a');
             a.href = u;
-            a.download = String(name || 'file');
+            a.download = String(name || 'file');     // ← 이름이 붙는 유일한 자리
             document.body.appendChild(a);
             a.click();
             a.remove();
-            toast(T('새 창이 막혀 내려받았습니다.', 'Popup blocked — downloaded instead.'), 'info', 5000);
+            toast('⬇️ ' + T((name || '파일') + ' 로 내려받았습니다.',
+                             'Downloaded as ' + (name || 'file') + '.'), 'info', 6000);
+            revokeLater(u);
             return false;
         } catch (e) {
+            if (u) revokeLater(u);
             toast('⚠️ ' + e.message, 'error', 8000);
             return false;
         }
@@ -856,7 +893,7 @@
             var el = document.getElementById('daily-th-' + i);
             if (!el || el.getAttribute('data-done')) return;
             el.setAttribute('data-done', '1');
-            fileUrl(f.rel).then(function (u) {
+            fileUrl(f.rel, f.name).then(function (u) {
                 if (u) { el.style.backgroundImage = 'url("' + u + '")'; el.textContent = ''; }
             }).catch(function () { /* 썸네일 하나 못 그려도 목록은 쓴다 */ });
         });
