@@ -58,6 +58,32 @@
         imgMaxPx: 2000           // 사진은 긴 변을 이만큼으로 줄여 올린다(0 = 원본 그대로)
     };
 
+    /**
+     * 🗂 여러 프로젝트 훑기 — 한계값은 전부 여기(코드에 박지 않는다).
+     *
+     * ⚠️ 간트는 **지금 열린 프로젝트 하나**만 메모리에 있다. 그런데 사람은 여러 개를 맡는다
+     *    (실측: 개발3팀 12건 중 5건이 한 사람 앞). 열린 것만 보면 나머지 업무가 **오류 없이**
+     *    빠진다 — 사람은 "오늘 한 게 없네" 로 읽는다.
+     * ⚠️ 싼 일이 아니다(실측 1.26MB·130ms/건, 팀 전체 22MB). 그래서
+     *    ① 모달은 **열린 프로젝트로 먼저 그리고** 나머지는 뒤에서 채운다
+     *    ② 파일마다 `updated_at` 로 캐시한다(안 바뀌었으면 다시 안 읽는다)
+     *    ③ 한 건씩 차례로 읽는다(한꺼번에 던지면 NAS 가 느려진다).
+     */
+    window.DAILY_SCAN = window.DAILY_SCAN || {
+        otherProjects: true,     // 끄면 지금까지처럼 열린 프로젝트만 본다
+        maxProjects: 30,         // 한 번에 훑을 프로젝트 수 상한
+        myTeamOnly: true,        // 남의 팀 폴더는 어차피 ACL 로 막힌다(407)
+        skipCompleted: true,     // 끝난 프로젝트는 오늘 일이 없다
+        // 🙋 **내가 들어 있는 프로젝트만** 후보로 쓴다.
+        //   ⚠️ 색인의 `assignee`(프로젝트담당자)만 보면 내가 **HW담당자로만** 들어간 프로젝트를
+        //      놓친다 — 색인엔 역할별 담당자가 없다. 그래서 파일을 열어 `projectMeta` 로도 본다.
+        //      (실측: 개발3팀 12건 중 내가 든 건 5건, 전부 프로젝트담당자였다. 그래도 역할만
+        //       맡은 경우를 색인으로는 알 수 없으므로 확인은 파일에서 한다.)
+        //   ⚠️ 끄면 팀의 모든 프로젝트 업무가 후보에 뜬다(실측 170건 중 154건이 남의 일이었다).
+        onlyMyProjects: true,
+        maxCandidates: 80        // 후보 목록에 한 번에 보일 수 상한(여러 프로젝트가 섞인다)
+    };
+
     window.DAILY_PATHS = window.DAILY_PATHS || {
         root: 'App_Config/DailyReport',
         roster: 'App_Config/DailyReport/_roster.json',
@@ -434,8 +460,29 @@
         return (ci.wbs != null && ci.wbs !== -1 && row[ci.wbs]) ? String(row[ci.wbs]).trim() : '';
     }
 
+    /**
+     * 역할(`HW`·`PM`…) → 그 프로젝트의 담당자 이름.
+     *
+     * ⚠️ `_msResolveCategoryAssignee`(js/15b)는 **지금 열린 프로젝트**의 `window.projectMeta` 를
+     *    읽는다 — 다른 프로젝트 파일을 훑을 땐 그걸 쓰면 **엉뚱한 사람**이 나온다. 그래서 역할→칸
+     *    이름 카탈로그(`_MS_CATEGORY_FIELD_MAP`)만 빌려 쓰고 meta 는 인자로 받는다.
+     */
+    function catAssignee(cat, meta, members3) {
+        var raw = String(cat || '').trim();
+        if (!raw || raw === '미분류') return '';
+        var fixed = (window._MS_CATEGORY_FIELD_MAP || {})[raw];
+        if (fixed) {
+            var nm = String((meta || {})[fixed.name] || '').trim();
+            if (nm) return nm;
+        }
+        var hit = (members3 || []).filter(function (m) {
+            return m && m.role && String(m.role).indexOf(raw) !== -1 && m.name;
+        })[0];
+        return hit ? String(hit.name).trim() : '';
+    }
+
     /** `_담당구분` 으로 "이게 내 일인가"를 본다. 못 가리면 **제외하지 않고** false 만 돌려준다. */
-    function isMine(row) {
+    function isMine(row, ctx) {
         var names = myNames();
         if (!Object.keys(names).length) return false;
         var disc = row && row._담당구분;
@@ -445,8 +492,7 @@
             ? window._normalizeWbsDiscipline(disc) : disc;
         var cats = String(norm || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
         for (var i = 0; i < cats.length; i++) {
-            var who = (typeof window._msResolveCategoryAssignee === 'function')
-                ? window._msResolveCategoryAssignee(cats[i]) : null;
+            var who = { name: catAssignee(cats[i], (ctx || {}).meta, (ctx || {}).members3) };
             if (!who || !who.name) continue;
             // ⚠️ 담당자 칸은 `조익현,조재준` 처럼 **쉼표 다중**이다 — 쪼개서 비교한다.
             var list = (typeof window._addrSplitNames === 'function')
@@ -458,15 +504,20 @@
         return false;
     }
 
-    /** 오늘 날짜가 걸린 리프 행 → 초안 후보. */
-    window.dailyBuildDraft = function (dateStr) {
+    /**
+     * 오늘 날짜가 걸린 리프 행 → 초안 후보. **한 프로젝트분.**
+     *
+     * `ctx` = { rows, ci, meta, members3, logs, project } — 열린 프로젝트든 NAS 에서 읽은
+     * 파일이든 **같은 함수**로 훑는다. 두 벌로 두면 한쪽만 고쳐져 "열린 것만 맞는다" 가 된다.
+     */
+    function scanOne(ctx, dateStr) {
         var out = { mine: [], others: [], touched: [] };
-        var gd = window.globalData;
-        var ci = window.colIdx || {};
+        var gd = (ctx || {}).rows;
+        var ci = (ctx || {}).ci || {};
         if (!Array.isArray(gd) || gd.length < 2) return out;
         var day = new Date((dateStr || ymd()) + 'T00:00:00').getTime();
         var dayEnd = day + 86400000 - 1;
-        var proj = projName();
+        var proj = ctx.project || '';
         var catByName = {};        // 업무명 → 구분
         var byNo = {};             // No. 칸 값 → 행 (변경이력이 남기는 게 이 값이다)
 
@@ -486,7 +537,11 @@
             var nx = gd[i + 1];
             var nlvl = (nx && typeof nx._level === 'number') ? nx._level : -1;
             if (nx && nlvl > lvl) continue;                       // 리프만
+            // ⚠️ `_calcStartTs/_calcPlanTs` 는 저장 파일에도 들어 있다(실측) — 그래도 없을 때를
+            //    대비해 날짜 **칸**으로 떨어진다(저장 때 그 칸에도 같은 값이 적힌다, js/04e).
             var s = row._calcStartTs, e = row._calcPlanTs;
+            if (!s && ci.start != null && ci.start !== -1) s = tsOf(row[ci.start]);
+            if (!e && ci.plan != null && ci.plan !== -1) e = tsOf(row[ci.plan]);
             if (!s && !e) continue;
             if (!((s || e) <= dayEnd && (e || s) >= day)) continue;
             var nm = rowName(row);
@@ -503,7 +558,7 @@
                 isMail: p.isMail,
                 late: !!(e && e < day && String((ci.status !== -1 && row[ci.status]) || '') !== '완료')
             };
-            (isMine(row) ? out.mine : out.others).push(item);
+            (isMine(row, ctx) ? out.mine : out.others).push(item);
         }
 
         // 🚨 [2026-11-05 신고] 자동 적립에 `8` `851` `849` `NO` `고객` 같은 게 담겼다.
@@ -513,7 +568,7 @@
         //    그래서 그걸 업무명으로 믿은 옛 코드는 번호를 그대로 보고에 적었다.
         //    → **No. 로 보고 간트에서 되찾는다.** 못 찾으면 **담지 않는다**(추측하지 않는다).
         // 오늘 내가 손댄 업무 — changeLogs 는 `toLocaleString('ko-KR')` 문자열이다.
-        var logs = window.changeLogs || [];
+        var logs = ctx.logs || [];
         var names = myNames();
         var seen = {};
         var dd = new Date((dateStr || ymd()) + 'T00:00:00');
@@ -535,7 +590,140 @@
                                col: String(L.colName || '') });
         }
         return out;
+    }
+
+    /** 'YYYY-MM-DD' / 'YYYY.MM.DD' → ts. 못 읽으면 0. */
+    function tsOf(v) {
+        var s = String(v == null ? '' : v).trim().replace(/[.\/]/g, '-');
+        var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (!m) return 0;
+        return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+    }
+
+    /** 지금 열린 프로젝트 — 예전과 똑같이 메모리에서 바로. */
+    window.dailyBuildDraft = function (dateStr) {
+        return scanOne({
+            rows: window.globalData,
+            ci: window.colIdx || {},
+            meta: window.projectMeta || {},
+            members3: (window.tabData && window.tabData.projectMembers3) || [],
+            logs: window.changeLogs || [],
+            project: projName()
+        }, dateStr);
     };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 4-2. 내가 맡은 **다른** 프로젝트도 훑는다 (NAS 파일에서, AI 호출 0회)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** 훑은 결과 — 화면이 열린 프로젝트 것과 합쳐 보여 준다. */
+    var _other = { at: '', mine: [], others: [], done: 0, total: 0, busy: false, errs: [] };
+    var _projCache = {};        // file_name|updated_at|date → {mine, others}
+    window._dailyOtherScan = _other;
+
+    /**
+     * 내가 맡은 프로젝트 파일을 차례로 읽어 같은 규칙으로 훑는다.
+     *
+     * ⚠️ 기다리게 하지 않는다 — 모달은 열린 프로젝트로 이미 그려져 있고, 한 건 끝날 때마다
+     *    **후보 목록만** 다시 그린다(`paintCands`). 모달 전체를 다시 그리면 사람이 치던
+     *    글자에서 포커스가 날아간다.
+     * ⚠️ 실패는 삼키지 않는다 — 못 읽은 프로젝트는 세어서 화면에 드러낸다. 조용히 빠지면
+     *    "그 프로젝트 업무가 원래 없는 것" 과 구분할 방법이 없다.
+     */
+    window.dailyScanOtherProjects = async function (dateStr, force) {
+        var S = window.DAILY_SCAN || {};
+        if (!S.otherProjects || _other.busy) return _other;
+        var date = dateStr || ymd();
+        // 같은 날을 이미 다 훑었으면 그냥 돌려준다. `force` 는 "다시 훑어라"(파일 캐시는 그대로
+        // 쓰므로, 안 바뀐 프로젝트는 여전히 안 읽는다).
+        if (!force && _other.at === date && _other.total && _other.done >= _other.total) return _other;
+        _other = { at: date, mine: [], others: [], done: 0, total: 0, kept: 0, busy: true, errs: [] };
+        window._dailyOtherScan = _other;
+        try {
+            var idx = await window.nasAppFile.get('App_Config/project_index.json', { json: true });
+            var list = (idx && idx.projects) || [];
+            var myTeam = String(me().team || '').trim();
+            var open = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
+            var todo = list.filter(function (p) {
+                if (!p || !p.file_name) return false;
+                if (S.skipCompleted && p.completed) return false;
+                if (S.myTeamOnly && myTeam && String(p.team || '').trim() !== myTeam) return false;
+                return String(p.file_name).replace(/\.json$/i, '').trim() !== open;
+            }).slice(0, +S.maxProjects || 30);
+            _other.total = todo.length;
+            _other.kept = 0;
+            paintCands();
+            for (var i = 0; i < todo.length; i++) {
+                var p = todo[i];
+                try {
+                    var got = await scanProjectFile(p, date);
+                    if (got.skipped) { _other.done++; paintCands(); continue; }
+                    _other.kept++;
+                    _other.mine = _other.mine.concat(got.mine);
+                    _other.others = _other.others.concat(got.others);
+                } catch (e) {
+                    _other.errs.push(String(p.file_name) + ' — ' + e.message);
+                    if (window._issueLog) {
+                        try { window._issueLog({ domain: 'daily-report', kind: 'scan_project_failed',
+                                                 result: { errorRaw: e.message, file: p.file_name } }); }
+                        catch (e2) { /* 기록 실패가 훑기를 막지는 않는다 */ }
+                    }
+                }
+                _other.done++;
+                paintCands();
+            }
+        } catch (e) {
+            _other.errs.push(T('프로젝트 목록을 못 읽었습니다: ', 'Could not read the project index: ') + e.message);
+        }
+        _other.busy = false;
+        paintCands();
+        return _other;
+    };
+
+    /** 프로젝트 파일 한 개 — `updated_at` 이 그대로면 다시 안 읽는다. */
+    async function scanProjectFile(entry, date) {
+        var key = entry.file_name + '|' + (entry.updated_at || '') + '|' + date;
+        if (_projCache[key]) return _projCache[key];
+        var rel = (entry.team ? entry.team + '/' : '') + entry.file_name;
+        var d = await window.nasAppFile.get(rel, { json: true });
+        if (!d || !Array.isArray(d.globalData)) throw new Error(T('내용을 읽지 못했습니다', 'unreadable'));
+        // 🙋 내가 든 프로젝트인가 — 색인의 담당자 **또는** 그 파일의 역할별 담당자.
+        if ((window.DAILY_SCAN || {}).onlyMyProjects && !iAmIn(entry, d)) {
+            _projCache[key] = { mine: [], others: [], skipped: true };
+            return _projCache[key];
+        }
+        var rows = (typeof window._deserializeGlobalDataForMerge === 'function')
+            ? window._deserializeGlobalDataForMerge(d.globalData) : null;
+        if (!rows) throw new Error(T('행을 복원하지 못했습니다', 'cannot restore rows'));
+        var got = scanOne({
+            rows: rows,
+            ci: d.colIdx || {},
+            meta: d.projectMeta || {},
+            members3: (d.tabData && d.tabData.projectMembers3) || [],
+            logs: [],                       // 다른 프로젝트의 "오늘 손댄 것"은 안 본다 — 내 기록이 아니다
+            project: String(entry.file_name).replace(/\.json$/i, '')
+        }, date);
+        _projCache[key] = got;
+        return got;
+    }
+
+    /** 이 프로젝트에 내가 들어 있는가 — 색인 담당자 또는 파일의 역할별 담당자/멤버-3. */
+    function iAmIn(entry, doc) {
+        var names = myNames();
+        if (!Object.keys(names).length) return true;   // 내 이름을 모르면 **거르지 않는다**
+        function hit(v) {
+            var list = (typeof window._addrSplitNames === 'function')
+                ? window._addrSplitNames(v) : String(v || '').split(',');
+            return list.some(function (x) { return names[String(x || '').trim().toLowerCase()]; });
+        }
+        if (hit((entry || {}).assignee)) return true;
+        var meta = (doc && doc.projectMeta) || {};
+        for (var k in meta) {
+            if (/담당자$/.test(k) && hit(meta[k])) return true;
+        }
+        var m3 = (doc && doc.tabData && doc.tabData.projectMembers3) || [];
+        return m3.some(function (m) { return m && hit(m.name); });
+    }
 
     // ══════════════════════════════════════════════════════════════════════
     // 5. 저장소 — 사람 × 날짜 파일 하나. 쓰는 사람은 **나 하나**.
@@ -682,7 +870,73 @@
         } catch (e) { /* 초안이 깨졌으면 무시 */ }
         await markMissing(_doc);   // 📎 참조가 가리키는 파일이 정말 있는가 (목록 1콜)
         render();
+        // 🗂 내가 맡은 **다른** 프로젝트는 뒤에서 채운다 — 기다리게 하지 않는다(await 안 함).
+        //    끝날 때마다 후보 목록만 다시 그린다.
+        try { window.dailyScanOtherProjects(_date); } catch (e) { /* 훑기 실패가 모달을 막지는 않는다 */ }
     };
+
+    /**
+     * 후보 목록(간트에서 불러오기)만 그린다.
+     *
+     * ⚠️ 모달 전체를 다시 그리면 **사람이 치던 칸에서 포커스가 날아간다** — 다른 프로젝트는
+     *    뒤에서 한 건씩 들어오므로, 바뀌는 건 이 목록뿐이다. 그래서 여기만 갈아 끼운다.
+     */
+    function candHtml() {
+        var draft = window.dailyBuildDraft(_date);
+        var o = window._dailyOtherScan || { mine: [], others: [], done: 0, total: 0, busy: false, errs: [] };
+        var openName = projName();
+        // 내 일을 먼저, 그 다음 그 외 — 프로젝트가 섞여도 "내 것" 이 위로 온다.
+        var all = [].concat(draft.mine, o.mine || [], draft.others, o.others || []);
+        var seen = {};
+        var cand = all.filter(function (c) {
+            if (!c || !c.name) return false;
+            var k = String(c.project || '') + '|' + c.name;
+            if (seen[k]) return false;
+            seen[k] = 1;
+            // ⚠️ 이미 담은 업무는 뺀다 — 담기는 이름으로 하므로 이름으로 본다.
+            return !_doc.items.some(function (it) { return it.name === c.name; });
+        });
+        window._dailyCand = cand;
+
+        var note = '';
+        if (o.busy) {
+            note = T('다른 프로젝트에서도 찾는 중… ', 'Scanning other projects… ') + o.done + ' / ' + o.total;
+        } else if (o.total) {
+            // ⚠️ 열린 프로젝트가 **없을 수도 있다** — 무턱대고 +1 하면 안 본 것까지 셌다고 말한다.
+            var n = (o.kept || 0) + (openName ? 1 : 0);
+            note = T('내 프로젝트 ', 'Scanned ') + n + T('개에서 모았습니다 (팀 ', ' of my projects (team has ') +
+                   o.total + T('개 확인)', ')');
+        }
+        var errTxt = (o.errs && o.errs.length)
+            ? '<div style="font-size:11px; color:#b1432f; margin-bottom:4px;">⚠️ ' +
+              esc(T('못 읽은 프로젝트 ', 'Could not read ') + o.errs.length + T('개', '')) + ' — ' + esc(o.errs[0]) + '</div>'
+            : '';
+        var noteTxt = note ? '<div style="font-size:11px; color:#aaa; margin-bottom:4px;">' + esc(note) + '</div>' : '';
+
+        if (!cand.length) {
+            return noteTxt + errTxt + '<div style="color:#aaa; font-size:11.5px;">' +
+                   esc(T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
+        }
+        var max = +(window.DAILY_SCAN || {}).maxCandidates || 80;
+        return noteTxt + errTxt + cand.slice(0, max).map(function (c, i) {
+            var pj = String(c.project || '').trim();
+            return '<div onclick="window._dailyAdd(' + i + ')" style="cursor:pointer; padding:5px 7px; border:1px solid #eee; border-radius:5px; margin-bottom:4px; background:#fafbfc;" ' +
+                   'onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fafbfc\';">' +
+                   '<div style="font-size:12px; font-weight:bold; color:#2c5f8a;">+ ' + catBadge(c.cat) + esc(c.name) +
+                     (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '') +
+                     (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '') +
+                     // 📒 어느 프로젝트 것인지 — 여러 프로젝트가 섞이면 이름만으론 못 가린다.
+                     (pj && pj !== openName ? ' <span style="color:#888; font-size:10.5px; font-weight:normal;">(' + esc(pj) + ')</span>' : '') +
+                   '</div>' +
+                   (c.core ? '<div style="font-size:11px; color:#666; margin-top:2px;">' + esc(c.core) + '</div>' : '') +
+                   '</div>';
+        }).join('');
+    }
+
+    function paintCands() {
+        var el = document.getElementById('daily-cand');
+        if (el) el.innerHTML = candHtml();
+    }
 
     function render() {
         var wrap = document.getElementById('daily-modal');
@@ -696,7 +950,6 @@
         //    때만** 줬다 — 그래서 한 번 닫은 뒤로는 모달이 영영 안 보였다(DOM 엔 있는데).
         //    여는 건 render 하나뿐이니 **열 때마다 다시 켠다.**
         wrap.style.display = 'flex';
-        var draft = window.dailyBuildDraft(_date);
         var types = window.DAILY_DAY_TYPES.map(function (t) {
             var on = _doc.dayType === t.key;
             return '<button onclick="window._dailySetType(\'' + t.key + '\')" style="padding:5px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid ' +
@@ -737,19 +990,6 @@
                    '</div></div>';
         }).join('') || '<div style="color:#aaa; font-size:12px; padding:6px 0;">' + esc(T('아래에서 골라 담거나 직접 추가하세요.', 'Pick below or add manually.')) + '</div>';
 
-        var cand = [].concat(draft.mine, draft.others).filter(function (c) {
-            return !_doc.items.some(function (it) { return it.name === c.name; });
-        });
-        var candHtml = cand.length ? cand.slice(0, 25).map(function (c, i) {
-            return '<div onclick="window._dailyAdd(' + i + ')" style="cursor:pointer; padding:5px 7px; border:1px solid #eee; border-radius:5px; margin-bottom:4px; background:#fafbfc;" ' +
-                   'onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fafbfc\';">' +
-                   '<div style="font-size:12px; font-weight:bold; color:#2c5f8a;">+ ' + catBadge(c.cat) + esc(c.name) +
-                     (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '') +
-                     (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '') + '</div>' +
-                   (c.core ? '<div style="font-size:11px; color:#666; margin-top:2px;">' + esc(c.core) + '</div>' : '') +
-                   '</div>';
-        }).join('') : '<div style="color:#aaa; font-size:11.5px;">' + esc(T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
-        window._dailyCand = cand;
 
         wrap.innerHTML =
 '<div id="daily-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(720px,94vw); max-height:90vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.22); overflow:hidden;">' +
@@ -771,7 +1011,7 @@
           '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
         '</div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:4px;">' + esc(T('간트에서 불러오기', 'From Gantt')) + ' <span style="color:#bbb;">' + esc(T('(AI 호출 없음 — 메일 분석 결과를 그대로 씁니다)', '(no AI call — reuses mail analysis)')) + '</span></div>' +
-        '<div style="max-height:150px; overflow-y:auto; margin-bottom:14px;">' + candHtml + '</div>' +
+        '<div id="daily-cand" style="max-height:190px; overflow-y:auto; margin-bottom:14px;">' + candHtml() + '</div>' +
         (_doc.aiDone
           ? '<div style="margin-bottom:10px;">' +
               '<div style="font-size:12.5px; font-weight:bold; color:#1971c2; margin-bottom:3px;">🤖 ' + esc(T('오늘 한 일 (AI 정리본 — 고쳐도 됩니다)', 'Done today (AI draft — editable)')) + '</div>' +

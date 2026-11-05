@@ -52,9 +52,32 @@ win.wrTaskName = function (row) {
 };
 win._normalizeWbsDiscipline = (d) => ({ '영업': 'SAL', '기구': 'ME' }[String(d || '').trim()] || d);
 win._addrSplitNames = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
-win._msResolveCategoryAssignee = function (cat) {
-    const map = { HW: '조익현,조재준', ME: '박지웅', PM: '박용훈', SAL: '장영익' };
-    return map[cat] ? { category: cat, name: map[cat], email: '' } : null;
+// ⚠️⚠️ [2026-11-05] 전엔 `_msResolveCategoryAssignee` 를 통째로 가짜로 뒀는데, 그건 **틀린
+//    계약**이었다 — 진짜 앱은 "역할 → 칸 이름"(`_MS_CATEGORY_FIELD_MAP`, 데이터)을 보고
+//    **그 프로젝트의 `projectMeta`** 에서 이름을 꺼낸다. 해석 함수를 가짜로 두면 프로젝트마다
+//    담당자가 다르다는 사실 자체가 하네스에서 사라져, 여러 프로젝트를 훑는 코드가 **다른
+//    프로젝트에 지금 열린 프로젝트의 담당자를 먹여도** 통과한다.
+//    → 카탈로그는 진짜 모양 그대로, 이름은 meta 와 멤버-3 에 심는다.
+win._MS_CATEGORY_FIELD_MAP = {
+    'PM':  { name: '프로젝트담당자', email: '프로젝트담당자이메일' },
+    'HW':  { name: 'HW담당자',       email: 'HW담당자이메일' },
+    'FW':  { name: 'FW담당자',       email: 'FW담당자이메일' },
+    'BLU': { name: 'Module담당자',   email: 'Module담당자이메일' }
+};
+// ⚠️ 진짜 카탈로그엔 `ME`·`SAL` 키가 **없다** — 그 역할은 '프로젝트 멤버-3' 의 role 로만 풀린다.
+win.projectMeta = { 프로젝트담당자: '박용훈', HW담당자: '조익현,조재준' };
+win.tabData = { projectMembers3: [{ role: 'ME 기구', name: '박지웅' }, { role: 'SAL 영업', name: '장영익' }] };
+
+// 저장 파일의 행 복원 — js/14d `_deserializeGlobalDataForMerge` 와 **같은 구현**(그 파일은
+// 딸린 게 많아 통째로 못 싣는다). 모양이 어긋나면 여기 먼저 의심할 것.
+win._deserializeGlobalDataForMerge = function (savedArr) {
+    if (!Array.isArray(savedArr)) return null;
+    return savedArr.map(function (obj) {
+        if (!obj || !obj.data) return null;
+        const r = obj.data.slice();
+        for (const k in obj) { if (k !== 'data') r[k] = obj[k]; }
+        return r;
+    });
 };
 
 // ── NAS 는 가짜(메모리) — 경계다 ────────────────────────────────────────────
@@ -623,6 +646,102 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('지우면 그 업무 것만 사라진다',
         pf2.files.map((f) => f.name).sort().join(',') === 'a.pdf,c.pdf',
         pf2.files.map((f) => f.name).join(','));
+
+    // ══ 8. 내가 맡은 **다른** 프로젝트도 훑는다 ═══════════════════════════════
+    console.log('\n■ 여러 프로젝트에서 모은다 (간트에서 불러오기)');
+
+    // 저장 파일 모양 — 행은 {data:[...], _level, _담당구분, …} 이다(js/04c `_serializeGD`).
+    function savedRow(lvl, name, content, startTs, planTs, disc) {
+        const o = { data: ['1', lvl, '', '', 1, '진행', name, content, ''],
+                    _level: lvl, _calcStartTs: startTs, _calcPlanTs: planTs };
+        o['_origT' + lvl] = name;
+        if (disc) o._담당구분 = disc;
+        return o;
+    }
+    const tToday = new Date(today + 'T00:00:00').getTime();
+    function savedProject(meta, rows) {
+        return JSON.stringify({
+            globalData: [{ data: ['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', '업무 상세내용', '현황'] }].concat(rows),
+            colIdx: { no: 0, bogo: 1, start: 2, plan: 3, period: 4, status: 5, wbs: 6, content: 7, chart: 8 },
+            projectMeta: meta,
+            tabData: { projectMembers3: [] },
+            changeLogs: []
+        });
+    }
+
+    // ⚠️⚠️ 핵심 함정: **담당자는 프로젝트마다 다르다.** 아래 두 파일에서 같은 역할(PM/HW)이
+    //    서로 다른 사람을 가리킨다 — 다른 프로젝트를 훑으면서 지금 열린 프로젝트의 meta 를
+    //    쓰면 이 시험이 깨진다(그게 바로 조용한 오답이다).
+    nas['개발3팀/B_PROJECT.json'] = savedProject(
+        { 프로젝트담당자: '최종석', HW담당자: '박용훈' },           // 여기선 내가 HW 담당이다
+        [savedRow(3, 'B-내 HW 업무', '[핵심내용]B 프로젝트 HW\n[출처]x', tToday, tToday, 'HW'),
+         savedRow(3, 'B-남의 PM 업무', '[핵심내용]B 프로젝트 PM\n[출처]y', tToday, tToday, 'PM'),
+         savedRow(3, 'B-지난 업무', '[핵심내용]옛것\n[출처]z', tToday - 86400000 * 9, tToday - 86400000 * 8, 'HW')]);
+    nas['개발3팀/C_DONE.json'] = savedProject({ 프로젝트담당자: '박용훈' },
+        [savedRow(3, 'C-끝난 프로젝트 업무', '[핵심내용]안 나와야 한다\n[출처]q', tToday, tToday, 'PM')]);
+    nas['개발9팀/D_OTHERTEAM.json'] = savedProject({ 프로젝트담당자: '박용훈' },
+        [savedRow(3, 'D-남의 팀 업무', '[핵심내용]안 나와야 한다\n[출처]q', tToday, tToday, 'PM')]);
+    // 🙋 내가 **어디에도 안 든** 프로젝트 — 읽기는 하지만 후보로는 한 건도 안 담아야 한다.
+    //    (안 거르면 실측에서 후보 170건 중 154건이 남의 일이었다.)
+    nas['개발3팀/F_NOTMINE.json'] = savedProject({ 프로젝트담당자: '최종석', HW담당자: '조익현' },
+        [savedRow(3, 'F-남의 프로젝트 업무', '[핵심내용]안 나와야 한다\n[출처]q', tToday, tToday, 'PM'),
+         savedRow(3, 'F-남의 프로젝트 HW', '[핵심내용]안 나와야 한다\n[출처]q', tToday, tToday, 'HW')]);
+
+    nas['App_Config/project_index.json'] = JSON.stringify({ projects: [
+        { file_name: 'A_OPEN.json',      team: '개발3팀', assignee: '박용훈', completed: false, updated_at: '1' },
+        { file_name: 'B_PROJECT.json',   team: '개발3팀', assignee: '최종석', completed: false, updated_at: '1' },
+        { file_name: 'C_DONE.json',      team: '개발3팀', assignee: '박용훈', completed: true,  updated_at: '1' },
+        { file_name: 'D_OTHERTEAM.json', team: '개발9팀', assignee: '박용훈', completed: false, updated_at: '1' },
+        { file_name: 'E_MISSING.json',   team: '개발3팀', assignee: '박용훈', completed: false, updated_at: '1' },
+        { file_name: 'F_NOTMINE.json',   team: '개발3팀', assignee: '최종석', completed: false, updated_at: '1' }
+    ] });
+
+    // 읽기 횟수를 센다 — 캐시가 정말 먹는지 보려면 숫자가 필요하다.
+    let reads = 0;
+    const scanGet = win.nasAppFile.get;
+    win.nasAppFile.get = async function (rel, opts) { if (/^개발/.test(rel)) reads++; return scanGet(rel, opts); };
+
+    win.currentDriveFileName = 'A_OPEN.json';     // 지금 열린 프로젝트
+    const sc = await win.dailyScanOtherProjects(today);
+
+    ok('열린 프로젝트·끝난 것·남의 팀은 후보에서 빠진다', sc.total === 3,
+        'total=' + sc.total + ' (B_PROJECT·E_MISSING·F_NOTMINE 셋만 남아야 한다)');
+    const gotNames = sc.mine.concat(sc.others).map((x) => x.name);
+    ok('끝난 프로젝트는 안 본다', !gotNames.some((n) => n.indexOf('C-') === 0), gotNames.join(','));
+    ok('남의 팀 프로젝트는 안 본다', !gotNames.some((n) => n.indexOf('D-') === 0), gotNames.join(','));
+    ok('오늘 걸린 것만 가져온다', !gotNames.some((n) => n.indexOf('B-지난') === 0), gotNames.join(','));
+    ok('그 프로젝트의 meta 로 내 일을 가린다 — HW담당자가 나다',
+        sc.mine.length === 1 && sc.mine[0].name === 'B-내 HW 업무',
+        'mine=' + JSON.stringify(sc.mine.map((x) => x.name)));
+    ok('그 프로젝트의 PM 은 남이다(열린 프로젝트 meta 를 쓰면 여기서 깨진다)',
+        sc.others.some((x) => x.name === 'B-남의 PM 업무'),
+        'others=' + JSON.stringify(sc.others.map((x) => x.name)));
+    ok('어느 프로젝트 것인지 싣는다', sc.mine[0].project === 'B_PROJECT', sc.mine[0].project);
+    ok('[핵심내용]도 같이 온다', (sc.mine[0].core || '').indexOf('B 프로젝트') === 0, sc.mine[0].core);
+    // ⚠️ 못 읽은 것은 **삼키지 않는다** — 조용히 빠지면 "그 프로젝트엔 원래 일이 없다"와 구분이 안 된다.
+    ok('못 읽은 프로젝트를 드러낸다', sc.errs.length === 1 && /E_MISSING/.test(sc.errs[0]), JSON.stringify(sc.errs));
+    // 🙋 내가 안 든 프로젝트는 **한 건도** 안 담는다 — 색인 담당자도 나가 아니고 meta 에도 없다.
+    ok('내가 안 든 프로젝트 업무는 안 담는다', !gotNames.some((n) => n.indexOf('F-') === 0), gotNames.join(','));
+    ok('내가 든 프로젝트만 센다', sc.kept === 1, 'kept=' + sc.kept + ' (B_PROJECT 하나)');
+
+    // ⚠️ 두 번째 훑기는 **force** 로 부른다 — 안 그러면 "이미 끝났다" 로 바로 돌아와
+    //    캐시가 아니라 **그 지름길**을 시험하게 된다(가짜 통과).
+    const after1 = reads;
+    await win.dailyScanOtherProjects(today, true);
+    // 캐시된 B 는 안 읽고, **못 읽었던 E 는 다시 시도한다**(실패를 캐시하면 고쳐 둬도 영영 안 돌아온다).
+    ok('안 바뀐 프로젝트는 다시 안 읽는다 — 실패한 것만 다시 시도', reads === after1 + 1,
+        '읽기 ' + after1 + ' → ' + reads + ' (E_MISSING 재시도 1건만 늘어야 한다. ' +
+        '내가 안 든 F 도 "건너뜀" 으로 캐시돼 다시 안 읽어야 한다)');
+
+    nas['App_Config/project_index.json'] = JSON.stringify({ projects: [
+        { file_name: 'A_OPEN.json',    team: '개발3팀', assignee: '박용훈', completed: false, updated_at: '1' },
+        { file_name: 'B_PROJECT.json', team: '개발3팀', assignee: '최종석', completed: false, updated_at: '2' }
+    ] });
+    const after2 = reads;
+    await win.dailyScanOtherProjects(today, true);
+    ok('updated_at 이 바뀌면 그 프로젝트를 다시 읽는다', reads === after2 + 1,
+        '읽기 ' + after2 + ' → ' + reads + ' (B_PROJECT 한 건)');
+    win.nasAppFile.get = realGet;
 
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');
