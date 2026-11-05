@@ -1334,7 +1334,7 @@
      * ⚠️ 바깥 표에 열을 더할 수 없다(한 사람 행에 업무가 여럿) → **안에 표**를 둔다.
      * ⚠️ 머리글은 `DAILY_FIELDS`(데이터)에서 — 칸 이름을 바꿀 때 여기도 고치는 일이 없게.
      */
-    function itemsCell(d) {
+    function itemsCellUnused(d) {
         var ai = String((d && d.aiDone) || '').trim();
         var items = keepItems(d && d.items);
         var head = ai ? '<div style="white-space:pre-line; margin-bottom:' + (items.length ? '5px' : '0') + ';">' + esc(ai) + '</div>' : '';
@@ -1421,6 +1421,15 @@
                 : '') +
         '</div>';
     }
+
+    /** 하루 보기 표의 열 — **데이터 한 곳**. 칸 셋은 `DAILY_FIELDS` 에서 끌어온다. */
+    var DAY_COLS = [
+        { ko: '이름', en: 'Name', w: '78px' },
+        { ko: '종류', en: 'Type', w: '50px' },
+        { ko: '구분', en: 'Cat.', w: '46px' },
+        { ko: '업무', en: 'Task', w: '20%' }
+    ].concat(window.DAILY_FIELDS.map(function (f) { return { ko: f.ko, en: f.en, w: '' }; }))
+     .concat([{ ko: '첨부', en: 'Files', w: '58px' }]);
 
     window._dailyTabDate = null;
     window._dailyView = 'day';       // 'day' | 'month'
@@ -2204,28 +2213,69 @@
             });
         }
 
+        // 📋 [2026-11-05 요청] 안쪽 표를 없애고 **한 겹**으로 편다 —
+        //    업무 하나가 한 줄이고, 이름·종류는 `rowspan` 으로 묶는다.
+        //    ⚠️ 그래서 `rows` 는 사람당 **여러 줄**이다(전엔 한 줄이었다).
+        var td = 'padding:5px 8px; border:1px solid #e3e6ea; vertical-align:top; font-size:12px;';
         var rows = people.map(function (p) {
             var d = byKey[String(p.key || '').toLowerCase()];
-            var typ = d ? (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === d.dayType; })[0] || {}) : null;
-            var typeTxt = typ ? (window._currentLang === 'en' ? typ.en : typ.ko) : '';
-            // ⚠️ AI 정리본이 있으면 그걸 보여준다 — 사람이 마지막으로 고친 글이 곧 보고 내용이다.
-            var done = d ? itemsCell(d) : '';
-            var td = 'padding:7px 9px; border:1px solid #e3e6ea; vertical-align:top; font-size:12px;';
             var dbl = ' ondblclick="window._dailyRowDbl(\'' + esc(String(p.key || '')) + '\')"'
                     + ' title="' + esc(T('더블클릭하면 내 보고 쓰기가 열립니다', 'Double-click to open your report')) + '"';
+            var nameTd = function (span) {
+                return '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap; font-weight:bold;">' +
+                       esc(p.name || p.key) + '</td>';
+            };
             if (!d) {
-                return '<tr style="background:#fff8f8; cursor:pointer;"' + dbl + '><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
-                       '<td style="' + td + '" colspan="3"><span style="color:#b1432f; font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
+                return '<tr style="background:#fff8f8; cursor:pointer;"' + dbl + '>' + nameTd(1) +
+                       '<td style="' + td + '" colspan="' + (DAY_COLS.length - 1) + '">' +
+                       '<span style="color:#b1432f; font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
             }
-            // 🧺 기타 = **업무에 안 붙는 것**(옛 보고의 보고-단위 글과 꼬리표 없는 사진도 여기로).
-            var etcTxt = [String(d.next || '').trim(), String(d.issue || '').trim()]
+            var typ = window.DAILY_DAY_TYPES.filter(function (x) { return x.key === d.dayType; })[0] || {};
+            var typeTxt = window._currentLang === 'en' ? (typ.en || '') : (typ.ko || '');
+            var items = keepItems(d.items);
+
+            // 🧺 기타 = 업무에 안 붙는 것(옛 보고의 보고-단위 글·꼬리표 없는 사진).
+            //    ⚠️ 필터가 켜져 있으면 기타는 안 보여 준다 — 어느 업무에도 안 걸리니까.
+            var etcTxt = [String(d.aiDone || '').trim(), String(d.next || '').trim(), String(d.issue || '').trim()]
                 .filter(Boolean).join('\n');
             var etcFiles = filesOf(d, '');
-            return '<tr style="cursor:pointer;"' + dbl + '><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
-                   '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
-                   '<td style="' + td + '">' + (done || '-') + '</td>' +
-                   '<td style="' + td + ' white-space:pre-line;">' + esc(etcTxt || '-') +
-                     (etcFiles.length ? '<div style="margin-top:3px;">' + fileChips(etcFiles) + '</div>' : '') + '</td></tr>';
+            var hasEtc = !(window._dailyFilter && (window._dailyFilter.proj || window._dailyFilter.cat))
+                      && !!(etcTxt || etcFiles.length);
+
+            var span = items.length + (hasEtc ? 1 : 0);
+            if (!span) {   // 일 종류만 적고 넘어간 날(휴가 등)
+                return '<tr style="cursor:pointer;"' + dbl + '>' + nameTd(1) +
+                       '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
+                       '<td style="' + td + '" colspan="' + (DAY_COLS.length - 2) + '">-</td></tr>';
+            }
+
+            var out = [];
+            items.forEach(function (it, n) {
+                var pj = String((it && it.project) || '').replace(/\.json$/i, '');
+                var fs = filesOf(d, it.name);
+                out.push('<tr style="cursor:pointer;"' + dbl + '>' +
+                    (n === 0 ? nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' : '') +
+                    '<td style="' + td + ' text-align:center; color:#50616f; background:#fafbfc; white-space:nowrap;">' + esc(it.cat || '-') + '</td>' +
+                    '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
+                      (pj ? '<div style="color:#9aa3ab; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' + esc(pj) + '</div>' : '') +
+                    '</td>' +
+                    window.DAILY_FIELDS.map(function (f) {
+                        var v = String(it[f.itemKey] || '').trim();
+                        return '<td style="' + td + ' white-space:pre-line;' + (f.key === 'issue' && v ? ' background:#fffaf0;' : '') + '">' + esc(v || '-') + '</td>';
+                    }).join('') +
+                    '<td style="' + td + ' text-align:center;">' + (fs.length ? fileChips(fs) : '<span style="color:#ccc;">-</span>') + '</td>' +
+                '</tr>');
+            });
+            if (hasEtc) {
+                out.push('<tr style="cursor:pointer;"' + dbl + '>' +
+                    (items.length ? '' : nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>') +
+                    '<td style="' + td + ' text-align:center; color:#aaa; background:#fafbfc;">-</td>' +
+                    '<td style="' + td + ' color:#888;">' + esc(T('(기타)', '(other)')) + '</td>' +
+                    '<td style="' + td + ' white-space:pre-line;" colspan="' + window.DAILY_FIELDS.length + '">' + esc(etcTxt || '-') + '</td>' +
+                    '<td style="' + td + ' text-align:center;">' + (etcFiles.length ? fileChips(etcFiles) : '<span style="color:#ccc;">-</span>') + '</td>' +
+                '</tr>');
+            }
+            return out.join('');
         }).join('');
 
         var written = people.filter(function (p) { return byKey[String(p.key || '').toLowerCase()]; }).length;
@@ -2237,13 +2287,12 @@
             (roster && roster.length ? '' : ' <span style="color:#b1432f;">' + esc(T('(명단 파일이 없어 쓴 사람만 보입니다)', '(no roster file — showing authors only)')) + '</span>') +
           '</div>' +
           '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
-            '<colgroup><col style="width:88px;"><col style="width:56px;"><col><col style="width:16%;"></colgroup>' +
+            '<colgroup>' + DAY_COLS.map(function (c) { return '<col' + (c.w ? ' style="width:' + c.w + ';"' : '') + '>'; }).join('') + '</colgroup>' +
             '<thead><tr style="background:#eef6f7;">' +
-              // 바깥은 사람 단위 — 칸 이름들은 **안쪽 표**가 쓴다(업무별이라서).
-              [['이름', 'Name'], ['종류', 'Type'], ['업무별 보고', 'Per task'], ['기타', 'Other']]
-                .map(function (hp) {
-                  return '<th style="padding:7px 9px; border:1px solid #cfe3e5; font-size:12px; color:#2c5f8a;">' + esc(window._currentLang === 'en' ? hp[1] : hp[0]) + '</th>';
+              DAY_COLS.map(function (c) {
+                  return '<th style="padding:6px 8px; border:1px solid #cfe3e5; font-size:12px; color:#2c5f8a;">' +
+                         esc(window._currentLang === 'en' ? c.en : c.ko) + '</th>';
               }).join('') +
-            '</tr></thead><tbody>' + (rows || '<tr><td colspan="4" style="padding:16px; text-align:center; color:#aaa; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
+            '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + DAY_COLS.length + '" style="padding:16px; text-align:center; color:#aaa; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
     };
 })();
