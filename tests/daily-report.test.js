@@ -132,8 +132,11 @@ win.colIdx = { no: 0, bogo: 1, start: 2, plan: 3, period: 4, status: 5, wbs: 6, 
                assignee: -1, answer: -1, devStage: -1, customer: -1, model: -1, inch: -1 };
 const today = win._dailyYmd();
 const t0 = new Date(today + 'T00:00:00').getTime();
+let _noSeq = 0;
 function row(lvl, name, content, startTs, planTs, disc) {
-    const r = ['', lvl, '', '', 1, '진행', name, content, ''];
+    // ⚠️ No. 칸을 비워 두면 안 된다 — `changeLogs.rowName` 이 **이 값**이라,
+    //    빈 채로 두면 '손댄 업무' 경로가 하네스에서만 다른 길을 탄다(그래서 버그를 놓쳤다).
+    const r = [String(++_noSeq), lvl, '', '', 1, '진행', name, content, ''];
     r._level = lvl; r._calcStartTs = startTs; r._calcPlanTs = planTs;
     r['_origT' + lvl] = name; if (lvl === 0) r._origDev = name;
     if (disc) r._담당구분 = disc;
@@ -180,15 +183,29 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     // `영업`(정규화 전) 도 SAL 로 풀려 장영익에게 간다 — 나와 안 섞인다
     ok('SAL/영업 정규화가 먹는다', !d1.mine.some((x) => x.name === '영업 확인'));
 
-    // 오늘 내가 손댄 업무 — changeLogs 의 ko-KR 시각 문자열을 읽는다
+    // 오늘 내가 손댄 업무 — changeLogs 의 ko-KR 시각 문자열을 읽는다.
+    // ⚠️⚠️ [2026-11-05 실사용 신고] `rowName` 은 **업무명이 아니라 No. 칸 값**이다
+    //    (js/04i `logChange`). 어떤 기록은 아예 **행 인덱스**를 넣는다(js/04g·14d·04d).
+    //    그걸 업무명으로 믿어서 보고에 `8` `851` `NO` `고객` 이 담겼다.
     const dd = new Date(today + 'T10:00:00');
     win.changeLogs = [
-        { time: dd.toLocaleString('ko-KR'), userName: 'yhpark', rowName: '포장재 검토 ＊AI📧', colName: '상태' },
-        { time: dd.toLocaleString('ko-KR'), userName: '다른사람', rowName: '남의 업무', colName: '상태' }
+        { time: dd.toLocaleString('ko-KR'), userName: 'yhpark', rowName: '2', colName: '상태' },
+        { time: dd.toLocaleString('ko-KR'), userName: 'yhpark', rowName: '851', colName: '상태' },   // 없는 번호
+        { time: dd.toLocaleString('ko-KR'), userName: 'yhpark', rowName: 'NO', colName: '상태' },    // 머리글 글자
+        { time: dd.toLocaleString('ko-KR'), userName: 'yhpark', rowName: '고객', colName: '상태' },  // 칸 이름
+        { time: dd.toLocaleString('ko-KR'), userName: 'yhpark', rowName: 1, colName: '행 조작' },    // 인덱스다
+        { time: dd.toLocaleString('ko-KR'), userName: '다른사람', rowName: '3', colName: '상태' }
     ];
     const d2 = win.dailyBuildDraft(today);
-    ok('오늘 내가 손댄 업무를 모은다', d2.touched.length === 1 && d2.touched[0].name === '포장재 검토',
+    ok('번호를 업무명으로 되찾는다', d2.touched.length === 1 && d2.touched[0].name === '사출물 견적',
        JSON.stringify(d2.touched));
+    ok('없는 번호·머리글 글자·칸 이름은 담지 않는다(8·851·NO·고객 사고)',
+        !d2.touched.some((x) => ['851', 'NO', '고객'].indexOf(x.name) >= 0),
+        d2.touched.map((x) => x.name).join(','));
+    ok('행 조작 기록은 건너뛴다(rowName 이 인덱스라 엉뚱한 업무가 된다)',
+        !d2.touched.some((x) => x.name === '인증비용 문의'), d2.touched.map((x) => x.name).join(','));
+    ok('되찾은 업무에 구분이 따라온다', d2.touched[0] && d2.touched[0].cat === 'HW',
+        d2.touched[0] && d2.touched[0].cat);
 
     // ══ 4. 저장 가드 ════════════════════════════════════════════════════════
     console.log('\n■ dailySave 가드');

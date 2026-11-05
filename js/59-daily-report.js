@@ -464,8 +464,18 @@
         var day = new Date((dateStr || ymd()) + 'T00:00:00').getTime();
         var dayEnd = day + 86400000 - 1;
         var proj = projName();
-        var catByName = {};        // 업무명 → 구분 (아래 '손댄 업무'가 다시 쓴다)
+        var catByName = {};        // 업무명 → 구분
+        var byNo = {};             // No. 칸 값 → 행 (변경이력이 남기는 게 이 값이다)
 
+        // No. 지도는 **전체 행**으로 만든다 — 손댄 업무가 오늘 일정이 아닐 수 있다.
+        if (ci.no != null && ci.no !== -1) {
+            for (var n0 = 1; n0 < gd.length; n0++) {
+                var r0 = gd[n0];
+                if (!r0) continue;
+                var v0 = String(r0[ci.no] == null ? '' : r0[ci.no]).trim();
+                if (v0 && !byNo[v0]) byNo[v0] = r0;
+            }
+        }
         for (var i = 1; i < gd.length; i++) {
             var row = gd[i];
             if (!row) continue;
@@ -493,6 +503,12 @@
             (isMine(row) ? out.mine : out.others).push(item);
         }
 
+        // 🚨 [2026-11-05 신고] 자동 적립에 `8` `851` `849` `NO` `고객` 같은 게 담겼다.
+        //    범인: **`changeLogs.rowName` 은 업무명이 아니다.** `logChange`(js/04i)가 거기에
+        //    넣는 건 **No. 칸 값**(또는 그 칸의 글자)이고, 어떤 기록은 아예 **행 인덱스**를 넣는다
+        //    (js/04g `rowName: rowIndex` · js/14d `rowName: pos` · js/04d `rowName: i`).
+        //    그래서 그걸 업무명으로 믿은 옛 코드는 번호를 그대로 보고에 적었다.
+        //    → **No. 로 보고 간트에서 되찾는다.** 못 찾으면 **담지 않는다**(추측하지 않는다).
         // 오늘 내가 손댄 업무 — changeLogs 는 `toLocaleString('ko-KR')` 문자열이다.
         var logs = window.changeLogs || [];
         var names = myNames();
@@ -503,11 +519,16 @@
             var L = logs[k];
             if (!L || String(L.time || '').indexOf(stamp) !== 0) continue;
             if (!names[String(L.userName || '').trim().toLowerCase()]) continue;
-            var rn = String(L.rowName || '').replace(/\s*＊AI📧?\s*$/, '').trim();
+            // ⚠️ 행 자체를 만지는 기록은 `rowName` 에 **인덱스**가 들어온다 — 번호로 오인하면
+            //    엉뚱한 업무를 담는다. 그 종류는 통째로 건너뛴다(`DAILY_TOUCH_SKIP_COLS`, 데이터).
+            if (window.DAILY_TOUCH_SKIP_COLS.indexOf(String(L.colName || '').trim()) >= 0) continue;
+            var no = String(L.rowName == null ? '' : L.rowName).trim();
+            var hitRow = byNo[no];
+            if (!hitRow) continue;                       // 간트에서 못 찾으면 담지 않는다
+            var rn = rowName(hitRow);
             if (!rn || seen[rn]) continue;
             seen[rn] = 1;
-            // ⚠️ 변경이력엔 구분이 없다 — 위에서 만든 업무명 지도로 잇는다(없으면 빈 값).
-            out.touched.push({ name: rn, project: proj, cat: catByName[rn] || '',
+            out.touched.push({ name: rn, project: proj, cat: catOf(hitRow),
                                col: String(L.colName || '') });
         }
         return out;
@@ -1222,6 +1243,87 @@
     // ══════════════════════════════════════════════════════════════════════
     // 7. 팀 하루 보기 탭
     // ══════════════════════════════════════════════════════════════════════
+
+    /** 행 자체를 만지는 기록 — `rowName` 에 **인덱스**가 들어와 번호로 오인된다. 데이터로 둔다. */
+    window.DAILY_TOUCH_SKIP_COLS = window.DAILY_TOUCH_SKIP_COLS ||
+        ['행 조작', '일정 재계산', '일정 고정'];
+
+    /** 지금 필터에 걸리는 항목만. */
+    function keepItems(items) {
+        var F = window._dailyFilter || {};
+        return (items || []).filter(function (it) {
+            if (F.cat && String((it && it.cat) || '') !== F.cat) return false;
+            if (F.proj && String((it && it.project) || '').replace(/\.json$/i, '') !== F.proj) return false;
+            return true;
+        });
+    }
+
+    /**
+     * "오늘 한 일" 칸 — 구분·업무·프로젝트를 **열로** 나눈다(2026-11-05 요청).
+     * ⚠️ 전엔 `• [HW] 이름 (프로젝트)` 한 줄이라 구분이 글 안에 묻혔다.
+     * ⚠️ 한 사람 행 안에 항목이 여럿이라 바깥 표에 열을 더할 수 없다 — **안에 작은 표**를 둔다.
+     */
+    function itemsCell(d) {
+        var ai = String((d && d.aiDone) || '').trim();
+        var items = keepItems(d && d.items);
+        var head = ai ? '<div style="white-space:pre-line; margin-bottom:' + (items.length ? '5px' : '0') + ';">' + esc(ai) + '</div>' : '';
+        if (!items.length) return head || '';
+        var td = 'padding:2px 6px; border:1px solid #eef1f4; font-size:11.5px; vertical-align:top;';
+        return head + '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
+            '<colgroup><col style="width:46px;"><col><col style="width:30%;"></colgroup>' +
+            items.map(function (it) {
+                var pj = String((it && it.project) || '').replace(/\.json$/i, '');
+                return '<tr>' +
+                  '<td style="' + td + ' text-align:center; color:#50616f; background:#f7f9fb; white-space:nowrap;">' +
+                    esc(it.cat || '-') + '</td>' +
+                  '<td style="' + td + '">' + esc(it.name) +
+                    (it.note ? '<div style="color:#8a8a8a; font-size:10.5px; margin-top:1px;">' + esc(it.note) + '</div>' : '') +
+                  '</td>' +
+                  '<td style="' + td + ' color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' +
+                    esc(pj || '-') + '</td>' +
+                '</tr>';
+            }).join('') + '</table>';
+    }
+
+    window.dailySetFilter = function (k, v) {
+        (window._dailyFilter || (window._dailyFilter = {}))[k] = String(v || '');
+        window.dailyRenderTab();
+    };
+
+    /** 필터 줄 — 고를 수 있는 값은 **그 날 실제로 있는 것만** 만든다(없는 선택지를 주지 않는다). */
+    function filterBar(people, docs) {
+        var F = window._dailyFilter || {};
+        var projs = {}, cats = {};
+        (docs || []).forEach(function (d) {
+            (d.items || []).forEach(function (it) {
+                var pj = String((it && it.project) || '').replace(/\.json$/i, '').trim();
+                if (pj) projs[pj] = 1;
+                var c = String((it && it.cat) || '').trim();
+                if (c) cats[c] = 1;
+            });
+        });
+        function sel(key, label, opts, cur) {
+            return '<select onchange="window.dailySetFilter(\'' + key + '\', this.value)" ' +
+                'style="padding:3px 6px; border:1px solid ' + (cur ? '#a5c8f0' : '#ddd') + '; border-radius:5px; ' +
+                'background:' + (cur ? '#eef6ff' : '#fff') + '; font-size:11.5px; color:#50616f;">' +
+                '<option value="">' + esc(label) + '</option>' +
+                opts.map(function (o) {
+                    return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+                }).join('') + '</select>';
+        }
+        var who = (people || []).map(function (p) { return [String(p.key || ''), String(p.name || p.key || '')]; });
+        return '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">' +
+            '<span style="font-size:11.5px; color:#888;">🔎</span>' +
+            sel('who', T('담당자 전체', 'All people'), who, F.who || '') +
+            sel('proj', T('프로젝트 전체', 'All projects'), Object.keys(projs).sort().map(function (k) { return [k, k]; }), F.proj || '') +
+            sel('cat', T('구분 전체', 'All disciplines'), Object.keys(cats).sort().map(function (k) { return [k, k]; }), F.cat || '') +
+            ((F.who || F.proj || F.cat)
+                ? '<button onclick="window._dailyFilter={who:\'\',proj:\'\',cat:\'\'}; window.dailyRenderTab();" ' +
+                  'style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' +
+                  esc(T('필터 해제', 'Clear')) + '</button>'
+                : '') +
+        '</div>';
+    }
 
     window._dailyTabDate = null;
     window._dailyView = 'day';       // 'day' | 'month'
@@ -1975,12 +2077,24 @@
             }).join('') + '</div>';
         }
 
+        var allPeople = people.slice();   // 선택지는 **필터 걸기 전** 목록에서 만든다
+        // 🔎 필터 — 사람·프로젝트·구분. 비어 있으면 전부.
+        var F = window._dailyFilter || (window._dailyFilter = { who: '', proj: '', cat: '' });
+        var itemFiltered = !!(F.proj || F.cat);
+        if (F.who) people = people.filter(function (p) { return String(p.key || '') === F.who; });
+        if (itemFiltered) {
+            people = people.filter(function (p) {
+                var dd = byKey[String(p.key || '').toLowerCase()];
+                return dd && keepItems(dd.items).length;
+            });
+        }
+
         var rows = people.map(function (p) {
             var d = byKey[String(p.key || '').toLowerCase()];
             var typ = d ? (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === d.dayType; })[0] || {}) : null;
             var typeTxt = typ ? (window._currentLang === 'en' ? typ.en : typ.ko) : '';
             // ⚠️ AI 정리본이 있으면 그걸 보여준다 — 사람이 마지막으로 고친 글이 곧 보고 내용이다.
-            var done = d ? (String(d.aiDone || '').trim() || (d.items || []).map(itemLine).join('\n')) : '';
+            var done = d ? itemsCell(d) : '';
             var td = 'padding:7px 9px; border:1px solid #e3e6ea; vertical-align:top; font-size:12px;';
             var dbl = ' ondblclick="window._dailyRowDbl(\'' + esc(String(p.key || '')) + '\')"'
                     + ' title="' + esc(T('더블클릭하면 내 보고 쓰기가 열립니다', 'Double-click to open your report')) + '"';
@@ -1990,15 +2104,17 @@
             }
             return '<tr style="cursor:pointer;"' + dbl + '><td style="' + td + ' white-space:nowrap; font-weight:bold;">' + esc(p.name || p.key) + '</td>' +
                    '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
-                   '<td style="' + td + ' white-space:pre-line;">' + esc(done || '-') + dayChips(d) + '</td>' +
+                   '<td style="' + td + '">' + (done || '-') + dayChips(d) + '</td>' +
                    '<td style="' + td + ' white-space:pre-line;">' + esc(d.next || '-') + '</td>' +
                    '<td style="' + td + ' white-space:pre-line;' + (d.issue ? ' background:#fffaf0;' : '') + '">' + esc(d.issue || '-') + '</td></tr>';
         }).join('');
 
         var written = people.filter(function (p) { return byKey[String(p.key || '').toLowerCase()]; }).length;
         box.innerHTML =
+          filterBar(allPeople, docs) +
           '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' +
             esc(T('작성 ', 'Written ')) + '<b>' + written + '</b> / ' + people.length +
+            ((F.who || F.proj || F.cat) ? ' <span style="color:#1971c2;">' + esc(T('(필터 적용 중)', '(filtered)')) + '</span>' : '') +
             (roster && roster.length ? '' : ' <span style="color:#b1432f;">' + esc(T('(명단 파일이 없어 쓴 사람만 보입니다)', '(no roster file — showing authors only)')) + '</span>') +
           '</div>' +
           '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
