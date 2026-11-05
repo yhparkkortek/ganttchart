@@ -129,6 +129,16 @@
         ok('남은 건 레벨1 두 건', vis2.every(function (r) { return r._level === 1; }));
         window.bomToggleLevel(2);
 
+        sec('[4b] 백엔드가 SAP에서 직접 읽어 온 정렬 기준');
+        // sap_bridge_32.py `_sap_read_alv_sort`가 계층이 깨졌을 때만 채워 준다.
+        put(ps, { sortInfo: ['SELTEXT=구성부품내역 / DOWN=X'] });
+        ok('무엇으로 정렬됐는지 화면에 적는다', metaTxt().indexOf('SELTEXT=구성부품내역') !== -1,
+            metaTxt().slice(0, 240));
+        ok('추측 문구와 실측 문구가 같이 뜬다(둘을 섞지 않는다)',
+            metaTxt().indexOf('걸린 정렬') !== -1 && metaTxt().indexOf('상·하위 관계를 복원할 수 없') !== -1);
+        put(ps, {});   // 구버전 백엔드 = sortInfo 없음
+        ok('정렬을 못 읽었으면 그 줄을 안 띄운다', metaTxt().indexOf('걸린 정렬') === -1);
+
         sec('[5] 설치지점(EBORT) 연속 행이 주인을 못 찾은 경우');
         put(ps, { locOverflow: 3 });
         ok('메인 탭도 그 사실을 말한다(전엔 저장조차 안 했다)', metaTxt().indexOf('설치지점 3건') !== -1,

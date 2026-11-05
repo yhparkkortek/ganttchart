@@ -1176,6 +1176,183 @@ def _sap_select_alv_layout(session, grid, variant_name):
         return False, 'doubleclick_failed'
 
 
+# ── 🆕 [2026-11-05] 계층 판정 + 레이아웃에 걸린 "정렬 순서" 읽기(읽기 전용) ─────────
+#
+# 왜 필요했나: ALV에 정렬이 걸리면 BOM이 깊이 우선 순서를 잃어 **모자 관계를 복원할 수 없다**
+# (프런트 `_bomHierOk`가 감지해 레벨 블록으로만 그린다). 그런데 "정렬이 걸린 것 같다"까지가
+# 추측이라, 사람이 SAP에서 **무엇을** 고쳐야 하는지 알 수 없었다 — 2026-11-05 제보(자재
+# 502627)에서는 레이아웃이 `/KTK_LOC`로 제대로 적용됐는데도 결과가 구성부품내역 내림차순이라,
+# 화면에 찍힌 행 순서를 사람이 눈으로 되짚어 정렬 키를 추론해야 했다.
+# → 계층이 깨졌을 때**만** 레이아웃 변경 다이얼로그를 열어 적용된 정렬을 읽어 함께 돌려준다.
+#
+# ⚠️ **읽기 전용이다.** 레이아웃 저장(F5)은 절대 누르지 않는다 — 이 레이아웃은 팀 공용 계정에
+#    **전역**으로 저장돼 있어서 여기서 뭘 저장하면 전원에게 반영된다(이번 사고의 원인이 그것).
+# ⚠️ 끝나면 반드시 팝업을 닫는다(취소). 모달이 남으면 그 뒤 wnd[0] 조작이 전부 막힌다
+#    (CLAUDE.md "코딩블록 팝업이 안 닫히면 wnd[0] 저장이 전부 막힘").
+# ⚠️ 여는 경로는 2026-10-27에 `/KTK_LOC`를 만들며 **라이브로 확인된 그 방법**이다:
+#    `grid.SelectContextMenuItemByText('레이아웃 변경...')`. (`ShowContextMenu()`는 COM 오류가
+#    났고, `&MB_VIEW`는 눌러도 팝업이 안 떴다 — docs/sap-lookup.md 2026-10-27절.)
+#    탭 이름과 그리드 이름은 **코드에 박지 않는다** — 탭은 '정렬/Sort'가 든 GuiTab을 트리에서
+#    찾고, 그리드는 실측으로 확인된 `cntlCONTAINER2_SORT`("적용된 정렬")를 쓴다.
+# ⚠️⚠️ `CONTAINER1_SORT`(고를 수 있는 열 목록)를 집으면 **전체 열이 정렬 기준인 것처럼** 보고하게
+#    된다. 그래서 2번 컨테이너를 못 찾으면 **추측하지 않고 진단만 돌려준다**(틀린 정보 < 정보 없음).
+_ALV_LAYOUT_MENU_LABELS = ['레이아웃 변경...', '레이아웃 변경…', '레이아웃 변경',
+                           'Change Layout...', 'Change layout...', 'Change Layout']
+_ALV_SORT_TAB_WORDS = ['정렬', 'sort']
+_ALV_SORT_ROW_CAP = 10          # 정렬 키가 10개를 넘을 일은 없다(넘으면 그만큼만 보고)
+
+
+def _bom_hierarchy_ok_from_text(body):
+    """그리드 덤프 텍스트에서 BOM 계층(모자 관계)이 성립하는지 판정한다.
+    반환: True(정상) | False(정렬 등으로 깨짐) | None(STUFE 열이 없어 판단 불가).
+    ⚠️ 판정 규칙은 프런트 `window._bomHierarchyOk`(js/38)와 **같아야 한다** — 둘이 달라지면
+       화면은 경고하는데 백엔드는 정렬을 안 읽는(또는 그 반대) 상태가 된다.
+       규칙: ① 첫 데이터가 레벨1 ② 레벨이 한 번에 2 이상 깊어지지 않는다."""
+    lines = [l for l in str(body or '').split(chr(10)) if l.strip()]
+    tab = chr(9)
+    i_stufe, start = None, 0
+    for idx, line in enumerate(lines):
+        if tab not in line:
+            continue
+        cells = [c.strip() for c in line.split(tab)]
+        if 'STUFE' in cells:
+            i_stufe, start = cells.index('STUFE'), idx + 1
+            break
+    if i_stufe is None:
+        return None
+    first_level, ok, prev = 0, True, 0
+    for line in lines[start:]:
+        # ⚠️ 탭이 없는 줄은 데이터 행이 아니다 — `_sap_dump_grid`가 끝에 붙이는
+        #    "... (총 722행 중 500행만 표시)" 같은 안내 줄이다. 걸러내지 않으면 그 안의
+        #    숫자(722)를 레벨로 읽어 **멀쩡한 BOM을 "계층 깨짐"으로 신고한다**(하네스가 잡음).
+        if tab not in line:
+            continue
+        cells = line.split(tab)
+        if i_stufe >= len(cells):
+            continue
+        m = re.search(r'([0-9]+)', cells[i_stufe])
+        if not m:
+            continue                      # 모체 자재·단위별 합계·설치지점 연속 행
+        lv = int(m.group(1))
+        if not first_level:
+            first_level = lv
+            if lv != 1:
+                ok = False
+        elif lv > prev + 1:
+            ok = False
+        prev = lv
+    return ok
+
+
+def _find_tab_by_text(container, words, depth=0, max_depth=12):
+    """팝업 트리에서 탭 라벨에 `words` 중 하나가 들어 있는 GuiTab을 찾는다(언어 무관하게)."""
+    if depth > max_depth:
+        return None
+    try:
+        if getattr(container, 'Type', None) == 'GuiTab':
+            txt = str(getattr(container, 'Text', '') or '').lower()
+            if any(w.lower() in txt for w in words):
+                return container
+    except Exception:
+        pass
+    try:
+        children = container.Children
+    except Exception:
+        return None
+    if children is None:
+        return None
+    for i in range(children.Count):
+        try:
+            child = children.Item(i)
+        except Exception:
+            continue
+        found = _find_tab_by_text(child, words, depth + 1, max_depth)
+        if found is not None:
+            return found
+    return None
+
+
+def _alv_sort_entries(shell):
+    """"적용된 정렬" 그리드를 **있는 그대로** 읽어 사람이 읽을 수 있는 줄로 만든다.
+    컬럼 이름을 모르므로(릴리스·언어마다 다르다) `열이름=값`으로 적는다 — 보통
+    `SELTEXT=구성부품내역 / DOWN=X`(내림차순) 같은 모양이 된다. 빈 칸은 버린다."""
+    try:
+        cols = list(shell.ColumnOrder)
+    except Exception:
+        cols = []
+    try:
+        n = min(int(shell.RowCount), _ALV_SORT_ROW_CAP)
+    except Exception:
+        n = 0
+    out = []
+    for r in range(n):
+        parts = []
+        for cid in cols:
+            try:
+                v = str(shell.GetCellValue(r, cid) or '').strip()
+            except Exception:
+                v = ''
+            if v:
+                parts.append(str(cid) + '=' + v)
+        if parts:
+            out.append(' / '.join(parts))
+    return out
+
+
+def _sap_read_alv_sort(session, grid):
+    """ALV 레이아웃에 **적용돼 있는 정렬**을 읽는다(읽기 전용, 위 블록 주석 참고).
+    반환: `(정렬줄 리스트 | None, 진단문자열)`. 예외를 던지지 않는다 — 이 함수는 조회가
+    이미 끝난 뒤 "왜 뒤섞였나"를 덧붙이는 용도라, 실패해도 조회 결과를 막으면 안 된다."""
+    entries, diag, opened = None, '', False
+    try:
+        for label in _ALV_LAYOUT_MENU_LABELS:
+            try:
+                grid.SelectContextMenuItemByText(label)
+                opened = True
+                break
+            except Exception:
+                continue
+        if not opened:
+            return None, 'menu_not_found'
+        time.sleep(0.4)                      # 다이얼로그가 뜰 시간
+        try:
+            popup = session.findById('wnd[1]')
+        except Exception:
+            return None, 'no_popup'
+        tab = _find_tab_by_text(popup, _ALV_SORT_TAB_WORDS)
+        if tab is None:
+            diag = 'no_sort_tab'
+        else:
+            try:
+                tab.Select()
+                time.sleep(0.3)              # 탭 전환 후 컨테이너가 트리에 나타날 시간
+                popup = session.findById('wnd[1]')
+            except Exception as e:
+                diag = 'tab_select_failed:' + str(e)
+        shell = _find_by_id_substring(popup, 'CONTAINER2_SORT', require_type='GuiShell')
+        if shell is None:
+            return None, (diag or 'no_sort_grid')
+        entries = _alv_sort_entries(shell)
+        return entries, diag
+    except Exception as e:
+        return None, 'error:' + str(e)
+    finally:
+        # 취소로 닫는다 — **저장 버튼은 누르지 않는다.** 남아 있으면 다음 조회가 전부 막힌다.
+        for _ in range(3):
+            try:
+                session.findById('wnd[1]')
+            except Exception:
+                break                        # 더 이상 팝업 없음 = 정상
+            try:
+                session.findById('wnd[1]').sendVKey(12)   # F12 = 취소
+                time.sleep(0.2)
+            except Exception:
+                try:
+                    session.findById('wnd[1]').close()
+                except Exception:
+                    break
+
+
 def _navigate_to_bom_screen(session, wnd, materials, plant='1000', use_single_tcode=None,
                              explosion='single', show_price=False, show_location=False):
     """ZPP038("BOM 전개 (Multiple)", 복수 자재) 또는 ZPP033("BOM 전개", 단일 자재 전용)로
@@ -1361,6 +1538,20 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     _stage('bom_dump')
     body, source = _sap_dump_screen_body(wnd)
 
+    # 🆕 [2026-11-05] 계층이 깨졌으면(= ALV에 정렬이 걸렸으면) **그때만** 레이아웃의 정렬을 읽어
+    #    함께 돌려준다. 정상 조회에는 비용이 0이다(계층 판정은 이미 받아온 텍스트만 본다).
+    #    덤프가 끝난 뒤에 하므로, 이 단계가 실패해도 조회 결과는 그대로 살아 있다.
+    hierarchy_ok = _bom_hierarchy_ok_from_text(body) if source == 'grid' else None
+    sort_entries, sort_diag = None, ''
+    if hierarchy_ok is False:
+        _stage('bom_sort_probe')
+        _grid_for_sort = _sap_find_grid(wnd)
+        if _grid_for_sort is None:
+            sort_diag = 'no_grid'
+        else:
+            sort_entries, sort_diag = _sap_read_alv_sort(session, _grid_for_sort)
+        wnd = session.findById('wnd[0]')  # 팝업을 열었다 닫았으므로 참조 갱신
+
     mat_label = ', '.join(materials) if isinstance(materials, (list, tuple)) else str(materials)
     tcode_label = 'ZPP033' if used_single else 'ZPP038'
 
@@ -1375,9 +1566,19 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
         header += f'[레이아웃: "{layout_variant}" 적용됨]\n'
     elif layout_applied is False:
         header += f'[레이아웃: "{layout_variant}" 적용 실패({layout_diag}) — 화면 기본값 사용]\n'
+    # 🆕 [2026-11-05] 계층이 깨졌다는 사실과 그 원인(레이아웃에 걸린 정렬)을 결과 텍스트에도 남긴다 —
+    #    AI 문답처럼 `text`만 읽는 경로도 "이 표는 모자 관계를 믿으면 안 된다"를 알 수 있어야 한다.
+    if hierarchy_ok is False:
+        if sort_entries:
+            header += '[⚠️ 계층 깨짐: ALV에 정렬이 걸려 있어 상·하위 관계를 복원할 수 없습니다 — '
+            header += '적용된 정렬: ' + ' ; '.join(sort_entries) + ']\n'
+        else:
+            header += ('[⚠️ 계층 깨짐: 결과가 정렬된 순서로 와서 상·하위 관계를 복원할 수 없습니다'
+                       + (' (정렬 읽기 실패: ' + sort_diag + ')' if sort_diag else '') + ']\n')
     text = header + '\n' + body
     return {'ok': True, 'source': source, 'materials': materials, 'tcode': tcode_label, 'text': text,
-            'layoutApplied': layout_applied, 'layoutRequested': layout_variant, 'layoutDiag': layout_diag}
+            'layoutApplied': layout_applied, 'layoutRequested': layout_variant, 'layoutDiag': layout_diag,
+            'hierarchyOk': hierarchy_ok, 'sortInfo': sort_entries, 'sortDiag': sort_diag}
 
 
 # ── "사용처 조회(역전개)" (CS15) 전용 헬퍼 ─────────────────────────────

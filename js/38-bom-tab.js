@@ -496,6 +496,9 @@
                 hierarchyOk: parsed.hierarchyOk,
                 locOverflow: parsed.locOverflow || 0,
                 layoutDiag: data.layoutDiag || '',
+                // 계층이 깨졌을 때 백엔드가 SAP 레이아웃에서 **직접 읽어 온** 정렬 기준
+                // (sap_bridge_32.py `_sap_read_alv_sort`). 정상 조회에선 null이다.
+                sortInfo: data.sortInfo || null, sortDiag: data.sortDiag || '',
                 tcode: data.tcode || '', fetchedAt: new Date().toISOString(),
                 cols: parsed.cols, parent: parsed.parent, rows: parsed.rows, totals: parsed.totals,
                 truncated: parsed.truncated, totalRows: parsed.totalRows,
@@ -1053,6 +1056,16 @@
             //    레이아웃은 **계정 기준으로 SAP에 저장된 상태**이고, 누가 그 레이아웃에 정렬을 넣으면
             //    다음 조회부터 모두에게 그대로 반영된다(docs/sap-lookup.md "/KTK_LOC 레이아웃 신설").
             var _lay = st.layout || '/KTK_LOC';
+            // 🆕 [2026-11-05] 백엔드가 SAP 레이아웃에서 직접 읽어 온 정렬 기준이 있으면 **그걸 보여준다** —
+            //    없으면(구버전 백엔드·읽기 실패) 아래 추측 문구만 나온다. 추측과 실측을 섞지 말 것.
+            if (st.sortInfo && st.sortInfo.length) {
+                html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
+                    + _esc(_t('SAP 레이아웃 "' + _lay + '"에 걸린 정렬: ', 'Sort applied in SAP layout "' + _lay + '": '))
+                    + '<b>' + _esc(st.sortInfo.join(' ; ')) + '</b>'
+                    + _esc(_t(' — 이걸 지워야 상·하위 관계가 돌아옵니다([레이아웃 변경…] ▸ "정렬 순서" 탭 비우고 같은 이름으로 저장).',
+                        ' — clear it to restore the hierarchy ([Change Layout…] ▸ "Sort Order", then save under the same name).'))
+                    + '</div>';
+            }
             html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
                 + _esc(_t('SAP 결과가 정렬된 상태로 와서 상·하위 관계를 복원할 수 없어 레벨별로만 묶었습니다'
                         + '. 레이아웃 "' + _lay + '"에 정렬이 걸렸을 수 있습니다 — 팀 공용 SAP 계정이라 누가 레이아웃을 바꾸면 모두에게 반영됩니다. '
