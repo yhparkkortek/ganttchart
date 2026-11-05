@@ -759,6 +759,20 @@
                 document.getElementById('naslogin-https').checked = !!s.https;
                 document.getElementById('naslogin-user').value = s.user || '';
                 if (pwEl) pwEl.placeholder = T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
+            } else {
+                // 🔑 [2026-11-05] 아직 설정 전인 PC(=팀원의 새 PC)는 **팀 공용 기본값**으로 주소를 채운다.
+                //    백엔드 `/nas/status` 가 바로 이걸 쓰라고 `defaults` 를 같이 내려보내는데(그쪽 주석)
+                //    여기서 안 읽고 있었다 — 그래서 팀원 화면은 주소가 **빈 칸**이었고, 사람이 사내 IP 를
+                //    손으로 쳤다. 오타 한 번이 곧 로그인 실패이고, 실패가 쌓이면 **그 PC 의 IP 가 차단**된다.
+                //    (간편 전환 쪽은 이미 이렇게 하고 있다 — 두 칸이 서로 다르게 동작하고 있었던 것.)
+                var d0 = s.defaults || {};
+                if (d0.host) {
+                    var hEl = document.getElementById('naslogin-host');
+                    var ptEl = document.getElementById('naslogin-port');
+                    if (hEl && !hEl.value) hEl.value = d0.host;
+                    if (ptEl && !ptEl.value && d0.port) ptEl.value = d0.port;
+                    if (d0.https !== undefined) document.getElementById('naslogin-https').checked = !!d0.https;
+                }
             }
             // 앱 폴더는 따로 묻는다 — 로그인은 됐는데 폴더만 안 정해진 상태가 흔하다.
             var p = await nasApi('/nas/paths');
@@ -811,14 +825,67 @@
             document.getElementById('naslogin-pw').value = '';
             // 저장 직후 **딱 한 번** 접속해 본다. 실패하면 백엔드가 잠그고 다시 안 한다.
             var lg = await nasApi('/nas/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            // 🗂 [2026-11-05 사용자 지적 "여기에만 저장하면 접속도 돼야 하는 거 아닌가"]
+            //    맞다 — 로그인은 여기서 된다. 그런데 **앱 폴더(root)** 는 이 칸이 건드리지 않아서,
+            //    팀원의 새 PC 는 "🗄️ 는 뜨는데 프로젝트가 안 열린다" 로 끝났다(간편 전환만 폴더까지 맞춘다).
+            //    팀 공용 기본값에 폴더가 적혀 있으면 **비어 있을 때만** 여기서 같이 맞춘다.
+            //    ⚠️ 실패를 삼키지 않는다 — 권한이 없으면 `set_roots` 의 `ensure_folder` 가 정직하게 실패하고,
+            //       그 문구("ACL 거부" 등)가 곧 "NAS 에서 이 팀원에게 폴더 권한을 줘야 한다"는 신호다.
+            var autoRoot = '', rootErr = '';
+            if (lg.ok) {
+                try {
+                    var p0 = await nasApi('/nas/paths');
+                    if (!(p0 && p0.root)) {
+                        var s0 = await nasApi('/nas/status');
+                        var dRoot = ((s0 && s0.defaults) || {}).root || '';
+                        if (dRoot) {
+                            var rr = await nasApi('/nas/root', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ root: dRoot })
+                            });
+                            if (rr && rr.ok) autoRoot = dRoot;
+                            else rootErr = (rr && rr.message) || '';
+                        }
+                    }
+                } catch (e) { rootErr = (e && e.message) ? e.message : String(e); }
+            }
+            // 🗂 [2026-11-05 팀원 PC 신고 "프로젝트 파일은 불러오는데 다른 NAS 파일은 접속 못함"]
+            //    프로젝트 파일(/nas/app/* · DSM API)과 사양서·도면·자료실(/doc/* · 윈도 SMB UNC)은
+            //    **다른 길**이라, 계정만 저장한 PC 는 앞은 되고 뒤는 경로가 빈 채로 남았다.
+            //    자료실 경로까지 여기서 같이 맞춘다 — 이미 닿고 있으면 백엔드가 그냥 둔다.
+            var docRoot = '', docErr = '';
+            if (lg.ok) {
+                try {
+                    var dr = await nasApi('/nas/docroot-auto', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                    });
+                    if (dr && dr.ok && dr.changed) docRoot = dr.root || '';
+                    else if (dr && !dr.ok) docErr = dr.message || '';
+                } catch (e) { docErr = (e && e.message) ? e.message : String(e); }
+            }
             await window._nasLoginRefresh();
             if (lg.ok) {
                 // 앱 폴더가 이미 정해져 있는데 "골라주세요"라고 하면 사람이 뭘 더 해야 하나 싶어진다.
                 // 안내는 **정말 비어 있을 때만** 한다.
                 var needRoot = !document.getElementById('naslogin-root').value.trim();
                 nasStatus('✅ ' + T('접속됐습니다.', 'Connected.')
-                          + (needRoot ? (' ' + T('이제 <b>📂 찾기</b>로 앱 폴더를 골라주세요.',
-                                                 'Now pick the app folder with <b>📂 Browse</b>.')) : ''), 'ok');
+                          + (autoRoot ? ('<br>' + T('앱 폴더도 팀 공용 기본값으로 맞췄습니다: ', 'App folder set from the team default: ')
+                                         + '<b>' + esc(autoRoot) + '</b>') : '')
+                          + (rootErr ? ('<br>⚠️ ' + T('앱 폴더를 맞추지 못했습니다: ', 'Could not set the app folder: ')
+                                        + esc(rootErr)
+                                        + '<br>' + T('NAS 에서 이 계정에 그 폴더 권한이 있는지 확인해주세요.',
+                                                     'Check that this account has permission on that folder.')) : '')
+                          + (docRoot ? ('<br>' + T('문서 저장소(사양서·도면)도 맞췄습니다: ', 'Document store set too: ')
+                                        + '<b>' + esc(docRoot) + '</b>') : '')
+                          + (docErr ? ('<br>⚠️ ' + T('문서 저장소(사양서·도면·자료실)는 아직 못 씁니다: ',
+                                                     'The document store is not reachable yet: ') + esc(docErr)
+                                       + '<br>' + T('프로젝트 파일과는 <b>다른 길</b>입니다 — 탐색기에서 그 공유 폴더를 한 번 열어 '
+                                                    + '계정을 입력(자격 증명 기억)한 뒤 다시 저장해주세요.',
+                                                    'It is a <b>different path</b> from project files — open the share once in Explorer, '
+                                                    + 'sign in (remember credentials), then save again.')) : '')
+                          + (needRoot && !rootErr ? (' ' + T('이제 <b>📂 찾기</b>로 앱 폴더를 골라주세요.',
+                                                 'Now pick the app folder with <b>📂 Browse</b>.')) : ''),
+                          (rootErr || docErr) ? 'err' : 'ok');
             } else {
                 nasStatus('❌ ' + esc(lg.message || T('접속하지 못했습니다.', 'Could not connect.'))
                           + '<br>' + T('⚠️ 다시 시도하지 않습니다 — 아이디·비밀번호를 고쳐 <b>다시 저장</b>해주세요.',

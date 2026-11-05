@@ -5983,6 +5983,65 @@ def nas_root_set():
 NAS_DOCSTORE_FOLDER = '개발자료실'
 
 
+def _docstore_autoconfig(nas, root, doc_root=''):
+    """앱 폴더에서 **문서 저장소(UNC)** 경로를 만들어 저장한다. → (ok, doc_root, message)
+
+    🗂 [2026-11-05] 왜 함수로 뺐나 — 팀원 PC 신고: "프로젝트 파일은 불러오는데 다른 NAS
+       파일은 접속 못함". 둘은 **완전히 다른 길**이다:
+         · 프로젝트 파일 = `/nas/app/*` → DSM REST API(HTTPS) → NAS 로그인만 되면 된다
+         · 사양서·도면·자료실 = `/doc/*` → **윈도가 직접 읽는 SMB UNC** → 이 설정이 따로 필요
+       그런데 이 4단계를 `🚀 간편 전환`(`/nas/setup`)만 밟고 있었다. 🔑 로그인 칸에서
+       계정만 저장한 PC 는 DSM 은 붙고 자료실은 **경로가 빈 채로** 남는다 → 정확히 그 증상.
+       → 두 입구가 **같은 함수**를 쓰게 한다(두 벌로 두면 또 갈라진다).
+    ⚠️ 실패해도 NAS 전환 자체는 성공으로 본다 — 앱 데이터는 이미 NAS 를 보고 있고,
+       자료실만 못 닿는 상태는 나중에 따로 고칠 수 있다(둘은 다른 설정이다).
+    """
+    doc_root = str(doc_root or '').strip()
+    if not doc_root and root:
+        doc_root = nas.unc_of(str(root).rstrip('/') + '/' + NAS_DOCSTORE_FOLDER)
+    if not doc_root:
+        return False, '', '앱 폴더가 정해져 있지 않아 자료실 경로를 만들지 못했습니다.'
+    okp, perr = _docstore_probe_root(doc_root)
+    if not okp:
+        return False, doc_root, perr or '자료실 경로에 닿지 못했습니다.'
+    cfg0 = _docstore_load()
+    try:
+        with open(DOCSTORE_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump({'root': doc_root, 'folders': cfg0['folders']}, f,
+                      ensure_ascii=False, indent=2)
+    except Exception as e:
+        return False, doc_root, f'설정 저장 실패: {e}'
+    _DOCSTORE_AUTH_BLOCK['code'] = 0
+    _DOCSTORE_AUTH_BLOCK['message'] = ''
+    return True, doc_root, doc_root
+
+
+@app.route('/nas/docroot-auto', methods=['POST'])
+def nas_docroot_auto():
+    """앱 폴더 밑의 자료실 경로를 자동으로 맞춘다 — 🔑 로그인 저장이 부른다.
+
+    이미 닿고 있으면 **아무것도 하지 않는다**(`changed:false`) — 사람이 손으로 정해 둔
+    경로를 덮어쓰면 안 된다.
+    """
+    try:
+        nas = _nas()
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'nas_dsm 로드 실패: {e}'}), 500
+    req = request.get_json(force=True, silent=True) or {}
+    cur = _docstore_load()
+    if cur['root'] and not req.get('force'):
+        okp, _perr = _docstore_probe_root(cur['root'])
+        if okp:
+            return jsonify({'ok': True, 'root': cur['root'], 'changed': False})
+    try:
+        root, _team = nas.roots()
+    except Exception as e:
+        return jsonify({'ok': False, 'changed': False, 'message': str(e)})
+    okd, doc_root, msg = _docstore_autoconfig(nas, root, req.get('docRoot') or '')
+    return jsonify({'ok': bool(okd), 'root': doc_root, 'changed': bool(okd),
+                    'message': '' if okd else msg})
+
+
 @app.route('/nas/setup', methods=['POST'])
 def nas_setup():
     """🚀 간편 전환 — **아이디·비밀번호만** 받고 나머지는 서버가 정한다. (2026-11-04)
@@ -6073,24 +6132,12 @@ def nas_setup():
     # 4) 문서 저장소(사양서·도면) — 윈도가 직접 읽는 UNC 경로. 앱 폴더에서 만들어 쓴다.
     #    ⚠️ 여기서 실패해도 전환은 성공으로 본다 — 앱 데이터는 이미 NAS 를 보고 있고,
     #       자료실만 못 닿는 상태는 사람이 나중에 고칠 수 있다(둘은 다른 설정이다).
-    doc_root = str(req.get('docRoot') or _dflt.get('docRoot') or '').strip()
-    if not doc_root:
-        doc_root = nas.unc_of(root.rstrip('/') + '/' + NAS_DOCSTORE_FOLDER)
+    #    ⚠️ 🔑 로그인 저장(`/nas/docroot-auto`)과 **같은 함수**를 쓴다 — 두 벌로 두면
+    #       "간편 전환으로는 되는데 로그인만 저장하면 자료실이 안 된다"가 다시 생긴다.
+    okd, doc_root, dmsg = _docstore_autoconfig(
+        nas, root, str(req.get('docRoot') or _dflt.get('docRoot') or '').strip())
     if doc_root:
-        okp, perr = _docstore_probe_root(doc_root)
-        if okp:
-            cfg0 = _docstore_load()
-            try:
-                with open(DOCSTORE_CONFIG_FILE, 'w', encoding='utf-8') as f:
-                    json.dump({'root': doc_root, 'folders': cfg0['folders']}, f,
-                              ensure_ascii=False, indent=2)
-                _DOCSTORE_AUTH_BLOCK['code'] = 0
-                _DOCSTORE_AUTH_BLOCK['message'] = ''
-                step('docstore', True, doc_root)
-            except Exception as e:
-                step('docstore', False, f'설정 저장 실패: {e}', root=doc_root)
-        else:
-            step('docstore', False, perr or '', root=doc_root)
+        step('docstore', okd, dmsg, root=doc_root)
 
     return jsonify({'ok': True, 'steps': steps, 'root': root,
                     'docRoot': doc_root, 'user': user,
