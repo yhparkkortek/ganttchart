@@ -236,19 +236,11 @@
         const row = globalData[rowIndex];
         if (!row) return;
         row._wbsCollapsed = !row._wbsCollapsed;
-        const tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
-        const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
-        if (arrow) {
-            arrow.textContent = row._wbsCollapsed ? '▶' : '▼';
-            if (arrow.parentElement) arrow.parentElement.title = row._wbsCollapsed
-                ? (window._currentLang === 'en' ? 'Expand one level' : '한 단계 펼치기')
-                : (window._currentLang === 'en' ? 'Collapse' : '접기');
-        }
-        // 🔢 [2026-10-29] 오른쪽 끝 "가지 전체 펼치기" 삼각형(이 행 자신의 _wbsCollapsed로 판정됨)을
-        //    같이 갱신 — renderTable() 전체 재호출 없이 이 가벼운 경로에서 바로 반영한다
-        //    (toggleWbsBranchFull처럼 renderTable()을 부르면 느려짐, 2026-10-28 설계 유지). 하위 개수
-        //    배지(wbs-hidden-count)는 펼침 상태와 무관한 상시 표시라(2026-10-29 변경) 여기서 안 건드림.
-        window._wbsSyncRowRightIcons(rowIndex, tr);
+        // 🔢 [2026-10-29] 오른쪽 끝 "가지 전체 펼치기" 삼각형도 같이 갱신 — renderTable() 전체 재호출
+        //    없이 이 가벼운 경로에서 바로 반영한다. 하위 개수 배지(wbs-hidden-count)는 펼침 상태와
+        //    무관한 상시 표시라(2026-10-29 변경) 안 건드림.
+        //    [2026-11-05] 세 곳이 복사해 갖고 있던 DOM 손질을 _wbsSyncRowArrows 하나로 모았다.
+        window._wbsSyncRowArrows(rowIndex, row._wbsCollapsed);
         applyFilters();
     };
 
@@ -275,11 +267,10 @@
     // 🔁 [2026-10-29 신규] toggleWbsCollapse·wrToggleAllWbsCollapse가 공유하는 "이 행의 오른쪽 끝 가지
     //    전체 펼치기 삼각형(▲/▼)을 현재 _wbsCollapsed 상태에 맞게 갱신" — 한 곳에서만 고치면 둘 다
     //    따라오게. 하위 개수 배지는 상시 표시라 여기서 손 안 댐(위 _wbsDescendantCount 주석 참고).
+    //    [2026-11-05] 실제 손질은 _wbsSyncRowArrows 가 한다 — 두 벌로 두면 한쪽만 고치는 사고가 난다.
     window._wbsSyncRowRightIcons = function(rowIndex, tr) {
-        tr = tr || document.querySelector(`tr[data-row-index="${rowIndex}"]`);
-        if (!tr) return;
-        const branchArrow = tr.querySelector('.wbs-branch-arrow');
-        if (branchArrow) branchArrow.textContent = window._wbsIsBranchFullyExpanded(rowIndex) ? '▲' : '▼';
+        const row = globalData[rowIndex];
+        if (row) window._wbsSyncRowArrows(rowIndex, !!row._wbsCollapsed);
     };
 
     // 🌳 [2026-10-28 신규 → 같은 날 더블클릭 폐기 후 재설계] 이 가지(이 행 + 모든 하위 레벨)가 끝까지
@@ -303,8 +294,14 @@
     //    레벨)를 한 번에 끝까지 펼치거나, 끝까지 펼쳐진 상태면 다시 이 행 하나만 남기고 접는다.
     //    더블클릭 방식(화살표 위에 올려서 클릭 두 번)은 히트존을 넓혀도 실사용에서 여전히 글자수정
     //    으로 새는 사례가 있어 포기 — 전용 아이콘을 셀 오른쪽에 별도 배치해 단일클릭으로 분리했다.
-    //    renderTable() 전체를 다시 그리는 이유: 이 행 하위 전부(및 그 각각의 ▼/▲ 아이콘 표시)가 한꺼번에
-    //    바뀌는 드문 명시적 조작이라 pin/status처럼 매 클릭 핫패스가 아님(c8edee5·9bb25ca와 다른 경우).
+    //    ⚡⚡ [2026-11-05, 실사용 신고 "펼치고 접는 게 느리다"] **renderTable()을 더 이상 안 부른다.**
+    //       실측(LNW_STELLAR32 906행 전부 펼침): 이 클릭 한 번이 1.4~3.8초였고 그 전부가 renderTable
+    //       (표 8.7MB를 통째로 다시 만들고 파싱·레이아웃)이었다. 정작 바뀌는 건 **이 가지 안 그룹 행의
+    //       화살표 두 개**뿐이고, 숨었다 나타나는 행은 어차피 applyFilters()가 자리표시(<tr data-lazy>)를
+    //       그때 채운다(_ganttHydrateRow). toggleWbsCollapse(한 행 버전)가 이미 쓰던 그 가벼운 길이다.
+    //       ⚠️ 결과 상태를 **알고 있으니** _wbsIsBranchFullyExpanded()를 행마다 다시 묻지 않는다 —
+    //          전부 펼치면 이 가지의 모든 그룹이 '▲', 전부 접으면 전부 '▼'다(그 판정은 하위를 훑어
+    //          O(n)이라, 그룹마다 부르면 가지 크기의 제곱이 된다).
     window.toggleWbsBranchFull = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
         const row = globalData[rowIndex];
@@ -312,15 +309,38 @@
         const parentLevel = row._level || 0;
         const expand = !window._wbsIsBranchFullyExpanded(rowIndex);
         row._wbsCollapsed = !expand;
+        window._wbsSyncRowArrows(rowIndex, !expand, expand);
         for (let i = rowIndex + 1; i < globalData.length; i++) {
             const child = globalData[i];
             if (!child) continue;
             if ((child._level || 0) <= parentLevel) break;
             const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (child._level || 0));
-            if (hasChildren) child._wbsCollapsed = !expand;
+            if (hasChildren) { child._wbsCollapsed = !expand; window._wbsSyncRowArrows(i, !expand, expand); }
         }
-        renderTable(globalData);
         applyFilters();
+    };
+
+    // 🔁 [2026-11-05] "이 행의 접기 화살표(▶/▼)와 가지 전체 화살표(▲/▼)를 지금 상태에 맞춘다" —
+    //    toggleWbsCollapse·toggleWbsBranchFull·wrToggleAllWbsCollapse 세 곳이 각자 복사해 갖고 있던
+    //    DOM 손질을 한 군데로 모은 것. renderTable() 없이 화면을 맞추는 길이라 **여기가 곧 성능**이다.
+    //    branchExpanded 를 주지 않으면 그때 _wbsIsBranchFullyExpanded 로 판정한다(한 행 토글용).
+    //    ⚠️ 자리표시 행(<tr data-lazy>)엔 화살표가 없다 — 보이게 될 때 최신 globalData 로 새로 그려지므로
+    //       여기서 못 찾는 건 고장이 아니다.
+    window._wbsSyncRowArrows = function(rowIndex, collapsed, branchExpanded) {
+        const tr = document.querySelector(`#table-body tr[data-row-index="${rowIndex}"]`);
+        if (!tr) return;
+        const arrow = tr.querySelector('.wbs-toggle-arrow');
+        if (arrow) {
+            arrow.textContent = collapsed ? '▶' : '▼';
+            if (arrow.parentElement) arrow.parentElement.title = collapsed
+                ? (window._currentLang === 'en' ? 'Expand one level' : '한 단계 펼치기')
+                : (window._currentLang === 'en' ? 'Collapse' : '접기');
+        }
+        const branchArrow = tr.querySelector('.wbs-branch-arrow');
+        if (branchArrow) {
+            const full = (branchExpanded === undefined) ? window._wbsIsBranchFullyExpanded(rowIndex) : !!branchExpanded;
+            branchArrow.textContent = full ? '▲' : '▼';
+        }
     };
 
     // 📂 [2026-10-28 신규] "개발업무(WBS)" 헤더 아이콘 — 행마다 화살표를 일일이 누르지 않고 전체를
@@ -331,7 +351,6 @@
     window.wrToggleAllWbsCollapse = function(ev) {
         if (ev) ev.stopPropagation();
         if (!globalData || globalData.length <= 1) return;
-        const _en = window._currentLang === 'en';
         let anyCollapsed = false;
         for (let i = 1; i < globalData.length; i++) {
             const row = globalData[i]; if (!row) continue;
@@ -345,13 +364,10 @@
             const hasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
             if (!hasChildren) continue;
             row._wbsCollapsed = newState; count++;
-            const tr = document.querySelector(`tr[data-row-index="${i}"]`);
-            const arrow = tr ? tr.querySelector('.wbs-toggle-arrow') : null;
-            if (arrow) {
-                arrow.textContent = newState ? '▶' : '▼';
-                if (arrow.parentElement) arrow.parentElement.title = newState ? (_en ? 'Expand' : '펼치기') : (_en ? 'Collapse' : '접기');
-            }
-            window._wbsSyncRowRightIcons(i, tr);  // 🔢 [2026-10-29] 가지 전체 펼치기 삼각형 + 숨은 자식 수 배지도 같이
+            // ⚡ [2026-11-05] 결과 상태를 아니까 _wbsIsBranchFullyExpanded 를 그룹마다 다시 묻지 않는다
+            //    (그 판정은 하위를 훑어 O(n) 이라 그룹 수 × 가지 크기로 불어난다). 전부 접으면 모든
+            //    가지가 "덜 펼쳐진" 상태(▼), 전부 펼치면 모두 ▲ 다.
+            window._wbsSyncRowArrows(i, newState, !newState);
         }
         // 헤더 아이콘 자체도 상태 반영: ▼(접힘 상태 — 누르면 전체 펼치기) / ▲(펼침 상태 — 누르면 전체 접기)
         const headerArrow = document.getElementById('wbs-th-arrow');

@@ -1790,6 +1790,7 @@
         //    패치 함수들은 이미 null 가드가 있고, 채울 때 항상 최신 globalData로 그리므로 어긋날 일이 없다.
         let _vis = null; // 판정 실패 시엔 예전처럼 전부 그린다(느릴 뿐 틀리지 않음)
         try { if (window._ganttComputeRowVisibility) _vis = window._ganttComputeRowVisibility(data); } catch (e) { console.error('[renderTable] 지연 렌더 판정 실패 — 전체 렌더로 대체:', e); }
+        const _RTH = _rtCtx(data);   // header/lang 의존 값은 렉더 당 한 번만
         let bodyHtml = '';
         let ganttZebraIdx = 0; // 💡 보이는 행 기준 줄무늬 카운터
         for(let i = 1; i < data.length; i++) {
@@ -1800,10 +1801,8 @@
             if (row._알림) trClass = trClass.replace('class="', 'class="alarm-on ');
             if (colIdx.status !== -1) {
                 const _rawSt = (row[colIdx.status] || '').toString().trim();
-                const _koMap = LANG['ko'].statusMap;
-                const _koKey = Object.keys(_koMap).find(k => k.toLowerCase() === _rawSt.toLowerCase());
                 // 항상 한글 기준값으로 정규화해서 판단 (드롭다운과 동일 기준)
-                const _normSt = (_koKey ? _koMap[_koKey] : _rawSt);
+                const _normSt = _RTH.koLower[_rawSt.toLowerCase()] || _rawSt;
                 if (_normSt === '완료') {
                     trClass = trClass.replace('class="', 'class="status-done ');
                 } else if (_normSt === '지연' || _normSt === '보류') {
@@ -1849,24 +1848,71 @@
 
     // ⚡ [2026-10-28] renderTable()의 한 행 셀 HTML — 최초 렌더와 지연 렌더(_ganttHydrateRow)가 반드시 같은
     //    결과를 내도록 한 곳에서만 만든다(예전엔 renderTable 루프 안에 그대로 있었음).
+    // ⚡⚡ [2026-11-05] 한 번의 renderTable 안에서 **행마다 똑같이 다시 만들던 것**을 한곳에 모아 둔다.
+    //    실측(LNW_STELLAR32 906행 전부 펼침): renderTable 한 번이 2.6~3.6초였고 그중 문자열을 만드는
+    //    JS 가 ~0.6초였는데, 그 안에서 열 이름 정규화(`data[0][c].toString().replace(/\s+/g,'')`)를
+    //    **칸마다** 다시 하고 있었다 — 열 40개면 한 번 렌더에 36,000번이다. 열 이름은 렌더 도중
+    //    바뀌지 않는다. 상태값 대소문자 조회(`Object.keys(statusMap).find(...)`)도 행마다 배열을
+    //    새로 만들고 있었다 → 소문자 색인을 한 번만 만든다.
+    //    ⚠️ 언어·헤더·담당구분 목록이 바뀌면 다시 만든다(`sig` 로 대조) — 캐시를 영구로 두면
+    //       언어를 바꿨는데 옛 라벨로 그리는 **조용한 오답**이 된다.
+    let _RT = null;
+    function _rtCtx(data) {
+        const header = (data && data[0]) || [];
+        const lang = window._currentLang || 'ko';
+        const sig = lang + '\u0002' + ((window.WBS_DISCIPLINE_CATEGORIES || []).length) + '\u0002' + header.join('\u0001');
+        if (_RT && _RT.sig === sig) return _RT;
+        const L = LANG[lang] || LANG['ko'];
+        const en = (lang === 'en');
+        const lower = (m) => { const o = {}; for (const k in m) o[k.toLowerCase()] = m[k]; return o; };
+        _RT = {
+            sig: sig, lang: L, en: en,
+            hidden: new Set([colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch,
+                colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage,
+                colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4,
+                colIdx.wbs, colIdx.answer]),
+            nonEditable: new Set([colIdx.no, colIdx.chart]),
+            colStrs: header.map(c => c ? c.toString().replace(/\s+/g, '').toLowerCase() : ''),
+            smLower: lower(L.statusMap || {}),
+            koLower: lower((LANG['ko'] || {}).statusMap || {}),
+            widest: window._wbsDisciplineWidest ? window._wbsDisciplineWidest() : '',
+            dragTitle: en ? 'Drag to reorder (within the same WBS level)' : '드래그해서 순서 바꾸기 (같은 WBS 레벨 안에서만)',
+            collapseTitle: en ? 'Collapse' : '접기',
+            expandTitle: en ? 'Expand one level' : '한 단계 펼치기',
+            discTitle: en ? 'Select discipline' : '담당구분 선택',
+            branchTitle: en ? 'Expand/collapse this branch fully' : '이 가지 전체 펼치기/접기',
+            descTitle: en ? 'Total child rows in this branch' : '이 가지의 전체 하위 업무 수',
+            srcStartTitle: en ? 'Earliest start among sub-tasks' : '하위 업무 중 시작일이 가장 빠른 행',
+            srcEndTitle: en ? 'Latest finish among sub-tasks' : '하위 업무 중 완료일이 가장 느린 행'
+        };
+        return _RT;
+    }
+    const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';
+    // class 속성을 **두 번** 붙이면 보라우잰가 뒤쪽을 조용히 무시한다 — 새 비교표/차트
+    // 분기가 같은 칸에 둘 다 닿을 수 있어서(예: 헤더가 "진행현황"이라 기본 분기로 떨어진 뒤
+    // chart 분기까지 타는 경우) 무조건 이 헬폼을 거친다.
+    const _addCls = (attrs, cls) => / class="/.test(attrs)
+        ? attrs.replace(/ class="([^"]*)"/, ' class="$1 ' + cls + '"')
+        : attrs + ' class="' + cls + '"';
+
     function _ganttRowCellsHtml(data, i) {
-        const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';
-        const hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs, colIdx.answer];
+        const RT = _rtCtx(data);
+        const hiddenCols = RT.hidden;
         const row = data[i];
         let bodyHtml = '';
-            for(let cellIndex = 0; cellIndex < data[0].length; cellIndex++) {
-                if (hiddenCols.includes(cellIndex)) continue; 
+        const _nCols = data[0].length;
+            for(let cellIndex = 0; cellIndex < _nCols; cellIndex++) {
+                if (hiddenCols.has(cellIndex)) continue;
                 let cell = (row[cellIndex] !== undefined && row[cellIndex] !== null) ? row[cellIndex] : "";
-                let colName = data[0][cellIndex] ? data[0][cellIndex].toString().replace(/\s+/g, '') : ""; let colStr = colName.toLowerCase();
-                
+                let colStr = RT.colStrs[cellIndex] || '';
+
                 let rawForEditing = cell.toString();
                 if (cellIndex === colIdx.start && row._calcStartTs) rawForEditing = formatTsToYMD(row._calcStartTs);
                 else if (cellIndex === colIdx.plan && row._calcPlanTs) rawForEditing = formatTsToYMD(row._calcPlanTs);
                 
                 let safeRawValue = encodeURIComponent(rawForEditing); let tdAttrs = ` data-raw="${safeRawValue}"`;
                 
-                let nonEditableCols = [colIdx.no, colIdx.chart];
-                if (!nonEditableCols.includes(cellIndex) && !hiddenCols.includes(cellIndex)) {
+                if (!RT.nonEditable.has(cellIndex) && !hiddenCols.has(cellIndex)) {
                     const isDateCol = (cellIndex === colIdx.start || cellIndex === colIdx.plan);
                     const dateHint = isDateCol ? " · 날짜를 지우면 자동계산, 입력하면 고정되어 다른 행이 바뀌어도 안 움직임" : "";
                     const isDetailCol = (cellIndex === colIdx.content || cellIndex === colIdx.answer);
@@ -1896,22 +1942,23 @@
                     // ⚡ [2026-11-05] 스타일은 styles.css(.no-td-inner / .no-td .row-drag-handle)로 옮겼고
                     //    템플릿 리터럴의 줄바꿈·들여쓰기도 뺐다 — 행마다 쓸모없이 따라오던 바이트다.
                     tdHtml = `<span class="row-pin-bar${alarmOn ? ' on' : ''}" onclick="window._wrPinClick(${i}, event)" ondblclick="window._wrPinDblClick(${i}, event)" title="${escapeHtml(window._pinBarTitle(alarmOn))}"></span>`
-                        + `<div class="no-td-inner"><span class="row-drag-handle" title="${_RT.dragTitle}">⠿</span><span class="row-num-span"></span></div>`;
+                        + `<div class="no-td-inner"><span class="row-drag-handle" title="${RT.dragTitle}">⠿</span><span class="row-num-span"></span></div>`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
-                    tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
+                    tdStyle = "";   // detail-td-base (styles.css) — "현황"은 아래 chart 분기가 덮어쓴다
                     if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) {
                         // 💡 [2026-08-25 버그 수정] WBS 상하좌우+- 등으로 tbody가 통째로 다시 그려져도,
                         //    이 행에서 개별적으로 펼쳐뒀던 칸(row._expandedDetailCols)은 펼친 채로 그린다.
                         const _wasCellExpanded = !!(row._expandedDetailCols && row._expandedDetailCols[cellIndex]);
-                        tdAttrs += ` class="detail-td${_wasCellExpanded ? ' detail-td-expanded' : ''}"`;
+                        tdAttrs = _addCls(tdAttrs, `detail-td detail-td-base${_wasCellExpanded ? ' detail-td-expanded' : ''}`);
                     }
                } else if (colStr.includes("상태")) {
                     continue; // 💡 "상태"는 소요일~개발업무 사이에서 이미 렌더링했으므로 원래 자리에서는 건너뜀
                 } else if (["시작", "완료", "기간", "view", "보고"].some(k => colStr.includes(k))) {
-                    tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'}; font-size: calc(var(--table-font-size) - 2px);`;
-                    tdAttrs += ` class="date-td"`;
+                    tdStyle = "";                      // #myTable td.date-td
+                    tdAttrs = _addCls(tdAttrs, 'date-td');
                 } else {
-                    tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+                    tdStyle = "";                      // #myTable td.gantt-plain-td
+                    tdAttrs = _addCls(tdAttrs, 'gantt-plain-td');
                 }
 
                 if (cellIndex !== colIdx.no) {
@@ -1921,7 +1968,7 @@
                         let startBadge = '';
                         const cmpInfoStart = window.getRowCompareInfo ? window.getRowCompareInfo(row) : null;
                         if (cmpInfoStart && cmpInfoStart.isNew) {
-                            startBadge = `<span title="${escapeHtml(cmpInfoStart.aLabel)} 계획 저장 이후 새로 추가된 업무 — 비교할 계획 데이터가 없습니다" style="font-size:9px; color:#fff; background:#2f9e44; font-weight:bold; margin-left:2px; padding:0 3px; border-radius:3px;">🆕신규</span>`;
+                            startBadge = `<span class="cmp-badge-new" title="${escapeHtml(cmpInfoStart.aLabel)} 계획 저장 이후 새로 추가된 업무 — 비교할 계획 데이터가 없습니다">🆕신규</span>`;
                         } else if (cmpInfoStart && cmpInfoStart.aStart && cmpInfoStart.bStart) {
                             const diffDays = workdayShift(cmpInfoStart.aStart, cmpInfoStart.bStart);
                             if (diffDays !== 0) {
@@ -1929,10 +1976,10 @@
                                 const badgeTitle = cmpInfoStart.mode === 'vsPlan'
                                     ? `${escapeHtml(cmpInfoStart.aLabel)}(${formatTsToYMD(cmpInfoStart.aStart)}) 대비 ${escapeHtml(cmpInfoStart.bLabel)} 시작일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
                                     : `계획(${formatTsToYMD(cmpInfoStart.aStart)}) 대비 시작일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
-                                startBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                                startBadge = `<span title="${badgeTitle}" class="cmp-badge" style="color:${badgeColor};">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
-                        const startSrcMark = row._isGroupStartSrc ? `<span title="${window._t('하위 업무 중 시작일이 가장 빠른 행', 'Earliest start among sub-tasks')}" style="font-size:9px; color:#2f9e44; font-weight:bold; margin-right:2px; vertical-align:middle;">S</span>` : '';
+                        const startSrcMark = row._isGroupStartSrc ? `<span class="grp-src-mark grp-src-s" title="${window._t('하위 업무 중 시작일이 가장 빠른 행', 'Earliest start among sub-tasks')}">S</span>` : '';
                         tdHtml = `${startSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" ondblclick="if(window._ganttJumpToGroupDateSrc(${i}, 'start')) event.stopPropagation();" title="클릭하여 달력으로 날짜 변경 · 더블클릭: 그룹이면 S 근거 행으로 이동">${displayDate}</span>${startBadge}`;
                     } 
                     else if (cellIndex === colIdx.plan) { 
@@ -1947,12 +1994,12 @@
                                 const badgeTitle = cmpInfoFinish.mode === 'vsPlan'
                                     ? `${escapeHtml(cmpInfoFinish.aLabel)}(${formatTsToYMD(cmpInfoFinish.aEnd)}) 대비 ${escapeHtml(cmpInfoFinish.bLabel)} 완료일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
                                     : `계획(${formatTsToYMD(cmpInfoFinish.aEnd)}) 대비 완료일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
-                                planBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                                planBadge = `<span title="${badgeTitle}" class="cmp-badge" style="color:${badgeColor};">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
-                        const endSrcMark = row._isGroupEndSrc ? `<span title="${window._t('하위 업무 중 완료일이 가장 느린 행', 'Latest finish among sub-tasks')}" style="font-size:9px; color:#e03131; font-weight:bold; margin-right:2px; vertical-align:middle;">E</span>` : '';
+                        const endSrcMark = row._isGroupEndSrc ? `<span class="grp-src-mark grp-src-e" title="${window._t('하위 업무 중 완료일이 가장 느린 행', 'Latest finish among sub-tasks')}">E</span>` : '';
                         tdHtml = `${endSrcMark}<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" ondblclick="if(window._ganttJumpToGroupDateSrc(${i}, 'end')) event.stopPropagation();" title="클릭하여 달력으로 날짜 변경 · 더블클릭: 그룹이면 E 근거 행으로 이동">${displayDate}</span>${planBadge}`;
-                        bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
+                        bodyHtml += `<td${tdStyle ? ` style="${tdStyle}"` : ''}${tdAttrs}>${tdHtml}</td>`;
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시
                             let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
@@ -1964,7 +2011,7 @@
                             const lockSvg = isLocked
                                 ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>'
                                 : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 7.75-1.5"></path></svg>';
-                            const lockIcon = `<span onclick="window.wrToggleScheduleLock(${i}, event); event.stopPropagation();" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}" style="display:inline-flex; cursor:pointer; margin-left:3px; vertical-align:middle; color:${isLocked ? '#333' : '#adb5bd'};">${lockSvg}</span>`;
+                            const lockIcon = `<span class="period-lock${isLocked ? ' on' : ''}" onclick="window.wrToggleScheduleLock(${i}, event); event.stopPropagation();" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}">${lockSvg}</span>`;
                             let baselineBadge = '';
                             const cmpInfoDur = window.getRowCompareInfo ? window.getRowCompareInfo(row) : null;
                             if (cmpInfoDur && cmpInfoDur.aStart && cmpInfoDur.aEnd && cmpInfoDur.bStart && cmpInfoDur.bEnd) {
@@ -1976,30 +2023,24 @@
                                     const badgeTitle = cmpInfoDur.mode === 'vsPlan'
                                         ? `${escapeHtml(cmpInfoDur.aLabel)}(${formatTsToYMD(cmpInfoDur.aStart)}~${formatTsToYMD(cmpInfoDur.aEnd)}) 대비 ${escapeHtml(cmpInfoDur.bLabel)} 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`
                                         : `계획(${formatTsToYMD(cmpInfoDur.aStart)}~${formatTsToYMD(cmpInfoDur.aEnd)}) 대비 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`;
-                                    baselineBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDur > 0 ? '▲' : '▼'}${Math.abs(diffDur)}</span>`;
+                                    baselineBadge = `<span title="${badgeTitle}" class="cmp-badge" style="color:${badgeColor};">${diffDur > 0 ? '▲' : '▼'}${Math.abs(diffDur)}</span>`;
                                 }
                             }
-                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap; font-size: calc(var(--table-font-size) - 2px);" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
+                            bodyHtml += `<td class="period-td"${periodAttrs} title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
                         }
                         if (colIdx.status !== -1) {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
                             const statusRaw = (row[colIdx.status] !== undefined && row[colIdx.status] !== null) ? row[colIdx.status].toString().trim() : '';
                             const lang = LANG[window._currentLang||'ko'];
                             // 대소문자 무시로 statusMap 조회 (엑셀 저장값이 소문자인 경우도 대응)
-                            const _smKeys = Object.keys(lang.statusMap);
-                            const _smMatch = _smKeys.find(k => k.toLowerCase() === statusRaw.toLowerCase());
-                            const statusVal = (_smMatch ? lang.statusMap[_smMatch] : null) || statusRaw;
-                            const statusSelectHtml = `<select onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\"
-                                ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\"
-                                style=\"border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit; white-space:nowrap;
-                                       -webkit-appearance:none; -moz-appearance:none; appearance:none;\">
-                                ${lang.status.map((s, idx) => {
+                            const statusVal = RT.smLower[statusRaw.toLowerCase()] || statusRaw;
+                            const statusSelectHtml = `<select class=\"status-select\" onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\" ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\">                                ${lang.status.map((s, idx) => {
                                     const optColor = ['', 'rgba(0,0,0,0.45)', '#f08c00', '#e03131'][idx] || '';
                                     const colorAttr = optColor ? ` style=\"color:${optColor};\"` : '';
                                     return `<option value=\"${s}\" ${statusVal===s?'selected':''}${colorAttr}>${s}</option>`;
                                 }).join('')}
                             </select>`;
-                            bodyHtml += `<td class="status-td" data-raw="${encodeURIComponent(statusVal)}" style="text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};">${statusSelectHtml}</td>`;
+                            bodyHtml += `<td class="status-td" data-raw="${encodeURIComponent(statusVal)}">${statusSelectHtml}</td>`;
                         }
                         let taskTxt = "";
                         if (row._level === 0) taskTxt = row._origDev; else if (row._level === 1) taskTxt = row._origT1; else if (row._level === 2) taskTxt = row._origT2; else if (row._level === 3) taskTxt = row._origT3; else if (row._level === 4) taskTxt = row._origT4;
@@ -2018,8 +2059,8 @@
                         //    통째로 하나의 클릭존으로 묶어 눈에 보이는 삼각형보다 훨씬 넓은 영역에서 한
                         //    번/두 번 클릭을 받게 한다. 아래 _levelConnectorHtml도 이 존 안으로 들어간다.
                         const _wbsToggleArrowGlyph = _wbsHasChildren
-                            ? `<span class="wbs-toggle-arrow" style="display:inline-block; width:11px; text-align:center; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
-                            : `<span style="display:inline-block; width:11px;"></span>`;
+                            ? `<span class="wbs-toggle-arrow">${row._wbsCollapsed ? '▶' : '▼'}</span>`
+                            : `<span class="wbs-arrow-gap"></span>`;
                         // 💡 [2026-08-28 신규 → 뒤쪽 배치 → 드롭다운으로 변경] 담당구분(PM/ME/HW/...) 선택 배지 —
                         //    업무명 "뒤"에 작은 드롭다운(select)으로 붙여서 목록에서 바로 골라 지정한다(기존엔
                         //    클릭할 때마다 다음 구분으로 순환하는 방식이었음 → window.setWbsDiscipline 참고).
@@ -2032,12 +2073,12 @@
                         //    (_wbsDisciplineFillOpts, js/04k) — 행마다 옵션 12개씩, 전체 펼치면 1만 개 넘는 노드였다.
                         //    숨은 "가장 긴 값" 옵션은 폭을 채운 뒤와 똑같이 맞추려는 것(누를 때 배지가 안 움직이게).
                         const _wbsDisciplineOpts = `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option><option hidden disabled>${window._wbsDisciplineWidest()}</option>`;
-                        const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onfocus="window._wbsDisciplineFillOpts(this)" onclick="event.stopPropagation();" onmousedown="window._wbsDisciplineFillOpts(this); event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Select discipline' : '담당구분 선택'}" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
+                        const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onfocus="window._wbsDisciplineFillOpts(this)" onclick="event.stopPropagation();" onmousedown="window._wbsDisciplineFillOpts(this); event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Select discipline' : '담당구분 선택'}">${_wbsDisciplineOpts}</select>`;
                         const _levelConnectorHtml = row._level > 0
-                            ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
+                            ? `<span class="wbs-lv-num">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '';
                         let prefix = _wbsHasChildren
-                            ? `<span onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand one level' : '한 단계 펼치기') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; cursor:pointer; padding:2px 6px 2px 0; vertical-align:middle;">${_wbsToggleArrowGlyph}${_levelConnectorHtml}</span>`
+                            ? `<span class="wbs-toggle-zone" onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand one level' : '한 단계 펼치기') : (window._currentLang === 'en' ? 'Collapse' : '접기')}">${_wbsToggleArrowGlyph}${_levelConnectorHtml}</span>`
                             : `${_wbsToggleArrowGlyph}${_levelConnectorHtml}`;
                         // 🔽 [2026-10-28 버그 수정 → 재설계] 더블클릭 방식은 화살표 히트존을 넓혀도 실사용에서
                         //    여전히 글자수정으로 새는 경우가 있어 포기(사용자 피드백) — 대신 셀 오른쪽 끝에
@@ -2046,7 +2087,7 @@
                         //    window._wbsIsBranchFullyExpanded()로 매 렌더마다 다시 판정(js/04k).
                         const _wbsBranchFullyExpanded = _wbsHasChildren && window._wbsIsBranchFullyExpanded(i);
                         const wbsBranchArrowHtml = _wbsHasChildren
-                            ? `<span class="wbs-branch-arrow" onclick="window.toggleWbsBranchFull(${i}, event); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Expand/collapse this branch fully' : '이 가지 전체 펼치기/접기'}" style="position:absolute; right:3px; top:50%; transform:translateY(-50%); cursor:pointer; color:#aaa; font-size:9px; user-select:none;">${_wbsBranchFullyExpanded ? '▲' : '▼'}</span>`
+                            ? `<span class="wbs-branch-arrow" onclick="window.toggleWbsBranchFull(${i}, event); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Expand/collapse this branch fully' : '이 가지 전체 펼치기/접기'}">${_wbsBranchFullyExpanded ? '▲' : '▼'}</span>`
                             : '';
                         // 🔢 [2026-10-29 신규, 사용자 요청] "자식 업무가 몇 개인지" — 가지 전체 펼치기 삼각형
                         //    바로 왼쪽에 파란 숫자로 표시. 이 행 아래 전체 하위 업무 개수(모든 레벨 재귀) —
@@ -2056,10 +2097,11 @@
                         //    토글해도 다시 계산할 필요가 없다 — window._wbsDescendantCount.
                         const wbsDescCount = _wbsHasChildren ? window._wbsDescendantCount(i) : 0;
                         const wbsHiddenCountHtml = _wbsHasChildren
-                            ? `<span class="wbs-hidden-count" title="${window._currentLang === 'en' ? 'Total child rows in this branch' : '이 가지의 전체 하위 업무 수'}" style="position:absolute; right:15px; top:50%; transform:translateY(-50%); color:#1971c2; font-size:9px; font-weight:bold; user-select:none;">${wbsDescCount}</span>`
+                            ? `<span class="wbs-hidden-count" title="${window._currentLang === 'en' ? 'Total child rows in this branch' : '이 가지의 전체 하위 업무 수'}">${wbsDescCount}</span>`
                             : '';
-                        let indentEm = (row._level || 0) * 1.2;
-                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; ${_wbsHasChildren ? 'padding-right: 30px !important; position: relative;' : ''} font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+                        // ⚡ 들여쓰기는 .wbs-lv0~4 클래스가 맡는다(styles.css) — WBS 레벨은 0~4 가 끝이라
+                        //    5 이상은 구조상 없지만 혁 생긴다도 4단계 들여쓰기로 보이게 조이다.
+                        const _wbsLv = Math.max(0, Math.min(4, row._level || 0));
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
                         if (wbsColIdx === -1 && colIdx.wbs !== -1) wbsColIdx = colIdx.wbs; // 💡 단일 "개발업무(WBS)" 열 모드 대응
                         let wbsRawValue = encodeURIComponent(taskTxt);
@@ -2070,11 +2112,11 @@
                         let wbsInnerHtml;
                         if (transModeWbs > 0 && taskTxt.trim() !== '') {
                             let safeTextWbs = encodeURIComponent(taskTxt).replace(/'/g, "%27").replace(/\\/g, "\\\\");
-                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print" data-trans-mode="' + transModeWbs + '" style="display:inline-block; cursor:pointer; font-size:8px; border-radius:3px; padding:1px 2px; margin-right:3px; background:transparent; vertical-align:middle;" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>' + wbsDisciplineBadge;
+                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print trans-btn-wbs" data-trans-mode="' + transModeWbs + '" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>' + wbsDisciplineBadge;
                         } else {
                             wbsInnerHtml = prefix + escapeHtml(taskTxt) + wbsDisciplineBadge;
                         }
-                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}${wbsHiddenCountHtml}${wbsBranchArrowHtml}</td>`;
+                        bodyHtml += `<td class="wbs-cell wbs-lv${_wbsLv}${_wbsHasChildren ? ' wbs-has-kids' : ''}"${wbsAttrs}>${wbsInnerHtml}${wbsHiddenCountHtml}${wbsBranchArrowHtml}</td>`;
                         continue; 
                     } 
                     else if (cellIndex === colIdx.period) {
@@ -2095,27 +2137,26 @@
                             //    상세내용 전체가 URL 인코딩돼 행마다 한 벌 더 붙어 표 HTML을 수 MB씩 불리던 원인 중 하나.
                             let displayHtml = linkifyAndEscape(cellText, boldBrackets);
                             if (cellIndex === colIdx.content) displayHtml = injectMailRawBtn(displayHtml, row, i);
-                            tdStyle += " position: relative; padding-left: 22px;";
                             // 💡 [2026-08-28 버그 수정] 개별 셀 펼침(row._expandedDetailCols → 위에서 이미 tdAttrs에
                             //    'detail-td-expanded' 클래스로 반영해둠)이 있어도, 여기서 class 속성을 통째로
                             //    갈아끼우면서 그 클래스가 조용히 사라졌다 — 한글/영문이 섞인 대부분의 실제
                             //    상세내용은 항상 이 분기(transMode>0)를 타므로, WBS 상하좌우/+-/삭제 등으로
                             //    renderTable()이 다시 그려질 때마다 개별로 펼쳐뒀던 칸이 매번 접혀 보였다.
                             const _hadExpandedClass = / class="[^"]*\bdetail-td-expanded\b[^"]*"/.test(tdAttrs);
-                            tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans${_hadExpandedClass ? ' detail-td-expanded' : ''}"`;
-                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 3.6px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, null, ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
+                            tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td detail-td-base detail-td-trans content-cell-trans${_hadExpandedClass ? ' detail-td-expanded' : ''}"`;
+                            tdHtml = '<span class="content-span content-span-block">' + displayHtml + '</span><span class="trans-btn-hide-print trans-btn-cell" onclick="toggleTranslation(this, null, ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
                         tdHtml = createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level, window.getRowCompareInfo ? window.getRowCompareInfo(row) : null);
-                        tdStyle = `font-weight: ${getFontWeight(row._level)}; position:relative;`;
-                        tdAttrs += ` class="chart-td" ondblclick="window.toggleChartExpand()" title="더블클릭: 차트 확장/기본 보기 전환"`;
+                        tdStyle = "";   // td.chart-td 가 position:relative !important 를 이미 가진다
+                        tdAttrs = _addCls(tdAttrs, 'chart-td') + ` ondblclick="window.toggleChartExpand()" title="더블클릭: 차트 확장/기본 보기 전환"`;
                     }
 
                     else { tdHtml = linkifyAndEscape(cell.toString().trim()); }
                 }
 
-                bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${(cellIndex === colIdx.content || cellIndex === colIdx.answer) ? '<div class="detail-td-inner">' + tdHtml + '</div>' : tdHtml}</td>`;
+                bodyHtml += `<td${tdStyle ? ` style="${tdStyle}"` : ''}${tdAttrs}>${(cellIndex === colIdx.content || cellIndex === colIdx.answer) ? '<div class="detail-td-inner">' + tdHtml + '</div>' : tdHtml}</td>`;
             }
         return bodyHtml;
     }

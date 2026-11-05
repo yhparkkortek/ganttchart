@@ -2466,3 +2466,70 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 .bom-row-sum     { background: #eef6f7; }   /* 합계 = headerTint 역할 */
 .bom-lvhdr       { background: #dff0f2; }   /* 레벨 블록 머리행 */
 #bom-body tr.bom-row:hover > td { background: #cfeaf0; }
+
+/* ⚡⚡ Gantt 표 렌더 경량화 — 행마다 똑같이 붙던 inline style 을 클래스로 (2026-11-05)
+   왜: 실사용 신고 "간트차트가 오히려 느려졌다". LNW_STELLAR32(906행)를 전부 펼친 상태로 실측하니
+       renderTable() 한 번이 3.6초였고, 만들어지는 tbody HTML 이 8.71MB · 노드 44,748개였다.
+       그 8.71MB 중 **inline style 이 3.01MB**(35%) — 행마다 글자 하나 다르지 않은 같은 선언을
+       905벌 쓰고 있었다. HTML 파서가 그걸 다 읽어야 하고(462ms) 레이아웃이 뒤따른다(864ms).
+   ⚠️ 여기 선언은 **원래 inline 과 계산값이 똑같아야** 한다 — inline 은 클래스 규칙을 늘 이기므로,
+      떼어내면 `.sub-parent-row td`(styles.css 402~405행)처럼 같은 속성을 건드리는 기존 규칙에
+      자리를 내줄 수 있다. 그래서 td 규칙은 `#myTable` 을 붙여 특정도를 올렸다.
+      검증은 tests/gantt-render-perf.browser.js 의 **화면 서명**(칸마다 computed style 비교)으로 한다.
+   ⚠️ font-weight 는 일부러 **안 적는다** — `.parent-row td`/`.sub-parent-row td` 가 이미
+      `font-weight: bold !important` 로 정하고 있어서 inline 선언이 애초에 아무 일도 안 했다. */
+
+/* No. 칸 — 막대(absolute) 바깥의 가로 묶음 */
+.no-td-inner { display: flex; align-items: center; justify-content: center; gap: 3px; position: relative; padding-left: 7px; }
+.no-td .row-drag-handle { font-size: 11px; color: #aaa; flex-shrink: 0; user-select: none; }
+
+/* 개발업무(WBS) 칸 안쪽 조각들 */
+.wbs-toggle-arrow { display: inline-block; width: 11px; text-align: center; color: #aaa; font-size: 9px; vertical-align: middle; user-select: none; }
+.wbs-arrow-gap { display: inline-block; width: 11px; }
+.wbs-toggle-zone { display: inline-block; cursor: pointer; padding: 2px 6px 2px 0; vertical-align: middle; }
+.wbs-lv-num { font-size: 9px; color: #999; margin-right: 1px; }
+.wbs-discipline-badge { display: inline-block; font-size: 9px; color: #868e96; background: #f1f3f5; border: none; border-radius: 3px; padding: 0 1px; margin-left: 4px; cursor: pointer; vertical-align: middle; white-space: nowrap; }
+.wbs-branch-arrow { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #aaa; font-size: 9px; user-select: none; }
+.wbs-hidden-count { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #1971c2; font-size: 9px; font-weight: bold; user-select: none; }
+
+/* 칸(td) 공통 — 레벨별 들여쓰기는 클래스 5개로 */
+#myTable td.wbs-cell { text-align: left; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#myTable td.wbs-lv0 { padding-left: calc(0em + 5px) !important; }
+#myTable td.wbs-lv1 { padding-left: calc(1.2em + 5px) !important; }
+#myTable td.wbs-lv2 { padding-left: calc(2.4em + 5px) !important; }
+#myTable td.wbs-lv3 { padding-left: calc(3.5999999999999996em + 5px) !important; }
+#myTable td.wbs-lv4 { padding-left: calc(4.8em + 5px) !important; }
+#myTable td.wbs-has-kids { padding-right: 30px !important; position: relative; }
+
+#myTable td.date-td { text-align: center; white-space: nowrap; font-size: calc(var(--table-font-size) - 2px); }
+#myTable td.period-td { text-align: center; color: #e03131; white-space: nowrap; font-size: calc(var(--table-font-size) - 2px); }
+.period-lock { display: inline-flex; cursor: pointer; margin-left: 3px; vertical-align: middle; color: #adb5bd; }
+.period-lock.on { color: #333; }
+#myTable td.status-td { text-align: center; white-space: nowrap; }
+/* ⚠️ font-weight 는 `.parent-row td` 등이 !important 로 정하므로 여기서 안 건드린다 */
+.status-select { border: none; background: transparent; font-size: var(--table-font-size); color: inherit; white-space: nowrap; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+
+/* ⚠️ font-size 는 일부러 없다 — 예전 inline 의 `font-size: 11px` 은 위 1683행
+   `td.detail-td { font-size: var(--detail-font-size) !important }` 에 눌려 **원래부터 안 쓰이는 선언**
+   이었다(실측 9px). 그대로 운기면 여기서도 안 도는 죽은 줄이 한 줄 더 생긴다. */
+#myTable td.detail-td-base { text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; }
+#myTable td.detail-strike { text-decoration: line-through; color: #adb5bd; }
+#myTable td.detail-td-trans { position: relative; padding-left: 22px; }
+#myTable td.gantt-plain-td { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#myTable td.chart-td-rel { position: relative; }
+.content-span-block { display: block; }
+.trans-btn-cell { position: absolute; top: 3.6px; left: 2px; cursor: pointer; font-size: 8px; border-radius: 3px; padding: 2px 2px; z-index: 1; background: transparent; }
+.trans-btn-wbs { display: inline-block; cursor: pointer; font-size: 8px; border-radius: 3px; padding: 1px 2px; margin-right: 3px; background: transparent; vertical-align: middle; }
+.date-empty-hint { color: #ced4da; font-size: 11px; }
+.cmp-badge { font-size: inherit; font-weight: bold; margin-left: 2px; }
+.cmp-badge-new { font-size: 9px; color: #fff; background: #2f9e44; font-weight: bold; margin-left: 2px; padding: 0 3px; border-radius: 3px; }
+.grp-src-mark { font-size: 9px; font-weight: bold; margin-right: 2px; vertical-align: middle; }
+.grp-src-s { color: #2f9e44; }
+.grp-src-e { color: #e03131; }
+
+/* ⚠️ 상태 드롭다운의 굵기는 **칸(td)과 따로** 간다 — `.parent-row td`/`.sub-parent-row td` 의
+   `font-weight: bold !important` 는 td 에만 걸리고 select 는 그 자식이라, 예전 inline 은
+   레벨0만 bold·나머지는 normal 이었다(레벨1 칸은 굵은데 드롭다운은 안 굵은 모습). 그 모습을
+   그대로 유지하려면 여기서 **명시**해야 한다 — 안 적으면 상속돼서 레벨1 이 굵어진다. */
+.status-select { font-weight: normal; }
+.parent-row .status-select { font-weight: bold; }
