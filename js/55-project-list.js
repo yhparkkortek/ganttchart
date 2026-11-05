@@ -203,6 +203,14 @@
         C('sales27',     '27년 예상',         'FY27 est.',           'sales', 70,  'num')
     ];
 
+    // 🔽 머리글 줄의 드롭다운 필터로 띄울 열(데이터) — 여기 한 줄이 곧 화면의 필터 하나다.
+    //    ⚠️ 여기서 빼면 그 필터는 화면에서 사라지지만, **누가 이미 걸어 둔 값은 `_view.filters` 에
+    //       남아 계속 행을 거른다**(저장된 화면 설정이 localStorage 에 남는다) — 고를 UI 가 없으니
+    //       푸는 방법도 없어진다. 그래서 아래 `_view` 를 만들 때 **목록에 없는 필터 키는 버린다**.
+    //    ⚠️ 열 정의의 `'sel'` 표시는 "드롭다운으로 쓸 만한 열"이라는 설명일 뿐 이 목록과 무관하다.
+    //    (2026-11-05 사용자 요청으로 TYPE·Panel Mfr. 를 뺐다 — 쓰지 않는 칸이라 줄만 좁혔다.)
+    window.PL_FILTER_KEYS = window.PL_FILTER_KEYS || ['customer', 'factory', 'project', 'status', 'cabinet'];
+
     // 엑셀 머리글 별칭(데이터) — 사람이 쓰는 표기가 조금씩 달라도 같은 열로 들어오게.
     window.PL_HEADER_ALIASES = window.PL_HEADER_ALIASES || {
         ktkPn:      ['KTK PN', 'KTK P/N', 'KTKPN', '자재코드', '품번'],
@@ -726,7 +734,15 @@
         window.PL_GROUPS.forEach(function (g) { def.groups[g.k] = g.on; });
         try {
             var o = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}');
-            return Object.assign(def, o, { groups: Object.assign({}, def.groups, o.groups || {}) });
+            var v = Object.assign(def, o, { groups: Object.assign({}, def.groups, o.groups || {}) });
+            // ⚠️ 화면에서 내린 필터는 **저장된 값까지 버린다**(PL_FILTER_KEYS 참고) — 안 그러면
+            //    고를 칸이 없는데 행은 계속 걸러져 "목록이 왜 적지?" 가 된다(푸는 방법도 없다).
+            if (v.filters) {
+                Object.keys(v.filters).forEach(function (k) {
+                    if (window.PL_FILTER_KEYS.indexOf(k) === -1) delete v.filters[k];
+                });
+            }
+            return v;
         } catch (e) { return def; }
     })();
     window._plView = _view;
@@ -1068,8 +1084,7 @@
         }
         var fb = document.getElementById('pl-filter-box');
         if (fb) {
-            var FKEYS = ['customer', 'factory', 'project', 'type', 'status', 'cabinet', 'panelMfr'];
-            fb.innerHTML = FKEYS.map(function (k) {
+            fb.innerHTML = window.PL_FILTER_KEYS.map(function (k) {
                 var c = _colByKey[k]; if (!c) return '';
                 var vals = {}, rows = D().rows || [];
                 rows.forEach(function (r) { var v = String(r[k] == null ? '' : r[k]).trim(); if (v) vals[v] = (vals[v] || 0) + 1; });
