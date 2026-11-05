@@ -111,6 +111,57 @@ def run():
         os.remove(kb.DOCSTORE_CONFIG_FILE)
         okd, droot, _msg = kb._docstore_autoconfig(fake, '/RND_ETC/100_공통/KORTEK_PM')
         ok('⑥ 헬퍼 단독 호출도 같은 결과', okd is True and droot == EXPECT, (okd, droot))
+
+        # ── ⑦ SMB 자격증명을 **자동으로** 건다
+        #    사용자 신고: "폴더 자격증명을 별도로 하니 NAS 연결되는데 자동으로는 안 되나".
+        #    원인: 동기화가 `if pw:` 뒤에 있어 **비밀번호를 다시 타이핑했을 때만** 돌았다.
+        #    설정 화면은 저장된 PC 에서 비밀번호 칸을 비워 두므로 사실상 거의 안 돌았다.
+        calls = []
+        orig_sync = kb._sync_docstore_smb_credential
+        orig_saved = kb._docstore_saved_password
+
+        def fake_sync(host, user, pw):
+            calls.append((host, user, pw))
+            return (bool(pw), 'ok' if pw else '비밀번호가 없어 자격증명을 걸지 못했습니다.')
+        kb._sync_docstore_smb_credential = fake_sync
+        kb._docstore_saved_password = lambda: 'STORED-PW'
+        fake.load_config = lambda: {'host': 'nas.example', 'user': 'mate', 'pw_dpapi': 'x'}
+        try:
+            os.remove(kb.DOCSTORE_CONFIG_FILE)
+        except OSError:
+            pass
+        calls[:] = []
+        client.post('/nas/docroot-auto', json={})
+        ok('⑦ docroot-auto 가 자격증명을 먼저 건다', len(calls) == 1, calls)
+        ok('⑦ 저장된 비밀번호를 쓴다(칸이 비어 있어도)',
+           calls and calls[0][2] == 'STORED-PW', calls)
+
+        #    저장 라우트도 같다 — 비밀번호를 안 켜도 걸려야 한다
+        class _FakeSave(object):
+            def save_config(self, *a, **k): return {'host': a[0], 'port': a[1], 'https': a[2], 'user': a[3]}
+        kb._nas = lambda: _FakeSave()
+        calls[:] = []
+        r = client.post('/nas/config', json={'host': 'nas.example', 'user': 'mate',
+                                             'port': 5001, 'https': True, 'password': ''}).get_json()
+        ok('⑦ 비밀번호 안 치고 저장해도 자격증명을 건다',
+           r.get('ok') is True and len(calls) == 1 and calls[0][2] == 'STORED-PW', (r, calls))
+        kb._nas = lambda: fake
+        kb._sync_docstore_smb_credential = orig_sync
+        kb._docstore_saved_password = orig_saved
+
+        # ⑧ cmdkey 실패를 삼키지 않는다(returncode 확인)
+        import subprocess as _sp
+        orig_run = _sp.run
+        class _R(object):
+            returncode = 1; stdout = b'cmdkey failed'; stderr = b''
+        _sp.run = lambda *a, **k: _R()
+        try:
+            cok, cmsg = kb._sync_docstore_smb_credential('nas.example', 'mate', 'pw')
+        finally:
+            _sp.run = orig_run
+        ok('⑧ cmdkey 실패면 ok=False', cok is False, cok)
+        ok('⑧ 실패 사유에 rc 가 들어 있다', 'rc=1' in (cmsg or ''), cmsg)
+        ok('⑧ 비밀번호가 사유에 안 실린다', 'pw' not in (cmsg or '').split('rc=')[0], cmsg)
         src = io.open(os.path.join(os.path.dirname(kb.__file__), 'kortek_backend.py'),
                       encoding='utf-8').read()
         seg = src[src.index('def nas_setup('):src.index('def nas_root_candidates(')]

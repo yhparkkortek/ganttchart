@@ -5908,25 +5908,53 @@ def nas_unblock():
 #   ⚠️ 비밀번호를 로그·예외·응답에 남기지 않는다. 이 동기화가 실패해도 NAS 로그인 자체는
 #      막지 않는다(그냥 무시 — 그래도 안 되면 사람이 탐색기에서 수동 재인증하는 기존 길이 남음).
 #   ⚠️ cmdkey 대상은 호스트명/IP만 받는다 — 스킴·포트·경로는 떼고 넘긴다.
+def _docstore_saved_password():
+    """저장된 NAS 비밀번호(DPAPI)를 꺼낸다. 없거나 못 풀면 ''.
+
+    🔑 [2026-11-05] 왜 필요한가 — 자격증명 동기화가 `if pw:` 뒤에 있어서 **사람이 비밀번호를
+       그 자리에서 다시 타이핑했을 때만** 돌았다. 설정 화면은 이미 저장된 PC 에서 비밀번호 칸을
+       "(저장됨 — 바꿀 때만 입력)" 으로 비워 두므로, 저장을 다시 눌러도 `pw` 가 빈 문자열이라
+       **cmdkey 가 한 번도 안 불렸다.** 사용자 신고: "폴더 자격증명을 별도로 하니 NAS 연결되는데
+       자동으로는 안 되나" — 바로 이 구멍이다. 비밀번호는 이미 이 PC 에 DPAPI 로 있으니 꺼내 쓴다.
+    """
+    try:
+        nas = _nas()
+        cfg = nas.load_config()
+        if cfg and cfg.get('pw_dpapi'):
+            return nas._dpapi_decrypt_b64(cfg['pw_dpapi']) or ''
+    except Exception as e:
+        print(f'[문서저장소] 저장된 비밀번호를 꺼내지 못했습니다(무시): {e}')
+    return ''
+
+
 def _sync_docstore_smb_credential(host, user, password):
     if not host or not user or not password:
-        return
+        return False, '비밀번호가 없어 자격증명을 걸지 못했습니다.'
     target = str(host).strip()
     if '://' in target:
         target = target.split('://', 1)[1]
     target = target.split('/')[0].split('\\')[0].split(':')[0]
     if not target:
-        return
+        return False, '서버 주소를 읽지 못했습니다.'
     try:
-        subprocess.run(
+        # ⚠️ 결과를 **확인한다.** 예전엔 returncode 를 안 보고 넘어가서, cmdkey 가 실패해도
+        #    화면은 아무 말이 없었다("조용히 삼키지 말 것"). 비밀번호는 로그에 남기지 않는다.
+        r = subprocess.run(
             ['cmdkey', '/add:' + target, '/user:' + str(user).strip(), '/pass:' + str(password)],
             capture_output=True, timeout=5
         )
+        if r.returncode != 0:
+            why = (r.stdout or b'').decode('cp949', 'replace').strip() \
+                  or (r.stderr or b'').decode('cp949', 'replace').strip()
+            print(f'[문서저장소] cmdkey 실패(rc={r.returncode}): {why}')
+            return False, f'자격증명을 걸지 못했습니다(cmdkey rc={r.returncode}). {why}'
         # 사람이 방금 새 비밀번호를 넣은 것 — 문서 저장소도 다시 두드려 보게 잠금을 풀어준다.
         _DOCSTORE_AUTH_BLOCK['code'] = 0
         _DOCSTORE_AUTH_BLOCK['message'] = ''
+        return True, target
     except Exception as e:
         print(f'[문서저장소] SMB 자격증명 동기화 실패(무시, 안 되면 탐색기에서 수동 재인증): {e}')
+        return False, str(e)
 
 
 # ── 🔑 NAS 로그인/앱 폴더 설정 (설정 화면이 쓰는 쓰기 라우트) ───────────────────
@@ -5949,8 +5977,9 @@ def nas_config_save():
     try:
         saved = _nas().save_config(host, port, bool(req.get('https')), user, pw)
         # save_config 가 잠금을 풀어 준다(= 사람이 설정을 다시 저장했다는 뜻).
-        if pw:
-            _sync_docstore_smb_credential(host, user, pw)
+        # 🔑 [2026-11-05] 비밀번호 칸이 비어 있어도(이미 저장된 PC) **저장된 걸 꺼내** 자격증명을 건다 —
+        #    예전엔 `if pw:` 라 다시 타이핑했을 때만 돌아서, 문서 저장소는 영영 수동이었다.
+        _sync_docstore_smb_credential(host, user, pw or _docstore_saved_password())
         return jsonify({'ok': True, 'saved': saved})
     except Exception as e:
         return jsonify({'ok': False, 'message': str(e)}), 400
@@ -6033,11 +6062,26 @@ def nas_docroot_auto():
         okp, _perr = _docstore_probe_root(cur['root'])
         if okp:
             return jsonify({'ok': True, 'root': cur['root'], 'changed': False})
+    # 🔑 두드리기 **전에** 자격증명을 다시 건다 — 자료실이 안 되는 가장 흔한 이유가
+    #    "윈도에 그 서버 자격증명이 없다" 이고, 그건 여기서 걸어 줄 수 있다.
+    #    ⚠️ 실패해도 멈추지 않는다 — 이미 탐색기에서 수동으로 걸어 둔 PC 는 그대로 된다.
+    cred_msg = ''
+    try:
+        cfg = nas.load_config() or {}
+        if cfg.get('host') and cfg.get('user'):
+            cok, cmsg = _sync_docstore_smb_credential(
+                cfg['host'], cfg['user'], _docstore_saved_password())
+            if not cok:
+                cred_msg = cmsg or ''
+    except Exception as e:
+        cred_msg = str(e)
     try:
         root, _team = nas.roots()
     except Exception as e:
         return jsonify({'ok': False, 'changed': False, 'message': str(e)})
     okd, doc_root, msg = _docstore_autoconfig(nas, root, req.get('docRoot') or '')
+    if not okd and cred_msg:
+        msg = (msg or '') + ' / ' + cred_msg
     return jsonify({'ok': bool(okd), 'root': doc_root, 'changed': bool(okd),
                     'message': '' if okd else msg})
 
@@ -6089,8 +6133,7 @@ def nas_setup():
     # 1) 계정 저장 (잠금도 함께 풀린다 — 사람이 다시 시킨 것이므로)
     try:
         nas.save_config(host, port, https, user, pw)
-        if pw:
-            _sync_docstore_smb_credential(host, user, pw)
+        _sync_docstore_smb_credential(host, user, pw or _docstore_saved_password())
         step('config', True, f'{host}:{port} / {user}')
     except Exception as e:
         step('config', False, str(e))
