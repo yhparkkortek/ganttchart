@@ -1271,9 +1271,6 @@
         all.forEach(function (f, gi) {
             if (String((f && f.task) || '') === only) fl.push({ f: f, gi: gi });
         });
-        var maxN = +window.DAILY_POLICY.filesMax || 12;
-        var mb = +window.DAILY_POLICY.fileMaxMB || 20;
-        var px = +window.DAILY_POLICY.imgMaxPx || 0;
         var w = compact ? 78 : 104;
         var h = compact ? 46 : 62;
         var cards = fl.map(function (x) {
@@ -1304,17 +1301,19 @@
                      '</div>' +
                    '</div>';
         }
-        return '<div style="margin-top:4px; padding-top:11px; border-top:1px solid #f0f0f0;">' +
-                 '<div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:5px;">' +
-                   '<span style="font-size:12.5px; font-weight:bold; color:#333;">📎 ' + esc(T('사진·파일 (업무에 안 붙는 것)', 'Photos & files (not tied to a task)')) + '</span>' +
-                   '<span style="font-size:11px; color:#aaa;">' + fl.length + ' / ' + maxN + '</span>' +
-                   pick +
-                 '</div>' +
-                 '<div style="font-size:11px; color:#999; margin-bottom:' + (fl.length ? '7px' : '0') + ';">' +
-                   esc(T('여기로 끌어다 놓거나 Ctrl+V 로 붙여넣어도 됩니다. 한 파일 ' + mb + 'MB 까지' + (px ? ', 사진은 긴 변 ' + px + 'px 로 줄여 올립니다' : '') + '.',
-                         'Drag files here or paste with Ctrl+V. Up to ' + mb + 'MB each' + (px ? '; photos are resized to ' + px + 'px on the long side' : '') + '.')) +
-                 '</div>' +
-                 (fl.length ? '<div style="display:flex; flex-wrap:wrap; gap:7px;">' + cards + '</div>' : '') +
+        // 🧹 [2026-11-05 요청] 보고-단위 "사진·파일 (업무에 안 붙는 것)" 칸은 없앤다 —
+        //    파일은 **업무마다** 붙이는 게 맞고, 칸이 둘이면 같은 사진을 두 군데서 찾게 된다.
+        //    ⚠️ 그래도 **꼬리표 없는 파일은 계속 생긴다** — 텔레그램으로 온 사진은 백엔드가
+        //       어느 업무인지 알 길이 없고, 옛 보고에도 남아 있다. 칸을 통째로 지우면 그 사진이
+        //       **보이지도 지워지지도 않는다** — 옛 글을 노란 띠로 남긴 것과 같은 이유로,
+        //       **있을 때만** 띠로 보여 준다(업무를 고르거나 ✕ 로 지울 수 있게).
+        //    └ 고르기 버튼도 안내문도 없다 — 새 파일은 업무 카드에서 붙이는 게 맞다.
+        if (!fl.length) return '';
+        return '<div style="margin:10px 0 0; padding:8px 10px; border:1px dashed #d8c7a8; background:#fffaf0; border-radius:6px;">' +
+                 '<div style="font-size:11.5px; font-weight:bold; color:#8a6d3b; margin-bottom:6px;">📎 ' +
+                   esc(T('아직 업무에 안 붙은 사진·파일 — 카드 아래 칸에서 업무를 골라 주세요',
+                         'Photos & files not tied to a task yet — pick a task under each card')) + '</div>' +
+                 '<div style="display:flex; flex-wrap:wrap; gap:7px;">' + cards + '</div>' +
                '</div>';
     }
 
