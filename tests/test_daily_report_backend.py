@@ -163,12 +163,29 @@ ok('월 폴더가 밑줄이다(DSM 이 숫자+하이픈 폴더를 거부한다)'
 print('\n■ 자유 텍스트 담기 — 서식을 외우게 하지 않는다')
 d = B._daily_apply_text({'items': []}, '패널 사양서 검토\n금형 업체 회신')
 ok('태그가 없으면 전부 "오늘 한 일"', len(d['items']) == 2 and not d.get('next'))
-d = B._daily_apply_text({'items': []}, '패널 검토\n내일: 금형 확인\n이슈: 납기 2주 밀림')
-ok('태그가 있으면 칸을 나눈다',
-   len(d['items']) == 1 and '금형 확인' in d.get('next', '') and '납기' in d.get('issue', ''),
+# ⚠️ [2026-11-05] 보고가 **업무별**로 갈렸다 — 태그는 보고가 아니라 **그 업무**의 칸이다.
+d = B._daily_apply_text({'items': []}, '패널 검토\n한일: 사양 확인\n내일: 금형 확인\n이슈: 납기 2주 밀림')
+ok('태그는 그 업무의 칸으로 간다',
+   len(d['items']) == 1 and '사양 확인' in d['items'][0]['note']
+   and '금형 확인' in d['items'][0]['next'] and '납기' in d['items'][0]['issue'],
+   json.dumps(d, ensure_ascii=False)[:160])
+ok('보고 전체 칸은 안 건드린다', not d.get('next') and not d.get('issue'), json.dumps(d, ensure_ascii=False)[:80])
+
+d = B._daily_apply_text({'items': []}, 'A 업무\n한일: a 했다\nB 업무\n막힌일: b 막힘')
+ok('업무가 둘이면 각자 칸에 담긴다',
+   len(d['items']) == 2 and d['items'][0]['note'] == 'a 했다'
+   and not d['items'][0]['issue'] and d['items'][1]['issue'] == 'b 막힘',
+   json.dumps(d, ensure_ascii=False)[:200])
+
+d = B._daily_apply_text({'items': [{'name': '기존', 'next': '먼저'}]}, '내일: 추가분')
+ok('업무 이름 없이 오면 **마지막 업무**에 이어 붙인다',
+   len(d['items']) == 1 and d['items'][0]['next'].startswith('먼저') and '추가분' in d['items'][0]['next'],
    json.dumps(d, ensure_ascii=False)[:120])
-d = B._daily_apply_text({'items': [{'name': '기존'}], 'next': '먼저'}, '내일: 추가분')
-ok('이어 붙인다(덮지 않는다)', d['next'].startswith('먼저') and '추가분' in d['next'], d['next'])
+
+d = B._daily_apply_text({'items': []}, '이슈: 아무 업무도 없음')
+ok('담을 업무가 없으면 버리지 않고 하나 만든다',
+   len(d['items']) == 1 and '아무 업무' in d['items'][0]['issue'],
+   json.dumps(d, ensure_ascii=False)[:120])
 
 print('\n■ 비근무일 — 모르면 안 보낸다')
 reset(ROSTER, None)
@@ -254,7 +271,8 @@ reset(ROSTER, FRESH)
 UPDATES.extend([{'update_id': 10, 'message': {'chat': {'id': 111}, 'text': '패널 검토\n내일: 금형 확인'}}])
 r = B._daily_tg_tick()
 doc = json.loads(NAS.files[B._daily_rel(TODAY, ME)])
-ok('내 하루 파일에 담긴다', r.get('handled') == 1 and len(doc['items']) == 1 and '금형' in doc['next'], r)
+ok('내 하루 파일에 담긴다',
+   r.get('handled') == 1 and len(doc['items']) == 1 and '금형' in doc['items'][0]['next'], r)
 ok('되읽어 확인 메시지를 보낸다', len(SENT) == 1 and '일일보고' in SENT[0][1], SENT[:1])
 ok('offset 을 올린다', B._daily_state().get('offset') == 11, B._daily_state())
 

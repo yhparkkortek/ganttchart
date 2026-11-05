@@ -1008,7 +1008,7 @@ DAILY_TG_STATE = os.path.join(BASE_DIR, 'daily_tg_state.json')
 
 # 어휘는 데이터 — 줄 머리에 이 말이 있으면 그 칸으로. 없으면 전부 "오늘 한 일".
 DAILY_TG_TAGS = {
-    'done':  ['한 일', '실적', '오늘', 'done'],
+    'done':  ['오늘 한 일', '한 일', '한일', '실적', '오늘', '완료', 'done'],
     'next':  ['해야 할 일', '해야할일', '해야', '할 일', '할일', '내일', '계획', 'next', 'tomorrow', 'todo'],
     'issue': ['막힌 일', '막힌일', '막힌', '이슈', '문제', '막힘', 'issue', 'blocker'],
 }
@@ -1194,10 +1194,35 @@ def _daily_nonworkday(date_str):
 
 
 def _daily_apply_text(doc, text):
-    """자유 텍스트를 칸에 담는다. 태그가 없으면 **전부 '오늘 한 일'** —
-    서식을 외우게 만들면 아무도 안 쓴다."""
-    buckets = {'done': [], 'next': [], 'issue': []}
-    cur = 'done'
+    """자유 텍스트를 **업무별** 칸에 담는다.
+
+    [2026-11-05 요청] 보고가 업무별로 갈렸다 — 텔레그램도 세 가지를 구분해 받아야 한다.
+    규칙(외울 게 하나뿐이다):
+
+        STELLAR32 점검          ← 태그 없는 줄 = **업무 이름**(여기서부터 그 업무)
+        한일: 원자재 확인        ← 그 업무의 '오늘 한 일'
+        할일: CTR 납품 일정      ← 그 업무의 '해야 할 일'
+        막힌일: 회신 없음        ← 그 업무의 '막힌 일'
+
+    ⚠️ 태그가 먼저 오면(업무 이름 없이) **그 날 마지막 업무**에 붙인다 — 이어서 적는 게
+       보통이라서다. 그마저 없으면 제목 없는 업무를 하나 만든다(버리지 않는다).
+    ⚠️ 태그가 하나도 없는 글은 **전부 업무 이름**이다(옛 동작 그대로 — 서식을 외우게
+       만들면 아무도 안 쓴다).
+    """
+    items = doc.setdefault('items', [])
+
+    def new_item(name):
+        it = {'name': name, 'project': '', 'cat': '', 'note': '', 'next': '', 'issue': '',
+              'via': 'telegram'}
+        items.append(it)
+        return it
+
+    def add(it, key, val):
+        prev = (it.get(key) or '').strip()
+        it[key] = (prev + ' ' if prev else '') + val
+
+    FIELD = {'done': 'note', 'next': 'next', 'issue': 'issue'}
+    cur = None
     for raw in str(text or '').split('\n'):
         line = raw.strip()
         if not line:
@@ -1213,45 +1238,50 @@ def _daily_apply_text(doc, text):
                     break
             if hit:
                 break
-        if hit:
-            cur = hit[0]
-            if hit[1]:
-                buckets[cur].append(hit[1])
-        else:
-            buckets[cur].append(line)
-    for one in buckets['done']:
-        doc.setdefault('items', []).append({'name': one, 'project': '', 'note': '', 'via': 'telegram'})
-    for k in ('next', 'issue'):
-        if buckets[k]:
-            prev = (doc.get(k) or '').strip()
-            doc[k] = (prev + '\n' if prev else '') + '\n'.join(buckets[k])
+        if not hit:
+            cur = new_item(line)
+            continue
+        if cur is None:
+            cur = items[-1] if items else new_item('(제목 없음)')
+        if hit[1]:
+            add(cur, FIELD[hit[0]], hit[1])
     return doc
 
-
 def _daily_summary_text(doc):
-    """"썼다"가 아니라 **쓰인 것을 되읽어** 보여준다(반환값은 증거가 아니다)."""
+    """"썼다"가 아니라 **쓰인 것을 되읽어** 보여준다(반환값은 증거가 아니다).
+
+    [2026-11-05] 업무별로 갈렸으니 되읽기도 업무마다 세 칸을 보여 준다.
+    """
     lines = ['\U0001F4D4 <b>%s</b> 일일보고' % html.escape(str(doc.get('date', '')))]
     t = {'work': '근무', 'leave': '휴가', 'half': '반차', 'trip': '출장', 'training': '교육'}.get(doc.get('dayType'), '')
     if t and t != '근무':
         lines.append('· 일 종류: %s' % t)
+    labels = [('note', '한 일'), ('next', '해야 할 일'), ('issue', '막힌 일')]
     for it in (doc.get('items') or []):
-        nm = html.escape(str(it.get('name', '')))
-        note = (' — ' + html.escape(str(it.get('note')))) if it.get('note') else ''
         cat = str(it.get('cat') or '').strip()
         tag = ('[%s] ' % html.escape(cat)) if cat else ''
-        lines.append('• %s%s%s' % (tag, nm, note))
-    fl = doc.get('files') or []
-    if fl:
-        lines.append('📎 ' + ', '.join(html.escape(str(f.get('name', ''))) for f in fl))
-    if doc.get('next'):
-        lines.append('')
-        lines.append('[해야 할 일] ' + html.escape(str(doc['next'])))
-    if doc.get('issue'):
-        lines.append('[막힌 일] ' + html.escape(str(doc['issue'])))
+        lines.append('\n\u2022 %s<b>%s</b>' % (tag, html.escape(str(it.get('name', '')))))
+        for key, lab in labels:
+            v = str(it.get(key) or '').strip()
+            if v:
+                lines.append('   %s: %s' % (lab, html.escape(v)))
+        fs = [f for f in (doc.get('files') or []) if str((f or {}).get('task') or '') == str(it.get('name') or '')]
+        if fs:
+            lines.append('   \U0001F4CE %s' % ', '.join(html.escape(str(f.get('name', ''))) for f in fs))
+    # 업무에 안 붙는 것(옛 보고·꼬리표 없는 사진)
+    etc = [str(doc.get('next') or '').strip(), str(doc.get('issue') or '').strip()]
+    etc = [x for x in etc if x]
+    efs = [f for f in (doc.get('files') or []) if not str((f or {}).get('task') or '')]
+    if etc or efs:
+        lines.append('\n\u2022 <b>(기타)</b>')
+        for x in etc:
+            lines.append('   %s' % html.escape(x))
+        if efs:
+            lines.append('   \U0001F4CE %s' % ', '.join(html.escape(str(f.get('name', ''))) for f in efs))
     lines.append('')
-    lines.append('(지금 저장된 내용입니다 — 더 보내면 이어 붙습니다)')
+    lines.append('(지금 저장된 내용입니다 \u2014 더 보내면 이어 붙습니다)')
+    lines.append('서식: <b>업무 이름</b> 줄 아래에 <code>한일:</code> <code>할일:</code> <code>막힌일:</code>')
     return '\n'.join(lines)
-
 
 def _daily_tg_tick(force=False):
     """텔레그램 DM → 그 사람의 하루 파일. 폴링은 담당 PC 한 대에서만."""

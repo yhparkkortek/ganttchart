@@ -716,9 +716,15 @@
                        '<input value="' + esc(it[f.itemKey] || '') + '" ' +
                          'oninput="window._dailyItemField(' + i + ', \'' + f.itemKey + '\', this.value)" ' +
                          'style="flex:1; min-width:0; padding:3px 7px; border:1px solid #e3e6ea; border-radius:5px; font-size:11.5px;">' +
+                       (f.key === 'issue'
+                         ? '<button onclick="window.dailyPromoteIssue(' + i + ')" title="' +
+                             esc(T('이 막힌 일을 그 업무의 [문제점] 줄로 넣습니다 — 주간보고 문제점 표에 올라옵니다',
+                                   'Writes this blocker into the task as a [문제점] line — it shows up in the Weekly Report')) +
+                           '" style="flex-shrink:0; padding:2px 7px; border:1px solid #cfe3e5; background:#eef6f7; color:#2c5f8a; border-radius:5px; font-size:10.5px; cursor:pointer;">↗️</button>'
+                         : '') +
                        '</div>';
             }).join('');
-            return '<div style="display:flex; gap:7px; align-items:flex-start; padding:7px 0; border-bottom:1px solid #f2f2f2;">' +
+            return '<div data-daily-item="' + i + '" style="display:flex; gap:7px; align-items:flex-start; padding:7px 0; border-bottom:1px solid #f2f2f2;">' +
                    '<button onclick="window._dailyDropItem(' + i + ')" title="' + esc(T('빼기', 'Remove')) + '" style="flex-shrink:0; width:20px; height:20px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:4px; cursor:pointer; font-size:11px; line-height:1;">✕</button>' +
                    '<div style="flex:1; min-width:0;">' +
                      '<div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">' +
@@ -772,15 +778,7 @@
               '<textarea rows="4" oninput="window._dailyField(\'aiDone\', this.value)" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #a5c8f0; background:#f7fbff; border-radius:6px; font-size:12px; font-family:inherit; resize:vertical;">' + esc(_doc.aiDone) + '</textarea>' +
             '</div>'
           : '') +
-        window.DAILY_FIELDS.filter(function (f) { return f.src === 'human'; }).map(function (f) {
-            return '<div style="margin-bottom:10px;">' +
-              '<div style="font-size:12.5px; font-weight:bold; color:#333; margin-bottom:3px;">' + esc(window._currentLang === 'en' ? f.en : f.ko) + '</div>' +
-              '<textarea rows="' + f.rows + '" oninput="window._dailyField(\'' + f.key + '\', this.value)" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ddd; border-radius:6px; font-size:12px; font-family:inherit; resize:vertical;">' + esc(_doc[f.key] || '') + '</textarea>' +
-              (f.key === 'issue'
-                ? '<button onclick="window.dailyPromoteIssue()" title="' + esc(T('이 이슈를 업무의 [문제점] 줄로 넣습니다 — 주간보고 문제점 표에 자동으로 올라옵니다', 'Writes this issue into the task as a [문제점] line — it then shows up in the Weekly Report')) + '" style="margin-top:4px; padding:4px 10px; border:1px solid #cfe3e5; background:#eef6f7; color:#2c5f8a; border-radius:5px; font-size:11.5px; cursor:pointer;">↗️ ' + esc(T('이 이슈를 업무에 반영', 'Attach issue to task')) + '</button>'
-                : '') +
-            '</div>';
-        }).join('')
+        legacyEtcHtml()
     ) +
     fileInputHtml() + filesHtml('') +
   '</div>' +
@@ -792,7 +790,6 @@
   '</div>' +
 '</div>';
 
-        bindFileDrop();
         paintThumbs();
         if (window._makeDraggable) window._makeDraggable('daily-box', 'daily-drag');
         if (window._bindClickToFront) window._bindClickToFront('daily-modal');
@@ -1191,12 +1188,69 @@
         });
     }
 
+    /**
+     * 옛 보고의 **보고-단위** 해야 할 일·막힌 일.
+     * [2026-11-05 요청] 칸을 업무마다로 옮겼으니 입력칸은 없앴다. 다만 **이미 적힌 글을
+     * 안 보이게만 하면 지울 수도 없는 데이터**가 남는다 — 있을 때만 보여 주고 치울 수 있게 한다.
+     */
+    function legacyEtcHtml() {
+        var has = String(_doc.next || '').trim() || String(_doc.issue || '').trim();
+        if (!has) return '';
+        return '<div style="margin:10px 0; padding:8px 10px; border:1px dashed #d8c7a8; background:#fffaf0; border-radius:6px;">' +
+                 '<div style="display:flex; align-items:center; gap:7px; margin-bottom:4px;">' +
+                   '<span style="font-size:11.5px; font-weight:bold; color:#8a6d3b;">' +
+                     esc(T('예전 방식으로 적힌 글 (업무에 안 붙음)', 'Older report-level text (not tied to a task)')) + '</span>' +
+                   '<button onclick="window._dailyClearLegacyEtc()" style="padding:2px 8px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:10.5px; cursor:pointer;">' +
+                     esc(T('치우기', 'Clear')) + '</button>' +
+                 '</div>' +
+                 '<div style="font-size:11.5px; color:#6b5a3e; white-space:pre-line;">' +
+                   esc([String(_doc.next || '').trim(), String(_doc.issue || '').trim()].filter(Boolean).join('\n')) +
+                 '</div>' +
+               '</div>';
+    }
+    window._dailyClearLegacyEtc = function () {
+        _doc.next = ''; _doc.issue = '';
+        saveDraftLocal(); render();
+        toast(T('치웠습니다 — 저장을 눌러야 남습니다.', 'Cleared — press Save to keep it.'), 'info', 5000);
+    };
+
     /** 모달 안 첨부 영역 HTML. 일 종류가 면제여도 보여준다(출장 사진 같은 게 있다). */
     /** 어느 업무로 담을지 기억해 두고 고르기 창을 연다. */
     window._dailyPickFiles = function (task) {
         window._dailyPickTask = String(task || '');
         var el = document.getElementById('daily-file-input');
         if (el) el.click();
+    };
+
+    /**
+     * 📎 이 사진이 **어느 업무 것인지** 고르는 칸.
+     * ⚠️ 텔레그램으로 온 사진은 어느 업무인지 알 길이 없어 "기타"로 들어온다
+     *    (2026-11-05 신고: "텔레그램 알림 첨부 위치 수정되어야"). 사람이 한 번에 옮길 수 있게 한다.
+     */
+    function taskSelect(gi, cur) {
+        var names = (_doc.items || []).map(function (x) { return String(x.name || ''); }).filter(Boolean);
+        var c = String(cur || '');
+        if (c && names.indexOf(c) < 0) names.push(c);     // 지워진 업무 것도 지우지 않는다
+        return '<select onchange="window._dailyFileTask(' + gi + ', this.value)" ' +
+            'title="' + esc(T('이 사진이 붙을 업무', 'Which task this file belongs to')) + '" ' +
+            'style="width:100%; box-sizing:border-box; border:none; border-top:1px solid #eef1f4; ' +
+            'background:#fafbfc; font-size:9.5px; color:#50616f; padding:1px 2px;">' +
+            '<option value=""' + (c ? '' : ' selected') + '>' + esc(T('기타', 'Other')) + '</option>' +
+            names.map(function (n) {
+                return '<option value="' + esc(n) + '"' + (n === c ? ' selected' : '') + '>' +
+                       esc(n.length > 14 ? n.slice(0, 14) + '…' : n) + '</option>';
+            }).join('') + '</select>';
+    }
+
+    /** 사진을 다른 업무로 옮긴다 — 바이트는 그대로 두고 **꼬리표만** 바꾼다. */
+    window._dailyFileTask = function (gi, task) {
+        var f = (_doc && _doc.files || [])[gi];
+        if (!f) return;
+        f.task = String(task || '');
+        saveDraftLocal();
+        render();
+        toast(T('첨부를 옮겼습니다 — 저장을 눌러야 남습니다.',
+                'Moved the attachment — press Save to keep it.'), 'info', 5000);
     };
 
     /** 고르기 창은 **문서에 하나만** — 업무마다 만들면 id 가 겹쳐 늘 첫 번째만 열린다. */
@@ -1235,6 +1289,7 @@
                          (compact ? '' : '<div style="font-size:9.5px; color:#aaa; margin-top:1px;">' + esc(sizeTxt(f.size)) + (f.via === 'telegram' ? ' 📱' : '') + '</div>') +
                        '</div>' +
                      '</div>' +
+                     taskSelect(gi, f.task) +
                    '</div>';
         }).join('');
         var pick = '<button onclick="window._dailyPickFiles(' + JSON.stringify(only).replace(/"/g, '&quot;') + ')" ' +
@@ -1263,19 +1318,51 @@
                '</div>';
     }
 
-    /** 끌어다 놓기 · 붙여넣기 — 렌더마다 상자가 새로 생기므로 그 상자에 다시 건다. */
-    function bindFileDrop() {
-        var box = document.getElementById('daily-box');
-        if (!box || box._dailyDnd) return;
-        box._dailyDnd = 1;
-        box.addEventListener('dragover', function (e) { e.preventDefault(); e.stopPropagation(); });
-        box.addEventListener('drop', function (e) {
+    /**
+     * 끌어다 놓기 · 붙여넣기.
+     *
+     * ⚠️⚠️ [2026-11-05 실측] 상자 **위**에 떨어뜨리면 잘 됐는데, **어두운 배경**에 떨어뜨리면
+     *    보고는 0건이고 **앱 전역 드롭**(js/04f 의 `window 'drop'`)이 받아 그 사진을
+     *    **간트 일정표 엑셀로 열려** 했다. 배경(`#daily-modal`)은 `pointer-events:none` 이라
+     *    드래그 이벤트가 아예 거길 지나지 않는다 — 상자에만 걸어선 못 막는다.
+     *    → 모달이 열려 있는 동안엔 **문서 capture 단계**에서 가로채 보고로 담는다.
+     * ⚠️ 그래서 `preventDefault` 와 `stopPropagation` 을 **capture 에서** 건다 —
+     *    bubble 로 가면 그땐 이미 전역이 받은 뒤다.
+     * 📎 업무 카드 위에 떨어뜨리면 **그 업무에** 붙는다(`data-daily-item`).
+     */
+    function taskFromEvent(e) {
+        var el = e && e.target;
+        while (el && el !== document) {
+            if (el.getAttribute && el.getAttribute('data-daily-item') != null) {
+                var n = +el.getAttribute('data-daily-item');
+                var it = (_doc && _doc.items || [])[n];
+                return it ? String(it.name || '') : '';
+            }
+            el = el.parentNode;
+        }
+        return '';
+    }
+
+    function modalOpen() {
+        var w = document.getElementById('daily-modal');
+        return !!(w && w.style.display !== 'none' && _doc);
+    }
+
+    (function bindFileDropOnce() {
+        document.addEventListener('dragover', function (e) {
+            if (!modalOpen()) return;
+            e.preventDefault();                       // 이걸 안 하면 drop 자체가 안 온다
+        }, true);
+        document.addEventListener('drop', function (e) {
+            if (!modalOpen()) return;
             var fs = e.dataTransfer && e.dataTransfer.files;
             if (!fs || !fs.length) return;
-            e.preventDefault(); e.stopPropagation();
-            window.dailyAttachFiles(fs);
-        });
-        box.addEventListener('paste', function (e) {
+            e.preventDefault();
+            e.stopPropagation();                      // 전역(엑셀 열기)까지 가지 않게
+            window.dailyAttachFiles(fs, taskFromEvent(e));
+        }, true);
+        document.addEventListener('paste', function (e) {
+            if (!modalOpen()) return;
             var items = (e.clipboardData && e.clipboardData.items) || [];
             var out = [];
             for (var i = 0; i < items.length; i++) {
@@ -1288,15 +1375,16 @@
                     try {
                         f = new File([f], 'capture_' + ymd() + '_' + String(Date.now()).slice(-6) + '.png',
                                      { type: f.type || 'image/png' });
-                    } catch (e2) { /* File 생성이 막히면 원본 이름으로 간다 */ }
+                    } catch (e2) { /* File 생성이 막히면 원본 이름으로 */ }
                 }
                 out.push(f);
             }
-            if (!out.length) return;          // 글자 붙여넣기는 그대로 입력칸으로 간다
+            if (!out.length) return;                  // 글자 붙여넣기는 그대로 입력칸으로
             e.preventDefault();
-            window.dailyAttachFiles(out);
-        });
-    }
+            e.stopPropagation();
+            window.dailyAttachFiles(out, taskFromEvent(e));
+        }, true);
+    })();
 
     // ══════════════════════════════════════════════════════════════════════
     // 7. 팀 하루 보기 탭
@@ -1998,31 +2086,36 @@
     // ══════════════════════════════════════════════════════════════════════
     // 주간보고(js/20)는 content 의 `[문제점]`/`[대책]` 줄만 읽는다. 그러니 그 줄을 심으면
     // js/20 은 **한 줄도 안 고치고** 일일 이슈가 주간보고 문제점 표에 올라온다.
-    window.dailyPromoteIssue = function () {
-        var txt = String(_doc.issue || '').trim();
-        if (!txt) { toast(T('반영할 이슈가 없습니다.', 'No issue to promote.'), 'info'); return; }
+    /**
+     * ↗️ 그 업무의 "막힌 일"을 간트 업무 행의 `[문제점]` 줄로 넣는다(주간보고가 그 줄을 읽는다).
+     * [2026-11-05] 칸이 업무마다로 갈리면서 **어느 업무인지 고를 필요가 없어졌다** — 번호로 받는다.
+     * ⚠️ 행은 **이름으로 다시 찾는다.** 인덱스는 정렬·추가로 움직이고, 2026-11-04 에 `_rowUid` 가
+     *    통째로 바뀌는 것도 봤다.
+     * ⚠️ `project` 로 거르지 않는다 — 저장되는 프로젝트 이름은 `.json` 을 뗀 모양이라
+     *    `currentDriveFileName` 과 글자가 다르다(그걸로 거르면 **아무도 안 걸린다**).
+     *    지금 열린 간트에서 같은 이름의 행을 찾는 것으로 충분하다.
+     */
+    window.dailyPromoteIssue = function (idx) {
+        var it = (_doc && _doc.items || [])[idx];
+        if (!it) { toast(T('어느 업무인지 알 수 없습니다.', 'No such task.'), 'info'); return; }
+        var txt = String(it.issue || '').trim();
+        if (!txt) { toast(T('이 업무의 「막힌 일」이 비어 있습니다.', 'This task has no blocker text.'), 'info'); return; }
         var gd = window.globalData, ci = window.colIdx || {};
         if (!Array.isArray(gd) || gd.length < 2 || ci.content == null || ci.content === -1) {
             toast(T('이 프로젝트를 먼저 열어주세요 — 이슈를 적을 업무 행이 필요합니다.',
                     'Open the project first — the issue needs a task row.'), 'warning', 7000);
             return;
         }
-        // 담긴 업무 중 **지금 열린 프로젝트의 행**만 대상으로 한다(행 번호가 아니라 이름으로 다시 찾는다 —
-        // 행은 정렬·추가로 움직인다. 2026-11-04 에 _rowUid 가 통째로 바뀐 걸 봤으니 인덱스는 더더욱 못 믿는다)
-        var cands = (_doc.items || []).filter(function (it) {
-            return !it.promoted && it.project && it.project === (window.currentDriveFileName || '');
-        });
-        var target = null, label = '';
-        for (var c = 0; c < cands.length && !target; c++) {
-            for (var i = 1; i < gd.length; i++) {
-                if (gd[i] && rowName(gd[i]) === cands[c].name) { target = gd[i]; label = cands[c].name; cands[c].promoted = true; break; }
-            }
+        var target = null, label = String(it.name || '');
+        for (var i = 1; i < gd.length; i++) {
+            if (gd[i] && rowName(gd[i]) === label) { target = gd[i]; break; }
         }
         if (!target) {
-            toast(T('이슈를 붙일 업무를 찾지 못했습니다 — 이 프로젝트의 업무를 하나 담아주세요.',
-                    'Could not find a task in this project to attach the issue to.'), 'warning', 8000);
+            toast(T('지금 열린 간트에서 「' + label + '」 행을 찾지 못했습니다 — 그 프로젝트를 열고 다시 눌러주세요.',
+                    'Could not find a row named "' + label + '" in the open Gantt.'), 'warning', 8000);
             return;
         }
+        it.promoted = true;
         var cur = String(target[ci.content] || '');
         if (cur.indexOf('[문제점]') !== -1) {
             toast(T('그 업무엔 이미 [문제점]이 적혀 있습니다 — 간트에서 직접 고쳐주세요.',
@@ -2217,6 +2310,8 @@
         //    업무 하나가 한 줄이고, 이름·종류는 `rowspan` 으로 묶는다.
         //    ⚠️ 그래서 `rows` 는 사람당 **여러 줄**이다(전엔 한 줄이었다).
         var td = 'padding:5px 8px; border:1px solid #e3e6ea; vertical-align:top; font-size:12px;';
+        // 🎨 [2026-11-05 요청] 구분 열은 **모든 줄에서 같은 배경**으로(업무·기타 가리지 않고).
+        var CAT_BG = ' text-align:center; color:#50616f; background:#f3f6f8; white-space:nowrap;';
         var rows = people.map(function (p) {
             var d = byKey[String(p.key || '').toLowerCase()];
             var dbl = ' ondblclick="window._dailyRowDbl(\'' + esc(String(p.key || '')) + '\')"'
@@ -2255,7 +2350,7 @@
                 var fs = filesOf(d, it.name);
                 out.push('<tr style="cursor:pointer;"' + dbl + '>' +
                     (n === 0 ? nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' : '') +
-                    '<td style="' + td + ' text-align:center; color:#50616f; background:#fafbfc; white-space:nowrap;">' + esc(it.cat || '-') + '</td>' +
+                    '<td style="' + td + CAT_BG + '">' + esc(it.cat || '-') + '</td>' +
                     '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
                       (pj ? '<div style="color:#9aa3ab; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' + esc(pj) + '</div>' : '') +
                     '</td>' +
@@ -2269,7 +2364,7 @@
             if (hasEtc) {
                 out.push('<tr style="cursor:pointer;"' + dbl + '>' +
                     (items.length ? '' : nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>') +
-                    '<td style="' + td + ' text-align:center; color:#aaa; background:#fafbfc;">-</td>' +
+                    '<td style="' + td + CAT_BG + '">-</td>' +
                     '<td style="' + td + ' color:#888;">' + esc(T('(기타)', '(other)')) + '</td>' +
                     '<td style="' + td + ' white-space:pre-line;" colspan="' + window.DAILY_FIELDS.length + '">' + esc(etcTxt || '-') + '</td>' +
                     '<td style="' + td + ' text-align:center;">' + (etcFiles.length ? fileChips(etcFiles) : '<span style="color:#ccc;">-</span>') + '</td>' +
