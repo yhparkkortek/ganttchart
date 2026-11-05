@@ -85,6 +85,11 @@ def setup(fake, reachable=True, tmpcfg=True):
     if tmpcfg:
         bk.DOCSTORE_CONFIG_FILE = os.path.join(tempfile.mkdtemp(), 'docstore_config.json')
     bk._docstore_load = lambda: {'root': '', 'folders': ['PANEL']}
+    # 🔑 [2026-11-05] /nas/setup 이 비밀번호 저장 시 실제 cmdkey 를 불러 이 PC의 Windows
+    # 자격 증명 관리자를 건드리게 됐다(_sync_docstore_smb_credential) — 이 하네스는 route의
+    # 단계 순서만 보는 자리라 그 경계도 가짜로 바꿔 둔다(안 바꾸면 테스트가 매번 실제
+    # 'nas.invalid' 자격증명을 PC에 심는다). 그 함수 자체의 동작은 test_docstore_smb_sync.py 가 본다.
+    bk._sync_docstore_smb_credential = lambda host, user, pw: None
 
 
 def post(body):

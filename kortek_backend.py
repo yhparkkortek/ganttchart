@@ -5777,6 +5777,37 @@ def nas_unblock():
 
 
 
+# 🔑 [2026-11-05] NAS 비밀번호를 저장할 때 문서 저장소(SMB) 자격증명도 같이 갱신한다.
+#   왜: 문서 저장소(/doc/*)는 DSM API 와 완전히 별개로 **Windows OS 가 캐시한 SMB 자격증명**
+#   (탐색기/자격 증명 관리자)에만 의존한다(_docstore_probe_root 윗주석, 2026-11-04). NAS
+#   비밀번호를 여기서만 바꾸면 문서 저장소는 여전히 낡은 비밀번호로 실패 로그온을 반복하다
+#   계정이 잠길 수 있다 — `unc_of()`가 같은 `host`로 UNC를 만드는 것처럼(nas_dsm.py:713)
+#   같은 장비·같은 계정이라고 보고 같이 갱신한다(실제 사고: 2026-11-05, 사용자가 NAS 비밀번호만
+#   바꿨는데 문서 저장소가 WinError 1326으로 막힘).
+#   ⚠️ 비밀번호를 로그·예외·응답에 남기지 않는다. 이 동기화가 실패해도 NAS 로그인 자체는
+#      막지 않는다(그냥 무시 — 그래도 안 되면 사람이 탐색기에서 수동 재인증하는 기존 길이 남음).
+#   ⚠️ cmdkey 대상은 호스트명/IP만 받는다 — 스킴·포트·경로는 떼고 넘긴다.
+def _sync_docstore_smb_credential(host, user, password):
+    if not host or not user or not password:
+        return
+    target = str(host).strip()
+    if '://' in target:
+        target = target.split('://', 1)[1]
+    target = target.split('/')[0].split('\\')[0].split(':')[0]
+    if not target:
+        return
+    try:
+        subprocess.run(
+            ['cmdkey', '/add:' + target, '/user:' + str(user).strip(), '/pass:' + str(password)],
+            capture_output=True, timeout=5
+        )
+        # 사람이 방금 새 비밀번호를 넣은 것 — 문서 저장소도 다시 두드려 보게 잠금을 풀어준다.
+        _DOCSTORE_AUTH_BLOCK['code'] = 0
+        _DOCSTORE_AUTH_BLOCK['message'] = ''
+    except Exception as e:
+        print(f'[문서저장소] SMB 자격증명 동기화 실패(무시, 안 되면 탐색기에서 수동 재인증): {e}')
+
+
 # ── 🔑 NAS 로그인/앱 폴더 설정 (설정 화면이 쓰는 쓰기 라우트) ───────────────────
 #   ⚠️ 비밀번호는 **POST 본문으로만** 받는다. 쿼리스트링에 실으면 NAS·프록시의
 #      access log 에 그대로 남는다(SAP·그룹웨어와 같은 규칙).
@@ -5797,6 +5828,8 @@ def nas_config_save():
     try:
         saved = _nas().save_config(host, port, bool(req.get('https')), user, pw)
         # save_config 가 잠금을 풀어 준다(= 사람이 설정을 다시 저장했다는 뜻).
+        if pw:
+            _sync_docstore_smb_credential(host, user, pw)
         return jsonify({'ok': True, 'saved': saved})
     except Exception as e:
         return jsonify({'ok': False, 'message': str(e)}), 400
@@ -5876,6 +5909,8 @@ def nas_setup():
     # 1) 계정 저장 (잠금도 함께 풀린다 — 사람이 다시 시킨 것이므로)
     try:
         nas.save_config(host, port, https, user, pw)
+        if pw:
+            _sync_docstore_smb_credential(host, user, pw)
         step('config', True, f'{host}:{port} / {user}')
     except Exception as e:
         step('config', False, str(e))
