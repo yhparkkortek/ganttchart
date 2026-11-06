@@ -31,7 +31,9 @@
         status: null,         // 마지막 /gw/status 결과
         loading: false,
         error: null,
-        fetchedAt: 0
+        fetchedAt: 0,
+        statusMsg: '',        // [2026-11-06] 사람에게 보일 안내. 그리는 자리는 **토글 버튼 말풍선**
+        statusKind: ''        //   '' | 'busy' | 'error' | 'ok'
     };
 
     var GW_MODE_KEY = 'gantt_cal_source';
@@ -54,11 +56,17 @@
         return { from: _ymd(from), to: _ymd(to) };
     };
 
+    // 🙈 [2026-11-06 사용자 요청] 토글 버튼 **왼쪽에 안내를 그리지 않는다.**
+    //    그 자리(`#gw-cal-status`)는 `white-space:nowrap` 스팬이라, 긴 문구(백엔드 꺼짐
+    //    안내가 45자다)가 줄바꿈도 못 하고 툴바를 통째로 밀어 **머리말이 깨졌다.**
+    //    ⚠️ 그래도 **조용히 삼키지는 않는다** — 11-05 에 건수를 옮긴 그 자리, 토글 버튼
+    //       말풍선에 싣는다. 실패를 지우면 "일정이 없는 것"과 "못 불러온 것"을 가를 방법이
+    //       사라지고, 말풍선의 "0건"이 **거짓말**이 된다.
+    //    ⚠️ 호출지 16곳은 그대로 둔다 — 그리는 자리만 바뀌었지 알릴 내용은 같다.
     window._gwSetStatus = function (msg, kind) {
-        var el = document.getElementById('gw-cal-status');
-        if (!el) return;
-        el.style.color = kind === 'error' ? '#b1432f' : (kind === 'busy' ? '#00707d' : '#888');
-        el.textContent = msg || '';
+        window._gwState.statusMsg = msg || '';
+        window._gwState.statusKind = msg ? (kind || '') : '';
+        if (window._gwSyncToggleBtn) window._gwSyncToggleBtn();
     };
 
     window._gwCheckStatus = async function () {
@@ -214,12 +222,16 @@
                            : ('📊 ' + _t('Gantt 일정', 'Gantt'));
         b.setAttribute('aria-pressed', gw ? 'true' : 'false');
         // 🏢 건수는 머리말 대신 여기(말풍선)에 — 0건이면 "없다"는 것도 알려줘야 하므로 늘 붙인다.
+        //    ⚠️ [2026-11-06] 실패·로그인 필요·불러오는 중 안내도 여기로 왔다(머리말 스팬을 없앴다).
+        //       **사유를 맨 앞에 둔다** — 못 불러왔는데 "0건을 보는 중"이 먼저 보이면 그게 거짓말이다.
         var cnt = (window._gwState.events || []).length;
-        b.title = gw
+        var base = gw
             ? _t('지금 그룹웨어 일정 ' + cnt + '건을 보는 중 — 누르면 Gantt 업무로 전환합니다',
                  'Showing ' + cnt + ' groupware event(s) — click to switch to Gantt tasks')
             : _t('지금 Gantt 업무를 보는 중 — 누르면 그룹웨어 일정으로 전환합니다 (읽기 전용, 로그인은 AI 문답 창의 🔑)',
                  'Showing Gantt tasks — click to switch to groupware events (read-only; sign in from the 🔑 in AI chat)');
+        var note = window._gwState.statusMsg || '';
+        b.title = note ? (note + '\n\n' + base) : base;
         // 🐛 [2026-10-28 버그 수정, 사용자 지적 "호버가 Gantt 쪽에만 적용돼 있음"] 옆의 "오늘"/
         //    "내보내기" 버튼처럼 onmouseover/out을 쓰되, 이 버튼은 상태에 따라 배경이 2가지라
         //    정적 색을 못 박는 대신 매번 이 함수가 돌 때(상태 바뀔 때마다) 그 상태 기준 호버색으로

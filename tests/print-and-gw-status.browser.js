@@ -149,9 +149,14 @@
     head('[F] 🏢 그룹웨어 — 성공 건수는 숨기고, 실패는 그대로 보여준다');
     window.switchTab('calendar');
     await sleep(350);
+    // ⚠️ [2026-11-06] 계약이 바뀌었다 — 버튼 **왼쪽 안내 스팬(#gw-cal-status)을 없앴다**
+    //    (nowrap 이라 긴 문구가 툴바를 밀어 머리말이 깨졌다). 성공이든 실패든 머리말엔
+    //    아무것도 안 그리고, **사유는 토글 버튼 말풍선**에 싣는다. 그래서 이 절은
+    //    "스팬이 없다 + 말풍선이 말한다" 로 검사한다.
     var statusEl = document.getElementById('gw-cal-status');
     var toggleBtn = document.getElementById('gw-cal-toggle-btn');
-    if (!statusEl || !toggleBtn || !window._gwLoadEvents) {
+    ok('버튼 왼쪽 안내 스팬이 없다 (#gw-cal-status)', statusEl === null, statusEl && statusEl.outerHTML);
+    if (!toggleBtn || !window._gwLoadEvents) {
         lines.push('  ⏭  Calendar 의 그룹웨어 UI 를 못 찾음 — 건너뜀');
     } else {
         var realFetch = window.fetch, realLogin = window._gwEnsureLogin, realMode = window._gwState.mode;
@@ -170,9 +175,9 @@
         window._gwState.mode = 'gw'; window._gwState.fetchedAt = 0; window._gwState.loading = false;
         await window._gwLoadEvents(true);
         await sleep(150);
-        ok('성공 시 머리말이 비어 있다', statusEl.textContent === '', statusEl.textContent);
-        ok('성공 시 머리말이 자리를 안 차지한다', statusEl.getBoundingClientRect().width === 0);
+        ok('성공 시 안내가 비어 있다', (window._gwState.statusMsg || '') === '', window._gwState.statusMsg);
         ok('건수(40)는 버튼 말풍선에 남아 있다', /40/.test(toggleBtn.title), toggleBtn.title);
+        ok('성공 시 말풍선에 ⚠️·🔒 같은 사유가 안 붙는다', !/⚠️|🔒/.test(toggleBtn.title), toggleBtn.title);
 
         // ② 실패 — 조용히 삼키면 "일정 없음"과 구분이 안 된다
         window.fetch = async function (u) {
@@ -183,7 +188,10 @@
         window._gwState.fetchedAt = 0; window._gwState.loading = false;
         await window._gwLoadEvents(true);
         await sleep(150);
-        ok('실패 시 머리말에 사유가 보인다', statusEl.textContent.trim().length > 0, statusEl.textContent);
+        // 실패를 지우면 "일정 없음"과 구분이 안 된다 — 자리만 옮겼지 없애지 않았음을 확인한다.
+        ok('실패 시 사유가 남아 있다', (window._gwState.statusMsg || '').trim().length > 0, window._gwState.statusMsg);
+        ok('실패 사유가 버튼 말풍선에 실린다', toggleBtn.title.indexOf(window._gwState.statusMsg) === 0, toggleBtn.title);
+        ok('실패 말풍선에도 전환 안내가 같이 있다', /누르면|click/i.test(toggleBtn.title), toggleBtn.title);
 
         window.fetch = realFetch; window._gwEnsureLogin = realLogin; window._gwState.mode = realMode;
     }
