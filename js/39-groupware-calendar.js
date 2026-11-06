@@ -211,13 +211,12 @@
         var b = document.getElementById('gw-cal-toggle-btn');
         if (!b) return;
         var gw = window._gwState.mode === 'gw';
-        // 🎨 [2026-10-28 버그 수정, 사용자 지적 "보라색 하드코딩"] 팔레트 롤(js/21 CP_CURRENT_NAV·
-        //    CP_CURRENT_TEAL)로 교체 — _cpApplyLive()가 이 정확한 hex 문자열을 찾아 테마색으로
-        //    바꿔치기하므로(bgRoles에 둘 다 등록돼 있음), 어떤 테마를 고르든 이 버튼도 같이 바뀐다.
-        var baseBg = gw ? window.CP_CURRENT_NAV.active : window.CP_CURRENT_TEAL.bg;
-        var hoverBg = gw ? window.CP_CURRENT_NAV.hover : window.CP_CURRENT_TEAL.hoverBg;
-        b.style.background = baseBg;
-        b.style.color = gw ? '#fff' : window.CP_CURRENT_TEAL.darkText;
+        // 🎨 [2026-11-06 사용자 요청] 두 상태의 **색을 통일**한다 — 기준은 📊 Gantt 일정 쪽
+        //    (연한 teal + 진한 글씨 + 호버). 📌 핀셋/WBS 버튼(js/24)과 같은 규칙이다.
+        //    지금 어느 모드인지는 **글자**와 `aria-pressed` 가 계속 말해 준다.
+        //    ⚠️⚠️ 색을 **여기서 칠하지 않는다** — 평소·호버 둘 다 `.ep-theme-hover-btn`(HTML 클래스)
+        //       이 맡고, js/21 `_cpApplyLive()` 가 그 클래스에 `!important` 로 테마색을 넣는다.
+        //       JS 로 인라인을 칠하면 `rgb()` 로 정규화돼 팔레트의 hex 선택자에 안 걸린다.
         b.textContent = gw ? ('🏢 ' + _t('그룹웨어 일정', 'Groupware'))
                            : ('📊 ' + _t('Gantt 일정', 'Gantt'));
         b.setAttribute('aria-pressed', gw ? 'true' : 'false');
@@ -232,12 +231,6 @@
                  'Showing Gantt tasks — click to switch to groupware events (read-only; sign in from the 🔑 in AI chat)');
         var note = window._gwState.statusMsg || '';
         b.title = note ? (note + '\n\n' + base) : base;
-        // 🐛 [2026-10-28 버그 수정, 사용자 지적 "호버가 Gantt 쪽에만 적용돼 있음"] 옆의 "오늘"/
-        //    "내보내기" 버튼처럼 onmouseover/out을 쓰되, 이 버튼은 상태에 따라 배경이 2가지라
-        //    정적 색을 못 박는 대신 매번 이 함수가 돌 때(상태 바뀔 때마다) 그 상태 기준 호버색으로
-        //    다시 걸어준다 — 두 상태 다 호버가 먹는다.
-        b.onmouseover = function () { b.style.background = hoverBg; };
-        b.onmouseout = function () { b.style.background = baseBg; };
     };
 
     // 간트 업무는 마감일 하루에만 찍히지만, 그룹웨어 일정은 기간 전체에 걸쳐 표시한다.

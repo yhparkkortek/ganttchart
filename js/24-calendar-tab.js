@@ -29,10 +29,17 @@ window.calSyncTaskModeBtn = function() {
     var b = document.getElementById('cal-task-mode-btn');
     if (!b) return;
     var pin = window.calState.taskMode === 'pin';
-    var baseBg = pin ? window.CP_CURRENT_NAV.active : window.CP_CURRENT_TEAL.bg;
-    var hoverBg = pin ? window.CP_CURRENT_NAV.hover : window.CP_CURRENT_TEAL.hoverBg;
-    b.style.background = baseBg;
-    b.style.color = pin ? '#fff' : window.CP_CURRENT_TEAL.darkText;
+    // 🎨 [2026-11-06 사용자 요청] 두 상태의 **색을 통일**한다 — 기준은 🗂 WBS 업무 쪽
+    //    (연한 teal + 진한 글씨 + 호버). 전엔 📌 핀셋일 때만 진한 색으로 채우고 글씨를
+    //    흰색으로 바꿔서, 바로 옆 [◀이전][오늘][📤 내보내기/동기화] 와 혼자 달라 보였다.
+    //    ⚠️ 지금 어느 모드인지는 **글자**(📌 핀셋 업무 / 🗂 WBS 업무)와 `aria-pressed` 가
+    //       계속 말해 준다 — 2026-10-28 에 고친 "색과 글자가 서로 다른 걸 가리킨다" 문제는
+    //       색을 뺀 지금도 생기지 않는다(가리키는 게 글자 하나로 줄었을 뿐이다).
+    //    ⚠️⚠️ 색을 **여기서 칠하지 않는다.** 평소·호버 둘 다 `.ep-theme-hover-btn`(HTML 클래스)이
+    //       맡는다 — js/21 `_cpApplyLive()` 가 그 클래스에 `!important` 로 테마색을 넣어 준다.
+    //       JS 로 인라인을 칠하면 값이 `rgb()` 로 정규화돼 팔레트의
+    //       `[style*="background:#a3d9e0"]` 선택자에 **안 걸리고**, 그래서 테마를 바꿔도 호버만
+    //       안 따라온다(실측: 이 버튼은 호버가 아예 안 먹었고 기준 버튼만 먹었다).
     b.textContent = pin ? ('📌 ' + window._t('핀셋 업무', 'Pinned')) : ('🗂 ' + window._t('WBS 업무', 'WBS'));
     b.setAttribute('aria-pressed', pin ? 'true' : 'false');
     b.title = pin
@@ -40,8 +47,6 @@ window.calSyncTaskModeBtn = function() {
                      'Showing pinned (📌) tasks only — click to switch to all tasks by the LEVEL(WBS) filter')
         : window._t('지금 LEVEL(WBS) 필터 기준 전체 업무를 보는 중 — 누르면 핀셋(📌) 처리된 업무만 보기로 전환합니다',
                      'Showing all tasks by the LEVEL(WBS) filter — click to switch to pinned (📌) tasks only');
-    b.onmouseover = function() { b.style.background = hoverBg; };
-    b.onmouseout = function() { b.style.background = baseBg; };
 };
 
 // 💡 [2026-08-21][WBS 레벨 필터] 캘린더에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
