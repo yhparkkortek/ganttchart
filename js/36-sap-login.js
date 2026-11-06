@@ -46,6 +46,35 @@
     const inputSt = 'flex:1; min-width:0; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;';
     const btnSt = 'padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid #ffe08a; background:#fff8e6; color:#7a5210;';
 
+    // 🏠 [2026-11-06, 사용자 요청] 집에서 NAS 접속이 안 될 때 임시로 Drive(+NAS 미러)로 전환하는
+    //    버튼 — 콘솔 명령(localStorage.gantt_storage_backend)을 그대로 감싼 것뿐이다. 이 PC의
+    //    브라우저 localStorage 에만 영향이라 사무실 PC·다른 브라우저는 그대로 NAS 를 쓴다.
+    //    ⚠️ Drive 쪽 데이터는 팀이 NAS로 넘어간 날짜(STORAGE_POLICY.since) 이전 스냅샷이다.
+    window._nasMirrorDebugToggle = function () {
+        var on = false;
+        try { on = localStorage.getItem('gantt_storage_backend') === 'mirror'; } catch (e) { /* ignore */ }
+        if (on) {
+            if (!confirm(T('미러 모드를 끄고 사내 NAS 로 돌아갈까요? (사무실에서 쓸 때)',
+                           'Turn off mirror mode and go back to the in-house NAS?'))) return;
+            try { localStorage.removeItem('gantt_storage_backend'); } catch (e) { /* ignore */ }
+        } else {
+            var since = (window.STORAGE_POLICY || {}).since || '';
+            if (!confirm(T('구글 드라이브로 임시 전환할까요? (NAS 접속이 안 되는 곳에서 디버깅용)\n'
+                           + '주의: 드라이브 데이터는 사내 NAS 전환일(' + since + ') 이전 스냅샷이라 최신이 아닐 수 있습니다.',
+                           'Switch to Google Drive temporarily (for debugging away from the NAS)?\n'
+                           + 'Note: Drive data predates the NAS cutover (' + since + ') and may be stale.'))) return;
+            try { localStorage.setItem('gantt_storage_backend', 'mirror'); } catch (e) { /* ignore */ }
+        }
+        location.reload();
+    };
+    function _nasMirrorDebugRefreshBtn() {
+        var btn = document.getElementById('nas-mirror-toggle');
+        if (!btn) return;
+        var on = false;
+        try { on = localStorage.getItem('gantt_storage_backend') === 'mirror'; } catch (e) { /* ignore */ }
+        btn.textContent = on ? ('🗄️ ' + T('NAS로 복귀', 'Back to NAS')) : ('🪞 ' + T('임시 전환', 'Switch temporarily'));
+    }
+
     window.openSapLoginSettings = async function () {
         let wrap = document.getElementById('saplogin-modal');
         if (!wrap) {
@@ -70,11 +99,11 @@
                 //    `min-height:0` 이 같이 있어야 한다 — flex 항목은 기본이 `min-height:auto` 라
                 //    안 줄어들고, 그러면 `overflow-y:auto` 가 일할 자리가 없어 스크롤바가 안 생긴다.
                 + '<div style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto;">'
-                + '<div style="font-size:11.5px; color:#666; margin-bottom:12px; line-height:1.5;">'
-                + T('SAP이 꺼져 있거나 로그아웃된 상태에서 SAP 질문을 하면 이 계정으로 자동 로그인한 뒤 명령을 수행합니다. '
-                    + '비밀번호는 <b>이 PC의 Windows 계정에 묶여 암호화</b>되어 저장되며(다른 PC/계정에선 복호화 불가) 화면·로그에 다시 나오지 않습니다.',
-                    'If SAP is closed or logged out, asking a SAP question logs in with this account first. '
-                    + 'The password is stored <b>encrypted and bound to this PC\'s Windows account</b> and is never shown again.')
+                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
+                + '<strong style="font-size:13px; color:#1971c2;">🏭 ' + T('SAP 자동 로그인', 'SAP auto-login') + '</strong></div>'
+                + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
+                + T('SAP 이 꺼져 있을 때 이 계정으로 자동 로그인합니다. 비밀번호는 이 PC 에만 암호화 저장됩니다.',
+                    'Auto-logs in to SAP with this account when it is closed. Password is stored encrypted on this PC only.')
                 + '</div>'
                 + fieldRow(T('접속 항목', 'Connection'), '<input id="saplogin-sysname" list="saplogin-entries" style="' + inputSt + '" placeholder="SAP Logon 목록의 이름"><datalist id="saplogin-entries"></datalist>')
                 + fieldRow(T('클라이언트', 'Client'), '<input id="saplogin-client" maxlength="3" style="' + inputSt + '" placeholder="예: 100 (비워도 됨)">')
@@ -96,12 +125,9 @@
                 + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
                 + '<strong style="font-size:13px; color:#5b3fa3;">🏢 ' + T('그룹웨어 자동 로그인', 'Groupware auto-login') + '</strong>'
                 + '<span id="gwlogin-state" style="font-size:11px; color:#888;"></span></div>'
-                + '<div style="font-size:11.5px; color:#666; margin-bottom:10px; line-height:1.5;">'
-                + T('그룹웨어는 <b>로그인에 실패해야 보안문자(CAPTCHA)가 나타나는</b> 구조라, '
-                    + '자동 로그인은 <b>한 번만</b> 시도하고 실패하면 재시도하지 않고 창을 열어드립니다 '
-                    + '(계정이 잠기면 메일·전자결재까지 멈춥니다). 비밀번호 보관 방식은 SAP과 동일합니다.',
-                    'Groupware shows a CAPTCHA only <b>after a failed sign-in</b>, so auto-login is tried '
-                    + '<b>once</b> and never retried — the window opens for you instead. Password storage is the same as SAP.')
+                + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
+                + T('실패 시 보안문자(CAPTCHA)가 뜨는 구조라 <b>한 번만</b> 시도합니다. 비밀번호 보관은 SAP과 동일.',
+                    'Tried only <b>once</b> — a failed login triggers a CAPTCHA. Password storage is the same as SAP.')
                 + '</div>'
                 + fieldRow(T('아이디', 'ID'), '<input id="gwlogin-user" autocomplete="off" style="' + inputSt + '" placeholder="예: yhpark">')
                 + fieldRow(T('비밀번호', 'Password'), '<input id="gwlogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
@@ -120,14 +146,9 @@
                 + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
                 + '<strong style="font-size:13px; color:#1a6b73;">🧑‍💼 ' + T('인사관리 자동 로그인', 'HR (kInsa) auto-login') + '</strong>'
                 + '<span id="insalogin-state" style="font-size:11px; color:#888;"></span></div>'
-                + '<div style="font-size:11.5px; color:#666; margin-bottom:10px; line-height:1.5;">'
-                + T('사내 인사관리(insa.kortek.co.kr) 자동 로그인입니다. 아이디는 <b>사번</b>입니다. '
-                    + '그룹웨어와 같은 <b>전용 크롬 창</b>에 열리므로, 로그인한 뒤 그 창에서 바로 쓰실 수 있습니다. '
-                    + '그룹웨어와 같은 이유로 <b>한 번만</b> 시도하고 실패하면 재시도하지 않습니다. '
-                    + '비밀번호 보관 방식은 SAP·그룹웨어와 동일합니다(이 PC의 Windows 계정에서만 풀림).',
-                    'Auto-login for the in-house HR system (insa.kortek.co.kr). The ID is your <b>employee number</b>. '
-                    + 'It opens in the same dedicated Chrome window as groupware. '
-                    + 'Like groupware it is tried <b>once</b> and never retried. Password storage is the same as SAP.')
+                + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
+                + T('아이디는 <b>사번</b>입니다. 그룹웨어와 같은 창에서 열리며, 한 번만 시도합니다.',
+                    'ID is your <b>employee number</b>. Opens in the same window as groupware; tried only once.')
                 + '</div>'
                 + fieldRow(T('아이디(사번)', 'ID (emp. no.)'), '<input id="insalogin-user" autocomplete="off" style="' + inputSt + '" placeholder="' + T('예: 12345', 'e.g. 12345') + '">')
                 + fieldRow(T('비밀번호', 'Password'), '<input id="insalogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
@@ -149,44 +170,33 @@
                 + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
                 + '<strong style="font-size:13px; color:#6741d9;">🗄️ ' + T('NAS(사내 저장소) 로그인', 'NAS (in-house storage) login') + '</strong>'
                 + '<span id="naslogin-state" style="font-size:11px; color:#888;"></span></div>'
-                + '<div style="font-size:11.5px; color:#666; margin-bottom:10px; line-height:1.5;">'
-                + T('사내 NAS 계정입니다. 앱 데이터(프로젝트 파일·설정·백업)가 여기에 저장됩니다. '
-                    + '<b>볼 수 있는 범위는 NAS 폴더 권한이 정합니다</b> — 본인 팀 폴더와 공용 폴더만 열립니다. '
-                    + '⚠️ 비밀번호가 몇 번 틀리면 계정이 아니라 <b>이 PC 의 접속 자체가 차단</b>되므로, '
-                    + '<b>한 번만</b> 시도하고 실패하면 다시 시도하지 않습니다. '
-                    + '비밀번호는 이 PC 의 Windows 계정에서만 풀리는 형태로 저장되고 브라우저에는 남지 않습니다.',
-                    'Your in-house NAS account. App data (project files, settings, backups) lives here. '
-                    + '<b>What you can see is decided by NAS folder permissions</b> — your own team folder and the shared one. '
-                    + '⚠️ Repeated wrong passwords block <b>this PC</b>, not just the account, so it is tried '
-                    + '<b>once</b> and never retried. The password is stored so that only this PC can decrypt it.')
+                + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
+                + T('앱 데이터(프로젝트·설정·백업)가 저장되는 곳입니다. ⚠️ 비밀번호를 틀리면 <b>이 PC 의 접속 자체</b>가 차단되니 한 번만 시도합니다.',
+                    'Where app data (projects, settings, backups) is stored. ⚠️ Wrong passwords block <b>this PC</b>, so it is tried only once.')
                 + '</div>'
-                + fieldRow(T('주소', 'Address'),
-                    '<input id="naslogin-host" autocomplete="off" style="' + inputSt + '" placeholder="' + T('예: nas.사내주소', 'e.g. nas.internal') + '">'
-                    + '<span style="font-size:11px; color:#777;">:</span>'
-                    + '<input id="naslogin-port" inputmode="numeric" style="width:62px; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="5001">'
-                    + '<label style="display:flex; align-items:center; gap:4px; font-size:11.5px; color:#555; white-space:nowrap;">'
-                    + '<input type="checkbox" id="naslogin-https" checked> HTTPS</label>')
-                + fieldRow(T('아이디', 'ID'), '<input id="naslogin-user" autocomplete="off" style="' + inputSt + '">')
-                + fieldRow(T('비밀번호', 'Password'), '<input id="naslogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
-                + fieldRow(T('앱 폴더', 'App folder'),
-                    '<input id="naslogin-root" autocomplete="off" style="' + inputSt + '" placeholder="/공유폴더/kortek_pm">'
-                    + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
-                + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
-                + '<div id="naslogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
-                // 🚀 [2026-11-04] 간편 전환 — 팀원이 해야 할 일을 **아이디·비밀번호 두 칸**으로 줄인다.
-                //    전환이 5단계(백엔드 → 로그인 → 앱 폴더 → 자료실 경로 → 모드)였고, 하나만
-                //    빠뜨려도 "🗄️ 는 뜨는데 프로젝트가 안 열린다"가 됐다. 순서는 백엔드
-                //    `/nas/setup` 이 지킨다 — 화면은 단계별 결과를 그대로 보여줄 뿐이다.
-                + '<div style="border:1px dashed #b197fc; background:#f8f5ff; border-radius:8px; padding:9px 10px; margin:0 0 12px;">'
-                + '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
-                + '<b style="font-size:12px; color:#5f3dc4;">🚀 ' + T('간편 전환', 'Quick switch') + '</b>'
-                + '<button id="nasq-toggle" onclick="window._nasQuickToggle()" style="' + btnSt + ' padding:5px 10px; font-weight:bold;">'
-                + T('열기', 'Open') + '</button></div>'
-                + '<div style="font-size:11px; color:#666; margin-top:5px; line-height:1.5;">'
-                + T('아이디·비밀번호만 넣으면 <b>앱 폴더·자료실 경로·저장소 모드</b>까지 한 번에 맞춥니다.',
-                    'Enter just your ID and password — the app folder, doc-store path and storage mode are set for you.')
-                + '</div>'
-                + '<div id="naslogin-quick" style="display:none; margin-top:9px;">'
+                // 🏠 [2026-11-06] 집 등 NAS 가 안 닿는 곳에서 디버깅할 때 쓰는 임시 전환 버튼.
+                //    NAS 주소/계정 칸 바로 위 — 화면 스크린샷으로 사용자가 지정한 자리.
+                + '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;'
+                + ' background:#fff8e6; border:1px dashed #e6a817; border-radius:8px; padding:8px 10px; margin:0 0 10px;">'
+                + '<span style="font-size:11px; color:#7a5210; line-height:1.4;">🏠 '
+                + T('집에서 NAS 없이 디버깅할 땐 구글 드라이브로 임시 전환할 수 있습니다.',
+                    'Away from the office NAS? Switch to Google Drive temporarily for debugging.')
+                + '</span>'
+                + '<button id="nas-mirror-toggle" onclick="window._nasMirrorDebugToggle()" style="' + btnSt
+                + ' padding:5px 10px; white-space:nowrap; flex:0 0 auto;"></button></div>'
+                // ══ 🚀 기본 경로 — 아이디·비밀번호만 넣으면 끝 ═══════════════════
+                //  ⚠️⚠️ [2026-11-06, 사용자 지적] 이게 **기본**이어야 하는 이유:
+                //     NAS 로 데이터를 옮긴 건 한 번이지만 **PC 설정은 PC 마다 매번** 다시 한다
+                //     (`nas_login_config.json`·`docstore_config.json` 은 .gitignore, 각 PC 로컬).
+                //     새 PC·재설치·노트북 교체·신규 입사자마다 처음부터다. 그리고 맞출 게 넷이다 —
+                //     ①DSM 계정 ②앱 폴더 ③자료실 SMB 경로(①과 **전혀 다른 길**) ④저장소 모드.
+                //     아래 '직접 입력'은 그중 **①만** 한다. 그게 맨 위에 "NAS 로그인"이라는 이름으로
+                //     먼저 보이던 동안, 그걸 채운 PC 가 "🗄️ 는 뜨는데 프로젝트가 안 열린다 /
+                //     사양서가 안 열린다" 로 끝났다(2026-11-04·11-05 팀원 신고 두 건).
+                //     → 넷을 다 밟는 `/nas/setup` 을 기본으로 올리고 수동은 고급으로 내린다.
+                //        고를 수 있게 둔 것 자체가 반쪽 설정의 입구였다.
+                + '<div id="naslogin-quick" style="border:1px solid #d0bfff; background:#f8f5ff;'
+                + ' border-radius:8px; padding:10px 11px 2px; margin:0 0 10px;">'
                 + fieldRow(T('아이디', 'ID'), '<input id="nasq-user" autocomplete="off" style="' + inputSt + '">')
                 + fieldRow(T('비밀번호', 'Password'), '<input id="nasq-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + fieldRow(T('NAS 주소', 'NAS address'),
@@ -197,7 +207,7 @@
                 + '<input id="nasq-code" placeholder="' + T('설정 코드 붙여넣기(선택)', 'Paste setup code (optional)') + '"'
                 + ' oninput="window._nasQuickApplyCode()" style="' + inputSt + ' margin-bottom:8px;">'
                 + '<div id="nasq-log" style="display:none; font-size:11.5px; line-height:1.6; margin:0 0 8px;"></div>'
-                + '<div style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">'
+                + '<div style="display:flex; gap:6px; justify-content:flex-end; align-items:center; margin-bottom:8px;">'
                 + '<button onclick="window._nasSaveDefaultsFile()" style="' + btnSt + ' padding:5px 9px;" title="'
                 + T('설치 폴더에 같이 둘 nas_defaults.json 을 내려받습니다(비밀번호는 안 들어갑니다)',
                     'Download nas_defaults.json to place next to the installer (no password inside)') + '">📄 '
@@ -207,7 +217,8 @@
                     'Copy this PC settings as a code for teammates (no password included)') + '">📤 '
                 + T('설정 코드 복사', 'Copy setup code') + '</button>'
                 + '<button onclick="window._nasQuickRun()" style="' + btnSt + ' font-weight:bold; background:#efe6ff; border-color:#b197fc; color:#5f3dc4;">🚀 '
-                + T('전환', 'Switch') + '</button></div></div></div>'
+                + T('연결하기', 'Connect') + '</button></div></div>'
+                + '<div id="naslogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
                 // 🔀 저장소 고르기 — Drive 모드에서 **들어가는 길**은 여기뿐이다.
                 //    (헤더 배지는 nas/mirror 일 때만 뜬다 — 아직 안 옮긴 팀원 화면에
                 //     못 보던 아이콘이 생기면 그것만으로 연락이 온다)
@@ -229,12 +240,39 @@
                 + ' text-overflow:ellipsis; white-space:nowrap;" title=""></span>'
                 + '<button onclick="window._dsOpenSettings && window._dsOpenSettings()" style="' + btnSt
                 + ' padding:6px 10px;">📁 ' + T('설정', 'Settings') + '</button></label>'
+                // ── 🔧 직접 입력(고급) — 자동이 못 고른 경우에만 ─────────────────
+                //  ⚠️ 지우지 않고 **접어 둔다**: 앱 폴더 후보가 여러 개면 `/nas/setup` 은
+                //     스스로 정하지 않고 사람에게 넘긴다(그게 맞다). 그때 고르는 자리가 여기다.
+                + '<div style="border-top:1px dashed #e5e5e5; margin:10px 0 8px;"></div>'
+                + '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">'
+                + '<span style="font-size:11.5px; color:#888;">🔧 ' + T('직접 입력 (고급)', 'Manual entry (advanced)') + '</span>'
+                + '<button id="nasadv-toggle" onclick="window._nasAdvToggle()" style="' + btnSt + ' padding:4px 9px;">'
+                + T('열기', 'Open') + '</button></div>'
+                + '<div id="naslogin-adv" style="display:none;">'
+                + '<div style="font-size:11px; color:#b06b00; margin:0 0 8px; line-height:1.5;">'
+                + T('⚠️ 여기는 <b>계정만</b> 맞춥니다 — 앱 폴더·자료실 경로는 따로 지정해야 합니다. '
+                    + '위 <b>연결하기</b>가 앱 폴더를 혼자 못 정했을 때만 쓰세요.',
+                    '⚠️ This sets the <b>account only</b> — the app folder and doc-store path must be set separately. '
+                    + 'Use it only when Connect could not pick the app folder.')
+                + '</div>'
+                + fieldRow(T('주소', 'Address'),
+                    '<input id="naslogin-host" autocomplete="off" style="' + inputSt + '" placeholder="' + T('예: nas.사내주소', 'e.g. nas.internal') + '">'
+                    + '<span style="font-size:11px; color:#777;">:</span>'
+                    + '<input id="naslogin-port" inputmode="numeric" style="width:62px; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="5001">'
+                    + '<label style="display:flex; align-items:center; gap:4px; font-size:11.5px; color:#555; white-space:nowrap;">'
+                    + '<input type="checkbox" id="naslogin-https" checked> HTTPS</label>')
+                + fieldRow(T('아이디', 'ID'), '<input id="naslogin-user" autocomplete="off" style="' + inputSt + '">')
+                + fieldRow(T('비밀번호', 'Password'), '<input id="naslogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
+                + fieldRow(T('앱 폴더', 'App folder'),
+                    '<input id="naslogin-root" autocomplete="off" style="' + inputSt + '" placeholder="/공유폴더/KORTEK_PM">'
+                    + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
+                + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
                 + '<div style="display:flex; gap:8px;">'
                 + '<button onclick="window._nasLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._nasLoginTest()" style="' + btnSt + '">🔌 ' + T('연결 테스트', 'Test') + '</button>'
                 + '<button onclick="window._nasLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
-                + '</div>'
+                + '</div></div>'
                 + '</div></div>';
             document.body.appendChild(wrap);
             if (window._makeDraggable) window._makeDraggable('saplogin-box', 'saplogin-drag');
@@ -268,6 +306,8 @@
         window._gwLoginRefresh();
         window._insaLoginRefresh();
         window._nasLoginRefresh();
+        window._nasQuickPrefill();      // ⚠️ 기본 경로는 늘 펼쳐져 있다 — 미리채우기를 여기서 건다
+        _nasMirrorDebugRefreshBtn();
     };
 
     // ── 🏢 그룹웨어 자동 로그인 ───────────────────────────────────────
@@ -694,13 +734,19 @@
     function paintStorageNow() {
         var el = document.getElementById('storage-mode-now');
         if (!el) return;
-        var m = 'drive';
-        try { m = (localStorage.getItem('gantt_storage_backend') || 'drive').toLowerCase(); } catch (e) { /* ignore */ }
+        // ⚠️⚠️ [2026-11-06] 여기서 localStorage 를 **직접** 읽고 `|| 'drive'` 로 떨어뜨리고 있었다.
+        //    플래그가 없으면 앱은 NAS 로 도는데(STORAGE_POLICY.nasOnly) 이 줄만 "☁️ 구글
+        //    드라이브"라고 말했다 — 즉 **설정창이 실제와 다른 저장소를 알려 주고 있었다**
+        //    (실측: `_storageMode()`='nas' 인데 화면은 드라이브). 저장소를 물을 땐 반드시
+        //    `window._storageMode()` 를 쓴다(js/04a 의 그 주석이 가리키는 사고가 이것이다).
+        var m = 'nas';
+        try { m = (window._storageMode ? window._storageMode() : 'nas'); } catch (e) { /* ignore */ }
         var label = { drive: '☁️ ' + T('구글 드라이브', 'Google Drive'),
                       mirror: '🪞 ' + T('미러 — 드라이브 + NAS', 'Mirror — Drive + NAS'),
                       nas: '🗄️ ' + T('사내 NAS', 'In-house NAS') }[m] || m;
         el.textContent = label;
         el.style.color = (m === 'nas') ? '#1f7a3d' : (m === 'mirror' ? '#1971c2' : '#555');
+        _nasMirrorDebugRefreshBtn();    // 🏠 버튼 라벨(임시 전환 ↔ NAS로 복귀)도 같은 자리에서 맞춘다
         paintDocStoreNow();
     }
 
@@ -1010,18 +1056,26 @@
         return new TextDecoder().decode(arr);
     }
 
-    window._nasQuickToggle = function () {
-        var box = document.getElementById('naslogin-quick');
+    // 🔧 [2026-11-06] 직접 입력(고급) 접기/펴기. 기본은 접힘 — 반쪽 설정의 입구였던 자리라
+    //    "할 수는 있지만 먼저 보이지는 않는" 곳에 둔다.
+    window._nasAdvToggle = function () {
+        var box = document.getElementById('naslogin-adv');
         if (!box) return;
         var open = box.style.display === 'none';
         box.style.display = open ? 'block' : 'none';
-        var tb = document.getElementById('nasq-toggle');
+        var tb = document.getElementById('nasadv-toggle');
         if (tb) tb.textContent = open ? T('닫기', 'Close') : T('열기', 'Open');
-        if (!open) return;
+    };
+
+    // ⚠️ [2026-11-06] 기본 경로가 **처음부터 펼쳐져 있게** 바뀌면서, 예전에 '열기'를 누를 때만
+    //    돌던 미리채우기가 영영 안 돌 뻔했다(주소 칸이 빈 채로 남아 사람이 사내 IP 를 손으로
+    //    치게 되고, 오타 한 번이 곧 로그인 실패 → 그 PC 의 IP 차단이다). 토글과 분리해 둔다.
+    window._nasQuickPrefill = function () {
         // 아이디는 **짐작해서 채워 둔다** — 사내 NAS 아이디는 그룹웨어/메일 아이디와 같다
         // (실측: 메일 user 의 @ 앞부분 = 그룹웨어 user). 틀리면 사람이 고치면 된다.
         var u = document.getElementById('nasq-user');
         var h = document.getElementById('nasq-host');
+        if (!u && !h) return;
         if (u && !u.value) {
             var guess = '';
             try {
@@ -1047,6 +1101,14 @@
                 if (pe) pe.placeholder = T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
             }
         }).catch(function () { /* 백엔드가 없으면 전환 때 그대로 알려준다 */ });
+    };
+
+    // ⚠️ 호환용으로 남긴다 — js/57 의 `storageOpenQuickSwitch`(배너 '로그인' 버튼·미설정 자동
+    //    열기)가 이걸 부른다. 이제 기본 경로는 늘 펼쳐져 있으므로 "열려 있게 하고 채운다"만 한다.
+    window._nasQuickToggle = function () {
+        var box = document.getElementById('naslogin-quick');
+        if (box) box.style.display = 'block';
+        window._nasQuickPrefill();
     };
 
     //  설정 코드 — 주소·포트·앱 폴더·자료실 경로만. **비밀번호·아이디는 안 들어간다.**
@@ -1190,8 +1252,12 @@
                 : (b.left === 0 ? ('<br>' + T('⛔ 더 시도하지 않습니다 — 담당자에게 알려주세요.',
                                               '⛔ No more attempts — contact the administrator.')) : '');
             // 앱 폴더를 못 찾은 경우엔 후보를 바로 보여준다(사람이 고르면 끝난다)
+            //  ⚠️ [2026-11-06] 고를 자리는 이제 접혀 있는 '직접 입력(고급)' 안이다 —
+            //     어디로 가야 하는지 말해 주지 않으면 사람은 후보만 보고 멈춘다.
             if (r.rootHits && r.rootHits.length) {
-                tail += '<br>' + T('후보: ', 'Candidates: ') + esc(r.rootHits.join(', '));
+                tail += '<br>' + T('후보: ', 'Candidates: ') + esc(r.rootHits.join(', '))
+                     + '<br>' + T('아래 <b>🔧 직접 입력(고급) ▸ 열기 ▸ 📂 찾기</b>에서 골라주세요.',
+                                  'Pick it under <b>Manual entry (advanced) ▸ Open ▸ Browse</b> below.');
             }
             nasStatus('❌ ' + T('전환하지 못했습니다.', 'Could not switch.') + tail, 'err');
             return;

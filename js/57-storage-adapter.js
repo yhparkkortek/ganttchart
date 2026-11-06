@@ -1471,6 +1471,10 @@
         if (_nasOnline) nasMarkConnected();
     })();
 
+    // 📂 [2026-11-06, 사용자 요청] "앱 초기 실행 + 로그인 정보 미저장"일 때만 모달을 자동으로
+    //    띄운다 — 페이지 생애 동안 한 번만(세션 만료 등으로 매번 뜨면 성가시다).
+    var _autoOpenedNasModal = false;
+
     /** NAS 모드인데 못 붙은 상태 — **사유마다 할 일이 다르다.** */
     function nasOfflineBanner(s) {
         var en = window._currentLang === 'en';
@@ -1504,6 +1508,13 @@
                     onClick: function () { window.storageOpenQuickSwitch(); } };
         }
         storageBanner('storage-nas-offline-banner', '#fdecea', '#e05c4a', '#a3281c', msg, [btn]);
+        // 📂 로그인 정보가 아예 저장된 적 없으면(최초 실행 등) 배너만 띄우고 기다리지 않는다 —
+        //    모달을 바로 연다. 세션만 만료된 경우(reason:'expired' 등)는 배너만 띄운다(이미
+        //    설정돼 있는데 매번 모달이 뜨면 성가시다).
+        if (reason === 'not_configured' && !_autoOpenedNasModal) {
+            _autoOpenedNasModal = true;
+            if (window.storageOpenQuickSwitch) window.storageOpenQuickSwitch();
+        }
     }
     window._storageNasOfflineBanner = nasOfflineBanner;   // 하네스용(백엔드를 끌 수 없으므로)
 
