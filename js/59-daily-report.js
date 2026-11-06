@@ -204,6 +204,31 @@
     }
     window._dailyRequireKey = requireKey;
 
+    /** 📔 일일보고는 **NAS 에 직접** 쓴다(`window.nasAppFile` → `/nas/app/*`).
+     *  그래서 따져야 할 건 "저장소 모드가 nas 인가"가 아니라 **그 길이 깔려 있는가**다.
+     *
+     *  ⚠️ [2026-11-06 사용자 신고 "미러에서 동작 안 한다"] 전엔 `_storageMode() !== 'nas'`
+     *     로 막아 **미러 모드까지 같이** 막혔다. 미러는 쓰기가 Drive+NAS 라 `/nas/app/*` 가
+     *     그대로 열려 있는데도(실측: 미러 모드에서 `window.nasAppFile` 이 살아 있다)
+     *     토스트만 띄우고 모달이 안 열렸다. 정작 막아야 하는 건 **drive 모드**다 —
+     *     거기선 js/57 이 `nasAppFile` 을 만들기 **전에** return 하므로(js/57 의 MODE 분기)
+     *     부르는 순간 `undefined.get` 으로 터진다.
+     *  ⚠️ "NAS 에 지금 닿는가"는 여기서 묻지 않는다 — `dailyEnsureIdentity()` 가
+     *     `/nas/status` 의 `ok` 로 이미 가린다. 그래서 NAS 가 안 닿는 곳(집)에서는
+     *     **여전히, 그러나 제 사유를 말하며**("내 계정을 알 수 없어…") 막힌다.
+     */
+    function storageReady() { return !!window.nasAppFile; }
+    window._dailyStorageReady = storageReady;
+
+    function storageWhyBlocked() {
+        var m = (window._storageMode ? window._storageMode() : '');
+        return m === 'drive'
+            ? T('일일보고는 사내 NAS 에 저장됩니다 — 지금은 ☁️ 구글 드라이브 모드라 쓸 수 없습니다.',
+                'Daily report is stored on the in-house NAS — not available in Google Drive mode.')
+            : T('일일보고를 쓸 NAS 경로가 준비되지 않았습니다.',
+                'The NAS path for the daily report is not ready.');
+    }
+
     // ══ 📒 명단은 **주소록에서 저절로** 만들어진다 (2026-11-05 요청) ═══════════
     //  "팀원이 전부 기본으로 보여줘야 함" · "텔레그램 chat id 는 주소록에 이미 적었다".
     //  맞다 — 같은 값을 두 곳에 적게 하면 **한쪽은 반드시 낡는다.** 주소록이 원본이고
@@ -826,8 +851,8 @@
     }
 
     window.dailyOpenModal = async function (dateStr) {
-        if (window._storageMode && window._storageMode() !== 'nas') {
-            toast(T('일일보고는 사내 NAS 저장소에서만 동작합니다.', 'Daily report requires the NAS storage backend.'), 'warning', 7000);
+        if (!storageReady()) {
+            toast(storageWhyBlocked(), 'warning', 7000);
             return;
         }
         _date = dateStr || ymd();
@@ -1881,7 +1906,7 @@
     var NONWORK_AHEAD = 120;        // 넉넉히 넉 달
 
     window.dailyPublishNonWorkdays = async function (force) {
-        if (window._storageMode && window._storageMode() !== 'nas') return null;
+        if (!storageReady()) return null;
         if (!window.isHoliday) return null;
         var d = new Date(), days = [], until = '';
         for (var i = 0; i < NONWORK_AHEAD; i++) {
@@ -1910,9 +1935,7 @@
     // ⚠️ 팀 공용 파일이라 **쓰는 사람이 여럿이 될 수 있는 유일한 자리**다.
     //    그래서 `rev` 로 막고, 빈 명단 덮어쓰기를 거부한다. 보통은 PM 혼자 만진다.
     window.dailyOpenRoster = async function () {
-        if (window._storageMode && window._storageMode() !== 'nas') {
-            toast(T('NAS 저장소에서만 쓸 수 있습니다.', 'NAS storage only.'), 'warning'); return;
-        }
+        if (!storageReady()) { toast(storageWhyBlocked(), 'warning'); return; }
         await window.dailyEnsureIdentity();   // 씨앗 행의 계정id 를 채우려면 먼저 알아야 한다
         await window.dailyLoadRoster(true);
         var list = (_roster || []).slice();
@@ -2044,7 +2067,7 @@
         async function go(n) {
             var panel = document.getElementById('tab-daily');
             if (!panel || !panel.classList.contains('active')) return;
-            if (window._storageMode && window._storageMode() !== 'nas') return;
+            if (!storageReady()) return;
             var ok = false;
             try { ok = !!(await window.dailyEnsureIdentity()); } catch (e) { ok = false; }
             if (!ok && n < BOOT_TRIES) { setTimeout(function () { go(n + 1); }, BOOT_WAIT); return; }
@@ -2067,7 +2090,7 @@
         if (_pollBusy) return;
         var panel = document.getElementById('tab-daily');
         if (!panel || !panel.classList.contains('active')) return;
-        if (window._storageMode && window._storageMode() !== 'nas') return;
+        if (!storageReady()) return;
         if (window._dailyView === 'month') return;      // 월 보기는 O/X 라 1분마다 볼 값이 아니다
         var date = window._dailyTabDate || ymd();
         _pollBusy = true;
@@ -2148,7 +2171,7 @@
 
     /** 그 주(월~금) 일일보고를 한 덩어리 글로. 주간보고 모달을 열기 전에 받아 둔다. */
     window.dailyWeekDigest = async function (baseDate) {
-        if (window._storageMode && window._storageMode() !== 'nas') return '';
+        if (!storageReady()) return '';
         var d = new Date(baseDate || new Date());
         var day = d.getDay(), diff = (day === 0) ? -6 : (1 - day);
         var mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
@@ -2385,7 +2408,7 @@
 
     window.dailyAccrueTouched = async function (force) {
         if (!force && Date.now() - _accrueAt < ACCRUE_GAP) return;
-        if (window._storageMode && window._storageMode() !== 'nas') return;
+        if (!storageReady()) return;
         _accrueAt = Date.now();
         var date = ymd();
         try {
@@ -2446,9 +2469,9 @@
                 ? '📅 ' + T('하루 보기', 'Day')
                 : '🗓️ ' + T('월 보기', 'Month');
         }
-        if (window._storageMode && window._storageMode() !== 'nas') {
+        if (!storageReady()) {
             box.innerHTML = '<div style="padding:18px; color:#b1432f; font-size:13px;">' +
-                esc(T('일일보고는 사내 NAS 저장소에서만 동작합니다.', 'Daily report requires the NAS storage backend.')) + '</div>';
+                esc(storageWhyBlocked()) + '</div>';
             return;
         }
         box.innerHTML = '<div style="padding:18px; color:#888; font-size:12.5px;">⏳ ' + esc(T('불러오는 중…', 'Loading…')) + '</div>';
