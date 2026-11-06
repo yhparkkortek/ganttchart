@@ -46,35 +46,6 @@
     const inputSt = 'flex:1; min-width:0; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;';
     const btnSt = 'padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid #ffe08a; background:#fff8e6; color:#7a5210;';
 
-    // 🏠 [2026-11-06, 사용자 요청] 집에서 NAS 접속이 안 될 때 임시로 Drive(+NAS 미러)로 전환하는
-    //    버튼 — 콘솔 명령(localStorage.gantt_storage_backend)을 그대로 감싼 것뿐이다. 이 PC의
-    //    브라우저 localStorage 에만 영향이라 사무실 PC·다른 브라우저는 그대로 NAS 를 쓴다.
-    //    ⚠️ Drive 쪽 데이터는 팀이 NAS로 넘어간 날짜(STORAGE_POLICY.since) 이전 스냅샷이다.
-    window._nasMirrorDebugToggle = function () {
-        var on = false;
-        try { on = localStorage.getItem('gantt_storage_backend') === 'mirror'; } catch (e) { /* ignore */ }
-        if (on) {
-            if (!confirm(T('미러 모드를 끄고 사내 NAS 로 돌아갈까요? (사무실에서 쓸 때)',
-                           'Turn off mirror mode and go back to the in-house NAS?'))) return;
-            try { localStorage.removeItem('gantt_storage_backend'); } catch (e) { /* ignore */ }
-        } else {
-            var since = (window.STORAGE_POLICY || {}).since || '';
-            if (!confirm(T('구글 드라이브로 임시 전환할까요? (NAS 접속이 안 되는 곳에서 디버깅용)\n'
-                           + '주의: 드라이브 데이터는 사내 NAS 전환일(' + since + ') 이전 스냅샷이라 최신이 아닐 수 있습니다.',
-                           'Switch to Google Drive temporarily (for debugging away from the NAS)?\n'
-                           + 'Note: Drive data predates the NAS cutover (' + since + ') and may be stale.'))) return;
-            try { localStorage.setItem('gantt_storage_backend', 'mirror'); } catch (e) { /* ignore */ }
-        }
-        location.reload();
-    };
-    function _nasMirrorDebugRefreshBtn() {
-        var btn = document.getElementById('nas-mirror-toggle');
-        if (!btn) return;
-        var on = false;
-        try { on = localStorage.getItem('gantt_storage_backend') === 'mirror'; } catch (e) { /* ignore */ }
-        btn.textContent = on ? ('🗄️ ' + T('NAS로 복귀', 'Back to NAS')) : ('🪞 ' + T('임시 전환', 'Switch temporarily'));
-    }
-
     window.openSapLoginSettings = async function () {
         let wrap = document.getElementById('saplogin-modal');
         if (!wrap) {
@@ -174,16 +145,6 @@
                 + T('앱 데이터(프로젝트·설정·백업)가 저장되는 곳입니다. ⚠️ 비밀번호를 틀리면 <b>이 PC 의 접속 자체</b>가 차단되니 한 번만 시도합니다.',
                     'Where app data (projects, settings, backups) is stored. ⚠️ Wrong passwords block <b>this PC</b>, so it is tried only once.')
                 + '</div>'
-                // 🏠 [2026-11-06] 집 등 NAS 가 안 닿는 곳에서 디버깅할 때 쓰는 임시 전환 버튼.
-                //    NAS 주소/계정 칸 바로 위 — 화면 스크린샷으로 사용자가 지정한 자리.
-                + '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;'
-                + ' background:#fff8e6; border:1px dashed #e6a817; border-radius:8px; padding:8px 10px; margin:0 0 10px;">'
-                + '<span style="font-size:11px; color:#7a5210; line-height:1.4;">🏠 '
-                + T('집에서 NAS 없이 디버깅할 땐 구글 드라이브로 임시 전환할 수 있습니다.',
-                    'Away from the office NAS? Switch to Google Drive temporarily for debugging.')
-                + '</span>'
-                + '<button id="nas-mirror-toggle" onclick="window._nasMirrorDebugToggle()" style="' + btnSt
-                + ' padding:5px 10px; white-space:nowrap; flex:0 0 auto;"></button></div>'
                 // ══ 🚀 기본 경로 — 아이디·비밀번호만 넣으면 끝 ═══════════════════
                 //  ⚠️⚠️ [2026-11-06, 사용자 지적] 이게 **기본**이어야 하는 이유:
                 //     NAS 로 데이터를 옮긴 건 한 번이지만 **PC 설정은 PC 마다 매번** 다시 한다
@@ -307,7 +268,6 @@
         window._insaLoginRefresh();
         window._nasLoginRefresh();
         window._nasQuickPrefill();      // ⚠️ 기본 경로는 늘 펼쳐져 있다 — 미리채우기를 여기서 건다
-        _nasMirrorDebugRefreshBtn();
     };
 
     // ── 🏢 그룹웨어 자동 로그인 ───────────────────────────────────────
@@ -746,7 +706,6 @@
                       nas: '🗄️ ' + T('사내 NAS', 'In-house NAS') }[m] || m;
         el.textContent = label;
         el.style.color = (m === 'nas') ? '#1f7a3d' : (m === 'mirror' ? '#1971c2' : '#555');
-        _nasMirrorDebugRefreshBtn();    // 🏠 버튼 라벨(임시 전환 ↔ NAS로 복귀)도 같은 자리에서 맞춘다
         paintDocStoreNow();
     }
 
