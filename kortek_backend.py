@@ -1396,6 +1396,291 @@ def _tg_ai_handle(person, chat, text, uid):
     return True
 
 
+# ══════════════════════════════════════════════════════════════
+# ☀️ 아침 브리핑 — AI 없음, 텔레그램, 담당 PC 한 대 (2026-11-08, docs/ai-expansion-review.md ①)
+# ══════════════════════════════════════════════════════════════
+#  사람마다 "오늘 뭘 봐야 하나" 를 한 통으로: 🔴 지연 · 📅 오늘 마감 · ▶ 오늘 시작 · 📆 이번 주
+#  마감 · 📔 어제 보고 여부. 재료는 전부 NAS 에 있다(프로젝트 파일·일일보고) — AI 호출 0회.
+#
+#  ⚠️ "내 업무" 판정은 js/59 `scanOne`/`isMine` 과 **같은 규칙**이어야 한다(두 벌이면 한쪽만 맞는다):
+#     리프 행만 · `_calcStartTs/_calcPlanTs`(없으면 날짜 칸) · `_담당구분` → 별칭 정규화 →
+#     역할→`projectMeta.<역할>담당자`(없으면 멤버-3 role) → 쉼표 다중 쪼개 **이름·key·별칭** 비교.
+#  ⚠️ 모르면 안 보낸다 — 색인을 못 읽으면 0건. 프로젝트 파일 하나를 못 읽으면 **그 사실을 본문에**
+#     적는다(조용히 빠지면 "원래 없는 것" 과 구분이 안 된다).
+#  ⚠️ 팀 폴더는 ACL 이라 남의 팀 파일은 407 — 명단에 있는 팀만 읽는다.
+#  ⚠️ 프로젝트 파일은 MB 단위다 — `updated_at` 이 같으면 다시 안 읽는다(프로세스 메모리 캐시).
+
+DAILY_BRIEF = {
+    'at': '08:30',            # 기본 발송 시각(상태 파일 briefAt 이 이긴다)
+    'enabled': True,          # 상태 파일 briefEnabled 가 이긴다
+    'weekAhead': 7,           # "이번 주 마감" = 오늘 이후 N일 안
+    'maxPerSection': 8,
+    'sendIfEmpty': False,     # 볼 게 하나도 없으면 안 보낸다(알림 피로)
+    'maxProjects': 30,
+    'maxNameChars': 48,
+}
+# js/15b `_MS_CATEGORY_FIELD_MAP` 과 같은 표 — 역할 → projectMeta 칸 이름
+BRIEF_ROLE_FIELD = {
+    'PM': '프로젝트담당자', '기구': '기구담당자', 'ME': '기구담당자', 'HW': 'HW담당자', 'FW': 'FW담당자',
+    'BLU': 'Module담당자', 'TSP': 'TSP담당자', 'LCM': 'LCM담당자',
+    'Slimming': 'Slimming담당자', 'Cutting': 'Cutting담당자', 'Tooling': 'Tooling담당자', 'TOOL': 'Tooling담당자',
+}
+# js/04k `_WBS_DISCIPLINE_ALIASES` 와 같은 표
+BRIEF_DISC_ALIAS = {'기구': 'ME', '영업': 'SAL', 'Tooling': 'TOOL', '미분류': 'ETC', 'Slimming': 'LCM', 'Cutting': 'LCM'}
+_BRIEF_CACHE = {}       # file_name|updated_at → 훑은 항목 목록
+
+
+def _brief_split_names(s):
+    """js/22b `_addrSplitNames` — 쉼표·전각쉼표·슬래시로 쪼개고 "외 N명" 을 뗀다."""
+    out = []
+    for n in re.split(r'[,，/]', str(s or '')):
+        n = re.sub(r'\s*외\s*(\d+\s*(명|인)?|다수)?\s*$', '', n.strip()).strip()
+        if n:
+            out.append(n)
+    return out
+
+
+def _brief_role_assignee(role, meta, members3):
+    """역할 → 그 프로젝트의 담당자 이름(쉼표 다중 가능). 없으면 ''."""
+    field = BRIEF_ROLE_FIELD.get(role)
+    if field:
+        v = str((meta or {}).get(field) or '').strip()
+        if v:
+            return v
+    for m in members3 or []:
+        if m and m.get('role') and role in str(m.get('role')) and m.get('name'):
+            return str(m['name']).strip()
+    return ''
+
+
+def _brief_ts_date(ms):
+    try:
+        return datetime.fromtimestamp(float(ms) / 1000.0, KST).date()
+    except Exception:
+        return None
+
+
+def _brief_cell_date(v):
+    m = re.match(r'^(\d{4})[-./](\d{1,2})[-./](\d{1,2})', str(v or '').strip())
+    if not m:
+        return None
+    try:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+    except Exception:
+        return None
+
+
+def _brief_scan_project(doc, project):
+    """프로젝트 파일 하나 → 날짜 있는 **리프** 업무 목록(담당자 이름까지 풀어서).
+
+    각 항목: {name, project, start, end, status, who:set(소문자 이름)}
+    """
+    gd = (doc or {}).get('globalData') or []
+    ci = (doc or {}).get('colIdx') or {}
+    meta = (doc or {}).get('projectMeta') or {}
+    m3 = ((doc or {}).get('tabData') or {}).get('projectMembers3') or []
+    items = []
+    if not isinstance(gd, list) or len(gd) < 2:
+        return items
+
+    def col(name):
+        i = ci.get(name)
+        return i if isinstance(i, int) and i >= 0 else None
+
+    c_start, c_plan, c_status = col('start'), col('plan'), col('status')
+    for i in range(1, len(gd)):
+        obj = gd[i]
+        if not isinstance(obj, dict) or not isinstance(obj.get('data'), list):
+            continue
+        lvl = obj.get('_level') if isinstance(obj.get('_level'), int) else 4
+        nx = gd[i + 1] if i + 1 < len(gd) else None
+        nlvl = nx.get('_level') if isinstance(nx, dict) and isinstance(nx.get('_level'), int) else -1
+        if nx is not None and nlvl > lvl:
+            continue                                    # 리프만
+        row = obj['data']
+        s = _brief_ts_date(obj.get('_calcStartTs')) if obj.get('_calcStartTs') else None
+        e = _brief_ts_date(obj.get('_calcPlanTs')) if obj.get('_calcPlanTs') else None
+        if s is None and c_start is not None and c_start < len(row):
+            s = _brief_cell_date(row[c_start])
+        if e is None and c_plan is not None and c_plan < len(row):
+            e = _brief_cell_date(row[c_plan])
+        if s is None and e is None:
+            continue
+        name = str(obj.get(['_origDev', '_origT1', '_origT2', '_origT3', '_origT4'][lvl] if 0 <= lvl <= 4 else '') or '')
+        name = re.sub(r'\s*＊AI📧?\s*$', '', name).strip()
+        if not name:
+            continue
+        status = str(row[c_status] or '') if (c_status is not None and c_status < len(row)) else ''
+        who = set()
+        disc = str(obj.get('_담당구분') or '').strip()
+        for part in disc.split(','):
+            role = part.strip()
+            if not role:
+                continue
+            role = BRIEF_DISC_ALIAS.get(role, role)
+            for nm in _brief_split_names(_brief_role_assignee(role, meta, m3)):
+                who.add(nm.lower())
+        items.append({'name': name[:DAILY_BRIEF['maxNameChars']], 'project': project,
+                      'start': s, 'end': e, 'status': status.strip(), 'who': who})
+    return items
+
+
+def _brief_load_items(teams):
+    """명단의 팀 프로젝트를 전부 훑어 (items, errors). 색인을 못 읽으면 예외."""
+    idx = _daily_nas_json('App_Config/project_index.json') or {}
+    projects = [p for p in (idx.get('projects') or []) if p and p.get('file_name')]
+    items, errors, n = [], [], 0
+    for p in projects:
+        if p.get('completed'):
+            continue
+        team = str(p.get('team') or '').strip()
+        if teams and team not in teams:
+            continue
+        if n >= DAILY_BRIEF['maxProjects']:
+            break
+        n += 1
+        key = '%s|%s' % (p['file_name'], p.get('updated_at') or '')
+        if key in _BRIEF_CACHE:
+            items.extend(_BRIEF_CACHE[key])
+            continue
+        rel = (team + '/' if team else '') + str(p['file_name'])
+        try:
+            doc = _daily_nas_json(rel)
+            if not doc or not isinstance(doc.get('globalData'), list):
+                raise RuntimeError('내용 없음')
+            got = _brief_scan_project(doc, re.sub(r'\.json$', '', str(p['file_name'])))
+            _BRIEF_CACHE[key] = got
+            items.extend(got)
+        except Exception as e:
+            errors.append('%s — %s' % (p['file_name'], e))
+            print("[브리핑] 프로젝트 읽기 실패: %s — %s" % (p['file_name'], e))
+    return items, errors
+
+
+def _brief_text_for(member, items, today, errors, yesterday_written):
+    """한 사람 몫 본문(HTML). 볼 게 없으면 None."""
+    names = set()
+    for n in [member.get('key'), member.get('name')] + list(member.get('aliases') or []):
+        n = str(n or '').strip().lower()
+        if n:
+            names.add(n)
+    mine = [it for it in items if it['who'] & names]
+    week_end = today + timedelta(days=DAILY_BRIEF['weekAhead'])
+    late = [it for it in mine if it['end'] and it['end'] < today and it['status'] != '완료']
+    due_today = [it for it in mine if it['end'] == today and it['status'] != '완료']
+    start_today = [it for it in mine if it['start'] == today]
+    week = [it for it in mine if it['end'] and today < it['end'] <= week_end and it['status'] != '완료']
+    cap = DAILY_BRIEF['maxPerSection']
+
+    def sec(title, rows, with_date):
+        if not rows:
+            return []
+        out = ['\n<b>%s</b> %d건' % (title, len(rows))]
+        for it in sorted(rows, key=lambda x: (x['end'] or x['start'] or today))[:cap]:
+            d = ''
+            if with_date and it['end']:
+                d = ' · ~%s' % it['end'].strftime('%m/%d')
+            out.append('\u2022 %s <i>[%s]</i>%s' % (html.escape(it['name']), html.escape(it['project']), d))
+        if len(rows) > cap:
+            out.append('  … 외 %d건' % (len(rows) - cap))
+        return out
+
+    lines = ['\u2600\ufe0f <b>%s 아침 브리핑</b> — %s' % (today.strftime('%m/%d(%a)'), html.escape(str(member.get('name') or member.get('key') or '')))]
+    lines += sec('\U0001F534 지연(미완료)', late, True)
+    lines += sec('\U0001F4C5 오늘 마감', due_today, False)
+    lines += sec('\u25B6\ufe0f 오늘 시작', start_today, False)
+    lines += sec('\U0001F4C6 이번 주 마감', week, True)
+    has_tasks = bool(late or due_today or start_today or week)
+    if yesterday_written is False:
+        lines.append('\n\U0001F4D4 어제 일일보고가 <b>없습니다</b> — 이 대화에 적어 보내면 저장됩니다.')
+    if not has_tasks and yesterday_written is not False and not DAILY_BRIEF['sendIfEmpty']:
+        return None
+    if not has_tasks:
+        lines.append('\n오늘 마감·지연 업무는 없습니다.')
+    if errors:
+        lines.append('\n\u26a0\ufe0f 프로젝트 %d개를 읽지 못해 그 업무는 빠졌습니다.' % len(errors))
+    lines.append('\n<i>질문은 /ai 로, 보고는 그냥 적어서.</i>')
+    return '\n'.join(lines)
+
+
+def _daily_brief_tick(force=False, only_key=None):
+    """☀️ 아침 브리핑. 담당 PC 한 대 · 근무일 · 시각 이후 · 하루 한 번. `only_key` 면 그 사람에게만(미리보기)."""
+    ok, roster = _daily_is_notifier()
+    if not ok and not force:
+        return {'ok': True, 'skipped': 'not-notifier'}
+    if not roster:
+        return {'ok': False, 'message': '명단을 읽지 못해 발송하지 않습니다'}
+    st = _daily_state()
+    enabled = st.get('briefEnabled', DAILY_BRIEF['enabled'])
+    if not enabled and not force:
+        return {'ok': True, 'skipped': 'disabled'}
+    now = datetime.now(KST)
+    today = now.date()
+    date_str = today.strftime('%Y-%m-%d')
+    if not force:
+        if _daily_nonworkday(date_str):
+            return {'ok': True, 'skipped': 'non-workday'}
+        try:
+            bh, bm = [int(x) for x in str(st.get('briefAt') or DAILY_BRIEF['at']).split(':')]
+        except Exception:
+            bh, bm = 8, 30
+        if (now.hour, now.minute) < (bh, bm):
+            return {'ok': True, 'skipped': 'before-time'}
+    fired = st.setdefault('briefLastFired', {})
+    targets = []
+    for m in roster:
+        if only_key and str(m.get('key', '')).lower() != str(only_key).lower():
+            continue
+        if m.get('active') is False or not m.get('tgChatId') or m.get('brief') is False:
+            continue
+        if not force and fired.get(m['key']) == date_str:
+            continue
+        on_leave = any(str(l.get('from', '')) <= date_str <= str(l.get('to', l.get('from', '')))
+                       for l in (m.get('leave') or []))
+        if on_leave:
+            continue
+        targets.append(m)
+    if not targets:
+        return {'ok': True, 'sent': [], 'skipped': 'no-targets'}
+    teams = set(str(m.get('team') or '').strip() for m in targets if str(m.get('team') or '').strip())
+    try:
+        items, errors = _brief_load_items(teams)
+    except Exception as e:
+        print("[브리핑] 색인을 못 읽어 발송하지 않습니다: %s" % e)
+        return {'ok': False, 'message': '프로젝트 색인 조회 실패: %s' % e}
+    # 어제(마지막 근무일) 보고 여부 — 조회 실패는 "모름"(None) 으로 두고 그 줄을 안 쓴다
+    yday = today - timedelta(days=1)
+    for _ in range(7):
+        if not _daily_nonworkday(yday.strftime('%Y-%m-%d')):
+            break
+        yday -= timedelta(days=1)
+    yday_str = yday.strftime('%Y-%m-%d')
+    sent, empty = [], []
+    for m in targets:
+        try:
+            doc = _daily_nas_json(_daily_rel(yday_str, m['key']))
+            written = bool(doc and (doc.get('dayType') in ('leave', 'trip', 'training', 'half')
+                                     or doc.get('items') or doc.get('next') or doc.get('issue')))
+        except Exception:
+            written = None
+        text = _brief_text_for(m, items, today, errors, written)
+        if not text:
+            empty.append(m['key'])
+            if not force:
+                fired[m['key']] = date_str          # 오늘은 볼 게 없었다 — 또 안 따진다
+            continue
+        res = send_telegram_msg(text, m['tgChatId'])
+        if res.get('ok'):
+            sent.append(m['key'])
+            if not force:
+                fired[m['key']] = date_str
+        else:
+            print("[브리핑] 발송 실패(%s): %s" % (m['key'], res))
+    if not force:
+        _daily_state_save(st)
+    return {'ok': True, 'sent': sent, 'empty': empty, 'projectsFailed': len(errors), 'items': len(items)}
+
+
 def _daily_tg_tick(force=False):
     """텔레그램 DM → 그 사람의 하루 파일. 폴링은 담당 PC 한 대에서만."""
     ok, roster = _daily_is_notifier()
@@ -1588,6 +1873,9 @@ def daily_tick_api():
         out['inbound'] = _daily_tg_tick(force=bool(data.get('force')))
     if data.get('notify', True):
         out['notify'] = _daily_report_tick(force=bool(data.get('force')))
+    # ☀️ 브리핑은 **시킬 때만**(기본 False) — 확인 버튼이 팀 전원에게 브리핑을 쏘면 안 된다. `briefOnly` 로 내게만.
+    if data.get('brief'):
+        out['brief'] = _daily_brief_tick(force=bool(data.get('force')), only_key=data.get('briefOnly') or None)
     out['ok'] = True
     return jsonify(out)
 
@@ -1599,9 +1887,15 @@ def daily_config_api():
         d = request.json or {}
         if 'dueAt' in d:
             st['dueAt'] = str(d['dueAt'])[:5]
+        if 'briefAt' in d:
+            st['briefAt'] = str(d['briefAt'])[:5]
+        if 'briefEnabled' in d:
+            st['briefEnabled'] = bool(d['briefEnabled'])
         _daily_state_save(st)
     ok, roster = _daily_is_notifier()
     return jsonify({'ok': True, 'dueAt': st.get('dueAt') or '17:00', 'isNotifier': ok,
+                    'briefAt': st.get('briefAt') or DAILY_BRIEF['at'],
+                    'briefEnabled': bool(st.get('briefEnabled', DAILY_BRIEF['enabled'])),
                     'rosterCount': len(roster or []), 'offset': st.get('offset') or 0})
 
 
@@ -2189,6 +2483,10 @@ def _scheduler_loop():
             _daily_report_tick()
         except Exception as e:
             print(f"[일일보고 알림 스케줄러 오류] {e}")
+        try:
+            _daily_brief_tick()
+        except Exception as e:
+            print(f"[브리핑 스케줄러 오류] {e}")
         time.sleep(60)
 
 

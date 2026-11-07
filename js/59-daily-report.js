@@ -1992,6 +1992,18 @@
         return '<th style="padding:5px 6px; border:1px solid #e3e6ea; color:#2c5f8a;">' + esc(window._currentLang === 'en' ? (p[1] || p[0]) : p[0]) + '</th>';
      }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>' +
    '<button onclick="window._dailyRosterAdd()" style="margin-top:8px; padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('사람 추가', 'Add person')) + '</button>' +
+   // ☀️ [2026-11-08] 아침 브리핑 설정 — 판단·발송은 백엔드(`_daily_brief_tick`, 📣 담당 PC)가 한다.
+   //    여기선 켜기·시각 저장(`/daily/config`)과 **내게만** 미리보기(`/daily/tick` brief+briefOnly)뿐.
+   //    ⚠️ 미리보기는 반드시 내게만 — 확인 버튼이 팀 전원에게 브리핑을 쏘면 안 된다.
+   '<div id="daily-brief-cfg" style="margin-top:14px; padding:10px 12px; border:1px dashed #a3d9e0; border-radius:6px; font-size:12px; color:#2c5f8a; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">' +
+     '<b>☀️ ' + esc(T('아침 브리핑', 'Morning brief')) + '</b>' +
+     '<label style="display:flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" id="daily-brief-on"> ' + esc(T('켜기', 'On')) + '</label>' +
+     '<label style="display:flex; align-items:center; gap:4px;">' + esc(T('시각', 'At')) + ' <input type="time" id="daily-brief-at" style="padding:2px 4px; border:1px solid #ccc; border-radius:4px; font-size:12px;"></label>' +
+     '<button onclick="window._dailyBriefSave()" style="padding:4px 10px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' + esc(T('저장', 'Save')) + '</button>' +
+     '<button onclick="window.dailyBriefPreview()" title="' + esc(T('지금 내 텔레그램으로 한 통 보내 봅니다(나에게만)', 'Send one to my Telegram now (me only)')) + '" style="padding:4px 10px; border:1px solid #f0d58c; background:#fff8e1; color:#8a6d00; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">📱 ' + esc(T('내게 미리보기', 'Preview to me')) + '</button>' +
+     '<span id="daily-brief-note" style="flex-basis:100%; font-size:11px; color:#777;">' + esc(T('근무일 아침에 지연·오늘 마감·오늘 시작·이번 주 마감 업무와 어제 보고 여부를 텔레그램으로. AI 는 쓰지 않습니다. 📣 담당 PC 의 백엔드가 보냅니다.',
+                                                                                                 'On workdays: late / due today / starting today / due this week + yesterday\'s report status, via Telegram. No AI. Sent by the 📣 PC\'s backend.')) + '</span>' +
+   '</div>' +
  '</div>' +
  '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; gap:8px; justify-content:flex-end;">' +
    '<button onclick="document.getElementById(\'daily-roster-modal\').style.display=\'none\'" style="padding:6px 14px; border:1px solid #ccc; background:#fff; color:#555; border-radius:6px; font-size:12.5px; cursor:pointer;">' + esc(T('닫기', 'Close')) + '</button>' +
@@ -2000,6 +2012,7 @@
         wrap.style.display = 'flex';
         if (window._makeDraggable) window._makeDraggable('daily-roster-box', 'daily-roster-drag');
         if (window.bringModalToFront) window.bringModalToFront('daily-roster-modal');
+        if (window.dailyBriefLoadConfig) window.dailyBriefLoadConfig();   // ☀️ 브리핑 설정 칸 채우기(백엔드에서)
     }
 
     window._dailyRosterSet = function (i, k, v) {
@@ -2135,6 +2148,55 @@
     /** 알림·수신 담당 PC 에서 1회 확인(사람이 누를 때). 백엔드가 구버전이면 404 로 구분된다.
      *  ⚠️ 돌린 **결과를 화면에도 반영**한다 — 전엔 토스트만 띄우고 표는 그대로여서,
      *     방금 들어온 보고를 보려면 탭을 다시 열어야 했다. */
+    // ☀️ [2026-11-08] 아침 브리핑 설정 읽기/저장/미리보기 — 판단·발송은 백엔드(`_daily_brief_tick`).
+    window.dailyBriefLoadConfig = async function () {
+        var on = document.getElementById('daily-brief-on'), at = document.getElementById('daily-brief-at');
+        if (!on || !at) return;
+        try {
+            var r = await fetch('http://127.0.0.1:5000/daily/config?_cb=' + Date.now(), { cache: 'no-store' });
+            if (r.status === 404) { on.disabled = at.disabled = true; var n0 = document.getElementById('daily-brief-note'); if (n0) n0.textContent = T('백엔드가 구버전입니다 — kortek_backend 를 재시작하면 이 설정이 생깁니다.', 'Backend is outdated — restart kortek_backend.'); return; }
+            var j = await r.json();
+            on.checked = ('briefEnabled' in j) ? !!j.briefEnabled : true;
+            at.value = j.briefAt || '08:30';
+            if (!j.isNotifier) {
+                var n1 = document.getElementById('daily-brief-note');
+                if (n1) n1.textContent += ' ' + T('(이 PC 는 📣 담당이 아니라 설정만 저장됩니다 — 보내는 건 담당 PC)', '(This PC is not the 📣 notifier — settings only.)');
+            }
+        } catch (e) {
+            on.disabled = at.disabled = true;
+        }
+    };
+    window._dailyBriefSave = async function () {
+        var on = document.getElementById('daily-brief-on'), at = document.getElementById('daily-brief-at');
+        if (!on || !at) return;
+        try {
+            var r = await fetch('http://127.0.0.1:5000/daily/config',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ briefEnabled: !!on.checked, briefAt: at.value || '08:30' }) });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            toast('☀️ ' + T('브리핑 설정을 저장했습니다 — ' + (on.checked ? (at.value || '08:30') + ' 에 보냅니다' : '꺼짐'),
+                            'Brief settings saved'), 'info', 5000);
+        } catch (e) {
+            toast(T('저장하지 못했습니다 — 백엔드가 떠 있는지(재시작된 버전인지) 확인해주세요.', 'Could not save — is the backend running (and restarted)?'), 'warning', 8000);
+        }
+    };
+    window.dailyBriefPreview = async function () {
+        var key = await window.dailyEnsureIdentity();
+        if (!key) { toast(T('내 계정을 알 수 없습니다 — NAS 로그인 후 새로고침', 'Unknown account — log in to NAS and reload'), 'warning', 7000); return; }
+        try {
+            var r = await fetch('http://127.0.0.1:5000/daily/tick',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ inbound: false, notify: false, brief: true, force: true, briefOnly: key }) });
+            if (r.status === 404) { toast(T('백엔드가 구버전입니다 — kortek_backend 를 재시작해주세요.', 'Backend is outdated — restart kortek_backend.'), 'warning', 9000); return; }
+            var j = await r.json(), b = j.brief || {};
+            if (b.ok === false) { toast('⚠️ ' + (b.message || T('실패', 'failed')), 'warning', 9000); return; }
+            if ((b.sent || []).length) toast('📱 ' + T('내 텔레그램으로 브리핑을 보냈습니다', 'Brief sent to my Telegram') + (b.projectsFailed ? ' (' + T('읽지 못한 프로젝트 ', 'unreadable projects: ') + b.projectsFailed + ')' : ''), 'info', 8000);
+            else toast(T('보낼 내용이 없거나(지연·마감 없음 + 어제 보고 있음) 명단에 내 텔레그램 ID 가 없습니다.', 'Nothing to send, or my Telegram ID is missing from the roster.') + (b.skipped ? ' [' + b.skipped + ']' : ''), 'info', 9000);
+        } catch (e) {
+            toast(T('백엔드에 연결하지 못했습니다.', 'Could not reach the backend.'), 'warning', 8000);
+        }
+    };
+
     window.dailyNotifyTest = async function () {
         try {
             var r = await fetch('http://127.0.0.1:5000/daily/tick',
