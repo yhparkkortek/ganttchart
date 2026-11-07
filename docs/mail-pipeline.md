@@ -670,3 +670,10 @@ Drive에 올리고 **업로드가 확인된 행만** 줄인 뒤 `_nonGanttDirty`
 검증: `python tests/test_mail_watch.py` (31건 — 조용한 시간·제외 어휘·escape·첫 틱·재발송·
 로그인 끊김·라우트). 가짜는 **그룹웨어 조회와 텔레그램 발송 둘뿐**이고, 설정 파일은 임시 경로를
 쓰므로 **사용자의 `mail_watch_config.json` 과 5000번 프로세스를 건드리지 않는다**.
+
+### 📎 (2026-11-08) 배분 판정에 결정론 근거층이 끼어든다 — `js/61-mail-evidence.js`
+
+AI 매칭(`_msBuildProjectMatchSection` → `_msResolveAiProjectMatch`)을 js/61 이 감싼다. 스레드·발신자·관리번호 근거를
+프롬프트에 싣고, AI 상(上)이 근거와 충돌하면 자동배치를 막아 대기로, AI 중(中)이 근거와 일치하면 승격, AI 0 이면 근거
+후보로 대기 제안. 매칭 결과가 예상과 다르면 `tag.evidence`(conflict/promote/suggest/agree) 와 `mailEvidenceStats()` 부터
+볼 것 → `docs/mail-evidence.md`
