@@ -18,6 +18,7 @@
 | `telegram-qa-bridge.test.js` | 다리 프런트(js/60) — 선점·답 모으기·alert 가로채기·파일 회신 | `node tests/telegram-qa-bridge.test.js` (회사 PC) |
 | `mail-evidence.test.js` | 📎 메일 배분 근거층(js/61) — 정규화·기록·충돌 차단·승격·제안·되돌림·큐 훑기 | `node tests/mail-evidence.test.js` (회사 PC) |
 | `mail-evidence.browser.js` | 같은 시나리오를 **진짜 15b·15c 함수**로 | 앱을 열고 콘솔에 붙여넣기(키·NAS 불필요) |
+| `period-summary.browser.js` | 📅 AI 요약 일일/주간/월간(js/62) — 사실 선별·접지 검사·모달·문답 입구 | 앱을 열고 콘솔에 붙여넣기(AI 는 가짜) |
 | `telegram-qa-bridge.browser.js` | 진짜 앱에서 한 바퀴(NAS 진짜, 텔레그램 발송만 가짜) | 앱을 열고(NAS 로그인) 콘솔에 붙여넣기 |
 
 둘 다 **그룹웨어·SAP·AI 키가 없어도 돈다.** 가짜는 **바깥 경계에만** 두고

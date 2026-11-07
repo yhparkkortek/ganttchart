@@ -62,8 +62,27 @@ console.log('\n[2] 설치 — 원본 두 함수를 감쌌고, 원본 결과 위�
 const inst = win._mailEvidenceInstall();
 ok('이미 감싸져 있다(로드 때)', win._msBuildProjectMatchSection._meWrapped && win._msResolveAiProjectMatch._meWrapped && win._tpAppendMailSignal._meWrapped, inst);
 reset();
-let r = resolveWith('아무 제목', 'x@ext.com', '본문', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '매칭근거': 'AI' });
-ok('근거가 없으면 프롬프트는 원본 그대로 · 판정도 그대로(상→matched)', r.prompt === '\n--- 후보 3개 ---' && r.tag.status === 'matched' && r.tag.evidence === 'agree', r);
+let r = resolveWith('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '매칭근거': 'AI', '근거인용': ['STELLAR32 패널 사양 회신 드립니다'] });
+ok('근거가 없으면 프롬프트는 원본 + 📜 인용 지시뿐 · 상 + 인용 검증 통과 → matched(cited)', r.prompt.indexOf('\n--- 후보 3개 ---') === 0 && r.prompt.indexOf('📎') < 0 && /근거인용/.test(r.prompt) && r.tag.status === 'matched' && r.tag.evidence === 'cited', r);
+
+console.log('\n[2b] 📜 인용 검증 — AI 혼자의 "상" 은 본문에 있는 특정 문장을 인용해야만 자동배치');
+r = resolveWith('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1 });
+ok('인용 없음 → 대기(unverified)', r.tag.status === 'ambiguous' && r.tag.evidence === 'unverified', r.tag);
+r = resolveWith('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '근거인용': ['본문에 없는 문장을 지어냈습니다 환각'] });
+ok('인용이 본문에 없음(환각) → 대기', r.tag.status === 'ambiguous' && /본문에 없음/.test(r.tag.matchBasis), r.tag);
+r = resolveWith('LNW 27 UHD 견적', 'x@ext.com', 'LNW 27 UHD 견적 요청드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '근거인용': ['LNW 27 UHD 견적 요청드립니다'] });
+ok('인용은 있지만 LNW 는 형제(OBSIDIAN)에도 있는 토큰 → 특정 못 함 → 대기', r.tag.status === 'ambiguous' && /형제/.test(r.tag.matchBasis), r.tag);
+r = resolveWith('견적', 'x@ext.com', 'stellar-32 패널 단가 회신', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '근거인용': ['Stellar-32 패널 단가 회신'] });
+ok('대소문자·하이픈이 달라도 정규화로 맞춘다 → matched', r.tag.status === 'matched' && r.tag.evidence === 'cited', r.tag);
+const Cnokw = [{ drive_file_id: 'Z', file_name: 'Z.json', model: '', customer: '', keywords: [] }, C[2]];
+win._mailParsedRaw = { subject: 'x', sender: 'x@ext.com' };
+win._msBuildProjectMatchSection(Cnokw, 'x\nx@ext.com\n아무 토큰도 등록 안 된 프로젝트 건입니다 확인 바랍니다');
+const rz = win._msResolveAiProjectMatch({ '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '근거인용': ['아무 토큰도 등록 안 된 프로젝트 건입니다'] }, Cnokw);
+ok('구별 토큰이 하나도 없는 후보는 존재 확인만으로 통과(cited_weak) — 키워드 없는 프로젝트를 전부 막지 않는다', rz.status === 'matched' && rz.evidence === 'cited_weak', rz);
+P.requireCitation = false;
+r = resolveWith('아무 제목', 'x@ext.com', '본문', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1 });
+ok('requireCitation 을 끄면 예전처럼 상 → matched(agree)', r.tag.status === 'matched' && r.tag.evidence === 'agree' && !/근거인용/.test(r.prompt), r.tag);
+P.requireCitation = true;
 
 console.log('\n[3] 기록 — 확정 배분 훅(_tpAppendMailSignal) 이 기록을 남기고 원본도 부른다');
 reset();
@@ -82,8 +101,8 @@ ok('matched → ambiguous(충돌) · 후보 [A, B] · 신뢰도 중', r.tag.stat
 ok('근거 문구가 matchBasis 에 남는다(보관함 카드에 보인다)', /근거 충돌/.test(r.tag.matchBasis) && /AI 라서|LNW 라서/.test(r.tag.matchBasis), r.tag.matchBasis);
 ok('이슈 로그에 evidence_conflict', ISSUES.some((e) => e.kind === 'evidence_conflict'));
 ok('AI 가 고른 쪽에도 고유 키워드가 있으면 내리지 않는다(둘 다 근거)', (() => {
-    const t = resolveWith('Re: OBSIDIAN 27 BOM 검토', 'kim@customer.com', 'STELLAR32 관련 BOM 도 같이', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1 }).tag;
-    return t.status === 'matched';
+    const t = resolveWith('Re: OBSIDIAN 27 BOM 검토', 'kim@customer.com', 'STELLAR32 관련 BOM 도 같이', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '근거인용': ['STELLAR32 관련 BOM 도 같이'] }).tag;
+    return t.status === 'matched' && t.evidence === 'cited';
 })());
 
 console.log('\n[5] (c-1) 승격 — AI "중" 이 B, 스레드 기록도 B, 다투는 후보 없음 → matched 상');

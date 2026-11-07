@@ -26,8 +26,15 @@
     try {
         localStorage.removeItem(P.historyKey); localStorage.removeItem(P.statsKey); localStorage.removeItem(P.offKey);
         ok('진짜 두 함수가 감싸여 있다', window._msBuildProjectMatchSection._meWrapped && window._msResolveAiProjectMatch._meWrapped && window._tpAppendMailSignal && window._tpAppendMailSignal._meWrapped);
-        var r = go('아무 제목', 'x@ext.com', '본문', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '매칭근거': 'AI' });
-        ok('근거 없음 → 원본 프롬프트에 📎 없음 · 상 → matched 그대로', r.prompt.indexOf('📎') < 0 && r.tag.status === 'matched', r.tag);
+        var r = go('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '매칭근거': 'AI', '근거인용': ['STELLAR32 패널 사양 회신 드립니다'] });
+        ok('기록 없음(토큰 적중만) → 📎 약한 근거 1줄 · 상 + 인용 검증 통과 → matched(cited)', /1번\(STELLAR32\).*고유 키워드/.test(r.prompt) && r.tag.status === 'matched' && r.tag.evidence === 'cited', r.tag);
+        ok('프롬프트에 📜 근거인용 지시가 있다', /근거인용/.test(r.prompt));
+        r = go('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '매칭근거': 'AI' });
+        ok('📜 인용이 없으면 상이라도 대기(unverified)', r.tag.status === 'ambiguous' && r.tag.evidence === 'unverified', r.tag);
+        r = go('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '근거인용': ['본문에 없는 문장을 지어냈습니다 환각'] });
+        ok('📜 인용 문장이 본문에 없으면(환각) 대기', r.tag.status === 'ambiguous' && /본문에 없음/.test(r.tag.matchBasis), r.tag);
+        r = go('LNW 27 UHD 견적', 'x@ext.com', 'LNW 27 UHD 견적 요청드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '근거인용': ['LNW 27 UHD 견적 요청드립니다'] });
+        ok('📜 인용은 있지만 LNW 는 형제 후보에도 있어 특정 못 함 → 대기', r.tag.status === 'ambiguous' && /형제/.test(r.tag.matchBasis), r.tag);
         ok('원본 프롬프트가 후보 3개를 번호로 나열한다(진짜 15c)', /1\. STELLAR32/.test(r.prompt) && /3\. AMUSNET 43/.test(r.prompt));
         window.mailEvidenceRecord('tB', 'T_OBSIDIAN27.json', { subject: 'OBSIDIAN 27 BOM 검토', sender: 'kim@customer.com', fileName: 'tf1' }, 'placed');
         r = go('Re: OBSIDIAN 27 BOM 검토', 'kim@customer.com', '첨부 확인', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '매칭근거': 'LNW 라서' });
@@ -41,7 +48,7 @@
         r = go('견적', 'new@vendor.com', '#502888 과 #502319', { '매칭신뢰도': '하', '주매칭프로젝트번호': 0 });
         ok('근거가 둘로 갈리면 제안 없음(null)', r.tag === null, r.tag);
         var st = window.mailEvidenceStats();
-        ok('집계 conflict/promote/suggest 각 1', st.conflict === 1 && st.promote === 1 && st.suggest === 1, st);
+        ok('집계 conflict/promote/suggest 각 1 · unverified 3 · cited 1', st.conflict === 1 && st.promote === 1 && st.suggest === 1 && st.unverified === 3 && st.cited === 1, st);
         localStorage.setItem(P.offKey, '1');
         r = go('RE: OBSIDIAN 27 BOM 검토', 'kim@customer.com', '', { '매칭신뢰도': '중', '주매칭프로젝트번호': 2 });
         ok('킬스위치 → 판정 원본(대기)', r.tag.status === 'ambiguous' && !r.tag.evidence);

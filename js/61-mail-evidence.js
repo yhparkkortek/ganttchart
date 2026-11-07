@@ -42,7 +42,15 @@
         downgrade: true,         // AI "상" → 근거 충돌 시 대기로 내림
         suggest: true,           // AI 0 → 근거 한 곳이면 그 후보로 대기
         sweepDelayMs: 40000,     // 켠 뒤 이만큼 지나 미분류 큐를 한 번 훑는다(AI 없음)
-        maxLines: 6
+        maxLines: 6,
+        // 📜 [2026-11-08 3차, 사용자: "AI 환각으로 오배송이 생기면 더 문제"] AI 가 "상" 을 줄 때는 본문에서
+        //    **그대로 복사한 근거 문장**을 같이 내게 하고, 코드가 ① 그 문장이 본문에 정말 있는지 ② 그 문장에
+        //    고른 프로젝트를 **특정하는 토큰**(모델명·키워드 — 형제 프로젝트와 겹치지 않는 것)이 있는지 확인한다.
+        //    둘 중 하나라도 아니면 자동배치를 **내린다**(대기). 올리는 데는 절대 안 쓴다 — 환각은 대기로만 작용.
+        //    결정론 근거(스레드·관리번호·발신자)가 이미 강하면 인용 검사를 건너뛴다(기록이 더 믿을 만하다).
+        requireCitation: true,
+        citationMinLen: 10,      // 정규화(영숫자·한글만) 뒤 이 길이 이상이어야 "문장" 으로 친다
+        citationTokenMinLen: 4   // 특정 토큰(모델명·키워드)의 정규화 최소 길이
     };
     var P = window.MAIL_EVIDENCE_POLICY;
 
@@ -155,7 +163,41 @@
             ? '\n📎 [결정론 근거 — 이 앱의 과거 배분 기록·코드 대조, AI 추론이 아닙니다]\n' + textLines.join('\n') +
               '\n  스레드 기록·관리번호 일치는 강한 근거입니다 — 본문이 명백히 다른 얘기가 아니면 그 후보를 고르고 신뢰도를 올리세요. 서로 다른 후보에 강한 근거가 갈리면 0으로 두고 매칭근거에 그 사실을 적으세요.\n'
             : '';
-        return { per: per, strongIdx: strongIdx, best: best, text: text, subj: subj, from: from };
+        return { per: per, strongIdx: strongIdx, best: best, text: text, subj: subj, from: from, hayNorm: hayNorm };
+    };
+
+    // ── 📜 근거 인용 검증 — AI 가 적은 문장이 본문에 있고, 고른 프로젝트를 특정하는가 ──────
+    /** 후보 i 를 **다른 후보와 구별해 주는** 토큰(정규화) — 모델명·키워드 중 형제 후보에 없는 것. */
+    function uniqueTokens(cands, i) {
+        var mine = {}, others = {};
+        var collect = function (c, into) {
+            [c.model, c.customer && c.model ? c.customer + c.model : ''].concat(c.keywords || []).forEach(function (k) {
+                var n = normToken(k); if (n.length >= P.citationTokenMinLen) into[n] = 1;
+            });
+        };
+        collect(cands[i], mine);
+        cands.forEach(function (c, j) { if (j !== i) collect(c, others); });
+        return Object.keys(mine).filter(function (n) { return !others[n]; });
+    }
+    /**
+     * @returns {ok, reason, quotes:[검증된 인용], specific:bool}
+     *  ok=false 면 부르는 쪽이 자동배치를 **내린다**. 올리는 데는 쓰지 않는다.
+     */
+    window.mailEvidenceVerifyCitation = function (task, ev, cands, pi) {
+        var raw = task && task['근거인용'];
+        var quotes = (Array.isArray(raw) ? raw : (raw ? [raw] : [])).map(function (q) { return String(q || '').trim(); }).filter(Boolean);
+        if (!quotes.length) return { ok: false, reason: T('근거 인용이 없음', 'no citation'), quotes: [], specific: false };
+        var hay = ev.hayNorm || '';
+        var present = quotes.filter(function (q) { var n = normToken(q); return n.length >= P.citationMinLen && hay.indexOf(n) !== -1; });
+        if (!present.length) return { ok: false, reason: T('인용한 문장이 본문에 없음(환각 의심)', 'cited sentence not found in mail (possible hallucination)'), quotes: quotes, specific: false };
+        var uniq = uniqueTokens(cands, pi);
+        if (!uniq.length) {
+            // 이 후보를 구별할 토큰 자체가 없다(모델명·키워드 미등록) — 특정성은 검사할 수 없다. 존재만 확인한 채 통과(약함).
+            return { ok: true, reason: T('인용 확인(후보를 특정할 토큰이 등록돼 있지 않아 특정성은 미검증)', 'quote present (no distinguishing tokens registered)'), quotes: present, specific: false };
+        }
+        var specific = present.filter(function (q) { var n = normToken(q); return uniq.some(function (u) { return n.indexOf(u) !== -1; }); });
+        if (!specific.length) return { ok: false, reason: T('인용 문장에 이 프로젝트를 특정하는 단어(모델명·키워드)가 없음 — 형제 프로젝트와 구별 불가', 'cited sentence has no project-specific token — cannot tell siblings apart'), quotes: present, specific: false };
+        return { ok: true, reason: T('인용 확인: ', 'quote verified: ') + specific[0].slice(0, 80), quotes: specific, specific: true };
     };
 
     // ── 📊 집계 ───────────────────────────────────────────────────────────────
@@ -181,7 +223,12 @@
                 var mail = { subject: raw.subject || lines[0] || '', sender: raw.sender || lines[1] || '', body: mailText || '' };
                 var ev = window.mailEvidenceFor(mail, cands);
                 _last = { cands: cands, ev: ev, at: Date.now() };
-                return out + ev.text;
+                var cite = P.requireCitation
+                    ? '\n📜 [근거 인용 — 필수] 위 JSON 에 "근거인용" 필드를 추가하세요: 매칭 판단의 근거가 된 문장 1~2개를 **메일 본문(또는 제목)에서 글자 그대로 복사**해 배열로 적습니다(요약·바꿔쓰기·번역 금지, 각 10자 이상). ' +
+                      '프로젝트를 특정하는 단어(모델명·관리번호·고객 모델명·키워드)가 들어 있는 문장을 고르세요. 그런 문장이 본문에 없으면 빈 배열 [] 로 두고 매칭신뢰도를 "중" 이하로 낮추세요 — ' +
+                      '이 필드는 코드가 본문과 **대조해 검증**하며, 본문에 없는 문장이면 자동배치가 보류됩니다.\n'
+                    : '';
+                return out + ev.text + cite;
             } catch (e) { console.warn('[메일 근거] 계산 실패(원본 프롬프트 그대로):', e.message); _last = null; return out; }
         };
         window._msBuildProjectMatchSection._meWrapped = true;
@@ -224,8 +271,24 @@
                                      T(' 을 가리킵니다 — 자동배치를 막고 사람 확인으로 남깁니다.', ' — auto-placement blocked, left for a person.'),
                          evidence: 'conflict' };
             }
-            bump(strong.indexOf(pi) >= 0 ? 'agree_strong' : 'agree');
-            tag.evidence = strong.indexOf(pi) >= 0 ? 'agree_strong' : 'agree';
+            if (strong.indexOf(pi) >= 0) { bump('agree_strong'); tag.evidence = 'agree_strong'; return tag; }
+            // 📜 결정론 근거가 없는 "상" — AI 혼자의 판단이다. 인용을 검증해 통과한 것만 자동배치.
+            if (P.requireCitation && pi >= 0) {
+                var v = window.mailEvidenceVerifyCitation(task, ev, cands, pi);
+                if (!v.ok) {
+                    bump('unverified', { ai: tag.candidates[0].file_name, why: v.reason });
+                    try { if (window._issueLog) window._issueLog({ domain: 'mail', kind: 'citation_unverified', rid: '', route: '', params: { ai: tag.candidates[0].file_name, why: v.reason, subj: (ev.subj || '').slice(0, 60) } }); } catch (e) { /* 무시 */ }
+                    return { status: 'ambiguous', candidates: [tag.candidates[0]], extraCandidates: [], confidence: '중',
+                             matchBasis: (tag.matchBasis || '') + ' 📜 ' + T('근거 인용 검증 실패 — ', 'Citation check failed — ') + v.reason + T('. 자동배치를 보류하고 사람 확인으로 남깁니다.', '. Auto-placement held for a person.'),
+                             evidence: 'unverified', citation: v };
+                }
+                bump(v.specific ? 'cited' : 'cited_weak');
+                tag.evidence = v.specific ? 'cited' : 'cited_weak';
+                tag.citation = v;
+                tag.matchBasis = (tag.matchBasis || '') + ' 📜 ' + v.reason;
+                return tag;
+            }
+            bump('agree'); tag.evidence = 'agree';
             return tag;
         }
         // (c-1) AI "중" 한 후보 — 근거가 같은 후보를 강하게 가리키고 다투는 후보가 없으면 승격

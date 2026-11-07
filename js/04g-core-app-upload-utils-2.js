@@ -431,7 +431,9 @@
         slide.addText(`🤖 AI 요약 — ${title}`, { x: 0.4, y: 0.3, w: 12.5, h: 0.6, fontSize: 22, bold: true, color: SKY });
         slide.addText(`${r.신호등 || ''}  ${r.총평 || ''}`, { x: 0.4, y: 1.0, w: 12.5, h: 0.6, fontSize: 16, bold: true, color: '333333' });
 
-        const statLabels = ['완료', '진행', '대기', '지연'];
+        // 📊 [2026-11-08 사용자 지시] 간트 상태 관리가 느슨해 완료/진행/대기/지연 숫자는 믿을 수 없다 —
+        //    `PERIOD_SUMMARY.showCounts`(js/62, 데이터)가 false 면 PPT 에서도 그 네 칸을 그리지 않는다(화면과 같은 스위치).
+        const statLabels = (window.PERIOD_SUMMARY && window.PERIOD_SUMMARY.showCounts === false) ? [] : ['완료', '진행', '대기', '지연'];
         const statColors = ['2F9E44', '1971C2', 'B85C00', 'E03131'];
         statLabels.forEach(function(label, i) {
             slide.addShape(pptx.ShapeType.roundRect, { x: 0.4 + i * 3.1, y: 1.8, w: 2.9, h: 1.0, fill: { color: 'F5F5F5' }, line: { color: 'DDDDDD', width: 0.5 } });
