@@ -13,6 +13,9 @@
 |---|---|---|
 | `test_approval_reuse_branch.py` | 작성 화면 **재사용 분기**(이동하지 않는가) | `python tests/test_approval_reuse_branch.py` |
 | `approval-loop.browser.js` | 기안 작성 **실행 루프** 전체 | 앱을 열고 콘솔에 붙여넣기 |
+| `test_telegram_ai_bridge.py` | 텔레그램 `/ai` → NAS 접수(백엔드, 진짜 입구 `_daily_tg_tick`) | `py -3 tests/test_telegram_ai_bridge.py` |
+| `telegram-qa-bridge.test.js` | 다리 프런트(js/60) — 선점·답 모으기·alert 가로채기·파일 회신 | `node tests/telegram-qa-bridge.test.js` (회사 PC) |
+| `telegram-qa-bridge.browser.js` | 진짜 앱에서 한 바퀴(NAS 진짜, 텔레그램 발송만 가짜) | 앱을 열고(NAS 로그인) 콘솔에 붙여넣기 |
 
 둘 다 **그룹웨어·SAP·AI 키가 없어도 돈다.** 가짜는 **바깥 경계에만** 두고
 안쪽은 진짜 코드가 돌기 때문이다 — 안쪽을 가짜로 만들면 시험이 자기 자신을 시험한다.

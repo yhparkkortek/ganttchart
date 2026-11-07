@@ -1283,6 +1283,119 @@ def _daily_summary_text(doc):
     lines.append('서식: <b>업무 이름</b> 줄 아래에 <code>한일:</code> <code>할일:</code> <code>막힌일:</code>')
     return '\n'.join(lines)
 
+# ══════════════════════════════════════════════════════════════
+# 🤖📱 텔레그램 → AI 문답 다리 (2026-11-08, 사용자 요청)
+# ══════════════════════════════════════════════════════════════
+#  "텔레그램에서 문의·명령을 하면 AI 문답창에도 보이고 텔레그램으로도 결과를 받는다."
+#
+#  왜 이 모양인가: AI 문답은 **전부 프런트**다 — 키는 localStorage, 프로젝트는 브라우저
+#  메모리, 로컬 명령·SAP·그룹웨어·도구 루프가 다 js/04h·40 에 있다. 백엔드가 그걸
+#  베끼면 두 벌이 된다(한쪽만 고쳐지는 구조). 그래서 백엔드는 **접수만** 한다:
+#    텔레그램 DM(접두어) → NAS `App_Config/TelegramAI/<key>__<id>.json`
+#    → 그 사람의 **열린 앱**(js/60)이 15초마다 집어 `sendGanttQaMessage()` 로 답하고
+#    → 답을 텔레그램으로 되보낸다(`/send-telegram`).
+#  담당 PC 한 대가 폴링하는 건 일일보고와 같다(`getUpdates` 는 한 프로세스만). 질문한
+#  사람의 앱은 **어느 PC 에서든** NAS 를 보므로 담당 PC 가 아니어도 된다.
+#
+#  ⚠️ 일일보고 글과 가르는 기준은 **접두어뿐**(`TG_AI_PREFIXES`, 데이터) — 접두어가
+#     없으면 지금처럼 전부 일일보고다. "요즘 메일 어때?" 를 보고에 넣는 사고보다
+#     접두어 하나 외우게 하는 쪽이 싸다.
+#  ⚠️ 앱이 꺼져 있으면 답이 안 온다 — 그래서 앱이 2분마다 `online__<key>.json` 을 찍고,
+#     접수 답장에 **"앱이 꺼져 있는 것 같다"** 를 정직하게 적는다(조용히 기다리게 하지 않는다).
+#  ⚠️ 쓰기(write) 도구는 그대로 **앱의 확인 버튼**이 지킨다 — 폰에서 버튼을 못 누르므로
+#     그런 답엔 앱이 "PC 에서 확인을 눌러 달라" 고 덧붙인다(js/60). 폰은 읽기·조회용이다.
+#  ⚠️ 요청 파일은 사람당·건당 따로(읽고-고쳐-쓰기 없음) — 11-04 색인 유실의 모양을 피한다.
+
+TG_AI_QUEUE_DIR = 'App_Config/TelegramAI'
+# 접두어 — 긴 것부터 맞춘다. 대소문자 무시, 뒤의 ':'·공백은 뗀다.
+TG_AI_PREFIXES = ['/ai', '/q', '/질문', '/문의', '/검색', 'ai:', 'ai ', '질문:', '문의:', '검색:', '?']
+TG_AI_HELP_WORDS = ['/help', '/start', '도움말', '도움', '사용법', '/도움말']
+TG_AI_ONLINE_STALE_SEC = 300          # 앱 신호가 이보다 오래되면 "꺼져 있는 것 같다"
+TG_AI_MAX_QUESTION = 2000
+
+
+def _tg_ai_strip(text):
+    """접두어를 떼고 질문만. AI 명령이 아니면 None."""
+    t = str(text or '').strip()
+    low = t.lower()
+    for pre in sorted(TG_AI_PREFIXES, key=len, reverse=True):
+        if low.startswith(pre.lower()):
+            rest = t[len(pre):]
+            # "/ai:" "/ai -" 처럼 구분 기호가 더 붙어도 받는다
+            rest = re.sub(r'^[\s:：\-–—]+', '', rest)
+            return rest.strip()[:TG_AI_MAX_QUESTION]
+    return None
+
+
+def _tg_ai_help_text():
+    return ('\U0001F916 <b>AI 문답</b> — 앞에 <code>/ai</code> 를 붙여 보내세요.\n'
+            '예) <code>/ai 999001 재고 확인해줘</code> · <code>/ai 이번 주 마감 업무</code> · '
+            '<code>/ai 최근 메일 요약</code>\n'
+            '답은 PC 에 켜 둔 앱이 만듭니다 — 앱이 꺼져 있으면 열 때 처리됩니다.\n\n'
+            '\U0001F4D4 <b>일일보고</b> — 접두어 없이 그냥 적으면 오늘 보고에 들어갑니다.\n'
+            '서식: <b>업무 이름</b> 줄 아래 <code>한일:</code> <code>할일:</code> <code>막힌일:</code> · '
+            '휴가면 <code>휴가</code> 한 단어 · 지우기 <code>/다시</code>')
+
+
+def _tg_ai_app_online(key):
+    """그 사람 앱의 최근 신호. True/False, 모르면 None(목록을 못 읽었다)."""
+    try:
+        n = _nas()
+        lst = n.list_folder(n.abs_path(TG_AI_QUEUE_DIR))
+    except Exception as e:
+        print("[텔레그램AI] 온라인 신호 조회 실패: %s" % e)
+        return None
+    name = 'online__%s.json' % key
+    for it in (lst or {}).get('items') or []:
+        if it.get('name') == name:
+            mt = it.get('mtime') or 0
+            try:
+                return (time.time() - float(mt)) <= TG_AI_ONLINE_STALE_SEC
+            except Exception:
+                return None
+    return False
+
+
+def _tg_ai_enqueue(person, chat, question, uid):
+    """요청 파일 하나를 쓴다. 실패는 예외로 올린다(부르는 쪽이 offset 을 안 올려 재시도)."""
+    rid = 'tg%d' % int(uid)
+    rel = '%s/%s__%s.json' % (TG_AI_QUEUE_DIR, person['key'], rid)
+    doc = {'id': rid, 'key': person['key'], 'name': person.get('name', ''), 'chatId': str(chat),
+           'text': question, 'via': 'telegram', 'reply': 'telegram',
+           'at': datetime.now(KST).isoformat()}
+    n = _nas()
+    n.put(n.abs_path(rel), json.dumps(doc, ensure_ascii=False, indent=2).encode('utf-8'))
+    return rel
+
+
+def _tg_ai_handle(person, chat, text, uid):
+    """AI 명령이면 접수하고 True(성공)/False(쓰기 실패 — 다음 틱 재시도). 아니면 None."""
+    word = str(text or '').strip()
+    if word.lower() in [w.lower() for w in TG_AI_HELP_WORDS]:
+        send_telegram_msg(_tg_ai_help_text(), chat)
+        return True
+    q = _tg_ai_strip(word)
+    if q is None:
+        return None
+    if not q:
+        send_telegram_msg(_tg_ai_help_text(), chat)
+        return True
+    try:
+        _tg_ai_enqueue(person, chat, q, uid)
+    except Exception as e:
+        print("[텔레그램AI] 접수 실패(다음 틱 재시도): %s" % e)
+        return False
+    online = _tg_ai_app_online(person['key'])
+    if online is True:
+        send_telegram_msg('\U0001F916 접수했습니다 — PC 앱이 답을 만드는 중입니다. (보통 10~60초)', chat)
+    elif online is False:
+        send_telegram_msg('⚠️ 접수는 했지만 <b>PC 앱이 꺼져 있는 것 같습니다</b>(최근 5분 신호 없음). '
+                          '앱을 열면 그때 처리됩니다(2시간 안).', chat)
+    else:
+        send_telegram_msg('\U0001F916 접수했습니다 — PC 에 앱이 켜져 있으면 곧 답합니다.', chat)
+    return True
+
+
 def _daily_tg_tick(force=False):
     """텔레그램 DM → 그 사람의 하루 파일. 폴링은 담당 PC 한 대에서만."""
     ok, roster = _daily_is_notifier()
@@ -1342,6 +1455,16 @@ def _daily_tg_tick(force=False):
             ignored += 1
             last = max(last, uid + 1)
             continue
+        # 🤖 AI 문답 명령인가 — 일일보고 글보다 **먼저** 가른다(접두어 기준, 사진이 달린
+        #    메시지는 보고로 간다). 쓰기 실패면 offset 을 안 올리고 멈춘다(일일보고와 같은 규칙).
+        if text and not att:
+            _ai = _tg_ai_handle(person, chat, text, uid)
+            if _ai is True:
+                handled += 1
+                last = max(last, uid + 1)
+                continue
+            if _ai is False:
+                break
         date_str = datetime.now(KST).strftime('%Y-%m-%d')
         rel = _daily_rel(date_str, person['key'])
         try:
@@ -2166,6 +2289,10 @@ def _mail_watch_digest(mails, cfg):
             lines.append(f"   {html.escape(prev[:pv])}")
     if len(mails) > n:
         lines.append(f"… 외 {len(mails) - n}건")
+    # 🤖 [2026-11-08] 요약은 **요청 시만**(알림마다 AI 를 부르면 하루 한도를 알림이 먹는다 — 11-02 결정).
+    #    텔레그램 다리(_tg_ai_handle)가 있으니 그 한 줄만 안내한다. 문구는 데이터(TG_AI_PREFIXES 첫 항목).
+    lines.append('')
+    lines.append('🤖 요약이 필요하면 <code>%s 최근 메일 요약</code> 이라고 답하세요 (PC 앱이 켜져 있을 때)' % TG_AI_PREFIXES[0])
     return '\n'.join(lines)
 
 
