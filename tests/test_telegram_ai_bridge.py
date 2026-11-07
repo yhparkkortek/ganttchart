@@ -191,6 +191,22 @@ ok('3통 다 도움말', len(SENT) == 3 and all('/ai' in m for _, m in SENT), [m
 ok('큐 비어 있음', queue_files() == [], queue_files())
 ok('일일보고 서식도 같이 안내', all('한일:' in m for _, m in SENT))
 
+print('\n[4b] /브리핑 — 내 브리핑을 즉시(관문 무시·나에게만), 큐엔 안 넣는다')
+reset()
+BRIEF_CALLS = []
+_orig_brief = B._daily_brief_tick
+B._daily_brief_tick = lambda force=False, only_key=None: (BRIEF_CALLS.append((force, only_key)) or {'ok': True, 'sent': [only_key]})
+UPDATES.append(upd(1020, '111', '/브리핑'))
+B._daily_tg_tick()
+ok('브리핑 틱을 force+내 key 로 불렀다', BRIEF_CALLS == [(True, 'yhpark')], BRIEF_CALLS)
+ok('큐·보고 파일 없음 · 추가 답장 없음(브리핑 본문은 틱이 직접 보낸다)', queue_files() == [] and len(SENT) == 0, (queue_files(), SENT))
+B._daily_brief_tick = lambda force=False, only_key=None: {'ok': True, 'sent': [], 'empty': [only_key]}
+reset()
+UPDATES.append(upd(1021, '111', '브리핑'))
+B._daily_tg_tick()
+ok('보낼 게 없으면 그렇다고 답한다', len(SENT) == 1 and '보낼 브리핑이 없습니다' in SENT[0][1], SENT)
+B._daily_brief_tick = _orig_brief
+
 print('\n[5] 접두어 없는 글은 예전처럼 일일보고로 간다(회귀)')
 reset()
 UPDATES.append(upd(1008, '111', 'STELLAR32 점검\n한일: 원자재 확인'))

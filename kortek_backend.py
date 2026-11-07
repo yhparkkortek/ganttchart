@@ -1310,6 +1310,7 @@ TG_AI_QUEUE_DIR = 'App_Config/TelegramAI'
 # 접두어 — 긴 것부터 맞춘다. 대소문자 무시, 뒤의 ':'·공백은 뗀다.
 TG_AI_PREFIXES = ['/ai', '/q', '/질문', '/문의', '/검색', 'ai:', 'ai ', '질문:', '문의:', '검색:', '?']
 TG_AI_HELP_WORDS = ['/help', '/start', '도움말', '도움', '사용법', '/도움말']
+TG_BRIEF_WORDS = ['/brief', '/브리핑', '브리핑', '오늘 브리핑', '/오늘']   # 즉시 내 아침 브리핑(AI 없음)
 TG_AI_ONLINE_STALE_SEC = 300          # 앱 신호가 이보다 오래되면 "꺼져 있는 것 같다"
 TG_AI_MAX_QUESTION = 2000
 
@@ -1332,6 +1333,7 @@ def _tg_ai_help_text():
             '예) <code>/ai 999001 재고 확인해줘</code> · <code>/ai 이번 주 마감 업무</code> · '
             '<code>/ai 최근 메일 요약</code>\n'
             '답은 PC 에 켜 둔 앱이 만듭니다 — 앱이 꺼져 있으면 열 때 처리됩니다.\n\n'
+            '\u2600\ufe0f <b>/브리핑</b> — 지금 내 업무 브리핑(지연·오늘 마감·이번 주)을 받습니다.\n'
             '\U0001F4D4 <b>일일보고</b> — 접두어 없이 그냥 적으면 오늘 보고에 들어갑니다.\n'
             '서식: <b>업무 이름</b> 줄 아래 <code>한일:</code> <code>할일:</code> <code>막힌일:</code> · '
             '휴가면 <code>휴가</code> 한 단어 · 지우기 <code>/다시</code>')
@@ -1373,6 +1375,17 @@ def _tg_ai_handle(person, chat, text, uid):
     word = str(text or '').strip()
     if word.lower() in [w.lower() for w in TG_AI_HELP_WORDS]:
         send_telegram_msg(_tg_ai_help_text(), chat)
+        return True
+    if word.lower() in [w.lower() for w in TG_BRIEF_WORDS]:
+        # ☀️ 지금 내 브리핑 — 관문(시각·근무일·하루 한 번)을 건너뛰되 **나에게만**.
+        try:
+            res = _daily_brief_tick(force=True, only_key=person['key'])
+        except Exception as e:
+            res = {'ok': False, 'message': str(e)}
+        if not res.get('ok'):
+            send_telegram_msg('\u26a0\ufe0f 브리핑을 만들지 못했습니다 — %s' % html.escape(str(res.get('message') or '')), chat)
+        elif not (res.get('sent') or []):
+            send_telegram_msg('\u2600\ufe0f 오늘 마감·지연 업무가 없고 어제 보고도 있습니다 — 보낼 브리핑이 없습니다.', chat)
         return True
     q = _tg_ai_strip(word)
     if q is None:

@@ -483,7 +483,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/morning-brief.md` — ☀️ 아침 브리핑 (텔레그램, AI 없음, 2026-11-08)
 - **읽을 때**: 브리핑이 안 오거나 엉뚱한 업무가 올 때, 섹션·시각·상한을 바꿀 때
 - 백엔드 `_daily_brief_tick`(📣 담당 PC, 스케줄러) — 🔴 지연 · 📅 오늘 마감 · ▶ 오늘 시작 · 📆 이번 주 · 📔 어제 보고 여부. **"내 업무" 판정은 js/59 `isMine` 과 같은 사다리**(리프 행 · `_담당구분` → 별칭 → `projectMeta.<역할>담당자` → 쉼표 다중 → 이름·계정id·별칭). 표 두 개(`BRIEF_ROLE_FIELD`·`BRIEF_DISC_ALIAS`)는 앱 표의 **사본** — 역할이 늘면 같이. 모르면 안 보냄(색인 실패 0건, 파일 실패는 본문에 표기), 볼 게 없으면 안 보냄, 하루 한 번, `updated_at` 캐시
-- 설정은 👥 명단 모달 ☀️ 칸(`/daily/config` `briefAt`/`briefEnabled`) · **📱 내게 미리보기**(`/daily/tick` `brief+force+briefOnly` — 반드시 나에게만). 검증 `py -3 tests/test_daily_brief.py` 27/27. ⚠️ 실제 NAS 프로젝트로는 미확인 · 재시작 전엔 없다
+- 폰에서 `/브리핑`(`TG_BRIEF_WORDS`, 데이터) 한 단어로 **즉시·나에게만** · 설정은 👥 명단 모달 ☀️ 칸(`/daily/config` `briefAt`/`briefEnabled`) · **📱 내게 미리보기**(`/daily/tick` `brief+force+briefOnly` — 반드시 나에게만). 검증 `py -3 tests/test_daily_brief.py` 27/27. ⚠️ 실제 NAS 프로젝트로는 미확인 · 재시작 전엔 없다
 
 ### `docs/ai-expansion-review.md` — 🤖 AI 활용 확장 검토 (2026-11-08)
 - **읽을 때**: AI 로 새 기능을 붙이기 전. "어디에 AI 를 더 쓸까", 외부에서 앱의 AI 를 쓰고 싶을 때
