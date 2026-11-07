@@ -13,7 +13,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -130,7 +130,9 @@ def upd(uid, chat, text):
 
 
 def queue_files():
-    return sorted(k for k in NAS.files if k.startswith(Q_DIR + '/'))
+    # 요청 파일만 — 신호 파일(online__/pending__)은 앱의 parseName 도 요청으로 안 본다
+    return sorted(k for k in NAS.files if k.startswith(Q_DIR + '/')
+                  and not k.rsplit('/', 1)[-1].startswith(('online__', 'pending__')))
 
 
 def state():
@@ -250,6 +252,201 @@ UPDATES.append(upd(1014, '111', '/ai 재고'))
 B._daily_tg_tick()
 ok('(돌연변이) 큐가 비고 보고로 샜다 — 하네스가 그 차이를 본다', queue_files() == [] and B._daily_rel(TODAY, 'yhpark') in NAS.files)
 B.TG_AI_PREFIXES[:] = saved
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 📥 /배분 — 폰에서 대기 메일 배분 (2026-11-08 5차, docs/ai-expansion-review.md §3-1 ②)
+# ══════════════════════════════════════════════════════════════════════════
+print('\n[10] /배분 — 앱이 올린 대기 목록을 inline 버튼으로(목록 없음·빈 목록·정상·낡음)')
+B.send_telegram_msg = lambda msg, chat_id=None, reply_markup=None: (SENT.append((chat_id, msg, reply_markup)) or {'ok': True})
+CALLS = []
+
+
+def _fake_post(url, **kw):
+    CALLS.append((url.rsplit('/', 1)[-1], kw.get('json') or {}))
+    return _Resp({'ok': True, 'result': {}})
+
+
+B.requests.post = _fake_post
+PEND = B.TG_AI_PENDING_FILE % 'yhpark'
+
+
+def pending(items, at=None, counts=None):
+    doc = {'key': 'yhpark', 'at': at or datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+           'items': items, 'counts': counts or {'waiting': len(items), 'withCands': len(items), 'unclassified': 2}}
+    NAS.put('/ROOT/' + PEND, json.dumps(doc, ensure_ascii=False).encode('utf-8'))
+
+
+ITEM = {'uid': 'ib_1731000000000_abcde', 'subject': 'Re: STELLAR32 CTR 납품 일정', 'from': 'kim@vendor.com',
+        'date': '2026-11-07 09:12', 'task': 'CTR 납품 일정 확인', 'basis': 'AI 중 — 스레드 기록 없음',
+        'cands': [{'id': 'fidA', 'name': 'LNW_STELLAR32_32.0.json', 'label': 'STELLAR32 32"'},
+                  {'id': 'fidB', 'name': 'LNW_STELLAR43_43.0.json', 'label': 'STELLAR43 43"'}]}
+ITEM2 = dict(ITEM, uid='ib_1731000000001_fghij', subject='OBSIDIAN AG 회로 검토',
+             cands=[{'id': 'fidC', 'name': 'OBSIDIAN.json', 'label': 'OBSIDIAN'}])
+
+reset()
+UPDATES.append(upd(1030, '111', '/배분'))
+B._daily_tg_tick()
+ok('목록 파일이 없으면 "아직 올리지 않았다"(보고로 안 샌다)', len(SENT) == 1 and '올리지 않았' in SENT[0][1], SENT)
+ok('큐·보고 파일 없음', queue_files() == [] and B._daily_rel(TODAY, 'yhpark') not in NAS.files, list(NAS.files))
+
+reset()
+pending([], counts={'waiting': 3, 'withCands': 0, 'unclassified': 5})
+UPDATES.append(upd(1031, '111', '/대기'))
+B._daily_tg_tick()
+ok('빈 목록 → "후보가 있는 대기 메일이 없다" + 건수(대기 3·미분류 5)', len(SENT) == 1 and '없습니다' in SENT[0][1] and '대기 3건' in SENT[0][1] and '미분류 5건' in SENT[0][1], SENT)
+
+reset()
+pending([ITEM, ITEM2])
+UPDATES.append(upd(1032, '111', '/배분'))
+B._daily_tg_tick()
+ok('메일 2건 → 한 건 한 통 + 꼬리 1통 = 3통', len(SENT) == 3, [m[1][:30] for m in SENT])
+kb = SENT[0][2] if SENT else None
+ok('첫 통에 inline 버튼: 후보 2 + ⏭ 보류 1', bool(kb) and len(kb['inline_keyboard']) == 3, kb)
+ok('callback_data = pl|<uid>|<후보번호> · 보류는 |skip (64바이트 안)',
+   bool(kb) and kb['inline_keyboard'][0][0]['callback_data'] == 'pl|ib_1731000000000_abcde|0'
+   and kb['inline_keyboard'][1][0]['callback_data'] == 'pl|ib_1731000000000_abcde|1'
+   and kb['inline_keyboard'][2][0]['callback_data'] == 'pl|ib_1731000000000_abcde|skip'
+   and all(len(r[0]['callback_data'].encode('utf-8')) <= 64 for r in kb['inline_keyboard']), kb)
+ok('본문에 제목·발신·근거·후보 라벨', 'STELLAR32 CTR' in SENT[0][1] and 'kim@vendor.com' in SENT[0][1] and '스레드 기록 없음' in SENT[0][1] and 'STELLAR43' in SENT[0][1], SENT[0][1])
+ok('꼬리에 "실행은 PC 앱" 과 건수', '실행은 PC 앱' in SENT[2][1] and '2건' in SENT[2][1], SENT[2][1])
+ok('보여 주기만 — 큐엔 아무것도 없다', queue_files() == [], queue_files())
+
+reset()
+pending([ITEM, ITEM2, dict(ITEM, uid='ib_3_aaaaa'), dict(ITEM, uid='ib_4_bbbbb'), dict(ITEM, uid='ib_5_ccccc'), dict(ITEM, uid='ib_6_ddddd'), dict(ITEM, uid='ib_7_eeeee')])
+UPDATES.append(upd(1034, '111', '/배분'))
+B._daily_tg_tick()
+ok('7건이면 TG_DIST.max(%d)건만 + "다시 보내면 다음 것"' % B.TG_DIST['max'], len(SENT) == B.TG_DIST['max'] + 1 and '다시 보내면' in SENT[-1][1], [m[1][:30] for m in SENT])
+
+old_at = (datetime.now(timezone.utc) - timedelta(minutes=40)).isoformat().replace('+00:00', 'Z')
+reset()
+pending([ITEM], at=old_at)
+UPDATES.append(upd(1033, '111', '/배분'))
+B._daily_tg_tick()
+ok('낡은 목록(40분) → 머리에 "꺼져 있는 것 같다" 경고, 그래도 보여 준다', len(SENT) == 3 and '분 전 것' in SENT[0][1] and SENT[1][2] is not None, [m[1][:40] for m in SENT])
+
+reset()
+pending([dict(ITEM, cands=[]), ITEM2])
+UPDATES.append(upd(1035, '111', '/배분'))
+B._daily_tg_tick()
+ok('후보 없는 항목은 건너뛴다(1건만 버튼)', len(SENT) == 2 and 'OBSIDIAN' in SENT[0][1] and SENT[0][2] is not None, [m[1][:40] for m in SENT])
+
+print('\n[11] 버튼 답(callback_query) → 접수 파일(action place) + 버튼 떼기 + 접수 답 — 진짜 입구로')
+
+
+def cb(uid, chat, data, mid=77):
+    return {'update_id': uid, 'callback_query': {'id': 'cq%d' % uid, 'from': {'id': int(chat)}, 'data': data,
+            'message': {'message_id': mid, 'chat': {'id': int(chat)}, 'text': '📨 1/2 Re: STELLAR32 <x>'}}}
+
+
+reset()
+pending([ITEM, ITEM2])
+del CALLS[:]
+UPDATES.append(cb(1040, '111', 'pl|ib_1731000000000_abcde|1'))
+res = B._daily_tg_tick()
+qf = queue_files()
+ok('접수 파일 <key>__cb<uid>.json 하나', qf == [Q_DIR + '/yhpark__cb1040.json'], qf)
+doc = json.loads(NAS.files[qf[0]]) if qf else {}
+ok('action place · 그 uid · 고른 후보(id fidB · idx 1 · 라벨)', doc.get('action') == 'place' and doc.get('uid') == 'ib_1731000000000_abcde'
+   and (doc.get('cand') or {}).get('id') == 'fidB' and doc['cand'].get('idx') == 1 and 'STELLAR43' in doc['cand'].get('label', ''), doc)
+ok('chatId·key·reply·text 가 실려 있다(앱의 빈 요청 검사를 지난다)', doc.get('chatId') == '111' and doc.get('key') == 'yhpark' and doc.get('reply') == 'telegram' and doc.get('text'), doc)
+methods = [c[0] for c in CALLS]
+ok('answerCallbackQuery 1회 + editMessageText 1회', methods.count('answerCallbackQuery') == 1 and methods.count('editMessageText') == 1, methods)
+edit = [c[1] for c in CALLS if c[0] == 'editMessageText'][0] if 'editMessageText' in methods else {}
+ok('고친 메시지: 원문(escape)+"선택: STELLAR43", 버튼은 빈 배열(두 번 누르기 방지)',
+   '선택: STELLAR43' in edit.get('text', '') and '&lt;x&gt;' in edit.get('text', '') and edit.get('reply_markup', {}).get('inline_keyboard') == [] and edit.get('message_id') == 77, edit)
+ok('앱 신호 없음 → "꺼져 있는 것 같다" 덧붙임', '꺼져 있는' in edit.get('text', ''), edit.get('text'))
+ok('offset 올라감 · handled 1 · 보고 파일 없음', state().get('offset') == 1041 and res.get('handled') == 1 and B._daily_rel(TODAY, 'yhpark') not in NAS.files, (state(), res))
+
+reset()
+pending([ITEM])
+del CALLS[:]
+UPDATES.append(cb(1041, '111', 'pl|ib_1731000000000_abcde|skip'))
+B._daily_tg_tick()
+ok('⏭ 보류 → 접수 파일 없음 · 답 + 버튼만 뗀다', queue_files() == [] and [c[0] for c in CALLS] == ['answerCallbackQuery', 'editMessageText'] and '보류' in CALLS[1][1].get('text', ''), (queue_files(), CALLS))
+
+reset()
+pending([ITEM])
+del CALLS[:]
+UPDATES.append(cb(1042, '111', 'pl|ib_0000_zzzzz|0'))
+B._daily_tg_tick()
+ok('목록에 없는 uid → 접수 안 함 + "목록에 없음" 답 + 버튼 뗀다', queue_files() == [] and any('목록에 없' in (c[1].get('text') or '') for c in CALLS if c[0] == 'answerCallbackQuery') and 'editMessageText' in [c[0] for c in CALLS], CALLS)
+
+reset()
+pending([ITEM])
+del CALLS[:]
+UPDATES.append(cb(1043, '111', 'pl|ib_1731000000000_abcde|7'))
+B._daily_tg_tick()
+ok('후보 번호가 범위 밖 → 접수 안 함', queue_files() == [], queue_files())
+
+reset()
+pending([ITEM])
+del CALLS[:]
+UPDATES.append(cb(1044, '999', 'pl|ib_1731000000000_abcde|0'))
+B._daily_tg_tick()
+ok('모르는 chat → 접수 안 함, 등록되지 않은 사용자 답, offset 은 올림', queue_files() == [] and state().get('offset') == 1045 and any('등록되지' in (c[1].get('text') or '') for c in CALLS), (queue_files(), state(), CALLS))
+
+reset()
+pending([ITEM])
+del CALLS[:]
+UPDATES.append(cb(1046, '111', 'xx|whatever'))
+B._daily_tg_tick()
+ok('모르는 버튼 자료 → "모르는 버튼" 답, 접수 없음', queue_files() == [] and any('모르는 버튼' in (c[1].get('text') or '') for c in CALLS), CALLS)
+
+reset()
+pending([ITEM])
+del CALLS[:]
+NAS.fail_write = True
+UPDATES.append(cb(1047, '111', 'pl|ib_1731000000000_abcde|0'))
+B._daily_tg_tick()
+ok('접수 쓰기 실패 → offset 그대로(다음 틱에 같은 답을 다시 받는다) · 버튼은 안 뗀다', state().get('offset', 0) == 0 and 'editMessageText' not in [c[0] for c in CALLS], (state(), CALLS))
+NAS.fail_write = False
+del CALLS[:]
+B._daily_tg_tick()
+ok('다음 틱에 접수됨', queue_files() == [Q_DIR + '/yhpark__cb1047.json'] and state().get('offset') == 1048, (queue_files(), state()))
+
+reset()
+pending([ITEM])
+NAS.put('/ROOT/' + Q_DIR + '/online__yhpark.json', b'{}')
+del CALLS[:]
+UPDATES.append(cb(1048, '111', 'pl|ib_1731000000000_abcde|0'))
+B._daily_tg_tick()
+edit = [c[1] for c in CALLS if c[0] == 'editMessageText'][0]
+ok('앱이 살아 있으면 "꺼져 있다" 를 안 붙인다', '선택: STELLAR32' in edit.get('text', '') and '꺼져 있는' not in edit.get('text', ''), edit.get('text'))
+
+print('\n[12] 아침 브리핑에 보관함 대기 건수 — 목록이 하루 안일 때만')
+reset()
+pending([ITEM], counts={'waiting': 4, 'withCands': 1, 'unclassified': 0})
+txt = B._brief_text_for({'key': 'yhpark', 'name': '박용훈'}, [], datetime.now(B.KST).date(), [], False)
+ok('"보관함 대기 4건 — 후보 있는 1건은 /배분"', bool(txt) and '보관함 대기 4건' in txt and '후보 있는 1건' in txt and '/배분' in txt, txt)
+reset()
+pending([ITEM], at=(datetime.now(timezone.utc) - timedelta(days=2)).isoformat().replace('+00:00', 'Z'))
+txt = B._brief_text_for({'key': 'yhpark', 'name': '박용훈'}, [], datetime.now(B.KST).date(), [], False)
+ok('이틀 전 목록은 안 싣는다', bool(txt) and '보관함 대기' not in txt, txt)
+reset()
+txt = B._brief_text_for({'key': 'yhpark', 'name': '박용훈'}, [], datetime.now(B.KST).date(), [], False)
+ok('목록 없음 → 줄 없음, 브리핑은 그대로(보고 초안 안내는 꼬리에)', bool(txt) and '보관함 대기' not in txt and '아침 브리핑' in txt and '보고 초안' in txt, txt)
+NAS.fail_list = True
+NAS.files.clear()
+txt = B._brief_text_for({'key': 'yhpark', 'name': '박용훈'}, [], datetime.now(B.KST).date(), [], False)
+ok('NAS 가 틀어져도 브리핑을 막지 않는다', bool(txt) and '아침 브리핑' in txt, txt)
+NAS.fail_list = False
+
+print('\n[13] 도움말에 /배분 · 보고 초안 안내')
+reset()
+UPDATES.append(upd(1050, '111', '/help'))
+B._daily_tg_tick()
+ok('/help 에 /배분 과 "오늘 보고 초안"', len(SENT) == 1 and '/배분' in SENT[0][1] and '오늘 보고 초안' in SENT[0][1], SENT)
+
+print('\n[14] 돌연변이 — /배분 어휘를 비우면 보고 글로 샌다(연결이 끊기면 하네스가 본다)')
+reset()
+pending([ITEM])
+saved = list(B.TG_DIST_WORDS)
+B.TG_DIST_WORDS[:] = []
+UPDATES.append(upd(1051, '111', '/배분'))
+B._daily_tg_tick()
+ok('(돌연변이) 버튼 메시지 0 · 보고 파일이 생겼다', not any(m[2] for m in SENT) and B._daily_rel(TODAY, 'yhpark') in NAS.files, ([m[1][:30] for m in SENT], list(NAS.files)))
+B.TG_DIST_WORDS[:] = saved
 
 try:
     os.remove(STATE)

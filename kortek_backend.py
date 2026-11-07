@@ -412,16 +412,30 @@ def matches_keyword(subject, body, keyword, keyword_from='', sender='', keyword_
 # ══════════════════════════════════════════════════════════════
 # 💬 Telegram 유틸
 # ══════════════════════════════════════════════════════════════
-def send_telegram_msg(message: str, chat_id: str = None) -> dict:
+def _tg_call(method: str, payload: dict) -> dict:
+    """봇 API 한 번(answerCallbackQuery·editMessageText 등). 실패는 dict 로 돌려준다 — 틱을 멈추지 않는다."""
+    if not TELEGRAM_TOKEN:
+        return {"ok": False, "error": "Token 미설정"}
+    try:
+        resp = requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}", json=payload, timeout=10)
+        return resp.json()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def send_telegram_msg(message: str, chat_id: str = None, reply_markup: dict = None) -> dict:
     target = chat_id or TELEGRAM_CHAT_ID
     if not TELEGRAM_TOKEN or not target:
         return {"ok": False, "error": "Token 또는 Chat ID 미설정"}
     url  = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    resp = requests.post(url, json={
+    body = {
         "chat_id":    target,
         "text":       message,
         "parse_mode": "HTML"
-    }, timeout=10)
+    }
+    if reply_markup:
+        body["reply_markup"] = reply_markup      # 📥 inline 버튼(/배분) — 2026-11-08
+    resp = requests.post(url, json=body, timeout=10)
     return resp.json()
 
 def get_target_chat_ids(to=None, role=None, project=None) -> list:
@@ -1311,6 +1325,16 @@ TG_AI_QUEUE_DIR = 'App_Config/TelegramAI'
 TG_AI_PREFIXES = ['/ai', '/q', '/질문', '/문의', '/검색', 'ai:', 'ai ', '질문:', '문의:', '검색:', '?']
 TG_AI_HELP_WORDS = ['/help', '/start', '도움말', '도움', '사용법', '/도움말']
 TG_BRIEF_WORDS = ['/brief', '/브리핑', '브리핑', '오늘 브리핑', '/오늘']   # 즉시 내 아침 브리핑(AI 없음)
+# 📥 폰에서 대기 메일 배분(docs/ai-expansion-review.md §3-1 ②, 2026-11-08) — 앱(js/60)이 2분마다 올리는
+#    `pending__<key>.json` 을 inline 버튼으로 보여 주고, 버튼 답을 같은 큐에 `action:'place'` 로 접수한다.
+#    고르는 건 사람, 실행은 열린 앱의 기존 배치 함수. AI 없음.
+TG_DIST_WORDS = ['/배분', '/대기', '/메일배분', '대기 메일', '/pending', '/inbox']
+TG_DIST = {'max': 5,          # 한 번에 보여 주는 메일 수(폰 화면)
+           'maxCands': 4,     # 항목당 후보 버튼 상한
+           'staleMin': 15,    # 목록이 이보다 오래됐으면 "앱이 꺼진 것 같다" 를 붙인다
+           'briefMaxAgeMin': 1440}   # 아침 브리핑에 대기 건수를 싣는 신선도 상한(하루)
+TG_AI_PENDING_FILE = TG_AI_QUEUE_DIR + '/pending__%s.json'
+TG_DIST_CB_PREFIX = 'pl'      # callback_data = 'pl|<보관함 uid>|<후보 번호|skip>' (64바이트 상한)
 TG_AI_ONLINE_STALE_SEC = 300          # 앱 신호가 이보다 오래되면 "꺼져 있는 것 같다"
 TG_AI_MAX_QUESTION = 2000
 
@@ -1334,6 +1358,8 @@ def _tg_ai_help_text():
             '<code>/ai 최근 메일 요약</code>\n'
             '답은 PC 에 켜 둔 앱이 만듭니다 — 앱이 꺼져 있으면 열 때 처리됩니다.\n\n'
             '\u2600\ufe0f <b>/브리핑</b> — 지금 내 업무 브리핑(지연·오늘 마감·이번 주)을 받습니다.\n'
+            '\U0001F4E5 <b>/배분</b> — 보관함에서 기다리는 메일을 버튼으로 프로젝트에 보냅니다(실행은 PC 앱).\n'
+            '\U0001F4D4 <code>/ai 오늘 보고 초안</code> — 간트에서 오늘 보고 초안을 받아 고쳐 보내면 저장됩니다.\n'
             '\U0001F4D4 <b>일일보고</b> — 접두어 없이 그냥 적으면 오늘 보고에 들어갑니다.\n'
             '서식: <b>업무 이름</b> 줄 아래 <code>한일:</code> <code>할일:</code> <code>막힌일:</code> · '
             '휴가면 <code>휴가</code> 한 단어 · 지우기 <code>/다시</code>')
@@ -1387,6 +1413,9 @@ def _tg_ai_handle(person, chat, text, uid):
         elif not (res.get('sent') or []):
             send_telegram_msg('\u2600\ufe0f 오늘 마감·지연 업무가 없고 어제 보고도 있습니다 — 보낼 브리핑이 없습니다.', chat)
         return True
+    if word.lower() in [w.lower() for w in TG_DIST_WORDS]:
+        _tg_dist_send(person, chat)
+        return True
     q = _tg_ai_strip(word)
     if q is None:
         return None
@@ -1406,6 +1435,187 @@ def _tg_ai_handle(person, chat, text, uid):
                           '앱을 열면 그때 처리됩니다(2시간 안).', chat)
     else:
         send_telegram_msg('\U0001F916 접수했습니다 — PC 에 앱이 켜져 있으면 곧 답합니다.', chat)
+    return True
+
+
+# ══════════════════════════════════════════════════════════════
+# 📥 폰에서 대기 메일 배분 — 목록은 앱이, 고르기는 사람이, 실행은 앱이 (2026-11-08, §3-1 ②)
+# ══════════════════════════════════════════════════════════════
+#  앱(js/60)이 2분마다 `App_Config/TelegramAI/pending__<key>.json` 을 올린다:
+#    {key, at, items:[{uid, subject, from, date, task, basis, cands:[{id,name,label}]}], counts:{waiting, withCands, unclassified}}
+#  `/배분` → 그 목록을 메일 한 건에 한 통씩 inline 버튼(후보 N개 + ⏭ 보류)으로.
+#  버튼 답(callback_query) → 같은 큐에 `<key>__cb<update_id>.json` {action:'place', uid, cand} 접수
+#  → 열린 앱이 기존 배치 함수로 실행하고 결과를 텔레그램으로 되보낸다.
+#  ⚠️ callback_data 는 64바이트 상한이라 **후보 번호**만 싣고, 파일 id 는 접수 때 목록에서 다시 찾는다.
+#  ⚠️ 버튼은 한 번만 — 접수하면 원래 메시지의 버튼을 떼고 "선택: …" 을 적는다(두 번 눌러 두 번 배치 방지).
+#  ⚠️ 목록이 없거나 낡았으면 그렇게 말한다(앱이 꺼져 있으면 올라오지 않는다). AI 없음.
+
+
+def _tg_doc_age_min(doc):
+    """`at`(ISO, 앱은 toISOString 의 Z) 로부터 몇 분 지났나. 모르면 None."""
+    try:
+        s = str((doc or {}).get('at') or '').replace('Z', '+00:00')
+        t = datetime.fromisoformat(s)
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=KST)
+        return (datetime.now(timezone.utc) - t.astimezone(timezone.utc)).total_seconds() / 60.0
+    except Exception:
+        return None
+
+
+def _tg_dist_pending(key):
+    """앱이 올린 대기 목록. 없으면 None, 못 읽으면 예외(`_daily_nas_json` 규칙)."""
+    return _daily_nas_json(TG_AI_PENDING_FILE % key)
+
+
+def _tg_pending_counts(key):
+    """아침 브리핑용 — 하루 안 목록의 건수만. 뭐든 틀어지면 None(브리핑을 막지 않는다)."""
+    try:
+        doc = _tg_dist_pending(key)
+        if not doc:
+            return None
+        age = _tg_doc_age_min(doc)
+        if age is None or age > TG_DIST['briefMaxAgeMin']:
+            return None
+        c = dict(doc.get('counts') or {})
+        c.setdefault('withCands', len(doc.get('items') or []))
+        return c
+    except Exception:
+        return None
+
+
+def _tg_dist_item_text(it, n, total):
+    lines = ['\U0001F4E8 <b>%d/%d</b> %s' % (n, total, html.escape(str(it.get('subject') or '(제목 없음)')))]
+    who = ' \u00b7 '.join(str(x) for x in [it.get('from'), it.get('date')] if x)
+    if who:
+        lines.append('\U0001F464 ' + html.escape(who))
+    if it.get('task'):
+        lines.append('\U0001F4DD ' + html.escape(str(it['task'])))
+    if it.get('basis'):
+        lines.append('\U0001F4CE ' + html.escape(str(it['basis'])))
+    cands = it.get('cands') or []
+    lines.append('후보: ' + ' / '.join('%d) %s' % (i + 1, html.escape(str(c.get('label') or c.get('name') or '')))
+                                       for i, c in enumerate(cands)))
+    return '\n'.join(lines)
+
+
+def _tg_dist_keyboard(it):
+    rows = []
+    uid = str(it.get('uid') or '')
+    for i, c in enumerate((it.get('cands') or [])[:TG_DIST['maxCands']]):
+        data = '%s|%s|%d' % (TG_DIST_CB_PREFIX, uid, i)
+        if len(data.encode('utf-8')) > 64:
+            continue                       # 텔레그램이 거부한다 — 그 버튼은 뺀다(목록 글엔 남아 있다)
+        rows.append([{'text': '\u2192 %d) %s' % (i + 1, str(c.get('label') or c.get('name') or '')[:36]), 'callback_data': data}])
+    skip = '%s|%s|skip' % (TG_DIST_CB_PREFIX, uid)
+    if len(skip.encode('utf-8')) <= 64:
+        rows.append([{'text': '\u23ed 보류', 'callback_data': skip}])
+    return {'inline_keyboard': rows}
+
+
+def _tg_dist_send(person, chat):
+    """`/배분` — 대기 목록을 버튼으로. 없으면·낡았으면 그렇게 말한다."""
+    try:
+        doc = _tg_dist_pending(person['key'])
+    except Exception as e:
+        send_telegram_msg('\u26a0\ufe0f 대기 목록을 읽지 못했습니다 — %s' % html.escape(str(e)), chat)
+        return {'ok': False, 'message': str(e)}
+    if not doc:
+        send_telegram_msg('\U0001F4ED 앱이 아직 대기 목록을 올리지 않았습니다 — PC 앱이 켜져 있어야 합니다(켜지면 2분 안에 올라옵니다).', chat)
+        return {'ok': True, 'sent': 0, 'reason': 'no-list'}
+    age = _tg_doc_age_min(doc)
+    items = [it for it in (doc.get('items') or []) if it.get('uid') and (it.get('cands') or [])]
+    counts = doc.get('counts') or {}
+    head = []
+    if age is not None and age > TG_DIST['staleMin']:
+        head.append('\u26a0\ufe0f 이 목록은 %d분 전 것입니다(PC 앱이 꺼져 있는 것 같습니다) — 앱을 켜면 새로 올라오고, 그 전엔 버튼을 눌러도 실행되지 않습니다.' % int(age))
+    if not items:
+        send_telegram_msg('\n'.join(head + ['\U0001F4ED 후보가 있는 대기 메일이 없습니다. (보관함 대기 %d건 \u00b7 미분류 %d건)'
+                                           % (int(counts.get('waiting') or 0), int(counts.get('unclassified') or 0))]), chat)
+        return {'ok': True, 'sent': 0, 'reason': 'empty'}
+    if head:
+        send_telegram_msg('\n'.join(head), chat)
+    shown = items[:TG_DIST['max']]
+    for i, it in enumerate(shown):
+        send_telegram_msg(_tg_dist_item_text(it, i + 1, len(items)), chat, reply_markup=_tg_dist_keyboard(it))
+    tail = '\U0001F4E5 보관함 대기 %d건 중 후보 있는 %d건 \u00b7 지금 %d건 표시' % (int(counts.get('waiting') or len(items)), len(items), len(shown))
+    if len(items) > len(shown):
+        tail += ' — 처리한 뒤 <b>/배분</b> 을 다시 보내면 다음 것을 보여 줍니다'
+    tail += '\n\u26a0\ufe0f 버튼은 "어느 프로젝트로" 를 고르는 것뿐이고 실행은 PC 앱이 합니다(앱이 꺼져 있으면 켤 때 처리).'
+    send_telegram_msg(tail, chat)
+    return {'ok': True, 'sent': len(shown), 'total': len(items)}
+
+
+def _tg_dist_callback(cq, by_chat, uid):
+    """inline 버튼 답. True = 처리됨(offset 올림) / False = 접수 쓰기 실패(다음 틱에 같은 답을 다시 받는다)."""
+    data = str(cq.get('data') or '')
+    cqid = cq.get('id')
+    msg = cq.get('message') or {}
+    chat = str(((msg.get('chat') or {}).get('id')) or ((cq.get('from') or {}).get('id')) or '')
+    mid = msg.get('message_id')
+
+    def answer(text):
+        _tg_call('answerCallbackQuery', {'callback_query_id': cqid, 'text': text[:190]})
+
+    def settle(tail):
+        # 버튼을 떼고 결과 한 줄을 붙인다 — 같은 버튼을 두 번 눌러 두 번 배치되는 것을 막는다
+        if mid:
+            _tg_call('editMessageText', {'chat_id': chat, 'message_id': mid, 'parse_mode': 'HTML',
+                                         'text': html.escape(str(msg.get('text') or '')) + '\n' + tail,
+                                         'reply_markup': {'inline_keyboard': []}})
+
+    person = by_chat.get(chat)
+    if not person:
+        answer('등록되지 않은 사용자입니다')
+        return True
+    parts = data.split('|')
+    if len(parts) != 3 or parts[0] != TG_DIST_CB_PREFIX:
+        answer('모르는 버튼입니다')
+        return True
+    _, item_uid, pick = parts
+    if pick == 'skip':
+        answer('보류했습니다')
+        settle('\u23ed 보류')
+        return True
+    try:
+        doc = _tg_dist_pending(person['key'])
+    except Exception as e:
+        answer('목록을 읽지 못했습니다 — %s' % str(e)[:80])
+        return True
+    it = next((x for x in ((doc or {}).get('items') or []) if str(x.get('uid')) == item_uid), None)
+    cands = (it or {}).get('cands') or []
+    try:
+        idx = int(pick)
+    except Exception:
+        idx = -1
+    if not it or idx < 0 or idx >= len(cands):
+        answer('목록에 없습니다(이미 처리됐거나 낡았습니다) — /배분 을 다시 보내 주세요')
+        settle('\u26a0\ufe0f 목록에 없음 — /배분 을 다시 보내 주세요')
+        return True
+    c = cands[idx]
+    rid = 'cb%d' % int(uid)
+    rel = '%s/%s__%s.json' % (TG_AI_QUEUE_DIR, person['key'], rid)
+    label = str(c.get('label') or c.get('name') or '')
+    req = {'id': rid, 'key': person['key'], 'name': person.get('name', ''), 'chatId': chat,
+           'via': 'telegram', 'reply': 'telegram',
+           'action': 'place', 'uid': item_uid,
+           'cand': {'id': c.get('id'), 'name': c.get('name'), 'label': label, 'idx': idx},
+           'subject': it.get('subject'),
+           'text': '[배분] %s \u2192 %s' % (str(it.get('subject') or ''), label),
+           'at': datetime.now(KST).isoformat()}
+    try:
+        n = _nas()
+        n.put(n.abs_path(rel), json.dumps(req, ensure_ascii=False, indent=2).encode('utf-8'))
+    except Exception as e:
+        print("[텔레그램AI] 배분 접수 실패(다음 틱 재시도): %s" % e)
+        answer('접수 중 오류 — 자동으로 다시 시도합니다')
+        return False
+    answer('접수했습니다')
+    online = _tg_ai_app_online(person['key'])
+    tail = '\u2705 선택: %s — PC 앱이 배치하고 결과를 보냅니다.' % html.escape(label)
+    if online is False:
+        tail += ' (지금 앱이 꺼져 있는 것 같습니다 — 켜면 처리됩니다)'
+    settle(tail)
     return True
 
 
@@ -1612,7 +1822,11 @@ def _brief_text_for(member, items, today, errors, yesterday_written):
         lines.append('\n오늘 마감·지연 업무는 없습니다.')
     if errors:
         lines.append('\n\u26a0\ufe0f 프로젝트 %d개를 읽지 못해 그 업무는 빠졌습니다.' % len(errors))
-    lines.append('\n<i>질문은 /ai 로, 보고는 그냥 적어서.</i>')
+    pend = _tg_pending_counts(member.get('key'))     # 📥 앱이 올린 보관함 대기 건수(하루 안 것만)
+    if pend and (pend.get('withCands') or pend.get('waiting')):
+        lines.append('\n\U0001F4E5 보관함 대기 %d건 — 후보 있는 %d건은 <b>/배분</b> 으로 폰에서 보낼 수 있습니다.'
+                     % (int(pend.get('waiting') or 0), int(pend.get('withCands') or 0)))
+    lines.append('\n<i>질문은 /ai 로, 보고는 그냥 적어서, 보고 초안은 /ai 오늘 보고 초안.</i>')
     return '\n'.join(lines)
 
 
@@ -1738,6 +1952,14 @@ def _daily_tg_tick(force=False):
     handled, ignored, last = 0, 0, offset
     for up in (j.get('result') or []):
         uid = up.get('update_id') or 0
+        # 📥 inline 버튼 답(/배분) — 글이 아니라 callback 으로 온다. 접수 쓰기 실패면 offset 을 안 올린다.
+        cq = up.get('callback_query')
+        if cq:
+            if _tg_dist_callback(cq, by_chat, uid) is False:
+                break
+            handled += 1
+            last = max(last, uid + 1)
+            continue
         msg = up.get('message') or up.get('edited_message') or {}
         # 📎 사진엔 `text` 가 없다 — 설명은 `caption` 으로 온다.
         #    옛 코드는 그래서 사진·문서를 조용히 버렸다.

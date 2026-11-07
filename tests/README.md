@@ -20,6 +20,7 @@
 | `mail-evidence.browser.js` | 같은 시나리오를 **진짜 15b·15c 함수**로 | 앱을 열고 콘솔에 붙여넣기(키·NAS 불필요) |
 | `period-summary.browser.js` | 📅 AI 요약 일일/주간/월간(js/62) — 사실 선별·접지 검사·모달·문답 입구 | 앱을 열고 콘솔에 붙여넣기(AI 는 가짜) |
 | `telegram-qa-bridge.browser.js` | 진짜 앱에서 한 바퀴(NAS 진짜, 텔레그램 발송만 가짜) | 앱을 열고(NAS 로그인) 콘솔에 붙여넣기 |
+| `telegram-dist-and-draft.browser.js` | 📥 폰에서 대기 메일 배분(js/60 `TG_QA_ACTIONS.place`·`pending__` 목록) + 📔 `/ai 오늘 보고 초안`(js/63) — 진짜 TaskInbox·진짜 바퀴·진짜 문답 입구 | 앱을 열고 콘솔에 붙여넣기(NAS 없으면 메모리 가짜로 돈다, 프로젝트가 안 열려 있으면 초안만 stub-data) |
 
 둘 다 **그룹웨어·SAP·AI 키가 없어도 돈다.** 가짜는 **바깥 경계에만** 두고
 안쪽은 진짜 코드가 돌기 때문이다 — 안쪽을 가짜로 만들면 시험이 자기 자신을 시험한다.

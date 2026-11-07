@@ -92,3 +92,37 @@ py -3 tools/ask-app-ai.py "999001 재고 확인해줘"
   으로 잇는 것인데, 초안이 텔레그램 4,096자에 잘려 **무엇에 확인하는지 모른 채** 누를 수 있다.
 - 사진·파일은 일일보고로만 간다(`att` 가 있으면 AI 경로 안 탐).
 - 담당 PC 백엔드가 꺼져 있으면 접수 자체가 안 된다 — 그건 일일보고도 같다.
+
+## 8. 📥 폰에서 대기 메일 배분 — `/배분` (2026-11-08 5차, `docs/ai-expansion-review.md` §3-1 ②)
+
+보관함에 **대기**로 남은 메일을 출퇴근길에 폰에서 프로젝트로 보낸다. **고르는 건 사람, 실행은 열린 앱의
+기존 배치 함수, AI 는 없다.**
+
+| 단계 | 누가 | 무엇을 |
+|---|---|---|
+| ① 목록 올리기 | 앱(js/60 `_tgqaWritePending`, 2분 신호와 같이) | `App_Config/TelegramAI/pending__<key>.json` — 보관함 `대기` 중 **후보(drive_file_id)가 있는 것**만, 제목·발신·날짜·업무명·근거·후보(≤4) + `counts{waiting, withCands, unclassified}` |
+| ② 보여 주기 | 백엔드(`_tg_dist_send`, `TG_DIST_WORDS`) | 메일 한 건에 한 통, inline 버튼 `→ 1) 후보` … `⏭ 보류`. `callback_data='pl\|<uid>\|<후보번호>'`(64바이트 상한이라 **번호**만) |
+| ③ 고르기 | 사람(폰) | 버튼 한 번. 백엔드가 `answerCallbackQuery` + 원래 메시지의 **버튼을 떼고** "✅ 선택: …" 을 붙인다(두 번 눌러 두 번 배치 방지) |
+| ④ 접수 | 백엔드(`_tg_dist_callback`) | 같은 큐에 `<key>__cb<update_id>.json` `{action:'place', uid, cand:{id,name,label,idx}}` — 목록에서 **id 를 다시 찾아** 싣는다. 쓰기 실패면 offset 을 안 올린다(다음 틱 재시도) |
+| ⑤ 실행 | 앱(js/60 `TG_QA_ACTIONS.place`) | 보관함에서 uid 를 찾아 **상태가 대기이고 후보 id 가 지금 후보에 있을 때만** `_msAutoRegisterToProject(...)`(PC 보관함 [📤 AI 후보로 전송] 과 같은 길) → 상태 배치됨/대기 → 결과 한 줄을 텔레그램으로, 목록을 바로 다시 올린다 |
+
+- 목록이 없으면 "앱이 아직 안 올렸다", `staleMin`(15분) 넘게 낡았으면 "앱이 꺼져 있는 것 같다" 를 **먼저 말한다**(버튼은 그래도 준다 — 앱을 켜면 처리된다).
+- 날짜 미확정(`날짜확인필요`)·후보 바뀜·이미 처리됨은 **실행하지 않고 사유를 보낸다**. 모르는 `action` 도 거부.
+- 아침 브리핑 끝에 "📥 보관함 대기 N건 — 후보 있는 M건은 /배분" 한 줄(목록이 하루 안일 때만, `_tg_pending_counts`).
+- 수치는 백엔드 `TG_DIST`(max 5·maxCands 4·staleMin 15·briefMaxAgeMin 1440)·앱 `TG_QA_BRIDGE.pendingMax/pendingMaxCands`(데이터).
+- 검증: `py -3 tests/test_telegram_ai_bridge.py` [10]~[14](68/68 — 목록 없음·빈 목록·7건 상한·낡음·후보 없음·callback 접수·보류·없는 uid·범위 밖·모르는 chat·쓰기 실패 재시도·앱 온라인 표기·브리핑 줄·돌연변이) ·
+  브라우저 `tests/telegram-dist-and-draft.browser.js`(진짜 TaskInbox·진짜 바퀴, 가짜는 NAS(없을 때)·텔레그램 발송·프로젝트 쓰기 셋뿐).
+
+## 9. 📔 `/ai 오늘 보고 초안` — 문답 로컬 명령 (js/63, §3-1 ①)
+
+`sendGanttQaMessage` 를 감싸는 로컬 명령(js/62 와 같은 자리)이라 **앱 문답창에서 "보고 초안 보여줘" 라고 쳐도,
+폰에서 `/ai 오늘 보고 초안` 이라고 해도** 같은 글이 나온다. AI 호출 0회 — js/59 가 이미 만드는
+`dailyBuildDraft`(열린 프로젝트) + `dailyScanOtherProjects`(내가 맡은 다른 프로젝트, `scanWaitMs` 25초까지) +
+`dailyLoad`(이미 적은 보고)를 모아 말풍선 **두 개**로 낸다:
+
+1. 안내 — 몇 건·어느 프로젝트·이미 적은 것·덜 모았는지(`partial`)·못 읽은 것.
+2. **복사해 보낼 글만** — 백엔드 `_daily_apply_text` 서식 그대로(`업무 이름` 줄 + `한일:`/`할일:`/`막힌일:`). 안내 문장은 한 줄도 섞지 않는다
+   — 태그 없는 줄은 전부 업무 이름으로 저장되기 때문이다. 다리는 이 말풍선(`tgSeparate`)을 **따로 한 통**으로 보낸다.
+
+사람은 ②를 복사해 고친 뒤 접두어 없이 답장하면 오늘 보고로 저장된다(이미 되는 길). 어제·날짜 지정도 받지만 텔레그램 답장은 **오늘** 보고에만
+들어가므로 안내에 그렇게 적는다. 어휘·상한은 `DAILY_DRAFT_QA`(데이터).
