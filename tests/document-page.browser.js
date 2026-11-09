@@ -137,8 +137,14 @@
             ok('고르면 드롭다운이 닫힌다', dd.style.display === 'none');
             // 🎨 문서 스타일 — 흰 종이 + 구역 띠(원본 문서와 비슷하게)
             ok('흰 종이 영역이 있다', !!body.querySelector('.doc-paper'));
-            ok('구역 띠가 칠해져 있다',
-               getComputedStyle(body.querySelector('.doc-sec')).backgroundColor === 'rgb(44, 95, 138)');
+            // 🎨 구역 띠 색을 **고정 hex 로 검사하지 않는다** — 팔레트(js/21)를 따라 바뀌는 게 맞다.
+            //    불변식은 "칠해져 있고, 헤더 박스와 **같은 팔레트 색**이다"(둘 다 `gen.bg`).
+            var secBg = getComputedStyle(body.querySelector('.doc-sec')).backgroundColor;
+            var hdrBg = getComputedStyle(document.getElementById('doc-header-box')).backgroundColor;
+            ok('구역 띠가 칠해져 있다', !!secBg && secBg !== 'rgba(0, 0, 0, 0)' && secBg !== 'transparent', secBg);
+            ok('구역 띠가 헤더와 같은 팔레트 색이다', secBg === hdrBg, secBg + ' vs ' + hdrBg);
+            // 색이 **클래스**로 와야 팔레트가 덮을 수 있다 — 주입 <style> 이 남아 있으면 안 된다
+            ok('주입 <style> 없이 styles.css 가 맡는다', !document.getElementById('doc-page-style'));
 
             // ── B. 기본 정보가 자동으로 표시되는가 ──
             LOG.push(''); LOG.push('── B. 기본 정보 자동 표시 ──');

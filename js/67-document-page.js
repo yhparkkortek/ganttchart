@@ -402,9 +402,9 @@
             return '<div onclick="window._docPick(\'' + _esc(f.id) + '\')"'
                  + ' style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px;'
                  + ' font-weight:bold; white-space:nowrap;'
-                 + ' background:' + (on ? '#2c5f8a' : 'transparent') + '; color:' + (on ? '#fff' : '#333') + ';"'
-                 + ' onmouseover="if(this.style.background!==\'rgb(44, 95, 138)\') this.style.background=\'#f1f3f5\';"'
-                 + ' onmouseout="if(this.style.background!==\'rgb(44, 95, 138)\') this.style.background=\'transparent\';">'
+                 + ' background:' + (on ? '#00707d' : 'transparent') + '; color:' + (on ? '#fff' : '#333') + ';"'
+                 + ' onmouseover="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'#f1f3f5\';"'
+                 + ' onmouseout="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'transparent\';">'
                  + (f.icon || '📄') + ' ' + _esc(f.label)
                  + (f.builder ? '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">PPT</span>' : '')
                  + '</div>';
@@ -462,47 +462,11 @@
         return BACKEND + '/doc/get?folder=' + encodeURIComponent(_attFolder(_ctx())) + '&name=' + encodeURIComponent(name);
     };
 
-    // ── 🎨 문서 스타일 (원본 문서와 비슷하게) ────────────────────────────
-    var _CSS_ID = 'doc-page-style';
-    var _ensureCss = function () {
-        if (document.getElementById(_CSS_ID)) return;
-        var st = document.createElement('style');
-        st.id = _CSS_ID;
-        st.textContent = [
-            // 흰 종이 느낌 — 원본이 A4 문서라 화면도 그 모양으로 본다
-            '#doc-page-body .doc-paper{background:#fff;border:1px solid #d7dde3;border-radius:2px;',
-            '  box-shadow:0 1px 4px rgba(0,0,0,.07);max-width:1040px;margin:0 auto 18px;padding:26px 30px 34px;}',
-            '#doc-page-body .doc-title{font-size:20px;font-weight:bold;text-align:center;letter-spacing:1px;',
-            '  padding:6px 0 14px;border-bottom:2px solid #2c5f8a;margin-bottom:16px;color:#1b3a57;}',
-            '#doc-page-body .doc-sec{margin:16px 0 4px;font-size:13px;font-weight:bold;color:#fff;',
-            '  background:#2c5f8a;padding:5px 10px;border-radius:2px;}',
-            '#doc-page-body table.doc-t{border-collapse:collapse;width:100%;font-size:12px;}',
-            '#doc-page-body table.doc-t td,#doc-page-body table.doc-t th{border:1px solid #9aa7b1;padding:4px 7px;}',
-            '#doc-page-body table.doc-t th,#doc-page-body table.doc-t td.doc-lab{background:#eef2f6;font-weight:bold;',
-            '  white-space:nowrap;text-align:center;}',
-            '#doc-page-body table.doc-t td.doc-lab{text-align:left;width:140px;}',
-            '#doc-page-body .doc-in{width:100%;box-sizing:border-box;padding:3px 5px;border:1px solid #ced4da;',
-            '  border-radius:3px;font-size:12px;background:#fff;}',
-            '#doc-page-body .doc-in.own{border-color:#e6a817;background:#fffbe6;font-weight:bold;}',
-            '#doc-page-body .doc-src{margin-top:2px;font-size:10px;color:#868e96;}',
-            '#doc-page-body .doc-src.own{color:#7a5210;}',
-            '#doc-page-body .doc-att{display:flex;flex-wrap:wrap;gap:8px;padding:8px;border:1px dashed #9aa7b1;',
-            '  border-radius:4px;background:#fafbfc;min-height:64px;align-items:flex-start;}',
-            '#doc-page-body .doc-att .thumb{width:118px;border:1px solid #d7dde3;border-radius:3px;background:#fff;padding:4px;}',
-            '#doc-page-body .doc-att .thumb img{width:100%;height:76px;object-fit:contain;display:block;}',
-            // 🖨 인쇄 — 종이에선 입력칸 테두리·출처·버튼을 지운다(문서처럼 보이게)
-            '@media print{',
-            '  #doc-page-body .doc-paper{box-shadow:none;border:none;max-width:none;margin:0;padding:0;}',
-            '  #doc-page-body .doc-src,#doc-page-body .doc-noprint{display:none !important;}',
-            '  #doc-page-body .doc-in{border:none;background:none;padding:1px 2px;font-weight:normal;}',
-            '  #doc-page-body .doc-in.own{background:none;}',
-            '  #doc-page-body .doc-sec{-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
-            '  #doc-page-body table.doc-t{page-break-inside:auto;}',
-            '  #doc-page-body table.doc-t tr{page-break-inside:avoid;}',
-            '}'
-        ].join('\n');
-        document.head.appendChild(st);
-    };
+    // 🎨 문서 모양 서식은 **styles.css** 에 있다(`#doc-page-body .doc-*`).
+    //   ⚠️⚠️ 여기서 `<style>` 을 심지 않는다 — 색을 두 군데서 정하면 팔레트(js/21 `_cpApplyLive`)가
+    //      덮어도 주입 스타일이 이겨서 "테마를 바꿔도 이 페이지만 안 바뀐다" 가 된다.
+    //      색을 고칠 땐 **styles.css 와 js/21 두 곳을 같이** 고친다(js/59 가 겪은 그 사고).
+    var _ensureCss = function () { /* styles.css 가 맡는다 */ };
 
     // ── 그리기 ─────────────────────────────────────────────────────────
     var _inputCell = function (id, key, value, own, src, hint, span) {
@@ -535,7 +499,7 @@
             : { meta: {}, overview: {}, milestones: { plan: {}, actual: {}, missing: [] }, members: [], spec: [], materials: [] };
 
         // ── 헤더 — PARTS 와 같은 드롭다운 + 출력(문서 형식이 기본, 엑셀은 옵션) ──
-        var PRIM = 'margin:0 4px 0 0; padding:6px 13px; background:#2c5f8a; color:#fff; border:none;'
+        var PRIM = 'margin:0 4px 0 0; padding:6px 13px; background:#00707d; color:#fff; border:none;'
                  + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;';
         var OPT = 'margin:0 4px 0 0; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none;'
                 + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;';
@@ -543,7 +507,7 @@
             + '<button id="doc-form-trigger" onclick="window._toggleDocFormDropdown(event)"'
             + ' title="' + _esc(_t('문서 종류를 고릅니다', 'Pick a document type')) + '"'
             + ' style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer;'
-            + ' color:#2c5f8a; background:none; border:none; padding:0; margin:0; user-select:none;">'
+            + ' color:#00707d; background:none; border:none; padding:0; margin:0; user-select:none;">'
             + '<span id="doc-form-trigger-label">' + (form ? (form.icon || '📄') + ' ' + _esc(form.label) : '📄 ' + _esc(_t('문서', 'Document')))
             + '</span><span style="font-size:11px;">▾</span></button>'
             + '<div id="doc-form-dropdown" class="row-action-popup" style="min-width:220px; padding:6px;"></div></div>'
@@ -585,8 +549,8 @@
                 var on = st.stage === sv;
                 h += '<button onclick="window._docSetStage(\'' + _esc(sv) + '\')" style="margin-right:4px;'
                    + ' padding:3px 10px; font-size:11px; cursor:pointer; border-radius:12px;'
-                   + ' border:1px solid ' + (on ? '#2c5f8a' : '#dee2e6') + ';'
-                   + ' background:' + (on ? '#e7f0f7' : '#fff') + '; font-weight:' + (on ? 'bold' : 'normal') + ';">'
+                   + ' border:1px solid ' + (on ? '#52a5af' : '#cfe3e5') + ';'
+                   + ' background:' + (on ? '#e0f5f7' : '#fff') + '; font-weight:' + (on ? 'bold' : 'normal') + ';">'
                    + _esc(sv) + '</button>';
             });
             h += '</div>';
@@ -633,7 +597,7 @@
                 }
                 h += '</table>';
                 sheets.forEach(function (sh) {
-                    h += '<div class="doc-sec" style="background:#4a6f8a;">' + _esc(sh.key) + '</div>';
+                    h += '<div class="doc-sec">' + _esc(sh.key) + '</div>';
                     h += '<table class="doc-t" style="table-layout:fixed;">'
                        + '<colgroup><col style="width:110px"><col><col style="width:168px">'
                        + '<col style="width:150px"><col style="width:150px"></colgroup>'
@@ -647,12 +611,9 @@
                         var cell = function (cols) {
                             return '<td style="text-align:center; white-space:nowrap;">' + cols.map(function (c) {
                                 var k = base + c, on = _docData(form.id).fields[k] === 'O';
-                                return '<span class="doc-chk" data-doc-chk="' + _esc(k) + '"'
-                                     + ' title="' + _esc(c) + '" style="display:inline-block; min-width:30px;'
-                                     + ' margin:0 1px; padding:1px 3px; cursor:pointer; border:1px solid #ccd3d9;'
-                                     + ' border-radius:3px; font-size:10px; line-height:14px;'
-                                     + ' background:' + (on ? '#2c5f8a' : '#fff') + '; color:' + (on ? '#fff' : '#adb5bd') + ';">'
-                                     + _esc(c) + (on ? ' O' : '') + '</span>';
+                                // ⚠️ 색은 인라인이 아니라 **클래스**(`.doc-chk` / `.on`)로 — 팔레트가 먹어야 한다
+                                return '<span class="doc-chk' + (on ? ' on' : '') + '" data-doc-chk="' + _esc(k) + '"'
+                                     + ' title="' + _esc(c) + '">' + _esc(c) + (on ? ' O' : '') + '</span>';
                             }).join('') + '</td>';
                         };
                         h += '<tr>'
@@ -753,8 +714,7 @@
             _markDirty();
             // 누른 칸만 다시 칠한다 — 167항목을 통째로 다시 그리면 눈에 띄게 느리다
             var on = d.fields[k] === 'O';
-            el.style.background = on ? '#2c5f8a' : '#fff';
-            el.style.color = on ? '#fff' : '#adb5bd';
+            el.classList.toggle('on', on);     // 색은 클래스가 정한다(팔레트 대응)
             el.textContent = el.getAttribute('title') + (on ? ' O' : '');
         };
         // 📎 끌어다 놓기 — 첨부 구역에 떨어뜨린 것만 받는다(앱 전역 드롭과 겹치지 않게 막는다)

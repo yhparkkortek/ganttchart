@@ -382,6 +382,23 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.daily-none-row > td { background: ' + compGen.bg + ' !important; }\n'
         + '.daily-none-txt { color: ' + compGen.darkText + ' !important; }\n';
 
+    // 📄 [2026-11-09] Document 페이지(js/67)의 문서 서식 — **클래스 기반**이라
+    //    `[style*="#hex"]` 인라인 매칭으로는 절대 안 잡힌다. 기본 색은 styles.css 에 있고
+    //    여기가 라이브로 덮는다. ⚠️ 한쪽만 고치면 "기본 테마에서만 색이 안 바뀐다".
+    css += '#doc-page-body .doc-title { color: ' + gen.darkText + ' !important;'
+         + ' border-bottom-color: ' + gen.hoverBorder + ' !important; }\n'
+        + '#doc-page-body .doc-sec { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important;'
+        + ' border-color: ' + gen.hoverBg + ' !important; }\n'
+        + '#doc-page-body table.doc-t td, #doc-page-body table.doc-t th { border-color: ' + gen.border + ' !important; }\n'
+        + '#doc-page-body table.doc-t th, #doc-page-body table.doc-t td.doc-lab { background: ' + gen.headerTint + ' !important;'
+        + ' color: ' + gen.darkText + ' !important; }\n'
+        + '#doc-page-body .doc-paper { border-color: ' + gen.border + ' !important; }\n'
+        + '#doc-page-body .doc-att { border-color: ' + gen.hoverBg + ' !important; }\n'
+        + '#doc-page-body .doc-att .thumb { border-color: ' + gen.border + ' !important; }\n'
+        + '#doc-page-body .doc-chk { border-color: ' + gen.border + ' !important; }\n'
+        + '#doc-page-body .doc-chk.on { background: ' + gen.darkText + ' !important; color: #fff !important;'
+        + ' border-color: ' + gen.darkText + ' !important; }\n';
+
     css += '.trans-btn-hide-print { color: ' + gen.darkText + ' !important; }\n';
     document.documentElement.style.setProperty('--trans-text', gen.darkText);
     // 💡 [2026-09-02 추가] 하단 taskbar 칩(최소화된 모달 칩 + 기본 바로가기 런처)이 프로젝트/테마 전환
