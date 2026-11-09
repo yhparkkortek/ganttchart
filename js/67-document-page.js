@@ -28,7 +28,7 @@
     'use strict';
 
     var BACKEND = 'http://127.0.0.1:5000';
-    var ATT_FOLDER = 'DOCUMENT/attach';   // 첨부 바이트는 문서와 섞지 않는다
+    var DOC_ROOT = 'DOCUMENT';
     var _t = function (ko, en) { return (window._currentLang === 'en') ? en : ko; };
     var _esc = function (s) { return window.escapeHtml ? window.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); };
     var _toast = function (m, k) { if (window.showToast) window.showToast(m, k || 'info'); };
@@ -94,7 +94,7 @@
     // ── 📚 문서 서식 카탈로그 (데이터) ──────────────────────────────────
     window.DOC_FORMS = window.DOC_FORMS || [
         {
-            id: 'proto-req', icon: '🧾', label: '시제품 제작의뢰서', folder: 'DOCUMENT',
+            id: 'proto-req', icon: '🧾', label: '시제품 제작의뢰서',
             note: '그룹웨어 기안의 본문 표와 같은 서식입니다(실측 RD3-2604-016).',
             nameOf: function (ctx) { return _projKey(ctx) + '_시제품 제작의뢰서_' + _today(); },
             sections: _protoReqSections()
@@ -104,7 +104,7 @@
             //    원본은 **7부 구성**이다(표지 뒤 '#문서 구분' 표에 그렇게 적혀 있다).
             //    ⚠️ SAMPLE CHECK SHEET(하드웨어·펌웨어·기구 6장, 300행 체크표)는 아직 안 넣었다 —
             //       넣을 땐 `kind:'check'` 를 새로 만들어 붙인다. 모르는 척하지 않고 적어 둔다.
-            id: 'sample-report', icon: '📑', label: 'Sample Report (시제품)', folder: 'DOCUMENT',
+            id: 'sample-report', icon: '📑', label: 'Sample Report (시제품)',
             note: '원본 구성: ①시제품 제작의뢰서 ②라벨 사양 ③검토 내역서(시제품팀) '
                 + '④광학 측정 ⑤제작 특이사항 ⑥검토 내역서(제품보증팀) ⑦SPL Check sheet. '
                 + '⑦ 체크시트(6장·300행)는 아직 안 들어갑니다.',
@@ -194,7 +194,7 @@
             ])
         },
         {
-            id: 'stage-dr', icon: '📊', label: 'DR / DVR 발표자료', folder: 'DOCUMENT',
+            id: 'stage-dr', icon: '📊', label: 'DR / DVR 발표자료',
             builder: 'stage-dr', stages: ['Kickoff & Proto DR', 'Proto DR', 'DVR', 'PRA'],
             note: '도면·사진·블록도는 들어가지 않습니다(사람이 넣는 부분). PPT 로 받으면 슬라이드 6장입니다.',
             nameOf: function (ctx, opt) {
@@ -233,14 +233,36 @@
     var _ymd = function () { var d = new Date(); return String(d.getFullYear()).slice(2) + _pad(d.getMonth() + 1) + _pad(d.getDate()); };
     var _todayDash = function () { var d = new Date(); return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); };
     // 파일 이름의 프로젝트 부분 — 고객사·모델명에서 만든다.
-    //  ⚠️ 폴더 이름으로는 쓰지 않는다 — `고객사` 에 `LNW>STELLAR32` 처럼 `>` 가 들어 있고(실측),
-    //     프로젝트 이름은 사람이 고칠 때마다 바뀐다. 폴더를 그걸로 만들면 **이름이 바뀌는 순간
-    //     옛 문서가 미아가 된다**(이 저장소가 세 번 겪은 고장 모양이다). 그래서 문서는
-    //     `DOCUMENT/` 에 평평하게 두고 **파일 이름에** 프로젝트를 적는다.
     var _projKey = function (ctx) {
         var s = [ctx.meta.고객사, ctx.meta.모델명].filter(Boolean).join('_') || 'PROJECT';
-        return s.replace(/[\\/:*?"<>|]/g, '-').trim();
+        return _safe(s);
     };
+    // 윈도 폴더·파일에 못 쓰는 글자를 바꾼다.
+    //  ⚠️ `고객사` 에 `LNW>STELLAR32` 처럼 **`>` 가 들어 있다**(실측) — 그대로 쓰면 폴더가 안 만들어진다.
+    var _safe = function (s) {
+        return String(s == null ? '' : s).replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
+    };
+
+    // ── 📁 프로젝트별 폴더 (사용자 결정 2026-11-09) ──────────────────────
+    //   `DOCUMENT/<프로젝트>/`  · 그 안에 문서 파일, `attach/` 에 첨부.
+    //   열쇠는 **프로젝트 코드를 앞에 붙인다** — 사람이 `고객사>프로젝트명` 을 고치면 모델명이
+    //   바뀌어 폴더가 갈릴 수 있는데(이 저장소가 겪은 고장 모양), 코드는 한 번 채번하면
+    //   안 바뀌므로 **코드로 같은 프로젝트임을 알아볼 수 있다**.
+    //   ⚠️ 코드가 아직 없으면(채번 전) 고객사_모델명만 쓴다 — 그땐 이름이 바뀌면 폴더도 갈린다.
+    //      그 경우 NAS 에서 옛 폴더를 손으로 합쳐야 한다(숨기지 않고 적어 둔다).
+    var _projFolderName = function (ctx) {
+        var code = _safe(ctx.meta.프로젝트코드);
+        var name = _safe([ctx.meta.고객사, ctx.meta.모델명].filter(Boolean).join('_'));
+        var s = [code, name].filter(Boolean).join('_');
+        return s || 'ETC';
+    };
+    var _docFolder = function (ctx) { return DOC_ROOT + '/' + _projFolderName(ctx); };
+    var _attFolder = function (ctx) { return _docFolder(ctx) + '/attach'; };
+    // 지금 열린 프로젝트의 사실 묶음 — 폴더를 물을 때마다 모은다(프로젝트가 바뀌면 폴더도 바뀐다).
+    var _ctx = function () {
+        return window._dgCollect ? window._dgCollect() : { meta: {} };
+    };
+    window._docFolderOf = function () { return _docFolder(_ctx()); };
 
     // ── 값 찾기 ────────────────────────────────────────────────────────
     // ⚠️⚠️ 항목 이름은 **참조 엑셀의 실제 이름**이다(2026-11-09 실측, 표준 28항목).
@@ -414,7 +436,7 @@
             var nm = _today() + '_' + id + '_' + key + '_' + (f.name || ('file' + i));
             nm = nm.replace(/[\\/:*?"<>|]/g, '-');
             _toast('⏳ ' + (f.name || '') + ' ' + _t('올리는 중…', 'uploading…'), 'info');
-            var r = await window._dgUploadBlob(ATT_FOLDER, nm, f);
+            var r = await window._dgUploadBlob(_attFolder(_ctx()), nm, f);
             if (r.ok) {
                 d.att[key].push({ name: r.name || nm, orig: f.name || '', size: r.size || f.size || 0,
                                   type: f.type || '', at: new Date().toISOString() });
@@ -437,7 +459,7 @@
         _markDirty(); window._docRender();
     };
     var _attUrl = function (name) {
-        return BACKEND + '/doc/get?folder=' + encodeURIComponent(ATT_FOLDER) + '&name=' + encodeURIComponent(name);
+        return BACKEND + '/doc/get?folder=' + encodeURIComponent(_attFolder(_ctx())) + '&name=' + encodeURIComponent(name);
     };
 
     // ── 🎨 문서 스타일 (원본 문서와 비슷하게) ────────────────────────────
@@ -531,11 +553,16 @@
             + '<span class="btn-group">'
             // 🖨 문서 형식이 **기본** 출력이다 — 보이는 그대로 인쇄/PDF
             + '<button onclick="window._docPrint()" style="' + PRIM + '">🖨 ' + _esc(_t('문서 출력', 'Print')) + '</button>'
-            + '<button onclick="window._docExport(\'xlsx\')" style="' + OPT + '">📗 ' + _esc(_t('엑셀', 'Excel')) + '</button>';
+            + '<button onclick="window._docExport(\'xlsx\')" style="' + OPT + '">📊 ' + _esc(_t('엑셀 저장', 'Excel')) + '</button>';
         if (form && form.builder) {
-            th += '<button onclick="window._docExport(\'pptx\')" style="' + OPT + '">📊 ' + _esc(_t('PPT', 'PPT')) + '</button>';
+            th += '<button onclick="window._docExport(\'pptx\')" style="' + OPT + '">📑 ' + _esc(_t('PPT 저장', 'PPT')) + '</button>';
         }
-        th += '<button onclick="window._docExport(\'nas\')" style="' + OPT + '">📁 ' + _esc(_t('NAS', 'NAS')) + '</button>'
+        // 📂 불러오기 — 다른 페이지와 **같은 뜻**이다: 파일을 읽어 이 페이지 칸을 채운다.
+        // 📁 NAS — 다른 페이지와 **같은 뜻**이다: 자료실 탐색기를 연다(올리기·열기는 거기서).
+        //   ⚠️ 예전엔 NAS 버튼이 "엑셀을 NAS 에 올리기"였다 — 같은 글자가 페이지마다 다른 일을
+        //      하면 사람이 매번 눌러 보고 알아내야 한다(사용자 지적 2026-11-09).
+        th += '<button onclick="window._docImportPick()" style="' + OPT + '">📂 ' + _esc(_t('불러오기', 'Import')) + '</button>'
+            + '<button onclick="window._docOpenNas()" style="' + OPT + '">📁 ' + _esc(_t('NAS', 'NAS')) + '</button>'
             + '</span>';
         tools.innerHTML = th;
 
@@ -543,11 +570,14 @@
             + _esc(_t('문서 서식이 없습니다.', 'No document forms.')) + '</div>'; return; }
 
         // ── 본문 — 흰 종이 위의 문서 ──
+        // ⚠️ [2026-11-09 사용자 요청] 프로젝트 경로 줄(`📁 고객사 > 모델`)과 서식 안내(ℹ️)는
+        //    **두지 않는다** — 문서 위에 앱 안내가 얹히면 문서처럼 안 보인다.
+        //    프로젝트가 안 열렸을 때만 한 줄 경고한다(그건 값이 안 채워지는 이유라 숨기면 안 된다).
         var h = '<div class="doc-paper">';
-        var pname = [ctx.meta.고객사, ctx.meta.모델명].filter(Boolean).join(' > ');
-        h += '<div class="doc-noprint" style="margin:0 0 8px; font-size:12px; color:#868e96;">'
-           + (pname ? '📁 ' + _esc(pname) : '⚠️ ' + _esc(_t('프로젝트가 열려 있지 않습니다 — 자동으로 채울 값이 없습니다.', 'No project open.')))
-           + '</div>';
+        if (!ctx.meta.고객사 && !ctx.meta.모델명) {
+            h += '<div class="doc-noprint" style="margin:0 0 8px; font-size:12px; color:#b1432f;">⚠️ '
+               + _esc(_t('프로젝트가 열려 있지 않습니다 — 자동으로 채울 값이 없습니다.', 'No project open.')) + '</div>';
+        }
         h += '<div class="doc-title">' + _esc(form.label) + '</div>';
         if (form.stages) {
             h += '<div class="doc-noprint" style="margin-bottom:10px; font-size:12px;">' + _esc(_t('단계', 'Stage')) + ': ';
@@ -560,11 +590,6 @@
                    + _esc(sv) + '</button>';
             });
             h += '</div>';
-        }
-        if (form.note) {
-            h += '<div class="doc-noprint" style="margin-bottom:12px; padding:6px 9px; background:#e8f4fd;'
-               + ' border-left:3px solid #1a4f7a; border-radius:0 4px 4px 0; font-size:11.5px; color:#1a4f7a;">ℹ️ '
-               + _esc(form.note) + '</div>';
         }
 
         form.sections.forEach(function (s) {
@@ -759,6 +784,166 @@
         window._docAttachAdd(window._docState.formId, zone.getAttribute('data-doc-att'), files);
     });
 
+    // ── 📁 NAS — 다른 페이지와 같은 자료실 탐색기 ────────────────────────
+    window._docOpenNas = function () {
+        var form = _formById(window._docState.formId);
+        if (!window._dsOpenBrowser) {
+            _toast('⚠️ ' + _t('문서 저장소 기능을 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return;
+        }
+        // 이 프로젝트의 폴더를 연다 — 없으면 백엔드가 만들면서 연다(`_docstore_dir` 이 makedirs).
+        window._dsOpenBrowser(_docFolder(_ctx()), { title: 'Document' });
+    };
+
+    // ── 📂 불러오기 — 문서를 읽어 이 페이지 칸을 채운다 ──────────────────
+    //  ⚠️ **AI 를 안 쓴다**(결정론). 서식의 칸 이름으로 `라벨 → 값` 을 찾는다:
+    //    · 엑셀이면 시트를 표로 읽어 `[라벨, 값]` 쌍을 만든다(이 페이지가 내보낸 모양 그대로)
+    //    · 그 외(docx/pdf/txt/html)는 글자를 뽑아 **줄 단위**로 라벨을 찾는다
+    //  ⚠️ 바로 적용하지 않는다 — **무엇을 어디에 넣을지 보여주고 사람이 승인**해야 들어간다
+    //    (틀린 값이 문서에 조용히 박히는 게 제일 나쁘다).
+    var _impNorm = function (s) {
+        return String(s == null ? '' : s).replace(/[\s:：·.]/g, '').toLowerCase();
+    };
+    var _formFieldList = function (form) {
+        var out = [];
+        (form.sections || []).forEach(function (s) {
+            if (s.kind === 'check' || s.kind === 'attach') return;
+            (s.fields || []).forEach(function (f) { out.push({ key: f.key, label: f.label || f.key }); });
+            (s.rows || []).forEach(function (r) {
+                (r.cells || []).forEach(function (c) { if (c.key) out.push({ key: c.key, label: c.key }); });
+            });
+            if (s.kind === 'text' && s.key) out.push({ key: s.key, label: s.title.replace(/^#\s*/, '') });
+        });
+        return out;
+    };
+
+    window._docImportPick = function () {
+        var inp = document.createElement('input');
+        inp.type = 'file';
+        inp.onchange = function () { if (inp.files && inp.files[0]) window._docImportFile(inp.files[0]); };
+        inp.click();
+    };
+
+    window._docImportFile = async function (file) {
+        var form = _formById(window._docState.formId);
+        if (!form) return;
+        if (window._docCanRead && !window._docCanRead(file.name)) {
+            _toast('⚠️ ' + (window._docReadHint ? window._docReadHint(file.name)
+                : _t('이 종류는 아직 못 읽습니다.', 'Cannot read this type.')), 'error');
+            return;
+        }
+        _toast('⏳ ' + _t('문서를 읽는 중…', 'Reading…'), 'info');
+        var pairs = [];
+        try {
+            var isWb = window._docIsWorkbook && window._docIsWorkbook(file.name);
+            if (isWb && typeof XLSX !== 'undefined') {
+                var wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+                (wb.SheetNames || []).forEach(function (n) {
+                    XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '' }).forEach(function (row) {
+                        // 한 줄에 `라벨 | 값` 또는 `라벨 | 값 | 라벨 | 값` 이 올 수 있다
+                        for (var i = 0; i + 1 < row.length; i += 2) {
+                            var a = String(row[i] || '').trim(), b = String(row[i + 1] || '').trim();
+                            if (a && b) pairs.push([a, b]);
+                        }
+                    });
+                });
+            } else {
+                var txt = await window._pxExtractText(file, null);
+                String(txt || '').split(/\r?\n/).forEach(function (ln) {
+                    // `라벨 : 값` · `라벨 <탭/2칸이상> 값` 둘 다 받는다
+                    var m = ln.match(/^\s*([^:\t]{1,30}?)\s*[:：]\s*(.+?)\s*$/)
+                         || ln.match(/^\s*(.{1,30}?)(?:\t|\s{2,})(.+?)\s*$/);
+                    if (m && m[1].trim() && m[2].trim()) pairs.push([m[1].trim(), m[2].trim()]);
+                });
+            }
+        } catch (e) {
+            _toast('⚠️ ' + _t('읽지 못했습니다: ', 'Could not read: ') + (e && e.message || e), 'error');
+            return;
+        }
+
+        // 라벨로 짝짓기 — 먼저 나온 값이 이긴다(문서 앞쪽이 본문이다)
+        var byLabel = {};
+        pairs.forEach(function (p) { var k = _impNorm(p[0]); if (k && !byLabel[k]) byLabel[k] = p[1]; });
+        var hits = [];
+        _formFieldList(form).forEach(function (f) {
+            var v = byLabel[_impNorm(f.label)] || byLabel[_impNorm(f.key)];
+            if (v === undefined || v === '') return;
+            var cur = _hasOwn(form.id, f.key) ? _docData(form.id).fields[f.key] : '';
+            if (String(cur) === String(v)) return;   // 이미 같은 값이면 보여줄 것도 없다
+            hits.push({ key: f.key, label: f.label, now: cur, next: v });
+        });
+        if (!hits.length) {
+            _toast('ℹ️ ' + _t('이 문서에서 채울 칸을 못 찾았습니다(라벨이 서식과 달라 보입니다). 파일: ',
+                              'No matching fields. ') + (file.name || ''), 'info');
+            return;
+        }
+        window._docImportPending = { formId: form.id, hits: hits, file: file.name || '' };
+        _docImportPreview();
+    };
+
+    var _docImportPreview = function () {
+        var p = window._docImportPending; if (!p) return;
+        var ov = document.getElementById('docimp-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'docimp-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9500; pointer-events:none; background:none;';
+            ov.innerHTML = '<div id="docimp-box" style="pointer-events:all; position:fixed; left:50%; top:9%;'
+                + ' transform:translateX(-50%); width:min(760px,94vw); max-height:78vh; display:flex; flex-direction:column;'
+                + ' background:#fff; border:1px solid #a5c8f0; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18);'
+                + ' overflow:hidden;">'
+                + '<div id="docimp-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between;'
+                + ' padding:9px 12px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2;'
+                + ' font-weight:bold; font-size:13px; cursor:grab;"><span id="docimp-title"></span>'
+                + '<button onclick="window._docImportClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
+                + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div id="docimp-body" style="flex:1; min-height:0; overflow-y:auto; padding:10px 12px;"></div>'
+                + '<div style="flex-shrink:0; display:flex; justify-content:flex-end; gap:6px; padding:9px 12px; border-top:1px solid #e9ecef;">'
+                + '<button onclick="window._docImportClose()" style="padding:6px 12px; background:#f1f3f5; color:#495057;'
+                + ' border:1px solid #dee2e6; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">'
+                + _esc(_t('취소', 'Cancel')) + '</button>'
+                + '<button onclick="window._docImportApply()" style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d;'
+                + ' border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ '
+                + _esc(_t('이대로 채우기', 'Apply')) + '</button></div></div>';
+            document.body.appendChild(ov);
+            if (window._makeDraggable) { try { window._makeDraggable('docimp-box', 'docimp-head'); } catch (e) { /* 〃 */ } }
+        }
+        ov.style.display = 'flex';
+        document.getElementById('docimp-title').textContent =
+            '📂 ' + _t('불러오기 — ', 'Import — ') + p.file + ' (' + p.hits.length + _t('칸', '') + ')';
+        var h = '<div style="margin-bottom:8px; font-size:11.5px; color:#868e96;">'
+              + _esc(_t('문서에서 찾은 값입니다. 체크된 칸만 채웁니다 — 기존 값은 덮어씁니다.',
+                        'Checked fields will be filled.')) + '</div>'
+              + '<table style="border-collapse:collapse; width:100%; font-size:11.5px;"><tr>'
+              + '<th style="border:1px solid #e9ecef; padding:4px; width:26px;"></th>'
+              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:left;">' + _esc(_t('칸', 'Field')) + '</th>'
+              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:left;">' + _esc(_t('지금', 'Now')) + '</th>'
+              + '<th style="border:1px solid #e9ecef; padding:4px; text-align:left;">' + _esc(_t('문서에서', 'From file')) + '</th></tr>';
+        p.hits.forEach(function (x, i) {
+            h += '<tr><td style="border:1px solid #e9ecef; padding:3px; text-align:center;">'
+               + '<input type="checkbox" id="docimp-c-' + i + '" checked></td>'
+               + '<td style="border:1px solid #e9ecef; padding:3px 6px; font-weight:bold; white-space:nowrap;">' + _esc(x.label) + '</td>'
+               + '<td style="border:1px solid #e9ecef; padding:3px 6px; color:#868e96;">' + _esc(x.now || '-') + '</td>'
+               + '<td style="border:1px solid #e9ecef; padding:3px 6px; color:#1f7a3d; font-weight:bold;">' + _esc(x.next) + '</td></tr>';
+        });
+        document.getElementById('docimp-body').innerHTML = h + '</table>';
+    };
+    window._docImportClose = function () {
+        var ov = document.getElementById('docimp-overlay'); if (ov) ov.style.display = 'none';
+        window._docImportPending = null;
+    };
+    window._docImportApply = function () {
+        var p = window._docImportPending; if (!p) return;
+        var n = 0;
+        p.hits.forEach(function (x, i) {
+            var c = document.getElementById('docimp-c-' + i);
+            if (c && !c.checked) return;
+            window._docSetField(p.formId, x.key, x.next); n++;
+        });
+        window._docImportClose();
+        window._docRender();
+        _toast('📂 ' + _t(n + '칸을 채웠습니다.', 'Filled ' + n + ' field(s).'), 'success');
+    };
+
     // ── 🖨 문서 출력 (기본) ─────────────────────────────────────────────
     //  보이는 그대로 인쇄한다 — 준비(`beforeprint`)는 기존 경로를 그대로 탄다.
     window._docPrint = function () {
@@ -858,8 +1043,8 @@
         var buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         _toast('⏳ ' + _t('NAS 에 올리는 중…', 'Uploading…'), 'info');
-        var r = await window._dgUploadBlob(form.folder, name, blob);
-        if (r.ok) _toast('📁 ' + form.folder + '/' + r.name + ' (' + Math.round((r.size || 0) / 1024) + 'KB)', 'success');
+        var r = await window._dgUploadBlob(_docFolder(ctx), name, blob);
+        if (r.ok) _toast('📁 ' + _docFolder(ctx) + '/' + r.name + ' (' + Math.round((r.size || 0) / 1024) + 'KB)', 'success');
         else if (r.skipped) _toast(_t('올리지 않았습니다.', 'Not uploaded.'), 'info');
         else _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + r.error, 'error');
     };

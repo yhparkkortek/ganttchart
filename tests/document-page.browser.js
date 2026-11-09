@@ -293,7 +293,15 @@
             puts.length = 0; nextStatus = 200;
             await window._docExport('nas');
             eq('업로드 호출 1회', puts.length, 1);
-            ok('folder=DOCUMENT 로 간다', /folder=DOCUMENT/.test(puts[0] || ''), puts[0]);
+            // 📁 [2026-11-09] 문서는 **프로젝트마다 폴더**에 들어간다(사용자 결정).
+            //    ⚠️ `고객사` 에 `>` 가 들어 있어도(실측 `LNW>STELLAR32`) 폴더 이름이 깨지면 안 된다.
+            ok('folder 가 DOCUMENT/<프로젝트> 다',
+               /folder=DOCUMENT%2F/.test(puts[0] || ''), puts[0]);
+            ok('폴더 이름에 프로젝트 코드가 들어간다',
+               (window._docFolderOf() || '').indexOf('G0000TT') >= 0, window._docFolderOf());
+            ok('폴더 이름에 금지 문자가 없다',
+               !/[\\:*?"<>|]/.test(String(window._docFolderOf() || '').replace(/^DOCUMENT\//, '')),
+               window._docFolderOf());
             ok('처음엔 overwrite 를 안 붙인다', (puts[0] || '').indexOf('overwrite=1') === -1, puts[0]);
 
             puts.length = 0; nextStatus = 409; confirmAnswer = false;
