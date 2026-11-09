@@ -4110,6 +4110,20 @@ def sap_material_rows():
     return jsonify(data), status
 
 
+@app.route('/sap-bom-layouts', methods=['GET'])
+def sap_bom_layouts():
+    # 🔎 [2026-11-09 진단, 읽기 전용] ZPP033 레이아웃 선택 목록을 통째로 읽는다.
+    #    "/KTK_LOC 로 조회했는데 정렬된 결과가 온다"가 반복될 때, 그 레이아웃에 정렬이 들어간
+    #    것인지 **같은 이름이 둘**이라 엉뚱한 쪽이 집히는 것인지 가르려고 만들었다.
+    #    아무것도 고르지 않고 팝업을 취소로 닫는다(저장 안 함).
+    material = (request.args.get('material') or '').strip()
+    plant = (request.args.get('plant') or '1000').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material)가 필요합니다 — 결과 그리드가 떠 있어야 레이아웃 목록을 볼 수 있습니다.'}), 400
+    data, status = _run_sap_bridge(['list_bom_layouts', material, plant], 90, 'SAP BOM 레이아웃 목록')
+    return jsonify(data), status
+
+
 @app.route('/sap-bom', methods=['GET'])
 def sap_bom():
     # 💡 [2026-09-15 신규] "SAP에서 502572 BOM 열어서 엑셀로 출력해줘"처럼 질문에 "BOM"과
@@ -6694,9 +6708,18 @@ def nas_status():
 
 @app.route('/nas/login', methods=['POST'])
 def nas_login():
-    """저장된 계정으로 **한 번만** 로그인. 실패하면 사람이 다시 시킬 때까지 잠근다."""
+    """로그인 — **한 번만** 시도한다. 실패하면 사람이 다시 시킬 때까지 잠근다.
+
+    본문에 `user`/`password` 가 있으면 **그 계정으로** 로그인하고(회의실에서 사람이 바뀔 때),
+    `save` 가 참이고 **성공했을 때만** 이 PC 에 저장한다.
+    ⚠️ 비밀번호는 로그·응답에 싣지 않는다. GET 이 아닌 POST 인 이유도 같다.
+    """
     try:
         req = request.get_json(force=True, silent=True) or {}
+        user = str(req.get('user') or '').strip()
+        pw = req.get('password') or ''
+        if user and pw:
+            return jsonify(_nas().login_with(user, pw, otp=req.get('otp'), save=bool(req.get('save'))))
         return jsonify(_nas().login_once(otp=req.get('otp')))
     except Exception as e:
         return jsonify({'ok': False, 'result': 'error', 'message': str(e)})

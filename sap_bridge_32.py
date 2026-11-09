@@ -1353,6 +1353,61 @@ def _sap_read_alv_sort(session, grid):
                     break
 
 
+def list_bom_layouts(material, plant='1000'):
+    """🔎 [2026-11-09 진단] ZPP033 결과화면의 **레이아웃 선택 목록을 통째로** 읽어 돌려준다(읽기 전용).
+    왜 필요했나: "/KTK_LOC 로 조회했는데 정렬된 결과가 왔다"가 반복되는데, 원인 후보가 둘이고
+    (① 그 레이아웃 자체에 정렬이 들어갔다 ② **같은 이름이 둘**이라 코드가 엉뚱한 쪽을 집는다)
+    둘을 가르려면 목록을 **이름만이 아니라 전부** 봐야 한다. `_sap_select_alv_layout` 은 `VARIANT`
+    열만 읽고 **첫 매치**를 쓰므로, 사용자 고유 변형이 같은 이름으로 있으면 그걸 집을 수 있다.
+    팝업은 반드시 취소로 닫는다(저장·선택 안 함)."""
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_bom_screen(session, wnd, material, plant, use_single_tcode=True,
+                            explosion='multi', show_price=False, show_location=True)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid is None:
+        return {'ok': False, 'error': 'BOM 결과 그리드를 찾지 못했습니다.'}
+    try:
+        grid.PressToolbarButton('&MB_VARIANT')
+    except Exception as e:
+        return {'ok': False, 'error': '레이아웃 선택 팝업을 열지 못했습니다: %s' % e}
+    time.sleep(0.6)
+    rows, cols = [], []
+    try:
+        popup = session.findById('wnd[1]')
+        inner = session.findById(popup.Id + '/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell')
+        cols = list(inner.ColumnOrder)
+        n = int(inner.RowCount)
+        for r in range(n):
+            item = {}
+            for cid in cols:
+                try:
+                    v = str(inner.GetCellValue(r, cid) or '').strip()
+                except Exception:
+                    v = ''
+                if v:
+                    item[cid] = v
+            rows.append(item)
+    except Exception as e:
+        try:
+            session.findById('wnd[1]').sendVKey(12)
+        except Exception:
+            pass
+        return {'ok': False, 'error': '레이아웃 목록을 읽지 못했습니다: %s' % e}
+    try:
+        session.findById('wnd[1]').sendVKey(12)   # 취소 — 아무것도 고르지 않는다
+    except Exception:
+        pass
+    dup = {}
+    for it in rows:
+        name = it.get('VARIANT') or ''
+        if name:
+            dup[name] = dup.get(name, 0) + 1
+    return {'ok': True, 'count': len(rows), 'columns': cols, 'layouts': rows,
+            'duplicates': {k: v for k, v in dup.items() if v > 1}}
+
+
 def _navigate_to_bom_screen(session, wnd, materials, plant='1000', use_single_tcode=None,
                              explosion='single', show_price=False, show_location=False):
     """ZPP038("BOM 전개 (Multiple)", 복수 자재) 또는 ZPP033("BOM 전개", 단일 자재 전용)로
@@ -1527,7 +1582,15 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     else:
         _screen_default = False
         if not layout_variant:
-            layout_variant = _BOM_LAYOUT_VARIANT if used_single else ''
+            # 🆕 [2026-11-09] 복수 자재(ZPP038)에도 **시도는 한다.** 예전엔 `else ''` 라 레이아웃을
+            # 아예 안 고르고 **화면 기본값**(= 팀 공용 계정에 마지막으로 남은 레이아웃)으로 읽었다.
+            # 그 기본값이 정렬된 레이아웃이면 결과가 뒤섞여 오는데, 화면엔 여전히 "/KTK_LOC" 라고
+            # 적혀 나와(프런트가 **요청한 이름**을 찍는다) 멀쩡한 레이아웃을 범인으로 몰았다.
+            # `_sap_select_alv_layout` 은 카탈로그에 없으면 조용히 실패하고 화면을 그대로 두므로
+            # 시도 자체는 안전하다 — 그리고 실패하면 `not_in_catalog` 로 **드러난다**(예전엔
+            # 2026-10-12에 "ZPP038엔 /STD_MC 가 없어 매번 실패한다"고 시도를 껐는데, 그 결과
+            # 실패가 아니라 **아무 말 없는 기본값 사용**이 되어 더 나빴다).
+            layout_variant = _BOM_LAYOUT_VARIANT
     _stage('bom_layout')
     layout_applied, layout_diag = None, ('screen_default' if _screen_default else '')
     grid_for_layout = _sap_find_grid(wnd) if layout_variant else None
@@ -1566,6 +1629,12 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
         header += f'[레이아웃: "{layout_variant}" 적용됨]\n'
     elif layout_applied is False:
         header += f'[레이아웃: "{layout_variant}" 적용 실패({layout_diag}) — 화면 기본값 사용]\n'
+    else:
+        # ⚠️ [2026-11-09] 예전엔 이 경우(레이아웃을 **아예 지정하지 않음**)에 아무 말도 안 했다.
+        #    그래서 화면은 요청한 이름("/KTK_LOC")을 그대로 찍었고, 실제로는 팀 공용 계정의
+        #    **화면 기본 레이아웃**(누가 마지막에 남긴 것)으로 읽고 있었다 — 결과가 정렬돼 오면
+        #    멀쩡한 /KTK_LOC 를 범인으로 지목하게 된다. 이제 "지정 안 함"을 분명히 남긴다.
+        header += '[레이아웃: 지정하지 않음 — 화면 기본 레이아웃(팀 공용 계정에 마지막으로 남은 것)으로 조회됨]\n'
     # 🆕 [2026-11-05] 계층이 깨졌다는 사실과 그 원인(레이아웃에 걸린 정렬)을 결과 텍스트에도 남긴다 —
     #    AI 문답처럼 `text`만 읽는 경로도 "이 표는 모자 관계를 믿으면 안 된다"를 알 수 있어야 한다.
     if hierarchy_ok is False:
@@ -8364,6 +8433,9 @@ def main():
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             doc_type = sys.argv[3] if len(sys.argv) > 3 else 'P01'
             result = download_documents_by_pattern(pattern, doc_type)
+        elif action == 'list_bom_layouts':
+            result = list_bom_layouts(sys.argv[2] if len(sys.argv) > 2 else '',
+                                      sys.argv[3] if len(sys.argv) > 3 else '1000')
         elif action == 'fetch_bom':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'

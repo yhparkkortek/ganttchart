@@ -1028,9 +1028,16 @@
             _t('총 ', 'Total ') + st.rows.length + (en ? ' rows' : '건') + (lvTxt ? ' (' + lvTxt + ')' : ''),
             when
         ];
+        // ⚠️⚠️ [2026-11-09] 여기는 **요청한 이름이 아니라 실제로 적용된 것**을 말해야 한다.
+        //    예전엔 `layoutApplied === false` 일 때만 경고를 붙여서, **아예 적용하지 않은 경우**
+        //    (`null`, 복수 자재 ZPP038·layout=none)에도 "레이아웃 /KTK_LOC" 라고 찍혔다.
+        //    그러면 결과가 정렬돼 와도 사람이 멀쩡한 /KTK_LOC 를 고치러 간다(2026-11-09 실제 발생).
         if (st.layout) {
             parts.push(_t('레이아웃 ', 'Layout ') + _esc(st.layout)
-                + (st.layoutApplied === false ? ' ⚠️' + _t('적용 실패 — SAP 기본값 사용', ' not applied — SAP default used') : ''));
+                + (st.layoutApplied === true ? ' ✅' : '')
+                + (st.layoutApplied === false ? ' ⚠️' + _t('적용 실패 — SAP 화면 기본값 사용', ' not applied — SAP screen default used') : '')
+                + (st.layoutApplied === null || st.layoutApplied === undefined
+                    ? ' ⚠️' + _t('지정 안 함 — SAP 화면 기본값으로 조회됨', ' not requested — SAP screen default used') : ''));
         }
         // 자재내역2·단가·제조사·담당자는 ZMM009 보강으로 채워지므로, 몇 건이 붙었는지 함께 보여준다
         if (st.enrich && st.enrich.total) {
@@ -1055,6 +1062,23 @@
             //    레이아웃은 `/KTK_LOC`로 제대로 적용됐는데도 결과가 정렬돼 있었다. SAP ID가 팀 공용이라
             //    레이아웃은 **계정 기준으로 SAP에 저장된 상태**이고, 누가 그 레이아웃에 정렬을 넣으면
             //    다음 조회부터 모두에게 그대로 반영된다(docs/sap-lookup.md "/KTK_LOC 레이아웃 신설").
+            // ⚠️⚠️ [2026-11-09] **적용되지 않은 레이아웃을 범인으로 지목하지 말 것.**
+            //    실제 사고: 결과가 정렬돼 왔고 이 문구가 "/KTK_LOC 에 정렬이 걸렸을 수 있다"고 해서
+            //    사람이 그 레이아웃을 뜯어고쳤는데, 정작 그 조회는 레이아웃을 **적용하지 않은** 채
+            //    화면 기본값(팀 공용 계정에 마지막으로 남은 것)을 읽고 있었다. 실측으로 확인:
+            //    레이아웃 목록 59개에 `/KTK_LOC` 는 **하나뿐**(중복 없음)이고 그때도 멀쩡했다.
+            if (st.layoutApplied !== true) {
+                html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
+                    + _esc(_t('이 조회는 레이아웃을 적용하지 못했습니다'
+                            + (st.layoutDiag ? '(' + st.layoutDiag + ')' : '')
+                            + ' — SAP 화면에 마지막으로 남아 있던 기본 레이아웃으로 읽었고, 그게 정렬된 것이라 상·하위 관계가 깨졌습니다. '
+                            + '팀 공용 계정이라 누가 다른 레이아웃을 쓰고 나가면 그게 기본값으로 남습니다. 다시 조회하면 됩니다.',
+                        'This lookup could not apply a layout'
+                            + (st.layoutDiag ? ' (' + st.layoutDiag + ')' : '')
+                            + ' — it read whatever layout was last left on the SAP screen, and that one was sorted. '
+                            + 'The SAP account is shared, so whatever a colleague used last stays as the default. Just run the lookup again.'))
+                    + '</div>';
+            }
             var _lay = st.layout || '/KTK_LOC';
             // 🆕 [2026-11-05] 백엔드가 SAP 레이아웃에서 직접 읽어 온 정렬 기준이 있으면 **그걸 보여준다** —
             //    없으면(구버전 백엔드·읽기 실패) 아래 추측 문구만 나온다. 추측과 실측을 섞지 말 것.
@@ -1066,13 +1090,17 @@
                         ' — clear it to restore the hierarchy ([Change Layout…] ▸ "Sort Order", then save under the same name).'))
                     + '</div>';
             }
+            // 레이아웃을 **실제로 적용한** 조회에서만 그 레이아웃을 의심한다(위 블록 주석 참고).
             html += '<div style="font-size:11px; color:#8a6d1f; margin-top:2px;">⚠️ '
-                + _esc(_t('SAP 결과가 정렬된 상태로 와서 상·하위 관계를 복원할 수 없어 레벨별로만 묶었습니다'
-                        + '. 레이아웃 "' + _lay + '"에 정렬이 걸렸을 수 있습니다 — 팀 공용 SAP 계정이라 누가 레이아웃을 바꾸면 모두에게 반영됩니다. '
-                        + 'SAP ALV에서 [레이아웃 변경…] ▸ "정렬 순서" 탭을 비우고 같은 이름(' + _lay + ')으로 저장한 뒤 다시 조회하세요.',
-                    'The SAP result came back sorted, so parent-child links cannot be restored and rows are grouped by level only. '
-                        + 'Layout "' + _lay + '" may now carry a sort — the SAP account is shared, so a layout change by anyone applies to everyone. '
-                        + 'In SAP ALV open [Change Layout…] ▸ "Sort Order", clear it, save under the same name (' + _lay + '), then re-run the lookup.'))
+                + _esc(st.layoutApplied === true
+                    ? _t('SAP 결과가 정렬된 상태로 와서 상·하위 관계를 복원할 수 없어 레벨별로만 묶었습니다'
+                            + '. 레이아웃 "' + _lay + '"에 정렬이 걸렸을 수 있습니다 — 팀 공용 SAP 계정이라 누가 레이아웃을 바꾸면 모두에게 반영됩니다. '
+                            + 'SAP ALV에서 [레이아웃 변경…] ▸ "정렬 순서" 탭을 비우고 같은 이름(' + _lay + ')으로 저장한 뒤 다시 조회하세요.',
+                        'The SAP result came back sorted, so parent-child links cannot be restored and rows are grouped by level only. '
+                            + 'Layout "' + _lay + '" may now carry a sort — the SAP account is shared, so a layout change by anyone applies to everyone. '
+                            + 'In SAP ALV open [Change Layout…] ▸ "Sort Order", clear it, save under the same name (' + _lay + '), then re-run the lookup.')
+                    : _t('SAP 결과가 정렬된 상태로 와서 상·하위 관계를 복원할 수 없어 레벨별로만 묶었습니다.',
+                        'The SAP result came back sorted, so parent-child links cannot be restored and rows are grouped by level only.'))
                 + '</div>';
         }
         // 📍 [2026-11-05] "설치지점이 접혀 있어 안 보인다"는 안내 줄을 **일부러 넣지 않는다**(사용자 요청).

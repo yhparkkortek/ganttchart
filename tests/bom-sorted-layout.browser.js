@@ -139,6 +139,23 @@
         put(ps, {});   // 구버전 백엔드 = sortInfo 없음
         ok('정렬을 못 읽었으면 그 줄을 안 띄운다', metaTxt().indexOf('걸린 정렬') === -1);
 
+        sec('[4c] 🚨 적용되지 않은 레이아웃을 범인으로 지목하지 않는다');
+        // 2026-11-09 실제 사고: 결과가 정렬돼 왔는데 화면이 "/KTK_LOC 에 정렬이 걸렸을 수 있다"고 해서
+        // 사람이 멀쩡한 레이아웃을 뜯어고쳤다. 그 조회는 레이아웃을 **적용하지 못한**(복수 자재
+        // ZPP038 엔 그 이름이 없다 — 실측) 채 화면 기본값을 읽고 있었다.
+        put(ps, { layoutApplied: true });
+        ok('적용됐으면 그 레이아웃을 의심한다', metaTxt().indexOf('정렬이 걸렸을 수 있습니다') !== -1);
+        ok('적용 표시 ✅ 가 붙는다', metaTxt().indexOf('/KTK_LOC ✅') !== -1, metaTxt().slice(0, 120));
+        put(ps, { layoutApplied: false, layoutDiag: 'not_in_catalog:/PP | /GG' });
+        ok('적용 실패면 그 레이아웃을 의심하지 않는다', metaTxt().indexOf('정렬이 걸렸을 수 있습니다') === -1,
+            metaTxt().slice(0, 200));
+        ok('대신 "화면 기본값을 읽었다"고 말한다', metaTxt().indexOf('마지막으로 남아 있던 기본 레이아웃') !== -1);
+        ok('왜 못 썼는지(진단)도 보여준다', metaTxt().indexOf('not_in_catalog') !== -1);
+        put(ps, { layoutApplied: null });
+        ok('아예 지정 안 했으면 "지정 안 함"으로 적는다', metaTxt().indexOf('지정 안 함') !== -1,
+            metaTxt().slice(0, 200));
+        ok('그 경우에도 레이아웃을 의심하지 않는다', metaTxt().indexOf('정렬이 걸렸을 수 있습니다') === -1);
+
         sec('[5] 설치지점(EBORT) 연속 행이 주인을 못 찾은 경우');
         put(ps, { locOverflow: 3 });
         ok('메인 탭도 그 사실을 말한다(전엔 저장조차 안 했다)', metaTxt().indexOf('설치지점 3건') !== -1,
