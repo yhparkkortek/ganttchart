@@ -70,9 +70,13 @@
         return (obs && obs.bubbles) ? 'local' : 'none';
     };
 
-    /** 집계 — 도메인별 건수·AI 호출·재질문율. "어디가 비싼가"와 "어디가 자주 틀리나". */
-    window._qaRouteStats = function () {
+    /** 집계 — 도메인별 건수·AI 호출·재질문율. "어디가 비싼가"와 "어디가 자주 틀리나".
+     *  ⚠️ 하네스가 넣은 줄(`test:true`)은 **빼고** 센다 — 안 빼면 하네스를 한 번 돌릴 때마다
+     *     라벨이 오염되고(특히 비슷한 문장을 잇따라 넣어 `reask` 가 부풀린다) 실사용 분포를 못 본다.
+     *     `_qaRouteStats({withTest:true})` 로 같이 볼 수 있다. */
+    window._qaRouteStats = function (opt) {
         var rows = read(), by = {}, cls = {};
+        if (!(opt && opt.withTest)) rows = rows.filter(function (r) { return !r.test; });
         rows.forEach(function (r) {
             var b = by[r.route] = by[r.route] || { n: 0, ai: 0, reask: 0, ms: 0 };
             b.n++; b.ai += (r.ai || 0); b.reask += (r.reask ? 1 : 0); b.ms += (r.ms || 0);
@@ -157,6 +161,8 @@
                         .map(function (c) { return c.id + ':' + (Math.round((c.score || 0) * 100) / 100); }); } catch (e) { /* 무시 */ }
         rows.push({
             at: new Date().toISOString(),
+            // 🧪 하네스가 돌리는 중이면 표시해 둔다 — 집계에서 빠진다(라벨 오염 방지).
+            test: !!window.__qaRouteTestRunning || undefined,
             q: String(q).slice(0, C.qMax),
             route: window._qaRouteOf(obs),
             ai: obs.ai.length,

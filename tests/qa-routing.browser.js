@@ -132,6 +132,8 @@
         window.showToast = function (m, k) { obs.toasts.push(cut(m, 120) + (k ? ' [' + k + ']' : '')); };
 
         var rows = [], keep = input.value;
+        // 🧪 기록기(js/64)에 "이건 하네스다" 를 알린다 — 그 줄은 `_qaRouteStats()` 집계에서 빠진다.
+        window.__qaRouteTestRunning = true;
         try {
             for (var i = 0; i < corpus.length; i++) {
                 var c = corpus[i];
@@ -174,6 +176,7 @@
             window.fetch = oFetch; window.callAiBackend = oAi; window.saveToGoogleDrive = oSave;
             window.alert = oAlert; window.showToast = oToast;
             input.value = keep;
+            window.__qaRouteTestRunning = false;
         }
         window.__qaRouteLast = rows;
         var bad = rows.filter(function (r) { return r.ok === false; });

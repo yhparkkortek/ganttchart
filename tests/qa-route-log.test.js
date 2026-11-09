@@ -190,6 +190,21 @@ console.log('\n[2] 입구를 감싸도 **동작이 그대로**인가 (제1 불�
         const r9 = e9.win._qaRouteLog()[0];
         ok('분류 실패해도 기록은 남는다', !!r9 && r9.cls === '' && r9.route === 'local', r9);
 
+        console.log('\n[10] 🧪 하네스가 넣은 줄은 집계에서 빼야 한다(라벨 오염 방지)');
+        const e10 = makeEnv();
+        e10.win.sendGanttQaMessage = async function () { e10.win._ganttQaHistory.push({ role: 'ai', text: 'x' }); };
+        load(e10);
+        e10.input.value = '사람이 물어본 질문';
+        await e10.win.sendGanttQaMessage();
+        e10.win.__qaRouteTestRunning = true;
+        e10.input.value = '하네스가 넣은 질문';
+        await e10.win.sendGanttQaMessage();
+        e10.win.__qaRouteTestRunning = false;
+        const rows10 = e10.win._qaRouteLog();
+        ok('하네스 줄에 test 표시', rows10.length === 2 && !rows10[0].test && rows10[1].test === true, rows10);
+        ok('기본 집계는 사람 것만', e10.win._qaRouteStats().total === 1, e10.win._qaRouteStats());
+        ok('withTest 면 같이 센다', e10.win._qaRouteStats({ withTest: true }).total === 2);
+
         console.log('\n결과: %d/%d 통과', PASS, PASS + FAIL);
         process.exit(FAIL ? 1 : 0);
     })();
