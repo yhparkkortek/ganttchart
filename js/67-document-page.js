@@ -421,14 +421,56 @@
         delete _docData(id).fields[key]; _markDirty(); window._docRender();
     };
 
+    // ── ✅ 점검표 항목 ─────────────────────────────────────────────────
+    //  🖥 [2026-11-09 요청] `Resolution` 묶음은 **고정 48줄이 아니라 고른 해상도**다 —
+    //     "SAMPLE CHECK SHEET(펌웨어) 3 / 해상도 부분도 # 지원 해상도 연결해서 필요한 것만".
+    //     묶음 이름은 데이터(`DOC_CHECK_FROM_RESOLUTION`) — 원본을 다시 뽑아도 js/68 은 안 건드린다.
+    //  ⚠️⚠️ 저장 열쇠는 **번호가 아니라 `id`** 다. 해상도 줄은 `res:<해상도열쇠>` 라서, 고른 목록이
+    //     바뀌어도 체크가 **그 해상도를 따라간다**. 번호로 두면 해상도를 하나 더 고르는 순간
+    //     아래 줄들의 체크가 통째로 밀려 **조용한 오답**이 된다.
+    window.DOC_CHECK_FROM_RESOLUTION = window.DOC_CHECK_FROM_RESOLUTION || ['Resolution'];
+    var RES_GROUPS = window.DOC_CHECK_FROM_RESOLUTION;
+    var _sheetItems = function (sh) {
+        var out = [], done = {};
+        (sh.items || []).forEach(function (it, n) {
+            if (RES_GROUPS.indexOf(it.g) < 0) { out.push({ g: it.g, q: it.q, id: String(n) }); return; }
+            if (done[it.g]) return;                 // 묶음 전체를 **한 번만** 바꿔 넣는다
+            done[it.g] = 1;
+            var picked = window.resSelectedRows ? window.resSelectedRows() : [];
+            picked.forEach(function (r) {
+                var ports = (window.RES_PORTS || []).filter(function (p) { return r.ports[p.key]; })
+                    .map(function (p) { return p.label; }).join('·');
+                out.push({ g: it.g, q: r.label + (ports ? '  (' + ports + ')' : ''), id: 'res:' + r.key, res: true });
+            });
+            if (!picked.length) out.push({ g: it.g, q: '', id: 'res:none', empty: true });
+        });
+        return out;
+    };
+
     // ── 📦 회차 (샘플 출고 이력이 곧 회차 목록이다) ──────────────────────
     //   ⚠️ 회차는 **출고 이력 한 곳**에서만 온다 — 따로 목록을 두면 "이력엔 있는데 문서는 없다"
     //      가 생긴다. 이력에 회차를 더하면 그 회차의 Sample Report 가 **그 자리에서 생긴다**.
     var HIST_FORM = 'proto-req';         // 이력의 주인 — 어느 문서를 보고 있든 같은 목록이다
+
+    // 📦📦 [2026-11-09 사용자 요청] **한 단계 안에서도 회차가 여럿일 수 있다**
+    //   ("PROTO A 에서도 회차가 있을 수 있음 / 각 단계에서 1,2,3,4,5 회차로 제작할 수 있는 경우")
+    //   → 샘플 하나를 가리키는 이름은 **단계(stage) + 회차(seq)** 다.
+    //   ⚠️⚠️ 1차는 **단계 이름 그대로**다(`PROTO A`). 꼬리를 붙이면 이미 적어 둔 문서의 저장 열쇠
+    //      (`sample-report@PROTO A`)가 어긋나 **그동안 쓴 내용이 통째로 안 보인다**.
+    //      2차부터만 `PROTO A 2차` 가 된다.
+    var _roundLabel = function (r) {
+        var st = String((r && r.stage) || '').trim();
+        var sq = String((r && r.seq) || '').trim();
+        if (!st) return '';
+        if (!sq || sq === '1') return st;
+        return st + ' ' + sq + _t('차', '');
+    };
+    window._docRoundLabel = _roundLabel;
+
     var _docRounds = function () {
         var out = [];
         (_hist() || []).forEach(function (r) {
-            var s = String((r && r.stage) || '').trim();
+            var s = _roundLabel(r);
             if (s && out.indexOf(s) === -1) out.push(s);
         });
         if (!out.length) out.push((window.DOC_SAMPLE_STAGES || ['PROTO A'])[0]);
@@ -462,12 +504,16 @@
         window._docRender();
     };
     /** 회차를 하나 더 만든다 = 출고 이력에 한 줄 더하고 그 회차로 간다(문서가 새로 생긴다) */
-    window._docRoundAdd = function () {
-        window._docHistAdd();                       // 기본 회차(PROTO A→B→C→ES→PP)로 한 줄
+    /**
+     * 헤더 ➕ — `same` 이면 **지금 단계의 다음 회차**, 아니면 **다음 단계** 1차.
+     *  ⚠️ 보고 있는 문서가 PROTO A 인데 ➕ 가 PROTO B 만 만들면 "PROTO A 2차" 를 만들 길이 없다.
+     */
+    window._docRoundAdd = function (same) {
+        var made = window._docHistAdd(!!same);
         var rounds = _docRounds();
-        window._docState.round = rounds[rounds.length - 1];
+        window._docState.round = made || rounds[rounds.length - 1];
         window._docRender();
-        _toast('📦 ' + (window._docState.round || '') + _t(' 회차 문서를 만들었습니다.', ' created.'), 'success');
+        _toast('📦 ' + (window._docState.round || '') + _t(' 문서를 만들었습니다.', ' created.'), 'success');
     };
     /** 출고 이력 줄에서 그 회차의 Sample Report 로 바로 간다 */
     window._docGoRound = function (stage, formId) {
@@ -714,9 +760,22 @@
                        + '<th>' + _esc(_t('개발담당자', 'Dev')) + '</th>'
                        + '<th>' + _esc(_t('시제품담당자', 'Proto')) + '</th>'
                        + '<th>' + _esc(_t('제품보증담당자', 'QA')) + '</th></tr>';
-                    var prevG = null;
-                    (sh.items || []).forEach(function (it, n) {
-                        var base = 'chk|' + sh.key + '|' + n + '|';
+                    var items = _sheetItems(sh);
+                    // 🧩 [2026-11-09 요청] 항목(묶음)은 **한 칸으로 묶는다**(rowspan).
+                    //    ⚠️ 항목마다 줄이 **둘**(점검 줄 + Note 줄)이라 묶는 높이는 개수 × 2 다.
+                    var span = {};
+                    for (var a = 0; a < items.length;) {
+                        var b = a;
+                        while (b + 1 < items.length && items[b + 1].g === items[a].g) b++;
+                        span[a] = (b - a + 1) * 2;
+                        a = b + 1;
+                    }
+                    if (!items.length) {
+                        h += '<tr><td colspan="5" style="color:#b1432f;">'
+                           + _esc(_t('이 장에 점검할 항목이 없습니다.', 'No items.')) + '</td></tr>';
+                    }
+                    items.forEach(function (it, n) {
+                        var base = 'chk|' + sh.key + '|' + it.id + '|';
                         var cell = function (cols) {
                             return '<td style="text-align:center; white-space:nowrap;">' + cols.map(function (c) {
                                 var k = base + c, on = _docData(form.id).fields[k] === 'O';
@@ -725,19 +784,39 @@
                                      + ' title="' + _esc(c) + '">' + _esc(c) + (on ? ' O' : '') + '</span>';
                             }).join('') + '</td>';
                         };
+                        // ✏️ [2026-11-09 요청] 내역은 **고칠 수 있다**. 기본값은 카탈로그(js/68)이고
+                        //    사람이 고친 것만 저장한다 — 기본값과 같아지면 뺀다(다른 칸과 같은 규칙).
+                        //    ⚠️ js/68 을 손으로 고치지 말라는 규칙은 그대로다. 여기 고친 값은 **이 프로젝트**
+                        //       것이고, 원본을 다시 뽑아도 안 지워진다.
+                        var tkey = base + 'text';
+                        var tv = _hasOwn(form.id, tkey) ? _docData(form.id).fields[tkey] : it.q;
                         h += '<tr>'
-                           + '<td class="doc-lab" style="text-align:center;">' + _esc(it.g === prevG ? '' : it.g) + '</td>'
-                           + '<td style="font-size:11.5px;">' + _esc(it.q) + '</td>'
+                           + (span[n] ? '<td class="doc-lab" style="text-align:center; vertical-align:middle;"'
+                                        + ' rowspan="' + span[n] + '">' + _esc(it.g) + '</td>' : '')
+                           + '<td><input type="text" class="doc-in' + (_hasOwn(form.id, tkey) ? ' own' : '') + '"'
+                           + ' data-doc-text="' + _esc(tkey) + '" data-doc-def="' + _esc(it.q) + '"'
+                           + ' value="' + _esc(tv) + '" style="font-size:11.5px;"'
+                           + (it.empty ? ' placeholder="' + _esc(_t('지원 해상도에서 고르면 여기에 나옵니다', 'pick resolutions above')) + '"' : '')
+                           + '></td>'
                            + cell(['점검요청', '해당없음']) + cell(['합격', '불합격', 'N/A']) + cell(['합격', '불합격', 'N/A'])
                            + '</tr>'
-                           // Note 줄 — 원본이 항목마다 하나씩 들고 있다
-                           + '<tr><td class="doc-lab" style="text-align:center; font-weight:normal; font-size:10px;">Note</td>'
-                           + '<td colspan="4"><input type="text" class="doc-in" data-doc-key="' + _esc(base + 'note') + '"'
+                           // 📝 확인자 의견 줄 — 원본이 항목마다 하나씩 들고 있다.
+                           //   ⚠️ [2026-11-09 요청] 굵은 `Note` 글자는 **지웠다**(항목 칸은 위에서 묶인다)
+                           //      — 빈 라벨이 줄마다 끼면 묶음이 끊겨 보인다. 대신 무엇을 적는 칸인지
+                           //      **안내 글**로 말한다("비고" 로는 누가 무엇을 적는지 알 수 없다).
+                           + '<tr><td colspan="4"><input type="text" class="doc-in" data-doc-key="' + _esc(base + 'note') + '"'
                            + ' value="' + _esc(_docData(form.id).fields[base + 'note'] || '') + '"'
-                           + ' placeholder="' + _esc(_t('비고', 'note')) + '" style="font-size:11px;"></td></tr>';
-                        prevG = it.g;
+                           + ' placeholder="' + _esc(_t('확인자 의견 란 — 의견을 자유롭게 기재해주세요',
+                                                        'Reviewer comment — write freely')) + '" style="font-size:11px;"></td></tr>';
                     });
                     h += '</table>';
+                    if ((sh.items || []).some(function (x) { return RES_GROUPS.indexOf(x.g) >= 0; })) {
+                        h += '<div class="doc-noprint" style="margin:2px 0 8px; font-size:11px; color:#868e96;">🖥 '
+                           + _esc(_t('이 장의 항목은 위 [# 지원 해상도]에서 고른 것만 나옵니다.',
+                                     'Items come from the picked resolutions.'))
+                           + ' <a href="#" onclick="window.resOpenPicker && window.resOpenPicker();return false;"'
+                           + ' style="color:#1971c2;">' + _esc(_t('해상도 고르기', 'pick')) + '</a></div>';
+                    }
                 });
                 h += '<table style="display:none;">';
             } else if (s.kind === 'history') {
@@ -745,20 +824,28 @@
                 //   ⚠️ 회차는 **적는 값**이다(기본값만 넣어 준다) — 거래선마다 PROTO/ES/PP 가 달라
                 //      고르는 목록으로 막으면 새 거래선이 못 들어온다(사용자 결정 2026-11-09).
                 var hist = _hist();
-                h += '<tr><th style="width:120px;">' + _esc(_t('회차', 'Stage')) + '</th>'
+                // 📦 단계(PROTO A…) 와 회차(1,2,3…)는 **다른 것**이다 — 한 단계에서 여러 번 만든다.
+                h += '<tr><th style="width:110px;">' + _esc(_t('단계', 'Stage')) + '</th>'
+                   + '<th style="width:66px;">' + _esc(_t('회차', 'Run')) + '</th>'
                    + '<th style="width:140px;">' + _esc(_t('출고 일자', 'Shipped')) + '</th>'
                    + '<th style="width:100px;">' + _esc(_t('수량', 'Qty')) + '</th>'
                    + '<th>' + _esc(_t('샘플/시제품 의뢰서', 'Sample request')) + '</th>'
                    + '<th class="doc-noprint" style="width:130px;">' + _esc(_t('보고서', 'Report')) + '</th>'
                    + '<th class="doc-noprint" style="width:56px;"></th></tr>';
                 if (!hist.length) {
-                    h += '<tr><td colspan="6" style="color:#868e96;">'
-                       + _esc(_t('아직 출고 이력이 없습니다 — 아래 [＋ 회차 추가]를 누르세요.', 'No shipping history yet.'))
+                    h += '<tr><td colspan="7" style="color:#868e96;">'
+                       + _esc(_t('아직 출고 이력이 없습니다 — 아래 [＋ 단계 추가]를 누르세요.', 'No shipping history yet.'))
                        + '</td></tr>';
                 }
+                // ⚠️ 같은 단계·회차가 두 줄이면 **같은 문서**를 가리킨다 — 조용히 두지 않고 드러낸다.
+                var labCount = {};
+                hist.forEach(function (r) {
+                    var L = window._docRoundLabel(r);
+                    if (L) labCount[L] = (labCount[L] || 0) + 1;
+                });
                 hist.forEach(function (r, i) {
-                    var rstage = String(r.stage || '').trim();
-                    var ron = rstage && window._docState.round === rstage;
+                    var rlab = window._docRoundLabel(r);
+                    var ron = rlab && window._docState.round === rlab;
                     // 📦 [2026-11-09 사용자 요청] **지금 보고 있는 회차 줄을 표시한다**
                     //   🎨 색은 테마색이 아니라 **보색**이다(사용자 지시) — 캘린더 핀셋 알람·일일보고
                     //      '미작성' 과 같은 규칙이라, 어떤 테마를 골라도 대비되는 색이 자동으로 나온다.
@@ -771,7 +858,14 @@
                        + '" data-doc-hist="' + i + '|stage" value="' + _esc(r.stage || '') + '">'
                        + (ron ? '<div class="doc-src doc-hist-now-txt">● '
                                 + _esc(_t('지금 보고 있는 문서', 'current document')) + '</div>' : '')
+                       + (rlab && labCount[rlab] > 1
+                          ? '<div class="doc-src" style="color:#b1432f;">⚠️ '
+                            + _esc(_t('같은 단계·회차가 둘 — 문서가 하나로 합쳐집니다', 'duplicate stage/run')) + '</div>'
+                          : '')
                        + '</td>'
+                       // 📦 회차 — 비우거나 1 이면 단계 이름이 곧 문서 이름이다(옛 문서가 그대로 열린다)
+                       + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|seq" value="' + _esc(r.seq || '') + '"'
+                       + ' placeholder="1" style="text-align:center;"></td>'
                        + '<td><input type="date" class="doc-in" data-doc-hist="' + i + '|date" value="' + _esc(r.date || '') + '"></td>'
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|qty" value="' + _esc(r.qty || '') + '"'
                        + ' placeholder="' + _esc(_t('예: 24', 'e.g. 24')) + '"></td>'
@@ -783,24 +877,29 @@
                        + (r.docTitle ? ' <span style="opacity:.8;">' + _esc(r.docTitle) + '</span>' : '')
                        + '</div></td>'
                        // 📦 이 회차의 Sample Report 로 — 회차마다 보고서가 따로 생긴다
-                       + '<td class="doc-noprint" style="text-align:center; font-size:11px;">'
-                       + (rstage
-                          ? '<a href="#" onclick="window._docGoRound(\'' + _esc(rstage).replace(/'/g, "\\'") + '\');return false;"'
-                            + ' style="color:' + (ron ? '#00707d' : '#1971c2') + '; font-weight:' + (ron ? 'bold' : 'normal') + ';">📑 '
+                       + '<td class="doc-noprint' + (ron ? ' doc-hist-now-txt' : '') + '" style="text-align:center; font-size:11px;">'
+                       + (rlab
+                          ? '<a href="#" onclick="window._docGoRound(\'' + _esc(rlab).replace(/'/g, "\\'") + '\');return false;"'
+                            + (ron ? ' class="doc-hist-now-txt"' : ' style="color:#1971c2;"') + '>📑 '
                             + _esc(_t('Sample Report', 'Sample Report')) + (ron ? ' ●' : '') + '</a>'
-                          : '<span style="color:#868e96;">' + _esc(_t('회차 이름을 적으세요', 'name the stage')) + '</span>')
+                          : '<span style="color:#868e96;">' + _esc(_t('단계 이름을 적으세요', 'name the stage')) + '</span>')
                        + '</td>'
                        + '<td class="doc-noprint" style="text-align:center;">'
                        + '<a href="#" onclick="window._docHistDel(' + i + ');return false;" style="color:#b1432f; font-size:11px;">'
                        + _esc(_t('삭제', 'del')) + '</a></td></tr>';
                 });
+                var ADDBTN = 'padding:4px 10px; font-size:11.5px; cursor:pointer; border:1px solid #a3d9e0;'
+                           + ' background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold; margin-right:6px;';
                 h += '</table><div class="doc-noprint" style="margin-top:6px;">'
-                   + '<button onclick="window._docHistAdd()" style="padding:4px 10px; font-size:11.5px; cursor:pointer;'
-                   + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">＋ '
-                   + _esc(_t('회차 추가', 'Add')) + '</button>'
-                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
-                   + _esc(_t('회차를 더하면 그 회차의 Sample Report 가 새로 생깁니다. 기본은 PROTO A·B·C 이고 자유롭게 고칠 수 있습니다(ES·PP 등).',
-                             'Stage defaults to PROTO A/B/C and is editable.')) + '</span></div>'
+                   + '<button onclick="window._docHistAdd()" title="'
+                   + _esc(_t('다음 단계 1차 (PROTO A → B → C → ES → PP)', 'next stage')) + '" style="' + ADDBTN + '">＋ '
+                   + _esc(_t('단계 추가', 'Add stage')) + '</button>'
+                   + '<button onclick="window._docHistAdd(true)" title="'
+                   + _esc(_t('같은 단계의 다음 회차 (PROTO A 1차 → PROTO A 2차)', 'next run of the same stage'))
+                   + '" style="' + ADDBTN + '">＋ ' + _esc(_t('회차 추가', 'Add run')) + '</button>'
+                   + '<span style="margin-left:2px; font-size:11px; color:#868e96;">'
+                   + _esc(_t('단계·회차마다 Sample Report 가 따로 생깁니다. 한 단계에서 여러 번 만들면 회차(2,3,4…)를 올리세요 — 1차는 단계 이름 그대로입니다.',
+                             'A report per stage/run.')) + '</span></div>'
                    + '<table style="display:none;">';
             } else if (s.kind === 'resolution') {
                 // 🖥 지원 해상도 — 고르기는 팝업(js/69), 여기는 **고른 줄만** 보여 준다.
@@ -905,6 +1004,16 @@
             if (!el || !el.getAttribute) return;
             var key = el.getAttribute('data-doc-key');
             if (key) { window._docSetField(form.id, key, el.value); return; }
+            // ✏️ 점검표 내역 — 기본값(카탈로그)과 같아지면 **저장에서 뺀다**
+            var tk = el.getAttribute('data-doc-text');
+            if (tk) {
+                var d = _docData(form.id);
+                if (el.value === (el.getAttribute('data-doc-def') || '')) delete d.fields[tk];
+                else d.fields[tk] = el.value;
+                d.savedAt = new Date().toISOString();
+                _markDirty();
+                return;
+            }
             // 📦 출고 이력 칸 — `<행번호>|<칸>` 으로 들어온다
             var hk = el.getAttribute('data-doc-hist');
             if (hk) {
@@ -969,22 +1078,48 @@
         }
         return d.history;
     };
-    window._docHistAdd = function () {
+    /**
+     * 이력 한 줄 더하기.
+     *  - 기본: **다음 단계** 1차 (PROTO A → B → C → ES → PP)
+     *  - `sameStage` 를 주면: **그 단계의 다음 회차** (PROTO A 1차 → PROTO A 2차)
+     *    사용자 요청(2026-11-09): "각 단계에서 1,2,3,4,5 회차로 제작할 수 있는 경우가 있으니".
+     */
+    window._docHistAdd = function (sameStage) {
         var list = _hist();
-        // 기본 회차 — 아직 안 쓴 것 중 첫 번째(PROTO A → B → C → ES → PP). 전부 썼으면 비워 둔다.
-        var used = list.map(function (r) { return String(r.stage || '').trim().toUpperCase(); });
-        var next = (window.DOC_SAMPLE_STAGES || []).filter(function (s) {
-            return used.indexOf(s.toUpperCase()) === -1;
-        })[0] || '';
-        list.push({ stage: next, date: '', qty: '', doc: '', docTitle: '' });
+        var norm = function (v) { return String(v || '').trim().toUpperCase(); };
+        var base = String(sameStage || '').trim();
+        if (base === 'true' || sameStage === true) {
+            // 지금 보고 있는 회차의 단계 — 없으면 마지막 줄의 단계
+            var cur = (list.filter(function (r) { return _roundLabel(r) === window._docState.round; })[0]
+                       || list[list.length - 1] || {});
+            base = String(cur.stage || '').trim();
+        }
+        var row = { stage: '', seq: '1', date: '', qty: '', doc: '', docTitle: '' };
+        if (base) {
+            row.stage = base;
+            var mx = 0;
+            list.forEach(function (r) {
+                if (norm(r.stage) !== norm(base)) return;
+                mx = Math.max(mx, parseInt(r.seq, 10) || 1);
+            });
+            row.seq = String(mx + 1);
+        } else {
+            // 아직 안 쓴 단계 중 첫 번째. 전부 썼으면 비워 둔다(사람이 적는다).
+            var used = list.map(function (r) { return norm(r.stage); });
+            row.stage = (window.DOC_SAMPLE_STAGES || []).filter(function (s) {
+                return used.indexOf(norm(s)) === -1;
+            })[0] || '';
+        }
+        list.push(row);
         _markDirty(); window._docRender();
+        return _roundLabel(row);
     };
     window._docHistDel = function (i) {
         var list = _hist();
         if (i < 0 || i >= list.length) return;
         var r = list[i];
         // ⚠️ 출고 이력은 **기록**이다 — 실수로 지우면 언제 몇 개를 냈는지가 사라진다. 한 번 묻는다.
-        if (!confirm(_t('이 출고 이력을 지웁니다:\n\n' + (r.stage || '(회차 없음)')
+        if (!confirm(_t('이 출고 이력을 지웁니다:\n\n' + (_roundLabel(r) || '(회차 없음)')
                         + ' / ' + (r.date || '(일자 없음)') + ' / ' + (r.qty || '-') + '\n\n지울까요?',
                         'Delete this shipping record?'))) return;
         list.splice(i, 1);
@@ -1328,13 +1463,16 @@
                 (window.DOC_CHECK_SHEETS || []).forEach(function (sh) {
                     rows.push([sh.key]);
                     rows.push([_t('항목', 'Group'), _t('내역', 'Item'), _t('개발', 'Dev'),
-                               _t('시제품', 'Proto'), _t('보증', 'QA'), 'Note']);
-                    (sh.items || []).forEach(function (it, n) {
-                        var base = 'chk|' + sh.key + '|' + n + '|';
+                               _t('시제품', 'Proto'), _t('보증', 'QA'), _t('확인자 의견', 'Comment')]);
+                    // ⚠️ 화면과 **같은 목록**(해상도 연결·내역 수정 포함)을 쓴다 — 두 벌로 두면 갈라진다
+                    _sheetItems(sh).forEach(function (it) {
+                        var base = 'chk|' + sh.key + '|' + it.id + '|';
                         var on = function (cols) {
                             return cols.filter(function (c) { return d.fields[base + c] === 'O'; }).join(',');
                         };
-                        rows.push([it.g, it.q, on(['점검요청', '해당없음']),
+                        var tkey = base + 'text';
+                        rows.push([it.g, _hasOwn(formId, tkey) ? d.fields[tkey] : it.q,
+                                   on(['점검요청', '해당없음']),
                                    on(['합격', '불합격', 'N/A']), on(['합격', '불합격', 'N/A']),
                                    d.fields[base + 'note'] || '']);
                     });

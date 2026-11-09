@@ -302,6 +302,95 @@
             var nm = form.nameOf({ meta: {} });
             ok(nm.indexOf(window._docState.round) >= 0, '파일 이름에 회차가 없다: ' + nm);
 
+            // ═══ 5-2. 한 단계 안의 여러 회차 (사용자: "각 단계에서 1,2,3,4,5 회차") ══
+            window._docPick('proto-req');
+            window._docSetRound('PROTO A');
+            var madeA2 = window._docHistAdd(true);        // PROTO A 의 다음 회차
+            ok(madeA2 === 'PROTO A 2차', '같은 단계의 다음 회차 이름이 틀리다: ' + madeA2);
+            var madeA3 = window._docHistAdd(true);
+            ok(madeA3 === 'PROTO A 3차', '회차가 3차로 안 올라간다: ' + madeA3);
+            ok(window._docRounds().indexOf('PROTO A') >= 0,
+               '⚠️ 1차 이름이 바뀌었다 — 옛 문서의 저장 열쇠가 어긋난다');
+            // 1차는 **단계 이름 그대로**여야 옛 문서가 그대로 열린다
+            ok(window._docRoundLabel({ stage: 'PROTO A', seq: '' }) === 'PROTO A', '회차가 비면 단계 이름이어야 한다');
+            ok(window._docRoundLabel({ stage: 'PROTO A', seq: '1' }) === 'PROTO A', '1차는 단계 이름이어야 한다');
+            ok(window._docRoundLabel({ stage: 'PROTO A', seq: '2' }) === 'PROTO A 2차', '2차 이름이 틀리다');
+            // 회차끼리 문서가 갈린다
+            window._docPick('sample-report');
+            window._docSetRound('PROTO A');     window._docSetField('sample-report', '제작특이사항', 'A-1');
+            window._docSetRound('PROTO A 2차'); window._docSetField('sample-report', '제작특이사항', 'A-2');
+            ok(window.tabData.documents['sample-report@PROTO A'].fields['제작특이사항'] === 'A-1'
+               && window.tabData.documents['sample-report@PROTO A 2차'].fields['제작특이사항'] === 'A-2',
+               '같은 단계의 회차끼리 내용이 섞인다');
+            // 표에 회차 칸이 있고 같은 단계가 두 줄이어도 서로 다른 문서를 가리킨다
+            window._docPick('proto-req');
+            ok(document.querySelector('#doc-page-body [data-doc-hist$="|seq"]'), '이력 표에 회차 칸이 없다');
+
+            // ═══ 5-3. 점검표 — 해상도 연결 · 묶음 · 내역 수정 ═══════════════
+            window._docPick('sample-report');
+            window._docSetRound('PROTO A');
+            var sheetOf = function (name) {
+                var secs = [].map.call(document.querySelectorAll('#doc-page-body .doc-sec'), function (e) { return e.textContent; });
+                var i = secs.indexOf(name);
+                return i < 0 ? null : document.querySelectorAll('#doc-page-body .doc-sec')[i].nextElementSibling;
+            };
+            var RES_SHEET = 'SAMPLE CHECK SHEET(펌웨어) 3';
+            // 고른 해상도 2개만 (전체 48줄이 아니라)
+            window.resClearAll();
+            window.resSetPort('1920X1080@60', '1920×1080@60', 'HDMI', true);
+            window.resSetPort('1280X1024@60', 'VESA 1280×1024@60', 'RGB', true);
+            window._docRender();
+            var rs = sheetOf(RES_SHEET);
+            ok(!!rs, '점검표에 ' + RES_SHEET + ' 가 없다');
+            var itemTexts = function (tb) {
+                return [].map.call(tb.querySelectorAll('input[data-doc-text]'), function (i) { return i.value; });
+            };
+            ok(itemTexts(rs).length === 2, '고른 해상도만 나와야 한다 (' + itemTexts(rs).length + '줄)');
+            ok(itemTexts(rs).join('|').indexOf('1920×1080@60') >= 0, '고른 해상도가 점검표에 안 나온다');
+            ok(/HDMI/.test(itemTexts(rs).join('|')), '어느 입력으로 지원하는지가 안 보인다');
+            // 🧩 항목(묶음)은 한 칸으로 묶인다 — 항목마다 줄이 둘이라 개수 × 2
+            var labs = rs.querySelectorAll('td.doc-lab');
+            ok(labs.length === 1 && labs[0].rowSpan === 4,
+               '묶음이 한 칸으로 안 묶인다 (칸 ' + labs.length + '개, rowspan ' + (labs[0] && labs[0].rowSpan) + ')');
+            var hw = sheetOf('SAMPLE CHECK SHEET(하드웨어) 1');
+            var hwLabs = [].map.call(hw.querySelectorAll('td.doc-lab'), function (td) { return td.textContent + '×' + td.rowSpan; });
+            ok(hwLabs.join(',') === 'ADB×14,Converter×10,PANEL×12,LED TRIM×12',
+               '다른 장의 묶음이 안 묶인다: ' + hwLabs.join(','));
+            // ✏️ 내역은 고칠 수 있고, 기본값으로 되돌리면 저장에서 빠진다
+            var dnow = window.tabData.documents['sample-report@PROTO A'];
+            var ti = hw.querySelector('input[data-doc-text]');
+            var tkey = ti.getAttribute('data-doc-text'), tdef = ti.getAttribute('data-doc-def');
+            ti.value = '고친 내역'; ti.dispatchEvent(new Event('input', { bubbles: true }));
+            ok(dnow.fields[tkey] === '고친 내역', '내역을 고쳐도 저장이 안 된다');
+            ti.value = tdef; ti.dispatchEvent(new Event('input', { bubbles: true }));
+            ok(!Object.prototype.hasOwnProperty.call(dnow.fields, tkey),
+               '기본값으로 되돌렸는데 저장에 남아 있다');
+            // ⚠️⚠️ 체크는 **해상도를 따라간다** — 목록 앞에 한 줄이 끼어도 밀리면 안 된다
+            var last = [].filter.call(rs.querySelectorAll('tr'), function (tr) { return tr.querySelector('input[data-doc-text]'); });
+            var tgt = last[last.length - 1];
+            var lab = tgt.querySelector('input[data-doc-text]').value;
+            var passChk = [].filter.call(tgt.querySelectorAll('.doc-chk'), function (s) { return s.textContent.indexOf('합격') === 0; })[0];
+            passChk.click();
+            var chkKey = passChk.getAttribute('data-doc-chk');
+            ok(/res:/.test(chkKey), '점검표 열쇠가 해상도가 아니라 번호다: ' + chkKey);
+            window.resSetPort('640X350@70', 'IBM 640×350@70', 'RGB', true);   // 맨 앞에 끼워 넣는다
+            window._docRender();
+            var rs2 = sheetOf(RES_SHEET);
+            var rows2 = [].filter.call(rs2.querySelectorAll('tr'), function (tr) { return tr.querySelector('input[data-doc-text]'); });
+            ok(rows2.length === 3, '해상도를 더했는데 줄이 안 는다 (' + rows2.length + ')');
+            var same = rows2.filter(function (tr) { return tr.querySelector('input[data-doc-text]').value === lab; })[0];
+            ok(!!same && [].some.call(same.querySelectorAll('.doc-chk.on'), function (s) { return s.textContent.indexOf('합격') === 0; }),
+               '줄이 밀리니 체크가 그 해상도를 안 따라간다');
+            ok(![].some.call(rows2[0].querySelectorAll('.doc-chk'), function (s) { return s.classList.contains('on'); }),
+               '새로 끼운 줄에 남의 체크가 붙었다');
+            // 엑셀도 같은 목록을 쓴다
+            var aoaChk = window._docToAoa('sample-report');
+            ok(aoaChk.some(function (r) { return r && String(r[1] || '').indexOf('1920×1080@60') >= 0; }),
+               '엑셀 점검표에 고른 해상도가 안 들어간다');
+            ok(!aoaChk.some(function (r) { return r && String(r[1] || '') === 'MAC 832×624@74.6'; }),
+               '엑셀에 안 고른 해상도가 남아 있다');
+            window.resClearAll();
+
             // ═══ 6. 문서에 찍히는가 ═══════════════════════════════════════
             window._docPick('proto-req');
             var txt = document.getElementById('doc-page-body').innerText;
