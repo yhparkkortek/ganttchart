@@ -80,6 +80,7 @@
         // 🧹 '내 프로젝트'·'내 일' 은 사람마다 다르다 — 앞사람 기준이 남으면 조용한 오답이 된다.
         try { if (window._dailyResetScans) window._dailyResetScans(); } catch (e) { /* 없으면 그만 */ }
         try { if (window._psResetScan) window._psResetScan(); } catch (e) { /* 없으면 그만 */ }
+        try { if (window._ovcReset) window._ovcReset(); } catch (e) { /* 없으면 그만 */ }
         paintBadge();
         try { if (window.dailyRenderTab) window.dailyRenderTab(); } catch (e) { /* 탭이 없을 수 있다 */ }
     }
