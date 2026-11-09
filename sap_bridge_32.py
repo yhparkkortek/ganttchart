@@ -43,6 +43,7 @@ import os
 import json
 import re
 import time
+import shutil
 import threading
 
 # 💡 [2026-09-14 버그수정] 이 스크립트는 kortek_backend.py가 subprocess.run(capture_output=True)로
@@ -3604,9 +3605,90 @@ def open_document(doc_type, material=None):
 _SAP_MULTI_SELECT_POPUP_TABLE = "wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE"
 
 
-def download_documents_batch(materials, doc_type='P01'):
+# -- 📥 ZDMSR004 다운로드 후처리 — 폴더 이동 + 파일명에 자재번호 붙이기 ---------
+# ZDMSR004(ABAP)는 다운로드 경로가 리포트 **안에 고정**돼 있어 `C:\SAP_DMS\<문서번호>\
+# <원본파일명>` 으로만 떨어진다(docs/sap-lookup.md ZDMSR004 절 — 폴더 선택 창이 아예 안 뜬다).
+# 그래서 SAP 쪽에서 이름을 바꿀 방법이 없고, 다운로드 **직후 로컬에서** 후처리한다.
+# ⚠️ [2026-11-09 실사용 제보] 그 결과물이 `C:\SAP_DMS` **루트에 흩뿌려져** 용도별 하위
+#    폴더(승인원표지·구매오더·SAP조회…)와 섞였고, 200건을 받아 놓고 **파일 이름만 보면
+#    어느 자재 것인지 알 수 없었다**. → ① 목적 폴더로 옮기고(없으면 만든다)
+#    ② 폴더는 `<자재번호>_<문서번호>`, ③ 그 안의 **파일 이름 앞에도 자재번호**를 붙인다
+#    (파일을 폴더 밖으로 복사해 가도 추적성이 남는다).
+# ⚠️ 폴더 이름(목적지)은 이 파일이 정하지 않는다 — 백엔드 `SAP_FOLDER_REGISTRY`(카탈로그)가
+#    정해서 인자로 넘긴다. 같은 것을 정하는 코드가 둘이면 한쪽이 움직일 때 조용히 어긋난다.
+# 멱등: 이미 옮겨졌거나 이미 접두사가 붙은 것은 건드리지 않는다.
+# SAP 없이 도는 순수 파일시스템 함수다 — 검증 `py -3 tests/test_sap_doc_download.py`.
+_DMS_DOWNLOAD_ROOT = r'C:\SAP_DMS'   # ZDMSR004 가 쓰는 고정 경로(우리가 못 바꾼다)
+
+
+def _dms_place_downloads(matnr_by_doknr, src_root=None, dest_dir=None):
+    r"""`<src_root>\<문서번호>` → `<dest_dir>\<자재번호>_<문서번호>` 로 옮기고, 그 안의 파일
+    이름 앞에 자재번호를 붙인다. 반환: (placed, renamed_map, errors)."""
+    src_root = src_root or _DMS_DOWNLOAD_ROOT
+    dest_dir = dest_dir or src_root
+    placed, renamed_map, errors = [], {}, []
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+    except Exception as e:
+        errors.append('목적 폴더를 만들지 못했습니다(%s): %s' % (dest_dir, e))
+        return placed, renamed_map, errors
+
+    def _same(a, b):
+        return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+    for doknr, matnr in (matnr_by_doknr or {}).items():
+        doknr, matnr = str(doknr).strip(), str(matnr).strip()
+        if not doknr or not matnr:
+            continue
+        dst_name = matnr + '_' + doknr
+        dst = os.path.join(dest_dir, dst_name)
+        # 원본 후보: ① SAP 이 방금 만든 <문서번호> 폴더 ② 옛 버전이 루트에서 이름만 바꿔 둔
+        #    <자재번호>_<문서번호> 폴더(그 때는 옮기지 않았다) — 둘 다 목적지로 모은다.
+        candidates = [os.path.join(src_root, doknr), os.path.join(src_root, dst_name)]
+        src_dir = next((c for c in candidates if os.path.isdir(c) and not _same(c, dst)), None)
+        try:
+            if src_dir and os.path.isdir(dst):
+                # 목적지에 이미 같은 문서가 있다 — SAP 에서 같은 문서번호를 다시 받은 중복이다.
+                #    그대로 두면 재실행마다 고아 폴더가 쌓인다(2026-10-29 실측).
+                shutil.rmtree(src_dir, ignore_errors=True)
+            elif src_dir:
+                shutil.move(src_dir, dst)
+                renamed_map[doknr] = dst_name
+        except Exception as e:
+            errors.append('%s: 폴더 이동 실패 — %s' % (dst_name, e))
+            continue
+        if not os.path.isdir(dst):
+            continue   # 이 문서는 아직 안 떨어졌다(문서가 없는 자재 등) — 고장이 아니다
+        files = []
+        try:
+            for name in sorted(os.listdir(dst)):
+                fp = os.path.join(dst, name)
+                if not os.path.isfile(fp) or name.startswith(matnr + '_'):
+                    files.append(name)      # 폴더이거나 이미 붙어 있다 — 두 번 붙이지 않는다
+                    continue
+                new_name = matnr + '_' + name
+                target = os.path.join(dst, new_name)
+                if os.path.exists(target):
+                    files.append(name)
+                    continue
+                try:
+                    os.rename(fp, target)
+                    files.append(new_name)
+                except Exception as e:
+                    errors.append('%s: 파일 이름 변경 실패 — %s' % (name, e))
+                    files.append(name)
+        except Exception as e:
+            errors.append('%s: 파일 목록을 읽지 못했습니다 — %s' % (dst_name, e))
+        placed.append({'matnr': matnr, 'doknr': doknr, 'folder': dst, 'files': files})
+    return placed, renamed_map, errors
+
+
+def download_documents_batch(materials, doc_type='P01', dest_dir=None):
     """ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")을 실행해 여러 자재의 문서를 한 번에
-    C:\\SAP_DMS\\<문서번호>\\ 아래로 다운로드한다. materials는 자재번호 문자열 리스트."""
+    다운로드하고, `dest_dir`\\<자재번호>_<문서번호>\\<자재번호>_<원본파일명>` 으로 정리한다
+    (`_dms_place_downloads`). materials는 자재번호 문자열 리스트.
+    ⚠️ `dest_dir` 은 **백엔드 카탈로그**(`SAP_FOLDER_REGISTRY`)가 정해 넘긴다 — 생략하면
+    예전처럼 ZDMSR004 가 쓰는 루트(`C:\\SAP_DMS`)에 그대로 둔다(CLI 하위호환)."""
     materials = [str(m).strip() for m in (materials or []) if str(m).strip()]
     if not materials:
         raise RuntimeError('다운로드할 자재번호가 없습니다.')
@@ -3723,34 +3805,13 @@ def download_documents_batch(materials, doc_type='P01'):
     # 후처리로 이름을 바꾸는 방식을 택함. 이미 그 이름으로 폴더가 있으면(재실행 등) 건드리지
     # 않고, 실패해도(폴더가 아직 안 생겼거나 권한 문제) 다운로드 자체는 이미 끝난 뒤이므로
     # 조용히 넘어간다.
-    renamed_map = {}  # {원래 문서번호 폴더명: 새 폴더명}
-    try:
-        base_dir = r'C:\SAP_DMS'
-        for doknr, matnr in matnr_by_doknr.items():
-            src = os.path.join(base_dir, doknr)
-            if not os.path.isdir(src):
-                continue
-            dst_name = f'{matnr}_{doknr}'
-            dst = os.path.join(base_dir, dst_name)
-            if os.path.isdir(dst):
-                # 이미 <자재번호>_<문서번호> 폴더가 있다 — src는 같은 문서번호(doknr)를 SAP에서
-                # 다시 받은 것뿐이라 내용이 매번 동일한 중복이다. 그대로 두면 재실행마다 고아
-                # 폴더가 쌓인다(2026-10-29, SAP_DMS 루트에서 실측 — 중복 폴더 다수 발견).
-                try:
-                    import shutil
-                    shutil.rmtree(src)
-                except Exception:
-                    pass
-                continue
-            try:
-                os.rename(src, dst)
-                renamed_map[doknr] = dst_name
-            except Exception:
-                continue
-    except Exception:
-        pass
+    # 📂 [2026-11-09] 폴더 이동 + 파일명 접두는 `_dms_place_downloads` 한 곳에서 한다
+    #    (SAP 없이 돌려 볼 수 있게 순수 함수로 뺐다 — tests/test_sap_doc_download.py).
+    placed, renamed_map, place_errors = _dms_place_downloads(
+        matnr_by_doknr, _DMS_DOWNLOAD_ROOT, dest_dir or _DMS_DOWNLOAD_ROOT)
+    saved_folder = dest_dir or _DMS_DOWNLOAD_ROOT
 
-    # 자재번호 → 문서번호(들) 역매핑 — 이름 변경이 실패했어도 채팅 응답 문구로 매칭 정보를
+    # 자재번호 → 문서번호(들) 역매핑 — 이동/이름변경이 실패했어도 채팅 응답 문구로 매칭 정보를
     # 그대로 전달할 수 있게 대비(벨트 앤 서스펜더스: 폴더명 개선이 안 돼도 최소한 텍스트로는
     # 사용자가 알 수 있어야 한다).
     doknrs_by_matnr = {}
@@ -3759,10 +3820,16 @@ def download_documents_batch(materials, doc_type='P01'):
     mapping_lines = [f'{matnr}: ' + ', '.join(doknrs) for matnr, doknrs in doknrs_by_matnr.items()]
     mapping_text = ' / '.join(mapping_lines)
 
-    if renamed_map:
-        folder_note = f'폴더명을 <자재번호>_<문서번호> 형태로 바꿔뒀습니다({len(renamed_map)}건) — 폴더명만 보고 바로 매칭됩니다.'
+    if placed:
+        folder_note = (f'{len(placed)}건을 `<자재번호>_<문서번호>` 폴더로 정리했고 파일 이름 앞에도 '
+                       f'자재번호를 붙였습니다 — 파일만 봐도 어느 자재 것인지 바로 보입니다.')
+    elif mapping_text:
+        # ⚠️ 조용히 넘어가지 않는다 — 폴더가 안 떨어졌으면 그 사실을 그대로 적는다.
+        folder_note = f'정리할 폴더를 찾지 못했습니다 — 자재번호 매칭: {mapping_text}'
     else:
-        folder_note = f'폴더는 여전히 문서번호로 표시됩니다 — 자재번호 매칭: {mapping_text}' if mapping_text else '자재-문서 매칭 정보를 확보하지 못했습니다(그리드 조회 실패).'
+        folder_note = '자재-문서 매칭 정보를 확보하지 못했습니다(그리드 조회 실패).'
+    if place_errors:
+        folder_note += ' ⚠️ 정리 중 오류 ' + str(len(place_errors)) + '건: ' + '; '.join(place_errors[:3])
 
     return {
         'ok': True,
@@ -3770,8 +3837,10 @@ def download_documents_batch(materials, doc_type='P01'):
         'docType': doc_type,
         'matnrByDoknr': matnr_by_doknr,
         'renamedFolders': renamed_map,
-        'savedFolder': r'C:\SAP_DMS',
-        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다. {folder_note}',
+        'placed': placed,
+        'placeErrors': place_errors,
+        'savedFolder': saved_folder,
+        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 {saved_folder} 폴더로 다운로드했습니다. {folder_note}',
     }
 
 
@@ -4140,6 +4209,11 @@ def _sap_read_material_label_matrix(session, max_results=200):
     return materials
 
 
+# 🔎 [2026-11-09] 마지막 패턴 조회의 진단 정보(열 구성·0건 여부·열 추정 사용 여부).
+#    `_ZMM009_LAST_GRID_DIAG` 와 같은 패턴 — 반환값 형식을 안 바꾸고 사실을 드러낸다.
+_LAST_DESC_PATTERN_DIAG = {}
+
+
 def resolve_materials_by_description_pattern(pattern, max_results=200):
     """자재내역(MAKT-MAKTX) 와일드카드 패턴으로 매치되는 자재번호 목록을 조회한다.
     MM60의 평범한 자재번호 필드에서 F4로 연 검색도움말(TAB001)에 패턴을 넣고, 결과
@@ -4202,11 +4276,32 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
     # 구 함수는 스크롤 없이 첫 화면 분량만 읽어 "*MLCC*" 같은 다건 패턴에서 결과가 잘렸다.
     headers, data_rows = _sap_read_searchhelp_matrix(session, max_results)
 
+    # 🔎 [2026-11-09] 결과가 **통째로 비어 있을 때**(headers=[] rows=[]) 를 "열을 못 찾았다"로
+    #    보고하면 사람이 ALV 레이아웃·권한을 의심하며 엉뚱한 곳을 뒤진다 — 실사용 제보의
+    #    `… "자재" 열을 찾지 못했습니다 — 헤더: []` 가 정확히 그 모양이었다. 라벨이 하나도
+    #    안 읽혔다는 건 거의 항상 **매치가 0건**(패턴에 따옴표·조사 같은 군더더기가 섞였거나
+    #    실제로 없음)이다. 팝업이 닫히기 **전에** 화면 정보를 떠서 사실대로 적는다.
+    empty_diag = None
+    if not headers and not data_rows:
+        try:
+            empty_diag = _sap_screen_info(session)
+        except Exception:
+            empty_diag = None
+
     # 결과는 읽기만 하고 아무것도 채택하지 않음 — 취소(F12)로 팝업을 닫는다.
     try:
         session.findById('wnd[1]').sendVKey(12)
     except Exception:
         pass
+
+    if not headers and not data_rows:
+        _LAST_DESC_PATTERN_DIAG.clear()
+        _LAST_DESC_PATTERN_DIAG.update({'pattern': pattern, 'empty': True, 'screen': empty_diag})
+        raise RuntimeError(
+            f'자재내역 패턴 "{pattern}"으로 검색했지만 결과 목록이 비어 있습니다 — '
+            f'매치되는 자재가 없을 가능성이 가장 큽니다. 실제로 SAP에 보낸 값이 '
+            f'"{pattern}" 이 맞는지(따옴표·조사 같은 군더더기가 섞이지 않았는지) 확인해주세요.'
+            + (f' [화면: {empty_diag}]' if empty_diag else ''))
 
     # (headers, data_rows) → [{'matnr': ..., 'desc': ...}] 형식으로 변환
     def _col_idx(names):
@@ -4219,8 +4314,29 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
 
     matnr_idx = _col_idx(['자재', 'Material', 'Material Number'])
     desc_idx  = _col_idx(['자재내역', 'Material Description', 'Description'])
+    header_fallback = None
     if matnr_idx is None:
-        raise RuntimeError('검색 결과에서 "자재" 열을 찾지 못했습니다 — 헤더: ' + str(headers))
+        # 🩹 [2026-11-09] 검색도움말 열 구성은 계정/레이아웃마다 다르다(CLAUDE.md: ALV 열은
+        #    "없는 게 아니라 숨겨진 것"일 수 있다). 열 **이름**으로 못 찾으면 열 **내용**으로
+        #    찾는다 — 값이 자재번호(5~8자리 숫자)인 열. 추측이 아니라 판정이고, 느슨하게
+        #    받지 않는다(행의 80% 이상이 자재번호 모양일 때만). 그리고 조용히 넘어가지 않고
+        #    `headerFallback` 으로 **공개**한다.
+        best, best_hit = None, 0
+        for ci in range(len(headers)):
+            hit = sum(1 for r in data_rows
+                      if ci < len(r) and re.match(r'^\d{5,8}$', (r[ci] or '').strip()))
+            if hit > best_hit:
+                best, best_hit = ci, hit
+        if data_rows and best is not None and best_hit >= max(1, int(len(data_rows) * 0.8)):
+            matnr_idx = best
+            header_fallback = {'col': best, 'headerText': headers[best] if best < len(headers) else '',
+                               'rowsMatched': best_hit, 'rowsTotal': len(data_rows)}
+        else:
+            raise RuntimeError(
+                '검색 결과에서 "자재" 열을 찾지 못했습니다(열 이름으로도, 값 모양으로도) — '
+                f'헤더: {headers} / 행 {len(data_rows)}건. '
+                '이 계정의 검색도움말 열 구성이 다를 수 있습니다 — 화면을 열어둔 채 '
+                '"윈도우 화면 덤프해줘"로 열 구성을 알려주세요.')
 
     materials = []
     for r in data_rows:
@@ -4232,6 +4348,9 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
     if len(materials) >= max_results:
         raise RuntimeError(f'패턴 "{pattern}"이 너무 광범위합니다(최소 {max_results}건 이상 매치) — 더 구체적인 패턴으로 다시 시도해주세요.')
 
+    _LAST_DESC_PATTERN_DIAG.clear()
+    _LAST_DESC_PATTERN_DIAG.update({'pattern': pattern, 'empty': False, 'headers': headers,
+                                    'count': len(materials), 'headerFallback': header_fallback})
     return materials
 
 
@@ -5736,7 +5855,7 @@ def print_reservation_zmm019(rsnum, werks='1000', rsdat=None):
     }
 
 
-def download_documents_by_pattern(pattern, doc_type='P01'):
+def download_documents_by_pattern(pattern, doc_type='P01', dest_dir=None):
     """자재내역 와일드카드 패턴으로 매치된 자재 전부의 문서를 다운로드한다 —
     `resolve_materials_by_description_pattern`으로 자재번호 목록을 구한 뒤, 이미 검증된
     `download_documents_batch`를 그대로 재사용한다. ZDMSR004의 "복수 선택" 팝업은 한
@@ -5760,7 +5879,7 @@ def download_documents_by_pattern(pattern, doc_type='P01'):
     renamed_map = {}  # {문서번호: 새 폴더명} — 전체 청크 통합
     for i in range(0, len(materials), chunk_size):
         chunk = materials[i:i + chunk_size]
-        result = download_documents_batch(chunk, doc_type)
+        result = download_documents_batch(chunk, doc_type, dest_dir)
         all_results.append(result)
         renamed_map.update(result.get('renamedFolders') or {})
 
@@ -8423,7 +8542,20 @@ def main():
             doc_type = sys.argv[2] if len(sys.argv) > 2 else 'P01'
             materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
             materials = [m.strip() for m in materials_str.split(',') if m.strip()]
-            result = download_documents_batch(materials, doc_type)
+            # 💡 [2026-11-09] 네 번째 인자 = 목적 폴더. 폴더 이름은 백엔드 카탈로그
+            #    (`SAP_FOLDER_REGISTRY`)가 정해 넘긴다 — 생략하면 예전과 같은 자리(루트).
+            dest_dir = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            result = download_documents_batch(materials, doc_type, dest_dir)
+        elif action == 'resolve_desc_pattern':
+            # 📥 [2026-11-09] 자재내역 와일드카드 패턴 → 자재번호 목록(다운로드 없음).
+            #    패턴 다운로드를 "조회 1회 + 청크 다운로드 N회"로 쪼개 백엔드가 **건수에 맞춘
+            #    예산**과 **중간 보고**를 할 수 있게 하려고 분리했다(기존 한 방 호출은 고정
+            #    타임아웃에 걸려 중간에 멈추고 어디까지 받았는지도 알 수 없었다).
+            pattern = sys.argv[2] if len(sys.argv) > 2 else ''
+            resolved = resolve_materials_by_description_pattern(pattern)
+            result = {'ok': True, 'pattern': pattern, 'count': len(resolved),
+                      'materials': [r['matnr'] for r in resolved], 'matchDetails': resolved,
+                      'diag': _LAST_DESC_PATTERN_DIAG}
         elif action == 'lookup_documents_batch':
             doc_type = sys.argv[2] if len(sys.argv) > 2 else 'P02'
             materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
@@ -8451,7 +8583,8 @@ def main():
         elif action == 'download_documents_by_pattern':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             doc_type = sys.argv[3] if len(sys.argv) > 3 else 'P01'
-            result = download_documents_by_pattern(pattern, doc_type)
+            dest_dir = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4].strip() else None
+            result = download_documents_by_pattern(pattern, doc_type, dest_dir)
         elif action == 'list_bom_layouts':
             result = list_bom_layouts(sys.argv[2] if len(sys.argv) > 2 else '',
                                       sys.argv[3] if len(sys.argv) > 3 else '1000')

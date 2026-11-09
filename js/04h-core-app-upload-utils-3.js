@@ -5755,8 +5755,15 @@ ${docsJson}`;
         //    그룹웨어 **전자결재 기안**(업무 흐름 문서). 구분 신호가 없는 표현
         //    ("102202 승인원 작성해줘")까지 한쪽으로 추측해 보내면 엉뚱한 기능이 돌아간다
         //    (실사용에서 그룹웨어 요청이 SAP 표지로 샜다). 모호하면 **되묻는다.**
+        // 📥 [2026-11-09 실사용 제보] "승인원 다운로드 해줘" 가 이 되묻기로 빠졌다 —
+        //    `해줘` 하나로 "작성 요청"으로 본 탓이다. **문서 다운로드**는 세 번째 기능이고
+        //    모호하지 않다(SAP 표지를 "다운로드" 라고 하지 않는다). 판정 어휘는 정규식이 아니라
+        //    `SAP_CAPABILITIES`(js/32) 의 `docbatch.kw` 카탈로그 — 이 저장소의 못 박힌 규칙.
+        //    ⚠️ 기존 판정은 그대로 둔다: `기안/결재/상신`이면 그룹웨어, `표지`면 SAP 표지,
+        //       둘 다 없고 다운로드도 아니면 여전히 되묻는다.
         const _apprAmbig = /승인원/.test(question) && /(작성|만들|생성|해줘)/.test(question)
             && !/표지/.test(question)
+            && !(window._sapCapKwHit && window._sapCapKwHit(question, 'docbatch'))
             && !(window._gwCapKwHit && window._gwCapKwHit(question, 'gw_approval_draft'));
         const _apprAmbigMat = _apprAmbig && (question.match(/\b\d{5,8}\b/) || [])[0];
         if (_apprAmbigMat) {
@@ -6767,24 +6774,41 @@ ${docsJson}`;
             });
             input.value = '';
             window._renderGanttQaMessages();
-            let sapPatternReply;
+            let sapPatternReply, sapPatternRaw = false;
+            // ⏳ [2026-11-09] 패턴 경로도 매치 건수를 모른 채 고정 240초였다 — 많이 맞으면
+            //    중간에 죽고 아무것도 못 돌려줬다. 백엔드가 "조회 1회 + 청크 다운로드"로
+            //    바뀌었으니 진행 폴링·건수 비례 상한·부분 결과 렌더를 배치와 똑같이 쓴다.
+            const _patPendingIdx = window._ganttQaHistory.length - 1;
+            const _stopPatWatch = window._sapDocBatchWatch(function (pg) {
+                const h = window._ganttQaHistory[_patPendingIdx];
+                if (!h || !h.pending || !pg || !pg.total) return;
+                h.text = '⏳ ' + window._sapDocBatchPendingText(pg.total, sapPatternReq.docType, pg);
+                window._renderGanttQaMessages();
+            });
             try {
                 const url = 'http://127.0.0.1:5000/sap-download-documents-by-pattern?pattern='
                     + encodeURIComponent(sapPatternReq.pattern)
                     + '&type=' + encodeURIComponent(sapPatternReq.docType);
                 const res = await window._withTimeout(
-                    fetch(url), 240000,
+                    fetch(url), window._sapDocBatchTimeoutMs(200),
                     window._t('SAP 패턴 검색 + 문서 일괄 다운로드 시간 초과', 'SAP pattern search + batch document download timed out')
                 );
                 const data = await res.json();
-                sapPatternReply = data.ok
-                    ? ('📥 ' + (data.message || window._t('패턴 검색 + 일괄 다운로드가 완료됐습니다.', 'Pattern search + batch download completed.')))
-                    : ('⚠️ ' + window._t('SAP 패턴 검색/다운로드 실패: ', 'Failed to search/download by pattern in SAP: ') + (data.error || window._t('알 수 없는 오류', 'unknown error')));
+                if (data.ok && (data.placed || data.done)) {
+                    sapPatternReply = window._sapDocBatchReplyHtml(data);
+                    sapPatternRaw = true;
+                } else if (data.ok) {
+                    sapPatternReply = '📥 ' + (data.message || window._t('패턴 검색 + 일괄 다운로드가 완료됐습니다.', 'Pattern search + batch download completed.'));
+                } else {
+                    sapPatternReply = '⚠️ ' + window._t('SAP 패턴 검색/다운로드 실패: ', 'Failed to search/download by pattern in SAP: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                }
             } catch (e) {
                 sapPatternReply = '⚠️ ' + window._t('SAP 패턴 검색/다운로드 실패: ', 'Failed to search/download by pattern in SAP: ') + (e && e.message ? e.message : e);
+            } finally {
+                _stopPatWatch();
             }
             window._ganttQaHistory.pop();
-            window._ganttQaHistory.push({ role: 'ai', text: sapPatternReply });
+            window._ganttQaHistory.push({ role: 'ai', text: sapPatternReply, rawHtml: sapPatternRaw });
             window._renderGanttQaMessages();
             input.focus();
             return;
@@ -7017,22 +7041,30 @@ ${docsJson}`;
         const sapBatchReq = window._ganttQaExtractSapBatchDownloadRequest ? window._ganttQaExtractSapBatchDownloadRequest(sapDocQuestion) : null;
         if (sapBatchReq) {
             window._ganttQaHistory.push({ role: 'user', text: question });
+            // ⏳ [2026-11-09] 대기 말풍선을 진행 숫자로 갱신한다 — 200건이면 몇 분이 걸리고,
+            //    그동안 아무 변화가 없으면 사람은 "멈췄다"고 본다(반복된 불만).
+            const _batchCount = sapBatchReq.materials.length;
             window._ganttQaHistory.push({
                 role: 'ai',
-                text: '⏳ ' + window._t(
-                    `SAP에서 자재 ${sapBatchReq.materials.length}개의 "${sapBatchReq.docType}" 문서를 일괄 다운로드하는 중... (시간이 걸릴 수 있습니다)`,
-                    `Batch-downloading "${sapBatchReq.docType}" documents for ${sapBatchReq.materials.length} materials in SAP... (this may take a while)`
-                ),
+                text: '⏳ ' + window._sapDocBatchPendingText(_batchCount, sapBatchReq.docType, null),
                 pending: true
             });
+            const _batchPendingIdx = window._ganttQaHistory.length - 1;
             input.value = '';
             window._renderGanttQaMessages();
             let sapBatchReply;
+            const _stopWatch = window._sapDocBatchWatch(function (pg) {
+                const h = window._ganttQaHistory[_batchPendingIdx];
+                if (!h || !h.pending) return;
+                h.text = '⏳ ' + window._sapDocBatchPendingText(_batchCount, sapBatchReq.docType, pg);
+                window._renderGanttQaMessages();
+            });
             try {
                 const url = 'http://127.0.0.1:5000/sap-download-documents-batch?materials='
                     + encodeURIComponent(sapBatchReq.materials.join(','))
                     + '&type=' + encodeURIComponent(sapBatchReq.docType);
-                const timeoutMs = Math.min(300000, 60000 + 8000 * sapBatchReq.materials.length);
+                // ⏱ 건수에 비례한 상한(js/32 데이터) — 고정 300초가 200건을 늘 중간에 끊었다.
+                const timeoutMs = window._sapDocBatchTimeoutMs(_batchCount);
                 const res = await window._withTimeout(
                     fetch(url), timeoutMs,
                     window._t('SAP 문서 일괄 다운로드 시간 초과', 'Batch document download timed out')
@@ -7040,24 +7072,9 @@ ${docsJson}`;
                 const data = await res.json();
                 if (data.ok) {
                     // 저장된 폴더/파일 정보 + 폴더 열기 버튼을 rawHtml로 표시
-                    const _savedFolder = data.savedFolder || 'C:\\SAP_DMS';
-                    const _renamed = data.renamedFolders || {};
-                    const _renamedEntries = Object.entries(_renamed);
-                    let _fileListHtml = '';
-                    if (_renamedEntries.length > 0) {
-                        _fileListHtml = '<ul style="margin:4px 0 6px 0; padding-left:16px; font-size:12px;">'
-                            + _renamedEntries.map(function([oldName, newName]) {
-                                return '<li>' + (newName || oldName) + '</li>';
-                            }).join('')
-                            + '</ul>';
-                    }
-                    const _folderBtnStyle = 'display:inline-block;margin-top:6px;padding:3px 10px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
-                    const _escapedFolder = _savedFolder.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                    sapBatchReply = '📥 ' + window._t('다운로드 완료', 'Download complete') + '<br>'
-                        + '<span style="font-size:12px;color:#555;">' + (data.message || '') + '</span>'
-                        + (_fileListHtml ? '<br>' + _fileListHtml : '')
-                        + '<br><button style="' + _folderBtnStyle + '" onclick="fetch(\'http://127.0.0.1:5000/sap-open-folder?path=' + encodeURIComponent(_savedFolder) + '\').catch(function(){});">'
-                        + '📁 ' + window._t('폴더 열기', 'Open folder') + ' (' + _savedFolder + ')</button>';
+                    // 📂 [2026-11-09] 결과 렌더는 공용 헬퍼 하나로 — 부분 결과(`partial`)도
+                    //    여기서 경고로 드러난다(패턴 경로가 같은 함수를 쓴다).
+                    sapBatchReply = window._sapDocBatchReplyHtml(data);
                     window._ganttQaHistory.pop();
                     window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply, rawHtml: true });
                 } else {
@@ -7066,9 +7083,16 @@ ${docsJson}`;
                     window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply });
                 }
             } catch (e) {
-                sapBatchReply = '⚠️ ' + window._t('SAP 문서 일괄 다운로드 실패: ', 'Failed to batch-download SAP documents: ') + (e && e.message ? e.message : e);
+                // ⚠️ 프런트가 먼저 끊긴 경우 — 백엔드는 계속 받고 있을 수 있다. 추측으로
+                //    "다 실패"라고 단정하지 말고 어디를 보면 되는지 알려준다.
+                sapBatchReply = '⚠️ ' + window._t('SAP 문서 일괄 다운로드 실패: ', 'Failed to batch-download SAP documents: ')
+                    + (e && e.message ? e.message : e) + '\n'
+                    + window._t('(백엔드가 아직 받고 있을 수 있습니다 — 잠시 뒤 저장 폴더를 열어 확인해주세요.)',
+                                '(the backend may still be downloading — open the save folder in a moment to check.)');
                 window._ganttQaHistory.pop();
                 window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply });
+            } finally {
+                _stopWatch();
             }
             window._renderGanttQaMessages();
             input.focus();
@@ -8511,6 +8535,9 @@ ${docsJson}`;
             if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
             // 컨텍스트 키워드 → 폴더 키 매핑 (우선순위 위에서 아래)
             const _folderKeyMap = [
+                // 📥 [2026-11-09] "승인원 **문서**/다운로드" 는 표지가 아니라 ZDMSR004 문서
+                //    폴더다 — 더 구체적인 쪽을 먼저 본다(아래 /승인원/ 보다 위여야 한다).
+                { kw: /승인원.*(문서|다운로드)|(문서|다운로드).*승인원/, key: 'docs_P01' },
                 { kw: /승인원/,                            key: 'approval' },
                 { kw: /발주서|구매오더|\bpo\b|발주/i,       key: 'po'       },
                 { kw: /bom|부품포|역전개|사용처/i,          key: 'doc'      },
@@ -8545,10 +8572,12 @@ ${docsJson}`;
                 } else if (_fd.ok) {
                     window._ganttQaLastOpenedFolderPath = _fd.path; // 닫기 명령에서 재사용
                     // doc 폴더 + 문서 타입 코드가 감지된 경우: 하위 폴더 구조 안내 추가
-                    const _docCodeNote = (_folderKey === 'doc' && _folderDocCode)
+                    // 📂 [2026-11-09] 폴더 구조가 바뀌었다 — `<자재번호>_<문서번호>` 폴더 +
+                    //    파일 이름 앞에도 자재번호(옛 안내는 문서번호만이라 틀린 안내였다).
+                    const _docCodeNote = ((_folderKey === 'doc' || _folderKey === 'docs' || _folderKey === 'docs_P01') && _folderDocCode)
                         ? window._t(
-                            `\n\n📂 **${_folderDocCode.code}** 문서는 \`${_fd.path}\\${_folderDocCode.code}XXXXXXXXX\` 형식의 하위 폴더(문서번호)에 저장됩니다.`,
-                            `\n\n📂 **${_folderDocCode.code}** documents are in subfolders named \`${_fd.path}\\${_folderDocCode.code}XXXXXXXXX\` (document number).`
+                            `\n\n📂 **${_folderDocCode.code}** 문서는 \`${_fd.path}\\<자재번호>_${_folderDocCode.code}XXXXXXXXX\\<자재번호>_<원본파일명>\` 으로 저장됩니다.`,
+                            `\n\n📂 **${_folderDocCode.code}** documents are saved as \`${_fd.path}\\<material>_${_folderDocCode.code}XXXXXXXXX\\<material>_<filename>\`.`
                           )
                         : '';
                     _reply = window._t(
@@ -9835,9 +9864,18 @@ ${docsJson}`;
     //    모든 곳(단일 열기/배치 다운로드)이 이 함수 하나를 공유 — 정규식을 각자 따로 두면 나중에
     //    한쪽만 고치고 다른 쪽을 빠뜨리는 실수가 재발하기 쉬움.
     // 📜 [2026-09-22] "문서/파일" 대신 문서 별칭(승인원 등, js/32 SAP_DOC_ALIASES 데이터)으로 말해도 문서 요청으로 인정
+    // 📥 [2026-11-09] 별칭(승인원 등) → 없으면 **문서 종류의 정식 이름**(js/32 SAP_DOC_TYPES
+    //    label 을 그대로 재사용, `_sapDocNameAliases`)으로도 찾는다 — "수입검사 기준서
+    //    다운로드해줘" 처럼 코드(Q11)를 모른 채 이름으로 말하는 경우. 띄어쓰기는 지우고 본다.
     window._sapDocAliasHit = function(text) {
+        var t = String(text || '');
         var list = window.SAP_DOC_ALIASES || [];
-        for (var i = 0; i < list.length; i++) { if (list[i] && list[i].word && text.indexOf(list[i].word) !== -1) return list[i]; }
+        for (var i = 0; i < list.length; i++) { if (list[i] && list[i].word && t.indexOf(list[i].word) !== -1) return list[i]; }
+        var flat = t.replace(/\s+/g, '').toLowerCase();
+        var named = (window._sapDocNameAliases ? window._sapDocNameAliases() : []);
+        for (var j = 0; j < named.length; j++) {
+            if (named[j].flat && flat.indexOf(named[j].flat) !== -1) return named[j];
+        }
         return null;
     };
     // [2026-09-29] "P01" 처럼 명시적 SAP 문서 코드가 텍스트에 있는지 SAP_DOC_TYPES 목록으로 확인
@@ -9866,6 +9904,77 @@ ${docsJson}`;
         if (!m) { var al = window._sapDocAliasHit(text || ''); return al ? al.docType : null; }
         var digits = m[2].length === 1 ? ('0' + m[2]) : m[2];
         return (m[1] + digits).toUpperCase();
+    };
+
+    // ── 📥 [2026-11-09] 문서 일괄 다운로드 공용 헬퍼 ────────────────────────────
+    //  실사용 제보: 자재 ~200개로 "P01 문서 다운로드 해줘" → `시간 초과` 로 중간에 멈추고,
+    //  어디까지 받았는지도 알 수 없었고, 그 몇 분 동안 화면은 "멈춘 것처럼" 보였다.
+    //  → ① 상한을 **건수에 비례**해 잡고(수치는 js/32 `SAP_DOC_BATCH_CLIENT` 데이터)
+    //     ② 2초마다 백엔드 진행(`/sap-doc-batch-progress`)을 읽어 대기 말풍선을 갱신하고
+    //     ③ 결과가 `partial` 이면 **몇 건까지 받았는지·남은 자재**를 그대로 보여준다.
+    //  배치 경로와 패턴 경로가 같은 함수를 쓴다 — 두 벌로 두면 한쪽만 고치게 된다.
+    window._sapDocBatchTimeoutMs = function (count) {
+        var c = window.SAP_DOC_BATCH_CLIENT || { baseMs: 180000, eachMs: 28000, capMs: 3900000 };
+        return Math.min(c.capMs, c.baseMs + c.eachMs * Math.max(0, count || 0));
+    };
+    /** 진행 폴링 시작 → 멈추는 함수를 돌려준다. 폴링이 실패해도 본 작업은 건드리지 않는다. */
+    window._sapDocBatchWatch = function (onTick) {
+        var c = window.SAP_DOC_BATCH_CLIENT || { pollMs: 2000 };
+        var stopped = false;
+        var timer = setInterval(function () {
+            if (stopped) return;
+            fetch('http://127.0.0.1:5000/sap-doc-batch-progress')
+                .then(function (r) { return r.json(); })
+                .then(function (j) { if (!stopped && j && j.ok && j.progress) onTick(j.progress); })
+                .catch(function () { /* 진행 표시는 부가 정보다 — 조용히 넘긴다 */ });
+        }, Math.max(1000, c.pollMs || 2000));
+        return function () { stopped = true; clearInterval(timer); };
+    };
+    /** 대기 말풍선 텍스트(진행 숫자 포함). */
+    window._sapDocBatchPendingText = function (count, docType, pg) {
+        var head = window._t(
+            'SAP에서 자재 ' + count + '개의 "' + docType + '" 문서를 받는 중',
+            'Downloading "' + docType + '" documents for ' + count + ' materials from SAP');
+        if (pg && pg.total) {
+            head += ' — ' + (pg.done || 0) + '/' + pg.total
+                 + ' (' + window._t('묶음', 'batch') + ' ' + (pg.chunkDone || 0) + '/' + (pg.chunkTotal || 0) + ')';
+        }
+        return head + '... ' + window._t('(시간이 걸릴 수 있습니다)', '(this may take a while)');
+    };
+    /** 결과 → 말풍선 HTML. `partial` 이면 경고로 시작한다(성공처럼 보이게 하지 않는다). */
+    window._sapDocBatchReplyHtml = function (data) {
+        var BS = String.fromCharCode(92), Q = String.fromCharCode(39);
+        var folder = data.savedFolder || ('C:' + BS + 'SAP_DMS');
+        var placed = data.placed || [];
+        var esc = function (s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
+        var list = '';
+        if (placed.length) {
+            list = '<ul style="margin:4px 0 6px 0; padding-left:16px; font-size:12px; max-height:220px; overflow-y:auto;">'
+                 + placed.slice(0, 200).map(function (e) {
+                       var name = String(e.folder || '').split(BS).pop();
+                       return '<li>' + esc(name)
+                            + (e.files && e.files.length ? ' <span style="color:#777;">(' + e.files.length + ')</span>' : '')
+                            + '</li>';
+                   }).join('')
+                 + '</ul>'
+                 + (placed.length > 200
+                     ? '<div style="font-size:11px;color:#777;">… ' + (placed.length - 200) + window._t('개 더', ' more') + '</div>'
+                     : '');
+        }
+        var btn = 'display:inline-block;margin-top:6px;padding:3px 10px;border:1px solid #888;border-radius:4px;cursor:pointer;font-size:12px;background:#f5f5f5;';
+        var head = data.partial
+            ? ('⚠️ ' + window._t('일부만 받았습니다', 'Partially downloaded')
+               + ' — ' + (data.done || []).length + '/' + (data.materials || []).length)
+            : ('📥 ' + window._t('다운로드 완료', 'Download complete'));
+        return head
+             + '<br><span style="font-size:12px;color:#555;white-space:pre-wrap;">' + esc(data.message || '') + '</span>'
+             + (list ? '<br>' + list : '')
+             + '<br><button style="' + btn + '" onclick="fetch(' + Q
+             + 'http://127.0.0.1:5000/sap-open-folder?path=' + encodeURIComponent(folder) + Q
+             + ').catch(function(){});">'
+             + '📁 ' + window._t('폴더 열기', 'Open folder') + ' (' + esc(folder) + ')</button>';
     };
 
     window._ganttQaExtractSapOpenDocRequest = function(question) {
@@ -9948,6 +10057,11 @@ ${docsJson}`;
         var tokens = text.split(/\s+/);
         var patternToken = tokens.filter(function(t) { return t.indexOf('*') !== -1; })[0];
         if (!patternToken) return null;
+        // 🧹 [2026-11-09 실사용 제보] `"*LABEL*로 조회된 아이템 …` — 따옴표·조사가 그대로
+        //    SAP 으로 나가 0건이 됐고, 그 0건이 `… "자재" 열을 찾지 못했습니다 — 헤더: []`
+        //    로 보고돼 사람이 ALV 레이아웃을 의심하게 됐다. 떼어낼 어휘는 js/32 데이터.
+        if (window._sapCleanWildcardPattern) patternToken = window._sapCleanWildcardPattern(patternToken);
+        if (!patternToken || patternToken.indexOf('*') === -1) return null;
         if (!/(문서|파일|승인원)/.test(text)) return null;
         if (!/(열어|열기|다운로드|출력|보여|저장|받아|open)/i.test(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);

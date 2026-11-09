@@ -23,6 +23,79 @@
         { word: '승인원', docType: 'P01' }
     ];
 
+    // 📥 [2026-11-09 사용자 요청 "문서 번호가 아니라 문서 이름으로도 동작하게"]
+    //    위 별칭은 "사람이 코드 대신 쓰는 말" 이고, **문서 종류의 정식 이름**(아래
+    //    `SAP_DOC_TYPES` 의 label — '수입검사 기준서', '기구도' …)은 이미 데이터로 있다.
+    //    그 이름으로도 문서를 집을 수 있게 **라벨을 별칭으로 재사용**한다 — 이름 목록을
+    //    두 번 적지 않는다(두 벌이 되면 한쪽만 늘어나 조용히 어긋난다).
+    //    ⚠️ 같은 이름이 미사용(inactive) 코드와 겹친다('원자재 승인 결과서' = C04(미사용)
+    //    /P01, '회로도' = D02(미사용)/P08) → **사용 중인 코드가 이긴다**.
+    //    ⚠️ 긴 이름부터 본다('제품 규격서' 가 '규격서' 보다 먼저 맞아야 한다).
+    //    ⚠️ 두 글자 이하 라벨은 쓰지 않는다(아무 문장에나 걸린다).
+    window.SAP_DOC_NAME_MIN_LEN = window.SAP_DOC_NAME_MIN_LEN || 3;
+    window._sapDocNameAliases = function () {
+        if (window._sapDocNameAliasCache) return window._sapDocNameAliasCache;
+        var flat = function (s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); };
+        var types = (window.SAP_DOC_TYPES || []).slice();
+        // 사용 중(inactive 아님) 먼저, 그 다음 라벨 긴 것 먼저
+        types.sort(function (a, b) {
+            var ia = a.inactive ? 1 : 0, ib = b.inactive ? 1 : 0;
+            if (ia !== ib) return ia - ib;
+            return String(b.label || '').length - String(a.label || '').length;
+        });
+        var out = [], seen = {};
+        types.forEach(function (t) {
+            var lbl = String(t.label || '').trim();
+            if (!t.code || lbl.length < window.SAP_DOC_NAME_MIN_LEN) return;
+            var k = flat(lbl);
+            if (!k || seen[k]) return;         // 같은 이름은 먼저 온(= 사용 중) 코드가 이긴다
+            seen[k] = 1;
+            out.push({ word: lbl, flat: k, docType: t.code, fromLabel: true });
+        });
+        window._sapDocNameAliasCache = out;
+        return out;
+    };
+
+    // 🎙️ [2026-11-09 실사용 제보] `"*LABEL*로 조회된 아이템 …` 처럼 **따옴표·조사가 붙은 채**
+    //    패턴 토큰이 SAP 으로 나갔다 — SAP 은 0건을 주고, 그 0건이 검색도움말 라벨이 하나도
+    //    없는 화면이 되어 `"자재" 열을 찾지 못했습니다 — 헤더: []` 로 보고됐다(사람은 ALV
+    //    레이아웃을 의심하게 된다). 패턴에서 떼어낼 군더더기는 **데이터**로 둔다.
+    window.SAP_PATTERN_TRIM = window.SAP_PATTERN_TRIM || {
+        // 앞뒤에서 떼는 기호(따옴표·괄호·문장부호)
+        chars: '"\'\u201c\u201d\u2018\u2019`()[]{}<>,.!?:;·…',
+        // 끝에 붙는 한국어 조사 — 떼고 나서도 `*` 가 남을 때만 뗀다
+        suffixes: ['으로', '로서', '로', '에서', '에게', '에', '의', '와', '과', '이랑', '랑',
+                   '까지', '부터', '처럼', '이면', '라면', '은', '는', '이', '가', '을', '를']
+    };
+    /** 와일드카드 패턴 토큰에서 따옴표·조사 같은 군더더기를 떼어낸다(결정론, AI 없음). */
+    window._sapCleanWildcardPattern = function (tok) {
+        var t = String(tok || '').trim();
+        var cfg = window.SAP_PATTERN_TRIM;
+        var isTrim = function (ch) { return cfg.chars.indexOf(ch) !== -1; };
+        for (var guard = 0; guard < 8; guard++) {
+            var before = t;
+            while (t.length && isTrim(t[0])) t = t.slice(1);
+            while (t.length && isTrim(t[t.length - 1])) t = t.slice(0, -1);
+            for (var i = 0; i < cfg.suffixes.length; i++) {
+                var s = cfg.suffixes[i];
+                if (t.length > s.length && t.slice(-s.length) === s) {
+                    var cut = t.slice(0, -s.length);
+                    // 떼고 나서도 패턴다워야 한다 — 아니면 그건 조사가 아니라 패턴의 일부다
+                    if (cut.indexOf('*') !== -1 && cut.length >= 2) { t = cut; break; }
+                }
+            }
+            if (t === before) break;
+        }
+        return t;
+    };
+
+    // ⏱ [2026-11-09] 문서 일괄 다운로드의 **클라이언트 쪽 상한**(ms) — 건수에 비례.
+    //    백엔드 예산(`SAP_DOC_BATCH_LIMITS`, kortek_backend.py)보다 넉넉해야 한다.
+    //    안 그러면 백엔드가 "몇 건까지 받았다"를 돌려주려는 순간 프런트가 먼저 끊는다.
+    window.SAP_DOC_BATCH_CLIENT = window.SAP_DOC_BATCH_CLIENT || {
+        baseMs: 180000, eachMs: 28000, capMs: 3900000, pollMs: 2000
+    };
+
     // 🎙️ [2026-11-04 신규, 사용자 요청] SAP 와일드카드 패턴("*KT*55*LNW*")은 음성으로 "별표"를
     //    매번 말하기 어렵다 — 이 단어들을 토큰 사이에서 말하면 "*"로 바꿔 이어붙인다
     //    (js/04h `_ganttQaNormalizeSapWildcard`). "별표"는 기호 이름 그대로라 가장 직관적이고,
