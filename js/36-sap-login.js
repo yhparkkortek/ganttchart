@@ -162,21 +162,16 @@
                 + fieldRow(T('비밀번호', 'Password'), '<input id="nasq-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + fieldRow(T('NAS 주소', 'NAS address'),
                     '<input id="nasq-host" autocomplete="off" style="' + inputSt + '" placeholder="' + T('담당자가 알려준 주소', 'the address you were given') + '">')
-                + '<div style="font-size:11px; color:#888; margin:-4px 0 8px;">'
-                + T('주소를 모르면 담당자가 준 <b>설정 코드</b>를 아래에 붙여넣으세요.',
-                    'If you do not know the address, paste the <b>setup code</b> below.') + '</div>'
-                + '<input id="nasq-code" placeholder="' + T('설정 코드 붙여넣기(선택)', 'Paste setup code (optional)') + '"'
-                + ' oninput="window._nasQuickApplyCode()" style="' + inputSt + ' margin-bottom:8px;">'
+                // 🗑 [2026-11-09] `📄 기본설정 파일`·`📤 설정 코드 복사`·`설정 코드 붙여넣기` 삭제.
+                //    실측으로 **필요가 없다**: `/nas/setup` 은 주소·아이디·비밀번호만 받으면
+                //    앱 폴더를 스스로 찾고(`find_app_folder` — 이 NAS 에선 31곳을 4.0초에 훑어
+                //    **정확히 1곳**), 자료실 경로·포트·HTTPS 까지 거기서 만들어 쓴다.
+                //    사용자가 팀원 PC 에서 **주소만 넣고 연결** 해서 확인했다.
+                //    ⚠️ `nas_defaults.json` 을 **읽는** 쪽은 남긴다 — 있으면 주소를 미리 채워
+                //    주고(`/nas/status.defaults` → `_nasQuickPrefill`), 설치 스크립트도 그 파일을
+                //    옆에 두면 같이 깐다. 만드는 UI 만 없앤 것이다.
                 + '<div id="nasq-log" style="display:none; font-size:11.5px; line-height:1.6; margin:0 0 8px;"></div>'
                 + '<div style="display:flex; gap:6px; justify-content:flex-end; align-items:center; margin-bottom:8px;">'
-                + '<button onclick="window._nasSaveDefaultsFile()" style="' + btnSt + ' padding:5px 9px;" title="'
-                + T('설치 폴더에 같이 둘 nas_defaults.json 을 내려받습니다(비밀번호는 안 들어갑니다)',
-                    'Download nas_defaults.json to place next to the installer (no password inside)') + '">📄 '
-                + T('기본설정 파일', 'Defaults file') + '</button>'
-                + '<button onclick="window._nasShareCode()" style="' + btnSt + ' padding:5px 9px;" title="'
-                + T('지금 이 PC 설정을 팀원에게 전달할 코드로 복사합니다(비밀번호는 들어가지 않습니다)',
-                    'Copy this PC settings as a code for teammates (no password included)') + '">📤 '
-                + T('설정 코드 복사', 'Copy setup code') + '</button>'
                 + '<button onclick="window._nasQuickRun()" style="' + btnSt + ' font-weight:bold; background:#efe6ff; border-color:#b197fc; color:#5f3dc4;">🚀 '
                 + T('연결하기', 'Connect') + '</button></div></div>'
                 + '<div id="naslogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
@@ -1001,19 +996,6 @@
     // ══ 🚀 간편 전환 ══════════════════════════════════════════════════
     //  ⚠️ 비밀번호는 입력칸에만 잠깐 있다가 보내고 즉시 지운다. 코드(설정 코드)에도 넣지 않는다.
     //  ⚠️ 실패해도 **재시도하지 않는다** — 남은 횟수는 백엔드 예산(기본 3회)이 말해 준다.
-    var CODE_PREFIX = 'KPMNAS1:';
-
-    function b64e(s) {
-        var bytes = new TextEncoder().encode(s), out = '';
-        for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
-        return btoa(out);
-    }
-
-    function b64d(s) {
-        var bin = atob(s), arr = new Uint8Array(bin.length);
-        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        return new TextDecoder().decode(arr);
-    }
 
     // 🔧 [2026-11-06] 직접 입력(고급) 접기/펴기. 기본은 접힘 — 반쪽 설정의 입구였던 자리라
     //    "할 수는 있지만 먼저 보이지는 않는" 곳에 둔다.
@@ -1070,80 +1052,6 @@
         window._nasQuickPrefill();
     };
 
-    //  설정 코드 — 주소·포트·앱 폴더·자료실 경로만. **비밀번호·아이디는 안 들어간다.**
-    //  (사내 주소는 저장소에 못 쓴다 — GitHub Pages 로 공개돼 있다. 그래서 코드로 전달한다.)
-    window._nasShareCode = async function () {
-        try {
-            var s = await nasApi('/nas/status');
-            var p = await nasApi('/nas/paths');
-            var doc = window._dsConfig ? await window._dsConfig() : null;
-            if (!s || !s.configured) { nasStatus('⚠️ ' + T('먼저 이 PC 의 NAS 설정을 저장해주세요.', 'Save this PC NAS settings first.'), 'err'); return; }
-            var payload = { host: s.host, port: s.port, https: !!s.https,
-                            root: (p && p.root) || '', docRoot: (doc && doc.root) || '' };
-            var code = CODE_PREFIX + b64e(JSON.stringify(payload));
-            var ok = false;
-            try { await navigator.clipboard.writeText(code); ok = true; } catch (e) { /* 권한 없으면 아래에 보여준다 */ }
-            var el = document.getElementById('nasq-code');
-            if (el) el.value = code;
-            nasStatus((ok ? '📤 ' + T('설정 코드를 복사했습니다 — 팀원에게 전달하세요.', 'Setup code copied — send it to your teammates.')
-                          : '📤 ' + T('아래 칸의 코드를 복사해 팀원에게 전달하세요.', 'Copy the code in the box below and send it.'))
-                      + '<br><span style="color:#888;">' + T('비밀번호는 들어 있지 않습니다.', 'It contains no password.') + '</span>', 'ok');
-        } catch (e) {
-            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
-        }
-    };
-
-    //  📄 팀 공용 기본값 파일 — **주소·폴더만.** 비밀번호·아이디는 안 들어간다.
-    //    이 파일을 백엔드 설치 폴더(kortek_backend.py 옆)에 두면 그 PC 의 간편 전환이
-    //    주소를 미리 채운다. 저장소에는 넣지 않는다(공개 저장소 + .gitignore).
-    window._nasSaveDefaultsFile = async function () {
-        try {
-            var s = await nasApi('/nas/status');
-            var p = await nasApi('/nas/paths');
-            var doc = window._dsConfig ? await window._dsConfig() : null;
-            if (!s || !s.configured) {
-                nasStatus('⚠️ ' + T('먼저 이 PC 의 NAS 설정을 저장해주세요.', 'Save this PC NAS settings first.'), 'err');
-                return;
-            }
-            var payload = {
-                _주의: '비밀번호는 여기 넣지 마세요. 이 파일은 평문이고 여러 PC 를 돌아다닙니다.',
-                host: s.host, port: s.port, https: !!s.https,
-                root: (p && p.root) || '', docRoot: (doc && doc.root) || ''
-            };
-            var blobUrl = URL.createObjectURL(new Blob(
-                [JSON.stringify(payload, null, 2)], { type: 'application/json' }));
-            var a = document.createElement('a');
-            a.href = blobUrl; a.download = 'nas_defaults.json';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(blobUrl);
-            nasStatus('📄 ' + T('nas_defaults.json 을 받았습니다 — <b>설치 파일(KORTEK_설치.bat) 옆</b>에 같이 두고 '
-                                + '팀원에게 폴더째 전달하세요. 그러면 팀원은 사번·비밀번호만 넣으면 됩니다.',
-                                'Saved nas_defaults.json — put it next to the installer and share the folder. '
-                                + 'Teammates then only type their ID and password.')
-                      + '<br><span style="color:#888;">'
-                      + T('비밀번호는 들어 있지 않습니다. 저장소에는 올리지 마세요.',
-                          'It contains no password. Do not commit it.') + '</span>', 'ok');
-        } catch (e) {
-            nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
-        }
-    };
-
-    window._nasQuickApplyCode = function () {
-        var el = document.getElementById('nasq-code');
-        if (!el) return;
-        var raw = (el.value || '').trim();
-        if (!raw) return;
-        var json = null;
-        try {
-            json = JSON.parse(raw.indexOf(CODE_PREFIX) === 0 ? b64d(raw.slice(CODE_PREFIX.length)) : raw);
-        } catch (e) { return; }           // 붙여넣는 중일 수 있다 — 조용히 넘긴다
-        if (!json || !json.host) return;
-        window._nasQuickCode = json;
-        var h = document.getElementById('nasq-host');
-        if (h) h.value = json.host;
-        nasStatus('✅ ' + T('설정 코드를 읽었습니다 — 아이디·비밀번호만 넣고 <b>전환</b>을 누르세요.',
-                            'Setup code read — enter your ID and password, then press <b>Switch</b>.'), 'ok');
-    };
 
     var STEP_LABEL = {
         config:      [ '계정 저장', 'Account saved' ],
