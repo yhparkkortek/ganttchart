@@ -2875,6 +2875,11 @@ def _scheduler_loop():
             _daily_brief_tick()
         except Exception as e:
             print(f"[브리핑 스케줄러 오류] {e}")
+        # 🧹 NAS 임시 폴더(.ganttput-*) — 하루 1회. 부르는 곳이 없어 154개까지 쌓였다(2026-11-09).
+        try:
+            _nas_tmp_sweep_tick()
+        except Exception as e:
+            print(f"[NAS 임시폴더 청소 오류] {e}")
         time.sleep(60)
 
 
@@ -7481,6 +7486,134 @@ def nas_app_sweep():
         stale = 600
     try:
         return jsonify(dict(_nas().cleanup_tmpdirs(path, stale_sec=max(0, stale)), ok=True))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════
+# 🧹 임시 폴더 자동 청소 (2026-11-09, 사용자 요청)
+# ══════════════════════════════════════════════════════════════
+#  왜 — `/nas/app/sweep` 라우트는 있었는데 **부르는 곳이 한 곳도 없었다**(프런트 0 · 백엔드 0).
+#  그래서 5일 만에 `.ganttput-*` 가 154개 쌓였다(실측, 하루 30개꼴). 사람이 기억해서
+#  눌러야 하는 청소는 결국 아무도 안 누른다 — 그게 "쌓이는 것"의 본질이다.
+#
+#  ⚠️ 지우는 규칙은 **건드리지 않는다** — `nas_dsm.cleanup_tmpdirs` 가 "내 태그" 이거나
+#     "**비어 있고** stale_sec 보다 오래된" 것만 지운다. 쓰는 중인 폴더는 1초 미만만
+#     파일을 들고 있으므로, 비었고 오래됐으면 쓰는 중일 수 없다. 자동화한다고 해서
+#     그 보수적인 판정을 느슨하게 하지 않는다(느슨하게 하면 남의 업로드를 깬다).
+#  ⚠️ **팀원 PC 마다 다 돌아도 된다** — 지우기가 멱등이고(이미 지워진 건 kept 로 떨어진다),
+#     혹시 남의 임시 폴더를 지워도 그쪽의 다음 업로드가 `create_parents` 로 다시 만든다
+#     (위 sweep 라우트 주석의 실측). 그래서 "담당 PC 한 대" 같은 설정을 두지 않는다 —
+#     설정이 필요하면 그 PC 가 꺼진 날엔 아무도 안 치운다.
+#  ⚠️ 하루 1회. 폴더를 **깊이 2까지만** 훑는다(실측: 임시 폴더가 나온 곳이 전부 그 안이다).
+#     깊이·간격·상한은 전부 데이터다 — 코드에 박지 말 것.
+NAS_TMP_SWEEP = {
+    'enabled':    True,
+    'depth':      2,      # 앱 루트에서 몇 단계까지 훑나(0 = 루트만)
+    'staleSec':   600,    # 비어 있고 이만큼(초) 오래된 것만 지운다
+    'maxFolders': 300,    # 한 번에 훑을 폴더 수 상한(폭주 방지)
+}
+_nas_tmp_sweep_last_date = None
+
+
+def _nas_tmp_sweep_folders(depth, max_folders):
+    """앱 루트 아래 폴더를 `depth` 단계까지 모은다(앱 루트 자신 포함).
+
+    ⚠️ `.ganttput-*` 자신은 **안 들어간다** — 치울 대상이지 뒤질 곳이 아니다.
+    """
+    nas = _nas()
+    out, frontier = [''], ['']
+    for _ in range(max(0, int(depth))):
+        nxt = []
+        for rel in frontier:
+            if len(out) >= max_folders:
+                break
+            try:
+                items = nas.list_folder(nas.abs_path(rel))['items']
+            except Exception:
+                continue                      # 권한 없는 폴더는 건너뛰고 계속(ACL 은 정상 동작)
+            for it in items:
+                if not it.get('isdir') or str(it.get('name', '')).startswith('.ganttput-'):
+                    continue
+                child = (rel + '/' + it['name']) if rel else it['name']
+                out.append(child)
+                nxt.append(child)
+                if len(out) >= max_folders:
+                    break
+        frontier = nxt
+        if not frontier:
+            break
+    return out[:max_folders]
+
+
+def nas_tmp_sweep_all(depth=None, stale_sec=None, max_folders=None, dry_run=False):
+    """앱 루트 아래 임시 폴더를 한 번에 치운다. 틱과 라우트가 **같은 함수**를 쓴다
+    (두 벌로 두면 한쪽만 고쳐져 조용히 갈라진다 — 이 저장소의 반복 교훈)."""
+    cfg = NAS_TMP_SWEEP
+    depth = cfg['depth'] if depth is None else int(depth)
+    stale_sec = cfg['staleSec'] if stale_sec is None else max(0, int(stale_sec))
+    max_folders = cfg['maxFolders'] if max_folders is None else int(max_folders)
+    nas = _nas()
+    rep = {'folders': 0, 'removed': 0, 'kept': 0, 'errors': [], 'dryRun': bool(dry_run), 'detail': []}
+    for rel in _nas_tmp_sweep_folders(depth, max_folders):
+        try:
+            path = nas.abs_path(rel)
+            if dry_run:
+                # 미리보기 — 지우지 않고 "임시 폴더가 몇 개 있나"만 센다
+                n = len([x for x in nas.list_folder(path)['items']
+                         if x.get('isdir') and str(x.get('name', '')).startswith('.ganttput-')])
+                rep['folders'] += 1
+                if n:
+                    rep['detail'].append({'rel': rel or '(앱 루트)', 'found': n})
+                continue
+            r = nas.cleanup_tmpdirs(path, stale_sec=stale_sec)
+            rep['folders'] += 1
+            rep['removed'] += len(r.get('removed') or [])
+            rep['kept'] += len(r.get('kept') or [])
+            if r.get('removed'):
+                rep['detail'].append({'rel': rel or '(앱 루트)',
+                                      'removed': len(r['removed']), 'kept': len(r.get('kept') or [])})
+        except Exception as e:
+            # ⚠️ 삼키지 않는다 — 조용히 건너뛰면 "원래 없는 것" 과 구분이 안 된다
+            rep['errors'].append('%s — %s' % (rel or '(앱 루트)', e))
+    return rep
+
+
+def _nas_tmp_sweep_tick():
+    """하루 1회 — `_scheduler_loop()` 의 1분 루프에 얹혀서 불린다(새 스레드 안 띄움).
+
+    ⚠️ NAS 에 로그인돼 있지 않으면 **아무것도 하지 않는다** — 백그라운드 루프가
+       로그인을 시도하면 실패가 쌓여 IP 가 차단된다(그룹웨어·SAP 과 같은 규칙).
+       그래서 '오늘 돌았다' 표시도 **실제로 돈 날에만** 찍는다.
+    """
+    global _nas_tmp_sweep_last_date
+    if not NAS_TMP_SWEEP.get('enabled'):
+        return
+    today = datetime.now(KST).date()
+    if _nas_tmp_sweep_last_date == today:
+        return
+    try:
+        if not (_nas().status() or {}).get('loggedIn'):
+            return                      # 로그인 전 — 날짜를 찍지 않는다(붙으면 그날 바로 돈다)
+    except Exception:
+        return
+    _nas_tmp_sweep_last_date = today
+    rep = nas_tmp_sweep_all()
+    if rep['removed'] or rep['errors']:
+        print('[NAS 임시폴더 청소] %d개 삭제 · %d개 유지(사용 중) · 폴더 %d곳%s'
+              % (rep['removed'], rep['kept'], rep['folders'],
+                 (' · 실패 %d건' % len(rep['errors'])) if rep['errors'] else ''))
+
+
+@app.route('/nas/app/sweep-all', methods=['POST'])
+def nas_app_sweep_all():
+    """앱 루트 아래를 한 번에 청소. `dryRun: true` 면 지우지 않고 대상만 센다."""
+    req = request.get_json(force=True, silent=True) or {}
+    try:
+        return jsonify(dict(nas_tmp_sweep_all(depth=req.get('depth'),
+                                              stale_sec=req.get('staleSec'),
+                                              max_folders=req.get('maxFolders'),
+                                              dry_run=bool(req.get('dryRun'))), ok=True))
     except Exception as e:
         return jsonify({'ok': False, 'message': str(e)}), 500
 
