@@ -393,3 +393,55 @@ document.addEventListener('DOMContentLoaded', function() { try { window.refreshC
 document.addEventListener('focusin', function(e) {
     if (e.target && e.target.id === 'sum-customer') { try { window.refreshCustomerDatalist(); } catch (err) {} }
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🔴 "이 업무가 늦었나" — **한 곳에서만** 정한다 (2026-11-09)
+//
+// ⚠️⚠️ 실측으로 드러난 것: 내 프로젝트 7개의 리프 2,272행 중 '완료' 는 80행(3.5%)뿐이고
+//    날짜가 지난 미완료 행이 **1,501건**이었다. 그런데 그중 **1,225건(82%)이 메일에서
+//    들어온 행**이다. 메일 행은 "고객이 단가를 물었다 — 2026-08-24" 같은 **사건**이지
+//    누가 끝내는 **업무**가 아니다. 끝낼 수 없는 것을 1,225건 쌓아 두고 "왜 안 닫나" 를
+//    물으니 아무도 안 닫는다 — 그래서 '지연' 이라는 말 자체가 뜻을 잃었다.
+//    → 메일 행은 **지연으로 세지 않는다**(사람이 적은 업무만 센다: 실측 276건).
+//
+// ⚠️ 데이터는 **안 건드린다.** 판정만 바꾼다 — 되돌리려면 `skipMailRows` 한 줄이다.
+// ⚠️ "오늘 마감·오늘 시작·이번 주" 에서는 메일 행을 **빼지 않는다** — 사건은 늦을 수 없어도
+//    "오늘 들어온 것" 일 수는 있다. 빼는 건 '지연' 하나다.
+// ⚠️ 메일 유래 판정은 **표식(`_mailRaw`·`＊AI📧`)이 아니라 칸 내용**으로 한다 —
+//    2026-11-04 에 표식이 통째로 날아간 적이 있고, 그때도 칸 내용만 살아남았다.
+// 🔗 같은 규칙이 백엔드 아침 브리핑(`kortek_backend.py` `_brief_text_for`)에도 있다 —
+//    거기선 js 를 못 부르므로 **사본**이다. 한쪽만 고치면 화면과 텔레그램이 갈린다.
+// ══════════════════════════════════════════════════════════════════════════
+window.GANTT_OVERDUE_POLICY = window.GANTT_OVERDUE_POLICY || {
+    skipMailRows: true,                  // 메일에서 들어온 행은 '지연' 으로 세지 않는다
+    doneWords: ['완료', 'Done']          // 이 상태면 끝난 것
+};
+
+/** 이 행이 메일 분석으로 들어온 것인가 — **칸 내용**으로 본다. */
+window._ganttRowIsMail = function (row, ci) {
+    if (!row) return false;
+    var c = (ci && ci.content != null && ci.content !== -1) ? String(row[ci.content] || '') : '';
+    return /\[출처\]|\[핵심내용\]/.test(c);
+};
+
+/**
+ * 이 행이 **늦었나**. 화면·요약·브리핑이 전부 이걸 쓴다.
+ * @param nowTs 기준 시각(없으면 오늘 0시)
+ */
+window._ganttIsOverdue = function (row, ci, nowTs) {
+    if (!row) return false;
+    var P = window.GANTT_OVERDUE_POLICY || {};
+    var end = row._calcPlanTs || 0;
+    if (!end && ci && ci.plan != null && ci.plan !== -1) {
+        var d = new Date(String(row[ci.plan] || '').replace(/[.\/]/g, '-'));
+        end = isNaN(d) ? 0 : d.getTime();
+    }
+    if (!end) return false;
+    var t0 = nowTs;
+    if (!t0) { var n = new Date(); n.setHours(0, 0, 0, 0); t0 = n.getTime(); }
+    if (end >= t0) return false;
+    var st = (ci && ci.status != null && ci.status !== -1) ? String(row[ci.status] || '').trim() : '';
+    if ((P.doneWords || []).indexOf(st) >= 0) return false;
+    if (P.skipMailRows && window._ganttRowIsMail(row, ci)) return false;
+    return true;
+};

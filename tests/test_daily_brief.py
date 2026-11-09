@@ -86,9 +86,11 @@ ROSTER = [
 ]
 
 
-def row(level, name, disc, start, end, status=''):
-    o = {'data': ['', name, YMD(start) if start else '', YMD(end) if end else '', status], '_level': level,
-         '_담당구분': disc}
+def row(level, name, disc, start, end, status='', content=''):
+    # ⚠️ 상세내용 칸은 진짜 파일에 있는 칸이다 — '메일에서 들어온 행인가' 를 여기서 읽는다.
+    #    빼 두면 그 판정이 하네스에서만 안 도는 **틀린 계약**이 된다.
+    o = {'data': ['', name, YMD(start) if start else '', YMD(end) if end else '', status, content],
+         '_level': level, '_담당구분': disc}
     o[['_origDev', '_origT1', '_origT2', '_origT3', '_origT4'][level]] = name
     if start:
         o['_calcStartTs'] = ms(start)
@@ -99,7 +101,7 @@ def row(level, name, disc, start, end, status=''):
 
 def project_doc(rows, meta=None, m3=None):
     return {'globalData': [{'data': ['No', 'WBS', 'start', 'plan', 'status']}] + rows,
-            'colIdx': {'no': 0, 'wbs': 1, 'start': 2, 'plan': 3, 'status': 4},
+            'colIdx': {'no': 0, 'wbs': 1, 'start': 2, 'plan': 3, 'status': 4, 'content': 5},
             'projectMeta': meta or {}, 'tabData': {'projectMembers3': m3 or []}}
 
 
@@ -235,6 +237,35 @@ reset([('P2.json', P2, None)])
 r = B._daily_brief_tick(force=True, only_key='yhpark')
 ok('(돌연변이) 역할표를 비우면 그 업무가 내 것으로 안 잡힌다(어제 보고 없음 안내만 간다)',
    my_msg() and '기구 오늘 마감' not in my_msg()[0] and '마감·지연 업무는 없습니다' in my_msg()[0], (r, my_msg()))
+# ══ 🔴 메일에서 들어온 행은 '지연' 으로 안 센다 (2026-11-09) ════════════════
+#  실측: 날짜 지난 미완료 1,501건 중 **1,225건(82%)이 메일 행**이었다. 메일 행은
+#  "고객이 단가를 물었다 — 8/24" 같은 **사건**이지 누가 끝내는 업무가 아니다.
+# ⚠️ 바로 앞 돌연변이 시험이 BRIEF_ROLE_FIELD 를 비워 둔다 — 먼저 되돌리지 않으면
+#    여기서 내 업무가 하나도 안 잡혀 **가짜 실패**가 난다(실제로 한 번 틀렸다).
+B.BRIEF_ROLE_FIELD.update(saved_rf)
+print('\n[9] 메일에서 들어온 행은 지연으로 세지 않는다')
+MAIL = '[요청/문의] [고객 \u2192 박용훈]\n[핵심내용]단가 회신 요청\n[출처]x_2026-08-24_a@b.c'
+PMAIL = project_doc([
+    row(1, '밀린 메일 건', 'PM', D(-30), D(-20), '진행', MAIL),   # 메일 행 · 날짜 지남
+    row(1, '밀린 내 업무', 'PM', D(-30), D(-20), '진행'),          # 사람이 적은 업무 · 날짜 지남
+    row(1, '오늘 들어온 메일', 'PM', D(0), D(0), '진행', MAIL),    # 메일 행 · 오늘
+], META)
+reset([('MAILP.json', PMAIL, None)])
+B._daily_brief_tick(force=True)
+m9 = my_msg()[0] if my_msg() else ''
+ok('메일 행은 지연에 안 든다', '밀린 메일 건' not in m9, m9[:260])
+ok('사람이 적은 업무는 그대로 지연에 든다', '밀린 내 업무' in m9, m9[:260])
+# ⚠️ 사건은 늦을 수 없어도 "오늘 들어온 것" 일 수는 있다 — 거기선 빼지 않는다.
+ok('메일 행도 오늘 마감에는 그대로 나온다', '오늘 들어온 메일' in m9, m9[:300])
+
+# 스위치를 끄면 예전처럼 — 지운 게 아니라 끈 것이다.
+B.DAILY_BRIEF['skipMailRowsInLate'] = False
+reset([('MAILP.json', PMAIL, None)])
+B._daily_brief_tick(force=True)
+m10 = my_msg()[0] if my_msg() else ''
+ok('스위치를 끄면 메일 행도 지연에 든다', '밀린 메일 건' in m10, m10[:260])
+B.DAILY_BRIEF['skipMailRowsInLate'] = True
+
 B.BRIEF_ROLE_FIELD.update(saved_rf)
 
 try:

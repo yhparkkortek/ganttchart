@@ -1767,6 +1767,10 @@ DAILY_BRIEF = {
     'sendIfEmpty': False,     # 볼 게 하나도 없으면 안 보낸다(알림 피로)
     'maxProjects': 30,
     'maxNameChars': 48,
+    # 🔴 [2026-11-09] 메일에서 들어온 행은 '지연' 으로 세지 않는다 — 사건이지 업무가 아니다.
+    #    실측: 날짜 지난 미완료 1,501건 중 1,225건(82%)이 메일 행이었다.
+    #    ⚠️ 프런트 `GANTT_OVERDUE_POLICY.skipMailRows`(js/04a)와 **같이** 켜고 꺼야 한다.
+    'skipMailRowsInLate': True,
 }
 # js/15b `_MS_CATEGORY_FIELD_MAP` 과 같은 표 — 역할 → projectMeta 칸 이름
 BRIEF_ROLE_FIELD = {
@@ -1860,6 +1864,13 @@ def _brief_scan_project(doc, project):
         if not name:
             continue
         status = str(row[c_status] or '') if (c_status is not None and c_status < len(row)) else ''
+        # 🔴 [2026-11-09] '지연' 판정에 쓸 꼬리표 — 메일에서 들어온 행인가.
+        #    ⚠️ 표식(`_mailRaw`·`＊AI📧`)이 아니라 **칸 내용**으로 본다(표식은 2026-11-04 에
+        #       통째로 날아간 적이 있고, 그때도 칸 내용만 살아남았다).
+        #       프런트 `_ganttRowIsMail`(js/04a)의 **사본**이다.
+        c_content = col('content')
+        _ctext = str(row[c_content] or '') if (c_content is not None and c_content < len(row)) else ''
+        is_mail = ('[출처]' in _ctext) or ('[핵심내용]' in _ctext)
         who = set()
         disc = str(obj.get('_담당구분') or '').strip()
         for part in disc.split(','):
@@ -1870,7 +1881,8 @@ def _brief_scan_project(doc, project):
             for nm in _brief_split_names(_brief_role_assignee(role, meta, m3)):
                 who.add(nm.lower())
         items.append({'name': name[:DAILY_BRIEF['maxNameChars']], 'project': project,
-                      'start': s, 'end': e, 'status': status.strip(), 'who': who})
+                      'start': s, 'end': e, 'status': status.strip(), 'who': who,
+                      'mail': is_mail})
     return items
 
 
@@ -1915,7 +1927,15 @@ def _brief_text_for(member, items, today, errors, yesterday_written):
             names.add(n)
     mine = [it for it in items if it['who'] & names]
     week_end = today + timedelta(days=DAILY_BRIEF['weekAhead'])
-    late = [it for it in mine if it['end'] and it['end'] < today and it['status'] != '완료']
+    # 🔴 메일에서 들어온 행은 **지연으로 세지 않는다** — 사건이지 업무가 아니다.
+    #    실측(2026-11-09): 날짜 지난 미완료 1,501건 중 **1,225건(82%)이 메일 행**이었다.
+    #    ⚠️ "오늘 마감·오늘 시작·이번 주" 에서는 빼지 않는다 — 사건은 늦을 수 없어도
+    #       "오늘 들어온 것" 일 수는 있다. 빼는 건 '지연' 하나다.
+    #    ⚠️ 프런트 `GANTT_OVERDUE_POLICY`(js/04a)의 **사본**이다 — 한쪽만 고치면 화면과
+    #       텔레그램이 갈린다(`BRIEF_ROLE_FIELD` 와 같은 처지).
+    late = [it for it in mine
+            if it['end'] and it['end'] < today and it['status'] != '완료'
+            and not (DAILY_BRIEF.get('skipMailRowsInLate', True) and it.get('mail'))]
     due_today = [it for it in mine if it['end'] == today and it['status'] != '완료']
     start_today = [it for it in mine if it['start'] == today]
     week = [it for it in mine if it['end'] and today < it['end'] <= week_end and it['status'] != '완료']
@@ -3878,11 +3898,129 @@ def sap_download_documents_batch():
     doc_type = (request.args.get('type') or 'P01').strip()
     if not materials_str:
         return jsonify({'ok': False, 'error': '자재번호 목록(materials 파라미터, 쉼표구분)이 필요합니다. 예: /sap-download-documents-batch?materials=133012,133010&type=P01'}), 400
-    materials = [m.strip() for m in materials_str.split(',') if m.strip()]
-    # 자재 수에 비례해 타임아웃을 넉넉히 둔다(팝업 입력+스크롤+다운로드까지 포함).
-    timeout = min(300, 40 + 8 * len(materials))
-    data, status = _run_sap_bridge(['download_documents_batch', doc_type, ','.join(materials)], timeout, 'SAP 문서 일괄 다운로드')
+    materials = [m.strip() for m in re.split(r'[,\s]+', materials_str) if m.strip()]
+    data, status = _sap_doc_batch_download(materials, doc_type)
     return jsonify(data), status
+
+
+# -- 📥 ZDMSR004 문서 일괄 다운로드 — 건수에 맞춘 예산 + 중간 보고 (2026-11-09) --
+# ⚠️ [실사용 제보] 자재 약 200개를 넣고 "P01 문서 다운로드 해줘" 를 했더니
+#    `SAP 문서 일괄 다운로드 시간 초과` 로 **중간에 멈췄고**, 받아진 것들은 루트에 쌓이고
+#    어디까지 받았는지도 알 수 없었다. 원인은 **고정 타임아웃**(min(300, 40+8*n) — 200건이면
+#    늘 300초에서 잘린다) + 한 방 호출.
+# → ① 백엔드가 청크로 쪼개 돌리고(ZDMSR004 "복수 선택" 팝업의 실사용 검증 한계와 같은 크기)
+#    ② 전체 예산을 **건수에 비례**해 잡고 ③ 못 끝내면 `partial` 로 **어디까지 받았는지 공개**
+#    (검색도움말 `partial` 선례) ④ 진행 상황을 `/sap-doc-batch-progress` 로 노출한다
+#    ("멈춘 것처럼 보인다" 가 반복된 불만이었다).
+# 숫자는 전부 데이터 — 코드에 흩어 박지 않는다.
+SAP_DOC_BATCH_LIMITS = {
+    'chunkSize':    7,      # ZDMSR004 팝업 한 화면 입력 행 수(8개 이상 스크롤은 미검증)
+    'perChunkBase': 30, 'perChunkEach': 9,        # 청크 1회 타임아웃 = base + each*건수
+    'totalBase':   120, 'totalEach':   25,        # 전체 예산 = base + each*건수
+    'totalCap':   3600,                           # 전체 예산 상한(초)
+}
+
+_SAP_DOC_PROGRESS_LOCK = threading.Lock()
+_SAP_DOC_PROGRESS = {'running': False}
+
+
+def _sap_doc_progress_set(**kw):
+    with _SAP_DOC_PROGRESS_LOCK:
+        _SAP_DOC_PROGRESS.update(kw)
+        _SAP_DOC_PROGRESS['at'] = time.time()
+
+
+def sap_doc_batch_budget(count):
+    """전체 예산(초) — 건수에 비례, 상한은 데이터."""
+    lim = SAP_DOC_BATCH_LIMITS
+    return min(lim['totalCap'], lim['totalBase'] + lim['totalEach'] * max(0, int(count)))
+
+
+def _sap_doc_batch_download(materials, doc_type, dest_dir=None, extra=None):
+    """자재 목록을 청크로 나눠 ZDMSR004 다운로드를 돌린다. (data, status) 를 돌려준다.
+    예산을 넘거나 한 청크가 실패하면 **거기서 멈추고** 어디까지 받았는지 그대로 담는다."""
+    lim = SAP_DOC_BATCH_LIMITS
+    seen, uniq = set(), []
+    for m in materials or []:
+        m = str(m).strip()
+        if m and m not in seen:
+            seen.add(m)
+            uniq.append(m)
+    if not uniq:
+        return {'ok': False, 'error': '다운로드할 자재번호가 없습니다.'}, 400
+    doc_type = (doc_type or 'P01').strip().upper()
+    dest = dest_dir or sap_doc_dir(doc_type)
+    size = max(1, int(lim['chunkSize']))
+    chunks = [uniq[i:i + size] for i in range(0, len(uniq), size)]
+    budget = sap_doc_batch_budget(len(uniq))
+    deadline = time.time() + budget
+
+    done, renamed, matnr_by_doknr, placed, place_errors = [], {}, {}, [], []
+    stop_reason, stop_error, last_status = None, None, 200
+    _sap_doc_progress_set(running=True, docType=doc_type, folder=dest, total=len(uniq), done=0,
+                          chunkTotal=len(chunks), chunkDone=0, budgetSec=budget,
+                          startedAt=time.time(), partial=False, error=None, stopReason=None)
+    for ci, part in enumerate(chunks):
+        left = deadline - time.time()
+        if left <= 5:
+            stop_reason = 'budget'
+            break
+        timeout = int(min(lim['perChunkBase'] + lim['perChunkEach'] * len(part), max(30, left)))
+        data, last_status = _run_sap_bridge(
+            ['download_documents_batch', doc_type, ','.join(part), dest], timeout,
+            'SAP 문서 일괄 다운로드')
+        if not data.get('ok'):
+            stop_reason = 'cancelled' if data.get('cancelled') else 'error'
+            stop_error = data.get('error')
+            break
+        done.extend(part)
+        renamed.update(data.get('renamedFolders') or {})
+        matnr_by_doknr.update(data.get('matnrByDoknr') or {})
+        placed.extend(data.get('placed') or [])
+        place_errors.extend(data.get('placeErrors') or [])
+        _sap_doc_progress_set(done=len(done), chunkDone=ci + 1)
+
+    pending = [m for m in uniq if m not in set(done)]
+    partial = bool(pending)
+    _sap_doc_progress_set(running=False, done=len(done), partial=partial,
+                          error=stop_error, stopReason=stop_reason)
+
+    if not done:
+        # 한 건도 못 받았다 — 예전처럼 실패로 돌려준다(부분 성공이 없으니 숨길 것도 없다).
+        return {'ok': False, 'partial': False, 'docType': doc_type, 'savedFolder': dest,
+                'materials': uniq, 'done': [], 'pending': pending, 'stopReason': stop_reason,
+                'error': stop_error or ('%d초 예산 안에 한 건도 끝내지 못했습니다.' % budget)}, last_status
+
+    with_doc = len(set(matnr_by_doknr.values()))
+    msg = ('자재 %d/%d건의 "%s" 문서를 %s 폴더로 받았습니다 (문서가 있는 자재 %d건 · 폴더 %d개).'
+           % (len(done), len(uniq), doc_type, dest, with_doc, len(placed)))
+    if partial:
+        why = {'budget': '제한시간(%d초)을 넘겨' % budget, 'error': '중간에 오류가 나서',
+               'cancelled': '사용자 요청으로'}.get(stop_reason, '')
+        msg += (' ⚠️ %s **%d건은 아직 못 받았습니다** — 남은 자재: %s%s'
+                % (why, len(pending), ', '.join(pending[:20]), ' …' if len(pending) > 20 else ''))
+        if stop_error:
+            msg += ' / 멈춘 이유: ' + str(stop_error)
+        msg += ' 남은 자재만 다시 말씀하시면 이어서 받습니다.'
+    if place_errors:
+        msg += ' ⚠️ 파일 정리 오류 %d건: %s' % (len(place_errors), '; '.join(place_errors[:3]))
+
+    out = {'ok': True, 'partial': partial, 'docType': doc_type, 'savedFolder': dest,
+           'materials': uniq, 'done': done, 'pending': pending,
+           'chunks': len(chunks), 'budgetSec': budget, 'stopReason': stop_reason,
+           'stopError': stop_error, 'renamedFolders': renamed, 'matnrByDoknr': matnr_by_doknr,
+           'placed': placed, 'placeErrors': place_errors, 'message': msg}
+    if extra:
+        out.update(extra)
+    return out, 200
+
+
+@app.route('/sap-doc-batch-progress', methods=['GET'])
+def sap_doc_batch_progress():
+    # 📊 [2026-11-09] "멈춘 것처럼 보인다" — 프런트가 이걸 2초마다 읽어 진행 상황을 보여준다.
+    with _SAP_DOC_PROGRESS_LOCK:
+        snap = dict(_SAP_DOC_PROGRESS)
+    return jsonify({'ok': True, 'progress': snap})
 
 
 @app.route('/sap-dms-lookup', methods=['GET'])
@@ -4075,9 +4213,31 @@ def sap_download_documents_by_pattern():
     doc_type = (request.args.get('type') or 'P01').strip()
     if not pattern:
         return jsonify({'ok': False, 'error': '검색 패턴(pattern 파라미터)이 필요합니다. 예: /sap-download-documents-by-pattern?pattern=*01+01*500*&type=P01'}), 400
-    # 검색(자재 수 미상, 최대 200건 안전장치) + 다운로드(7개씩 청크)까지 다 포함되므로
-    # 넉넉하게 잡는다 — 실사용에서 매치 건수가 아주 많으면 이 값도 같이 늘려야 할 수 있음.
-    data, status = _run_sap_bridge(['download_documents_by_pattern', pattern, doc_type], 240, 'SAP 패턴 검색 + 문서 일괄 다운로드')
+    # ⚠️ [2026-11-09] 예전엔 "조회+다운로드"를 브릿지 한 방 호출(고정 240초)로 돌려서, 매치가
+    #    많으면 **중간에 죽고 아무것도 못 돌려줬다**. 이제 ① 조회만 먼저 하고(건수를 알아야
+    #    예산을 잡을 수 있다) ② 다운로드는 위 청크 루프에 넘긴다 — 그래야 못 끝냈을 때
+    #    "몇 건까지 받았는지" 를 말할 수 있다.
+    rdata, rstatus = _run_sap_bridge(['resolve_desc_pattern', pattern], 120,
+                                     'SAP 자재내역 패턴 조회')
+    if not rdata.get('ok'):
+        return jsonify(rdata), rstatus
+    mats = rdata.get('materials') or []
+    if not mats:
+        return jsonify({'ok': True, 'pattern': pattern, 'materials': [], 'docType': doc_type,
+                        'message': '패턴 "%s"에 매치되는 자재가 없습니다.' % pattern}), 200
+    desc_by = {d.get('matnr'): d.get('desc', '') for d in (rdata.get('matchDetails') or [])}
+    data, status = _sap_doc_batch_download(
+        mats, doc_type, extra={'pattern': pattern, 'matchDetails': rdata.get('matchDetails'),
+                               'patternDiag': rdata.get('diag')})
+    if data.get('ok'):
+        lines = []
+        for m in (data.get('done') or []):
+            folders = sorted({os.path.basename(e.get('folder') or '')
+                              for e in (data.get('placed') or []) if e.get('matnr') == m})
+            lines.append('%s(%s) → %s' % (m, desc_by.get(m, ''),
+                                          ', '.join(f for f in folders if f) or '(문서 없음)'))
+        if lines:
+            data['message'] = data['message'] + chr(10) + '자재별 매칭:' + chr(10) + chr(10).join(lines)
     return jsonify(data), status
 
 
@@ -4169,18 +4329,57 @@ _SAP_EXPORT_OUT_DIR = os.path.join('C:\\SAP_DMS', 'SAP조회')
 
 # ── SAP 저장 경로 레지스트리 (2026-09-30 신규) ──────────────────────────────
 # 모든 SAP 기능의 저장 위치를 한 곳에서 관리 — 새 기능 추가 시 여기에도 등록.
+# 🗂 [2026-11-09] `path` 를 날것으로 적지 않고 **루트 + 폴더 이름**으로 조립한다 — 폴더
+#    이름이 문자열로 흩어져 있으면 한 곳만 고쳐도 다른 곳이 조용히 어긋난다(2026-11-09
+#    "승자 규칙이 두 벌" 사고와 같은 모양). 이 리스트가 SAP 저장 폴더의 **단일 원본**이고,
+#    sap_bridge_32.py 는 폴더 이름을 모르고 **인자로 받아서** 쓴다.
+SAP_DMS_ROOT = r'C:\SAP_DMS'
 SAP_FOLDER_REGISTRY = [
-    {'key': 'doc',      'path': r'C:\SAP_DMS',              'label': '문서/BOM 다운로드 (ZDMSR004)',  'kw': ['문서', 'bom', '자재문서', '다운로드', '첨부']},
-    {'key': 'approval', 'path': r'C:\SAP_DMS\승인원표지',    'label': '승인원 표지',                   'kw': ['승인원']},
-    {'key': 'po',       'path': r'C:\SAP_DMS\구매오더',      'label': '발주서 / 구매오더',             'kw': ['발주서', '구매오더', 'po', '발주']},
-    {'key': 'export',   'path': r'C:\SAP_DMS\SAP조회',       'label': 'SAP 조회 엑셀 내보내기',        'kw': ['엑셀', '조회', 'sap조회', '내보내기']},
-    {'key': 'issue',    'path': r'C:\SAP_DMS\이슈리포트',     'label': '이슈 리포트',                   'kw': ['이슈', '버그', '오류리포트', '학습리포트']},
-    {'key': 'dump',     'path': r'C:\SAP_DMS\SAP_화면덤프',  'label': 'SAP 화면 덤프',                 'kw': ['덤프', '화면덤프', '트리덤프']},
+    {'key': 'root',     'path': SAP_DMS_ROOT,                               'label': 'SAP 저장 루트',                 'kw': ['sap_dms', '저장 루트', 'sap 폴더']},
+    # 📥 [2026-11-09 실사용 제보] ZDMSR004 문서 다운로드가 **루트에 흩뿌려져** 다른 용도
+    #    폴더(승인원표지·구매오더·SAP조회…)와 섞였다 — 이제 제 폴더로 들어간다(없으면 만든다).
+    {'key': 'docs',     'path': os.path.join(SAP_DMS_ROOT, '자재문서'),     'label': '자재 문서 다운로드 (ZDMSR004)', 'kw': ['자재문서', '문서 다운로드', '첨부']},
+    {'key': 'docs_P01', 'path': os.path.join(SAP_DMS_ROOT, '원자재승인원'), 'label': '원자재 승인원(P01) 문서',       'kw': ['승인원 문서', '원자재 승인원', '승인원 다운로드']},
+    # 하위호환: 예전 'doc' 키(문서/BOM 다운로드)를 쓰는 호출부가 있다 — 새 문서 폴더로 보낸다.
+    {'key': 'doc',      'path': os.path.join(SAP_DMS_ROOT, '자재문서'),     'label': '문서/BOM 다운로드 (ZDMSR004)',  'kw': ['문서', 'bom', '다운로드']},
+    {'key': 'approval', 'path': os.path.join(SAP_DMS_ROOT, '승인원표지'),    'label': '승인원 표지',                   'kw': ['승인원 표지', '표지']},
+    {'key': 'po',       'path': os.path.join(SAP_DMS_ROOT, '구매오더'),      'label': '발주서 / 구매오더',             'kw': ['발주서', '구매오더', 'po', '발주']},
+    {'key': 'export',   'path': os.path.join(SAP_DMS_ROOT, 'SAP조회'),       'label': 'SAP 조회 엑셀 내보내기',        'kw': ['엑셀', '조회', 'sap조회', '내보내기']},
+    {'key': 'issue',    'path': os.path.join(SAP_DMS_ROOT, '이슈리포트'),     'label': '이슈 리포트',                   'kw': ['이슈', '버그', '오류리포트', '학습리포트']},
+    {'key': 'dump',     'path': os.path.join(SAP_DMS_ROOT, 'SAP_화면덤프'),  'label': 'SAP 화면 덤프',                 'kw': ['덤프', '화면덤프', '트리덤프']},
     # 🆕 [2026-10-29 버그 수정, 사용자 제보 "SAP DMS 폴더가 뒤죽박죽"] _RSV_PDF_OUT_DIR
     # (sap_bridge_32.py, MB21 예약 청구서 PDF)이 실제로 쓰는 폴더인데 여기 레지스트리엔
     # 빠져 있었다 — "저장경로 열어줘" 같은 AI 문답 요청이 이 폴더만 찾지 못했다.
-    {'key': 'reserve',  'path': r'C:\SAP_DMS\계정대체청구서', 'label': '자재 예약 청구서 (MB21/ZMM019)', 'kw': ['계정대체청구서', '예약', '청구서', 'mb21', 'zmm019']},
+    {'key': 'reserve',  'path': os.path.join(SAP_DMS_ROOT, '계정대체청구서'), 'label': '자재 예약 청구서 (MB21/ZMM019)', 'kw': ['계정대체청구서', '예약', '청구서', 'mb21', 'zmm019']},
 ]
+
+# 📋 [2026-11-09] 문서 타입 → 저장 폴더 키(데이터). 사람이 따로 부르는 이름이 있는 타입만
+#    적고 나머지는 `docs`(자재문서) 로 모인다 — 폴더를 20개 만들 이유가 없다.
+#    문서 타입↔이름 대응 자체는 프런트 `SAP_DOC_TYPES`/`SAP_DOC_ALIASES`(js/32) 가 원본이다.
+SAP_DOC_TYPE_FOLDER_KEYS = {'P01': 'docs_P01'}
+SAP_DOC_FOLDER_DEFAULT_KEY = 'docs'
+
+
+def sap_folder_path(key, create=False):
+    """카탈로그 키 → 실제 경로. 모르는 키면 None."""
+    for e in SAP_FOLDER_REGISTRY:
+        if e['key'] == key:
+            if create:
+                try:
+                    os.makedirs(e['path'], exist_ok=True)
+                except Exception:
+                    pass
+            return e['path']
+    return None
+
+
+def sap_doc_dir(doc_type, create=True):
+    """ZDMSR004 문서 다운로드 목적 폴더 — 폴더 이름은 카탈로그에만 있다."""
+    key = SAP_DOC_TYPE_FOLDER_KEYS.get((doc_type or '').strip().upper(),
+                                       SAP_DOC_FOLDER_DEFAULT_KEY)
+    return (sap_folder_path(key, create=create)
+            or sap_folder_path(SAP_DOC_FOLDER_DEFAULT_KEY, create=create)
+            or SAP_DMS_ROOT)
 
 
 @app.route('/open-sap-folder', methods=['POST'])

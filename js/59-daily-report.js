@@ -588,7 +588,10 @@
                 todo: oneLine(p.todo, 120),
                 issue: p.issue ? oneLine(p.issue, 120) : '',
                 isMail: p.isMail,
-                late: !!(e && e < day && String((ci.status !== -1 && row[ci.status]) || '') !== '완료')
+                // 🔴 '지연' 판정은 `_ganttIsOverdue`(js/04a) 한 곳에서 — 메일 행은 안 센다.
+                late: (typeof window._ganttIsOverdue === 'function')
+                    ? window._ganttIsOverdue(row, ci, day)
+                    : !!(e && e < day && String((ci.status !== -1 && row[ci.status]) || '') !== '완료')
             };
             (isMine(row, ctx) ? out.mine : out.others).push(item);
         }

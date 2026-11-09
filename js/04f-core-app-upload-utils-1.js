@@ -946,8 +946,12 @@
             //    같은 글자수 한도로 원문 메일(_mailRaw) 발췌를 같이 담아도 프롬프트가 과도하게 커지지 않는다.
             //    (AI 문답처럼 300건 전체를 훑는 목록이 아니라서, 여기서는 [원문有] 표시 대신 발췌를 바로 포함.)
             const mailExcerpt = row._mailRaw ? String((row._mailRaw.body2000 || '')).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
+            // 🔴 '지연' 판정은 `_ganttIsOverdue`(js/04a) 한 곳에서 — 메일에서 들어온 행은 안 센다
+            //    (실측: 날짜 지난 미완료 1,501건 중 1,225건이 메일 행이었다).
+            var _ovr = (typeof window._ganttIsOverdue === 'function')
+                ? window._ganttIsOverdue(row, colIdx) : (diffDays < 0);
             if (diffDays < 0) {
-                if (-diffDays <= rangeDays) delayed.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
+                if (_ovr && -diffDays <= rangeDays) delayed.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
             } else if (diffDays <= rangeDays) {
                 dueSoon.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, dDay: diffDays, urgent: diffDays <= urgentDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
             }
