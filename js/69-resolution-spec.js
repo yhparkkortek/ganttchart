@@ -200,6 +200,9 @@
     //      끌기는 공용 `_makeDraggable` 하나를 쓴다(js/19).
     var _filter = '';
     var _onDone = null;
+    // ✅ 고른 것만 보기 (접기) — Customer SPEC·M.C Table 의 `🔽 펼치기` 와 **같은 뜻**이다.
+    //   ⚠️ 117줄을 다 펼쳐 두면 "내가 뭘 골랐는지" 가 안 보인다(사용자 요청 2026-11-09).
+    var _onlyChecked = false;
 
     window.resOpenPicker = function (opts) {
         opts = opts || {};
@@ -239,6 +242,9 @@
         ov.style.display = 'flex';
         if (window.bringModalToFront) { try { window.bringModalToFront('respick-box'); } catch (e) { /* 〃 */ } }
         _filter = '';
+        // 고른 게 있으면 **접힌 채로** 연다 — 그게 지금 이 프로젝트의 답이다(Customer SPEC 과 같은 규칙).
+        // 아무것도 안 골랐으면 접어 봐야 빈 화면이라 펼쳐서 연다.
+        _onlyChecked = Object.keys(_store()).length > 0;
         _render();
     };
 
@@ -286,10 +292,27 @@
 
     var _visibleRows = function () {
         var f = _filter.toUpperCase().replace(/\s+/g, '');
-        if (!f) return window.resAllRows();
+        var st = _store();
         return window.resAllRows().filter(function (r) {
+            if (_onlyChecked && !st[r.key]) return false;
+            if (!f) return true;
             return (r.label + ' ' + r.g).toUpperCase().replace(/\s+/g, '').indexOf(f) >= 0;
         });
+    };
+
+    /** 접기(고른 것만) ↔ 펼치기(전체) */
+    window.resToggleOnlyChecked = function () {
+        _onlyChecked = !_onlyChecked;
+        _paintRows(); _paintToggleBtn();
+    };
+
+    var _paintToggleBtn = function () {
+        var b = document.getElementById('respick-only');
+        if (!b) return;
+        // 앱의 다른 표와 같은 말: 접혀 있으면 [🔽 전체 보기], 펼쳐져 있으면 [🔼 고른 것만]
+        b.textContent = _onlyChecked ? '🔽 ' + _t('전체 보기', 'Show all') : '🔼 ' + _t('고른 것만', 'Picked only');
+        b.style.background = _onlyChecked ? '#00707d' : '#e0f5f7';
+        b.style.color = _onlyChecked ? '#fff' : '#00707d';
     };
 
     var _render = function () {
@@ -302,7 +325,12 @@
         document.getElementById('respick-bar').innerHTML =
             '<input id="respick-q" type="text" oninput="window.resFilter(this.value)" placeholder="'
             + _esc(_t('해상도 검색 (예: 1920, @60, VESA)', 'search')) + '"'
-            + ' style="flex:1; min-width:180px; padding:4px 8px; border:1px solid #cfe3e5; border-radius:5px; font-size:12px;">'
+            + ' style="flex:1; min-width:160px; padding:4px 8px; border:1px solid #cfe3e5; border-radius:5px; font-size:12px;">'
+            // ✅ 고른 것만 보기 — Customer SPEC 의 `🔽 펼치기` 버튼과 같은 모양·같은 뜻
+            + '<button id="respick-only" onclick="window.resToggleOnlyChecked()" title="'
+            + _esc(_t('체크한 해상도만 보이게 접습니다', 'Show only checked rows')) + '"'
+            + ' style="padding:4px 10px; border:1px solid #a3d9e0; border-radius:5px; font-size:11.5px;'
+            + ' font-weight:bold; cursor:pointer; white-space:nowrap;"></button>'
             + '<span style="color:#868e96;">' + _esc(_t('보이는 줄 전체:', 'All visible:')) + '</span>'
             + ports.map(function (p) {
                 return '<span style="white-space:nowrap;"><b>' + _esc(p.label) + '</b> '
@@ -327,7 +355,7 @@
             + ' border:none; background:#00707d; color:#fff; border-radius:5px; font-weight:bold;">'
             + _esc(_t('닫기', 'Close')) + '</button>';
 
-        _paintRows(); _paintFoot();
+        _paintRows(); _paintFoot(); _paintToggleBtn();
     };
 
     var _paintRows = function () {
@@ -345,8 +373,11 @@
               }).join('')
               + '</tr></thead><tbody>';
         if (!rows.length) {
+            // 왜 비었는지 갈라서 말한다 — 접혀 있어 빈 것과 정말 없는 것은 다른 사실이다.
             h += '<tr><td colspan="' + (2 + ports.length) + '" style="padding:18px; text-align:center; color:#868e96;">'
-               + _esc(_t('찾는 해상도가 없습니다 — 아래 칸에 적어 넣을 수 있습니다.', 'No match.')) + '</td></tr>';
+               + _esc(_onlyChecked
+                      ? _t('아직 고른 해상도가 없습니다 — 위 [🔽 전체 보기] 를 눌러 고르세요.', 'Nothing picked yet.')
+                      : _t('찾는 해상도가 없습니다 — 아래 칸에 적어 넣을 수 있습니다.', 'No match.')) + '</td></tr>';
         }
         var prevG = null, n = 0;
         rows.forEach(function (r) {

@@ -86,21 +86,44 @@
             var box = document.getElementById('respick-box');
             ok(!!box, '팝업이 안 열린다');
             var cbs = box.querySelectorAll('input[data-res]');
+            var nRows = function () { return box.querySelectorAll('input[data-res]').length / pkeys.length; };
+            var btn = document.getElementById('respick-only');
+            ok(!!btn, '접기/펼치기 버튼이 없다');
+            // ✅ 고른 게 있으면 **접힌 채로** 열린다 (Customer SPEC 의 `🔽 펼치기` 와 같은 규칙)
+            //    ⚠️ 117줄을 다 펼쳐 두면 "내가 뭘 골랐는지" 가 안 보인다(사용자 요청 2026-11-09).
+            var picked = window.resSelectedRows().length;
+            ok(picked > 0, '이 시점엔 고른 줄이 있어야 한다 (' + picked + ')');
+            ok(nRows() === picked, '고른 게 있는데 접힌 채로 안 열린다 (' + nRows() + '줄)');
+            ok(/전체 보기|Show all/.test(btn.textContent), '접힌 상태인데 버튼 글자가 다르다: ' + btn.textContent);
+
+            // 펼치면 전체가 나온다
+            btn.click();
+            ok(nRows() === rows.length, '펼쳐도 전체가 안 나온다 (' + nRows() + ')');
+            ok(/고른 것만|Picked only/.test(btn.textContent), '펼친 뒤 버튼 글자가 안 바뀐다: ' + btn.textContent);
+            cbs = box.querySelectorAll('input[data-res]');
             ok(cbs.length === rows.length * pkeys.length,
                '칸 수가 안 맞는다: ' + cbs.length + ' ≠ ' + (rows.length * pkeys.length));
-            // 이미 고른 것이 체크되어 보여야 한다
+            // 이미 고른 것이 체크되어 보여야 한다 (1920×1080@60 의 HDMI·DP)
             var checked = box.querySelectorAll('input[data-res]:checked');
             ok(checked.length === 2, '고른 칸이 팝업에 안 비친다 (' + checked.length + ')');
             // 칸을 **실제로 눌러** 저장까지 가는가 (위임 핸들러를 지난다)
             var one = box.querySelector('input[data-res$="|RGB"]');
             one.checked = true;
             one.dispatchEvent(new Event('change', { bubbles: true }));
-            ok(window.resSelectedRows().length === 2, '팝업에서 켠 칸이 저장에 안 들어간다');
+            ok(window.resSelectedRows().length === picked + 1, '팝업에서 켠 칸이 저장에 안 들어간다');
             // 검색 — 보이는 줄만 줄어든다
             window.resFilter('2560');
-            var vis = box.querySelectorAll('input[data-res]').length / pkeys.length;
-            ok(vis > 0 && vis < rows.length, '검색이 안 걸린다 (' + vis + '줄)');
+            ok(nRows() > 0 && nRows() < rows.length, '검색이 안 걸린다 (' + nRows() + '줄)');
             window.resFilter('');
+
+            // 접으면 고른 줄만 — 지금은 2줄(원래 1 + 방금 켠 1)
+            btn.click();
+            ok(nRows() === picked + 1, '접었는데 고른 줄만 안 남는다: ' + nRows());
+            // 접은 채로 검색하면 **둘 다** 걸린다(고른 줄 ∩ 검색어)
+            window.resFilter('9999999');
+            ok(nRows() === 0, '접은 채 검색이 안 걸린다');
+            window.resFilter('');
+
             window.resClearAll();
             ok(window.resSelectedRows().length === 0, '전부 해제가 안 된다');
             window.resClosePicker();
