@@ -7985,6 +7985,76 @@ def _docstore_existing_dir(folder, cfg):
     return path, None
 
 
+@app.route('/doc/docx', methods=['POST'])
+def doc_docx():
+    """💾 문서를 **원본 문서 모양(.docx)** 으로 만들어 돌려준다 (2026-11-09 요청 "원본저장").
+
+    받는 것: `{ name, rows: [[칸…], …] }` — 프런트가 이미 갖고 있는 `_docToAoa` 그대로다.
+    ⚠️⚠️ 목록을 **두 벌로 만들지 않는다** — 화면·엑셀·워드가 같은 `_docToAoa` 한 고지에서 온다.
+       그래야 구역을 하나 늘려도 세 쪽이 같이 따라온다.
+    모양 규칙: 칸이 **하나뿐인 줄 = 제목**, 여러 칸이 연속된 덩어리 = **표** (원본과 같은 표 구성).
+    ⚠️ 읽기 전용이다 — NAS 에 쓰지 않는다(올리기는 프런트가 `/doc/put` 으로 따로 한다).
+    """
+    try:
+        from docx import Document
+        from docx.shared import Pt
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'python-docx 가 없습니다: %s' % e}), 500
+    req = request.get_json(silent=True) or {}
+    rows = req.get('rows') or []
+    if not isinstance(rows, list) or not rows:
+        return jsonify({'ok': False, 'error': '내용이 비어 있습니다.'}), 400
+
+    def cell_text(v):
+        return '' if v is None else str(v)
+
+    doc = Document()
+    st = doc.styles['Normal']
+    st.font.size = Pt(9)
+    buf_rows = []
+
+    def flush():
+        """모아 둔 여러-칸 줄들을 표 하나로 내려놓는다."""
+        if not buf_rows:
+            return
+        ncol = max(len(r) for r in buf_rows)
+        t = doc.add_table(rows=len(buf_rows), cols=ncol)
+        t.style = 'Table Grid'
+        for i, r in enumerate(buf_rows):
+            for j in range(ncol):
+                t.cell(i, j).text = cell_text(r[j]) if j < len(r) else ''
+        doc.add_paragraph('')
+        del buf_rows[:]
+
+    first = True
+    for r in rows:
+        if not isinstance(r, list):
+            continue
+        vals = [cell_text(x) for x in r]
+        if not any(v.strip() for v in vals):      # 빈 줄 = 구역 끝
+            flush()
+            continue
+        if len([v for v in vals if v.strip()]) == 1 and vals[0].strip():
+            flush()
+            if first:
+                doc.add_heading(vals[0].strip(), level=0)
+                first = False
+            else:
+                doc.add_heading(vals[0].strip(), level=2)
+            continue
+        buf_rows.append(vals)
+    flush()
+
+    bio = io.BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+    name = _docstore_safe_name(req.get('name') or 'document') or 'document'
+    if not name.lower().endswith('.docx'):
+        name += '.docx'
+    return send_file(bio, as_attachment=True, download_name=name,
+                     mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+
 @app.route('/doc/export-zip', methods=['POST'])
 def doc_export_zip():
     """프로젝트 자료 한꺼번에 내려받기 — 프런트가 이미 프로젝트/모델별로 조립해 보낸 폴더

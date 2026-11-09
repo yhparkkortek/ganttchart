@@ -826,8 +826,9 @@
             //    장치인 `.btn-group`(styles.css 에서 `margin-left:auto`)을 그대로 쓴다.
             //    ⚠️ 직접 `margin-left:auto` 를 쓰지 않는다 — 한 곳에서 정하게 둔다.
             + '<span class="btn-group">'
-            // 🖨 문서 형식이 **기본** 출력이다 — 보이는 그대로 인쇄/PDF
-            + '<button onclick="window._docPrint()" style="' + PRIM + '">🖨 ' + _esc(_t('문서 출력', 'Print')) + '</button>'
+            // 💾 [2026-11-09 요청] 인쇄 버튼은 **없앴다** — 브라우저 인쇄(Ctrl+P)로 대체.
+            //    대신 **원본 문서 모양(.docx)** 으로 저장한다(실측 원본과 같은 Word 파일).
+            + '<button onclick="window._docSaveDocx()" style="' + PRIM + '">💾 ' + _esc(_t('원본저장', 'Save as Word')) + '</button>'
             + '<button onclick="window._docExport(\'xlsx\')" style="' + OPT + '">📊 ' + _esc(_t('엑셀 저장', 'Excel')) + '</button>';
         if (form && form.builder) {
             th += '<button onclick="window._docExport(\'pptx\')" style="' + OPT + '">📑 ' + _esc(_t('PPT 저장', 'PPT')) + '</button>';
@@ -1646,12 +1647,50 @@
         _toast('📂 ' + _t(n + '칸을 채웠습니다.', 'Filled ' + n + ' field(s).'), 'success');
     };
 
-    // ── 🖨 문서 출력 (기본) ─────────────────────────────────────────────
-    //  보이는 그대로 인쇄한다 — 준비(`beforeprint`)는 기존 경로를 그대로 탄다.
-    window._docPrint = function () {
+    // ── 💾 원본저장 (.docx) ─────────────────────────────────────────────
+    //  [2026-11-09 사용자 요청] "문서 출력 버튼은 브라우저 인쇄로 대체할 거니까 삭제하고,
+    //   원본저장 버튼을 만들어서 첨부와 동일한 형태(원본문서)로 저장되게".
+    //  실측 원본(`260929_LNW_S32_…_Proto B_Sample Report_V00.docx`)은 표 19개짜리 Word 문서다.
+    //
+    //  ⚠️⚠️ 내용은 **`_docToAoa` 한 곳**에서 온다 — 화면·엑셀·워드가 같은 목록을 쓴다.
+    //     여기서 따로 조립하면 구역을 하나 늘릴 때마다 세 곳을 고쳐야 하고, 곧 갈라진다.
+    //  ⚠️ 만드는 일은 **백엔드**가 한다(python-docx). 브라우저엔 Word 를 만들 수단이 없다.
+    //  ⚠️ 백엔드 재시작 전엔 404 — 그때는 "엑셀 저장"으로 받으라고 정직하게 안내한다.
+    window._docSaveDocx = async function () {
+        var st = window._docState, form = _formById(st.formId);
+        if (!form) { _toast('⚠️ ' + _t('문서를 고르세요.', 'Pick a document.'), 'error'); return; }
         var pop = document.getElementById('doc-form-dropdown');
         if (pop) pop.style.display = 'none';
-        window.print();
+        var ctx = window._dgCollect(), opt = { stage: st.stage };
+        var name = form.nameOf(ctx, opt).replace(/\.(pptx|xlsx|docx)$/i, '') + '.docx';
+        _toast('⏳ ' + _t('원본 문서를 만드는 중…', 'Building…'), 'info');
+        var res;
+        try {
+            res = await fetch(BACKEND + '/doc/docx', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, rows: window._docToAoa(form.id) })
+            });
+        } catch (e) {
+            _toast('⚠️ ' + _t('백엔드에 닿지 못했습니다: ', 'Backend unreachable: ') + (e && e.message || e), 'error');
+            return;
+        }
+        if (!res.ok) {
+            var why = '';
+            try { why = (await res.json()).error || ''; } catch (e2) { /* HTML 404 면 본문이 JSON 이 아니다 */ }
+            _toast('⚠️ ' + (why || (res.status === 404
+                    ? _t('백엔드를 재시작해야 쓸 수 있습니다(원본저장). 지금은 [📊 엑셀 저장]을 쓰세요.',
+                         'Restart the backend to use this.')
+                    : _t('만들지 못했습니다.', 'Failed.'))), 'error');
+            return;
+        }
+        var blob = await res.blob();
+        // 받기 — `<a download>` 로 **이름을 붙여** 내려받는다(blob: 주소엔 이름이 안 실린다)
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        _toast('💾 ' + name + ' (' + Math.round(blob.size / 1024) + 'KB)', 'success');
     };
 
     // ── 📗📊📁 옵션 출력 ───────────────────────────────────────────────

@@ -528,6 +528,51 @@
             ok(dateKeys.indexOf('검사일자') >= 0 && dateKeys.indexOf('접수일') >= 0,
                '날짜 칸의 저장 열쇠가 바뀌었다 (적어 둔 값이 사라진다)');
 
+            // ═══ 5-3-4. 💾 원본저장(.docx) · 🖨 인쇄 버튼 제거 ═══════════════
+            window._docPick('sample-report');
+            var toolsTxt = document.getElementById('doc-header-tools').innerText;
+            ok(!/문서 출력|🖨/.test(toolsTxt), '인쇄 버튼이 아직 있다 (브라우저 인쇄로 대체했다)');
+            ok(/원본저장|Save as Word/.test(toolsTxt), '[원본저장] 버튼이 없다');
+            ok(typeof window._docPrint === 'undefined', '쓰지 않는 _docPrint 가 남아 있다');
+
+            var realFetch3 = window.fetch, docxReq = null, dl = null;
+            window.fetch = function (u, o) {
+                if (String(u).indexOf('/doc/docx') >= 0) {
+                    docxReq = JSON.parse((o && o.body) || '{}');
+                    return Promise.resolve({ ok: true, status: 200,
+                        blob: function () { return Promise.resolve(new Blob(['PK'], { type: 'application/octet-stream' })); } });
+                }
+                return realFetch3.apply(window, arguments);
+            };
+            var realClick = HTMLAnchorElement.prototype.click;
+            HTMLAnchorElement.prototype.click = function () { if (this.download) { dl = this.download; return; } return realClick.apply(this, arguments); };
+            await window._docSaveDocx();
+            HTMLAnchorElement.prototype.click = realClick;
+            window.fetch = realFetch3;
+            ok(!!docxReq, '원본저장이 /doc/docx 로 안 간다');
+            ok(/\.docx$/.test(docxReq.name || ''), '보내는 이름이 .docx 가 아니다: ' + (docxReq && docxReq.name));
+            ok(/Sample Report/.test(docxReq.name || ''), '파일 이름이 문서 이름을 안 따른다: ' + (docxReq && docxReq.name));
+            ok(docxReq.name.indexOf(window._docState.round) >= 0, '파일 이름에 회차가 없다: ' + docxReq.name);
+            // ⚠️⚠️ 내용은 화면·엑셀과 **같은 목록**(`_docToAoa`)이어야 한다 — 두 벌이면 갈라진다
+            var aoaNow = window._docToAoa('sample-report');
+            ok(JSON.stringify(docxReq.rows) === JSON.stringify(aoaNow),
+               '원본저장이 엑셀과 다른 목록을 보낸다 (한쪽만 고쳐질 자리)');
+            ok(dl === docxReq.name, '받는 파일에 이름이 안 붙는다: ' + dl);
+
+            // 구버전 백엔드(404)면 **정직하게** 안내한다 — 조용히 아무 일도 안 하면 안 된다
+            var said = [];
+            var realToast = window.showToast;
+            window.showToast = function (m) { said.push(String(m)); };
+            window.fetch = function (u) {
+                if (String(u).indexOf('/doc/docx') >= 0) {
+                    return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.reject(new Error('html')); } });
+                }
+                return realFetch3.apply(window, arguments);
+            };
+            await window._docSaveDocx();
+            window.fetch = realFetch3; window.showToast = realToast;
+            ok(said.some(function (m) { return /재시작/.test(m); }), '404 일 때 재시작이 필요하다고 말하지 않는다: ' + said.join(' | '));
+
             // ═══ 5-4. 🗂 문서마다 제 NAS 폴더 ═════════════════════════════
             //   사용자 신고(2026-11-09): "DOCUMENT 하위 폴더가 생성되지 않음 /
             //   DOCUMENT > PROJECT 이름 폴더 > SAMPLE REPORT, DR/DVR … CUSTOMER 폴더처럼"
