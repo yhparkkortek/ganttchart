@@ -3159,3 +3159,41 @@ def insa_annual_plan_status():
         msg = '상태를 판정하지 못했습니다 — 인사관리 화면에서 직접 확인해주세요.'
     return {'ok': True, 'hasWritten': has_written, 'shouldWrite': should_write,
             'isTarget': is_target, 'hasActiveDoc': has_active_doc, 'message': msg}
+
+
+# ══ 🔗 그룹웨어 문서 열람 (2026-11-09 요청) ═══════════════════════════════
+#  "샘플/시제품 의뢰서를 열람할 수 있는 링크 적용해줘"
+#
+#  ⚠️ 사람이 로그인해 둔 곳은 **전용 크롬**(CDP 9222)이다. 앱이 보는 브라우저에서
+#     그냥 열면 로그인이 안 돼 있어 로그인 화면만 뜬다 → 전용 크롬에 새 탭으로 연다.
+#  ⚠️ 주소를 밖에서 받아 그대로 열지 않는다 — **문서 id 로 우리가 만든다**(GW_ORIGIN 고정).
+#     그래야 이 통로로 아무 주소나 열리지 않는다.
+#  ⚠️ 읽기 전용이다 — 여는 것 말고 아무 것도 하지 않는다(로그인도 시도하지 않는다).
+def open_document(doc_id=None, doc_num=None):
+    did = str(doc_id or '').strip()
+    if not did and doc_num:
+        # 문서번호만 아는 옛 줄 — 결재함에서 한 번 찾아 id 를 얻는다
+        try:
+            r = approval_doclist(box='all', limit=20, searchtype='docNum',
+                                 keyword=str(doc_num).strip(), duration='all') or {}
+            for d in (r.get('docs') or []):
+                if str(d.get('docNum') or '').strip() == str(doc_num).strip():
+                    did = str(d.get('id') or '').strip()
+                    break
+        except Exception as e:
+            return {'ok': False, 'message': '문서번호로 찾지 못했습니다: %s' % e}
+    if not did.isdigit():
+        return {'ok': False, 'message': '열 문서를 찾지 못했습니다(문서 id 없음).'}
+
+    ok, msg = launch_chrome()
+    if not ok:
+        return {'ok': False, 'message': msg}
+    url = '%s/app/approval/document/%s' % (GW_ORIGIN, did)
+    try:
+        requests.put('%s/json/new?%s' % (CDP_BASE, url), timeout=8)
+    except Exception:
+        try:
+            requests.get('%s/json/new?%s' % (CDP_BASE, url), timeout=8)
+        except Exception as e:
+            return {'ok': False, 'message': '전용 크롬에 탭을 못 열었습니다: %s' % e, 'url': url}
+    return {'ok': True, 'url': url, 'docId': did}

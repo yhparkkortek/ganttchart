@@ -515,6 +515,47 @@
         window._docRender();
         _toast('📦 ' + (window._docState.round || '') + _t(' 문서를 만들었습니다.', ' created.'), 'success');
     };
+    /**
+     * 🔗 그 줄의 샘플/시제품 의뢰서를 **그룹웨어에서 연다**.
+     *  ⚠️ 사람이 로그인해 둔 곳은 **전용 크롬**이라 앱 쪽 브라우저로 열면 로그인 화면만 뜬다
+     *     → 백엔드가 전용 크롬에 새 탭을 띄운다. 그 길이 막히면(구버전 백엔드·크롬 꺼짐)
+     *     주소를 알고 있을 때만 이 브라우저에서 열어 본다(막다른 길을 만들지 않는다).
+     */
+    window._docOpenReq = async function (i) {
+        var list = _hist();
+        var r = list[i];
+        if (!r) return;
+        var num = String(r.doc || '').trim();
+        if (!num && !r.docId) {
+            _toast('⚠️ ' + _t('먼저 [🔎 그룹웨어에서 찾기]로 의뢰서를 고르세요.', 'Pick a document first.'), 'error');
+            return;
+        }
+        _toast('🔗 ' + _t('그룹웨어에서 여는 중…', 'Opening…'), 'info');
+        var res = null;
+        try {
+            var resp = await fetch(BACKEND + '/gw/open-doc', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ docId: r.docId || '', docNum: num })
+            });
+            res = await resp.json();
+        } catch (e) { res = { ok: false, message: String(e && e.message || e) }; }
+        if (res && res.ok) {
+            // 연 주소를 기억해 둔다 — 다음엔 찾는 단계를 건너뛴다
+            if (res.url && r.docUrl !== res.url) { r.docUrl = res.url; r.docId = res.docId || r.docId; _markDirty(); }
+            _toast('🔗 ' + _t('그룹웨어 창에서 열었습니다.', 'Opened in the groupware window.'), 'success');
+            return;
+        }
+        var url = r.docUrl || '';
+        if (url) {
+            var w = window.open(url, '_blank');
+            _toast(w ? '🔗 ' + _t('새 탭에서 열었습니다 — 로그인이 필요할 수 있습니다.', 'Opened in a new tab.')
+                     : '⚠️ ' + _t('팝업이 막혔습니다: ', 'Popup blocked: ') + url, w ? 'info' : 'error');
+            return;
+        }
+        _toast('⚠️ ' + ((res && res.message) || _t('그룹웨어 창을 열지 못했습니다.', 'Could not open.'))
+               + _t(' (백엔드를 재시작하면 이 기능이 켜집니다)', ''), 'error');
+    };
+
     /** 출고 이력 줄에서 그 회차의 Sample Report 로 바로 간다 */
     window._docGoRound = function (stage, formId) {
         var s = String(stage || '').trim();
@@ -830,7 +871,9 @@
                    + '<th style="width:140px;">' + _esc(_t('출고 일자', 'Shipped')) + '</th>'
                    + '<th style="width:100px;">' + _esc(_t('수량', 'Qty')) + '</th>'
                    + '<th>' + _esc(_t('샘플/시제품 의뢰서', 'Sample request')) + '</th>'
-                   + '<th class="doc-noprint" style="width:130px;">' + _esc(_t('보고서', 'Report')) + '</th>'
+                   // 🔗 [2026-11-09 요청] 여기는 원래 `보고서`(지금 보고 있는 그 리포트)라 뜻이 없었다
+                   //    — 의뢰서를 **그룹웨어에서 바로 여는 자리**로 바꿨다.
+                   + '<th class="doc-noprint" style="width:110px;">' + _esc(_t('열람', 'Open')) + '</th>'
                    + '<th class="doc-noprint" style="width:56px;"></th></tr>';
                 if (!hist.length) {
                     h += '<tr><td colspan="7" style="color:#868e96;">'
@@ -877,12 +920,12 @@
                        + (r.docTitle ? ' <span style="opacity:.8;">' + _esc(r.docTitle) + '</span>' : '')
                        + '</div></td>'
                        // 📦 이 회차의 Sample Report 로 — 회차마다 보고서가 따로 생긴다
-                       + '<td class="doc-noprint' + (ron ? ' doc-hist-now-txt' : '') + '" style="text-align:center; font-size:11px;">'
-                       + (rlab
-                          ? '<a href="#" onclick="window._docGoRound(\'' + _esc(rlab).replace(/'/g, "\\'") + '\');return false;"'
-                            + (ron ? ' class="doc-hist-now-txt"' : ' style="color:#1971c2;"') + '>📑 '
-                            + _esc(_t('Sample Report', 'Sample Report')) + (ron ? ' ●' : '') + '</a>'
-                          : '<span style="color:#868e96;">' + _esc(_t('단계 이름을 적으세요', 'name the stage')) + '</span>')
+                       // 🔗 그룹웨어에서 그 의뢰서를 연다 (전용 크롬 — 사람이 로그인해 둔 곳)
+                       + '<td class="doc-noprint" style="text-align:center; font-size:11px;">'
+                       + (String(r.doc || '').trim() || r.docId
+                          ? '<a href="#" onclick="window._docOpenReq(' + i + ');return false;" style="color:#1971c2;">🔗 '
+                            + _esc(_t('의뢰서 열기', 'Open')) + '</a>'
+                          : '<span style="color:#868e96;">' + _esc(_t('의뢰서를 고르세요', 'pick a document')) + '</span>')
                        + '</td>'
                        + '<td class="doc-noprint" style="text-align:center;">'
                        + '<a href="#" onclick="window._docHistDel(' + i + ');return false;" style="color:#b1432f; font-size:11px;">'
@@ -1268,6 +1311,10 @@
         if (p.rowIdx < 0 || p.rowIdx >= list.length) { window._docGwClose(); return; }
         list[p.rowIdx].doc = d.docNum || ('id:' + d.id);
         list[p.rowIdx].docTitle = d.title || '';
+        // 🔗 여는 데 필요한 것도 같이 적어 둔다 — 문서번호만으로는 매번 결재함을 뒤져야 한다
+        //   (채번 전 문서는 `docNum` 이 비어 있어 **id 가 유일한 손잡이**다)
+        list[p.rowIdx].docId = String(d.id || '');
+        list[p.rowIdx].docUrl = d.url || '';
         // 출고 일자가 비어 있으면 **기안일로 채워 준다**(사람이 고칠 수 있다) — 보통 그 무렵이다.
         if (!list[p.rowIdx].date && d.draftedAt) list[p.rowIdx].date = String(d.draftedAt).slice(0, 10);
         _markDirty(); window._docGwClose(); window._docRender();

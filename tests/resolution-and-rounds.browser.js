@@ -326,6 +326,37 @@
             window._docPick('proto-req');
             ok(document.querySelector('#doc-page-body [data-doc-hist$="|seq"]'), '이력 표에 회차 칸이 없다');
 
+            // 🔗 의뢰서 열람 — 백엔드 `/gw/open-doc` 로 간다(전용 크롬에서 열린다)
+            //   ⚠️ 가짜는 **fetch 하나**다. 진짜로 그룹웨어를 열지 않는다.
+            var histList = window.tabData.documents['proto-req'].history;
+            histList[0].doc = 'M3T-2605-020'; histList[0].docId = '222';
+            window._docRender();
+            var openLink = [].filter.call(document.querySelectorAll('#doc-page-body a'), function (a) {
+                return /의뢰서 열기|Open/.test(a.textContent);
+            })[0];
+            ok(!!openLink, '의뢰서 열람 링크가 없다');
+            ok(!/📑 Sample Report/.test(document.getElementById('doc-page-body').innerText),
+               '뜻 없던 보고서 열이 아직 남아 있다');
+            var realFetch = window.fetch, sent = null;
+            window.fetch = function (u, o) {
+                if (String(u).indexOf('/gw/open-doc') >= 0) {
+                    sent = JSON.parse((o && o.body) || '{}');
+                    return Promise.resolve({ json: function () {
+                        return Promise.resolve({ ok: true, url: 'https://gw.example/app/approval/document/222', docId: '222' });
+                    } });
+                }
+                return realFetch.apply(window, arguments);
+            };
+            await window._docOpenReq(0);
+            window.fetch = realFetch;
+            ok(sent && sent.docId === '222' && sent.docNum === 'M3T-2605-020',
+               '열람 요청에 문서 id·번호가 안 실린다: ' + JSON.stringify(sent));
+            ok(histList[0].docUrl === 'https://gw.example/app/approval/document/222',
+               '연 주소를 기억하지 않는다 (다음에 또 찾아야 한다)');
+            // 의뢰서를 안 고른 줄은 링크 대신 안내
+            ok(/의뢰서를 고르세요|pick a document/.test(document.getElementById('doc-page-body').innerText),
+               '의뢰서가 없는 줄에 안내가 없다');
+
             // ═══ 5-3. 점검표 — 해상도 연결 · 묶음 · 내역 수정 ═══════════════
             window._docPick('sample-report');
             window._docSetRound('PROTO A');
@@ -397,7 +428,9 @@
             ok(txt.indexOf('RESOLUTION SPEC') >= 0, '문서에 해상도 구역이 없다');
             ok(txt.indexOf('샘플/시제품 의뢰서') >= 0, '출고 이력 열 이름이 "샘플/시제품 의뢰서" 가 아니다');
             ok(txt.indexOf('그룹웨어 의뢰서') < 0, '옛 열 이름(그룹웨어 의뢰서)이 남아 있다');
-            ok(txt.indexOf('📑 Sample Report') >= 0, '이력 줄에서 그 회차 보고서로 가는 길이 없다');
+            // 🔗 그 자리는 이제 **의뢰서 열람**이다 — 보고서 열은 "지금 보고 있는 그 리포트"라
+            //    뜻이 없어서 뺐다(사용자 지시 2026-11-09). 회차 이동은 헤더의 ◀ 📦 ▶ 가 한다.
+            ok(/열람|Open/.test(txt), '이력 표에 의뢰서 열람 자리가 없다');
             // 고른 해상도가 그대로 찍히는가
             window.resSetPort('1920X1080@60', '1920×1080@60', 'HDMI', true);
             window._docRender();

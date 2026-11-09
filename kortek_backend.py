@@ -5218,6 +5218,21 @@ def _sync_mail_from_gw(gw_user, pw):
     return True, f'메일 서버 설정도 같이 저장했습니다({mail_user}).'
 
 
+@app.route('/gw/open-doc', methods=['POST'])
+def gw_open_doc():
+    """🔗 그룹웨어 결재문서를 **전용 크롬**(사람이 로그인해 둔 곳)에 새 탭으로 열어 준다.
+
+    ⚠️ 주소를 받지 않고 **문서 id/번호**로 우리가 만든다 — 이 통로로 아무 주소나 열리지 않게.
+    ⚠️ 읽기 전용 — 로그인을 시도하지 않는다(계정 잠김 방지 규칙 그대로).
+    """
+    try:
+        import gw_bridge
+        d = request.get_json(silent=True) or {}
+        return jsonify(gw_bridge.open_document(doc_id=d.get('docId'), doc_num=d.get('docNum')))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/login-config', methods=['GET'])
 def gw_login_config_get():
     cfg = {}
