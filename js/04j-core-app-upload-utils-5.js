@@ -1,9 +1,14 @@
 // [분리됨] 원본: js/04-core-app.js 의 9663~11058행 (리팩터링: 파일당 토큰 절약 · 협업용 분리)
 // 섹션: 파일 업로드 및 유틸리티 로직 5/5
-    window.applyStatusToChildren = function(rowIndex, colIndex, newVal) {
+    /**
+     * 한 행과 그 **하위 전부**를 같은 상태로.
+     * @param silent 기록(logChange)을 남기지 않는다 — 일괄 변경이 **한 줄로 요약해서** 남기려고
+     *               쓴다. 수백 행을 한 번에 바꾸면서 행마다 적으면 수정이력이 그걸로 덮인다.
+     */
+    window.applyStatusToChildren = function(rowIndex, colIndex, newVal, silent) {
         const row = globalData[rowIndex];
         const oldVal = globalData[rowIndex][colIndex];
-        logChange(rowIndex, colIndex, oldVal, newVal);
+        if (!silent) logChange(rowIndex, colIndex, oldVal, newVal);
         globalData[rowIndex][colIndex] = newVal;
         const affected = [rowIndex]; // 💡 [2026-10-28] 실제로 바뀐 행 번호를 돌려줘서 호출부가 그 행만 패치할 수 있게 함
         // 하위 행 순회 (현재 행보다 레벨이 높은 연속된 행들)
@@ -13,7 +18,7 @@
             if (!childRow) continue;
             if ((childRow._level || 0) <= parentLevel) break; // 같은 레벨이나 상위면 중단
             const childOld = childRow[colIndex];
-            logChange(i, colIndex, childOld, newVal);
+            if (!silent) logChange(i, colIndex, childOld, newVal);
             globalData[i][colIndex] = newVal;
             affected.push(i);
         }
@@ -53,6 +58,55 @@
         if (chartTd && typeof createStatusChart === 'function') {
             chartTd.innerHTML = createStatusChart(row._calcStartTs, row._calcPlanTs, newVal, row._level, window.getRowCompareInfo ? window.getRowCompareInfo(row) : null);
         }
+    };
+
+    /**
+     * ✅ **선택한 행을 한 번에** 그 상태로 (하위 업무까지 같이).
+     *
+     * 왜: 실측으로 내 프로젝트 리프 2,272행 중 '완료' 가 80행(3.5%)뿐이었다. 한 행씩
+     * 드롭다운을 여는 것 말고는 닫을 길이 없어서 아무도 안 닫는다.
+     * Ctrl/Shift 다중 선택은 **이미 있었는데** 상태 일괄 변경만 없었다.
+     *
+     * ⚠️ `_selectedRows` 는 **행 인덱스** Set 이다(`sel.add(i)`, js/04e). 형제 함수
+     *    `changeSelectedRowsLevel`·`deleteSelectedRows` 와 같은 방식으로 다룬다.
+     * ⚠️ 기록은 **한 줄로 요약**한다(행마다 적으면 수정이력이 이것만으로 덮인다).
+     * ⚠️ 바꾸기 **전에** 되돌리기 지점을 찍는다 — 한 행씩 바꿀 때와 달리 한 번에 수십·수백 행이
+     *    바뀌므로, 잘못 눌렀을 때 Ctrl+Z 로 돌아올 수 있어야 한다.
+     */
+    window.setSelectedRowsStatus = function(newVal) {
+        const sel = window._selectedRows;
+        if (!sel || sel.size === 0) return false;
+        if (typeof colIdx === 'undefined' || colIdx.status == null || colIdx.status === -1) {
+            if (window.showToast) window.showToast(window._t('이 프로젝트엔 상태 칸이 없습니다.', 'No status column in this project.'), 'warning');
+            return false;
+        }
+        const idxs = [...sel].sort((a, b) => a - b);
+        const touched = new Set();
+        idxs.forEach(i => {
+            const row = globalData[i];
+            if (!row) return;
+            if (String(row[colIdx.status] || '').trim() === newVal) return;   // 이미 그 상태면 건너뛴다
+            window.applyStatusToChildren(i, colIdx.status, newVal, true).forEach(k => touched.add(k));
+        });
+        if (!touched.size) {
+            if (window.showToast) window.showToast(window._t('이미 전부 그 상태입니다.', 'Already in that status.'), 'info');
+            return false;
+        }
+        // ⚠️ 되돌리기 지점은 **바꾸기 전** 상태여야 하는데, 여기선 이미 바꾼 뒤다 —
+        //    그래서 맨 위에서 찍지 않고 `toggleRowActions` 의 호출부에서 먼저 찍는다.
+        if (typeof logChange === 'function') {
+            logChange(idxs[0], -1, window._t('상태 일괄 변경', 'Bulk status'),
+                      window._t('선택 ' + idxs.length + '개 → ' + newVal + ' (하위 포함 ' + touched.size + '행)',
+                                idxs.length + ' selected → ' + newVal + ' (' + touched.size + ' rows)'));
+        }
+        touched.forEach(k => { if (window._patchStatusRowDom) window._patchStatusRowDom(k); });
+        if (typeof applyFilters === 'function') applyFilters();
+        if (window.paintRowSelection) window.paintRowSelection();
+        if (window.showToast) {
+            window.showToast('✅ ' + window._t(touched.size + '행을 ' + newVal + ' 로 바꿨습니다 (Ctrl+Z 로 되돌리기).',
+                                               touched.size + ' rows → ' + newVal + ' (Ctrl+Z to undo)'), 'success', 5000);
+        }
+        return true;
     };
 
     window.setStatusDone = function(select, rowIndex, colIndex) {
@@ -2037,7 +2091,7 @@
                             const lang = LANG[window._currentLang||'ko'];
                             // 대소문자 무시로 statusMap 조회 (엑셀 저장값이 소문자인 경우도 대응)
                             const statusVal = RT.smLower[statusRaw.toLowerCase()] || statusRaw;
-                            const statusSelectHtml = `<select class=\"status-select\" onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\" ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\">                                ${lang.status.map((s, idx) => {
+                            const statusSelectHtml = `<select class=\"status-select\" title=\"✅ 더블클릭하면 하위까지 한 번에 '완료' · 여러 행은 Ctrl/Shift 로 고른 뒤 No. 칸 메뉴에서\" onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\" ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\">                                ${lang.status.map((s, idx) => {
                                     const optColor = ['', 'rgba(0,0,0,0.45)', '#f08c00', '#e03131'][idx] || '';
                                     const colorAttr = optColor ? ` style=\"color:${optColor};\"` : '';
                                     return `<option value=\"${s}\" ${statusVal===s?'selected':''}${colorAttr}>${s}</option>`;

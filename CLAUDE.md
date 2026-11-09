@@ -259,8 +259,17 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - ⚠️⚠️ 백엔드 아침 브리핑(`kortek_backend.py` `_brief_text_for`, `DAILY_BRIEF.skipMailRowsInLate`)에
   **같은 규칙의 사본**이 있다(파이썬이라 js 를 못 부른다) — 한쪽만 고치면 화면과 텔레그램이 갈린다.
   검증 `py -3 tests/test_daily_brief.py` 31/31(스위치를 끄면 예전처럼 도는 것까지).
-- 💡 다음 수: 선택한 행 **일괄 완료**(Ctrl/Shift 다중 선택은 이미 있는데 상태 일괄 변경만 없다) ·
-  상태 칸 **더블클릭 = 완료**(`setStatusDone`, 하위까지)가 이미 있는데 아무도 모른다 → 안내.
+- ✅ **선택한 행 일괄 완료**(2026-11-09) — No. 칸 메뉴의 `✅ 선택한 행 완료로`
+  (`setSelectedRowsStatus`, js/04j). 선택이 없으면 메뉴를 연 **그 행** 하나.
+  하위 업무까지 같이 닫고(`applyStatusToChildren`), 기록은 **한 줄로 요약**하며
+  (행마다 적으면 수정이력이 그걸로 덮인다 → `silent` 인자 신설), 바꾸기 **전에**
+  `pushUndoSnapshot()` 을 찍어 **Ctrl+Z 로 되돌아온다**(한 행씩 바꾸는 길엔 그게 없다).
+  상태 칸 **더블클릭 = 완료**(하위까지)는 원래 있었는데 아무도 몰라서 **툴팁**을 달았다.
+  ⚠️ `_selectedRows` 는 **인덱스 Set** 이다(`sel.add(i)`, js/04e — 형제 함수
+  `changeSelectedRowsLevel`·`deleteSelectedRows` 도 그렇게 다룬다). js/04i 주석과 아래
+  'gantt-internals' 줄엔 "행 객체 참조 Set" 이라고 적혀 있는데 **지금 코드와 다르다**(실측).
+  검증 `tests/bulk-status.browser.js` 12/12 + 메뉴 버튼을 실제로 눌러 부모·하위만 닫히고
+  안 고른 행은 그대로인 것까지.
 
 ### `docs/gantt-internals.md` — 일정 계산/탭 복원/표 오버레이/AI 검색
 - **읽을 때**: `recalculateSchedules`·`_calcStartTs`, Undo, `.no-td` 오버레이, 체크박스 일괄 작업

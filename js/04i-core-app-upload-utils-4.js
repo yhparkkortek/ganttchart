@@ -834,6 +834,9 @@
             <span id="rap-add"   class="rap-btn rap-btn-add" title="행 추가"><i class="ti ti-plus"></i></span>
             <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제"><i class="ti ti-minus"></i></span>
             <span id="rap-group" class="rap-btn rap-btn-group" title="선택한 업무들을 새 상위 그룹으로 묶기 (2개 이상 선택 시)" style="grid-column: span 3; width:100%; height:28px; font-size:11px; font-weight:bold; gap:4px;"><i class="ti ti-folder-plus" style="font-size:14px;"></i>그룹으로 묶기</span>
+            <!-- ✅ [2026-11-09] 선택한 행 일괄 완료 — 다중 선택은 이미 있었는데 상태만 못 바꿨다.
+                 (실측: 리프 2,272행 중 '완료' 80행 = 3.5%. 한 행씩 드롭다운 여는 길밖에 없었다) -->
+            <span id="rap-done" class="rap-btn" title="선택한 업무(하위 포함)를 '완료' 로 — 되돌리기는 Ctrl+Z · 상태 칸을 더블클릭해도 같습니다" style="grid-column: span 3; width:100%; height:28px; font-size:11px; font-weight:bold; gap:4px; color:#1f7a3d;">✅ 선택한 행 완료로</span>
 
         </div>`;
         document.body.appendChild(popup);
@@ -895,6 +898,22 @@
             popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
         },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        // ✅ 선택이 없으면 **지금 이 행** 하나를 완료로(메뉴를 연 그 행이 뜻하는 바다).
+        //    ⚠️ 되돌리기 지점은 **바꾸기 전에** 찍는다.
+        'rap-done':  () => {
+            if (window.pushUndoSnapshot) window.pushUndoSnapshot();
+            const sel = window._selectedRows;
+            if (sel && sel.size > 0) {
+                window.setSelectedRowsStatus('완료');
+            } else if (colIdx.status !== -1) {
+                window._selectedRows = new Set([rowIndex]);
+                window.setSelectedRowsStatus('완료');
+                window._selectedRows = new Set();
+                window.paintRowSelection();
+            }
+            popup.style.display = 'none';
+            window.clearRowHighlight();
+        },
         'rap-group': () => {
             const ok = window.groupSelectedRows && window.groupSelectedRows();
             if (ok) { popup.style.display = 'none'; window.clearRowHighlight(); }
