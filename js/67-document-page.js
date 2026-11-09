@@ -525,14 +525,18 @@
             + '<span id="doc-form-trigger-label">' + (form ? (form.icon || '📄') + ' ' + _esc(form.label) : '📄 ' + _esc(_t('문서', 'Document')))
             + '</span><span style="font-size:11px;">▾</span></button>'
             + '<div id="doc-form-dropdown" class="row-action-popup" style="min-width:220px; padding:6px;"></div></div>'
-            + '<span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>'
-            // 🖨 문서 형식이 **기본** 출력이다(사용자 요청) — 보이는 그대로 인쇄/PDF
+            // 📌 [2026-11-09 사용자 요청] 출력 버튼은 **오른쪽 끝**에 붙인다 — PARTS 와 같은
+            //    장치인 `.btn-group`(styles.css 에서 `margin-left:auto`)을 그대로 쓴다.
+            //    ⚠️ 직접 `margin-left:auto` 를 쓰지 않는다 — 한 곳에서 정하게 둔다.
+            + '<span class="btn-group">'
+            // 🖨 문서 형식이 **기본** 출력이다 — 보이는 그대로 인쇄/PDF
             + '<button onclick="window._docPrint()" style="' + PRIM + '">🖨 ' + _esc(_t('문서 출력', 'Print')) + '</button>'
             + '<button onclick="window._docExport(\'xlsx\')" style="' + OPT + '">📗 ' + _esc(_t('엑셀', 'Excel')) + '</button>';
         if (form && form.builder) {
             th += '<button onclick="window._docExport(\'pptx\')" style="' + OPT + '">📊 ' + _esc(_t('PPT', 'PPT')) + '</button>';
         }
-        th += '<button onclick="window._docExport(\'nas\')" style="' + OPT + '">📁 ' + _esc(_t('NAS', 'NAS')) + '</button>';
+        th += '<button onclick="window._docExport(\'nas\')" style="' + OPT + '">📁 ' + _esc(_t('NAS', 'NAS')) + '</button>'
+            + '</span>';
         tools.innerHTML = th;
 
         if (!form) { body.innerHTML = '<div style="padding:12px; color:#b1432f;">'
