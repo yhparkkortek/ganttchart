@@ -85,6 +85,9 @@
                     { key: 'EDID CHECK SUM', from: 'specEdid', hint: '예: DP 0x36' }
                 ]
             },
+            // 🖥 EDID 가 어떤 해상도를 어느 입력으로 받는가 — 고르는 건 팝업(js/69)이 한다.
+            //   ⚠️ 여기엔 **고른 줄만** 찍는다(카탈로그가 150줄이 넘는다).
+            { title: '# 지원 해상도 (RESOLUTION SPEC)', kind: 'resolution' },
             {
                 title: '# 주요자재', kind: 'table',
                 columns: ['항목', '코드', '부품 명', '비고'],
@@ -118,10 +121,14 @@
             //    ⚠️ SAMPLE CHECK SHEET(하드웨어·펌웨어·기구 6장, 300행 체크표)는 아직 안 넣었다 —
             //       넣을 땐 `kind:'check'` 를 새로 만들어 붙인다. 모르는 척하지 않고 적어 둔다.
             id: 'sample-report', icon: '📑', label: 'Sample Report (시제품)',
+            perRound: true,   // 📦 회차마다 문서가 따로 생긴다(실측 원본 파일 이름에도 'Proto B' 가 들어 있다)
             note: '원본 구성: ①시제품 제작의뢰서 ②라벨 사양 ③검토 내역서(시제품팀) '
                 + '④광학 측정 ⑤제작 특이사항 ⑥검토 내역서(제품보증팀) ⑦SPL Check sheet. '
                 + '⑦ 체크시트(6장·300행)는 아직 안 들어갑니다.',
-            nameOf: function (ctx) { return _ymd() + '_' + _projKey(ctx) + '_Sample Report_V00'; },
+            nameOf: function (ctx) {
+                var rd = (window._docState && window._docState.round) || '';
+                return _ymd() + '_' + _projKey(ctx) + (rd ? '_' + rd : '') + '_Sample Report_V00';
+            },
             sections: [
                 {
                     title: 'Sample Report', kind: 'cover', cols: 2,
@@ -129,6 +136,8 @@
                         { key: 'Customer',     from: 'meta.고객사' },
                         { key: 'Project Name', from: 'meta.프로젝트명' },
                         { key: 'Model Name',   from: 'meta.KTK모델명' },
+                        // 📦 이 보고서가 **몇 회차의 샘플**인지 — 실측 원본 파일 이름에도 들어 있다
+                        { key: 'Sample Stage', from: 'round' },
                         { key: 'ISSUE DATE',   from: 'today' }
                     ]
                 }
@@ -317,6 +326,11 @@
     var _autoOf = function (ctx, from) {
         if (!from) return { v: '', src: '' };
         if (from === 'today') return { v: _todayDash(), src: _srcLabel(from) };
+        // 📦 지금 보고 있는 회차 — 헤더의 회차 바가 정한다(출고 이력이 목록의 원본이다)
+        if (from === 'round') {
+            return { v: (window._docState && window._docState.round) || '',
+                     src: _t('샘플 출고 이력 ▸ 회차', 'Shipping history ▸ stage') };
+        }
         if (from.indexOf('mat:') === 0) {
             var p = from.split(':');
             var hit = (ctx.materials || []).filter(function (m) { return m.cat === p[1]; })[0];
@@ -349,10 +363,24 @@
     };
 
     // ── 사람이 적은 값 · 첨부 (프로젝트 파일에 저장) ─────────────────────
+    //
+    // 🔁 [2026-11-09] **회차마다 문서가 따로 생긴다** (사용자: "샘플 출고 이력마다 sample 리포트가
+    //    새롭게 생겨야 하는 건데 … PROTO A,B,C,D,E… 문서가 계속 신규 생성되어야 함").
+    //    실측 원본 파일 이름에도 회차가 들어 있다:
+    //      `260311_LNW_Slim Slot iDeck_KTBR14DPS01_Proto B_Sample Report_V00.docx`
+    //    → `perRound: true` 인 서식은 저장 열쇠에 회차를 붙인다(`sample-report@PROTO B`).
+    //    ⚠️ 열쇠를 **여기 한 곳**에서만 만든다 — 칸·첨부·불러오기·엑셀이 전부 `_docData` 를 지나므로
+    //       이 한 줄로 전부 회차별이 된다(화면마다 고치면 고친 화면만 산다).
+    var _dataKey = function (id) {
+        var form = _formById(id);
+        if (!form || !form.perRound) return id;
+        return id + '@' + (window._docState.round || _docRounds()[0] || 'PROTO A');
+    };
     var _docData = function (id) {
         window.tabData = window.tabData || {};
         window.tabData.documents = window.tabData.documents || {};
-        var d = window.tabData.documents[id] = window.tabData.documents[id] || {};
+        var k = _dataKey(id);
+        var d = window.tabData.documents[k] = window.tabData.documents[k] || {};
         d.fields = d.fields || {};
         d.att = d.att || {};
         return d;
@@ -392,8 +420,23 @@
         delete _docData(id).fields[key]; _markDirty(); window._docRender();
     };
 
+    // ── 📦 회차 (샘플 출고 이력이 곧 회차 목록이다) ──────────────────────
+    //   ⚠️ 회차는 **출고 이력 한 곳**에서만 온다 — 따로 목록을 두면 "이력엔 있는데 문서는 없다"
+    //      가 생긴다. 이력에 회차를 더하면 그 회차의 Sample Report 가 **그 자리에서 생긴다**.
+    var HIST_FORM = 'proto-req';         // 이력의 주인 — 어느 문서를 보고 있든 같은 목록이다
+    var _docRounds = function () {
+        var out = [];
+        (_hist() || []).forEach(function (r) {
+            var s = String((r && r.stage) || '').trim();
+            if (s && out.indexOf(s) === -1) out.push(s);
+        });
+        if (!out.length) out.push((window.DOC_SAMPLE_STAGES || ['PROTO A'])[0]);
+        return out;
+    };
+    window._docRounds = _docRounds;
+
     // ── 상태 ───────────────────────────────────────────────────────────
-    window._docState = window._docState || { formId: null, stage: 'Proto DR' };
+    window._docState = window._docState || { formId: null, stage: 'Proto DR', round: '' };
     window._docPick = function (id) {
         window._docState.formId = id;
         try { localStorage.setItem('gantt_doc_last_form', id); } catch (e) { /* 무시 */ }
@@ -402,6 +445,36 @@
         window._docRender();
     };
     window._docSetStage = function (v) { window._docState.stage = v; window._docRender(); };
+
+    // ── 📦 회차 넘기기 (M.C Table·BOM 의 제품구분자 바와 **같은 장치**) ───
+    //   ⚠️ 새로 디자인하지 않는다 — 삼각형 ◀ ▶ 로 앞뒤 회차를 넘기고, 가운데 버튼은 누를 때마다
+    //      다음 회차로 돈다(`unit-cycle-btn` 과 같은 모양). 사람이 이미 아는 동작이다.
+    window._docRoundGo = function (delta) {
+        var rounds = _docRounds();
+        var i = rounds.indexOf(window._docState.round);
+        if (i < 0) i = 0;
+        window._docState.round = rounds[((i + delta) % rounds.length + rounds.length) % rounds.length];
+        window._docRender();
+    };
+    window._docSetRound = function (v) {
+        window._docState.round = v;
+        window._docRender();
+    };
+    /** 회차를 하나 더 만든다 = 출고 이력에 한 줄 더하고 그 회차로 간다(문서가 새로 생긴다) */
+    window._docRoundAdd = function () {
+        window._docHistAdd();                       // 기본 회차(PROTO A→B→C→ES→PP)로 한 줄
+        var rounds = _docRounds();
+        window._docState.round = rounds[rounds.length - 1];
+        window._docRender();
+        _toast('📦 ' + (window._docState.round || '') + _t(' 회차 문서를 만들었습니다.', ' created.'), 'success');
+    };
+    /** 출고 이력 줄에서 그 회차의 Sample Report 로 바로 간다 */
+    window._docGoRound = function (stage, formId) {
+        var s = String(stage || '').trim();
+        if (!s) { _toast('⚠️ ' + _t('회차 이름을 먼저 적어 주세요.', 'Type a stage name first.'), 'error'); return; }
+        window._docState.round = s;
+        window._docPick(formId || 'sample-report');
+    };
 
     // ── 📄 드롭다운 (PARTS 와 같은 방식·같은 팝업 클래스) ────────────────
     window._toggleDocFormDropdown = function (ev) {
@@ -508,6 +581,9 @@
             st.formId = (forms.filter(function (f) { return f.id === last; })[0] || forms[0] || {}).id || null;
         }
         var form = _formById(st.formId);
+        // 📦 회차 — 목록에 없는 회차를 들고 있으면 되돌린다(이력에서 지운 회차일 수 있다)
+        var rounds = _docRounds();
+        if (!st.round || rounds.indexOf(st.round) < 0) st.round = rounds[rounds.length - 1];
         var ctx = window._dgCollect ? window._dgCollect()
             : { meta: {}, overview: {}, milestones: { plan: {}, actual: {}, missing: [] }, members: [], spec: [], materials: [] };
 
@@ -523,7 +599,26 @@
             + ' color:#00707d; background:none; border:none; padding:0; margin:0; user-select:none;">'
             + '<span id="doc-form-trigger-label">' + (form ? (form.icon || '📄') + ' ' + _esc(form.label) : '📄 ' + _esc(_t('문서', 'Document')))
             + '</span><span style="font-size:11px;">▾</span></button>'
-            + '<div id="doc-form-dropdown" class="row-action-popup" style="min-width:220px; padding:6px;"></div></div>'
+            + '<div id="doc-form-dropdown" class="row-action-popup" style="min-width:220px; padding:6px;"></div></div>';
+        // 📦 회차 바 — 회차마다 문서가 따로인 서식에서만 보인다(M.C·BOM 의 전환 바와 같은 모양).
+        if (form && form.perRound) {
+            var ri = rounds.indexOf(st.round);
+            th += '<span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>'
+                + '<div id="doc-round-bar" style="display:flex; align-items:center; gap:2px; flex-shrink:0;">'
+                + '<button onclick="window._docRoundGo(-1)" title="' + _esc(_t('이전 회차', 'Previous')) + '"'
+                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">◀</button>'
+                + '<button class="unit-cycle-btn" onclick="window._docRoundGo(1)" title="'
+                + _esc(_t('누를 때마다 다음 회차로 — 회차마다 문서가 따로입니다', 'Next round')) + '"'
+                + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer;'
+                + ' font-size:12px; font-weight:bold; background:#00707d; color:#fff;">📦 ' + _esc(st.round || '-') + '</button>'
+                + '<button onclick="window._docRoundGo(1)" title="' + _esc(_t('다음 회차', 'Next')) + '"'
+                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">▶</button>'
+                + '<span style="font-size:11px; color:#868e96;">' + ((ri < 0 ? 0 : ri + 1) + '/' + rounds.length) + '</span>'
+                + '<button onclick="window._docRoundAdd()" title="' + _esc(_t('회차 추가 — 새 문서가 생깁니다', 'Add a round')) + '"'
+                + ' style="margin-left:2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
+                + '</div>';
+        }
+        th += ''
             // 📌 [2026-11-09 사용자 요청] 출력 버튼은 **오른쪽 끝**에 붙인다 — PARTS 와 같은
             //    장치인 `.btn-group`(styles.css 에서 `margin-left:auto`)을 그대로 쓴다.
             //    ⚠️ 직접 `margin-left:auto` 를 쓰지 않는다 — 한 곳에서 정하게 둔다.
@@ -648,18 +743,21 @@
                 // 📦 샘플 출고 이력 — 회차·출고일자·수량·그룹웨어 의뢰서
                 //   ⚠️ 회차는 **적는 값**이다(기본값만 넣어 준다) — 거래선마다 PROTO/ES/PP 가 달라
                 //      고르는 목록으로 막으면 새 거래선이 못 들어온다(사용자 결정 2026-11-09).
-                var hist = _docData(form.id).history || [];
+                var hist = _hist();
                 h += '<tr><th style="width:120px;">' + _esc(_t('회차', 'Stage')) + '</th>'
                    + '<th style="width:140px;">' + _esc(_t('출고 일자', 'Shipped')) + '</th>'
                    + '<th style="width:100px;">' + _esc(_t('수량', 'Qty')) + '</th>'
-                   + '<th>' + _esc(_t('그룹웨어 의뢰서', 'Request doc')) + '</th>'
+                   + '<th>' + _esc(_t('샘플/시제품 의뢰서', 'Sample request')) + '</th>'
+                   + '<th class="doc-noprint" style="width:130px;">' + _esc(_t('보고서', 'Report')) + '</th>'
                    + '<th class="doc-noprint" style="width:56px;"></th></tr>';
                 if (!hist.length) {
-                    h += '<tr><td colspan="5" style="color:#868e96;">'
+                    h += '<tr><td colspan="6" style="color:#868e96;">'
                        + _esc(_t('아직 출고 이력이 없습니다 — 아래 [＋ 회차 추가]를 누르세요.', 'No shipping history yet.'))
                        + '</td></tr>';
                 }
                 hist.forEach(function (r, i) {
+                    var rstage = String(r.stage || '').trim();
+                    var ron = rstage && window._docState.round === rstage;
                     h += '<tr>'
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|stage" value="' + _esc(r.stage || '') + '"></td>'
                        + '<td><input type="date" class="doc-in" data-doc-hist="' + i + '|date" value="' + _esc(r.date || '') + '"></td>'
@@ -672,6 +770,14 @@
                        + _esc(_t('그룹웨어에서 찾기', 'find in groupware')) + '</a>'
                        + (r.docTitle ? ' <span style="opacity:.8;">' + _esc(r.docTitle) + '</span>' : '')
                        + '</div></td>'
+                       // 📦 이 회차의 Sample Report 로 — 회차마다 보고서가 따로 생긴다
+                       + '<td class="doc-noprint" style="text-align:center; font-size:11px;">'
+                       + (rstage
+                          ? '<a href="#" onclick="window._docGoRound(\'' + _esc(rstage).replace(/'/g, "\\'") + '\');return false;"'
+                            + ' style="color:' + (ron ? '#00707d' : '#1971c2') + '; font-weight:' + (ron ? 'bold' : 'normal') + ';">📑 '
+                            + _esc(_t('Sample Report', 'Sample Report')) + (ron ? ' ●' : '') + '</a>'
+                          : '<span style="color:#868e96;">' + _esc(_t('회차 이름을 적으세요', 'name the stage')) + '</span>')
+                       + '</td>'
                        + '<td class="doc-noprint" style="text-align:center;">'
                        + '<a href="#" onclick="window._docHistDel(' + i + ');return false;" style="color:#b1432f; font-size:11px;">'
                        + _esc(_t('삭제', 'del')) + '</a></td></tr>';
@@ -681,8 +787,39 @@
                    + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">＋ '
                    + _esc(_t('회차 추가', 'Add')) + '</button>'
                    + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
-                   + _esc(_t('회차는 기본 PROTO A·B·C 로 채워지고 자유롭게 고칠 수 있습니다(ES·PP 등).',
+                   + _esc(_t('회차를 더하면 그 회차의 Sample Report 가 새로 생깁니다. 기본은 PROTO A·B·C 이고 자유롭게 고칠 수 있습니다(ES·PP 등).',
                              'Stage defaults to PROTO A/B/C and is editable.')) + '</span></div>'
+                   + '<table style="display:none;">';
+            } else if (s.kind === 'resolution') {
+                // 🖥 지원 해상도 — 고르기는 팝업(js/69), 여기는 **고른 줄만** 보여 준다.
+                //   ⚠️ 포트 이름은 `RES_PORTS`(데이터) 한 곳에서 온다. 옛 문서의 `PC` 는 `RGB` 다.
+                var rports = window.RES_PORTS || [];
+                var rrows = window.resSelectedRows ? window.resSelectedRows() : [];
+                h += '<tr><th style="width:44px;">NO</th><th style="text-align:left;">RESOLUTION</th>'
+                   + rports.map(function (p) {
+                       return '<th title="' + _esc(p.title || p.label) + '" style="width:62px;">' + _esc(p.label) + '</th>';
+                   }).join('') + '</tr>';
+                if (!rrows.length) {
+                    h += '<tr><td colspan="' + (2 + rports.length) + '" style="color:#b1432f;">'
+                       + _esc(_t('아직 고른 해상도가 없습니다 — 아래 [🖥 해상도 고르기]를 누르세요.',
+                                 'No resolution selected yet.')) + '</td></tr>';
+                }
+                rrows.forEach(function (r, i) {
+                    h += '<tr><td style="text-align:center;">' + (i + 1) + '</td><td>' + _esc(r.label) + '</td>'
+                       + rports.map(function (p) {
+                           return '<td style="text-align:center;">' + (r.ports[p.key] ? 'O' : '') + '</td>';
+                       }).join('') + '</tr>';
+                });
+                h += '</table><div class="doc-noprint" style="margin-top:6px;">'
+                   + '<button onclick="window.resOpenPicker && window.resOpenPicker()"'
+                   + ' style="padding:4px 10px; font-size:11.5px; cursor:pointer; border:1px solid #a3d9e0;'
+                   + ' background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">🖥 '
+                   + _esc(_t('해상도 고르기', 'Pick resolutions')) + '</button>'
+                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
+                   + _esc(window.resSummary && window.resSummary()
+                          ? window.resSummary()
+                          : _t('VESA·CTA 표준 목록에서 고르거나 직접 적어 넣을 수 있습니다.',
+                               'Pick from VESA/CTA list or type your own.')) + '</span></div>'
                    + '<table style="display:none;">';
             } else if (s.kind === 'text') {
                 var tv = _hasOwn(form.id, s.key) ? _docData(form.id).fields[s.key] : '';
@@ -759,7 +896,7 @@
             // 📦 출고 이력 칸 — `<행번호>|<칸>` 으로 들어온다
             var hk = el.getAttribute('data-doc-hist');
             if (hk) {
-                var pp = hk.split('|'), list = _hist(form.id), row = list[Number(pp[0])];
+                var pp = hk.split('|'), list = _hist(), row = list[Number(pp[0])];
                 if (row) { row[pp[1]] = el.value; _markDirty(); }
             }
         };
@@ -804,14 +941,24 @@
     });
 
     // ── 📦 샘플 출고 이력 ───────────────────────────────────────────────
-    var _hist = function (id) {
-        var d = _docData(id);
-        d.history = d.history || [];
+    // 📦 출고 이력은 **문서마다가 아니라 프로젝트마다 하나**다 — 어느 서식을 보고 있든 같은 목록.
+    //   ⚠️ 예전엔 지금 열린 서식에 붙였다. 그 구역은 시제품 제작의뢰서와 Sample Report 가
+    //      **같이 쓰는 표**(`_protoReqSections`)라, 서식을 바꾸면 이력이 빈 것처럼 보였다.
+    var _hist = function () {
+        var d = _docData(HIST_FORM);
+        if (!d.history) {
+            // 옛 데이터 구하기 — 다른 서식 밑에 적혀 있던 이력을 한 번만 가져온다.
+            var docs = (window.tabData && window.tabData.documents) || {};
+            var old = null;
+            Object.keys(docs).forEach(function (k) {
+                if (k !== HIST_FORM && docs[k] && docs[k].history && docs[k].history.length && !old) old = docs[k].history;
+            });
+            d.history = old ? old.slice() : [];
+        }
         return d.history;
     };
     window._docHistAdd = function () {
-        var id = window._docState.formId;
-        var list = _hist(id);
+        var list = _hist();
         // 기본 회차 — 아직 안 쓴 것 중 첫 번째(PROTO A → B → C → ES → PP). 전부 썼으면 비워 둔다.
         var used = list.map(function (r) { return String(r.stage || '').trim().toUpperCase(); });
         var next = (window.DOC_SAMPLE_STAGES || []).filter(function (s) {
@@ -821,7 +968,7 @@
         _markDirty(); window._docRender();
     };
     window._docHistDel = function (i) {
-        var list = _hist(window._docState.formId);
+        var list = _hist();
         if (i < 0 || i >= list.length) return;
         var r = list[i];
         // ⚠️ 출고 이력은 **기록**이다 — 실수로 지우면 언제 몇 개를 냈는지가 사라진다. 한 번 묻는다.
@@ -851,16 +998,56 @@
         var r;
         try { r = await window._apvFindProjectDocs(window.DOC_REQ_FORMS || []); }
         catch (e) { _toast('⚠️ ' + (e && e.message || e), 'error'); return; }
+        // 🔎 [2026-11-09 사용자 신고: "그룹웨어 조회 안되는데?"]
+        //    못 찾았을 때 **그냥 끝내지 않는다**. 프로젝트 키워드(메일키워드·모델명)가 문서 제목과
+        //    안 맞으면 0건이 나오는데, 그때 사람이 할 수 있는 일이 없었다.
+        //    → 창은 열고, **직접 검색**할 수 있게 한다(검색어는 사람이 정한다).
+        window._docGwPending = {
+            rowIdx: rowIdx, docs: r.docs, keyword: r.keyword, total: r.total, scope: 'project'
+        };
+        _docGwShow();
         if (!r.docs.length) {
-            // 조용히 끝내지 않는다 — 검색어가 뭐였는지 알려줘야 사람이 고칠 수 있다.
             _toast('ℹ️ ' + _t('이 프로젝트의 의뢰서를 못 찾았습니다'
                    + (r.keyword ? ' (검색어 "' + r.keyword + '", 전체 ' + r.total + '건)'
-                                : ' — Summary 의 메일키워드/모델명이 비어 검색어를 못 만들었습니다'),
-                   'No request documents found.'), 'info');
+                                : ' — Summary 의 메일키워드/모델명이 비어 검색어를 못 만들었습니다')
+                   + ' — 창에서 직접 검색해 보세요.',
+                   'Not found — search manually in the dialog.'), 'info');
+        }
+    };
+
+    /** 창 안에서 사람이 직접 검색한다 — 비우면 **양식 이름**으로 전건을 훑는다. */
+    window._docGwSearch = async function () {
+        var p = window._docGwPending; if (!p) return;
+        var el = document.getElementById('docgw-q');
+        var term = el ? String(el.value || '').trim() : '';
+        var forms = (window.DOC_REQ_FORMS || []);
+        var url = BACKEND + '/gw/approval/doclist?box=all&duration=all&limit=80'
+                + (term ? '&searchtype=title&keyword=' + encodeURIComponent(term)
+                        : '&searchtype=formName&keyword=' + encodeURIComponent(forms[0] || ''));
+        var body = document.getElementById('docgw-body');
+        if (body) body.innerHTML = '<div style="padding:16px; color:#868e96;">🔎 ' + _esc(_t('찾는 중…', 'Searching…')) + '</div>';
+        var docs = [];
+        try {
+            var res = await fetch(url);
+            var d = await res.json();
+            docs = (d && d.docs) || [];
+        } catch (e) {
+            if (body) body.innerHTML = '<div style="padding:16px; color:#b1432f;">⚠️ ' + _esc(e && e.message || e) + '</div>';
             return;
         }
-        window._docGwPending = { rowIdx: rowIdx, docs: r.docs, keyword: r.keyword };
+        // 양식으로 한 번 거른다 — 의뢰서가 아닌 문서까지 고르게 두면 엉뚱한 번호가 적힌다.
+        var norm = function (v) { return String(v == null ? '' : v).replace(/\s+/g, '').toLowerCase(); };
+        var want = forms.map(norm);
+        var hit = docs.filter(function (x) {
+            var key = window._apvFormKey ? window._apvFormKey(x.formName, x.title) : x.formName;
+            return want.indexOf(norm(x.formName)) >= 0 || want.indexOf(norm(key)) >= 0;
+        });
+        hit.sort(function (a, b) { return String(b.draftedAt || '').localeCompare(String(a.draftedAt || '')); });
+        p.docs = hit; p.keyword = term || (forms[0] || ''); p.total = docs.length;
+        p.scope = 'manual';     // ⚠️ 이 목록은 **이 프로젝트 것만이 아니다** — 창에 그렇게 적는다
         _docGwShow();
+        var q = document.getElementById('docgw-q');
+        if (q) { q.value = term; q.focus(); }
     };
 
     var _docGwShow = function () {
@@ -885,8 +1072,29 @@
         }
         ov.style.display = 'flex';
         document.getElementById('docgw-title').textContent =
-            '🔎 ' + _t('샘플/시제품 의뢰서 — 검색어 "', 'Request docs — "') + p.keyword + '" (' + p.docs.length + _t('건', '') + ')';
-        var h = '<table style="border-collapse:collapse; width:100%; font-size:11.5px;"><tr>'
+            '🔎 ' + _t('샘플/시제품 의뢰서', 'Sample request docs')
+            + (p.keyword ? ' — "' + p.keyword + '"' : '') + ' (' + p.docs.length + _t('건', '') + ')';
+        // 🔎 직접 검색 줄 — 프로젝트 키워드가 안 맞을 때 사람이 손으로 찾는다(막다른 길 방지).
+        var h = '<div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">'
+              + '<input id="docgw-q" type="text" placeholder="'
+              + _esc(_t('제목으로 검색 (비우고 [찾기] = 의뢰서 전체)', 'search by title')) + '"'
+              + ' onkeydown="if(event.key===\'Enter\'){window._docGwSearch();}"'
+              + ' style="flex:1; padding:4px 8px; border:1px solid #cfe3e5; border-radius:5px; font-size:12px;">'
+              + '<button onclick="window._docGwSearch()" style="padding:4px 12px; font-size:12px; cursor:pointer;'
+              + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">🔎 '
+              + _esc(_t('찾기', 'Search')) + '</button></div>';
+        if (p.scope === 'manual') {
+            // ⚠️ 이건 **이 프로젝트 것만이 아니다** — 숨기면 남의 프로젝트 번호가 조용히 적힌다.
+            h += '<div style="margin-bottom:8px; font-size:11.5px; color:#b1432f;">⚠️ '
+               + _esc(_t('이 목록은 프로젝트로 거르지 않았습니다 — 제목을 보고 고르세요.',
+                         'Not filtered by project — check the title.')) + '</div>';
+        }
+        if (!p.docs.length) {
+            h += '<div style="padding:14px 4px; color:#868e96; font-size:12px;">'
+               + _esc(_t('조건에 맞는 의뢰서가 없습니다. 검색어를 바꾸거나 비우고 [찾기] 를 눌러 보세요.',
+                         'No matching documents.')) + '</div>';
+        }
+        h += '<table style="border-collapse:collapse; width:100%; font-size:11.5px;"><tr>'
               + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('문서번호', 'No.')) + '</th>'
               + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안일', 'Date')) + '</th>'
               + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안자', 'Drafter')) + '</th>'
@@ -909,7 +1117,7 @@
     window._docGwChoose = function (i) {
         var p = window._docGwPending; if (!p) return;
         var d = p.docs[i]; if (!d) return;
-        var list = _hist(window._docState.formId);
+        var list = _hist();
         if (p.rowIdx < 0 || p.rowIdx >= list.length) { window._docGwClose(); return; }
         list[p.rowIdx].doc = d.docNum || ('id:' + d.id);
         list[p.rowIdx].docTitle = d.title || '';
@@ -1100,8 +1308,8 @@
             rows.push([s.title]);
             if (s.kind === 'history') {
                 rows.push([_t('회차', 'Stage'), _t('출고 일자', 'Shipped'), _t('수량', 'Qty'),
-                           _t('그룹웨어 의뢰서', 'Request doc'), _t('제목', 'Title')]);
-                (d.history || []).forEach(function (r) {
+                           _t('샘플/시제품 의뢰서', 'Sample request'), _t('제목', 'Title')]);
+                _hist().forEach(function (r) {
                     rows.push([r.stage || '', r.date || '', r.qty || '', r.doc || '', r.docTitle || '']);
                 });
             } else if (s.kind === 'check') {
@@ -1119,6 +1327,12 @@
                                    d.fields[base + 'note'] || '']);
                     });
                     rows.push([]);
+                });
+            } else if (s.kind === 'resolution') {
+                var xports = window.RES_PORTS || [];
+                rows.push(['NO', 'RESOLUTION'].concat(xports.map(function (p) { return p.label; })));
+                (window.resSelectedRows ? window.resSelectedRows() : []).forEach(function (r, i) {
+                    rows.push([i + 1, r.label].concat(xports.map(function (p) { return r.ports[p.key] ? 'O' : ''; })));
                 });
             } else if (s.kind === 'attach') {
                 var list = (d.att[s.key] || []);

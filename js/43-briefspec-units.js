@@ -258,48 +258,86 @@
         //    "펌웨어·EDID 는 없으니 만들어야 함 / 고객 SPEC 에 추가하면 될 것 같음".
         //    ⚠️ 팀 공용 **참조 엑셀(바이너리)은 건드리지 않는다** — 거기에 추가되면 이 목록에서
         //       빼면 되고, 그전까지는 둘 다 있어도 아래 중복 검사로 한 번만 들어간다.
-        (window.BS_EXTRA_ITEMS || []).forEach(function (x) {
-            var dup = out.some(function (r) {
-                return String(r.type || '').trim().toUpperCase() === String(x.type || '').trim().toUpperCase()
-                    && String(r.sub || '').trim().toUpperCase() === String(x.sub || '').trim().toUpperCase();
-            });
-            if (!dup) out.push({ type: x.type, sub: x.sub || '' });
-        });
+        window._bsPlaceExtraItems(out);
         return out;
     };
 
     // 참조 엑셀에 없는 **보탬 항목** (데이터) — 문서가 쓰는 칸이다.
+    //  📍 자리(데이터) — `at:'top'` 은 **표 맨 위**, `before:[…]` 는 그 말로 **시작하는** 첫 행 앞.
+    //     사용자 지시 2026-11-09: "F/W EDID 위치는 Power 위로" → 그다음 "제일 상단으로 가야 하는데".
+    //     ⚠️ 자리를 코드에 숫자로 박지 않는다 — 프로젝트마다 행 수가 다르다. 자리를 다시 옮기려면
+    //        `at`/`before` **한 줄**만 고치면 된다(옛 프로젝트도 다음에 열 때 따라온다).
     window.BS_EXTRA_ITEMS = window.BS_EXTRA_ITEMS || [
-        { type: 'F/W Version', sub: '' },
-        { type: 'EDID Check Sum', sub: '' }
+        { type: 'F/W Version', sub: '', at: 'top', before: ['Power estimation', 'Power'] },
+        { type: 'EDID Check Sum', sub: '', at: 'top', before: ['Power estimation', 'Power'] }
     ];
 
     /**
-     * 보탬 항목이 지금 Customer SPEC 에 **없으면 뒤에 붙인다**(append-only).
+     * 보탬 항목을 행 배열 `rows` 의 제자리에 놓는다 (없으면 끼워 넣고, 뒤에 있으면 앞으로 옮긴다).
+     * 반환: 바뀐 개수. **멱등** — 이미 제자리면 0.
+     *
+     * ⚠️ 옮길 때는 **행 객체 그대로** 옮긴다 — 값(`modelA`/`note`)이 같이 따라와야 한다.
+     */
+    window._bsPlaceExtraItems = function (rows) {
+        if (!Array.isArray(rows)) return 0;
+        var norm = function (v) { return String(v == null ? '' : v).trim().toUpperCase(); };
+        var key = function (t, s) { return norm(t) + '\u0000' + norm(s); };
+        // `before` 에 적힌 말로 시작하는 첫 행의 자리 (없으면 -1)
+        var anchorOf = function (before) {
+            var pats = before ? (Array.isArray(before) ? before : [before]) : [];
+            for (var p = 0; p < pats.length; p++) {
+                var pat = norm(pats[p]);
+                if (!pat) continue;
+                for (var i = 0; i < rows.length; i++) {
+                    if (rows[i] && norm(rows[i].type).indexOf(pat) === 0) return i;
+                }
+            }
+            return -1;
+        };
+        var changed = 0, topIdx = 0;
+        (window.BS_EXTRA_ITEMS || []).forEach(function (x) {
+            var k = key(x.type, x.sub), at = -1;
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i] && key(rows[i].type, rows[i].sub) === k) { at = i; break; }
+            }
+            // ⚠️ 항목마다 **다시** 센다(앞에서 끼워 넣으면 뒤가 밀린다)
+            var top = (x.at === 'top');
+            var target = top ? topIdx : anchorOf(x.before);
+            if (top) topIdx++;
+            if (at < 0) {
+                var row = { type: x.type, sub: x.sub || '', modelA: '', note: '' };
+                if (target < 0) rows.push(row); else rows.splice(target, 0, row);
+                changed++;
+                return;
+            }
+            // 맨 위로 가야 하는 항목은 자리가 다르면 무조건 옮기고,
+            // `before` 짜리는 기준 행보다 **뒤**에 있을 때만 앞으로 끌어온다.
+            if (target >= 0 && (top ? at !== target : at > target)) {
+                rows.splice(target, 0, rows.splice(at, 1)[0]);
+                changed++;
+            }
+        });
+        return changed;
+    };
+
+    /**
+     * 보탬 항목을 지금 Customer SPEC 의 **제자리**(`before`)에 놓는다.
      *
      * ⚠️⚠️ 왜 따로 필요한가 (2026-11-09 사용자 신고: "FW EDID 작성하는 곳은 어디야?")
      *   `_bsEnsureStandardTemplate` 은 **Customer SPEC 이 비어 있을 때만** 돈다
      *   (`hasTpl && !force` 에서 바로 return). 그래서 이미 쓰던 프로젝트에는 보탬 항목이
      *   **영영 안 들어가고**, 문서 페이지는 "항목이 없음" 만 띄운다 — 적을 자리가 없다.
-     *   이 함수는 그 조건과 **무관하게** 돌아 빠진 것만 뒤에 붙인다.
-     * ⚠️ 기존 행은 건드리지 않는다(값·순서 보존). 이미 있으면 아무 일도 안 한다.
+     *   이 함수는 그 조건과 **무관하게** 돌아 빠진 것만 끼워 넣는다.
+     * ⚠️ 다른 행은 건드리지 않는다(값 보존). 이미 제자리면 아무 일도 안 한다(멱등).
+     * ⚠️ 보탬 항목이 `before` 보다 **뒤**에 있으면 앞으로 옮긴다 — 예전엔 맨 뒤에 붙여서
+     *    Power 아래로 떨어졌다(사용자 지시로 Power 위로 올린다, 2026-11-09).
      */
     window._bsEnsureExtraItems = function () {
         var td = _td();
         if (!Array.isArray(td.briefSpec)) return 0;
-        var key = function (t, s) {
-            return (String(t || '').trim() + '\u0000' + String(s || '').trim()).toUpperCase();
-        };
-        var have = {};
-        td.briefSpec.forEach(function (r) { if (r) have[key(r.type, r.sub)] = true; });
-        var added = 0;
-        (window.BS_EXTRA_ITEMS || []).forEach(function (x) {
-            if (have[key(x.type, x.sub)]) return;
-            td.briefSpec.push({ type: x.type, sub: x.sub || '', modelA: '', note: '' });
-            added++;
-        });
-        if (added && window.bsSyncAlias) { try { window.bsSyncAlias(); } catch (e) { /* 별칭 실패가 흐름을 막지 않게 */ } }
-        return added;
+        var changed = window._bsPlaceExtraItems(td.briefSpec);
+        if (changed && window.bsSyncAlias) { try { window.bsSyncAlias(); } catch (e) { /* 별칭 실패가 흐름을 막지 않게 */ } }
+        return changed;
     };
 
     /**
