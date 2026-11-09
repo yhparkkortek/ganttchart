@@ -650,12 +650,35 @@ window._msLoadProjectIndex = async function() {
                 return !!(rel && liveRels.has(rel));
             };
             const ghostEntries = projects.filter(function(p) { return !p || !stillThere(p); });
-            if (ghostEntries.length) {
-                // ⚠️ 남기는 쪽도 **같은 판정**을 써야 한다 — 한쪽만 고치면 "유령은 아닌데 목록에선 빠지는"
-                //    항목이 생겨서 결국 똑같이 지워진다.
-                validProjects = projects.filter(function(p) { return p && stillThere(p); });
-                console.warn('project_index.json에서 존재하지 않는 프로젝트 항목 ' + ghostEntries.length + '건 제거:',
+            // ⚠️ 남기는 쪽도 **같은 판정**을 써야 한다 — 한쪽만 고치면 "유령은 아닌데 목록에선 빠지는"
+            //    항목이 생겨서 결국 똑같이 지워진다.
+            let kept = projects.filter(function(p) { return p && stillThere(p); });
+            // 🧹 [2026-11-09] **같은 파일을 가리키는 항목이 둘이면 하나만 남긴다.**
+            //    위에서 유령 판정을 느슨하게(경로로 풀리면 산다) 바꾼 대가다 — 한 경로에 Drive id 가
+            //    둘인 프로젝트는, 저장할 때마다 **그때 목록이 내놓은 id** 로 upsert 되므로
+            //    (`updateProjectIndexEntry`) 승자가 바뀌면 항목이 하나 더 생긴다. 그대로 두면
+            //    메일 매칭 후보에 같은 프로젝트가 두 번 올라간다. **live id 를 가진 쪽이 이긴다.**
+            const dupDropped = [];
+            if (window._storageRelOfId) {
+                const seen = new Map();
+                kept.forEach(function(p) {
+                    const rel = window._storageRelOfId(p.drive_file_id);
+                    if (!rel) return;
+                    const prev = seen.get(rel);
+                    if (!prev) { seen.set(rel, p); return; }
+                    const win = validIds.has(p.drive_file_id) ? p : prev;
+                    const lose = (win === p) ? prev : p;
+                    seen.set(rel, win);
+                    dupDropped.push(lose);
+                });
+                if (dupDropped.length) kept = kept.filter(function(p) { return dupDropped.indexOf(p) === -1; });
+            }
+            if (ghostEntries.length || dupDropped.length) {
+                validProjects = kept;
+                if (ghostEntries.length) console.warn('project_index.json에서 존재하지 않는 프로젝트 항목 ' + ghostEntries.length + '건 제거:',
                     ghostEntries.map(function(p) { return p && p.file_name; }));
+                if (dupDropped.length) console.warn('project_index.json에서 같은 파일을 가리키는 중복 항목 ' + dupDropped.length + '건 정리:',
+                    dupDropped.map(function(p) { return p && p.file_name; }));
                 fetch(`https://www.googleapis.com/upload/drive/v3/files/${indexFileId}?uploadType=media&supportsAllDrives=true`, {
                     method: 'PATCH',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
