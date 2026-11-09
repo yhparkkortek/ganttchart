@@ -236,13 +236,24 @@ B._daily_tg_tick()
 ok('다음 틱에 처리됨', queue_files() == [Q_DIR + '/yhpark__tg1010.json'] and state().get('offset') == 1011, (queue_files(), state()))
 
 print('\n[8] 두 사람이 섞여 와도 각자 key 로 간다')
+#  ⚠️ [2026-11-09] 질문을 한 번 보내면 그 사람은 **AI 문답 모드**다 — 뒤에 온 접두어 없는
+#     "회의 참석" 도 질문으로 간다(그게 "문답창처럼"의 뜻이다). 보고로 적으려면 서식(`한일:`)
+#     이나 `/보고`. 그래서 여기선 김팀원의 뒷글도 큐로 가고, 보고 파일은 안 생긴다.
 reset()
 UPDATES.append(upd(1011, '111', '/ai 내 일정'))
 UPDATES.append(upd(1012, '222', '/q 김팀원 질문'))
 UPDATES.append(upd(1013, '222', '회의 참석'))
 B._daily_tg_tick()
-ok('큐 2건, 각자 key', queue_files() == [Q_DIR + '/kim__tg1012.json', Q_DIR + '/yhpark__tg1011.json'], queue_files())
-ok('김팀원 보고 글은 보고로', B._daily_rel(TODAY, 'kim') in NAS.files)
+ok('큐 3건, 각자 key', queue_files() == [Q_DIR + '/kim__tg1012.json', Q_DIR + '/kim__tg1013.json',
+                                        Q_DIR + '/yhpark__tg1011.json'], queue_files())
+ok('모드가 사람별이다(박용훈만 1건)', json.loads(NAS.files[Q_DIR + '/yhpark__tg1011.json']).get('key') == 'yhpark')
+ok('문답 모드라 보고 파일은 안 생겼다', B._daily_rel(TODAY, 'kim') not in NAS.files, list(NAS.files))
+reset()
+UPDATES.append(upd(1011, '111', '/ai 내 일정'))
+UPDATES.append(upd(1013, '222', '회의 참석'))      # 김팀원은 모드가 아니다
+B._daily_tg_tick()
+ok('모드 아닌 사람의 글은 그대로 보고로', B._daily_rel(TODAY, 'kim') in NAS.files
+   and queue_files() == [Q_DIR + '/yhpark__tg1011.json'], (queue_files(), list(NAS.files)))
 
 print('\n[9] 돌연변이 — 입구 연결이 끊기면 잡히는가(접두어 목록을 비우면 /ai 가 보고로 샌다)')
 reset()
@@ -447,6 +458,77 @@ UPDATES.append(upd(1051, '111', '/배분'))
 B._daily_tg_tick()
 ok('(돌연변이) 버튼 메시지 0 · 보고 파일이 생겼다', not any(m[2] for m in SENT) and B._daily_rel(TODAY, 'yhpark') in NAS.files, ([m[1][:30] for m in SENT], list(NAS.files)))
 B.TG_DIST_WORDS[:] = saved
+
+print('\n[15] 🔁 AI 문답 모드 — "텔레그램 채팅창을 AI 문답창처럼"(2026-11-09 신고 대응)')
+#  실측 사고: 접두어 없이 보낸 "프로젝트 요약 부탁해" 가 오늘 보고의 **업무 이름**으로
+#  저장돼 있었다(조용한 실패). 이제 모드로 가른다.
+reset()
+UPDATES.append(upd(1060, '111', '프로젝트 요약 부탁해'))
+B._daily_tg_tick()
+ok('(기본) 접두어 없는 글은 여전히 보고로 — 글을 잃지 않는다', B._daily_rel(TODAY, 'yhpark') in NAS.files and not queue_files(), (queue_files(), list(NAS.files)))
+ok('질문처럼 보이면 "질문이었나요?" 안내가 따라온다', any('질문이었나요' in m[1] for m in SENT), [m[1][:40] for m in SENT])
+
+reset()
+UPDATES.append(upd(1061, '111', '/문답'))
+B._daily_tg_tick()
+ok('/문답 → 모드 전환 답장, 큐·보고 둘 다 안 건드림', len(SENT) == 1 and 'AI 문답 모드' in SENT[0][1]
+   and not queue_files() and B._daily_rel(TODAY, 'yhpark') not in NAS.files, (SENT, queue_files()))
+ok('모드가 상태 파일에 남는다', (state().get('tgMode') or {}).get('yhpark', {}).get('mode') == 'ai', state())
+del UPDATES[:]
+del SENT[:]
+UPDATES.append(upd(1062, '111', '프로젝트 요약 부탁해'))
+B._daily_tg_tick()
+ok('그 뒤 접두어 없는 글은 **질문**으로 간다', queue_files() == [Q_DIR + '/yhpark__tg1062.json'], queue_files())
+ok('질문 본문은 글 그대로', json.loads(NAS.files[Q_DIR + '/yhpark__tg1062.json']).get('text') == '프로젝트 요약 부탁해')
+ok('보고 파일은 안 생겼다', B._daily_rel(TODAY, 'yhpark') not in NAS.files, list(NAS.files))
+
+del UPDATES[:]
+del SENT[:]
+UPDATES.append(upd(1063, '111', '한일: 원자재 점검'))       # 문답 모드라도 보고 서식은 보고
+B._daily_tg_tick()
+ok('문답 모드라도 `한일:` 은 보고로 저장된다', B._daily_rel(TODAY, 'yhpark') in NAS.files
+   and not [k for k in queue_files() if 'tg1063' in k], (queue_files(), list(NAS.files)))
+ok('보고를 적으면 모드도 보고로 돌아온다', B._tg_mode_get(state(), 'yhpark') == 'report', state())
+
+reset()
+UPDATES.append(upd(1064, '111', '/문답'))
+B._daily_tg_tick()
+del UPDATES[:]
+UPDATES.append(upd(1065, '111', '휴가'))
+B._daily_tg_tick()
+ok('문답 모드라도 `휴가` 한 단어는 그 날 종류로', json.loads(NAS.files[B._daily_rel(TODAY, 'yhpark')]).get('dayType') == 'leave',
+   NAS.files.get(B._daily_rel(TODAY, 'yhpark')))
+
+reset({'tgMode': {'yhpark': {'mode': 'ai',
+                             'at': (datetime.now(B.KST) - timedelta(minutes=B.TG_MODE['ttlMin'] + 5)).isoformat()}}})
+UPDATES.append(upd(1066, '111', '회의 참석'))
+B._daily_tg_tick()
+ok('모드는 스스로 식는다(ttl 지나면 보고로)', B._daily_rel(TODAY, 'yhpark') in NAS.files and not queue_files(), (queue_files(), list(NAS.files)))
+
+reset({'tgMode': {'yhpark': {'mode': 'ai', 'at': '엉터리'}}})
+UPDATES.append(upd(1067, '111', '회의 참석'))
+B._daily_tg_tick()
+ok('시각을 모르면 안전한 쪽(보고)', B._daily_rel(TODAY, 'yhpark') in NAS.files and not queue_files(), (queue_files(), list(NAS.files)))
+
+reset()
+UPDATES.append(upd(1068, '111', '/ai 재고 확인'))
+B._daily_tg_tick()
+ok('/ai 한 번이 모드를 켠다 + 접수 답장에 그 사실을 적는다',
+   B._tg_mode_get(state(), 'yhpark') == 'ai' and any('접두어 없이' in m[1] for m in SENT), (state(), [m[1][:60] for m in SENT]))
+del UPDATES[:]
+del SENT[:]
+UPDATES.append(upd(1069, '111', '/보고'))
+B._daily_tg_tick()
+ok('/보고 → 보고 모드로', len(SENT) == 1 and '일일보고 모드' in SENT[0][1] and B._tg_mode_get(state(), 'yhpark') == 'report', (SENT, state()))
+
+print('\n[16] 돌연변이 — 모드 어휘를 비우면 "/문답" 이 보고 글로 샌다')
+reset()
+saved_m = dict(B.TG_MODE_WORDS)
+B.TG_MODE_WORDS.clear()
+UPDATES.append(upd(1070, '111', '/문답'))
+B._daily_tg_tick()
+ok('(돌연변이) 모드 안 바뀌고 보고 파일이 생겼다', B._daily_rel(TODAY, 'yhpark') in NAS.files, list(NAS.files))
+B.TG_MODE_WORDS.update(saved_m)
 
 try:
     os.remove(STATE)

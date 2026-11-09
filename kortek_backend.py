@@ -1338,6 +1338,88 @@ TG_DIST_CB_PREFIX = 'pl'      # callback_data = 'pl|<보관함 uid>|<후보 번�
 TG_AI_ONLINE_STALE_SEC = 300          # 앱 신호가 이보다 오래되면 "꺼져 있는 것 같다"
 TG_AI_MAX_QUESTION = 2000
 
+# ══════════════════════════════════════════════════════════════
+# 🔁 대화 모드 — "텔레그램 채팅창을 AI 문답창처럼" (2026-11-09, 사용자 신고)
+# ══════════════════════════════════════════════════════════════
+#  신고: "텔레그램 채팅창을 AI 문답창처럼 쓰게 해달라고 했는데 잘 안 된다."
+#  실측 원인: 가르는 기준이 **접두어뿐**이라 접두어 없이 보낸 질문
+#  ("프로젝트 요약 부탁해")이 **오늘 일일보고의 업무 이름으로 저장**돼 있었다
+#  (2026-11-09 11:05 `2026-11-09__yhpark.json`). 오류도 안 나고 답도 안 온다.
+#  → 사람에게 접두어를 외우게 하는 대신 **모드**를 둔다: `/ai` 를 한 번 쓰면 그 사람의
+#    채팅이 AI 문답 모드가 되고, 그 뒤엔 **접두어 없이 적어도 질문**이다(문답창처럼).
+#  ⚠️ 보고를 잃지 않는 것이 먼저다 — AI 모드라도 **보고 서식은 보고로 간다**:
+#     `한일:`/`할일:`/`막힌일:` 태그(DAILY_TG_TAGS, 같은 어휘)·`휴가` 같은 한 단어
+#     (DAILY_TG_DAYTYPES)·`/다시` 는 그대로 보고로 떨어지고 모드도 보고로 돌아온다.
+#  ⚠️ 모드는 **스스로 식는다**(`ttlMin`) — 아침에 질문하고 퇴근 때 보고를 적는 사람이
+#     하루 종일 AI 모드에 갇히면 안 된다. 질문을 보낼 때마다 다시 데워진다.
+#  ⚠️ 보고 모드에서 **질문처럼 보이는 글**은 막지 않고(오분류로 글을 잃는 게 더 나쁘다)
+#     저장한 뒤 "질문이었나요?" 한 줄을 덧붙인다 — 조용한 실패를 드러내는 쪽.
+TG_MODE_WORDS = {   # 한 단어만 보내면 모드가 바뀐다(어휘는 데이터)
+    'ai':     ['/문답', '/ai모드', '/aimode', '/qa', '/채팅', '/chat', 'ai모드', '문답모드'],
+    'report': ['/보고', '/보고모드', '/report', '/일일보고', '보고모드'],
+}
+TG_MODE = {'ttlMin': 180,        # 마지막 질문 뒤 이만큼 지나면 보고 모드로 돌아간다
+           'hintQuestion': True}  # 보고 모드에서 질문처럼 보이는 글이면 안내 한 줄
+# 질문처럼 보이는 말 — 안내 한 줄을 붙일지에만 쓴다(저장을 막거나 AI 로 보내지 않는다).
+TG_QUESTION_HINTS = ['?', '？', '해줘', '해 줘', '알려줘', '알려 줘', '뭐야', '뭔지', '어때',
+                     '있나', '있어?', '확인해', '찾아줘', '요약해', '보여줘', '부탁해', '뽑아줘']
+
+
+def _tg_mode_norm(text):
+    """모드 전환 한 단어인가 → 'ai'/'report', 아니면 None."""
+    w = str(text or '').strip().lower().replace(' ', '')
+    for mode, words in TG_MODE_WORDS.items():
+        for x in words:
+            if w == x.lower().replace(' ', ''):
+                return mode
+    return None
+
+
+def _tg_mode_get(st, key):
+    """그 사람의 지금 모드. 식었으면 'report'(기본)."""
+    m = ((st.get('tgMode') or {}).get(key)) or {}
+    if (m.get('mode') or 'report') != 'ai':
+        return 'report'
+    try:
+        age = (datetime.now(KST) - datetime.fromisoformat(str(m.get('at')))).total_seconds() / 60.0
+    except Exception:
+        return 'report'          # 시각을 모르면 안전한 쪽(보고)
+    return 'ai' if age <= TG_MODE['ttlMin'] else 'report'
+
+
+def _tg_mode_set(st, key, mode):
+    """모드를 적고 **바로 저장**한다 — 틱이 중간에 죽어도 사람이 본 모드와 맞아야 한다."""
+    st.setdefault('tgMode', {})[key] = {'mode': mode, 'at': datetime.now(KST).isoformat()}
+    _daily_state_save(st)
+
+
+def _daily_tg_has_tag(text):
+    """보고 서식인가 — `_daily_apply_text` 와 **같은 어휘·같은 규칙**(줄머리 태그)."""
+    for raw in str(text or '').split('\n'):
+        low = raw.strip().lower()
+        if not low:
+            continue
+        for words in DAILY_TG_TAGS.values():
+            for w in words:
+                wl = w.lower()
+                if low.startswith(wl + ':') or low.startswith(wl + ' :') or low.startswith(wl + ')'):
+                    return True
+    return False
+
+
+def _tg_is_report_text(text):
+    """AI 모드에서도 **보고로 보내야 하는 글**인가(서식·날 종류·지우기)."""
+    w = str(text or '').strip()
+    return bool(w in DAILY_TG_DAYTYPES or w in ('/다시', '/reset') or _daily_tg_has_tag(w))
+
+
+def _tg_looks_question(text):
+    """질문처럼 보이는가 — 안내 한 줄에만 쓴다(판정이 틀려도 글은 이미 저장됐다)."""
+    w = str(text or '').strip().lower()
+    if not w or _tg_is_report_text(w):
+        return False
+    return any(h.lower() in w for h in TG_QUESTION_HINTS)
+
 
 def _tg_ai_strip(text):
     """접두어를 떼고 질문만. AI 명령이 아니면 None."""
@@ -1357,6 +1439,9 @@ def _tg_ai_help_text():
             '예) <code>/ai 999001 재고 확인해줘</code> · <code>/ai 이번 주 마감 업무</code> · '
             '<code>/ai 최근 메일 요약</code>\n'
             '답은 PC 에 켜 둔 앱이 만듭니다 — 앱이 꺼져 있으면 열 때 처리됩니다.\n\n'
+            '\U0001F501 <b>/문답</b> — 이 대화를 <b>AI 문답창처럼</b> 씁니다(접두어 없이 그냥 적으면 질문, '
+            '%d분 뒤 자동 복귀). 돌아오기는 <b>/보고</b>.\n'
+            '   문답 모드라도 <code>한일:</code> 같은 보고 서식과 <code>휴가</code> 는 보고로 저장됩니다.\n\n' % TG_MODE['ttlMin'] +
             '\u2600\ufe0f <b>/브리핑</b> — 지금 내 업무 브리핑(지연·오늘 마감·이번 주)을 받습니다.\n'
             '\U0001F4E5 <b>/배분</b> — 보관함에서 기다리는 메일을 버튼으로 프로젝트에 보냅니다(실행은 PC 앱).\n'
             '\U0001F4D4 <code>/ai 오늘 보고 초안</code> — 간트에서 오늘 보고 초안을 받아 고쳐 보내면 저장됩니다.\n'
@@ -1396,9 +1481,46 @@ def _tg_ai_enqueue(person, chat, question, uid):
     return rel
 
 
-def _tg_ai_handle(person, chat, text, uid):
-    """AI 명령이면 접수하고 True(성공)/False(쓰기 실패 — 다음 틱 재시도). 아니면 None."""
+def _tg_ai_accept(person, chat, question, uid, note=''):
+    """질문 하나를 큐에 넣고 접수 답장. True(성공)/False(쓰기 실패 — offset 안 올림)."""
+    try:
+        _tg_ai_enqueue(person, chat, question, uid)
+    except Exception as e:
+        print("[텔레그램AI] 접수 실패(다음 틱 재시도): %s" % e)
+        return False
+    online = _tg_ai_app_online(person['key'])
+    if online is True:
+        msg = '\U0001F916 접수했습니다 — PC 앱이 답을 만드는 중입니다. (보통 10~60초)'
+    elif online is False:
+        msg = ('⚠️ 접수는 했지만 <b>PC 앱이 꺼져 있는 것 같습니다</b>(최근 5분 신호 없음). '
+               '앱을 열면 그때 처리됩니다(2시간 안).')
+    else:
+        msg = '\U0001F916 접수했습니다 — PC 에 앱이 켜져 있으면 곧 답합니다.'
+    send_telegram_msg(msg + (('\n' + note) if note else ''), chat)
+    return True
+
+
+def _tg_ai_handle(person, chat, text, uid, st=None):
+    """AI 명령이면 접수하고 True(성공)/False(쓰기 실패 — 다음 틱 재시도). 아니면 None.
+
+    🔁 [2026-11-09] 접두어가 없어도 **AI 문답 모드**면 질문으로 받는다(문답창처럼).
+       보고 서식(`한일:`…)·`휴가`·`/다시` 는 모드와 무관하게 **보고로** 보낸다(None).
+    """
     word = str(text or '').strip()
+    st = st if st is not None else _daily_state()
+    key = person['key']
+    # 🔁 모드 전환 한 단어
+    want = _tg_mode_norm(word)
+    if want:
+        _tg_mode_set(st, key, want)
+        if want == 'ai':
+            send_telegram_msg('\U0001F916 <b>AI 문답 모드</b>로 바꿨습니다 — 이제 접두어 없이 그냥 적으면 '
+                              '질문으로 받습니다(%d분 뒤 자동으로 보고 모드).\n'
+                              '보고로 돌아가려면 <code>/보고</code>' % TG_MODE['ttlMin'], chat)
+        else:
+            send_telegram_msg('\U0001F4D4 <b>일일보고 모드</b>로 바꿨습니다 — 그냥 적으면 오늘 보고에 들어갑니다.\n'
+                              '질문은 <code>/ai 질문</code> 또는 <code>/문답</code>', chat)
+        return True
     if word.lower() in [w.lower() for w in TG_AI_HELP_WORDS]:
         send_telegram_msg(_tg_ai_help_text(), chat)
         return True
@@ -1418,24 +1540,28 @@ def _tg_ai_handle(person, chat, text, uid):
         return True
     q = _tg_ai_strip(word)
     if q is None:
-        return None
+        # 접두어가 없다 — 보고 서식이면 언제나 보고, 아니면 **AI 모드일 때만** 질문.
+        if _tg_is_report_text(word):
+            if _tg_mode_get(st, key) == 'ai':
+                _tg_mode_set(st, key, 'report')   # 보고를 적기 시작했으면 모드도 돌린다
+            return None
+        if _tg_mode_get(st, key) != 'ai':
+            return None
+        ok = _tg_ai_accept(person, chat, word[:TG_AI_MAX_QUESTION], uid)
+        if ok:
+            _tg_mode_set(st, key, 'ai')           # 질문마다 모드를 다시 데운다
+        return ok
     if not q:
         send_telegram_msg(_tg_ai_help_text(), chat)
         return True
-    try:
-        _tg_ai_enqueue(person, chat, q, uid)
-    except Exception as e:
-        print("[텔레그램AI] 접수 실패(다음 틱 재시도): %s" % e)
-        return False
-    online = _tg_ai_app_online(person['key'])
-    if online is True:
-        send_telegram_msg('\U0001F916 접수했습니다 — PC 앱이 답을 만드는 중입니다. (보통 10~60초)', chat)
-    elif online is False:
-        send_telegram_msg('⚠️ 접수는 했지만 <b>PC 앱이 꺼져 있는 것 같습니다</b>(최근 5분 신호 없음). '
-                          '앱을 열면 그때 처리됩니다(2시간 안).', chat)
-    else:
-        send_telegram_msg('\U0001F916 접수했습니다 — PC 에 앱이 켜져 있으면 곧 답합니다.', chat)
-    return True
+    was = _tg_mode_get(st, key)
+    note = ('' if was == 'ai' else
+            ('ℹ️ 이제 <b>접두어 없이</b> 그냥 적어도 질문으로 받습니다(%d분). '
+             '보고로 적으려면 <code>/보고</code>' % TG_MODE['ttlMin']))
+    ok = _tg_ai_accept(person, chat, q, uid, note)
+    if ok:
+        _tg_mode_set(st, key, 'ai')
+    return ok
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1978,7 +2104,7 @@ def _daily_tg_tick(force=False):
         # 🤖 AI 문답 명령인가 — 일일보고 글보다 **먼저** 가른다(접두어 기준, 사진이 달린
         #    메시지는 보고로 간다). 쓰기 실패면 offset 을 안 올리고 멈춘다(일일보고와 같은 규칙).
         if text and not att:
-            _ai = _tg_ai_handle(person, chat, text, uid)
+            _ai = _tg_ai_handle(person, chat, text, uid, st)
             if _ai is True:
                 handled += 1
                 last = max(last, uid + 1)
@@ -2027,6 +2153,13 @@ def _daily_tg_tick(force=False):
             n.put(n.abs_path(rel), json.dumps(doc, ensure_ascii=False, indent=2).encode('utf-8'))
             back = _daily_nas_json(rel) or doc
             send_telegram_msg(_daily_summary_text(back), chat)
+            # 🔁 [2026-11-09] 질문을 보고로 저장한 게 아닌지 **드러낸다**(조용한 실패 방지).
+            #    막지도 되묻지도 않는다 — 글은 이미 안전하게 저장됐고, 고치는 길만 알려 준다.
+            if TG_MODE.get('hintQuestion') and text and not att and _tg_looks_question(text):
+                send_telegram_msg('ℹ️ 질문이었나요? 지금은 <b>일일보고 모드</b>라 보고에 저장했습니다.\n'
+                                  '· 방금 글 지우기: <code>/다시</code>\n'
+                                  '· 한 번만 묻기: <code>/ai 질문</code>\n'
+                                  '· 계속 문답으로: <code>/문답</code>', chat)
             if att_err:
                 send_telegram_msg('⚠️ 첨부는 저장하지 못했습니다 — ' + html.escape(att_err), chat)
             handled += 1
