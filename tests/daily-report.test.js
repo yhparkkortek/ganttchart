@@ -245,10 +245,12 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('rev 가 다르면 덮어쓰지 않는다', conflicted);
 
     // 빈 내용 덮어쓰기 거부
+    // ⚠️ 문구가 아니라 **동작**으로 본다 — 예전엔 `/비어 있어/` 로 글자를 박아 둬서, 안내를 고치면
+    //    고장이 아닌데도 시험이 깨졌다(2026-11-09 에 실제로 그랬다).
     let blocked = false;
     try { await win.dailySave({ date: today, key: 'yhpark', dayType: 'work', items: [], next: '', issue: '', rev: 1 }); }
-    catch (e) { blocked = /비어 있어/.test(e.message); }
-    ok('내용 있는 날을 빈 것으로 덮지 않는다', blocked);
+    catch (e) { blocked = true; }
+    ok('내용 있는 날을 빈 것으로 덮지 않는다', blocked && (win.DAILY_PATHS.file(today, 'yhpark') in nas));
 
     // 휴가는 비어 있어도 저장된다(그게 정상 상태다)
     let leaveOk = false;
@@ -372,7 +374,8 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
         await win.dailySave({ date: fdate, key: 'yhpark', items: [], files: [], next: '', issue: '', rev: 2 });
         wiped = 'saved';
     } catch (e) { wiped = e.message; }
-    ok('첨부만 있던 보고를 빈 것으로 덮지 못한다', wiped !== 'saved' && /비어/.test(wiped), wiped);
+    // ⚠️ 문구가 아니라 **동작**으로 — 안내를 고치면 고장이 아닌데도 깨진다(2026-11-09).
+    ok('첨부만 있던 보고를 빈 것으로 덮지 못한다', wiped !== 'saved' && (win.DAILY_PATHS.file(fdate, 'yhpark') in nas), wiped);
     const keep = await win.dailySave({ date: fdate, key: 'yhpark', items: [],
         files: [{ name: 'b.pdf', safe: 'b.pdf', rel: 'r2', size: 2 }], next: '', issue: '', rev: 2 });
     ok('첨부만 바꾸는 저장은 통과한다', keep && keep.rev === 3, keep && keep.rev);
@@ -742,6 +745,59 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('updated_at 이 바뀌면 그 프로젝트를 다시 읽는다', reads === after2 + 1,
         '읽기 ' + after2 + ' → ' + reads + ' (B_PROJECT 한 건)');
     win.nasAppFile.get = realGet;
+
+    // ══ 9. 보고 지우기 — 항목을 전부 빼고 저장 ════════════════════════════════
+    console.log('\n■ 보고 지우기 (빈 덮어쓰기 가드는 그대로)');
+
+    const rmdate = '2026-09-17';
+    const rmrel = win.DAILY_PATHS.file(rmdate, 'yhpark');
+    function seedReport() {
+        nas[rmrel] = JSON.stringify({ date: rmdate, key: 'yhpark', name: '박용훈', team: '개발3팀',
+            dayType: 'work', items: [{ name: 'A 업무', note: '했다' }, { name: 'B 업무', next: '할 것' }],
+            files: [], next: '', issue: '', rev: 3, savedAt: '2026-09-17T08:00:00.000Z' });
+        try { global.localStorage.removeItem(win.DAILY_POLICY.draftKey); } catch (e) { /* 없으면 그만 */ }
+    }
+
+    // ⚠️ 가드는 남아 있어야 한다 — 사람이 비우지 않았는데 빈 것이 써지는 길(낡은 초안·배경 경로)은
+    //    2026-11-04 색인 유실과 같은 모양이다.
+    seedReport();
+    let rmBlocked = '';
+    try {
+        await win.dailySave({ date: rmdate, key: 'yhpark', dayType: 'work', items: [], files: [],
+                              next: '', issue: '', rev: 3 });
+    } catch (e) { rmBlocked = e.message; }
+    ok('사람이 비우지 않은 빈 저장은 여전히 막는다', !!rmBlocked && rmrel in nas, rmBlocked || '(안 막혔다)');
+    // 🗑 [2026-11-09 신고] 옛 안내는 "지우려면 항목을 하나씩 지워주세요" 였는데, 하나씩 지운
+    //    **마지막 상태**가 바로 막히는 그 상태라 빠져나갈 길이 없었다.
+    ok('막다른 안내("하나씩 지워주세요")를 쓰지 않는다', rmBlocked.indexOf('하나씩') === -1, rmBlocked);
+
+    // 사람이 이 창에서 항목을 전부 빼고 저장하면 → 파일이 사라진다(빈 껍데기를 남기지 않는다).
+    seedReport();
+    await win.dailyOpenModal(rmdate);
+    win._dailyDropItem(0);
+    win._dailyDropItem(0);
+    await win._dailySave();
+    ok('사람이 비우고 저장하면 파일이 지워진다', !(rmrel in nas) && deleted.indexOf(rmrel) >= 0,
+        'nas=' + (rmrel in nas) + ' deleted=' + JSON.stringify(deleted.slice(-1)));
+
+    // ↩ 되돌리기 — 지운 그대로 되살아난다(이 창을 닫기 전까지).
+    await win.dailyUndoDelete();
+    const back = nas[rmrel] ? JSON.parse(nas[rmrel]) : null;
+    ok('되돌리면 업무가 그대로 돌아온다',
+        !!back && back.items.length === 2 && back.items[0].name === 'A 업무' && back.items[0].note === '했다',
+        back ? JSON.stringify(back.items.map((x) => x.name)) : '(없음)');
+
+    // 🏖 휴가처럼 "보고할 일이 없는 날"은 원래부터 빈 채로 저장된다 — 지우기가 아니다.
+    seedReport();
+    await win.dailyOpenModal(rmdate);
+    win._dailyDropItem(0);
+    win._dailyDropItem(0);
+    win._dailySetType('leave');
+    await win._dailySave();
+    const lv = nas[rmrel] ? JSON.parse(nas[rmrel]) : null;
+    ok('휴가는 빈 채로 저장되고 파일은 남는다', !!lv && lv.dayType === 'leave' && (lv.items || []).length === 0,
+        lv ? lv.dayType : '(파일이 지워졌다)');
+    delete nas[rmrel];
 
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');

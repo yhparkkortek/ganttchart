@@ -783,7 +783,7 @@
      *             ② 지금 내용이 있는데 **빈 것으로** 덮으려 하면 거부한다
      *   (project_index 를 0건으로 덮어 날린 그 사고와 같은 모양을 미리 막는다)
      */
-    window.dailySave = async function (doc) {
+    window.dailySave = async function (doc, opts) {
         // ⚠️ 이 함수는 **내 파일만** 쓴다(그게 이 설계의 불변식이다). 그래서 `doc.key` 를
         //    믿지 않고 덮어쓴다 — 옛 초안(localStorage)에 `'unknown'` 이 남아 있을 수 있다.
         var _k = requireKey();
@@ -806,8 +806,20 @@
         var hasContent = !!((doc.items || []).length || (doc.files || []).length || doc.next || doc.issue);
         var exempt = (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === doc.dayType; })[0] || {}).exempt;
         if (hadContent && !hasContent && !exempt) {
-            throw new Error(T('내용이 비어 있어 저장을 막았습니다 — 지우려면 항목을 하나씩 지워주세요.',
-                              'Blocked an empty overwrite — remove items individually instead.'));
+            // 🗑 [2026-11-09 신고] 보고를 **지우려고** 항목을 전부 뺀 사람이 여기서 막혔다.
+            //    게다가 안내가 "하나씩 지워주세요" 였는데, 하나씩 지운 그 **마지막 상태**가 바로
+            //    이 상태라 빠져나갈 길이 없었다.
+            //    ⚠️ 가드는 남긴다 — 이건 `project_index` 를 0건으로 덮어 날린 사고와 같은 모양이고,
+            //       막아야 하는 건 **사람이 비우지 않았는데 빈 것이 써지는** 경우(낡은 초안·배경 경로)다.
+            //    → 가르는 기준은 **이 창에서 사람이 직접 비웠는가**(`_emptiedByUser`). 그 경우엔
+            //       빈 껍데기를 쓰지 않고 **파일을 지운다** — 빈 보고를 남기면 하루 보기에서
+            //       '작성함(내용 없음)' 으로 보여 "안 쓴 날" 과 구분이 안 된다.
+            if (!opts || !opts.allowEmpty) {
+                throw new Error(T('빈 내용으로 덮어쓰지 않았습니다 — 오늘 보고를 지우려면 이 창에서 항목을 모두 뺀 뒤 저장하세요.',
+                                  'Did not overwrite with empty content — to delete today\'s report, remove all items here and save.'));
+            }
+            await window.nasAppFile.del(rel);
+            return { deleted: true, prev: cur };
         }
         doc.rev = (doc.rev || 0) + 1;
         doc.savedAt = new Date().toISOString();
@@ -842,6 +854,8 @@
     // ══════════════════════════════════════════════════════════════════════
 
     var _doc = null, _date = null;
+    // 🗑 지우기 — "이 창에서 사람이 비웠나" 와 "방금 지운 보고"(되돌리기용).
+    var _emptiedByUser = false, _deleted = null;
 
     function saveDraftLocal() {
         if (!_doc) return;
@@ -856,6 +870,8 @@
             return;
         }
         _date = dateStr || ymd();
+        _emptiedByUser = false;      // 날짜가 바뀌면 "사람이 비웠다" 는 표시도 처음부터
+        _deleted = null;
         // 🪪 계정을 모르면 쓸 파일이 정해지지 않는다 — 열기 전에 한 번 확보하고,
         //    그래도 모르면 **모달을 열지 않고** 왜 안 되는지 말한다.
         if (!await window.dailyEnsureIdentity()) {
@@ -1024,6 +1040,7 @@
     '<button onclick="window.dailyCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; flex-shrink:0;">✕</button>' +
   '</div>' +
   '<div style="flex:1; min-height:0; overflow-y:auto; padding:14px 17px;">' +
+    deletedBandHtml() +
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">' +
       '<span style="font-size:12px; color:#555; margin-right:4px;">' + esc(T('일 종류', 'Day type')) + '</span>' + types + '</div>' +
     (exempt
@@ -1081,7 +1098,9 @@
         if (_doc.items[i]) { _doc.items[i].cat = String(v || '').trim(); saveDraftLocal(); render(); }
     };
     window._dailyField = function (k, v) { _doc[k] = v; saveDraftLocal(); };
-    window._dailyDropItem = function (i) { _doc.items.splice(i, 1); saveDraftLocal(); render(); };
+    // 🗑 사람이 **직접** 뺀 것만 표시한다 — 이 표시가 있어야 빈 저장(=지우기)이 통과한다.
+    //    ⚠️ 낡은 초안이나 배경 경로가 비운 것은 이 표시를 못 얻는다(그래서 여전히 막힌다).
+    window._dailyDropItem = function (i) { _doc.items.splice(i, 1); _emptiedByUser = true; saveDraftLocal(); render(); };
     window._dailyAdd = function (i) {
         var c = (window._dailyCand || [])[i];
         if (!c) return;
@@ -1101,8 +1120,21 @@
         var btn = document.getElementById('daily-save-btn');
         if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
         try {
-            _doc = await window.dailySave(_doc);
-            toast('✅ ' + T('일일보고를 저장했습니다.', 'Daily report saved.'), 'success');
+            var res = await window.dailySave(_doc, { allowEmpty: _emptiedByUser });
+            if (res && res.deleted) {
+                // ⚠️ 되돌릴 거리는 **지워지기 전 NAS 내용**(`res.prev`)이다 — 화면의 `_doc` 은
+                //    사람이 방금 비운 **빈 것**이라, 그걸 담아 두면 되돌려도 빈 보고가 돌아온다
+                //    (하네스가 바로 이걸 잡았다).
+                _deleted = res.prev;
+                _doc = emptyDoc(_date);
+                _emptiedByUser = false;
+                toast('🗑 ' + T('오늘 보고를 지웠습니다.', 'Deleted today\'s report.'), 'info', 6000);
+            } else {
+                _doc = res;
+                _deleted = null;
+                _emptiedByUser = false;
+                toast('✅ ' + T('일일보고를 저장했습니다.', 'Daily report saved.'), 'success');
+            }
             render();
             if (document.getElementById('tab-daily') && document.getElementById('tab-daily').classList.contains('active')) {
                 window.dailyRenderTab();
@@ -1352,6 +1384,7 @@
             delete _fileUrls[f.rel];
         }
         _doc.files.splice(i, 1);
+        _emptiedByUser = true;
         saveDraftLocal();
         render();
         toast(T('첨부를 지웠습니다 — 저장을 눌러야 보고에서도 빠집니다.',
@@ -1458,6 +1491,37 @@
      * [2026-11-05 요청] 칸을 업무마다로 옮겼으니 입력칸은 없앴다. 다만 **이미 적힌 글을
      * 안 보이게만 하면 지울 수도 없는 데이터**가 남는다 — 있을 때만 보여 주고 치울 수 있게 한다.
      */
+    /** 🗑 방금 지운 보고를 되살릴 띠 — 이 창을 닫으면 사라진다(그래서 "방금" 만 된다). */
+    function deletedBandHtml() {
+        if (!_deleted) return '';
+        var n = ((_deleted.items || []).length);
+        return '<div style="margin:0 0 10px; padding:8px 10px; border:1px dashed #a5c8f0; background:#f2f8ff; border-radius:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
+                 '<span style="font-size:11.5px; color:#1a4f7a;">🗑 ' +
+                   esc(T('오늘 보고를 지웠습니다 (업무 ' + n + '건).', 'Deleted today\'s report (' + n + ' task(s)).')) + '</span>' +
+                 '<button onclick="window.dailyUndoDelete()" style="padding:2px 9px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:5px; font-size:10.5px; font-weight:bold; cursor:pointer;">↩ ' +
+                   esc(T('되돌리기', 'Undo')) + '</button>' +
+               '</div>';
+    }
+
+    /**
+     * 지운 보고를 그대로 다시 쓴다.
+     * ⚠️ `rev` 는 손대지 않는다 — 파일이 없으니 `dailySave` 의 충돌 검사가 건너뛰고,
+     *    빈 덮어쓰기 가드도 (지금 내용이 있으므로) 걸리지 않는다.
+     */
+    window.dailyUndoDelete = async function () {
+        if (!_deleted) return;
+        try {
+            _doc = await window.dailySave(_deleted);
+            _deleted = null;
+            _emptiedByUser = false;
+            toast('↩ ' + T('보고를 되살렸습니다.', 'Report restored.'), 'success');
+            render();
+            if (window.dailyRenderTab) window.dailyRenderTab();
+        } catch (e) {
+            toast('⚠️ ' + e.message, 'warning', 9000);
+        }
+    };
+
     function legacyEtcHtml() {
         var has = String(_doc.next || '').trim() || String(_doc.issue || '').trim();
         if (!has) return '';
