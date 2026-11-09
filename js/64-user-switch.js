@@ -1,23 +1,24 @@
 /* ============================================================================
-   👤 js/64-user-switch.js — "지금 누구로 보고 있나" 고르기 + 로그아웃 (2026-11-09, 사용자 요청)
+   🔑 js/64-user-switch.js — 시작 화면 로그인(NAS 계정) + 로그아웃 (2026-11-09, 사용자 요청)
 
-   요청: "앱 실행하면 로그인 창 띄워주고 로그아웃 기능도 넣어줘 /
-          하나의 PC에서 여러명이 자기 프로젝트 띄워놓고 발표해야 하는 경우가 필요하니까"
-   그리고 이어서: **"형식적인 로그아웃 기능 — 회의실에서 업무 보고할 때"**
+   요청: "하나의 PC에서 여러명이 자기 프로젝트 띄워놓고 발표" · "형식일지라도 개인 로그인이
+         나중에 필요하니까 **NAS 비번 넣는 곳과 연동해서** 초기에 아이디·비번 눌러서 저장되게"
 
-   ⚠️⚠️ 그래서 이건 **접근 제한이 아니다.** 비밀번호를 묻지 않고, 아무나 아무 이름이나 고를 수 있다.
-      바뀌는 건 "앱이 **나**라고 보는 사람" 하나다 — 일일보고의 내 파일, '내 프로젝트', 담당자 기준.
-      ⛔ 진짜 인증을 원하면 NAS 로그인을 붙여야 하는데, 그건 **실패 3번이면 그 PC 의 IP 가 잠긴다**
-         (docs/nas-dsm.md). 회의실에서 돌려쓰며 타자 실수가 쌓이기 딱 좋은 자리라 **일부러 안 붙였다.**
-      그래서 화면에도 "접근 제한이 아니다" 라고 적어 둔다 — 로그인처럼 보이면 사람은 지켜 준다고 믿는다.
+   그래서 이 화면은 🔑 설정의 NAS 계정과 **같은 저장소**를 쓴다(`/nas/login` → `nas_dsm`).
+   여기서 로그인하면 그 계정이 이 PC 의 NAS 계정이 되고, 앱이 "나" 로 보는 사람도 그 사람이 된다.
 
-   ⚠️⚠️ **가장 위험한 것은 일일보고 파일 이름이다.** `myKey()`(js/59)가 파일 이름을 정하므로,
-      신원을 잘못 둔 채 저장하면 **남의 보고 파일에 쓴다**(이 설계의 단 하나뿐인 불변식이 깨진다).
-      → 그래서 ① 고른 사람을 **헤더에 늘 띄우고** ② 바꾸면 훑어 둔 '내 프로젝트' 캐시를 **전부 버린다**.
+   ⚠️⚠️ **틀리면 3번 만에 이 PC 의 IP 가 잠긴다**(계정이 아니라 PC 다, docs/nas-dsm.md).
+      그래서 ① 남은 횟수를 **화면에 적고** ② 잠기면 푸는 방법을 적고 ③ **자동 재시도는 없다**.
+      백엔드는 "로그인 성공한 뒤에만 저장" 한다 — 저장이 먼저면 `save_config` 의 `reset_block()`
+      때문에 예산이 매번 되살아나 **잠금이 영영 안 걸린다**(그 자리를 DSM 자동차단이 대신한다).
 
-   연결: js/59 `myKey()` 가 `window._appUserKey` 를 **맨 먼저** 본다(한 줄). 나머지(내 일 판정·
-        담당자 필터·명단)는 전부 그 아래를 지나므로 따라온다.
-   검증: tests/user-switch.browser.js
+   ⚠️⚠️ 이 값이 **일일보고 파일 이름**을 정한다(js/59 `myKey()` 가 `window._appUserKey` 를 맨 먼저 본다).
+      잘못 두면 남의 보고 파일에 쓴다 → 고른 사람을 **헤더 배지에 늘** 띄우고, 사람이 바뀌면
+      훑어 둔 '내 프로젝트' 캐시를 **전부 버린다**.
+
+   ⚠️ 계정이 **실제로 바뀌면 새로고침한다** — 백엔드 NAS 세션은 PC 에 하나뿐이라, 앞사람이 열어 둔
+      화면이 그대로 있으면 그 자동저장이 **뒷사람 계정으로** 나간다.
+   검증: tests/user-switch.browser.js · py -3 tests/test_nas_login_with.py
    ============================================================================ */
 (function () {
     'use strict';
@@ -25,11 +26,13 @@
     window.USER_SWITCH = window.USER_SWITCH || {
         userKey: 'gantt_app_user',            // {key,name,at} — 이 브라우저가 기억하는 "지금 나"
         rememberKey: 'gantt_app_user_remember',
-        askOnBoot: true,                      // 앱을 열면 고르는 화면부터
-        bootDelayMs: 2500,                    // 명단(주소록)이 들어올 틈을 준다
-        badgeId: 'app-user-badge'
+        askOnBoot: true,
+        bootDelayMs: 2500,                    // 명단·NAS 상태가 들어올 틈을 준다
+        badgeId: 'app-user-badge',
+        backend: 'http://127.0.0.1:5000'
     };
     var U = window.USER_SWITCH;
+    var _busy = false, _msg = '', _budget = null;
 
     function T(ko, en) { return window._t ? window._t(ko, en) : ko; }
     function esc(s) { return window.escapeHtml ? window.escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -47,97 +50,116 @@
         try { return localStorage.getItem(U.rememberKey) === '1'; } catch (e) { return false; }
     }
 
-    /** 명단(주소록 기반). 아직 안 들어왔으면 빈 배열 — 그땐 화면이 "불러오는 중" 으로 말한다. */
-    function roster() {
-        var list = (typeof window._dailyRoster === 'function') ? (window._dailyRoster() || []) : [];
-        return list.filter(function (m) { return m && m.key && m.active !== false; });
+    /** 계정 id → 사람 이름(명단은 주소록에서 온다). 못 찾으면 id 그대로 — 지어내지 않는다. */
+    function nameOf(key) {
+        var k = String(key || '').trim().toLowerCase();
+        var hit = ((typeof window._dailyRoster === 'function' ? window._dailyRoster() : []) || [])
+            .filter(function (m) { return m && String(m.key || '').toLowerCase() === k; })[0];
+        return (hit && hit.name) || key || '';
     }
 
-    /** 이 PC 의 NAS 계정에 해당하는 사람 — 고르는 화면의 기본값. */
-    function defaultKey() {
-        return String(window._nasAccount || '').trim().toLowerCase();
+    async function api(method, path, body) {
+        var r = await fetch(U.backend + path, {
+            method: method, cache: 'no-store',
+            headers: { 'Content-Type': 'application/json' },
+            body: body ? JSON.stringify(body) : undefined
+        });
+        var txt = await r.text();
+        try { return JSON.parse(txt); } catch (e) {
+            // 구버전 백엔드는 404 HTML 을 준다 — "안 돌고 있다" 와 "돌지만 구버전" 을 나눠 말한다.
+            throw new Error(r.status === 404
+                ? T('백엔드가 구버전입니다 — 재시작해주세요.', 'Backend is outdated — please restart it.')
+                : T('백엔드 응답을 읽지 못했습니다(' + r.status + ').', 'Bad backend response (' + r.status + ').'));
+        }
     }
 
     // ── 신원 적용 ───────────────────────────────────────────────────────────
-    /**
-     * ⚠️ 바꾸면 **훑어 둔 것을 전부 버린다** — '내 프로젝트'·'내 일' 은 사람마다 다른데,
-     *    캐시가 남아 있으면 앞사람 기준이 그대로 보인다(오류는 안 난다 = 조용한 오답).
-     */
     function apply(u) {
         window._appUserKey = u ? u.key : '';
         if (u && u.name) window.currentUserName = u.name;
+        // 🧹 '내 프로젝트'·'내 일' 은 사람마다 다르다 — 앞사람 기준이 남으면 조용한 오답이 된다.
         try { if (window._dailyResetScans) window._dailyResetScans(); } catch (e) { /* 없으면 그만 */ }
         try { if (window._psResetScan) window._psResetScan(); } catch (e) { /* 없으면 그만 */ }
         paintBadge();
         try { if (window.dailyRenderTab) window.dailyRenderTab(); } catch (e) { /* 탭이 없을 수 있다 */ }
-        try {
-            var m = document.getElementById('ai-summary-modal');
-            if (m && m.style.display !== 'none' && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
-        } catch (e) { /* 모달이 없으면 그만 */ }
     }
 
+    function store(u, remember) {
+        try {
+            localStorage.setItem(U.userKey, JSON.stringify({ key: u.key, name: u.name, at: Date.now() }));
+            localStorage.setItem(U.rememberKey, remember ? '1' : '0');
+        } catch (e) { /* 저장소가 꽉 차도 이번 판은 돌아야 한다 */ }
+    }
+
+    /** 코드에서 신원만 바꾼다(하네스·내부용). 로그인은 `_appUserLogin` 이 한다. */
     window.appUserSet = function (key, name, remember) {
         var k = String(key || '').trim();
         if (!k) return;
-        var u = { key: k, name: String(name || k), at: Date.now() };
-        try {
-            localStorage.setItem(U.userKey, JSON.stringify(u));
-            localStorage.setItem(U.rememberKey, remember ? '1' : '0');
-        } catch (e) { /* 저장소가 꽉 차도 이번 판은 돌아야 한다 */ }
+        var u = { key: k, name: String(name || nameOf(k) || k) };
+        store(u, remember);
         apply(u);
         closePicker();
-        if (window.showToast) window.showToast('👤 ' + T(u.name + ' 으로 보고 있습니다.', 'Viewing as ' + u.name), 'info');
     };
 
     /**
-     * 🚪 로그아웃 — **형식적인 것**이다. NAS 연결은 그대로 둔다(끊으면 다음 사람이 아무것도 못 연다).
-     *    바뀌는 건 "앱이 나라고 보는 사람" 뿐이고, 고르는 화면이 다시 뜬다.
+     * 🚪 로그아웃 — NAS 세션을 끊고(다음 사람이 제 계정으로 들어오게) 로그인 화면으로 돌아간다.
+     * ⚠️ 저장된 계정(아이디·비밀번호)은 **지우지 않는다** — 주소·앱 폴더가 같은 파일에 있어서
+     *    지우면 다음 사람이 설정을 처음부터 해야 한다. 다음 사람은 자기 계정으로 로그인하면
+     *    그때 덮어쓴다(`save` 를 켰을 때만).
      */
-    window.appUserLogout = function () {
+    window.appUserLogout = async function () {
         try { localStorage.removeItem(U.userKey); localStorage.removeItem(U.rememberKey); } catch (e) { /* 무시 */ }
+        try { await api('DELETE', '/nas/login'); } catch (e) { /* 끊기에 실패해도 화면은 돌려놓는다 */ }
         apply(null);
+        _msg = T('로그아웃했습니다 — 아이디와 비밀번호를 넣어주세요.', 'Signed out — please sign in.');
         openPicker();
     };
 
-    // ── 고르는 화면 ─────────────────────────────────────────────────────────
+    // ── 로그인 화면 ─────────────────────────────────────────────────────────
     function closePicker() {
         var el = document.getElementById('app-user-gate');
         if (el) el.style.display = 'none';
     }
     window._appUserClosePicker = closePicker;
 
-    function pickerHtml() {
-        var list = roster();
-        var cur = (readUser() || {}).key || defaultKey();
-        var opts = list.map(function (m) {
-            var label = (m.name || m.key) + (m.team ? ' · ' + m.team : '');
-            return '<option value="' + esc(m.key) + '"' + (m.key === cur ? ' selected' : '') + '>' + esc(label) + '</option>';
-        }).join('');
-        var none = !list.length;
+    function gateHtml(st) {
+        var idv = (readUser() || {}).key || (st && st.user) || '';
+        var left = _budget && typeof _budget.left === 'number' ? _budget.left : null;
+        var blocked = !!(st && st.reason === 'blocked');
+        var warn = '';
+        if (blocked) {
+            warn = '<div style="padding:9px 11px; background:#fbe4e2; border:1px solid #eeb0ac; border-radius:7px; font-size:11.5px; color:#b1432f; text-align:left; margin-bottom:10px;">⛔ ' +
+                   esc(T('여러 번 틀려서 잠겼습니다. 🔑 설정 ▸ NAS 에서 비밀번호를 다시 저장하면 풀립니다.',
+                         'Locked after repeated failures. Re-save the password in 🔑 settings to unlock.')) + '</div>';
+        } else if (_msg) {
+            warn = '<div style="padding:9px 11px; background:#fbead9; border:1px solid #edbf85; border-radius:7px; font-size:11.5px; color:#a85d0a; text-align:left; margin-bottom:10px;">' +
+                   esc(_msg) + (left !== null ? ' (' + esc(T(left + '번 더 시도할 수 있습니다', left + ' attempt(s) left')) + ')' : '') + '</div>';
+        }
+        var inp = 'width:100%; box-sizing:border-box; padding:11px 12px; border:1px solid #2aa5b5; border-radius:6px; font-size:14px; background:#eef8fa; margin-bottom:8px;';
         return '' +
-        '<div style="width:min(420px,92vw); background:#fff; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.25); padding:28px 26px 22px; text-align:center;">' +
+        '<div style="width:min(430px,92vw); background:#fff; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.25); padding:28px 26px 22px; text-align:center;">' +
           '<div style="font-size:30px; font-weight:900; letter-spacing:-1px; color:#00707d; margin-bottom:4px;">kortek</div>' +
           '<div style="font-size:12px; color:#888; margin-bottom:18px;">' + esc(T('업무 관리', 'Project Manager')) + '</div>' +
-          (none
-            ? '<div style="padding:14px; background:#fff8e6; border:1px solid #f0d9a0; border-radius:8px; font-size:12px; color:#8a6d3b; margin-bottom:14px;">' +
-                esc(T('명단을 아직 못 불러왔습니다 — NAS 연결을 확인하고 새로고침해주세요. (👥 명단은 주소록에서 만들어집니다)',
-                      'Roster not loaded yet — check the NAS connection and reload.')) + '</div>'
-            : '<select id="app-user-pick" style="width:100%; box-sizing:border-box; padding:11px 12px; border:1px solid #2aa5b5; border-radius:6px; font-size:14px; background:#eef8fa; margin-bottom:10px;">' + opts + '</select>') +
-          '<button onclick="window._appUserSubmit()" ' + (none ? 'disabled ' : '') +
-            'style="width:100%; box-sizing:border-box; padding:11px 0; border:none; border-radius:6px; background:' + (none ? '#bbb' : '#19b4c8') + '; color:#fff; font-size:15px; font-weight:bold; cursor:' + (none ? 'default' : 'pointer') + ';">' +
-            esc(T('시작', 'Start')) + '</button>' +
+          warn +
+          '<input id="app-user-id" value="' + esc(idv) + '" autocomplete="username" placeholder="' + esc(T('아이디', 'ID')) + '" style="' + inp + '">' +
+          '<input id="app-user-pw" type="password" autocomplete="current-password" placeholder="' + esc(T('비밀번호', 'Password')) + '" style="' + inp + '" ' +
+            'onkeydown="if(event.key===\'Enter\'){window._appUserLogin();}">' +
+          '<button id="app-user-go" onclick="window._appUserLogin()"' + (blocked ? ' disabled' : '') +
+            ' style="width:100%; box-sizing:border-box; padding:11px 0; border:none; border-radius:6px; background:' + (blocked ? '#bbb' : '#19b4c8') + '; color:#fff; font-size:15px; font-weight:bold; cursor:' + (blocked ? 'default' : 'pointer') + ';">' +
+            esc(_busy ? T('로그인 중…', 'Signing in…') : T('로그인', 'Sign in')) + '</button>' +
           '<label style="display:flex; align-items:center; gap:6px; margin-top:12px; font-size:12px; color:#666; cursor:pointer;">' +
             '<input type="checkbox" id="app-user-remember"' + (remembered() ? ' checked' : '') + '> ' +
-            esc(T('이 PC 에서 기억 (다음부터 이 창을 안 띄웁니다)', 'Remember on this PC')) + '</label>' +
-          // ⚠️ 로그인처럼 보이면 사람은 "지켜 준다"고 믿는다 — 아니라고 적는다.
+            esc(T('계정 저장 (이 PC 에 저장하고 다음부터 이 창을 안 띄웁니다)', 'Save on this PC')) + '</label>' +
           '<div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee; font-size:11px; color:#aaa; line-height:1.5; text-align:left;">' +
-            esc(T('이 화면은 일일보고·내 프로젝트·담당자를 누구 기준으로 볼지 정합니다. 비밀번호를 묻지 않으며 접근을 막지 않습니다 — 회의실에서 발표자를 바꾸기 위한 것입니다.',
-                  'This only sets whose daily report / projects you are looking at. It asks no password and restricts nothing.')) +
+            esc(T('사내 NAS 계정입니다(🔑 설정의 그 계정과 같습니다). 로그인한 사람 기준으로 일일보고·내 프로젝트·담당자를 보여 줍니다.',
+                  'Your NAS account — the same one in 🔑 settings.')) +
+            '<br>⚠️ ' + esc(T('비밀번호를 여러 번 틀리면 이 PC 가 잠깁니다 — 천천히 확인하고 넣어주세요.',
+                             'Repeated failures lock this PC — type carefully.')) +
           '</div>' +
         '</div>';
     }
 
-    function openPicker() {
+    async function openPicker() {
         var el = document.getElementById('app-user-gate');
         if (!el) {
             el = document.createElement('div');
@@ -145,18 +167,63 @@
             el.style.cssText = 'position:fixed; inset:0; z-index:99000; background:rgba(245,248,250,.97); display:flex; align-items:center; justify-content:center;';
             document.body.appendChild(el);
         }
-        el.style.display = 'flex';            // ⚠️ 닫을 때 none 으로 두므로 열 때마다 다시 켠다(js/59 와 같은 버그를 피한다)
-        el.innerHTML = pickerHtml();
+        el.style.display = 'flex';            // ⚠️ 닫을 땐 none 이므로 열 때마다 다시 켠다
+        var st = null;
+        try { st = await api('GET', '/nas/status'); } catch (e) { /* 백엔드가 꺼져 있어도 화면은 띄운다 */ }
+        _budget = (st && st.budget) || _budget;
+        el.innerHTML = gateHtml(st || {});
+        var pw = document.getElementById('app-user-pw');
+        if (pw) try { pw.focus(); } catch (e) { /* 무시 */ }
     }
     window.appUserOpenPicker = openPicker;
 
-    window._appUserSubmit = function () {
-        var sel = document.getElementById('app-user-pick');
-        var rem = document.getElementById('app-user-remember');
-        if (!sel || !sel.value) return;
-        var name = sel.options[sel.selectedIndex] ? String(sel.options[sel.selectedIndex].textContent).split(' · ')[0] : sel.value;
-        window.appUserSet(sel.value, name, !!(rem && rem.checked));
+    window._appUserLogin = async function () {
+        if (_busy) return;
+        var id = (document.getElementById('app-user-id') || {}).value || '';
+        var pw = (document.getElementById('app-user-pw') || {}).value || '';
+        var rem = !!(document.getElementById('app-user-remember') || {}).checked;
+        id = String(id).trim();
+        if (!id || !pw) { _msg = T('아이디와 비밀번호를 모두 넣어주세요.', 'Enter both ID and password.'); return openPicker(); }
+        _busy = true;
+        var btn = document.getElementById('app-user-go');
+        if (btn) { btn.disabled = true; btn.textContent = T('로그인 중…', 'Signing in…'); }
+        var before = String(window._nasAccount || '').trim().toLowerCase();
+        try {
+            // ⚠️ 비밀번호는 **본문으로만** 간다(쿼리에 실으면 로그에 남는다). 자동 재시도는 없다.
+            var r = await api('POST', '/nas/login', { user: id, password: pw, save: rem });
+            _budget = r && r.budget || null;
+            if (!r || !r.ok) {
+                _msg = (r && r.message) || T('로그인하지 못했습니다.', 'Sign-in failed.');
+                _busy = false;
+                return openPicker();
+            }
+            _msg = '';
+            _busy = false;
+            var key = String(r.user || id).toLowerCase();
+            // 명단을 다시 들여야 이름이 나온다(처음 로그인이면 아직 못 읽었다).
+            try { if (window.dailyLoadRoster) await window.dailyLoadRoster(true); } catch (e) { /* 이름은 id 로 */ }
+            store({ key: key, name: nameOf(key) }, rem);
+            window._nasAccount = r.user || id;
+            closePicker();
+            // ⚠️ 계정이 **진짜 바뀌었으면** 새로고침한다 — 앞사람이 열어 둔 화면의 자동저장이
+            //    뒷사람 계정으로 나가는 것을 막는 가장 확실한 방법이다.
+            if (before && before !== key) { window._appUserReload(); return; }
+            apply({ key: key, name: nameOf(key) });
+            if (window.showToast) window.showToast('👤 ' + T(nameOf(key) + ' 으로 로그인했습니다.', 'Signed in as ' + nameOf(key)), 'success');
+            try { if (window._storageLoadSharedData) window._storageLoadSharedData(); } catch (e) { /* 아래에서 배너가 말한다 */ }
+        } catch (e) {
+            _busy = false;
+            _msg = String((e && e.message) || e);
+            return openPicker();
+        }
     };
+
+    /**
+     * 화면을 새로 여는 지점 — 하네스가 갈아 끼울 수 있게 한 칸 놨다.
+     * ⚠️ `location.reload` 는 **덮어쓸 수 없다**(조용히 무시된다) — 실측으로 확인했고,
+     *    그래서 하네스가 페이지를 정말 새로고쳐 결과를 통째로 잃었다.
+     */
+    window._appUserReload = function () { location.reload(); };
 
     // ── 헤더 배지 ───────────────────────────────────────────────────────────
     function paintBadge() {
@@ -171,11 +238,11 @@
             host.parentNode.insertBefore(b, host);
         }
         var u = readUser();
-        // ⚠️ 안 고른 상태도 **보여 준다** — 비워 두면 "아무나"로 저장될 수 있다는 걸 아무도 모른다.
-        b.textContent = '👤 ' + (u ? u.name : T('누구?', 'Who?'));
+        // ⚠️ 안 고른 상태도 **보여 준다** — 비워 두면 누구로 저장되는지 아무도 모른다.
+        b.textContent = '👤 ' + (u ? u.name : T('로그인', 'Sign in'));
         b.title = u
-            ? T(u.name + ' 기준으로 보고 있습니다 — 누르면 바꿉니다', 'Viewing as ' + u.name + ' — click to switch')
-            : T('누구로 볼지 아직 안 골랐습니다 — 누르면 고릅니다', 'No one picked yet — click to choose');
+            ? T(u.name + ' 으로 보고 있습니다 — 누르면 바꿉니다', 'Viewing as ' + u.name + ' — click to switch')
+            : T('아직 로그인하지 않았습니다 — 누르면 로그인합니다', 'Not signed in — click to sign in');
         b.style.cssText = 'flex-shrink:0; ' + (u ? '' : 'background:#fbead9; color:#a85d0a; border-color:#edbf85;');
     }
     window._appUserPaintBadge = paintBadge;
@@ -184,13 +251,18 @@
     async function boot() {
         try { if (window.dailyLoadRoster) await window.dailyLoadRoster(); } catch (e) { /* 명단 없이도 화면은 뜬다 */ }
         var u = readUser();
-        if (u) {
-            apply(u);
-            // 기억 안 했으면 매번 묻는다(발표용 PC 에서 앞사람 이름이 그대로 남지 않게).
-            if (!remembered() && U.askOnBoot) openPicker();
-            return;
+        if (u && remembered()) {
+            // 저장해 둔 사람 — 백엔드가 그 계정으로 붙어 있으면 그대로 들어간다.
+            var st = null;
+            try { st = await api('GET', '/nas/status'); } catch (e) { /* 아래에서 다시 묻는다 */ }
+            if (st && st.ok && String(st.user || '').toLowerCase() === u.key) { apply(u); return; }
+            // 저장은 돼 있는데 아직 안 붙었으면 js/57 이 자동 로그인을 한 번 한다 — 잠깐 기다렸다 다시 본다.
+            await new Promise(function (r) { setTimeout(r, 1500); });
+            try { st = await api('GET', '/nas/status'); } catch (e) { /* 아래 */ }
+            if (st && st.ok && String(st.user || '').toLowerCase() === u.key) { apply(u); return; }
+            _msg = T('다시 로그인해주세요.', 'Please sign in again.');
         }
-        apply(null);
+        apply(u || null);
         if (U.askOnBoot) openPicker();
     }
 

@@ -1,94 +1,151 @@
 /* ============================================================================
-   👤 사람 바꾸기 / 로그아웃 (js/64) — 진짜 앱에서 돌리는 하네스 (2026-11-09)
-   앱을 열고 콘솔에 붙여넣는다. NAS 가 붙어 있어야 명단이 있다(없으면 "명단 없음" 으로 정직하게 멈춘다).
+   🔑 시작 화면 로그인 / 로그아웃 (js/64) — 진짜 앱에서 돌리는 하네스 (2026-11-09)
+   앱을 열고 콘솔에 붙여넣는다.
 
-   ⚠️ 저장은 한 번도 하지 않는다 — 남의 보고 파일을 만들지 않으려고 `_dailySave` 를 막고 돈다.
-   ⚠️ 끝나면 원래 고르던 사람·기억 여부를 **그대로 되돌린다**.
+   ⚠️⚠️ **진짜 로그인은 시도하지 않는다.** 비밀번호를 틀리면 3번 만에 이 PC 가 잠긴다
+      (docs/nas-dsm.md) — 하네스가 그걸 태우면 안 된다. 그래서 `/nas/login` **그 한 줄만**
+      가짜로 막고(나머지 fetch 는 진짜), 성공·실패 응답을 흉내 내서 화면 반응을 본다.
+   ⚠️ 저장은 한 번도 하지 않는다(`_dailySave` 킬스위치). 끝나면 원래 상태로 되돌린다.
    ============================================================================ */
 (async function () {
     'use strict';
     var pass = 0, fail = 0, out = [];
     function ok(n, c, d) { if (c) { pass++; out.push('  OK   ' + n); } else { fail++; out.push('  FAIL ' + n + (d !== undefined ? '  — ' + (typeof d === 'string' ? d : JSON.stringify(d)).slice(0, 240) : '')); } }
     var U = window.USER_SWITCH;
-    if (!U || !window.appUserSet) { console.error('js/64 미로드'); return; }
+    if (!U || !window._appUserLogin) { console.error('js/64 미로드(또는 구버전)'); return; }
 
     var keep = {
         user: localStorage.getItem(U.userKey),
         remember: localStorage.getItem(U.rememberKey),
         save: window._dailySave,
-        draft: localStorage.getItem(window.DAILY_POLICY && window.DAILY_POLICY.draftKey)
+        fetch: window.fetch,
+        reload: window._appUserReload,
+        acct: window._nasAccount
     };
-    // 🔒 킬스위치 — 이 하네스가 보고를 쓰는 일이 없게
     window._dailySave = function () { console.warn('[harness] 저장 차단'); };
 
-    function gateOn() {
-        var g = document.getElementById('app-user-gate');
-        return !!(g && g.style.display !== 'none');
-    }
+    // 🔒 /nas/login 만 가로챈다 — 진짜 시도는 **한 번도** 나가지 않는다.
+    var sent = [], reply = { ok: false, message: '비밀번호가 맞지 않습니다', budget: { max: 3, left: 2 } };
+    var fakeStatus = null;          // 필요할 때만 켜서 예산을 맞춘다
+    var reloaded = 0;
+    window.fetch = function (url, opt) {
+        var u = String(url || '');
+        if (u.indexOf('/nas/login') >= 0 && opt && String(opt.method).toUpperCase() === 'POST') {
+            var body = {};
+            try { body = JSON.parse(opt.body || '{}'); } catch (e) { /* 무시 */ }
+            sent.push(body);
+            return Promise.resolve(new Response(JSON.stringify(reply), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        }
+        // ⚠️ 화면은 남은 횟수를 **`/nas/status` 에서** 읽는다(그게 진짜 값이다).
+        //    로그인만 가짜로 두면 둘이 어긋나 가짜 실패가 난다 — 같은 경계를 같이 맞춘다.
+        if (u.indexOf('/nas/status') >= 0 && fakeStatus) {
+            return Promise.resolve(new Response(JSON.stringify(fakeStatus), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        }
+        if (u.indexOf('/nas/login') >= 0 && opt && String(opt.method).toUpperCase() === 'DELETE') {
+            sent.push({ logout: true });
+            return Promise.resolve(new Response('{"ok":true}', { status: 200 }));
+        }
+        return keep.fetch.apply(window, arguments);
+    };
+
+    function gateOn() { var g = document.getElementById('app-user-gate'); return !!(g && g.style.display !== 'none'); }
     function badge() { var b = document.getElementById('app-user-badge'); return b ? b.textContent : ''; }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms || 400); }); }
 
     try {
         if (window.dailyLoadRoster) await window.dailyLoadRoster();
         var list = (window._dailyRoster() || []).filter(function (m) { return m && m.key && m.active !== false; });
-        ok('명단이 있다(없으면 아래가 전부 뜻이 없다)', list.length >= 2, list.length);
-        if (list.length < 2) throw new Error('명단 부족 — NAS 연결을 확인하세요');
+        ok('명단이 있다(이름을 못 붙이면 id 로 떨어진다)', list.length >= 2, list.length);
+        var me = window._nasAccount;
+        var other = (list.filter(function (m) { return m.key !== me; })[0] || {}).key;
 
-        var nasAcct = window._nasAccount;
-        var a = list.filter(function (m) { return m.key === nasAcct; })[0] || list[0];
-        var b = list.filter(function (m) { return m.key !== a.key; })[0];
+        // ── 로그인 화면 ────────────────────────────────────────────────────
+        await window.appUserOpenPicker();
+        await wait(300);
+        ok('아이디·비밀번호 칸이 있다',
+           !!document.getElementById('app-user-id') && !!document.getElementById('app-user-pw'));
+        ok('계정 저장 체크가 있다', !!document.getElementById('app-user-remember'));
+        ok('안내에 잠금 경고가 있다', /여러 번 틀리면|lock/i.test(document.getElementById('app-user-gate').innerText));
 
-        // 🚪 로그아웃 → 고르는 화면이 뜬다
-        window.appUserLogout();
-        await new Promise(function (r) { setTimeout(r, 300); });
-        ok('로그아웃하면 고르는 화면이 뜬다', gateOn());
-        ok('안 고른 상태를 배지가 드러낸다', /누구|Who/.test(badge()), badge());
-        // ⚠️ 안 골랐을 때의 기본은 **이 PC 의 NAS 계정** — 비워 두면 파일 이름이 빈 채로 간다.
-        ok('안 고르면 이 PC 계정으로 떨어진다', window._dailyMyKey() === String(nasAcct || '').toLowerCase(),
-           window._dailyMyKey() + ' vs ' + nasAcct);
+        // ⚠️ 빈 칸으로 누르면 **백엔드로 나가지 않는다**(헛된 실패로 예산을 깎지 않는다).
+        document.getElementById('app-user-id').value = '';
+        document.getElementById('app-user-pw').value = '';
+        var n0 = sent.length;
+        await window._appUserLogin();
+        await wait(300);
+        ok('빈 칸이면 시도조차 안 한다', sent.length === n0, sent.length + ' vs ' + n0);
+        ok('빈 칸이면 왜 안 되는지 말한다', /모두 넣어|Enter both/.test(document.getElementById('app-user-gate').innerText));
 
-        // 👤 다른 사람으로 바꾸면 **일일보고 파일 이름**이 따라온다(이게 이 기능의 전부이자 위험한 지점)
-        window.appUserSet(b.key, b.name, false);
-        await new Promise(function (r) { setTimeout(r, 300); });
-        ok('고르면 화면이 닫힌다', !gateOn());
-        ok('신원이 바뀐다', window._dailyMyKey() === b.key, window._dailyMyKey() + ' vs ' + b.key);
-        ok('일일보고 파일 이름이 따라온다',
-           window.DAILY_PATHS.file('2026-01-02', window._dailyMyKey()).indexOf('__' + b.key + '.json') > 0,
-           window.DAILY_PATHS.file('2026-01-02', window._dailyMyKey()));
-        ok('배지가 그 사람을 보여 준다', badge().indexOf(b.name) >= 0, badge());
-        // ⚠️⚠️ NAS 연결은 **건드리지 않는다** — 끊으면 다음 사람이 아무것도 못 연다(형식적 전환이다).
-        ok('NAS 계정·연결은 그대로', window._nasAccount === nasAcct, window._nasAccount + ' vs ' + nasAcct);
+        // ── 틀렸을 때: 남은 횟수를 보여 준다 ───────────────────────────────
+        document.getElementById('app-user-id').value = me || 'someone';
+        document.getElementById('app-user-pw').value = 'xxx';
+        document.getElementById('app-user-remember').checked = false;
+        fakeStatus = { configured: true, ok: false, reason: 'no_session', user: me, budget: { max: 3, left: 2 } };
+        await window._appUserLogin();
+        await wait(400);
+        ok('틀리면 비밀번호를 본문으로만 보낸다(쿼리 아님)', sent.length === n0 + 1 && sent[sent.length - 1].password === 'xxx',
+           JSON.stringify(sent[sent.length - 1] || {}).replace(/xxx/, '***'));
+        ok('저장 체크가 꺼져 있으면 save 를 안 보낸다', sent[sent.length - 1].save === false, sent[sent.length - 1].save);
+        ok('남은 횟수를 화면에 적는다', /2번 더|2 attempt/.test(document.getElementById('app-user-gate').innerText),
+           document.getElementById('app-user-gate').innerText.split('\n').slice(0, 4));
+        ok('틀려도 화면은 닫히지 않는다', gateOn());
 
-        // 🧹 훑어 둔 '내 프로젝트' 는 앞사람 기준이라 버려야 한다
+        // ── 성공했을 때: 같은 계정이면 새로고침하지 않는다 ─────────────────
+        // ⚠️ `location.reload` 는 덮어쓸 수 없다(실측) — js/64 가 놨 이음쇠를 갈아 끼운다.
+        window._appUserReload = function () { reloaded++; };
+        fakeStatus = null;
+        reply = { ok: true, user: me, saved: true };
+        document.getElementById('app-user-id').value = me;
+        document.getElementById('app-user-pw').value = 'right';
+        document.getElementById('app-user-remember').checked = true;
+        await window._appUserLogin();
+        await wait(600);
+        ok('성공하면 화면이 닫힌다', !gateOn());
+        ok('저장 체크를 켜면 save 를 보낸다', sent[sent.length - 1].save === true, sent[sent.length - 1].save);
+        ok('같은 계정이면 새로고침하지 않는다', reloaded === 0, reloaded);
+        ok('신원이 그 계정으로 선다', window._dailyMyKey() === String(me).toLowerCase(),
+           window._dailyMyKey() + ' vs ' + me);
+        ok('배지가 그 사람을 보여 준다', badge().indexOf('👤') === 0 && badge().length > 2, badge());
+
+        // ── 다른 계정으로 들어오면 화면을 새로 연다(앞사람 자동저장 방지) ───
+        if (other) {
+            reply = { ok: true, user: other, saved: false };
+            await window.appUserOpenPicker();
+            await wait(250);
+            document.getElementById('app-user-id').value = other;
+            document.getElementById('app-user-pw').value = 'right';
+            await window._appUserLogin();
+            await wait(600);
+            ok('계정이 바뀌면 새로고침한다', reloaded === 1, reloaded);
+        }
+
+        // ── 🧹 사람이 바뀌면 훑어 둔 것을 버린다 ───────────────────────────
+        window.appUserSet(me, undefined, true);
         ok('일일보고 훑기 캐시가 비워진다', (window._dailyOtherScan || {}).total === 0, (window._dailyOtherScan || {}).total);
         ok('기간 요약 훑기 캐시가 비워진다', (window._psOtherScan || {}).key === '', (window._psOtherScan || {}).key);
+        ok('일일보고 파일 이름이 그 사람으로',
+           window.DAILY_PATHS.file('2026-01-02', window._dailyMyKey()).indexOf('__' + String(me).toLowerCase() + '.json') > 0,
+           window.DAILY_PATHS.file('2026-01-02', window._dailyMyKey()));
 
-        // 💾 기억 — 켜면 다음에 안 묻는다(끄면 매번 묻는다)
-        window.appUserSet(a.key, a.name, true);
-        ok('기억을 켜면 그렇게 적힌다', localStorage.getItem(U.rememberKey) === '1');
-        window.appUserSet(a.key, a.name, false);
-        ok('기억을 끄면 그렇게 적힌다', localStorage.getItem(U.rememberKey) === '0');
+        // ── 🚪 로그아웃 ────────────────────────────────────────────────────
+        var before = sent.length;
+        await window.appUserLogout();
+        await wait(400);
+        ok('로그아웃은 NAS 세션을 끊는다', sent.slice(before).some(function (s) { return s.logout; }), sent.slice(before));
+        ok('로그아웃하면 로그인 화면이 뜬다', gateOn());
+        ok('기억이 지워진다', localStorage.getItem(U.userKey) === null);
 
-        // 🪟 한 번 닫은 뒤에도 다시 열린다(js/59 에서 났던 `display:flex` 버그와 같은 자리)
-        window.appUserOpenPicker();
-        await new Promise(function (r) { setTimeout(r, 200); });
-        ok('닫았다 다시 열어도 보인다', gateOn());
-        ok('고르는 목록이 그대로다', document.querySelectorAll('#app-user-pick option').length === list.length,
-           document.querySelectorAll('#app-user-pick option').length + '/' + list.length);
-        window._appUserClosePicker();
-
-        // ⚙️ 설정 메뉴에 길이 있다
-        ok('설정 메뉴에 사람 바꾸기·로그아웃이 있다',
+        ok('설정 메뉴에 로그인·로그아웃이 있다',
            !!document.getElementById('app-user-switch-btn') && !!document.getElementById('app-user-logout-btn'));
     } catch (e) {
         ok('하네스가 끝까지 돌았다', false, String(e && e.message || e));
     } finally {
+        window.fetch = keep.fetch;
+        window._appUserReload = keep.reload;
         window._dailySave = keep.save;
+        window._nasAccount = keep.acct;
         if (keep.user == null) localStorage.removeItem(U.userKey); else localStorage.setItem(U.userKey, keep.user);
         if (keep.remember == null) localStorage.removeItem(U.rememberKey); else localStorage.setItem(U.rememberKey, keep.remember);
-        if (window.DAILY_POLICY) {
-            if (keep.draft == null) localStorage.removeItem(window.DAILY_POLICY.draftKey);
-            else localStorage.setItem(window.DAILY_POLICY.draftKey, keep.draft);
-        }
         var u = window._appUser();
         window._appUserKey = u ? u.key : '';
         if (window._appUserPaintBadge) window._appUserPaintBadge();

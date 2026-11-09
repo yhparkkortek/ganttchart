@@ -371,48 +371,108 @@ def login_once(otp=None):
             pw = _dpapi_decrypt_b64(cfg['pw_dpapi'])
         except Exception as e:
             return {'ok': False, 'result': 'decrypt', 'retryable': True, 'message': str(e)}
+        return _login_core(cfg, pw, otp)
 
-        params = {'account': cfg['user'], 'passwd': pw,
-                  'session': _LOGIN['session'], 'format': 'sid'}
-        if otp:
-            params['otp_code'] = str(otp)
+
+def login_with(user, password, otp=None, save=False):
+    """👤 [2026-11-09] **받은** 아이디·비밀번호로 로그인한다(회의실에서 사람이 바뀔 때).
+
+    ⚠️⚠️ 저장은 **성공한 뒤에만**, 그리고 `save` 가 참일 때만 한다.
+       왜: `save_config()` 는 `reset_block()` 을 부른다(= 사람이 설정을 다시 저장했다는 신호).
+       그래서 "저장 → 로그인" 순서로 짜면 **틀릴 때마다 예산이 되살아나** 잠금이 영영 안 걸리고,
+       그 대신 **DSM 자신의 자동 차단**이 그 PC 의 IP 를 진짜로 막는다. 우리 예산은 그 전에
+       멈추라고 있는 것이므로 순서를 뒤집으면 안전장치가 통째로 무의미해진다.
+    ⚠️ 비밀번호는 인자로만 다닌다 — 로그·명령줄·응답에 싣지 않는다.
+    """
+    with _LOCK:
+        if _BLOCKED['reason']:
+            return {'ok': False, 'result': 'blocked', 'retryable': False,
+                    'budget': login_budget(), 'message': _BLOCKED['reason']}
+        user = str(user or '').strip()
+        if not user or not password:
+            return {'ok': False, 'result': 'need_credentials', 'retryable': True,
+                    'budget': login_budget(), 'message': '아이디와 비밀번호가 필요합니다.'}
+        raw = _raw_config()
+        host = str(raw.get('host') or '').strip()
+        if not host:
+            d = load_defaults() or {}
+            host = str(d.get('host') or '').strip()
+            raw = {'host': host, 'port': d.get('port'), 'https': d.get('https', True)}
+        if not host:
+            return {'ok': False, 'result': 'not_configured', 'retryable': True,
+                    'budget': login_budget(),
+                    'message': 'NAS 주소가 없습니다 — 🔑 설정에서 주소를 먼저 넣어주세요.'}
         try:
-            # ⚠️ 반드시 POST — GET 이면 비밀번호가 NAS 접근로그(nginx)에 통째로 남는다.
-            data = _call(cfg, 'SYNO.API.Auth', 'login', _LOGIN['version'], params,
-                         post=True, timeout=30, path=_LOGIN['path'])
-        except requests.RequestException as e:
-            # 서버까지 못 갔다 = 실패가 쌓이지 않는다 → 잠그지 않는다.
-            return {'ok': False, 'result': 'unreachable', 'retryable': True,
-                    'message': 'NAS 에 닿지 못했습니다: %s' % e}
-        except NasApiError as e:
-            code = e.code
-            if code in _AUTH_HARD_STOP:
-                _BLOCKED['reason'] = str(e)
-                return {'ok': False, 'result': 'failed', 'retryable': False,
-                        'code': code, 'budget': login_budget(), 'message': str(e)}
-            if code in _AUTH_COUNTED:
-                _BLOCKED['fails'] = int(_BLOCKED.get('fails') or 0) + 1
-                b = login_budget()
-                if b['left'] <= 0:
-                    _BLOCKED['reason'] = (str(e) +
-                        ' — %d번 틀려서 더 시도하지 않습니다. 설정에서 비밀번호를 다시 저장하면 풀립니다.'
-                        % b['max'])
-                    return {'ok': False, 'result': 'failed', 'retryable': False,
-                            'code': code, 'budget': b, 'message': _BLOCKED['reason']}
-                return {'ok': False, 'result': 'bad_credentials', 'retryable': True,
-                        'code': code, 'budget': b,
-                        'message': str(e) + ' — %d번 더 시도할 수 있습니다.' % b['left']}
-            # 쌓이지 않는 실패(권한·비활성·만료·OTP 설정) — 잠그지 않는다
-            return {'ok': False, 'result': 'rejected', 'retryable': True,
-                    'code': code, 'budget': login_budget(), 'message': str(e)}
-        except Exception as e:
+            port = int(raw.get('port') or (5001 if raw.get('https', True) else 5000))
+        except Exception:
+            port = 5001
+        cfg = {'host': host, 'port': port, 'https': bool(raw.get('https', True)), 'user': user}
+        # 다른 사람으로 바꾸는 중이면 앞사람 세션은 버린다(같은 백엔드에 둘은 못 산다).
+        if _SESSION.get('sid') and _SESSION.get('user') != user:
+            _SESSION.update({'sid': None, 'user': None, 'origin': None})
+        res = _login_core(cfg, password, otp)
+        if res.get('ok') and save:
+            try:
+                save_config(cfg['host'], cfg['port'], cfg['https'], user, password)
+                # save_config 가 세션을 비우므로 방금 받은 sid 를 다시 세운다.
+                _SESSION.update({'sid': res.pop('_sid', None) or _SESSION.get('sid'),
+                                 'user': user, 'origin': origin_of(cfg)})
+                res['saved'] = True
+            except Exception as e:
+                res['saved'] = False
+                res['save_error'] = str(e)
+        else:
+            res.pop('_sid', None)
+            res['saved'] = False
+        return res
+
+
+def _login_core(cfg, pw, otp=None):
+    """실제 한 번의 로그인. `login_once`(저장된 계정)와 `login_with`(받은 계정)가 같이 쓴다 —
+    두 벌로 두면 **예산·잠금 규칙이 한쪽에서만** 지켜진다.
+    ⚠️ 부르는 쪽이 `_LOCK` 을 이미 잡고 있어야 한다."""
+    params = {'account': cfg['user'], 'passwd': pw,
+              'session': _LOGIN['session'], 'format': 'sid'}
+    if otp:
+        params['otp_code'] = str(otp)
+    try:
+        # ⚠️ 반드시 POST — GET 이면 비밀번호가 NAS 접근로그(nginx)에 통째로 남는다.
+        data = _call(cfg, 'SYNO.API.Auth', 'login', _LOGIN['version'], params,
+                     post=True, timeout=30, path=_LOGIN['path'])
+    except requests.RequestException as e:
+        # 서버까지 못 갔다 = 실패가 쌓이지 않는다 → 잠그지 않는다.
+        return {'ok': False, 'result': 'unreachable', 'retryable': True,
+                'message': 'NAS 에 닿지 못했습니다: %s' % e}
+    except NasApiError as e:
+        code = e.code
+        if code in _AUTH_HARD_STOP:
             _BLOCKED['reason'] = str(e)
             return {'ok': False, 'result': 'failed', 'retryable': False,
-                    'budget': login_budget(), 'message': str(e)}
-        finally:
-            pw = None
-        _SESSION.update({'sid': data.get('sid'), 'user': cfg['user'], 'origin': origin_of(cfg)})
-        return {'ok': True, 'result': 'ok', 'user': cfg['user'], 'message': '로그인했습니다.'}
+                    'code': code, 'budget': login_budget(), 'message': str(e)}
+        if code in _AUTH_COUNTED:
+            _BLOCKED['fails'] = int(_BLOCKED.get('fails') or 0) + 1
+            b = login_budget()
+            if b['left'] <= 0:
+                _BLOCKED['reason'] = (str(e) +
+                    ' — %d번 틀려서 더 시도하지 않습니다. 설정에서 비밀번호를 다시 저장하면 풀립니다.'
+                    % b['max'])
+                return {'ok': False, 'result': 'failed', 'retryable': False,
+                        'code': code, 'budget': b, 'message': _BLOCKED['reason']}
+            return {'ok': False, 'result': 'bad_credentials', 'retryable': True,
+                    'code': code, 'budget': b,
+                    'message': str(e) + ' — %d번 더 시도할 수 있습니다.' % b['left']}
+        # 쌓이지 않는 실패(권한·비활성·만료·OTP 설정) — 잠그지 않는다
+        return {'ok': False, 'result': 'rejected', 'retryable': True,
+                'code': code, 'budget': login_budget(), 'message': str(e)}
+    except Exception as e:
+        _BLOCKED['reason'] = str(e)
+        return {'ok': False, 'result': 'failed', 'retryable': False,
+                'budget': login_budget(), 'message': str(e)}
+    finally:
+        pw = None
+    _SESSION.update({'sid': data.get('sid'), 'user': cfg['user'], 'origin': origin_of(cfg)})
+    return {'ok': True, 'result': 'ok', 'user': cfg['user'], 'message': '로그인했습니다.',
+            '_sid': data.get('sid')}
 
 
 def logout():
