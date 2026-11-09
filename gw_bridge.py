@@ -931,11 +931,62 @@ def resolve_form(form_name):
     return {'name': chit['name'], 'formId': chit['formId'], 'deptId': dept_id}
 
 
+# 📋 본문(자유 서식) 표의 **라벨 칸 ↔ 값 칸 짝짓기** — 읽기와 쓰기가 **같은 규칙**을 쓴다.
+#
+#   왜 한 벌로 묶었나 (2026-11-09)
+#     읽기(_READ_JS → bodyFields)와 쓰기(_DRAFT_JS → bodyEdits)가 각자 짝을 지으면, 한쪽만
+#     고치는 순간 "읽을 때는 보이는데 쓸 때는 엉뚱한 칸에 들어가는" 조용한 고장이 난다
+#     (CLAUDE.md: 같은 것을 정하는 코드가 둘이면 한쪽이 움직일 때만 터진다).
+#
+#   규칙의 근거 (실측, RD3-2512-010 본문 45,136자)
+#     · 이 표엔 `class=` 가 **0개**다 — subjectColumn/detailColumn 이 없으니 클래스로 못 가른다.
+#     · 라벨 칸은 inline `background: rgb(242,242,242)`, 값 칸은 배경이 없다 → **배경색으로 가른다.**
+#     · 클래스에 안 기대므로 그룹웨어 스타일시트 없이도(오프스크린 div) 같은 판정이 나온다.
+#
+#   ⚠️ 이 문자열엔 `%` 를 쓰지 말 것 — `_DRAFT_JS % cfg` 의 포맷 문자열에 그대로 들어간다.
+_BODY_PAIR_FN = r"""
+  // 본문 표의 짝을 **전부** 돌려준다(값이 빈 칸도 포함) — 걸러내기는 쓰는 쪽이 각자 한다.
+  //   읽기: 빈 값은 버린다(bodyFields 는 "값이 있는 칸"이다)
+  //   쓰기: 빈 칸도 채워야 한다(원본에서 비어 있던 칸이 바로 채울 칸이다)
+  const __kpmBodyPairs = (root, win) => {
+    const nm = s => String(s == null ? '' : s).replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+    const painted = td => {
+      const m = String(win.getComputedStyle(td).backgroundColor || '').match(/rgba?\(([^)]+)\)/);
+      if (!m) return false;
+      const p = m[1].split(',').map(x => parseFloat(x));
+      if (p.length > 3 && !(p[3] > 0)) return false;          // 완전 투명 = 값 칸
+      return !(p[0] > 250 && p[1] > 250 && p[2] > 250);        // 흰색도 값 칸으로 본다
+    };
+    const pairs = [], rows = [];
+    [...root.querySelectorAll('table')].forEach(tb => {
+      let colHead = null;
+      [...tb.rows].forEach(tr => {
+        const cells = [...tr.children];
+        const texts = cells.map(c => nm(c.innerText));
+        if (rows.length < 200) rows.push(texts);
+        if (cells.length < 2) { colHead = null; return; }      // 구역 머리글 — 여기서 표가 바뀐다
+        const pa = cells.map(painted);
+        if (pa.every(Boolean)) { colHead = texts; return; }    // 전부 칠해짐 = 열 머리글 줄
+        if (colHead && pa[0] && colHead.length === cells.length) {
+          for (let j = 1; j < cells.length; j++)
+            if (!pa[j]) pairs.push({ label: texts[0] + ' ' + (colHead[j] || ''), value: texts[j], cell: cells[j] });
+          return;
+        }
+        for (let i = 0; i + 1 < cells.length; i++)
+          if (pa[i] && !pa[i + 1]) pairs.push({ label: texts[i], value: texts[i + 1], cell: cells[i + 1] });
+      });
+    });
+    return { pairs, rows };
+  };
+"""
+
+
 # 작성 화면을 열고, 입력칸을 '열 머리글/행 라벨'로 찾아 채운 뒤 임시저장한다.
 _DRAFT_JS = r"""
 (async (cfg) => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const log = [];
+  /*__KPM_BODY_PAIR_FN__*/
 
   // 1) 작성 화면 로딩 대기 — subject 칸이 나타나면 준비된 것
   for (let i = 0; i < 60 && !document.getElementById('subject'); i++) await sleep(300);
@@ -1009,6 +1060,52 @@ _DRAFT_JS = r"""
   //      editorForm_N 의 N 은 양식마다 다르므로 이름을 박지 말고, `dext_frame_<id>` 프레임이
   //      실제로 붙어 있는 칸만 고른다(docs/groupware.md 8-0-3 실측).
   //      실패를 조용히 넘기지 않는다 — 본문이 빈 기안이 올라가는 게 제일 나쁘다.
+  // 4-a) 📝 본문 표의 **값만 바꿔치기** — 라벨 칸은 건드리지 않는다.
+  //   오프스크린 div 에 붙여서 돌린다. 붙이지 않으면 getComputedStyle 이 배경색을 못 읽어
+  //   라벨/값 구분이 전부 실패한다(= 한 칸도 안 바뀌는데 오류도 안 난다).
+  //   ⚠️ 본문 표엔 class 가 없고 색이 inline 이라 그룹웨어 스타일시트 없이도 같은 판정이 나온다
+  //      (실측 RD3-2512-010: class 0개 / inline `background: rgb(242,242,242)`).
+  //   ⚠️ 그래도 **읽을 때 센 칸 수와 맞는지 확인**한다 — 안 맞으면 엉뚱한 칸에 쓰지 말고 그만둔다.
+  let _bodyEditLog = null;
+  const _bEdits = cfg.bodyEdits || {};
+  if (cfg.bodyHtml && Object.keys(_bEdits).length) {
+    const holder = document.createElement('div');
+    // ⚠️⚠️ `visibility:hidden` / `display:none` 을 주면 안 된다 — 숨긴 요소는 **innerText 가 빈
+    //    문자열**이라(렌더된 글자만 돌려준다) 라벨/값을 한 칸도 못 가린다. 아래 가드가 그걸
+    //    잡아내 "구분이 깨졌다"로 떨어지고, 결국 **한 칸도 안 바뀐다.** 화면 밖으로만 보낼 것.
+    //    (하네스 `tests/approval-body-table.browser.js` A절이 이 실수를 잡는다)
+    holder.style.cssText = 'position:absolute; left:-99999px; top:0; width:1200px;';
+    holder.innerHTML = cfg.bodyHtml;
+    document.body.appendChild(holder);
+    try {
+      const pairs = __kpmBodyPairs(holder, window).pairs;
+      const seen = {}, applied = [], missing = [];
+      // 읽기와 같은 "처음 나온 것" 규칙 — 같은 라벨이 여러 번이면 첫 칸만 바꾼다.
+      pairs.forEach(p => { if (p.label && !seen[p.label]) seen[p.label] = p; });
+      const expect = Number(cfg.bodyPairCount || 0);
+      const got = Object.keys(seen).length;
+      // 라벨을 하나도 못 가렸다 = 배경색 판정이 깨진 것이다. 그 상태로 쓰면 아무 칸에나 들어간다.
+      if (!got || (expect && got < expect / 2)) {
+        _bodyEditLog = { ok: false, why: '본문 표의 라벨/값 구분이 깨졌습니다(짝 ' + got + '개, 기대 ' + expect + '개) — 본문은 원본 그대로 넣습니다.', applied: [], missing: Object.keys(_bEdits) };
+      } else {
+        Object.keys(_bEdits).forEach(label => {
+          const hit = seen[label];
+          if (!hit) { missing.push(label); return; }
+          hit.cell.textContent = String(_bEdits[label] == null ? '' : _bEdits[label]);
+          applied.push(label);
+        });
+        cfg.bodyHtml = holder.innerHTML;
+        _bodyEditLog = { ok: missing.length === 0, pairs: got, applied, missing,
+                         why: missing.length ? ('본문에서 못 찾은 칸: ' + missing.join(', ')) : '' };
+      }
+    } catch (e) {
+      _bodyEditLog = { ok: false, why: String(e && e.message || e), applied: [], missing: Object.keys(_bEdits) };
+    } finally {
+      try { holder.remove(); } catch (e2) {}
+    }
+    log.push(Object.assign({ field: '본문칸' }, _bodyEditLog));
+  }
+
   if (cfg.bodyHtml) {
     const edId = [...document.querySelectorAll('[id^=editorForm_]')].map(e => e.id)
       .find(id => document.getElementById('dext_frame_' + id));
@@ -1072,6 +1169,7 @@ _READ_JS = r"""
 (async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const norm = s => String(s||'').trim().replace(/\s+/g,' ');
+  /*__KPM_BODY_PAIR_FN__*/
   // ⚠️ 양식에 따라 입력칸(editorForm_*)이 **하나도 없다** — 본문이 contentViewer iframe 안에
   //    통째로 들어 있는 자유 서식 기안이 그렇다(2026-10-29 실측, 기안서/시제품 제작의뢰서).
   //    그런 문서에서 editorForm 만 기다리면 18초를 버리고 결국 본문도 못 읽는다.
@@ -1143,33 +1241,22 @@ _READ_JS = r"""
   // subjectColumn/detailColumn 이 없으니 라벨/값은 **칸 배경색**으로 가른다(라벨=칠해짐, 값=투명).
   // 못 가르는 칸은 짐작하지 말고 bodyRows 에 글자 그대로 남긴다 — 거짓 값보다 원문이 낫다.
   const bodyFields = {}; const bodyRows = []; let bodyText = ''; let bodyHtml = '';
+  // 짝 개수 — 쓰기 쪽이 "오프스크린에서도 같은 수가 나오나"를 대조하는 데 쓴다(라벨/값 판정이
+  // 깨졌는지 알아내는 유일한 신호다). 값이 빈 칸까지 센 **전체** 짝 수다.
+  let bodyPairCount = 0;
   const bd = viewerDoc();
   if (bd) {
-    const win = bd.defaultView;
-    const painted = td => {
-      const m = String(win.getComputedStyle(td).backgroundColor || '').match(/rgba?\(([^)]+)\)/);
-      if (!m) return false;
-      const p = m[1].split(',').map(x => parseFloat(x));
-      if (p.length > 3 && !(p[3] > 0)) return false;        // 완전 투명 = 값 칸
-      return !(p[0] > 250 && p[1] > 250 && p[2] > 250);      // 흰색도 값 칸으로 본다
-    };
-    const putB = (k, v) => { k = norm(k); v = norm(v);
-      if (k && v && k !== v && k.length <= 24 && !bodyFields[k]) bodyFields[k] = v; };
-    [...bd.querySelectorAll('table')].forEach(tb => {
-      let colHead = null;
-      [...tb.rows].forEach(tr => {
-        const cells = [...tr.children];
-        const texts = cells.map(c => norm(c.innerText));
-        if (bodyRows.length < 200) bodyRows.push(texts);
-        if (cells.length < 2) { colHead = null; return; }     // 구역 머리글 — 여기서 표가 바뀐다
-        const pa = cells.map(painted);
-        if (pa.every(Boolean)) { colHead = texts; return; }   // 전부 칠해짐 = 열 머리글 줄
-        if (colHead && pa[0] && colHead.length === cells.length) {
-          for (let j = 1; j < cells.length; j++) if (!pa[j]) putB(texts[0] + ' ' + (colHead[j] || ''), texts[j]);
-          return;
-        }
-        for (let i = 0; i + 1 < cells.length; i++) if (pa[i] && !pa[i + 1]) putB(texts[i], texts[i + 1]);
-      });
+    // 📋 짝짓기는 **공용 규칙 한 곳**(__kpmBodyPairs)에서 — 쓰기(_DRAFT_JS)와 같은 코드다.
+    //    여기서 따로 구현하면 "읽을 때는 보이는데 쓸 때는 다른 칸에 들어가는" 고장이 난다.
+    const pr = __kpmBodyPairs(bd, bd.defaultView);
+    pr.rows.forEach(r => bodyRows.push(r));
+    bodyPairCount = pr.pairs.length;
+    // 읽기 쪽 걸러내기 — bodyFields 는 "값이 **있는** 칸"이다.
+    //  ⚠️ 쓰기 쪽은 이 걸러내기를 쓰지 않는다(원본에서 비어 있던 칸이 바로 채울 칸이다).
+    //  처음 나온 것만 쓴다 — 쓰기 쪽도 같은 칸(첫 번째)을 고른다.
+    pr.pairs.forEach(p => {
+      const k = p.label, v = p.value;
+      if (k && v && k !== v && k.length <= 24 && !bodyFields[k]) bodyFields[k] = v;
     });
     // 표를 줄글로 옮길 땐 innerText 를 쓰지 않는다 — 칸 사이가 빈 줄·탭으로 벌어져 읽기 어렵다.
     bodyText = bodyRows.map(r => r.filter(Boolean).join(' | ')).filter(Boolean).join('\n').slice(0, 8000);
@@ -1194,10 +1281,19 @@ _READ_JS = r"""
 
   return { url: location.href, subject: norm((document.getElementById('subject')||{}).value) || head['제목'] || '',
            head, fields, checks, apprLine: asides[0] || '', docInfo: asides[1] || '',
-           body: bodyText, bodyFields, bodyRows, bodyHtml,
+           body: bodyText, bodyFields, bodyRows, bodyHtml, bodyPairCount,
            attachments: [...new Set(attach)] };
 })()
 """
+
+# 📋 본문 표 짝짓기 규칙을 읽기·쓰기 **두 JS 에 같은 코드로** 끼워 넣는다.
+#    ⚠️ 이 치환을 빼면 두 JS 에서 `__kpmBodyPairs is not defined` 가 난다(마커만 남는다).
+#    ⚠️ `_DRAFT_JS % cfg` 보다 **먼저** 끼워야 한다 — _BODY_PAIR_FN 엔 `%` 가 없으므로 안전하다.
+for _marker in ['/*__KPM_BODY_PAIR_FN__*/']:
+    if _marker not in _DRAFT_JS or _marker not in _READ_JS:
+        raise RuntimeError('본문 표 짝짓기 마커가 사라졌습니다 — gw_bridge.py 의 _DRAFT_JS/_READ_JS 를 확인하세요.')
+    _DRAFT_JS = _DRAFT_JS.replace(_marker, _BODY_PAIR_FN)
+    _READ_JS = _READ_JS.replace(_marker, _BODY_PAIR_FN)
 
 
 def approval_read(doc_num=None, doc_id=None, with_html=False):
@@ -1269,7 +1365,8 @@ def _clean_form_name(v):
 _COPY_SKIP = {'문서번호', '작성일', '작성부서', '작성자', '제목', '기안부서', '기안자'}
 
 
-def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=True, copy_body=True):
+def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=True, copy_body=True,
+                  body_edits=None):
     """기존 문서를 읽어 **같은 양식의 새 기안에 채워 임시저장**한다. 상신은 하지 않는다.
 
     첨부파일은 가져오지 않는다(사용자 결정 2026-10-21) — 몇 건 있었는지만 알려준다.
@@ -1295,7 +1392,12 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
     r = approval_draft(form_id=hit['formId'], dept_id=hit['deptId'],
                        subject=(subject if subject is not None else src.get('subject') or ''),
                        fields=merged, dry_run=bool(dry_run), checks=src.get('checks') or [],
-                       body_html=(src.get('bodyHtml') if copy_body else None))
+                       body_html=(src.get('bodyHtml') if copy_body else None),
+                       # 📝 본문이 표인 양식은 값이 fields 가 아니라 **본문 표** 안에 있다
+                       #    (실측: 기안서[시제품 제작의뢰서] fields 5개 / bodyFields 30개).
+                       #    그 30칸을 못 바꾸면 "채웠다"면서 원본 값이 그대로 올라간다.
+                       body_edits=(body_edits if copy_body else None),
+                       body_pair_count=src.get('bodyPairCount') or 0)
 
     _notes = []
     if src.get('attachments'):
@@ -1314,6 +1416,18 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
                           % (_hit[0].get('why') or '원인 미상'))
         elif not dry_run:
             _notes.append('원본 본문이 새 기안에 들어갔는지 확인하지 못했습니다 — 눈으로 봐 주세요.')
+    # 📝 본문 표의 칸을 바꿔 달라고 했으면, **몇 칸이 실제로 바뀌었는지** 밝힌다.
+    #    조용히 넘기면 "채웠다"는 말만 믿고 원본 값이 결재선을 타고 올라간다.
+    if body_edits:
+        _be = [x for x in ((r or {}).get('log') or []) if x.get('field') == '본문칸']
+        if not _be:
+            _notes.append('본문 표의 %d칸을 바꿔 달라고 했지만 바뀐 기록이 없습니다 — 본문을 눈으로 봐 주세요.'
+                          % len(body_edits))
+        else:
+            _b = _be[0]
+            _notes.append('본문 표 %d칸을 프로젝트 값으로 바꿨습니다%s'
+                          % (len(_b.get('applied') or []),
+                             (' / ' + _b['why']) if _b.get('why') else '.'))
     return {
         'source': {'docNum': meta.get('docNum') or doc_num, 'docId': src.get('docId'),
                    'formName': form_name, 'formId': hit['formId'], 'deptId': hit['deptId'],
@@ -1324,7 +1438,9 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
                    'fields': merged, 'checks': src.get('checks') or []},
         'body': {'text': src.get('body') or '', 'fields': src.get('bodyFields') or {},
                  'rows': src.get('bodyRows') or [], 'copied': bool(copy_body),
-                 'htmlLen': len(src.get('bodyHtml') or '')},
+                 'htmlLen': len(src.get('bodyHtml') or ''),
+                 'pairCount': src.get('bodyPairCount') or 0,
+                 'edits': body_edits or {}},
         'dryRun': bool(dry_run),
         'draft': r,
         'notes': _notes,
@@ -1332,7 +1448,7 @@ def approval_copy(doc_num=None, doc_id=None, subject=None, fields=None, dry_run=
 
 
 def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None, body_html=None,
-                   reuse_screen=False):
+                   reuse_screen=False, body_edits=None, body_pair_count=0):
     """결재 양식에 값을 채우고 **임시저장**한다. 상신(결재요청)은 하지 않는다.
 
     fields: {'Item Code': '102202', 'Model': '...', 'Name': '삼완전자'} 처럼
@@ -1357,7 +1473,11 @@ def approval_draft(form_id, dept_id, subject, fields, dry_run=False, checks=None
 
     cfg = json.dumps({'subject': subject, 'fields': fields or {},
                       'checks': checks or [], 'dryRun': bool(dry_run),
-                      'bodyHtml': body_html or ''},
+                      'bodyHtml': body_html or '',
+                      # 📝 본문 표의 값만 바꿔치기(라벨 칸은 안 건드린다). 비면 원본 그대로 들어간다.
+                      'bodyEdits': body_edits or {},
+                      # 읽을 때 센 짝 수 — 오프스크린에서 라벨/값 판정이 깨졌는지 대조용
+                      'bodyPairCount': int(body_pair_count or 0)},
                      ensure_ascii=False)
     return eval_in_gw(_DRAFT_JS % cfg, timeout=120)
 

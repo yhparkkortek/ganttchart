@@ -5632,7 +5632,11 @@ def gw_approval_draft_fill():
             dry_run=(d.get('dryRun', True) is not False),
             checks=d.get('checks') or None,
             body_html=d.get('bodyHtml') or None,
-            reuse_screen=(d.get('reuseScreen', True) is not False))
+            reuse_screen=(d.get('reuseScreen', True) is not False),
+            # 📝 본문이 표인 양식 — `bodyEdits`({라벨: 새 값})가 있으면 그 칸의 값만 바꾼다.
+            #    ⚠️ `bodyHtml` 이 없으면 아무 일도 안 한다(이미 화면에 들어간 본문은 그대로 남는다).
+            body_edits=d.get('bodyEdits') or None,
+            body_pair_count=d.get('bodyPairCount') or 0)
         r['ok'] = True
         return jsonify(r)
     except Exception as e:
@@ -5657,7 +5661,10 @@ def gw_approval_copy():
             doc_num=num or None, doc_id=did or None,
             subject=d.get('subject'), fields=d.get('fields') or None,
             dry_run=(d.get('dryRun', True) is not False),
-            copy_body=(d.get('copyBody', True) is not False))
+            copy_body=(d.get('copyBody', True) is not False),
+            # 📝 본문 표 칸 바꿔치기 — 기안서[시제품 제작의뢰서]처럼 값이 **fields 가 아니라
+            #    본문 표** 안에 있는 양식용(실측: fields 5개 / bodyFields 30개).
+            body_edits=d.get('bodyEdits') or None)
         r['ok'] = True
         return jsonify(r)
     except Exception as e:

@@ -121,6 +121,100 @@
             //    칸 단위 매핑을 못 한다 — 틀로 쓰면 '그대로 복사'만 된다. 모르는 척하지 않고 적어 둔다.
             fields: [],
             note: '입력칸을 못 읽었다(양식 구조가 다름) — 틀로 쓰면 원본 값 그대로 복사만 된다.'
+        },
+
+        // ───────────────────────────────────────────────────────────────
+        // 🧪 [2026-11-09 추가] 한 프로젝트(LNW Slim Slot iDeck 15.6")의 전자결재 45건을
+        //    전수로 훑어, 아래 양식들의 칸 이름을 **문서를 실제로 읽어** 받아 적었다.
+        //    근거 문서번호는 각 항목의 `sampled`. 추측으로 적은 칸은 하나도 없다.
+        // ───────────────────────────────────────────────────────────────
+
+        // ⚠️⚠️ '기안서' 는 **양식이 아니라 봉투다.** 실측: 한 프로젝트의 '기안서' 7건이
+        //    [시제품 제작의뢰서] 4건 · 표준원가/E2 BOM(비용) 3건으로 **전혀 다른 문서**였다.
+        //    formName 만 보면 셋이 한 덩어리가 되므로 **제목 접두어까지** 봐야 한다
+        //    (사내 관행으로 이미 `[...]` 를 붙인다 — 45건 중 20건).
+        {
+            form: '기안서',
+            titlePrefix: ['시제품 제작의뢰서'],
+            kw: ['시제품 제작의뢰서', '시제품 제작 의뢰서', '시제품 의뢰 기안', '시제품 제작 기안'],
+            needs: '지금 열린 프로젝트(코드·제품코드·모델명·담당자) + Summary 주요자재. '
+                 + '수량·출고처·일정은 사람이 정한다.',
+            sampled: 'RD3-2604-016 / RD3-2512-010',
+            // ⚠️⚠️ 이 양식은 값이 **입력칸(fields)에 없다** — fields 는 문서번호·작성일 등
+            //    시스템이 채우는 5개뿐이고, 실제 내용 30칸이 전부 **본문 표**(bodyFields)에 있다.
+            //    그래서 아래 목록은 `bodyFields` 의 칸 이름이다(js/47 이 본문 경로로 채운다).
+            bodyForm: true,
+            fields: [],
+            bodyFields: ['프로젝트 코드', '제품 코드', '모 델 명', 'B U Y E R',
+                         '모델 담당자', '기구 담당자', 'FW 담당자',
+                         '개발 단계', '제작 회차', '총 제작수량', '출고 수량', '출고 요청일',
+                         '조립 예상일', '제작 기간', 'X', 'Y', 'Lv', 'FW Ver', 'EDID CHECK SUM',
+                         'LCM(Panel) 코드', 'LCM(Panel) 부품 명', 'LCM(Panel) 비고',
+                         'A/D Board 코드', 'A/D Board 부품 명',
+                         'Converter 코드', 'Converter 부품 명',
+                         'TSP(Glass) 코드', 'TSP(Glass) 부품 명',
+                         'TSP CTRL 코드', 'TSP CTRL 부품 명'],
+            note: '본문이 표인 양식 — 값이 fields 가 아니라 bodyFields 에 있다.'
+        },
+        {
+            form: '단계별 DR 회의록',
+            kw: ['dr 회의록', 'dvr 회의록', '단계별 dr', '회의록 기안', 'dr 회의 기안'],
+            needs: '지금 열린 프로젝트(코드·과제명·모델). 시간·장소·내용·일정은 회의 고유값이라 사람이 쓴다.',
+            sampled: 'RD3-2606-023',
+            fields: ['과 제 명', '프로젝트 코드', 'M o d e l', '담 당', '주관부서(담당자)',
+                     '시 간', '장 소', '내 용', '일 정']
+        },
+        {
+            form: 'JIRA 프로젝트 등록 요청서',
+            kw: ['jira 등록', 'jira 프로젝트 등록', '지라 등록', '지라 프로젝트 등록'],
+            needs: '지금 열린 프로젝트(명칭·팀·고객사). 구성요소·이슈유형은 양식 고정값이라 원본을 쓴다.',
+            sampled: 'RD3-2510-035',
+            fields: ['프로젝트명', '프로젝트 카테고리', '구성 요소', '이슈 유형', '이슈 필드', '알림 계획']
+        },
+        {
+            form: '환경 대응 의뢰서',
+            kw: ['환경 대응 의뢰', '환경대응 의뢰', 'rohs 의뢰', 'reach 의뢰', '환경 자료 의뢰'],
+            needs: '지금 열린 프로젝트(고객·제품코드·모델명·회로/기구 담당자). 요청사항·기한은 사람이 정한다.',
+            sampled: 'RD3-2605-022',
+            fields: ['고객(Buyer)', '제품명 / 제품코드', '회로 / 기구 담당자', '의 뢰 자', '의뢰부서',
+                     '의뢰목적(사유)', '고객요청 접수일', '대응완료 요청일자', '대응가능 일자',
+                     '출 향 지(Countrty)', '요청사항', '단계(Event)', '보완사항']
+        },
+        {
+            form: '신뢰성 시험 의뢰서',
+            kw: ['신뢰성 시험 의뢰', '신뢰성시험 의뢰', '신뢰성 의뢰서', '신뢰성 시험 기안'],
+            needs: '지금 열린 프로젝트 + Customer SPEC(해상도·전압) + 주요자재(패널 PN). '
+                 + '시료수·시험기간·체크항목은 사람이 정한다.',
+            sampled: 'RD3-2510-044',
+            // 실측 53칸 중 **프로젝트에서 올 수 있는 칸만** 적는다 — 체크박스 묶음 30여 개는
+            // 원본 그대로가 맞다(사람 판단).
+            fields: ['고객(Buyer)', '모델(Model)', '제품명/부품명', '의뢰부서',
+                     '의뢰자 (회로, 기구담당포함)', '해상도', '품명(Serial No.)', 'Firmware 형명',
+                     '입력 전압', 'x', 'y', 'Brightness', 'Contrast', 'Color Temp'],
+            note: '실측 53칸이지만 대부분이 체크박스 묶음이다 — 위 14칸만 프로젝트에서 온다.'
+        },
+        {
+            form: '연구개발과제 발의서',
+            kw: ['연구개발과제 발의', '과제 발의서', '개발 발의서', '발의서 기안'],
+            needs: '-',
+            sampled: 'RD3-2506-066',
+            // ⚠️ 실측으로 **본문 칸이 0개**다. 내용 전부가 첨부(설계입력기준서.docx /
+            //    개발발의서.xlsx)에 있다 — 칸 채우기로는 할 수 있는 일이 없다.
+            fields: [],
+            note: '본문·입력칸이 0개이고 내용이 전부 첨부파일에 있다 — 칸 채우기로는 못 만든다. '
+                + '첨부 생성 기능이 생기면 그때 연결할 양식이다.'
+        },
+        {
+            form: '개발 완료 보고서',
+            kw: ['개발 완료 보고', '개발완료 보고서', '개발 완료 기안'],
+            needs: '-',
+            sampled: 'RD3-2608-011',
+            // ⚠️⚠️ 읽기 자체가 깨진다 — 실측에서 라벨/값 짝이 어긋났다
+            //    (`16.51 = FRONT PARTS`, `Rev = 제품 기획`, `No = Sub Board`).
+            //    매핑을 적으면 **엉뚱한 칸에 값이 들어간다.** 리더를 먼저 고쳐야 한다.
+            fields: null,
+            note: '⚠️ /gw/approval/read 가 이 양식의 라벨/값 짝을 잘못 읽는다(실측). '
+                + '리더를 고치기 전에는 매핑을 적지 말 것 — 엉뚱한 칸에 들어간다.'
         }
     ];
     // 📌 여기 없는 양식도 많다(사내 97개, 최근 50건만 세어도 25종). 사람이 보는 전체 색인은
@@ -151,20 +245,61 @@
     //   원자재 문서를 틀로 집는다 — 실측으로 잡았다(제품코드 → RD3-2609-050, 원자재 문서).
     //   그래서 **정확히 같은 이름을 최우선**으로 두고, 포함 관계는 가장 긴 쪽만 인정한다.
     //   돌려주는 값: 이 이름에 가장 잘 맞는 카탈로그 항목 하나(없으면 null).
-    var _bestTypeFor = function (formName) {
+    // ── 📛 양식 **열쇠**(formKey) — 양식 이름 + 제목 접두어 ──────────────────
+    //  ⚠️⚠️ '기안서' 는 양식이 아니라 봉투다(위 카탈로그 주석). 그래서 매핑을 찾을 때 쓰는
+    //    열쇠는 양식 이름 하나가 아니라 **'기안서[시제품 제작의뢰서]'** 처럼 접두어까지다.
+    //    접두어가 없는 양식은 열쇠가 그냥 양식 이름이라 기존 동작이 그대로 유지된다.
+    var _typeKey = function (t) {
+        if (!t) return '';
+        var p = (t.titlePrefix || [])[0];
+        return p ? (t.form + '[' + p + ']') : t.form;
+    };
+    window._apvTypeKey = _typeKey;
+
+    // 제목에서 `[...]` 접두어를 꺼낸다. 없으면 빈 문자열.
+    var _titlePrefixOf = function (title) {
+        var m = String(title == null ? '' : title).match(/^\s*\[([^\]]+)\]/);
+        return m ? m[1].trim() : '';
+    };
+
+    //  formName(+title) → 카탈로그 항목 하나.
+    //  ⚠️ title 을 안 주면 `titlePrefix` 가 있는 항목은 **고르지 않는다** — 접두어를 확인하지
+    //     못한 상태에서 고르면 '기안서' 전부가 시제품 제작의뢰서 매핑을 쓰게 된다.
+    //     단, formName 자체가 '기안서[시제품 제작의뢰서]' 꼴이면 그걸로 맞춘다.
+    var _bestTypeFor = function (formName, title) {
         var fn = _norm(formName);
         if (!fn) return null;
+        var pre = _norm(_titlePrefixOf(title) || _titlePrefixOf(String(formName).replace(/^[^\[]*/, '')));
         var best = null, bestRank = -1;
         (window.APPROVAL_DOC_TYPES || []).forEach(function (t) {
             var tn = _norm(t.form);
             if (!tn) return;
-            var rank = (tn === fn) ? Infinity
+            var pres = (t.titlePrefix || []).map(_norm);
+            if (pres.length) {
+                // 접두어가 있는 항목은 **접두어가 맞을 때만** 인정한다.
+                var keyn = _norm(_typeKey(t));
+                var preHit = (pre && pres.indexOf(pre) >= 0) || (keyn === fn);
+                if (!preHit) return;
+                // 양식 이름도 맞아야 한다(제목만 같고 양식이 다른 문서를 집지 않게).
+                if (!(fn.indexOf(tn) >= 0 || keyn === fn)) return;
+                if (Infinity > bestRank) { bestRank = Infinity; best = t; }
+                return;
+            }
+            var rank = (tn === fn) ? 1e9
                      : ((fn.indexOf(tn) >= 0 || tn.indexOf(fn) >= 0) ? tn.length : -1);
             if (rank > bestRank) { bestRank = rank; best = t; }
         });
         return bestRank >= 0 ? best : null;
     };
-    window._apvDocTypeByForm = function (form) { return _bestTypeFor(form); };
+    window._apvDocTypeByForm = function (form, title) { return _bestTypeFor(form, title); };
+
+    //  📛 매핑을 찾을 때 쓸 열쇠를 돌려준다 — js/47 이 `APPROVAL_FIELD_SOURCES[key]` 로 쓴다.
+    //    카탈로그에 접두어 항목이 있으면 그 열쇠, 없으면 양식 이름 그대로.
+    window._apvFormKey = function (formName, title) {
+        var t = _bestTypeFor(formName, title);
+        if (t && (t.titlePrefix || []).length) return _typeKey(t);
+        return String(formName == null ? '' : formName).trim();
+    };
 
     // ── 그 양식의 **최근 문서**를 결재함에서 찾는다 (틀로 쓸 문서) ──────
     //  하드코딩하지 않는 이유: 문서는 매주 쌓이고, 박아두면 그 순간부터 과거를 가리킨다.
@@ -180,11 +315,20 @@
                                 + encodeURIComponent(limit || 100));
             var d = await r.json();
             if (!d || d.ok === false) return null;
+            // ⚠️⚠️ 접두어가 있는 양식('기안서[시제품 제작의뢰서]')은 **제목까지 봐야** 한다.
+            //    formName 만 보면 같은 '기안서' 인 표준원가 문서를 틀로 집는다(실측: 한
+            //    프로젝트의 '기안서' 7건이 서로 다른 세 문서였다).
+            var wantPre = (wantType && (wantType.titlePrefix || []).length)
+                ? (wantType.titlePrefix || []).map(_norm) : null;
             var hit = (d.docs || []).find(function (x) {
                 var fn = _norm(x.formName);
                 if (!x.docNum || !fn) return false;
+                if (wantPre) {
+                    if (fn !== _norm(wantType.form)) return false;
+                    return wantPre.indexOf(_norm(_titlePrefixOf(x.title))) >= 0;
+                }
                 if (fn === want) return true;                       // 정확히 같은 이름이면 끝
-                if (wantType) return _bestTypeFor(x.formName) === wantType;
+                if (wantType) return _bestTypeFor(x.formName, x.title) === wantType;
                 // 카탈로그에 없는 양식(사람이 직접 이름을 준 경우)만 포함 관계를 허용한다.
                 return fn.indexOf(want) >= 0 || want.indexOf(fn) >= 0;
             });
@@ -243,7 +387,9 @@
         opts = opts || {};
         var step = (typeof opts.onStep === 'function') ? opts.onStep : function () {};
         var type = window._apvDocTypeByForm(form);
-        var name = (type && type.form) || String(form || '').trim();
+        // ⚠️ 접두어가 있는 양식은 **열쇠**('기안서[시제품 제작의뢰서]')로 넘긴다 — `type.form`
+        //    만 넘기면 접두어가 날아가 같은 '기안서' 인 표준원가 문서를 틀로 집는다.
+        var name = (type ? _typeKey(type) : '') || String(form || '').trim();
         if (!name) return { ok: false, message: '어떤 양식인지 알 수 없습니다.' };
 
         if (window._gwEnsureLogin) {

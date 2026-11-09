@@ -25,9 +25,27 @@
     //         'spec'   Customer SPEC(briefSpec)에서 label 과 맞는 행의 값
     //         'summary' tabData.summary[key]
     //         'user'   지금 사용자 이름
+    //         'doc'    **이 프로젝트의 선행 결재문서**에서 읽는다(아래 참조 사다리)
     //         'blank'  일부러 비운다(신규 채번처럼 사람이 정할 것)
     //         (없음)   원본 기안 값을 그대로 쓴다
     //   label 은 **별칭 목록** — 양식·프로젝트마다 말이 달라서 한 개로는 못 맞춘다.
+    //
+    //  ── 📜 `from:'doc'` — 선행 문서 참조 (2026-11-09 신설) ─────────────────────
+    //   왜 필요한가: 앱에 **원본이 없는 값**이 있다. 프로젝트 코드·제품 코드·자재 코드는
+    //   결재로 **채번되고**, FW ver·EDID·광학 실측값은 시험 문서에서 **확정된다.**
+    //   그 값들은 앱이 아니라 **앞서 쓴 문서**가 원본이다.
+    //
+    //   ⚠️⚠️ **순서표를 박지 않는다.** 프로젝트 4개를 실측했더니 작성 순서가 제각각이었다 —
+    //     개발 의뢰서가 SLIM SLOT 에선 1위인데 OBSIDIAN 에선 6위, 프로젝트코드 등록 신청서는
+    //     ICONIC 엔 **아예 없다**. 그래서 `ref` 는 **후보 목록**이고, 지금 이 프로젝트의
+    //     결재함에 **실제로 있는** 문서 중에서 고른다. 없으면 fallback 으로 내려간다.
+    //
+    //   ⚠️⚠️ 참조 문서는 **이 프로젝트 것만** 쓴다. 양식만 보고 "최근 문서"를 집으면
+    //     **남의 프로젝트 코드**가 그대로 결재선을 타고 올라간다(조용한 오답 중 최악).
+    //     그래서 프로젝트 키워드로 먼저 걸러낸다(`_apvProjectDocs`).
+    //
+    //   rule: { from:'doc', ref:['양식 이름', …], label:['칸 이름', …],
+    //           fallback:'meta'|'spec'|'summary'|'source'|'blank', key/label…, why }
     window.APPROVAL_FIELD_SOURCES = window.APPROVAL_FIELD_SOURCES || {
         '제품코드 등록 신청서': {
             '프로젝트 코드': { from: 'meta', key: '프로젝트코드' },
@@ -103,6 +121,92 @@
             '1. 자재/제품 번호': { from: 'sap', key: 'self',  fallback: 'source' },
             '주요모델명':         { from: 'meta', key: '모델명' },
             '2. DMS 문서번호':   { from: 'blank', why: 'DMS 문서번호는 등록 후에 생기므로 사람이 채워주세요' }
+        },
+        // 🧪 [2026-11-09] 기안서[시제품 제작의뢰서] — 값이 **입력칸이 아니라 본문 표**에 있다.
+        //   실측(RD3-2604-016 / RD3-2512-010): fields 5개(문서번호·작성일 등 시스템 값)
+        //   / bodyFields **30개**(실제 내용 전부). 그래서 아래 칸 이름은 전부 bodyFields 다.
+        //   한 프로젝트에서 4번 쓴 양식이고, 같은 표가 Sample Report·모델명세서에도 또 들어간다.
+        //   ⚠️ 수량·출고처·일정·회차는 **사람이 정하는 값**이라 원본을 유지한다(적지 않는다) —
+        //     지난 회차의 날짜가 그대로 올라가면 안 되니 미리보기에서 고치게 둔다.
+        '기안서[시제품 제작의뢰서]': {
+            // ① 채번된 코드 — 앱(Summary)에 적혀 있을 수도 있지만 **문서가 원본**이다.
+            '프로젝트 코드': { from: 'doc', ref: ['프로젝트코드 등록 신청서', '제품코드 등록 신청서'],
+                            label: ['프로젝트 코드'], fallback: 'meta', key: '프로젝트코드' },
+            '제품 코드':     { from: 'doc', ref: ['제품코드 등록 신청서'],
+                            label: ['자재코드', '자재 코드', '제품코드'], fallback: 'meta', key: 'KTKPN' },
+            '모 델 명':      { from: 'doc', ref: ['제품코드 등록 신청서'],
+                            label: ['Description'], fallback: 'meta', key: 'PN_모델명' },
+            'B U Y E R':    { from: 'meta', key: '고객사' },
+            // ② 사람 — 앱이 원본이다(Summary 프로젝트 멤버).
+            '모델 담당자':    { from: 'meta', key: 'HW담당자',  fallback: 'meta2', key2: '프로젝트담당자' },
+            '기구 담당자':    { from: 'meta', key: '기구담당자' },
+            'FW 담당자':     { from: 'meta', key: 'FW담당자' },
+            // ③ 확정값 — 시험 의뢰서에서 확정된다. 앱엔 없다.
+            'FW Ver':       { from: 'doc', ref: ['신뢰성 시험 의뢰서'], label: ['Firmware 형명'],
+                            fallback: 'blank', why: '아직 확정 전이면 비웁니다 — 확인해 주세요' },
+            // ④ 광학 사양 — Customer SPEC 에 적어 두면 거기서, 아니면 시험 의뢰서에서.
+            'X':            { from: 'doc', ref: ['신뢰성 시험 의뢰서'], label: ['x'],
+                            fallback: 'spec', label2: ['색좌표 X', 'Color Coordinate X', 'White X'] },
+            'Y':            { from: 'doc', ref: ['신뢰성 시험 의뢰서'], label: ['y'],
+                            fallback: 'spec', label2: ['색좌표 Y', 'Color Coordinate Y', 'White Y'] },
+            'Lv':           { from: 'spec', label: ['휘도', 'Brightness', 'Luminance', 'White Luminance'] },
+            // ⑤ 주요자재 11칸 — Summary 탭 주요자재의 **고정 구분**과 1:1 로 맞물린다.
+            //    `matCat` = window.MATERIAL_FIXED_CATEGORIES 의 구분 이름, `matKey` = 꺼낼 값.
+            'LCM(Panel) 코드':      { from: 'mat', matCat: 'PANEL',       matKey: 'ktkPn' },
+            'LCM(Panel) 부품 명':    { from: 'mat', matCat: 'PANEL',       matKey: 'description' },
+            'A/D Board 코드':       { from: 'mat', matCat: 'AD BOARD',    matKey: 'ktkPn' },
+            'A/D Board 부품 명':     { from: 'mat', matCat: 'AD BOARD',    matKey: 'description' },
+            'Converter 코드':       { from: 'mat', matCat: 'CONVERTER',   matKey: 'ktkPn' },
+            'Converter 부품 명':     { from: 'mat', matCat: 'CONVERTER',   matKey: 'description' },
+            'TSP(Glass) 코드':      { from: 'mat', matCat: 'TOUCH / GLASS', matKey: 'ktkPn' },
+            'TSP(Glass) 부품 명':    { from: 'mat', matCat: 'TOUCH / GLASS', matKey: 'description' },
+            'TSP CTRL 코드':        { from: 'mat', matCat: 'TOUCH CTRL',  matKey: 'ktkPn' },
+            'TSP CTRL 부품 명':      { from: 'mat', matCat: 'TOUCH CTRL',  matKey: 'description' }
+            // 개발 단계·제작 회차·총 제작수량·출고 수량·출고 요청일·조립 예상일·제작 기간·
+            // EDID CHECK SUM·LCM(Panel) 비고 = 원본 유지(사람이 정한다).
+        },
+        // 🧪 [2026-11-09] 단계별 DR 회의록 — 실측 RD3-2606-023.
+        //   시간·장소·내용·일정은 **회의 고유값**이라 적지 않는다(원본 유지 → 사람이 고친다).
+        '단계별 DR 회의록': {
+            '과 제 명':        { from: 'meta', key: '프로젝트명' },
+            '프로젝트 코드':     { from: 'doc', ref: ['프로젝트코드 등록 신청서', '제품코드 등록 신청서'],
+                               label: ['프로젝트 코드'], fallback: 'meta', key: '프로젝트코드' },
+            'M o d e l':      { from: 'meta', key: 'KTK모델명', fallback: 'meta2', key2: '모델명' },
+            '담 당':           { from: 'meta', key: '팀' },
+            '주관부서(담당자)':   { from: 'metaJoin', keys: ['팀', '프로젝트담당자'], fmt: '{0}({1})' },
+            // 날짜·시간은 비운다 — 지난 회의 날짜가 그대로 올라가면 안 된다.
+            '시 간':           { from: 'blank', why: '회의 시간은 사람이 정해주세요' },
+            '장 소':           { from: 'blank', why: '회의 장소는 사람이 정해주세요' },
+            '내 용':           { from: 'blank', why: '회의 내용은 사람이 적어주세요' }
+        },
+        // 🧪 [2026-11-09] JIRA 프로젝트 등록 요청서 — 실측 RD3-2510-035.
+        //   구성요소·이슈유형·이슈필드·알림계획은 **양식 고정값**이라 원본 유지가 맞다.
+        'JIRA 프로젝트 등록 요청서': {
+            '프로젝트명':         { from: 'meta', key: '프로젝트명' },
+            '프로젝트 카테고리':   { from: 'metaJoin', keys: ['팀', '고객사'], fmt: '{0}-{1}' }
+        },
+        // 🧪 [2026-11-09] 환경 대응 의뢰서 — 실측 RD3-2605-022.
+        '환경 대응 의뢰서': {
+            '고객(Buyer)':        { from: 'meta', key: '고객사' },
+            '제품명 / 제품코드':    { from: 'metaJoin', keys: ['KTKPN', 'PN_모델명'], fmt: '{0} {1}' },
+            '회로 / 기구 담당자':   { from: 'metaJoin', keys: ['HW담당자', '기구담당자'], fmt: '{0}/{1}' },
+            // 기한·접수일은 **이번 요청의 값**이다. 원본의 지난 날짜가 올라가면 안 된다.
+            '고객요청 접수일':      { from: 'today' },
+            '대응완료 요청일자':    { from: 'blank', why: '요청 기한은 사람이 정해주세요' },
+            '대응가능 일자':        { from: 'blank', why: '대응 가능일은 사람이 정해주세요' }
+        },
+        // 🧪 [2026-11-09] 신뢰성 시험 의뢰서 — 실측 RD3-2510-044(칸 53개).
+        //   체크박스 묶음 30여 개는 원본 유지가 맞다(사람 판단) — 아래 칸만 프로젝트에서 온다.
+        '신뢰성 시험 의뢰서': {
+            '고객(Buyer)':   { from: 'meta', key: '고객사' },
+            '모델(Model)':   { from: 'meta', key: 'KTK모델명', fallback: 'meta2', key2: '모델명' },
+            '의뢰부서':       { from: 'meta', key: '팀' },
+            '의뢰자 (회로, 기구담당포함)': { from: 'metaJoin', keys: ['HW담당자', '기구담당자'], fmt: '{0}, {1}' },
+            '해상도':         { from: 'spec', label: ['해상도', 'Resolution', 'Native Resolution'] },
+            '품명(Serial No.)': { from: 'mat', matCat: 'PANEL', matKey: 'description' },
+            // 시료수·시험기간·접수일은 이번 의뢰의 값이다 — 지난 값이 올라가면 안 된다.
+            '시료수(Q\'ty)':  { from: 'blank', why: '시료 수량은 사람이 정해주세요' },
+            '시험 기간':      { from: 'blank', why: '시험 기간은 사람이 정해주세요' }
         },
         '개발품 자재상태 전환 요청서': {
             '제품코드':             { from: 'sap', key: 'self',  fallback: 'blank', why: '제품코드를 같이 주세요' },
@@ -190,16 +294,79 @@
         return '';
     };
 
+    // 📊 주요 자재 — Summary 탭의 **고정 구분**(window.MATERIAL_FIXED_CATEGORIES) 이름으로 찾는다.
+    //   모델이 여러 개면 지금 보는 모델(#1)을 먼저 본다. 합본(projectMaterials)도 폴백으로 본다.
+    //   ⚠️ 구분 이름은 바뀐 적이 있다(SLIMMING/CUTTING → SLIM/CUT) — 별칭표를 같이 본다.
+    var _matFind = function (cat, key) {
+        var td = window.tabData || {};
+        var lists = [];
+        var models = td.projectModels || [];
+        if (models.length && Array.isArray(models[0].materials)) lists.push(models[0].materials);
+        models.forEach(function (m) { if (Array.isArray(m.materials)) lists.push(m.materials); });
+        if (Array.isArray(td.projectMaterials)) lists.push(td.projectMaterials);
+        var names = [cat].concat(((window._MATERIAL_CATEGORY_ALIASES || {})[cat]) || []).map(_norm);
+        for (var i = 0; i < lists.length; i++) {
+            for (var j = 0; j < lists[i].length; j++) {
+                var r = lists[i][j] || {};
+                if (names.indexOf(_norm(r.category)) === -1) continue;
+                var v = String(r[key] == null ? '' : r[key]).trim();
+                if (v) return v;
+            }
+        }
+        return '';
+    };
+
+    // 📜 선행 문서에서 칸 하나 읽기 — ctx.docs 는 미리 읽어 둔 {양식열쇠: {칸: 값}} 이다.
+    //   ⚠️ 여기서 fetch 하지 않는다(이 함수는 동기다) — 미리 읽는 건 _apvPrefetchRefDocs.
+    var _docFind = function (ctx, refForms, labels) {
+        var docs = (ctx && ctx.docs) || {};
+        var want = (labels || []).map(_norm);
+        for (var i = 0; i < (refForms || []).length; i++) {
+            var d = docs[refForms[i]];
+            if (!d || !d.fields) continue;
+            var keys = Object.keys(d.fields);
+            for (var w = 0; w < want.length; w++) {
+                for (var k = 0; k < keys.length; k++) {
+                    if (_norm(keys[k]) !== want[w]) continue;
+                    var v = String(d.fields[keys[k]] == null ? '' : d.fields[keys[k]]).trim();
+                    if (v) return { value: v, form: refForms[i], docNum: d.docNum || '', label: keys[k] };
+                }
+            }
+        }
+        return null;
+    };
+
     // 칸 하나의 값을 정한다 → {value, from, note}
     //   from 은 **사람에게 보여줄 출처**다. 비워 두지 말 것 — 출처가 안 보이면 다 맞다고 믿고 넘긴다.
-    var _resolveOne = function (form, label, srcValue, ctx) {
+    //   ruleOverride: 폴백으로 내려갈 때 쓰는 임시 규칙(카탈로그를 다시 안 본다).
+    var _resolveOne = function (form, label, srcValue, ctx, ruleOverride) {
         ctx = ctx || {};
-        var learned = _learnGet(form, label);
-        if (learned !== undefined && learned !== null && String(learned).trim()) {
-            return { value: String(learned), from: _t('지난번 수정값', 'learned'), kind: 'learn' };
+        if (!ruleOverride) {
+            var learned = _learnGet(form, label);
+            if (learned !== undefined && learned !== null && String(learned).trim()) {
+                return { value: String(learned), from: _t('지난번 수정값', 'learned'), kind: 'learn' };
+            }
         }
-        var rule = (window.APPROVAL_FIELD_SOURCES[form] || {})[label];
+        var rule = ruleOverride || (window.APPROVAL_FIELD_SOURCES[form] || {})[label];
         if (!rule) return { value: srcValue || '', from: _t('원본 기안', 'source doc'), kind: 'source' };
+
+        // ── 폴백 사다리 ────────────────────────────────────────────────
+        //  ⚠️ 폴백이 **없으면** 비운다(원본을 조용히 물려받지 않는다) — 이 규칙이 있는 칸은
+        //     "원본 값을 그대로 쓰면 안 되는 칸"이라 명시한 칸이기 때문이다.
+        var _fb = function (why) {
+            var f = rule.fallback;
+            if (!f || f === 'blank') {
+                return { value: '', from: _t('비움', 'blank'), kind: 'blank', note: why || rule.why || '' };
+            }
+            if (f === 'source') {
+                return { value: srcValue || '', from: _t('원본 기안', 'source doc'), kind: 'source' };
+            }
+            var sub = { from: (f === 'meta2' ? 'meta' : f),
+                        key: rule.key2 || rule.key, label: rule.label2 || rule.label,
+                        keys: rule.keys, fmt: rule.fmt,
+                        matCat: rule.matCat, matKey: rule.matKey, why: rule.why };
+            return _resolveOne(form, label, srcValue, ctx, sub);
+        };
 
         if (rule.from === 'blank') {
             return { value: '', from: _t('비움', 'blank'), kind: 'blank', note: rule.why || '' };
@@ -211,8 +378,44 @@
         }
         if (rule.from === 'meta') {
             var v = ((window.projectMeta || {})[rule.key] || '').toString().trim();
-            return v ? { value: v, from: _t('프로젝트 > ', 'project > ') + rule.key, kind: 'app' }
-                     : { value: '', from: _t('프로젝트에 ', 'project has no ') + rule.key + _t(' 없음', ''), kind: 'miss' };
+            if (v) return { value: v, from: _t('프로젝트 > ', 'project > ') + rule.key, kind: 'app' };
+            // 폴백을 적은 규칙만 내려간다 — 기존 규칙(폴백 없음)은 예전처럼 'miss' 그대로.
+            if (rule.fallback) return _fb(_t('프로젝트에 ' + rule.key + ' 없음', 'no ' + rule.key));
+            return { value: '', from: _t('프로젝트에 ', 'project has no ') + rule.key + _t(' 없음', ''), kind: 'miss' };
+        }
+        // 🔗 여러 meta 값을 한 칸에 — '개발3팀(박용훈)'·'박용훈/이재우' 처럼 양식이 합쳐 적는 칸.
+        //    ⚠️ 하나라도 비면 '개발3팀()' 같은 반쪽 값이 결재선을 탄다 → **전부 있을 때만** 쓴다.
+        if (rule.from === 'metaJoin') {
+            var pm = window.projectMeta || {};
+            var vals = (rule.keys || []).map(function (k) { return String(pm[k] == null ? '' : pm[k]).trim(); });
+            if (vals.length && vals.every(function (x) { return !!x; })) {
+                var out = String(rule.fmt || vals.join(' '));
+                vals.forEach(function (x, i) { out = out.split('{' + i + '}').join(x); });
+                return { value: out, from: _t('프로젝트 > ', 'project > ') + (rule.keys || []).join(' + '), kind: 'app' };
+            }
+            var lack = (rule.keys || []).filter(function (k, i) { return !vals[i]; });
+            if (rule.fallback) return _fb(_t('프로젝트에 ' + lack.join('·') + ' 없음', 'missing ' + lack.join(', ')));
+            return { value: '', from: _t('프로젝트에 ', 'project has no ') + lack.join('·') + _t(' 없음', ''), kind: 'miss' };
+        }
+        // 📊 주요 자재(Summary 탭) — 구분 이름으로 찾는다.
+        if (rule.from === 'mat') {
+            var mv = _matFind(rule.matCat, rule.matKey || 'ktkPn');
+            if (mv) return { value: mv, from: _t('주요자재 > ', 'materials > ') + rule.matCat, kind: 'app' };
+            if (rule.fallback) return _fb(_t('주요자재에 ' + rule.matCat + ' 없음', 'no ' + rule.matCat));
+            return { value: '', from: _t('주요자재에 ' + rule.matCat + ' 가 비어 있음', 'materials: ' + rule.matCat + ' empty'), kind: 'miss' };
+        }
+        // 📜 선행 문서 — 이 프로젝트의 앞선 결재문서에서 읽는다(미리 읽어 둔 ctx.docs).
+        if (rule.from === 'doc') {
+            var dh = _docFind(ctx, rule.ref || [], rule.label || []);
+            if (dh) {
+                return { value: dh.value, kind: 'app',
+                         from: '📜 ' + dh.form + (dh.docNum ? ' ' + dh.docNum : '') + ' > ' + dh.label };
+            }
+            // 못 찾은 이유를 구분해 적는다 — "문서가 없다"와 "문서엔 그 칸이 없다"는 다른 사실이다.
+            var tried = (rule.ref || []).join(', ');
+            var had = (rule.ref || []).some(function (f) { return (ctx.docs || {})[f]; });
+            return _fb(had ? _t(tried + ' 에 그 칸이 비어 있음', 'field empty in ' + tried)
+                           : _t('이 프로젝트에 ' + tried + ' 문서가 없음', 'no ' + tried + ' for this project'));
         }
         if (rule.from === 'summary') {
             var s = (((window.tabData || {}).summary || {})[rule.key] || '').toString().trim();
@@ -250,8 +453,9 @@
         }
         if (rule.from === 'spec') {
             var sv = _specFind(rule.label);
-            return sv ? { value: sv, from: _t('Customer SPEC > ', 'Customer SPEC > ') + (rule.label || [])[0], kind: 'app' }
-                      : { value: '', from: _t('Customer SPEC 에서 못 찾음', 'not found in Customer SPEC'), kind: 'miss' };
+            if (sv) return { value: sv, from: _t('Customer SPEC > ', 'Customer SPEC > ') + (rule.label || [])[0], kind: 'app' };
+            if (rule.fallback) return _fb(_t('Customer SPEC 에서 못 찾음', 'not in Customer SPEC'));
+            return { value: '', from: _t('Customer SPEC 에서 못 찾음', 'not found in Customer SPEC'), kind: 'miss' };
         }
         return { value: srcValue || '', from: _t('원본 기안', 'source doc'), kind: 'source' };
     };
@@ -279,6 +483,121 @@
             return { value: subject, changed: false, oldMat: oldMat };
         }
         return { value: subject.split(oldMat).join(newMat), changed: true, oldMat: oldMat };
+    };
+
+    // ── 📜 선행 문서 참조 — 미리 읽기 ──────────────────────────────────────
+    //  수치는 데이터로 — 참조 문서 하나 읽기가 실측 3~22초라 상한이 반드시 있어야 한다.
+    window.APV_REF = window.APV_REF || {
+        maxRefForms: 4,      // 한 번 작성에 읽을 **참조 양식** 수 상한
+        listLimit: 80        // 프로젝트 문서 목록 상한(실측: 한 프로젝트 45건, 긴 것은 105건)
+    };
+    var BACKEND = 'http://127.0.0.1:5000';
+
+    // 이 프로젝트를 가리키는 **검색어 후보** — 앞에 있는 것부터 써 보고, 걸리는 첫 번째를 쓴다.
+    //  ⚠️ 짧은 말은 쓰지 않는다 — 두 글자면 남의 프로젝트가 통째로 걸린다.
+    //  메일키워드가 가장 믿을 만하다 — 사람이 "이 프로젝트를 가리키는 말"로 직접 적어 둔 칸이다.
+    var _apvProjectKeywords = function () {
+        var pm = window.projectMeta || {};
+        var cand = [];
+        var push = function (s) {
+            s = String(s == null ? '' : s).trim();
+            if (s.length < 3) return;
+            if (cand.indexOf(s) === -1) cand.push(s);
+        };
+        String(pm.메일키워드 || '').split(',').forEach(push);
+        push(pm.모델명); push(pm.KTK모델명); push(pm.고객모델명);
+        var pn = String(pm.프로젝트명 || '');
+        if (pn.indexOf('>') >= 0) push(pn.split('>').pop());   // '고객사>모델' 이면 뒤쪽이 더 좁다
+        push(pn);
+        return cand;
+    };
+
+    // 이 프로젝트의 결재문서 목록 — **참조 문서를 남의 프로젝트에서 집지 않게** 하는 장치다.
+    //  ⚠️⚠️ 양식만 보고 "최근 문서"를 집으면 **남의 프로젝트 코드**가 그대로 결재선을 탄다.
+    var _apvProjectDocs = async function (ctx) {
+        if (ctx._projDocs) return ctx._projDocs;
+        var kws = _apvProjectKeywords();
+        for (var i = 0; i < kws.length; i++) {
+            try {
+                var r = await fetch(BACKEND + '/gw/approval/doclist?box=all&duration=all&searchtype=title'
+                    + '&limit=' + encodeURIComponent(window.APV_REF.listLimit)
+                    + '&keyword=' + encodeURIComponent(kws[i]));
+                var d = await r.json();
+                var docs = (d && d.docs) || [];
+                if (docs.length) { ctx._projDocs = { keyword: kws[i], docs: docs }; return ctx._projDocs; }
+            } catch (e) { /* 다음 후보로 — 왜 못 찾았는지는 칸 출처에 적힌다 */ }
+        }
+        ctx._projDocs = { keyword: '', docs: [] };
+        return ctx._projDocs;
+    };
+
+    // 그 목록에서 양식이 맞는 **가장 최근** 문서. 양식 열쇠(접두어 포함)로 맞춘다.
+    var _apvNewestOf = function (docs, refForm) {
+        var want = _norm(refForm);
+        var best = null;
+        (docs || []).forEach(function (x) {
+            var key = window._apvFormKey ? window._apvFormKey(x.formName, x.title) : x.formName;
+            if (_norm(key) !== want && _norm(x.formName) !== want) return;
+            if (!best || String(x.draftedAt || '') > String(best.draftedAt || '')) best = x;
+        });
+        return best;
+    };
+
+    // 이 양식의 `from:'doc'` 규칙이 가리키는 참조 문서들을 **미리** 읽어 ctx.docs 에 담는다.
+    //  ⚠️ 칸마다 읽으면 몇 분씩 걸린다 — SAP 조회를 한 번만 하는 것과 같은 이유.
+    var _apvPrefetchRefDocs = async function (form, ctx, say) {
+        var map = window.APPROVAL_FIELD_SOURCES[form] || {};
+        var refs = [];
+        Object.keys(map).forEach(function (k) {
+            var r = map[k] || {};
+            if (r.from !== 'doc') return;
+            (r.ref || []).forEach(function (f) { if (refs.indexOf(f) === -1) refs.push(f); });
+        });
+        if (!refs.length) return;
+        ctx.docs = ctx.docs || {};
+        say && say('🔎 ' + _t('이 프로젝트의 선행 문서를 찾는 중입니다…', 'Finding earlier documents…'));
+        var pool = await _apvProjectDocs(ctx);
+        ctx.refKeyword = pool.keyword;
+        ctx.refWanted = refs.slice();
+        if (!pool.docs.length) {
+            // 조용히 넘기지 않는다 — 왜 참조를 못 했는지 미리보기에 밝힌다.
+            ctx.refNote = _t('이 프로젝트의 결재문서를 못 찾았습니다(검색어 후보: '
+                             + (_apvProjectKeywords().join(', ') || '없음')
+                             + ') — 선행 문서에서 가져오는 칸은 앱 값이나 빈칸으로 둡니다.',
+                             'No approval documents found for this project.');
+            return;
+        }
+        var read = 0;
+        for (var i = 0; i < refs.length && read < window.APV_REF.maxRefForms; i++) {
+            var hit = _apvNewestOf(pool.docs, refs[i]);
+            if (!hit) continue;
+            read++;
+            say && say('📜 ' + refs[i] + ' (' + (hit.docNum || ('id:' + hit.id)) + ') '
+                       + _t('를 읽는 중…', 'reading…'));
+            try {
+                var q = hit.docNum ? ('docNum=' + encodeURIComponent(hit.docNum))
+                                   : ('docId=' + encodeURIComponent(hit.id));
+                var rr = await fetch(BACKEND + '/gw/approval/read?' + q);
+                var dd = await rr.json();
+                if (!dd || !dd.ok) continue;
+                // 참조 문서도 본문이 표인 양식일 수 있다 — 둘을 합쳐 본다(입력칸이 이긴다).
+                var merged = {};
+                Object.keys(dd.bodyFields || {}).forEach(function (k) { merged[k] = dd.bodyFields[k]; });
+                Object.keys(dd.fields || {}).forEach(function (k) { merged[k] = dd.fields[k]; });
+                ctx.docs[refs[i]] = { docNum: hit.docNum || ('id:' + hit.id), fields: merged };
+            } catch (e) { /* 못 읽은 문서는 '없는 것'으로 — 사유는 칸 출처에 적힌다 */ }
+        }
+    };
+
+    // 카탈로그 칸 이름 찾기 — 띄어쓰기만 다른 라벨도 같은 칸으로 본다.
+    //  (본문 표 라벨은 리더가 공백을 한 칸으로 줄여 돌려주므로 글자가 미세하게 다를 수 있다)
+    var _apvCatalogKey = function (form, label) {
+        var map = window.APPROVAL_FIELD_SOURCES[form] || {};
+        if (map[label]) return label;
+        var want = _norm(label);
+        var keys = Object.keys(map);
+        for (var i = 0; i < keys.length; i++) if (_norm(keys[i]) === want) return keys[i];
+        return label;
     };
 
     // ── 진입점 ─────────────────────────────────────────────────────────
@@ -311,7 +630,12 @@
             if (window._issueLog) { try { window._issueLog('approval-compose', { docNum: docNum, docId: docId, err: (src && src.message) || '' }); } catch (e2) { /* 기록 실패가 흐름을 막지 않게 */ } }
             return;
         }
-        var form = ((src.meta || {}).formName || '').trim();
+        // 📛 매핑 열쇠는 **양식 이름 + 제목 접두어**다 — '기안서' 는 양식이 아니라 봉투라서
+        //    formName 만으로는 [시제품 제작의뢰서]와 표준원가 문서가 한 덩어리가 된다(js/52).
+        var formName = ((src.meta || {}).formName || '').trim();
+        var form = (window._apvFormKey
+            ? window._apvFormKey(formName, (src.meta || {}).title || src.subject || '')
+            : formName) || formName;
         var srcFields = src.fields || {};
 
         // 🏭 자재번호를 줬고 이 양식에 SAP 출처 칸이 있으면 **한 번만** 조회한다.
@@ -368,22 +692,42 @@
                                            : _t('원본 기안', 'source doc'),
                         kind: _sub.changed ? 'app' : 'source', note: '', isSubject: true };
 
+        // 📜 선행 문서 참조 — 칸을 풀기 **전에** 미리 읽어 둔다(칸마다 읽으면 몇 분씩 걸린다).
+        if (!opts.asIs) {
+            await _apvPrefetchRefDocs(form, ctx, function (m) { _toast(m, 'info'); });
+        }
+
         var rows = Object.keys(srcFields)
             .filter(function (k) { return SKIP.indexOf(k.replace(/\s/g, '')) === -1; })
             .map(function (k) {
                 var d = opts.asIs
                     ? { value: srcFields[k] || '', from: _t('원본 기안', 'source doc'), kind: 'source' }
-                    : _resolveOne(form, k, srcFields[k], ctx);
+                    : _resolveOne(form, _apvCatalogKey(form, k), srcFields[k], ctx);
                 return { label: k, srcValue: srcFields[k], value: d.value, from: d.from, kind: d.kind, note: d.note || '' };
             });
+
+        // 📝 본문 표 칸 — 이 양식의 값이 **입력칸이 아니라 본문 표**에 있는 경우다.
+        //   실측: 기안서[시제품 제작의뢰서] 는 fields 5개(시스템 값)뿐이고 내용 30칸이 전부 여기다.
+        //   ⚠️ 이걸 안 다루면 "채웠다"면서 **원본 값이 그대로** 결재선을 타고 올라간다.
+        var bodySrc = (src.bodyFields && typeof src.bodyFields === 'object') ? src.bodyFields : {};
+        Object.keys(bodySrc).forEach(function (k) {
+            if (SKIP.indexOf(k.replace(/\s/g, '')) !== -1) return;
+            var d = opts.asIs
+                ? { value: bodySrc[k] || '', from: _t('원본 기안', 'source doc'), kind: 'source' }
+                : _resolveOne(form, _apvCatalogKey(form, k), bodySrc[k], ctx);
+            rows.push({ label: k, srcValue: bodySrc[k], value: d.value, from: d.from,
+                        kind: d.kind, note: d.note || '', isBody: true });
+        });
+
         rows.unshift(subjRow);
-        _apvOpen(docNum, docId, src, form, rows, opts.asIs, ctx.material);
+        _apvOpen(docNum, docId, src, form, rows, opts.asIs, ctx.material, ctx);
     };
 
     // ── 미리보기 (칸마다 출처를 보여준다) ───────────────────────────────
     window._apvPending = null;
-    var _apvOpen = function (docNum, docId, src, form, rows, asIs, material) {
-        window._apvPending = { docNum: docNum, docId: docId, src: src, form: form, rows: rows, asIs: !!asIs, material: material || '' };
+    var _apvOpen = function (docNum, docId, src, form, rows, asIs, material, ctx) {
+        window._apvPending = { docNum: docNum, docId: docId, src: src, form: form, rows: rows,
+                               asIs: !!asIs, material: material || '', ctx: ctx || {} };
         var ov = document.getElementById('apv-overlay');
         if (!ov) {
             ov = document.createElement('div');
@@ -461,7 +805,10 @@
             html += '<tr style="background:' + (isDiff ? '#fffbe6' : 'transparent') + ';">'
                 + '<td style="border:1px solid #e9ecef; padding:3px 2px; text-align:center; width:22px; color:#e6a817; font-weight:bold;"'
                 + ' title="' + _esc(isDiff ? _t('원본과 다름', 'changed') : '') + '">' + (isDiff ? '●' : '') + '</td>'
-                + '<td style="border:1px solid #e9ecef; padding:3px 6px; white-space:nowrap; font-weight:bold;">' + _esc(r.label) + '</td>'
+                // 📝 = 본문 표 안의 칸(입력칸이 아니다). 어디에 들어가는 값인지 보여야 한다.
+                + '<td style="border:1px solid #e9ecef; padding:3px 6px; white-space:nowrap; font-weight:bold;"'
+                + (r.isBody ? ' title="' + _esc(_t('본문 표 안의 칸', 'cell inside the body table')) + '"' : '')
+                + '>' + (r.isBody ? '📝 ' : '') + _esc(r.label) + '</td>'
                 + '<td style="border:1px solid #e9ecef; padding:2px 4px;"><input type="text" id="apv-v-' + i + '" value="' + _esc(r.value)
                 + '" style="width:100%; box-sizing:border-box; padding:3px 5px; border:1px solid ' + (isDiff ? '#e6a817' : '#ced4da')
                 + '; border-radius:4px; font-size:11.5px;' + (isDiff ? ' font-weight:bold;' : '') + '"></td>'
@@ -520,13 +867,39 @@
         //    **DEXT5 에디터 한 덩어리**라 칸마다 쪼개 보여줄 수가 없다(docs/groupware.md 8-0-3).
         //    대신 "원본 그대로 들어간다"는 사실과 **들어갈 내용 전부**를 보여준다 — 칸마다
         //    출처를 보여주는 이 모달의 원칙을 본문에서도 지키려면 이게 최선이다.
+        // 📜 선행 문서 참조를 못 한 이유가 있으면 **먼저** 밝힌다 — 빈칸만 남기면 왜 비었는지 모른다.
+        if (!p.asIs && (p.ctx || {}).refNote) {
+            html += '<div style="margin-top:8px; padding:6px 9px; background:#fff3cd; border-left:3px solid #e6a817;'
+                + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#7a5210;">📜 ' + _esc(p.ctx.refNote) + '</div>';
+        } else if (!p.asIs && (p.ctx || {}).refKeyword) {
+            var _rd = Object.keys((p.ctx.docs) || {});
+            html += '<div style="margin-top:8px; font-size:11px; color:#1f7a3d;">📜 '
+                + _esc(_t('선행 문서 참조: 검색어 "' + p.ctx.refKeyword + '" 로 찾은 ',
+                          'earlier docs via "' + p.ctx.refKeyword + '": '))
+                + (_rd.length
+                    ? _esc(_rd.map(function (f) { return f + '(' + p.ctx.docs[f].docNum + ')'; }).join(', '))
+                    : _esc(_t('문서 중 참조할 양식이 없었습니다 — 앱 값이나 빈칸으로 둡니다',
+                              'none of the referenced forms exist yet')))
+                + '</div>';
+        }
         var _bodyTxt = String(p.src.body || '').trim();
+        var _bodyRows = p.rows.filter(function (r) { return r.isBody; });
+        var _bodyDiff = _bodyRows.filter(function (r) { return String(r.value || '') !== String(r.srcValue || ''); });
         if (_bodyTxt) {
             html += '<div style="margin-top:8px; padding:6px 9px; background:#e8f4fd; border-left:3px solid #1a4f7a;'
                 + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#1a4f7a;">📋 '
-                + _esc(_t('본문은 칸이 아니라 에디터 한 덩어리라, 아래 내용이 원본 그대로 새 기안 본문에 들어갑니다'
-                          + (p.asIs ? '.' : ' — 프로젝트 값으로 바꾸지 않으니 임시저장 뒤 그룹웨어에서 고쳐 주세요.'),
-                          'The body is one editor block, so it is copied into the new draft exactly as shown below.'))
+                + _esc(p.asIs
+                    ? _t('본문은 아래 내용이 원본 그대로 새 기안 본문에 들어갑니다.',
+                         'The body is copied into the new draft exactly as shown below.')
+                    : (_bodyRows.length
+                        ? _t('본문 표의 칸 ' + _bodyRows.length + '개는 위 표에서 📝 로 표시했습니다 — '
+                             + '그중 ' + _bodyDiff.length + '개를 프로젝트 값으로 바꿔 넣습니다. '
+                             + '나머지 본문은 원본 그대로 들어갑니다.',
+                             _bodyRows.length + ' body cells shown above with 📝 — '
+                             + _bodyDiff.length + ' will be replaced.')
+                        : _t('본문은 칸으로 쪼개지지 않아 원본 그대로 들어갑니다 — '
+                             + '임시저장 뒤 그룹웨어에서 고쳐 주세요.',
+                             'The body could not be split into cells, so it is copied as-is.')))
                 + '</div>'
                 + '<pre style="margin:6px 0 0; padding:7px 9px; background:#f8f9fa; border:1px solid #e9ecef;'
                 + ' border-radius:4px; font-size:11px; line-height:1.5; max-height:220px; overflow:auto;'
@@ -654,13 +1027,21 @@
 
     window._apvApply = async function () {
         var p = window._apvPending; if (!p) return;
-        var fields = {}, edited = 0, subject = null;
+        var fields = {}, bodyEdits = {}, edited = 0, subject = null;
         p.rows.forEach(function (r, i) {
             var el = document.getElementById('apv-v-' + i);
             var v = el ? el.value : r.value;
             // 제목은 **입력칸이 아니다** — fields 에 넣으면 'Subject' 라는 칸을 찾다 실패한다.
             if (r.isSubject) { subject = v; return; }
-            fields[r.label] = v;
+            // 📝 본문 표 칸은 입력칸이 아니다 — fields 에 넣으면 "해당 칸 없음"으로 떨어지고,
+            //    실행 루프가 그걸 메우려고 AI 를 부르다 상한만 태운다. 따로 보낸다.
+            //    ⚠️ **바뀐 칸만** 보낸다 — 안 바뀐 칸까지 다시 쓰면 원본과 같은 글자를 덮어쓰는
+            //       헛일이고, 못 찾은 라벨 경고만 늘어난다.
+            if (r.isBody) {
+                if (String(v) !== String(r.srcValue == null ? '' : r.srcValue)) bodyEdits[r.label] = v;
+            } else {
+                fields[r.label] = v;
+            }
             // 사람이 고친 값만 적립한다 — 자동으로 나온 값까지 저장하면 사전이 금방 오염된다.
             // ⚠️ 아래 루프에서 AI 가 고른 값은 **적립하지 않는다**(같은 이유).
             if (String(v) !== String(r.value)) { _learnPut(p.form, r.label, v); edited++; }
@@ -679,7 +1060,10 @@
         _busy(_t('⏳ 채우는 중…', '⏳ Filling…'));
         var first = await _apvPost('/gw/approval/copy', {
             docNum: p.docNum || undefined, docId: p.docNum ? undefined : p.docId,
-            fields: fields, subject: _sub, dryRun: true
+            fields: fields, subject: _sub, dryRun: true,
+            // 📝 본문 표 칸 바꿔치기 — copy 단계에서만 보낸다. 그다음 draft-fill 은 **같은 화면을
+            //    다시 쓰므로**(reuseScreen) 에디터에 이미 들어간 본문이 그대로 남는다.
+            bodyEdits: bodyEdits
         });
         if (!first || !first.ok) { _free(); _say(''); _apvReportFail(p, first, 'fill'); return; }
 
@@ -750,7 +1134,9 @@
         var finalFailed = (saved.log || []).filter(function (x) { return !x.ok; })
             .map(function (x) { return x.field; });
         // 본문은 '칸'이 아니라 위 목록만으로는 들어갔는지가 안 보인다 — 따로 알린다.
-        var bodyNote = (notes.filter(function (n) { return /본문/.test(String(n)); })[0] || '');
+        //  ⚠️ 본문 관련 알림이 **둘 이상**이다(본문 넣기 / 본문 표 칸 바꾸기) — 첫 줄만 쓰면
+        //     "표 칸을 몇 개 바꿨는지"가 조용히 사라진다.
+        var bodyNote = notes.filter(function (n) { return /본문/.test(String(n)); }).join(' / ');
 
         if (finalFailed.length && window._issueLog) {
             try {
