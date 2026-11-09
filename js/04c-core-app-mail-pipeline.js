@@ -311,9 +311,38 @@
             }
 
             const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot);
-            const idx = indexData.projects.findIndex(function(p) { return p.drive_file_id === driveFileId; });
+            // 🎯 [2026-11-09] 항목을 찾는 열쇠는 id 하나가 아니다 — **경로**도 본다.
+            //    왜: NAS 모드에선 한 경로에 옛 Drive id 가 여럿 걸려 있고(이사 때 이름이 겹친 파일),
+            //    목록이 내놓는 "승자" id 는 **파일 이름이 바뀌는 순간 뒤바뀐다**(`remapIdPath`).
+            //    id 로만 찾으면 그때 항목을 **못 찾아 하나를 더 밀어 넣고**(같은 프로젝트가 색인에 둘),
+            //    둘 중 하나는 어느 live 파일과도 안 맞아 "유령"으로 보인다 → 목록에서 담당자·팀·색이
+            //    전부 빈 **"미지정"**. 실제로 `고객사>프로젝트명` 을 고쳐 저장할 때마다 재발했다.
+            //    → 같은 경로를 가리키는 항목이면 **그 항목을 고쳐 쓴다**(id 도 지금 승자로 자동 교정).
+            //    ⚠️ 이름으로는 찾지 않는다 — 팀이 다른 두 프로젝트가 같은 파일 이름일 수 있다.
+            const relOfId = window._storageRelOfId || null;      // NAS 모드에만 있다(Drive 는 id 가 안 바뀐다)
+            const myRel = relOfId ? relOfId(driveFileId) : '';
+            let idx = indexData.projects.findIndex(function(p) { return p.drive_file_id === driveFileId; });
+            if (idx === -1 && myRel) {
+                idx = indexData.projects.findIndex(function(p) { return relOfId(p.drive_file_id) === myRel; });
+                if (idx !== -1) {
+                    console.log('project_index: 같은 경로의 항목을 id 대신 경로로 찾아 고쳐 씁니다 — '
+                              + indexData.projects[idx].drive_file_id + ' → ' + driveFileId);
+                }
+            }
             if (idx === -1) indexData.projects.push(entry);
             else indexData.projects[idx] = entry;
+            // 🧹 같은 경로를 가리키는 항목이 이미 여럿이면(옛 js 가 돌던 PC 가 만들어 둔 것) 하나로 모은다.
+            //    남기는 건 방금 쓴 것 하나 — 경로를 모르는 항목(Drive 모드·지도에 없는 id)은 안 건드린다.
+            if (myRel) {
+                const before = indexData.projects.length;
+                indexData.projects = indexData.projects.filter(function(p) {
+                    return p === entry || p.drive_file_id === driveFileId || relOfId(p.drive_file_id) !== myRel;
+                });
+                if (indexData.projects.length !== before) {
+                    console.log('project_index: 같은 경로를 가리키는 중복 항목 '
+                              + (before - indexData.projects.length) + '건을 하나로 모았습니다 — ' + myRel);
+                }
+            }
 
             const body = JSON.stringify(indexData);
             if (indexFileId) {
