@@ -111,7 +111,7 @@
     // ── 📚 문서 서식 카탈로그 (데이터) ──────────────────────────────────
     window.DOC_FORMS = window.DOC_FORMS || [
         {
-            id: 'proto-req', icon: '🧾', label: '시제품 제작의뢰서',
+            id: 'proto-req', icon: '🧾', label: '시제품 제작의뢰서', folder: '시제품 제작의뢰서',
             note: '그룹웨어 기안의 본문 표와 같은 서식입니다(실측 RD3-2604-016).',
             nameOf: function (ctx) { return _projKey(ctx) + '_시제품 제작의뢰서_' + _today(); },
             sections: _protoReqSections()
@@ -121,7 +121,7 @@
             //    원본은 **7부 구성**이다(표지 뒤 '#문서 구분' 표에 그렇게 적혀 있다).
             //    ⚠️ SAMPLE CHECK SHEET(하드웨어·펌웨어·기구 6장, 300행 체크표)는 아직 안 넣었다 —
             //       넣을 땐 `kind:'check'` 를 새로 만들어 붙인다. 모르는 척하지 않고 적어 둔다.
-            id: 'sample-report', icon: '📑', label: 'Sample Report (시제품)',
+            id: 'sample-report', icon: '📑', label: 'Sample Report (시제품)', folder: 'SAMPLE REPORT',
             perRound: true,   // 📦 회차마다 문서가 따로 생긴다(실측 원본 파일 이름에도 'Proto B' 가 들어 있다)
             note: '원본 구성: ①시제품 제작의뢰서 ②라벨 사양 ③검토 내역서(시제품팀) '
                 + '④광학 측정 ⑤제작 특이사항 ⑥검토 내역서(제품보증팀) ⑦SPL Check sheet. '
@@ -217,7 +217,7 @@
             ])
         },
         {
-            id: 'stage-dr', icon: '📊', label: 'DR / DVR 발표자료',
+            id: 'stage-dr', icon: '📊', label: 'DR / DVR 발표자료', folder: 'DR_DVR 발표자료',
             builder: 'stage-dr', stages: ['Kickoff & Proto DR', 'Proto DR', 'DVR', 'PRA'],
             note: '도면·사진·블록도는 들어가지 않습니다(사람이 넣는 부분). PPT 로 받으면 슬라이드 6장입니다.',
             nameOf: function (ctx, opt) {
@@ -279,8 +279,50 @@
         var s = [code, name].filter(Boolean).join('_');
         return s || 'ETC';
     };
-    var _docFolder = function (ctx) { return DOC_ROOT + '/' + _projFolderName(ctx); };
-    var _attFolder = function (ctx) { return _docFolder(ctx) + '/attach'; };
+    var _projFolder = function (ctx) { return DOC_ROOT + '/' + _projFolderName(ctx); };
+
+    // 🗂🗂 [2026-11-09 사용자 요청] 문서마다 **제 폴더**를 둔다 — CUSTOMER 폴더와 같은 모양.
+    //   `DOCUMENT/<프로젝트>/SAMPLE REPORT/` · `…/DR_DVR 발표자료/` · `…/시제품 제작의뢰서/`
+    //   앞으로 서식을 늘리면 폴더도 **저절로** 는다(이름은 서식 데이터의 `folder`, 없으면 label).
+    //   ⚠️ 폴더 이름에 `/` 를 쓰면 안 된다 — 윈도 경로에서 한 단계가 더 생긴다. 그래서
+    //      'DR / DVR 발표자료' 는 폴더로는 `DR_DVR 발표자료` 다.
+    var _formFolderName = function (form) {
+        if (!form) return '';
+        return _safe(form.folder || form.label);
+    };
+    var _docFolder = function (ctx, form) {
+        var f = _formFolderName(form || _formById(window._docState.formId));
+        return _projFolder(ctx) + (f ? '/' + f : '');
+    };
+    var _attFolder = function (ctx, form) { return _docFolder(ctx, form) + '/attach'; };
+
+    // 📂 폴더를 **미리 만든다** — 사람이 NAS 탐색기를 열었을 때 자리가 보여야 한다.
+    //   ⚠️ 폴더는 원래 뭔가를 쓰거나 읽을 때 생긴다(백엔드 `_docstore_dir`). 그래서 아무것도
+    //      안 올린 프로젝트는 `DOCUMENT` 가 **텅 비어 있었다**(사용자 신고 2026-11-09, 실측 0건).
+    //   ⚠️ 한 번 지난 폴더는 다시 안 만든다(SMB 왕복이 비싸다) · 실패해도 화면을 막지 않는다.
+    var _mkdirSeen = {};
+    // 한 번 만든 폴더를 다시 안 만들려고 기억해 둔다. 열쇠는 **전체 경로**라 프로젝트가 바뀌어도
+    // 섞이지 않는다. (하네스가 같은 걸 두 번 재려면 이걸 비워야 한다 — 안 그러면 2회차가 0건이다)
+    window._docResetFolderCache = function () { _mkdirSeen = {}; };
+    var _docEnsureFolder = async function (rel) {
+        if (!rel || _mkdirSeen[rel]) return;
+        _mkdirSeen[rel] = 1;
+        try {
+            await fetch(BACKEND + '/doc/list?folder=' + encodeURIComponent(rel));
+        } catch (e) { delete _mkdirSeen[rel]; }      // 다음에 다시 해 본다
+    };
+    window._docEnsureFolders = async function () {
+        var ctx = _ctx();
+        if (!ctx.meta || (!ctx.meta.고객사 && !ctx.meta.모델명 && !ctx.meta.프로젝트코드)) return;
+        // 지금 고른 문서 폴더 먼저, 나머지 서식은 그다음(한 번에 다 만들어 둔다)
+        var cur = _formById(window._docState.formId);
+        var forms = (window.DOC_FORMS || []).slice().sort(function (a, b) {
+            return (a === cur ? -1 : 0) - (b === cur ? -1 : 0);
+        });
+        for (var i = 0; i < forms.length; i++) {
+            await _docEnsureFolder(_docFolder(ctx, forms[i]));
+        }
+    };
     // 지금 열린 프로젝트의 사실 묶음 — 폴더를 물을 때마다 모은다(프로젝트가 바뀌면 폴더도 바뀐다).
     var _ctx = function () {
         return window._dgCollect ? window._dgCollect() : { meta: {} };
@@ -612,8 +654,11 @@
             _toast('⏳ ' + (f.name || '') + ' ' + _t('올리는 중…', 'uploading…'), 'info');
             var r = await window._dgUploadBlob(_attFolder(_ctx()), nm, f);
             if (r.ok) {
+                // 🗂 올린 **폴더를 같이 적는다** — 나중에 폴더 규칙을 바꿔도 옷 첨부가 살아있어야 한다.
+                //   (적어 두지 않으면 규칙을 바꾸는 순간 올려 둔 파일이 전부 404 가 된다)
                 d.att[key].push({ name: r.name || nm, orig: f.name || '', size: r.size || f.size || 0,
-                                  type: f.type || '', at: new Date().toISOString() });
+                                  type: f.type || '', at: new Date().toISOString(),
+                                  folder: _attFolder(_ctx()) });
                 _markDirty();
             } else if (!r.skipped) {
                 // 조용히 넘기지 않는다 — 첨부가 "들어간 줄 알았는데 없는" 게 제일 나쁘다.
@@ -632,8 +677,12 @@
         list.splice(idx, 1);
         _markDirty(); window._docRender();
     };
-    var _attUrl = function (name) {
-        return BACKEND + '/doc/get?folder=' + encodeURIComponent(_attFolder(_ctx())) + '&name=' + encodeURIComponent(name);
+    // ⚠️ 체부 주소는 **그 파일을 올렸던 폴더**로 만든다. 폴더 규칙이 바뀜기 전에 올린 것은
+    //    `folder` 가 없으므로 **옷 자리**(`DOCUMENT/<프로젝트>/attach`)를 본다.
+    var _attUrl = function (a) {
+        var folder = (a && a.folder) || (_projFolder(_ctx()) + '/attach');
+        var name = (a && a.name) || a;
+        return BACKEND + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name);
     };
 
     // 🎨 문서 모양 서식은 **styles.css** 에 있다(`#doc-page-body .doc-*`).
@@ -766,11 +815,11 @@
                 list.forEach(function (a, i) {
                     var isImg = /^image\//.test(a.type || '') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.name || '');
                     h += '<div class="thumb">'
-                       + (isImg ? '<img src="' + _esc(_attUrl(a.name)) + '" alt="">'
+                       + (isImg ? '<img src="' + _esc(_attUrl(a)) + '" alt="">'
                                 : '<div style="height:76px; display:flex; align-items:center; justify-content:center; font-size:26px;">📄</div>')
                        + '<div style="font-size:10px; word-break:break-all; margin-top:3px;">' + _esc(a.orig || a.name) + '</div>'
                        + '<div class="doc-noprint" style="text-align:right;">'
-                       + '<a href="' + _esc(_attUrl(a.name)) + '" target="_blank" style="font-size:10px; color:#1971c2;">열기</a> '
+                       + '<a href="' + _esc(_attUrl(a)) + '" target="_blank" style="font-size:10px; color:#1971c2;">열기</a> '
                        + '<a href="#" onclick="window._docAttachRemove(\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\',' + i + ');return false;"'
                        + ' style="font-size:10px; color:#b1432f;">떼기</a></div></div>';
                 });
@@ -1328,7 +1377,9 @@
             _toast('⚠️ ' + _t('문서 저장소 기능을 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return;
         }
         // 이 프로젝트의 폴더를 연다 — 없으면 백엔드가 만들면서 연다(`_docstore_dir` 이 makedirs).
-        window._dsOpenBrowser(_docFolder(_ctx()), { title: 'Document' });
+        // 🗂 프로젝트 폴더를 열어 **문서 폴더들을 한눈에** 보여 준다(한 문서 안이 아니라)
+        window._docEnsureFolders();
+        window._dsOpenBrowser(_projFolder(_ctx()), { title: 'Document' });
     };
 
     // ── 📂 불러오기 — 문서를 읽어 이 페이지 칸을 채운다 ──────────────────
@@ -1601,7 +1652,12 @@
         else _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + r.error, 'error');
     };
 
-    window._docOnTabShown = function () { try { window._docRender(); } catch (e) { /* 그리기 실패가 탭을 막지 않게 */ } };
+    window._docOnTabShown = function () {
+        try { window._docRender(); } catch (e) { /* 그리기 실패가 탭을 막지 않게 */ }
+        // 🗂 탭에 들어오면 이 프로젝트의 문서 폴더들을 만들어 둔다(없으면 NAS 가 텅 비어 보인다).
+        //   ⚠️ 기다리지 않는다 — 폴더 만들기가 화면을 붙잡으면 안 된다.
+        try { window._docEnsureFolders(); } catch (e) { /* 〃 */ }
+    };
     var boot = function () {
         if (!document.getElementById('doc-page-body')) return;
         try { window._docRender(); } catch (e) { /* 〃 */ }

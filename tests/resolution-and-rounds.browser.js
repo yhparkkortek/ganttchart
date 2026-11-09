@@ -422,6 +422,48 @@
                '엑셀에 안 고른 해상도가 남아 있다');
             window.resClearAll();
 
+            // ═══ 5-4. 🗂 문서마다 제 NAS 폴더 ═════════════════════════════
+            //   사용자 신고(2026-11-09): "DOCUMENT 하위 폴더가 생성되지 않음 /
+            //   DOCUMENT > PROJECT 이름 폴더 > SAMPLE REPORT, DR/DVR … CUSTOMER 폴더처럼"
+            //   ⚠️ 가짜는 **fetch 하나** — 진짜 NAS 에 폴더를 만들지 않는다.
+            var realCollect = window._dgCollect;
+            window._dgCollect = function () {
+                return { meta: { 프로젝트코드: 'ZZCODE', 고객사: 'LNW>MODEL', 모델명: 'KTS1' },
+                         overview: {}, milestones: { plan: {}, actual: {}, missing: [] },
+                         members: [], spec: [], materials: [] };
+            };
+            // ⚠️ 한 번 만든 폴더는 기억해 두므로(SMB 왕복이 비싸다) 재실행 전에 비운다 —
+            //    안 비우면 **2회차가 0건**이라 가짜 실패가 난다(하네스가 한 번 그렇게 틀렸다).
+            if (window._docResetFolderCache) window._docResetFolderCache();
+            var realFetch2 = window.fetch, asked = [];
+            window.fetch = function (u) {
+                var s = String(u);
+                if (s.indexOf('/doc/list') >= 0) {
+                    asked.push(decodeURIComponent(s.split('folder=')[1] || ''));
+                    return Promise.resolve({ json: function () { return Promise.resolve({ ok: true, dirs: [], files: [] }); } });
+                }
+                return realFetch2.apply(window, arguments);
+            };
+            window._docState.formId = 'sample-report';
+            await window._docEnsureFolders();
+            window.fetch = realFetch2;
+            window._dgCollect = realCollect;
+
+            var PROJ = 'DOCUMENT/ZZCODE_LNW-MODEL_KTS1';
+            ok(asked.indexOf(PROJ + '/SAMPLE REPORT') >= 0, 'SAMPLE REPORT 폴더를 안 만든다: ' + asked.join(' | '));
+            ok(asked.indexOf(PROJ + '/DR_DVR 발표자료') >= 0, 'DR/DVR 폴더를 안 만든다: ' + asked.join(' | '));
+            ok(asked.indexOf(PROJ + '/시제품 제작의뢰서') >= 0, '시제품 제작의뢰서 폴더를 안 만든다');
+            ok(asked.length === (window.DOC_FORMS || []).length,
+               '서식 수(' + (window.DOC_FORMS || []).length + ')와 만든 폴더 수(' + asked.length + ')가 다르다');
+            ok(asked[0] === PROJ + '/SAMPLE REPORT', '지금 보는 문서 폴더를 먼저 안 만든다: ' + asked[0]);
+            // ⚠️ 폴더 이름에 `/` 가 들어가면 한 단계가 더 생긴다 — 'DR / DVR' 은 `DR_DVR` 이어야 한다
+            (window.DOC_FORMS || []).forEach(function (f) {
+                ok(String(f.folder || f.label).indexOf('/') < 0, f.id + ' 의 폴더 이름에 / 가 있다: ' + f.folder);
+            });
+            // 서식을 늘리면 폴더도 저절로 는다(이름을 코드에 박지 않았는지)
+            ok((window.DOC_FORMS || []).every(function (f) { return !!(f.folder || f.label); }),
+               '폴더 이름이 없는 서식이 있다');
+
             // ═══ 6. 문서에 찍히는가 ═══════════════════════════════════════
             window._docPick('proto-req');
             var txt = document.getElementById('doc-page-body').innerText;
