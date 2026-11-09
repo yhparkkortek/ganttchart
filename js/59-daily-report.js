@@ -506,6 +506,10 @@
         return hit ? String(hit.name).trim() : '';
     }
 
+    // 🔗 다른 모듈(js/62 기간 요약)도 같은 규칙으로 담당자를 풀어야 한다 — 두 벌로 두면
+    //    화면마다 다른 사람이 나온다.
+    window._dailyCatAssignee = catAssignee;
+
     /** `_담당구분` 으로 "이게 내 일인가"를 본다. 못 가리면 **제외하지 않고** false 만 돌려준다. */
     function isMine(row, ctx) {
         var names = myNames();
@@ -664,6 +668,44 @@
         if (!force && _other.at === date && _other.total && _other.done >= _other.total) return _other;
         _other = { at: date, mine: [], others: [], done: 0, total: 0, kept: 0, busy: true, errs: [] };
         window._dailyOtherScan = _other;
+        var r = await window.dailyScanMyProjects('draft|' + date, function (ctx) {
+            return scanOne(ctx, date);
+        }, function (st) {
+            _other.done = st.done; _other.total = st.total; _other.kept = st.kept;
+            paintCands();
+        });
+        _other.mine = [];
+        _other.others = [];
+        r.results.forEach(function (g) {
+            _other.mine = _other.mine.concat(g.mine);
+            _other.others = _other.others.concat(g.others);
+        });
+        _other.total = r.total; _other.kept = r.kept; _other.errs = r.errs;
+        _other.busy = false;
+        paintCands();
+        return _other;
+    };
+
+    /**
+     * 🔗 **공용** — 내가 맡은 프로젝트 파일을 차례로 읽어 `collect(ctx)` 를 먹인다.
+     *
+     * "어느 프로젝트가 내 것인가" 를 **여기 한 곳**에서만 정한다(js/59 초안·js/62 기간 요약이 같이 쓴다).
+     * 두 벌로 두면 화면마다 다른 답이 나온다.
+     *
+     * @param tag     캐시 이름표 — 같은 파일이라도 쓰는 쪽이 다르면 결과가 다르다
+     * @param collect (ctx) => 그 프로젝트분 결과. ctx = {rows, ci, meta, members3, logs, project, entry}
+     * @param onStep  한 건 끝날 때마다 {done,total,kept} 로 부른다(화면 갱신용)
+     * ⚠️ 한 건씩 **차례로** 읽는다(한꺼번에 던지면 NAS 가 느려진다).
+     * ⚠️ 실패는 삼키지 않는다 — `errs` 로 올려 화면이 드러내게 한다.
+     */
+    window.dailyScanMyProjects = async function (tag, collect, onStep) {
+        var S = window.DAILY_SCAN || {};
+        var st = { results: [], total: 0, kept: 0, errs: [], entries: [] };
+        // 🪪 ⚠️ 명단을 먼저 들인다. 없으면 `myNames()` 에 **계정id 하나**만 들어 있어서
+        //    `iAmIn` 이 '박용훈' 같은 실명과 못 맞물리고 **모든 프로젝트를 건너뛴다**(실측:
+        //    js/62 가 명단 없이 불렀더니 13개 전부 skip, 오류는 한 줄도 안 났다).
+        //    여기서 챙기면 부르는 쪽이 저마다 기억하지 않아도 된다(이미 읽었으면 그대로 돌아온다).
+        try { if (window.dailyLoadRoster) await window.dailyLoadRoster(); } catch (e) { /* 주소록만으로도 돈다 */ }
         try {
             var idx = await window.nasAppFile.get('App_Config/project_index.json', { json: true });
             var list = (idx && idx.projects) || [];
@@ -675,59 +717,57 @@
                 if (S.myTeamOnly && myTeam && String(p.team || '').trim() !== myTeam) return false;
                 return String(p.file_name).replace(/\.json$/i, '').trim() !== open;
             }).slice(0, +S.maxProjects || 30);
-            _other.total = todo.length;
-            _other.kept = 0;
-            paintCands();
+            st.total = todo.length;
+            if (onStep) onStep({ done: 0, total: st.total, kept: 0 });
             for (var i = 0; i < todo.length; i++) {
                 var p = todo[i];
                 try {
-                    var got = await scanProjectFile(p, date);
-                    if (got.skipped) { _other.done++; paintCands(); continue; }
-                    _other.kept++;
-                    _other.mine = _other.mine.concat(got.mine);
-                    _other.others = _other.others.concat(got.others);
+                    var got = await scanProjectFile(p, tag, collect);
+                    if (!got || !got._skipped) {
+                        st.kept++;
+                        st.results.push(got);
+                        st.entries.push(p);
+                    }
                 } catch (e) {
-                    _other.errs.push(String(p.file_name) + ' — ' + e.message);
+                    st.errs.push(String(p.file_name) + ' — ' + e.message);
                     if (window._issueLog) {
                         try { window._issueLog({ domain: 'daily-report', kind: 'scan_project_failed',
                                                  result: { errorRaw: e.message, file: p.file_name } }); }
                         catch (e2) { /* 기록 실패가 훑기를 막지는 않는다 */ }
                     }
                 }
-                _other.done++;
-                paintCands();
+                if (onStep) onStep({ done: i + 1, total: st.total, kept: st.kept });
             }
         } catch (e) {
-            _other.errs.push(T('프로젝트 목록을 못 읽었습니다: ', 'Could not read the project index: ') + e.message);
+            st.errs.push(T('프로젝트 목록을 못 읽었습니다: ', 'Could not read the project index: ') + e.message);
         }
-        _other.busy = false;
-        paintCands();
-        return _other;
+        return st;
     };
 
     /** 프로젝트 파일 한 개 — `updated_at` 이 그대로면 다시 안 읽는다. */
-    async function scanProjectFile(entry, date) {
-        var key = entry.file_name + '|' + (entry.updated_at || '') + '|' + date;
+    async function scanProjectFile(entry, tag, collect) {
+        var key = tag + '|' + entry.file_name + '|' + (entry.updated_at || '');
         if (_projCache[key]) return _projCache[key];
         var rel = (entry.team ? entry.team + '/' : '') + entry.file_name;
         var d = await window.nasAppFile.get(rel, { json: true });
         if (!d || !Array.isArray(d.globalData)) throw new Error(T('내용을 읽지 못했습니다', 'unreadable'));
         // 🙋 내가 든 프로젝트인가 — 색인의 담당자 **또는** 그 파일의 역할별 담당자.
         if ((window.DAILY_SCAN || {}).onlyMyProjects && !iAmIn(entry, d)) {
-            _projCache[key] = { mine: [], others: [], skipped: true };
+            _projCache[key] = { _skipped: true };
             return _projCache[key];
         }
         var rows = (typeof window._deserializeGlobalDataForMerge === 'function')
             ? window._deserializeGlobalDataForMerge(d.globalData) : null;
         if (!rows) throw new Error(T('행을 복원하지 못했습니다', 'cannot restore rows'));
-        var got = scanOne({
+        var got = collect({
             rows: rows,
             ci: d.colIdx || {},
             meta: d.projectMeta || {},
             members3: (d.tabData && d.tabData.projectMembers3) || [],
             logs: [],                       // 다른 프로젝트의 "오늘 손댄 것"은 안 본다 — 내 기록이 아니다
-            project: String(entry.file_name).replace(/\.json$/i, '')
-        }, date);
+            project: String(entry.file_name).replace(/\.json$/i, ''),
+            entry: entry
+        });
         _projCache[key] = got;
         return got;
     }

@@ -9,7 +9,11 @@
     function ok(n, c, d) { if (c) { pass++; out.push('  OK   ' + n); } else { fail++; out.push('  FAIL ' + n + (d !== undefined ? '  — ' + (typeof d === 'string' ? d : JSON.stringify(d)).slice(0, 300) : '')); } }
     var P = window.PERIOD_SUMMARY;
     if (!P || !window._psCollectFacts) { console.error('js/62 미로드'); return; }
-    var keep = { gd: window.globalData, ci: window.colIdx, pm: window.projectMeta, call: window.callAiBackend, key: window.getActiveAiKey, mode: localStorage.getItem(P.modeKey), hist: window._ganttQaHistory };
+    var keep = { gd: window.globalData, ci: window.colIdx, pm: window.projectMeta, call: window.callAiBackend, key: window.getActiveAiKey, mode: localStorage.getItem(P.modeKey), hist: window._ganttQaHistory,
+                 filt: localStorage.getItem(P.filterKey), scan: P.scanProjects };
+    // ⚠️ 다른 프로젝트 훑기는 **끈다** — 이 하네스는 픽스처만 본다(NAS 가 섞이면 숫자가 흔들린다).
+    P.scanProjects = false;
+    localStorage.removeItem(P.filterKey);
     var pad = function (n) { return String(n).padStart(2, '0'); };
     var ymd = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
     var today = new Date(); today.setHours(0, 0, 0, 0);
@@ -84,9 +88,49 @@
         await window.sendGanttQaMessage();
         var H = window._ganttQaHistory;
         ok('문답창에 질문 + 기간 요약 답(AI 재호출 0)', H.some(function (m) { return m.role === 'user' && /일일 요약/.test(m.text); }) && H.some(function (m) { return m.role === 'ai' && !m.pending && /#G1/.test(m.text); }) && prompts.length === n0, H.map(function (m) { return (m.text || '').slice(0, 60); }));
+        // ══ 기간설정 + 담당자·프로젝트 고르기 (2026-11-09 요청) ═════════════════
+        // 📅 직접 기간 — 두 칸을 다 골라야 움직인다.
+        window._psSetFilter({ from: ymd(D(-3)), to: ymd(D(-1)) });
+        var cr = window._psRange(P.customId);
+        ok('기간설정은 고른 날짜 그대로', cr.key === ymd(D(-3)) + '~' + ymd(D(-1)), cr.key);
+        var cc = window._psCollectFacts(P.customId);
+        ok('기간 밖 사실은 안 든다', cc.facts.every(function (f) { return f.date >= ymd(D(-3)) && f.date <= ymd(D(-1)); }),
+           cc.facts.map(function (f) { return f.date; }).join(','));
+        // ⚠️ 거꾸로 골라도 되게 — 시작/끝이 뒤집혀 오면 바꿔 끼운다.
+        window._psSetFilter({ from: ymd(D(-1)), to: ymd(D(-3)) });
+        ok('시작·끝이 뒤집혀도 같은 기간', window._psRange(P.customId).key === ymd(D(-1)) + '~' + ymd(D(-3)),
+           window._psRange(P.customId).key);
+        window._psSetFilter({ from: '', to: '' });
+
+        // 👤 담당자 — 역할(`_담당구분`)을 그 프로젝트의 projectMeta 로 푼다.
+        window.projectMeta.HW담당자 = '조익현';
+        var cm = window._psCollectFacts('month');
+        ok('담당자를 역할에서 푼다', cm.facts.length > 0 && cm.facts.every(function (f) { return f.assignee === '조익현'; }),
+           JSON.stringify(cm.facts.map(function (f) { return f.assignee; })));
+        ok('고를 거리에 그 담당자가 있다', cm.people.indexOf('조익현') >= 0, JSON.stringify(cm.people));
+
+        window._psSetFilter({ who: '조익현' });
+        var cw = window._psCollectFacts('month');
+        ok('담당자로 고르면 그 사람 것만', cw.total === cm.total && cw.filtered === true, cw.total + '/' + cm.total);
+        window._psSetFilter({ who: '없는사람' });
+        var cz = window._psCollectFacts('month');
+        ok('없는 담당자를 고르면 0건(조용히 전부 보여주지 않는다)', cz.total === 0, cz.total);
+        // ⚠️ 선택지는 **거르기 전** 목록에서 만든다 — 한 번 고르면 다른 선택지가 사라지면 안 된다.
+        ok('걸러도 고를 거리는 그대로', cz.people.indexOf('조익현') >= 0, JSON.stringify(cz.people));
+
+        // 🔑 캐시 열쇠에 필터가 들어간다 — 다른 조건의 요약을 같은 것으로 보여 주면 조용한 오답이다.
+        window._psSetFilter({ who: '' });
+        var sigA = window._psCollectFacts('month').sig;
+        window._psSetFilter({ who: '조익현' });
+        var sigB = window._psCollectFacts('month').sig;
+        ok('필터가 다르면 요약 캐시 열쇠도 다르다', sigA !== sigB, sigA + ' vs ' + sigB);
+        window._psSetFilter({ who: '', proj: '' });
+
     } finally {
         window.globalData = keep.gd; window.colIdx = keep.ci; window.projectMeta = keep.pm; window.callAiBackend = keep.call; window.getActiveAiKey = keep.key; window._ganttQaHistory = keep.hist || [];
         if (keep.mode == null) localStorage.removeItem(P.modeKey); else localStorage.setItem(P.modeKey, keep.mode);
+        if (keep.filt == null) localStorage.removeItem(P.filterKey); else localStorage.setItem(P.filterKey, keep.filt);
+        P.scanProjects = keep.scan;
         var m = document.getElementById('ai-summary-modal'); if (m) m.style.display = 'none';
         if (window._renderAiProjectSummaryBody) { try { window._renderAiProjectSummaryBody(); } catch (e) { /* 무시 */ } }
     }
