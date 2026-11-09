@@ -626,9 +626,34 @@ window._msLoadProjectIndex = async function() {
         try {
             const realFiles = await window._listProjectFiles();
             const validIds = new Set(realFiles.map(function(f) { return f.id; }));
-            const ghostEntries = projects.filter(function(p) { return !p || !validIds.has(p.drive_file_id); });
+            // 🛡️ [2026-11-09] **목록이 비면 아무것도 지우지 않는다.** 여기서 지우는 건 영구다 —
+            //    권한 거부·네트워크로 목록이 통째로 비어 온 한 번이 색인 전체를 날린다.
+            //    "없다"와 "못 봤다"는 다른 사실이다.
+            if (!realFiles.length) throw new Error('프로젝트 목록이 비어 왔습니다 — 유령 정리를 건너뜁니다');
+            // 🛡️🛡️ [2026-11-09] 유령 판정을 **id 같음**이 아니라 **지금 있는 파일로 풀리는가**로 바꿨다.
+            //    왜: 이사 때 생긴 별칭 때문에 한 경로에 Drive id 가 둘 걸린 프로젝트가 있는데,
+            //    목록은 그중 **하나만** 내놓는다. 게다가 그 '하나'가 이름이 바뀌는 순간 뒤바뀌어서
+            //    (js/57 `remapIdPath` 가 `adoptIdMap` 과 반대 규칙이었다 — 2026-11-09 수정),
+            //    멀쩡한 항목이 유령으로 보이고 **영구 삭제**됐다. 그 프로젝트는 목록에서
+            //    담당자·팀·색이 빈 "미지정"이 된다(실측: OBSIDIAN 이 두 번 당했다).
+            const liveRels = new Set();
+            if (window._storageRelOfId) {
+                realFiles.forEach(function(f) {
+                    const rel = window._storageRelOfId(f.id);
+                    if (rel) liveRels.add(rel);
+                });
+            }
+            const stillThere = function(p) {
+                if (validIds.has(p.drive_file_id)) return true;
+                if (!window._storageRelOfId || !liveRels.size) return false;   // Drive 모드 = 예전 그대로
+                const rel = window._storageRelOfId(p.drive_file_id);
+                return !!(rel && liveRels.has(rel));
+            };
+            const ghostEntries = projects.filter(function(p) { return !p || !stillThere(p); });
             if (ghostEntries.length) {
-                validProjects = projects.filter(function(p) { return p && validIds.has(p.drive_file_id); });
+                // ⚠️ 남기는 쪽도 **같은 판정**을 써야 한다 — 한쪽만 고치면 "유령은 아닌데 목록에선 빠지는"
+                //    항목이 생겨서 결국 똑같이 지워진다.
+                validProjects = projects.filter(function(p) { return p && stillThere(p); });
                 console.warn('project_index.json에서 존재하지 않는 프로젝트 항목 ' + ghostEntries.length + '건 제거:',
                     ghostEntries.map(function(p) { return p && p.file_name; }));
                 fetch(`https://www.googleapis.com/upload/drive/v3/files/${indexFileId}?uploadType=media&supportsAllDrives=true`, {

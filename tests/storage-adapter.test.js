@@ -83,6 +83,28 @@ check('목록 항목에도 옛 id 가 실린다',
 check('지도에 없는 파일은 여전히 만든 id', F.idOf('개발3팀/다른.json', false).indexOf('nas_f_') === 0);
 check('폴더는 지도를 안 탄다', F.idOf('개발3팀/LNW_27.0.json', true).indexOf('nas_d_') === 0);
 check('지도에 없는 남의 Drive id 는 그대로 null', F.relOf('1ZZZzzzNotInTheMapAtAll999') === null);
+// 🛡 [2026-11-09] **한 경로에 id 가 둘일 때 누가 이기는가** — 이게 "미지정" 재발의 뿌리였다.
+//    `adoptIdMap` 은 마지막이 이기는데 `remapIdPath` 는 `moved[0]`(첫째)를 썼다. 그래서
+//    이름이 바뀌는 순간 목록이 내놓는 id 가 뒤바뀌고, 색인 항목이 어느 live 파일과도 안 맞아
+//    메일 파이프라인의 유령 정리가 **영구 삭제**했다(OBSIDIAN 이 두 번 당했다).
+const ID_A = '1cFKsmKKzepgOc9MYlD-JU70_wkLzgUKB';   // 색인이 들고 있던 쪽
+const ID_B = '18ZViaZaoKN6i4cIQMRgC6DLWqZVCawHd';   // 데이터가 실제로 쓰는 쪽
+F.adoptIdMap({ map: { [ID_A]: '개발3팀/LNW_27.0.json', [ID_B]: '개발3팀/LNW_27.0.json' } });
+eq('별칭 둘 다 같은 경로로 풀린다', F.relOf(ID_A).rel, F.relOf(ID_B).rel);
+const winner = F.idOf('개발3팀/LNW_27.0.json', false);
+check('승자는 지도의 **마지막** id', winner === ID_B, winner);
+check('진 쪽도 경로로는 풀린다(= 유령이 아니다)', F.relOf(ID_A) !== null);
+
+// ⚠️ `remapIdPath` 는 설치돼야 도는 비공개 함수라 여기서 못 부른다 — 대신 **두 곳이 같은 규칙인지**를
+//    소스로 본다(두 벌로 두면 또 갈라진다는 게 이 사고의 교훈이다).
+{
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', '57-storage-adapter.js'), 'utf8');
+  check('adoptIdMap 은 마지막이 이긴다', /_relToOldId\[rel\]\s*=\s*k;/.test(src));
+  check('remapIdPath 도 **마지막**을 쓴다(moved[0] 이면 안 된다)',
+        /_relToOldId\[newRel\]\s*=\s*moved\[moved\.length - 1\];/.test(src)
+        && !/_relToOldId\[newRel\]\s*=\s*moved\[0\];/.test(src));
+}
+
 eq('지도를 비우면 원래대로', F.adoptIdMap({ map: {} }), 0);
 check('비운 뒤엔 만든 id', F.idOf('개발3팀/LNW_27.0.json', false).indexOf('nas_f_') === 0);
 

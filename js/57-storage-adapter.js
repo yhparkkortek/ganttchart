@@ -281,6 +281,19 @@
         }
     };
 
+    /** 옛 Drive id(별칭 포함) → 상대경로. 모르면 ''.
+     *  🛡 [2026-11-09] 유령 판정에 쓰라고 공개한다 — **id 가 같은지**가 아니라
+     *     **그 id 가 지금 있는 파일로 풀리는지**로 물어야 한다. 한 경로에 id 가 둘인
+     *     프로젝트는 목록이 그중 하나만 내놓으므로, id 비교만 하면 멀쩡한 항목이
+     *     유령으로 보인다(그리고 지워진다). Drive 모드에선 지도가 없어 '' 를 돌려주고,
+     *     부르는 쪽은 예전처럼 id 비교만 하게 된다(동작 불변). */
+    window._storageRelOfId = function (id) {
+        try {
+            var r = relOf(String(id || ''));
+            return (r && !r.isdir) ? r.rel : '';
+        } catch (e) { return ''; }
+    };
+
     // ───────────────────────────────────────────────────────────────────────
     // 🔖 저장소 표식 — 저장소를 바꾸면 **저장소에 매인 캐시**를 버려야 한다
     //
@@ -1010,7 +1023,13 @@
         });
         if (!moved.length) return 0;
         delete _relToOldId[oldRel];
-        _relToOldId[newRel] = moved[0];
+        // ⚠️⚠️ [2026-11-09] **`adoptIdMap` 과 같은 규칙이어야 한다 — 거기는 "마지막이 이긴다".**
+        //    여기만 `moved[0]`(첫째)이라, 한 경로에 id 가 둘인 프로젝트는 **이름이 바뀌는 순간
+        //    목록이 내놓는 id 가 뒤바뀌었다**(새로고침하면 또 반대로). 그러면 색인 항목의
+        //    `drive_file_id` 가 어느 live 파일과도 안 맞아 메일 파이프라인의 유령 정리가
+        //    그 항목을 **영구 삭제**한다 → 그 프로젝트가 목록에서 "미지정"으로 떨어진다.
+        //    (실측 2026-11-09: OBSIDIAN 이 11-05 에 고쳤는데 이름이 바뀌자 또 사라졌다.)
+        _relToOldId[newRel] = moved[moved.length - 1];
         try {
             var res = await nas('GET', '/nas/app/get' + qs(ID_MAP_REL_ADAPTER));
             var doc = res.ok ? JSON.parse(await res.text()) : { version: 1, map: {} };
