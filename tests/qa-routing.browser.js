@@ -19,6 +19,9 @@
        await __qaRouteTest({only:'sap'})         // 한 도메인만
        await __qaRouteTest({corpus:[{q:'...', want:'sap'}]})
    결과: 표 + 기대와 다른 것 목록 + `window.__qaRouteLast`(원자료).
+   ⚠️ 콘솔에 **붙여넣는 게 기본**이다. 스크립트로 들여올 땐 `raw.githubusercontent.com` 이 아니라
+      **앱과 같은 Pages 경로**(`/ganttchart/tests/qa-routing.browser.js?cb=…`)에서 받을 것 —
+      raw 는 `?cb=` 를 붙여도 옛 사본을 준다(2026-11-09 실측: 고친 하네스가 안 와서 10분 날렸다).
 
    ⚠️ 이 하네스는 **AI 답 품질을 검증하지 않는다** — `callAiBackend` 가 가짜이므로
       "AI 가 잘 답하는가" 는 여기서 알 수 없다. 여기서 아는 것은 **어디로 보냈는가** 뿐이다.
