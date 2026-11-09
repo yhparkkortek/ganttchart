@@ -59,13 +59,36 @@
         localStorage.setItem(P.modeKey, 'week');
         window.openAiProjectSummaryModal();
         var body = document.getElementById('ai-summary-body');
-        ok('툴바(일일/주간/월간/일정 현황)가 그려졌다', !!body.querySelector('#ps-period-toolbar') && /일일|Daily/.test(body.textContent) && /월간|Monthly/.test(body.textContent));
+        ok('툴바(일일/주간/월간/기간설정)가 그려졌다', !!body.querySelector('#ps-period-toolbar') && /일일|Daily/.test(body.textContent) && /월간|Monthly/.test(body.textContent) && /기간설정|Range/.test(body.textContent));
+        // 📊 [2026-11-09] '일정 현황' 은 간트 상태 칸이 관리되지 않아 접었다(showLegacy:false).
+        //    ⚠️ 숨기는 것으로 끝나면 안 된다 — 그 모드에만 매인 버튼(프롬프트·PPT)이 남아 있으면
+        //       눌러도 "먼저 리포트를 만들어주세요" 만 뜬다.
+        ok('일정 현황 버튼이 없다', !/일정 현황|Schedule view/.test(body.textContent), body.textContent.slice(0, 80));
+        ok('그 모드 전용 버튼도 같이 숨는다', (function () {
+            var p = document.getElementById('ai-summary-open-prompt-btn');
+            var ppt = document.querySelector('#ai-summary-modal [onclick*="exportAiProjectSummaryPPT"]');
+            return (!p || p.style.display === 'none') && (!ppt || ppt.style.display === 'none');
+        })());
+        ok('🖨️ PDF 는 남는다(기간 모드에서도 찍힌다)', (function () {
+            var pdf = document.querySelector('#ai-summary-modal [onclick*="printAiProjectSummary"]');
+            return !!pdf && pdf.style.display !== 'none';
+        })());
+        // ⚠️ 옛 설정이 'legacy' 로 남아 있어도 **갇히지 않는다**(돌아올 버튼이 없으니까).
+        localStorage.setItem(P.modeKey, P.legacyId);
+        ok('꺼 둔 모드가 저장돼 있어도 기본 모드로 돌아온다', window._psMode() === P.defaultMode, window._psMode());
         ok('기간 모드엔 완료/진행/대기/지연 네 칸이 없다', !/repeat\(4,\s*1fr\)/.test(body.innerHTML));
         ok('사실 목록이 #G 링크로 그려졌다', /#G1\b/.test(body.textContent) && /패널 단가 회신 요청/.test(body.textContent));
         ok('생성 버튼 라벨이 기간용', /AI 요약 생성|Generate AI summary/.test(document.getElementById('ai-summary-generate-btn').textContent));
-        // 일정 현황(옛) 모드로 — 숫자 네 칸 제거 확인
+        // 일정 현황(옛) 모드 — 스위치를 켜면 **여전히 돈다**(지운 게 아니라 접은 것이다).
+        P.showLegacy = true;
         window._psSetMode(P.legacyId);
+        ok('켜면 일정 현황이 다시 나온다', /일정 현황|Schedule view/.test(body.textContent));
         ok('일정 현황 모드에서도 숫자 네 칸은 숨긴다(showCounts=false)', !/repeat\(4,\s*1fr\)/.test(body.innerHTML) && !!body.querySelector('#ps-period-toolbar'));
+        ok('그 모드에선 전용 버튼이 보인다', (function () {
+            var p = document.getElementById('ai-summary-open-prompt-btn');
+            return !p || p.style.display !== 'none';
+        })());
+        P.showLegacy = false;
         window._psSetMode('day');
 
         // AI 생성 — 가짜 응답(접지 안 된 문장 1개 포함)

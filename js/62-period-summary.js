@@ -24,6 +24,21 @@
         periods: [{ id: 'day', ko: '일일', en: 'Daily' }, { id: 'week', ko: '주간', en: 'Weekly' }, { id: 'month', ko: '월간', en: 'Monthly' }],
         customId: 'custom',                    // 📅 기간 직접 설정(시작~끝)
         legacyId: 'legacy',
+        /**
+         * 📊 '일정 현황'(옛 AI 요약 — 지연·임박·리스크·담당자별 액션) 을 보일 것인가.
+         *
+         * ⚠️ [2026-11-09] **끈다.** 그 모드는 간트의 `상태`·`완료일` 칸을 근거로 삼는데, 실측하니
+         *    그 칸이 관리되지 않는다 — 내 프로젝트 7개 **리프 2,272행 중 '완료' 는 80행(3.5%)**,
+         *    두 프로젝트는 **전 행이 '진행'** 이고, 그래서 '지연' 으로 잡히는 행이 **1,501건**
+         *    (STELLAR32 는 827행 중 764행, 가장 오래된 '지연' 이 2026-02-22). 그건 늦은 게
+         *    아니라 **아무도 행을 닫지 않은 것**이다. 그 위에 AI 를 돌리면 "지연 764건" 으로
+         *    시작하는 그럴듯한 거짓말이 나온다.
+         * ⚠️ "현 실정에 맞게 고칠" 길은, 관리되는 유일한 신호(메일 분석 `[핵심내용]`/`[To do]`/
+         *    `[문제점]`) 위에 다시 세우는 것인데 — 그게 바로 **일일/주간/월간이 이미 하는 일**이다.
+         *    그래서 고치는 게 아니라 **접는다.** 코드는 남겨 두고 스위치만 끈다(간트 일정 관리가
+         *    자리잡으면 `showLegacy: true` 한 줄로 돌아온다).
+         */
+        showLegacy: false,
         defaultMode: 'week',
         modeKey: 'gantt_ps_mode',
         filterKey: 'gantt_ps_filter',          // 담당자·프로젝트·직접 기간 — 이 브라우저에 기억
@@ -40,8 +55,12 @@
     function pad(n) { return String(n).padStart(2, '0'); }
     function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
     function mode() {
-        try { var m = localStorage.getItem(P.modeKey); if (m) return m; } catch (e) { /* 아래 */ }
-        return P.defaultMode;
+        var m = null;
+        try { m = localStorage.getItem(P.modeKey); } catch (e) { /* 아래 */ }
+        // ⚠️ 꺼 둔 모드가 저장돼 있으면 **기본 모드로 되돌린다** — 안 그러면 숨긴 화면에
+        //    갇혀서 돌아올 버튼이 없다(그 사람만 앱이 고장 난 것처럼 보인다).
+        if (m === P.legacyId && !P.showLegacy) return P.defaultMode;
+        return m || P.defaultMode;
     }
     window._psMode = mode;
 
@@ -407,7 +426,9 @@
         };
         var b = P.periods.map(function (p) { return btn(p.id, en ? p.en : p.ko, cur === p.id); }).join('');
         b += btn(P.customId, en ? '📅 Range' : '📅 기간설정', cur === P.customId);
-        b += '<span style="flex:1"></span>' + btn(P.legacyId, en ? '📊 Schedule view' : '📊 일정 현황', cur === P.legacyId);
+        if (P.showLegacy) {
+            b += '<span style="flex:1"></span>' + btn(P.legacyId, en ? '📊 Schedule view' : '📊 일정 현황', cur === P.legacyId);
+        }
         var h = '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">' + b + '</div>';
         if (cur === P.legacyId) return h;
 
@@ -500,6 +521,20 @@
         h.push('</div>');
         body.innerHTML = toolbarHtml(kind, col) + h.join('');
     }
+    /**
+     * ✏️ 프롬프트 · 📊 PPT 는 **'일정 현황' 리포트 전용**이다.
+     * ⚠️ 기간 모드에서 눌러도 `projectMeta.aiSummaryReport`(옛 리포트)를 보므로 "먼저 리포트를
+     *    만들어주세요" 같은 엉뚱한 소리만 한다 — 눌러서 아무 일도 안 나는 버튼은 없느니만 못하다.
+     *    🖨️ PDF 는 `#ai-summary-report-content` 를 찍으므로 기간 모드에서도 멀쩡하다 → 남긴다.
+     */
+    function paintModeOnlyButtons(cur) {
+        var show = (cur === P.legacyId);
+        var p = document.getElementById('ai-summary-open-prompt-btn');
+        if (p) p.style.display = show ? '' : 'none';
+        var ppt = document.querySelector('#ai-summary-modal [onclick*="exportAiProjectSummaryPPT"]');
+        if (ppt) ppt.style.display = show ? '' : 'none';
+    }
+
     function setGenerateLabel(cur) {
         var btn = document.getElementById('ai-summary-generate-btn');
         if (!btn || btn.disabled) return;
@@ -513,6 +548,7 @@
             var body = document.getElementById('ai-summary-body');
             var cur = mode();
             if (!body) return orig.apply(this, arguments);
+            paintModeOnlyButtons(cur);
             if (cur !== P.legacyId) { try { renderPeriod(body, cur); setGenerateLabel(cur); return; } catch (e) { console.warn('[기간 요약] 렌더 실패 — 일정 현황으로:', e.message); } }
             var r = orig.apply(this, arguments);
             // 숫자 네 칸 숨기기 + 모드 툴바
