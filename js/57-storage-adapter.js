@@ -986,8 +986,22 @@
                      parents: [idOf(normRel(frel).split('/').slice(0, -1).join('/'), true)] };
         }
         var rel = relFromMeta(meta);
-        await writeRel(rel, media, isB64);
-        return await driveGetMeta(rel, false);
+        var put = await writeRel(rel, media, isB64);
+        // ⚠️⚠️ [2026-11-09] 예전엔 여기서 `driveGetMeta(rel)` 로 **부모 폴더를 통째로 훑어**
+        //    방금 쓴 파일을 찾았다. 두 가지로 틀렸다:
+        //      ① 폴더가 1,000개를 넘으면 목록이 잘려 **방금 쓴 파일이 안 보인다** →
+        //         "그 경로에 파일이 없습니다" 로 던졌다(실측 `MailBodies` total 1,067).
+        //         메일 본문 옮기기가 매번 거기서 터지며 콘솔에 404 를 쏟았다.
+        //      ② 파일 하나 쓸 때마다 1,000건짜리 목록을 받는 건 그냥 비싸다.
+        //    **쓴 것이 진짜 있는지는 이미 확인됐다** — 백엔드 `/nas/app/put` 이
+        //    `nas_dsm.put` 안에서 `_verify_written()` 으로 되읽어 보고, 아니면 500 을 준다
+        //    (그러면 `nasJson` 이 던진다). 그러니 여기서 또 찾을 이유가 없다.
+        //    ⚠️ 모양은 `toDriveFile` 로 만든다 — 손으로 짜 두면 목록이 주는 것과 조용히 갈라진다.
+        var parts = normRel(rel).split('/');
+        var nm = parts.pop();
+        return toDriveFile({ name: nm, isdir: false,
+                             size: (put && put.bytes != null) ? put.bytes : undefined,
+                             mtime: Math.floor(Date.now() / 1000) }, parts.join('/'));
     }
 
     async function driveUpdate(id, meta, media, isB64) {

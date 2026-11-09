@@ -507,21 +507,44 @@ def list_shares():
              'perm': (s.get('additional') or {}).get('perm')} for s in (d or {}).get('shares') or []]
 
 
-def list_folder(path, limit=1000):
-    """폴더 하나의 내용. 권한이 없으면 105(권한 없음)로 떨어진다 — 그게 정상 동작이다."""
+def list_folder(path, limit=1000, max_items=20000):
+    """폴더 하나의 내용. 권한이 없으면 105(권한 없음)로 떨어진다 — 그게 정상 동작이다.
+
+    ⚠️⚠️ **끝까지 받아 온다(페이징).** 예전엔 `limit` 한 번만 보내고 끝냈는데, DSM 은 그
+       개수까지만 주고 나머지는 **말없이 버린다** — 응답의 `total` 만 진짜 개수다.
+       2026-11-09 실측: `MailBodies` 가 **total 1,067 / 받은 것 1,000** 이라 67개가 안 왔고,
+       그 바람에 방금 쓴 파일이 목록에 없어 어댑터가 "그 경로에 파일이 없습니다" 로 던졌다
+       (메일 본문 옮기기가 매번 실패하며 콘솔에 404 를 쏟았다).
+       ⚠️ 이건 그 한 폴더의 문제가 아니다 — **1,000개를 넘기는 어느 폴더든** 조용히 잘린다
+          (백업 폴더·자료실). 그래서 호출한 쪽이 아니라 **여기서** 끝까지 받는다.
+       ⚠️ `max_items` 는 폭주 방지용 상한이다. 거기서 끊기면 `truncated: True` 로 **알린다** —
+          조용히 잘라서 "없는 것" 처럼 보이게 하지 않는다(그게 이 버그의 본질이었다).
+    """
     cfg = _cfg_or_raise()
-    d = _call(cfg, 'SYNO.FileStation.List', 'list', 2,
-              {'folder_path': path, 'limit': limit, 'additional': '["size","time","perm"]'})
-    out = []
-    for f in (d or {}).get('files') or []:
-        a = f.get('additional') or {}
-        out.append({'name': f.get('name'), 'path': f.get('path'), 'isdir': bool(f.get('isdir')),
-                    'size': (a.get('size') if not f.get('isdir') else None),
-                    'mtime': (a.get('time') or {}).get('mtime'),
-                    # ⚠️ perm 을 버리지 말 것 — "여기에 쓸 수 있나"를 이것으로 판정한다.
-                    #    예전엔 요청만 하고 응답에서 떨궈서 ACL 지도가 전부 '?' 로 나왔다.
-                    'perm': a.get('perm')})
-    return {'path': path, 'count': len(out), 'items': out, 'total': (d or {}).get('total')}
+    out, offset, total = [], 0, None
+    while True:
+        d = _call(cfg, 'SYNO.FileStation.List', 'list', 2,
+                  {'folder_path': path, 'limit': limit, 'offset': offset,
+                   'additional': '["size","time","perm"]'}) or {}
+        if total is None:
+            total = d.get('total')
+        files = d.get('files') or []
+        for f in files:
+            a = f.get('additional') or {}
+            out.append({'name': f.get('name'), 'path': f.get('path'), 'isdir': bool(f.get('isdir')),
+                        'size': (a.get('size') if not f.get('isdir') else None),
+                        'mtime': (a.get('time') or {}).get('mtime'),
+                        # ⚠️ perm 을 버리지 말 것 — "여기에 쓸 수 있나"를 이것으로 판정한다.
+                        #    예전엔 요청만 하고 응답에서 떨궈서 ACL 지도가 전부 '?' 로 나왔다.
+                        'perm': a.get('perm')})
+        offset += len(files)
+        # 더 받을 게 없다: 빈 쪽 · 한 쪽이 limit 미만 · total 만큼 다 받음 · 상한 도달
+        if not files or len(files) < limit or (total is not None and offset >= total) or len(out) >= max_items:
+            break
+    res = {'path': path, 'count': len(out), 'items': out, 'total': total}
+    if total is not None and len(out) < total:
+        res['truncated'] = True          # 상한에 걸렸다 — 부르는 쪽이 알아야 한다
+    return res
 
 
 def path_info(paths):
