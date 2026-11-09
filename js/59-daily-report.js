@@ -727,10 +727,17 @@
             var list = (idx && idx.projects) || [];
             var myTeam = String(me().team || '').trim();
             var open = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
+            // ⚠️⚠️ [2026-11-09 신고 "여러 개 열어놔서 에러인가?"] 열린 프로젝트를 **이름으로만**
+            //    빼면 그 프로젝트가 **두 번** 담긴다 — 앱은 저장할 때 파일 이름을 다시 조립하므로
+            //    (`고객_모델_인치`, js/04k) 열어 둔 파일 이름과 색인에 적힌 이름이 **다를 수 있다**.
+            //    실제로 `LNW_21.0` 을 열어 둔 화면에 `ELECTRICAL* (LNW_POLED_21.0)` 이 같이 떠서
+            //    같은 업무가 라벨만 다르게 두 줄로 보였다. → **id 로도 뺀다**(이름이 바뀌어도 같다).
+            var openId = String(window.currentDriveFileId || '').trim();
             var todo = list.filter(function (p) {
                 if (!p || !p.file_name) return false;
                 if (S.skipCompleted && p.completed) return false;
                 if (S.myTeamOnly && myTeam && String(p.team || '').trim() !== myTeam) return false;
+                if (openId && String(p.drive_file_id || '').trim() === openId) return false;
                 return String(p.file_name).replace(/\.json$/i, '').trim() !== open;
             }).slice(0, +S.maxProjects || 30);
             st.total = todo.length;
@@ -912,6 +919,9 @@
     var _doc = null, _date = null;
     // 🗑 지우기 — "이 창에서 사람이 비웠나" 와 "방금 지운 보고"(되돌리기용).
     var _emptiedByUser = false, _deleted = null;
+    // 📒 후보 목록을 좁혀 둔 프로젝트(빈 값 = 전체). 창을 열 때마다 푼다 —
+    //    좁혀 둔 채로 다시 열면 "업무가 없다" 로 보여 사람이 까닭을 모른다.
+    var _candProj = '';
 
     function saveDraftLocal() {
         if (!_doc) return;
@@ -928,6 +938,7 @@
         _date = dateStr || ymd();
         _emptiedByUser = false;      // 날짜가 바뀌면 "사람이 비웠다" 는 표시도 처음부터
         _deleted = null;
+        _candProj = '';              // 📒 프로젝트 좁히기도 풀고 연다(좁힌 채 열면 "없다" 로 보인다)
         // 🪪 계정을 모르면 쓸 파일이 정해지지 않는다 — 열기 전에 한 번 확보하고,
         //    그래도 모르면 **모달을 열지 않고** 왜 안 되는지 말한다.
         if (!await window.dailyEnsureIdentity()) {
@@ -990,10 +1001,28 @@
             var k = String(c.project || '') + '|' + c.name;
             if (seen[k]) return false;
             seen[k] = 1;
-            // ⚠️ 이미 담은 업무는 뺀다 — 담기는 이름으로 하므로 이름으로 본다.
-            return !_doc.items.some(function (it) { return it.name === c.name; });
+            // ⚠️⚠️ [2026-11-09] 이미 담은 업무는 뺀다 — 단 **프로젝트까지 같을 때만**.
+            //    이름만 보면 `ELECTRICAL*`·`MECHANICAL*`·`BLU*` 처럼 **프로젝트마다 똑같이 쓰는
+            //    이름**이 서로를 지운다: 한 프로젝트의 `ELECTRICAL*` 을 담는 순간 다른 프로젝트의
+            //    `ELECTRICAL*` 이 목록에서 사라져 **영영 못 담는다**(실측으로 재현, 오류는 안 난다).
+            //    담을 때는 이미 `project` 를 같이 싣고 있었다(`_dailyAdd`) — 거르는 쪽만 몰랐다.
+            return !_doc.items.some(function (it) {
+                return it.name === c.name && String(it.project || '') === String(c.project || '');
+            });
         });
-        window._dailyCand = cand;
+
+        // 📒 [2026-11-09 요청] 프로젝트 고르기 — 내 프로젝트가 여럿이면 한 목록에 섞여 나온다.
+        //    ⚠️ 고를 거리는 **거르기 전** 목록으로 만든다(js/62 와 같은 규칙) — 거른 뒤로 만들면
+        //       한 번 고르는 순간 다른 프로젝트가 목록에서 사라져 되돌아갈 수 없다.
+        var projOpts = [];
+        cand.forEach(function (c) {
+            var p = String(c.project || '').trim();
+            if (p && projOpts.indexOf(p) < 0) projOpts.push(p);
+        });
+        if (_candProj && projOpts.indexOf(_candProj) < 0) _candProj = '';   // 그 프로젝트가 사라졌다
+        var shown = _candProj ? cand.filter(function (c) { return String(c.project || '').trim() === _candProj; }) : cand;
+        // ⚠️ `_dailyAdd(i)` 는 이 배열의 **자리**로 집는다 — 반드시 화면에 그리는 목록과 같아야 한다.
+        window._dailyCand = shown;
 
         var note = '';
         if (o.busy) {
@@ -1010,20 +1039,40 @@
             : '';
         var noteTxt = note ? '<div style="font-size:11px; color:#aaa; margin-bottom:4px;">' + esc(note) + '</div>' : '';
 
-        if (!cand.length) {
-            return noteTxt + errTxt + '<div style="color:#aaa; font-size:11.5px;">' +
-                   esc(T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
+        // 프로젝트 고르기 — 2개 이상일 때만 띄운다(하나뿐이면 고를 게 없다)
+        var pickTxt = '';
+        if (projOpts.length > 1) {
+            pickTxt = '<div style="margin-bottom:5px;"><select onchange="window._dailySetCandProj(this.value)" ' +
+                      'style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px; max-width:260px;">' +
+                      '<option value=""' + (_candProj ? '' : ' selected') + '>' +
+                      esc(T('프로젝트 전체', 'All projects')) + ' (' + cand.length + ')</option>' +
+                      projOpts.map(function (p) {
+                          var n = cand.filter(function (c) { return String(c.project || '').trim() === p; }).length;
+                          return '<option value="' + esc(p) + '"' + (_candProj === p ? ' selected' : '') + '>' +
+                                 esc(p) + ' (' + n + ')</option>';
+                      }).join('') + '</select></div>';
+        }
+
+        if (!shown.length) {
+            return noteTxt + errTxt + pickTxt + '<div style="color:#aaa; font-size:11.5px;">' +
+                   esc(_candProj ? T('이 프로젝트엔 오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today in this project.')
+                                 : T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
         }
         var max = +(window.DAILY_SCAN || {}).maxCandidates || 80;
-        return noteTxt + errTxt + cand.slice(0, max).map(function (c, i) {
+        return noteTxt + errTxt + pickTxt + shown.slice(0, max).map(function (c, i) {
             var pj = String(c.project || '').trim();
             return '<div onclick="window._dailyAdd(' + i + ')" style="cursor:pointer; padding:5px 7px; border:1px solid #eee; border-radius:5px; margin-bottom:4px; background:#fafbfc;" ' +
                    'onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fafbfc\';">' +
                    '<div style="font-size:12px; font-weight:bold; color:#2c5f8a;">+ ' + catBadge(c.cat) + esc(c.name) +
                      (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '') +
                      (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '') +
-                     // 📒 어느 프로젝트 것인지 — 여러 프로젝트가 섞이면 이름만으론 못 가린다.
-                     (pj && pj !== openName ? ' <span style="color:#888; font-size:10.5px; font-weight:normal;">(' + esc(pj) + ')</span>' : '') +
+                     // 📒 어느 프로젝트 것인지 — **언제나** 적는다.
+                     //    ⚠️ [2026-11-09 신고 "아래 정보는 뭐야?"] 예전엔 열린 프로젝트면 생략했는데,
+                     //       그래서 라벨 없는 줄과 있는 줄이 섞여 사람이 "이건 뭐지?" 하고 멈췄다.
+                     //       `ELECTRICAL*` 처럼 프로젝트마다 같은 이름을 쓰면 더더욱 못 가린다.
+                     //       열린 프로젝트는 📂 로 구분만 해 준다(지우지 않는다).
+                     (pj ? ' <span style="color:#888; font-size:10.5px; font-weight:normal;">' +
+                           (pj === openName ? '📂 ' : '') + '(' + esc(pj) + ')</span>' : '') +
                    '</div>' +
                    (c.core ? '<div style="font-size:11px; color:#666; margin-top:2px;">' + esc(c.core) + '</div>' : '') +
                    '</div>';
@@ -1034,6 +1083,13 @@
         var el = document.getElementById('daily-cand');
         if (el) el.innerHTML = candHtml();
     }
+
+    /** 📒 후보 목록을 한 프로젝트로 좁힌다(빈 값 = 전체). 목록만 다시 그린다 — 모달 전체를
+     *  다시 그리면 사람이 치던 칸에서 포커스가 날아간다. */
+    window._dailySetCandProj = function (v) {
+        _candProj = String(v || '').trim();
+        paintCands();
+    };
 
     function render() {
         var wrap = document.getElementById('daily-modal');
