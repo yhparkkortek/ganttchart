@@ -2181,6 +2181,27 @@
             const res = await fetch(url + '?cb=' + Date.now());
             if (!res.ok) throw new Error('HTTP ' + res.status);
             let text = await res.text();
+            // 🔑 [2026-11-09] **NAS 주소를 여기서 심는다.** 그러면 팀원은 받은 파일을 더블클릭하고
+            //    앱에서 아이디·비밀번호만 넣으면 된다(주소를 칠 일이 없다 → 오타로 IP 가 잠길 일도 없다).
+            //    ⚠️ 저장소엔 여전히 안 들어간다 — 이 저장소는 GitHub Pages 로 **공개**라 주소를 못 박는다.
+            //       심는 건 **관리자 브라우저**이고, 받는 사람 파일에만 들어간다.
+            //    ⚠️ 비밀번호·아이디는 안 심는다. 설치 파일은 여러 PC 를 돌아다니는 평문이다.
+            //    ⚠️ cmd 가 특별히 보는 글자가 섞인 주소는 **심지 않는다** — escape 하느니 안 넣는 게 낫다.
+            try {
+                const st = await (await fetch('http://127.0.0.1:5000/nas/status',
+                                              { signal: AbortSignal.timeout(4000) })).json();
+                const h = String((st && (st.host || (st.defaults && st.defaults.host))) || '').trim();
+                if (h && /^[A-Za-z0-9._:-]+$/.test(h)) {
+                    const before = text;
+                    text = text.replace('set "NASHOST="', 'set "NASHOST=' + h + '"');
+                    if (text !== before) console.info('[설치 파일] NAS 주소를 심었습니다 — 받는 사람은 아이디·비밀번호만 넣으면 됩니다.');
+                } else if (h) {
+                    console.warn('[설치 파일] 주소에 cmd 가 특별히 보는 글자가 있어 심지 않았습니다 — 받는 사람이 직접 넣어야 합니다.');
+                }
+            } catch (e) {
+                // 백엔드가 꺼져 있거나 아직 설정 전 — 주소 없이 그냥 내려준다(받는 사람이 넣는다).
+                console.info('[설치 파일] NAS 주소를 못 읽어 심지 않았습니다:', e && e.message);
+            }
             text = text.replace(/\r?\n/g, '\r\n');
             const blobUrl = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
             const a = document.createElement('a');

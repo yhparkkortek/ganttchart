@@ -116,8 +116,18 @@ start "" wscript.exe "%DEST%\kortek_backend_start_minimized.vbs"
 ::   📄 설치 파일 **옆에** nas_defaults.json 이 있으면 같이 깐다 — 그러면 그 PC 의 간편 전환이
 ::   주소·앱 폴더를 미리 채운다(팀원은 사번·비밀번호만 넣는다). 비밀번호는 안 들어 있다.
 ::   ⚠️ 저장소에는 없는 파일이다 — 이 저장소는 공개라 사내 주소를 올릴 수 없다.
+::   🔑 앱이 설치 파일을 내려줄 때 **아래 한 줄에 NAS 주소를 심어** 준다.
+::   그러면 팀원은 주소를 치지 않고 아이디·비밀번호만 넣으면 된다.
+::   ⚠️ 비밀번호·아이디는 안 들어간다. 저장소의 이 파일엔 늘 비어 있다.
+::   ⚠️ BOM 을 붙이면 백엔드가 조용히 {} 로 읽는다 — UTF8Encoding($false).
+set "NASHOST="
 if defined DRY goto :skipdefaults
-if not exist "%~dp0nas_defaults.json" goto :skipdefaults
+if exist "%~dp0nas_defaults.json" goto :copydefaults
+if not defined NASHOST goto :skipdefaults
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p=$env:DEST+'\nas_defaults.json'; $j=@{host=$env:NASHOST;port=5001;https=$true} | ConvertTo-Json -Compress; [IO.File]::WriteAllText($p,$j,(New-Object Text.UTF8Encoding $false))"
+echo         NAS 주소를 미리 넣어 두었습니다 — 앱에서 아이디·비밀번호만 넣으면 됩니다.
+goto :skipdefaults
+:copydefaults
 copy /y "%~dp0nas_defaults.json" "%DEST%\nas_defaults.json" > nul
 echo         기본설정(nas_defaults.json)도 같이 두었습니다 — 주소를 칠 필요가 없습니다.
 :skipdefaults
