@@ -177,6 +177,8 @@
                 { title: '# 문제점 개선 요청', kind: 'attach', key: 'att_issue',
                   hint: '문제가 보이는 사진·자료를 올려 주세요.' },
                 { title: '# 제작 특이사항', kind: 'text', key: '제작특이사항' },
+                // ✅ SPL Check sheet — 항목은 js/68 `DOC_CHECK_SHEETS`(원본에서 기계로 뽑은 데이터)
+                { title: 'SPL Check sheet', kind: 'check' },
                 {
                     title: '디버깅 내역', cols: 2,
                     fields: [
@@ -591,6 +593,54 @@
                    + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
                    + _esc(_t('끌어다 놓기 · Ctrl+V 붙여넣기도 됩니다. 파일은 NAS 에 올라가고 문서엔 참조만 남습니다.',
                              'Drag & drop or paste.')) + '</span></div></td></tr>';
+            } else if (s.kind === 'check') {
+                // ✅ SPL Check sheet — 6장·167항목. 체크는 **라디오가 아니라 칸 클릭**이다
+                //    (원본이 O 를 손으로 적는 표라, 같은 모양으로 눌러 O 를 켠다).
+                //    저장 열쇠: `chk|<시트>|<번호>|<열>` · 비고는 `chk|<시트>|<번호>|note`
+                var sheets = window.DOC_CHECK_SHEETS || [];
+                if (!sheets.length) {
+                    h += '<tr><td style="color:#b1432f;">'
+                       + _esc(_t('점검표 데이터(js/68)를 불러오지 못했습니다.', 'check sheet data missing')) + '</td></tr>';
+                }
+                h += '</table>';
+                sheets.forEach(function (sh) {
+                    h += '<div class="doc-sec" style="background:#4a6f8a;">' + _esc(sh.key) + '</div>';
+                    h += '<table class="doc-t" style="table-layout:fixed;">'
+                       + '<colgroup><col style="width:110px"><col><col style="width:168px">'
+                       + '<col style="width:150px"><col style="width:150px"></colgroup>'
+                       + '<tr><th>' + _esc(_t('항목', 'Group')) + '</th><th>' + _esc(_t('내역', 'Item')) + '</th>'
+                       + '<th>' + _esc(_t('개발담당자', 'Dev')) + '</th>'
+                       + '<th>' + _esc(_t('시제품담당자', 'Proto')) + '</th>'
+                       + '<th>' + _esc(_t('제품보증담당자', 'QA')) + '</th></tr>';
+                    var prevG = null;
+                    (sh.items || []).forEach(function (it, n) {
+                        var base = 'chk|' + sh.key + '|' + n + '|';
+                        var cell = function (cols) {
+                            return '<td style="text-align:center; white-space:nowrap;">' + cols.map(function (c) {
+                                var k = base + c, on = _docData(form.id).fields[k] === 'O';
+                                return '<span class="doc-chk" data-doc-chk="' + _esc(k) + '"'
+                                     + ' title="' + _esc(c) + '" style="display:inline-block; min-width:30px;'
+                                     + ' margin:0 1px; padding:1px 3px; cursor:pointer; border:1px solid #ccd3d9;'
+                                     + ' border-radius:3px; font-size:10px; line-height:14px;'
+                                     + ' background:' + (on ? '#2c5f8a' : '#fff') + '; color:' + (on ? '#fff' : '#adb5bd') + ';">'
+                                     + _esc(c) + (on ? ' O' : '') + '</span>';
+                            }).join('') + '</td>';
+                        };
+                        h += '<tr>'
+                           + '<td class="doc-lab" style="text-align:center;">' + _esc(it.g === prevG ? '' : it.g) + '</td>'
+                           + '<td style="font-size:11.5px;">' + _esc(it.q) + '</td>'
+                           + cell(['점검요청', '해당없음']) + cell(['합격', '불합격', 'N/A']) + cell(['합격', '불합격', 'N/A'])
+                           + '</tr>'
+                           // Note 줄 — 원본이 항목마다 하나씩 들고 있다
+                           + '<tr><td class="doc-lab" style="text-align:center; font-weight:normal; font-size:10px;">Note</td>'
+                           + '<td colspan="4"><input type="text" class="doc-in" data-doc-key="' + _esc(base + 'note') + '"'
+                           + ' value="' + _esc(_docData(form.id).fields[base + 'note'] || '') + '"'
+                           + ' placeholder="' + _esc(_t('비고', 'note')) + '" style="font-size:11px;"></td></tr>';
+                        prevG = it.g;
+                    });
+                    h += '</table>';
+                });
+                h += '<table style="display:none;">';
             } else if (s.kind === 'text') {
                 var tv = _hasOwn(form.id, s.key) ? _docData(form.id).fields[s.key] : '';
                 h += '<tr><td><textarea data-doc-key="' + _esc(s.key) + '" rows="3" placeholder="' + _esc(s.hint || '')
@@ -664,6 +714,20 @@
             var key = el.getAttribute('data-doc-key');
             if (key) window._docSetField(form.id, key, el.value);
         };
+        // ✅ 점검표 칸 켜고 끄기 — 위임으로 받는다(167항목 × 8칸에 핸들러를 달지 않는다)
+        body.onclick = function (e) {
+            var el = e.target && e.target.closest ? e.target.closest('[data-doc-chk]') : null;
+            if (!el) return;
+            var k = el.getAttribute('data-doc-chk');
+            var d = _docData(form.id);
+            if (d.fields[k] === 'O') delete d.fields[k]; else d.fields[k] = 'O';
+            _markDirty();
+            // 누른 칸만 다시 칠한다 — 167항목을 통째로 다시 그리면 눈에 띄게 느리다
+            var on = d.fields[k] === 'O';
+            el.style.background = on ? '#2c5f8a' : '#fff';
+            el.style.color = on ? '#fff' : '#adb5bd';
+            el.textContent = el.getAttribute('title') + (on ? ' O' : '');
+        };
         // 📎 끌어다 놓기 — 첨부 구역에 떨어뜨린 것만 받는다(앱 전역 드롭과 겹치지 않게 막는다)
         [].slice.call(body.querySelectorAll('[data-doc-att]')).forEach(function (zone) {
             zone.addEventListener('dragover', function (ev) { ev.preventDefault(); ev.stopPropagation(); zone.style.background = '#eef7ff'; });
@@ -710,7 +774,23 @@
         rows.push([]);
         form.sections.forEach(function (s) {
             rows.push([s.title]);
-            if (s.kind === 'attach') {
+            if (s.kind === 'check') {
+                (window.DOC_CHECK_SHEETS || []).forEach(function (sh) {
+                    rows.push([sh.key]);
+                    rows.push([_t('항목', 'Group'), _t('내역', 'Item'), _t('개발', 'Dev'),
+                               _t('시제품', 'Proto'), _t('보증', 'QA'), 'Note']);
+                    (sh.items || []).forEach(function (it, n) {
+                        var base = 'chk|' + sh.key + '|' + n + '|';
+                        var on = function (cols) {
+                            return cols.filter(function (c) { return d.fields[base + c] === 'O'; }).join(',');
+                        };
+                        rows.push([it.g, it.q, on(['점검요청', '해당없음']),
+                                   on(['합격', '불합격', 'N/A']), on(['합격', '불합격', 'N/A']),
+                                   d.fields[base + 'note'] || '']);
+                    });
+                    rows.push([]);
+                });
+            } else if (s.kind === 'attach') {
                 var list = (d.att[s.key] || []);
                 rows.push([_t('첨부', 'attachments') + ' ' + list.length + _t('건', '')]);
                 list.forEach(function (a) { rows.push(['', a.orig || a.name]); });
