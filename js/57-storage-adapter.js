@@ -999,7 +999,33 @@
                 var res = await readRel(cur.rel);
                 var buf = await res.arrayBuffer();
                 await writeRel(newRel, bytesToB64(buf), true);
-                await nasJson('POST', '/nas/app/delete', { rel: cur.rel });
+                // 🧹🧹 [2026-11-09] **원본 삭제가 실패하면 이름 바꾸기를 통째로 되돌린다.**
+                //    예전엔 여기서 예외가 그대로 터져 나가 **새 이름 파일만 남고**(원본도 그대로)
+                //    아래 `remapIdPath` 가 안 돌아 지도·색인은 옛 경로를 가리켰다 → 같은 프로젝트가
+                //    파일 둘로 갈라지고, 새 쪽은 id 가 없어 목록에서 **"미지정"**으로 떴다
+                //    (실측 2026-11-09 13:47: `LNW_27.0.json` 과 `LNW_OBSIDIAN27_DB_27.0.json` 이
+                //     426행·2,362,096바이트로 **똑같이** 남았다).
+                //    ⚠️ DSM 은 `Delete` 가 **성공을 주면서 안 지우는** 경우가 있다(docs/nas-dsm.md) —
+                //       그래서 한 번 더 해 보고, 그래도 안 되면 **방금 쓴 쪽을 지워** 옛 이름으로 돌아간다.
+                //       이름은 꾸밈이고 **쪼개짐은 사고**다 — 다음 저장 때 다시 시도하면 된다.
+                var delErr = null;
+                for (var tryN = 0; tryN < 2; tryN++) {
+                    try { await nasJson('POST', '/nas/app/delete', { rel: cur.rel }); delErr = null; break; }
+                    catch (e) { delErr = e; }
+                }
+                if (delErr) {
+                    try { await nasJson('POST', '/nas/app/delete', { rel: newRel }); }
+                    catch (e2) {
+                        note('rename-split', { from: cur.rel, to: newRel, why: String(delErr && delErr.message || delErr) });
+                        console.error('[storage-adapter] 이름 바꾸기가 **쪼개졌다** — 같은 프로젝트가 파일 둘로 남았습니다. '
+                            + '하나를 지워 주세요(내용은 같습니다): ', cur.rel, ' / ', newRel, delErr);
+                        throw delErr;
+                    }
+                    note('rename-rolledback', { keep: cur.rel, dropped: newRel });
+                    console.warn('[storage-adapter] 원본을 못 지워서 이름 바꾸기를 되돌렸습니다 — 옛 이름 그대로 씁니다: '
+                        + cur.rel + ' (바라던 이름: ' + newRel + ')', delErr);
+                    return await driveGetMeta(cur.rel, false);
+                }
                 note('moved', { from: cur.rel, to: newRel });
                 // ⚠️⚠️ **지도를 같이 옮겨야 한다**(2026-11-04 실사고).
                 //    Drive 는 이름이 바뀌어도 fileId 가 **그대로**라 아무것도 안 깨진다.

@@ -103,6 +103,12 @@ check('진 쪽도 경로로는 풀린다(= 유령이 아니다)', F.relOf(ID_A) 
   check('remapIdPath 도 **마지막**을 쓴다(moved[0] 이면 안 된다)',
         /_relToOldId\[newRel\]\s*=\s*moved\[moved\.length - 1\];/.test(src)
         && !/_relToOldId\[newRel\]\s*=\s*moved\[0\];/.test(src));
+  // 🧹 이름 바꾸기는 "새로 쓰고 → 원본 지우기" 2단계다. 원본 삭제가 실패했는데 그냥 터져 나가면
+  //    **새 이름 파일만 남고 지도는 옛 경로**를 가리켜 같은 프로젝트가 둘로 쪼개진다
+  //    (실측 2026-11-09: 426행 파일이 두 이름으로 똑같이 남았고 새 쪽이 "미지정"으로 떴다).
+  const ren = src.slice(src.indexOf('await writeRel(newRel'), src.indexOf("note('moved'"));
+  check('이름 바꾸기: 삭제 실패를 그냥 흘리지 않는다(되돌리기가 있다)',
+        /nas\/app\/delete[\s\S]*newRel/.test(ren) && /rolledback|rename-split/.test(ren), ren.length);
 }
 
 eq('지도를 비우면 원래대로', F.adoptIdMap({ map: {} }), 0);
