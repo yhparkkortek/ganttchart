@@ -357,7 +357,7 @@
     };
 
     // ── C. 양식 열쇠 판정 (js/52) ───────────────────────────────────────
-    var _testFormKey = function () {
+    var _testFormKey = async function () {
         LOG.push('── C. 양식 열쇠 — formName + 제목 접두어 (js/52) ──');
         if (typeof window._apvFormKey !== 'function') { ok('js/52 로드됨', false); return; }
         eq('기안서 + [시제품 제작의뢰서]',
@@ -372,6 +372,22 @@
         // 부분문자열 오매칭 방지(기존 보장)
         eq('제품코드 vs 원자재/반제품 구분',
            window._apvFormKey('제품코드 등록 신청서', '제품코드 등록 신청서[X]'), '제품코드 등록 신청서');
+        // ⚠️⚠️ 봉투 이름만 들어오면 **짐작하지 않고 되물어야** 한다 —
+        //   예전엔 "아무 기안서나 최근 것"을 틀로 집어 **표준원가 문서가 틀**이 됐다(사고 220176 모양).
+        //   실제로 js/04h 가 `_apvType.form`('기안서')만 넘기고 있었다(2026-11-09 실측으로 걸렸다).
+        if (typeof window.apvComposeByForm === 'function') {
+            var amb = await window.apvComposeByForm('기안서', {});
+            ok('봉투 이름만 들어오면 짐작하지 않고 되묻는다',
+               !!(amb && amb.ok === false && /봉투/.test(String(amb.message || ''))), JSON.stringify(amb));
+            ok('되묻는 문구에 후보가 들어 있다',
+               /시제품 제작의뢰서/.test(String((amb || {}).message || '')), String((amb || {}).message || ''));
+        }
+        // 🔗 호출부(js/04h)가 접두어를 잃지 않는지 — 열쇠를 만드는 함수가 있어야 한다
+        ok('_apvTypeKey 가 공개되어 있다(04h 가 이걸로 열쇠를 만든다)',
+           typeof window._apvTypeKey === 'function');
+        var _tk = window._apvTypeKey && window._apvTypeKey(window._apvDocTypeHit
+            ? window._apvDocTypeHit('시제품 제작의뢰서 기안 작성해줘') : null);
+        eq('"시제품 제작의뢰서 기안 작성해줘" → 열쇠', _tk, '기안서[시제품 제작의뢰서]');
         var t = window._apvDocTypeByForm('기안서', '[시제품 제작의뢰서]X');
         ok('카탈로그가 본문 양식임을 알고 있다', !!(t && t.bodyForm), JSON.stringify(t && t.form));
         ok('본문 칸 이름을 실측해 들고 있다', !!(t && (t.bodyFields || []).length >= 25),
@@ -384,7 +400,7 @@
         LOG.push('');
         await _testPairing();
         LOG.push('');
-        _testFormKey();
+        await _testFormKey();
         LOG.push('');
         await _testCompose();
         LOG.push('');

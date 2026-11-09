@@ -392,6 +392,21 @@
         var name = (type ? _typeKey(type) : '') || String(form || '').trim();
         if (!name) return { ok: false, message: '어떤 양식인지 알 수 없습니다.' };
 
+        // ⚠️⚠️ **봉투 이름만 들어온 경우 — 짐작하지 않고 되묻는다.**
+        //   '기안서' 처럼 카탈로그에 **접두어 변종만** 있는 이름이 접두어 없이 들어오면,
+        //   예전 코드는 "아무 기안서나 최근 것"을 틀로 집었다(표준원가 문서가 틀이 되는 사고).
+        //   어느 문서 종류인지는 사람만 안다 — 후보를 보여주고 멈춘다.
+        if (!type) {
+            var variants = (window.APPROVAL_DOC_TYPES || []).filter(function (t) {
+                return (t.titlePrefix || []).length && _norm(t.form) === _norm(name);
+            });
+            if (variants.length) {
+                return { ok: false, form: name,
+                         message: '"' + name + '" 은 여러 문서 종류의 **봉투**입니다 — 어느 것인지 알려주세요: '
+                                + variants.map(function (t) { return t.titlePrefix[0]; }).join(' / ') };
+            }
+        }
+
         if (window._gwEnsureLogin) {
             var g = await window._gwEnsureLogin(step);
             if (!g || !g.ok) return { ok: false, message: (g && g.message) || '그룹웨어 로그인이 필요합니다.' };

@@ -6197,13 +6197,19 @@ ${docsJson}`;
             //    바로 작성에 들어가도 되는 이유: js/47 이 칸마다 출처를 보여주고 사람이
             //    [이대로 임시저장]을 눌러야 저장되므로, 틀을 잘못 골라도 사람이 막을 수 있다.
             const _apvType = (!_docNo && window._apvDocTypeHit) ? window._apvDocTypeHit(question) : null;
+            // ⚠️⚠️ [2026-11-09] **양식 열쇠**를 넘긴다 — `_apvType.form` 만 넘기면 제목 접두어가
+            //    날아간다('기안서' 는 양식이 아니라 봉투다, js/52). 그러면 `_apvLatestDocOf` 가
+            //    "아무 기안서나" 최근 것을 집어 **표준원가 문서를 틀로 쓴다** — 사고 문서 220176 과
+            //    같은 모양이다(실측으로 걸렸다: 한 프로젝트의 '기안서' 7건이 서로 다른 세 문서).
+            const _apvKey = (_apvType && window._apvTypeKey) ? window._apvTypeKey(_apvType)
+                                                             : (_apvType && _apvType.form);
             if (_apvType && window.apvComposeByForm) {
                 window._ganttQaHistory.push({ role: 'ai', pending: true,
-                    text: '📝 ' + window._t('"' + _apvType.form + '" 으로 보입니다 — 틀로 쓸 최근 문서를 찾는 중입니다…',
-                                            'Looks like "' + _apvType.form + '" — looking for a recent document to use as a template…') });
+                    text: '📝 ' + window._t('"' + _apvKey + '" 으로 보입니다 — 틀로 쓸 최근 문서를 찾는 중입니다…',
+                                            'Looks like "' + _apvKey + '" — looking for a recent document to use as a template…') });
                 window._renderGanttQaMessages();
                 const _apvStep = function (m) { const h = window._ganttQaHistory, l = h[h.length - 1]; if (l && l.pending) { l.text = m; window._renderGanttQaMessages(); } };
-                const _apvR = await window.apvComposeByForm(_apvType.form, { material: _gwDraftMat || '', onStep: _apvStep });
+                const _apvR = await window.apvComposeByForm(_apvKey, { material: _gwDraftMat || '', onStep: _apvStep });
                 window._ganttQaHistory.pop();
                 const _nl2 = String.fromCharCode(10);
                 if (_apvR && _apvR.ok) {
