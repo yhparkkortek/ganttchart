@@ -45,6 +45,17 @@
     // 자재코드 목록을 ZMM009 구조화 조회(renderMatRows 표)로 처리할 SAP 기능 id.
     // 이 밖의 기능(가격·재고·BOM·문서 등)이 어휘로 이기면 기존 경로를 그대로 둔다.
     var ZMM009_ROW_CAPS = ['matlist', 'itemdesc', 'descpattern'];
+
+    // 📌 [2026-11-09] "기능은 있는데 인자가 없다"를 미지원과 가르는 기준(데이터).
+    //  minScore: `_qaMatchCapabilities`는 kw 1개 일치에 0.5를 준다 — 그 아래는 그냥 닮은 말이다.
+    //  idRe/wildRe: SAP 기능이 받는 **식별자**가 질문에 하나라도 있는지(자재·오더번호, 와일드카드).
+    //    ⚠️ 어느 인자가 빠졌는지 `needs` 문구를 파싱하지 않는다 — 자연어를 코드가 해석하기
+    //    시작하면 42개 기능마다 규칙이 생긴다. "식별자가 아예 없다"만 본다.
+    window.SAP_NEEDS_PROMPT = window.SAP_NEEDS_PROMPT || {
+        minScore: 0.5,
+        idRe: /\d{4,}/,
+        wildRe: /[^\s,]*\*[^\s,]*/
+    };
     var KO_STOP = /^(조회|알려|보여|해줘|해주|있어|없어|이거|그거|정보|내용|관련|대해|대한|확인|이번|다음|지금|현재|전체|모든|업무|일정|담당|프로젝트|진행|완료|지연|마감|설명|무엇)/;
 
     function patternOf(q) {
@@ -466,6 +477,35 @@
         // 폴백: 기존 "지원하지 않음" 안내 + 적립
         var en = window._currentLang === 'en';
         var caps = window._qaMatchCapabilities ? window._qaMatchCapabilities(question).slice(0, 2) : [];
+
+        // ── 📌 [2026-11-09 실측] **기능은 있는데 인자가 없는 것**을 "미지원"으로 답하지 않는다 ──
+        //  재현: "ZMM009 자재코드 목록 조회" → "아직 이 유형은 직접 조회하지 못합니다" 였다.
+        //  ZMM009 는 **구현돼 있고**(`matlist`, `/sap-material-rows`) 그 기능이 뭘 필요로 하는지도
+        //  데이터에 적혀 있다(`needs: '자재번호(복수 가능)'`). 그런데 자재번호가 없으면 조회할 게
+        //  없어 이 폴백까지 와서, 사람에게 **"그 기능이 없다"고 거짓을 말하고** 있었다.
+        //  더 나쁜 건 같은 자리에서 "새 SAP 기능 후보"로 **적립**까지 한 것 — 이미 구현된 기능이
+        //  구현 요청으로 쌓여 우선순위 신호가 오염된다.
+        //  → 비슷한 기능이 분명하고(점수) 질문에 **식별자가 하나도 없으면** 필요한 인자를 묻는다.
+        //  ⚠️ 식별자가 있으면(자재번호·패턴) 손대지 않는다 — 그건 정말 모양이 다른 요청일 수 있다.
+        var _np = window.SAP_NEEDS_PROMPT;
+        var _top = caps[0];
+        var _full = _top ? (window.SAP_CAPABILITIES || []).find(function (c) { return c.id === _top.id; }) : null;
+        var _hasId = _np.idRe.test(question) || _np.wildRe.test(question);
+        if (_full && _full.needs && _top.score >= _np.minScore && !_hasId) {
+            var _ex = String(_full.ex || '').split('/')[0].trim();
+            var _nm = (en && _full.titleEn) ? _full.titleEn : _full.title;
+            var _ask = '🏭 ' + T('"' + _nm + '"' + (_full.tcode ? '(' + _full.tcode + ')' : '') + ' 기능은 있습니다 — 다만 ',
+                                 'The "' + _nm + '"' + (_full.tcode ? ' (' + _full.tcode + ')' : '') + ' capability exists — it just needs ')
+                + '**' + _full.needs + '**' + T(' 가 필요합니다.', '.')
+                + (_ex ? '\n\n' + T('예) ', 'e.g. ') + _ex : '');
+            pushAi(_ask, question, route);
+            // 🧾 "기능이 없다"(sap_unsupported)와 **다른 신호**로 적립한다 — 구현 요청으로 쌓이면
+            //    이미 있는 기능이 후보 목록 상위에 올라가 우선순위를 망친다.
+            logRoute('sap_needs_arg', question, { cls: cls || 'sap', cap: _full.id, needs: _full.needs });
+            finish(input);
+            return;
+        }
+
         var msg = '🏭 ' + T('SAP 요청으로 이해했지만, 아직 이 유형은 직접 조회하지 못합니다. (SAP에 없는 정보를 지어내지 않기 위해 프로젝트 데이터로 추측해 답하지 않았습니다.)',
             'Understood as a SAP request, but this type is not supported yet. (I did not guess from project data to avoid making things up.)');
         if (route && route.reasons && route.reasons.length) msg += '\n' + T('이해한 근거: ', 'Why: ') + route.reasons.join(' / ');

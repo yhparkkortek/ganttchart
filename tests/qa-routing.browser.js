@@ -56,7 +56,11 @@
         // ⚠️ [2026-11-09 실측] "🏭 SAP 요청으로 이해했지만, 아직 이 유형은 직접 조회하지 못합니다" 로
         //    끝난다 — SAP **의도는** 맞혔는데 `matlist`(ZMM009_ROW_CAPS, js/33) 로는 안 붙는다.
         //    즉 어휘 문제가 아니라 **의도→기능 매칭**이 비어 있는 자리. 남은 일.
-        { q: 'ZMM009 자재코드 목록 조회',          want: 'sap', note: '미해결 — 의도는 SAP, 기능 매칭 실패' },
+        //  [2026-11-09 고침] 자재번호가 없으면 조회할 게 없다 — 그걸 "미지원"이라 답하던 자리.
+        //  이제 "기능은 있습니다 — 자재번호(복수 가능) 가 필요합니다 / 예) …" 로 **되묻는다**.
+        { q: 'ZMM009 자재코드 목록 조회',          want: 'local', wantText: '기능은 있습니다' },
+        { q: '자재 리스트 조회해줘',                want: 'local', wantText: '기능은 있습니다' },
+        { q: '133025,133026 ZMM009 로 조회해줘',   want: 'sap', note: '번호가 있으면 실제 조회로 간다' },
         // 🏢 그룹웨어 — 메일 조회의 자연스러운 말들(2026-11-09에 전부 빠져 있던 자리)
         { q: '오늘 받은 메일 목록 보여줘',          want: 'gw' },
         { q: '메일 목록 보여줘',                   want: 'gw' },
@@ -168,6 +172,9 @@
                 }
                 got = got || (bubbles.length ? 'local' : 'none');
                 var okWant = (c.want === 'ambig') ? null : (c.want || '').split('|').indexOf(got) >= 0;
+                // `wantText` — 라우트만 맞아도 **답이 틀린 말을 하면** 통과시키지 않는다
+                //  (예: 기능이 있는데 "미지원"이라고 답하던 자리. 2026-11-09)
+                if (okWant && c.wantText) okWant = bubbles.some(function (b) { return b.indexOf(c.wantText) >= 0; });
                 rows.push({ q: c.q, want: c.want, got: got, ok: okWant, ms: Date.now() - t0,
                             fetch: obs.fetches.slice(0, 3), ai: obs.ai.length, bubbles: bubbles,
                             alerts: obs.alerts.slice(0, 2), toasts: obs.toasts.slice(0, 2), note: c.note || '' });
