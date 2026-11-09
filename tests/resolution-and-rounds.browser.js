@@ -108,22 +108,40 @@
 
             // ═══ 4. Customer SPEC 보탬 항목 자리 (js/43) ══════════════════
             ok(typeof window._bsPlaceExtraItems === 'function', 'js/43 _bsPlaceExtraItems 가 없다');
+            // 🎯 자리는 **`Power estimation` 바로 위**다 (사용자 확정: "Power 위로" · "26~27 번 사이")
+            var order = function (rows) { return rows.map(function (r) { return r.type; }).join(' > '); };
             var a = [{ type: 'Panel', sub: '' }, { type: 'Power estimation', sub: 'LCD Monitor' }, { type: 'Touch', sub: '' }];
             var c1 = window._bsPlaceExtraItems(a);
             ok(c1 === 2, '보탬 항목 2개가 안 들어갔다 (' + c1 + ')');
-            ok(a[0].type === 'F/W Version' && a[1].type === 'EDID Check Sum',
-               '보탬 항목이 맨 위가 아니다: ' + a.map(function (r) { return r.type; }).join(' > '));
+            ok(order(a) === 'Panel > F/W Version > EDID Check Sum > Power estimation > Touch',
+               '보탬 항목이 Power 바로 위가 아니다: ' + order(a));
             ok(window._bsPlaceExtraItems(a) === 0, '두 번째 호출이 또 바꾼다 (멱등이 아니다)');
 
-            // 맨 뒤에 값까지 들고 있던 옛 데이터 → **값을 지닌 채** 위로 올라온다
+            // 맨 뒤에 값까지 들고 있던 옛 데이터 → **값을 지닌 채** Power 위로 올라온다
             var b = [{ type: 'Panel', sub: '' }, { type: 'Power estimation', sub: 'LCD Monitor' },
                      { type: 'F/W Version', sub: '', modelA: 'V1.02', note: '보존' },
                      { type: 'EDID Check Sum', sub: '', modelA: '0x36' }];
             window._bsPlaceExtraItems(b);
-            ok(b[0].type === 'F/W Version' && b[0].modelA === 'V1.02' && b[0].note === '보존',
-               '옮기면서 값이 사라졌다');
-            ok(b[1].type === 'EDID Check Sum' && b[1].modelA === '0x36', 'EDID 값이 사라졌다');
+            ok(order(b) === 'Panel > F/W Version > EDID Check Sum > Power estimation', '맨 뒤에서 안 올라왔다: ' + order(b));
+            ok(b[1].modelA === 'V1.02' && b[1].note === '보존', '옮기면서 값이 사라졌다');
+            ok(b[2].modelA === '0x36', 'EDID 값이 사라졌다');
             ok(b.length === 4, '옮기다가 행이 늘거나 줄었다 (' + b.length + ')');
+
+            // 🔁 회귀 — **이미 맨 위로 올라간** 프로젝트도 Power 위로 되돌아온다.
+            //    (2026-11-09 에 한 번 맨 위로 올렸다가 되돌렸다. "앞에 있으면 그대로 둔다" 로
+            //     짜면 이 줄이 영영 안 내려온다.)
+            var c = [{ type: 'F/W Version', sub: '', modelA: 'V1.02' }, { type: 'EDID Check Sum', sub: '' },
+                     { type: 'Panel', sub: '' }, { type: 'Power estimation', sub: 'LCD Monitor' }, { type: 'Touch', sub: '' }];
+            window._bsPlaceExtraItems(c);
+            ok(order(c) === 'Panel > F/W Version > EDID Check Sum > Power estimation > Touch',
+               '맨 위에 있던 항목이 Power 위로 안 내려온다: ' + order(c));
+            ok(window._bsPlaceExtraItems(c) === 0, '되돌린 뒤 멱등이 깨진다 (부를 때마다 순서가 뒤바뀐다)');
+            ok(c[1].modelA === 'V1.02', '되돌리면서 값이 사라졌다');
+
+            // 기준 행이 없는 표에서는 맨 뒤 — 조용히 엉뚱한 데 넣지 않는다
+            var e = [{ type: 'Panel', sub: '' }, { type: 'Touch', sub: '' }];
+            window._bsPlaceExtraItems(e);
+            ok(order(e) === 'Panel > Touch > F/W Version > EDID Check Sum', 'Power 가 없을 때 자리가 이상하다: ' + order(e));
 
             // ═══ 5. 회차마다 Sample Report 가 따로 (js/67) ════════════════
             if (window.switchTab) window.switchTab('document');

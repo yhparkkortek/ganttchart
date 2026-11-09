@@ -263,20 +263,26 @@
     };
 
     // 참조 엑셀에 없는 **보탬 항목** (데이터) — 문서가 쓰는 칸이다.
-    //  📍 자리(데이터) — `at:'top'` 은 **표 맨 위**, `before:[…]` 는 그 말로 **시작하는** 첫 행 앞.
-    //     사용자 지시 2026-11-09: "F/W EDID 위치는 Power 위로" → 그다음 "제일 상단으로 가야 하는데".
-    //     ⚠️ 자리를 코드에 숫자로 박지 않는다 — 프로젝트마다 행 수가 다르다. 자리를 다시 옮기려면
-    //        `at`/`before` **한 줄**만 고치면 된다(옛 프로젝트도 다음에 열 때 따라온다).
+    //  📍 자리(데이터) — `before:[…]` 는 그 말로 **시작하는** 첫 행 **바로 앞**, `at:'top'` 은 표 맨 위.
+    //     사용자 확정(2026-11-09): **Power estimation 바로 위**("Power 위로" · "26~27 번 사이").
+    //     ⚠️⚠️ 자리를 **행 번호로 박지 않는다** — 프로젝트마다 행 수가 다르다. 사람이 말한 "26~27 번"
+    //        은 그 프로젝트에서 Power 가 27번이라는 뜻이고, 기준은 **번호가 아니라 그 행**이다.
+    //     ⚠️ 자리를 다시 옮기려면 이 **한 줄**만 고친다(옛 프로젝트도 다음에 열 때 따라온다).
     window.BS_EXTRA_ITEMS = window.BS_EXTRA_ITEMS || [
-        { type: 'F/W Version', sub: '', at: 'top', before: ['Power estimation', 'Power'] },
-        { type: 'EDID Check Sum', sub: '', at: 'top', before: ['Power estimation', 'Power'] }
+        { type: 'F/W Version', sub: '', before: ['Power estimation', 'Power'] },
+        { type: 'EDID Check Sum', sub: '', before: ['Power estimation', 'Power'] }
     ];
 
     /**
-     * 보탬 항목을 행 배열 `rows` 의 제자리에 놓는다 (없으면 끼워 넣고, 뒤에 있으면 앞으로 옮긴다).
-     * 반환: 바뀐 개수. **멱등** — 이미 제자리면 0.
+     * 보탬 항목을 행 배열 `rows` 의 제자리에 놓는다 — 없으면 끼워 넣고, 있으면 **그 자리로 옮긴다**.
+     * 반환: 자리가 바뀐 항목 수. **멱등** — 이미 제자리면 0.
      *
      * ⚠️ 옮길 때는 **행 객체 그대로** 옮긴다 — 값(`modelA`/`note`)이 같이 따라와야 한다.
+     * ⚠️⚠️ 같은 자리를 가리키는 항목은 **한 덩어리로** 꺼냈다가 한꺼번에 넣는다.
+     *    하나씩 옮기면 서로를 밀어내서 부를 때마다 순서가 뒤바뀐다(멱등이 깨진다).
+     *    F/W·EDID 를 한 번 맨 위로 올렸다가 Power 위로 되돌리면서 실제로 겪은 일이다.
+     * ⚠️ "앞에 있으면 그대로 둔다" 가 아니라 **제자리로 옮긴다** — 그래야 자리를 바꿨을 때
+     *    이미 다른 데로 간 프로젝트도 다음에 열 때 따라온다.
      */
     window._bsPlaceExtraItems = function (rows) {
         if (!Array.isArray(rows)) return 0;
@@ -294,27 +300,32 @@
             }
             return -1;
         };
-        var changed = 0, topIdx = 0;
+        // 같은 자리를 가리키는 항목끼리 묶는다(적어 둔 순서를 지킨다)
+        var groups = [], gmap = {};
         (window.BS_EXTRA_ITEMS || []).forEach(function (x) {
-            var k = key(x.type, x.sub), at = -1;
+            var gk = (x.at || '') + '\u0001' + [].concat(x.before || []).join('\u0002');
+            if (!gmap[gk]) { gmap[gk] = { at: x.at, before: x.before, list: [] }; groups.push(gmap[gk]); }
+            gmap[gk].list.push(x);
+        });
+
+        var changed = 0;
+        groups.forEach(function (g) {
+            var snapshot = rows.slice();                  // 진짜 바뀌었는지 보려고
+            // ① 덩어리 항목을 꺼낸다 (없으면 빈 행을 만든다 — 값 칸은 비운다)
+            var picked = g.list.map(function (x) {
+                var k = key(x.type, x.sub);
+                for (var i = 0; i < rows.length; i++) {
+                    if (rows[i] && key(rows[i].type, rows[i].sub) === k) return rows.splice(i, 1)[0];
+                }
+                return { type: x.type, sub: x.sub || '', modelA: '', note: '' };
+            });
+            // ② 자리를 찾는다 (꺼낸 **뒤**에 세야 자기 자신에 밀리지 않는다)
+            var dest = (g.at === 'top') ? 0 : anchorOf(g.before);
+            if (dest < 0) dest = rows.length;             // 기준 행이 없으면 맨 뒤
+            // ③ 한꺼번에 넣는다
+            picked.forEach(function (r, i) { rows.splice(dest + i, 0, r); });
             for (var i = 0; i < rows.length; i++) {
-                if (rows[i] && key(rows[i].type, rows[i].sub) === k) { at = i; break; }
-            }
-            // ⚠️ 항목마다 **다시** 센다(앞에서 끼워 넣으면 뒤가 밀린다)
-            var top = (x.at === 'top');
-            var target = top ? topIdx : anchorOf(x.before);
-            if (top) topIdx++;
-            if (at < 0) {
-                var row = { type: x.type, sub: x.sub || '', modelA: '', note: '' };
-                if (target < 0) rows.push(row); else rows.splice(target, 0, row);
-                changed++;
-                return;
-            }
-            // 맨 위로 가야 하는 항목은 자리가 다르면 무조건 옮기고,
-            // `before` 짜리는 기준 행보다 **뒤**에 있을 때만 앞으로 끌어온다.
-            if (target >= 0 && (top ? at !== target : at > target)) {
-                rows.splice(target, 0, rows.splice(at, 1)[0]);
-                changed++;
+                if (rows[i] !== snapshot[i]) { changed += g.list.length; break; }
             }
         });
         return changed;
