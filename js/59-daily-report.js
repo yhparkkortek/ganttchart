@@ -169,7 +169,10 @@
     window._dailyKeyClean = keyClean;
 
     function myKey() {
-        return keyClean(_acct || window._nasAccount || '');
+        // 👤 [2026-11-09] 사람이 **고른** 신원이 맨 먼저다(js/64, 회의실 발표용 전환).
+        //    ⚠️ 이 값이 일일보고 **파일 이름**을 정한다 — 잘못 두면 남의 파일에 쓴다.
+        //       그래서 js/64 는 고른 사람을 헤더에 늘 띄우고, 안 골랐으면 그것도 띄운다.
+        return keyClean(window._appUserKey || _acct || window._nasAccount || '');
     }
     window._dailyMyKey = myKey;
 
@@ -649,6 +652,16 @@
     var _other = { at: '', mine: [], others: [], done: 0, total: 0, busy: false, errs: [] };
     var _projCache = {};        // file_name|updated_at|date → {mine, others}
     window._dailyOtherScan = _other;
+
+    /**
+     * 🧹 훑어 둔 것을 전부 버린다 — **사람이 바뀌면**(js/64) 쓸 수 없는 결과다.
+     * ⚠️ 안 버리면 앞사람 기준 목록이 그대로 보인다(오류는 안 난다 = 조용한 오답).
+     */
+    window._dailyResetScans = function () {
+        _projCache = {};
+        _other = { at: '', mine: [], others: [], done: 0, total: 0, kept: 0, busy: false, errs: [] };
+        window._dailyOtherScan = _other;
+    };
 
     /**
      * 내가 맡은 프로젝트 파일을 차례로 읽어 같은 규칙으로 훑는다.

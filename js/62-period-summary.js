@@ -188,6 +188,12 @@
     var _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, done: 0, total: 0, errs: [] };
     window._psOtherScan = _psOther;
 
+    /** 🧹 사람이 바뀌면(js/64) 모아 둔 사실은 앞사람 기준이다 — 버린다. */
+    window._psResetScan = function () {
+        _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, done: 0, total: 0, errs: [] };
+        window._psOtherScan = _psOther;
+    };
+
     /**
      * 기간이 바뀌면 다시 모은다. **기다리게 하지 않는다** — 열린 프로젝트로 먼저 그리고,
      * 한 건 끝날 때마다 다시 그린다(js/59 와 같은 방식, 같은 공용 스캐너를 쓴다).
