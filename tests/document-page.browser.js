@@ -34,9 +34,14 @@
     var FAKE_TAB = {
         summary: { purpose: '시험 목적', volume: '4,000대/년', mpDate: '2026년 7월',
                    milestones: { ProtoDR: { date: '2025-09-30' }, PRA: { date: '2026-09-30' } } },
+        // ⚠️ 항목 이름은 **참조 엑셀의 실제 이름**이다(실측) — 지어낸 이름으로 적으면
+        //    하네스만 통과하고 앱에선 한 칸도 안 채워진다.
         briefSpec: [
-            { type: 'Optical', sub: '휘도', modelA: '500~550', note: '' },
-            { type: 'Display', sub: 'Panel', modelA: 'Innolux TEST-L01', note: 'KTK note A' }
+            { type: 'Color coordinate(x/y)', sub: '', modelA: '0.305 / 0.335', note: 'LNW SPEC' },
+            { type: 'Brightness(Centre. Min)', sub: '', modelA: '500~550', note: '' },
+            { type: 'F/W Version', sub: '', modelA: 'TULW138IS02', note: '' },
+            { type: 'EDID Check Sum', sub: '', modelA: 'DP 0x36', note: '' },
+            { type: 'Panel', sub: '', modelA: 'Innolux TEST-L01', note: 'KTK note A' }
         ],
         projectModels: [{ materials: [
             { category: 'PANEL',         ktkPn: '131475', description: 'FOG IPS>TEST-PANEL' },
@@ -111,19 +116,29 @@
 
             // ── A. 서식이 페이지로 펼쳐지는가 ──
             LOG.push(''); LOG.push('── A. 문서 초안이 페이지에 펼쳐지는가 ──');
-            var titles = [].slice.call(body.querySelectorAll('div'))
-                .map(function (d) { return d.textContent.trim(); })
-                // ⚠️ 구역 제목은 **앞부분으로** 찾는다 — '광학 사양 · 펌웨어' 처럼 꼬리가 붙는다
-                //    (처음에 `^광학 사양$` 로 적었다가 가짜 실패가 났다)
-                .filter(function (t) { return /^(시제품 제작의뢰서|광학 사양|# 주요자재|# 요청사항|# 참고 자료)/.test(t); });
+            var titles = [].slice.call(body.querySelectorAll('.doc-sec'))
+                .map(function (d) { return d.textContent.trim(); });
             eq('구역 5개가 그려진다', titles.length, 5);
             ok('주요자재 표가 5행이다',
                [].slice.call(body.querySelectorAll('input[data-doc-key$="|코드"]')).length === 5);
-            ok('헤더에 엑셀 출력 버튼이 있다(기본 출력)',
-               /엑셀/.test(document.getElementById('doc-header-tools').textContent));
-            ok('시제품 제작의뢰서엔 PPT 버튼이 없다',
-               !/PPT/.test(document.getElementById('doc-header-tools').textContent),
-               document.getElementById('doc-header-tools').textContent);
+            var toolsTxt = document.getElementById('doc-header-tools').textContent;
+            // 🖨 문서 형식이 **기본** 출력이고 엑셀은 옵션이다(사용자 요청 2026-11-09)
+            ok('헤더에 문서 출력 버튼이 있다(기본)', /문서 출력/.test(toolsTxt), toolsTxt);
+            ok('엑셀은 옵션으로 있다', /엑셀/.test(toolsTxt), toolsTxt);
+            ok('시제품 제작의뢰서엔 PPT 버튼이 없다', !/PPT/.test(toolsTxt), toolsTxt);
+            // 📄 문서 고르기는 **드롭다운**이다(PARTS 와 같은 방식)
+            ok('드롭다운 트리거가 있다', !!document.getElementById('doc-form-trigger'));
+            window._toggleDocFormDropdown();
+            var dd = document.getElementById('doc-form-dropdown');
+            ok('드롭다운이 열린다', dd && dd.style.display === 'block');
+            eq('드롭다운에 문서가 전부 나온다',
+               [].slice.call(dd.querySelectorAll('div')).length, (window.DOC_FORMS || []).length);
+            window._docPick('proto-req');
+            ok('고르면 드롭다운이 닫힌다', dd.style.display === 'none');
+            // 🎨 문서 스타일 — 흰 종이 + 구역 띠(원본 문서와 비슷하게)
+            ok('흰 종이 영역이 있다', !!body.querySelector('.doc-paper'));
+            ok('구역 띠가 칠해져 있다',
+               getComputedStyle(body.querySelector('.doc-sec')).backgroundColor === 'rgb(44, 95, 138)');
 
             // ── B. 기본 정보가 자동으로 표시되는가 ──
             LOG.push(''); LOG.push('── B. 기본 정보 자동 표시 ──');
@@ -201,6 +216,38 @@
                 ok('진짜 xlsx(zip) 가 만들어진다', !!names && names.some(function (n) { return /sheet1\.xml$/.test(n); }),
                    JSON.stringify((names || []).slice(0, 4)));
             }
+
+            // ── D-2. Sample Report · 첨부 구역 ──
+            LOG.push(''); LOG.push('── D-2. Sample Report · 첨부 ──');
+            window._docPick('sample-report'); await sleep(60);
+            var sbody = document.getElementById('doc-page-body');
+            var ssecs = [].slice.call(sbody.querySelectorAll('.doc-sec')).map(function (d) { return d.textContent.trim(); });
+            ok('Sample Report 구역이 10개 넘는다', ssecs.length >= 10, String(ssecs.length));
+            ok('제품 외관·내부·문제점 구역이 있다',
+               ssecs.indexOf('# 제품 외관') >= 0 && ssecs.indexOf('# 제품 내부') >= 0
+               && ssecs.indexOf('# 문제점 개선 요청') >= 0, JSON.stringify(ssecs));
+            var zones = [].slice.call(sbody.querySelectorAll('[data-doc-att]'))
+                .map(function (z) { return z.getAttribute('data-doc-att'); });
+            eq('첨부 구역 4개', zones.length, 4);
+            ok('첨부 올리기 버튼이 구역마다 있다',
+               [].slice.call(sbody.querySelectorAll('button'))
+                 .filter(function (b) { return /첨부/.test(b.textContent); }).length === 4);
+            // ⚠️ 시제품 제작의뢰서 표는 **한 번 만들어 양쪽이 같이 쓴다**(베끼지 않는다)
+            ok('시제품 제작의뢰서 표를 같이 들고 있다', ssecs.indexOf('# 주요자재') >= 0);
+
+            // ── D-3. 광학·F/W·EDID 는 Customer SPEC **실측 이름**에서 온다 ──
+            LOG.push(''); LOG.push('── D-3. 광학 · F/W · EDID (Customer SPEC 실측 이름) ──');
+            window._docPick('proto-req'); await sleep(60);
+            var q2 = function (k) { return document.querySelector('#doc-page-body input[data-doc-key="' + k + '"]'); };
+            // ⚠️⚠️ 색좌표는 **한 항목에 x/y 가 같이** 들어 있다(`0.305 / 0.335`).
+            //    처음엔 '색좌표 X' 처럼 **지어낸 이름**으로 찾아 한 칸도 안 맞았다 — 실측 이름으로만.
+            eq('X 는 Color coordinate(x/y) 에서 쪼개진다', q2('X').value, '0.305');
+            eq('Y 도 같은 항목에서', q2('Y').value, '0.335');
+            eq('Lv = Brightness(Centre. Min)', q2('Lv').value, '500~550');
+            eq('FW Ver = F/W Version', q2('FW Ver').value, 'TULW138IS02');
+            eq('EDID = EDID Check Sum', q2('EDID CHECK SUM').value, 'DP 0x36');
+            ok('Customer SPEC 보탬 항목이 카탈로그에 있다',
+               (window.BS_EXTRA_ITEMS || []).length === 2, JSON.stringify(window.BS_EXTRA_ITEMS));
 
             // ── E. 이미 만든 종류(DR/DVR)도 같은 페이지에서 ──
             LOG.push(''); LOG.push('── E. DR / DVR 발표자료 ──');

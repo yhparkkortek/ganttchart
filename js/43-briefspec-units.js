@@ -247,8 +247,28 @@
             if (!type && !sub) continue;        // 값 칸은 가져오지 않는다 — 서식만 필요하다
             out.push({ type: type, sub: sub });
         }
-        return out.length ? out : null;
+        if (!out.length) return null;
+        // 📌 [2026-11-09] 참조 엑셀엔 아직 없지만 **문서가 요구하는** 항목을 보탠다.
+        //    근거(실측): Sample Report·시제품 제작의뢰서엔 `FW Ver`·`EDID CHECK SUM` 칸이 있는데
+        //    Customer SPEC 표준 28항목엔 **둘 다 없다**. 사용자 결정(2026-11-09):
+        //    "펌웨어·EDID 는 없으니 만들어야 함 / 고객 SPEC 에 추가하면 될 것 같음".
+        //    ⚠️ 팀 공용 **참조 엑셀(바이너리)은 건드리지 않는다** — 거기에 추가되면 이 목록에서
+        //       빼면 되고, 그전까지는 둘 다 있어도 아래 중복 검사로 한 번만 들어간다.
+        (window.BS_EXTRA_ITEMS || []).forEach(function (x) {
+            var dup = out.some(function (r) {
+                return String(r.type || '').trim().toUpperCase() === String(x.type || '').trim().toUpperCase()
+                    && String(r.sub || '').trim().toUpperCase() === String(x.sub || '').trim().toUpperCase();
+            });
+            if (!dup) out.push({ type: x.type, sub: x.sub || '' });
+        });
+        return out;
     };
+
+    // 참조 엑셀에 없는 **보탬 항목** (데이터) — 문서가 쓰는 칸이다.
+    window.BS_EXTRA_ITEMS = window.BS_EXTRA_ITEMS || [
+        { type: 'F/W Version', sub: '' },
+        { type: 'EDID Check Sum', sub: '' }
+    ];
 
     /**
      * 지금 Customer SPEC에 표준 서식이 없으면 참조 엑셀에서 가져와 채운다.
