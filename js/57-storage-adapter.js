@@ -835,6 +835,15 @@
                     //    Drive id 가 없어 id 로는 영영 못 맞춘다. 그래서 복원 목록이 팀·담당자·
                     //    테마색을 통째로 잃고 "미지정" 한 덩어리로 보였다(실측 502건 전부).
                     if (p.file_name) map['name:' + p.file_name] = props;
+                    // 📍 [2026-11-09] **경로로도** 찾게 해 둔다 — 이게 제일 튼튼한 열쇠다.
+                    //    id 는 한 경로에 둘이 걸려 승자가 바뀌고, 이름은 사람이 `고객사>프로젝트명`
+                    //    을 고칠 때마다 바뀐다(앱이 파일명을 다시 조립한다). **둘 다 흔들린다.**
+                    //    실측 2026-11-09 13:59: 이름 바꾸기는 깨끗이 됐는데 색인의 `file_name` 이
+                    //    옛 이름(`LNW_27.0.json`)으로 남고 id 는 진 쪽이라 **id 도 이름도 안 맞아**
+                    //    그 프로젝트가 또 "미지정"이 됐다. "지금 그 파일이 어디 있는가"는 하나뿐이다.
+                    var r = null;
+                    try { r = relOf(p.drive_file_id); } catch (e2) { r = null; }
+                    if (r && !r.isdir && r.rel) map['rel:' + r.rel] = props;
                 });
             }
         } catch (e) {
@@ -850,6 +859,13 @@
         var map = await loadIndexProps();
         for (var i = 0; i < files.length; i++) {
             var p = map[files[i].id];
+            if (!p) {
+                // 📍 [2026-11-09] **경로로 먼저** 되짚는다 — id 도 이름도 흔들리지만
+                //    "지금 그 파일이 어디 있는가"는 하나다(위 loadIndexProps 주석).
+                var rr = null;
+                try { rr = relOf(files[i].id); } catch (e3) { rr = null; }
+                if (rr && !rr.isdir && rr.rel) p = map['rel:' + rr.rel];
+            }
             if (!p) {
                 // 🏷 [2026-11-05] id 로 못 찾으면 **이름으로** 되짚는다.
                 //    왜 id 가 빗나가나 — 이사 때 생긴 **별칭** 때문에 한 경로에 Drive id 가

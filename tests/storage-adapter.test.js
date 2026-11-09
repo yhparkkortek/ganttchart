@@ -106,6 +106,12 @@ check('진 쪽도 경로로는 풀린다(= 유령이 아니다)', F.relOf(ID_A) 
   // 🧹 이름 바꾸기는 "새로 쓰고 → 원본 지우기" 2단계다. 원본 삭제가 실패했는데 그냥 터져 나가면
   //    **새 이름 파일만 남고 지도는 옛 경로**를 가리켜 같은 프로젝트가 둘로 쪼개진다
   //    (실측 2026-11-09: 426행 파일이 두 이름으로 똑같이 남았고 새 쪽이 "미지정"으로 떴다).
+  // 📍 꼬리표(담당자·팀·색)는 **경로**로도 찾아야 한다. id 는 한 경로에 둘이 걸려 승자가 바뀌고,
+  //    이름은 사람이 `고객사>프로젝트명` 을 고칠 때마다 바뀐다(앱이 파일명을 다시 조립한다).
+  //    실측 2026-11-09 13:59: 이름 바꾸기는 깨끗했는데 색인의 file_name 이 옛 이름이고 id 는
+  //    진 쪽이라 **id 도 이름도 안 맞아** 또 "미지정"이 됐다.
+  check('꼬리표를 **경로**로도 색인한다(loadIndexProps)', /map\['rel:'\s*\+\s*r\.rel\]/.test(src));
+  check('꼬리표를 **경로**로도 되짚는다(attachAppProps)', /map\['rel:'\s*\+\s*rr\.rel\]/.test(src));
   const ren = src.slice(src.indexOf('await writeRel(newRel'), src.indexOf("note('moved'"));
   check('이름 바꾸기: 삭제 실패를 그냥 흘리지 않는다(되돌리기가 있다)',
         /nas\/app\/delete[\s\S]*newRel/.test(ren) && /rolledback|rename-split/.test(ren), ren.length);
