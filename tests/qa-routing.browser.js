@@ -26,8 +26,10 @@
 (function () {
     'use strict';
 
-    // ── 관찰로 라우트를 가리는 규칙(데이터) — 위에서 아래로 첫 일치 ──────────────
-    var ROUTE_RULES = [
+    // ── 관찰로 라우트를 가리는 규칙 — **앱이 들고 있으면 그걸 쓴다**(js/64 `QA_ROUTE_RULES`).
+    //    두 벌로 두면 하네스와 런타임이 서로 다른 답을 내고, 그게 제일 고치기 어려운 종류다.
+    //    아래는 js/64 가 없는(옛) 앱에서도 돌게 두는 사본이다.
+    var ROUTE_RULES = window.QA_ROUTE_RULES || [
         { route: 'sap',      url: /\/sap[-/]/i },
         { route: 'gw',       url: /\/gw\// },
         { route: 'insa',     url: /\/insa\// },
