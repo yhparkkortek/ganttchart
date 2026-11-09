@@ -16,7 +16,7 @@
         gd: window.globalData, ci: window.colIdx, logs: window.changeLogs,
         sel: window._selectedRows, save: window.saveToGoogleDrive,
         apply: window.applyFilters, patch: window._patchStatusRowDom,
-        paint: window.paintRowSelection, toast: window.showToast,
+        paint: window.paintRowSelection, toast: window.showToast, recalc: window.recalculateSchedules,
         undo: window._undoStack ? window._undoStack.slice() : null
     };
     // 🔒 저장·화면 갱신은 막는다(프로젝트가 안 열려 있어도 돌아야 한다)
@@ -86,6 +86,39 @@
         window._selectedRows = new Set([1]);
         ok('상태 칸이 없으면 안 하고 말해 준다', window.setSelectedRowsStatus('완료') === false &&
            toasts.some(function (m) { return /상태 칸|status column/.test(m); }), toasts);
+        // ⚠️⚠️ 바로 되돌려 놓는다 — 안 돌려놓으면 **뒤 시험이 전부 가짜 실패**한다
+        //    (`status: -1` 이라 무엇도 안 바뀜다). 실제로 되돌리기 시험이 그걸로 한 번 틀렸다
+        //    — 하네스 안에서 전역 상태를 만졌으면 **그 자리에서** 되돌려뇐야 한다.
+        window.colIdx = { no: 0, wbs: 1, start: 2, plan: 3, period: 4, status: 5, content: -1, answer: -1 };
+
+        // ── ↩ 되돌리기는 **한 번에 하나씩** 풀려야 한다 ─────────────
+        // ⚠️⚠️ 이 앱의 undo 스택은 "각 작업이 **끝난** 상태" 를 쌓는다(js/04e).
+        //    바꾸기 **전**에 찍으면 스택 맨 위가 화면과 어긋나, **다음 작업을 되돌릴 때
+        //    이 일괄 변경까지 같이 풀린다** — 처음에 그렇게 짠고 규약을 읽고 고쳤다.
+        (function () {
+            var ks = { recalc: window.recalculateSchedules };
+            window.recalculateSchedules = function () {};
+            // ⚠️ `_isRestoringUndo` 가 켜져 있으면 `pushUndoSnapshot` 은 **조용히 아무것도
+            //    안 한다**(js/04e 첫 줄). 앞서 콘솔에서 undo 를 눌렀거나 30ms 타이머가 아직
+            //    안 돌았으면 여기가 **가짜 실패**한다(실제로 한 번 그러겠다).
+            window._isRestoringUndo = false;
+            window._undoStack = []; window._redoStack = [];
+            window.globalData[1][5] = '진행'; window.globalData[2][5] = '진행';
+            window.globalData[3][5] = '진행'; window.globalData[4][5] = '진행';
+            window.pushUndoSnapshot();                       // 직전 작업이 끝난 상태
+            window._selectedRows = new Set([4]);
+            window.setSelectedRowsStatus('완료');              // ① 일괄
+            window._selectedRows = new Set();
+            window.applyStatusToChildren(3, 5, '대기'); window.pushUndoSnapshot();   // ② 다음 작업
+            window.undoLastAction();
+            var u1 = [3, 4].map(function (i) { return window.globalData[i][5]; }).join(',');
+            window.undoLastAction();
+            var u2 = [3, 4].map(function (i) { return window.globalData[i][5]; }).join(',');
+            ok('되돌리기 한 번은 **다음 작업만** 풀린다', u1 === '진행,완료', u1);
+            ok('한 번 더 눌러야 일괄 변경이 풀린다', u2 === '진행,진행', u2);
+            window.recalculateSchedules = ks.recalc;
+            window._isRestoringUndo = false;
+        })();
 
         // ── 행 메뉴에 버튼이 있고, 되돌리기 지점을 먼저 찍는다 ─────────────
         var html = (document.getElementById('row-action-popup') || {}).innerHTML || '';
@@ -101,6 +134,7 @@
         window._patchStatusRowDom = keep.patch; window.paintRowSelection = keep.paint;
         window.showToast = keep.toast;
         if (keep.undo) window._undoStack = keep.undo;
+        if (keep.recalc) window.recalculateSchedules = keep.recalc;
     }
     console.log(out.join('\n') + '\n결과: ' + pass + '/' + (pass + fail) + ' 통과');
     return { pass: pass, fail: fail };

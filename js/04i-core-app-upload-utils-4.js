@@ -899,9 +899,8 @@
         },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         // ✅ 선택이 없으면 **지금 이 행** 하나를 완료로(메뉴를 연 그 행이 뜻하는 바다).
-        //    ⚠️ 되돌리기 지점은 **바꾸기 전에** 찍는다.
+        //    ⚠️ 되돌리기 지점은 `setSelectedRowsStatus` 가 **바꾼 뒤** 스스로 찍는다(js/04j 주석).
         'rap-done':  () => {
-            if (window.pushUndoSnapshot) window.pushUndoSnapshot();
             const sel = window._selectedRows;
             if (sel && sel.size > 0) {
                 window.setSelectedRowsStatus('완료');

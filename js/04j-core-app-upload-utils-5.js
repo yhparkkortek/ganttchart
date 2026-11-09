@@ -70,8 +70,11 @@
      * ⚠️ `_selectedRows` 는 **행 인덱스** Set 이다(`sel.add(i)`, js/04e). 형제 함수
      *    `changeSelectedRowsLevel`·`deleteSelectedRows` 와 같은 방식으로 다룬다.
      * ⚠️ 기록은 **한 줄로 요약**한다(행마다 적으면 수정이력이 이것만으로 덮인다).
-     * ⚠️ 바꾸기 **전에** 되돌리기 지점을 찍는다 — 한 행씩 바꿀 때와 달리 한 번에 수십·수백 행이
-     *    바뀌므로, 잘못 눌렀을 때 Ctrl+Z 로 돌아올 수 있어야 한다.
+     * ⚠️⚠️ 되돌리기 지점은 **바꾼 뒤**에 찍는다(이 함수가 스스로). 이 앱의 undo 스택은
+     *    "**각 작업이 끝난 상태**" 를 쌓고, `undoLastAction` 은 맨 위를 버리고 **그 아래**
+     *    (= 직전 작업이 끝난 상태)로 되돌린다(js/04e). `updateStatus` 도 그래서 바꾼 뒤에 찍는다.
+     *    ⛔ 바꾸기 **전**에 찍으면 스택 맨 위가 지금 화면과 어긋나, **그 다음 작업을 되돌릴 때
+     *       이 일괄 변경까지 같이 풀린다**(처음에 그렇게 짰다가 규약을 읽고 고쳤다).
      */
     window.setSelectedRowsStatus = function(newVal) {
         const sel = window._selectedRows;
@@ -101,6 +104,7 @@
         }
         touched.forEach(k => { if (window._patchStatusRowDom) window._patchStatusRowDom(k); });
         if (typeof applyFilters === 'function') applyFilters();
+        if (window.pushUndoSnapshot) window.pushUndoSnapshot();      // ⚠️ 바꾼 **뒤**(위 주석)
         if (window.paintRowSelection) window.paintRowSelection();
         if (window.showToast) {
             window.showToast('✅ ' + window._t(touched.size + '행을 ' + newVal + ' 로 바꿨습니다 (Ctrl+Z 로 되돌리기).',

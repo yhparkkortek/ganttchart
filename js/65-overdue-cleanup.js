@@ -192,7 +192,7 @@
             if (window.showToast) window.showToast(T('먼저 정리할 업무를 골라주세요.', 'Pick some tasks first.'), 'info');
             return false;
         }
-        if (window.pushUndoSnapshot) window.pushUndoSnapshot();      // 바꾸기 **전에**
+        // ⚠️ 되돌리기 지점은 `setSelectedRowsStatus` 가 **바꾼 뒤** 스스로 찍는다(js/04j 주석).
         window._selectedRows = new Set(idxs);
         var ok = window.setSelectedRowsStatus && window.setSelectedRowsStatus('완료');
         window._selectedRows = new Set();
