@@ -6774,7 +6774,12 @@ DOCSTORE_APP_FOLDERS = ['SUMMARY', 'CUSTOMER', 'MC', 'PARTS', 'ADDRESS',
                         #    ⚠️ 철자/띄어쓰기는 NAS 에 있는 그대로다('PROJECT LIST', 공백 포함) —
                         #    'PROJECTLIST' 로 적으면 실제 폴더를 못 찾는다(실측에서 FileNotFound).
                         #    실제 파일은 그 아래 'PROJECT LIST/CUSTOMER' 에 있다(하위 한 단계까지 허용).
-                        'PROJECT LIST']
+                        'PROJECT LIST',
+                        # 📄 [2026-11-09] Document 페이지(js/66)가 만들어 올리는 프로젝트 문서 폴더.
+                        #    DR/DVR 발표자료·모델명세서·라벨사양서 등 — 사람이 쓰던 문서를 앱 데이터로
+                        #    만들어 여기에 떨어뜨린다. ⚠️ 설정의 `folders` 목록엔 없을 수 있어서
+                        #    (PC 마다 따로다) 여기 적어 둔다 — 안 적으면 그 PC 에서만 400 이 난다.
+                        'DOCUMENT']
 
 
 def _docstore_load():
@@ -7379,6 +7384,128 @@ def nas_app_get():
     return resp
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 🛡 색인 쓰기 가드 — "항목은 그 파일이 **정말 없을 때만** 지울 수 있다"
+#
+#   왜 백엔드인가 — `project_index.json` 은 **전사 공용 파일**이고, 옛 js 가 돌고
+#   있는 탭이 유령 정리로 **살아 있는 프로젝트의 항목을 지운다**(2026-11-09 실측:
+#   16:43:39 에 두 건이 사라졌고, 되살려도 5분 뒤 또 지워졌다). 프런트 가드
+#   (`guardIndexWrite`, js/57)는 그 탭이 **그냥 비켜 간다** — 모든 PC 가 반드시
+#   지나는 자리는 이 라우트 하나뿐이다.
+#
+#   항목이 사라지면 **오류가 안 난다** — 목록에서 담당자·팀·색이 빈 "미지정"이 되고
+#   메일 자동배분 색인이 조용히 줄어든다. 사람이 알아챌 방법이 없으니 막는 쪽이 맞다.
+#
+# ⚡ 속도 — 이 가드는 **그 한 파일**에만 돈다(다른 쓰기는 문자열 비교 하나 늘 뿐).
+#    흔한 경우(떨어진 항목 0건)는 색인 읽기 1회로 끝나고(실측 792KB · 111ms),
+#    id 지도 읽기(124KB · 71ms)와 NAS 존재 확인은 **떨어진 항목이 있을 때만** 한다.
+#    앱은 이 쓰기를 기다리지 않고(js/04c `updateProjectIndexEntry` 는 fire-and-forget)
+#    저장의 ~70%는 색인 갱신을 아예 건너뛴다 → 사람이 기다리는 시간은 안 늘어난다.
+#
+# ⚠️ 약속은 **좁게** 한다 — "파일이 살아 있는 걸 **볼 수 있는** 항목"만 지킨다.
+#    id 를 경로로 못 풀면 지우도록 **둔다**(안 그러면 진짜 유령이 영영 안 지워진다).
+# ⚠️ 판단이 안 되면(색인 모양 아님·읽기 실패) **아무것도 하지 않는다** — 읽기 실패
+#    한 번이 모든 PC 의 저장을 멈추면 그게 더 나쁘다.
+# ═══════════════════════════════════════════════════════════════════════════
+PROJECT_INDEX_REL = 'App_Config/project_index.json'
+NAS_ID_MAP_REL    = 'App_Config/nas_id_map.json'
+
+
+def _index_entry_rel(fid, id_map):
+    """색인 항목의 `drive_file_id` → 앱 루트 기준 상대경로. 모르면 ''.
+
+    어댑터(js/57 `relOf`)와 같은 규칙 — 지도에 있으면 그걸, `nas_f_` 면 풀어서.
+    """
+    fid = str(fid or '')
+    if not fid:
+        return ''
+    if id_map.get(fid):
+        return str(id_map[fid])
+    if fid.startswith('nas_f_'):
+        s = fid[6:]
+        try:
+            return base64.urlsafe_b64decode(s + '=' * (-len(s) % 4)).decode('utf-8')
+        except Exception:
+            return ''
+    return ''
+
+
+def _guard_project_index_write(data):
+    """색인 쓰기를 검사한다 → (고친 바이트 or None, 안내 dict or None).
+
+    살아 있는 파일의 항목을 떨어뜨리려 하면 **되살려 넣은** 바이트를 돌려준다.
+    """
+    try:
+        incoming = json.loads(data.decode('utf-8'))
+    except Exception:
+        return None, None                      # 색인 모양이 아니다 — 우리 일이 아니다
+    if not isinstance(incoming, dict) or not isinstance(incoming.get('projects'), list):
+        return None, None
+    nas = _nas()
+    try:
+        cur = json.loads(nas.download(nas.abs_path(PROJECT_INDEX_REL)).decode('utf-8'))
+    except Exception:
+        return None, None                      # 아직 없거나 못 읽었다 — 비교 불가
+    if not isinstance(cur, dict) or not isinstance(cur.get('projects'), list):
+        return None, None
+    new_ids = set()
+    for p in incoming['projects']:
+        if isinstance(p, dict):
+            new_ids.add(str(p.get('drive_file_id')))
+    dropped = [p for p in cur['projects']
+               if isinstance(p, dict) and str(p.get('drive_file_id')) not in new_ids]
+    if not dropped:
+        return None, None                      # ⚡ 흔한 길 — 여기서 끝난다(읽기 1회)
+
+    try:
+        id_map = (json.loads(nas.download(nas.abs_path(NAS_ID_MAP_REL)).decode('utf-8'))
+                  or {}).get('map') or {}
+    except Exception:
+        id_map = {}
+    by_rel = {}
+    for p in dropped:
+        r = _index_entry_rel(p.get('drive_file_id'), id_map)
+        if r:
+            by_rel.setdefault(r, []).append(p)
+    if not by_rel:
+        return None, {'dropped': len(dropped), 'restored': 0,
+                      'note': '떨어진 항목의 경로를 몰라 확인하지 못했습니다.'}
+
+    abs_of = {}
+    for r in by_rel:
+        try:
+            abs_of[r] = nas.abs_path(r)
+        except Exception:
+            pass
+    try:
+        alive = set()
+        for i in nas.path_info(list(abs_of.values())):
+            if not i.get('isdir') and i.get('path'):
+                alive.add(str(i['path']))
+    except Exception as e:
+        return None, {'dropped': len(dropped), 'restored': 0,
+                      'note': 'NAS 존재 확인에 실패해 검사하지 못했습니다: %s' % e}
+
+    back = []
+    for r, entries in by_rel.items():
+        if abs_of.get(r) in alive:
+            back.extend(entries)
+    if not back:
+        return None, {'dropped': len(dropped), 'restored': 0}
+
+    incoming['projects'] = list(incoming['projects']) + back
+    names = [str(p.get('file_name') or p.get('drive_file_id')) for p in back]
+    try:
+        app.logger.warning('[색인 가드] 살아 있는 파일의 항목 %d건을 되살렸습니다: %s',
+                           len(back), ', '.join(names[:6]))
+    except Exception:
+        pass
+    return json.dumps(incoming, ensure_ascii=False).encode('utf-8'), {
+        'dropped': len(dropped), 'restored': len(back), 'restoredNames': names[:20],
+        'note': '파일이 살아 있는 항목을 지우려 해서 되살려 넣었습니다 — '
+                '옛 버전 앱이 열려 있을 수 있습니다(새로고침하세요).'}
+
+
 @app.route('/nas/app/put', methods=['POST'])
 def nas_app_put():
     """원자적 쓰기. 본문 JSON: {rel, team?, text} 또는 {rel, team?, b64}.
@@ -7399,8 +7526,20 @@ def nas_app_put():
             return jsonify({'ok': False, 'message': f'b64 디코드 실패: {e}'}), 400
     else:
         return jsonify({'ok': False, 'message': 'text 또는 b64 가 필요합니다.'}), 400
+    # 🛡 색인은 "파일이 살아 있는 항목"을 못 지운다 — 그 한 파일만 검사한다(위 주석).
+    guard = None
+    if (req.get('rel') or '').strip() == PROJECT_INDEX_REL and not (req.get('team') or '').strip():
+        try:
+            fixed, guard = _guard_project_index_write(data)
+            if fixed is not None:
+                data = fixed
+        except Exception as e:                 # 가드가 터져도 저장은 막지 않는다
+            guard = {'error': str(e)}
     try:
-        return jsonify(dict(_nas().put(path, data), rel=req.get('rel')))
+        res = dict(_nas().put(path, data), rel=req.get('rel'))
+        if guard:
+            res['guard'] = guard
+        return jsonify(res)
     except Exception as e:
         return jsonify({'ok': False, 'message': str(e)}), 500
 
