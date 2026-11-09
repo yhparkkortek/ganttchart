@@ -8718,8 +8718,20 @@ ${docsJson}`;
         //    · AI는 **도구 id만** 고른다. 엔드포인트·인자는 레지스트리 스키마로 검증·보정한다.
         //    · 도구가 필요 없다고 판단하면(`[[NO_TOOL]]`) null이 와서 아래 기존 경로로 넘어간다.
         //    ⚠️ SAP 의도는 아래 `_aiFetchSapContext`가 전담하므로 여기서 가로채지 않는다.
+        //    💸 [2026-11-09 실측] **확신 있는 일반 질문은 루프를 건너뛴다.** 라우팅 하네스로 재 보니
+        //       "리튬이온 배터리 원리 설명해줘" 같은 순수 자유추론도 AI 를 **2회** 썼다 — 첫 호출은
+        //       "도구가 필요한가"만 물어 `[[NO_TOOL]]` 를 받는 데 쓰인다(무료 키는 하루 20회).
+        //       `_qaClassify`(js/33)의 `general` 은 **일부러 보수적**이다 — 프로젝트·SAP 신호가
+        //       조금이라도 있으면 확신을 안 주고, 그때 `route.cls` 는 `'general'` 이 아니라
+        //       **`'auto'`** 가 된다(js/33: `cls = forced || (res.confident ? res.cls : 'auto')`).
+        //       ⚠️⚠️ 그래서 `cls === 'general'` 자체가 이미 "확신했다"는 뜻이다. 확신 여부를
+        //          따로 보려고 `_qaRoute.confident` 를 쓰면 **그 필드는 없다**(이름이 `conf`) —
+        //          처음에 그렇게 적었더니 조건이 늘 false 여서 **아무 일도 안 하는** 변경이었다.
+        //       ⚠️ `project`·`action` 은 건너뛰지 않는다 — 그쪽은 실제로 쓸 도구가 있다
+        //          (`project_fact_scan`·`wbs_group_suggestions`·`project_list_search`).
         if (window._qaToolLoop && !window._questionMentionsSapIntent(question)
-                && !(_qaRoute && _qaRoute.cls === 'sap')) {
+                && !(_qaRoute && _qaRoute.cls === 'sap')
+                && !(_qaRoute && _qaRoute.cls === 'general')) {
             const _pendIdx = window._ganttQaHistory.length - 1;
             const _setStep = function (txt) {
                 if (window._ganttQaOpToken !== _sendOpToken) return;   // 취소됐으면 건드리지 않는다

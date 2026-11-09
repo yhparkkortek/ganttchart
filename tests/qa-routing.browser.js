@@ -89,8 +89,10 @@
         { q: '주간 요약해줘',                       want: 'local' },
         { q: '오늘 보고 초안',                      want: 'local' },
         // 💬 자유추론
-        { q: '간트차트 작성 팁 알려줘',             want: 'ai-gantt|toolloop' },
-        { q: '리튬이온 배터리 원리 설명해줘',        want: 'ai-gantt|toolloop' },
+        //  💸 [2026-11-09] 확신 있는 일반 질문은 도구 루프를 건너뛴다 — AI 호출이 2회에서 1회로.
+        //     `wantAi` 는 그 호출 수를 못으로 박는다(다시 2회가 되면 하네스가 잡는다).
+        { q: '간트차트 작성 팁 알려줘',             want: 'ai-gantt|ai|toolloop' },
+        { q: '리튬이온 배터리 원리 설명해줘',        want: 'ai-gantt|ai', wantAi: 1 },
         // ⚠️ 사고 재현·애매한 것
         { q: '요약해줘',                            want: 'ambig', note: '대상이 없다 — 되묻는 게 맞다' },
         { q: '프로젝트 조회해줘',                   want: 'ambig', note: '2026-10-12: 자재내역으로 샜던 문장' },
@@ -133,11 +135,17 @@
             }
             return oFetch.apply(this, arguments);
         };
+        //  ⚠️ [2026-11-09] 반환 **모양**을 진짜와 같게 둔다(`{ok:true, data:{result:{candidates:…}}}`).
+        //     처음엔 문자열을 돌려줬더니 호출부가 예외를 내서 모든 질문이 "⚠️ 오류: 알 수 없는 오류"
+        //     로 끝났다 — 라우트는 맞게 찍혔지만 **답 경로를 하나도 못 보는** 가짜 실패였다.
+        var aiText = function (t) {
+            return { ok: true, data: { result: { candidates: [{ content: { parts: [{ text: t }] } }] } } };
+        };
         window.callAiBackend = async function (key, prompt) {
             obs.ai.push(String(prompt || ''));
             // 도구 루프는 바로 빠져나오게 해 둔다(라우팅만 보면 되므로)
-            if (/\[\[\s*NO_TOOL\s*\]\]/.test(String(prompt || ''))) return '[[NO_TOOL]]';
-            return '(라우팅 테스트: 가짜 AI 응답)';
+            if (/\[\[\s*NO_TOOL\s*\]\]/.test(String(prompt || ''))) return aiText('[[NO_TOOL]]');
+            return aiText('(라우팅 테스트: 가짜 AI 응답)');
         };
         window.saveToGoogleDrive = function () { obs.saves++; return Promise.resolve({ ok: true, test: true }); };
         window.alert = function (m) { obs.alerts.push(cut(m, 120)); };
@@ -180,6 +188,8 @@
                 // `wantText` — 라우트만 맞아도 **답이 틀린 말을 하면** 통과시키지 않는다
                 //  (예: 기능이 있는데 "미지원"이라고 답하던 자리. 2026-11-09)
                 if (okWant && c.wantText) okWant = bubbles.some(function (b) { return b.indexOf(c.wantText) >= 0; });
+                // `wantAi` — AI 호출 **수**까지 못으로 박는다(하루 한도가 진짜 비용이다)
+                if (okWant && typeof c.wantAi === 'number') okWant = (obs.ai.length === c.wantAi);
                 rows.push({ q: c.q, want: c.want, got: got, ok: okWant, ms: Date.now() - t0,
                             fetch: obs.fetches.slice(0, 3), ai: obs.ai.length, bubbles: bubbles,
                             alerts: obs.alerts.slice(0, 2), toasts: obs.toasts.slice(0, 2), note: c.note || '' });
