@@ -721,11 +721,105 @@
         if (isB64) payload.b64 = media; else payload.text = String(media === null || media === undefined ? '' : media);
         if (payload.rel === IDX_REL) {
             var blocked = await guardIndexWrite(payload.rel, payload.text);
-            if (blocked) return blocked;
+            if (blocked) {
+                // 🎯 **막은 것일수록 기록해야 한다** — "누가 색인을 0건으로 덮어쓰려 했나" 가
+                //    2026-11-04 사고에서 끝내 못 찾은 바로 그 답이다. 막혀서 아무 일도 안
+                //    일어나면 더더욱 흔적이 없다.
+                try { _wjNote(payload.rel, { bytes: (payload.text || '').length, blocked: true }); }
+                catch (e) { /* 기록 실패가 가드를 막지 않는다 */ }
+                return blocked;
+            }
             _idxAt = 0;   // 📇 꼬리표 출처가 바뀌었다 — 캐시 버림
         }
-        return await nasJson('POST', '/nas/app/put', payload);
+        var res = await nasJson('POST', '/nas/app/put', payload);
+        // 📝 누가 썼는지 적어 둔다 — **기억만 하고 끝난다**(여기서 네트워크를 쓰지 않는다).
+        //    실제 기록 파일은 뒤에서 모아 쓴다(`_wjFlush`). 쓰기 속도에 영향 0.
+        try { _wjNote(payload.rel, res); } catch (e) { /* 기록 실패가 저장을 막지 않는다 */ }
+        return res;
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 📝 쓰기 기록(write journal) — "누가·언제·어느 파일에" (2026-11-09, 사용자 요청)
+    // ══════════════════════════════════════════════════════════════════════
+    //  왜 — 2026-11-04 에 `project_index.json` 이 0건이 된 적이 있는데 **범인을 못 찾았다**.
+    //  실측(2026-11-09): 색인 항목에는 `updated_at`(언제)만 있고 **"누가" 가 한 글자도 없다**.
+    //  프로젝트 파일의 `changeLogs` 는 칸 수정만 적고(게다가 1,000건에서 잘린다), NAS 쪽
+    //  파일 접근 기록은 **관리자만** 읽을 수 있다(실측: LogCenter·SyslogClient 둘 다 105).
+    //  그래서 앱이 스스로 남긴다. 쓰기 경계가 `writeRel` **한 곳**이라 여기만 손대면 된다.
+    //
+    //  ⚠️⚠️ **팀 공용 파일 하나에 모으지 않는다.** 그러면 여러 PC 가 "읽고-고쳐-쓰기" 를 해서
+    //     바로 그 11-04 사고(lost update)를 **기록기가 다시 만든다**. 일일보고와 같은 규칙으로
+    //     **PC(계정)×날짜 파일 1개** — 쓰는 사람이 파일마다 한 명이라 겹칠 일이 없다.
+    //  ⚠️ **쓰기 경로를 느리게 하지 않는다**: `writeRel` 은 배열에 하나 넣고 끝(네트워크 0).
+    //     모아서 `flushSec` 마다 한 번만 올린다. 안 바뀌었으면 올리지도 않는다.
+    //  ⚠️ 기록 파일 자신의 쓰기는 **기록하지 않는다**(무한 루프).
+    //  ⚠️ 실패해도 **던지지 않는다** — 기록이 저장을 막으면 본말전도다.
+    //  ⚠️ 폴더 이름은 **글자로 시작**해야 한다(DSM 이 숫자로 시작하는 이름을 거부한다, 2026-11-04).
+    var WRITE_JOURNAL = {
+        enabled:   true,
+        dir:       'App_Config/WriteLog',
+        flushSec:  60,      // 모아서 올리는 간격
+        maxPerDay: 3000,    // 하루 한 파일이 무한정 커지지 않게
+        bigBytes:  200000   // 이보다 큰 쓰기는 `big:true` 로 표시(색인·프로젝트 통째 쓰기 찾기용)
+    };
+    var _wjBuf = [], _wjDay = '', _wjLoaded = false, _wjDirty = false, _wjTimer = null, _wjBusy = false;
+
+    function _wjToday() {
+        var d = new Date();
+        return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+    /** 누구로 적을까 — **NAS 계정**이 근거다(표시이름은 한글 실명·'비로그인'이 섞인다, js/59 교훈). */
+    function _wjWho() {
+        return String(window._appUserKey || window._nasAccount || '').trim() || 'unknown';
+    }
+    function _wjFile() { return WRITE_JOURNAL.dir + '/' + _wjToday() + '__' + _wjWho() + '.json'; }
+
+    function _wjNote(rel, res) {
+        if (!WRITE_JOURNAL.enabled) return;
+        if (String(rel || '').indexOf(WRITE_JOURNAL.dir) === 0) return;   // 기록의 기록은 안 남긴다
+        var today = _wjToday();
+        if (today !== _wjDay) { _wjDay = today; _wjBuf = []; _wjLoaded = false; }   // 날이 바뀌면 새 파일
+        if (_wjBuf.length >= WRITE_JOURNAL.maxPerDay) return;
+        var n = (res && res.bytes != null) ? res.bytes : null;
+        var e = { t: new Date().toISOString(), rel: rel };
+        if (n != null) e.n = n;
+        if (n != null && n >= WRITE_JOURNAL.bigBytes) e.big = true;
+        if (res && res.blocked) e.blocked = true;   // 가드가 막은 쓰기 — 가장 중요한 신호다
+        _wjBuf.push(e);
+        _wjDirty = true;
+    }
+
+    /** 모아 둔 것을 내 파일에 올린다. **쓰는 사람이 나 하나**라 읽고-고쳐-쓰기가 안전하다. */
+    async function _wjFlush() {
+        if (!WRITE_JOURNAL.enabled || !_wjDirty || _wjBusy) return;
+        if (!_wjBuf.length) { _wjDirty = false; return; }
+        if (!_wjWho() || _wjWho() === 'unknown') return;   // 누군지 모르면 안 적는다(섞이면 못 쓴다)
+        _wjBusy = true;
+        try {
+            var rel = _wjFile();
+            if (!_wjLoaded) {
+                // 새로고침을 넘어 이어 쓰려고 **처음 한 번만** 읽는다(내 파일이라 경합 없음)
+                try {
+                    var r = await nas('GET', '/nas/app/get' + qs(rel));
+                    if (r.ok) {
+                        var old = JSON.parse(await r.text());
+                        if (old && Array.isArray(old.writes)) _wjBuf = old.writes.concat(_wjBuf).slice(-WRITE_JOURNAL.maxPerDay);
+                    }
+                } catch (e) { /* 없으면 새로 만든다 */ }
+                _wjLoaded = true;
+            }
+            await nasJson('POST', '/nas/app/put', { rel: rel,
+                text: JSON.stringify({ who: _wjWho(), day: _wjDay, writes: _wjBuf }) });
+            _wjDirty = false;
+        } catch (e) {
+            // ⚠️ 조용히 넘기지 않는다 — 기록이 안 쌓이고 있다는 걸 알 수 있어야 한다
+            note('writelog-fail', String((e && e.message) || e));
+        } finally { _wjBusy = false; }
+    }
+
+    window._storageWriteLog = function () { return { who: _wjWho(), day: _wjDay, n: _wjBuf.length,
+                                                     dirty: _wjDirty, file: _wjFile() }; };
+    window._storageWriteLogFlush = _wjFlush;   // 하네스·수동 확인용
 
     // ── 📄 팀 공용 파일 헬퍼 — **새 기능이 fetch 를 또 베끼지 않게** ────────────────
     // ⚠️ 이게 없어서 `/nas/app/*` 를 부르는 곳마다 `no-store`·`_cb` 난수·403/404 구분을
@@ -1657,6 +1751,14 @@
         };
     }
     setInterval(implant, 1000);   // ③ 백스톱 — 위 둘이 다 빗나가도 1초 안에 되돌린다
+
+    // 📝 쓰기 기록 — 모아 둔 것을 주기적으로 한 번만 올린다(쓰기 경로는 안 건드린다).
+    //    ⚠️ 이 타이머는 **어댑터가 켜졌을 때만** 걸린다(플래그 OFF 면 이 블록까지 안 온다).
+    if (WRITE_JOURNAL.enabled && !_wjTimer) {
+        _wjTimer = setInterval(function () { _wjFlush(); }, Math.max(10, WRITE_JOURNAL.flushSec) * 1000);
+        // 창을 닫을 때 마지막 것도 남겨 본다 — 되면 좋고, 안 돼도 다음에 이어 쓴다(읽고 합치므로).
+        window.addEventListener('pagehide', function () { try { _wjFlush(); } catch (e) { /* 닫는 중 */ } });
+    }
 
     // ⚠️⚠️ **어댑터보다 먼저 로드된 파일이 `window.fetch` 를 잡아 두면 우회가 생긴다.**
     //    js/30(이슈 수집)이 로드 시점에 원본 fetch 를 잡아 두고 그걸로 Drive 를 부른다 —
