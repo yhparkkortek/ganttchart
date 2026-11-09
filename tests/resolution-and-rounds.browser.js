@@ -68,7 +68,9 @@
             var before = window.resAllRows().length;
             window.tabData.resolutionCustom = ['9999×1234@61'];
             ok(window.resAllRows().length === before + 1, '사람이 보탠 해상도가 목록에 안 는다');
-            delete window.tabData.resolutionCustom;
+            ok(window.resAllRows()[window.resAllRows().length - 1].g === 'CUSTOMER RESOLUTION',
+               '보탠 해상도의 묶음 이름이 CUSTOMER RESOLUTION 이 아니다');
+            window.tabData.resolutionCustom = [];
 
             // ═══ 2. 고르기 · 요약 ════════════════════════════════════════
             window.resSetPort('1920X1080@60', '1920×1080@60', 'HDMI', true);
@@ -123,6 +125,51 @@
             window.resFilter('9999999');
             ok(nRows() === 0, '접은 채 검색이 안 걸린다');
             window.resFilter('');
+
+            // ═══ 3-2. CUSTOMER RESOLUTION — 행을 더해 직접 적는다 ═════════
+            //   ⚠️ 팝업의 **진짜 버튼·칸**을 눌러서 확인한다(함수만 부르면 연결을 안 본다).
+            btn.click();                                    // 전체 보기로
+            var addLink = [].filter.call(box.querySelectorAll('a'), function (a) {
+                return /행 추가|Add row/.test(a.textContent);
+            })[0];
+            ok(!!addLink, '[＋ 행 추가] 가 없다');
+            var nCustom = function () { return box.querySelectorAll('input[data-res-custom]').length; };
+            var c0 = nCustom();
+            addLink.click();
+            ok(nCustom() === c0 + 1, '행이 안 늘어난다 (' + nCustom() + ')');
+            // 이름을 안 적은 줄은 고를 수 없다 — 어디에 적을지 모른다
+            var blank = box.querySelectorAll('input[data-res-custom]')[c0];
+            ok(blank.value === '', '새 행이 비어 있지 않다');
+            ok(blank.closest('tr').querySelectorAll('input[type="checkbox"]').length === 0,
+               '이름 없는 줄에 체크칸이 있다');
+            // 적으면 그 줄이 고를 수 있게 된다
+            blank.value = '1920×720@60';
+            blank.dispatchEvent(new Event('change', { bubbles: true }));
+            var crow = [].filter.call(box.querySelectorAll('input[data-res]'), function (c) {
+                return c.getAttribute('data-res-label') === '1920×720@60';
+            });
+            ok(crow.length === pkeys.length, '적어 넣은 줄에 체크칸이 안 생긴다 (' + crow.length + ')');
+            crow[2].checked = true; crow[2].dispatchEvent(new Event('change', { bubbles: true }));
+            ok(window.resSelectedRows().some(function (r) { return r.label === '1920×720@60' && r.ports.HDMI; }),
+               '적어 넣은 줄을 고른 게 저장에 안 들어간다');
+
+            // 🔁 이름을 고치면 **고른 표시가 따라와야** 한다 (오타 한 글자에 체크가 사라지면 안 된다)
+            var ci = Number(box.querySelectorAll('input[data-res-custom]')[c0].getAttribute('data-res-custom'));
+            window.resCustomSet(ci, '1920×728@60');
+            var moved = window.resSelectedRows().filter(function (r) { return r.label === '1920×728@60'; });
+            ok(moved.length === 1 && moved[0].ports.HDMI, '이름을 고치니 고른 표시가 사라졌다');
+            ok(!window.resSelectedRows().some(function (r) { return r.label === '1920×720@60'; }),
+               '옛 이름이 고른 목록에 남아 있다');
+            // 문서에도 그 줄이 찍힌다
+            ok(window.resAllRows().some(function (r) { return r.label === '1920×728@60' && r.g === 'CUSTOMER RESOLUTION'; }),
+               'CUSTOMER 줄이 전체 목록에 없다');
+            // 빼면 고른 표시도 같이 빠진다 (확인창은 건너뛴다)
+            var oldConfirm = window.confirm; window.confirm = function () { return true; };
+            window.resCustomDel(ci);
+            window.confirm = oldConfirm;
+            ok(!window.resSelectedRows().some(function (r) { return r.label === '1920×728@60'; }),
+               '행을 뺐는데 고른 표시가 남아 있다');
+            ok(nCustom() === c0, '행이 안 빠진다 (' + nCustom() + ')');
 
             window.resClearAll();
             ok(window.resSelectedRows().length === 0, '전부 해제가 안 된다');
@@ -191,6 +238,26 @@
             ok(window._docState.round === 'PROTO A', '◀ 가 이전 회차로 안 간다');
             window._docRoundGo(1);
             ok(window._docState.round === 'PROTO B', '▶ 가 다음 회차로 안 간다');
+            // 📦 지금 보고 있는 회차 줄에 **표시**가 있어야 한다 (사용자 요청)
+            //   ⚠️ 색만 보지 않는다 — 팔레트를 바꾸면 색이 바뀐다. "표시가 그 줄에만 있는가" 를 본다.
+            var histRows = [].filter.call(document.querySelectorAll('#doc-page-body tr'), function (tr) {
+                return tr.querySelector('[data-doc-hist$="|stage"]');
+            });
+            ok(histRows.length >= 2, '이력 줄이 2개 이상이어야 한다 (' + histRows.length + ')');
+            var marked = histRows.filter(function (tr) { return /지금 보고 있는|current document/.test(tr.textContent); });
+            ok(marked.length === 1, '현재 회차 표시가 한 줄에만 있어야 한다 (' + marked.length + ')');
+            ok(marked[0].querySelector('[data-doc-hist$="|stage"]').value === window._docState.round,
+               '표시가 지금 회차가 아닌 줄에 붙어 있다');
+            ok(/background/.test(marked[0].getAttribute('style') || ''), '현재 회차 줄에 배경 표시가 없다');
+            // 회차를 넘기면 표시도 따라간다
+            window._docRoundGo(-1);
+            var marked2 = [].filter.call(document.querySelectorAll('#doc-page-body tr'), function (tr) {
+                return tr.querySelector('[data-doc-hist$="|stage"]') && /지금 보고 있는|current document/.test(tr.textContent);
+            });
+            ok(marked2.length === 1 && marked2[0].querySelector('[data-doc-hist$="|stage"]').value === window._docState.round,
+               '회차를 넘겼는데 표시가 안 따라간다');
+            window._docRoundGo(1);
+
             // 회차는 **이력 한 곳**에서 온다 — 서식을 바꿔도 같은 목록이어야 한다
             window._docPick('proto-req');
             ok(window._docRounds().length === 2, '서식을 바꾸니 회차 목록이 달라진다');

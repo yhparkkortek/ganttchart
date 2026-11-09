@@ -136,9 +136,59 @@
         (window.RESOLUTION_CATALOG || []).forEach(function (grp) {
             (grp.list || []).forEach(function (lab) { push(lab, grp.g); });
         });
-        var custom = _td().resolutionCustom;
-        if (Array.isArray(custom)) custom.forEach(function (lab) { push(lab, _t('직접 추가', 'Custom')); });
+        window.resCustomList().forEach(function (lab) { push(lab, CUSTOM_G); });
         return out;
+    };
+
+    // ── 🧑‍💼 CUSTOMER RESOLUTION — 고객이 따로 요구하는 해상도 ───────────
+    //   표준 목록에 없는 모드는 프로젝트마다 다르다(실측 원본에도 `1280×242@60`·`1920×510@60`
+    //   같은 줄이 있다). **코드가 아니라 이 프로젝트의 데이터**로 둔다.
+    //   ⚠️ 제품구분자별이 아니라 **프로젝트 하나**다 — 같은 고객 모델의 어휘라서 모델마다
+    //      따로 적게 하면 같은 줄을 두 번 적게 된다(고른 것은 모델별로 따로 남는다).
+    var CUSTOM_G = 'CUSTOMER RESOLUTION';
+    window.RES_CUSTOM_GROUP = CUSTOM_G;
+    window.resCustomList = function () {
+        var td = _td();
+        if (!Array.isArray(td.resolutionCustom)) td.resolutionCustom = [];
+        return td.resolutionCustom;
+    };
+    /** 빈 행 하나 — 사람이 그 자리에서 적는다 */
+    window.resCustomAdd = function () {
+        window.resCustomList().push('');
+        _markDirty(); _paintRows();
+        var els = document.querySelectorAll('#respick-body input[data-res-custom]');
+        var last = els[els.length - 1];
+        if (last) { last.focus(); }
+    };
+    /**
+     * 이름 고치기. ⚠️ **고른 것이 따라와야 한다** — 열쇠는 이름에서 나오므로, 이름을 고치면
+     * 옛 열쇠에 붙어 있던 체크가 길을 잃는다(오타 한 글자에 체크가 통째로 사라진다).
+     */
+    window.resCustomSet = function (i, v) {
+        var list = window.resCustomList();
+        if (i < 0 || i >= list.length) return;
+        var old = String(list[i] || '').trim();
+        v = String(v == null ? '' : v).trim();
+        if (old === v) return;
+        var st = _store(), ok = old ? window.resKeyOf(old) : '', nk = v ? window.resKeyOf(v) : '';
+        list[i] = v;
+        if (ok && st[ok]) {
+            if (nk && nk !== ok) { st[nk] = { label: v, ports: st[ok].ports }; delete st[ok]; }
+            else if (!nk) { delete st[ok]; }          // 이름을 비우면 고른 것도 뺀다
+            else { st[ok].label = v; }                 // 열쇠는 같고 글자만 바뀐 경우
+        }
+        _markDirty(); _paintRows(); _paintFoot();
+    };
+    window.resCustomDel = function (i) {
+        var list = window.resCustomList();
+        if (i < 0 || i >= list.length) return;
+        var lab = String(list[i] || '').trim();
+        if (lab && !confirm(_t('이 해상도를 목록에서 뺍니다:\n\n' + lab + '\n\n빼면 고른 표시도 같이 사라집니다.',
+                               'Remove this resolution?'))) return;
+        var st = _store(), k = lab ? window.resKeyOf(lab) : '';
+        if (k && st[k]) delete st[k];
+        list.splice(i, 1);
+        _markDirty(); _paintRows(); _paintFoot();
     };
 
     // ── 💾 저장 (제품구분자별) ──────────────────────────────────────────
@@ -259,9 +309,9 @@
 
     window.resFilter = function (v) { _filter = String(v || '').trim(); _paintRows(); };
 
-    /** 지금 보이는 줄 전부를 그 포트로 켜거나 끈다 */
+    /** 지금 보이는 줄 전부를 그 포트로 켜거나 끈다 (CUSTOMER 줄도 보이면 같이) */
     window.resToggleColumn = function (port, on) {
-        var rows = _visibleRows();
+        var rows = _visibleRows().concat(_customRows().filter(function (r) { return !!r.key; }));
         rows.forEach(function (r) { window.resSetPort(r.key, r.label, port, on); });
         _paintRows(); _paintFoot();
         _toast('🖥 ' + port + ' — ' + rows.length + _t(' 줄을 ', ' rows ') + (on ? _t('켰습니다.', 'on.') : _t('껐습니다.', 'off.')), 'info');
@@ -273,30 +323,31 @@
         _markDirty(); _paintRows(); _paintFoot();
     };
 
-    /** 목록에 없는 해상도를 사람이 보탠다 — 코드를 고치지 않고 어휘가 는다 */
-    window.resAddCustom = function () {
-        var el = document.getElementById('respick-new');
-        var v = el ? String(el.value || '').trim() : '';
-        if (!v) { _toast('⚠️ ' + _t('해상도를 적어 주세요 (예: 1920×720@60).', 'Type a resolution.'), 'error'); return; }
-        var td = _td();
-        td.resolutionCustom = td.resolutionCustom || [];
-        var k = window.resKeyOf(v);
-        var dup = window.resAllRows().some(function (r) { return r.key === k; });
-        if (dup) { _toast('ℹ️ ' + _t('이미 목록에 있습니다.', 'Already listed.'), 'info'); if (el) el.value = ''; _filter = v; _paintRows(); return; }
-        td.resolutionCustom.push(v);
-        _markDirty();
-        if (el) el.value = '';
-        _paintRows(); _paintFoot();
-        _toast('＋ ' + v + _t(' 를 목록에 넣었습니다.', ' added.'), 'success');
-    };
-
     var _visibleRows = function () {
         var f = _filter.toUpperCase().replace(/\s+/g, '');
         var st = _store();
         return window.resAllRows().filter(function (r) {
+            if (r.g === CUSTOM_G) return false;       // CUSTOMER 묶음은 따로 그린다(빈 행도 보여야 한다)
             if (_onlyChecked && !st[r.key]) return false;
             if (!f) return true;
             return (r.label + ' ' + r.g).toUpperCase().replace(/\s+/g, '').indexOf(f) >= 0;
+        });
+    };
+
+    /**
+     * CUSTOMER 묶음에서 **화면에 그릴** 줄 — `{ idx, label, key }`.
+     * ⚠️ 접어 뒀어도 **빈 행(새로 더한 행)은 보여 준다** — 안 그러면 적을 자리가 사라진다.
+     */
+    var _customRows = function () {
+        var f = _filter.toUpperCase().replace(/\s+/g, '');
+        var st = _store();
+        return window.resCustomList().map(function (lab, i) {
+            return { idx: i, label: String(lab || ''), key: lab ? window.resKeyOf(lab) : '' };
+        }).filter(function (r) {
+            if (!r.label) return true;
+            if (_onlyChecked && !st[r.key]) return false;
+            if (!f) return true;
+            return r.label.toUpperCase().replace(/\s+/g, '').indexOf(f) >= 0;
         });
     };
 
@@ -343,11 +394,11 @@
             + _esc(_t('RGB = 아날로그 D-Sub(옛 문서의 "PC")', 'RGB = analog D-Sub ("PC")')) + '</span>';
 
         document.getElementById('respick-foot').innerHTML =
-            '<input id="respick-new" type="text" placeholder="' + _esc(_t('목록에 없으면 적어 넣기 (예: 1920×720@60)', 'add e.g. 1920×720@60')) + '"'
-            + ' style="width:260px; padding:4px 8px; border:1px solid #cfe3e5; border-radius:5px; font-size:12px;">'
-            + '<button onclick="window.resAddCustom()" style="padding:4px 10px; font-size:11.5px; cursor:pointer;'
+            '<button onclick="window.resCustomAdd()" title="'
+            + _esc(_t('표준 목록에 없는 고객 요구 해상도를 적습니다', 'Add a customer-specific resolution')) + '"'
+            + ' style="padding:4px 10px; font-size:11.5px; cursor:pointer;'
             + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">＋ '
-            + _esc(_t('추가', 'Add')) + '</button>'
+            + _esc(_t('CUSTOMER RESOLUTION 행 추가', 'Add customer row')) + '</button>'
             + '<a href="#" onclick="window.resClearAll();return false;" style="color:#b1432f;">'
             + _esc(_t('전부 해제', 'Clear all')) + '</a>'
             + '<span id="respick-count" style="margin-left:auto; font-weight:bold; color:#00707d;"></span>'
@@ -372,12 +423,13 @@
                        + ' border:1px solid #cfe3e5; padding:5px; background:#eef6f7; width:62px;">' + _esc(p.label) + '</th>';
               }).join('')
               + '</tr></thead><tbody>';
-        if (!rows.length) {
+        var customs = _customRows();
+        if (!rows.length && !customs.length) {
             // 왜 비었는지 갈라서 말한다 — 접혀 있어 빈 것과 정말 없는 것은 다른 사실이다.
             h += '<tr><td colspan="' + (2 + ports.length) + '" style="padding:18px; text-align:center; color:#868e96;">'
                + _esc(_onlyChecked
                       ? _t('아직 고른 해상도가 없습니다 — 위 [🔽 전체 보기] 를 눌러 고르세요.', 'Nothing picked yet.')
-                      : _t('찾는 해상도가 없습니다 — 아래 칸에 적어 넣을 수 있습니다.', 'No match.')) + '</td></tr>';
+                      : _t('찾는 해상도가 없습니다 — 아래 [＋ CUSTOMER RESOLUTION 행 추가] 로 적어 넣을 수 있습니다.', 'No match.')) + '</td></tr>';
         }
         var prevG = null, n = 0;
         rows.forEach(function (r) {
@@ -399,6 +451,50 @@
                }).join('')
                + '</tr>';
         });
+
+        // ── 🧑‍💼 CUSTOMER RESOLUTION — 사람이 적는 줄 ──────────────────
+        //   ⚠️ 묶음 머리글과 [＋ 행 추가] 는 **늘 보여 준다** — 접혀 있든 검색 중이든
+        //      "여기에 적으면 된다" 가 보여야 한다.
+        h += '<tr><td colspan="' + (2 + ports.length) + '" style="border:1px solid #cfe3e5; padding:4px 6px;'
+           + ' background:#e0f5f7; color:#00707d; font-weight:bold;">' + _esc(CUSTOM_G)
+           + ' <span style="font-weight:normal; opacity:.75;">'
+           + _esc(_t('— 표준 목록에 없는 고객 요구 해상도', '— customer-specific')) + '</span></td></tr>';
+        customs.forEach(function (r) {
+            n++;
+            var on = !!(r.key && _store()[r.key]);
+            h += '<tr style="background:' + (on ? '#f3fbfc' : '') + ';">'
+               + '<td style="border:1px solid #cfe3e5; padding:3px 6px; text-align:center; color:#868e96;">' + n + '</td>'
+               // ⚠️ 칸 + ✕ 는 **flex 한 줄**로 묶는다 — `calc(100% - 26px)` 로 폭을 재면 테두리·여백
+               //    때문에 ✕ 가 다음 줄로 밀려 줄 높이가 26 → 41px 이 된다(실측).
+               + '<td style="border:1px solid #cfe3e5; padding:2px 4px;">'
+               + '<div style="display:flex; align-items:center; gap:6px;">'
+               // ⚠️ 글자가 바뀔 때마다 다시 그리면 치던 칸에서 포커스가 날아간다 → `change`(칸을 떠날 때)
+               + '<input type="text" data-res-custom="' + r.idx + '" value="' + _esc(r.label) + '"'
+               + ' onchange="window.resCustomSet(' + r.idx + ', this.value)"'
+               + ' onkeydown="if(event.key===\'Enter\'){this.blur();}"'
+               + ' placeholder="' + _esc(_t('예: 1920×720@60', 'e.g. 1920×720@60')) + '"'
+               + ' style="flex:1; min-width:0; padding:3px 6px; border:1px solid #cfe3e5; border-radius:4px;'
+               + ' font-size:11.5px;' + (on ? ' font-weight:bold;' : '') + '">'
+               + '<a href="#" onclick="window.resCustomDel(' + r.idx + ');return false;" title="'
+               + _esc(_t('이 줄 빼기', 'remove')) + '" style="color:#b1432f; font-size:12px; flex-shrink:0;">✕</a>'
+               + '</div></td>'
+               + ports.map(function (p) {
+                   // 이름을 안 적은 줄은 고를 수 없다 — 열쇠가 없으면 어디에 적을지 모른다
+                   if (!r.key) return '<td style="border:1px solid #cfe3e5; padding:3px; text-align:center; color:#ccc;">·</td>';
+                   return '<td style="border:1px solid #cfe3e5; padding:3px; text-align:center;">'
+                        + '<input type="checkbox" data-res="' + _esc(r.key) + '|' + _esc(p.key) + '"'
+                        + ' data-res-label="' + _esc(r.label) + '"'
+                        + (window.resPortOn(r.key, p.key) ? ' checked' : '') + '></td>';
+               }).join('')
+               + '</tr>';
+        });
+        h += '<tr><td colspan="' + (2 + ports.length) + '" style="border:1px solid #cfe3e5; padding:5px 6px;">'
+           + '<a href="#" onclick="window.resCustomAdd();return false;" style="color:#1971c2; font-weight:bold;">＋ '
+           + _esc(_t('행 추가', 'Add row')) + '</a>'
+           + (customs.length ? '' : ' <span style="color:#868e96;">'
+              + _esc(_t('고객이 따로 요구하는 해상도를 여기에 적습니다.', 'Add customer resolutions here.')) + '</span>')
+           + '</td></tr>';
+
         body.innerHTML = h + '</tbody></table>';
     };
 

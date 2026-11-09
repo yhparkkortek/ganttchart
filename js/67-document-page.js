@@ -55,6 +55,9 @@
     //  ⚠️ 두 군데에 베껴 쓰지 않는다 — 한 번 만들어 양쪽이 같이 쓴다.
     var _protoReqSections = function () {
         return [
+            // 📦 [2026-11-09 사용자 요청] 출고 이력은 **맨 위**다 — 이 문서가 "몇 회차의 샘플인가"
+            //    를 먼저 보여 줘야 아래 내용을 읽을 수 있다(Sample Report 에서는 표지 바로 아래).
+            { title: '# 샘플 출고 이력', kind: 'history' },
             {
                 title: '시제품 제작의뢰서', cols: 2,
                 fields: [
@@ -98,8 +101,6 @@
                                      { key: m.item + '|비고' }] };
                 })
             },
-            // 📦 회차마다 한 줄 — 언제 몇 개를 어느 의뢰서로 냈는지 남는다
-            { title: '# 샘플 출고 이력', kind: 'history' },
             { title: '# 요청사항', kind: 'text', key: '요청사항',
               hint: '예: Auto GAMMA Calibration / CUTTING 모델 원자재 …' },
             { title: '# 참고 자료', kind: 'text', key: '참고자료',
@@ -758,8 +759,15 @@
                 hist.forEach(function (r, i) {
                     var rstage = String(r.stage || '').trim();
                     var ron = rstage && window._docState.round === rstage;
-                    h += '<tr>'
-                       + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|stage" value="' + _esc(r.stage || '') + '"></td>'
+                    // 📦 [2026-11-09 사용자 요청] **지금 보고 있는 회차 줄을 표시한다**
+                    //   ⚠️ 색은 팔레트가 쓰는 teal 계열 인라인으로 — 테마를 바꾸면 js/21 이 다시 칠한다.
+                    //   ⚠️ 인쇄에도 남긴다: 이 보고서가 몇 회차의 것인지가 한눈에 보여야 한다.
+                    h += '<tr' + (ron ? ' style="background:#eef6f7; box-shadow:inset 3px 0 0 #00707d;"' : '') + '>'
+                       + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|stage" value="' + _esc(r.stage || '') + '"'
+                       + (ron ? ' style="font-weight:bold; color:#00707d;"' : '') + '>'
+                       + (ron ? '<div class="doc-src" style="color:#00707d; font-weight:bold;">● '
+                                + _esc(_t('지금 보고 있는 문서', 'current document')) + '</div>' : '')
+                       + '</td>'
                        + '<td><input type="date" class="doc-in" data-doc-hist="' + i + '|date" value="' + _esc(r.date || '') + '"></td>'
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|qty" value="' + _esc(r.qty || '') + '"'
                        + ' placeholder="' + _esc(_t('예: 24', 'e.g. 24')) + '"></td>'
