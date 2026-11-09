@@ -161,10 +161,18 @@ class Grid(object):
     def __init__(self, accept='레이아웃 변경...', session=None, popup=None):
         self.accept = accept
         self.tried = []
+        self.dropdown = []
         self._session = session
         self._popup = popup
 
+    def PressToolbarContextButton(self, code):
+        # ⚠️ 실물에서는 **이걸 먼저 눌러야** 드롭다운이 열리고 "레이아웃 변경..."이 보인다
+        #    (2026-11-09 실측 — 11-05 의 menu_not_found 원인이 이것이었다).
+        self.dropdown.append(code)
+
     def SelectContextMenuItemByText(self, label):
+        if not self.dropdown:
+            raise RuntimeError('context menu not open')   # 실물과 같은 실패 모양
         self.tried.append(label)
         if label != self.accept:
             raise RuntimeError('no such menu item')
@@ -196,6 +204,7 @@ grid = Grid(session=sess)
 entries, diag = B._sap_read_alv_sort(sess, grid)
 eq('정렬 1줄을 열이름=값으로 읽는다', entries, ['SELTEXT=구성부품내역 / DOWN=X'])
 eq('진단은 비어 있다(성공)', diag, '')
+eq('드롭다운을 먼저 연다(&MB_VARIANT)', grid.dropdown, ['&MB_VARIANT'])
 eq('정렬 순서 탭을 눌렀다', tab.selected, True)
 eq('팝업을 취소(F12)로 닫았다', popup.vkeys, [12])
 eq('버튼을 누른 적이 없다(레이아웃 저장 금지)', popup.pressed, [])

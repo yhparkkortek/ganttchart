@@ -1305,6 +1305,16 @@ def _sap_read_alv_sort(session, grid):
     이미 끝난 뒤 "왜 뒤섞였나"를 덧붙이는 용도라, 실패해도 조회 결과를 막으면 안 된다."""
     entries, diag, opened = None, '', False
     try:
+        # ⚠️⚠️ [2026-11-09 실측으로 확정] **드롭다운을 먼저 열어야 한다.** 2026-11-05 첫 라이브
+        #    시도가 `menu_not_found` 로 죽은 이유가 이것이다 — `SelectContextMenuItemByText` 만
+        #    단독으로 부르면 그 메뉴에 항목이 없다. `&MB_VARIANT` 는 타입이 `ButtonAndMenu` 라
+        #    `PressToolbarButton`(레이아웃 **선택**)과 `PressToolbarContextButton`(그 버튼의
+        #    **드롭다운**)이 다르고, "레이아웃 변경..."은 드롭다운 쪽에만 있다(10-27 기록 그대로).
+        try:
+            grid.PressToolbarContextButton('&MB_VARIANT')
+            time.sleep(0.4)
+        except Exception:
+            pass          # 못 열어도 아래를 시도해 본다(릴리스마다 다를 수 있다)
         for label in _ALV_LAYOUT_MENU_LABELS:
             try:
                 grid.SelectContextMenuItemByText(label)
@@ -1319,7 +1329,16 @@ def _sap_read_alv_sort(session, grid):
             popup = session.findById('wnd[1]')
         except Exception:
             return None, 'no_popup'
-        tab = _find_tab_by_text(popup, _ALV_SORT_TAB_WORDS)
+        # 🆕 [2026-11-09 실측] 탭 경로가 확인됐다 — `wnd[1]/usr/tabsG_TS_ALV/tabpALV_M_R2`("정렬 순서").
+        #    (R1 표시된 열 · R2 정렬 순서 · R3 필터 · R4 뷰 · R5 조회) 먼저 그걸 쓰고,
+        #    없으면 예전처럼 라벨로 찾는다(릴리스·언어가 다를 수 있다).
+        tab = None
+        try:
+            tab = session.findById('wnd[1]/usr/tabsG_TS_ALV/tabpALV_M_R2')
+        except Exception:
+            tab = None
+        if tab is None:
+            tab = _find_tab_by_text(popup, _ALV_SORT_TAB_WORDS)
         if tab is None:
             diag = 'no_sort_tab'
         else:
