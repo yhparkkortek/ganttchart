@@ -33,6 +33,8 @@
     };
     var U = window.USER_SWITCH;
     var _busy = false, _msg = '', _budget = null;
+    //  마지막으로 읽은 `/nas/status` — 로그인 때 "이 PC 가 설정돼 있나"를 다시 묻지 않으려고 둔다.
+    var _status = null;
 
     function T(ko, en) { return window._t ? window._t(ko, en) : ko; }
     function esc(s) { return window.escapeHtml ? window.escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -125,6 +127,14 @@
 
     function gateHtml(st) {
         var idv = (readUser() || {}).key || (st && st.user) || '';
+        // 🆕 [2026-11-09] 아직 NAS 설정이 없는 PC(= 새로 깐 PC)면 **여기서 전환까지** 한다.
+        //    왜: `/nas/login` 은 주소가 이미 저장돼 있어야 되는 호출이라, 새 PC 는 이 화면에서
+        //    반드시 실패하고 사람이 🔑 설정까지 찾아가야 했다("굳이 여기까지 와서 로그인할
+        //    필요 없는데"). 설정이 없으면 `/nas/setup` 을 부르면 되고, 그건 **주소·아이디·
+        //    비밀번호만** 있으면 앱 폴더·자료실 경로·포트를 스스로 정한다(실측: 31곳 4.0초 → 1곳).
+        //    주소는 `nas_defaults.json` 이 있으면 **미리 채운다** — 사람이 칠 것은 아이디·비번뿐.
+        var needSetup = !(st && st.configured);
+        var hostv = (st && st.host) || (st && st.defaults && st.defaults.host) || '';
         var left = _budget && typeof _budget.left === 'number' ? _budget.left : null;
         var blocked = !!(st && st.reason === 'blocked');
         var warn = '';
@@ -145,6 +155,18 @@
           '<input id="app-user-id" value="' + esc(idv) + '" autocomplete="username" placeholder="' + esc(T('아이디', 'ID')) + '" style="' + inp + '">' +
           '<input id="app-user-pw" type="password" autocomplete="current-password" placeholder="' + esc(T('비밀번호', 'Password')) + '" style="' + inp + '" ' +
             'onkeydown="if(event.key===\'Enter\'){window._appUserLogin();}">' +
+          // 주소 칸은 **설정이 없을 때만** 보인다 — 이미 쓰는 PC 에 없던 칸이 생기면 그것만으로 연락이 온다.
+          (needSetup
+            ? '<input id="app-user-host" value="' + esc(hostv) + '" autocomplete="off" placeholder="' +
+                esc(T('NAS 주소 (담당자에게 받으세요)', 'NAS address')) + '" style="' + inp + '" ' +
+                'onkeydown="if(event.key===\'Enter\'){window._appUserLogin();}">' +
+              '<div style="font-size:11px; color:#888; text-align:left; margin:-4px 0 8px;">' +
+                esc(hostv ? T('이 PC 는 처음입니다 — 주소는 채워 뒀습니다. 아이디·비밀번호만 넣으면 나머지는 자동으로 맞춥니다.',
+                              'First time on this PC — the address is prefilled; the rest is automatic.')
+                          : T('이 PC 는 처음입니다 — 주소만 한 번 넣으면 나머지(앱 폴더·자료실)는 자동으로 맞춥니다.',
+                              'First time on this PC — enter the address once; the rest is automatic.')) +
+              '</div>'
+            : '') +
           '<button id="app-user-go" onclick="window._appUserLogin()"' + (blocked ? ' disabled' : '') +
             ' style="width:100%; box-sizing:border-box; padding:11px 0; border:none; border-radius:6px; background:' + (blocked ? '#bbb' : '#19b4c8') + '; color:#fff; font-size:15px; font-weight:bold; cursor:' + (blocked ? 'default' : 'pointer') + ';">' +
             esc(_busy ? T('로그인 중…', 'Signing in…') : T('로그인', 'Sign in')) + '</button>' +
@@ -172,6 +194,7 @@
         var st = null;
         try { st = await api('GET', '/nas/status'); } catch (e) { /* 백엔드가 꺼져 있어도 화면은 띄운다 */ }
         _budget = (st && st.budget) || _budget;
+        _status = st || null;
         el.innerHTML = gateHtml(st || {});
         var pw = document.getElementById('app-user-pw');
         if (pw) try { pw.focus(); } catch (e) { /* 무시 */ }
@@ -191,13 +214,40 @@
         var before = String(window._nasAccount || '').trim().toLowerCase();
         try {
             // ⚠️ 비밀번호는 **본문으로만** 간다(쿼리에 실으면 로그에 남는다). 자동 재시도는 없다.
-            var r = await api('POST', '/nas/login', { user: id, password: pw, save: rem });
+            // 🆕 [2026-11-09] 아직 설정이 없는 PC 면 **로그인이 아니라 전환**을 부른다.
+            //    `/nas/login` 은 주소가 저장돼 있어야 되는 호출이라 새 PC 에선 반드시 실패했고,
+            //    그래서 사람이 🔑 설정까지 찾아가야 했다. `/nas/setup` 은 주소·아이디·비밀번호만
+            //    있으면 계정저장 → 로그인 → 앱 폴더 찾기 → 자료실 경로까지 한 번에 밟는다.
+            //    ⚠️ 로그인 실패 예산은 백엔드가 관리한다 — 여기서 재시도하지 않는다(계정·IP 잠김).
+            var needSetup = !(_status && _status.configured);
+            var r;
+            if (needSetup) {
+                var host = String((document.getElementById('app-user-host') || {}).value || '').trim();
+                if (!host) {
+                    _msg = T('NAS 주소를 넣어주세요 (담당자에게 받으세요).', 'Enter the NAS address.');
+                    _busy = false;
+                    return openPicker();
+                }
+                r = await api('POST', '/nas/setup', { host: host, user: id, password: pw });
+                // 전환은 단계별 결과를 준다 — **어디서 막혔는지** 그대로 보여준다(숨기면 사람이 못 고친다).
+                if (r && !r.ok) {
+                    var bad = (r.steps || []).filter(function (s) { return s && !s.ok; }).pop();
+                    _msg = (bad && (bad.message || bad.step)) || T('설정하지 못했습니다.', 'Setup failed.');
+                    if (r.rootHits && r.rootHits.length > 1) {
+                        _msg += ' — ' + T('앱 폴더 후보가 여러 곳입니다. 🔑 설정 ▸ NAS 에서 골라주세요.',
+                                          'Multiple app folders — pick one in 🔑 settings.');
+                    }
+                }
+            } else {
+                r = await api('POST', '/nas/login', { user: id, password: pw, save: rem });
+            }
             _budget = r && r.budget || null;
             if (!r || !r.ok) {
-                _msg = (r && r.message) || T('로그인하지 못했습니다.', 'Sign-in failed.');
+                if (!_msg) _msg = (r && r.message) || T('로그인하지 못했습니다.', 'Sign-in failed.');
                 _busy = false;
                 return openPicker();
             }
+            _status = null;                 // 설정이 바뀌었을 수 있다 — 다음에 열 때 다시 묻는다
             _msg = '';
             _busy = false;
             var key = String(r.user || id).toLowerCase();

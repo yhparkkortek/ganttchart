@@ -27,6 +27,7 @@
     // 🔒 /nas/login 만 가로챈다 — 진짜 시도는 **한 번도** 나가지 않는다.
     var sent = [], reply = { ok: false, message: '비밀번호가 맞지 않습니다', budget: { max: 3, left: 2 } };
     var fakeStatus = null;          // 필요할 때만 켜서 예산을 맞춘다
+    var setupReply = { ok: true, steps: [], root: '/X/KORTEK_PM', user: 'tester' };
     var reloaded = 0;
     window.fetch = function (url, opt) {
         var u = String(url || '');
@@ -40,6 +41,15 @@
         //    로그인만 가짜로 두면 둘이 어긋나 가짜 실패가 난다 — 같은 경계를 같이 맞춘다.
         if (u.indexOf('/nas/status') >= 0 && fakeStatus) {
             return Promise.resolve(new Response(JSON.stringify(fakeStatus), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        }
+        // 🆕 [2026-11-09] 새 PC 경로 — `/nas/setup`. 진짜로는 **절대** 안 나간다(앱 폴더를
+        //    31곳 훑고 계정을 저장하는 호출이다). 응답만 흉내 내서 화면 반응을 본다.
+        if (u.indexOf('/nas/setup') >= 0 && opt && String(opt.method).toUpperCase() === 'POST') {
+            var sb = {};
+            try { sb = JSON.parse(opt.body || '{}'); } catch (e2) { /* 무시 */ }
+            sb._setup = true;
+            sent.push(sb);
+            return Promise.resolve(new Response(JSON.stringify(setupReply), { status: 200, headers: { 'Content-Type': 'application/json' } }));
         }
         if (u.indexOf('/nas/login') >= 0 && opt && String(opt.method).toUpperCase() === 'DELETE') {
             sent.push({ logout: true });
@@ -165,6 +175,87 @@
 
         ok('설정 메뉴에 로그인·로그아웃이 있다',
            !!document.getElementById('app-user-switch-btn') && !!document.getElementById('app-user-logout-btn'));
+
+        // ══ 🆕 새 PC — 이 화면에서 전환까지 끝낸다 (2026-11-09) ═══════════════
+        //   왜: `/nas/login` 은 주소가 저장돼 있어야 되는 호출이라 새 PC 는 여기서 반드시
+        //   실패했고, 사람이 🔑 설정까지 찾아가야 했다. 설정이 없으면 `/nas/setup` 을 부른다.
+        fakeStatus = { ok: true, configured: false, defaults: { host: '10.0.0.9' }, budget: { max: 3, left: 3 } };
+        await window.appUserOpenPicker();
+        await wait(350);
+        var hostEl = document.getElementById('app-user-host');
+        ok('설정 없는 PC 엔 주소 칸이 생긴다', !!hostEl);
+        ok('주소가 **미리 채워진다**(기본값 파일에서)', hostEl && hostEl.value === '10.0.0.9', hostEl && hostEl.value);
+        ok('처음이라고 안내한다', /처음입니다|First time/i.test(document.getElementById('app-user-gate').innerText));
+
+        // 주소를 비우면 **백엔드로 안 나간다**(헛된 실패로 예산을 깎지 않는다)
+        hostEl.value = '';
+        document.getElementById('app-user-id').value = 'tester';
+        document.getElementById('app-user-pw').value = 'pw';
+        var nh = sent.length;
+        await window._appUserLogin();
+        await wait(300);
+        ok('주소가 비면 호출하지 않는다', sent.length === nh, sent.slice(nh));
+        ok('주소를 넣으라고 말한다', /NAS 주소를 넣어|Enter the NAS address/i.test(document.getElementById('app-user-gate').innerText));
+
+        // 제대로 넣으면 **login 이 아니라 setup** 으로 간다
+        document.getElementById('app-user-host').value = '10.0.0.9';
+        document.getElementById('app-user-id').value = 'tester';
+        document.getElementById('app-user-pw').value = 'pw';
+        var n2 = sent.length;
+        window._appUserReload = function () { reloaded++; };
+        setupReply = { ok: true, steps: [{ step: 'config', ok: true }], root: '/X/KORTEK_PM', user: 'tester' };
+        await window._appUserLogin();
+        await wait(500);
+        var calls = sent.slice(n2);
+        ok('`/nas/setup` 을 부른다', calls.some(function (c) { return c._setup; }), calls);
+        ok('`/nas/login` 은 안 부른다(주소가 없으니 실패할 호출이다)',
+           !calls.some(function (c) { return !c._setup && !c.logout; }), calls);
+        var su = calls.filter(function (c) { return c._setup; })[0] || {};
+        ok('주소·아이디·비밀번호를 같이 보낸다', su.host === '10.0.0.9' && su.user === 'tester' && !!su.password, { host: su.host, user: su.user, pw: !!su.password });
+
+        // 전환이 실패하면 **어디서 막혔는지** 그대로 보여준다
+        fakeStatus = { ok: true, configured: false, defaults: {}, budget: { max: 3, left: 2 } };
+        setupReply = { ok: false, steps: [{ step: 'config', ok: true }, { step: 'login', ok: false, message: '비밀번호가 맞지 않습니다' }] };
+        await window.appUserOpenPicker();
+        await wait(300);
+        ok('기본값이 없으면 주소 칸이 빈 채로 뜬다',
+           document.getElementById('app-user-host') && document.getElementById('app-user-host').value === '');
+        document.getElementById('app-user-host').value = '10.0.0.9';
+        document.getElementById('app-user-id').value = 'tester';
+        document.getElementById('app-user-pw').value = 'bad';
+        await window._appUserLogin();
+        await wait(400);
+        ok('막힌 단계의 메시지를 보여준다',
+           /비밀번호가 맞지 않습니다/.test(document.getElementById('app-user-gate').innerText),
+           document.getElementById('app-user-gate').innerText.slice(0, 200));
+
+        // 앱 폴더가 여러 곳이면 — 드물다. 고르라고 안내한다.
+        setupReply = { ok: false, steps: [{ step: 'find-root', ok: false, message: '같은 이름이 여러 곳에 있습니다' }],
+                       rootHits: ['/A/KORTEK_PM', '/B/KORTEK_PM'] };
+        document.getElementById('app-user-host').value = '10.0.0.9';
+        document.getElementById('app-user-id').value = 'tester';
+        document.getElementById('app-user-pw').value = 'pw';
+        await window._appUserLogin();
+        await wait(400);
+        ok('앱 폴더가 여러 곳이면 설정에서 고르라고 한다',
+           /골라주세요|pick one/i.test(document.getElementById('app-user-gate').innerText));
+
+        // 이미 설정된 PC 는 **예전 그대로** — 주소 칸이 없고 /nas/login 으로 간다
+        fakeStatus = { ok: true, configured: true, user: 'tester', host: '10.0.0.9', budget: { max: 3, left: 3 } };
+        reply = { ok: true, user: 'tester' };
+        await window.appUserOpenPicker();
+        await wait(350);
+        ok('설정된 PC 엔 주소 칸이 없다(없던 칸이 생기면 그것만으로 연락이 온다)',
+           !document.getElementById('app-user-host'));
+        document.getElementById('app-user-id').value = 'tester';
+        document.getElementById('app-user-pw').value = 'pw';
+        var n3 = sent.length;
+        await window._appUserLogin();
+        await wait(450);
+        var c3 = sent.slice(n3);
+        ok('`/nas/login` 으로 간다', c3.some(function (c) { return !c._setup && !c.logout; }), c3);
+        ok('`/nas/setup` 은 안 부른다', !c3.some(function (c) { return c._setup; }), c3);
+        fakeStatus = null;
     } catch (e) {
         ok('하네스가 끝까지 돌았다', false, String(e && e.message || e));
     } finally {
