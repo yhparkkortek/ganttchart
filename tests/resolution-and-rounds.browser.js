@@ -248,7 +248,38 @@
             ok(marked.length === 1, '현재 회차 표시가 한 줄에만 있어야 한다 (' + marked.length + ')');
             ok(marked[0].querySelector('[data-doc-hist$="|stage"]').value === window._docState.round,
                '표시가 지금 회차가 아닌 줄에 붙어 있다');
-            ok(/background/.test(marked[0].getAttribute('style') || ''), '현재 회차 줄에 배경 표시가 없다');
+            // 🎨 색은 **보색**이어야 한다(사용자 지시) — 고정 hex 를 박지 않고 팔레트 공식으로 센다.
+            //   ⚠️ 두 곳(styles.css 기본값 · js/21 라이브)을 같이 고쳐야 하므로 **테마를 바꿔 가며** 본다.
+            var compOf = function (themeHex) {
+                var h = (window._cpHexToHsl(themeHex).h + 180) % 360, o = {};
+                window.CP_ROLES.forEach(function (r) { o[r.key] = window._cpHslToHex(h, r.s, r.l); });
+                return o;
+            };
+            var rgbOf = function (hex) {
+                var m = String(hex).replace('#', '').match(/.{2}/g) || [];
+                return 'rgb(' + m.map(function (x) { return parseInt(x, 16); }).join(', ') + ')';
+            };
+            var nowRow = function () {
+                return [].filter.call(document.querySelectorAll('#doc-page-body tr.doc-hist-now'), function (t) { return t; })[0];
+            };
+            ok(!!nowRow(), '현재 회차 줄에 doc-hist-now 클래스가 없다');
+            ok(!/background/.test(marked[0].getAttribute('style') || ''),
+               '색을 인라인으로 박았다 — 인라인이면 팔레트가 보색으로 못 바꾼다');
+            [['#00707d', '기본'], ['#2f6fe0', '파랑'], ['#b1432f', '빨강']].forEach(function (th) {
+                window._cpApplyLive(th[0], true);
+                var want = compOf(th[0]);
+                var td = nowRow().querySelector('td');
+                var bg = getComputedStyle(td).backgroundColor;
+                ok(bg === rgbOf(want.bg), th[1] + ' 테마에서 줄 배경이 보색이 아니다: ' + bg + ' ≠ ' + rgbOf(want.bg));
+                var txt = nowRow().querySelector('.doc-hist-now-txt');
+                ok(getComputedStyle(txt).color === rgbOf(want.darkText),
+                   th[1] + ' 테마에서 글자색이 보색이 아니다: ' + getComputedStyle(txt).color);
+                // 테마색 그 자체면 안 된다 — 대비가 생기지 않는다
+                var gen = {}; var hh = window._cpHexToHsl(th[0]).h;
+                window.CP_ROLES.forEach(function (r) { gen[r.key] = window._cpHslToHex(hh, r.s, r.l); });
+                ok(bg !== rgbOf(gen.bg), th[1] + ' 테마에서 줄 배경이 테마색 그대로다(보색이 아니다)');
+            });
+            window._cpApplyLive('#00707d', true);
             // 회차를 넘기면 표시도 따라간다
             window._docRoundGo(-1);
             var marked2 = [].filter.call(document.querySelectorAll('#doc-page-body tr'), function (tr) {

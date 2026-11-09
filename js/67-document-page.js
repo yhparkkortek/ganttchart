@@ -760,12 +760,16 @@
                     var rstage = String(r.stage || '').trim();
                     var ron = rstage && window._docState.round === rstage;
                     // 📦 [2026-11-09 사용자 요청] **지금 보고 있는 회차 줄을 표시한다**
-                    //   ⚠️ 색은 팔레트가 쓰는 teal 계열 인라인으로 — 테마를 바꾸면 js/21 이 다시 칠한다.
+                    //   🎨 색은 테마색이 아니라 **보색**이다(사용자 지시) — 캘린더 핀셋 알람·일일보고
+                    //      '미작성' 과 같은 규칙이라, 어떤 테마를 골라도 대비되는 색이 자동으로 나온다.
+                    //   ⚠️⚠️ 그래서 **인라인이 아니라 클래스**(`doc-hist-now`)다. 인라인 hex 는 js/21 이
+                    //      `[style*="#hex"]` 로 테마색만 갈아 끼우므로 보색을 못 만든다.
+                    //      기본값은 styles.css, 라이브는 js/21 `_cpApplyLive` — **두 곳을 같이** 고칠 것.
                     //   ⚠️ 인쇄에도 남긴다: 이 보고서가 몇 회차의 것인지가 한눈에 보여야 한다.
-                    h += '<tr' + (ron ? ' style="background:#eef6f7; box-shadow:inset 3px 0 0 #00707d;"' : '') + '>'
-                       + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|stage" value="' + _esc(r.stage || '') + '"'
-                       + (ron ? ' style="font-weight:bold; color:#00707d;"' : '') + '>'
-                       + (ron ? '<div class="doc-src" style="color:#00707d; font-weight:bold;">● '
+                    h += '<tr' + (ron ? ' class="doc-hist-now"' : '') + '>'
+                       + '<td><input type="text" class="doc-in' + (ron ? ' doc-hist-now-txt' : '')
+                       + '" data-doc-hist="' + i + '|stage" value="' + _esc(r.stage || '') + '">'
+                       + (ron ? '<div class="doc-src doc-hist-now-txt">● '
                                 + _esc(_t('지금 보고 있는 문서', 'current document')) + '</div>' : '')
                        + '</td>'
                        + '<td><input type="date" class="doc-in" data-doc-hist="' + i + '|date" value="' + _esc(r.date || '') + '"></td>'

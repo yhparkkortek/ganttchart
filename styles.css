@@ -2601,6 +2601,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     border:1px solid #cfe3e5; border-radius:4px; font-size:10px; line-height:14px; background:#fff; color:#adb5bd; }
 #doc-page-body .doc-chk.on { background:#00707d; color:#fff; border-color:#00707d; }
 
+/* 📦 지금 보고 있는 회차 줄 — 색은 테마색이 **아니라 보색**이다(사용자 지시 2026-11-09).
+   ⚠️⚠️ 여기는 **팔레트를 안 쓸 때의 기본값**이고, 라이브는 js/21 `_cpApplyLive` 가 덮는다.
+      두 곳을 같이 고치지 않으면 "기본 테마에서만 색이 안 바뀐다". 아래 hex 는 기본 테마
+      (#00707d, hue 186°)의 보색 hue 6° 에 같은 CP_ROLES 공식을 먹인 값이다(실측). */
+#doc-page-body tr.doc-hist-now > td { background:#f9e9e7; }
+#doc-page-body tr.doc-hist-now > td:first-child { box-shadow:inset 3px 0 0 #800d00; }
+#doc-page-body .doc-hist-now-txt { color:#800d00; font-weight:bold; }
+
 /* 🖨 인쇄 — 종이에선 입력칸 테두리·출처·버튼을 지워 **문서처럼** 찍는다 */
 @media print {
     #doc-page-body .doc-paper { box-shadow:none; border:none; max-width:none; margin:0; padding:0; }
@@ -2608,6 +2616,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     #doc-page-body .doc-in { border:none; background:none; padding:1px 2px; font-weight:normal; }
     #doc-page-body .doc-in.own { background:none; }
     #doc-page-body .doc-sec { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    /* 📦 몇 회차의 보고서인지는 **종이에도** 남는다 — `.doc-src` 를 숨기는 위 규칙의 예외다 */
+    #doc-page-body tr.doc-hist-now > td { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    #doc-page-body .doc-src.doc-hist-now-txt { display:block !important; }
+    #doc-page-body .doc-in.doc-hist-now-txt { font-weight:bold; }
     #doc-page-body table.doc-t { page-break-inside:auto; }
     #doc-page-body table.doc-t tr { page-break-inside:avoid; }
 }

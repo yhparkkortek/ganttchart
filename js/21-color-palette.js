@@ -397,7 +397,13 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#doc-page-body .doc-att .thumb { border-color: ' + gen.border + ' !important; }\n'
         + '#doc-page-body .doc-chk { border-color: ' + gen.border + ' !important; }\n'
         + '#doc-page-body .doc-chk.on { background: ' + gen.darkText + ' !important; color: #fff !important;'
-        + ' border-color: ' + gen.darkText + ' !important; }\n';
+        + ' border-color: ' + gen.darkText + ' !important; }\n'
+        // 📦 [2026-11-09 요청] 지금 보고 있는 회차 줄은 테마색이 아니라 **보색**(compGen) —
+        //    캘린더 핀셋 알람·일일보고 '미작성' 과 같은 규칙이라, 어떤 테마를 골라도 대비된다.
+        //    기본값(팔레트 미적용)은 styles.css 에 같은 선택자로 있다.
+        + '#doc-page-body tr.doc-hist-now > td { background: ' + compGen.bg + ' !important; }\n'
+        + '#doc-page-body tr.doc-hist-now > td:first-child { box-shadow: inset 3px 0 0 ' + compGen.darkText + ' !important; }\n'
+        + '#doc-page-body .doc-hist-now-txt { color: ' + compGen.darkText + ' !important; }\n';
 
     css += '.trans-btn-hide-print { color: ' + gen.darkText + ' !important; }\n';
     document.documentElement.style.setProperty('--trans-text', gen.darkText);
