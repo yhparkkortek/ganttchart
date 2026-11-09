@@ -643,11 +643,17 @@ window._msLoadProjectIndex = async function() {
                     if (rel) liveRels.add(rel);
                 });
             }
+            const liveNames = new Set(realFiles.map(function(f) { return f.name; }));
             const stillThere = function(p) {
                 if (validIds.has(p.drive_file_id)) return true;
-                if (!window._storageRelOfId || !liveRels.size) return false;   // Drive 모드 = 예전 그대로
-                const rel = window._storageRelOfId(p.drive_file_id);
-                return !!(rel && liveRels.has(rel));
+                // 📍 경로로 풀리면 산다(id 승자가 바뀌어도 안전)
+                if (window._storageRelOfId && liveRels.size) {
+                    const rel = window._storageRelOfId(p.drive_file_id);
+                    if (rel && liveRels.has(rel)) return true;
+                }
+                // 🏷 이름이 그대로 있으면 산다 — 지도가 아직 안 옮겨졌을 뿐일 수 있다
+                if (p.file_name && liveNames.has(p.file_name)) return true;
+                return false;
             };
             const ghostEntries = projects.filter(function(p) { return !p || !stillThere(p); });
             // ⚠️ 남기는 쪽도 **같은 판정**을 써야 한다 — 한쪽만 고치면 "유령은 아닌데 목록에선 빠지는"
@@ -673,17 +679,32 @@ window._msLoadProjectIndex = async function() {
                 });
                 if (dupDropped.length) kept = kept.filter(function(p) { return dupDropped.indexOf(p) === -1; });
             }
+            // 🛑🛑 [2026-11-09] **유령 판정으로 색인을 지우지 않는다 — 메모리에서만 거른다.**
+            //
+            //  이 블록의 목적은 "없는 프로젝트로 메일이 자동배치되는 것"을 막는 거였고,
+            //  그건 **돌려주는 목록에서 빼는 것만으로 이미 달성된다**. 파일에 되쓰는 건
+            //  "다음부터 이 거르기가 필요 없게" 하려던 **최적화**였을 뿐인데, 그 최적화가
+            //  실제로 한 일은 **남의 프로젝트 꼬리표를 영구히 날리는 것**이었다.
+            //
+            //  왜 위험하냐 — 이 판정은 **모든 PC 의 모든 탭**에서 5분마다 돈다. 그중 하나만
+            //  ① 옛 코드를 쓰거나 ② 목록을 덜 받아 왔거나 ③ id 승자를 다르게 들고 있으면,
+            //  그 한 번이 **팀 전체의 색인에서 항목을 지운다**. 실측(2026-11-09): 14:27~15:55
+            //  사이에 `1__PqvJa3H`(김시윤)·`1xKwoKPW7n`(POLED) 두 항목이 사라졌는데,
+            //  그때 지도·파일은 **둘 다 멀쩡했다**(두 id 모두 살아있는 파일로 풀렸다).
+            //  즉 지운 쪽은 이 PC 가 아니라 **아직 새로고침 안 한 다른 클라이언트**였다.
+            //  지우는 쪽은 한 번이면 되고, 되살리는 쪽은 사람이 매번 손으로 해야 한다 —
+            //  **비대칭이 이렇게 크면 그 자동 삭제는 둘 자리가 아니다.**
+            //
+            //  진짜 유령(드라이브에서 직접 지운 프로젝트)은 앱의 `🗑️ 프로젝트 삭제` 가
+            //  `_removeProjectIndexEntry`(js/04b)로 **그 id 하나만** 지운다 — 그게 올바른 자리다.
             if (ghostEntries.length || dupDropped.length) {
-                validProjects = kept;
-                if (ghostEntries.length) console.warn('project_index.json에서 존재하지 않는 프로젝트 항목 ' + ghostEntries.length + '건 제거:',
+                validProjects = kept;          // ← 이번 매칭에서만 뺀다(파일은 안 건드린다)
+                if (ghostEntries.length) console.warn('project_index.json 에서 지금 파일을 못 찾은 항목 '
+                    + ghostEntries.length + '건 — **이번 매칭에서만 빼고 파일은 그대로 둡니다**:',
                     ghostEntries.map(function(p) { return p && p.file_name; }));
-                if (dupDropped.length) console.warn('project_index.json에서 같은 파일을 가리키는 중복 항목 ' + dupDropped.length + '건 정리:',
+                if (dupDropped.length) console.warn('같은 파일을 가리키는 중복 항목 ' + dupDropped.length
+                    + '건 — 이번 매칭에서만 하나로 봅니다:',
                     dupDropped.map(function(p) { return p && p.file_name; }));
-                fetch(`https://www.googleapis.com/upload/drive/v3/files/${indexFileId}?uploadType=media&supportsAllDrives=true`, {
-                    method: 'PATCH',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(Object.assign({}, data, { projects: validProjects }))
-                }).catch(function(e) { console.warn('project_index.json 유령 항목 정리 저장 실패(다음 로드에서 다시 시도됨):', e.message); });
             }
         } catch (e) { console.warn('project_index.json 유효성 검증 실패 — 원본 목록 그대로 사용:', e.message); }
 

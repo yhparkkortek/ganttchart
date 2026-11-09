@@ -112,6 +112,22 @@ check('진 쪽도 경로로는 풀린다(= 유령이 아니다)', F.relOf(ID_A) 
   //    진 쪽이라 **id 도 이름도 안 맞아** 또 "미지정"이 됐다.
   check('꼬리표를 **경로**로도 색인한다(loadIndexProps)', /map\['rel:'\s*\+\s*r\.rel\]/.test(src));
   check('꼬리표를 **경로**로도 되짚는다(attachAppProps)', /map\['rel:'\s*\+\s*rr\.rel\]/.test(src));
+  // 🛑 **메일 파이프라인은 project_index 를 "유령 정리"로 되쓰지 않는다**(2026-11-09).
+  //    그 되쓰기는 최적화였는데, 모든 PC·모든 탭에서 5분마다 돌아서 **하나만 낡아도**
+  //    팀 전체 색인에서 항목이 사라졌다(실측: 지도·파일이 멀쩡한데 두 항목이 지워짐).
+  //    지우는 건 한 번이면 되고 되살리는 건 사람 손이다 — 그 비대칭이면 자동 삭제는 안 둔다.
+  {
+    const mail = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'js', '15b-mail-server-tab-1.js'), 'utf8');
+    const _s = mail.indexOf('window._msLoadProjectIndex = async function');
+    const blk = mail.slice(_s, mail.indexOf('_msBuildProjectMatchSection', _s) > _s
+                               ? mail.indexOf('_msBuildProjectMatchSection', _s) : _s + 30000);
+    check('유령 정리가 색인 파일을 PATCH 하지 않는다',
+          !/upload\/drive\/v3\/files\/\$\{indexFileId\}/.test(blk), '되쓰기가 살아 있다');
+    check('그래도 이번 매칭 목록에선 뺀다(오배치 방지)', /validProjects\s*=\s*kept/.test(blk));
+    check('이름으로도 살려 준다(지도가 덜 옮겨졌을 때)', /liveNames\.has\(p\.file_name\)/.test(blk));
+  }
+
   const ren = src.slice(src.indexOf('await writeRel(newRel'), src.indexOf("note('moved'"));
   check('이름 바꾸기: 삭제 실패를 그냥 흘리지 않는다(되돌리기가 있다)',
         /nas\/app\/delete[\s\S]*newRel/.test(ren) && /rolledback|rename-split/.test(ren), ren.length);
