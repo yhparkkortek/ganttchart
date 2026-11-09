@@ -2587,6 +2587,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #doc-page-body table.doc-t td.doc-lab { background:#eef6f7; color:#00707d; font-weight:bold;
     white-space:nowrap; text-align:center; }
 #doc-page-body table.doc-t td.doc-lab { text-align:left; width:140px; }
+/* ✅ 점검표 항목(묶음) 칸 — 긴 이름은 **줄바꿈**한다(사용자 요청 2026-11-09).
+   ⚠️ 위 `td.doc-lab` 이 nowrap 이라 `Appearance Inspection`·`조립 성 및 Rework` 가
+      110px 칸을 삐져나갔다. 한글은 낱말째 넘기고(keep-all), 긴 영문은 잘라서 넘긴다. */
+#doc-page-body table.doc-t td.doc-lab.doc-grp { white-space:normal; word-break:keep-all;
+    overflow-wrap:anywhere; line-height:1.35; padding:4px 5px; }
 #doc-page-body .doc-in { width:100%; box-sizing:border-box; padding:3px 5px; border:1px solid #ced4da;
     border-radius:5px; font-size:12px; background:#fff; }
 #doc-page-body .doc-in.own { border-color:#e6a817; background:#fffbe6; font-weight:bold; }

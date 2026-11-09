@@ -68,9 +68,10 @@
                     { key: '제품 코드',     from: 'meta.제품코드' },
                     { key: '모 델 명',      from: 'meta.모델풀네임' },
                     { key: 'B U Y E R',   from: 'meta.고객사' },
-                    { key: '출고 요청일',   hint: '예: 2026-02-13 X 2 SET / 2026-03-12 X 22 SET' },
+                    { key: '출고 요청일', label: '출고 요청 일자',
+                      hint: '예: 2026-02-13 X 2 SET / 2026-03-12 X 22 SET' },
                     { key: '총 제작수량',   hint: '예: 36 (24고객 + 12개발검토)' },
-                    { key: '조립 예상일' },
+                    { key: '조립 예상일', label: '조립 예상 일자', date: true },
                     { key: '출고 수량',     hint: '예: 24 (USA X 1 + UK X 1 + CTR X 22)' },
                     { key: '제작 기간',     hint: '예: 2026-02-02 ~ 2026-02-13' },
                     { key: '개발 단계',     hint: 'Proto A / Proto B / ES / PP' },
@@ -155,10 +156,10 @@
                 {
                     title: '시제품 검토 내역서 (시제품팀)', cols: 2,
                     fields: [
-                        { key: '작 성 일',   from: 'today' },
+                        { key: '작 성 일', label: '작성 일자', from: 'today' },
                         { key: '작 성 부 서', hint: '시제품팀' },
                         { key: '작 성 자' },
-                        { key: '제품 출고일' },
+                        { key: '제품 출고일', label: '제품 출고 일자', date: true },
                         { key: '제 목',      hint: '예: LNW>COSMIC SLIM SLOT 15.6"(1/2) 샘플 의뢰서' },
                         { key: '요청부서',   from: 'meta.팀' },
                         { key: 'PM 담당자',  from: 'meta.프로젝트담당자' },
@@ -169,7 +170,8 @@
                 {
                     title: '시제품 검토 내역서 (제품 보증팀) · 광학 측정', cols: 2,
                     fields: [
-                        { key: '접수일' }, { key: '검사일자' },
+                        { key: '접수일', label: '접수 일자', date: true },
+                        { key: '검사일자', label: '검사 일자', date: true },
                         { key: 'Label No.' }, { key: '검사자' },
                         { key: '부적합 내역', hint: '없으면 "없음"' },
                         { key: '계측기',      hint: '예: CA-210' }
@@ -207,7 +209,7 @@
                     fields: [
                         { key: '디버깅 제목' },
                         { key: '발생 부문',  hint: '예: H/W, F/W - EMI' },
-                        { key: '발생 일자' },
+                        { key: '발생 일자', label: '발생 일자', date: true },
                         { key: '디버깅 담당자' },
                         { key: '문제 발생',  wide: true },
                         { key: '발생 요인',  wide: true },
@@ -472,20 +474,70 @@
     //     아래 줄들의 체크가 통째로 밀려 **조용한 오답**이 된다.
     window.DOC_CHECK_FROM_RESOLUTION = window.DOC_CHECK_FROM_RESOLUTION || ['Resolution'];
     var RES_GROUPS = window.DOC_CHECK_FROM_RESOLUTION;
-    var _sheetItems = function (sh) {
+
+    // ➕ [2026-11-09 요청] 항목(묶음)마다 **내역을 더할 수 있다**.
+    //   ⚠️ 저장은 `checkAdd['<시트>\u0000<묶음>'] = [{id, q}]` 이고 **id 는 만들 때 한 번** 정한다 —
+    //      번호(자리)로 두면 앞 줄을 지우는 순간 아래 줄들의 체크가 통째로 밀린다(해상도와 같은 함정).
+    //   ⚠️⚠️ **그리기만 해도 저장이 커지면 안 된다** — 읽기(`_checkAddRead`)는 없으면 빈 배열을
+    //      돌려주기만 하고, 칸을 **만드는 건 더할 때뿐**이다. 처음엔 읽기에서도 만들었더니
+    //      화면 한 번 그릴 때마다 묶음 21개가 빈 배열로 프로젝트 파일에 적혔다(실측).
+    var _checkAddKey = function (sheetKey, group) { return sheetKey + '\u0000' + group; };
+    var _checkAddRead = function (id, sheetKey, group) {
+        var d = _docData(id);
+        return (d.checkAdd && d.checkAdd[_checkAddKey(sheetKey, group)]) || [];
+    };
+    var _checkAdd = function (id, sheetKey, group) {
+        var d = _docData(id);
+        d.checkAdd = d.checkAdd || {};
+        var k = _checkAddKey(sheetKey, group);
+        d.checkAdd[k] = d.checkAdd[k] || [];
+        return d.checkAdd[k];
+    };
+    window._docCheckAddRow = function (formId, sheetKey, group) {
+        _checkAdd(formId, sheetKey, group).push({
+            id: 'add' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), q: ''
+        });
+        _markDirty(); window._docRender();
+    };
+    window._docCheckDelRow = function (formId, sheetKey, group, rowId) {
+        var list = _checkAdd(formId, sheetKey, group);
+        var i = -1;
+        list.forEach(function (r, n) { if (r.id === rowId) i = n; });
+        if (i < 0) return;
+        var q = String(list[i].q || '').trim();
+        if (q && !confirm(_t('이 내역을 지웁니다:\n\n' + q + '\n\n체크한 것도 같이 사라집니다.', 'Delete this item?'))) return;
+        list.splice(i, 1);
+        _markDirty(); window._docRender();
+    };
+
+    var _sheetItems = function (sh, formId) {
         var out = [], done = {};
+        var push = function (it) { out.push(it); };
         (sh.items || []).forEach(function (it, n) {
-            if (RES_GROUPS.indexOf(it.g) < 0) { out.push({ g: it.g, q: it.q, id: String(n) }); return; }
+            if (RES_GROUPS.indexOf(it.g) < 0) { push({ g: it.g, q: it.q, id: String(n) }); return; }
             if (done[it.g]) return;                 // 묶음 전체를 **한 번만** 바꿔 넣는다
             done[it.g] = 1;
             var picked = window.resSelectedRows ? window.resSelectedRows() : [];
             picked.forEach(function (r) {
                 var ports = (window.RES_PORTS || []).filter(function (p) { return r.ports[p.key]; })
                     .map(function (p) { return p.label; }).join('·');
-                out.push({ g: it.g, q: r.label + (ports ? '  (' + ports + ')' : ''), id: 'res:' + r.key, res: true });
+                push({ g: it.g, q: r.label + (ports ? '  (' + ports + ')' : ''), id: 'res:' + r.key, res: true });
             });
-            if (!picked.length) out.push({ g: it.g, q: '', id: 'res:none', empty: true });
+            if (!picked.length) push({ g: it.g, q: '', id: 'res:none', empty: true });
         });
+        // ➕ 사람이 보탠 내역을 **그 묶음 끝에** 붙인다(묶음이 끊기지 않게 — rowspan 이 연속을 본다)
+        if (formId) {
+            var groups = [];
+            out.forEach(function (it) { if (groups.indexOf(it.g) < 0) groups.push(it.g); });
+            var merged = [];
+            groups.forEach(function (g) {
+                out.forEach(function (it) { if (it.g === g) merged.push(it); });
+                _checkAddRead(formId, sh.key, g).forEach(function (r) {
+                    merged.push({ g: g, q: r.q || '', id: r.id, added: true });
+                });
+            });
+            out = merged;
+        }
         return out;
     };
 
@@ -530,6 +582,11 @@
         window._docRender();
     };
     window._docSetStage = function (v) { window._docState.stage = v; window._docRender(); };
+    /** ✅ 점검요청만 보기 ↔ 전체 보기 */
+    window._docToggleChkOnly = function () {
+        window._docState.chkOnly = !window._docState.chkOnly;
+        window._docRender();
+    };
 
     // ── 📦 회차 넘기기 (M.C Table·BOM 의 제품구분자 바와 **같은 장치**) ───
     //   ⚠️ 새로 디자인하지 않는다 — 삼각형 ◀ ▶ 로 앞뒤 회차를 넘기고, 가운데 버튼은 누를 때마다
@@ -692,9 +749,18 @@
     var _ensureCss = function () { /* styles.css 가 맡는다 */ };
 
     // ── 그리기 ─────────────────────────────────────────────────────────
-    var _inputCell = function (id, key, value, own, src, hint, span) {
+    // 📅 [2026-11-09 요청] 날짜 칸은 **앱 공용 달력 모달**로 고른다 — `readonly` + `showGenericCalendar`.
+    //   ⚠️ 새 달력을 만들지 않는다. 앱 전체가 이 하나(js/04i)를 쓴다(간트·Summary·공휴일…).
+    //   ⚠️ 타이핑도 되게 더블클릭 보조를 같이 건다(`_msEnableDirectEdit`, 마일스톤 칸과 같은 규칙).
+    var _dateAttrs = function () {
+        return ' readonly onclick="window.showGenericCalendar && window.showGenericCalendar(this)"'
+             + ' ondblclick="window._msEnableDirectEdit && window._msEnableDirectEdit(this)"'
+             + ' style="cursor:pointer;"';
+    };
+    var _inputCell = function (id, key, value, own, src, hint, span, isDate) {
         return '<td' + (span ? ' colspan="' + span + '"' : '') + '>'
-            + '<input type="text" value="' + _esc(value) + '" placeholder="' + _esc(hint || '') + '"'
+            + '<input type="' + (isDate ? 'date' : 'text') + '" value="' + _esc(value) + '"'
+            + (isDate ? _dateAttrs() : ' placeholder="' + _esc(hint || '') + '"')
             + ' data-doc-key="' + _esc(key) + '" class="doc-in' + (own ? ' own' : '') + '">'
             + '<div class="doc-src' + (own ? ' own' : '') + '">'
             + (own
@@ -840,8 +906,28 @@
                     h += '<tr><td style="color:#b1432f;">'
                        + _esc(_t('점검표 데이터(js/68)를 불러오지 못했습니다.', 'check sheet data missing')) + '</td></tr>';
                 }
-                h += '</table>';
+                // ✅ [2026-11-09 요청] **개발담당자 점검요청을 켠 것만** 보기 —
+                //    해상도 팝업·Customer SPEC 의 `🔽 펼치기` 와 같은 뜻이다(새로 디자인하지 않는다).
+                //    ⚠️ 167항목을 다 펼쳐 두면 "내가 뭘 요청했는지" 가 안 보인다.
+                var chkOnly = !!window._docState.chkOnly;
+                h += '</table><div class="doc-noprint" style="margin:2px 0 8px;">'
+                   + '<button onclick="window._docToggleChkOnly()" style="padding:4px 10px; font-size:11.5px;'
+                   + ' cursor:pointer; border:1px solid #a3d9e0; border-radius:5px; font-weight:bold;'
+                   + ' background:' + (chkOnly ? '#00707d' : '#e0f5f7') + '; color:' + (chkOnly ? '#fff' : '#00707d') + ';">'
+                   + (chkOnly ? '🔽 ' + _esc(_t('전체 보기', 'Show all'))
+                              : '🔼 ' + _esc(_t('점검요청만', 'Requested only'))) + '</button>'
+                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
+                   + _esc(_t('개발담당자 칸에 ‘점검요청’ 을 켜 둔 내역만 보여 줍니다.',
+                             'Only items you asked to be checked.')) + '</span></div>';
                 sheets.forEach(function (sh) {
+                    var items = _sheetItems(sh, form.id);
+                    if (chkOnly) {
+                        items = items.filter(function (it) {
+                            return _docData(form.id).fields['chk|' + sh.key + '|' + it.id + '|점검요청'] === 'O';
+                        });
+                        // 요청한 게 하나도 없는 장은 **제목째** 접는다(빈 표만 남으면 더 헷갈린다)
+                        if (!items.length) return;
+                    }
                     h += '<div class="doc-sec">' + _esc(sh.key) + '</div>';
                     h += '<table class="doc-t" style="table-layout:fixed;">'
                        + '<colgroup><col style="width:110px"><col><col style="width:168px">'
@@ -850,7 +936,6 @@
                        + '<th>' + _esc(_t('개발담당자', 'Dev')) + '</th>'
                        + '<th>' + _esc(_t('시제품담당자', 'Proto')) + '</th>'
                        + '<th>' + _esc(_t('제품보증담당자', 'QA')) + '</th></tr>';
-                    var items = _sheetItems(sh);
                     // 🧩 [2026-11-09 요청] 항목(묶음)은 **한 칸으로 묶는다**(rowspan).
                     //    ⚠️ 항목마다 줄이 **둘**(점검 줄 + Note 줄)이라 묶는 높이는 개수 × 2 다.
                     var span = {};
@@ -880,14 +965,33 @@
                         //       것이고, 원본을 다시 뽑아도 안 지워진다.
                         var tkey = base + 'text';
                         var tv = _hasOwn(form.id, tkey) ? _docData(form.id).fields[tkey] : it.q;
+                        // ⚠️ 묶음 칸은 **줄바꿈**(`doc-grp`) — `Appearance Inspection`·`조립 성 및 Rework`
+                        //    같은 긴 이름이 110px 칸을 삐져나갔다(사용자 지적).
+                        // ➕ 그 칸 밑에 **행 추가**를 둔다 — 줄을 하나 더 끼우면 rowspan 셈이 틀어진다.
                         h += '<tr>'
-                           + (span[n] ? '<td class="doc-lab" style="text-align:center; vertical-align:middle;"'
-                                        + ' rowspan="' + span[n] + '">' + _esc(it.g) + '</td>' : '')
-                           + '<td><input type="text" class="doc-in' + (_hasOwn(form.id, tkey) ? ' own' : '') + '"'
-                           + ' data-doc-text="' + _esc(tkey) + '" data-doc-def="' + _esc(it.q) + '"'
-                           + ' value="' + _esc(tv) + '" style="font-size:11.5px;"'
-                           + (it.empty ? ' placeholder="' + _esc(_t('지원 해상도에서 고르면 여기에 나옵니다', 'pick resolutions above')) + '"' : '')
-                           + '></td>'
+                           + (span[n] ? '<td class="doc-lab doc-grp" style="vertical-align:middle;"'
+                                        + ' rowspan="' + span[n] + '">' + _esc(it.g)
+                                        + (chkOnly ? '' :
+                                           '<div class="doc-noprint" style="margin-top:3px; font-weight:normal;">'
+                                           + '<a href="#" onclick="window._docCheckAddRow(\'' + _esc(form.id) + '\',\''
+                                           + _esc(sh.key).replace(/'/g, "\\'") + '\',\'' + _esc(it.g).replace(/'/g, "\\'")
+                                           + '\');return false;" style="color:#1971c2; font-size:10.5px;">＋ '
+                                           + _esc(_t('행 추가', 'Add row')) + '</a></div>')
+                                        + '</td>' : '')
+                           + '<td><input type="text" class="doc-in' + ((it.added || _hasOwn(form.id, tkey)) ? ' own' : '') + '"'
+                           + (it.added ? ' data-doc-add="' + _esc(sh.key) + '\u0001' + _esc(it.g) + '\u0001' + _esc(it.id) + '"'
+                                       : ' data-doc-text="' + _esc(tkey) + '" data-doc-def="' + _esc(it.q) + '"')
+                           + ' value="' + _esc(tv) + '" style="font-size:11.5px;'
+                           + (it.added ? ' width:calc(100% - 20px);' : '') + '"'
+                           + (it.added ? ' placeholder="' + _esc(_t('보탤 점검 내역을 적으세요', 'new item')) + '"'
+                              : (it.empty ? ' placeholder="' + _esc(_t('지원 해상도에서 고르면 여기에 나옵니다', 'pick resolutions above')) + '"' : ''))
+                           + '>'
+                           + (it.added ? '<a href="#" onclick="window._docCheckDelRow(\'' + _esc(form.id) + '\',\''
+                                         + _esc(sh.key).replace(/'/g, "\\'") + '\',\'' + _esc(it.g).replace(/'/g, "\\'")
+                                         + '\',\'' + _esc(it.id) + '\');return false;"'
+                                         + ' class="doc-noprint" title="' + _esc(_t('이 줄 빼기', 'remove'))
+                                         + '" style="color:#b1432f; margin-left:4px;">✕</a>' : '')
+                           + '</td>'
                            + cell(['점검요청', '해당없음']) + cell(['합격', '불합격', 'N/A']) + cell(['합격', '불합격', 'N/A'])
                            + '</tr>'
                            // 📝 확인자 의견 줄 — 원본이 항목마다 하나씩 들고 있다.
@@ -958,7 +1062,7 @@
                        // 📦 회차 — 비우거나 1 이면 단계 이름이 곧 문서 이름이다(옛 문서가 그대로 열린다)
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|seq" value="' + _esc(r.seq || '') + '"'
                        + ' placeholder="1" style="text-align:center;"></td>'
-                       + '<td><input type="date" class="doc-in" data-doc-hist="' + i + '|date" value="' + _esc(r.date || '') + '"></td>'
+                       + '<td><input type="date" class="doc-in" data-doc-hist="' + i + '|date" value="' + _esc(r.date || '') + '"' + _dateAttrs() + '></td>'
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|qty" value="' + _esc(r.qty || '') + '"'
                        + ' placeholder="' + _esc(_t('예: 24', 'e.g. 24')) + '"></td>'
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|doc" value="' + _esc(r.doc || '') + '"'
@@ -1035,7 +1139,7 @@
                     r.cells.forEach(function (c) {
                         if (c.fixed !== undefined) { h += '<td class="doc-lab" style="text-align:center;">' + _esc(c.fixed) + '</td>'; return; }
                         var own = _hasOwn(form.id, c.key), a = _autoOf(ctx, c.from);
-                        h += _inputCell(form.id, c.key, own ? _docData(form.id).fields[c.key] : a.v, own, a.src, c.hint);
+                        h += _inputCell(form.id, c.key, own ? _docData(form.id).fields[c.key] : a.v, own, a.src, c.hint, 0, !!c.date);
                     });
                     h += '</tr>';
                 });
@@ -1082,7 +1186,7 @@
                     var own = _hasOwn(form.id, f.key), a = _autoOf(ctx, f.from);
                     h += '<td class="doc-lab">' + _esc(f.label || f.key) + '</td>'
                        + _inputCell(form.id, f.key, own ? _docData(form.id).fields[f.key] : a.v, own, a.src, f.hint,
-                                    wide ? (cols * 2 - 1) : 0);
+                                    wide ? (cols * 2 - 1) : 0, !!f.date);
                     if (wide || (i % cols) === cols - 1 || i === s.fields.length - 1) h += '</tr>';
                 }
             }
@@ -1096,6 +1200,16 @@
             if (!el || !el.getAttribute) return;
             var key = el.getAttribute('data-doc-key');
             if (key) { window._docSetField(form.id, key, el.value); return; }
+            // ➕ 사람이 보탠 점검 내역 — 그 줄 자체에 적는다(기본값이 없다)
+            var ak = el.getAttribute('data-doc-add');
+            if (ak) {
+                var ap = ak.split('\u0001');
+                _checkAdd(form.id, ap[0], ap[1]).forEach(function (row) {
+                    if (row.id === ap[2]) row.q = el.value;
+                });
+                _markDirty();
+                return;
+            }
             // ✏️ 점검표 내역 — 기본값(카탈로그)과 같아지면 **저장에서 뺀다**
             var tk = el.getAttribute('data-doc-text');
             if (tk) {
@@ -1335,7 +1449,7 @@
         }
         h += '<table style="border-collapse:collapse; width:100%; font-size:11.5px;"><tr>'
               + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('문서번호', 'No.')) + '</th>'
-              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안일', 'Date')) + '</th>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안 일자', 'Date')) + '</th>'
               + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안자', 'Drafter')) + '</th>'
               + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('제목', 'Title')) + '</th></tr>';
         p.docs.forEach(function (d, i) {
@@ -1563,7 +1677,7 @@
                     rows.push([_t('항목', 'Group'), _t('내역', 'Item'), _t('개발', 'Dev'),
                                _t('시제품', 'Proto'), _t('보증', 'QA'), _t('확인자 의견', 'Comment')]);
                     // ⚠️ 화면과 **같은 목록**(해상도 연결·내역 수정 포함)을 쓴다 — 두 벌로 두면 갈라진다
-                    _sheetItems(sh).forEach(function (it) {
+                    _sheetItems(sh, formId).forEach(function (it) {
                         var base = 'chk|' + sh.key + '|' + it.id + '|';
                         var on = function (cols) {
                             return cols.filter(function (c) { return d.fields[base + c] === 'O'; }).join(',');

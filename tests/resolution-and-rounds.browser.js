@@ -384,7 +384,9 @@
             ok(labs.length === 1 && labs[0].rowSpan === 4,
                '묶음이 한 칸으로 안 묶인다 (칸 ' + labs.length + '개, rowspan ' + (labs[0] && labs[0].rowSpan) + ')');
             var hw = sheetOf('SAMPLE CHECK SHEET(하드웨어) 1');
-            var hwLabs = [].map.call(hw.querySelectorAll('td.doc-lab'), function (td) { return td.textContent + '×' + td.rowSpan; });
+            // ⚠️ 묶음 칸에 [＋ 행 추가] 링크가 들어 있으므로 **첫 글자 마디만** 본다
+            var grpName = function (td) { return (td.firstChild && td.firstChild.nodeValue || td.textContent).trim(); };
+            var hwLabs = [].map.call(hw.querySelectorAll('td.doc-lab'), function (td) { return grpName(td) + '×' + td.rowSpan; });
             ok(hwLabs.join(',') === 'ADB×14,Converter×10,PANEL×12,LED TRIM×12',
                '다른 장의 묶음이 안 묶인다: ' + hwLabs.join(','));
             // ✏️ 내역은 고칠 수 있고, 기본값으로 되돌리면 저장에서 빠진다
@@ -421,6 +423,110 @@
             ok(!aoaChk.some(function (r) { return r && String(r[1] || '') === 'MAC 832×624@74.6'; }),
                '엑셀에 안 고른 해상도가 남아 있다');
             window.resClearAll();
+
+            // ═══ 5-3-2. 점검표 — 줄바꿈 · 점검요청만 · 행 추가 ═══════════════
+            window._docRender();
+            var hw2 = sheetOf('SAMPLE CHECK SHEET(하드웨어) 2');
+            var longGrp = [].filter.call(hw2.querySelectorAll('td.doc-grp'), function (td) {
+                return /Appearance Inspection/.test(td.textContent);
+            })[0];
+            ok(!!longGrp, '긴 묶음 이름 칸을 못 찾았다');
+            ok(getComputedStyle(longGrp).whiteSpace !== 'nowrap', '긴 묶음 이름이 줄바꿈되지 않는다');
+            ok(longGrp.scrollWidth <= longGrp.clientWidth + 1,
+               '묶음 이름이 칸을 삐져나간다 (' + longGrp.scrollWidth + ' > ' + longGrp.clientWidth + ')');
+
+            // ➕ 항목마다 행 추가 — 묶음 칸 안의 링크
+            var dchk = window.tabData.documents['sample-report@PROTO A'];
+            ok(!dchk.checkAdd, '⚠️ 그리기만 했는데 저장이 커졌다 (빈 묶음이 파일에 적힌다)');
+            var addLinks = [].filter.call(document.querySelectorAll('#doc-page-body td.doc-grp a'), function (a) {
+                return /행 추가|Add row/.test(a.textContent);
+            });
+            ok(addLinks.length >= 20, '묶음마다 [＋ 행 추가]가 없다 (' + addLinks.length + ')');
+            addLinks[0].click();
+            var added = document.querySelectorAll('#doc-page-body input[data-doc-add]');
+            ok(added.length === 1, '행이 안 늘어난다 (' + added.length + ')');
+            added[0].value = '보탠 점검 내역';
+            added[0].dispatchEvent(new Event('input', { bubbles: true }));
+            var addKeys = Object.keys(window.tabData.documents['sample-report@PROTO A'].checkAdd || {});
+            ok(addKeys.length === 1, '보탠 줄이 한 묶음에만 적혀야 한다 (' + addKeys.length + ')');
+            var addRow = window.tabData.documents['sample-report@PROTO A'].checkAdd[addKeys[0]][0];
+            ok(addRow && addRow.q === '보탠 점검 내역', '보탠 내역이 저장 안 된다');
+            ok(addRow && /^add/.test(addRow.id), '보탠 줄의 열쇠가 번호다(자리가 바뀌면 체크가 밀린다): ' + (addRow && addRow.id));
+            // 보탠 줄도 체크할 수 있고 엑셀에 나온다
+            var addTr = added[0].closest('tr');
+            [].filter.call(addTr.querySelectorAll('.doc-chk'), function (s) { return s.textContent.indexOf('점검요청') === 0; })[0].click();
+            ok(window._docToAoa('sample-report').some(function (r) { return r && r[1] === '보탠 점검 내역'; }),
+               '보탠 내역이 엑셀에 안 들어간다');
+
+            // ✅ 점검요청만 보기
+            var nItems = function () { return document.querySelectorAll('#doc-page-body input[data-doc-text],#doc-page-body input[data-doc-add]').length; };
+            var allN = nItems();
+            var chkBtn = [].filter.call(document.querySelectorAll('#doc-page-body button'), function (b) {
+                return /점검요청만|Requested only/.test(b.textContent);
+            })[0];
+            ok(!!chkBtn, '[점검요청만] 버튼이 없다');
+            chkBtn.click();
+            ok(nItems() === 1, '점검요청 켠 1줄만 남아야 한다 (' + nItems() + ')');
+            var backBtn = [].filter.call(document.querySelectorAll('#doc-page-body button'), function (b) {
+                return /전체 보기|Show all/.test(b.textContent);
+            })[0];
+            ok(!!backBtn, '[전체 보기] 로 안 바뀐다');
+            backBtn.click();
+            ok(nItems() === allN, '다시 펼쳐도 전체가 안 돌아온다 (' + nItems() + ' ≠ ' + allN + ')');
+            // 보탠 줄 빼기 — 확인창은 건너뛴다
+            var oc = window.confirm; window.confirm = function () { return true; };
+            document.querySelector('#doc-page-body input[data-doc-add]').closest('td')
+                .querySelector('a').click();
+            window.confirm = oc;
+            ok(document.querySelectorAll('#doc-page-body input[data-doc-add]').length === 0, '보탠 줄이 안 빠진다');
+
+            // ═══ 5-3-3. 📅 날짜 칸 — 말(일자) 통일 · 앱 공용 달력 ═══════════
+            window._docPick('proto-req');
+            var dIn = document.querySelector('#doc-page-body input[data-doc-hist$="|date"]');
+            ok(!!dIn && dIn.readOnly, '출고 일자 칸이 달력 전용(readonly)이 아니다');
+            ok(/showGenericCalendar/.test(dIn.getAttribute('onclick') || ''), '출고 일자가 앱 공용 달력을 안 쓴다');
+            // 달력을 실제로 열어 하루를 골라 본다 (앱이 쓰는 그 팝업)
+            dIn.click();
+            var pop = document.getElementById('calendar-popup');
+            ok(!!pop && getComputedStyle(pop).display !== 'none', '달력 모달이 안 열린다');
+            var day15 = [].filter.call(pop.querySelectorAll('*'), function (e) {
+                return e.children.length === 0 && e.textContent.trim() === '15';
+            })[0];
+            ok(!!day15, '달력에서 날짜를 못 찾았다');
+            day15.click();
+            ok(/^\d{4}-\d{2}-15$/.test(dIn.value), '달력에서 고른 날짜가 칸에 안 들어간다: ' + dIn.value);
+            var histRow0 = ((window.tabData.documents['proto-req'] || {}).history || [])[0] || {};
+            ok(/^\d{4}-\d{2}-15$/.test(histRow0.date || ''), '고른 날짜가 저장에 안 들어간다: ' + histRow0.date);
+            // 말은 `일자` 로 통일 — 라벨에 `…일` 로 끝나는 날짜 칸이 없어야 한다
+            var DATE_FIELDS = [];
+            (window.DOC_FORMS || []).forEach(function (f) {
+                (f.sections || []).forEach(function (sec) {
+                    (sec.fields || []).forEach(function (fl) {
+                        var L = fl.label || fl.key;
+                        if (/일자$|일$/.test(L)) DATE_FIELDS.push(f.id + ' ▸ ' + L);
+                    });
+                });
+            });
+            var bad = DATE_FIELDS.filter(function (L) { return !/일자$/.test(L); });
+            ok(!bad.length, '날짜 칸 이름이 `일자` 로 안 맞춰졌다: ' + bad.join(', '));
+            // `date:true` 칸은 달력으로 뜬다
+            var dateKeys = [];
+            (window.DOC_FORMS || []).forEach(function (f) {
+                (f.sections || []).forEach(function (sec) {
+                    (sec.fields || []).forEach(function (fl) { if (fl.date) dateKeys.push(fl.key); });
+                });
+            });
+            ok(dateKeys.length >= 3, '달력으로 뜰 날짜 칸이 너무 적다 (' + dateKeys.length + ')');
+            window._docPick('sample-report');
+            var dateInputs = [].filter.call(document.querySelectorAll('#doc-page-body input[data-doc-key]'), function (i) {
+                return dateKeys.indexOf(i.getAttribute('data-doc-key')) >= 0;
+            });
+            ok(dateInputs.length > 0 && dateInputs.every(function (i) {
+                return i.type === 'date' && i.readOnly && /showGenericCalendar/.test(i.getAttribute('onclick') || '');
+            }), 'date 칸이 달력 모달로 안 뜬다');
+            // ⚠️ 저장 열쇠(`key`)는 그대로여야 한다 — 바꾸면 적어 둔 값이 사라진다
+            ok(dateKeys.indexOf('검사일자') >= 0 && dateKeys.indexOf('접수일') >= 0,
+               '날짜 칸의 저장 열쇠가 바뀌었다 (적어 둔 값이 사라진다)');
 
             // ═══ 5-4. 🗂 문서마다 제 NAS 폴더 ═════════════════════════════
             //   사용자 신고(2026-11-09): "DOCUMENT 하위 폴더가 생성되지 않음 /
