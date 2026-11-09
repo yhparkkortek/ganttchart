@@ -13,6 +13,9 @@
                  filt: localStorage.getItem(P.filterKey), scan: P.scanProjects };
     // ⚠️ 다른 프로젝트 훑기는 **끈다** — 이 하네스는 픽스처만 본다(NAS 가 섞이면 숫자가 흔들린다).
     P.scanProjects = false;
+    // ⚠️ 끄는 것만으로는 **이미 모아 둔 사실**이 안 사라진다 — 진짜 NAS 데이터가
+//    픽스처 시험에 섮여 숫자가 틀어진다(2026-11-09 여기서 두 건 가짜 실패가 났다).
+    if (window._psResetScan) window._psResetScan();
     localStorage.removeItem(P.filterKey);
     var pad = function (n) { return String(n).padStart(2, '0'); };
     var ymd = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
@@ -125,6 +128,79 @@
         var sigB = window._psCollectFacts('month').sig;
         ok('필터가 다르면 요약 캐시 열쇠도 다르다', sigA !== sigB, sigA + ' vs ' + sigB);
         window._psSetFilter({ who: '', proj: '' });
+
+        // ══ 기간을 바꿔도 NAS 를 다시 읽지 않는다 (2026-11-09 신고) ═══════════
+        // ⚠️ 신고: "일일/주간/월간/기간설정마다 담당자·프로젝트 업무를 못 가져오는 건지
+        //    표현이 안 되는 건지 동작이 이상함". 원인은 캐시 열쇠에 **기간**이 들어가서
+        //    누를 때마다 프로젝트 파일을 전부 다시 읽은 것(실측 1.0~7.5초). 그 동안 화면은
+        //    "0건 · 선택지 없음" 이라 **못 가져오는 것처럼** 보였다.
+        var scanCalls = 0;
+        var realScan = window.dailyScanMyProjects;
+        var tsOf = function (d) { return d.getTime(); };
+        window.dailyScanMyProjects = function (tag, collect, onStep) {
+            scanCalls++;
+            // 다른 프로젝트 한 개 — 오늘 1건, 40일 전 1건(월간·기간설정에서만 보여야 한다)
+            var mk = function (idx, when, who) {
+                return { idx: idx, date: ymd(when), _ts: tsOf(when), task: '타프로젝트 ' + idx,
+                         cat: 'HW', assignee: who, project: 'OTHER_PROJ', local: false,
+                         status: '', sender: '', receiver: '', core: 'x', todo: '', issue: '', fix: '', answer: '' };
+            };
+            var got = { project: 'OTHER_PROJ', scanned: 2, facts: [mk(901, today, '남담당'), mk(902, D(-40), '남담당')] };
+            if (onStep) onStep({ done: 0, total: 1, kept: 0 });
+            // 진짜 스캐너처럼 **한 건 끝나자마자** collect 를 부른다(그 안에서 합친다)
+            collect({ rows: [], ci: {}, meta: {}, members3: [], project: 'OTHER_PROJ' });
+            return Promise.resolve({ results: [got], total: 1, kept: 1, errs: [], entries: [] });
+        };
+        P.scanProjects = true;
+        window._psResetScan();
+        // ⚠️ 가짜 collect 는 빈 행을 주므로 facts 가 0 이다 — 모아 두는 쪽을 직접 채워 흉내 낸다.
+        window._psScan();
+        await new Promise(function (r) { setTimeout(r, 50); });
+        window._psOtherScan.facts = [
+            { idx: 901, date: ymd(today), _ts: tsOf(today), task: '타프로젝트 오늘', cat: 'HW',
+              assignee: '남담당', project: 'OTHER_PROJ', local: false, core: 'x', todo: '', issue: '', fix: '', answer: '' },
+            { idx: 902, date: ymd(D(-40)), _ts: tsOf(D(-40)), task: '타프로젝트 지난달', cat: 'HW',
+              assignee: '남담당', project: 'OTHER_PROJ', local: false, core: 'y', todo: '', issue: '', fix: '', answer: '' }
+        ];
+        window._psOtherScan.loaded = true;
+        window._psOtherScan.busy = false;
+
+        var before = scanCalls;
+        var cDay = window._psCollectFacts('day');
+        var cMon = window._psCollectFacts('month');
+        window._psSetFilter({ from: ymd(D(-45)), to: ymd(D(-35)) });
+        var cCus = window._psCollectFacts(P.customId);
+        ok('기간을 바꿔도 다시 훑지 않는다', scanCalls === before, scanCalls + ' vs ' + before);
+        ok('일일엔 오늘 것만 온다', cDay.facts.some(function (f) { return f.idx === 901; }) &&
+           !cDay.facts.some(function (f) { return f.idx === 902; }),
+           cDay.facts.map(function (f) { return f.idx; }).join(','));
+        ok('월간/기간설정엔 그 기간 것이 온다',
+           cMon.facts.some(function (f) { return f.idx === 901; }) &&
+           cCus.facts.some(function (f) { return f.idx === 902; }) &&
+           !cCus.facts.some(function (f) { return f.idx === 901; }),
+           JSON.stringify([cMon.facts.map(function (f) { return f.idx; }), cCus.facts.map(function (f) { return f.idx; })]));
+        ok('다른 프로젝트 담당자가 고를 거리에 들어온다', cMon.people.indexOf('남담당') >= 0, JSON.stringify(cMon.people));
+        ok('다른 프로젝트가 고를 거리에 들어온다', cMon.projects.indexOf('OTHER_PROJ') >= 0, JSON.stringify(cMon.projects));
+        window._psSetFilter({ from: '', to: '' });
+
+        // ⚠️ 훑는 중엔 "없습니다" 라고 하면 안 된다 — 없는 것과 아직 못 읽은 것이 구분이 안 된다.
+        window._psOtherScan.facts = [];
+        window._psOtherScan.busy = true;
+        window._psOtherScan.done = 2; window._psOtherScan.total = 5;
+        window._psSetFilter({ from: '2020-01-01', to: '2020-01-31' });   // 확실히 0건인 기간
+        window._psSetMode(P.customId);
+        await new Promise(function (r) { setTimeout(r, 200); });
+        var busyTxt = document.getElementById('ai-summary-body').innerText;
+        ok('훑는 중엔 "확인하는 중" 이라고 말한다', /확인하는 중|Scanning/.test(busyTxt) && !/없습니다/.test(busyTxt),
+           busyTxt.split('\n').filter(Boolean).slice(-2));
+        window._psOtherScan.busy = false;
+        await new Promise(function (r) { setTimeout(r, 150); });
+        window._renderAiProjectSummaryBody();
+        ok('다 읽고 나서야 "없습니다"', /없습니다|No mail-derived/.test(document.getElementById('ai-summary-body').innerText));
+        window._psSetFilter({ from: '', to: '' });
+        window.dailyScanMyProjects = realScan;
+        window._psResetScan();
+        P.scanProjects = false;
 
     } finally {
         window.globalData = keep.gd; window.colIdx = keep.ci; window.projectMeta = keep.pm; window.callAiBackend = keep.call; window.getActiveAiKey = keep.key; window._ganttQaHistory = keep.hist || [];

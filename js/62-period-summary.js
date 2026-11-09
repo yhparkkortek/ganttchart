@@ -140,6 +140,8 @@
      * `ctx` = { rows, ci, meta, members3, project }
      */
     function collectFrom(ctx, R) {
+        // ⚠️ `R` 이 없으면 **기간을 안 거른다** — 다른 프로젝트는 "한 번 읽어 전부 모아 두고"
+        //    기간은 화면에서 거른다(아래 `_psScan` 주석 참고).
         var gd = ctx.rows, ci = ctx.ci || {};
         var out = [], scanned = 0;
         if (!Array.isArray(gd)) return { facts: out, scanned: 0 };
@@ -150,11 +152,13 @@
             if (!p.isMail && !(P.includeNonMail && content.trim())) continue;
             scanned++;
             var d = window._psFactDate(row, content, ci);
-            if (!d || d < R.from || d > R.to) continue;
+            if (!d) continue;
+            if (R && (d < R.from || d > R.to)) continue;
             var people = window._extractMailSenderReceiver ? window._extractMailSenderReceiver(content) : { sender: p.from || '', receiver: p.to || '' };
             var cat = String(row._담당구분 || '').trim();
             out.push({
-                idx: i, date: ymd(d), task: taskName(row) || T('(제목 없음)', '(untitled)'),
+                idx: i, date: ymd(d), _ts: d.getTime(),
+                task: taskName(row) || T('(제목 없음)', '(untitled)'),
                 cat: cat,
                 // 👤 담당자 — 역할(`_담당구분`)을 **그 프로젝트의** projectMeta 로 푼다.
                 //    ⚠️ 해석기는 js/59 `_dailyCatAssignee` 하나를 빌려 쓴다(두 벌이면 화면마다 다른 사람이 나온다).
@@ -185,45 +189,68 @@
     }
 
     // 🗂 내가 맡은 **다른** 프로젝트의 사실 — 뒤에서 모아 둔다(키는 기간).
-    var _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, done: 0, total: 0, errs: [] };
+    var _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, loaded: false,
+                     done: 0, total: 0, errs: [] };
     window._psOtherScan = _psOther;
 
     /** 🧹 사람이 바뀌면(js/64) 모아 둔 사실은 앞사람 기준이다 — 버린다. */
     window._psResetScan = function () {
-        _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, done: 0, total: 0, errs: [] };
+        _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, loaded: false,
+                     done: 0, total: 0, errs: [] };
         window._psOtherScan = _psOther;
     };
 
     /**
-     * 기간이 바뀌면 다시 모은다. **기다리게 하지 않는다** — 열린 프로젝트로 먼저 그리고,
-     * 한 건 끝날 때마다 다시 그린다(js/59 와 같은 방식, 같은 공용 스캐너를 쓴다).
+     * 내가 맡은 프로젝트의 사실을 **한 번만** 읽어 전부 모아 둔다. 기간은 화면에서 거른다.
+     *
+     * ⚠️⚠️ [2026-11-09 신고 "일일/주간/월간/기간설정마다 동작이 이상함"] 처음엔 캐시 열쇠에
+     *    **기간**을 넣어서, 일일↔주간↔월간을 누를 때마다 프로젝트 파일 13개를 **전부 다시
+     *    읽었다**(실측 1.0~7.5초). 그 동안 화면은 "0건 · 담당자 전체(선택지 없음)" 였고,
+     *    사람 눈엔 **못 가져오는 것처럼** 보였다. 파일은 그대로인데 날짜 조건만 달라지는 것이니
+     *    다시 읽을 이유가 없다 → 전 기간을 한 벌 들고 메모리에서 거른다(실측 7개 프로젝트
+     *    1,433건, 몇 MB 가 안 된다).
+     * ⚠️ 기다리게 하지 않는다 — 한 건 끝날 때마다 **바로 합치고** 다시 그린다(전엔 전부 끝난
+     *    뒤에야 합쳐서, 3초 내내 아무것도 안 보였다).
      */
-    window._psScan = function (R) {
+    window._psScan = function () {
         if (!P.scanProjects || typeof window.dailyScanMyProjects !== 'function') return;
-        if (_psOther.busy || _psOther.key === R.key) return;
-        _psOther = { key: R.key, facts: [], scanned: 0, projects: [], busy: true, done: 0, total: 0, errs: [] };
+        if (_psOther.busy || _psOther.loaded) return;
+        _psOther = { key: 'all', facts: [], scanned: 0, projects: [], busy: true, loaded: false,
+                     done: 0, total: 0, errs: [] };
         window._psOtherScan = _psOther;
         var mine = _psOther;
-        window.dailyScanMyProjects('psfacts|' + R.key, function (ctx) {
-            var g = collectFrom(ctx, R);
-            return { project: ctx.project, facts: g.facts, scanned: g.scanned };
+        function repaint() {
+            if (window._renderAiProjectSummaryBody && mode() !== P.legacyId) window._renderAiProjectSummaryBody();
+        }
+        window.dailyScanMyProjects('psfacts', function (ctx) {
+            var g = collectFrom(ctx, null);          // 기간은 여기서 안 거른다
+            var got = { project: ctx.project, facts: g.facts, scanned: g.scanned };
+            // 한 건 끝나자마자 합친다 — 화면이 차오르는 게 보여야 "도는 중" 임을 안다.
+            mine.facts = mine.facts.concat(got.facts);
+            mine.scanned += got.scanned;
+            if (got.facts.length) mine.projects.push(got.project);
+            return got;
         }, function (st) {
             mine.done = st.done; mine.total = st.total;
-            if (window._renderAiProjectSummaryBody && mode() !== P.legacyId) window._renderAiProjectSummaryBody();
+            repaint();
         }).then(function (r) {
-            r.results.forEach(function (g) {
-                if (!g) return;
-                mine.facts = mine.facts.concat(g.facts);
-                mine.scanned += g.scanned;
-                if (g.facts.length) mine.projects.push(g.project);
-            });
             mine.errs = r.errs;
             mine.busy = false;
-            if (window._renderAiProjectSummaryBody && mode() !== P.legacyId) window._renderAiProjectSummaryBody();
+            mine.loaded = true;
+            repaint();
         }).catch(function (e) {
             mine.errs.push(String(e && e.message || e));
             mine.busy = false;
+            repaint();
         });
+    };
+
+    /** 🧹 다시 읽어야 할 때(사람이 바뀌었다·새로고침 요청) — 캐시를 버린다. */
+    window._psReloadScan = function () {
+        _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, loaded: false,
+                     done: 0, total: 0, errs: [] };
+        window._psOtherScan = _psOther;
+        window._psScan();
     };
 
     /**
@@ -238,8 +265,12 @@
         var here = collectFrom({ rows: gd, ci: ci, meta: window.projectMeta || {},
                                  members3: (window.tabData && window.tabData.projectMembers3) || [],
                                  project: openName, local: true }, R);
-        var other = (_psOther.key === R.key) ? _psOther : { facts: [], scanned: 0, projects: [], busy: false, done: 0, total: 0, errs: [] };
-        var all = here.facts.concat(other.facts);
+        var other = _psOther;
+        // 🗓 모아 둔 건 **전 기간**이다 — 보는 기간만 여기서 거른다(NAS 를 다시 읽지 않는다).
+        var inRange = (other.facts || []).filter(function (f) {
+            return f._ts >= R.from.getTime() && f._ts <= R.to.getTime();
+        });
+        var all = here.facts.concat(inRange);
         var scanned = here.scanned + other.scanned;
 
         // 🔎 고를 거리는 **거르기 전** 목록에서 만든다 — 한 번 고르면 다른 선택지가 사라지면 안 된다.
@@ -419,7 +450,7 @@
     function renderPeriod(body, kind) {
         var col = window._psCollectFacts(kind);
         // 🗂 다른 프로젝트는 뒤에서 — 기다리지 않는다(끝나면 스스로 다시 그린다).
-        try { window._psScan(col.range); } catch (e) { /* 훑기 실패가 화면을 막지는 않는다 */ }
+        try { window._psScan(); } catch (e) { /* 훑기 실패가 화면을 막지는 않는다 */ }
         var pm = window.projectMeta || {};
         var cache = (pm.aiPeriodSummary || {})[kind];
         // ⚠️ 캐시는 **기간 + 필터**가 같을 때만 "이 화면의 요약" 이다.
@@ -441,7 +472,13 @@
                    esc(T('AI 요약은 아래 [🤖 AI 요약 생성] 을 누르면 이 기간의 사실 목록만으로 만듭니다(목록 밖의 말은 버립니다). 아래 사실 목록은 AI 없이 그린 것입니다.', 'Press [🤖 Generate AI summary] to summarize only the facts below (ungrounded sentences are dropped). The fact list needs no AI.')) + '</div>');
         }
         if (!col.facts.length) {
-            h.push('<div style="padding:24px 10px; text-align:center; color:#999; font-size:12px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>');
+            // ⚠️ 훑는 중에 "없습니다" 라고 하면 **없는 것과 아직 못 읽은 것**을 구분할 수 없다.
+            //    (그게 "못 가져오는 건지 표현이 안 되는 건지 모르겠다" 는 신고의 정체였다)
+            h.push(col.scan && col.scan.busy
+                ? '<div style="padding:24px 10px; text-align:center; color:#1971c2; font-size:12px;">⏳ ' +
+                  esc(T('내 프로젝트를 확인하는 중입니다… ' + (col.scan.done || 0) + ' / ' + (col.scan.total || 0),
+                        'Scanning my projects… ' + (col.scan.done || 0) + ' / ' + (col.scan.total || 0))) + '</div>'
+                : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>');
         } else {
             var byDate = {};
             col.facts.forEach(function (f) { (byDate[f.date] = byDate[f.date] || []).push(f); });
