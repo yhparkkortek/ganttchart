@@ -706,6 +706,17 @@ window._msLoadProjectIndex = async function() {
                     + '건 — 이번 매칭에서만 하나로 봅니다:',
                     dupDropped.map(function(p) { return p && p.file_name; }));
             }
+            // 🩹 [2026-11-09] **반대 방향도 본다 — 살아 있는 파일인데 항목이 없으면 되살린다.**
+            //    위 블록은 "없는 파일의 항목"을 걸러내고, 이건 "항목 없는 파일"을 되살린다.
+            //    막는 쪽(이 파일·백엔드 가드)은 **그 PC 가 최신이어야** 듣는데, 실측으로 낡은
+            //    PC 한 대가 계속 지웠다(2026-11-09 17:34). 고치는 쪽은 남의 PC 를 안 기다린다.
+            //    기다리지 않는다(fire-and-forget) — 이번 매칭은 `kept` 로 그대로 진행한다.
+            window._indexSnapshotRemember && window._indexSnapshotRemember(projects);
+            if (window._indexSelfHeal) {
+                window._indexSelfHeal(realFiles, kept).catch(function(e) {
+                    console.warn('[색인 복구] 호출 실패:', e && e.message);
+                });
+            }
         } catch (e) { console.warn('project_index.json 유효성 검증 실패 — 원본 목록 그대로 사용:', e.message); }
 
         // 💡 [2026-09-06] 실사용 데이터 확인 결과 — Summary 탭에 인치를 채운 뒤 저장(buildProjectIndexEntry의
