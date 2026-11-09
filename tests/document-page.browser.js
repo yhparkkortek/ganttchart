@@ -118,7 +118,7 @@
             LOG.push(''); LOG.push('── A. 문서 초안이 페이지에 펼쳐지는가 ──');
             var titles = [].slice.call(body.querySelectorAll('.doc-sec'))
                 .map(function (d) { return d.textContent.trim(); });
-            eq('구역 5개가 그려진다', titles.length, 5);
+            eq('구역 6개가 그려진다(+샘플 출고 이력)', titles.length, 6);
             ok('주요자재 표가 5행이다',
                [].slice.call(body.querySelectorAll('input[data-doc-key$="|코드"]')).length === 5);
             var toolsTxt = document.getElementById('doc-header-tools').textContent;
@@ -254,6 +254,60 @@
             eq('EDID = EDID Check Sum', q2('EDID CHECK SUM').value, 'DP 0x36');
             ok('Customer SPEC 보탬 항목이 카탈로그에 있다',
                (window.BS_EXTRA_ITEMS || []).length === 2, JSON.stringify(window.BS_EXTRA_ITEMS));
+
+            // ── D-4. 📦 샘플 출고 이력 · 🔎 그룹웨어 의뢰서 고르기 ──
+            LOG.push(''); LOG.push('── D-4. 샘플 출고 이력 ──');
+            var realConfirm2 = window.confirm;
+            window.confirm = function () { return true; };
+            window._docHistAdd(); window._docHistAdd(); window._docHistAdd();
+            await sleep(40);
+            var hist = (window.tabData.documents['proto-req'] || {}).history || [];
+            eq('회차 3줄이 생긴다', hist.length, 3);
+            // ⚠️ 회차는 **고르는 값이 아니라 적는 값**이다 — 기본값만 채우고 자유 수정(거래선마다 다르다)
+            eq('기본 회차가 PROTO A/B/C 로 붙는다', hist.map(function (r) { return r.stage; }).join(','),
+               (window.DOC_SAMPLE_STAGES || []).slice(0, 3).join(','));
+            var qi = document.querySelector('#doc-page-body input[data-doc-hist="0|qty"]');
+            var di = document.querySelector('#doc-page-body input[data-doc-hist="0|date"]');
+            ok('출고 일자 칸이 날짜 입력이다', di && di.type === 'date', di && di.type);
+            qi.value = '24'; qi.dispatchEvent(new Event('input', { bubbles: true }));
+            eq('수량이 저장된다', (window.tabData.documents['proto-req'].history[0] || {}).qty, '24');
+            // 회차를 자유롭게 고칠 수 있다(ES/PP 등)
+            var si = document.querySelector('#doc-page-body input[data-doc-hist="1|stage"]');
+            si.value = 'ES'; si.dispatchEvent(new Event('input', { bubbles: true }));
+            eq('회차를 자유 입력할 수 있다', window.tabData.documents['proto-req'].history[1].stage, 'ES');
+            // 삭제
+            window._docHistDel(2); await sleep(30);
+            eq('이력을 지울 수 있다', (window.tabData.documents['proto-req'].history || []).length, 2);
+            // 🔎 그룹웨어 고르기 — fetch 는 가짜다(그룹웨어에 요청이 안 간다)
+            var realFind = window._apvFindProjectDocs;
+            window._apvFindProjectDocs = async function () {
+                return { keyword: 'TESTPROJ', total: 9, docs: [
+                    { docNum: 'M3T-2608-011', draftedAt: '2026-08-05T10:00:00+09:00',
+                      formName: '샘플/시제품 의뢰서', drafterName: '김대환', title: 'Rev. B FA 샘플 의뢰서' }] };
+            };
+            var realEnsure = window._gwEnsureLogin;
+            window._gwEnsureLogin = async function () { return { ok: true }; };
+            await window._docGwPick(0); await sleep(60);
+            ok('고르기 모달이 열린다',
+               document.getElementById('docgw-overlay') &&
+               document.getElementById('docgw-overlay').style.display === 'flex');
+            window._docGwChoose(0); await sleep(60);
+            var h0 = window.tabData.documents['proto-req'].history[0];
+            eq('고른 문서번호가 들어간다', h0.doc, 'M3T-2608-011');
+            ok('문서 제목도 같이 들어간다', !!h0.docTitle, JSON.stringify(h0));
+            // ⚠️ 출고 일자가 비어 있으면 기안일로 채워 준다(사람이 고칠 수 있다)
+            eq('빈 출고 일자는 기안일로 채워진다', h0.date, '2026-08-05');
+            ok('고르면 모달이 닫힌다',
+               document.getElementById('docgw-overlay').style.display === 'none');
+            // 엑셀에도 이력이 들어간다
+            var aoaH = window._docToAoa('proto-req');
+            ok('엑셀에 출고 이력이 들어간다',
+               aoaH.some(function (r) { return r[3] === 'M3T-2608-011'; }),
+               JSON.stringify(aoaH.filter(function (r) { return r[0] === 'PROTO A'; })));
+            window._apvFindProjectDocs = realFind;
+            window._gwEnsureLogin = realEnsure;
+            window.confirm = realConfirm2;
+            window.tabData.documents['proto-req'].history = [];
 
             // ── E. 이미 만든 종류(DR/DVR)도 같은 페이지에서 ──
             LOG.push(''); LOG.push('── E. DR / DVR 발표자료 ──');

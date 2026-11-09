@@ -531,6 +531,24 @@
         return ctx._projDocs;
     };
 
+    // 🔎 [2026-11-09 공개] "이 프로젝트의 결재문서 찾기" 는 **여기 한 곳**이 정한다 —
+    //    Document 페이지(js/67)도 이걸 쓴다. 두 벌로 두면 한쪽만 고쳐져서 "기안에선 찾는데
+    //    문서 페이지에선 못 찾는다" 가 된다(CLAUDE.md: 같은 것을 정하는 코드가 둘이면 터진다).
+    //    forms: 양식 이름 배열(비우면 전부). 돌려주는 값: { keyword, docs }
+    window._apvProjectKeywords = _apvProjectKeywords;
+    window._apvFindProjectDocs = async function (forms) {
+        var pool = await _apvProjectDocs({});
+        var want = (forms || []).map(_norm);
+        var docs = (pool.docs || []).filter(function (x) {
+            if (!want.length) return true;
+            var key = window._apvFormKey ? window._apvFormKey(x.formName, x.title) : x.formName;
+            return want.indexOf(_norm(x.formName)) >= 0 || want.indexOf(_norm(key)) >= 0;
+        });
+        // 최근 것이 위로 — 사람이 고르는 목록이다
+        docs.sort(function (a, b) { return String(b.draftedAt || '').localeCompare(String(a.draftedAt || '')); });
+        return { keyword: pool.keyword, docs: docs, total: (pool.docs || []).length };
+    };
+
     // 그 목록에서 양식이 맞는 **가장 최근** 문서. 양식 열쇠(접두어 포함)로 맞춘다.
     var _apvNewestOf = function (docs, refForm) {
         var want = _norm(refForm);

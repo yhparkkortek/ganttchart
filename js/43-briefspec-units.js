@@ -189,7 +189,11 @@
 
         // 데이터 → 화면. 그리기 **전에** 이전·별칭을 맞춰야 옛 파일도 바로 보인다.
         _wrap('populateTabData',
-            function () { window.bsMigrateFromModelCols(); window.bsSyncAlias(_switching); },
+            function () {
+                window.bsMigrateFromModelCols();
+                window.bsSyncAlias(_switching);
+                window._bsEnsureExtraItems();
+            },
             function () { window.bsRenderUnitBar(); });
     };
 
@@ -269,6 +273,34 @@
         { type: 'F/W Version', sub: '' },
         { type: 'EDID Check Sum', sub: '' }
     ];
+
+    /**
+     * 보탬 항목이 지금 Customer SPEC 에 **없으면 뒤에 붙인다**(append-only).
+     *
+     * ⚠️⚠️ 왜 따로 필요한가 (2026-11-09 사용자 신고: "FW EDID 작성하는 곳은 어디야?")
+     *   `_bsEnsureStandardTemplate` 은 **Customer SPEC 이 비어 있을 때만** 돈다
+     *   (`hasTpl && !force` 에서 바로 return). 그래서 이미 쓰던 프로젝트에는 보탬 항목이
+     *   **영영 안 들어가고**, 문서 페이지는 "항목이 없음" 만 띄운다 — 적을 자리가 없다.
+     *   이 함수는 그 조건과 **무관하게** 돌아 빠진 것만 뒤에 붙인다.
+     * ⚠️ 기존 행은 건드리지 않는다(값·순서 보존). 이미 있으면 아무 일도 안 한다.
+     */
+    window._bsEnsureExtraItems = function () {
+        var td = _td();
+        if (!Array.isArray(td.briefSpec)) return 0;
+        var key = function (t, s) {
+            return (String(t || '').trim() + '\u0000' + String(s || '').trim()).toUpperCase();
+        };
+        var have = {};
+        td.briefSpec.forEach(function (r) { if (r) have[key(r.type, r.sub)] = true; });
+        var added = 0;
+        (window.BS_EXTRA_ITEMS || []).forEach(function (x) {
+            if (have[key(x.type, x.sub)]) return;
+            td.briefSpec.push({ type: x.type, sub: x.sub || '', modelA: '', note: '' });
+            added++;
+        });
+        if (added && window.bsSyncAlias) { try { window.bsSyncAlias(); } catch (e) { /* 별칭 실패가 흐름을 막지 않게 */ } }
+        return added;
+    };
 
     /**
      * 지금 Customer SPEC에 표준 서식이 없으면 참조 엑셀에서 가져와 채운다.

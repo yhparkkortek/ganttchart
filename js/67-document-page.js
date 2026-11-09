@@ -33,6 +33,17 @@
     var _esc = function (s) { return window.escapeHtml ? window.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); };
     var _toast = function (m, k) { if (window.showToast) window.showToast(m, k || 'info'); };
 
+    // ── 📦 샘플 출고 이력 (데이터) ───────────────────────────────────────
+    //   사용자 결정(2026-11-09): "제작 회차·출고 일자에 따라 샘플 출고 이력이 남아야 한다.
+    //   문서번호를 부여할지 Proto A/B/C 로 할지 — 어떤 거래선은 ES·PP 를 쓰는 등 다양하니
+    //   **기본은 PROTO A,B,C 로 가고 수정할 수 있게**."
+    //   ⚠️ 그래서 회차는 **고르는 값이 아니라 적는 값**이다(기본값만 넣어 주고 자유 수정).
+    //      거래선 어휘를 코드에 박으면 새 거래선마다 코드를 고쳐야 한다.
+    window.DOC_SAMPLE_STAGES = window.DOC_SAMPLE_STAGES || ['PROTO A', 'PROTO B', 'PROTO C', 'ES', 'PP'];
+    // 🔎 그룹웨어에서 찾아 고를 양식 (데이터) — 영업이 개발로 발행하는 의뢰서.
+    //   ⚠️ 양식 이름은 그룹웨어가 돌려주는 **그대로**다(실측). 다른 이름이 늘면 여기 한 줄.
+    window.DOC_REQ_FORMS = window.DOC_REQ_FORMS || ['샘플/시제품 의뢰서', '기안서[시제품 제작의뢰서]'];
+
     var MAT_ROWS = [
         { item: 'LCM(Panel)', cat: 'PANEL' },
         { item: 'A/D Board',  cat: 'AD BOARD' },
@@ -84,6 +95,8 @@
                                      { key: m.item + '|비고' }] };
                 })
             },
+            // 📦 회차마다 한 줄 — 언제 몇 개를 어느 의뢰서로 냈는지 남는다
+            { title: '# 샘플 출고 이력', kind: 'history' },
             { title: '# 요청사항', kind: 'text', key: '요청사항',
               hint: '예: Auto GAMMA Calibration / CUTTING 모델 원자재 …' },
             { title: '# 참고 자료', kind: 'text', key: '참고자료',
@@ -631,6 +644,46 @@
                     h += '</table>';
                 });
                 h += '<table style="display:none;">';
+            } else if (s.kind === 'history') {
+                // 📦 샘플 출고 이력 — 회차·출고일자·수량·그룹웨어 의뢰서
+                //   ⚠️ 회차는 **적는 값**이다(기본값만 넣어 준다) — 거래선마다 PROTO/ES/PP 가 달라
+                //      고르는 목록으로 막으면 새 거래선이 못 들어온다(사용자 결정 2026-11-09).
+                var hist = _docData(form.id).history || [];
+                h += '<tr><th style="width:120px;">' + _esc(_t('회차', 'Stage')) + '</th>'
+                   + '<th style="width:140px;">' + _esc(_t('출고 일자', 'Shipped')) + '</th>'
+                   + '<th style="width:100px;">' + _esc(_t('수량', 'Qty')) + '</th>'
+                   + '<th>' + _esc(_t('그룹웨어 의뢰서', 'Request doc')) + '</th>'
+                   + '<th class="doc-noprint" style="width:56px;"></th></tr>';
+                if (!hist.length) {
+                    h += '<tr><td colspan="5" style="color:#868e96;">'
+                       + _esc(_t('아직 출고 이력이 없습니다 — 아래 [＋ 회차 추가]를 누르세요.', 'No shipping history yet.'))
+                       + '</td></tr>';
+                }
+                hist.forEach(function (r, i) {
+                    h += '<tr>'
+                       + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|stage" value="' + _esc(r.stage || '') + '"></td>'
+                       + '<td><input type="date" class="doc-in" data-doc-hist="' + i + '|date" value="' + _esc(r.date || '') + '"></td>'
+                       + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|qty" value="' + _esc(r.qty || '') + '"'
+                       + ' placeholder="' + _esc(_t('예: 24', 'e.g. 24')) + '"></td>'
+                       + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|doc" value="' + _esc(r.doc || '') + '"'
+                       + ' placeholder="' + _esc(_t('그룹웨어 문서번호', 'doc no.')) + '">'
+                       + '<div class="doc-src doc-noprint">'
+                       + '<a href="#" onclick="window._docGwPick(' + i + ');return false;" style="color:#1971c2;">🔎 '
+                       + _esc(_t('그룹웨어에서 찾기', 'find in groupware')) + '</a>'
+                       + (r.docTitle ? ' <span style="opacity:.8;">' + _esc(r.docTitle) + '</span>' : '')
+                       + '</div></td>'
+                       + '<td class="doc-noprint" style="text-align:center;">'
+                       + '<a href="#" onclick="window._docHistDel(' + i + ');return false;" style="color:#b1432f; font-size:11px;">'
+                       + _esc(_t('삭제', 'del')) + '</a></td></tr>';
+                });
+                h += '</table><div class="doc-noprint" style="margin-top:6px;">'
+                   + '<button onclick="window._docHistAdd()" style="padding:4px 10px; font-size:11.5px; cursor:pointer;'
+                   + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">＋ '
+                   + _esc(_t('회차 추가', 'Add')) + '</button>'
+                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
+                   + _esc(_t('회차는 기본 PROTO A·B·C 로 채워지고 자유롭게 고칠 수 있습니다(ES·PP 등).',
+                             'Stage defaults to PROTO A/B/C and is editable.')) + '</span></div>'
+                   + '<table style="display:none;">';
             } else if (s.kind === 'text') {
                 var tv = _hasOwn(form.id, s.key) ? _docData(form.id).fields[s.key] : '';
                 h += '<tr><td><textarea data-doc-key="' + _esc(s.key) + '" rows="3" placeholder="' + _esc(s.hint || '')
@@ -702,7 +755,13 @@
             var el = e.target;
             if (!el || !el.getAttribute) return;
             var key = el.getAttribute('data-doc-key');
-            if (key) window._docSetField(form.id, key, el.value);
+            if (key) { window._docSetField(form.id, key, el.value); return; }
+            // 📦 출고 이력 칸 — `<행번호>|<칸>` 으로 들어온다
+            var hk = el.getAttribute('data-doc-hist');
+            if (hk) {
+                var pp = hk.split('|'), list = _hist(form.id), row = list[Number(pp[0])];
+                if (row) { row[pp[1]] = el.value; _markDirty(); }
+            }
         };
         // ✅ 점검표 칸 켜고 끄기 — 위임으로 받는다(167항목 × 8칸에 핸들러를 달지 않는다)
         body.onclick = function (e) {
@@ -743,6 +802,122 @@
         ev.preventDefault();
         window._docAttachAdd(window._docState.formId, zone.getAttribute('data-doc-att'), files);
     });
+
+    // ── 📦 샘플 출고 이력 ───────────────────────────────────────────────
+    var _hist = function (id) {
+        var d = _docData(id);
+        d.history = d.history || [];
+        return d.history;
+    };
+    window._docHistAdd = function () {
+        var id = window._docState.formId;
+        var list = _hist(id);
+        // 기본 회차 — 아직 안 쓴 것 중 첫 번째(PROTO A → B → C → ES → PP). 전부 썼으면 비워 둔다.
+        var used = list.map(function (r) { return String(r.stage || '').trim().toUpperCase(); });
+        var next = (window.DOC_SAMPLE_STAGES || []).filter(function (s) {
+            return used.indexOf(s.toUpperCase()) === -1;
+        })[0] || '';
+        list.push({ stage: next, date: '', qty: '', doc: '', docTitle: '' });
+        _markDirty(); window._docRender();
+    };
+    window._docHistDel = function (i) {
+        var list = _hist(window._docState.formId);
+        if (i < 0 || i >= list.length) return;
+        var r = list[i];
+        // ⚠️ 출고 이력은 **기록**이다 — 실수로 지우면 언제 몇 개를 냈는지가 사라진다. 한 번 묻는다.
+        if (!confirm(_t('이 출고 이력을 지웁니다:\n\n' + (r.stage || '(회차 없음)')
+                        + ' / ' + (r.date || '(일자 없음)') + ' / ' + (r.qty || '-') + '\n\n지울까요?',
+                        'Delete this shipping record?'))) return;
+        list.splice(i, 1);
+        _markDirty(); window._docRender();
+    };
+
+    // 🔎 그룹웨어에서 **이 프로젝트의** 샘플/시제품 의뢰서를 찾아 고른다.
+    //   ⚠️ 찾는 법은 js/47 `_apvFindProjectDocs` **한 곳**이 정한다 — 여기서 다시 구현하지 않는다.
+    //      (프로젝트 키워드로 거르는 규칙이 두 벌이 되면 한쪽만 고쳐진다)
+    window._docGwPick = async function (rowIdx) {
+        if (!window._apvFindProjectDocs) {
+            _toast('⚠️ ' + _t('기안 조회 기능을 불러오지 못했습니다(js/47).', 'Approval lookup unavailable.'), 'error');
+            return;
+        }
+        if (window._gwEnsureLogin) {
+            var g = await window._gwEnsureLogin();
+            if (!g || !g.ok) {
+                _toast('🔒 ' + ((g && g.message) || _t('그룹웨어 로그인이 필요합니다.', 'Groupware login required.')), 'error');
+                return;
+            }
+        }
+        _toast('🔎 ' + _t('그룹웨어에서 의뢰서를 찾는 중…', 'Searching…'), 'info');
+        var r;
+        try { r = await window._apvFindProjectDocs(window.DOC_REQ_FORMS || []); }
+        catch (e) { _toast('⚠️ ' + (e && e.message || e), 'error'); return; }
+        if (!r.docs.length) {
+            // 조용히 끝내지 않는다 — 검색어가 뭐였는지 알려줘야 사람이 고칠 수 있다.
+            _toast('ℹ️ ' + _t('이 프로젝트의 의뢰서를 못 찾았습니다'
+                   + (r.keyword ? ' (검색어 "' + r.keyword + '", 전체 ' + r.total + '건)'
+                                : ' — Summary 의 메일키워드/모델명이 비어 검색어를 못 만들었습니다'),
+                   'No request documents found.'), 'info');
+            return;
+        }
+        window._docGwPending = { rowIdx: rowIdx, docs: r.docs, keyword: r.keyword };
+        _docGwShow();
+    };
+
+    var _docGwShow = function () {
+        var p = window._docGwPending; if (!p) return;
+        var ov = document.getElementById('docgw-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'docgw-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9500; pointer-events:none; background:none;';
+            ov.innerHTML = '<div id="docgw-box" style="pointer-events:all; position:fixed; left:50%; top:10%;'
+                + ' transform:translateX(-50%); width:min(820px,94vw); max-height:74vh; display:flex; flex-direction:column;'
+                + ' background:#fff; border:1px solid #a3d9e0; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18);'
+                + ' overflow:hidden;">'
+                + '<div id="docgw-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between;'
+                + ' padding:9px 12px; background:#e0f5f7; border-bottom:1px solid #a3d9e0; color:#00707d;'
+                + ' font-weight:bold; font-size:13px; cursor:grab;"><span id="docgw-title"></span>'
+                + '<button onclick="window._docGwClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
+                + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div id="docgw-body" style="flex:1; min-height:0; overflow-y:auto; padding:10px 12px;"></div></div>';
+            document.body.appendChild(ov);
+            if (window._makeDraggable) { try { window._makeDraggable('docgw-box', 'docgw-head'); } catch (e) { /* 〃 */ } }
+        }
+        ov.style.display = 'flex';
+        document.getElementById('docgw-title').textContent =
+            '🔎 ' + _t('샘플/시제품 의뢰서 — 검색어 "', 'Request docs — "') + p.keyword + '" (' + p.docs.length + _t('건', '') + ')';
+        var h = '<table style="border-collapse:collapse; width:100%; font-size:11.5px;"><tr>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('문서번호', 'No.')) + '</th>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안일', 'Date')) + '</th>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('기안자', 'Drafter')) + '</th>'
+              + '<th style="border:1px solid #cfe3e5; padding:4px; background:#eef6f7; text-align:left;">' + _esc(_t('제목', 'Title')) + '</th></tr>';
+        p.docs.forEach(function (d, i) {
+            h += '<tr onclick="window._docGwChoose(' + i + ')" style="cursor:pointer;"'
+               + ' onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'\';">'
+               + '<td style="border:1px solid #cfe3e5; padding:3px 6px; white-space:nowrap; font-weight:bold;">'
+               + _esc(d.docNum || ('id:' + d.id)) + '</td>'
+               + '<td style="border:1px solid #cfe3e5; padding:3px 6px; white-space:nowrap;">' + _esc(String(d.draftedAt || '').slice(0, 10)) + '</td>'
+               + '<td style="border:1px solid #cfe3e5; padding:3px 6px; white-space:nowrap;">' + _esc(d.drafterName || '') + '</td>'
+               + '<td style="border:1px solid #cfe3e5; padding:3px 6px;">' + _esc(d.title || '') + '</td></tr>';
+        });
+        document.getElementById('docgw-body').innerHTML = h + '</table>';
+    };
+    window._docGwClose = function () {
+        var ov = document.getElementById('docgw-overlay'); if (ov) ov.style.display = 'none';
+        window._docGwPending = null;
+    };
+    window._docGwChoose = function (i) {
+        var p = window._docGwPending; if (!p) return;
+        var d = p.docs[i]; if (!d) return;
+        var list = _hist(window._docState.formId);
+        if (p.rowIdx < 0 || p.rowIdx >= list.length) { window._docGwClose(); return; }
+        list[p.rowIdx].doc = d.docNum || ('id:' + d.id);
+        list[p.rowIdx].docTitle = d.title || '';
+        // 출고 일자가 비어 있으면 **기안일로 채워 준다**(사람이 고칠 수 있다) — 보통 그 무렵이다.
+        if (!list[p.rowIdx].date && d.draftedAt) list[p.rowIdx].date = String(d.draftedAt).slice(0, 10);
+        _markDirty(); window._docGwClose(); window._docRender();
+        _toast('🔎 ' + (d.docNum || '') + _t(' 를 넣었습니다.', ' linked.'), 'success');
+    };
 
     // ── 📁 NAS — 다른 페이지와 같은 자료실 탐색기 ────────────────────────
     window._docOpenNas = function () {
@@ -923,7 +1098,13 @@
         rows.push([]);
         form.sections.forEach(function (s) {
             rows.push([s.title]);
-            if (s.kind === 'check') {
+            if (s.kind === 'history') {
+                rows.push([_t('회차', 'Stage'), _t('출고 일자', 'Shipped'), _t('수량', 'Qty'),
+                           _t('그룹웨어 의뢰서', 'Request doc'), _t('제목', 'Title')]);
+                (d.history || []).forEach(function (r) {
+                    rows.push([r.stage || '', r.date || '', r.qty || '', r.doc || '', r.docTitle || '']);
+                });
+            } else if (s.kind === 'check') {
                 (window.DOC_CHECK_SHEETS || []).forEach(function (sh) {
                     rows.push([sh.key]);
                     rows.push([_t('항목', 'Group'), _t('내역', 'Item'), _t('개발', 'Dev'),
