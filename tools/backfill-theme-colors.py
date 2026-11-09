@@ -105,7 +105,12 @@ if not todo:
     sys.exit(0)
 
 print('\n파일에서 색을 읽습니다 — %d개 (파일이 커서 잠시 걸립니다)' % len(todo))
-filled = 0
+# ⚠️⚠️ [2026-11-09] 색을 **여기서 색인 객체에 직접 넣지 않는다.**
+#    아래 내려받기는 파일이 MB 단위라 몇 분 걸리는데, 그 사이 앱이 색인을 저장하면
+#    처음 읽은 `idx` 를 그대로 쓰는 순간 **그 저장이 조용히 사라진다**(2026-11-04 색인
+#    유실과 같은 모양 — `tools/backfill-index-meta.py` 가 같은 이유로 이미 고쳐져 있다).
+#    그래서 값만 모아 뒀다가 **쓰기 직전에 색인을 다시 읽어 얹는다.**
+fills = {}                              # drive_file_id → 색
 for p, rel in todo:
     try:
         d = json.loads(nd.download(root + '/' + rel.lstrip('/')).decode('utf-8'))
@@ -116,10 +121,10 @@ for p, rel in todo:
     if not color:
         print('  · %s — 파일에도 색이 없습니다(기본색)' % (p.get('file_name') or rel))
         continue
-    p['themeColor'] = color
-    filled += 1
+    fills[str(p.get('drive_file_id') or '')] = color
     print('  ✓ %-46s %s' % ((p.get('file_name') or rel)[:46], color))
 
+filled = len(fills)
 print('\n채울 색: %d건' % filled)
 if not filled:
     sys.exit(0)
@@ -127,15 +132,38 @@ if not APPLY:
     print('[비교만] 실제로 채우려면 --apply 를 붙여 다시 실행하세요.')
     sys.exit(0)
 
+# ── 쓰기 직전에 색인을 **다시 읽는다** ────────────────────────────────────
+fresh_raw = nd.download(root + '/' + REL)
+fresh = json.loads(fresh_raw.decode('utf-8'))
+fresh_projects = fresh.get('projects')
+if not isinstance(fresh_projects, list) or not fresh_projects:
+    die('쓰기 직전 색인을 못 읽었습니다(또는 비었습니다) — 쓰지 않습니다.')
+if len(fresh_projects) != len(projects):
+    print('ℹ️ 그 사이 색인이 바뀌었습니다(%d → %d건) — **다시 읽은 쪽**에 얹습니다.'
+          % (len(projects), len(fresh_projects)))
+
 stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
 bak = 'App_Config/project_index.before-themecolor-%s.json' % stamp
-nd.put(root + '/' + bak, idx_raw)
+nd.put(root + '/' + bak, fresh_raw)     # 백업은 **지금 덮어쓸 그 내용**이어야 한다
 print('백업: %s' % bak)
 
-nd.put(root + '/' + REL, json.dumps(idx, ensure_ascii=False).encode('utf-8'))
+applied = 0
+for p in fresh_projects:
+    c = fills.get(str(p.get('drive_file_id') or ''))
+    if c and not (p.get('themeColor') or '').strip():   # 그 사이 색이 생겼으면 안 건드린다
+        p['themeColor'] = c
+        applied += 1
+print('얹은 색: %d건 (모은 것 %d건)' % (applied, filled))
+if not applied:
+    print('✅ 그 사이 전부 채워졌습니다 — 쓸 것이 없습니다.')
+    sys.exit(0)
+
+nd.put(root + '/' + REL, json.dumps(fresh, ensure_ascii=False).encode('utf-8'))
 back = json.loads(nd.download(root + '/' + REL).decode('utf-8'))
-got = sum(1 for p in (back.get('projects') or []) if (p.get('themeColor') or '').strip())
-ok = got >= filled and len(back.get('projects') or []) == len(projects)
-print('확인: projects %d · 색 있는 항목 %d → %s'
-      % (len(back.get('projects') or []), got, 'OK' if ok else '불일치!'))
+bp = back.get('projects') or []
+got = sum(1 for p in bp if (p.get('themeColor') or '').strip())
+ok = len(bp) == len(fresh_projects) and all(
+    (p.get('themeColor') or '').strip()
+    for p in bp if str(p.get('drive_file_id') or '') in fills)
+print('확인: projects %d · 색 있는 항목 %d → %s' % (len(bp), got, 'OK' if ok else '불일치!'))
 sys.exit(0 if ok else 1)
