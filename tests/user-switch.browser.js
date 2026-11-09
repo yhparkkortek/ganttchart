@@ -127,7 +127,35 @@
            window.DAILY_PATHS.file('2026-01-02', window._dailyMyKey()).indexOf('__' + String(me).toLowerCase() + '.json') > 0,
            window.DAILY_PATHS.file('2026-01-02', window._dailyMyKey()));
 
+        // ── 🪪 배지 = 접속자 + 로그아웃 버튼 ───────────────────────────────
+        window.appUserSet(me, undefined, true);
+        var bEl = document.getElementById(U.badgeId);
+        ok('배지가 접속자를 보여 준다', bEl.textContent.indexOf('👤') === 0 && bEl.textContent.length > 3, bEl.textContent);
+        // ⚠️ 이름만 있으면 "내 정보" 처럼 보인다 — 누르면 무슨 일이 나는지도 **글자로** 같이 보여야 한다.
+        //    아이콘만 붙였더니 머리줄 글꼴에서 흑백 막대처럼 보여 아무 뜻도 전하지 못했다(실측).
+        ok('배지에 로그아웃이 글자로 같이 있다', /로그아웃|Sign out/.test(bEl.textContent), bEl.textContent);
+        ok('말풍선도 로그아웃이라고 말한다', /로그아웃|sign out/i.test(bEl.title), bEl.title);
+
+        // 누르면 **로그아웃이다**(로그인 창이 아니라).
+        var n1 = sent.length;
+        bEl.onclick();
+        await wait(500);
+        ok('배지를 누르면 로그아웃한다', sent.slice(n1).some(function (s) { return s.logout; }), sent.slice(n1));
+        ok('로그아웃 뒤 배지는 로그인으로 바뀐다',
+           /로그인|Sign in/.test(document.getElementById(U.badgeId).textContent) &&
+           !/로그아웃|Sign out/.test(document.getElementById(U.badgeId).textContent),
+           document.getElementById(U.badgeId).textContent);
+        // ⚠️ 안 한 상태에서는 같은 자리가 **반대 일**을 한다 — 로그인 창이 떠야 한다.
+        window._appUserClosePicker();
+        document.getElementById(U.badgeId).onclick();
+        await wait(400);
+        ok('로그인 전에는 같은 배지가 로그인 창을 연다', gateOn());
+        // ⚠️ 로그인 전에는 '로그아웃' 이라고 적히면 안 된다(거꾸로다).
+        ok('로그인 전에는 로그아웃이라고 안 적는다', !/로그아웃|Sign out/.test(document.getElementById(U.badgeId).textContent),
+           document.getElementById(U.badgeId).textContent);
+
         // ── 🚪 로그아웃 ────────────────────────────────────────────────────
+        window.appUserSet(me, undefined, true);
         var before = sent.length;
         await window.appUserLogout();
         await wait(400);

@@ -226,6 +226,14 @@
     window._appUserReload = function () { location.reload(); };
 
     // ── 헤더 배지 ───────────────────────────────────────────────────────────
+    /**
+     * 헤더 배지 = **로그아웃 버튼**(2026-11-09 요청 "로그아웃 버튼으로 인식하게 해줘").
+     *
+     * 로그인 중이면 누르는 순간 로그아웃이다. 그런데 이름만 적혀 있으면 "내 정보" 처럼 보여
+     * 누르는 사람이 무슨 일이 날지 모른다 → **마우스를 올리면 `🚪 로그아웃` 으로 바뀐다.**
+     * (머리줄은 좁아서 늘 두 가지를 같이 적을 수 없다 — 평소엔 누구인지, 올리면 무엇을 하는지.)
+     * ⚠️ 안 한 상태(`👤 로그인`)에서는 누르면 로그인 창이 뜬다 — 같은 자리, 반대 일이다.
+     */
     function paintBadge() {
         var host = document.getElementById('lang-toggle-btn');
         if (!host || !host.parentNode) return;
@@ -234,15 +242,22 @@
             b = document.createElement('button');
             b.id = U.badgeId;
             b.className = 'topbar-btn';
-            b.onclick = function () { window.appUserOpenPicker(); };
             host.parentNode.insertBefore(b, host);
         }
         var u = readUser();
-        // ⚠️ 안 고른 상태도 **보여 준다** — 비워 두면 누구로 저장되는지 아무도 모른다.
-        b.textContent = '👤 ' + (u ? u.name : T('로그인', 'Sign in'));
+        // 🚪 접속자와 로그아웃을 **둘 다 한눈에** — 사람은 마우스를 올려 보고 알아차리지 않는다.
+        // ⚠️ 아이콘(🚪)만 붙였더니 머리줄 글꼴에서 **흑백 막대처럼** 보여 뭔지 알 수 없었다
+        //    (실측: 확대해 보고서야 알았다) → 글자로 적는다. 이모지 렌더링에 기대지 않는다.
+        var inLabel = u ? ('👤 ' + u.name + ' · ' + T('로그아웃', 'Sign out'))
+                        : ('👤 ' + T('로그인', 'Sign in'));
+        b.textContent = inLabel;
+        b.dataset.inLabel = inLabel;
         b.title = u
-            ? T(u.name + ' 으로 보고 있습니다 — 누르면 바꿉니다', 'Viewing as ' + u.name + ' — click to switch')
+            ? T(u.name + ' 으로 보고 있습니다 — 누르면 로그아웃합니다', 'Signed in as ' + u.name + ' — click to sign out')
             : T('아직 로그인하지 않았습니다 — 누르면 로그인합니다', 'Not signed in — click to sign in');
+        b.onclick = u
+            ? function () { window.appUserLogout(); }
+            : function () { window.appUserOpenPicker(); };
         b.style.cssText = 'flex-shrink:0; ' + (u ? '' : 'background:#fbead9; color:#a85d0a; border-color:#edbf85;');
     }
     window._appUserPaintBadge = paintBadge;
