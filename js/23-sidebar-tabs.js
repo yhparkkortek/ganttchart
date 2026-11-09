@@ -65,6 +65,9 @@
         if (tabName === 'daily' && window.dailyOnTabShown) window.dailyOnTabShown();
         // 📒 Project list — 들어올 때마다 다시 그리고, 첫 진입에선 Drive 최신본/NAS 문서 개수를 받아온다
         if (tabName === 'projectlist' && window.plOnTabShown) window.plOnTabShown();
+        // 📄 Document — 들어올 때마다 다시 그린다(그 사이 Summary·자재·SPEC 이 바뀌었을 수 있다).
+        //    ⚠️ 다시 안 그리면 **옛 자동값이 그대로 보인다** — 사람이 그걸 그대로 출력한다.
+        if (tabName === 'document' && window._docOnTabShown) window._docOnTabShown();
         // 💾 Project list 를 **떠날 때**는 3초 디바운스를 기다리지 말고 바로 Drive 에 올린다 —
         //    표를 고치자마자 다른 탭으로 넘어가 창을 닫으면 그 수정이 내 PC 에만 남기 때문.
         if (prevTab === 'projectlist' && tabName !== 'projectlist' && window.plFlushSave) window.plFlushSave();

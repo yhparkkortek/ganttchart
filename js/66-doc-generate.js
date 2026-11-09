@@ -192,6 +192,10 @@
                 PN_모델명:     String(pm.PN_모델명 || '').trim(),
                 팀:           String(pm.팀 || '').trim()
             },
+            // 👥 담당자도 **meta 로 꺼내 둔다** — 문서 서식(js/67)이 `meta.기구담당자` 처럼
+            //    칸 하나에 사람 하나를 꽂는다. `members`(조직도용 목록)만 두면 그 칸들을
+            //    못 채운다(실측으로 걸렸다 — 담당자 3칸이 빈 채로 나왔다).
+            //    ⚠️ 여기서도 **저장값 우선, 입력칸은 폴백**이다.
             overview: {
                 purpose: pick(sum.purpose, 'sum-purpose'),
                 volume: pick(sum.volume, 'sum-volume'),
@@ -204,6 +208,10 @@
             spec: spec,
             materials: mats
         };
+        // 👥 담당자 10역할을 meta 에 같이 싣는다(위 주석 참고) — 역할 이름은 카탈로그가 정한다.
+        (window.DOC_MEMBER_ROLES || []).forEach(function (r) {
+            ctx.meta[r.metaKey] = pick(pm[r.metaKey], r.id);
+        });
         // 제품코드 — Summary 는 KTKPN 에 앞 6자리를 담는다(모델명은 뒤쪽).
         ctx.meta.제품코드 = ctx.meta.KTKPN;
         ctx.meta.모델풀네임 = ctx.meta.PN_모델명
@@ -384,287 +392,43 @@
     };
 
     // 생성기 등록 — `kind` 로 고른다(새 종류가 생기면 여기 한 줄).
-    var _BUILDERS = { 'stage-dr': _dgBuildStageDeck };
 
-    // ── 🗂 Document 목록·미리보기 (PARTS 처럼 고른다) ───────────────────
-    window._dgState = window._dgState || { specId: null, stage: 'Proto DR', ctx: null, gaps: [] };
-
-    window.openDocumentPicker = function () {
-        var ov = document.getElementById('dg-overlay');
-        if (!ov) {
-            ov = document.createElement('div');
-            ov.id = 'dg-overlay';
-            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9400; pointer-events:none; background:none;';
-            ov.innerHTML = '<div id="dg-box" style="pointer-events:all; position:fixed; left:50%; top:7%;'
-                + ' transform:translateX(-50%); width:min(900px,94vw); max-height:86vh; display:flex; flex-direction:column;'
-                + ' background:#fff; border:1px solid var(--modal-border, #a5c8f0); border-radius:10px;'
-                + ' box-shadow:0 8px 28px rgba(0,0,0,.18); overflow:hidden; resize:both; min-width:520px; min-height:320px;">'
-                + '<div id="dg-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between;'
-                + ' gap:8px; padding:9px 12px; background:var(--modal-head-bg, #e7f3ff);'
-                + ' border-bottom:1px solid var(--modal-border, #a5c8f0); color:var(--modal-head-text, #1971c2);'
-                + ' font-weight:bold; font-size:13px; cursor:grab; user-select:none;">'
-                + '<span id="dg-title">📄 Document</span>'
-                + '<button onclick="window._dgClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
-                + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
-                // ⚠️ flex 본문엔 `min-height:0` 이 있어야 스크롤바가 생긴다(docs/modal-ux.md)
-                + '<div id="dg-body" style="flex:1; min-height:0; overflow-y:auto; padding:10px 12px;"></div>'
-                + '<div style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center; gap:6px;'
-                + ' padding:9px 12px; border-top:1px solid #e9ecef;">'
-                + '<span id="dg-warn" style="font-size:11px; color:#b1432f;"></span>'
-                + '<span><button onclick="window._dgClose()" style="padding:6px 12px; background:#f1f3f5; color:#495057;'
-                + ' border:1px solid #dee2e6; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">'
-                + _esc(_t('닫기', 'Close')) + '</button> '
-                + '<button id="dg-make" onclick="window._dgMake(false)" style="padding:6px 12px; background:#e6f6ea;'
-                + ' color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold;'
-                + ' cursor:pointer;">⬇️ ' + _esc(_t('내려받기', 'Download')) + '</button> '
-                + '<button id="dg-upload" onclick="window._dgMake(true)" style="padding:6px 12px; background:#e7f3ff;'
-                + ' color:#1971c2; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold;'
-                + ' cursor:pointer;">📁 ' + _esc(_t('NAS 에 올리기', 'Upload to NAS')) + '</button></span></div></div>';
-            document.body.appendChild(ov);
-            if (window._makeDraggable) { try { window._makeDraggable('dg-box', 'dg-head'); } catch (e) { /* 드래그 실패가 열기를 막지 않게 */ } }
-            if (window._bindClickToFront) { try { window._bindClickToFront('dg-overlay'); } catch (e) { /* 〃 */ } }
-        }
-        ov.style.display = 'flex';
-        // ⚠️ 열 때마다 **지금 창 크기에 맞춘다.** 좁은 창에서 한 번 열면 inline 폭이 박혀(실측
-        //    430px) 창을 넓혀도 그대로 작게 열린다 — `width:min(900px,94vw)` 가 inline 에 눌린다.
-        //    이 모달은 고르고 닫는 창이지 사람이 붙잡고 쓰는 작업창이 아니라서, 저장된 크기보다
-        //    "지금 화면에 맞는 크기"가 낫다.
-        var box = document.getElementById('dg-box');
-        if (box) { box.style.width = ''; box.style.height = ''; }
-        if (window.bringModalToFront) { try { window.bringModalToFront('dg-overlay'); } catch (e) { /* 〃 */ } }
-        if (!window._dgState.specId) window._dgState.specId = (window.DOC_GEN_SPECS[0] || {}).id;
-        window._dgRender();
-    };
-
-    window._dgClose = function () {
-        var ov = document.getElementById('dg-overlay');
-        if (ov) ov.style.display = 'none';
-    };
-
-    window._dgPick = function (id) { window._dgState.specId = id; window._dgRender(); };
-    window._dgSetStage = function (v) { window._dgState.stage = v; window._dgRender(); };
-
-    var _specById = function (id) {
-        return (window.DOC_GEN_SPECS || []).filter(function (s) { return s.id === id; })[0] || null;
-    };
-
-    window._dgRender = function () {
-        var st = window._dgState;
-        var spec = _specById(st.specId);
-        var ctx = window._dgCollect();
-        st.ctx = ctx;
-        st.gaps = spec ? window._dgGaps(spec, ctx) : [];
-
-        var pname = [ctx.meta.고객사, ctx.meta.모델명].filter(Boolean).join(' > ') || _t('(프로젝트가 안 열렸습니다)', '(no project)');
-        var el = document.getElementById('dg-title');
-        if (el) el.textContent = '📄 Document — ' + pname;
-
-        var h = '<div style="display:flex; gap:12px; align-items:flex-start;">';
-        // 왼쪽 — 문서 종류(PARTS 처럼 고른다)
-        h += '<div style="flex:0 0 220px;">'
-           + '<div style="font-size:11px; color:#868e96; margin-bottom:5px;">'
-           + _esc(_t('문서 종류', 'Document type')) + '</div>';
-        (window.DOC_GEN_SPECS || []).forEach(function (s) {
-            var on = s.id === st.specId;
-            h += '<button onclick="window._dgPick(\'' + _esc(s.id) + '\')" style="display:block; width:100%;'
-               + ' text-align:left; margin-bottom:4px; padding:7px 9px; font-size:12px; cursor:pointer;'
-               + ' border-radius:6px; border:1px solid ' + (on ? 'var(--modal-border,#a5c8f0)' : '#dee2e6') + ';'
-               + ' background:' + (on ? 'var(--modal-head-bg,#e7f3ff)' : '#fff') + ';'
-               + ' font-weight:' + (on ? 'bold' : 'normal') + ';">'
-               + (s.kind === 'pptx' ? '📊 ' : '📗 ') + _esc(s.label) + '</button>';
-        });
-        h += '</div>';
-
-        // 오른쪽 — 들어갈 내용 / 비어 있는 것
-        h += '<div style="flex:1; min-width:0;">';
-        if (!spec) {
-            h += '<div style="color:#b1432f; font-size:12px;">' + _esc(_t('문서 종류를 고르세요.', 'Pick a document type.')) + '</div>';
-        } else {
-            if (spec.id === 'stage-dr') {
-                h += '<div style="margin-bottom:8px; font-size:12px;">'
-                   + _esc(_t('단계', 'Stage')) + ': ';
-                ['Kickoff & Proto DR', 'Proto DR', 'DVR', 'PRA'].forEach(function (sv) {
-                    var on = st.stage === sv;
-                    h += '<button onclick="window._dgSetStage(\'' + _esc(sv) + '\')" style="margin-right:4px;'
-                       + ' padding:3px 9px; font-size:11px; cursor:pointer; border-radius:12px;'
-                       + ' border:1px solid ' + (on ? 'var(--modal-border,#a5c8f0)' : '#dee2e6') + ';'
-                       + ' background:' + (on ? 'var(--modal-head-bg,#e7f3ff)' : '#fff') + ';'
-                       + ' font-weight:' + (on ? 'bold' : 'normal') + ';">' + _esc(sv) + '</button>';
-                });
-                h += '</div>';
-            }
-            if (spec.note) {
-                h += '<div style="margin-bottom:8px; padding:6px 9px; background:#e8f4fd; border-left:3px solid #1a4f7a;'
-                   + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#1a4f7a;">ℹ️ ' + _esc(spec.note) + '</div>';
-            }
-            // 들어갈 내용 — 개수로 먼저 보여준다
-            var counts = [
-                [_t('프로젝트 정보', 'Project info'), [ctx.meta.프로젝트코드, ctx.meta.제품코드, ctx.meta.모델풀네임].filter(Boolean).length + '/3'],
-                [_t('프로젝트 개요', 'Overview'), [ctx.overview.purpose, ctx.overview.volume, ctx.overview.mpDate].filter(Boolean).length + '/3'],
-                [_t('마일스톤(계획)', 'Milestones'), ((window.DOC_MILESTONES || []).length - ctx.milestones.missing.length) + '/' + (window.DOC_MILESTONES || []).length],
-                [_t('프로젝트 멤버', 'Members'), ctx.members.length + _t('명', '')],
-                ['Customer SPEC', ctx.spec.length + _t('항목', ' items')],
-                [_t('주요 자재', 'Key materials'), ctx.materials.length + _t('종', '')]
-            ];
-            h += '<table style="border-collapse:collapse; width:100%; font-size:11.5px; margin-bottom:8px;">';
-            counts.forEach(function (c) {
-                var empty = /^0/.test(String(c[1]));
-                h += '<tr><td style="border:1px solid #e9ecef; padding:3px 7px; background:#f8f9fa; width:40%;">'
-                   + _esc(c[0]) + '</td><td style="border:1px solid #e9ecef; padding:3px 7px;'
-                   + (empty ? ' color:#b1432f; font-weight:bold;' : ' color:#1f7a3d;') + '">'
-                   + _esc(c[1]) + '</td></tr>';
-            });
-            h += '</table>';
-            // ⚠️ 비어 있는 것 — 숨기지 않는다. 어디서 채우는지까지 적는다.
-            if (st.gaps.length) {
-                h += '<div style="padding:6px 9px; background:#fff3cd; border-left:3px solid #e6a817;'
-                   + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#7a5210;">⚠️ '
-                   + _esc(_t('비어 있는 항목 ' + st.gaps.length + '개 — 이대로 만들면 그 칸은 비거나 빨간 글씨로 들어갑니다:',
-                             st.gaps.length + ' empty item(s):')) + '<ul style="margin:5px 0 0 16px; padding:0;">';
-                st.gaps.forEach(function (g) {
-                    h += '<li style="margin-bottom:2px;">' + _esc(g.what)
-                       + ' <span style="opacity:.75;">— ' + _esc(g.where) + '</span></li>';
-                });
-                h += '</ul></div>';
-            } else {
-                h += '<div style="padding:6px 9px; background:#e6f6ea; border-left:3px solid #1f7a3d;'
-                   + ' border-radius:0 4px 4px 0; font-size:11.5px; color:#1f7a3d;">✅ '
-                   + _esc(_t('이 문서가 쓰는 항목이 전부 채워져 있습니다.', 'All inputs are filled.')) + '</div>';
-            }
-            h += '<div style="margin-top:8px; font-size:11px; color:#868e96;">'
-               + _esc(_t('파일 이름: ', 'file name: '))
-               + '<code>' + _esc(spec.nameOf(ctx, { stage: st.stage })) + '</code><br>'
-               + _esc(_t('NAS 폴더: ', 'NAS folder: ')) + '<code>' + _esc(spec.folder) + '</code></div>';
-        }
-        h += '</div></div>';
-
-        document.getElementById('dg-body').innerHTML = h;
-        var w = document.getElementById('dg-warn');
-        if (w) {
-            w.textContent = st.gaps.length
-                ? _t('비어 있는 항목 ' + st.gaps.length + '개', st.gaps.length + ' empty')
-                : '';
-        }
-    };
-
-    // ── ⬇️📁 만들기 ────────────────────────────────────────────────────
-    //  upload=false → 내려받기 / true → NAS 업로드(같은 이름이면 덮어쓰기 확인)
-    window._dgMake = async function (upload) {
-        var st = window._dgState;
-        var spec = _specById(st.specId);
-        if (!spec) { _toast('⚠️ ' + _t('문서 종류를 고르세요.', 'Pick a document type.'), 'error'); return; }
-        var build = _BUILDERS[spec.id];
-        if (!build) { _toast('⚠️ ' + _t('이 문서의 생성기가 없습니다.', 'No builder for this document.'), 'error'); return; }
-
-        var ctx = window._dgCollect();
-        var name = spec.nameOf(ctx, { stage: st.stage });
-        var btn = document.getElementById(upload ? 'dg-upload' : 'dg-make');
-        var label = btn ? btn.textContent : '';
-        var busy = function (t) { if (btn) { btn.disabled = true; btn.textContent = t; } };
-        var free = function () { if (btn) { btn.disabled = false; btn.textContent = label; } };
-
-        busy(_t('⏳ 만드는 중…', '⏳ Building…'));
-        var pptx;
-        try {
-            pptx = build(ctx, { stage: st.stage });
-        } catch (e) {
-            free();
-            _toast('⚠️ ' + _t('문서를 만들지 못했습니다: ', 'Could not build: ') + (e && e.message || e), 'error');
-            if (window._issueLog) { try { window._issueLog('doc-generate', { spec: spec.id, err: String(e && e.message || e) }); } catch (e2) {} }
-            return;
-        }
-
-        if (!upload) {
-            try { await pptx.writeFile({ fileName: name }); _toast('⬇️ ' + name, 'success'); }
-            catch (e) { _toast('⚠️ ' + _t('내려받기 실패: ', 'Download failed: ') + (e && e.message || e), 'error'); }
-            free();
-            return;
-        }
-
-        // NAS 업로드 — 바이트를 만들어 `/doc/put` 으로 보낸다(브라우저는 UNC 를 못 쓴다).
-        busy(_t('⏳ 올리는 중…', '⏳ Uploading…'));
-        var blob;
-        try { blob = await pptx.write({ outputType: 'blob' }); }
-        catch (e) {
-            free(); _toast('⚠️ ' + _t('파일을 만들지 못했습니다: ', 'Could not serialize: ') + (e && e.message || e), 'error'); return;
-        }
+    // ── 📁 NAS 업로드 — 만든 바이트를 /doc/put 으로 보낸다 ───────────────
+    //  ⚠️ 팀 공유 폴더다 — 같은 이름이 있으면 백엔드가 409 로 막고,
+    //     **사람이 한 번 확인한 뒤에만** overwrite=1 로 다시 보낸다(되돌릴 수 없다).
+    //  돌려주는 값: { ok, name, size, skipped, error }
+    window._dgUploadBlob = async function (folder, name, blob) {
         var put = async function (overwrite) {
             var fd = new FormData();
             fd.append('file', blob, name);
-            var u = BACKEND + '/doc/put?folder=' + encodeURIComponent(spec.folder)
+            var u = BACKEND + '/doc/put?folder=' + encodeURIComponent(folder)
                   + '&name=' + encodeURIComponent(name) + (overwrite ? '&overwrite=1' : '');
             var r = await fetch(u, { method: 'POST', body: fd });
             return { status: r.status, body: await r.json().catch(function () { return {}; }) };
         };
         try {
             var res = await put(false);
-            // ⚠️ 같은 이름이 있으면 백엔드가 409 로 거부한다 — 팀 공유라 조용히 덮어쓰지 않는다.
-            //    사람에게 **한 번** 물어본 뒤에만 덮어쓴다.
             if (res.status === 409 || (res.body && res.body.exists)) {
-                free();
                 if (!confirm(_t('NAS 에 같은 이름의 파일이 이미 있습니다:\n\n' + name
                                 + '\n\n덮어쓸까요? (되돌릴 수 없습니다 — 팀 공유 폴더입니다)',
                                 'A file with the same name exists. Overwrite?'))) {
-                    _toast(_t('올리지 않았습니다.', 'Not uploaded.'), 'info'); return;
+                    return { ok: false, skipped: true };
                 }
-                busy(_t('⏳ 덮어쓰는 중…', '⏳ Overwriting…'));
                 res = await put(true);
             }
-            free();
-            if (res.body && res.body.ok) {
-                _toast('📁 ' + _t('NAS 에 올렸습니다 — ', 'Uploaded — ') + spec.folder + '/' + name
-                       + ' (' + Math.round((res.body.size || 0) / 1024) + 'KB)', 'success');
-            } else {
-                var why = (res.body && res.body.error) || ('HTTP ' + res.status);
-                // 조용히 삼키지 않는다 — 폴더 허용 목록·백엔드 버전 문제가 여기서 드러난다.
-                _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + why
-                       + (res.status === 400 ? _t(' (백엔드를 재시작해야 DOCUMENT 폴더가 열립니다)',
-                                                  ' (restart the backend)') : ''), 'error');
-                if (window._issueLog) { try { window._issueLog('doc-generate', { spec: spec.id, up: why }); } catch (e2) {} }
-            }
+            if (res.body && res.body.ok) return { ok: true, name: res.body.name, size: res.body.size || 0 };
+            var why = (res.body && res.body.error) || ('HTTP ' + res.status);
+            // 조용히 삼키지 않는다 — 폴더 허용 목록·백엔드 버전 문제가 여기서 드러난다.
+            return { ok: false, error: why + (res.status === 400
+                ? _t(' (백엔드를 재시작해야 DOCUMENT 폴더가 열립니다)', ' (restart the backend)') : '') };
         } catch (e) {
-            free();
-            _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + (e && e.message || e), 'error');
+            return { ok: false, error: String(e && e.message || e) };
         }
     };
 
-    // ── 📄 입구 — Summary 탭 헤더에 **런타임으로** 끼운다 ───────────────
-    //  HTML 을 안 고치는 이유: 지금은 Summary 가 모든 재료를 들고 있는 자리라 거기 붙이는 게
-    //  자연스럽고, 나중에 Document **탭**을 만들면 `openDocumentPicker()` 를 그 탭에서 부르면
-    //  된다(그릴 함수가 `_dgRender` 하나라 모달이든 탭이든 같은 걸 쓴다).
-    //  ⚠️ 자리는 js/42·53 과 같은 앵커(`.concept-header-box` 에 append) — 그 셋이 한 줄에 선다.
-    var BTN = 'padding:5px 11px; background:#e0f5f7; color:#0b7285; border:1px solid #a3d9e0;'
-            + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;'
-            + ' transition:background .15s; margin-right:4px;';
-
-    var _dgMountButton = function () {
-        // ⚠️ 탭 요소 id 는 `tab-summary` 다(실측) — `summary` 는 **없다**. 처음 그렇게 적었다가
-        //    버튼이 아예 안 달렸다(오류도 안 났다 — `getElementById` 가 null 이면 조용히 return).
-        var tabEl = document.getElementById('tab-summary');
-        if (!tabEl) return;
-        if (document.getElementById('dg-open-btn')) return;
-        var at = tabEl.querySelector('.concept-header-box');
-        if (!at) return;
-        var b = document.createElement('button');
-        b.id = 'dg-open-btn';
-        b.style.cssText = BTN;
-        b.textContent = '📄 ' + _t('문서 만들기', 'Documents');
-        b.title = _t('이 프로젝트 정보로 문서를 만듭니다 — DR/DVR 발표자료 등. 만들기 전에 '
-                     + '무엇이 비어 있는지 보여줍니다.',
-                     'Build project documents from this project\'s data.');
-        b.onmouseover = function () { b.style.background = '#a3d9e0'; };
-        b.onmouseout = function () { b.style.background = '#e0f5f7'; };
-        b.onclick = function () { window.openDocumentPicker(); };
-        at.appendChild(b);
-    };
-    window._dgMountButton = _dgMountButton;
-
-    // 탭은 나중에 그려지기도 한다 — 로드 후 한 번 + 클릭마다 다시(js/42·53 과 같은 방식).
-    var boot = function () { try { _dgMountButton(); } catch (e) { /* 버튼 실패가 페이지를 막지 않게 */ } };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-    else boot();
-    document.addEventListener('click', function (e) {
-        var t = e.target;
-        if (t && t.closest && t.closest('button, a, [onclick]')) setTimeout(boot, 140);
-    }, true);
+    // 📊 단계별 발표자료 PPT 생성기 — Document 페이지(js/67)가 부른다.
+    //    ⚠️ 화면(모달)은 js/67 의 **페이지**로 옮겼다. 이 파일은 이제 **엔진만** 한다:
+    //       값 모으기(_dgCollect) · 빈 칸 집어내기(_dgGaps) · PPT 만들기 · NAS 올리기.
+    window._dgBuildStageDeck = _dgBuildStageDeck;
+    window._dgEnDate = _dgEnDate;
 })();
