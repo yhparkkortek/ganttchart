@@ -86,7 +86,7 @@
         { q: '이 프로젝트 이름 뭐야',               want: 'local' },
         { q: '지연된 업무 알려줘',                  want: 'local|ai-gantt' },
         { q: '이번 주 마감 업무 뭐야',              want: 'local|ai-gantt' },
-        { q: '주간 요약해줘',                       want: 'local' },
+        { q: '주간 요약해줘',                       want: 'local|ai', note: '사실 목록만이면 local(0회), AI 요약까지면 ai(1회) — 둘 다 설계' },
         { q: '오늘 보고 초안',                      want: 'local' },
         // 💬 자유추론
         //  💸 [2026-11-09] 확신 있는 일반 질문은 도구 루프를 건너뛴다 — AI 호출이 2회에서 1회로.
