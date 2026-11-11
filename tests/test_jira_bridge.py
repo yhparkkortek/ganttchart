@@ -248,6 +248,59 @@ check('resolve: 좁히면 1건으로 풀린다', jb.resolve_project_key('LEGACY'
 check('resolve: 일치 0건 → None(추측 안 함)', jb.resolve_project_key('없는프로젝트') is None)
 check('resolve: 빈 입력 → None', jb.resolve_project_key('') is None)
 
+print('\n[10] assignable_users — JIRA query= 를 안 믿고 우리가 직접 거른다')
+#    ⚠️⚠️ [2026-11-11 실측] /rest/api/2/user/assignable/search 의 query 파라미터는 이
+#    서버에서 조용히 무시된다("hong"·"yhpark" 로 각각 질의해도 똑같은 50명이 그대로 왔다).
+#    그래서 전체를 받아 **우리가** 이름/아이디로 거른다.
+fresh(); stub_auth(True)
+_FAKE_USERS = [
+    {'name': 'yhpark', 'displayName': '박용훈'},
+    {'name': 'hck', 'displayName': '홍철기'},
+    {'name': 'joshuatango', 'displayName': 'Aaron Joshua Tango'},
+]
+seen_au = {}
+
+
+def fake_au(method, url, **kw):
+    seen_au['url'] = url
+    seen_au['params'] = kw.get('params')
+    return FakeResp(200, _FAKE_USERS)
+
+
+jb.requests.request = fake_au
+all_users = jb.assignable_users('GABJQ-4')
+check('issueKey 파라미터로 보낸다', seen_au['params'] == {'issueKey': 'GABJQ-4', 'maxResults': 500}, seen_au['params'])
+check('전체 3건 그대로', len(all_users) == 3, all_users)
+filtered = jb.assignable_users('GABJQ-4', 'park')
+check('아이디로 거르기(1건)', [u['name'] for u in filtered] == ['yhpark'], filtered)
+filtered2 = jb.assignable_users('GABJQ-4', '철기')
+check('표시이름(한글)으로 거르기(1건)', [u['name'] for u in filtered2] == ['hck'], filtered2)
+filtered3 = jb.assignable_users('GABJQ-4', '없는사람')
+check('일치 0건이면 빈 목록', filtered3 == [], filtered3)
+
+print('\n[11] add_attachment — 올린 파일을 attachments 모양으로 돌려준다')
+fresh(); stub_auth(True)
+seen_up = {}
+
+
+def fake_upload(method, url, **kw):
+    seen_up['method'] = method
+    seen_up['url'] = url
+    seen_up['headers'] = kw.get('headers')
+    seen_up['files'] = kw.get('files')
+    return FakeResp(200, [{'filename': '측정데이터.xlsx', 'size': 1234, 'mimeType': 'application/vnd.ms-excel',
+                           'content': jb.JIRA_BASE + '/secure/attachment/40000/x.xlsx',
+                           'author': {'displayName': '박용훈'}, 'created': '2026-11-11T12:00:00.000+0900'}])
+
+
+jb.requests.request = fake_upload
+result = jb.add_attachment('GABJQ-4', '측정데이터.xlsx', b'fake-bytes', 'application/vnd.ms-excel')
+check('POST 메서드', seen_up['method'] == 'POST')
+check('attachments 엔드포인트', seen_up['url'].endswith('/rest/api/2/issue/GABJQ-4/attachments'), seen_up['url'])
+check('X-Atlassian-Token 헤더 필수(옛 Jira XSRF 우회)', (seen_up['headers'] or {}).get('X-Atlassian-Token') == 'no-check', seen_up['headers'])
+check('files에 파일을 실어 보낸다', seen_up['files'] is not None and 'file' in seen_up['files'], seen_up['files'])
+check('결과가 attachments 모양(_shape_issue와 같은 키)', result[0]['filename'] == '측정데이터.xlsx' and result[0]['url'].startswith(jb.JIRA_BASE), result)
+
 print('\n' + ('=' * 50))
 print('PASS %d / FAIL %d' % (len(PASS), len(FAIL)))
 if FAIL:

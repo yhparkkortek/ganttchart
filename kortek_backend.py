@@ -5671,6 +5671,34 @@ def jira_attachment():
         return jsonify({'ok': False, 'message': str(e)}), 502
 
 
+@app.route('/jira/issue/<key>/attachment', methods=['POST'])
+def jira_issue_attachment_upload(key):
+    """📎 첨부 저장(2026-11-11 추가) — 이 이슈에 새 파일을 올린다. 사람이 파일을 고르고
+    [업로드]를 눌러야만 실행된다(쓰기 경로 공용 원칙 — AI 자율 루프는 못 탄다, js/40에
+    이 라우트를 아예 등록하지 않았다)."""
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'message': '올릴 파일을 선택해주세요.'}), 400
+    try:
+        import jira_bridge
+        attachments = jira_bridge.add_attachment(key, f.filename, f.read(), f.mimetype)
+        return jsonify({'ok': True, 'attachments': attachments, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 502
+
+
+@app.route('/jira/issue/<key>/assignable-users', methods=['GET'])
+def jira_assignable_users(key):
+    """👤 담당자 찾기(2026-11-11 추가) — JIRA 아이디를 몰라도 이름 일부로 찾는다. ⚠️ JIRA의
+    `query` 파라미터는 이 서버에서 조용히 무시되므로(실측) 전체를 받아 우리가 직접 거른다
+    (jira_bridge.assignable_users 참고)."""
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'users': jira_bridge.assignable_users(key, request.args.get('q'))})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/jira/projects', methods=['GET'])
 def jira_projects():
     """📁 프로젝트 목록 — `q`로 코드/이름 부분일치 필터(대소문자 무시). q 없으면 전체(604건

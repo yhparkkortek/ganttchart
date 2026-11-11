@@ -254,6 +254,19 @@
         var manualKeys = (L.manualKeys || []).filter(function (k) { return KEY_RE.test(k); });
         var validPrefixes = await validProjectPrefixes();
         var mailKeys = mailScanKeys(validPrefixes).filter(function (k) { return manualKeys.indexOf(k) === -1; });
+        // ⚠️⚠️ [2026-11-11 사용자 제보] "키가 섞이고, JIRA 등록건이 없는데 키가 오매칭되어
+        // 있음" — 메일 스캔은 모델 구분 없이 **전체 메일**을 훑으므로(헤더 주석 ③ 참고),
+        // 모델이 여럿인 프로젝트에서는 **다른 모델의 JIRA 프로젝트 이슈까지** 전부 섞여
+        // 나왔다(실측: TPR 탭에 아무 연결도 안 했는데 사실은 TVD 쪽 이슈인 GABJQ-4 가 보임).
+        // → 모델이 둘 이상이면: ① 지금 모델에 프로젝트 코드가 있으면 **그 코드로 시작하는
+        // 키만** 남기고 ② 아직 아무 프로젝트도 등록 안 했으면 **메일 추정 자체를 안 보여준다**
+        // (어느 모델 것인지 알 길이 없는데 섞어 보여주는 것보다 "없음"이 정직하다). 모델이
+        // 하나뿐인 프로젝트는 섞일 대상이 없으므로 그대로 전체를 쓴다.
+        var _units = window.getMcUnits ? window.getMcUnits() : [];
+        if (_units.length > 1) {
+            var myKey = (L.projectKey || '').trim();
+            mailKeys = myKey ? mailKeys.filter(function (k) { return k.split('-')[0] === myKey; }) : [];
+        }
         var keyword = (L.keyword || '').trim();
 
         var byKey = {};
@@ -349,7 +362,7 @@
                 + '<input id="jira-link-manual" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:10px;">'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">🔍 ' + T('검색어(JQL text 검색, 비우면 모델명 사용)', 'Search keyword (JQL text search; blank uses the model name)') + '</label>'
                 + '<input id="jira-link-keyword" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:6px;" placeholder="' + esc(defaultKeyword()) + '">'
-                + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 자동으로 같이 모읍니다(별도 입력 불필요).', 'Issue numbers already captured from mail are collected automatically (no input needed).') + '</div>'
+                + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 자동으로 같이 모읍니다(별도 입력 불필요) — 모델이 여럿이면 📁 프로젝트 코드를 등록해야 그 모델 것만 보입니다.', 'Issue numbers already captured from mail are collected automatically (no input needed) — with multiple models, set the 📁 project code so only this model\'s issues show.') + '</div>'
                 + '<div id="jira-link-status" style="display:none; font-size:11.5px; margin-bottom:8px; line-height:1.5;"></div>'
                 + '<div style="display:flex; justify-content:flex-end;">'
                 + '<button onclick="window._jiraSaveLinkSettings()"'
@@ -579,13 +592,23 @@
         body.innerHTML =
             fieldRow(T('요약', 'Summary'), '<input id="jira-f-summary" style="' + inputSt + '" value="' + esc(issue.summary) + '">')
             + fieldRow(T('설명', 'Description'), '<textarea id="jira-f-description" rows="5" style="' + inputSt + ' resize:vertical; font-family:inherit;">' + esc(issue.description) + '</textarea>')
-            + fieldRow(T('담당자', 'Assignee'), '<input id="jira-f-assignee" style="' + inputSt + '" value="' + esc(issue.assigneeName) + '" placeholder="' + T('JIRA 아이디(이름 아님)', 'JIRA username (not display name)') + '">')
+            + fieldRow(T('담당자', 'Assignee'), '<div style="flex:1; min-width:0;">'
+                + '<div style="display:flex; gap:6px;">'
+                + '<input id="jira-f-assignee" style="' + inputSt + '" value="' + esc(issue.assigneeName) + '" placeholder="' + T('JIRA 아이디(이름 아님)', 'JIRA username (not display name)') + '">'
+                + '<button onclick="window._jiraSearchAssignee(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + '">🔍 ' + T('찾기', 'Find') + '</button>'
+                + '</div>'
+                + '<div id="jira-assignee-hits" style="display:none; max-height:130px; overflow-y:auto; border:1px solid #eee; border-radius:6px; margin-top:4px;"></div>'
+                + '</div>')
             + fieldRow(T('우선순위', 'Priority'), '<select id="jira-f-priority" style="' + inputSt + '">'
                 + priorities.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === issue.priorityId ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('')
                 + '</select>')
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
             + renderAttachments(issue.attachments)
+            + '<div style="display:flex; align-items:center; gap:6px; margin-bottom:12px;">'
+            + '<input type="file" id="jira-attach-file" style="flex:1; min-width:0; font-size:11.5px;">'
+            + '<button onclick="window._jiraUploadAttachment(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">⬆ ' + T('첨부 저장', 'Save attachment') + '</button>'
+            + '</div>'
             + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
             + fieldRow(T('상태 전환', 'Transition'), (transitions.length
                 ? ('<select id="jira-f-transition" style="' + inputSt + '">'
@@ -607,6 +630,62 @@
             + '<div style="display:flex; justify-content:flex-end; margin-top:6px;">'
             + '<button onclick="window._jiraAddComment(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">📨 ' + T('댓글 등록', 'Post comment') + '</button></div>'
             + '<div id="jira-issue-status" style="display:none; font-size:11.5px; margin-top:8px; line-height:1.5;"></div>';
+
+        // 모달 본문을 통째로 다시 그리므로(위 innerHTML) 위임 리스너도 매번 다시 건다.
+        document.getElementById('jira-assignee-hits').addEventListener('click', function (e) {
+            var el = e.target.closest('[data-idx]');
+            if (!el) return;
+            var u = _assigneeHits[Number(el.dataset.idx)];
+            if (!u) return;
+            var inp = document.getElementById('jira-f-assignee');
+            inp.value = u.name;
+            document.getElementById('jira-assignee-hits').style.display = 'none';
+        });
+    };
+
+    // 👤 [2026-11-11 사용자 요청] 담당자 변경 확장 — 아이디를 몰라도 이름으로 찾는다.
+    //  ⚠️ JIRA 자체 검색(query=)은 이 서버에서 조용히 무시된다(실측) — 전체를 받아
+    //  **우리가 직접** 거른다(jira_bridge.assignable_users).
+    var _assigneeHits = [];
+
+    window._jiraSearchAssignee = async function (key) {
+        var q = (document.getElementById('jira-f-assignee').value || '').trim();
+        var box = document.getElementById('jira-assignee-hits');
+        box.style.display = 'block';
+        box.innerHTML = '<div style="padding:8px; color:#999;">' + T('찾는 중...', 'Searching...') + '</div>';
+        try {
+            var d = await fetchJson(BASE + '/jira/issue/' + encodeURIComponent(key) + '/assignable-users'
+                + (q ? ('?q=' + encodeURIComponent(q)) : ''));
+            if (!d || d.ok === false) { box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc((d && d.message) || '') + '</div>'; return; }
+            _assigneeHits = (d.users || []).slice(0, 50);
+            if (!_assigneeHits.length) { box.innerHTML = '<div style="padding:8px; color:#999;">' + T('일치하는 사람이 없습니다.', 'No matching person.') + '</div>'; return; }
+            box.innerHTML = _assigneeHits.map(function (u, i) {
+                return '<div data-idx="' + i + '" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;" onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'"><b>' + esc(u.displayName) + '</b> <span style="color:#999;">(' + esc(u.name) + ')</span></div>';
+            }).join('');
+        } catch (e) {
+            box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
+        }
+    };
+
+    // 📎 [2026-11-11 사용자 요청] 첨부 저장 — 사람이 파일을 고르고 눌러야만 올라간다(AI 자율
+    //  루프는 이 라우트를 아예 모른다, js/40에 미등록).
+    window._jiraUploadAttachment = async function (key) {
+        var fileEl = document.getElementById('jira-attach-file');
+        var file = fileEl && fileEl.files && fileEl.files[0];
+        if (!file) { modalSetStatus('⚠️ ' + T('올릴 파일을 선택해주세요.', 'Choose a file to upload.'), 'err'); return; }
+        modalSetStatus('⏳ ' + T('올리는 중...', 'Uploading...'), '');
+        try {
+            var fd = new FormData();
+            fd.append('file', file);
+            var d = await fetch(BASE + '/jira/issue/' + encodeURIComponent(key) + '/attachment', {
+                method: 'POST', body: fd
+            }).then(function (r) { return r.json(); });
+            if (!d || d.ok === false) { modalSetStatus('⚠️ ' + esc((d && d.message) || ''), 'err'); return; }
+            modalSetStatus('✅ ' + T('첨부를 저장했습니다.', 'Attachment saved.'), 'ok');
+            window._jiraRenderIssueBody(key);
+        } catch (e) {
+            modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
+        }
     };
 
     window._jiraSaveFields = async function (key) {

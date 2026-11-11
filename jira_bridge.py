@@ -255,6 +255,23 @@ def add_comment(key, body):
     return {'ok': True}
 
 
+# ── 👤 담당자 변경 확장(2026-11-11) — 아이디를 몰라도 이름으로 찾는다 ──────────
+#  ⚠️⚠️ 실측: `/rest/api/2/user/assignable/search`의 `query` 파라미터는 이 서버에서
+#  **조용히 무시된다**("hong"과 "yhpark"로 각각 질의해도 똑같은 50명이 그대로 왔다) —
+#  그래서 JIRA 쪽 검색을 믿지 않고 `list_projects`/`resolve_project_key`와 같은 원칙으로
+#  **우리가 전체를 받아 직접 거른다**(결정론 먼저, CLAUDE.md). `maxResults`는 실제로
+#  듣는다(실측 204명 한 번에 옴) — 페이지네이션 없이 한 번에 받는다.
+def assignable_users(key, q=None):
+    r = _request('GET', '/rest/api/2/user/assignable/search',
+                  params={'issueKey': key, 'maxResults': 500})
+    out = [{'name': u.get('name'), 'displayName': u.get('displayName') or u.get('name')}
+           for u in r.json()]
+    if q:
+        ql = q.strip().lower()
+        out = [u for u in out if ql in (u['name'] or '').lower() or ql in (u['displayName'] or '').lower()]
+    return out
+
+
 def get_transitions(key):
     r = _request('GET', '/rest/api/2/issue/' + key + '/transitions')
     return [{'id': t.get('id'), 'name': t.get('name'), 'to': (t.get('to') or {}).get('name')}
@@ -272,6 +289,25 @@ def fetch_attachment(url):
     if not url.startswith(prefix):
         raise JiraApiError('허용되지 않은 첨부파일 주소입니다.')
     return _request('GET', url[len(JIRA_BASE):])
+
+
+def add_attachment(key, filename, content, mime_type=None):
+    """이슈에 새 파일을 올린다(첨부 저장, 2026-11-11 추가).
+
+    ⚠️ `X-Atlassian-Token: no-check` 헤더가 필수다 — 옛 Jira는 파일 업로드에 XSRF 토큰을
+    요구하는데, REST API 클라이언트는 그 토큰을 받을 방법이 없어 이 헤더로 그 검사를
+    건너뛴다(공식 문서에 적힌 값 그대로). `_request`가 `**kw`를 그대로 `requests.request`에
+    넘기므로 `files=`/`headers=`도 기존 401/403/CAPTCHA/잠금 판정을 그대로 탄다.
+    """
+    r = _request('POST', '/rest/api/2/issue/' + key + '/attachments',
+                  headers={'X-Atlassian-Token': 'no-check'},
+                  files={'file': (filename, content, mime_type or 'application/octet-stream')})
+    return [{'filename': a.get('filename') or '',
+             'size': a.get('size') or 0,
+             'mimeType': a.get('mimeType') or '',
+             'url': a.get('content') or '',
+             'author': (a.get('author') or {}).get('displayName'),
+             'created': a.get('created') or ''} for a in r.json()]
 
 
 def do_transition(key, transition_id, comment=None):

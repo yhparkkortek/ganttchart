@@ -84,6 +84,35 @@ SPEC과 공유하는 `window.mcActiveUnit` — 한 프로젝트에 MVD/TPR/BTN�
 실측: `get_issue('GABJQ-4')` → 첨부 3건, `fetch_attachment`로 37,711바이트(xlsx) 그대로 받음
 확인.
 
+### 📎 첨부 저장(업로드, 2026-11-11 추가)
+
+상세 모달에서 파일을 골라 **⬆ 첨부 저장**을 누르면 그 이슈에 새 첨부가 올라간다
+(`jira_bridge.add_attachment` → `POST /rest/api/2/issue/{key}/attachments`, multipart).
+
+⚠️⚠️ **`X-Atlassian-Token: no-check` 헤더가 필수다** — 옛 Jira는 파일 업로드에 XSRF 토큰을
+요구하는데 REST 클라이언트는 그 토큰을 받을 길이 없어, 공식 문서가 적어 둔 이 헤더로 그 검사를
+건너뛴다(빠뜨리면 403). `_request`가 `**kw`를 그대로 `requests.request`에 넘기므로
+`headers=`/`files=`도 기존 401/403/CAPTCHA/잠금 판정을 그대로 탄다 — 새 경로를 따로 안
+만들어도 된다.
+
+⚠️ AI 문답 도구(js/40 QA_TOOLS)엔 이 라우트를 **등록하지 않았다** — 업로드는 파일을 고르고
+버튼을 누르는 사람만 할 수 있다(다른 쓰기 경로와 같은 원칙).
+
+⚠️ **실측 안 함(의도적)** — GET(조회)과 달리 POST는 실제 이슈에 영구적인 첨부를 남겨 동료들도
+보게 된다. 코드는 문서화된 API 계약대로 작성하고 가짜 경계(`requests.request`) 테스트로
+확인했지만, 실제 JIRA 서버에 올라가는 것은 사람이 한 번 직접 눌러 확인해야 한다.
+
+### 👤 담당자 변경 확장(2026-11-11 추가)
+
+담당자 칸 옆에 **🔍 찾기**를 추가했다 — JIRA 아이디를 몰라도 이름 일부로 찾아 고를 수 있다.
+
+⚠️⚠️ **JIRA 자체 검색은 못 믿는다(실측)** — `/rest/api/2/user/assignable/search`의 `query`
+파라미터가 이 서버에서 **조용히 무시된다**("hong"과 "yhpark"로 각각 질의해도 똑같은 50명이
+그대로 왔다). `maxResults`는 실제로 듣는다(실측 `maxResults=500` → 204명 한 번에 옴,
+페이지네이션 불필요). 그래서 `jira_bridge.assignable_users(key, q)`가 전체를 한 번 받아
+**우리가 직접** 이름/아이디로 거른다 — `list_projects`/`resolve_project_key`와 같은 원칙
+("결정론 먼저", CLAUDE.md).
+
 ## 🔁 Summary 탭 모델 카드 ↔ JIRA 양방향 참조 (2026-11-11, 사용자 요청)
 
 Summary 탭의 모델 카드(고객모델명·프로젝트코드·프로젝트명칭·KTK PN 4칸)에 **🪐 JIRA 코드**
@@ -128,6 +157,17 @@ Summary 탭의 모델 카드(고객모델명·프로젝트코드·프로젝트�
 소스에 동시에 걸릴 수 있다). AI 문답에서 프로젝트 이름만 아는 질문("SHUFFLER 코드가 뭐야")은
 `jira_projects` 도구(js/40, `/jira/projects?q=`)로 먼저 key를 찾게 한다.
 
+⚠️⚠️ **(2026-11-11 사용자 제보) 메일캡처는 모델 구분이 없어 다른 모델 이슈가 섞여 보였다** —
+"TPR 탭에 아무 연결도 안 했는데 사실은 TVD 쪽 이슈(GABJQ-4)가 보인다"는 신고로 확인. 메일
+스캔은 설계상 **전체 메일**을 훑는다(어느 행이 어느 모델 것인지 메일 자체엔 표시가 없다) —
+그래서 모델이 하나뿐인 프로젝트에선 문제가 없지만, 모델이 여럿이면 한 모델의 메일에서 찾은
+JIRA 키가 **다른 모델 탭에도 그대로** 나타났다. → `_jiraOnTabShown`에서 모델이 둘 이상이면
+메일 스캔 결과를 추가로 좁힌다: ① 지금 모델에 📁 프로젝트 코드가 있으면 **그 코드로 시작하는
+키만** 남기고 ② 아직 아무 프로젝트도 등록 안 했으면 **메일 추정 자체를 보여주지 않는다**(어느
+모델 것인지 알 길이 없는데 섞어 보이는 것보다 "없음"이 정직하다 — CLAUDE.md "결정론 먼저").
+수동 키·키워드·프로젝트 전체 3가지는 애초에 모델별 저장소(`jiraLinksByUnit[unit]`)라 이
+문제가 없다 — 영향은 메일캡처 하나뿐이었다.
+
 ## 백엔드 라우트 (`kortek_backend.py` → `jira_bridge.py`)
 
 | 라우트 | 메서드 | 용도 |
@@ -144,6 +184,8 @@ Summary 탭의 모델 카드(고객모델명·프로젝트코드·프로젝트�
 | `/jira/priorities` | GET | 우선순위 목록(필드수정 드롭다운용) |
 | `/jira/projects` | GET | 프로젝트 목록/검색(`q=`, 코드·이름 부분일치). 5분 캐시(`_PROJECT_CACHE`) |
 | `/jira/attachment` | GET | 첨부파일 다운로드 프록시(`url=`, `name=`) — `/secure/attachment/`로 시작하는 주소만 허용 |
+| `/jira/issue/<key>/attachment` | POST | 첨부 저장(업로드, multipart `file`) |
+| `/jira/issue/<key>/assignable-users` | GET | 담당자 후보 찾기(`q=`, 이름/아이디 부분일치 — JIRA 자체 검색은 못 믿어서 우리가 직접 거름) |
 
 ⚠️ `/jira/issue/<key>`와 `/jira/issue`가 **둘 다 있는 이유**: AI 문답 도구 루프(`js/40 _qaRunTool`)는
 모든 인자를 쿼리스트링으로만 붙이고 경로에 끼워 넣지 않는다 — 그래서 QA_TOOLS 전용으로
