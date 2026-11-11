@@ -1336,19 +1336,26 @@
         if (!box) {
             box = document.createElement('div');
             box.id = 'pl-popup';
+            // ⚠️ [2026-11-11] **모달 기본값**(docs/modal-ux.md) — 머리글은 `flex-shrink:0`,
+            //    본문만 `flex:1; overflow-y:auto`. 전엔 바깥 박스 하나에만 `overflow:auto`를 줘서
+            //    머리글까지 본문과 **같이** 스크롤로 말려 올라갔다(제목이 안 보이게 사라짐).
             box.style.cssText = 'display:none; position:fixed; z-index:100000; left:50%; top:50%; transform:translate(-50%,-50%);'
                               + ' background:#fff; border:1px solid #a3d9e0; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,.25);'
-                              + ' max-height:82vh; overflow:auto;';
+                              + ' max-height:82vh; overflow:hidden; display:flex; flex-direction:column;';
             box.onclick = function (e) { e.stopPropagation(); };
             document.body.appendChild(box);
         }
         box.style.width = wide ? '720px' : '460px';
         box.innerHTML = '<div id="pl-popup-head" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#e0f5f7;'
-                      + ' border-bottom:1px solid #a3d9e0; border-radius:10px 10px 0 0; font-weight:bold; color:#00707d; font-size:13.5px;">'
+                      + ' border-bottom:1px solid #a3d9e0; border-radius:10px 10px 0 0; font-weight:bold; color:#00707d; font-size:13.5px; flex-shrink:0;">'
                       + '<span style="flex:1;">' + title + '</span>'
                       + '<span onclick="window.plClosePopup()" style="cursor:pointer; font-size:15px;">✕</span></div>'
-                      + '<div style="padding:14px 16px; font-size:12.5px;">' + html + '</div>';
-        box.style.display = 'block';
+                      // ⚠️ `min-height:0` 필수 — flex 항목 기본값(auto)이면 안 줄어들어 스크롤이 안 생긴다.
+                      + '<div style="padding:14px 16px; font-size:12.5px; overflow-y:auto; flex:1; min-height:0;">' + html + '</div>';
+        // ⚠️⚠️ 'block'이 아니라 'flex' — 박스 자체가 `display:flex`(머리글 고정용)라, 'block'으로
+        //    돌아가면 flex 컨텍스트가 깨져 본문의 `flex:1`이 무효가 되고(실측: 다시 글 길이만큼
+        //    통째로 자란다) 머리글 고정이 도로 안 먹는다.
+        box.style.display = 'flex';
         if (window._makeDraggable) { try { window._makeDraggable('pl-popup', 'pl-popup-head'); } catch (e) { /* 드래그 실패는 보기를 막지 않는다 */ } }
         return box;
     };
@@ -1883,12 +1890,21 @@
         });
     };
 
-    /** pdf.js 모양 전용 MATRIX 읽기 — 행은 리비전 칸으로 시작하고, VENDOR 자리로 양식을 가른다 */
+    /** pdf.js 모양 전용 MATRIX 읽기 — 행은 리비전 칸으로 시작하고, VENDOR 자리로 양식을 가른다
+     *  ⚠️⚠️ [2026-11-11] VENDOR 가 REVISION 바로 다음(vi===0)에 오는 세 번째 양식이 있었다
+     *  ("REVISION VENDOR PART NUMBER MODEL DESCRIPTION TOUCH SENSOR TOUCH F/W PANEL VIDEO F/W",
+     *  1570705 REV N 실측) — A/B 둘 다 안 걸려서(vi 가 1도 2도 아님) 이 함수가 통째로 null 을
+     *  돌려줬고, 그래서 아래 "줄=칸" 전용 대비책으로 떨어졌다가 **엉뚱한 줄에서 "DISPLAY
+     *  INFORMATION MATRIX" 를 찾아**(리비전 H 의 변경내용 문장 속에 우연히 그 문구가 들어 있었다)
+     *  머리글 자리에 리비전 기록 문장이 통째로 섞여 들어갔다(실측: "FIRMWARE TABLE 6. CABLE/LINE
+     *  INSTALLTION: …" 글자 수프). C 양식을 추가하니 그 줄=칸 경로를 아예 안 타고 25행이 깨끗하게 나온다. */
     var _matFromLineRows = function (L) {
         var A = ['REVISION', 'MANUFACTURER PART NUMBER', 'PART NUMBER', 'VENDOR',
                  'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL'];
         var B = ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
                  'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
+        var C = ['REVISION', 'VENDOR', 'PART NUMBER', 'MODEL', 'DESCRIPTION',
+                 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
         var headers = null, rows = [];
         for (var i = 0; i < L.length; i++) {
             var m = L[i].match(/^([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(.*)$/);
@@ -1899,7 +1915,7 @@
                 if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { vi = k; break; }
             }
             if (vi < 0) continue;
-            var cols = (vi === 2) ? A : (vi === 1 ? B : null);
+            var cols = (vi === 2) ? A : (vi === 1 ? B : (vi === 0 ? C : null));
             if (!cols) continue;
             if (!headers) headers = cols;
             if (headers !== cols) continue;                       // 한 도면에 양식이 섞이진 않는다
@@ -1965,10 +1981,17 @@
         var L = _lines(text);
         var byLine = _matFromLineRows(L);          // pdf.js 모양 먼저
         if (byLine) return byLine;
-        var at = -1;
+        // ⚠️ [2026-11-11] "DISPLAY INFORMATION MATRIX" 문구가 **리비전 변경내용 문장 속에도**
+        //    우연히 등장할 수 있다("… AND FIXED A TYPO IN DISPLAY INFORMATION MATRIX AND …" 처럼).
+        //    그 줄을 표 제목으로 잘못 짚으면 그 뒤 리비전 기록 전체가 머리글로 빨려 들어간다
+        //    (실측 사고). 그 줄 **하나만**으로 된 줄(진짜 표 제목)을 먼저 찾고, 없을 때만
+        //    예전처럼 문장 속에서라도 찾는다(최후 대비).
+        var at = -1, atLoose = -1;
         for (var i = 0; i < L.length; i++) {
-            if (/DISPLAY INFORMATION MATRIX/i.test(L[i])) { at = i; break; }
+            if (/^DISPLAY INFORMATION MATRIX$/i.test(L[i])) { at = i; break; }
+            if (atLoose < 0 && /DISPLAY INFORMATION MATRIX/i.test(L[i])) atLoose = i;
         }
+        if (at < 0) at = atLoose;
         if (at < 0) return { headers: [], rows: [] };
 
         // 머리글 — 첫 리비전 칸이 나오기 전까지
