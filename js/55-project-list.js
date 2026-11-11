@@ -1995,27 +1995,51 @@
         if (at < 0) return { headers: [], rows: [] };
 
         // 머리글 — 첫 리비전 칸이 나오기 전까지
+        // ⚠️⚠️ [2026-11-11] "줄=칸"(PyMuPDF) 모양 전용 가정 — 리비전 칸이 **그 줄 하나뿐**이어야
+        //    머리글 수집이 멈춘다. 그런데 실측 여러 문서(1571018·1590937·1629124 등)가 "줄=행"
+        //    (pdf.js, `_matFromLineRows`가 못 알아본 것들 — DESCRIPTION 칸이 "18.5\" TOP DISPLAY"
+        //    처럼 **글자 수가 문서마다 다른 자유 문장**이라 고정 칸수 양식으로 못 묶는다)이라
+        //    리비전 칸 뒤에 곧장 값이 붙는다 — 그 줄은 절대 "리비전 칸 하나뿐"이 될 수 없어
+        //    머리글 수집이 멈추지 않고 **본문 데이터 행까지 머리글로 빨아들인다.**
+        //    → 리비전 칸으로 **시작하면서 VENDOR 이름이 보이는 줄**도 멈추는 신호로 추가한다.
         var hLines = [], k = at + 1;
         for (; k < L.length && hLines.length < 16; k++) {
             if (!L[k]) continue;
             if (_isRevCell(L[k])) break;
+            if (_REVCELL_RE.test(L[k])) {
+                var afterRev = L[k].replace(/^[A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?\s+/, '').toUpperCase();
+                if (_VENDORS.some(function (v) { return afterRev.indexOf(v) !== -1; })) break;
+            }
             hLines.push(L[k]);
         }
         var joined = hLines.join(' ').replace(/\s+/g, ' ').trim().toUpperCase();
         var vocab = (window.PL_MATRIX_COLS || []).slice().sort(function (a, b) { return b.length - a.length; });
-        var headers = [], guard = 0;
+        // ⚠️ [2026-11-11] 머리글 줄 **안에도** 법적 문구가 같은 줄에 바로 붙어 나온다
+        //    ("…PANEL VIDEO F/W THE DESIGNS AND RELATED INFORMATION…" — 표 머리글과 도면
+        //    하단 고지문이 한 줄에 섞였다). 사전에 없는 토막을 만나면 **법적 문구에서 흔한
+        //    낱말**인지 먼저 보고, 맞으면 거기서 수집을 그만둔다(그 뒤는 전부 본문/고지문).
+        var _STOP_WORD = /^(THE|AND|OR|TO|IN|THIS|FOR|ALL|SHALL|IS|ARE|OF|WITH|NOT|IT|ONE|MORE|ITS|UNLESS|OTHERWISE|UNDER|STATE,|FEDERAL,|COUNTRY,|CONFIDENTIAL|PROPRIETARY|SUBSIDIAR(?:Y|IES)|TOLERANCE|TOLERANCES|DIMENSIONS|RECIPIENT|DISCLOSED,|REPRODUCED,)$/;
+        var headers = [], vocabHits = 0, guard = 0;
         while (joined && guard++ < 40) {
             var hit = '';
             for (var v = 0; v < vocab.length; v++) {
                 if (joined.indexOf(vocab[v]) === 0) { hit = vocab[v]; break; }
             }
-            if (hit) { headers.push(hit); joined = joined.slice(hit.length).trim(); }
+            if (hit) { headers.push(hit); vocabHits++; joined = joined.slice(hit.length).trim(); }
             else {                                   // 사전에 없는 말은 한 토막만 떼어 낸다
                 var sp = joined.indexOf(' ');
+                var tok0 = sp < 0 ? joined : joined.slice(0, sp);
+                if (_STOP_WORD.test(tok0)) break;     // 법적 문구로 넘어간 신호 — 여기서 그만
                 if (sp < 0) { headers.push(joined); joined = ''; }
                 else { headers.push(joined.slice(0, sp)); joined = joined.slice(sp + 1); }
             }
         }
+        // ⚠️⚠️ [2026-11-11] 알아본 진짜 열 이름이 2개 미만이거나, 열 개수가 실제 양식(A/B/C,
+        //    많아야 10개)보다 훨씬 많으면 — 숫자·BOM 조각·다른 표의 머리글까지 섞여 들어온
+        //    신호다(실측 "1590937": 22개, 그중 "1"·"2"·"1564166"·"BKT,"·"ITEM"·"QTY." 등
+        //    전혀 다른 표의 글자가 섞여 있었다). 틀린 머리글을 자신있게 보여주느니
+        //    "못 읽었다"고 정직하게 빈 표를 돌려준다.
+        if (vocabHits < 2 || headers.length > 12) return { headers: [], rows: [] };
 
         // 본문 — 리비전 칸에서 다음 리비전 칸 전까지가 한 행
         var rows = [], cur = null;
