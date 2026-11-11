@@ -205,6 +205,7 @@ window.AddressBook = {
             if (resp.ok) {
                 this._lastKnownServerCount = meaningful; // 성공적으로 반영된 값으로 기준선 갱신
                 this._lastKnownSavedAt = newSavedAt;      // 내가 방금 쓴 시각을 새 기준선으로 기록
+                this.backupIfNewDay(list); // 🗄️📜 날짜가 바뀐 뒤 처음 저장이면 그날의 상태를 백업
             }
         } catch(e) { console.warn('AddressBook Drive 동기화 실패:', e.message); }
     },
@@ -224,6 +225,70 @@ window.AddressBook = {
             this.save(list, true); // 로컬 캐시만 갱신 (방금 받은 걸 다시 올릴 필요 없음)
             return list;
         } catch(e) { console.warn('AddressBook Drive 조회 실패:', e.message); return null; }
+    },
+    // 🗄️📜 [2026-11-11 요청] "NAS 에 여러 버전이 있으면 최신을 기본으로, 필요하면 이전 파일을
+    //    열 수 있게" — 지금까지 공유 주소록은 파일 1개를 매번 덮어써서 "이전 버전"이 아예
+    //    없었다. 위험한 순간(그룹웨어 전사 주소록으로 **일괄 교체**하는 순간, 그리고 그냥
+    //    하루에 한 번)에 현재 내용을 `Backups/AddressBook/` 하위에 타임스탬프 파일로 남긴다
+    //    — 프로젝트 백업과 같은 폴더 체계(`_getOrCreateBackupTeamFolder`는 이름만 다를 뿐
+    //    "Backups/ 아래 하위 폴더" 범용 헬퍼라 팀명이 아니어도 그대로 쓸 수 있다)·같은
+    //    파일명 규칙(`백업_<이름>_<YYYYMMDD>_<HHMM>.json`)이라 js/57 어댑터의
+    //    `backupStampOf`가 그대로 날짜를 읽어준다. 실패해도 저장 자체는 막지 않는다.
+    backupCurrent: async function(list, reason) {
+        try {
+            const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return false;
+            const meaningful = this._meaningfulCount(list);
+            if (!meaningful) return false; // 빈 상태는 백업할 가치가 없다(되려 혼란만 더함)
+            const folderId = await window._getOrCreateBackupTeamFolder(token, 'AddressBook');
+            if (!folderId) return false;
+            const now = new Date();
+            const ts = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0')
+                + '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+            const backupName = '백업_AddressBook_Shared_' + ts + '.json';
+            const boundary = 'addr_backup_boundary';
+            const metadata = { name: backupName, mimeType: 'application/json', parents: [folderId] };
+            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ addressBook: list, savedAt: now.toISOString() })
+                + "\r\n--" + boundary + "--";
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
+                body: body
+            });
+            if (!resp.ok) { console.warn('[주소록 백업] 실패(' + (reason || '') + '): HTTP ' + resp.status); return false; }
+            console.info('[주소록 백업] ' + backupName + ' 생성(' + meaningful + '명, ' + (reason || '') + ')');
+            return true;
+        } catch (e) { console.warn('[주소록 백업] 예외(저장 자체엔 영향 없음):', e.message); return false; }
+    },
+    // 💡 매 편집(3초 디바운스)마다 백업을 쌓으면 금방 수백 개가 된다 — 날짜가 바뀐 뒤 처음
+    //    저장될 때만 "그날의 상태"를 남긴다. localStorage에 마지막 백업 날짜를 적어 새로고침
+    //    해도 같은 날 중복 백업하지 않는다.
+    _backupDayKey: 'gantt_ab_backup_day_v1',
+    backupIfNewDay: function(list) {
+        const today = new Date().toISOString().slice(0, 10);
+        let last = '';
+        try { last = localStorage.getItem(this._backupDayKey) || ''; } catch (e) {}
+        if (last === today) return;
+        try { localStorage.setItem(this._backupDayKey, today); } catch (e) {}
+        this.backupCurrent(list, 'daily');
+    },
+    // 📜 Backups/AddressBook/ 안의 백업 목록(최신순) — "이전 버전 열기" 모달이 쓴다.
+    listVersions: async function() {
+        const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return [];
+        try {
+            const folderId = await window._getOrCreateBackupTeamFolder(token, 'AddressBook');
+            if (!folderId) return [];
+            const resp = await gapi.client.drive.files.list({
+                q: "mimeType='application/json' and trashed=false and '" + folderId + "' in parents",
+                fields: 'files(id, name, createdTime, modifiedTime)', orderBy: 'createdTime desc',
+                supportsAllDrives: true, includeItemsFromAllDrives: true
+            });
+            return (resp.result && resp.result.files) || [];
+        } catch (e) { console.warn('[주소록 백업] 목록 조회 실패:', e.message); return []; }
     }
 };
 
@@ -334,6 +399,11 @@ window.importAddressFromGroupware = async function() {
         // 그룹웨어 검색에 안 걸린 기존 인원(협력사 등 외부 연락처)은 지우지 않고 그대로 둔다.
         byName.forEach(function (p) { merged.push(p); });
 
+        // 🗄️📜 [2026-11-11] 394명짜리 일괄 교체 **직전** 상태를 먼저 남긴다 — 이게 실제로
+        //    위험한 순간이다(그룹웨어가 모르는 외부 연락처는 안 지우지만, 혹시라도 잘못
+        //    병합되면 되돌아올 다리가 필요하다). 저장을 막지 않도록 기다리지 않는다.
+        window.AddressBook.backupCurrent(curList, 'groupware-import-before').catch(function() {});
+
         window.tabData = window.tabData || {};
         window.tabData.addressBook = merged;
         window._addrSelectedRows = new Set();
@@ -358,5 +428,110 @@ window.importAddressFromGroupware = async function() {
                          'Could not load from either the groupware directory or the shared NAS store.\nReason: ' + (gwErr ? gwErr.message : 'unknown')));
     }
 };
+
+// =========================================================
+// 📜 [2026-11-11 요청] "이전 버전 열기" — Backups/AddressBook/ 에 쌓인 과거 시점을 사람이
+// 직접 골라 적용할 수 있게 한다. 프로젝트 복원 모달(showBackupFileModal, js/04c)과 같은
+// DOM 틀(#drive-file-modal-overlay 등)을 재사용 — 새 모달 HTML을 또 만들지 않는다.
+// =========================================================
+window.openAddressBookVersionModal = async function() {
+    var _t = window._t ? window._t : function (ko) { return ko; };
+    if (!window.AddressBook) return;
+    var files = await window.AddressBook.listVersions();
+    if (!files.length) {
+        if (window.showToast) window.showToast(_t(
+            '📜 저장된 이전 버전이 없습니다(앞으로 저장될 때마다 쌓입니다).',
+            '📜 No earlier versions saved yet (they accumulate from here on).'
+        ), 'info', 5000);
+        else alert(_t('📜 저장된 이전 버전이 없습니다(앞으로 저장될 때마다 쌓입니다).', '📜 No earlier versions saved yet (they accumulate from here on).'));
+        return;
+    }
+    var listContainer = document.getElementById('drive-file-list');
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+    var _title = document.getElementById('drive-modal-title');
+    if (_title) _title.textContent = _t('📜 주소록 이전 버전', '📜 Address Book — earlier versions');
+    var _desc = document.getElementById('drive-modal-desc');
+    if (_desc) _desc.textContent = _t(
+        '열어볼 시점을 선택해 주세요. 선택하면 지금 주소록에 적용되고(지금 내용은 자동 백업됩니다), 공유 저장소에도 반영됩니다.',
+        'Pick a point to open. Applying it replaces the current Address Book (the current content is backed up first) and syncs to the shared store.'
+    );
+    var _actionSlot = document.getElementById('drive-modal-action-slot');
+    if (_actionSlot) _actionSlot.innerHTML = '';
+
+    files.forEach(function(file) {
+        var d = new Date(file.createdTime || file.modifiedTime);
+        var dateStr = isNaN(d.getTime()) ? file.name : (d.toLocaleDateString() + ' ' + d.toLocaleTimeString());
+        var row = document.createElement('div');
+        row.style.cssText = 'padding:9px 14px; border:1px solid #a5c8f0; border-radius:8px; cursor:pointer; '
+            + 'transition:background .15s, border-color .15s; display:flex; justify-content:space-between; align-items:center; background:#e8f4fd;';
+        row.onmouseover = function() { row.style.background = '#cfe6fa'; row.style.borderColor = '#7fb0dd'; };
+        row.onmouseout  = function() { row.style.background = '#e8f4fd'; row.style.borderColor = '#a5c8f0'; };
+        row.onclick = function() { window._abOpenVersion(file.id, file.name); };
+        row.innerHTML = '<div style="font-weight:bold; color:#333; font-size:14px;">📜 ' + dateStr + '</div>'
+                      + '<div style="font-size:12px; color:#868e96;">' + file.name + '</div>';
+        listContainer.appendChild(row);
+    });
+    var overlay = document.getElementById('drive-file-modal-overlay');
+    if (overlay) overlay.style.display = 'flex';
+};
+
+window._abOpenVersion = async function(fileId, fileName) {
+    var _t = window._t ? window._t : function (ko) { return ko; };
+    if (window.closeDriveModal) window.closeDriveModal();
+    if (!confirm(_t(
+        '이 시점으로 주소록을 교체합니다(지금 내용은 자동 백업되어 나중에 다시 열 수 있습니다).\n계속할까요?',
+        'This will replace the Address Book with this point in time (the current content is backed up first, so it can be reopened later).\nContinue?'
+    ))) return;
+    try {
+        var curList = (window.tabData && window.tabData.addressBook) ? window.tabData.addressBook.slice() : [];
+        await window.AddressBook.backupCurrent(curList, 'before-open-version'); // 되돌아올 다리를 먼저 놓는다
+        var resp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
+        var data = resp.result;
+        var list = (data && data.addressBook) || [];
+        window.tabData = window.tabData || {};
+        window.tabData.addressBook = list;
+        window._addrSelectedRows = new Set();
+        window.renderAddressTable();
+        window.AddressBook.save(list); // 공유 저장소(NAS)에도 반영 — 디바운스 3초
+        if (window.showToast) window.showToast('✅ ' + _t(fileName + ' 을(를) 적용했습니다(' + list.length + '명).', 'Applied ' + fileName + ' (' + list.length + ' contacts).'), 'success', 6000);
+        else alert('✅ ' + _t(fileName + ' 을(를) 적용했습니다(' + list.length + '명).', 'Applied ' + fileName + ' (' + list.length + ' contacts).'));
+    } catch (e) {
+        alert('❌ ' + _t('이전 버전을 여는 중 오류: ', 'Error opening the earlier version: ') + e.message);
+    }
+};
+
+// 🔘 "📜 이전 버전" 버튼을 표준 "📂 불러오기" 버튼 묶음(js/42, `#px-btns-address`) 바로 뒤에
+// 런타임으로 꽂는다. HTML을 또 고치지 않는 이유 — `#px-btns-address`는 **안쪽 innerHTML만**
+// 탭 전환/클릭마다 다시 그려진다(_pxRenderButtons). 그 안쪽에 넣으면 금방 지워지므로,
+// 그 span **바로 다음 형제**로 넣어야 살아남는다(js/42의 홀더 자체는 재사용되고 비워지지 않음).
+window._abEnsureVersionBtn = function() {
+    if (document.getElementById('ab-version-btn')) return;
+    var holder = document.getElementById('px-btns-address');
+    if (!holder || !holder.parentNode) return;
+    var _t = window._t ? window._t : function (ko) { return ko; };
+    var btn = document.createElement('button');
+    btn.id = 'ab-version-btn';
+    btn.type = 'button';
+    btn.title = _t('지금까지 자동으로 쌓인 이전 버전을 열어봅니다.', 'Open an earlier automatically-saved version.');
+    btn.onclick = function() { window.openAddressBookVersionModal(); };
+    btn.textContent = _t('📜 이전 버전', '📜 Earlier versions');
+    btn.style.cssText = 'white-space:nowrap; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none;'
+        + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; line-height:1.2;'
+        + ' transition:background .15s; margin-right:4px;';
+    btn.onmouseover = function() { btn.style.background = '#a3d9e0'; };
+    btn.onmouseout  = function() { btn.style.background = '#e0f5f7'; };
+    holder.insertAdjacentElement('afterend', btn);
+};
+(function() {
+    var _boot = function() { try { window._abEnsureVersionBtn(); } catch (e) {} };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _boot);
+    else _boot();
+    // 💡 Address 탭이 처음 그려지는 시점(= 탭 클릭)을 놓치지 않으려고 js/42와 같은 패턴 재사용.
+    document.addEventListener('click', function(e) {
+        var t = e.target;
+        if (t && t.closest && t.closest('button, a, [onclick]')) setTimeout(_boot, 150);
+    }, true);
+})();
 
 
