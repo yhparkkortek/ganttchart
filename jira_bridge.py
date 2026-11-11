@@ -167,17 +167,25 @@ def _request(method, path, **kw):
         # 권한 문제는 계정 자체가 틀린 게 아니다 — 잠그지 않는다.
         raise JiraApiError(_err_text(r) or '이 이슈를 볼 권한이 없습니다.', status=403)
     if r.status_code == 404:
-        raise JiraApiError('해당 이슈를 찾을 수 없습니다.', status=404)
+        raise JiraApiError('요청한 대상을 찾을 수 없습니다 (HTTP 404, %s).' % path, status=404)
     if r.status_code >= 400:
         raise JiraApiError(_err_text(r) or ('JIRA 오류 (HTTP %d)' % r.status_code), status=r.status_code)
     return r
 
 
 def verify_login():
-    """자격증명을 **한 번만** 확인한다(whoami). 성공하면 verified 플래그를 남긴다."""
-    r = _request('GET', '/rest/api/2/myself')
-    me = r.json()
+    """자격증명을 **한 번만** 확인한다(whoami). 성공하면 verified 플래그를 남긴다.
+
+    ⚠️⚠️ [2026-11-11 실측] `/rest/api/2/myself`는 이 서버(2013년 빌드)에 **등록돼 있지 않다**
+    — 인증은 성공하는데(응답 헤더에 `X-Seraph-LoginReason: OK`, `X-AUSERNAME: <내 계정>`이
+    실린다) 그 리소스 자체가 없어 **404**("null for uri")로 떨어진다. 그래서 자격증명이
+    맞는데도 "로그인 실패"로 오판했다. `/rest/api/2/user?username=<내 계정>`은 실측으로
+    200이 확인됐다 — 이게 이 서버에서 통하는 whoami다.
+    """
     c = _cfg()
+    user = c.get('user') or ''
+    r = _request('GET', '/rest/api/2/user', params={'username': user})
+    me = r.json()
     c['verified'] = True
     _write_cfg(c)
     return {'ok': True, 'displayName': me.get('displayName') or me.get('name'), 'name': me.get('name')}

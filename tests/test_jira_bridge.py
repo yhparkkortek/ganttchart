@@ -150,7 +150,37 @@ res = jb.search('project = GABKJ', 10)
 check('total', res['total'] == 2, res)
 check('issues 2건, key 보존', [i['key'] for i in res['issues']] == ['GABKJ-1', 'GABKJ-2'])
 
-print('\n[7] save_config/delete_config — 진짜 DPAPI 왕복 + 잠금 해제')
+print('\n[7] verify_login — /rest/api/2/myself 가 아니라 /rest/api/2/user?username= 을 쓴다')
+#    ⚠️⚠️ [2026-11-11 실환경 발견] /rest/api/2/myself 는 이 서버(2013년 빌드)에 없다 —
+#    인증은 성공하는데(헤더에 X-Seraph-LoginReason: OK) 그 리소스가 404("null for uri")를
+#    줘서 "로그인 실패"로 오판했다. 실측으로 /rest/api/2/user?username=<계정> 이 통하는
+#    걸 확인하고 바꿨다 — 이 테스트는 **그 선택이 유지되는지**를 지킨다(되돌리면 실패).
+fresh(); stub_auth(True)
+_orig_cfg_path_v = jb._CFG_PATH
+test_path_v = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_jira_login_config_test_verify.json')
+jb._CFG_PATH = test_path_v
+try:
+    jb._write_cfg({'user': 'yhpark', 'pw_dpapi': 'x', 'verified': False})
+    seen = {}
+
+    def fake_verify(method, url, **kw):
+        seen['method'] = method
+        seen['url'] = url
+        seen['params'] = kw.get('params')
+        return FakeResp(200, {'name': 'yhpark', 'displayName': '박용훈'})
+    jb.requests.request = fake_verify
+    res = jb.verify_login()
+    check('myself 를 안 부른다', '/rest/api/2/myself' not in seen['url'], seen['url'])
+    check('/rest/api/2/user 를 부른다', seen['url'].endswith('/rest/api/2/user'), seen['url'])
+    check('username 파라미터로 내 계정을 넘긴다', seen['params'] == {'username': 'yhpark'}, seen['params'])
+    check('ok + displayName', res['ok'] is True and res['displayName'] == '박용훈', res)
+    check('verified 플래그가 파일에 남는다', jb._cfg().get('verified') is True)
+finally:
+    jb._CFG_PATH = _orig_cfg_path_v
+    if os.path.exists(test_path_v):
+        os.remove(test_path_v)
+
+print('\n[8] save_config/delete_config — 진짜 DPAPI 왕복 + 잠금 해제')
 _orig_cfg_path = jb._CFG_PATH
 test_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_jira_login_config_test.json')
 jb._CFG_PATH = test_path

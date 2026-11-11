@@ -65,7 +65,7 @@ SAP(`sap_bridge_32.py`, win32com)·그룹웨어/인사관리(`gw_bridge.py`, CDP
 |---|---|---|
 | `/jira/status` | GET | 설정 유무·서버 도달성·확인 여부·잠금 사유 |
 | `/jira/login-config` | POST/DELETE | 계정 저장(DPAPI)/삭제 |
-| `/jira/login` | POST | **1회** whoami 확인(`/rest/api/2/myself`) |
+| `/jira/login` | POST | **1회** whoami 확인(`/rest/api/2/user?username=<내 계정>`) |
 | `/jira/issue/<key>` | GET | 이슈 1건(경로 파라미터 — JIRA 탭 전용) |
 | `/jira/issue` | GET | 이슈 1건(쿼리 `key=` — **AI 문답 도구 전용**, js/40 은 인자를 쿼리스트링으로만 붙인다) |
 | `/jira/search` | GET | JQL 검색(`jql`, `maxResults`) |
@@ -85,21 +85,46 @@ AI 문답 도구(`QA_TOOLS`, js/40)에는 `jira_issue`/`jira_search` **두 개�
 절대 부를 수 없다 — `js/70`의 상세 모달에서 **사람이 버튼을 눌러야만** 실행된다
 (`docs/qa-tool-router.md` "쓰기는 읽기와 경로 분리" 원칙 그대로).
 
+## 🐛 (2026-11-11) "로그인 테스트"가 항상 실패했던 진짜 원인 — `/rest/api/2/myself`가 이 서버엔 없다
+
+사용자가 🔑 설정에서 실제 계정을 저장하고 로그인 테스트를 눌렀는데 **"해당 이슈를 찾을 수
+없습니다."**로 매번 실패했다. 실측(`python -c "..."`로 직접 HTTP 응답 확인)으로 원인을
+확정했다:
+
+- **인증 자체는 성공한다** — 응답 헤더에 `X-Seraph-LoginReason: OK`, `X-AUSERNAME: <내 계정>`이
+  실린다. 비밀번호 문제가 전혀 아니었다.
+- 그런데 `GET /rest/api/2/myself`가 이 2013년 빌드엔 **등록돼 있지 않아** `404`
+  (`<status><status-code>404</status-code><message>null for uri: ...</message></status>`)를
+  준다. 404 핸들러가 "이슈를 찾을 수 없다"는 문구를 썼던 터라 더 헷갈렸다(그 문구도 범용으로
+  고쳤다).
+- `GET /rest/api/2/user?username=<내 계정>`은 실측으로 **200**이 확인됐다 — 이 서버에서
+  통하는 whoami는 이것이다. `verify_login()`을 여기로 바꿨다.
+- ⚠️ `GET /rest/api/2/issue/GABKJ-1`도 실측 **200**으로 확인됐다(한글 요약 정상 반환 —
+  터미널에 찍히는 깨진 글자는 Windows 콘솔 코드페이지 문제였을 뿐, 실제 유니코드 코드포인트는
+  정확했다). → 이 연동은 이제 실제로 동작한다.
+
+검증 `tests/test_jira_bridge.py` [7]이 "다시 `/rest/api/2/myself`로 되돌리면" 바로 잡아낸다.
+
 ## 검증
 
 ```
 python tests/test_jira_bridge.py
 ```
 
-27건 — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `_shape_issue`
-필드 매핑(요약·설명·상태·담당자·우선순위·댓글), `search` 집계, `save_config`/`delete_config`는
+32건 — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `verify_login`이
+`/rest/api/2/user?username=`을 쓰는지(위 버그의 회귀 방지), `_shape_issue` 필드 매핑
+(요약·설명·상태·담당자·우선순위·댓글), `search` 집계, `save_config`/`delete_config`는
 **진짜 Windows DPAPI**로 암복호화 왕복까지 확인한다. 가짜는 `requests.request` 경계 하나뿐.
 
-⚠️ **확인 못 한 것**(실제 JIRA 계정이 없어 이 세션에서는 못 돌렸다 — CLAUDE.md 검증 규칙):
-- 실제 계정으로 로그인 테스트(🔑 설정 ▸ JIRA ▸ 로그인 테스트)
-- JIRA 탭에서 실제 이슈가 표에 그려지는지, 상세 모달의 댓글/상태전환/필드수정이 실제
-  JIRA 서버에 반영되는지(브라우저 자동화가 이 세션의 로컬 프리뷰 서버에 연결하지 못해
-  확인 불가 — 사람이 한 번 켜서 확인해야 한다)
+✅ **실제 서버로 확인한 것**(2026-11-11, 저장된 실제 계정으로): 로그인(whoami) 성공, 실제
+이슈(`GABKJ-1`) 조회 성공(요약·상태·담당자 정상 반환).
+
+⚠️ **아직 확인 못 한 것** — 백엔드가 `debug=False`라 재시작 전엔 이 수정이 반영되지 않는다:
+- **백엔드 재시작 필요** — 지금 돌고 있는 프로세스는 고치기 전 `jira_bridge.py`를 메모리에 들고
+  있다(재시작 전엔 이전처럼 "이슈를 찾을 수 없습니다"가 난다).
+- JIRA 탭 화면이 실제로 표를 그리는지, 상세 모달의 댓글/상태전환/필드수정이 실제 JIRA에
+  반영되는지(브라우저 자동화가 이 세션의 로컬 프리뷰 서버에 연결하지 못해 화면 자체는
+  아직 못 봄)
 - AI 문답에서 "GABKJ-1 상태 알려줘" 같은 질문이 실제로 `jira_issue` 도구를 골라 답하는지
 
 ## 알려진 제약
