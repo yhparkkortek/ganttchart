@@ -669,7 +669,85 @@
         _projCache = {};
         _other = { at: '', mine: [], others: [], done: 0, total: 0, kept: 0, busy: false, errs: [] };
         window._dailyOtherScan = _other;
+        _carry = { at: '', raw: [], loading: false };
     };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 4-3. 📌 업무 연속성 — AI 호출 없음, 저장을 막지 않는 정보성 신호만
+    // ══════════════════════════════════════════════════════════════════════
+    // [2026-11-11 요청] "업무 개연성" 중 사용자가 고른 범위:
+    //   A) 가장 최근 내 보고의 '해야 할 일' 이 오늘 안 담겼으면 칩으로 알려준다(이월 알림)
+    //   B) "직접 추가" 로 적은 업무명이 오늘 간트 일정 어디에도 없으면 배지로 알려준다
+
+    /** 가장 최근 작성된 내 보고의 '해야 할 일' 원본(오늘 담았는지 여부는 그리는 시점에 따로 가른다
+     *  — 담고 빼는 걸 바로 반영하려면 **사람이 오늘 고친 항목과 매번 대조**해야지, 여기서 한 번만
+     *  걸러 두면 안 된다). */
+    var _carry = { at: '', raw: [], loading: false };
+
+    /** 달력상 '어제'가 아니라 **가장 최근 존재하는 내 보고**를 찾는다 — 주말·휴가로 비는 날이
+     *  흔하다. 최대 7일만 거슬러 올라간다(그보다 오래된 건 "이월" 이라 부르기엔 너무 늦다).
+     *  ⚠️ 못 읽으면(네트워크 등) 더 거슬러 올라가지 않고 **조용히 포기한다** — 추측하지 않는다. */
+    window._dailyEnsureCarryOver = async function (dateStr) {
+        if (_carry.at === dateStr || _carry.loading) return;
+        _carry.loading = true;
+        var cur = new Date(dateStr + 'T00:00:00');
+        var raw = [];
+        for (var back = 1; back <= 7; back++) {
+            var d = new Date(cur.getTime() - back * 86400000);
+            var doc;
+            try { doc = await window.dailyLoad(ymd(d)); } catch (e) { break; }
+            if (doc && Array.isArray(doc.items) && doc.items.length) {
+                raw = doc.items.filter(function (it) { return it && it.next && String(it.next).trim(); })
+                               .map(function (it) { return { name: it.name, project: it.project, cat: it.cat || '', next: it.next }; });
+                break;
+            }
+        }
+        _carry = { at: dateStr, raw: raw, loading: false };
+        window._dailyCarryRaw = raw;      // 🧪 `_dailyCand` 와 같은 이유로 노출 — 확인·시험용
+        paintCands();
+    };
+
+    /** 이월 후보 — 오늘 이미 담았으면(이름 기준) 뺀다. 칩(`carryOverHtml`)과 담기(`_dailyAddCarryOver`)
+     *  가 **같은 필터**를 써야 "보이는 칩 번호"와 "담기는 항목"이 어긋나지 않는다 — 두 벌로 두지 않는다. */
+    function pendingCarryOver() {
+        var todayNames = {};
+        _doc.items.forEach(function (it) { if (it) todayNames[it.name] = 1; });
+        return _carry.raw.filter(function (c) { return c && !todayNames[c.name]; });
+    }
+    window._dailyPendingCarryOver = pendingCarryOver;   // 🧪 확인·시험용 — `_dailyCand` 와 같은 이유
+
+    /** 이월 후보 칩. 클릭하면 바로 오늘 업무로 담는다. */
+    function carryOverHtml() {
+        var pend = pendingCarryOver();
+        if (!pend.length) return '';
+        return '<div style="margin-bottom:6px;">' + pend.map(function (c, i) {
+            return '<span onclick="window._dailyAddCarryOver(' + i + ')" title="' +
+                   esc(T('클릭하면 오늘 업무로 담습니다 — \'해야 할 일\': ', "Click to add as today's task — \"To do\": ") + c.next) +
+                   '" style="cursor:pointer; display:inline-block; margin:0 5px 5px 0; padding:4px 9px; border:1px solid #ffd27a; background:#fff4e0; color:#8a5a00; border-radius:12px; font-size:11px;">↩️ ' +
+                   esc(T('어제 적어둔 ', "Carried over: ")) + '\'' + esc(c.name) + '\' ' +
+                   esc(T('오늘 없음', 'missing today')) + '</span>';
+        }).join('') + '</div>';
+    }
+
+    window._dailyAddCarryOver = function (i) {
+        var c = pendingCarryOver()[i];
+        if (!c) return;
+        _doc.items.push({ name: c.name, project: c.project, cat: c.cat || '', note: c.next || '', carriedOver: true });
+        saveDraftLocal(); render();
+    };
+
+    /** 오늘 간트에 걸린 업무 이름 전체(후보 필터링 전) — "직접 추가" 가 간트에 있는 이름인지
+     *  확인용이다. candHtml() 의 `cand` 보다 넓다(그쪽은 인용할 말이 없는 후보를 뺀다) —
+     *  여기선 "오늘 일정에 있는가"만 보면 된다. */
+    function todayGanttNameSet() {
+        var draft = window.dailyBuildDraft(_date);
+        var o = window._dailyOtherScan || { mine: [], others: [] };
+        var set = {};
+        [].concat(draft.mine, draft.others, o.mine || [], o.others || []).forEach(function (c) {
+            if (c && c.name) set[c.name] = 1;
+        });
+        return set;
+    }
 
     /**
      * 내가 맡은 프로젝트 파일을 차례로 읽어 같은 규칙으로 훑는다.
@@ -1017,6 +1095,7 @@
         // 🗂 내가 맡은 **다른** 프로젝트는 뒤에서 채운다 — 기다리게 하지 않는다(await 안 함).
         //    끝날 때마다 후보 목록만 다시 그린다.
         try { window.dailyScanOtherProjects(_date); } catch (e) { /* 훑기 실패가 모달을 막지는 않는다 */ }
+        try { window._dailyEnsureCarryOver(_date); } catch (e) { /* 이월 알림 실패가 모달을 막지는 않는다 */ }
     };
 
     /**
@@ -1092,13 +1171,14 @@
                       }).join('') + '</select></div>';
         }
 
+        var carryTxt = carryOverHtml();
         if (!shown.length) {
-            return noteTxt + errTxt + pickTxt + '<div style="color:#aaa; font-size:11.5px;">' +
+            return carryTxt + noteTxt + errTxt + pickTxt + '<div style="color:#aaa; font-size:11.5px;">' +
                    esc(_candProj ? T('이 프로젝트엔 오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today in this project.')
                                  : T('오늘 날짜가 걸린 업무가 없습니다.', 'No tasks dated today.')) + '</div>';
         }
         var max = +(window.DAILY_SCAN || {}).maxCandidates || 80;
-        return noteTxt + errTxt + pickTxt + shown.slice(0, max).map(function (c, i) {
+        return carryTxt + noteTxt + errTxt + pickTxt + shown.slice(0, max).map(function (c, i) {
             var pj = String(c.project || '').trim();
             return '<div onclick="window._dailyAdd(' + i + ')" style="cursor:pointer; padding:5px 7px; border:1px solid #eee; border-radius:5px; margin-bottom:4px; background:#fafbfc;" ' +
                    'onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fafbfc\';">' +
@@ -1155,6 +1235,10 @@
 
         var exempt = (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === _doc.dayType; })[0] || {}).exempt;
 
+        // 📌 [2026-11-11 요청] "직접 추가" 로 적은 업무명이 오늘 간트 일정 어디에도 없으면
+        //    배지로 알려준다 — 저장을 막지 않는다(오타일 수도, 그냥 간트에 없는 업무일 수도 있다).
+        var ganttNames = todayGanttNameSet();
+
         var chk = _doc.items.map(function (it, i) {
             // 📝 업무 하나가 카드 하나 — 오늘 한 일 / 해야 할 일 / 막힌 일 / 📎 를 **그 업무 밑에** 둔다.
             //    [2026-11-05 요청] 전엔 셋이 보고 전체에 하나씩이라, 업무가 여럿이면 누구 것인지 몰랐다.
@@ -1185,6 +1269,12 @@
                              esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) +
                              '" style="padding:1px 7px; border:1px solid #ffe08a; background:#fff8e6; color:#7a5210; border-radius:4px; font-size:10.5px; cursor:pointer;">📧 ' +
                              esc(T('원문보기', 'Source')) + '</button>'
+                         : '') +
+                       (it.manual && !ganttNames[it.name]
+                         ? '<span title="' + esc(T('직접 추가한 업무 이름이 오늘 간트 일정 어디에도 없습니다 — 오타이거나 다른 프로젝트일 수 있습니다.',
+                                                   'This manually-typed name does not match any task on today\'s Gantt schedule — check for a typo or a different project.')) +
+                             '" style="padding:1px 7px; border:1px solid #f0b8b0; background:#fdeeec; color:#a23b2e; border-radius:4px; font-size:10.5px;">⚠️ ' +
+                             esc(T('간트에 없음', 'Not on Gantt')) + '</span>'
                          : '') +
                      '</div>' +
                      fields +
@@ -1295,7 +1385,7 @@
         var el = document.getElementById('daily-manual');
         var v = el ? el.value.trim() : '';
         if (!v) return;
-        _doc.items.push({ name: v, project: projName(), cat: '', note: '' });
+        _doc.items.push({ name: v, project: projName(), cat: '', note: '', manual: true });
         if (el) el.value = '';
         saveDraftLocal(); render();
     };

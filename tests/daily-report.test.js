@@ -799,6 +799,55 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
         lv ? lv.dayType : '(파일이 지워졌다)');
     delete nas[rmrel];
 
+    // ══════════════════════════════════════════════════════════════════════
+    console.log('\n■ 📌 업무 연속성 — 이월 알림(A) (2026-11-11)');
+    // ══════════════════════════════════════════════════════════════════════
+    // ⚠️ B(직접 추가가 간트에 없으면 배지)는 `_dailyAddManual` 이 DOM 입력칸(`#daily-manual`)을
+    //    직접 읽어서 이 document 스텁(getElementById → null)으론 못 돈다 — 화면에서 확인할 것.
+    {
+        const cToday = '2030-03-12';
+        const cPrev = '2030-03-10';          // 주말을 건너뛴 "가장 최근 작성일" 흉내
+        nas[win.DAILY_PATHS.file(cPrev, 'yhpark')] = JSON.stringify({
+            date: cPrev, key: 'yhpark', items: [
+                { name: 'A 업무', project: 'LNW_STELLAR32_32.0', cat: 'PM', note: '했다', next: '검토 요청', issue: '' },
+                { name: 'B 업무', project: 'LNW_STELLAR32_32.0', cat: 'PM', note: '했다', next: '', issue: '' }
+            ], files: [], rev: 1
+        });
+        localStorage.removeItem(win.DAILY_POLICY.draftKey);
+        await win.dailyOpenModal(cToday);
+        win._dailyResetScans();                       // 열 때 미리 쏜 백그라운드 조회를 버리고
+        await win._dailyEnsureCarryOver(cToday);       // 이번엔 직접 기다린다
+
+        ok('주말 등으로 "어제" 가 비어도 가장 최근 작성일을 찾는다 — 해야 할 일 있는 것만',
+            win._dailyCarryRaw.length === 1 && win._dailyCarryRaw[0].name === 'A 업무',
+            JSON.stringify(win._dailyCarryRaw));
+
+        win._dailyAddCarryOver(0);
+        ok('클릭해 담으면 이월 후보에서 빠진다(다시 안 뜬다)',
+            win._dailyPendingCarryOver().length === 0, JSON.stringify(win._dailyPendingCarryOver()));
+
+        const draft1 = JSON.parse(localStorage.getItem(win.DAILY_POLICY.draftKey));
+        ok('담긴 항목 — carriedOver 표시 + "해야 할 일" 이 오늘 메모로 들어간다',
+            draft1.doc.items.some((it) => it.name === 'A 업무' && it.note === '검토 요청' && it.carriedOver === true),
+            JSON.stringify(draft1.doc.items));
+
+        const lenBefore = draft1.doc.items.length;
+        win._dailyAddCarryOver(0);     // pend 가 이미 비었으니 인덱스 0 은 없는 항목
+        const draft2 = JSON.parse(localStorage.getItem(win.DAILY_POLICY.draftKey));
+        ok('이미 담은 건 다시 안 담긴다(중복 방지)', draft2.doc.items.length === lenBefore, JSON.stringify(draft2.doc.items));
+
+        delete nas[win.DAILY_PATHS.file(cPrev, 'yhpark')];
+    }
+    {
+        // 최근 7일에 내 보고가 하나도 없으면 — 추측하지 않고 빈 채로 둔다.
+        const cToday2 = '2030-06-01';
+        localStorage.removeItem(win.DAILY_POLICY.draftKey);
+        await win.dailyOpenModal(cToday2);
+        win._dailyResetScans();
+        await win._dailyEnsureCarryOver(cToday2);
+        ok('최근 7일에 내 보고가 하나도 없으면 빈 채로 둔다', win._dailyCarryRaw.length === 0, JSON.stringify(win._dailyCarryRaw));
+    }
+
     console.log('\n' + (fail === 0 ? '✅ ' : '⛔ ') + pass + '/' + (pass + fail) + ' 통과');
     console.log('⚠️ 화면(모달·탭)은 이 하네스가 보지 않는다 — 브라우저에서 따로 확인할 것.');
     process.exit(fail ? 1 : 0);
