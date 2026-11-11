@@ -33,8 +33,11 @@
     // 재렌더/재배치했든 항상 정확한 행이 삭제된다.
     var _selected = new Set(); // 체크박스로 선택된 "행 객체" 집합(배열 인덱스 아님 — 위 설명 참고)
     var _navIndex = -1;        // 현재 네비게이션 위치 (-1=미선택)
-    var _debounceTimer = null; // 검색 debounce 타이머
     var _lastAutoNavQuery = ''; // 자동 이동 마지막 적용 쿼리
+    // 🔍 [2026-11-11 2차] 디바운스 없음 — 타이핑만으론 검색이 안 돈다(Enter/🔍 버튼이 돌려야
+    //    한다). `_applySearch()`가 실제로 돌 때마다 이 값을 그 `_query`로 맞춰 둔다. Enter 가
+    //    "아직 반영 안 된 입력이 있는지"를 이 값과 `_query` 비교로 가린다.
+    var _lastAppliedQuery = '';
 
     // ── 셀 키보드 포커스 ──────────────────────────────────────────────────────
     var _kbCell = null;       // { tr: HTMLElement, tdIdx: number } 현재 포커스 셀
@@ -124,9 +127,10 @@
                 : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
             '  style="flex:1;min-width:200px;padding:4px 10px;border-radius:6px;border:1px solid ' + c.inputBorder + ';' +
             '  font-size:13px;outline:none;background:#fff;color:' + c.text + ';">' +
-            // 🐢 [2026-11-11 요청] "타이핑할 때마다 바로 필터링되어 글 작성이 느려진다 — 딜레이를
-            //    넣거나 검색 버튼을 두자" — 둘 다 넣는다. 타이핑 중엔 디바운스(아래, 500ms)로 덜
-            //    자주 돌고, 급하면 이 버튼이나 Enter 로 그 자리에서 바로 적용한다.
+            // 🐢 [2026-11-11] "타이핑할 때마다 바로 필터링되어 글 작성이 느려진다 — 딜레이를
+            //    넣거나 검색 버튼을 두자" → [2026-11-11 2차] "디바운스는 쓰지 않는다 — 지금
+            //    검색으로 실행한다". 그래서 타이핑만으론 전혀 안 돌고, 이 버튼이나 Enter 를
+            //    눌러야만 검색이 적용된다(아래 input 리스너 참고).
             '<button id="gantt-search-now" title="' + (_en ? 'Search now (Enter)' : '지금 검색 (Enter)') + '"' +
             '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">🔍</button>' +
             '<button id="gantt-search-prev" title="' + (_en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)') + '"' +
@@ -143,25 +147,20 @@
         container.insertBefore(bar, container.firstChild);
 
         var inp = document.getElementById('gantt-ai-search-input');
-        // 🐢 타이핑 중엔 이 디바운스 지난 뒤에야 _applySearch 가 돈다(행이 많은 프로젝트에선 그
-        //    한 번도 적지 않은 DOM 작업이라, 150ms 는 빠른 타이핑에선 거의 매 글자마다 돌았다).
-        //    `_debounceTimer` 를 "아직 반영 안 된 입력이 있다"는 신호로도 쓴다(Enter/버튼이 본다).
-        var LIVE_SEARCH_DELAY_MS = 500;
-        var runNow = function () {
-            clearTimeout(_debounceTimer); _debounceTimer = null;
-            _applySearch();
-        };
+        // 🐢 [2026-11-11 2차 요청] "디바운스 기능은 쓰지 않는다 — 지금 검색으로 실행한다" —
+        //    타이핑만으로는 **전혀** 검색/필터가 돌지 않는다. Enter 나 🔍 버튼을 눌러야만
+        //    `_applySearch()`가 실행된다. `_lastAppliedQuery` 로 "지금 입력이 아직 적용 전인가"
+        //    를 가린다(Enter 가 그걸 보고 먼저 적용할지 다음 결과로 넘어갈지 정한다).
+        var runNow = function () { _applySearch(); };
         inp.addEventListener('input', function() {
             _query = this.value.trim();
             _selected.clear();
             _navIndex = -1;
-            clearTimeout(_debounceTimer);
-            _debounceTimer = setTimeout(function () { _debounceTimer = null; _applySearch(); }, LIVE_SEARCH_DELAY_MS);
         });
         inp.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                if (_debounceTimer) { runNow(); return; }   // 아직 안 돈 입력 — 지금 바로 적용(이미 첫 결과로 이동됨)
+                if (_query !== _lastAppliedQuery) { runNow(); return; }   // 아직 안 돈 입력 — 지금 바로 적용(이미 첫 결과로 이동됨)
                 if (e.shiftKey) _navGo(-1); else _navGo(1);
             }
             // 검색창 포커스 상태에서도 ↑/↓로 결과 이동 — 전역 핸들러와 중복 방지를 위해
@@ -332,7 +331,6 @@
 
     function _clearSearch() {
         _query = ''; _selected.clear(); _navIndex = -1; _lastAutoNavQuery = '';
-        clearTimeout(_debounceTimer);
         var inp = document.getElementById('gantt-ai-search-input');
         if (inp) inp.value = '';
         var tbody = document.getElementById('table-body');
@@ -485,6 +483,8 @@
         //    순서대로 번호를 다시 매긴다(applyFilters 전체 재호출보다 가볍고 충돌 없음).
         if (!active && typeof applyFilters === 'function') applyFilters(); // 검색 해제 → WBS 접힘·필터 상태로 복귀(번호도 여기서)
         else _gsRenumberRows();
+
+        _lastAppliedQuery = _query;   // 이 입력은 이제 "반영됨" — Enter 가 재적용 대신 다음 결과로 이동한다
     }
 
     // 현재 화면에 보이는 행만 순서대로 No. 번호 재할당

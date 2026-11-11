@@ -8053,6 +8053,44 @@ def doc_delete():
     return jsonify({'ok': True, 'folder': folder, 'name': name})
 
 
+@app.route('/doc/rmdir', methods=['POST'])
+def doc_rmdir():
+    """**빈** 하위 폴더 하나만 지운다 — 되돌릴 수 없다. 안에 파일이든 하위 폴더든 하나라도
+    있으면 거부한다(그 안의 것까지 통째로 날리는 사고를 막으려고 일부러 `os.rmdir` 만 쓴다 —
+    비어 있지 않으면 OS 가 스스로 실패해 준다). 없는 폴더를 만들지 않는다
+    (`_docstore_existing_dir` — `_docstore_dir` 와 달리 makedirs 를 안 한다).
+
+    2026-11-11: ADDRESS 가 프로젝트별 하위 폴더로 나뉘던 버그를 고치고 나니, 그 버그가
+    예전에 만들어 둔 빈 폴더(ADDRESS/<프로젝트명>)들이 그대로 남아 있었다 — 그걸 치우는 데 쓴다.
+    """
+    cfg = _docstore_load()
+    req = request.get_json(force=True, silent=True) or {}
+    folder = str(req.get('folder') or '').strip()
+    root = cfg.get('root') or ''
+    if not root:
+        return jsonify({'ok': False, 'error': '문서 저장소 경로가 설정되지 않았습니다.'}), 400
+    ok, perr = _docstore_probe_root(root)
+    if not ok:
+        return jsonify({'ok': False, 'error': perr}), 400
+    path, err = _docstore_existing_dir(folder, cfg)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    if not path:
+        return jsonify({'ok': True, 'skipped': 'not-found', 'folder': folder})
+    try:
+        entries = os.listdir(path)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'폴더를 읽을 수 없습니다: {e}'}), 500
+    if entries:
+        return jsonify({'ok': False, 'error': f'폴더가 비어 있지 않습니다({len(entries)}개) — 지우지 않았습니다.',
+                        'notEmpty': True, 'count': len(entries)}), 409
+    try:
+        os.rmdir(path)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'삭제 실패: {e}'}), 500
+    return jsonify({'ok': True, 'folder': folder})
+
+
 def _docstore_existing_dir(folder, cfg):
     """`_docstore_dir`와 같은 경로 검증이지만 **없는 폴더를 만들지 않는다**(makedirs 안 함).
     /doc/export-zip처럼 "있으면 가져오고 없으면 조용히 건너뛰는" 읽기 전용 용도 —

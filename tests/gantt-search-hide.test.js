@@ -212,17 +212,28 @@ new Function('window', 'document', src)(win, global.document);
     ok('B가 다시 보인다', rows[1].style.display !== 'none', rows[1].style.display);
     ok('C도 다시 보인다', rows[2].style.display !== 'none', rows[2].style.display);
 
-    console.log('\n■ 🔍 지금검색 버튼 — 디바운스 중이던 입력을 즉시 반영한다');
+    console.log('\n■ 🔍 지금검색 버튼 — 타이핑만으론 안 돌고, 버튼을 눌러야 반영된다(디바운스 완전히 없앰)');
     const inp = document.getElementById('gantt-ai-search-input');
     inp.value = 'B-';
-    inp.dispatchEvent({ type: 'input' }); // 500ms 디바운스 예약됨 — 아직 안 돌았다
+    inp.dispatchEvent({ type: 'input' }); // 자동 검색 없음 — _query 만 갱신, _applySearch 는 안 돈다
     rows = tbody.children;
-    ok('디바운스 중엔 아직 안 바뀐다(이전 질의 상태 그대로)',
+    ok('타이핑만으론 안 바뀐다(이전 질의 상태 그대로)',
        rows[0].classList.contains('gantt-search-match'), rows.map((r) => r.className));
     document.getElementById('gantt-search-now').click();
     rows = tbody.children;
-    ok('버튼을 누르면 즉시 반영된다 — 이번엔 B만 매칭', rows[1].classList.contains('gantt-search-match')
+    ok('버튼을 누르면 그제서야 반영된다 — 이번엔 B만 매칭', rows[1].classList.contains('gantt-search-match')
        && !rows[0].classList.contains('gantt-search-match'), rows.map((r) => r.className));
+
+    console.log('\n■ Enter — 아직 안 돈 입력은 먼저 적용하고, 이미 반영된 상태면 다음 결과로 이동한다');
+    inp.value = 'C-';
+    inp.dispatchEvent({ type: 'input' });
+    rows = tbody.children;
+    ok('입력만으론 여전히 안 바뀐다(B만 매칭 그대로)', rows[1].classList.contains('gantt-search-match')
+       && !rows[2].classList.contains('gantt-search-match'), rows.map((r) => r.className));
+    inp.dispatchEvent({ type: 'keydown', key: 'Enter', preventDefault: () => {} });
+    rows = tbody.children;
+    ok('Enter 를 누르면 그 자리에서 바로 적용된다 — 이번엔 C만 매칭', rows[2].classList.contains('gantt-search-match')
+       && !rows[1].classList.contains('gantt-search-match'), rows.map((r) => r.className));
 
     console.log('\n■ 검색을 지우면 전부 원상복구(match/dim 클래스 제거)');
     document.getElementById('gantt-ai-search-clear').click();
