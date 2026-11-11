@@ -2066,15 +2066,28 @@
         var mat = window.plParseDisplayMatrix(text);
 
         // 표에 적힌 REV(생산REV·Agile REV)와 같은 줄을 찾아 표시한다 — "지금 우리가 쓰는 리비전"
-        // ⚠️ [2026-11-11] Agile REV 칸은 "PN      : K\nREF PN : K" 처럼 줄마다 라벨+값으로 들어 있다
+        // ⚠️ [2026-11-11] Agile REV 칸은 "PN      : K\nREF PN : K" 처럼 라벨+값이 들어 있다
         //    (PN 리비전과 REF PN 리비전을 한 칸에 적어 둔 것) — 라벨 글자까지 한 글자씩 훑으면
         //    P·N·R·E·F 가 리비전으로 잡혀 "표의 REV" 줄이 글자 수프가 된다
         //    (실측: J,J,P,N,K,R,E,F,P,N,K). "PN"/"REF PN" 라벨은 검색(매칭) 대상에서 뺀다.
+        // ⚠️⚠️ [2026-11-11 2차] **줄바꿈 기준으로 자르면 안 된다** — 177행 전수 확인(`43건이 라벨을
+        //    쓴다`) 중 1건(502633)이 "PN      : G REF PN : G" 처럼 **한 줄에 라벨 둘**이었다. 줄 단위로
+        //    자르면 그 줄 전체가 "값"으로 남아 REF PN 라벨이 그대로 다시 새어 들어온다(실측: 고치기
+        //    전 G,R,E,F,P,N,G). 그래서 줄이 아니라 **라벨 위치 자체**를 전역으로 찾아, 각 라벨의 값은
+        //    "그 라벨 끝 ~ 다음 라벨 시작(또는 문자열 끝)"으로 자른다 — 라벨이 같은 줄에 붙어 있어도 안전.
         var _revTokens = function (raw) {
+            var s = String(raw || '');
             var out = [];
-            String(raw || '').split(/\r?\n/).forEach(function (line) {
-                var m = line.match(/^\s*(?:REF\s*PN1?|PN)\s*:\s*(.*)$/i);   // "PN : K" / "REF PN : K" 라벨 제거
-                (m ? m[1] : line).replace(/[A-Z](?:\.\d+)?/g, function (t) { out.push(t.toUpperCase()); return t; });
+            var LABEL_RE = /(?:REF\s*PN1?|PN)\s*:\s*/gi;
+            var marks = [], m;
+            while ((m = LABEL_RE.exec(s))) marks.push({ labelStart: m.index, valueStart: LABEL_RE.lastIndex });
+            if (!marks.length) {
+                s.replace(/[A-Z](?:\.\d+)?/g, function (t) { out.push(t.toUpperCase()); return t; });
+                return out;
+            }
+            marks.forEach(function (mk, i) {
+                var end = (i + 1 < marks.length) ? marks[i + 1].labelStart : s.length;
+                s.slice(mk.valueStart, end).replace(/[A-Z](?:\.\d+)?/g, function (t) { out.push(t.toUpperCase()); return t; });
             });
             return out;
         };
