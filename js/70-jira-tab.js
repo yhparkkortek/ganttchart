@@ -49,10 +49,16 @@
     }
 
     // ── ③ 메일에서 이미 캡처된 이슈번호 스캔(저장하지 않음, 매번 다시) ──────
-    function mailScanKeys() {
+    //  ⚠️⚠️ [2026-11-11 실사용 제보] 정규식만으로는 전자부품 코드·사내 제품번호까지
+    //  주워온다(실측: AR-1·CN-02·DFN-1610·KTK-101·WHC-1000·ACM2012-900 등 14건이 전부
+    //  "존재하지 않는 이슈"로 실패해 경고 줄이 화면을 덮었다). 이 JIRA 인스턴스의 실제
+    //  프로젝트 키는 전부 **순수 알파벳**(실측 GABKJ·GABJO·PAAEP 등, 숫자 없음)이고
+    //  `validPrefixes`(list_projects로 받은 진짜 키 집합)에 없는 접두어는 **결정론으로
+    //  버린다** — 규칙(CLAUDE.md "결정론 먼저")대로 추측 대신 실제 카탈로그와 대조한다.
+    function mailScanKeys(validPrefixes) {
         var rows = window.globalData;
         if (!Array.isArray(rows)) return [];
-        var re = /\b[A-Z][A-Z0-9]{1,9}-\d{1,6}\b/g;
+        var re = /\b[A-Z]{2,10}-\d{1,6}\b/g;
         var found = [];
         var seen = {};
         for (var i = rows.length - 1; i >= 1 && found.length < 20; i--) {
@@ -64,10 +70,26 @@
             re.lastIndex = 0;
             while ((m = re.exec(text))) {
                 var k = m[0];
+                var prefix = k.split('-')[0];
+                if (validPrefixes && !validPrefixes[prefix]) continue;   // 실제 JIRA 프로젝트가 아니면 버림
                 if (!seen[k]) { seen[k] = true; found.push(k); }
             }
         }
         return found;
+    }
+
+    // 실제 프로젝트 키 집합(이름이 아니라 key로만 — 위 "4가지 동시 연결" 절 참고). 실패하면
+    // null을 돌려줘서 호출부가 "걸러내지 않고 예전처럼" 동작하게 한다(로그인 전 등).
+    async function validProjectPrefixes() {
+        try {
+            var d = await fetchJson(BASE + '/jira/projects');
+            if (d && d.ok && Array.isArray(d.projects)) {
+                var s = {};
+                d.projects.forEach(function (p) { if (p.key) s[p.key] = true; });
+                return s;
+            }
+        } catch (e) { /* 실패하면 거르지 않는다 */ }
+        return null;
     }
 
     function jql(parts) { return parts.filter(Boolean).join(' AND '); }
@@ -107,20 +129,23 @@
             return;
         }
         merged.sort(function (a, b) { return String(b.updated || '').localeCompare(String(a.updated || '')); });
-        var html = '<table class="concept-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
+        // ⚠️ table-layout:fixed 가 없으면 th 의 width 는 힌트일 뿐이라 브라우저가 내용 기준으로
+        //    다시 배분한다 — 그래서 '요약'은 안 넓어지고 '담당자/우선순위/수정일/출처'만 헐렁하게
+        //    늘어나 보였다(실측). 폭 비율은 여기 한 곳(%, 합 100)에서만 바꾼다.
+        var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
-            + '<th style="padding:7px 8px; text-align:left; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:90px; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:90px; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:70px; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('우선순위', 'Priority') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:110px; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:140px; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('출처', 'Source') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:9%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:38%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:10%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('우선순위', 'Priority') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:12%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:15%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('출처', 'Source') + '</th>'
             + '</tr></thead><tbody>'
             + merged.map(function (it) {
                 var c = statusColor(it.status);
                 return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
-                    + '<td style="padding:7px 8px; font-weight:bold; color:#8b5a00;">' + esc(it.key) + '</td>'
+                    + '<td style="padding:7px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
                     + '<td style="padding:7px 8px;">' + esc(it.summary) + '</td>'
                     + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
                     + '<td style="padding:7px 8px; text-align:center;">' + esc(it.assignee || '—') + '</td>'
@@ -156,7 +181,8 @@
 
         var L = links();
         var manualKeys = (L.manualKeys || []).filter(function (k) { return KEY_RE.test(k); });
-        var mailKeys = mailScanKeys().filter(function (k) { return manualKeys.indexOf(k) === -1; });
+        var validPrefixes = await validProjectPrefixes();
+        var mailKeys = mailScanKeys(validPrefixes).filter(function (k) { return manualKeys.indexOf(k) === -1; });
         var keyword = (L.keyword || '').trim();
 
         var byKey = {};
@@ -227,7 +253,7 @@
                 '<div id="jira-link-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
                 + ' width:min(420px,94vw); max-height:86vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
                 + ' display:flex; flex-direction:column;">'
-                + '<div id="jira-link-drag" style="padding:10px 14px; background:#fff4e0; border-bottom:1px solid #f0d090; color:#8b5a00;'
+                + '<div id="jira-link-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
                 + ' cursor:move; display:flex; align-items:center; gap:8px;">'
                 + '<strong style="font-size:14px;">⚙️ ' + T('JIRA 연결 설정', 'JIRA link settings') + '</strong>'
                 + '<span style="flex:1;"></span>'
@@ -241,7 +267,9 @@
                 + '<label style="display:block; margin-bottom:4px; color:#555;">📁 ' + T('JIRA 프로젝트(코드 또는 이름 — 그 프로젝트 전체 이슈)', 'JIRA project (code or name — all its issues)') + '</label>'
                 + '<div style="display:flex; gap:6px; margin-bottom:4px;">'
                 + '<input id="jira-link-project" style="flex:1; min-width:0; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="' + T('예: GABKJ 또는 SHUFFLER', 'e.g. GABKJ or SHUFFLER') + '">'
-                + '<button onclick="window._jiraSearchProject()" style="padding:7px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid #f0d090; background:#fff4e0; color:#8b5a00;">🔍 ' + T('찾기', 'Find') + '</button>'
+                + '<button onclick="window._jiraSearchProject()"'
+                + ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
+                + ' style="padding:7px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d; transition:background .15s;">🔍 ' + T('찾기', 'Find') + '</button>'
                 + '</div>'
                 + '<div id="jira-link-project-hits" style="display:none; max-height:130px; overflow-y:auto; border:1px solid #eee; border-radius:6px; margin-bottom:10px;"></div>'
                 + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 10px;"></div>'
@@ -252,7 +280,9 @@
                 + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 자동으로 같이 모읍니다(별도 입력 불필요).', 'Issue numbers already captured from mail are collected automatically (no input needed).') + '</div>'
                 + '<div id="jira-link-status" style="display:none; font-size:11.5px; margin-bottom:8px; line-height:1.5;"></div>'
                 + '<div style="display:flex; justify-content:flex-end;">'
-                + '<button onclick="window._jiraSaveLinkSettings()" style="padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid #f0d090; background:#fff4e0; color:#8b5a00; font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
+                + '<button onclick="window._jiraSaveLinkSettings()"'
+                + ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
+                + ' style="padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d; font-weight:bold; transition:background .15s;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div></div></div>';
             document.body.appendChild(wrap);
             if (window._makeDraggable) window._makeDraggable('jira-link-box', 'jira-link-drag');
@@ -365,7 +395,8 @@
             + '<span style="width:70px; flex:0 0 auto; color:#555; padding-top:6px;">' + label + '</span>' + inner + '</label>';
     }
     var inputSt = 'flex:1; min-width:0; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;';
-    var btnSt = 'padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid #f0d090; background:#fff4e0; color:#8b5a00;';
+    var btnSt = 'padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d;';
+    var btnHover = ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"';
 
     function modalSetStatus(msg, kind) {
         var el = document.getElementById('jira-issue-status');
@@ -387,10 +418,10 @@
             '<div id="jira-issue-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
             + ' width:min(640px,94vw); max-height:88vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
             + ' display:flex; flex-direction:column;">'
-            + '<div id="jira-issue-drag" style="padding:10px 14px; background:#fff4e0; border-bottom:1px solid #f0d090; color:#8b5a00;'
+            + '<div id="jira-issue-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
             + ' cursor:move; display:flex; align-items:center; gap:8px;">'
             + '<strong id="jira-issue-title" style="font-size:14px;">🪐 ' + esc(key) + '</strong>'
-            + '<a id="jira-issue-openlink" target="_blank" rel="noopener" style="font-size:11px; color:#8b5a00;">' + T('JIRA에서 열기 ↗', 'Open in JIRA ↗') + '</a>'
+            + '<a id="jira-issue-openlink" target="_blank" rel="noopener" style="font-size:11px; color:#00707d;">' + T('JIRA에서 열기 ↗', 'Open in JIRA ↗') + '</a>'
             + '<span style="flex:1;"></span>'
             + '<button onclick="document.getElementById(\'jira-issue-modal\').style.display=\'none\'"'
             + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
@@ -440,12 +471,12 @@
                 + priorities.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === issue.priorityId ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('')
                 + '</select>')
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
-            + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')" style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
+            + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
             + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
             + fieldRow(T('상태 전환', 'Transition'), (transitions.length
                 ? ('<select id="jira-f-transition" style="' + inputSt + '">'
                     + transitions.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + (t.to ? (' → ' + esc(t.to)) : '') + '</option>'; }).join('')
-                    + '</select><button onclick="window._jiraDoTransition(\'' + esc(key) + '\')" style="' + btnSt + ' margin-left:8px;">▶ ' + T('전환', 'Go') + '</button>')
+                    + '</select><button onclick="window._jiraDoTransition(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' margin-left:8px;">▶ ' + T('전환', 'Go') + '</button>')
                 : ('<span style="color:#999;">(' + T('현재 상태: ', 'current: ') + esc(issue.status) + T(' — 전환 가능한 상태 없음)', ' — no transitions available)') + '</span>')))
             + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
             + '<div style="font-weight:bold; color:#555; margin-bottom:6px;">💬 ' + T('댓글(대응)', 'Comments') + '</div>'
@@ -460,7 +491,7 @@
             + '</div>'
             + '<textarea id="jira-comment-input" rows="2" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; resize:vertical;" placeholder="' + T('댓글을 입력하세요...', 'Write a comment...') + '"></textarea>'
             + '<div style="display:flex; justify-content:flex-end; margin-top:6px;">'
-            + '<button onclick="window._jiraAddComment(\'' + esc(key) + '\')" style="' + btnSt + ' font-weight:bold;">📨 ' + T('댓글 등록', 'Post comment') + '</button></div>'
+            + '<button onclick="window._jiraAddComment(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">📨 ' + T('댓글 등록', 'Post comment') + '</button></div>'
             + '<div id="jira-issue-status" style="display:none; font-size:11.5px; margin-top:8px; line-height:1.5;"></div>';
     };
 
