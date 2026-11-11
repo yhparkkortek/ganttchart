@@ -113,6 +113,12 @@
     window.DOC_FORMS = window.DOC_FORMS || [
         {
             id: 'proto-req', icon: '🧾', label: '시제품 제작의뢰서', folder: '시제품 제작의뢰서',
+            // 🙈 [2026-11-11 사용자 결정] **목록에서 숨긴다** — Sample Report 가 이 7구역을
+            //    통째로 품고 있어(원본 .docx 의 `TABLE#3` 이 바로 이것) 드롭다운에 둘 다 있으면
+            //    "같은 문서를 두 번 쓰는 것"처럼 보인다. ⚠️ 지우지 않는다 —
+            //    출고 이력의 주인(`HIST_FORM='proto-req'`)이고 구역 묶음(`_protoReqSections()`)도
+            //    여기 있다. 되돌리려면 **이 한 줄만** 지우면 된다.
+            hidden: true,
             note: '그룹웨어 기안의 본문 표와 같은 서식입니다(실측 RD3-2604-016).',
             nameOf: function (ctx) { return _projKey(ctx) + '_시제품 제작의뢰서_' + _today(); },
             sections: _protoReqSections()
@@ -329,7 +335,9 @@
         if (!ctx.meta || (!ctx.meta.고객사 && !ctx.meta.모델명 && !ctx.meta.프로젝트코드)) return;
         // 지금 고른 문서 폴더 먼저, 나머지 서식은 그다음(한 번에 다 만들어 둔다)
         var cur = _formById(window._docState.formId);
-        var forms = (window.DOC_FORMS || []).slice().sort(function (a, b) {
+        // 🙈 숨긴 서식은 폴더도 안 만든다 — 아무도 거기에 올릴 수 없으니 팀 NAS 에
+        //    빈 폴더만 남는다(이미 만들어 둔 것은 그대로 남아 있다 — 지우지 않는다).
+        var forms = window._docVisibleForms().slice().sort(function (a, b) {
             return (a === cur ? -1 : 0) - (b === cur ? -1 : 0);
         });
         for (var i = 0; i < forms.length; i++) {
@@ -445,7 +453,14 @@
         return Object.prototype.hasOwnProperty.call(_docData(id).fields, key);
     };
     var _formById = function (id) {
+        // ⚠️ 숨긴 서식도 **찾을 수 있어야 한다** — 출고 이력의 주인이 `proto-req` 이고,
+        //    코드가 직접 고른 경우(하네스·되돌림)에도 그려져야 한다. 거르는 건 아래 하나뿐.
         return (window.DOC_FORMS || []).filter(function (f) { return f.id === id; })[0] || null;
+    };
+    // 🙈 사람에게 보이는 서식만 — 드롭다운·기본 선택·NAS 폴더 만들기가 **이 하나**를 쓴다.
+    //    (세 곳이 각자 거르면 한 곳만 고쳐져 "목록엔 없는데 폴더는 생긴다"가 난다.)
+    window._docVisibleForms = function () {
+        return (window.DOC_FORMS || []).filter(function (f) { return !f.hidden; });
     };
     var _findField = function (id, key) {
         var form = _formById(id), found = null;
@@ -681,7 +696,7 @@
         if (!pop) return;
         if (pop.style.display === 'block') { pop.style.display = 'none'; return; }
         var cur = window._docState.formId;
-        pop.innerHTML = (window.DOC_FORMS || []).map(function (f) {
+        pop.innerHTML = window._docVisibleForms().map(function (f) {
             var on = f.id === cur;
             return '<div onclick="window._docPick(\'' + _esc(f.id) + '\')"'
                  + ' style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px;'
@@ -799,7 +814,10 @@
         if (!body || !tools) return;
         _ensureCss();
 
-        var forms = window.DOC_FORMS || [], st = window._docState;
+        // 🙈 처음 고르는 것도 **보이는 서식에서만** — 안 그러면 숨긴 문서가 열린 채로 뜨고
+        //    드롭다운엔 그게 없어서 "내가 지금 보는 게 목록에 없다"가 된다.
+        //    ⚠️ 마지막으로 본 서식(`gantt_doc_last_form`)이 숨겨졌을 때도 같다.
+        var forms = window._docVisibleForms(), st = window._docState;
         if (!st.formId) {
             var last = '';
             try { last = localStorage.getItem('gantt_doc_last_form') || ''; } catch (e) { /* 무시 */ }

@@ -644,9 +644,15 @@
                         ? window._dsCurrentProjectFolderName() : 'LNW-MODEL_KTS1');
             ok(asked.indexOf(PROJ + '/SAMPLE REPORT') >= 0, 'SAMPLE REPORT 폴더를 안 만든다: ' + asked.join(' | '));
             ok(asked.indexOf(PROJ + '/DR_DVR 발표자료') >= 0, 'DR/DVR 폴더를 안 만든다: ' + asked.join(' | '));
-            ok(asked.indexOf(PROJ + '/시제품 제작의뢰서') >= 0, '시제품 제작의뢰서 폴더를 안 만든다');
-            ok(asked.length === (window.DOC_FORMS || []).length,
-               '서식 수(' + (window.DOC_FORMS || []).length + ')와 만든 폴더 수(' + asked.length + ')가 다르다');
+            // 🙈 [2026-11-11 사용자 결정] **숨긴 서식은 폴더도 안 만든다** —
+            //    아무도 거기에 올릴 수 없으니 팀 NAS 에 빈 폴더만 남는다.
+            var VIS = window._docVisibleForms();
+            (window.DOC_FORMS || []).filter(function (f) { return f.hidden; }).forEach(function (f) {
+                ok(asked.indexOf(PROJ + '/' + String(f.folder || f.label)) < 0,
+                   '숨긴 서식(' + f.id + ')의 폴더를 만든다: ' + asked.join(' | '));
+            });
+            ok(asked.length === VIS.length,
+               '보이는 서식 수(' + VIS.length + ')와 만든 폴더 수(' + asked.length + ')가 다르다');
             ok(asked[0] === PROJ + '/SAMPLE REPORT', '지금 보는 문서 폴더를 먼저 안 만든다: ' + asked[0]);
             // ⚠️ 폴더 이름에 `/` 가 들어가면 한 단계가 더 생긴다 — 'DR / DVR' 은 `DR_DVR` 이어야 한다
             (window.DOC_FORMS || []).forEach(function (f) {

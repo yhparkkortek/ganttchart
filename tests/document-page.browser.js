@@ -118,12 +118,16 @@
             LOG.push(''); LOG.push('── A. 문서 초안이 페이지에 펼쳐지는가 ──');
             var titles = [].slice.call(body.querySelectorAll('.doc-sec'))
                 .map(function (d) { return d.textContent.trim(); });
-            eq('구역 6개가 그려진다(+샘플 출고 이력)', titles.length, 6);
+            // 📦 출고이력 · 시제품 제작의뢰서 · 광학/펌웨어 · 지원 해상도 · 주요자재 · 요청사항 · 참고자료
+            //    (2026-11-11: `# 지원 해상도` 가 늘어 6 → 7 — 옛 기대값이 그대로 남아 있었다)
+            eq('구역 7개가 그려진다(+샘플 출고 이력·지원 해상도)', titles.length, 7);
             ok('주요자재 표가 5행이다',
                [].slice.call(body.querySelectorAll('input[data-doc-key$="|코드"]')).length === 5);
             var toolsTxt = document.getElementById('doc-header-tools').textContent;
-            // 🖨 문서 형식이 **기본** 출력이고 엑셀은 옵션이다(사용자 요청 2026-11-09)
-            ok('헤더에 문서 출력 버튼이 있다(기본)', /문서 출력/.test(toolsTxt), toolsTxt);
+            // 💾 [2026-11-11 사용자 요청] `🖨 문서 출력` 버튼은 **없앴다**(브라우저 Ctrl+P 로 대체)
+            //    — 그 자리는 실측 원본과 같은 **Word 문서**로 저장하는 `원본저장` 이다.
+            ok('헤더에 원본저장(.docx) 버튼이 있다', /원본저장/.test(toolsTxt), toolsTxt);
+            ok('옛 문서 출력 버튼은 없다', !/문서 출력/.test(toolsTxt), toolsTxt);
             ok('엑셀은 옵션으로 있다', /엑셀/.test(toolsTxt), toolsTxt);
             ok('시제품 제작의뢰서엔 PPT 버튼이 없다', !/PPT/.test(toolsTxt), toolsTxt);
             // 📄 문서 고르기는 **드롭다운**이다(PARTS 와 같은 방식)
@@ -131,10 +135,40 @@
             window._toggleDocFormDropdown();
             var dd = document.getElementById('doc-form-dropdown');
             ok('드롭다운이 열린다', dd && dd.style.display === 'block');
-            eq('드롭다운에 문서가 전부 나온다',
-               [].slice.call(dd.querySelectorAll('div')).length, (window.DOC_FORMS || []).length);
+            // 🙈 [2026-11-11 사용자 결정] 드롭다운엔 **보이는 서식만** — 시제품 제작의뢰서는
+            //    Sample Report 가 품고 있어서 둘 다 있으면 같은 문서를 두 번 쓰는 것처럼 보였다.
+            var VIS = window._docVisibleForms();
+            eq('드롭다운에 보이는 문서가 전부 나온다',
+               [].slice.call(dd.querySelectorAll('div')).length, VIS.length);
+            ok('숨긴 서식은 드롭다운에 없다',
+               (window.DOC_FORMS || []).filter(function (f) { return f.hidden; })
+                   .every(function (f) { return dd.textContent.indexOf(f.label) < 0; }), dd.textContent);
+            ok('숨긴 서식이 하나라도 있다(이 검사가 헛돌지 않게)',
+               VIS.length < (window.DOC_FORMS || []).length);
             window._docPick('proto-req');
-            ok('고르면 드롭다운이 닫힌다', dd.style.display === 'none');
+            // ⚠️⚠️ 두 번 속는 자리다 — ① 고르면 **다시 그려서 팝업 요소가 바뀐다**(들고 있던
+            //    `dd` 는 떨어져 나간 옛 노드다) ② 새 노드는 inline `display` 가 **빈 문자열**이고
+            //    안 보이게 하는 건 `.row-action-popup` **CSS** 다. 그래서 `style.display==='none'`
+            //    으로 보면 **닫혀 있는데도 실패**한다 — 눈에 보이는가는 computed 로 재라.
+            var dd2 = document.getElementById('doc-form-dropdown');
+            ok('고르면 드롭다운이 닫힌다', dd2 && getComputedStyle(dd2).display === 'none',
+               dd2 ? ('inline="' + dd2.style.display + '" computed=' + getComputedStyle(dd2).display) : 'no node');
+            // ⚠️ 마지막으로 본 서식이 숨겨졌어도 **그걸 열지 않는다**(목록에 없는 문서가 뜬다)
+            var keepLast = null;
+            try {
+                keepLast = localStorage.getItem('gantt_doc_last_form');
+                localStorage.setItem('gantt_doc_last_form', 'proto-req');
+            } catch (e) { /* 무시 */ }
+            window._docState = { formId: null, stage: 'Proto DR' };
+            window._docRender();
+            ok('숨긴 서식을 기본으로 열지 않는다', window._docState.formId !== 'proto-req',
+               String(window._docState.formId));
+            try {                                   // 사람이 쓰던 값을 돌려 놓는다
+                if (keepLast === null) localStorage.removeItem('gantt_doc_last_form');
+                else localStorage.setItem('gantt_doc_last_form', keepLast);
+            } catch (e) { /* 무시 */ }
+            window._docPick('proto-req');           // 아래 검사들이 보는 화면으로 되돌린다
+            await sleep(30);
             // 🎨 문서 스타일 — 흰 종이 + 구역 띠(원본 문서와 비슷하게)
             ok('흰 종이 영역이 있다', !!body.querySelector('.doc-paper'));
             // 🎨 구역 띠 색을 **고정 hex 로 검사하지 않는다** — 팔레트(js/21)를 따라 바뀌는 게 맞다.
@@ -357,8 +391,18 @@
             //    ⚠️ `고객사` 에 `>` 가 들어 있어도(실측 `LNW>STELLAR32`) 폴더 이름이 깨지면 안 된다.
             ok('folder 가 DOCUMENT/<프로젝트> 다',
                /folder=DOCUMENT%2F/.test(puts[0] || ''), puts[0]);
-            ok('폴더 이름에 프로젝트 코드가 들어간다',
-               (window._docFolderOf() || '').indexOf('G0000TT') >= 0, window._docFolderOf());
+            // 🗂 [2026-11-11 신고 "신규 프로젝트 폴더 형식이 기존 것들과 상이함 / 프로젝트 코드는
+            //    포함되지 않았음"] 폴더 이름은 **앱 공용 규칙**(`_dsCurrentProjectFolderName`, js/48)을
+            //    따른다 — CUSTOMER·SUMMARY 와 같은 꼴이어야 하고 **프로젝트 코드는 안 들어간다**.
+            //    프로젝트를 안 열었으면 `고객사_모델명` 으로 떨어진다(그게 지금 하네스 상황).
+            var EXP = 'DOCUMENT/' + (window._dsCurrentProjectFolderName && window._dsCurrentProjectFolderName()
+                        ? window._dsCurrentProjectFolderName()
+                        : (FAKE_META['고객사'] + '_' + FAKE_META['모델명']).replace(/[\\/:*?"<>|]/g, '-'));
+            ok('폴더 이름이 앱 공용 규칙과 같다',
+               String(window._docFolderOf() || '').indexOf(EXP) === 0,
+               window._docFolderOf() + ' vs ' + EXP);
+            ok('폴더 이름에 프로젝트 코드가 안 들어간다',
+               (window._docFolderOf() || '').indexOf('G0000TT') < 0, window._docFolderOf());
             ok('폴더 이름에 금지 문자가 없다',
                !/[\\:*?"<>|]/.test(String(window._docFolderOf() || '').replace(/^DOCUMENT\//, '')),
                window._docFolderOf());
