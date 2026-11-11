@@ -723,8 +723,20 @@
         //    여기서 챙기면 부르는 쪽이 저마다 기억하지 않아도 된다(이미 읽었으면 그대로 돌아온다).
         try { if (window.dailyLoadRoster) await window.dailyLoadRoster(); } catch (e) { /* 주소록만으로도 돈다 */ }
         try {
-            var idx = await window.nasAppFile.get('App_Config/project_index.json', { json: true });
-            var list = (idx && idx.projects) || [];
+            // ⚠️ [2026-11-11] 색인을 통째로 다시 읽지 말고, js/15b 가 이미 **실시간 파일 목록과
+            //    대조해 유령(이름이 바뀌거나 지워진 옛 줄)을 거른 결과**를 그대로 쓴다(5분 캐시,
+            //    다른 화면과 공유). project_index.json 을 직접 읽으면 그 유령도 그대로 읽으려다
+            //    실패해 "못 읽은 프로젝트"로 보고되는데, 실제로는 지워진 지 오래된 옛 파일명일
+            //    뿐이다(실측: LNW_27.0.json·LNW_OBSIDIAN AGARAF_27.0.json — 둘 다 지금은
+            //    LNW_OBSIDIAN27_DB_27.0.json 으로 이름이 바뀐 프로젝트의 옛 줄). 진짜 읽기 실패는
+            //    여전히 `catch` 로 드러난다 — 유령만 미리 걷어낼 뿐 오류를 삼키지 않는다.
+            var list;
+            if (typeof window._msLoadProjectIndex === 'function') {
+                list = await window._msLoadProjectIndex();
+            } else {
+                var idx = await window.nasAppFile.get('App_Config/project_index.json', { json: true });
+                list = (idx && idx.projects) || [];
+            }
             var myTeam = String(me().team || '').trim();
             var open = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
             // ⚠️⚠️ [2026-11-09 신고 "여러 개 열어놔서 에러인가?"] 열린 프로젝트를 **이름으로만**
