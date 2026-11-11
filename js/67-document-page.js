@@ -275,11 +275,22 @@
     //   안 바뀌므로 **코드로 같은 프로젝트임을 알아볼 수 있다**.
     //   ⚠️ 코드가 아직 없으면(채번 전) 고객사_모델명만 쓴다 — 그땐 이름이 바뀌면 폴더도 갈린다.
     //      그 경우 NAS 에서 옛 폴더를 손으로 합쳐야 한다(숨기지 않고 적어 둔다).
+    //  📁📁 [2026-11-11 신고] 폴더 이름은 **앱 공용 규칙 하나**를 쓴다 —
+    //     `window._dsCurrentProjectFolderName()`(js/48: 프로젝트 파일 이름에서 `.json` 뗀 것).
+    //     CUSTOMER·SUMMARY·MC 가 전부 그걸 쓰므로 NAS 에 같은 꼴로 모인다:
+    //       `LNW_STELLAR32_32.0` · `KONAMI_KGP-4_55.0` · `LNW_Digital Wheel Back-Box Display_32.0`
+    //     ⚠️⚠️ 처음엔 여기서 **따로 조립**해서(`프로젝트코드_고객사_모델명`) 혼자만 달랐다 —
+    //        실측 `G2608OB_LNW-STELLAR32_1641445-ALT1` vs 다른 폴더 `LNW_STELLAR32_32.0`.
+    //        ① 프로젝트 코드가 앞에 붙고 ② `>` 를 `-` 로 바꿔 `LNW-` 가 되고 ③ 모델명 자리에
+    //        KTK PN 이 들어가 **세 군데가 어긋났다**. 같은 것을 정하는 코드가 둘이면 갈라진다.
+    //     ⚠️ 프로젝트를 안 연 상태(하네스·새 창)에서만 meta 로 만들어 쓴다.
     var _projFolderName = function (ctx) {
-        var code = _safe(ctx.meta.프로젝트코드);
+        if (window._dsCurrentProjectFolderName) {
+            var shared = window._dsCurrentProjectFolderName();
+            if (shared) return shared;
+        }
         var name = _safe([ctx.meta.고객사, ctx.meta.모델명].filter(Boolean).join('_'));
-        var s = [code, name].filter(Boolean).join('_');
-        return s || 'ETC';
+        return name || 'ETC';
     };
     var _projFolder = function (ctx) { return DOC_ROOT + '/' + _projFolderName(ctx); };
 
@@ -682,6 +693,17 @@
                  + (f.builder ? '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">PPT</span>' : '')
                  + '</div>';
         }).join('');
+        // 📍 [2026-11-11 신고 "드롭다운 가려짐"] 자리를 **직접 잡는다** — PARTS 와 같은 방식
+        //    (js/23 `_toggleElecViewDropdown`: `rect.left` · `rect.bottom + 4`).
+        //    ⚠️⚠️ `.row-action-popup` 은 `position:fixed` 인데 제 `top/left` 가 없다. 안 잡아 주면
+        //       **문서 흐름상의 자리**에 떠서 트리거(실측 105~133px)보다 위인 63px 에 그려지고,
+        //       그 자리는 프로젝트 탭 띠 밑이라 **첫 항목이 가린다**(사용자 화면).
+        var btn = document.getElementById('doc-form-trigger');
+        if (btn) {
+            var rect = btn.getBoundingClientRect();
+            pop.style.left = rect.left + 'px';
+            pop.style.top = (rect.bottom + 4) + 'px';
+        }
         pop.style.display = 'block';
     };
     document.addEventListener('click', function () {
@@ -1497,7 +1519,14 @@
         // 이 프로젝트의 폴더를 연다 — 없으면 백엔드가 만들면서 연다(`_docstore_dir` 이 makedirs).
         // 🗂 프로젝트 폴더를 열어 **문서 폴더들을 한눈에** 보여 준다(한 문서 안이 아니라)
         window._docEnsureFolders();
-        window._dsOpenBrowser(_projFolder(_ctx()), { title: 'Document' });
+        // 📁 [2026-11-11 신고 "헤더에 적히는 폴더 명이 이상"] 탭·제목은 **다른 페이지와 같은 장치**
+        //    (`_dsProjectAwareFolders`, js/48)가 만든다 — 그래야 `📌 <프로젝트>` / `📁 DOCUMENT (전체)`
+        //    로 CUSTOMER·MC 와 같은 말이 나온다. 전엔 제목이 그냥 `Document` 한 마디였다.
+        var tabs = window._dsProjectAwareFolders ? window._dsProjectAwareFolders(DOC_ROOT) : null;
+        window._dsOpenBrowser(_projFolder(_ctx()), {
+            title: DOC_ROOT,
+            folders: tabs || undefined
+        });
     };
 
     // ── 📂 불러오기 — 문서를 읽어 이 페이지 칸을 채운다 ──────────────────

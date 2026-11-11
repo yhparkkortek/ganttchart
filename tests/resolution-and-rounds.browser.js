@@ -535,6 +535,19 @@
             ok(/원본저장|Save as Word/.test(toolsTxt), '[원본저장] 버튼이 없다');
             ok(typeof window._docPrint === 'undefined', '쓰지 않는 _docPrint 가 남아 있다');
 
+            // 📍 드롭다운은 **트리거 바로 아래**에 떠야 한다 (2026-11-11 신고: "드롭다운 가려짐")
+            //    ⚠️ `.row-action-popup` 은 fixed 인데 제 top/left 가 없다 — 안 잡아 주면 트리거보다
+            //       **위**에 떠서 프로젝트 탭 띠에 가린다. 자리 규칙은 PARTS(js/23)와 같아야 한다.
+            window._toggleDocFormDropdown(null);
+            var ddTrig = document.getElementById('doc-form-trigger').getBoundingClientRect();
+            var ddPop = document.getElementById('doc-form-dropdown').getBoundingClientRect();
+            ok(ddPop.top >= ddTrig.bottom, '드롭다운이 트리거보다 위에 뜬다 (탭 띠에 가린다): '
+               + Math.round(ddPop.top) + ' < ' + Math.round(ddTrig.bottom));
+            ok(Math.abs(ddPop.left - ddTrig.left) < 1, '드롭다운 왼쪽이 트리거와 안 맞는다');
+            ok(Math.round(ddPop.top - ddTrig.bottom) === 4, 'PARTS 와 간격이 다르다: '
+               + Math.round(ddPop.top - ddTrig.bottom) + 'px (PARTS 는 4px)');
+            document.getElementById('doc-form-dropdown').style.display = 'none';
+
             // 🎨 헤더 버튼은 **한 벌**이고 팔레트를 따라야 한다 (사용자 신고 2026-11-11:
             //    "원본저장 버튼 배경이 파란색으로 고정")
             //    ⚠️ 고정 hex 를 기대값으로 박지 않는다 — "넷이 같은가 · 테마를 바꾸면 같이 바뀌는가"
@@ -624,7 +637,11 @@
             window.fetch = realFetch2;
             window._dgCollect = realCollect;
 
-            var PROJ = 'DOCUMENT/ZZCODE_LNW-MODEL_KTS1';
+            // ⚠️ 폴더 이름은 **앱 공용 규칙**(`_dsCurrentProjectFolderName`)을 따른다 —
+            //    여기서 따로 조립하면 CUSTOMER·SUMMARY 와 모양이 갈라진다(2026-11-11 신고).
+            //    프로젝트를 안 열었으면 meta 로 만든다(그게 지금 하네스 상황).
+            var PROJ = 'DOCUMENT/' + (window._dsCurrentProjectFolderName && window._dsCurrentProjectFolderName()
+                        ? window._dsCurrentProjectFolderName() : 'LNW-MODEL_KTS1');
             ok(asked.indexOf(PROJ + '/SAMPLE REPORT') >= 0, 'SAMPLE REPORT 폴더를 안 만든다: ' + asked.join(' | '));
             ok(asked.indexOf(PROJ + '/DR_DVR 발표자료') >= 0, 'DR/DVR 폴더를 안 만든다: ' + asked.join(' | '));
             ok(asked.indexOf(PROJ + '/시제품 제작의뢰서') >= 0, '시제품 제작의뢰서 폴더를 안 만든다');
