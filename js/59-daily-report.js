@@ -1300,7 +1300,11 @@
   '<div style="flex:1; min-height:0; overflow-y:auto; padding:14px 17px; display:flex; flex-direction:column;">' +
     '<div style="flex-shrink:0;">' + deletedBandHtml() +
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">' +
-      '<span style="font-size:12px; color:#555; margin-right:4px;">' + esc(T('일 종류', 'Day type')) + '</span>' + types + '</div>' +
+      '<span style="font-size:12px; color:#555; margin-right:4px;">' + esc(T('일 종류', 'Day type')) + '</span>' + types +
+      // 🔧 [2026-11-11 3차 요청] "저장" 버튼을 "오늘 한 일" 박스 밖 — 이 줄로, 오른쪽 정렬.
+      // 크기는 일 종류 버튼과 통일(padding:5px 12px; font-size:12.5px; border-radius:6px).
+      '<button id="daily-save-btn" onclick="window._dailySave()" style="margin-left:auto; padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
+    '</div>' +
     (exempt
       ? '<div style="padding:9px 12px; background:#f4f8fb; border:1px solid #d6e6f2; border-radius:7px; font-size:12px; color:#2c5f8a; margin-bottom:10px;">' +
         esc(T('이 날은 보고가 필수는 아닙니다 — 그래도 사유가 있으면 아래에서 업무로 등록할 수 있습니다.',
@@ -1311,14 +1315,9 @@
     //    불러오기·후보 목록·저장 버튼)가 전부 멀리 밀렸다 — 3개 정도 보이는 높이로 고정하고
     //    그 안에서만 스크롤한다(모달 전체 스크롤과 별개). 카드 하나 125px(실측, 글 길이와
     //    무관 — input 은 줄바꿈 안 함) × 3 + 안쪽 패딩 14px, 440px 로 확정.
-    // 🔧 [2026-11-11 2차 요청] "저장" 버튼을 이 박스 안으로 — 목록은 계속 스크롤되고, 저장
-    //    줄만 테두리 **안쪽**에서 스크롤 없이 붙박인다(바깥 박스를 flex 세로로 나눈다).
-    '<div style="border:1px solid #e8e8e8; border-radius:7px; margin-bottom:6px; display:flex; flex-direction:column;">' +
-      '<div style="padding:7px 10px; max-height:420px; overflow-y:auto;">' + chk + '</div>' +
-      '<div style="padding:7px 10px; border-top:1px solid #e8e8e8; display:flex; justify-content:flex-end;">' +
-        '<button id="daily-save-btn" onclick="window._dailySave()" style="padding:6px 20px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
-      '</div>' +
-    '</div>' +
+    // 🔧 [2026-11-11 3차 요청] "저장" 버튼은 위 "일 종류" 줄로 옮겼다 — 이 박스는 다시
+    //    목록 전용 스크롤 영역 하나로.
+    '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px; max-height:420px; overflow-y:auto;">' + chk + '</div>' +
     '<div style="display:flex; gap:6px; margin-bottom:12px;">' +
       '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
       '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
