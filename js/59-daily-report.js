@@ -1288,7 +1288,12 @@
   '<div id="daily-drag" style="flex-shrink:0; padding:12px 17px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; align-items:center; cursor:grab; user-select:none;">' +
     '<span>📔 ' + esc(T('일일 업무보고', 'Daily Report')) + ' — ' + esc(dayLabel(_date)) +
       (me().name ? ' <span style="font-weight:normal; font-size:11.5px; color:#5a8ab5;">' + esc(me().name) + '</span>' : '') + '</span>' +
-    '<button onclick="window.dailyCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; flex-shrink:0;">✕</button>' +
+    // 🔧 [2026-11-11 요청] "AI로 정리" 를 헤더로 — 팔레트 공식(bg #e0f5f7 · 테두리 #a3d9e0 ·
+    //    글자 #00707d, "+추가" 버튼과 같은 조합)이라 테마를 바꾸면 같이 바뀐다.
+    '<div style="display:flex; align-items:center; gap:7px; flex-shrink:0;">' +
+      '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" style="padding:5px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
+      '<button onclick="window.dailyCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; flex-shrink:0;">✕</button>' +
+    '</div>' +
   '</div>' +
   '<div style="flex:1; min-height:0; overflow-y:auto; padding:14px 17px; display:flex; flex-direction:column;">' +
     '<div style="flex-shrink:0;">' + deletedBandHtml() +
@@ -1304,7 +1309,14 @@
     //    불러오기·후보 목록·저장 버튼)가 전부 멀리 밀렸다 — 3개 정도 보이는 높이로 고정하고
     //    그 안에서만 스크롤한다(모달 전체 스크롤과 별개). 카드 하나 125px(실측, 글 길이와
     //    무관 — input 은 줄바꿈 안 함) × 3 + 안쪽 패딩 14px, 440px 로 확정.
-    '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px; max-height:440px; overflow-y:auto;">' + chk + '</div>' +
+    // 🔧 [2026-11-11 2차 요청] "저장" 버튼을 이 박스 안으로 — 목록은 계속 스크롤되고, 저장
+    //    줄만 테두리 **안쪽**에서 스크롤 없이 붙박인다(바깥 박스를 flex 세로로 나눈다).
+    '<div style="border:1px solid #e8e8e8; border-radius:7px; margin-bottom:6px; display:flex; flex-direction:column;">' +
+      '<div style="padding:7px 10px; max-height:400px; overflow-y:auto;">' + chk + '</div>' +
+      '<div style="padding:7px 10px; border-top:1px solid #e8e8e8; display:flex; justify-content:flex-end;">' +
+        '<button id="daily-save-btn" onclick="window._dailySave()" style="padding:6px 20px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
+      '</div>' +
+    '</div>' +
     '<div style="display:flex; gap:6px; margin-bottom:12px;">' +
       '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
       '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
@@ -1326,11 +1338,8 @@
     fileInputHtml() + filesHtml('') +
     '</div>' +
   '</div>' +
-  '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; align-items:center; gap:8px;">' +
-    '<span style="flex:1; font-size:11px; color:#999;">' + esc(_doc.savedAt ? T('마지막 저장 ', 'Saved ') + new Date(_doc.savedAt).toLocaleString('ko-KR') : T('아직 저장 안 됨', 'Not saved yet')) + '</span>' +
-    '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" style="padding:6px 13px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
-    '<button onclick="window.dailyCloseModal()" style="padding:6px 14px; border:1px solid #ccc; background:#fff; color:#555; border-radius:6px; font-size:12.5px; cursor:pointer;">' + esc(T('닫기', 'Close')) + '</button>' +
-    '<button id="daily-save-btn" onclick="window._dailySave()" style="padding:6px 20px; border:none; background:#19c3d6; color:#fff; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
+  '<div style="flex-shrink:0; padding:9px 17px; border-top:1px solid #eee; text-align:right;">' +
+    '<span style="font-size:11px; color:#999;">' + esc(_doc.savedAt ? T('마지막 저장 ', 'Saved ') + new Date(_doc.savedAt).toLocaleString('ko-KR') : T('아직 저장 안 됨', 'Not saved yet')) + '</span>' +
   '</div>' +
 '</div>';
 
@@ -1744,6 +1753,13 @@
     window.dailyOpenDayFile = function (i) {
         var f = (window._dailyDayFiles || [])[i];
         if (f) return window.dailyOpenRel(f.rel, f.name);
+    };
+    // 📧 [2026-11-11 요청] 하루 보기 표에도 메일 원문보기를 — 모달 안 항목과 같은 이유로
+    //    **인덱스로만** 받는다(`_dailyDayFiles` 와 같은 패턴). `showMailRawModal()` 하나만
+    //    다시 부르므로 "아웃룩으로 열기" 도 그대로 딸려온다.
+    window.dailyOpenDayMailRaw = function (i) {
+        var r = (window._dailyDayMailRaw || [])[i];
+        if (r && window.showMailRawModal) window.showMailRawModal(r);
     };
 
     /** 썸네일은 그린 **뒤에** 채운다 — 렌더를 막지 않는다. */
@@ -2943,6 +2959,7 @@
         // 📎 남의 보고 첨부는 **인덱스로만** 여다 — 파일 이름이 onclick 속으로
         //    들어가지 않게 한다(이름엔 따옴표·괄호가 섭일 수 있다).
         window._dailyDayFiles = [];
+        window._dailyDayMailRaw = [];
         function dayChipsUnused(d) {
             var fl = (d && d.files) || [];
             if (!fl.length) return '';
@@ -3015,6 +3032,14 @@
                     (n === 0 ? nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' : '') +
                     '<td class="daily-cat-cell" style="' + td + '">' + esc(it.cat || '-') + '</td>' +
                     '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
+                      (it.mailRaw
+                        ? (function () {
+                            var gi = window._dailyDayMailRaw.push(it.mailRaw) - 1;
+                            return ' <span onclick="event.stopPropagation(); window.dailyOpenDayMailRaw(' + gi + ')" title="' +
+                                   esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) +
+                                   '" style="cursor:pointer; text-decoration:underline dotted;">📧</span>';
+                          })()
+                        : '') +
                       (pj ? '<div style="color:#9aa3ab; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(pj) + '">' + esc(pj) + '</div>' : '') +
                     '</td>' +
                     window.DAILY_FIELDS.map(function (f) {
