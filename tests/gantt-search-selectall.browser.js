@@ -73,6 +73,34 @@ window.__ganttSearchSelAllTest = async function () {
             console.warn('업무명이 너무 짧아(2) 건너뜀');
         }
 
+        console.log('\n=== 2.5) 체크 전/후가 뚜렷하게 달라야 한다(신고: "체크 여부가 반대로 느껴진다") ===');
+        //    원인: 체크 전(하이라이트 모드)의 opacity:0.2 + pointer-events:none 이 이미 거의
+        //    숨긴 모양이라 체크해도 눈에 띄는 차이가 없었다. 체크 전엔 흐리되 또렷이 보이고
+        //    클릭도 되어야 하며, 체크했을 때만 완전히 사라져야(display:none) 한다.
+        if (taskName.length >= 2) {
+            const otherTr = [...document.querySelectorAll('#table-body tr[data-row-index]')]
+                .find((t) => t !== document.querySelector('tr[data-row-index="' + leafIdx + '"]')
+                            && !t.hasAttribute('data-lazy') && t.style.display !== 'none');
+            const fm = document.getElementById('gantt-ai-search-filtermode');
+            if (fm && fm.checked) { fm.checked = false; fm.dispatchEvent(new Event('change')); await new Promise((r) => setTimeout(r, 30)); }
+            if (otherTr) {
+                const cs = getComputedStyle(otherTr);
+                check('체크 전 — 비매칭 행이 완전히 안 사라진다(display != none)', otherTr.style.display !== 'none', otherTr.style.display);
+                check('체크 전 — 거의 안 보일 만큼(0.2) 흐리지 않는다', parseFloat(cs.opacity) > 0.4, cs.opacity);
+                check('체크 전 — 눌러도 반응 없게 막지 않는다(pointer-events)', cs.pointerEvents !== 'none', cs.pointerEvents);
+            } else {
+                console.warn('비매칭 행을 못 찾아 2.5번 일부를 건너뜀(총 업무가 1~2개뿐일 수 있음)');
+            }
+            if (fm) {
+                fm.checked = true; fm.dispatchEvent(new Event('change'));
+                await new Promise((r) => setTimeout(r, 30));
+                if (otherTr) check('체크 후 — 비매칭 행은 완전히 사라진다(display:none)', otherTr.style.display === 'none', otherTr.style.display);
+                fm.checked = false; fm.dispatchEvent(new Event('change')); // 원상복구
+            }
+        } else {
+            console.warn('업무명이 너무 짧아(2) 2.5번 건너뜀');
+        }
+
         console.log('\n=== 3) 헤더 전체선택 체크박스 — 검색 중엔 보이고, 누르면 매칭된 걸 다 선택한다 ===');
         const headCb = document.getElementById('gantt-search-selall-head');
         check('헤더 체크박스가 있다(js/04j 렌더)', !!headCb);

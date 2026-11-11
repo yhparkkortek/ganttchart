@@ -1375,7 +1375,13 @@
             'tr.gantt-search-match { /* outline 제거 */ }' +
             // 현재 포커스 행: 매우 연한 배경만
             'tr.gantt-search-focus { background: rgba(0,112,125,.06) !important; }' +
-            'tr.gantt-search-dim   { opacity: 0.2; pointer-events: none; }' +
+            // ⚠️⚠️ [2026-11-11 신고] "비매칭 숨기기 체크 여부가 반대로 느껴진다" — 원인은 opacity
+            //    0.2 + pointer-events:none 이 **체크 전(하이라이트 모드)에도** 비매칭 행을 사실상
+            //    안 보이고 못 누르게 만들어서, 체크박스를 켜고 꺼도 눈에 띄는 차이가 없었다(둘 다
+            //    "거의 숨겨진" 모습). 체크 전엔 **살짝만** 흐리고 계속 누를 수 있게 두고, "완전히
+            //    숨기기"는 체크했을 때(_mode==='filter')의 `display:none` 하나에만 맡긴다 — 그래야
+            //    껐을 때와 켰을 때가 뚜렷하게 달라 보인다.
+            'tr.gantt-search-dim   { opacity: 0.55; }' +
             '#gantt-ai-searchbar   { border-radius: 0; }' +
             '#gantt-ai-search-input:focus { border-color: #00707d !important; box-shadow: 0 0 0 2px rgba(0,112,125,.15); }' +
             '#gantt-ai-bulk-bar button:hover { filter: brightness(0.93); }' +
