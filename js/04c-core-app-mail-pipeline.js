@@ -1037,12 +1037,34 @@
             //    "지금 화면" 전역(currentDriveFileId 등)을 건드리면 지금 보고 있는 다른 프로젝트가
             //    오염된다. 이 저장을 시작한 시트가 여전히 활성 상태일 때만 전역을 갱신한다.
             const _stillOnSameSheet = (window._activeSheetKey === _savingSheetKey);
+            // 🗂 [2026-11-11] NAS 하위 폴더(CUSTOMER/SUMMARY/MC/DOCUMENT)도 **지금 파일 이름**으로
+            //    갈린다(`_dsCurrentProjectFolderName`, js/48). "고객사>프로젝트명" 등을 고쳐서
+            //    파일 이름이 바뀌는 이 저장이 바로 그 분기점이라, 덮어쓰기 **직전**(옛 이름)과
+            //    **직후**(새 이름)를 여기서 캡처해 둔다. `fileId`가 있어야(=기존 프로젝트) 옮길
+            //    "옛" 폴더가 있을 수 있다 — 신규 프로젝트는 아직 아무 폴더도 없다.
+            //    ⚠️ 이 전환 레이스(다른 시트로 넘어간 저장)에선 **건너뛴다** — `currentDriveFileName`
+            //       을 여기서 안 건드리므로 "새 이름"을 믿을 수 없고, 억지로 추측해 NAS 폴더를
+            //       옮기느니 다음 저장(그 시트가 다시 활성일 때) 때 잡히는 쪽이 안전하다.
+            const _oldProjFolder = (_stillOnSameSheet && fileId && window._dsCurrentProjectFolderName)
+                ? window._dsCurrentProjectFolderName() : '';
             if (_stillOnSameSheet) {
                 window.currentDriveFileName = dynamicFileName;
                 window.updateCurrentFileLabel();
             }
 
             if (response.ok && file && file.id) {
+                // ⚠️ 폴더 이름 변경은 **저장이 실제로 성공했을 때만** — 위에서
+                //    `currentDriveFileName` 은 응답을 확인하기도 전에 미리 바뀌지만, 저장 자체가
+                //    실패했는데 NAS 폴더까지 옮기면 "파일은 옛 이름 그대로인데 폴더만 새 이름"
+                //    이라는 더 혼란스러운 상태가 된다.
+                if (_oldProjFolder && window._dsCurrentProjectFolderName) {
+                    const _newProjFolder = window._dsCurrentProjectFolderName();
+                    if (_newProjFolder && _newProjFolder !== _oldProjFolder && window._dsRenameProjectFolders) {
+                        window._dsRenameProjectFolders(_oldProjFolder, _newProjFolder).catch(function (e) {
+                            console.warn('[저장] NAS 프로젝트 폴더 이름 변경 실패:', e);
+                        });
+                    }
+                }
                 // 💡 [2026-08-25 신규] 방금 정상적으로 Drive에 저장됐으니, 이 프로젝트에 대해 남아있을 수
                 //    있는 로컬 백업(연결 끊김 등으로 저장 못 했던 시점의 스냅샷)은 이제 낡은 것이므로 정리.
                 //    저장 전 fileId(신규 프로젝트면 아직 null → 'new' 버킷)를 기준으로 지워야 정확히 맞는다.

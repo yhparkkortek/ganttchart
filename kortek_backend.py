@@ -7585,6 +7585,43 @@ def nas_app_delete():
         return jsonify({'ok': False, 'message': str(e)}), 500
 
 
+@app.route('/nas/app/rename', methods=['POST'])
+def nas_app_rename():
+    """폴더 **이름만** 바꾼다(내용은 그대로) — 프로젝트를 "고객사>프로젝트명" 등을 고쳐
+    다시 저장하면 CUSTOMER/DOCUMENT/MC/… 아래 프로젝트별 하위 폴더 이름도 같이 옮기기 위함
+    (2026-11-11, "프로젝트명을 바꾸면 폴더명도 자동으로 바뀌면 좋겠다" 요청).
+
+    본문 JSON: {rel, team?, newName}. `rel` 은 **지금 이름의** 폴더(앱 루트 기준 상대경로),
+    `newName` 은 **그 자리에 올 새 마지막 이름 하나**(경로 구분자 금지 — 한 단계만 바꾼다).
+
+    ⚠️ 겹치면(그 새 이름의 폴더가 이미 있으면) **덮지 않고 거부한다** — 합치기는 다른 일이고,
+       사람이 눈으로 보고 정리할 문제다.
+    ⚠️ 원래 폴더가 없으면(그 프로젝트가 그 자료를 아직 안 올렸다) **성공으로 둔다** —
+       옮길 게 없을 뿐이지 오류가 아니다.
+    ⚠️ `nas_dsm.rename` 이 바꾼 뒤 **정말 그 이름으로 있는지 확인**한다.
+    """
+    req = request.get_json(force=True, silent=True) or {}
+    path, err = _nas_target(req)
+    if err:
+        return jsonify({'ok': False, 'message': err}), 400
+    new_name = str(req.get('newName') or '').strip()
+    if not new_name or '/' in new_name or chr(92) in new_name:
+        return jsonify({'ok': False, 'message': '새 이름이 비었거나 경로 구분자를 담고 있습니다.'}), 400
+    nas = _nas()
+    try:
+        if not nas.exists(path):
+            return jsonify({'ok': True, 'skipped': 'source-missing', 'path': path})
+        parent = path.rstrip('/').rsplit('/', 1)[0]
+        dest = parent + '/' + new_name
+        if dest != path and nas.exists(dest):
+            return jsonify({'ok': False, 'collision': True, 'dest': dest,
+                            'message': '이미 그 이름의 폴더가 있어 덮어쓰지 않았습니다: ' + dest}), 409
+        new_path = nas.rename(path, new_name)
+        return jsonify({'ok': True, 'from': path, 'to': new_path})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+
+
 @app.route('/nas/app/open-native', methods=['POST'])
 def nas_app_open_native():
     """NAS 원본을 **그 자리에서** 연결 프로그램으로 연다(사진 뷰어·PDF·엑셀).
@@ -7870,6 +7907,56 @@ def doc_mkdir():
     if err:
         return jsonify({'ok': False, 'error': err}), 400
     return jsonify({'ok': True, 'folder': full})
+
+
+@app.route('/doc/rename', methods=['POST'])
+def doc_rename():
+    """프로젝트별 하위 폴더 이름만 바꾼다(`os.rename`, 같은 공유 안이라 원자적) — 사람이
+    "고객사>프로젝트명" 등을 고쳐 다시 저장하면 CUSTOMER/<프로젝트>·DOCUMENT/<프로젝트>·
+    MC/<프로젝트>·SUMMARY/<프로젝트> 가 **새 이름의 폴더**로 조용히 갈라지던 것을
+    고치기 위해서다(2026-11-11, "프로젝트명을 바꾸면 폴더명도 자동 변경" 요청).
+
+    본문 JSON: {folder, newName}. `folder` 는 **지금 이름의** 하위 폴더(예:
+    'CUSTOMER/LNW_27.0'), `newName` 은 그 자리에 올 새 마지막 이름 하나(경로 구분자 금지).
+
+    ⚠️ `_docstore_dir` 를 쓰지 않는다 — 그건 **없는 폴더를 만들어 버린다**(새 글 쓸 때는
+       맞는 동작이지만, 여기서는 "없다"가 "아직 그 자료를 안 올렸다"는 정상 상태다).
+    ⚠️ 새 이름의 폴더가 **이미 있으면 덮지 않고 거부한다**(409) — 합치기는 사람이 볼 일.
+    """
+    cfg = _docstore_load()
+    req = request.get_json(force=True, silent=True) or {}
+    folder = str(req.get('folder') or '').strip()
+    # ⚠️ `_docstore_safe_name` 은 경로가 섞여 들어오면 **조용히 basename만 남긴다**
+    #    (업로드 파일명엔 맞는 동작) — 여기선 그 조용한 축약이 "다른 이름으로 바뀌었다"는
+    #    조용한 오답이 되므로, 구분자가 있으면 **먼저 거부한다**.
+    raw_new_name = str(req.get('newName') or '')
+    if '/' in raw_new_name or '\\' in raw_new_name:
+        return jsonify({'ok': False, 'error': '새 이름에 경로 구분자를 넣을 수 없습니다: ' + raw_new_name}), 400
+    new_name = _docstore_safe_name(raw_new_name)
+    if not new_name:
+        return jsonify({'ok': False, 'error': '새 이름이 올바르지 않습니다.'}), 400
+    segs, err = _docstore_folder_segs(folder, cfg)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    root = cfg.get('root') or ''
+    if not root:
+        return jsonify({'ok': False, 'error': '문서 저장소 경로가 설정되지 않았습니다.'}), 400
+    ok, err = _docstore_probe_root(root)
+    if not ok:
+        return jsonify({'ok': False, 'error': err}), 400
+    src = os.path.join(root, *segs)
+    if not os.path.isdir(src):
+        return jsonify({'ok': True, 'skipped': 'source-missing', 'folder': folder})
+    dest = os.path.join(root, *(segs[:-1] + [new_name]))
+    if os.path.normcase(os.path.abspath(dest)) != os.path.normcase(os.path.abspath(src)) \
+            and os.path.exists(dest):
+        return jsonify({'ok': False, 'collision': True,
+                        'error': f'이미 그 이름의 폴더가 있어 덮어쓰지 않았습니다: {new_name}'}), 409
+    try:
+        os.rename(src, dest)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'폴더 이름 바꾸기 실패: {e}'}), 500
+    return jsonify({'ok': True, 'from': '/'.join(segs), 'to': '/'.join(segs[:-1] + [new_name])})
 
 
 @app.route('/doc/get', methods=['GET'])

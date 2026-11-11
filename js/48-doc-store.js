@@ -255,6 +255,61 @@ window._dsProjectAwareFolders = function (baseFolder, opts) {
     return tabs;
 };
 
+// ── 🗂 프로젝트 이름이 바뀌면 NAS 하위 폴더도 같이 옮긴다 ────────────────────
+//    [2026-11-11 요청] "프로젝트명을 바꾸면 폴더명도 자동 변경되면 좋겠다" — CUSTOMER·
+//    SUMMARY·MC·DOCUMENT 는 위 `_dsCurrentProjectFolderName()`(지금 저장된 파일 이름)으로
+//    하위 폴더를 쓰는데, 사람이 "고객사>프로젝트명" 등을 고쳐 다시 저장하면 다음부터는
+//    **새 이름의 폴더**를 쓰기 시작하고 **옛 폴더는 그대로 버려진다**(js/67 코드 주석에
+//    이미 적혀 있던 설계상 빈틈 — 실측으로 확인됨, LNW_27.0 → LNW_OBSIDIAN27_DB_27.0).
+//    저장이 끝난 뒤(js/04c) 이 함수를 fire-and-forget 으로 불러 백엔드 `/doc/rename`
+//    (os.rename, 내용 그대로 옮긴다)으로 네 폴더를 한 번에 옮긴다.
+//    ⚠️ MAIL·PARTS 는 안 들어간다 — PARTS 는 프로젝트 전용이 아닌 공용 자료실이고
+//       MAIL 은 다른 민감한 영역이라 비슷한 전체-내보내기 기능에서도 일부러 뺐다(위 참고).
+//    ⚠️ 겹치면(그 새 이름의 폴더가 이미 있으면) 백엔드가 덮지 않고 거부한다 — 그건
+//       사람이 눈으로 보고 정리할 일이라 여기서도 억지로 합치지 않는다.
+window.PROJECT_FOLDER_RENAME_BASES = window.PROJECT_FOLDER_RENAME_BASES
+    || ['CUSTOMER', 'SUMMARY', 'MC', 'DOCUMENT'];
+
+window._dsRenameProjectFolders = async function (oldName, newName) {
+    oldName = String(oldName || '').trim();
+    newName = String(newName || '').trim();
+    if (!oldName || !newName || oldName === newName) return null;
+    var moved = [], skipped = [], collided = [], failed = [];
+    for (var i = 0; i < window.PROJECT_FOLDER_RENAME_BASES.length; i++) {
+        var base = window.PROJECT_FOLDER_RENAME_BASES[i];
+        try {
+            var r = await _api('/doc/rename', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder: base + '/' + oldName, newName: newName })
+            });
+            if (r && r.skipped === 'source-missing') skipped.push(base); else moved.push(base);
+        } catch (e) {
+            // ⚠️ `_api` 는 겹침(409)·백엔드 실패를 구분 없이 던진다 — 겹침 메시지는
+            //    백엔드가 "이미 그 이름의 폴더가 있어" 로 적어 두므로 문구로 가른다.
+            if (/이미 그 이름/.test(e.message || '')) collided.push(base); else failed.push(base + ': ' + e.message);
+        }
+    }
+    if (moved.length) {
+        console.info('[문서저장소] 프로젝트 폴더 이름 변경 — ' + oldName + ' → ' + newName + ' (' + moved.join(', ') + ')');
+    }
+    if (collided.length || failed.length) {
+        console.warn('[문서저장소] 프로젝트 폴더 이름 변경 중 일부 못 옮김 — 겹침:', collided, '실패:', failed);
+        if (window._issueLog) {
+            try { window._issueLog({ domain: 'doc-store', kind: 'rename_folder_failed',
+                                     result: { oldName: oldName, newName: newName, collided: collided, failed: failed } }); }
+            catch (e2) { /* 기록 실패가 저장을 막지는 않는다 */ }
+        }
+    }
+    if (collided.length) {
+        _toast(_t('⚠️ NAS 에 "' + newName + '" 이름의 폴더가 이미 있어 옛 "' + oldName + '" 폴더(' + collided.join(', ') +
+                  ')는 자동으로 못 옮겼습니다 — NAS 에서 직접 정리해 주세요.',
+                  '⚠️ A folder named "' + newName + '" already exists on NAS, so the old "' + oldName +
+                  '" folder (' + collided.join(', ') + ') could not be auto-renamed — please merge it manually.'),
+               'warning', 10000);
+    }
+    return { moved: moved, skipped: skipped, collided: collided, failed: failed };
+};
+
 // ── 📦 프로젝트 자료 전체 내보내기 ──────────────────────────────────────
 //    "나중에 프로젝트 단위로 파일을 뽑아서 전달해야 할 때" (사용자 질문, 2026-10-26).
 //    폴더 구조는 문서종류가 상위(CUSTOMER/MC/…)라 한 프로젝트 자료가 여러 최상위 폴더에
