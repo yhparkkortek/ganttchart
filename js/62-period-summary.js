@@ -429,10 +429,31 @@
         if (P.showLegacy) {
             b += '<span style="flex:1"></span>' + btn(P.legacyId, en ? '📊 Schedule view' : '📊 일정 현황', cur === P.legacyId);
         }
-        var h = '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">' + b + '</div>';
-        if (cur === P.legacyId) return h;
+        if (cur === P.legacyId) {
+            return '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">' + b + '</div>';
+        }
 
+        // 🔎 담당자·프로젝트 — 선택지는 **거르기 전** 목록에서 만든다.
         var F = filt();
+        var sel = function (id, label, cur2, opts, allLabel) {
+            var o = '<option value="">' + esc(allLabel) + '</option>' + opts.map(function (v) {
+                return '<option value="' + esc(v) + '"' + (v === cur2 ? ' selected' : '') + '>' + esc(v) + '</option>';
+            }).join('');
+            return '<select onchange="window._psSetFilter({' + id + ': this.value})" title="' + esc(label) + '" ' +
+                   'style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px; max-width:220px;">' + o + '</select>';
+        };
+        var sc = (col && col.scan) || {};
+        // 💡 [2026-11-11 사용자 요청] 기간 버튼·검색 아이콘·담당자/프로젝트 드롭다운·필터 해제를
+        //    한 줄로 — 예전엔 두 개의 flex div로 나뉘어 있어 한 줄에 다 안 보였다.
+        b += '<span style="font-size:11.5px; color:#888; margin-left:4px;">🔎</span>' +
+             sel('who', T('담당자', 'Assignee'), F.who, (col && col.people) || [], T('담당자 전체', 'All assignees')) +
+             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('프로젝트 전체', 'All projects')) +
+             (col && col.filtered ? '<button onclick="window._psSetFilter({who:\'\', proj:\'\'})" style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' + esc(T('필터 해제', 'Clear')) + '</button>' : '') +
+             (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('다른 프로젝트 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
+             ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
+
+        var h = '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' + b + '</div>';
+
         // 📅 기간설정 — 시작·끝 두 칸. 아직 안 골랐으면 지금 기간을 채워 둔다(빈 칸부터 시작하면
         //    무엇을 고르라는 건지 알 수 없다).
         if (cur === P.customId) {
@@ -445,24 +466,6 @@
                  '<button onclick="window._psApplyCustom()" style="padding:3px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' +
                    esc(T('적용', 'Apply')) + '</button></div>';
         }
-
-        // 🔎 담당자·프로젝트 — 선택지는 **거르기 전** 목록에서 만든다.
-        var sel = function (id, label, cur2, opts, allLabel) {
-            var o = '<option value="">' + esc(allLabel) + '</option>' + opts.map(function (v) {
-                return '<option value="' + esc(v) + '"' + (v === cur2 ? ' selected' : '') + '>' + esc(v) + '</option>';
-            }).join('');
-            return '<select onchange="window._psSetFilter({' + id + ': this.value})" title="' + esc(label) + '" ' +
-                   'style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px; max-width:220px;">' + o + '</select>';
-        };
-        var sc = (col && col.scan) || {};
-        h += '<div style="display:flex; gap:6px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">' +
-             '<span style="font-size:11.5px; color:#888;">🔎</span>' +
-             sel('who', T('담당자', 'Assignee'), F.who, (col && col.people) || [], T('담당자 전체', 'All assignees')) +
-             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('프로젝트 전체', 'All projects')) +
-             (col && col.filtered ? '<button onclick="window._psSetFilter({who:\'\', proj:\'\'})" style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' + esc(T('필터 해제', 'Clear')) + '</button>' : '') +
-             (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('다른 프로젝트 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
-             ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '') +
-             '</div>';
         return h;
     }
     function link(idx) {
