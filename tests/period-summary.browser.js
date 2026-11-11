@@ -206,6 +206,26 @@
         ok('다른 프로젝트가 고를 거리에 들어온다', cMon.projects.indexOf('OTHER_PROJ') >= 0, JSON.stringify(cMon.projects));
         window._psSetFilter({ from: '', to: '' });
 
+        // ══ 담당자(프로젝트 담당자=PM) 기본 필터 + 캐스케이딩 (2026-11-11 요청) ═════════
+        // 열린 프로젝트 PM='조익현', 다른 프로젝트(OTHER_PROJ) PM='남담당피엠' 로 나눠 둔다.
+        window.projectMeta.프로젝트담당자 = '조익현';
+        window._psOtherScan.facts.forEach(function (f) { f.pm = '남담당피엠'; });
+        var cPm = window._psCollectFacts('month');
+        ok('업무마다 프로젝트 담당자(PM)를 담는다', cPm.facts.filter(function (f) { return f.local; }).every(function (f) { return f.pm === '조익현'; }),
+           JSON.stringify(cPm.facts.map(function (f) { return f.pm; })));
+        ok('PM 고를 거리에 둘 다 있다', cPm.pms.indexOf('조익현') >= 0 && cPm.pms.indexOf('남담당피엠') >= 0, JSON.stringify(cPm.pms));
+
+        window._psSetFilter({ pm: '조익현' });
+        var cPmSel = window._psCollectFacts('month');
+        ok('PM을 고르면 그 PM 소속 프로젝트만 남는다',
+           cPmSel.projects.indexOf('OTHER_PROJ') === -1 && !cPmSel.facts.some(function (f) { return f.project === 'OTHER_PROJ'; }),
+           JSON.stringify(cPmSel.projects));
+        ok('업무 담당자(보조) 고를 거리도 PM 범위로 좁혀진다', cPmSel.people.indexOf('남담당') === -1, JSON.stringify(cPmSel.people));
+        window._psSetFilter({ pm: '' });
+        var cPmAll = window._psCollectFacts('month');
+        ok('PM 필터를 풀면 다시 둘 다 보인다', cPmAll.projects.indexOf('OTHER_PROJ') >= 0, JSON.stringify(cPmAll.projects));
+        window._psSetFilter({ pm: '', who: '', proj: '' });
+
         // ⚠️ 훑는 중엔 "없습니다" 라고 하면 안 된다 — 없는 것과 아직 못 읽은 것이 구분이 안 된다.
         window._psOtherScan.facts = [];
         window._psOtherScan.busy = true;

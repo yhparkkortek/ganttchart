@@ -65,15 +65,20 @@
     window._psMode = mode;
 
     /**
-     * 🔎 보는 조건 — 담당자 / 프로젝트 / 직접 기간.
+     * 🔎 보는 조건 — 담당자(PM) / 프로젝트 / 업무 담당자(보조) / 직접 기간.
      * ⚠️ 모달을 다시 그려도 살아 있어야 해서 localStorage 에 둔다(모듈 변수는 새로고침에 날아간다).
+     *
+     * 💡 [2026-11-11 사용자 요청] "개발3팀 > 프로젝트 담당자 > 프로젝트 선택" 흐름이 기본이다 —
+     *    `pm`(=projectMeta.프로젝트담당자, 그 프로젝트를 총괄하는 사람)으로 먼저 거르고, 그 사람
+     *    소속 프로젝트만 고를 수 있게 한다. 예전부터 있던 `who`(행의 `_담당구분`을 그 분야 담당자로
+     *    푼 값 — HW/FW 등 **업무** 단위 사람, PM과 다를 수 있다)는 **보조 필터**로 남긴다.
      */
     function filt() {
         try {
             var o = JSON.parse(localStorage.getItem(P.filterKey) || 'null');
-            if (o && typeof o === 'object') return { who: o.who || '', proj: o.proj || '', from: o.from || '', to: o.to || '' };
+            if (o && typeof o === 'object') return { pm: o.pm || '', who: o.who || '', proj: o.proj || '', from: o.from || '', to: o.to || '' };
         } catch (e) { /* 아래 */ }
-        return { who: '', proj: '', from: '', to: '' };
+        return { pm: '', who: '', proj: '', from: '', to: '' };
     }
     window._psFilter = filt;
     window._psSetFilter = function (patch) {
@@ -179,8 +184,11 @@
                 idx: i, date: ymd(d), _ts: d.getTime(),
                 task: taskName(row) || T('(제목 없음)', '(untitled)'),
                 cat: cat,
-                // 👤 담당자 — 역할(`_담당구분`)을 **그 프로젝트의** projectMeta 로 푼다.
+                // 👤 담당자(기본 필터) — 그 **프로젝트**를 총괄하는 사람(projectMeta.프로젝트담당자).
+                //    👷 업무 담당자(보조 필터) — 역할(`_담당구분`)을 그 프로젝트의 projectMeta 로 푼
+                //    값으로, 행마다(HW/FW 등 분야별로) 다를 수 있다. 둘은 다른 사람일 수 있다.
                 //    ⚠️ 해석기는 js/59 `_dailyCatAssignee` 하나를 빌려 쓴다(두 벌이면 화면마다 다른 사람이 나온다).
+                pm: String((ctx.meta || {}).프로젝트담당자 || '').trim(),
                 assignee: roleOwner(cat, ctx.meta, ctx.members3),
                 project: ctx.project || '',
                 local: !!ctx.local,          // 열린 프로젝트의 행인가(#G 링크는 그때만 뜻이 있다)
@@ -220,7 +228,15 @@
     };
 
     /**
-     * 내가 맡은 프로젝트의 사실을 **한 번만** 읽어 전부 모아 둔다. 기간은 화면에서 거른다.
+     * **개발팀 전체**(내가 속한 팀, 완료 제외)의 사실을 **한 번만** 읽어 전부 모아 둔다.
+     * 기간은 화면에서 거른다.
+     *
+     * 💡 [2026-11-11 사용자 요청] "개발3팀 > 프로젝트 담당자(PM) > 프로젝트 선택" 이 기본 흐름이라,
+     *    PM을 고르기 **전에** 그 팀의 모든 PM/프로젝트가 선택지에 있어야 한다 — 그래서
+     *    `dailyScanMyProjects` 를 `{onlyMyProjects:false}` 로 불러 "내가 맡은 것"이 아니라
+     *    **내 팀 전체**(js/59 `DAILY_SCAN.myTeamOnly` 는 그대로 — 남의 팀 폴더는 ACL 로도 막힌다)를
+     *    읽는다. 전역 `DAILY_SCAN.onlyMyProjects` 자체는 건드리지 않는다 — js/59 자신의 "오늘 할
+     *    일" 후보 스캔은 여전히 "내 프로젝트만"이어야 한다(안 그러면 남의 업무 170건이 섞인다).
      *
      * ⚠️⚠️ [2026-11-09 신고 "일일/주간/월간/기간설정마다 동작이 이상함"] 처음엔 캐시 열쇠에
      *    **기간**을 넣어서, 일일↔주간↔월간을 누를 때마다 프로젝트 파일 13개를 **전부 다시
@@ -252,7 +268,7 @@
         }, function (st) {
             mine.done = st.done; mine.total = st.total;
             repaint();
-        }).then(function (r) {
+        }, { onlyMyProjects: false }).then(function (r) {
             mine.errs = r.errs;
             mine.busy = false;
             mine.loaded = true;
@@ -292,30 +308,37 @@
         var all = here.facts.concat(inRange);
         var scanned = here.scanned + other.scanned;
 
-        // 🔎 고를 거리는 **거르기 전** 목록에서 만든다 — 한 번 고르면 다른 선택지가 사라지면 안 된다.
-        var people = {}, projs = {};
-        all.forEach(function (f) {
+        var F = filt();
+        // 🔎 선택지는 **캐스케이딩**으로 만든다 — "개발3팀 > 프로젝트 담당자(PM) > 프로젝트" 흐름이라
+        //    PM 목록은 기간만 거른 전체에서(자유롭게 다른 PM으로 돌아갈 수 있어야 하니), 프로젝트
+        //    목록은 **그 PM 을 고른 뒤**에서, 보조 필터인 업무 담당자 목록은 **PM+프로젝트까지
+        //    고른 뒤**에서 만든다. 한 단계 위를 바꾸면 그 아래 선택은 toolbarHtml 에서 같이 지운다.
+        var pms = {};
+        all.forEach(function (f) { if (f.pm) pms[f.pm] = 1; });
+
+        var afterPm = all.filter(function (f) { return !F.pm || String(f.pm || '') === F.pm; });
+        var projs = {};
+        afterPm.forEach(function (f) { if (f.project) projs[f.project] = 1; });
+
+        var afterProj = afterPm.filter(function (f) { return !F.proj || String(f.project || '') === F.proj; });
+        var people = {};
+        afterProj.forEach(function (f) {
             if (f.assignee) f.assignee.split(',').forEach(function (n) { n = n.trim(); if (n) people[n] = 1; });
-            if (f.project) projs[f.project] = 1;
         });
 
-        var F = filt();
-        var out = all.filter(function (f) {
-            if (F.proj && String(f.project || '') !== F.proj) return false;
-            if (F.who) {
-                var list = String(f.assignee || '').split(',').map(function (x) { return x.trim(); });
-                if (list.indexOf(F.who) === -1) return false;
-            }
-            return true;
+        var out = afterProj.filter(function (f) {
+            if (!F.who) return true;
+            var list = String(f.assignee || '').split(',').map(function (x) { return x.trim(); });
+            return list.indexOf(F.who) !== -1;
         });
         out.sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : a.idx - b.idx); });
         return {
             range: R, facts: out.slice(0, P.maxFacts), total: out.length, scanned: scanned,
-            people: Object.keys(people).sort(), projects: Object.keys(projs).sort(),
-            filtered: !!(F.who || F.proj), filter: F,
+            pms: Object.keys(pms).sort(), people: Object.keys(people).sort(), projects: Object.keys(projs).sort(),
+            filtered: !!(F.pm || F.who || F.proj), filter: F,
             // 🔑 AI 요약 캐시 열쇠 — 기간뿐 아니라 **필터도** 들어가야 한다(다른 조건의 요약을
             //    같은 것으로 보여 주면 조용한 오답이다).
-            sig: R.key + (F.who ? '|w=' + F.who : '') + (F.proj ? '|p=' + F.proj : ''),
+            sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : ''),
             scan: other
         };
     };
@@ -433,23 +456,28 @@
             return '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">' + b + '</div>';
         }
 
-        // 🔎 담당자·프로젝트 — 선택지는 **거르기 전** 목록에서 만든다.
+        // 🔎 담당자(PM, 기본) · 프로젝트(PM 소속으로 캐스케이딩) · 업무 담당자(보조, 선택) —
+        //    선택지는 **그 앞 단계까지 거른** 목록에서 만든다(_psCollectFacts 참고).
         var F = filt();
-        var sel = function (id, label, cur2, opts, allLabel) {
+        var sel = function (id, label, cur2, opts, allLabel, resetKeys, extraStyle) {
             var o = '<option value="">' + esc(allLabel) + '</option>' + opts.map(function (v) {
                 return '<option value="' + esc(v) + '"' + (v === cur2 ? ' selected' : '') + '>' + esc(v) + '</option>';
             }).join('');
-            return '<select onchange="window._psSetFilter({' + id + ': this.value})" title="' + esc(label) + '" ' +
-                   'style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px; max-width:220px;">' + o + '</select>';
+            // 💡 캐스케이딩 — 상위 선택이 바뀌면 그 아래(하위) 선택은 더 이상 안 맞을 수 있어 같이 비운다.
+            var patch = '{' + id + ': this.value' + (resetKeys || []).map(function (k) { return ', ' + k + ": ''"; }).join('') + '}';
+            return '<select onchange="window._psSetFilter(' + patch + ')" title="' + esc(label) + '" ' +
+                   'style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px; max-width:220px;' + (extraStyle || '') + '">' + o + '</select>';
         };
         var sc = (col && col.scan) || {};
-        // 💡 [2026-11-11 사용자 요청] 기간 버튼·검색 아이콘·담당자/프로젝트 드롭다운·필터 해제를
-        //    한 줄로 — 예전엔 두 개의 flex div로 나뉘어 있어 한 줄에 다 안 보였다.
+        // 💡 [2026-11-11 사용자 요청] 기간 버튼·검색 아이콘·담당자(PM)/프로젝트/업무 담당자
+        //    드롭다운·필터 해제를 한 줄로 — 예전엔 두 개의 flex div로 나뉘어 있어 한 줄에 다 안 보였다.
         b += '<span style="font-size:11.5px; color:#888; margin-left:4px;">🔎</span>' +
-             sel('who', T('담당자', 'Assignee'), F.who, (col && col.people) || [], T('담당자 전체', 'All assignees')) +
-             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('프로젝트 전체', 'All projects')) +
-             (col && col.filtered ? '<button onclick="window._psSetFilter({who:\'\', proj:\'\'})" style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' + esc(T('필터 해제', 'Clear')) + '</button>' : '') +
-             (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('다른 프로젝트 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
+             sel('pm', T('프로젝트 담당자', 'Project owner'), F.pm, (col && col.pms) || [], T('담당자 전체', 'All owners'), ['proj', 'who']) +
+             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('프로젝트 전체', 'All projects'), ['who']) +
+             // 👷 업무 담당자 — 기본 필터(PM)와 구분되게 옅은 색으로 "보조" 느낌을 준다.
+             sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('업무 담당자 전체', 'All task assignees'), [], ' color:#888;') +
+             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\'})" style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' + esc(T('필터 해제', 'Clear')) + '</button>' : '') +
+             (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
              ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
 
         var h = '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' + b + '</div>';

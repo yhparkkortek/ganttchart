@@ -711,11 +711,16 @@
      * @param tag     캐시 이름표 — 같은 파일이라도 쓰는 쪽이 다르면 결과가 다르다
      * @param collect (ctx) => 그 프로젝트분 결과. ctx = {rows, ci, meta, members3, logs, project, entry}
      * @param onStep  한 건 끝날 때마다 {done,total,kept} 로 부른다(화면 갱신용)
+     * @param opts    (선택) `DAILY_SCAN` 의 일부 값을 **이 호출 한 번만** 덮어쓴다 — 전역을 건드리면
+     *                동시에 도는 다른 호출(js/59 자신의 후보 스캔 등)까지 바뀐다. 지금은
+     *                `onlyMyProjects:false` 하나만 쓴다(js/62 — PM 선택 전 개발팀 전체를 봐야 한다).
      * ⚠️ 한 건씩 **차례로** 읽는다(한꺼번에 던지면 NAS 가 느려진다).
      * ⚠️ 실패는 삼키지 않는다 — `errs` 로 올려 화면이 드러내게 한다.
      */
-    window.dailyScanMyProjects = async function (tag, collect, onStep) {
+    window.dailyScanMyProjects = async function (tag, collect, onStep, opts) {
         var S = window.DAILY_SCAN || {};
+        var ov = opts || {};
+        var onlyMyProjects = (ov.onlyMyProjects != null) ? ov.onlyMyProjects : S.onlyMyProjects;
         var st = { results: [], total: 0, kept: 0, errs: [], entries: [] };
         // 🪪 ⚠️ 명단을 먼저 들인다. 없으면 `myNames()` 에 **계정id 하나**만 들어 있어서
         //    `iAmIn` 이 '박용훈' 같은 실명과 못 맞물리고 **모든 프로젝트를 건너뛴다**(실측:
@@ -757,7 +762,7 @@
             for (var i = 0; i < todo.length; i++) {
                 var p = todo[i];
                 try {
-                    var got = await scanProjectFile(p, tag, collect);
+                    var got = await scanProjectFile(p, tag, collect, onlyMyProjects);
                     if (!got || !got._skipped) {
                         st.kept++;
                         st.results.push(got);
@@ -786,8 +791,9 @@
      *     사고 다수). 그 옛 이름으로 바로 읽으면 404 → "내용을 읽지 못했습니다"로 조용히 빠진다.
      *     → id 로 지금 경로를 다시 풀어(`_storageRelOfId`, js/57·js/15b·js/66 과 같은 방법) 한 번 더
      *     시도한다. 그래도 없으면 **진짜** 못 읽은 것이다. */
-    async function scanProjectFile(entry, tag, collect) {
-        var key = tag + '|' + entry.file_name + '|' + (entry.updated_at || '');
+    async function scanProjectFile(entry, tag, collect, onlyMyProjectsOverride) {
+        var onlyMine = (onlyMyProjectsOverride != null) ? onlyMyProjectsOverride : (window.DAILY_SCAN || {}).onlyMyProjects;
+        var key = tag + '|' + entry.file_name + '|' + (entry.updated_at || '') + '|' + (onlyMine ? '1' : '0');
         if (_projCache[key]) return _projCache[key];
         var rel = (entry.team ? entry.team + '/' : '') + entry.file_name;
         var d = await window.nasAppFile.get(rel, { json: true });
@@ -800,7 +806,7 @@
         }
         if (!d || !Array.isArray(d.globalData)) throw new Error(T('내용을 읽지 못했습니다', 'unreadable'));
         // 🙋 내가 든 프로젝트인가 — 색인의 담당자 **또는** 그 파일의 역할별 담당자.
-        if ((window.DAILY_SCAN || {}).onlyMyProjects && !iAmIn(entry, d)) {
+        if (onlyMine && !iAmIn(entry, d)) {
             _projCache[key] = { _skipped: true };
             return _projCache[key];
         }
