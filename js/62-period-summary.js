@@ -215,14 +215,16 @@
         return '';
     }
 
-    // 🗂 내가 맡은 **다른** 프로젝트의 사실 — 뒤에서 모아 둔다(키는 기간).
-    var _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, loaded: false,
+    // 🗂 내 팀 **다른** 프로젝트의 사실 — 뒤에서 모아 둔다(키는 기간).
+    //    `entries` = 그 팀의 project_index 항목(team/assignee/file_name) — **사실이 0건인 프로젝트도**
+    //    PM·프로젝트 선택지에 보이게 하려고 따로 들고 있는다(아래 `_psCollectFacts` 참고).
+    var _psOther = { key: '', facts: [], scanned: 0, projects: [], entries: [], busy: false, loaded: false,
                      done: 0, total: 0, errs: [] };
     window._psOtherScan = _psOther;
 
     /** 🧹 사람이 바뀌면(js/64) 모아 둔 사실은 앞사람 기준이다 — 버린다. */
     window._psResetScan = function () {
-        _psOther = { key: '', facts: [], scanned: 0, projects: [], busy: false, loaded: false,
+        _psOther = { key: '', facts: [], scanned: 0, projects: [], entries: [], busy: false, loaded: false,
                      done: 0, total: 0, errs: [] };
         window._psOtherScan = _psOther;
     };
@@ -250,7 +252,7 @@
     window._psScan = function () {
         if (!P.scanProjects || typeof window.dailyScanMyProjects !== 'function') return;
         if (_psOther.busy || _psOther.loaded) return;
-        _psOther = { key: 'all', facts: [], scanned: 0, projects: [], busy: true, loaded: false,
+        _psOther = { key: 'all', facts: [], scanned: 0, projects: [], entries: [], busy: true, loaded: false,
                      done: 0, total: 0, errs: [] };
         window._psOtherScan = _psOther;
         var mine = _psOther;
@@ -270,6 +272,9 @@
             repaint();
         }, { onlyMyProjects: false }).then(function (r) {
             mine.errs = r.errs;
+            // 📁 [2026-11-11] project_index 항목(팀 전체) — **사실이 0건이어도** PM·프로젝트
+            //    선택지에 나와야 하니, 사실과 별도로 그대로 들고 있는다.
+            mine.entries = r.entries || [];
             mine.busy = false;
             mine.loaded = true;
             repaint();
@@ -309,17 +314,37 @@
         var scanned = here.scanned + other.scanned;
 
         var F = filt();
-        // 🔎 선택지는 **캐스케이딩**으로 만든다 — "개발3팀 > 프로젝트 담당자(PM) > 프로젝트" 흐름이라
-        //    PM 목록은 기간만 거른 전체에서(자유롭게 다른 PM으로 돌아갈 수 있어야 하니), 프로젝트
-        //    목록은 **그 PM 을 고른 뒤**에서, 보조 필터인 업무 담당자 목록은 **PM+프로젝트까지
-        //    고른 뒤**에서 만든다. 한 단계 위를 바꾸면 그 아래 선택은 toolbarHtml 에서 같이 지운다.
+        // 📁 [2026-11-11 신고 "담당자가 지금 접속한 나만 보인다 — 개발3팀 전부·프로젝트 전부가
+        //    보여야 한다"] PM·프로젝트 선택지는 **기간과 무관하게** 스캔한 개발팀 전체에서 만든다.
+        //    전엔 `all`(기간이 이미 적용된 사실)에서 뽑아서, 이번 주에 메일이 없는 프로젝트는
+        //    선택지에 아예 안 보였다(실제로 그 프로젝트엔 PM도 있고 업무도 있는데, 그 주에만
+        //    메일 유래 행이 0건이면 "없는 셈" 취급됐다). → 열린 프로젝트는 사실이 0건이어도
+        //    자기 자신을, 다른 프로젝트는 `_psOther.entries`(project_index, 팀 전체)의 pm/project
+        //    를 더한다 — **사실이 없어도** 선택할 수 있어야 그 프로젝트를 고른 뒤 "이 기간엔 없음"
+        //    을 보여줄 수 있다(실제 사실 목록 `out` 은 여전히 기간을 지킨다).
+        var projDir = {};   // project(파일명) → pm, 기간과 무관
+        if (openName) projDir[openName] = String((window.projectMeta || {}).프로젝트담당자 || '').trim();
+        (other.entries || []).forEach(function (e) {
+            var proj = String((e && e.file_name) || '').replace(/\.json$/i, '').trim();
+            if (proj && !(proj in projDir)) projDir[proj] = String((e && e.assignee) || '').trim();
+        });
+        // 보강 — index 에 아직 없거나(캐시 지연) 못 읽은 경우에도, 실제 사실에 찍힌 pm/project 로 채운다.
+        here.facts.concat(other.facts || []).forEach(function (f) {
+            if (f.project && !(f.project in projDir)) projDir[f.project] = f.pm || '';
+        });
+
         var pms = {};
-        all.forEach(function (f) { if (f.pm) pms[f.pm] = 1; });
+        Object.keys(projDir).forEach(function (p) { if (projDir[p]) pms[projDir[p]] = 1; });
 
-        var afterPm = all.filter(function (f) { return !F.pm || String(f.pm || '') === F.pm; });
+        // 프로젝트 선택지는 PM 을 고르면 그 PM 소속으로 좁힌다(캐스케이딩) — 역시 기간과 무관.
         var projs = {};
-        afterPm.forEach(function (f) { if (f.project) projs[f.project] = 1; });
+        Object.keys(projDir).forEach(function (p) {
+            if (F.pm && projDir[p] !== F.pm) return;
+            projs[p] = 1;
+        });
 
+        // 👷 업무 담당자(보조)는 여전히 **기간이 적용된** 사실(`all`)에서, PM·프로젝트까지 거른 뒤 만든다.
+        var afterPm = all.filter(function (f) { return !F.pm || String(f.pm || '') === F.pm; });
         var afterProj = afterPm.filter(function (f) { return !F.proj || String(f.project || '') === F.proj; });
         var people = {};
         afterProj.forEach(function (f) {

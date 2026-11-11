@@ -10,7 +10,11 @@
     var P = window.PERIOD_SUMMARY;
     if (!P || !window._psCollectFacts) { console.error('js/62 미로드'); return; }
     var keep = { gd: window.globalData, ci: window.colIdx, pm: window.projectMeta, call: window.callAiBackend, key: window.getActiveAiKey, mode: localStorage.getItem(P.modeKey), hist: window._ganttQaHistory,
-                 filt: localStorage.getItem(P.filterKey), scan: P.scanProjects };
+                 filt: localStorage.getItem(P.filterKey), scan: P.scanProjects, fileName: window.currentDriveFileName };
+    // ⚠️ 열린 프로젝트 이름을 픽스처 값으로 — 비워 두면(실제로 열린 프로젝트가 없을 때) 로컬
+    //    사실의 `project` 가 '' 가 되어 PM 선택지 보강 로직(_psCollectFacts 의 projDir)이
+    //    그 사실을 못 줍는다. 실제 앱에선 프로젝트를 열면 항상 값이 있으므로 그 상태를 흉내낸다.
+    window.currentDriveFileName = 'LOCAL_TEST_PROJ';
     // ⚠️ 다른 프로젝트 훑기는 **끈다** — 이 하네스는 픽스처만 본다(NAS 가 섞이면 숫자가 흔들린다).
     P.scanProjects = false;
     // ⚠️ 끄는 것만으로는 **이미 모아 둔 사실**이 안 사라진다 — 진짜 NAS 데이터가
@@ -224,6 +228,17 @@
         window._psSetFilter({ pm: '' });
         var cPmAll = window._psCollectFacts('month');
         ok('PM 필터를 풀면 다시 둘 다 보인다', cPmAll.projects.indexOf('OTHER_PROJ') >= 0, JSON.stringify(cPmAll.projects));
+
+        // ⚠️⚠️ [2026-11-11 2차 신고] "담당자가 지금 접속한 나만 보인다 — 개발3팀 전부가 보여야 한다"
+        //    — 원인은 PM·프로젝트 선택지를 **기간이 적용된 사실**에서 뽑은 것이었다. 이번 달(기간)엔
+        //    메일이 **한 건도 없는** 팀 프로젝트(`QUIET_PROJ`, PM='조용한피엠')를 project_index
+        //    항목(`entries`)에만 심어 두고, 그래도 선택지에 나오는지 확인한다.
+        window._psOtherScan.entries = [{ file_name: 'QUIET_PROJ.json', team: '개발3팀', assignee: '조용한피엠' }];
+        var cQuiet = window._psCollectFacts('month');
+        ok('이번 기간에 사실이 0건인 프로젝트도 PM 선택지에 보인다', cQuiet.pms.indexOf('조용한피엠') >= 0, JSON.stringify(cQuiet.pms));
+        ok('그 프로젝트도 프로젝트 선택지에 보인다', cQuiet.projects.indexOf('QUIET_PROJ') >= 0, JSON.stringify(cQuiet.projects));
+        ok('하지만 사실 목록엔 안 들어온다(0건이니까)', !cQuiet.facts.some(function (f) { return f.project === 'QUIET_PROJ'; }));
+        window._psOtherScan.entries = [];
         window._psSetFilter({ pm: '', who: '', proj: '' });
 
         // ⚠️ 훑는 중엔 "없습니다" 라고 하면 안 된다 — 없는 것과 아직 못 읽은 것이 구분이 안 된다.
@@ -247,6 +262,7 @@
 
     } finally {
         window.globalData = keep.gd; window.colIdx = keep.ci; window.projectMeta = keep.pm; window.callAiBackend = keep.call; window.getActiveAiKey = keep.key; window._ganttQaHistory = keep.hist || [];
+        window.currentDriveFileName = keep.fileName;
         if (keep.mode == null) localStorage.removeItem(P.modeKey); else localStorage.setItem(P.modeKey, keep.mode);
         if (keep.filt == null) localStorage.removeItem(P.filterKey); else localStorage.setItem(P.filterKey, keep.filt);
         P.scanProjects = keep.scan;
