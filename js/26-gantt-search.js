@@ -84,7 +84,7 @@
         if (lbl) lbl.style.color = c.text;
         var countEl = document.getElementById('gantt-ai-search-count');
         if (countEl) countEl.style.color = c.text;
-        ['gantt-search-prev', 'gantt-search-next', 'gantt-ai-search-clear'].forEach(function(id) {
+        ['gantt-search-now', 'gantt-search-prev', 'gantt-search-next', 'gantt-ai-search-clear'].forEach(function(id) {
             var btn = document.getElementById(id);
             if (!btn) return;
             btn.style.background = c.btnBg;
@@ -124,6 +124,11 @@
                 : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
             '  style="flex:1;min-width:200px;padding:4px 10px;border-radius:6px;border:1px solid ' + c.inputBorder + ';' +
             '  font-size:13px;outline:none;background:#fff;color:' + c.text + ';">' +
+            // 🐢 [2026-11-11 요청] "타이핑할 때마다 바로 필터링되어 글 작성이 느려진다 — 딜레이를
+            //    넣거나 검색 버튼을 두자" — 둘 다 넣는다. 타이핑 중엔 디바운스(아래, 500ms)로 덜
+            //    자주 돌고, 급하면 이 버튼이나 Enter 로 그 자리에서 바로 적용한다.
+            '<button id="gantt-search-now" title="' + (_en ? 'Search now (Enter)' : '지금 검색 (Enter)') + '"' +
+            '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">🔍</button>' +
             '<button id="gantt-search-prev" title="' + (_en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)') + '"' +
             '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↑</button>' +
             '<button id="gantt-search-next" title="' + (_en ? 'Next result (Enter)' : '다음 결과 (Enter)') + '"' +
@@ -138,21 +143,31 @@
         container.insertBefore(bar, container.firstChild);
 
         var inp = document.getElementById('gantt-ai-search-input');
+        // 🐢 타이핑 중엔 이 디바운스 지난 뒤에야 _applySearch 가 돈다(행이 많은 프로젝트에선 그
+        //    한 번도 적지 않은 DOM 작업이라, 150ms 는 빠른 타이핑에선 거의 매 글자마다 돌았다).
+        //    `_debounceTimer` 를 "아직 반영 안 된 입력이 있다"는 신호로도 쓴다(Enter/버튼이 본다).
+        var LIVE_SEARCH_DELAY_MS = 500;
+        var runNow = function () {
+            clearTimeout(_debounceTimer); _debounceTimer = null;
+            _applySearch();
+        };
         inp.addEventListener('input', function() {
             _query = this.value.trim();
             _selected.clear();
             _navIndex = -1;
             clearTimeout(_debounceTimer);
-            _debounceTimer = setTimeout(_applySearch, 150);
+            _debounceTimer = setTimeout(function () { _debounceTimer = null; _applySearch(); }, LIVE_SEARCH_DELAY_MS);
         });
         inp.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                if (_debounceTimer) { runNow(); return; }   // 아직 안 돈 입력 — 지금 바로 적용(이미 첫 결과로 이동됨)
                 if (e.shiftKey) _navGo(-1); else _navGo(1);
             }
             // 검색창 포커스 상태에서도 ↑/↓로 결과 이동 — 전역 핸들러와 중복 방지를 위해
             // 전역 핸들러가 isSearchInput 분기로 처리하므로 여기선 따로 처리하지 않음
         });
+        document.getElementById('gantt-search-now').addEventListener('click', runNow);
         document.getElementById('gantt-search-prev').addEventListener('click', function() { _navGo(-1); });
         document.getElementById('gantt-search-next').addEventListener('click', function() { _navGo(1); });
         document.getElementById('gantt-ai-search-filtermode').addEventListener('change', function() {
@@ -213,6 +228,8 @@
         if (inp) inp.placeholder = _en
             ? 'Name·task·content·mail snippet  /  @project  /  #ai (all AI-registered)'
             : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)';
+        var nowBtn = document.getElementById('gantt-search-now');
+        if (nowBtn) nowBtn.title = _en ? 'Search now (Enter)' : '지금 검색 (Enter)';
         var prevBtn = document.getElementById('gantt-search-prev');
         if (prevBtn) prevBtn.title = _en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)';
         var nextBtn = document.getElementById('gantt-search-next');
