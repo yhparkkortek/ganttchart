@@ -588,6 +588,11 @@
                 todo: oneLine(p.todo, 120),
                 issue: p.issue ? oneLine(p.issue, 120) : '',
                 isMail: p.isMail,
+                // 📧 [2026-11-11 요청] "원문보기·아웃룩으로 열기" 를 이 보고에도 상속 —
+                //    `row._mailRaw` 는 간트 어디서나 `showMailRawModal()` 하나로 여는 그 모양
+                //    그대로(subject/sender/date/body2000/bodyRef/fileName), js/54 가 이미 2,000자로
+                //    줄여 둔 버전이라 여기 담아도 새로 커지지 않는다. 그대로 넘긴다 — 흉내내지 않는다.
+                mailRaw: row._mailRaw || null,
                 // 🔴 '지연' 판정은 `_ganttIsOverdue`(js/04a) 한 곳에서 — 메일 행은 안 센다.
                 late: (typeof window._ganttIsOverdue === 'function')
                     ? window._ganttIsOverdue(row, ci, day)
@@ -1098,7 +1103,11 @@
             return '<div onclick="window._dailyAdd(' + i + ')" style="cursor:pointer; padding:5px 7px; border:1px solid #eee; border-radius:5px; margin-bottom:4px; background:#fafbfc;" ' +
                    'onmouseover="this.style.background=\'#eef6f7\';" onmouseout="this.style.background=\'#fafbfc\';">' +
                    '<div style="font-size:12px; font-weight:bold; color:#2c5f8a;">+ ' + catBadge(c.cat) + esc(c.name) +
-                     (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '') +
+                     (c.mailRaw
+                       ? ' <span onclick="event.stopPropagation(); window._dailyCandShowMailRaw(' + i + ')" title="' +
+                           esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) +
+                           '" style="cursor:pointer; text-decoration:underline dotted;">📧</span>'
+                       : (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '')) +
                      (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '') +
                      // 📒 어느 프로젝트 것인지 — **언제나** 적는다.
                      //    ⚠️ [2026-11-09 신고 "아래 정보는 뭐야?"] 예전엔 열린 프로젝트면 생략했는데,
@@ -1171,6 +1180,12 @@
                        catSelect(i, it.cat) +
                        '<span style="font-size:12.5px; font-weight:bold; color:#222;">' + esc(it.name) + '</span>' +
                        (it.project ? '<span style="color:#888; font-size:11px;">(' + esc(String(it.project).replace(/\.json$/i, '')) + ')</span>' : '') +
+                       (it.mailRaw
+                         ? '<button onclick="window._dailyShowMailRaw(' + i + ')" title="' +
+                             esc(T('메일 원문 보기 · 아웃룩으로 열기', 'View mail source · Open in Outlook')) +
+                             '" style="padding:1px 7px; border:1px solid #ffe08a; background:#fff8e6; color:#7a5210; border-radius:4px; font-size:10.5px; cursor:pointer;">📧 ' +
+                             esc(T('원문보기', 'Source')) + '</button>'
+                         : '') +
                      '</div>' +
                      fields +
                      filesHtml(it.name, true) +
@@ -1262,8 +1277,19 @@
         var c = (window._dailyCand || [])[i];
         if (!c) return;
         _doc.items.push({ name: c.name, project: c.project, cat: c.cat || '',
-                          note: c.todo || '', fromMail: !!c.isMail, rowIdx: c.idx });
+                          note: c.todo || '', fromMail: !!c.isMail, rowIdx: c.idx,
+                          mailRaw: c.mailRaw || null });
         saveDraftLocal(); render();
+    };
+    // 📧 [2026-11-11] 간트 다른 곳과 똑같이 `showMailRawModal()` 하나만 부른다 — 이 모달 전용
+    //    팝업을 새로 만들지 않는다(그래야 "아웃룩으로 열기"도 그대로 딸려 온다).
+    window._dailyShowMailRaw = function (i) {
+        var it = _doc.items[i];
+        if (it && it.mailRaw && window.showMailRawModal) window.showMailRawModal(it.mailRaw);
+    };
+    window._dailyCandShowMailRaw = function (i) {
+        var c = (window._dailyCand || [])[i];
+        if (c && c.mailRaw && window.showMailRawModal) window.showMailRawModal(c.mailRaw);
     };
     window._dailyAddManual = function () {
         var el = document.getElementById('daily-manual');
