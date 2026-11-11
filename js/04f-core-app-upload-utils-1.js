@@ -802,6 +802,14 @@
         const aiSummaryPrintArea = document.getElementById('ai-summary-print-area');
         if (aiSummaryPrintArea) aiSummaryPrintArea.innerHTML = '';
         document.body.classList.remove('ai-summary-printing-mode');
+
+        // 🐛 [2026-11-11] printAiProjectSummary가 인쇄 동안 숨겨 둔 모달을 되돌린다
+        //    (흐린 배경에 모달이 겹쳐 보이던 버그 대응 — window.printAiProjectSummary 참고)
+        const aiSummaryModal = document.getElementById('ai-summary-modal');
+        if (aiSummaryModal && aiSummaryModal.dataset.hiddenForPrint) {
+            aiSummaryModal.style.display = 'block';
+            delete aiSummaryModal.dataset.hiddenForPrint;
+        }
     };
     window.addEventListener('afterprint', function() {
         setTimeout(window._clearPrintingModeClasses, 1000);

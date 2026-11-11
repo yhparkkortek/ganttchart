@@ -408,6 +408,15 @@
             <h2 style="margin:0 0 4px; color:#2c5f8a;">🤖 AI 요약 — ${escapeHtml(title)}</h2>
             <div>${content.innerHTML}</div>
         </div>`;
+        // 🐛 [2026-11-11] @media print 규칙은 "인쇄될 내용"에만 적용돼 미리보기 대화상자 뒤
+        //    흐려진 실제 화면(screen 렌더링)엔 안 먹는다 — 모달을 열어 둔 채 인쇄하면 그 뒤
+        //    흐린 배경에 모달이 그대로(화면 상태 그대로) 겹쳐 보인다. 인쇄 동안만 모달 자체를
+        //    숨기고(_clearPrintingModeClasses에서 되돌림) 흐린 배경엔 원래 Gantt 화면만 보이게 한다.
+        const modal = document.getElementById('ai-summary-modal');
+        if (modal && modal.style.display !== 'none') {
+            modal.dataset.hiddenForPrint = '1';
+            modal.style.display = 'none';
+        }
         document.body.classList.add('ai-summary-printing-mode');
         window.print();
     };
