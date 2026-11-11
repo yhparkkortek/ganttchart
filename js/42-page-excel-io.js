@@ -1085,6 +1085,14 @@
             // "ADDRESS/LNW_STELLAR32_32.0" 같은 쓸모없는 폴더가 프로젝트 수만큼 생김). 폴더
             // 하나만 돌려줘 그 기본 분기를 건너뛴다.
             nasFolders: function () { return [{ f: 'ADDRESS', label: '📁 ADDRESS' }]; },
+            // 🏢 [2026-11-11 2차 요청] "불러오기 버튼이 2개라 헷갈린다 — NAS 왼쪽 걸로 하나만
+            //    남기자" — Address 탭 머리글에 따로 달아 뒀던 그룹웨어 불러오기 버튼을 지우고,
+            //    이 표준 "📂 불러오기" 버튼(원래는 엑셀 재불러오기) 자리를 그대로 쓰되 동작만
+            //    그룹웨어 불러오기로 바꾼다. `importFn`/`importTitle` 은 이 페이지만의 예외라
+            //    `_pxRenderButtons` 가 있으면 쓰고 없으면(다른 모든 페이지는) 전처럼 엑셀 재불러오기.
+            importFn: 'importAddressFromGroupware',
+            importTitle: ['그룹웨어 주소록을 불러옵니다(실패 시 NAS 공유 주소록으로 대신 불러옵니다).',
+                          'Loads the groupware directory (falls back to the shared NAS address book on failure).'],
             repaint: ['renderAddressTable'],
             blocks: [{ sheet: 'Address', kind: 'rows',
                 get: function () { return _td().addressBook || []; },
@@ -1868,6 +1876,15 @@
         btn.addEventListener('dragleave', function (e) { stop(e); cool(); });
         btn.addEventListener('drop', function (e) {
             stop(e); cool();
+            // 🏢 [2026-11-11] `importFn` 을 쓰는 페이지(Address Book)는 이 버튼이 더 이상 엑셀
+            //    재불러오기가 아니다 — ⚠️ 그래도 `stop(e)` 는 반드시 위에서 먼저 한다(안 하면
+            //    js/04f 의 전역 drop 이 "프로젝트 전체를 엑셀로 덮어쓰기"로 이어받는다, 위 주석).
+            var _sp0 = _specById(id);
+            if (_sp0 && _sp0.importFn) {
+                _toast(_t('이 버튼은 파일을 끌어다 놓는 자리가 아닙니다 — 눌러서 불러오거나, 📁 NAS 버튼을 이용해주세요.',
+                          'Dropping a file here does nothing — click to import, or use the 📁 NAS button instead.'), 'info', 6000);
+                return;
+            }
             var files = (e.dataTransfer && e.dataTransfer.files) || [];
             // 무엇을 떨구든 받는다 — 규격 엑셀이 아니면 AI 가 읽어서 매핑하고,
             // 아예 글자를 못 뽑는 종류면 **왜 안 되는지**를 알려 준다(조용히 무시하지 않는다).
@@ -1955,9 +1972,13 @@
                   + _t('엑셀 저장', 'Save') + '</button>')
                 + (spec.exportOnly ? '' :
                     (_hasExport ? SEP : '')
-                  + '<button id="px-import-' + spec.id + '" onclick="window.pageExcelImportPick(\'' + spec.id + '\')" title="'
-                  + _esc(_t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다.\n이 버튼 위로 엑셀 파일을 끌어다 놓아도 됩니다.',
-                            'Load an edited Excel file — replaces current content; you can undo right after.\nYou can also drop an Excel file onto this button.'))
+                  // 🏢 [2026-11-11] 이 버튼은 기본적으로 "엑셀 재불러오기"지만, `spec.importFn` 을
+                  //    준 페이지(지금은 Address Book 하나)는 그 함수를 대신 부른다 — 중복으로
+                  //    따로 달아 뒀던 버튼(그룹웨어 불러오기)을 지우고 이 표준 자리 하나로 모은다.
+                  + '<button id="px-import-' + spec.id + '" onclick="' + (spec.importFn ? ('window.' + spec.importFn + '()') : ('window.pageExcelImportPick(\'' + spec.id + '\')')) + '" title="'
+                  + _esc(spec.importTitle ? _t(spec.importTitle[0], spec.importTitle[1])
+                        : _t('엑셀에서 수정한 내용을 다시 불러옵니다 — 현재 내용은 통째로 교체되며, 바로 되돌릴 수 있습니다.\n이 버튼 위로 엑셀 파일을 끌어다 놓아도 됩니다.',
+                             'Load an edited Excel file — replaces current content; you can undo right after.\nYou can also drop an Excel file onto this button.'))
                   + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
                   + ' style="' + BTN + ' margin-right:4px;">📂 ' + _t('불러오기', 'Load') + '</button>'
                   // 📁 [2026-10-22] 같은 불러오기인데 출처가 **사내 공유**인 경우. 내 PC에 받아둘
