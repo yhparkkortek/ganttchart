@@ -638,21 +638,34 @@
     //  같은 방식 — 이 파일만 빼면 예전 동작으로 돌아간다). 복사본을 만들지 않는다 — 두 화면이
     //  **같은 저장소**(tabData.jiraLinksByUnit[unitId].projectKey)를 그대로 읽고 쓰므로
     //  "동기화"할 코드 자체가 없다(한쪽에서 바꾸면 다른 쪽은 다음에 그릴 때 그 값을 본다).
+    // ⚠️⚠️ [2026-11-11 사용자 정정] 첫 시도는 JIRA 코드를 **새 줄**로 맨 아래에 붙였는데,
+    //  사용자가 원한 건 "프로젝트 코드" 자리를 **같은 줄에서** 4칸 → 6칸으로 늘려 그 옆에
+    //  넣는 것이었다(첨부 스크린샷 — 고객모델명·프로젝트코드 다음 칸에 JIRA 코드가 나란히).
+    //  그래서 끝에 덧붙이지 않고, 프로젝트 코드 칸 **바로 뒤·프로젝트 명칭 칸 바로 앞**에
+    //  끼워 넣고 그리드를 4열→6열로 늘린다. 원본(js/22g) 문자열이 바뀌면(다른 버전) 그
+    //  이정표를 못 찾을 수 있으니, 그때는 예전처럼 맨 끝에 붙이는 것으로 안전하게 물러난다.
     (function () {
         var orig = window._renderModelCardHtml;
         if (typeof orig !== 'function' || orig.__jiraWrapped) return;
+        var GRID4 = 'grid-template-columns:140px 1fr 140px 1fr; padding:10px 12px;';
+        var GRID6 = 'grid-template-columns:140px 1fr 140px 1fr 110px 1fr; padding:10px 12px;';
+        var LBL = '<label style="font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; background:#fff; white-space:nowrap;">';
+        var PROJNAME_ANCHOR = LBL + '프로젝트 명칭</label>';
         var fn = function (model, idx) {
             var html = orig(model, idx);
             var unit = model.unitId || '';
             var store = (window.tabData && window.tabData.jiraLinksByUnit) || {};
             var val = (store[unit] && store[unit].projectKey) || '';
-            var _lbl = '<label style="font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; background:#fff; white-space:nowrap;">';
-            var field = _lbl + '🪐 ' + T('JIRA 코드', 'JIRA code') + '</label>'
+            var field = LBL + '🪐 ' + T('JIRA 코드', 'JIRA code') + '</label>'
                 + '<input type="text" class="u-input" data-jira-field="projectKey"'
                 + ' title="' + esc(T('이 모델과 연결할 JIRA 프로젝트 코드 — JIRA 탭에서 찾아 저장할 수도 있습니다', 'JIRA project code linked to this model — can also be set from the JIRA tab')) + '"'
                 + ' placeholder="' + T('예: GABKJ', 'e.g. GABKJ') + '" value="' + esc(val) + '">';
-            var tail = '</div></div>';
-            if (html.slice(-tail.length) === tail) html = html.slice(0, -tail.length) + field + tail;
+            if (html.indexOf(GRID4) !== -1 && html.indexOf(PROJNAME_ANCHOR) !== -1) {
+                html = html.replace(GRID4, GRID6).replace(PROJNAME_ANCHOR, field + PROJNAME_ANCHOR);
+            } else {
+                var tail = '</div></div>';
+                if (html.slice(-tail.length) === tail) html = html.slice(0, -tail.length) + field + tail;
+            }
             return html;
         };
         fn.__jiraWrapped = true;
