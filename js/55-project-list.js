@@ -1839,7 +1839,7 @@
     //    · PyMuPDF(내가 검증할 때 쓴 것) : **한 줄 = 표의 한 칸**.
     //    처음엔 PyMuPDF 모양만 보고 규칙을 짜서, 앱에서는 표가 통째로 뭉개져 보였다.
     //    그래서 **줄-행 모양을 먼저 시도하고**, 안 나오면 칸-줄 모양으로 떨어진다.
-    var _VENDORS = ['TOVIS', 'KORTEK', 'AUO', 'BOE', 'INNOLUX', 'AXIOMTEK', 'LGD', 'TXD', 'INX'];
+    var _VENDORS = ['TOVIS', 'KORTEK', 'AUO', 'BOE', 'INNOLUX', 'AXIOMTEK', 'LGD', 'LG', 'TXD', 'INX'];
     var _DATE_RE = /(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{1,2}\s*-\s*[A-Z]{3}\s*-\s*\d{2,4}|\d{1,2}\s+[A-Z]{3}\s+\d{2,4})/i;
     var _HEAD_RE = /^(REV\.?\s+DESCRIPTION|DRAWN\s*BY|REVISIONS?|DATE|BY\s*\/?\s*DATE)\b/i;
     var _REVCELL_RE = /^[A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?\s+\S/;
@@ -1917,12 +1917,126 @@
             if (vi < 0) continue;
             var cols = (vi === 2) ? A : (vi === 1 ? B : (vi === 0 ? C : null));
             if (!cols) continue;
+            // ⚠️⚠️ [2026-11-11] 토큰이 양식이 요구하는 칸 수보다 **적은** 행(실측 "1570704_H":
+            // MODEL 칸이 빠진 행 4/8건)을 그대로 slice 하면 뒤 칸이 전부 한 칸씩 당겨져 틀린
+            // 값이 엉뚱한 열에 들어간다 — 모자라면 그 행은 아예 버린다(틀리게 채우지 않는다).
+            if (toks.length < cols.length - 1) continue;
             if (!headers) headers = cols;
             if (headers !== cols) continue;                       // 한 도면에 양식이 섞이진 않는다
             rows.push([m[1].replace(/\s*-\s*/, '-')].concat(toks.slice(0, cols.length - 1)));
             if (rows.length > 40) break;
         }
-        return rows.length ? { headers: headers, rows: rows } : null;
+        if (rows.length) return { headers: headers, rows: rows };
+        return _matGeneric(L);
+    };
+
+    // ⚠️⚠️⚠️ [2026-11-11 3차] A/B/C 전부 "REV 뒤 몇 번째 토큰이 VENDOR인가"가 **문서마다 고정된
+    //    상수**라고 가정한다 — 그런데 실측(1571018·1590937·1629124)으로 보면 PART NUMBER 가 먼저
+    //    오는 문서는 그 사이 DESCRIPTION 이 "18.5\" TOP DISPLAY"(3칸)·"ASY, MONITOR TOP, VJ-1"
+    //    (4칸)·"ASY, TOPBOX FACADE, L7, CS-1"(5칸)처럼 **문서마다 글자 수가 다른 자유 문장**이라
+    //    고정 위치로는 절대 못 묶는다. 게다가 PANEL 칸도 "AUO G185HAN01.1"처럼 **그 칸만** 브랜드+
+    //    모델 두 토막일 수 있다(터치 조립 벤더와 패널 벤더가 다를 때만, 1570705 류는 벤더가 하나라
+    //    한 토막).
+    //    → 칸 수를 미리 정하지 않고 **VENDOR 이름 자체를 이정표로 그때그때 찾는다**:
+    //      토큰0=PART NUMBER · 토큰1~(첫 VENDOR 전)=DESCRIPTION(통째로 합친다) · 그 VENDOR=VENDOR ·
+    //      그 뒤에 **두 번째 VENDOR 이름**이 또 나오면 거기서부터 두 토막을 PANEL(브랜드+모델)로
+    //      묶고, 둘 사이는 칸 하나씩(TOUCH 관련 등 문서마다 다른 몇 개), 두 번째 VENDOR가 없으면
+    //      그 뒤 전부 칸 하나씩. 이러면 DESCRIPTION 글자 수·중간 칸 개수가 달라도 안 깨진다.
+    // ⚠️⚠️ [2026-11-11 4차] 리비전 변경내용 문장도 "F UPDATE PANEL TO BOE WITH …"처럼 REV 글자로
+    //    시작하고 문장 속에 VENDOR 이름이 우연히 섞여 **오인식될 수 있다**(실측 1571018). 진짜
+    //    DESCRIPTION("18.5\" TOP DISPLAY" 등)은 흔한 연결어(AND/OR/TO/THE/WITH…)를 안 쓰므로,
+    //    그 사이에 연결어가 보이면 그 줄은 행이 아니라 문장으로 보고 버린다.
+    //    ⚠️ 꼬리 칸에도 법적 문구가 **같은 줄로 바로 붙는다**(1629124) — 연결어를 만나면 그 자리에서
+    //    자른다(그 뒤는 버림). 둘 다 안 하면 양식 일치 검사가 법적 문구 길이 차이 때문에 깨진다.
+    var _GEN_STOP = /^(AND|OR|TO|THE|WITH|FOR|FROM|THIS|THAT|SHALL|IS|ARE|OF|IN|ALL|NOT|BE)[,.]?$/i;
+    // ⚠️ 꼬리 칸 잘라내기는 **낱말 금지어 목록**으로 못 한다 — 법적 문구 낱말이 너무 많다
+    // (PROTECTION·UNDER·STATE·FEDERAL·COUNTRY·REGIONAL… 실측 전부 다른 낱말). 대신 **모양**으로
+    // 본다: 진짜 칸 값(V1.0·VILW750LP03·N/A)은 숫자나 슬래시가 섞여 있거나 'N/A' 자체고,
+    // 법적 문구는 **순수 알파벳 낱말이 연달아** 나온다 — 그 연속 쌍이 보이면 거기서부터 버린다.
+    // 꼬리 끝에 혼자 남는 한 글자(도면 용지 크기 "D"·"F" 등 제목란 글자)도 떼어 낸다.
+    var _looksLikeProseWord = function (t) {
+        var bare = t.replace(/[,.:;]$/, '');
+        return bare.length > 1 && /^[A-Za-z]+$/.test(bare) && bare.toUpperCase() !== 'N/A';
+    };
+    var _truncAtProse = function (arr) {
+        var out = arr;
+        for (var x = 0; x + 1 < arr.length; x++) {
+            if (_looksLikeProseWord(arr[x]) && _looksLikeProseWord(arr[x + 1])) { out = arr.slice(0, x); break; }
+        }
+        if (out.length && /^[A-Z]$/.test(out[out.length - 1])) out = out.slice(0, -1);   // 혼자 남은 용지크기 글자
+        return out;
+    };
+    var _matGeneric = function (L) {
+        var rows = [], shape = null, midCount = 0, hasPanel2 = false;
+        for (var i = 0; i < L.length; i++) {
+            var m = L[i].match(/^([A-Z]\d*(?:\.\d+)?(?:\s*-\s*[A-Z]\d*(?:\.\d+)?)?)\s+(.*)$/);
+            if (!m) continue;
+            var toks = m[2].split(/\s+/);
+            if (toks.length < 4) continue;
+            // ⚠️ "10. DIMENSIONING: ALT1 KORTEK …"(NOTES 목록 10번) 같은 줄도 REV+VENDOR 모양을
+            // 흉내 낸다(실측 1644741) — 진짜 PART NUMBER 는 전부 6~7자리 숫자라 "10." 처럼
+            // 짧은 목록 번호는 버린다.
+            if (/^\d{1,2}\.?$/.test(toks[0])) continue;
+            var vi1 = -1;
+            for (var k = 1; k < toks.length; k++) {
+                if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { vi1 = k; break; }
+            }
+            if (vi1 < 1) continue;
+            // ⚠️⚠️ [2026-11-11 5차] "E RELEASE TOVIS VERSION ASSEMBLY. V.BERNARD 7/29/2026" 처럼
+            //    REVISIONS 표의 변경내용 한 줄도 REV 로 시작하고 VENDOR 이름이 우연히 섞인다
+            //    (실측 1622777). DESCRIPTION 이 아예 없거나(vi1===1) 줄 안에 날짜가 있으면
+            //    그건 리비전 기록이지 매트릭스 행이 아니다.
+            if (vi1 < 2 || _DATE_RE.test(m[2])) continue;
+            var descToks = toks.slice(1, vi1);
+            if (descToks.some(function (t) { return _GEN_STOP.test(t); })) continue;  // 문장 오인식
+            var vi2 = -1;
+            for (var k2 = vi1 + 1; k2 < toks.length; k2++) {
+                if (_VENDORS.indexOf(toks[k2].toUpperCase()) !== -1) { vi2 = k2; break; }
+            }
+            var desc = descToks.join(' ');
+            var cells, curMid, curPanel2;
+            if (vi2 > vi1 && vi2 + 1 < toks.length) {
+                var midToks = _truncAtProse(toks.slice(vi1 + 1, vi2));
+                if (midToks.length !== vi2 - vi1 - 1) continue;    // 중간 칸에서 잘렸으면 이 줄은 버린다
+                var tail2 = _truncAtProse(toks.slice(vi2 + 2));
+                var panel = toks.slice(vi2, vi2 + 2).join(' ');
+                curPanel2 = true;
+                curMid = midToks.length;
+                cells = [toks[0], desc, toks[vi1]].concat(midToks, [panel], tail2);
+            } else {
+                var tail1 = _truncAtProse(toks.slice(vi1 + 1));
+                curPanel2 = false;
+                curMid = tail1.length;
+                cells = [toks[0], desc, toks[vi1]].concat(tail1);
+            }
+            var curShape = cells.length + ':' + (curPanel2 ? 1 : 0);
+            if (!shape) { shape = curShape; midCount = curMid; hasPanel2 = curPanel2; }
+            if (curShape !== shape) continue;      // 양식이 안 맞는 줄(법적 문구 등 오인식)은 버린다
+            rows.push([m[1].replace(/\s*-\s*/, '-')].concat(cells));
+            if (rows.length > 40) break;
+        }
+        // ⚠️ [2026-11-11] "최소 2줄" 로 두었다가 실측 1629124(이 표가 진짜 1행뿐)까지 버렸다 —
+        //    문장 오인식은 위 descToks 검사(흔한 연결어)가 이미 걸러 주므로 1행도 받는다.
+        if (!rows.length) return null;
+        return { headers: _matGenericHeaders(L, midCount, hasPanel2, rows[0].length), rows: rows };
+    };
+
+    /** _matGeneric 용 머리글 이름 — PART NUMBER/DESCRIPTION/VENDOR(앞 3칸)·PANEL(둘째 VENDOR 있으면)은
+     *  구조로 이미 안다. 가운데 칸 이름은 흩어진 머리글 줄 속 글자가 **어느 칸 것인지 확신할 수
+     *  없어**(실측: "VIDEO F/W" 가 가운데 칸으로 잘못 끌려와 칸이 모자랐다 — 1590937) 그냥
+     *  "항목 n"으로 둔다 — **칸 수가 실제 값과 맞는 것**이 이름이 예쁜 것보다 훨씬 중요하다.
+     *  단 "VIDEO F/W" 는 세 문서 전부(1570705·1571018·1590937·1629124) **마지막 칸**이었으므로
+     *  그 이름이 문서에 있으면 마지막 칸에만 붙인다. */
+    var _matGenericHeaders = function (L, midCount, hasPanel2, totalCells) {
+        var hasVideoFw = L.join(' ').toUpperCase().indexOf('VIDEO F/W') >= 0;
+        var headers = ['REVISION', 'PART NUMBER', 'DESCRIPTION', 'VENDOR'];
+        for (var i = 0; i < midCount; i++) headers.push('항목' + (i + 1));
+        if (hasPanel2) headers.push('PANEL');
+        var tailLen = Math.max(0, totalCells - headers.length);
+        for (var j = 0; j < tailLen; j++) {
+            headers.push((j === tailLen - 1 && hasVideoFw) ? 'VIDEO F/W' : ('항목' + (midCount + j + 1)));
+        }
+        return headers;
     };
 
     /** ① REVISIONS 표 → [{rev, desc, by, date}] (도면에 적힌 순서 그대로)
