@@ -360,17 +360,14 @@
             if (contentVal && String(contentVal).toLowerCase().includes(kwL)) return true;
         }
 
-        // ── 모델명 (colIdx.model) ──
-        if (typeof colIdx !== 'undefined' && colIdx.model !== -1) {
-            var modelVal = row[colIdx.model];
-            if (modelVal && String(modelVal).toLowerCase().includes(kwL)) return true;
-        }
-
-        // ── 고객사 (colIdx.customer) ──
-        if (typeof colIdx !== 'undefined' && colIdx.customer !== -1) {
-            var customerVal = row[colIdx.customer];
-            if (customerVal && String(customerVal).toLowerCase().includes(kwL)) return true;
-        }
+        // ⚠️⚠️ [2026-11-11 신고] "비매칭 숨기기 — 숨길 대상을 잘못 보고 있다" — 한 프로젝트 안에서
+        //    고객사/모델명(colIdx.customer/model)은 **프로젝트 전체에 걸쳐 같은 값**이다(숨은 열,
+        //    js/14a 가 "아무 행에서나" 읽어 그 프로젝트의 고객사/모델명으로 쓰는 것도 그래서다).
+        //    그래서 검색어가 그 값의 일부와 겹치면(예: LNW_STELLAR32 프로젝트의 모델명이
+        //    "STELLAR32/OBSIDIAN" 처럼 자매 제품과 함께 적혀 있을 때 "OBSIDIAN" 으로 검색)
+        //    **그 프로젝트의 리프 행 전부**가 매칭돼 버린다 — "비매칭 숨기기"가 사실상 아무것도
+        //    못 숨기는 것으로 보였다(실측: 44/44건). 같은 프로젝트 안에서 업무를 가리는 용도로는
+        //    전혀 변별력이 없으므로 여기서는 보지 않는다(프로젝트 간 검색은 `@프로젝트명`이 따로 있다).
 
         // ── 업무 상태 (colIdx.status) ──
         if (typeof colIdx !== 'undefined' && colIdx.status !== -1) {
@@ -456,6 +453,9 @@
             _navIndex = Math.min(_navIndex, _matchedIndices.length - 1);
         }
         _updateNavCount(matchCount);
+
+        // ☑️ 헤더 "전체 선택" 체크박스 — 검색 재적용(재렌더 포함)마다 표시/체크 상태를 맞춘다.
+        _syncSelectAllHeadCheckbox();
 
         // 일괄처리 툴바 업데이트
         _updateBulkBar(active);
@@ -544,6 +544,7 @@
                     if (!row) return;
                     if (this.checked) _selected.add(row);
                     else _selected.delete(row);
+                    _syncSelectAllHeadCheckbox();
                     _updateBulkBar(true);
                 });
                 flexWrap.insertBefore(cb, flexWrap.firstChild);
@@ -554,6 +555,41 @@
             cb.style.display = 'none';
             _selected.delete(globalData[idx]);
         }
+    }
+
+    // ☑️ [2026-11-11] 검색 결과 전체 선택/해제 — 헤더 체크박스("No." 왼쪽)와 일괄처리 툴바
+    //    "전체 선택" 버튼이 **같은 함수**를 쓴다(전엔 버튼 쪽에만 있던 로직을 복제하지 않고 뗐다).
+    window._ganttSearchToggleSelectAll = function(on) {
+        if (on) {
+            _matchedIndices.forEach(function(i) { if (globalData[i]) _selected.add(globalData[i]); });
+        } else {
+            _selected.clear();
+        }
+        var tbody = document.getElementById('table-body');
+        if (tbody) tbody.querySelectorAll('.gantt-ai-cb').forEach(function(cb) {
+            var idx = parseInt(cb.closest('tr').getAttribute('data-row-index'), 10);
+            cb.checked = _selected.has(globalData[idx]);
+        });
+        _syncSelectAllHeadCheckbox();
+        _updateBulkBar(true);
+    };
+
+    // 헤더 체크박스 표시/체크/부분선택(indeterminate) 상태를 지금 선택 현황에 맞춘다.
+    // ⚠️ 검색이 꺼지면 숨긴다 — 매칭된 게 없는데 체크박스만 남아 있으면 뭘 누르는지 알 수 없다.
+    function _syncSelectAllHeadCheckbox() {
+        var cb = document.getElementById('gantt-search-selall-head');
+        if (!cb) return;
+        var active = _query.length > 0;
+        cb.style.display = active ? 'inline-block' : 'none';
+        if (!active || !_matchedIndices.length) {
+            cb.checked = false; cb.indeterminate = false;
+            return;
+        }
+        var selCount = _matchedIndices.reduce(function(n, i) {
+            return n + (globalData[i] && _selected.has(globalData[i]) ? 1 : 0);
+        }, 0);
+        cb.checked = selCount === _matchedIndices.length;
+        cb.indeterminate = selCount > 0 && selCount < _matchedIndices.length;
     }
 
     // ─── 일괄처리 툴바 ─────────────────────────────────────────────────────────
@@ -583,14 +619,7 @@
         if (container) container.insertBefore(bar, container.firstChild);
 
         document.getElementById('gantt-ai-bulk-selall').addEventListener('click', function() {
-            _selected.clear();
-            _matchedIndices.forEach(function(i) { if (globalData[i]) _selected.add(globalData[i]); });
-            var tbody = document.getElementById('table-body');
-            if (tbody) tbody.querySelectorAll('.gantt-ai-cb').forEach(function(cb) {
-                var idx = parseInt(cb.closest('tr').getAttribute('data-row-index'), 10);
-                cb.checked = _selected.has(globalData[idx]);
-            });
-            _updateBulkBar(true);
+            window._ganttSearchToggleSelectAll(true);
         });
 
         document.getElementById('gantt-ai-bulk-cancel').addEventListener('click', function() {

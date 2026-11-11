@@ -1802,7 +1802,13 @@
                 const _allPinTitle = window._currentLang === 'en'
                     ? 'Turn the alarm on/off for every task — turns all on if any is off, otherwise turns all off'
                     : '전체 업무 알람 켜기/끄기 — 하나라도 꺼져 있으면 전체 켜짐, 전부 켜져 있으면 전체 꺼짐';
-                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:flex; align-items:center; justify-content:center; gap:3px;"><span class="row-pin-bar pin-bar-head" onclick="window.wrToggleAllPins(event)" title="${escapeHtml(_allPinTitle)}"></span><span>${displayCell}</span></div></th>`;
+                // ☑️ [2026-11-11 요청] AI 검색(js/26) 결과 전체 선택 — "알람 표기와 No. 사이".
+                //    검색 중이 아닐 땐 `display:none`(js/26 `_applySearch` 가 검색 활성/비활성에
+                //    맞춰 보이기/숨기기·체크 상태를 맞춘다). 매번 다시 그려지는 헤더라 **id 로만**
+                //    짚는다 — 몇 번째 자식인지로 집지 말 것(렌더러가 만든 DOM 규칙, 2026-11-05 교훈).
+                const _selAllTitle = window._currentLang === 'en'
+                    ? 'Select/deselect all search results' : '검색 결과 전체 선택/해제';
+                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:flex; align-items:center; justify-content:center; gap:3px;"><span class="row-pin-bar pin-bar-head" onclick="window.wrToggleAllPins(event)" title="${escapeHtml(_allPinTitle)}"></span><input type="checkbox" id="gantt-search-selall-head" title="${escapeHtml(_selAllTitle)}" style="display:none; width:13px; height:13px; cursor:pointer; accent-color:#d63384; flex-shrink:0;" onchange="window._ganttSearchToggleSelectAll(this.checked)"><span>${displayCell}</span></div></th>`;
             } else if (thClass === 'detail-th') {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass} cursor:pointer;" title="클릭: 상세내용 전체 펼치기/접기" onclick="window.toggleAllDetailExpand(this, event)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell} <span style="font-size:9px; color:#aaa;" id="detail-th-arrow">▼</span></div></th>`;
             } else {
