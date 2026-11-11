@@ -256,32 +256,80 @@ window._applyAddressWorkbookBuffer = function(arrayBuffer, sourceLabel) {
     }
 };
 
-// ☁️ 구글 드라이브에 저장된 주소록 시트를 바로 불러오기 (기존 드라이브 연동 로그인 재사용)
-window.importAddressFromDrive = async function() {
-    const ADDR_SHEET_FILE_ID = '1jskqTXVOKCqXSXRqsv275OYQVQg6NyWD';
+// 🏢 [2026-11-11 요청] "불러오기" = 그룹웨어 주소록(사내 인사 전산망) 조회 → 실패하면 NAS 공유
+//    주소록으로 폴백. 전엔 특정 구글 드라이브 시트(고정 파일 id)를 통째로 가져와 **전체 교체**
+//    했는데, NAS 전환 이후 그 파일을 못 찾아 손을 못 댄 채로 남아 있었다(사용자 신고).
+//    ⚠️ 그룹웨어 조회 결과는 이름/부서/직함/이메일/휴대폰/근무처전화만 준다 — 영문 이름·
+//    텔레그램 ID 는 그룹웨어에 없는, **사람이 이 앱에 직접 적어 둔 값**이라 덮어쓰지 않는다
+//    (병합, 이름이 같으면 같은 사람으로 본다 — 기존 AddressBook._mergeCfg 와 같은 규칙).
+//    ⚠️ 저장은 **새로 만들지 않는다** — `window.AddressBook.save()`(디바운스 후 공유 저장소
+//    동기화, NAS 전환 때 어댑터가 이미 그 경로를 NAS 로 돌려놓았다)를 그대로 부른다.
+window.importAddressFromGroupware = async function() {
+    var _t = window._t ? window._t : function (ko) { return ko; };
+    var curList = (window.tabData && window.tabData.addressBook) ? window.tabData.addressBook.slice() : [];
+    if (!confirm(_t('그룹웨어 주소록으로 현재 주소록을 갱신합니다(기존에 직접 입력해 둔 영문 이름·텔레그램 ID는 유지됩니다).\n계속할까요?',
+                     'This will refresh the current Address Book from the groupware directory (English names/Telegram IDs you entered by hand are kept).\nContinue?'))) return;
 
-    const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
-    if (!tokenObj) {
-        alert(window._t('먼저 상단의 [🔵 드라이브 연동하기]로 구글 드라이브 로그인을 해주세요.\n로그인 후 이 버튼을 다시 눌러주세요.', 'Please sign in to Google Drive via [🔵 Connect Drive] at the top first.\nThen click this button again after signing in.'));
+    var norm = function (n) { return String(n || '').trim().toLowerCase(); };
+
+    var gwList = null, gwErr = null;
+    try {
+        if (window._gwEnsureLogin) {
+            var g = await window._gwEnsureLogin();
+            if (!g || !g.ok) throw new Error((g && g.message) || _t('그룹웨어 로그인이 필요합니다.', 'Groupware login required.'));
+        }
+        var res = await fetch('http://127.0.0.1:5000/gw/contacts?limit=1000');
+        var j = await res.json();
+        if (!j || !j.ok) throw new Error((j && j.message) || ('HTTP ' + res.status));
+        gwList = j.contacts || [];
+    } catch (err) {
+        gwErr = err;
+        console.warn('[주소록] 그룹웨어 조회 실패 — NAS 공유 주소록으로 폴백:', err.message);
+    }
+
+    if (gwList && gwList.length) {
+        var byName = new Map();
+        curList.forEach(function (p) { var k = norm(p.name); if (k && !byName.has(k)) byName.set(k, p); });
+        var merged = gwList.map(function (c) {
+            var k = norm(c.name);
+            var old = byName.get(k) || {};
+            byName.delete(k);
+            return {
+                name: c.name || old.name || '',
+                nameEn: old.nameEn || '',           // 그룹웨어엔 없다 — 사람이 적은 값만 유지
+                dept: c.dept || old.dept || '',
+                title: c.position || old.title || '',
+                email: c.email || old.email || '',
+                mobile: c.mobile || old.mobile || '',
+                phone: c.tel || old.phone || '',
+                telegramId: old.telegramId || ''    // 그룹웨어엔 없다 — 사람이 적은 값만 유지
+            };
+        });
+        // 그룹웨어 검색에 안 걸린 기존 인원(협력사 등 외부 연락처)은 지우지 않고 그대로 둔다.
+        byName.forEach(function (p) { merged.push(p); });
+
+        window.tabData = window.tabData || {};
+        window.tabData.addressBook = merged;
+        window._addrSelectedRows = new Set();
+        window.renderAddressTable();
+        window.AddressBook.save(merged); // 공유 저장소(NAS) 동기화 — 디바운스 3초
+        alert('✅ ' + _t('그룹웨어 주소록 ' + gwList.length + '명을 반영했습니다(공유 저장소에도 자동 반영됩니다).',
+                         'Applied ' + gwList.length + ' contacts from the groupware directory (also synced to the shared store).'));
         return;
     }
 
-    const curCount = (window.tabData && window.tabData.addressBook) ? window.tabData.addressBook.length : 0;
-    if (!confirm(window._t('구글 드라이브의 주소록 시트로 현재 주소록(' + curCount + '명)을 전체 교체합니다.\n계속할까요?', 'This will replace the current Address Book (' + curCount + ' people) entirely with the Google Drive sheet.\nContinue?'))) return;
-
-    try {
-        const url = 'https://www.googleapis.com/drive/v3/files/' + ADDR_SHEET_FILE_ID
-    + '?alt=media&supportsAllDrives=true';
-        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + tokenObj.access_token } });
-        if (!res.ok) {
-            let detail = '';
-            try { const errJson = await res.json(); detail = errJson?.error?.message || ''; } catch(e) {}
-            throw new Error('HTTP ' + res.status + (detail ? ' - ' + detail : '') + ' (드라이브 파일 접근 권한을 확인해주세요)');
-        }
-        const buf = await res.arrayBuffer();
-        window._applyAddressWorkbookBuffer(buf, '구글 드라이브 주소록');
-    } catch (err) {
-        alert(window._t('❌ 드라이브 파일을 불러오는 중 오류가 발생했습니다: ', '❌ An error occurred while loading the Drive file: ') + err.message);
+    // 그룹웨어를 못 썼을 때만 — 이미 공유 저장소에 있는 최신본을 다시 받아온다(새 경로 아님).
+    var nasList = (window.AddressBook && window.AddressBook.loadFromDrive) ? await window.AddressBook.loadFromDrive() : null;
+    if (nasList) {
+        window.tabData = window.tabData || {};
+        window.tabData.addressBook = nasList;
+        window._addrSelectedRows = new Set();
+        window.renderAddressTable();
+        alert('⚠️ ' + _t('그룹웨어 주소록을 불러오지 못해 공유 저장소(NAS)의 주소록 ' + nasList.length + '명을 대신 불러왔습니다.\n사유: ' + (gwErr ? gwErr.message : ''),
+                         'Could not reach the groupware directory, so loaded the ' + nasList.length + ' contacts already shared on NAS instead.\nReason: ' + (gwErr ? gwErr.message : '')));
+    } else {
+        alert('❌ ' + _t('그룹웨어·공유 저장소(NAS) 둘 다 불러오지 못했습니다.\n사유: ' + (gwErr ? gwErr.message : '알 수 없음'),
+                         'Could not load from either the groupware directory or the shared NAS store.\nReason: ' + (gwErr ? gwErr.message : 'unknown')));
     }
 };
 

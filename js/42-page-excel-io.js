@@ -1078,6 +1078,13 @@
         {
             id: 'address', tab: 'tab-address', label: 'Address Book',
             nasFolder: 'ADDRESS',
+            // 🏢 [2026-11-11 요청] "ADDRESS 가 프로젝트별로 나뉘면 안 된다" — 주소록은 팀 전체가
+            // 공유하는 단일 목록(window.AddressBook, 프로젝트와 무관)인데, `📁 NAS` 버튼은
+            // `nasFolders` 를 안 주면 `_dsImportToPage`(js/48)가 기본값으로 `_dsProjectAwareFolders`
+            // 를 걸어 CUSTOMER/MC 처럼 "지금 연 프로젝트 이름" 하위 폴더를 만들어 버린다(실측:
+            // "ADDRESS/LNW_STELLAR32_32.0" 같은 쓸모없는 폴더가 프로젝트 수만큼 생김). 폴더
+            // 하나만 돌려줘 그 기본 분기를 건너뛴다.
+            nasFolders: function () { return [{ f: 'ADDRESS', label: '📁 ADDRESS' }]; },
             repaint: ['renderAddressTable'],
             blocks: [{ sheet: 'Address', kind: 'rows',
                 get: function () { return _td().addressBook || []; },
