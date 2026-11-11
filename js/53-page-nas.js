@@ -19,14 +19,19 @@
     window.PAGE_NAS_FOLDERS = [
         { tab: 'tab-calendar', folder: 'CALENDER',     label: ['캘린더', 'Calendar'] },
         { tab: 'tab-weekly',   folder: 'REPORT',       label: ['주간 업무 보고', 'Weekly report'] },
-        // 알람 탭엔 인쇄 버튼이 없다 — 헤더 버튼 묶음 앞에 끼운다.
-        { tab: 'tab-alarm',    folder: 'ALARM&NOTICE', label: ['알람·공지', 'Alarm & Notice'],
-          anchor: '#alarm-header-box .btn-group' }
+        // ⚠️ [2026-11-11 사용자 요청] 예전엔 `#alarm-header-box .btn-group` **앞**에 끼워서
+        //    '메일 서버 연결됨' 바로 옆(왼쪽)에 섰다. 다른 탭처럼 **헤더 오른쪽 끝**으로 옮긴다
+        //    — 앵커를 빼면 아래 기본값(헤더 박스에 append)이 그대로 듣는다.
+        { tab: 'tab-alarm',    folder: 'ALARM&NOTICE', label: ['알람·공지', 'Alarm & Notice'] }
     ];
 
+    // ⚠️ `order:99` 는 장식이 아니다 — 헤더 박스가 전부 `display:flex` 라, 이걸 주면 DOM 순서와
+    //    상관없이 **늘 맨 오른쪽**에 선다. js/42 의 엑셀 버튼 묶음(`px-btns-*`)은 뷰를 바꿀 때마다
+    //    지워졌다 다시 append 되는데, 그때 어느 쪽 스윕이 나중에 도느냐에 따라 자리가 뒤바뀐다
+    //    (실측으로 알람↔공지 전환에서 한 번 뒤집혔다). 순서에 기대지 않으려는 것.
     var BTN = 'white-space:nowrap; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none;'
             + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;'
-            + ' margin-right:4px;';
+            + ' margin-right:4px; order:99;';
 
     function _render() {
         (window.PAGE_NAS_FOLDERS || []).forEach(function (p) {
@@ -36,7 +41,15 @@
             if (tabEl.querySelector('[id^="px-share-"]')) return;
 
             var id = 'pn-nas-' + p.tab;
-            if (document.getElementById(id)) return;
+            var have = document.getElementById(id);
+            if (have) {
+                // ⚠️ 이 버튼은 **헤더의 맨 끝**이 자리다. js/42 의 엑셀 버튼 묶음(`px-btns-*`)은
+                //    나중에 만들어지기도 해서, 그러면 NAS 가 가운데로 밀린다 — 끝으로 되돌린다.
+                //    (로드 순서에 기대지 않으려는 것이다.)
+                var box = have.parentNode;
+                if (!p.anchor && box && box.lastElementChild !== have) box.appendChild(have);
+                return;
+            }
 
             // ⚠️ [2026-11-05] 예전엔 그 탭의 인쇄(PDF) 버튼 **앞**에 끼웠는데 인쇄 버튼이
             //    전부 삭제됐다(브라우저 인쇄 사용). 인쇄 버튼은 `.concept-header-box` 의
