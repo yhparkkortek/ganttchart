@@ -157,6 +157,34 @@
                       + '목록의 몇 번째인지와 무관하다. 확실하지 않으면 이름을 쓰는 쪽이 안전하다.' }
             ]
         },
+        // ── 🪐 JIRA(Kortek Issue Tracker) ─ 읽기 전용 ───────────────────────
+        //  댓글/상태전환/필드수정은 js/70(JIRA 탭)에서 사람이 직접 한다 — 이 루프는
+        //  mode:'read'만 돌 수 있으므로(docs/qa-tool-router.md) 쓰기는 애초에 못 탄다.
+        {
+            id: 'jira_issue', mode: 'read', requires: 'jira',
+            title: 'JIRA 이슈 조회',
+            desc: 'JIRA(사내 이슈트래커) 이슈 하나를 키(예: GABKJ-1)로 조회한다 — 요약·상태·담당자·'
+                + '우선순위·설명·댓글까지 들어 있다. "GABKJ-1 상태 알려줘", "이 이슈 내용 보여줘", '
+                + '"GABKJ-5 담당자 누구야" 같은 질문에 쓴다. '
+                + '⚠️ 조회만 한다 — 댓글 작성·상태 전환·필드 수정은 이 도구로 할 수 없다(JIRA 탭에서 사람이 직접).',
+            path: '/jira/issue',
+            params: [
+                { name: 'key', type: 'text', max: 20, desc: '이슈 키, 예: GABKJ-1' }
+            ]
+        },
+        {
+            id: 'jira_search', mode: 'read', requires: 'jira',
+            title: 'JIRA 이슈 검색(JQL)',
+            desc: 'JQL로 JIRA 이슈를 검색한다. 예: "project = GABKJ ORDER BY updated DESC", '
+                + '\'text ~ "OBSIDIAN" ORDER BY updated DESC\'. '
+                + '"GABKJ 프로젝트 최근 이슈 뭐 있어", "OBSIDIAN 관련 JIRA 이슈 찾아줘" 같은 질문에 쓴다. '
+                + '⚠️ 조회만 한다 — 결과를 바꾸려면 사람이 JIRA 탭에서 직접 한다.',
+            path: '/jira/search', pick: 'issues',
+            params: [
+                { name: 'jql', type: 'text', max: 200, desc: 'JQL 질의문' },
+                { name: 'maxResults', type: 'int', min: 1, max: 50, def: 20 }
+            ]
+        },
         {
             id: 'gw_mail', mode: 'read', requires: 'gw',
             title: '그룹웨어 메일 목록',
@@ -1102,7 +1130,7 @@
         if (!apiKey) return null;
         var onStep = opts.onStep || function () {};
         var MAX_TURNS = 4, MAX_CALLS = 6;
-        var steps = [], calls = [], gwChecked = false, insaChecked = false;
+        var steps = [], calls = [], gwChecked = false, insaChecked = false, jiraChecked = false;
 
         for (var turn = 1; turn <= MAX_TURNS; turn++) {
             onStep(turn === 1
@@ -1163,6 +1191,15 @@
                 onStep('🔑 ' + window._t('인사관리 로그인 상태 확인 중...', 'Checking HR session...'));
                 var _insaGate = window._insaEnsureLogin ? await window._insaEnsureLogin(onStep) : { ok: true };
                 if (!_insaGate.ok) return { reply: _insaGate.message, calls: calls };
+            }
+            // 🪐 [2026-11-11] JIRA도 같은 선검사 — gw/insa와 같은 이유(계정 잠금 방지, 재시도
+            //    금지 가드는 _jiraEnsureLogin(js/36) 안에 있다).
+            if (!jiraChecked && wanted.some(function (w) {
+                    var t = window._qaToolById(w.id); return t && t.requires === 'jira'; })) {
+                jiraChecked = true;
+                onStep('🔑 ' + window._t('JIRA 로그인 상태 확인 중...', 'Checking JIRA session...'));
+                var _jiraGate = window._jiraEnsureLogin ? await window._jiraEnsureLogin(onStep) : { ok: true };
+                if (!_jiraGate.ok) return { reply: _jiraGate.message, calls: calls };
             }
             for (var i = 0; i < wanted.length && calls.length < MAX_CALLS; i++) {
                 var tl = window._qaToolById(wanted[i].id);

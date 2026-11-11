@@ -1,0 +1,261 @@
+# -*- coding: utf-8 -*-
+"""🪐 JIRA(Kortek Issue Tracker) REST API 연동.
+
+대상: http://jira.kortek.co.kr — Jira Server **5.2.11**(2013-04-15 빌드, serverInfo 실측).
+PAT(개인 액세스 토큰)가 없는 시대의 버전이라(PAT는 Jira 8.14+) 모든 호출을 **Basic Auth**
+(아이디:비밀번호를 매 요청에 실음)로 한다. REST API(/rest/api/2/*)가 이미 열려 있고 401에도
+깨끗한 JSON을 주므로(실측: GET /rest/api/2/issue/GABKJ-1 → 401 +
+{"errorMessages":[...],"errors":{}}) SAP/그룹웨어/인사관리처럼 화면 자동화가 필요 없다.
+
+비밀번호는 Windows DPAPI로 암호화해 jira_login_config.json(.gitignore)에만 두고, 어떤
+응답에도 돌려주지 않는다. ⚠️⚠️ 이 서버는 HTTP 전용(암호화 없음)이라 사내망을 벗어나면
+평문으로 샌다 — 이 스크립트는 그 사실을 바꾸지 못한다.
+
+⚠️⚠️ **CAPTCHA/계정잠금 정책을 모른다 — "모르면 안 한다".** 자격증명이 한 번 틀리면(401)
+또는 CAPTCHA 요구 헤더(X-Authentication-Denied-Reason)가 오면, 그 자리에서 잠그고
+**다시 시도하지 않는다**(SAP·그룹웨어·인사관리와 같은 이유). 사람이 🔑 설정에서 계정을
+다시 저장해야 풀린다. 이 가드는 여기(백엔드)에 있다 — 프런트(js/36 `_jiraEnsureLogin`)는
+"이미 실패했으면 또 부르지 않는다"는 자기 가드를 따로 갖되, 서버가 최종 방어선이다.
+"""
+import os
+import json
+import requests
+from requests.auth import HTTPBasicAuth
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CFG_PATH = os.path.join(BASE_DIR, 'jira_login_config.json')
+JIRA_BASE = 'http://jira.kortek.co.kr'
+_TIMEOUT = 15
+
+# ⚠️ 한 번 틀리면 잠근다 — 이 서버가 몇 번까지 허용하는지 모른다(모르면 1회).
+_BLOCKED = {'reason': None}
+
+
+class JiraApiError(RuntimeError):
+    def __init__(self, message, status=None):
+        super(JiraApiError, self).__init__(message)
+        self.status = status
+
+
+def _dpapi_encrypt_b64(text):
+    """⚠️ kortek_backend.py에도 같은 함수가 있지만 **여기에 따로 둔다** — 이 모듈을 import 않는
+    PC에서도(아직 jira 기능을 안 쓰는 PC) kortek_backend.py만으로 돌아가야 한다."""
+    import ctypes
+    import base64
+    from ctypes import wintypes
+
+    class _BLOB(ctypes.Structure):
+        _fields_ = [('cbData', wintypes.DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+    raw = text.encode('utf-8')
+    buf = ctypes.create_string_buffer(raw, len(raw))
+    blob_in = _BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    blob_out = _BLOB()
+    if not ctypes.windll.crypt32.CryptProtectData(ctypes.byref(blob_in), 'kortek-jira-login', None, None, None, 0, ctypes.byref(blob_out)):
+        raise RuntimeError('Windows 데이터 보호(DPAPI)로 비밀번호를 암호화하지 못했습니다.')
+    try:
+        return base64.b64encode(ctypes.string_at(blob_out.pbData, blob_out.cbData)).decode('ascii')
+    finally:
+        ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+
+
+def _dpapi_decrypt_b64(b64):
+    import ctypes
+    import base64
+    from ctypes import wintypes
+
+    class _BLOB(ctypes.Structure):
+        _fields_ = [('cbData', wintypes.DWORD), ('pbData', ctypes.POINTER(ctypes.c_char))]
+    raw = base64.b64decode(b64)
+    buf = ctypes.create_string_buffer(raw, len(raw))
+    bin_ = _BLOB(len(raw), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+    bout = _BLOB()
+    if not ctypes.windll.crypt32.CryptUnprotectData(ctypes.byref(bin_), None, None, None, None, 0, ctypes.byref(bout)):
+        raise RuntimeError('저장된 비밀번호를 복호화하지 못했습니다'
+                            '(다른 Windows 계정/PC에서 저장한 설정일 수 있음) — 다시 저장해주세요.')
+    try:
+        return ctypes.string_at(bout.pbData, bout.cbData).decode('utf-8')
+    finally:
+        ctypes.windll.kernel32.LocalFree(bout.pbData)
+
+
+def _cfg():
+    try:
+        with open(_CFG_PATH, 'r', encoding='utf-8') as f:
+            c = json.load(f)
+        return c if isinstance(c, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_cfg(c):
+    with open(_CFG_PATH, 'w', encoding='utf-8') as f:
+        json.dump(c, f, ensure_ascii=False, indent=2)
+
+
+def status():
+    """로그인은 하지 않는다 — 설정 유무 + 서버 도달 가능 여부만."""
+    c = _cfg()
+    out = {'ok': True, 'configured': bool(c.get('user') and c.get('pw_dpapi')),
+           'user': c.get('user', ''), 'verified': bool(c.get('verified')),
+           'blocked': _BLOCKED['reason']}
+    try:
+        requests.get(JIRA_BASE + '/rest/api/2/serverInfo', timeout=5)
+        out['reachable'] = True
+    except Exception as e:
+        out['reachable'] = False
+        out['message'] = 'JIRA 서버에 연결할 수 없습니다: %s' % e
+    return out
+
+
+def save_config(user, pw):
+    enc = _dpapi_encrypt_b64(pw)
+    _write_cfg({'user': user, 'pw_dpapi': enc, 'verified': False})
+    _BLOCKED['reason'] = None  # 새 자격증명을 저장했으니 잠금을 푼다
+
+
+def delete_config():
+    if os.path.exists(_CFG_PATH):
+        os.remove(_CFG_PATH)
+    _BLOCKED['reason'] = None
+
+
+def _auth():
+    c = _cfg()
+    if not (c.get('user') and c.get('pw_dpapi')):
+        return None
+    pw = _dpapi_decrypt_b64(c['pw_dpapi'])
+    return HTTPBasicAuth(c['user'], pw)
+
+
+def _err_text(r):
+    try:
+        j = r.json()
+    except Exception:
+        return None
+    msgs = list(j.get('errorMessages') or [])
+    errs = j.get('errors') or {}
+    msgs += ['%s: %s' % (k, v) for k, v in errs.items()]
+    return ' / '.join(msgs) if msgs else None
+
+
+def _request(method, path, **kw):
+    """모든 JIRA 호출의 단일 입구 — 잠금 판정·401/CAPTCHA 감지가 여기 한 곳에만 있다."""
+    if _BLOCKED['reason']:
+        raise JiraApiError(_BLOCKED['reason'])
+    try:
+        auth = _auth()
+    except Exception as e:
+        raise JiraApiError(str(e))
+    if not auth:
+        raise JiraApiError('저장된 JIRA 계정이 없습니다 — 🔑 설정에서 등록해주세요.')
+    try:
+        r = requests.request(method, JIRA_BASE + path, auth=auth, timeout=_TIMEOUT, **kw)
+    except Exception as e:
+        raise JiraApiError('JIRA 서버에 연결하지 못했습니다: %s' % e)
+    # ⚠️ CAPTCHA 요구는 401이 아니라 이 헤더로 온다(그룹웨어와 달리 폼이 없어 추측만 가능하므로
+    #    실제로 보이면 보수적으로 바로 잠근다) — 상태코드보다 먼저 본다.
+    deny = r.headers.get('X-Authentication-Denied-Reason')
+    if deny:
+        _BLOCKED['reason'] = ('🔒 JIRA 가 추가 인증(보안문자 등)을 요구합니다 — 브라우저로 '
+                              + JIRA_BASE + ' 에 직접 로그인해 풀어주세요. (사유: ' + deny + ')')
+        raise JiraApiError(_BLOCKED['reason'])
+    if r.status_code == 401:
+        _BLOCKED['reason'] = ('🔒 JIRA 로그인 실패(아이디/비밀번호를 확인해주세요) — '
+                              '계정을 다시 저장할 때까지 재시도하지 않습니다.')
+        raise JiraApiError(_BLOCKED['reason'], status=401)
+    if r.status_code == 403:
+        # 권한 문제는 계정 자체가 틀린 게 아니다 — 잠그지 않는다.
+        raise JiraApiError(_err_text(r) or '이 이슈를 볼 권한이 없습니다.', status=403)
+    if r.status_code == 404:
+        raise JiraApiError('해당 이슈를 찾을 수 없습니다.', status=404)
+    if r.status_code >= 400:
+        raise JiraApiError(_err_text(r) or ('JIRA 오류 (HTTP %d)' % r.status_code), status=r.status_code)
+    return r
+
+
+def verify_login():
+    """자격증명을 **한 번만** 확인한다(whoami). 성공하면 verified 플래그를 남긴다."""
+    r = _request('GET', '/rest/api/2/myself')
+    me = r.json()
+    c = _cfg()
+    c['verified'] = True
+    _write_cfg(c)
+    return {'ok': True, 'displayName': me.get('displayName') or me.get('name'), 'name': me.get('name')}
+
+
+FIELDS_DEFAULT = ('summary,description,status,assignee,reporter,priority,issuetype,'
+                   'created,updated,comment,components,labels,fixVersions')
+
+
+def _shape_issue(raw):
+    f = raw.get('fields') or {}
+    status_f = f.get('status') or {}
+    assignee = f.get('assignee') or {}
+    reporter = f.get('reporter') or {}
+    priority = f.get('priority') or {}
+    issuetype = f.get('issuetype') or {}
+    comments = ((f.get('comment') or {}).get('comments')) or []
+    return {
+        'key': raw.get('key'),
+        'url': JIRA_BASE + '/browse/' + str(raw.get('key') or ''),
+        'summary': f.get('summary') or '',
+        'description': f.get('description') or '',
+        'status': status_f.get('name') or '',
+        'statusId': status_f.get('id'),
+        'assignee': assignee.get('displayName') or '',
+        'assigneeName': assignee.get('name') or '',
+        'reporter': reporter.get('displayName') or '',
+        'priority': priority.get('name') or '',
+        'priorityId': priority.get('id'),
+        'issuetype': issuetype.get('name') or '',
+        'created': f.get('created') or '',
+        'updated': f.get('updated') or '',
+        'components': [c.get('name') for c in (f.get('components') or [])],
+        'labels': f.get('labels') or [],
+        'comments': [{'author': (c.get('author') or {}).get('displayName'),
+                      'body': c.get('body'), 'created': c.get('created')} for c in comments],
+    }
+
+
+def get_issue(key):
+    r = _request('GET', '/rest/api/2/issue/' + key, params={'fields': FIELDS_DEFAULT})
+    return _shape_issue(r.json())
+
+
+def search(jql, max_results=50):
+    r = _request('GET', '/rest/api/2/search', params={
+        'jql': jql, 'maxResults': max_results,
+        'fields': 'summary,status,assignee,priority,issuetype,updated'
+    })
+    j = r.json()
+    return {'total': j.get('total', 0), 'issues': [_shape_issue(i) for i in j.get('issues', [])]}
+
+
+def add_comment(key, body):
+    _request('POST', '/rest/api/2/issue/' + key + '/comment', json={'body': body})
+    return {'ok': True}
+
+
+def get_transitions(key):
+    r = _request('GET', '/rest/api/2/issue/' + key + '/transitions')
+    return [{'id': t.get('id'), 'name': t.get('name'), 'to': (t.get('to') or {}).get('name')}
+            for t in r.json().get('transitions', [])]
+
+
+def do_transition(key, transition_id, comment=None):
+    body = {'transition': {'id': str(transition_id)}}
+    if comment:
+        body['update'] = {'comment': [{'add': {'body': comment}}]}
+    _request('POST', '/rest/api/2/issue/' + key + '/transitions', json=body)
+    return {'ok': True}
+
+
+def update_fields(key, fields):
+    """fields 예: {'summary': '...', 'assignee': {'name': 'uid'}, 'priority': {'id': '3'}}"""
+    _request('PUT', '/rest/api/2/issue/' + key, json={'fields': fields})
+    return {'ok': True}
+
+
+def priorities():
+    r = _request('GET', '/rest/api/2/priority')
+    return [{'id': p.get('id'), 'name': p.get('name')} for p in r.json()]

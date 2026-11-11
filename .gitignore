@@ -31,6 +31,7 @@ sap_login_config.json
 gw_login_config.json
 insa_login_config.json
 insa_write_capture.json
+jira_login_config.json
 write_capture.json
 
 # [2026-10-19] 커밋 훅의 js/ 문법 검증(oxlint) 전용 개발 도구 — 앱 런타임과 무관.

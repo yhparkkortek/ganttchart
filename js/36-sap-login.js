@@ -131,6 +131,28 @@
                 + '<button onclick="window._insaLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div>'   // ⚠ 인사 버튼 행(flex)을 **여기서 닫는다** — 안 닫고 다음 섹션을 붙였다가
                              //   모든 글자가 flex 항목이 돼 **한 자씩 세로로** 깨졌다(화면으로 확인).
+                // ── 🪐 JIRA(Kortek Issue Tracker) ─────────────────────────────
+                //  http://jira.kortek.co.kr — Jira Server 5.2.11(2013년 빌드, PAT 없음, 실측).
+                //  REST API가 이미 열려 있어 Basic Auth 만으로 된다(브라우저 자동화 불필요).
+                //  ⚠️ CAPTCHA/계정잠금 정책을 모르므로 그룹웨어·인사관리와 같은 보수적 규칙:
+                //     **한 번만** 시도하고 실패하면 재시도하지 않는다.
+                + '<div style="border-top:1px solid #e5e5e5; margin:14px 0 12px;"></div>'
+                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
+                + '<strong style="font-size:13px; color:#8b5a00;">🪐 ' + T('JIRA 로그인', 'JIRA login') + '</strong>'
+                + '<span id="jiralogin-state" style="font-size:11px; color:#888;"></span></div>'
+                + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
+                + T('이 JIRA는 <b>HTTP(암호화 없음)</b>이고 몇 번 틀리면 잠기는지 모릅니다 — <b>한 번만</b> 시도합니다.',
+                    'This JIRA is <b>HTTP (unencrypted)</b> and its lockout policy is unknown — tried only <b>once</b>.')
+                + '</div>'
+                + fieldRow(T('아이디', 'ID'), '<input id="jiralogin-user" autocomplete="off" style="' + inputSt + '">')
+                + fieldRow(T('비밀번호', 'Password'), '<input id="jiralogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
+                + '<div id="jiralogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
+                + '<div style="display:flex; gap:8px;">'
+                + '<button onclick="window._jiraLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<span style="flex:1;"></span>'
+                + '<button onclick="window._jiraLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
+                + '<button onclick="window._jiraLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
+                + '</div>'
                 // ── 🗄️ NAS(사내 저장소) 로그인 ─────────────────────────────────
                 //  ⚠️ 이건 "또 하나의 외부 시스템"이 아니라 **앱 데이터가 사는 곳**이다.
                 //     여기 계정이 곧 신원이고, 무엇을 볼 수 있는지는 **NAS 폴더 권한**이 정한다
@@ -261,6 +283,7 @@
         }
         window._gwLoginRefresh();
         window._insaLoginRefresh();
+        window._jiraLoginRefresh();
         window._nasLoginRefresh();
         window._nasQuickPrefill();      // ⚠️ 기본 경로는 늘 펼쳐져 있다 — 미리채우기를 여기서 건다
     };
@@ -1162,6 +1185,131 @@
         } catch (e) {
             nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
         }
+    };
+
+    // ── 🪐 JIRA 로그인 ─────────────────────────────────────────────────
+    //  그룹웨어·인사관리 블록과 같은 모양 — 같은 성격의 기능이 다르게 생기면 안 된다.
+    var jiraStatus = function (msg, kind) {
+        var el = document.getElementById('jiralogin-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'ok' ? '#1f7a3d' : (kind === 'err' ? '#b1432f' : '#555');
+        el.textContent = msg || '';
+    };
+
+    window._jiraLoginRefresh = async function () {
+        var st = document.getElementById('jiralogin-state');
+        var pwEl = document.getElementById('jiralogin-pw');
+        if (pwEl) pwEl.value = '';
+        jiraStatus('', '');
+        try {
+            var cfg = await fetch(BASE + '/jira/status').then(function (r) { return r.json(); });
+            if (cfg.configured) {
+                document.getElementById('jiralogin-user').value = cfg.user || '';
+                if (pwEl) pwEl.placeholder = T('(저장됨 — 바꿀 때만 입력)', '(saved — type only to change)');
+                if (st) {
+                    if (cfg.blocked) { st.textContent = T('· 🔒 잠김', '· 🔒 blocked'); st.style.color = '#b1432f'; }
+                    else { st.textContent = cfg.verified ? T('· 확인됨', '· verified') : T('· 설정됨(미확인)', '· configured (unverified)'); st.style.color = '#1f7a3d'; }
+                }
+            } else if (st) {
+                st.textContent = T('· 미설정', '· not set'); st.style.color = '#999';
+            }
+        } catch (e) {
+            if (st) { st.textContent = T('· 백엔드 연결 안 됨', '· backend unreachable'); st.style.color = '#b1432f'; }
+        }
+    };
+
+    window._jiraLoginSave = async function () {
+        var user = (document.getElementById('jiralogin-user').value || '').trim();
+        var pw = document.getElementById('jiralogin-pw').value;
+        if (!user) { jiraStatus('⚠️ ' + T('아이디를 입력해주세요.', 'Enter the ID.'), 'err'); return false; }
+        if (!pw) { jiraStatus('⚠️ ' + T('비밀번호를 입력해주세요.', 'Enter the password.'), 'err'); return false; }
+        try {
+            var r = await fetch(BASE + '/jira/login-config', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: user, pw: pw })
+            });
+            var d = await r.json();
+            document.getElementById('jiralogin-pw').value = '';
+            jiraStatus(d.ok ? ('✅ ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
+            if (d.ok) { _jiraTried = false; _jiraFailMsg = ''; window._jiraLoginRefresh(); }
+            return !!d.ok;
+        } catch (e) {
+            jiraStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
+            return false;
+        }
+    };
+
+    window._jiraLoginTest = async function () {
+        if (document.getElementById('jiralogin-pw').value) {
+            if (!(await window._jiraLoginSave())) return;
+        }
+        jiraStatus('⏳ ' + T('로그인 확인 중… (실패해도 재시도하지 않습니다)', 'Verifying… (no retry on failure)'), '');
+        try {
+            var d = await fetch(BASE + '/jira/login', { method: 'POST' }).then(function (r) { return r.json(); });
+            // 사람이 직접 누른 테스트는 **가드를 푼다** — 비밀번호를 고쳤을 수 있다.
+            _jiraTried = !d.ok; _jiraFailMsg = d.ok ? '' : (d.message || '');
+            jiraStatus((d.ok ? ('✅ ' + T('확인됨 — ', 'Verified — ') + (d.displayName || d.name || '')) : ('🔒 ' + (d.message || ''))), d.ok ? 'ok' : 'err');
+        } catch (e) {
+            jiraStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
+        }
+    };
+
+    window._jiraLoginDelete = async function () {
+        if (!confirm(T('저장된 JIRA 로그인 정보를 삭제할까요?', 'Delete the saved JIRA login?'))) return;
+        try {
+            var d = await fetch(BASE + '/jira/login-config', { method: 'DELETE' }).then(function (r) { return r.json(); });
+            document.getElementById('jiralogin-user').value = '';
+            document.getElementById('jiralogin-pw').value = '';
+            _jiraTried = false; _jiraFailMsg = '';
+            jiraStatus(d.ok ? ('🗑 ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
+            window._jiraLoginRefresh();
+        } catch (e) {
+            jiraStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
+        }
+    };
+
+    // ── 🔑 JIRA 로그인 게이트 (JIRA 탭 + AI 문답 도구 루프 공용) ─────────────
+    //  ⚠️⚠️ 계정 잠금 방지가 이 함수의 존재 이유다 — 인사관리 _insaEnsureLogin과 같은 역할.
+    //  이 서버가 몇 번 틀리면 잠기는지 모르므로, 한 세션에서 **한 번 실패하면 다시 시도하지
+    //  않고** 그때 받은 사유를 그대로 돌려준다. 새 경로를 붙일 땐 반드시 이 함수를 거칠 것
+    //  (/jira/login을 직접 부르지 말 것 — 서버 쪽 _BLOCKED가 최종 방어선이지만, 매번 그걸
+    //  믿고 때리면 "몇 번 실패했는지"가 쌓여 더 위험하다).
+    var _jiraTried = false, _jiraFailMsg = '';
+
+    window._jiraEnsureLogin = async function (onStep) {
+        var say = function (m) { try { if (onStep) onStep(m); } catch (e) { /* 안내 실패가 흐름을 막지 않게 */ } };
+        var st;
+        try {
+            st = await fetch(BASE + '/jira/status').then(function (r) { return r.json(); });
+        } catch (e) {
+            return { ok: false, message: T('백엔드(kortek_backend)에 연결하지 못했습니다 — 실행 중인지 확인해주세요.',
+                                           'Could not reach the backend — is it running?') };
+        }
+        if (st && st.verified && !st.blocked) return { ok: true };
+        if (st && !st.reachable) return { ok: false, message: st.message || T('JIRA 서버에 연결할 수 없습니다.', 'JIRA server unreachable.') };
+        if (st && st.blocked) return { ok: false, message: st.blocked };
+        if (!st || !st.configured) {
+            return { ok: false, message: T('🔑 저장된 JIRA 로그인 정보가 없습니다 — 🔑 설정에서 등록해주세요.',
+                                           'No saved JIRA login — register it under 🔑.') };
+        }
+        if (_jiraTried) {
+            return { ok: false, message: _jiraFailMsg || T('JIRA 로그인에 실패했습니다 — 🔑에서 확인해주세요.',
+                                                           'JIRA sign-in failed — check it under 🔑.') };
+        }
+        _jiraTried = true;
+        say('🔑 ' + T('JIRA 로그인 확인 중... (실패해도 재시도하지 않습니다)',
+                      'Verifying JIRA sign-in... (no retry on failure)'));
+        var d;
+        try {
+            d = await fetch(BASE + '/jira/login', { method: 'POST' }).then(function (r) { return r.json(); });
+        } catch (e) {
+            _jiraFailMsg = T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.');
+            return { ok: false, message: _jiraFailMsg };
+        }
+        if (d && d.ok) { _jiraTried = false; _jiraFailMsg = ''; return { ok: true }; }
+        _jiraFailMsg = (d && d.message) || T('🔒 JIRA 로그인에 실패했습니다.', '🔒 JIRA sign-in failed.');
+        return { ok: false, message: _jiraFailMsg };
     };
 
 })();

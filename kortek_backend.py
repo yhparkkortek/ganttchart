@@ -5488,6 +5488,165 @@ def insa_overtime_form():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+# ══ 🪐 JIRA(Kortek Issue Tracker) 연동 ════════════════════════════════════
+#  대상: http://jira.kortek.co.kr — Jira Server 5.2.11(2013년 빌드, PAT 없음, 실측).
+#  REST API(/rest/api/2/*)가 이미 열려 있어 **브라우저 자동화가 필요 없다** — 매 요청에
+#  Basic Auth를 실어 보낸다. 실제 HTTP 호출·잠금 판정은 jira_bridge.py 하나에 모여 있다
+#  (이 파일은 라우트만). 비밀번호는 DPAPI로 jira_login_config.json(.gitignore)에만.
+#
+#  ⚠️⚠️ **HTTP 전용(암호화 없음)** — 사내망을 벗어나면 평문으로 샌다.
+#  ⚠️⚠️ **CAPTCHA/계정잠금 정책을 모른다 — 그래서 1회 실패(401) 후엔 재시도하지 않는다**
+#     (SAP·그룹웨어·인사관리와 같은 이유). 계정을 다시 저장해야 풀린다 — 가드는
+#     jira_bridge.py(서버) + js/36 `_jiraEnsureLogin`(프런트) 이중으로 걸려 있다.
+@app.route('/jira/status', methods=['GET'])
+def jira_status():
+    try:
+        import jira_bridge
+        return jsonify(jira_bridge.status())
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/login-config', methods=['POST'])
+def jira_login_config_save():
+    body = request.get_json(silent=True) or {}
+    user = str(body.get('user') or '').strip()
+    pw = str(body.get('pw') or '')
+    if not user or not pw:
+        return jsonify({'ok': False, 'message': '아이디와 비밀번호를 모두 입력해주세요.'}), 400
+    try:
+        import jira_bridge
+        jira_bridge.save_config(user, pw)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+    finally:
+        pw = None
+    return jsonify({'ok': True, 'message': 'JIRA 로그인 정보를 저장했습니다.', 'user': user})
+
+
+@app.route('/jira/login-config', methods=['DELETE'])
+def jira_login_config_delete():
+    try:
+        import jira_bridge
+        jira_bridge.delete_config()
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 500
+    return jsonify({'ok': True, 'message': '저장된 JIRA 로그인 정보를 삭제했습니다.'})
+
+
+@app.route('/jira/login', methods=['POST'])
+def jira_login():
+    """저장된 계정으로 **한 번만** 확인(whoami). 실패해도 재시도하지 않는다.
+
+    ⚠️ 재시도 금지 가드는 **프런트**(js/36 `_jiraEnsureLogin`)에도 있다 — 이 라우트는
+       부를 때마다 그냥 한 번 시도한다. jira_bridge._BLOCKED가 서버 쪽 최종 방어선이다.
+    """
+    try:
+        import jira_bridge
+        return jsonify(jira_bridge.verify_login())
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue/<key>', methods=['GET'])
+def jira_issue_get(key):
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue', methods=['GET'])
+def jira_issue_get_q():
+    """`/jira/issue/<key>`의 쿼리파라미터 버전 — AI 문답 도구 루프(js/40)는 인자를 전부
+    쿼리스트링으로만 붙이므로 경로에 키를 넣는 라우트를 못 쓴다(QA_TOOLS 전용)."""
+    key = (request.args.get('key') or '').strip()
+    if not key:
+        return jsonify({'ok': False, 'message': 'key가 필요합니다. 예: GABKJ-1'}), 400
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/search', methods=['GET'])
+def jira_search():
+    jql = request.args.get('jql') or ''
+    if not jql:
+        return jsonify({'ok': False, 'message': 'jql 파라미터가 필요합니다.'}), 400
+    try:
+        max_results = int(request.args.get('maxResults') or 50)
+    except Exception:
+        max_results = 50
+    try:
+        import jira_bridge
+        return jsonify(dict({'ok': True}, **jira_bridge.search(jql, max_results)))
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue/<key>/comment', methods=['POST'])
+def jira_issue_comment(key):
+    body = request.get_json(silent=True) or {}
+    text = str(body.get('body') or '').strip()
+    if not text:
+        return jsonify({'ok': False, 'message': '댓글 내용을 입력해주세요.'}), 400
+    try:
+        import jira_bridge
+        jira_bridge.add_comment(key, text)
+        return jsonify({'ok': True, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue/<key>/transitions', methods=['GET'])
+def jira_issue_transitions_get(key):
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'transitions': jira_bridge.get_transitions(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue/<key>/transitions', methods=['POST'])
+def jira_issue_transitions_post(key):
+    body = request.get_json(silent=True) or {}
+    transition_id = body.get('transitionId')
+    if not transition_id:
+        return jsonify({'ok': False, 'message': 'transitionId가 필요합니다.'}), 400
+    try:
+        import jira_bridge
+        jira_bridge.do_transition(key, transition_id, comment=(body.get('comment') or None))
+        return jsonify({'ok': True, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue/<key>', methods=['PUT'])
+def jira_issue_update(key):
+    body = request.get_json(silent=True) or {}
+    fields = body.get('fields')
+    if not isinstance(fields, dict) or not fields:
+        return jsonify({'ok': False, 'message': '수정할 필드가 없습니다.'}), 400
+    try:
+        import jira_bridge
+        jira_bridge.update_fields(key, fields)
+        return jsonify({'ok': True, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/priorities', methods=['GET'])
+def jira_priorities():
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'priorities': jira_bridge.priorities()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/chrome-restart', methods=['POST'])
 def gw_chrome_restart():
     """전용 크롬을 닫았다 다시 띄운다 — **http 사이트 차단(HTTPS 자동승격) 해제용.**
@@ -6525,6 +6684,7 @@ _SELF_UPDATE_FILES = [
     'sap_bridge_32.py',
     'gw_bridge.py',
     'insa_write.py',
+    'jira_bridge.py',
     'nas_dsm.py',
     'nas_set_login.py',
     'nas_set_root.py',
