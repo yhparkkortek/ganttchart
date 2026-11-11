@@ -124,8 +124,34 @@ window.AddressBook = {
     load: function() {
         try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
     },
+    // ⚠️⚠️ [2026-11-11 실사용 버그] 그룹웨어 전사 주소록 불러오기(394명)로 이 키가 전보다
+    //    훨씬 커졌는데, setItem에 try/catch가 없어 localStorage 용량 초과(QuotaExceededError)가
+    //    그대로 throw됐다 — 호출자(메일 자동처리의 신규발신자 등록, AddressBook.loadFromDrive
+    //    폴백 등)가 이 예외를 못 받아내면 그 작업 전체가 깨지고, 공교롭게 AI 문답 답변란에
+    //    브라우저 원문 에러로 노출되기도 했다(실제로는 AI 호출과 무관). js/14c(업무 보관함)와
+    //    같은 방어 패턴 — 저장소 닥터(js/34)로 캐시만 자동 정리 후 재시도, 그래도 안 되면
+    //    로컬 캐시는 포기하되 호출자는 깨뜨리지 않는다(공유 저장소는 원본이라 계속 동기화 시도).
     save: function(list, skipSync) {
-        localStorage.setItem(this.KEY, JSON.stringify(list));
+        try {
+            localStorage.setItem(this.KEY, JSON.stringify(list));
+        } catch (e) {
+            var isQuota = !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
+            if (!isQuota) throw e;
+            console.warn('[주소록] localStorage 용량 초과 — 캐시 정리 후 재시도합니다.', e);
+            var recovered = false;
+            try {
+                if (window._storageDoctorAuto && window._storageDoctorAuto()) {
+                    localStorage.setItem(this.KEY, JSON.stringify(list));
+                    recovered = true;
+                }
+            } catch (e2) { /* 그래도 부족 — 아래 안내 */ }
+            if (!recovered && window.showToast) {
+                window.showToast(window._t(
+                    '⚠️ 주소록을 이 브라우저에 캐시하지 못했습니다(저장 공간 부족) — 공유 저장소에는 그대로 반영을 시도합니다.',
+                    '⚠️ Could not cache the address book in this browser (storage full) — still trying to sync to the shared store.'
+                ), 'warning', 8000);
+            }
+        }
         if (!skipSync) this.scheduleDriveSync(list);
     },
     scheduleDriveSync: function(list) {
