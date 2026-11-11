@@ -41,6 +41,16 @@
         { key: 'ms_discard_queue',                label: '자동 폐기된 메일 목록',            labelEn: 'Auto-discarded mails',    cls: 'log',   strategy: { type: 'array', keep: 50, order: 'newest-first' } },
         // 메일 서버 검토 큐 — 등록 완료 건의 본문을 줄이고 예산 초과분(오래된 것부터)을 뺀다(js/15b _msSlimQueue). 검토 대기 건 본문은 보존.
         { key: 'ms_pending_queue',                label: '메일 검토 큐(등록 완료 메일 본문 축소)', labelEn: 'Mail review queue (shrink done mails)', cls: 'log', strategy: { type: 'fn', fn: '_msSlimQueue' } },
+        // 📮 [2026-11-11 보완] 신규 발신자 보류 큐도 메일 레코드를 그대로 든다 — 같은 함수(_msSlimQueue)를
+        //    재사용해 예산 초과분을 오래된 것부터 줄인다. 큐 자체가 200건 상한이 있어도 그 안 메일 본문이
+        //    커서 이 키 하나가 수백KB를 먹을 수 있다.
+        { key: 'ms_new_sender_queue',              label: '신규 발신자 메일 대기열(오래된 것부터 줄임)', labelEn: 'New-sender mail queue (drops oldest first)', cls: 'log', strategy: { type: 'fn', fn: '_msSlimQueue' } },
+        // 📥 [2026-11-11 보완] "⚠️ 가장 큰 두 항목(ms_pending_queue·gantt_task_inbox)이 정리
+        //    대상에 안 보인다"는 사용자 지적 — gantt_task_inbox 는 레지스트리에 아예 없어서 정작
+        //    가장 큰 항목인데도 이 창에서 손을 못 댔다. 업무 보관함(js/14c)엔 이미 전용 경량화
+        //    로직(완료 항목 메일원문부터 비움 → 그래도 넘치면 오래된 완료 항목 정리, '대기' 항목은
+        //    절대 안 건드림)이 있어 그걸 그대로 재사용한다(래퍼: window._taskInboxSlimForRegistry).
+        { key: 'gantt_task_inbox',                 label: '업무 보관함(완료 항목의 메일 원문부터 비움)', labelEn: 'Task Inbox (strip mail bodies from completed items first)', cls: 'log', strategy: { type: 'fn', fn: '_taskInboxSlimForRegistry' } },
         // 🧺 [2026-10-02 신규] 자재 보관함(js/35) — SAP 자재청구/입고 전 담아두는 장바구니.
         //    사람이 직접 담은 것이라 자동 정리 대상(cache)으로 두면 안 된다 — log로 두고 확인 후에만 줄인다.
         { key: 'gantt_matcart_items_v1',          label: '자재 보관함(담아둔 자재)',          labelEn: 'Material cart items',     cls: 'log',   strategy: { type: 'array', keep: 200, order: 'newest-last' } },
@@ -243,10 +253,22 @@
                     var lines = pl.map(function (p) { return ' • ' + label(p.entry) + ' — ' + kb(p.before) + 'KB → ' + kb(p.after) + 'KB'; }).join('\n');
                     var ask = head + '\n\n' + T('정리 가능한 항목(최근 것만 남기고 오래된 것을 줄입니다):\n', 'Cleanable items (keeps the most recent, trims old ones):\n') + lines + '\n\n' + T('정리할까요?', 'Clean up now?');
                     if (!confirm(ask)) return;
+                    var touchedInbox = pl.some(function (p) { return p.entry.key === 'gantt_task_inbox'; });
                     var freed = apply(pl);
+                    // 🩺 [2026-11-11] `gantt_task_inbox` 가 이 등록된 목록(`pl`)에 걸려 여기서 이미
+                    //    비워졌으면, 이 함수를 여는 바로 그 모달(업무 보관함)이 켜져 있을 테니 화면도
+                    //    같이 새로 그린다 — 안 하면 방금 지운 메일 원문이 화면엔 그대로 남아 보인다.
+                    if (touchedInbox) {
+                        if (window.updateInboxBadge) window.updateInboxBadge();
+                        var ovNow = document.getElementById('task-inbox-overlay');
+                        if (ovNow && ovNow.style.display === 'flex' && window.renderTaskInbox) window.renderTaskInbox();
+                    }
                     var msg = T('🧹 저장소 정리 완료 — 약 ' + kb(freed) + 'KB 확보', '🧹 Storage cleanup done — freed ~' + kb(freed) + 'KB');
                     if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
-                    if (inboxClean) return orig.apply(this, arguments);   // 보관함 자체도 정리할 게 있으면 이어서
+                    // ⚠️ `inboxClean` 은 **정리 전** 상태로 잰 값이다 — `gantt_task_inbox` 를 방금 이
+                    //    목록에서 같이 비웠다면 다시 재서 판단한다(안 그러면 "정리 완료" 토스트 직후
+                    //    "정리할 항목이 없습니다" 경고가 또 뜬다, 2026-11-11 등록 추가로 생긴 겹침).
+                    if (touchedInbox ? inboxHasCleanable() : inboxClean) return orig.apply(this, arguments);
                     return;
                 }
                 if (!pl.length && !inboxClean) {

@@ -262,6 +262,16 @@ window.TaskInbox = {
     }
 };
 
+// 🩺 [2026-11-11 요청] 저장소 닥터(js/34)의 "🧹 저장공간 정리" 창은 **등록된 키만** 보여주는데
+//    `gantt_task_inbox` 는 레지스트리에 없어서 — 정작 가장 큰 항목인데도 그 창에서 손을 못 댔다
+//    (완료 항목의 메일 원문을 비우는 전용 로직은 `_shrinkForQuota` 에 이미 있다, 그걸 그대로 쓴다).
+//    `type:'fn'` 전략은 `window[fn](배열)` 을 **메서드가 아니라 평범한 함수**로 부르므로,
+//    `this` 가 필요한 `_shrinkForQuota` 를 그대로 등록하면 안 되고 이 얇은 래퍼로 감싼다.
+window._taskInboxSlimForRegistry = function (list) {
+    var out = window.TaskInbox._shrinkForQuota(Array.isArray(list) ? list : []);
+    return { list: out, json: JSON.stringify(out) };
+};
+
 // 💡 공용: 모달을 열 때마다 그 순간 가장 높은 z-index를 부여해서 항상 맨 위로 오게 함
 window._topModalZ = window._topModalZ || 9999;
 window.bringModalToFront = function(overlayId) {
