@@ -2066,17 +2066,39 @@
         var mat = window.plParseDisplayMatrix(text);
 
         // 표에 적힌 REV(생산REV·Agile REV)와 같은 줄을 찾아 표시한다 — "지금 우리가 쓰는 리비전"
-        var mine = [];
-        [r.prodRev, r.agileRev].forEach(function (v) {
-            String(v || '').replace(/[A-Z](?:\.\d+)?/g, function (m) { mine.push(m.toUpperCase()); return m; });
-        });
-        var isMine = function (rv) {
+        // ⚠️ [2026-11-11] Agile REV 칸은 "PN      : K\nREF PN : K" 처럼 줄마다 라벨+값으로 들어 있다
+        //    (PN 리비전과 REF PN 리비전을 한 칸에 적어 둔 것) — 라벨 글자까지 한 글자씩 훑으면
+        //    P·N·R·E·F 가 리비전으로 잡혀 "표의 REV" 줄이 글자 수프가 된다
+        //    (실측: J,J,P,N,K,R,E,F,P,N,K). "PN"/"REF PN" 라벨은 검색(매칭) 대상에서 뺀다.
+        var _revTokens = function (raw) {
+            var out = [];
+            String(raw || '').split(/\r?\n/).forEach(function (line) {
+                var m = line.match(/^\s*(?:REF\s*PN1?|PN)\s*:\s*(.*)$/i);   // "PN : K" / "REF PN : K" 라벨 제거
+                (m ? m[1] : line).replace(/[A-Z](?:\.\d+)?/g, function (t) { out.push(t.toUpperCase()); return t; });
+            });
+            return out;
+        };
+        var mineProd = _revTokens(r.prodRev);
+        var mineAgile = _revTokens(r.agileRev);
+        var _uniq = function (arr) { var seen = {}, out = []; arr.forEach(function (x) { if (!seen[x]) { seen[x] = 1; out.push(x); } }); return out; };
+        var _hitIn = function (rv, list) {
             rv = String(rv || '').toUpperCase();
             if (!rv) return false;
-            if (mine.indexOf(rv) !== -1) return true;
+            if (list.indexOf(rv) !== -1) return true;
             var m = rv.match(/^([A-Z](?:\.\d+)?)\s*-\s*([A-Z](?:\.\d+)?)$/);   // 범위 칸(G.5-J.4)
             if (!m) return false;
-            return mine.some(function (x) { return x >= m[1] && x <= m[2]; });
+            return list.some(function (x) { return x >= m[1] && x <= m[2]; });
+        };
+        // 🎨 [2026-11-11] 생산REV 일치(초록)와 Agile REV 일치(주황)를 **다른 색**으로 구분한다 —
+        //    어느 칸 때문에 이 리비전이 "우리 것"으로 잡혔는지 구분해 달라는 요청. 둘 다면 보라.
+        var HIT = {
+            prod:  { bg: '#eefbf1', fg: '#2b7a45' },
+            agile: { bg: '#fff4e6', fg: '#e8590c' },
+            both:  { bg: '#f3ebfc', fg: '#6f42c1' }
+        };
+        var matchKind = function (rv) {
+            var p = _hitIn(rv, mineProd), a = _hitIn(rv, mineAgile);
+            return p && a ? 'both' : (p ? 'prod' : (a ? 'agile' : ''));
         };
 
         var pickSel = (docs && docs.length > 1)
@@ -2095,10 +2117,10 @@
               + '<th style="text-align:left; padding:5px 6px; width:96px;">' + _t('작성자', 'Drawn by') + '</th>'
               + '<th style="text-align:left; padding:5px 6px; width:84px;">' + _t('일자', 'Date') + '</th></tr>'
               + revs.map(function (x) {
-                  var hit = isMine(x.rev);
-                  return '<tr style="border-bottom:1px solid #f1f3f5;' + (hit ? ' background:#eefbf1;' : '') + '">'
-                       + '<td style="padding:4px 6px; font-weight:bold; color:' + (hit ? '#2b7a45' : '#1971c2') + '; white-space:nowrap;">'
-                       + _esc(x.rev) + (hit ? ' ◀' : '') + '</td>'
+                  var kind = matchKind(x.rev), st = HIT[kind];
+                  return '<tr style="border-bottom:1px solid #f1f3f5;' + (st ? ' background:' + st.bg + ';' : '') + '">'
+                       + '<td style="padding:4px 6px; font-weight:bold; color:' + (st ? st.fg : '#1971c2') + '; white-space:nowrap;">'
+                       + _esc(x.rev) + (st ? ' ◀' : '') + '</td>'
                        + '<td style="padding:4px 6px; color:#444;">' + _esc(x.desc) + '</td>'
                        + '<td style="padding:4px 6px; color:#666; overflow-wrap:anywhere;">' + _esc(x.by) + '</td>'
                        + '<td style="padding:4px 6px; color:#666; white-space:nowrap;">' + _esc(x.date) + '</td></tr>';
@@ -2114,9 +2136,9 @@
                   return '<th style="text-align:left; padding:4px 5px; overflow-wrap:anywhere; word-break:break-word;">' + _esc(h) + '</th>';
               }).join('') + '</tr>'
               + mat.rows.map(function (row) {
-                  var hit = isMine(row[0]);
+                  var kind = matchKind(row[0]), st = HIT[kind];
                   var ktk = /KORTEK/i.test(row.join(' '));
-                  return '<tr style="border-bottom:1px solid #f1f3f5;' + (hit && ktk ? ' background:#eefbf1;' : (ktk ? ' background:#fcfdff;' : '')) + '">'
+                  return '<tr style="border-bottom:1px solid #f1f3f5;' + (st && ktk ? ' background:' + st.bg + ';' : (ktk ? ' background:#fcfdff;' : '')) + '">'
                        + row.map(function (c, ci) {
                            return '<td style="padding:3px 5px; overflow-wrap:anywhere; word-break:break-word;' + (ci === 0 ? ' font-weight:bold; color:#1971c2;' : ' color:#444;') + '">'
                                 + _esc(c) + '</td>';
@@ -2128,7 +2150,8 @@
             '<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; font-size:11.5px; color:#555; flex-wrap:wrap;">'
           + '<b style="color:#2c5f8a;">' + _t('REVISIONS', 'REVISIONS') + '</b>'
           + '<span>' + revs.length + _t('건', ' rows') + '</span>'
-          + (mine.length ? '<span style="color:#2b7a45;">◀ ' + _t('표의 REV: ', 'REV in table: ') + _esc(mine.join(', ')) + '</span>' : '')
+          + (mineProd.length ? '<span style="color:' + HIT.prod.fg + ';">◀ ' + _t('생산REV: ', 'Prod. REV: ') + _esc(_uniq(mineProd).join(', ')) + '</span>' : '')
+          + (mineAgile.length ? '<span style="color:' + HIT.agile.fg + ';">◀ ' + _t('Agile REV: ', 'Agile REV: ') + _esc(_uniq(mineAgile).join(', ')) + '</span>' : '')
           + '<span style="margin-left:auto;">' + pickSel + '</span>'
           + '</div>'
           + '<div style="max-height:40vh; overflow:auto; border:1px solid #e3e6ea; border-radius:6px;">' + revHtml + '</div>'
