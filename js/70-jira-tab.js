@@ -5,18 +5,26 @@
 //       상태전환·필드수정(요약/담당자/우선순위)까지 한다. 실제 HTTP 호출은 백엔드
 //       (/jira/*, jira_bridge.py)가 하고, 이 파일은 화면 + 연결(3가지) 수집만 한다.
 //
-// 연결은 4가지를 **모두 쓴다**(사용자 결정, 2026-11-11):
-//   ① 수동 이슈 키  — tabData.jiraLinks.manualKeys (쉼표 구분 입력)
-//   ② 키워드 자동검색(JQL text~) — tabData.jiraLinks.keyword (기본값: 프로젝트 모델명)
+// 연결은 4가지를 **모두 쓴다**(사용자 결정, 2026-11-11), 전부 지금 모델 기준(아래 2차 참고):
+//   ① 수동 이슈 키  — tabData.jiraLinksByUnit[unit].manualKeys (쉼표 구분 입력)
+//   ② 키워드 자동검색(JQL text~) — tabData.jiraLinksByUnit[unit].keyword (기본값: 모델명)
 //   ③ 메일에서 이미 캡처된 이슈번호 — row._mailRaw.subject/body2000 정규식 스캔(저장 안 함,
-//      매번 다시 스캔 — 메일 분석이 쌓일수록 자동으로 늘어난다)
-//   ④ JIRA 프로젝트 전체 — tabData.jiraLinks.projectKey (코드 또는 이름으로 찾아 **key로
-//      저장**, 2026-11-11 추가). 사용자 실측: JIRA 프로젝트는 "LNW>SHUFFLER 3.0"" 처럼
+//      매번 다시 스캔 — 메일 분석이 쌓일수록 자동으로 늘어난다, 모델 구분 없이 전체 스캔)
+//   ④ JIRA 프로젝트 전체 — tabData.jiraLinksByUnit[unit].projectKey (코드 또는 이름으로 찾아
+//      **key로 저장**, 2026-11-11 추가). 사용자 실측: JIRA 프로젝트는 "LNW>SHUFFLER 3.0"" 처럼
 //      이름에 특수문자·따옴표가 섞여 있어 JQL `project = "그 이름"` 매칭이 깨지기 쉽다
 //      (실측 400) → 이름은 **찾는 용도로만**, 저장/조회는 항상 key(`project = GABKJ`).
 // 네 소스는 **따로 조회한다**(한 JQL로 OR 하지 않음) — 메일 스캔은 존재하지 않는 키를
 // 주워올 수 있는데, JIRA의 `key in (...)`는 그중 하나라도 없으면 전체가 400으로 죽는다.
 // 소스 하나가 깨져도 나머지는 멀쩡히 보여야 한다.
+//
+// 🧩 [2026-11-11 2차, 사용자 요청] 연결은 **제품구분자(모델)별**이다 — `tabData.jiraLinksByUnit
+// [unitId]`. 한 간트 프로젝트에 모델이 여러 개(MVD/TPR/BTN…)면 모델마다 JIRA 프로젝트가 다를 수
+// 있다(M.C Table·BOM·Customer SPEC과 같은 `window.mcActiveUnit` 전환을 그대로 쓴다 — 따로 두면
+// "M.C는 TPR을 보는데 JIRA는 MVD" 같은 어긋남이 생긴다, js/43의 교훈 그대로). 헤더의 토글 바
+// (#jira-unit-bar)로 전환하고, Summary 탭 모델 카드의 "JIRA 코드" 칸과 **같은 값을 공유**해
+// 양방향 참조가 된다(한쪽이 아니라 같은 저장소를 읽고 쓰므로 "동기화 코드" 자체가 없다 — 아래
+// _renderModelCardHtml/_syncProjectModelsFromDom 감싸기 참고).
 //
 // 쓰기(댓글/상태전환/필드수정)는 **사람이 상세 모달에서 버튼을 눌러야만** 실행된다 —
 // AI 문답 도구(js/40 QA_TOOLS)는 mode:'read'만 등록돼 있어 조회만 할 수 있다
@@ -31,19 +39,42 @@
     var _issueCache = {};   // key -> issue (상세 모달·행 갱신 공용)
     var _lastRows = [];     // 지금 표에 그려진 {key, src:[...]} 목록
 
-    // ── 연결 설정 읽기/쓰기 ──────────────────────────────────────────
-    function links() {
+    // ── 제품구분자(모델) — M.C/BOM/Customer SPEC과 같은 것을 공유 ──────────
+    function jiraActiveUnit() {
+        var units = window.getMcUnits ? window.getMcUnits() : [];
+        var cur = window.mcActiveUnit || '';
+        if (cur) return cur;
+        return units.length ? units[0] : '';
+    }
+
+    function jiraLinksStore() {
         window.tabData = window.tabData || {};
-        var l = window.tabData.jiraLinks;
+        var store = window.tabData.jiraLinksByUnit;
+        if (!store || typeof store !== 'object') store = {};
+        window.tabData.jiraLinksByUnit = store;
+        return store;
+    }
+
+    // ── 연결 설정 읽기/쓰기(지금 모델 기준) ───────────────────────────
+    function links() {
+        var store = jiraLinksStore();
+        var unit = jiraActiveUnit();
+        var l = store[unit];
         if (!l || typeof l !== 'object') l = { manualKeys: [], keyword: '', projectKey: '', projectName: '' };
         if (!Array.isArray(l.manualKeys)) l.manualKeys = [];
         if (typeof l.projectKey !== 'string') l.projectKey = '';
         if (typeof l.projectName !== 'string') l.projectName = '';
-        window.tabData.jiraLinks = l;
+        store[unit] = l;
         return l;
     }
 
     function defaultKeyword() {
+        // 모델이 여럿이면 **지금 모델의** 고객모델명을 우선한다(전체 프로젝트 값이 아니라) —
+        // 그래야 "모델 갯수에 맞는 JIRA 검색"이 된다(사용자 요청, 2026-11-11).
+        var unit = jiraActiveUnit();
+        var models = (window.tabData && window.tabData.projectModels) || [];
+        var mine = models.filter(function (m) { return (m.unitId || '') === unit; })[0];
+        if (mine && mine.고객모델명) return mine.고객모델명;
         var pm = window.projectMeta || {};
         return pm.고객모델명 || pm.모델명 || pm.프로젝트명 || '';
     }
@@ -164,8 +195,48 @@
         if (el) el.innerHTML = html || '';
     }
 
+    // ── 🏷 제품구분자 전환 바 ──────────────────────────────────────────
+    //   M.C Table(#mc-unit-bar)·BOM(#bom-unit-bar)·Customer SPEC(#bs-unit-bar)과
+    //   **같은 모양·같은 동작**이다 — 탭마다 다르게 생기면 같은 기능으로 안 보인다(js/43 교훈).
+    window.jiraRenderUnitBar = function () {
+        var bar = document.getElementById('jira-unit-bar');
+        if (!bar) return;
+        var units = window.getMcUnits ? window.getMcUnits() : [];
+        if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+        var cur = jiraActiveUnit() || units[0];
+        bar.style.display = 'flex';
+        bar.innerHTML = '<button class="unit-cycle-btn" onclick="window.jiraCycleUnit()" title="'
+            + esc(T('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
+            + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#00707d; color:#fff;">'
+            + esc(cur) + '</button>';
+    };
+
+    window.jiraCycleUnit = function () {
+        var units = window.getMcUnits ? window.getMcUnits() : [];
+        if (units.length < 2) return;
+        var i = units.indexOf(jiraActiveUnit());
+        if (window.mcSwitchUnit) window.mcSwitchUnit(units[(i + 1) % units.length]);
+    };
+
+    // 다른 탭(M.C/BOM/Customer SPEC)에서 모델을 바꿔도, 지금 JIRA 탭을 보고 있으면 같이
+    // 전환돼야 한다 — js/43이 populateTabData/mcSwitchUnit을 감싸는 것과 같은 방식.
+    (function () {
+        var orig = window.mcSwitchUnit;
+        if (typeof orig !== 'function' || orig.__jiraWrapped) return;
+        var fn = function () {
+            var r = orig.apply(this, arguments);
+            window.jiraRenderUnitBar();
+            var panel = document.getElementById('tab-jira');
+            if (panel && panel.classList.contains('active') && window._jiraOnTabShown) window._jiraOnTabShown();
+            return r;
+        };
+        fn.__jiraWrapped = true;
+        window.mcSwitchUnit = fn;
+    })();
+
     // ── 탭 진입 시마다 다시 수집한다(메일 분석·설정이 그 사이 바뀌었을 수 있다) ──
     window._jiraOnTabShown = async function () {
+        window.jiraRenderUnitBar();
         var box = document.getElementById('jira-table-wrap');
         if (!box) return;
         box.innerHTML = '<div style="padding:30px; text-align:center; color:#999;">' + T('불러오는 중...', 'Loading...') + '</div>';
@@ -256,13 +327,14 @@
                 + '<div id="jira-link-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
                 + ' cursor:move; display:flex; align-items:center; gap:8px;">'
                 + '<strong style="font-size:14px;">⚙️ ' + T('JIRA 연결 설정', 'JIRA link settings') + '</strong>'
+                + '<span id="jira-link-unit-badge" style="font-size:11px; padding:1px 8px; border-radius:10px; background:#00707d; color:#fff; font-weight:bold;"></span>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="document.getElementById(\'jira-link-modal\').style.display=\'none\'"'
                 + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
                 + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
                 + '<div style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto; font-size:12px;">'
                 + '<div style="margin-bottom:10px; color:#777; line-height:1.5;">'
-                + T('이 프로젝트와 연결할 JIRA 이슈를 네 가지 방법으로 모읍니다 — 같이 켜 둘 수 있습니다.', 'Collects linked JIRA issues four ways — all can be on at once.')
+                + T('지금 모델(위 배지)과 연결할 JIRA 이슈를 네 가지 방법으로 모읍니다 — 같이 켜 둘 수 있고, 모델마다 따로 저장됩니다.', 'Collects linked JIRA issues for the current model (badge above) four ways — all can be on at once, saved separately per model.')
                 + '</div>'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">📁 ' + T('JIRA 프로젝트(코드 또는 이름 — 그 프로젝트 전체 이슈)', 'JIRA project (code or name — all its issues)') + '</label>'
                 + '<div style="display:flex; gap:6px; margin-bottom:4px;">'
@@ -300,6 +372,12 @@
                 inp.dataset.name = p.name;
                 document.getElementById('jira-link-project-hits').style.display = 'none';
             });
+        }
+        var unitBadge = document.getElementById('jira-link-unit-badge');
+        if (unitBadge) {
+            var curUnit = jiraActiveUnit();
+            unitBadge.textContent = curUnit || '';
+            unitBadge.style.display = curUnit ? 'inline-block' : 'none';
         }
         document.getElementById('jira-link-manual').value = (L.manualKeys || []).join(', ');
         document.getElementById('jira-link-keyword').value = L.keyword || '';
@@ -379,7 +457,7 @@
         }
 
         if (window.collectTabData) { try { window.collectTabData(); } catch (e) { /* 있는 값으로 */ } }
-        window.tabData.jiraLinks = L;  // collectTabData가 건드리지 않는 키라 다시 얹어 둔다
+        jiraLinksStore()[jiraActiveUnit()] = L;  // collectTabData가 건드리지 않는 키라 다시 얹어 둔다
         if (window._markDirty) window._markDirty();
         if (!L.projectKey && typed) {
             // 프로젝트만 못 골랐고 나머지는 저장됐다 — 창을 열어 둬서 경고를 보게 한다.
@@ -554,4 +632,51 @@
             modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
         }
     };
+
+    // ══ 🔗 Summary 탭 모델 카드 ↔ JIRA 양방향 참조 (2026-11-11, 사용자 요청) ═══════
+    //  js/22g를 직접 고치지 않고 **감싼다**(js/43이 populateTabData/mcSwitchUnit을 감싸는 것과
+    //  같은 방식 — 이 파일만 빼면 예전 동작으로 돌아간다). 복사본을 만들지 않는다 — 두 화면이
+    //  **같은 저장소**(tabData.jiraLinksByUnit[unitId].projectKey)를 그대로 읽고 쓰므로
+    //  "동기화"할 코드 자체가 없다(한쪽에서 바꾸면 다른 쪽은 다음에 그릴 때 그 값을 본다).
+    (function () {
+        var orig = window._renderModelCardHtml;
+        if (typeof orig !== 'function' || orig.__jiraWrapped) return;
+        var fn = function (model, idx) {
+            var html = orig(model, idx);
+            var unit = model.unitId || '';
+            var store = (window.tabData && window.tabData.jiraLinksByUnit) || {};
+            var val = (store[unit] && store[unit].projectKey) || '';
+            var _lbl = '<label style="font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; background:#fff; white-space:nowrap;">';
+            var field = _lbl + '🪐 ' + T('JIRA 코드', 'JIRA code') + '</label>'
+                + '<input type="text" class="u-input" data-jira-field="projectKey"'
+                + ' title="' + esc(T('이 모델과 연결할 JIRA 프로젝트 코드 — JIRA 탭에서 찾아 저장할 수도 있습니다', 'JIRA project code linked to this model — can also be set from the JIRA tab')) + '"'
+                + ' placeholder="' + T('예: GABKJ', 'e.g. GABKJ') + '" value="' + esc(val) + '">';
+            var tail = '</div></div>';
+            if (html.slice(-tail.length) === tail) html = html.slice(0, -tail.length) + field + tail;
+            return html;
+        };
+        fn.__jiraWrapped = true;
+        window._renderModelCardHtml = fn;
+    })();
+
+    (function () {
+        var orig = window._syncProjectModelsFromDom;
+        if (typeof orig !== 'function' || orig.__jiraWrapped) return;
+        var fn = function () {
+            var out = orig.apply(this, arguments);
+            document.querySelectorAll('.sum-model-card').forEach(function (card) {
+                var input = card.querySelector('[data-jira-field="projectKey"]');
+                if (!input) return;
+                var unit = card.dataset.unitId || '';
+                var val = (input.value || '').trim().toUpperCase();
+                var store = jiraLinksStore();
+                var L = store[unit] || { manualKeys: [], keyword: '', projectKey: '', projectName: '' };
+                if (L.projectKey !== val) { L.projectKey = val; L.projectName = ''; }  // 코드가 바뀌면 옛 이름은 버린다(다음 조회가 다시 채운다)
+                store[unit] = L;
+            });
+            return out;
+        };
+        fn.__jiraWrapped = true;
+        window._syncProjectModelsFromDom = fn;
+    })();
 })();

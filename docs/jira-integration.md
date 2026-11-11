@@ -38,22 +38,25 @@ SAP(`sap_bridge_32.py`, win32com)·그룹웨어/인사관리(`gw_bridge.py`, CDP
 - ⚠️⚠️ **HTTP 평문** — 이 서버를 HTTPS로 바꾸지 않는 한 사내망을 벗어나면 자격증명이 샌다.
   이 연동은 그 사실을 바꾸지 못한다(관리자 영역).
 
-## 프로젝트↔이슈 연결 — 4가지를 동시에 쓴다 (사용자 결정, 2026-11-11)
+## 프로젝트↔이슈 연결 — 4가지를 동시에, **모델(제품구분자)마다 따로** (2026-11-11, 2차 갱신)
 
-`js/70-jira-tab.js`가 매 탭 진입마다 네 소스를 **따로** 조회해 합친다:
+`js/70-jira-tab.js`가 매 탭 진입마다 네 소스를 **따로** 조회해 합친다. 전부 `tabData.
+jiraLinksByUnit[unit]`에 **제품구분자(모델)별로** 저장된다(`unit`은 M.C Table·BOM·Customer
+SPEC과 공유하는 `window.mcActiveUnit` — 한 프로젝트에 MVD/TPR/BTN처럼 모델이 여럿이면 모델마다
+다른 JIRA 프로젝트를 연결할 수 있다, 사용자 요청):
 
-1. **수동 키** — `tabData.jiraLinks.manualKeys`(배열). ⚙️ 연결 설정 모달에서 쉼표로 입력.
-2. **키워드 자동검색** — `tabData.jiraLinks.keyword`. JQL `text ~ "키워드*"`. 기본값 placeholder는
-   프로젝트 모델명(`projectMeta.고객모델명`)이지만 **자동으로 저장하지 않는다** — 빈 칸이면
-   검색을 돌리지 않는다(아무 말 없이 전체 조회가 되는 걸 막는다).
-3. **메일에서 이미 캡처된 이슈번호** — 저장하지 않고 **매번 다시 스캔**한다. `window.globalData`
-   리프가 아닌 전체 행을 훑어 `row._mailRaw.subject`/`body2000`에서
-   `/\b[A-Z][A-Z0-9]{1,9}-\d{1,6}\b/g`로 추출(최근 20건 cap). 이미 메일 분석이 쌓아 둔 데이터를
-   재사용하는 것이라 새 인프라가 없다(`CLAUDE.md` "학습으로 업그레이드되는 앱" 방향과 일치).
-4. **JIRA 프로젝트 전체** — `tabData.jiraLinks.projectKey`(+ 표시용 `projectName`). ⚙️ 설정의
+1. **수동 키** — `...[unit].manualKeys`(배열). ⚙️ 연결 설정 모달에서 쉼표로 입력.
+2. **키워드 자동검색** — `...[unit].keyword`. JQL `text ~ "키워드*"`. 기본값 placeholder는
+   **지금 모델의** 고객모델명(`tabData.projectModels`에서 `unitId`가 일치하는 카드)이지만
+   **자동으로 저장하지 않는다** — 빈 칸이면 검색을 돌리지 않는다.
+3. **메일에서 이미 캡처된 이슈번호** — 모델 구분 없이 저장하지 않고 **매번 다시 스캔**한다.
+   `window.globalData` 전체 행을 훑어 `row._mailRaw.subject`/`body2000`에서
+   `/\b[A-Z]{2,10}-\d{1,6}\b/g`로 추출(최근 20건 cap) 후, **실제 JIRA 프로젝트 키 목록과
+   대조해** 없는 접두어는 버린다(`validProjectPrefixes()` — 전자부품 코드·사내 제품번호가
+   섞여 들어오는 걸 막는다, 아래 "메일캡처 오탐" 절 참고).
+4. **JIRA 프로젝트 전체** — `...[unit].projectKey`(+ 표시용 `projectName`). ⚙️ 설정의
    📁 칸에 코드(`GABKJ`)나 이름 일부(`SHUFFLER`)를 넣고 🔍 찾기로 고르면 `project = GABKJ`로
-   그 프로젝트의 이슈 전체를 가져온다(사용자 요청 2026-11-11 — 이슈를 하나씩 수동으로 넣을
-   필요 없이 프로젝트 전체를 연결).
+   그 프로젝트의 이슈 전체를 가져온다.
 
 ⚠️⚠️ **프로젝트는 이름이 아니라 항상 key로 저장·조회한다.** 실측(`/rest/api/2/project`, 604건)
 으로 확인: 프로젝트 **이름**엔 `LNW>SHUFFLER 3.0"`처럼 `>`나 끝에 붙은 `"` 같은 특수문자가
@@ -62,6 +65,30 @@ SAP(`sap_bridge_32.py`, win32com)·그룹웨어/인사관리(`gw_bridge.py`, CDP
 `jira_bridge.resolve_project_key(text)`는 사람이 적은 글자(코드 또는 이름 일부)를 **정확히
 하나의 프로젝트에만** 걸릴 때만 key로 바꾸고, 0건이나 2건 이상 걸리면 **추측하지 않고 `None`**
 을 돌려준다(연결 설정 모달이 "🔍 찾기로 골라주세요"를 보여주고 그 필드는 저장하지 않는다).
+
+## 🔁 Summary 탭 모델 카드 ↔ JIRA 양방향 참조 (2026-11-11, 사용자 요청)
+
+Summary 탭의 모델 카드(고객모델명·프로젝트코드·프로젝트명칭·KTK PN 4칸)에 **🪐 JIRA 코드**
+칸을 추가했다. JIRA 탭 헤더의 토글 바(`#jira-unit-bar`, M.C/BOM/Customer SPEC과 같은 모양 —
+"탭마다 다르게 생기면 같은 기능으로 안 보인다"는 js/43의 교훈을 그대로 따른다)로 모델을
+전환하면 그 모델의 JIRA 연결만 보인다.
+
+⚠️⚠️ **"양방향 참조"는 동기화 코드가 아니라 같은 저장소를 공유하는 것으로 구현했다.** Summary
+모델 카드의 JIRA 코드 칸과 JIRA 탭의 📁 프로젝트 칸은 **둘 다 `tabData.jiraLinksByUnit[unitId]
+.projectKey`를 그대로 읽고 쓴다** — 복사본이 없으므로 한쪽을 고치면 다른 쪽은 다음에 그릴 때
+그 값을 그대로 본다. 구현은 js/22g(Summary 모델 카드)를 직접 고치지 않고 **감싼다**(js/43이
+`populateTabData`/`mcSwitchUnit`을 감싸는 것과 같은 방식 — js/70 하나만 빼면 예전 동작으로
+돌아간다):
+- `window._renderModelCardHtml`을 감싸 반환된 HTML 끝(`</div></div>`) 바로 앞에 JIRA 코드
+  입력칸을 끼워 넣는다(`data-jira-field="projectKey"`).
+- `window._syncProjectModelsFromDom`을 감싸, DOM의 모든 `.sum-model-card`를 훑어 그 칸의
+  값을 `tabData.jiraLinksByUnit[card.dataset.unitId].projectKey`에 적는다(코드가 바뀌면
+  `projectName`은 비워 다음 조회가 다시 채우게 한다 — 옛 이름이 새 코드에 붙어 있으면 안 된다).
+- `window.mcSwitchUnit`도 감싸 모델을 바꿀 때마다 토글 바를 다시 그리고, **지금 JIRA 탭이
+  열려 있으면** `_jiraOnTabShown()`을 다시 불러 그 모델의 연결로 새로고침한다.
+
+⚠️ Summary의 JIRA 코드 칸은 **코드만** 받는다(대문자로 저장) — JIRA 탭의 🔍 찾기 같은 이름
+검색은 하지 않는다(Summary는 빠른 입력용, JIRA 탭이 "찾아서 고르는" 쪽을 전담).
 
 ⚠️⚠️ **네 소스를 한 JQL로 OR 하지 않는다.** JIRA의 `key in (A,B,C)`는 그중 **하나라도 존재하지
 않으면 전체가 400**으로 죽는다 — 메일 스캔은 정규식 기반이라 가짜 키(SAP 코드 등)를 주워올
