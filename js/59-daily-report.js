@@ -1312,7 +1312,7 @@
     // 🔧 [2026-11-11 2차 요청] "저장" 버튼을 이 박스 안으로 — 목록은 계속 스크롤되고, 저장
     //    줄만 테두리 **안쪽**에서 스크롤 없이 붙박인다(바깥 박스를 flex 세로로 나눈다).
     '<div style="border:1px solid #e8e8e8; border-radius:7px; margin-bottom:6px; display:flex; flex-direction:column;">' +
-      '<div style="padding:7px 10px; max-height:400px; overflow-y:auto;">' + chk + '</div>' +
+      '<div style="padding:7px 10px; max-height:410px; overflow-y:auto;">' + chk + '</div>' +
       '<div style="padding:7px 10px; border-top:1px solid #e8e8e8; display:flex; justify-content:flex-end;">' +
         '<button id="daily-save-btn" onclick="window._dailySave()" style="padding:6px 20px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
       '</div>' +
