@@ -963,27 +963,15 @@
         wrap._plLazySweep = sweep;
     };
 
-    // 🎨 머리띠 버튼 칠하기 — HTML 에 인라인으로 박힌 색은 팔레트 <style> 보다 세서, 테마를 바꿔도
-    //    이 띠만 옛 색으로 남는다. 특히 "📐 도면 분석"은 보라색이 박혀 있어 혼자 튀었다(2026-10-30 지적).
-    //    기본 버튼은 팔레트 bg/darkText, 도면 분석만 한 단계 진한 hoverBg 로 구분한다(색은 전부 팔레트).
-    window._plPaintHeaderButtons = function () {
-        var P = _pal();
-        var paint = function (id, bg, fg, bd) {
-            var el = document.getElementById(id); if (!el) return;
-            el.style.background = bg; el.style.color = fg;
-            el.style.border = '1px solid ' + bd;
-        };
-        // 🎯 [2026-10-30] "도면 분석"도 **옆 버튼과 똑같이** 칠한다(사용자 지적: 혼자 튄다).
-        //    처음엔 한 단계 진한 색으로 구분했는데, 띠 안에서 저 혼자 눈에 띌 이유가 없다 —
-        //    자주 쓰는 버튼도 아니고 위험한 버튼도 아니다(AI 안 쓰고, 표를 바로 고치지도 않는다).
-        ['pl-btn-reset', 'pl-btn-add', 'pl-btn-import', 'pl-btn-export', 'pl-btn-nas', 'pl-btn-cols']
-            .forEach(function (id) { paint(id, P.bg, P.darkText, P.border); });
-    };
+    // 🎨 [2026-11-11] 머리띠 버튼 — 전엔 이 함수가 JS 로 색만(테두리 없이 흐리게) 칠해서 호버가
+    //    아예 없었다(사용자 지적: 다른 탭 버튼들과 안 어울린다). 이제 다른 탭의 제목띠 버튼과
+    //    **같은 클래스**(`.concept-add-row-btn`, kortek_pm.html)를 쓴다 — bg/hoverBg(테두리)/darkText
+    //    공식과 호버(hoverBg 배경·hoverBorder 테두리)를 js/21 `_cpApplyLive` 가 전부 대신 칠해 주므로
+    //    여기서 따로 칠할 게 없다. 함수는 비워 두지 않고 그냥 지운다(호출부도 같이 제거).
 
     window.plRender = function (light) {
         var wrap = document.getElementById('pl-table-wrap');
         if (!wrap) return;
-        window._plPaintHeaderButtons();
         var cols = _visibleCols(), rows = _visibleRows();
         var P = _pal();          // 🎨 테마 색 — 아래 인라인 배경(머리글/제브라/고정행)에 그대로 쓴다
 
@@ -1125,7 +1113,8 @@
         'pl-btn-reset':   ['↺',                '↺']
     };
     window.PL_UI_TITLE = window.PL_UI_TITLE || {
-        'pl-btn-reset': ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
+        'pl-btn-reset':  ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
+        'pl-btn-search': ['지금 검색 (Enter)',     'Search now (Enter)'],
         'pl-btn-cols':  ['숨긴 열 되돌리기',      'Restore hidden columns'],
         'pl-btn-nas':   ['NAS 자료실 — 목록(JSON)·백업과 고객 도면을 열고, 올리고, 불러오고, AI로 분석합니다',
                          'NAS files — open, upload, import and AI-analyze the team list (JSON), backups and customer drawings'],
@@ -1167,14 +1156,11 @@
         _saveView(); window.plRender();
     };
     window.plSetFilter = function (k, v) { _view.filters = _view.filters || {}; _view.filters[k] = v; _saveView(); window.plRender(); };
-    // ⚡ 검색은 **타자마다** 부르면 느리다 — 164행 × 91열 재렌더가 한 번에 112ms 라(실측)
-    //    글자를 칠 때마다 화면이 밀린다. 입력이 멎고 나서 한 번만 그린다(필터 목록은 건너뛴다).
-    var _searchTimer = null;
-    window.plSearch = function (v) {
-        _view.search = v;
-        if (_searchTimer) clearTimeout(_searchTimer);
-        _searchTimer = setTimeout(function () { _saveView(); window.plRender(true); }, 160);
-    };
+    // 🔍 [2026-11-11] 디바운스 없음 — 타이핑만으론 검색이 안 돈다(164행 × 91열 재렌더가 한 번에
+    //    112ms 라 타자마다 돌리면 화면이 밀린다, 실측). [🔍 지금 검색] 버튼이나 Enter 를 눌러야
+    //    `plSearchNow()`가 돈다 — js/26 간트 검색과 같은 이유·같은 방식(2026-11-11 사용자 요청).
+    window.plSearch = function (v) { _view.search = v; };
+    window.plSearchNow = function () { _saveView(); window.plRender(true); };
     window.plClearFilters = function () {
         _view.filters = {}; _view.search = ''; _view.sort = { k: '', dir: 1 };
         var si = document.getElementById('pl-search'); if (si) si.value = '';

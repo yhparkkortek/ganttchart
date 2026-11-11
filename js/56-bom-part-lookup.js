@@ -386,7 +386,10 @@
         if (window.switchTab) window.switchTab('projectlist');
         var si = document.getElementById('pl-search');
         if (si) si.value = name;
+        // 🔍 [2026-11-11] plSearch 는 이제 입력만 받고 그리지 않는다(디바운스 제거) — 여기선
+        //    사람이 Enter/버튼을 누를 수 없는 "코드가 대신 검색해 주는" 자리라 바로 반영해야 한다.
         if (window.plSearch) window.plSearch(name);
+        if (window.plSearchNow) window.plSearchNow();
         else if (window.plRender) window.plRender(true);
         return !!si;
     };
