@@ -77,6 +77,22 @@
         ok('계정 저장 체크가 있다', !!document.getElementById('app-user-remember'));
         ok('안내에 잠금 경고가 있다', /여러 번 틀리면|lock/i.test(document.getElementById('app-user-gate').innerText));
 
+        // 🖼 로고는 **회사 로고 파일**이다(2026-11-11 사용자 요청 — 글자로 흉내 내던 것을 교체).
+        //    ⚠️ "태그가 있다" 만 보면 **파일이 없어도 통과한다** → 실제로 그려졌는지(`naturalWidth`)를 본다.
+        var logo = document.getElementById('app-user-gate').querySelector('img[alt="KORTEK"]');
+        ok('로고가 이미지다', !!logo, logo ? logo.getAttribute('src') : '(없음)');
+        if (logo) {
+            if (!logo.complete) { await new Promise(function (r) { logo.onload = logo.onerror = r; }); }
+            ok('로고 파일이 실제로 그려진다', logo.naturalWidth > 0 && logo.naturalHeight > 0,
+               logo.getAttribute('src') + ' → ' + logo.naturalWidth + 'x' + logo.naturalHeight);
+        }
+        // ⚠️ 못 불러왔을 때 **빈 자리로 두지 않는다** — 옛 글자 로고가 대신 뜬다.
+        var logoFb = document.getElementById('app-user-logo-fb');
+        ok('못 불러오면 글자 로고로 떨어진다', !!logoFb && /kortek/i.test(logoFb.textContent),
+           logoFb ? logoFb.textContent : '(폴백 없음)');
+        ok('평소엔 그 글자 로고가 숨어 있다', !!logoFb && getComputedStyle(logoFb).display === 'none',
+           logoFb ? getComputedStyle(logoFb).display : '-');
+
         // ⚠️ 빈 칸으로 누르면 **백엔드로 나가지 않는다**(헛된 실패로 예산을 깎지 않는다).
         document.getElementById('app-user-id').value = '';
         document.getElementById('app-user-pw').value = '';

@@ -149,7 +149,14 @@
         var inp = 'width:100%; box-sizing:border-box; padding:11px 12px; border:1px solid #2aa5b5; border-radius:6px; font-size:14px; background:#eef8fa; margin-bottom:8px;';
         return '' +
         '<div style="width:min(430px,92vw); background:#fff; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.25); padding:28px 26px 22px; text-align:center;">' +
-          '<div style="font-size:30px; font-weight:900; letter-spacing:-1px; color:#00707d; margin-bottom:4px;">kortek</div>' +
+          // 🖼 로고는 **회사 로고 파일**(`assets/kortek-logo.png`, 300×150 투명 PNG —
+          //    그룹웨어 로그인 화면이 쓰는 그 이미지다). 글자로 흉내 내던 것을 2026-11-11 에 교체.
+          //    ⚠️ 못 불러오면 **빈 자리로 두지 않고** 예전 글자 로고를 대신 보여 준다
+          //       (경로가 어긋난 PC 에서 깨진 이미지 아이콘만 뜨면 사람이 원인을 못 찾는다).
+          '<img src="assets/kortek-logo.png" alt="KORTEK" ' +
+            'style="width:170px; max-width:62%; height:auto; display:block; margin:0 auto 2px;" ' +
+            'onerror="this.style.display=\'none\'; var f=document.getElementById(\'app-user-logo-fb\'); if(f){f.style.display=\'block\';}">' +
+          '<div id="app-user-logo-fb" style="display:none; font-size:30px; font-weight:900; letter-spacing:-1px; color:#00707d; margin-bottom:4px;">kortek</div>' +
           '<div style="font-size:12px; color:#888; margin-bottom:18px;">' + esc(T('업무 관리', 'Project Manager')) + '</div>' +
           warn +
           '<input id="app-user-id" value="' + esc(idv) + '" autocomplete="username" placeholder="' + esc(T('아이디', 'ID')) + '" style="' + inp + '">' +
