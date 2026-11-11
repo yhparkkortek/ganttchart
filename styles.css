@@ -1738,6 +1738,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
     /* 🖨️ [공용] 각 탭 인쇄 사본 */
     #tab-print-area { display: none; }
+
+    /* 🐛 [2026-11-11] AI 요약 인쇄 사본만 이 평소-화면 숨김 규칙이 빠져 있었다 — <div> 기본값이
+       display:block이라, printAiProjectSummary()가 내용을 채워 넣는 순간부터 (인쇄 전/후 가리지 않고)
+       평소 화면에도 그대로 보였다(인쇄 대화상자 뒤 흐린 배경에 AI 요약 내용이 겹쳐 보이던 버그의 진짜 원인). */
+    #ai-summary-print-area { display: none; }
     body.tab-printing-mode #app-topbar,
     body.tab-printing-mode #app-sidebar,
     body.tab-printing-mode .concept-header-box,
