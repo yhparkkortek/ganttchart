@@ -147,12 +147,11 @@
     window.wrBaseDate = window.wrBaseDate || new Date();   // 주차 이동의 기준 날짜 (기본값: 오늘)
 
     // 💡 [2026-08-21][WBS 레벨 필터] Weekly Report에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
-    window.wrState = window.wrState || { levelFilter: [3, 4], taskMode: 'wbs' };
+    window.wrState = window.wrState || { levelFilter: [3, 4], taskMode: 'pin' };
 
     // 📌 [2026-11-11 사용자 요청] Calendar(js/24)와 동일한 "📌 핀셋 업무 / 🗂 WBS 업무" 토글을
     //    Weekly Report에도 상속 — 'pin' 이면 핀셋(📌 알림) 처리된 업무만(레벨 필터 무시), 'wbs'
-    //    면 기존 방식 그대로(LEVEL(WBS) 필터 기준). 기본값은 **'wbs'**(Calendar는 'pin' 이 기본이지만,
-    //    Weekly Report는 원래부터 LEVEL(WBS) 필터로 쓰던 화면이라 기존 동작을 바꾸지 않는다).
+    //    면 기존 방식 그대로(LEVEL(WBS) 필터 기준). **기본값은 'pin'**(Calendar와 동일하게 — 사용자 요청).
     var WR_TASK_MODE_KEY = 'gantt_wr_task_mode';
     try {
         var _savedWrTaskMode = localStorage.getItem(WR_TASK_MODE_KEY);
