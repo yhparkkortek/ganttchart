@@ -147,7 +147,37 @@
     window.wrBaseDate = window.wrBaseDate || new Date();   // 주차 이동의 기준 날짜 (기본값: 오늘)
 
     // 💡 [2026-08-21][WBS 레벨 필터] Weekly Report에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
-    window.wrState = window.wrState || { levelFilter: [3, 4] };
+    window.wrState = window.wrState || { levelFilter: [3, 4], taskMode: 'wbs' };
+
+    // 📌 [2026-11-11 사용자 요청] Calendar(js/24)와 동일한 "📌 핀셋 업무 / 🗂 WBS 업무" 토글을
+    //    Weekly Report에도 상속 — 'pin' 이면 핀셋(📌 알림) 처리된 업무만(레벨 필터 무시), 'wbs'
+    //    면 기존 방식 그대로(LEVEL(WBS) 필터 기준). 기본값은 **'wbs'**(Calendar는 'pin' 이 기본이지만,
+    //    Weekly Report는 원래부터 LEVEL(WBS) 필터로 쓰던 화면이라 기존 동작을 바꾸지 않는다).
+    var WR_TASK_MODE_KEY = 'gantt_wr_task_mode';
+    try {
+        var _savedWrTaskMode = localStorage.getItem(WR_TASK_MODE_KEY);
+        if (_savedWrTaskMode === 'pin' || _savedWrTaskMode === 'wbs') window.wrState.taskMode = _savedWrTaskMode;
+    } catch (e) {}
+
+    window.wrToggleTaskMode = function() {
+        window.wrState.taskMode = (window.wrState.taskMode === 'pin') ? 'wbs' : 'pin';
+        try { localStorage.setItem(WR_TASK_MODE_KEY, window.wrState.taskMode); } catch (e) {}
+        window.wrSyncTaskModeBtn();
+        if (window.showWeeklyReport) window.showWeeklyReport();
+    };
+    // 버튼엔 **지금 보고 있는 것**을 표시(Calendar의 cal-task-mode-btn 과 같은 결론).
+    window.wrSyncTaskModeBtn = function() {
+        var b = document.getElementById('wr-task-mode-btn');
+        if (!b) return;
+        var pin = window.wrState.taskMode === 'pin';
+        b.textContent = pin ? ('📌 ' + window._t('핀셋 업무', 'Pinned')) : ('🗂 ' + window._t('WBS 업무', 'WBS'));
+        b.setAttribute('aria-pressed', pin ? 'true' : 'false');
+        b.title = pin
+            ? window._t('지금 핀셋(📌) 처리된 업무만 보는 중 — 누르면 LEVEL(WBS) 필터 기준 전체 업무로 전환합니다',
+                         'Showing pinned (📌) tasks only — click to switch to all tasks by the LEVEL(WBS) filter')
+            : window._t('지금 LEVEL(WBS) 필터 기준 전체 업무를 보는 중 — 누르면 핀셋(📌) 처리된 업무만 보기로 전환합니다',
+                         'Showing all tasks by the LEVEL(WBS) filter — click to switch to pinned (📌) tasks only');
+    };
     // (Gantt 차트 상단의 LEVEL(WBS) 필터와 동일한 filter-group/filter-label/btn 스타일을 그대로 사용)
     window.wrSyncLevelFilterUI = function() {
         const group = document.getElementById('wr-level-filter-group');
@@ -200,8 +230,12 @@
             const nextLevel = (nextRow && typeof nextRow._level === 'number') ? nextRow._level : -1;
             const isLeaf = !(nextRow && nextLevel > myLevel);
             if (!isLeaf) continue;
-            // 💡 [WBS 레벨 필터] 선택한 레벨(기본 L3/L4)에 해당하는 업무만 주간보고서에 표시
-            if (window.wrState.levelFilter && window.wrState.levelFilter.indexOf(myLevel) === -1) continue;
+            // 📌 [2026-11-11] Calendar(js/24 calBuildEvents)와 같은 토글 — 'pin' 이면 핀셋(📌 알림)
+            //    처리된 업무만(레벨과 무관, 사용자가 직접 고른 항목이므로 LEVEL(WBS) 필터를 건너뛴다).
+            //    'wbs'(기본값, 기존 동작)면 선택한 레벨(기본 L3/L4)에 해당하는 업무만.
+            if (window.wrState.taskMode === 'pin') {
+                if (!row._알림) continue;
+            } else if (window.wrState.levelFilter && window.wrState.levelFilter.indexOf(myLevel) === -1) continue;
             const s = row._calcStartTs, e = row._calcPlanTs;
             const name = wrTaskName(row);
             if (!name) continue;
@@ -380,6 +414,7 @@
 // ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
         window.wrSyncLevelFilterUI(); // 💡 [드롭다운화] 탭을 열 때마다 트리거 버튼 강조 상태를 현재 필터와 맞춤
+        window.wrSyncTaskModeBtn(); // 📌 핀셋/WBS 업무 토글 버튼도 매번 현재 모드와 맞춤
         const data = window.wrClassifyTasks();
         const _wrEn = window._currentLang === 'en';
 
