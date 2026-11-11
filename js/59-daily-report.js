@@ -767,12 +767,25 @@
         return st;
     };
 
-    /** 프로젝트 파일 한 개 — `updated_at` 이 그대로면 다시 안 읽는다. */
+    /** 프로젝트 파일 한 개 — `updated_at` 이 그대로면 다시 안 읽는다.
+     *  ⚠️ [2026-11-11] 색인(`project_index.json`)의 `file_name` 은 **낡을 수 있다** — 프로젝트를
+     *     "고객사>프로젝트명" 등을 고쳐 저장하면 앱이 파일명을 다시 조립하는데, 그 저장이 일어난
+     *     PC 가 아니면 색인의 `file_name` 이 옛 이름 그대로 남는다(`docs/nas-dsm.md`에 같은 모양의
+     *     사고 다수). 그 옛 이름으로 바로 읽으면 404 → "내용을 읽지 못했습니다"로 조용히 빠진다.
+     *     → id 로 지금 경로를 다시 풀어(`_storageRelOfId`, js/57·js/15b·js/66 과 같은 방법) 한 번 더
+     *     시도한다. 그래도 없으면 **진짜** 못 읽은 것이다. */
     async function scanProjectFile(entry, tag, collect) {
         var key = tag + '|' + entry.file_name + '|' + (entry.updated_at || '');
         if (_projCache[key]) return _projCache[key];
         var rel = (entry.team ? entry.team + '/' : '') + entry.file_name;
         var d = await window.nasAppFile.get(rel, { json: true });
+        if (!d) {
+            var liveRel = (window._storageRelOfId && entry.drive_file_id) ? window._storageRelOfId(entry.drive_file_id) : '';
+            if (liveRel && liveRel !== rel) {
+                d = await window.nasAppFile.get(liveRel, { json: true });
+                if (d) rel = liveRel;
+            }
+        }
         if (!d || !Array.isArray(d.globalData)) throw new Error(T('내용을 읽지 못했습니다', 'unreadable'));
         // 🙋 내가 든 프로젝트인가 — 색인의 담당자 **또는** 그 파일의 역할별 담당자.
         if ((window.DAILY_SCAN || {}).onlyMyProjects && !iAmIn(entry, d)) {
@@ -998,6 +1011,9 @@
         var seen = {};
         var cand = all.filter(function (c) {
             if (!c || !c.name) return false;
+            // ⚠️ [2026-11-11 요청] 내용(core/todo/issue)이 하나도 없으면 "오늘 한 일" 에 인용할
+            //    말이 없다 — 업무 이름만 있는 후보는 담아도 빈칸이라 목록에서 아예 뺀다.
+            if (!c.core && !c.todo && !c.issue) return false;
             var k = String(c.project || '') + '|' + c.name;
             if (seen[k]) return false;
             seen[k] = 1;
@@ -1151,34 +1167,41 @@
       (me().name ? ' <span style="font-weight:normal; font-size:11.5px; color:#5a8ab5;">' + esc(me().name) + '</span>' : '') + '</span>' +
     '<button onclick="window.dailyCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; flex-shrink:0;">✕</button>' +
   '</div>' +
-  '<div style="flex:1; min-height:0; overflow-y:auto; padding:14px 17px;">' +
-    deletedBandHtml() +
+  '<div style="flex:1; min-height:0; overflow-y:auto; padding:14px 17px; display:flex; flex-direction:column;">' +
+    '<div style="flex-shrink:0;">' + deletedBandHtml() +
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">' +
       '<span style="font-size:12px; color:#555; margin-right:4px;">' + esc(T('일 종류', 'Day type')) + '</span>' + types + '</div>' +
     (exempt
-      ? '<div style="padding:14px; background:#f4f8fb; border:1px solid #d6e6f2; border-radius:7px; font-size:12.5px; color:#2c5f8a;">' +
-        esc(T('이 날은 보고할 업무가 없습니다 — 저장만 누르면 됩니다.', 'Nothing to report for this day — just save.')) + '</div>'
-      : '<div style="font-size:12.5px; font-weight:bold; color:#333; margin-bottom:4px;">' + esc(T('오늘 한 일', 'Done today')) + '</div>' +
-        '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px;">' + chk + '</div>' +
-        '<div style="display:flex; gap:6px; margin-bottom:12px;">' +
-          '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
-          '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
-        '</div>' +
-        '<div style="font-size:11.5px; color:#888; margin-bottom:4px;">' + esc(T('간트에서 불러오기', 'From Gantt')) + ' <span style="color:#bbb;">' + esc(T('(AI 호출 없음 — 메일 분석 결과를 그대로 씁니다)', '(no AI call — reuses mail analysis)')) + '</span></div>' +
-        '<div id="daily-cand" style="max-height:190px; overflow-y:auto; margin-bottom:14px;">' + candHtml() + '</div>' +
-        (_doc.aiDone
-          ? '<div style="margin-bottom:10px;">' +
-              '<div style="font-size:12.5px; font-weight:bold; color:#1971c2; margin-bottom:3px;">🤖 ' + esc(T('오늘 한 일 (AI 정리본 — 고쳐도 됩니다)', 'Done today (AI draft — editable)')) + '</div>' +
-              '<textarea rows="4" oninput="window._dailyField(\'aiDone\', this.value)" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #a5c8f0; background:#f7fbff; border-radius:6px; font-size:12px; font-family:inherit; resize:vertical;">' + esc(_doc.aiDone) + '</textarea>' +
-            '</div>'
-          : '') +
-        legacyEtcHtml()
-    ) +
+      ? '<div style="padding:9px 12px; background:#f4f8fb; border:1px solid #d6e6f2; border-radius:7px; font-size:12px; color:#2c5f8a; margin-bottom:10px;">' +
+        esc(T('이 날은 보고가 필수는 아닙니다 — 그래도 사유가 있으면 아래에서 업무로 등록할 수 있습니다.',
+              'A report is optional for this day — but if there is something to note, you can still add it as a task below.')) + '</div>'
+      : '') +
+    '<div style="font-size:12.5px; font-weight:bold; color:#333; margin-bottom:4px;">' + esc(T('오늘 한 일', 'Done today')) + '</div>' +
+    '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px;">' + chk + '</div>' +
+    '<div style="display:flex; gap:6px; margin-bottom:12px;">' +
+      '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
+      '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
+    '</div>' +
+    '<div style="font-size:11.5px; color:#888; margin-bottom:4px;">' + esc(T('간트에서 불러오기', 'From Gantt')) + ' <span style="color:#bbb;">' + esc(T('(AI 호출 없음 — 메일 분석 결과를 그대로 씁니다)', '(no AI call — reuses mail analysis)')) + '</span></div>' +
+    '</div>' +
+    // 🔧 [2026-11-11 요청] 간트 업무 후보 목록은 **모달을 키운 만큼 같이 커진다** — 위아래는
+    //    고정 높이(flex-shrink:0)로 두고 이 영역만 `flex:1` 로 남는 공간을 전부 가져간다.
+    //    (전엔 `max-height:190px` 로 박아 둬서 모달을 크게 늘려도 후보 칸은 그대로였다.)
+    '<div id="daily-cand" style="flex:1 1 auto; min-height:110px; overflow-y:auto; margin-bottom:14px;">' + candHtml() + '</div>' +
+    '<div style="flex-shrink:0;">' +
+    (_doc.aiDone
+      ? '<div style="margin-bottom:10px;">' +
+          '<div style="font-size:12.5px; font-weight:bold; color:#1971c2; margin-bottom:3px;">🤖 ' + esc(T('오늘 한 일 (AI 정리본 — 고쳐도 됩니다)', 'Done today (AI draft — editable)')) + '</div>' +
+          '<textarea rows="4" oninput="window._dailyField(\'aiDone\', this.value)" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #a5c8f0; background:#f7fbff; border-radius:6px; font-size:12px; font-family:inherit; resize:vertical;">' + esc(_doc.aiDone) + '</textarea>' +
+        '</div>'
+      : '') +
+    legacyEtcHtml() +
     fileInputHtml() + filesHtml('') +
+    '</div>' +
   '</div>' +
   '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; align-items:center; gap:8px;">' +
     '<span style="flex:1; font-size:11px; color:#999;">' + esc(_doc.savedAt ? T('마지막 저장 ', 'Saved ') + new Date(_doc.savedAt).toLocaleString('ko-KR') : T('아직 저장 안 됨', 'Not saved yet')) + '</span>' +
-    (exempt ? '' : '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" style="padding:6px 13px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>') +
+    '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" style="padding:6px 13px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
     '<button onclick="window.dailyCloseModal()" style="padding:6px 14px; border:1px solid #ccc; background:#fff; color:#555; border-radius:6px; font-size:12.5px; cursor:pointer;">' + esc(T('닫기', 'Close')) + '</button>' +
     '<button id="daily-save-btn" onclick="window._dailySave()" style="padding:6px 20px; border:none; background:#19c3d6; color:#fff; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
   '</div>' +
