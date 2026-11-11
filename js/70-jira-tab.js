@@ -5,14 +5,18 @@
 //       상태전환·필드수정(요약/담당자/우선순위)까지 한다. 실제 HTTP 호출은 백엔드
 //       (/jira/*, jira_bridge.py)가 하고, 이 파일은 화면 + 연결(3가지) 수집만 한다.
 //
-// 연결은 3가지를 **모두 쓴다**(사용자 결정, 2026-11-11):
+// 연결은 4가지를 **모두 쓴다**(사용자 결정, 2026-11-11):
 //   ① 수동 이슈 키  — tabData.jiraLinks.manualKeys (쉼표 구분 입력)
 //   ② 키워드 자동검색(JQL text~) — tabData.jiraLinks.keyword (기본값: 프로젝트 모델명)
 //   ③ 메일에서 이미 캡처된 이슈번호 — row._mailRaw.subject/body2000 정규식 스캔(저장 안 함,
 //      매번 다시 스캔 — 메일 분석이 쌓일수록 자동으로 늘어난다)
-// 세 소스는 **따로 조회한다**(한 JQL로 OR 하지 않음) — 메일 스캔은 존재하지 않는 키를
+//   ④ JIRA 프로젝트 전체 — tabData.jiraLinks.projectKey (코드 또는 이름으로 찾아 **key로
+//      저장**, 2026-11-11 추가). 사용자 실측: JIRA 프로젝트는 "LNW>SHUFFLER 3.0"" 처럼
+//      이름에 특수문자·따옴표가 섞여 있어 JQL `project = "그 이름"` 매칭이 깨지기 쉽다
+//      (실측 400) → 이름은 **찾는 용도로만**, 저장/조회는 항상 key(`project = GABKJ`).
+// 네 소스는 **따로 조회한다**(한 JQL로 OR 하지 않음) — 메일 스캔은 존재하지 않는 키를
 // 주워올 수 있는데, JIRA의 `key in (...)`는 그중 하나라도 없으면 전체가 400으로 죽는다.
-// 소스 하나가 깨져도 나머지 둘은 멀쩡히 보여야 한다.
+// 소스 하나가 깨져도 나머지는 멀쩡히 보여야 한다.
 //
 // 쓰기(댓글/상태전환/필드수정)는 **사람이 상세 모달에서 버튼을 눌러야만** 실행된다 —
 // AI 문답 도구(js/40 QA_TOOLS)는 mode:'read'만 등록돼 있어 조회만 할 수 있다
@@ -31,8 +35,10 @@
     function links() {
         window.tabData = window.tabData || {};
         var l = window.tabData.jiraLinks;
-        if (!l || typeof l !== 'object') l = { manualKeys: [], keyword: '' };
+        if (!l || typeof l !== 'object') l = { manualKeys: [], keyword: '', projectKey: '', projectName: '' };
         if (!Array.isArray(l.manualKeys)) l.manualKeys = [];
+        if (typeof l.projectKey !== 'string') l.projectKey = '';
+        if (typeof l.projectName !== 'string') l.projectName = '';
         window.tabData.jiraLinks = l;
         return l;
     }
@@ -82,7 +88,7 @@
     }
 
     function srcChip(src) {
-        var map = { manual: ['🔗', T('수동', 'manual')], mail: ['📧', T('메일', 'mail')], keyword: ['🔍', T('검색', 'search')] };
+        var map = { manual: ['🔗', T('수동', 'manual')], mail: ['📧', T('메일', 'mail')], keyword: ['🔍', T('검색', 'search')], project: ['📁', T('프로젝트', 'project')] };
         return src.map(function (s) {
             var m = map[s] || ['•', s];
             return '<span style="font-size:10px; padding:1px 5px; border-radius:8px; background:#f0f0f0; color:#777; margin-right:2px;">' + m[0] + ' ' + m[1] + '</span>';
@@ -179,15 +185,30 @@
                 });
             } catch (e) { notes.push(String(e && e.message || e)); }
         }
+        async function pullProject() {
+            var pk = (L.projectKey || '').trim();
+            if (!pk) return;
+            try {
+                // ⚠️ 이름이 아니라 **key로만** 조회한다 — 이름엔 특수문자·따옴표가 섞여
+                //    JQL 매칭이 깨진다(위 헤더 주석, 실측 400).
+                var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('project = ' + pk + ' ORDER BY updated DESC') + '&maxResults=50');
+                if (!d || d.ok === false) { notes.push(T('프로젝트 조회 실패: ', 'Project lookup failed: ') + (d && d.message)); return; }
+                (d.issues || []).forEach(function (iss) {
+                    if (!byKey[iss.key]) byKey[iss.key] = Object.assign({ src: [] }, iss);
+                    if (byKey[iss.key].src.indexOf('project') === -1) byKey[iss.key].src.push('project');
+                });
+            } catch (e) { notes.push(String(e && e.message || e)); }
+        }
 
         await pull(manualKeys, 'manual');
         await pull(mailKeys, 'mail');
         await pullKeyword();
+        await pullProject();
 
         Object.keys(byKey).forEach(function (k) { _issueCache[k] = byKey[k]; });
         renderTable(Object.keys(byKey).map(function (k) { return byKey[k]; }), notes.join(' / '));
 
-        if (!manualKeys.length && !mailKeys.length && !keyword) {
+        if (!manualKeys.length && !mailKeys.length && !keyword && !(L.projectKey || '').trim()) {
             renderTable([], null);
         }
     };
@@ -215,35 +236,126 @@
                 + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
                 + '<div style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto; font-size:12px;">'
                 + '<div style="margin-bottom:10px; color:#777; line-height:1.5;">'
-                + T('이 프로젝트와 연결할 JIRA 이슈를 세 가지 방법으로 모읍니다 — 세 가지를 같이 켜 둘 수 있습니다.', 'Collects linked JIRA issues three ways — all three can be on at once.')
+                + T('이 프로젝트와 연결할 JIRA 이슈를 네 가지 방법으로 모읍니다 — 같이 켜 둘 수 있습니다.', 'Collects linked JIRA issues four ways — all can be on at once.')
                 + '</div>'
+                + '<label style="display:block; margin-bottom:4px; color:#555;">📁 ' + T('JIRA 프로젝트(코드 또는 이름 — 그 프로젝트 전체 이슈)', 'JIRA project (code or name — all its issues)') + '</label>'
+                + '<div style="display:flex; gap:6px; margin-bottom:4px;">'
+                + '<input id="jira-link-project" style="flex:1; min-width:0; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="' + T('예: GABKJ 또는 SHUFFLER', 'e.g. GABKJ or SHUFFLER') + '">'
+                + '<button onclick="window._jiraSearchProject()" style="padding:7px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid #f0d090; background:#fff4e0; color:#8b5a00;">🔍 ' + T('찾기', 'Find') + '</button>'
+                + '</div>'
+                + '<div id="jira-link-project-hits" style="display:none; max-height:130px; overflow-y:auto; border:1px solid #eee; border-radius:6px; margin-bottom:10px;"></div>'
+                + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 10px;"></div>'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">🔗 ' + T('수동 이슈 키 (쉼표로 구분, 예: GABKJ-1, GABKJ-5)', 'Manual issue keys (comma-separated, e.g. GABKJ-1, GABKJ-5)') + '</label>'
                 + '<input id="jira-link-manual" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:10px;">'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">🔍 ' + T('검색어(JQL text 검색, 비우면 모델명 사용)', 'Search keyword (JQL text search; blank uses the model name)') + '</label>'
                 + '<input id="jira-link-keyword" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:6px;" placeholder="' + esc(defaultKeyword()) + '">'
                 + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 자동으로 같이 모읍니다(별도 입력 불필요).', 'Issue numbers already captured from mail are collected automatically (no input needed).') + '</div>'
+                + '<div id="jira-link-status" style="display:none; font-size:11.5px; margin-bottom:8px; line-height:1.5;"></div>'
                 + '<div style="display:flex; justify-content:flex-end;">'
                 + '<button onclick="window._jiraSaveLinkSettings()" style="padding:7px 14px; border-radius:6px; font-size:12px; cursor:pointer; border:1px solid #f0d090; background:#fff4e0; color:#8b5a00; font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div></div></div>';
             document.body.appendChild(wrap);
             if (window._makeDraggable) window._makeDraggable('jira-link-box', 'jira-link-drag');
             if (window._bindClickToFront) window._bindClickToFront('jira-link-modal');
+            // 검색 결과 목록은 위임 클릭 하나로 — onclick 에 이름/키를 문자열로 박으면
+            // 프로젝트 이름의 따옴표·꺾쇠(실측 `LNW>SHUFFLER 3.0"`)가 그대로 HTML을 깬다.
+            document.getElementById('jira-link-project-hits').addEventListener('click', function (e) {
+                var el = e.target.closest('[data-idx]');
+                if (!el) return;
+                var p = _projectHits[Number(el.dataset.idx)];
+                if (!p) return;
+                var inp = document.getElementById('jira-link-project');
+                inp.value = p.key + ' — ' + p.name;
+                inp.dataset.key = p.key;
+                inp.dataset.name = p.name;
+                document.getElementById('jira-link-project-hits').style.display = 'none';
+            });
         }
         document.getElementById('jira-link-manual').value = (L.manualKeys || []).join(', ');
         document.getElementById('jira-link-keyword').value = L.keyword || '';
+        var projEl = document.getElementById('jira-link-project');
+        projEl.value = L.projectKey ? (L.projectKey + (L.projectName ? (' — ' + L.projectName) : '')) : '';
+        projEl.dataset.key = L.projectKey || '';
+        projEl.dataset.name = L.projectName || '';
+        document.getElementById('jira-link-project-hits').style.display = 'none';
+        document.getElementById('jira-link-status').style.display = 'none';
         wrap.style.display = 'block';
         if (window.bringModalToFront) window.bringModalToFront('jira-link-modal');
     };
 
-    window._jiraSaveLinkSettings = function () {
+    // ⚠️ 프로젝트 이름이 아니라 **key로 저장**(헤더 주석 참고) — 찾기로 고르면 dataset.key가
+    //    바로 채워지고, 직접 타이핑만 했으면 저장 시 한 번 더 서버에 확인한다.
+    var _projectHits = [];
+
+    window._jiraSearchProject = async function () {
+        var q = (document.getElementById('jira-link-project').value || '').split(' — ')[0].trim();
+        var box = document.getElementById('jira-link-project-hits');
+        if (!q) { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        box.innerHTML = '<div style="padding:8px; color:#999;">' + T('찾는 중...', 'Searching...') + '</div>';
+        try {
+            var d = await fetchJson(BASE + '/jira/projects?q=' + encodeURIComponent(q));
+            if (!d || d.ok === false) { box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc((d && d.message) || '') + '</div>'; return; }
+            _projectHits = (d.projects || []).slice(0, 50);
+            if (!_projectHits.length) { box.innerHTML = '<div style="padding:8px; color:#999;">' + T('일치하는 프로젝트가 없습니다.', 'No matching project.') + '</div>'; return; }
+            box.innerHTML = _projectHits.map(function (p, i) {
+                return '<div data-idx="' + i + '" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;" onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'"><b>' + esc(p.key) + '</b> — ' + esc(p.name) + '</div>';
+            }).join('');
+        } catch (e) {
+            box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
+        }
+    };
+
+    function linkStatus(msg, kind) {
+        var el = document.getElementById('jira-link-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'err' ? '#b1432f' : '#1f7a3d';
+        el.textContent = msg || '';
+    }
+
+    window._jiraSaveLinkSettings = async function () {
         var L = links();
         var raw = (document.getElementById('jira-link-manual').value || '').toUpperCase();
         L.manualKeys = raw.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return KEY_RE.test(s); });
         L.keyword = (document.getElementById('jira-link-keyword').value || '').trim();
+
+        var projEl = document.getElementById('jira-link-project');
+        var typed = (projEl.value || '').split(' — ')[0].trim();
+        linkStatus('', '');
+        if (!typed) {
+            L.projectKey = ''; L.projectName = '';
+        } else if (projEl.dataset.key && projEl.dataset.key.toUpperCase() === typed.toUpperCase().split(' ')[0]) {
+            L.projectKey = projEl.dataset.key;
+            L.projectName = projEl.dataset.name || '';
+        } else {
+            // 찾기로 고르지 않고 직접 타이핑만 함 — 저장 전에 한 번 더 확인한다(추측 금지).
+            try {
+                var d = await fetchJson(BASE + '/jira/projects?q=' + encodeURIComponent(typed));
+                var hits = (d && d.projects) || [];
+                var exact = hits.filter(function (p) { return (p.key || '').toUpperCase() === typed.toUpperCase(); })[0];
+                if (exact) { L.projectKey = exact.key; L.projectName = exact.name; }
+                else if (hits.length === 1) { L.projectKey = hits[0].key; L.projectName = hits[0].name; }
+                else {
+                    linkStatus(hits.length
+                        ? T('⚠️ 여러 프로젝트와 일치해 프로젝트 연결은 저장하지 않았습니다 — 🔍 찾기로 골라주세요.', '⚠️ Matches several projects — project link not saved; use 🔍 Find to pick one.')
+                        : T('⚠️ 일치하는 프로젝트가 없어 프로젝트 연결은 저장하지 않았습니다.', '⚠️ No matching project — project link not saved.'), 'err');
+                    L.projectKey = ''; L.projectName = '';
+                }
+            } catch (e) {
+                linkStatus('⚠️ ' + String(e && e.message || e), 'err');
+                L.projectKey = ''; L.projectName = '';
+            }
+        }
+
         if (window.collectTabData) { try { window.collectTabData(); } catch (e) { /* 있는 값으로 */ } }
         window.tabData.jiraLinks = L;  // collectTabData가 건드리지 않는 키라 다시 얹어 둔다
         if (window._markDirty) window._markDirty();
-        document.getElementById('jira-link-modal').style.display = 'none';
+        if (!L.projectKey && typed) {
+            // 프로젝트만 못 골랐고 나머지는 저장됐다 — 창을 열어 둬서 경고를 보게 한다.
+        } else {
+            document.getElementById('jira-link-modal').style.display = 'none';
+        }
         window._jiraOnTabShown();
     };
 

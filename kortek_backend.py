@@ -5647,6 +5647,18 @@ def jira_priorities():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/jira/projects', methods=['GET'])
+def jira_projects():
+    """📁 프로젝트 목록 — `q`로 코드/이름 부분일치 필터(대소문자 무시). q 없으면 전체(604건
+    실측, 0.1초/186KB — 가볍다). JIRA 탭 ⚙️ 연결 설정의 자동완성 + AI 문답 `jira_projects`
+    도구가 공용으로 쓴다."""
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'projects': jira_bridge.list_projects(request.args.get('q'))})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/chrome-restart', methods=['POST'])
 def gw_chrome_restart():
     """전용 크롬을 닫았다 다시 띄운다 — **http 사이트 차단(HTTPS 자동승격) 해제용.**

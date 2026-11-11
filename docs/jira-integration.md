@@ -38,9 +38,9 @@ SAP(`sap_bridge_32.py`, win32com)·그룹웨어/인사관리(`gw_bridge.py`, CDP
 - ⚠️⚠️ **HTTP 평문** — 이 서버를 HTTPS로 바꾸지 않는 한 사내망을 벗어나면 자격증명이 샌다.
   이 연동은 그 사실을 바꾸지 못한다(관리자 영역).
 
-## 프로젝트↔이슈 연결 — 3가지를 동시에 쓴다 (사용자 결정, 2026-11-11)
+## 프로젝트↔이슈 연결 — 4가지를 동시에 쓴다 (사용자 결정, 2026-11-11)
 
-`js/70-jira-tab.js`가 매 탭 진입마다 세 소스를 **따로** 조회해 합친다:
+`js/70-jira-tab.js`가 매 탭 진입마다 네 소스를 **따로** 조회해 합친다:
 
 1. **수동 키** — `tabData.jiraLinks.manualKeys`(배열). ⚙️ 연결 설정 모달에서 쉼표로 입력.
 2. **키워드 자동검색** — `tabData.jiraLinks.keyword`. JQL `text ~ "키워드*"`. 기본값 placeholder는
@@ -50,14 +50,28 @@ SAP(`sap_bridge_32.py`, win32com)·그룹웨어/인사관리(`gw_bridge.py`, CDP
    리프가 아닌 전체 행을 훑어 `row._mailRaw.subject`/`body2000`에서
    `/\b[A-Z][A-Z0-9]{1,9}-\d{1,6}\b/g`로 추출(최근 20건 cap). 이미 메일 분석이 쌓아 둔 데이터를
    재사용하는 것이라 새 인프라가 없다(`CLAUDE.md` "학습으로 업그레이드되는 앱" 방향과 일치).
+4. **JIRA 프로젝트 전체** — `tabData.jiraLinks.projectKey`(+ 표시용 `projectName`). ⚙️ 설정의
+   📁 칸에 코드(`GABKJ`)나 이름 일부(`SHUFFLER`)를 넣고 🔍 찾기로 고르면 `project = GABKJ`로
+   그 프로젝트의 이슈 전체를 가져온다(사용자 요청 2026-11-11 — 이슈를 하나씩 수동으로 넣을
+   필요 없이 프로젝트 전체를 연결).
 
-⚠️⚠️ **세 소스를 한 JQL로 OR 하지 않는다.** JIRA의 `key in (A,B,C)`는 그중 **하나라도 존재하지
+⚠️⚠️ **프로젝트는 이름이 아니라 항상 key로 저장·조회한다.** 실측(`/rest/api/2/project`, 604건)
+으로 확인: 프로젝트 **이름**엔 `LNW>SHUFFLER 3.0"`처럼 `>`나 끝에 붙은 `"` 같은 특수문자가
+섞여 있다 — JQL `project = "그 이름"`은 따옴표/이스케이프가 꼬여 거의 항상 **400**으로
+실패한다(실측 확인). `project = GABKJ`(key)는 공백·특수문자가 없어 안전하다. 그래서
+`jira_bridge.resolve_project_key(text)`는 사람이 적은 글자(코드 또는 이름 일부)를 **정확히
+하나의 프로젝트에만** 걸릴 때만 key로 바꾸고, 0건이나 2건 이상 걸리면 **추측하지 않고 `None`**
+을 돌려준다(연결 설정 모달이 "🔍 찾기로 골라주세요"를 보여주고 그 필드는 저장하지 않는다).
+
+⚠️⚠️ **네 소스를 한 JQL로 OR 하지 않는다.** JIRA의 `key in (A,B,C)`는 그중 **하나라도 존재하지
 않으면 전체가 400**으로 죽는다 — 메일 스캔은 정규식 기반이라 가짜 키(SAP 코드 등)를 주워올
 수 있다. 그래서 `/jira/search`를 소스별로 **따로** 부른다: 수동 키 1콜, 메일 키 1콜, 키워드
-검색 1콜. 하나가 400이어도 나머지 둘은 멀쩡히 보여야 한다(표 위에 ⚠️ 로 실패 사유만 적힌다).
+검색 1콜, 프로젝트 1콜. 하나가 400이어도 나머지는 멀쩡히 보여야 한다(표 위에 ⚠️ 로 실패
+사유만 적힌다).
 
 표의 "출처" 칩은 머지 후 클라이언트에서 역으로 계산한다(`src: []` 배열, 한 이슈가 여러
-소스에 동시에 걸릴 수 있다).
+소스에 동시에 걸릴 수 있다). AI 문답에서 프로젝트 이름만 아는 질문("SHUFFLER 코드가 뭐야")은
+`jira_projects` 도구(js/40, `/jira/projects?q=`)로 먼저 key를 찾게 한다.
 
 ## 백엔드 라우트 (`kortek_backend.py` → `jira_bridge.py`)
 
@@ -73,6 +87,7 @@ SAP(`sap_bridge_32.py`, win32com)·그룹웨어/인사관리(`gw_bridge.py`, CDP
 | `/jira/issue/<key>/transitions` | GET/POST | 전환 가능 목록 / 실행 |
 | `/jira/issue/<key>` | PUT | 필드 수정(`fields: {summary, description, assignee:{name}, priority:{id}}`) |
 | `/jira/priorities` | GET | 우선순위 목록(필드수정 드롭다운용) |
+| `/jira/projects` | GET | 프로젝트 목록/검색(`q=`, 코드·이름 부분일치). 5분 캐시(`_PROJECT_CACHE`) |
 
 ⚠️ `/jira/issue/<key>`와 `/jira/issue`가 **둘 다 있는 이유**: AI 문답 도구 루프(`js/40 _qaRunTool`)는
 모든 인자를 쿼리스트링으로만 붙이고 경로에 끼워 넣지 않는다 — 그래서 QA_TOOLS 전용으로
@@ -111,13 +126,17 @@ AI 문답 도구(`QA_TOOLS`, js/40)에는 `jira_issue`/`jira_search` **두 개�
 python tests/test_jira_bridge.py
 ```
 
-32건 — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `verify_login`이
+42건 — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `verify_login`이
 `/rest/api/2/user?username=`을 쓰는지(위 버그의 회귀 방지), `_shape_issue` 필드 매핑
 (요약·설명·상태·담당자·우선순위·댓글), `search` 집계, `save_config`/`delete_config`는
-**진짜 Windows DPAPI**로 암복호화 왕복까지 확인한다. 가짜는 `requests.request` 경계 하나뿐.
+**진짜 Windows DPAPI**로 암복호화 왕복까지, `list_projects`/`resolve_project_key`는 캐시가
+네트워크를 또 안 타는지·이름이 0건/2건+이면 추측 없이 `None`을 돌려주는지까지 확인한다.
+가짜는 `requests.request` 경계 하나뿐.
 
 ✅ **실제 서버로 확인한 것**(2026-11-11, 저장된 실제 계정으로): 로그인(whoami) 성공, 실제
-이슈(`GABKJ-1`) 조회 성공(요약·상태·담당자 정상 반환).
+이슈(`GABKJ-1`) 조회 성공(요약·상태·담당자 정상 반환), `GET /rest/api/2/project`(604건,
+0.1초/186KB) 성공, `project = GABKJ` JQL 조회 성공(2건), `project = "LNW>SHUFFLER 3.0"` 이름
+그대로는 **400 실측 확인**(위 "4가지 동시 연결" 절의 근거).
 
 ⚠️ **아직 확인 못 한 것** — 백엔드가 `debug=False`라 재시작 전엔 이 수정이 반영되지 않는다:
 - **백엔드 재시작 필요** — 지금 돌고 있는 프로세스는 고치기 전 `jira_bridge.py`를 메모리에 들고

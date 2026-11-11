@@ -202,6 +202,35 @@ finally:
     if os.path.exists(test_path):
         os.remove(test_path)
 
+print('\n[9] list_projects/resolve_project_key — 이름이 아니라 key로 찾는다, 캐시도 돈다')
+#    ⚠️⚠️ [2026-11-11] 프로젝트 "이름"에 특수문자·따옴표가 섞여 있다(실측: 'LNW>SHUFFLER 3.0"').
+#    그래서 연결은 항상 key 로만 저장해야 한다 — resolve_project_key가 애매하면(0건·2건+)
+#    **추측하지 않고 None** 을 돌려주는지가 이 테스트의 핵심.
+fresh(); stub_auth(True)
+jb._PROJECT_CACHE['list'] = None
+jb._PROJECT_CACHE['ts'] = 0
+_FAKE_PROJECTS = [
+    {'key': 'GABKJ', 'name': 'LNW>SHUFFLER 3.0"'},
+    {'key': 'GABJO', 'name': 'OBSIDIAN'},
+    {'key': 'GABXY', 'name': 'OBSIDIAN LEGACY'},
+    {'key': 'PAAEP', 'name': 'VALICY 23.8" TPR'},
+]
+calls = arm([FakeResp(200, _FAKE_PROJECTS)])
+out = jb.list_projects()
+check('흉내낸 4건 그대로', len(out) == 4 and out[0]['key'] == 'GABKJ', out)
+check('이름의 특수문자도 그대로 보존', out[0]['name'] == 'LNW>SHUFFLER 3.0"', out[0])
+out2 = jb.list_projects()
+check('캐시 안에서는 네트워크를 다시 안 탄다', calls['n'] == 1, calls)
+hits = jb.list_projects('shuffler')
+check('q 필터 — 이름 부분일치(대소문자 무시)', [p['key'] for p in hits] == ['GABKJ'], hits)
+
+check('resolve: 정확한 key → 그대로', jb.resolve_project_key('gabjo') == 'GABJO')
+check('resolve: 이름 부분일치 1건 → key', jb.resolve_project_key('TPR') == 'PAAEP')
+check('resolve: 이름에 2건 걸리면 → None(추측 안 함)', jb.resolve_project_key('OBSIDIAN') is None)
+check('resolve: 좁히면 1건으로 풀린다', jb.resolve_project_key('LEGACY') == 'GABXY')
+check('resolve: 일치 0건 → None(추측 안 함)', jb.resolve_project_key('없는프로젝트') is None)
+check('resolve: 빈 입력 → None', jb.resolve_project_key('') is None)
+
 print('\n' + ('=' * 50))
 print('PASS %d / FAIL %d' % (len(PASS), len(FAIL)))
 if FAIL:

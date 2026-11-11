@@ -267,3 +267,45 @@ def update_fields(key, fields):
 def priorities():
     r = _request('GET', '/rest/api/2/priority')
     return [{'id': p.get('id'), 'name': p.get('name')} for p in r.json()]
+
+
+# ── 📁 프로젝트 목록 — 코드(key)와 이름(name)으로 둘 다 찾게 (2026-11-11) ──────────
+#  실측: 604개, 응답 0.1초/186KB — 매번 불러도 될 정도로 가볍다. 그래도 탭을 들락거릴
+#  때마다 다시 받지 않도록 짧게(5분) 캐시한다. ⚠️ 프로젝트 **이름**은 `LNW>SHUFFLER 3.0"`
+#  처럼 특수문자·끝에 따옴표가 섞여 있어(실측) JQL `project = "그 이름"` 매칭이 깨지기
+#  쉽다 — 그래서 이름은 **사람이 찾는 용도로만** 쓰고, 실제 연결은 **항상 key** 로 한다.
+_PROJECT_CACHE = {'ts': 0, 'list': None}
+_PROJECT_CACHE_TTL = 300
+
+
+def list_projects(q=None):
+    import time
+    now = time.time()
+    if _PROJECT_CACHE['list'] is None or (now - _PROJECT_CACHE['ts']) > _PROJECT_CACHE_TTL:
+        r = _request('GET', '/rest/api/2/project')
+        _PROJECT_CACHE['list'] = [{'key': p.get('key'), 'name': p.get('name')} for p in r.json()]
+        _PROJECT_CACHE['ts'] = now
+    out = _PROJECT_CACHE['list']
+    if q:
+        ql = q.strip().lower()
+        out = [p for p in out if ql in (p['key'] or '').lower() or ql in (p['name'] or '').lower()]
+    return out
+
+
+def resolve_project_key(text):
+    """사람이 적은 글자(코드 또는 이름의 일부)를 **정확히 하나의** 프로젝트 key 로 바꾼다.
+
+    ⚠️ 여러 개에 걸리거나 하나도 안 걸리면 **추측하지 않고** None 을 돌려준다 — 잘못
+    고르면 엉뚱한 프로젝트의 수백 건 이슈가 딸려 온다.
+    """
+    text = (text or '').strip()
+    if not text:
+        return None
+    projects = list_projects()
+    for p in projects:
+        if p['key'] == text.upper():
+            return p['key']
+    hits = [p for p in projects if text.lower() in (p['name'] or '').lower()]
+    if len(hits) == 1:
+        return hits[0]['key']
+    return None

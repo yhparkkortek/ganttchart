@@ -178,11 +178,26 @@
             desc: 'JQL로 JIRA 이슈를 검색한다. 예: "project = GABKJ ORDER BY updated DESC", '
                 + '\'text ~ "OBSIDIAN" ORDER BY updated DESC\'. '
                 + '"GABKJ 프로젝트 최근 이슈 뭐 있어", "OBSIDIAN 관련 JIRA 이슈 찾아줘" 같은 질문에 쓴다. '
+                + '⚠️ project 조건은 **이름이 아니라 코드(key)만** 써라 — 프로젝트 이름엔 특수문자·따옴표가 '
+                + '섞여 있어(예: \'LNW>SHUFFLER 3.0"\') `project = "그 이름"`이 거의 항상 400으로 실패한다 '
+                + '(실측). 이름만 안다면 먼저 jira_projects 로 코드를 찾아라. '
                 + '⚠️ 조회만 한다 — 결과를 바꾸려면 사람이 JIRA 탭에서 직접 한다.',
             path: '/jira/search', pick: 'issues',
             params: [
                 { name: 'jql', type: 'text', max: 200, desc: 'JQL 질의문' },
                 { name: 'maxResults', type: 'int', min: 1, max: 50, def: 20 }
+            ]
+        },
+        {
+            id: 'jira_projects', mode: 'read', requires: 'jira',
+            title: 'JIRA 프로젝트 목록/검색',
+            desc: 'JIRA 프로젝트를 코드나 이름 일부로 찾는다(예: "SHUFFLER" → GABKJ). '
+                + '"SHUFFLER 프로젝트 코드가 뭐야", "GABKJ가 무슨 프로젝트야" 같은 질문, 또는 '
+                + 'jira_search 에 project 조건을 쓰기 전 코드를 모를 때 먼저 부른다. '
+                + 'q를 비우면 전체(604건 실측)를 돌려주니, 찾는 질문이면 q를 채워서 불러라.',
+            path: '/jira/projects', pick: 'projects',
+            params: [
+                { name: 'q', type: 'text', max: 60, required: false, desc: '코드/이름 부분일치 검색어(대소문자 무시)' }
             ]
         },
         {
