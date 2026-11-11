@@ -1898,7 +1898,7 @@
      *  INFORMATION MATRIX" 를 찾아**(리비전 H 의 변경내용 문장 속에 우연히 그 문구가 들어 있었다)
      *  머리글 자리에 리비전 기록 문장이 통째로 섞여 들어갔다(실측: "FIRMWARE TABLE 6. CABLE/LINE
      *  INSTALLTION: …" 글자 수프). C 양식을 추가하니 그 줄=칸 경로를 아예 안 타고 25행이 깨끗하게 나온다. */
-    var _matFromLineRows = function (L) {
+    var _matFromLineRows = function (L, hasTitleAnywhere) {
         var A = ['REVISION', 'MANUFACTURER PART NUMBER', 'PART NUMBER', 'VENDOR',
                  'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL'];
         var B = ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
@@ -1927,7 +1927,10 @@
             if (rows.length > 40) break;
         }
         if (rows.length) return { headers: headers, rows: rows };
-        return _matGeneric(L);
+        // ⚠️ _matGeneric 은 VENDOR 를 토큰 위치 제한 없이(처음 5개 밖까지) 찾아서 A/B/C 보다
+        // 오인식 여지가 더 크다 — "DISPLAY INFORMATION MATRIX" 문구가 문서 어딘가에(느슨하게)
+        // 있을 때만 시도한다(표 자체가 없는 문서의 BOM 행이 걸리는 사고 방지, 실측 "1576437 REV M").
+        return hasTitleAnywhere ? _matGeneric(L) : null;
     };
 
     // ⚠️⚠️⚠️ [2026-11-11 3차] A/B/C 전부 "REV 뒤 몇 번째 토큰이 VENDOR인가"가 **문서마다 고정된
@@ -2093,13 +2096,17 @@
      *  행은 **리비전 칸으로 시작한다**는 규칙으로 끊는다(F/W 로 끊으면 N/A 인 옛 양식을 놓친다). */
     window.plParseDisplayMatrix = function (text) {
         var L = _lines(text);
-        var byLine = _matFromLineRows(L);          // pdf.js 모양 먼저
+        // ⚠️⚠️ [2026-11-11 6차] "제목이 있어야만 시도한다"를 _matFromLineRows 전체에 걸었다가
+        //    **더 많이 깨졌다**(정상 39 → 16) — "1569940 REV J" 같은 멀쩡한 문서가 제목 글자
+        //    자체가 pdf.js 추출에서 쪼개져 안 보이는 경우였다(실측: 템플릿 A/B/C 는 "리비전칸+
+        //    VENDOR(처음 5토큰 안)+같은 모양 반복"이라는 조건만으로 이미 안전했다 — 제목 없이도
+        //    잘 돌고 있었다). 그래서 제목 확인은 **_matGeneric 에만**(그 조건이 느슨해서 BOM
+        //    표에서도 걸릴 수 있었다, 실측 "1576437 REV M": 제목 자체가 없는 문서인데 BOM 행
+        //    "B ASY,TOPPER MONITOR,27" ... BOE MV270FHM-N20 ..."이 오인식됨) 신호로만 준다.
+        var hasTitleAnywhere = /DISPLAY INFORMATION MATRIX/i.test(text);
+        var byLine = _matFromLineRows(L, hasTitleAnywhere);
         if (byLine) return byLine;
-        // ⚠️ [2026-11-11] "DISPLAY INFORMATION MATRIX" 문구가 **리비전 변경내용 문장 속에도**
-        //    우연히 등장할 수 있다("… AND FIXED A TYPO IN DISPLAY INFORMATION MATRIX AND …" 처럼).
-        //    그 줄을 표 제목으로 잘못 짚으면 그 뒤 리비전 기록 전체가 머리글로 빨려 들어간다
-        //    (실측 사고). 그 줄 **하나만**으로 된 줄(진짜 표 제목)을 먼저 찾고, 없을 때만
-        //    예전처럼 문장 속에서라도 찾는다(최후 대비).
+
         var at = -1, atLoose = -1;
         for (var i = 0; i < L.length; i++) {
             if (/^DISPLAY INFORMATION MATRIX$/i.test(L[i])) { at = i; break; }
