@@ -381,3 +381,34 @@ CP949 로 보냈을 뿐이고, `/doc/list` 가 주는 이름은 `U+AC1C U+BC1C 3
 - ⚠️ **NAS/Drive 의 JSON 을 스크립트로 직접 고치지 않았다** — 그 파일을 열어 둔 앱이 메모리의 옛 값으로
   되돌려 쓴다(`docs/doc-store.md` 의 사진 이전 사고와 같은 함정). 지우는 주체는 **앱**이어야 한다.
 - 지운 사실은 변경 이력에 한 줄로 남는다("도면분석 칸 정리 · 1행 → 삭제됨").
+
+## 🔍 정보 확인 — 프로젝트 파일(Summary·Customer SPEC)과 값이 다른 행 찾기 (2026-11-11)
+
+`plCheckAgainstProjects()`(헤더 `🔍 정보 확인`) — 사용자 요청: "프로젝트 정보와 비교해서 저장된
+정보가 다른 것들을 찾아서 표시".
+
+- ⚠️⚠️ **실측으로 뒤집힌 가정** — 처음엔 행의 `project`(G2111OB 같은 사내 관리번호)로
+  `project_index.json` 의 `model` 과 맞추려 했는데, **177건 중 176건이 못 찾았다**(실측). 원인:
+  `project`·`project_index.model` 둘 다 그 프로젝트 파일 어디에도 없는 서로 무관한 값이었다
+  (`model` 은 Summary '모델명' 칸이라 사람이 PN 을 적기도 한다 — STELLAR32 프로젝트의 모델명이
+  "1641445-ALT1"). **실제로 겹치는 건 CABINET 과 파일명의 모델 조각**뿐이다(파일명은 앱이 항상
+  `고객_모델_인치.json` 으로 조립하므로 믿을 수 있다 — `_plFileModelOf`). → **CUSTOMER + CABINET**
+  으로 맞춘다. 같은 CABINET 에 인치가 다른 프로젝트가 여럿이면 `panelInch`/`cuttingInch` 로 좁혀
+  보고, 그래도 둘 이상이면 **고르지 않는다**(근거가 갈리면 아무것도 안 올린다 — docs/mail-evidence.md
+  와 같은 원칙). 실측: CUSTOMER 로만 걸러도 177건 중 CABINET 이 맞는 건 9건뿐(대부분의 행은 그
+  CABINET 을 전담하는 Gantt 파일이 따로 없다 — 못 찾음이 정상이다).
+- CUSTOMER 비교는 **포함 관계**로 본다(파일의 `고객사` 가 "LNW>OBSIDIAN27_DB" 같은 복합값일 수
+  있어, Project list 의 "LNW" 가 그 안에 들어 있으면 같은 값이다 — 매칭에 쓴 것과 같은 함수
+  `_plNameHit`). 처음엔 문자 그대로 비교해서 **전부** "CUSTOMER 가 다르다"는 거짓 경고를 냈다.
+- 담당자(`ownerHw/Fw/Mech/Touch` ↔ `projectMeta.HW/FW/기구/TSP담당자`, js/66 `DOC_MEMBER_ROLES`
+  와 같은 자리)는 **쉼표로 여러 명을 적는데 순서가 사람마다 다르다**(실측: "채해원 노태헌 김진권"
+  vs "노태헌,김진권,채해원" — 같은 세 명). 순서가 아니라 **누가 있나(집합)** 로 비교한다
+  (`sameNames`) — 안 그러면 순서만 다른 행이 전부 "다르다"로 뜬다.
+- Customer SPEC(`tabData.briefSpec`/`briefSpecByUnit`)은 **항목 이름을 지어내지 않는다**
+  (이 문서 위쪽 "Customer SPEC 항목 이름은 지어내지 말 것"과 같은 경고 — 추측하면 전부 0건으로
+  떨어진 적 있다, js/67 인계 기록). Project list 열과 **뜻이 분명한 두 항목만** 본다: `panel` ↔
+  TYPE 이 'PANEL' 로 시작하는 행, `resolution` ↔ 'RESOLUTION' 로 시작하는 행.
+- 둘 중 하나가 비어 있으면 "다르다"고 안 한다(미입력일 뿐 — 거짓 경고 방지).
+- 결과는 팝업 표(행 클릭 시 상세 보기로 이동) + "비교 N건 · 다른 값 N건 · 못 찾은 N건 · 겹친 N건"
+  요약. 검증: 실제 개발3팀 데이터(177행·NAS 프로젝트 파일 15개)로 돌려 9건 비교·9건 중 CUSTOMER
+  오탐 0·담당자 순서 오탐 0·겹침 2건(SHUFFLER 인치 2종) 확인.

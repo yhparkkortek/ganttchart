@@ -1105,9 +1105,9 @@
     //    정적 HTML 에 한글을 박아 두면 언어를 바꿔도 이 페이지만 한글로 남는다(그 사고가 반복됐다).
     //    언어 전환(toggleLang)에서도 불러 주므로, 이미 그려진 화면도 같이 따라간다.
     window.PL_UI_TEXT = window.PL_UI_TEXT || {
-        'pl-btn-add':     ['➕ 행 추가',        '➕ Add row'],
-        'pl-btn-import':  ['📥 엑셀 불러오기', '📥 Import Excel'],
+        'pl-btn-check':   ['🔍 정보 확인',     '🔍 Check info'],
         'pl-btn-export':  ['📊 엑셀 저장',     '📊 Export Excel'],
+        'pl-btn-import':  ['📂 불러오기',      '📂 Import'],
         'pl-btn-nas':     ['📁 NAS',           '📁 NAS'],
         'pl-btn-cols':    ['🔁 열',            '🔁 Columns'],
         'pl-btn-reset':   ['↺',                '↺']
@@ -1115,6 +1115,10 @@
     window.PL_UI_TITLE = window.PL_UI_TITLE || {
         'pl-btn-reset':  ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
         'pl-btn-search': ['지금 검색 (Enter)',     'Search now (Enter)'],
+        'pl-btn-check':  ['프로젝트 파일(Summary·Customer SPEC)과 값이 다른 행을 찾아 표시',
+                           'Find rows whose values differ from the project file (Summary · Customer SPEC)'],
+        'pl-btn-import': ['NAS에서 목록(JSON)이나 엑셀을 불러옵니다',
+                           'Import the list (JSON) or an Excel file from NAS'],
         'pl-btn-cols':  ['숨긴 열 되돌리기',      'Restore hidden columns'],
         'pl-btn-nas':   ['NAS 자료실 — 목록(JSON)·백업과 고객 도면을 열고, 올리고, 불러오고, AI로 분석합니다',
                          'NAS files — open, upload, import and AI-analyze the team list (JSON), backups and customer drawings'],
@@ -1228,33 +1232,22 @@
             box.onclick = function (e) { e.stopPropagation(); };
             document.body.appendChild(box);
         }
-        // 🎨 모양은 사용자가 준 디자인 그대로 — 흰 라운드 상자 안에 **파스텔 라운드 사각형 2×2**.
-        //    ⌃⌄(파랑) 이동 · ＋(초록) 추가 · －(빨강) 삭제. 통일성 때문에 다른 팝업도 이 톤을 쓴다.
-        var _b = function (bg, bd, fg) {
-            return 'width:42px; height:36px; border:1px solid ' + bd + '; border-radius:9px; background:' + bg + ';'
-                 + ' color:' + fg + '; cursor:pointer; font-size:15px; font-weight:bold; line-height:1;'
-                 + ' display:flex; align-items:center; justify-content:center; transition:filter .12s;';
-        };
-        var BLUE = _b('#e8f1fd', '#c7ddf7', '#4a7fd4');
-        var GREEN = _b('#e9f7ec', '#bfe6c9', '#35a35a');
-        var RED = _b('#fdeceb', '#f6c9c5', '#d4584f');
-        var SMALL = 'flex:1; padding:5px 0; border:1px solid #dde6ea; border-radius:9px; background:#fff; cursor:pointer;'
-                  + ' font-size:11px; color:#5b6b73;';
-        box.style.cssText = 'position:fixed; z-index:100001; background:#fff; border:1px solid #e3eaed; border-radius:14px;'
-                          + ' box-shadow:0 8px 22px rgba(0,0,0,.16); padding:9px;';
+        // 🎨 [2026-11-11] Gantt 의 행 액션 팝업(.row-action-popup/.rap-btn 류, js/04i)과 **같은 버튼**을
+        //    쓴다 — 전엔 이 페이지만 따로 만든 파스텔 사각형이라 앱 전체 톤과 어긋났다(사용자 지적).
+        box.className = 'row-action-popup';
+        box.style.cssText = 'position:fixed; z-index:100001;';
+        var WIDE = 'grid-column: span 2; width:100%; height:28px; font-size:11px; font-weight:bold; gap:4px;';
         box.innerHTML =
             '<div style="font-size:10.5px; color:#9aa5a9; text-align:center; margin-bottom:6px;">'
           + _esc(_t('행 ', 'Row ') + (r.no || '')) + '</div>'
-          + '<div style="display:grid; grid-template-columns:repeat(2,42px); gap:7px;">'
-          + '<button title="' + _esc(_t('위로 이동', 'Move up')) + '" onclick="window.plMoveRow(\'' + id + '\',-1)" style="' + BLUE + '">⌃</button>'
-          + '<button title="' + _esc(_t('아래로 이동', 'Move down')) + '" onclick="window.plMoveRow(\'' + id + '\',1)" style="' + BLUE + '">⌄</button>'
-          + '<button title="' + _esc(_t('아래에 행 추가', 'Insert row below')) + '" onclick="window.plInsertRow(\'' + id + '\',1)" style="' + GREEN + '">＋</button>'
-          + '<button title="' + _esc(_t('이 행 삭제', 'Delete row')) + '" onclick="window.plDeleteRow(\'' + id + '\')" style="' + RED + '">－</button>'
-          + '</div>'
-          + '<div style="display:flex; gap:6px; margin-top:7px;">'
-          + '<button title="' + _esc(_t('위에 행 추가', 'Insert row above')) + '" onclick="window.plInsertRow(\'' + id + '\',0)" style="' + SMALL + '">＋↑</button>'
-          + '<button title="' + _esc(pinned ? _t('고정 해제', 'Unpin') : _t('맨 위에 고정', 'Pin to top')) + '" onclick="window.plTogglePin(\'' + id + '\'); window.plCloseRowMenu();" style="' + SMALL + (pinned ? ' background:#fff8e1; border-color:#f2dfa0;' : '') + '">📌</button>'
-          + '<button title="' + _esc(_t('상세 보기', 'Detail')) + '" onclick="window.plCloseRowMenu(); window.plOpenDetail(\'' + id + '\')" style="' + SMALL + '">📋</button>'
+          + '<div style="display:grid; grid-template-columns:repeat(2,33px); grid-auto-rows:33px; gap:4px; justify-items:center;">'
+          + '<span class="rap-btn" title="' + _esc(_t('위로 이동', 'Move up')) + '" onclick="window.plMoveRow(\'' + id + '\',-1)"><i class="ti ti-chevron-up"></i></span>'
+          + '<span class="rap-btn" title="' + _esc(_t('아래로 이동', 'Move down')) + '" onclick="window.plMoveRow(\'' + id + '\',1)"><i class="ti ti-chevron-down"></i></span>'
+          + '<span class="rap-btn rap-btn-add" title="' + _esc(_t('아래에 행 추가', 'Insert row below')) + '" onclick="window.plInsertRow(\'' + id + '\',1)"><i class="ti ti-plus"></i></span>'
+          + '<span class="rap-btn rap-btn-danger" title="' + _esc(_t('이 행 삭제', 'Delete row')) + '" onclick="window.plDeleteRow(\'' + id + '\')"><i class="ti ti-minus"></i></span>'
+          + '<span class="rap-btn" style="' + WIDE + '" title="' + _esc(_t('위에 행 추가', 'Insert row above')) + '" onclick="window.plInsertRow(\'' + id + '\',0)"><i class="ti ti-row-insert-top"></i>' + _esc(_t('위에 추가', 'Insert above')) + '</span>'
+          + '<span class="rap-btn" style="' + WIDE + (pinned ? ' background:#fff8e1; border-color:#f2dfa0; color:#8a6d1a;' : '') + '" title="' + _esc(pinned ? _t('고정 해제', 'Unpin') : _t('맨 위에 고정', 'Pin to top')) + '" onclick="window.plTogglePin(\'' + id + '\'); window.plCloseRowMenu();"><i class="ti ti-pin"></i>' + _esc(pinned ? _t('고정 해제', 'Unpin') : _t('고정', 'Pin')) + '</span>'
+          + '<span class="rap-btn" style="' + WIDE + '" title="' + _esc(_t('상세 보기', 'Detail')) + '" onclick="window.plCloseRowMenu(); window.plOpenDetail(\'' + id + '\')"><i class="ti ti-list-details"></i>' + _esc(_t('상세 보기', 'Detail')) + '</span>'
           + '</div>';
         box.style.display = 'block';
         // 화면 밖으로 나가지 않게 — 아래/오른쪽이 모자라면 위/왼쪽으로 붙인다
@@ -2400,27 +2393,10 @@
     // ──────────────────────────────────────────────────────────────────────────
     // 11. 엑셀 불러오기 — 사내 "제품 SPEC" 시트를 그대로 받는다.
     //     머리글을 읽어 열을 맞추므로 열 순서가 달라도 따라간다(한/영 둘 다).
+    //     ⚠️ [2026-11-11] 로컬 파일 선택창(옛 plImportExcel)은 "📂 불러오기"가 NAS 창을
+    //        바로 여는 것으로 바뀌면서(plOpenNas) 호출하는 곳이 없어져 삭제했다 — NAS 의
+    //        엑셀/CSV 선택이 같은 _plApplyWorkbook 으로 들어간다(plNasPick ②).
     // ──────────────────────────────────────────────────────────────────────────
-    window.plImportExcel = function () {
-        var inp = document.createElement('input');
-        inp.type = 'file';
-        // 📂 [2026-10-30] 무엇이든 고를 수 있게 — 엑셀이 아니면 아래에서 이유를 말해 준다.
-        inp.onchange = async function () {
-            var f = inp.files && inp.files[0];
-            if (!f) return;
-            if (window._docIsWorkbook && !window._docIsWorkbook(f.name)) {
-                _toast('⚠️ ' + _t('"' + f.name + '" 은(는) 엑셀이 아닙니다 — 제품 목록은 .xlsx/.xls/.csv 로 넣어주세요. (도면·사양서는 행의 📜 자료 버튼으로)',
-                                  '"' + f.name + '" is not an Excel file — the product list needs .xlsx/.xls/.csv. (Drawings go to the row\'s 📜 documents button.)'), 'error', 9000);
-                return;
-            }
-            try {
-                var buf = await f.arrayBuffer();
-                window._plApplyWorkbook(buf, f.name);
-            } catch (e) { _toast('⚠️ ' + _t('파일을 읽지 못했습니다: ', 'Could not read the file: ') + e.message, 'error', 7000); }
-        };
-        inp.click();
-    };
-
     window._plApplyWorkbook = function (arrayBuffer, label) {
         var wb = XLSX.read(arrayBuffer, { type: 'array' });
         // 머리글이 가장 많이 맞는 시트를 고른다 — 파일에 의뢰서/리스트 등 다른 시트가 섞여 있다.
@@ -2517,13 +2493,15 @@
     //      · 엑셀/CSV → 제품 목록 엑셀로 불러오기(교체/합치기)
     //      · 그 외(PDF·도면 등) → 파일명 앞 숫자로 **그 제품 행을 찾아** AI 분석에 건다
     // ══════════════════════════════════════════════════════════════════════════
-    window.plOpenNas = function () {
+    window.plOpenNas = function (drawingsFirst) {
         if (!window._dsOpenPicker) {
             _toast('⚠️ ' + _t('문서 저장소를 불러오지 못했습니다(백엔드 확인).', 'Document store unavailable (check the backend).'), 'error');
             return;
         }
+        // ⚠️ "📂 불러오기"(목록 불러오기)와 "📁 NAS"(고객 도면)가 **같은 창**을 공유한다 —
+        //    시작 탭만 다르다(사용자 요청: 불러오기=목록·백업, NAS=고객 도면 먼저 보이게).
         window._dsOpenPicker({
-            folder: NAS_DATA_FOLDER,
+            folder: drawingsFirst ? NAS_FOLDER : NAS_DATA_FOLDER,
             folders: [
                 { f: NAS_DATA_FOLDER, label: '📒 ' + _t('목록·백업', 'List & backups') },
                 { f: NAS_FOLDER,      label: '📐 ' + _t('고객 도면', 'Customer drawings') }
@@ -2600,6 +2578,176 @@
             await window.plRefreshDocCache(true);
             _toast('📁 ' + _t('NAS에 저장했습니다: ', 'Saved to NAS: ') + name, 'success', 5000);
         } catch (e) { _toast('⚠️ ' + (e && e.message ? e.message : e), 'error', 7000); }
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 11-2. 🔍 정보 확인 — 이 행의 값이 그 프로젝트(Gantt) 파일의 Summary·Customer SPEC 과
+    //       다른지 찾아 보여준다(2026-11-11 사용자 요청).
+    //   - 어느 프로젝트 파일인지는 **이 행이 들고 있지 않다** — CUSTOMER+Project 이름으로
+    //     project_index.json 항목과 맞춰 찾는다(`_plNameHit`, 양방향 포함 검사).
+    //   - Summary 쪽은 `projectMeta.<역할>담당자`(js/66 DOC_MEMBER_ROLES 와 같은 자리 —
+    //     Summary 탭을 한 번도 안 열면 비어 있을 수 있어 그때는 "그 프로젝트도 비어 있음"으로 적는다).
+    //   - Customer SPEC(`tabData.briefSpec`/`briefSpecByUnit`)은 **항목 이름을 지어내지 않는다**
+    //     (docs/project-list.md 경고 — 참조 엑셀 항목명을 추측해 썼다가 전부 0건으로 떨어진 적 있다).
+    //     Project List 열과 **뜻이 분명히 같은 두 항목만** 본다: Panel · Resolution.
+    // ──────────────────────────────────────────────────────────────────────────
+    var PL_CHECK_OWNER_FIELDS = [
+        { k: 'ownerHw',    metaKey: 'HW담당자',     label: ['회로담당(PM)', 'HW owner (PM)'] },
+        { k: 'ownerFw',    metaKey: 'FW담당자',     label: ['펌웨어담당',   'FW owner'] },
+        { k: 'ownerMech',  metaKey: '기구담당자',    label: ['기구담당',     'Mech owner'] },
+        { k: 'ownerTouch', metaKey: 'TSP담당자',    label: ['터치담당',     'Touch owner'] }
+    ];
+    var _plCheckNorm = function (v) { return String(v == null ? '' : v).replace(/\s+/g, '').trim(); };
+    /** briefSpec 행에서 TYPE 이 그 말로 **시작하는** 첫 항목의 값칸을 — 항목 이름을 지어내지 않고
+     *  참조 엑셀에 실제로 있는 'Panel'/'Resolution' 한정으로만 쓴다. */
+    var _plCheckSpecItem = function (bs, startsWith) {
+        if (!Array.isArray(bs)) return '';
+        var pat = String(startsWith).toUpperCase();
+        for (var i = 0; i < bs.length; i++) {
+            var t = String((bs[i] && bs[i].type) || '').trim().toUpperCase();
+            if (t.indexOf(pat) === 0) return String((bs[i] && bs[i].modelA) || '').trim();
+        }
+        return '';
+    };
+    var _plCheckBriefSpecOf = function (d) {
+        var td = d.tabData || {};
+        if (Array.isArray(td.briefSpec) && td.briefSpec.length) return td.briefSpec;
+        var byUnit = td.briefSpecByUnit;
+        if (byUnit && typeof byUnit === 'object') {
+            var vals = Object.keys(byUnit).map(function (k) { return byUnit[k]; }).filter(function (v) { return Array.isArray(v) && v.length; });
+            if (vals.length) return vals[0];
+        }
+        return [];
+    };
+
+    /** 프로젝트 파일명(`고객_모델_인치.json`)에서 **모델 조각**만 뺀다 — project_index.json 의
+     *  `model` 필드(=Summary '모델명')는 사람이 PN 을 적기도 해 믿을 수 없지만(실측: STELLAR32
+     *  프로젝트의 모델명이 "1641445-ALT1"), **파일명**은 항상 이 규칙으로 조립된다(js/04k). */
+    var _plFileModelOf = function (fileName) {
+        var base = String(fileName || '').replace(/\.json$/i, '');
+        var parts = base.split('_');
+        if (parts.length < 2) return base;
+        var last = parts[parts.length - 1];
+        if (/^\d+(\.\d+)?$/.test(last)) parts.pop(); // 끝 조각이 인치 숫자면 뺀다
+        return parts.slice(1).join('_');
+    };
+
+    window.plCheckAgainstProjects = async function () {
+        if (typeof window._msLoadProjectIndex !== 'function' || !window.nasAppFile || !window.nasAppFile.get) {
+            _toast('⚠️ ' + _t('프로젝트 파일 조회 기능을 불러오지 못했습니다.', 'Could not load project-file lookup.'), 'error');
+            return;
+        }
+        // ⚠️ [2026-11-11 실측] Project List 의 `project`(G2111OB 같은 사내 관리번호)는 프로젝트
+        //    파일 어디에도 없다 — project_index.json 의 `customer`/`model` 과도, 파일명과도 안 맞는다.
+        //    실제로 겹치는 건 **CABINET**(예: STELLAR32·SHUFFLER·OBSIDIAN DB)과 파일명의 모델 조각뿐
+        //    (실측: LNW_STELLAR32_32.0.json ↔ CABINET "STELLAR32" 3건, LNW_OBSIDIAN27_DB_27.0.json
+        //    ↔ CABINET "OBSIDIAN DB" 5건). 그래서 **CABINET** 으로 맞춘다 — `project` 로 맞추지 않는다.
+        var rows = (D().rows || []).filter(function (r) { return String(r.customer || '').trim() && String(r.cabinet || '').trim(); });
+        if (!rows.length) { _toast(_t('비교할 행이 없습니다(CUSTOMER·CABINET 이 채워진 행만 봅니다).', 'Nothing to compare (only rows with CUSTOMER and CABINET).'), 'warning'); return; }
+        _toast('🔍 ' + _t('프로젝트 파일과 비교하는 중…', 'Comparing against project files…'), 'info', 5000);
+        var team = _team();
+        var idx;
+        try { idx = await window._msLoadProjectIndex(); } catch (e) { idx = []; }
+        var mine = (idx || []).filter(function (p) { return p && p.file_name && (!team || String(p.team || '').trim() === team); })
+            .map(function (p) { return Object.assign({}, p, { _fileModel: _plFileModelOf(p.file_name) }); })
+            .filter(function (p) { return p._fileModel; });
+
+        var cache = {}; // file_name → 읽은 문서(or null)
+        var readEntry = async function (entry) {
+            if (cache[entry.file_name] !== undefined) return cache[entry.file_name];
+            var rel = (entry.team ? entry.team + '/' : '') + entry.file_name;
+            var d = null;
+            try { d = await window.nasAppFile.get(rel, { json: true }); } catch (e) { d = null; }
+            if (!d && window._storageRelOfId && entry.drive_file_id) {
+                var liveRel = window._storageRelOfId(entry.drive_file_id);
+                if (liveRel) { try { d = await window.nasAppFile.get(liveRel, { json: true }); } catch (e2) { d = null; } }
+            }
+            cache[entry.file_name] = d || null;
+            return cache[entry.file_name];
+        };
+
+        var mism = [], noMatch = 0, ambiguous = 0, checked = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            var cands = mine.filter(function (p) {
+                return (window._plNameHit(p.customer || '', r.customer) || window._plNameHit(r.customer, p.customer || ''))
+                    && (window._plNameHit(p._fileModel, r.cabinet) || window._plNameHit(r.cabinet, p._fileModel));
+            });
+            if (cands.length > 1) {
+                // 인치로 좁혀본다(같은 CABINET 에 여러 인치 변형 프로젝트가 있는 실제 경우) — 그래도
+                // 둘 이상이면 **고르지 않는다**(근거가 갈리면 아무것도 올리지 않는다, docs/mail-evidence.md 와 같은 원칙).
+                var inchWanted = _plCheckNorm(r.panelInch || r.cuttingInch || '');
+                if (inchWanted) {
+                    var narrowed = cands.filter(function (p) { return _plCheckNorm(p.inch || '') === inchWanted; });
+                    if (narrowed.length) cands = narrowed;
+                }
+            }
+            if (cands.length !== 1) { if (cands.length > 1) ambiguous++; else noMatch++; continue; }
+            var ent = cands[0];
+            var d = await readEntry(ent);
+            if (!d) continue;
+            checked++;
+            var pm = d.projectMeta || {};
+            var bs = _plCheckBriefSpecOf(d);
+            var diffs = [];
+            var cmp = function (plVal, projVal, label, sameFn) {
+                plVal = String(plVal == null ? '' : plVal).trim();
+                projVal = String(projVal == null ? '' : projVal).trim();
+                if (!plVal || !projVal) return;           // 둘 중 하나가 비어 있으면 "다르다"고 안 한다 — 미입력일 뿐
+                if (sameFn ? sameFn(plVal, projVal) : _plCheckNorm(plVal) === _plCheckNorm(projVal)) return;
+                diffs.push({ label: label, pl: plVal, proj: projVal });
+            };
+            // CUSTOMER — 파일은 "고객사>프로젝트명" 복합값일 수 있다(예: "LNW>OBSIDIAN27_DB").
+            //  Project list 의 "LNW"가 그 안에 들어 있으면 같은 값이지 다른 값이 아니다.
+            cmp(r.customer, pm.고객사, _t('CUSTOMER', 'CUSTOMER'), function (a, b) {
+                return window._plNameHit(a, b) || window._plNameHit(b, a);
+            });
+            // 담당자 — 쉼표로 여러 명을 적는데 **순서가 사람마다 다르다**(실측: "A,B,C" vs "B,A,C"
+            //  같은 세 명). 순서가 아니라 **누가 있나**로 비교한다.
+            var sameNames = function (a, b) {
+                var split = function (v) { return String(v).split(/[,\/\s]+/).map(function (x) { return x.trim(); }).filter(Boolean).sort(); };
+                var A = split(a), B = split(b);
+                return A.length === B.length && A.every(function (x, i) { return x === B[i]; });
+            };
+            PL_CHECK_OWNER_FIELDS.forEach(function (f) { cmp(r[f.k], pm[f.metaKey], _t(f.label[0], f.label[0]), sameNames); });
+            cmp(r.panel, _plCheckSpecItem(bs, 'PANEL'), _t('Panel (Customer SPEC)', 'Panel (Customer SPEC)'));
+            cmp(r.resolution, _plCheckSpecItem(bs, 'RESOLUTION'), _t('Resolution (Customer SPEC)', 'Resolution (Customer SPEC)'));
+            if (diffs.length) mism.push({ row: r, diffs: diffs, project: ent.file_name });
+        }
+
+        var skipNote = '';
+        if (noMatch || ambiguous) {
+            skipNote = '<div style="color:#888; font-size:11.5px; margin-top:6px;">'
+                + (noMatch ? noMatch + _t('건은 프로젝트 파일을 찾지 못해 건너뛰었습니다(CUSTOMER·CABINET 이름이 다를 수 있음). ', ' rows had no matching project file (CUSTOMER/CABINET name mismatch?) — skipped. ') : '')
+                + (ambiguous ? ambiguous + _t('건은 같은 CABINET 의 프로젝트 파일이 여럿이라 건너뛰었습니다.', ' rows matched more than one project file for the same CABINET — skipped.') : '')
+                + '</div>';
+        }
+        var body;
+        if (!mism.length) {
+            body = '<div style="color:#2e7d32; padding:10px 0;">✅ ' + _t('비교한 ', 'Compared ') + checked + _t('건 중 다른 값이 없습니다.', ' rows — no differences found.') + skipNote + '</div>';
+        } else {
+            body = '<table style="width:100%; border-collapse:collapse; font-size:11.5px;">'
+                 + '<tr style="background:#f1f6f7;"><th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">No</th>'
+                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트', 'Project') + '</th>'
+                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
+                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">Project list</th>'
+                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th></tr>'
+                 + mism.map(function (m) {
+                     return m.diffs.map(function (df, di) {
+                         return '<tr style="border-bottom:1px solid #eef3f4;' + (di === 0 ? '' : '') + '">'
+                              + (di === 0 ? '<td style="padding:5px 8px; cursor:pointer; color:#00707d; text-decoration:underline;" onclick="window.plClosePopup(); window.plOpenDetail(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>'
+                                          + '<td style="padding:5px 8px; color:#789;" rowspan="' + m.diffs.length + '">' + _esc(String(m.project).replace(/\.json$/i, '')) + '</td>' : '')
+                              + '<td style="padding:5px 8px;">' + _esc(df.label) + '</td>'
+                              + '<td style="padding:5px 8px;">' + _esc(df.pl) + '</td>'
+                              + '<td style="padding:5px 8px; color:#b1432f;">' + _esc(df.proj) + '</td></tr>';
+                     }).join('');
+                 }).join('')
+                 + '</table>'
+                 + '<div style="color:#888; font-size:11px; margin-top:8px;">' + _t('비교 ', 'Compared ') + checked + _t('건 · 다른 값 ', ' rows · differences ') + mism.length + _t('건', ' rows')
+                 + (noMatch ? _t(' · 못 찾은 ', ' · unmatched ') + noMatch + _t('건', ' rows') : '')
+                 + (ambiguous ? _t(' · 겹친 ', ' · ambiguous ') + ambiguous + _t('건', ' rows') : '') + '</div>';
+        }
+        _popup('🔍 ' + _t('프로젝트 파일과 다른 값', 'Differences from the project file'), body, true);
     };
 
     // ──────────────────────────────────────────────────────────────────────────
