@@ -66,6 +66,24 @@ SPEC과 공유하는 `window.mcActiveUnit` — 한 프로젝트에 MVD/TPR/BTN�
 하나의 프로젝트에만** 걸릴 때만 key로 바꾸고, 0건이나 2건 이상 걸리면 **추측하지 않고 `None`**
 을 돌려준다(연결 설정 모달이 "🔍 찾기로 골라주세요"를 보여주고 그 필드는 저장하지 않는다).
 
+## 📎 첨부파일 (2026-11-11, 사용자 제보)
+
+"댓글에 '첨부 파일 참조'라고 적혀 있는데 파일이 안 보인다" — JIRA는 첨부를 **댓글이 아니라
+이슈**에 붙인다(실측 GABJQ-4, 3건: xlsx 1개 + jpg 2개). `FIELDS_DEFAULT`에 `attachment`를
+추가하고 `_shape_issue`가 `attachments: [{filename,size,mimeType,url,author,created}]`로
+옮긴다. 이미지는 상세 모달에 90×90 썸네일로 바로 보이고, 전부 새 탭으로 열면 받아진다.
+
+⚠️⚠️ **다운로드는 프록시를 거친다(`GET /jira/attachment?url=&name=`)** — JIRA 첨부 주소
+(`/secure/attachment/<id>/<파일명>`)는 Basic Auth가 필요해서 브라우저가 직접 열면 401이
+난다. `jira_bridge.fetch_attachment(url)`가 그 바이트를 받아 백엔드가 중계한다. ⚠️ `url`은
+**`JIRA_BASE + '/secure/attachment/'`로 시작할 때만** 허용한다(`fetch_attachment` 안에서
+검사) — 그렇지 않으면 임의 주소를 우리 JIRA 계정으로 대신 받아오는 SSRF 통로가 된다. 파일명이
+한글일 수 있어 `Content-Disposition`은 RFC 5987 퍼센트 인코딩(`filename*=UTF-8''...`)으로 —
+일반 `filename="..."`는 라틴-1만 허용돼 한글에서 터진다.
+
+실측: `get_issue('GABJQ-4')` → 첨부 3건, `fetch_attachment`로 37,711바이트(xlsx) 그대로 받음
+확인.
+
 ## 🔁 Summary 탭 모델 카드 ↔ JIRA 양방향 참조 (2026-11-11, 사용자 요청)
 
 Summary 탭의 모델 카드(고객모델명·프로젝트코드·프로젝트명칭·KTK PN 4칸)에 **🪐 JIRA 코드**
@@ -125,6 +143,7 @@ Summary 탭의 모델 카드(고객모델명·프로젝트코드·프로젝트�
 | `/jira/issue/<key>` | PUT | 필드 수정(`fields: {summary, description, assignee:{name}, priority:{id}}`) |
 | `/jira/priorities` | GET | 우선순위 목록(필드수정 드롭다운용) |
 | `/jira/projects` | GET | 프로젝트 목록/검색(`q=`, 코드·이름 부분일치). 5분 캐시(`_PROJECT_CACHE`) |
+| `/jira/attachment` | GET | 첨부파일 다운로드 프록시(`url=`, `name=`) — `/secure/attachment/`로 시작하는 주소만 허용 |
 
 ⚠️ `/jira/issue/<key>`와 `/jira/issue`가 **둘 다 있는 이유**: AI 문답 도구 루프(`js/40 _qaRunTool`)는
 모든 인자를 쿼리스트링으로만 붙이고 경로에 끼워 넣지 않는다 — 그래서 QA_TOOLS 전용으로

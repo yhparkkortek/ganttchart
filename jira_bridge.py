@@ -192,7 +192,7 @@ def verify_login():
 
 
 FIELDS_DEFAULT = ('summary,description,status,assignee,reporter,priority,issuetype,'
-                   'created,updated,comment,components,labels,fixVersions')
+                   'created,updated,comment,components,labels,fixVersions,attachment')
 
 
 def _shape_issue(raw):
@@ -203,6 +203,7 @@ def _shape_issue(raw):
     priority = f.get('priority') or {}
     issuetype = f.get('issuetype') or {}
     comments = ((f.get('comment') or {}).get('comments')) or []
+    attachments = f.get('attachment') or []
     return {
         'key': raw.get('key'),
         'url': JIRA_BASE + '/browse/' + str(raw.get('key') or ''),
@@ -222,6 +223,16 @@ def _shape_issue(raw):
         'labels': f.get('labels') or [],
         'comments': [{'author': (c.get('author') or {}).get('displayName'),
                       'body': c.get('body'), 'created': c.get('created')} for c in comments],
+        # 📎 [2026-11-11 사용자 요청] 댓글에 "첨부 파일 참조"라고만 적혀 있고 정작 파일은
+        # 안 보이는 문제 — JIRA는 첨부를 **댓글이 아니라 이슈**에 붙인다(실측 GABJQ-4,
+        # 3건). 다운로드는 Basic Auth가 필요해 브라우저가 직접 못 받으므로
+        # /jira/attachment 프록시를 거친다(아래 fetch_attachment).
+        'attachments': [{'filename': a.get('filename') or '',
+                          'size': a.get('size') or 0,
+                          'mimeType': a.get('mimeType') or '',
+                          'url': a.get('content') or '',
+                          'author': (a.get('author') or {}).get('displayName'),
+                          'created': a.get('created') or ''} for a in attachments],
     }
 
 
@@ -248,6 +259,19 @@ def get_transitions(key):
     r = _request('GET', '/rest/api/2/issue/' + key + '/transitions')
     return [{'id': t.get('id'), 'name': t.get('name'), 'to': (t.get('to') or {}).get('name')}
             for t in r.json().get('transitions', [])]
+
+
+def fetch_attachment(url):
+    """첨부파일 바이트를 가져온다 — 브라우저가 직접 받으면 Basic Auth가 없어 401이 난다.
+
+    ⚠️ `url` 은 프런트가 issue 조회로 받은 `attachments[].url` 그대로다 — **그 값 그대로가
+    아니면 거부한다**(JIRA_BASE/secure/attachment/ 로 시작하지 않으면). 임의 주소를 우리
+    자격증명으로 대신 불러오는 SSRF 통로가 되지 않게 하기 위해서다.
+    """
+    prefix = JIRA_BASE + '/secure/attachment/'
+    if not url.startswith(prefix):
+        raise JiraApiError('허용되지 않은 첨부파일 주소입니다.')
+    return _request('GET', url[len(JIRA_BASE):])
 
 
 def do_transition(key, transition_id, comment=None):

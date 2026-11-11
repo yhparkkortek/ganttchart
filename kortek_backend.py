@@ -5647,6 +5647,30 @@ def jira_priorities():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/jira/attachment', methods=['GET'])
+def jira_attachment():
+    """📎 첨부파일 다운로드 프록시 — 브라우저는 Basic Auth가 없어 JIRA 첨부 주소를 직접 못
+    받는다(401). `url`은 jira_issue가 돌려준 attachments[].url **그대로**만 받는다
+    (jira_bridge.fetch_attachment가 JIRA_BASE/secure/attachment/ 접두어를 검사 — 임의 주소를
+    우리 계정으로 대신 받아오는 통로가 되지 않게)."""
+    url = request.args.get('url') or ''
+    name = request.args.get('name') or 'attachment'
+    if not url:
+        return jsonify({'ok': False, 'message': 'url이 필요합니다.'}), 400
+    try:
+        import jira_bridge
+        r = jira_bridge.fetch_attachment(url)
+        from flask import make_response
+        from urllib.parse import quote
+        resp = make_response(r.content)
+        resp.headers['Content-Type'] = r.headers.get('Content-Type', 'application/octet-stream')
+        # ⚠️ 파일명이 한글일 수 있다 — 헤더는 라틴-1만 허용되므로 RFC 5987 퍼센트 인코딩으로.
+        resp.headers['Content-Disposition'] = "inline; filename*=UTF-8''%s" % quote(name)
+        return resp
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 502
+
+
 @app.route('/jira/projects', methods=['GET'])
 def jira_projects():
     """📁 프로젝트 목록 — `q`로 코드/이름 부분일치 필터(대소문자 무시). q 없으면 전체(604건

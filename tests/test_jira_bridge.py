@@ -129,6 +129,9 @@ raw = {
         'components': [{'name': 'MECH'}],
         'labels': ['urgent'],
         'comment': {'comments': [{'author': {'displayName': '박영희'}, 'body': '확인했습니다', 'created': '2026-11-10T10:00:00.000+0900'}]},
+        'attachment': [{'filename': '온도별 휘도 내역.jpg', 'size': 42234, 'mimeType': 'image/jpeg',
+                        'content': jb.JIRA_BASE + '/secure/attachment/39143/x.jpg',
+                        'author': {'displayName': '홍철기'}, 'created': '2026-11-09T08:51:38.000+0900'}],
     }
 }
 shaped = jb._shape_issue(raw)
@@ -142,6 +145,20 @@ check('priority', shaped['priority'] == 'High' and shaped['priorityId'] == '2')
 check('components', shaped['components'] == ['MECH'])
 check('labels', shaped['labels'] == ['urgent'])
 check('comments 1건', len(shaped['comments']) == 1 and shaped['comments'][0]['author'] == '박영희')
+check('attachments 1건 — 댓글이 아니라 이슈에 붙는다', len(shaped['attachments']) == 1
+      and shaped['attachments'][0]['filename'] == '온도별 휘도 내역.jpg'
+      and shaped['attachments'][0]['url'] == jb.JIRA_BASE + '/secure/attachment/39143/x.jpg')
+
+print('\n[5.5] fetch_attachment — 허용된 주소만, SSRF 방지')
+fresh(); stub_auth(True)
+try:
+    jb.fetch_attachment('http://evil.example.com/steal')
+    check('허용 안 된 주소는 거부한다', False)
+except jb.JiraApiError as e:
+    check('허용 안 된 주소 → 거부', '허용되지 않은' in str(e), str(e))
+calls = arm([FakeResp(200, b'\xff\xd8\xff fake-jpeg-bytes', headers={'Content-Type': 'image/jpeg'})])
+r = jb.fetch_attachment(jb.JIRA_BASE + '/secure/attachment/39143/x.jpg')
+check('허용된 JIRA_BASE 주소는 통과', calls['n'] == 1 and r.json() == b'\xff\xd8\xff fake-jpeg-bytes', calls)
 
 print('\n[6] search — total/issues를 그대로 옮긴다')
 fresh(); stub_auth(True)

@@ -476,6 +476,41 @@
     var btnSt = 'padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d;';
     var btnHover = ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"';
 
+    // 📎 [2026-11-11 사용자 제보] 댓글에 "첨부 파일 참조"라고 적혀 있는데 정작 파일이 안
+    // 보였다 — JIRA는 첨부를 댓글이 아니라 **이슈**에 붙인다. 이미지는 썸네일로 미리 보여준다
+    // (다운로드는 /jira/attachment 프록시 — 브라우저는 Basic Auth가 없어 직접 못 받는다).
+    function humanSize(n) {
+        n = Number(n) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    function attachmentUrl(att) {
+        return BASE + '/jira/attachment?url=' + encodeURIComponent(att.url) + '&name=' + encodeURIComponent(att.filename);
+    }
+
+    function renderAttachments(list) {
+        if (!list || !list.length) return '';
+        var items = list.map(function (a) {
+            var href = attachmentUrl(a);
+            var isImg = /^image\//.test(a.mimeType || '');
+            var inner = isImg
+                ? '<img src="' + esc(href) + '" alt="' + esc(a.filename) + '" style="width:90px; height:90px; object-fit:cover; border-radius:6px; display:block;">'
+                : '<div style="width:90px; height:90px; display:flex; align-items:center; justify-content:center; font-size:30px; background:#f5f7f8; border-radius:6px;">📄</div>';
+            return '<a href="' + esc(href) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + ' (' + humanSize(a.size) + ')"'
+                + ' style="display:flex; flex-direction:column; align-items:center; gap:3px; width:94px; text-decoration:none;">'
+                + inner
+                + '<span style="font-size:10.5px; color:#555; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(a.filename) + '</span>'
+                + '<span style="font-size:10px; color:#aaa;">' + esc(humanSize(a.size)) + '</span>'
+                + '</a>';
+        }).join('');
+        return '<div style="margin-bottom:12px;">'
+            + '<div style="font-weight:bold; color:#555; margin-bottom:6px;">📎 ' + T('첨부파일', 'Attachments') + ' (' + list.length + ')</div>'
+            + '<div style="display:flex; flex-wrap:wrap; gap:10px;">' + items + '</div>'
+            + '</div>';
+    }
+
     function modalSetStatus(msg, kind) {
         var el = document.getElementById('jira-issue-status');
         if (!el) return;
@@ -550,6 +585,7 @@
                 + '</select>')
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
+            + renderAttachments(issue.attachments)
             + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
             + fieldRow(T('상태 전환', 'Transition'), (transitions.length
                 ? ('<select id="jira-f-transition" style="' + inputSt + '">'
