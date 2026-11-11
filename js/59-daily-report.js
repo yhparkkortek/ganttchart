@@ -1198,8 +1198,8 @@
     // 🔧 [2026-11-11 요청] 담은 업무가 많으면 이 목록이 끝없이 늘어나 아래(직접 추가·간트
     //    불러오기·후보 목록·저장 버튼)가 전부 멀리 밀렸다 — 3개 정도 보이는 높이로 고정하고
     //    그 안에서만 스크롤한다(모달 전체 스크롤과 별개). 카드 하나 125px(실측, 글 길이와
-    //    무관 — input 은 줄바꿈 안 함) × 3 + 안쪽 패딩 14px, +60px 요청 후 -10px 요청.
-    '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px; max-height:439px; overflow-y:auto;">' + chk + '</div>' +
+    //    무관 — input 은 줄바꿈 안 함) × 3 + 안쪽 패딩 14px, 440px 로 확정.
+    '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px; max-height:440px; overflow-y:auto;">' + chk + '</div>' +
     '<div style="display:flex; gap:6px; margin-bottom:12px;">' +
       '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
       '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
