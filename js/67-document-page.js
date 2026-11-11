@@ -791,8 +791,11 @@
             : { meta: {}, overview: {}, milestones: { plan: {}, actual: {}, missing: [] }, members: [], spec: [], materials: [] };
 
         // ── 헤더 — PARTS 와 같은 드롭다운 + 출력(문서 형식이 기본, 엑셀은 옵션) ──
-        var PRIM = 'margin:0 4px 0 0; padding:6px 13px; background:#00707d; color:#fff; border:none;'
-                 + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;';
+        // 🎨 헤더 버튼은 **한 벌**이다 — 원본저장·엑셀·불러오기·NAS 가 같은 모양·같은 팔레트.
+        //   ⚠️⚠️ `background:#00707d`(darkText)를 쓰지 말 것 — js/21 은 그 hex 를 **글자색 역할**로만
+        //      매핑해서(`textRoles`), 배경으로 쓰면 테마를 바꿔도 **그 버튼만 청록으로 굳는다**
+        //      (사용자 신고 2026-11-11). 배경으로 다시 칠해지는 건 `bgRoles` 에 있는 hex 뿐이다
+        //      (`bg #e0f5f7` · `headerTint` · `zebraB` · `hoverBg`).
         var OPT = 'margin:0 4px 0 0; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none;'
                 + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;';
         var th = '<div id="doc-form-toggle" style="position:relative; display:flex; align-items:center; flex-shrink:0;">'
@@ -828,7 +831,7 @@
             + '<span class="btn-group">'
             // 💾 [2026-11-09 요청] 인쇄 버튼은 **없앴다** — 브라우저 인쇄(Ctrl+P)로 대체.
             //    대신 **원본 문서 모양(.docx)** 으로 저장한다(실측 원본과 같은 Word 파일).
-            + '<button onclick="window._docSaveDocx()" style="' + PRIM + '">💾 ' + _esc(_t('원본저장', 'Save as Word')) + '</button>'
+            + '<button onclick="window._docSaveDocx()" style="' + OPT + '">💾 ' + _esc(_t('원본저장', 'Save as Word')) + '</button>'
             + '<button onclick="window._docExport(\'xlsx\')" style="' + OPT + '">📊 ' + _esc(_t('엑셀 저장', 'Excel')) + '</button>';
         if (form && form.builder) {
             th += '<button onclick="window._docExport(\'pptx\')" style="' + OPT + '">📑 ' + _esc(_t('PPT 저장', 'PPT')) + '</button>';

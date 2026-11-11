@@ -535,6 +535,30 @@
             ok(/원본저장|Save as Word/.test(toolsTxt), '[원본저장] 버튼이 없다');
             ok(typeof window._docPrint === 'undefined', '쓰지 않는 _docPrint 가 남아 있다');
 
+            // 🎨 헤더 버튼은 **한 벌**이고 팔레트를 따라야 한다 (사용자 신고 2026-11-11:
+            //    "원본저장 버튼 배경이 파란색으로 고정")
+            //    ⚠️ 고정 hex 를 기대값으로 박지 않는다 — "넷이 같은가 · 테마를 바꾸면 같이 바뀌는가"
+            //       로 본다(테마는 PC 마다 다르게 저장돼 있다).
+            var headBtns = function () {
+                return [].map.call(document.querySelectorAll('#doc-header-tools .btn-group button'), function (b) {
+                    var cs = getComputedStyle(b);
+                    return { t: b.textContent.trim(), bg: cs.backgroundColor, fg: cs.color };
+                });
+            };
+            var hb = headBtns();
+            ok(hb.length >= 4, '헤더 출력 버튼이 모자란다 (' + hb.length + ')');
+            ok(hb.every(function (b) { return b.bg === hb[0].bg && b.fg === hb[0].fg; }),
+               '헤더 버튼 모양이 서로 다르다: ' + hb.map(function (b) { return b.t.slice(0, 6) + ' ' + b.bg; }).join(' | '));
+            var themeBefore = hb[0].bg;
+            window._cpApplyLive('#b1432f', true);
+            window._docRender();
+            var hb2 = headBtns();
+            ok(hb2.every(function (b) { return b.bg === hb2[0].bg; }),
+               '테마를 바꾸니 버튼 하나만 안 따라온다: ' + hb2.map(function (b) { return b.t.slice(0, 6) + ' ' + b.bg; }).join(' | '));
+            ok(hb2[0].bg !== themeBefore, '테마를 바꿨는데 버튼 색이 그대로다 (팔레트를 안 탄다)');
+            window._cpApplyLive(window._cpSavedThemeHex || '#00707d', true);
+            window._docRender();
+
             var realFetch3 = window.fetch, docxReq = null, dl = null;
             window.fetch = function (u, o) {
                 if (String(u).indexOf('/doc/docx') >= 0) {
