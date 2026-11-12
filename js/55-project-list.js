@@ -2518,6 +2518,29 @@
         _toast('✅ ' + _esc(label) + ' — ' + rows.length + _t('건을 불러왔습니다. (시트: ', ' rows imported. (sheet: ') + best.sheet + ')', 'success', 6000);
     };
 
+    /** 📥 [2026-11-12 사용자 요청] 로컬 엑셀을 **페이지 아무 데나 끌어다 놓아** 바로 불러오기 —
+     *  담당자가 본인 PC 에서 계속 쓰던 파일을 완료하면 NAS 업로드 단계 없이 곧장 등록한다
+     *  (NAS 에 올리는 건 이후 자동 저장이 알아서 한다 — _persist() → plSaveToNasJson).
+     *  ⚠️ 전역 드롭(js/04f, 프로젝트 엑셀 통째 불러오기)으로 새지 않게 stopPropagation 필수. */
+    window.plDropImport = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+        var zone = document.getElementById('pl-drop-zone');
+        if (zone) zone.style.outline = 'none';
+        var files = ev.dataTransfer && ev.dataTransfer.files ? Array.prototype.slice.call(ev.dataTransfer.files) : [];
+        if (!files.length) return;
+        var f = files[0];
+        if (window._docIsWorkbook && !window._docIsWorkbook(f.name)) {
+            _toast('⚠️ ' + _t('"' + f.name + '" 은(는) 엑셀이 아닙니다 — .xlsx/.xls/.csv 파일을 끌어다 놓아주세요.',
+                              '"' + f.name + '" is not an Excel file — drop an .xlsx/.xls/.csv file.'), 'error', 7000);
+            return;
+        }
+        _toast('📥 ' + _esc(f.name) + _t(' 불러오는 중…', ' loading…'), 'info');
+        f.arrayBuffer().then(function (buf) { window._plApplyWorkbook(buf, f.name); })
+            .catch(function (e) { _toast('⚠️ ' + (e && e.message ? e.message : e), 'error', 7000); });
+    };
+
     /** 엑셀 내보내기 — 지금 보이는 열/행 그대로(내보낼 땐 현재 언어 하나, 불러올 땐 두 언어 다) */
     window.plExportExcel = function () {
         var cols = _visibleCols(), rows = _visibleRows();
