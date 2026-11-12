@@ -470,6 +470,60 @@
     //    ⚠️ 경로(루트 UNC)는 코드에 적지 않는다 — 각 PC 의 docstore_config.json 에만 있다(저장소 공개).
     // ══════════════════════════════════════════════════════════════════════════
     var NAS_DATA_FOLDER = 'PROJECT LIST';
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📦 백업/리비전 — 엑셀 불러오기(교체/합치기) **직전에만** 스냅샷 하나를 남긴다
+    //    (2026-11-12 사용자 설계 확정: "임포트 직전만" — 매일 안전 스냅샷은 안 둠).
+    //    간트 프로젝트 백업(js/04b `backupToDrive`)과 같은 철학 — 파일명에 찍힌 시각만 믿고
+    //    (`mtime` 금지, docs/nas-dsm.md 경고), 백업을 쓴 **그 자리에서** 10일 지난 것부터 치운다
+    //    (따로 도는 정리 작업 없음). ⚠️ **Backups/<팀>/**(간트 프로젝트 백업 폴더)에 안 섞는다 —
+    //    섞으면 그 복원 모달(`loadBackupList`)이 project_index 에 없는 "ProjectList_개발3팀"을
+    //    프로젝트처럼 보여주며 뒤섞인다. 대신 Project list 전용 `PROJECT LIST/Backups` 에 둔다
+    //    (백엔드 화이트리스트는 첫 단계만 보므로 — `DOCSTORE_APP_FOLDERS` — 새로 등록할 필요 없다).
+    //    복원은 새 화면 없이 **기존 NAS 창의 세 번째 탭**(plOpenNas)으로 — 그 파일을 고르면
+    //    `plNasPick`의 JSON 분기(확인 후 통째 교체)가 그대로 돈다.
+    var PL_BACKUP_FOLDER = NAS_DATA_FOLDER + '/Backups';
+    var PL_BACKUP_RETENTION_DAYS = 10;
+    /** 파일명의 `_YYYYMMDD_HHMM` 도장만 믿는다 — NAS mtime 은 이사/복사로 뒤바뀐 전력이 있다. */
+    var _plBackupStampOf = function (name) {
+        var m = String(name || '').match(/_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})\.json$/i);
+        if (!m) return null;
+        var t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+        return isNaN(t.getTime()) ? null : t;
+    };
+    /** 지금 표를 백업 폴더에 스냅샷 — 실패해도 불러오기 자체는 막지 않는다(백업은 부차적 안전장치). */
+    window._plBackupBeforeImport = async function () {
+        if (!window._dsPut) return;
+        try {
+            var cur = D();
+            if (!(cur.rows || []).length) return;           // 비어 있던 표는 백업할 게 없다
+            var now = new Date();
+            var pad = function (n) { return String(n).padStart(2, '0'); };
+            var name = '백업_ProjectList_' + _team() + '_'
+                     + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '_'
+                     + pad(now.getHours()) + pad(now.getMinutes()) + '.json';
+            var payload = JSON.stringify({ rows: cur.rows, history: cur.history || [], savedAt: new Date().toISOString() });
+            await window._dsPut(PL_BACKUP_FOLDER, new File([payload], name, { type: 'application/json' }), true);
+        } catch (e) { console.warn('[Project list] 백업 실패(불러오기는 계속 진행):', e && e.message); }
+        window._plSweepOldBackups(); // 기다리지 않는다 — 정리가 늦어도 불러오기를 막을 이유가 없다
+    };
+    /** 10일 지난 백업만 지운다 — 한 번 실패해도 다음 임포트 때 다시 시도되니 조용히 넘어간다. */
+    window._plSweepOldBackups = async function () {
+        if (!window._dsList || !window._dsDelete) return;
+        try {
+            var j = await window._dsList(PL_BACKUP_FOLDER);
+            var files = (j && (j.files || j.items || j.list)) || [];
+            var cutoff = Date.now() - PL_BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+            for (var i = 0; i < files.length; i++) {
+                var nm = (files[i] && files[i].name) || String(files[i]);
+                var stamp = _plBackupStampOf(nm);
+                if (stamp && stamp.getTime() < cutoff) {
+                    try { await window._dsDelete(PL_BACKUP_FOLDER, nm); } catch (e) { /* 다음 번에 다시 */ }
+                }
+            }
+        } catch (e) { /* 폴더가 아직 없거나 조회 실패 — 다음 임포트 때 다시 시도 */ }
+    };
+
     // 파일 이름은 팀 이름 그대로(`ProjectList_개발3팀.json`). 사람이 NAS 폴더에서 보고
     //    알 수 있어야 하고, 실제로 UTF-8 그대로 오갔다(2026-10-30 확인).
     //    ⚠️ 단, **이름이 정확히 같아야 찾는 방식에 의지하지 않는다** — 사람이 복사본을 두거나
@@ -2446,7 +2500,7 @@
     //        바로 여는 것으로 바뀌면서(plOpenNas) 호출하는 곳이 없어져 삭제했다 — NAS 의
     //        엑셀/CSV 선택이 같은 _plApplyWorkbook 으로 들어간다(plNasPick ②).
     // ──────────────────────────────────────────────────────────────────────────
-    window._plApplyWorkbook = function (arrayBuffer, label) {
+    window._plApplyWorkbook = async function (arrayBuffer, label) {
         var wb = XLSX.read(arrayBuffer, { type: 'array' });
         // 머리글이 가장 많이 맞는 시트를 고른다 — 파일에 의뢰서/리스트 등 다른 시트가 섞여 있다.
         var best = null;
@@ -2489,9 +2543,11 @@
         if (mode === 'replace') {
             if (cur && !confirm(_t('기존 ' + cur + '건을 전부 지우고 ' + rows.length + '건으로 교체합니다. 계속할까요?',
                                    'This replaces all ' + cur + ' rows with ' + rows.length + ' rows. Continue?'))) return;
+            await window._plBackupBeforeImport(); // 취소하지 않고 실제로 바꾸기 직전 — 여기서만 스냅샷
             D().rows = rows;
             _plPushHistory({ ktkPn: '-', desc: label }, 'no', cur + _t('건', ''), rows.length + _t('건 (엑셀 교체)', ' rows (Excel replace)'));
         } else {
+            await window._plBackupBeforeImport(); // 합치기도 기존 칸을 덮어쓰므로 똑같이 백업한다
             var byPn = {};
             (D().rows || []).forEach(function (r) { var k = String(r.ktkPn || '').trim(); if (k) byPn[k] = r; });
             var added = 0, updated = 0;
@@ -2575,8 +2631,12 @@
         window._dsOpenPicker({
             folder: drawingsFirst ? NAS_FOLDER : NAS_DATA_FOLDER,
             folders: [
-                { f: NAS_DATA_FOLDER, label: '📒 ' + _t('목록·백업', 'List & backups') },
-                { f: NAS_FOLDER,      label: '📐 ' + _t('고객 도면', 'Customer drawings') }
+                { f: NAS_DATA_FOLDER,   label: '📒 ' + _t('목록·백업', 'List & backups') },
+                { f: NAS_FOLDER,        label: '📐 ' + _t('고객 도면', 'Customer drawings') },
+                // 🕐 [2026-11-12] 엑셀 불러오기 직전에 자동으로 쌓이는 스냅샷(PL_BACKUP_FOLDER,
+                //    10일 보관) — 여기서 하나를 고르면 아래 JSON 분기(확인 후 통째 교체)로
+                //    복원된다. 새 복원 화면을 따로 안 만든 이유.
+                { f: PL_BACKUP_FOLDER,  label: '🕐 ' + _t('백업 기록', 'Backup history') }
             ],
             title: 'NAS DATA',
             onPick: function (f, name) { window.plNasPick(f, name); }
@@ -2593,6 +2653,9 @@
                 if (!o || !Array.isArray(o.rows)) { _toast('⚠️ ' + _t('제품 목록 JSON이 아닙니다.', 'Not a project-list JSON.'), 'error'); return; }
                 if (!confirm(_t('"' + name + '" 의 ' + o.rows.length + '건으로 지금 표(' + (D().rows || []).length + '건)를 교체할까요?',
                                 'Replace the current table (' + (D().rows || []).length + ' rows) with ' + o.rows.length + ' rows from "' + name + '"?'))) return;
+                // ⚠️ 백업(🕐 백업 기록 탭)을 복원하는 경우도 포함 — 엉뚱한 시점을 골랐을 때를 위해
+                //    지금 지워질 상태도 똑같이 한 장 남긴다(교체 직전에만, 반복 저장은 아님).
+                await window._plBackupBeforeImport();
                 window._plData = { rows: o.rows, history: Array.isArray(o.history) ? o.history : (D().history || []) };
                 _plPushHistory({ ktkPn: '-', desc: name }, 'no', '', _t('NAS JSON 불러오기 ', 'loaded from NAS JSON ') + o.rows.length + _t('건', ' rows'));
                 _persist(); window.plRender();
