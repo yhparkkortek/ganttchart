@@ -926,7 +926,11 @@
                 barcode: it.barcode, model: it.model, startTime: it.startTime, endTime: it.endTime,
                 targetX: it.targetX, targetY: it.targetY, nativeX: it.nativeX, nativeY: it.nativeY,
                 maxPwmLv: it.maxPwmLv, defaultPwmLv: it.defaultPwmLv, gamutPct: it.gamutPct,
-                pqTotal: it.pqTotal, pqPass: it.pqPass, pqFail: it.pqFail,
+                pqTotal: it.pqTotal, pqPass: it.pqPass, pqFail: it.pqFail, pqManual: '',
+                // 🔬 균일도·색재현율은 zip 에 없다 — 빈 채로 두고 "🔽 상세" 를 펼쳐 손으로 보탤 수 있다.
+                dimming: '', grade: '', remark: '', category: '', aging: '', label: '',
+                points: ['', '', '', '', '', '', '', '', ''],
+                primaries: { Rx: '', Ry: '', Gx: '', Gy: '', Bx: '', By: '' },
                 files: files, importedAt: new Date().toISOString()
             });
             okCount++;
@@ -949,6 +953,178 @@
     window._docOpticalToggleAll = function () {
         window._docState.opticalAllRounds = !window._docState.opticalAllRounds;
         window._docRender();
+    };
+
+    // ── 🔬🔬 [2026-11-12 2차] 손으로 재는 9포인트 균일도 + R/G/B 색재현율 ───────
+    //  사용자 확인: 9포인트 Lv(1~9, 3x3)·R/G/B 삼원색 좌표는 **장비 로그가 없어 직접 입력**해야
+    //  한다. 공식은 실제 예시 표를 역산해 맞춘 것 — 첨부(RGB 수동조절 시뮬레이터)의 "NTSC" 프리셋
+  //  숫자는 **그대로 쓰면 95%가 아니라 125%대가 나와 안 맞았고**, 국제 표준 NTSC(1953)
+    //  삼원색(R 0.67,0.33 / G 0.21,0.71 / B 0.14,0.08)을 써야 실제 표(95%)와 맞았다(사용자 승인).
+    //  ⚠️ "PQ"(26포인트 감마/컬러트래킹)와는 **다른 개념** — zip 없이 9포인트만 적은 행은 26포인트
+    //  원본이 없어 진짜 PQ를 계산할 수 없으므로, 그 행은 PQ 를 **비워 두고 사람이 직접 입력**한다
+    //  (사용자 결정 — Uniformity/Gamut 기준 충족으로 자동 판정하면 다른 개념이 한 칸에 섞인다).
+    window.DOC_NTSC1953 = window.DOC_NTSC1953 || { Rx: 0.67, Ry: 0.33, Gx: 0.21, Gy: 0.71, Bx: 0.14, By: 0.08 };
+    var _triArea = function (x1, y1, x2, y2, x3, y3) {
+        return 0.5 * Math.abs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+    };
+    var _NTSC53_AREA = _triArea(window.DOC_NTSC1953.Rx, window.DOC_NTSC1953.Ry, window.DOC_NTSC1953.Gx,
+                                 window.DOC_NTSC1953.Gy, window.DOC_NTSC1953.Bx, window.DOC_NTSC1953.By);
+    /** 9포인트(또는 그 이하) Lv → Uniformity% = min/max×100. 숫자 2개 미만이면 못 구한다(null). */
+    var _opticalUniformity = function (points) {
+        var nums = (points || []).map(function (v) { return parseFloat(v); }).filter(function (v) { return !isNaN(v) && v > 0; });
+        if (nums.length < 2) return null;
+        var min = Math.min.apply(null, nums), max = Math.max.apply(null, nums);
+        if (max <= 0) return null;
+        return { pct: Math.round((min / max) * 100), min: min, max: max };
+    };
+    window._opticalUniformity = _opticalUniformity;
+    /** R/G/B 삼원색(x,y) → Color Gamut(%NTSC) = 측정 삼각형 넓이 ÷ NTSC(1953) 표준 삼각형 넓이 × 100.
+     *  셋 중 하나라도 비었으면 null(빈 값으로 지어내지 않는다). */
+    var _opticalGamut = function (prim) {
+        if (!prim) return null;
+        var rx = parseFloat(prim.Rx), ry = parseFloat(prim.Ry), gx = parseFloat(prim.Gx), gy = parseFloat(prim.Gy),
+            bx = parseFloat(prim.Bx), by = parseFloat(prim.By);
+        if ([rx, ry, gx, gy, bx, by].some(function (v) { return isNaN(v); })) return null;
+        var area = _triArea(rx, ry, gx, gy, bx, by);
+        return { area: area, pct: Math.round((area / _NTSC53_AREA) * 10000) / 100 };
+    };
+    window._opticalGamut = _opticalGamut;
+
+    window._docOpticalAddManual = function (formId) {
+        var d = _docData(formId);
+        d.opticalLogs = d.opticalLogs || [];
+        d.opticalLogs.push({
+            barcode: '', model: '', startTime: '', endTime: '',
+            nativeX: '', nativeY: '', maxPwmLv: '', defaultPwmLv: '',
+            pqTotal: 0, pqPass: 0, pqFail: 0, pqManual: '',
+            dimming: '', grade: '', remark: '', category: '', aging: '', label: '',
+            points: ['', '', '', '', '', '', '', '', ''],
+            primaries: { Rx: '', Ry: '', Gx: '', Gy: '', Bx: '', By: '' },
+            files: [], manual: true, importedAt: new Date().toISOString()
+        });
+        window._docState.opticalExpand = window._docState.opticalExpand || {};
+        window._docState.opticalExpand[d.opticalLogs.length - 1] = true;   // 방금 추가한 행은 펼쳐서 바로 입력
+        _markDirty(); window._docRender();
+    };
+    window._docOpticalClearAll = function (formId) {
+        var d = _docData(formId);
+        var n = (d.opticalLogs || []).length;
+        if (!n) return;
+        if (!confirm(_t('이 회차의 광학 측정 이력 ' + n + '건을 전부 지웁니다(NAS 원본 파일은 그대로 둡니다). 되돌릴 수 없습니다.',
+                        'Delete all ' + n + ' optical records for this round? NAS files are kept.'))) return;
+        d.opticalLogs = [];
+        _markDirty(); window._docRender();
+    };
+    window._docOpticalToggleDetail = function (idx) {
+        window._docState.opticalExpand = window._docState.opticalExpand || {};
+        window._docState.opticalExpand[idx] = !window._docState.opticalExpand[idx];
+        window._docRender();
+    };
+    // ⚡ 9포인트·R/G/B 칸은 **전체 다시 그리지 않는다** — 타이핑 중 포커스가 날아간다(다른 수동
+    //    입력칸들과 같은 원칙). 값만 저장하고 Uniformity/Gamut 표시만 직접 고쳐 칠한다.
+    window._docOpticalRepaint = function (idx) {
+        var d = _docData(window._docState.formId);
+        var row = (d.opticalLogs || [])[idx]; if (!row) return;
+        var uni = _opticalUniformity(row.points);
+        var gam = _opticalGamut(row.primaries);
+        var uEl = document.getElementById('opt-uni-' + idx);
+        if (uEl) uEl.textContent = uni ? (uni.pct + '%') : '-';
+        var gEl = document.getElementById('opt-gamut-' + idx);
+        if (gEl) {
+            gEl.textContent = gam ? (gam.pct + '%') : '-';
+            // ⚠️ 텍스트만 고치면 안 된다 — 처음 렌더 때 gam 이 null 이었으면 onclick 자체가 안 달려
+            //    있어서, 타이핑으로 방금 완성됐는데도 클릭이 안 먹는 채로 남는다.
+            if (gam) {
+                gEl.style.cursor = 'pointer'; gEl.style.color = '#1971c2'; gEl.style.textDecoration = 'underline';
+                gEl.title = _t('클릭하면 CIE1931 그래프', 'Click for CIE1931 chart');
+                gEl.onclick = function () { window._docOpticalShowCIE(window._docState.formId, idx); };
+            } else {
+                gEl.style.cursor = ''; gEl.style.color = ''; gEl.style.textDecoration = ''; gEl.title = ''; gEl.onclick = null;
+            }
+        }
+    };
+
+    // ── 🎨 CIE1931 크로마시티 팝업 — Color Gamut 값을 누르면 측정 삼각형 vs NTSC(1953) 를 그린다 ──
+    //    ⚠️ Delta E·SPD 등은 안 옮긴다(여긴 "이 샘플의 색재현율이 어떤 모양인가"만 보여주는 자리).
+    //    스펙트럼 궤적(물리 상수, CIE1931)은 색 공간을 보여주는 배경선이라 그대로 재사용했다.
+    var DOC_SPECTRUM_LOCUS = [
+        { x: 0.1741, y: 0.0050 }, { x: 0.1440, y: 0.0297 }, { x: 0.1096, y: 0.0868 }, { x: 0.0687, y: 0.2007 },
+        { x: 0.0235, y: 0.4127 }, { x: 0.0039, y: 0.6548 }, { x: 0.0743, y: 0.8338 }, { x: 0.1540, y: 0.8059 },
+        { x: 0.2296, y: 0.7543 }, { x: 0.3016, y: 0.6885 }, { x: 0.3731, y: 0.6058 }, { x: 0.4441, y: 0.5152 },
+        { x: 0.5125, y: 0.4866 }, { x: 0.5752, y: 0.4242 }, { x: 0.6270, y: 0.3725 }, { x: 0.6658, y: 0.3340 },
+        { x: 0.6915, y: 0.3083 }, { x: 0.7079, y: 0.2920 }, { x: 0.7230, y: 0.2770 }, { x: 0.7300, y: 0.2700 },
+        { x: 0.7347, y: 0.2653 }, { x: 0.1741, y: 0.0050 }
+    ];
+    window._docOpticalShowCIE = function (formId, idx) {
+        var d = _docData(formId);
+        var row = (d.opticalLogs || [])[idx]; if (!row) return;
+        var gam = _opticalGamut(row.primaries);
+        var ov = document.getElementById('doccie-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'doccie-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9550; pointer-events:none; background:none;';
+            ov.innerHTML = '<div id="doccie-box" style="pointer-events:all; position:fixed; left:50%; top:8%;'
+                + ' transform:translateX(-50%); width:min(560px,94vw); max-height:86vh; display:flex; flex-direction:column;'
+                + ' background:#fff; border:1px solid #a3d9e0; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18); overflow:hidden;">'
+                + '<div id="doccie-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between;'
+                + ' padding:9px 12px; background:#e0f5f7; border-bottom:1px solid #a3d9e0; color:#00707d; font-weight:bold; font-size:13px; cursor:grab;">'
+                + '<span id="doccie-title"></span>'
+                + '<button onclick="document.getElementById(\'doccie-overlay\').style.display=\'none\'" style="background:var(--modal-icon-bg);'
+                + ' border:1px solid var(--modal-icon-border); color:var(--modal-icon-text); border-radius:6px; font-size:16px;'
+                + ' cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div style="flex:1; min-height:0; overflow:auto; padding:12px; text-align:center;">'
+                + '<canvas id="doccie-canvas" width="480" height="440" style="max-width:100%; background:#fff; border:1px solid #e9ecef; border-radius:6px;"></canvas>'
+                + '<div id="doccie-note" style="margin-top:8px; font-size:11.5px; color:#555; text-align:left;"></div>'
+                + '</div></div>';
+            document.body.appendChild(ov);
+            if (window._makeDraggable) { try { window._makeDraggable('doccie-box', 'doccie-head'); } catch (e) { /* 〃 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('doccie-overlay'); } catch (e) { /* 〃 */ } }
+        }
+        ov.style.display = 'flex';
+        if (window.bringModalToFront) { try { window.bringModalToFront('doccie-overlay'); } catch (e) { /* 〃 */ } }
+        document.getElementById('doccie-title').textContent =
+            '🎨 CIE 1931 — ' + _t('색재현율', 'Color Gamut') + (row.barcode ? ' (' + row.barcode + ')' : '');
+        document.getElementById('doccie-note').innerHTML = gam
+            ? _esc(_t('측정 삼각형 넓이 ' + gam.area.toFixed(4) + ' ÷ NTSC(1953) 표준 ' + _NTSC53_AREA.toFixed(4)
+                      + ' × 100 = ', 'Measured area ' + gam.area.toFixed(4) + ' ÷ NTSC(1953) standard ' + _NTSC53_AREA.toFixed(4) + ' × 100 = '))
+              + '<b>' + gam.pct + '% NTSC</b>'
+            : _esc(_t('R/G/B 삼원색 좌표를 전부 입력해야 그려집니다.', 'Enter all R/G/B primary coordinates to draw.'));
+        _docCieDraw(row.primaries, gam);
+    };
+    var _docCieDraw = function (prim, gam) {
+        var cv = document.getElementById('doccie-canvas'); if (!cv) return;
+        var ctx = cv.getContext('2d'), w = cv.width, h = cv.height, margin = 40;
+        ctx.clearRect(0, 0, w, h);
+        var toX = function (x) { return margin + (x / 0.8) * (w - 2 * margin); };
+        var toY = function (y) { return h - margin - (y / 0.9) * (h - 2 * margin); };
+        // 축 + 격자
+        ctx.strokeStyle = '#e9ecef'; ctx.lineWidth = 1; ctx.font = '10px sans-serif'; ctx.fillStyle = '#868e96';
+        for (var gx = 0; gx <= 0.8; gx += 0.1) {
+            ctx.beginPath(); ctx.moveTo(toX(gx), toY(0)); ctx.lineTo(toX(gx), toY(0.9)); ctx.stroke();
+            ctx.fillText(gx.toFixed(1), toX(gx) - 8, h - margin + 14);
+        }
+        for (var gy = 0; gy <= 0.9; gy += 0.1) {
+            ctx.beginPath(); ctx.moveTo(toX(0), toY(gy)); ctx.lineTo(toX(0.8), toY(gy)); ctx.stroke();
+            ctx.fillText(gy.toFixed(1), margin - 26, toY(gy) + 3);
+        }
+        // CIE1931 스펙트럼 궤적(배경 윤곽선)
+        ctx.strokeStyle = '#adb5bd'; ctx.lineWidth = 1.2; ctx.beginPath();
+        DOC_SPECTRUM_LOCUS.forEach(function (p, i) { var fn = i === 0 ? 'moveTo' : 'lineTo'; ctx[fn](toX(p.x), toY(p.y)); });
+        ctx.stroke();
+        var drawTri = function (p, color, label, dashed) {
+            ctx.beginPath(); ctx.moveTo(toX(p.Rx), toY(p.Ry)); ctx.lineTo(toX(p.Gx), toY(p.Gy));
+            ctx.lineTo(toX(p.Bx), toY(p.By)); ctx.closePath();
+            ctx.strokeStyle = color; ctx.lineWidth = dashed ? 2 : 1.8;
+            if (dashed) ctx.setLineDash([5, 4]); else ctx.setLineDash([]);
+            ctx.stroke(); ctx.setLineDash([]);
+            [['R', p.Rx, p.Ry], ['G', p.Gx, p.Gy], ['B', p.Bx, p.By]].forEach(function (v) {
+                ctx.fillStyle = color; ctx.beginPath(); ctx.arc(toX(v[1]), toY(v[2]), 3, 0, 2 * Math.PI); ctx.fill();
+            });
+            ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = color; ctx.fillText(label, toX(p.Rx) + 5, toY(p.Ry) - 5);
+        };
+        drawTri(window.DOC_NTSC1953, '#dc2626', 'NTSC(1953)', true);
+        if (gam) drawTri(prim, '#1971c2', _t('측정', 'Measured'), false);
     };
 
     // 🎨 문서 모양 서식은 **styles.css** 에 있다(`#doc-page-body .doc-*`).
@@ -1409,6 +1585,7 @@
                 // 🔬 바코드별 Gamma 측정 이력 — 기본은 이 회차만, 토글로 전체 회차를 모아 본다
                 //   (출고 이력과 같은 집계 방식: 저장은 회차별 그대로, 읽을 때만 _docRounds() 를 돈다).
                 var showAll = !!window._docState.opticalAllRounds;
+                var optExpand = window._docState.opticalExpand || {};
                 var rowsToShow = [];
                 if (showAll) {
                     _docRounds().forEach(function (rd) {
@@ -1424,42 +1601,107 @@
                         cp.round = st.round; rowsToShow.push(cp);
                     });
                 }
-                h += '<tr>' + (showAll ? '<th style="width:90px;">' + _esc(_t('회차', 'Round')) + '</th>' : '')
-                   + '<th style="width:120px;">' + _esc(_t('바코드', 'Barcode')) + '</th>'
-                   + '<th style="width:130px;">' + _esc(_t('측정일시', 'Measured')) + '</th>'
-                   + '<th>Native X / Y</th><th>Max / Default Lv</th><th>Gamut</th><th>PQ Check</th>'
-                   + '<th class="doc-noprint" style="width:60px;">📎</th>'
-                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
+                var baseCols = showAll ? 9 : 10;
+                h += '<tr>' + (showAll ? '<th style="width:85px;">' + _esc(_t('회차', 'Round')) + '</th>' : '')
+                   + '<th style="width:110px;">' + _esc(_t('바코드/라벨', 'Barcode/Label')) + '</th>'
+                   + '<th style="width:110px;">' + _esc(_t('측정일시', 'Measured')) + '</th>'
+                   + '<th>Native X / Y</th><th>Lv</th>'
+                   + '<th style="width:60px;">' + _esc(_t('균일도', 'Uniform.')) + '</th>'
+                   + '<th style="width:60px;">Gamut</th><th style="width:70px;">PQ</th>'
+                   + '<th class="doc-noprint" style="width:50px;">📎</th>'
+                   + (showAll ? '' : '<th class="doc-noprint" style="width:40px;"></th>'
+                                   + '<th class="doc-noprint" style="width:36px;"></th>')
+                   + '</tr>';
                 if (!rowsToShow.length) {
-                    h += '<tr><td colspan="9" style="color:#868e96;">'
-                       + _esc(_t('아직 가져온 측정 이력이 없습니다 — 아래 [📥 Gamma 리포트 zip 가져오기]를 눌러 주세요.',
-                                 'No optical history yet — use [Import Gamma report zip] below.'))
+                    h += '<tr><td colspan="' + baseCols + '" style="color:#868e96;">'
+                       + _esc(_t('아직 측정 이력이 없습니다 — 아래 [📥 zip 가져오기] 또는 [➕ 직접 추가]를 눌러 주세요.',
+                                 'No optical history yet — use [Import zip] or [Add manually] below.'))
                        + '</td></tr>';
                 }
                 rowsToShow.forEach(function (it, idx) {
-                    var pqOk = it.pqFail === 0;
+                    var uni = _opticalUniformity(it.points);
+                    var gam = (it.primaries) ? _opticalGamut(it.primaries) : null;
+                    var gamPct = gam ? gam.pct : (it.gamutPct || '');
+                    var hasPQ26 = it.pqTotal > 0;
+                    var pqOk = hasPQ26 ? it.pqFail === 0 : (it.pqManual === 'PASS');
+                    var pqLabel = hasPQ26 ? (pqOk ? '✅ PASS' : '⚠️ ' + it.pqFail + '/' + it.pqTotal + ' FAIL')
+                                : (it.pqManual || '-');
+                    var pqColor = hasPQ26 ? (pqOk ? '#1f7a3d' : '#b1432f')
+                                : (it.pqManual === 'PASS' ? '#1f7a3d' : it.pqManual === 'FAIL' ? '#b1432f' : '#868e96');
                     var tgt = (it.targetX && it.targetY)
                         ? _t('타겟', 'target') + ' X ' + it.targetX.min + '~' + it.targetX.max
                           + ' / Y ' + it.targetY.min + '~' + it.targetY.max
                         : '';
+                    var expanded = !showAll && !!optExpand[idx];
                     h += '<tr>' + (showAll ? '<td>' + _esc(it.round) + '</td>' : '')
-                       + '<td>' + _esc(it.barcode) + '</td>'
+                       + '<td>' + _esc(it.barcode || it.label || '-') + (it.manual ? ' <span style="font-size:9px; color:#868e96;">('
+                         + _esc(_t('수동', 'manual')) + ')</span>' : '') + '</td>'
                        + '<td style="font-size:11px;">' + _esc(it.startTime) + '</td>'
                        + '<td title="' + _esc(tgt) + '">' + _esc(it.nativeX) + ' / ' + _esc(it.nativeY) + '</td>'
-                       + '<td>' + _esc(it.maxPwmLv) + ' / ' + _esc(it.defaultPwmLv) + '</td>'
-                       + '<td>' + _esc(it.gamutPct) + '%</td>'
-                       + '<td style="color:' + (pqOk ? '#1f7a3d' : '#b1432f') + '; font-weight:bold;">'
-                       + (pqOk ? '✅ PASS' : '⚠️ ' + it.pqFail + '/' + it.pqTotal + ' FAIL') + '</td>'
+                       + '<td>' + _esc(it.maxPwmLv) + (it.defaultPwmLv ? ' / ' + _esc(it.defaultPwmLv) : '') + '</td>'
+                       + '<td id="opt-uni-' + idx + '">' + (uni ? uni.pct + '%' : '-') + '</td>'
+                       + '<td id="opt-gamut-' + idx + '"' + (gam ? ' style="cursor:pointer; color:#1971c2; text-decoration:underline;"'
+                         + ' title="' + _esc(_t('클릭하면 CIE1931 그래프', 'Click for CIE1931 chart')) + '"'
+                         + ' onclick="window._docOpticalShowCIE(\'' + _esc(form.id) + '\',' + idx + ')"' : '') + '>'
+                       + (gamPct !== '' && gamPct != null ? gamPct + '%' : '-') + '</td>'
+                       + '<td style="color:' + pqColor + '; font-weight:bold; font-size:11px;">' + _esc(pqLabel) + '</td>'
                        + '<td class="doc-noprint" style="text-align:center;">'
                        + (it.files || []).map(function (fl) {
                            return '<a href="' + _esc(_attUrl(fl)) + '" target="_blank" title="' + _esc(fl.name) + '">'
                                + (fl.kind === 'log' ? '🧾' : '📄') + '</a>';
                        }).join(' ')
-                       + '</td>'
-                       + '<td class="doc-noprint" style="text-align:center;">'
-                       + (showAll ? '' : '<a href="#" onclick="window._docOpticalRemove(\'' + _esc(form.id) + '\',' + idx + ');return false;"'
-                                         + ' style="color:#b1432f; font-size:11px;">' + _esc(_t('삭제', 'del')) + '</a>')
-                       + '</td></tr>';
+                       + '</td>';
+                    if (!showAll) {
+                        h += '<td class="doc-noprint" style="text-align:center;">'
+                           + '<a href="#" onclick="window._docOpticalToggleDetail(' + idx + ');return false;" style="color:#555; font-size:11px;">'
+                           + (expanded ? '🔼' : '🔽') + '</a></td>'
+                           + '<td class="doc-noprint" style="text-align:center;">'
+                           + '<a href="#" onclick="window._docOpticalRemove(\'' + _esc(form.id) + '\',' + idx + ');return false;"'
+                           + ' style="color:#b1432f; font-size:11px;">' + _esc(_t('삭제', 'del')) + '</a></td>';
+                    }
+                    h += '</tr>';
+                    if (expanded) {
+                        var pts = it.points || [];
+                        var prim = it.primaries || {};
+                        var qc = [
+                            ['barcode', _t('바코드/라벨', 'Barcode'), it.barcode], ['label', _t('라벨', 'Label'), it.label],
+                            ['dimming', 'Dimming', it.dimming], ['grade', _t('등급', 'Grade'), it.grade],
+                            ['category', _t('구분', 'Category'), it.category], ['aging', 'Aging', it.aging]
+                        ].map(function (f) {
+                            return '<label style="display:flex; flex-direction:column; gap:2px; font-size:10.5px; color:#555;">' + _esc(f[1])
+                                 + '<input type="text" value="' + _esc(f[2] || '') + '" data-doc-opt="' + idx + '|' + f[0] + '"'
+                                 + ' style="padding:3px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; width:90px;"></label>';
+                        }).join('');
+                        var ptInputs = '';
+                        for (var pI = 0; pI < 9; pI++) {
+                            ptInputs += '<input type="text" value="' + _esc(pts[pI] || '') + '" placeholder="' + (pI + 1) + '"'
+                                + ' data-doc-opt="' + idx + '|points|' + pI + '"'
+                                + ' style="width:48px; padding:3px 4px; border:1px solid #ddd; border-radius:4px; font-size:11px; text-align:center;">';
+                        }
+                        var rgbInputs = ['R', 'G', 'B'].map(function (ch) {
+                            return '<span style="font-size:10.5px; color:#555; margin-right:4px;">' + ch + '</span>'
+                                 + '<input type="text" value="' + _esc(prim[ch + 'x'] || '') + '" placeholder="x"'
+                                 + ' data-doc-opt="' + idx + '|primaries|' + ch + 'x"'
+                                 + ' style="width:56px; padding:3px 4px; border:1px solid #ddd; border-radius:4px; font-size:11px; margin-right:3px;">'
+                                 + '<input type="text" value="' + _esc(prim[ch + 'y'] || '') + '" placeholder="y"'
+                                 + ' data-doc-opt="' + idx + '|primaries|' + ch + 'y"'
+                                 + ' style="width:56px; padding:3px 4px; border:1px solid #ddd; border-radius:4px; font-size:11px; margin-right:10px;">';
+                        }).join('');
+                        var pqSelect = hasPQ26 ? '' :
+                            '<label style="display:flex; flex-direction:column; gap:2px; font-size:10.5px; color:#555;">PQ ('
+                            + _esc(_t('26포인트 원본 없음 — 직접 입력', 'no 26-pt data — enter manually')) + ')'
+                            + '<select data-doc-opt="' + idx + '|pqManual" style="padding:3px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; width:90px;">'
+                            + ['', 'PASS', 'FAIL'].map(function (v) {
+                                return '<option value="' + v + '"' + (it.pqManual === v ? ' selected' : '') + '>' + (v || '-') + '</option>';
+                            }).join('') + '</select></label>';
+                        h += '<tr><td colspan="' + baseCols + '" style="background:#fafbfc; padding:10px 14px;">'
+                           + '<div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px;">' + qc + pqSelect + '</div>'
+                           + '<div style="font-size:10.5px; color:#555; margin-bottom:4px;">' + _esc(_t('균일도용 9포인트 Lv(3×3, 5번=중앙)', '9-point Lv for uniformity (5=center)')) + '</div>'
+                           + '<div style="display:grid; grid-template-columns:repeat(3,52px); gap:3px; margin-bottom:10px;">' + ptInputs + '</div>'
+                           + '<div style="font-size:10.5px; color:#555; margin-bottom:4px;">' + _esc(_t('색재현율용 R/G/B 삼원색 좌표(x,y)', 'R/G/B primary coordinates (x,y) for gamut')) + '</div>'
+                           + '<div>' + rgbInputs + '</div>'
+                           + '</td></tr>';
+                    }
                 });
                 h += '</table>';
                 if (showAll) {
@@ -1468,9 +1710,11 @@
                     h += '<div class="doc-noprint" style="display:flex; flex-wrap:wrap; gap:8px; margin:6px 0;">';
                     _docRounds().forEach(function (rd) {
                         var arr = byRound[rd]; if (!arr || !arr.length) return;
-                        var passN = arr.filter(function (it) { return it.pqFail === 0; }).length;
+                        var passN = arr.filter(function (it) { return it.pqTotal > 0 ? it.pqFail === 0 : it.pqManual === 'PASS'; }).length;
                         var avgLv = (arr.reduce(function (s2, it) { return s2 + (parseFloat(it.maxPwmLv) || 0); }, 0) / arr.length).toFixed(2);
-                        var avgGamut = (arr.reduce(function (s2, it) { return s2 + (parseFloat(it.gamutPct) || 0); }, 0) / arr.length).toFixed(2);
+                        var gamVals = arr.map(function (it) { var g = it.primaries ? _opticalGamut(it.primaries) : null; return g ? g.pct : parseFloat(it.gamutPct); })
+                            .filter(function (v) { return !isNaN(v); });
+                        var avgGamut = gamVals.length ? (gamVals.reduce(function (a, b) { return a + b; }, 0) / gamVals.length).toFixed(2) : '-';
                         h += '<span style="font-size:11px; color:#555; padding:4px 8px; background:#f8f9fa;'
                            + ' border:1px solid #e9ecef; border-radius:5px;"><b>' + _esc(rd) + '</b> '
                            + arr.length + _esc(_t('개', ' ea')) + ' · PASS ' + passN + '/' + arr.length
@@ -1481,13 +1725,21 @@
                 h += '<div class="doc-noprint" style="margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
                    + '<button onclick="window._docOpticalPick(\'' + _esc(form.id) + '\')" style="padding:4px 10px; font-size:11.5px;'
                    + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">📥 '
-                   + _esc(_t('Gamma 리포트 zip 가져오기', 'Import Gamma report zip')) + '</button>'
-                   + '<button onclick="window._docOpticalToggleAll()" style="padding:4px 10px; font-size:11.5px;'
+                   + _esc(_t('Gamma 리포트 zip 가져오기', 'Import Gamma report zip')) + '</button>';
+                if (!showAll) {
+                    h += '<button onclick="window._docOpticalAddManual(\'' + _esc(form.id) + '\')" style="padding:4px 10px; font-size:11.5px;'
+                       + ' cursor:pointer; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; font-weight:bold;">➕ '
+                       + _esc(_t('직접 추가', 'Add manually')) + '</button>'
+                       + '<button onclick="window._docOpticalClearAll(\'' + _esc(form.id) + '\')" style="padding:4px 10px; font-size:11.5px;'
+                       + ' cursor:pointer; border:1px solid #f0b4ad; background:#fdecea; color:#a3281c; border-radius:5px; font-weight:bold;">🗑 '
+                       + _esc(_t('전체 삭제', 'Delete all')) + '</button>';
+                }
+                h += '<button onclick="window._docOpticalToggleAll()" style="padding:4px 10px; font-size:11.5px;'
                    + ' cursor:pointer; border:1px solid #cfe3e5; background:#fff; color:#555; border-radius:5px; font-weight:bold;">'
                    + (showAll ? '📦 ' + _esc(_t('이 회차만', 'This round only')) : '📈 ' + _esc(_t('전체 회차 보기', 'All rounds'))) + '</button>'
                    + '<span style="font-size:11px; color:#868e96;">'
-                   + _esc(_t('Final_Report.txt 를 읽어 바코드별 요약을 만듭니다(AI 안 씀). Log_File.txt 는 원본 증적으로 같이 보관됩니다.',
-                             'Reads Final_Report.txt deterministically (no AI).')) + '</span></div>'
+                   + _esc(_t('zip = Final_Report.txt 26포인트 PQ 자동, 직접 추가 = 균일도·색재현율만(PQ는 직접 입력).',
+                             'zip = 26-pt PQ auto; manual = uniformity/gamut only (PQ entered by hand).')) + '</span></div>'
                    + '<table style="display:none;">';
             } else if (s.kind === 'milestones') {
                 h += '<tr><th>' + _esc(_t('구분', 'Stage')) + '</th>'
@@ -1572,6 +1824,21 @@
             if (hk) {
                 var pp = hk.split('|'), list = _hist(), row = list[Number(pp[0])];
                 if (row) { row[pp[1]] = el.value; _markDirty(); }
+                return;
+            }
+            // 🔬 광학 측정 이력 수동 칸 — `<행번호>|<칸>` 또는 `<행번호>|points|<0~8>` 또는
+            //    `<행번호>|primaries|<Rx 등>`. 전체 다시 그리지 않는다(타이핑 중 포커스 보존).
+            var ok = el.getAttribute('data-doc-opt');
+            if (ok) {
+                var op = ok.split('|');
+                var od = _docData(form.id), olist = od.opticalLogs || [], orow = olist[Number(op[0])];
+                if (orow) {
+                    if (op[1] === 'points') { orow.points = orow.points || []; orow.points[Number(op[2])] = el.value; }
+                    else if (op[1] === 'primaries') { orow.primaries = orow.primaries || {}; orow.primaries[op[2]] = el.value; }
+                    else orow[op[1]] = el.value;
+                    _markDirty();
+                    if (op[1] === 'points' || op[1] === 'primaries') window._docOpticalRepaint(Number(op[0]));
+                }
             }
         };
         // ✅ 점검표 칸 켜고 끄기 — 위임으로 받는다(167항목 × 8칸에 핸들러를 달지 않는다)
@@ -2105,11 +2372,16 @@
                 });
             } else if (s.kind === 'optical') {
                 // 🔬 이 문서(=이 회차)의 측정 이력만 — 전체 회차 집계는 화면 전용(인쇄물은 한 회차 보고서다)
-                rows.push([_t('바코드', 'Barcode'), _t('측정일시', 'Measured'), 'Native X', 'Native Y',
-                           'Max PWM Lv', 'Default PWM Lv', 'Gamut(%NTSC)', 'PQ Check']);
+                rows.push([_t('바코드/라벨', 'Barcode/Label'), _t('측정일시', 'Measured'), 'Native X', 'Native Y',
+                           'Max PWM Lv', _t('균일도(%)', 'Uniformity(%)'), 'Gamut(%NTSC)', 'PQ',
+                           'Dimming', _t('등급', 'Grade'), _t('구분', 'Category'), 'Aging', _t('비고', 'Remark')]);
                 (d.opticalLogs || []).forEach(function (it) {
-                    rows.push([it.barcode, it.startTime, it.nativeX, it.nativeY, it.maxPwmLv, it.defaultPwmLv,
-                               it.gamutPct, (it.pqFail === 0 ? 'PASS' : it.pqFail + '/' + it.pqTotal + ' FAIL')]);
+                    var uni = window._opticalUniformity ? window._opticalUniformity(it.points) : null;
+                    var gam = (it.primaries && window._opticalGamut) ? window._opticalGamut(it.primaries) : null;
+                    var pqTxt = it.pqTotal > 0 ? (it.pqFail === 0 ? 'PASS' : it.pqFail + '/' + it.pqTotal + ' FAIL') : (it.pqManual || '');
+                    rows.push([it.barcode || it.label || '', it.startTime, it.nativeX, it.nativeY, it.maxPwmLv,
+                               uni ? uni.pct : '', gam ? gam.pct : it.gamutPct, pqTxt,
+                               it.dimming || '', it.grade || '', it.category || '', it.aging || '', it.remark || '']);
                 });
             } else if (s.kind === 'milestones') {
                 rows.push([_t('구분', 'Stage')].concat((window.DOC_MILESTONES || []).map(function (m) { return m.label; })));

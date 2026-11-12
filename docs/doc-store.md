@@ -659,3 +659,53 @@ LF도 받아 줘서 앱 안 원문 창은 멀쩡했다 — 아웃룩으로 열 �
 - 검증: 백엔드는 실제 zip(16건, 바코드 16개 전부 파싱 성공)으로 `app.test_client()` 테스트,
   프런트는 `/doc/parse-optical-zip`·`/doc/put` 두 경계만 가짜로 두고 가져오기→미리보기→중복
   감지→적용→삭제→전체 회차 집계→엑셀/워드 내보내기까지 브라우저에서 직접 확인.
+
+### 🔬🔬 2차 — 손으로 재는 9포인트 균일도 + R/G/B 색재현율 (2026-11-12)
+
+사용자가 준 실제 "SPL.1~SPL.6" 수기 리포트 표를 보면 zip 안 `Final_Report.txt` 에 없는 두 값이
+더 있었다: **9포인트(3×3) Lv 균일도**와 **R/G/B 삼원색(x,y) 좌표로 구한 Color Gamut(%NTSC)**.
+둘 다 **장비 로그 출처가 없고 사람이 그 자리에서 손으로 잰 값**이라 입력칸을 열어 직접 타이핑
+하게 했다(줌·가장자리 9곳을 측정기로 짚어야 하는 값이라 자동 유도가 불가능).
+
+- **세 개념은 서로 독립이다 — 하나가 다른 걸 대신 판정하지 않는다.**
+  - **PQ**(Picture Quality) = Gamma 로그 "LNW PQ Check" 구간의 26개 PASS/FAIL 행(Luminance
+    Tracking 10 + Color Tracking Wx 8 + Wy 8). 고객 PDF 스펙의 IRE/MAX/MIN 표와 **정확히
+    일치**(실측 대조 확인) — 그 로그가 이미 PASS/FAIL 을 계산해서 들고 있으므로 Customer SPEC
+    과 대조할 필요가 없다(위 1차 절과 동일).
+  - **Uniformity%** = 9포인트 Lv 중 `min/max×100`(중앙 1점이 아니라 **9점 전부**가 필요 —
+    가장자리가 어두워지는 패널 특성을 중앙 한 점으론 못 본다).
+  - **Color Gamut(%NTSC)** = R/G/B 측정 삼각형 넓이 ÷ NTSC(1953) 표준 삼각형 넓이 × 100.
+  - 사용자가 직접 확인한 결론: **"26포인트는 균일도와 다른 이야기"** — Uniformity/Gamut 가
+    SPEC 을 만족한다고 PQ 를 자동으로 PASS 처리하면 안 된다(세 개념이 한 칸에 섞인다).
+- ⚠️⚠️ **Color Gamut 공식 — 첨부 시뮬레이터의 "NTSC" 프리셋 숫자를 쓰면 안 된다.** 그 HTML의
+  preset(R 0.642,0.341 / G 0.303,0.622 / B 0.154,0.057)은 실제 라벨과 다른 값이라, 그대로
+  계산하면 샘플 표의 실측 ~95% 대신 **~125~129%** 가 나온다(plain xy·u'v' 둘 다 시도해 확인).
+  국제 표준 **NTSC-1953**(R 0.67,0.33 / G 0.21,0.71 / B 0.14,0.08, plain xy)로 계산하면 표의
+  샘플 3건 전부와 거의 정확히 맞아떨어졌다 — `window.DOC_NTSC1953`(데이터)로 고정, 공식은
+  `_triArea`(삼각형 넓이, shoelace) 비율. 이 불일치는 사용자에게 명시적으로 알리고 승인받았다.
+- **26포인트 원본(zip)이 없는 행의 PQ 는 절대 자동 유도하지 않는다** — Uniformity/Gamut 가
+  SPEC 을 만족해도 **빈 칸으로 두고 사람이 직접 PASS/FAIL 을 고른다**(`pqManual`, 사용자 확정:
+  "네, 비워두고 사람이 직접 입력"). `pqTotal>0`(zip 유래)이면 기존 26점 롤업 표시, 아니면
+  `<select>` 로 수동 입력 — 둘을 섞지 않는다(`hasPQ26` 분기).
+- **Uniformity/Gamut SPEC 문턱 값은 아직 안 연결했다** — Customer SPEC 페이지의 실측 필드명은
+  `type: 'Uniformity(%)'` / `'Color Gamut'` / `'Brightness(Centre. Min)'`(=Lv, `js/55`
+  `PL_CHECK_SPEC_FIELDS` 참조) — 나중에 PASS/FAIL 배지를 붙이려면 이 이름으로 찾을 것. 지금은
+  계산된 %만 보여주고 합격/불합격 판정은 안 한다(요청받지 않은 기능을 미리 만들지 않음).
+- **개별 추가/개별 삭제/전체 삭제** — `_docOpticalAddManual`(zip 없이 빈 행 추가, 추가 즉시
+  상세를 펼쳐 바로 입력), `_docOpticalRemove`(zip 1차 때 이미 있던 개별 삭제, 수동 행도 같은
+  경로), `_docOpticalClearAll`(이 회차 전체 삭제, NAS 에 올린 원본 파일은 지우지 않는다 —
+  참조만 없앤다, 기존 첨부 삭제 규칙과 동일).
+- **9포인트·R/G/B 입력칸은 전체 재렌더를 하지 않는다** — 다른 수동 입력칸들과 같은 이유로
+  (타이핑 중 포커스 유실 방지) `_docOpticalRepaint(idx)` 가 Uniformity/Gamut 표시 텍스트만
+  직접 patch 한다. ⚠️ **텍스트만 고치면 안 된다** — 처음 렌더 때 값이 비어 있어 `gam===null`
+  이면 그 칸의 `onclick`/커서/밑줄이 애초에 안 달려 있어서, 타이핑으로 방금 계산 가능해져도
+  클릭이 안 먹는 채로 남는다(실측으로 발견) → repaint 가 `onclick`/`cursor`/`color`/`title`도
+  같이 세팅한다.
+- **Color Gamut(%NTSC) 값 클릭 → CIE 1931 색도 그래프 팝업**(`_docOpticalShowCIE`,
+  `doccie-overlay`/`<canvas id="doccie-canvas">`) — 배경에 약 22점 스펙트럼 로커스
+  (`DOC_SPECTRUM_LOCUS`)와 NTSC-1953 표준 삼각형(점선)을, 위에 측정된 R/G/B 삼각형(실선)을
+  그린다. 값이 없으면(아직 하나도 안 입력) 클릭 자체가 비활성.
+- 검증: 수기 입력·계산 로직은 브라우저에서 직접 타이핑→표시값 확인(기존 샘플 표 3건과 대조해
+  공식 검증 완료), DOM-노드-신원 체크(`_testMarker` 부여 후 재조회)로 타이핑 중 전체 재렌더가
+  안 도는 것 확인. ⚠️ **아직 전용 하네스 파일은 없다** — 같은 검증을 다시 만들 일이 생기면
+  `tests/document-page.browser.js` 를 확장하거나 새 파일로 남길 것(이 저장소 관행).
