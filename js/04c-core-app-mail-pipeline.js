@@ -201,7 +201,16 @@
         //    새던 것도 같은 원인 — model이 비어 _tiProjectOf가 customer로 폴백).
         const customerSegs = String(pm.고객사 || '').split('>').map(function(s) { return s.trim(); }).filter(Boolean);
         const customerProjectParts = customerSegs.slice(1); // [0]=고객사명(제외), 나머지=프로젝트명/세부모델
-        const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].concat(customerProjectParts).filter(Boolean);
+        // 🆕 [2026-11-12, 사용자 제보] pm.models(모델이 여러 개인 프로젝트, js/22g)가 있으면 각
+        //    모델의 고객모델명·명칭도 키워드에 전부 넣는다 — 위 baseFields는 모델#1(pm.모델명/
+        //    고객모델명)만 담아서, 메일이 모델#2·#3 얘기만 하면(예: "Stellar Topper") Stage 1
+        //    후보 필터링에서부터 걸러질 수 있었다(실측: LNW>STELLAR32 모델#3 1647180-13P50/TOPPER).
+        const hasMultiModel = (pm.models || []).length > 1;
+        const multiModelKeywords = hasMultiModel
+            ? pm.models.flatMap(function(m) { return [m && m.고객모델명, m && m.프로젝트명칭].filter(Boolean); })
+            : [];
+        const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].concat(customerProjectParts)
+            .concat(multiModelKeywords).filter(Boolean);
         // 💡 [2026-08-29 버그 수정] "발신인 이름만으로 오매칭됐다"는 지적 — 메일키워드 칸에 사람 이름이
         //    (직접 입력 등으로) 들어가 있으면, 그 사람이 보내는 모든 메일이 서명란 때문에 내용과 무관하게
         //    이 프로젝트로 매칭돼버린다. 주소록에 등록된 이름과 겹치는 항목은 매칭용 키워드에서 제외
@@ -223,7 +232,15 @@
             // 💡 [2026-11-12] draft 단계(모델명/고객모델명 미입력)는 고객사 칸에서 뽑은 프로젝트명/
             //    세부모델로 폴백 — model||customer 폴백 패턴을 쓰는 곳(_tiProjectOf 등 30여 곳)이
             //    전부 고객사 원문 통째("LNW>K43 EC>DV430QUB-PL0") 대신 깔끔한 라벨을 받는다.
-            model: pm.모델명 || pm.고객모델명 || pm.프로젝트명 || customerProjectParts.join(' ') || '',
+            // 🆕 [2026-11-12 2차, 사용자 제보] 모델이 여러 개면 모델#1 번호("1641445-ALT1") 하나로
+            //    전체 프로젝트를 대표시키지 않는다 — 업무 보관함 그룹 라벨 등 이 필드를 쓰는 곳이
+            //    전부 모델#1만 보여줘서 "대표 모델명 말고 고객사>프로젝트명 기준으로 쓰라고 했는데
+            //    아직도 그런다"는 재제보가 있었다. 모델 2개 이상이면 고객사 칸의 프로젝트명
+            //    (customerProjectParts, 예: "STELLAR32")을 우선하고, 1개뿐이면 그 모델 번호를
+            //    그대로 쓴다(단일모델 프로젝트는 기존 동작 불변).
+            model: hasMultiModel
+                ? (customerProjectParts.join(' ') || pm.프로젝트명 || pm.모델명 || pm.고객모델명 || '')
+                : (pm.모델명 || pm.고객모델명 || pm.프로젝트명 || customerProjectParts.join(' ') || ''),
             customer: pm.고객사 || '',
             assignee: pm.프로젝트담당자 || '',
             inch: pm.인치 || _inchFromFileName(dynamicFileName) || '',
