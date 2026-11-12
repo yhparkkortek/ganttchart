@@ -542,13 +542,15 @@
      * `ctx` = { rows, ci, meta, members3, logs, project } — 열린 프로젝트든 NAS 에서 읽은
      * 파일이든 **같은 함수**로 훑는다. 두 벌로 두면 한쪽만 고쳐져 "열린 것만 맞는다" 가 된다.
      */
-    function scanOne(ctx, dateStr) {
+    // 📅 [2026-11-12 요청] "오늘" 만이 아니라 **기간**으로도 걸 수 있다 — `endDateStr` 생략 시
+    //    예전과 완전히 같다(하루만). 둘 다 주면 [dateStr, endDateStr] 전체와 겹치는 업무를 담는다.
+    function scanOne(ctx, dateStr, endDateStr) {
         var out = { mine: [], others: [], touched: [] };
         var gd = (ctx || {}).rows;
         var ci = (ctx || {}).ci || {};
         if (!Array.isArray(gd) || gd.length < 2) return out;
         var day = new Date((dateStr || ymd()) + 'T00:00:00').getTime();
-        var dayEnd = day + 86400000 - 1;
+        var dayEnd = new Date((endDateStr || dateStr || ymd()) + 'T00:00:00').getTime() + 86400000 - 1;
         var proj = ctx.project || '';
         var catByName = {};        // 업무명 → 구분
         var byNo = {};             // No. 칸 값 → 행 (변경이력이 남기는 게 이 값이다)
@@ -607,15 +609,24 @@
         //    (js/04g `rowName: rowIndex` · js/14d `rowName: pos` · js/04d `rowName: i`).
         //    그래서 그걸 업무명으로 믿은 옛 코드는 번호를 그대로 보고에 적었다.
         //    → **No. 로 보고 간트에서 되찾는다.** 못 찾으면 **담지 않는다**(추측하지 않는다).
-        // 오늘 내가 손댄 업무 — changeLogs 는 `toLocaleString('ko-KR')` 문자열이다.
+        // 오늘(또는 그 기간) 내가 손댄 업무 — changeLogs 는 `toLocaleString('ko-KR')` 문자열이라
+        // 날짜만 "YYYY. M. D." 접두어로 비교한다. 기간이면 그 안의 날짜 전부를 유효 접두어로 둔다
+        // (너무 긴 범위를 실수로 주는 사고를 막기 위해 31일로 끊는다 — 그 이상은 추측하지 않는다).
         var logs = ctx.logs || [];
         var names = myNames();
         var seen = {};
-        var dd = new Date((dateStr || ymd()) + 'T00:00:00');
-        var stamp = dd.getFullYear() + '. ' + (dd.getMonth() + 1) + '. ' + dd.getDate() + '.';
+        var stampOf = function (d) { return d.getFullYear() + '. ' + (d.getMonth() + 1) + '. ' + d.getDate() + '.'; };
+        var validStamps = {};
+        var curD = new Date((dateStr || ymd()) + 'T00:00:00');
+        var endD = new Date((endDateStr || dateStr || ymd()) + 'T00:00:00');
+        for (var dcount = 0; curD.getTime() <= endD.getTime() && dcount < 31; dcount++) {
+            validStamps[stampOf(curD)] = true;
+            curD = new Date(curD.getTime() + 86400000);
+        }
         for (var k = logs.length - 1; k >= 0 && out.touched.length < 40; k--) {
             var L = logs[k];
-            if (!L || String(L.time || '').indexOf(stamp) !== 0) continue;
+            var tm = L && String(L.time || '').match(/^(\d{4}\. \d{1,2}\. \d{1,2}\.)/);
+            if (!tm || !validStamps[tm[1]]) continue;
             if (!names[String(L.userName || '').trim().toLowerCase()]) continue;
             // ⚠️ 행 자체를 만지는 기록은 `rowName` 에 **인덱스**가 들어온다 — 번호로 오인하면
             //    엉뚱한 업무를 담는다. 그 종류는 통째로 건너뛴다(`DAILY_TOUCH_SKIP_COLS`, 데이터).
@@ -640,8 +651,9 @@
         return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
     }
 
-    /** 지금 열린 프로젝트 — 예전과 똑같이 메모리에서 바로. */
-    window.dailyBuildDraft = function (dateStr) {
+    /** 지금 열린 프로젝트 — 예전과 똑같이 메모리에서 바로.
+     *  `endDateStr` 는 선택(기간으로 훑을 때만) — 생략하면 예전과 100% 같다(하루만). */
+    window.dailyBuildDraft = function (dateStr, endDateStr) {
         return scanOne({
             rows: window.globalData,
             ci: window.colIdx || {},
@@ -649,7 +661,7 @@
             members3: (window.tabData && window.tabData.projectMembers3) || [],
             logs: window.changeLogs || [],
             project: projName()
-        }, dateStr);
+        }, dateStr, endDateStr);
     };
 
     // ══════════════════════════════════════════════════════════════════════
@@ -741,7 +753,12 @@
      *  여기선 "오늘 일정에 있는가"만 보면 된다. */
     function todayGanttNameSet() {
         var draft = window.dailyBuildDraft(_date);
-        var o = window._dailyOtherScan || { mine: [], others: [] };
+        // ⚠️ [2026-11-12] `_other` 는 후보 목록의 **기간** 캐시와 같이 쓴다(candHtml 참고) — 사람이
+        //    기간을 오늘이 아닌 쪽으로 넓혔으면 그 안엔 오늘 것이 아닌 업무도 섞여 있다. 그때는
+        //    다른 프로젝트분을 빼고 **열린 프로젝트만**으로 판정한다(과소 판정이 과대 판정보다 낫다
+        //    — "간트에 없음" 배지는 정보성 힌트일 뿐이라 가끔 못 잡는 게 엉뚱하게 뜨는 것보다 낫다).
+        var o = (window._dailyOtherScan && window._dailyOtherScan.at === (_date + '|' + _date))
+            ? window._dailyOtherScan : { mine: [], others: [] };
         var set = {};
         [].concat(draft.mine, draft.others, o.mine || [], o.others || []).forEach(function (c) {
             if (c && c.name) set[c.name] = 1;
@@ -758,17 +775,21 @@
      * ⚠️ 실패는 삼키지 않는다 — 못 읽은 프로젝트는 세어서 화면에 드러낸다. 조용히 빠지면
      *    "그 프로젝트 업무가 원래 없는 것" 과 구분할 방법이 없다.
      */
-    window.dailyScanOtherProjects = async function (dateStr, force) {
+    // 📅 [2026-11-12 요청] `endDateStr` 는 선택 — 생략하면 예전과 100% 같다(하루만). 기간 캐시
+    //    열쇠는 둘을 합친 문자열이라, 오늘-모드 캐시와 기간-모드 캐시가 서로 안 덮는다.
+    window.dailyScanOtherProjects = async function (dateStr, force, endDateStr) {
         var S = window.DAILY_SCAN || {};
         if (!S.otherProjects || _other.busy) return _other;
         var date = dateStr || ymd();
-        // 같은 날을 이미 다 훑었으면 그냥 돌려준다. `force` 는 "다시 훑어라"(파일 캐시는 그대로
+        var endDate = endDateStr || date;
+        var cacheKey = date + '|' + endDate;
+        // 같은 기간을 이미 다 훑었으면 그냥 돌려준다. `force` 는 "다시 훑어라"(파일 캐시는 그대로
         // 쓰므로, 안 바뀐 프로젝트는 여전히 안 읽는다).
-        if (!force && _other.at === date && _other.total && _other.done >= _other.total) return _other;
-        _other = { at: date, mine: [], others: [], done: 0, total: 0, kept: 0, busy: true, errs: [] };
+        if (!force && _other.at === cacheKey && _other.total && _other.done >= _other.total) return _other;
+        _other = { at: cacheKey, mine: [], others: [], done: 0, total: 0, kept: 0, busy: true, errs: [] };
         window._dailyOtherScan = _other;
-        var r = await window.dailyScanMyProjects('draft|' + date, function (ctx) {
-            return scanOne(ctx, date);
+        var r = await window.dailyScanMyProjects('draft|' + cacheKey, function (ctx) {
+            return scanOne(ctx, date, endDate);
         }, function (st) {
             _other.done = st.done; _other.total = st.total; _other.kept = st.kept;
             paintCands();
@@ -1036,6 +1057,12 @@
     // 📒 후보 목록을 좁혀 둔 프로젝트(빈 값 = 전체). 창을 열 때마다 푼다 —
     //    좁혀 둔 채로 다시 열면 "업무가 없다" 로 보여 사람이 까닭을 모른다.
     var _candProj = '';
+    // 📅 [2026-11-12 요청] 기본은 "오늘" — 최근 기간 업무도 골라야 할 때가 있어 기간으로 넓힌다.
+    var _candPeriod = { mode: 'today', start: '', end: '' };
+    // 🔍 간트 후보 검색 — **디바운스 없음**. Enter/버튼으로만 적용(타이핑마다 다시 거르지 않는다,
+    //    js/26 간트 내 검색과 같은 결정). 입력칸은 모달 정적 영역에 둔다 — 배경 스캔이 끝날 때마다
+    //    `#daily-cand` 만 다시 그리는데, 그 안에 입력칸을 두면 타이핑 도중 갈아 끼워져 글자가 날아간다.
+    var _candQuery = '';
 
     function saveDraftLocal() {
         if (!_doc) return;
@@ -1053,6 +1080,8 @@
         _emptiedByUser = false;      // 날짜가 바뀌면 "사람이 비웠다" 는 표시도 처음부터
         _deleted = null;
         _candProj = '';              // 📒 프로젝트 좁히기도 풀고 연다(좁힌 채 열면 "없다" 로 보인다)
+        _candPeriod = { mode: 'today', start: '', end: '' };
+        _candQuery = '';
         // 🪪 계정을 모르면 쓸 파일이 정해지지 않는다 — 열기 전에 한 번 확보하고,
         //    그래도 모르면 **모달을 열지 않고** 왜 안 되는지 말한다.
         if (!await window.dailyEnsureIdentity()) {
@@ -1104,8 +1133,17 @@
      * ⚠️ 모달 전체를 다시 그리면 **사람이 치던 칸에서 포커스가 날아간다** — 다른 프로젝트는
      *    뒤에서 한 건씩 들어오므로, 바뀌는 건 이 목록뿐이다. 그래서 여기만 갈아 끼운다.
      */
+    /** 기간 모드의 [시작,끝] — 거꾸로 골라도 바꿔 끼운다(js/62 와 같은 규칙). 오늘 모드거나
+     *  시작일을 아직 안 골랐으면 그냥 오늘 하루. */
+    function candRange() {
+        if (_candPeriod.mode !== 'range' || !_candPeriod.start) return { start: _date, end: _date };
+        var s = _candPeriod.start, e = _candPeriod.end || _candPeriod.start;
+        return s <= e ? { start: s, end: e } : { start: e, end: s };
+    }
+
     function candHtml() {
-        var draft = window.dailyBuildDraft(_date);
+        var rg = candRange();
+        var draft = window.dailyBuildDraft(rg.start, rg.end);
         var o = window._dailyOtherScan || { mine: [], others: [], done: 0, total: 0, busy: false, errs: [] };
         var openName = projName();
         // 내 일을 먼저, 그 다음 그 외 — 프로젝트가 섞여도 "내 것" 이 위로 온다.
@@ -1128,6 +1166,16 @@
                 return it.name === c.name && String(it.project || '') === String(c.project || '');
             });
         });
+
+        // 🔍 [2026-11-12 요청] 검색 — Enter/🔍 버튼으로 **적용된** 값만 본다(타이핑 중엔 안 거른다).
+        if (_candQuery) {
+            var q = _candQuery.toLowerCase();
+            cand = cand.filter(function (c) {
+                return ['name', 'core', 'todo', 'issue', 'project'].some(function (f) {
+                    return c[f] && String(c[f]).toLowerCase().indexOf(q) !== -1;
+                });
+            });
+        }
 
         // 📒 [2026-11-09 요청] 프로젝트 고르기 — 내 프로젝트가 여럿이면 한 목록에 섞여 나온다.
         //    ⚠️ 고를 거리는 **거르기 전** 목록으로 만든다(js/62 와 같은 규칙) — 거른 뒤로 만들면
@@ -1211,6 +1259,43 @@
      *  다시 그리면 사람이 치던 칸에서 포커스가 날아간다. */
     window._dailySetCandProj = function (v) {
         _candProj = String(v || '').trim();
+        paintCands();
+    };
+
+    /** 다른 프로젝트 스캔을 지금 기간으로 다시 돈다(캐시 열쇠가 다르면 `dailyScanOtherProjects`
+     *  가 알아서 새로 훑는다 — 여기서 굳이 `_other` 를 손으로 비울 필요 없다). */
+    function rescanCandPeriod() {
+        var rg = candRange();
+        try { window.dailyScanOtherProjects(rg.start, false, rg.end); } catch (e) { /* 모달을 막지 않는다 */ }
+        paintCands();
+    }
+
+    // 📅 모드 전환(오늘 ↔ 기간)은 날짜 입력칸이 보이고/숨는 **레이아웃 변화**라 통째로 다시 그린다.
+    //    (검색칸은 같은 정적 영역에 있어 모드 전환 중 타이핑하고 있었다면 같이 날아간다 — 드문
+    //    동시 상황이라 감수한다, 다른 전체-재렌더 동작들과 같은 수준의 트레이드오프.)
+    window._dailySetCandPeriodMode = function (mode) {
+        _candPeriod.mode = (mode === 'range') ? 'range' : 'today';
+        render();
+        rescanCandPeriod();
+    };
+    window._dailySetCandPeriodDate = function (which, v) {
+        if (which !== 'start' && which !== 'end') return;
+        _candPeriod[which] = String(v || '').trim();
+        if (_candPeriod.start) rescanCandPeriod(); else paintCands();
+    };
+
+    // 🔍 디바운스 없음 — Enter 나 버튼을 눌러야만 적용된다(js/26 간트 내 검색과 같은 결정,
+    //    2026-11-11 사용자 지시: "지금 검색으로 실행"). 입력칸 값은 DOM 에서 직접 읽는다(정적
+    //    영역이라 타이핑 중 다시 그려지지 않으므로 그 사이 값이 안전하다).
+    window._dailyApplyCandSearch = function () {
+        var el = document.getElementById('daily-cand-search');
+        _candQuery = el ? el.value.trim() : '';
+        paintCands();
+    };
+    window._dailyClearCandSearch = function () {
+        _candQuery = '';
+        var el = document.getElementById('daily-cand-search');
+        if (el) el.value = '';
         paintCands();
     };
 
@@ -1323,6 +1408,28 @@
       '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
     '</div>' +
     '<div style="font-size:11.5px; color:#888; margin-bottom:4px;">' + esc(T('간트에서 불러오기', 'From Gantt')) + ' <span style="color:#bbb;">' + esc(T('(AI 호출 없음 — 메일 분석 결과를 그대로 씁니다)', '(no AI call — reuses mail analysis)')) + '</span></div>' +
+    // 📅 [2026-11-12 요청] 기본은 오늘, 필요하면 기간으로 넓힌다 — 정적 영역(배경 스캔이
+    //    `#daily-cand` 만 다시 그리므로 여기 둬야 검색칸 타이핑이 안 날아간다).
+    '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">' +
+      '<select onchange="window._dailySetCandPeriodMode(this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">' +
+        '<option value="today"' + (_candPeriod.mode === 'today' ? ' selected' : '') + '>' + esc(T('오늘', 'Today')) + '</option>' +
+        '<option value="range"' + (_candPeriod.mode === 'range' ? ' selected' : '') + '>' + esc(T('기간 설정', 'Date range')) + '</option>' +
+      '</select>' +
+      (_candPeriod.mode === 'range'
+        ? '<input type="date" value="' + esc(_candPeriod.start) + '" onchange="window._dailySetCandPeriodDate(\'start\', this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">' +
+          '<span style="color:#aaa; font-size:11px;">~</span>' +
+          '<input type="date" value="' + esc(_candPeriod.end) + '" onchange="window._dailySetCandPeriodDate(\'end\', this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">'
+        : '') +
+    '</div>' +
+    '<div style="display:flex; gap:6px; margin-bottom:6px;">' +
+      '<input id="daily-cand-search" value="' + esc(_candQuery) + '" placeholder="' + esc(T('업무 검색', 'Search tasks')) + '" ' +
+        'onkeydown="if(event.key===\'Enter\'){window._dailyApplyCandSearch();}" ' +
+        'style="flex:1; min-width:0; padding:4px 8px; border:1px solid #ddd; border-radius:5px; font-size:11.5px;">' +
+      '<button onclick="window._dailyApplyCandSearch()" style="padding:4px 10px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer; white-space:nowrap;">🔍 ' + esc(T('지금 검색', 'Search now')) + '</button>' +
+      (_candQuery
+        ? '<button onclick="window._dailyClearCandSearch()" title="' + esc(T('검색 지우기', 'Clear search')) + '" style="padding:4px 9px; border:1px solid #eee; background:#fafbfc; color:#888; border-radius:5px; font-size:11.5px; cursor:pointer;">✕</button>'
+        : '') +
+    '</div>' +
     '</div>' +
     // 🔧 [2026-11-11 요청] 간트 업무 후보 목록은 **모달을 키운 만큼 같이 커진다** — 위아래는
     //    고정 높이(flex-shrink:0)로 두고 이 영역만 `flex:1` 로 남는 공간을 전부 가져간다.

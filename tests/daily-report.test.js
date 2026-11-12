@@ -230,6 +230,22 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('되찾은 업무에 구분이 따라온다', d2.touched[0] && d2.touched[0].cat === 'HW',
         d2.touched[0] && d2.touched[0].cat);
 
+    // 📅 [2026-11-12 요청] "오늘" 만이 아니라 기간으로도 걸 수 있다 — `endDateStr` 생략하면
+    // 예전과 100% 같아야 한다(하루만).
+    console.log('\n■ dailyBuildDraft 기간(2026-11-12)');
+    const past9Str = win._dailyYmd(new Date(t0 - 9 * 86400000));
+    const d3 = win.dailyBuildDraft(past9Str, today);
+    ok('기간을 주면 그 사이에 걸친 지난 업무도 후보에 든다',
+        d3.mine.concat(d3.others).some((x) => x.name === '지난 업무'),
+        JSON.stringify(d3.mine.concat(d3.others).map((x) => x.name)));
+    ok('기간 모드에서도 오늘 걸린 업무는 그대로 포함된다',
+        d3.mine.concat(d3.others).some((x) => x.name.indexOf('인증비용 문의') === 0));
+    ok('기간이 오늘까지 걸치면 "손댄 업무"(changeLogs)도 그대로 잡힌다',
+        d3.touched.length === 1 && d3.touched[0].name === '사출물 견적', JSON.stringify(d3.touched));
+    const d4 = win.dailyBuildDraft(today);   // endDateStr 생략
+    ok('endDateStr 생략하면(하루만) 지난 업무는 여전히 안 보인다 — 하위호환',
+        !d4.mine.concat(d4.others).some((x) => x.name === '지난 업무'));
+
     // ══ 4. 저장 가드 ════════════════════════════════════════════════════════
     console.log('\n■ dailySave 가드');
     const doc = { date: today, key: 'yhpark', dayType: 'work',
