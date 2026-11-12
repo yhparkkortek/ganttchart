@@ -4952,24 +4952,107 @@ def sap_label_search():
     return jsonify({'ok': True, 'code': code, 'matches': matches[:_LABEL_SEARCH_MAX], 'partial': partial})
 
 
+def _sap_dms_safe_path(path):
+    """`C:\\SAP_DMS\\` 이하 경로인지 확인 — /sap-open-folder 와 같은 화이트리스트 규칙을
+    이 셋(open-file·label-images·label-image-bytes)이 공유한다. 문제 있으면 (None, (json, status))."""
+    path = (path or '').strip()
+    if not path:
+        return None, (jsonify({'ok': False, 'error': 'path 파라미터가 필요합니다.'}), 400)
+    norm = os.path.normpath(os.path.abspath(path))
+    allowed_root = os.path.normpath(os.path.abspath(r'C:\SAP_DMS'))
+    if not norm.startswith(allowed_root):
+        return None, (jsonify({'ok': False, 'error': 'C:\\SAP_DMS 하위 경로만 열 수 있습니다.'}), 403)
+    return norm, None
+
+
 @app.route('/sap-open-file', methods=['GET'])
 def sap_open_file():
     # 로컬 파일을 연결 프로그램으로 열기. 파라미터: path (파일 경로)
-    # 보안: /sap-open-folder 와 같은 규칙 — C:\SAP_DMS\ 이하 경로만 허용.
-    path = (request.args.get('path') or '').strip()
-    if not path:
-        return jsonify({'ok': False, 'error': 'path 파라미터가 필요합니다.'}), 400
+    norm, err = _sap_dms_safe_path(request.args.get('path'))
+    if err:
+        return err
     try:
-        norm = os.path.normpath(os.path.abspath(path))
-        allowed_root = os.path.normpath(os.path.abspath(r'C:\SAP_DMS'))
-        if not norm.startswith(allowed_root):
-            return jsonify({'ok': False, 'error': 'C:\\SAP_DMS 하위 경로만 열 수 있습니다.'}), 403
         if not os.path.isfile(norm):
             return jsonify({'ok': False, 'error': f'파일이 없습니다: {norm}'}), 404
         os.startfile(norm)
         return jsonify({'ok': True, 'path': norm})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# 🖼 [2026-11-12 2차] 라벨 도안 이미지 미리보기 — 실측으로 확인: 원자재승인원 폴더의
+# 엑셀(.xlsx, 또는 그 엑셀을 담은 .zip) 안에는 라벨 도면이 **PNG/JPEG 로 그대로 박혀 있다**
+# (`xl/media/imageN.png`). AI 도 변환도 없이 그 바이트를 그대로 꺼내 쓴다.
+# ⚠️ .emf/.wmf 는 건너뛴다 — 브라우저 <img> 가 못 그린다(원본은 열기 링크로만 본다).
+# ⚠️ 한 파일에 로고·치수도면·완성 미리보기가 섞여(실측 10개 이상) 10개 넘게 나올 수 있어
+#    **골라서 자동으로 붙이지 않는다** — 사람이 썸네일을 보고 하나 고른다(js/67).
+_LABEL_IMG_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')
+_LABEL_IMG_MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                    '.gif': 'image/gif', '.bmp': 'image/bmp'}
+
+
+def _label_zip_candidates(path):
+    """path 파일에서 이미지를 뽑을 수 있는 (zip 바이트, 안쪽 파일명 또는 None) 쌍들.
+    .xlsx/.xlsm/.xls 는 그 자체가 zip 구조 — 바로 연다. .zip 은 그 안의 엑셀을 한 겹 더
+    열어야 한다(실측: `승인원_*.ZIP` 안에 엑셀 1개)."""
+    ext = os.path.splitext(path)[1].lower()
+    out = []
+    try:
+        if ext in ('.xlsx', '.xlsm', '.xls'):
+            with io.open(path, 'rb') as f:
+                out.append((f.read(), None))
+        elif ext == '.zip':
+            with zipfile.ZipFile(path) as z:
+                for n in z.namelist():
+                    if os.path.splitext(n)[1].lower() in ('.xlsx', '.xlsm', '.xls'):
+                        out.append((z.read(n), n))
+    except Exception:
+        pass
+    return out
+
+
+@app.route('/sap-label-images', methods=['GET'])
+def sap_label_images():
+    norm, err = _sap_dms_safe_path(request.args.get('path'))
+    if err:
+        return err
+    images, skipped = [], 0
+    for data, inner in _label_zip_candidates(norm):
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                for n in z.namelist():
+                    if not n.startswith('xl/media/'):
+                        continue
+                    ext = os.path.splitext(n)[1].lower()
+                    if ext in _LABEL_IMG_EXTS:
+                        images.append({'inner': inner or '', 'member': n, 'size': z.getinfo(n).file_size})
+                    else:
+                        skipped += 1
+        except Exception:
+            pass
+    return jsonify({'ok': True, 'images': images, 'skipped': skipped})
+
+
+@app.route('/sap-label-image-bytes', methods=['GET'])
+def sap_label_image_bytes():
+    norm, err = _sap_dms_safe_path(request.args.get('path'))
+    if err:
+        return err
+    inner = request.args.get('inner') or ''
+    member = (request.args.get('member') or '').strip()
+    if not member:
+        return jsonify({'ok': False, 'error': 'member 파라미터가 필요합니다.'}), 400
+    for data, inn in _label_zip_candidates(norm):
+        if (inn or '') != inner:
+            continue
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                img = z.read(member)
+        except Exception:
+            continue
+        mime = _LABEL_IMG_MIME.get(os.path.splitext(member)[1].lower(), 'application/octet-stream')
+        return send_file(io.BytesIO(img), as_attachment=False, mimetype=mime)
+    return jsonify({'ok': False, 'error': '이미지를 찾지 못했습니다.'}), 404
 
 
 @app.route('/sap-approval-fetch', methods=['GET'])
@@ -7162,7 +7245,12 @@ DOCSTORE_APP_FOLDERS = ['SUMMARY', 'CUSTOMER', 'MC', 'PARTS', 'ADDRESS',
                         #    DR/DVR 발표자료·모델명세서·라벨사양서 등 — 사람이 쓰던 문서를 앱 데이터로
                         #    만들어 여기에 떨어뜨린다. ⚠️ 설정의 `folders` 목록엔 없을 수 있어서
                         #    (PC 마다 따로다) 여기 적어 둔다 — 안 적으면 그 PC 에서만 400 이 난다.
-                        'DOCUMENT']
+                        'DOCUMENT',
+                        # 🏷 [2026-11-12] 라벨 도안 **공용** 라이브러리(js/67 'labelitems') — 코드당
+                        #    파일 하나(`<라벨품목코드>.png`). 라벨품목코드가 주인이지 프로젝트가
+                        #    아니라서(같은 코드를 여러 프로젝트가 쓸 수 있다) DOCUMENT 밑에 안 넣고
+                        #    PARTS/PANEL 과 같은 성격의 최상위 공용 폴더로 둔다.
+                        '라벨도안']
 
 
 def _docstore_load():

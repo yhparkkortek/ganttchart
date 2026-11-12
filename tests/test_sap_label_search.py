@@ -11,16 +11,23 @@
   ④ 'docs'(자재문서) 폴더도 같이 훑는다(승인원 폴더에 없어도 찾는다)
   ⑤ 여러 폴더 루트에 흩어져 있어도 전부 모은다 + 상한(`_LABEL_SEARCH_MAX`)에서 `partial` 를 켠다
   ⑥ /sap-open-file — C:\\SAP_DMS 바깥 경로는 403, 없는 파일은 404
+  ⑦ /sap-label-images — .xlsx 안의 PNG/JPEG 는 집고 .emf 는 건너뛴다(skipped 로 드러낸다),
+     .zip 이 감싼 .xlsx 도 한 겹 더 열어서 찾는다(실측 `승인원_*.ZIP` 모양)
+  ⑧ /sap-label-image-bytes — 찾은 이미지 그대로(mimetype 포함) 돌려준다, 없는 member/inner 는 404
 
 ⚠️ 사람이 돌리는 5000번 프로세스를 죽이지 않는다 — `app.test_client()` 로만 두드린다.
 ⚠️ 실제 `C:/SAP_DMS` 를 건드리지 않는다 — 폴더 카탈로그를 임시 폴더로 갈아 끼운다
    (`test_sap_doc_download.py` 의 `test_catalog` 와 같은 방식).
+⚠️ ⑦⑧의 픽스처는 **합성**이다 — openpyxl 등 없이, xlsx가 실은 zip 구조라는 점만 이용해
+   `xl/media/imageN.<ext>` 항목을 직접 집어넣은 "속 빈" zip 을 만든다(서버 코드는 그 경로
+   패턴만 보지 워크북 구조 전체를 검증하지 않는다 — 실제 승인원 파일로 먼저 확인했다).
 """
 import io
 import os
 import sys
 import shutil
 import tempfile
+import zipfile
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -150,6 +157,77 @@ def test_open_file(tmp):
     ok('⑥ path 없으면 400', r4.status_code == 400)
 
 
+# 1x1 투명 PNG(최소 유효 PNG 바이트) — 실제로 열어 보일 필요는 없고, "이미지 바이트가 그대로
+# 왕복하는가"만 보면 된다.
+_PNG_1PX = bytes.fromhex(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4'
+    '890000000a49444154789c6364000000050001a5f645400000000049454e44ae426082')
+
+
+def _make_fake_xlsx_bytes(entries):
+    """{member_name: bytes} → zip 바이트(확장자만 .xlsx 라고 속여도 서버는 zip 으로 연다)."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        for name, data in entries.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_label_images(tmp):
+    p01 = B.sap_folder_path('docs_P01', create=True)
+    # ⑦ 직접 .xlsx — PNG 1개 + EMF 1개(건너뛰어야 함)
+    xlsx_path = os.path.join(p01, 'P01111111111', '124291_LABEL.XLSX')
+    os.makedirs(os.path.dirname(xlsx_path), exist_ok=True)
+    with open(xlsx_path, 'wb') as f:
+        f.write(_make_fake_xlsx_bytes({
+            'xl/media/image1.png': _PNG_1PX,
+            'xl/media/image2.emf': b'not-a-real-emf-but-bytes',
+            'xl/worksheets/sheet1.xml': b'<worksheet/>',
+        }))
+
+    c = B.app.test_client()
+    r = c.get('/sap-label-images?path=' + xlsx_path)
+    j = r.get_json()
+    ok('⑦ 200 · ok', r.status_code == 200 and j['ok'])
+    ok('⑦ PNG 1개만 집는다(EMF 는 skipped 로)', len(j['images']) == 1 and j['skipped'] == 1, j)
+    im = j['images'][0]
+    ok('⑦ member 는 실제 zip 경로, inner 는 직접 xlsx 라 빈 문자열', im['member'] == 'xl/media/image1.png' and im['inner'] == '')
+
+    r2 = c.get('/sap-label-image-bytes?path=' + xlsx_path
+               + '&inner=' + im['inner'] + '&member=' + im['member'])
+    ok('⑧ 이미지 바이트가 그대로 돌아온다', r2.status_code == 200 and r2.data == _PNG_1PX and r2.mimetype == 'image/png')
+
+    r3 = c.get('/sap-label-image-bytes?path=' + xlsx_path + '&inner=&member=xl/media/ghost.png')
+    ok('⑧ 없는 member 는 404', r3.status_code == 404)
+
+    # ⑦ zip 이 감싼 xlsx(실측 `승인원_*.ZIP` 모양) — 한 겹 더 열어야 이미지가 보인다
+    inner_name = '122549-LABEL.xlsx'
+    zip_path = os.path.join(p01, 'P01222222222', '122549-LABEL.ZIP')
+    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    inner_bytes = _make_fake_xlsx_bytes({'xl/media/image1.jpeg': _PNG_1PX})
+    with zipfile.ZipFile(zip_path, 'w') as z:
+        z.writestr(inner_name, inner_bytes)
+
+    r4 = c.get('/sap-label-images?path=' + zip_path)
+    j4 = r4.get_json()
+    ok('⑦ .zip 이 감싼 .xlsx 도 한 겹 더 열어 찾는다', len(j4['images']) == 1 and j4['images'][0]['inner'] == inner_name, j4)
+
+    im4 = j4['images'][0]
+    r5 = c.get('/sap-label-image-bytes?path=' + zip_path
+               + '&inner=' + im4['inner'] + '&member=' + im4['member'])
+    ok('⑧ zip 속 이미지도 그대로 돌아온다', r5.status_code == 200 and r5.data == _PNG_1PX)
+
+    # 보안 — 경로 밖은 그대로 403/400 (open-file 과 같은 _sap_dms_safe_path 공유)
+    outside = os.path.join(os.path.dirname(tmp), 'outside.xlsx')
+    touch(outside)
+    try:
+        r6 = c.get('/sap-label-images?path=' + outside)
+        ok('⑦ SAP_DMS 바깥은 403', r6.status_code == 403)
+    finally:
+        os.remove(outside)
+    ok('⑧ member 없으면 400', c.get('/sap-label-image-bytes?path=' + xlsx_path).status_code == 400)
+
+
 def main():
     print('=== ① 코드 형식 검증 ===')
     test_code_validation()
@@ -159,6 +237,8 @@ def main():
     test_partial_cap()
     print('=== ⑥ /sap-open-file 화이트리스트 ===')
     with_temp_catalog(test_open_file)
+    print('=== ⑦⑧ /sap-label-images · /sap-label-image-bytes ===')
+    with_temp_catalog(test_label_images)
     print('')
     print('PASS %d / FAIL %d' % (PASS[0], FAIL[0]))
     return 1 if FAIL[0] else 0
