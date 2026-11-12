@@ -858,7 +858,11 @@
                         }
                     }
                 } else {
-                    window._ganttQaPendingAttachments.push({ name: file.name, text: text });
+                    // 🆕 [2026-11-12] 원본 File도 같이 들고 있는다 — 텍스트엔 품목/날짜는 있는데
+                    // 사업자등록번호 칸만 비는 문서(박스형 서브셋 폰트로 그 칸만 이미지/비텍스트인
+                    // 경우, 예: 더존비즈온 전자세금계산서)가 있어서, 나중에 그 번호만 비전으로
+                    // 다시 확인할 때 파일을 재첨부받지 않고 바로 렌더링할 수 있게 하기 위함.
+                    window._ganttQaPendingAttachments.push({ name: file.name, text: text, file: file });
                 }
             } catch (e) {
                 if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}" 읽기 실패: `, `⚠️ Failed to read "${file.name}": `) + (e && e.message ? e.message : e), 'warning');
@@ -2058,6 +2062,46 @@ ${_sourceSection}`;
                 );
                 parsed.bizRegNo = _fix2;
                 parsed.note = parsed.note ? parsed.note + ' ' + _warnH : _warnH;
+            }
+        }
+
+        // 🆕🆕 [2026-11-12, 사용자 제보] 텍스트에 사업자등록번호 숫자가 "아예" 없는 PDF —
+        // 실사례: 더존비즈온 전자세금계산서 중 등록번호 칸이 박스형 서브셋 폰트/이미지로
+        // 찍혀 pdf.js 텍스트 레이어에 아예 안 잡히는 경우(공급자·공급받는자 둘 다 숫자가
+        // 통째로 빔, 다른 항목은 텍스트로 멀쩡히 뽑힘). 바로 위 "환각 복구"(정규식 재탐색)도
+        // 원문에 숫자 자체가 없으니 못 찾는다 — 그래서 **텍스트가 아니라 이미지로 한 번 더
+        // 같은 페이지를 보여주고 그 번호만** 다시 묻는다(품목/날짜는 이미 텍스트로 뽑혔으니
+        // 재추출 안 함, AI 호출 1회 추가뿐). 실패해도 조용히 넘어가 기존 "미확인 → 사람에게
+        // 안내" 경로(_ganttQaPoFindMissingBizNoDocs)로 그대로 떨어진다.
+        if (!parsed.bizRegNo && !_allImageParts) {
+            var _srcFile = attachments[0] && attachments[0].file;
+            if (_srcFile && typeof window._pcRenderPdfAsImages === 'function') {
+                try {
+                    var _visionImgs = await window._pcRenderPdfAsImages(_srcFile, { maxPages: 1, scale: 2 });
+                    if (_visionImgs && _visionImgs.length) {
+                        var _visionPrompt = '아래 이미지는 전자세금계산서/거래명세서/견적서 PDF 페이지입니다. "공급자"(물건을 파는 쪽 — 우리 회사 "(주)코텍"/"주식회사 코텍"이 아닌 반대쪽)의 사업자등록번호만 찾아 JSON 하나로만 답하세요(설명 문구·코드블록 표시 없이 JSON만):\n{"bizRegNo":"숫자만 10자리(하이픈 제거), 못 찾으면 빈 문자열","vendorName":"공급자 상호, 못 찾으면 빈 문자열"}\n⚠️ "(주)코텍"/"주식회사 코텍" 쪽 번호는 절대 쓰지 마세요 — 그건 우리 회사(공급받는자)입니다. 반드시 반대쪽(공급자) 번호만 답하세요.';
+                        var _vres = await window.callAiBackend(apiKey, _visionPrompt, { imageParts: _visionImgs });
+                        if (_vres.ok) {
+                            var _vtext = window._extractGanttQaAiText(_vres);
+                            var _vm = _vtext.match(/\{[\s\S]*\}/);
+                            if (_vm) {
+                                var _vparsed = JSON.parse(_vm[0]);
+                                var _vnum = String(_vparsed.bizRegNo || '').replace(/\D/g, '');
+                                if (_vnum.length === 10 && _vnum !== KORTEK_BIZ_NO) {
+                                    parsed.bizRegNo = _vnum;
+                                    if (!parsed.vendorName && _vparsed.vendorName) parsed.vendorName = _vparsed.vendorName;
+                                    var _visionNote = window._t(
+                                        '📷 사업자등록번호가 텍스트로 안 뽑혀 이미지로 다시 확인했습니다(' + _vnum + ') — 꼭 맞는지 확인해주세요.',
+                                        '📷 Biz. reg. no. wasn\'t extractable as text; recovered it by re-analyzing the page image (' + _vnum + ') — please double-check.'
+                                    );
+                                    parsed.note = parsed.note ? parsed.note + ' ' + _visionNote : _visionNote;
+                                }
+                            }
+                        }
+                    }
+                } catch (_vErr) {
+                    console.warn('[사업자등록번호 비전 재확인 실패]', _vErr);
+                }
             }
         }
 
