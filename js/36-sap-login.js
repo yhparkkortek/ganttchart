@@ -10,6 +10,34 @@
     const T = function (ko, en) { return window._t ? window._t(ko, en) : ko; };
     const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); };
 
+    // 🪗 [2026-11-12, 사용자 요청] 항목(SAP/그룹웨어/인사관리/JIRA/NAS)마다 접고 펴기 — 모달이
+    // 다섯 구역이라 다 펼치면 스크롤이 길다. 제목 줄을 누르면 그 밑 내용만 접힌다. 상태는
+    // localStorage에 남겨 다음에 열 때도 그대로 — 기본은 전부 펼침(처음 쓰는 사람은 그대로 보임).
+    function secCollapsed(key) {
+        try { return localStorage.getItem('saplogin_sec_collapsed_' + key) === '1'; } catch (e) { return false; }
+    }
+    function secBodyStyle(key) {
+        return secCollapsed(key) ? ' style="display:none;"' : '';
+    }
+    function secHeader(key, emoji, label, color, stateSpanId) {
+        return '<div onclick="window._saploginToggleSec(\'' + key + '\')"'
+            + ' style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; user-select:none;">'
+            + '<span id="saplogin-chev-' + key + '" style="font-size:10px; color:#999; width:10px; flex:0 0 auto;">'
+            + (secCollapsed(key) ? '▸' : '▾') + '</span>'
+            + '<strong style="font-size:13px; color:' + color + ';">' + emoji + ' ' + label + '</strong>'
+            + (stateSpanId ? '<span id="' + stateSpanId + '" style="font-size:11px; color:#888;"></span>' : '')
+            + '</div>';
+    }
+    window._saploginToggleSec = function (key) {
+        var body = document.getElementById('saplogin-sec-' + key);
+        var chev = document.getElementById('saplogin-chev-' + key);
+        if (!body) return;
+        var willCollapse = body.style.display !== 'none';
+        body.style.display = willCollapse ? 'none' : '';
+        if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+        try { localStorage.setItem('saplogin_sec_collapsed_' + key, willCollapse ? '1' : '0'); } catch (e) {}
+    };
+
     window._sapAutoLoginOn = false;
 
     // 설정 유무를 미리 알아둔다(SAP 조회 타임아웃 연장 판단용). 백엔드가 꺼져 있으면 조용히 무시.
@@ -70,8 +98,8 @@
                 //    `min-height:0` 이 같이 있어야 한다 — flex 항목은 기본이 `min-height:auto` 라
                 //    안 줄어들고, 그러면 `overflow-y:auto` 가 일할 자리가 없어 스크롤바가 안 생긴다.
                 + '<div style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto;">'
-                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
-                + '<strong style="font-size:13px; color:#1971c2;">🏭 ' + T('SAP 자동 로그인', 'SAP auto-login') + '</strong></div>'
+                + secHeader('sap', '🏭', T('SAP 자동 로그인', 'SAP auto-login'), '#1971c2')
+                + '<div id="saplogin-sec-sap"' + secBodyStyle('sap') + '>'
                 + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
                 + T('SAP 이 꺼져 있을 때 이 계정으로 자동 로그인합니다. 비밀번호는 이 PC 에만 암호화 저장됩니다.',
                     'Auto-logs in to SAP with this account when it is closed. Password is stored encrypted on this PC only.')
@@ -88,14 +116,14 @@
                 + '<button onclick="window._sapLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._sapLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div>'
+                + '</div>' // /saplogin-sec-sap
                 // ── 🏢 그룹웨어(다우오피스) ─────────────────────────────────
                 //  SAP과 같은 자리에 두는 게 맞다(사용자 요청) — 둘 다 "사외 시스템 자동 로그인".
                 //  ⚠️ 다만 동작 규칙이 SAP보다 더 보수적이다: 이 사이트는 **로그인 실패 후에만**
                 //     CAPTCHA가 뜨므로, 실패하면 재시도하지 않고 창을 열어 사람에게 넘긴다.
                 + '<div style="border-top:1px solid #e5e5e5; margin:14px 0 12px;"></div>'
-                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
-                + '<strong style="font-size:13px; color:#5b3fa3;">🏢 ' + T('그룹웨어 자동 로그인', 'Groupware auto-login') + '</strong>'
-                + '<span id="gwlogin-state" style="font-size:11px; color:#888;"></span></div>'
+                + secHeader('gw', '🏢', T('그룹웨어 자동 로그인', 'Groupware auto-login'), '#5b3fa3', 'gwlogin-state')
+                + '<div id="saplogin-sec-gw"' + secBodyStyle('gw') + '>'
                 + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
                 + T('실패 시 보안문자(CAPTCHA)가 뜨는 구조라 <b>한 번만</b> 시도합니다. 비밀번호 보관은 SAP과 동일.',
                     'Tried only <b>once</b> — a failed login triggers a CAPTCHA. Password storage is the same as SAP.')
@@ -109,14 +137,14 @@
                 + '<button onclick="window._gwLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._gwLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div>'
+                + '</div>' // /saplogin-sec-gw
                 // ── 🧑‍💼 인사관리(kInsa) ─────────────────────────────────────
                 //  http://insa.kortek.co.kr — SAP·그룹웨어와 같은 "사외 시스템 자동 로그인" 묶음.
                 //  ⚠️ 그룹웨어와 같은 보수적 규칙: **한 번만** 시도하고 실패하면 재시도하지 않는다.
                 //     이 시스템이 몇 번 틀리면 잠기는지 우리가 모르기 때문이다(모르면 안 한다).
                 + '<div style="border-top:1px solid #e5e5e5; margin:14px 0 12px;"></div>'
-                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
-                + '<strong style="font-size:13px; color:#1a6b73;">🧑‍💼 ' + T('인사관리 자동 로그인', 'HR (kInsa) auto-login') + '</strong>'
-                + '<span id="insalogin-state" style="font-size:11px; color:#888;"></span></div>'
+                + secHeader('insa', '🧑‍💼', T('인사관리 자동 로그인', 'HR (kInsa) auto-login'), '#1a6b73', 'insalogin-state')
+                + '<div id="saplogin-sec-insa"' + secBodyStyle('insa') + '>'
                 + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
                 + T('아이디는 <b>사번</b>입니다. 그룹웨어와 같은 창에서 열리며, 한 번만 시도합니다.',
                     'ID is your <b>employee number</b>. Opens in the same window as groupware; tried only once.')
@@ -131,15 +159,15 @@
                 + '<button onclick="window._insaLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div>'   // ⚠ 인사 버튼 행(flex)을 **여기서 닫는다** — 안 닫고 다음 섹션을 붙였다가
                              //   모든 글자가 flex 항목이 돼 **한 자씩 세로로** 깨졌다(화면으로 확인).
+                + '</div>' // /saplogin-sec-insa
                 // ── 🪐 JIRA(Kortek Issue Tracker) ─────────────────────────────
                 //  http://jira.kortek.co.kr — Jira Server 5.2.11(2013년 빌드, PAT 없음, 실측).
                 //  REST API가 이미 열려 있어 Basic Auth 만으로 된다(브라우저 자동화 불필요).
                 //  ⚠️ CAPTCHA/계정잠금 정책을 모르므로 그룹웨어·인사관리와 같은 보수적 규칙:
                 //     **한 번만** 시도하고 실패하면 재시도하지 않는다.
                 + '<div style="border-top:1px solid #e5e5e5; margin:14px 0 12px;"></div>'
-                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
-                + '<strong style="font-size:13px; color:#8b5a00;">🪐 ' + T('JIRA 로그인', 'JIRA login') + '</strong>'
-                + '<span id="jiralogin-state" style="font-size:11px; color:#888;"></span></div>'
+                + secHeader('jira', '🪐', T('JIRA 로그인', 'JIRA login'), '#8b5a00', 'jiralogin-state')
+                + '<div id="saplogin-sec-jira"' + secBodyStyle('jira') + '>'
                 + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
                 + T('이 JIRA는 <b>HTTP(암호화 없음)</b>이고 몇 번 틀리면 잠기는지 모릅니다 — <b>한 번만</b> 시도합니다.',
                     'This JIRA is <b>HTTP (unencrypted)</b> and its lockout policy is unknown — tried only <b>once</b>.')
@@ -153,6 +181,7 @@
                 + '<button onclick="window._jiraLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._jiraLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div>'
+                + '</div>' // /saplogin-sec-jira
                 // ── 🗄️ NAS(사내 저장소) 로그인 ─────────────────────────────────
                 //  ⚠️ 이건 "또 하나의 외부 시스템"이 아니라 **앱 데이터가 사는 곳**이다.
                 //     여기 계정이 곧 신원이고, 무엇을 볼 수 있는지는 **NAS 폴더 권한**이 정한다
@@ -160,9 +189,8 @@
                 //  ⚠️ DSM 은 비밀번호 실패가 쌓이면 계정이 아니라 **이 PC 의 IP 를 차단한다.**
                 //     그래서 한 번 실패하면 잠그고, 사람이 설정을 다시 저장할 때까지 재시도하지 않는다.
                 + '<div style="border-top:1px solid #e5e5e5; margin:14px 0 12px;"></div>'
-                + '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">'
-                + '<strong style="font-size:13px; color:#6741d9;">🗄️ ' + T('NAS(사내 저장소) 로그인', 'NAS (in-house storage) login') + '</strong>'
-                + '<span id="naslogin-state" style="font-size:11px; color:#888;"></span></div>'
+                + secHeader('nas', '🗄️', T('NAS(사내 저장소) 로그인', 'NAS (in-house storage) login'), '#6741d9', 'naslogin-state')
+                + '<div id="saplogin-sec-nas"' + secBodyStyle('nas') + '>'
                 + '<div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">'
                 + T('앱 데이터(프로젝트·설정·백업)가 저장되는 곳입니다. ⚠️ 비밀번호를 틀리면 <b>이 PC 의 접속 자체</b>가 차단되니 한 번만 시도합니다.',
                     'Where app data (projects, settings, backups) is stored. ⚠️ Wrong passwords block <b>this PC</b>, so it is tried only once.')
@@ -251,6 +279,7 @@
                 + '<button onclick="window._nasLoginTest()" style="' + btnSt + '">🔌 ' + T('연결 테스트', 'Test') + '</button>'
                 + '<button onclick="window._nasLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
                 + '</div></div>'
+                + '</div>' // /saplogin-sec-nas
                 + '</div></div>';
             document.body.appendChild(wrap);
             if (window._makeDraggable) window._makeDraggable('saplogin-box', 'saplogin-drag');

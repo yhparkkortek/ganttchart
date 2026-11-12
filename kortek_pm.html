@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>kortek_pm</title>
 
-<script src="js/01-gapi-gis-stub.js?v=20261112p0a"></script>
+<script src="js/01-gapi-gis-stub.js?v=20261112q0a"></script>
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <!-- 🖥️ [Panel Compare] PDF 데이터시트에서 텍스트를 뽑아 AI 추출 입력으로 쓰기 위한 pdf.js (UMD, 전역 pdfjsLib) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-<script src="js/02-pdfjs-worker-init.js?v=20261112p0a"></script>
+<script src="js/02-pdfjs-worker-init.js?v=20261112q0a"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=20261112p0a">
+<link rel="stylesheet" href="styles.css?v=20261112q0a">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -47,12 +47,17 @@
                 <button id="drive_save_btn" class="topbar-menu-item" onclick="window._saveToGoogleDriveOptimistic ? window._saveToGoogleDriveOptimistic() : saveToGoogleDrive()" disabled>💾 프로젝트 저장</button>
                 <button id="backup_restore_btn" class="topbar-menu-item" onclick="window.loadBackupList()" disabled title="Backups 폴더의 이전 저장본으로 복원 (최근 7일)" data-i18n-title="drive-restore-backup">🔄 프로젝트 복원</button>
                 <button id="doc-export-zip-btn" class="topbar-menu-item" onclick="window._dsExportProjectZip && window._dsExportProjectZip()" title="CUSTOMER·M.C·SUMMARY 등 NAS 자료실에서 이 프로젝트(모든 모델) 몫만 모아 zip으로 내려받습니다" data-i18n-title="doc-export-zip-hint">📦 자료 전체 내보내기(zip)</button>
-                <div class="tb-menu-sep"></div>
-                <!-- 📊 [2026-10-21] 순서·이름을 앱 전체와 통일(사용자 요청): **저장 먼저, 그다음 불러오기**.
-                     '엑셀 열기' → '엑셀 불러오기'. ⚠️ 숨은 #file-input 은 절대 지우지 말 것 —
-                     js/04f:6 이 가드 없이 참조해, 없으면 그 파일이 7줄째에서 죽고 인쇄(PDF)·AI 요약까지 사라진다. -->
-                <button id="excel-btn" class="topbar-menu-item" onclick="exportToExcel()">🟩 프로젝트 엑셀 저장</button>
-                <label id="file-input-label" class="topbar-menu-item" for="file-input" style="cursor:pointer;">🟩 프로젝트 엑셀 불러오기</label>
+                <!-- 📊 [2026-11-12, 사용자 요청] "프로젝트 엑셀 저장/불러오기" 메뉴 버튼(옛 excel-btn·
+                     file-input-label)은 지웠다 — 개별 페이지(js/42 PAGE_EXCEL_SPECS)에 각자 📊 엑셀
+                     버튼이 있다는 게 사용자 판단. ⚠️⚠️ 단, 이 둘은 **같은 게 아니다** — 개별 페이지 버튼은
+                     "이미 열려 있는 프로젝트"의 그 탭 한 장만 왕복하고, 이 입력칸(#file-input)이 열던 길은
+                     ① 고객/외부 엑셀 일정표를 **병합해 새 프로젝트를 만드는** 유일한 입구(js/04f handleFiles,
+                     "다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요" 안내가 그 증거)
+                     ② 전체 탭을 한 파일로 묶는 백업/공유용 내보내기(js/04k exportToExcel)였다 — 사용자가
+                     그 차이를 알고도 삭제를 선택했다. ⚠️⚠️ **#file-input 자체는 절대 지우지 말 것** —
+                     js/04f:6 이 가드 없이 참조해, 없으면 그 파일이 7줄째에서 죽고 인쇄(PDF)·AI 요약까지
+                     사라진다. 드래그앤드롭(window 전역 drop, js/04f)은 그대로 살아있어 엑셀 파일을 페이지
+                     아무 데나 끌어놓으면 여전히 "병합" 길은 열려 있다 — 메뉴의 클릭 진입점만 없앤 것이다. -->
                 <input type="file" id="file-input" multiple style="display:none;" />
                 <div class="tb-menu-sep"></div>
                 <button id="new-project-btn" class="topbar-menu-item" onclick="window.startNewProject()" title="현재 화면을 비우고 새 프로젝트를 시작합니다" data-i18n-title="new-project-clear">➕ 새 프로젝트 추가</button>
@@ -85,9 +90,12 @@
                      있어(계정·알림·메일·일정·진단이 번갈아 들어가 있었다) 찾는 데 시간이 걸렸다.
                      버튼 자체는 그대로고(id·onclick·title 동일) 순서만 바꾸고 제목을 달았다.
                      ⚠️ 드라이브 전용 항목(자동로그인·사용자 추가)은 NAS 모드에선 js/05 가 숨긴다. -->
+                <!-- 👤🚪 [2026-11-12, 사용자 요청] "다른 계정으로 로그인"·"로그아웃" 삭제 — 헤더 배지(js/64
+                     paintBadge)가 이미 같은 함수를 부른다(로그인 중엔 클릭=appUserLogout, 아니면
+                     appUserOpenPicker). 실측: 두 버튼 다 그 창(openPicker→_appUserLogin, 실제 NAS
+                     비밀번호 재인증·3회 예산 소모)으로 귀결돼 "비밀번호를 묻지 않는 형식적 전환"이라는
+                     옛 툴팁은 사실과 달랐다 — 완전한 중복이라 지웠다. -->
                 <div class="tb-menu-label" id="settings-group-account">👤 계정·저장소</div>
-                <button id="app-user-switch-btn" class="topbar-menu-item" onclick="window.appUserOpenPicker &amp;&amp; window.appUserOpenPicker(); window.closeTopbarMenu('settings-menu-popup');" title="일일보고·내 프로젝트를 누구 기준으로 볼지 고릅니다 (비밀번호를 묻지 않는 형식적 전환입니다)">👤 다른 계정으로 로그인</button>
-                <button id="app-user-logout-btn" class="topbar-menu-item" onclick="window.appUserLogout &amp;&amp; window.appUserLogout(); window.closeTopbarMenu('settings-menu-popup');" title="앞사람 신원을 지우고 고르는 화면으로 돌아갑니다 — NAS 연결은 그대로입니다">🚪 로그아웃</button>
                 <button id="my-team-menu-btn" class="topbar-menu-item" onclick="window.openMyTeamModal(); window.closeTopbarMenu('settings-menu-popup');" title="이 컴퓨터(브라우저)가 속한 팀 — 로그인 이름을 주소록과 대조해 자동 추정되며, 여기서 직접 바꿀 수 있습니다. 앞으로 AI 메일 매칭 범위 제한 등에 사용될 예정입니다." data-i18n-title="my-team-hint">👥 <span data-i18n="my-team-prefix">내 팀:</span> <span id="my-team-label">미설정</span></button>
                 <button id="login-settings-btn" class="topbar-menu-item" onclick="window.openSapLoginSettings &amp;&amp; window.openSapLoginSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SAP·그룹웨어·인사관리 자동 로그인과 NAS(사내 저장소) 계정·앱 폴더 설정" data-i18n-title="login-settings-hint">🔑 로그인·저장소 설정</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다" data-i18n-title="admin-pw-change-hint">🔑 비밀번호 변경</button>
@@ -2026,45 +2034,45 @@
         </div>
     </div>
 
-<script src="js/03-drive-modal-drag.js?v=20261112p0a"></script>
+<script src="js/03-drive-modal-drag.js?v=20261112q0a"></script>
 
 <!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/04a-core-app-globals.js?v=20261112p0a"></script>
-<script src="js/04b-core-app-drive-sync.js?v=20261112p0a"></script>
-<script src="js/04c-core-app-mail-pipeline.js?v=20261112p0a"></script>
-<script src="js/04d-core-app-gantt-core.js?v=20261112p0a"></script>
-<script src="js/04e-core-app-undo-redo.js?v=20261112p0a"></script>
-<script src="js/04f-core-app-upload-utils-1.js?v=20261112p0a"></script>
-<script src="js/04g-core-app-upload-utils-2.js?v=20261112p0a"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=20261112p0a"></script>
-<script src="js/04i-core-app-upload-utils-4.js?v=20261112p0a"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=20261112p0a"></script>
-<script src="js/04k-core-app-filter-export.js?v=20261112p0a"></script>
+<script src="js/04a-core-app-globals.js?v=20261112q0a"></script>
+<script src="js/04b-core-app-drive-sync.js?v=20261112q0a"></script>
+<script src="js/04c-core-app-mail-pipeline.js?v=20261112q0a"></script>
+<script src="js/04d-core-app-gantt-core.js?v=20261112q0a"></script>
+<script src="js/04e-core-app-undo-redo.js?v=20261112q0a"></script>
+<script src="js/04f-core-app-upload-utils-1.js?v=20261112q0a"></script>
+<script src="js/04g-core-app-upload-utils-2.js?v=20261112q0a"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=20261112q0a"></script>
+<script src="js/04i-core-app-upload-utils-4.js?v=20261112q0a"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=20261112q0a"></script>
+<script src="js/04k-core-app-filter-export.js?v=20261112q0a"></script>
 
-<script src="js/05-drive-sync-optimize.js?v=20261112p0a"></script>
+<script src="js/05-drive-sync-optimize.js?v=20261112q0a"></script>
 
-<script src="js/06-theme-color-chart.js?v=20261112p0a"></script>
+<script src="js/06-theme-color-chart.js?v=20261112q0a"></script>
 
-<script src="js/07-data-loss-safeguard.js?v=20261112p0a"></script>
+<script src="js/07-data-loss-safeguard.js?v=20261112q0a"></script>
 
-<script src="js/08-filter-ui.js?v=20261112p0a"></script>
+<script src="js/08-filter-ui.js?v=20261112q0a"></script>
 
-<script src="js/09-autosave-user-id.js?v=20261112p0a"></script>
+<script src="js/09-autosave-user-id.js?v=20261112q0a"></script>
 
-<script src="js/10-gantt-filter-date-ui.js?v=20261112p0a"></script>
+<script src="js/10-gantt-filter-date-ui.js?v=20261112q0a"></script>
 
-<script src="js/11-mobile-detect.js?v=20261112p0a"></script>
+<script src="js/11-mobile-detect.js?v=20261112q0a"></script>
 
-<script src="js/12-mobile-longpress.js?v=20261112p0a"></script>
+<script src="js/12-mobile-longpress.js?v=20261112q0a"></script>
 
 
-<script src="js/13-mobile-touch-timer.js?v=20261112p0a"></script>
+<script src="js/13-mobile-touch-timer.js?v=20261112q0a"></script>
 
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/14a-ai-mail-analysis-1.js?v=20261112p0a"></script>
-<script src="js/14b-ai-mail-analysis-2.js?v=20261112p0a"></script>
-<script src="js/14c-task-inbox.js?v=20261112p0a"></script>
-<script src="js/14d-distribution-ledger.js?v=20261112p0a"></script>
+<script src="js/14a-ai-mail-analysis-1.js?v=20261112q0a"></script>
+<script src="js/14b-ai-mail-analysis-2.js?v=20261112q0a"></script>
+<script src="js/14c-task-inbox.js?v=20261112q0a"></script>
+<script src="js/14d-distribution-ledger.js?v=20261112q0a"></script>
 
 
 
@@ -2637,22 +2645,22 @@
 </div>
 
 <!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/15a-mail-attachment-tab.js?v=20261112p0a"></script>
-<script src="js/15b-mail-server-tab-1.js?v=20261112p0a"></script>
-<script src="js/15c-mail-server-tab-2.js?v=20261112p0a"></script>
+<script src="js/15a-mail-attachment-tab.js?v=20261112q0a"></script>
+<script src="js/15b-mail-server-tab-1.js?v=20261112q0a"></script>
+<script src="js/15c-mail-server-tab-2.js?v=20261112q0a"></script>
 
 
 
 
-<script src="js/16-wbs-level-colors.js?v=20261112p0a"></script>
+<script src="js/16-wbs-level-colors.js?v=20261112q0a"></script>
 
-<script src="js/17-weekly-report-modal-drag.js?v=20261112p0a"></script>
+<script src="js/17-weekly-report-modal-drag.js?v=20261112q0a"></script>
 
-<script src="js/18-mail-analyzer-modal-drag.js?v=20261112p0a"></script>
+<script src="js/18-mail-analyzer-modal-drag.js?v=20261112q0a"></script>
 
-<script src="js/19-shared-modal-drag.js?v=20261112p0a"></script>
+<script src="js/19-shared-modal-drag.js?v=20261112q0a"></script>
 
-<script src="js/20-weekly-report.js?v=20261112p0a"></script>
+<script src="js/20-weekly-report.js?v=20261112q0a"></script>
 
 </div> <!-- /#app-main -->
 
@@ -2693,85 +2701,85 @@
     </div>
 </div>
 
-<script src="js/21-color-palette.js?v=20261112p0a"></script>
+<script src="js/21-color-palette.js?v=20261112q0a"></script>
 
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/22a-summary-mctable-parse.js?v=20261112p0a"></script>
-<script src="js/22b-summary-mctable-core1.js?v=20261112p0a"></script>
-<script src="js/22c-summary-mctable-core2.js?v=20261112p0a"></script>
-<script src="js/22d-summary-mctable-core3.js?v=20261112p0a"></script>
-<script src="js/22e-summary-mctable-core4.js?v=20261112p0a"></script>
-<script src="js/22f-address-book.js?v=20261112p0a"></script>
-<script src="js/22g-name-autocomplete.js?v=20261112p0a"></script>
-<script src="js/22h-brief-mc-common-1.js?v=20261112p0a"></script>
-<script src="js/22i-brief-mc-common-2.js?v=20261112p0a"></script>
+<script src="js/22a-summary-mctable-parse.js?v=20261112q0a"></script>
+<script src="js/22b-summary-mctable-core1.js?v=20261112q0a"></script>
+<script src="js/22c-summary-mctable-core2.js?v=20261112q0a"></script>
+<script src="js/22d-summary-mctable-core3.js?v=20261112q0a"></script>
+<script src="js/22e-summary-mctable-core4.js?v=20261112q0a"></script>
+<script src="js/22f-address-book.js?v=20261112q0a"></script>
+<script src="js/22g-name-autocomplete.js?v=20261112q0a"></script>
+<script src="js/22h-brief-mc-common-1.js?v=20261112q0a"></script>
+<script src="js/22i-brief-mc-common-2.js?v=20261112q0a"></script>
 
-<script src="js/23-sidebar-tabs.js?v=20261112p0a"></script>
+<script src="js/23-sidebar-tabs.js?v=20261112q0a"></script>
 
-<script src="js/24-calendar-tab.js?v=20261112p0a"></script>
+<script src="js/24-calendar-tab.js?v=20261112q0a"></script>
 
-<script src="js/25-ai-learning.js?v=20261112p0a"></script>
+<script src="js/25-ai-learning.js?v=20261112q0a"></script>
 
-<script src="js/26-topic-profile.js?v=20261112p0a"></script>
+<script src="js/26-topic-profile.js?v=20261112q0a"></script>
 
-<script src="js/27-topic-contamination.js?v=20261112p0a"></script>
+<script src="js/27-topic-contamination.js?v=20261112q0a"></script>
 
-<script src="js/26-gantt-search.js?v=20261112p0a"></script>
+<script src="js/26-gantt-search.js?v=20261112q0a"></script>
 
-<script src="js/28-new-project-wizard.js?v=20261112p0a"></script>
+<script src="js/28-new-project-wizard.js?v=20261112q0a"></script>
 
-<script src="js/29-new-project-cluster-detect.js?v=20261112p0a"></script>
+<script src="js/29-new-project-cluster-detect.js?v=20261112q0a"></script>
 
-<script src="js/30-issue-collector.js?v=20261112p0a"></script>
+<script src="js/30-issue-collector.js?v=20261112q0a"></script>
 
-<script src="js/31-issue-report.js?v=20261112p0a"></script>
+<script src="js/31-issue-report.js?v=20261112q0a"></script>
 
-<script src="js/32-sap-capabilities.js?v=20261112p0a"></script>
+<script src="js/32-sap-capabilities.js?v=20261112q0a"></script>
 
-<script src="js/33-qa-router.js?v=20261112p0a"></script>
+<script src="js/33-qa-router.js?v=20261112q0a"></script>
 
-<script src="js/34-storage-doctor.js?v=20261112p0a"></script>
-    <script src="js/35-material-cart.js?v=20261112p0a"></script>
-    <script src="js/36-sap-login.js?v=20261112p0a"></script>
-    <script src="js/37-project-cache.js?v=20261112p0a"></script>
-    <script src="js/38-bom-tab.js?v=20261112p0a"></script>
-    <script src="js/39-groupware-calendar.js?v=20261112p0a"></script>
-    <script src="js/40-qa-tool-router.js?v=20261112p0a"></script>
-    <script src="js/41-qa-write-tools.js?v=20261112p0a"></script>
-    <script src="js/42-page-excel-io.js?v=20261112p0a"></script>
-    <script src="js/45-mc-import.js?v=20261112p0a"></script>
-    <script src="js/47-approval-compose.js?v=20261112p0a"></script>
-    <script src="js/43-briefspec-units.js?v=20261112p0a"></script>
-    <script src="js/44-backlog-consolidate.js?v=20261112p0a"></script>
-    <script src="js/46-model-name-builder.js?v=20261112p0a"></script>
-    <script src="js/48-doc-store.js?v=20261112p0a"></script>
-    <script src="js/49-panel-project-dict.js?v=20261112p0a"></script>
-    <script src="js/50-parts-category-pages.js?v=20261112p0a"></script>
-    <script src="js/51-panel-lib-import.js?v=20261112p0a"></script>
-    <script src="js/53-page-nas.js?v=20261112p0a"></script>
-    <script src="js/52-approval-doctypes.js?v=20261112p0a"></script>
-    <script src="js/54-mail-body-store.js?v=20261112p0a"></script>
-    <script src="js/55-project-list.js?v=20261112p0a"></script>
+<script src="js/34-storage-doctor.js?v=20261112q0a"></script>
+    <script src="js/35-material-cart.js?v=20261112q0a"></script>
+    <script src="js/36-sap-login.js?v=20261112q0a"></script>
+    <script src="js/37-project-cache.js?v=20261112q0a"></script>
+    <script src="js/38-bom-tab.js?v=20261112q0a"></script>
+    <script src="js/39-groupware-calendar.js?v=20261112q0a"></script>
+    <script src="js/40-qa-tool-router.js?v=20261112q0a"></script>
+    <script src="js/41-qa-write-tools.js?v=20261112q0a"></script>
+    <script src="js/42-page-excel-io.js?v=20261112q0a"></script>
+    <script src="js/45-mc-import.js?v=20261112q0a"></script>
+    <script src="js/47-approval-compose.js?v=20261112q0a"></script>
+    <script src="js/43-briefspec-units.js?v=20261112q0a"></script>
+    <script src="js/44-backlog-consolidate.js?v=20261112q0a"></script>
+    <script src="js/46-model-name-builder.js?v=20261112q0a"></script>
+    <script src="js/48-doc-store.js?v=20261112q0a"></script>
+    <script src="js/49-panel-project-dict.js?v=20261112q0a"></script>
+    <script src="js/50-parts-category-pages.js?v=20261112q0a"></script>
+    <script src="js/51-panel-lib-import.js?v=20261112q0a"></script>
+    <script src="js/53-page-nas.js?v=20261112q0a"></script>
+    <script src="js/52-approval-doctypes.js?v=20261112q0a"></script>
+    <script src="js/54-mail-body-store.js?v=20261112q0a"></script>
+    <script src="js/55-project-list.js?v=20261112q0a"></script>
     <!-- 🔎 BOM 에서 특정 부품 찾기(패널·터치…) — 사내 자점그룹표 R100 기반 -->
-    <script src="js/56-bom-part-lookup.js?v=20261112p0a"></script>
+    <script src="js/56-bom-part-lookup.js?v=20261112q0a"></script>
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
-    <script src="js/57-storage-adapter.js?v=20261112p0a"></script>
+    <script src="js/57-storage-adapter.js?v=20261112q0a"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/59-daily-report.js?v=20261112p0a"></script>
-    <script src="js/60-telegram-qa-bridge.js?v=20261112p0a"></script>
-    <script src="js/61-mail-evidence.js?v=20261112p0a"></script>
-    <script src="js/62-period-summary.js?v=20261112p0a"></script>
-    <script src="js/63-daily-draft-qa.js?v=20261112p0a"></script>
-    <script src="js/64-user-switch.js?v=20261112p0a"></script>
-    <script src="js/65-overdue-cleanup.js?v=20261112p0a"></script>
-    <script src="js/66-index-selfheal.js?v=20261112p0a"></script>
-    <script src="js/66-doc-generate.js?v=20261112p0a"></script>
-    <script src="js/68-doc-checksheets.js?v=20261112p0a"></script>
-    <script src="js/69-resolution-spec.js?v=20261112p0a"></script>
-    <script src="js/70-jira-tab.js?v=20261112p0a"></script>
-    <script src="js/67-document-page.js?v=20261112p0a"></script>
-    <script src="js/64-qa-route-log.js?v=20261112p0a"></script>
-    <script src="js/71-selection-to-ai.js?v=20261112p0a"></script>
+    <script src="js/59-daily-report.js?v=20261112q0a"></script>
+    <script src="js/60-telegram-qa-bridge.js?v=20261112q0a"></script>
+    <script src="js/61-mail-evidence.js?v=20261112q0a"></script>
+    <script src="js/62-period-summary.js?v=20261112q0a"></script>
+    <script src="js/63-daily-draft-qa.js?v=20261112q0a"></script>
+    <script src="js/64-user-switch.js?v=20261112q0a"></script>
+    <script src="js/65-overdue-cleanup.js?v=20261112q0a"></script>
+    <script src="js/66-index-selfheal.js?v=20261112q0a"></script>
+    <script src="js/66-doc-generate.js?v=20261112q0a"></script>
+    <script src="js/68-doc-checksheets.js?v=20261112q0a"></script>
+    <script src="js/69-resolution-spec.js?v=20261112q0a"></script>
+    <script src="js/70-jira-tab.js?v=20261112q0a"></script>
+    <script src="js/67-document-page.js?v=20261112q0a"></script>
+    <script src="js/64-qa-route-log.js?v=20261112q0a"></script>
+    <script src="js/71-selection-to-ai.js?v=20261112q0a"></script>
 
 </body>
 </html>

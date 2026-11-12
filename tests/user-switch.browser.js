@@ -189,8 +189,10 @@
         ok('로그아웃하면 로그인 화면이 뜬다', gateOn());
         ok('기억이 지워진다', localStorage.getItem(U.userKey) === null);
 
-        ok('설정 메뉴에 로그인·로그아웃이 있다',
-           !!document.getElementById('app-user-switch-btn') && !!document.getElementById('app-user-logout-btn'));
+        // 🗑 [2026-11-12] 설정 메뉴의 "다른 계정으로 로그인"·"로그아웃" 버튼은 헤더 배지와
+        //    완전히 중복이라(위에서 이미 확인) 삭제됨 — 이제 "없다"를 확인한다.
+        ok('설정 메뉴엔 로그인·로그아웃 버튼이 없다(헤더 배지와 중복이라 삭제)',
+           !document.getElementById('app-user-switch-btn') && !document.getElementById('app-user-logout-btn'));
 
         // ══ 🆕 새 PC — 이 화면에서 전환까지 끝낸다 (2026-11-09) ═══════════════
         //   왜: `/nas/login` 은 주소가 저장돼 있어야 되는 호출이라 새 PC 는 여기서 반드시

@@ -197,7 +197,6 @@
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'issue-report-menu-btn': '🧾 이슈·버그 리포트',
                 'add-user-btn':       '👤 사용자 추가',
-                'file-input-label':'🟩 프로젝트 엑셀 불러오기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
                 'inbox-btn':'📦 AI 업무 보관함',
@@ -207,7 +206,6 @@
                 'chart-expand-btn':    '📊 차트 확장',
                 'chart-expand-btn-on': '📊 기본 보기',
                 
-                'excel-btn':      '🟩 프로젝트 엑셀 저장',
                 'date-sort-btn':  '📅 날짜순 정렬',
                 'file-status-default': '파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)',
                 'file-status-updated': '✅ 일정이 업데이트 되었습니다.',
@@ -502,7 +500,6 @@
                 'issue-report-menu-btn': '🧾 Issue/Bug Report',
                 'add-user-btn':       '👤 Add User',
                 'login-settings-btn': '🔑 Login & Storage settings',
-                'file-input-label':'🟩 Load Project Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
                 'inbox-btn':'📦 AI Task Inbox',
@@ -512,7 +509,6 @@
                 'chart-expand-btn':    '📊 Chart View',
                 'chart-expand-btn-on': '📊 Basic View',
                
-                'excel-btn':      '🟩 Save Project Excel',
                 'date-sort-btn':  '📅 Sort by Date',
                 'file-status-default': 'Select a file or drag & drop an Excel file here. (Double-click any item to edit)',
                 'file-status-updated': '✅ Schedule has been updated.',
