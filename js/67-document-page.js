@@ -612,20 +612,17 @@
         window._docRender();
     };
     window._docSetStage = function (v) { window._docState.stage = v; window._docRender(); };
-    /** ✅ 점검요청만 보기 ↔ 전체 보기 */
-    window._docToggleChkOnly = function () {
-        window._docState.chkOnly = !window._docState.chkOnly;
-        window._docRender();
-    };
     /** 🙈 [2026-11-12 요청] 점검요청 '해당없음' 항목 접기 ↔ 펴기 (기본 접힘, Resolution 묶음은 예외) */
     window._docToggleHideNA = function () {
         window._docState.hideNA = (window._docState.hideNA === false) ? true : false;
         window._docRender();
     };
-    /** 📂 [2026-11-12 3차 요청] SPL Check sheet 장(시트) 하나만 접기 ↔ 펴기 */
+    /** 📂 [2026-11-12 5차 요청] 시트 헤더 버튼 하나로 3단 순환: 접기 → 펼치기1(점검요청만) →
+     *  펼치기2(전체) → 접기... 기본값(未지정)은 '전체' — 예전 화면과 같은 첫 모습을 지킨다. */
     window._docToggleSheetCollapse = function (sheetKey) {
-        window._docState.chkSheetCollapsed = window._docState.chkSheetCollapsed || {};
-        window._docState.chkSheetCollapsed[sheetKey] = !window._docState.chkSheetCollapsed[sheetKey];
+        window._docState.chkSheetState = window._docState.chkSheetState || {};
+        var cur = window._docState.chkSheetState[sheetKey] || 'all';
+        window._docState.chkSheetState[sheetKey] = cur === 'all' ? 'collapsed' : (cur === 'collapsed' ? 'req' : 'all');
         window._docRender();
     };
     /** 📂 [2026-11-12 4차 요청] 문서 안 섹션(.doc-sec) 전부에 접기 ↔ 펴기 — 섹션 제목(s.title)으로 구분 */
@@ -1326,18 +1323,23 @@
             h += '</div>';
         }
 
+        // 🔘 [2026-11-12 5차 요청] 접기/펼치기 버튼은 **한 스타일**만 쓴다(삼각형·폰트 크기가
+        //    섹션 제목용과 시트 제목용에서 갈라지지 않게 — 작은 쪽으로 통일).
+        var _COLLAPSE_BTN_STYLE = 'padding:3px 9px; font-size:11px; cursor:pointer;'
+            + ' border:1px solid #a3d9e0; border-radius:5px; font-weight:bold; background:#fff; color:#00707d;'
+            + ' flex-shrink:0;';
         form.sections.forEach(function (s) {
             // 📂 [2026-11-12 4차 요청] 섹션 제목(.doc-sec) 전부에 접기/펴기 버튼을 오른쪽 정렬로
             //    단다(사용자: "하늘색 박스 전부"). kind 마다 내용 모양이 달라 **통째로 감싸는 div
             //    하나**만 display:none 으로 접는다 — kind별 분기 코드는 안 건드린다.
+            //    ⚠️ [2026-11-12 5차] 'check'(SPL Check sheet)는 제목 줄 자체를 **안 그린다** —
+            //    시트마다 이미 제 접기 버튼이 있어 위에 한 겹 더 두면 군더더기다(사용자 지시).
             var secCollapsed = !!(window._docState.secCollapsed && window._docState.secCollapsed[s.title]);
-            if (s.kind !== 'cover') {
+            if (s.kind !== 'cover' && s.kind !== 'check') {
                 h += '<div class="doc-sec" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
                    + '<span>' + _esc(s.title) + '</span>'
                    + '<button class="doc-noprint" onclick="window._docToggleSectionCollapse(\''
-                   + _esc(s.title).replace(/'/g, "\\'") + '\')" style="padding:3px 9px; font-size:11px; cursor:pointer;'
-                   + ' border:1px solid #a3d9e0; border-radius:5px; font-weight:bold; background:#fff; color:#00707d;'
-                   + ' flex-shrink:0;">'
+                   + _esc(s.title).replace(/'/g, "\\'") + '\')" style="' + _COLLAPSE_BTN_STYLE + '">'
                    + (secCollapsed ? '▶ ' + _esc(_t('펼치기', 'Expand')) : '▼ ' + _esc(_t('접기', 'Collapse'))) + '</button>'
                    + '</div>';
             }
@@ -1379,31 +1381,26 @@
                     h += '<tr><td style="color:#b1432f;">'
                        + _esc(_t('점검표 데이터(js/68)를 불러오지 못했습니다.', 'check sheet data missing')) + '</td></tr>';
                 }
-                // ✅ [2026-11-09 요청] **개발담당자 점검요청을 켠 것만** 보기 —
-                //    해상도 팝업·Customer SPEC 의 `🔽 펼치기` 와 같은 뜻이다(새로 디자인하지 않는다).
-                //    ⚠️ 167항목을 다 펼쳐 두면 "내가 뭘 요청했는지" 가 안 보인다.
-                var chkOnly = !!window._docState.chkOnly;
                 var hideNA = window._docState.hideNA !== false;
-                // 🗑️ [2026-11-12 4차 요청] 전체 토글 박스("SPL Check sheet" 테두리 + 점검요청만/
-                //    해당없음 버튼)는 삭제 — 시트마다 접기 버튼(아래)과 섹션 제목 접기(위)로 충분하다.
-                //    ⚠️ chkOnly 는 더 이상 켤 방법이 없어 **항상 꺼진 채**로 남는다(기본 동작 유지,
-                //    기능 제거는 아님 — 다시 필요하면 버튼만 어딘가에 다시 달면 된다). hideNA 는
-                //    각 장(sheet) 아래 '🙈 N건 접힘 · 펴기' 링크로 계속 켜고 끌 수 있다.
+                // 🗑️ [2026-11-12 5차 요청] "SPL Check sheet" 제목 줄은 완전히 없앴다(위에서
+                //    kind==='check' 를 건너뛴다) — 시트 헤더 버튼이 접기/펼치기1(점검요청만)/
+                //    펼치기2(전체)를 전부 맡는다. hideNA 는 '전체' 상태에서만 뜻이 있고 그 아래
+                //    '🙈 N건 접힘 · 펴기' 링크로 계속 켜고 끌 수 있다.
                 h += '</table>';
                 sheets.forEach(function (sh) {
-                    var items = _sheetItems(sh, form.id);
-                    if (chkOnly) {
-                        items = items.filter(function (it) {
-                            return _docData(form.id).fields['chk|' + sh.key + '|' + it.id + '|점검요청'] === 'O';
+                    var itemsAll = _sheetItems(sh, form.id);
+                    // 📂 [2026-11-12 5차 요청] 시트 헤더 버튼 하나가 3단을 순환한다:
+                    //    접기 → 펼치기1(점검요청 켠 것만) → 펼치기2(전체, 해당없음은 기존처럼 접음) → 접기…
+                    var state = (window._docState.chkSheetState && window._docState.chkSheetState[sh.key]) || 'all';
+                    var items = itemsAll, naCount = 0, reqCount = 0;
+                    if (state === 'req') {
+                        items = itemsAll.filter(function (it) {
+                            var hit = _docData(form.id).fields['chk|' + sh.key + '|' + it.id + '|점검요청'] === 'O';
+                            if (hit) reqCount++;
+                            return hit;
                         });
-                        // 요청한 게 하나도 없는 장은 **제목째** 접는다(빈 표만 남으면 더 헷갈린다)
-                        if (!items.length) return;
-                    }
-                    // 🙈 [2026-11-12 요청] '해당없음' 항목 접기 — chkOnly 가 켜져 있으면 이미 'O' 만
-                    //    남았으므로 다시 거를 필요가 없다(해당없음이 섞여 있을 수 없다).
-                    var naCount = 0;
-                    if (hideNA && !chkOnly) {
-                        items = items.filter(function (it) {
+                    } else if (state === 'all' && hideNA) {
+                        items = itemsAll.filter(function (it) {
                             if (RES_GROUPS.indexOf(it.g) >= 0) return true;
                             if (_docData(form.id).fields['chk|' + sh.key + '|' + it.id + '|해당없음'] === 'O') {
                                 naCount++; return false;
@@ -1411,21 +1408,20 @@
                             return true;
                         });
                     }
-                    // 📂 [2026-11-12 3차 요청] 시트 헤더마다 **그 시트 하나만** 접고 펼치는 버튼을
-                    //    헤더 박스(.doc-sec) 안쪽에 오른쪽 정렬로 둔다 — 위 전체 토글(점검요청/해당없음)과
-                    //    다른 축이다: 이건 '해당없음' 과 무관하게 긴 표 자체를 안 보이게 접는다.
-                    var collapsed = !!(window._docState.chkSheetCollapsed && window._docState.chkSheetCollapsed[sh.key]);
+                    var arrow = state === 'collapsed' ? '▶' : (state === 'req' ? '▼' : '▲');
+                    var label = state === 'collapsed' ? _t('펼치기', 'Expand')
+                              : (state === 'req' ? _t('전체 보기', 'Show all') : _t('접기', 'Collapse'));
+                    var badge = state === 'collapsed' ? '(' + itemsAll.length + _t('개 항목', ' items') + ')'
+                              : (state === 'req' ? '(' + reqCount + '/' + itemsAll.length + _t('개 항목', ' items') + ')' : '');
                     h += '<div class="doc-sec" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
-                       + '<span>' + _esc(sh.key) + (collapsed ? '<span class="doc-noprint" style="font-weight:normal;'
-                           + ' color:#868e96; margin-left:8px;">(' + items.length + _esc(_t('개 항목', ' items')) + ')</span>' : '')
+                       + '<span>' + _esc(sh.key) + (badge ? '<span class="doc-noprint" style="font-weight:normal;'
+                           + ' color:#868e96; margin-left:8px;">' + _esc(badge) + '</span>' : '')
                        + '</span>'
                        + '<button class="doc-noprint" onclick="window._docToggleSheetCollapse(\''
-                       + _esc(sh.key).replace(/'/g, "\\'") + '\')" style="padding:3px 9px; font-size:11px; cursor:pointer;'
-                       + ' border:1px solid #a3d9e0; border-radius:5px; font-weight:bold; background:#fff; color:#00707d;'
-                       + ' flex-shrink:0;">'
-                       + (collapsed ? '▶ ' + _esc(_t('펼치기', 'Expand')) : '▼ ' + _esc(_t('접기', 'Collapse'))) + '</button>'
+                       + _esc(sh.key).replace(/'/g, "\\'") + '\')" style="' + _COLLAPSE_BTN_STYLE + '">'
+                       + arrow + ' ' + _esc(label) + '</button>'
                        + '</div>';
-                    if (collapsed) return;
+                    if (state === 'collapsed') return;
                     h += '<table class="doc-t" style="table-layout:fixed;">'
                        + '<colgroup><col style="width:110px"><col><col style="width:168px">'
                        + '<col style="width:150px"><col style="width:150px"></colgroup>'
@@ -1444,8 +1440,9 @@
                     }
                     if (!items.length) {
                         h += '<tr><td colspan="5" style="color:#b1432f;">'
-                           + (naCount ? _esc(_t('이 장은 전부 ‘해당없음’ 으로 접혀 있습니다.', 'All items are N/A (hidden).'))
-                                      : _esc(_t('이 장에 점검할 항목이 없습니다.', 'No items.')))
+                           + (state === 'req' ? _esc(_t('‘점검요청’ 으로 표시된 항목이 없습니다.', 'No items requested.'))
+                              : naCount ? _esc(_t('이 장은 전부 ‘해당없음’ 으로 접혀 있습니다.', 'All items are N/A (hidden).'))
+                                        : _esc(_t('이 장에 점검할 항목이 없습니다.', 'No items.')))
                            + '</td></tr>';
                     }
                     items.forEach(function (it, n) {
@@ -1470,7 +1467,7 @@
                         h += '<tr>'
                            + (span[n] ? '<td class="doc-lab doc-grp" style="vertical-align:middle;"'
                                         + ' rowspan="' + span[n] + '">' + _esc(it.g)
-                                        + (chkOnly ? '' :
+                                        + (state === 'req' ? '' :
                                            '<div class="doc-noprint" style="margin-top:3px; font-weight:normal;">'
                                            + '<a href="#" onclick="window._docCheckAddRow(\'' + _esc(form.id) + '\',\''
                                            + _esc(sh.key).replace(/'/g, "\\'") + '\',\'' + _esc(it.g).replace(/'/g, "\\'")
