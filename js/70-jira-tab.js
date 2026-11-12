@@ -169,19 +169,24 @@
         // ⚠️ table-layout:fixed 가 없으면 th 의 width 는 힌트일 뿐이라 브라우저가 내용 기준으로
         //    다시 배분한다 — 그래서 '요약'은 안 넓어지고 '담당자/우선순위/수정일/출처'만 헐렁하게
         //    늘어나 보였다(실측). 폭 비율은 여기 한 곳(%, 합 100)에서만 바꾼다.
+        // 📌 [2026-11-12 사용자 요청] 키 왼쪽에 No. 열 — 지금 정렬(수정일 내림차순) 기준 순번일
+        //    뿐이라 JIRA 자체 값이 아니다(정렬 바뀌면 같이 바뀐다). 폭은 '키'에서 1%, '요약'에서
+        //    2%, '출처'에서 1% 씩 떼어 왔다(합 100% 유지).
         var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
-            + '<th style="padding:7px 8px; text-align:left; width:9%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:38%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:36%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
             + '<th style="padding:7px 8px; text-align:center; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
             + '<th style="padding:7px 8px; text-align:center; width:10%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
             + '<th style="padding:7px 8px; text-align:center; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('우선순위', 'Priority') + '</th>'
             + '<th style="padding:7px 8px; text-align:center; width:12%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:15%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('출처', 'Source') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:14%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('출처', 'Source') + '</th>'
             + '</tr></thead><tbody>'
-            + merged.map(function (it) {
+            + merged.map(function (it, i) {
                 var c = statusColor(it.status);
                 return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
+                    + '<td style="padding:7px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
                     + '<td style="padding:7px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
                     + '<td style="padding:7px 8px;">' + esc(it.summary) + '</td>'
                     + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
@@ -687,6 +692,16 @@
             + fieldRow(T('우선순위', 'Priority'), '<select id="jira-f-priority" style="' + inputSt + '">'
                 + priorities.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === issue.priorityId ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('')
                 + '</select>')
+            // 📌 [2026-11-12 사용자 요청] 실제 JIRA 화면의 "자세히" 패널에 있는 구성 요소/해결책/
+            // Milestone도 여기 보여준다 — 전부 **읽기 전용**(이 모달에서 고치는 칸이 아니라
+            // 참고용, JIRA 쪽 화면에서 고치면 "🔄 새로고침"으로 다시 받아온다). Milestone은
+            // 이 인스턴스의 커스텀 필드라 이름이 영문 그대로다(jira_bridge._field_id_by_name).
+            + fieldRow(T('구성 요소', 'Components'), '<span style="flex:1; min-width:0; padding:6px 0; color:#333;">'
+                + (issue.components && issue.components.length ? esc(issue.components.join(', ')) : '<span style="color:#aaa;">—</span>') + '</span>')
+            + fieldRow(T('해결책', 'Resolution'), '<span style="flex:1; min-width:0; padding:6px 0; color:#333;">'
+                + (issue.resolution ? esc(issue.resolution) : '<span style="color:#aaa;">—</span>') + '</span>')
+            + fieldRow('Milestone', '<span style="flex:1; min-width:0; padding:6px 0; color:#333;">'
+                + (issue.milestone ? esc(issue.milestone) : '<span style="color:#aaa;">—</span>') + '</span>')
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
             + renderAttachments(issue.attachments)

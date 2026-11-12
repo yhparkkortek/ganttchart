@@ -332,6 +332,51 @@ finally:
     except Exception:
         pass
 
+print('\n[13] 구성 요소/해결책/Milestone — Milestone은 커스텀 필드라 이름으로 id를 찾아야 한다 (2026-11-12)')
+#    ⚠️ components/resolution은 표준 필드라 FIELDS_DEFAULT에 그냥 적으면 되지만, Milestone은
+#    이 인스턴스에만 있는 customfield_NNNNN이다 — /rest/api/2/field로 한 번 받아 이름으로
+#    찾고(_field_id_by_name), 실패해도 핵심 조회(이슈 상세)는 막히지 않아야 한다.
+fresh(); stub_auth(True)
+jb._FIELD_META_CACHE['id_by_name'] = None
+jb._FIELD_META_CACHE['ts'] = 0
+_FAKE_FIELDS = [{'id': 'summary', 'name': 'Summary'}, {'id': 'customfield_10010', 'name': 'Milestone'}]
+calls = arm([
+    FakeResp(200, _FAKE_FIELDS),  # 1) /rest/api/2/field (get_issue 안에서 먼저 찾는다)
+    FakeResp(200, {'key': 'GABJO-3', 'fields': {
+        'summary': '[문의] 256Gray 계조별 일정간격으로 Bar처럼 보임',
+        'resolution': {'name': 'Fixed'},
+        'components': [{'name': 'S/W'}],
+        'customfield_10010': {'value': 'ES'},
+    }}),  # 2) /rest/api/2/issue/GABJO-3
+])
+issue = jb.get_issue('GABJO-3')
+check('필드 정의 1회 + 이슈 조회 1회 = 네트워크 2회', calls['n'] == 2, calls)
+check('resolution(표준 필드)', issue['resolution'] == 'Fixed', issue)
+check('components(표준 필드)', issue['components'] == ['S/W'], issue)
+check('milestone(커스텀 필드, dict value)', issue['milestone'] == 'ES', issue)
+
+calls2 = arm([FakeResp(200, {'key': 'GABJO-4', 'fields': {'customfield_10010': {'value': 'PP'}}})])
+issue2 = jb.get_issue('GABJO-4')
+check('필드 정의는 캐시돼 재조회 안 함(두 번째 get_issue는 네트워크 1회만)', calls2['n'] == 1, calls2)
+check('모델이 바뀌면 milestone 값도 그대로 따라온다', issue2['milestone'] == 'PP', issue2)
+
+jb._FIELD_META_CACHE['id_by_name'] = None
+jb._FIELD_META_CACHE['ts'] = 0
+calls3 = arm([
+    FakeResp(403, {'errorMessages': ['no perm'], 'errors': {}}),  # 필드 정의 조회 자체가 실패
+    FakeResp(200, {'key': 'GABJO-5', 'fields': {'summary': '폴백'}}),
+])
+issue3 = jb.get_issue('GABJO-5')
+check('필드 정의 조회가 실패해도 이슈 조회는 그대로 된다', issue3['summary'] == '폴백', issue3)
+check('milestone은 모르니 빈 문자열(추측하지 않는다)', issue3['milestone'] == '', issue3)
+
+jb._FIELD_META_CACHE['id_by_name'] = None
+jb._FIELD_META_CACHE['ts'] = 0
+calls4 = arm([FakeResp(200, {'total': 1, 'issues': [{'key': 'GABJO-6', 'fields': {'summary': '목록'}}]})])
+res13 = jb.search('project = GABJO', 10)
+check('search는 가벼운 필드셋이라 필드 정의를 따로 조회하지 않는다(네트워크 1회만)', calls4['n'] == 1, calls4)
+check('search 결과의 milestone은 빈 문자열(목록은 그 필드를 안 받는다)', res13['issues'][0]['milestone'] == '', res13)
+
 print('\n' + ('=' * 50))
 print('PASS %d / FAIL %d' % (len(PASS), len(FAIL)))
 if FAIL:

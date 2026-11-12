@@ -192,18 +192,60 @@ def verify_login():
 
 
 FIELDS_DEFAULT = ('summary,description,status,assignee,reporter,priority,issuetype,'
-                   'created,updated,comment,components,labels,fixVersions,attachment')
+                   'created,updated,comment,components,labels,fixVersions,attachment,resolution')
 
 
-def _shape_issue(raw):
+# ── 🏷 커스텀 필드 이름 → id (2026-11-12, "구성 요소/해결책/Milestone도 보여줘") ──────
+#  `resolution`은 표준 필드라 위 FIELDS_DEFAULT에 그냥 적으면 되지만, **Milestone은 이
+#  인스턴스의 커스텀 필드**(`customfield_NNNNN`)라 이름만으로는 조회할 수 없다 — `/rest/api/2/
+#  field`로 전체 필드 정의(id↔이름)를 한 번 받아 이름으로 찾는다. 필드 정의는 거의 안
+#  바뀌므로 넉넉히(30분) 캐시한다. ⚠️ 실패해도 예외를 던지지 않고 None — 이 부가 정보 하나
+#  때문에 이슈 조회 전체가 막히면 안 된다(핵심 정보는 FIELDS_DEFAULT의 표준 필드들이다).
+_FIELD_META_CACHE = {'ts': 0, 'id_by_name': None}
+_FIELD_META_TTL = 1800
+
+
+def _field_id_by_name(name):
+    import time
+    now = time.time()
+    cache = _FIELD_META_CACHE
+    if cache['id_by_name'] is None or (now - cache['ts']) > _FIELD_META_TTL:
+        try:
+            r = _request('GET', '/rest/api/2/field')
+            m = {}
+            for fdef in r.json():
+                nm = (fdef.get('name') or '').strip().lower()
+                if nm and nm not in m:
+                    m[nm] = fdef.get('id')
+            cache['id_by_name'] = m
+            cache['ts'] = now
+        except Exception:
+            return None  # 다음 호출에서 다시 시도(성공할 때만 캐시에 올린다)
+    return (cache['id_by_name'] or {}).get((name or '').strip().lower())
+
+
+def _field_display_value(v):
+    """커스텀 필드 값 표시용 — select(단일: dict{value|name})·다중선택(list)·문자열을 전부 받는다."""
+    if v is None:
+        return ''
+    if isinstance(v, dict):
+        return v.get('value') or v.get('name') or ''
+    if isinstance(v, list):
+        return ', '.join(_field_display_value(x) for x in v if x is not None)
+    return str(v)
+
+
+def _shape_issue(raw, milestone_field_id=None):
     f = raw.get('fields') or {}
     status_f = f.get('status') or {}
     assignee = f.get('assignee') or {}
     reporter = f.get('reporter') or {}
     priority = f.get('priority') or {}
     issuetype = f.get('issuetype') or {}
+    resolution = f.get('resolution') or {}
     comments = ((f.get('comment') or {}).get('comments')) or []
     attachments = f.get('attachment') or []
+    milestone = _field_display_value(f.get(milestone_field_id)) if milestone_field_id else ''
     return {
         'key': raw.get('key'),
         'url': JIRA_BASE + '/browse/' + str(raw.get('key') or ''),
@@ -220,6 +262,8 @@ def _shape_issue(raw):
         'created': f.get('created') or '',
         'updated': f.get('updated') or '',
         'components': [c.get('name') for c in (f.get('components') or [])],
+        'resolution': resolution.get('name') or '',
+        'milestone': milestone,
         'labels': f.get('labels') or [],
         'comments': [{'author': (c.get('author') or {}).get('displayName'),
                       'body': c.get('body'), 'created': c.get('created')} for c in comments],
@@ -237,8 +281,10 @@ def _shape_issue(raw):
 
 
 def get_issue(key):
-    r = _request('GET', '/rest/api/2/issue/' + key, params={'fields': FIELDS_DEFAULT})
-    return _shape_issue(r.json())
+    mid = _field_id_by_name('Milestone')
+    fields = FIELDS_DEFAULT + (',' + mid if mid else '')
+    r = _request('GET', '/rest/api/2/issue/' + key, params={'fields': fields})
+    return _shape_issue(r.json(), mid)
 
 
 def search(jql, max_results=50):
