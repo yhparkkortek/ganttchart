@@ -1174,7 +1174,9 @@
         'pl-btn-import':  ['📂 불러오기',      '📂 Import'],
         'pl-btn-nas':     ['📁 NAS',           '📁 NAS'],
         'pl-btn-cols':    ['🔁 열',            '🔁 Columns'],
-        'pl-btn-reset':   ['↺',                '↺']
+        'pl-btn-reset':   ['↺',                '↺'],
+        'pl-btn-ext-register': ['등록',  'Register'],
+        'pl-btn-ext-later':    ['나중에', 'Later']
     };
     window.PL_UI_TITLE = window.PL_UI_TITLE || {
         'pl-btn-reset':  ['검색·필터·정렬 초기화', 'Reset search, filters and sorting'],
@@ -3053,13 +3055,71 @@
         } catch (e) { return ''; }
     };
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 📤 NAS 직접 업로드 감지 (2026-11-12 사용자 설계) — 담당자가 앱을 거치지 않고 NAS
+    //    `PROJECT LIST` 폴더에 엑셀을 바로 올려 둔 경우. 탭에 들어올 때마다(10분 간격으로
+    //    느슨하게) 그 폴더를 훑어 **가장 최신 엑셀**이 지난번에 본 것과 다르면 배너로 물어본다.
+    //    ⚠️ **새 PC/첫 실행은 조용히 기준만 세운다** — 그 순간 폴더에 이미 있던 파일(예: 과거에
+    //    수동으로 남겨 둔 엑셀들)을 "새로 올라온 것"으로 오인해 느닷없이 배너를 띄우지 않는다.
+    //    등록을 누르면 `_plApplyWorkbook`(교체/합치기 확인 + 백업 스냅샷까지 전부 그대로 탄다).
+    // ══════════════════════════════════════════════════════════════════════════
+    var PL_EXT_EXCEL_RECHECK_MS = 10 * 60 * 1000; // 폴더 목록 조회라 JSON 재조회(2분)보다 느슨하게
+    window._plExtExcelCheckedAt = window._plExtExcelCheckedAt || 0;
+    window._plExtExcelPending = null; // {name, mtime} — 배너의 [등록]이 쓸 지금 후보
+    var _plExtExcelSeenKey = function () { return 'gantt_pl_ext_excel_seen_' + _teamSlug(); };
+    var _plExtExcelBannerShow = function (name) {
+        var el = document.getElementById('pl-nas-upload-banner'); if (!el) return;
+        var tx = document.getElementById('pl-nas-upload-banner-text');
+        if (tx) tx.textContent = '📤 ' + _t('NAS에 새 엑셀이 올라와 있습니다: ', 'A new Excel file appeared in NAS: ') + name;
+        el.style.display = 'flex';
+    };
+    var _plExtExcelBannerHide = function () {
+        var el = document.getElementById('pl-nas-upload-banner'); if (el) el.style.display = 'none';
+    };
+    window._plCheckExternalExcel = async function () {
+        if (!window._dsList) return;
+        if (Date.now() - window._plExtExcelCheckedAt < PL_EXT_EXCEL_RECHECK_MS) return;
+        window._plExtExcelCheckedAt = Date.now();
+        try {
+            var j = await window._dsList(NAS_DATA_FOLDER);
+            var files = ((j && (j.files || j.items || j.list)) || []).map(function (f) { return (f && f.name) ? f : { name: String(f) }; });
+            var xl = files.filter(function (f) { return window._docIsWorkbook && window._docIsWorkbook(f.name); });
+            if (!xl.length) { _plExtExcelBannerHide(); return; }
+            xl.sort(function (a, b) { return String(b.mtime || '').localeCompare(String(a.mtime || '')); });
+            var newest = { name: xl[0].name, mtime: xl[0].mtime || '' };
+            var seen = null;
+            try { seen = JSON.parse(localStorage.getItem(_plExtExcelSeenKey()) || 'null'); } catch (e) { seen = null; }
+            if (!seen) { localStorage.setItem(_plExtExcelSeenKey(), JSON.stringify(newest)); return; } // 기준만 세운다
+            if (seen.name === newest.name && seen.mtime === newest.mtime) { _plExtExcelBannerHide(); return; }
+            window._plExtExcelPending = newest;
+            _plExtExcelBannerShow(newest.name);
+        } catch (e) { /* 조회 실패는 조용히 넘어간다 — 다음 탭 진입 때 다시 시도 */ }
+    };
+    /** [등록] — 그 엑셀을 바로 읽어 기존 교체/합치기 흐름으로(백업 스냅샷도 그 안에서 같이 돈다). */
+    window.plRegisterExternalExcel = async function () {
+        var p = window._plExtExcelPending; if (!p) return;
+        _plExtExcelBannerHide();
+        try {
+            var f = await window._dsFileOf(NAS_DATA_FOLDER, p.name);
+            await window._plApplyWorkbook(await f.arrayBuffer(), p.name);
+            localStorage.setItem(_plExtExcelSeenKey(), JSON.stringify(p));
+        } catch (e) { _toast('⚠️ ' + (e && e.message ? e.message : e), 'error', 7000); }
+    };
+    /** [나중에] — 이 파일은 더 안 물어본다(더 새로운 파일이 나타나기 전까지). */
+    window.plDismissExternalExcel = function () {
+        var p = window._plExtExcelPending;
+        if (p) localStorage.setItem(_plExtExcelSeenKey(), JSON.stringify(p));
+        _plExtExcelBannerHide();
+    };
+
     window.plOnTabShown = function () {
         window.plRenderIfStale();        // ⚡ 바뀐 게 없으면 그대로 둔다 — 표를 다시 만들면 150ms 가 든다
         window.plEnsureLoaded(false);
+        window._plCheckExternalExcel();
     };
 
     // ① 떠고 3초 — 구글 연동을 기다리지 않는다(NAS 는 로그인 부요).
-    setTimeout(function () { window.plEnsureLoaded(false); }, 3000);
+    setTimeout(function () { window.plEnsureLoaded(false); window._plCheckExternalExcel(); }, 3000);
     // ② 프로젝트 파일을 여는 모든 길(드라이다 불러오기·새 시트·백업 복원)은 populateTabData 를 거친다.
     //    시트 전환마다 네트워크를 타면 안 되니 _PL_RELOAD_MS 사이 간경은 그상 지나간다.
     (function () {
