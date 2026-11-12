@@ -2822,12 +2822,20 @@ ${docsJson}`;
                 var _ferr = data.error || window._t('알 수 없는 오류', 'unknown error');
                 return '(' + window._t('SAP 조회 실패', 'SAP lookup failed') + ': ' + _ferr + ')';
             }
+            // 🆕 [2026-11-12, 사용자 요청] BOM 조회는 BOM 탭(js/38)과 같은 레벨 블록 폴백을
+            //    거친다 — 계층이 깨지면(기본 레이아웃 자동 보정 뒤에도 드물게 남을 수 있음)
+            //    AI에게 뒤섞인 원본 대신 레벨별로 다시 묶은 표를 넘긴다. 정상이면 원본 그대로
+            //    (불필요한 변형 금지). BOM 아닌 조회(사용처/ZMM009/범용)는 손대지 않는다.
+            var _finalText = data.text;
+            if (bomMatch && _finalText && window._bomReorderTextForHierarchy) {
+                _finalText = window._bomReorderTextForHierarchy(_finalText);
+            }
             // 💡 [2026-09-14 신규] "엑셀로 내보내줘" 로컬 명령(sendGanttQaMessage의
             //    _ganttQaExtractSapExportRequest 처리 블록)이 AI를 다시 거치지 않고 바로 쓸 수
             //    있도록, 성공한 조회 결과를 매번 최신 것으로 캐싱해둔다.
-            window._lastSapFetchResult = { source: data.source, text: data.text, fetchedAt: Date.now(), bomMeta: window._pendingBomMeta || null };
+            window._lastSapFetchResult = { source: data.source, text: _finalText, fetchedAt: Date.now(), bomMeta: window._pendingBomMeta || null };
             window._pendingBomMeta = null;
-            return data.text || null;
+            return _finalText || null;
         } catch (e) {
             console.warn('[AI 문답] SAP 조회 실패:', e && e.message);
             return '(' + window._t('SAP 조회 실패', 'SAP lookup failed') + ': ' + window._t('로컬 백엔드(kortek_backend.py)가 켜져 있는지 확인하세요.', 'Please check that the local backend (kortek_backend.py) is running.') + ')';

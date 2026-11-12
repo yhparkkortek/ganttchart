@@ -370,6 +370,31 @@
                  totalRows: totalRows, hierarchyOk: window._bomHierarchyOk(rows), locOverflow: locOverflow };
     };
 
+    // 🆕 [2026-11-12, 사용자 요청] AI 문답의 일반 "BOM 보여줘" 경로(js/04h `_aiFetchSapContext`)는
+    // 백엔드가 돌려준 원본 텍스트를 그대로 AI에게 넘겨서, 계층이 깨지면(기본 레이아웃 자동
+    // 보정 뒤에도 드물게 남을 수 있음) BOM 탭처럼 레벨 블록으로라도 다시 묶지 않고 뒤섞인
+    // 순서를 그대로 보냈다. BOM 탭의 폴백(`_bomLevelGroups`)과 **같은 규칙**으로 텍스트를
+    // 다시 조립한다 — 파싱은 `_bomParseSapText` 재사용, 새 판정 로직을 만들지 않는다.
+    // 정상(hierarchyOk)이면 손대지 않고 원본을 그대로 돌려준다(불필요한 변형 금지).
+    window._bomReorderTextForHierarchy = function (text) {
+        var parsed = window._bomParseSapText(text);
+        if (!parsed || parsed.hierarchyOk) return text;
+        var g = window._bomLevelGroups(parsed), ordered = [];
+        g.levels.forEach(function (lv) { ordered = ordered.concat(g.byLevel[lv]); });
+        var lineOf = function (o) { return parsed.cols.map(function (c) { return o[c] || ''; }).join('\t'); };
+        var body = [parsed.cols.join('\t')];
+        if (parsed.parent) body.push(lineOf(parsed.parent));
+        ordered.forEach(function (o) { body.push(lineOf(o)); });
+        (parsed.totals || []).forEach(function (o) { body.push(lineOf(o)); });
+        // 메타 헤더(탭 없는 첫 덩어리 — "[SAP BOM 전개...]"/"[⚠️ 계층 깨짐...]" 등, 백엔드가
+        // 이미 경고를 담아 보낸 줄들)는 그대로 보존한다 — `_bomParseSapText`와 같은 분리 규칙.
+        var t = String(text || '').replace(/\r/g, '');
+        var sp = t.indexOf('\n\n');
+        var metaHead = (sp !== -1 && t.slice(0, sp).indexOf('\t') === -1) ? t.slice(0, sp) + '\n\n' : '';
+        return metaHead + body.join('\n') +
+            '\n[ℹ️ 레벨별로 다시 묶어 표시함 — 원래 순서에 정렬이 걸려 있어 상·하위(모자) 관계는 보장되지 않습니다]';
+    };
+
     // ─── ZMM009 보강 ───────────────────────────────────────────────────
     // ZPP033 BOM엔 자재내역2·단가·제조사·담당자가 없다. 구성부품 번호를 모아
     // `/sap-material-rows`(ZMM009 복수선택 조회, 포크 세션 2026-10-15 신규)로 한 번에 받아 합친다.
