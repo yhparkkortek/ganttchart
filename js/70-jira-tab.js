@@ -41,7 +41,8 @@
     const KEY_RE = /^[A-Z][A-Z0-9]{1,9}-\d{1,6}$/;
 
     var _issueCache = {};   // key -> issue (상세 모달·행 갱신 공용)
-    var _lastRows = [];     // 지금 표에 그려진 {key, src:[...]} 목록
+    var _lastRows = [];     // 지금 merge된 **원본**(필터 전) 목록 — 정렬·필터는 이걸 걸러서 다시 그린다
+    var _lastNote = '';     // 그 원본을 만들 때 쌓인 경고/실패 메시지(아래 renderFilteredSortedTable 공용)
     var _byKey = {};        // 지금 merge 중인 결과(자동 + "더 찾기") — _jiraOnTabShown/_jiraPullExtraSources 공용
     var _notes = [];        // 그 과정에서 쌓인 경고/실패 메시지
 
@@ -146,47 +147,261 @@
         return { bg: '#eef1f4', fg: '#555' };
     }
 
+    var SRC_LABELS = { manual: T('수동', 'manual'), mail: T('메일', 'mail'), keyword: T('검색', 'search'), project: T('프로젝트', 'project') };
+    var SRC_ICONS = { manual: '🔗', mail: '📧', keyword: '🔍', project: '📁' };
+
     function srcChip(src) {
-        var map = { manual: ['🔗', T('수동', 'manual')], mail: ['📧', T('메일', 'mail')], keyword: ['🔍', T('검색', 'search')], project: ['📁', T('프로젝트', 'project')] };
         return src.map(function (s) {
-            var m = map[s] || ['•', s];
-            return '<span style="font-size:10px; padding:1px 5px; border-radius:8px; background:#f0f0f0; color:#777; margin-right:2px;">' + m[0] + ' ' + m[1] + '</span>';
+            return '<span style="font-size:10px; padding:1px 5px; border-radius:8px; background:#f0f0f0; color:#777; margin-right:2px;">'
+                + (SRC_ICONS[s] || '•') + ' ' + (SRC_LABELS[s] || s) + '</span>';
         }).join('');
+    }
+
+    // ── 🔽 헤더 정렬·필터 (2026-11-12 사용자 요청) ──────────────────────────
+    //  열 머리글을 누르면 그 열 기준으로 정렬(오름/내림 토글), 🔽 아이콘을 누르면 필터
+    //  팝업(체크박스 또는 포함검색)이 뜬다 — 전부 **클라이언트 사이드**: 지금 merge된
+    //  `_lastRows`(원본, 필터 전)를 걸러서 다시 그릴 뿐 서버에 다시 묻지 않는다.
+    var _sortCol = 'updated';
+    var _sortDir = 'desc';
+    var _colFilters = {};   // colKey -> {값:true,...}(선택형) 또는 문자열(포함검색형)
+    var _filterUnit = null; // 모델이 바뀔 때만 초기화(새로고침은 유지) — 아래 _jiraOnTabShown 참고
+
+    var COLUMNS = [
+        { key: 'key', label: T('키', 'Key'), type: 'text', get: function (it) { return it.key || ''; } },
+        { key: 'summary', label: T('요약', 'Summary'), type: 'text', get: function (it) { return it.summary || ''; } },
+        { key: 'status', label: T('상태', 'Status'), type: 'select', get: function (it) { return it.status || ''; } },
+        { key: 'assignee', label: T('담당자', 'Assignee'), type: 'select', get: function (it) { return it.assignee || ''; } },
+        { key: 'priority', label: T('우선순위', 'Priority'), type: 'select', get: function (it) { return it.priority || ''; } },
+        {
+            key: 'meta', label: T('구성/해결/MS', 'Comp/Res/MS'), type: 'text',
+            title: T('구성 요소 · 해결책 · Milestone', 'Components · Resolution · Milestone'),
+            get: function (it) { return metaCellText(it); }
+        },
+        { key: 'updated', label: T('수정일', 'Updated'), type: 'date', get: function (it) { return it.updated || ''; } },
+        {
+            key: 'src', label: T('출처', 'Source'), type: 'select', multi: true,
+            get: function (it) { return (it.src || []).map(function (s) { return SRC_LABELS[s] || s; }).join(', '); },
+            getArray: function (it) { return it.src || []; },
+            display: function (v) { return SRC_LABELS[v] || v; }
+        }
+    ];
+    var COLUMNS_BY_KEY = {};
+    COLUMNS.forEach(function (c) { COLUMNS_BY_KEY[c.key] = c; });
+
+    function uniqueColumnValues(colKey) {
+        var col = COLUMNS_BY_KEY[colKey];
+        var seen = {};
+        var out = [];
+        _lastRows.forEach(function (it) {
+            if (col.multi) {
+                (col.getArray(it) || []).forEach(function (tag) { if (!seen[tag]) { seen[tag] = true; out.push(tag); } });
+            } else {
+                var v = (col.get(it) || '').toString();
+                if (!seen[v]) { seen[v] = true; out.push(v); }
+            }
+        });
+        out.sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); });
+        return out;
+    }
+
+    function passesColFilters(it) {
+        for (var i = 0; i < COLUMNS.length; i++) {
+            var col = COLUMNS[i];
+            var f = _colFilters[col.key];
+            if (!f) continue;
+            if (col.type === 'text') {
+                var val = (col.get(it) || '').toString().toLowerCase();
+                if (val.indexOf(String(f).toLowerCase()) === -1) return false;
+            } else if (col.multi) {
+                var arr = col.getArray(it) || [];
+                if (!arr.some(function (tag) { return f[tag]; })) return false;
+            } else {
+                var v = (col.get(it) || '').toString();
+                if (!f[v]) return false;
+            }
+        }
+        return true;
+    }
+
+    // merge 결과(_lastRows, 원본)에 지금의 필터·정렬을 입혀 다시 그린다 — 열 머리글
+    // 클릭이나 필터 체크박스가 바뀔 때마다 이것만 부르면 된다(서버 재조회 없음).
+    function renderFilteredSortedTable() {
+        var view = _lastRows.filter(passesColFilters);
+        var col = COLUMNS_BY_KEY[_sortCol];
+        view.sort(function (a, b) {
+            var va = col ? (col.get(a) || '').toString() : '';
+            var vb = col ? (col.get(b) || '').toString() : '';
+            var cmp = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
+            return _sortDir === 'asc' ? cmp : -cmp;
+        });
+        renderTable(view, _lastNote);
+    }
+
+    window._jiraSetSort = function (colKey) {
+        if (_sortCol === colKey) { _sortDir = (_sortDir === 'asc') ? 'desc' : 'asc'; }
+        else { _sortCol = colKey; _sortDir = (colKey === 'updated') ? 'desc' : 'asc'; }
+        renderFilteredSortedTable();
+    };
+
+    function colFilterBox() {
+        var box = document.getElementById('jira-colfilter-box');
+        if (box) return box;
+        box = document.createElement('div');
+        box.id = 'jira-colfilter-box';
+        box.style.cssText = 'position:fixed; z-index:9500; display:none; min-width:170px; max-width:260px; max-height:260px;'
+            + ' overflow-y:auto; border:1px solid #cfe3e5; border-radius:6px; background:#fff; box-shadow:0 4px 16px rgba(0,0,0,.18);'
+            + ' font-size:12px; padding:8px;';
+        document.body.appendChild(box);
+        document.addEventListener('click', function (e) {
+            if (box.style.display === 'none') return;
+            if (box.contains(e.target) || e.target.closest('[data-jira-filter-btn]')) return;
+            box.style.display = 'none';
+        });
+        return box;
+    }
+
+    function buildColFilterContent(colKey) {
+        var col = COLUMNS_BY_KEY[colKey];
+        if (!col) return '';
+        if (col.type === 'text') {
+            var cur = _colFilters[colKey] || '';
+            return '<div style="margin-bottom:6px; color:#777;">' + esc(col.label) + ' (' + T('포함 검색', 'contains') + ')</div>'
+                + '<input type="text" value="' + esc(cur) + '" oninput="window._jiraApplyTextFilter(\'' + colKey + '\', this.value)"'
+                + ' style="width:100%; box-sizing:border-box; padding:5px 7px; border:1px solid #ccc; border-radius:5px; font-size:12px;"'
+                + ' placeholder="' + esc(T('검색어', 'search')) + '">'
+                + (cur ? ('<div style="text-align:right; margin-top:6px;"><button onclick="window._jiraApplyTextFilter(\'' + colKey + '\', \'\')"'
+                    + ' style="border:none; background:none; color:#00707d; cursor:pointer; font-size:11px;">✕ ' + T('지우기', 'Clear') + '</button></div>') : '');
+        }
+        var values = uniqueColumnValues(colKey);
+        var f = _colFilters[colKey];
+        var allChecked = !f;
+        return '<div style="margin-bottom:6px; color:#777;">' + esc(col.label) + '</div>'
+            + '<label style="display:flex; align-items:center; gap:6px; padding:3px 2px; border-bottom:1px solid #f0f0f0; margin-bottom:4px; cursor:pointer;">'
+            + '<input type="checkbox"' + (allChecked ? ' checked' : '') + ' onchange="window._jiraToggleAllColFilter(\'' + colKey + '\', this.checked)">'
+            + '<b>' + T('전체', 'All') + '</b></label>'
+            + values.map(function (v) {
+                var checked = allChecked || !!(f && f[v]);
+                var label = col.display ? col.display(v) : v;
+                return '<label style="display:flex; align-items:center; gap:6px; padding:3px 2px; cursor:pointer;">'
+                    + '<input type="checkbox" value="' + esc(v) + '"' + (checked ? ' checked' : '') + ' onchange="window._jiraToggleValueColFilter(\'' + colKey + '\', this.value, this.checked)">'
+                    + '<span>' + (label ? esc(label) : '<span style="color:#aaa;">(' + T('없음', 'none') + ')</span>') + '</span></label>';
+            }).join('');
+    }
+
+    function refreshOpenFilterBox(colKey) {
+        var box = document.getElementById('jira-colfilter-box');
+        if (box && box.style.display !== 'none' && box.dataset.col === colKey) box.innerHTML = buildColFilterContent(colKey);
+    }
+
+    window._jiraToggleColFilter = function (el, colKey) {
+        var box = colFilterBox();
+        var already = box.style.display !== 'none' && box.dataset.col === colKey;
+        box.style.display = 'none';
+        if (already) { box.dataset.col = ''; return; }
+        box.dataset.col = colKey;
+        var r = el.getBoundingClientRect();
+        box.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 270)) + 'px';
+        box.style.top = (r.bottom + 4) + 'px';
+        box.innerHTML = buildColFilterContent(colKey);
+        box.style.display = 'block';
+    };
+
+    window._jiraApplyTextFilter = function (colKey, value) {
+        value = (value || '').trim();
+        if (value) _colFilters[colKey] = value; else delete _colFilters[colKey];
+        renderFilteredSortedTable();
+        refreshOpenFilterBox(colKey);
+    };
+
+    window._jiraToggleAllColFilter = function (colKey, checked) {
+        if (checked) delete _colFilters[colKey];
+        else _colFilters[colKey] = {};
+        renderFilteredSortedTable();
+        refreshOpenFilterBox(colKey);
+    };
+
+    window._jiraToggleValueColFilter = function (colKey, value, checked) {
+        var values = uniqueColumnValues(colKey);
+        var f = _colFilters[colKey];
+        if (!f) { f = {}; values.forEach(function (v) { f[v] = true; }); }
+        if (checked) f[value] = true; else delete f[value];
+        var allOn = values.length > 0 && values.every(function (v) { return f[v]; });
+        if (allOn) delete _colFilters[colKey]; else _colFilters[colKey] = f;
+        renderFilteredSortedTable();
+        refreshOpenFilterBox(colKey);
+    };
+
+    window._jiraClearAllFilters = function () {
+        _colFilters = {};
+        renderFilteredSortedTable();
+        var box = document.getElementById('jira-colfilter-box');
+        if (box) box.style.display = 'none';
+    };
+
+    function sortArrow(colKey) {
+        if (_sortCol !== colKey) return '<span style="opacity:.3;">⇅</span>';
+        return _sortDir === 'asc' ? '▲' : '▼';
+    }
+
+    function headerCell(colKey, widthPct, align) {
+        var col = COLUMNS_BY_KEY[colKey];
+        var filterActive = !!_colFilters[colKey];
+        return '<th style="padding:7px 8px; text-align:' + align + '; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
+            + (col.title ? (' title="' + esc(col.title) + '"') : '') + '>'
+            + '<span onclick="window._jiraSetSort(\'' + colKey + '\')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
+            + esc(col.label) + ' <span style="font-size:10px; color:#00707d;">' + sortArrow(colKey) + '</span></span>'
+            + ' <span data-jira-filter-btn onclick="window._jiraToggleColFilter(this, \'' + colKey + '\')"'
+            + ' style="cursor:pointer; font-size:11px; color:' + (filterActive ? '#00707d' : '#bbb') + ';" title="' + esc(T('필터', 'Filter')) + '">🔽</span>'
+            + '</th>';
     }
 
     function renderTable(merged, note) {
         var box = document.getElementById('jira-table-wrap');
         if (!box) return;
-        _lastRows = merged;
+        var activeFilterCount = Object.keys(_colFilters).length;
+        var filterBar = activeFilterCount
+            ? ('<div style="padding:5px 8px; font-size:11px; color:#00707d; background:#eef6f7; border-top:1px solid #cfe3e5; display:flex; align-items:center; gap:8px;">'
+                + '🔽 ' + esc(T(activeFilterCount + '개 열에 필터 적용 중', activeFilterCount + ' column filter(s) active'))
+                + '<button onclick="window._jiraClearAllFilters()" style="border:none; background:none; color:#a3281c; cursor:pointer; font-size:11px; text-decoration:underline;">'
+                + T('전체 해제', 'Clear all') + '</button></div>')
+            : '';
         if (!merged.length) {
-            box.innerHTML = '<div style="padding:30px; text-align:center; color:#999; font-size:12.5px;">'
-                + (note || T('연결된 JIRA 이슈가 없습니다 — ⚙️ 연결 설정에서 키/검색어를 등록해주세요.',
-                             'No linked JIRA issues — register keys/keyword under ⚙️ Link settings.'))
-                + '</div>';
+            var emptyMsg;
+            if (!note && _lastRows.length > 0) {
+                // ⚠️ [2026-11-12 사용자 요청: 헤더 필터] 원본(_lastRows)엔 행이 있는데 필터링
+                //    결과가 0건이면 "연결된 이슈가 없다"가 아니라 "필터에 다 걸렸다"가 맞는 말이다
+                //    — 메시지를 구분하지 않으면 사람이 필터를 잊고 "이슈가 사라졌다"로 오인한다.
+                emptyMsg = T('필터 조건에 맞는 이슈가 없습니다 — ', 'No issues match the current filters — ')
+                    + '<button onclick="window._jiraClearAllFilters()" style="border:none; background:none; color:#00707d; cursor:pointer; text-decoration:underline; font-size:12.5px;">'
+                    + T('필터 초기화', 'clear filters') + '</button>';
+            } else {
+                emptyMsg = note || T('연결된 JIRA 이슈가 없습니다 — ⚙️ 연결 설정에서 키/검색어를 등록해주세요.',
+                                     'No linked JIRA issues — register keys/keyword under ⚙️ Link settings.');
+            }
+            box.innerHTML = '<div style="padding:30px; text-align:center; color:#999; font-size:12.5px;">' + emptyMsg + '</div>' + filterBar;
             return;
         }
-        merged.sort(function (a, b) { return String(b.updated || '').localeCompare(String(a.updated || '')); });
         // ⚠️ table-layout:fixed 가 없으면 th 의 width 는 힌트일 뿐이라 브라우저가 내용 기준으로
         //    다시 배분한다 — 그래서 '요약'은 안 넓어지고 '담당자/우선순위/수정일/출처'만 헐렁하게
         //    늘어나 보였다(실측). 폭 비율은 여기 한 곳(%, 합 100)에서만 바꾼다.
-        // 📌 [2026-11-12 사용자 요청] 키 왼쪽에 No. 열 — 지금 정렬(수정일 내림차순) 기준 순번일
-        //    뿐이라 JIRA 자체 값이 아니다(정렬 바뀌면 같이 바뀐다).
-        // 📋 [2026-11-12 2차, 사용자 요청] 구성 요소·해결책·Milestone도 표에 열로 — 한 칸에
-        //    `metaCellText`(위 "구성 요소·해결책·Milestone" 절)로 압축해 넣는다(세 칸으로
-        //    나누면 좁은 화면에서 공간을 너무 많이 먹는다). 폭은 다른 칸에서 조금씩 떼어 왔다
-        //    (합 100% 유지 — 이 비율만 여기서 바꿀 것).
+        // 📌 [2026-11-12 사용자 요청] 키 왼쪽에 No. 열 — 지금 정렬 기준 순번일 뿐이라 JIRA 자체
+        //    값이 아니다(정렬 바뀌면 같이 바뀐다).
+        // 📋 [2026-11-12 2차] 구성 요소·해결책·Milestone도 표에 열로 — 한 칸에 `metaCellText`로
+        //    압축해 넣는다(세 칸으로 나누면 좁은 화면에서 공간을 너무 많이 먹는다).
+        // 🔽 [2026-11-12 3차, 사용자 요청] 각 열 머리글에 정렬(클릭)·필터(🔽) — headerCell() 한
+        //    곳에서 공통으로 그린다(COLUMNS 레지스트리, 위 "헤더 정렬·필터" 절). 정렬은 여기서
+        //    다시 안 한다 — merged는 renderFilteredSortedTable이 이미 정렬해서 넘긴다.
         var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
             + '<th style="padding:7px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:7%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:28%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:7%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:9%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:7%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('우선순위', 'Priority') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:17%; background:#eef6f7; border-bottom:2px solid #cfe3e5;"'
-            + ' title="' + esc(T('구성 요소 · 해결책 · Milestone', 'Components · Resolution · Milestone')) + '">' + T('구성/해결/MS', 'Comp/Res/MS') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:11%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:10%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('출처', 'Source') + '</th>'
+            + headerCell('key', 7, 'left')
+            + headerCell('summary', 28, 'left')
+            + headerCell('status', 7, 'center')
+            + headerCell('assignee', 9, 'center')
+            + headerCell('priority', 7, 'center')
+            + headerCell('meta', 17, 'left')
+            + headerCell('updated', 11, 'center')
+            + headerCell('src', 10, 'left')
             + '</tr></thead><tbody>'
             + merged.map(function (it, i) {
                 var c = statusColor(it.status);
@@ -204,7 +419,8 @@
                     + '</tr>';
             }).join('')
             + '</tbody></table>'
-            + (note ? '<div style="padding:6px 8px; font-size:11px; color:#b06b00;">⚠️ ' + esc(note) + '</div>' : '');
+            + (note ? '<div style="padding:6px 8px; font-size:11px; color:#b06b00;">⚠️ ' + esc(note) + '</div>' : '')
+            + filterBar;
         box.innerHTML = html;
     }
 
@@ -292,8 +508,9 @@
     }
 
     function renderMergedTable(L) {
-        var rows = Object.keys(_byKey).map(function (k) { return _byKey[k]; });
-        renderTable(rows, _notes.join(' / '));
+        _lastRows = Object.keys(_byKey).map(function (k) { return _byKey[k]; });
+        _lastNote = _notes.join(' / ');
+        renderFilteredSortedTable();
         appendExtraSearchControl(L);
     }
 
@@ -374,9 +591,19 @@
         box.innerHTML = '<div style="padding:30px; text-align:center; color:#999;">' + T('불러오는 중...', 'Loading...') + '</div>';
         setHeaderState('');
 
+        // 🔽 [2026-11-12 사용자 요청] 정렬·필터는 **모델이 바뀔 때만** 초기화한다 — 단순
+        // "🔄 새로고침"으로는 공들여 걸어 둔 필터가 날아가면 안 된다(모델 전환은 다른
+        // 프로젝트를 보는 것이라 이전 필터가 의미 없어지는 경우가 많다).
+        var curUnit = jiraActiveUnit();
+        if (curUnit !== _filterUnit) {
+            _sortCol = 'updated'; _sortDir = 'desc'; _colFilters = {};
+            _filterUnit = curUnit;
+        }
+
         var gate = window._jiraEnsureLogin ? await window._jiraEnsureLogin(function (m) { setHeaderState('<span style="color:#888;">' + esc(m) + '</span>'); }) : { ok: true };
         if (!gate.ok) {
             setHeaderState('<span style="color:#b1432f;">🔒 ' + esc(gate.message || '') + '</span>');
+            _lastRows = []; _lastNote = '';
             renderTable([], gate.message || T('JIRA에 로그인하지 못했습니다.', 'Could not sign in to JIRA.'));
             return;
         }
