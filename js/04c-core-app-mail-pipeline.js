@@ -1154,7 +1154,11 @@
                 //    간트 행 편집(가장 흔한 저장 이유)과 무관하므로, 평상시 저장의 ~70%는 인덱스 업로드 생략.
                 //    ⚠️ [2026-10-27] live window.projectMeta/tabData 대신 saveData(업로드 전 캡처본)를
                 //    쓴다 — 전환 후엔 live 쪽이 "다른" 프로젝트 것으로 바뀌어 있을 수 있어서.
-                const _IDX_WATCH_FIELDS = ['모델명', '고객모델명', '고객사', '프로젝트담당자', '인치', '메일키워드', '완료여부', '팀', '개발팀'];
+                // 🆕 [2026-11-12, 사용자 제보] 'models'(멀티모델 배열, js/22g)가 이 감시 목록에 없어서,
+                //    모델 카드 값 자체는 그대로인데 buildProjectIndexEntry의 계산 로직만 바뀐 경우
+                //    (이번 사고가 그랬다) project_index.json이 영영 다시 안 만들어졌다 — 모델 카드를
+                //    실제로 추가/수정/삭제할 때도 이 필드가 감시 목록에 없으면 같은 문제가 재발한다.
+                const _IDX_WATCH_FIELDS = ['모델명', '고객모델명', '고객사', '프로젝트담당자', '인치', '메일키워드', '완료여부', '팀', '개발팀', 'models'];
                 const _idxSnap = JSON.stringify({
                     pm: _IDX_WATCH_FIELDS.map(function(f) { return (saveData.projectMeta || {})[f]; }),
                     mat: ((saveData.tabData || {}).projectMaterials || []).filter(function(m) { return m && m.useForAnalysis; }).map(function(m) { return [m.ktkPn, m.description]; }),
@@ -1162,11 +1166,17 @@
                 });
                 window._lastIndexedSnap = window._lastIndexedSnap || {};
                 const _idxChanged = !fileId || window._lastIndexedSnap[file.id] !== _idxSnap;
-                if ((_preSaveHadChanges || !fileId) && _idxChanged) {
+                // 🆕 [2026-11-12, 사용자 제보] 예전엔 `_preSaveHadChanges &&`가 앞에 더 있었다 —
+                //    간트/Summary 편집이 전혀 없으면(changeLogs 등 안 바뀌면) `_idxChanged`가
+                //    true여도 건너뛰었다. 그런데 오늘처럼 "모델 카드 값은 그대로인데 계산 코드만
+                //    바뀐" 경우(buildProjectIndexEntry 수정)엔 editLog가 전혀 안 남아 `_idxChanged`
+                //    가 true가 돼도 영영 반영이 안 됐다. `_idxChanged` 자체가 이미 "인덱스에 들어갈
+                //    값이 지난번과 다른가"를 정확히 보는 신호라 `_preSaveHadChanges`는 군더더기였다.
+                if (_idxChanged) {
                     window._lastIndexedSnap[file.id] = _idxSnap;
-                    window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget)
+                    window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 fire-and-forget
                 } else {
-                    console.info('[저장 계측]', _idxChanged ? '변경사항 없음' : '인덱스 관련 필드 불변', '— project_index.json 갱신 생략');
+                    console.info('[저장 계측] 인덱스 관련 필드 불변 — project_index.json 갱신 생략');
                 }
                 // [2026-10-02] 보류 큐 flush — 현재 프로젝트 외 다른 프로젝트 학습 데이터를 각 Drive 파일에 PATCH
                 //   fire-and-forget: 실패해도 pending에 남아 다음 저장 때 재시도, 저장 결과에 영향 없음
