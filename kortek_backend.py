@@ -4920,6 +4920,58 @@ def sap_open_folder():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# 🏷 [2026-11-12 신규] 라벨사양서 — 라벨품목코드(6자리)로 라벨 도안을 찾는다.
+# ZDMSR004로 받은 원자재승인원(docs_P01) 폴더는 파일 이름 규칙이 들쭉날쭉하다
+# (`124291.XLSX` · `승인원_128961_REV02.ZIP` · `400467_인컴_20130528_REV00.ZIP`…) — 실측 확인된
+# 공통점은 **6자리 코드가 파일명 어딘가에 토큰으로 있다**는 것뿐이라 os.walk 로 훑어 찾는다.
+# ⚠️ 부분일치 오탐 방지: 코드 앞뒤가 숫자가 아닐 때만 매치('124291'이 '1124291'을 집지 않게).
+_LABEL_SEARCH_FOLDER_KEYS = ['docs_P01', 'docs']
+_LABEL_SEARCH_MAX = 50
+
+
+@app.route('/sap-label-search', methods=['GET'])
+def sap_label_search():
+    code = (request.args.get('code') or '').strip()
+    if not re.fullmatch(r'\d{4,7}', code):
+        return jsonify({'ok': False, 'error': '6자리 안팎의 숫자 코드를 입력하세요.'}), 400
+    pat = re.compile(r'(?<!\d)' + re.escape(code) + r'(?!\d)')
+    matches, seen_roots, partial = [], set(), False
+    for key in _LABEL_SEARCH_FOLDER_KEYS:
+        root = sap_folder_path(key, create=False)
+        if not root or root in seen_roots or not os.path.isdir(root):
+            continue
+        seen_roots.add(root)
+        for dirpath, _dirnames, filenames in os.walk(root):
+            for fn in filenames:
+                if pat.search(fn):
+                    full = os.path.join(dirpath, fn)
+                    matches.append({'name': fn, 'folder': os.path.relpath(dirpath, SAP_DMS_ROOT), 'path': full})
+            if len(matches) >= _LABEL_SEARCH_MAX:
+                partial = True
+                break
+    return jsonify({'ok': True, 'code': code, 'matches': matches[:_LABEL_SEARCH_MAX], 'partial': partial})
+
+
+@app.route('/sap-open-file', methods=['GET'])
+def sap_open_file():
+    # 로컬 파일을 연결 프로그램으로 열기. 파라미터: path (파일 경로)
+    # 보안: /sap-open-folder 와 같은 규칙 — C:\SAP_DMS\ 이하 경로만 허용.
+    path = (request.args.get('path') or '').strip()
+    if not path:
+        return jsonify({'ok': False, 'error': 'path 파라미터가 필요합니다.'}), 400
+    try:
+        norm = os.path.normpath(os.path.abspath(path))
+        allowed_root = os.path.normpath(os.path.abspath(r'C:\SAP_DMS'))
+        if not norm.startswith(allowed_root):
+            return jsonify({'ok': False, 'error': 'C:\\SAP_DMS 하위 경로만 열 수 있습니다.'}), 403
+        if not os.path.isfile(norm):
+            return jsonify({'ok': False, 'error': f'파일이 없습니다: {norm}'}), 404
+        os.startfile(norm)
+        return jsonify({'ok': True, 'path': norm})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/sap-approval-fetch', methods=['GET'])
 def sap_approval_fetch():
     # "SAP에서 자재정보 가져오기" 단계 — 자재 여러 개(최대 30개, 원본 앱과 동일 상한)의

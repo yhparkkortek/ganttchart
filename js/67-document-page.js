@@ -260,6 +260,30 @@
                 { title: '참고 이미지 (도면 · 사진 · 블록도)', kind: 'attach', key: 'att_dr',
                   hint: 'PPT 에는 안 들어갑니다 — 화면·인쇄에만 보입니다.' }
             ]
+        },
+        // 🏷 [2026-11-12 신규] 라벨사양서 — 실측 원본("모델명세서_라벨_<품목코드>_<모델>_V/R<REV>.xlsx")은
+        //    라벨이 모델마다 3~5개(규격·6자리 라벨품목코드·부착위치) 반복되고, '제품' 라벨 하나에만
+        //    인증(CE/FCC/UL…)·정격표시(Set/LED Rating SPEC…) 표가 딸린다. 둘 다 개수가 들쭉날쭉해
+        //    고정 `table` kind 로는 못 받는다 — 'check' kind 와 같은 add/del-row 전용 kind 둘로 받는다.
+        {
+            id: 'label-spec', icon: '🏷', label: '라벨사양서', folder: '라벨사양서',
+            note: '라벨마다 규격·라벨품목코드(6자리)·부착위치를 적으면, 그 코드로 SAP 원자재승인원'
+                + ' 폴더에서 라벨 도안을 바로 찾아 엽니다.',
+            nameOf: function (ctx) { return _projKey(ctx) + '_라벨사양서_' + _today(); },
+            sections: [
+                {
+                    title: '라벨사양서', cols: 2,
+                    fields: [
+                        { key: 'BUYER', from: 'meta.고객사' },
+                        { key: 'MODEL', from: 'meta.모델풀네임' },
+                        { key: '품목코드', from: 'meta.제품코드', hint: '예: 502293' },
+                        { key: 'REV', hint: '예: 00' },
+                        { key: '작성일자', from: 'today', date: true }
+                    ]
+                },
+                { title: '# 라벨 목록', kind: 'labelitems' },
+                { title: '# 인증 · 정격 표시 (제품 라벨)', kind: 'labelcerts' }
+            ]
         }
     ];
 
@@ -504,6 +528,128 @@
     //     아래 줄들의 체크가 통째로 밀려 **조용한 오답**이 된다.
     window.DOC_CHECK_FROM_RESOLUTION = window.DOC_CHECK_FROM_RESOLUTION || ['Resolution'];
     var RES_GROUPS = window.DOC_CHECK_FROM_RESOLUTION;
+
+    // ── 🏷 라벨사양서 — 라벨 목록 + 인증/정격 표 (2026-11-12 신규) ─────────
+    //   둘 다 모델마다 행 개수가 다르다(실측 3~5개 라벨 · 3~4개 인증 · 1~3개 정격) — 번호(자리)로
+    //   두면 행을 지웠을 때 아래 줄 전부가 밀린다는 함정은 없다(해상도·checkAdd 와 달리 '같은
+    //   항목을 다른 저장에서도 찾아야 하는' 자리가 아니라서 — 순서만 유지하면 그만이다).
+    window._docLabelItemAdd = function (formId) {
+        var d = _docData(formId);
+        d.labelItems = d.labelItems || [];
+        d.labelItems.push({ size: '', code: '', position: '', note: '' });
+        _markDirty(); window._docRender();
+    };
+    window._docLabelItemDel = function (formId, idx) {
+        var list = _docData(formId).labelItems || [], it = list[idx];
+        if (!it) return;
+        var filled = [it.size, it.code, it.position, it.note].filter(Boolean).join(' ');
+        if (filled && !confirm(_t('이 라벨을 지웁니다:\n\n' + filled, 'Delete this label?'))) return;
+        list.splice(idx, 1);
+        // 🔎 찾기 결과는 자리(행 번호)로 저장돼 있어 — 지우면 뒤 칸들의 번호가 밀리므로 비운다
+        if (window._docLabelFindResult) {
+            Object.keys(window._docLabelFindResult).forEach(function (k) {
+                if (k.indexOf(formId + '|') === 0) delete window._docLabelFindResult[k];
+            });
+        }
+        _markDirty(); window._docRender();
+    };
+    window._docLabelCertAdd = function (formId, kind) {
+        var lc = _docData(formId).labelCerts = _docData(formId).labelCerts || { certs: [], ratings: [] };
+        if (kind === 'c') lc.certs.push({ name: '', check: '', print: '', printType: '' });
+        else lc.ratings.push({ name: '', spec: '', print: '' });
+        _markDirty(); window._docRender();
+    };
+    window._docLabelCertDel = function (formId, kind, idx) {
+        var lc = _docData(formId).labelCerts || {}, list = kind === 'c' ? lc.certs : lc.ratings;
+        if (!list || !list[idx]) return;
+        list.splice(idx, 1);
+        _markDirty(); window._docRender();
+    };
+    // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
+    //   — 그 폴더는 ZDMSR004 다운로드 결과라 이름 규칙이 제각각이다(`<code>.xlsx` ·
+    //   `승인원_<code>_REV02.zip` · `<code>_설명_날짜_REV00.zip` 등). 공통점은 6자리 코드가
+    //   파일명 어딘가에 토큰으로 있다는 것뿐이라, 서버(`/sap-label-search`)가 숫자 경계로
+    //   훑어 찾는다(부분일치 오탐 방지는 서버 쪽 정규식이 맡는다).
+    window._docLabelFindResult = window._docLabelFindResult || {};
+    window._docLabelFindMatches = window._docLabelFindMatches || {};
+    window._docLabelFind = async function (formId, idx) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        var code = String((it && it.code) || '').trim();
+        var key = formId + '|' + idx;
+        if (!/^\d{4,7}$/.test(code)) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('6자리 코드를 먼저 적으세요.', 'Enter the 6-digit code first.'));
+            window._docRender(); return;
+        }
+        window._docLabelFindResult[key] = '⏳ ' + _esc(_t('찾는 중…', 'Searching…'));
+        window._docRender();
+        var res, r;
+        try {
+            r = await fetch(BACKEND + '/sap-label-search?code=' + encodeURIComponent(code));
+        } catch (e) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('백엔드에 닿지 못했습니다.', 'Backend unreachable.'));
+            window._docRender(); return;
+        }
+        // ⚠️ 404 는 "못 찾았다" 가 아니라 **구버전 백엔드** 다 — 재시작 전엔 이 라우트가 없다
+        //    (_docSaveDocx 와 같은 판정, docs/backend-auto-update.md).
+        if (r.status === 404) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('백엔드를 재시작해야 쓸 수 있습니다(라벨 도안 찾기).',
+                                                              'Restart the backend to use this.'));
+            window._docRender(); return;
+        }
+        try { res = await r.json(); } catch (e2) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('응답을 읽지 못했습니다.', 'Could not read the response.'));
+            window._docRender(); return;
+        }
+        if (!res || !res.ok) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc((res && res.error) || _t('검색 실패', 'Search failed'));
+        } else if (!res.matches || !res.matches.length) {
+            window._docLabelFindResult[key] = '🔍 ' + _esc(_t('도안을 못 찾았습니다(코드를 확인해 주세요): ', 'No drawing found for: ')) + _esc(code);
+        } else {
+            window._docLabelFindMatches[key] = res.matches;
+            window._docLabelFindResult[key] = '🔎 ' + res.matches.length + _esc(_t('건 찾음 — ', ' found — '))
+                + res.matches.map(function (m, mi) {
+                    return '<a href="#" onclick="window._docLabelOpen(\'' + _esc(key).replace(/'/g, "\\'") + '\',' + mi
+                         + ');return false;" style="color:#1971c2;" title="' + _esc(m.folder || '') + '">📎 ' + _esc(m.name) + '</a>';
+                }).join(' · ')
+                + (res.partial ? ' (' + _esc(_t('너무 많아 일부만', 'truncated')) + ')' : '');
+        }
+        window._docRender();
+    };
+    window._docLabelOpen = async function (key, mi) {
+        var m = (window._docLabelFindMatches[key] || [])[mi];
+        if (!m) return;
+        try {
+            var r = await fetch(BACKEND + '/sap-open-file?path=' + encodeURIComponent(m.path));
+            if (r.status === 404) {
+                _toast('⚠️ ' + _t('백엔드를 재시작해야 쓸 수 있습니다(파일 열기).', 'Restart the backend to use this.'), 'error');
+                return;
+            }
+            var res = await r.json();
+            if (!res || !res.ok) _toast('⚠️ ' + _esc((res && res.error) || _t('열지 못했습니다.', 'Could not open.')), 'error');
+        } catch (e) {
+            _toast('⚠️ ' + _t('백엔드에 닿지 못했습니다.', 'Backend unreachable.'), 'error');
+        }
+    };
+    // 📥 엑셀 불러오기(js/72 `_labelSpecImportFile`)가 다리로 부른다 — `_docData` 가 이 파일의
+    //    닫힌 스코프 안에 있어서 파서(순수 함수, 앱 상태를 모른다) 쪽에서 직접 못 건드린다.
+    //    ⚠️ 이미 적어 둔 내용이 있으면 **1회 확인** 후에만 통째로 바꾼다(되돌릴 길이 없어서다).
+    window._docLabelImportApply = function (formId, parsed) {
+        var d = _docData(formId);
+        var has = (d.labelItems && d.labelItems.length)
+            || (d.labelCerts && ((d.labelCerts.certs || []).length || (d.labelCerts.ratings || []).length));
+        if (has && !confirm(_t('지금 있는 라벨 목록·인증/정격 표를 불러온 내용으로 덮어씁니다. 계속할까요?',
+                                'Overwrite the current labels and cert/rating table with the imported file?'))) {
+            return false;
+        }
+        d.labelItems = parsed.items || [];
+        d.labelCerts = { certs: parsed.certs || [], ratings: parsed.ratings || [] };
+        // BUYER/MODEL/품목코드/작성일자는 이미 프로젝트 값에서 자동으로 채워지니 건드리지 않는다
+        // — REV 만 사람이 아직 안 적었을 때만 채운다(자동 소스가 없는 유일한 칸이다).
+        if (parsed.rev && !_hasOwn(formId, 'REV')) window._docSetField(formId, 'REV', parsed.rev);
+        window._docLabelFindResult = {}; window._docLabelFindMatches = {};   // 옛 찾기 결과는 자리가 안 맞을 수 있다
+        _markDirty(); window._docRender();
+        return true;
+    };
 
     // ➕ [2026-11-09 요청] 항목(묶음)마다 **내역을 더할 수 있다**.
     //   ⚠️ 저장은 `checkAdd['<시트>\u0000<묶음>'] = [{id, q}]` 이고 **id 는 만들 때 한 번** 정한다 —
@@ -1630,6 +1776,107 @@
                           : _t('VESA·CTA 표준 목록에서 고르거나 직접 적어 넣을 수 있습니다.',
                                'Pick from VESA/CTA list or type your own.')) + '</span></div>'
                    + '<table style="display:none;">';
+            } else if (s.kind === 'labelitems') {
+                // 🏷 [2026-11-12] 라벨 목록 — 개수가 모델마다 다르다(실측 3~5개) → 'check' kind 와
+                //    같은 add/del-row 로 받는다. 코드 옆 🔎 는 C:\SAP_DMS\원자재승인원 을 파일명으로
+                //    훑는 새 라우트(`/sap-label-search`)를 부른다(그 폴더는 이름 규칙이 들쭉날쭉해서
+                //    6자리 코드가 파일명 어딘가에 있다는 것만 믿고 찾는다).
+                var litems = _docData(form.id).labelItems = _docData(form.id).labelItems || [];
+                h += '<tr><th style="width:120px;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
+                   + '<th style="width:190px;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
+                   + '<th style="width:110px;">' + _esc(_t('부착위치', 'Position')) + '</th>'
+                   + '<th>' + _esc(_t('비고', 'Note')) + '</th>'
+                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
+                if (!litems.length) {
+                    h += '<tr><td colspan="5" style="color:#868e96;">'
+                       + _esc(_t('아직 라벨이 없습니다 — 아래 [＋ 라벨 추가]를 누르거나 모델명세서_라벨 엑셀을 불러오세요.',
+                                 'No labels yet — add one or import the label spec sheet.')) + '</td></tr>';
+                }
+                litems.forEach(function (it, i) {
+                    var found = window._docLabelFindResult && window._docLabelFindResult[form.id + '|' + i];
+                    h += '<tr>'
+                       + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|size" value="' + _esc(it.size || '')
+                       + '" placeholder="예: 75 X 70" style="font-size:11.5px;"></td>'
+                       + '<td style="white-space:nowrap;"><input type="text" class="doc-in" data-doc-litem="' + i + '|code"'
+                       + ' value="' + _esc(it.code || '') + '" placeholder="예: 124291"'
+                       + ' style="font-size:11.5px; width:86px; display:inline-block;">'
+                       + ' <button class="doc-noprint" onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')"'
+                       + ' style="padding:2px 7px; font-size:10.5px; cursor:pointer; border:1px solid #a3d9e0;'
+                       + ' border-radius:4px; background:#e0f5f7; color:#00707d; font-weight:bold;">🔎 '
+                       + _esc(_t('도안 찾기', 'Find')) + '</button></td>'
+                       + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|position" value="'
+                       + _esc(it.position || '') + '" placeholder="예: 제품 / C.T BOX" style="font-size:11.5px;"></td>'
+                       + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|note" value="' + _esc(it.note || '')
+                       + '" style="font-size:11.5px;"></td>'
+                       + '<td class="doc-noprint"><a href="#" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
+                       + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '" style="color:#b1432f;">✕</a></td>'
+                       + '</tr>';
+                    if (found) {
+                        h += '<tr><td colspan="5" class="doc-noprint" style="font-size:11px; color:#495057;'
+                           + ' background:#f8fbfb; padding:3px 8px;">' + found + '</td></tr>';
+                    }
+                });
+                h += '</table><div class="doc-noprint" style="margin-top:6px;">'
+                   + '<a href="#" onclick="window._docLabelItemAdd(\'' + _esc(form.id) + '\');return false;"'
+                   + ' style="color:#1971c2; font-size:11.5px; font-weight:bold;">＋ ' + _esc(_t('라벨 추가', 'Add label'))
+                   + '</a></div><table style="display:none;">';
+            } else if (s.kind === 'labelcerts') {
+                // 🏷 [2026-11-12] 인증(CE/FCC/UL…)·정격표시(Set/LED Rating SPEC…) — 실측 3개 파일
+                //    전부 **'제품' 라벨 하나에만** 딸려 있었다. 묶는 열쇠를 따로 두지 않고 라벨
+                //    목록의 '제품' 첫 줄(없으면 맨 앞 줄)을 **안내로만** 보여 준다 — 저장은 독립적이다.
+                var lc = _docData(form.id).labelCerts = _docData(form.id).labelCerts || { certs: [], ratings: [] };
+                var mainItem = (_docData(form.id).labelItems || []).filter(function (it) {
+                    return /제품/.test(it.position || '');
+                })[0] || (_docData(form.id).labelItems || [])[0];
+                h += '<tr><td colspan="5" class="doc-noprint" style="font-size:11px; color:#868e96; padding:2px 0 6px;">'
+                   + '🏷 ' + _esc(_t('적용 라벨: ', 'Applies to: '))
+                   + (mainItem ? _esc((mainItem.size || '-') + ' / ' + (mainItem.code || '-') + ' (' + (mainItem.position || '-') + ')')
+                               : _esc(_t('위 라벨 목록을 먼저 채워 주세요.', 'Add a label above first.')))
+                   + '</td></tr>';
+                h += '<tr><th colspan="5" style="text-align:left; background:none; border:none; font-weight:bold; padding:6px 0 2px;">'
+                   + _esc(_t('인증 항목', 'Certifications')) + '</th></tr>';
+                h += '<tr><th>' + _esc(_t('항목', 'Item')) + '</th><th style="width:60px;">Check</th>'
+                   + '<th style="width:80px;">' + _esc(_t('인쇄 적용', 'Printed')) + '</th>'
+                   + '<th style="width:110px;">' + _esc(_t('인쇄 구분', 'Print type')) + '</th>'
+                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
+                (lc.certs || []).forEach(function (r, i) {
+                    h += '<tr>'
+                       + '<td><input type="text" class="doc-in" data-doc-lcert="c|' + i + '|name" value="' + _esc(r.name || '')
+                       + '" placeholder="예: CE" style="font-size:11.5px;"></td>'
+                       + '<td style="text-align:center;"><span class="doc-chk' + (r.check === 'O' ? ' on' : '')
+                       + '" data-doc-ltoggle="c|' + i + '|check" title="Check">' + (r.check === 'O' ? 'O' : 'X') + '</span></td>'
+                       + '<td style="text-align:center;"><span class="doc-chk' + (r.print === 'O' ? ' on' : '')
+                       + '" data-doc-ltoggle="c|' + i + '|print" title="' + _esc(_t('인쇄 적용', 'Printed')) + '">'
+                       + (r.print === 'O' ? 'O' : 'X') + '</span></td>'
+                       + '<td><input type="text" class="doc-in" data-doc-lcert="c|' + i + '|printType" value="'
+                       + _esc(r.printType || '') + '" placeholder="예: 기본/코텍" style="font-size:11.5px;"></td>'
+                       + '<td class="doc-noprint"><a href="#" onclick="window._docLabelCertDel(\'' + _esc(form.id)
+                       + '\',\'c\',' + i + ');return false;" style="color:#b1432f;">✕</a></td></tr>';
+                });
+                h += '<tr><td colspan="5" class="doc-noprint"><a href="#" onclick="window._docLabelCertAdd(\''
+                   + _esc(form.id) + '\',\'c\');return false;" style="color:#1971c2; font-size:11.5px; font-weight:bold;">＋ '
+                   + _esc(_t('인증 항목 추가', 'Add cert')) + '</a></td></tr>';
+
+                h += '<tr><th colspan="5" style="text-align:left; background:none; border:none; font-weight:bold; padding:10px 0 2px;">'
+                   + _esc(_t('정격 표시', 'Rating spec')) + '</th></tr>';
+                h += '<tr><th>' + _esc(_t('항목', 'Item')) + '</th><th colspan="2">' + _esc(_t('규격값', 'Spec')) + '</th>'
+                   + '<th style="width:80px;">' + _esc(_t('인쇄 적용', 'Printed')) + '</th>'
+                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
+                (lc.ratings || []).forEach(function (r, i) {
+                    h += '<tr>'
+                       + '<td><input type="text" class="doc-in" data-doc-lcert="r|' + i + '|name" value="' + _esc(r.name || '')
+                       + '" placeholder="예: Set Rating SPEC" style="font-size:11.5px;"></td>'
+                       + '<td colspan="2"><input type="text" class="doc-in" data-doc-lcert="r|' + i + '|spec" value="'
+                       + _esc(r.spec || '') + '" placeholder="예: DC 24V / 8A" style="font-size:11.5px;"></td>'
+                       + '<td style="text-align:center;"><span class="doc-chk' + (r.print === 'O' ? ' on' : '')
+                       + '" data-doc-ltoggle="r|' + i + '|print" title="' + _esc(_t('인쇄 적용', 'Printed')) + '">'
+                       + (r.print === 'O' ? 'O' : 'X') + '</span></td>'
+                       + '<td class="doc-noprint"><a href="#" onclick="window._docLabelCertDel(\'' + _esc(form.id)
+                       + '\',\'r\',' + i + ');return false;" style="color:#b1432f;">✕</a></td></tr>';
+                });
+                h += '<tr><td colspan="5" class="doc-noprint"><a href="#" onclick="window._docLabelCertAdd(\''
+                   + _esc(form.id) + '\',\'r\');return false;" style="color:#1971c2; font-size:11.5px; font-weight:bold;">＋ '
+                   + _esc(_t('정격 항목 추가', 'Add rating')) + '</a></td></tr>';
             } else if (s.kind === 'text') {
                 var tv = _hasOwn(form.id, s.key) ? _docData(form.id).fields[s.key] : '';
                 h += '<tr><td><textarea data-doc-key="' + _esc(s.key) + '" rows="3" placeholder="' + _esc(s.hint || '')
@@ -1907,19 +2154,52 @@
                     if (op[1] === 'points' || op[1] === 'primaries') window._docOpticalRepaint(Number(op[0]));
                 }
             }
+            // 🏷 라벨 목록 칸 — `<행번호>|<size|code|position|note>`
+            var lk = el.getAttribute('data-doc-litem');
+            if (lk) {
+                var lpp = lk.split('|'), llist2 = _docData(form.id).labelItems || [], lrow2 = llist2[Number(lpp[0])];
+                if (lrow2) { lrow2[lpp[1]] = el.value; _markDirty(); }
+                return;
+            }
+            // 🏷 인증/정격 표 글자 칸 — `<c|r>|<행번호>|<name|printType|spec>`
+            var lck = el.getAttribute('data-doc-lcert');
+            if (lck) {
+                var lcp = lck.split('|'), lc3 = _docData(form.id).labelCerts || {};
+                var llist3 = lcp[0] === 'c' ? lc3.certs : lc3.ratings, lrow3 = llist3 && llist3[Number(lcp[1])];
+                if (lrow3) { lrow3[lcp[2]] = el.value; _markDirty(); }
+                return;
+            }
         };
         // ✅ 점검표 칸 켜고 끄기 — 위임으로 받는다(167항목 × 8칸에 핸들러를 달지 않는다)
         body.onclick = function (e) {
             var el = e.target && e.target.closest ? e.target.closest('[data-doc-chk]') : null;
-            if (!el) return;
-            var k = el.getAttribute('data-doc-chk');
-            var d = _docData(form.id);
-            if (d.fields[k] === 'O') delete d.fields[k]; else d.fields[k] = 'O';
-            _markDirty();
-            // 누른 칸만 다시 칠한다 — 167항목을 통째로 다시 그리면 눈에 띄게 느리다
-            var on = d.fields[k] === 'O';
-            el.classList.toggle('on', on);     // 색은 클래스가 정한다(팔레트 대응)
-            el.textContent = el.getAttribute('title') + (on ? ' O' : '');
+            if (el) {
+                var k = el.getAttribute('data-doc-chk');
+                var d = _docData(form.id);
+                if (d.fields[k] === 'O') delete d.fields[k]; else d.fields[k] = 'O';
+                _markDirty();
+                // 누른 칸만 다시 칠한다 — 167항목을 통째로 다시 그리면 눈에 띄게 느리다
+                var on = d.fields[k] === 'O';
+                el.classList.toggle('on', on);     // 색은 클래스가 정한다(팔레트 대응)
+                el.textContent = el.getAttribute('title') + (on ? ' O' : '');
+                return;
+            }
+            // 🏷 라벨 인증/정격 표의 O↔X 토글 — `<c|r>|<행번호>|<check|print>`, 플랫 fields 가 아니라
+            //    `labelCerts` 배열 안에 산다(이름·규격값과 같은 행 객체에 같이 둬야 내보내기가 쉽다).
+            var lt = e.target && e.target.closest ? e.target.closest('[data-doc-ltoggle]') : null;
+            if (lt) {
+                var lp = lt.getAttribute('data-doc-ltoggle').split('|');
+                var lc2 = _docData(form.id).labelCerts || {};
+                var llist = lp[0] === 'c' ? lc2.certs : lc2.ratings;
+                var lrow = llist && llist[Number(lp[1])];
+                if (lrow) {
+                    lrow[lp[2]] = (lrow[lp[2]] === 'O') ? '' : 'O';
+                    _markDirty();
+                    var lon = lrow[lp[2]] === 'O';
+                    lt.classList.toggle('on', lon);
+                    lt.textContent = lon ? 'O' : 'X';
+                }
+            }
         };
         // 📎 끌어다 놓기 — 첨부 구역에 떨어뜨린 것만 받는다(앱 전역 드롭과 겹치지 않게 막는다)
         [].slice.call(body.querySelectorAll('[data-doc-att]')).forEach(function (zone) {
@@ -2218,6 +2498,12 @@
     window._docImportFile = async function (file) {
         var form = _formById(window._docState.formId);
         if (!form) return;
+        // 🏷 라벨사양서는 "라벨 | 값" 짝짓기가 아니라 반복 행(라벨마다 규격·코드·부착위치) +
+        //    인증/정격 표라서 모양이 전혀 다르다 — 전용 파서(js/72)로 먼저 보낸다.
+        if (form.id === 'label-spec' && window._labelSpecImportFile) {
+            await window._labelSpecImportFile(file, form.id);
+            return;
+        }
         if (window._docCanRead && !window._docCanRead(file.name)) {
             _toast('⚠️ ' + (window._docReadHint ? window._docReadHint(file.name)
                 : _t('이 종류는 아직 못 읽습니다.', 'Cannot read this type.')), 'error');
@@ -2425,6 +2711,24 @@
                 rows.push(['NO', 'RESOLUTION'].concat(xports.map(function (p) { return p.label; })));
                 (window.resSelectedRows ? window.resSelectedRows() : []).forEach(function (r, i) {
                     rows.push([i + 1, r.label].concat(xports.map(function (p) { return r.ports[p.key] ? 'O' : ''; })));
+                });
+            } else if (s.kind === 'labelitems') {
+                rows.push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note')]);
+                (d.labelItems || []).forEach(function (it) {
+                    rows.push([it.size || '', it.code || '', it.position || '', it.note || '']);
+                });
+            } else if (s.kind === 'labelcerts') {
+                var lc = d.labelCerts || {};
+                rows.push([_t('인증 항목', 'Certifications')]);
+                rows.push([_t('항목', 'Item'), 'Check', _t('인쇄 적용', 'Printed'), _t('인쇄 구분', 'Print type')]);
+                (lc.certs || []).forEach(function (r) {
+                    rows.push([r.name || '', r.check || '', r.print || '', r.printType || '']);
+                });
+                rows.push([]);
+                rows.push([_t('정격 표시', 'Rating spec')]);
+                rows.push([_t('항목', 'Item'), _t('규격값', 'Spec'), _t('인쇄 적용', 'Printed')]);
+                (lc.ratings || []).forEach(function (r) {
+                    rows.push([r.name || '', r.spec || '', r.print || '']);
                 });
             } else if (s.kind === 'attach') {
                 var list = (d.att[s.key] || []);
