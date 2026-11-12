@@ -618,6 +618,12 @@
         window._docState.hideNA = (window._docState.hideNA === false) ? true : false;
         window._docRender();
     };
+    /** 📂 [2026-11-12 3차 요청] SPL Check sheet 장(시트) 하나만 접기 ↔ 펴기 */
+    window._docToggleSheetCollapse = function (sheetKey) {
+        window._docState.chkSheetCollapsed = window._docState.chkSheetCollapsed || {};
+        window._docState.chkSheetCollapsed[sheetKey] = !window._docState.chkSheetCollapsed[sheetKey];
+        window._docRender();
+    };
 
     // ── 📦 회차 넘기기 (M.C Table·BOM 의 제품구분자 바와 **같은 장치**) ───
     //   ⚠️ 새로 디자인하지 않는다 — 삼각형 ◀ ▶ 로 앞뒤 회차를 넘기고, 가운데 버튼은 누를 때마다
@@ -917,7 +923,9 @@
         }
 
         form.sections.forEach(function (s) {
-            if (s.kind !== 'cover') h += '<div class="doc-sec">' + _esc(s.title) + '</div>';
+            // 📂 [2026-11-12 요청] 'check'(SPL Check sheet) 섹션은 제목 줄에 전체 접기/펴기 버튼을
+            //    오른쪽 정렬로 넣어야 해서 **자기 제목을 스스로 그린다**(아래 kind==='check' 블록).
+            if (s.kind !== 'cover' && s.kind !== 'check') h += '<div class="doc-sec">' + _esc(s.title) + '</div>';
             h += '<table class="doc-t">';
 
             if (s.kind === 'attach') {
@@ -960,26 +968,27 @@
                 //    ⚠️ 167항목을 다 펼쳐 두면 "내가 뭘 요청했는지" 가 안 보인다.
                 var chkOnly = !!window._docState.chkOnly;
                 var hideNA = window._docState.hideNA !== false;
-                h += '</table><div class="doc-noprint" style="margin:2px 0 8px;">'
-                   + '<button onclick="window._docToggleChkOnly()" style="padding:4px 10px; font-size:11.5px;'
-                   + ' cursor:pointer; border:1px solid #a3d9e0; border-radius:5px; font-weight:bold;'
-                   + ' background:' + (chkOnly ? '#00707d' : '#e0f5f7') + '; color:' + (chkOnly ? '#fff' : '#00707d') + ';">'
-                   + (chkOnly ? '🔽 ' + _esc(_t('전체 보기', 'Show all'))
-                              : '🔼 ' + _esc(_t('점검요청만', 'Requested only'))) + '</button>'
-                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
-                   + _esc(_t('개발담당자 칸에 ‘점검요청’ 을 켜 둔 내역만 보여 줍니다.',
-                             'Only items you asked to be checked.')) + '</span>'
-                   // 🙈 [2026-11-12 요청] '해당없음' 항목은 기본으로 접어 둔다 — 167항목 중 안 쓰는
-                   //    항목까지 매번 다 보이면 "뭘 봐야 하는지" 가 안 보인다. Resolution 묶음은
-                   //    위 '해상도 고르기' 팝업이 이미 걸러 주므로 **여기서는 손대지 않는다**(사용자 지시).
-                   + '<button onclick="window._docToggleHideNA()" style="padding:4px 10px; font-size:11.5px;'
-                   + ' margin-left:8px; cursor:pointer; border:1px solid #a3d9e0; border-radius:5px; font-weight:bold;'
-                   + ' background:' + (hideNA ? '#e0f5f7' : '#00707d') + '; color:' + (hideNA ? '#00707d' : '#fff') + ';">'
-                   + (hideNA ? '🔽 ' + _esc(_t('해당없음도 보기', 'Show N/A'))
-                             : '🔼 ' + _esc(_t('해당없음 접기', 'Hide N/A'))) + '</button>'
-                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
-                   + _esc(_t('‘해당없음’ 으로 선택한 항목은 기본으로 접어 둡니다(Resolution 제외).',
-                             'Items marked N/A are folded by default (except Resolution).')) + '</span></div>';
+                // 🙈 [2026-11-12 2차 요청] 버튼 둘을 "SPL Check sheet" 박스(테두리) 안으로 모으고
+                //    오른쪽 정렬 + 첨부(📎) 버튼과 같은 납작한 한 가지 스타일로 통일한다
+                //    (상태에 따라 색이 뒤집히던 것 → 라벨/화살표만 바뀌는 쪽으로).
+                var _chkBtnStyle = 'padding:4px 10px; font-size:11.5px; cursor:pointer;'
+                    + ' border:1px solid #a3d9e0; border-radius:5px; font-weight:bold; background:#e0f5f7; color:#00707d;';
+                h += '</table><div class="doc-sec">' + _esc(s.title) + '</div>'
+                   + '<div class="doc-noprint" style="margin:2px 0 8px; border:1px solid #a3d9e0;'
+                   + ' border-radius:6px; padding:8px 10px; background:#fff;">'
+                   + '<div style="font-size:11px; color:#868e96; margin-bottom:6px;">'
+                   + _esc(_t('개발담당자 칸에 ‘점검요청’ 을 켜 둔 내역만 보여 줍니다. ‘해당없음’ 으로 선택한 항목은'
+                             + ' 기본으로 접어 둡니다(Resolution 제외).',
+                             'Shows only requested items. N/A items are folded by default (except Resolution).'))
+                   + '</div>'
+                   + '<div style="display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap;">'
+                   + '<button onclick="window._docToggleChkOnly()" style="' + _chkBtnStyle + '">'
+                   + (chkOnly ? '▼ ' + _esc(_t('전체 보기', 'Show all'))
+                              : '▶ ' + _esc(_t('점검요청만', 'Requested only'))) + '</button>'
+                   + '<button onclick="window._docToggleHideNA()" style="' + _chkBtnStyle + '">'
+                   + (hideNA ? '▶ ' + _esc(_t('해당없음도 보기', 'Show N/A'))
+                             : '▼ ' + _esc(_t('해당없음 접기', 'Hide N/A'))) + '</button>'
+                   + '</div></div>';
                 sheets.forEach(function (sh) {
                     var items = _sheetItems(sh, form.id);
                     if (chkOnly) {
@@ -1001,7 +1010,21 @@
                             return true;
                         });
                     }
-                    h += '<div class="doc-sec">' + _esc(sh.key) + '</div>';
+                    // 📂 [2026-11-12 3차 요청] 시트 헤더마다 **그 시트 하나만** 접고 펼치는 버튼을
+                    //    헤더 박스(.doc-sec) 안쪽에 오른쪽 정렬로 둔다 — 위 전체 토글(점검요청/해당없음)과
+                    //    다른 축이다: 이건 '해당없음' 과 무관하게 긴 표 자체를 안 보이게 접는다.
+                    var collapsed = !!(window._docState.chkSheetCollapsed && window._docState.chkSheetCollapsed[sh.key]);
+                    h += '<div class="doc-sec" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
+                       + '<span>' + _esc(sh.key) + (collapsed ? '<span class="doc-noprint" style="font-weight:normal;'
+                           + ' color:#868e96; margin-left:8px;">(' + items.length + _esc(_t('개 항목', ' items')) + ')</span>' : '')
+                       + '</span>'
+                       + '<button class="doc-noprint" onclick="window._docToggleSheetCollapse(\''
+                       + _esc(sh.key).replace(/'/g, "\\'") + '\')" style="padding:3px 9px; font-size:11px; cursor:pointer;'
+                       + ' border:1px solid #a3d9e0; border-radius:5px; font-weight:bold; background:#fff; color:#00707d;'
+                       + ' flex-shrink:0;">'
+                       + (collapsed ? '▶ ' + _esc(_t('펼치기', 'Expand')) : '▼ ' + _esc(_t('접기', 'Collapse'))) + '</button>'
+                       + '</div>';
+                    if (collapsed) return;
                     h += '<table class="doc-t" style="table-layout:fixed;">'
                        + '<colgroup><col style="width:110px"><col><col style="width:168px">'
                        + '<col style="width:150px"><col style="width:150px"></colgroup>'
