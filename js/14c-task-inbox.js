@@ -365,11 +365,23 @@ var _TI_STATUS_STYLE = {
 // "자동배치됨/대기/전송됨/배치됨"이 그대로 노출되고 있었음.
 var _TI_STATUS_LABEL_EN = { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed', '전송 중': 'Sending…' };
 
-/** 업무 1건이 매칭된 프로젝트명 (없으면 noMatchLabel) — 요약 집계·필터 양쪽에서 재사용 */
+/** 업무 1건이 매칭된 프로젝트명 (없으면 noMatchLabel) — 요약 집계·필터 양쪽에서 재사용
+ * 🆕 [2026-11-12, 사용자 제보] candidates[0].model은 "그 메일을 매칭한 그 시점"의 스냅샷이라,
+ *    그 뒤 project_index.json의 model이 바뀌어도(예: 멀티모델 프로젝트 대표 라벨을 모델#1 번호
+ *    대신 고객사>프로젝트명으로 고친 수정) 이미 매칭된 옛 업무는 옛 라벨 그대로 남는다(실측:
+ *    토픽 프로파일 뷰어는 "STELLAR32"로 바뀌었는데 업무 보관함 그룹 칩은 "1641445-ALT1" 그대로).
+ *    지금 메모리에 캐시된 project_index(5분 TTL, js/26 등이 이미 불러다 둠)에서 같은
+ *    drive_file_id의 최신 model을 먼저 찾고, 캐시에 없으면(아직 안 불러왔거나 삭제된 프로젝트)
+ *    예전처럼 스냅샷 값으로 폴백한다 — 데이터 자체는 안 건드리고 "보여주는 라벨"만 최신화. */
 function _tiProjectOf(it, noMatchLabel) {
-    return (it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0])
-        ? (it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer)
-        : noMatchLabel;
+    const c = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
+    if (!c) return noMatchLabel;
+    const liveIdx = (window._projectIndexCache && window._projectIndexCache.data) || null;
+    if (liveIdx && c.drive_file_id) {
+        const live = liveIdx.find(function(p) { return p.drive_file_id === c.drive_file_id; });
+        if (live && (live.model || live.customer)) return live.model || live.customer;
+    }
+    return c.model || c.customer || noMatchLabel;
 }
 
 window._tiFilter = window._tiFilter || null; // { status, project(선택, null=그 상태 전체) }
