@@ -170,21 +170,27 @@
         //    다시 배분한다 — 그래서 '요약'은 안 넓어지고 '담당자/우선순위/수정일/출처'만 헐렁하게
         //    늘어나 보였다(실측). 폭 비율은 여기 한 곳(%, 합 100)에서만 바꾼다.
         // 📌 [2026-11-12 사용자 요청] 키 왼쪽에 No. 열 — 지금 정렬(수정일 내림차순) 기준 순번일
-        //    뿐이라 JIRA 자체 값이 아니다(정렬 바뀌면 같이 바뀐다). 폭은 '키'에서 1%, '요약'에서
-        //    2%, '출처'에서 1% 씩 떼어 왔다(합 100% 유지).
+        //    뿐이라 JIRA 자체 값이 아니다(정렬 바뀌면 같이 바뀐다).
+        // 📋 [2026-11-12 2차, 사용자 요청] 구성 요소·해결책·Milestone도 표에 열로 — 한 칸에
+        //    `metaCellText`(위 "구성 요소·해결책·Milestone" 절)로 압축해 넣는다(세 칸으로
+        //    나누면 좁은 화면에서 공간을 너무 많이 먹는다). 폭은 다른 칸에서 조금씩 떼어 왔다
+        //    (합 100% 유지 — 이 비율만 여기서 바꿀 것).
         var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
             + '<th style="padding:7px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:36%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:10%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:8%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('우선순위', 'Priority') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:12%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:14%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('출처', 'Source') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:7%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:28%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:7%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:9%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:7%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('우선순위', 'Priority') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:17%; background:#eef6f7; border-bottom:2px solid #cfe3e5;"'
+            + ' title="' + esc(T('구성 요소 · 해결책 · Milestone', 'Components · Resolution · Milestone')) + '">' + T('구성/해결/MS', 'Comp/Res/MS') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:11%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:10%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('출처', 'Source') + '</th>'
             + '</tr></thead><tbody>'
             + merged.map(function (it, i) {
                 var c = statusColor(it.status);
+                var metaTxt = metaCellText(it);
                 return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
                     + '<td style="padding:7px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
                     + '<td style="padding:7px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
@@ -192,6 +198,7 @@
                     + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
                     + '<td style="padding:7px 8px; text-align:center;">' + esc(it.assignee || '—') + '</td>'
                     + '<td style="padding:7px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
+                    + '<td style="padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555;" title="' + esc(metaTxt) + '">' + (metaTxt ? esc(metaTxt) : '—') + '</td>'
                     + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
                     + '<td style="padding:7px 8px;">' + srcChip(it.src) + '</td>'
                     + '</tr>';
@@ -546,6 +553,28 @@
         return '<label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:9px; font-size:12px;">'
             + '<span style="width:70px; flex:0 0 auto; color:#555; padding-top:6px;">' + label + '</span>' + inner + '</label>';
     }
+
+    // 🏷 [2026-11-12] 구성 요소·해결책·Milestone — 모달(1줄 압축, metaLineHtml)과 표(새 열,
+    // metaCellText)가 **같은 순서·같은 값**을 쓴다(metaParts 한 곳). 전부 읽기 전용 참고 정보.
+    function metaParts(issue) {
+        return [
+            [T('구성 요소', 'Components'), (issue.components && issue.components.length) ? issue.components.join(', ') : ''],
+            [T('해결책', 'Resolution'), issue.resolution || ''],
+            ['Milestone', issue.milestone || '']
+        ];
+    }
+    function metaLineHtml(issue) {
+        // 📌 [2026-11-12 2차, 사용자 요청] "공간을 많이 차지하지 않도록" 세 줄이 아니라 한 줄로.
+        return metaParts(issue).map(function (p, i) {
+            return (i ? '<span style="color:#ddd; margin:0 10px;">│</span>' : '')
+                + '<span style="color:#888;">' + esc(p[0]) + ':</span> '
+                + '<b style="color:#333; font-weight:600;">' + (p[1] ? esc(p[1]) : '<span style="color:#aaa; font-weight:normal;">—</span>') + '</b>';
+        }).join('');
+    }
+    function metaCellText(issue) {
+        var bits = metaParts(issue).map(function (p) { return p[1]; }).filter(Boolean);
+        return bits.length ? bits.join(' · ') : '';
+    }
     var inputSt = 'flex:1; min-width:0; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;';
     var btnSt = 'padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d;';
     var btnHover = ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"';
@@ -696,12 +725,10 @@
             // Milestone도 여기 보여준다 — 전부 **읽기 전용**(이 모달에서 고치는 칸이 아니라
             // 참고용, JIRA 쪽 화면에서 고치면 "🔄 새로고침"으로 다시 받아온다). Milestone은
             // 이 인스턴스의 커스텀 필드라 이름이 영문 그대로다(jira_bridge._field_id_by_name).
-            + fieldRow(T('구성 요소', 'Components'), '<span style="flex:1; min-width:0; padding:6px 0; color:#333;">'
-                + (issue.components && issue.components.length ? esc(issue.components.join(', ')) : '<span style="color:#aaa;">—</span>') + '</span>')
-            + fieldRow(T('해결책', 'Resolution'), '<span style="flex:1; min-width:0; padding:6px 0; color:#333;">'
-                + (issue.resolution ? esc(issue.resolution) : '<span style="color:#aaa;">—</span>') + '</span>')
-            + fieldRow('Milestone', '<span style="flex:1; min-width:0; padding:6px 0; color:#333;">'
-                + (issue.milestone ? esc(issue.milestone) : '<span style="color:#aaa;">—</span>') + '</span>')
+            // ⚠️ [2026-11-12 2차] "공간을 많이 차지하지 않도록" 세 칸 각각이 아니라 **한 줄**로
+            // 압축한다(metaLineHtml, 위 "구성 요소·해결책·Milestone" 절).
+            + fieldRow('📋', '<div style="flex:1; min-width:0; display:flex; align-items:center;'
+                + ' flex-wrap:wrap; padding-top:6px; font-size:12px; line-height:1.7;">' + metaLineHtml(issue) + '</div>')
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
             + renderAttachments(issue.attachments)

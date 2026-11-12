@@ -167,6 +167,10 @@ check('허용된 JIRA_BASE 주소는 통과', calls['n'] == 1 and r.json() == b'
 
 print('\n[6] search — total/issues를 그대로 옮긴다')
 fresh(); stub_auth(True)
+# search()가 이제 Milestone 커스텀 필드 id도 찾으려 하므로(아래 [13] 참고), 이 테스트의
+# 관심사(total/issues 전달)와 무관한 그 조회가 끼어들지 않게 캐시를 미리 채워 둔다.
+jb._FIELD_META_CACHE['id_by_name'] = {}
+jb._FIELD_META_CACHE['ts'] = float('inf')
 calls = arm([FakeResp(200, {'total': 2, 'issues': [raw, dict(raw, key='GABKJ-2')]})])
 res = jb.search('project = GABKJ', 10)
 check('total', res['total'] == 2, res)
@@ -370,12 +374,35 @@ issue3 = jb.get_issue('GABJO-5')
 check('필드 정의 조회가 실패해도 이슈 조회는 그대로 된다', issue3['summary'] == '폴백', issue3)
 check('milestone은 모르니 빈 문자열(추측하지 않는다)', issue3['milestone'] == '', issue3)
 
+# 📋 [2026-11-12 2차, 사용자 요청] 표(목록)에도 구성 요소/해결책/Milestone 열을 보여
+# 달라고 해서 search()도 이 필드들을 요청하고 담아 돌려주게 바꿨다.
 jb._FIELD_META_CACHE['id_by_name'] = None
 jb._FIELD_META_CACHE['ts'] = 0
-calls4 = arm([FakeResp(200, {'total': 1, 'issues': [{'key': 'GABJO-6', 'fields': {'summary': '목록'}}]})])
+seen_search = {}
+
+
+def fake_search(method, url, **kw):
+    if url.endswith('/rest/api/2/field'):
+        return FakeResp(200, _FAKE_FIELDS)
+    seen_search['params'] = kw.get('params')
+    return FakeResp(200, {'total': 1, 'issues': [{'key': 'GABJO-6', 'fields': {
+        'summary': '목록', 'resolution': {'name': "Won't Fix"},
+        'components': [{'name': 'H/W'}], 'customfield_10010': {'value': 'PP'},
+    }}]})
+
+
+jb.requests.request = fake_search
 res13 = jb.search('project = GABJO', 10)
-check('search는 가벼운 필드셋이라 필드 정의를 따로 조회하지 않는다(네트워크 1회만)', calls4['n'] == 1, calls4)
-check('search 결과의 milestone은 빈 문자열(목록은 그 필드를 안 받는다)', res13['issues'][0]['milestone'] == '', res13)
+check('search도 fields 파라미터에 components/resolution/milestone 커스텀 필드를 싣는다',
+      all(k in seen_search['params']['fields'] for k in ('components', 'resolution', 'customfield_10010')),
+      seen_search)
+check('search 결과에도 구성 요소/해결책/Milestone이 담긴다(표 열 추가)',
+      res13['issues'][0]['components'] == ['H/W'] and res13['issues'][0]['resolution'] == "Won't Fix"
+      and res13['issues'][0]['milestone'] == 'PP', res13['issues'][0])
+
+calls4 = arm([FakeResp(200, {'total': 0, 'issues': []})])
+jb.search('project = GABJO', 5)
+check('필드 정의가 이미 캐시돼 있으면 search를 반복해도 다시 안 묻는다(네트워크 1회만)', calls4['n'] == 1, calls4)
 
 print('\n' + ('=' * 50))
 print('PASS %d / FAIL %d' % (len(PASS), len(FAIL)))

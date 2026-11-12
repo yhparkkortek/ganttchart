@@ -288,12 +288,18 @@ def get_issue(key):
 
 
 def search(jql, max_results=50):
+    # 📋 [2026-11-12 2차, 사용자 요청] 목록(표)에도 구성 요소/해결책/Milestone 열을 보여
+    # 달라고 해서 이 필드들을 더했다 — `mid` 조회는 `_field_id_by_name`이 캐시하므로(30분)
+    # 검색을 반복해도 매번 새로 묻지 않는다.
+    mid = _field_id_by_name('Milestone')
+    fields = 'summary,status,assignee,priority,issuetype,updated,components,resolution'
+    if mid:
+        fields += ',' + mid
     r = _request('GET', '/rest/api/2/search', params={
-        'jql': jql, 'maxResults': max_results,
-        'fields': 'summary,status,assignee,priority,issuetype,updated'
+        'jql': jql, 'maxResults': max_results, 'fields': fields
     })
     j = r.json()
-    return {'total': j.get('total', 0), 'issues': [_shape_issue(i) for i in j.get('issues', [])]}
+    return {'total': j.get('total', 0), 'issues': [_shape_issue(i, mid) for i in j.get('issues', [])]}
 
 
 def add_comment(key, body):
