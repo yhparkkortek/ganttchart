@@ -173,59 +173,69 @@ def _make_fake_xlsx_bytes(entries):
     return buf.getvalue()
 
 
-def test_label_images(tmp):
-    p01 = B.sap_folder_path('docs_P01', create=True)
-    # ⑦ 직접 .xlsx — PNG 1개 + EMF 1개(건너뛰어야 함)
-    xlsx_path = os.path.join(p01, 'P01111111111', '124291_LABEL.XLSX')
-    os.makedirs(os.path.dirname(xlsx_path), exist_ok=True)
-    with open(xlsx_path, 'wb') as f:
-        f.write(_make_fake_xlsx_bytes({
-            'xl/media/image1.png': _PNG_1PX,
-            'xl/media/image2.emf': b'not-a-real-emf-but-bytes',
-            'xl/worksheets/sheet1.xml': b'<worksheet/>',
-        }))
-
-    c = B.app.test_client()
-    r = c.get('/sap-label-images?path=' + xlsx_path)
-    j = r.get_json()
-    ok('⑦ 200 · ok', r.status_code == 200 and j['ok'])
-    ok('⑦ PNG 1개만 집는다(EMF 는 skipped 로)', len(j['images']) == 1 and j['skipped'] == 1, j)
-    im = j['images'][0]
-    ok('⑦ member 는 실제 zip 경로, inner 는 직접 xlsx 라 빈 문자열', im['member'] == 'xl/media/image1.png' and im['inner'] == '')
-
-    r2 = c.get('/sap-label-image-bytes?path=' + xlsx_path
-               + '&inner=' + im['inner'] + '&member=' + im['member'])
-    ok('⑧ 이미지 바이트가 그대로 돌아온다', r2.status_code == 200 and r2.data == _PNG_1PX and r2.mimetype == 'image/png')
-
-    r3 = c.get('/sap-label-image-bytes?path=' + xlsx_path + '&inner=&member=xl/media/ghost.png')
-    ok('⑧ 없는 member 는 404', r3.status_code == 404)
-
-    # ⑦ zip 이 감싼 xlsx(실측 `승인원_*.ZIP` 모양) — 한 겹 더 열어야 이미지가 보인다
-    inner_name = '122549-LABEL.xlsx'
-    zip_path = os.path.join(p01, 'P01222222222', '122549-LABEL.ZIP')
-    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
-    inner_bytes = _make_fake_xlsx_bytes({'xl/media/image1.jpeg': _PNG_1PX})
-    with zipfile.ZipFile(zip_path, 'w') as z:
-        z.writestr(inner_name, inner_bytes)
-
-    r4 = c.get('/sap-label-images?path=' + zip_path)
-    j4 = r4.get_json()
-    ok('⑦ .zip 이 감싼 .xlsx 도 한 겹 더 열어 찾는다', len(j4['images']) == 1 and j4['images'][0]['inner'] == inner_name, j4)
-
-    im4 = j4['images'][0]
-    r5 = c.get('/sap-label-image-bytes?path=' + zip_path
-               + '&inner=' + im4['inner'] + '&member=' + im4['member'])
-    ok('⑧ zip 속 이미지도 그대로 돌아온다', r5.status_code == 200 and r5.data == _PNG_1PX)
-
-    # 보안 — 경로 밖은 그대로 403/400 (open-file 과 같은 _sap_dms_safe_path 공유)
-    outside = os.path.join(os.path.dirname(tmp), 'outside.xlsx')
-    touch(outside)
+def test_label_images():
+    # ⚠️ /sap-label-images·/sap-label-image-bytes 도 /sap-open-file 과 같은 리터럴
+    #    `C:\SAP_DMS` 화이트리스트를 쓴다 — 카탈로그 리다이렉션으론 "안쪽" 을 못 본다.
+    #    real root 밑 전용 하위폴더(`_test_probe`, 끝나면 지운다)로 직접 만든다.
+    probe_dir = os.path.join(r'C:\SAP_DMS', '_test_probe')
     try:
+        # ⑦ 직접 .xlsx — PNG 1개 + EMF 1개(건너뛰어야 함)
+        xlsx_path = os.path.join(probe_dir, 'P01111111111', '124291_LABEL.XLSX')
+        os.makedirs(os.path.dirname(xlsx_path), exist_ok=True)
+        with open(xlsx_path, 'wb') as f:
+            f.write(_make_fake_xlsx_bytes({
+                'xl/media/image1.png': _PNG_1PX,
+                'xl/media/image2.emf': b'not-a-real-emf-but-bytes',
+                'xl/worksheets/sheet1.xml': b'<worksheet/>',
+            }))
+
+        c = B.app.test_client()
+        r = c.get('/sap-label-images?path=' + xlsx_path)
+        j = r.get_json() or {}
+        ok('⑦ 200 · ok', r.status_code == 200 and j.get('ok'), j)
+        ok('⑦ PNG 1개만 집는다(EMF 는 skipped 로)', j.get('images') and len(j['images']) == 1 and j['skipped'] == 1, j)
+        im = j['images'][0]
+        ok('⑦ member 는 실제 zip 경로, inner 는 직접 xlsx 라 빈 문자열',
+           im['member'] == 'xl/media/image1.png' and im['inner'] == '')
+
+        r2 = c.get('/sap-label-image-bytes?path=' + xlsx_path
+                   + '&inner=' + im['inner'] + '&member=' + im['member'])
+        ok('⑧ 이미지 바이트가 그대로 돌아온다', r2.status_code == 200 and r2.data == _PNG_1PX and r2.mimetype == 'image/png')
+
+        r3 = c.get('/sap-label-image-bytes?path=' + xlsx_path + '&inner=&member=xl/media/ghost.png')
+        ok('⑧ 없는 member 는 404', r3.status_code == 404)
+
+        # ⑦ zip 이 감싼 xlsx(실측 `승인원_*.ZIP` 모양) — 한 겹 더 열어야 이미지가 보인다
+        inner_name = '122549-LABEL.xlsx'
+        zip_path = os.path.join(probe_dir, 'P01222222222', '122549-LABEL.ZIP')
+        os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+        inner_bytes = _make_fake_xlsx_bytes({'xl/media/image1.jpeg': _PNG_1PX})
+        with zipfile.ZipFile(zip_path, 'w') as z:
+            z.writestr(inner_name, inner_bytes)
+
+        r4 = c.get('/sap-label-images?path=' + zip_path)
+        j4 = r4.get_json() or {}
+        ok('⑦ .zip 이 감싼 .xlsx 도 한 겹 더 열어 찾는다',
+           j4.get('images') and len(j4['images']) == 1 and j4['images'][0]['inner'] == inner_name, j4)
+
+        im4 = j4['images'][0]
+        r5 = c.get('/sap-label-image-bytes?path=' + zip_path
+                   + '&inner=' + im4['inner'] + '&member=' + im4['member'])
+        ok('⑧ zip 속 이미지도 그대로 돌아온다', r5.status_code == 200 and r5.data == _PNG_1PX)
+        ok('⑧ member 없으면 400', c.get('/sap-label-image-bytes?path=' + xlsx_path).status_code == 400)
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+
+    # 보안 — 경로 밖은 403 (open-file 과 같은 _sap_dms_safe_path 공유)
+    tmp = tempfile.mkdtemp(prefix='saplabelimg-')
+    try:
+        outside = os.path.join(tmp, 'outside.xlsx')
+        touch(outside)
+        c = B.app.test_client()
         r6 = c.get('/sap-label-images?path=' + outside)
         ok('⑦ SAP_DMS 바깥은 403', r6.status_code == 403)
     finally:
-        os.remove(outside)
-    ok('⑧ member 없으면 400', c.get('/sap-label-image-bytes?path=' + xlsx_path).status_code == 400)
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def main():
@@ -238,7 +248,7 @@ def main():
     print('=== ⑥ /sap-open-file 화이트리스트 ===')
     with_temp_catalog(test_open_file)
     print('=== ⑦⑧ /sap-label-images · /sap-label-image-bytes ===')
-    with_temp_catalog(test_label_images)
+    test_label_images()
     print('')
     print('PASS %d / FAIL %d' % (PASS[0], FAIL[0]))
     return 1 if FAIL[0] else 0

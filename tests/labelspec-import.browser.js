@@ -10,8 +10,13 @@
 //     실측 3개 파일의 모양(머리글 글자로 열을 찾기·리비전 시트 선택·'제품' 하나에만 딸린
 //     인증/정격 표·부착위치가 다른 행/열에 떨어진 경우)을 합성한다 — **실제 고객 파일은
 //     저장소에 안 넣는다**(그 안에 실제 모델·품목코드가 있다).
-//  ⚠️ `/sap-label-search`·`/sap-open-file` 는 백엔드 재시작이 필요해 **이 하네스에선 안 본다**
-//     (그건 `tests/test_sap_label_search.py` 가 본다, app.test_client() 로).
+//  ⚠️ `/sap-label-search`·`/sap-open-file`·`/sap-label-images`·`/sap-label-image-bytes` 는
+//     백엔드 재시작이 필요해 **이 하네스에선 안 본다**(그건 `tests/test_sap_label_search.py`
+//     가 app.test_client() 로 본다). 대신 `await __labelArtTest()` 가 그 라우트들과
+//     `_dgUploadBlob` 을 **네트워크 경계에서만** 가짜로 바꿔(fetch 가로채기) 찾기→미리보기→
+//     고르기→공용 라이브러리 저장까지의 **클라이언트 쪽 로직**을 검증한다 — 특히
+//     "`DOCUMENT/<프로젝트>/...` 가 아니라 `라벨도안/<코드>.<ext>` 공용 폴더에 저장되는가"
+//     (사용자 지적: "공통문서라서 프로젝트로 가면 안 될 것 같다").
 (function () {
     'use strict';
 
@@ -174,5 +179,123 @@
         return { pass: pass, fail: fail, notes: notes };
     };
 
-    console.log('🏷 준비됨 — `await __labelSpecTest()` 를 치세요 (빈 앱에서).');
+    // 🖼 [2026-11-12 2차] 도안 찾기 → 미리보기 → 고르기 → 공용 라이브러리 저장
+    //    가짜는 fetch(네트워크)와 _dgUploadBlob(NAS 업로드) **둘뿐** — 그 사이의 렌더·상태
+    //    전이·URL 조립은 전부 진짜 js/67 코드로 돈다.
+    window.__labelArtTest = async function (opt) {
+        opt = opt || {};
+        var pm = window.projectMeta || {};
+        if (!opt.force && (pm.모델명 || pm.고객사 || pm.프로젝트명)) {
+            console.error('⛔ 실제 프로젝트가 열려 있습니다 — 빈 앱에서 돌리세요. ({force:true} 로 강제 가능)');
+            return { refused: true };
+        }
+        var pass = 0, fail = 0, notes = [];
+        var ok = function (cond, what) {
+            if (cond) { pass++; } else { fail++; notes.push('❌ ' + what); console.error('❌ ' + what); }
+        };
+
+        var saved = {
+            save: window.saveToGoogleDrive, dirty: window.markUnsavedChanges,
+            docs: window.tabData && window.tabData.documents,
+            state: window._docState && JSON.parse(JSON.stringify(window._docState)),
+            fetch: window.fetch, dgUpload: window._dgUploadBlob,
+            artIndex: window._docLabelArtIndex, findResult: window._docLabelFindResult,
+            findMatches: window._docLabelFindMatches, imgState: window._docLabelImgState
+        };
+        window.saveToGoogleDrive = function () { return Promise.resolve({ skipped: 'test' }); };
+        window.markUnsavedChanges = function () {};
+        window.tabData = window.tabData || {};
+        window.tabData.documents = {};
+        window._docLabelArtIndex = {};               // 빈 공용 라이브러리로 시작(아직 아무 코드도 없음)
+        window._docLabelFindResult = {}; window._docLabelFindMatches = {}; window._docLabelImgState = {};
+
+        var FAKE_CODE = '999001';
+        var FAKE_PATH = 'C:\\SAP_DMS\\원자재승인원\\P01999999999\\999001_LABEL.XLSX';
+        var uploadCalls = [];
+        window._dgUploadBlob = async function (folder, name, blob) {
+            uploadCalls.push({ folder: folder, name: name, size: blob && blob.size });
+            return { ok: true, name: name, size: blob && blob.size || 0 };
+        };
+        window.fetch = function (url, init) {
+            var u = String(url);
+            if (u.indexOf('/sap-label-search') >= 0) {
+                return Promise.resolve({ status: 200, ok: true, json: function () {
+                    return Promise.resolve({ ok: true, matches: [{ name: '999001_LABEL.XLSX', folder: '원자재승인원\\P01999999999', path: FAKE_PATH }], partial: false });
+                } });
+            }
+            if (u.indexOf('/sap-label-images') >= 0) {
+                return Promise.resolve({ status: 200, ok: true, json: function () {
+                    return Promise.resolve({ ok: true, images: [{ inner: '', member: 'xl/media/image1.png', size: 12345 }], skipped: 1 });
+                } });
+            }
+            if (u.indexOf('/sap-label-image-bytes') >= 0) {
+                return Promise.resolve({ status: 200, ok: true, blob: function () { return Promise.resolve(new Blob(['fake-png-bytes'], { type: 'image/png' })); } });
+            }
+            return saved.fetch(url, init);
+        };
+
+        try {
+            window.switchTab && window.switchTab('document');
+            window._docPick('label-spec');
+            var d = window.tabData.documents['label-spec'] = window.tabData.documents['label-spec'] || { fields: {}, att: {} };
+            d.labelItems = [{ size: '75 X 70', code: FAKE_CODE, position: '제품', note: '' }];
+            window._docRender();
+
+            // ═══ 1. 찾기 ═══
+            await window._docLabelFind('label-spec', 0);
+            var key = 'label-spec|0';
+            var res1 = window._docLabelFindResult[key] || '';
+            ok(res1.indexOf('999001_LABEL.XLSX') >= 0, '검색 결과에 파일명이 안 보인다: ' + res1);
+            ok(res1.indexOf('미리보기') >= 0, '미리보기 토글 링크가 없다');
+
+            // ═══ 2. 미리보기 펼치기 ═══
+            await window._docLabelToggleImages(key, 0);
+            var res2 = window._docLabelFindResult[key] || '';
+            ok(res2.indexOf('/sap-label-image-bytes') >= 0, '썸네일 <img> 가 안 보인다: ' + res2);
+            ok(res2.indexOf('member=xl%2Fmedia%2Fimage1.png') >= 0 || res2.indexOf('xl/media/image1.png') >= 0,
+               '썸네일 URL 에 member 가 안 실렸다: ' + res2);
+
+            // ═══ 3. 고르기 → 공용 라이브러리(라벨도안) 저장, 프로젝트 폴더 아님 ═══
+            await window._docLabelPickImage('label-spec', 0, FAKE_PATH, '', 'xl/media/image1.png');
+            ok(uploadCalls.length === 1, '_dgUploadBlob 이 한 번 안 불렸다: ' + uploadCalls.length);
+            var up = uploadCalls[0] || {};
+            ok(up.folder === '라벨도안', '프로젝트 폴더가 아니라 공용 폴더(라벨도안)에 저장돼야 한다: ' + up.folder);
+            ok(up.name === FAKE_CODE + '.png', '파일 이름이 <코드>.<ext> 가 아니다: ' + up.name);
+            ok(window._docLabelArtIndex[FAKE_CODE] === FAKE_CODE + '.png',
+               '공용 인덱스에 코드가 안 올라갔다: ' + JSON.stringify(window._docLabelArtIndex));
+            ok(!window._docLabelFindResult[key], '저장 후 찾기 상태가 안 지워졌다');
+
+            // ═══ 4. 다시 그리면 재검색 없이 바로 보여야 한다(같은 인덱스 재사용) ═══
+            window._docRender();
+            var img = document.querySelector('#doc-page-body td img');
+            ok(!!img, '저장한 도안이 라벨 줄에 안 보인다');
+            if (img) {
+                ok(img.src.indexOf('/doc/get') >= 0 && img.src.indexOf('folder=' + encodeURIComponent('라벨도안')) >= 0,
+                   '도안 <img> src 가 공용 폴더를 안 가리킨다: ' + img.src);
+                ok(img.src.indexOf('999001.png') >= 0, '도안 <img> src 에 파일명이 안 들어갔다: ' + img.src);
+            }
+
+        } catch (e) {
+            fail++; notes.push('💥 ' + (e && e.stack || e));
+            console.error(e);
+        } finally {
+            window.saveToGoogleDrive = saved.save;
+            window.markUnsavedChanges = saved.dirty;
+            window.fetch = saved.fetch;
+            window._dgUploadBlob = saved.dgUpload;
+            window._docLabelArtIndex = saved.artIndex;
+            window._docLabelFindResult = saved.findResult;
+            window._docLabelFindMatches = saved.findMatches;
+            window._docLabelImgState = saved.imgState;
+            if (saved.docs) window.tabData.documents = saved.docs; else delete window.tabData.documents;
+            if (saved.state) window._docState = saved.state;
+            try { window._docRender && window._docRender(); } catch (e2) { /* 〃 */ }
+        }
+
+        console.log((fail ? '❌' : '✅') + ' 라벨 도안 공용 라이브러리: ' + pass + '/' + (pass + fail));
+        notes.forEach(function (n) { console.log('   ' + n); });
+        return { pass: pass, fail: fail, notes: notes };
+    };
+
+    console.log('🏷 준비됨 — `await __labelSpecTest()` 그리고 `await __labelArtTest()` 를 치세요 (빈 앱에서).');
 })();
