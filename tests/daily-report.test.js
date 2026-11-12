@@ -246,6 +246,31 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('endDateStr 생략하면(하루만) 지난 업무는 여전히 안 보인다 — 하위호환',
         !d4.mine.concat(d4.others).some((x) => x.name === '지난 업무'));
 
+    // 📅 [2026-11-12 2차 요청] "이번주" 모드 — 월~일 **달력 주**(js/62 weekStartsMonday 와
+    // 같은 규칙, 롤링 7일 아님). 기대값은 독립 공식(dailyWeekDigest, js/59:2699 와 같은
+    // "diff = 일요일이면 -6, 그 외엔 1-dow" 표현)으로 — candRange() 코드를 그대로 베끼면
+    // 같은 실수를 두 번 하고도 통과한다.
+    console.log('\n■ 후보 기간 "이번주" 모드(2026-11-12)');
+    {
+        const dow = new Date(today + 'T00:00:00').getDay();
+        const diff = (dow === 0) ? -6 : (1 - dow);
+        const d0date = new Date(today + 'T00:00:00');
+        const mon = new Date(d0date.getFullYear(), d0date.getMonth(), d0date.getDate() + diff);
+        const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+        const expectKey = win._dailyYmd(mon) + '|' + win._dailyYmd(sun);
+
+        await win.dailyOpenModal(today);                 // _candPeriod 를 'today' 로 리셋하고 연다
+        win._dailySetCandPeriodMode('week');             // 모달 안 select 를 "이번주" 로 바꾼 것과 같다
+        ok('이번주 모드가 월~일 범위로 다시 훑는다(캐시 열쇠로 확인)',
+            win._dailyOtherScan && win._dailyOtherScan.at === expectKey,
+            'got=' + (win._dailyOtherScan && win._dailyOtherScan.at) + ' want=' + expectKey);
+
+        win._dailySetCandPeriodMode('today');            // 되돌리면 오늘 하루로 돌아온다
+        ok('"오늘"로 되돌리면 오늘|오늘 캐시 열쇠로 돌아온다',
+            win._dailyOtherScan && win._dailyOtherScan.at === (today + '|' + today),
+            win._dailyOtherScan && win._dailyOtherScan.at);
+    }
+
     // ══ 4. 저장 가드 ════════════════════════════════════════════════════════
     console.log('\n■ dailySave 가드');
     const doc = { date: today, key: 'yhpark', dayType: 'work',

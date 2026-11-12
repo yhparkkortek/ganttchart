@@ -779,21 +779,29 @@
     //    열쇠는 둘을 합친 문자열이라, 오늘-모드 캐시와 기간-모드 캐시가 서로 안 덮는다.
     window.dailyScanOtherProjects = async function (dateStr, force, endDateStr) {
         var S = window.DAILY_SCAN || {};
-        if (!S.otherProjects || _other.busy) return _other;
+        if (!S.otherProjects) return _other;
         var date = dateStr || ymd();
         var endDate = endDateStr || date;
         var cacheKey = date + '|' + endDate;
-        // 같은 기간을 이미 다 훑었으면 그냥 돌려준다. `force` 는 "다시 훑어라"(파일 캐시는 그대로
-        // 쓰므로, 안 바뀐 프로젝트는 여전히 안 읽는다).
-        if (!force && _other.at === cacheKey && _other.total && _other.done >= _other.total) return _other;
+        // 같은 기간을 이미 다 훑었거나(또는 지금 그 기간을 훑고 있으면) 그냥 돌려준다. `force` 는
+        // "다시 훑어라"(파일 캐시는 그대로 쓰므로, 안 바뀐 프로젝트는 여전히 안 읽는다).
+        // ⚠️ [2026-11-12] "뭔가 돌고 있나"(_other.busy)만으로 막으면 안 된다 — 모달을 열자마자
+        //    기간을 "이번주"/"기간 설정"으로 바꾼 클릭이, 아직 "오늘" 스캔이 도는 중이라는
+        //    이유로 조용히 무시된다(실제로 새 테스트가 바로 이 자리에서 잡았다). 그래서
+        //    **다른** 기간이면 busy 여도 새로 시작하고, 끝난 뒤엔 `_other.at` 로 더 새 기간으로
+        //    안 바뀌었는지 확인해서 — 바뀌었으면 그 결과로 지금 것을 덮지 않는다(늦게 끝난
+        //    옛 스캔이 방금 시작한 새 스캔을 조용히 되돌리는 사고 방지).
+        if (!force && _other.at === cacheKey && (_other.busy || (_other.total && _other.done >= _other.total))) return _other;
         _other = { at: cacheKey, mine: [], others: [], done: 0, total: 0, kept: 0, busy: true, errs: [] };
         window._dailyOtherScan = _other;
         var r = await window.dailyScanMyProjects('draft|' + cacheKey, function (ctx) {
             return scanOne(ctx, date, endDate);
         }, function (st) {
+            if (_other.at !== cacheKey) return;   // 더 새 기간으로 바뀌었다 — 이 진행률은 버린다
             _other.done = st.done; _other.total = st.total; _other.kept = st.kept;
             paintCands();
         });
+        if (_other.at !== cacheKey) return _other;   // 끝나기 전에 더 새 기간으로 바뀌었다 — 옛 결과로 덮지 않는다
         _other.mine = [];
         _other.others = [];
         r.results.forEach(function (g) {
@@ -1134,8 +1142,16 @@
      *    뒤에서 한 건씩 들어오므로, 바뀌는 건 이 목록뿐이다. 그래서 여기만 갈아 끼운다.
      */
     /** 기간 모드의 [시작,끝] — 거꾸로 골라도 바꿔 끼운다(js/62 와 같은 규칙). 오늘 모드거나
-     *  시작일을 아직 안 골랐으면 그냥 오늘 하루. */
+     *  시작일을 아직 안 골랐으면 그냥 오늘 하루. "이번주"는 **월~일 달력 주**(js/62 `weekStartsMonday`
+     *  와 같은 규칙 — 롤링 7일 아님, 일요일이 그 주의 7번째 날). */
     function candRange() {
+        if (_candPeriod.mode === 'week') {
+            var b = new Date(_date + 'T00:00:00');
+            var dow = b.getDay(), back = (dow + 6) % 7;
+            var mon = new Date(b.getFullYear(), b.getMonth(), b.getDate() - back);
+            var sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+            return { start: ymd(mon), end: ymd(sun) };
+        }
         if (_candPeriod.mode !== 'range' || !_candPeriod.start) return { start: _date, end: _date };
         var s = _candPeriod.start, e = _candPeriod.end || _candPeriod.start;
         return s <= e ? { start: s, end: e } : { start: e, end: s };
@@ -1274,7 +1290,7 @@
     //    (검색칸은 같은 정적 영역에 있어 모드 전환 중 타이핑하고 있었다면 같이 날아간다 — 드문
     //    동시 상황이라 감수한다, 다른 전체-재렌더 동작들과 같은 수준의 트레이드오프.)
     window._dailySetCandPeriodMode = function (mode) {
-        _candPeriod.mode = (mode === 'range') ? 'range' : 'today';
+        _candPeriod.mode = (mode === 'range') ? 'range' : (mode === 'week') ? 'week' : 'today';
         render();
         rescanCandPeriod();
     };
@@ -1413,6 +1429,7 @@
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">' +
       '<select onchange="window._dailySetCandPeriodMode(this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">' +
         '<option value="today"' + (_candPeriod.mode === 'today' ? ' selected' : '') + '>' + esc(T('오늘', 'Today')) + '</option>' +
+        '<option value="week"' + (_candPeriod.mode === 'week' ? ' selected' : '') + '>' + esc(T('이번주', 'This week')) + '</option>' +
         '<option value="range"' + (_candPeriod.mode === 'range' ? ' selected' : '') + '>' + esc(T('기간 설정', 'Date range')) + '</option>' +
       '</select>' +
       (_candPeriod.mode === 'range'
