@@ -392,7 +392,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/jira-integration.md` — 🪐 JIRA(Kortek Issue Tracker) 연동 (`http://jira.kortek.co.kr`, 2026-11-11)
 - **읽을 때**: JIRA 탭(js/70) 수정, 연결(3가지) 로직, 로그인/잠금 가드, 새 필드·QA 도구 추가
 - **Jira Server 5.2.11(2013년 빌드, PAT 없음)** — REST API(`/rest/api/2/*`)가 이미 열려 있어 GUI 자동화 불필요, Basic Auth만. **HTTP 평문** + CAPTCHA/계정잠금 정책 불명 → SAP·그룹웨어와 같은 "1회 실패 후 재시도 금지"
-- 연결은 **4가지 동시**(수동 키·키워드 JQL·메일캡처·JIRA 프로젝트 전체) — `docs/jira-integration.md` 본문에 각 소스를 **따로 조회하는 이유**(`key in (...)`가 없는 키 하나로 전체 400) + 프로젝트는 **이름이 아니라 key로**(이름에 특수문자 섞여 JQL이 깨짐, 실측)
+- 연결은 **4가지**(수동 키·키워드 JQL·메일캡처·JIRA 프로젝트 전체)를 쓸 수 있지만 **자동으로 도는 건 프로젝트 코드뿐**(2026-11-12) — 나머지 셋은 표 아래 "🔎 더 찾기" 버튼을 사람이 눌러야 조회된다. — `docs/jira-integration.md` 본문에 각 소스를 **따로 조회하는 이유**(`key in (...)`가 없는 키 하나로 전체 400) + 프로젝트는 **이름이 아니라 key로**(이름에 특수문자 섞여 JQL이 깨짐, 실측)
+- ⚠️⚠️ **(2026-11-12 사용자 제보) 넷을 전부 자동으로 돌리면 모델끼리 이슈가 섞인다** — 키워드 JQL `text ~`가 모델명 숫자 하나 겹치는 **다른 프로젝트** 이슈까지 끌어왔다(실측: GABKJ 연결인데 GABKH·GABJO 이슈가 표에 섞여 보임). → **결정론(📁 프로젝트 코드, Summary 탭 "JIRA 코드"와 같은 저장소)만 탭 진입 시 자동**, 🔗 수동 키·🔍 검색어·📧 메일 추정은 "🔎 더 찾기" 버튼으로 분리(js/70 `_jiraPullExtraSources`). Summary 탭 "JIRA 코드" 칸에도 🔍 찾기 버튼을 달아 JIRA 탭을 열지 않고도 바로 검색·저장할 수 있다
 - 📎 **(2026-11-12) 첨부 저장(업로드)·연결 프로그램으로 열기 추가** — 업로드는 `X-Atlassian-Token: no-check` 필수(옛 Jira XSRF 우회). 열기는 NAS(`/nas/app/open-native`)와 같은 UX지만 JIRA 첨부는 로컬에 없어 **먼저 받아서**(`%TEMP%\kortek_jira_attachments\`) `os.startfile` — `docs/file-upload-dragdrop-audit.md`에 상세
 
 ### `docs/file-upload-dragdrop-audit.md` — 📎 파일 불러오기 드래그앤드롭 전수조사 (2026-11-12)

@@ -5,7 +5,7 @@
 //       상태전환·필드수정(요약/담당자/우선순위)까지 한다. 실제 HTTP 호출은 백엔드
 //       (/jira/*, jira_bridge.py)가 하고, 이 파일은 화면 + 연결(3가지) 수집만 한다.
 //
-// 연결은 4가지를 **모두 쓴다**(사용자 결정, 2026-11-11), 전부 지금 모델 기준(아래 2차 참고):
+// 연결은 4가지를 **모두 쓸 수 있다**, 전부 지금 모델 기준(아래 2차 참고):
 //   ① 수동 이슈 키  — tabData.jiraLinksByUnit[unit].manualKeys (쉼표 구분 입력)
 //   ② 키워드 자동검색(JQL text~) — tabData.jiraLinksByUnit[unit].keyword (기본값: 모델명)
 //   ③ 메일에서 이미 캡처된 이슈번호 — row._mailRaw.subject/body2000 정규식 스캔(저장 안 함,
@@ -14,9 +14,13 @@
 //      **key로 저장**, 2026-11-11 추가). 사용자 실측: JIRA 프로젝트는 "LNW>SHUFFLER 3.0"" 처럼
 //      이름에 특수문자·따옴표가 섞여 있어 JQL `project = "그 이름"` 매칭이 깨지기 쉽다
 //      (실측 400) → 이름은 **찾는 용도로만**, 저장/조회는 항상 key(`project = GABKJ`).
-// 네 소스는 **따로 조회한다**(한 JQL로 OR 하지 않음) — 메일 스캔은 존재하지 않는 키를
-// 주워올 수 있는데, JIRA의 `key in (...)`는 그중 하나라도 없으면 전체가 400으로 죽는다.
-// 소스 하나가 깨져도 나머지는 멀쩡히 보여야 한다.
+// ⚠️⚠️ [2026-11-12 사용자 제보] 넷을 전부 자동으로 돌렸더니 모델끼리 이슈가 섞였다
+// (검색어 JQL `text ~`가 모델명 숫자 하나 겹치는 **다른 프로젝트** 이슈까지 끌어왔다 — 실측:
+// GABKJ를 연결했는데 GABKH·GABJO 이슈까지 표에 보임). → **자동은 ④(프로젝트 코드, 결정론)
+// 하나뿐**이고, ①②③은 표 아래 "🔎 더 찾기" 버튼을 사람이 눌러야 돈다(CLAUDE.md "결정론
+// 먼저" 그대로 — 느슨한 검색은 사람이 트리거할 때만). 네 소스는 **따로 조회한다**(한 JQL로
+// OR 하지 않음) — 메일 스캔은 존재하지 않는 키를 주워올 수 있는데, JIRA의 `key in (...)`는
+// 그중 하나라도 없으면 전체가 400으로 죽는다. 소스 하나가 깨져도 나머지는 멀쩡히 보여야 한다.
 //
 // 🧩 [2026-11-11 2차, 사용자 요청] 연결은 **제품구분자(모델)별**이다 — `tabData.jiraLinksByUnit
 // [unitId]`. 한 간트 프로젝트에 모델이 여러 개(MVD/TPR/BTN…)면 모델마다 JIRA 프로젝트가 다를 수
@@ -38,6 +42,8 @@
 
     var _issueCache = {};   // key -> issue (상세 모달·행 갱신 공용)
     var _lastRows = [];     // 지금 표에 그려진 {key, src:[...]} 목록
+    var _byKey = {};        // 지금 merge 중인 결과(자동 + "더 찾기") — _jiraOnTabShown/_jiraPullExtraSources 공용
+    var _notes = [];        // 그 과정에서 쌓인 경고/실패 메시지
 
     // ── 제품구분자(모델) — M.C/BOM/Customer SPEC과 같은 것을 공유 ──────────
     function jiraActiveUnit() {
@@ -234,7 +240,121 @@
         window.mcSwitchUnit = fn;
     })();
 
+    // ── 네 소스 조회 함수(모듈 스코프) — 자동(프로젝트 코드)·수동 버튼("더 찾기") 공용 ──
+    async function pullKeysByTag(keys, tag) {
+        if (!keys.length) return;
+        try {
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('key in (' + keys.join(',') + ') ORDER BY updated DESC') + '&maxResults=' + keys.length);
+            if (!d || d.ok === false) { _notes.push((tag === 'mail' ? T('메일에서 찾은 키 조회 실패(존재하지 않는 키 포함 가능): ', 'Failed to look up mail-captured keys (may include nonexistent keys): ') : T('수동 키 조회 실패: ', 'Manual key lookup failed: ')) + (d && d.message)); return; }
+            (d.issues || []).forEach(function (iss) {
+                if (!_byKey[iss.key]) _byKey[iss.key] = Object.assign({ src: [] }, iss);
+                if (_byKey[iss.key].src.indexOf(tag) === -1) _byKey[iss.key].src.push(tag);
+            });
+        } catch (e) { _notes.push(String(e && e.message || e)); }
+    }
+    async function pullKeyword(keyword) {
+        if (!keyword) return;
+        try {
+            var safe = keyword.replace(/["\\]/g, '');
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('text ~ "' + safe + '*" ORDER BY updated DESC') + '&maxResults=30');
+            if (!d || d.ok === false) { _notes.push(T('검색어 조회 실패: ', 'Keyword search failed: ') + (d && d.message)); return; }
+            (d.issues || []).forEach(function (iss) {
+                if (!_byKey[iss.key]) _byKey[iss.key] = Object.assign({ src: [] }, iss);
+                if (_byKey[iss.key].src.indexOf('keyword') === -1) _byKey[iss.key].src.push('keyword');
+            });
+        } catch (e) { _notes.push(String(e && e.message || e)); }
+    }
+    async function pullProject(L) {
+        var pk = (L.projectKey || '').trim();
+        if (!pk) return;
+        try {
+            // ⚠️ 이름이 아니라 **key로만** 조회한다 — 이름엔 특수문자·따옴표가 섞여
+            //    JQL 매칭이 깨진다(위 헤더 주석, 실측 400).
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('project = ' + pk + ' ORDER BY updated DESC') + '&maxResults=50');
+            if (!d || d.ok === false) { _notes.push(T('프로젝트 조회 실패: ', 'Project lookup failed: ') + (d && d.message)); return; }
+            (d.issues || []).forEach(function (iss) {
+                if (!_byKey[iss.key]) _byKey[iss.key] = Object.assign({ src: [] }, iss);
+                if (_byKey[iss.key].src.indexOf('project') === -1) _byKey[iss.key].src.push('project');
+            });
+        } catch (e) { _notes.push(String(e && e.message || e)); }
+    }
+
+    function renderMergedTable(L) {
+        var rows = Object.keys(_byKey).map(function (k) { return _byKey[k]; });
+        renderTable(rows, _notes.join(' / '));
+        appendExtraSearchControl(L);
+    }
+
+    // ── 🔍 "더 찾기"(수동 키·검색어·메일 추정) — 사람이 눌러야만 돈다 ─────────
+    //  ⚠️⚠️ [2026-11-12 사용자 제보] 네 소스를 전부 자동으로 돌리니 키가 모델끼리 겹쳤다
+    //  (검색어 JQL `text ~`가 모델명 숫자 하나 겹치는 다른 프로젝트 이슈까지 끌어왔다 — 실측
+    //  화면에 GABKJ 프로젝트를 연결했는데 GABKH·GABJO 이슈까지 섞여 나왔다). → **결정론
+    //  (프로젝트 코드, Summary 탭 "JIRA 코드"와 같은 저장소)만 자동으로 돌리고, 나머지
+    //  (수동 키·검색어·메일 추정)는 사람이 이 버튼을 눌러야 돈다**(CLAUDE.md "결정론 먼저").
+    function extraSourcesLabel(L) {
+        var manualCount = (L.manualKeys || []).filter(function (k) { return KEY_RE.test(k); }).length;
+        var keyword = (L.keyword || '').trim();
+        var bits = [];
+        bits.push(manualCount ? T('수동 키 ' + manualCount + '개', manualCount + ' manual key(s)') : T('수동 키 없음', 'no manual keys'));
+        bits.push(T('검색어 ', 'keyword ') + (keyword ? ('"' + keyword + '"') : T('(모델명 기본값)', '(default: model name)')));
+        bits.push(T('메일에서 찾은 이슈번호', 'issue numbers captured from mail'));
+        return bits.join(' · ');
+    }
+
+    function appendExtraSearchControl(L) {
+        var box = document.getElementById('jira-table-wrap');
+        if (!box) return;
+        var html = '<div id="jira-extra-row" style="padding:8px 10px; border-top:1px solid #eee; background:#fafcfc;'
+            + ' font-size:11.5px; color:#789; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+            + '<span>🔍 ' + T('그 외 연결 방법(눌러야 돕니다): ', 'Other link methods (click to run): ') + esc(extraSourcesLabel(L)) + '</span>'
+            + '<button onclick="window._jiraPullExtraSources()"'
+            + ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
+            + ' style="padding:4px 10px; border-radius:6px; font-size:11.5px; cursor:pointer; border:none; background:#e0f5f7;'
+            + ' color:#00707d; font-weight:bold; transition:background .15s;">🔎 ' + T('더 찾기', 'Search these too') + '</button>'
+            + '<span id="jira-extra-status" style="color:#999;"></span>'
+            + '</div>';
+        box.insertAdjacentHTML('beforeend', html);
+    }
+
+    window._jiraPullExtraSources = async function () {
+        var statusEl = document.getElementById('jira-extra-status');
+        if (statusEl) statusEl.textContent = T('찾는 중...', 'Searching...');
+        var L = links();
+        var beforeCount = Object.keys(_byKey).length;
+
+        var manualKeys = (L.manualKeys || []).filter(function (k) { return KEY_RE.test(k); });
+        var validPrefixes = await validProjectPrefixes();
+        var mailKeys = mailScanKeys(validPrefixes).filter(function (k) { return manualKeys.indexOf(k) === -1; });
+        // ⚠️⚠️ [2026-11-11 사용자 제보] "키가 섞이고, JIRA 등록건이 없는데 키가 오매칭되어
+        // 있음" — 메일 스캔은 모델 구분 없이 **전체 메일**을 훑으므로(헤더 주석 ③ 참고),
+        // 모델이 여럿인 프로젝트에서는 **다른 모델의 JIRA 프로젝트 이슈까지** 전부 섞여
+        // 나왔다(실측: TPR 탭에 아무 연결도 안 했는데 사실은 TVD 쪽 이슈인 GABJQ-4 가 보임).
+        // → 모델이 둘 이상이면: ① 지금 모델에 프로젝트 코드가 있으면 **그 코드로 시작하는
+        // 키만** 남기고 ② 아직 아무 프로젝트도 등록 안 했으면 **메일 추정 자체를 안 보여준다**
+        // (어느 모델 것인지 알 길이 없는데 섞어 보여주는 것보다 "없음"이 정직하다). 모델이
+        // 하나뿐인 프로젝트는 섞일 대상이 없으므로 그대로 전체를 쓴다. 버튼으로 돌려도 이
+        // 가드는 그대로 유지한다.
+        var _units = window.getMcUnits ? window.getMcUnits() : [];
+        if (_units.length > 1) {
+            var myKey = (L.projectKey || '').trim();
+            mailKeys = myKey ? mailKeys.filter(function (k) { return k.split('-')[0] === myKey; }) : [];
+        }
+        var keyword = (L.keyword || '').trim();
+
+        await pullKeysByTag(manualKeys, 'manual');
+        await pullKeysByTag(mailKeys, 'mail');
+        await pullKeyword(keyword);
+
+        Object.keys(_byKey).forEach(function (k) { _issueCache[k] = _byKey[k]; });
+        var added = Object.keys(_byKey).length - beforeCount;
+        renderMergedTable(L);
+        var statusEl2 = document.getElementById('jira-extra-status');
+        if (statusEl2) statusEl2.textContent = '✅ ' + (added > 0 ? T(added + '건 더 찾았습니다.', 'Found ' + added + ' more.') : T('더 찾은 결과 없음.', 'Nothing more found.'));
+    };
+
     // ── 탭 진입 시마다 다시 수집한다(메일 분석·설정이 그 사이 바뀌었을 수 있다) ──
+    //  자동으로는 **프로젝트 코드만**(위 "더 찾기" 절 참고) — Summary 탭 "JIRA 코드" 입력칸과
+    //  같은 저장소를 쓰므로, 거기서 코드를 넣고 저장하면 다음 탭 진입 때 바로 보인다.
     window._jiraOnTabShown = async function () {
         window.jiraRenderUnitBar();
         var box = document.getElementById('jira-table-wrap');
@@ -251,76 +371,12 @@
         setHeaderState('<span style="color:#1f7a3d;">✅ ' + T('연결됨', 'Connected') + '</span>');
 
         var L = links();
-        var manualKeys = (L.manualKeys || []).filter(function (k) { return KEY_RE.test(k); });
-        var validPrefixes = await validProjectPrefixes();
-        var mailKeys = mailScanKeys(validPrefixes).filter(function (k) { return manualKeys.indexOf(k) === -1; });
-        // ⚠️⚠️ [2026-11-11 사용자 제보] "키가 섞이고, JIRA 등록건이 없는데 키가 오매칭되어
-        // 있음" — 메일 스캔은 모델 구분 없이 **전체 메일**을 훑으므로(헤더 주석 ③ 참고),
-        // 모델이 여럿인 프로젝트에서는 **다른 모델의 JIRA 프로젝트 이슈까지** 전부 섞여
-        // 나왔다(실측: TPR 탭에 아무 연결도 안 했는데 사실은 TVD 쪽 이슈인 GABJQ-4 가 보임).
-        // → 모델이 둘 이상이면: ① 지금 모델에 프로젝트 코드가 있으면 **그 코드로 시작하는
-        // 키만** 남기고 ② 아직 아무 프로젝트도 등록 안 했으면 **메일 추정 자체를 안 보여준다**
-        // (어느 모델 것인지 알 길이 없는데 섞어 보여주는 것보다 "없음"이 정직하다). 모델이
-        // 하나뿐인 프로젝트는 섞일 대상이 없으므로 그대로 전체를 쓴다.
-        var _units = window.getMcUnits ? window.getMcUnits() : [];
-        if (_units.length > 1) {
-            var myKey = (L.projectKey || '').trim();
-            mailKeys = myKey ? mailKeys.filter(function (k) { return k.split('-')[0] === myKey; }) : [];
-        }
-        var keyword = (L.keyword || '').trim();
+        _byKey = {};
+        _notes = [];
+        await pullProject(L);
 
-        var byKey = {};
-        var notes = [];
-
-        async function pull(keys, tag) {
-            if (!keys.length) return;
-            try {
-                var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('key in (' + keys.join(',') + ') ORDER BY updated DESC') + '&maxResults=' + keys.length);
-                if (!d || d.ok === false) { notes.push((tag === 'mail' ? T('메일에서 찾은 키 조회 실패(존재하지 않는 키 포함 가능): ', 'Failed to look up mail-captured keys (may include nonexistent keys): ') : T('수동 키 조회 실패: ', 'Manual key lookup failed: ')) + (d && d.message)); return; }
-                (d.issues || []).forEach(function (iss) {
-                    if (!byKey[iss.key]) byKey[iss.key] = Object.assign({ src: [] }, iss);
-                    if (byKey[iss.key].src.indexOf(tag) === -1) byKey[iss.key].src.push(tag);
-                });
-            } catch (e) { notes.push(String(e && e.message || e)); }
-        }
-        async function pullKeyword() {
-            if (!keyword) return;
-            try {
-                var safe = keyword.replace(/["\\]/g, '');
-                var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('text ~ "' + safe + '*" ORDER BY updated DESC') + '&maxResults=30');
-                if (!d || d.ok === false) { notes.push(T('검색어 조회 실패: ', 'Keyword search failed: ') + (d && d.message)); return; }
-                (d.issues || []).forEach(function (iss) {
-                    if (!byKey[iss.key]) byKey[iss.key] = Object.assign({ src: [] }, iss);
-                    if (byKey[iss.key].src.indexOf('keyword') === -1) byKey[iss.key].src.push('keyword');
-                });
-            } catch (e) { notes.push(String(e && e.message || e)); }
-        }
-        async function pullProject() {
-            var pk = (L.projectKey || '').trim();
-            if (!pk) return;
-            try {
-                // ⚠️ 이름이 아니라 **key로만** 조회한다 — 이름엔 특수문자·따옴표가 섞여
-                //    JQL 매칭이 깨진다(위 헤더 주석, 실측 400).
-                var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('project = ' + pk + ' ORDER BY updated DESC') + '&maxResults=50');
-                if (!d || d.ok === false) { notes.push(T('프로젝트 조회 실패: ', 'Project lookup failed: ') + (d && d.message)); return; }
-                (d.issues || []).forEach(function (iss) {
-                    if (!byKey[iss.key]) byKey[iss.key] = Object.assign({ src: [] }, iss);
-                    if (byKey[iss.key].src.indexOf('project') === -1) byKey[iss.key].src.push('project');
-                });
-            } catch (e) { notes.push(String(e && e.message || e)); }
-        }
-
-        await pull(manualKeys, 'manual');
-        await pull(mailKeys, 'mail');
-        await pullKeyword();
-        await pullProject();
-
-        Object.keys(byKey).forEach(function (k) { _issueCache[k] = byKey[k]; });
-        renderTable(Object.keys(byKey).map(function (k) { return byKey[k]; }), notes.join(' / '));
-
-        if (!manualKeys.length && !mailKeys.length && !keyword && !(L.projectKey || '').trim()) {
-            renderTable([], null);
-        }
+        Object.keys(_byKey).forEach(function (k) { _issueCache[k] = _byKey[k]; });
+        renderMergedTable(L);
     };
 
     window._jiraRefresh = function () { window._jiraOnTabShown(); };
@@ -347,7 +403,7 @@
                 + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
                 + '<div style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto; font-size:12px;">'
                 + '<div style="margin-bottom:10px; color:#777; line-height:1.5;">'
-                + T('지금 모델(위 배지)과 연결할 JIRA 이슈를 네 가지 방법으로 모읍니다 — 같이 켜 둘 수 있고, 모델마다 따로 저장됩니다.', 'Collects linked JIRA issues for the current model (badge above) four ways — all can be on at once, saved separately per model.')
+                + T('지금 모델(위 배지)과 연결할 JIRA 이슈를 네 가지 방법으로 모읍니다 — 모델마다 따로 저장됩니다. 📁 프로젝트만 탭을 열 때 자동으로 조회되고, 나머지(🔗🔍📧)는 표 아래 "🔎 더 찾기" 버튼을 눌러야 돕니다(다른 모델 이슈가 섞이는 걸 막기 위한 안전장치).', 'Collects linked JIRA issues for the current model (badge above) four ways — saved separately per model. Only 📁 project auto-runs when the tab opens; the rest (🔗🔍📧) need the "🔎 Search these too" button below the table (a safeguard against pulling in another model\'s issues).')
                 + '</div>'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">📁 ' + T('JIRA 프로젝트(코드 또는 이름 — 그 프로젝트 전체 이슈)', 'JIRA project (code or name — all its issues)') + '</label>'
                 + '<div style="display:flex; gap:6px; margin-bottom:4px;">'
@@ -362,7 +418,7 @@
                 + '<input id="jira-link-manual" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:10px;">'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">🔍 ' + T('검색어(JQL text 검색, 비우면 모델명 사용)', 'Search keyword (JQL text search; blank uses the model name)') + '</label>'
                 + '<input id="jira-link-keyword" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:6px;" placeholder="' + esc(defaultKeyword()) + '">'
-                + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 자동으로 같이 모읍니다(별도 입력 불필요) — 모델이 여럿이면 📁 프로젝트 코드를 등록해야 그 모델 것만 보입니다.', 'Issue numbers already captured from mail are collected automatically (no input needed) — with multiple models, set the 📁 project code so only this model\'s issues show.') + '</div>'
+                + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 별도 입력 없이 함께 모이지만, 표 아래 "🔎 더 찾기"를 눌러야 조회됩니다 — 모델이 여럿이면 📁 프로젝트 코드를 등록해야 그 모델 것만 보입니다.', 'Issue numbers captured from mail need no extra input, but are only fetched when you click "🔎 Search these too" below the table — with multiple models, set the 📁 project code so only this model\'s issues show.') + '</div>'
                 + '<div id="jira-link-status" style="display:none; font-size:11.5px; margin-bottom:8px; line-height:1.5;"></div>'
                 + '<div style="display:flex; justify-content:flex-end;">'
                 + '<button onclick="window._jiraSaveLinkSettings()"'
@@ -830,10 +886,20 @@
             var unit = model.unitId || '';
             var store = (window.tabData && window.tabData.jiraLinksByUnit) || {};
             var val = (store[unit] && store[unit].projectKey) || '';
+            // 📌 [2026-11-12 사용자 요청] 입력칸 옆에 🔍 찾기 버튼 — JIRA 탭 모달을 열지 않고도
+            //    여기서 바로 프로젝트 코드/이름을 검색해 넣는다(아래 _jiraFindProjectFromSummary).
             var field = LBL + '🪐 ' + T('JIRA 코드', 'JIRA code') + '</label>'
-                + '<input type="text" class="u-input" data-jira-field="projectKey"'
-                + ' title="' + esc(T('이 모델과 연결할 JIRA 프로젝트 코드 — JIRA 탭에서 찾아 저장할 수도 있습니다', 'JIRA project code linked to this model — can also be set from the JIRA tab')) + '"'
-                + ' placeholder="' + T('예: GABKJ', 'e.g. GABKJ') + '" value="' + esc(val) + '">';
+                + '<div class="jira-code-row" style="display:flex; gap:4px; min-width:0;">'
+                + '<input type="text" class="u-input" data-jira-field="projectKey" style="flex:1 1 0; min-width:0;"'
+                + ' title="' + esc(T('이 모델과 연결할 JIRA 프로젝트 코드 — 🔍로 찾아 바로 넣을 수 있습니다', 'JIRA project code linked to this model — use 🔍 to look it up')) + '"'
+                + ' placeholder="' + T('예: GABKJ', 'e.g. GABKJ') + '" value="' + esc(val) + '"'
+                + ' onkeydown="if(event.key===\'Enter\'){event.preventDefault(); window._jiraFindProjectFromSummary(this.parentElement.querySelector(\'button\'));}">'
+                + '<button type="button" onclick="window._jiraFindProjectFromSummary(this)"'
+                + ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"'
+                + ' title="' + esc(T('JIRA 프로젝트 찾기', 'Find JIRA project')) + '"'
+                + ' style="flex:0 0 auto; padding:0 9px; border-radius:5px; font-size:12px; cursor:pointer; border:none;'
+                + ' background:#e0f5f7; color:#00707d; transition:background .15s;">🔍</button>'
+                + '</div>';
             if (html.indexOf(GRID4) !== -1 && html.indexOf(PROJNAME_ANCHOR) !== -1) {
                 html = html.replace(GRID4, GRID6).replace(PROJNAME_ANCHOR, field + PROJNAME_ANCHOR);
             } else {
@@ -866,4 +932,68 @@
         fn.__jiraWrapped = true;
         window._syncProjectModelsFromDom = fn;
     })();
+
+    // ── 🔍 Summary 탭 "JIRA 코드" 칸의 찾기 버튼 — JIRA 탭 모달을 안 열어도 여기서
+    //    바로 검색해서 넣는다(사용자 요청, 2026-11-12). JIRA 연결 설정 모달의
+    //    🔍 찾기(window._jiraSearchProject)와 같은 조회(/jira/projects?q=)를 쓰되,
+    //    카드가 여러 개(모델 여럿)일 수 있어 결과 목록은 **공용 floating 박스 하나**를
+    //    버튼 위치에 맞춰 띄운다(JIRA 연결 설정의 고정 박스와 달리 카드마다 못 둔다).
+    var _summaryProjectHits = [];
+    var _summaryProjectTargetInput = null;
+
+    function summaryProjectHitsBox() {
+        var box = document.getElementById('jira-summary-project-hits');
+        if (box) return box;
+        box = document.createElement('div');
+        box.id = 'jira-summary-project-hits';
+        box.style.cssText = 'position:fixed; z-index:9500; display:none; min-width:220px; max-height:170px;'
+            + ' overflow-y:auto; border:1px solid #cfe3e5; border-radius:6px; background:#fff;'
+            + ' box-shadow:0 4px 16px rgba(0,0,0,.18); font-size:12px;';
+        document.body.appendChild(box);
+        box.addEventListener('click', function (e) {
+            var el = e.target.closest('[data-idx]');
+            if (!el || !_summaryProjectTargetInput) return;
+            var p = _summaryProjectHits[Number(el.dataset.idx)];
+            if (!p) return;
+            _summaryProjectTargetInput.value = p.key;
+            box.style.display = 'none';
+            // 고르자마자 저장소에 반영 — 탭을 벗어나지 않아도 다음 JIRA 탭 진입 때 바로 쓰인다.
+            if (window._syncProjectModelsFromDom) window._syncProjectModelsFromDom();
+            if (window._markDirty) window._markDirty();
+        });
+        document.addEventListener('click', function (e) {
+            if (box.style.display === 'none') return;
+            if (box.contains(e.target) || e.target.closest('.jira-code-row')) return;
+            box.style.display = 'none';
+        });
+        return box;
+    }
+
+    window._jiraFindProjectFromSummary = async function (btn) {
+        var row = btn && btn.closest('.jira-code-row');
+        var input = row ? row.querySelector('[data-jira-field="projectKey"]') : null;
+        if (!input) return;
+        var q = (input.value || '').trim();
+        _summaryProjectTargetInput = input;
+        var box = summaryProjectHitsBox();
+        var r = btn.getBoundingClientRect();
+        box.style.left = Math.max(4, r.right - 260) + 'px';
+        box.style.top = (r.bottom + 4) + 'px';
+        box.style.display = 'block';
+        if (!q) { box.innerHTML = '<div style="padding:8px; color:#999;">' + T('프로젝트 코드나 이름을 입력하세요.', 'Enter a project code or name.') + '</div>'; return; }
+        box.innerHTML = '<div style="padding:8px; color:#999;">' + T('찾는 중...', 'Searching...') + '</div>';
+        try {
+            var d = await fetchJson(BASE + '/jira/projects?q=' + encodeURIComponent(q));
+            if (!d || d.ok === false) { box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc((d && d.message) || '') + '</div>'; return; }
+            _summaryProjectHits = (d.projects || []).slice(0, 50);
+            if (!_summaryProjectHits.length) { box.innerHTML = '<div style="padding:8px; color:#999;">' + T('일치하는 프로젝트가 없습니다.', 'No matching project.') + '</div>'; return; }
+            box.innerHTML = _summaryProjectHits.map(function (p, i) {
+                return '<div data-idx="' + i + '" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;"'
+                    + ' onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'">'
+                    + '<b>' + esc(p.key) + '</b> — ' + esc(p.name) + '</div>';
+            }).join('');
+        } catch (e) {
+            box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
+        }
+    };
 })();
