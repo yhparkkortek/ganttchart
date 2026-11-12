@@ -1349,10 +1349,19 @@
             document.body.appendChild(box);
         }
         box.style.width = wide ? '720px' : '460px';
-        box.innerHTML = '<div id="pl-popup-head" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#e0f5f7;'
-                      + ' border-bottom:1px solid #a3d9e0; border-radius:10px 10px 0 0; font-weight:bold; color:#00707d; font-size:13.5px; flex-shrink:0;">'
+        // ⚠️ [2026-11-12 사용자 지적] 머리글 높이가 다른 모달보다 낮았다 — 앱 전체 머리글은
+        //    `padding:13px 18px`(11곳 실측, 예: notice-modal-header·cp-modal-header)인데 여긴
+        //    `10px 14px`였다. 닫기 버튼도 `--modal-icon-*` CSS 변수를 쓰는 표준 28×28 버튼이 아니라
+        //    글자만 있었다 — 둘 다 앱 표준으로 맞춘다.
+        box.innerHTML = '<div id="pl-popup-head" style="display:flex; align-items:center; gap:8px; padding:13px 18px; background:#e0f5f7;'
+                      + ' border-bottom:1px solid #a3d9e0; border-radius:10px 10px 0 0; font-weight:bold; color:#00707d; font-size:14px; flex-shrink:0;">'
                       + '<span style="flex:1;">' + title + '</span>'
-                      + '<span onclick="window.plClosePopup()" style="cursor:pointer; font-size:15px;">✕</span></div>'
+                      + '<button onclick="window.plClosePopup()"'
+                      + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text);'
+                      + ' font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"'
+                      + ' onmouseover="this.style.background=\'var(--modal-icon-hover-bg)\'; this.style.borderColor=\'#adb5bd\';"'
+                      + ' onmouseout="this.style.background=\'var(--modal-icon-bg)\'; this.style.borderColor=\'var(--modal-icon-border)\';"'
+                      + ' onmousedown="event.stopPropagation()">✕</button></div>'
                       // ⚠️ `min-height:0` 필수 — flex 항목 기본값(auto)이면 안 줄어들어 스크롤이 안 생긴다.
                       + '<div style="padding:14px 16px; font-size:12.5px; overflow-y:auto; flex:1; min-height:0;">' + html + '</div>';
         // ⚠️⚠️ 'block'이 아니라 'flex' — 박스 자체가 `display:flex`(머리글 고정용)라, 'block'으로
@@ -1364,6 +1373,29 @@
     };
     window.plClosePopup = function () { var b = document.getElementById('pl-popup'); if (b) b.style.display = 'none'; };
     window._plPopup = _popup;
+
+    // ── 팝업 안 버튼 — 역할별 한 벌(2026-11-12 사용자 요청: "팝업 안 버튼 스타일 통일") ──────
+    //    전엔 팝업마다(담당자 카드·패널 카드·문서함·SAP 메뉴·이력·상세보기…) 똑같은 역할인데도
+    //    패딩·글자크기·반경이 제각각 복붙돼 있었다(5px10px/12px vs 6px12px/12px vs 3px8px/11px 뒤섞임).
+    //    ⚠️ 배경엔 **역할색(bg/neutral/danger/success)만** 쓴다 — darkText(#00707d)를 배경으로 쓰면
+    //    테마를 바꿔도 그 버튼만 청록으로 굳는다(docs/ui-conventions.md 경고).
+    var PL_BTN_ROLE = {
+        primary: 'background:#e0f5f7; color:#00707d; border:none;',
+        neutral: 'background:#eef2f5; color:#495057; border:none;',
+        danger:  'background:#fbe4e2; color:#b1432f; border:none;',
+        success: 'background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; font-weight:bold;',
+        close:   'background:#f1f3f5; color:#495057; border:1px solid #dee2e6;'
+    };
+    /** opts: size('sm'=목록 행 안 아이콘 버튼 / 기본=팝업 하단 액션 버튼) · title · id · disabled · extraStyle(block 메뉴 등) */
+    var _plBtn = function (role, html, onclick, opts) {
+        opts = opts || {};
+        var dims = opts.size === 'sm' ? 'padding:3px 8px; border-radius:5px; font-size:11px;' : 'padding:6px 12px; border-radius:6px; font-size:12px;';
+        return '<button' + (opts.id ? ' id="' + opts.id + '"' : '')
+             + (opts.title ? ' title="' + _esc(opts.title) + '"' : '')
+             + ' onclick="' + onclick + '"'
+             + (opts.disabled ? ' disabled' : '')
+             + ' style="' + dims + (PL_BTN_ROLE[role] || PL_BTN_ROLE.primary) + ' cursor:pointer;' + (opts.extraStyle || '') + '">' + html + '</button>';
+    };
 
     // ── 8-1. 담당자 카드 ───────────────────────────────────────────────────────
     window.plOpenPersonCard = function (id, k) {
@@ -1378,9 +1410,9 @@
                  + (p ? ' <span style="color:#666;">' + _esc(p.dept || '') + ' ' + _esc(p.title || '') + '</span>'
                         + '<div style="color:#555; margin-top:3px;">' + _esc(p.email || '') + (p.mobile ? ' · ' + _esc(p.mobile) : '') + '</div>'
                       : ' <span style="color:#b1432f;">' + _t('주소록에 없음', 'not in Address book') + '</span>')
-                 + '<div style="margin-top:6px;"><button onclick="window.plFilterByOwner(\'' + k + '\',\'' + _esc(nm) + '\')"'
-                 + ' style="padding:4px 9px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:11.5px; cursor:pointer;">'
-                 + '📒 ' + _t('이 담당자 제품 ', 'Products by this owner ') + cnt + _t('건 보기', '') + '</button></div></div>';
+                 + '<div style="margin-top:6px;">' + _plBtn('primary',
+                     '📒 ' + _t('이 담당자 제품 ', 'Products by this owner ') + cnt + _t('건 보기', ''),
+                     'window.plFilterByOwner(\'' + k + '\',\'' + _esc(nm) + '\')') + '</div></div>';
         }).join('');
         _popup('👤 ' + _esc(window._currentLang === 'en' ? _colByKey[k].en : _colByKey[k].ko),
                cards || '<div style="color:#888;">' + _t('지정된 담당자가 없습니다.', 'No owner set.') + '</div>');
@@ -1419,9 +1451,9 @@
         } catch (e) { html += '<div style="color:#b1432f;">' + _t('라이브러리 조회 실패: ', 'Library lookup failed: ') + _esc(e.message) + '</div>'; }
 
         html += '<div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">'
-             + '<button onclick="window.plOpenPanelSpec(\'' + _esc(model) + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📜 ' + _t('NAS 사양서 열기', 'Open NAS spec') + '</button>'
-             + '<button onclick="window.plFilterByPanel(\'' + _esc(model) + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📒 ' + _t('이 패널 쓰는 제품 ', 'Products using this panel ') + same + _t('건 보기', '') + '</button>'
-             + '<button onclick="window.switchTab(\'elecparts\'); window.plClosePopup();" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">⚡ ' + _t('PARTS 탭으로', 'Go to PARTS') + '</button>'
+             + _plBtn('primary', '📜 ' + _t('NAS 사양서 열기', 'Open NAS spec'), 'window.plOpenPanelSpec(\'' + _esc(model) + '\')')
+             + _plBtn('primary', '📒 ' + _t('이 패널 쓰는 제품 ', 'Products using this panel ') + same + _t('건 보기', ''), 'window.plFilterByPanel(\'' + _esc(model) + '\')')
+             + _plBtn('primary', '⚡ ' + _t('PARTS 탭으로', 'Go to PARTS'), 'window.switchTab(\'elecparts\'); window.plClosePopup();')
              + '</div>';
         var b = document.getElementById('pl-panel-body');
         if (b) { b.style.color = ''; b.innerHTML = html; }
@@ -1463,9 +1495,9 @@
                 html += '<div style="color:#b1432f;">' + _t('PARTS 라이브러리에 없습니다.', 'Not found in the PARTS library.') + '</div>';
             }
         } catch (e) { html += '<div style="color:#b1432f;">' + _esc(e.message) + '</div>'; }
-        html += '<div style="margin-top:9px;"><button onclick="window.plFilterByPanel(\'' + _esc(v) + '\')"'
-             + ' style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📒 '
-             + _t('같은 값 제품 ', 'Products with same value ') + same + _t('건 보기', '') + '</button></div>';
+        html += '<div style="margin-top:9px;">' + _plBtn('primary',
+            '📒 ' + _t('같은 값 제품 ', 'Products with same value ') + same + _t('건 보기', ''),
+            'window.plFilterByPanel(\'' + _esc(v) + '\')') + '</div>';
         var b = document.getElementById('pl-part-body');
         if (b) { b.style.color = ''; b.innerHTML = html; }
     };
@@ -1475,15 +1507,14 @@
         var r = _rowById(id); if (!r) return;
         var pn = String(r.ktkPn || '').trim();
         if (!pn) { _toast(_t('KTK PN이 비어 있습니다.', 'KTK PN is empty.'), 'warning'); return; }
-        var B = 'display:block; width:100%; text-align:left; margin-bottom:6px; padding:7px 11px; background:#e0f5f7; color:#00707d;'
-              + ' border:none; border-radius:6px; font-size:12.5px; cursor:pointer;';
+        var BLOCK = ' display:block; width:100%; text-align:left; margin-bottom:6px;';
         _popup('🏭 ' + _esc(pn),
-            '<button style="' + B + '" onclick="window.plAskAi(\'' + _esc(pn) + ' 자재내역 조회해줘\')">🔍 ' + _t('SAP 자재 내역 조회', 'SAP material description') + '</button>'
-          + '<button style="' + B + '" onclick="window.plAskAi(\'' + _esc(pn) + ' 재고 조회해줘\')">📦 ' + _t('SAP 재고 조회', 'SAP stock') + '</button>'
-          + '<button style="' + B + '" onclick="window.plAskAi(\'' + _esc(pn) + ' 가격 조회해줘\')">💰 ' + _t('SAP 가격 조회', 'SAP price') + '</button>'
-          + '<button style="' + B + '" onclick="window.plAskAi(\'' + _esc(pn) + ' BOM 조회해줘\')">🧱 ' + _t('SAP BOM 조회', 'SAP BOM') + '</button>'
+            _plBtn('primary', '🔍 ' + _t('SAP 자재 내역 조회', 'SAP material description'), 'window.plAskAi(\'' + _esc(pn) + ' 자재내역 조회해줘\')', { extraStyle: BLOCK })
+          + _plBtn('primary', '📦 ' + _t('SAP 재고 조회', 'SAP stock'), 'window.plAskAi(\'' + _esc(pn) + ' 재고 조회해줘\')', { extraStyle: BLOCK })
+          + _plBtn('primary', '💰 ' + _t('SAP 가격 조회', 'SAP price'), 'window.plAskAi(\'' + _esc(pn) + ' 가격 조회해줘\')', { extraStyle: BLOCK })
+          + _plBtn('primary', '🧱 ' + _t('SAP BOM 조회', 'SAP BOM'), 'window.plAskAi(\'' + _esc(pn) + ' BOM 조회해줘\')', { extraStyle: BLOCK })
           + '<div style="border-top:1px solid #eee; margin:8px 0;"></div>'
-          + '<button style="' + B + '" onclick="window.plOpenProjectOf(\'' + id + '\')">📂 ' + _t('이 모델의 프로젝트 찾기', 'Find the project for this model') + '</button>');
+          + _plBtn('primary', '📂 ' + _t('이 모델의 프로젝트 찾기', 'Find the project for this model'), 'window.plOpenProjectOf(\'' + id + '\')', { extraStyle: BLOCK }));
     };
     /** AI 문답 창에 질문을 그대로 넣어 보낸다 — SAP 경로/권한/가드를 전부 그대로 재사용한다 */
     window.plAskAi = function (q) {
@@ -1666,15 +1697,15 @@
                      + (f.rev ? 'REV ' + _esc(f.rev) : '-') + '</span>'
                      + (isCur ? '<span title="' + _esc(_t('표의 REV와 같은 도면', 'matches the REV in the table')) + '">✅</span>' : '')
                      + '<span style="flex:1; word-break:break-all; color:#444;">' + _esc(f.name) + '</span>'
-                     + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:11px; cursor:pointer;">' + _t('열기', 'Open') + '</button>'
-                     + '<button onclick="window._dsOpenNative && window._dsOpenNative(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')" title="' + _esc(_t('NAS 원본을 연결 프로그램으로', 'Open the NAS original in its app')) + '" style="padding:3px 8px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:11px; cursor:pointer;">🖥️</button>'
+                     + _plBtn('primary', _t('열기', 'Open'), 'window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')', { size: 'sm' })
+                     + _plBtn('neutral', '🖥️', 'window._dsOpenNative && window._dsOpenNative(\'' + NAS_FOLDER + '\',\'' + _esc(f.name) + '\')', { size: 'sm', title: _t('NAS 원본을 연결 프로그램으로', 'Open the NAS original in its app') })
                      // 💾 이 파일 하나를 내 PC 로 받는다 — 열기/연결프로그램/분석과 같은 줄에 둔다(사용자 지적: 위치가 틀렸다)
-                     + '<button onclick="window.plDownloadDoc(\'' + _esc(f.name) + '\')" title="' + _esc(_t('이 파일을 내 PC에 저장', 'Save this file to my PC')) + '" style="padding:3px 8px; background:#eef7ef; color:#2b7a45; border:none; border-radius:5px; font-size:11px; cursor:pointer;">💾</button>'
+                     + _plBtn('success', '💾', 'window.plDownloadDoc(\'' + _esc(f.name) + '\')', { size: 'sm', title: _t('이 파일을 내 PC에 저장', 'Save this file to my PC') })
                      // 🔍 분석은 **AI 를 안 쓰는** 결정론 추출이라 팔레트 색을 따른다. 보라색은
                      //    AI 한도를 쓰는 "🤖 AI로 더 읽기" 전용으로 남겨 둔다(색이 곧 경고다).
                      // 📜 [2026-10-30] 도면에서 읽는 건 **REVISIONS / DISPLAY INFORMATION MATRIX** 두 표뿐이다.
                      //    옛 "30개 항목 추출"은 사용자가 원한 게 아니어서 통째로 지웠다 — 여기도 그 표로 간다.
-                     + '<button onclick="window.plOpenRevisions(\'' + id + '\',\'' + _esc(f.name) + '\')" style="padding:3px 8px; background:' + _pal().bg + '; color:' + _pal().darkText + '; border:none; border-radius:5px; font-size:11px; cursor:pointer;">📜 ' + _t('이력', 'Revisions') + '</button>'
+                     + _plBtn('primary', '📜 ' + _t('이력', 'Revisions'), 'window.plOpenRevisions(\'' + id + '\',\'' + _esc(f.name) + '\')', { size: 'sm' })
                      + '</div>';
             }).join('')
             : '<div style="color:#888; padding:10px 2px;">'
@@ -1695,10 +1726,9 @@
                  //    끌어다 놓은 파일도 같은 자리에 모인다 — 올리기 전에 무엇이 올라가는지 보이게.
                  + '<div id="pl-doc-staged" style="margin-top:8px; font-size:11.5px; color:#2b7a45; display:none;"></div>'
                  + '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">'
-                 + '<button id="pl-doc-save" onclick="window.plUploadDocs(\'' + id + '\')" disabled'
-                 + ' style="padding:5px 13px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer; opacity:.45;">⬆️ ' + _t('NAS에 올리기', 'Upload to NAS') + '</button>'
-                 + '<button onclick="window._dsOpenBrowser && window._dsOpenBrowser(\'' + NAS_FOLDER + '\')" style="padding:5px 11px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📁 ' + _t('폴더 열기', 'Open folder') + '</button>'
-                 + '<button onclick="window.plRefreshDocCache(false)" style="padding:5px 11px; background:#eef2f5; color:#495057; border:none; border-radius:5px; font-size:12px; cursor:pointer;">🔄 ' + _t('목록 새로고침', 'Refresh') + '</button>'
+                 + _plBtn('success', '⬆️ ' + _t('NAS에 올리기', 'Upload to NAS'), 'window.plUploadDocs(\'' + id + '\')', { id: 'pl-doc-save', disabled: true, extraStyle: ' opacity:.45;' })
+                 + _plBtn('primary', '📁 ' + _t('폴더 열기', 'Open folder'), 'window._dsOpenBrowser && window._dsOpenBrowser(\'' + NAS_FOLDER + '\')')
+                 + _plBtn('neutral', '🔄 ' + _t('목록 새로고침', 'Refresh'), 'window.plRefreshDocCache(false)')
                  + '</div>'
                  + '<div style="margin-top:9px; color:#888; font-size:11px; line-height:1.55;">'
                  + _esc(_t('· 파일은 이름을 바꾸지 않고 그대로 올립니다 — 앞 숫자(' + nums.join(', ') + ')로 이 행과 이어집니다.',
@@ -1738,14 +1768,24 @@
     };
     window.plClearStaged = function () { window._plStaged = []; _renderStaged(); };
 
-    /** 💾 NAS 파일 하나를 내 PC 로 — 백엔드 URL 을 그대로 내려받는다(사본이 NAS 를 건드리지 않는다) */
-    window.plDownloadDoc = function (name) {
-        if (!window._dsFileUrl) { _toast(_t('문서 저장소를 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return; }
-        var a = document.createElement('a');
-        a.href = window._dsFileUrl(NAS_FOLDER, name);
-        a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
+    /** 💾 NAS 파일 하나를 내 PC 로 — 사본이 NAS 를 건드리지 않는다.
+     *  ⚠️⚠️ [2026-11-12 사용자 신고] `_dsFileUrl` 은 **백엔드(다른 출처) 주소**라 cross-origin
+     *     anchor 는 `download` 속성을 브라우저가 무시하고 **그 주소로 페이지를 이동**시킨다 —
+     *     그래서 "저장 안 되고 사이트 나가기(이탈 확인) 동작"이 났다(이 앱은 떠날 때 저장 확인
+     *     창을 띄운다, js/07). → `_dsFileOf` 로 먼저 받아(같은 창 안의 blob) object URL 을 만들면
+     *     `download` 이 항상 먹는다(doc-store.md "받기는 `<a download>`로" 와 같은 원칙 — 단, 주소가
+     *     아니라 **받은 바이트**로 만들어야 한다). */
+    window.plDownloadDoc = async function (name) {
+        if (!window._dsFileOf) { _toast(_t('문서 저장소를 불러오지 못했습니다.', 'Document store unavailable.'), 'error'); return; }
         _toast('💾 ' + _esc(name) + _t(' 내려받는 중…', ' downloading…'), 'info');
+        try {
+            var f = await window._dsFileOf(NAS_FOLDER, name);
+            var url = URL.createObjectURL(f);
+            var a = document.createElement('a');
+            a.href = url; a.download = name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+        } catch (e) { _toast('⚠️ ' + (e && e.message ? e.message : e), 'error', 7000); }
     };
 
     window.plStageDocs = function (id) {
@@ -2346,12 +2386,11 @@
               : '')
           + '<div style="margin-top:11px; display:flex; gap:6px; align-items:center;">'
           + (revs.length
-              ? '<button onclick="window.plUseLatestRev()" style="padding:6px 12px; background:#d4f3dd; color:#2b7a45; border:1px solid #9bd8ae; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ '
-                + _t('최신 REV(', 'Use latest REV (') + _esc(revs[revs.length - 1].rev) + _t(')를 이 행에 넣기', ') for this row') + '</button>'
+              ? _plBtn('success', '✅ ' + _t('최신 REV(', 'Use latest REV (') + _esc(revs[revs.length - 1].rev) + _t(')를 이 행에 넣기', ') for this row'), 'window.plUseLatestRev()')
               : '')
-          + '<button onclick="window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(pick) + '\')" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:12px; cursor:pointer;">📜 ' + _t('도면 열기', 'Open drawing') + '</button>'
-          + '<button onclick="window.plOpenDocBox(\'' + id + '\')" style="padding:6px 12px; background:#eef2f5; color:#495057; border:none; border-radius:6px; font-size:12px; cursor:pointer;">📁 ' + _t('문서함', 'Documents') + '</button>'
-          + '<span style="margin-left:auto;"><button onclick="window.plClosePopup()" style="padding:6px 12px; background:#f1f3f5; color:#495057; border:1px solid #dee2e6; border-radius:6px; font-size:12px; cursor:pointer;">' + _t('닫기', 'Close') + '</button></span>'
+          + _plBtn('primary', '📜 ' + _t('도면 열기', 'Open drawing'), 'window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(pick) + '\')')
+          + _plBtn('neutral', '📁 ' + _t('문서함', 'Documents'), 'window.plOpenDocBox(\'' + id + '\')')
+          + '<span style="margin-left:auto;">' + _plBtn('close', _t('닫기', 'Close'), 'window.plClosePopup()') + '</span>'
           + '</div>';
         var b = document.getElementById('pl-rev-body');
         if (b) { b.style.color = ''; b.innerHTML = html; }
@@ -2392,10 +2431,10 @@
         }).join('');
         _popup('📜 ' + _esc(r.ktkPn || '-') + ' <span style="font-weight:normal; color:#555;">' + _esc(r.desc || '') + '</span>',
             '<div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">'
-          + '<button onclick="window.plOpenDocBox(\'' + id + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📎 ' + _t('문서함', 'Documents') + '</button>'
-          + '<button onclick="window.plOpenPnMenu(\'' + id + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">🏭 SAP</button>'
-          + '<button onclick="window.plDuplicateRow(\'' + id + '\')" style="padding:5px 10px; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12px; cursor:pointer;">📑 ' + _t('복제', 'Duplicate') + '</button>'
-          + '<button onclick="window.plDeleteRow(\'' + id + '\')" style="padding:5px 10px; background:#fbe4e2; color:#b1432f; border:none; border-radius:5px; font-size:12px; cursor:pointer;">🗑️ ' + _t('삭제', 'Delete') + '</button>'
+          + _plBtn('primary', '📎 ' + _t('문서함', 'Documents'), 'window.plOpenDocBox(\'' + id + '\')')
+          + _plBtn('primary', '🏭 SAP', 'window.plOpenPnMenu(\'' + id + '\')')
+          + _plBtn('primary', '📑 ' + _t('복제', 'Duplicate'), 'window.plDuplicateRow(\'' + id + '\')')
+          + _plBtn('danger', '🗑️ ' + _t('삭제', 'Delete'), 'window.plDeleteRow(\'' + id + '\')')
           + '</div>' + html, true);
     };
     window.plCloseDetail = function () { window.plClosePopup(); };
@@ -2674,11 +2713,44 @@
         return out.sort().join(',');
     };
 
+    // ⚠️⚠️ [2026-11-12 사용자 요청] "차이점을 모달에서 바로 수정" — 적용 버튼은 **값을 그대로
+    //    onclick 문자열에 넣지 않는다**(담당자·사양 값엔 따옴표·쉼표·슬래시가 섞여 있어 그대로
+    //    박으면 깨지거나 주입 위험이 있다). 대신 번호(`data-check-id`)만 버튼에 싣고, 진짜 값은
+    //    `window._plCheckPending` 맵에 **메모리로만** 들고 있다가 위임 클릭에서 찾아 쓴다.
+    window._plCheckPending = window._plCheckPending || {};
+    window._plCheckIdSeq = window._plCheckIdSeq || 0;
+    if (!window._plCheckApplyBound) {
+        window._plCheckApplyBound = true;
+        // ⚠️⚠️ [2026-11-12 실측] `_popup()`의 `box.onclick = stopPropagation`이 버블 단계에서
+        //    이벤트를 막아, document 의 **버블(기본) 리스너는 절대 안 불린다**(실측으로 확인 —
+        //    버튼을 눌러도 호출이 0회). **캡처 단계**(세 번째 인자 true)로 붙여야 그 전에 먼저 본다.
+        document.addEventListener('click', function (e) {
+            var btn = e.target && e.target.closest ? e.target.closest('.pl-check-apply') : null;
+            if (!btn) return;
+            var item = window._plCheckPending[btn.getAttribute('data-check-id')];
+            if (!item) return;
+            window._plCheckApplyField(item.rowId, item.plKey, item.newVal, item.fileName);
+        }, true);
+    }
+    /** 차이 한 줄을 Project list 쪽에 적용 — 프로젝트 파일 값을 그대로 그 행의 칸에 써 넣는다. */
+    window._plCheckApplyField = function (rowId, plKey, newVal, fileName) {
+        var r = _rowById(rowId); if (!r) return;
+        var before = r[plKey] == null ? '' : String(r[plKey]);
+        if (before === newVal) return;
+        r[plKey] = newVal;
+        _plPushHistory(r, plKey, before, newVal);
+        _persist(); window.plRender();
+        var col = _colByKey[plKey];
+        _toast('✅ ' + _t('적용했습니다: ', 'Applied: ') + (col ? (window._currentLang === 'en' ? col.en : col.ko) : plKey) + ' → ' + newVal, 'success', 4000);
+        window.plCheckAgainstProjects(fileName); // 모달을 새 값 기준으로 다시 그린다(그 줄은 이제 같아져 사라진다)
+    };
+
     window.plCheckAgainstProjects = async function (fileNameOverride) {
         if (typeof window._msLoadProjectIndex !== 'function' || !window.nasAppFile || !window.nasAppFile.get) {
             _toast('⚠️ ' + _t('프로젝트 파일 조회 기능을 불러오지 못했습니다.', 'Could not load project-file lookup.'), 'error');
             return;
         }
+        window._plCheckPending = {}; // 다시 그릴 때마다 비운다 — 번호가 옛 값을 가리키지 않게
         var team = _team();
         var idx;
         try { idx = await window._msLoadProjectIndex(); } catch (e) { idx = []; }
@@ -2738,7 +2810,10 @@
         for (var i = 0; i < rows.length; i++) {
             var r = rows[i];
             var diffs = [];
-            var cmp = function (plVal, projVal, label, sameFn) {
+            // ⚠️ [2026-11-12 사용자 요청] "모달에서 바로 수정" — 어느 열(plKey)의 차이인지도 같이
+            //    담아 둔다. 담당자 합산 비교(예: 회로=PM+HW)는 **합친 값**을 그대로 적용하면 뜻이
+            //    바뀌므로 적용 버튼을 안 둔다(plKey 를 안 주면 적용 버튼이 안 생긴다).
+            var cmp = function (plVal, projVal, label, sameFn, plKey) {
                 plVal = String(plVal == null ? '' : plVal).trim();
                 projVal = String(projVal == null ? '' : projVal).trim();
                 if (!plVal || !projVal) return;           // 둘 중 하나가 비어 있으면 "다르다"고 안 한다 — 미입력일 뿐
@@ -2746,33 +2821,35 @@
                 //  그런 표시일 땐 글자가 달라도 다른 값으로 치지 않는다(둘 다 실제 값이 없다는 뜻).
                 if (_PL_CHECK_BLANK_RE.test(plVal) && _PL_CHECK_BLANK_RE.test(projVal)) return;
                 if (sameFn ? sameFn(plVal, projVal) : _plCheckNorm(plVal) === _plCheckNorm(projVal)) return;
-                diffs.push({ label: label, pl: plVal, proj: projVal });
+                diffs.push({ label: label, pl: plVal, proj: projVal, plKey: plKey });
             };
             // CUSTOMER — 파일은 "고객사>프로젝트명" 복합값일 수 있다(예: "LNW>OBSIDIAN27_DB").
-            //  Project list 의 "LNW"가 그 안에 들어 있으면 같은 값이지 다른 값이 아니다.
+            //  Project list 의 "LNW"가 그 안에 들어 있으면 같은 값이지 다른 값이 아니다. 복합값을
+            //  그대로 적용하면 틀린 값이 되므로 적용 버튼은 안 둔다(plKey 생략).
             cmp(r.customer, pm.고객사, _t('CUSTOMER', 'CUSTOMER'), function (a, b) {
                 return window._plNameHit(a, b) || window._plNameHit(b, a);
             });
             // 담당자 — 쉼표로 여러 명을 적는데 **순서가 사람마다 다르다**(실측: "A,B,C" vs "B,A,C"
             //  같은 세 명). 순서가 아니라 **누가 있나**로 비교한다.
-            // 🔧 [2026-11-12] "회로담당(PM)"은 PM(프로젝트담당자)+HW담당자를 합친 값과 비교한다.
-            cmp(r.ownerHw, _plCheckMergeNames(pm.프로젝트담당자, pm.HW담당자), _t('회로담당(PM)', 'HW owner (PM)'), _plCheckSameNames);
-            cmp(r.ownerFw, pm.FW담당자, _t('펌웨어담당', 'FW owner'), _plCheckSameNames);
-            cmp(r.ownerMech, pm.기구담당자, _t('기구담당', 'Mech owner'), _plCheckSameNames);
-            cmp(r.ownerTouch, pm.TSP담당자, _t('터치담당', 'Touch owner'), _plCheckSameNames);
+            // 🔧 [2026-11-12] "회로담당(PM)"은 PM(프로젝트담당자)+HW담당자를 합친 값과 비교한다 —
+            //  적용 버튼은 **합친 값 그대로** 넣는다(그게 이 칸이 뜻하는 값이다).
+            cmp(r.ownerHw, _plCheckMergeNames(pm.프로젝트담당자, pm.HW담당자), _t('회로담당(PM)', 'HW owner (PM)'), _plCheckSameNames, 'ownerHw');
+            cmp(r.ownerFw, pm.FW담당자, _t('펌웨어담당', 'FW owner'), _plCheckSameNames, 'ownerFw');
+            cmp(r.ownerMech, pm.기구담당자, _t('기구담당', 'Mech owner'), _plCheckSameNames, 'ownerMech');
+            cmp(r.ownerTouch, pm.TSP담당자, _t('터치담당', 'Touch owner'), _plCheckSameNames, 'ownerTouch');
             // Customer SPEC — 실측 TYPE 과 정확히 같은 항목만(PL_CHECK_SPEC_FIELDS).
             PL_CHECK_SPEC_FIELDS.forEach(function (f) {
                 var val = _plCheckSpecValue(bs, f.specType);
                 var col = _colByKey[f.plKey];
-                if (val) cmp(r[f.plKey], val, _t(col ? col.ko : f.plKey, col ? col.en : f.plKey) + ' (' + f.specType + ')');
+                if (val) cmp(r[f.plKey], val, _t(col ? col.ko : f.plKey, col ? col.en : f.plKey) + ' (' + f.specType + ')', null, f.plKey);
             });
             // Color coordinate(x/y) — 한 항목에 x/y 가 같이 들어 있어 쪼개야 한다(docs/project-list.md 경고).
             var coord = _plCheckSpecValue(bs, 'Color coordinate(x/y)');
             if (coord) {
                 var cParts = coord.split('/').map(function (s) { return s.trim(); });
                 if (cParts.length === 2) {
-                    cmp(r.cieX, cParts[0], 'x (Color coordinate(x/y))');
-                    cmp(r.cieY, cParts[1], 'y (Color coordinate(x/y))');
+                    cmp(r.cieX, cParts[0], 'x (Color coordinate(x/y))', null, 'cieX');
+                    cmp(r.cieY, cParts[1], 'y (Color coordinate(x/y))', null, 'cieY');
                 }
             }
             if (diffs.length) mism.push({ row: r, diffs: diffs });
@@ -2785,18 +2862,30 @@
             body += '<div style="color:#2e7d32; padding:10px 0;">✅ ' + _t('비교한 ', 'Compared ') + rows.length + _t('건 중 다른 값이 없습니다.', ' rows — no differences found.') + '</div>';
         } else {
             body += '<table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:11.5px;">'
-                 + '<colgroup><col style="width:42px"><col style="width:190px"><col><col></colgroup>'
+                 + '<colgroup><col style="width:38px"><col style="width:170px"><col><col><col style="width:56px"></colgroup>'
                  + '<tr style="background:#f1f6f7;"><th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">No</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">Project list</th>'
-                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th></tr>'
+                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th>'
+                 + '<th style="padding:5px 6px; border-bottom:1px solid #d7e4e6;"></th></tr>'
                  + mism.map(function (m) {
                      return m.diffs.map(function (df, di) {
+                         var applyCell;
+                         if (df.plKey) {
+                             var cid = 'c' + (++window._plCheckIdSeq);
+                             window._plCheckPending[cid] = { rowId: m.row._id, plKey: df.plKey, newVal: df.proj, fileName: target.file_name };
+                             applyCell = '<td style="padding:5px 6px; text-align:center;"><button class="pl-check-apply" data-check-id="' + cid + '"'
+                                       + ' title="' + _esc(_t('이 값을 Project list 에 적용', 'Apply this value to Project list')) + '"'
+                                       + ' style="padding:3px 8px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.primary + ' cursor:pointer;">➡️ ' + _t('적용', 'Apply') + '</button></td>';
+                         } else {
+                             applyCell = '<td></td>';
+                         }
                          return '<tr style="border-bottom:1px solid #eef3f4;">'
                               + (di === 0 ? '<td style="padding:5px 6px; cursor:pointer; color:#00707d; text-decoration:underline; word-break:break-all;" onclick="window.plClosePopup(); window.plOpenDetail(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>' : '')
                               + '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.label) + '</td>'
                               + '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.pl) + '</td>'
-                              + '<td style="padding:5px 6px; color:#b1432f; word-break:break-word;">' + _esc(df.proj) + '</td></tr>';
+                              + '<td style="padding:5px 6px; color:#b1432f; word-break:break-word;">' + _esc(df.proj) + '</td>'
+                              + applyCell + '</tr>';
                      }).join('');
                  }).join('')
                  + '</table>'
