@@ -278,6 +278,7 @@
                 + ' background:#eef6f7; display:flex; align-items:center; gap:10px; font-size:12px;"></div></div>';
             document.body.appendChild(ov);
             if (window._makeDraggable) { try { window._makeDraggable('respick-box', 'respick-head'); } catch (e) { /* 〃 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('respick-overlay'); } catch (e) { /* 〃 */ } }
             // 칸 누르기는 **위임**으로 받는다 — 줄이 수백 개라 칸마다 달면 느리다.
             document.getElementById('respick-body').addEventListener('change', function (e) {
                 var el = e.target;
@@ -290,7 +291,7 @@
             });
         }
         ov.style.display = 'flex';
-        if (window.bringModalToFront) { try { window.bringModalToFront('respick-box'); } catch (e) { /* 〃 */ } }
+        if (window.bringModalToFront) { try { window.bringModalToFront('respick-overlay'); } catch (e) { /* 〃 */ } }
         _filter = '';
         // 고른 게 있으면 **접힌 채로** 연다 — 그게 지금 이 프로젝트의 답이다(Customer SPEC 과 같은 규칙).
         // 아무것도 안 골랐으면 접어 봐야 빈 화면이라 펼쳐서 연다.
@@ -403,7 +404,7 @@
             + _esc(_t('전부 해제', 'Clear all')) + '</a>'
             + '<span id="respick-count" style="margin-left:auto; font-weight:bold; color:#00707d;"></span>'
             + '<button onclick="window.resClosePicker()" style="padding:5px 14px; font-size:12px; cursor:pointer;'
-            + ' border:none; background:#00707d; color:#fff; border-radius:5px; font-weight:bold;">'
+            + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">'
             + _esc(_t('닫기', 'Close')) + '</button>';
 
         _paintRows(); _paintFoot(); _paintToggleBtn();

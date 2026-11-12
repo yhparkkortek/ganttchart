@@ -2429,6 +2429,7 @@
             wrap.id = 'daily-roster-modal';
             wrap.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9450; pointer-events:none; background:none;';
             document.body.appendChild(wrap);
+            if (window._bindClickToFront) window._bindClickToFront('daily-roster-modal');
         }
         // 🐞 보고 모달과 **같은 버그** — 닫기가 `display:none` 으로 두고 가므로 열 때마다 켠다.
         wrap.style.display = 'flex';
@@ -2485,7 +2486,7 @@
  '</div>' +
  '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; gap:8px; justify-content:flex-end;">' +
    '<button onclick="document.getElementById(\'daily-roster-modal\').style.display=\'none\'" style="padding:6px 14px; border:1px solid #ccc; background:#fff; color:#555; border-radius:6px; font-size:12.5px; cursor:pointer;">' + esc(T('닫기', 'Close')) + '</button>' +
-   '<button onclick="window.dailySaveRoster()" style="padding:6px 20px; border:none; background:#19c3d6; color:#fff; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
+   '<button onclick="window.dailySaveRoster()" style="padding:6px 20px; border:none; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ ' + esc(T('저장', 'Save')) + '</button>' +
  '</div></div>';
         wrap.style.display = 'flex';
         if (window._makeDraggable) window._makeDraggable('daily-roster-box', 'daily-roster-drag');

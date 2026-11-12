@@ -613,11 +613,6 @@
         window._docState.chkOnly = !window._docState.chkOnly;
         window._docRender();
     };
-    /** 🙈 [2026-11-12 요청] 점검요청 '해당없음' 항목 접기 ↔ 펴기 (기본 접힘, Resolution 묶음은 예외) */
-    window._docToggleHideNA = function () {
-        window._docState.hideNA = (window._docState.hideNA === false) ? true : false;
-        window._docRender();
-    };
 
     // ── 📦 회차 넘기기 (M.C Table·BOM 의 제품구분자 바와 **같은 장치**) ───
     //   ⚠️ 새로 디자인하지 않는다 — 삼각형 ◀ ▶ 로 앞뒤 회차를 넘기고, 가운데 버튼은 누를 때마다
@@ -860,8 +855,8 @@
                 + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">◀</button>'
                 + '<button class="unit-cycle-btn" onclick="window._docRoundGo(1)" title="'
                 + _esc(_t('누를 때마다 다음 회차로 — 회차마다 문서가 따로입니다', 'Next round')) + '"'
-                + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer;'
-                + ' font-size:12px; font-weight:bold; background:#00707d; color:#fff;">📦 ' + _esc(st.round || '-') + '</button>'
+                + ' style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer;'
+                + ' font-size:12px; font-weight:bold;">📦 ' + _esc(st.round || '-') + '</button>'
                 + '<button onclick="window._docRoundGo(1)" title="' + _esc(_t('다음 회차', 'Next')) + '"'
                 + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">▶</button>'
                 + '<span style="font-size:11px; color:#868e96;">' + ((ri < 0 ? 0 : ri + 1) + '/' + rounds.length) + '</span>'
@@ -959,7 +954,6 @@
                 //    해상도 팝업·Customer SPEC 의 `🔽 펼치기` 와 같은 뜻이다(새로 디자인하지 않는다).
                 //    ⚠️ 167항목을 다 펼쳐 두면 "내가 뭘 요청했는지" 가 안 보인다.
                 var chkOnly = !!window._docState.chkOnly;
-                var hideNA = window._docState.hideNA !== false;
                 h += '</table><div class="doc-noprint" style="margin:2px 0 8px;">'
                    + '<button onclick="window._docToggleChkOnly()" style="padding:4px 10px; font-size:11.5px;'
                    + ' cursor:pointer; border:1px solid #a3d9e0; border-radius:5px; font-weight:bold;'
@@ -968,18 +962,7 @@
                               : '🔼 ' + _esc(_t('점검요청만', 'Requested only'))) + '</button>'
                    + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
                    + _esc(_t('개발담당자 칸에 ‘점검요청’ 을 켜 둔 내역만 보여 줍니다.',
-                             'Only items you asked to be checked.')) + '</span>'
-                   // 🙈 [2026-11-12 요청] '해당없음' 항목은 기본으로 접어 둔다 — 167항목 중 안 쓰는
-                   //    항목까지 매번 다 보이면 "뭘 봐야 하는지" 가 안 보인다. Resolution 묶음은
-                   //    위 '해상도 고르기' 팝업이 이미 걸러 주므로 **여기서는 손대지 않는다**(사용자 지시).
-                   + '<button onclick="window._docToggleHideNA()" style="padding:4px 10px; font-size:11.5px;'
-                   + ' margin-left:8px; cursor:pointer; border:1px solid #a3d9e0; border-radius:5px; font-weight:bold;'
-                   + ' background:' + (hideNA ? '#e0f5f7' : '#00707d') + '; color:' + (hideNA ? '#00707d' : '#fff') + ';">'
-                   + (hideNA ? '🔽 ' + _esc(_t('해당없음도 보기', 'Show N/A'))
-                             : '🔼 ' + _esc(_t('해당없음 접기', 'Hide N/A'))) + '</button>'
-                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
-                   + _esc(_t('‘해당없음’ 으로 선택한 항목은 기본으로 접어 둡니다(Resolution 제외).',
-                             'Items marked N/A are folded by default (except Resolution).')) + '</span></div>';
+                             'Only items you asked to be checked.')) + '</span></div>';
                 sheets.forEach(function (sh) {
                     var items = _sheetItems(sh, form.id);
                     if (chkOnly) {
@@ -988,18 +971,6 @@
                         });
                         // 요청한 게 하나도 없는 장은 **제목째** 접는다(빈 표만 남으면 더 헷갈린다)
                         if (!items.length) return;
-                    }
-                    // 🙈 [2026-11-12 요청] '해당없음' 항목 접기 — chkOnly 가 켜져 있으면 이미 'O' 만
-                    //    남았으므로 다시 거를 필요가 없다(해당없음이 섞여 있을 수 없다).
-                    var naCount = 0;
-                    if (hideNA && !chkOnly) {
-                        items = items.filter(function (it) {
-                            if (RES_GROUPS.indexOf(it.g) >= 0) return true;
-                            if (_docData(form.id).fields['chk|' + sh.key + '|' + it.id + '|점검요청'] === '해당없음') {
-                                naCount++; return false;
-                            }
-                            return true;
-                        });
                     }
                     h += '<div class="doc-sec">' + _esc(sh.key) + '</div>';
                     h += '<table class="doc-t" style="table-layout:fixed;">'
@@ -1020,9 +991,7 @@
                     }
                     if (!items.length) {
                         h += '<tr><td colspan="5" style="color:#b1432f;">'
-                           + (naCount ? _esc(_t('이 장은 전부 ‘해당없음’ 으로 접혀 있습니다.', 'All items are N/A (hidden).'))
-                                      : _esc(_t('이 장에 점검할 항목이 없습니다.', 'No items.')))
-                           + '</td></tr>';
+                           + _esc(_t('이 장에 점검할 항목이 없습니다.', 'No items.')) + '</td></tr>';
                     }
                     items.forEach(function (it, n) {
                         var base = 'chk|' + sh.key + '|' + it.id + '|';
@@ -1079,12 +1048,6 @@
                                                         'Reviewer comment — write freely')) + '" style="font-size:11px;"></td></tr>';
                     });
                     h += '</table>';
-                    if (naCount) {
-                        h += '<div class="doc-noprint" style="margin:2px 0 8px; font-size:11px; color:#868e96;">🙈 '
-                           + _esc(_t(naCount + '건은 ‘해당없음’ 으로 접혀 있습니다.', naCount + ' item(s) hidden (N/A).'))
-                           + ' <a href="#" onclick="window._docToggleHideNA();return false;"'
-                           + ' style="color:#1971c2;">' + _esc(_t('펴기', 'show')) + '</a></div>';
-                    }
                     if ((sh.items || []).some(function (x) { return RES_GROUPS.indexOf(x.g) >= 0; })) {
                         h += '<div class="doc-noprint" style="margin:2px 0 8px; font-size:11px; color:#868e96;">🖥 '
                            + _esc(_t('이 장의 항목은 위 [# 지원 해상도]에서 고른 것만 나옵니다.',
@@ -1503,8 +1466,10 @@
                 + '<div id="docgw-body" style="flex:1; min-height:0; overflow-y:auto; padding:10px 12px;"></div></div>';
             document.body.appendChild(ov);
             if (window._makeDraggable) { try { window._makeDraggable('docgw-box', 'docgw-head'); } catch (e) { /* 〃 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('docgw-overlay'); } catch (e) { /* 〃 */ } }
         }
         ov.style.display = 'flex';
+        if (window.bringModalToFront) { try { window.bringModalToFront('docgw-overlay'); } catch (e) { /* 〃 */ } }
         document.getElementById('docgw-title').textContent =
             '🔎 ' + _t('샘플/시제품 의뢰서', 'Sample request docs')
             + (p.keyword ? ' — "' + p.keyword + '"' : '') + ' (' + p.docs.length + _t('건', '') + ')';
@@ -1696,8 +1661,10 @@
                 + _esc(_t('이대로 채우기', 'Apply')) + '</button></div></div>';
             document.body.appendChild(ov);
             if (window._makeDraggable) { try { window._makeDraggable('docimp-box', 'docimp-head'); } catch (e) { /* 〃 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('docimp-overlay'); } catch (e) { /* 〃 */ } }
         }
         ov.style.display = 'flex';
+        if (window.bringModalToFront) { try { window.bringModalToFront('docimp-overlay'); } catch (e) { /* 〃 */ } }
         document.getElementById('docimp-title').textContent =
             '📂 ' + _t('불러오기 — ', 'Import — ') + p.file + ' (' + p.hits.length + _t('칸', '') + ')';
         var h = '<div style="margin-bottom:8px; font-size:11.5px; color:#868e96;">'

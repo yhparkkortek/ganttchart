@@ -441,7 +441,7 @@
         bar.style.display = 'flex';
         bar.innerHTML = '<button class="unit-cycle-btn" onclick="window.jiraCycleUnit()" title="'
             + esc(T('클릭할 때마다 다음 모델로 전환', 'Click to switch to the next model')) + '"'
-            + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#00707d; color:#fff;">'
+            + ' style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold;">'
             + esc(cur) + '</button>';
     };
 
@@ -635,7 +635,7 @@
                 + '<div id="jira-link-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
                 + ' cursor:move; display:flex; align-items:center; gap:8px;">'
                 + '<strong style="font-size:14px;">⚙️ ' + T('JIRA 연결 설정', 'JIRA link settings') + '</strong>'
-                + '<span id="jira-link-unit-badge" style="font-size:11px; padding:1px 8px; border-radius:10px; background:#00707d; color:#fff; font-weight:bold;"></span>'
+                + '<span id="jira-link-unit-badge" style="font-size:11px; padding:1px 8px; border-radius:10px; background:#e0f5f7; color:#00707d; font-weight:bold;"></span>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="document.getElementById(\'jira-link-modal\').style.display=\'none\'"'
                 + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
@@ -1152,7 +1152,7 @@
                 + '<div id="jira-create-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
                 + ' cursor:move; display:flex; align-items:center; gap:8px;">'
                 + '<strong style="font-size:14px;">🆕 ' + T('새 이슈', 'New issue') + '</strong>'
-                + '<span id="jira-create-unit-badge" style="font-size:11px; padding:1px 8px; border-radius:10px; background:#00707d; color:#fff; font-weight:bold;"></span>'
+                + '<span id="jira-create-unit-badge" style="font-size:11px; padding:1px 8px; border-radius:10px; background:#e0f5f7; color:#00707d; font-weight:bold;"></span>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="document.getElementById(\'jira-create-modal\').style.display=\'none\'"'
                 + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'

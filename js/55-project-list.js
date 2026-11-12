@@ -1403,6 +1403,7 @@
                               + ' max-height:82vh; overflow:hidden; display:flex; flex-direction:column;';
             box.onclick = function (e) { e.stopPropagation(); };
             document.body.appendChild(box);
+            if (window._bindClickToFront) { try { window._bindClickToFront('pl-popup'); } catch (e) { /* 〃 */ } }
         }
         box.style.width = wide ? '720px' : '460px';
         // ⚠️ [2026-11-12 사용자 지적] 머리글 높이가 다른 모달보다 낮았다 — 앱 전체 머리글은
@@ -1425,6 +1426,7 @@
         //    통째로 자란다) 머리글 고정이 도로 안 먹는다.
         box.style.display = 'flex';
         if (window._makeDraggable) { try { window._makeDraggable('pl-popup', 'pl-popup-head'); } catch (e) { /* 드래그 실패는 보기를 막지 않는다 */ } }
+        if (window.bringModalToFront) { try { window.bringModalToFront('pl-popup'); } catch (e) { /* 〃 */ } }
         return box;
     };
     window.plClosePopup = function () { var b = document.getElementById('pl-popup'); if (b) b.style.display = 'none'; };
