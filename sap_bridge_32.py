@@ -4744,6 +4744,15 @@ def _sap_status_text(session):
         return ''
 
 
+def _sap_status_type(session):
+    """상태바 메시지 종류(SAP GUI `sbar.MessageType`) — 'E'/'A'=오류(진짜 막힘),
+    'W'=주의(엔터로 넘어갈 수 있음), 'I'/'S'=정보/성공. 못 읽으면 빈 문자열."""
+    try:
+        return (session.findById('wnd[0]/sbar').MessageType or '').strip()
+    except Exception:
+        return ''
+
+
 def _sap_open_popups(session, max_windows=4):
     """지금 열려 있는 팝업(wnd[1] 이상)을 [(인덱스, 제목)] 로 돌려준다."""
     out = []
@@ -4997,6 +5006,23 @@ def _mb21_fill_texts_and_save(session, items, fallback_text=None, purpose=None):
             return None, f'SAP 화면을 읽지 못했습니다: {e}'
         fld = _find_by_id_substring(wnd, 'txtRESB-SGTXT')
         if fld is None:
+            # 🆕 [2026-11-12 사용자 제보] "자재 121196는(은) 플랜트 1000에서 상태 관리자재입니다"
+            #    같은 **주의**급 상태바 메시지(예: 자재 상태 안내)는 텍스트 칸도 안 열고 예약번호도
+            #    안 주면서 그 화면에 그대로 머문다 — 사람은 엔터로 그 메시지를 넘기고 저장을 다시
+            #    누른다. 예전엔 이 경우를 "더 보낼 게 없다"로 오판해 바로 실패 처리했는데, 그 과정의
+            #    `_mb21_read_last_rsnum` 가 MB23으로 **화면을 옮겨버려** 실패 보고에 찍히는 "화면"이
+            #    실제 멈춘 자리(MB21)가 아니라 그 부작용(MB23)이 되는 문제도 같이 있었다.
+            #    → 진짜 오류('E'/'A')가 아니면 **엔터로 넘기고 다음 라운드에서 저장을 다시 시도**한다
+            #    (화면을 옮기는 MB23 조회는 거치지 않는다). 같은 메시지가 계속 반복되면
+            #    `max_rounds` 상한에 걸려 아래 "N회 시도했지만" 실패로 정직하게 끝난다.
+            sbar_type = _sap_status_type(session)
+            if last_sbar and sbar_type not in ('E', 'A', ''):
+                try:
+                    wnd.sendVKey(0)
+                    time.sleep(0.6)
+                    continue
+                except Exception:
+                    pass
             # 채울 것도 없고 되묻지도 않는다 = 더 보낼 게 없다. 저장이 이미 끝났을 수 있으니
             # 예약번호를 한 번 더 회수해 본다(화면번호가 500이 아니어도 완료 화면일 수 있다).
             got = _mb21_read_last_rsnum(session)
