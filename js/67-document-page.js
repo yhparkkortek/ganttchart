@@ -995,7 +995,7 @@
                     if (hideNA && !chkOnly) {
                         items = items.filter(function (it) {
                             if (RES_GROUPS.indexOf(it.g) >= 0) return true;
-                            if (_docData(form.id).fields['chk|' + sh.key + '|' + it.id + '|점검요청'] === '해당없음') {
+                            if (_docData(form.id).fields['chk|' + sh.key + '|' + it.id + '|해당없음'] === 'O') {
                                 naCount++; return false;
                             }
                             return true;
