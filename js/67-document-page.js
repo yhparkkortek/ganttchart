@@ -910,18 +910,48 @@
         if (btn) { btn.disabled = true; btn.textContent = _t('올리는 중…', 'uploading…'); }
         var ctx = _ctx(), folder = _attFolder(ctx, _formById(p.formId));
         var roundSafe = String(window._docState.round || '').replace(/[\\/:*?"<>|]/g, '-');
+
+        // ── 올릴 파일 목록(바코드별 report+log)을 먼저 만든다 ──────────────────
+        var uploads = []; // { pIdx, kind:'report'|'log', name, blob }
+        picked.forEach(function (it, pIdx) {
+            var reportName = roundSafe + '_' + (it.reportFileName || (it.barcode + '_Final_Report.txt'));
+            uploads.push({ pIdx: pIdx, kind: 'report', name: reportName, blob: new Blob([it.reportText || ''], { type: 'text/plain' }) });
+            if (it.logFileName) {
+                var logName = roundSafe + '_' + it.logFileName;
+                uploads.push({ pIdx: pIdx, kind: 'log', name: logName, blob: new Blob([it.logText || ''], { type: 'text/plain' }) });
+            }
+        });
+        // ── 1차: 안 겹치는 파일은 그대로 올린다 · 겹치는 파일은 묻지 않고 모아만 둔다
+        //    (파일마다 confirm 을 띄우면 샘플 16개×2 파일 = 32번 뜬다, 2026-11-12 신고) ──
+        var up1 = {}; // key = pIdx+'|'+kind → {ok,name}
+        var conflicts = [];
+        for (var u = 0; u < uploads.length; u++) {
+            var upl = uploads[u];
+            var r = await window._dgUploadBlob(folder, upl.name, upl.blob, { forceOverwrite: false });
+            if (r.ok) up1[upl.pIdx + '|' + upl.kind] = r;
+            else if (r.exists) conflicts.push(upl);
+        }
+        // ── 2차: 겹친 파일이 있으면 **전체를 한 번만** 묻고, 좋다면 전부 덮어쓴다 ──
+        if (conflicts.length) {
+            var ovwAll = confirm(_t('NAS 에 같은 이름의 파일이 이미 ' + conflicts.length + '개 있습니다.\n\n'
+                                    + '전부 덮어쓸까요? (되돌릴 수 없습니다 — 팀 공유 폴더입니다)',
+                                    conflicts.length + ' file(s) already exist on NAS.\n\nOverwrite all? (cannot be undone — shared team folder)'));
+            for (var c = 0; c < conflicts.length; c++) {
+                var cu = conflicts[c];
+                if (!ovwAll) continue;
+                var r2 = await window._dgUploadBlob(folder, cu.name, cu.blob, { forceOverwrite: true });
+                if (r2.ok) up1[cu.pIdx + '|' + cu.kind] = r2;
+            }
+        }
+
         var okCount = 0;
         for (var i = 0; i < picked.length; i++) {
             var it = picked[i];
             var files = [];
-            var reportName = roundSafe + '_' + (it.reportFileName || (it.barcode + '_Final_Report.txt'));
-            var r1 = await window._dgUploadBlob(folder, reportName, new Blob([it.reportText || ''], { type: 'text/plain' }));
-            if (r1.ok) files.push({ name: r1.name, folder: folder, kind: 'report' });
-            if (it.logFileName) {
-                var logName = roundSafe + '_' + it.logFileName;
-                var r2 = await window._dgUploadBlob(folder, logName, new Blob([it.logText || ''], { type: 'text/plain' }));
-                if (r2.ok) files.push({ name: r2.name, folder: folder, kind: 'log' });
-            }
+            var rr = up1[i + '|report'];
+            if (rr && rr.ok) files.push({ name: rr.name, folder: folder, kind: 'report' });
+            var rl = up1[i + '|log'];
+            if (rl && rl.ok) files.push({ name: rl.name, folder: folder, kind: 'log' });
             d.opticalLogs.push({
                 barcode: it.barcode, model: it.model, startTime: it.startTime, endTime: it.endTime,
                 targetX: it.targetX, targetY: it.targetY, nativeX: it.nativeX, nativeY: it.nativeY,
@@ -989,6 +1019,43 @@
         return { area: area, pct: Math.round((area / _NTSC53_AREA) * 10000) / 100 };
     };
     window._opticalGamut = _opticalGamut;
+    // ── 🔬🔬 [2026-11-12 3차] Uniformity/Gamut PASS·FAIL — Customer SPEC 최소 기준과 대조 ──
+    //  Customer SPEC(`tabData.briefSpec`, 지금 모델을 가리키는 별칭 — js/43)의 TYPE 은 **지어내지
+    //  않는다**: js/55 `PL_CHECK_SPEC_FIELDS` 가 실측해 둔 그 문자열('Uniformity(%)'/'Color Gamut')
+    //  과 정확히 같은 이름만 찾는다. 값은 "80% Min"처럼 자유 서술형이라 **첫 숫자를 하한**으로 본다
+    //  (이 두 스펙은 관례상 항상 '이상이면 합격'이라 최댓값 스펙과 다르다). PQ 는 그 로그 안에
+    //  이미 PASS/FAIL 이 있어 대조가 필요 없지만, 이 둘은 **스펙 자체가 앱 밖(Customer SPEC)에만
+    //  있어서** 대조가 필요하다 — 그래서 PQ 와 달리 이 둘만 배지를 매긴다.
+    var _opticalSpecValue = function (exactType) {
+        var bs = (window.tabData && window.tabData.briefSpec) || [];
+        if (!Array.isArray(bs)) return '';
+        var want = String(exactType).trim().toLowerCase();
+        for (var i = 0; i < bs.length; i++) {
+            var t = String((bs[i] && bs[i].type) || '').trim().toLowerCase();
+            if (t === want) return String((bs[i] && bs[i].modelA) || '').trim();
+        }
+        return '';
+    };
+    /** 측정값(%) vs Customer SPEC 최소 기준 → {pass,min,specText} | null(스펙이 없거나 숫자를
+     *  못 읽으면 **판정하지 않는다** — 기준 없이 PASS/FAIL 을 지어내지 않음). */
+    var _opticalSpecCheck = function (exactType, measuredPct) {
+        if (measuredPct == null || measuredPct === '' || isNaN(measuredPct)) return null;
+        var specText = _opticalSpecValue(exactType);
+        if (!specText) return null;
+        var m = specText.match(/[\d.]+/);
+        if (!m) return null;
+        var min = parseFloat(m[0]);
+        return { pass: measuredPct >= min, min: min, specText: specText };
+    };
+    window._opticalSpecCheck = _opticalSpecCheck;
+    /** {pass,min,specText}|null → 칸에 바로 붙일 수 있는 작은 PASS/FAIL 배지 HTML(없으면 ''). */
+    var _opticalBadgeHtml = function (chk) {
+        if (!chk) return '';
+        return ' <span style="font-size:9px; font-weight:bold; color:' + (chk.pass ? '#1f7a3d' : '#b1432f')
+             + ';" title="' + _esc(_t('Customer SPEC 기준', 'Customer SPEC threshold') + ' ' + chk.specText) + '">'
+             + (chk.pass ? '✅' : '⚠️') + '</span>';
+    };
+    window._opticalBadgeHtml = _opticalBadgeHtml;
 
     window._docOpticalAddManual = function (formId) {
         var d = _docData(formId);
@@ -1028,10 +1095,10 @@
         var uni = _opticalUniformity(row.points);
         var gam = _opticalGamut(row.primaries);
         var uEl = document.getElementById('opt-uni-' + idx);
-        if (uEl) uEl.textContent = uni ? (uni.pct + '%') : '-';
+        if (uEl) uEl.innerHTML = (uni ? uni.pct + '%' : '-') + _opticalBadgeHtml(_opticalSpecCheck('Uniformity(%)', uni ? uni.pct : null));
         var gEl = document.getElementById('opt-gamut-' + idx);
         if (gEl) {
-            gEl.textContent = gam ? (gam.pct + '%') : '-';
+            gEl.innerHTML = (gam ? gam.pct + '%' : '-') + _opticalBadgeHtml(_opticalSpecCheck('Color Gamut', gam ? gam.pct : null));
             // ⚠️ 텍스트만 고치면 안 된다 — 처음 렌더 때 gam 이 null 이었으면 onclick 자체가 안 달려
             //    있어서, 타이핑으로 방금 완성됐는데도 클릭이 안 먹는 채로 남는다.
             if (gam) {
@@ -1622,6 +1689,9 @@
                     var uni = _opticalUniformity(it.points);
                     var gam = (it.primaries) ? _opticalGamut(it.primaries) : null;
                     var gamPct = gam ? gam.pct : (it.gamutPct || '');
+                    // 🔬 Customer SPEC 최소 기준과 대조 — 기준이 없거나 측정값이 없으면 배지를 안 띄운다.
+                    var uniChk = _opticalSpecCheck('Uniformity(%)', uni ? uni.pct : null);
+                    var gamChk = _opticalSpecCheck('Color Gamut', gamPct !== '' ? parseFloat(gamPct) : null);
                     var hasPQ26 = it.pqTotal > 0;
                     var pqOk = hasPQ26 ? it.pqFail === 0 : (it.pqManual === 'PASS');
                     var pqLabel = hasPQ26 ? (pqOk ? '✅ PASS' : '⚠️ ' + it.pqFail + '/' + it.pqTotal + ' FAIL')
@@ -1639,11 +1709,11 @@
                        + '<td style="font-size:11px;">' + _esc(it.startTime) + '</td>'
                        + '<td title="' + _esc(tgt) + '">' + _esc(it.nativeX) + ' / ' + _esc(it.nativeY) + '</td>'
                        + '<td>' + _esc(it.maxPwmLv) + (it.defaultPwmLv ? ' / ' + _esc(it.defaultPwmLv) : '') + '</td>'
-                       + '<td id="opt-uni-' + idx + '">' + (uni ? uni.pct + '%' : '-') + '</td>'
+                       + '<td id="opt-uni-' + idx + '">' + (uni ? uni.pct + '%' : '-') + _opticalBadgeHtml(uniChk) + '</td>'
                        + '<td id="opt-gamut-' + idx + '"' + (gam ? ' style="cursor:pointer; color:#1971c2; text-decoration:underline;"'
                          + ' title="' + _esc(_t('클릭하면 CIE1931 그래프', 'Click for CIE1931 chart')) + '"'
                          + ' onclick="window._docOpticalShowCIE(\'' + _esc(form.id) + '\',' + idx + ')"' : '') + '>'
-                       + (gamPct !== '' && gamPct != null ? gamPct + '%' : '-') + '</td>'
+                       + (gamPct !== '' && gamPct != null ? gamPct + '%' : '-') + _opticalBadgeHtml(gamChk) + '</td>'
                        + '<td style="color:' + pqColor + '; font-weight:bold; font-size:11px;">' + _esc(pqLabel) + '</td>'
                        + '<td class="doc-noprint" style="text-align:center;">'
                        + (it.files || []).map(function (fl) {
@@ -2378,9 +2448,14 @@
                 (d.opticalLogs || []).forEach(function (it) {
                     var uni = window._opticalUniformity ? window._opticalUniformity(it.points) : null;
                     var gam = (it.primaries && window._opticalGamut) ? window._opticalGamut(it.primaries) : null;
+                    var gamPctX = gam ? gam.pct : it.gamutPct;
+                    // 🔬 Customer SPEC 최소 기준과 대조해 PASS/FAIL 을 값 뒤에 붙인다(화면 배지와 같은 판정 — _opticalSpecCheck 한 곳).
+                    var uChk = window._opticalSpecCheck ? window._opticalSpecCheck('Uniformity(%)', uni ? uni.pct : null) : null;
+                    var gChk = window._opticalSpecCheck ? window._opticalSpecCheck('Color Gamut', gamPctX !== '' && gamPctX != null ? parseFloat(gamPctX) : null) : null;
                     var pqTxt = it.pqTotal > 0 ? (it.pqFail === 0 ? 'PASS' : it.pqFail + '/' + it.pqTotal + ' FAIL') : (it.pqManual || '');
                     rows.push([it.barcode || it.label || '', it.startTime, it.nativeX, it.nativeY, it.maxPwmLv,
-                               uni ? uni.pct : '', gam ? gam.pct : it.gamutPct, pqTxt,
+                               (uni ? uni.pct : '') + (uChk ? (uChk.pass ? ' (PASS)' : ' (FAIL)') : ''),
+                               (gamPctX != null ? gamPctX : '') + (gChk ? (gChk.pass ? ' (PASS)' : ' (FAIL)') : ''), pqTxt,
                                it.dimming || '', it.grade || '', it.category || '', it.aging || '', it.remark || '']);
                 });
             } else if (s.kind === 'milestones') {

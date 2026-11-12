@@ -687,10 +687,9 @@ LF도 받아 줘서 앱 안 원문 창은 멀쩡했다 — 아웃룩으로 열 �
   SPEC 을 만족해도 **빈 칸으로 두고 사람이 직접 PASS/FAIL 을 고른다**(`pqManual`, 사용자 확정:
   "네, 비워두고 사람이 직접 입력"). `pqTotal>0`(zip 유래)이면 기존 26점 롤업 표시, 아니면
   `<select>` 로 수동 입력 — 둘을 섞지 않는다(`hasPQ26` 분기).
-- **Uniformity/Gamut SPEC 문턱 값은 아직 안 연결했다** — Customer SPEC 페이지의 실측 필드명은
-  `type: 'Uniformity(%)'` / `'Color Gamut'` / `'Brightness(Centre. Min)'`(=Lv, `js/55`
-  `PL_CHECK_SPEC_FIELDS` 참조) — 나중에 PASS/FAIL 배지를 붙이려면 이 이름으로 찾을 것. 지금은
-  계산된 %만 보여주고 합격/불합격 판정은 안 한다(요청받지 않은 기능을 미리 만들지 않음).
+- **Uniformity/Gamut SPEC 문턱 값은 ✅ 연결됨(4차, 아래)** — Customer SPEC 페이지의 실측
+  필드명은 `type: 'Uniformity(%)'` / `'Color Gamut'` / `'Brightness(Centre. Min)'`(=Lv, `js/55`
+  `PL_CHECK_SPEC_FIELDS` 참조).
 - **개별 추가/개별 삭제/전체 삭제** — `_docOpticalAddManual`(zip 없이 빈 행 추가, 추가 즉시
   상세를 펼쳐 바로 입력), `_docOpticalRemove`(zip 1차 때 이미 있던 개별 삭제, 수동 행도 같은
   경로), `_docOpticalClearAll`(이 회차 전체 삭제, NAS 에 올린 원본 파일은 지우지 않는다 —
@@ -709,3 +708,47 @@ LF도 받아 줘서 앱 안 원문 창은 멀쩡했다 — 아웃룩으로 열 �
   공식 검증 완료), DOM-노드-신원 체크(`_testMarker` 부여 후 재조회)로 타이핑 중 전체 재렌더가
   안 도는 것 확인. ⚠️ **아직 전용 하네스 파일은 없다** — 같은 검증을 다시 만들 일이 생기면
   `tests/document-page.browser.js` 를 확장하거나 새 파일로 남길 것(이 저장소 관행).
+
+### 🔬🔬🔬 4차 — 가져오기 덮어쓰기 confirm 1건으로 묶기 + Uniformity/Gamut PASS·FAIL 연결 (2026-11-12)
+
+사용자 신고: "전체 파일 모두 한번에 덮어씌울수 있어야 하는데 파일 하나씩 하고 있음" — 같은 회차
+zip 을 다시 가져오면 바코드 16개×(report+log) = **최대 32개 파일마다** "NAS 에 같은 이름의 파일이
+이미 있습니다. 덮어쓸까요?" 가 한 번씩 떴다.
+
+- **원인** — `_docOpticalApply` 가 바코드마다 `window._dgUploadBlob()`(`js/66`)를 직접 불렀고,
+  그 함수 **자신이** 충돌(409)마다 `confirm()`을 띄우는 구조였다(1차 구현 그대로, 1건 올릴 때는
+  맞는 설계였지만 다건 가져오기엔 안 맞았다).
+- **고친 법** — `_dgUploadBlob(folder, name, blob, opts)`에 **`opts.forceOverwrite`**를 추가했다
+  (생략하면 예전처럼 함수 자신이 1건씩 confirm — 다른 호출지 3곳은 전부 그대로 3-인자 호출이라
+  **동작 불변**). `forceOverwrite:false`는 묻지 않고 충돌을 `{exists:true}`로만 돌려주고,
+  `true`는 묻지 않고 바로 덮어쓴다 — **판단은 호출지가, confirm 은 함수가 평소처럼.**
+  `_docOpticalApply`는 ① 모든 파일을 `forceOverwrite:false`로 먼저 올려 안 겹치는 건 그 자리에서
+  끝내고 ② 겹친 파일만 모아 **딱 한 번** "N개가 이미 있습니다. 전부 덮어쓸까요?"로 묻고 ③ 좋다면
+  그 파일들만 `forceOverwrite:true`로 다시 올린다. 거절하면 그 파일들만 빠지고(바코드 레코드
+  자체는 그대로 생성) — 1차 때부터 있던 "실패한 파일만 `files[]`에서 빠진다" 부분 성공 의미를
+  그대로 지켰다.
+- 검증: `window.fetch`/`window.confirm`을 흉내 내 5개 파일(겹침 3·신규 2) 가져오기를 돌려
+  **confirm 호출이 정확히 1번**(이전 설계라면 3번)인 것, 겹친 3개·안 겹친 2개가 맞게 갈리는 것을
+  브라우저 콘솔에서 실측 확인.
+
+사용자 요청: "Uniformity/Gamut도 Customer SPEC 기준으로 PASS/FAIL 표시해줘" — 3차에서 미뤄 뒀던
+문턱 비교를 연결했다.
+
+- `_opticalSpecValue(exactType)` — `tabData.briefSpec`(지금 모델의 Customer SPEC, `js/43` 별칭)
+  에서 TYPE 이 **정확히 일치**하는 값을 찾는다(`js/55` `PL_CHECK_SPEC_FIELDS` 가 실측해 둔 이름
+  그대로 재사용 — 지어내지 않음).
+- `_opticalSpecCheck(exactType, measuredPct)` — SPEC 값 문자열에서 **첫 숫자를 하한**으로 뽑는다
+  (관례상 "80% Min"/"90% NTSC Min"처럼 전부 "이상이면 합격"이라 PQ 의 IRE 상하한표와 다르게 숫자
+  하나면 충분하다). 측정값이 없거나(`null`/빈 값) SPEC 자체가 없거나 숫자를 못 읽으면 **판정하지
+  않고 `null`을 돌려준다** — 기준 없이 PASS/FAIL 을 지어내지 않는다(이 저장소 "조용히 틀린
+  PASS/FAIL 이 최악" 원칙).
+- `_opticalBadgeHtml(chk)` — `chk`가 있을 때만 작은 ✅(PASS)/⚠️(FAIL) 배지를 붙인다(hover 하면
+  어떤 SPEC 값과 비교했는지 title 로 보여준다). 균일도·Gamut 칸(주 렌더·`_docOpticalRepaint`
+  라이브 패치·AOA 엑셀/워드 내보내기까지 **세 곳 전부** 같은 함수로 배지를 단다 — 따로 조립하면
+  한 곳만 고쳐질 때 화면과 파일이 갈린다.
+- ⚠️ **PQ 는 이 배지를 안 받는다** — PQ 는 로그 안에 이미 PASS/FAIL 이 있거나(26포인트) 사람이
+  직접 고른 값(`pqManual`)이라 SPEC 대조가 필요 없다(3차 결론 "세 개념은 독립"과 같은 이유).
+- 검증: `window.tabData.briefSpec` 에 합성 SPEC("80% Min"/"90% NTSC Min")을 넣고
+  `_opticalSpecCheck` 를 PASS/FAIL/스펙없음/측정값없음 네 가지 경우로 브라우저 콘솔에서 직접
+  호출해 확인, `_opticalBadgeHtml` 출력 HTML 도 확인. ⚠️ 실제 Document 화면에 떠 있는 표에서
+  직접 눈으로 본 건 아니다(프로젝트를 열어야 하는 흐름이라 미확인) — 다음에 열어볼 때 확인할 것.

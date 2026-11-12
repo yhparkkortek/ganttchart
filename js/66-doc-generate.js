@@ -396,8 +396,13 @@
     // ── 📁 NAS 업로드 — 만든 바이트를 /doc/put 으로 보낸다 ───────────────
     //  ⚠️ 팀 공유 폴더다 — 같은 이름이 있으면 백엔드가 409 로 막고,
     //     **사람이 한 번 확인한 뒤에만** overwrite=1 로 다시 보낸다(되돌릴 수 없다).
-    //  돌려주는 값: { ok, name, size, skipped, error }
-    window._dgUploadBlob = async function (folder, name, blob) {
+    //  돌려주는 값: { ok, name, size, skipped, error, exists }
+    //  opts.forceOverwrite — 여러 파일을 한 번에 올리는 호출지(예: js/67 광학 이력 가져오기)가
+    //  **파일마다 confirm 이 뜨는 걸 피하려고** 쓴다: true 면 묻지 않고 덮어쓰기, false 면 묻지
+    //  않고 충돌을 `{ok:false, exists:true}` 로만 돌려준다(그 호출지가 한꺼번에 하나로 묻는다).
+    //  생략(기본)이면 예전처럼 **이 함수가 직접** 1건씩 confirm.
+    window._dgUploadBlob = async function (folder, name, blob, opts) {
+        opts = opts || {};
         var put = async function (overwrite) {
             var fd = new FormData();
             fd.append('file', blob, name);
@@ -409,10 +414,13 @@
         try {
             var res = await put(false);
             if (res.status === 409 || (res.body && res.body.exists)) {
-                if (!confirm(_t('NAS 에 같은 이름의 파일이 이미 있습니다:\n\n' + name
-                                + '\n\n덮어쓸까요? (되돌릴 수 없습니다 — 팀 공유 폴더입니다)',
-                                'A file with the same name exists. Overwrite?'))) {
-                    return { ok: false, skipped: true };
+                if (opts.forceOverwrite === false) return { ok: false, exists: true };
+                if (opts.forceOverwrite !== true) {
+                    if (!confirm(_t('NAS 에 같은 이름의 파일이 이미 있습니다:\n\n' + name
+                                    + '\n\n덮어쓸까요? (되돌릴 수 없습니다 — 팀 공유 폴더입니다)',
+                                    'A file with the same name exists. Overwrite?'))) {
+                        return { ok: false, skipped: true };
+                    }
                 }
                 res = await put(true);
             }
