@@ -671,6 +671,16 @@
         el.style.color = '#2b7a45';
         el.title = _t('팀 공용 파일(App_Config/ProjectList_' + _team() + '.json)에 반영된 시각입니다.',
                       'Time this was written to the shared team file (App_Config/ProjectList_' + _team() + '.json).');
+        // 📄 [2026-11-12 사용자 요청] 지금 읽고 있는 실제 파일 이름 — `_plFindNasDataFile`이 복사본·
+        //    철자가 다른 파일을 키워드로 찾아올 수 있어(510행 주석) "ProjectList_개발3팀.json"이라고
+        //    늘 단정할 수 없다. NAS 는 실제로 읽은 이름(`_plNasLoadedName`)을 그대로 보여준다.
+        var fel = document.getElementById('pl-saved-file');
+        if (fel) {
+            var fname = (where === 'NAS') ? (window._plNasLoadedName || _nasDataName())
+                      : ((window.ProjectList && window.ProjectList.FILE_NAME) || _nasDataName());
+            fel.textContent = '📄 ' + fname;
+            fel.title = _t('지금 표가 읽어온 실제 파일입니다.', 'The actual file this table was loaded from.');
+        }
     };
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -2582,30 +2592,48 @@
 
     // ──────────────────────────────────────────────────────────────────────────
     // 11-2. 🔍 정보 확인 — 이 행의 값이 그 프로젝트(Gantt) 파일의 Summary·Customer SPEC 과
-    //       다른지 찾아 보여준다(2026-11-11 사용자 요청).
-    //   - 어느 프로젝트 파일인지는 **이 행이 들고 있지 않다** — CUSTOMER+Project 이름으로
-    //     project_index.json 항목과 맞춰 찾는다(`_plNameHit`, 양방향 포함 검사).
-    //   - Summary 쪽은 `projectMeta.<역할>담당자`(js/66 DOC_MEMBER_ROLES 와 같은 자리 —
-    //     Summary 탭을 한 번도 안 열면 비어 있을 수 있어 그때는 "그 프로젝트도 비어 있음"으로 적는다).
+    //       다른지 찾아 보여준다(2026-11-11 사용자 요청, 2026-11-12 사용자 피드백으로 재설계).
+    //   - 어느 프로젝트 파일인지는 **이 행이 들고 있지 않다** — CUSTOMER+CABINET 으로
+    //     project_index.json 항목(의 파일명 모델 조각)과 맞춰 찾는다(`_plNameHit`, 양방향 포함 검사).
+    //   - ⚠️ [2026-11-12] **전체를 한 번에 훑지 않는다** — 기본은 **지금 열린 프로젝트** 하나만
+    //     비교하고, 필요하면 팝업의 드롭다운으로 다른 프로젝트를 고른다(`plCheckAgainstProjects(fileName)`).
+    //   - 담당자는 `projectMeta.<역할>담당자`(js/66 DOC_MEMBER_ROLES 와 같은 자리). ⚠️ "회로담당(PM)"
+    //     은 **PM(프로젝트담당자) + HW담당자를 합친 값**과 비교한다(사용자 지시 — 열 이름 자체가
+    //     '회로담당(PM)'인 이유).
     //   - Customer SPEC(`tabData.briefSpec`/`briefSpecByUnit`)은 **항목 이름을 지어내지 않는다**
-    //     (docs/project-list.md 경고 — 참조 엑셀 항목명을 추측해 썼다가 전부 0건으로 떨어진 적 있다).
-    //     Project List 열과 **뜻이 분명히 같은 두 항목만** 본다: Panel · Resolution.
+    //     (docs/project-list.md 경고 — 추측한 항목명은 전부 0건으로 떨어진 적 있다). 아래 표는
+    //     실제 프로젝트 파일 5개를 열어 **실측한 TYPE 문자열**만 쓴다(정확히 같은 글자로 비교).
     // ──────────────────────────────────────────────────────────────────────────
-    var PL_CHECK_OWNER_FIELDS = [
-        { k: 'ownerHw',    metaKey: 'HW담당자',     label: ['회로담당(PM)', 'HW owner (PM)'] },
-        { k: 'ownerFw',    metaKey: 'FW담당자',     label: ['펌웨어담당',   'FW owner'] },
-        { k: 'ownerMech',  metaKey: '기구담당자',    label: ['기구담당',     'Mech owner'] },
-        { k: 'ownerTouch', metaKey: 'TSP담당자',    label: ['터치담당',     'Touch owner'] }
+    // ⚠️ [2026-11-12 실측] 대소문자만 다른 값("2560x1440" vs "2560 X 1440")이 "다르다"로 떴다 —
+    //    소문자로도 맞춰야 한다(공백 제거만으론 부족).
+    var _plCheckNorm = function (v) { return String(v == null ? '' : v).replace(/\s+/g, '').trim().toLowerCase(); };
+    // "해당없음"을 적는 관례 — 칸마다 X 를 쓰기도, -를 쓰기도 한다(실측).
+    var _PL_CHECK_BLANK_RE = /^(x|-|n\/a|none|없음|해당없음)$/i;
+    /** Customer SPEC TYPE(실측 고정 문자열, 지어내지 않음) → Project list 열 매핑. */
+    var PL_CHECK_SPEC_FIELDS = [
+        { plKey: 'panel',       specType: 'Panel' },
+        { plKey: 'resolution',  specType: 'Native Resolution' },
+        { plKey: 'colorTemp',   specType: 'Color Temperature(K)' },
+        { plKey: 'uniformity',  specType: 'Uniformity(%)' },
+        { plKey: 'colorGamut',  specType: 'Color Gamut' },
+        { plKey: 'ledLighting', specType: 'LED Lighting' },
+        { plKey: 'adbd',        specType: 'AD Board' },
+        { plKey: 'glassThk',    specType: 'Thickness of Glass' },
+        { plKey: 'inputSignal', specType: 'Video input' },
+        { plKey: 'luminance',   specType: 'Brightness(Centre. Min)' }
+        // ⚠️ [2026-11-12 실측] 뺀 항목 — 비교해 봤더니 단위·관례가 달라 **값이 같아도 항상 달라 보였다**:
+        //  power1('POWER RATING')은 PL 이 "24V=2.0A"(전압×전류), 파일은 "51W"(계산된 전력)라 단위가
+        //  다른 표기일 뿐이라 정규화로 못 맞춘다. radius·enclosure 는 PL 이 "X"(해당없음 표시 관례)를
+        //  자주 쓰는데 파일 쪽은 "Flat / Landscape"/"Open frame" 같은 서술형이라 비교할수록 소음만 늘었다.
     ];
-    var _plCheckNorm = function (v) { return String(v == null ? '' : v).replace(/\s+/g, '').trim(); };
-    /** briefSpec 행에서 TYPE 이 그 말로 **시작하는** 첫 항목의 값칸을 — 항목 이름을 지어내지 않고
-     *  참조 엑셀에 실제로 있는 'Panel'/'Resolution' 한정으로만 쓴다. */
-    var _plCheckSpecItem = function (bs, startsWith) {
+    /** briefSpec 행에서 TYPE 이 **정확히 같은** 첫 항목의 값칸을 — 느슨한 접두어 매칭은 실제 TYPE
+     *  이 "Native Resolution"처럼 수식어가 붙어 있어 조용히 0건으로 떨어뜨린 적이 있다(실측). */
+    var _plCheckSpecValue = function (bs, exactType) {
         if (!Array.isArray(bs)) return '';
-        var pat = String(startsWith).toUpperCase();
+        var want = String(exactType).trim().toLowerCase();
         for (var i = 0; i < bs.length; i++) {
-            var t = String((bs[i] && bs[i].type) || '').trim().toUpperCase();
-            if (t.indexOf(pat) === 0) return String((bs[i] && bs[i].modelA) || '').trim();
+            var t = String((bs[i] && bs[i].type) || '').trim().toLowerCase();
+            if (t === want) return String((bs[i] && bs[i].modelA) || '').trim();
         }
         return '';
     };
@@ -2632,68 +2660,91 @@
         return parts.slice(1).join('_');
     };
 
-    window.plCheckAgainstProjects = async function () {
+    var PL_CHECK_TITLE = function () { return '🔍 ' + _t('프로젝트 파일과 다른 값', 'Differences from the project file'); };
+    var _plCheckSameNames = function (a, b) {
+        var split = function (v) { return String(v).split(/[,\/\s]+/).map(function (x) { return x.trim(); }).filter(Boolean).sort(); };
+        var A = split(a), B = split(b);
+        return A.length === B.length && A.every(function (x, i) { return x === B[i]; });
+    };
+    var _plCheckMergeNames = function () {
+        var out = [];
+        for (var i = 0; i < arguments.length; i++) {
+            String(arguments[i] || '').split(/[,\/\s]+/).forEach(function (x) { x = x.trim(); if (x && out.indexOf(x) === -1) out.push(x); });
+        }
+        return out.sort().join(',');
+    };
+
+    window.plCheckAgainstProjects = async function (fileNameOverride) {
         if (typeof window._msLoadProjectIndex !== 'function' || !window.nasAppFile || !window.nasAppFile.get) {
             _toast('⚠️ ' + _t('프로젝트 파일 조회 기능을 불러오지 못했습니다.', 'Could not load project-file lookup.'), 'error');
             return;
         }
-        // ⚠️ [2026-11-11 실측] Project List 의 `project`(G2111OB 같은 사내 관리번호)는 프로젝트
-        //    파일 어디에도 없다 — project_index.json 의 `customer`/`model` 과도, 파일명과도 안 맞는다.
-        //    실제로 겹치는 건 **CABINET**(예: STELLAR32·SHUFFLER·OBSIDIAN DB)과 파일명의 모델 조각뿐
-        //    (실측: LNW_STELLAR32_32.0.json ↔ CABINET "STELLAR32" 3건, LNW_OBSIDIAN27_DB_27.0.json
-        //    ↔ CABINET "OBSIDIAN DB" 5건). 그래서 **CABINET** 으로 맞춘다 — `project` 로 맞추지 않는다.
-        var rows = (D().rows || []).filter(function (r) { return String(r.customer || '').trim() && String(r.cabinet || '').trim(); });
-        if (!rows.length) { _toast(_t('비교할 행이 없습니다(CUSTOMER·CABINET 이 채워진 행만 봅니다).', 'Nothing to compare (only rows with CUSTOMER and CABINET).'), 'warning'); return; }
-        _toast('🔍 ' + _t('프로젝트 파일과 비교하는 중…', 'Comparing against project files…'), 'info', 5000);
         var team = _team();
         var idx;
         try { idx = await window._msLoadProjectIndex(); } catch (e) { idx = []; }
+        // ⚠️ [2026-11-11 실측] Project List 의 `project`(G2111OB 같은 사내 관리번호)는 프로젝트
+        //    파일 어디에도 없다 — 실제로 겹치는 건 **CABINET**과 파일명의 모델 조각뿐이라 그걸로 맞춘다.
         var mine = (idx || []).filter(function (p) { return p && p.file_name && (!team || String(p.team || '').trim() === team); })
             .map(function (p) { return Object.assign({}, p, { _fileModel: _plFileModelOf(p.file_name) }); })
             .filter(function (p) { return p._fileModel; });
+        if (!mine.length) { _toast('⚠️ ' + _t('이 팀의 프로젝트 파일을 찾지 못했습니다.', 'No project files found for this team.'), 'warning'); return; }
 
-        var cache = {}; // file_name → 읽은 문서(or null)
-        var readEntry = async function (entry) {
-            if (cache[entry.file_name] !== undefined) return cache[entry.file_name];
-            var rel = (entry.team ? entry.team + '/' : '') + entry.file_name;
-            var d = null;
-            try { d = await window.nasAppFile.get(rel, { json: true }); } catch (e) { d = null; }
-            if (!d && window._storageRelOfId && entry.drive_file_id) {
-                var liveRel = window._storageRelOfId(entry.drive_file_id);
-                if (liveRel) { try { d = await window.nasAppFile.get(liveRel, { json: true }); } catch (e2) { d = null; } }
-            }
-            cache[entry.file_name] = d || null;
-            return cache[entry.file_name];
-        };
+        // 기본값: **지금 열린 프로젝트**(2026-11-12 사용자 요청) — id 로 찾는다(이름은 바뀔 수 있다,
+        //  js/59 와 같은 방법). 없으면 첫 번째 프로젝트, 드롭다운으로 바꿀 수 있다.
+        var openId = String(window.currentDriveFileId || '').trim();
+        var target = null;
+        if (fileNameOverride) target = mine.filter(function (p) { return p.file_name === fileNameOverride; })[0] || null;
+        if (!target && openId) target = mine.filter(function (p) { return String(p.drive_file_id || '').trim() === openId; })[0] || null;
+        if (!target) target = mine[0];
 
-        var mism = [], noMatch = 0, ambiguous = 0, checked = 0;
+        var optionsHtml = mine.map(function (p) {
+            var label = String(p.file_name).replace(/\.json$/i, '');
+            return '<option value="' + _esc(p.file_name) + '"' + (p.file_name === target.file_name ? ' selected' : '') + '>' + _esc(label) + '</option>';
+        }).join('');
+        var pickerHtml = '<div style="margin-bottom:10px; display:flex; align-items:center; gap:6px;">'
+            + '<span style="font-size:11.5px; color:#567; white-space:nowrap;">' + _t('비교 대상 프로젝트', 'Compare against') + '</span>'
+            + '<select onchange="window.plCheckAgainstProjects(this.value)" style="flex:1; padding:4px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:12px;">' + optionsHtml + '</select></div>';
+
+        _popup(PL_CHECK_TITLE(), pickerHtml + '<div style="color:#888; padding:6px 0;">⏳ ' + _t('불러오는 중…', 'Loading…') + '</div>', true);
+
+        var rel = (target.team ? target.team + '/' : '') + target.file_name;
+        var d = null;
+        try { d = await window.nasAppFile.get(rel, { json: true }); } catch (e) { d = null; }
+        if (!d && window._storageRelOfId && target.drive_file_id) {
+            var liveRel = window._storageRelOfId(target.drive_file_id);
+            if (liveRel) { try { d = await window.nasAppFile.get(liveRel, { json: true }); } catch (e2) { d = null; } }
+        }
+        if (!d) {
+            _popup(PL_CHECK_TITLE(), pickerHtml + '<div style="color:#b1432f; padding:6px 0;">⚠️ ' + _t('프로젝트 파일을 읽지 못했습니다.', 'Could not read the project file.') + '</div>', true);
+            return;
+        }
+
+        // 이 프로젝트의 CUSTOMER+CABINET 에 맞는 Project list 행만. 같은 CABINET 에 인치가 다른
+        // 행이 섞여 있으면(실측: SHUFFLER 3"/4.3") 가능하면 인치로 좁힌다.
+        var allRows = (D().rows || []).filter(function (r) { return String(r.customer || '').trim() && String(r.cabinet || '').trim(); });
+        var rows = allRows.filter(function (r) {
+            return (window._plNameHit(target.customer || '', r.customer) || window._plNameHit(r.customer, target.customer || ''))
+                && (window._plNameHit(target._fileModel, r.cabinet) || window._plNameHit(r.cabinet, target._fileModel));
+        });
+        if (rows.length > 1 && target.inch) {
+            var inchWanted = _plCheckNorm(target.inch);
+            var narrowed = rows.filter(function (r) { return _plCheckNorm(r.panelInch || r.cuttingInch || '') === inchWanted; });
+            if (narrowed.length) rows = narrowed;
+        }
+
+        var pm = d.projectMeta || {};
+        var bs = _plCheckBriefSpecOf(d);
+        var mism = [];
         for (var i = 0; i < rows.length; i++) {
             var r = rows[i];
-            var cands = mine.filter(function (p) {
-                return (window._plNameHit(p.customer || '', r.customer) || window._plNameHit(r.customer, p.customer || ''))
-                    && (window._plNameHit(p._fileModel, r.cabinet) || window._plNameHit(r.cabinet, p._fileModel));
-            });
-            if (cands.length > 1) {
-                // 인치로 좁혀본다(같은 CABINET 에 여러 인치 변형 프로젝트가 있는 실제 경우) — 그래도
-                // 둘 이상이면 **고르지 않는다**(근거가 갈리면 아무것도 올리지 않는다, docs/mail-evidence.md 와 같은 원칙).
-                var inchWanted = _plCheckNorm(r.panelInch || r.cuttingInch || '');
-                if (inchWanted) {
-                    var narrowed = cands.filter(function (p) { return _plCheckNorm(p.inch || '') === inchWanted; });
-                    if (narrowed.length) cands = narrowed;
-                }
-            }
-            if (cands.length !== 1) { if (cands.length > 1) ambiguous++; else noMatch++; continue; }
-            var ent = cands[0];
-            var d = await readEntry(ent);
-            if (!d) continue;
-            checked++;
-            var pm = d.projectMeta || {};
-            var bs = _plCheckBriefSpecOf(d);
             var diffs = [];
             var cmp = function (plVal, projVal, label, sameFn) {
                 plVal = String(plVal == null ? '' : plVal).trim();
                 projVal = String(projVal == null ? '' : projVal).trim();
                 if (!plVal || !projVal) return;           // 둘 중 하나가 비어 있으면 "다르다"고 안 한다 — 미입력일 뿐
+                // ⚠️ [2026-11-12 실측] "해당없음"을 적는 관례가 칸마다 다르다("X" vs "-") — 둘 다
+                //  그런 표시일 땐 글자가 달라도 다른 값으로 치지 않는다(둘 다 실제 값이 없다는 뜻).
+                if (_PL_CHECK_BLANK_RE.test(plVal) && _PL_CHECK_BLANK_RE.test(projVal)) return;
                 if (sameFn ? sameFn(plVal, projVal) : _plCheckNorm(plVal) === _plCheckNorm(projVal)) return;
                 diffs.push({ label: label, pl: plVal, proj: projVal });
             };
@@ -2704,50 +2755,54 @@
             });
             // 담당자 — 쉼표로 여러 명을 적는데 **순서가 사람마다 다르다**(실측: "A,B,C" vs "B,A,C"
             //  같은 세 명). 순서가 아니라 **누가 있나**로 비교한다.
-            var sameNames = function (a, b) {
-                var split = function (v) { return String(v).split(/[,\/\s]+/).map(function (x) { return x.trim(); }).filter(Boolean).sort(); };
-                var A = split(a), B = split(b);
-                return A.length === B.length && A.every(function (x, i) { return x === B[i]; });
-            };
-            PL_CHECK_OWNER_FIELDS.forEach(function (f) { cmp(r[f.k], pm[f.metaKey], _t(f.label[0], f.label[0]), sameNames); });
-            cmp(r.panel, _plCheckSpecItem(bs, 'PANEL'), _t('Panel (Customer SPEC)', 'Panel (Customer SPEC)'));
-            cmp(r.resolution, _plCheckSpecItem(bs, 'RESOLUTION'), _t('Resolution (Customer SPEC)', 'Resolution (Customer SPEC)'));
-            if (diffs.length) mism.push({ row: r, diffs: diffs, project: ent.file_name });
+            // 🔧 [2026-11-12] "회로담당(PM)"은 PM(프로젝트담당자)+HW담당자를 합친 값과 비교한다.
+            cmp(r.ownerHw, _plCheckMergeNames(pm.프로젝트담당자, pm.HW담당자), _t('회로담당(PM)', 'HW owner (PM)'), _plCheckSameNames);
+            cmp(r.ownerFw, pm.FW담당자, _t('펌웨어담당', 'FW owner'), _plCheckSameNames);
+            cmp(r.ownerMech, pm.기구담당자, _t('기구담당', 'Mech owner'), _plCheckSameNames);
+            cmp(r.ownerTouch, pm.TSP담당자, _t('터치담당', 'Touch owner'), _plCheckSameNames);
+            // Customer SPEC — 실측 TYPE 과 정확히 같은 항목만(PL_CHECK_SPEC_FIELDS).
+            PL_CHECK_SPEC_FIELDS.forEach(function (f) {
+                var val = _plCheckSpecValue(bs, f.specType);
+                var col = _colByKey[f.plKey];
+                if (val) cmp(r[f.plKey], val, _t(col ? col.ko : f.plKey, col ? col.en : f.plKey) + ' (' + f.specType + ')');
+            });
+            // Color coordinate(x/y) — 한 항목에 x/y 가 같이 들어 있어 쪼개야 한다(docs/project-list.md 경고).
+            var coord = _plCheckSpecValue(bs, 'Color coordinate(x/y)');
+            if (coord) {
+                var cParts = coord.split('/').map(function (s) { return s.trim(); });
+                if (cParts.length === 2) {
+                    cmp(r.cieX, cParts[0], 'x (Color coordinate(x/y))');
+                    cmp(r.cieY, cParts[1], 'y (Color coordinate(x/y))');
+                }
+            }
+            if (diffs.length) mism.push({ row: r, diffs: diffs });
         }
 
-        var skipNote = '';
-        if (noMatch || ambiguous) {
-            skipNote = '<div style="color:#888; font-size:11.5px; margin-top:6px;">'
-                + (noMatch ? noMatch + _t('건은 프로젝트 파일을 찾지 못해 건너뛰었습니다(CUSTOMER·CABINET 이름이 다를 수 있음). ', ' rows had no matching project file (CUSTOMER/CABINET name mismatch?) — skipped. ') : '')
-                + (ambiguous ? ambiguous + _t('건은 같은 CABINET 의 프로젝트 파일이 여럿이라 건너뛰었습니다.', ' rows matched more than one project file for the same CABINET — skipped.') : '')
-                + '</div>';
-        }
-        var body;
-        if (!mism.length) {
-            body = '<div style="color:#2e7d32; padding:10px 0;">✅ ' + _t('비교한 ', 'Compared ') + checked + _t('건 중 다른 값이 없습니다.', ' rows — no differences found.') + skipNote + '</div>';
+        var body = pickerHtml;
+        if (!rows.length) {
+            body += '<div style="color:#888; padding:10px 0;">⚠️ ' + _t('이 프로젝트와 일치하는 CUSTOMER·CABINET 행이 Project list 에 없습니다.', 'No Project list rows match this project\'s CUSTOMER/CABINET.') + '</div>';
+        } else if (!mism.length) {
+            body += '<div style="color:#2e7d32; padding:10px 0;">✅ ' + _t('비교한 ', 'Compared ') + rows.length + _t('건 중 다른 값이 없습니다.', ' rows — no differences found.') + '</div>';
         } else {
-            body = '<table style="width:100%; border-collapse:collapse; font-size:11.5px;">'
-                 + '<tr style="background:#f1f6f7;"><th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">No</th>'
-                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트', 'Project') + '</th>'
-                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
-                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">Project list</th>'
-                 + '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th></tr>'
+            body += '<table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:11.5px;">'
+                 + '<colgroup><col style="width:42px"><col style="width:190px"><col><col></colgroup>'
+                 + '<tr style="background:#f1f6f7;"><th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">No</th>'
+                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
+                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">Project list</th>'
+                 + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th></tr>'
                  + mism.map(function (m) {
                      return m.diffs.map(function (df, di) {
-                         return '<tr style="border-bottom:1px solid #eef3f4;' + (di === 0 ? '' : '') + '">'
-                              + (di === 0 ? '<td style="padding:5px 8px; cursor:pointer; color:#00707d; text-decoration:underline;" onclick="window.plClosePopup(); window.plOpenDetail(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>'
-                                          + '<td style="padding:5px 8px; color:#789;" rowspan="' + m.diffs.length + '">' + _esc(String(m.project).replace(/\.json$/i, '')) + '</td>' : '')
-                              + '<td style="padding:5px 8px;">' + _esc(df.label) + '</td>'
-                              + '<td style="padding:5px 8px;">' + _esc(df.pl) + '</td>'
-                              + '<td style="padding:5px 8px; color:#b1432f;">' + _esc(df.proj) + '</td></tr>';
+                         return '<tr style="border-bottom:1px solid #eef3f4;">'
+                              + (di === 0 ? '<td style="padding:5px 6px; cursor:pointer; color:#00707d; text-decoration:underline; word-break:break-all;" onclick="window.plClosePopup(); window.plOpenDetail(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>' : '')
+                              + '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.label) + '</td>'
+                              + '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.pl) + '</td>'
+                              + '<td style="padding:5px 6px; color:#b1432f; word-break:break-word;">' + _esc(df.proj) + '</td></tr>';
                      }).join('');
                  }).join('')
                  + '</table>'
-                 + '<div style="color:#888; font-size:11px; margin-top:8px;">' + _t('비교 ', 'Compared ') + checked + _t('건 · 다른 값 ', ' rows · differences ') + mism.length + _t('건', ' rows')
-                 + (noMatch ? _t(' · 못 찾은 ', ' · unmatched ') + noMatch + _t('건', ' rows') : '')
-                 + (ambiguous ? _t(' · 겹친 ', ' · ambiguous ') + ambiguous + _t('건', ' rows') : '') + '</div>';
+                 + '<div style="color:#888; font-size:11px; margin-top:8px;">' + _t('비교 ', 'Compared ') + rows.length + _t('건 · 다른 값 ', ' rows · differences ') + mism.length + _t('건', ' rows') + '</div>';
         }
-        _popup('🔍 ' + _t('프로젝트 파일과 다른 값', 'Differences from the project file'), body, true);
+        _popup(PL_CHECK_TITLE(), body, true);
     };
 
     // ──────────────────────────────────────────────────────────────────────────
