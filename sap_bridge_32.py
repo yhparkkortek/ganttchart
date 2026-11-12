@@ -1177,6 +1177,97 @@ def _sap_select_alv_layout(session, grid, variant_name):
         return False, 'doubleclick_failed'
 
 
+# ── 🆕 [2026-11-12] "기본 레이아웃" 자체를 /KTK_LOC로 되돌리기(필요할 때만 쓰기) ──────
+#
+# 왜 필요했나: `_sap_select_alv_layout`로 `/KTK_LOC`을 매번 선택해도, 팀 공용 계정의
+# "기본 레이아웃"(ZPP033을 새로 열 때 SAP가 자동으로 까는 레이아웃) 자체가 다른 이름
+# (예: 팀원이 "레이아웃 관리"에서 자기 레이아웃을 기본으로 지정)으로 바뀌어 있으면,
+# 화면이 그 기본값으로 **먼저** 초기화된 채 시작돼 이미 깔린 정렬 상태가 남는 것을
+# 라이브로 확인함(2026-11-12, 자재 502574 — `/KTK_LOC` 컬럼은 맞는데 행 순서는 깨짐).
+# 실측 원인: "레이아웃: 관리"(`&MB_VARIANT` 컨텍스트 메뉴 → "레이아웃 관리") 화면의
+# `DEFAULT` 컬럼에 `/장정범`이 "기본 레이아웃"으로 체크돼 있고 `/KTK_LOC`은 빈 칸이었음.
+# → 조회 전에 "레이아웃 관리"를 열어 기본값이 다르면 **이 함수가 직접 고쳐서 저장**한다.
+#
+# ⚠️⚠️ 위 `_sap_read_alv_sort`의 "저장은 절대 안 누른다"와 모순돼 보이지만 다른 화면·다른
+#    목적이다 — 거긴 "정렬 탭"을 열기만 하는 **읽기 전용 진단**이고, 여긴 "기본 레이아웃"
+#    지정이 **의도와 다를 때만**(이미 맞으면 손 안 대고 취소) 그 한 가지만 고쳐 저장하는
+#    **좁은 쓰기**다. 팀 전체에 영향을 주므로 바꿀 때만 저장하고, 맞으면 절대 저장하지
+#    않는다(불필요한 쓰기 금지).
+# ⚠️ 실사용 확인: "기본 세팅 정의"(`tbar[1]/btn[20]`, Shift+F8)가 선택된 행을 기본으로
+#    지정하고, 지정하는 순간 기존 기본값의 체크는 자동으로 풀린다(라디오버튼처럼 하나만
+#    유지). 저장은 `tbar[0]/btn[11]`(Ctrl+S) — 이 화면에선 **활성화돼 있다**(BOM 조회
+#    화면 자체의 `btn[11]`은 비활성).
+_BOM_LAYOUT_MGMT_LABELS = ['레이아웃 관리', '레이아웃 관리...', '레이아웃 관리…',
+                           'Manage Layouts', 'Manage Layouts...', 'Layout Management']
+
+
+def _sap_ensure_default_layout(session, grid, variant_name):
+    """ALV "레이아웃 관리" 화면에서 `variant_name`이 "기본 레이아웃"으로 지정돼 있는지 확인하고,
+    아니면 그 행을 기본으로 바꿔 저장한다. 이미 맞으면 아무것도 안 하고 취소로 나간다.
+    반환: `(바꿨는가: bool, 진단: str)` — 진단: `''`(이미 맞음 또는 정상 변경) |
+    `button_failed` | `menu_not_found` | `no_mgmt_grid` | `variant_not_found` |
+    `exception:<메시지>`. 끝나면(성공/실패 무관) 항상 "뒤로"(F3)로 원래 BOM 화면에 복귀한다."""
+    def _back_to_bom():
+        try:
+            session.findById('wnd[0]/tbar[0]/btn[3]').press()  # 뒤로(F3)
+            time.sleep(0.3)
+        except Exception:
+            pass
+
+    try:
+        grid.PressToolbarContextButton('&MB_VARIANT')
+        time.sleep(0.4)
+    except Exception:
+        return False, 'button_failed'
+    opened = False
+    for label in _BOM_LAYOUT_MGMT_LABELS:
+        try:
+            grid.SelectContextMenuItemByText(label)
+            opened = True
+            break
+        except Exception:
+            continue
+    if not opened:
+        try:
+            session.findById('wnd[0]').sendVKey(12)
+        except Exception:
+            pass
+        return False, 'menu_not_found'
+    time.sleep(0.5)
+    try:
+        mgmt_grid = session.findById('wnd[0]/usr/cntlGRID1/shellcont/shell')
+    except Exception:
+        _back_to_bom()
+        return False, 'no_mgmt_grid'
+    try:
+        target_row = None
+        current_default_variant = None
+        for r in range(mgmt_grid.RowCount):
+            v = (mgmt_grid.GetCellValue(r, 'VARIANT') or '').strip()
+            if mgmt_grid.GetCellValue(r, 'DEFAULT'):
+                current_default_variant = v
+            if v == variant_name:
+                target_row = r
+        if target_row is None:
+            _back_to_bom()
+            return False, 'variant_not_found'
+        if current_default_variant == variant_name:
+            _back_to_bom()  # 이미 맞다 — 저장 없이 그대로 나간다.
+            return False, ''
+        mgmt_grid.SetCurrentCell(target_row, 'VARIANT')
+        mgmt_grid.SelectedRows = str(target_row)
+        time.sleep(0.2)
+        session.findById('wnd[0]/tbar[1]/btn[20]').press()  # 기본 세팅 정의(Shift+F8)
+        time.sleep(0.4)
+        session.findById('wnd[0]/tbar[0]/btn[11]').press()  # 저장(Ctrl+S)
+        time.sleep(0.6)
+        _back_to_bom()
+        return True, ''
+    except Exception as e:
+        _back_to_bom()
+        return False, 'exception:' + str(e)
+
+
 # ── 🆕 [2026-11-05] 계층 판정 + 레이아웃에 걸린 "정렬 순서" 읽기(읽기 전용) ─────────
 #
 # 왜 필요했나: ALV에 정렬이 걸리면 BOM이 깊이 우선 순서를 잃어 **모자 관계를 복원할 수 없다**
@@ -1365,6 +1456,81 @@ def _sap_read_alv_sort(session, grid):
                 break                        # 더 이상 팝업 없음 = 정상
             try:
                 session.findById('wnd[1]').sendVKey(12)   # F12 = 취소
+                time.sleep(0.2)
+            except Exception:
+                try:
+                    session.findById('wnd[1]').close()
+                except Exception:
+                    break
+
+
+def dump_bom_sort_dialog(material, plant='1000'):
+    """[2026-11-12, 읽기 전용 정찰 — 저장 기능 없음] "레이아웃 변경..." 팝업의 "정렬 순서" 탭을
+    `_sap_read_alv_sort`와 **같은 경로로** 연 채로, 값만 뽑지 않고 화면 트리 전체(`dump_screen_tree`)를
+    덤프한다. 목적: 팀 공용 레이아웃(`/KTK_LOC`)에 정렬이 걸렸을 때 사람이 수동으로 하는
+    "정렬 순서 탭 비우고 같은 이름으로 저장"을 자동화하기 **전에**, 정렬 지우기 버튼과 저장
+    버튼의 정확한 컨트롤 id를 추측 없이 확인하려는 것이다(CLAUDE.md "녹화 매크로 없이 3번
+    추측해서 실패" 전례를 반복하지 않는다).
+    ⚠️⚠️ **저장 버튼은 절대 누르지 않는다** — 다 보고 나면 F12(취소)로 닫는다. 이 함수가
+    실제로 손대는 건 "탭을 선택"하는 것뿐이고, 그마저 실패해도 트리는 그대로 덤프한다."""
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_bom_screen(session, wnd, material, plant, use_single_tcode=True,
+                            explosion='multi', show_price=False, show_location=True)
+    wnd = session.findById('wnd[0]')
+    grid = _sap_find_grid(wnd)
+    if grid is None:
+        return {'ok': False, 'error': 'BOM 결과 그리드를 찾지 못했습니다.'}
+    diag = ''
+    try:
+        try:
+            grid.PressToolbarContextButton('&MB_VARIANT')
+            time.sleep(0.4)
+        except Exception:
+            pass
+        opened = False
+        for label in _ALV_LAYOUT_MENU_LABELS:
+            try:
+                grid.SelectContextMenuItemByText(label)
+                opened = True
+                break
+            except Exception:
+                continue
+        if not opened:
+            return {'ok': False, 'error': '"레이아웃 변경..." 메뉴를 열지 못했습니다(menu_not_found).'}
+        time.sleep(0.4)
+        try:
+            popup = session.findById('wnd[1]')
+        except Exception:
+            return {'ok': False, 'error': '팝업이 뜨지 않았습니다(no_popup).'}
+        tab = None
+        try:
+            tab = session.findById('wnd[1]/usr/tabsG_TS_ALV/tabpALV_M_R2')
+        except Exception:
+            tab = None
+        if tab is None:
+            tab = _find_tab_by_text(popup, _ALV_SORT_TAB_WORDS)
+        if tab is not None:
+            try:
+                tab.Select()
+                time.sleep(0.3)
+            except Exception as e:
+                diag = 'tab_select_failed:' + str(e)
+        else:
+            diag = 'no_sort_tab'
+        dump = dump_screen_tree()
+        if diag:
+            dump['diag'] = diag
+        return dump
+    finally:
+        # ⚠️⚠️ 저장(F5/btn)은 절대 누르지 않는다 — 취소(F12)로만 닫는다(_sap_read_alv_sort와 동일 안전장치).
+        for _ in range(3):
+            try:
+                session.findById('wnd[1]')
+            except Exception:
+                break
+            try:
+                session.findById('wnd[1]').sendVKey(12)
                 time.sleep(0.2)
             except Exception:
                 try:
@@ -1613,7 +1779,17 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
             layout_variant = _BOM_LAYOUT_VARIANT
     _stage('bom_layout')
     layout_applied, layout_diag = None, ('screen_default' if _screen_default else '')
+    default_fixed, default_fix_diag = False, ''
     grid_for_layout = _sap_find_grid(wnd) if layout_variant else None
+    if grid_for_layout is not None:
+        # 🆕 [2026-11-12] 선택보다 먼저 "기본 레이아웃" 자체가 이 레이아웃이 맞는지 확인·보정한다
+        # — 누군가 "레이아웃 관리"에서 다른 걸 기본으로 지정해두면, 화면이 그 기본값으로 먼저
+        # 초기화돼 이미 깔린 정렬이 남는 것을 실사용으로 확인함(_sap_ensure_default_layout 참고).
+        # 이미 맞으면 저장하지 않고 조용히 넘어간다 — 실패해도 예외를 던지지 않으므로 이어지는
+        # `_sap_select_alv_layout`(매 조회마다의 안전망)은 그대로 시도된다.
+        default_fixed, default_fix_diag = _sap_ensure_default_layout(session, grid_for_layout, layout_variant)
+        wnd = session.findById('wnd[0]')
+        grid_for_layout = _sap_find_grid(wnd)
     if grid_for_layout is not None:
         layout_applied, layout_diag = _sap_select_alv_layout(session, grid_for_layout, layout_variant)
         wnd = session.findById('wnd[0]')  # 레이아웃 적용 후 화면이 다시 그려지므로 참조 갱신
@@ -1645,6 +1821,10 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     # 🆕 [2026-09-21, Phase 10] 레이아웃 적용 결과를 결과 텍스트에도 남긴다 — 실패해도 조회는
     #    막지 않지만(기본 화면 레이아웃으로 계속) "왜 선택한 레이아웃이 안 먹는지"가 AI 답변과
     #    이슈 수집(layoutApplied 필드) 양쪽에서 보이도록.
+    # 🆕 [2026-11-12] "기본 레이아웃" 자체를 되돌려 저장했으면 그 사실을 분명히 남긴다 —
+    #    조용히 팀 전역 설정을 고치면 안 되고, 바뀐 걸 늘 드러내야 한다(AI 답변·이슈 수집 둘 다).
+    if default_fixed:
+        header += f'[⚠️ 팀 공용 "기본 레이아웃"이 다른 값이어서 "{layout_variant}"로 되돌려 저장했습니다]\n'
     if layout_applied is True:
         header += f'[레이아웃: "{layout_variant}" 적용됨]\n'
     elif layout_applied is False:
@@ -1667,7 +1847,8 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     text = header + '\n' + body
     return {'ok': True, 'source': source, 'materials': materials, 'tcode': tcode_label, 'text': text,
             'layoutApplied': layout_applied, 'layoutRequested': layout_variant, 'layoutDiag': layout_diag,
-            'hierarchyOk': hierarchy_ok, 'sortInfo': sort_entries, 'sortDiag': sort_diag}
+            'hierarchyOk': hierarchy_ok, 'sortInfo': sort_entries, 'sortDiag': sort_diag,
+            'defaultLayoutFixed': default_fixed, 'defaultLayoutFixDiag': default_fix_diag}
 
 
 # ── "사용처 조회(역전개)" (CS15) 전용 헬퍼 ─────────────────────────────
@@ -8614,6 +8795,9 @@ def main():
         elif action == 'list_bom_layouts':
             result = list_bom_layouts(sys.argv[2] if len(sys.argv) > 2 else '',
                                       sys.argv[3] if len(sys.argv) > 3 else '1000')
+        elif action == 'dump_bom_sort_dialog':
+            result = dump_bom_sort_dialog(sys.argv[2] if len(sys.argv) > 2 else '',
+                                          sys.argv[3] if len(sys.argv) > 3 else '1000')
         elif action == 'fetch_bom':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
