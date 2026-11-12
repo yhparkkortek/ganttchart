@@ -590,6 +590,60 @@
         window._docLabelArtLoading = false;
         window._docRender();
     };
+    // 📍 [2026-11-12 3차] 라벨 도안 위 표시(원본의 빨간 화살표+텍스트와 같은 뜻, 예:
+    //    "REV 정보는 영업 P/O 정보와 반드시 일치해야 함") — 도안 이미지처럼 **코드가 주인**이다
+    //    (그 도안의 어느 지점을 가리키는 내용이라 어느 프로젝트에서 봐도 같아야 한다). 그래서
+    //    이미지와 같은 공용 폴더에 **사이드카**(`<코드>.notes.json`)로 둔다. 화살표 대신 번호
+    //    매긴 동그라미(①②…) + 아래 번호 목록 — 선을 자동으로 그려 붙이는 것보다 단순하고
+    //    인쇄에도 그대로 나온다.
+    window._docLabelNotesCache = window._docLabelNotesCache || {};     // code -> [{x,y,text}] (0~1 비율)
+    window._docLabelNotePlacing = window._docLabelNotePlacing || null; // 지금 "표시 추가" 대기 중인 code
+    window._docLabelNotesLoad = async function (code) {
+        if (window._docLabelNotesCache[code] !== undefined) return;    // 이미 불렀거나 불러오는 중
+        window._docLabelNotesCache[code] = null;
+        var notes = [];
+        try {
+            var r = await fetch(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
+                + '&name=' + encodeURIComponent(code + '.notes.json'));
+            if (r.ok) {
+                var parsed = JSON.parse(await r.text());
+                notes = (parsed && parsed.notes) || [];
+            }
+        } catch (e) { /* 아직 없으면(404) 빈 배열 — 네트워크 문제도 여기선 그냥 빈 채로 둔다 */ }
+        window._docLabelNotesCache[code] = notes;
+        window._docRender();
+    };
+    window._docLabelNotesSave = async function (code) {
+        var notes = window._docLabelNotesCache[code] || [];
+        var blob = new Blob([JSON.stringify({ notes: notes })], { type: 'application/json' });
+        var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, code + '.notes.json', blob, { forceOverwrite: true });
+        if (!res.ok) _toast('⚠️ ' + _t('표시를 저장하지 못했습니다: ', 'Could not save the note: ') + (res.error || ''), 'error');
+        return res.ok;
+    };
+    window._docLabelNoteArm = function (code) { window._docLabelNotePlacing = code; window._docRender(); };
+    window._docLabelNoteDisarm = function () { window._docLabelNotePlacing = null; window._docRender(); };
+    window._docLabelImgClick = async function (ev, code) {
+        if (window._docLabelNotePlacing !== code) return;   // 그냥 보는 중이면 클릭은 아무 일도 안 한다
+        var rect = ev.target.getBoundingClientRect();
+        var x = (ev.clientX - rect.left) / rect.width;
+        var y = (ev.clientY - rect.top) / rect.height;
+        window._docLabelNotePlacing = null;                 // 한 번 찍으면 바로 해제 — 연속으로 안 찍힌다
+        var text = prompt(_t('이 위치에 표시할 내용을 입력하세요(예: REV 정보는 영업 P/O 정보와 반드시 일치해야 함)',
+                              'Enter the note text for this spot:'));
+        if (text == null || !text.trim()) { window._docRender(); return; }
+        window._docLabelNotesCache[code] = window._docLabelNotesCache[code] || [];
+        window._docLabelNotesCache[code].push({ x: x, y: y, text: text.trim() });
+        window._docRender();
+        await window._docLabelNotesSave(code);
+    };
+    window._docLabelNoteDel = async function (code, i) {
+        var list = window._docLabelNotesCache[code] || [];
+        if (!list[i]) return;
+        if (!confirm(_t('이 표시를 지웁니다:\n\n' + list[i].text, 'Delete this note?'))) return;
+        list.splice(i, 1);
+        window._docRender();
+        await window._docLabelNotesSave(code);
+    };
     // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
     //   — 그 폴더는 ZDMSR004 다운로드 결과라 이름 규칙이 제각각이다(`<code>.xlsx` ·
     //   `승인원_<code>_REV02.zip` · `<code>_설명_날짜_REV00.zip` 등). 공통점은 6자리 코드가
@@ -621,15 +675,18 @@
                               + (st.skipped ? _esc(_t(' (그림 ' + st.skipped + '개는 지원하지 않는 형식).', '.'))
                                             : _esc(_t('.', '.'))) + '</div>';
                     } else {
+                        // ⚠️⚠️ [버그 실측] 윈도 경로(`\1`, `\P` 등)를 onclick="...('...')" 문자열에
+                        //    그대로 넣으면 JS 가 `\1` 을 **8진 이스케이프**(제어문자)로 읽어 경로가
+                        //    조용히 깨진다(백엔드가 그 깨진 경로를 못 찾아 "가져오지 못했습니다") —
+                        //    `_docLabelOpen` 처럼 **자리(키)만** 넘기고 실제 값은 저장된 상태에서
+                        //    다시 찾는다(문자열 이스케이프가 아예 필요 없어진다).
                         line += '<div style="margin-top:3px; display:flex; flex-wrap:wrap; gap:6px;">'
-                            + st.images.map(function (im) {
+                            + st.images.map(function (im, ii) {
                                 var src = BACKEND + '/sap-label-image-bytes?path=' + encodeURIComponent(m.path)
                                     + '&inner=' + encodeURIComponent(im.inner || '') + '&member=' + encodeURIComponent(im.member);
                                 return '<img src="' + _esc(src) + '" title="' + _esc(im.member) + ' (' + Math.round(im.size / 1024) + 'KB)"'
                                     + ' style="max-width:90px; max-height:80px; border:1px solid #dee2e6; border-radius:3px; cursor:pointer;"'
-                                    + ' onclick="window._docLabelPickImage(\'' + _esc(formId).replace(/'/g, "\\'") + '\',' + idx + ',\''
-                                    + _esc(m.path).replace(/'/g, "\\'") + '\',\'' + _esc(im.inner || '').replace(/'/g, "\\'") + '\',\''
-                                    + _esc(im.member).replace(/'/g, "\\'") + '\')">';
+                                    + ' onclick="window._docLabelPickImage(\'' + _esc(key).replace(/'/g, "\\'") + '\',' + mi + ',' + ii + ')">';
                             }).join('') + '</div>'
                             + '<div style="font-size:10px; color:#868e96; margin-top:2px;">'
                             + _esc(_t('그림을 누르면 공용 라벨 도안(' + _LABEL_ART_FOLDER + ')으로 저장됩니다.',
@@ -639,8 +696,57 @@
                 return line;
             }).join('')
             + '</div>'
-            + (partial ? ' (' + _esc(_t('너무 많아 일부만', 'truncated')) + ')' : '');
+            + (partial ? ' (' + _esc(_t('너무 많아 일부만', 'truncated')) + ')' : '')
+            + _docLabelSapRefreshLink(key, true);
         window._docLabelFindResult[key] = html;
+    };
+    // 🔄 [2026-11-12 4차, 사용자 지적] "로컬 폴더 검색"은 과거에 내려받아 둔 사본만 본다 —
+    //    SAP 에 라벨이 **새로 등록**되면 그 파일은 아직 로컬에 없어 검색에서 조용히 빠진다.
+    //    기존 "📥 문서 다운로드(ZDMSR004)" 배치(`/sap-download-documents-batch`, 이미 있는
+    //    기능 — 새 라우트 아님)를 그 코드 하나로 불러 **SAP 에서 직접 받고**, 받은 뒤 같은
+    //    로컬 검색을 다시 돌린다. ⚠️ SAP GUI 가 로그인돼 있어야 하고 시간이 걸릴 수 있어
+    //    자동으로는 안 돌리고 **사람이 누를 때만** 돈다.
+    var _docLabelSapRefreshLink = function (key, found) {
+        return '<div class="doc-noprint" style="margin-top:4px;">'
+            + '<a href="#" onclick="window._docLabelFetchFromSap(\'' + _esc(key).replace(/'/g, "\\'") + '\');return false;"'
+            + ' style="color:#7a5210; font-size:11px; font-weight:bold;">🔄 '
+            + _esc(found ? _t('SAP 에서 최신 문서로 다시 받기', 'Fetch the latest from SAP')
+                         : _t('SAP 에서 새로 받아오기(최근 등록된 라벨이면 로컬에 아직 없을 수 있습니다)',
+                              'Fetch from SAP (a newly registered label may not be downloaded locally yet)'))
+            + '</a></div>';
+    };
+    window._docLabelFetchFromSap = async function (key) {
+        var parts = key.split('|'), formId = parts[0], idx = Number(parts[1]);
+        var it = (_docData(formId).labelItems || [])[idx];
+        var code = String((it && it.code) || '').trim();
+        if (!/^\d{4,7}$/.test(code)) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('6자리 코드를 먼저 적으세요.', 'Enter the 6-digit code first.'));
+            window._docRender(); return;
+        }
+        window._docLabelFindResult[key] = '⏳ ' + _esc(_t('SAP 에서 최신 문서를 받는 중… (SAP GUI 로그인이 필요하고, 1분 이상 걸릴 수 있습니다)',
+                                                          'Fetching the latest document from SAP… (SAP GUI must be logged in; may take a minute or more)'));
+        window._docRender();
+        var res, r;
+        try {
+            r = await fetch(BACKEND + '/sap-download-documents-batch?materials=' + encodeURIComponent(code) + '&type=P01',
+                             { signal: AbortSignal.timeout(170000) });
+        } catch (e) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('백엔드에 닿지 못했거나 시간이 초과됐습니다.', 'Backend unreachable or timed out.'));
+            window._docRender(); return;
+        }
+        if (r.status === 404) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('백엔드를 재시작해야 쓸 수 있습니다(SAP 문서 다운로드).',
+                                                              'Restart the backend to use this.'));
+            window._docRender(); return;
+        }
+        try { res = await r.json(); } catch (e2) { res = null; }
+        if (!res || !res.ok) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc((res && res.error) || _t('SAP 에서 받지 못했습니다.', 'Could not fetch from SAP.'))
+                + _docLabelSapRefreshLink(key, false);
+            window._docRender(); return;
+        }
+        _toast('✅ ' + (res.message || _t('SAP 에서 받았습니다.', 'Fetched from SAP.')), 'success');
+        await window._docLabelFind(formId, idx);   // 받은 뒤 같은 로컬 검색을 다시 돌려 찾는다
     };
     window._docLabelFind = async function (formId, idx) {
         var it = (_docData(formId).labelItems || [])[idx];
@@ -673,7 +779,8 @@
         if (!res || !res.ok) {
             window._docLabelFindResult[key] = '⚠️ ' + _esc((res && res.error) || _t('검색 실패', 'Search failed'));
         } else if (!res.matches || !res.matches.length) {
-            window._docLabelFindResult[key] = '🔍 ' + _esc(_t('도안을 못 찾았습니다(코드를 확인해 주세요): ', 'No drawing found for: ')) + _esc(code);
+            window._docLabelFindResult[key] = '🔍 ' + _esc(_t('도안을 못 찾았습니다(코드를 확인해 주세요): ', 'No drawing found for: ')) + _esc(code)
+                + _docLabelSapRefreshLink(key, false);
         } else {
             window._docLabelFindMatches[key] = res.matches;
             _docLabelRenderMatches(formId, idx, key, res.matches, res.partial);
@@ -714,21 +821,33 @@
         _docLabelRenderMatches(formId, idx, key, matches, false);
         window._docRender();
     };
-    window._docLabelPickImage = async function (formId, idx, path, inner, member) {
+    // ⚠️⚠️ [2026-11-12 실측 버그] `(formId, idx, path, inner, member)` 로 **경로를 onclick 문자열에
+    //    직접 박았더니** 윈도 경로의 `\1`(예: `...P01202300096\124291...`) 을 JS 가 **8진
+    //    이스케이프**(제어문자)로 읽어 경로가 조용히 깨졌다 — 백엔드가 그 경로를 못 찾아 매번
+    //    "이미지를 가져오지 못했습니다" 로 끝났다(사용자 신고: "토스트만 뜨고 아무 반응 없음").
+    //    `_docLabelOpen` 과 같은 방식으로 **자리(key·mi·ii)만** 받고 실제 경로는 이미 저장된
+    //    `_docLabelFindMatches`/`_docLabelImgState` 에서 다시 찾는다 — 문자열 이스케이프가 아예
+    //    필요 없어진다.
+    window._docLabelPickImage = async function (key, mi, ii) {
+        var parts = key.split('|'), formId = parts[0], idx = Number(parts[1]);
+        var m = (window._docLabelFindMatches[key] || [])[mi];
+        var im = (window._docLabelImgState[key + '|' + mi] && window._docLabelImgState[key + '|' + mi].images || [])[ii];
+        if (!m || !im) { _toast('⚠️ ' + _t('이 그림을 더 이상 찾을 수 없습니다 — 미리보기를 다시 열어주세요.',
+                                           'This image is no longer available — reopen the preview.'), 'error'); return; }
         var it = (_docData(formId).labelItems || [])[idx];
         var code = String((it && it.code) || '').trim();
         if (!code) { _toast('⚠️ ' + _t('코드를 먼저 적으세요.', 'Enter the code first.'), 'error'); return; }
         _toast('⏳ ' + _t('이미지를 가져오는 중…', 'Fetching…'), 'info');
         var blob;
         try {
-            var r = await fetch(BACKEND + '/sap-label-image-bytes?path=' + encodeURIComponent(path)
-                + '&inner=' + encodeURIComponent(inner || '') + '&member=' + encodeURIComponent(member));
+            var r = await fetch(BACKEND + '/sap-label-image-bytes?path=' + encodeURIComponent(m.path)
+                + '&inner=' + encodeURIComponent(im.inner || '') + '&member=' + encodeURIComponent(im.member));
             if (!r.ok) { _toast('⚠️ ' + _t('이미지를 가져오지 못했습니다.', 'Could not fetch the image.'), 'error'); return; }
             blob = await r.blob();
         } catch (e) {
             _toast('⚠️ ' + _t('백엔드에 닿지 못했습니다.', 'Backend unreachable.'), 'error'); return;
         }
-        var ext = (String(member).split('.').pop() || 'png').toLowerCase();
+        var ext = (String(im.member).split('.').pop() || 'png').toLowerCase();
         var fname = code + '.' + ext;
         if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
         // ⚠️ 공용 자료다 — 코드 하나당 파일 하나(덮어쓰기 확인 없이): 같은 코드를 다시 고르는 건
@@ -1935,15 +2054,45 @@
                 }
                 litems.forEach(function (it, i) {
                     var found = window._docLabelFindResult && window._docLabelFindResult[form.id + '|' + i];
-                    var artFile = (window._docLabelArtIndex && it.code) ? window._docLabelArtIndex[String(it.code).trim()] : null;
+                    var itCode = String(it.code || '').trim();
+                    var artFile = (window._docLabelArtIndex && itCode) ? window._docLabelArtIndex[itCode] : null;
                     var artCell;
                     if (window._docLabelArtIndex === null) {
                         artCell = '<div style="color:#adb5bd; font-size:10.5px;">' + _esc(_t('불러오는 중…', 'loading…')) + '</div>';
                     } else if (artFile) {
-                        artCell = '<img src="' + _esc(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
+                        // 📍 [2026-11-12 3차] 표시(원본의 빨간 화살표+텍스트) — 도안과 같은 공용
+                        //    자료라 코드로 따로 불러온다(`_docLabelNotesLoad`, 처음엔 undefined).
+                        if (window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
+                        var notes = window._docLabelNotesCache[itCode] || [];
+                        var placing = window._docLabelNotePlacing === itCode;
+                        artCell = '<div style="position:relative; display:inline-block;">'
+                            + '<img src="' + _esc(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
                                 + '&name=' + encodeURIComponent(artFile)) + '" style="max-width:135px; max-height:120px;'
-                            + ' border:1px solid #dee2e6; border-radius:3px;">'
-                            + '<div style="font-size:10px; color:#868e96;">' + _esc(_t('공용 라벨 도안', 'shared artwork')) + '</div>';
+                                + ' border:1px solid #dee2e6; border-radius:3px; display:block;' + (placing ? ' cursor:crosshair;' : '') + '"'
+                                + ' onclick="window._docLabelImgClick(event,\'' + _esc(itCode) + '\')">'
+                            + notes.map(function (n, ni) {
+                                return '<span class="doc-noprint" title="' + _esc(n.text) + '" style="position:absolute;'
+                                    + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
+                                    + ' width:15px; height:15px; border-radius:50%; background:#e03131; color:#fff;'
+                                    + ' font-size:9px; font-weight:bold; display:flex; align-items:center; justify-content:center;'
+                                    + ' box-shadow:0 0 0 1px #fff;">' + (ni + 1) + '</span>';
+                            }).join('')
+                            + '</div>'
+                            + '<div style="font-size:10px; color:#868e96;">' + _esc(_t('공용 라벨 도안', 'shared artwork')) + '</div>'
+                            + (notes.length ? '<div class="doc-noprint" style="text-align:left; font-size:9.5px; color:#495057; margin-top:2px;">'
+                                + notes.map(function (n, ni) {
+                                    return '<div>' + (ni + 1) + '. ' + _esc(n.text)
+                                        + ' <a href="#" onclick="window._docLabelNoteDel(\'' + _esc(itCode) + '\',' + ni
+                                        + ');return false;" style="color:#b1432f;">✕</a></div>';
+                                }).join('') + '</div>' : '')
+                            + '<div class="doc-noprint" style="margin-top:2px;">'
+                            + (placing
+                               ? '<span style="color:#e03131; font-size:9.5px;">' + _esc(_t('이미지를 클릭하세요…', 'Click the image…')) + '</span>'
+                                 + ' <a href="#" onclick="window._docLabelNoteDisarm();return false;" style="font-size:9.5px;">'
+                                 + _esc(_t('취소', 'cancel')) + '</a>'
+                               : '<a href="#" onclick="window._docLabelNoteArm(\'' + _esc(itCode) + '\');return false;"'
+                                 + ' style="color:#7a5210; font-size:9.5px;">✏️ ' + _esc(_t('표시 추가', 'Add note')) + '</a>')
+                            + '</div>';
                     } else {
                         artCell = '<div style="width:135px; height:70px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
@@ -2869,9 +3018,13 @@
                     rows.push([i + 1, r.label].concat(xports.map(function (p) { return r.ports[p.key] ? 'O' : ''; })));
                 });
             } else if (s.kind === 'labelitems') {
-                rows.push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note')]);
+                rows.push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note'),
+                           _t('도안 표시사항', 'Artwork notes')]);
                 (d.labelItems || []).forEach(function (it) {
-                    rows.push([it.size || '', it.code || '', it.position || '', it.note || '']);
+                    // 📍 도안 위 표시(화면의 번호 목록)도 같이 — 불러온 적 없으면 빈칸(강제로 불러오진 않는다)
+                    var notes = (window._docLabelNotesCache && window._docLabelNotesCache[String(it.code || '').trim()]) || [];
+                    rows.push([it.size || '', it.code || '', it.position || '', it.note || '',
+                               notes.map(function (n, ni) { return (ni + 1) + '. ' + n.text; }).join(' / ')]);
                 });
             } else if (s.kind === 'labelcerts') {
                 var lc = d.labelCerts || {};

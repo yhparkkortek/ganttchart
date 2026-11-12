@@ -17,6 +17,12 @@
 //     고르기→공용 라이브러리 저장까지의 **클라이언트 쪽 로직**을 검증한다 — 특히
 //     "`DOCUMENT/<프로젝트>/...` 가 아니라 `라벨도안/<코드>.<ext>` 공용 폴더에 저장되는가"
 //     (사용자 지적: "공통문서라서 프로젝트로 가면 안 될 것 같다").
+//  ⚠️⚠️ **(2026-11-12 실측 버그, 사용자 신고 "토스트만 뜨고 아무 반응 없음")** 썸네일 "고르기" 는
+//     `_docLabelPickImage` 를 **직접 부르지 않고 실제 렌더된 <img> 를 `.click()`** 한다 — 윈도
+//     경로(백슬래시+숫자, 예 `\1`)를 onclick="...('...')" 에 그대로 넣었더니 JS 가 8진
+//     이스케이프로 읽어 경로가 조용히 깨지는 버그였는데, 함수를 직접 호출하는 시험으로는
+//     그 깨짐이 **onclick 문자열이 브라우저에서 다시 파싱될 때만** 나타나서 절대 못 잡는다
+//     (이 하네스도 처음엔 직접 호출로 썼다가 그 버그를 놓쳤다).
 (function () {
     'use strict';
 
@@ -210,8 +216,12 @@
         window._docLabelFindResult = {}; window._docLabelFindMatches = {}; window._docLabelImgState = {};
 
         var FAKE_CODE = '999001';
-        var FAKE_PATH = 'C:\\SAP_DMS\\원자재승인원\\P01999999999\\999001_LABEL.XLSX';
+        // ⚠️⚠️ 일부러 "\1" 을 심는다 — 실측 버그(윈도 경로를 onclick="...('...')" 에 그대로
+        //    박으면 JS 가 `\1` 을 8진 이스케이프로 읽어 조용히 깨졌다)가 **재발하면 바로 잡힌다**.
+        //    실제 사고 경로와 글자 모양이 같다("...P01202300096\124291...").
+        var FAKE_PATH = 'C:\\SAP_DMS\\원자재승인원\\P01100000001\\124291_LABEL STICKER-,PRO_CE_VINA,-,SLV,75X70 (1).XLSX';
         var uploadCalls = [];
+        var imageBytesCalls = [];
         window._dgUploadBlob = async function (folder, name, blob) {
             uploadCalls.push({ folder: folder, name: name, size: blob && blob.size });
             return { ok: true, name: name, size: blob && blob.size || 0 };
@@ -220,7 +230,7 @@
             var u = String(url);
             if (u.indexOf('/sap-label-search') >= 0) {
                 return Promise.resolve({ status: 200, ok: true, json: function () {
-                    return Promise.resolve({ ok: true, matches: [{ name: '999001_LABEL.XLSX', folder: '원자재승인원\\P01999999999', path: FAKE_PATH }], partial: false });
+                    return Promise.resolve({ ok: true, matches: [{ name: '124291_LABEL.XLSX', folder: '원자재승인원\\P01100000001', path: FAKE_PATH }], partial: false });
                 } });
             }
             if (u.indexOf('/sap-label-images') >= 0) {
@@ -229,6 +239,7 @@
                 } });
             }
             if (u.indexOf('/sap-label-image-bytes') >= 0) {
+                imageBytesCalls.push(u);
                 return Promise.resolve({ status: 200, ok: true, blob: function () { return Promise.resolve(new Blob(['fake-png-bytes'], { type: 'image/png' })); } });
             }
             return saved.fetch(url, init);
@@ -245,7 +256,7 @@
             await window._docLabelFind('label-spec', 0);
             var key = 'label-spec|0';
             var res1 = window._docLabelFindResult[key] || '';
-            ok(res1.indexOf('999001_LABEL.XLSX') >= 0, '검색 결과에 파일명이 안 보인다: ' + res1);
+            ok(res1.indexOf('124291_LABEL.XLSX') >= 0, '검색 결과에 파일명이 안 보인다: ' + res1);
             ok(res1.indexOf('미리보기') >= 0, '미리보기 토글 링크가 없다');
 
             // ═══ 2. 미리보기 펼치기 ═══
@@ -256,7 +267,22 @@
                '썸네일 URL 에 member 가 안 실렸다: ' + res2);
 
             // ═══ 3. 고르기 → 공용 라이브러리(라벨도안) 저장, 프로젝트 폴더 아님 ═══
-            await window._docLabelPickImage('label-spec', 0, FAKE_PATH, '', 'xl/media/image1.png');
+            //    ⚠️⚠️ 함수를 직접 부르지 않고 **실제 렌더된 썸네일을 진짜로 클릭한다** — 이 버그는
+            //    onclick="...('...')" 문자열이 브라우저에서 다시 파싱될 때만 나타나서, 함수를
+            //    직접 호출하는 시험으로는 절대 못 잡는다(바로 이 방식으로 한 번 놓쳤다).
+            window._docRender();
+            var thumb = document.querySelector('#doc-page-body img[title*="image1.png"]');
+            ok(!!thumb, '썸네일 <img> 를 실제 DOM 에서 못 찾았다');
+            if (thumb) thumb.click();
+            await new Promise(function (res) { setTimeout(res, 50); });   // 클릭 핸들러의 await 들이 풀리게
+
+            ok(imageBytesCalls.length === 1, '/sap-label-image-bytes 가 한 번 안 불렸다: ' + imageBytesCalls.length);
+            if (imageBytesCalls.length) {
+                var calledPath = decodeURIComponent((imageBytesCalls[0].split('path=')[1] || '').split('&')[0]);
+                ok(calledPath === FAKE_PATH,
+                   '경로가 onclick 문자열을 거치며 깨졌다(실측 버그 — `\\1` 이 8진 이스케이프로 읽힘): '
+                   + JSON.stringify(calledPath) + ' !== ' + JSON.stringify(FAKE_PATH));
+            }
             ok(uploadCalls.length === 1, '_dgUploadBlob 이 한 번 안 불렸다: ' + uploadCalls.length);
             var up = uploadCalls[0] || {};
             ok(up.folder === '라벨도안', '프로젝트 폴더가 아니라 공용 폴더(라벨도안)에 저장돼야 한다: ' + up.folder);
