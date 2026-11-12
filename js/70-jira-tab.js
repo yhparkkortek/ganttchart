@@ -503,26 +503,55 @@
         return BASE + '/jira/attachment?url=' + encodeURIComponent(att.url) + '&name=' + encodeURIComponent(att.filename);
     }
 
+    // 상세 모달을 다시 그릴 때마다 renderAttachments가 다시 채운다 — onclick에 이름을 그대로
+    // 박으면 따옴표 섞인 파일명에서 깨지므로(JIRA 프로젝트 이름 사고와 같은 이유) 인덱스로 찾는다.
+    var _attachList = [];
+
     function renderAttachments(list) {
+        _attachList = list || [];
         if (!list || !list.length) return '';
-        var items = list.map(function (a) {
+        var items = list.map(function (a, i) {
             var href = attachmentUrl(a);
             var isImg = /^image\//.test(a.mimeType || '');
             var inner = isImg
                 ? '<img src="' + esc(href) + '" alt="' + esc(a.filename) + '" style="width:90px; height:90px; object-fit:cover; border-radius:6px; display:block;">'
                 : '<div style="width:90px; height:90px; display:flex; align-items:center; justify-content:center; font-size:30px; background:#f5f7f8; border-radius:6px;">📄</div>';
-            return '<a href="' + esc(href) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + ' (' + humanSize(a.size) + ')"'
-                + ' style="display:flex; flex-direction:column; align-items:center; gap:3px; width:94px; text-decoration:none;">'
-                + inner
-                + '<span style="font-size:10.5px; color:#555; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(a.filename) + '</span>'
-                + '<span style="font-size:10px; color:#aaa;">' + esc(humanSize(a.size)) + '</span>'
-                + '</a>';
+            var nameLine = '<span style="font-size:10.5px; color:#555; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(a.filename) + '</span>'
+                + '<span style="font-size:10px; color:#aaa;">' + esc(humanSize(a.size)) + '</span>';
+            var commonSt = 'display:flex; flex-direction:column; align-items:center; gap:3px; width:94px; text-decoration:none; cursor:pointer;';
+            if (isImg) {
+                // 🖼 이미지는 브라우저가 바로 보여줄 수 있다 — 그대로 새 탭.
+                return '<a href="' + esc(href) + '" target="_blank" rel="noopener" title="' + esc(a.filename) + ' (' + humanSize(a.size) + ')" style="' + commonSt + '">' + inner + nameLine + '</a>';
+            }
+            // 📄 [2026-11-12 사용자 요청] 그 외(엑셀 등)는 브라우저가 못 띄우니(결국 다운로드일 뿐)
+            // **연결 프로그램으로 먼저** 연다 — 실패하면(Windows 아님 등) 내려받기로 돌아간다.
+            return '<div onclick="window._jiraOpenAttachmentNative(' + i + ')" title="' + esc(a.filename) + ' (' + humanSize(a.size) + ') — '
+                + esc(T('클릭하면 연결 프로그램으로 엽니다', 'Click to open with the associated app')) + '" style="' + commonSt + '">' + inner + nameLine + '</div>';
         }).join('');
         return '<div style="margin-bottom:12px;">'
             + '<div style="font-weight:bold; color:#555; margin-bottom:6px;">📎 ' + T('첨부파일', 'Attachments') + ' (' + list.length + ')</div>'
             + '<div style="display:flex; flex-wrap:wrap; gap:10px;">' + items + '</div>'
             + '</div>';
     }
+
+    // 🖥️ [2026-11-12 사용자 요청] 첨부를 연결 프로그램으로 — NAS(`_dsOpenNative`)와 같은 역할이지만
+    // JIRA 첨부는 로컬에 없어 백엔드가 먼저 받은 뒤 연다. 실패하면(Windows 아님·백엔드 오류)
+    // 조용히 끝내지 않고 기존 다운로드 링크로 돌아간다(`_dsOpenNative`의 폴백과 같은 모양).
+    window._jiraOpenAttachmentNative = async function (i) {
+        var a = _attachList[i];
+        if (!a) return;
+        try {
+            var d = await fetch(BASE + '/jira/attachment/open-native', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: a.url, name: a.filename })
+            }).then(function (r) { return r.json(); });
+            if (!d || d.ok === false) throw new Error((d && d.message) || T('실패', 'Failed'));
+        } catch (e) {
+            if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : e) + ' — '
+                + T('대신 내려받습니다', 'downloading instead'), 'warning');
+            window.open(attachmentUrl(a), '_blank');
+        }
+    };
 
     function modalSetStatus(msg, kind) {
         var el = document.getElementById('jira-issue-status');
@@ -605,8 +634,12 @@
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
             + renderAttachments(issue.attachments)
-            + '<div style="display:flex; align-items:center; gap:6px; margin-bottom:12px;">'
-            + '<input type="file" id="jira-attach-file" style="flex:1; min-width:0; font-size:11.5px;">'
+            + '<div id="jira-attach-dropzone" style="border:1.5px dashed #a3d9e0; border-radius:6px; padding:9px 10px;'
+            + ' text-align:center; background:#fafefe; font-size:11.5px; color:#789; cursor:pointer; margin-bottom:8px; transition:background .15s;">'
+            + '📎 <span id="jira-attach-filename">' + T('파일을 여기로 끌어놓거나 클릭해서 고르세요', 'Drop a file here or click to choose') + '</span>'
+            + '<input type="file" id="jira-attach-file" style="display:none;">'
+            + '</div>'
+            + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraUploadAttachment(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">⬆ ' + T('첨부 저장', 'Save attachment') + '</button>'
             + '</div>'
             + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
@@ -640,6 +673,32 @@
             var inp = document.getElementById('jira-f-assignee');
             inp.value = u.name;
             document.getElementById('jira-assignee-hits').style.display = 'none';
+        });
+
+        // 📎 [2026-11-12 사용자 요청] 첨부 고르기에도 드래그앤드롭 — 클릭하면 그대로 파일 고르기,
+        // 끌어다 놓으면 그 파일이 선택된다(바로 올리지 않는다 — ⬆ 버튼으로 한 번 더 확인).
+        var dz = document.getElementById('jira-attach-dropzone');
+        var attFileEl = document.getElementById('jira-attach-file');
+        var fnameEl = document.getElementById('jira-attach-filename');
+        var defaultFnameMsg = T('파일을 여기로 끌어놓거나 클릭해서 고르세요', 'Drop a file here or click to choose');
+        var paintFname = function () {
+            var f = attFileEl.files && attFileEl.files[0];
+            fnameEl.textContent = f ? f.name : defaultFnameMsg;
+        };
+        dz.addEventListener('click', function () { attFileEl.click(); });
+        attFileEl.addEventListener('change', paintFname);
+        dz.addEventListener('dragover', function (e) {
+            e.preventDefault(); e.stopPropagation();   // ⚠️ 안 막으면 js/04f 전역 드롭(프로젝트 엑셀 열기)이 같이 돈다
+            dz.style.background = '#e0f5f7';
+        });
+        dz.addEventListener('dragleave', function (e) { e.preventDefault(); e.stopPropagation(); dz.style.background = '#fafefe'; });
+        dz.addEventListener('drop', function (e) {
+            e.preventDefault(); e.stopPropagation();
+            dz.style.background = '#fafefe';
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                attFileEl.files = e.dataTransfer.files;
+                paintFname();
+            }
         });
     };
 

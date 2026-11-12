@@ -41,6 +41,11 @@ class FakeResp(object):
     def json(self):
         return self._body
 
+    @property
+    def content(self):
+        # 실제 requests.Response 흉내 — body가 이미 bytes면(다운로드 류) 그대로 돌려준다.
+        return self._body if isinstance(self._body, bytes) else str(self._body).encode('utf-8')
+
 
 def fresh():
     jb._BLOCKED['reason'] = None
@@ -300,6 +305,32 @@ check('attachments 엔드포인트', seen_up['url'].endswith('/rest/api/2/issue/
 check('X-Atlassian-Token 헤더 필수(옛 Jira XSRF 우회)', (seen_up['headers'] or {}).get('X-Atlassian-Token') == 'no-check', seen_up['headers'])
 check('files에 파일을 실어 보낸다', seen_up['files'] is not None and 'file' in seen_up['files'], seen_up['files'])
 check('결과가 attachments 모양(_shape_issue와 같은 키)', result[0]['filename'] == '측정데이터.xlsx' and result[0]['url'].startswith(jb.JIRA_BASE), result)
+
+print('\n[12] open_attachment_native — 받은 바이트를 임시 폴더에 쓰고 연다(os.startfile은 가짜)')
+#    ⚠️ os.startfile은 실제로 창을 띄우므로 테스트에선 경계로 삼는다 — 그 앞(다운로드·파일쓰기·
+#    경로 안전화)까지는 전부 진짜 코드로 돈다.
+fresh(); stub_auth(True)
+calls = arm([FakeResp(200, b'fake-image-bytes')])
+seen_start = {}
+_orig_startfile = getattr(jb.os, 'startfile', None)
+jb.os.startfile = lambda p: seen_start.__setitem__('path', p)
+try:
+    fp = jb.open_attachment_native(jb.JIRA_BASE + '/secure/attachment/1/photo.jpg', '../../evil\\photo*.jpg')
+    check('파일이 실제로 쓰였다', os.path.isfile(fp), fp)
+    with open(fp, 'rb') as f:
+        check('내용이 받은 바이트 그대로', f.read() == b'fake-image-bytes')
+    check('경로 조각이 빠진 안전한 파일명', os.path.basename(fp) == 'photo_.jpg', fp)
+    check('os.startfile이 그 경로로 불렸다', seen_start.get('path') == fp, seen_start)
+finally:
+    if _orig_startfile is not None:
+        jb.os.startfile = _orig_startfile
+    else:
+        del jb.os.startfile
+    try:
+        if 'fp' in globals() and os.path.isfile(fp):
+            os.remove(fp)
+    except Exception:
+        pass
 
 print('\n' + ('=' * 50))
 print('PASS %d / FAIL %d' % (len(PASS), len(FAIL)))

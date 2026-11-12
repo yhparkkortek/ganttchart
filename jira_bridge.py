@@ -291,6 +291,37 @@ def fetch_attachment(url):
     return _request('GET', url[len(JIRA_BASE):])
 
 
+def _safe_attachment_filename(name):
+    """경로 조각을 뺀다 — JIRA 메타데이터를 신뢰하지만, 로컬 파일 시스템에 쓰는 자리라
+    방어적으로 한 번 더 거른다(`os.path.basename` + 금지 문자 치환)."""
+    import re
+    name = os.path.basename(str(name or 'attachment'))
+    name = re.sub(r'[\\/:*?"<>|]', '_', name).strip() or 'attachment'
+    return name
+
+
+def open_attachment_native(url, filename):
+    """📎 [2026-11-12 사용자 요청] 첨부를 **연결 프로그램으로** 연다 — NAS(`/nas/app/open-native`)
+    와 같은 UX 지만, JIRA 첨부는 이미 로컬에 있는 파일이 아니라 **매번 내려받아야 한다**(이
+    서버로 와서 바이트를 받고 임시 폴더에 1부만 남긴다 — 같은 이름이면 덮어써 쌓이지 않는다).
+    Windows 전용(`os.startfile`).
+    """
+    if not hasattr(os, 'startfile'):
+        raise JiraApiError('이 기능은 Windows에서만 됩니다.')
+    r = fetch_attachment(url)   # 화이트리스트(JIRA_BASE/secure/attachment/) 검사는 여기서 이미 한다
+    import tempfile
+    d = os.path.join(tempfile.gettempdir(), 'kortek_jira_attachments')
+    os.makedirs(d, exist_ok=True)
+    fp = os.path.join(d, _safe_attachment_filename(filename))
+    with open(fp, 'wb') as f:
+        f.write(r.content)
+    try:
+        os.startfile(fp)        # noqa: S606 — 우리가 방금 받아 쓴 임시 폴더 안 파일로 한정된다
+    except Exception as e:
+        raise JiraApiError('열지 못했습니다: %s' % e)
+    return fp
+
+
 def add_attachment(key, filename, content, mime_type=None):
     """이슈에 새 파일을 올린다(첨부 저장, 2026-11-11 추가).
 

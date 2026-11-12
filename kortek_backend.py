@@ -5671,6 +5671,25 @@ def jira_attachment():
         return jsonify({'ok': False, 'message': str(e)}), 502
 
 
+@app.route('/jira/attachment/open-native', methods=['POST'])
+def jira_attachment_open_native():
+    """📎 [2026-11-12 사용자 요청] 첨부를 연결 프로그램으로 연다(Windows 전용) — NAS의
+    `/nas/app/open-native`·`/doc/open-native`와 같은 UX 지만, JIRA 첨부는 로컬에 없어서
+    이 라우트가 먼저 받아 임시 폴더에 1부를 쓴 뒤 os.startfile 로 연다(jira_bridge.
+    open_attachment_native)."""
+    req = request.get_json(force=True, silent=True) or {}
+    url = req.get('url') or ''
+    name = req.get('name') or 'attachment'
+    if not url:
+        return jsonify({'ok': False, 'message': 'url이 필요합니다.'}), 400
+    try:
+        import jira_bridge
+        fp = jira_bridge.open_attachment_native(url, name)
+        return jsonify({'ok': True, 'path': fp})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 502
+
+
 @app.route('/jira/issue/<key>/attachment', methods=['POST'])
 def jira_issue_attachment_upload(key):
     """📎 첨부 저장(2026-11-11 추가) — 이 이슈에 새 파일을 올린다. 사람이 파일을 고르고

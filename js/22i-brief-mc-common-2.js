@@ -1020,8 +1020,13 @@ window._renderProductImageSlots = function () {
             + '<button class="prod-del-btn" title="' + (_en ? 'Delete' : '삭제') + '" style="display:block;">✕</button>'
             + '</div>';
     }).join('');
-    html += '<div class="prod-img-slot" id="prod-img-add" title="' + (_en ? 'Click to add photos' : '클릭하여 사진 추가') + '">'
-        + '<div class="prod-placeholder">📷<br>' + (_en ? 'Add photo' : '사진 추가') + '<br><span style="font-size:10px;">' + (_en ? '(several at once OK)' : '(여러 장 한꺼번에 가능)') + '</span></div>'
+    // 🫳 [2026-11-12 사용자 요청] PARTS/Elec Parts 첨부 창과 같은 끌어다 놓기 — 사진은 클릭 대신
+    //    바로 끌어다 놓는 경우가 많아서 형제 기능(22d/22e)과 모양·동작을 맞춘다.
+    html += '<div class="prod-img-slot" id="prod-img-add" title="' + (_en ? 'Click to add photos, or drag & drop' : '클릭하거나 끌어다 놓아 사진 추가') + '"'
+        + ' ondragover="event.preventDefault(); event.stopPropagation(); this.style.background=\'#e9eef3\';"'
+        + ' ondragleave="this.style.background=\'\';"'
+        + ' ondrop="event.preventDefault(); event.stopPropagation(); this.style.background=\'\'; window._prodImgHandleFileDrop(event.dataTransfer.files);">'
+        + '<div class="prod-placeholder">📷<br>' + (_en ? 'Add photo' : '사진 추가') + '<br><span style="font-size:10px;">' + (_en ? '(drag & drop OK)' : '(드래그앤드롭 가능)') + '</span></div>'
         + '<input type="file" multiple style="display:none;">'
         + '</div>';
     list.innerHTML = html;
@@ -1039,6 +1044,10 @@ window._renderProductImageSlots = function () {
         addInput.value = '';
         files.forEach(function (f) { window._uploadProductImage(f); });
     });
+    // 🫳 끌어다 놓기 — 위 change 핸들러와 같은 경로(파일마다 _uploadProductImage)로 보낸다.
+    window._prodImgHandleFileDrop = function (fileList) {
+        Array.prototype.slice.call(fileList || []).forEach(function (f) { window._uploadProductImage(f); });
+    };
     // 프로젝트를 열 때마다 여기를 지난다(populateTabData) — 옛 base64가 남아 있으면 NAS로 옮긴다.
     setTimeout(function () { window._prodImgMigrateLegacy(); }, 3000);
 };
