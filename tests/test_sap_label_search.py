@@ -105,6 +105,37 @@ def test_search_real_shapes(tmp):
     ok('   없는 코드는 빈 목록(오류 아님)', r2.status_code == 200 and j2['ok'] and j2['matches'] == [])
 
 
+def test_search_by_size(tmp):
+    # ⑨ [2026-11-12 10차, 사용자 요청] 코드 대신 **라벨규격**으로도 찾는다 — 실측 파일명에
+    #    치수가 공백 없이 들어있다(`...,SLV,75X70 (1).XLSX`, `...WHT,50X25.ZIP`).
+    p01 = B.sap_folder_path('docs_P01', create=True)
+    touch(os.path.join(p01, 'P01202300096', '124291_LABEL STICKER-,PRO_CE_VINA,-,SLV,75X70 (1).XLSX'))
+    touch(os.path.join(p01, 'P01202102144', '122549-LABEL STICKER-LCM,ID,SG-K43,WHT,50X25.ZIP'))
+    c = B.app.test_client()
+
+    r = c.get('/sap-label-search?q=' + _urlq('75 X 70'))
+    j = r.get_json()
+    ok('⑨ 공백 섞인 규격으로 찾는다(파일명엔 공백 없음)', r.status_code == 200 and j['ok']
+       and any('75X70' in m['name'] for m in j['matches']), j)
+    ok('⑨ 다른 규격(50X25) 파일은 안 걸린다', not any('50X25' in m['name'] for m in j['matches']))
+
+    r2 = c.get('/sap-label-search?q=' + _urlq('50x25'))   # 대소문자도 무시
+    j2 = r2.get_json()
+    ok('⑨ 대소문자 무시하고 찾는다', r2.status_code == 200 and j2['ok']
+       and any('50X25' in m['name'] for m in j2['matches']), j2)
+
+    r3 = c.get('/sap-label-search?q=' + _urlq('ab'))
+    ok('⑨ 너무 짧은 검색어(3자 미만) → 400', r3.status_code == 400)
+
+    r4 = c.get('/sap-label-search')
+    ok('⑨ code 도 q 도 없으면 400', r4.status_code == 400)
+
+
+def _urlq(s):
+    import urllib.parse
+    return urllib.parse.quote(s)
+
+
 def test_partial_cap():
     orig_max = B._LABEL_SEARCH_MAX
     B._LABEL_SEARCH_MAX = 3
@@ -243,6 +274,8 @@ def main():
     test_code_validation()
     print('=== ②③④ 실측 파일 이름 규칙 + 오탐 방지 + 자재문서 폴더 ===')
     with_temp_catalog(test_search_real_shapes)
+    print('=== ⑨ 라벨규격으로 찾기(q 파라미터) ===')
+    with_temp_catalog(test_search_by_size)
     print('=== ⑤ 상한 + partial ===')
     test_partial_cap()
     print('=== ⑥ /sap-open-file 화이트리스트 ===')

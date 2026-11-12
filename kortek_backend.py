@@ -4931,10 +4931,25 @@ _LABEL_SEARCH_MAX = 50
 
 @app.route('/sap-label-search', methods=['GET'])
 def sap_label_search():
+    # 🔎 [2026-11-12 7차, 사용자 요청] 코드 말고 **라벨규격**(예: "75 X 70")으로도 찾을 수 있다 —
+    #    실측 파일명에 치수가 공백 없이 그대로 들어 있다(`...,SLV,75X70 (1).XLSX`,
+    #    `...WHT,50X25.ZIP`). `q` 파라미터는 공백/대소문자를 무시하고 부분일치로 찾는다
+    #    (코드처럼 숫자 경계를 요구하지 않는다 — 규격 문자열은 애초에 숫자만이 아니다).
     code = (request.args.get('code') or '').strip()
-    if not re.fullmatch(r'\d{4,7}', code):
-        return jsonify({'ok': False, 'error': '6자리 안팎의 숫자 코드를 입력하세요.'}), 400
-    pat = re.compile(r'(?<!\d)' + re.escape(code) + r'(?!\d)')
+    q = (request.args.get('q') or '').strip()
+    if code:
+        if not re.fullmatch(r'\d{4,7}', code):
+            return jsonify({'ok': False, 'error': '6자리 안팎의 숫자 코드를 입력하세요.'}), 400
+        pat = re.compile(r'(?<!\d)' + re.escape(code) + r'(?!\d)')
+        norm_q = None
+    elif q:
+        norm_q = re.sub(r'\s+', '', q).lower()
+        if len(norm_q) < 3:
+            return jsonify({'ok': False, 'error': '검색어가 너무 짧습니다(3자 이상 입력하세요).'}), 400
+        pat = None
+    else:
+        return jsonify({'ok': False, 'error': 'code 또는 q 파라미터가 필요합니다.'}), 400
+
     matches, seen_roots, partial = [], set(), False
     for key in _LABEL_SEARCH_FOLDER_KEYS:
         root = sap_folder_path(key, create=False)
@@ -4943,13 +4958,14 @@ def sap_label_search():
         seen_roots.add(root)
         for dirpath, _dirnames, filenames in os.walk(root):
             for fn in filenames:
-                if pat.search(fn):
+                hit = pat.search(fn) if pat else (norm_q in re.sub(r'\s+', '', fn).lower())
+                if hit:
                     full = os.path.join(dirpath, fn)
                     matches.append({'name': fn, 'folder': os.path.relpath(dirpath, SAP_DMS_ROOT), 'path': full})
             if len(matches) >= _LABEL_SEARCH_MAX:
                 partial = True
                 break
-    return jsonify({'ok': True, 'code': code, 'matches': matches[:_LABEL_SEARCH_MAX], 'partial': partial})
+    return jsonify({'ok': True, 'code': code, 'q': q, 'matches': matches[:_LABEL_SEARCH_MAX], 'partial': partial})
 
 
 def _sap_dms_safe_path(path):

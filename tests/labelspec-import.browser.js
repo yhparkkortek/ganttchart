@@ -222,6 +222,7 @@
         var FAKE_PATH = 'C:\\SAP_DMS\\원자재승인원\\P01100000001\\124291_LABEL STICKER-,PRO_CE_VINA,-,SLV,75X70 (1).XLSX';
         var uploadCalls = [];
         var imageBytesCalls = [];
+        var searchCalls = [];
         window._dgUploadBlob = async function (folder, name, blob) {
             uploadCalls.push({ folder: folder, name: name, size: blob && blob.size });
             return { ok: true, name: name, size: blob && blob.size || 0 };
@@ -229,6 +230,7 @@
         window.fetch = function (url, init) {
             var u = String(url);
             if (u.indexOf('/sap-label-search') >= 0) {
+                searchCalls.push(u);
                 return Promise.resolve({ status: 200, ok: true, json: function () {
                     return Promise.resolve({ ok: true, matches: [{ name: '124291_LABEL.XLSX', folder: '원자재승인원\\P01100000001', path: FAKE_PATH }], partial: false });
                 } });
@@ -252,12 +254,34 @@
             d.labelItems = [{ size: '75 X 70', code: FAKE_CODE, position: '제품', note: '' }];
             window._docRender();
 
-            // ═══ 1. 찾기 ═══
+            // ═══ 1. 찾기(코드) ═══
             await window._docLabelFind('label-spec', 0);
             var key = 'label-spec|0';
             var res1 = window._docLabelFindResult[key] || '';
             ok(res1.indexOf('124291_LABEL.XLSX') >= 0, '검색 결과에 파일명이 안 보인다: ' + res1);
             ok(res1.indexOf('미리보기') >= 0, '미리보기 토글 링크가 없다');
+            ok(searchCalls[searchCalls.length - 1].indexOf('code=' + FAKE_CODE) >= 0,
+               '코드 검색인데 code= 파라미터가 안 실렸다: ' + searchCalls[searchCalls.length - 1]);
+            ok(res1.indexOf('SAP 에서') >= 0, '코드 검색엔 "SAP 에서 다시 받기" 링크가 있어야 한다: ' + res1);
+
+            // ═══ 1b. [2026-11-12 10차] 규격으로도 찾기 — 코드 없이 규격만으로 ═══
+            //    ⚠️ 규격 검색은 자재번호를 모르니 "SAP 에서 다시 받기" 링크가 **없어야** 한다.
+            await window._docLabelFindBySize('label-spec', 0);
+            var resSize = window._docLabelFindResult[key] || '';
+            ok(searchCalls[searchCalls.length - 1].indexOf('q=' + encodeURIComponent('75 X 70')) >= 0,
+               '규격 검색인데 q= 파라미터가 안 실렸다: ' + searchCalls[searchCalls.length - 1]);
+            ok(resSize.indexOf('124291_LABEL.XLSX') >= 0, '규격 검색 결과에 파일명이 안 보인다: ' + resSize);
+            ok(resSize.indexOf('SAP 에서') < 0, '규격 검색엔 "SAP 에서 다시 받기" 링크가 없어야 한다(코드를 모른다): ' + resSize);
+
+            // ═══ 1c. 규격이 너무 짧으면 검색 자체를 막는다(백엔드 호출 전에) ═══
+            d.labelItems[0].size = 'ab';
+            var callsBefore = searchCalls.length;
+            await window._docLabelFindBySize('label-spec', 0);
+            ok(searchCalls.length === callsBefore, '규격이 짧은데도 검색 요청을 보냈다');
+            d.labelItems[0].size = '75 X 70';   // 되돌려서 이후 단계(미리보기·고르기)가 코드 검색 결과를 쓰게
+
+            // 다시 코드로 찾아 이후 단계(미리보기·고르기)가 쓸 결과를 맞춰 둔다
+            await window._docLabelFind('label-spec', 0);
 
             // ═══ 2. 미리보기 펼치기 ═══
             await window._docLabelToggleImages(key, 0);
@@ -300,6 +324,30 @@
                    '도안 <img> src 가 공용 폴더를 안 가리킨다: ' + img.src);
                 ok(img.src.indexOf('999001.png') >= 0, '도안 <img> src 에 파일명이 안 들어갔다: ' + img.src);
             }
+
+            // ═══ 5. [2026-11-12 9차] 배경 잘라내기 — 드래그 선택 상태 전이(실제 이미지 로딩·
+            //    캔버스는 cross-origin 이라 이 하네스에선 안 본다 — 라이브로 직접 확인했다) ═══
+            window._docLabelCropArm(FAKE_CODE);
+            ok(window._docLabelCropState && window._docLabelCropState.code === FAKE_CODE, '자르기를 켜도 상태가 안 들어간다');
+            ok(window._docLabelNotePlacing === null, '자르기를 켜면 표시 찍기는 꺼져 있어야 한다');
+            window._docRender();
+            var cropImg = document.querySelector('#doc-page-body img[data-crop-img="' + FAKE_CODE + '"]');
+            ok(!!cropImg, '자르기 모드인데 data-crop-img 이미지를 못 찾았다');
+            ok(cropImg && typeof cropImg.onmousedown === 'function', '자르기 모드인데 드래그 리스너가 안 걸렸다');
+            if (cropImg) {
+                // getBoundingClientRect 는 테스트 DOM 에서 0일 수 있어 — 드래그 수학은 함수 안
+                // toFrac 비율 계산이라 사실상 `rect` 에만 의존한다. 실제 숫자 검증은 라이브로
+                // 이미 했으니, 여기선 "드래그하면 선택이 생긴다"까지만 가볍게 본다.
+                var rect0 = cropImg.getBoundingClientRect();
+                if (rect0.width > 0) {
+                    cropImg.dispatchEvent(new MouseEvent('mousedown', { clientX: rect0.left + 2, clientY: rect0.top + 2, bubbles: true }));
+                    document.dispatchEvent(new MouseEvent('mousemove', { clientX: rect0.left + rect0.width * 0.4, clientY: rect0.top + rect0.height * 0.4, bubbles: true }));
+                    document.dispatchEvent(new MouseEvent('mouseup', { clientX: rect0.left + rect0.width * 0.4, clientY: rect0.top + rect0.height * 0.4, bubbles: true }));
+                    ok(!!(window._docLabelCropState && window._docLabelCropState.sel), '드래그해도 선택 영역이 안 생긴다');
+                }
+            }
+            window._docLabelCropCancel();
+            ok(window._docLabelCropState === null, '취소해도 자르기 상태가 안 꺼진다');
 
         } catch (e) {
             fail++; notes.push('💥 ' + (e && e.stack || e));

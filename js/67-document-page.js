@@ -644,6 +644,116 @@
         window._docRender();
         await window._docLabelNotesSave(code);
     };
+    // ✂️ [2026-11-12 9차, 사용자 요청] 도안 배경 잘라내기 — 드래그로 사각형을 고르면 그 안쪽만
+    //    남긴다(캔버스로 잘라서 **같은 공용 파일을 덮어쓴다** — 다른 프로젝트도 보는 자료라
+    //    "이 잘린 모습이 맞다"는 정정은 전부에게 적용돼야 한다). ⚠️ 자른 범위 밖에 있던 표시
+    //    (📍)는 더 이상 그 도안 위 어디도 가리키지 못해 지워지고, 안에 있던 표시는 새 비율
+    //    좌표로 다시 맞춘다.
+    window._docLabelCropState = window._docLabelCropState || null;   // {code, sel:{x0,y0,x1,y1}|null}
+    window._docLabelCropArm = function (code) {
+        window._docLabelNotePlacing = null;   // 표시 찍기와 동시에 켜지면 혼란스럽다 — 하나만
+        window._docLabelCropState = { code: code, sel: null };
+        window._docRender();
+    };
+    window._docLabelCropCancel = function () {
+        window._docLabelCropState = null;
+        window._docRender();
+    };
+    // 렌더 직후(`_docRender` 끝) 한 번만 불린다 — 매번 `innerHTML` 을 통째로 새로 만들어서
+    // 옛 리스너는 엘리먼트와 함께 이미 사라졌다(따로 떼어낼 필요가 없다).
+    window._docLabelCropWire = function (img) {
+        var state = window._docLabelCropState;
+        if (!state) return;
+        var wrap = img.parentElement;
+        var box = null, start = null;
+        var toFrac = function (ev) {
+            var r = img.getBoundingClientRect();
+            return { x: Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)),
+                     y: Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)) };
+        };
+        var onMove = function (ev) {
+            if (!start) return;
+            var p = toFrac(ev);
+            var x0 = Math.min(start.x, p.x), x1 = Math.max(start.x, p.x);
+            var y0 = Math.min(start.y, p.y), y1 = Math.max(start.y, p.y);
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'doc-noprint';
+                box.style.cssText = 'position:absolute; border:2px dashed #1971c2; background:rgba(25,113,194,.15); pointer-events:none;';
+                wrap.appendChild(box);
+            }
+            box.style.left = (x0 * 100) + '%'; box.style.top = (y0 * 100) + '%';
+            box.style.width = ((x1 - x0) * 100) + '%'; box.style.height = ((y1 - y0) * 100) + '%';
+            state.sel = { x0: x0, y0: y0, x1: x1, y1: y1 };
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            var hadSel = start && box;
+            start = null;
+            if (hadSel) window._docRender();   // "적용" 버튼을 보이게 — 드래그 중엔 다시 안 그린다(끊기지 않게)
+        };
+        img.onmousedown = function (ev) {
+            ev.preventDefault();
+            start = toFrac(ev);
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    window._docLabelCropApply = async function () {
+        var state = window._docLabelCropState;
+        if (!state || !state.sel) return;
+        var code = state.code, sel = state.sel;
+        if ((sel.x1 - sel.x0) < 0.02 || (sel.y1 - sel.y0) < 0.02) {
+            _toast('⚠️ ' + _t('선택한 영역이 너무 작습니다 — 다시 드래그해 주세요.', 'Selection too small — drag again.'), 'error');
+            return;
+        }
+        var artFile = window._docLabelArtIndex && window._docLabelArtIndex[code];
+        if (!artFile) { _toast('⚠️ ' + _t('도안을 찾을 수 없습니다.', 'Artwork not found.'), 'error'); return; }
+        _toast('⏳ ' + _t('자르는 중…', 'Cropping…'), 'info');
+        var url = BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile)
+            + '&_cb=' + Date.now();   // ⚠️ 캔버스로 읽으려면 브라우저 캐시의 옛 그림이 아니라 지금 파일이어야 한다
+        var img = new Image();
+        // ⚠️⚠️ [실측 버그] `crossOrigin` 을 `src` **전에** 안 주면 — 백엔드가 CORS 헤더를 이미
+        //    돌려주고 있어도(`kortek_backend.py` 전역 CORS) — 브라우저가 이 이미지를 "오염된"
+        //    것으로 표시해 `canvas.toBlob()` 이 SecurityError 로 죽는다(앱과 백엔드가 다른 포트,
+        //    즉 다른 출처라서). 속성을 먼저 선언해야 CORS 모드로 다시 받아온다.
+        img.crossOrigin = 'anonymous';
+        var loaded = await new Promise(function (resolve) {
+            img.onload = function () { resolve(true); };
+            img.onerror = function () { resolve(false); };
+            img.src = url;
+        });
+        if (!loaded) { _toast('⚠️ ' + _t('이미지를 불러오지 못했습니다.', 'Could not load the image.'), 'error'); return; }
+        var sx = Math.round(sel.x0 * img.naturalWidth), sy = Math.round(sel.y0 * img.naturalHeight);
+        var sw = Math.max(1, Math.round((sel.x1 - sel.x0) * img.naturalWidth));
+        var sh = Math.max(1, Math.round((sel.y1 - sel.y0) * img.naturalHeight));
+        var canvas = document.createElement('canvas');
+        canvas.width = sw; canvas.height = sh;
+        canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        var blob = await new Promise(function (resolve) { canvas.toBlob(resolve, 'image/png'); });
+        if (!blob) { _toast('⚠️ ' + _t('자르기에 실패했습니다.', 'Crop failed.'), 'error'); return; }
+        if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
+        // ⚠️ 항상 .png 로 저장한다(canvas.toBlob 기본) — 원본 확장자가 .jpeg 였으면 그 옛 파일은
+        //    NAS 에 그대로 남지만(공용 폴더는 안 지운다) 인덱스가 새 .png 파일을 가리켜 화면엔 안 보인다.
+        var fname = code + '.png';
+        var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, fname, blob, { forceOverwrite: true });
+        if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
+        window._docLabelArtIndex[code] = fname;
+        // 📍 잘린 범위 밖의 표시는 더 이상 가리킬 자리가 없어 지운다 — 안쪽 것은 새 비율로 다시 맞춘다
+        var notes = window._docLabelNotesCache[code] || [];
+        var kept = [], dropped = 0;
+        notes.forEach(function (n) {
+            if (n.x >= sel.x0 && n.x <= sel.x1 && n.y >= sel.y0 && n.y <= sel.y1) {
+                kept.push({ x: (n.x - sel.x0) / (sel.x1 - sel.x0), y: (n.y - sel.y0) / (sel.y1 - sel.y0), text: n.text });
+            } else dropped++;
+        });
+        if (notes.length) { window._docLabelNotesCache[code] = kept; await window._docLabelNotesSave(code); }
+        window._docLabelCropState = null;
+        _toast('✅ ' + _t('잘라서 저장했습니다' + (dropped ? ' (표시 ' + dropped + '개는 범위 밖이라 지워졌습니다)' : '.'),
+                          'Cropped and saved.'), 'success');
+        window._docRender();
+    };
     // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
     //   — 그 폴더는 ZDMSR004 다운로드 결과라 이름 규칙이 제각각이다(`<code>.xlsx` ·
     //   `승인원_<code>_REV02.zip` · `<code>_설명_날짜_REV00.zip` 등). 공통점은 6자리 코드가
@@ -654,7 +764,9 @@
     window._docLabelImgState = window._docLabelImgState || {};
     // 🖼 매치 한 줄(파일 열기 + 미리보기 펼침/접힘 + 썸네일) — _docLabelFind 와 _docLabelToggleImages
     //    둘 다 결과 문자열을 다시 그려야 해서 한 곳으로 모은다.
-    var _docLabelRenderMatches = function (formId, idx, key, matches, partial) {
+    window._docLabelFindAllowSap = window._docLabelFindAllowSap || {};   // key -> 코드 검색이었나(규격 검색엔 SAP 다시받기가 없다)
+    var _docLabelRenderMatches = function (formId, idx, key, matches, partial, allowSapRefresh) {
+        if (allowSapRefresh !== undefined) window._docLabelFindAllowSap[key] = allowSapRefresh;
         var html = '🔎 ' + matches.length + _esc(_t('건 찾음', ' found')) + '<div class="doc-noprint"'
                  + ' style="margin-top:4px; display:flex; flex-direction:column; gap:6px;">'
             + matches.map(function (m, mi) {
@@ -697,7 +809,7 @@
             }).join('')
             + '</div>'
             + (partial ? ' (' + _esc(_t('너무 많아 일부만', 'truncated')) + ')' : '')
-            + _docLabelSapRefreshLink(key, true);
+            + (window._docLabelFindAllowSap[key] !== false ? _docLabelSapRefreshLink(key, true) : '');
         window._docLabelFindResult[key] = html;
     };
     // 🔄 [2026-11-12 4차, 사용자 지적] "로컬 폴더 검색"은 과거에 내려받아 둔 사본만 본다 —
@@ -748,19 +860,17 @@
         _toast('✅ ' + (res.message || _t('SAP 에서 받았습니다.', 'Fetched from SAP.')), 'success');
         await window._docLabelFind(formId, idx);   // 받은 뒤 같은 로컬 검색을 다시 돌려 찾는다
     };
-    window._docLabelFind = async function (formId, idx) {
-        var it = (_docData(formId).labelItems || [])[idx];
-        var code = String((it && it.code) || '').trim();
+    // 🔎 [2026-11-12 7차] 코드뿐 아니라 **라벨규격**(예: "75 X 70")으로도 찾을 수 있다 — 실측
+    //    파일명에 치수가 공백 없이 그대로 들어 있다(`...SLV,75X70 (1).XLSX`). 코드/규격 둘 다
+    //    같은 결과 렌더링(`_docLabelRenderMatches`)·같은 "SAP 에서 새로 받기" 흐름을 타게
+    //    **공용 실행기 하나**로 모은다(검색 경로가 둘이어도 결과 처리는 한 곳).
+    var _docLabelSearchRun = async function (formId, idx, qs, allowSapRefresh, notFoundLabel) {
         var key = formId + '|' + idx;
-        if (!/^\d{4,7}$/.test(code)) {
-            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('6자리 코드를 먼저 적으세요.', 'Enter the 6-digit code first.'));
-            window._docRender(); return;
-        }
         window._docLabelFindResult[key] = '⏳ ' + _esc(_t('찾는 중…', 'Searching…'));
         window._docRender();
         var res, r;
         try {
-            r = await fetch(BACKEND + '/sap-label-search?code=' + encodeURIComponent(code));
+            r = await fetch(BACKEND + '/sap-label-search?' + qs);
         } catch (e) {
             window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('백엔드에 닿지 못했습니다.', 'Backend unreachable.'));
             window._docRender(); return;
@@ -779,13 +889,34 @@
         if (!res || !res.ok) {
             window._docLabelFindResult[key] = '⚠️ ' + _esc((res && res.error) || _t('검색 실패', 'Search failed'));
         } else if (!res.matches || !res.matches.length) {
-            window._docLabelFindResult[key] = '🔍 ' + _esc(_t('도안을 못 찾았습니다(코드를 확인해 주세요): ', 'No drawing found for: ')) + _esc(code)
-                + _docLabelSapRefreshLink(key, false);
+            window._docLabelFindResult[key] = '🔍 ' + _esc(_t('도안을 못 찾았습니다(확인해 주세요): ', 'No drawing found for: ')) + _esc(notFoundLabel)
+                + (allowSapRefresh ? _docLabelSapRefreshLink(key, false) : '');
         } else {
             window._docLabelFindMatches[key] = res.matches;
-            _docLabelRenderMatches(formId, idx, key, res.matches, res.partial);
+            _docLabelRenderMatches(formId, idx, key, res.matches, res.partial, allowSapRefresh);
         }
         window._docRender();
+    };
+    window._docLabelFind = async function (formId, idx) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        var code = String((it && it.code) || '').trim();
+        var key = formId + '|' + idx;
+        if (!/^\d{4,7}$/.test(code)) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('6자리 코드를 먼저 적으세요.', 'Enter the 6-digit code first.'));
+            window._docRender(); return;
+        }
+        await _docLabelSearchRun(formId, idx, 'code=' + encodeURIComponent(code), true, code);
+    };
+    window._docLabelFindBySize = async function (formId, idx) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        var size = String((it && it.size) || '').trim();
+        var key = formId + '|' + idx;
+        if (size.length < 3) {
+            window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('라벨규격을 먼저 적으세요(3자 이상).', 'Enter the label size first (3+ chars).'));
+            window._docRender(); return;
+        }
+        // ⚠️ 규격만으로는 코드를 모르니 SAP "다시 받기"(자재번호 필요)는 못 쓴다 — 링크를 안 보인다.
+        await _docLabelSearchRun(formId, idx, 'q=' + encodeURIComponent(size), false, size);
     };
     window._docLabelToggleImages = async function (key, mi) {
         var parts = key.split('|'), formId = parts[0], idx = Number(parts[1]);
@@ -2065,50 +2196,75 @@
                         if (window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
                         var notes = window._docLabelNotesCache[itCode] || [];
                         var placing = window._docLabelNotePlacing === itCode;
+                        // ✂️ [2026-11-12 9차] 자르기 모드 — 이 라벨 줄이 지금 자르는 대상인가
+                        var cropping = window._docLabelCropState && window._docLabelCropState.code === itCode;
+                        var cropSel = cropping ? window._docLabelCropState.sel : null;
+                        // 🔍 [2026-11-12 8차, 사용자 요청] 표시 추가가 무의미할 만큼 작았다 — **5배** 키운다.
                         artCell = '<div style="position:relative; display:inline-block;">'
-                            + '<img src="' + _esc(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
-                                + '&name=' + encodeURIComponent(artFile)) + '" style="max-width:135px; max-height:120px;'
-                                + ' border:1px solid #dee2e6; border-radius:3px; display:block;' + (placing ? ' cursor:crosshair;' : '') + '"'
+                            + '<img data-crop-img="' + _esc(itCode) + '" src="' + _esc(BACKEND + '/doc/get?folder='
+                                + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile))
+                                + '" style="max-width:675px; max-height:600px;'
+                                + ' border:1px solid #dee2e6; border-radius:3px; display:block;'
+                                + ((placing || cropping) ? ' cursor:crosshair;' : '') + '"'
                                 + ' onclick="window._docLabelImgClick(event,\'' + _esc(itCode) + '\')">'
                             + notes.map(function (n, ni) {
                                 return '<span class="doc-noprint" title="' + _esc(n.text) + '" style="position:absolute;'
                                     + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
-                                    + ' width:15px; height:15px; border-radius:50%; background:#e03131; color:#fff;'
-                                    + ' font-size:9px; font-weight:bold; display:flex; align-items:center; justify-content:center;'
-                                    + ' box-shadow:0 0 0 1px #fff;">' + (ni + 1) + '</span>';
+                                    + ' width:22px; height:22px; border-radius:50%; background:#e03131; color:#fff;'
+                                    + ' font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center;'
+                                    + ' box-shadow:0 0 0 2px #fff;">' + (ni + 1) + '</span>';
                             }).join('')
+                            + (cropSel ? '<div class="doc-noprint" style="position:absolute; pointer-events:none;'
+                                + ' left:' + (cropSel.x0 * 100) + '%; top:' + (cropSel.y0 * 100) + '%;'
+                                + ' width:' + ((cropSel.x1 - cropSel.x0) * 100) + '%; height:' + ((cropSel.y1 - cropSel.y0) * 100) + '%;'
+                                + ' border:2px dashed #1971c2; background:rgba(25,113,194,.15);"></div>' : '')
                             + '</div>'
-                            + '<div style="font-size:10px; color:#868e96;">' + _esc(_t('공용 라벨 도안', 'shared artwork')) + '</div>'
-                            + (notes.length ? '<div class="doc-noprint" style="text-align:left; font-size:9.5px; color:#495057; margin-top:2px;">'
+                            + '<div style="font-size:11px; color:#868e96;">' + _esc(_t('공용 라벨 도안', 'shared artwork')) + '</div>'
+                            + (notes.length ? '<div class="doc-noprint" style="text-align:left; font-size:11px; color:#495057; margin-top:3px;">'
                                 + notes.map(function (n, ni) {
                                     return '<div>' + (ni + 1) + '. ' + _esc(n.text)
                                         + ' <a href="#" onclick="window._docLabelNoteDel(\'' + _esc(itCode) + '\',' + ni
                                         + ');return false;" style="color:#b1432f;">✕</a></div>';
                                 }).join('') + '</div>' : '')
-                            + '<div class="doc-noprint" style="margin-top:2px;">'
+                            + '<div class="doc-noprint" style="margin-top:3px;">'
                             + (placing
-                               ? '<span style="color:#e03131; font-size:9.5px;">' + _esc(_t('이미지를 클릭하세요…', 'Click the image…')) + '</span>'
-                                 + ' <a href="#" onclick="window._docLabelNoteDisarm();return false;" style="font-size:9.5px;">'
+                               ? '<span style="color:#e03131; font-size:11px;">' + _esc(_t('이미지를 클릭하세요…', 'Click the image…')) + '</span>'
+                                 + ' <a href="#" onclick="window._docLabelNoteDisarm();return false;" style="font-size:11px;">'
+                                 + _esc(_t('취소', 'cancel')) + '</a>'
+                               : cropping
+                               ? (cropSel
+                                  ? '<a href="#" onclick="window._docLabelCropApply();return false;" style="color:#1971c2; font-weight:bold; font-size:11px;">✅ '
+                                    + _esc(_t('자르기 적용', 'Apply crop')) + '</a>'
+                                  : '<span style="color:#1971c2; font-size:11px;">' + _esc(_t('드래그해서 영역을 고르세요…', 'Drag to select an area…')) + '</span>')
+                                 + ' <a href="#" onclick="window._docLabelCropCancel();return false;" style="font-size:11px;">'
                                  + _esc(_t('취소', 'cancel')) + '</a>'
                                : '<a href="#" onclick="window._docLabelNoteArm(\'' + _esc(itCode) + '\');return false;"'
-                                 + ' style="color:#7a5210; font-size:9.5px;">✏️ ' + _esc(_t('표시 추가', 'Add note')) + '</a>')
+                                 + ' style="color:#7a5210; font-size:11px;">✏️ ' + _esc(_t('표시 추가', 'Add note')) + '</a>'
+                                 + ' · <a href="#" onclick="window._docLabelCropArm(\'' + _esc(itCode) + '\');return false;"'
+                                 + ' style="color:#7a5210; font-size:11px;">✂️ ' + _esc(_t('배경 잘라내기', 'Crop')) + '</a>')
                             + '</div>';
                     } else {
-                        artCell = '<div style="width:135px; height:70px; margin:0 auto; display:flex; align-items:center;'
+                        artCell = '<div style="width:300px; height:150px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
-                            + ' color:#adb5bd; font-size:10.5px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>';
+                            + ' color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>';
                     }
+                    // 🔎 [2026-11-12 10차, 사용자 요청] "도안 찾기" 글자는 지우고 아이콘만 남긴다 —
+                    //    같은 아이콘을 **규격 칸**에도 달아, 코드를 몰라도 규격(예: "75 X 70")만으로
+                    //    찾을 수 있게 한다(서버가 파일명에서 공백 무시 부분일치로 찾는다).
+                    var _findIconBtn = 'padding:3px 6px; font-size:12px; line-height:1; cursor:pointer;'
+                        + ' border:1px solid #a3d9e0; border-radius:4px; background:#e0f5f7; color:#00707d;'
+                        + ' font-weight:bold; vertical-align:middle;';
                     h += '<tr>'
                        + '<td class="doc-noprint" style="text-align:center; vertical-align:middle; padding:5px;">' + artCell + '</td>'
-                       + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|size" value="' + _esc(it.size || '')
-                       + '" placeholder="예: 75 X 70" style="font-size:11.5px;"></td>'
+                       + '<td style="white-space:nowrap;"><input type="text" class="doc-in" data-doc-litem="' + i + '|size" value="' + _esc(it.size || '')
+                       + '" placeholder="예: 75 X 70" style="font-size:11.5px; width:76px; display:inline-block;">'
+                       + ' <button class="doc-noprint" title="' + _esc(_t('규격으로 도안 찾기', 'Find artwork by size')) + '"'
+                       + ' onclick="window._docLabelFindBySize(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button></td>'
                        + '<td style="white-space:nowrap;"><input type="text" class="doc-in" data-doc-litem="' + i + '|code"'
                        + ' value="' + _esc(it.code || '') + '" placeholder="예: 124291"'
                        + ' style="font-size:11.5px; width:86px; display:inline-block;">'
-                       + ' <button class="doc-noprint" onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')"'
-                       + ' style="padding:2px 7px; font-size:10.5px; cursor:pointer; border:1px solid #a3d9e0;'
-                       + ' border-radius:4px; background:#e0f5f7; color:#00707d; font-weight:bold;">🔎 '
-                       + _esc(_t('도안 찾기', 'Find')) + '</button></td>'
+                       + ' <button class="doc-noprint" title="' + _esc(_t('코드로 도안 찾기', 'Find artwork by code')) + '"'
+                       + ' onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button></td>'
                        + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|position" value="'
                        + _esc(it.position || '') + '" placeholder="예: 제품 / C.T BOX" style="font-size:11.5px;"></td>'
                        + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|note" value="' + _esc(it.note || '')
@@ -2413,6 +2569,12 @@
         h += '</div>';
 
         body.innerHTML = h;
+        // ✂️ 자르기 모드면 그 라벨의 <img> 에 드래그 리스너를 다시 건다 — `innerHTML` 교체로
+        //    엘리먼트가 매번 새로 생기니 옛 리스너는 떼어낼 필요 없이 그냥 없어진다.
+        if (window._docLabelCropState && window._docLabelCropState.code) {
+            var cropImg = body.querySelector('img[data-crop-img="' + window._docLabelCropState.code.replace(/"/g, '') + '"]');
+            if (cropImg) window._docLabelCropWire(cropImg);
+        }
         body.oninput = function (e) {
             var el = e.target;
             if (!el || !el.getAttribute) return;
