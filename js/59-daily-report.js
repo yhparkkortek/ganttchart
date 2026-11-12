@@ -1425,7 +1425,7 @@
       '<input id="daily-cand-search" value="' + esc(_candQuery) + '" placeholder="' + esc(T('업무 검색', 'Search tasks')) + '" ' +
         'onkeydown="if(event.key===\'Enter\'){window._dailyApplyCandSearch();}" ' +
         'style="flex:1; min-width:0; padding:4px 8px; border:1px solid #ddd; border-radius:5px; font-size:11.5px;">' +
-      '<button onclick="window._dailyApplyCandSearch()" style="padding:4px 10px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer; white-space:nowrap;">🔍 ' + esc(T('지금 검색', 'Search now')) + '</button>' +
+      '<button onclick="window._dailyApplyCandSearch()" title="' + esc(T('지금 검색', 'Search now')) + '" style="padding:4px 9px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12.5px; cursor:pointer;">🔍</button>' +
       (_candQuery
         ? '<button onclick="window._dailyClearCandSearch()" title="' + esc(T('검색 지우기', 'Clear search')) + '" style="padding:4px 9px; border:1px solid #eee; background:#fafbfc; color:#888; border-radius:5px; font-size:11.5px; cursor:pointer;">✕</button>'
         : '') +
