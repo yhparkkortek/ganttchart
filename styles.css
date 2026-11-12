@@ -2571,8 +2571,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         한쪽만 고치면 "기본 테마에서만 색이 안 바뀐다"가 된다(js/59 가 겪은 그 사고).
    ══════════════════════════════════════════════════════════════════════════ */
 /* ⚠️ 모서리 R 은 앱 공용 값(`.concept-section` 6px)에 맞춘다 — 이 페이지만 각지면 따로 논다. */
+/* ⚠️ [2026-11-12] 다른 탭(BOM/M.C/PARTS 등)은 .concept-section(패딩 12px 18px)이 표를 꽉 채우는데,
+   이 페이지만 그 안에 좁게(max-width:1040px) 중앙 정렬된 흰 카드를 또 넣어 여백이 두 배로 보였다
+   — max-width 제거 + 패딩을 concept-section 수준으로 낮춤(사용자 신고: "다른 페이지보다 여백이 넓다"). */
 #doc-page-body .doc-paper { background:#fff; border:1px solid #cfe3e5; border-radius:8px;
-    box-shadow:0 1px 4px rgba(0,0,0,.06); max-width:1040px; margin:0 auto 18px; padding:26px 30px 34px; }
+    box-shadow:0 1px 4px rgba(0,0,0,.06); margin:0 0 18px; padding:18px 20px 22px; }
 #doc-page-body .doc-title { font-size:20px; font-weight:bold; text-align:center; letter-spacing:1px;
     padding:6px 0 14px; border-bottom:2px solid #52a5af; margin-bottom:16px; color:#00707d; }
 #doc-page-body .doc-sec { margin:16px 0 4px; font-size:13px; font-weight:bold; color:#00707d;
