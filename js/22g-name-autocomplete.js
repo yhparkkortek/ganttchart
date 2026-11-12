@@ -459,6 +459,16 @@ window.collectTabData = function() {
         pm.KTKPN = _cardModels[0].KTKPN;
         pm.KTK모델명 = _cardModels[0].KTK모델명;
     }
+    // 🆕 [2026-11-12, 사용자 제보] 모델이 여러 개인 프로젝트는 단일값 필드(모델 #1만)만으로는
+    // 메일 매칭 AI가 "이 프로젝트가 맞다"는 근거(모델별 고객모델명·명칭 접미어)를 전혀 못 얻는다
+    // (실측: "Stellar Topper" 메일 — 모델 #3(TOPPER, 1647180-13P50) 얘기인데 프로젝트 식별자가
+    // 모델 #1(1641445-ALT1)뿐이라 근거 인용 검증에 실패해 자동배치가 보류됨). js/26 토픽 프로파일
+    // 프롬프트가 이 pm.models를 읽어 각 모델의 식별자를 keywords에 포함하도록 지시한다 —
+    // 헤드리스 재생성(_tpMaybeAutoRegen)도 ctx.projectMeta로 이 필드를 그대로 넘겨받는다.
+    pm.models = _cardModels.map(function(m) {
+        return { 고객모델명: m.고객모델명, 프로젝트코드: m.프로젝트코드,
+                 프로젝트명칭: m.프로젝트명칭, KTKPN: m.KTKPN, KTK모델명: m.KTK모델명 };
+    });
     bind('sum-pm', '프로젝트담당자');
     bind('sum-project-status', '완료여부'); // 💡 값: "" = 진행중, "완료" = 완료
     bind('sum-mail-keywords', '메일키워드');

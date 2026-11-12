@@ -307,6 +307,30 @@
      *   프로젝트에 헤드리스로 업무를 꽂는 경로에서도 프로파일을 갱신할 수 있도록 ctx로 대상을 주입
      *   가능하게 확장 — ctx를 생략한 기존 호출부(수동 재생성 버튼 등)는 변경 없이 그대로 동작한다.
      */
+    // 🆕 [2026-11-12, 사용자 제보] 한 프로젝트 파일에 모델이 여러 개(예: LOWER/UPPER/TOPPER)면,
+    // 토픽 프로파일 AI 프롬프트의 "모델: pm.모델명" 한 줄은 모델 #1 식별자뿐이다 — keywords가
+    // 모델 #1만 담으면, 메일이 모델 #2/#3 얘기만 해도(예: "Stellar Topper") 근거 인용 검증
+    // (js/61-mail-evidence.js)이 이 프로젝트를 특정하는 단어를 못 찾아 자동배치가 "중" 신뢰도로
+    // 보류된다(실측: LNW>STELLAR32 — 모델#1 1641445-ALT1/LOWER, 모델#3 1647180-13P50/TOPPER).
+    // `pm.models`(js/22g `collectTabData`가 채움)가 있으면 각 모델의 고객모델명·명칭을 전부
+    // 보여주고 keywords에 다 넣으라고 명시 지시한다. 1개 이하면 빈 문자열(기존 동작 그대로).
+    window._tpMultiModelNote = function (pm) {
+        var modelsList = ((pm && pm.models) || []).filter(function (m) { return m && (m.고객모델명 || m.프로젝트명칭); });
+        if (modelsList.length <= 1) return '';
+        var modelLines = modelsList.map(function (m, i) {
+            var parts = [];
+            if (m.고객모델명) parts.push('고객모델명 ' + m.고객모델명);
+            if (m.프로젝트명칭) parts.push('명칭 ' + m.프로젝트명칭);
+            if (m.KTKPN) parts.push('KTK PN ' + m.KTKPN);
+            return '  모델#' + (i + 1) + ': ' + parts.join(', ');
+        });
+        return '\n⚠️ 이 프로젝트 파일 하나에 모델이 ' + modelsList.length + '개 있습니다:\n' +
+            modelLines.join('\n') + '\n' +
+            'keywords에 모델#1 식별자만 넣지 말고, 위 각 모델의 고객모델명과 명칭 끝 구분 단어' +
+            '(명칭 맨 뒤 단어, 예: LOWER/UPPER/TOPPER)를 전부 포함해주세요 — 메일이 모델#2나 ' +
+            '모델#3 얘기만 해도 이 프로젝트로 확정할 근거가 있어야 합니다.\n';
+    };
+
     window._generateTopicProfile = async function(ctx) {
         ctx = ctx || {};
         var silent  = !!ctx.silent;
@@ -413,6 +437,12 @@
                'keywords에 모델명만 단독으로 넣지 말고 "' + pm.모델명 + ' ' + pm.인치 + '" 처럼 인치를 ' +
                '붙인 조합도 반드시 포함해서, 크기만 다른 형제 프로젝트와 구분되게 해주세요.\n')
             : '';
+        // 🆕 [2026-11-12, 사용자 제보] 한 프로젝트 파일에 모델이 여러 개(예: LOWER/UPPER/TOPPER)면
+        //    위 metaLine의 "모델: pm.모델명"은 모델 #1 하나뿐이다 — keywords가 모델 #1 식별자만
+        //    담으면, 메일이 모델 #2/#3 얘기만 해도(예: "Stellar Topper") 근거 인용 검증(js/61)이
+        //    이 프로젝트를 특정하는 단어를 못 찾아 자동배치가 "중" 신뢰도로 보류된다(실측).
+        //    → 각 모델의 고객모델명·명칭을 전부 보여주고 keywords에 다 넣으라고 명시 지시한다.
+        var multiModelNote = window._tpMultiModelNote(pm);
 
         // ③ project_index.json에 누적된 mail 신호 키워드 주입
         //    다른 사용자가 메일 분류 시 기록한 키워드들 — Gantt 업무명만으로 못 잡는 실제 메일 언어 반영
@@ -529,6 +559,7 @@
 
         var prompt = metaLine +
             siblingNote +
+            multiModelNote +
             '아래는 제품 개발 프로젝트 간트차트의 업무 목록입니다.\n\n' +
             '⚠️ 중요 지시사항:\n' +
             '① keywords에는 "이 프로젝트를 다른 하드웨어 개발 프로젝트와 구분하는 고유 식별자"만 포함해 주세요.\n' +
