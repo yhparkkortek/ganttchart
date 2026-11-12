@@ -628,6 +628,12 @@
         window._docState.chkSheetCollapsed[sheetKey] = !window._docState.chkSheetCollapsed[sheetKey];
         window._docRender();
     };
+    /** 📂 [2026-11-12 4차 요청] 문서 안 섹션(.doc-sec) 전부에 접기 ↔ 펴기 — 섹션 제목(s.title)으로 구분 */
+    window._docToggleSectionCollapse = function (sectionTitle) {
+        window._docState.secCollapsed = window._docState.secCollapsed || {};
+        window._docState.secCollapsed[sectionTitle] = !window._docState.secCollapsed[sectionTitle];
+        window._docRender();
+    };
 
     // ── 📦 회차 넘기기 (M.C Table·BOM 의 제품구분자 바와 **같은 장치**) ───
     //   ⚠️ 새로 디자인하지 않는다 — 삼각형 ◀ ▶ 로 앞뒤 회차를 넘기고, 가운데 버튼은 누를 때마다
@@ -1078,9 +1084,21 @@
         }
 
         form.sections.forEach(function (s) {
-            // 📂 [2026-11-12 요청] 'check'(SPL Check sheet) 섹션은 제목 줄에 전체 접기/펴기 버튼을
-            //    오른쪽 정렬로 넣어야 해서 **자기 제목을 스스로 그린다**(아래 kind==='check' 블록).
-            if (s.kind !== 'cover' && s.kind !== 'check') h += '<div class="doc-sec">' + _esc(s.title) + '</div>';
+            // 📂 [2026-11-12 4차 요청] 섹션 제목(.doc-sec) 전부에 접기/펴기 버튼을 오른쪽 정렬로
+            //    단다(사용자: "하늘색 박스 전부"). kind 마다 내용 모양이 달라 **통째로 감싸는 div
+            //    하나**만 display:none 으로 접는다 — kind별 분기 코드는 안 건드린다.
+            var secCollapsed = !!(window._docState.secCollapsed && window._docState.secCollapsed[s.title]);
+            if (s.kind !== 'cover') {
+                h += '<div class="doc-sec" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
+                   + '<span>' + _esc(s.title) + '</span>'
+                   + '<button class="doc-noprint" onclick="window._docToggleSectionCollapse(\''
+                   + _esc(s.title).replace(/'/g, "\\'") + '\')" style="padding:3px 9px; font-size:11px; cursor:pointer;'
+                   + ' border:1px solid #a3d9e0; border-radius:5px; font-weight:bold; background:#fff; color:#00707d;'
+                   + ' flex-shrink:0;">'
+                   + (secCollapsed ? '▶ ' + _esc(_t('펼치기', 'Expand')) : '▼ ' + _esc(_t('접기', 'Collapse'))) + '</button>'
+                   + '</div>';
+            }
+            h += '<div class="doc-sec-wrap"' + (secCollapsed ? ' style="display:none;"' : '') + '>';
             h += '<table class="doc-t">';
 
             if (s.kind === 'attach') {
@@ -1123,27 +1141,12 @@
                 //    ⚠️ 167항목을 다 펼쳐 두면 "내가 뭘 요청했는지" 가 안 보인다.
                 var chkOnly = !!window._docState.chkOnly;
                 var hideNA = window._docState.hideNA !== false;
-                // 🙈 [2026-11-12 2차 요청] 버튼 둘을 "SPL Check sheet" 박스(테두리) 안으로 모으고
-                //    오른쪽 정렬 + 첨부(📎) 버튼과 같은 납작한 한 가지 스타일로 통일한다
-                //    (상태에 따라 색이 뒤집히던 것 → 라벨/화살표만 바뀌는 쪽으로).
-                var _chkBtnStyle = 'padding:4px 10px; font-size:11.5px; cursor:pointer;'
-                    + ' border:1px solid #a3d9e0; border-radius:5px; font-weight:bold; background:#e0f5f7; color:#00707d;';
-                h += '</table><div class="doc-sec">' + _esc(s.title) + '</div>'
-                   + '<div class="doc-noprint" style="margin:2px 0 8px; border:1px solid #a3d9e0;'
-                   + ' border-radius:6px; padding:8px 10px; background:#fff;">'
-                   + '<div style="font-size:11px; color:#868e96; margin-bottom:6px;">'
-                   + _esc(_t('개발담당자 칸에 ‘점검요청’ 을 켜 둔 내역만 보여 줍니다. ‘해당없음’ 으로 선택한 항목은'
-                             + ' 기본으로 접어 둡니다(Resolution 제외).',
-                             'Shows only requested items. N/A items are folded by default (except Resolution).'))
-                   + '</div>'
-                   + '<div style="display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap;">'
-                   + '<button onclick="window._docToggleChkOnly()" style="' + _chkBtnStyle + '">'
-                   + (chkOnly ? '▼ ' + _esc(_t('전체 보기', 'Show all'))
-                              : '▶ ' + _esc(_t('점검요청만', 'Requested only'))) + '</button>'
-                   + '<button onclick="window._docToggleHideNA()" style="' + _chkBtnStyle + '">'
-                   + (hideNA ? '▶ ' + _esc(_t('해당없음도 보기', 'Show N/A'))
-                             : '▼ ' + _esc(_t('해당없음 접기', 'Hide N/A'))) + '</button>'
-                   + '</div></div>';
+                // 🗑️ [2026-11-12 4차 요청] 전체 토글 박스("SPL Check sheet" 테두리 + 점검요청만/
+                //    해당없음 버튼)는 삭제 — 시트마다 접기 버튼(아래)과 섹션 제목 접기(위)로 충분하다.
+                //    ⚠️ chkOnly 는 더 이상 켤 방법이 없어 **항상 꺼진 채**로 남는다(기본 동작 유지,
+                //    기능 제거는 아님 — 다시 필요하면 버튼만 어딘가에 다시 달면 된다). hideNA 는
+                //    각 장(sheet) 아래 '🙈 N건 접힘 · 펴기' 링크로 계속 켜고 끌 수 있다.
+                h += '</table>';
                 sheets.forEach(function (sh) {
                     var items = _sheetItems(sh, form.id);
                     if (chkOnly) {
@@ -1534,6 +1537,7 @@
                 }
             }
             h += '</table>';
+            h += '</div>'; // .doc-sec-wrap 닫기 — 섹션 전체 접기/펴기가 이 한 줄에 달려 있다
         });
         h += '</div>';
 

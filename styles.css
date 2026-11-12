@@ -2635,4 +2635,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     #doc-page-body .doc-in.doc-hist-now-txt { font-weight:bold; }
     #doc-page-body table.doc-t { page-break-inside:auto; }
     #doc-page-body table.doc-t tr { page-break-inside:avoid; }
+    /* 📂 [2026-11-12] 화면에서 접어 둔 섹션도 인쇄·PDF 에는 전부 펼쳐서 찍는다 */
+    #doc-page-body .doc-sec-wrap { display:block !important; }
 }
