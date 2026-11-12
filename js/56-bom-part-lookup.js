@@ -201,23 +201,30 @@
         return v;
     };
 
-    /** BOM 텍스트(TSV) → 행 배열. 백엔드가 주는 `text` 를 그대로 읽는다. */
+    /**
+     * BOM 텍스트(TSV) → 행 배열. [2026-11-12] **탭 위치를 고정으로 읽지 않는다** — BOM 탭의
+     * 진짜 파서(`_bomParseSapText`, js/38)를 그대로 쓴다. 전엔 `p[6]`을 무조건 자재그룹으로
+     * 읽었는데, SAP 계정이 팀 공용이라 누가 `/KTK_LOC` 레이아웃의 **열 구성**을 바꾸면(정렬뿐
+     * 아니라 열을 추가·삭제·이동해도) 이 조회가 **조용히 다른 칸을 자재그룹으로 읽는다** —
+     * BOM 탭이 겪은 "다른 사용자 레이아웃 변경" 사고(CLAUDE.md js/38 항목)와 같은 종류다.
+     * `_bomParseSapText`는 머리글 행에서 열 이름(STUFE/IDNRK/OJTXP/MENGE/MMEIN/WGBEZ60)을
+     * 찾아 그 이름으로 칸을 읽으므로, 열 순서가 바뀌어도 올바른 칸을 읽는다. 설치지점(EBORT)
+     * 연속 행 병합도 같이 물려받는다(이 조회는 `show_location=0`이라 보통 안 생기지만, 공용
+     * 레이아웃에 누가 Location Information을 켜 두면 생길 수 있다 — 조용히 깨지는 대신 처리됨).
+     */
     window._bomTextRows = function (text) {
-        var out = [];
-        String(text || '').split('\n').forEach(function (line) {
-            if (line.charAt(0) !== '[' || line.indexOf('\t') === -1) return;
-            var p = line.split('\t');
-            if (p.length < 7) return;
-            out.push({
-                level: String(p[0]).replace(/[^\d]/g, ''),
-                code: String(p[1]).trim(),
-                desc: String(p[2]).trim(),
-                qty: String(p[4]).trim(),
-                unit: String(p[5]).trim(),
-                group: String(p[6]).trim()
-            });
+        var parsed = window._bomParseSapText ? window._bomParseSapText(text) : null;
+        if (!parsed) return [];
+        return (parsed.rows || []).map(function (o) {
+            return {
+                level: String(o._level == null ? '' : o._level),
+                code: String(o.IDNRK || '').trim(),
+                desc: String(o.OJTXP || '').trim(),
+                qty: String(o.MENGE || '').trim(),
+                unit: String(o.MMEIN || '').trim(),
+                group: String(o.WGBEZ60 || '').trim()
+            };
         });
-        return out;
     };
 
     /** 그 종류의 행만. 같은 자재가 여러 번 나오면(여러 상위에 물림) 한 번만. */
@@ -254,12 +261,33 @@
         var url = (window.BACKEND_BASE || 'http://127.0.0.1:5000')
                 + '/sap-bom?material=' + encodeURIComponent(material)
                 + '&plant=1000&tcode=single&explosion=multi&show_price=0&show_location=0';
-        var res = await fetch(url);
-        var j = await res.json();
-        if (!j || !j.ok) throw new Error((j && j.error) || _t('BOM 조회 실패', 'BOM lookup failed'));
+        // 🆕 [2026-11-12] BOM 탭(js/38 bomFetchFromSap)과 같은 1회 재시도 — 간헐적으로 SAP이
+        //    결과 그리드 대신 선택화면(source:'fields')을 돌려준다(고정 sleep 네비게이션의 한계).
+        var j = null, attempt = 0;
+        while (attempt < 2) {
+            attempt++;
+            var res = await fetch(url);
+            j = await res.json();
+            if (!j || !j.ok) throw new Error((j && j.error) || _t('BOM 조회 실패', 'BOM lookup failed'));
+            if (j.source === 'grid') break;
+            if (attempt < 2) say(_t('결과 화면을 못 읽어 재시도합니다…', 'Could not read result screen — retrying…'));
+        }
+        if (j.source !== 'grid') {
+            throw new Error(_t('SAP가 BOM 결과 표 대신 다른 화면을 돌려줬습니다(source: ' + j.source + '). 자재번호를 확인하거나 잠시 뒤 다시 시도해주세요.',
+                'SAP returned a non-table screen (source: ' + j.source + '). Check the material number or retry.'));
+        }
         var rows = window._bomTextRows(j.text);
         var hits = window._bomPickParts(j.text, kind);
-        return { material: material, kind: kind, hits: hits, total: rows.length, raw: j.text };
+        // 🆕 [2026-11-12] BOM 탭이 쓰는 레이아웃·정렬 진단을 그대로 물려받는다 — 백엔드는 이미
+        //    이 값들을 돌려주고 있었는데(`sap_bridge_32.fetch_bom`) 여기선 지금까지 버리고 있었다.
+        //    팀 공용 SAP 계정이라 누가 레이아웃을 못 적용되게 만들거나(`layoutApplied:false`) 그
+        //    레이아웃에 정렬을 넣으면(`sortInfo`) 조용히 다른 결과를 줄 수 있다 — 삼키지 않는다.
+        return {
+            material: material, kind: kind, hits: hits, total: rows.length, raw: j.text,
+            layoutApplied: j.layoutApplied, layoutDiag: j.layoutDiag || '',
+            sortInfo: j.sortInfo || null, sortDiag: j.sortDiag || '',
+            truncated: !!j.truncated, totalRows: j.totalRows || 0
+        };
     };
 
     /** 결과를 사람이 읽는 글로. 못 찾았으면 **무엇을 찾았는지**까지 밝힌다(조용히 0건 금지). */
@@ -282,9 +310,35 @@
             return '⚠️ ' + _t(r.material + ' BOM(' + r.total + '행)에 **' + kindName + '**(으)로 분류된 자재가 없습니다.',
                               'No **' + kindName + '** material in the BOM of ' + r.material + ' (' + r.total + ' rows).')
                  + '\n\n' + (bySep ? _t('이 BOM 에 있는 구분자: ', 'Separators in this BOM: ')
-                                   : _t('이 BOM 에 있는 자재그룹: ', 'Material groups in this BOM: ')) + list;
+                                   : _t('이 BOM 에 있는 자재그룹: ', 'Material groups in this BOM: ')) + list
+                 + window.bomPartLayoutWarning(r);
         }
         return window.bomPartLookupHeader(r) + '\n\n' + window.bomPartMarkdownTable(r);
+    };
+
+    /**
+     * 레이아웃 진단 — [2026-11-12] BOM 탭(js/38)이 계층 깨짐을 경고할 때 쓰는 두 신호
+     * (`layoutApplied`·`sortInfo`)를 그대로 물려받는다. 이 조회는 트리 계층을 안 쓰지만,
+     * 레이아웃이 안 먹으면 자재그룹(WGBEZ60) 칸 자체가 비어 **"없음"과 "레이아웃이 안
+     * 먹어서 못 봤음"을 구분 못 하는 조용한 오답**이 난다 — 삼키지 않고 알린다.
+     */
+    window.bomPartLayoutWarning = function (r) {
+        var out = '';
+        if (r.layoutApplied !== true) {
+            out += '\n\n⚠️ ' + _t('이 조회는 레이아웃을 적용하지 못했습니다'
+                    + (r.layoutDiag ? '(' + r.layoutDiag + ')' : '')
+                    + ' — SAP 화면에 마지막으로 남아 있던 레이아웃으로 읽었습니다. 팀 공용 계정이라 '
+                    + '누가 다른 레이아웃을 쓰고 나가면 그게 기본값으로 남습니다. 결과가 이상하면 다시 조회해보세요.',
+                'This lookup could not apply the requested layout'
+                    + (r.layoutDiag ? ' (' + r.layoutDiag + ')' : '')
+                    + ' — it read whatever layout was last left on the SAP screen. The account is shared, so '
+                    + "a colleague's last layout can stay as the default. Retry if the result looks off.");
+        }
+        if (r.sortInfo && r.sortInfo.length) {
+            out += '\n\n⚠️ ' + _t('SAP 레이아웃에 걸린 정렬: ', 'Sort applied in the SAP layout: ')
+                 + '**' + r.sortInfo.join(' ; ') + '**';
+        }
+        return out;
     };
 
     /** 머리글 한 줄 — 칩 표와 마크다운 표가 **같은 글**을 쓴다(두 군데 적지 않는다). */
@@ -313,7 +367,7 @@
             body.push('| ' + (h.name || '—') + ' | ' + d + ' | ' + h.code
                     + ' | ' + h.group + ' | ' + h.level + ' | ' + h.qty + ' ' + h.unit + ' |');
         });
-        return body.join('\n') + window.bomPartCutNote(r);
+        return body.join('\n') + window.bomPartCutNote(r) + window.bomPartLayoutWarning(r);
     };
 
     /** ALV 가 자른 행이 몇 건인지 — 자른 사실을 숨기지 않는다. */
@@ -408,7 +462,7 @@
         }
         window._ganttQaHistory.push({
             role: 'ai', rawHtml: true,
-            text: window._mdToHtml(header + window.bomPartCutNote(r)) + html,
+            text: window._mdToHtml(header + window.bomPartCutNote(r) + window.bomPartLayoutWarning(r)) + html,
             tgText: header + '\n\n' + md
         });
         return true;
