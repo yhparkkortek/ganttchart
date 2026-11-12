@@ -14,6 +14,9 @@
   ⑦ /sap-label-images — .xlsx 안의 PNG/JPEG 는 집고 .emf 는 건너뛴다(skipped 로 드러낸다),
      .zip 이 감싼 .xlsx 도 한 겹 더 열어서 찾는다(실측 `승인원_*.ZIP` 모양)
   ⑧ /sap-label-image-bytes — 찾은 이미지 그대로(mimetype 포함) 돌려준다, 없는 member/inner 는 404
+  ⑨ 라벨규격(q 파라미터)으로도 찾는다 — 공백/대소문자 무시 부분일치, 3자 미만은 400
+  ⑩ PDF 지원 — 직접 .pdf·.zip 이 감싼 .pdf 둘 다 kind:'pdf' 로 잡히고, 원본 바이트 그대로
+     돌아온다(application/pdf) — 변환(PDF→PNG)은 클라이언트 pdf.js 몫이라 서버는 안 건드린다
 
 ⚠️ 사람이 돌리는 5000번 프로세스를 죽이지 않는다 — `app.test_client()` 로만 두드린다.
 ⚠️ 실제 `C:/SAP_DMS` 를 건드리지 않는다 — 폴더 카탈로그를 임시 폴더로 갈아 끼운다
@@ -269,6 +272,75 @@ def test_label_images():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_label_pdf():
+    # 📄 [2026-11-12 11차, 사용자 요청 "PDF 파일도 도안 검색에 추가해줘"] 승인원 폴더엔 도면이
+    #    PDF 로 올라온 것도 있다 — `/sap-label-search` 는 이미 확장자를 안 가려 걸리지만(바뀐
+    #    게 없다), 추출(`/sap-label-images`)·바이트 서빙(`/sap-label-image-bytes`)은 이번에
+    #    추가됐다. 변환(PDF→PNG)은 클라이언트의 pdf.js 가 하므로 서버는 **원본 PDF 바이트만
+    #    그대로** 돌려주면 된다 — 가짜 PDF 콘텐츠로 충분하다(서버는 내용을 안 본다).
+    probe_dir = os.path.join(r'C:\SAP_DMS', '_test_probe_pdf')
+    try:
+        fake_pdf = b'%PDF-1.4 fake pdf bytes for test\n%%EOF'
+
+        # 직접 .pdf
+        pdf_path = os.path.join(probe_dir, 'P01333333333', '128961_DWG.PDF')
+        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        with open(pdf_path, 'wb') as f:
+            f.write(fake_pdf)
+
+        c = B.app.test_client()
+        r1 = c.get('/sap-label-images?path=' + pdf_path)
+        j1 = r1.get_json() or {}
+        ok('직접 .pdf 도 images 에 kind:pdf 로 잡힌다',
+           j1.get('ok') and len(j1.get('images') or []) == 1 and j1['images'][0]['kind'] == 'pdf', j1)
+        im1 = j1['images'][0]
+        ok('member 는 PDF 전용 고정값', im1['member'] == B._LABEL_PDF_MEMBER)
+        ok('직접 PDF 는 inner 가 빈 문자열', im1['inner'] == '')
+
+        r2 = c.get('/sap-label-image-bytes?path=' + pdf_path
+                   + '&inner=' + im1['inner'] + '&member=' + im1['member'])
+        ok('PDF 원본 바이트가 그대로 돌아온다(mimetype=application/pdf)',
+           r2.status_code == 200 and r2.data == fake_pdf and r2.mimetype == 'application/pdf')
+
+        # .zip 이 감싼 .pdf — 이미지 쪽(.xlsx 포함)과 같은 모양
+        zip_path = os.path.join(probe_dir, 'P01444444444', '129000_승인원.ZIP')
+        os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+        inner_name = '129000-도면.pdf'
+        with zipfile.ZipFile(zip_path, 'w') as z:
+            z.writestr(inner_name, fake_pdf)
+            z.writestr('readme.txt', b'not a pdf')   # pdf 아닌 파일은 안 섞여야 한다
+
+        r3 = c.get('/sap-label-images?path=' + zip_path)
+        j3 = r3.get_json() or {}
+        ok('.zip 속 .pdf 도 한 겹 더 열어 kind:pdf 로 찾는다',
+           j3.get('ok') and len(j3.get('images') or []) == 1 and j3['images'][0]['kind'] == 'pdf'
+           and j3['images'][0]['inner'] == inner_name, j3)
+
+        im3 = j3['images'][0]
+        r4 = c.get('/sap-label-image-bytes?path=' + zip_path
+                   + '&inner=' + im3['inner'] + '&member=' + im3['member'])
+        ok('zip 속 PDF 바이트도 그대로 돌아온다', r4.status_code == 200 and r4.data == fake_pdf)
+
+        # 없는 inner 로 PDF 멤버를 요청하면 404(이미지 쪽 "없는 member" 404 와 같은 계약)
+        r5 = c.get('/sap-label-image-bytes?path=' + zip_path
+                   + '&inner=' + 'no-such.pdf' + '&member=' + B._LABEL_PDF_MEMBER)
+        ok('없는 inner 의 PDF 요청은 404', r5.status_code == 404)
+
+        # 이미지와 PDF 가 한 zip 에 같이 있으면 둘 다 나온다(승인원 파일 하나에 둘 다 있을 수 있음)
+        mixed_zip = os.path.join(probe_dir, 'P01555555555', 'mixed.ZIP')
+        os.makedirs(os.path.dirname(mixed_zip), exist_ok=True)
+        mixed_xlsx = _make_fake_xlsx_bytes({'xl/media/image1.png': _PNG_1PX})
+        with zipfile.ZipFile(mixed_zip, 'w') as z:
+            z.writestr('a.xlsx', mixed_xlsx)
+            z.writestr('b.pdf', fake_pdf)
+        r6 = c.get('/sap-label-images?path=' + mixed_zip)
+        j6 = r6.get_json() or {}
+        kinds = sorted([im.get('kind') or 'image' for im in (j6.get('images') or [])])
+        ok('한 zip 에 이미지·PDF 가 같이 있으면 둘 다 나온다', kinds == ['image', 'pdf'], j6)
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+
+
 def main():
     print('=== ① 코드 형식 검증 ===')
     test_code_validation()
@@ -282,6 +354,8 @@ def main():
     with_temp_catalog(test_open_file)
     print('=== ⑦⑧ /sap-label-images · /sap-label-image-bytes ===')
     test_label_images()
+    print('=== ⑩ PDF 지원(/sap-label-images · /sap-label-image-bytes) ===')
+    test_label_pdf()
     print('')
     print('PASS %d / FAIL %d' % (PASS[0], FAIL[0]))
     return 1 if FAIL[0] else 0

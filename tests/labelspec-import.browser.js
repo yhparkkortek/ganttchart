@@ -23,6 +23,14 @@
 //     이스케이프로 읽어 경로가 조용히 깨지는 버그였는데, 함수를 직접 호출하는 시험으로는
 //     그 깨짐이 **onclick 문자열이 브라우저에서 다시 파싱될 때만** 나타나서 절대 못 잡는다
 //     (이 하네스도 처음엔 직접 호출로 썼다가 그 버그를 놓쳤다).
+//  ⚠️⚠️ **(2026-11-12 11차, 사용자 신고 "이미지는 커졌는데 도표는 조정되지 않음" +
+//     "문서 기본 양식 반영해서 수정해줘")** 표시·자르기·크기조절을 표 안에서 전부 빼서
+//     **전용 모달**(`#doclabelart-overlay`)로 옮겼다 — 메인 표는 실제 문서처럼 항상 작은
+//     썸네일만 둔다. 이 하네스도 모달을 열어(`_docLabelArtModalOpen`) 그 안의
+//     `#doclabelart-img`/크기 손잡이/자르기 드래그를 본다. 자르기 적용은 **일부러 업로드를
+//     실패시켜** 예외가 나도 토스트가 뜨는지까지 본다(사용자 신고 "자르기 적용 눌렀는데
+//     아무 반응 없음" 재발 방지). PDF 는 `pdfjsLib` 를 스텁으로 바꿔 1페이지 추출 경로만 본다
+//     (진짜 PDF 렌더는 라이브로 확인).
 (function () {
     'use strict';
 
@@ -204,9 +212,12 @@
             save: window.saveToGoogleDrive, dirty: window.markUnsavedChanges,
             docs: window.tabData && window.tabData.documents,
             state: window._docState && JSON.parse(JSON.stringify(window._docState)),
-            fetch: window.fetch, dgUpload: window._dgUploadBlob,
+            fetch: window.fetch, dgUpload: window._dgUploadBlob, toast: window.showToast,
+            pdfjsLib: window.pdfjsLib,
             artIndex: window._docLabelArtIndex, findResult: window._docLabelFindResult,
-            findMatches: window._docLabelFindMatches, imgState: window._docLabelImgState
+            findMatches: window._docLabelFindMatches, imgState: window._docLabelImgState,
+            notesCache: window._docLabelNotesCache, sizeCache: window._docLabelSizeCache,
+            artModal: window._docLabelArtModal
         };
         window.saveToGoogleDrive = function () { return Promise.resolve({ skipped: 'test' }); };
         window.markUnsavedChanges = function () {};
@@ -214,6 +225,9 @@
         window.tabData.documents = {};
         window._docLabelArtIndex = {};               // 빈 공용 라이브러리로 시작(아직 아무 코드도 없음)
         window._docLabelFindResult = {}; window._docLabelFindMatches = {}; window._docLabelImgState = {};
+        window._docLabelNotesCache = {}; window._docLabelSizeCache = {}; window._docLabelArtModal = null;
+        var toastCalls = [];
+        window.showToast = function (msg, kind) { toastCalls.push({ msg: msg, kind: kind }); };
 
         var FAKE_CODE = '999001';
         // ⚠️⚠️ 일부러 "\1" 을 심는다 — 실측 버그(윈도 경로를 onclick="...('...')" 에 그대로
@@ -243,6 +257,24 @@
             if (u.indexOf('/sap-label-image-bytes') >= 0) {
                 imageBytesCalls.push(u);
                 return Promise.resolve({ status: 200, ok: true, blob: function () { return Promise.resolve(new Blob(['fake-png-bytes'], { type: 'image/png' })); } });
+            }
+            // ⚠️⚠️ [2026-11-12 11차 실측] 표시·크기 사이드카(`_docLabelNotesLoad`)가 모달을 열
+            //    때마다 백엔드(`/doc/get`)로 **가짜 없이 실제 fetch** 를 쏘고 있었다 — 여기서
+            //    안 막으면 실제 네트워크 요청(연결 거부)이 **비동기로 임의의 시점에** 풀려서
+            //    업로드 횟수 검증이 가끔 흔들렸다(실측: 한 번은 39/41, 다시 돌리니 40/40). 404
+            //    로 즉시 끊어 "아직 표시 없음"으로 빠지게 한다 — 레이스 자체를 없앤다.
+            if (u.indexOf('/doc/get') >= 0 && u.indexOf('.notes.json') >= 0) {
+                return Promise.resolve({ status: 404, ok: false });
+            }
+            // ⚠️⚠️ [2026-11-12 11차 실측 2] 이 하네스를 **연달아 여러 번** 돌리면 더 드물게
+            //    실패했다 — `finally` 가 `_docLabelArtIndex` 를 이전 실행 전 값(첫 실행이면
+            //    원래의 `null`)으로 되돌린 뒤 `_docRender()` 를 부르는데, 그 렌더가
+            //    `_docLabelArtIndex === null` 을 보고 **실제** `/doc/list` 를 쏘는 배경 작업을
+            //    새로 깨운다. 그 fetch 가 다음 실행 **도중** 임의의 시점에 풀려 `_docLabelArtIndex`
+            //    를 다시 `null`/`{}` 로 덮어써 `[FAKE_CODE]` 읽기가 "null 의 속성" 으로 터졌다.
+            //    `/doc/list` 도 막아 그 배경 작업 자체를 네트워크에 안 나가게 한다.
+            if (u.indexOf('/doc/list') >= 0) {
+                return Promise.resolve({ status: 200, ok: true, json: function () { return Promise.resolve({ ok: true, files: [] }); } });
             }
             return saved.fetch(url, init);
         };
@@ -325,14 +357,26 @@
                 ok(img.src.indexOf('999001.png') >= 0, '도안 <img> src 에 파일명이 안 들어갔다: ' + img.src);
             }
 
-            // ═══ 5. [2026-11-12 9차] 배경 잘라내기 — 드래그 선택 상태 전이(실제 이미지 로딩·
-            //    캔버스는 cross-origin 이라 이 하네스에선 안 본다 — 라이브로 직접 확인했다) ═══
+            // ═══ 5. [2026-11-12 11차, 사용자 요청 "문서 기본 양식 반영"] 표시·자르기·크기조절은
+            //    이제 표 안이 아니라 **전용 모달**에서만 — 메인 표 이미지가 5배로 커졌을 때 표
+            //    자체의 열(규격/코드/부착위치) 폭이 깨지던 문제(사용자 스크린샷)를 이 분리로
+            //    근본적으로 없앴다. 썸네일/링크를 누르면 모달이 뜬다. ═══
+            window._docLabelArtModalOpen('label-spec', 0);
+            ok(!!window._docLabelArtModal && window._docLabelArtModal.code === FAKE_CODE, '모달을 열어도 상태가 안 든다');
+            var modalBox = document.getElementById('doclabelart-box');
+            ok(!!modalBox, '모달 DOM 이 안 생겼다');
+            var modalImg = document.getElementById('doclabelart-img');
+            ok(!!modalImg && modalImg.getAttribute('data-crop-img') === FAKE_CODE, '모달 안 이미지를 못 찾았다');
+            var resizeHandle = document.querySelector('#doclabelart-body [data-resize-handle]');
+            ok(!!resizeHandle && typeof resizeHandle.onmousedown === 'function', '크기 조절 손잡이가 안 걸렸다(idle 상태인데)');
+
+            // ═══ 6. 배경 잘라내기 — 드래그 선택 상태 전이(실제 이미지 로딩·캔버스는 cross-origin
+            //    이라 이 하네스에선 안 본다 — 라이브로 직접 확인했다) ═══
             window._docLabelCropArm(FAKE_CODE);
             ok(window._docLabelCropState && window._docLabelCropState.code === FAKE_CODE, '자르기를 켜도 상태가 안 들어간다');
             ok(window._docLabelNotePlacing === null, '자르기를 켜면 표시 찍기는 꺼져 있어야 한다');
-            window._docRender();
-            var cropImg = document.querySelector('#doc-page-body img[data-crop-img="' + FAKE_CODE + '"]');
-            ok(!!cropImg, '자르기 모드인데 data-crop-img 이미지를 못 찾았다');
+            var cropImg = document.getElementById('doclabelart-img');
+            ok(!!cropImg, '자르기 모드인데 모달 이미지를 못 찾았다');
             ok(cropImg && typeof cropImg.onmousedown === 'function', '자르기 모드인데 드래그 리스너가 안 걸렸다');
             if (cropImg) {
                 // getBoundingClientRect 는 테스트 DOM 에서 0일 수 있어 — 드래그 수학은 함수 안
@@ -346,21 +390,107 @@
                     ok(!!(window._docLabelCropState && window._docLabelCropState.sel), '드래그해도 선택 영역이 안 생긴다');
                 }
             }
+
+            // ═══ 7. [실측 버그 회귀, 사용자 신고 "자르기 적용 눌렀는데 아무 반응 없음"] 자르기
+            //    적용 중 어느 단계든 예외가 나도 — 이제 try/catch 가 전체를 감싸서 — 반드시
+            //    토스트가 뜬다. 예전엔 토스트 한 줄 없이 조용히 멈췄다(원인은 아직 확실치 않아도,
+            //    이제 "뭐가 나든 토스트로 드러난다"는 계약 자체를 고정해 둔다). ═══
+            if (window._docLabelCropState && window._docLabelCropState.sel) {
+                var toastCountBefore = toastCalls.length;
+                var origUpload = window._dgUploadBlob;
+                window._dgUploadBlob = function () { throw new Error('강제 실패(시험)'); };
+                await window._docLabelCropApply();
+                ok(toastCalls.length > toastCountBefore, '자르기 적용 중 예외가 나도 토스트가 안 떴다(이전 버그 재발)');
+                ok(toastCalls[toastCalls.length - 1].kind === 'error', '실패 토스트의 종류가 error 가 아니다');
+                window._dgUploadBlob = origUpload;
+            }
             window._docLabelCropCancel();
             ok(window._docLabelCropState === null, '취소해도 자르기 상태가 안 꺼진다');
+
+            // ═══ 8. [2026-11-12 11차, 사용자 요청] 크기 조절 — 손잡이를 끌면 캐시에 크기가
+            //    남고(표시와 같은 사이드카에 같이 저장), 리셋하면 지워진다 ═══
+            window._docLabelArtModalOpen('label-spec', 0);   // 다시 idle 상태로
+            var handle2 = document.querySelector('#doclabelart-body [data-resize-handle]');
+            var img2 = document.getElementById('doclabelart-img');
+            if (handle2 && img2) {
+                var r2 = img2.getBoundingClientRect();
+                if (r2.width > 0) {
+                    handle2.dispatchEvent(new MouseEvent('mousedown', { clientX: r2.left, clientY: r2.top, bubbles: true }));
+                    document.dispatchEvent(new MouseEvent('mousemove', { clientX: r2.left + 40, clientY: r2.top + 30, bubbles: true }));
+                    document.dispatchEvent(new MouseEvent('mouseup', { clientX: r2.left + 40, clientY: r2.top + 30, bubbles: true }));
+                    ok(!!(window._docLabelSizeCache && window._docLabelSizeCache[FAKE_CODE]), '손잡이를 끌어도 크기가 캐시에 안 남는다');
+                }
+            }
+            window._docLabelArtModalClose();
+            ok(window._docLabelArtModal === null, '닫아도 모달 상태가 안 지워진다');
+
+            // ═══ 9. [2026-11-12 11차, 사용자 요청 "PDF 파일도 도안 검색에 추가해줘"] 검색 결과에
+            //    PDF 항목이 섞이면 이미지 썸네일 대신 "📄 PDF" 버튼으로, 고르면 pdf.js(스텁)로
+            //    1페이지를 그려 **같은 공용 라이브러리**에 저장한다 ═══
+            window.pdfjsLib = {
+                getDocument: function () {
+                    return { promise: Promise.resolve({
+                        getPage: function () {
+                            return Promise.resolve({
+                                getViewport: function () { return { width: 40, height: 30 }; },
+                                render: function () { return { promise: Promise.resolve() }; }
+                            });
+                        }
+                    }) };
+                }
+            };
+            window.fetch = function (url, init) {
+                var u = String(url);
+                if (u.indexOf('/sap-label-images') >= 0) {
+                    return Promise.resolve({ status: 200, ok: true, json: function () {
+                        return Promise.resolve({ ok: true, images: [{ inner: 'inner.pdf', member: '__pdf_page1__', kind: 'pdf', size: 999 }], skipped: 0 });
+                    } });
+                }
+                if (u.indexOf('/sap-label-image-bytes') >= 0) {
+                    imageBytesCalls.push(u);
+                    return Promise.resolve({ status: 200, ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(8)); } });
+                }
+                if (u.indexOf('/doc/get') >= 0 && u.indexOf('.notes.json') >= 0) {
+                    return Promise.resolve({ status: 404, ok: false });
+                }
+                if (u.indexOf('/doc/list') >= 0) {
+                    return Promise.resolve({ status: 200, ok: true, json: function () { return Promise.resolve({ ok: true, files: [] }); } });
+                }
+                return saved.fetch(url, init);
+            };
+            await window._docLabelToggleImages(key, 0);
+            var resPdf = window._docLabelFindResult[key] || '';
+            ok(resPdf.indexOf('PDF') >= 0, 'PDF 항목인데 썸네일 대신 글자 버튼이 안 보인다: ' + resPdf);
+            window._docRender();
+            var pdfBtn = document.querySelector('#doc-page-body [onclick*="_docLabelPickPdfPage"]');
+            ok(!!pdfBtn, 'PDF 고르기 버튼을 DOM 에서 못 찾았다');
+            var uploadCallsBeforePdf = uploadCalls.length;
+            if (pdfBtn) pdfBtn.click();
+            await new Promise(function (res) { setTimeout(res, 50); });
+            ok(uploadCalls.length === uploadCallsBeforePdf + 1,
+               'PDF 1페이지 저장이 공용 라이브러리에 한 번 더 안 올라갔다: ' + uploadCalls.length);
+            var upPdf = uploadCalls[uploadCalls.length - 1] || {};
+            ok(upPdf.folder === '라벨도안', 'PDF 결과도 공용 폴더(라벨도안)에 저장돼야 한다: ' + upPdf.folder);
+            ok(upPdf.name === FAKE_CODE + '.png', 'PDF 결과 파일 이름이 <코드>.png 가 아니다: ' + upPdf.name);
 
         } catch (e) {
             fail++; notes.push('💥 ' + (e && e.stack || e));
             console.error(e);
         } finally {
+            try { window._docLabelArtModalClose && window._docLabelArtModalClose(); } catch (e3) { /* 〃 */ }
             window.saveToGoogleDrive = saved.save;
             window.markUnsavedChanges = saved.dirty;
             window.fetch = saved.fetch;
             window._dgUploadBlob = saved.dgUpload;
+            window.showToast = saved.toast;
+            window.pdfjsLib = saved.pdfjsLib;
             window._docLabelArtIndex = saved.artIndex;
             window._docLabelFindResult = saved.findResult;
             window._docLabelFindMatches = saved.findMatches;
             window._docLabelImgState = saved.imgState;
+            window._docLabelNotesCache = saved.notesCache;
+            window._docLabelSizeCache = saved.sizeCache;
+            window._docLabelArtModal = saved.artModal;
             if (saved.docs) window.tabData.documents = saved.docs; else delete window.tabData.documents;
             if (saved.state) window._docState = saved.state;
             try { window._docRender && window._docRender(); } catch (e2) { /* 〃 */ }

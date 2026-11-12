@@ -5005,6 +5005,31 @@ def sap_open_file():
 _LABEL_IMG_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.bmp')
 _LABEL_IMG_MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
                     '.gif': 'image/gif', '.bmp': 'image/bmp'}
+# 📄 [2026-11-12 11차, 사용자 요청] "PDF 파일도 도안 검색에 추가해줘" — 승인원 폴더엔 도면이
+# PDF 로 올라온 것도 있다(검색(`/sap-label-search`)은 이미 확장자를 안 가려 PDF 파일명도
+# 걸린다 — 빠진 건 **미리보기/추출** 뿐이었다). PDF 변환은 서버에 새 의존성을 추가하지 않고
+# **클라이언트의 pdf.js(이미 전역 로드됨)가 1페이지를 캔버스에 그려 PNG 로 저장**한다 — 서버는
+# 원본 PDF 바이트만 그대로 돌려준다(`member` 열쇠로 이미지 추출과 구분).
+_LABEL_PDF_MEMBER = '__pdf_page1__'
+
+
+def _label_pdf_candidates(path):
+    """path 파일에서 PDF 를 뽑을 수 있는 (pdf 바이트, 안쪽 파일명 또는 None) 쌍들.
+    .pdf 는 그대로, .zip 은 그 안의 .pdf 를 전부 연다(여러 개일 수 있다)."""
+    ext = os.path.splitext(path)[1].lower()
+    out = []
+    try:
+        if ext == '.pdf':
+            with io.open(path, 'rb') as f:
+                out.append((f.read(), None))
+        elif ext == '.zip':
+            with zipfile.ZipFile(path) as z:
+                for n in z.namelist():
+                    if os.path.splitext(n)[1].lower() == '.pdf':
+                        out.append((z.read(n), n))
+    except Exception:
+        pass
+    return out
 
 
 def _label_zip_candidates(path):
@@ -5046,6 +5071,8 @@ def sap_label_images():
                         skipped += 1
         except Exception:
             pass
+    for data, inner in _label_pdf_candidates(norm):
+        images.append({'inner': inner or '', 'member': _LABEL_PDF_MEMBER, 'kind': 'pdf', 'size': len(data)})
     return jsonify({'ok': True, 'images': images, 'skipped': skipped})
 
 
@@ -5058,6 +5085,12 @@ def sap_label_image_bytes():
     member = (request.args.get('member') or '').strip()
     if not member:
         return jsonify({'ok': False, 'error': 'member 파라미터가 필요합니다.'}), 400
+    if member == _LABEL_PDF_MEMBER:
+        for data, inn in _label_pdf_candidates(norm):
+            if (inn or '') != inner:
+                continue
+            return send_file(io.BytesIO(data), as_attachment=False, mimetype='application/pdf')
+        return jsonify({'ok': False, 'error': 'PDF 를 찾지 못했습니다.'}), 404
     for data, inn in _label_zip_candidates(norm):
         if (inn or '') != inner:
             continue
