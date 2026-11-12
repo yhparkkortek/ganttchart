@@ -905,6 +905,183 @@
         }
     };
 
+    // ── 🆕 새 이슈(키) 생성 (2026-11-12 사용자 요청, "제일 중요한 신규 이슈 생성 기능") ──
+    //  지금 모델에 연결된 📁 프로젝트 코드(Summary 탭 "JIRA 코드" 칸과 같은 저장소)로
+    //  만든다 — 어느 프로젝트에 만들지 알 수 없으면(코드 미연결) 폼 대신 안내만 보여주고
+    //  막는다(추측하지 않는다). 사람이 버튼을 눌러야만 실행된다(AI 자율 루프는 js/40에
+    //  이 라우트가 없어 못 탄다 — 다른 쓰기 경로와 같은 원칙).
+    var _createAssigneeHits = [];
+
+    window._jiraOpenCreateModal = async function () {
+        var wrap = document.getElementById('jira-create-modal');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.id = 'jira-create-modal';
+            wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:9350; pointer-events:none; background:none;';
+            wrap.innerHTML =
+                '<div id="jira-create-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
+                + ' width:min(460px,94vw); max-height:88vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+                + ' display:flex; flex-direction:column;">'
+                + '<div id="jira-create-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
+                + ' cursor:move; display:flex; align-items:center; gap:8px;">'
+                + '<strong style="font-size:14px;">🆕 ' + T('새 이슈', 'New issue') + '</strong>'
+                + '<span id="jira-create-unit-badge" style="font-size:11px; padding:1px 8px; border-radius:10px; background:#00707d; color:#fff; font-weight:bold;"></span>'
+                + '<span style="flex:1;"></span>'
+                + '<button onclick="document.getElementById(\'jira-create-modal\').style.display=\'none\'"'
+                + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
+                + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div id="jira-create-body" style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto; font-size:12px;"></div>'
+                + '</div>';
+            document.body.appendChild(wrap);
+            if (window._makeDraggable) window._makeDraggable('jira-create-box', 'jira-create-drag');
+            if (window._bindClickToFront) window._bindClickToFront('jira-create-modal');
+            // 담당자 찾기 결과 위임 클릭 — 모달 본문을 매번 통째로 다시 그려도(아래
+            // _jiraRenderCreateBody) 이 리스너는 바깥 컨테이너(#jira-create-body)에 한 번만
+            // 걸어 둔다(이슈 상세 모달의 담당자 찾기와 같은 이유 — 따옴표 섞인 이름이 안전).
+            document.getElementById('jira-create-body').addEventListener('click', function (e) {
+                var hitsBox = document.getElementById('jira-create-assignee-hits');
+                var el = hitsBox && e.target.closest('[data-idx]');
+                if (!el || !hitsBox.contains(el)) return;
+                var u = _createAssigneeHits[Number(el.dataset.idx)];
+                if (!u) return;
+                var inp = document.getElementById('jira-c-assignee');
+                if (inp) inp.value = u.name;
+                hitsBox.style.display = 'none';
+            });
+        }
+        var badge = document.getElementById('jira-create-unit-badge');
+        if (badge) {
+            var curUnit = jiraActiveUnit();
+            badge.textContent = curUnit || '';
+            badge.style.display = curUnit ? 'inline-block' : 'none';
+        }
+        wrap.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('jira-create-modal');
+        await window._jiraRenderCreateBody();
+    };
+
+    function createStatus(msg, kind) {
+        var el = document.getElementById('jira-create-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'err' ? '#a3281c' : (kind === 'ok' ? '#1f7a3d' : '#555');
+        el.innerHTML = msg || '';
+    }
+
+    window._jiraRenderCreateBody = async function () {
+        var body = document.getElementById('jira-create-body');
+        if (!body) return;
+        var L = links();
+        var pk = (L.projectKey || '').trim();
+        body.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('불러오는 중...', 'Loading...') + '</div>';
+        if (!pk) {
+            // ⚠️ 프로젝트 코드가 없으면 **폼 자체를 안 보여준다** — "일단 적당히 만들고 나중에
+            // 옮기자"는 더 큰 실수를 부른다(결정론 먼저, CLAUDE.md).
+            body.innerHTML = '<div style="padding:10px; color:#a3281c; line-height:1.6;">⚠️ '
+                + T('지금 모델에 📁 JIRA 프로젝트 코드가 연결돼 있지 않아 어느 프로젝트에 만들지 알 수 없습니다 — Summary 탭의 🪐 JIRA 코드 칸(🔍 찾기)이나 ⚙️ 연결 설정에서 먼저 지정해주세요.',
+                           'No 📁 JIRA project is linked to this model, so there\'s no way to know where to create it — set it first via the 🪐 JIRA code field (🔍 Find) in the Summary tab, or ⚙️ Link settings.')
+                + '</div>';
+            return;
+        }
+        var typesRes, priRes, compRes;
+        try { typesRes = await fetchJson(BASE + '/jira/issuetypes'); } catch (e) { typesRes = { issuetypes: [] }; }
+        try { priRes = await fetchJson(BASE + '/jira/priorities'); } catch (e) { priRes = { priorities: [] }; }
+        try { compRes = await fetchJson(BASE + '/jira/project/' + encodeURIComponent(pk) + '/components'); } catch (e) { compRes = { components: [] }; }
+        var types = (typesRes && typesRes.issuetypes) || [];
+        var priorities = (priRes && priRes.priorities) || [];
+        var comps = (compRes && compRes.components) || [];
+
+        body.innerHTML =
+            '<div style="margin-bottom:10px; color:#777;">📁 ' + T('프로젝트', 'Project') + ': <b style="color:#00707d;">' + esc(pk) + '</b></div>'
+            + fieldRow(T('유형', 'Type'), (types.length
+                ? ('<select id="jira-c-type" style="' + inputSt + '">'
+                    + types.map(function (t) { return '<option value="' + esc(t.name) + '">' + esc(t.name) + '</option>'; }).join('')
+                    + '</select>')
+                : ('<input id="jira-c-type" style="' + inputSt + '" value="Task">')))
+            + fieldRow(T('요약', 'Summary') + ' *', '<input id="jira-c-summary" style="' + inputSt + '" placeholder="' + T('필수', 'Required') + '">')
+            + fieldRow(T('설명', 'Description'), '<textarea id="jira-c-description" rows="4" style="' + inputSt + ' resize:vertical; font-family:inherit;"></textarea>')
+            + fieldRow(T('우선순위', 'Priority'), '<select id="jira-c-priority" style="' + inputSt + '">'
+                + '<option value="">(' + T('기본값', 'default') + ')</option>'
+                + priorities.map(function (p) { return '<option value="' + esc(p.name) + '">' + esc(p.name) + '</option>'; }).join('')
+                + '</select>')
+            + fieldRow(T('구성 요소', 'Components'), comps.length
+                ? ('<select id="jira-c-components" multiple size="' + Math.min(5, Math.max(2, comps.length)) + '" style="' + inputSt + '">'
+                    + comps.map(function (c) { return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>'; }).join('')
+                    + '</select>')
+                : ('<span style="color:#aaa; padding-top:6px;">(' + T('이 프로젝트엔 등록된 구성 요소가 없습니다', 'No components registered for this project') + ')</span>'))
+            + fieldRow(T('담당자', 'Assignee'), '<div style="flex:1; min-width:0;">'
+                + '<div style="display:flex; gap:6px;">'
+                + '<input id="jira-c-assignee" style="' + inputSt + '" placeholder="' + T('JIRA 아이디(비우면 미배정)', 'JIRA username (blank = unassigned)') + '">'
+                + '<button onclick="window._jiraSearchAssigneeForCreate()"' + btnHover + ' style="' + btnSt + '">🔍 ' + T('찾기', 'Find') + '</button>'
+                + '</div>'
+                + '<div id="jira-create-assignee-hits" style="display:none; max-height:130px; overflow-y:auto; border:1px solid #eee; border-radius:6px; margin-top:4px;"></div>'
+                + '</div>')
+            + '<div id="jira-create-status" style="display:none; font-size:11.5px; margin:4px 0 8px; line-height:1.5;"></div>'
+            + '<div style="display:flex; justify-content:flex-end;">'
+            + '<button onclick="window._jiraSubmitCreateIssue(\'' + esc(pk) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">➕ ' + T('만들기', 'Create') + '</button>'
+            + '</div>';
+    };
+
+    window._jiraSearchAssigneeForCreate = async function () {
+        var L = links();
+        var pk = (L.projectKey || '').trim();
+        var q = (document.getElementById('jira-c-assignee').value || '').trim();
+        var box = document.getElementById('jira-create-assignee-hits');
+        if (!box || !pk) return;
+        box.style.display = 'block';
+        box.innerHTML = '<div style="padding:8px; color:#999;">' + T('찾는 중...', 'Searching...') + '</div>';
+        try {
+            var d = await fetchJson(BASE + '/jira/project/' + encodeURIComponent(pk) + '/assignable-users'
+                + (q ? ('?q=' + encodeURIComponent(q)) : ''));
+            if (!d || d.ok === false) { box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc((d && d.message) || '') + '</div>'; return; }
+            _createAssigneeHits = (d.users || []).slice(0, 50);
+            if (!_createAssigneeHits.length) { box.innerHTML = '<div style="padding:8px; color:#999;">' + T('일치하는 사람이 없습니다.', 'No matching person.') + '</div>'; return; }
+            box.innerHTML = _createAssigneeHits.map(function (u, i) {
+                return '<div data-idx="' + i + '" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;" onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'"><b>' + esc(u.displayName) + '</b> <span style="color:#999;">(' + esc(u.name) + ')</span></div>';
+            }).join('');
+        } catch (e) {
+            box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
+        }
+    };
+
+    window._jiraSubmitCreateIssue = async function (pk) {
+        var summaryEl = document.getElementById('jira-c-summary');
+        var summary = (summaryEl && summaryEl.value || '').trim();
+        if (!summary) { createStatus('⚠️ ' + T('요약을 입력해주세요.', 'Please enter a summary.'), 'err'); if (summaryEl) summaryEl.focus(); return; }
+        var typeEl = document.getElementById('jira-c-type');
+        var priEl = document.getElementById('jira-c-priority');
+        var compEl = document.getElementById('jira-c-components');
+        var comps = compEl ? Array.prototype.slice.call(compEl.selectedOptions || []).map(function (o) { return o.value; }) : [];
+        createStatus('⏳ ' + T('만드는 중...', 'Creating...'), '');
+        try {
+            var d = await fetch(BASE + '/jira/issue', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectKey: pk,
+                    summary: summary,
+                    description: (document.getElementById('jira-c-description').value || '').trim(),
+                    issuetype: typeEl ? typeEl.value : '',
+                    priority: priEl ? priEl.value : '',
+                    assignee: (document.getElementById('jira-c-assignee').value || '').trim(),
+                    components: comps
+                })
+            }).then(function (r) { return r.json(); });
+            if (!d || d.ok === false) { createStatus('⚠️ ' + esc((d && d.message) || T('생성 실패', 'Create failed')), 'err'); return; }
+            var key = d.issue && d.issue.key;
+            createStatus('✅ ' + T('생성했습니다: ', 'Created: ') + '<b>' + esc(key || '') + '</b>', 'ok');
+            if (window._jiraRefresh) window._jiraRefresh();
+            if (key) {
+                setTimeout(function () {
+                    var m = document.getElementById('jira-create-modal');
+                    if (m) m.style.display = 'none';
+                    window._jiraOpenIssueModal(key);
+                }, 600);
+            }
+        } catch (e) {
+            createStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
+        }
+    };
+
     // ══ 🔗 Summary 탭 모델 카드 ↔ JIRA 양방향 참조 (2026-11-11, 사용자 요청) ═══════
     //  js/22g를 직접 고치지 않고 **감싼다**(js/43이 populateTabData/mcSwitchUnit을 감싸는 것과
     //  같은 방식 — 이 파일만 빼면 예전 동작으로 돌아간다). 복사본을 만들지 않는다 — 두 화면이

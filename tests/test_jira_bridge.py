@@ -287,6 +287,12 @@ check('표시이름(한글)으로 거르기(1건)', [u['name'] for u in filtered
 filtered3 = jb.assignable_users('GABJQ-4', '없는사람')
 check('일치 0건이면 빈 목록', filtered3 == [], filtered3)
 
+# 🆕 [2026-11-12] 새 이슈 생성 모달용 — 아직 이슈 키가 없으니 project로 묻는다
+jb.requests.request = fake_au
+proj_users = jb.assignable_users_for_project('GABJO')
+check('project 파라미터로 보낸다(issueKey 아님)', seen_au['params'] == {'project': 'GABJO', 'maxResults': 500}, seen_au['params'])
+check('project 기준도 같은 거르기 로직을 쓴다', [u['name'] for u in jb.assignable_users_for_project('GABJO', 'park')] == ['yhpark'])
+
 print('\n[11] add_attachment — 올린 파일을 attachments 모양으로 돌려준다')
 fresh(); stub_auth(True)
 seen_up = {}
@@ -403,6 +409,80 @@ check('search 결과에도 구성 요소/해결책/Milestone이 담긴다(표 �
 calls4 = arm([FakeResp(200, {'total': 0, 'issues': []})])
 jb.search('project = GABJO', 5)
 check('필드 정의가 이미 캐시돼 있으면 search를 반복해도 다시 안 묻는다(네트워크 1회만)', calls4['n'] == 1, calls4)
+
+print('\n[14] create_issue — 새 이슈(키) 생성 (2026-11-12, "제일 중요한 신규 이슈 생성 기능")')
+fresh(); stub_auth(True)
+# Milestone 조회는 이미 캐시돼 있다([13]에서 채워짐) — create_issue 안의 get_issue가
+# 그 네트워크 호출까지 또 타면 아래 가짜 함수가 모르는 URL로 AssertionError를 낸다.
+jb._FIELD_META_CACHE['id_by_name'] = {'summary': 'summary', 'milestone': 'customfield_10010'}
+jb._FIELD_META_CACHE['ts'] = float('inf')
+
+calls = arm([])
+try:
+    jb.create_issue('', '요약')
+    check('프로젝트 코드 없으면 예외', False)
+except jb.JiraApiError as e:
+    check('프로젝트 코드 없음 → 거부(네트워크 안 탐)', '프로젝트 코드' in str(e) and calls['n'] == 0, str(e))
+try:
+    jb.create_issue('GABJO', '   ')
+    check('요약 없으면 예외', False)
+except jb.JiraApiError as e:
+    check('요약 없음(공백만) → 거부', '요약' in str(e) and calls['n'] == 0, str(e))
+
+seen_create = {}
+
+
+def fake_create(method, url, **kw):
+    if method == 'POST' and url.endswith('/rest/api/2/issue'):
+        seen_create['json'] = kw.get('json')
+        return FakeResp(201, {'id': '40001', 'key': 'GABJO-7'})
+    if url.endswith('/rest/api/2/issue/GABJO-7'):
+        return FakeResp(200, {'key': 'GABJO-7', 'fields': {'summary': '새 이슈', 'status': {'name': '열림'}}})
+    raise AssertionError('예상하지 못한 호출: %s %s' % (method, url))
+
+
+jb.requests.request = fake_create
+issue = jb.create_issue('GABJO', '새 이슈', description='상세 설명', issuetype='버그',
+                         priority='Major', assignee='yhpark', components=['S/W', 'H/W'])
+fsent = seen_create['json']['fields']
+check('project는 key로 보낸다', fsent['project'] == {'key': 'GABJO'}, fsent)
+check('summary 그대로', fsent['summary'] == '새 이슈')
+check('issuetype은 id 선조회 없이 이름으로', fsent['issuetype'] == {'name': '버그'}, fsent)
+check('priority도 이름으로', fsent['priority'] == {'name': 'Major'}, fsent)
+check('assignee는 username', fsent['assignee'] == {'name': 'yhpark'}, fsent)
+check('components는 이름 배열', fsent['components'] == [{'name': 'S/W'}, {'name': 'H/W'}], fsent)
+check('생성 직후 전체 이슈로 돌려준다(get_issue)', issue['key'] == 'GABJO-7' and issue['summary'] == '새 이슈', issue)
+
+seen_min = {}
+
+
+def fake_create_min(method, url, **kw):
+    if method == 'POST' and url.endswith('/rest/api/2/issue'):
+        seen_min['json'] = kw.get('json')
+        return FakeResp(201, {'id': '40002', 'key': 'GABJO-8'})
+    return FakeResp(200, {'key': 'GABJO-8', 'fields': {'summary': '최소 입력'}})
+
+
+jb.requests.request = fake_create_min
+jb.create_issue('GABJO', '최소 입력')
+fmin = seen_min['json']['fields']
+check('선택 필드를 안 주면 fields에도 아예 없다(빈 값으로 400을 유발하지 않는다)',
+      'priority' not in fmin and 'assignee' not in fmin and 'components' not in fmin and 'description' not in fmin, fmin)
+check('issuetype 기본값은 Task', fmin['issuetype'] == {'name': 'Task'}, fmin)
+
+print('\n[15] list_issue_types/project_components — 생성 모달 선택지')
+fresh(); stub_auth(True)
+calls = arm([FakeResp(200, [
+    {'id': '1', 'name': '버그', 'subtask': False},
+    {'id': '2', 'name': '문의', 'subtask': False},
+    {'id': '3', 'name': '하위 작업', 'subtask': True},
+])])
+types = jb.list_issue_types()
+check('하위 작업(subtask)은 뺀다', [t['name'] for t in types] == ['버그', '문의'], types)
+
+calls2 = arm([FakeResp(200, [{'id': '10', 'name': 'S/W'}, {'id': '11', 'name': 'H/W'}])])
+comps = jb.project_components('GABJO')
+check('프로젝트 구성 요소 목록', [c['name'] for c in comps] == ['S/W', 'H/W'], comps)
 
 print('\n' + ('=' * 50))
 print('PASS %d / FAIL %d' % (len(PASS), len(FAIL)))

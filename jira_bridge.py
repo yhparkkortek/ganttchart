@@ -313,15 +313,25 @@ def add_comment(key, body):
 #  그래서 JIRA 쪽 검색을 믿지 않고 `list_projects`/`resolve_project_key`와 같은 원칙으로
 #  **우리가 전체를 받아 직접 거른다**(결정론 먼저, CLAUDE.md). `maxResults`는 실제로
 #  듣는다(실측 204명 한 번에 옴) — 페이지네이션 없이 한 번에 받는다.
-def assignable_users(key, q=None):
-    r = _request('GET', '/rest/api/2/user/assignable/search',
-                  params={'issueKey': key, 'maxResults': 500})
+def _assignable_users(params, q):
+    r = _request('GET', '/rest/api/2/user/assignable/search', params=params)
     out = [{'name': u.get('name'), 'displayName': u.get('displayName') or u.get('name')}
            for u in r.json()]
     if q:
         ql = q.strip().lower()
         out = [u for u in out if ql in (u['name'] or '').lower() or ql in (u['displayName'] or '').lower()]
     return out
+
+
+def assignable_users(key, q=None):
+    return _assignable_users({'issueKey': key, 'maxResults': 500}, q)
+
+
+def assignable_users_for_project(project_key, q=None):
+    """🆕 [2026-11-12] 새 이슈 생성 모달의 담당자 찾기 — 아직 이슈 키가 없으니 `issueKey`
+    대신 `project`로 묻는다(JIRA REST가 둘 다 지원). 그 외엔 `assignable_users`와 동일
+    (JIRA의 `query=` 를 못 믿어 전체를 받아 우리가 직접 거르는 것까지 포함)."""
+    return _assignable_users({'project': project_key, 'maxResults': 500}, q)
 
 
 def get_transitions(key):
@@ -410,6 +420,63 @@ def update_fields(key, fields):
 def priorities():
     r = _request('GET', '/rest/api/2/priority')
     return [{'id': p.get('id'), 'name': p.get('name')} for p in r.json()]
+
+
+# ── 🆕 새 이슈(키) 생성 (2026-11-12, "제일 중요한 신규 이슈 생성 기능이 없다") ──────────
+#  사람이 📝+ 새 이슈 모달에서 입력하고 버튼을 눌러야만 실행된다(쓰기는 읽기와 경로 분리 —
+#  js/40 QA_TOOLS에 등록하지 않는다, docs/qa-tool-router.md 원칙 그대로).
+def list_issue_types():
+    """생성 모달의 '유형' 선택지. 하위 작업(subtask)은 뺀다 — 이 탭은 상위 이슈 생성만
+    다룬다(하위 작업은 부모 이슈가 있어야 하는데 이 모달엔 그 입력이 없다)."""
+    r = _request('GET', '/rest/api/2/issuetype')
+    return [{'id': t.get('id'), 'name': t.get('name')} for t in r.json() if not t.get('subtask')]
+
+
+def project_components(project_key):
+    """생성 모달의 '구성 요소' 선택지 — 그 프로젝트에 실제로 등록된 것만(실측 이슈의
+    components 값과 같은 이름이라야 한다)."""
+    r = _request('GET', '/rest/api/2/project/' + project_key + '/components')
+    return [{'id': c.get('id'), 'name': c.get('name')} for c in r.json()]
+
+
+def create_issue(project_key, summary, description='', issuetype='Task', priority=None, assignee=None, components=None):
+    """새 이슈를 만들고, 만든 뒤 바로 전체 모양으로 다시 읽어 돌려준다(다른 쓰기 함수들—
+    add_comment/do_transition—과 같은 관례, 모달이 새로고침 없이 바로 그릴 수 있게).
+
+    ⚠️⚠️ **issuetype/priority/components는 id가 아니라 이름으로 보낸다** — JIRA REST API가
+    프로젝트 컨텍스트 안에서 이름을 해석해 주므로, 이 서버의 id 체계를 미리 알아낼 필요가
+    없다(list_issue_types()/project_components()는 **생성 모달의 선택지를 보여주는 용도**일
+    뿐, create_issue 자체는 그 목록이 없어도 사람이 적은 이름 그대로 시도한다). 그 프로젝트에
+    없는 이름이거나 이 인스턴스만의 다른 필수 커스텀 필드가 있으면 JIRA가 400으로 알려주고
+    그 메시지를 그대로 보여준다 — 추측해서 채우지 않는다(CLAUDE.md "결정론 먼저").
+    """
+    project_key = (project_key or '').strip()
+    summary = (summary or '').strip()
+    if not project_key:
+        raise JiraApiError('프로젝트 코드가 없습니다 — 먼저 📁 연결 설정에서 지정해주세요.')
+    if not summary:
+        raise JiraApiError('요약을 입력해주세요.')
+    fields = {
+        'project': {'key': project_key},
+        'summary': summary,
+        'issuetype': {'name': issuetype or 'Task'},
+    }
+    if description:
+        fields['description'] = description
+    if priority:
+        fields['priority'] = {'name': priority}
+    if assignee:
+        fields['assignee'] = {'name': assignee}
+    if components:
+        comps = [{'name': c} for c in components if c]
+        if comps:
+            fields['components'] = comps
+    r = _request('POST', '/rest/api/2/issue', json={'fields': fields})
+    j = r.json()
+    key = j.get('key')
+    if not key:
+        raise JiraApiError('이슈가 생성된 것 같지만 키를 받지 못했습니다: %s' % j)
+    return get_issue(key)
 
 
 # ── 📁 프로젝트 목록 — 코드(key)와 이름(name)으로 둘 다 찾게 (2026-11-11) ──────────

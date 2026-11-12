@@ -284,6 +284,10 @@ JIRA 키가 **다른 모델 탭에도 그대로** 나타났다. → `_jiraOnTabS
 | `/jira/attachment` | GET | 첨부파일 다운로드 프록시(`url=`, `name=`) — `/secure/attachment/`로 시작하는 주소만 허용 |
 | `/jira/issue/<key>/attachment` | POST | 첨부 저장(업로드, multipart `file`) |
 | `/jira/issue/<key>/assignable-users` | GET | 담당자 후보 찾기(`q=`, 이름/아이디 부분일치 — JIRA 자체 검색은 못 믿어서 우리가 직접 거름) |
+| `/jira/issue` | POST | 🆕 새 이슈 생성(`projectKey`·`summary`·`description`·`issuetype`·`priority`·`assignee`·`components`) |
+| `/jira/issuetypes` | GET | 🆕 생성 모달 '유형' 선택지(하위 작업 제외) |
+| `/jira/project/<key>/components` | GET | 🆕 생성 모달 '구성 요소' 선택지(그 프로젝트에 실제 등록된 것만) |
+| `/jira/project/<key>/assignable-users` | GET | 🆕 생성 모달 담당자 찾기(`q=` — 아직 이슈 키가 없어 `issueKey` 대신 `project`로 묻는다) |
 
 ⚠️ `/jira/issue/<key>`와 `/jira/issue`가 **둘 다 있는 이유**: AI 문답 도구 루프(`js/40 _qaRunTool`)는
 모든 인자를 쿼리스트링으로만 붙이고 경로에 끼워 넣지 않는다 — 그래서 QA_TOOLS 전용으로
@@ -294,7 +298,41 @@ JIRA 키가 **다른 모델 탭에도 그대로** 나타났다. → `_jiraOnTabS
 AI 문답 도구(`QA_TOOLS`, js/40)에는 `jira_issue`/`jira_search` **두 개만, `mode:'read'`로만**
 등록돼 있다. 쓰기 라우트(`/jira/issue/<key>/comment` 등)는 QA_TOOLS에 없으므로 AI 자율 루프가
 절대 부를 수 없다 — `js/70`의 상세 모달에서 **사람이 버튼을 눌러야만** 실행된다
-(`docs/qa-tool-router.md` "쓰기는 읽기와 경로 분리" 원칙 그대로).
+(`docs/qa-tool-router.md` "쓰기는 읽기와 경로 분리" 원칙 그대로). **새 이슈 생성도 같은 원칙** —
+`POST /jira/issue`도 QA_TOOLS에 없다.
+
+## 🆕 새 이슈(키) 생성 (2026-11-12, "제일 중요한 신규 이슈 생성 기능이 없다")
+
+사용자 지적대로 조회·댓글·상태전환·필드수정은 다 있는데 **정작 새 이슈를 만드는 기능이
+없었다** — 🆕 새 이슈 버튼(헤더, 가장 왼쪽)을 누르면 모달이 열린다.
+
+- **프로젝트는 지금 모델의 📁 JIRA 연결에서만 받는다** — 어느 프로젝트에 만들지 모르면
+  **폼 자체를 안 보여주고** "Summary 탭 🪐 JIRA 코드(🔍 찾기)나 ⚙️ 연결 설정에서 먼저
+  지정해달라"는 안내만 보여준다(추측해서 아무 프로젝트에나 만드는 게 더 위험하다).
+- 모달이 열릴 때 `GET /jira/issuetypes`(유형, 하위 작업 제외)·`GET /jira/priorities`(이미
+  있던 것 재사용)·`GET /jira/project/<key>/components`(그 프로젝트에 실제 등록된 구성 요소만)
+  를 받아 선택지로 채운다. 담당자는 상세 모달과 같은 모양의 🔍 찾기지만, **아직 이슈 키가
+  없어** `issueKey` 대신 `project`로 묻는 `assignable_users_for_project()`(및
+  `/jira/project/<key>/assignable-users`)를 새로 만들었다 — 로직은 기존
+  `assignable_users`와 공유(`_assignable_users` 헬퍼로 합침, JIRA의 `query=` 무시를 우리가
+  직접 거르는 것까지 동일).
+- ⚠️⚠️ **issuetype/priority/components는 id를 선조회하지 않고 이름 그대로 보낸다** —
+  JIRA REST가 프로젝트 컨텍스트 안에서 이름을 해석해 주므로(`{'name': '버그'}` 식), 이
+  인스턴스의 id 체계를 몰라도 된다. `list_issue_types()`/`project_components()`는 **생성
+  모달의 선택지를 보여주는 용도일 뿐**이고, `create_issue()` 자체는 그 목록을 안 거치고
+  받은 이름을 그대로 JIRA에 보낸다.
+- 선택 필드(설명·우선순위·담당자·구성 요소)를 비우면 **그 키 자체를 `fields`에서 뺀다**(빈
+  문자열을 보내지 않는다) — 빈 값으로 JIRA의 다른 검증을 건드리지 않기 위해서다.
+- 생성 직후 `get_issue(key)`로 **전체 모양을 다시 읽어** 돌려준다(다른 쓰기 함수들—
+  `add_comment`/`do_transition`—과 같은 관례). 프런트는 성공 메시지를 짧게 보여준 뒤 생성
+  모달을 닫고 그 이슈의 상세 모달을 바로 연다.
+- ⚠️ **이 인스턴스만의 다른 필수 커스텀 필드가 있을 수 있다** — 미리 전부 알아내려 하지
+  않는다(JIRA의 `createmeta`가 이 옛 버전엔 신뢰도가 낮다). 그런 필드가 있으면 JIRA가
+  400으로 정확히 어느 필드가 빠졌는지 알려주고, 그 메시지를 그대로 보여준다(추측해서 채우지
+  않는다 — CLAUDE.md "결정론 먼저").
+- ⚠️ **실측 안 함(의도적)** — 📎 첨부 저장과 같은 이유로, 실제 JIRA에 영구적인 이슈를 만드는
+  행위라 가짜 경계(`requests.request`) 테스트로만 확인했다(85건). 사람이 한 번 직접 눌러
+  실제로 키가 발급되는지 확인해야 한다.
 
 ## 🐛 (2026-11-11) "로그인 테스트"가 항상 실패했던 진짜 원인 — `/rest/api/2/myself`가 이 서버엔 없다
 
@@ -322,14 +360,17 @@ AI 문답 도구(`QA_TOOLS`, js/40)에는 `jira_issue`/`jira_search` **두 개�
 python tests/test_jira_bridge.py
 ```
 
-**59건** — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `verify_login`이
+**85건** — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `verify_login`이
 `/rest/api/2/user?username=`을 쓰는지(위 버그의 회귀 방지), `_shape_issue` 필드 매핑
-(요약·설명·상태·담당자·우선순위·댓글·첨부), `search` 집계, `save_config`/`delete_config`는
-**진짜 Windows DPAPI**로 암복호화 왕복까지, `list_projects`/`resolve_project_key`는 캐시가
-네트워크를 또 안 타는지·이름이 0건/2건+이면 추측 없이 `None`을 돌려주는지, 📎 첨부 다운로드
+(요약·설명·상태·담당자·우선순위·댓글·첨부·구성요소·해결책·Milestone), `search` 집계, `save_config`/
+`delete_config`는 **진짜 Windows DPAPI**로 암복호화 왕복까지, `list_projects`/`resolve_project_key`는
+캐시가 네트워크를 또 안 타는지·이름이 0건/2건+이면 추측 없이 `None`을 돌려주는지, 📎 첨부 다운로드
 SSRF 화이트리스트, 📎 첨부 저장(업로드, `X-Atlassian-Token`)·👤 담당자 찾기(`query=` 무시를
 직접 거름)·**📂 연결 프로그램으로 열기**(받은 바이트를 임시 폴더에 안전한 파일명으로 쓰고
-`os.startfile` 호출까지, `..`/`\`가 섞인 악의적 파일명도 확인)까지 포함한다.
+`os.startfile` 호출까지, `..`/`\`가 섞인 악의적 파일명도 확인)·🏷 구성 요소/해결책/Milestone
+(커스텀 필드 이름→id 캐시, 실패해도 핵심 조회는 안 막힘, search도 같은 필드를 싣는지)·
+**🆕 create_issue**(프로젝트 코드/요약 없으면 네트워크 안 타고 거부, 필드는 이름으로 전달,
+선택 필드는 비면 아예 안 실음, 생성 직후 전체 이슈로 돌려줌)까지 포함한다.
 가짜는 `requests.request` 경계 하나뿐(`os.startfile`만 추가로 스텁).
 
 ✅ **실제 서버로 확인한 것**(2026-11-11, 저장된 실제 계정으로): 로그인(whoami) 성공, 실제
@@ -344,8 +385,9 @@ SSRF 화이트리스트, 📎 첨부 저장(업로드, `X-Atlassian-Token`)·�
 
 ⚠️ **아직 확인 못 한 것**:
 - JIRA 탭 화면이 실제로 표를 그리는지, 상세 모달의 댓글/상태전환/필드수정이 실제 JIRA에
-  반영되는지, 드롭존 애니메이션이 의도대로 보이는지(브라우저 자동화가 이 세션의 로컬 프리뷰
-  서버에 연결하지 못해 화면 자체는 아직 못 봄)
+  반영되는지, 드롭존 애니메이션이 의도대로 보이는지, **🆕 새 이슈 생성 모달이 실제로 키를
+  발급받는지**(브라우저 자동화가 이 세션에서 로컬 백엔드·실제 JIRA 서버에 연결하지 못해
+  화면 자체를 아직 못 봄 — 코드는 가짜 경계 테스트로만 확인)
 - AI 문답에서 "GABKJ-1 상태 알려줘" 같은 질문이 실제로 `jira_issue` 도구를 골라 답하는지
 - 엑셀 등 비이미지 첨부를 "연결 프로그램으로 열기"했을 때 실제로 Excel이 뜨는지(jpg로만 확인)
 
@@ -358,3 +400,6 @@ SSRF 화이트리스트, 📎 첨부 저장(업로드, `X-Atlassian-Token`)·�
 - 메일 키 스캔 정규식(`[A-Z][A-Z0-9]{1,9}-\d{1,6}`)은 과매칭할 수 있다(예: 다른 사내
   코드 체계) — JQL `key in (...)`이 존재하지 않는 키를 만나면 그 소스 하나만 조용히
   "조회 실패" 노트로 떨어지고 나머지는 멀쩡하다(위 "3가지 동시 연결" 절 참고).
+- 🆕 새 이슈 생성은 **그 프로젝트만의 다른 필수 커스텀 필드**(예: Milestone을 생성 시점에
+  필수로 요구하는 프로젝트가 있을 수 있다)를 미리 알아내 채우지 않는다 — 그런 필드가 있으면
+  JIRA가 400으로 바로 알려주고 그 메시지를 그대로 보여준다.

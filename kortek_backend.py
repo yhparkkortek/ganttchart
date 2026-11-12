@@ -5730,6 +5730,66 @@ def jira_projects():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/jira/project/<key>/assignable-users', methods=['GET'])
+def jira_project_assignable_users(key):
+    """🆕 새 이슈 생성 모달의 담당자 찾기(2026-11-12) — 아직 이슈 키가 없으니 project로 묻는다
+    (`/jira/issue/<key>/assignable-users`의 project 버전)."""
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'users': jira_bridge.assignable_users_for_project(key, request.args.get('q'))})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issuetypes', methods=['GET'])
+def jira_issuetypes():
+    """🆕 새 이슈 생성 모달의 '유형' 선택지(2026-11-12 추가)."""
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'issuetypes': jira_bridge.list_issue_types()})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/project/<key>/components', methods=['GET'])
+def jira_project_components(key):
+    """🆕 새 이슈 생성 모달의 '구성 요소' 선택지(2026-11-12 추가) — 그 프로젝트에 실제
+    등록된 것만."""
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'components': jira_bridge.project_components(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue', methods=['POST'])
+def jira_issue_create():
+    """🆕 [2026-11-12 사용자 요청] 새 이슈(키) 생성 — 사람이 모달에서 입력하고 버튼을 눌러야만
+    실행된다(다른 쓰기 라우트와 같은 원칙, AI 자율 루프는 js/40에 이 라우트가 없어 못 탄다).
+    프로젝트는 지금 모델의 📁 JIRA 연결에서 받는다 — 비어 있으면 어느 프로젝트에 만들지
+    추측하지 않고 400으로 막는다."""
+    body = request.get_json(silent=True) or {}
+    project_key = (body.get('projectKey') or '').strip()
+    summary = (body.get('summary') or '').strip()
+    if not project_key:
+        return jsonify({'ok': False, 'message': '프로젝트 코드가 없습니다 — 📁 연결 설정에서 먼저 지정해주세요.'}), 400
+    if not summary:
+        return jsonify({'ok': False, 'message': '요약을 입력해주세요.'}), 400
+    try:
+        import jira_bridge
+        issue = jira_bridge.create_issue(
+            project_key, summary,
+            description=body.get('description') or '',
+            issuetype=body.get('issuetype') or 'Task',
+            priority=body.get('priority') or None,
+            assignee=body.get('assignee') or None,
+            components=body.get('components') or None,
+        )
+        return jsonify({'ok': True, 'issue': issue})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 502
+
+
 @app.route('/gw/chrome-restart', methods=['POST'])
 def gw_chrome_restart():
     """전용 크롬을 닫았다 다시 띄운다 — **http 사이트 차단(HTTPS 자동승격) 해제용.**
