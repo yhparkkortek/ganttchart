@@ -192,6 +192,10 @@
                         { cells: [{ fixed: 'Luminance Lv' }, { key: 'opt|lv1' }, { key: 'opt|lv2' }, { key: 'opt|lvn' }] }
                     ]
                 },
+                // 🔬 [2026-11-12 요청] "Gamma tuning 로그로 샘플 광학 측정 이력을 남기고 싶다" —
+                //    위 표는 사람이 손으로 두 지점만 적는 칸이고, 이건 **Gamma 리포트 zip(바코드별
+                //    Final_Report.txt)을 통째로 가져와 자동으로 쌓는** 이력이다. 다른 이름이다.
+                { title: '🔬 광학 측정 이력 (Gamma 리포트, 바코드별)', kind: 'optical' },
                 {
                     title: 'OSD Control', cols: 2,
                     fields: [
@@ -790,6 +794,157 @@
         return BACKEND + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name);
     };
 
+    // ── 🔬 광학 측정 이력 (Gamma 리포트 zip, 바코드별) ────────────────────
+    //  2026-11-12 요청 — 샘플 광학 측정 이력을 Gamma tuning 로그로 남긴다. Final_Report.txt 는
+    //  완전 고정 포맷이라 **AI 없이** 백엔드 정규식 파서(`/doc/parse-optical-zip`)로 구조화한다
+    //  (실측 16개 샘플 전부 같은 라벨·같은 표 모양). Log_File.txt(원시 보정 로그)는 파싱하지
+    //  않고 증적으로만 같이 보관한다. ⚠️ 미리보기 승인 전엔 저장하지 않는다(이 앱의 모든
+    //  가져오기와 같은 규칙) · ⚠️ NAS 업로드는 **기존 `_dgUploadBlob`(/doc/put) 재사용** —
+    //  쓰기 경로를 두 벌로 만들지 않는다.
+    window._docOpticalPick = function (formId) {
+        var inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = '.zip';
+        inp.onchange = function () { if (inp.files && inp.files[0]) window._docOpticalImport(formId, inp.files[0]); };
+        inp.click();
+    };
+    window._docOpticalImport = async function (formId, file) {
+        _toast('⏳ ' + _esc(file.name) + ' ' + _t('zip 을 열어 읽는 중…', 'reading zip…'), 'info');
+        var fd = new FormData();
+        fd.append('file', file, file.name);
+        var body = null;
+        try {
+            var res = await fetch(BACKEND + '/doc/parse-optical-zip', { method: 'POST', body: fd, signal: AbortSignal.timeout(60000) });
+            body = await res.json();
+        } catch (e) {
+            _toast('⚠️ ' + _t('zip 을 읽지 못했습니다: ', 'failed to read zip: ') + (e.message || e), 'error'); return;
+        }
+        if (!body || !body.ok) { _toast('⚠️ ' + ((body && body.error) || _t('알 수 없는 오류', 'unknown error')), 'error'); return; }
+        if (!body.items || !body.items.length) {
+            _toast('⚠️ ' + _t('이 zip 에서 읽을 수 있는 리포트가 없습니다.', 'No readable reports in this zip.'), 'error'); return;
+        }
+        window._docOpticalPending = { formId: formId, items: body.items, picked: body.items.map(function () { return true; }) };
+        if (body.warnings && body.warnings.length) {
+            _toast('ℹ️ ' + body.warnings.length + _t('건은 건너뛰었습니다(형식이 다름).', ' item(s) skipped (unrecognized format).'), 'info');
+        }
+        _docOpticalPreview();
+    };
+    var _docOpticalPreview = function () {
+        var p = window._docOpticalPending; if (!p) return;
+        var existing = {};
+        (_docData(p.formId).opticalLogs || []).forEach(function (it) { existing[it.barcode] = true; });
+        var ov = document.getElementById('docopt-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'docopt-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9500; pointer-events:none; background:none;';
+            ov.innerHTML = '<div id="docopt-box" style="pointer-events:all; position:fixed; left:50%; top:8%;'
+                + ' transform:translateX(-50%); width:min(760px,94vw); max-height:82vh; display:flex; flex-direction:column;'
+                + ' background:#fff; border:1px solid #a3d9e0; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18);'
+                + ' overflow:hidden;">'
+                + '<div id="docopt-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between;'
+                + ' padding:9px 12px; background:#e0f5f7; border-bottom:1px solid #a3d9e0; color:#00707d;'
+                + ' font-weight:bold; font-size:13px; cursor:grab;"><span id="docopt-title"></span>'
+                + '<button onclick="window._docOpticalCancel()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
+                + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div id="docopt-body" style="flex:1; min-height:0; overflow-y:auto; padding:10px 12px;"></div>'
+                + '<div style="flex-shrink:0; display:flex; justify-content:flex-end; gap:6px; padding:9px 12px; border-top:1px solid #e9ecef;">'
+                + '<button onclick="window._docOpticalCancel()" style="padding:6px 12px; background:#f1f3f5; color:#495057;'
+                + ' border:1px solid #dee2e6; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">'
+                + _esc(_t('취소', 'Cancel')) + '</button>'
+                + '<button id="docopt-apply-btn" onclick="window._docOpticalApply()" style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d;'
+                + ' border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ '
+                + _esc(_t('선택한 항목 가져오기', 'Import selected')) + '</button></div></div>';
+            document.body.appendChild(ov);
+            if (window._makeDraggable) { try { window._makeDraggable('docopt-box', 'docopt-head'); } catch (e) { /* 〃 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('docopt-overlay'); } catch (e) { /* 〃 */ } }
+        }
+        ov.style.display = 'flex';
+        if (window.bringModalToFront) { try { window.bringModalToFront('docopt-overlay'); } catch (e) { /* 〃 */ } }
+        document.getElementById('docopt-title').textContent =
+            '📥 ' + _t('광학 측정 이력 가져오기 — ', 'Import optical history — ') + p.items.length + _t('건', ' item(s)');
+        var rows = p.items.map(function (it, i) {
+            var dup = !!existing[it.barcode];
+            var pqOk = it.pqFail === 0;
+            return '<tr' + (dup ? ' style="opacity:.55;"' : '') + '>'
+                + '<td style="text-align:center;"><input type="checkbox" ' + (p.picked[i] && !dup ? 'checked' : '')
+                + (dup ? ' disabled' : '') + ' onchange="window._docOpticalTogglePick(' + i + ',this.checked)"></td>'
+                + '<td>' + _esc(it.barcode) + (dup ? ' <span style="font-size:10px; color:#b1432f;">('
+                  + _esc(_t('이미 있음', 'already have')) + ')</span>' : '') + '</td>'
+                + '<td style="font-size:11px;">' + _esc(it.startTime) + '</td>'
+                + '<td>' + _esc(it.nativeX) + ' / ' + _esc(it.nativeY) + '</td>'
+                + '<td>' + _esc(it.gamutPct) + '%</td>'
+                + '<td style="color:' + (pqOk ? '#1f7a3d' : '#b1432f') + '; font-weight:bold;">'
+                + (pqOk ? 'PASS' : it.pqFail + '/' + it.pqTotal + ' FAIL') + '</td></tr>';
+        }).join('');
+        document.getElementById('docopt-body').innerHTML =
+            '<div style="font-size:11.5px; color:#868e96; margin-bottom:8px;">'
+            + _esc(_t('이미 있는 바코드는 다시 가져오지 않습니다(회색, 선택 불가). Log_File.txt 는 원본 증적으로 같이 보관됩니다(파싱하지 않음).',
+                      'Already-imported barcodes are skipped.')) + '</div>'
+            + '<table class="doc-t"><tr><th style="width:30px;"></th><th>' + _esc(_t('바코드', 'Barcode')) + '</th>'
+            + '<th>' + _esc(_t('측정일시', 'Measured')) + '</th><th>Native X/Y</th><th>Gamut</th><th>PQ</th></tr>'
+            + rows + '</table>';
+    };
+    window._docOpticalTogglePick = function (i, v) {
+        if (window._docOpticalPending) window._docOpticalPending.picked[i] = v;
+    };
+    window._docOpticalCancel = function () {
+        window._docOpticalPending = null;
+        var ov = document.getElementById('docopt-overlay');
+        if (ov) ov.style.display = 'none';
+    };
+    window._docOpticalApply = async function () {
+        var p = window._docOpticalPending; if (!p) return;
+        var d = _docData(p.formId);
+        d.opticalLogs = d.opticalLogs || [];
+        var existing = {};
+        d.opticalLogs.forEach(function (it) { existing[it.barcode] = true; });
+        var picked = p.items.filter(function (it, i) { return p.picked[i] && !existing[it.barcode]; });
+        if (!picked.length) { window._docOpticalCancel(); return; }
+        var btn = document.getElementById('docopt-apply-btn');
+        if (btn) { btn.disabled = true; btn.textContent = _t('올리는 중…', 'uploading…'); }
+        var ctx = _ctx(), folder = _attFolder(ctx, _formById(p.formId));
+        var roundSafe = String(window._docState.round || '').replace(/[\\/:*?"<>|]/g, '-');
+        var okCount = 0;
+        for (var i = 0; i < picked.length; i++) {
+            var it = picked[i];
+            var files = [];
+            var reportName = roundSafe + '_' + (it.reportFileName || (it.barcode + '_Final_Report.txt'));
+            var r1 = await window._dgUploadBlob(folder, reportName, new Blob([it.reportText || ''], { type: 'text/plain' }));
+            if (r1.ok) files.push({ name: r1.name, folder: folder, kind: 'report' });
+            if (it.logFileName) {
+                var logName = roundSafe + '_' + it.logFileName;
+                var r2 = await window._dgUploadBlob(folder, logName, new Blob([it.logText || ''], { type: 'text/plain' }));
+                if (r2.ok) files.push({ name: r2.name, folder: folder, kind: 'log' });
+            }
+            d.opticalLogs.push({
+                barcode: it.barcode, model: it.model, startTime: it.startTime, endTime: it.endTime,
+                targetX: it.targetX, targetY: it.targetY, nativeX: it.nativeX, nativeY: it.nativeY,
+                maxPwmLv: it.maxPwmLv, defaultPwmLv: it.defaultPwmLv, gamutPct: it.gamutPct,
+                pqTotal: it.pqTotal, pqPass: it.pqPass, pqFail: it.pqFail,
+                files: files, importedAt: new Date().toISOString()
+            });
+            okCount++;
+        }
+        _markDirty();
+        window._docOpticalCancel();
+        _toast('✅ ' + okCount + _t('건을 가져왔습니다.', ' item(s) imported.'), 'success');
+        window._docRender();
+    };
+    window._docOpticalRemove = function (formId, idx) {
+        var d = _docData(formId);
+        var list = d.opticalLogs || [];
+        if (idx < 0 || idx >= list.length) return;
+        // ⚠️ NAS 파일은 지우지 않는다 — 다른 첨부와 같은 규칙(팀 공유라 되돌릴 수 없다).
+        if (!confirm(_t('이 측정 이력을 지웁니다(NAS 원본 파일은 그대로 둡니다):\n\n' + list[idx].barcode,
+                        'Remove this record?'))) return;
+        list.splice(idx, 1);
+        _markDirty(); window._docRender();
+    };
+    window._docOpticalToggleAll = function () {
+        window._docState.opticalAllRounds = !window._docState.opticalAllRounds;
+        window._docRender();
+    };
+
     // 🎨 문서 모양 서식은 **styles.css** 에 있다(`#doc-page-body .doc-*`).
     //   ⚠️⚠️ 여기서 `<style>` 을 심지 않는다 — 색을 두 군데서 정하면 팔레트(js/21 `_cpApplyLive`)가
     //      덮어도 주입 스타일이 이겨서 "테마를 바꿔도 이 페이지만 안 바뀐다" 가 된다.
@@ -1247,6 +1402,90 @@
                     });
                     h += '</tr>';
                 });
+            } else if (s.kind === 'optical') {
+                // 🔬 바코드별 Gamma 측정 이력 — 기본은 이 회차만, 토글로 전체 회차를 모아 본다
+                //   (출고 이력과 같은 집계 방식: 저장은 회차별 그대로, 읽을 때만 _docRounds() 를 돈다).
+                var showAll = !!window._docState.opticalAllRounds;
+                var rowsToShow = [];
+                if (showAll) {
+                    _docRounds().forEach(function (rd) {
+                        var rdList = (window.tabData.documents['sample-report@' + rd] || {}).opticalLogs || [];
+                        rdList.forEach(function (it) {
+                            var cp = {}; for (var k2 in it) cp[k2] = it[k2];
+                            cp.round = rd; rowsToShow.push(cp);
+                        });
+                    });
+                } else {
+                    (_docData(form.id).opticalLogs || []).forEach(function (it) {
+                        var cp = {}; for (var k3 in it) cp[k3] = it[k3];
+                        cp.round = st.round; rowsToShow.push(cp);
+                    });
+                }
+                h += '<tr>' + (showAll ? '<th style="width:90px;">' + _esc(_t('회차', 'Round')) + '</th>' : '')
+                   + '<th style="width:120px;">' + _esc(_t('바코드', 'Barcode')) + '</th>'
+                   + '<th style="width:130px;">' + _esc(_t('측정일시', 'Measured')) + '</th>'
+                   + '<th>Native X / Y</th><th>Max / Default Lv</th><th>Gamut</th><th>PQ Check</th>'
+                   + '<th class="doc-noprint" style="width:60px;">📎</th>'
+                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
+                if (!rowsToShow.length) {
+                    h += '<tr><td colspan="9" style="color:#868e96;">'
+                       + _esc(_t('아직 가져온 측정 이력이 없습니다 — 아래 [📥 Gamma 리포트 zip 가져오기]를 눌러 주세요.',
+                                 'No optical history yet — use [Import Gamma report zip] below.'))
+                       + '</td></tr>';
+                }
+                rowsToShow.forEach(function (it, idx) {
+                    var pqOk = it.pqFail === 0;
+                    var tgt = (it.targetX && it.targetY)
+                        ? _t('타겟', 'target') + ' X ' + it.targetX.min + '~' + it.targetX.max
+                          + ' / Y ' + it.targetY.min + '~' + it.targetY.max
+                        : '';
+                    h += '<tr>' + (showAll ? '<td>' + _esc(it.round) + '</td>' : '')
+                       + '<td>' + _esc(it.barcode) + '</td>'
+                       + '<td style="font-size:11px;">' + _esc(it.startTime) + '</td>'
+                       + '<td title="' + _esc(tgt) + '">' + _esc(it.nativeX) + ' / ' + _esc(it.nativeY) + '</td>'
+                       + '<td>' + _esc(it.maxPwmLv) + ' / ' + _esc(it.defaultPwmLv) + '</td>'
+                       + '<td>' + _esc(it.gamutPct) + '%</td>'
+                       + '<td style="color:' + (pqOk ? '#1f7a3d' : '#b1432f') + '; font-weight:bold;">'
+                       + (pqOk ? '✅ PASS' : '⚠️ ' + it.pqFail + '/' + it.pqTotal + ' FAIL') + '</td>'
+                       + '<td class="doc-noprint" style="text-align:center;">'
+                       + (it.files || []).map(function (fl) {
+                           return '<a href="' + _esc(_attUrl(fl)) + '" target="_blank" title="' + _esc(fl.name) + '">'
+                               + (fl.kind === 'log' ? '🧾' : '📄') + '</a>';
+                       }).join(' ')
+                       + '</td>'
+                       + '<td class="doc-noprint" style="text-align:center;">'
+                       + (showAll ? '' : '<a href="#" onclick="window._docOpticalRemove(\'' + _esc(form.id) + '\',' + idx + ');return false;"'
+                                         + ' style="color:#b1432f; font-size:11px;">' + _esc(_t('삭제', 'del')) + '</a>')
+                       + '</td></tr>';
+                });
+                h += '</table>';
+                if (showAll) {
+                    var byRound = {};
+                    rowsToShow.forEach(function (it) { (byRound[it.round] = byRound[it.round] || []).push(it); });
+                    h += '<div class="doc-noprint" style="display:flex; flex-wrap:wrap; gap:8px; margin:6px 0;">';
+                    _docRounds().forEach(function (rd) {
+                        var arr = byRound[rd]; if (!arr || !arr.length) return;
+                        var passN = arr.filter(function (it) { return it.pqFail === 0; }).length;
+                        var avgLv = (arr.reduce(function (s2, it) { return s2 + (parseFloat(it.maxPwmLv) || 0); }, 0) / arr.length).toFixed(2);
+                        var avgGamut = (arr.reduce(function (s2, it) { return s2 + (parseFloat(it.gamutPct) || 0); }, 0) / arr.length).toFixed(2);
+                        h += '<span style="font-size:11px; color:#555; padding:4px 8px; background:#f8f9fa;'
+                           + ' border:1px solid #e9ecef; border-radius:5px;"><b>' + _esc(rd) + '</b> '
+                           + arr.length + _esc(_t('개', ' ea')) + ' · PASS ' + passN + '/' + arr.length
+                           + ' · ' + _esc(_t('평균', 'avg')) + ' Lv ' + avgLv + ' · Gamut ' + avgGamut + '%</span>';
+                    });
+                    h += '</div>';
+                }
+                h += '<div class="doc-noprint" style="margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">'
+                   + '<button onclick="window._docOpticalPick(\'' + _esc(form.id) + '\')" style="padding:4px 10px; font-size:11.5px;'
+                   + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">📥 '
+                   + _esc(_t('Gamma 리포트 zip 가져오기', 'Import Gamma report zip')) + '</button>'
+                   + '<button onclick="window._docOpticalToggleAll()" style="padding:4px 10px; font-size:11.5px;'
+                   + ' cursor:pointer; border:1px solid #cfe3e5; background:#fff; color:#555; border-radius:5px; font-weight:bold;">'
+                   + (showAll ? '📦 ' + _esc(_t('이 회차만', 'This round only')) : '📈 ' + _esc(_t('전체 회차 보기', 'All rounds'))) + '</button>'
+                   + '<span style="font-size:11px; color:#868e96;">'
+                   + _esc(_t('Final_Report.txt 를 읽어 바코드별 요약을 만듭니다(AI 안 씀). Log_File.txt 는 원본 증적으로 같이 보관됩니다.',
+                             'Reads Final_Report.txt deterministically (no AI).')) + '</span></div>'
+                   + '<table style="display:none;">';
             } else if (s.kind === 'milestones') {
                 h += '<tr><th>' + _esc(_t('구분', 'Stage')) + '</th>'
                    + (window.DOC_MILESTONES || []).map(function (m) { return '<th>' + _esc(m.label) + '</th>'; }).join('') + '</tr>';
@@ -1621,7 +1860,7 @@
     var _formFieldList = function (form) {
         var out = [];
         (form.sections || []).forEach(function (s) {
-            if (s.kind === 'check' || s.kind === 'attach') return;
+            if (s.kind === 'check' || s.kind === 'attach' || s.kind === 'optical') return;
             (s.fields || []).forEach(function (f) { out.push({ key: f.key, label: f.label || f.key }); });
             (s.rows || []).forEach(function (r) {
                 (r.cells || []).forEach(function (c) { if (c.key) out.push({ key: c.key, label: c.key }); });
@@ -1859,6 +2098,14 @@
                 rows.push(s.columns.slice());
                 s.rows.forEach(function (r) {
                     rows.push(r.cells.map(function (c) { return c.fixed !== undefined ? c.fixed : val(c.key, c.from); }));
+                });
+            } else if (s.kind === 'optical') {
+                // 🔬 이 문서(=이 회차)의 측정 이력만 — 전체 회차 집계는 화면 전용(인쇄물은 한 회차 보고서다)
+                rows.push([_t('바코드', 'Barcode'), _t('측정일시', 'Measured'), 'Native X', 'Native Y',
+                           'Max PWM Lv', 'Default PWM Lv', 'Gamut(%NTSC)', 'PQ Check']);
+                (d.opticalLogs || []).forEach(function (it) {
+                    rows.push([it.barcode, it.startTime, it.nativeX, it.nativeY, it.maxPwmLv, it.defaultPwmLv,
+                               it.gamutPct, (it.pqFail === 0 ? 'PASS' : it.pqFail + '/' + it.pqTotal + ' FAIL')]);
                 });
             } else if (s.kind === 'milestones') {
                 rows.push([_t('구분', 'Stage')].concat((window.DOC_MILESTONES || []).map(function (m) { return m.label; })));

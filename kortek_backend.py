@@ -4289,6 +4289,19 @@ def sap_bom_layouts():
     return jsonify(data), status
 
 
+@app.route('/sap-bom-sort-dialog-dump', methods=['GET'])
+def sap_bom_sort_dialog_dump():
+    # 🔎 [2026-11-12, 읽기 전용 정찰] "레이아웃 변경..." 팝업의 "정렬 순서" 탭을 연 채로
+    #    화면 트리 전체를 덤프한다 — 정렬 자동 지우기+저장 자동화를 만들기 전에 정확한
+    #    컨트롤 id를 추측 없이 확인하려는 1회성 조사용. 저장은 절대 안 한다(dump_bom_sort_dialog).
+    material = (request.args.get('material') or '').strip()
+    plant = (request.args.get('plant') or '1000').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material)가 필요합니다.'}), 400
+    data, status = _run_sap_bridge(['dump_bom_sort_dialog', material, plant], 90, 'SAP BOM 레이아웃 정렬 탭 덤프')
+    return jsonify(data), status
+
+
 @app.route('/sap-bom', methods=['GET'])
 def sap_bom():
     # 💡 [2026-09-15 신규] "SAP에서 502572 BOM 열어서 엑셀로 출력해줘"처럼 질문에 "BOM"과
@@ -8511,6 +8524,117 @@ def doc_export_zip():
     resp = send_file(buf, as_attachment=True, download_name='export.zip', mimetype='application/zip')
     resp.headers['X-File-Count'] = str(file_count)
     return resp
+
+
+_GAMMA_LOG_RE = re.compile(r'^(.*?)_(Final_Report|Log_File)\.txt$', re.I)
+
+
+def _gamma_decode(data):
+    """Gamma 튜닝 장비 로그는 UTF-16(BOM 없을 수 있음) — 순서대로 시도, 전부 실패하면 깨진 채로."""
+    for enc in ('utf-16', 'utf-16-le', 'utf-8'):
+        try:
+            return data.decode(enc)
+        except Exception:
+            continue
+    return data.decode('utf-8', errors='replace')
+
+
+def _gamma_norm(s):
+    return re.sub(r'\s+', ' ', s).strip() if s else s
+
+
+def _gamma_parse_report(text, fallback_barcode):
+    """Final_Report.txt 를 구조화한다 — AI 안 씀. 완전 고정 포맷이라 정규식으로 충분하다
+    (2026-11-12 실측: 샘플 16개 전부 같은 라벨·같은 표 모양, 숫자만 다름).
+    모르는 포맷이면 None — 빈 값을 섞어 조용한 오답을 만들지 않는다."""
+    def grab(pattern, flags=0):
+        return re.search(pattern, text, flags)
+    model_m = grab(r'MODEL NAME\s*::\s*(.+)')
+    barcode_m = grab(r'BARCODE NUM\s*::\s*(\S+)')
+    if not (model_m or barcode_m):
+        return None
+    start_m = grab(r'Start Time\s*::\s*([0-9.]+\s+[0-9:]+)')
+    end_m = grab(r'End Time\s*::\s*([0-9.]+\s+[0-9:]+)')
+    target_m = grab(r'Target Color Coordinates.*?X\s*:\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)'
+                     r'.*?Y\s*:\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)', re.S)
+    native_m = grab(r'Measured Panel Native Color Coordinates.*?X\s*:\s*([0-9.]+)\s*\n.*?Y\s*:\s*([0-9.]+)', re.S)
+    lum_m = grab(r'Measured Panel Luminance.*?Max PWM LV\s*:\s*([0-9.]+)\s*\n.*?Default PWM LV\s*:\s*([0-9.]+)', re.S)
+    gamut_m = grab(r'Color Gamut\s*\(%NTSC\)\s*::\s*([0-9.]+)\s*%')
+    # ✅ "LNW PQ Check" 구간의 모든 Result 열(Luminance/Color Tracking Wx/Wy) 을 세어 롤업한다 —
+    #    MIN/MAX 는 이미 로그 안에 있으므로 Customer SPEC 과 대조할 필요 없이 그 자체로 판정이다.
+    pq_total = pq_pass = 0
+    if 'LNW PQ Check' in text:
+        pq_section = text.split('LNW PQ Check', 1)[1]
+        results = re.findall(r'\|\s*(PASS|FAIL)\s*$', pq_section, re.M)
+        pq_total = len(results)
+        pq_pass = results.count('PASS')
+    return {
+        'barcode': barcode_m.group(1) if barcode_m else fallback_barcode,
+        'model': _gamma_norm(model_m.group(1)) if model_m else '',
+        'startTime': _gamma_norm(start_m.group(1)) if start_m else '',
+        'endTime': _gamma_norm(end_m.group(1)) if end_m else '',
+        'targetX': {'min': target_m.group(1), 'typ': target_m.group(2), 'max': target_m.group(3)} if target_m else None,
+        'targetY': {'min': target_m.group(4), 'typ': target_m.group(5), 'max': target_m.group(6)} if target_m else None,
+        'nativeX': native_m.group(1) if native_m else '',
+        'nativeY': native_m.group(2) if native_m else '',
+        'maxPwmLv': lum_m.group(1) if lum_m else '',
+        'defaultPwmLv': lum_m.group(2) if lum_m else '',
+        'gamutPct': gamut_m.group(1) if gamut_m else '',
+        'pqTotal': pq_total, 'pqPass': pq_pass, 'pqFail': pq_total - pq_pass,
+    }
+
+
+@app.route('/doc/parse-optical-zip', methods=['POST'])
+def doc_parse_optical_zip():
+    """📥 [2026-11-12] Gamma 튜닝 리포트 zip(바코드별 `*_Final_Report.txt`+`*_Log_File.txt` 쌍)을
+    열어 구조화한다. **NAS 에는 안 쓴다** — 프런트가 사람 승인(미리보기) 뒤 기존 `/doc/put` 으로
+    올린다(쓰기 경로를 두 벌로 만들지 않는다). 이 라우트는 순수 파싱만, 상태 없음."""
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'ok': False, 'error': '파일이 없습니다(form-data의 file 필드).'}), 400
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(f.read()))
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'zip 을 열지 못했습니다: {e}'}), 400
+    groups = {}   # 바코드/시퀀스 접두어 → {'report': 항목명, 'log': 항목명}
+    for name in zf.namelist():
+        base = os.path.basename(name)
+        m = _GAMMA_LOG_RE.match(base)
+        if not m:
+            continue
+        prefix, kind = m.group(1), m.group(2).lower()
+        groups.setdefault(prefix, {})['report' if kind == 'final_report' else 'log'] = name
+    if not groups:
+        return jsonify({'ok': False, 'error': '이 zip 안에서 "*_Final_Report.txt" 파일을 못 찾았습니다.'}), 400
+    items = []
+    warnings = []
+    for prefix in sorted(groups.keys()):
+        g = groups[prefix]
+        report_name = g.get('report')
+        if not report_name:
+            warnings.append(prefix + ': Final_Report.txt 가 없습니다 — 건너뜁니다.')
+            continue
+        try:
+            report_text = _gamma_decode(zf.read(report_name))
+        except Exception as e:
+            warnings.append(prefix + f': 읽기 실패 — {e}')
+            continue
+        parsed = _gamma_parse_report(report_text, prefix)
+        if not parsed:
+            warnings.append(prefix + ': 알려진 포맷이 아닙니다 — 건너뜁니다.')
+            continue
+        log_text = ''
+        if g.get('log'):
+            try:
+                log_text = _gamma_decode(zf.read(g['log']))
+            except Exception:
+                log_text = ''
+        parsed['reportFileName'] = prefix + '_Final_Report.txt'
+        parsed['logFileName'] = (prefix + '_Log_File.txt') if g.get('log') else ''
+        parsed['reportText'] = report_text
+        parsed['logText'] = log_text
+        items.append(parsed)
+    return jsonify({'ok': True, 'items': items, 'warnings': warnings, 'total': len(groups)})
 
 
 def _doc_text_key(folder):

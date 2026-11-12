@@ -633,3 +633,29 @@ LF도 받아 줘서 앱 안 원문 창은 멀쩡했다 — 아웃룩으로 열 �
 - 💬 AI 문답 첨부는 이 참에 **넓어졌다** — 예전엔 PDF·DOCX 만 받았는데, 이제 엑셀(시트를 글자로)·
   HTML·텍스트도 읽어 붙인다. ⚠️ pdf.js 미로딩 확인은 **PDF 일 때만** 한다(예전엔 맨 위에서 걸러
   .txt 첨부까지 막혔다).
+
+## 🔬 광학 측정 이력 — Gamma 리포트 zip 가져오기 (`js/67` `kind:'optical'`, 2026-11-12)
+
+사용자 요청: "샘플 광학 측정 이력을 Gamma tuning 로그로 남기고 싶다 — zip 안에 바코드별
+`Final_Report.txt`+`Log_File.txt` 쌍이 있다." 실측(16개 샘플 전부 같은 모양 확인):
+
+- **`Final_Report.txt`만 구조화한다** — 완전 고정 포맷이라 **AI 없이** 백엔드 정규식 파서
+  (`/doc/parse-optical-zip`, `kortek_backend.py` `_gamma_parse_report`)로 모델명·바코드·측정
+  시간·Target/Native Color Coordinate·Luminance·Color Gamut(%NTSC)·"LNW PQ Check" 구간의
+  PASS/FAIL 을 전부 뽑는다. PASS/FAIL 판정은 로그 안에 이미 있는 MIN/MAX 를 그대로 쓰므로
+  Customer SPEC 과 대조할 필요가 없다.
+- **`Log_File.txt`(원시 보정 타임스탬프 로그)는 파싱하지 않는다** — 구조화해 쓸 데이터가 아니라
+  "문제 생겼을 때 들추는 원본 증적"이라 원본 그대로 NAS 에만 같이 둔다.
+- ⚠️ 인코딩은 **UTF-16**(BOM 없을 수 있음) — `_gamma_decode()` 가 `utf-16`→`utf-16-le`→`utf-8`
+  순서로 시도한다. 바이트를 그대로 Latin-1/UTF-8 로 읽으면 글자 사이에 널바이트가 공백처럼
+  보여 "한 글자씩 띄어 쓴 것처럼" 깨진다(실측).
+- **NAS 쓰기 경로는 새로 안 만든다** — 미리보기에서 사람이 승인한 항목만 프런트가 기존
+  `window._dgUploadBlob()`(`/doc/put`)으로 Sample Report 의 `attach` 폴더에 올린다. 백엔드
+  파싱 라우트는 **상태 없음**(파일시스템에 안 씀) — zip 을 열어 구조화한 JSON(원본 텍스트
+  포함)만 돌려주고, 저장은 전부 프런트가 사람 승인 뒤에 한다.
+- 저장은 **회차별**(`perRound`, `tabData.documents['sample-report@'+round].opticalLogs[]`),
+  바코드로 중복을 막는다(같은 zip 을 다시 올려도 안 늘어난다). "📈 전체 회차 보기" 토글은
+  샘플 출고 이력과 같은 집계 방식 — 저장은 그대로 두고 읽을 때만 `_docRounds()` 를 돌며 모은다.
+- 검증: 백엔드는 실제 zip(16건, 바코드 16개 전부 파싱 성공)으로 `app.test_client()` 테스트,
+  프런트는 `/doc/parse-optical-zip`·`/doc/put` 두 경계만 가짜로 두고 가져오기→미리보기→중복
+  감지→적용→삭제→전체 회차 집계→엑셀/워드 내보내기까지 브라우저에서 직접 확인.
