@@ -15,6 +15,11 @@ const path = require('path');
 
 const SRC = path.join(__dirname, '..', 'js', '56-bom-part-lookup.js');
 const window = {};
+// 🆕 [2026-11-12] js/56 의 _bomTextRows 가 이제 js/38 의 진짜 파서(_bomParseSapText)를
+//    그대로 쓴다(레이아웃 변경에 안전하게 열 이름으로 칸을 찾으려고) — 그래서 js/38 도
+//    같이 로드한다. 가짜로 대신하면 "그 파서를 쓰는가"를 못 보고 테스트가 자기 자신을
+//    테스트하게 된다(CLAUDE.md "안쪽을 가짜로 만들면 테스트가 자기 자신을 테스트한다").
+new Function('window', fs.readFileSync(path.join(__dirname, '..', 'js', '38-bom-tab.js'), 'utf8'))(window);
 // js/56 은 IIFE 라 그대로 평가하면 window 에 함수들이 달린다.
 new Function('window', fs.readFileSync(SRC, 'utf8'))(window);
 
@@ -103,6 +108,36 @@ eq('내역을 같이 보여준다(이름만 믿지 않게)', txt.indexOf('FOG IP
 eq('잘린 내역을 밝힌다', txt.indexOf('자른 것입니다') !== -1, true);
 const none = window.bomPartLookupText({ material: '999001', kind: kindOf('speaker'), hits: [], total: 8, raw: BOM });
 eq('0건이면 무엇이 있었는지 밝힌다', none.indexOf('DISPLAY/FOG') !== -1, true);
+
+console.log('[6] 레이아웃 변경에도 올바른 칸을 읽는다 (2026-11-12 — BOM 탭 방식 상속)');
+// 팀 공용 SAP 계정이라 누가 레이아웃의 **열 구성**을 바꾸면(새 열 삽입·순서 변경) 자재그룹(WGBEZ60)의
+// 탭 위치가 달라진다. 예전 _bomTextRows는 p[6]을 무조건 자재그룹으로 읽어서 이럴 때 조용히
+// 다른 칸을 읽었다 — 이제 _bomParseSapText(js/38)를 써서 **열 이름**으로 찾으므로 위치가 바뀌어도
+// 맞는 칸을 읽어야 한다.
+const BOM_REORDERED = [
+    '[SAP BOM 전개(ZPP033): 자재 999001, 플랜트 1000]',
+    '',
+    // ⚠️ WGBEZ60 앞에 새 열(EXTRACOL)이 끼어들었다 — 누가 레이아웃에 열을 추가한 상황을 흉내 낸다.
+    'STUFE\tIDNRK\tOJTXP\tMMSTA\tMENGE\tMMEIN\tEXTRACOL\tWGBEZ60\tMTSTB',
+    '[ 5     ]\t900106\tFOG IPS>ZZ999PANEL-X9,3840X2160,-,-,VB=\tX1\t1\tEA\tSHOULD_NOT_BE_READ_AS_GROUP\tDISPLAY/FOG\t관리자재'
+].join('\n');
+eq('열이 밀려도 자재그룹은 이름으로 찾아 읽는다(위치 아님)',
+   window._bomPickParts(BOM_REORDERED, kindOf('panel')).map(h => h.group), ['DISPLAY/FOG']);
+eq('끼어든 열 값이 자재그룹으로 새지 않는다',
+   window._bomPickParts(BOM_REORDERED, kindOf('panel')).some(h => h.group === 'SHOULD_NOT_BE_READ_AS_GROUP'), false);
+
+console.log('[7] 레이아웃 진단 경고 (layoutApplied / sortInfo)');
+// 이 조회는 트리 계층을 안 쓰지만, 레이아웃이 안 먹으면 WGBEZ60 자체가 빈 칸일 수 있어
+// "없음"과 "레이아웃이 안 먹어서 못 봤음"을 구분하지 못하면 조용한 오답이 된다(BOM 탭과 같은 경고를 물려받는다).
+const rOk = { material: '999001', kind: kindOf('panel'), hits: window._bomPickParts(BOM, kindOf('panel')), total: 8, raw: BOM, layoutApplied: true, sortInfo: null };
+eq('레이아웃이 정상 적용되면 경고가 없다', window.bomPartLayoutWarning(rOk), '');
+const rBad = { material: '999001', kind: kindOf('panel'), hits: window._bomPickParts(BOM, kindOf('panel')), total: 8, raw: BOM, layoutApplied: false, layoutDiag: 'not_in_catalog', sortInfo: null };
+eq('레이아웃 적용 실패를 경고한다', window.bomPartLayoutWarning(rBad).indexOf('레이아웃을 적용하지 못했습니다') !== -1, true);
+eq('실패 사유(layoutDiag)를 같이 보여준다', window.bomPartLayoutWarning(rBad).indexOf('not_in_catalog') !== -1, true);
+const rSorted = { material: '999001', kind: kindOf('panel'), hits: window._bomPickParts(BOM, kindOf('panel')), total: 8, raw: BOM, layoutApplied: true, sortInfo: ['IDNRK ASC'] };
+eq('정렬이 걸려 있으면 그 기준을 보여준다', window.bomPartLayoutWarning(rSorted).indexOf('IDNRK ASC') !== -1, true);
+eq('경고가 0건 결과(bomPartLookupText)에도 붙는다',
+   window.bomPartLookupText({ material: '999001', kind: kindOf('speaker'), hits: [], total: 8, raw: BOM, layoutApplied: false, layoutDiag: 'timeout' }).indexOf('레이아웃을 적용하지 못했습니다') !== -1, true);
 
 console.log('\n' + (fail ? '❌ ' + fail + '건 실패' : '✅ 전부 통과') + ' (' + pass + '/' + (pass + fail) + ')');
 process.exit(fail ? 1 : 0);
