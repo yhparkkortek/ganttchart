@@ -353,11 +353,15 @@ window.getCustomerOptions = function() {
         seen[k] = true;
         out.push(n);
     };
+    // 💡 [2026-11-12] 고객사 칸은 "고객사>프로젝트명(>세부모델)"을 한 칸에 담으므로(2026-10-22~),
+    //    드롭다운엔 첫 조각(고객사명)만 올린다 — 안 그러면 프로젝트 전체 식별자가 통째로
+    //    "고객사 이름"인 것처럼 섞여 들어간다.
+    var pushCustomerField = function(raw) { push(String(raw || '').split('>')[0]); };
     (window.CUSTOMER_CATALOG || []).forEach(function(c) { push(c.name); });
     // 지금 열려 있는 프로젝트의 고객사
-    push((window.projectMeta || {}).고객사);
+    pushCustomerField((window.projectMeta || {}).고객사);
     // project_index.json 캐시(모달 열 때 5분 캐시로 채워짐) — Drive를 새로 읽지는 않는다
-    ((window._piModalCache) || []).forEach(function(p) { push(p && p.customer); });
+    ((window._piModalCache) || []).forEach(function(p) { pushCustomerField(p && p.customer); });
     // 주소록의 회사명 — 마법사의 기존 자동완성(_npwCustAC)이 쓰던 출처다.
     //    드롭다운으로 바꾸면서 이 출처가 빠지면 "전엔 뜨던 거래처가 안 뜬다"가 되므로 같이 합친다.
     try {

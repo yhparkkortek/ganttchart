@@ -190,10 +190,18 @@
     window._inchFromFileName = _inchFromFileName;
     window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride) {
         const pm = pmOverride || window.projectMeta || {};
-        // 💡 고객사명은 매칭 키워드에서 제외 — 한 고객사가 여러 프로젝트를 가진 경우
-        //    (예: LNW의 STELLAR32/OBSIDIAN) 전부 후보로 묶여버려 변별력이 없음.
-        //    customer 필드 자체는 화면 표시용으로만 남기고, keywords 배열엔 안 넣음.
-        const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].filter(Boolean);
+        // 💡 [2026-11-12] 고객사 칸은 2026-10-22부터 "고객사>프로젝트명(>세부모델)"처럼 여러 단을
+        //    한 칸에 담는다(파일명 조립이 이 칸 하나로 고정됨 — updatePrintTitle 참고). 그래서 첫
+        //    조각(고객사명)만 매칭 키워드에서 뺀다 — 한 고객사가 여러 프로젝트를 가진 경우
+        //    (예: LNW의 STELLAR32/OBSIDIAN) 전부 후보로 묶여버려 변별력이 없기 때문. 나머지 조각
+        //    (프로젝트명·세부모델)은 이 프로젝트를 구체적으로 특정하는 정보라 키워드에 넣는다.
+        //    ⚠️ 예전엔 고객사 칸 전체를 통째로 뺐는데, KTK PN이 아직 없는 draft(RFQ·견적) 단계
+        //    프로젝트는 모델명/고객모델명도 비어 있어 매칭 키워드가 하나도 안 남는 사각지대가 있었다
+        //    (업무 보관함에 "LNW>K43 EC>DV430QUB-PL0"처럼 고객사 원문 그대로가 매칭 라벨로
+        //    새던 것도 같은 원인 — model이 비어 _tiProjectOf가 customer로 폴백).
+        const customerSegs = String(pm.고객사 || '').split('>').map(function(s) { return s.trim(); }).filter(Boolean);
+        const customerProjectParts = customerSegs.slice(1); // [0]=고객사명(제외), 나머지=프로젝트명/세부모델
+        const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].concat(customerProjectParts).filter(Boolean);
         // 💡 [2026-08-29 버그 수정] "발신인 이름만으로 오매칭됐다"는 지적 — 메일키워드 칸에 사람 이름이
         //    (직접 입력 등으로) 들어가 있으면, 그 사람이 보내는 모든 메일이 서명란 때문에 내용과 무관하게
         //    이 프로젝트로 매칭돼버린다. 주소록에 등록된 이름과 겹치는 항목은 매칭용 키워드에서 제외
@@ -212,7 +220,10 @@
         return {
             drive_file_id: driveFileId,
             file_name: dynamicFileName,
-            model: pm.모델명 || pm.고객모델명 || '',
+            // 💡 [2026-11-12] draft 단계(모델명/고객모델명 미입력)는 고객사 칸에서 뽑은 프로젝트명/
+            //    세부모델로 폴백 — model||customer 폴백 패턴을 쓰는 곳(_tiProjectOf 등 30여 곳)이
+            //    전부 고객사 원문 통째("LNW>K43 EC>DV430QUB-PL0") 대신 깔끔한 라벨을 받는다.
+            model: pm.모델명 || pm.고객모델명 || pm.프로젝트명 || customerProjectParts.join(' ') || '',
             customer: pm.고객사 || '',
             assignee: pm.프로젝트담당자 || '',
             inch: pm.인치 || _inchFromFileName(dynamicFileName) || '',
