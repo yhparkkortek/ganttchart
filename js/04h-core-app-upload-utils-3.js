@@ -1375,8 +1375,8 @@
         const id = 'po-flds-' + Date.now();
         window._ganttQaPoFieldsForm = { id: id, pd: pd };
         const introText = window._t(
-            '✅ 문서 ' + pd.docs.length + '건 품목 확인 완료.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행됩니다 — 아래 항목을 한 번에 입력해주세요:',
-            '✅ Item confirmation done for all ' + pd.docs.length + ' document(s).\n\nEverything after this (Excel → SAP upload → save → PO printing) runs automatically — please fill in all fields below at once:'
+            '✅ 문서 ' + pd.docs.length + '건 품목 확인 완료.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행됩니다 — 아래 표에서 PDF 추출정보(사업자등록번호·공급자·작성일자·통화·수량·단가 포함)를 확인/수정하고 나머지 항목도 한 번에 입력해주세요:',
+            '✅ Item confirmation done for all ' + pd.docs.length + ' document(s).\n\nEverything after this (Excel → SAP upload → save → PO printing) runs automatically — review/edit the extracted info (biz. reg. no., vendor, date, currency, qty, unit price) and fill in the rest below, all in one place:'
         );
         window._ganttQaHistory.push({ role: 'ai', poFieldsFormId: id, text: introText });
     };
@@ -1426,6 +1426,25 @@
         const docSections = pd.docs.map(function(doc, i) {
             const label = doc.vendorName ? escapeHtml(doc.vendorName) : (doc.bizRegNo ? escapeHtml(doc.bizRegNo) : (_en ? 'Document ' + (i+1) : '문서 ' + (i+1)));
             const totalItems = (doc.items || []).length;
+            // 🆕 [2026-11-13, 사용자 요청] "분석한 내용 따로 사용자 입력정보 따로"를 하나의
+            // 표로 통합 — PDF에서 뽑은 사업자등록번호/공급자/작성일자/통화도 이 표 안에서
+            // 바로 고칠 수 있게 한다(예전엔 채팅에 자연어로 "정정"을 입력해야 했음).
+            const extractNote = doc.note ? '<div style="font-size:9.5px; color:#8a6d3b; background:#fff8e6; border:1px solid #ffe08a; border-radius:4px; padding:3px 6px; margin-top:4px;">ℹ️ ' + escapeHtml(doc.note) + '</div>' : '';
+            const extractRow = '<div style="margin-bottom:6px; padding:6px; background:#eef2fb; border-radius:5px;">' +
+                '<div style="font-size:9.5px; color:#555; margin-bottom:3px;">' + (_en ? '📜 Extracted from PDF (editable)' : '📜 PDF에서 추출한 정보 (수정 가능)') + '</div>' +
+                '<div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">' +
+                    '<span style="font-size:10px;color:#666;">' + (_en ? 'Biz. reg. no.' : '사업자등록번호') + '</span>' +
+                    '<input id="pof-' + id + '-biz-' + i + '" value="' + escapeHtml(doc.bizRegNo || '') + '" placeholder="' + (_en ? '10 digits' : '숫자 10자리') + '" style="width:110px; ' + inpSt.replace('width:100%;', '') + '"/>' +
+                    '<span style="font-size:10px;color:#666;">' + (_en ? 'Vendor' : '공급자') + '</span>' +
+                    '<input id="pof-' + id + '-vendor-' + i + '" value="' + escapeHtml(doc.vendorName || '') + '" style="width:140px; ' + inpSt.replace('width:100%;', '') + '"/>' +
+                    '<span style="font-size:10px;color:#666;">' + (_en ? 'Date' : '작성일자') + '</span>' +
+                    '<input id="pof-' + id + '-date-' + i + '" value="' + escapeHtml(doc.invoiceDate || '') + '" placeholder="YYYYMMDD" style="width:85px; ' + inpSt.replace('width:100%;', '') + '"/>' +
+                    '<span style="font-size:10px;color:#666;">' + (_en ? 'Currency' : '통화') + '</span>' +
+                    '<select id="pof-' + id + '-currency-' + i + '" style="' + selSt + '">' +
+                        ['KRW', 'USD'].map(function(c) { return '<option value="' + c + '"' + (c === (doc.currency || 'KRW') ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
+                    '</select>' +
+                '</div>' + extractNote +
+            '</div>';
             // 사원번호 자동전파 (첫 번째 문서 → 이후 문서)
             const propagateYr = i === 0 && totalDocs > 1 ? ' onchange="(function(v){for(var j=1;j<' + totalDocs + ';j++){var el=document.getElementById(\'pof-' + id + '-yr-\'+j);if(el)el.value=v;}})(this.value)"' : '';
             const propagateMo = i === 0 && totalDocs > 1 ? ' onchange="(function(v){for(var j=1;j<' + totalDocs + ';j++){var el=document.getElementById(\'pof-' + id + '-mo-\'+j);if(el)el.value=v;}})(this.value)"' : '';
@@ -1475,10 +1494,16 @@
                     (window._PO_PURPOSE_TABLE || []).map(function(r) {
                         return '<option value="' + r.code + '"' + (r.code === curPurpose ? ' selected' : '') + '>' + r.code + ' ' + escapeHtml(r.desc) + '</option>';
                     }).join('');
+                // 🆕 [2026-11-13] 수량/단가도 이 표 안에서 바로 고칠 수 있게(PDF 추출값의
+                // 숫자 오류를 자연어 재추출 없이 직접 정정).
+                const curQty = (it.qty === 0 || it.qty) ? it.qty : '';
+                const curPrice = (it.unitPrice === 0 || it.unitPrice) ? it.unitPrice : '';
                 return '<tr>' +
                     '<td style="' + tdSt + '">' +
                         '<span style="font-size:10px;color:#333;" title="' + escapeHtml(it.desc || '') + '">' + (ii+1) + '. ' + shortName + '</span>' +
                     '</td>' +
+                    '<td style="' + tdSt + '"><input id="pof-' + id + '-qty-' + i + '-' + ii + '" type="number" value="' + curQty + '" style="' + inpRSt + ' text-align:right;"/></td>' +
+                    '<td style="' + tdSt + '"><input id="pof-' + id + '-price-' + i + '-' + ii + '" type="number" step="0.01" value="' + curPrice + '" style="' + inpRSt + ' text-align:right;"/></td>' +
                     '<td style="' + tdSt + '"><select id="pof-' + id + '-temp-' + i + '-' + ii + '" style="' + selRSt + '"' + makeP('temp') + '>' + tcOpts + '</select></td>' +
                     '<td style="' + tdSt + '"><input id="pof-' + id + '-proj-' + i + '-' + ii + '" list="pof-' + id + '-projlist-' + i + '" value="' + curProj + '" placeholder="' + (_en ? 'code' : '코드') + '" style="' + inpRSt + '"' + makeP('proj') + '/></td>' +
                     '<td style="' + tdSt + '"><select id="pof-' + id + '-purpose-' + i + '-' + ii + '" style="' + selRSt + '"' + makeP('purpose') + '>' + purposeOptsWithSel + '</select></td>' +
@@ -1487,17 +1512,19 @@
             }).join('');
             const itemTable = '<table style="width:100%; border-collapse:collapse; margin-bottom:4px; font-size:10.5px; table-layout:auto;">' +
                 '<thead><tr>' +
-                    '<th style="' + thSt + 'width:26%;">' + (_en ? 'Item' : '품목') + '</th>' +
-                    '<th style="' + thSt + 'width:18%;">' + (_en ? 'Temp Code' : '임시코드') + firstNote + '</th>' +
-                    '<th style="' + thSt + 'width:18%;">' + (_en ? 'Project Code' : '프로젝트코드') + '</th>' +
-                    '<th style="' + thSt + 'width:14%;">' + (_en ? 'Purpose' : '목적') + '</th>' +
-                    '<th style="' + thSt + 'width:24%;">' + (_en ? 'Reason (→ fill ex.)' : '요청사유 (→ 예시)') + '</th>' +
+                    '<th style="' + thSt + 'width:18%;">' + (_en ? 'Item' : '품목') + '</th>' +
+                    '<th style="' + thSt + 'width:7%;">' + (_en ? 'Qty' : '수량') + '</th>' +
+                    '<th style="' + thSt + 'width:12%;">' + (_en ? 'Unit price' : '단가') + '</th>' +
+                    '<th style="' + thSt + 'width:16%;">' + (_en ? 'Temp Code' : '임시코드') + firstNote + '</th>' +
+                    '<th style="' + thSt + 'width:16%;">' + (_en ? 'Project Code' : '프로젝트코드') + '</th>' +
+                    '<th style="' + thSt + 'width:12%;">' + (_en ? 'Purpose' : '목적') + '</th>' +
+                    '<th style="' + thSt + 'width:19%;">' + (_en ? 'Reason (→ fill ex.)' : '요청사유 (→ 예시)') + '</th>' +
                 '</tr></thead>' +
                 '<tbody>' + itemRows + '</tbody>' +
                 '</table>';
             return '<div style="padding:8px; background:#f5f7ff; border-radius:6px; border-left:3px solid #7aaedc; margin-bottom:8px;">' +
                 '<div style="font-size:11px; font-weight:bold; color:#2c5fa8; margin-bottom:6px;">' + (i+1) + '. ' + label + '</div>' +
-                empRow + sapSearchRow + itemTable +
+                extractRow + empRow + sapSearchRow + itemTable +
             '</div>';
         }).join('');
 
@@ -1567,13 +1594,47 @@
         }
         pd.buyerEmpId = pd.docs[0].buyerEmpId;
         try { localStorage.setItem('gantt_po_last_buyer_emp_id', pd.buyerEmpId); } catch(e) {}
+        // 🆕 [2026-11-13, 사용자 요청] PDF 추출정보(사업자등록번호/공급자/작성일자/통화)도
+        // 이 표에서 직접 고쳐 반영 — 채팅에 자연어 정정을 치지 않아도 되게 한다.
+        const missingBiz = [];
+        pd.docs.forEach(function(doc, i) {
+            const bizV = (getV('pof-' + id + '-biz-' + i) || '').replace(/\D/g, '');
+            if (!bizV || bizV.length !== 10) { missingBiz.push(i + 1); return; }
+            doc.bizRegNo = bizV;
+            const vendV = (getV('pof-' + id + '-vendor-' + i) || '').trim();
+            if (vendV) doc.vendorName = vendV;
+            const dateV = (getV('pof-' + id + '-date-' + i) || '').trim();
+            if (dateV) doc.invoiceDate = dateV;
+            const curV = getV('pof-' + id + '-currency-' + i);
+            if (curV) doc.currency = curV;
+        });
+        if (missingBiz.length) {
+            if (errEl) errEl.textContent = window._t(missingBiz.join(', ') + '번 문서의 사업자등록번호를 10자리 숫자로 입력해주세요.', 'Please enter a 10-digit business registration number for document(s): ' + missingBiz.join(', '));
+            return;
+        }
         // [2026-09-28] 임시코드 수집 — 전 품목 표시로 변경돼 모든 품목에서 수집
+        // 🆕 [2026-11-13] 수량/단가도 같이 수집(이 표에서 직접 고친 값을 그대로 반영).
+        const missingQtyPrice = [];
         pd.docs.forEach(function(doc, i) {
             (doc.items || []).forEach(function(it, ii) {
                 const tval = getV('pof-' + id + '-temp-' + i + '-' + ii);
                 if (tval) it.tempCode = tval;
+                const qtyV = getV('pof-' + id + '-qty-' + i + '-' + ii);
+                const priceV = getV('pof-' + id + '-price-' + i + '-' + ii);
+                const qtyNum = Number(qtyV);
+                const priceNum = Number(priceV);
+                if (qtyV === '' || isNaN(qtyNum) || qtyNum <= 0 || priceV === '' || isNaN(priceNum) || priceNum < 0) {
+                    missingQtyPrice.push(window._t((i + 1) + '번 문서 ' + (ii + 1) + '번 품목', 'doc ' + (i + 1) + ' item ' + (ii + 1)));
+                    return;
+                }
+                it.qty = qtyNum;
+                it.unitPrice = priceNum;
             });
         });
+        if (missingQtyPrice.length) {
+            if (errEl) errEl.textContent = window._t('수량/단가를 올바르게 입력해주세요: ' + missingQtyPrice.join(', '), 'Please enter a valid quantity/unit price for: ' + missingQtyPrice.join(', '));
+            return;
+        }
         // 임시코드 검증 — 아직 없는 게 있으면 에러
         const missingTc = [];
         pd.docs.forEach(function(doc, i) {
