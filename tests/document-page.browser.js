@@ -472,6 +472,70 @@
             ok('옛 문서(모델 없음)는 그대로 — 이관은 복사지 이동이 아니다',
                (window.tabData.documents['sample-report@' + window._docState.round] || {}).fields['제 목'] === '모델분리 전 제목',
                JSON.stringify(window.tabData.documents['sample-report@' + window._docState.round]));
+
+            // ── H. 🏷 라벨사양서 리비전(R1/R2…) 관리 + 🆚 VS 비교 (2026-11-13 요청) ──
+            //    "라벨 사양서는 M.C Table 처럼 R1,2,3… 관리가 필요함 / VS 는 … 차이점 요약"
+            LOG.push(''); LOG.push('── H. 라벨사양서 리비전 + VS 비교 ──');
+            window.mcActiveUnit = '';   // 앞 절(G)이 남긴 BRANDNEW 모델에서 빠져나온다
+            window._docPick('label-spec'); await sleep(30);
+            var revBtn = document.getElementById('doc-rev-bar');
+            ok('리비전 바가 보인다(라벨사양서는 perRevision)', !!revBtn, document.getElementById('doc-header-tools').textContent);
+            ok('기본값은 R1', revBtn && /R1/.test(revBtn.textContent), revBtn && revBtn.textContent);
+            ok('리비전이 하나뿐이면 VS 버튼이 없다', !/🆚 VS/.test(document.getElementById('doc-header-tools').textContent));
+
+            // R1 에 라벨 1개
+            window._docLabelItemAdd('label-spec'); await sleep(30);
+            var qlit = function (k) { return document.querySelector('#doc-page-body input[data-doc-litem="' + k + '"], #doc-page-body textarea[data-doc-litem="' + k + '"]'); };
+            qlit('0|size').value = '75 X 70'; qlit('0|size').dispatchEvent(new Event('input', { bubbles: true }));
+            qlit('0|code').value = '124291'; qlit('0|code').dispatchEvent(new Event('input', { bubbles: true }));
+            qlit('0|position').value = '제품'; qlit('0|position').dispatchEvent(new Event('input', { bubbles: true }));
+            eq('R1 라벨이 실제 입력 경로로 저장된다',
+               (window.tabData.documents['label-spec'].revisions.R1.labelItems[0] || {}).code, '124291');
+
+            // ➕ 리비전 추가 — 복사 확인(기존 confirmAnswer 스위치 재사용)
+            confirmAnswer = true;
+            window._docRevAdd('label-spec'); await sleep(30);
+            revBtn = document.getElementById('doc-rev-bar');
+            ok('추가하면 R2 로 전환되고 바에도 R2 가 보인다', revBtn && /R2/.test(revBtn.textContent), revBtn && revBtn.textContent);
+            eq('R2 는 R1 내용을 복사해서 시작한다(라벨 1개)',
+               window.tabData.documents['label-spec'].revisions.R2.labelItems.length, 1);
+
+            // R2 에서 부착위치를 고치고 라벨 1개 추가 — 전부 실제 입력 경로
+            qlit('0|position').value = '후면'; qlit('0|position').dispatchEvent(new Event('input', { bubbles: true }));
+            window._docLabelItemAdd('label-spec'); await sleep(30);
+            qlit('1|size').value = '40 X 20'; qlit('1|size').dispatchEvent(new Event('input', { bubbles: true }));
+            qlit('1|code').value = '309213'; qlit('1|code').dispatchEvent(new Event('input', { bubbles: true }));
+            qlit('1|position').value = '박스'; qlit('1|position').dispatchEvent(new Event('input', { bubbles: true }));
+
+            // 인증 항목도 하나 적어 VS 가 인증 쪽도 비교하는지 확인
+            window._docLabelCertAdd('label-spec', 'c'); await sleep(30);
+            var qlcert = function (k) { return document.querySelector('#doc-page-body input[data-doc-lcert="' + k + '"]'); };
+            qlcert('c|0|name').value = 'CE'; qlcert('c|0|name').dispatchEvent(new Event('input', { bubbles: true }));
+
+            // ◀ 로 R1 로 돌아가 — 실제 화면에 R1 의 옛값이 그대로 보이는지(R2 수정이 안 섞였는지)
+            window._docRevGo('label-spec', -1); await sleep(30);
+            revBtn = document.getElementById('doc-rev-bar');
+            ok('◀ 를 누르면 R1 로 돌아간다', revBtn && /R1/.test(revBtn.textContent), revBtn && revBtn.textContent);
+            eq('R1 화면엔 라벨이 여전히 1개뿐이다(R2 의 추가분이 안 섞인다)',
+               document.querySelectorAll('#doc-page-body input[data-doc-litem$="|code"]').length, 1);
+            eq('R1 부착위치는 제품 그대로(R2 에서 후면으로 고친 게 안 번진다)', qlit('0|position').value, '제품');
+
+            // ▶ 로 다시 R2 로 — VS 버튼이 떴는지(리비전 2개 다 내용 있음)
+            window._docRevGo('label-spec', 1); await sleep(30);
+            ok('VS 버튼은 내용 있는 리비전이 2개 이상일 때만 뜬다',
+               /🆚 VS/.test(document.getElementById('doc-header-tools').textContent));
+
+            window._docRevVsOpen('label-spec'); await sleep(30);
+            var vsOv = document.getElementById('docrevvs-overlay');
+            ok('VS 모달이 열린다', vsOv && vsOv.style.display === 'flex');
+            var vsBody = document.getElementById('docrevvs-body').textContent;
+            ok('요약에 추가된 라벨(309213)이 나온다', vsBody.indexOf('309213') >= 0, vsBody);
+            ok('요약에 바뀐 부착위치(제품→후면)가 나온다', vsBody.indexOf('제품') >= 0 && vsBody.indexOf('후면') >= 0, vsBody);
+            ok('표에도 두 리비전(R1/R2) 열이 있다', vsBody.indexOf('R1') >= 0 && vsBody.indexOf('R2') >= 0);
+            ok('표에 인증 항목(CE)도 나온다', vsBody.indexOf('CE') >= 0, vsBody);
+
+            window._docRevVsClose();
+            ok('닫으면 모달이 숨는다', document.getElementById('docrevvs-overlay').style.display === 'none');
         } catch (e) {
             ok('예외 없이 끝남', false, String(e && e.stack || e));
         } finally {
