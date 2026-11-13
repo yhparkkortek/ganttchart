@@ -3912,13 +3912,15 @@
                 //    글상자·긴 표시 목록이 들어오면서 실제로 넘쳤다. **이 표만** `table-layout:fixed`
                 //    (전체 % 합 100) 로 바꿔 셀 내용이 아무리 길어도 열 폭 자체는 절대 안 바뀌게 한다
                 //    (대신 칸 안에서 줄바꿈·세로로만 늘어난다 — 넘치지 않는다).
+                // 📐 [2026-11-13, 사용자 요청: 150%→정정 130%] "라벨 도안 열 너비 130% 늘려줘" —
+                //    32%→42%(1.3배), 나머지 5칸은 원래 비율 그대로 줄여서(68% 를 58% 에) 합이 다시 100%.
                 h += '</table><table class="doc-t" style="table-layout:fixed; width:100%;">'
-                   + '<tr><th class="doc-noprint" style="width:32%;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
-                   + '<th style="width:10%;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
-                   + '<th style="width:16%;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
-                   + '<th style="width:10%;">' + _esc(_t('부착위치', 'Position')) + '</th>'
-                   + '<th style="width:28%;">' + _esc(_t('비고', 'Note')) + '</th>'
-                   + '<th class="doc-noprint" style="width:4%;"></th></tr>';
+                   + '<tr><th class="doc-noprint" style="width:42%;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
+                   + '<th style="width:8%;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
+                   + '<th style="width:14%;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
+                   + '<th style="width:9%;">' + _esc(_t('부착위치', 'Position')) + '</th>'
+                   + '<th style="width:24%;">' + _esc(_t('비고', 'Note')) + '</th>'
+                   + '<th class="doc-noprint" style="width:3%;"></th></tr>';
                 if (!litems.length) {
                     h += '<tr><td colspan="6" style="color:#868e96;">'
                        + _esc(_t('아직 라벨이 없습니다 — 아래 [＋ 라벨 추가]를 누르거나 모델명세서_라벨 엑셀을 불러오세요.',
