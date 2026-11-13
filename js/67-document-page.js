@@ -3519,7 +3519,8 @@
                 + '<button class="unit-cycle-btn" onclick="window._docRevGo(\'' + _esc(form.id) + '\',1)" title="'
                 + _esc(_t('누를 때마다 다음 리비전으로 — 리비전마다 라벨 목록이 따로입니다', 'Next revision')) + '"'
                 + ' style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer;'
-                + ' font-size:12px; font-weight:bold;">🏷 ' + _esc(_docRevCur) + '</button>'
+                // 🏷 아이콘 없이 R 번호 글자만(사용자 요청 2026-11-13 3차).
+                + ' font-size:12px; font-weight:bold;">' + _esc(_docRevCur) + '</button>'
                 + '<button onclick="window._docRevGo(\'' + _esc(form.id) + '\',1)" title="' + _esc(_t('다음 리비전', 'Next')) + '"'
                 + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">▶</button>'
                 + '<span style="font-size:11px; color:#868e96;">' + ((_docRevI < 0 ? 0 : _docRevI + 1) + '/' + _docRevList.length) + '</span>'
@@ -3529,7 +3530,8 @@
                 th += '<button onclick="window._docRevVsOpen(\'' + _esc(form.id) + '\')" title="'
                     + _esc(_t('리비전끼리 무엇이 달라졌는지 비교합니다', 'Compare what changed between revisions')) + '"'
                     + ' style="margin-left:4px; padding:6px 10px; min-width:auto; border:1px solid #e3a8a8; border-radius:5px;'
-                    + ' background:#fdeaea; color:#a83232; cursor:pointer; font-size:12px; font-weight:bold;">🆚 VS</button>';
+                    // 🆚 아이콘 없이 글자만(사용자 요청 2026-11-13 3차).
+                    + ' background:#fdeaea; color:#a83232; cursor:pointer; font-size:12px; font-weight:bold;">VS</button>';
             }
             th += '</div>';
         }
