@@ -4317,15 +4317,17 @@
                 // 🔢 [2026-11-13, 사용자 요청] "라벨 도안 왼쪽에 NO 열 추가합시다" — 도면 위
                 //    핀(아래 labelattach)이 이 번호로 어느 라벨인지 가리킨다.
                 h += '</table><table class="doc-t" style="table-layout:fixed; width:100%;">'
-                   + '<tr><th style="width:4%;">NO</th>'
+                   // 📐 [2026-11-13 3차, 사용자 요청] "코드는 6자리 고정이니 줄이고 규격을 늘려줘 /
+                   //    부착위치도 제품·포장 박스 5글자면 되니 줄여줘 / X 버튼 열 없애고 NO 열
+                   //    위로" — ✕ 전용 열을 없애 그만큼(3%)을 포함해 재배분.
+                   + '<tr><th style="width:5%;">NO</th>'
                    + '<th class="doc-noprint" style="width:40%;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
-                   + '<th style="width:8%;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
-                   + '<th style="width:13%;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
-                   + '<th style="width:9%;">' + _esc(_t('부착위치', 'Position')) + '</th>'
-                   + '<th style="width:23%;">' + _esc(_t('비고', 'Note')) + '</th>'
-                   + '<th class="doc-noprint" style="width:3%;"></th></tr>';
+                   + '<th style="width:15%;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
+                   + '<th style="width:8%;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
+                   + '<th style="width:6%;">' + _esc(_t('부착위치', 'Position')) + '</th>'
+                   + '<th style="width:26%;">' + _esc(_t('비고', 'Note')) + '</th></tr>';
                 if (!litems.length) {
-                    h += '<tr><td colspan="7" style="color:#868e96;">'
+                    h += '<tr><td colspan="6" style="color:#868e96;">'
                        + _esc(_t('아직 라벨이 없습니다 — 아래 [＋ 라벨 추가]를 누르거나 모델명세서_라벨 엑셀을 불러오세요.',
                                  'No labels yet — add one or import the label spec sheet.')) + '</td></tr>';
                 }
@@ -4434,8 +4436,16 @@
                     // ⚠️⚠️ [2026-11-13, 사용자 신고] input+button 을 `white-space:nowrap` 으로 한 줄에
                     //    묶었더니(고정 폭 76~86px + 버튼) 좁아진 열(10%) 을 넘쳤다 — `flex-wrap:wrap` 으로
                     //    바꿔 모자라면 버튼이 **다음 줄로** 내려가게 한다(열 폭 자체는 절대 안 넘친다).
+                    // 🗑 [2026-11-13 3차, 사용자 요청] "X 버튼 열은 삭제하고 NO 숫자 열 상단으로" —
+                    //    전용 열 없애고 이 칸 안에서 ✕(위) · 번호(아래)로 쌓는다.
+                    // ⚠️ NO 숫자는 인쇄에도 남아야 하니 `<td>` 자체엔 doc-noprint 를 안 주고,
+                    //    ✕ 버튼에만 준다(인쇄 땐 버튼만 사라지고 번호는 그대로).
                     h += '<tr>'
-                       + '<td style="text-align:center; vertical-align:middle; font-weight:bold;">' + (i + 1) + '</td>'
+                       + '<td style="text-align:center; vertical-align:middle; font-weight:bold;">'
+                       + '<a href="#" class="doc-noprint" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
+                       + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '"'
+                       + ' style="display:block; color:#b1432f; text-decoration:none; font-weight:bold; margin-bottom:2px;">✕</a>'
+                       + (i + 1) + '</td>'
                        + '<td class="doc-noprint" style="text-align:center; vertical-align:middle; padding:5px;">' + artCell + '</td>'
                        // 📋 [2026-11-13, 사용자 요청] "라벨 규격은 자동으로 내역이 적용되는 구조이니
                        //    돋보기는 필요 없을것 같은데 사용자 작성란은 아래로 이동 배치해줘" — 코드로
@@ -4482,11 +4492,9 @@
                        + ' style="font-size:11.5px; width:100%; box-sizing:border-box; text-align:left; resize:vertical; font-family:inherit;">'
                        + _esc(it.note || '') + '</textarea>'
                        + '</td>'
-                       + '<td class="doc-noprint"><a href="#" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
-                       + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '" style="color:#b1432f;">✕</a></td>'
                        + '</tr>';
                     if (found) {
-                        h += '<tr><td colspan="7" class="doc-noprint" style="font-size:11px; color:#495057;'
+                        h += '<tr><td colspan="6" class="doc-noprint" style="font-size:11px; color:#495057;'
                            + ' background:#f8fbfb; padding:3px 8px; position:relative;">'
                            + '<a href="#" onclick="window._docLabelFindResultClose(\'' + _esc(form.id) + '|' + i + '\');return false;"'
                            + ' title="' + _esc(_t('닫기', 'close')) + '" style="position:absolute; right:4px; top:3px; color:#b1432f;'
