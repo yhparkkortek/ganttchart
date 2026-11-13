@@ -4085,7 +4085,14 @@
                    + '<span>' + _esc(s.title) + '</span>'
                    + '<button class="doc-noprint" onclick="window._docToggleSectionCollapse(\''
                    + _esc(s.title).replace(/'/g, "\\'") + '\')" style="' + _COLLAPSE_BTN_STYLE + '">'
-                   + (secCollapsed ? '▶ ' + _esc(_t('펼치기', 'Expand')) : '▼ ' + _esc(_t('접기', 'Collapse'))) + '</button>'
+                   // 🔺🔻 [2026-11-13 5차, 사용자 신고 "여전히 폰트 크기가 다름"] `_COLLAPSE_BTN_STYLE`
+                   //    한 벌을 똑같이 쓰는데도 달라 보인 진짜 원인 — ▶·▼·▲ 삼각형 글자는 폰트
+                   //    대체(fallback)에 따라 **같은 font-size 라도 글자 자신의 실제 그려지는
+                   //    크기가 서로 다르다**(이모지/기호 폰트가 글자마다 다른 내부 비율을 쓴다).
+                   //    글자색·굵기가 똑같아도 이 삼각형만 유독 커 보였던 이유. 삼각형만 따로
+                   //    더 작은 font-size 로 눌러 둬 어느 글자든 일정하게 보이게 한다.
+                   + (secCollapsed ? '<span style="font-size:0.78em;">▶</span> ' + _esc(_t('펼치기', 'Expand'))
+                                   : '<span style="font-size:0.78em;">▼</span> ' + _esc(_t('접기', 'Collapse'))) + '</button>'
                    + '</div>';
             }
             h += '<div class="doc-sec-wrap"' + (secCollapsed ? ' style="display:none;"' : '') + '>';
@@ -4153,7 +4160,9 @@
                             return true;
                         });
                     }
-                    var arrow = state === 'collapsed' ? '▶' : (state === 'req' ? '▼' : '▲');
+                    // 🔺🔻 [2026-11-13 5차] 섹션 쪽과 같은 이유로 삼각형만 작게(0.78em) — 셋 다
+                    //    같은 비율이라야 상태가 바뀌어도(collapsed/req/all) 크기가 안 흔들린다.
+                    var arrow = '<span style="font-size:0.78em;">' + (state === 'collapsed' ? '▶' : (state === 'req' ? '▼' : '▲')) + '</span>';
                     var label = state === 'collapsed' ? _t('펼치기', 'Expand')
                               : (state === 'req' ? _t('전체 보기', 'Show all') : _t('접기', 'Collapse'));
                     var badge = state === 'collapsed' ? '(' + itemsAll.length + _t('개 항목', ' items') + ')'
