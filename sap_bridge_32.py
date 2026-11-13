@@ -6842,71 +6842,85 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
     lifnr_filled = _read_cell_retry(0, 'LIFNR')
     mwskz_filled = _read_cell_retry(0, 'MWSKZ')
 
+    def _lifnr_f4_row(idx):
+        grid.currentCellRow = idx
+        grid.currentCellColumn = 'LIFNR'
+        grid.pressF4()
+        time.sleep(0.6)
+        try:
+            # row0에서 실제로 먹힌 기준(사업자등록번호 또는 상호명)을 그대로 재사용 —
+            # biz_reg_no를 그냥 다시 쓰면, row0이 상호명으로 찾은 경우 여기서만 다른
+            # (존재하지 않는) 협력사를 찾게 된다.
+            _sap_vendor_f4_fill_and_select(session, vendor_search_row, vendor_search_value)
+        except Exception as e2:
+            raise RuntimeError(f'{idx + 1}번째 품목의 협력사 검색 중 오류가 발생했습니다: {e2}')
+
+    def _mwskz_f4_row(idx):
+        grid.currentCellRow = idx
+        grid.currentCellColumn = 'MWSKZ'
+        grid.pressF4()
+        time.sleep(0.6)
+        try:
+            session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
+            session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
+            session.findById('wnd[1]').sendVKey(2)
+            time.sleep(0.5)
+        except Exception as e2:
+            raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e2}')
+
     # ── 행 1~N: Ctrl+V에 해당 — 이미 검증된 값을 modifyCell로 직접 씀 ─────────
+    # 🐛 [2026-11-13 실사용 버그수정] row0 자체의 읽기(`lifnr_filled`/`mwskz_filled`)가
+    # 재시도(5회·0.3초 간격) 끝에도 실패하면, row0엔 실제로 값(예: 세금코드 V9)이 들어가
+    # 있었는데도 예전 코드는 "복사할 값이 없다"며 `if lifnr_filled:`/`if mwskz_filled:`를
+    # 통째로 건너뛰어 행 1~N을 전혀 건드리지 않았다 — 그 결과 저장 직전 SAP ALV 재검증에서
+    # "세금코드가 입력되지 않았습니다"로 막히는 걸 사용자가 실사용 중 직접 목격함(row0엔
+    # V9가 보이는데 row1만 비어있는 스크린샷). → 읽기가 실패했어도 포기하지 않고, row0과
+    # 같은 방법(F4)으로 행마다 직접 채운다(복사가 아니라 "다시 검색"이라 더 느리지만 확실함).
     for idx in range(1, len(items)):
         if lifnr_filled:
             try:
                 grid.modifyCell(idx, 'LIFNR', lifnr_filled)
             except Exception:
-                # modifyCell 실패 시 F4 폴백 (SAP 그리드가 직접 쓰기를 막는 경우)
-                grid.currentCellRow = idx
-                grid.currentCellColumn = 'LIFNR'
-                grid.pressF4()
-                time.sleep(0.6)
-                try:
-                    # 🆕 [2026-11-13] row0에서 실제로 먹힌 기준(사업자등록번호 또는 상호명)을
-                    # 그대로 재사용 — biz_reg_no를 그냥 다시 쓰면, row0이 상호명으로 찾은
-                    # 경우 여기서만 다른(존재하지 않는) 협력사를 찾게 된다.
-                    _sap_vendor_f4_fill_and_select(session, vendor_search_row, vendor_search_value)
-                except Exception as e2:
-                    raise RuntimeError(f'{idx + 1}번째 품목의 협력사 검색 중 오류가 발생했습니다: {e2}')
+                _lifnr_f4_row(idx)  # modifyCell 실패 시 F4 폴백 (SAP 그리드가 직접 쓰기를 막는 경우)
+        else:
+            _lifnr_f4_row(idx)
         if mwskz_filled:
             try:
                 grid.modifyCell(idx, 'MWSKZ', mwskz_filled)
             except Exception:
-                # modifyCell 실패 시 F4 폴백
-                grid.currentCellRow = idx
-                grid.currentCellColumn = 'MWSKZ'
-                grid.pressF4()
-                time.sleep(0.6)
-                try:
-                    session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
-                    session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
-                    session.findById('wnd[1]').sendVKey(2)
-                    time.sleep(0.5)
-                except Exception as e2:
-                    raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e2}')
+                _mwskz_f4_row(idx)
+        else:
+            _mwskz_f4_row(idx)
 
-    # 🐛 [2026-10-28 실사용 버그수정] 위 복사 루프가 예외 없이 "성공"해도 SAP 그리드가 조용히
-    # 반영을 안 받아들인 행이 있을 수 있다(오늘 실사용에서 MWSKZ 8/9행이 바로 이 증상이었다 —
-    # modifyCell은 예외를 던지지 않았는데 실제로는 안 먹음). 저장을 누르기 전에 전 행을 다시
-    # 읽어 빈 셀이 남아있으면 여기서 한 번 더 복구를 시도한다 — 이 관문을 통과 못 하면 저장
-    # 시점에 "데이터가 존재하지 않습니다"로 막히고, 그마저 못 잡으면 EBELN도 못 읽는 이중
-    # 실패로 이어지므로(오늘 실제로 겪은 증상) 여기서 미리 잡는 게 훨씬 안전하다.
-    if lifnr_filled or mwskz_filled:
-        for idx in range(1, len(items)):
-            if lifnr_filled and not _read_cell_retry(idx, 'LIFNR', tries=2, delay=0.3):
-                try:
-                    grid.modifyCell(idx, 'LIFNR', lifnr_filled)
-                except Exception:
-                    pass
-            if mwskz_filled and not _read_cell_retry(idx, 'MWSKZ', tries=2, delay=0.3):
-                try:
-                    grid.modifyCell(idx, 'MWSKZ', mwskz_filled)
-                except Exception:
-                    pass
-        # 복구 시도 후에도 비어있는 행이 있으면 여기서 분명하게 실패시킨다 — 조용히 넘어가면
-        # 저장 시점에야 "데이터가 존재하지 않습니다"로 막히고 원인 추적이 훨씬 어려워진다.
-        still_blank = []
-        for idx in range(1, len(items)):
-            if lifnr_filled and not _read_cell_retry(idx, 'LIFNR', tries=1, delay=0):
-                still_blank.append(f'{idx + 1}행 협력사')
-            if mwskz_filled and not _read_cell_retry(idx, 'MWSKZ', tries=1, delay=0):
-                still_blank.append(f'{idx + 1}행 세금코드')
-        if still_blank:
-            raise RuntimeError('품목 행에 협력사/세금코드가 채워지지 않았습니다(복구 재시도 후에도): '
-                                + ', '.join(still_blank) + ' — 저장하면 SAP이 "데이터가 존재하지'
-                                ' 않습니다"로 막을 수 있으니 저장 전에 확인이 필요합니다.')
+    # 🐛 [2026-10-28 실사용 버그수정, 2026-11-13 무조건 실행으로 강화] 위 복사/F4 루프가 예외
+    # 없이 "성공"해도 SAP 그리드가 조용히 반영을 안 받아들인 행이 있을 수 있다(2026-10-28
+    # 실사용에서 MWSKZ 8/9행이 이 증상 — modifyCell은 예외를 안 던졌는데 실제로는 안 먹음).
+    # 저장을 누르기 전에 전 행을 다시 읽어 빈 셀이 남아있으면 한 번 더 복구를 시도한다.
+    # [2026-11-13] 예전엔 `if lifnr_filled or mwskz_filled:`로 감싸 row0 읽기가 둘 다 실패하면
+    # 이 안전장치 자체가 통째로 꺼졌다(바로 위 버그와 같은 뿌리) → 이제 항상 돈다.
+    for idx in range(1, len(items)):
+        if not _read_cell_retry(idx, 'LIFNR', tries=2, delay=0.3):
+            try:
+                grid.modifyCell(idx, 'LIFNR', lifnr_filled) if lifnr_filled else _lifnr_f4_row(idx)
+            except Exception:
+                pass
+        if not _read_cell_retry(idx, 'MWSKZ', tries=2, delay=0.3):
+            try:
+                grid.modifyCell(idx, 'MWSKZ', mwskz_filled) if mwskz_filled else _mwskz_f4_row(idx)
+            except Exception:
+                pass
+    # 복구 시도 후에도 비어있는 행이 있으면 여기서 분명하게 실패시킨다 — 조용히 넘어가면
+    # 저장 시점에야 "데이터가 존재하지 않습니다"로 막히고 원인 추적이 훨씬 어려워진다.
+    still_blank = []
+    for idx in range(1, len(items)):
+        if not _read_cell_retry(idx, 'LIFNR', tries=1, delay=0):
+            still_blank.append(f'{idx + 1}행 협력사')
+        if not _read_cell_retry(idx, 'MWSKZ', tries=1, delay=0):
+            still_blank.append(f'{idx + 1}행 세금코드')
+    if still_blank:
+        raise RuntimeError('품목 행에 협력사/세금코드가 채워지지 않았습니다(복구 재시도 후에도): '
+                            + ', '.join(still_blank) + ' — 저장하면 SAP이 "데이터가 존재하지'
+                            ' 않습니다"로 막을 수 있으니 저장 전에 확인이 필요합니다.')
 
     # 품목별 단가(NETPR)/EPEIN — PDF에서 추출한 값을 행 순서대로 입력.
     # [2026-09-30 버그수정] 소수점 단가(예: 321.94)를 NETPR에 그대로 쓰면 SAP KRW 필드가

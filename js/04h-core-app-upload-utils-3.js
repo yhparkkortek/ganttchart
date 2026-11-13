@@ -949,6 +949,7 @@
             btn.style.opacity = '0.6'; btn.style.cursor = 'default';
             btn.textContent = window._t('⏳ 다음 안전한 지점에서 멈춥니다...', '⏳ Stopping at the next safe point...');
         }
+        if (typeof window._ganttQaPoSendBtnSetBusy === 'function') window._ganttQaPoSendBtnSetBusy('stopping');
     };
     window._ganttQaPoStopButtonHtml = function () {
         return '<div style="margin-top:4px;">' +
@@ -957,6 +958,38 @@
             '</button> <span style="font-size:10.5px; color:#888;">' +
                 window._t('— 저장(SAVE) 직전까지는 안전하게 멈춥니다. 이미 시작된 SAP 동작 1건은 끝까지 진행된 뒤 멈춥니다.', '— safely stops any time before SAVE. One SAP step already in progress will finish first.') +
             '</span></div>';
+    };
+    // 🆕 [2026-11-13, 사용자 재요청] "전송 버튼이 모래시계로 돌고, 필요하면 그걸로 취소"
+    // — 채팅 속 🛑 버튼(위)과 별개로, 입력창 옆 "전송" 버튼 자체도 자동 처리 중엔 모래시계
+    // 커서로 바뀌고 눌렀을 때 중지되도록 한다. 두 버튼 다 같은 `_ganttQaPoRequestStop`을
+    // 부르므로 어느 쪽을 눌러도 동일하게 멈춘다. `document`가 없는 환경(Node 테스트 하네스)
+    // 에서도 안전하도록 버튼을 못 찾으면 조용히 아무것도 안 한다.
+    window._ganttQaPoSendBtnSetBusy = function (mode) {
+        var btn;
+        try { btn = document.getElementById('gantt-qa-send-btn'); } catch (e) { return; }
+        if (!btn) return;
+        if (mode === 'busy') {
+            btn.style.cursor = 'wait';
+            btn.style.background = '#fdeaea';
+            btn.style.borderColor = '#e3a8a8';
+            btn.style.color = '#a83232';
+            btn.textContent = window._t('⏳ 중지', '⏳ Stop');
+            btn.title = window._t('누르면 다음 안전한 지점에서 멈춥니다', 'Click to stop at the next safe point');
+            btn.onclick = function () { window._ganttQaPoRequestStop(); };
+        } else if (mode === 'stopping') {
+            btn.style.cursor = 'default';
+            btn.textContent = window._t('⏳ 멈추는 중...', '⏳ Stopping...');
+            btn.title = '';
+            btn.onclick = null;
+        } else {
+            btn.style.cursor = 'pointer';
+            btn.style.background = '#e8f4fd';
+            btn.style.borderColor = '#a5c8f0';
+            btn.style.color = '#1a4f7a';
+            btn.textContent = window._t('전송', 'Send');
+            btn.title = '';
+            btn.onclick = function () { window.sendGanttQaMessage(); };
+        }
     };
     // `e._poAborted`가 있는 예외만 "사람이 중지함"으로 구분 — 일반 SAP 오류와 섞이면 안 됨
     // (일반 오류는 재처리 제안으로, 중지는 전체를 멈추고 조용히 끝내야 하므로).
@@ -2742,6 +2775,7 @@ ${docsJson}`;
         window._ganttQaHistory.push({ role: 'ai', rawHtml: true, text: window._ganttQaPoStopButtonHtml() });
         const _stopBtnIdx = window._ganttQaHistory.length - 1;
         window._renderGanttQaMessages();
+        if (typeof window._ganttQaPoSendBtnSetBusy === 'function') window._ganttQaPoSendBtnSetBusy('busy');
         var _wasAborted = false;
 
         function _stageNote(stage) {
@@ -2824,8 +2858,9 @@ ${docsJson}`;
             }
             window._ganttQaHistory.pop();
         }
-        // 비상정지 버튼은 끝났으니 치운다
+        // 비상정지 버튼은 끝났으니 치운다 — 전송 버튼의 모래시계도 같이 원상복구
         if (_stopBtnIdx >= 0 && _stopBtnIdx < window._ganttQaHistory.length) window._ganttQaHistory.splice(_stopBtnIdx, 1);
+        if (typeof window._ganttQaPoSendBtnSetBusy === 'function') window._ganttQaPoSendBtnSetBusy(false);
         window._ganttQaPoAbortRequested = false;
         const lines = results.map(function(r, i) {
             if (r.ok) {
