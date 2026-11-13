@@ -1218,8 +1218,9 @@
                 // ⚠️⚠️ [2026-11-13, 사용자 신고 "TXT 왼쪽 정렬 안 됨"] 모달 몸통(`#doclabelart-body`)이
                 //    가운데 정렬(`text-align:center`)이라 글자상자가 그 값을 그대로 물려받았다 —
                 //    `text-align` 을 **명시**해야 한다(기본 왼쪽, `n.align` 으로 가운데·오른쪽도 가능).
+                // 🧹 [2026-11-13, 사용자 요청] "글 상자 테두리 음영도 삭제해줘" — 그림자 없앰.
                 + '<span style="display:block; background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
-                + ' padding:0.15em 0.45em; border-radius:0.3em; box-shadow:0 1px 3px rgba(0,0,0,.18); text-align:'
+                + ' padding:0.15em 0.45em; border-radius:0.3em; text-align:'
                 + (n.align || 'left') + ';'
                 + ' white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
                 + _esc(n.text) + '</span>'
