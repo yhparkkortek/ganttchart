@@ -2275,6 +2275,40 @@
                     }
                 }
             });
+            // ⌨️ [2026-11-13, 사용자 요청] "키보드로 TXT 박스 이동 — 정밀하게" — 화살표 키로
+            //    "지금 조절 대상"(`window._docLabelActiveNote`, 클릭이나 포커스로 지정됨)인 표시를
+            //    1px 씩(Shift 누르면 10px) 옮긴다. textarea/input 에 포커스가 있을 땐(타이핑 중)
+            //    커서 이동을 가로채지 않게 건너뛴다. 드래그와 같은 이유로 **놓을 때처럼** 저장은
+            //    디바운스(400ms) — 키를 누르고 있으면(자동반복) 매번 NAS 에 쓰지 않는다.
+            // ⚠️ `document` 에 건다 — 드래그는 `mousedown`에서 `preventDefault()` 해서 아무 데도
+            //    포커스가 안 가므로(기본은 `document.body`), `ov`(모달 자신)에 걸면 `body` 에서
+            //    일어난 keydown 이 **그 위 조상(document)으로만** 올라가 `ov`(body 의 자식)까지
+            //    안 들어온다.
+            document.addEventListener('keydown', function (ev) {
+                if (!ov || ov.style.display === 'none') return;
+                if (ev.target && (ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT')) return;
+                var dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+                var d = dirs[ev.key];
+                if (!d) return;
+                var active = window._docLabelActiveNote;
+                var m2 = window._docLabelArtModal;
+                if (!active || !m2 || active.code !== m2.code) return;
+                var list = window._docLabelNotesCache[active.code] || [];
+                var note = list[active.idx];
+                if (!note) return;
+                ev.preventDefault();
+                var img = document.getElementById('doclabelart-img');
+                var r = img ? img.getBoundingClientRect() : null;
+                var stepPx = ev.shiftKey ? 10 : 1;
+                var dx = (r && r.width) ? (stepPx / r.width) : 0.002;
+                var dy = (r && r.height) ? (stepPx / r.height) : 0.002;
+                note.x = Math.min(1, Math.max(0, note.x + d[0] * dx));
+                note.y = Math.min(1, Math.max(0, note.y + d[1] * dy));
+                var wrap = document.querySelector('[data-note-wrap][data-note-idx="' + active.idx + '"]');
+                if (wrap) { wrap.style.left = (note.x * 100) + '%'; wrap.style.top = (note.y * 100) + '%'; }
+                clearTimeout(window._docLabelNoteKeyNudgeTimer);
+                window._docLabelNoteKeyNudgeTimer = setTimeout(function () { window._docLabelNotesSave(active.code); }, 400);
+            });
         }
         ov.style.display = 'flex';
         if (window.bringModalToFront) { try { window.bringModalToFront('doclabelart-overlay'); } catch (e) { /* 〃 */ } }
