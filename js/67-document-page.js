@@ -1641,13 +1641,10 @@
                   + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
                   + ' z-index:2; pointer-events:auto;"></span>' : '')
                 + '</span>'
-                // 🔢 [2026-11-13, 사용자 요청] "동그라미 번호 크기 너무 줄였음 — 이전(1.8em)과
-                //    비교했을 때 절반만큼 키워줘" — 1.1em 에서 원래값 쪽으로 절반(1.45em)까지.
-                // 🔢🔢 [2026-11-13 2차, 사용자 요청] "동그라미 넘버 50%만 더 키워줘" — 1.45em 에서
-                //    50% 더(×1.5): 원 지름 2.175em·안쪽 숫자 글자도 같은 비율로(0.78em → 1.17em,
-                //    안 늘리면 원만 커지고 숫자는 그대로라 가운데가 비어 보인다).
-                + '<span style="width:2.175em; height:2.175em; min-width:2.175em; border-radius:50%; background:#e03131;'
-                + ' color:#fff; font-weight:bold; font-size:1.17em; display:flex; align-items:center; justify-content:center;'
+                // 🔢🔢🔢 [2026-11-13 3차, 사용자 요청] "동그라미 번호 절반으로 줄여줘" — 2.175em
+                //    에서 절반(1.09em), 안쪽 숫자도 같은 비율로(1.17em → 0.585em).
+                + '<span style="width:1.09em; height:1.09em; min-width:1.09em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; font-size:0.585em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
         }).join('');
@@ -2138,23 +2135,24 @@
                     + _esc(_t('자르기 적용', 'Apply crop')) + '</a>'
                   : '<span style="color:#1971c2;">' + _esc(_t('드래그해서 영역을 고르세요…', 'Drag to select an area…')) + '</span>')
                  + ' <a href="#" onclick="window._docLabelCropCancel();return false;">' + _esc(_t('취소', 'cancel')) + '</a>'
-               : '<a href="#" onclick="window._docLabelNoteArm(\'' + _esc(code) + '\');return false;" style="color:#7a5210;">✏️ '
+               // 🖤 [2026-11-13, 사용자 요청] "글자색 검은색으로 통일해줘" — 이 줄의 색은 전부 검정으로.
+               : '<a href="#" onclick="window._docLabelNoteArm(\'' + _esc(code) + '\');return false;" style="color:#000;">✏️ '
                  + _esc(_t('표시 추가', 'Add note')) + '</a>'
-                 + ' · <a href="#" onclick="window._docLabelCropArm(\'' + _esc(code) + '\');return false;" style="color:#7a5210;">✂️ '
+                 + ' · <a href="#" onclick="window._docLabelCropArm(\'' + _esc(code) + '\');return false;" style="color:#000;">✂️ '
                  + _esc(_t('배경 잘라내기', 'Crop')) + '</a>'
-                 + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',-1);return false;" style="color:#7a5210;">⟲ '
+                 + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',-1);return false;" style="color:#000;">⟲ '
                  + _esc(_t('왼쪽으로 회전', 'Rotate left')) + '</a>'
-                 + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',1);return false;" style="color:#7a5210;">⟳ '
+                 + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',1);return false;" style="color:#000;">⟳ '
                  + _esc(_t('오른쪽으로 회전', 'Rotate right')) + '</a>'
-                 + (size ? ' · <a href="#" onclick="window._docLabelSizeReset(\'' + _esc(code) + '\');return false;" style="color:#495057;">↺ '
+                 + (size ? ' · <a href="#" onclick="window._docLabelSizeReset(\'' + _esc(code) + '\');return false;" style="color:#000;">↺ '
                    + _esc(_t('크기 기본값', 'Reset size')) + '</a>' : '')
                  // 📐 [2026-11-13, 사용자 요청] 손잡이로 끌 때 비율을 지킬지 — 전역 체크 하나(표 썸네일과 공유)
-                 + ' · <label style="cursor:pointer; font-weight:normal; color:#495057;"><input type="checkbox" '
+                 + ' · <label style="cursor:pointer; font-weight:normal; color:#000;"><input type="checkbox" '
                    + (window._docLabelAspectLock ? 'checked' : '')
                    + ' onchange="window._docLabelAspectLock=this.checked;" style="vertical-align:middle; margin-right:3px;">'
                    + _esc(_t('비율 고정', 'Lock ratio')) + '</label>'
                  // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — ＋／－로 조절, 이미지 크기와 연동(px 아님)
-                 + (notes.length ? ' · <span style="color:#495057;">' + _esc(_t('표시 글자크기', 'Note text size')) + ': '
+                 + (notes.length ? ' · <span style="color:#000;">' + _esc(_t('표시 글자크기', 'Note text size')) + ': '
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',-1);return false;"'
                      + ' title="' + _esc(_t('작게', 'smaller')) + '" style="padding:0 4px; font-weight:bold;">－</a>'
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',1);return false;"'
@@ -2162,24 +2160,25 @@
             + '</div>'
             // 🏷 [2026-11-13, 사용자 요청] "UL CE CB FCC 정도만 사용 — 인증마크도 도안 위에 넣고 싶다"
             //    누르면 바로 도안 위에 찍힌다(기본 자리는 오른쪽 위) — 정확한 위치는 끌어서.
-            + (idle ? '<div style="margin-top:6px; font-size:12px; color:#495057;">🏷 ' + _esc(_t('인증마크 추가', 'Add cert mark')) + ': '
+            // 🖤 [2026-11-13, 사용자 요청] "글자색 검은색으로 통일해줘" — 아래 줄도 전부 검정.
+            //    🔲▮ [같은 요청] "바코드 아이콘은 ▮ 하나만 써줘" — ▮▮ → ▮.
+            + (idle ? '<div style="margin-top:6px; font-size:12px; color:#000;">🏷 ' + _esc(_t('인증마크 추가', 'Add cert mark')) + ': '
               + CERT_MARK_CATALOG.map(function (c) {
                   return '<a href="#" onclick="window._docLabelMarkAdd(\'' + _esc(code) + '\',\'' + _esc(c.key) + '\');return false;"'
-                      + ' style="margin-right:10px; color:#7a5210; font-weight:bold;">' + _esc(c.label) + '</a>';
+                      + ' style="margin-right:10px; color:#000; font-weight:bold;">' + _esc(c.label) + '</a>';
               }).join('')
               // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 누를 때마다 빈 박스가
               //    하나씩 늘고(표 칸 구분선처럼 여러 개 쌓아 배치), 자리·크기는 끌어서 맞춘다.
-              //    ⚠️ 색은 표시(TXT)와 같은 빨강으로 통일(사용자 요청).
               + ' · <a href="#" onclick="window._docLabelBoxAdd(\'' + _esc(code) + '\');return false;"'
-              + ' style="color:#e03131; font-weight:bold;">⬜ ' + _esc(_t('박스 추가', 'Add box')) + '</a>'
+              + ' style="color:#000; font-weight:bold;">⬜ ' + _esc(_t('박스 추가', 'Add box')) + '</a>'
               // 📏 [2026-11-13, 사용자 요청] "직선도 그릴 수 있으면 좋겠다"
               + ' · <a href="#" onclick="window._docLabelLineAdd(\'' + _esc(code) + '\');return false;"'
-              + ' style="color:#e03131; font-weight:bold;">📏 ' + _esc(_t('직선 추가', 'Add line')) + '</a>'
-              // 🔲▮▮ [2026-11-13, 사용자 요청] "바코드 QR 은 어떻게 추가해?" — 값은 직접 입력(prompt).
+              + ' style="color:#000; font-weight:bold;">📏 ' + _esc(_t('직선 추가', 'Add line')) + '</a>'
+              // 🔲▮ [2026-11-13, 사용자 요청] "바코드 QR 은 어떻게 추가해?" — 값은 직접 입력(prompt).
               + ' · <a href="#" onclick="window._docLabelCodeAdd(\'' + _esc(code) + '\',\'qr\');return false;"'
-              + ' style="color:#e03131; font-weight:bold;">🔲 ' + _esc(_t('QR 추가', 'Add QR')) + '</a>'
+              + ' style="color:#000; font-weight:bold;">🔲 ' + _esc(_t('QR 추가', 'Add QR')) + '</a>'
               + ' · <a href="#" onclick="window._docLabelCodeAdd(\'' + _esc(code) + '\',\'barcode\');return false;"'
-              + ' style="color:#e03131; font-weight:bold;">▮▮ ' + _esc(_t('바코드 추가', 'Add barcode')) + '</a>'
+              + ' style="color:#000; font-weight:bold;">▮ ' + _esc(_t('바코드 추가', 'Add barcode')) + '</a>'
               + '</div>' : '')
             // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로도 작성 가능했으면
             //    좋겠음" — 번호 목록을 **입력칸으로** 바꿔 클릭 위치 없이 타이핑만으로 고칠 수 있게 하고,
