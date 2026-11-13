@@ -4468,14 +4468,19 @@
                     //    바꿔 모자라면 버튼이 **다음 줄로** 내려가게 한다(열 폭 자체는 절대 안 넘친다).
                     // 🗑 [2026-11-13 3차, 사용자 요청] "X 버튼 열은 삭제하고 NO 숫자 열 상단으로" —
                     //    전용 열 없애고 이 칸 안에서 ✕(위) · 번호(아래)로 쌓는다.
+                    // 🗑🗑 [2026-11-13 4차, 사용자 요청] "숫자 왼쪽으로 X 박스로 만들어서 배치해줘" —
+                    //    위아래 쌓기 대신 가로로 [✕ 박스] [번호] 로, ✕ 는 테두리 있는 작은 박스로.
                     // ⚠️ NO 숫자는 인쇄에도 남아야 하니 `<td>` 자체엔 doc-noprint 를 안 주고,
                     //    ✕ 버튼에만 준다(인쇄 땐 버튼만 사라지고 번호는 그대로).
                     h += '<tr>'
                        + '<td style="text-align:center; vertical-align:middle; font-weight:bold;">'
+                       + '<span style="display:inline-flex; align-items:center; justify-content:center; gap:4px;">'
                        + '<a href="#" class="doc-noprint" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
                        + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '"'
-                       + ' style="display:block; color:#b1432f; text-decoration:none; font-weight:bold; margin-bottom:2px;">✕</a>'
-                       + (i + 1) + '</td>'
+                       + ' style="display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;'
+                       + ' border:1px solid #b1432f; border-radius:3px; color:#b1432f; text-decoration:none;'
+                       + ' font-weight:bold; font-size:10px; line-height:1; flex-shrink:0;">✕</a>'
+                       + '<span>' + (i + 1) + '</span></span></td>'
                        + '<td class="doc-noprint" style="text-align:center; vertical-align:middle; padding:5px;">' + artCell + '</td>'
                        // 📋 [2026-11-13, 사용자 요청] "라벨 규격은 자동으로 내역이 적용되는 구조이니
                        //    돋보기는 필요 없을것 같은데 사용자 작성란은 아래로 이동 배치해줘" — 코드로
