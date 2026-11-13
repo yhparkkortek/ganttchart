@@ -1080,7 +1080,11 @@
         await window._docLabelNotesSave(code);
     };
     // 🖐 끌기 — 박스의 `_docLabelBoxDragWire` 와 같은 틀(위 테두리 가는 띠만 받는다).
-    window._docLabelCodeDragWire = function (handle, img, code, idx, wrap) {
+    // 🖱️ [2026-11-13, 사용자 신고 "이동하려고 마우스로 잡는데 잘 안잡힘"] 처음엔 박스처럼
+    //    얇은 위쪽 띠(`data-code-drag`, 10px)만 손잡이였다 — QR·바코드는 안에 다른 표시·마크를
+    //    겹쳐 둘 일이 없으니(박스와 다름) 몸통 전체를 끌 수 있게 **wrap 자신**을 손잡이로 쓴다.
+    //    단 크기조절 손잡이·✏️·✕ 위에서 누른 건 그쪽이 먼저 처리하게 건너뛴다.
+    window._docLabelCodeDragWire = function (wrap, img, code, idx) {
         var moved = false;
         var onMove = function (ev) {
             moved = true;
@@ -1096,7 +1100,8 @@
             document.removeEventListener('mouseup', onUp);
             if (moved) window._docLabelNotesSave(code);
         };
-        handle.onmousedown = function (ev) {
+        wrap.onmousedown = function (ev) {
+            if (ev.target && ev.target.closest && ev.target.closest('[data-code-resize], a')) return;
             ev.preventDefault(); ev.stopPropagation();
             moved = false;
             document.addEventListener('mousemove', onMove);
@@ -1133,20 +1138,22 @@
         };
     };
     // HTML — 실제 그림(QR·바코드)은 비워 둔 `data-code-canvas` 안에 렌더 직후 JS 가 채운다
-    //    (라이브러리를 문자열로 미리 못 부른다). 틀은 박스와 같은 흰 바탕 + 빨강 테두리.
+    //    (라이브러리를 문자열로 미리 못 부른다).
+    // 🧹 [2026-11-13, 사용자 요청] "바코드 빨간색 테두리 삭제해주고" — 바코드는 테두리 없음(QR 은
+    //    작은 정사각형이라 배경과 구분이 잘 안 돼 그대로 둔다).
+    // 🖱️ [같은 요청] "이동하려고 마우스로 잡는데 잘 안잡힘" — 얇은 띠 대신 몸통 전체가 손잡이.
     var _docLabelCodeMarkersHtml = function (codes, draggable, code) {
         return (codes || []).map(function (c, ci) {
             var wrapStyle = 'position:absolute; left:' + (c.x * 100) + '%; top:' + (c.y * 100) + '%;'
                 + ' transform:translate(-50%,-50%); width:' + (c.wem || (c.kind === 'qr' ? 6 : 10)) + 'em;'
                 + ' height:' + (c.hem || (c.kind === 'qr' ? 6 : 3.5)) + 'em; background:#fff;'
-                + ' border:1px solid #e03131; border-radius:0.2em; z-index:1; box-sizing:border-box; padding:0.2em;'
+                + (c.kind === 'qr' ? ' border:1px solid #e03131;' : '')
+                + ' border-radius:0.2em; z-index:1; box-sizing:border-box; padding:0.2em;'
                 + (draggable ? ' cursor:grab;' : '');
             return '<span data-code-wrap data-code-idx="' + ci + '" data-code-kind="' + _esc(c.kind) + '"'
                 + ' data-code-value="' + _esc(c.value) + '" title="' + _esc(c.value) + '" style="' + wrapStyle + '">'
-                + '<span data-code-canvas style="display:block; width:100%; height:100%;"></span>'
-                + (draggable ? '<span data-code-drag title="' + _esc(_t('끌어서 옮기기', 'drag to move')) + '"'
-                  + ' style="position:absolute; left:-2px; right:-2px; top:-2px; height:10px; cursor:grab; pointer-events:auto;"></span>'
-                  + '<span data-code-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
+                + '<span data-code-canvas style="display:block; width:100%; height:100%; pointer-events:none;"></span>'
+                + (draggable ? '<span data-code-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                   + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em; border-radius:0.25em;'
                   + ' background:#e03131; border:2px solid #fff; box-shadow:0 0 0 1px #e03131; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
                   + '<a href="#" onclick="window._docLabelCodeEdit(\'' + _esc(code) + '\',' + ci + ');return false;"'
@@ -1641,10 +1648,10 @@
                   + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
                   + ' z-index:2; pointer-events:auto;"></span>' : '')
                 + '</span>'
-                // 🔢🔢🔢 [2026-11-13 3차, 사용자 요청] "동그라미 번호 절반으로 줄여줘" — 2.175em
-                //    에서 절반(1.09em), 안쪽 숫자도 같은 비율로(1.17em → 0.585em).
-                + '<span style="width:1.09em; height:1.09em; min-width:1.09em; border-radius:50%; background:#e03131;'
-                + ' color:#fff; font-weight:bold; font-size:0.585em; display:flex; align-items:center; justify-content:center;'
+                // 🔢🔢🔢🔢 [2026-11-13 4차, 사용자 요청] "50% 만 늘려줘" — 1.09em 에서 50% 더(×1.5):
+                //    1.64em·안쪽 숫자도 같은 비율로(0.585em → 0.88em).
+                + '<span style="width:1.64em; height:1.64em; min-width:1.64em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; font-size:0.88em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
         }).join('');
@@ -2274,11 +2281,11 @@
                 var bHandle = wrap.querySelector('[data-box-resize]');
                 if (bHandle) window._docLabelBoxResizeWire(bHandle, wrap, code, bidx);
             });
-            // 🔲▮▮ [2026-11-13] 코드(QR·바코드)도 박스와 같은 규칙으로 끌기 + 크기조절
+            // 🔲▮ [2026-11-13] 코드(QR·바코드) — 몸통 전체가 끌기 손잡이(박스와 달리 안에 겹쳐
+            //    둘 다른 표시가 없어서 통째로 잡아도 된다), 크기조절만 모서리 손잡이.
             [].slice.call(bodyEl.querySelectorAll('[data-code-wrap]')).forEach(function (wrap) {
                 var cidx = Number(wrap.getAttribute('data-code-idx'));
-                var cDrag = wrap.querySelector('[data-code-drag]');
-                if (cDrag) window._docLabelCodeDragWire(cDrag, img, code, cidx, wrap);
+                window._docLabelCodeDragWire(wrap, img, code, cidx);
                 var cHandle = wrap.querySelector('[data-code-resize]');
                 if (cHandle) window._docLabelCodeResizeWire(cHandle, wrap, code, cidx);
             });
