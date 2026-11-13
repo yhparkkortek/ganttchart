@@ -2664,6 +2664,9 @@ ${docsJson}`;
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     excelPath: exData.path, bizRegNo: doc.bizRegNo,
+                    // 🆕 [2026-11-13, 사용자 제보] 사업자등록번호로 협력사를 못 찾으면
+                    // SAP 쪽에서 이 상호명으로 재시도한다(docs/purchase-order.md).
+                    vendorName: doc.vendorName || '',
                     items: doc.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
                     plant: '1000', currency: doc.currency || 'KRW'
                 })

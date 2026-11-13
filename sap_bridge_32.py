@@ -6664,7 +6664,48 @@ def _sap_close_stray_popups(session, max_windows=4):
         time.sleep(0.3)
 
 
-def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency='KRW'):
+# 🆕 [2026-11-13, 사용자 제보] "사업자등록번호 오류 난 경우 공급자 이름으로도 검색" —
+# ZMMR060 협력사(LIFNR) 칸의 F4 검색도움말은 탭001("회사코드별 공급업체(사업자 번호)")
+# 안에 **여러 검색 기준이 행(row)으로 나열된 멀티 크라이테리아 폼**이다(실측 덤프,
+# `tests/test_po_vendor_name_search.py` 참고): row0=검색어, row1=사업자등록번호,
+# row2=우편번호, row3=도시, **row4=이름**, row5=공급업체, row6=회사코드. 지금까지는
+# row1(사업자등록번호)만 썼는데, 그 번호가 AI 추출 실패·SAP 미등록 등으로 안 맞으면
+# 그대로 실패했다 — 이제 row4(이름)로도 재시도한다. 필드 ID 패턴(`txtG_SELFLD_TAB-LOW
+# [row,24]`)은 모든 행이 동일하므로 row 번호만 바꾸면 된다.
+_SAP_VENDOR_SEARCH_ROW_STCD2 = 1
+_SAP_VENDOR_SEARCH_ROW_NAME = 4
+
+
+def _sap_vendor_search_core_name(name):
+    """상호명에서 "(주)"/"㈜"/"주식회사" 등 법인격 표시를 떼고 핵심 상호만 남긴다 —
+    SAP에 등록된 표기(괄호 위치·㈜ 기호 등)가 PDF에서 AI가 뽑은 표기와 다를 수 있어
+    와일드카드(`*핵심상호*`) 검색의 명중률을 높이기 위함."""
+    import re as _re
+    s = str(name or '').strip()
+    s = _re.sub(r'\(주\)|㈜|주식회사', '', s).strip()
+    return s
+
+
+def _sap_vendor_f4_fill_and_select(session, search_row, value):
+    """ZMMR060 협력사(LIFNR) 칸에서 `grid.pressF4()`로 이미 열려 있는 검색도움말 탭001
+    팝업에, `search_row`번째 검색기준 칸에 `value`를 채우고 실행해 **첫 결과행을
+    선택 확정**한다. 호출 전에 `grid.pressF4()`+`time.sleep(0.6)`까지는 호출부 책임.
+    실패하면 그대로 예외를 던진다(호출부가 사유를 포함해 재포장)."""
+    field = session.findById(
+        "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
+        f"sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[{search_row},24]"
+    )
+    field.text = str(value)
+    field.setFocus()
+    field.caretPosition = len(str(value))
+    session.findById('wnd[1]').sendVKey(0)  # 검색 실행
+    time.sleep(0.6)
+    session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9  # 첫 결과 행 선택
+    session.findById('wnd[1]').sendVKey(2)  # 더블클릭과 동일 — 선택 확정
+    time.sleep(0.5)
+
+
+def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency='KRW', vendor_name=None):
     """구매오더 생성 1단계 — 엑셀 업로드 후 각 품목 행에 협력사/세금코드/단가를 채우고
     저장 직전에 멈춘다. `items`는 엑셀에 넣은 행과 같은 순서의 리스트, 각 원소는
     {"unitPrice": 숫자} 형태(PDF에서 추출한 단가 — SAP에 저장된 값이 아니라 이 값을
@@ -6678,7 +6719,11 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
     — 그리드의 `WAERS`(통화) 컬럼은 실사용 테스트에서 아무것도 안 건드려도 'KRW'로
     자동 채워지는 것을 확인했으므로(협력사/플랜트 기준 기본 통화로 추정), 기본값(KRW)일
     때는 그대로 두고(이미 검증된 동작을 건드리지 않기 위해) **currency가 'KRW'가
-    아닐 때만** 행마다 `WAERS` 셀을 명시적으로 덮어쓴다."""
+    아닐 때만** 행마다 `WAERS` 셀을 명시적으로 덮어쓴다.
+    `vendor_name`(2026-11-13 신규, 사용자 제보 — "사업자등록번호 오류 난 경우 공급자
+    이름으로도 검색") — `biz_reg_no`로 협력사를 못 찾으면 이 이름으로 재시도한다
+    (법인격 표시를 뗀 핵심 상호 + 와일드카드, `_sap_vendor_search_core_name`). 생략하면
+    기존과 100% 동일하게 사업자등록번호만 쓴다."""
     session = _get_sap_session()
     _sap_close_stray_popups(session)
     wnd = session.findById('wnd[0]')
@@ -6734,25 +6779,31 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
     # 쓰면 SAP이 저장 시점에 검증하며 정상 통과한다(사용자 실사용 확인).
 
     # ── 행 0: F4 팝업으로 협력사 조회 ──────────────────────────────────────────
+    # 🆕 [2026-11-13] 사업자등록번호로 못 찾으면(없음·오탈자 등) vendor_name이 있을 때
+    # 상호명(row4)으로 재시도 — 성공한 (row, 검색값)을 기억해뒀다가 아래 행1~N F4
+    # 폴백에서도 같은 기준으로 재사용한다(기준이 섞이면 행마다 다른 협력사가 들어간다).
     grid.currentCellRow = 0
     grid.currentCellColumn = 'LIFNR'
     grid.pressF4()
     time.sleep(0.6)
+    vendor_search_row, vendor_search_value = _SAP_VENDOR_SEARCH_ROW_STCD2, biz_reg_no
     try:
-        biz_field = session.findById(
-            "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
-            "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
-        )
-        biz_field.text = str(biz_reg_no)
-        biz_field.setFocus()
-        biz_field.caretPosition = len(str(biz_reg_no))
-        session.findById('wnd[1]').sendVKey(0)  # 검색 실행
-        time.sleep(0.6)
-        session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9  # 첫 결과 행 선택
-        session.findById('wnd[1]').sendVKey(2)  # 더블클릭과 동일 — 선택 확정
-        time.sleep(0.5)
+        _sap_vendor_f4_fill_and_select(session, _SAP_VENDOR_SEARCH_ROW_STCD2, biz_reg_no)
     except Exception as e:
-        raise RuntimeError(f'1번째 품목의 협력사(사업자등록번호 "{biz_reg_no}") 검색 중 오류가 발생했습니다: {e} — 그 사업자등록번호로 등록된 협력사가 SAP에 없을 수 있습니다.')
+        core_name = _sap_vendor_search_core_name(vendor_name)
+        if not core_name:
+            raise RuntimeError(f'1번째 품목의 협력사(사업자등록번호 "{biz_reg_no}") 검색 중 오류가 발생했습니다: {e} — 그 사업자등록번호로 등록된 협력사가 SAP에 없을 수 있습니다.')
+        _sap_close_stray_popups(session)
+        grid.currentCellRow = 0
+        grid.currentCellColumn = 'LIFNR'
+        grid.pressF4()
+        time.sleep(0.6)
+        name_query = f'*{core_name}*'
+        try:
+            _sap_vendor_f4_fill_and_select(session, _SAP_VENDOR_SEARCH_ROW_NAME, name_query)
+            vendor_search_row, vendor_search_value = _SAP_VENDOR_SEARCH_ROW_NAME, name_query
+        except Exception as e2:
+            raise RuntimeError(f'1번째 품목의 협력사를 사업자등록번호("{biz_reg_no}")와 상호명("{name_query}") 둘 다로 찾지 못했습니다: {e2} — SAP에 등록된 협력사 정보를 직접 확인해주세요.')
 
     # ── 행 0: F4 팝업으로 세금코드 선택 ──────────────────────────────────────
     grid.currentCellRow = 0
@@ -6803,18 +6854,10 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
                 grid.pressF4()
                 time.sleep(0.6)
                 try:
-                    biz_field = session.findById(
-                        "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
-                        "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
-                    )
-                    biz_field.text = str(biz_reg_no)
-                    biz_field.setFocus()
-                    biz_field.caretPosition = len(str(biz_reg_no))
-                    session.findById('wnd[1]').sendVKey(0)
-                    time.sleep(0.6)
-                    session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9
-                    session.findById('wnd[1]').sendVKey(2)
-                    time.sleep(0.5)
+                    # 🆕 [2026-11-13] row0에서 실제로 먹힌 기준(사업자등록번호 또는 상호명)을
+                    # 그대로 재사용 — biz_reg_no를 그냥 다시 쓰면, row0이 상호명으로 찾은
+                    # 경우 여기서만 다른(존재하지 않는) 협력사를 찾게 된다.
+                    _sap_vendor_f4_fill_and_select(session, vendor_search_row, vendor_search_value)
                 except Exception as e2:
                     raise RuntimeError(f'{idx + 1}번째 품목의 협력사 검색 중 오류가 발생했습니다: {e2}')
         if mwskz_filled:
@@ -8839,8 +8882,9 @@ def main():
             items_json = sys.argv[4] if len(sys.argv) > 4 else '[]'
             plant = sys.argv[5] if len(sys.argv) > 5 else '1000'
             currency = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else 'KRW'
+            vendor_name_arg = sys.argv[7] if len(sys.argv) > 7 and sys.argv[7].strip() else None
             items = json.loads(items_json)
-            result = prepare_po_from_excel(excel_path, biz_reg_no, items, plant, currency)
+            result = prepare_po_from_excel(excel_path, biz_reg_no, items, plant, currency, vendor_name_arg)
         elif action == 'simulate_indat_copy':
             row_count = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 2
             result = simulate_indat_copy(row_count)

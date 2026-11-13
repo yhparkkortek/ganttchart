@@ -6762,11 +6762,14 @@ def po_sap_prepare():
     items = data.get('items') or []
     plant = (data.get('plant') or '1000').strip()
     currency = (data.get('currency') or 'KRW').strip() or 'KRW'
+    # 🆕 [2026-11-13, 사용자 제보] 사업자등록번호로 협력사를 못 찾으면 상호명으로도 검색 —
+    # PDF에서 AI가 뽑은 공급자 상호(있으면), 없으면 재시도를 안 한다(기존과 동일 동작).
+    vendor_name = (data.get('vendorName') or '').strip()
     if not excel_path or not biz_reg_no or not items:
         return jsonify({'ok': False, 'error': 'excelPath/bizRegNo/items가 모두 필요합니다.'}), 400
     timeout = min(300, 40 + 10 * len(items))  # 20품목=240초(4분) — 이전 120초 캡이 20품목에서 초과됨
     data_out, status = _run_sap_bridge(
-        ['prepare_po_from_excel', excel_path, biz_reg_no, json.dumps(items, ensure_ascii=False), plant, currency],
+        ['prepare_po_from_excel', excel_path, biz_reg_no, json.dumps(items, ensure_ascii=False), plant, currency, vendor_name],
         timeout, 'SAP 구매오더 준비')
     return jsonify(data_out), status
 
