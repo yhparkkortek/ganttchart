@@ -4308,8 +4308,10 @@
                        //    도로 왼쪽 끝까지 당긴다(번호는 첫 줄에만 있으니).
                        + '<td>' + (notes.length ? '<div class="doc-noprint" style="font-size:10.5px; color:#495057; text-align:left;'
                          + ' margin-bottom:4px;">'
+                         // 📐 [2026-11-13, 사용자 요청] "한칸만 왼쪽으로 이동하면 좋을것 같음" — 들여쓰기
+                         //    1.4em 은 너무 멀었다. 1.1em 으로 한 칸만큼 당김.
                          + notes.map(function (n, ni) {
-                             return '<div style="padding-left:1.4em; text-indent:-1.4em; white-space:pre-line;">'
+                             return '<div style="padding-left:1.1em; text-indent:-1.1em; white-space:pre-line;">'
                                  + (ni + 1) + '. ' + _esc(n.text) + '</div>';
                            }).join('') + '</div>' : '')
                        // ⚠️ [2026-11-13, 사용자 요청] 비고도 기재내용과 같은 이유로 textarea — 한 줄
