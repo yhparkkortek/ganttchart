@@ -2894,19 +2894,26 @@
                         var fc = it.fieldsCustom || [];
                         h += '<tr><td colspan="6" class="doc-noprint" style="background:#f8fbfb; padding:8px 10px;">'
                            + '<table style="width:auto; border:none; border-collapse:collapse;">'
+                           // ⚠️ [2026-11-13, 사용자 신고 "엔터 쳐도 줄바꿈 안 됨·왼쪽 정렬 안 됨"] 한 줄
+                           //    `<input>`은 애초에 줄바꿈을 못 받는다(Enter 가 아무 일도 안 함) — 길게
+                           //    쓰는 칸(Product Des. 등)은 `<textarea>` 로 바꿔 Enter 로 줄을 나눌 수
+                           //    있게 하고 `text-align:left` 를 명시한다.
                            + LABEL_FIELD_CATALOG.map(function (f) {
-                               return '<tr><td style="border:none; padding:2px 8px 2px 0; font-size:11.5px; white-space:nowrap; font-weight:bold;">'
+                               return '<tr><td style="border:none; padding:2px 8px 2px 0; font-size:11.5px; white-space:nowrap; font-weight:bold; vertical-align:top;">'
                                    + _esc(f.label) + '</td><td style="border:none; padding:2px 0;">'
-                                   + '<input type="text" class="doc-in" data-doc-lfield="' + i + '|' + f.key + '" value="' + _esc(fx[f.key] || '')
-                                   + '" style="font-size:11.5px; width:280px;"></td></tr>';
+                                   + '<textarea class="doc-in" data-doc-lfield="' + i + '|' + f.key + '" rows="2"'
+                                   + ' style="font-size:11.5px; width:280px; text-align:left; resize:vertical; font-family:inherit;">'
+                                   + _esc(fx[f.key] || '') + '</textarea></td></tr>';
                            }).join('')
                            + fc.map(function (c, ci) {
-                               return '<tr><td style="border:none; padding:2px 8px 2px 0;">'
+                               return '<tr><td style="border:none; padding:2px 8px 2px 0; vertical-align:top;">'
                                    + '<input type="text" class="doc-in" data-doc-lfieldcl="' + i + '|' + ci + '" value="' + _esc(c.label || '')
-                                   + '" placeholder="' + _esc(_t('항목명', 'Field name')) + '" style="font-size:11.5px; width:120px; font-weight:bold;"></td>'
+                                   + '" placeholder="' + _esc(_t('항목명', 'Field name')) + '"'
+                                   + ' style="font-size:11.5px; width:120px; font-weight:bold; text-align:left;"></td>'
                                    + '<td style="border:none; padding:2px 0;">'
-                                   + '<input type="text" class="doc-in" data-doc-lfieldc="' + i + '|' + ci + '" value="' + _esc(c.value || '')
-                                   + '" style="font-size:11.5px; width:260px; display:inline-block;">'
+                                   + '<textarea class="doc-in" data-doc-lfieldc="' + i + '|' + ci + '" rows="2"'
+                                   + ' style="font-size:11.5px; width:260px; text-align:left; resize:vertical; font-family:inherit; display:inline-block; vertical-align:top;">'
+                                   + _esc(c.value || '') + '</textarea>'
                                    + ' <a href="#" onclick="window._docLabelFieldDelCustom(\'' + _esc(form.id) + '\',' + i + ',' + ci
                                    + ');return false;" style="color:#b1432f;">✕</a></td></tr>';
                            }).join('')
