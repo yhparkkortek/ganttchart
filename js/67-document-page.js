@@ -1481,7 +1481,9 @@
         var startX, startW, fontPx, moved = false;
         var onMove = function (ev) {
             moved = true;
-            var w = Math.max(fontPx * 1.5, startW + (ev.clientX - startX));
+            // 📏 [2026-11-13, 사용자 요청 "크기를 더 줄여야 하는데 제한이 걸려있음"] 최소폭을
+            //    1.5em → 0.5em 으로 — 인증마크(DC·AC 등)를 실측 라벨만큼 작게도 줄일 수 있어야 한다.
+            var w = Math.max(fontPx * 0.5, startW + (ev.clientX - startX));
             wrap.style.width = w + 'px';
             var list = window._docLabelMarksCache[code] || [];
             if (list[idx]) list[idx].wem = Math.round((w / fontPx) * 100) / 100;
@@ -1513,8 +1515,11 @@
     var _docLabelMarkMarkersHtml = function (marks, draggable, code) {
         return (marks || []).map(function (m, mi) {
             var cat = CERT_MARK_CATALOG.filter(function (c) { return c.key === m.key; })[0] || { key: m.key, label: m.key };
+            // 🔝 [2026-11-13, 사용자 요청 "특수 문자는 항상 맨 위로 올라와야"] 인증마크(UL·CE·FCC·
+            //    DC·AC)는 글자상자(z-index:3)·박스(0)·QR·바코드(1)보다 **항상 위**에 있어야 다른
+            //    표시에 가려지지 않는다 — 4 로 전부보다 높게.
             var wrapStyle = 'position:absolute; left:' + (m.x * 100) + '%; top:' + (m.y * 100) + '%; transform:translate(-50%,-50%);'
-                + ' z-index:1;' + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;');
+                + ' z-index:4;' + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;');
             var inner;
             if (cat.noImage) {
                 inner = '<span style="display:inline-block; border:0.12em solid #e03131; border-radius:0.2em; padding:0.1em 0.4em;'
@@ -1683,6 +1688,10 @@
         };
         wrap.onmousedown = function (ev) {
             ev.preventDefault(); ev.stopPropagation();
+            // 🔤 [2026-11-13 3차, 사용자 요청] "하단 박스 말고 그림 박스 클릭해도 변경 가능하게" —
+            //    도안 위 마커(그림 박스)를 눌러도 글자크기 조정 대상이 되도록, 드래그 시작과
+            //    동시에 이 표시를 "지금 조절 대상"으로 기억한다(실제로 끌지 않고 짧게 눌러도 된다).
+            window._docLabelActiveNote = { code: code, idx: idx };
             moved = false;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
@@ -1764,8 +1773,10 @@
                 // 🔵 [2026-11-13 5차, 사용자 신고 "파란색 동그라미 번호로 기준 잡고 통일해줘"] —
                 //    `data-note-circle` 로 표시해 두면 `_docLabelNotesApplyFont` 가 이 칸의
                 //    font-size 를 (배율 없는) 고정 기준으로 직접 덮어써 라벨마다 달라지지 않는다.
-                + '<span data-note-circle style="width:1.64em; height:1.64em; min-width:1.64em; border-radius:50%; background:#e03131;'
-                + ' color:#fff; font-weight:bold; font-size:0.88em; display:flex; align-items:center; justify-content:center;'
+                // 🔵🔵 [2026-11-13 6차, 사용자 요청] "지름 1.2 적용해줘" — 1.64em → 1.2em(같은 비율로
+                //    안쪽 숫자도 0.88em → 0.64em).
+                + '<span data-note-circle style="width:1.2em; height:1.2em; min-width:1.2em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; font-size:0.64em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
         }).join('');
@@ -1774,13 +1785,17 @@
     //    이전엔 코드(라벨) 하나에 배율 하나라 글자 전부가 같이 커졌다. 이제 배율을 **그 표시
     //    객체 자신**(`note.fontScale`)에 저장 — "마지막으로 커서를 둔 입력칸"(특수문자 넣기와
     //    같은 `window._docLabelActiveTextarea`)이 곧 "지금 조절 대상"이다.
+    // 🔤 [2026-11-13 3차, 사용자 신고 "+/- 한번 누르면 선택이 자동으로 풀리는데"] 이전엔 매번
+    //    `window._docLabelActiveTextarea`(DOM 엘리먼트 참조)에서 다시 idx 를 풀었는데, 이 함수가
+    //    끝에서 부르는 `_docLabelRefresh()` 가 그 textarea 자체를 새로 만들어 버려 **다음 클릭부터
+    //    참조가 끊겼다**. 이제 `window._docLabelActiveNote`(순수 `{code,idx}` 데이터, 재렌더에도
+    //    안 끊김)를 기준으로 삼아 +/- 를 연속으로 눌러도 선택이 유지된다.
     window._docLabelNoteFontAdjust = function (code, dir) {
-        var ta = window._docLabelActiveTextarea;
-        var row = ta && document.contains(ta) ? ta.closest('[data-note-row]') : null;
-        var idx = row ? Number(row.getAttribute('data-note-idx2')) : NaN;
+        var active = window._docLabelActiveNote;
+        var idx = (active && active.code === code) ? active.idx : NaN;
         var list = window._docLabelNotesCache[code] || [];
         if (isNaN(idx) || !list[idx]) {
-            _toast('⚠️ ' + _t('먼저 글자 크기를 바꿀 표시 입력칸을 한 번 눌러주세요.', 'Click into a note field first.'), 'error');
+            _toast('⚠️ ' + _t('먼저 글자 크기를 바꿀 표시(입력칸 또는 도안 위 그림 박스)를 한 번 눌러주세요.', 'Click a note field or its marker on the drawing first.'), 'error');
             return;
         }
         var cur = list[idx].fontScale || 1;
@@ -2244,7 +2259,18 @@
             //    막고, 여기서 **포커스 들어올 때**(focusin) 참조를 들고 있는다). `innerHTML`
             //    교체로 textarea 자체가 매번 새로 생겨도 이 리스너는 한 번만 달면 된다(위임).
             ov.addEventListener('focusin', function (ev) {
-                if (ev.target && ev.target.tagName === 'TEXTAREA') window._docLabelActiveTextarea = ev.target;
+                if (ev.target && ev.target.tagName === 'TEXTAREA') {
+                    window._docLabelActiveTextarea = ev.target;
+                    // 🔤 [2026-11-13 3차, 사용자 요청] "+/- 한번 누르면 선택이 자동으로 풀리는데" —
+                    //    `_docLabelActiveTextarea` 는 재렌더로 textarea 자체가 새로 생기면 끊어진다
+                    //    (DOM 참조라서). `{code, idx}` 순수 데이터로도 같이 기억해 두면 재렌더 뒤에도
+                    //    살아남아 +/- 를 연속으로 눌러도 선택이 안 풀린다.
+                    var row = ev.target.closest('[data-note-row]');
+                    var listEl = ev.target.closest('[data-note-list]');
+                    if (row && listEl) {
+                        window._docLabelActiveNote = { code: listEl.getAttribute('data-note-list-code'), idx: Number(row.getAttribute('data-note-idx2')) };
+                    }
+                }
             });
         }
         ov.style.display = 'flex';
