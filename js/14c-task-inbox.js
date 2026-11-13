@@ -736,13 +736,19 @@ window.renderTaskInbox = function() {
                     const _cand0 = _hasCand ? it.matchedProject.candidates[0] : null;
                     const _cand0Label = _cand0 ? (_cand0.model || _cand0.customer || _cand0.file_name || '') : '';
                     if (_hasCand) {
-                        return '<button onclick="window.inboxPlaceToCandidate(\'' + it.uid + '\')" title="' + escapeHtml((_ibEn ? 'Send to AI-analyzed project: ' : 'AI 분석 프로젝트로 전송: ') + _cand0Label) + '" onmouseover="this.style.background=\'#c9ecd3\'; this.style.borderColor=\'#7cc494\';" onmouseout="this.style.background=\'#e6f6ea\'; this.style.borderColor=\'#a8dab8\';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'AI Proj' : '분석 Proj 전송') + '</button>';
+                        return '<button onclick="window.inboxPlaceToCandidate(\'' + it.uid + '\')" title="' + escapeHtml((_ibEn ? 'Send to AI-analyzed project: ' : 'AI 분석 프로젝트로 전송: ') + _cand0Label) + '" onmouseover="this.style.background=\'#c9ecd3\'; this.style.borderColor=\'#7cc494\';" onmouseout="this.style.background=\'#e6f6ea\'; this.style.borderColor=\'#a8dab8\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'AI Proj' : '분석 Proj 전송') + '</button>';
                     } else {
-                        return '<button onclick="window.inboxPlaceToCurrent(\'' + it.uid + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'Current Proj' : '현재 Proj 전송') + '</button>';
+                        return '<button onclick="window.inboxPlaceToCurrent(\'' + it.uid + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'Current Proj' : '현재 Proj 전송') + '</button>';
                     }
                 })()}
-                <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
-                <button onclick="window.inboxDeleteWithFeedback('${it.uid}')" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
+                <!-- 🗑 [2026-11-13 요청] 사유 선택 팝업을 띄우던 휴지통 1개를 없애고, 같은 줄에
+                     원클릭 분류 아이콘 3개(오매칭/중복/불필요)를 바로 둔다 — 팝업 한 번을 더 거치지
+                     않고 클릭 한 번으로 학습 기록까지 끝난다(window.inboxQuickClassify, 기존
+                     inboxDeleteWithFeedback 모달의 doLearnAndRemove 로직을 그대로 옮긴 것). -->
+                <button onclick="window.inboxQuickClassify('${it.uid}', '오매칭')" title="${_ibEn ? 'False match — not this project' : '오매칭 — 이 프로젝트 업무가 아님'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fff3f3'; this.style.borderColor='#f5a5a5';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #f5a5a5; border-radius:6px; background:#fff3f3; color:#b10000; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">❌</button>
+                <button onclick="window.inboxQuickClassify('${it.uid}', '중복')" title="${_ibEn ? 'Duplicate — already registered' : '중복 — 이미 등록된 업무'}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#f0fff4'; this.style.borderColor='#a3d9b5';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a3d9b5; border-radius:6px; background:#f0fff4; color:#1a6b35; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">♻️</button>
+                <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Unnecessary / Other' : '불필요 / 기타'}" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ced4da';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; background:#f8f9fa; color:#555; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🚫</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -2405,15 +2411,15 @@ window.inboxCreateNewProjectFromPending = function(uid) {
     window._ibStartNewProjectFromMismatch(it);
 };
 
-// ─── 💡 [버그 수정 2026-09-07] 업무 보관함 카드의 🗑 버튼이 이유 없이 곧장 TaskInbox.remove()만
-//    호출해서 AI 학습(gantt_ai_learning_v1)에 전혀 기록되지 않고 있었음. 사용자 제보: "AI 업무
-//    보관함에서 보다가 지웠는데 [학습+삭제] 기능(Gantt 행 삭제 시 뜨는 사유 선택 팝업)없이
-//    삭제되는데?" — Gantt 행 삭제(_showAiDeleteFeedback)와 같은 취지로, 지우기 전에 사유
-//    (오매칭/중복/불필요/기타)를 물어 학습 로그에 남긴다. 아직 어느 프로젝트에도 배치 전이라
-//    globalData splice가 필요 없어(=Gantt 재배치 대상 드롭다운 불필요) _showAiDeleteFeedback을
-//    그대로 재사용하지 않고 더 단순한 전용 팝업으로 분리했다 — 재배치가 필요하면 이미 있는
+// ─── 💡 [버그 수정 2026-09-07, 2026-10-02 원클릭화, 2026-11-13 인라인화] 업무 보관함 카드의
+//    분류 삭제 — 사유(오매칭/중복/불필요)를 물어 학습 로그(gantt_ai_learning_v1)에 남긴 뒤
+//    지운다. 처음엔 🗑 버튼 → 팝업 → 사유 버튼 2단이었는데, 팝업 자체가 "한 번 더 거치는 클릭"
+//    이라 사용자 요청으로 **팝업을 없애고 카드 줄에 아이콘 3개를 바로 둔다**(❌오매칭/♻️중복/
+//    🚫불필요) — 그 아이콘을 누르면 바로 이 함수가 실행된다(모달 X). 아직 어느 프로젝트에도
+//    배치 전이라 globalData splice가 필요 없어(=Gantt 재배치 대상 드롭다운 불필요) Gantt 행
+//    삭제(_showAiDeleteFeedback)와는 분리된 채 유지 — 재배치가 필요하면 이미 있는
 //    [📤 다른 Proj 선택] 버튼(inboxOpenDistribute)을 쓰면 되므로 여기서 중복 구현하지 않음.
-window.inboxDeleteWithFeedback = function(uid) {
+window.inboxQuickClassify = function(uid, reason) {
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
     const _en = window._currentLang === 'en';
@@ -2421,71 +2427,32 @@ window.inboxDeleteWithFeedback = function(uid) {
     const taskName = t['업무명'] || (_en ? '(untitled)' : '(제목없음)');
     const mc = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
 
-    const existing = document.getElementById('inbox-delete-feedback-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'inbox-delete-feedback-modal';
-    // 💡 다른 확인용 팝업들과 동일하게 배경 조작 허용(pointer-events:none 오버레이 + 내부 박스만 all).
-    modal.style.cssText = 'position:fixed;inset:0;z-index:100010;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
-    // [2026-10-02] 원클릭 삭제 — 이유 버튼 클릭 즉시 학습+삭제. 라디오+확인 2단계 제거.
-    //   "불필요"+"기타" 통합(학습 신호가 동일) → 3개 버튼으로 축소.
-    modal.innerHTML =
-        '<div style="pointer-events:all;background:#fff;border-radius:14px;padding:22px 26px;min-width:320px;max-width:420px;' +
-        'box-shadow:0 10px 44px rgba(0,0,0,0.22);font-family:sans-serif;">' +
-          '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">🗑 ' + (_en ? 'Delete Inbox Item' : '업무 보관함 항목 삭제') + '</div>' +
-          '<div style="background:#f8f9fa;border-radius:7px;padding:8px 11px;margin:10px 0 14px;font-size:13px;font-weight:600;color:#333;">' + escapeHtml(taskName) + '</div>' +
-          '<div style="font-size:12px;color:#666;margin-bottom:10px;">' + (_en ? 'Why are you deleting? (tap to delete immediately)' : '삭제 이유를 선택하면 즉시 삭제됩니다') + '</div>' +
-          '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">' +
-            '<button id="ib-del-mismatch" style="text-align:left;padding:10px 14px;background:#fff3f3;color:#b10000;border:1px solid #f5a5a5;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">❌ ' + (_en ? 'False match — not this project' : '오매칭 — 이 프로젝트 업무가 아님') + '</button>' +
-            '<button id="ib-del-dup" style="text-align:left;padding:10px 14px;background:#f0fff4;color:#1a6b35;border:1px solid #a3d9b5;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">♻️ ' + (_en ? 'Duplicate — already registered' : '중복 — 이미 등록된 업무') + '</button>' +
-            '<button id="ib-del-irrelevant" style="text-align:left;padding:10px 14px;background:#f8f9fa;color:#555;border:1px solid #ced4da;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🚫 ' + (_en ? 'Unnecessary / Other' : '불필요 / 기타') + '</button>' +
-          '</div>' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-            '<a id="ib-del-plain-btn" href="javascript:void(0)" style="font-size:11px;color:#aaa;text-decoration:underline;cursor:pointer;">' + (_en ? 'Delete without learning' : '이유 없이 삭제') + '</a>' +
-            '<button id="ib-del-cancel-btn" style="padding:7px 18px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:13px;cursor:pointer;">' + (_en ? 'Cancel' : '취소') + '</button>' +
-          '</div>' +
-        '</div>';
-    document.body.appendChild(modal);
-
-    function closeModal() { modal.remove(); }
-    function doRemove() {
-        window._ibCollapsedUids && window._ibCollapsedUids.delete(uid);
-        window.TaskInbox.remove(uid);
-        window.renderTaskInbox();
-        // ⭐ [2026-09-23] 단건 삭제도 3초 대기 없이 바로 드라이브까지 반영
-        window.TaskInbox.syncNow().then(function(r) {
-            if (r === 'failed' && window.showToast) {
-                window.showToast(window._t(
-                    '⚠️ 드라이브 반영에 실패했습니다(로컬에는 삭제됨) — 연결 확인 후 다시 시도해주세요.',
-                    '⚠️ Failed to sync the deletion to Drive (deleted locally) — check your connection and try again.'), 'error', 6000);
-            }
+    const projectKey = (mc && mc.drive_file_id) || window.currentDriveFileId || window.currentDriveFileName || '__unclassified__';
+    if (window._writeLearningEntry) {
+        window._writeLearningEntry(projectKey, {
+            type: reason === '오매칭' ? 'negative_match' :
+                  reason === '중복'   ? 'duplicate' : 'irrelevant',
+            reason: reason,
+            taskName: taskName,
+            confidence: (mc && mc.confidence) || t['매칭신뢰도'] || '',
+            matchedProjectId: (mc && mc.drive_file_id) || '',
+            matchedProjectName: (mc && (mc.file_name || mc.model || mc.customer)) || '',
+            matchBasis: (mc && (mc.model || mc.customer)) || '',
+            matchKeywords: (mc && mc.keywords) ? mc.keywords.slice(0, 8) : [],
+            sourceSnippet: (it.mailRaw && it.mailRaw.body2000 ? it.mailRaw.body2000.slice(0, 300) : '')
         });
     }
-    function doLearnAndRemove(reason) {
-        const projectKey = (mc && mc.drive_file_id) || window.currentDriveFileId || window.currentDriveFileName || '__unclassified__';
-        if (window._writeLearningEntry) {
-            window._writeLearningEntry(projectKey, {
-                type: reason === '오매칭' ? 'negative_match' :
-                      reason === '중복'   ? 'duplicate' : 'irrelevant',
-                reason: reason,
-                taskName: taskName,
-                confidence: (mc && mc.confidence) || t['매칭신뢰도'] || '',
-                matchedProjectId: (mc && mc.drive_file_id) || '',
-                matchedProjectName: (mc && (mc.file_name || mc.model || mc.customer)) || '',
-                matchBasis: (mc && (mc.model || mc.customer)) || '',
-                matchKeywords: (mc && mc.keywords) ? mc.keywords.slice(0, 8) : [],
-                sourceSnippet: (it.mailRaw && it.mailRaw.body2000 ? it.mailRaw.body2000.slice(0, 300) : '')
-            });
+    window._ibCollapsedUids && window._ibCollapsedUids.delete(uid);
+    window.TaskInbox.remove(uid);
+    window.renderTaskInbox();
+    if (window.showToast) window.showToast(_en ? '📚 Learning recorded' : '📚 학습 데이터가 기록됐습니다', 'info');
+    // ⭐ [2026-09-23] 단건 삭제도 3초 대기 없이 바로 드라이브까지 반영
+    window.TaskInbox.syncNow().then(function(r) {
+        if (r === 'failed' && window.showToast) {
+            window.showToast(window._t(
+                '⚠️ 드라이브 반영에 실패했습니다(로컬에는 삭제됨) — 연결 확인 후 다시 시도해주세요.',
+                '⚠️ Failed to sync the deletion to Drive (deleted locally) — check your connection and try again.'), 'error', 6000);
         }
-        closeModal();
-        doRemove();
-        if (window.showToast) window.showToast(_en ? '📚 Learning recorded' : '📚 학습 데이터가 기록됐습니다', 'info');
-    }
-    document.getElementById('ib-del-cancel-btn').onclick = closeModal;
-    document.getElementById('ib-del-plain-btn').onclick = function() { closeModal(); doRemove(); };
-    document.getElementById('ib-del-mismatch').onclick   = function() { doLearnAndRemove('오매칭'); };
-    document.getElementById('ib-del-dup').onclick        = function() { doLearnAndRemove('중복'); };
-    document.getElementById('ib-del-irrelevant').onclick = function() { doLearnAndRemove('불필요'); };
+    });
 };
 
