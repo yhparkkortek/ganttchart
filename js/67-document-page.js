@@ -646,6 +646,12 @@
     window._docLabelNotesCache = window._docLabelNotesCache || {};     // code -> [{x,y,text}] (0~1 비율)
     window._docLabelSizeCache = window._docLabelSizeCache || {};       // code -> {w,h}(px) | null(기본 크기)
     window._docLabelNotePlacing = window._docLabelNotePlacing || null; // 지금 "표시 추가" 대기 중인 code
+    // 🔤 [2026-11-13, 사용자 요청] "번호만 찍혀 있고 내용은 아래 목록에만" → 도안 위에 **실제 표시
+    //    내용**을 바로 보여준다 + 글자 크기를 사람이 조절 + **이미지 크기와 연동**(도안을 늘리면
+    //    글자도 같이 커진다). 절대 px 를 저장하면 이미지를 늘릴 때마다 다시 맞춰야 하므로,
+    //    저장은 **배율**(`fontScale`, 기본 1)만 두고 실제 px 는 "이미지 폭 × 비율 × 배율"로
+    //    매번 계산한다(이미지 폭 하나만 바뀌면 전부 같이 바뀌게).
+    window._docLabelNoteFontScale = window._docLabelNoteFontScale || {};   // code -> number(배율) | undefined(기본 1)
     // 🖼️🔍 [2026-11-12 11차] 표시·자르기·크기조절은 전부 이 **별도 모달**에서만 한다 — 메인
     //    표 안에 큰 이미지를 직접 넣었더니 열(규격/코드/부착위치) 폭을 다 깨뜨렸다(사용자 실측
     //    스크린샷: "이미지는 커졌는데 도표는 조정되지 않음"). 표 쪽은 실제 문서(위 스크린샷)처럼
@@ -658,7 +664,7 @@
     window._docLabelNotesLoad = async function (code) {
         if (window._docLabelNotesCache[code] !== undefined) return;    // 이미 불렀거나 불러오는 중
         window._docLabelNotesCache[code] = null;
-        var notes = [], size = null, thumbSize = null;
+        var notes = [], size = null, thumbSize = null, fontScale = null;
         try {
             var r = await fetch(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
                 + '&name=' + encodeURIComponent(code + '.notes.json'));
@@ -667,6 +673,7 @@
                 notes = (parsed && parsed.notes) || [];
                 size = (parsed && parsed.size) || null;
                 thumbSize = (parsed && parsed.thumbSize) || null;
+                fontScale = (parsed && parsed.fontScale) || null;
             }
         } catch (e) { /* 아직 없으면(404) 빈 값 — 네트워크 문제도 여기선 그냥 빈 채로 둔다 */ }
         // ⚠️ [2026-11-12 11차, 실측] 이 fetch 가 느리게 도는 동안 사람이 먼저 표시를 찍거나
@@ -675,13 +682,15 @@
         if (window._docLabelNotesCache[code] === null) window._docLabelNotesCache[code] = notes;
         if (window._docLabelSizeCache[code] === undefined) window._docLabelSizeCache[code] = size;
         if (window._docLabelThumbSizeCache[code] === undefined) window._docLabelThumbSizeCache[code] = thumbSize;
+        if (window._docLabelNoteFontScale[code] === undefined) window._docLabelNoteFontScale[code] = fontScale || 1;
         _docLabelRefresh();
     };
     window._docLabelNotesSave = async function (code) {
         var notes = window._docLabelNotesCache[code] || [];
         var size = window._docLabelSizeCache[code] || null;
         var thumbSize = window._docLabelThumbSizeCache[code] || null;
-        var blob = new Blob([JSON.stringify({ notes: notes, size: size, thumbSize: thumbSize })], { type: 'application/json' });
+        var fontScale = window._docLabelNoteFontScale[code] || 1;
+        var blob = new Blob([JSON.stringify({ notes: notes, size: size, thumbSize: thumbSize, fontScale: fontScale })], { type: 'application/json' });
         var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, code + '.notes.json', blob, { forceOverwrite: true });
         if (!res.ok) _toast('⚠️ ' + _t('표시를 저장하지 못했습니다: ', 'Could not save the note: ') + (res.error || ''), 'error');
         return res.ok;
@@ -710,6 +719,30 @@
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
+    // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — 사람이 조절(＋／－) + 이미지 크기와 연동.
+    //    배율만 저장하고(`_docLabelNoteFontScale`) 실제 px는 렌더마다 "이미지 폭 × 비율 × 배율"
+    //    로 계산 — `_docLabelNotesApplyFont`(아래) 한 곳에서만 계산해 모달·드래그 중 호출이 같은 값을 쓴다.
+    window._docLabelNoteFontAdjust = function (code, dir) {
+        var cur = window._docLabelNoteFontScale[code] || 1;
+        var next = Math.max(0.5, Math.min(3, Math.round((cur + dir * 0.15) * 100) / 100));
+        window._docLabelNoteFontScale[code] = next;
+        _docLabelRefresh();
+        window._docLabelNotesSave(code);
+    };
+    // px = 이미지 표시폭 × 3.2% × 배율 — 3.2%는 기본 배율(1)에서 보기 좋은 값으로 고른 상수.
+    window._docLabelNoteFontPx = function (imgWidthPx, code) {
+        var scale = (window._docLabelNoteFontScale && window._docLabelNoteFontScale[code]) || 1;
+        return Math.max(9, Math.round((imgWidthPx || 0) * 0.032 * scale));
+    };
+    // wrap(표시 마커들을 담은 상위 엘리먼트)의 각 `[data-note-wrap]`에 계산된 px를 적는다 —
+    // 하나의 font-size 로 원 번호·글자 상자가 **같은 em 기준**이라 함께 커진다(마커 HTML 쪽 em 참고).
+    window._docLabelNotesApplyFont = function (bodyEl, img, code, widthPxOverride) {
+        if (!bodyEl || !img) return;
+        var w = widthPxOverride || img.getBoundingClientRect().width;
+        if (!w) return;
+        var px = window._docLabelNoteFontPx(w, code);
+        [].slice.call(bodyEl.querySelectorAll('[data-note-wrap]')).forEach(function (el) { el.style.fontSize = px + 'px'; });
+    };
     // 🔧 [2026-11-12 11차, 사용자 요청] 크기 조정 — 모달 안 이미지 우하단 손잡이를 끌면 크기를
     //    바꾼다. 표시(notes)와 **같은 사이드카**(`<코드>.notes.json`)에 `size:{w,h}` 로 같이
     //    저장한다(공용 자료라 다음에 열 때도, 다른 프로젝트에서도 그 크기 그대로 보인다).
@@ -717,7 +750,9 @@
     //    같이 쓴다) — 켜져 있으면 가로로 끈 만큼만 보고 세로는 **끌기 시작 시점의 가로세로 비율**
     //    로 따라간다(세로로도 끌 수는 있지만 무시 — 가로 하나만 보면 된다). 꺼져 있으면 예전처럼
     //    가로·세로를 각각 끈 대로.
-    window._docLabelSizeWire = function (handle, img, code) {
+    // ⚠️ `onResize(wPx)` 는 끄는 **동안** 실시간으로 불린다(선택) — 표시 글자 크기가 이미지 폭을
+    //    따라가는 걸 눈으로 바로 보려면, 다 끌고 놓을 때까지 기다리지 말고 끄는 중에도 갱신해야 한다.
+    window._docLabelSizeWire = function (handle, img, code, onResize) {
         var startX, startY, startW, startH, ratio, moved = false;
         var onMove = function (ev) {
             moved = true;
@@ -727,6 +762,7 @@
             img.style.width = w + 'px'; img.style.height = h + 'px';
             img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
             window._docLabelSizeCache[code] = { w: Math.round(w), h: Math.round(h) };
+            if (onResize) onResize(w);
         };
         var onUp = function () {
             document.removeEventListener('mousemove', onMove);
@@ -1023,12 +1059,20 @@
             + '<img id="doclabelart-img" data-crop-img="' + _esc(code) + '" draggable="false" ondragstart="return false;"'
                 + ' src="' + _esc(_docLabelArtSrc(code, artFile))
                 + '" style="' + imgStyle + '" onclick="window._docLabelImgClick(event,\'' + _esc(code) + '\')">'
+            // 🔤 [2026-11-13, 사용자 요청] 번호 원 + **실제 표시내용**을 도안 위에 같이 보여준다
+            //    (전엔 원만 찍고 내용은 아래 목록·말풍선뿐이었다). `data-note-wrap` 하나에 font-size
+            //    를 px 로 적어 두면(`_docLabelNotesApplyFont`) 원·글자상자 둘 다 em 기준이라 같이 커진다.
             + notes.map(function (n, ni) {
-                return '<span title="' + _esc(n.text) + '" style="position:absolute;'
+                return '<span data-note-wrap title="' + _esc(n.text) + '" style="position:absolute;'
                     + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
-                    + ' width:22px; height:22px; border-radius:50%; background:#e03131; color:#fff;'
-                    + ' font-size:12px; font-weight:bold; display:flex; align-items:center; justify-content:center;'
-                    + ' box-shadow:0 0 0 2px #fff;">' + (ni + 1) + '</span>';
+                    + ' display:flex; align-items:center; gap:0.3em; pointer-events:none; z-index:1;">'
+                    + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
+                    + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
+                    + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
+                    + '<span style="background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
+                    + ' padding:0.15em 0.45em; border-radius:0.3em; border:1px solid #e03131;'
+                    + ' box-shadow:0 1px 3px rgba(0,0,0,.18); max-width:14em; white-space:normal;'
+                    + ' word-break:keep-all; line-height:1.25;">' + _esc(n.text) + '</span></span>';
             }).join('')
             + (cropSel ? '<div style="position:absolute; pointer-events:none;'
                 + ' left:' + (cropSel.x0 * 100) + '%; top:' + (cropSel.y0 * 100) + '%;'
@@ -1062,7 +1106,13 @@
                  + ' · <label style="cursor:pointer; font-weight:normal; color:#495057;"><input type="checkbox" '
                    + (window._docLabelAspectLock ? 'checked' : '')
                    + ' onchange="window._docLabelAspectLock=this.checked;" style="vertical-align:middle; margin-right:3px;">'
-                   + _esc(_t('비율 고정', 'Lock ratio')) + '</label>')
+                   + _esc(_t('비율 고정', 'Lock ratio')) + '</label>'
+                 // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — ＋／－로 조절, 이미지 크기와 연동(px 아님)
+                 + (notes.length ? ' · <span style="color:#495057;">' + _esc(_t('표시 글자크기', 'Note text size')) + ': '
+                   + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',-1);return false;"'
+                     + ' title="' + _esc(_t('작게', 'smaller')) + '" style="padding:0 4px; font-weight:bold;">－</a>'
+                   + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',1);return false;"'
+                     + ' title="' + _esc(_t('크게', 'bigger')) + '" style="padding:0 4px; font-weight:bold;">＋</a></span>' : ''))
             + '</div>'
             + (notes.length ? '<div style="text-align:left; font-size:11.5px; color:#495057; margin-top:8px;'
                 + ' border-top:1px solid #e9ecef; padding-top:6px;">'
@@ -1076,8 +1126,18 @@
         // 렌더 직후 한 번만 — `innerHTML` 교체로 옛 리스너는 이미 사라졌다(따로 뗄 필요 없음).
         var img = document.getElementById('doclabelart-img');
         var handle = bodyEl && bodyEl.querySelector('[data-resize-handle]');
-        if (img && handle) window._docLabelSizeWire(handle, img, code);
+        if (img && handle) {
+            // 🔤 [2026-11-13] 끄는 동안에도 실시간으로 글자 크기를 같이 키운다(놓을 때까지 기다리지 않음)
+            window._docLabelSizeWire(handle, img, code, function (wPx) {
+                window._docLabelNotesApplyFont(bodyEl, img, code, wPx);
+            });
+        }
         if (img && cropping) window._docLabelCropWire(img);
+        if (img && bodyEl) {
+            window._docLabelNotesApplyFont(bodyEl, img, code);
+            // 이미지가 아직 안 불러와졌으면(첫 진입) 로드 후 실제 폭으로 다시 맞춘다
+            if (!img.complete) img.addEventListener('load', function () { window._docLabelNotesApplyFont(bodyEl, img, code); }, { once: true });
+        }
     };
     // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
     //   — 그 폴더는 ZDMSR004 다운로드 결과라 이름 규칙이 제각각이다(`<code>.xlsx` ·
