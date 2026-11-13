@@ -1539,6 +1539,33 @@
         _markDirty();
         window._docRender();
     };
+    // 🗑️ [2026-11-13, 사용자 요청] "상제(삭제)도 가능하게 해줘 직접등록 후" — 여러 개 등록된
+    //    것 중 하나를 완전히 지운다(공용 자료라 같은 코드를 쓰는 다른 줄·다른 프로젝트에서도
+    //    사라짐 — 확인창에서 밝힌다). 이 줄·다른 줄의 `it.artFile` 이 지운 파일을 가리키고
+    //    있어도 **따로 손댈 필요 없다** — 표/모달 둘 다 artFile 이 그룹에 실제로 있는지
+    //    매번 확인하고 없으면 기본값으로 저절로 돌아간다(이미 있는 안전장치 재사용).
+    window._docLabelArtDelete = async function (code, fname) {
+        if (!confirm(_t('이 등록된 도안을 완전히 지웁니다 — 같은 코드를 쓰는 다른 줄·다른 프로젝트에서도 사라집니다.',
+                         'This deletes the registered artwork for good — it disappears for every row/project sharing this code.'))) return;
+        if (!window._dsDelete) { _toast('⚠️ ' + _t('삭제 기능을 불러오지 못했습니다.', 'Delete unavailable.'), 'error'); return; }
+        // ⚠️ `_dsDelete`(js/48)는 `_dgUploadBlob` 과 달리 실패를 `{ok:false}` 로 돌려주지 않고
+        //    **예외를 던진다**(`_api` 의 계약) — 여기서 잡지 않으면 토스트 없이 조용히 실패한다.
+        try {
+            await window._dsDelete(_LABEL_ART_FOLDER, fname);
+        } catch (e) {
+            _toast('⚠️ ' + _t('지우지 못했습니다: ', 'Could not delete: ') + (e && e.message || e), 'error'); return;
+        }
+        var group = (window._docLabelArtGroups && window._docLabelArtGroups[code]) || [];
+        group = group.filter(function (g) { return g.name !== fname; });
+        window._docLabelArtGroups[code] = group;
+        if (window._docLabelArtIndex) {
+            if (group.length) window._docLabelArtIndex[code] = group[0].name;
+            else delete window._docLabelArtIndex[code];
+        }
+        _docLabelBumpVer(code);
+        _toast('✅ ' + _t('지웠습니다: ' + fname, 'Deleted: ' + fname), 'success');
+        window._docRender();
+    };
     // 🗂️ [2026-11-13, 사용자 요청] "직접 만들어서 올리면 코드 매칭해서 올리고, 다른 사용자·다른
     //    프로젝트에서 그 코드로 조회하면 등록된 여러개 중 선택해서 쓸 수 있게" — 더 이상 같은
     //    코드의 기존 파일을 덮어쓰지 않는다. `<코드>__<uid>.<ext>` 로 나란히 추가 등록한다
@@ -3394,10 +3421,18 @@
                             + '</a>' + (artOpen ? '<div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:6px;">'
                                 + artGroup.map(function (g) {
                                     var sel = g.name === artFile;
-                                    return '<img src="' + _esc(_docLabelArtSrc(itCode, g.name)) + '" title="' + _esc(g.name)
+                                    // 🗑️ [2026-11-13, 사용자 요청] "상제(삭제)도 가능하게 해줘 직접등록 후" —
+                                    //    썸네일마다 ✕ 를 올려 완전히 지울 수 있게(공용 자료 — 확인창에서 경고).
+                                    return '<div style="position:relative; display:inline-block;">'
+                                        + '<img src="' + _esc(_docLabelArtSrc(itCode, g.name)) + '" title="' + _esc(g.name)
                                         + '" onclick="window._docLabelArtPick(\'' + _esc(form.id) + '\',' + i + ',\'' + _esc(g.name).replace(/'/g, "\\'")
-                                        + '\');return false;" style="max-width:70px; max-height:60px; border-radius:3px; cursor:pointer;'
-                                        + (sel ? ' border:2px solid #1971c2;' : ' border:1px solid #dee2e6;') + '">';
+                                        + '\');return false;" style="max-width:70px; max-height:60px; border-radius:3px; cursor:pointer; display:block;'
+                                        + (sel ? ' border:2px solid #1971c2;' : ' border:1px solid #dee2e6;') + '">'
+                                        + '<a href="#" title="' + _esc(_t('이 도안 삭제', 'Delete this artwork')) + '"'
+                                        + ' onclick="window._docLabelArtDelete(\'' + _esc(itCode) + '\',\'' + _esc(g.name).replace(/'/g, "\\'")
+                                        + '\');return false;" style="position:absolute; right:-0.4em; top:-0.4em; width:1.1em; height:1.1em;'
+                                        + ' line-height:1.1em; text-align:center; background:#b1432f; color:#fff; border-radius:50%;'
+                                        + ' font-size:11px; font-weight:bold; text-decoration:none; box-shadow:0 0 0 1px #fff;">✕</a></div>';
                                 }).join('') + '</div>' : '') + '</div>';
                     }
                     if (window._docLabelArtIndex === null) {
