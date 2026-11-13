@@ -2468,7 +2468,7 @@
                 var litems = _docData(form.id).labelItems = _docData(form.id).labelItems || [];
                 if (window._docLabelArtIndex === null && !window._docLabelArtLoading
                     && (Date.now() - window._docLabelArtLoadFailedAt) > 5000) window._docLabelArtLoad();
-                h += '<tr><th class="doc-noprint" style="width:150px;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
+                h += '<tr><th class="doc-noprint" style="width:450px;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
                    + '<th style="width:110px;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
                    + '<th style="width:190px;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
                    + '<th style="width:100px;">' + _esc(_t('부착위치', 'Position')) + '</th>'
@@ -2497,14 +2497,14 @@
                         var notes = window._docLabelNotesCache[itCode] || [];
                         artCell = '<img src="' + _esc(BACKEND + '/doc/get?folder='
                                 + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile))
-                                + '" style="max-width:170px; max-height:150px; border:1px solid #dee2e6;'
+                                + '" style="max-width:510px; max-height:450px; border:1px solid #dee2e6;'
                                 + ' border-radius:3px; display:block; margin:0 auto; cursor:pointer;"'
                                 + ' onclick="window._docLabelArtModalOpen(\'' + _esc(form.id) + '\',' + i + ');return false;">'
                                 + '<div style="margin-top:3px;"><a href="#" onclick="window._docLabelArtModalOpen(\''
                                 + _esc(form.id) + '\',' + i + ');return false;" style="color:#1971c2; font-weight:bold; font-size:11px;">🔍 '
                                 + _esc(_t('크게 보기', 'View / edit')) + (notes.length ? ' (' + notes.length + ')' : '') + '</a></div>';
                     } else {
-                        artCell = '<div style="width:140px; height:110px; margin:0 auto; display:flex; align-items:center;'
+                        artCell = '<div style="width:420px; height:330px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
                             + ' color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>';
                     }
