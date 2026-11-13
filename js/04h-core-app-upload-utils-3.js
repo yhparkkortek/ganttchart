@@ -934,6 +934,42 @@
     window._ganttQaPoDraft = null;
     window._ganttQaPoRetryDraft = null; // [2026-09-28] 실패 문서 재처리용 임시 draft
 
+    // 🆕 [2026-11-13, 사용자 요청] "SAP 동작을 중간에 멈추는 기능" — 자동 처리 중 사람이 눈치채고
+    // 바로 세워야 할 때를 위한 비상정지. ⚠️ 이미 시작된 SAP COM 호출(한 번에 수십 초 걸릴 수
+    // 있는 동기 호출) 자체를 중간에 끊지는 못한다 — 다음 "안전한 틈"(엑셀 생성 후, SAP 입력
+    // 완료 후·저장 전, 다음 문서로 넘어가기 전)에서 멈춘다. 가장 중요한 틈은 **저장 직전**
+    // (`po-sap-confirm-save` 호출 전) — 거기서 멈추면 SAP 화면엔 입력까지 돼 있고 재무적으로
+    // 커밋되는 저장은 아직 안 일어난 상태라 안전하게 사람이 이어받을 수 있다.
+    window._ganttQaPoAbortRequested = false;
+    window._ganttQaPoRequestStop = function () {
+        window._ganttQaPoAbortRequested = true;
+        const btn = document.getElementById('po-stop-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.6'; btn.style.cursor = 'default';
+            btn.textContent = window._t('⏳ 다음 안전한 지점에서 멈춥니다...', '⏳ Stopping at the next safe point...');
+        }
+    };
+    window._ganttQaPoStopButtonHtml = function () {
+        return '<div style="margin-top:4px;">' +
+            '<button id="po-stop-btn" onclick="window._ganttQaPoRequestStop()" style="font-size:11px; padding:5px 12px; border:1px solid #e3a8a8; background:#fdeaea; color:#a83232; border-radius:6px; font-weight:bold; cursor:pointer;">' +
+                window._t('🛑 여기서 중지', '🛑 Stop here') +
+            '</button> <span style="font-size:10.5px; color:#888;">' +
+                window._t('— 저장(SAVE) 직전까지는 안전하게 멈춥니다. 이미 시작된 SAP 동작 1건은 끝까지 진행된 뒤 멈춥니다.', '— safely stops any time before SAVE. One SAP step already in progress will finish first.') +
+            '</span></div>';
+    };
+    // `e._poAborted`가 있는 예외만 "사람이 중지함"으로 구분 — 일반 SAP 오류와 섞이면 안 됨
+    // (일반 오류는 재처리 제안으로, 중지는 전체를 멈추고 조용히 끝내야 하므로).
+    // `stage`는 "어디까지 진행된 상태에서 멈췄는지"를 안내 문구에 싣기 위함.
+    window._ganttQaPoCheckAbort = function (stage) {
+        if (window._ganttQaPoAbortRequested) {
+            const e = new Error(window._t('사용자가 중지를 요청했습니다.', 'User requested a stop.'));
+            e._poAborted = true;
+            e._poAbortedStage = stage || '';
+            throw e;
+        }
+    };
+
     window._ganttQaPoOptionsTableText = function() {
         const tempLines = window._PO_TEMP_CODE_TABLE.map(function(r) { return `${r.code} ${r.desc}`; }).join('\n');
         const purposeLines = window._PO_PURPOSE_TABLE.map(function(r) { return `${r.code} ${r.desc}`; }).join('\n');
@@ -2641,6 +2677,7 @@ ${docsJson}`;
     // 것을 전제하므로, 두 호출 사이에 절대 다른 요청이 끼어들지 않도록 이 함수 안에서
     // 곧바로 이어서 호출한다.
     window._ganttQaPrepareAndSaveOneDoc = async function(pd, doc) {
+        window._ganttQaPoCheckAbort('before_start');
         const receiver = window.getActiveUserName ? window.getActiveUserName() : '';
         const rows = doc.items.map(function(it) {
             return {
@@ -2658,6 +2695,7 @@ ${docsJson}`;
         );
         const exData = await window._ganttQaParsePoApiResponse(exRes, '엑셀 생성', 'excel generation');
         if (!exData.ok) throw new Error(exData.error || window._t('알 수 없는 오류', 'unknown error'));
+        window._ganttQaPoCheckAbort('after_excel');
 
         const prepRes = await window._withTimeout(
             fetch('http://127.0.0.1:5000/po-sap-prepare', {
@@ -2675,6 +2713,10 @@ ${docsJson}`;
         );
         const prepData = await window._ganttQaParsePoApiResponse(prepRes, 'SAP 구매오더 준비', 'SAP purchase order preparation');
         if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
+        // 🆕 [2026-11-13] 가장 중요한 중지 지점 — SAP 화면엔 이미 입력됐지만 아직 저장(재무
+        // 커밋)은 안 된 시점. 여기서 멈추면 사람이 SAP 창을 직접 보고 이어서 저장하거나
+        // 취소할 수 있다(아래 catch에서 `_poAborted`를 보고 "SAP 화면 그대로 두었다"고 안내).
+        window._ganttQaPoCheckAbort('before_save');
 
         const saveRes = await window._withTimeout(
             fetch('http://127.0.0.1:5000/po-sap-confirm-save', {
@@ -2695,9 +2737,36 @@ ${docsJson}`;
     // 필요하면 해당 문서만 다시 첨부/설명해서 새로 시작해야 한다.
     window._ganttQaRunPoBatchAutomatically = async function(pd) {
         const results = [];
+        // 🆕 [2026-11-13] 비상정지 버튼 — 배치 시작 직후 한 번 띄우고 끝나면 치운다.
+        window._ganttQaPoAbortRequested = false;
+        window._ganttQaHistory.push({ role: 'ai', rawHtml: true, text: window._ganttQaPoStopButtonHtml() });
+        const _stopBtnIdx = window._ganttQaHistory.length - 1;
+        window._renderGanttQaMessages();
+        var _wasAborted = false;
+
+        function _stageNote(stage) {
+            if (stage === 'before_save') {
+                return window._t(' — SAP 화면엔 입력까지 됐고 저장은 하지 않았습니다. SAP 창을 직접 확인해주세요.', ' — SAP screen is filled in but not saved yet. Please check the SAP window directly.');
+            }
+            if (stage === 'after_excel') {
+                return window._t(' — SAP에 아직 손대지 않은 상태에서 멈췄습니다.', ' — stopped before touching SAP.');
+            }
+            return window._t(' — 아직 아무것도 시작하지 않은 상태에서 멈췄습니다.', ' — stopped before starting anything.');
+        }
+
         for (let i = 0; i < pd.docs.length; i++) {
             const doc = pd.docs[i];
             const label = doc.vendorName || doc.bizRegNo || (i + 1);
+            // 🆕 [2026-11-13] 다음 문서로 넘어가기 전에도 확인 — 이미 멈췄으면 남은 문서는 전부 건너뜀
+            if (window._ganttQaPoAbortRequested) {
+                _wasAborted = true;
+                for (let j = i; j < pd.docs.length; j++) {
+                    const dj = pd.docs[j];
+                    const lj = dj.vendorName || dj.bizRegNo || (j + 1);
+                    results.push({ label: lj, ok: false, error: window._t('🛑 사용자 중지 — 시작 전에 건너뜀', '🛑 Stopped by user — skipped before starting'), _doc: dj, _aborted: true });
+                }
+                break;
+            }
             // [2026-09-28] 요청 5: 코텍 자기 번호(130-81-44628)가 협력사로 남아있으면 즉시 실패 — 절대 협력사가 될 수 없음
             if (doc.bizRegNo && doc.bizRegNo.replace(/[^0-9]/g, '') === '1308144628') {
                 results.push({ label: label, ok: false, error: window._t('협력사 사업자등록번호가 코텍 자기 번호(130-81-44628)입니다 — 올바른 협력사 번호를 확인해주세요.', 'Vendor registration number matches Kortek\'s own (130-81-44628) — please verify the correct vendor number.'), _doc: doc });
@@ -2709,6 +2778,19 @@ ${docsJson}`;
                 const r = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
                 results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved, pdfPath: r.pdfPath || null, xlsPath: r.xlsPath || null });
             } catch (e) {
+                // 🆕 [2026-11-13] 사람이 중지 버튼을 눌러 던져진 예외 — 통화 자동재시도 등 어떤
+                // 추가 시도도 하지 않고 즉시 배치 전체를 멈춘다(일반 SAP 오류와 다른 대우).
+                if (e && e._poAborted) {
+                    results.push({ label: label, ok: false, error: window._t('🛑 사용자가 중지했습니다', '🛑 Stopped by user') + _stageNote(e._poAbortedStage), _doc: doc, _aborted: true });
+                    window._ganttQaHistory.pop();
+                    _wasAborted = true;
+                    for (let j = i + 1; j < pd.docs.length; j++) {
+                        const dj = pd.docs[j];
+                        const lj = dj.vendorName || dj.bizRegNo || (j + 1);
+                        results.push({ label: lj, ok: false, error: window._t('🛑 사용자 중지 — 시작 전에 건너뜀', '🛑 Stopped by user — skipped before starting'), _doc: dj, _aborted: true });
+                    }
+                    break;
+                }
                 // [2026-10-01] 기본 KRW로 실패하면 USD로 1회 자동 재시도
                 var _origCurrency = doc.currency || 'KRW';
                 if (_origCurrency !== 'USD') {
@@ -2723,6 +2805,17 @@ ${docsJson}`;
                         const r2 = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
                         results.push({ label: label, ok: true, poNumber: r2.poNumber, autoSaved: r2.autoSaved, pdfPath: r2.pdfPath || null, xlsPath: r2.xlsPath || null, currencyRetried: true });
                     } catch (e2) {
+                        if (e2 && e2._poAborted) {
+                            results.push({ label: label, ok: false, error: window._t('🛑 사용자가 중지했습니다', '🛑 Stopped by user') + _stageNote(e2._poAbortedStage), _doc: doc, _aborted: true });
+                            window._ganttQaHistory.pop();
+                            _wasAborted = true;
+                            for (let j = i + 1; j < pd.docs.length; j++) {
+                                const dj = pd.docs[j];
+                                const lj = dj.vendorName || dj.bizRegNo || (j + 1);
+                                results.push({ label: lj, ok: false, error: window._t('🛑 사용자 중지 — 시작 전에 건너뜀', '🛑 Stopped by user — skipped before starting'), _doc: dj, _aborted: true });
+                            }
+                            break;
+                        }
                         results.push({ label: label, ok: false, error: (e2 && e2.message) ? e2.message : String(e2), _doc: doc });
                     }
                 } else {
@@ -2731,6 +2824,9 @@ ${docsJson}`;
             }
             window._ganttQaHistory.pop();
         }
+        // 비상정지 버튼은 끝났으니 치운다
+        if (_stopBtnIdx >= 0 && _stopBtnIdx < window._ganttQaHistory.length) window._ganttQaHistory.splice(_stopBtnIdx, 1);
+        window._ganttQaPoAbortRequested = false;
         const lines = results.map(function(r, i) {
             if (r.ok) {
                 var _currencyNote = r.currencyRetried ? window._t(' [KRW→USD 자동변경]', ' [KRW→USD auto]') : '';
@@ -2745,9 +2841,13 @@ ${docsJson}`;
         const _xlsPaths = results.filter(function(r) { return r.ok && r.xlsPath; }).map(function(r) { return r.xlsPath; });
         const _pdfPaths = results.filter(function(r) { return r.ok && r.pdfPath; }).map(function(r) { return r.pdfPath; });
         const _savePaths = (_xlsPaths.length || _pdfPaths.length) ? { xlsPaths: _xlsPaths, pdfPaths: _pdfPaths } : null;
+        const _headerIcon = _wasAborted ? '🛑' : '🏁';
+        const _headerText = _wasAborted
+            ? window._t('구매오더 자동 처리를 사용자 중지로 멈췄습니다', 'Purchase order processing was stopped by the user')
+            : window._t('구매오더 자동 처리를 마쳤습니다', 'Finished automatic purchase order processing');
         window._ganttQaHistory.push({ role: 'ai', text: window._t(
-            '🏁 구매오더 자동 처리를 마쳤습니다(' + successCount + '/' + results.length + '건 성공):\n' + lines,
-            '🏁 Finished automatic purchase order processing (' + successCount + '/' + results.length + ' succeeded):\n' + lines
+            _headerIcon + ' ' + _headerText + '(' + successCount + '/' + results.length + '건 성공):\n' + lines,
+            _headerIcon + ' ' + _headerText + ' (' + successCount + '/' + results.length + ' succeeded):\n' + lines
         ), savePaths: _savePaths });
         window._ganttQaPoDraft = null;
         // [2026-09-28] 요청 4: 건너뛴 문서(사업자등록번호 오류) 안내
@@ -2761,7 +2861,10 @@ ${docsJson}`;
             )});
         }
         // [2026-09-28] 요청 4: SAP 처리 실패 문서 재처리 제안
-        const failedDocs = results.filter(function(r) { return !r.ok && r._doc; }).map(function(r) { return r._doc; });
+        // 🆕 [2026-11-13] 사용자가 직접 중지한 문서(`_aborted`)는 이 제안에서 뺀다 — 방금
+        // "멈춰달라"고 한 사람에게 곧바로 "다시 할까요?"를 묻는 건 어색하다. 다시 하려면
+        // 첨부를 새로 올려 처음부터 시작하면 된다(기존 경로 그대로).
+        const failedDocs = results.filter(function(r) { return !r.ok && r._doc && !r._aborted; }).map(function(r) { return r._doc; });
         if (failedDocs.length) {
             window._ganttQaPoRetryDraft = { stage: 'po_fields_form', docs: failedDocs, buyerEmpId: pd.buyerEmpId, errorDocs: [] };
             window._ganttQaShowConfirmButtons(
