@@ -289,7 +289,10 @@
                 // 🗺️ [2026-11-13, 사용자 요청] "인증·정격 표시 항목은 삭제하고 도면 추가해서 부착
                 //    위치 표현하는 기능을 추가" — 위 라벨 목록에서 만든 라벨을 제품 도면(전면·
                 //    후면·측면) 위 어디에 붙이는지 표시한다.
-                { title: '# 부착 위치 (제품 도면)', kind: 'labelattach' }
+                { title: '# 부착 위치 (제품 도면)', kind: 'labelattach', scope: 'product' },
+                // 📦 [2026-11-13, 사용자 요청] "부착 위치(제품 도면)와 동일한 기능으로 부착
+                //    위치(포장 박스) 추가" — 같은 엔진을 `scope` 만 다르게 재사용(복제 아님).
+                { title: '# 부착 위치 (포장 박스)', kind: 'labelattach', scope: 'box' }
             ]
         }
     ];
@@ -306,9 +309,10 @@
     ];
     // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘(DC 표시 등) / 필요시 추가할 수 있도록" —
     //    라벨에 자주 쓰이는 전기·기호 글자. 코드 안 고치고 **이 목록에 한 줄만** 더하면 는다.
+    // 🔁 [2026-11-13 2차, 사용자 요청] DC/AC 는 글자(유니코드)가 아니라 "작은 그림(이미지)"으로
+    //    정확히 맞추기로 해서(폰트마다 막대+점선/물결 모양이 다르게 보임) — 인증마크와 같은
+    //    `CERT_MARK_CATALOG`(DC/AC 항목)로 옮기고 여기서는 뺐다.
     var DOC_LABEL_SPECIAL_CHARS = [
-        { ch: '⎓', title: 'DC (직류)' },
-        { ch: '∼', title: 'AC (교류)' },
         { ch: 'Ω', title: '옴' },
         { ch: '±', title: '플러스마이너스' },
         { ch: '°', title: '도' },
@@ -976,7 +980,12 @@
         { key: 'UL', label: 'UL', w: 256, h: 105 },
         { key: 'CE', label: 'CE', w: 433, h: 429 },
         { key: 'CB', label: 'CB', noImage: true },
-        { key: 'FCC', label: 'FCC', w: 347, h: 244 }
+        { key: 'FCC', label: 'FCC', w: 347, h: 244 },
+        // ⚡ [2026-11-13, 사용자 요청] "DC/AC 기호를 작은 그림으로" — 글자(유니코드 한 글자)로는
+        //    막대+점선/막대+물결 모양을 정확히 못 그려서(폰트마다 다르게 보임) 캔버스로 직접
+        //    그려 구운 그림. IEC 표준 모양(막대 하나 + 그 아래 점선 셋/물결)과 같은 비율.
+        { key: 'DC', label: 'DC', w: 210, h: 78 },
+        { key: 'AC', label: 'AC', w: 210, h: 94 }
     ];
     window._docLabelMarksCache = window._docLabelMarksCache || {};   // code -> [{key,x,y,wem}]
     // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 빈 네모 칸을 여러 개 올려
@@ -1718,9 +1727,12 @@
             var wStyle = (n.wem ? (' width:' + n.wem + 'em; max-width:none;') : ' max-width:14em;');
             // ⚠️ [2026-11-13, 사용자 요청] 번호 원을 글자상자 **오른쪽**으로 — flex 자식 순서만
             //    바꾼다(위치 기준점은 전체 묶음 가운데라 순서를 바꿔도 끌기 좌표 계산은 그대로).
+            // 🔝 [2026-11-13, 사용자 신고 "동그라미 번호가 바코드와 겹치면 안보임"] 바코드 wrap 이
+            //    흰 배경(z-index:1)이라 **같은 z-index**인 표시가 DOM 순서상 먼저 그려져 뒤에
+            //    깔렸다. 표시는 항상 인증마크·박스·QR·바코드보다 위(3)에 — 겹쳐도 번호가 가려지지 않게.
             return '<span data-note-wrap data-note-idx="' + ni + '" title="' + _esc(n.text) + '" style="position:absolute;'
                 + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
-                + ' display:flex; align-items:center; gap:0.3em; z-index:1;'
+                + ' display:flex; align-items:center; gap:0.3em; z-index:3;'
                 + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;') + '">'
                 + '<span data-note-widthbox style="position:relative; display:inline-block;' + wStyle + '">'
                 // ⚠️⚠️ [2026-11-13, 사용자 신고 "줄바꿈 이미지에는 반영 안 됨"] `white-space:normal` 은
@@ -1758,19 +1770,33 @@
                 + '</span>';
         }).join('');
     };
-    // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — 사람이 조절(＋／－) + 이미지 크기와 연동.
-    //    배율만 저장하고(`_docLabelNoteFontScale`) 실제 px는 렌더마다 "이미지 폭 × 비율 × 배율"
-    //    로 계산 — `_docLabelNotesApplyFont`(아래) 한 곳에서만 계산해 모달·드래그 중 호출이 같은 값을 쓴다.
+    // 🔤🔤 [2026-11-13 2차, 사용자 요청] "클릭한 글자만 확대 축소 가능하도록 개별 조정해줘" —
+    //    이전엔 코드(라벨) 하나에 배율 하나라 글자 전부가 같이 커졌다. 이제 배율을 **그 표시
+    //    객체 자신**(`note.fontScale`)에 저장 — "마지막으로 커서를 둔 입력칸"(특수문자 넣기와
+    //    같은 `window._docLabelActiveTextarea`)이 곧 "지금 조절 대상"이다.
     window._docLabelNoteFontAdjust = function (code, dir) {
-        var cur = window._docLabelNoteFontScale[code] || 1;
+        var ta = window._docLabelActiveTextarea;
+        var row = ta && document.contains(ta) ? ta.closest('[data-note-row]') : null;
+        var idx = row ? Number(row.getAttribute('data-note-idx2')) : NaN;
+        var list = window._docLabelNotesCache[code] || [];
+        if (isNaN(idx) || !list[idx]) {
+            _toast('⚠️ ' + _t('먼저 글자 크기를 바꿀 표시 입력칸을 한 번 눌러주세요.', 'Click into a note field first.'), 'error');
+            return;
+        }
+        var cur = list[idx].fontScale || 1;
         var next = Math.max(0.5, Math.min(3, Math.round((cur + dir * 0.15) * 100) / 100));
-        window._docLabelNoteFontScale[code] = next;
+        list[idx].fontScale = next;
         _docLabelRefresh();
         window._docLabelNotesSave(code);
     };
-    // px = 이미지 표시폭 × 3.2% × 배율 — 3.2%는 기본 배율(1)에서 보기 좋은 값으로 고른 상수.
-    window._docLabelNoteFontPx = function (imgWidthPx, code) {
-        var scale = (window._docLabelNoteFontScale && window._docLabelNoteFontScale[code]) || 1;
+    // px = 이미지 표시폭 × 3.2% — 3.2%는 보기 좋은 값으로 고른 기준 상수(배율 없음, 글자상자·
+    //    번호 원·마크·박스·QR/바코드가 전부 같이 쓰는 **공통 바닥**). 글자 하나만 커지는 건
+    //    `_docLabelNoteTextFontPx`(각 표시 자신의 `fontScale`)가 따로 맡는다.
+    window._docLabelNoteFontPx = function (imgWidthPx) {
+        return Math.max(9, Math.round((imgWidthPx || 0) * 0.032));
+    };
+    window._docLabelNoteTextFontPx = function (imgWidthPx, note) {
+        var scale = (note && note.fontScale) || 1;
         return Math.max(9, Math.round((imgWidthPx || 0) * 0.032 * scale));
     };
     // 🔵 [2026-11-13, 사용자 신고 "파란색 동그라미 번호로 기준 잡고 통일해줘"] 번호 원은 글자
@@ -1790,13 +1816,22 @@
         if (!bodyEl || !img) return;
         var w = widthPxOverride || img.getBoundingClientRect().width;
         if (!w) return;
-        var px = window._docLabelNoteFontPx(w, code);
+        var px = window._docLabelNoteFontPx(w);
         [].slice.call(bodyEl.querySelectorAll('[data-note-wrap], [data-mark-wrap], [data-box-wrap], [data-code-wrap]'))
             .forEach(function (el) { el.style.fontSize = px + 'px'; });
-        // 🔵 번호 원은 위 px(배율 포함) 말고 **배율 없는 고정 기준**으로 따로 — 자기 자신에
-        //    font-size 를 직접 줘서 부모(wrap)의 배율 영향을 받지 않게 끊는다.
+        // 🔵 번호 원은 위 px 와 **같은 고정 기준**이지만 자기 자신에 직접 줘서(부모 wrap 과 분리)
+        //    아래 글자 배율이 바뀌어도 번호 원 크기는 전혀 안 흔들리게 한다.
         var circlePx = window._docLabelCircleFontPx(w);
         [].slice.call(bodyEl.querySelectorAll('[data-note-circle]')).forEach(function (el) { el.style.fontSize = circlePx + 'px'; });
+        // 🔤🔤 [2026-11-13 2차] 글자 상자 안 **글자 자신**(`[data-note-text]`)은 그 표시 하나만의
+        //    `fontScale` 을 따로 적용 — wrap 의 px 와 분리해 그 표시만 커지고 번호 원·너비박스
+        //    틀은 그대로 둔다(틀을 같이 키우면 다른 표시까지 밀려 레이아웃이 흔들린다).
+        var notesArr = window._docLabelNotesCache[code] || [];
+        [].slice.call(bodyEl.querySelectorAll('[data-note-text]')).forEach(function (el) {
+            var ni = Number(el.getAttribute('data-note-idx2'));
+            var n = notesArr[ni];
+            el.style.fontSize = window._docLabelNoteTextFontPx(w, n) + 'px';
+        });
     };
     // 🔧 [2026-11-12 11차, 사용자 요청] 크기 조정 — 모달 안 이미지 우하단 손잡이를 끌면 크기를
     //    바꾼다. 표시(notes)와 **같은 사이드카**(`<코드>.notes.json`)에 `size:{w,h}` 로 같이
@@ -2279,8 +2314,9 @@
                    + (window._docLabelAspectLock ? 'checked' : '')
                    + ' onchange="window._docLabelAspectLock=this.checked;" style="vertical-align:middle; margin-right:3px;">'
                    + _esc(_t('비율 고정', 'Lock ratio')) + '</label>'
-                 // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — ＋／－로 조절, 이미지 크기와 연동(px 아님)
-                 + (notes.length ? ' · <span style="color:#000;">' + _esc(_t('표시 글자크기', 'Note text size')) + ': '
+                 // 🔤🔤 [2026-11-13 2차, 사용자 요청] "클릭한 글자만 확대 축소" — 전체가 아니라
+                 //    마지막으로 커서를 둔 그 표시 하나만 바뀐다는 걸 글자로 밝힌다.
+                 + (notes.length ? ' · <span style="color:#000;">' + _esc(_t('글자크기(클릭한 칸만)', 'Text size (clicked field only)')) + ': '
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',-1);return false;"'
                      + ' title="' + _esc(_t('작게', 'smaller')) + '" style="padding:0 4px; font-weight:bold;">－</a>'
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',1);return false;"'
@@ -2361,10 +2397,11 @@
             // 📐 [2026-11-13, 사용자 요청] "새표시내용을 입력... 위 박스와 시작 위치 맞춰줘" — 위
             //    번호 목록은 "N." 칸(flex:0 0 1.6em)이 먼저라 textarea 가 그만큼 밀려 시작한다.
             //    이 줄엔 번호가 없으니 **같은 폭의 빈 칸**을 똑같이 둬서 textarea 시작 위치를 맞춘다.
-            // ⠿ 번호 목록 쪽에 끌기 손잡이(1.1em)가 하나 더 생겨서 — 손잡이+간격+번호칸 만큼을
-            //    한 번에 빈 칸으로 둬야 textarea 시작 위치가 그대로 맞는다.
+            // ⠿ [2026-11-13, 사용자 신고 "붉은색 박스 얼라인 맞춰줘 위 박스들과"] 번호 줄은
+            //    [손잡이(1.1em)] gap [번호(1.6em)] gap [textarea] — gap 이 **둘**인데 스페이서
+            //    쪽엔 gap 이 하나뿐이라 4px 모자랐다. 스페이서 폭에 그 gap 하나를 더한다.
             + (idle ? '<div style="margin-top:8px; display:flex; gap:4px; align-items:flex-start;">'
-                + '<span style="flex:0 0 calc(1.1em + 1.6em);"></span>'
+                + '<span style="flex:0 0 calc(1.1em + 1.6em + 4px);"></span>'
                 + '<textarea id="doclabelart-newnote" rows="2" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
                   'Type a new note (Ctrl+Enter to add) — drag it into place after.')) + '"'
                 + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
@@ -3175,40 +3212,44 @@
         return BACKEND + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name);
     };
 
-    // ── 🗺️ [2026-11-13, 사용자 요청] 부착 위치 — 제품 도면(전면·후면·측면) 위에 위 라벨
-    //    목록의 각 라벨이 어디에 붙는지 표시한다. 도면은 첨부와 같은 방식으로 NAS 에
-    //    올리고(공용 아님 — 프로젝트 전용 `attach` 폴더), 표시는 라벨 도안의 "표시"와
-    //    같은 끌기 틀을 재사용한다.
-    window._docLabelAttachPlacing = window._docLabelAttachPlacing || null;   // {id, labelIdx} | null
-    var _docLabelAttachData = function (id) {
+    // ── 🗺️📦 [2026-11-13, 사용자 요청] 부착 위치 — 도면(제품 또는 포장 박스) 위에 위 라벨
+    //    목록의 각 라벨이 어디에 붙는지 표시한다. 두 종류(`scope`: 'product'|'box')가
+    //    **완전히 독립**된 도면·표시 세트를 갖되 **같은 엔진 하나**를 돌린다(복제 아님) —
+    //    복제했으면 다음 버그 수정을 두 곳에 똑같이 해야 했을 것. 도면은 첨부와 같은
+    //    방식으로 NAS 에 올리고(공용 아님 — 프로젝트 전용 `attach` 폴더), 표시는 라벨
+    //    도안의 "표시"와 같은 끌기 틀을 재사용한다.
+    window._docLabelAttachPlacing = window._docLabelAttachPlacing || null;   // {id, scope, labelIdx} | null
+    var _docLabelAttachData = function (id, scope) {
         var d = _docData(id);
+        d.labelAttach = d.labelAttach || {};
         // 🗺️🗺️ 기본값은 '전체' — 한 장짜리 도면만 쓰는 제품이 더 흔할 것(면별 구분이 필요한
         //    제품만 전면·후면·측면으로 넘어가면 된다).
-        d.labelAttach = d.labelAttach || { view: 'all', views: {} };
-        if (!d.labelAttach.view) d.labelAttach.view = 'all';
-        d.labelAttach.views = d.labelAttach.views || {};
+        d.labelAttach[scope] = d.labelAttach[scope] || { view: 'all', views: {} };
+        var la = d.labelAttach[scope];
+        if (!la.view) la.view = 'all';
+        la.views = la.views || {};
         DOC_LABEL_ATTACH_VIEWS.forEach(function (v) {
-            d.labelAttach.views[v.key] = d.labelAttach.views[v.key] || { img: null, folder: null, marks: [] };
+            la.views[v.key] = la.views[v.key] || { img: null, folder: null, marks: [] };
         });
-        return d.labelAttach;
+        return la;
     };
-    window._docLabelAttachViewSet = function (id, view) {
-        var la = _docLabelAttachData(id);
+    window._docLabelAttachViewSet = function (id, scope, view) {
+        var la = _docLabelAttachData(id, scope);
         la.view = view;
         window._docLabelAttachPlacing = null;
         _markDirty(); window._docRender();
     };
-    window._docLabelAttachPick = function (id) {
+    window._docLabelAttachPick = function (id, scope) {
         var inp = document.createElement('input');
         inp.type = 'file'; inp.accept = 'image/*,.pdf,application/pdf';
-        inp.onchange = function () { if (inp.files && inp.files[0]) window._docLabelAttachUploadApply(id, inp.files[0]); };
+        inp.onchange = function () { if (inp.files && inp.files[0]) window._docLabelAttachUploadApply(id, scope, inp.files[0]); };
         inp.click();
     };
     // 📄 PDF 는 pdf.js 로 1페이지를 PNG 로 — `_docLabelPickPdfPage` 와 같은 변환, 다만 여기는
     //    서버에서 받아오는 게 아니라 **사람이 고른 로컬 파일**이라 `file.arrayBuffer()` 로 직접 읽는다.
-    window._docLabelAttachUploadApply = async function (id, file) {
+    window._docLabelAttachUploadApply = async function (id, scope, file) {
         if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
-        var la = _docLabelAttachData(id);
+        var la = _docLabelAttachData(id, scope);
         var view = la.view;
         var blob = file;
         var ext = (String(file.name || '').split('.').pop() || 'png').toLowerCase();
@@ -3233,7 +3274,7 @@
         }
         if (!/^(png|jpg|jpeg|gif|webp|bmp)$/.test(ext)) ext = 'png';
         var folder = _attFolder(_ctx());
-        var fname = _today() + '_' + _safe(id) + '_attach_' + view + '.' + ext;
+        var fname = _today() + '_' + _safe(id) + '_attach_' + scope + '_' + view + '.' + ext;
         _toast('⏳ ' + _t('올리는 중…', 'Uploading…'), 'info');
         var res = await window._dgUploadBlob(folder, fname, blob, { forceOverwrite: true });
         if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
@@ -3242,41 +3283,42 @@
         la.views[view].marks = la.views[view].marks || [];
         _markDirty(); window._docRender();
     };
-    window._docLabelAttachReset = function (id) {
-        var la = _docLabelAttachData(id);
+    window._docLabelAttachReset = function (id, scope) {
+        var la = _docLabelAttachData(id, scope);
         if (!confirm(_t('이 면의 도면·표시를 모두 지웁니다(NAS 원본 파일은 그대로 둡니다).', 'Clear this view\'s drawing and marks?'))) return;
         la.views[la.view] = { img: null, folder: null, marks: [] };
         _markDirty(); window._docRender();
     };
-    window._docLabelAttachArm = function (id, labelIdx) {
-        window._docLabelAttachPlacing = { id: id, labelIdx: labelIdx };
+    window._docLabelAttachArm = function (id, scope, labelIdx) {
+        window._docLabelAttachPlacing = { id: id, scope: scope, labelIdx: labelIdx };
         window._docRender();
     };
     window._docLabelAttachDisarm = function () {
         window._docLabelAttachPlacing = null;
         window._docRender();
     };
-    window._docLabelAttachImgClick = function (ev, id) {
+    window._docLabelAttachImgClick = function (ev, id, scope) {
         var p = window._docLabelAttachPlacing;
-        if (!p || p.id !== id) return;   // 그냥 보는 중이면 클릭은 아무 일도 안 한다(라벨 도안과 같은 규칙)
+        if (!p || p.id !== id || p.scope !== scope) return;   // 그냥 보는 중이면 클릭은 아무 일도 안 한다
         var rect = ev.target.getBoundingClientRect();
         var x = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
         var y = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
-        var la = _docLabelAttachData(id);
+        var la = _docLabelAttachData(id, scope);
         la.views[la.view].marks.push({ labelIdx: p.labelIdx, x: x, y: y });
         window._docLabelAttachPlacing = null;
         _markDirty(); window._docRender();
     };
-    window._docLabelAttachMarkDel = function (id, idx) {
-        var la = _docLabelAttachData(id);
+    window._docLabelAttachMarkDel = function (id, scope, idx) {
+        var la = _docLabelAttachData(id, scope);
         var list = la.views[la.view].marks || [];
         if (!list[idx]) return;
         if (!confirm(_t('이 표시를 지웁니다.', 'Delete this mark?'))) return;
         list.splice(idx, 1);
         _markDirty(); window._docRender();
     };
-    // 🖱️ 끌기 — QR·바코드와 같은 "몸통 전체가 손잡이" 방식(✕ 위를 누른 건 그쪽이 먼저 처리).
-    window._docLabelAttachMarkDragWire = function (wrap, img, id, idx) {
+    // 🖱️ 끌기 — QR·바코드와 같은 "몸통 전체가 손잡이" 방식(크기조절 손잡이·✕ 위를 누른 건
+    //    그쪽이 먼저 처리).
+    window._docLabelAttachMarkDragWire = function (wrap, img, id, scope, idx) {
         var moved = false;
         var onMove = function (ev) {
             moved = true;
@@ -3284,7 +3326,7 @@
             var x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
             var y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
             wrap.style.left = (x * 100) + '%'; wrap.style.top = (y * 100) + '%';
-            var la = _docLabelAttachData(id);
+            var la = _docLabelAttachData(id, scope);
             var list = la.views[la.view].marks || [];
             if (list[idx]) { list[idx].x = x; list[idx].y = y; }
         };
@@ -3294,9 +3336,39 @@
             if (moved) _markDirty();
         };
         wrap.onmousedown = function (ev) {
-            if (ev.target && ev.target.closest && ev.target.closest('a')) return;
+            if (ev.target && ev.target.closest && ev.target.closest('a, [data-attach-mark-resize]')) return;
             ev.preventDefault(); ev.stopPropagation();
             moved = false;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // 📏 [2026-11-13, 사용자 요청] "가져온 라벨 크기를 조정해서 안착해야 하니 크기 조절 기능
+    //    넣어주세요" — 도안 이미지를 끌어서 너비만 조절(세로는 원본 비율대로 자동, 라벨은
+    //    원래 비율을 유지해야 알아볼 수 있다). 번호 원 대체(artFile 없음)일 땐 크기조절이
+    //    의미 없어 손잡이를 안 둔다.
+    window._docLabelAttachMarkResizeWire = function (handle, wrap, id, scope, idx) {
+        var startX, startW, moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var w = Math.max(24, Math.min(400, startW + (ev.clientX - startX)));
+            var img2 = wrap.querySelector('img');
+            if (img2) img2.style.width = w + 'px';
+            var la = _docLabelAttachData(id, scope);
+            var list = la.views[la.view].marks || [];
+            if (list[idx]) list[idx].wpx = Math.round(w);
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) _markDirty();
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            startX = ev.clientX;
+            var img2 = wrap.querySelector('img');
+            startW = (img2 && img2.getBoundingClientRect().width) || 80;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         };
@@ -3305,7 +3377,9 @@
     //    번호 원 대신 **그 라벨의 실제 도안 이미지**를 도면 위에 작게 올린다(어떤 라벨이
     //    거기 붙는지 그림으로 바로 보여야 한다는 지적). NO 는 구석 작은 배지로만 — 표의
     //    NO 열과 맞춰 보는 용도. 도안이 아직 없는 라벨은(코드 미입력 등) 옛 번호 원으로 대신.
-    var _docLabelAttachMarkersHtml = function (marks, draggable, id, litems) {
+    //    🔵 [2차, 사용자 요청] "동그라미 번호 크기 통일해서 적당한 크기로" — 16px → 20px 고정
+    //    (표 쪽 번호 원과 같은 이유로 "고정값 하나"가 항상 통일되게 유지하기 가장 쉽다).
+    var _docLabelAttachMarkersHtml = function (marks, draggable, id, scope, litems) {
         return (marks || []).map(function (m, mi) {
             var it = litems[m.labelIdx] || {};
             var itCode = String(it.code || '').trim();
@@ -3317,21 +3391,24 @@
                 + ' z-index:1;' + (draggable ? ' cursor:grab;' : '');
             var inner = artFile
                 ? '<img src="' + _esc(_docLabelArtSrc(itCode, artFile)) + '" draggable="false" ondragstart="return false;"'
-                  + ' style="display:block; width:80px; height:auto; border:1px solid #495057; border-radius:2px; background:#fff;'
-                  + ' box-shadow:0 1px 4px rgba(0,0,0,.35);">'
-                : '<span style="display:flex; width:26px; height:26px; border-radius:50%; background:#e03131; color:#fff;'
-                  + ' font-weight:bold; align-items:center; justify-content:center; font-size:13px; box-shadow:0 0 0 2px #fff;">'
+                  + ' style="display:block; width:' + (m.wpx || 80) + 'px; height:auto; border:1px solid #495057; border-radius:2px;'
+                  + ' background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.35);">'
+                : '<span style="display:flex; width:20px; height:20px; border-radius:50%; background:#e03131; color:#fff;'
+                  + ' font-weight:bold; align-items:center; justify-content:center; font-size:11px; box-shadow:0 0 0 2px #fff;">'
                   + (m.labelIdx + 1) + '</span>';
             return '<span data-attach-mark-wrap data-attach-mark-idx="' + mi + '" title="' + _esc(title) + '" style="' + wrapStyle + '">'
                 + inner
                 // 도안 이미지일 때만 구석에 NO 배지(위 표의 NO 열과 맞춰 보는 용도) — 번호 원
                 // 대체(artFile 없음)일 땐 그 원 자체가 이미 번호라 또 달면 중복이다.
-                + (artFile ? '<span style="position:absolute; left:-6px; top:-6px; width:16px; height:16px; line-height:16px;'
-                  + ' text-align:center; background:#1971c2; color:#fff; border-radius:50%; font-size:10px; font-weight:bold;'
+                + (artFile ? '<span style="position:absolute; left:-7px; top:-7px; width:20px; height:20px; line-height:20px;'
+                  + ' text-align:center; background:#1971c2; color:#fff; border-radius:50%; font-size:11px; font-weight:bold;'
                   + ' box-shadow:0 0 0 1px #fff;">' + (m.labelIdx + 1) + '</span>' : '')
-                + (draggable ? '<a href="#" onclick="window._docLabelAttachMarkDel(\'' + _esc(id) + '\',' + mi + ');return false;"'
-                  + ' style="position:absolute; right:-6px; top:-6px; width:16px; height:16px; line-height:16px; text-align:center;'
-                  + ' background:#b1432f; color:#fff; border-radius:50%; font-size:10px; font-weight:bold; text-decoration:none;'
+                + (draggable && artFile ? '<span data-attach-mark-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
+                  + ' style="position:absolute; right:-7px; bottom:-7px; width:14px; height:14px; border-radius:3px; background:#1971c2;'
+                  + ' border:2px solid #fff; box-shadow:0 0 0 1px #1971c2; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>' : '')
+                + (draggable ? '<a href="#" onclick="window._docLabelAttachMarkDel(\'' + _esc(id) + '\',\'' + _esc(scope) + '\',' + mi + ');return false;"'
+                  + ' style="position:absolute; right:-7px; top:-7px; width:20px; height:20px; line-height:20px; text-align:center;'
+                  + ' background:#b1432f; color:#fff; border-radius:50%; font-size:11px; font-weight:bold; text-decoration:none;'
                   + ' box-shadow:0 0 0 1px #fff; pointer-events:auto; z-index:2;">✕</a>' : '')
                 + '</span>';
         }).join('');
@@ -4428,19 +4505,20 @@
                    + _esc(_t('도안 크기조절 비율 고정', 'Lock aspect ratio when resizing artwork')) + '</label>'
                    + '</div><table style="display:none;">';
             } else if (s.kind === 'labelattach') {
-                // 🗺️ [2026-11-13, 사용자 요청] "인증·정격 표시 항목은 삭제하고 도면 추가해서
-                //    부착 위치 표현하는 기능을 추가" — 제품 도면(전면·후면·측면) 위에 위 라벨
-                //    목록의 라벨이 어디 붙는지 표시한다.
-                var la2 = _docLabelAttachData(form.id);
+                // 🗺️📦 [2026-11-13, 사용자 요청] "인증·정격 표시 항목은 삭제하고 도면 추가해서
+                //    부착 위치 표현하는 기능을 추가" + "제품 도면과 동일한 기능으로 포장 박스도" —
+                //    도면(제품 또는 포장 박스, `s.scope`) 위에 위 라벨 목록의 라벨이 어디 붙는지 표시.
+                var scope2 = s.scope || 'product';
+                var la2 = _docLabelAttachData(form.id, scope2);
                 var litems2 = _docData(form.id).labelItems || [];
-                var placing2 = (window._docLabelAttachPlacing && window._docLabelAttachPlacing.id === form.id)
-                    ? window._docLabelAttachPlacing.labelIdx : null;
+                var placing2 = (window._docLabelAttachPlacing && window._docLabelAttachPlacing.id === form.id
+                    && window._docLabelAttachPlacing.scope === scope2) ? window._docLabelAttachPlacing.labelIdx : null;
                 var vd2 = la2.views[la2.view];
                 h += '<tr><td class="doc-noprint" style="padding:8px;">'
                    + '<div style="margin-bottom:8px;">' + DOC_LABEL_ATTACH_VIEWS.map(function (v) {
                        var on = v.key === la2.view;
-                       return '<a href="#" onclick="window._docLabelAttachViewSet(\'' + _esc(form.id) + '\',\'' + _esc(v.key)
-                           + '\');return false;" style="margin-right:8px; padding:3px 12px; border-radius:5px; text-decoration:none;'
+                       return '<a href="#" onclick="window._docLabelAttachViewSet(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\',\''
+                           + _esc(v.key) + '\');return false;" style="margin-right:8px; padding:3px 12px; border-radius:5px; text-decoration:none;'
                            + ' font-weight:bold;' + (on ? ' background:#1971c2; color:#fff;' : ' background:#f1f3f5; color:#000;') + '">'
                            + _esc(_t(v.label, v.labelEn)) + '</a>';
                    }).join('') + '</div>';
@@ -4449,18 +4527,19 @@
                        + _esc(_t('위 라벨 목록에 라벨을 먼저 추가하세요.', 'Add labels in the list above first.')) + '</div>';
                 } else if (!vd2.img) {
                     h += '<div style="color:#868e96; font-size:11.5px; margin-bottom:8px;">'
-                       + _esc(_t('이 면의 제품 도면(PDF·이미지)을 올리면 라벨을 어디에 붙일지 표시할 수 있습니다.',
+                       + _esc(_t('이 면의 도면(PDF·이미지)을 올리면 라벨을 어디에 붙일지 표시할 수 있습니다.',
                                  'Upload this view\'s drawing (PDF/image) to mark where each label attaches.')) + '</div>'
-                       + '<button onclick="window._docLabelAttachPick(\'' + _esc(form.id) + '\')" style="padding:5px 12px; font-size:11.5px;'
-                       + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#000; border-radius:5px; font-weight:bold;">📤 '
+                       + '<button onclick="window._docLabelAttachPick(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\')" style="padding:5px 12px;'
+                       + ' font-size:11.5px; cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#000; border-radius:5px; font-weight:bold;">📤 '
                        + _esc(_t('도면 올리기', 'Upload drawing')) + '</button>';
                 } else {
                     h += '<div style="position:relative; display:inline-block;">'
-                       + '<img data-attach-img data-attach-img-id="' + _esc(form.id) + '" src="' + _esc(_attUrl({ folder: vd2.folder, name: vd2.img }))
+                       + '<img data-attach-img data-attach-img-id="' + _esc(form.id) + '" data-attach-img-scope="' + _esc(scope2)
+                       + '" src="' + _esc(_attUrl({ folder: vd2.folder, name: vd2.img }))
                        + '" style="max-width:100%; max-height:70vh; display:block; border:1px solid #dee2e6; border-radius:3px;'
                        + (placing2 != null ? ' cursor:crosshair;' : ' cursor:default;')
-                       + '" onclick="window._docLabelAttachImgClick(event,\'' + _esc(form.id) + '\')">'
-                       + _docLabelAttachMarkersHtml(vd2.marks, placing2 == null, form.id, litems2)
+                       + '" onclick="window._docLabelAttachImgClick(event,\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\')">'
+                       + _docLabelAttachMarkersHtml(vd2.marks, placing2 == null, form.id, scope2, litems2)
                        + '</div>'
                        + '<div style="margin-top:6px; font-size:11.5px;">'
                        + (placing2 != null
@@ -4469,13 +4548,13 @@
                             + _esc(_t('취소', 'cancel')) + '</a>'
                           : '<span style="color:#000;">' + _esc(_t('표시할 라벨: ', 'Mark label: ')) + '</span>'
                             + litems2.map(function (it, li) {
-                                return '<a href="#" onclick="window._docLabelAttachArm(\'' + _esc(form.id) + '\',' + li + ');return false;"'
+                                return '<a href="#" onclick="window._docLabelAttachArm(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\',' + li + ');return false;"'
                                     + ' title="' + _esc((it.code || it.size || '-') + (it.position ? ' / ' + it.position : '')) + '"'
                                     + ' style="margin-right:8px; color:#000; font-weight:bold;">📍' + (li + 1) + '</a>';
                               }).join('')
-                            + ' · <a href="#" onclick="window._docLabelAttachPick(\'' + _esc(form.id) + '\');return false;" style="color:#000;">↺ '
+                            + ' · <a href="#" onclick="window._docLabelAttachPick(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\');return false;" style="color:#000;">↺ '
                             + _esc(_t('도면 바꾸기', 'Replace drawing')) + '</a>'
-                            + ' · <a href="#" onclick="window._docLabelAttachReset(\'' + _esc(form.id) + '\');return false;" style="color:#b1432f;">🗑 '
+                            + ' · <a href="#" onclick="window._docLabelAttachReset(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\');return false;" style="color:#b1432f;">🗑 '
                             + _esc(_t('지우기', 'Clear')) + '</a>')
                        + '</div>';
                 }
@@ -4813,15 +4892,20 @@
                 window._docAttachAdd(form.id, zone.getAttribute('data-doc-att'), ev.dataTransfer.files);
             });
         });
-        // 🗺️ 부착 위치 — 도면 위 표시(번호 원) 끌기. 화면에 도면이 하나뿐이라 이미지도 하나뿐이다.
-        var attachImg = body.querySelector('[data-attach-img]');
-        if (attachImg) {
+        // 🗺️📦 부착 위치 — 도면 위 표시 끌기·크기조절. 제품·포장 박스 **두 섹션이 동시에** 보일
+        //    수 있어 도면 이미지가 여러 개일 수 있다(각자 제 섹션 안의 표시만 와이어링한다).
+        [].slice.call(body.querySelectorAll('[data-attach-img]')).forEach(function (attachImg) {
             var attachId = attachImg.getAttribute('data-attach-img-id');
-            [].slice.call(body.querySelectorAll('[data-attach-mark-wrap]')).forEach(function (wrap) {
+            var attachScope = attachImg.getAttribute('data-attach-img-scope');
+            var attachBox = attachImg.parentElement;   // 그 도면 하나만 담은 wrap
+            if (!attachBox) return;
+            [].slice.call(attachBox.querySelectorAll('[data-attach-mark-wrap]')).forEach(function (wrap) {
                 var aidx = Number(wrap.getAttribute('data-attach-mark-idx'));
-                window._docLabelAttachMarkDragWire(wrap, attachImg, attachId, aidx);
+                window._docLabelAttachMarkDragWire(wrap, attachImg, attachId, attachScope, aidx);
+                var rHandle = wrap.querySelector('[data-attach-mark-resize]');
+                if (rHandle) window._docLabelAttachMarkResizeWire(rHandle, wrap, attachId, attachScope, aidx);
             });
-        }
+        });
         // 🏷 라벨 사양서 — 표 썸네일 크기조절 손잡이(렌더마다 다시 그려지므로 매번 새로 건다)
         //    + 마커 글자 크기를 썸네일 폭에 맞춘다(모달과 같은 계산, `_docLabelNotesApplyFont`).
         [].slice.call(body.querySelectorAll('[data-thumb-resize]')).forEach(function (handle) {
