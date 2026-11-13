@@ -1739,9 +1739,12 @@
             // 🔝 [2026-11-13, 사용자 신고 "동그라미 번호가 바코드와 겹치면 안보임"] 바코드 wrap 이
             //    흰 배경(z-index:1)이라 **같은 z-index**인 표시가 DOM 순서상 먼저 그려져 뒤에
             //    깔렸다. 표시는 항상 인증마크·박스·QR·바코드보다 위(3)에 — 겹쳐도 번호가 가려지지 않게.
+            // 🔵📦 [2026-11-13 7차, 사용자 요청] "동그라미 숫자가 박스/글자하고 너무 떨어져 있음
+            //    가까이 이동해줘 박스 크기를 가늠할수 있도록" — 틈을 0.3em → 0.05em 으로 좁혀
+            //    어느 번호가 어느 박스 것인지 눈으로 바로 붙어 보이게 한다.
             return '<span data-note-wrap data-note-idx="' + ni + '" title="' + _esc(n.text) + '" style="position:absolute;'
                 + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
-                + ' display:flex; align-items:center; gap:0.3em; z-index:3;'
+                + ' display:flex; align-items:center; gap:0.05em; z-index:3;'
                 + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;') + '">'
                 + '<span data-note-widthbox style="position:relative; display:inline-block;' + wStyle + '">'
                 // ⚠️⚠️ [2026-11-13, 사용자 신고 "줄바꿈 이미지에는 반영 안 됨"] `white-space:normal` 은
@@ -2330,11 +2333,11 @@
                  + ' · <a href="#" onclick="window._docLabelCropArm(\'' + _esc(code) + '\');return false;" style="color:#000;">✂️ '
                  + _esc(_t('배경 잘라내기', 'Crop')) + '</a>'
                  + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',-1);return false;" style="color:#000;">⟲ '
-                 + _esc(_t('왼쪽으로 회전', 'Rotate left')) + '</a>'
+                 + _esc(_t('왼쪽 회전', 'Rotate left')) + '</a>'
                  + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',1);return false;" style="color:#000;">⟳ '
-                 + _esc(_t('오른쪽으로 회전', 'Rotate right')) + '</a>'
+                 + _esc(_t('오른쪽 회전', 'Rotate right')) + '</a>'
                  + (size ? ' · <a href="#" onclick="window._docLabelSizeReset(\'' + _esc(code) + '\');return false;" style="color:#000;">↺ '
-                   + _esc(_t('크기 기본값', 'Reset size')) + '</a>' : '')
+                   + _esc(_t('기본값', 'Reset size')) + '</a>' : '')
                  // 📐 [2026-11-13, 사용자 요청] 손잡이로 끌 때 비율을 지킬지 — 전역 체크 하나(표 썸네일과 공유)
                  + ' · <label style="cursor:pointer; font-weight:normal; color:#000;"><input type="checkbox" '
                    + (window._docLabelAspectLock ? 'checked' : '')
@@ -2342,7 +2345,7 @@
                    + _esc(_t('비율 고정', 'Lock ratio')) + '</label>'
                  // 🔤🔤 [2026-11-13 2차, 사용자 요청] "클릭한 글자만 확대 축소" — 전체가 아니라
                  //    마지막으로 커서를 둔 그 표시 하나만 바뀐다는 걸 글자로 밝힌다.
-                 + (notes.length ? ' · <span style="color:#000;">' + _esc(_t('글자크기(클릭한 칸만)', 'Text size (clicked field only)')) + ': '
+                 + (notes.length ? ' · <span style="color:#000;">' + _esc(_t('글자크기', 'Text size')) + ': '
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',-1);return false;"'
                      + ' title="' + _esc(_t('작게', 'smaller')) + '" style="padding:0 4px; font-weight:bold;">－</a>'
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',1);return false;"'
@@ -2404,9 +2407,17 @@
                     // ⠿ [2026-11-13, 사용자 요청] "마우스로 잡아서 위치 이동가능하도록 / 번호 순서
                     //    변경되도록" — 손잡이를 끌면 그 자리에 끼워 넣고 번호(N.)는 새 자리 기준으로
                     //    다시 매겨진다(순서 자체가 배열 순서라 따로 번호를 옮길 필요가 없다).
+                    // 🗑🗑 [2026-11-13 4차, 사용자 요청] "이 라벨 빼기 X 버튼은 숫자 왼쪽으로 X 박스로
+                    //    만들어서 배치해줘" — 줄 끝에 있던 ✕ 를 손잡이 바로 다음, 번호 왼쪽으로 옮기고
+                    //    테두리 있는 작은 박스로(메인 표 NO 칸의 ✕ 와 같은 모양).
                     return '<div data-note-row data-note-idx2="' + ni + '" style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
                         + '<span data-note-reorder-handle title="' + _esc(_t('끌어서 순서 바꾸기', 'drag to reorder')) + '"'
                         + ' style="flex:0 0 1.1em; text-align:center; padding-top:2px; cursor:grab; color:#adb5bd; user-select:none;">⠿</span>'
+                        + '<a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni + ');return false;"'
+                        + ' title="' + _esc(_t('이 표시 빼기', 'remove')) + '"'
+                        + ' style="flex:0 0 14px; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px;'
+                        + ' margin-top:2px; border:1px solid #b1432f; border-radius:3px; color:#b1432f; text-decoration:none;'
+                        + ' font-weight:bold; font-size:9px; line-height:1;">✕</a>'
                         + '<span style="flex:0 0 1.6em; text-align:right; padding-top:2px;">' + (ni + 1) + '.</span>'
                         // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] `oninput`
                         //    으로 타이핑하는 즉시 도안 위 글자상자만 가볍게 고쳐쓴다(전체 다시 그리기는
@@ -2418,30 +2429,40 @@
                         + ' onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
                         + _esc(n.text) + '</textarea>'
-                        + '<span style="white-space:nowrap;">' + alignBtns + '</span>'
-                        + ' <a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni
-                        + ');return false;" style="color:#b1432f;">✕</a></div>';
-                }).join('') + '</div>' : '')
-            // 📐 [2026-11-13, 사용자 요청] "새표시내용을 입력... 위 박스와 시작 위치 맞춰줘" — 위
-            //    번호 목록은 "N." 칸(flex:0 0 1.6em)이 먼저라 textarea 가 그만큼 밀려 시작한다.
-            //    이 줄엔 번호가 없으니 **같은 폭의 빈 칸**을 똑같이 둬서 textarea 시작 위치를 맞춘다.
-            // ⠿ [2026-11-13, 사용자 신고 "붉은색 박스 얼라인 맞춰줘 위 박스들과"] 번호 줄은
-            //    [손잡이(1.1em)] gap [번호(1.6em)] gap [textarea] — gap 이 **둘**인데 스페이서
-            //    쪽엔 gap 이 하나뿐이라 4px 모자랐다. 스페이서 폭에 그 gap 하나를 더한다.
-            // 📏 [2026-11-13 2차, 사용자 요청] "1줄 크기로 조정 / 왼쪽으로 5px 이동" — rows 1줄로
-            //    줄이고, 스페이서를 5px 더 줄여 textarea 가 번호 줄보다 5px 왼쪽에서 시작하게 한다.
-            // 📏 [2026-11-13 3차, 사용자 요청] "왼쪽으로 10px 이동" — 추가로 10px 더 줄인다(누적 15px).
-            + (idle ? '<div style="margin-top:8px; display:flex; gap:4px; align-items:flex-start;">'
-                + '<span style="flex:0 0 calc(1.1em + 1.6em + 4px - 5px - 10px);"></span>'
-                + '<textarea id="doclabelart-newnote" rows="1" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
-                  'Type a new note (Ctrl+Enter to add) — drag it into place after.')) + '"'
-                + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
-                + '\');return false;}" style="flex:1; font-size:11.5px; padding:4px 6px; text-align:left; resize:vertical; font-family:inherit;"></textarea>'
-                + '<button onclick="window._docLabelNoteQuickAdd(\'' + _esc(code) + '\')" style="padding:4px 10px; font-size:11.5px;'
-                + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">＋ '
-                + _esc(_t('추가', 'Add')) + '</button></div>' : '');
+                        + '<span style="white-space:nowrap;">' + alignBtns + '</span></div>';
+                }).join('') + '</div>' : '');
+            // 📍 [2026-11-13 4차, 사용자 요청] "하단 구석으로 배치하는게 좋을것 같음 실수로 누르지
+            //    않게" — "새 표시 내용" 입력+추가는 번호 목록 흐름 속에 있으면 스크롤·드래그 중
+            //    실수로 눌리기 쉬웠다. 목록 밖, 모달 하단 구석에 고정된 별도 칸으로 뺀다
+            //    (`#doclabelart-newnote-corner`, 아래에서 따로 그린다).
         var bodyEl = document.getElementById('doclabelart-body');
         if (bodyEl) bodyEl.innerHTML = h;
+        // 📍 [2026-11-13 4차, 사용자 요청] "새 표시 내용을 하단 구석으로 — 실수로 누르지 않게" —
+        //    목록 흐름 밖, 모달 상자(`#doclabelart-box`) 우하단 구석에 고정된 별도 칸을 둔다.
+        //    `idle` 이 아닐 때(표시추가·자르기 중)는 치운다.
+        (function () {
+            var boxEl = document.getElementById('doclabelart-box');
+            var corner = document.getElementById('doclabelart-newnote-corner');
+            if (!idle) { if (corner) corner.remove(); return; }
+            if (!corner && boxEl) {
+                corner = document.createElement('div');
+                corner.id = 'doclabelart-newnote-corner';
+                corner.style.cssText = 'position:absolute; right:10px; bottom:10px; width:230px; display:flex;'
+                    + ' flex-direction:column; gap:4px; background:#fff; border:1px solid #a3d9e0; border-radius:8px;'
+                    + ' padding:6px; box-shadow:0 2px 8px rgba(0,0,0,.18); z-index:5;';
+                boxEl.appendChild(corner);
+            }
+            if (corner) {
+                corner.innerHTML = '<textarea id="doclabelart-newnote" rows="1" placeholder="' + _esc(_t('새 표시 내용을 입력(추가는 Ctrl+Enter)',
+                      'Type a new note (Ctrl+Enter to add)')) + '"'
+                    + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
+                    + '\');return false;}" style="width:100%; font-size:11.5px; padding:4px 6px; text-align:left; resize:vertical;'
+                    + ' font-family:inherit; box-sizing:border-box;"></textarea>'
+                    + '<button onclick="window._docLabelNoteQuickAdd(\'' + _esc(code) + '\')" style="padding:4px 10px; font-size:11.5px;'
+                    + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;'
+                    + ' align-self:flex-end;">＋ ' + _esc(_t('추가', 'Add')) + '</button>';
+            }
+        })();
         // 렌더 직후 한 번만 — `innerHTML` 교체로 옛 리스너는 이미 사라졌다(따로 뗄 필요 없음).
         var img = document.getElementById('doclabelart-img');
         var handle = bodyEl && bodyEl.querySelector('[data-resize-handle]');
