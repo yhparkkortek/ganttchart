@@ -299,6 +299,24 @@
         { key: 'back', label: '후면', labelEn: 'Back' },
         { key: 'side', label: '측면', labelEn: 'Side' }
     ];
+    // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘(DC 표시 등) / 필요시 추가할 수 있도록" —
+    //    라벨에 자주 쓰이는 전기·기호 글자. 코드 안 고치고 **이 목록에 한 줄만** 더하면 는다.
+    var DOC_LABEL_SPECIAL_CHARS = [
+        { ch: '⎓', title: 'DC (직류)' },
+        { ch: '∼', title: 'AC (교류)' },
+        { ch: 'Ω', title: '옴' },
+        { ch: '±', title: '플러스마이너스' },
+        { ch: '°', title: '도' },
+        { ch: 'µ', title: '마이크로' },
+        { ch: '≥', title: '이상' },
+        { ch: '≤', title: '이하' },
+        { ch: '×', title: '곱하기/바이' },
+        { ch: '→', title: '화살표' },
+        { ch: '℃', title: '섭씨' },
+        { ch: '™', title: '트레이드마크' },
+        { ch: '®', title: '등록상표' },
+        { ch: '©', title: '저작권' }
+    ];
 
     var _pad = function (n) { return (n < 10 ? '0' : '') + n; };
     var _today = function () { var d = new Date(); return d.getFullYear() + _pad(d.getMonth() + 1) + _pad(d.getDate()); };
@@ -960,10 +978,13 @@
     //    가로/세로 칸 구분선처럼 쓸 수 있게 한다(표/마크와 같은 사이드카에 `boxes:[{x,y,wem,hem}]`).
     //    ⚠️ [2026-11-13, 사용자 요청] "기본적으로 박스는 모두 모서리 R 값 적용" — 둥근 모서리가 기본.
     window._docLabelBoxesCache = window._docLabelBoxesCache || {};   // code -> [{x,y,wem,hem}]
+    // 📏 [2026-11-13, 사용자 요청] "1줄 크기로 박스 줄여주고" — 기본 높이를 4em(여러 줄)에서
+    //    1.3em(한 줄+여백)으로. 이미 찍어 둔 박스는 그대로 두고(옛 데이터는 안 건드림), 새로
+    //    추가하는 박스부터 적용된다 — 기존 박스는 모서리 손잡이로 직접 줄이면 된다.
     window._docLabelBoxAdd = function (code) {
         var list = window._docLabelBoxesCache[code] = window._docLabelBoxesCache[code] || [];
         var n = list.length;
-        list.push({ x: Math.min(0.85, 0.2 + (n % 3) * 0.12), y: Math.min(0.85, 0.2 + Math.floor(n / 3) * 0.12), wem: 10, hem: 4 });
+        list.push({ x: Math.min(0.85, 0.2 + (n % 3) * 0.12), y: Math.min(0.85, 0.2 + Math.floor(n / 3) * 0.12), wem: 10, hem: 1.3 });
         _docLabelRefresh();
         window._docLabelNotesSave(code);
     };
@@ -1038,8 +1059,9 @@
     var _docLabelBoxMarkersHtml = function (boxes, draggable, code) {
         return (boxes || []).map(function (b, bi) {
             var wrapStyle = 'position:absolute; left:' + (b.x * 100) + '%; top:' + (b.y * 100) + '%;'
-                + ' width:' + (b.wem || 10) + 'em; height:' + (b.hem || 4) + 'em;'
-                + ' border:2px solid #e03131; border-radius:0.3em; background:transparent; z-index:0; pointer-events:none;';
+                + ' width:' + (b.wem || 10) + 'em; height:' + (b.hem || 1.3) + 'em;'
+                // 🔵 [2026-11-13, 사용자 요청] "박스 모서리 R값 적용해줘" — 0.3em → 0.5em(더 뚜렷하게).
+                + ' border:2px solid #e03131; border-radius:0.5em; background:transparent; z-index:0; pointer-events:none;';
             return '<span data-box-wrap data-box-idx="' + bi + '" style="' + wrapStyle + '">'
                 + (draggable ? '<span data-box-drag title="' + _esc(_t('끌어서 옮기기', 'drag to move')) + '"'
                   + ' style="position:absolute; left:-2px; right:-2px; top:-2px; height:10px; cursor:grab; pointer-events:auto;"></span>'
@@ -1542,6 +1564,25 @@
     window._docLabelNoteLivePatch = function (code, i, val) {
         var sel = '[data-note-text][data-note-code="' + CSS.escape(code) + '"][data-note-idx2="' + i + '"]';
         [].slice.call(document.querySelectorAll(sel)).forEach(function (el) { el.textContent = val; });
+    };
+    // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘 / 필요시 추가할수 있도록" — 마지막으로
+    //    커서가 있던 textarea(`window._docLabelActiveTextarea`, focusin 으로 기억해 둠)의 커서
+    //    위치에 글자를 끼워 넣는다. `input` 이벤트를 직접 쏴서 기존 `oninput`(실시간 반영)·
+    //    `onchange`(저장) 핸들러가 그대로 걸리게 한다(새 경로를 안 만든다).
+    window._docLabelInsertChar = function (ch) {
+        var ta = window._docLabelActiveTextarea;
+        if (!ta || !document.contains(ta)) {
+            _toast('⚠️ ' + _t('먼저 표시 입력칸을 한 번 눌러 커서를 둔 뒤 눌러주세요.', 'Click into a note field first.'), 'error');
+            return;
+        }
+        var s = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+        var e = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + ch + ta.value.slice(e);
+        var pos = s + ch.length;
+        ta.focus();
+        try { ta.setSelectionRange(pos, pos); } catch (errSel) { /* 일부 input 타입은 지원 안 함 */ }
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.dispatchEvent(new Event('change', { bubbles: true }));
     };
     // ↔ [2026-11-13, 사용자 요청] "정렬 기능 추가해줘(왼쪽·가운데·오른쪽)"
     window._docLabelNoteAlignSet = async function (code, i, align) {
@@ -2100,6 +2141,13 @@
             document.body.appendChild(ov);
             if (window._makeDraggable) { try { window._makeDraggable('doclabelart-box', 'doclabelart-head'); } catch (e) { /* 〃 */ } }
             if (window._bindClickToFront) { try { window._bindClickToFront('doclabelart-overlay'); } catch (e) { /* 〃 */ } }
+            // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘(DC 표시 등)" — 어느 표시 textarea에
+            //    커서가 있었는지 기억해 둔다(버튼을 눌러도 포커스가 안 날아가게 mousedown 은
+            //    막고, 여기서 **포커스 들어올 때**(focusin) 참조를 들고 있는다). `innerHTML`
+            //    교체로 textarea 자체가 매번 새로 생겨도 이 리스너는 한 번만 달면 된다(위임).
+            ov.addEventListener('focusin', function (ev) {
+                if (ev.target && ev.target.tagName === 'TEXTAREA') window._docLabelActiveTextarea = ev.target;
+            });
         }
         ov.style.display = 'flex';
         if (window.bringModalToFront) { try { window.bringModalToFront('doclabelart-overlay'); } catch (e) { /* 〃 */ } }
@@ -2197,6 +2245,16 @@
               + ' · <a href="#" onclick="window._docLabelCodeAdd(\'' + _esc(code) + '\',\'barcode\');return false;"'
               + ' style="color:#000; font-weight:bold;">▮ ' + _esc(_t('바코드 추가', 'Add barcode')) + '</a>'
               + '</div>' : '')
+            // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘(DC 표시 등) / 필요시 추가할수 있도록" —
+            //    아래 표시 입력칸 중 마지막으로 커서가 있던 곳에 끼워 넣는다. `onmousedown`
+            //    에서 기본 동작을 막아 버튼을 눌러도 그 textarea 가 포커스를 안 잃게 한다
+            //    (안 막으면 블러로 `window._docLabelActiveTextarea` 를 다시 잡기 전에 값이 꼬인다).
+            + (idle ? '<div style="margin-top:6px; font-size:12px; color:#000;">🔣 ' + _esc(_t('특수문자', 'Symbols')) + ': '
+              + DOC_LABEL_SPECIAL_CHARS.map(function (sc) {
+                  return '<a href="#" onmousedown="event.preventDefault();" onclick="window._docLabelInsertChar(\'' + _esc(sc.ch).replace(/'/g, "\\'")
+                      + '\');return false;" title="' + _esc(sc.title) + '" style="margin-right:8px; color:#000; font-weight:bold; font-size:14px;">'
+                      + _esc(sc.ch) + '</a>';
+              }).join('') + '</div>' : '')
             // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로도 작성 가능했으면
             //    좋겠음" — 번호 목록을 **입력칸으로** 바꿔 클릭 위치 없이 타이핑만으로 고칠 수 있게 하고,
             //    맨 아래에 "입력 후 추가" 줄을 둬서 도안을 클릭하지 않고도 표처럼 줄줄이 적을 수 있다
@@ -2232,7 +2290,11 @@
                         + ' <a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni
                         + ');return false;" style="color:#b1432f;">✕</a></div>';
                 }).join('') + '</div>' : '')
+            // 📐 [2026-11-13, 사용자 요청] "새표시내용을 입력... 위 박스와 시작 위치 맞춰줘" — 위
+            //    번호 목록은 "N." 칸(flex:0 0 1.6em)이 먼저라 textarea 가 그만큼 밀려 시작한다.
+            //    이 줄엔 번호가 없으니 **같은 폭의 빈 칸**을 똑같이 둬서 textarea 시작 위치를 맞춘다.
             + (idle ? '<div style="margin-top:8px; display:flex; gap:6px; align-items:flex-start;">'
+                + '<span style="flex:0 0 1.6em;"></span>'
                 + '<textarea id="doclabelart-newnote" rows="2" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
                   'Type a new note (Ctrl+Enter to add) — drag it into place after.')) + '"'
                 + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
@@ -3154,21 +3216,38 @@
             document.addEventListener('mouseup', onUp);
         };
     };
-    // 번호 원만(라벨 목록의 "N." 과 같은 번호) — 제목(title)에 그 라벨의 코드·규격·부착위치.
+    // 🖼️ [2026-11-13, 사용자 신고 "지금은 동그라미 숫자가 올라가고 있는데 잘못된 방향임"] —
+    //    번호 원 대신 **그 라벨의 실제 도안 이미지**를 도면 위에 작게 올린다(어떤 라벨이
+    //    거기 붙는지 그림으로 바로 보여야 한다는 지적). NO 는 구석 작은 배지로만 — 표의
+    //    NO 열과 맞춰 보는 용도. 도안이 아직 없는 라벨은(코드 미입력 등) 옛 번호 원으로 대신.
     var _docLabelAttachMarkersHtml = function (marks, draggable, id, litems) {
         return (marks || []).map(function (m, mi) {
-            var it = litems[m.labelIdx];
-            var title = it ? ((it.code || it.size || '-') + (it.position ? ' / ' + it.position : '')) : '-';
+            var it = litems[m.labelIdx] || {};
+            var itCode = String(it.code || '').trim();
+            var title = (it.code || it.size || '-') + (it.position ? ' / ' + it.position : '');
+            var artGroup = (window._docLabelArtGroups && itCode) ? (window._docLabelArtGroups[itCode] || []) : [];
+            var pickedStillThere = it.artFile && artGroup.some(function (g) { return g.name === it.artFile; });
+            var artFile = pickedStillThere ? it.artFile : ((window._docLabelArtIndex && itCode) ? window._docLabelArtIndex[itCode] : null);
             var wrapStyle = 'position:absolute; left:' + (m.x * 100) + '%; top:' + (m.y * 100) + '%; transform:translate(-50%,-50%);'
-                + ' width:26px; height:26px; min-width:26px; border-radius:50%; background:#e03131; color:#fff; font-weight:bold;'
-                + ' display:flex; align-items:center; justify-content:center; font-size:13px; box-shadow:0 0 0 2px #fff; z-index:1;'
-                + (draggable ? ' cursor:grab;' : '');
+                + ' z-index:1;' + (draggable ? ' cursor:grab;' : '');
+            var inner = artFile
+                ? '<img src="' + _esc(_docLabelArtSrc(itCode, artFile)) + '" draggable="false" ondragstart="return false;"'
+                  + ' style="display:block; width:80px; height:auto; border:1px solid #495057; border-radius:2px; background:#fff;'
+                  + ' box-shadow:0 1px 4px rgba(0,0,0,.35);">'
+                : '<span style="display:flex; width:26px; height:26px; border-radius:50%; background:#e03131; color:#fff;'
+                  + ' font-weight:bold; align-items:center; justify-content:center; font-size:13px; box-shadow:0 0 0 2px #fff;">'
+                  + (m.labelIdx + 1) + '</span>';
             return '<span data-attach-mark-wrap data-attach-mark-idx="' + mi + '" title="' + _esc(title) + '" style="' + wrapStyle + '">'
-                + (m.labelIdx + 1)
+                + inner
+                // 도안 이미지일 때만 구석에 NO 배지(위 표의 NO 열과 맞춰 보는 용도) — 번호 원
+                // 대체(artFile 없음)일 땐 그 원 자체가 이미 번호라 또 달면 중복이다.
+                + (artFile ? '<span style="position:absolute; left:-6px; top:-6px; width:16px; height:16px; line-height:16px;'
+                  + ' text-align:center; background:#1971c2; color:#fff; border-radius:50%; font-size:10px; font-weight:bold;'
+                  + ' box-shadow:0 0 0 1px #fff;">' + (m.labelIdx + 1) + '</span>' : '')
                 + (draggable ? '<a href="#" onclick="window._docLabelAttachMarkDel(\'' + _esc(id) + '\',' + mi + ');return false;"'
-                  + ' style="position:absolute; left:-8px; top:-8px; width:16px; height:16px; line-height:16px; text-align:center;'
+                  + ' style="position:absolute; right:-6px; top:-6px; width:16px; height:16px; line-height:16px; text-align:center;'
                   + ' background:#b1432f; color:#fff; border-radius:50%; font-size:10px; font-weight:bold; text-decoration:none;'
-                  + ' box-shadow:0 0 0 1px #fff; pointer-events:auto;">✕</a>' : '')
+                  + ' box-shadow:0 0 0 1px #fff; pointer-events:auto; z-index:2;">✕</a>' : '')
                 + '</span>';
         }).join('');
     };
@@ -4073,15 +4152,18 @@
                 //    (대신 칸 안에서 줄바꿈·세로로만 늘어난다 — 넘치지 않는다).
                 // 📐 [2026-11-13, 사용자 요청: 150%→정정 130%] "라벨 도안 열 너비 130% 늘려줘" —
                 //    32%→42%(1.3배), 나머지 5칸은 원래 비율 그대로 줄여서(68% 를 58% 에) 합이 다시 100%.
+                // 🔢 [2026-11-13, 사용자 요청] "라벨 도안 왼쪽에 NO 열 추가합시다" — 도면 위
+                //    핀(아래 labelattach)이 이 번호로 어느 라벨인지 가리킨다.
                 h += '</table><table class="doc-t" style="table-layout:fixed; width:100%;">'
-                   + '<tr><th class="doc-noprint" style="width:42%;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
+                   + '<tr><th style="width:4%;">NO</th>'
+                   + '<th class="doc-noprint" style="width:40%;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
                    + '<th style="width:8%;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
-                   + '<th style="width:14%;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
+                   + '<th style="width:13%;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
                    + '<th style="width:9%;">' + _esc(_t('부착위치', 'Position')) + '</th>'
-                   + '<th style="width:24%;">' + _esc(_t('비고', 'Note')) + '</th>'
+                   + '<th style="width:23%;">' + _esc(_t('비고', 'Note')) + '</th>'
                    + '<th class="doc-noprint" style="width:3%;"></th></tr>';
                 if (!litems.length) {
-                    h += '<tr><td colspan="6" style="color:#868e96;">'
+                    h += '<tr><td colspan="7" style="color:#868e96;">'
                        + _esc(_t('아직 라벨이 없습니다 — 아래 [＋ 라벨 추가]를 누르거나 모델명세서_라벨 엑셀을 불러오세요.',
                                  'No labels yet — add one or import the label spec sheet.')) + '</td></tr>';
                 }
@@ -4191,6 +4273,7 @@
                     //    묶었더니(고정 폭 76~86px + 버튼) 좁아진 열(10%) 을 넘쳤다 — `flex-wrap:wrap` 으로
                     //    바꿔 모자라면 버튼이 **다음 줄로** 내려가게 한다(열 폭 자체는 절대 안 넘친다).
                     h += '<tr>'
+                       + '<td style="text-align:center; vertical-align:middle; font-weight:bold;">' + (i + 1) + '</td>'
                        + '<td class="doc-noprint" style="text-align:center; vertical-align:middle; padding:5px;">' + artCell + '</td>'
                        // 📋 [2026-11-13, 사용자 요청] "라벨 규격은 자동으로 내역이 적용되는 구조이니
                        //    돋보기는 필요 없을것 같은데 사용자 작성란은 아래로 이동 배치해줘" — 코드로
@@ -4239,7 +4322,7 @@
                        + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '" style="color:#b1432f;">✕</a></td>'
                        + '</tr>';
                     if (found) {
-                        h += '<tr><td colspan="6" class="doc-noprint" style="font-size:11px; color:#495057;'
+                        h += '<tr><td colspan="7" class="doc-noprint" style="font-size:11px; color:#495057;'
                            + ' background:#f8fbfb; padding:3px 8px;">' + found + '</td></tr>';
                     }
                 });
