@@ -267,8 +267,11 @@
         //    고정 `table` kind 로는 못 받는다 — 'check' kind 와 같은 add/del-row 전용 kind 둘로 받는다.
         {
             id: 'label-spec', icon: '🏷', label: '라벨사양서', folder: '라벨사양서',
+            // 🏷🏷 [2026-11-13 요청] M.C Table 과 같은 R1/R2/R3… 리비전 관리 — 라벨 목록·인증 표가
+            //    리비전마다 완전히 갈린다(`_docData` 가 그 통을 고른다, 위 `perRevision` 분기).
+            perRevision: true,
             note: '라벨마다 규격·라벨품목코드(6자리)·부착위치를 적으면, 그 코드로 SAP 원자재승인원'
-                + ' 폴더에서 라벨 도안을 바로 찾아 엽니다.',
+                + ' 폴더에서 라벨 도안을 바로 찾아 엽니다. M.C Table 과 같은 R1/R2/R3… 리비전 관리가 됩니다.',
             nameOf: function (ctx) { return _projKey(ctx) + '_라벨사양서_' + _today(); },
             sections: [
                 {
@@ -479,14 +482,15 @@
         var u = window.mcActiveUnit || '';
         return u ? base + '#' + u : base;
     };
-    var _docData = function (id) {
+    // 📦 (round+모델 범위) **문서 통**을 반환 — `perRevision` 서식에선 이 통 안에 `.revisions[R1..]`
+    //    를 둔다(M.C 의 `mcRevisions`와 같은 자리). `perRevision` 이 아닌 서식은 이 통 자체가
+    //    곧 문서다(지금까지와 동일) — `_docData`가 거기서 한 걸음 더 들어가 고른다.
+    var _docContainer = function (id) {
         window.tabData = window.tabData || {};
         window.tabData.documents = window.tabData.documents || {};
         var k = _dataKey(id);
         var isNew = !window.tabData.documents[k];
         var d = window.tabData.documents[k] = window.tabData.documents[k] || {};
-        d.fields = d.fields || {};
-        d.att = d.att || {};
         // ⚠️⚠️ **모델을 처음 추가한 프로젝트**가 그 모델로 처음 들어올 때, 모델 구분이 없던
         //    옛 문서 내용을 한 번 베껴 담는다(이관, js/43 과 같은 방식) — 안 그러면 모델을
         //    추가하는 순간 이미 적어 둔 문서가 그 모델에선 전부 빈 걸로 보인다. **복사**만
@@ -498,9 +502,60 @@
             if (legacy) {
                 if (legacy.fields) d.fields = JSON.parse(JSON.stringify(legacy.fields));
                 if (legacy.att) d.att = JSON.parse(JSON.stringify(legacy.att));
+                if (legacy.revisions) d.revisions = JSON.parse(JSON.stringify(legacy.revisions));
             }
         }
         return d;
+    };
+    // 🏷🏷 [2026-11-13 요청] "라벨 사양서는 M.C Table 처럼 R1,2,3… 관리가 필요함" — `perRevision`
+    //    서식은 리비전마다 완전히 **따로** 라벨 목록·인증 표를 둔다(M.C 가 `mcRevisions[R1..]`로
+    //    견적을 나누는 것과 같은 방식). 리비전 목록은 **있는 것만**(always 'R1' 포함, 번호순) —
+    //    M.C 의 `_mcRevList` 와 같은 규칙.
+    window._docRevisions = function (id) {
+        var form = _formById(id);
+        if (!form || !form.perRevision) return ['R1'];
+        var revs = _docContainer(id).revisions || {};
+        var out = ['R1'];
+        Object.keys(revs).forEach(function (k) { if (/^R\d+$/.test(k) && out.indexOf(k) === -1) out.push(k); });
+        out.sort(function (a, b) { return parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10); });
+        return out;
+    };
+    // 그 리비전에 실제 내용이 있는가(완전히 빈 새 리비전과 구분) — 어느 하나라도 값이 있으면 '있다'.
+    window._docRevisionHasData = function (id, rev) {
+        var revs = _docContainer(id).revisions || {};
+        var d = revs[rev];
+        if (!d) return false;
+        if ((d.labelItems || []).length) return true;
+        var lc = d.labelCerts || {};
+        if ((lc.certs || []).length || (lc.ratings || []).length) return true;
+        return Object.keys(d.fields || {}).some(function (k) { return String(d.fields[k] || '').trim(); });
+    };
+    // 지금 보고 있는 리비전 — 들고 있는 값이 목록에 없으면(지운 리비전 등) 가장 최근 것으로.
+    //    처음 여는 문서는 **내용이 있는 가장 최근 리비전**이 기본값이다(M.C 와 같은 규칙).
+    var _docActiveRevision = function (id) {
+        var form = _formById(id);
+        if (!form || !form.perRevision) return null;
+        var list = window._docRevisions(id);
+        var cur = window._docState.revision;
+        if (cur && list.indexOf(cur) !== -1) return cur;
+        for (var i = list.length - 1; i >= 0; i--) { if (window._docRevisionHasData(id, list[i])) return list[i]; }
+        return list[0];
+    };
+    window._docActiveRevision = _docActiveRevision;
+    var _docData = function (id) {
+        var form = _formById(id);
+        var container = _docContainer(id);
+        if (form && form.perRevision) {
+            container.revisions = container.revisions || {};
+            var rev = _docActiveRevision(id) || 'R1';
+            var d = container.revisions[rev] = container.revisions[rev] || {};
+            d.fields = d.fields || {};
+            d.att = d.att || {};
+            return d;
+        }
+        container.fields = container.fields || {};
+        container.att = container.att || {};
+        return container;
     };
     var _hasOwn = function (id, key) {
         return Object.prototype.hasOwnProperty.call(_docData(id).fields, key);
@@ -589,6 +644,197 @@
         if (!list || !list[idx]) return;
         list.splice(idx, 1);
         _markDirty(); window._docRender();
+    };
+
+    // ── 🆚 [2026-11-13 요청] "VS는 R1,2,3… 차이점이 무엇인지 요약해주는 기능" ──────────
+    //   M.C Table 의 VS 는 금액을 리비전마다 나란히 보여준다 — 여기는 텍스트 항목(라벨·인증)이라
+    //   "뭐가 늘고 줄고 바뀌었는지"를 직접 짚어 준다. 리비전 데이터는 `_docContainer(id).revisions`
+    //   에 그대로 있으므로(화면에 그려진 현재 리비전만 보지 않는다), 보고 있지 않은 리비전끼리도 비교된다.
+    var _docRevVsItemKey = function (it) {
+        var code = String((it && it.code) || '').trim();
+        if (code) return 'c:' + code.toLowerCase();
+        var size = String((it && it.size) || '').trim(), pos = String((it && it.position) || '').trim();
+        return 's:' + size.toLowerCase() + '|' + pos.toLowerCase();
+    };
+    window._docRevVsBuildItemRows = function (formId, revs) {
+        var container = _docContainer(formId), order = [], byKey = {};
+        revs.forEach(function (rev) {
+            var d = (container.revisions || {})[rev] || {};
+            (d.labelItems || []).forEach(function (it) {
+                var key = _docRevVsItemKey(it);
+                var entry = byKey[key];
+                if (!entry) { entry = { key: key, label: it.code || it.size || '-', byRev: {} }; byKey[key] = entry; order.push(entry); }
+                entry.byRev[rev] = { size: it.size || '', code: it.code || '', position: it.position || '', note: it.note || '' };
+            });
+        });
+        return order;
+    };
+    window._docRevVsBuildCertRows = function (formId, revs, kind) {
+        var container = _docContainer(formId), order = [], byKey = {};
+        revs.forEach(function (rev) {
+            var d = (container.revisions || {})[rev] || {};
+            var lc = d.labelCerts || {};
+            (lc[kind] || []).forEach(function (r) {
+                var name = String(r.name || '').trim();
+                if (!name) return;
+                var key = name.toLowerCase();
+                var entry = byKey[key];
+                if (!entry) { entry = { key: key, label: name, byRev: {} }; byKey[key] = entry; order.push(entry); }
+                entry.byRev[rev] = (kind === 'certs')
+                    ? { check: r.check || '', print: r.print || '', printType: r.printType || '' }
+                    : { spec: r.spec || '', print: r.print || '' };
+            });
+        });
+        return order;
+    };
+    var _docRevVsDiffText = function (a, b, fields, labels) {
+        var out = [];
+        fields.forEach(function (f, i) {
+            var av = (a && a[f]) || '', bv = (b && b[f]) || '';
+            if (String(av) !== String(bv)) out.push((labels[i] || f) + ' ' + (av || '-') + '→' + (bv || '-'));
+        });
+        return out;
+    };
+    /** 리비전이 바로 다음 리비전과 비교해 뭐가 늘고(➕)·줄고(➖)·바뀌었는지(✏️) 한 줄씩. */
+    window._docRevVsSummaryLines = function (formId, revs) {
+        var itemRows = window._docRevVsBuildItemRows(formId, revs);
+        var certRows = window._docRevVsBuildCertRows(formId, revs, 'certs')
+            .concat(window._docRevVsBuildCertRows(formId, revs, 'ratings'));
+        var lines = [];
+        for (var i = 1; i < revs.length; i++) {
+            var prev = revs[i - 1], cur = revs[i];
+            var added = [], removed = [], changed = [];
+            itemRows.forEach(function (row) {
+                var a = row.byRev[prev], b = row.byRev[cur];
+                if (!a && b) { added.push(row.label); return; }
+                if (a && !b) { removed.push(row.label); return; }
+                if (a && b) {
+                    var d = _docRevVsDiffText(a, b, ['size', 'position', 'note'],
+                        [_t('규격', 'size'), _t('부착위치', 'position'), _t('비고', 'note')]);
+                    if (d.length) changed.push(row.label + '(' + d.join(', ') + ')');
+                }
+            });
+            var cAdded = [], cRemoved = [], cChanged = [];
+            certRows.forEach(function (row) {
+                var a = row.byRev[prev], b = row.byRev[cur];
+                if (!a && b) { cAdded.push(row.label); return; }
+                if (a && !b) { cRemoved.push(row.label); return; }
+                if (a && b) {
+                    var isCert = a.check !== undefined;
+                    var fs = isCert ? ['check', 'print', 'printType'] : ['spec', 'print'];
+                    var ls = isCert ? ['Check', _t('인쇄', 'print'), _t('인쇄구분', 'type')] : [_t('규격값', 'spec'), _t('인쇄', 'print')];
+                    var d2 = _docRevVsDiffText(a, b, fs, ls);
+                    if (d2.length) cChanged.push(row.label + '(' + d2.join(', ') + ')');
+                }
+            });
+            var parts = [];
+            if (added.length) parts.push('➕ ' + added.length + _t('개 라벨 추가(', ' label(s) added (') + added.join(', ') + ')');
+            if (removed.length) parts.push('➖ ' + removed.length + _t('개 라벨 삭제(', ' label(s) removed (') + removed.join(', ') + ')');
+            if (changed.length) parts.push('✏️ ' + changed.length + _t('개 라벨 변경: ', ' label(s) changed: ') + changed.join(' · '));
+            if (cAdded.length) parts.push('➕ ' + cAdded.length + _t('개 인증/정격 추가(', ' cert(s) added (') + cAdded.join(', ') + ')');
+            if (cRemoved.length) parts.push('➖ ' + cRemoved.length + _t('개 인증/정격 삭제(', ' cert(s) removed (') + cRemoved.join(', ') + ')');
+            if (cChanged.length) parts.push('✏️ ' + cChanged.length + _t('개 인증/정격 변경: ', ' cert(s) changed: ') + cChanged.join(' · '));
+            if (!parts.length) parts.push(_t('차이 없음', 'No changes'));
+            lines.push({ from: prev, to: cur, text: parts.join(' · ') });
+        }
+        return lines;
+    };
+    window._docRevVsOpen = function (formId) {
+        window._docRevVs = { formId: formId };
+        _docRevVsRender();
+    };
+    window._docRevVsClose = function () {
+        window._docRevVs = null;
+        var ov = document.getElementById('docrevvs-overlay');
+        if (ov) ov.style.display = 'none';
+    };
+    var _docRevVsRender = function () {
+        var m = window._docRevVs; if (!m) return;
+        var formId = m.formId;
+        var revs = window._docRevisions(formId).filter(function (r) { return window._docRevisionHasData(formId, r); });
+        if (revs.length < 2) { _toast('⚠️ ' + _t('비교할 리비전이 2개 미만입니다.', 'Fewer than 2 revisions to compare.'), 'error'); window._docRevVsClose(); return; }
+
+        var ov = document.getElementById('docrevvs-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'docrevvs-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9600; pointer-events:none; background:none;';
+            ov.innerHTML = '<div id="docrevvs-box" style="pointer-events:all; position:fixed; left:50%; top:5%;'
+                + ' transform:translateX(-50%); width:min(920px,95vw); max-height:88vh; display:flex; flex-direction:column;'
+                + ' background:#fff; border:1px solid #e3a8a8; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18); overflow:hidden;">'
+                + '<div id="docrevvs-head" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between;'
+                + ' padding:9px 12px; background:#fdeaea; border-bottom:1px solid #e3a8a8; color:#a83232; font-weight:bold;'
+                + ' font-size:13px; cursor:grab;"><span id="docrevvs-title"></span>'
+                + '<button onclick="window._docRevVsClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
+                + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+                + '<div id="docrevvs-body" style="flex:1; min-height:0; overflow:auto; padding:14px;"></div></div>';
+            document.body.appendChild(ov);
+            if (window._makeDraggable) { try { window._makeDraggable('docrevvs-box', 'docrevvs-head'); } catch (e) { /* 〃 */ } }
+            if (window._bindClickToFront) { try { window._bindClickToFront('docrevvs-overlay'); } catch (e) { /* 〃 */ } }
+        }
+        ov.style.display = 'flex';
+        if (window.bringModalToFront) { try { window.bringModalToFront('docrevvs-overlay'); } catch (e) { /* 〃 */ } }
+        var titleEl = document.getElementById('docrevvs-title');
+        if (titleEl) titleEl.textContent = '🆚 ' + _t('리비전 비교 — ', 'Compare revisions — ') + revs.join(' / ');
+
+        var lines = window._docRevVsSummaryLines(formId, revs);
+        var h = '<div style="margin-bottom:12px;">'
+            + '<div style="font-weight:bold; font-size:12.5px; margin-bottom:6px; color:#495057;">'
+            + _esc(_t('무엇이 달라졌나', 'What changed')) + '</div>'
+            + '<ul style="margin:0; padding-left:18px; font-size:12px; line-height:1.7;">';
+        lines.forEach(function (l) { h += '<li><b>' + _esc(l.from) + ' → ' + _esc(l.to) + '</b>: ' + _esc(l.text) + '</li>'; });
+        h += '</ul></div>';
+
+        var itemRows = window._docRevVsBuildItemRows(formId, revs);
+        h += '<div style="font-weight:bold; font-size:12.5px; margin:14px 0 6px; color:#495057;">'
+            + _esc(_t('라벨 목록', 'Labels')) + '</div>'
+            + '<table class="doc-t" style="width:100%; table-layout:fixed;"><tr><th style="width:18%;">'
+            + _esc(_t('코드/규격', 'Code/size')) + '</th>' + revs.map(function (r) { return '<th>' + _esc(r) + '</th>'; }).join('') + '</tr>';
+        if (!itemRows.length) {
+            h += '<tr><td colspan="' + (revs.length + 1) + '" style="color:#868e96;">' + _esc(_t('라벨이 없습니다.', 'No labels.')) + '</td></tr>';
+        }
+        itemRows.forEach(function (row) {
+            h += '<tr><td class="doc-lab">' + _esc(row.label) + '</td>';
+            var base = null;
+            revs.forEach(function (rev) {
+                var v = row.byRev[rev];
+                if (v && !base) base = v;
+                var txt = v ? [v.size, v.position].filter(Boolean).join(' / ') + (v.note ? (' · ' + v.note) : '') : '—';
+                var changed = !!(v && base && (v.size !== base.size || v.position !== base.position || v.note !== base.note));
+                var bg = !v ? '#f1f3f5' : (changed ? '#fff3cd' : '#fff'), fg = !v ? '#adb5bd' : '#212529';
+                h += '<td style="background:' + bg + '; color:' + fg + '; font-size:11.5px;">' + _esc(txt) + '</td>';
+            });
+            h += '</tr>';
+        });
+        h += '</table>';
+
+        ['certs', 'ratings'].forEach(function (kind) {
+            var rows = window._docRevVsBuildCertRows(formId, revs, kind);
+            if (!rows.length) return;
+            h += '<div style="font-weight:bold; font-size:12.5px; margin:14px 0 6px; color:#495057;">'
+                + _esc(kind === 'certs' ? _t('인증 항목', 'Certifications') : _t('정격 표시', 'Rating spec')) + '</div>'
+                + '<table class="doc-t" style="width:100%; table-layout:fixed;"><tr><th style="width:18%;">'
+                + _esc(_t('항목', 'Item')) + '</th>' + revs.map(function (r) { return '<th>' + _esc(r) + '</th>'; }).join('') + '</tr>';
+            rows.forEach(function (row) {
+                h += '<tr><td class="doc-lab">' + _esc(row.label) + '</td>';
+                var base = null;
+                revs.forEach(function (rev) {
+                    var v = row.byRev[rev];
+                    if (v && !base) base = v;
+                    var txt = !v ? '—' : (kind === 'certs'
+                        ? ((v.check === 'O' ? 'O' : 'X') + (v.printType ? (' · ' + v.printType) : ''))
+                        : (v.spec || '-'));
+                    var changed = !!(v && base && (kind === 'certs'
+                        ? (v.check !== base.check || v.printType !== base.printType) : (v.spec !== base.spec)));
+                    var bg = !v ? '#f1f3f5' : (changed ? '#fff3cd' : '#fff'), fg = !v ? '#adb5bd' : '#212529';
+                    h += '<td style="background:' + bg + '; color:' + fg + '; font-size:11.5px;">' + _esc(txt) + '</td>';
+                });
+                h += '</tr>';
+            });
+            h += '</table>';
+        });
+
+        document.getElementById('docrevvs-body').innerHTML = h;
     };
     // 🖼 [2026-11-12 2차] 라벨 도안 **공용 라이브러리** — 라벨품목코드(6자리)가 주인이지
     //    프로젝트가 주인이 아니다(사용자 지적: "공통문서라서 프로젝트로 가면 안 될 것 같다").
@@ -1311,7 +1557,13 @@
             startX = ev.clientX; startY = ev.clientY;
             var r = img.getBoundingClientRect();
             startW = r.width; startH = r.height;
-            ratio = startW / startH || 1;
+            // ⚠️⚠️ [2026-11-13, 사용자 신고 "비율 및 얼라인 안 맞음"] **지금 렌더된 박스**의 비율이
+            //    아니라 **이미지 원본**(naturalWidth/Height)의 비율로 고정한다 — 모달 따로·표
+            //    썸네일 따로 각자 드래그 시점의 "그때 보이던" 비율을 캡처하면, 한쪽이 예전에
+            //    비율 고정 없이 한 번이라도 눌려 비틀어져 있었을 때 그 비틀어진 비율이 그대로
+            //    "기준"이 돼 새로 끌어도 둘이 서로 다른 비율로 갈라진다. 원본 기준이면 **항상
+            //    같은 값**이라 모달·표가 반드시 같은 비율로 되돌아온다(자가 교정).
+            ratio = (img.naturalWidth && img.naturalHeight) ? (img.naturalWidth / img.naturalHeight) : (startW / startH || 1);
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         };
@@ -1346,7 +1598,8 @@
             startX = ev.clientX; startY = ev.clientY;
             var r = img.getBoundingClientRect();
             startW = r.width; startH = r.height;
-            ratio = startW / startH || 1;
+            // ⚠️⚠️ 위 `_docLabelSizeWire`(모달)와 같은 이유 — 렌더된 박스가 아니라 이미지 원본 비율.
+            ratio = (img.naturalWidth && img.naturalHeight) ? (img.naturalWidth / img.naturalHeight) : (startW / startH || 1);
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         };
@@ -1544,10 +1797,23 @@
     // 🗂️ [2026-11-13, 사용자 요청] "등록된 여러개 중 선택해서 사용" — 고르기 줄을 펼치고/접고,
     //    고른 파일을 이 줄(`it.artFile`)에만 고정한다. 다른 줄·다른 프로젝트는 영향받지 않는다.
     window._docLabelArtPickOpen = window._docLabelArtPickOpen || {};
-    window._docLabelArtPickToggle = function (key) {
-        window._docLabelArtPickOpen[key] = !window._docLabelArtPickOpen[key];
+    window._docLabelArtPickToggle = function (key, ev) {
+        if (ev) ev.stopPropagation();   // 같은 클릭이 바로 아래 document 리스너에 다시 잡혀 즉시 닫히지 않게
+        var opening = !window._docLabelArtPickOpen[key];
+        window._docLabelArtPickOpen = {};   // 다른 줄에 열려 있던 것도 같이 접는다(한 번에 하나만)
+        if (opening) window._docLabelArtPickOpen[key] = true;
         window._docRender();
     };
+    // 🖱️ [2026-11-13, 사용자 요청] "등록된 선택 상태는 다른곳 클릭하면 숨겨져야하는데" —
+    //    고르기 목록 **바깥**을 누르면 닫는다(`data-art-pick` 안쪽 클릭은 제외 — 썸네일
+    //    고르기·삭제 자신이 먼저 처리되게).
+    document.addEventListener('click', function (ev) {
+        var open = window._docLabelArtPickOpen;
+        if (!open || !Object.keys(open).some(function (k) { return open[k]; })) return;
+        if (ev.target && ev.target.closest && ev.target.closest('[data-art-pick]')) return;
+        window._docLabelArtPickOpen = {};
+        window._docRender();
+    });
     window._docLabelArtPick = function (formId, idx, fname) {
         var it = (_docData(formId).labelItems || [])[idx];
         if (!it) return;
@@ -2343,6 +2609,52 @@
         if (window.mcSwitchUnit) window.mcSwitchUnit(next); else window.mcActiveUnit = next;
         window._docRender();
     };
+    // 🏷🏷 리비전(R1/R2/R3…) 넘기기 — M.C `mcCycleRevision`/`mcAddNewRevision`과 같은 규칙.
+    //    ◀▶ 는 **내용 있는** 리비전끼리만 돈다(+지금 보는 중인 빈 리비전은 임시로 끼워 준다) —
+    //    빈 슬롯을 계속 만들며 돌아다니면 끝이 없다.
+    window._docRevGo = function (formId, delta) {
+        var cur = _docActiveRevision(formId) || 'R1';
+        var list = window._docRevisions(formId).filter(function (r) {
+            return r === cur || window._docRevisionHasData(formId, r);
+        });
+        if (!list.length) list = ['R1'];
+        var i = list.indexOf(cur);
+        if (i < 0) i = 0;
+        window._docState.revision = list[((i + delta) % list.length + list.length) % list.length];
+        window._docRender();
+    };
+    window._docSetRevision = function (formId, rev) {
+        window._docState.revision = rev;
+        window._docRender();
+    };
+    /** ➕ 리비전 추가 — 지금까지 "내용 있는" 가장 큰 R번호 다음 번호로. 내용이 있으면 복사할지 묻는다
+     *  (M.C `mcAddNewRevision`과 같은 질문·같은 이유 — 보통 R3 는 R2 를 조금만 고쳐서 만든다). */
+    window._docRevAdd = function (formId) {
+        var list = window._docRevisions(formId);
+        var cur = _docActiveRevision(formId) || 'R1';
+        var maxN = 0;
+        list.forEach(function (r) {
+            if (window._docRevisionHasData(formId, r)) maxN = Math.max(maxN, parseInt(r.slice(1), 10));
+        });
+        var curM = cur.match(/^R(\d+)$/);
+        var curHasData = window._docRevisionHasData(formId, cur);
+        if (curM && curHasData) maxN = Math.max(maxN, parseInt(curM[1], 10));
+        var nextN = maxN + 1;
+        if (curM && nextN === parseInt(curM[1], 10)) nextN += 1;
+        var newRev = 'R' + nextN;
+
+        var container = _docContainer(formId);
+        container.revisions = container.revisions || {};
+        if (curHasData && confirm(_t(
+            '[' + cur + '] 내용을 복사해서 [' + newRev + ']을(를) 만들까요? (바뀐 부분만 고치면 됩니다)\n(취소를 누르면 빈 표로 시작합니다)',
+            'Copy [' + cur + '] into new revision [' + newRev + '] so you only need to edit what changed?\n(Cancel starts ' + newRev + ' blank instead)'
+        ))) {
+            container.revisions[newRev] = JSON.parse(JSON.stringify(container.revisions[cur]));
+        }
+        window._docState.revision = newRev;
+        window._docRender();
+        _toast('🏷 ' + newRev + _t(' 리비전을 만들었습니다.', ' revision created.'), 'success');
+    };
     /** 🙈 [2026-11-12 요청] 점검요청 '해당없음' 항목 접기 ↔ 펴기 (기본 접힘, Resolution 묶음은 예외) */
     window._docToggleHideNA = function () {
         window._docState.hideNA = (window._docState.hideNA === false) ? true : false;
@@ -3018,6 +3330,35 @@
                 + ' style="margin-left:2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
                 + '</div>';
         }
+        // 🏷🏷 리비전 바(R1/R2/R3…) — M.C Table 과 같은 모양(◀ 📦 ▶ 와 같은 자리에 R 번호).
+        //    `perRevision` 서식에서만 보인다(지금은 라벨사양서 하나). + VS 는 리비전이 2개
+        //    이상 **내용 있게** 있을 때만 뜻이 있어 그때만 보인다.
+        if (form && form.perRevision) {
+            var _docRevList = window._docRevisions(form.id);
+            var _docRevCur = _docActiveRevision(form.id) || 'R1';
+            var _docRevI = _docRevList.indexOf(_docRevCur);
+            var _docRevWithData = _docRevList.filter(function (r) { return window._docRevisionHasData(form.id, r); });
+            th += '<span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>'
+                + '<div id="doc-rev-bar" style="display:flex; align-items:center; gap:2px; flex-shrink:0;">'
+                + '<button onclick="window._docRevGo(\'' + _esc(form.id) + '\',-1)" title="' + _esc(_t('이전 리비전', 'Previous')) + '"'
+                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">◀</button>'
+                + '<button class="unit-cycle-btn" onclick="window._docRevGo(\'' + _esc(form.id) + '\',1)" title="'
+                + _esc(_t('누를 때마다 다음 리비전으로 — 리비전마다 라벨 목록이 따로입니다', 'Next revision')) + '"'
+                + ' style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer;'
+                + ' font-size:12px; font-weight:bold;">🏷 ' + _esc(_docRevCur) + '</button>'
+                + '<button onclick="window._docRevGo(\'' + _esc(form.id) + '\',1)" title="' + _esc(_t('다음 리비전', 'Next')) + '"'
+                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">▶</button>'
+                + '<span style="font-size:11px; color:#868e96;">' + ((_docRevI < 0 ? 0 : _docRevI + 1) + '/' + _docRevList.length) + '</span>'
+                + '<button onclick="window._docRevAdd(\'' + _esc(form.id) + '\')" title="' + _esc(_t('리비전 추가 — R 번호가 하나 늘어납니다', 'Add a revision')) + '"'
+                + ' style="margin-left:2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>';
+            if (_docRevWithData.length >= 2) {
+                th += '<button onclick="window._docRevVsOpen(\'' + _esc(form.id) + '\')" title="'
+                    + _esc(_t('리비전끼리 무엇이 달라졌는지 비교합니다', 'Compare what changed between revisions')) + '"'
+                    + ' style="margin-left:4px; padding:6px 10px; min-width:auto; border:1px solid #e3a8a8; border-radius:5px;'
+                    + ' background:#fdeaea; color:#a83232; cursor:pointer; font-size:12px; font-weight:bold;">🆚 VS</button>';
+            }
+            th += '</div>';
+        }
         th += ''
             // 📌 [2026-11-09 사용자 요청] 출력 버튼은 **오른쪽 끝**에 붙인다 — PARTS 와 같은
             //    장치인 `.btn-group`(styles.css 에서 `margin-left:auto`)을 그대로 쓴다.
@@ -3436,8 +3777,8 @@
                     var artPickLink = '';
                     if (artGroup.length > 1) {
                         var artOpen = window._docLabelArtPickOpen && window._docLabelArtPickOpen[artPickKey];
-                        artPickLink = '<div class="doc-noprint" style="margin-top:3px; font-size:11px;">'
-                            + '<a href="#" onclick="window._docLabelArtPickToggle(\'' + _esc(artPickKey) + '\');return false;"'
+                        artPickLink = '<div class="doc-noprint" data-art-pick style="margin-top:3px; font-size:11px;">'
+                            + '<a href="#" onclick="window._docLabelArtPickToggle(\'' + _esc(artPickKey) + '\',event);return false;"'
                             + ' style="color:#7a5210; font-weight:bold;">📚 ' + artGroup.length + _esc(_t('개 등록됨 · 선택', ' registered · choose'))
                             + '</a>' + (artOpen ? '<div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:6px;">'
                                 + artGroup.map(function (g) {
