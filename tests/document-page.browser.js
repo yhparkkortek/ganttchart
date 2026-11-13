@@ -96,7 +96,7 @@
             realFetch = window.fetch, realConfirm = window.confirm,
             realXW = (typeof XLSX !== 'undefined') ? XLSX.writeFile : null,
             realPW = (typeof PptxGenJS !== 'undefined') ? PptxGenJS.prototype.writeFile : null,
-            realState = window._docState;
+            realState = window._docState, realUnit = window.mcActiveUnit;
         var puts = [], confirmAnswer = false, wroteX = null, wroteP = null;
 
         window.saveToGoogleDrive = function () { console.warn('[document-page harness] 저장 차단됨'); return Promise.resolve(); };
@@ -419,6 +419,59 @@
             eq('409 + 승인 → 요청 2회', puts.length, 2);
             ok('두 번째는 overwrite=1', (puts[1] || '').indexOf('overwrite=1') >= 0, puts[1]);
             confirmAnswer = false;
+
+            // ── G. 🏷 모델(제품구분자)별 문서 분리 (2026-11-13 요청) ──
+            //    "Document 페이지 문서는 Summary 에 등록된 모델(MVD/TVD/TPR…)별로 나와야 함"
+            //    M.C/BOM/Customer SPEC 과 같은 `window.mcActiveUnit` 을 공유한다.
+            LOG.push(''); LOG.push('── G. 모델(제품구분자)별 문서 분리 ──');
+            window.tabData.mcUnits = [];
+            window.mcActiveUnit = '';
+            window._docPick('proto-req'); await sleep(30);
+            ok('모델을 하나도 안 늘린 프로젝트는 모델 바가 안 보인다',
+               !document.getElementById('doc-header-tools').querySelector('.unit-cycle-btn[onclick*="docCycleUnit"]'));
+            window.tabData.mcUnits = ['MVD', 'TVD'];
+            window.mcActiveUnit = 'MVD';
+            window._docRender(); await sleep(30);
+            var unitBtn = document.getElementById('doc-header-tools').querySelector('.unit-cycle-btn[onclick*="docCycleUnit"]');
+            ok('모델이 둘 이상이면 모델 바가 보인다', !!unitBtn, document.getElementById('doc-header-tools').textContent);
+            ok('모델 바에 지금 모델명이 보인다', unitBtn && unitBtn.textContent.trim() === 'MVD', unitBtn && unitBtn.textContent);
+            // ⚠️ '기구 담당자'는 자동값(`meta.기구담당자`)이 있는 칸이라 **프로젝트 전체 공통값**을
+            //    보여 주는 게 맞다(위 B절에서 이미 확인) — 모델별 분리를 보려면 자동값도 없고
+            //    위 섹션에서 손댄 적도 없는 깨끗한 칸('제작 회차')으로 확인해야 한다
+            //    ('총 제작수량'은 C절에서 이미 값을 넣어 둬서, 거기서 새 모델을 시험하면
+            //    "모델 분리 전 값을 이어받는다"(이관, 의도된 동작)와 "비어 있다"가 헷갈린다).
+            var FK = '제작 회차';
+            window._docSetField('proto-req', FK, 'MVD-전용');
+            eq('MVD 몫에 저장된다', (window.tabData.documents['proto-req#MVD'] || {}).fields[FK], 'MVD-전용');
+            ok('MVD 문서 열쇠엔 #MVD 가 붙는다', 'proto-req#MVD' in window.tabData.documents);
+            window.docCycleUnit();                    // MVD → TVD
+            eq('다음 모델로 전환된다', window.mcActiveUnit, 'TVD');
+            ok('모델 바 글자도 같이 바뀐다',
+               document.getElementById('doc-header-tools').querySelector('.unit-cycle-btn[onclick*="docCycleUnit"]').textContent.trim() === 'TVD');
+            var q3 = function (k) { return document.querySelector('#doc-page-body input[data-doc-key="' + k + '"]'); };
+            ok('새 모델은 그 모델만의 문서라 전 모델 값을 안 보여준다(값이 비어 있다)',
+               !q3(FK).value, q3(FK).value);
+            window._docSetField('proto-req', FK, 'TVD-전용');
+            window.docCycleUnit();                    // TVD → MVD (모델 2개뿐이라 한 번이면 돌아온다)
+            eq('MVD 로 되돌아온다', window.mcActiveUnit, 'MVD');
+            window._docRender(); await sleep(30);
+            eq('MVD 몫은 그대로 — TVD 를 적어도 안 섞인다', q3(FK).value, 'MVD-전용');
+            ok('TVD 몫도 따로 남아 있다',
+               (window.tabData.documents['proto-req#TVD'] || {}).fields[FK] === 'TVD-전용');
+
+            // ⚠️ 모델 분리 **전**에 이미 적어 둔 문서(열쇠에 #모델 없음)는 잃지 않는다 —
+            //    그 모델로 처음 들어올 때 한 번 베껴 담는다(이관, js/43 과 같은 방식).
+            window.mcActiveUnit = '';
+            window._docSetField('sample-report', '제 목', '모델분리 전 제목');
+            window.tabData.mcUnits.push('BRANDNEW');
+            window.mcActiveUnit = 'BRANDNEW';
+            var q4 = function (k) { return document.querySelector('#doc-page-body input[data-doc-key="' + k + '"]'); };
+            window._docPick('sample-report'); await sleep(30);
+            eq('처음 보는 모델도 모델 구분 전 옛 문서를 이어받는다', q4('제 목').value, '모델분리 전 제목');
+            window._docSetField('sample-report', '제 목', 'BRANDNEW 전용으로 수정');
+            ok('옛 문서(모델 없음)는 그대로 — 이관은 복사지 이동이 아니다',
+               (window.tabData.documents['sample-report@' + window._docState.round] || {}).fields['제 목'] === '모델분리 전 제목',
+               JSON.stringify(window.tabData.documents['sample-report@' + window._docState.round]));
         } catch (e) {
             ok('예외 없이 끝남', false, String(e && e.stack || e));
         } finally {
@@ -433,6 +486,7 @@
             if (realXW) XLSX.writeFile = realXW;
             if (realPW) PptxGenJS.prototype.writeFile = realPW;
             window._docState = realState;
+            window.mcActiveUnit = realUnit;
             try { window._docRender(); } catch (e) { /* 되돌린 상태로 다시 그린다 */ }
         }
 

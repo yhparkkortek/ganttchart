@@ -463,18 +463,43 @@
     //    → `perRound: true` 인 서식은 저장 열쇠에 회차를 붙인다(`sample-report@PROTO B`).
     //    ⚠️ 열쇠를 **여기 한 곳**에서만 만든다 — 칸·첨부·불러오기·엑셀이 전부 `_docData` 를 지나므로
     //       이 한 줄로 전부 회차별이 된다(화면마다 고치면 고친 화면만 산다).
-    var _dataKey = function (id) {
+    // 🏷 [2026-11-13 요청] "Document 페이지 문서는 Summary 에 등록된 모델(MVD/TVD/TPR…)별로
+    //    나와야 함" — M.C/BOM/Customer SPEC/Resolution spec 과 **같은** `window.mcActiveUnit`
+    //    을 공유한다(제품구분자를 따로 두지 않는다 — 안 그러면 "M.C 는 TPR 인데 Document 는
+    //    MVD" 같은 어긋남이 생긴다). 모델을 하나도 안 늘린 프로젝트는 `getMcUnits()` 가 빈
+    //    배열이라 `window.mcActiveUnit` 이 항상 `''`이고, 저장 열쇠도 **옛날과 완전히 같다**
+    //    — 기존 단일모델 프로젝트는 손댈 필요가 없다.
+    var _dataKeyBase = function (id) {
         var form = _formById(id);
         if (!form || !form.perRound) return id;
         return id + '@' + (window._docState.round || _docRounds()[0] || 'PROTO A');
+    };
+    var _dataKey = function (id) {
+        var base = _dataKeyBase(id);
+        var u = window.mcActiveUnit || '';
+        return u ? base + '#' + u : base;
     };
     var _docData = function (id) {
         window.tabData = window.tabData || {};
         window.tabData.documents = window.tabData.documents || {};
         var k = _dataKey(id);
+        var isNew = !window.tabData.documents[k];
         var d = window.tabData.documents[k] = window.tabData.documents[k] || {};
         d.fields = d.fields || {};
         d.att = d.att || {};
+        // ⚠️⚠️ **모델을 처음 추가한 프로젝트**가 그 모델로 처음 들어올 때, 모델 구분이 없던
+        //    옛 문서 내용을 한 번 베껴 담는다(이관, js/43 과 같은 방식) — 안 그러면 모델을
+        //    추가하는 순간 이미 적어 둔 문서가 그 모델에선 전부 빈 걸로 보인다. **복사**만
+        //    하고 옛 키(모델 없음)는 그대로 둔다 — 다음부터는 k 가 이미 있어 이 블록을 다시
+        //    지나지 않는다(멱등). `.history`(샘플 출고 이력)는 `_hist()` 가 **따로** 더 넓게
+        //    훑어 이관하므로 여기서는 건드리지 않는다.
+        if (isNew && k.indexOf('#') !== -1) {
+            var legacy = window.tabData.documents[k.slice(0, k.indexOf('#'))];
+            if (legacy) {
+                if (legacy.fields) d.fields = JSON.parse(JSON.stringify(legacy.fields));
+                if (legacy.att) d.att = JSON.parse(JSON.stringify(legacy.att));
+            }
+        }
         return d;
     };
     var _hasOwn = function (id, key) {
@@ -574,6 +599,21 @@
     window._docLabelArtIndex = window._docLabelArtIndex === undefined ? null : window._docLabelArtIndex;
     window._docLabelArtLoading = false;
     window._docLabelArtLoadFailedAt = 0;   // ⚠️ 아래 설명 — 실패 뒤 재시도 쿨다운(5초)
+    // ⚠️⚠️ [2026-11-13, 사용자 신고 "크기변경/회전/배경삭제 결과가 실시간으로 안 보인다"] 파일명이
+    //    그대로라(`<코드>.png`, 덮어쓰기) 브라우저가 **옛 캐시 그림**을 계속 보여줬다 — 업로드는
+    //    성공했지만 화면만 안 바뀌었다. 덮어쓸 때마다 올리는 버전 번호를 쿼리에 실어 매번 다른
+    //    주소로 만든다(코드 하나에 번호 하나 — 모달·표 썸네일 둘 다 이 번호를 같이 쓴다).
+    window._docLabelArtVer = window._docLabelArtVer || {};
+    var _docLabelBumpVer = function (code) { window._docLabelArtVer[code] = (window._docLabelArtVer[code] || 0) + 1; };
+    var _docLabelArtSrc = function (code, artFile) {
+        return BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile)
+            + '&_v=' + (window._docLabelArtVer[code] || 0);
+    };
+    // 📏 [2026-11-13, 사용자 요청] 표 썸네일도 끌어서 크기를 조절할 수 있다 — 모달의 `size`(큰 보기)
+    //    와는 **다른 칸**(`thumbSize`)에 저장한다(표는 늘 작게·모달은 늘 크게 보여야 하는 11차 결정과
+    //    충돌하지 않게). 끌 때 비율을 지킬지는 전역 체크(`_docLabelAspectLock`) 하나로 모달·표 둘 다 같이 쓴다.
+    window._docLabelThumbSizeCache = window._docLabelThumbSizeCache || {};   // code -> {w,h} | null
+    window._docLabelAspectLock = window._docLabelAspectLock !== false;       // 기본 켬
     window._docLabelArtLoad = async function () {
         if (window._docLabelArtLoading) return;
         window._docLabelArtLoading = true;
@@ -618,7 +658,7 @@
     window._docLabelNotesLoad = async function (code) {
         if (window._docLabelNotesCache[code] !== undefined) return;    // 이미 불렀거나 불러오는 중
         window._docLabelNotesCache[code] = null;
-        var notes = [], size = null;
+        var notes = [], size = null, thumbSize = null;
         try {
             var r = await fetch(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
                 + '&name=' + encodeURIComponent(code + '.notes.json'));
@@ -626,6 +666,7 @@
                 var parsed = JSON.parse(await r.text());
                 notes = (parsed && parsed.notes) || [];
                 size = (parsed && parsed.size) || null;
+                thumbSize = (parsed && parsed.thumbSize) || null;
             }
         } catch (e) { /* 아직 없으면(404) 빈 값 — 네트워크 문제도 여기선 그냥 빈 채로 둔다 */ }
         // ⚠️ [2026-11-12 11차, 실측] 이 fetch 가 느리게 도는 동안 사람이 먼저 표시를 찍거나
@@ -633,12 +674,14 @@
         //    도착한(옛) 서버 응답으로 덮어쓰지 않는다. "아직 로딩 표식 그대로일 때만" 적용.
         if (window._docLabelNotesCache[code] === null) window._docLabelNotesCache[code] = notes;
         if (window._docLabelSizeCache[code] === undefined) window._docLabelSizeCache[code] = size;
+        if (window._docLabelThumbSizeCache[code] === undefined) window._docLabelThumbSizeCache[code] = thumbSize;
         _docLabelRefresh();
     };
     window._docLabelNotesSave = async function (code) {
         var notes = window._docLabelNotesCache[code] || [];
         var size = window._docLabelSizeCache[code] || null;
-        var blob = new Blob([JSON.stringify({ notes: notes, size: size })], { type: 'application/json' });
+        var thumbSize = window._docLabelThumbSizeCache[code] || null;
+        var blob = new Blob([JSON.stringify({ notes: notes, size: size, thumbSize: thumbSize })], { type: 'application/json' });
         var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, code + '.notes.json', blob, { forceOverwrite: true });
         if (!res.ok) _toast('⚠️ ' + _t('표시를 저장하지 못했습니다: ', 'Could not save the note: ') + (res.error || ''), 'error');
         return res.ok;
@@ -670,12 +713,17 @@
     // 🔧 [2026-11-12 11차, 사용자 요청] 크기 조정 — 모달 안 이미지 우하단 손잡이를 끌면 크기를
     //    바꾼다. 표시(notes)와 **같은 사이드카**(`<코드>.notes.json`)에 `size:{w,h}` 로 같이
     //    저장한다(공용 자료라 다음에 열 때도, 다른 프로젝트에서도 그 크기 그대로 보인다).
+    // 📐 [2026-11-13, 사용자 요청] "비율 고정" 체크(`_docLabelAspectLock`, 전역 — 모달·표 썸네일이
+    //    같이 쓴다) — 켜져 있으면 가로로 끈 만큼만 보고 세로는 **끌기 시작 시점의 가로세로 비율**
+    //    로 따라간다(세로로도 끌 수는 있지만 무시 — 가로 하나만 보면 된다). 꺼져 있으면 예전처럼
+    //    가로·세로를 각각 끈 대로.
     window._docLabelSizeWire = function (handle, img, code) {
-        var startX, startY, startW, startH, moved = false;
+        var startX, startY, startW, startH, ratio, moved = false;
         var onMove = function (ev) {
             moved = true;
             var w = Math.max(80, startW + (ev.clientX - startX));
-            var h = Math.max(60, startH + (ev.clientY - startY));
+            var h = window._docLabelAspectLock ? Math.max(60, Math.round(w / ratio))
+                                                : Math.max(60, startH + (ev.clientY - startY));
             img.style.width = w + 'px'; img.style.height = h + 'px';
             img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
             window._docLabelSizeCache[code] = { w: Math.round(w), h: Math.round(h) };
@@ -691,12 +739,47 @@
             startX = ev.clientX; startY = ev.clientY;
             var r = img.getBoundingClientRect();
             startW = r.width; startH = r.height;
+            ratio = startW / startH || 1;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         };
     };
     window._docLabelSizeReset = async function (code) {
         window._docLabelSizeCache[code] = null;
+        _docLabelRefresh();
+        await window._docLabelNotesSave(code);
+    };
+    // 📏 [2026-11-13] 표 썸네일용 — 같은 방식이지만 **가로는 열 폭을 못 넘게 묶는다**(430px, 11차에
+    //    도안을 표 안에 직접 넣었다가 열이 깨졌던 사고의 재발 방지 — 세로는 행이 늘어나도 그만이라 안 묶는다).
+    window._docLabelThumbSizeWire = function (handle, img, code) {
+        var startX, startY, startW, startH, ratio, moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var w = Math.max(40, Math.min(430, startW + (ev.clientX - startX)));
+            var h = window._docLabelAspectLock ? Math.max(30, Math.round(w / ratio))
+                                                : Math.max(30, startH + (ev.clientY - startY));
+            img.style.width = w + 'px'; img.style.height = h + 'px';
+            img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
+            window._docLabelThumbSizeCache[code] = { w: Math.round(w), h: Math.round(h) };
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            startX = ev.clientX; startY = ev.clientY;
+            var r = img.getBoundingClientRect();
+            startW = r.width; startH = r.height;
+            ratio = startW / startH || 1;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    window._docLabelThumbSizeReset = async function (code) {
+        window._docLabelThumbSizeCache[code] = null;
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
@@ -800,6 +883,7 @@
             var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, fname, blob, { forceOverwrite: true });
             if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
             window._docLabelArtIndex[code] = fname;
+            _docLabelBumpVer(code);
             // 📍 잘린 범위 밖의 표시는 더 이상 가리킬 자리가 없어 지운다 — 안쪽 것은 새 비율로 다시 맞춘다
             var notes = window._docLabelNotesCache[code] || [];
             var kept = [], dropped = 0;
@@ -1433,6 +1517,16 @@
         window._docRender();
     };
     window._docSetStage = function (v) { window._docState.stage = v; window._docRender(); };
+    // 🏷 모델(제품구분자) 전환 — BOM·Customer SPEC 과 같은 "누를 때마다 다음 모델" 버튼.
+    //    같은 전환 함수(`mcSwitchUnit`)를 쓴다 — 저장 열쇠(`_dataKey`)가 바로 그 값을 본다.
+    window.docCycleUnit = function () {
+        var units = window.getMcUnits ? window.getMcUnits() : [];
+        if (units.length < 2) return;
+        var cur = window.mcActiveUnit || units[0];
+        var next = units[(units.indexOf(cur) + 1) % units.length];
+        if (window.mcSwitchUnit) window.mcSwitchUnit(next); else window.mcActiveUnit = next;
+        window._docRender();
+    };
     /** 🙈 [2026-11-12 요청] 점검요청 '해당없음' 항목 접기 ↔ 펴기 (기본 접힘, Resolution 묶음은 예외) */
     window._docToggleHideNA = function () {
         window._docState.hideNA = (window._docState.hideNA === false) ? true : false;
@@ -2079,6 +2173,17 @@
             + '<span id="doc-form-trigger-label">' + (form ? (form.icon || '📄') + ' ' + _esc(form.label) : '📄 ' + _esc(_t('문서', 'Document')))
             + '</span><span style="font-size:11px;">▾</span></button>'
             + '<div id="doc-form-dropdown" class="row-action-popup" style="min-width:220px; padding:6px;"></div></div>';
+        // 🏷 모델(제품구분자) 바 — 모델을 하나도 안 늘린 프로젝트는 숨긴다(BOM·Customer SPEC 과 같은 규칙).
+        var _docUnits = window.getMcUnits ? window.getMcUnits() : [];
+        if (_docUnits.length) {
+            var _docUnitCur = window.mcActiveUnit || _docUnits[0];
+            th += '<span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>'
+                + '<button class="unit-cycle-btn" onclick="window.docCycleUnit()" title="'
+                + _esc(_t('클릭할 때마다 다음 모델로 전환 — 모델마다 문서가 따로입니다', 'Click to switch to the next model — each model keeps its own documents')) + '"'
+                + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer;'
+                + ' font-size:12px; font-weight:bold; background:#00707d; color:#fff; flex-shrink:0;">'
+                + _esc(_docUnitCur) + '</button>';
+        }
         // 📦 회차 바 — 회차마다 문서가 따로인 서식에서만 보인다(M.C·BOM 의 전환 바와 같은 모양).
         if (form && form.perRound) {
             var ri = rounds.indexOf(st.round);
@@ -3542,6 +3647,21 @@
         else if (r.skipped) _toast(_t('올리지 않았습니다.', 'Not uploaded.'), 'info');
         else _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + r.error, 'error');
     };
+
+    // 🏷 다른 탭(M.C·BOM·Customer SPEC·JIRA)에서 모델을 바꿔도 **지금 Document 탭이 열려
+    //    있으면** 바로 따라간다 — 안 감싸면 탭을 한 번 나갔다 들어와야만(`_docOnTabShown`)
+    //    새 모델의 문서가 보인다. js/43 이 Brief SPEC 에 쓰는 것과 같은 감싸기 방식.
+    (function () {
+        var orig = window.mcSwitchUnit;
+        if (typeof orig !== 'function' || orig.__docWrapped) return;
+        var wrapped = function () {
+            var r = orig.apply(this, arguments);
+            try { if (window._docRender) window._docRender(); } catch (e) { /* 문서 탭이 안 열려 있을 수 있다 */ }
+            return r;
+        };
+        wrapped.__docWrapped = true;
+        window.mcSwitchUnit = wrapped;
+    })();
 
     window._docOnTabShown = function () {
         try { window._docRender(); } catch (e) { /* 그리기 실패가 탭을 막지 않게 */ }
