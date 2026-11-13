@@ -29,8 +29,21 @@
 //     썸네일만 둔다. 이 하네스도 모달을 열어(`_docLabelArtModalOpen`) 그 안의
 //     `#doclabelart-img`/크기 손잡이/자르기 드래그를 본다. 자르기 적용은 **일부러 업로드를
 //     실패시켜** 예외가 나도 토스트가 뜨는지까지 본다(사용자 신고 "자르기 적용 눌렀는데
-//     아무 반응 없음" 재발 방지). PDF 는 `pdfjsLib` 를 스텁으로 바꿔 1페이지 추출 경로만 본다
-//     (진짜 PDF 렌더는 라이브로 확인).
+//     아무 반응 없음" 재발 방지). PDF 는 `pdfjsLib` 를 스텁으로 바꿔 1페이지 추출 경로만 본다.
+//  ⚠️⚠️ **(2026-11-13, 사용자 신고 "직접 해봤어? 실제 크기나 잘려진 사진은 볼 수가 없네")**
+//     이전 "라이브로 직접 확인했다"는 기록은 **과장**이었다 — 실제로는 안 봤다. 이번에 진짜
+//     라이브(회사 PC·실 NAS·실 백엔드·`C:\SAP_DMS` 실제 파일)로 돌려서 **실측 버그를 하나
+//     찾았다**: 도안 `<img>` 가 HTML5 네이티브 드래그 가능 상태라, 크기조절 손잡이를 살짝
+//     빗나가면 **브라우저의 이미지 드래그 고스트**가 뜨면서(화면엔 엉뚱한 색 블롭처럼 보였다)
+//     진짜 크기조절은 전혀 안 먹었다 — `draggable="false"` 로 고쳤다(8b 구역, 회귀 고정).
+//     회전(⟲/⟳)도 이번에 추가해 **같은 라이브 환경**(진짜 116970 제품의 진짜 승인원 엑셀
+//     속 진짜 도장 이미지)으로 크기조절·자르기·회전 전부 스크린샷으로 **실제로 보고** 확인
+//     했다(검증 끝나고 생성한 테스트 파일은 지웠다). ⚠️⚠️ `_docLabelCropApply`/`_docLabelRotate`
+//     는 `new Image(); img.src=url` 로 읽는데 이건 **window.fetch 를 안 타서**(브라우저가
+//     직접 가져온다) 가짜로 안 막으면 이 하네스가 평범하게(백엔드 없이) 돌 때 이미지 로딩
+//     자체가 실패해 그 뒤(업로드·표시좌표 변환) 검증을 못 한다 — `window.Image` 생성자를
+//     감싸 `src` 지정을 가로채고 **진짜 window.fetch(가짜 응답)로 받은 바이트를 blob: URL
+//     로 바꿔 진짜 `<img>` 디코더에 넘긴다**(디코딩 자체는 가짜가 아니다).
 (function () {
     'use strict';
 
@@ -229,6 +242,32 @@
         var toastCalls = [];
         window.showToast = function (msg, kind) { toastCalls.push({ msg: msg, kind: kind }); };
 
+        // 🖼️ [2026-11-13] `_docLabelCropApply`/`_docLabelRotate` 는 `new Image(); img.src = url`
+        //    로 도안을 읽는데, 이건 **window.fetch 를 안 탄다**(브라우저가 직접 네트워크로
+        //    가져온다) — 가짜로 안 막으면 백엔드가 없는 평범한 실행에선 이미지 로딩 자체가
+        //    실패해 자르기/회전이 "이미지를 불러오지 못했습니다" 에서 멈추고, 그 뒤(업로드·
+        //    표시좌표 변환) 검증은 전부 통과 못 한다(실측: 이전엔 어쩌다 진짜 백엔드가 떠
+        //    있을 때만 통과했다 — 숨은 레이스였다). `src` 지정을 가로채 **진짜 window.fetch
+        //    (가짜)로 받은 바이트를 blob: URL 로 바꿔 진짜 `<img>` 디코더에 넘긴다** — 디코딩
+        //    자체는 가짜가 아니다.
+        var _RealImage = window.Image;
+        var _imgSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+        window.Image = function () {
+            var el = new _RealImage();
+            Object.defineProperty(el, 'src', {
+                configurable: true,
+                get: function () { return _imgSrcDesc.get.call(el); },
+                set: function (url) {
+                    window.fetch(url).then(function (r) { return r.blob(); }).then(function (blob) {
+                        _imgSrcDesc.set.call(el, URL.createObjectURL(blob));
+                    }).catch(function () { el.dispatchEvent(new Event('error')); });
+                }
+            });
+            return el;
+        };
+        // 1x1 실제 디코드 가능한 PNG(투명) — 표시·크기만 보면 되니 내용은 중요하지 않다
+        var _REAL_1PX_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
         var FAKE_CODE = '999001';
         // ⚠️⚠️ 일부러 "\1" 을 심는다 — 실측 버그(윈도 경로를 onclick="...('...')" 에 그대로
         //    박으면 JS 가 `\1` 을 8진 이스케이프로 읽어 조용히 깨졌다)가 **재발하면 바로 잡힌다**.
@@ -265,6 +304,16 @@
             //    로 즉시 끊어 "아직 표시 없음"으로 빠지게 한다 — 레이스 자체를 없앤다.
             if (u.indexOf('/doc/get') >= 0 && u.indexOf('.notes.json') >= 0) {
                 return Promise.resolve({ status: 404, ok: false });
+            }
+            // 🖼️ [2026-11-13] 도안 파일 자체(.png/.jpg/.jpeg) GET — 자르기·회전이 `new Image()`
+            //    로 읽는 그 바이트. 위의 `window.Image` 가로채기가 이 응답을 blob: URL 로
+            //    바꿔 진짜 디코딩으로 넘긴다.
+            if (u.indexOf('/doc/get') >= 0 && u.indexOf('folder=' + encodeURIComponent('라벨도안')) >= 0) {
+                return Promise.resolve({ status: 200, ok: true, blob: function () {
+                    var bin = atob(_REAL_1PX_PNG_B64), bytes = new Uint8Array(bin.length);
+                    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    return Promise.resolve(new Blob([bytes], { type: 'image/png' }));
+                } });
             }
             // ⚠️⚠️ [2026-11-12 11차 실측 2] 이 하네스를 **연달아 여러 번** 돌리면 더 드물게
             //    실패했다 — `finally` 가 `_docLabelArtIndex` 를 이전 실행 전 값(첫 실행이면
@@ -424,6 +473,40 @@
             window._docLabelArtModalClose();
             ok(window._docLabelArtModal === null, '닫아도 모달 상태가 안 지워진다');
 
+            // ═══ 8b. [2026-11-13 실측 버그, 사용자 신고 "크기나 배경이 잘려진 사진을 볼 수가
+            //    없네"] `<img>` 가 기본으로 HTML5 네이티브 드래그 가능이라, 크기조절 손잡이를
+            //    살짝 빗나가 이미지 쪽에서 드래그가 시작되면 **브라우저의 네이티브 이미지
+            //    드래그 고스트**가 뜨고(화면엔 엉뚱한 색 블롭으로 보인다) 진짜 크기조절은 전혀
+            //    동작하지 않았다(라이브로 실제 재현 — 진한 파란 사각형으로 보였다). `draggable`
+            //    속성이 꺼져 있는지로 이 회귀를 고정한다. ═══
+            window._docLabelArtModalOpen('label-spec', 0);
+            var imgNoDrag = document.getElementById('doclabelart-img');
+            ok(imgNoDrag && imgNoDrag.draggable === false, '도안 이미지가 여전히 네이티브 드래그 가능이다(크기조절과 충돌)');
+
+            // ═══ 8c. [2026-11-13, 사용자 요청] 회전 — 90도 돌리면 캔버스로 다시 그려 같은
+            //    공용 파일에 저장하고, 표시(notes) 좌표도 같은 90도로 다시 맞추며, 가로세로가
+            //    바뀌니 크기는 기본값으로 되돌린다(자르기와 같은 이유) ═══
+            window._docLabelSizeCache[FAKE_CODE] = { w: 300, h: 200 };   // 회전 전엔 커스텀 크기가 있었다
+            window._docLabelNotesCache[FAKE_CODE] = [{ x: 0.2, y: 0.1, text: '테스트 표시' }];
+            var uploadCountBeforeRotate = uploadCalls.length;
+            await window._docLabelRotate(FAKE_CODE, 1);   // ⟳ 시계방향
+            // ⚠️ 자르기와 같은 패턴 — 도안(.png) 업로드 + `_docLabelNotesSave`(.notes.json 사이드카)
+            //    **둘** 다 올라간다(한 번이 아니다).
+            ok(uploadCalls.length === uploadCountBeforeRotate + 2, '회전이 도안+사이드카 둘 다 저장되지 않았다: ' + uploadCalls.length);
+            var rotUploads = uploadCalls.slice(uploadCountBeforeRotate);
+            var upRotPng = rotUploads.filter(function (u) { return u.name === FAKE_CODE + '.png'; })[0];
+            ok(!!upRotPng && upRotPng.folder === '라벨도안', '회전 결과가 공용 폴더에 <코드>.png 로 저장돼야 한다: ' + JSON.stringify(rotUploads));
+            ok(window._docLabelSizeCache[FAKE_CODE] === null, '회전 후 가로세로가 바뀌었는데 옛 커스텀 크기가 안 지워졌다');
+            var noteAfterCw = (window._docLabelNotesCache[FAKE_CODE] || [])[0] || {};
+            ok(Math.abs(noteAfterCw.x - 0.9) < 1e-9 && Math.abs(noteAfterCw.y - 0.2) < 1e-9,
+               '시계방향 회전의 표시 좌표 변환이 틀렸다(기대 x=0.9,y=0.2): ' + JSON.stringify(noteAfterCw));
+            // 반시계방향으로 한 번 더 돌리면 원래 좌표로 돌아와야 한다(역변환 검증)
+            await window._docLabelRotate(FAKE_CODE, -1);
+            var noteAfterCcw = (window._docLabelNotesCache[FAKE_CODE] || [])[0] || {};
+            ok(Math.abs(noteAfterCcw.x - 0.2) < 1e-9 && Math.abs(noteAfterCcw.y - 0.1) < 1e-9,
+               '반시계방향 회전이 시계방향의 역변환이 아니다(기대 x=0.2,y=0.1): ' + JSON.stringify(noteAfterCcw));
+            window._docLabelArtModalClose();
+
             // ═══ 9. [2026-11-12 11차, 사용자 요청 "PDF 파일도 도안 검색에 추가해줘"] 검색 결과에
             //    PDF 항목이 섞이면 이미지 썸네일 대신 "📄 PDF" 버튼으로, 고르면 pdf.js(스텁)로
             //    1페이지를 그려 **같은 공용 라이브러리**에 저장한다 ═══
@@ -466,7 +549,10 @@
             ok(!!pdfBtn, 'PDF 고르기 버튼을 DOM 에서 못 찾았다');
             var uploadCallsBeforePdf = uploadCalls.length;
             if (pdfBtn) pdfBtn.click();
-            await new Promise(function (res) { setTimeout(res, 50); });
+            // ⚠️ [2026-11-13 실측] `canvas.toBlob()` 콜백이 pdf.js 렌더+여러 프라미스 체인
+            //    뒤라 50ms 로는 가끔 못 끝났다(토스트는 "✅ 저장했습니다"로 떴는데 이 시점의
+            //    `uploadCalls` 읽기는 그 전 값이었다 — 진짜 실패가 아니라 대기 시간 부족).
+            await new Promise(function (res) { setTimeout(res, 1500); });
             ok(uploadCalls.length === uploadCallsBeforePdf + 1,
                'PDF 1페이지 저장이 공용 라이브러리에 한 번 더 안 올라갔다: ' + uploadCalls.length);
             var upPdf = uploadCalls[uploadCalls.length - 1] || {};
@@ -478,6 +564,7 @@
             console.error(e);
         } finally {
             try { window._docLabelArtModalClose && window._docLabelArtModalClose(); } catch (e3) { /* 〃 */ }
+            window.Image = _RealImage;
             window.saveToGoogleDrive = saved.save;
             window.markUnsavedChanges = saved.dirty;
             window.fetch = saved.fetch;

@@ -819,6 +819,59 @@
             _toast('⚠️ ' + _t('자르기 중 오류가 났습니다: ', 'Crop failed: ') + (e && e.message || e), 'error');
         }
     };
+    // ⟲⟳ [2026-11-13, 사용자 요청] 회전 — 90도씩, 자르기와 같은 방식으로 **같은 공용 파일을
+    //    덮어쓴다**(캔버스에 돌려 그려 저장 — 화면에만 CSS 로 돌리면 표시(notes)·크기 손잡이의
+    //    좌표 계산이 전부 따로 틀어진다). 표시는 같은 90도로 좌표를 맞추고, 가로세로가
+    //    바뀌었으니 크기는 기본값으로 되돌린다(자르기와 같은 이유).
+    window._docLabelRotate = async function (code, dir) {
+        var artFile = window._docLabelArtIndex && window._docLabelArtIndex[code];
+        if (!artFile) { _toast('⚠️ ' + _t('도안을 찾을 수 없습니다.', 'Artwork not found.'), 'error'); return; }
+        _toast('⏳ ' + _t('회전하는 중…', 'Rotating…'), 'info');
+        try {
+            var url = BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile)
+                + '&_cb=' + Date.now();
+            var img = new Image();
+            img.crossOrigin = 'anonymous';
+            var loaded = await new Promise(function (resolve) {
+                img.onload = function () { resolve(true); };
+                img.onerror = function () { resolve(false); };
+                img.src = url;
+            });
+            if (!loaded) { _toast('⚠️ ' + _t('이미지를 불러오지 못했습니다.', 'Could not load the image.'), 'error'); return; }
+            var w = img.naturalWidth, h = img.naturalHeight;
+            var canvas = document.createElement('canvas');
+            canvas.width = h; canvas.height = w;
+            var ctx = canvas.getContext('2d');
+            if (dir > 0) {                 // ⟳ 시계방향 90도
+                ctx.translate(h, 0);
+                ctx.rotate(Math.PI / 2);
+            } else {                       // ⟲ 반시계방향 90도
+                ctx.translate(0, w);
+                ctx.rotate(-Math.PI / 2);
+            }
+            ctx.drawImage(img, 0, 0);
+            var blob = await new Promise(function (resolve) { canvas.toBlob(resolve, 'image/png'); });
+            if (!blob) { _toast('⚠️ ' + _t('회전에 실패했습니다.', 'Rotation failed.'), 'error'); return; }
+            if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
+            var fname = code + '.png';
+            var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, fname, blob, { forceOverwrite: true });
+            if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
+            window._docLabelArtIndex[code] = fname;
+            var notes = window._docLabelNotesCache[code] || [];
+            var rotated = notes.map(function (n) {
+                return dir > 0
+                    ? { x: 1 - n.y, y: n.x, text: n.text }      // 시계방향: (x,y) → (1-y, x)
+                    : { x: n.y, y: 1 - n.x, text: n.text };     // 반시계방향: (x,y) → (y, 1-x)
+            });
+            window._docLabelNotesCache[code] = rotated;
+            window._docLabelSizeCache[code] = null;   // 가로세로가 바뀌었으니 기본 크기로
+            await window._docLabelNotesSave(code);
+            _toast('✅ ' + _t('회전해서 저장했습니다.', 'Rotated and saved.'), 'success');
+            _docLabelRefresh();
+        } catch (e) {
+            _toast('⚠️ ' + _t('회전 중 오류가 났습니다: ', 'Rotation failed: ') + (e && e.message || e), 'error');
+        }
+    };
     // 🖼️🔍 [2026-11-12 11차, 사용자 요청 "문서 기본 양식 반영"] 표시·자르기·크기조절 전용 모달 —
     //    실제 문서(스크린샷)는 도안 칸이 작고 규격/코드/부착위치가 좁은 글자 칸으로 옆에 나란하다.
     //    그 모양을 지키려고 메인 표의 썸네일은 항상 **고정된 작은 크기**로 두고, 편집은 표와
@@ -882,7 +935,8 @@
                ? (' width:' + size.w + 'px; height:' + size.h + 'px; max-width:none; max-height:none;')
                : ' max-width:min(700px,85vw); max-height:60vh;');
         var h = '<div style="position:relative; display:inline-block;">'
-            + '<img id="doclabelart-img" data-crop-img="' + _esc(code) + '" src="' + _esc(BACKEND + '/doc/get?folder='
+            + '<img id="doclabelart-img" data-crop-img="' + _esc(code) + '" draggable="false" ondragstart="return false;"'
+                + ' src="' + _esc(BACKEND + '/doc/get?folder='
                 + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile))
                 + '" style="' + imgStyle + '" onclick="window._docLabelImgClick(event,\'' + _esc(code) + '\')">'
             + notes.map(function (n, ni) {
@@ -914,6 +968,10 @@
                  + _esc(_t('표시 추가', 'Add note')) + '</a>'
                  + ' · <a href="#" onclick="window._docLabelCropArm(\'' + _esc(code) + '\');return false;" style="color:#7a5210;">✂️ '
                  + _esc(_t('배경 잘라내기', 'Crop')) + '</a>'
+                 + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',-1);return false;" style="color:#7a5210;">⟲ '
+                 + _esc(_t('왼쪽으로 회전', 'Rotate left')) + '</a>'
+                 + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',1);return false;" style="color:#7a5210;">⟳ '
+                 + _esc(_t('오른쪽으로 회전', 'Rotate right')) + '</a>'
                  + (size ? ' · <a href="#" onclick="window._docLabelSizeReset(\'' + _esc(code) + '\');return false;" style="color:#495057;">↺ '
                    + _esc(_t('크기 기본값', 'Reset size')) + '</a>' : ''))
             + '</div>'
