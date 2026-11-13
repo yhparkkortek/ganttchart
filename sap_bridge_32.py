@@ -6806,15 +6806,21 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
             raise RuntimeError(f'1번째 품목의 협력사를 사업자등록번호("{biz_reg_no}")와 상호명("{name_query}") 둘 다로 찾지 못했습니다: {e2} — SAP에 등록된 협력사 정보를 직접 확인해주세요.')
 
     # ── 행 0: F4 팝업으로 세금코드 선택 ──────────────────────────────────────
+    # 🐛 [2026-11-13 2차, 사용자 실사용 "V9를 누르긴 하는데 빨라서 문제"] 팝업이 뜨자마자
+    # setFocus→caretPosition→sendVKey를 연달아 쏘면 SAP이 포커스 이동을 다 처리하기 전에
+    # Enter(sendVKey 2)가 들어가 선택이 반영 안 될 수 있다 — 각 단계 사이·팝업 뜬 뒤에
+    # 조금 더 쉬어간다(대기시간만 늘림, 로직 변경 없음).
     grid.currentCellRow = 0
     grid.currentCellColumn = 'MWSKZ'
     grid.pressF4()
-    time.sleep(0.6)
+    time.sleep(1.0)
     try:
         session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
+        time.sleep(0.3)
         session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
+        time.sleep(0.3)
         session.findById('wnd[1]').sendVKey(2)
-        time.sleep(0.5)
+        time.sleep(0.8)
     except Exception as e:
         raise RuntimeError(f'1번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e}')
 
@@ -6859,12 +6865,14 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
         grid.currentCellRow = idx
         grid.currentCellColumn = 'MWSKZ'
         grid.pressF4()
-        time.sleep(0.6)
+        time.sleep(1.0)
         try:
             session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
+            time.sleep(0.3)
             session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
+            time.sleep(0.3)
             session.findById('wnd[1]').sendVKey(2)
-            time.sleep(0.5)
+            time.sleep(0.8)
         except Exception as e2:
             raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e2}')
 
@@ -6880,6 +6888,8 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
         if lifnr_filled:
             try:
                 grid.modifyCell(idx, 'LIFNR', lifnr_filled)
+                grid.triggerModified()
+                time.sleep(0.3)  # 🐛 [2026-11-13 2차] 커밋 전 다음 쓰기로 넘어가 조용히 안 먹는 것 방지
             except Exception:
                 _lifnr_f4_row(idx)  # modifyCell 실패 시 F4 폴백 (SAP 그리드가 직접 쓰기를 막는 경우)
         else:
@@ -6887,6 +6897,8 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
         if mwskz_filled:
             try:
                 grid.modifyCell(idx, 'MWSKZ', mwskz_filled)
+                grid.triggerModified()
+                time.sleep(0.3)
             except Exception:
                 _mwskz_f4_row(idx)
         else:
@@ -6902,11 +6914,15 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency=
         if not _read_cell_retry(idx, 'LIFNR', tries=2, delay=0.3):
             try:
                 grid.modifyCell(idx, 'LIFNR', lifnr_filled) if lifnr_filled else _lifnr_f4_row(idx)
+                grid.triggerModified()
+                time.sleep(0.3)
             except Exception:
                 pass
         if not _read_cell_retry(idx, 'MWSKZ', tries=2, delay=0.3):
             try:
                 grid.modifyCell(idx, 'MWSKZ', mwskz_filled) if mwskz_filled else _mwskz_f4_row(idx)
+                grid.triggerModified()
+                time.sleep(0.3)
             except Exception:
                 pass
     # 복구 시도 후에도 비어있는 행이 있으면 여기서 분명하게 실패시킨다 — 조용히 넘어가면
