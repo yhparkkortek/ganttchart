@@ -617,17 +617,36 @@
     // 🗑 [2026-11-13, 사용자 결정] "기재내용 기능은 필요없으니 삭제" — Part No 등 고정 항목표
     //    기능을 뺐다(도안 위 "표시"(드래그 핀)로 실제로 쓰고 있어 중복이었다). 예전에 저장된
     //    `it.fields`/`it.fieldsCustom` 값은 건드리지 않는다(화면에서만 빠진다).
+    // 🗂️ [2026-11-13, 사용자 요청] "직접 만들어서 라벨 도안을 올리면 코드매칭해서 올리고, 다른
+    //    사용자/프로젝트에서 그 코드로 조회하면 등록된 여러개 중 선택해서 쓸 수 있게 해줘" — 한
+    //    코드에 파일 하나(덮어쓰기)였던 걸 **코드당 여러 개**로 바꾼다. 파일명은 접미사로 가른다:
+    //    `<코드>.<ext>`(옛 단일 파일, 그대로 둠) 또는 `<코드>__<uid>.<ext>`(새로 등록하는 것들,
+    //    덮어쓰지 않고 나란히 쌓인다). `_docLabelArtIndex[code]`는 **기본 표시용 한 장**(가장 최근
+    //    등록분)을 그대로 돌려줘 기존 호출부 수십 곳이 안 바뀌어도 되고, `_docLabelArtGroups[code]`
+    //    가 그 코드에 등록된 **전체 목록**(최신순)을 따로 들고 있어 2개 이상일 때만 고르기 UI를 띄운다.
+    window._docLabelArtGroups = window._docLabelArtGroups || {};   // code -> [{name, mtime}] (최신순)
     window._docLabelArtLoad = async function () {
         if (window._docLabelArtLoading) return;
         window._docLabelArtLoading = true;
-        var idx = {};
+        var idx = {}, groups = {};
         try {
             var r = await fetch(BACKEND + '/doc/list?folder=' + encodeURIComponent(_LABEL_ART_FOLDER));
             var j = await r.json();
             if (j && j.ok) {
-                (j.files || []).forEach(function (f) { idx[f.name.replace(/\.[^.]+$/, '')] = f.name; });
+                (j.files || []).forEach(function (f) {
+                    if (/\.notes\.json$/i.test(f.name)) return;   // 표시·박스 등 사이드카는 그림이 아니다
+                    var base = f.name.replace(/\.[^.]+$/, '');
+                    var codeKey = base.split('__')[0];
+                    groups[codeKey] = groups[codeKey] || [];
+                    groups[codeKey].push({ name: f.name, mtime: f.mtime || '' });
+                });
+                Object.keys(groups).forEach(function (code) {
+                    groups[code].sort(function (a, b) { return a.mtime < b.mtime ? 1 : (a.mtime > b.mtime ? -1 : 0); });
+                    idx[code] = groups[code][0].name;
+                });
             }
             window._docLabelArtIndex = idx;      // 폴더가 아직 없거나 비었어도 {} 로 — 다시 재시도만 안 하면 된다
+            window._docLabelArtGroups = groups;
         } catch (e) {
             // ⚠️⚠️ [2026-11-12 11차 실측] 백엔드가 안 닿으면(CORS·연결 거부) 실패마다 `_docRender()`
             //    를 부르고, 그 렌더는 `_docLabelArtIndex===null` 을 보고 **바로** 이 함수를 또
@@ -815,6 +834,43 @@
             document.addEventListener('mouseup', onUp);
         };
     };
+    // 🖐 [2026-11-13, 사용자 요청] "직선 이동 가능하게 해줘" — 끝점 둘을 따로 끄는 것 말고, 선
+    //    몸통을 잡아 두 끝점을 한 번에 같은 방향·거리로 옮긴다. 화면 밖으로 나가지 않도록 두 끝점
+    //    중 하나라도 경계에 닿으면 그만큼 델타를 줄인다(선 길이·기울기는 항상 그대로 유지).
+    window._docLabelLineMoveWire = function (handle, img, code, idx) {
+        var moved = false, startX, startY, orig;
+        var onMove = function (ev) {
+            moved = true;
+            var r = img.getBoundingClientRect();
+            var dx = (ev.clientX - startX) / r.width;
+            var dy = (ev.clientY - startY) / r.height;
+            var minDx = Math.max(-orig.x1, -orig.x2), maxDx = Math.min(1 - orig.x1, 1 - orig.x2);
+            var minDy = Math.max(-orig.y1, -orig.y2), maxDy = Math.min(1 - orig.y1, 1 - orig.y2);
+            dx = Math.min(maxDx, Math.max(minDx, dx));
+            dy = Math.min(maxDy, Math.max(minDy, dy));
+            var list = window._docLabelLinesCache[code] || [];
+            if (list[idx]) {
+                list[idx].x1 = orig.x1 + dx; list[idx].y1 = orig.y1 + dy;
+                list[idx].x2 = orig.x2 + dx; list[idx].y2 = orig.y2 + dy;
+            }
+            window._docLabelLinesApply(img.parentElement, img, code, true);
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            startX = ev.clientX; startY = ev.clientY;
+            var list = window._docLabelLinesCache[code] || [];
+            var ln = list[idx] || { x1: 0, y1: 0, x2: 0, y2: 0 };
+            orig = { x1: ln.x1, y1: ln.y1, x2: ln.x2, y2: ln.y2 };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
     // ⚠️ 비율(%)만으로 CSS 회전각을 구하면 이미지가 정사각형이 아닐 때 기울기가 틀어진다 —
     //    반드시 img 의 **실제 픽셀 크기**로 dx·dy 를 구해야 한다. 매 렌더·매 드래그마다 컨테이너
     //    안의 기존 선을 지우고 다시 그린다(간단하고, 선 개수가 많지 않아 비용도 작다).
@@ -839,6 +895,15 @@
             bar.style.cssText = 'display:block; width:100%; height:3px; margin-top:-1.5px; background:#e03131; border-radius:1.5px;';
             wrap.appendChild(bar);
             if (draggable) {
+                // 🖐 [2026-11-13] 3px 짜리 선은 그대로 잡기엔 너무 얇다(핀 막대와 같은 함정) —
+                //    보이진 않지만 14px 높이의 투명 손잡이를 선 위에 겹쳐 몸통 전체를 잡게 한다.
+                var moveHit = document.createElement('span');
+                moveHit.setAttribute('data-line-move', '');
+                moveHit.title = _t('끌어서 전체 이동', 'Drag to move the whole line');
+                moveHit.style.cssText = 'position:absolute; left:0; top:-7px; width:100%; height:14px;'
+                    + ' cursor:move; pointer-events:auto;';
+                wrap.appendChild(moveHit);
+                window._docLabelLineMoveWire(moveHit, img, code, li);
                 ['a', 'b'].forEach(function (which) {
                     var dot = document.createElement('span');
                     dot.setAttribute('data-line-handle', which);
@@ -984,9 +1049,11 @@
     // 🏷 [2026-11-13] 마커 HTML — 표시(notes)와 같은 틀, 그림은 이미지 하나(UL·CE·FCC)거나
     //    글자 배지 하나(CB, `noImage`)뿐이라 번호 원이 없다. `draggable` 일 때만 손잡이가 붙는다.
     //    ⚠️⚠️ [2026-11-13, 사용자 요청] "추가로 넣는 인증마크는 TXT 색상과 같은 색상으로 적용해줘
-    //    기존 도안에 있는 마크와 구별" — `<img>` 대신 CSS `mask-image` 로 검정 라인아트를 빨강
-    //    (표시와 같은 `#e03131`)으로 덧칠한다. 원본 도안 그림 자체에 박힌 CE·FCC 는 손대지 않으니
-    //    (이건 다른 레이어 위의 오버레이일 뿐) 그대로 검정으로 남아 "내가 추가한 것"과 구별된다.
+    //    기존 도안에 있는 마크와 구별" — `assets/certmarks/*.png` 자체를 이미 TXT 빨강(#e03131)
+    //    + 투명배경으로 다시 구워 뒀다(브라우저 canvas 로 원본 흑백 마크를 재색칠, 자세한 건
+    //    자산 생성 당시 커밋 참고). CSS `mask-image` 는 실제 배포 환경에서 마스크 로드가 실패하면
+    //    `background-color` 가 그대로 네모로 드러나는 버그가 있어(2026-11-13 실측, "빨간색 상자로
+    //    나오는데") 버렸다 — 색이 이미 파일에 구워져 있으니 그냥 `<img>` 로 충분하다.
     var _docLabelMarkMarkersHtml = function (marks, draggable, code) {
         return (marks || []).map(function (m, mi) {
             var cat = CERT_MARK_CATALOG.filter(function (c) { return c.key === m.key; })[0] || { key: m.key, label: m.key };
@@ -999,10 +1066,8 @@
             } else {
                 wrapStyle += ' width:' + (m.wem || 4) + 'em; aspect-ratio:' + cat.w + '/' + cat.h + ';';
                 var markUrl = 'assets/certmarks/' + cat.key + '.png';
-                inner = '<span data-mark-img style="display:block; width:100%; height:100%; background-color:#e03131;'
-                    + ' -webkit-mask-image:url(\'' + markUrl + '\'); mask-image:url(\'' + markUrl + '\');'
-                    + ' -webkit-mask-size:contain; mask-size:contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;'
-                    + ' -webkit-mask-position:center; mask-position:center;"></span>';
+                inner = '<img data-mark-img src="' + markUrl + '" draggable="false" ondragstart="return false;"'
+                    + ' style="display:block; width:100%; height:100%;">';
             }
             return '<span data-mark-wrap data-mark-idx="' + mi + '" title="' + _esc(cat.label) + '" style="' + wrapStyle + '">'
                 + inner
@@ -1447,32 +1512,59 @@
     //    옮기는 방법도 가능할까?"] — 가능하다: SAP 검색을 안 거치고 **로컬 파일을 바로** 공용
     //    도안(`라벨도안/<코드>.<ext>`)으로 올린다. PPT·Illustrator 등에서 완성한 뒤 PNG/JPG 로
     //    내보내 여기로 올리면 끝 — 크기조절·자르기·회전·표시 추가는 그 뒤 모달에서 그대로 쓴다.
-    window._docLabelArtUploadPick = function (code) {
+    window._docLabelArtUploadPick = function (code, formId, idx) {
         if (!code) { _toast('⚠️ ' + _t('코드를 먼저 적으세요.', 'Enter the code first.'), 'error'); return; }
         var inp = document.createElement('input');
         inp.type = 'file'; inp.accept = 'image/*';
-        inp.onchange = function () { if (inp.files && inp.files[0]) window._docLabelArtUploadApply(code, inp.files[0]); };
+        inp.onchange = function () { if (inp.files && inp.files[0]) window._docLabelArtUploadApply(code, inp.files[0], formId, idx); };
         inp.click();
     };
-    window._docLabelArtUploadApply = async function (code, file) {
+    // 🗂️ [2026-11-13, 사용자 요청] "등록된 여러개 중 선택해서 사용" — 고르기 줄을 펼치고/접고,
+    //    고른 파일을 이 줄(`it.artFile`)에만 고정한다. 다른 줄·다른 프로젝트는 영향받지 않는다.
+    window._docLabelArtPickOpen = window._docLabelArtPickOpen || {};
+    window._docLabelArtPickToggle = function (key) {
+        window._docLabelArtPickOpen[key] = !window._docLabelArtPickOpen[key];
+        window._docRender();
+    };
+    window._docLabelArtPick = function (formId, idx, fname) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        if (!it) return;
+        it.artFile = fname;
+        _markDirty();
+        window._docRender();
+    };
+    // 🗂️ [2026-11-13, 사용자 요청] "직접 만들어서 올리면 코드 매칭해서 올리고, 다른 사용자·다른
+    //    프로젝트에서 그 코드로 조회하면 등록된 여러개 중 선택해서 쓸 수 있게" — 더 이상 같은
+    //    코드의 기존 파일을 덮어쓰지 않는다. `<코드>__<uid>.<ext>` 로 나란히 추가 등록한다
+    //    (uid 는 시각 기반, 충돌 걱정 없음). `formId|idx` 가 주어지면 **지금 이 줄에만** 새로
+    //    올린 파일을 바로 쓰도록 `it.artFile` 을 같이 세팅한다(다른 줄·다른 프로젝트는 그대로
+    //    자기가 고른/기본값을 쓴다).
+    window._docLabelArtUploadApply = async function (code, file, formId, idx) {
         if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
         var ext = (String(file.name || '').split('.').pop() || 'png').toLowerCase();
         if (!/^(png|jpg|jpeg|gif|bmp|webp)$/.test(ext)) ext = 'png';
-        var fname = code + '.' + ext;
-        // ⚠️ 공용 자료다 — 코드 하나당 파일 하나(덮어쓰기 확인 없이, 다른 도안 선택 함수들과 같은 규칙)
+        var fname = code + '__' + Date.now().toString(36) + '.' + ext;
         _toast('⏳ ' + _t('올리는 중…', 'Uploading…'), 'info');
         var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, fname, file, { forceOverwrite: true });
         if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
         window._docLabelArtIndex = window._docLabelArtIndex || {};
-        window._docLabelArtIndex[code] = fname;
+        window._docLabelArtIndex[code] = fname;   // 방금 올린 것을 당장의 기본 표시로
+        window._docLabelArtGroups = window._docLabelArtGroups || {};
+        window._docLabelArtGroups[code] = [{ name: fname, mtime: new Date().toISOString() }]
+            .concat((window._docLabelArtGroups[code] || []).filter(function (g) { return g.name !== fname; }));
+        if (formId && idx != null) {
+            var it = (_docData(formId).labelItems || [])[idx];
+            if (it) it.artFile = fname;   // 이 줄만 방금 올린 파일을 쓰도록 고정
+        }
         _docLabelBumpVer(code);
-        // 완전히 새 디자인일 수 있다 — 자르기·회전과 같은 이유로 가로세로 비율이 달라졌을 수 있으니
-        // 크기는 기본값으로(표시 위치는 그대로 둔다 — 같은 도안을 다시 올린 경우일 수도 있어서).
+        // ⚠️ 표시·마크·박스·직선·크기는 아직 **코드 단위**로 공유된다(파일 단위 분리는 다음 과제) —
+        // 완전히 새 디자인일 수 있으니 크기만은 기본값으로 돌려 비율이 안 맞는 채로 안 보이게 한다.
         window._docLabelSizeCache[code] = null;
         window._docLabelThumbSizeCache[code] = null;
         await window._docLabelNotesSave(code);
-        _toast('✅ ' + _t('공용 라벨 도안(' + _LABEL_ART_FOLDER + ')에 저장했습니다: ' + fname,
-                          'Saved to the shared label artwork library.'), 'success');
+        _toast('✅ ' + _t('공용 라벨 도안(' + _LABEL_ART_FOLDER + ')에 새로 등록했습니다: ' + fname
+                          + '(기존에 등록된 다른 도안은 그대로 남아 있습니다 — 조회 시 고를 수 있습니다)',
+                          'Registered as a new shared artwork (earlier ones for this code are kept — pick among them when looking up).'), 'success');
         _docLabelRefresh();
     };
     // 🖼️🔍 [2026-11-12 11차, 사용자 요청 "문서 기본 양식 반영"] 표시·자르기·크기조절 전용 모달 —
@@ -1482,12 +1574,16 @@
     window._docLabelArtModalOpen = function (formId, idx) {
         var it = (_docData(formId).labelItems || [])[idx];
         var code = String((it && it.code) || '').trim();
-        var artFile = code && window._docLabelArtIndex && window._docLabelArtIndex[code];
+        // 🗂️ [2026-11-13] 표 썸네일이 보여주는 것과 같은 파일을 모달도 보여준다 — 이 줄이
+        //    고른 게 있으면(`it.artFile`) 그걸, 없으면 기본(가장 최근 등록분)을.
+        var artGroup = (window._docLabelArtGroups && code) ? (window._docLabelArtGroups[code] || []) : [];
+        var pickedStillThere = it && it.artFile && artGroup.some(function (g) { return g.name === it.artFile; });
+        var artFile = pickedStillThere ? it.artFile : (code && window._docLabelArtIndex && window._docLabelArtIndex[code]);
         if (!artFile) {
             _toast('⚠️ ' + _t('도안이 없습니다 — 먼저 🔎 로 찾아서 저장하세요.', 'No artwork yet — find and save one first.'), 'error');
             return;
         }
-        window._docLabelArtModal = { formId: formId, idx: idx, code: code };
+        window._docLabelArtModal = { formId: formId, idx: idx, code: code, artFile: artFile };
         if (window._docLabelNotesCache[code] === undefined) window._docLabelNotesLoad(code);
         _docLabelArtModalRender();
     };
@@ -1501,7 +1597,7 @@
     var _docLabelArtModalRender = function () {
         var m = window._docLabelArtModal; if (!m) return;
         var code = m.code;
-        var artFile = window._docLabelArtIndex && window._docLabelArtIndex[code];
+        var artFile = m.artFile || (window._docLabelArtIndex && window._docLabelArtIndex[code]);
         if (!artFile) { window._docLabelArtModalClose(); return; }
         var ov = document.getElementById('doclabelart-overlay');
         if (!ov) {
@@ -1625,8 +1721,11 @@
                                 + '\');return false;" title="' + _esc(a.v) + '" style="padding:0 3px; font-size:10.5px;'
                                 + (curAlign === a.v ? ' font-weight:bold; color:#1971c2;' : ' color:#868e96;') + '">' + _esc(a.l) + '</a>';
                         }).join('');
-                    return '<div style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">' + (ni + 1) + '.'
-                        + ' <textarea rows="2" onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
+                    // 📐 [2026-11-13, 사용자 요청] "번호 줄 맞추어서 들여쓰기 해줘" — 번호가 1자리든
+                    //    2자리든 입력칸이 늘 같은 자리에서 시작하도록 번호에 고정폭(오른쪽 정렬)을 준다.
+                    return '<div style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
+                        + '<span style="flex:0 0 1.6em; text-align:right; padding-top:2px;">' + (ni + 1) + '.</span>'
+                        + '<textarea rows="2" onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
                         + _esc(n.text) + '</textarea>'
                         + '<span style="white-space:nowrap;">' + alignBtns + '</span>'
@@ -3257,7 +3356,13 @@
                 litems.forEach(function (it, i) {
                     var found = window._docLabelFindResult && window._docLabelFindResult[form.id + '|' + i];
                     var itCode = String(it.code || '').trim();
-                    var artFile = (window._docLabelArtIndex && itCode) ? window._docLabelArtIndex[itCode] : null;
+                    var artGroup = (window._docLabelArtGroups && itCode) ? (window._docLabelArtGroups[itCode] || []) : [];
+                    // 🗂️ [2026-11-13, 사용자 요청] 이 줄이 고른 적 있으면(`it.artFile`) 그걸, 없으면
+                    //    기본(가장 최근 등록분)을 — 단 고른 파일이 그 사이 지워졌을 수 있으니 그룹
+                    //    목록에 실제로 있는지 확인한다.
+                    var pickedStillThere = it.artFile && artGroup.some(function (g) { return g.name === it.artFile; });
+                    var artFile = pickedStillThere ? it.artFile
+                        : ((window._docLabelArtIndex && itCode) ? window._docLabelArtIndex[itCode] : null);
                     // ⚠️ [2026-11-13] 비고 열에서도 표시 목록을 보여주려면 artFile 유무와 상관없이 필요하다
                     //    — if/else 안에서만 선언하면 도안 없는 줄에선 `notes` 가 비어 쓰레기값(undefined).
                     if (itCode && window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
@@ -3268,9 +3373,27 @@
                     // 📤 [2026-11-13, 사용자 요청] "PPT 등으로 완성한 이미지를 바로 올릴 수 있나" — 코드만
                     //    있으면 SAP 검색 없이도 로컬 파일을 바로 공용 도안으로 올린다(크기·회전과 같이
                     //    `_docLabelArtUploadPick` 한 곳).
-                    var uploadLink = '<a href="#" onclick="window._docLabelArtUploadPick(\'' + _esc(itCode)
-                        + '\');return false;" class="doc-noprint" style="color:#7a5210; font-size:11px;">📤 '
+                    var uploadLink = '<a href="#" onclick="window._docLabelArtUploadPick(\'' + _esc(itCode) + '\',\''
+                        + _esc(form.id) + '\',' + i + ');return false;" class="doc-noprint" style="color:#7a5210; font-size:11px;">📤 '
                         + _esc(_t('직접 올리기', 'Upload file')) + '</a>';
+                    // 🗂️ [2026-11-13, 사용자 요청] "등록된 여러개 중 선택해서 사용" — 한 코드에 2개
+                    //    이상 등록돼 있으면 고르기 줄을 보여준다. 연 상태는 `formId|idx` 로 따로 기억.
+                    var artPickKey = form.id + '|' + i;
+                    var artPickLink = '';
+                    if (artGroup.length > 1) {
+                        var artOpen = window._docLabelArtPickOpen && window._docLabelArtPickOpen[artPickKey];
+                        artPickLink = '<div class="doc-noprint" style="margin-top:3px; font-size:11px;">'
+                            + '<a href="#" onclick="window._docLabelArtPickToggle(\'' + _esc(artPickKey) + '\');return false;"'
+                            + ' style="color:#7a5210; font-weight:bold;">📚 ' + artGroup.length + _esc(_t('개 등록됨 · 선택', ' registered · choose'))
+                            + '</a>' + (artOpen ? '<div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:6px;">'
+                                + artGroup.map(function (g) {
+                                    var sel = g.name === artFile;
+                                    return '<img src="' + _esc(_docLabelArtSrc(itCode, g.name)) + '" title="' + _esc(g.name)
+                                        + '" onclick="window._docLabelArtPick(\'' + _esc(form.id) + '\',' + i + ',\'' + _esc(g.name).replace(/'/g, "\\'")
+                                        + '\');return false;" style="max-width:70px; max-height:60px; border-radius:3px; cursor:pointer;'
+                                        + (sel ? ' border:2px solid #1971c2;' : ' border:1px solid #dee2e6;') + '">';
+                                }).join('') + '</div>' : '') + '</div>';
+                    }
                     if (window._docLabelArtIndex === null) {
                         artCell = '<div style="color:#adb5bd; font-size:10.5px;">' + _esc(_t('불러오는 중…', 'loading…')) + '</div>';
                     } else if (artFile) {
@@ -3309,12 +3432,12 @@
                                 + (thumbSz ? ' · <a href="#" onclick="window._docLabelThumbSizeReset(\'' + _esc(itCode)
                                   + '\');return false;" class="doc-noprint" style="color:#495057; font-size:11px;">↺ '
                                   + _esc(_t('기본 크기', 'Reset size')) + '</a>' : '')
-                                + ' · ' + uploadLink + '</div>';
+                                + ' · ' + uploadLink + '</div>' + artPickLink;
                     } else {
                         artCell = '<div style="width:100%; max-width:400px; height:300px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
                             + ' box-sizing:border-box; color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>'
-                            + '<div style="margin-top:3px;">' + uploadLink + '</div>';
+                            + '<div style="margin-top:3px;">' + uploadLink + '</div>' + artPickLink;
                     }
                     // 🔎 [2026-11-12 10차, 사용자 요청] "도안 찾기" 글자는 지우고 아이콘만 남긴다 —
                     //    같은 아이콘을 **규격 칸**에도 달아, 코드를 몰라도 규격(예: "75 X 70")만으로
@@ -3327,17 +3450,17 @@
                     //    바꿔 모자라면 버튼이 **다음 줄로** 내려가게 한다(열 폭 자체는 절대 안 넘친다).
                     h += '<tr>'
                        + '<td class="doc-noprint" style="text-align:center; vertical-align:middle; padding:5px;">' + artCell + '</td>'
-                       + '<td><div style="display:flex; flex-wrap:wrap; align-items:center; gap:3px;">'
+                       // 📋 [2026-11-13, 사용자 요청] "라벨 규격은 자동으로 내역이 적용되는 구조이니
+                       //    돋보기는 필요 없을것 같은데 사용자 작성란은 아래로 이동 배치해줘" — 코드로
+                       //    찾을 때 같이 받아온 SAP 자재내역(`it.sapDesc`, MAKTX)을 **먼저**(읽기 전용,
+                       //    규격을 몰라도 코드만 있으면 자동으로 채워짐), 사람이 직접 쓰는 입력칸은
+                       //    **그 아래**(비고 칸과 같은 순서). 규격 전용 돋보기(크기로 찾기)는 뺐다 —
+                       //    코드 조회가 이미 내역을 자동으로 보여주므로 중복.
+                       + '<td>' + (it.sapDesc ? '<div class="doc-noprint" style="font-size:10px; color:#495057;'
+                         + ' white-space:normal; word-break:break-all; margin-bottom:4px;" title="' + _esc(_t('SAP 자재내역', 'SAP material description'))
+                         + '">🏭 ' + _esc(it.sapDesc) + '</div>' : '')
                        + '<input type="text" class="doc-in" data-doc-litem="' + i + '|size" value="' + _esc(it.size || '')
-                       + '" placeholder="예: 75 X 70" style="font-size:11.5px; width:0; flex:1 1 56px; min-width:48px;">'
-                       + '<button class="doc-noprint" title="' + _esc(_t('규격으로 도안 찾기', 'Find artwork by size')) + '"'
-                       + ' onclick="window._docLabelFindBySize(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button></div>'
-                       // 📋 [2026-11-13, 사용자 요청] "라벨품목코드 조회하면 SAP 내역을 표시" — 코드로
-                       //    찾을 때 같이 받아온 SAP 자재내역(`it.sapDesc`, MAKTX)을 참고용으로 보여준다.
-                       //    규격 칸을 자동으로 덮어쓰진 않는다(사람이 보고 직접 적는다).
-                       + (it.sapDesc ? '<div class="doc-noprint" style="margin-top:3px; font-size:10px; color:#495057;'
-                         + ' white-space:normal; word-break:break-all;" title="' + _esc(_t('SAP 자재내역', 'SAP material description'))
-                         + '">🏭 ' + _esc(it.sapDesc) + '</div>' : '') + '</td>'
+                       + '" placeholder="예: 75 X 70" style="font-size:11.5px; width:100%; box-sizing:border-box;"></td>'
                        + '<td><div style="display:flex; flex-wrap:wrap; align-items:center; gap:3px;">'
                        + '<input type="text" class="doc-in" data-doc-litem="' + i + '|code"'
                        + ' value="' + _esc(it.code || '') + '" placeholder="예: 124291"'
