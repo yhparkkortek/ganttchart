@@ -719,6 +719,72 @@
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
+    // ✏️ [2026-11-13, 사용자 요청] 목록 칸에서 바로 글자를 고친다(지우고 다시 찍을 필요 없게) —
+    //    onchange(블러 시)만 저장한다, 입력마다 다시 그리면 타이핑 중 포커스가 날아간다.
+    window._docLabelNoteTextEdit = async function (code, i, val) {
+        var list = window._docLabelNotesCache[code] || [];
+        if (!list[i]) return;
+        list[i].text = String(val || '').trim();
+        await window._docLabelNotesSave(code);
+        _docLabelRefresh();
+    };
+    // 📋 [2026-11-13, 사용자 요청] "도표 형태로도 작성 가능했으면" — 도안을 클릭하지 않고 글만 입력해
+    //    표처럼 줄줄이 추가한다. 자리는 기본값(왼쪽 위부터 아래로 쌓기)이고, 정확한 위치는 추가한
+    //    뒤 끌어서(드래그) 옮기면 된다 — 빈 라벨지에 Part No·Q'ty 같은 여러 항목을 한 번에 채울 때 유용.
+    window._docLabelNoteQuickAdd = async function (code) {
+        var inp = document.getElementById('doclabelart-newnote');
+        var text = inp && inp.value && inp.value.trim();
+        if (!text) return;
+        var list = window._docLabelNotesCache[code] = window._docLabelNotesCache[code] || [];
+        var y = Math.min(0.92, 0.08 + list.length * 0.09);
+        list.push({ x: 0.1, y: y, text: text });
+        _docLabelRefresh();
+        await window._docLabelNotesSave(code);
+    };
+    // 🖱 [2026-11-13, 사용자 요청] "개별 글자 위치 조정 가능" — 마커(원+글자상자)를 끌어서 옮긴다.
+    //    모달에서만(표 썸네일은 보기 전용) `idle`(표시추가·자르기 중이 아닐 때)에만 건다 —
+    //    그래야 "표시 추가" 클릭 대기 중에 마커를 끌다가 새 표시가 같이 찍히는 혼선이 없다.
+    window._docLabelNoteDragWire = function (wrap, img, code, idx) {
+        var moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var r = img.getBoundingClientRect();
+            var x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+            var y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+            wrap.style.left = (x * 100) + '%'; wrap.style.top = (y * 100) + '%';
+            var list = window._docLabelNotesCache[code] || [];
+            if (list[idx]) { list[idx].x = x; list[idx].y = y; }
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        wrap.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // 🔤 [2026-11-13, 사용자 요청] 마커(원 번호 + **실제 표시내용**) HTML — 모달·표 썸네일이 같은
+    //    모양을 쓰도록 한 곳에 모은다(두 벌로 두면 한쪽만 고쳐진다). ⚠️ 글자상자엔 **테두리를 안 둔다**
+    //    (사용자 요청 — 배경·그림자만으로 구분). `draggable` 이면 끌 수 있게 pointer-events 를 연다.
+    var _docLabelNoteMarkersHtml = function (notes, draggable) {
+        return (notes || []).map(function (n, ni) {
+            return '<span data-note-wrap data-note-idx="' + ni + '" title="' + _esc(n.text) + '" style="position:absolute;'
+                + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
+                + ' display:flex; align-items:center; gap:0.3em; z-index:1;'
+                + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;') + '">'
+                + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
+                + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
+                + '<span style="background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
+                + ' padding:0.15em 0.45em; border-radius:0.3em; box-shadow:0 1px 3px rgba(0,0,0,.18);'
+                + ' max-width:14em; white-space:normal; word-break:keep-all; line-height:1.25;">'
+                + _esc(n.text) + '</span></span>';
+        }).join('');
+    };
     // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — 사람이 조절(＋／－) + 이미지 크기와 연동.
     //    배율만 저장하고(`_docLabelNoteFontScale`) 실제 px는 렌더마다 "이미지 폭 × 비율 × 배율"
     //    로 계산 — `_docLabelNotesApplyFont`(아래) 한 곳에서만 계산해 모달·드래그 중 호출이 같은 값을 쓴다.
@@ -787,7 +853,7 @@
     };
     // 📏 [2026-11-13] 표 썸네일용 — 같은 방식이지만 **가로는 열 폭을 못 넘게 묶는다**(430px, 11차에
     //    도안을 표 안에 직접 넣었다가 열이 깨졌던 사고의 재발 방지 — 세로는 행이 늘어나도 그만이라 안 묶는다).
-    window._docLabelThumbSizeWire = function (handle, img, code) {
+    window._docLabelThumbSizeWire = function (handle, img, code, onResize) {
         var startX, startY, startW, startH, ratio, moved = false;
         var onMove = function (ev) {
             moved = true;
@@ -797,6 +863,7 @@
             img.style.width = w + 'px'; img.style.height = h + 'px';
             img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
             window._docLabelThumbSizeCache[code] = { w: Math.round(w), h: Math.round(h) };
+            if (onResize) onResize(w);
         };
         var onUp = function () {
             document.removeEventListener('mousemove', onMove);
@@ -993,6 +1060,38 @@
             _toast('⚠️ ' + _t('회전 중 오류가 났습니다: ', 'Rotation failed: ') + (e && e.message || e), 'error');
         }
     };
+    // 📤 [2026-11-13, 사용자 요청 "PPT 같은 연결프로그램으로 라벨 도안을 완성하고 이미지를 도표로
+    //    옮기는 방법도 가능할까?"] — 가능하다: SAP 검색을 안 거치고 **로컬 파일을 바로** 공용
+    //    도안(`라벨도안/<코드>.<ext>`)으로 올린다. PPT·Illustrator 등에서 완성한 뒤 PNG/JPG 로
+    //    내보내 여기로 올리면 끝 — 크기조절·자르기·회전·표시 추가는 그 뒤 모달에서 그대로 쓴다.
+    window._docLabelArtUploadPick = function (code) {
+        if (!code) { _toast('⚠️ ' + _t('코드를 먼저 적으세요.', 'Enter the code first.'), 'error'); return; }
+        var inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.onchange = function () { if (inp.files && inp.files[0]) window._docLabelArtUploadApply(code, inp.files[0]); };
+        inp.click();
+    };
+    window._docLabelArtUploadApply = async function (code, file) {
+        if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
+        var ext = (String(file.name || '').split('.').pop() || 'png').toLowerCase();
+        if (!/^(png|jpg|jpeg|gif|bmp|webp)$/.test(ext)) ext = 'png';
+        var fname = code + '.' + ext;
+        // ⚠️ 공용 자료다 — 코드 하나당 파일 하나(덮어쓰기 확인 없이, 다른 도안 선택 함수들과 같은 규칙)
+        _toast('⏳ ' + _t('올리는 중…', 'Uploading…'), 'info');
+        var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, fname, file, { forceOverwrite: true });
+        if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
+        window._docLabelArtIndex = window._docLabelArtIndex || {};
+        window._docLabelArtIndex[code] = fname;
+        _docLabelBumpVer(code);
+        // 완전히 새 디자인일 수 있다 — 자르기·회전과 같은 이유로 가로세로 비율이 달라졌을 수 있으니
+        // 크기는 기본값으로(표시 위치는 그대로 둔다 — 같은 도안을 다시 올린 경우일 수도 있어서).
+        window._docLabelSizeCache[code] = null;
+        window._docLabelThumbSizeCache[code] = null;
+        await window._docLabelNotesSave(code);
+        _toast('✅ ' + _t('공용 라벨 도안(' + _LABEL_ART_FOLDER + ')에 저장했습니다: ' + fname,
+                          'Saved to the shared label artwork library.'), 'success');
+        _docLabelRefresh();
+    };
     // 🖼️🔍 [2026-11-12 11차, 사용자 요청 "문서 기본 양식 반영"] 표시·자르기·크기조절 전용 모달 —
     //    실제 문서(스크린샷)는 도안 칸이 작고 규격/코드/부착위치가 좁은 글자 칸으로 옆에 나란하다.
     //    그 모양을 지키려고 메인 표의 썸네일은 항상 **고정된 작은 크기**로 두고, 편집은 표와
@@ -1060,20 +1159,8 @@
                 + ' src="' + _esc(_docLabelArtSrc(code, artFile))
                 + '" style="' + imgStyle + '" onclick="window._docLabelImgClick(event,\'' + _esc(code) + '\')">'
             // 🔤 [2026-11-13, 사용자 요청] 번호 원 + **실제 표시내용**을 도안 위에 같이 보여준다
-            //    (전엔 원만 찍고 내용은 아래 목록·말풍선뿐이었다). `data-note-wrap` 하나에 font-size
-            //    를 px 로 적어 두면(`_docLabelNotesApplyFont`) 원·글자상자 둘 다 em 기준이라 같이 커진다.
-            + notes.map(function (n, ni) {
-                return '<span data-note-wrap title="' + _esc(n.text) + '" style="position:absolute;'
-                    + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
-                    + ' display:flex; align-items:center; gap:0.3em; pointer-events:none; z-index:1;">'
-                    + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
-                    + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
-                    + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
-                    + '<span style="background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
-                    + ' padding:0.15em 0.45em; border-radius:0.3em; border:1px solid #e03131;'
-                    + ' box-shadow:0 1px 3px rgba(0,0,0,.18); max-width:14em; white-space:normal;'
-                    + ' word-break:keep-all; line-height:1.25;">' + _esc(n.text) + '</span></span>';
-            }).join('')
+            //    (전엔 원만 찍고 내용은 아래 목록·말풍선뿐이었다). `idle` 일 때만 끌 수 있게.
+            + _docLabelNoteMarkersHtml(notes, idle)
             + (cropSel ? '<div style="position:absolute; pointer-events:none;'
                 + ' left:' + (cropSel.x0 * 100) + '%; top:' + (cropSel.y0 * 100) + '%;'
                 + ' width:' + ((cropSel.x1 - cropSel.x0) * 100) + '%; height:' + ((cropSel.y1 - cropSel.y0) * 100) + '%;'
@@ -1114,13 +1201,27 @@
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',1);return false;"'
                      + ' title="' + _esc(_t('크게', 'bigger')) + '" style="padding:0 4px; font-weight:bold;">＋</a></span>' : ''))
             + '</div>'
+            // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로도 작성 가능했으면
+            //    좋겠음" — 번호 목록을 **입력칸으로** 바꿔 클릭 위치 없이 타이핑만으로 고칠 수 있게 하고,
+            //    맨 아래에 "입력 후 추가" 줄을 둬서 도안을 클릭하지 않고도 표처럼 줄줄이 적을 수 있다
+            //    (기본 위치에 쌓인다 — 정확한 자리는 이제 **끌어서**(위 드래그) 옮기면 된다).
             + (notes.length ? '<div style="text-align:left; font-size:11.5px; color:#495057; margin-top:8px;'
                 + ' border-top:1px solid #e9ecef; padding-top:6px;">'
                 + notes.map(function (n, ni) {
-                    return '<div>' + (ni + 1) + '. ' + _esc(n.text)
+                    return '<div style="display:flex; align-items:center; gap:4px; margin-top:2px;">' + (ni + 1) + '.'
+                        + ' <input type="text" value="' + _esc(n.text) + '"'
+                        + ' onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
+                        + ' style="flex:1; font-size:11.5px; padding:2px 5px;">'
                         + ' <a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni
                         + ');return false;" style="color:#b1432f;">✕</a></div>';
-                }).join('') + '</div>' : '');
+                }).join('') + '</div>' : '')
+            + (idle ? '<div style="margin-top:8px; display:flex; gap:6px; align-items:center;">'
+                + '<input id="doclabelart-newnote" type="text" placeholder="' + _esc(_t('새 표시 내용을 입력하고 추가 — 자리는 나중에 끌어서 옮기세요',
+                  'Type a new note, then drag it into place.')) + '" onkeydown="if(event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
+                + '\');return false;}" style="flex:1; font-size:11.5px; padding:4px 6px;">'
+                + '<button onclick="window._docLabelNoteQuickAdd(\'' + _esc(code) + '\')" style="padding:4px 10px; font-size:11.5px;'
+                + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">＋ '
+                + _esc(_t('추가', 'Add')) + '</button></div>' : '');
         var bodyEl = document.getElementById('doclabelart-body');
         if (bodyEl) bodyEl.innerHTML = h;
         // 렌더 직후 한 번만 — `innerHTML` 교체로 옛 리스너는 이미 사라졌다(따로 뗄 필요 없음).
@@ -1137,6 +1238,12 @@
             window._docLabelNotesApplyFont(bodyEl, img, code);
             // 이미지가 아직 안 불러와졌으면(첫 진입) 로드 후 실제 폭으로 다시 맞춘다
             if (!img.complete) img.addEventListener('load', function () { window._docLabelNotesApplyFont(bodyEl, img, code); }, { once: true });
+        }
+        // 🖱 [2026-11-13] 마커 끌기는 `idle` 일 때만(표시추가·자르기 중엔 끌지 않는다)
+        if (img && idle) {
+            [].slice.call(bodyEl.querySelectorAll('[data-note-wrap]')).forEach(function (wrap) {
+                window._docLabelNoteDragWire(wrap, img, code, Number(wrap.getAttribute('data-note-idx')));
+            });
         }
     };
     // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
@@ -2655,7 +2762,17 @@
                     var found = window._docLabelFindResult && window._docLabelFindResult[form.id + '|' + i];
                     var itCode = String(it.code || '').trim();
                     var artFile = (window._docLabelArtIndex && itCode) ? window._docLabelArtIndex[itCode] : null;
+                    // ⚠️ [2026-11-13] 비고 열에서도 표시 목록을 보여주려면 artFile 유무와 상관없이 필요하다
+                    //    — if/else 안에서만 선언하면 도안 없는 줄에선 `notes` 가 비어 쓰레기값(undefined).
+                    if (itCode && window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
+                    var notes = (itCode && window._docLabelNotesCache[itCode]) || [];
                     var artCell;
+                    // 📤 [2026-11-13, 사용자 요청] "PPT 등으로 완성한 이미지를 바로 올릴 수 있나" — 코드만
+                    //    있으면 SAP 검색 없이도 로컬 파일을 바로 공용 도안으로 올린다(크기·회전과 같이
+                    //    `_docLabelArtUploadPick` 한 곳).
+                    var uploadLink = '<a href="#" onclick="window._docLabelArtUploadPick(\'' + _esc(itCode)
+                        + '\');return false;" class="doc-noprint" style="color:#7a5210; font-size:11px;">📤 '
+                        + _esc(_t('직접 올리기', 'Upload file')) + '</a>';
                     if (window._docLabelArtIndex === null) {
                         artCell = '<div style="color:#adb5bd; font-size:10.5px;">' + _esc(_t('불러오는 중…', 'loading…')) + '</div>';
                     } else if (artFile) {
@@ -2667,17 +2784,19 @@
                         //    에서만 하되, ⚠️ [2026-11-13, 사용자 요청] 표 썸네일 자체의 **보이는 크기**는
                         //    여기서도 끌어서 조절할 수 있다(`thumbSize`, 모달 `size` 와는 별도 칸) — 가로는
                         //    430px 로 묶어 열 폭(450px)을 못 넘게 한다(11차 사고 재발 방지).
-                        if (window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
-                        var notes = window._docLabelNotesCache[itCode] || [];
                         var thumbSz = window._docLabelThumbSizeCache && window._docLabelThumbSizeCache[itCode];
                         var thumbImgStyle = 'border:1px solid #dee2e6; border-radius:3px; display:block; margin:0 auto; cursor:pointer;'
                             + ((thumbSz && thumbSz.w && thumbSz.h)
                                ? (' width:' + thumbSz.w + 'px; height:' + thumbSz.h + 'px; max-width:none; max-height:none;')
                                : ' max-width:430px; max-height:400px;');
+                        // 🔤 [2026-11-13, 사용자 요청] "모달에서 수정한 내용을 도표에서도 실시간으로" —
+                        //    표 썸네일에도 **같은 마커**(보기 전용, 끌기는 모달에서만)를 얹는다. 모달에서
+                        //    표시를 고치면 `_docLabelRefresh()` 가 이 표도 같이 다시 그려서 따로 손댈 게 없다.
                         artCell = '<div style="position:relative; display:inline-block;">'
                                 + '<img data-thumb-img="' + _esc(itCode) + '" src="' + _esc(_docLabelArtSrc(itCode, artFile))
                                 + '" style="' + thumbImgStyle + '"'
                                 + ' onclick="window._docLabelArtModalOpen(\'' + _esc(form.id) + '\',' + i + ');return false;">'
+                                + _docLabelNoteMarkersHtml(notes, false)
                                 + '<div data-thumb-resize="' + _esc(itCode) + '" title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                                 + ' class="doc-noprint" style="position:absolute; right:2px; bottom:2px; width:13px; height:13px;'
                                 + ' border-radius:3px; background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2;'
@@ -2687,11 +2806,13 @@
                                 + _esc(_t('크게 보기', 'View / edit')) + (notes.length ? ' (' + notes.length + ')' : '') + '</a>'
                                 + (thumbSz ? ' · <a href="#" onclick="window._docLabelThumbSizeReset(\'' + _esc(itCode)
                                   + '\');return false;" class="doc-noprint" style="color:#495057; font-size:11px;">↺ '
-                                  + _esc(_t('기본 크기', 'Reset size')) + '</a>' : '') + '</div>';
+                                  + _esc(_t('기본 크기', 'Reset size')) + '</a>' : '')
+                                + ' · ' + uploadLink + '</div>';
                     } else {
                         artCell = '<div style="width:400px; height:300px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
-                            + ' color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>';
+                            + ' color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>'
+                            + '<div style="margin-top:3px;">' + uploadLink + '</div>';
                     }
                     // 🔎 [2026-11-12 10차, 사용자 요청] "도안 찾기" 글자는 지우고 아이콘만 남긴다 —
                     //    같은 아이콘을 **규격 칸**에도 달아, 코드를 몰라도 규격(예: "75 X 70")만으로
@@ -2713,7 +2834,12 @@
                        + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|position" value="'
                        + _esc(it.position || '') + '" placeholder="예: 제품 / C.T BOX" style="font-size:11.5px;"></td>'
                        + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|note" value="' + _esc(it.note || '')
-                       + '" style="font-size:11.5px;"></td>'
+                       + '" style="font-size:11.5px;">'
+                       // 📋 [2026-11-13, 사용자 요청] 도안 위 표시 내용을 "1. 2. 3." 으로 정리해 비고 열에도 보여준다
+                       //    (모달을 열지 않아도 무슨 표시가 있는지 바로 읽힌다) — 읽기 전용, 고치려면 🔍 크게 보기.
+                       + (notes.length ? '<div class="doc-noprint" style="margin-top:4px; font-size:10.5px; color:#495057; text-align:left;">'
+                         + notes.map(function (n, ni) { return (ni + 1) + '. ' + _esc(n.text); }).join('<br>') + '</div>' : '')
+                       + '</td>'
                        + '<td class="doc-noprint"><a href="#" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
                        + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '" style="color:#b1432f;">✕</a></td>'
                        + '</tr>';
@@ -3124,10 +3250,17 @@
             });
         });
         // 🏷 라벨 사양서 — 표 썸네일 크기조절 손잡이(렌더마다 다시 그려지므로 매번 새로 건다)
+        //    + 마커 글자 크기를 썸네일 폭에 맞춘다(모달과 같은 계산, `_docLabelNotesApplyFont`).
         [].slice.call(body.querySelectorAll('[data-thumb-resize]')).forEach(function (handle) {
             var tcode = handle.getAttribute('data-thumb-resize');
-            var timg = handle.parentElement && handle.parentElement.querySelector('[data-thumb-img]');
-            if (timg) window._docLabelThumbSizeWire(handle, timg, tcode);
+            var twrap = handle.parentElement;
+            var timg = twrap && twrap.querySelector('[data-thumb-img]');
+            if (!timg) return;
+            window._docLabelThumbSizeWire(handle, timg, tcode, function (wPx) {
+                window._docLabelNotesApplyFont(twrap, timg, tcode, wPx);
+            });
+            window._docLabelNotesApplyFont(twrap, timg, tcode);
+            if (!timg.complete) timg.addEventListener('load', function () { window._docLabelNotesApplyFont(twrap, timg, tcode); }, { once: true });
         });
     };
 
