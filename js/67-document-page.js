@@ -1701,7 +1701,10 @@
                 + '</span>'
                 // 🔢🔢🔢🔢 [2026-11-13 4차, 사용자 요청] "50% 만 늘려줘" — 1.09em 에서 50% 더(×1.5):
                 //    1.64em·안쪽 숫자도 같은 비율로(0.585em → 0.88em).
-                + '<span style="width:1.64em; height:1.64em; min-width:1.64em; border-radius:50%; background:#e03131;'
+                // 🔵 [2026-11-13 5차, 사용자 신고 "파란색 동그라미 번호로 기준 잡고 통일해줘"] —
+                //    `data-note-circle` 로 표시해 두면 `_docLabelNotesApplyFont` 가 이 칸의
+                //    font-size 를 (배율 없는) 고정 기준으로 직접 덮어써 라벨마다 달라지지 않는다.
+                + '<span data-note-circle style="width:1.64em; height:1.64em; min-width:1.64em; border-radius:50%; background:#e03131;'
                 + ' color:#fff; font-weight:bold; font-size:0.88em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
@@ -1722,6 +1725,14 @@
         var scale = (window._docLabelNoteFontScale && window._docLabelNoteFontScale[code]) || 1;
         return Math.max(9, Math.round((imgWidthPx || 0) * 0.032 * scale));
     };
+    // 🔵 [2026-11-13, 사용자 신고 "파란색 동그라미 번호로 기준 잡고 통일해줘"] 번호 원은 글자
+    //    상자와 같은 font-size(= 이미지 폭 × 표시 글자크기 배율)를 따라가고 있었다 — 그 배율은
+    //    라벨마다 사람이 **+／－로 따로** 조절해 둔 값이라(이름 그대로 "표시 글자크기"), 라벨 A
+    //    에서 글자를 키워 두면 번호 원까지 같이 커져 **다른 라벨의 원과 크기가 달라졌다**. 번호
+    //    원은 그 배율을 무시하고 **이미지 폭 기준 하나로만** 고정해야 라벨이 달라도 항상 같다.
+    window._docLabelCircleFontPx = function (imgWidthPx) {
+        return Math.max(9, Math.round((imgWidthPx || 0) * 0.032));
+    };
     // wrap(표시·마크·박스를 담은 상위 엘리먼트)의 각 em 기준 엘리먼트에 계산된 px 를 적는다 —
     // 하나의 font-size 로 원 번호·글자 상자가 **같은 em 기준**이라 함께 커진다(마커 HTML 쪽 em 참고).
     // ⚠️⚠️ [2026-11-13, 사용자 신고 "도표 이미지에는 박스 크기가 연동되지 않음"] 처음엔 `[data-note-wrap]`
@@ -1734,6 +1745,10 @@
         var px = window._docLabelNoteFontPx(w, code);
         [].slice.call(bodyEl.querySelectorAll('[data-note-wrap], [data-mark-wrap], [data-box-wrap], [data-code-wrap]'))
             .forEach(function (el) { el.style.fontSize = px + 'px'; });
+        // 🔵 번호 원은 위 px(배율 포함) 말고 **배율 없는 고정 기준**으로 따로 — 자기 자신에
+        //    font-size 를 직접 줘서 부모(wrap)의 배율 영향을 받지 않게 끊는다.
+        var circlePx = window._docLabelCircleFontPx(w);
+        [].slice.call(bodyEl.querySelectorAll('[data-note-circle]')).forEach(function (el) { el.style.fontSize = circlePx + 'px'; });
     };
     // 🔧 [2026-11-12 11차, 사용자 요청] 크기 조정 — 모달 안 이미지 우하단 손잡이를 끌면 크기를
     //    바꾼다. 표시(notes)와 **같은 사이드카**(`<코드>.notes.json`)에 `size:{w,h}` 로 같이
