@@ -685,6 +685,128 @@
     //    저장은 **배율**(`fontScale`, 기본 1)만 두고 실제 px 는 "이미지 폭 × 비율 × 배율"로
     //    매번 계산한다(이미지 폭 하나만 바뀌면 전부 같이 바뀌게).
     window._docLabelNoteFontScale = window._docLabelNoteFontScale || {};   // code -> number(배율) | undefined(기본 1)
+    // 🏷 [2026-11-13, 사용자 요청] 인증마크(UL·CE·CB·FCC) 도장 — 표시(notes)와 같은 사이드카에
+    //    `marks:[{key,x,y,wem}]` 로 같이 저장한다(**코드가 주인** — 도안·표시와 같은 이유, 실제
+    //    물리 라벨도 그 자리에 마크가 찍혀 있다). ⚠️ "많지 않으니 UL CE CB FCC 정도만" — 종류를
+    //    늘리고 싶으면 이 카탈로그 한 줄만 추가(코드에 if 분기 없음).
+    //    ⚠️ [2026-11-13, 사용자 정정] CB 는 **별도 도형 마크가 없다**(CB Scheme 은 인증서 체계라
+    //    UL·CE·FCC 처럼 찍는 로고가 없음) — `noImage:true` 로 두면 이미지 대신 글자 배지로 찍는다.
+    var CERT_MARK_CATALOG = [
+        { key: 'UL', label: 'UL' },
+        { key: 'CE', label: 'CE' },
+        { key: 'CB', label: 'CB', noImage: true },
+        { key: 'FCC', label: 'FCC' }
+    ];
+    var _CERT_MARK_FOLDER = _LABEL_ART_FOLDER + '/_marks';   // 라벨도안/_marks/<KEY>.png — 코드(제품)가 아니라 마크 종류가 주인
+    window._docLabelMarksCache = window._docLabelMarksCache || {};   // code -> [{key,x,y,wem}]
+    window._docCertMarkIndex = window._docCertMarkIndex === undefined ? null : window._docCertMarkIndex; // null=아직 안 불러옴
+    window._docCertMarkLoading = false;
+    window._docCertMarkLoadFailedAt = 0;
+    // ⚠️ 마크 그림은 **종류 하나당 파일 하나**(도안·패널 라이브러리와 같은 공용 자료) — 코드(제품)
+    //    별이 아니라 **한 번만** 불러온다. 실패 후 재시도 쿨다운은 `_docLabelArtLoad` 와 같은 이유.
+    window._docCertMarkLoad = async function () {
+        if (window._docCertMarkLoading) return;
+        window._docCertMarkLoading = true;
+        var idx = {};
+        try {
+            var r = await fetch(BACKEND + '/doc/list?folder=' + encodeURIComponent(_CERT_MARK_FOLDER));
+            var j = await r.json();
+            if (j && j.ok) (j.files || []).forEach(function (f) { idx[f.name.replace(/\.[^.]+$/, '').toUpperCase()] = f.name; });
+            window._docCertMarkIndex = idx;
+        } catch (e) {
+            window._docCertMarkIndex = null;
+            window._docCertMarkLoadFailedAt = Date.now();
+        }
+        window._docCertMarkLoading = false;
+        _docLabelRefresh();
+    };
+    // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 빈 네모 칸을 여러 개 올려
+    //    가로/세로 칸 구분선처럼 쓸 수 있게 한다(표/마크와 같은 사이드카에 `boxes:[{x,y,wem,hem}]`).
+    //    ⚠️ [2026-11-13, 사용자 요청] "기본적으로 박스는 모두 모서리 R 값 적용" — 둥근 모서리가 기본.
+    window._docLabelBoxesCache = window._docLabelBoxesCache || {};   // code -> [{x,y,wem,hem}]
+    window._docLabelBoxAdd = function (code) {
+        var list = window._docLabelBoxesCache[code] = window._docLabelBoxesCache[code] || [];
+        var n = list.length;
+        list.push({ x: Math.min(0.85, 0.2 + (n % 3) * 0.12), y: Math.min(0.85, 0.2 + Math.floor(n / 3) * 0.12), wem: 10, hem: 4 });
+        _docLabelRefresh();
+        window._docLabelNotesSave(code);
+    };
+    window._docLabelBoxDel = async function (code, idx) {
+        var list = window._docLabelBoxesCache[code] || [];
+        if (!list[idx]) return;
+        if (!confirm(_t('이 박스를 지웁니다.', 'Delete this box?'))) return;
+        list.splice(idx, 1);
+        _docLabelRefresh();
+        await window._docLabelNotesSave(code);
+    };
+    window._docLabelBoxDragWire = function (wrap, img, code, idx) {
+        var moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var r = img.getBoundingClientRect();
+            var x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+            var y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+            wrap.style.left = (x * 100) + '%'; wrap.style.top = (y * 100) + '%';
+            var list = window._docLabelBoxesCache[code] || [];
+            if (list[idx]) { list[idx].x = x; list[idx].y = y; }
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        wrap.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // 📏 박스는 마크(너비만)와 달리 **가로·세로 둘 다** 조절한다 — 표 칸 크기를 자유롭게 맞추려면 필수.
+    window._docLabelBoxResizeWire = function (handle, wrap, code, idx) {
+        var startX, startY, startW, startH, fontPx, moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var w = Math.max(fontPx * 1.5, startW + (ev.clientX - startX));
+            var h = Math.max(fontPx * 1, startH + (ev.clientY - startY));
+            wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
+            var list = window._docLabelBoxesCache[code] || [];
+            if (list[idx]) { list[idx].wem = Math.round((w / fontPx) * 100) / 100; list[idx].hem = Math.round((h / fontPx) * 100) / 100; }
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            startX = ev.clientX; startY = ev.clientY;
+            var r = wrap.getBoundingClientRect();
+            startW = r.width; startH = r.height;
+            fontPx = parseFloat(getComputedStyle(wrap).fontSize) || 16;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // ⬜ 박스 HTML — 테두리만 있는 빈 네모(표의 칸 구분선 용도), **모서리는 기본 둥글게**(사용자 요청).
+    var _docLabelBoxMarkersHtml = function (boxes, draggable, code) {
+        return (boxes || []).map(function (b, bi) {
+            var wrapStyle = 'position:absolute; left:' + (b.x * 100) + '%; top:' + (b.y * 100) + '%;'
+                + ' width:' + (b.wem || 10) + 'em; height:' + (b.hem || 4) + 'em;'
+                + ' border:2px solid #1971c2; border-radius:0.3em; background:rgba(255,255,255,.12); z-index:1;'
+                + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;');
+            return '<span data-box-wrap data-box-idx="' + bi + '" style="' + wrapStyle + '">'
+                + (draggable ? '<span data-box-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
+                  + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em; border-radius:0.25em;'
+                  + ' background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2; cursor:nwse-resize; z-index:2;"></span>'
+                  + '<a href="#" onclick="window._docLabelBoxDel(\'' + _esc(code) + '\',' + bi + ');return false;"'
+                  + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
+                  + ' background:#b1432f; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
+                  + ' box-shadow:0 0 0 1px #fff;">✕</a>' : '')
+                + '</span>';
+        }).join('');
+    };
     // 🖼️🔍 [2026-11-12 11차] 표시·자르기·크기조절은 전부 이 **별도 모달**에서만 한다 — 메인
     //    표 안에 큰 이미지를 직접 넣었더니 열(규격/코드/부착위치) 폭을 다 깨뜨렸다(사용자 실측
     //    스크린샷: "이미지는 커졌는데 도표는 조정되지 않음"). 표 쪽은 실제 문서(위 스크린샷)처럼
@@ -697,7 +819,7 @@
     window._docLabelNotesLoad = async function (code) {
         if (window._docLabelNotesCache[code] !== undefined) return;    // 이미 불렀거나 불러오는 중
         window._docLabelNotesCache[code] = null;
-        var notes = [], size = null, thumbSize = null, fontScale = null;
+        var notes = [], size = null, thumbSize = null, fontScale = null, marks = [], boxes = [];
         try {
             var r = await fetch(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
                 + '&name=' + encodeURIComponent(code + '.notes.json'));
@@ -707,6 +829,8 @@
                 size = (parsed && parsed.size) || null;
                 thumbSize = (parsed && parsed.thumbSize) || null;
                 fontScale = (parsed && parsed.fontScale) || null;
+                marks = (parsed && parsed.marks) || [];
+                boxes = (parsed && parsed.boxes) || [];
             }
         } catch (e) { /* 아직 없으면(404) 빈 값 — 네트워크 문제도 여기선 그냥 빈 채로 둔다 */ }
         // ⚠️ [2026-11-12 11차, 실측] 이 fetch 가 느리게 도는 동안 사람이 먼저 표시를 찍거나
@@ -716,6 +840,8 @@
         if (window._docLabelSizeCache[code] === undefined) window._docLabelSizeCache[code] = size;
         if (window._docLabelThumbSizeCache[code] === undefined) window._docLabelThumbSizeCache[code] = thumbSize;
         if (window._docLabelNoteFontScale[code] === undefined) window._docLabelNoteFontScale[code] = fontScale || 1;
+        if (window._docLabelMarksCache[code] === undefined) window._docLabelMarksCache[code] = marks;
+        if (window._docLabelBoxesCache[code] === undefined) window._docLabelBoxesCache[code] = boxes;
         _docLabelRefresh();
     };
     window._docLabelNotesSave = async function (code) {
@@ -723,10 +849,116 @@
         var size = window._docLabelSizeCache[code] || null;
         var thumbSize = window._docLabelThumbSizeCache[code] || null;
         var fontScale = window._docLabelNoteFontScale[code] || 1;
-        var blob = new Blob([JSON.stringify({ notes: notes, size: size, thumbSize: thumbSize, fontScale: fontScale })], { type: 'application/json' });
+        var marks = window._docLabelMarksCache[code] || [];
+        var boxes = window._docLabelBoxesCache[code] || [];
+        var blob = new Blob([JSON.stringify({ notes: notes, size: size, thumbSize: thumbSize, fontScale: fontScale, marks: marks, boxes: boxes })], { type: 'application/json' });
         var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, code + '.notes.json', blob, { forceOverwrite: true });
         if (!res.ok) _toast('⚠️ ' + _t('표시를 저장하지 못했습니다: ', 'Could not save the note: ') + (res.error || ''), 'error');
         return res.ok;
+    };
+    // 🏷 [2026-11-13, 사용자 요청] 인증마크 추가 — 기본 자리는 오른쪽 위부터 3개씩 줄줄이(실제 라벨도
+    //    보통 그 자리에 몰려 찍힌다), 정확한 자리는 드래그로. `wem` 기본 4(대략 글자 4개 폭).
+    window._docLabelMarkAdd = function (code, key) {
+        if (window._docCertMarkIndex === null && !window._docCertMarkLoading) window._docCertMarkLoad();
+        var list = window._docLabelMarksCache[code] = window._docLabelMarksCache[code] || [];
+        var n = list.length;
+        list.push({ key: key, x: Math.min(0.92, 0.74 + (n % 3) * 0.09), y: Math.min(0.9, 0.08 + Math.floor(n / 3) * 0.13), wem: 4 });
+        _docLabelRefresh();
+        window._docLabelNotesSave(code);
+    };
+    window._docLabelMarkDel = async function (code, idx) {
+        var list = window._docLabelMarksCache[code] || [];
+        var m = list[idx];
+        if (!m) return;
+        var cat = CERT_MARK_CATALOG.filter(function (c) { return c.key === m.key; })[0];
+        if (!confirm(_t('이 인증마크를 지웁니다: ' + ((cat && cat.label) || m.key), 'Delete this certification mark?'))) return;
+        list.splice(idx, 1);
+        _docLabelRefresh();
+        await window._docLabelNotesSave(code);
+    };
+    // 🖱📏 [2026-11-13] 인증마크 끌어서 옮기기·크기 조절 — 표시(notes)의 드래그/너비조절과 같은 짝.
+    window._docLabelMarkDragWire = function (wrap, img, code, idx) {
+        var moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var r = img.getBoundingClientRect();
+            var x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+            var y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+            wrap.style.left = (x * 100) + '%'; wrap.style.top = (y * 100) + '%';
+            var list = window._docLabelMarksCache[code] || [];
+            if (list[idx]) { list[idx].x = x; list[idx].y = y; }
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        wrap.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    window._docLabelMarkWidthWire = function (handle, wrap, code, idx) {
+        var startX, startW, fontPx, moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var w = Math.max(fontPx * 1.5, startW + (ev.clientX - startX));
+            wrap.style.width = w + 'px';
+            var list = window._docLabelMarksCache[code] || [];
+            if (list[idx]) list[idx].wem = Math.round((w / fontPx) * 100) / 100;
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            startX = ev.clientX;
+            var r = wrap.getBoundingClientRect();
+            startW = r.width;
+            fontPx = parseFloat(getComputedStyle(wrap).fontSize) || 16;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // 🏷 [2026-11-13] 마커 HTML — 표시(notes)와 같은 틀, 그림은 이미지 하나(UL·CE·FCC)거나
+    //    글자 배지 하나(CB, `noImage`)뿐이라 번호 원이 없다. `draggable` 일 때만 손잡이가 붙는다.
+    var _docLabelMarkMarkersHtml = function (marks, draggable, code) {
+        return (marks || []).map(function (m, mi) {
+            var cat = CERT_MARK_CATALOG.filter(function (c) { return c.key === m.key; })[0] || { key: m.key, label: m.key };
+            var wrapStyle = 'position:absolute; left:' + (m.x * 100) + '%; top:' + (m.y * 100) + '%; transform:translate(-50%,-50%);'
+                + ' z-index:1;' + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;');
+            var inner;
+            if (cat.noImage) {
+                inner = '<span style="display:inline-block; border:0.12em solid #333; border-radius:0.2em; padding:0.1em 0.4em;'
+                    + ' font-weight:bold; background:#fff; color:#222; font-size:1.3em; white-space:nowrap;">' + _esc(cat.label) + '</span>';
+            } else {
+                wrapStyle += ' width:' + (m.wem || 4) + 'em;';
+                var markFile = window._docCertMarkIndex && window._docCertMarkIndex[cat.key];
+                inner = markFile
+                    ? ('<img data-mark-img src="' + _esc(BACKEND + '/doc/get?folder=' + encodeURIComponent(_CERT_MARK_FOLDER)
+                        + '&name=' + encodeURIComponent(markFile)) + '" style="display:block; width:100%; height:auto;"'
+                        + ' draggable="false" ondragstart="return false;">')
+                    : ('<span style="display:flex; align-items:center; justify-content:center; width:100%; height:2.2em;'
+                        + ' border:1px dashed #cfe3e5; border-radius:0.2em; background:#f8fbfb; color:#adb5bd; font-size:0.65em;'
+                        + ' font-weight:bold;">' + _esc(cat.label) + '</span>');
+            }
+            return '<span data-mark-wrap data-mark-idx="' + mi + '" title="' + _esc(cat.label) + '" style="' + wrapStyle + '">'
+                + inner
+                + ((draggable && !cat.noImage) ? '<span data-mark-wresize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
+                  + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
+                  + ' display:flex; align-items:center; justify-content:center; z-index:2;">'
+                  + '<span style="width:2px; height:60%; background:#333; border-radius:1px;"></span></span>' : '')
+                + (draggable ? '<a href="#" onclick="window._docLabelMarkDel(\'' + _esc(code) + '\',' + mi + ');return false;"'
+                  + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
+                  + ' background:#b1432f; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
+                  + ' box-shadow:0 0 0 1px #fff;">✕</a>' : '')
+                + '</span>';
+        }).join('');
     };
     window._docLabelNoteArm = function (code) { window._docLabelNotePlacing = code; _docLabelRefresh(); };
     window._docLabelNoteDisarm = function () { window._docLabelNotePlacing = null; _docLabelRefresh(); };
@@ -837,23 +1069,30 @@
     var _docLabelNoteMarkersHtml = function (notes, draggable) {
         return (notes || []).map(function (n, ni) {
             var wStyle = (n.wem ? (' width:' + n.wem + 'em; max-width:none;') : ' max-width:14em;');
+            // ⚠️ [2026-11-13, 사용자 요청] 번호 원을 글자상자 **오른쪽**으로 — flex 자식 순서만
+            //    바꾼다(위치 기준점은 전체 묶음 가운데라 순서를 바꿔도 끌기 좌표 계산은 그대로).
             return '<span data-note-wrap data-note-idx="' + ni + '" title="' + _esc(n.text) + '" style="position:absolute;'
                 + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
                 + ' display:flex; align-items:center; gap:0.3em; z-index:1;'
                 + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;') + '">'
-                + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
-                + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
-                + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '<span data-note-widthbox style="position:relative; display:inline-block;' + wStyle + '">'
+                // ⚠️⚠️ [2026-11-13, 사용자 신고 "줄바꿈 이미지에는 반영 안 됨"] `white-space:normal` 은
+                //    HTML 이 원래 그런 것처럼 줄바꿈 문자(`\n`)를 **공백 하나로 뭉갠다** — 입력칸엔
+                //    여러 줄로 보여도 도안 위 글자상자에선 한 줄로 이어 붙었다. `pre-wrap` 으로 바꾸면
+                //    사람이 친 줄바꿈은 그대로 살리면서 칸 폭을 넘는 긴 줄만 자동으로 더 접는다.
                 + '<span style="display:block; background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
                 + ' padding:0.15em 0.45em; border-radius:0.3em; box-shadow:0 1px 3px rgba(0,0,0,.18);'
-                + ' white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
+                + ' white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
                 + _esc(n.text) + '</span>'
                 + (draggable ? '<span data-note-wresize title="' + _esc(_t('끌어서 너비 조절', 'drag to resize width')) + '"'
                   + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
                   + ' display:flex; align-items:center; justify-content:center; z-index:2; pointer-events:auto;">'
                   + '<span style="width:2px; height:60%; background:#e03131; border-radius:1px;"></span></span>' : '')
-                + '</span></span>';
+                + '</span>'
+                + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
+                + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
+                + '</span>';
         }).join('');
     };
     // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — 사람이 조절(＋／－) + 이미지 크기와 연동.
@@ -992,7 +1231,7 @@
             if (!box) {
                 box = document.createElement('div');
                 box.className = 'doc-noprint';
-                box.style.cssText = 'position:absolute; border:2px dashed #1971c2; background:rgba(25,113,194,.15); pointer-events:none;';
+                box.style.cssText = 'position:absolute; border:2px dashed #1971c2; border-radius:3px; background:rgba(25,113,194,.15); pointer-events:none;';
                 wrap.appendChild(box);
             }
             box.style.left = (x0 * 100) + '%'; box.style.top = (y0 * 100) + '%';
@@ -1215,6 +1454,11 @@
         if (titleEl) titleEl.textContent = '🏷 ' + _t('라벨 도안 — ', 'Artwork — ') + code;
 
         var notes = window._docLabelNotesCache[code] || [];
+        var marks = window._docLabelMarksCache[code] || [];
+        var boxes = window._docLabelBoxesCache[code] || [];
+        // 🏷 [2026-11-13] 마크 그림 목록(UL·CE·FCC 공용 파일)은 코드와 상관없이 **한 번만** 불러온다
+        if (window._docCertMarkIndex === null && !window._docCertMarkLoading
+            && (Date.now() - window._docCertMarkLoadFailedAt) > 5000) window._docCertMarkLoad();
         var placing = window._docLabelNotePlacing === code;
         var cropping = window._docLabelCropState && window._docLabelCropState.code === code;
         var cropSel = cropping ? window._docLabelCropState.sel : null;
@@ -1232,10 +1476,14 @@
             // 🔤 [2026-11-13, 사용자 요청] 번호 원 + **실제 표시내용**을 도안 위에 같이 보여준다
             //    (전엔 원만 찍고 내용은 아래 목록·말풍선뿐이었다). `idle` 일 때만 끌 수 있게.
             + _docLabelNoteMarkersHtml(notes, idle)
+            // 🏷 [2026-11-13, 사용자 요청] 인증마크(UL·CE·CB·FCC) 도장 — 같은 틀로 끌어서 배치
+            + _docLabelMarkMarkersHtml(marks, idle, code)
+            // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 빈 박스(표 칸 구분선 용도)
+            + _docLabelBoxMarkersHtml(boxes, idle, code)
             + (cropSel ? '<div style="position:absolute; pointer-events:none;'
                 + ' left:' + (cropSel.x0 * 100) + '%; top:' + (cropSel.y0 * 100) + '%;'
                 + ' width:' + ((cropSel.x1 - cropSel.x0) * 100) + '%; height:' + ((cropSel.y1 - cropSel.y0) * 100) + '%;'
-                + ' border:2px dashed #1971c2; background:rgba(25,113,194,.15);"></div>' : '')
+                + ' border:2px dashed #1971c2; border-radius:3px; background:rgba(25,113,194,.15);"></div>' : '')
             + (idle ? '<div data-resize-handle title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                 + ' style="position:absolute; right:-7px; bottom:-7px; width:15px; height:15px; border-radius:3px;'
                 + ' background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2; cursor:nwse-resize; z-index:2;"></div>' : '')
@@ -1272,6 +1520,18 @@
                    + '<a href="#" onclick="window._docLabelNoteFontAdjust(\'' + _esc(code) + '\',1);return false;"'
                      + ' title="' + _esc(_t('크게', 'bigger')) + '" style="padding:0 4px; font-weight:bold;">＋</a></span>' : ''))
             + '</div>'
+            // 🏷 [2026-11-13, 사용자 요청] "UL CE CB FCC 정도만 사용 — 인증마크도 도안 위에 넣고 싶다"
+            //    누르면 바로 도안 위에 찍힌다(기본 자리는 오른쪽 위) — 정확한 위치는 끌어서.
+            + (idle ? '<div style="margin-top:6px; font-size:12px; color:#495057;">🏷 ' + _esc(_t('인증마크 추가', 'Add cert mark')) + ': '
+              + CERT_MARK_CATALOG.map(function (c) {
+                  return '<a href="#" onclick="window._docLabelMarkAdd(\'' + _esc(code) + '\',\'' + _esc(c.key) + '\');return false;"'
+                      + ' style="margin-right:10px; color:#7a5210; font-weight:bold;">' + _esc(c.label) + '</a>';
+              }).join('')
+              // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 누를 때마다 빈 박스가
+              //    하나씩 늘고(표 칸 구분선처럼 여러 개 쌓아 배치), 자리·크기는 끌어서 맞춘다.
+              + ' · <a href="#" onclick="window._docLabelBoxAdd(\'' + _esc(code) + '\');return false;"'
+              + ' style="color:#1971c2; font-weight:bold;">⬜ ' + _esc(_t('박스 추가', 'Add box')) + '</a>'
+              + '</div>' : '')
             // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로도 작성 가능했으면
             //    좋겠음" — 번호 목록을 **입력칸으로** 바꿔 클릭 위치 없이 타이핑만으로 고칠 수 있게 하고,
             //    맨 아래에 "입력 후 추가" 줄을 둬서 도안을 클릭하지 않고도 표처럼 줄줄이 적을 수 있다
@@ -1283,7 +1543,7 @@
                 + ' border-top:1px solid #e9ecef; padding-top:6px;">'
                 + notes.map(function (n, ni) {
                     return '<div style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">' + (ni + 1) + '.'
-                        + ' <textarea rows="1" onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
+                        + ' <textarea rows="2" onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
                         + _esc(n.text) + '</textarea>'
                         + ' <a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni
@@ -1322,6 +1582,20 @@
                 var widthBox = wrap.querySelector('[data-note-widthbox]');
                 var wHandle = wrap.querySelector('[data-note-wresize]');
                 if (widthBox && wHandle) window._docLabelNoteWidthWire(wHandle, widthBox, code, idx);
+            });
+            // 🏷 [2026-11-13] 인증마크도 같은 규칙으로 끌기·크기조절
+            [].slice.call(bodyEl.querySelectorAll('[data-mark-wrap]')).forEach(function (wrap) {
+                var midx = Number(wrap.getAttribute('data-mark-idx'));
+                window._docLabelMarkDragWire(wrap, img, code, midx);
+                var mHandle = wrap.querySelector('[data-mark-wresize]');
+                if (mHandle) window._docLabelMarkWidthWire(mHandle, wrap, code, midx);
+            });
+            // ⬜ [2026-11-13] 박스도 같은 규칙으로 끌기 + 가로세로 크기조절
+            [].slice.call(bodyEl.querySelectorAll('[data-box-wrap]')).forEach(function (wrap) {
+                var bidx = Number(wrap.getAttribute('data-box-idx'));
+                window._docLabelBoxDragWire(wrap, img, code, bidx);
+                var bHandle = wrap.querySelector('[data-box-resize]');
+                if (bHandle) window._docLabelBoxResizeWire(bHandle, wrap, code, bidx);
             });
         }
     };
@@ -2845,6 +3119,10 @@
                     //    — if/else 안에서만 선언하면 도안 없는 줄에선 `notes` 가 비어 쓰레기값(undefined).
                     if (itCode && window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
                     var notes = (itCode && window._docLabelNotesCache[itCode]) || [];
+                    var marks = (itCode && window._docLabelMarksCache[itCode]) || [];
+                    var boxes = (itCode && window._docLabelBoxesCache[itCode]) || [];
+                    if (window._docCertMarkIndex === null && !window._docCertMarkLoading
+                        && (Date.now() - window._docCertMarkLoadFailedAt) > 5000) window._docCertMarkLoad();
                     var artCell;
                     // 📤 [2026-11-13, 사용자 요청] "PPT 등으로 완성한 이미지를 바로 올릴 수 있나" — 코드만
                     //    있으면 SAP 검색 없이도 로컬 파일을 바로 공용 도안으로 올린다(크기·회전과 같이
@@ -2886,6 +3164,8 @@
                                 + '" style="' + thumbImgStyle + '"'
                                 + ' onclick="window._docLabelArtModalOpen(\'' + _esc(form.id) + '\',' + i + ');return false;">'
                                 + _docLabelNoteMarkersHtml(notes, false)
+                                + _docLabelMarkMarkersHtml(marks, false, itCode)
+                                + _docLabelBoxMarkersHtml(boxes, false, itCode)
                                 + '<div data-thumb-resize="' + _esc(itCode) + '" title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                                 + ' class="doc-noprint" style="position:absolute; right:2px; bottom:2px; width:13px; height:13px;'
                                 + ' border-radius:3px; background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2;'
@@ -2929,7 +3209,8 @@
                        + _esc(it.note || '') + '</textarea>'
                        // 📋 [2026-11-13, 사용자 요청] 도안 위 표시 내용을 "1. 2. 3." 으로 정리해 비고 열에도 보여준다
                        //    (모달을 열지 않아도 무슨 표시가 있는지 바로 읽힌다) — 읽기 전용, 고치려면 🔍 크게 보기.
-                       + (notes.length ? '<div class="doc-noprint" style="margin-top:4px; font-size:10.5px; color:#495057; text-align:left;">'
+                       + (notes.length ? '<div class="doc-noprint" style="margin-top:4px; font-size:10.5px; color:#495057; text-align:left;'
+                         + ' white-space:pre-line;">'
                          + notes.map(function (n, ni) { return (ni + 1) + '. ' + _esc(n.text); }).join('<br>') + '</div>' : '')
                        + '</td>'
                        + '<td class="doc-noprint"><a href="#" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
@@ -3919,16 +4200,19 @@
                 //    `LABEL_FIELD_CATALOG` 한 곳에만 적으면 여기도 같이 늘어난다(서식=화면=엑셀 원칙).
                 rows.push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note')]
                     .concat(LABEL_FIELD_CATALOG.map(function (f) { return f.label; }))
-                    .concat([_t('추가 항목', 'Extra fields'), _t('도안 표시사항', 'Artwork notes')]));
+                    .concat([_t('추가 항목', 'Extra fields'), _t('인증마크', 'Cert marks'), _t('도안 표시사항', 'Artwork notes')]));
                 (d.labelItems || []).forEach(function (it) {
-                    // 📍 도안 위 표시(화면의 번호 목록)도 같이 — 불러온 적 없으면 빈칸(강제로 불러오진 않는다)
-                    var notes = (window._docLabelNotesCache && window._docLabelNotesCache[String(it.code || '').trim()]) || [];
+                    // 📍 도안 위 표시(화면의 번호 목록)·인증마크도 같이 — 불러온 적 없으면 빈칸(강제로 불러오진 않는다)
+                    var codeKey = String(it.code || '').trim();
+                    var notes = (window._docLabelNotesCache && window._docLabelNotesCache[codeKey]) || [];
+                    var marksHere = (window._docLabelMarksCache && window._docLabelMarksCache[codeKey]) || [];
                     var fx = it.fields || {};
                     var extra = (it.fieldsCustom || []).filter(function (c) { return c.label || c.value; })
                         .map(function (c) { return (c.label || '') + ': ' + (c.value || ''); }).join(' / ');
                     rows.push([it.size || '', it.code || '', it.position || '', it.note || '']
                         .concat(LABEL_FIELD_CATALOG.map(function (f) { return fx[f.key] || ''; }))
-                        .concat([extra, notes.map(function (n, ni) { return (ni + 1) + '. ' + n.text; }).join(' / ')]));
+                        .concat([extra, marksHere.map(function (m) { return m.key; }).join(' / '),
+                                 notes.map(function (n, ni) { return (ni + 1) + '. ' + n.text; }).join(' / ')]));
                 });
             } else if (s.kind === 'labelcerts') {
                 var lc = d.labelCerts || {};
