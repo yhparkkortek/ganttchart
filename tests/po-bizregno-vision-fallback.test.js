@@ -154,6 +154,71 @@ const ITEMS_OK = [{ desc: 'P550QAR01.0 T-CON BOARD', qty: 5, unitPrice: 14776.3,
         check('코텍 자사 번호는 받아들이지 않음(빈 채로 남음)', doc.bizRegNo === '', 'got=' + JSON.stringify(doc.bizRegNo));
     }
 
+    console.log('\n[7] 실제 사고 2 — AI 환각 + 구조적 패턴 없음인데 "전체 digit-stream"엔 무관한 10자리가 있음 → 비전이 이긴다(낮은 신뢰도 추측보다 우선)');
+    {
+        // 실측 재현: "1_정림전자 20261111.pdf" — 등록번호 자체는 원문에 없지만, 승인번호/
+        // 관리번호의 숫자를 이어붙인 digit-stream 한가운데서 "6111141000"이 우연히 걸렸었다
+        // (고친 전 버그). 구조적 정규식(\d{3}-?\d{2}-?\d{5}, 원문의 실제 하이픈 위치 보존)은
+        // 이 노이즈에서 못 찾아야 하고, 비전이 성공하면 그 노이즈 추측은 아예 안 쓰여야 한다.
+        const noisyText = '정림전자(주) 유병진 (주)코텍 김영달 승인번호: 20261111-41000096-60847705 관리번호: TX2026115753348 품목내역 P550QAR01.0';
+        let calls = 0;
+        const win = makeWin(
+            async function (apiKey, prompt, opts) {
+                calls++;
+                if (opts && opts.imageParts) {
+                    return { ok: true, raw: JSON.stringify({ bizRegNo: '106-81-47845', vendorName: '정림전자(주)' }) };
+                }
+                // AI가 우리 회사(코텍) 번호를 협력사로 착각(환각) — 원문에 1308144628도 없음
+                return { ok: true, raw: JSON.stringify({ bizRegNo: '130-81-44628', invoiceDate: '20261111', vendorName: '정림전자(주)', currency: 'KRW', items: ITEMS_OK, note: '' }) };
+            },
+            async function (file, opts) { return [{ mimeType: 'image/jpeg', data: 'ZmFrZQ==' }]; }
+        );
+        const fn = buildFn(win);
+        const doc = await fn('key', [{ name: '1_정림전자.pdf', text: noisyText, file: {} }], null);
+        check('digit-stream 노이즈(6111141000 등)를 쓰지 않는다', doc.bizRegNo !== '6111141000', 'got=' + doc.bizRegNo);
+        check('비전으로 복구된 진짜 번호를 쓴다', doc.bizRegNo === '1068147845', 'got=' + doc.bizRegNo);
+        check('callAiBackend 2회(텍스트 1차 + 비전)', calls === 2, 'calls=' + calls);
+    }
+
+    console.log('\n[8] 구조적 패턴도 없고 비전도 실패 — 그제서야 digit-stream 최후 수단(낮은 신뢰도 명시)');
+    {
+        const noisyText = '정림전자(주) 유병진 (주)코텍 김영달 승인번호: 20261111-41000096-60847705 관리번호: TX2026115753348 품목내역 P550QAR01.0';
+        const win = makeWin(
+            async function (apiKey, prompt, opts) {
+                if (opts && opts.imageParts) return { ok: true, raw: JSON.stringify({ bizRegNo: '', vendorName: '' }) }; // 비전도 못 찾음
+                return { ok: true, raw: JSON.stringify({ bizRegNo: '130-81-44628', invoiceDate: '20261111', vendorName: '정림전자(주)', currency: 'KRW', items: ITEMS_OK, note: '' }) };
+            },
+            async function (file, opts) { return [{ mimeType: 'image/jpeg', data: 'ZmFrZQ==' }]; }
+        );
+        const fn = buildFn(win);
+        const doc = await fn('key', [{ name: '1_정림전자.pdf', text: noisyText, file: {} }], null);
+        check('최후 수단으로 digit-stream에서 뭔가는 채운다(빈 채로 끝나지 않음)', !!doc.bizRegNo, 'got=' + JSON.stringify(doc.bizRegNo));
+        check('낮은 신뢰도임을 note에 명시', (doc.note || '').indexOf('신뢰도가 낮으니') !== -1, 'note=' + doc.note);
+    }
+
+    console.log('\n[9] 실제 사고 3 — 더존비즈온(전자세금계산서 발급대행사) 번호가 "[134-81-08473]"처럼 독립 토큰으로 찍혀 있어도 공급자로 안 씀 → 비전이 이긴다');
+    {
+        // 실측 재현: "1_정림전자 20261111.pdf" 원문 끝줄 "발급업무대행사업자: (주)더존비즈온[134-81-08473]".
+        // 공급자 번호는 원문에 전혀 없는데, 이 대행사 번호는 구조적으로 멀쩡한 독립 토큰이라
+        // (?<![\d-])...(?![\d-]) 경계 검사만으로는 못 거른다 — 알려진 "공급자일 수 없는 번호"
+        // 로 따로 제외해야 한다(CLAUDE.md가 허용한 사업자번호 제외 가드레일).
+        const text = '정림전자(주) 유병진 (주)코텍 김영달 품목내역 P550QAR01.0 발급업무대행사업자: (주)더존비즈온[134-81-08473]';
+        let calls = 0;
+        const win = makeWin(
+            async function (apiKey, prompt, opts) {
+                calls++;
+                if (opts && opts.imageParts) return { ok: true, raw: JSON.stringify({ bizRegNo: '106-81-47845', vendorName: '정림전자(주)' }) };
+                return { ok: true, raw: JSON.stringify({ bizRegNo: '130-81-44628', invoiceDate: '20261111', vendorName: '정림전자(주)', currency: 'KRW', items: ITEMS_OK, note: '' }) };
+            },
+            async function (file, opts) { return [{ mimeType: 'image/jpeg', data: 'ZmFrZQ==' }]; }
+        );
+        const fn = buildFn(win);
+        const doc = await fn('key', [{ name: '1_정림전자.pdf', text: text, file: {} }], null);
+        check('더존비즈온 번호(1348108473)를 공급자로 쓰지 않는다', doc.bizRegNo !== '1348108473', 'got=' + doc.bizRegNo);
+        check('비전으로 복구된 진짜 번호를 쓴다', doc.bizRegNo === '1068147845', 'got=' + doc.bizRegNo);
+        check('callAiBackend 2회(텍스트 1차 + 비전)', calls === 2, 'calls=' + calls);
+    }
+
     console.log('\n' + (fail ? ('❌ ' + fail + ' 건 실패') : '✅ 전부 통과') + ' (' + pass + '/' + (pass + fail) + ')');
     process.exit(fail ? 1 : 0);
 })();

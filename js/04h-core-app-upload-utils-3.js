@@ -2009,12 +2009,27 @@ ${_sourceSection}`;
         // 깨져도 번호 자체(숫자+하이픈)는 보통 가로쓰기라 훼손되지 않고 그대로 남아있어
         // 이 방식이 AI의 판단보다 신뢰도가 높다.
         const KORTEK_BIZ_NO = '1308144628'; // (주)코텍 자기 회사 사업자등록번호(130-81-44628) — 절대 협력사로 쓰면 안 됨
+        // 🐛 [2026-11-13 실사용 버그수정] 코텍 번호만 걸러서는 부족했다 — 전자세금계산서엔
+        // 발급업무를 대행하는 중개 플랫폼(더존비즈온 등)의 사업자번호도 "[134-81-08473]"처럼
+        // 공급자/공급받는자 둘 다 아닌 독립된 토큰으로 찍혀 있어서, 구조적 정규식이 이걸
+        // "공급자 번호"로 오인했다(실측: 정림전자 전자세금계산서, 실제 공급자 번호는 텍스트에
+        // 아예 없는데 더존비즈온 번호가 구조적으로 멀쩡해 보여 먼저 집혔다). 이런 "공급자가
+        // 절대 될 수 없는" 번호는 CLAUDE.md가 허용한 가드레일(사업자번호 제외)이라 하드코딩.
+        const DOUZONE_BIZ_NO = '1348108473'; // (주)더존비즈온 — 전자세금계산서 발급대행사, 공급자 아님
+        const _NON_SUPPLIER_BIZ_NOS = [KORTEK_BIZ_NO, DOUZONE_BIZ_NO];
         const normalizedBizNo = (parsed.bizRegNo || '').replace(/\D/g, '');
         if (normalizedBizNo === KORTEK_BIZ_NO) {
             const combinedText = attachments.map(function(a) { return a.text || ''; }).join('\n');
-            const allBizNos = (combinedText.match(/\d{3}-?\d{2}-?\d{5}/g) || [])
+            // 🐛 [2026-11-13 실사용 버그수정] 앞뒤 경계(숫자·하이픈이 아닌 자리) 없이 그냥
+            // `/\d{3}-?\d{2}-?\d{5}/`만 쓰면, 하이픈이 **optional**이라 "승인번호:
+            // 20261111-41000096-60847705" 같은 더 긴 숫자+하이픈 토큰 한가운데서도
+            // 10자리를 슬쩍 집어 올 수 있다(하이픈이 3번째·5번째 자리가 아니어도 그냥 건너뛰고
+            // 매칭됨) — 실제로 전혀 무관한 승인번호 조각을 사업자등록번호로 오인한 사고.
+            // `(?<![\d-])...(?![\d-])`로 "숫자·하이픈이 아닌 경계"를 양쪽에 강제해 독립된
+            // 토큰만 받는다(긴 숫자+하이픈 뭉치 안쪽은 아예 후보에서 빠짐).
+            const allBizNos = (combinedText.match(/(?<![\d-])\d{3}-?\d{2}-?\d{5}(?![\d-])/g) || [])
                 .map(function(s) { return s.replace(/-/g, ''); })
-                .filter(function(n) { return n.length === 10 && n !== KORTEK_BIZ_NO; });
+                .filter(function(n) { return n.length === 10 && _NON_SUPPLIER_BIZ_NOS.indexOf(n) === -1; });
             const candidate = allBizNos[0];
             const warnNote = candidate
                 ? window._t(`⚠️ AI가 처음엔 우리 회사(코텍) 사업자등록번호를 협력사로 잘못 추출해서, 문서에서 찾은 다른 사업자등록번호(${candidate})로 자동 정정했습니다 — 협력사명도 다시 확인해주세요.`, `⚠️ The AI initially extracted our own (KORTEK's) business registration number as the vendor — auto-corrected to another number found in the document (${candidate}). Please double-check the vendor name too.`)
@@ -2041,26 +2056,24 @@ ${_sourceSection}`;
         var _looksLikeYear = /^(?:19|20)\d{2}/.test(_norm2);
         // 이미지 기반 PDF(_td2 = '')는 원문 텍스트가 없어 digit-stream으로 검증 불가 → 환각 체크 건너뜀
         if (_td2 && _norm2 && _norm2 !== KORTEK_BIZ_NO && (!_td2.includes(_norm2) || _looksLikeYear)) {
-            // AI 번호가 원문 digit-stream에 없음 → 환각으로 판정, 원문에서 직접 탐색
-            var _cands2 = (_ct2.match(/\d{3}-?\d{2}-?\d{5}/g) || [])
+            // AI 번호가 원문 digit-stream에 없음 → 환각으로 판정, 원문에서 구조적으로(하이픈
+            // 위치가 그대로 보존된) 패턴만 재탐색한다. 🐛🐛 [2026-11-13 실사용 버그수정] 여기서
+            // 바로 "하이픈 없이 전체 digit-stream 슬라이딩"까지 하던 걸 뺐다 — 실제 사고(정림전자
+            // 전자세금계산서): 등록번호 자체가 원문에 아예 없는데, 이 슬라이딩이 "승인번호:
+            // 20261111-41000096-60847705"의 digit-stream 한가운데서 "6111141000"을 멋대로
+            // 집어 "자동 정정됐다"고 확신에 찬 오답을 냈다(문서 전체 숫자를 이어붙여 슬라이딩하니
+            // 사업자번호와 무관한 아무 10자리나 걸릴 수 있음). 이 와일드 슬라이딩은 신뢰도가
+            // 가장 낮으므로 **아래 비전 재확인이 다 실패했을 때만 쓰는 최후 수단**으로 내린다.
+            // (?<![\d-])...(?![\d-]) — 위 코텍 번호 복구 블록과 같은 이유로 경계를 강제한다.
+            var _cands2 = (_ct2.match(/(?<![\d-])\d{3}-?\d{2}-?\d{5}(?![\d-])/g) || [])
                 .map(function(s) { return s.replace(/-/g, ''); })
-                .filter(function(n) { return n.length === 10 && n !== KORTEK_BIZ_NO; });
-            if (!_cands2.length) {
-                // 하이픈 없이 연속된 10자리도 탐색 — 박스형 PDF에서 하이픈 누락 대비
-                for (var _ki = 0; _ki <= _td2.length - 10; _ki++) {
-                    var _s = _td2.substring(_ki, _ki + 10);
-                    if (_s[0] !== '0' && _s !== KORTEK_BIZ_NO && _cands2.indexOf(_s) < 0) {
-                        _cands2.push(_s);
-                    }
-                }
-            }
-            var _fix2 = _cands2[0];
-            if (_fix2) {
+                .filter(function(n) { return n.length === 10 && _NON_SUPPLIER_BIZ_NOS.indexOf(n) === -1; });
+            parsed.bizRegNo = _cands2[0] || '';
+            if (parsed.bizRegNo) {
                 var _warnH = window._t(
-                    '⚠️ AI가 추출한 사업자등록번호(' + _norm2 + ')가 문서 원문에 없어 자동 정정했습니다(' + _fix2 + ') — 협력사명도 다시 확인해주세요.',
-                    '⚠️ The biz reg no from AI (' + _norm2 + ') was not in the raw document; auto-corrected to (' + _fix2 + '). Please verify the vendor name.'
+                    '⚠️ AI가 추출한 사업자등록번호(' + _norm2 + ')가 문서 원문에 없어 자동 정정했습니다(' + parsed.bizRegNo + ') — 협력사명도 다시 확인해주세요.',
+                    '⚠️ The biz reg no from AI (' + _norm2 + ') was not in the raw document; auto-corrected to (' + parsed.bizRegNo + '). Please verify the vendor name.'
                 );
-                parsed.bizRegNo = _fix2;
                 parsed.note = parsed.note ? parsed.note + ' ' + _warnH : _warnH;
             }
         }
@@ -2068,11 +2081,12 @@ ${_sourceSection}`;
         // 🆕🆕 [2026-11-12, 사용자 제보] 텍스트에 사업자등록번호 숫자가 "아예" 없는 PDF —
         // 실사례: 더존비즈온 전자세금계산서 중 등록번호 칸이 박스형 서브셋 폰트/이미지로
         // 찍혀 pdf.js 텍스트 레이어에 아예 안 잡히는 경우(공급자·공급받는자 둘 다 숫자가
-        // 통째로 빔, 다른 항목은 텍스트로 멀쩡히 뽑힘). 바로 위 "환각 복구"(정규식 재탐색)도
-        // 원문에 숫자 자체가 없으니 못 찾는다 — 그래서 **텍스트가 아니라 이미지로 한 번 더
-        // 같은 페이지를 보여주고 그 번호만** 다시 묻는다(품목/날짜는 이미 텍스트로 뽑혔으니
-        // 재추출 안 함, AI 호출 1회 추가뿐). 실패해도 조용히 넘어가 기존 "미확인 → 사람에게
-        // 안내" 경로(_ganttQaPoFindMissingBizNoDocs)로 그대로 떨어진다.
+        // 통째로 빔, 다른 항목은 텍스트로 멀쩡히 뽑힘). 위 "환각 복구"(구조적 정규식 재탐색)도
+        // 원문에 숫자 자체가 없으니(또는 AI가 처음부터 솔직하게 빈 문자열로 답해서) 못 찾는다
+        // — 그래서 **텍스트가 아니라 이미지로 한 번 더 같은 페이지를 보여주고 그 번호만**
+        // 다시 묻는다(품목/날짜는 이미 텍스트로 뽑혔으니 재추출 안 함, AI 호출 1회 추가뿐).
+        // 실패해도 조용히 넘어가 아래 "최후 수단"(전체 digit-stream 슬라이딩) → 그마저 없으면
+        // 기존 "미확인 → 사람에게 안내" 경로(_ganttQaPoFindMissingBizNoDocs)로 떨어진다.
         if (!parsed.bizRegNo && !_allImageParts) {
             var _srcFile = attachments[0] && attachments[0].file;
             if (_srcFile && typeof window._pcRenderPdfAsImages === 'function') {
@@ -2087,7 +2101,7 @@ ${_sourceSection}`;
                             if (_vm) {
                                 var _vparsed = JSON.parse(_vm[0]);
                                 var _vnum = String(_vparsed.bizRegNo || '').replace(/\D/g, '');
-                                if (_vnum.length === 10 && _vnum !== KORTEK_BIZ_NO) {
+                                if (_vnum.length === 10 && _NON_SUPPLIER_BIZ_NOS.indexOf(_vnum) === -1) {
                                     parsed.bizRegNo = _vnum;
                                     if (!parsed.vendorName && _vparsed.vendorName) parsed.vendorName = _vparsed.vendorName;
                                     var _visionNote = window._t(
@@ -2101,6 +2115,26 @@ ${_sourceSection}`;
                     }
                 } catch (_vErr) {
                     console.warn('[사업자등록번호 비전 재확인 실패]', _vErr);
+                }
+            }
+        }
+
+        // 🐛 [2026-11-13] 최후 수단 — 하이픈 없이 전체 digit-stream을 슬라이딩해 10자리를
+        // 찾는다(박스형 PDF에서 하이픈이 통째로 날아간, 그래도 숫자 자체는 텍스트에 있는 옛
+        // 실사례 대응). ⚠️ 신뢰도가 가장 낮다(문서 전체 숫자를 이어붙여 보는 것이라 사업자번호와
+        // 무관한 10자리가 걸릴 수 있음, 2026-11-13 오탐 실사례) — 그래서 구조적 재탐색과 비전
+        // 재확인이 **둘 다** 실패했을 때만 쓴다.
+        if (!parsed.bizRegNo && _td2) {
+            for (var _ki = 0; _ki <= _td2.length - 10; _ki++) {
+                var _s = _td2.substring(_ki, _ki + 10);
+                if (_s[0] !== '0' && _NON_SUPPLIER_BIZ_NOS.indexOf(_s) === -1) {
+                    parsed.bizRegNo = _s;
+                    var _warnLast = window._t(
+                        '⚠️ 사업자등록번호를 문서 숫자 나열에서 추정했습니다(' + _s + ') — 신뢰도가 낮으니 꼭 직접 확인해주세요.',
+                        '⚠️ The biz reg no was guessed from the raw digit stream (' + _s + ') — low confidence, please verify manually.'
+                    );
+                    parsed.note = parsed.note ? parsed.note + ' ' + _warnLast : _warnLast;
+                    break;
                 }
             }
         }
