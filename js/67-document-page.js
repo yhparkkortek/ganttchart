@@ -688,11 +688,16 @@
     //    도안에 있는 마크와 구별" — CSS `mask-image` 로 검정 라인아트를 표시(TXT)와 같은 빨강으로
     //    덧칠한다. 원본 도안에 이미 박혀 있는 CE·FCC 마크(이미지 자체의 일부)는 그대로 검정이라
     //    한눈에 "내가 새로 추가한 것"과 "원래 있던 것"이 구별된다.
+    // ⚠️⚠️ [2026-11-13, 사용자 신고 "FCC 마크는 비율이 안맞음"] w/h는 **지금 실제 파일의 픽셀
+    //    크기**와 반드시 같아야 한다 — CSS `aspect-ratio`가 여기 값으로 박스를 잡고 그 안에
+    //    이미지를 채우므로, 파일을 다시 구워 비율이 바뀌었는데 이 숫자를 안 고치면 **눌리거나
+    //    늘어나 보인다**(실측: 347x244로 다시 구운 뒤에도 348x522가 남아 있어 세로로 짜부라짐).
+    //    PNG 다시 구울 때마다 같이 맞출 것.
     var CERT_MARK_CATALOG = [
-        { key: 'UL', label: 'UL', w: 261, h: 110 },
-        { key: 'CE', label: 'CE', w: 447, h: 447 },
+        { key: 'UL', label: 'UL', w: 256, h: 105 },
+        { key: 'CE', label: 'CE', w: 433, h: 429 },
         { key: 'CB', label: 'CB', noImage: true },
-        { key: 'FCC', label: 'FCC', w: 348, h: 522 }
+        { key: 'FCC', label: 'FCC', w: 347, h: 244 }
     ];
     window._docLabelMarksCache = window._docLabelMarksCache || {};   // code -> [{key,x,y,wem}]
     // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 빈 네모 칸을 여러 개 올려
@@ -1071,10 +1076,10 @@
             }
             return '<span data-mark-wrap data-mark-idx="' + mi + '" title="' + _esc(cat.label) + '" style="' + wrapStyle + '">'
                 + inner
+                // 🧹 [2026-11-13, 사용자 요청] "상자 오른쪽 붉은색 바 삭제해줘" — 보이는 빨간 줄만
+                //    없앤다. 크기조절 손잡이 자체(끌 수 있는 영역)는 그대로 남긴다(투명).
                 + ((draggable && !cat.noImage) ? '<span data-mark-wresize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
-                  + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
-                  + ' display:flex; align-items:center; justify-content:center; z-index:2;">'
-                  + '<span style="width:2px; height:60%; background:#e03131; border-radius:1px;"></span></span>' : '')
+                  + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize; z-index:2;"></span>' : '')
                 + (draggable ? '<a href="#" onclick="window._docLabelMarkDel(\'' + _esc(code) + '\',' + mi + ');return false;"'
                   + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
                   + ' background:#b1432f; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
@@ -1218,10 +1223,11 @@
                 + (n.align || 'left') + ';'
                 + ' white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
                 + _esc(n.text) + '</span>'
+                // 🧹 [2026-11-13, 사용자 요청] "다른 표시 추가도" — 표시(note) 쪽 너비조절 손잡이도
+                //    같은 이유로 보이는 빨간 줄만 없앤다(손잡이 자체는 투명하게 남겨 그대로 끌린다).
                 + (draggable ? '<span data-note-wresize title="' + _esc(_t('끌어서 너비 조절', 'drag to resize width')) + '"'
                   + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
-                  + ' display:flex; align-items:center; justify-content:center; z-index:2; pointer-events:auto;">'
-                  + '<span style="width:2px; height:60%; background:#e03131; border-radius:1px;"></span></span>' : '')
+                  + ' z-index:2; pointer-events:auto;"></span>' : '')
                 + '</span>'
                 + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
                 + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
