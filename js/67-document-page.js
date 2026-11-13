@@ -1243,9 +1243,10 @@
                   + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
                   + ' z-index:2; pointer-events:auto;"></span>' : '')
                 + '</span>'
-                // 🔢 [2026-11-13, 사용자 요청] "동그라미 번호 크기를 줄여줘"
-                + '<span style="width:1.1em; height:1.1em; min-width:1.1em; border-radius:50%; background:#e03131;'
-                + ' color:#fff; font-weight:bold; font-size:0.65em; display:flex; align-items:center; justify-content:center;'
+                // 🔢 [2026-11-13, 사용자 요청] "동그라미 번호 크기 너무 줄였음 — 이전(1.8em)과
+                //    비교했을 때 절반만큼 키워줘" — 1.1em 에서 원래값 쪽으로 절반(1.45em)까지.
+                + '<span style="width:1.45em; height:1.45em; min-width:1.45em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; font-size:0.78em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
         }).join('');
@@ -4619,6 +4620,22 @@
         //   ⚠️ 기다리지 않는다 — 폴더 만들기가 화면을 붙잡으면 안 된다.
         try { window._docEnsureFolders(); } catch (e) { /* 〃 */ }
     };
+    // ⚡ [2026-11-13, 사용자 신고 "처음 프로젝트 파일 로드하면 실시간 반영 안되고 다른 페이지
+    //    갔다와야 반영됨"] — 이 탭의 다시 그리기는 `switchTab('document')`(js/23) 한 곳에서만
+    //    불렸다. **Document 탭이 이미 열려 있는 채로** 다른 프로젝트를 불러오면(`populateTabData`,
+    //    project list/백업복원/새 프로젝트 전부 여길 지난다) `switchTab` 이 다시 안 돌아 탭을
+    //    떠났다 와야만(그때 비로소 `switchTab` 이 불려) 새 값이 보였다. 다른 페이지(M.C/BOM
+    //    등)들도 `populateTabData` 를 **같은 방식으로 감싸** 자기 탭을 다시 그린다 — 여기도
+    //    같은 선례를 따른다.
+    (function () {
+        var orig = window.populateTabData;
+        if (typeof orig !== 'function') return;
+        window.populateTabData = function () {
+            var r = orig.apply(this, arguments);
+            try { window._docRender(); } catch (e) { /* 그리기 실패가 데이터 적재를 막지 않게 */ }
+            return r;
+        };
+    })();
     var boot = function () {
         if (!document.getElementById('doc-page-body')) return;
         try { window._docRender(); } catch (e) { /* 〃 */ }
