@@ -266,7 +266,8 @@
         //    인증(CE/FCC/UL…)·정격표시(Set/LED Rating SPEC…) 표가 딸린다. 둘 다 개수가 들쭉날쭉해
         //    고정 `table` kind 로는 못 받는다 — 'check' kind 와 같은 add/del-row 전용 kind 둘로 받는다.
         {
-            id: 'label-spec', icon: '🏷', label: '라벨사양서', folder: '라벨사양서',
+            // 🔖 [2026-11-13, 사용자 요청] "라벨 사양서 앞 아이콘 다른것으로 변경" — 🏷 → 🔖.
+            id: 'label-spec', icon: '🔖', label: '라벨사양서', folder: '라벨사양서',
             // 🏷🏷 [2026-11-13 요청] M.C Table 과 같은 R1/R2/R3… 리비전 관리 — 라벨 목록·인증 표가
             //    리비전마다 완전히 갈린다(`_docData` 가 그 통을 고른다, 위 `perRevision` 분기).
             perRevision: true,
@@ -294,7 +295,11 @@
     ];
     // 🗺️ [2026-11-13, 사용자 요청] 도면은 면(보통 전면·후면·측면)마다 따로 — 작은 고정 목록이라
     //    CERT_MARK_CATALOG 와 같은 성격의 데이터.
+    // 🗺️🗺️ [2026-11-13, 사용자 요청] "부착 위치 '전체' 도면 버튼 추가해줘" — 한 장짜리 전체
+    //    도면만 쓰는 제품도 있어서, 면별(전면·후면·측면)과 **별도**인 독립 탭 하나 추가
+    //    (코드 변경 없이 이 목록에 줄만 더하면 되는 구조라 그대로 한 줄).
     var DOC_LABEL_ATTACH_VIEWS = [
+        { key: 'all', label: '전체', labelEn: 'All' },
         { key: 'front', label: '전면', labelEn: 'Front' },
         { key: 'back', label: '후면', labelEn: 'Back' },
         { key: 'side', label: '측면', labelEn: 'Side' }
@@ -1548,6 +1553,49 @@
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
+    // ⠿ [2026-11-13, 사용자 요청] "마우스로 잡아서 위치 이동가능하도록 / 번호 순서 변경되도록" —
+    //    목록 줄의 ⠿ 손잡이를 끌면 그 자리에 끼워 넣는다. 끄는 동안은 **얇은 파란 줄**(가벼운
+    //    DOM 삽입)로만 자리를 보여주고, 실제 배열 재배치·다시 그리기는 **놓을 때 한 번만**
+    //    (끄는 중 전체를 다시 그리면 텍스트칸이 매번 새로 생겨 느낌이 나쁘다).
+    window._docLabelNoteReorderDrag = function (handle, code, idx) {
+        var indicator = null, targetIdx = null;
+        var onMove = function (ev) {
+            var rows = [].slice.call(document.querySelectorAll('[data-note-list-code="' + CSS.escape(code) + '"] [data-note-row]'));
+            if (!rows.length) return;
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.style.cssText = 'height:2px; background:#1971c2; margin:1px 0; border-radius:1px;';
+            }
+            var list = rows[0].parentElement;
+            var ti = rows.length;
+            for (var r = 0; r < rows.length; r++) {
+                var rect = rows[r].getBoundingClientRect();
+                if (ev.clientY < rect.top + rect.height / 2) { ti = r; break; }
+            }
+            targetIdx = ti;
+            if (ti < rows.length) list.insertBefore(indicator, rows[ti]);
+            else list.appendChild(indicator);
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (indicator && indicator.parentElement) indicator.parentElement.removeChild(indicator);
+            if (targetIdx != null && targetIdx !== idx && targetIdx !== idx + 1) {
+                var arr = window._docLabelNotesCache[code] || [];
+                var item = arr.splice(idx, 1)[0];
+                var insertAt = targetIdx > idx ? targetIdx - 1 : targetIdx;
+                arr.splice(insertAt, 0, item);
+                _docLabelRefresh();
+                window._docLabelNotesSave(code);
+            }
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            targetIdx = null;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
     // ✏️ [2026-11-13, 사용자 요청] 목록 칸에서 바로 글자를 고친다(지우고 다시 찍을 필요 없게) —
     //    onchange(블러 시)만 저장한다, 입력마다 다시 그리면 타이핑 중 포커스가 날아간다.
     window._docLabelNoteTextEdit = async function (code, i, val) {
@@ -2277,8 +2325,8 @@
             // ⚠️ [2026-11-13, 사용자 요청] 표시 입력칸도 비고·기재내용과 같이 textarea — 한 줄 `<input>`
             //    은 Enter 로 줄을 못 나눈다. 새로 추가하는 칸은 Enter 가 줄바꿈으로 바뀌었으니 **추가는
             //    Ctrl+Enter 로**(또는 ＋ 추가 버튼).
-            + (notes.length ? '<div style="text-align:left; font-size:11.5px; color:#495057; margin-top:8px;'
-                + ' border-top:1px solid #e9ecef; padding-top:6px;">'
+            + (notes.length ? '<div data-note-list data-note-list-code="' + _esc(code) + '" style="text-align:left; font-size:11.5px;'
+                + ' color:#495057; margin-top:8px; border-top:1px solid #e9ecef; padding-top:6px;">'
                 + notes.map(function (n, ni) {
                     // ↔ [2026-11-13, 사용자 요청] "정렬 기능 추가해줘(왼쪽·가운데·오른쪽)" — 글자 하나씩
                     //    고르는 토글 셋, 지금 값은 굵게 표시.
@@ -2291,7 +2339,12 @@
                         }).join('');
                     // 📐 [2026-11-13, 사용자 요청] "번호 줄 맞추어서 들여쓰기 해줘" — 번호가 1자리든
                     //    2자리든 입력칸이 늘 같은 자리에서 시작하도록 번호에 고정폭(오른쪽 정렬)을 준다.
-                    return '<div style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
+                    // ⠿ [2026-11-13, 사용자 요청] "마우스로 잡아서 위치 이동가능하도록 / 번호 순서
+                    //    변경되도록" — 손잡이를 끌면 그 자리에 끼워 넣고 번호(N.)는 새 자리 기준으로
+                    //    다시 매겨진다(순서 자체가 배열 순서라 따로 번호를 옮길 필요가 없다).
+                    return '<div data-note-row data-note-idx2="' + ni + '" style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
+                        + '<span data-note-reorder-handle title="' + _esc(_t('끌어서 순서 바꾸기', 'drag to reorder')) + '"'
+                        + ' style="flex:0 0 1.1em; text-align:center; padding-top:2px; cursor:grab; color:#adb5bd; user-select:none;">⠿</span>'
                         + '<span style="flex:0 0 1.6em; text-align:right; padding-top:2px;">' + (ni + 1) + '.</span>'
                         // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] `oninput`
                         //    으로 타이핑하는 즉시 도안 위 글자상자만 가볍게 고쳐쓴다(전체 다시 그리기는
@@ -2308,8 +2361,10 @@
             // 📐 [2026-11-13, 사용자 요청] "새표시내용을 입력... 위 박스와 시작 위치 맞춰줘" — 위
             //    번호 목록은 "N." 칸(flex:0 0 1.6em)이 먼저라 textarea 가 그만큼 밀려 시작한다.
             //    이 줄엔 번호가 없으니 **같은 폭의 빈 칸**을 똑같이 둬서 textarea 시작 위치를 맞춘다.
-            + (idle ? '<div style="margin-top:8px; display:flex; gap:6px; align-items:flex-start;">'
-                + '<span style="flex:0 0 1.6em;"></span>'
+            // ⠿ 번호 목록 쪽에 끌기 손잡이(1.1em)가 하나 더 생겨서 — 손잡이+간격+번호칸 만큼을
+            //    한 번에 빈 칸으로 둬야 textarea 시작 위치가 그대로 맞는다.
+            + (idle ? '<div style="margin-top:8px; display:flex; gap:4px; align-items:flex-start;">'
+                + '<span style="flex:0 0 calc(1.1em + 1.6em);"></span>'
                 + '<textarea id="doclabelart-newnote" rows="2" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
                   'Type a new note (Ctrl+Enter to add) — drag it into place after.')) + '"'
                 + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
@@ -2379,6 +2434,13 @@
         }
         // 📏 [2026-11-13] 직선 — idle 이 아니어도 보여는 준다(끌기만 idle 일 때). 코드도 같이.
         if (img) { window._docLabelLinesApply(bodyEl, img, code, idle); window._docLabelCodesApply(bodyEl, code); }
+        // ⠿ [2026-11-13] 번호 목록 순서 바꾸기 — 도안 유무·idle 상태와 무관하게 목록 자체는
+        //    늘 보이므로 이 감싸는 `if` 바깥에서 건다.
+        [].slice.call(bodyEl.querySelectorAll('[data-note-reorder-handle]')).forEach(function (handle) {
+            var row = handle.closest('[data-note-row]');
+            var nidx = row ? Number(row.getAttribute('data-note-idx2')) : NaN;
+            if (!isNaN(nidx)) window._docLabelNoteReorderDrag(handle, code, nidx);
+        });
     };
     // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
     //   — 그 폴더는 ZDMSR004 다운로드 결과라 이름 규칙이 제각각이다(`<code>.xlsx` ·
@@ -2388,6 +2450,12 @@
     window._docLabelFindResult = window._docLabelFindResult || {};
     window._docLabelFindMatches = window._docLabelFindMatches || {};
     window._docLabelImgState = window._docLabelImgState || {};
+    // ✕ [2026-11-13, 사용자 신고 "붉은색 박스는 사라지지 않음"] 검색 결과 패널을 닫는다 —
+    //    열어 둔 채 다른 줄 작업을 계속해도 거슬리지 않게.
+    window._docLabelFindResultClose = function (key) {
+        delete window._docLabelFindResult[key];
+        window._docRender();
+    };
     // 🖼 매치 한 줄(파일 열기 + 미리보기 펼침/접힘 + 썸네일) — _docLabelFind 와 _docLabelToggleImages
     //    둘 다 결과 문자열을 다시 그려야 해서 한 곳으로 모은다.
     window._docLabelFindAllowSap = window._docLabelFindAllowSap || {};   // key -> 코드 검색이었나(규격 검색엔 SAP 다시받기가 없다)
@@ -3114,8 +3182,10 @@
     window._docLabelAttachPlacing = window._docLabelAttachPlacing || null;   // {id, labelIdx} | null
     var _docLabelAttachData = function (id) {
         var d = _docData(id);
-        d.labelAttach = d.labelAttach || { view: 'front', views: {} };
-        if (!d.labelAttach.view) d.labelAttach.view = 'front';
+        // 🗺️🗺️ 기본값은 '전체' — 한 장짜리 도면만 쓰는 제품이 더 흔할 것(면별 구분이 필요한
+        //    제품만 전면·후면·측면으로 넘어가면 된다).
+        d.labelAttach = d.labelAttach || { view: 'all', views: {} };
+        if (!d.labelAttach.view) d.labelAttach.view = 'all';
         d.labelAttach.views = d.labelAttach.views || {};
         DOC_LABEL_ATTACH_VIEWS.forEach(function (v) {
             d.labelAttach.views[v.key] = d.labelAttach.views[v.key] || { img: null, folder: null, marks: [] };
@@ -4340,7 +4410,10 @@
                        + '</tr>';
                     if (found) {
                         h += '<tr><td colspan="7" class="doc-noprint" style="font-size:11px; color:#495057;'
-                           + ' background:#f8fbfb; padding:3px 8px;">' + found + '</td></tr>';
+                           + ' background:#f8fbfb; padding:3px 8px; position:relative;">'
+                           + '<a href="#" onclick="window._docLabelFindResultClose(\'' + _esc(form.id) + '|' + i + '\');return false;"'
+                           + ' title="' + _esc(_t('닫기', 'close')) + '" style="position:absolute; right:4px; top:3px; color:#b1432f;'
+                           + ' font-weight:bold; text-decoration:none;">✕</a>' + found + '</td></tr>';
                     }
                 });
                 h += '</table><div class="doc-noprint" style="margin-top:6px; display:flex; align-items:center; gap:14px;">'
