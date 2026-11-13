@@ -11868,6 +11868,9 @@ ${docsJson}`;
         // 🐛 [2026-09-13 버그수정] 아래 함수들이 정의되기 전에(또는 04g 스크립트 로드 실패 시)
         //    openGanttQaModal이 호출되면 TypeError가 발생해 _openAndMinimize의 try-catch에 잡혀
         //    칩이 생성되지 않고 모달도 열리지 않았다. 모두 방어적 호출로 전환.
+        // 💾 [2026-11-13] 복원은 렌더 직전 — 이미 이번 세션에 대화가 있으면 _ganttQaRestoreHistory가
+        //    스스로 아무 것도 안 하므로(비어있을 때만 채움) 매번 호출해도 안전하다.
+        if (window._ganttQaRestoreHistory)       window._ganttQaRestoreHistory();
         if (window._renderGanttQaMessages)       window._renderGanttQaMessages();
         if (window._ganttQaPopulateProjectSelect) window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
         if (window._ganttQaPopulateFreqSelect)    window._ganttQaPopulateFreqSelect(); // 열 때마다 "자주 쓰는 질문" 최신화

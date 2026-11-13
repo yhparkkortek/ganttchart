@@ -468,7 +468,10 @@
     //    무엇이든 물어보고 AI가 실제 업무 목록 데이터를 근거로 답변한다. 대화는 채팅 형태로 이어지며,
     //    AI 프로젝트 요약과 동일한 백엔드 호출(window.callAiBackend/getActiveAiKey)을 그대로 재사용.
     //    GAS 백엔드가 단일 prompt 문자열만 받으므로, 매 턴마다 [업무 목록 + 지금까지의 대화 + 새 질문]을
-    //    하나의 프롬프트로 합쳐서 보낸다(멀티턴을 흉내). 대화 내용은 저장하지 않는 휘발성 세션 상태.
+    //    하나의 프롬프트로 합쳐서 보낸다(멀티턴을 흉내). 메모리 상태는 window._ganttQaHistory 하나.
+    //    💾 [2026-11-13] 현재 프로젝트 대화는 localStorage(`gantt_qa_history_v1`)에 저장돼 새로고침해도
+    //    남는다(_ganttQaPersistHistory/_ganttQaRestoreHistory, js/04g 하단) — "다른 프로젝트" 질문
+    //    대상으로 물어본 대화는 예전처럼 휘발.
     // ═══════════════════════════════════════════════════════════
     window._ganttQaHistory = [];
     // 💡 [2026-09-01 신규] "📤 메일 작성/발송" 기능이 [[MAIL_DRAFT]]로 만든, 아직 발송 확정 전인
@@ -2108,6 +2111,10 @@ ${question}
             box.innerHTML = `<div style="padding:20px 10px; color:#999; font-size:12px; line-height:1.6; text-align:center;">
                 ${_emEn ? "Ask anything about this project's Gantt tasks · overview · members · key materials." : '이 프로젝트의 Gantt 업무 · 개요 · 멤버 · 주요 자재에 대해 자유롭게 질문해보세요.'}
             </div>`;
+            // 🐛 [2026-11-13] 이 이른 return 뒤에 있던 _ganttQaPersistHistory() 호출이 안 닿아서
+            //    대화를 지운(clearGanttQaChat) 직후엔 "빈 배열"이 저장 안 되고 **옛 대화가 그대로
+            //    localStorage 에 남아** 새로고침하면 지운 대화가 되살아났다(실측으로 재현·확인).
+            window._ganttQaPersistHistory();
             return;
         }
         // Q/A 순번 배정 (렌더 시마다 재산정 — 말풍선 오른쪽 하단에 Q1·A1 표시용)
@@ -2353,6 +2360,55 @@ ${question}
         }).join('');
         box.scrollTop = box.scrollHeight;
         if (window._ganttQaMaybeSpeakLatest) window._ganttQaMaybeSpeakLatest(); // 🎙️ 음성 답변 켜져있으면 새 답변 자동으로 읽어줌
+        window._ganttQaPersistHistory(); // 💾 [2026-11-13] 렌더될 때마다 저장 — 모든 history 변경이 결국 이 렌더를 거친다
+    };
+
+    // 💾 [2026-11-13 사용자 요청 "새로고침하면 삭제되지 않았으면 좋겠음"] 위 주석에 있던 "대화는
+    //    저장하지 않는 휘발성 세션 상태"를 뒤집는다 — localStorage 1건에 **현재 프로젝트의 대화만**
+    //    저장한다(다른 프로젝트 "질문 대상"으로 물어본 대화는 전처럼 휘발 — 프로젝트를 바꾸면 그
+    //    자리에서 이미 새로 시작하는 기존 규칙과 같은 맥락). 저장은 `_renderGanttQaMessages` 끝
+    //    **한 곳**에서만 한다 — history를 바꾸는 263곳 전부에 저장 호출을 심는 대신, "바뀌면 결국
+    //    다시 그린다"는 기존 관례(모든 push 뒤에 이미 렌더를 부르고 있었다)를 그대로 탄다.
+    // ⚠️ `pending`(⏳ 응답 대기 중)·`choiceDropdownId`/`confirmButtonsId`/`poFieldsFormId`/
+    //    `approvalAllFieldsFormId`(버튼·폼이 달린 말풍선)는 **저장하지 않는다** — 그 버튼들은
+    //    메모리 안의 임시 id/핸들러를 참조하는데 새로고침하면 그 임시 상태가 사라져 눌러도
+    //    죽은 버튼이 된다. 또 `pending`은 진행 중이던 네트워크 요청 자체가 새로고침으로 끊겨
+    //    "⏳ 처리 중..."인 채 영원히 멈춘 말풍선만 남긴다 — 차라리 안 보이는 게 맞다.
+    window._ganttQaPersistHistory = function() {
+        try {
+            if (window._ganttQaTargetProject) return; // 🔀 "다른 프로젝트" 질문 대상 대화는 저장 안 함(기존처럼 휘발)
+            const fid = window.currentDriveFileId || '';
+            if (!fid) return; // 열려 있는 프로젝트가 없으면 저장할 맥락이 없다
+            // 🧹 [2026-11-13] "질문 대상" 드롭다운이 아니라 📂 프로젝트 열기로 실제 프로젝트가 바뀐
+            //    경우(기존에도 있던 간극 — _ganttQaHistory는 그 경로에서 안 비워진다)를 저장 시점에
+            //    걸러낸다. 안 그러면 전환 직후 한 렌더에 옛 프로젝트 대화가 **새 프로젝트 소유로**
+            //    저장돼, 나중에 그 새 프로젝트를 열 때 한 번도 안 물어본 질문이 "전에 물어봤던 것"
+            //    처럼 복원된다 — 저장 자체를 건너뛰는 게 엉뚱한 프로젝트에 데이터를 붙이는 것보다 낫다.
+            if (window._ganttQaHistoryFid && window._ganttQaHistoryFid !== fid) {
+                window._ganttQaHistoryFid = fid;
+                return;
+            }
+            window._ganttQaHistoryFid = fid;
+            const MAX = 150; // 과도한 localStorage 사용 방지 — 최근 150개만 보관
+            const clean = window._ganttQaHistory
+                .filter(function(m) { return !m.pending && !m.choiceDropdownId && !m.confirmButtonsId && !m.poFieldsFormId && !m.approvalAllFieldsFormId; })
+                .slice(-MAX);
+            localStorage.setItem('gantt_qa_history_v1', JSON.stringify({ driveFileId: fid, history: clean }));
+        } catch (e) { /* 용량 초과 등은 조용히 포기 — 대화 지속에 꼭 필요한 기능은 아님 */ }
+    };
+    // 📂 [2026-11-13] 모달을 열 때 복원 — **이번 세션에서 이미 뭔가 대화한 상태면 건너뛴다**
+    //    (저장된 옛 대화로 지금 메모리의 새 대화를 덮어쓰면 안 됨). 저장된 프로젝트와 지금 열린
+    //    프로젝트가 다르면 복원하지 않는다(다른 프로젝트 얘기가 섞여 보이면 더 혼란스럽다).
+    window._ganttQaRestoreHistory = function() {
+        if (window._ganttQaHistory && window._ganttQaHistory.length) return;
+        try {
+            const raw = localStorage.getItem('gantt_qa_history_v1');
+            if (!raw) return;
+            const saved = JSON.parse(raw);
+            if (!saved || !Array.isArray(saved.history) || !saved.history.length) return;
+            if (!window.currentDriveFileId || saved.driveFileId !== window.currentDriveFileId) return;
+            window._ganttQaHistory = saved.history;
+        } catch (e) { /* 손상된 저장값은 무시하고 빈 대화로 시작 */ }
     };
 
     // 💡 [2026-08-28 신규] AI 문답이 실제로 앱 데이터를 바꿀 수 있는 유일한 통로 — AI 답변 끝에 붙는
