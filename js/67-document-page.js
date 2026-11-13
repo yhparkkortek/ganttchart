@@ -1043,6 +1043,155 @@
                 + '</span>';
         }).join('');
     };
+    // 🔲▮▮ [2026-11-13, 사용자 요청] "바코드 QR 은 어떻게 추가해?" — 코드/박스/직선과 같은 틀의
+    //    또 다른 오버레이. 값은 **직접 입력**(prompt, 표시 추가와 같은 UX) — 라벨품목코드 자동
+    //    연동은 지금 범위 밖(사용자 선택: "직접 입력"). QR 은 `qrcodejs`(canvas), 바코드는
+    //    `JsBarcode`(svg) — 둘 다 <head> CDN. 그림 자체는 **렌더 직후 JS 에서 그린다**(직선과
+    //    같은 이유 — 라이브러리 호출은 문자열로 미리 못 쓴다), 그래서 `_docLabelCodesApply` 가
+    //    직선의 `_docLabelLinesApply` 와 같은 6곳에서 같이 불린다.
+    window._docLabelCodesCache = window._docLabelCodesCache || {};   // code -> [{kind:'qr'|'barcode', value, x, y, wem, hem}]
+    window._docLabelCodeAdd = function (code, kind) {
+        var value = prompt(kind === 'qr' ? _t('QR 코드에 넣을 값을 입력하세요.', 'Enter the value to encode as a QR code.')
+                                          : _t('바코드에 넣을 값을 입력하세요.', 'Enter the value to encode as a barcode.'), '');
+        value = value && value.trim();
+        if (!value) return;
+        var list = window._docLabelCodesCache[code] = window._docLabelCodesCache[code] || [];
+        list.push({ kind: kind, value: value, x: 0.5, y: 0.5, wem: kind === 'qr' ? 6 : 10, hem: kind === 'qr' ? 6 : 3.5 });
+        _docLabelRefresh();
+        window._docLabelNotesSave(code);
+    };
+    window._docLabelCodeEdit = async function (code, idx) {
+        var list = window._docLabelCodesCache[code] || [];
+        var it = list[idx]; if (!it) return;
+        var value = prompt(_t('값을 고치세요.', 'Edit the value.'), it.value);
+        if (value == null) return;   // 취소
+        value = value.trim();
+        if (!value) return;
+        it.value = value;
+        _docLabelRefresh();
+        await window._docLabelNotesSave(code);
+    };
+    window._docLabelCodeDel = async function (code, idx) {
+        var list = window._docLabelCodesCache[code] || [];
+        if (!list[idx]) return;
+        if (!confirm(_t('이 코드를 지웁니다.', 'Delete this code?'))) return;
+        list.splice(idx, 1);
+        _docLabelRefresh();
+        await window._docLabelNotesSave(code);
+    };
+    // 🖐 끌기 — 박스의 `_docLabelBoxDragWire` 와 같은 틀(위 테두리 가는 띠만 받는다).
+    window._docLabelCodeDragWire = function (handle, img, code, idx, wrap) {
+        var moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var r = img.getBoundingClientRect();
+            var x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+            var y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+            wrap.style.left = (x * 100) + '%'; wrap.style.top = (y * 100) + '%';
+            var list = window._docLabelCodesCache[code] || [];
+            if (list[idx]) { list[idx].x = x; list[idx].y = y; }
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // 📏 크기조절 — 박스의 `_docLabelBoxResizeWire` 와 같은 틀. QR 은 정사각형을 유지한다
+    //    (가로만 보고 세로를 맞춘다 — 비뚤어진 QR 은 못 읽는 경우가 있어서 항상 고정).
+    window._docLabelCodeResizeWire = function (handle, wrap, code, idx) {
+        var startX, startY, startW, startH, fontPx, moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var list = window._docLabelCodesCache[code] || [];
+            var it = list[idx];
+            var w = Math.max(fontPx * 2, startW + (ev.clientX - startX));
+            var h = (it && it.kind === 'qr') ? w : Math.max(fontPx * 1, startH + (ev.clientY - startY));
+            wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
+            if (it) { it.wem = Math.round((w / fontPx) * 100) / 100; it.hem = Math.round((h / fontPx) * 100) / 100; }
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            startX = ev.clientX; startY = ev.clientY;
+            var r = wrap.getBoundingClientRect();
+            startW = r.width; startH = r.height;
+            fontPx = parseFloat(getComputedStyle(wrap).fontSize) || 16;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // HTML — 실제 그림(QR·바코드)은 비워 둔 `data-code-canvas` 안에 렌더 직후 JS 가 채운다
+    //    (라이브러리를 문자열로 미리 못 부른다). 틀은 박스와 같은 흰 바탕 + 빨강 테두리.
+    var _docLabelCodeMarkersHtml = function (codes, draggable, code) {
+        return (codes || []).map(function (c, ci) {
+            var wrapStyle = 'position:absolute; left:' + (c.x * 100) + '%; top:' + (c.y * 100) + '%;'
+                + ' transform:translate(-50%,-50%); width:' + (c.wem || (c.kind === 'qr' ? 6 : 10)) + 'em;'
+                + ' height:' + (c.hem || (c.kind === 'qr' ? 6 : 3.5)) + 'em; background:#fff;'
+                + ' border:1px solid #e03131; border-radius:0.2em; z-index:1; box-sizing:border-box; padding:0.2em;'
+                + (draggable ? ' cursor:grab;' : '');
+            return '<span data-code-wrap data-code-idx="' + ci + '" data-code-kind="' + _esc(c.kind) + '"'
+                + ' data-code-value="' + _esc(c.value) + '" title="' + _esc(c.value) + '" style="' + wrapStyle + '">'
+                + '<span data-code-canvas style="display:block; width:100%; height:100%;"></span>'
+                + (draggable ? '<span data-code-drag title="' + _esc(_t('끌어서 옮기기', 'drag to move')) + '"'
+                  + ' style="position:absolute; left:-2px; right:-2px; top:-2px; height:10px; cursor:grab; pointer-events:auto;"></span>'
+                  + '<span data-code-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
+                  + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em; border-radius:0.25em;'
+                  + ' background:#e03131; border:2px solid #fff; box-shadow:0 0 0 1px #e03131; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
+                  + '<a href="#" onclick="window._docLabelCodeEdit(\'' + _esc(code) + '\',' + ci + ');return false;"'
+                  + ' title="' + _esc(_t('값 고치기', 'edit value')) + '" style="position:absolute; left:-0.6em; bottom:-0.6em; width:1em; height:1em;'
+                  + ' line-height:1em; text-align:center; background:#1971c2; color:#fff; border-radius:50%; font-size:0.6em;'
+                  + ' text-decoration:none; box-shadow:0 0 0 1px #fff; pointer-events:auto; z-index:2;">✏</a>'
+                  + '<a href="#" onclick="window._docLabelCodeDel(\'' + _esc(code) + '\',' + ci + ');return false;"'
+                  + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
+                  + ' background:#b1432f; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
+                  + ' box-shadow:0 0 0 1px #fff; pointer-events:auto; z-index:2;">✕</a>' : '')
+                + '</span>';
+        }).join('');
+    };
+    // 실제 그림 생성 — `_docLabelLinesApply` 와 같은 "렌더 직후, 매번 다시 그린다" 패턴.
+    //    ⚠️ QRCode.js 는 대상 엘리먼트를 스스로 비우지 않는다 — 다시 그릴 때마다 직접 비울 것.
+    window._docLabelCodesApply = function (container, code) {
+        if (!container) return;
+        [].slice.call(container.querySelectorAll('[data-code-wrap]')).forEach(function (wrap) {
+            var canvas = wrap.querySelector('[data-code-canvas]');
+            if (!canvas) return;
+            canvas.innerHTML = '';
+            var kind = wrap.getAttribute('data-code-kind');
+            var value = wrap.getAttribute('data-code-value');
+            if (!value) return;
+            var r = wrap.getBoundingClientRect();
+            var w = Math.max(20, Math.round(r.width)), h = Math.max(20, Math.round(r.height));
+            try {
+                if (kind === 'qr') {
+                    if (!window.QRCode) return;   // CDN 이 아직 안 불러와졌으면 다음 렌더에서 다시 시도
+                    new window.QRCode(canvas, { text: value, width: w, height: w,
+                        correctLevel: window.QRCode.CorrectLevel.M });
+                } else {
+                    if (!window.JsBarcode) return;
+                    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    canvas.appendChild(svg);
+                    window.JsBarcode(svg, value, { format: 'CODE128', displayValue: true,
+                        height: Math.max(10, h * 0.62), fontSize: Math.max(8, h * 0.18), margin: 0 });
+                    svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%');
+                    svg.style.display = 'block';
+                }
+            } catch (e) {
+                canvas.innerHTML = '<span style="color:#b1432f; font-size:0.6em;">' + _esc(_t('생성 실패', 'render failed')) + '</span>';
+            }
+        });
+    };
     // 📏 [2026-11-13, 사용자 요청] "직선도 그릴 수 있으면 좋겠다(TXT 와 같은 색상)" — 두 끝점을
     //    따로 끌 수 있는 선. 각도·길이는 실제 픽셀로 계산해야 하므로(비율만으론 이미지가 정사각형이
     //    아니면 기울기가 틀어진다) 문자열로 미리 안 그리고 **렌더 직후 JS 에서**(`_docLabelLinesApply`)
@@ -1189,7 +1338,7 @@
     window._docLabelNotesLoad = async function (code) {
         if (window._docLabelNotesCache[code] !== undefined) return;    // 이미 불렀거나 불러오는 중
         window._docLabelNotesCache[code] = null;
-        var notes = [], size = null, thumbSize = null, fontScale = null, marks = [], boxes = [], lines = [];
+        var notes = [], size = null, thumbSize = null, fontScale = null, marks = [], boxes = [], lines = [], codes = [];
         try {
             var r = await fetch(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER)
                 + '&name=' + encodeURIComponent(code + '.notes.json'));
@@ -1202,6 +1351,7 @@
                 marks = (parsed && parsed.marks) || [];
                 boxes = (parsed && parsed.boxes) || [];
                 lines = (parsed && parsed.lines) || [];
+                codes = (parsed && parsed.codes) || [];
             }
         } catch (e) { /* 아직 없으면(404) 빈 값 — 네트워크 문제도 여기선 그냥 빈 채로 둔다 */ }
         // ⚠️ [2026-11-12 11차, 실측] 이 fetch 가 느리게 도는 동안 사람이 먼저 표시를 찍거나
@@ -1214,6 +1364,7 @@
         if (window._docLabelMarksCache[code] === undefined) window._docLabelMarksCache[code] = marks;
         if (window._docLabelBoxesCache[code] === undefined) window._docLabelBoxesCache[code] = boxes;
         if (window._docLabelLinesCache[code] === undefined) window._docLabelLinesCache[code] = lines;
+        if (window._docLabelCodesCache[code] === undefined) window._docLabelCodesCache[code] = codes;
         _docLabelRefresh();
     };
     window._docLabelNotesSave = async function (code) {
@@ -1224,7 +1375,8 @@
         var marks = window._docLabelMarksCache[code] || [];
         var boxes = window._docLabelBoxesCache[code] || [];
         var lines = window._docLabelLinesCache[code] || [];
-        var blob = new Blob([JSON.stringify({ notes: notes, size: size, thumbSize: thumbSize, fontScale: fontScale, marks: marks, boxes: boxes, lines: lines })], { type: 'application/json' });
+        var codes = window._docLabelCodesCache[code] || [];
+        var blob = new Blob([JSON.stringify({ notes: notes, size: size, thumbSize: thumbSize, fontScale: fontScale, marks: marks, boxes: boxes, lines: lines, codes: codes })], { type: 'application/json' });
         var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, code + '.notes.json', blob, { forceOverwrite: true });
         if (!res.ok) _toast('⚠️ ' + _t('표시를 저장하지 못했습니다: ', 'Could not save the note: ') + (res.error || ''), 'error');
         return res.ok;
@@ -1491,8 +1643,11 @@
                 + '</span>'
                 // 🔢 [2026-11-13, 사용자 요청] "동그라미 번호 크기 너무 줄였음 — 이전(1.8em)과
                 //    비교했을 때 절반만큼 키워줘" — 1.1em 에서 원래값 쪽으로 절반(1.45em)까지.
-                + '<span style="width:1.45em; height:1.45em; min-width:1.45em; border-radius:50%; background:#e03131;'
-                + ' color:#fff; font-weight:bold; font-size:0.78em; display:flex; align-items:center; justify-content:center;'
+                // 🔢🔢 [2026-11-13 2차, 사용자 요청] "동그라미 넘버 50%만 더 키워줘" — 1.45em 에서
+                //    50% 더(×1.5): 원 지름 2.175em·안쪽 숫자 글자도 같은 비율로(0.78em → 1.17em,
+                //    안 늘리면 원만 커지고 숫자는 그대로라 가운데가 비어 보인다).
+                + '<span style="width:2.175em; height:2.175em; min-width:2.175em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; font-size:1.17em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
         }).join('');
@@ -1522,7 +1677,7 @@
         var w = widthPxOverride || img.getBoundingClientRect().width;
         if (!w) return;
         var px = window._docLabelNoteFontPx(w, code);
-        [].slice.call(bodyEl.querySelectorAll('[data-note-wrap], [data-mark-wrap], [data-box-wrap]'))
+        [].slice.call(bodyEl.querySelectorAll('[data-note-wrap], [data-mark-wrap], [data-box-wrap], [data-code-wrap]'))
             .forEach(function (el) { el.style.fontSize = px + 'px'; });
     };
     // 🔧 [2026-11-12 11차, 사용자 요청] 크기 조정 — 모달 안 이미지 우하단 손잡이를 끌면 크기를
@@ -1940,6 +2095,7 @@
         var notes = window._docLabelNotesCache[code] || [];
         var marks = window._docLabelMarksCache[code] || [];
         var boxes = window._docLabelBoxesCache[code] || [];
+        var codes = window._docLabelCodesCache[code] || [];
         var placing = window._docLabelNotePlacing === code;
         var cropping = window._docLabelCropState && window._docLabelCropState.code === code;
         var cropSel = cropping ? window._docLabelCropState.sel : null;
@@ -1961,6 +2117,9 @@
             + _docLabelMarkMarkersHtml(marks, idle, code)
             // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 빈 박스(표 칸 구분선 용도)
             + _docLabelBoxMarkersHtml(boxes, idle, code)
+            // 🔲▮▮ [2026-11-13, 사용자 요청] "바코드 QR 은 어떻게 추가해?" — 틀만 여기서 찍고
+            //    실제 그림은 `_docLabelCodesApply` 가 렌더 직후에 채운다.
+            + _docLabelCodeMarkersHtml(codes, idle, code)
             + (cropSel ? '<div style="position:absolute; pointer-events:none;'
                 + ' left:' + (cropSel.x0 * 100) + '%; top:' + (cropSel.y0 * 100) + '%;'
                 + ' width:' + ((cropSel.x1 - cropSel.x0) * 100) + '%; height:' + ((cropSel.y1 - cropSel.y0) * 100) + '%;'
@@ -2016,6 +2175,11 @@
               // 📏 [2026-11-13, 사용자 요청] "직선도 그릴 수 있으면 좋겠다"
               + ' · <a href="#" onclick="window._docLabelLineAdd(\'' + _esc(code) + '\');return false;"'
               + ' style="color:#e03131; font-weight:bold;">📏 ' + _esc(_t('직선 추가', 'Add line')) + '</a>'
+              // 🔲▮▮ [2026-11-13, 사용자 요청] "바코드 QR 은 어떻게 추가해?" — 값은 직접 입력(prompt).
+              + ' · <a href="#" onclick="window._docLabelCodeAdd(\'' + _esc(code) + '\',\'qr\');return false;"'
+              + ' style="color:#e03131; font-weight:bold;">🔲 ' + _esc(_t('QR 추가', 'Add QR')) + '</a>'
+              + ' · <a href="#" onclick="window._docLabelCodeAdd(\'' + _esc(code) + '\',\'barcode\');return false;"'
+              + ' style="color:#e03131; font-weight:bold;">▮▮ ' + _esc(_t('바코드 추가', 'Add barcode')) + '</a>'
               + '</div>' : '')
             // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로도 작성 가능했으면
             //    좋겠음" — 번호 목록을 **입력칸으로** 바꿔 클릭 위치 없이 타이핑만으로 고칠 수 있게 하고,
@@ -2070,16 +2234,18 @@
             window._docLabelSizeWire(handle, img, code, function (wPx) {
                 window._docLabelNotesApplyFont(bodyEl, img, code, wPx);
                 window._docLabelLinesApply(bodyEl, img, code, idle);
+                window._docLabelCodesApply(bodyEl, code);
             });
         }
         if (img && cropping) window._docLabelCropWire(img);
         if (img && bodyEl) {
             window._docLabelNotesApplyFont(bodyEl, img, code);
-            // 이미지가 아직 안 불러와졌으면(첫 진입) 로드 후 실제 폭으로 다시 맞춘다(직선도 같이)
+            // 이미지가 아직 안 불러와졌으면(첫 진입) 로드 후 실제 폭으로 다시 맞춘다(직선·코드도 같이)
             if (!img.complete) {
                 img.addEventListener('load', function () {
                     window._docLabelNotesApplyFont(bodyEl, img, code);
                     window._docLabelLinesApply(bodyEl, img, code, idle);
+                    window._docLabelCodesApply(bodyEl, code);
                 }, { once: true });
             }
         }
@@ -2109,9 +2275,17 @@
                 var bHandle = wrap.querySelector('[data-box-resize]');
                 if (bHandle) window._docLabelBoxResizeWire(bHandle, wrap, code, bidx);
             });
+            // 🔲▮▮ [2026-11-13] 코드(QR·바코드)도 박스와 같은 규칙으로 끌기 + 크기조절
+            [].slice.call(bodyEl.querySelectorAll('[data-code-wrap]')).forEach(function (wrap) {
+                var cidx = Number(wrap.getAttribute('data-code-idx'));
+                var cDrag = wrap.querySelector('[data-code-drag]');
+                if (cDrag) window._docLabelCodeDragWire(cDrag, img, code, cidx, wrap);
+                var cHandle = wrap.querySelector('[data-code-resize]');
+                if (cHandle) window._docLabelCodeResizeWire(cHandle, wrap, code, cidx);
+            });
         }
-        // 📏 [2026-11-13] 직선 — idle 이 아니어도 보여는 준다(끌기만 idle 일 때).
-        if (img) window._docLabelLinesApply(bodyEl, img, code, idle);
+        // 📏 [2026-11-13] 직선 — idle 이 아니어도 보여는 준다(끌기만 idle 일 때). 코드도 같이.
+        if (img) { window._docLabelLinesApply(bodyEl, img, code, idle); window._docLabelCodesApply(bodyEl, code); }
     };
     // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
     //   — 그 폴더는 ZDMSR004 다운로드 결과라 이름 규칙이 제각각이다(`<code>.xlsx` ·
@@ -3764,6 +3938,7 @@
                     var notes = (itCode && window._docLabelNotesCache[itCode]) || [];
                     var marks = (itCode && window._docLabelMarksCache[itCode]) || [];
                     var boxes = (itCode && window._docLabelBoxesCache[itCode]) || [];
+                    var codes = (itCode && window._docLabelCodesCache[itCode]) || [];
                     var artCell;
                     // 📤 [2026-11-13, 사용자 요청] "PPT 등으로 완성한 이미지를 바로 올릴 수 있나" — 코드만
                     //    있으면 SAP 검색 없이도 로컬 파일을 바로 공용 도안으로 올린다(크기·회전과 같이
@@ -3825,6 +4000,7 @@
                                 + _docLabelNoteMarkersHtml(notes, false, itCode)
                                 + _docLabelMarkMarkersHtml(marks, false, itCode)
                                 + _docLabelBoxMarkersHtml(boxes, false, itCode)
+                                + _docLabelCodeMarkersHtml(codes, false, itCode)
                                 + '<div data-thumb-resize="' + _esc(itCode) + '" title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                                 + ' class="doc-noprint" style="position:absolute; right:2px; bottom:2px; width:13px; height:13px;'
                                 + ' border-radius:3px; background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2;'
@@ -4315,13 +4491,16 @@
             window._docLabelThumbSizeWire(handle, timg, tcode, function (wPx) {
                 window._docLabelNotesApplyFont(twrap, timg, tcode, wPx);
                 window._docLabelLinesApply(twrap, timg, tcode, false);
+                window._docLabelCodesApply(twrap, tcode);
             });
             window._docLabelNotesApplyFont(twrap, timg, tcode);
             window._docLabelLinesApply(twrap, timg, tcode, false);
+            window._docLabelCodesApply(twrap, tcode);
             if (!timg.complete) {
                 timg.addEventListener('load', function () {
                     window._docLabelNotesApplyFont(twrap, timg, tcode);
                     window._docLabelLinesApply(twrap, timg, tcode, false);
+                    window._docLabelCodesApply(twrap, tcode);
                 }, { once: true });
             }
         });
