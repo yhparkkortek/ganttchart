@@ -1762,7 +1762,48 @@
             window._docLabelFindResult[key] = '⚠️ ' + _esc(_t('6자리 코드를 먼저 적으세요.', 'Enter the 6-digit code first.'));
             window._docRender(); return;
         }
+        window._docLabelFetchSapDesc(formId, idx, code);   // 도안 찾기와 별개로 끝날 때까지 안 기다림
         await _docLabelSearchRun(formId, idx, 'code=' + encodeURIComponent(code), true, code);
+    };
+    // 📋 [2026-11-13, 사용자 요청] "라벨 규격은 라벨 품목 코드 조회하면 SAP 의 내역을 표시해주면" —
+    //    코드로 도안을 찾을 때 SAP 자재 내역(`/sap-material-rows`, ZMM009 — BOM·QA 문답과 같은 경로,
+    //    `MAKTX`)도 같이 받아 규격 칸 밑에 참고로 보여준다. **규격 칸을 자동으로 덮어쓰지 않는다**
+    //    — 사람이 내역을 보고 직접 규격을 적어 넣는다(SAP 내역 문구가 그대로 "규격"은 아니라서).
+    window._docLabelFetchSapDesc = async function (formId, idx, code) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        if (!it) return;
+        try {
+            var r = await fetch(BACKEND + '/sap-material-rows?materials=' + encodeURIComponent(code));
+            var d = await r.json();
+            var m = d && d.ok && d.materials && d.materials[0];
+            it.sapDesc = (m && m.MAKTX) || '';
+        } catch (e) {
+            return;   // 조용히 넘긴다 — 도안 찾기는 이미 따로 끝났고, 이건 참고 정보일 뿐이다
+        }
+        if (it.sapDesc) { _markDirty(); window._docRender(); }
+    };
+    // 🤖 [2026-11-13, 사용자 요청] "라벨 품목 코드를 넣지 않는 경우는 AI 문답 창을 띄워서 찾도록
+    //    유도해줘" — 코드 칸이 비어 있을 때만 보이는 버튼. 기존 AI 문답 입구를 그대로 쓴다
+    //    (`openGanttQaModal→#gantt-qa-input→focus`, js/71 과 같은 방식 — 입구를 베끼지 않는다).
+    window._docLabelAskAiCode = function (formId, idx) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        var size = String((it && it.size) || '').trim();
+        var q = size
+            ? _t('라벨품목코드를 모르겠습니다 — 규격 ' + size + ' 라벨의 SAP 자재코드를 찾아주세요.',
+                 'I don\'t know the label item code — please help me find the SAP material code for a ' + size + ' label.')
+            : _t('라벨품목코드를 모르겠습니다 — 이 라벨의 SAP 자재코드를 찾아주세요.',
+                 'I don\'t know the label item code — please help me find the SAP material code for this label.');
+        if (!window.openGanttQaModal) { _toast('⚠️ ' + _t('AI 문답 창을 열지 못했습니다.', 'Could not open the AI chat.'), 'error'); return; }
+        window.openGanttQaModal();
+        var apply = function () {
+            var inp = document.getElementById('gantt-qa-input');
+            if (!inp) return;
+            inp.value = q;
+            inp.focus();
+            try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { /* 〃 */ }
+        };
+        apply();
+        setTimeout(apply, 80);   // openGanttQaModal 자체 focus(js/04h, 50ms 뒤)보다 늦게 한 번 더
     };
     window._docLabelFindBySize = async function (formId, idx) {
         var it = (_docData(formId).labelItems || [])[idx];
@@ -3100,12 +3141,19 @@
                 var litems = _docData(form.id).labelItems = _docData(form.id).labelItems || [];
                 if (window._docLabelArtIndex === null && !window._docLabelArtLoading
                     && (Date.now() - window._docLabelArtLoadFailedAt) > 5000) window._docLabelArtLoad();
-                h += '<tr><th class="doc-noprint" style="width:450px;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
-                   + '<th style="width:110px;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
-                   + '<th style="width:190px;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
-                   + '<th style="width:100px;">' + _esc(_t('부착위치', 'Position')) + '</th>'
-                   + '<th>' + _esc(_t('비고', 'Note')) + '</th>'
-                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
+                // ⚠️⚠️ [2026-11-13, 사용자 신고 "붉은색 표시 항목들이 열 너비에 맞춰지지 않고 넘침"] 이
+                //    표가 쓰던 공용 `<table class="doc-t">`(고정폭 아님, auto layout)는 셀 **내용**이
+                //    길면 그 칸을 밀어 열 폭이 흐트러진다(폭 지정은 그냥 "희망값"일 뿐이었다) — 기재내용
+                //    글상자·긴 표시 목록이 들어오면서 실제로 넘쳤다. **이 표만** `table-layout:fixed`
+                //    (전체 % 합 100) 로 바꿔 셀 내용이 아무리 길어도 열 폭 자체는 절대 안 바뀌게 한다
+                //    (대신 칸 안에서 줄바꿈·세로로만 늘어난다 — 넘치지 않는다).
+                h += '</table><table class="doc-t" style="table-layout:fixed; width:100%;">'
+                   + '<tr><th class="doc-noprint" style="width:32%;">' + _esc(_t('라벨 도안', 'Artwork')) + '</th>'
+                   + '<th style="width:10%;">' + _esc(_t('라벨규격', 'Size')) + '</th>'
+                   + '<th style="width:16%;">' + _esc(_t('라벨품목코드', 'Code')) + '</th>'
+                   + '<th style="width:10%;">' + _esc(_t('부착위치', 'Position')) + '</th>'
+                   + '<th style="width:28%;">' + _esc(_t('비고', 'Note')) + '</th>'
+                   + '<th class="doc-noprint" style="width:4%;"></th></tr>';
                 if (!litems.length) {
                     h += '<tr><td colspan="6" style="color:#868e96;">'
                        + _esc(_t('아직 라벨이 없습니다 — 아래 [＋ 라벨 추가]를 누르거나 모델명세서_라벨 엑셀을 불러오세요.',
@@ -3152,10 +3200,12 @@
                         //    여기서도 끌어서 조절할 수 있다(`thumbSize`, 모달 `size` 와는 별도 칸) — 가로는
                         //    430px 로 묶어 열 폭(450px)을 못 넘게 한다(11차 사고 재발 방지).
                         var thumbSz = window._docLabelThumbSizeCache && window._docLabelThumbSizeCache[itCode];
-                        var thumbImgStyle = 'border:1px solid #dee2e6; border-radius:3px; display:block; margin:0 auto; cursor:pointer;'
+                        // ⚠️ [2026-11-13] `max-width:100%` 는 **항상** 둔다 — 고정 폭(`thumbSz`)을 골라도
+                        //    표 칸 자체가 더 좁으면(예: 좁은 창) 그 안으로 다시 줄어들어야 넘치지 않는다.
+                        var thumbImgStyle = 'border:1px solid #dee2e6; border-radius:3px; display:block; margin:0 auto; cursor:pointer; max-width:100%;'
                             + ((thumbSz && thumbSz.w && thumbSz.h)
-                               ? (' width:' + thumbSz.w + 'px; height:' + thumbSz.h + 'px; max-width:none; max-height:none;')
-                               : ' max-width:430px; max-height:400px;');
+                               ? (' width:' + thumbSz.w + 'px; height:' + thumbSz.h + 'px; max-height:none;')
+                               : ' max-height:400px;');
                         // 🔤 [2026-11-13, 사용자 요청] "모달에서 수정한 내용을 도표에서도 실시간으로" —
                         //    표 썸네일에도 **같은 마커**(보기 전용, 끌기는 모달에서만)를 얹는다. 모달에서
                         //    표시를 고치면 `_docLabelRefresh()` 가 이 표도 같이 다시 그려서 따로 손댈 게 없다.
@@ -3178,9 +3228,9 @@
                                   + _esc(_t('기본 크기', 'Reset size')) + '</a>' : '')
                                 + ' · ' + uploadLink + ' · ' + fieldsLink + '</div>';
                     } else {
-                        artCell = '<div style="width:400px; height:300px; margin:0 auto; display:flex; align-items:center;'
+                        artCell = '<div style="width:100%; max-width:400px; height:300px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
-                            + ' color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>'
+                            + ' box-sizing:border-box; color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>'
                             + '<div style="margin-top:3px;">' + uploadLink + ' · ' + fieldsLink + '</div>';
                     }
                     // 🔎 [2026-11-12 10차, 사용자 요청] "도안 찾기" 글자는 지우고 아이콘만 남긴다 —
@@ -3189,29 +3239,45 @@
                     var _findIconBtn = 'padding:3px 6px; font-size:12px; line-height:1; cursor:pointer;'
                         + ' border:1px solid #a3d9e0; border-radius:4px; background:#e0f5f7; color:#00707d;'
                         + ' font-weight:bold; vertical-align:middle;';
+                    // ⚠️⚠️ [2026-11-13, 사용자 신고] input+button 을 `white-space:nowrap` 으로 한 줄에
+                    //    묶었더니(고정 폭 76~86px + 버튼) 좁아진 열(10%) 을 넘쳤다 — `flex-wrap:wrap` 으로
+                    //    바꿔 모자라면 버튼이 **다음 줄로** 내려가게 한다(열 폭 자체는 절대 안 넘친다).
                     h += '<tr>'
                        + '<td class="doc-noprint" style="text-align:center; vertical-align:middle; padding:5px;">' + artCell + '</td>'
-                       + '<td style="white-space:nowrap;"><input type="text" class="doc-in" data-doc-litem="' + i + '|size" value="' + _esc(it.size || '')
-                       + '" placeholder="예: 75 X 70" style="font-size:11.5px; width:76px; display:inline-block;">'
-                       + ' <button class="doc-noprint" title="' + _esc(_t('규격으로 도안 찾기', 'Find artwork by size')) + '"'
-                       + ' onclick="window._docLabelFindBySize(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button></td>'
-                       + '<td style="white-space:nowrap;"><input type="text" class="doc-in" data-doc-litem="' + i + '|code"'
+                       + '<td><div style="display:flex; flex-wrap:wrap; align-items:center; gap:3px;">'
+                       + '<input type="text" class="doc-in" data-doc-litem="' + i + '|size" value="' + _esc(it.size || '')
+                       + '" placeholder="예: 75 X 70" style="font-size:11.5px; width:0; flex:1 1 56px; min-width:48px;">'
+                       + '<button class="doc-noprint" title="' + _esc(_t('규격으로 도안 찾기', 'Find artwork by size')) + '"'
+                       + ' onclick="window._docLabelFindBySize(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button></div>'
+                       // 📋 [2026-11-13, 사용자 요청] "라벨품목코드 조회하면 SAP 내역을 표시" — 코드로
+                       //    찾을 때 같이 받아온 SAP 자재내역(`it.sapDesc`, MAKTX)을 참고용으로 보여준다.
+                       //    규격 칸을 자동으로 덮어쓰진 않는다(사람이 보고 직접 적는다).
+                       + (it.sapDesc ? '<div class="doc-noprint" style="margin-top:3px; font-size:10px; color:#495057;'
+                         + ' white-space:normal; word-break:break-all;" title="' + _esc(_t('SAP 자재내역', 'SAP material description'))
+                         + '">🏭 ' + _esc(it.sapDesc) + '</div>' : '') + '</td>'
+                       + '<td><div style="display:flex; flex-wrap:wrap; align-items:center; gap:3px;">'
+                       + '<input type="text" class="doc-in" data-doc-litem="' + i + '|code"'
                        + ' value="' + _esc(it.code || '') + '" placeholder="예: 124291"'
-                       + ' style="font-size:11.5px; width:86px; display:inline-block;">'
-                       + ' <button class="doc-noprint" title="' + _esc(_t('코드로 도안 찾기', 'Find artwork by code')) + '"'
-                       + ' onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button></td>'
+                       + ' style="font-size:11.5px; width:0; flex:1 1 64px; min-width:52px;">'
+                       + '<button class="doc-noprint" title="' + _esc(_t('코드로 도안 찾기', 'Find artwork by code')) + '"'
+                       + ' onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button>'
+                       // 🤖 [2026-11-13, 사용자 요청] "코드를 넣지 않는 경우는 AI 문답 창을 띄워서 찾도록 유도"
+                       + (it.code ? '' : '<a href="#" onclick="window._docLabelAskAiCode(\'' + _esc(form.id) + '\',' + i
+                         + ');return false;" class="doc-noprint" title="' + _esc(_t('AI 문답으로 코드 찾기', 'Ask AI to find the code'))
+                         + '" style="' + _findIconBtn + '">🤖</a>')
+                       + '</div></td>'
                        + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|position" value="'
                        + _esc(it.position || '') + '" placeholder="예: 제품 / C.T BOX" style="font-size:11.5px;"></td>'
+                       // 📋 [2026-11-13, 사용자 요청] "비고 사용자 작성란은 아래로 이동" — 도안 위 표시
+                       //    내용(읽기 전용 "1. 2. 3." 요약)을 **먼저**, 사람이 직접 쓰는 textarea 는 **그 아래**.
+                       + '<td>' + (notes.length ? '<div class="doc-noprint" style="font-size:10.5px; color:#495057; text-align:left;'
+                         + ' white-space:pre-line; margin-bottom:4px;">'
+                         + notes.map(function (n, ni) { return (ni + 1) + '. ' + _esc(n.text); }).join('<br>') + '</div>' : '')
                        // ⚠️ [2026-11-13, 사용자 요청] 비고도 기재내용과 같은 이유로 textarea — 한 줄
                        //    `<input>` 은 Enter 로 줄을 못 나눈다.
-                       + '<td><textarea class="doc-in" data-doc-litem="' + i + '|note" rows="2"'
-                       + ' style="font-size:11.5px; width:100%; text-align:left; resize:vertical; font-family:inherit;">'
+                       + '<textarea class="doc-in" data-doc-litem="' + i + '|note" rows="2"'
+                       + ' style="font-size:11.5px; width:100%; box-sizing:border-box; text-align:left; resize:vertical; font-family:inherit;">'
                        + _esc(it.note || '') + '</textarea>'
-                       // 📋 [2026-11-13, 사용자 요청] 도안 위 표시 내용을 "1. 2. 3." 으로 정리해 비고 열에도 보여준다
-                       //    (모달을 열지 않아도 무슨 표시가 있는지 바로 읽힌다) — 읽기 전용, 고치려면 🔍 크게 보기.
-                       + (notes.length ? '<div class="doc-noprint" style="margin-top:4px; font-size:10.5px; color:#495057; text-align:left;'
-                         + ' white-space:pre-line;">'
-                         + notes.map(function (n, ni) { return (ni + 1) + '. ' + _esc(n.text); }).join('<br>') + '</div>' : '')
                        + '</td>'
                        + '<td class="doc-noprint"><a href="#" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
                        + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '" style="color:#b1432f;">✕</a></td>'
