@@ -2412,7 +2412,9 @@
                         //    으로 타이핑하는 즉시 도안 위 글자상자만 가볍게 고쳐쓴다(전체 다시 그리기는
                         //    `onchange`(블러 시) 그대로 — 안 그러면 타이핑 중 이 textarea 자체가
                         //    매번 새로 만들어져 포커스·커서 위치가 날아간다).
-                        + '<textarea rows="2" oninput="window._docLabelNoteLivePatch(\'' + _esc(code) + '\',' + ni + ',this.value)"'
+                        // 📏 [2026-11-13, 사용자 요청] "1줄 크기로 조정" — 2줄은 괜히 면적만 차지,
+                        //    1줄로 줄인다(긴 글은 `resize:vertical` 손잡이로 늘려 쓰면 된다).
+                        + '<textarea rows="1" oninput="window._docLabelNoteLivePatch(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
                         + _esc(n.text) + '</textarea>'
@@ -2426,9 +2428,11 @@
             // ⠿ [2026-11-13, 사용자 신고 "붉은색 박스 얼라인 맞춰줘 위 박스들과"] 번호 줄은
             //    [손잡이(1.1em)] gap [번호(1.6em)] gap [textarea] — gap 이 **둘**인데 스페이서
             //    쪽엔 gap 이 하나뿐이라 4px 모자랐다. 스페이서 폭에 그 gap 하나를 더한다.
+            // 📏 [2026-11-13 2차, 사용자 요청] "1줄 크기로 조정 / 왼쪽으로 5px 이동" — rows 1줄로
+            //    줄이고, 스페이서를 5px 더 줄여 textarea 가 번호 줄보다 5px 왼쪽에서 시작하게 한다.
             + (idle ? '<div style="margin-top:8px; display:flex; gap:4px; align-items:flex-start;">'
-                + '<span style="flex:0 0 calc(1.1em + 1.6em + 4px);"></span>'
-                + '<textarea id="doclabelart-newnote" rows="2" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
+                + '<span style="flex:0 0 calc(1.1em + 1.6em + 4px - 5px);"></span>'
+                + '<textarea id="doclabelart-newnote" rows="1" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
                   'Type a new note (Ctrl+Enter to add) — drag it into place after.')) + '"'
                 + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
                 + '\');return false;}" style="flex:1; font-size:11.5px; padding:4px 6px; text-align:left; resize:vertical; font-family:inherit;"></textarea>'
