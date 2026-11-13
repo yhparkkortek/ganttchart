@@ -614,6 +614,39 @@
     //    충돌하지 않게). 끌 때 비율을 지킬지는 전역 체크(`_docLabelAspectLock`) 하나로 모달·표 둘 다 같이 쓴다.
     window._docLabelThumbSizeCache = window._docLabelThumbSizeCache || {};   // code -> {w,h} | null
     window._docLabelAspectLock = window._docLabelAspectLock !== false;       // 기본 켬
+    // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로" — 실측 예시
+    //    라벨(Part No·Q'ty·Serial No·Product Des.·Mfr. Name·Mfr. PN·Made in)의 고정 항목표.
+    //    ⚠️ 도안(artwork)·표시(notes)는 **코드가 주인**(공용)이지만, 이 값들은 **이 프로젝트의
+    //    그 라벨 한 장**에만 해당하는 값(시리얼 등)이라 공용 폴더가 아니라 `it`(labelItems 행)
+    //    자체에 저장한다 — 코드가 같아도 프로젝트마다·라벨마다 값이 다르다.
+    var LABEL_FIELD_CATALOG = [
+        { key: 'partNo', label: 'Part No' },
+        { key: 'qty', label: "Q'ty" },
+        { key: 'serialNo', label: 'Serial No' },
+        { key: 'productDes', label: 'Product Des.' },
+        { key: 'mfrName', label: 'Mfr. Name' },
+        { key: 'mfrPn', label: 'Mfr. PN' },
+        { key: 'madeIn', label: 'Made in' }
+    ];
+    window._docLabelFieldsOpen = window._docLabelFieldsOpen || {};   // "<formId>|<idx>" -> true(펼침, 저장 안 함 — 화면 상태일 뿐)
+    window._docLabelFieldsToggle = function (key) {
+        window._docLabelFieldsOpen[key] = !window._docLabelFieldsOpen[key];
+        window._docRender();
+    };
+    window._docLabelFieldAddCustom = function (formId, idx) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        if (!it) return;
+        it.fieldsCustom = it.fieldsCustom || [];
+        it.fieldsCustom.push({ label: '', value: '' });
+        _markDirty(); window._docRender();
+    };
+    window._docLabelFieldDelCustom = function (formId, idx, ci) {
+        var it = (_docData(formId).labelItems || [])[idx];
+        var list = it && it.fieldsCustom;
+        if (!list || !list[ci]) return;
+        list.splice(ci, 1);
+        _markDirty(); window._docRender();
+    };
     window._docLabelArtLoad = async function () {
         if (window._docLabelArtLoading) return;
         window._docLabelArtLoading = true;
@@ -2773,6 +2806,16 @@
                     var uploadLink = '<a href="#" onclick="window._docLabelArtUploadPick(\'' + _esc(itCode)
                         + '\');return false;" class="doc-noprint" style="color:#7a5210; font-size:11px;">📤 '
                         + _esc(_t('직접 올리기', 'Upload file')) + '</a>';
+                    // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로" — 고정
+                    //    항목(Part No 등)을 펼쳐서 입력하는 토글. `fkey` 는 펼침 상태만의 열쇠라(저장 안 함)
+                    //    이름·순서가 바뀌어도 무방 — 값은 `it.fields`/`it.fieldsCustom` 에 저장된다.
+                    var fkey = form.id + '|' + i;
+                    var fieldsOpen = !!window._docLabelFieldsOpen[fkey];
+                    var fieldsFilled = Object.keys(it.fields || {}).some(function (k) { return it.fields[k]; })
+                        || (it.fieldsCustom || []).some(function (c) { return c.label || c.value; });
+                    var fieldsLink = '<a href="#" onclick="window._docLabelFieldsToggle(\'' + _esc(fkey)
+                        + '\');return false;" class="doc-noprint" style="color:#7a5210; font-size:11px;">📋 '
+                        + _esc(_t('기재내용', 'Fill-in content')) + (fieldsOpen ? ' ▲' : (fieldsFilled ? ' ●' : ' ▼')) + '</a>';
                     if (window._docLabelArtIndex === null) {
                         artCell = '<div style="color:#adb5bd; font-size:10.5px;">' + _esc(_t('불러오는 중…', 'loading…')) + '</div>';
                     } else if (artFile) {
@@ -2807,12 +2850,12 @@
                                 + (thumbSz ? ' · <a href="#" onclick="window._docLabelThumbSizeReset(\'' + _esc(itCode)
                                   + '\');return false;" class="doc-noprint" style="color:#495057; font-size:11px;">↺ '
                                   + _esc(_t('기본 크기', 'Reset size')) + '</a>' : '')
-                                + ' · ' + uploadLink + '</div>';
+                                + ' · ' + uploadLink + ' · ' + fieldsLink + '</div>';
                     } else {
                         artCell = '<div style="width:400px; height:300px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
                             + ' color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>'
-                            + '<div style="margin-top:3px;">' + uploadLink + '</div>';
+                            + '<div style="margin-top:3px;">' + uploadLink + ' · ' + fieldsLink + '</div>';
                     }
                     // 🔎 [2026-11-12 10차, 사용자 요청] "도안 찾기" 글자는 지우고 아이콘만 남긴다 —
                     //    같은 아이콘을 **규격 칸**에도 달아, 코드를 몰라도 규격(예: "75 X 70")만으로
@@ -2843,6 +2886,34 @@
                        + '<td class="doc-noprint"><a href="#" onclick="window._docLabelItemDel(\'' + _esc(form.id) + '\',' + i
                        + ');return false;" title="' + _esc(_t('이 라벨 빼기', 'remove')) + '" style="color:#b1432f;">✕</a></td>'
                        + '</tr>';
+                    // 📋 [2026-11-13, 사용자 요청] 기재내용 표 — "found" 줄과 같은 colspan=6 펼침 줄.
+                    //    ⚠️ 이 값들은 공용 도안과 달리 **이 라벨 한 장만의 값**이라 `it.fields`(이 labelItem)
+                    //    에만 저장한다 — 같은 코드를 쓰는 다른 프로젝트·다른 줄과 섞이면 안 된다.
+                    if (fieldsOpen) {
+                        var fx = it.fields || {};
+                        var fc = it.fieldsCustom || [];
+                        h += '<tr><td colspan="6" class="doc-noprint" style="background:#f8fbfb; padding:8px 10px;">'
+                           + '<table style="width:auto; border:none; border-collapse:collapse;">'
+                           + LABEL_FIELD_CATALOG.map(function (f) {
+                               return '<tr><td style="border:none; padding:2px 8px 2px 0; font-size:11.5px; white-space:nowrap; font-weight:bold;">'
+                                   + _esc(f.label) + '</td><td style="border:none; padding:2px 0;">'
+                                   + '<input type="text" class="doc-in" data-doc-lfield="' + i + '|' + f.key + '" value="' + _esc(fx[f.key] || '')
+                                   + '" style="font-size:11.5px; width:280px;"></td></tr>';
+                           }).join('')
+                           + fc.map(function (c, ci) {
+                               return '<tr><td style="border:none; padding:2px 8px 2px 0;">'
+                                   + '<input type="text" class="doc-in" data-doc-lfieldcl="' + i + '|' + ci + '" value="' + _esc(c.label || '')
+                                   + '" placeholder="' + _esc(_t('항목명', 'Field name')) + '" style="font-size:11.5px; width:120px; font-weight:bold;"></td>'
+                                   + '<td style="border:none; padding:2px 0;">'
+                                   + '<input type="text" class="doc-in" data-doc-lfieldc="' + i + '|' + ci + '" value="' + _esc(c.value || '')
+                                   + '" style="font-size:11.5px; width:260px; display:inline-block;">'
+                                   + ' <a href="#" onclick="window._docLabelFieldDelCustom(\'' + _esc(form.id) + '\',' + i + ',' + ci
+                                   + ');return false;" style="color:#b1432f;">✕</a></td></tr>';
+                           }).join('')
+                           + '</table><a href="#" onclick="window._docLabelFieldAddCustom(\'' + _esc(form.id) + '\',' + i + ');return false;"'
+                           + ' style="color:#1971c2; font-size:11px; font-weight:bold;">＋ ' + _esc(_t('항목 추가', 'Add field')) + '</a>'
+                           + '</td></tr>';
+                    }
                     if (found) {
                         h += '<tr><td colspan="6" class="doc-noprint" style="font-size:11px; color:#495057;'
                            + ' background:#f8fbfb; padding:3px 8px;">' + found + '</td></tr>';
@@ -3206,6 +3277,29 @@
                 var lcp = lck.split('|'), lc3 = _docData(form.id).labelCerts || {};
                 var llist3 = lcp[0] === 'c' ? lc3.certs : lc3.ratings, lrow3 = llist3 && llist3[Number(lcp[1])];
                 if (lrow3) { lrow3[lcp[2]] = el.value; _markDirty(); }
+                return;
+            }
+            // 📋 라벨 기재내용 고정 항목 — `<행번호>|<key>` (Part No·Q'ty 등, `it.fields` 에 저장)
+            var lfk = el.getAttribute('data-doc-lfield');
+            if (lfk) {
+                var lfp = lfk.split('|'), lfRow = (_docData(form.id).labelItems || [])[Number(lfp[0])];
+                if (lfRow) { lfRow.fields = lfRow.fields || {}; lfRow.fields[lfp[1]] = el.value; _markDirty(); }
+                return;
+            }
+            // 📋 라벨 기재내용 자유 추가 항목 값 — `<행번호>|<항목번호>`
+            var lfck = el.getAttribute('data-doc-lfieldc');
+            if (lfck) {
+                var lfcp = lfck.split('|'), lfcList = ((_docData(form.id).labelItems || [])[Number(lfcp[0])] || {}).fieldsCustom;
+                var lfcItem = lfcList && lfcList[Number(lfcp[1])];
+                if (lfcItem) { lfcItem.value = el.value; _markDirty(); }
+                return;
+            }
+            // 📋 라벨 기재내용 자유 추가 항목 이름 — `<행번호>|<항목번호>`
+            var lfclk = el.getAttribute('data-doc-lfieldcl');
+            if (lfclk) {
+                var lfclp = lfclk.split('|'), lfclList = ((_docData(form.id).labelItems || [])[Number(lfclp[0])] || {}).fieldsCustom;
+                var lfclItem = lfclList && lfclList[Number(lfclp[1])];
+                if (lfclItem) { lfclItem.label = el.value; _markDirty(); }
                 return;
             }
         };
@@ -3765,13 +3859,20 @@
                     rows.push([i + 1, r.label].concat(xports.map(function (p) { return r.ports[p.key] ? 'O' : ''; })));
                 });
             } else if (s.kind === 'labelitems') {
-                rows.push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note'),
-                           _t('도안 표시사항', 'Artwork notes')]);
+                // 📋 [2026-11-13, 사용자 요청] 기재내용(Part No 등) 고정 항목도 같이 — 화면에 추가한 칸은
+                //    `LABEL_FIELD_CATALOG` 한 곳에만 적으면 여기도 같이 늘어난다(서식=화면=엑셀 원칙).
+                rows.push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note')]
+                    .concat(LABEL_FIELD_CATALOG.map(function (f) { return f.label; }))
+                    .concat([_t('추가 항목', 'Extra fields'), _t('도안 표시사항', 'Artwork notes')]));
                 (d.labelItems || []).forEach(function (it) {
                     // 📍 도안 위 표시(화면의 번호 목록)도 같이 — 불러온 적 없으면 빈칸(강제로 불러오진 않는다)
                     var notes = (window._docLabelNotesCache && window._docLabelNotesCache[String(it.code || '').trim()]) || [];
-                    rows.push([it.size || '', it.code || '', it.position || '', it.note || '',
-                               notes.map(function (n, ni) { return (ni + 1) + '. ' + n.text; }).join(' / ')]);
+                    var fx = it.fields || {};
+                    var extra = (it.fieldsCustom || []).filter(function (c) { return c.label || c.value; })
+                        .map(function (c) { return (c.label || '') + ': ' + (c.value || ''); }).join(' / ');
+                    rows.push([it.size || '', it.code || '', it.position || '', it.note || '']
+                        .concat(LABEL_FIELD_CATALOG.map(function (f) { return fx[f.key] || ''; }))
+                        .concat([extra, notes.map(function (n, ni) { return (ni + 1) + '. ' + n.text; }).join(' / ')]));
                 });
             } else if (s.kind === 'labelcerts') {
                 var lc = d.labelCerts || {};
