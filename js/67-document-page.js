@@ -941,6 +941,7 @@
             var res = await window._dgUploadBlob(_LABEL_ART_FOLDER, fname, blob, { forceOverwrite: true });
             if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
             window._docLabelArtIndex[code] = fname;
+            _docLabelBumpVer(code);
             var notes = window._docLabelNotesCache[code] || [];
             var rotated = notes.map(function (n) {
                 return dir > 0
@@ -1020,8 +1021,7 @@
                : ' max-width:min(700px,85vw); max-height:60vh;');
         var h = '<div style="position:relative; display:inline-block;">'
             + '<img id="doclabelart-img" data-crop-img="' + _esc(code) + '" draggable="false" ondragstart="return false;"'
-                + ' src="' + _esc(BACKEND + '/doc/get?folder='
-                + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile))
+                + ' src="' + _esc(_docLabelArtSrc(code, artFile))
                 + '" style="' + imgStyle + '" onclick="window._docLabelImgClick(event,\'' + _esc(code) + '\')">'
             + notes.map(function (n, ni) {
                 return '<span title="' + _esc(n.text) + '" style="position:absolute;'
@@ -1057,7 +1057,12 @@
                  + ' · <a href="#" onclick="window._docLabelRotate(\'' + _esc(code) + '\',1);return false;" style="color:#7a5210;">⟳ '
                  + _esc(_t('오른쪽으로 회전', 'Rotate right')) + '</a>'
                  + (size ? ' · <a href="#" onclick="window._docLabelSizeReset(\'' + _esc(code) + '\');return false;" style="color:#495057;">↺ '
-                   + _esc(_t('크기 기본값', 'Reset size')) + '</a>' : ''))
+                   + _esc(_t('크기 기본값', 'Reset size')) + '</a>' : '')
+                 // 📐 [2026-11-13, 사용자 요청] 손잡이로 끌 때 비율을 지킬지 — 전역 체크 하나(표 썸네일과 공유)
+                 + ' · <label style="cursor:pointer; font-weight:normal; color:#495057;"><input type="checkbox" '
+                   + (window._docLabelAspectLock ? 'checked' : '')
+                   + ' onchange="window._docLabelAspectLock=this.checked;" style="vertical-align:middle; margin-right:3px;">'
+                   + _esc(_t('비율 고정', 'Lock ratio')) + '</label>')
             + '</div>'
             + (notes.length ? '<div style="text-align:left; font-size:11.5px; color:#495057; margin-top:8px;'
                 + ' border-top:1px solid #e9ecef; padding-top:6px;">'
@@ -1319,6 +1324,7 @@
         if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
         window._docLabelArtIndex = window._docLabelArtIndex || {};
         window._docLabelArtIndex[code] = fname;
+        _docLabelBumpVer(code);
         delete window._docLabelFindResult[formId + '|' + idx];
         Object.keys(window._docLabelImgState).forEach(function (k) {
             if (k.indexOf(formId + '|' + idx + '|') === 0) delete window._docLabelImgState[k];
@@ -1363,6 +1369,7 @@
             if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
             window._docLabelArtIndex = window._docLabelArtIndex || {};
             window._docLabelArtIndex[code] = fname;
+            _docLabelBumpVer(code);
             delete window._docLabelFindResult[formId + '|' + idx];
             Object.keys(window._docLabelImgState).forEach(function (k) {
                 if (k.indexOf(formId + '|' + idx + '|') === 0) delete window._docLabelImgState[k];
@@ -2596,20 +2603,33 @@
                         //    문서(스크린샷)는 도안 칸이 **작고** 규격/코드/부착위치가 좁은 글자 칸으로
                         //    옆에 나란하다 — 5배로 키운 이미지를 이 표 안에 직접 넣었더니 그 열 폭이
                         //    통째로 깨졌다(사용자 신고: "이미지는 커졌는데 도표는 조정되지 않음").
-                        //    표시·자르기·크기조절은 전부 **별도 모달**(`_docLabelArtModalOpen`)로
-                        //    옮기고, 여기는 실제 문서처럼 **항상 작은 썸네일**만 둔다.
+                        //    표시·자르기·크기조절(모달 전용)은 그대로 **별도 모달**(`_docLabelArtModalOpen`)
+                        //    에서만 하되, ⚠️ [2026-11-13, 사용자 요청] 표 썸네일 자체의 **보이는 크기**는
+                        //    여기서도 끌어서 조절할 수 있다(`thumbSize`, 모달 `size` 와는 별도 칸) — 가로는
+                        //    430px 로 묶어 열 폭(450px)을 못 넘게 한다(11차 사고 재발 방지).
                         if (window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
                         var notes = window._docLabelNotesCache[itCode] || [];
-                        artCell = '<img src="' + _esc(BACKEND + '/doc/get?folder='
-                                + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(artFile))
-                                + '" style="max-width:510px; max-height:450px; border:1px solid #dee2e6;'
-                                + ' border-radius:3px; display:block; margin:0 auto; cursor:pointer;"'
+                        var thumbSz = window._docLabelThumbSizeCache && window._docLabelThumbSizeCache[itCode];
+                        var thumbImgStyle = 'border:1px solid #dee2e6; border-radius:3px; display:block; margin:0 auto; cursor:pointer;'
+                            + ((thumbSz && thumbSz.w && thumbSz.h)
+                               ? (' width:' + thumbSz.w + 'px; height:' + thumbSz.h + 'px; max-width:none; max-height:none;')
+                               : ' max-width:430px; max-height:400px;');
+                        artCell = '<div style="position:relative; display:inline-block;">'
+                                + '<img data-thumb-img="' + _esc(itCode) + '" src="' + _esc(_docLabelArtSrc(itCode, artFile))
+                                + '" style="' + thumbImgStyle + '"'
                                 + ' onclick="window._docLabelArtModalOpen(\'' + _esc(form.id) + '\',' + i + ');return false;">'
+                                + '<div data-thumb-resize="' + _esc(itCode) + '" title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
+                                + ' class="doc-noprint" style="position:absolute; right:2px; bottom:2px; width:13px; height:13px;'
+                                + ' border-radius:3px; background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2;'
+                                + ' cursor:nwse-resize; z-index:2;"></div></div>'
                                 + '<div style="margin-top:3px;"><a href="#" onclick="window._docLabelArtModalOpen(\''
                                 + _esc(form.id) + '\',' + i + ');return false;" style="color:#1971c2; font-weight:bold; font-size:11px;">🔍 '
-                                + _esc(_t('크게 보기', 'View / edit')) + (notes.length ? ' (' + notes.length + ')' : '') + '</a></div>';
+                                + _esc(_t('크게 보기', 'View / edit')) + (notes.length ? ' (' + notes.length + ')' : '') + '</a>'
+                                + (thumbSz ? ' · <a href="#" onclick="window._docLabelThumbSizeReset(\'' + _esc(itCode)
+                                  + '\');return false;" class="doc-noprint" style="color:#495057; font-size:11px;">↺ '
+                                  + _esc(_t('기본 크기', 'Reset size')) + '</a>' : '') + '</div>';
                     } else {
-                        artCell = '<div style="width:420px; height:330px; margin:0 auto; display:flex; align-items:center;'
+                        artCell = '<div style="width:400px; height:300px; margin:0 auto; display:flex; align-items:center;'
                             + ' justify-content:center; background:#f8fbfb; border:1px dashed #cfe3e5; border-radius:4px;'
                             + ' color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>';
                     }
@@ -2642,10 +2662,17 @@
                            + ' background:#f8fbfb; padding:3px 8px;">' + found + '</td></tr>';
                     }
                 });
-                h += '</table><div class="doc-noprint" style="margin-top:6px;">'
+                h += '</table><div class="doc-noprint" style="margin-top:6px; display:flex; align-items:center; gap:14px;">'
                    + '<a href="#" onclick="window._docLabelItemAdd(\'' + _esc(form.id) + '\');return false;"'
                    + ' style="color:#1971c2; font-size:11.5px; font-weight:bold;">＋ ' + _esc(_t('라벨 추가', 'Add label'))
-                   + '</a></div><table style="display:none;">';
+                   + '</a>'
+                   // 📐 [2026-11-13, 사용자 요청] 썸네일을 끌어서 늘일 때 비율을 지킬지 — 모달의 체크와
+                   //    같은 전역 값을 공유한다(둘 다 같은 `_docLabelAspectLock` 을 본다).
+                   + '<label style="font-size:11px; color:#495057; cursor:pointer; font-weight:normal;">'
+                   + '<input type="checkbox" ' + (window._docLabelAspectLock ? 'checked' : '')
+                   + ' onchange="window._docLabelAspectLock=this.checked;" style="vertical-align:middle; margin-right:3px;">'
+                   + _esc(_t('도안 크기조절 비율 고정', 'Lock aspect ratio when resizing artwork')) + '</label>'
+                   + '</div><table style="display:none;">';
             } else if (s.kind === 'labelcerts') {
                 // 🏷 [2026-11-12] 인증(CE/FCC/UL…)·정격표시(Set/LED Rating SPEC…) — 실측 3개 파일
                 //    전부 **'제품' 라벨 하나에만** 딸려 있었다. 묶는 열쇠를 따로 두지 않고 라벨
@@ -3035,6 +3062,12 @@
                 ev.preventDefault(); ev.stopPropagation(); zone.style.background = '';
                 window._docAttachAdd(form.id, zone.getAttribute('data-doc-att'), ev.dataTransfer.files);
             });
+        });
+        // 🏷 라벨 사양서 — 표 썸네일 크기조절 손잡이(렌더마다 다시 그려지므로 매번 새로 건다)
+        [].slice.call(body.querySelectorAll('[data-thumb-resize]')).forEach(function (handle) {
+            var tcode = handle.getAttribute('data-thumb-resize');
+            var timg = handle.parentElement && handle.parentElement.querySelector('[data-thumb-img]');
+            if (timg) window._docLabelThumbSizeWire(handle, timg, tcode);
         });
     };
 
