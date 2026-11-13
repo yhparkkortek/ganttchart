@@ -800,11 +800,43 @@
             document.addEventListener('mouseup', onUp);
         };
     };
+    // 📏 [2026-11-13, 사용자 요청 "TXT 박스 가로 길이를 자유롭게 조절"] 글자상자 오른쪽 손잡이를 끌면
+    //    너비가 바뀐다. **em 단위로 저장**(`n.wem`) — px 로 저장하면 글자 크기(배율)를 나중에 바꿀 때
+    //    상자 비율이 틀어진다. `ev.stopPropagation()` 필수 — 안 하면 마커 끌기(위치 이동)가 같이 걸린다.
+    window._docLabelNoteWidthWire = function (handle, widthBox, code, idx) {
+        var startX, startW, fontPx, moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var w = Math.max(fontPx * 3, startW + (ev.clientX - startX));
+            widthBox.style.width = w + 'px'; widthBox.style.maxWidth = 'none';
+            var list = window._docLabelNotesCache[code] || [];
+            if (list[idx]) list[idx].wem = Math.round((w / fontPx) * 100) / 100;
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) window._docLabelNotesSave(code);
+        };
+        handle.onmousedown = function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            startX = ev.clientX;
+            var r = widthBox.getBoundingClientRect();
+            startW = r.width;
+            fontPx = parseFloat(getComputedStyle(widthBox).fontSize) || 16;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
     // 🔤 [2026-11-13, 사용자 요청] 마커(원 번호 + **실제 표시내용**) HTML — 모달·표 썸네일이 같은
     //    모양을 쓰도록 한 곳에 모은다(두 벌로 두면 한쪽만 고쳐진다). ⚠️ 글자상자엔 **테두리를 안 둔다**
     //    (사용자 요청 — 배경·그림자만으로 구분). `draggable` 이면 끌 수 있게 pointer-events 를 연다.
+    // 📏 [2026-11-13, 사용자 요청 "TXT 박스 가로 길이를 자유롭게 조절"] 글자상자 너비는 고정 14em 이
+    //    기본값이고, 오른쪽 손잡이로 끌면 `n.wem`(글자크기 em 단위 — px 로 저장하면 글자 크기를
+    //    바꿀 때마다 상자 크기가 어긋난다)에 저장돼 다음부터 그 너비로 열린다.
     var _docLabelNoteMarkersHtml = function (notes, draggable) {
         return (notes || []).map(function (n, ni) {
+            var wStyle = (n.wem ? (' width:' + n.wem + 'em; max-width:none;') : ' max-width:14em;');
             return '<span data-note-wrap data-note-idx="' + ni + '" title="' + _esc(n.text) + '" style="position:absolute;'
                 + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
                 + ' display:flex; align-items:center; gap:0.3em; z-index:1;'
@@ -812,10 +844,16 @@
                 + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
                 + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
-                + '<span style="background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
+                + '<span data-note-widthbox style="position:relative; display:inline-block;' + wStyle + '">'
+                + '<span style="display:block; background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
                 + ' padding:0.15em 0.45em; border-radius:0.3em; box-shadow:0 1px 3px rgba(0,0,0,.18);'
-                + ' max-width:14em; white-space:normal; word-break:keep-all; line-height:1.25;">'
-                + _esc(n.text) + '</span></span>';
+                + ' white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
+                + _esc(n.text) + '</span>'
+                + (draggable ? '<span data-note-wresize title="' + _esc(_t('끌어서 너비 조절', 'drag to resize width')) + '"'
+                  + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
+                  + ' display:flex; align-items:center; justify-content:center; z-index:2; pointer-events:auto;">'
+                  + '<span style="width:2px; height:60%; background:#e03131; border-radius:1px;"></span></span>' : '')
+                + '</span></span>';
         }).join('');
     };
     // 🔤 [2026-11-13, 사용자 요청] 표시 글자 크기 — 사람이 조절(＋／－) + 이미지 크기와 연동.
@@ -1238,20 +1276,24 @@
             //    좋겠음" — 번호 목록을 **입력칸으로** 바꿔 클릭 위치 없이 타이핑만으로 고칠 수 있게 하고,
             //    맨 아래에 "입력 후 추가" 줄을 둬서 도안을 클릭하지 않고도 표처럼 줄줄이 적을 수 있다
             //    (기본 위치에 쌓인다 — 정확한 자리는 이제 **끌어서**(위 드래그) 옮기면 된다).
+            // ⚠️ [2026-11-13, 사용자 요청] 표시 입력칸도 비고·기재내용과 같이 textarea — 한 줄 `<input>`
+            //    은 Enter 로 줄을 못 나눈다. 새로 추가하는 칸은 Enter 가 줄바꿈으로 바뀌었으니 **추가는
+            //    Ctrl+Enter 로**(또는 ＋ 추가 버튼).
             + (notes.length ? '<div style="text-align:left; font-size:11.5px; color:#495057; margin-top:8px;'
                 + ' border-top:1px solid #e9ecef; padding-top:6px;">'
                 + notes.map(function (n, ni) {
-                    return '<div style="display:flex; align-items:center; gap:4px; margin-top:2px;">' + (ni + 1) + '.'
-                        + ' <input type="text" value="' + _esc(n.text) + '"'
-                        + ' onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
-                        + ' style="flex:1; font-size:11.5px; padding:2px 5px;">'
+                    return '<div style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">' + (ni + 1) + '.'
+                        + ' <textarea rows="1" onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
+                        + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
+                        + _esc(n.text) + '</textarea>'
                         + ' <a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni
                         + ');return false;" style="color:#b1432f;">✕</a></div>';
                 }).join('') + '</div>' : '')
-            + (idle ? '<div style="margin-top:8px; display:flex; gap:6px; align-items:center;">'
-                + '<input id="doclabelart-newnote" type="text" placeholder="' + _esc(_t('새 표시 내용을 입력하고 추가 — 자리는 나중에 끌어서 옮기세요',
-                  'Type a new note, then drag it into place.')) + '" onkeydown="if(event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
-                + '\');return false;}" style="flex:1; font-size:11.5px; padding:4px 6px;">'
+            + (idle ? '<div style="margin-top:8px; display:flex; gap:6px; align-items:flex-start;">'
+                + '<textarea id="doclabelart-newnote" rows="2" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
+                  'Type a new note (Ctrl+Enter to add) — drag it into place after.')) + '"'
+                + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
+                + '\');return false;}" style="flex:1; font-size:11.5px; padding:4px 6px; text-align:left; resize:vertical; font-family:inherit;"></textarea>'
                 + '<button onclick="window._docLabelNoteQuickAdd(\'' + _esc(code) + '\')" style="padding:4px 10px; font-size:11.5px;'
                 + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">＋ '
                 + _esc(_t('추가', 'Add')) + '</button></div>' : '');
@@ -1272,10 +1314,14 @@
             // 이미지가 아직 안 불러와졌으면(첫 진입) 로드 후 실제 폭으로 다시 맞춘다
             if (!img.complete) img.addEventListener('load', function () { window._docLabelNotesApplyFont(bodyEl, img, code); }, { once: true });
         }
-        // 🖱 [2026-11-13] 마커 끌기는 `idle` 일 때만(표시추가·자르기 중엔 끌지 않는다)
+        // 🖱 [2026-11-13] 마커 끌기·너비 조절은 `idle` 일 때만(표시추가·자르기 중엔 건드리지 않는다)
         if (img && idle) {
             [].slice.call(bodyEl.querySelectorAll('[data-note-wrap]')).forEach(function (wrap) {
-                window._docLabelNoteDragWire(wrap, img, code, Number(wrap.getAttribute('data-note-idx')));
+                var idx = Number(wrap.getAttribute('data-note-idx'));
+                window._docLabelNoteDragWire(wrap, img, code, idx);
+                var widthBox = wrap.querySelector('[data-note-widthbox]');
+                var wHandle = wrap.querySelector('[data-note-wresize]');
+                if (widthBox && wHandle) window._docLabelNoteWidthWire(wHandle, widthBox, code, idx);
             });
         }
     };
@@ -2876,8 +2922,11 @@
                        + ' onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button></td>'
                        + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|position" value="'
                        + _esc(it.position || '') + '" placeholder="예: 제품 / C.T BOX" style="font-size:11.5px;"></td>'
-                       + '<td><input type="text" class="doc-in" data-doc-litem="' + i + '|note" value="' + _esc(it.note || '')
-                       + '" style="font-size:11.5px;">'
+                       // ⚠️ [2026-11-13, 사용자 요청] 비고도 기재내용과 같은 이유로 textarea — 한 줄
+                       //    `<input>` 은 Enter 로 줄을 못 나눈다.
+                       + '<td><textarea class="doc-in" data-doc-litem="' + i + '|note" rows="2"'
+                       + ' style="font-size:11.5px; width:100%; text-align:left; resize:vertical; font-family:inherit;">'
+                       + _esc(it.note || '') + '</textarea>'
                        // 📋 [2026-11-13, 사용자 요청] 도안 위 표시 내용을 "1. 2. 3." 으로 정리해 비고 열에도 보여준다
                        //    (모달을 열지 않아도 무슨 표시가 있는지 바로 읽힌다) — 읽기 전용, 고치려면 🔍 크게 보기.
                        + (notes.length ? '<div class="doc-noprint" style="margin-top:4px; font-size:10.5px; color:#495057; text-align:left;">'
