@@ -1120,6 +1120,14 @@
         await window._docLabelNotesSave(code);
         _docLabelRefresh();
     };
+    // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] 타이핑하는 **즉시**
+    //    도안 위 글자상자(모달·표 썸네일 둘 다)만 가볍게 고쳐 쓴다 — `_docLabelRefresh()` 는
+    //    안 부른다(그러면 이 textarea 자체가 매번 다시 만들어져 포커스·커서가 날아간다).
+    //    실제 저장·전체 다시 그리기는 그대로 `onchange`(블러 시)가 맡는다.
+    window._docLabelNoteLivePatch = function (code, i, val) {
+        var sel = '[data-note-text][data-note-code="' + CSS.escape(code) + '"][data-note-idx2="' + i + '"]';
+        [].slice.call(document.querySelectorAll(sel)).forEach(function (el) { el.textContent = val; });
+    };
     // ↔ [2026-11-13, 사용자 요청] "정렬 기능 추가해줘(왼쪽·가운데·오른쪽)"
     window._docLabelNoteAlignSet = async function (code, i, align) {
         var list = window._docLabelNotesCache[code] || [];
@@ -1201,7 +1209,7 @@
     // 📏 [2026-11-13, 사용자 요청 "TXT 박스 가로 길이를 자유롭게 조절"] 글자상자 너비는 고정 14em 이
     //    기본값이고, 오른쪽 손잡이로 끌면 `n.wem`(글자크기 em 단위 — px 로 저장하면 글자 크기를
     //    바꿀 때마다 상자 크기가 어긋난다)에 저장돼 다음부터 그 너비로 열린다.
-    var _docLabelNoteMarkersHtml = function (notes, draggable) {
+    var _docLabelNoteMarkersHtml = function (notes, draggable, code) {
         return (notes || []).map(function (n, ni) {
             var wStyle = (n.wem ? (' width:' + n.wem + 'em; max-width:none;') : ' max-width:14em;');
             // ⚠️ [2026-11-13, 사용자 요청] 번호 원을 글자상자 **오른쪽**으로 — flex 자식 순서만
@@ -1219,7 +1227,12 @@
                 //    가운데 정렬(`text-align:center`)이라 글자상자가 그 값을 그대로 물려받았다 —
                 //    `text-align` 을 **명시**해야 한다(기본 왼쪽, `n.align` 으로 가운데·오른쪽도 가능).
                 // 🧹 [2026-11-13, 사용자 요청] "글 상자 테두리 음영도 삭제해줘" — 그림자 없앰.
-                + '<span style="display:block; background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
+                // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] 이 칸에
+                //    `data-note-text` 를 달아 둔다 — 목록 textarea 의 `oninput` 이 전체를 다시
+                //    그리지 않고(그러면 타이핑 중 포커스가 날아간다) 이 칸 **글자만** 바로 고쳐
+                //    쓴다(모달·표 썸네일 둘 다, 같은 code·idx 를 가진 칸이면 전부).
+                + '<span data-note-text data-note-code="' + _esc(code) + '" data-note-idx2="' + ni
+                + '" style="display:block; background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
                 + ' padding:0.15em 0.45em; border-radius:0.3em; text-align:'
                 + (n.align || 'left') + ';'
                 + ' white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
@@ -1230,8 +1243,9 @@
                   + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize;'
                   + ' z-index:2; pointer-events:auto;"></span>' : '')
                 + '</span>'
-                + '<span style="width:1.8em; height:1.8em; min-width:1.8em; border-radius:50%; background:#e03131;'
-                + ' color:#fff; font-weight:bold; display:flex; align-items:center; justify-content:center;'
+                // 🔢 [2026-11-13, 사용자 요청] "동그라미 번호 크기를 줄여줘"
+                + '<span style="width:1.1em; height:1.1em; min-width:1.1em; border-radius:50%; background:#e03131;'
+                + ' color:#fff; font-weight:bold; font-size:0.65em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
         }).join('');
@@ -1675,7 +1689,7 @@
                 + '" style="' + imgStyle + '" onclick="window._docLabelImgClick(event,\'' + _esc(code) + '\')">'
             // 🔤 [2026-11-13, 사용자 요청] 번호 원 + **실제 표시내용**을 도안 위에 같이 보여준다
             //    (전엔 원만 찍고 내용은 아래 목록·말풍선뿐이었다). `idle` 일 때만 끌 수 있게.
-            + _docLabelNoteMarkersHtml(notes, idle)
+            + _docLabelNoteMarkersHtml(notes, idle, code)
             // 🏷 [2026-11-13, 사용자 요청] 인증마크(UL·CE·CB·FCC) 도장 — 같은 틀로 끌어서 배치
             + _docLabelMarkMarkersHtml(marks, idle, code)
             // ⬜ [2026-11-13, 사용자 요청] "도안 위에 도표를 그려 넣고 싶은데" — 빈 박스(표 칸 구분선 용도)
@@ -1759,7 +1773,12 @@
                     //    2자리든 입력칸이 늘 같은 자리에서 시작하도록 번호에 고정폭(오른쪽 정렬)을 준다.
                     return '<div style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
                         + '<span style="flex:0 0 1.6em; text-align:right; padding-top:2px;">' + (ni + 1) + '.</span>'
-                        + '<textarea rows="2" onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
+                        // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] `oninput`
+                        //    으로 타이핑하는 즉시 도안 위 글자상자만 가볍게 고쳐쓴다(전체 다시 그리기는
+                        //    `onchange`(블러 시) 그대로 — 안 그러면 타이핑 중 이 textarea 자체가
+                        //    매번 새로 만들어져 포커스·커서 위치가 날아간다).
+                        + '<textarea rows="2" oninput="window._docLabelNoteLivePatch(\'' + _esc(code) + '\',' + ni + ',this.value)"'
+                        + ' onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
                         + _esc(n.text) + '</textarea>'
                         + '<span style="white-space:nowrap;">' + alignBtns + '</span>'
@@ -3461,7 +3480,7 @@
                                 + '<img data-thumb-img="' + _esc(itCode) + '" src="' + _esc(_docLabelArtSrc(itCode, artFile))
                                 + '" style="' + thumbImgStyle + '"'
                                 + ' onclick="window._docLabelArtModalOpen(\'' + _esc(form.id) + '\',' + i + ');return false;">'
-                                + _docLabelNoteMarkersHtml(notes, false)
+                                + _docLabelNoteMarkersHtml(notes, false, itCode)
                                 + _docLabelMarkMarkersHtml(marks, false, itCode)
                                 + _docLabelBoxMarkersHtml(boxes, false, itCode)
                                 + '<div data-thumb-resize="' + _esc(itCode) + '" title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
@@ -3518,9 +3537,17 @@
                        + _esc(it.position || '') + '" placeholder="예: 제품 / C.T BOX" style="font-size:11.5px;"></td>'
                        // 📋 [2026-11-13, 사용자 요청] "비고 사용자 작성란은 아래로 이동" — 도안 위 표시
                        //    내용(읽기 전용 "1. 2. 3." 요약)을 **먼저**, 사람이 직접 쓰는 textarea 는 **그 아래**.
+                       // 📐 [2026-11-13, 사용자 요청 "아래와 같이 정렬되게 해줘"] 한 항목의 글이
+                       //    여러 줄(`\n`)이면 이어지는 줄이 "1. " 글자 뒤(= 실제 내용 시작 위치)에
+                       //    맞춰 들여써지게 — 전형적인 매달린 들여쓰기(hanging indent) 기법:
+                       //    `padding-left` 로 모든 줄을 밀어 두고 `text-indent` 음수로 **첫 줄만**
+                       //    도로 왼쪽 끝까지 당긴다(번호는 첫 줄에만 있으니).
                        + '<td>' + (notes.length ? '<div class="doc-noprint" style="font-size:10.5px; color:#495057; text-align:left;'
-                         + ' white-space:pre-line; margin-bottom:4px;">'
-                         + notes.map(function (n, ni) { return (ni + 1) + '. ' + _esc(n.text); }).join('<br>') + '</div>' : '')
+                         + ' margin-bottom:4px;">'
+                         + notes.map(function (n, ni) {
+                             return '<div style="padding-left:1.4em; text-indent:-1.4em; white-space:pre-line;">'
+                                 + (ni + 1) + '. ' + _esc(n.text) + '</div>';
+                           }).join('') + '</div>' : '')
                        // ⚠️ [2026-11-13, 사용자 요청] 비고도 기재내용과 같은 이유로 textarea — 한 줄
                        //    `<input>` 은 Enter 로 줄을 못 나눈다.
                        + '<textarea class="doc-in" data-doc-litem="' + i + '|note" rows="2"'
