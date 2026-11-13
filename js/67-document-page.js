@@ -2430,8 +2430,9 @@
             //    쪽엔 gap 이 하나뿐이라 4px 모자랐다. 스페이서 폭에 그 gap 하나를 더한다.
             // 📏 [2026-11-13 2차, 사용자 요청] "1줄 크기로 조정 / 왼쪽으로 5px 이동" — rows 1줄로
             //    줄이고, 스페이서를 5px 더 줄여 textarea 가 번호 줄보다 5px 왼쪽에서 시작하게 한다.
+            // 📏 [2026-11-13 3차, 사용자 요청] "왼쪽으로 10px 이동" — 추가로 10px 더 줄인다(누적 15px).
             + (idle ? '<div style="margin-top:8px; display:flex; gap:4px; align-items:flex-start;">'
-                + '<span style="flex:0 0 calc(1.1em + 1.6em + 4px - 5px);"></span>'
+                + '<span style="flex:0 0 calc(1.1em + 1.6em + 4px - 5px - 10px);"></span>'
                 + '<textarea id="doclabelart-newnote" rows="1" placeholder="' + _esc(_t('새 표시 내용을 입력 — 자리는 나중에 끌어서 옮기세요(추가는 Ctrl+Enter)',
                   'Type a new note (Ctrl+Enter to add) — drag it into place after.')) + '"'
                 + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
