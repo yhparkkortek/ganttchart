@@ -285,9 +285,19 @@
                     ]
                 },
                 { title: '# 라벨 목록', kind: 'labelitems' },
-                { title: '# 인증 · 정격 표시 (제품 라벨)', kind: 'labelcerts' }
+                // 🗺️ [2026-11-13, 사용자 요청] "인증·정격 표시 항목은 삭제하고 도면 추가해서 부착
+                //    위치 표현하는 기능을 추가" — 위 라벨 목록에서 만든 라벨을 제품 도면(전면·
+                //    후면·측면) 위 어디에 붙이는지 표시한다.
+                { title: '# 부착 위치 (제품 도면)', kind: 'labelattach' }
             ]
         }
+    ];
+    // 🗺️ [2026-11-13, 사용자 요청] 도면은 면(보통 전면·후면·측면)마다 따로 — 작은 고정 목록이라
+    //    CERT_MARK_CATALOG 와 같은 성격의 데이터.
+    var DOC_LABEL_ATTACH_VIEWS = [
+        { key: 'front', label: '전면', labelEn: 'Front' },
+        { key: 'back', label: '후면', labelEn: 'Back' },
+        { key: 'side', label: '측면', labelEn: 'Side' }
     ];
 
     var _pad = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -3020,6 +3030,149 @@
         return BACKEND + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name);
     };
 
+    // ── 🗺️ [2026-11-13, 사용자 요청] 부착 위치 — 제품 도면(전면·후면·측면) 위에 위 라벨
+    //    목록의 각 라벨이 어디에 붙는지 표시한다. 도면은 첨부와 같은 방식으로 NAS 에
+    //    올리고(공용 아님 — 프로젝트 전용 `attach` 폴더), 표시는 라벨 도안의 "표시"와
+    //    같은 끌기 틀을 재사용한다.
+    window._docLabelAttachPlacing = window._docLabelAttachPlacing || null;   // {id, labelIdx} | null
+    var _docLabelAttachData = function (id) {
+        var d = _docData(id);
+        d.labelAttach = d.labelAttach || { view: 'front', views: {} };
+        if (!d.labelAttach.view) d.labelAttach.view = 'front';
+        d.labelAttach.views = d.labelAttach.views || {};
+        DOC_LABEL_ATTACH_VIEWS.forEach(function (v) {
+            d.labelAttach.views[v.key] = d.labelAttach.views[v.key] || { img: null, folder: null, marks: [] };
+        });
+        return d.labelAttach;
+    };
+    window._docLabelAttachViewSet = function (id, view) {
+        var la = _docLabelAttachData(id);
+        la.view = view;
+        window._docLabelAttachPlacing = null;
+        _markDirty(); window._docRender();
+    };
+    window._docLabelAttachPick = function (id) {
+        var inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*,.pdf,application/pdf';
+        inp.onchange = function () { if (inp.files && inp.files[0]) window._docLabelAttachUploadApply(id, inp.files[0]); };
+        inp.click();
+    };
+    // 📄 PDF 는 pdf.js 로 1페이지를 PNG 로 — `_docLabelPickPdfPage` 와 같은 변환, 다만 여기는
+    //    서버에서 받아오는 게 아니라 **사람이 고른 로컬 파일**이라 `file.arrayBuffer()` 로 직접 읽는다.
+    window._docLabelAttachUploadApply = async function (id, file) {
+        if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
+        var la = _docLabelAttachData(id);
+        var view = la.view;
+        var blob = file;
+        var ext = (String(file.name || '').split('.').pop() || 'png').toLowerCase();
+        var isPdf = ext === 'pdf' || file.type === 'application/pdf';
+        if (isPdf) {
+            if (!window.pdfjsLib) { _toast('⚠️ ' + _t('PDF 처리 기능을 불러오지 못했습니다.', 'PDF support failed to load.'), 'error'); return; }
+            _toast('⏳ ' + _t('PDF 페이지를 그리는 중…', 'Rendering the PDF page…'), 'info');
+            try {
+                var buf = await file.arrayBuffer();
+                var pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+                var page = await pdf.getPage(1);
+                var viewport = page.getViewport({ scale: 2 });
+                var canvas = document.createElement('canvas');
+                canvas.width = viewport.width; canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+                blob = await new Promise(function (resolve) { canvas.toBlob(resolve, 'image/png'); });
+                ext = 'png';
+            } catch (e) {
+                _toast('⚠️ ' + _t('PDF 변환에 실패했습니다: ', 'PDF conversion failed: ') + (e && e.message || e), 'error'); return;
+            }
+            if (!blob) { _toast('⚠️ ' + _t('변환에 실패했습니다.', 'Conversion failed.'), 'error'); return; }
+        }
+        if (!/^(png|jpg|jpeg|gif|webp|bmp)$/.test(ext)) ext = 'png';
+        var folder = _attFolder(_ctx());
+        var fname = _today() + '_' + _safe(id) + '_attach_' + view + '.' + ext;
+        _toast('⏳ ' + _t('올리는 중…', 'Uploading…'), 'info');
+        var res = await window._dgUploadBlob(folder, fname, blob, { forceOverwrite: true });
+        if (!res.ok) { _toast('⚠️ ' + _t('저장하지 못했습니다: ', 'Could not save: ') + (res.error || ''), 'error'); return; }
+        la.views[view].img = fname;
+        la.views[view].folder = folder;
+        la.views[view].marks = la.views[view].marks || [];
+        _markDirty(); window._docRender();
+    };
+    window._docLabelAttachReset = function (id) {
+        var la = _docLabelAttachData(id);
+        if (!confirm(_t('이 면의 도면·표시를 모두 지웁니다(NAS 원본 파일은 그대로 둡니다).', 'Clear this view\'s drawing and marks?'))) return;
+        la.views[la.view] = { img: null, folder: null, marks: [] };
+        _markDirty(); window._docRender();
+    };
+    window._docLabelAttachArm = function (id, labelIdx) {
+        window._docLabelAttachPlacing = { id: id, labelIdx: labelIdx };
+        window._docRender();
+    };
+    window._docLabelAttachDisarm = function () {
+        window._docLabelAttachPlacing = null;
+        window._docRender();
+    };
+    window._docLabelAttachImgClick = function (ev, id) {
+        var p = window._docLabelAttachPlacing;
+        if (!p || p.id !== id) return;   // 그냥 보는 중이면 클릭은 아무 일도 안 한다(라벨 도안과 같은 규칙)
+        var rect = ev.target.getBoundingClientRect();
+        var x = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+        var y = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
+        var la = _docLabelAttachData(id);
+        la.views[la.view].marks.push({ labelIdx: p.labelIdx, x: x, y: y });
+        window._docLabelAttachPlacing = null;
+        _markDirty(); window._docRender();
+    };
+    window._docLabelAttachMarkDel = function (id, idx) {
+        var la = _docLabelAttachData(id);
+        var list = la.views[la.view].marks || [];
+        if (!list[idx]) return;
+        if (!confirm(_t('이 표시를 지웁니다.', 'Delete this mark?'))) return;
+        list.splice(idx, 1);
+        _markDirty(); window._docRender();
+    };
+    // 🖱️ 끌기 — QR·바코드와 같은 "몸통 전체가 손잡이" 방식(✕ 위를 누른 건 그쪽이 먼저 처리).
+    window._docLabelAttachMarkDragWire = function (wrap, img, id, idx) {
+        var moved = false;
+        var onMove = function (ev) {
+            moved = true;
+            var r = img.getBoundingClientRect();
+            var x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+            var y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
+            wrap.style.left = (x * 100) + '%'; wrap.style.top = (y * 100) + '%';
+            var la = _docLabelAttachData(id);
+            var list = la.views[la.view].marks || [];
+            if (list[idx]) { list[idx].x = x; list[idx].y = y; }
+        };
+        var onUp = function () {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) _markDirty();
+        };
+        wrap.onmousedown = function (ev) {
+            if (ev.target && ev.target.closest && ev.target.closest('a')) return;
+            ev.preventDefault(); ev.stopPropagation();
+            moved = false;
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+    };
+    // 번호 원만(라벨 목록의 "N." 과 같은 번호) — 제목(title)에 그 라벨의 코드·규격·부착위치.
+    var _docLabelAttachMarkersHtml = function (marks, draggable, id, litems) {
+        return (marks || []).map(function (m, mi) {
+            var it = litems[m.labelIdx];
+            var title = it ? ((it.code || it.size || '-') + (it.position ? ' / ' + it.position : '')) : '-';
+            var wrapStyle = 'position:absolute; left:' + (m.x * 100) + '%; top:' + (m.y * 100) + '%; transform:translate(-50%,-50%);'
+                + ' width:26px; height:26px; min-width:26px; border-radius:50%; background:#e03131; color:#fff; font-weight:bold;'
+                + ' display:flex; align-items:center; justify-content:center; font-size:13px; box-shadow:0 0 0 2px #fff; z-index:1;'
+                + (draggable ? ' cursor:grab;' : '');
+            return '<span data-attach-mark-wrap data-attach-mark-idx="' + mi + '" title="' + _esc(title) + '" style="' + wrapStyle + '">'
+                + (m.labelIdx + 1)
+                + (draggable ? '<a href="#" onclick="window._docLabelAttachMarkDel(\'' + _esc(id) + '\',' + mi + ');return false;"'
+                  + ' style="position:absolute; left:-8px; top:-8px; width:16px; height:16px; line-height:16px; text-align:center;'
+                  + ' background:#b1432f; color:#fff; border-radius:50%; font-size:10px; font-weight:bold; text-decoration:none;'
+                  + ' box-shadow:0 0 0 1px #fff; pointer-events:auto;">✕</a>' : '')
+                + '</span>';
+        }).join('');
+    };
+
     // ── 🔬 광학 측정 이력 (Gamma 리포트 zip, 바코드별) ────────────────────
     //  2026-11-12 요청 — 샘플 광학 측정 이력을 Gamma tuning 로그로 남긴다. Final_Report.txt 는
     //  완전 고정 포맷이라 **AI 없이** 백엔드 정규식 파서(`/doc/parse-optical-zip`)로 구조화한다
@@ -4101,63 +4254,59 @@
                    + ' onchange="window._docLabelAspectLock=this.checked;" style="vertical-align:middle; margin-right:3px;">'
                    + _esc(_t('도안 크기조절 비율 고정', 'Lock aspect ratio when resizing artwork')) + '</label>'
                    + '</div><table style="display:none;">';
-            } else if (s.kind === 'labelcerts') {
-                // 🏷 [2026-11-12] 인증(CE/FCC/UL…)·정격표시(Set/LED Rating SPEC…) — 실측 3개 파일
-                //    전부 **'제품' 라벨 하나에만** 딸려 있었다. 묶는 열쇠를 따로 두지 않고 라벨
-                //    목록의 '제품' 첫 줄(없으면 맨 앞 줄)을 **안내로만** 보여 준다 — 저장은 독립적이다.
-                var lc = _docData(form.id).labelCerts = _docData(form.id).labelCerts || { certs: [], ratings: [] };
-                var mainItem = (_docData(form.id).labelItems || []).filter(function (it) {
-                    return /제품/.test(it.position || '');
-                })[0] || (_docData(form.id).labelItems || [])[0];
-                h += '<tr><td colspan="5" class="doc-noprint" style="font-size:11px; color:#868e96; padding:2px 0 6px;">'
-                   + '🏷 ' + _esc(_t('적용 라벨: ', 'Applies to: '))
-                   + (mainItem ? _esc((mainItem.size || '-') + ' / ' + (mainItem.code || '-') + ' (' + (mainItem.position || '-') + ')')
-                               : _esc(_t('위 라벨 목록을 먼저 채워 주세요.', 'Add a label above first.')))
-                   + '</td></tr>';
-                h += '<tr><th colspan="5" style="text-align:left; background:none; border:none; font-weight:bold; padding:6px 0 2px;">'
-                   + _esc(_t('인증 항목', 'Certifications')) + '</th></tr>';
-                h += '<tr><th>' + _esc(_t('항목', 'Item')) + '</th><th style="width:60px;">Check</th>'
-                   + '<th style="width:80px;">' + _esc(_t('인쇄 적용', 'Printed')) + '</th>'
-                   + '<th style="width:110px;">' + _esc(_t('인쇄 구분', 'Print type')) + '</th>'
-                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
-                (lc.certs || []).forEach(function (r, i) {
-                    h += '<tr>'
-                       + '<td><input type="text" class="doc-in" data-doc-lcert="c|' + i + '|name" value="' + _esc(r.name || '')
-                       + '" placeholder="예: CE" style="font-size:11.5px;"></td>'
-                       + '<td style="text-align:center;"><span class="doc-chk' + (r.check === 'O' ? ' on' : '')
-                       + '" data-doc-ltoggle="c|' + i + '|check" title="Check">' + (r.check === 'O' ? 'O' : 'X') + '</span></td>'
-                       + '<td style="text-align:center;"><span class="doc-chk' + (r.print === 'O' ? ' on' : '')
-                       + '" data-doc-ltoggle="c|' + i + '|print" title="' + _esc(_t('인쇄 적용', 'Printed')) + '">'
-                       + (r.print === 'O' ? 'O' : 'X') + '</span></td>'
-                       + '<td><input type="text" class="doc-in" data-doc-lcert="c|' + i + '|printType" value="'
-                       + _esc(r.printType || '') + '" placeholder="예: 기본/코텍" style="font-size:11.5px;"></td>'
-                       + '<td class="doc-noprint"><a href="#" onclick="window._docLabelCertDel(\'' + _esc(form.id)
-                       + '\',\'c\',' + i + ');return false;" style="color:#b1432f;">✕</a></td></tr>';
-                });
-                h += '<tr><td colspan="5" class="doc-noprint"><a href="#" onclick="window._docLabelCertAdd(\''
-                   + _esc(form.id) + '\',\'c\');return false;" style="color:#1971c2; font-size:11.5px; font-weight:bold;">＋ '
-                   + _esc(_t('인증 항목 추가', 'Add cert')) + '</a></td></tr>';
-
-                h += '<tr><th colspan="5" style="text-align:left; background:none; border:none; font-weight:bold; padding:10px 0 2px;">'
-                   + _esc(_t('정격 표시', 'Rating spec')) + '</th></tr>';
-                h += '<tr><th>' + _esc(_t('항목', 'Item')) + '</th><th colspan="2">' + _esc(_t('규격값', 'Spec')) + '</th>'
-                   + '<th style="width:80px;">' + _esc(_t('인쇄 적용', 'Printed')) + '</th>'
-                   + '<th class="doc-noprint" style="width:40px;"></th></tr>';
-                (lc.ratings || []).forEach(function (r, i) {
-                    h += '<tr>'
-                       + '<td><input type="text" class="doc-in" data-doc-lcert="r|' + i + '|name" value="' + _esc(r.name || '')
-                       + '" placeholder="예: Set Rating SPEC" style="font-size:11.5px;"></td>'
-                       + '<td colspan="2"><input type="text" class="doc-in" data-doc-lcert="r|' + i + '|spec" value="'
-                       + _esc(r.spec || '') + '" placeholder="예: DC 24V / 8A" style="font-size:11.5px;"></td>'
-                       + '<td style="text-align:center;"><span class="doc-chk' + (r.print === 'O' ? ' on' : '')
-                       + '" data-doc-ltoggle="r|' + i + '|print" title="' + _esc(_t('인쇄 적용', 'Printed')) + '">'
-                       + (r.print === 'O' ? 'O' : 'X') + '</span></td>'
-                       + '<td class="doc-noprint"><a href="#" onclick="window._docLabelCertDel(\'' + _esc(form.id)
-                       + '\',\'r\',' + i + ');return false;" style="color:#b1432f;">✕</a></td></tr>';
-                });
-                h += '<tr><td colspan="5" class="doc-noprint"><a href="#" onclick="window._docLabelCertAdd(\''
-                   + _esc(form.id) + '\',\'r\');return false;" style="color:#1971c2; font-size:11.5px; font-weight:bold;">＋ '
-                   + _esc(_t('정격 항목 추가', 'Add rating')) + '</a></td></tr>';
+            } else if (s.kind === 'labelattach') {
+                // 🗺️ [2026-11-13, 사용자 요청] "인증·정격 표시 항목은 삭제하고 도면 추가해서
+                //    부착 위치 표현하는 기능을 추가" — 제품 도면(전면·후면·측면) 위에 위 라벨
+                //    목록의 라벨이 어디 붙는지 표시한다.
+                var la2 = _docLabelAttachData(form.id);
+                var litems2 = _docData(form.id).labelItems || [];
+                var placing2 = (window._docLabelAttachPlacing && window._docLabelAttachPlacing.id === form.id)
+                    ? window._docLabelAttachPlacing.labelIdx : null;
+                var vd2 = la2.views[la2.view];
+                h += '<tr><td class="doc-noprint" style="padding:8px;">'
+                   + '<div style="margin-bottom:8px;">' + DOC_LABEL_ATTACH_VIEWS.map(function (v) {
+                       var on = v.key === la2.view;
+                       return '<a href="#" onclick="window._docLabelAttachViewSet(\'' + _esc(form.id) + '\',\'' + _esc(v.key)
+                           + '\');return false;" style="margin-right:8px; padding:3px 12px; border-radius:5px; text-decoration:none;'
+                           + ' font-weight:bold;' + (on ? ' background:#1971c2; color:#fff;' : ' background:#f1f3f5; color:#000;') + '">'
+                           + _esc(_t(v.label, v.labelEn)) + '</a>';
+                   }).join('') + '</div>';
+                if (!litems2.length) {
+                    h += '<div style="color:#868e96; font-size:11.5px;">'
+                       + _esc(_t('위 라벨 목록에 라벨을 먼저 추가하세요.', 'Add labels in the list above first.')) + '</div>';
+                } else if (!vd2.img) {
+                    h += '<div style="color:#868e96; font-size:11.5px; margin-bottom:8px;">'
+                       + _esc(_t('이 면의 제품 도면(PDF·이미지)을 올리면 라벨을 어디에 붙일지 표시할 수 있습니다.',
+                                 'Upload this view\'s drawing (PDF/image) to mark where each label attaches.')) + '</div>'
+                       + '<button onclick="window._docLabelAttachPick(\'' + _esc(form.id) + '\')" style="padding:5px 12px; font-size:11.5px;'
+                       + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#000; border-radius:5px; font-weight:bold;">📤 '
+                       + _esc(_t('도면 올리기', 'Upload drawing')) + '</button>';
+                } else {
+                    h += '<div style="position:relative; display:inline-block;">'
+                       + '<img data-attach-img data-attach-img-id="' + _esc(form.id) + '" src="' + _esc(_attUrl({ folder: vd2.folder, name: vd2.img }))
+                       + '" style="max-width:100%; max-height:70vh; display:block; border:1px solid #dee2e6; border-radius:3px;'
+                       + (placing2 != null ? ' cursor:crosshair;' : ' cursor:default;')
+                       + '" onclick="window._docLabelAttachImgClick(event,\'' + _esc(form.id) + '\')">'
+                       + _docLabelAttachMarkersHtml(vd2.marks, placing2 == null, form.id, litems2)
+                       + '</div>'
+                       + '<div style="margin-top:6px; font-size:11.5px;">'
+                       + (placing2 != null
+                          ? '<span style="color:#e03131; font-weight:bold;">' + _esc(_t('도면을 클릭하세요…', 'Click the drawing…')) + '</span>'
+                            + ' <a href="#" onclick="window._docLabelAttachDisarm();return false;" style="color:#000;">'
+                            + _esc(_t('취소', 'cancel')) + '</a>'
+                          : '<span style="color:#000;">' + _esc(_t('표시할 라벨: ', 'Mark label: ')) + '</span>'
+                            + litems2.map(function (it, li) {
+                                return '<a href="#" onclick="window._docLabelAttachArm(\'' + _esc(form.id) + '\',' + li + ');return false;"'
+                                    + ' title="' + _esc((it.code || it.size || '-') + (it.position ? ' / ' + it.position : '')) + '"'
+                                    + ' style="margin-right:8px; color:#000; font-weight:bold;">📍' + (li + 1) + '</a>';
+                              }).join('')
+                            + ' · <a href="#" onclick="window._docLabelAttachPick(\'' + _esc(form.id) + '\');return false;" style="color:#000;">↺ '
+                            + _esc(_t('도면 바꾸기', 'Replace drawing')) + '</a>'
+                            + ' · <a href="#" onclick="window._docLabelAttachReset(\'' + _esc(form.id) + '\');return false;" style="color:#b1432f;">🗑 '
+                            + _esc(_t('지우기', 'Clear')) + '</a>')
+                       + '</div>';
+                }
+                h += '</td></tr>';
             } else if (s.kind === 'text') {
                 var tv = _hasOwn(form.id, s.key) ? _docData(form.id).fields[s.key] : '';
                 h += '<tr><td><textarea data-doc-key="' + _esc(s.key) + '" rows="3" placeholder="' + _esc(s.hint || '')
@@ -4491,6 +4640,15 @@
                 window._docAttachAdd(form.id, zone.getAttribute('data-doc-att'), ev.dataTransfer.files);
             });
         });
+        // 🗺️ 부착 위치 — 도면 위 표시(번호 원) 끌기. 화면에 도면이 하나뿐이라 이미지도 하나뿐이다.
+        var attachImg = body.querySelector('[data-attach-img]');
+        if (attachImg) {
+            var attachId = attachImg.getAttribute('data-attach-img-id');
+            [].slice.call(body.querySelectorAll('[data-attach-mark-wrap]')).forEach(function (wrap) {
+                var aidx = Number(wrap.getAttribute('data-attach-mark-idx'));
+                window._docLabelAttachMarkDragWire(wrap, attachImg, attachId, aidx);
+            });
+        }
         // 🏷 라벨 사양서 — 표 썸네일 크기조절 손잡이(렌더마다 다시 그려지므로 매번 새로 건다)
         //    + 마커 글자 크기를 썸네일 폭에 맞춘다(모달과 같은 계산, `_docLabelNotesApplyFont`).
         [].slice.call(body.querySelectorAll('[data-thumb-resize]')).forEach(function (handle) {
