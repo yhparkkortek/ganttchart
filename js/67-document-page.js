@@ -2588,11 +2588,22 @@
                  + ' style="margin-top:4px; display:flex; flex-direction:column; gap:6px;">'
             + matches.map(function (m, mi) {
                 var skey = key + '|' + mi, st = window._docLabelImgState[skey];
-                var line = '<a href="#" onclick="window._docLabelOpen(\'' + _esc(key).replace(/'/g, "\\'") + '\',' + mi
+                // 🤝 [2026-11-16 요청] "전체 팀원이 사용하는데 도움이 되게" — NAS 미러
+                //    (라벨도안/원본/)에서 찾은 것은 이미 누군가 팀 공용으로 올려 둔 사본이라
+                //    ☁️ 로 표시하고 "NAS로 복사" 는 안 보여준다(NAS→NAS 복사는 의미 없다).
+                var isNas = m.source === 'nas';
+                var line = (isNas ? '☁️ ' : '')
+                     + '<a href="#" onclick="window._docLabelOpen(\'' + _esc(key).replace(/'/g, "\\'") + '\',' + mi
                      + ');return false;" style="color:#1971c2;" title="' + _esc(m.folder || '') + '">📎 ' + _esc(m.name) + '</a>'
                      + ' <a href="#" onclick="window._docLabelToggleImages(\'' + _esc(key).replace(/'/g, "\\'") + '\',' + mi
                      + ');return false;" style="color:#7a5210;">🖼 ' + (st && st.open ? _esc(_t('접기', 'hide'))
-                                                                                       : _esc(_t('미리보기', 'preview'))) + '</a>';
+                                                                                       : _esc(_t('미리보기', 'preview'))) + '</a>'
+                     // 📤 [2026-11-16 요청] "조회해서 열어보고 필요한 자료만 NAS로 복사" — 사람이
+                     //    열어보고 판단할 때만, 한 번에 하나씩. 로컬 PC 캐시는 각자 따로라 이렇게
+                     //    올려야 다른 팀원도 /sap-label-search 에서 ☁️ 로 찾을 수 있다.
+                     + (isNas ? '' : ' <a href="#" onclick="window._docLabelCopyToNas(\'' + _esc(formId).replace(/'/g, "\\'")
+                        + '\',' + idx + ',' + mi + ');return false;" style="color:#2f9e44;">📤 '
+                        + _esc(_t('NAS로 복사', 'Copy to NAS')) + '</a>');
                 if (st && st.open) {
                     if (st.loading) {
                         line += '<div style="margin-top:3px; color:#868e96;">⏳ ' + _esc(_t('이미지 찾는 중…', 'loading…')) + '</div>';
@@ -2925,6 +2936,47 @@
             }
             var res = await r.json();
             if (!res || !res.ok) _toast('⚠️ ' + _esc((res && res.error) || _t('열지 못했습니다.', 'Could not open.')), 'error');
+        } catch (e) {
+            _toast('⚠️ ' + _t('백엔드에 닿지 못했습니다.', 'Backend unreachable.'), 'error');
+        }
+    };
+    // 📤 [2026-11-16 요청] "조회해서 열어보고 필요한 자료만 NAS로 복사 / 전체 팀원이 사용하는데
+    //    도움이 되는 방향으로" — 로컬 PC 캐시(`C:\SAP_DMS\...`)는 사람마다 따로라, 내가 이미
+    //    열어서 확인한 SAP 원본을 다른 팀원 PC 는 모른다. 자동으로 전부 옮기진 않고(그건
+    //    "전부"가 아니라 "라벨만" 요구와 어긋난다) **한 파일씩, 사람이 확인하고 누를 때만**
+    //    팀 공용 NAS(`라벨도안/원본/<코드>/`)로 복사한다 — 그래야 다른 팀원이 같은 코드로
+    //    검색할 때 ☁️ 로 바로 보인다(`/sap-label-search` 가 그 폴더도 같이 본다).
+    window._docLabelCopyToNas = async function (formId, idx, mi) {
+        var key = formId + '|' + idx;
+        var m = (window._docLabelFindMatches[key] || [])[mi];
+        if (!m) return;
+        var it = (_docData(formId).labelItems || [])[idx];
+        var code = String((it && it.code) || '').trim();
+        if (!/^\d{6}$/.test(code)) {
+            _toast('⚠️ ' + _t('라벨품목코드(6자리)가 없습니다.', 'No 6-digit label code on this row.'), 'error');
+            return;
+        }
+        if (!confirm(_t('"' + m.name + '" 을(를) 팀 공용 NAS(라벨도안/원본/' + code + '/)로 복사할까요? — 다른 팀원도 이 코드로 검색하면 보이게 됩니다.',
+                        'Copy "' + m.name + '" to the shared NAS folder (라벨도안/원본/' + code + '/)? Other teammates will see it when they search this code.'))) {
+            return;
+        }
+        _toast('⏳ ' + _t('NAS로 복사하는 중…', 'Copying to NAS…'), 'info');
+        try {
+            var r = await fetch(BACKEND + '/sap-label-save-to-nas', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: m.path, code: code })
+            });
+            if (r.status === 404) {
+                _toast('⚠️ ' + _t('백엔드를 재시작해야 쓸 수 있습니다(NAS로 복사).', 'Restart the backend to use this.'), 'error');
+                return;
+            }
+            var res = await r.json();
+            if (!res || !res.ok) {
+                _toast('⚠️ ' + _esc((res && res.error) || _t('복사하지 못했습니다.', 'Could not copy.')), 'error');
+                return;
+            }
+            _toast('✅ ' + _t('NAS 공용 폴더로 복사했습니다: ' + res.folder + '/' + res.name,
+                              'Copied to the shared NAS folder: ' + res.folder + '/' + res.name), 'success');
         } catch (e) {
             _toast('⚠️ ' + _t('백엔드에 닿지 못했습니다.', 'Backend unreachable.'), 'error');
         }

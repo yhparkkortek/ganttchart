@@ -4965,19 +4965,111 @@ def sap_label_search():
             if len(matches) >= _LABEL_SEARCH_MAX:
                 partial = True
                 break
+    # 🤝 [2026-11-16 요청] "전체 팀원이 사용하는데 도움이 되게" — 로컬 PC 캐시는 사람마다 따로라
+    #    내가 이미 받아 둔 자료를 다른 팀원은 못 찾는다. 사람이 "📤 NAS로 복사"로 직접 올린
+    #    사본(라벨도안/원본/<코드>/)은 전원이 보는 자리라 여기도 같이 찾는다. **자동 미러링이
+    #    아니라 사람이 연 뒤 고른 것만** 쌓이므로 전체 SAP_DMS 를 NAS 에 복제하지 않는다.
+    if len(matches) < _LABEL_SEARCH_MAX:
+        nas_matches = _label_search_nas(pat, norm_q, code)
+        matches.extend(nas_matches[:max(0, _LABEL_SEARCH_MAX - len(matches))])
+        if len(nas_matches) > max(0, _LABEL_SEARCH_MAX - len(matches)):
+            partial = True
     return jsonify({'ok': True, 'code': code, 'q': q, 'matches': matches[:_LABEL_SEARCH_MAX], 'partial': partial})
 
 
+# 🤝 [2026-11-16] 라벨 NAS 미러 — 사람이 "📤 NAS로 복사"로 직접 고른 원본만 모이는 공용 폴더.
+#    `라벨도안`(최종 고른 도안 PNG) 바로 아래 `원본/<코드>/` 에 둬서 같은 공용 라이브러리
+#    안에서 "최종 그림"과 "원본 SAP 문서"가 코드 기준으로 나란히 있게 한다.
+_LABEL_NAS_MIRROR_FOLDER = '라벨도안/원본'
+
+
+def _label_nas_mirror_root():
+    """원본 미러 NAS 폴더의 실제 경로. 문서저장소(NAS) 설정이 없거나 안 닿으면 None(검색은
+    그냥 건너뛴다 — 로컬 검색까지 막을 이유는 없다)."""
+    path, err = _docstore_dir(_LABEL_NAS_MIRROR_FOLDER)
+    return path if not err else None
+
+
+def _label_search_nas(pat, norm_q, code):
+    """NAS 미러에서도 같은 규칙으로 찾는다. code 검색이면 그 코드 하위 폴더 하나만 보면
+    되므로(폴더 자체가 코드로 이미 나뉘어 있다) 안의 파일 전부를 그대로 후보로 낸다 —
+    전체 미러를 훑지 않아 SMB 왕복이 작다. q(규격) 검색만 모든 코드 폴더를 훑는다."""
+    root = _label_nas_mirror_root()
+    if not root or not os.path.isdir(root):
+        return []
+    out = []
+    try:
+        sub_dirs = [code] if code else [d for d in os.listdir(root)
+                                         if os.path.isdir(os.path.join(root, d))]
+        for sub in sub_dirs:
+            d = os.path.join(root, sub)
+            if not os.path.isdir(d):
+                continue
+            for fn in os.listdir(d):
+                full = os.path.join(d, fn)
+                if not os.path.isfile(full):
+                    continue
+                hit = True if code else (norm_q in re.sub(r'\s+', '', fn).lower())
+                if hit:
+                    out.append({'name': fn, 'folder': 'NAS:' + _LABEL_NAS_MIRROR_FOLDER + '/' + sub,
+                                'path': full, 'source': 'nas'})
+    except Exception as e:
+        print(f'[라벨 NAS 검색 오류] {e}')
+    return out
+
+
+@app.route('/sap-label-save-to-nas', methods=['POST'])
+def sap_label_save_to_nas():
+    """🏷📤 [2026-11-16 요청] "조회해서 열어보고 필요한 자료만 NAS로 복사" — 라벨 검색으로 찾은
+    로컬 SAP 원본 파일 하나를 사람이 직접 고를 때만 팀 공용 NAS(라벨도안/원본/<코드>/)로
+    복사한다. 자동 미러링이 아니다 — 사람이 파일을 열어 확인한 뒤 누를 때만 돈다.
+    이래야 다른 팀원이 같은 코드를 검색할 때(/sap-label-search) 이 사본을 찾을 수 있다
+    (로컬 PC 캐시는 팀원마다 따로라서)."""
+    req = request.get_json(force=True, silent=True) or {}
+    raw_path = (req.get('path') or '').strip()
+    if not raw_path:
+        return jsonify({'ok': False, 'error': 'path 파라미터가 필요합니다.'}), 400
+    local_path = os.path.normpath(os.path.abspath(raw_path))
+    sap_dms_root = os.path.normpath(os.path.abspath(r'C:\SAP_DMS'))
+    if not local_path.startswith(sap_dms_root):
+        return jsonify({'ok': False, 'error': 'C:\\SAP_DMS 하위 경로만 복사할 수 있습니다.'}), 403
+    if not os.path.isfile(local_path):
+        return jsonify({'ok': False, 'error': f'파일이 없습니다: {local_path}'}), 404
+    code = re.sub(r'\D', '', str(req.get('code') or ''))
+    if len(code) != 6:
+        return jsonify({'ok': False, 'error': '라벨품목코드(6자리)가 필요합니다.'}), 400
+    dest_dir, derr = _docstore_dir(_LABEL_NAS_MIRROR_FOLDER + '/' + code)
+    if derr:
+        return jsonify({'ok': False, 'error': derr}), 400
+    name = _docstore_safe_name(os.path.basename(local_path))
+    if not name:
+        return jsonify({'ok': False, 'error': '파일 이름이 올바르지 않습니다.'}), 400
+    dest_path = os.path.join(dest_dir, name)
+    try:
+        shutil.copy2(local_path, dest_path)
+        st = os.stat(dest_path)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'복사 실패: {e}'}), 500
+    return jsonify({'ok': True, 'folder': _LABEL_NAS_MIRROR_FOLDER + '/' + code, 'name': name, 'size': st.st_size})
+
+
 def _sap_dms_safe_path(path):
-    """`C:\\SAP_DMS\\` 이하 경로인지 확인 — /sap-open-folder 와 같은 화이트리스트 규칙을
-    이 셋(open-file·label-images·label-image-bytes)이 공유한다. 문제 있으면 (None, (json, status))."""
+    """`C:\\SAP_DMS\\` 이하 **또는** 문서저장소(NAS) 경로인지 확인 — /sap-open-folder 와 같은
+    화이트리스트 규칙을 이 셋(open-file·label-images·label-image-bytes)이 공유한다.
+    🤝 [2026-11-16] 라벨 NAS 미러(`라벨도안/원본/`)에서 찾은 파일도 열기·미리보기가 **같은
+    세 라우트**를 타므로, 문서저장소 root 도 같이 허용한다 — 그 root 는 설정 화면에서만
+    바뀌는 신뢰 경로고 이미 `/doc/*` 가 전체를 다루므로 허용 범위가 늘지 않는다.
+    문제 있으면 (None, (json, status))."""
     path = (path or '').strip()
     if not path:
         return None, (jsonify({'ok': False, 'error': 'path 파라미터가 필요합니다.'}), 400)
     norm = os.path.normpath(os.path.abspath(path))
-    allowed_root = os.path.normpath(os.path.abspath(r'C:\SAP_DMS'))
-    if not norm.startswith(allowed_root):
-        return None, (jsonify({'ok': False, 'error': 'C:\\SAP_DMS 하위 경로만 열 수 있습니다.'}), 403)
+    allowed_roots = [os.path.normpath(os.path.abspath(r'C:\SAP_DMS'))]
+    nas_root = (_docstore_load() or {}).get('root') or ''
+    if nas_root:
+        allowed_roots.append(os.path.normpath(os.path.abspath(nas_root)))
+    if not any(norm.startswith(r) for r in allowed_roots):
+        return None, (jsonify({'ok': False, 'error': 'C:\\SAP_DMS 또는 문서저장소 경로만 열 수 있습니다.'}), 403)
     return norm, None
 
 
