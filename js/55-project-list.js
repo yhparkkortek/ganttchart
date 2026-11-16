@@ -2803,10 +2803,11 @@
         return out.sort().join(',');
     };
     // 🔁 [2026-11-16 사용자 요청] "프로젝트 리스트 ↔ 프로젝트 파일 양방향 통일화" — 두 칸을 모두
-    //  편집 가능한 입력칸으로 두고, 화살표 버튼 자체가 "변경(적용)" 동작을 겸한다: ⬅️ 는 프로젝트
-    //  파일 칸의 지금 값(사람이 고쳐 써도 된다 — 그게 "통일화")을 Project list 에, ➡️ 는 그
-    //  반대로 Project list 칸의 지금 값을 프로젝트 파일에 적용한다. 어느 쪽이 맞는지는 여전히
-    //  사람이 판단해서 방향을 고른다 — ✏️ 탭 이동 버튼은 그 자리에서 바로 고칠 수 있게 되어 없앴다.
+    //  편집 가능한 입력칸으로 두고, 삼각형 버튼 자체가 "변경(적용)" 동작을 겸한다(2026-11-16
+    //  사용자 요청으로 화살표 이모지 대신 ◀/▶ 삼각형 아이콘 사용): ◀ 는 프로젝트 파일 칸의
+    //  지금 값(사람이 고쳐 써도 된다 — 그게 "통일화")을 Project list 에, ▶ 는 그 반대로
+    //  Project list 칸의 지금 값을 프로젝트 파일에 적용한다. 어느 쪽이 맞는지는 여전히 사람이
+    //  판단해서 방향을 고른다 — ✏️ 탭 이동 버튼은 그 자리에서 바로 고칠 수 있게 되어 없앴다.
 
     // ⚠️⚠️ [2026-11-12 사용자 요청] "차이점을 모달에서 바로 수정" — 적용 버튼은 **값을 그대로
     //    onclick 문자열에 넣지 않는다**(담당자·사양 값엔 따옴표·쉼표·슬래시가 섞여 있어 그대로
@@ -2828,19 +2829,19 @@
             var item = window._plCheckPending[cid];
             if (!item) return;
             if (toListBtn) {
-                // ⬅️ 프로젝트 파일 칸의 지금 값(통일화를 위해 사람이 고쳤을 수 있다)을 Project list 에.
+                // ◀ 프로젝트 파일 칸의 지금 값(통일화를 위해 사람이 고쳤을 수 있다)을 Project list 에.
                 var fileInputEl = document.getElementById('pl-check-file-' + cid);
                 var liveVal = fileInputEl ? fileInputEl.value : item.fileVal;
                 window._plCheckApplyField(item.rowId, item.plKey, liveVal, item.fileName);
             } else {
-                // ➡️ Project list 칸의 지금 값을 프로젝트 파일에.
+                // ▶ Project list 칸의 지금 값을 프로젝트 파일에.
                 var plInputEl = document.getElementById('pl-check-pl-' + cid);
                 var liveVal2 = plInputEl ? plInputEl.value : item.plVal;
                 window._plCheckApplyToFile(item.rowId, item.plKey, liveVal2, item.fileName);
             }
         }, true);
     }
-    /** ⬅️ 차이 한 줄을 Project list 쪽에 적용 — 프로젝트 파일 칸의 값을 그 행의 칸에 써 넣는다. */
+    /** ◀ 차이 한 줄을 Project list 쪽에 적용 — 프로젝트 파일 칸의 값을 그 행의 칸에 써 넣는다. */
     window._plCheckApplyField = function (rowId, plKey, newVal, fileName) {
         var r = _rowById(rowId); if (!r) return;
         var before = r[plKey] == null ? '' : String(r[plKey]);
@@ -2853,7 +2854,7 @@
         window.plCheckAgainstProjects(fileName); // 모달을 새 값 기준으로 다시 그린다(그 줄은 이제 같아져 사라진다)
     };
     /** plKey → 프로젝트 파일 안에서 그 값이 사는 자리. 합친 값(ownerHw)·쪼갠 값(cieX/cieY)처럼
-     *  "거꾸로 쓰면 뜻이 바뀌는" 항목은 자리를 안 주어 ➡️ 를 비활성화한다(추측해서 쓰지 않는다). */
+     *  "거꾸로 쓰면 뜻이 바뀌는" 항목은 자리를 안 주어 ▶ 를 비활성화한다(추측해서 쓰지 않는다). */
     var _plCheckFileWriteTarget = function (plKey) {
         var specField = PL_CHECK_SPEC_FIELDS.filter(function (f) { return f.plKey === plKey; })[0];
         if (specField) return { kind: 'spec', specType: specField.specType };
@@ -2862,7 +2863,7 @@
         if (plKey === 'ownerTouch') return { kind: 'meta', metaKey: 'TSP담당자' };
         return null;
     };
-    /** ➡️ 차이 한 줄을 **지금 열려 있는 프로젝트**의 메모리(`window.tabData`/`projectMeta`)에
+    /** ▶ 차이 한 줄을 **지금 열려 있는 프로젝트**의 메모리(`window.tabData`/`projectMeta`)에
      *  직접 써 넣고 앱의 저장(`saveToGoogleDrive`)을 부른다 — NAS 파일을 스크립트로 직접 고치지
      *  않는다(docs/doc-store.md 경고: 열려 있는 앱이 메모리의 옛 값으로 되돌린다). 그래서 이 버튼은
      *  **열려 있을 때만** 보인다(렌더 쪽의 `isOpenProject` 가드). */
@@ -2940,7 +2941,7 @@
         if (fileNameOverride) target = mine.filter(function (p) { return p.file_name === fileNameOverride; })[0] || null;
         if (!target && openId) target = mine.filter(function (p) { return String(p.drive_file_id || '').trim() === openId; })[0] || null;
         if (!target) target = mine[0];
-        // ✏️ [2026-11-16] 이 프로젝트가 **지금 열려 있는지** — ➡️(Project list→파일) 버튼을 보여줄지,
+        // ✏️ [2026-11-16] 이 프로젝트가 **지금 열려 있는지** — ▶(Project list→파일) 버튼을 보여줄지,
         //  그리고 비교 기준으로 NAS 를 다시 읽을지 메모리를 쓸지 둘 다 이 값 하나로 가른다.
         var isOpenProject = !!target.drive_file_id && String(target.drive_file_id).trim() === String(window.currentDriveFileId || '').trim();
 
@@ -2958,7 +2959,7 @@
         var d = null;
         if (isOpenProject && window.tabData) {
             // ⚠️ [2026-11-16] 열려 있는 프로젝트면 NAS 를 다시 읽지 않고 **지금 메모리**를 쓴다 —
-            //  그래야 ➡️ 로 방금 적용한 값이 바로 비교에 반영되고(저장은 비동기라 다시 읽으면 아직
+            //  그래야 ▶ 로 방금 적용한 값이 바로 비교에 반영되고(저장은 비동기라 다시 읽으면 아직
             //  옛 값일 수 있다), 다른 사람이 보는 중일 수 있는 NAS 파일을 또 건드리지도 않는다.
             d = { tabData: window.tabData, projectMeta: window.projectMeta || {} };
         } else {
@@ -3070,7 +3071,7 @@
             body += '<div style="color:#2e7d32; padding:10px 0;">✅ ' + _t('비교한 ', 'Compared ') + rows.length + _t('건 중 다른 값이 없습니다.', ' rows — no differences found.') + '</div>' + ioNote;
         } else {
             // 🔁 [2026-11-16] "어느 쪽이 맞는지는 사람이 판단" — 두 칸 다 편집 가능한 입력칸으로
-            //  두고, 가운데 화살표 버튼이 그 방향으로 값을 적용한다(➡️ 는 지금 열려 있을 때만 —
+            //  두고, 가운데 삼각형 버튼이 그 방향으로 값을 적용한다(▶ 는 지금 열려 있을 때만 —
             //  다른 사람이 보는 중일 수 있는 남의 프로젝트 파일을 스크립트로 고치지 않는다,
             //  docs/doc-store.md 경고와 같은 원칙). isOpenProject 는 위에서 이미 계산해 뒀다.
             body += '<table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:11.5px;">'
@@ -3078,7 +3079,7 @@
                  + '<tr style="background:#f1f6f7;"><th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">No</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">Project list</th>'
-                 + '<th style="padding:5px 6px; border-bottom:1px solid #d7e4e6;"></th>'
+                 + '<th style="padding:5px 6px; text-align:center; border-bottom:1px solid #d7e4e6;">' + _t('변경', 'Apply') + '</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th></tr>'
                  + mism.map(function (m) {
                      return m.diffs.map(function (df, di) {
@@ -3094,9 +3095,9 @@
                                       + '" style="width:100%; box-sizing:border-box; border:1px solid #d7e4e6; border-radius:4px; padding:2px 5px; font-size:11.5px; color:#b1432f;"></td>';
                              var canToFile = isOpenProject && !!_plCheckFileWriteTarget(df.plKey);
                              var toFileBtn = canToFile
-                                 ? '<button class="pl-check-to-file" data-check-id="' + cid + '" title="' + _esc(_t('왼쪽(Project list) 값을 프로젝트 파일에 적용', 'Apply the Project list value to the project file')) + '" style="padding:2px 5px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.primary + ' cursor:pointer;">➡️</button>'
-                                 : '<span title="' + _esc(isOpenProject ? _t('이 항목은 프로젝트 파일 자동 반영을 지원하지 않습니다', 'Auto-apply to the project file isn\'t supported for this field') : _t('이 프로젝트를 열어야 반영할 수 있습니다', 'Open this project first to apply here')) + '" style="color:#ccc; font-size:11px;">➡️</span>';
-                             var toListBtn = '<button class="pl-check-to-list" data-check-id="' + cid + '" title="' + _esc(_t('오른쪽(프로젝트 파일) 값을 Project list 에 적용', 'Apply the project-file value to Project list')) + '" style="padding:2px 5px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.primary + ' cursor:pointer;">⬅️</button>';
+                                 ? '<button class="pl-check-to-file" data-check-id="' + cid + '" title="' + _esc(_t('왼쪽(Project list) 값을 프로젝트 파일에 적용', 'Apply the Project list value to the project file')) + '" style="padding:2px 6px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.primary + ' cursor:pointer;">▶</button>'
+                                 : '<span title="' + _esc(isOpenProject ? _t('이 항목은 프로젝트 파일 자동 반영을 지원하지 않습니다', 'Auto-apply to the project file isn\'t supported for this field') : _t('이 프로젝트를 열어야 반영할 수 있습니다', 'Open this project first to apply here')) + '" style="color:#ccc; font-size:11px;">▶</span>';
+                             var toListBtn = '<button class="pl-check-to-list" data-check-id="' + cid + '" title="' + _esc(_t('오른쪽(프로젝트 파일) 값을 Project list 에 적용', 'Apply the project-file value to Project list')) + '" style="padding:2px 6px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.primary + ' cursor:pointer;">◀</button>';
                              arrowsCell = '<td style="padding:3px 2px; text-align:center; white-space:nowrap;">' + toListBtn + ' ' + toFileBtn + '</td>';
                          } else {
                              plCell = '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.pl) + '</td>';

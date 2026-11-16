@@ -514,26 +514,26 @@ SHUFFLER 가 3.0"·4.3" 둘로 갈리는 팀에서 4.3" 프로젝트를 열고 �
 
 - **두 칸 다 편집 가능한 입력칸** — Project list 값과 프로젝트 파일 값 모두 입력칸이라, 어느
   쪽이든 고쳐서(표기 통일) 적용할 수 있다.
-- **가운데 화살표 두 개가 그 자체로 "변경" 버튼** — ⬅️(프로젝트 파일 → Project list)는 기존
-  `_plCheckApplyField` 그대로(Project list 는 이 페이지가 들고 있는 데이터라 항상 가능). ➡️
+- **가운데 화살표 두 개가 그 자체로 "변경" 버튼** — ◀(프로젝트 파일 → Project list)는 기존
+  `_plCheckApplyField` 그대로(Project list 는 이 페이지가 들고 있는 데이터라 항상 가능). ▶
   (Project list → 프로젝트 파일, 새로 추가한 `_plCheckApplyToFile`)는 **지금 열려 있는 프로젝트일
   때만** 보인다 — NAS 파일을 스크립트로 직접 열어 고치지 않고, **열려 있는 앱의 메모리**
   (`window.tabData`/`projectMeta`)를 직접 고친 뒤 기존 저장 경로(`window.saveToGoogleDrive`,
   js/26 토픽 프로파일의 사람 편집과 같은 패턴)를 부른다 — docs/doc-store.md 의 "열려 있는 앱이
   메모리의 옛 값으로 되돌린다" 경고와 같은 원칙.
-- **➡️ 는 항목마다 쓸 자리가 분명할 때만 켜진다**(`_plCheckFileWriteTarget`) — Customer SPEC
+- **▶ 는 항목마다 쓸 자리가 분명할 때만 켜진다**(`_plCheckFileWriteTarget`) — Customer SPEC
   실측 항목(PL_CHECK_SPEC_FIELDS)과 FW/기구/터치 담당자는 1:1 이라 바로 쓴다. 반대로 CUSTOMER
   (고객사>프로젝트명 복합값), 회로담당(PM+HW 를 합친 값), x/y(한 항목을 쪼갠 것)는 **거꾸로
-  쓰면 뜻이 바뀌므로** ➡️ 를 회색으로 비활성화하고 사유를 툴팁에 적는다(추측해서 쓰지 않는다
+  쓰면 뜻이 바뀌므로** ▶ 를 회색으로 비활성화하고 사유를 툴팁에 적는다(추측해서 쓰지 않는다
   원칙 재적용).
 - **✏️ 탭 이동 버튼은 없앴다** — 두 칸 다 그 자리에서 고치고 적용할 수 있게 되면서 "가서 직접
   고쳐라"가 필요 없어졌다.
-- **열려 있을 때 비교 기준도 NAS 재조회 대신 메모리로** — ➡️ 로 막 적용한 값이 바로 다음 비교에
+- **열려 있을 때 비교 기준도 NAS 재조회 대신 메모리로** — ▶ 로 막 적용한 값이 바로 다음 비교에
   반영되게(저장은 비동기라 NAS 를 바로 다시 읽으면 아직 옛 값일 수 있다), `isOpenProject` 면
   `window.tabData`/`projectMeta` 를 그대로 비교 기준(`d`)으로 쓴다.
 - ✅ **실측 완료** — 사용자가 직접 로그인한 실 브라우저에서 LNW_SHUFFLER_04.3 프로젝트를 열고
-  확인. ➡️ 클릭 → `window.tabData.briefSpec`의 해당 항목 `modelA`가 Project list 값으로 실제
-  갱신되고 `window.saveToGoogleDrive({suppressAlert:true})`가 정확히 호출되는 것, ⬅️ 클릭 →
+  확인. ▶ 클릭 → `window.tabData.briefSpec`의 해당 항목 `modelA`가 Project list 값으로 실제
+  갱신되고 `window.saveToGoogleDrive({suppressAlert:true})`가 정확히 호출되는 것, ◀ 클릭 →
   Project list 행의 그 칸이 프로젝트 파일 값으로 갱신되는 것, 적용 후 그 줄이 비교 결과에서
   바로 사라지는 것(재비교가 메모리 기준이라 즉시 반영)까지 전부 실제 클릭으로 확인했다(테스트용
   적용은 끝나고 원래 값으로 되돌려 둠 — 실 데이터에 흔적을 남기지 않음).
