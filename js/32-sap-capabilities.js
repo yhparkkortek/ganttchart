@@ -1063,9 +1063,12 @@
             var t = window.QA_OUT_OF_SCOPE[i];
             for (var j = 0; j < t.kw.length; j++) {
                 if (q.toLowerCase().indexOf(String(t.kw[j]).toLowerCase()) !== -1) {
+                    // 💡 [2026-11-16 사용자 요청] "그래도 물어보고 싶다"는 선택은 본인 몫으로 남긴다 —
+                    //    분류 선택 상자에서 "💡 추론"을 고르거나 "#추론 " 접두어를 쓰면 이 즉답을
+                    //    건너뛰고 AI가 실제로 답한다(04h `_qaOosForced` 가드).
                     return (en ? t.en : t.ko) + (en
-                        ? '\n\n(Answered without calling the AI — this saves your daily quota.)'
-                        : '\n\n(AI를 부르지 않고 바로 답했습니다 — 하루 사용량을 아끼기 위함입니다.)');
+                        ? '\n\n(Answered without calling the AI — this saves your daily quota. Want an answer anyway? Pick "💡 General" in the 🏷 Type box above the input, or start your question with "#general ", then ask again.)'
+                        : '\n\n(AI를 부르지 않고 바로 답했습니다 — 하루 사용량을 아끼기 위함입니다. 그래도 답을 듣고 싶으면 입력창 위 🏷 분류 상자에서 "💡 추론"을 고르거나, 질문 앞에 "#추론 "을 붙여 다시 물어보세요.)');
                 }
             }
         }
