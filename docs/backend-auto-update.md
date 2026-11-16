@@ -127,6 +127,46 @@ LF 로 넣고 체크아웃할 때 CRLF 로 바꿔 주는 규칙이라, **raw.git
   `_SELF_UPDATE_FILES`와 `.claude/settings.json` PostToolUse 훅의 `Compress-Archive -Path` 목록이
   서로 어긋나면, "zip엔 있는데 자동 업데이트 대상엔 없는 파일"이 생겨 일부 PC만 그 파일이 계속
   구버전으로 남는 문제가 생긴다 — 새 배포 파일을 추가할 때 두 곳 다 같이 고칠 것.
+
+## ⚠️⚠️ zip 자동 재생성 훅은 `.py`/`.json`/`templates/*`만 보고 `.bat`/`.vbs`는 놓친다 (2026-11-16 실사고)
+
+**증상**: 팀원 PC가 그룹웨어/인사관리 로그인에서 "No module named 'websockets'" — `kortek_backend.bat`의
+패키지 자동설치 목록(`pip install ...`)에 `websockets`가 빠져 있던 걸 고쳐 커밋·푸시했는데도
+(`58a1d53`), 팀원이 **"설치 파일 받기"(`kortek_setup.bat` → `kortek_backend.zip` 다운로드, 1절 참고)**
+로 다시 받아도 그대로였다.
+
+**원인**: `.claude/settings.json`의 `PostToolUse` 훅(이 문서 126~129행이 말하는 그 훅)은
+`Compress-Archive -Path` 목록엔 `kortek_backend.bat`/`kortek_backend_install.bat`/
+`kortek_backend_start_minimized.vbs`를 **포함하면서도**, 트리거 정규식(언제 재압축을 돌릴지)엔
+이 세 파일이 **빠져 있다** — `kortek_backend\.py$|sap_bridge_32\.py$|...|matgroups\.json$|
+templates[\\/].*`까지만 보고 `.bat$`/`.vbs$`는 없다. 그래서 `.bat`/`.vbs`만 고치면 **커밋은
+되는데 zip은 조용히 안 갱신된다** — `kortek_backend.zip`의 git 커밋 날짜가 `.bat` 수정 날짜보다
+며칠 더 오래된 채로 남는 식(실측: zip 2026-11-13, bat 2026-11-16). 자동 업데이트 경로(`/self-update`)
+는 GitHub raw에서 **개별 파일**을 받으므로 영향 없고, **zip을 통째로 받는 처음 설치/재설치
+경로(`kortek_setup.bat`)만** 옛 파일을 받는다.
+
+**확인 방법**: `python -c "import zipfile; print('websockets' in zipfile.ZipFile('kortek_backend.zip').read('kortek_backend.bat').decode())"` 처럼
+zip 안의 내용을 직접 열어 볼 것 — `git log -1 --format=%ci -- kortek_backend.zip`과
+`-- kortek_backend.bat`의 날짜를 비교해 zip이 더 오래됐으면 의심.
+
+**수정(임시, 2026-11-16)**: `.bat`/`.vbs`만 고쳤을 땐 커밋 전에 **수동으로 zip을 다시 만들 것**
+(훅과 똑같은 명령):
+```powershell
+Compress-Archive -Path kortek_backend.py,sap_bridge_32.py,gw_bridge.py,insa_write.py,jira_bridge.py,nas_dsm.py,nas_set_login.py,nas_set_root.py,kortek_backend.bat,kortek_backend_install.bat,kortek_backend_start_minimized.vbs,matgroups.json,templates -DestinationPath kortek_backend.zip -Force
+```
+그 뒤 `kortek_backend.zip`도 `git add`해서 같이 커밋.
+
+⚠️ **근본 수정(훅 정규식에 `.bat$`/`.vbs$` 추가)은 아직 안 됨** — `.claude/settings.json`이
+너무 거대해(스키마 전체가 JSON 안에 들어 있음) Edit 도구로 그 한 줄짜리 PowerShell 커맨드를
+고치려다 두 번 다 "Unable to parse JSON string"으로 거부당했다(파일 자체는 손상되지 않고 그대로
+남음 — 도구가 쓰기 전에 롤백함). 다음에 시간 날 때 사람이 직접 에디터로 열어
+`matgroups\.json$|templates[\\\\/].*` 뒤에 `|kortek_backend\\.bat$|kortek_backend_install\\.bat$|
+kortek_backend_start_minimized\\.vbs$`를 추가하면 된다.
+
+> **교훈**: "자동 재생성 훅이 있다"는 "그 파일 종류가 전부 감시된다"는 뜻이 아니다 — **압축 대상
+> 목록과 트리거 조건은 서로 다른 설정**이라 하나만 갱신될 수 있다. `.bat`/`.vbs`를 고친 뒤엔
+> `git diff --stat`에 `kortek_backend.zip`이 같이 올라와 있는지 한 번 볼 것(안 올라와 있으면
+> 훅이 조용히 안 돈 것).
 - **⚠️⚠️ [2026-09-16 실사용 버그수정] `.bat`/`.vbs` 파일이 LF-only로 배포돼 "파일이 이상하다"는
   제보로 이어짐** — git은 저장소 안에 텍스트 파일을 항상 LF로 정규화해서 저장한다(로컬 작업
   사본의 실제 줄바꿈과 무관) — 실제로 `git show HEAD:kortek_backend.bat`을 바이트 단위로 까보면
