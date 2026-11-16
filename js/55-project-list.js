@@ -2922,16 +2922,25 @@
         //    왜 3"을 비교하나"). → CABINET 이 인치로 갈리는 경우엔 **인치가 확인되는 행만** 비교하고,
         //    확인 안 되는 행은 비교하지 않고 "인치 미확인" 으로 따로 센다(추측해서 끼워 넣지 않는다 —
         //    mail-evidence.md 와 같은 원칙).
+        // ⚠️ [2026-11-16 실측] Project list 의 panelInch/cuttingInch 는 `4.3"` 처럼 인치 기호(")가
+        //  글자 그대로 붙어 있지만, 파일명/projectMeta 에서 뽑은 inch 는 `4.3`(기호 없음) — 기호를
+        //  안 떼고 비교하면 **정확히 맞는 행까지** "다르다"로 떨어진다(실측: 4.3" 행이 빠짐).
+        //  숫자로 파싱해 비교(소수점 표기·선행 0 차이도 같이 흡수).
+        var _plInchNorm = function (v) {
+            var s = String(v == null ? '' : v).replace(/["″'′\s]/g, '').toLowerCase().replace(/inch(es)?$/, '');
+            var n = parseFloat(s);
+            return isNaN(n) ? s : String(n);
+        };
         var ioUnchecked = 0;
         var siblingInches = mine.filter(function (p) {
             return (window._plNameHit(target.customer || '', p.customer || '') || window._plNameHit(p.customer || '', target.customer || ''))
                 && (window._plNameHit(target._fileModel, p._fileModel) || window._plNameHit(p._fileModel, target._fileModel));
-        }).map(function (p) { return _plCheckNorm(p.inch || ''); }).filter(Boolean);
+        }).map(function (p) { return _plInchNorm(p.inch || ''); }).filter(Boolean);
         var cabinetHasInchVariants = new Set(siblingInches).size > 1;
         if (cabinetHasInchVariants) {
-            var inchWanted = _plCheckNorm(target.inch);
+            var inchWanted = _plInchNorm(target.inch);
             rows = rows.filter(function (r) {
-                var rowInch = _plCheckNorm(r.panelInch || r.cuttingInch || '');
+                var rowInch = _plInchNorm(r.panelInch || r.cuttingInch || '');
                 if (!rowInch) { ioUnchecked++; return false; }
                 return rowInch === inchWanted;
             });
