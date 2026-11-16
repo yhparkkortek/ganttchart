@@ -156,12 +156,16 @@ Compress-Archive -Path kortek_backend.py,sap_bridge_32.py,gw_bridge.py,insa_writ
 ```
 그 뒤 `kortek_backend.zip`도 `git add`해서 같이 커밋.
 
-⚠️ **근본 수정(훅 정규식에 `.bat$`/`.vbs$` 추가)은 아직 안 됨** — `.claude/settings.json`이
-너무 거대해(스키마 전체가 JSON 안에 들어 있음) Edit 도구로 그 한 줄짜리 PowerShell 커맨드를
-고치려다 두 번 다 "Unable to parse JSON string"으로 거부당했다(파일 자체는 손상되지 않고 그대로
-남음 — 도구가 쓰기 전에 롤백함). 다음에 시간 날 때 사람이 직접 에디터로 열어
-`matgroups\.json$|templates[\\\\/].*` 뒤에 `|kortek_backend\\.bat$|kortek_backend_install\\.bat$|
-kortek_backend_start_minimized\\.vbs$`를 추가하면 된다.
+✅ **근본 수정 완료(2026-11-16, `775f693`)** — 트리거 정규식에 `|kortek_backend\.bat$|
+kortek_backend_install\.bat$|kortek_backend_start_minimized\.vbs$`를 추가해 `.bat`/`.vbs`
+수정도 이제 zip을 자동 재생성한다. ⚠️ **Edit 도구로 직접 고치면 두 번 다 "Unable to parse
+JSON string"으로 거부당했다**(파일 자체는 손상 안 되고 쓰기 전에 롤백됨 — `.claude/settings.json`이
+너무 거대해서(스키마 전체가 파일 안에 들어 있음) 생긴 도구 쪽 문제로 추정, 원인 미확정) →
+**Bash heredoc도 백슬래시를 먹어서 못 쓴다**(`r"\\\\/"` 로 4개를 넣었는데 실제론 2개만
+도착 — `feedback_heredoc-backslash-collapse` 메모 그대로 재현). **된 방법**: Write 도구로
+파이썬 패치 스크립트 파일을 만들고(백슬래시는 `chr(92)`로 조립해 heredoc/셸 이스케이프를
+아예 피함) Bash로 그 스크립트를 실행 — 바꾼 뒤 `json.loads()`로 유효성 확인하고 바로 써서
+문제의 파일을 거치지 않고 끝냄.
 
 > **교훈**: "자동 재생성 훅이 있다"는 "그 파일 종류가 전부 감시된다"는 뜻이 아니다 — **압축 대상
 > 목록과 트리거 조건은 서로 다른 설정**이라 하나만 갱신될 수 있다. `.bat`/`.vbs`를 고친 뒤엔
