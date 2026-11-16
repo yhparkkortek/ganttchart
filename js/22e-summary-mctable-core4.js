@@ -79,6 +79,16 @@ window.renderElecCompareTab = async function(type) {
     const entries = selected.map(function(m) { return window.findElecPartInLibrary(lib, m); });
     const totalCols = 1 + slotCount + 1; // 라벨 + 슬롯들 + Note
 
+    // 📜 [2026-11-16] PANEL(js/22d)과 같은 "NAS 사양서 링크" — AD BD/CONV/TOUCH CTRL 등
+    //    이 공용 엔진을 쓰는 모든 구분에 한 번에 적용된다. 폴더는 ELEC_CATEGORY_META에서
+    //    읽은 구분별 NAS 폴더(window._elecNasFolder(type)) — PANEL_FOLDER 를 하드코딩하지 않는다.
+    //    검색 열쇠는 Item Code(모델키 "코드_파트명"의 앞부분)만 쓴다 — 파일명이 코드 기준이라서다.
+    const nasFolder = window._elecNasFolder ? window._elecNasFolder(type) : null;
+    let nasSpec = {};
+    if (window._dsFindPanelSpecs && nasFolder && selected.length) {
+        try { nasSpec = await window._dsFindPanelSpecs(selected.map(function(m) { return String(m || '').split('_')[0]; }), nasFolder); } catch (e) { nasSpec = {}; }
+    }
+
     let headHtml = '<tr>';
     // 📥 주요자재에서 한 번에 가져오기 — 아직 비교표에 없는 개수를 같이 보여준다.
     const _impN = projParts.order.filter(function(m) { return selected.indexOf(m) === -1; }).length;
@@ -94,8 +104,15 @@ window.renderElecCompareTab = async function(type) {
             const displayName = entry ? (window._epPartNameOf(entry.specs) || m) : m;
             // 💡 [2026-08-27] Item Code(6자리 숫자)는 표 아래 Basic Information 행에 이미 나오므로
             //    헤더에 중복 표시할 필요 없음 — 요청에 따라 헤더에서는 뺌.
+            // 📜 [2026-11-16] NAS 사양서 링크 — 코드가 걸리면 📜N 배지, 없으면 아무것도 안 붙인다
+            //    (PANEL처럼 panelook.com 같은 외부 검색 폴백은 없다 — AD BD류는 외부 검색처가 없다).
+            const _itemCode = String(m || '').split('_')[0];
+            const _nasCnt = (nasSpec._counts && nasSpec._counts[_itemCode]) || 0;
+            const specBadge = _nasCnt > 0
+                ? ` <a href="javascript:void(0)" onclick="window._epOpenNasSpec(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(m))})" title="${_en ? `NAS spec files: ${_nasCnt}` : `NAS 사양서 ${_nasCnt}개 — 골라서 열기`}" style="font-size:9.5px; color:#1f7a3d; font-weight:bold; text-decoration:underline;">📜${_nasCnt}</a>`
+                : '';
             headHtml += `<th style="min-width:130px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
-                <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>
+                <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>${specBadge}
                 ${(projParts.byLib[m] || []).length
                     ? `<div style="margin-top:2px; display:flex; gap:3px; justify-content:center; flex-wrap:wrap;">`
                       + (projParts.byLib[m] || []).map(function(b) {
@@ -479,6 +496,41 @@ window.elecCompareOpenEditModal = async function(type, model) {
     window._epSyncImageSlotsUI();
     window._epRenderPreviewForm(type, entry.specs || {});
     if (window.showToast) window.showToast(_en ? `Loaded the current spec for "${entry.model}" — edit and save.` : `"${entry.model}"의 현재 스펙을 불러왔습니다 — 수정 후 저장하세요.`, 'info');
+};
+
+/**
+ * 📜 [2026-11-16] NAS 사양서 링크 열기 — PANEL `_dsOpenPanelSpec`(js/48)과 같은 패턴이지만
+ * 폴더를 하드코딩하지 않고 구분별 NAS 폴더(`window._elecNasFolder(type)`)를 받는다.
+ * AD BD/CONV/TOUCH CTRL 등 이 공용 엔진을 쓰는 모든 구분이 같이 쓴다.
+ */
+window._epOpenNasSpec = async function(type, model) {
+    const _en = window._currentLang === 'en';
+    const itemCode = String(model || '').split('_')[0];
+    const folder = window._elecNasFolder ? window._elecNasFolder(type) : null;
+    if (!folder || !window._dsFindPanelSpecAll) return;
+    try {
+        const hits = await window._dsFindPanelSpecAll(itemCode, folder);
+        if (!hits.length) {
+            if (window.showToast) window.showToast(_en ? `No spec found on NAS for "${itemCode}".` : `NAS에서 "${itemCode}" 사양서를 찾지 못했습니다.`, 'error');
+            return;
+        }
+        if (hits.length === 1 && window._dsOpenInNewTab) {
+            window._dsOpenInNewTab(folder, hits[0].name);
+            return;
+        }
+        if (window._dsOpenPicker) {
+            const cfg = window.ELEC_VIEW_META && window.ELEC_VIEW_META[type];
+            window._dsOpenPicker({
+                folder: folder,
+                folders: [{ f: folder, label: (cfg && cfg.label) || type }],
+                q: itemCode,
+                title: '📜 ' + itemCode + ' — ' + (_en ? hits.length + ' files' : hits.length + '개 파일'),
+                onPick: function(f, name) { window._dsOpenInNewTab(f, name); }
+            });
+        }
+    } catch (e) {
+        if (window.showToast) window.showToast('❌ ' + e.message, 'error', 7000);
+    }
 };
 
 // ─── "➕ 추가" 모달: 라이브러리 검색 + 새 항목 AI 추출 (Panel Compare와 동일 UI, type만 다름) ───
