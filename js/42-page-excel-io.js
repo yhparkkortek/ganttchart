@@ -1222,10 +1222,16 @@
         { k: 'pdf',   read: 'pdf',      re: /\.pdf$/i },
         { k: 'html',  read: 'html',     re: /\.(html?|xhtml|mht|mhtml)$/i },
         { k: 'text',  read: 'text',     re: /\.(txt|md|markdown|log|json|xml|ya?ml|ini|cfg|conf|properties|eml|msg|srt|vtt|sql|js|ts|css|py|bat|ps1|sh|c|h|cpp|cs|java|vbs|gcode|nc)$/i },
-        // ↓ 여기부터는 **읽을 수 없는 것** — 사람이 다음에 뭘 하면 되는지까지 적는다.
-        { k: 'word',  re: /\.(docx?|dotx?|rtf|odt)$/i,
-          ko: 'Word 문서는 아직 글자를 뽑지 못합니다 — Word에서 [다른 이름으로 저장 → PDF]로 바꿔 올려주세요.',
-          en: 'Word files cannot be read yet — save as PDF in Word ([Save As → PDF]) and try again.' },
+        // 📝 [2026-11-16 사용자 요청] "Word 파일로도 분석 요청할 수 있게 해달라" —
+        //    .docx/.dotx는 zip 안에 word/document.xml(XML 평문)이 들어 있어, 외부 라이브러리
+        //    없이 브라우저 내장 기능(DecompressionStream('deflate-raw') — tests/weekly-ppt-export.browser.js
+        //    에서 이미 쓰고 있던 것과 같은 방식)만으로 글자를 뽑을 수 있다. `_docExtractWordText` 참고.
+        //    ⚠️ .doc(97-2003 바이너리)·.rtf·.odt는 구조가 전혀 달라(OLE2 복합문서 등) 여기 기법이
+        //    안 통한다 — 여전히 "읽을 수 없는 것"으로 남긴다.
+        { k: 'word',  read: 'word',     re: /\.(docx|dotx)$/i },
+        { k: 'word_old', re: /\.(doc|dot|rtf|odt)$/i,
+          ko: '예전 Word(.doc) 문서는 아직 글자를 뽑지 못합니다 — Word에서 [다른 이름으로 저장 → .docx 또는 PDF]로 바꿔 올려주세요.',
+          en: 'Legacy Word (.doc) files cannot be read yet — save as .docx or PDF in Word and try again.' },
         { k: 'ppt',   re: /\.(pptx?|potx?|odp)$/i,
           ko: 'PowerPoint 는 아직 글자를 뽑지 못합니다 — [다른 이름으로 저장 → PDF]로 바꿔 올려주세요.',
           en: 'PowerPoint files cannot be read yet — save as PDF and try again.' },
@@ -1352,7 +1358,7 @@
         if (!k || k.read) return '';
         var ext = (String(name || '').split('.').pop() || '').toLowerCase();
         return '⚠️ ' + (String(name || '')) + ' — ' + _t(k.ko, k.en)
-             + _t('  (지금 읽을 수 있는 것: 엑셀·PDF·HTML·텍스트 계열)', '  (Readable now: Excel, PDF, HTML and text files)')
+             + _t('  (지금 읽을 수 있는 것: 엑셀·PDF·HTML·Word(.docx)·텍스트 계열)', '  (Readable now: Excel, PDF, HTML, Word (.docx) and text files)')
              + (ext ? '' : '');
     };
     /** 엑셀 계열인가 — 엑셀만 받는 길목(간트 일정표 불러오기 등)이 같은 목록을 보게 한다. */
@@ -1386,12 +1392,102 @@
         return spec.blocks[0].ai || null;
     };
 
+    // 📦 [2026-11-16] 외부 라이브러리 없이 zip(docx)을 연다 — 중앙 디렉터리를 직접 읽고
+    //    deflate 항목은 브라우저 내장 DecompressionStream('deflate-raw')로 푼다.
+    //    tests/weekly-ppt-export.browser.js 의 openPptx()와 같은 기법(이미 이 저장소에서
+    //    검증된 방식) — 거기 있던 걸 복사하지 않고, 여기로 옮겨 **둘 다 이 함수를 쓰게** 한다.
+    window._docOpenZip = async function (file) {
+        var buf = await file.arrayBuffer();
+        var dv = new DataView(buf), u8 = new Uint8Array(buf), eocd = -1;
+        for (var i = u8.length - 22; i >= 0 && i > u8.length - 70000; i--) {
+            if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+        }
+        if (eocd < 0) {
+            throw new Error(_t('zip 구조를 찾지 못했습니다 — 올바른 파일인지 확인해주세요.',
+                                'Could not find a zip structure — please check this is a valid file.'));
+        }
+        var count = dv.getUint16(eocd + 10, true), off = dv.getUint32(eocd + 16, true), entries = [];
+        for (var n = 0; n < count; n++) {
+            if (dv.getUint32(off, true) !== 0x02014b50) break;
+            var nameLen = dv.getUint16(off + 28, true), extraLen = dv.getUint16(off + 30, true), commentLen = dv.getUint16(off + 32, true);
+            entries.push({
+                name: new TextDecoder('utf-8').decode(u8.slice(off + 46, off + 46 + nameLen)),
+                method: dv.getUint16(off + 10, true),
+                compSize: dv.getUint32(off + 20, true),
+                localOff: dv.getUint32(off + 42, true)
+            });
+            off += 46 + nameLen + extraLen + commentLen;
+        }
+        async function readBytes(e) {
+            var lo = e.localOff, lNameLen = dv.getUint16(lo + 26, true), lExtraLen = dv.getUint16(lo + 28, true);
+            var dataStart = lo + 30 + lNameLen + lExtraLen;
+            var data = u8.slice(dataStart, dataStart + e.compSize);
+            if (e.method === 0) return data;
+            var out = await new Response(new Blob([data]).stream()
+                .pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+            return new Uint8Array(out);
+        }
+        return { entries: entries, readBytes: readBytes };
+    };
+
+    // 📝 [2026-11-16] word/document.xml 의 문단·표를 **문서 순서대로** 글자로 편다.
+    //    표는 칸 사이를 탭으로, 문단은 줄로 — 사람이 SAP 승인원/SPEC 문서를 직접 읽을 때
+    //    쓰던 방식(scratchpad extract_docx.py)과 같은 규칙. 표 안 문단은 한 칸 안에서 공백으로 합친다.
+    window._docExtractWordText = async function (file) {
+        var W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+        var zip = await window._docOpenZip(file);
+        var entry = zip.entries.filter(function (e) { return e.name === 'word/document.xml'; })[0];
+        if (!entry) {
+            throw new Error(_t('이 파일 안에서 문서 내용(word/document.xml)을 찾지 못했습니다 — 올바른 .docx 파일인지 확인해주세요.',
+                                'Could not find document content inside this file — please check it is a valid .docx.'));
+        }
+        var bytes = await zip.readBytes(entry);
+        var xml = new TextDecoder('utf-8').decode(bytes);
+        var doc = new DOMParser().parseFromString(xml, 'application/xml');
+        if (doc.getElementsByTagName('parsererror').length) {
+            throw new Error(_t('문서 내용을 해석하지 못했습니다(손상된 파일일 수 있습니다).',
+                                'Could not parse the document content (the file may be corrupted).'));
+        }
+        var body = doc.getElementsByTagNameNS(W_NS, 'body')[0];
+        if (!body) return '';
+        function nodeText(el) {
+            var ts = el.getElementsByTagNameNS(W_NS, 't'), out = '';
+            for (var i = 0; i < ts.length; i++) out += ts[i].textContent || '';
+            return out;
+        }
+        function cellText(tc) {
+            var ps = Array.prototype.filter.call(tc.children, function (c) { return c.localName === 'p'; });
+            return ps.map(nodeText).join(' ').trim();
+        }
+        var lines = [];
+        Array.prototype.forEach.call(body.children, function (el) {
+            if (el.localName === 'p') {
+                lines.push(nodeText(el));
+            } else if (el.localName === 'tbl') {
+                Array.prototype.forEach.call(el.children, function (tr) {
+                    if (tr.localName !== 'tr') return;
+                    var tcs = Array.prototype.filter.call(tr.children, function (c) { return c.localName === 'tc'; });
+                    lines.push(tcs.map(cellText).join('\t'));
+                });
+            }
+        });
+        return lines.join('\n');
+    };
+
     // 파일 → 글자. PDF는 앱이 이미 쓰는 추출기(js/22d)를 그대로 쓴다 — 줄/열 순서를 좌표로
     // 복원해 둔 함수라, 표가 든 문서에서 값이 뒤섞이지 않는다(구매오더에서 검증됨).
     // 💡 [2026-10-22] 문서 저장소(js/48)가 공유 파일의 텍스트를 뽑아 캐시할 때 같은 추출기를 쓴다.
     //    복제하면 "여기선 읽히는데 저기선 안 읽힌다"로 갈라지므로 하나만 둔다.
     var _pxExtractText = window._pxExtractText = async function (file, wb) {
         var name = String(file.name || '');
+        if (/\.(docx|dotx)$/i.test(name)) {
+            var wordText = await window._docExtractWordText(file);
+            if (!String(wordText || '').replace(/\s/g, '').length) {
+                throw new Error(_t('이 Word 문서에서 글자를 찾지 못했습니다(그림만 있거나 손상됐을 수 있습니다).',
+                                    'No readable text found in this Word file (it may contain only images, or be corrupted).'));
+            }
+            return wordText;
+        }
         if (/\.pdf$/i.test(name)) {
             if (typeof window._pcExtractPdfText !== 'function') {
                 throw new Error(_t('PDF 읽기 기능을 아직 불러오지 못했습니다.', 'The PDF reader has not loaded yet.'));

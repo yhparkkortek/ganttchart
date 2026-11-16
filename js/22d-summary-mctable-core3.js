@@ -690,6 +690,12 @@ window._pcProcessFile = async function(file) {
             //    순서가 보존된다. DOMParser로 파싱해 script/style만 제거하고 텍스트만 뽑아낸다.
             const htmlStr = await file.text();
             text = window._pcExtractHtmlText(htmlStr);
+        } else if (ext === 'docx' || ext === 'dotx') {
+            // 📝 [2026-11-16] `_docReadHint`가 더는 .docx를 막지 않으므로, 여기서도 직접 읽어야 한다 —
+            //    안 읽으면 zip 바이트를 `file.text()`로 읽어 깨진 글자를 AI 에 보내는 조용한 오답이 된다.
+            //    js/22e `_epProcessFile`과 같은 블록 — 한쪽만 고치면 "AD BD는 되는데 PANEL은 안 된다".
+            if (paste) paste.value = _en ? 'Reading Word document…' : 'Word 문서 읽는 중...';
+            text = await window._docExtractWordText(file);
         } else {
             // 모르는 확장자는 막지 않고 **내용을 들춰 본다** — 이진이면 깨진 글자를 AI 로 보내지 않는다.
             if (window._docLooksBinary && !window._docKindOf(file.name) && await window._docLooksBinary(file)) {
