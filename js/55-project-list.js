@@ -2802,6 +2802,10 @@
         }
         return out.sort().join(',');
     };
+    // ✏️ [2026-11-16 사용자 요청] "잘못된 곳으로 이동해서 수정" — 담당자 칸은 Summary 탭,
+    //  나머지(Customer SPEC 실측 항목)는 briefspec 탭에서 사람이 직접 값을 본다(자동 역방향
+    //  쓰기는 안 한다 — 어느 쪽이 맞는지는 사람이 판단해야 한다).
+    var _plCheckFieldTab = function (plKey) { return (plKey && /^owner/.test(plKey)) || !plKey ? 'summary' : 'briefspec'; };
 
     // ⚠️⚠️ [2026-11-12 사용자 요청] "차이점을 모달에서 바로 수정" — 적용 버튼은 **값을 그대로
     //    onclick 문자열에 넣지 않는다**(담당자·사양 값엔 따옴표·쉼표·슬래시가 섞여 있어 그대로
@@ -2817,9 +2821,14 @@
         document.addEventListener('click', function (e) {
             var btn = e.target && e.target.closest ? e.target.closest('.pl-check-apply') : null;
             if (!btn) return;
-            var item = window._plCheckPending[btn.getAttribute('data-check-id')];
+            var cid = btn.getAttribute('data-check-id');
+            var item = window._plCheckPending[cid];
             if (!item) return;
-            window._plCheckApplyField(item.rowId, item.plKey, item.newVal, item.fileName);
+            // ✏️ [2026-11-16 사용자 요청] "같은 내용인데 표기가 다르면 통일화" — 칸을 편집 가능하게
+            //  두어, 프로젝트 파일 값을 그대로 쓰지 않고 **사람이 다듬은 글**을 적용할 수 있다.
+            var inputEl = document.getElementById('pl-check-in-' + cid);
+            var liveVal = inputEl ? inputEl.value : item.newVal;
+            window._plCheckApplyField(item.rowId, item.plKey, liveVal, item.fileName);
         }, true);
     }
     /** 차이 한 줄을 Project list 쪽에 적용 — 프로젝트 파일 값을 그대로 그 행의 칸에 써 넣는다. */
@@ -2833,6 +2842,26 @@
         var col = _colByKey[plKey];
         _toast('✅ ' + _t('적용했습니다: ', 'Applied: ') + (col ? (window._currentLang === 'en' ? col.en : col.ko) : plKey) + ' → ' + newVal, 'success', 4000);
         window.plCheckAgainstProjects(fileName); // 모달을 새 값 기준으로 다시 그린다(그 줄은 이제 같아져 사라진다)
+    };
+    /** No 클릭 — [2026-11-16 사용자 요청] 상세보기(읽기 전용) 대신 **표의 그 행으로 이동**한다.
+     *  표에서 바로 칸을 눌러 고칠 수 있어야 하므로(상세보기는 읽기 전용) 필터·검색으로 숨어
+     *  있으면 초기화해서 보이게 하고, 자리표시(lazy) 행이면 그 자리에서 채운 뒤 스크롤+깜빡인다. */
+    window.plCheckGotoRow = function (rowId) {
+        window.plClosePopup();
+        var r = _rowById(rowId); if (!r) return;
+        var nowVisible = _visibleRows().some(function (x) { return x._id === rowId; });
+        if (!nowVisible) window.plClearFilters();
+        window.plRender();
+        setTimeout(function () {
+            var tr = document.querySelector('#pl-table tbody tr[data-id="' + rowId + '"]');
+            if (!tr) return;
+            if (tr.hasAttribute('data-lazy') && window._plHydrateRow) window._plHydrateRow(tr);
+            tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            var old = tr.style.backgroundColor;
+            tr.style.transition = 'background-color 0.4s';
+            tr.style.backgroundColor = '#fff3b0';
+            setTimeout(function () { tr.style.backgroundColor = old; }, 1600);
+        }, 80);
     };
 
     window.plCheckAgainstProjects = async function (fileNameOverride) {
@@ -2881,17 +2910,31 @@
             return;
         }
 
-        // 이 프로젝트의 CUSTOMER+CABINET 에 맞는 Project list 행만. 같은 CABINET 에 인치가 다른
-        // 행이 섞여 있으면(실측: SHUFFLER 3"/4.3") 가능하면 인치로 좁힌다.
+        // 이 프로젝트의 CUSTOMER+CABINET 에 맞는 Project list 행만.
         var allRows = (D().rows || []).filter(function (r) { return String(r.customer || '').trim() && String(r.cabinet || '').trim(); });
         var rows = allRows.filter(function (r) {
             return (window._plNameHit(target.customer || '', r.customer) || window._plNameHit(r.customer, target.customer || ''))
                 && (window._plNameHit(target._fileModel, r.cabinet) || window._plNameHit(r.cabinet, target._fileModel));
         });
-        if (rows.length > 1 && target.inch) {
+        // ⚠️⚠️ [2026-11-16 실측 버그] 같은 CABINET 에 인치가 다른 프로젝트 파일이 **여러 개**면
+        //    (실측: SHUFFLER 3"·4.3") 인치가 안 적힌 행까지 "일단 포함"했더니 **3" 행이 4.3" 파일과
+        //    비교되며 Resolution 480x854 vs 272 같은 엉뚱한 "차이"로 떴다(사용자 지적: "4.3" 모델인데
+        //    왜 3"을 비교하나"). → CABINET 이 인치로 갈리는 경우엔 **인치가 확인되는 행만** 비교하고,
+        //    확인 안 되는 행은 비교하지 않고 "인치 미확인" 으로 따로 센다(추측해서 끼워 넣지 않는다 —
+        //    mail-evidence.md 와 같은 원칙).
+        var ioUnchecked = 0;
+        var siblingInches = mine.filter(function (p) {
+            return (window._plNameHit(target.customer || '', p.customer || '') || window._plNameHit(p.customer || '', target.customer || ''))
+                && (window._plNameHit(target._fileModel, p._fileModel) || window._plNameHit(p._fileModel, target._fileModel));
+        }).map(function (p) { return _plCheckNorm(p.inch || ''); }).filter(Boolean);
+        var cabinetHasInchVariants = new Set(siblingInches).size > 1;
+        if (cabinetHasInchVariants) {
             var inchWanted = _plCheckNorm(target.inch);
-            var narrowed = rows.filter(function (r) { return _plCheckNorm(r.panelInch || r.cuttingInch || '') === inchWanted; });
-            if (narrowed.length) rows = narrowed;
+            rows = rows.filter(function (r) {
+                var rowInch = _plCheckNorm(r.panelInch || r.cuttingInch || '');
+                if (!rowInch) { ioUnchecked++; return false; }
+                return rowInch === inchWanted;
+            });
         }
 
         var pm = d.projectMeta || {};
@@ -2945,41 +2988,60 @@
             if (diffs.length) mism.push({ row: r, diffs: diffs });
         }
 
+        var ioNote = ioUnchecked ? ('<div style="color:#888; font-size:11px; margin-top:4px;">⚠️ ' + ioUnchecked
+            + _t('건은 인치(panelInch/cuttingInch)가 비어 있어 비교에서 뺐습니다 — 같은 CABINET 에 인치가 다른 프로젝트 파일이 있어 추측하면 엉뚱한 제품과 비교됩니다.',
+                 ' rows had no inch (panelInch/cuttingInch) on file — skipped, since this CABINET has more than one inch variant and guessing would compare against the wrong product.') + '</div>') : '';
         var body = pickerHtml;
         if (!rows.length) {
-            body += '<div style="color:#888; padding:10px 0;">⚠️ ' + _t('이 프로젝트와 일치하는 CUSTOMER·CABINET 행이 Project list 에 없습니다.', 'No Project list rows match this project\'s CUSTOMER/CABINET.') + '</div>';
+            body += '<div style="color:#888; padding:10px 0;">⚠️ ' + _t('이 프로젝트와 일치하는 CUSTOMER·CABINET 행이 Project list 에 없습니다.', 'No Project list rows match this project\'s CUSTOMER/CABINET.') + '</div>' + ioNote;
         } else if (!mism.length) {
-            body += '<div style="color:#2e7d32; padding:10px 0;">✅ ' + _t('비교한 ', 'Compared ') + rows.length + _t('건 중 다른 값이 없습니다.', ' rows — no differences found.') + '</div>';
+            body += '<div style="color:#2e7d32; padding:10px 0;">✅ ' + _t('비교한 ', 'Compared ') + rows.length + _t('건 중 다른 값이 없습니다.', ' rows — no differences found.') + '</div>' + ioNote;
         } else {
+            // ✏️ [2026-11-16] "어느 쪽이 틀렸는지 모르니 잘못된 곳으로 이동해서 수정" — 프로젝트 파일
+            //  쪽은 **지금 열려 있을 때만** 그 탭으로 이동할 수 있다(안 열려 있으면 자동으로 써넣지
+            //  않는다 — 다른 사람이 보는 중일 수 있는 남의 프로젝트 파일을 스크립트로 고치지 않는다,
+            //  docs/doc-store.md 경고와 같은 원칙).
+            var isOpenProject = !!target.drive_file_id && String(target.drive_file_id).trim() === String(window.currentDriveFileId || '').trim();
             body += '<table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:11.5px;">'
-                 + '<colgroup><col style="width:38px"><col style="width:170px"><col><col><col style="width:56px"></colgroup>'
+                 + '<colgroup><col style="width:38px"><col style="width:150px"><col style="width:26%"><col><col style="width:50px"><col style="width:26px"></colgroup>'
                  + '<tr style="background:#f1f6f7;"><th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">No</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('항목', 'Field') + '</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">Project list</th>'
                  + '<th style="padding:5px 6px; text-align:left; border-bottom:1px solid #d7e4e6;">' + _t('프로젝트 파일', 'Project file') + '</th>'
+                 + '<th style="padding:5px 6px; border-bottom:1px solid #d7e4e6;"></th>'
                  + '<th style="padding:5px 6px; border-bottom:1px solid #d7e4e6;"></th></tr>'
                  + mism.map(function (m) {
                      return m.diffs.map(function (df, di) {
-                         var applyCell;
+                         var applyCell, navCell, valCell;
+                         var navBtn = '<td style="padding:5px 4px; text-align:center;"><button onclick="window.plClosePopup(); window.switchTab(\'' + _plCheckFieldTab(df.plKey) + '\')"'
+                                    + ' title="' + _esc(_t('이 프로젝트에서 직접 확인·수정(어느 쪽이 맞는지는 사람이 판단)', 'Check and edit directly in the project (you decide which side is right)')) + '"'
+                                    + ' style="padding:3px 6px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.neutral + ' cursor:pointer;">✏️</button></td>';
+                         var navOff = '<td style="padding:5px 4px; text-align:center;"><span title="' + _esc(_t('이 프로젝트를 열어야 이동할 수 있습니다', 'Open this project first to go there')) + '" style="color:#ccc;">✏️</span></td>';
+                         navCell = isOpenProject ? navBtn : navOff;
                          if (df.plKey) {
                              var cid = 'c' + (++window._plCheckIdSeq);
-                             window._plCheckPending[cid] = { rowId: m.row._id, plKey: df.plKey, newVal: df.proj, fileName: target.file_name };
-                             applyCell = '<td style="padding:5px 6px; text-align:center;"><button class="pl-check-apply" data-check-id="' + cid + '"'
-                                       + ' title="' + _esc(_t('이 값을 Project list 에 적용', 'Apply this value to Project list')) + '"'
-                                       + ' style="padding:3px 8px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.primary + ' cursor:pointer;">➡️ ' + _t('적용', 'Apply') + '</button></td>';
+                             window._plCheckPending[cid] = { rowId: m.row._id, plKey: df.plKey, fileName: target.file_name };
+                             // 📝 [2026-11-16] 값칸을 **편집 가능한 입력칸**으로 — 프로젝트 파일 값을 그대로
+                             //  옮기는 게 기본이지만, 사람이 고쳐서(예: 표기 통일) 적용할 수도 있다.
+                             valCell = '<td style="padding:3px 6px;"><input id="pl-check-in-' + cid + '" value="' + _esc(df.proj)
+                                     + '" style="width:100%; box-sizing:border-box; border:1px solid #d7e4e6; border-radius:4px; padding:2px 5px; font-size:11.5px; color:#b1432f;"></td>';
+                             applyCell = '<td style="padding:5px 4px; text-align:center;"><button class="pl-check-apply" data-check-id="' + cid + '"'
+                                       + ' title="' + _esc(_t('왼쪽 칸의 값을 Project list 에 적용(고쳐서 넣어도 됨)', 'Apply the value on the left to Project list (edit it first if you like)')) + '"'
+                                       + ' style="padding:3px 7px; border-radius:5px; font-size:11px; ' + PL_BTN_ROLE.primary + ' cursor:pointer;">➡️</button></td>';
                          } else {
+                             valCell = '<td style="padding:5px 6px; color:#b1432f; word-break:break-word;">' + _esc(df.proj) + '</td>';
                              applyCell = '<td></td>';
                          }
                          return '<tr style="border-bottom:1px solid #eef3f4;">'
-                              + (di === 0 ? '<td style="padding:5px 6px; cursor:pointer; color:#00707d; text-decoration:underline; word-break:break-all;" onclick="window.plClosePopup(); window.plOpenDetail(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>' : '')
+                              + (di === 0 ? '<td style="padding:5px 6px; cursor:pointer; color:#00707d; text-decoration:underline; word-break:break-all;" onclick="window.plCheckGotoRow(\'' + m.row._id + '\')" rowspan="' + m.diffs.length + '">' + _esc(m.row.no || '') + '</td>' : '')
                               + '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.label) + '</td>'
                               + '<td style="padding:5px 6px; word-break:break-word;">' + _esc(df.pl) + '</td>'
-                              + '<td style="padding:5px 6px; color:#b1432f; word-break:break-word;">' + _esc(df.proj) + '</td>'
-                              + applyCell + '</tr>';
+                              + valCell + applyCell + navCell + '</tr>';
                      }).join('');
                  }).join('')
                  + '</table>'
-                 + '<div style="color:#888; font-size:11px; margin-top:8px;">' + _t('비교 ', 'Compared ') + rows.length + _t('건 · 다른 값 ', ' rows · differences ') + mism.length + _t('건', ' rows') + '</div>';
+                 + '<div style="color:#888; font-size:11px; margin-top:8px;">' + _t('비교 ', 'Compared ') + rows.length + _t('건 · 다른 값 ', ' rows · differences ') + mism.length + _t('건', ' rows') + '</div>'
+                 + ioNote;
         }
         _popup(PL_CHECK_TITLE(), body, true);
     };
