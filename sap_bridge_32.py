@@ -1788,7 +1788,19 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
         # 이미 맞으면 저장하지 않고 조용히 넘어간다 — 실패해도 예외를 던지지 않으므로 이어지는
         # `_sap_select_alv_layout`(매 조회마다의 안전망)은 그대로 시도된다.
         default_fixed, default_fix_diag = _sap_ensure_default_layout(session, grid_for_layout, layout_variant)
-        wnd = session.findById('wnd[0]')
+        if default_fixed:
+            # 🆕 [2026-11-16, 사용자 실측] 방금 고친 기본값은 **지금 이 화면 인스턴스엔 안 먹는다**
+            # — ALV는 "트랜잭션 최초 진입" 시점의 기본 레이아웃 기준으로 내부 정렬/데이터를
+            # 이미 확정해 버리고, 그 뒤 같은 화면에서 레이아웃만 다시 골라도(_sap_select_alv_layout)
+            # **컬럼만 바뀌고 행 순서는 옛 기본값(예 /장정범) 그대로** 남았다(실측: 1회차 조회는
+            # 깨진 채·완전히 새로 재진입한 2회차부터 정상). → 고친 뒤엔 그 자리에서 잇지 말고
+            # **트랜잭션을 완전히 재진입**해야 그 재진입 시점의(이제 올바른) 기본값을 ALV가
+            # 처음부터 쓴다.
+            used_single = _navigate_to_bom_screen(session, wnd, materials, plant,
+                                                   use_single_tcode=use_single_tcode,
+                                                   explosion=explosion, show_price=show_price,
+                                                   show_location=show_location)
+            wnd = session.findById('wnd[0]')
         grid_for_layout = _sap_find_grid(wnd)
     if grid_for_layout is not None:
         layout_applied, layout_diag = _sap_select_alv_layout(session, grid_for_layout, layout_variant)
@@ -1824,7 +1836,7 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     # 🆕 [2026-11-12] "기본 레이아웃" 자체를 되돌려 저장했으면 그 사실을 분명히 남긴다 —
     #    조용히 팀 전역 설정을 고치면 안 되고, 바뀐 걸 늘 드러내야 한다(AI 답변·이슈 수집 둘 다).
     if default_fixed:
-        header += f'[⚠️ 팀 공용 "기본 레이아웃"이 다른 값이어서 "{layout_variant}"로 되돌려 저장했습니다]\n'
+        header += f'[⚠️ 팀 공용 "기본 레이아웃"이 다른 값이어서 "{layout_variant}"로 되돌려 저장하고 재조회했습니다]\n'
     if layout_applied is True:
         header += f'[레이아웃: "{layout_variant}" 적용됨]\n'
     elif layout_applied is False:
