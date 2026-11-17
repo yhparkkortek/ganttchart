@@ -1150,6 +1150,12 @@
 #mc-unit-actions-panel.mc-unit-actions-open { max-width:220px; opacity:1; }
 #mc-unit-actions-toggle { transition:background .15s; border-radius:4px; }
 #mc-unit-actions-toggle:hover { background-color:#e9ecef !important; }
+/* 🏷🏷 [2026-11-17 2차, "MC TABLE 기능 상속해줘"] Document 리비전 관리(이름변경/추가/삭제)
+   패널 — 위 M.C 제품구분자 관리 패널과 완전히 같은 모양(슬라이드로 나왔다 들어간다). */
+#doc-rev-actions-panel { display:flex; align-items:center; gap:2px; max-width:0; overflow:hidden; transition:max-width .25s ease, opacity .2s ease; opacity:0; white-space:nowrap; }
+#doc-rev-actions-panel.doc-rev-actions-open { max-width:160px; opacity:1; }
+#doc-rev-actions-toggle { transition:background .15s; border-radius:4px; }
+#doc-rev-actions-toggle:hover { background-color:#e9ecef !important; }
 /* 💡 [2026-08-30 신규 → 같은 날 재수정] AI 요약/문답의 "#G숫자📌📧발신인" 인용이 여러 개 연달아
    나오면 한 줄이 너무 길어져 보기 불편하다는 지적 — M.C Table 제품구분자 관리 패널과 동일하게,
    평소엔 화살표(▶)만 보이고 누르면 📌(알람)/📧(원문)/발신인 이름이 옆으로 슬라이드 펼쳐지도록

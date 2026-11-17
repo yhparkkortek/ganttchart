@@ -3119,15 +3119,13 @@
         if (window.mcSwitchUnit) window.mcSwitchUnit(next); else window.mcActiveUnit = next;
         window._docRender();
     };
-    // 🏷🏷 리비전(R1/R2/R3…) 넘기기 — M.C `mcCycleRevision`/`mcAddNewRevision`과 같은 규칙.
-    //    ◀▶ 는 **내용 있는** 리비전끼리만 돈다(+지금 보는 중인 빈 리비전은 임시로 끼워 준다) —
-    //    빈 슬롯을 계속 만들며 돌아다니면 끝이 없다.
+    // 🏷🏷 [2026-11-17 2차, "MC TABLE 기능 상속해줘"] 리비전(R1/R2/R3…) 넘기기 — M.C 의
+    //    단일 순환 버튼(`mcCycleUnit`)과 **완전히 같은 규칙**으로 바꿨다: 있는 리비전
+    //    전부를 그냥 돈다(내용 유무로 거르지 않는다) — 빈 리비전도 사람이 ➕로 일부러
+    //    만든 것이니 M.C 가 빈 제품구분자도 그냥 도는 것과 같다.
     window._docRevGo = function (formId, delta) {
+        var list = window._docRevisions(formId);
         var cur = _docActiveRevision(formId) || 'R1';
-        var list = window._docRevisions(formId).filter(function (r) {
-            return r === cur || window._docRevisionHasData(formId, r);
-        });
-        if (!list.length) list = ['R1'];
         var i = list.indexOf(cur);
         if (i < 0) i = 0;
         window._docState.revision = list[((i + delta) % list.length + list.length) % list.length];
@@ -3172,6 +3170,40 @@
         _markDirty();
         window._docRender();
         _toast('🏷 ' + newRev + _t(' 리비전을 만들었습니다.', ' revision created.'), 'success');
+    };
+    /** ✏️ [2026-11-17 2차, "MC TABLE 기능 상속해줘"] 리비전 번호 바꾸기 — M.C `mcRenameUnit`과
+     *  같은 자리(✏️). 리비전엔 자유 이름이 없어 "이름"대신 **R 번호 자체**를 바꾼다(데이터는
+     *  그대로, 키만 옮긴다). R1 은 코드 전체가 "항상 있는 바닥"으로 가정하므로(`_docRevisions`가
+     *  무조건 포함) 번호를 바꿀 수 없다. */
+    window._docRevRename = function (formId, oldRev) {
+        oldRev = oldRev || _docActiveRevision(formId) || 'R1';
+        if (oldRev === 'R1') {
+            _toast('⚠️ ' + _t('R1은 번호를 바꿀 수 없습니다(항상 기준 리비전입니다).', 'R1 cannot be renumbered (it is always the baseline revision).'), 'error');
+            return;
+        }
+        var input = prompt(_t('새 리비전 번호를 입력하세요 (예: R5)', 'Enter a new revision number (e.g. R5)'), oldRev);
+        if (!input) return;
+        var m = String(input).trim().toUpperCase().match(/^R(\d+)$/);
+        if (!m) {
+            _toast('⚠️ ' + _t('R 뒤에 숫자만 적어주세요. 예: R5', 'Use "R" followed by digits only, e.g. R5'), 'error');
+            return;
+        }
+        var newRev = 'R' + m[1];
+        if (newRev === oldRev) return;
+        if (newRev !== 'R1' && window._docRevisionHasData(formId, newRev)) {
+            if (!confirm(_t(
+                '[' + newRev + ']에 이미 내용이 있습니다. [' + oldRev + '] 내용으로 덮어쓸까요?',
+                '[' + newRev + '] already has content. Overwrite it with [' + oldRev + ']?'
+            ))) return;
+        }
+        var container = _docContainer(formId);
+        container.revisions = container.revisions || {};
+        container.revisions[newRev] = container.revisions[oldRev] || {};
+        delete container.revisions[oldRev];
+        if ((window._docState.revision || '') === oldRev) window._docState.revision = newRev;
+        _markDirty();
+        window._docRender();
+        _toast('✏️ ' + oldRev + ' → ' + newRev + _t(' 로 번호를 바꿨습니다.', ' renamed.'), 'success');
     };
     /** 🗑️ [2026-11-17 요청] 리비전 삭제 — M.C 의 "제품구분자 관리(이름변경/추가/삭제)" 패널과
      *  같은 자리에, 같은 안전장치(확인창 + 관리자 비밀번호)로 리비전 삭제를 둔다. 마지막 남은
@@ -4088,56 +4120,35 @@
                 + ' style="margin-left:2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
                 + '</div>';
         }
-        // 🏷🏷 리비전 바(R1/R2/R3…) — M.C Table 과 같은 모양(◀ 📦 ▶ 와 같은 자리에 R 번호).
-        //    `perRevision` 서식에서만 보인다(지금은 라벨사양서 하나). + VS 는 리비전이 2개
-        //    이상 **내용 있게** 있을 때만 뜻이 있어 그때만 보인다.
+        // 🏷🏷 [2026-11-17 2차, "MC TABLE 기능 상속해줘"] 리비전 바(R1/R2/R3…) — M.C 의
+        //    제품구분자 바와 **글자 그대로 같은 모양**: [R-순환 버튼] [▶/◀ 토글] [열리면
+        //    ✏️➕🗑️ 가 슬라이드로 나왔다 들어간다]. `perRevision` 서식에서만 보인다
+        //    (지금은 라벨사양서 하나). VS 는 그 옆에 별도로, 리비전이 2개 이상 **내용
+        //    있게** 있을 때만 뜻이 있어 그때만 보인다(M.C 에도 없는, Document 만의 보탬).
         if (form && form.perRevision) {
             var _docRevList = window._docRevisions(form.id);
             var _docRevCur = _docActiveRevision(form.id) || 'R1';
-            var _docRevI = _docRevList.indexOf(_docRevCur);
             var _docRevWithData = _docRevList.filter(function (r) { return window._docRevisionHasData(form.id, r); });
+            var _docRevMgOpen = !!window._docState.revManageOpen;
             th += '<span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>'
                 + '<div id="doc-rev-bar" style="display:flex; align-items:center; gap:2px; flex-shrink:0;">'
-                + '<button onclick="window._docRevGo(\'' + _esc(form.id) + '\',-1)" title="' + _esc(_t('이전 리비전', 'Previous')) + '"'
-                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">◀</button>'
                 + '<button class="unit-cycle-btn" onclick="window._docRevGo(\'' + _esc(form.id) + '\',1)" title="'
-                + _esc(_t('누를 때마다 다음 리비전으로 — 리비전마다 라벨 목록이 따로입니다', 'Next revision')) + '"'
-                + ' style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer;'
-                // 🏷 아이콘 없이 R 번호 글자만(사용자 요청 2026-11-13 3차).
-                + ' font-size:12px; font-weight:bold;">' + _esc(_docRevCur) + '</button>'
-                + '<button onclick="window._docRevGo(\'' + _esc(form.id) + '\',1)" title="' + _esc(_t('다음 리비전', 'Next')) + '"'
-                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">▶</button>'
-                + '<span style="font-size:11px; color:#868e96;">' + ((_docRevI < 0 ? 0 : _docRevI + 1) + '/' + _docRevList.length) + '</span>'
-                + '<button onclick="window._docRevAdd(\'' + _esc(form.id) + '\')" title="' + _esc(_t('리비전 추가 — R 번호가 하나 늘어납니다', 'Add a revision')) + '"'
-                + ' style="margin-left:2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>';
-            // 🗂️ [2026-11-17 요청] "Rev 삭제 추가 변경 기능이 없음 — M.C Table 참조" — M.C 의
-            //    "제품구분자 관리(이름변경/추가/삭제)" 토글 패널과 같은 자리·같은 모양으로,
-            //    리비전은 원하는 번호로 **바로 전환**(변경)하고 **지울 수**(삭제) 있게 한다
-            //    (추가는 바로 위 ➕가 이미 담당). 리비전엔 자유 이름이 없어 "이름변경"만 없다.
-            var _docRevMgOpen = !!window._docState.revManageOpen;
-            th += '<button onclick="window._docRevToggleManage()" title="'
-                + _esc(_docRevMgOpen ? _t('접기', 'Collapse') : _t('리비전 관리(바로가기/삭제)', 'Manage revisions (jump/delete)')) + '"'
+                + _esc(_t('클릭할 때마다 다음 리비전으로 전환 — 리비전마다 라벨 목록이 따로입니다', 'Click to switch to the next revision')) + '"'
+                + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer;'
+                + ' font-size:12px; font-weight:bold; background:#00707d; color:#fff;">' + _esc(_docRevCur) + '</button>'
+                + '<button id="doc-rev-actions-toggle" onclick="window._docRevToggleManage()" title="'
+                + _esc(_docRevMgOpen ? _t('접기', 'Collapse') : _t('리비전 관리(이름변경/추가/삭제)', 'Manage revisions (rename/add/delete)')) + '"'
                 + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (_docRevMgOpen ? '#e9ecef' : 'none')
-                + '; color:#555; cursor:pointer; font-size:12px;">' + (_docRevMgOpen ? '◀' : '▶') + '</button>';
-            if (_docRevMgOpen) {
-                th += '<span style="display:flex; align-items:center; gap:3px; padding:0 2px; background:#fff; border:1px solid #d7dee3; border-radius:6px;">';
-                _docRevList.forEach(function (r) {
-                    var isCur = r === _docRevCur;
-                    th += '<span style="display:inline-flex; align-items:center; gap:1px;">'
-                        + '<button onclick="window._docSetRevision(\'' + _esc(form.id) + '\',\'' + _esc(r) + '\')" title="'
-                        + _esc(_t('[' + r + ']로 바로 전환', 'Jump to [' + r + ']')) + '"'
-                        + ' style="padding:4px 8px; min-width:auto; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;'
-                        + (isCur ? ' border:1px solid #00707d; background:#00707d; color:#fff;'
-                                 : ' border:1px solid #ccc; background:#f8f9fa; color:#444;') + '">' + _esc(r) + '</button>'
-                        + (_docRevList.length > 1
-                            ? '<a href="#" onclick="window._docRevDelete(\'' + _esc(form.id) + '\',\'' + _esc(r) + '\');return false;" title="'
-                              + _esc(_t('[' + r + '] 지우기', 'Delete [' + r + ']')) + '"'
-                              + ' style="font-size:10px; color:#a83232; padding:0 2px; text-decoration:none;">✕</a>'
-                            : '')
-                        + '</span>';
-                });
-                th += '</span>';
-            }
+                + '; color:#555; cursor:pointer; font-size:12px;">' + (_docRevMgOpen ? '◀' : '▶') + '</button>'
+                + '<div id="doc-rev-actions-panel" class="' + (_docRevMgOpen ? 'doc-rev-actions-open' : '') + '">'
+                + '<button onclick="window._docRevRename(\'' + _esc(form.id) + '\',\'' + _esc(_docRevCur) + '\')" title="'
+                + _esc(_t('리비전 번호 바꾸기', 'Rename this revision')) + '"'
+                + ' style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:14px;">✏️</button>'
+                + '<button onclick="window._docRevAdd(\'' + _esc(form.id) + '\')" title="' + _esc(_t('리비전 추가 — R 번호가 하나 늘어납니다', 'Add a revision')) + '"'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
+                + '<button onclick="window._docRevDelete(\'' + _esc(form.id) + '\')" title="' + _esc(_t('현재 리비전 삭제', 'Delete this revision')) + '"'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
+                + '</div>';
             if (_docRevWithData.length >= 2) {
                 th += '<button onclick="window._docRevVsOpen(\'' + _esc(form.id) + '\')" title="'
                     + _esc(_t('리비전끼리 무엇이 달라졌는지 비교합니다', 'Compare what changed between revisions')) + '"'
