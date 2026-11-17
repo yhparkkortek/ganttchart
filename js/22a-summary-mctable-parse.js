@@ -24,6 +24,32 @@ function _xlsxCellToDateStr(v) {
     return String(v).trim();
 }
 
+// 🐛 [2026-11-17] js/55 Project list "Agile REV" 사고와 같은 패턴을 여기서도 확인했다 —
+// 사람이 라벨 끝에 확인 비고를 덧붙이면(예 "개발기간(일) (11.17 확인)") 아래 labelMap 등은
+// **정확히 일치**만 보므로 그 행이 경고 한 줄도 없이 통째로 무시된다(project-list보다 더
+// 조용하다 — 거긴 console.warn 이라도 있다). 끝에 붙은 괄호 비고만 반복해서 떼고 다시
+// 찾는다 — '개발기간(일)' 처럼 괄호가 **라벨 자체의 일부**인 키는 똑같이 떼서 비교하므로
+// 원래 매칭이 깨지지 않는다(이 파일의 맵들을 전수 확인 — 끝 괄호를 가진 키는 '개발기간(일)'
+// 하나뿐이고, 떼어도 충돌하는 다른 키가 없다. ⚠️ js/51 패널 라이브러리 이식과 달리 여기
+// 맵에는 'Expected Price'/'Expected Price (Cutting/Slimming)' 처럼 괄호로만 구분되는
+// 쌍이 없어 안전하다 — 그런 쌍이 있는 파일엔 이 방식을 그대로 베끼면 안 된다).
+function _normSummaryLabel(s) {
+    s = String(s == null ? '' : s).trim();
+    var stripped;
+    do { stripped = s; s = s.replace(/\s*\([^()]*\)\s*$/, '').trim(); } while (s !== stripped);
+    return s;
+}
+// 정확히 일치하면 그대로(기존 동작 그대로 보존), 안 맞으면 괄호 비고를 뗀 모양으로 재시도.
+function _summaryMapGet(map, key) {
+    if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+    var nk = _normSummaryLabel(key);
+    if (nk === key) return undefined;
+    for (var mk in map) {
+        if (Object.prototype.hasOwnProperty.call(map, mk) && _normSummaryLabel(mk) === nk) return map[mk];
+    }
+    return undefined;
+}
+
 function _parseSummarySheetFromWorkbook(workbook) {
     const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'Summary' || n.trim().includes('Summary'); });
     if (!sheetName) return false;
@@ -98,27 +124,32 @@ function _parseSummarySheetFromWorkbook(workbook) {
         [[0, 1, 2], [4, 5, 6]].forEach(function(cols) {
             const L = String(row[cols[0]] || '').trim(); if (!L) return;
             const V = row[cols[1]] === undefined || row[cols[1]] === null ? '' : String(row[cols[1]]).trim();
-            if (pairMap[L]) { pairMap[L](V); return; }
-            if (memberMap[L]) {
-                pm[memberMap[L]] = V;
+            const pairFn = _summaryMapGet(pairMap, L);
+            if (pairFn) { pairFn(V); return; }
+            const memberKey = _summaryMapGet(memberMap, L);
+            if (memberKey) {
+                pm[memberKey] = V;
                 const E = row[cols[2]] === undefined || row[cols[2]] === null ? '' : String(row[cols[2]]).trim();
-                if (E) pm[memberMap[L] + '이메일'] = E;
+                if (E) pm[memberKey + '이메일'] = E;
             }
         });
         if (!label) return;
         const rawVal = row[1];
-        if (milestoneMap[label]) {
+        const msKey = _summaryMapGet(milestoneMap, label);
+        if (msKey) {
             const patch = { date: _xlsxCellToDateStr(rawVal) };
             if (row.length > 2 && String(row[2] || '').trim() !== '') patch.actualDate = _xlsxCellToDateStr(row[2]); // 💡 3열(실적) 형식 지원
-            sd.milestones[milestoneMap[label]] = Object.assign({}, sd.milestones[milestoneMap[label]], patch);
+            sd.milestones[msKey] = Object.assign({}, sd.milestones[msKey], patch);
             return;
         }
-        if (actualMilestoneMap[label]) {
-            sd.milestones[actualMilestoneMap[label]] = Object.assign({}, sd.milestones[actualMilestoneMap[label]], { actualDate: _xlsxCellToDateStr(rawVal) });
+        const amsKey = _summaryMapGet(actualMilestoneMap, label);
+        if (amsKey) {
+            sd.milestones[amsKey] = Object.assign({}, sd.milestones[amsKey], { actualDate: _xlsxCellToDateStr(rawVal) });
             return;
         }
-        if (labelMap[label]) {
-            labelMap[label](rawVal === undefined || rawVal === null ? '' : String(rawVal).trim());
+        const labelFn = _summaryMapGet(labelMap, label);
+        if (labelFn) {
+            labelFn(rawVal === undefined || rawVal === null ? '' : String(rawVal).trim());
         }
     });
     window.tabData.summary = sd;
