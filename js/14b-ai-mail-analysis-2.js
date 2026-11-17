@@ -488,14 +488,40 @@ window._mailFindDupBySourceTag = function(detailText, gd, ci) {
     return null;
 };
 
+// 📅 [2026-11-17 요청] 반복회의 일정이 바뀔 때마다 Outlook/Exchange가 스스로 보내는
+//    "자동 업데이트" 알림 메일 — 실행할 내용이 없는 시스템 메일인데, 올 때마다 새 업무로
+//    등록돼 같은 회의가 계속 새 리프로 쌓였다(실측: LNW_STELLAR32_32.0 "SL-1 Proto B
+//    topper status" 한 건이 10/22·10/29 두 번의 일정 변경만으로 벌써 4건).
+//    ⚠️ AI 가 매번 다른 말로 요약하는 `[핵심내용]` 문장으로 판정하면 표현이 바뀔 때마다
+//       못 잡는다 — **Exchange 가 보내는 원문(mailRaw.body2000)의 고정 문구**로 판정한다.
+//    데이터로 뺀 이유: 새 어투·새 시스템(Google Calendar 등)이 보태질 수 있어 한 줄 추가로
+//    끝나야 한다 — 코드에 정규식을 박지 않는다.
+window.MAIL_AUTO_NOTICE_MARKERS = [
+    'Sent by Microsoft Exchange Online',
+    'has been automatically updated'
+];
+window._mailIsAutoNotice = function(mailRaw) {
+    const body = String((mailRaw && mailRaw.body2000) || '');
+    if (!body) return false;
+    return window.MAIL_AUTO_NOTICE_MARKERS.some(function(marker) { return body.indexOf(marker) !== -1; });
+};
+
 // ✅ [공용] 분석 결과(r) → 간트 행 객체 생성 (개별 등록 / 보관함 배치 / 타 프로젝트 배분 공용)
 //    gd/ci 생략 시 현재 프로젝트(globalData/colIdx) 기준으로 동작
-//    반환값의 row는 중복으로 판단되면 null — 호출부는 반드시 확인 후 처리할 것.
-window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
+//    반환값의 row는 중복으로 판단되면(또는 등록할 내용이 없으면) null — 호출부는 반드시
+//    확인 후 처리할 것. `skipReason` 으로 어느 쪽인지 가른다('dup'|'autoNotice').
+//    targetMeta: { projectMeta, members3 } — gd/ci로 "지금 열려있지 않은 다른 프로젝트"의
+//    데이터를 넘기는 헤드리스 배치 경로(_msAutoRegisterToProject·distSendTaskToTargets 등)에서,
+//    담당구분→담당자 매핑(_msResolveCategoryAssignee)도 그 프로젝트 기준으로 풀도록 같이 넘긴다.
+//    생략하면 기존처럼 현재 열린 프로젝트 기준(같은 프로젝트에 넣는 일반 경로는 그대로 호환).
+window.buildMailTaskRow = function(r, gd, ci, mailRaw, targetMeta) {
     gd = gd || globalData;
     ci = ci || colIdx;
     if (window._mailFindDupBySourceTag(r['상세내용'], gd, ci)) {
-        return { row: null, taskName: (r['업무명'] || '새 업무'), duplicate: true };
+        return { row: null, taskName: (r['업무명'] || '새 업무'), duplicate: true, skipReason: 'dup' };
+    }
+    if (window._mailIsAutoNotice(mailRaw)) {
+        return { row: null, taskName: (r['업무명'] || '새 업무'), skipReason: 'autoNotice' };
     }
     // 💡 사용자가 미리보기에서 드롭다운으로 직접 고른 값이거나(_wbsLevelUserSet) AI가 0~2(대분류~
     //    소분류2)로 판단한 경우는 그대로 존중. 그 외(3/4/미지정)는 실제 시트 기준으로 재추정.
@@ -525,7 +551,9 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     }
     // 💡 [담당구분] AI가 판정한 담당구분(예: LCM)이 있고 Summary에 해당 담당자가 등록돼 있으면
     //    그 담당자로 배정 — 없으면 기존처럼 대상 프로젝트의 기존 행(refRow) 담당자를 그대로 승계
-    const _catAssignee = window._msResolveCategoryAssignee ? window._msResolveCategoryAssignee(r['담당구분']) : null;
+    const _catAssignee = window._msResolveCategoryAssignee
+        ? window._msResolveCategoryAssignee(r['담당구분'], targetMeta && targetMeta.projectMeta, targetMeta && targetMeta.members3)
+        : null;
     if (ci.assignee !== -1) newRow[ci.assignee] = _catAssignee ? _catAssignee.name : (refRow ? (refRow[ci.assignee] || "") : "");
     // 💡 [2026-08-28 버그 수정] r['담당구분']은 AI가 프롬프트 그대로("영업"/"기구"/"Tooling" 등 정식
     //    명칭으로) 응답한 원본값 — WBS 배지/드롭다운 짧은 코드(SAL/ME/TOOL 등)와 다른 문자열이라, 별칭
@@ -852,7 +880,10 @@ window.insertMailTask = function() {
     const insertAfter = parseInt(document.getElementById('mail-insert-position').value);
     const built = window.buildMailTaskRow(r, undefined, undefined, window._mailParsedRaw);
     if (!built.row) {
-        alert(window._t('⚠️ 이미 등록된 메일입니다. 같은 업무가 이미 있어 중복으로 추가하지 않았습니다.', '⚠️ This mail is already registered — a duplicate task already exists, so nothing new was added.'));
+        alert(built.skipReason === 'autoNotice'
+            ? window._t('⚠️ Outlook/Exchange가 보낸 "일정 자동 업데이트" 알림 메일이라 등록하지 않았습니다 — 실행할 내용이 없는 시스템 메일입니다.',
+                        '⚠️ Not added — this is an automatic "meeting schedule updated" notice from Outlook/Exchange with nothing to act on.')
+            : window._t('⚠️ 이미 등록된 메일입니다. 같은 업무가 이미 있어 중복으로 추가하지 않았습니다.', '⚠️ This mail is already registered — a duplicate task already exists, so nothing new was added.'));
         return;
     }
 

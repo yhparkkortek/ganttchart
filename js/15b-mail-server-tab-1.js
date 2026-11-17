@@ -883,12 +883,19 @@ window._MS_CATEGORY_FIELD_MAP = {
 //    실질적으로 두 영역이 걸친 경우만 AI가 최대 2개까지 기재 — 프롬프트에서 엄격히 제한).
 //    배지/담당자 표시는 여전히 "대표 담당자 한 명"이 필요하므로, 앞에서부터 순서대로 실제 등록된
 //    담당자를 찾아 맨 처음 매칭되는 값을 대표로 반환한다(전부 미등록이면 null).
-window._msResolveCategoryAssignee = function(category) {
+// 🐛 [2026-11-17 버그수정, 사용자 제보] 지금까지 pm/members3를 무조건 window.projectMeta/
+// window.tabData에서만 읽어서, "다른(지금 안 열려있는) 프로젝트"로 업무를 배치하는 헤드리스
+// 경로(_msAutoRegisterToProject·distSendTaskToTargets·inboxDistExecute)에서 이 함수를 그대로
+// 쓰면 지금 화면에 열려있는 엉뚱한 프로젝트의 담당자 매핑이 적용됐다(배치 자체는 대상 프로젝트에
+// 정상적으로 되지만, 담당자만 조용히 뒤바뀜 — 오류 없이 넘어가는 종류의 버그). pmOverride/
+// members3Override를 주면 그 프로젝트 기준으로 풀고, 생략하면 기존처럼 현재 열린 프로젝트
+// 기준(호환 유지).
+window._msResolveCategoryAssignee = function(category, pmOverride, members3Override) {
     const raw = (category || '').toString().trim();
     if (!raw || raw === '미분류') return null;
     const parts = raw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    const pm = window.projectMeta || {};
-    const members3 = (window.tabData && window.tabData.projectMembers3) || [];
+    const pm = pmOverride || window.projectMeta || {};
+    const members3 = members3Override || (window.tabData && window.tabData.projectMembers3) || [];
     for (let i = 0; i < parts.length; i++) {
         const cat = parts[i];
         const fixed = window._MS_CATEGORY_FIELD_MAP[cat];
@@ -1260,7 +1267,8 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         const l0s = window.buildL0SectionInfo(rows, saveData.colIdx);
         const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
 
-        const built = window.buildMailTaskRow(task, rows, saveData.colIdx, mailRaw);
+        const built = window.buildMailTaskRow(task, rows, saveData.colIdx, mailRaw,
+            { projectMeta: saveData.projectMeta, members3: (saveData.tabData && saveData.tabData.projectMembers3) || [] });
         if (!built.row) return { ok: true, label: window._t('이미 배치됨', 'already placed'), alreadyPlaced: true };
         if (setAlarm) built.row._알림 = true; // 💡 커트라인 이상일 때만 자동알람(D-7/3/1) 대상으로 설정
 

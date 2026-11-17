@@ -418,7 +418,8 @@ window.inboxDistExecute = async function(attempt) {
 
         // 행 생성 — 대상 프로젝트의 컬럼 구조(colIdx) 기준
         const tCol = ctx.saveData.colIdx;
-        const built = window.buildMailTaskRow(ctx.task, ctx.rows, tCol, ctx.mailRaw);
+        const built = window.buildMailTaskRow(ctx.task, ctx.rows, tCol, ctx.mailRaw,
+            { projectMeta: ctx.saveData.projectMeta, members3: (ctx.saveData.tabData && ctx.saveData.tabData.projectMembers3) || [] });
         if (!built.row) {
             alert(window._t('⚠️ 이미 같은 메일이 대상 프로젝트에 등록돼 있어 전송하지 않았습니다.', '⚠️ The same mail is already registered in the target project — nothing was sent.'));
             return;
@@ -562,7 +563,8 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
             const l0s = window.buildL0SectionInfo(rows, tCol);
             const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '');
 
-            const built = window.buildMailTaskRow(task, rows, tCol, opts.mailRaw);
+            const built = window.buildMailTaskRow(task, rows, tCol, opts.mailRaw,
+                { projectMeta: saveData.projectMeta, members3: (saveData.tabData && saveData.tabData.projectMembers3) || [] });
             if (!built.row) { failNames.push(fileName + ' (이미 등록된 메일)'); continue; }
             built.row._알림 = true;
             const posInfo = window.computeL0InsertPos(rows, tCol, chosenL0, task['시작일'], true, opts.mailRaw && opts.mailRaw.date);

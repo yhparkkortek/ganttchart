@@ -643,6 +643,16 @@ window.renderTaskInbox = function() {
                 const range = window.formatYM(sec.startTs) + '~' + window.formatYM(sec.endTs);
                 return '<option value="' + escapeHtml(sec.name) + '"' + selAttr + '>' + escapeHtml(sec.name) + (_ibEn ? ' end (' : ' 구간 끝 (') + range + ')</option>';
             })).join('');
+        // 🐛 [2026-11-17 버그수정, 사용자 제보] 위 l0List/l0Options는 getCurrentL0List() → 지금
+        // 열려있는 프로젝트(globalData/colIdx)의 구간이다. 이 카드가 AI 판단 후보(다른 프로젝트)로
+        // 가는 카드라면("➡️ 분석 Proj 전송" 버튼, _hasCand=true) 그 후보 프로젝트의 구간과 무관한
+        // 값이라 — 표시만 혼란스러울 뿐 실제로는 inboxPlaceToCandidate()가 이 드롭다운 값을 아예
+        // 읽지 않는다(배치는 _msAutoRegisterToProject가 후보 프로젝트 자체의 데이터로 다시 계산함).
+        // → 후보가 있는 카드는 이 드롭다운/자동위치 미리보기를 아예 숨긴다(_hasCand === false일
+        // 때만 "현재 Proj 전송"이 쓰므로 그때만 의미가 있음).
+        const _hasCand = !!(it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0]
+            && it.matchedProject.candidates[0].drive_file_id);
+        const _cand0 = _hasCand ? it.matchedProject.candidates[0] : null;
         const dateStr = (t['시작일'] || '?') + ' ~ ' + (t['완료일'] || '?');
         const when = it.addedAt ? new Date(it.addedAt).toLocaleString() : '';
         // 💡 [담당구분] 매칭된 프로젝트가 지금 열려있는 시트와 같을 때만 실제 담당자명까지 붙임
@@ -730,17 +740,13 @@ window.renderTaskInbox = function() {
                 <button onclick="window.inboxDistributeToMultiCandidates('${it.uid}')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="margin-top:6px; width:100%; height:28px; box-sizing:border-box; font-size:11.5px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Distribute to checked projects' : '체크한 프로젝트에 배분'}</button>
             </div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 1 200px; min-width:60px; max-width:220px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
-                ${(function() {
-                    const _hasCand = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id;
-                    const _cand0 = _hasCand ? it.matchedProject.candidates[0] : null;
-                    const _cand0Label = _cand0 ? (_cand0.model || _cand0.customer || _cand0.file_name || '') : '';
-                    if (_hasCand) {
-                        return '<button onclick="window.inboxPlaceToCandidate(\'' + it.uid + '\')" title="' + escapeHtml((_ibEn ? 'Send to AI-analyzed project: ' : 'AI 분석 프로젝트로 전송: ') + _cand0Label) + '" onmouseover="this.style.background=\'#c9ecd3\'; this.style.borderColor=\'#7cc494\';" onmouseout="this.style.background=\'#e6f6ea\'; this.style.borderColor=\'#a8dab8\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'AI Proj' : '분석 Proj 전송') + '</button>';
-                    } else {
-                        return '<button onclick="window.inboxPlaceToCurrent(\'' + it.uid + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'Current Proj' : '현재 Proj 전송') + '</button>';
-                    }
-                })()}
+                <!-- 🐛 [2026-11-17] l0Options는 "지금 열려있는 프로젝트"의 구간이다 — 이 카드가
+                     다른 프로젝트(AI 판단 후보)로 가는 카드(_hasCand)라면 그 프로젝트와 무관해
+                     보여주면 안 된다(아래 분기에서 숨김). "현재 Proj 전송" 카드에서만 의미가 있음. -->
+                ${!_hasCand ? `<select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 1 200px; min-width:60px; max-width:220px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>` : ''}
+                ${_hasCand
+                    ? '<button onclick="window.inboxPlaceToCandidate(\'' + it.uid + '\')" title="' + escapeHtml((_ibEn ? 'Send to AI-analyzed project: ' : 'AI 분석 프로젝트로 전송: ') + (_cand0 ? (_cand0.model || _cand0.customer || _cand0.file_name || '') : '')) + '" onmouseover="this.style.background=\'#c9ecd3\'; this.style.borderColor=\'#7cc494\';" onmouseout="this.style.background=\'#e6f6ea\'; this.style.borderColor=\'#a8dab8\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'AI Proj' : '분석 Proj 전송') + '</button>'
+                    : '<button onclick="window.inboxPlaceToCurrent(\'' + it.uid + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'Current Proj' : '현재 Proj 전송') + '</button>'}
                 <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
                 <!-- 🗑 [2026-11-13 요청] 사유 선택 팝업을 띄우던 휴지통 1개를 없애고, 같은 줄에
                      원클릭 분류 아이콘 3개(오매칭/중복/불필요)를 바로 둔다 — 팝업 한 번을 더 거치지
@@ -751,13 +757,15 @@ window.renderTaskInbox = function() {
                 <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Unnecessary / Other' : '불필요 / 기타'}" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ced4da';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; background:#f8f9fa; color:#555; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🚫</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
-            <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
+            ${_hasCand
+                ? `<div style="font-size:10.5px; color:#888; margin-top:6px;">${_ibEn ? '📅 Placed automatically by start date, inside the AI-matched project\'s own schedule.' : '📅 AI 판단 후보 프로젝트 자체의 일정 기준으로 시작일에 맞춰 자동 배치됩니다.'}</div>`
+                : `<div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="inbox-auto-${it.uid}" checked onchange="window.inboxRecomputePreview('${it.uid}')" style="cursor:pointer;">
                     ${_ibEn ? '🎯 Auto-position in current project (by start date)' : '🎯 현재 프로젝트 자동위치(시작일 기준)'}
                 </label>
                 <span id="inbox-preview-${it.uid}" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
-            </div>
+            </div>`}
         </div>`;
     });
     listEl.innerHTML = html;
