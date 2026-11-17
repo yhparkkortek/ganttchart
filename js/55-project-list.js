@@ -1432,6 +1432,21 @@
         //    돌아가면 flex 컨텍스트가 깨져 본문의 `flex:1`이 무효가 되고(실측: 다시 글 길이만큼
         //    통째로 자란다) 머리글 고정이 도로 안 먹는다.
         box.style.display = 'flex';
+        // 🐛 [2026-11-17 실측, 사용자 제보 "정보확인 두 번째부터 모달이 안 보인다"] 진짜 원인 —
+        //  document 의 "팝업 바깥 클릭 닫기" 리스너(아래, 3421줄 근처)가 **이벤트 대상을 전혀
+        //  안 가린 채** 클릭마다 무조건 plClosePopup()을 부른다. 이 버튼을 처음 누를 때는
+        //  _msLoadProjectIndex()가 NAS 를 실제로 받아오느라 느려서, 그 click 이벤트의 버블이
+        //  document 까지 다 끝난(= 아직 팝업이 없어 아무 일도 안 함) *뒤에* 비동기로 _popup()이
+        //  열린다 — 멀쩡해 보인다. 그런데 같은 세션에서 프로젝트 인덱스가 **캐시로 따뜻해진 뒤**
+        //  다시 누르면 await 가 거의 즉시 풀려, 크롬이 리스너 호출마다 마이크로태스크를
+        //  비우는 타이밍에 걸려 _popup()이 **같은 클릭의 버블이 document 에 닿기 전에** 먼저
+        //  열려버린다 — 그 직후 document 리스너가 "방금 연 바로 그 팝업"을 바깥 클릭으로
+        //  오인해 5ms 만에 도로 닫았다(실측: MutationObserver 로 flex→none 전환을 직접 잡음,
+        //  콘솔 에러 0건이라 증상만 보면 "버튼이 아예 안 먹는다"와 구분이 안 됐다). 버튼마다
+        //  stopPropagation 을 박는 대신, **방금(이 유예 시간 안에) 열렸으면 그 열기를 일으킨
+        //  클릭의 뒤이은 버블로는 안 닫는다** — 이 파일의 다른 _popup() 호출부(담당자·부품·
+        //  패널 등)에도 전부 적용되는 공통 수정.
+        window._plPopupOpenedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         if (window._makeDraggable) { try { window._makeDraggable('pl-popup', 'pl-popup-head'); } catch (e) { /* 드래그 실패는 보기를 막지 않는다 */ } }
         if (window.bringModalToFront) { try { window.bringModalToFront('pl-popup'); } catch (e) { /* 〃 */ } }
         return box;
@@ -3418,7 +3433,15 @@
         if (si) si.value = _view.search || '';
         if (document.getElementById('pl-table-wrap')) window.plRender();
     });
-    document.addEventListener('click', function () { /* 팝업 바깥 클릭 닫기 */ window.plClosePopup(); window.plCloseRowMenu(); });
+    // 🐛 [2026-11-17] 방금(80ms 안) _popup()이 막 열렸으면 — 그걸 연 바로 그 클릭의 뒤이은
+    //  버블일 수 있으므로(위 _popup() 주석 참고) 이번 클릭으로는 닫지 않는다. 진짜 바깥 클릭은
+    //  사람 반응속도로도 80ms 보다 훨씬 늦게 오므로 정상적인 "바깥 클릭 닫기"는 그대로 작동한다.
+    document.addEventListener('click', function () {
+        /* 팝업 바깥 클릭 닫기 */
+        var justOpened = window._plPopupOpenedAt && (((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - window._plPopupOpenedAt) < 80;
+        if (!justOpened) window.plClosePopup();
+        window.plCloseRowMenu();
+    });
 
     // 💾 이탈 직전 플러시 — 3초 디바운스가 뜨기 전에 닫으면 그 수정이 내 PC 에만 남기 때문.
     //    visibilitychange(hidden) 이 탭 전환·최소화·닫기에서 가장 확실히 뜨는 신호다(모바일 포함).
