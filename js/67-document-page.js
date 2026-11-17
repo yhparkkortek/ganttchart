@@ -3155,6 +3155,13 @@
 
         var container = _docContainer(formId);
         container.revisions = container.revisions || {};
+        // ⚠️⚠️ [2026-11-17 버그수정] 이 줄이 바로 그 자리다 — 복사를 묻는 confirm() 을
+        //    취소하면(또는 cur 가 아직 비어 있으면) 여기서 **아무것도 안 만들고** 넘어갔다.
+        //    그러면 `_docRevisions()`(Object.keys 기반)엔 newRev 키가 없어서, 화면은
+        //    "지금 R2 를 보는 중"이라고 표시해도 `_docActiveRevision()` 은 그 키를 못 찾고
+        //    조용히 R1 으로 되돌아가 — 사람이 R2/R3/R4 에 입력한 내용이 전부 R1 에 겹쳐 써졌다
+        //    (다음에 열면 "1/1"만 보이는 바로 그 증상). 빈 리비전이라도 키 자체는 반드시 만든다.
+        container.revisions[newRev] = container.revisions[newRev] || {};
         if (curHasData && confirm(_t(
             '[' + cur + '] 내용을 복사해서 [' + newRev + ']을(를) 만들까요? (바뀐 부분만 고치면 됩니다)\n(취소를 누르면 빈 표로 시작합니다)',
             'Copy [' + cur + '] into new revision [' + newRev + '] so you only need to edit what changed?\n(Cancel starts ' + newRev + ' blank instead)'
@@ -3162,8 +3169,47 @@
             container.revisions[newRev] = JSON.parse(JSON.stringify(container.revisions[cur]));
         }
         window._docState.revision = newRev;
+        _markDirty();
         window._docRender();
         _toast('🏷 ' + newRev + _t(' 리비전을 만들었습니다.', ' revision created.'), 'success');
+    };
+    /** 🗑️ [2026-11-17 요청] 리비전 삭제 — M.C 의 "제품구분자 관리(이름변경/추가/삭제)" 패널과
+     *  같은 자리에, 같은 안전장치(확인창 + 관리자 비밀번호)로 리비전 삭제를 둔다. 마지막 남은
+     *  하나는 지울 수 없다(전부 지우면 리비전 개념 자체가 없어진다). R1 은 목록에서 빠지지
+     *  않는 고정 바닥(`_docRevisions`가 항상 포함)이라, R1 을 "지우면" 내용만 비워진다 —
+     *  R2 이상은 키 자체가 없어져 목록에서 완전히 사라진다(M.C 가 빈 리비전을 순환에서
+     *  빼는 것과 같은 결과, 다만 여기는 데이터까지 실제로 지운다). */
+    window._docRevDelete = function (formId, rev) {
+        var list = window._docRevisions(formId);
+        var target = rev || _docActiveRevision(formId) || 'R1';
+        if (list.length <= 1) {
+            _toast('⚠️ ' + _t('마지막 남은 리비전은 지울 수 없습니다.', 'Cannot delete the only remaining revision.'), 'error');
+            return;
+        }
+        if (!confirm(_t(
+            '[' + target + ']을(를) 지울까요? 되돌릴 수 없습니다.',
+            'Delete [' + target + ']? This cannot be undone.'
+        ))) return;
+        if (!window.verifyAdminPassword(_t(
+            '🔒 리비전을 지우려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)',
+            '🔒 Enter the admin password to delete this revision.\n(case-insensitive)'
+        ))) {
+            _toast('❌ ' + _t('비밀번호 인증 실패. 삭제가 취소되었습니다.', 'Authentication failed. Delete cancelled.'), 'error');
+            return;
+        }
+        var container = _docContainer(formId);
+        if (container.revisions) delete container.revisions[target];
+        var remain = window._docRevisions(formId);
+        var idx = Math.max(0, list.indexOf(target));
+        window._docState.revision = remain[Math.min(idx, remain.length - 1)] || 'R1';
+        _markDirty();
+        window._docRender();
+        _toast('🗑 ' + target + _t(' 리비전을 지웠습니다.', ' revision deleted.'), 'success');
+    };
+    /** ▶◀ [2026-11-17 요청] 리비전 관리 패널 토글 — M.C `mcToggleUnitActions`와 같은 모양. */
+    window._docRevToggleManage = function () {
+        window._docState.revManageOpen = !window._docState.revManageOpen;
+        window._docRender();
     };
     /** 🙈 [2026-11-12 요청] 점검요청 '해당없음' 항목 접기 ↔ 펴기 (기본 접힘, Resolution 묶음은 예외) */
     window._docToggleHideNA = function () {
@@ -4064,6 +4110,34 @@
                 + '<span style="font-size:11px; color:#868e96;">' + ((_docRevI < 0 ? 0 : _docRevI + 1) + '/' + _docRevList.length) + '</span>'
                 + '<button onclick="window._docRevAdd(\'' + _esc(form.id) + '\')" title="' + _esc(_t('리비전 추가 — R 번호가 하나 늘어납니다', 'Add a revision')) + '"'
                 + ' style="margin-left:2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>';
+            // 🗂️ [2026-11-17 요청] "Rev 삭제 추가 변경 기능이 없음 — M.C Table 참조" — M.C 의
+            //    "제품구분자 관리(이름변경/추가/삭제)" 토글 패널과 같은 자리·같은 모양으로,
+            //    리비전은 원하는 번호로 **바로 전환**(변경)하고 **지울 수**(삭제) 있게 한다
+            //    (추가는 바로 위 ➕가 이미 담당). 리비전엔 자유 이름이 없어 "이름변경"만 없다.
+            var _docRevMgOpen = !!window._docState.revManageOpen;
+            th += '<button onclick="window._docRevToggleManage()" title="'
+                + _esc(_docRevMgOpen ? _t('접기', 'Collapse') : _t('리비전 관리(바로가기/삭제)', 'Manage revisions (jump/delete)')) + '"'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (_docRevMgOpen ? '#e9ecef' : 'none')
+                + '; color:#555; cursor:pointer; font-size:12px;">' + (_docRevMgOpen ? '◀' : '▶') + '</button>';
+            if (_docRevMgOpen) {
+                th += '<span style="display:flex; align-items:center; gap:3px; padding:0 2px; background:#fff; border:1px solid #d7dee3; border-radius:6px;">';
+                _docRevList.forEach(function (r) {
+                    var isCur = r === _docRevCur;
+                    th += '<span style="display:inline-flex; align-items:center; gap:1px;">'
+                        + '<button onclick="window._docSetRevision(\'' + _esc(form.id) + '\',\'' + _esc(r) + '\')" title="'
+                        + _esc(_t('[' + r + ']로 바로 전환', 'Jump to [' + r + ']')) + '"'
+                        + ' style="padding:4px 8px; min-width:auto; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;'
+                        + (isCur ? ' border:1px solid #00707d; background:#00707d; color:#fff;'
+                                 : ' border:1px solid #ccc; background:#f8f9fa; color:#444;') + '">' + _esc(r) + '</button>'
+                        + (_docRevList.length > 1
+                            ? '<a href="#" onclick="window._docRevDelete(\'' + _esc(form.id) + '\',\'' + _esc(r) + '\');return false;" title="'
+                              + _esc(_t('[' + r + '] 지우기', 'Delete [' + r + ']')) + '"'
+                              + ' style="font-size:10px; color:#a83232; padding:0 2px; text-decoration:none;">✕</a>'
+                            : '')
+                        + '</span>';
+                });
+                th += '</span>';
+            }
             if (_docRevWithData.length >= 2) {
                 th += '<button onclick="window._docRevVsOpen(\'' + _esc(form.id) + '\')" title="'
                     + _esc(_t('리비전끼리 무엇이 달라졌는지 비교합니다', 'Compare what changed between revisions')) + '"'
