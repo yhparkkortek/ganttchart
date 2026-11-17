@@ -9164,6 +9164,27 @@ ${docsJson}`;
             }
         }
 
+        // 🔎 [2026-11-17 사용자 요청] "추론" 모드 + Tavily 키가 저장돼 있으면 AI를 부르기 전에
+        //    먼저 직접 검색한다(월 1,000회 무료 — LLM 자체 그라운딩은 전부 유료 확인됐다,
+        //    docs/ai-qa.md). 결과는 프롬프트에 텍스트로 붙여 기존 무료 LLM한테 넘긴다(RAG).
+        //    키가 없거나 검색이 실패하면 조용히 넘어가고(기존처럼 Gemini 자체 그라운딩 시도로
+        //    폴백) — 이 기능이 없어도 예전과 동일하게 동작해야 한다.
+        let tavilySearchResults = null;
+        if (_qaRoute && _qaRoute.cls === 'general' && window._aiTavilySearch && localStorage.getItem('tavily_api_key')) {
+            const pendingIdxT = window._ganttQaHistory.length - 1;
+            if (window._ganttQaHistory[pendingIdxT]) {
+                window._ganttQaHistory[pendingIdxT].text = '⏳ ' + window._t('실시간 웹검색 중...', 'Searching the web...');
+                window._renderGanttQaMessages();
+            }
+            const tavilyRes = await window._aiTavilySearch(qaQuestionForPrompt);
+            console.info('[AI 문답] Tavily 검색:', tavilyRes.ok ? `${tavilyRes.results.length}건` : `실패(${tavilyRes.error})`);
+            if (tavilyRes.ok && tavilyRes.results && tavilyRes.results.length) tavilySearchResults = tavilyRes.results;
+            if (window._ganttQaHistory[pendingIdxT]) {
+                window._ganttQaHistory[pendingIdxT].text = '⏳ 답변 생성 중...';
+                window._renderGanttQaMessages();
+            }
+        }
+
         try {
             // 💡 [2026-09-08 신규] "느리다"는 신고가 반복돼서, 어디가 느린지(코드가 컨텍스트를
             //    조립하는 단계 vs AI가 실제로 답을 생성하는 단계) 바로 구분할 수 있게 계측 로그를
@@ -9173,7 +9194,7 @@ ${docsJson}`;
             //    등)가 느린 것이라 코드로는 더 손댈 부분이 없다는 뜻.
             const _tQa0 = performance.now();
             const prompt = (_qaRoute && _qaRoute.cls === 'general' && window._qaBuildGeneralPrompt)
-                ? window._qaBuildGeneralPrompt(qaQuestionForPrompt, priorHistory)   // 🏷 일반 추론 — 프로젝트 JSON 미포함(빠르고 싸며 데이터 없다는 오답 방지)
+                ? window._qaBuildGeneralPrompt(qaQuestionForPrompt, priorHistory, tavilySearchResults)   // 🏷 일반 추론 — 프로젝트 JSON 미포함(빠르고 싸며 데이터 없다는 오답 방지), Tavily 검색 결과는 있으면 포함
                 : await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, manualOtherProjectTexts, sapText);
             const _tQa1 = performance.now();
             const _ctxMs = Math.round(_tQa1 - _tQa0);
@@ -9199,7 +9220,11 @@ ${docsJson}`;
                 //    opts.webSearch를 켠다 — Gemini 제공사일 때만 gas/Code.gs가 tools를 붙인다.
                 //    프로젝트/SAP 질문까지 켜면 매 호출마다 검색이 붙어 무료 한도를 더 빨리 태우므로
                 //    "추론 모드로 직접 선택했을 때만"으로 좁혀 둔다.
-                const _qaWebSearch = !!(_qaRoute && _qaRoute.cls === 'general');
+                //    ⚠️ Tavily 검색이 이미 성공했으면(tavilySearchResults) 끌 것 — 어차피 무료
+                //    등급엔 할당량 0이라 매번 실패+폴백만 하고(불필요한 왕복 1회), 폴백 성공 시
+                //    붙는 "그라운딩 막혀서 일반 지식으로만 답함" 안내도 Tavily로 실제 검색한
+                //    상황에는 맞지 않는 말이 된다.
+                const _qaWebSearch = !!(_qaRoute && _qaRoute.cls === 'general') && !tavilySearchResults;
                 result = await window._withTimeout(window.callAiBackend(apiKey, prompt, { webSearch: _qaWebSearch }), 60000, window._currentLang === 'en'
                     ? '⏱️ Still no response after 60 seconds. Please check your connection and try again.'
                     : '⏱️ 60초가 지나도 응답이 오지 않고 있어요. 네트워크 상태를 확인하고 다시 시도해주세요.');

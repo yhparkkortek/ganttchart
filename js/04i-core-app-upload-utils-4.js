@@ -118,7 +118,11 @@
             'ai-provider-test-btn':     { ko:'🧪 제공사 연결 테스트',                 en:'🧪 Test providers' },
             'ai-provider-groq':         { ko:'Groq — 오픈모델 무료 호스팅',           en:'Groq — free hosting for open models' },
             'ai-provider-mistral':      { ko:'Mistral (프랑스 AI, 무료)',             en:'Mistral (French AI, free)' },
+            'ai-provider-glm':          { ko:'GLM (Zhipu AI, 중국·무료 보고됨)',       en:'GLM (Zhipu AI, China — free reported)' },
             'ai-provider-openai':       { ko:'OpenAI (GPT, 유료·카드등록 필요)',      en:'OpenAI (GPT, paid — card required)' },
+            'ai-set-sec-tavily-label':  { ko:'🔎 실시간 웹검색 (선택, Tavily)',       en:'🔎 Live web search (optional, Tavily)' },
+            'ai-set-tavily-notice':     { ko:'💡 입력창 위 🏷 분류에서 "💡 추론"을 고른 질문(날씨 등 실시간 정보가 필요한 질문)에만 쓰입니다. 비워두면 이 기능 없이 예전처럼 동작합니다. 키 발급은 월 1,000회까지 무료(카드 등록 불필요)로 알려져 있습니다.',
+                                          en:'💡 Only used for questions classified as "💡 General" in the 🏷 Type box above the input (ones needing live info, like weather). Leave it blank to keep working as before, without this feature. Signup is reported to be free up to 1,000 requests/month, no card required.' },
             'ai-set-sec-maxlen-label':  { ko:'🔢 AI 글자 수 설정',                    en:'🔢 AI Character Limits' },
             'ai-mail-maxlen-label':     { ko:'AI 업무 분석(메일) 최대 글자 수',       en:'AI Task Analysis (mail) — Max characters' },
             'ai-mail-maxlen-desc':      { ko:'🤖 AI 업무 분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.',
@@ -172,7 +176,7 @@
         if (window._aiUsageRenderSettings) window._aiUsageRenderSettings();
         // 💡 ai-set-sec-reqsize 라벨 자체는 04j-core-app-upload-utils-5.js의 toggleLang() 안
         // _reqsizeTexts가 이미 갱신하지만, 그 화살표(-arrow)는 어디에도 없었어서 여기서 같이 처리.
-        ['ai-set-sec-model','ai-set-sec-maxlen','ai-set-sec-reqsize','ai-set-sec-range','ai-set-sec-learning','ai-set-sec-retry'].forEach(sid => {
+        ['ai-set-sec-model','ai-set-sec-tavily','ai-set-sec-maxlen','ai-set-sec-reqsize','ai-set-sec-range','ai-set-sec-learning','ai-set-sec-retry'].forEach(sid => {
             const sec   = document.getElementById(sid);
             const arrow = document.getElementById(sid + '-arrow');
             if (!sec || !arrow) return;
@@ -233,6 +237,7 @@
                                     <option value="groq" data-i18n="ai-provider-groq">Groq — 오픈모델 무료 호스팅</option>
                                     <option value="mistral" data-i18n="ai-provider-mistral">Mistral (프랑스 AI, 무료)</option>
                                     <option value="openrouter" data-i18n="ai-provider-openrouter">OpenRouter (무료모델 20개+, Llama4 포함)</option>
+                                    <option value="glm" data-i18n="ai-provider-glm">GLM (Zhipu AI, 중국·무료 보고됨)</option>
                                     <option value="openai" data-i18n="ai-provider-openai">OpenAI (GPT, 유료·카드등록 필요)</option>
                                 </select>
                             </div>
@@ -278,6 +283,49 @@
                                 </button>
                             </div>
                             <div id="mail-key-status" style="font-size:11px; margin-top:3px; color:#28a745;"></div>
+                        </div>
+                    </div>
+
+                    <!-- ══ 그룹1.5: 🔎 실시간 웹검색(선택, Tavily) — [2026-11-17 사용자 요청] LLM 자체
+                         그라운딩은 전부 유료라 확인됐다(docs/ai-qa.md) — 검색은 Tavily(월 1,000회
+                         무료, 카드 불필요)로 직접 하고 결과 텍스트만 프롬프트에 붙여 기존 무료 LLM한테
+                         넘긴다(RAG). "추론" 모드일 때만 쓰임 — 키가 없으면 이 기능 없이 예전처럼 동작 ══ -->
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
+                        <div onclick="window._toggleAlarmSection('ai-set-sec-tavily')"
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
+                            <span id="ai-set-sec-tavily-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔎 실시간 웹검색 (선택, Tavily)</span>
+                            <span id="ai-set-sec-tavily-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                        </div>
+                        <div id="ai-set-sec-tavily" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                            <div id="ai-set-tavily-notice" style="font-size:11px; color:#555; background:#fff8e6; border:1px solid #ffe066; border-radius:6px; padding:8px 10px; margin-bottom:10px; line-height:1.6;">
+                                💡 입력창 위 🏷 분류에서 "💡 추론"을 고른 질문(날씨 등 실시간 정보가 필요한 질문)에만 쓰입니다. 비워두면 이 기능 없이 예전처럼 동작합니다. 키 발급은 월 1,000회까지 무료(카드 등록 불필요)로 알려져 있습니다.
+                            </div>
+                            <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                                <span>🔑 Tavily API</span>
+                                <button id="tavily-key-link-btn" onclick="window.open('https://app.tavily.com/home', '_blank')"
+                                        onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                                        title="① app.tavily.com 접속 → 계정 가입/로그인 → ② API Keys 메뉴에서 키 복사 → ③ 아래 입력란에 붙여넣고 저장"
+                                        style="height:26px; padding:0 8px; font-size:11px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box; transition:background .15s, border-color .15s;">
+                                    🔗 발급받기
+                                </button>
+                            </div>
+                            <div style="display:flex; gap:4px;">
+                                <input id="tavily-api-key" type="password" placeholder="tvly-로 시작하는 Tavily API 키"
+                                    style="flex:1; min-width:0; box-sizing:border-box; height:26px; padding:0 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                                <button onclick="window.saveTavilyKey()"
+                                        onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                                        title="API 키 저장"
+                                        style="height:26px; padding:0 10px; font-size:11px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box; transition:background .15s, border-color .15s;">
+                                    💾 저장
+                                </button>
+                                <button onclick="window.clearTavilyKey()"
+                                        onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                                        title="API 키 삭제"
+                                        style="height:26px; padding:0 8px; font-size:11px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:4px; cursor:pointer; box-sizing:border-box; transition:background .15s, border-color .15s;">
+                                    🗑️
+                                </button>
+                            </div>
+                            <div id="tavily-key-status" style="font-size:11px; margin-top:3px; color:#888;"></div>
                         </div>
                     </div>
 
@@ -478,6 +526,7 @@
         //    팝업이 열릴 때만 채워지던 값들이라, 여기서도 열릴 때마다 새로 채워줘야 함.
         if (window.refreshAiKeyPanel) window.refreshAiKeyPanel();
         if (window.refreshAiModelDropdown) window.refreshAiModelDropdown();
+        if (window._refreshTavilyKeyPanel) window._refreshTavilyKeyPanel();
         // 💡 처음 여는 순간이 영문 모드일 수도 있으므로(모달 뼈대는 항상 한글로 그려짐), 열 때마다
         // 현재 언어로 다시 맞춰준다 — toggleLang()이 나중에 또 호출해도 안전(멱등).
         window._aiSettingsRefreshLang();

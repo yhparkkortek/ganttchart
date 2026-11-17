@@ -20,6 +20,11 @@ function doPost(e) {
   try {
     var rawBody = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
     var params = JSON.parse(rawBody);
+    // 🔎 [2026-11-17] action 필드로 분기 — 없으면(기존 프런트) 그대로 AI 생성 경로. Tavily 검색은
+    //    LLM 생성이 아니라 "우리가 직접 검색"이라 그 결과(제목/URL/본문 일부)를 그대로 돌려준다.
+    if (params.action === 'tavilySearch') {
+      return json_(tavilySearch_(params.tavilyKey, params.query));
+    }
     Logger.log('[doPost] provider=' + params.provider + ' model=' + params.model + ' promptLen=' + String(params.prompt || '').length);
 
     var userKey    = params.userApiKey;
@@ -45,6 +50,10 @@ function doPost(e) {
     } else if (provider === 'openrouter') {
       text = callOpenAiCompatible_('OpenRouter', 'https://openrouter.ai/api/v1/chat/completions', userKey, prompt,
         model || 'deepseek/deepseek-r1:free', { max_tokens: 4096 });
+    } else if (provider === 'glm') {
+      // 🔎 [2026-11-17] GLM(Zhipu/Z.ai) — OpenAI 호환 엔드포인트라 Groq/Mistral과 같은 공용 함수 재사용.
+      text = callOpenAiCompatible_('GLM', 'https://api.z.ai/api/paas/v4/chat/completions', userKey, prompt,
+        model || 'glm-4.5-flash', { max_tokens: 4096 });
     } else {
       text = callGemini_(userKey, prompt, model, imageParts, webSearch);
     }
@@ -75,6 +84,26 @@ function errorMessage_(label, code, body, raw) {
   }
   if (!msg) msg = label + ' 통신 오류' + (raw ? ' — ' + String(raw).slice(0, 200) : '');
   return '[HTTP ' + code + '] ' + msg;
+}
+
+/** 🔎 [2026-11-17] Tavily 검색 — LLM 생성이 아니라 "우리가 직접 검색"(월 1,000회 무료, 카드 불필요로
+ *  알려짐). 결과는 생성하지 않고 그대로 반환 — 프런트가 이 텍스트를 프롬프트에 붙여 기존 무료 LLM한테
+ *  넘긴다(RAG). 실패는 throw로(doPost 바깥 catch가 {status:'error'}로 포장). */
+function tavilySearch_(apiKey, query) {
+  if (!apiKey) throw new Error('[HTTP 401] Tavily API 키가 없습니다 — ⚙️ AI 분석 설정의 🔎 실시간 웹검색에서 저장하세요.');
+  if (!query) throw new Error('[HTTP 400] 검색어가 비어 있습니다.');
+  var res = UrlFetchApp.fetch('https://api.tavily.com/search', {
+    method: 'post', contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + apiKey },
+    payload: JSON.stringify({ query: query, search_depth: 'basic', max_results: 5, include_answer: false }),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode(), raw = res.getContentText(), body = parseJsonSafe_(raw);
+  if (code !== 200 || !body) throw new Error(errorMessage_('Tavily', code, body, raw));
+  var results = (body.results || []).map(function (r) {
+    return { title: r.title || '', url: r.url || '', content: String(r.content || '').slice(0, 500) };
+  });
+  return { status: 'success', query: query, results: results };
 }
 
 /** Gemini generateContent 1회 호출 — {code, raw, body} 그대로 반환(오류 판단은 호출부가) */
@@ -117,11 +146,12 @@ function callGemini_(apiKey, prompt, model, imageParts, webSearch) {
   //    tools를 빼고 한 번 더 시도해서 "검색 기능이 없어서 전체가 막히는 것"을 막는다(사람에게는
   //    평소처럼 일반 지식 답변이라도 가게). 진짜 하루 한도 소진이면 이 재시도도 똑같이 막혀 원래
   //    오류 그대로 올라간다 — 조용히 삼키지 않는다.
+  var searchDenied = false;
   if (wantsSearch && (r.code === 429 || r.code === 403 || r.code === 400)) {
     var payloadNoTools = JSON.parse(JSON.stringify(payload));
     delete payloadNoTools.tools;
     var r2 = _fetchGemini_(url, apiKey, payloadNoTools);
-    if (r2.code === 200 && r2.body) r = r2;
+    if (r2.code === 200 && r2.body) { r = r2; searchDenied = true; }
   }
   var code = r.code, raw = r.raw, body = r.body;
   if (code !== 200 || !body) throw new Error(errorMessage_('Gemini', code, body, raw));
@@ -132,6 +162,12 @@ function callGemini_(apiKey, prompt, model, imageParts, webSearch) {
   var text = parts.filter(function (p) { return p && p.text && !p.thought; }).map(function (p) { return p.text; }).join('');
   var finish = cand ? cand.finishReason : (body.promptFeedback && body.promptFeedback.blockReason) || 'NO_CANDIDATE';
   if (!text) throw new Error('[HTTP 200] Gemini 빈 응답 (finishReason=' + finish + ')');
+  // 💡 [2026-11-17 사용자 요청] "왜 날씨를 못 알려주는지" 매번 다시 물어보게 하지 않고, 그라운딩이
+  //    막혀서 일반 지식으로만 답한 바로 그 대답에 이유를 적어 둔다 — 코드 문제가 아니라 구글
+  //    정책(무료=빌링 미연결 프로젝트는 Grounding 할당량 0)이라는 것과 해결책(유료 결제)까지.
+  if (searchDenied) {
+    text += '\n\n💡 (실시간 웹검색 없이 일반 지식으로만 답했습니다 — 무료 등급 키는 구글 정책상 Grounding with Google Search 기능이 막혀 있습니다(할당량 0). 실시간 정보가 꼭 필요하면 Google Cloud 프로젝트에 결제수단을 등록해 유료 등급으로 전환해야 합니다.)';
+  }
   return { text: text, finish: finish };
 }
 

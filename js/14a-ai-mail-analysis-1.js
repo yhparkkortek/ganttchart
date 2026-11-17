@@ -96,6 +96,50 @@ window.clearGeminiKey = function() {
     status.style.color = '#dc3545';
 };
 
+// ─── 🔎 [2026-11-17 사용자 요청] 실시간 웹검색(Tavily) — LLM 자체 그라운딩은 전부 유료로
+//    확인됐다(docs/ai-qa.md) — 검색은 우리가 직접 하고(월 1,000회 무료, 카드 불필요로 알려짐)
+//    결과 텍스트만 프롬프트에 붙여 기존 무료 LLM한테 넘긴다(RAG, 기존 SAP 컨텍스트를 프롬프트에
+//    붙이는 방식과 동일) — AI_PROVIDERS 와 분리된 독립 키(검색 전용, LLM 아님). ───
+window.saveTavilyKey = function() {
+    const key = document.getElementById('tavily-api-key').value.trim();
+    if (!key) { alert(window._t('API 키를 입력해주세요.', 'Please enter the API key.')); return; }
+    localStorage.setItem('tavily_api_key', key);
+    window._refreshTavilyKeyPanel();
+};
+window.clearTavilyKey = function() {
+    localStorage.removeItem('tavily_api_key');
+    window._refreshTavilyKeyPanel();
+};
+window._refreshTavilyKeyPanel = function() {
+    const input = document.getElementById('tavily-api-key');
+    const status = document.getElementById('tavily-key-status');
+    if (input) input.value = localStorage.getItem('tavily_api_key') || '';
+    if (status) {
+        const saved = localStorage.getItem('tavily_api_key');
+        const _en = window._currentLang === 'en';
+        if (saved) { status.textContent = _en ? '✅ Saved' : '✅ 저장됨'; status.style.color = '#28a745'; }
+        else { status.textContent = _en ? '(optional — leave blank to skip)' : '(선택 — 비워두면 안 씀)'; status.style.color = '#888'; }
+    }
+};
+// 추론 모드 질문을 Tavily로 검색해 {ok, results:[{title,url,content}]} 또는 {ok:false, error} 반환.
+// gas/Code.gs의 같은 GAS_URL을 그대로 쓴다(action 필드로 AI 생성과 분기) — 새 배포/새 URL 불필요.
+window._aiTavilySearch = async function(query) {
+    const apiKey = localStorage.getItem('tavily_api_key');
+    if (!apiKey) return { ok: false, error: 'no_key' };
+    try {
+        const res = await fetch(window._aiGasUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'tavilySearch', tavilyKey: apiKey, query: query })
+        });
+        const data = await res.json();
+        if (data.status !== 'success') return { ok: false, error: data.message || 'search_failed' };
+        return { ok: true, results: data.results || [] };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+};
+
 // ─── 🤖 AI 제공사 설정 (Gemini / Groq / Mistral) ───
 window.AI_PROVIDERS = {
     gemini:  { label: 'Gemini (Google)',  keyName: 'gemini_api_key',  defaultModel: 'gemini-3.5-flash-lite',
@@ -148,6 +192,20 @@ window.AI_PROVIDERS = {
                    { id: 'meta-llama/llama-4-scout:free',       label: 'Llama 4 Scout (Meta, 경량)',     tier: 'free', note: '🟢 무료 · 빠름' },
                    { id: 'google/gemini-2.5-flash:free',        label: 'Gemini 2.5 Flash (경량 무료판)', tier: 'free', note: '🟢 무료 · OpenRouter 경유' },
                    { id: 'nvidia/llama-3.1-nemotron-nano-8b-v1:free', label: 'Nemotron Nano 8B (NVIDIA)', tier: 'free', note: '🟢 무료 · 초경량' },
+               ]},
+    // 💡 [2026-11-17 사용자 요청] "중국 쪽 무료 AI도 조사해서 추가" — 조사 결과 DeepSeek/Qwen은
+    //    무료가 1회성(체험 크레딧·90일 한도)이라 "매일 쓰는 용도"엔 안 맞고, GLM(Zhipu/Z.ai)의
+    //    Flash 계열만 기간·횟수 제한 없는 상시 무료로 여러 출처에서 확인됨 + OpenAI 호환
+    //    엔드포인트라 Groq/Mistral과 똑같은 방식으로 붙일 수 있음(gas/Code.gs callOpenAiCompatible_
+    //    재사용). ⚠️ 웹검색 기능은 여기도 건당 $0.01 과금(무료 아님) — 추가 목적은 "일반 채팅용
+    //    무료 한도 하나 더"이지 날씨 같은 실시간 질문 해결이 아니다.
+    glm:     { label: 'GLM (Zhipu AI, 중국)',  keyName: 'glm_api_key', defaultModel: 'glm-4.5-flash',
+               placeholder: '(Z.ai API 키)', guideUrl: 'https://z.ai/manage-apikey/apikey-list',
+               guideText: '💡 GLM(智谱/Z.ai)은 Flash 계열 모델을 상시 무료로 제공한다고 알려져 있습니다(기간·횟수 제한 없음 — 단 동시 요청 1개 제한, 공식 조건은 수시로 바뀔 수 있어 가입 시 다시 확인 필요).\n\n① z.ai/model-api 접속 → 계정 가입/로그인\n② z.ai/manage-apikey/apikey-list 에서 [Create API Key] 클릭\n③ 생성된 키를 복사 → 아래 입력란에 붙여넣고 저장\n※ 가입 자체는 무료지만 결제수단 등록을 요구할 수 있다는 보고도 있음(출처마다 다름) — 안내 화면에서 직접 확인하세요.',
+               guideTextEn: '💡 GLM (Zhipu/Z.ai) reportedly offers its Flash models free with no time/count limit (max 1 concurrent request — official terms can change, re-check at signup).\n\n① Go to z.ai/model-api → sign up or sign in\n② On z.ai/manage-apikey/apikey-list click [Create API Key]\n③ Copy the key → paste below and save\n※ Signup itself is free, but some reports say a payment method may be requested — check the signup screen yourself.',
+               models: [
+                   { id: 'glm-4.5-flash', label: 'GLM-4.5 Flash', tier: 'free', note: '🟢 무료(보고됨) · 상시' },
+                   { id: 'glm-4.7-flash', label: 'GLM-4.7 Flash', tier: 'free', note: '🟢 무료(보고됨) · 신모델' },
                ]},
     openai:  { label: 'OpenAI (GPT)',  keyName: 'openai_api_key', defaultModel: 'gpt-5.6-luna',
                placeholder: 'sk-로 시작하는 OpenAI API 키', guideUrl: 'https://platform.openai.com/api-keys',
@@ -400,7 +458,7 @@ async function _aiTryProviderCandidates(providerKey, apiKey, prompt, opts, GAS_U
 //    자동목록에서 뺀다 — 사람이 명시적으로 선택 안 했는데 자동으로 돈이 나가는 제공사로 넘어가면
 //    안 되므로(다른 곳은 전부 "무료" 등급이 실제로 있는 곳들). 활성 제공사가 이미 이 목록에 있으면
 //    그건 이미 1차 시도로 끝났으므로 자동으로 건너뛴다.
-window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral', 'openrouter'];
+window._AI_FREE_FALLBACK_PROVIDER_ORDER = ['gemini', 'groq', 'mistral', 'openrouter', 'glm'];
 // 💡 [2026-09-22 신규, 사용자 요청 "자동전환을 막아도 같은 현상인지 보고 싶다"] 교차 제공사
 //    폴백 자체를 끌 수 있게 함 — Groq/Mistral 쪽이 원인인지, 폴백 로직 자체가 원인인지 구분하는
 //    진단 목적. 기본 켜짐(기존 동작 유지), ⚙️ AI 도구 설정에서 끄면 활성 제공사(예: Gemini)만

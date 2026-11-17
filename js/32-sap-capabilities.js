@@ -1066,9 +1066,14 @@
                     // 💡 [2026-11-16 사용자 요청] "그래도 물어보고 싶다"는 선택은 본인 몫으로 남긴다 —
                     //    분류 선택 상자에서 "💡 추론"을 고르거나 "#추론 " 접두어를 쓰면 이 즉답을
                     //    건너뛰고 AI가 실제로 답한다(04h `_qaOosForced` 가드).
+                    // 🔴 [2026-11-17 실측 확정] 추론 모드로 넘어가도 날씨처럼 실시간 정보가 필요한
+                    //    질문은 "Grounding with Google Search"가 필요한데, 이 기능 자체가 무료
+                    //    등급 키엔 할당량 0으로 막혀 있다(구글 정책 — 코드로 못 푸는 제약). 겪어보고
+                    //    당황하지 않게 미리 적어 둔다(gas/Code.gs `callGemini_`가 실제로 거부되면
+                    //    같은 안내를 답변에도 또 붙인다).
                     return (en ? t.en : t.ko) + (en
-                        ? '\n\n(Answered without calling the AI — this saves your daily quota. Want an answer anyway? Pick "💡 General" in the 🏷 Type box above the input, or start your question with "#general ", then ask again.)'
-                        : '\n\n(AI를 부르지 않고 바로 답했습니다 — 하루 사용량을 아끼기 위함입니다. 그래도 답을 듣고 싶으면 입력창 위 🏷 분류 상자에서 "💡 추론"을 고르거나, 질문 앞에 "#추론 "을 붙여 다시 물어보세요.)');
+                        ? '\n\n(Answered without calling the AI — this saves your daily quota. Want an answer anyway? Pick "💡 General" in the 🏷 Type box above the input, or start your question with "#general ", then ask again. Note: real-time info like weather needs Google Search grounding, which free-tier API keys don\'t have quota for by Google policy — it only works on a paid-tier key.)'
+                        : '\n\n(AI를 부르지 않고 바로 답했습니다 — 하루 사용량을 아끼기 위함입니다. 그래도 답을 듣고 싶으면 입력창 위 🏷 분류 상자에서 "💡 추론"을 고르거나, 질문 앞에 "#추론 "을 붙여 다시 물어보세요. 단, 날씨처럼 실시간 정보가 필요한 질문은 추론 모드로도 못 받을 수 있습니다 — 그 기능(Google 웹검색 연동)은 구글 정책상 무료 등급 키엔 할당량이 0이라 유료 등급 키에서만 됩니다.)');
                 }
             }
         }

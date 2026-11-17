@@ -566,14 +566,26 @@
     })(0);
 
     // ── 일반 추론용 가벼운 프롬프트(프로젝트 JSON을 싣지 않음) ────────────
-    window._qaBuildGeneralPrompt = function (question, hist) {
+    // 🔎 [2026-11-17] searchResults(선택) — Tavily로 직접 검색한 결과([{title,url,content}]).
+    //    LLM 자체 그라운딩(전부 유료 확인됨, docs/ai-qa.md)과 달리, 검색은 04h가 미리 해서
+    //    텍스트로 넘겨준다 — AI는 이 결과만 보고 답하고 지어내지 않는다(RAG).
+    window._qaBuildGeneralPrompt = function (question, hist, searchResults) {
         var en = window._currentLang === 'en';
         var h = (hist || []).filter(function (m) { return m && !m.pending && m.text; }).slice(-6)
             .map(function (m) { return (m.role === 'user' ? 'User: ' : 'AI: ') + String(m.text).slice(0, 600); }).join('\n');
         var rules = en
             ? 'You are the in-app assistant of the KORTEK Gantt Chart web app. This question was classified as a general knowledge/reasoning question that does NOT need the project data or live SAP data. Do not pretend to have project data or SAP lookup results. If you are unsure, say so. If it actually needs project data or a SAP lookup, say that in one sentence. Answer concisely in English.'
             : '당신은 KORTEK 간트차트 웹앱의 AI 문답 도우미입니다. 이 질문은 프로젝트 데이터나 SAP 실데이터가 필요 없는 일반 지식/추론 질문으로 분류되었습니다. 프로젝트 데이터나 SAP 조회 결과를 가진 것처럼 답하지 마세요. 확실하지 않으면 확실하지 않다고 말하고, 실제로는 프로젝트 데이터나 SAP 조회가 필요한 질문이면 그 사실을 한 문장으로만 알려주세요. 핵심 위주로 간결하게 한국어로 답하세요.';
-        return rules + (h ? '\n\n[대화 기록]\n' + h : '') + '\n\n[질문]\n' + question;
+        var searchBlock = '';
+        if (searchResults && searchResults.length) {
+            var lines = searchResults.map(function (r, i) {
+                return (i + 1) + '. ' + (r.title || '') + ' (' + (r.url || '') + ')\n' + (r.content || '');
+            }).join('\n\n');
+            searchBlock = en
+                ? '\n\n[Live web search results — base your answer on these (may include today\'s date/weather/current info). If they don\'t cover the question, say so instead of guessing.]\n' + lines
+                : '\n\n[실시간 웹검색 결과 — 이 내용을 바탕으로 답하세요(오늘 날짜/날씨/현재 정보가 포함될 수 있습니다). 이 결과로 답이 안 되면 추측하지 말고 그렇다고 말하세요.]\n' + lines;
+        }
+        return rules + searchBlock + (h ? '\n\n[대화 기록]\n' + h : '') + '\n\n[질문]\n' + question;
     };
 
     // ── 라우팅 진입점(04h가 로컬 명령 이후, AI 호출 직전에 부른다) ─────────

@@ -958,3 +958,67 @@ SAP, 자유추론… 쉽게 구분할 방법이 필요한데." → **먼저 재 
   전사적으로 유료 등급을 요구하는 건 득보다 비용이 크다는 사용자 판단으로 추가 작업 없이 종료.
   (검증: Claude in Chrome으로 실제 Gemini REST API 두 번 호출 + `callAiBackend` 1회 호출, 전부
   로그에 API 키 평문은 남기지 않음)
+- 💬 그라운딩이 막혀 폴백(tools 없이 재시도)으로 넘어간 **그 답변 자체에도** 이유를 적는다
+  (`gas/Code.gs` `callGemini_` `searchDenied` 플래그 → "실시간 웹검색 없이 일반 지식으로만
+  답했습니다 — 무료 등급 키는 … 할당량 0 … 유료 등급으로 전환해야 합니다" 한 단락 추가). 매번
+  막힌 이유를 다시 물어보게 하지 않으려는 목적. 즉답 차단 안내문(`js/32`
+  `_qaOutOfScopeAnswer`)에도 같은 취지를 미리 적어 둬서, 추론 모드로 넘어가기 **전에** 알 수
+  있게 했다.
+
+**🌏 (2026-11-17 3차) 중국 AI 모델 조사 → GLM(Zhipu/Z.ai) 추가** — 사용자 요청으로 "무료로 쓸 수
+있는 다른 제조사·중국 모델"을 웹 검색으로 조사(`WebSearch`). 결과:
+- DeepSeek/Qwen의 무료는 **1회성**(가입 체험 크레딧, 또는 모델당 90일 100만 토큰) — 매일 쓰는
+  용도엔 안 맞아 제외.
+- **GLM(Zhipu AI)만 Flash 계열(`glm-4.5-flash`/`glm-4.7-flash`)이 기간·횟수 제한 없는 상시
+  무료**라는 보고가 여러 출처에서 나옴(단, 가입 시 결제수단을 요구한다는 상충 보고도 있어 "보고됨"
+  수준 — 공식 확정 아님). OpenAI 호환 엔드포인트(`api.z.ai/api/paas/v4/chat/completions`)라
+  Groq/Mistral과 **같은 `callOpenAiCompatible_` 재사용**으로 끝남(`gas/Code.gs`에 분기 한 줄).
+- ⚠️ 웹검색은 여기도 **건당 $0.01 과금**(무료 아님) — 추가 목적은 "일반 채팅용 무료 한도 하나
+  더"이지 날씨 문제의 해결책이 아니다.
+- `window.AI_PROVIDERS.glm`(js/14a) + `<option value="glm">`(js/04i, `mail-ai-provider` select)
+  + `_AI_FREE_FALLBACK_PROVIDER_ORDER`**맨 끝**에 추가(검증 덜 된 신규 후보라 우선순위를 가장
+  낮게) + i18n `ai-provider-glm`.
+- ✅ **Claude in Chrome으로 실제 UI 동작까지 라이브 확인**: `openAiToolsSettingsModal()` →
+  드롭다운에 GLM 항목 노출 → 선택 시 모델 드롭다운(GLM-4.5/4.7 Flash)·키 라벨("🔑 GLM API")·
+  placeholder가 전부 올바르게 갱신 → 확인 후 `gemini`로 원복(실사용 설정을 안 건드리게). GLM API
+  키 자체는 아직 발급/테스트 안 함 — 실제 호출 성공 여부는 팀원이 키를 발급해 봐야 확인된다.
+
+**🆕 (2026-11-17 4차) Tavily 웹검색 추가 — "LLM이 직접 검색"이 아니라 "우리가 검색해서 LLM에 붙인다"
+로 접근을 바꿔서 날씨 질문을 실제로 무료로 해결** — 3차까지 LLM 자체 그라운딩(Gemini/GLM/Kimi/
+DeepSeek/Qwen/Groq compound/Mistral/OpenRouter `:online`/Perplexity 전부)이 예외 없이 유료임을
+재확인했는데, 사용자가 "정말 안 되는지 다시 확인해달라"고 요청해 **검색 자체를 LLM이 하지 않는
+경로**를 추가로 조사했다. **Tavily — 공식 pricing 페이지 확인: 월 1,000크레딧 영구 무료, 카드
+등록 불필요**(검색 1건=1크레딧). 이미 이 앱이 쓰고 있는 패턴(SAP 조회 결과·다른 프로젝트 데이터를
+프롬프트에 텍스트로 붙여 AI에게 넘기는 RAG)을 날씨에도 그대로 적용 — **LLM의 유료 그라운딩이
+전혀 필요 없다.**
+- 흐름: `js/04h`가 `_qaRoute.cls === 'general'`이고 Tavily 키가 저장돼 있으면, AI를 부르기
+  **전에** `window._aiTavilySearch(question)`(js/14a)로 먼저 검색 → 결과(`[{title,url,content}]`)
+  를 `window._qaBuildGeneralPrompt(question, hist, searchResults)`(js/33, 세 번째 인자 신설)에
+  넘겨 프롬프트 텍스트에 붙인다("이 결과를 바탕으로 답하라, 없으면 추측하지 말고 모른다고 하라").
+  AI는 평소와 같은 기존 무료 LLM(Gemini/Groq/GLM 등 무엇이든) 그대로 사용 — **검색과 생성이
+  완전히 분리**돼 있어 생성 쪽 코드는 거의 안 건드렸다.
+- Tavily 검색이 **성공하면** 기존 Gemini 자체 그라운딩(`webSearch` 플래그, 2차에서 넣은 기능)은
+  **끈다**(`_qaWebSearch = ... && !tavilySearchResults`) — 이미 실제 검색 결과가 있는데 무료
+  등급엔 할당량 0인 그라운딩을 또 시도해 헛된 왕복 1회(429→폴백)를 만들 이유가 없고, 그 폴백이
+  붙이는 "그라운딩 막혀서 일반 지식으로만 답함" 안내도 실제로 검색한 상황엔 안 맞는 말이 된다.
+- 키가 없거나 검색이 실패하면(`tavilySearchResults === null`) **조용히 2차 동작(Gemini 그라운딩
+  시도→폴백)으로 넘어간다** — 이 기능을 안 켠 사람에겐 기존과 동일, 퇴행 없음.
+- **GAS 프록시(gas/Code.gs) 재사용** — 새 URL/새 배포 불필요. `doPost`가 `params.action ===
+  'tavilySearch'`면 `tavilySearch_()`로 분기(기존 AI 생성 경로는 `action` 필드가 없을 때 그대로
+  유지돼 하위호환). Tavily는 "생성"이 아니라 "조회"라 결과(제목/URL/본문 500자)를 그대로 돌려주고
+  LLM을 부르지 않는다.
+- UI는 ⚙️ AI 분석 설정에 새 접이식 섹션 "🔎 실시간 웹검색 (선택, Tavily)" — 비워두면 이 기능
+  없이 예전처럼 동작한다고 안내문에 명시. 발급 안내는 `app.tavily.com`.
+- ✅ **Claude in Chrome으로 라이브 검증**: ① 설정 UI 저장/삭제/상태표시 정상 ② `_qaBuildGeneralPrompt`
+  에 실제 가짜 검색결과("오늘 서울은 맑음, 기온 12도")를 넣어 프롬프트에 그대로 포함되는 것 확인
+  ③ `_aiTavilySearch`가 (아직 재배포 전인) 구버전 GAS를 상대로도 **예외 없이** `{ok:false,
+  error:...}`를 반환해 크래시 없이 안전하게 저항하는 것까지 확인. ⚠️ **첫 라이브 테스트에서
+  `promptHasSearchBlock:false`가 나와 당황했는데 — 코드 버그가 아니라 그 브라우저 탭이 이전
+  네비게이션 시점의 `window._qaBuildGeneralPrompt` 클로저를 그대로 들고 있던 것**이었다(서버·
+  디스크 파일은 전부 최신이었음, `curl`로 교차 확인). 그 자리에서 최신 스크립트를 `fetch` +
+  `eval` 로 다시 실행시켜서야 맞게 나왔다 — **브라우저 탭 하나로 여러 번 라이브 검증할 때는
+  탭이 "지금 로드된 시점의 코드"를 들고 있다는 것을 잊지 말 것**(이 저장소의 다른 캐시 관련
+  사고들과 같은 결).
+- ⚠️ **실제 Tavily 키로 진짜 날씨를 물어본 적은 아직 없다** — 키 발급·GAS 재배포(이번에도 Apps
+  Script 편집기에 최신 `gas/Code.gs`를 붙여넣고 새 버전 배포 필요)·실제 질문까지는 사람이 해야
+  확인된다.
