@@ -3289,6 +3289,88 @@
         window._docRender();
         _toast('📦 ' + (window._docState.round || '') + _t(' 문서를 만들었습니다.', ' created.'), 'success');
     };
+    /** ✏️ [2026-11-17 3차, "샘플 리포트도 동일 기능 상속"] 회차 이름 바꾸기 — 회차는
+     *  리비전과 달리 **출고 이력 행의 단계(`r.stage`)**가 정체성이다(회차 번호는 유지,
+     *  단계 이름만 바꾼다 — 예: "PROTO A" → "PROTO A1"). 문서 저장 열쇠(`id@회차이름`)가
+     *  그 글자 그대로를 쓰므로, 이름이 바뀌면 **이 회차를 쓰는 모든 perRound 서식 ×
+     *  모든 모델**의 문서를 새 열쇠로 같이 옮긴다 — 안 옮기면 이름만 바뀌고 그동안
+     *  쓴 내용은 옛 열쇠에 고립되어 안 보이게 된다(리비전 번호 바꾸기와 같은 이유). */
+    window._docRoundRename = function (oldLabel) {
+        oldLabel = oldLabel || window._docState.round || _docRounds()[0];
+        var row = _hist().filter(function (r) { return _roundLabel(r) === oldLabel; })[0];
+        if (!row) {
+            _toast('⚠️ ' + _t('해당 회차의 출고 이력을 찾지 못했습니다.', 'Could not find a shipping record for this round.'), 'error');
+            return;
+        }
+        var input = prompt(_t('단계 이름을 바꿉니다 (회차 번호는 그대로 유지됩니다)', 'Rename the stage (the round number stays as-is)'), row.stage || '');
+        if (input === null) return;
+        var newStage = String(input).trim();
+        if (!newStage) {
+            _toast('⚠️ ' + _t('이름을 비울 수 없습니다.', 'Name cannot be empty.'), 'error');
+            return;
+        }
+        if (newStage === row.stage) return;
+        var newLabel = _roundLabel({ stage: newStage, seq: row.seq });
+        if (newLabel !== oldLabel && window._docRounds().indexOf(newLabel) !== -1) {
+            if (!confirm(_t(
+                '[' + newLabel + ']은(는) 이미 있는 회차입니다. 계속할까요? (서로 다른 출고 이력이 같은 문서를 보게 됩니다)',
+                '[' + newLabel + '] already exists as a round. Continue? (these two shipping records will then share the same document)'
+            ))) return;
+        }
+        var docs = (window.tabData && window.tabData.documents) || {};
+        var units = (window.getMcUnits ? window.getMcUnits() : []).concat(['']);
+        var moved = 0;
+        (window.DOC_FORMS || []).forEach(function (f) {
+            if (!f.perRound) return;
+            units.forEach(function (u) {
+                var oldKey = f.id + '@' + oldLabel + (u ? '#' + u : '');
+                var newKey = f.id + '@' + newLabel + (u ? '#' + u : '');
+                if (oldKey !== newKey && docs[oldKey] !== undefined && docs[newKey] === undefined) {
+                    docs[newKey] = docs[oldKey];
+                    delete docs[oldKey];
+                    moved++;
+                }
+            });
+        });
+        row.stage = newStage;
+        if (window._docState.round === oldLabel) window._docState.round = newLabel;
+        _markDirty();
+        window._docRender();
+        _toast('✏️ ' + oldLabel + ' → ' + newLabel
+            + (moved ? _t(' 로 이름을 바꿨습니다(문서 ' + moved + '건 같이 옮김).', ' (moved ' + moved + ' document(s) along).')
+                     : _t(' 로 이름을 바꿨습니다.', ' renamed.')), 'success');
+    };
+    /** 🗑️ [2026-11-17 3차] 회차 삭제 — 이미 있는 `_docHistDel`(출고 이력 삭제, 확인창 있음)을
+     *  **그대로** 불러 쓴다(같은 삭제를 두 벌로 만들지 않는다). 지워진 뒤 지금 보던 회차가
+     *  사라졌으면 남은 회차 중 하나로 옮긴다. 문서 내용 자체는 지우지 않는다(출고 이력만
+     *  지운다 — 리비전 삭제보다 되돌리기 쉬운 쪽을 택했다, 같은 회차 이름을 다시 쓰면
+     *  그 내용이 그대로 돌아온다). */
+    window._docRoundDelete = function (label) {
+        label = label || window._docState.round || _docRounds()[0];
+        var list = _hist();
+        if (_docRounds().length <= 1) {
+            _toast('⚠️ ' + _t('마지막 남은 회차는 지울 수 없습니다.', 'Cannot delete the only remaining round.'), 'error');
+            return;
+        }
+        var idx = -1;
+        list.forEach(function (r, i) { if (_roundLabel(r) === label) idx = i; });
+        if (idx < 0) {
+            _toast('⚠️ ' + _t('해당 회차의 출고 이력을 찾지 못했습니다.', 'Could not find a shipping record for this round.'), 'error');
+            return;
+        }
+        window._docHistDel(idx);
+        var after = _docRounds();
+        if (after.indexOf(label) === -1) {
+            window._docState.round = after[Math.min(idx, after.length - 1)] || after[0];
+            window._docRender();
+        }
+    };
+    /** ▶◀ [2026-11-17 3차] 회차 관리 패널 토글 — 리비전 관리 패널(`_docRevToggleManage`)과
+     *  같은 모양(M.C `mcToggleUnitActions`). */
+    window._docRoundToggleManage = function () {
+        window._docState.roundManageOpen = !window._docState.roundManageOpen;
+        window._docRender();
+    };
     /**
      * 🔗 그 줄의 샘플/시제품 의뢰서를 **그룹웨어에서 연다**.
      *  ⚠️ 사람이 로그인해 둔 곳은 **전용 크롬**이라 앱 쪽 브라우저로 열면 로그인 화면만 뜬다
@@ -4102,23 +4184,31 @@
                 + ' font-size:12px; font-weight:bold; background:#00707d; color:#fff; flex-shrink:0;">'
                 + _esc(_docUnitCur) + '</button>';
         }
-        // 📦 회차 바 — 회차마다 문서가 따로인 서식에서만 보인다(M.C·BOM 의 전환 바와 같은 모양).
+        // 📦 [2026-11-17 3차, "샘플 리포트도 동일 기능 상속"] 회차 바 — 리비전 바와 **같은
+        //    모양**(M.C 제품구분자 패널): [회차 순환 버튼] [▶/◀ 토글] [열리면 ✏️➕🗑️ 슬라이드].
+        //    회차마다 문서가 따로인 서식에서만 보인다.
         if (form && form.perRound) {
-            var ri = rounds.indexOf(st.round);
+            var _docRoundCur = st.round || rounds[0] || '-';
+            var _docRoundMgOpen = !!window._docState.roundManageOpen;
             th += '<span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>'
                 + '<div id="doc-round-bar" style="display:flex; align-items:center; gap:2px; flex-shrink:0;">'
-                + '<button onclick="window._docRoundGo(-1)" title="' + _esc(_t('이전 회차', 'Previous')) + '"'
-                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">◀</button>'
                 + '<button class="unit-cycle-btn" onclick="window._docRoundGo(1)" title="'
-                + _esc(_t('누를 때마다 다음 회차로 — 회차마다 문서가 따로입니다', 'Next round')) + '"'
-                + ' style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer;'
-                + ' font-size:12px; font-weight:bold;">📦 ' + _esc(st.round || '-') + '</button>'
-                + '<button onclick="window._docRoundGo(1)" title="' + _esc(_t('다음 회차', 'Next')) + '"'
-                + ' style="padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:12px;">▶</button>'
-                + '<span style="font-size:11px; color:#868e96;">' + ((ri < 0 ? 0 : ri + 1) + '/' + rounds.length) + '</span>'
+                + _esc(_t('클릭할 때마다 다음 회차로 전환 — 회차마다 문서가 따로입니다', 'Click to switch to the next round')) + '"'
+                + ' style="padding:6px 10px; min-width:auto; border:1px solid #00707d; border-radius:5px; cursor:pointer;'
+                + ' font-size:12px; font-weight:bold; background:#00707d; color:#fff;">📦 ' + _esc(_docRoundCur) + '</button>'
+                + '<button id="doc-round-actions-toggle" onclick="window._docRoundToggleManage()" title="'
+                + _esc(_docRoundMgOpen ? _t('접기', 'Collapse') : _t('회차 관리(이름변경/추가/삭제)', 'Manage rounds (rename/add/delete)')) + '"'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (_docRoundMgOpen ? '#e9ecef' : 'none')
+                + '; color:#555; cursor:pointer; font-size:12px;">' + (_docRoundMgOpen ? '◀' : '▶') + '</button>'
+                + '<div id="doc-round-actions-panel" class="' + (_docRoundMgOpen ? 'doc-round-actions-open' : '') + '">'
+                + '<button onclick="window._docRoundRename(\'' + _esc(_docRoundCur) + '\')" title="'
+                + _esc(_t('회차 이름(단계) 바꾸기', 'Rename this round (stage)')) + '"'
+                + ' style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:none; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:14px;">✏️</button>'
                 + '<button onclick="window._docRoundAdd()" title="' + _esc(_t('회차 추가 — 새 문서가 생깁니다', 'Add a round')) + '"'
-                + ' style="margin-left:2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
-                + '</div>';
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
+                + '<button onclick="window._docRoundDelete(\'' + _esc(_docRoundCur) + '\')" title="' + _esc(_t('현재 회차 삭제(출고 이력)', 'Delete this round (shipping record)')) + '"'
+                + ' style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
+                + '</div></div>';
         }
         // 🏷🏷 [2026-11-17 2차, "MC TABLE 기능 상속해줘"] 리비전 바(R1/R2/R3…) — M.C 의
         //    제품구분자 바와 **글자 그대로 같은 모양**: [R-순환 버튼] [▶/◀ 토글] [열리면
