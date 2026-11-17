@@ -21,7 +21,13 @@ const win = {};
 global.window = win;
 global.document = {
     getElementById() { return null; },
-    querySelectorAll() { return []; }
+    querySelectorAll() { return []; },
+    // 🐛 [2026-11-17, 사용자 지시로 다른 테스트 파일들을 한 번씩 돌려보다 발견] js/22f 맨 끝의
+    // 무관한 모듈-로드 시점 IIFE(버전 버튼 부트스트랩)가 document.addEventListener를 부르는데
+    // 이 최소 document 스텁엔 그 메서드가 없어 로드 자체가 TypeError로 죽었다 — 검사 대상인
+    // importAddressFromGroupware와는 무관, 로드가 끝까지 되게 no-op만 추가한다.
+    addEventListener() {},
+    removeEventListener() {}
 };
 win.document = global.document;
 win._currentLang = 'ko';

@@ -34,7 +34,7 @@
         historyDays: 240,
         internalDomains: ['kortek.co.kr'],
         tokenMinLen: 5,          // 영숫자·한글만 남긴 뒤 이 길이 이상인 키워드만 "정확 일치" 근거로
-        tokenMaxHits: 2,         // 후보 3개 이상에 걸리는 토큰은 공용어 — 근거 아님
+        tokenMaxHits: 1,         // "고유" 키워드라는 이름 그대로 — 후보 1개에만 걸려야 근거, 2개 이상 걸리면 공용어
         threadMin: 1,            // 같은 제목 스레드가 이만큼 이미 배분돼 있으면 강한 근거
         senderMin: 4,            // 발신자 기록이 이 건수 이상이고
         senderShare: 0.85,       //   그중 이 비율 이상이 한 프로젝트면 강한 근거(사내 발신자는 제외)
@@ -128,20 +128,39 @@
         var senderHist = (from && !isInternal(from)) ? hist.filter(function (h) { return h.from === from; }) : [];
         var codes = window._msExtractCodeTokens ? window._msExtractCodeTokens(hay) : [];
         // 토큰 적중 — 공용어(여러 후보에 걸리는 것)는 먼저 센다
+        // 🐛 [2026-11-17, 사용자 지시로 다른 테스트 파일들을 돌려보다 발견] tokCount 는 "이 정규화된
+        // 토큰이 몇 개의 **서로 다른 후보**에 걸리는가" 여야 하는데, 실제로는 "매칭된 키워드
+        // **문자열** 개수"를 셌다 — 한 후보가 같은 토큰의 철자 변형을 여러 개 등록해 두면
+        // (예: 'STELLAR32'·'STELLAR-32', 메일 매칭용으로 흔히 둘 다 둔다) 그 후보 **혼자서도**
+        // 카운트가 2로 올라가 "공용어"로 잘못 빠졌다(실측: tests/mail-evidence.test.js [8]).
+        // 후보마다 정규화된 토큰을 한 번만 세도록 고친다.
         var tokHits = cands.map(function (c) {
             return (c.keywords || []).map(String).filter(function (kw) {
                 var n = normToken(kw); return n.length >= P.tokenMinLen && hayNorm.indexOf(n) !== -1;
             });
         });
         var tokCount = {};
-        tokHits.forEach(function (list) { list.forEach(function (kw) { var n = normToken(kw); tokCount[n] = (tokCount[n] || 0) + 1; }); });
+        tokHits.forEach(function (list) {
+            var seenInCand = {};
+            list.forEach(function (kw) { seenInCand[normToken(kw)] = true; });
+            Object.keys(seenInCand).forEach(function (n) { tokCount[n] = (tokCount[n] || 0) + 1; });
+        });
         var per = cands.map(function (c, i) {
             var th = threadHist.filter(function (h) { return byFid(h, c); }).length;
             var sd = senderHist.filter(function (h) { return byFid(h, c); }).length;
             var share = senderHist.length ? sd / senderHist.length : 0;
             var senderStrong = senderHist.length >= P.senderMin && share >= P.senderShare && sd > 0;
             var cd = codes.filter(function (code) { return (c.keywords || []).some(function (k) { return String(k).indexOf(code) !== -1; }); });
-            var tk = tokHits[i].filter(function (kw) { return tokCount[normToken(kw)] <= P.tokenMaxHits; });
+            // ⚠️ 같은 토큰의 철자 변형(위와 같은 이유)이 중복으로 들어가지 않게 후보 안에서도 한 번만.
+            var tk = (function () {
+                var seen = {}, out = [];
+                tokHits[i].forEach(function (kw) {
+                    var n = normToken(kw);
+                    if (tokCount[n] > P.tokenMaxHits || seen[n]) return;
+                    seen[n] = true; out.push(kw);
+                });
+                return out;
+            })();
             var strong = th >= P.threadMin || cd.length > 0 || senderStrong;
             var score = th * 3 + cd.length * 3 + Math.min(tk.length, 3) + (senderStrong ? 2 : 0);
             var lines = [];

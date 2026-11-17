@@ -149,6 +149,19 @@ class FakeNas(object):
         self.calls.append('unc_of')
         return chr(92) * 2 + 'nas' + chr(92) + str(path).strip('/').replace('/', chr(92))
 
+    # 🐛 [2026-11-17, 사용자 지시로 다른 테스트 파일들을 돌려보다 발견] `_docstore_saved_password()`
+    # 는 `_nas().load_config()`/`_nas()._dpapi_decrypt_b64(...)` 를 부르는데(실제 `_nas()` 는
+    # nas_dsm **모듈 자체**를 돌려줘서 그 모듈의 최상위 함수를 메서드처럼 쓴다), 이 가짜엔 그 둘이
+    # 없어 AttributeError 로 조용히 ''(빈 문자열)로 떨어졌다 — 그 바람에 아래 [6]이 "저장된
+    # 비밀번호로 동기화한다"는 실제 설계(2026-11-05 `_docstore_saved_password` 문서화 참고)를
+    # 전혀 확인하지 못하고 있었다.
+    def load_config(self):
+        self.calls.append('load_config')
+        return {'pw_dpapi': 'FAKE_ENC'}
+
+    def _dpapi_decrypt_b64(self, b64):
+        return 'saved-pw' if b64 == 'FAKE_ENC' else ''
+
 
 def setup(fake):
     bk._nas = lambda: fake
@@ -170,7 +183,13 @@ try:
 finally:
     bk._sync_docstore_smb_credential = orig_sync
 
-print('\n[6] /nas/config POST — 비밀번호를 비워 보내면(다른 항목만 수정) 동기화를 안 부른다')
+# 🐛 [2026-11-17, 사용자 지시로 재점검] 이 테스트의 원래 제목·단언은 "비밀번호를 안 바꿨으면
+# 동기화 자체를 안 부른다"였는데, 이건 바로 위 라우트 코드(kortek_backend.py `/nas/config`)가
+# **일부러 고친 그 버그**와 정반대다 — 2026-11-05 사용자 제보("폴더 자격증명을 별도로 하니
+# 되는데 자동으로는 안 되나") 이후로 비밀번호 칸이 비어도(이미 저장된 PC) **저장된 비밀번호를
+# 꺼내 그걸로** 동기화를 건다(`pw or _docstore_saved_password()`, 주석에 그 경위가 그대로
+# 적혀 있다). 이 테스트는 그 의도된 동작이 아니라 **고치기 전의 버그**를 정답으로 놓고 있었다.
+print('\n[6] /nas/config POST — 비밀번호를 비워 보내도(다른 항목만 수정) 저장된 비밀번호로 동기화한다')
 sync_calls = []
 bk._sync_docstore_smb_credential = lambda h, u, p: sync_calls.append((h, u, p))
 try:
@@ -178,7 +197,7 @@ try:
     with bk.app.test_client() as c:
         r = c.post('/nas/config', json={'host': 'nas.kortek.local', 'user': 'kkr034', 'password': ''})
     check('응답 ok', json.loads(r.data.decode('utf-8'))['ok'] is True)
-    check('비밀번호 안 바꿨으면 SMB 동기화도 안 부른다', sync_calls == [], sync_calls)
+    check('빈 비밀번호는 저장된 값으로 채워져 동기화된다', sync_calls == [('nas.kortek.local', 'kkr034', 'saved-pw')], sync_calls)
 finally:
     bk._sync_docstore_smb_credential = orig_sync
 

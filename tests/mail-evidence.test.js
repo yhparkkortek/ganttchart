@@ -63,7 +63,17 @@ const inst = win._mailEvidenceInstall();
 ok('이미 감싸져 있다(로드 때)', win._msBuildProjectMatchSection._meWrapped && win._msResolveAiProjectMatch._meWrapped && win._tpAppendMailSignal._meWrapped, inst);
 reset();
 let r = resolveWith('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1, '매칭근거': 'AI', '근거인용': ['STELLAR32 패널 사양 회신 드립니다'] });
-ok('근거가 없으면 프롬프트는 원본 + 📜 인용 지시뿐 · 상 + 인용 검증 통과 → matched(cited)', r.prompt.indexOf('\n--- 후보 3개 ---') === 0 && r.prompt.indexOf('📎') < 0 && /근거인용/.test(r.prompt) && r.tag.status === 'matched' && r.tag.evidence === 'cited', r);
+// 🐛 [2026-11-17, 사용자 지시로 재점검] 이 본문은 인용 검증(아래)이 통과하려면 후보를 구별하는
+// 단어(STELLAR32)를 담고 있어야 하는데, 그 단어는 js/61 의 "고유 키워드" 근거도 같이 집어내
+// 📎 블록을 붙인다 — "근거가 아예 없다"는 건 이 입력으로는 애초에 성립하지 않는다(📜 인용 검증을
+// 테스트하려고 본문을 바꾼 85668f3 때 생긴 모순, 그땐 안 걸렸다). 확인할 수 있는 건 "스레드·
+// 발신자·관리번호 같은 **강한** 근거는 없다"는 것뿐 — 약한 키워드 힌트는 있는 게 맞다.
+// ⚠️ 📎 블록엔 "스레드 기록·관리번호 일치는 강한 근거입니다" 라는 **고정 안내문**이 항상 같이
+// 붙는다 — 그 안내문 자체엔 "스레드"/"관리번호"/"발신자" 가 들어 있어 일반 키워드로 보면
+// 안 걸린다. 실제 근거 줄만 보려면 더 구체적인 표현(같은 제목 스레드/관리번호 #.../발신자 )으로.
+ok('강한 근거(스레드·발신자·관리번호)는 없고 약한 키워드 힌트만 · 상 + 인용 검증 통과 → matched(cited)',
+   r.prompt.indexOf('\n--- 후보 3개 ---') === 0 && !/같은 제목 스레드|관리번호 #|발신자 /.test(r.prompt)
+   && /근거인용/.test(r.prompt) && r.tag.status === 'matched' && r.tag.evidence === 'cited', r);
 
 console.log('\n[2b] 📜 인용 검증 — AI 혼자의 "상" 은 본문에 있는 특정 문장을 인용해야만 자동배치');
 r = resolveWith('아무 제목', 'x@ext.com', 'STELLAR32 패널 사양 회신 드립니다', { '매칭신뢰도': '상', '주매칭프로젝트번호': 1 });
