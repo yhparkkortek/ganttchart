@@ -1299,14 +1299,22 @@
         //    너비는 js/40 `QA_ROW_CHIP_KINDS[].cols[].w`(데이터) — 안 적은 열이 남는 폭을 먹는다.
         const tdS = 'box-sizing:border-box; padding:4px 7px; border-bottom:1px solid #eef0f3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
         const hasW = cfg.cols.some(function (c) { return c.w; });
+        // 🔢 [2026-11-18 사용자 요청 "정보를 보여줄 때 NO 링을 꼭 해주면"] 모든 칩 표가 **공통으로**
+        //    NO. 열을 맨 앞에 받는다 — 각 kind 의 `cols` 데이터에 매번 추가하지 않고 여기 한 곳에서
+        //    붙인다(새 kind 를 추가해도 자동으로 번호가 붙는다). 이 번호(1부터)는 `_qaRowChipStore`
+        //    배열의 인덱스+1과 같아서, 사람이 "5번"이라고 말했을 때 가리키는 것과 화면 숫자가
+        //    항상 일치한다(아래 `_ganttQaResolveTurnRowRef` 가 바로 이 인덱스를 쓴다).
+        const noColW = '30px';
         let html = '<div style="font-size:11px;color:#5577aa;margin-bottom:4px;">💡 '
-            + window._t('행을 클릭하면 할 수 있는 작업이 나옵니다', 'Click a row to see what you can do') + '</div>'
-            + '<div style="max-height:260px; overflow:auto; border:1px solid #dde4ec; border-radius:5px;">'
-            + '<table style="border-collapse:collapse; font-size:12px; width:100%;' + (hasW ? ' table-layout:fixed;' : '') + '">'
-            + (hasW ? '<colgroup>' + cfg.cols.map(function (c) {
+            + window._t('행을 클릭하면 할 수 있는 작업이 나옵니다 · 번호로도 가리킬 수 있습니다(예: "5번 ~해줘")',
+                         'Click a row to see what you can do · you can also refer to it by number (e.g. "do #5")') + '</div>'
+            + '<div class="qa-chip-table" data-qa-table-id="' + esc(tableId) + '" data-qa-kind="' + esc(kind) + '" style="max-height:260px; overflow:auto; border:1px solid #dde4ec; border-radius:5px;">'
+            + '<table style="border-collapse:collapse; font-size:12px; width:100%; table-layout:fixed;">'
+            + '<colgroup><col style="width:' + noColW + ';">' + cfg.cols.map(function (c) {
                 return '<col' + (c.w ? ' style="width:' + esc(c.w) + ';"' : '') + '>';
-            }).join('') + '</colgroup>' : '')
+            }).join('') + '</colgroup>'
             + '<thead><tr>'
+            + '<th style="' + thS + ' text-align:center;">' + esc(window._t('NO', 'NO')) + '</th>'
             //  🌐 머리글은 **함수도 받는다** — 카탈로그는 로드 때 한 번 만들어지므로 거기서
             //     `_t(...)`를 부르면 그때 언어로 **굳는다**. 함수로 적으면 그릴 때마다 정해진다.
             + cfg.cols.map(function (c) {
@@ -1318,6 +1326,7 @@
             html += '<tr style="background:' + bg + '; cursor:pointer;" '
                 + 'onclick="window._qaRowChipClick(\'' + kind + '\',\'' + tableId + '\',' + i + ')" '
                 + 'onmouseover="this.style.background=\'#d4eaf8\'" onmouseout="this.style.background=\'' + bg + '\'">'
+                + '<td style="' + tdS + ' text-align:center; color:#8aa; font-weight:bold;">' + (i + 1) + '</td>'
                 + cfg.cols.map(function (c) {
                     const v = c.get(r) || '';
                     const tip = c.title ? (c.title(r) || v) : v;
@@ -1327,6 +1336,106 @@
         });
         html += '</tbody></table></div>';
         return html;
+    };
+
+    /**
+     * 🔢 [2026-11-18 사용자 요청] "A8 대화 5번 문서로 ~해줘" 같은 턴+행 참조를 실제 내용으로
+     * 풀어서 문장 앞에 붙인다 — 지어내지 않고, 못 찾으면 되묻는다(아래 정책).
+     *
+     * 턴 참조: `A8`/`Q8`/`8번 답변`/`8번 질문`/`8번 대화` → 그 정확한 `_aIdx`/`_qIdx` 말풍선
+     *          하나(`_renderGanttQaMessages`가 매 렌더마다 매기는 번호, `window._ganttQaMsgKeyIndexMap`).
+     * 행 참조:  `5번`/`5번째` → 번호 매긴 칩 표(`_qaBuildRowChipTable`)의 그 줄(1부터).
+     *
+     * 정책(모호하면 되묻는다 — 추측하지 않는다):
+     *  - 턴 참조가 가리키는 말풍선 자체에 번호 매긴 표가 없으면, 사용자 메시지가 나오기 전까지
+     *    **바로 다음 AI 말풍선들**(최대 5개)에서 처음 찾은 표를 쓴다 — 도구 결과 표는 설명
+     *    말풍선 바로 뒤에 **별도** 말풍선으로 붙는 경우가 많기 때문이다(`_qaAttachRowChips`).
+     *  - 턴 참조 없이 행 번호만 있으면 지금까지 보여준 표 중 **가장 최근 것**을 쓴다.
+     *  - 행 번호가 그 표의 행 수를 벗어나거나, 표를 끝내 못 찾으면 되묻는다.
+     *  - 턴 참조만 있고 행 번호가 없으면(예: "A8 내용 다시 보여줘") 참조를 안 건드리고 그대로
+     *    돌려보낸다(null) — 이 함수는 "행을 구체적인 글로 바꾸는" 것만 한다.
+     */
+    window._ganttQaResolveTurnRowRef = function (question) {
+        const text = String(question || '');
+        const turnM = text.match(/\b([AQ])\s?(\d{1,3})\b(?:\s*번)?(?:\s*(?:대화|답변|질문))?/i)
+                   || text.match(/(\d{1,3})\s*번(?:째)?\s*(답변|대화|질문)/);
+        let turnKey = null, turnSpan = null;
+        if (turnM) {
+            if (/^[AQ]$/i.test(turnM[1])) { turnKey = turnM[1].toUpperCase() + (+turnM[2]); }
+            else { turnKey = (turnM[2] === '질문' ? 'Q' : 'A') + (+turnM[1]); }
+            turnSpan = turnM[0];
+        }
+        const rest = turnSpan ? text.replace(turnSpan, ' ') : text;
+        const rowM = rest.match(/(\d{1,3})\s*번(?:째)?/);
+        if (!turnSpan && !rowM) return null;   // 참조 패턴 자체가 없음 — 평소대로 흘려보낸다
+
+        const map = window._ganttQaMsgKeyIndexMap || {};
+        const hist = window._ganttQaHistory || [];
+        function tableIdIn(msg) {
+            if (!msg || !msg.rawHtml || !msg.text) return null;
+            const m = msg.text.match(/data-qa-table-id="([^"]+)"/);
+            return m ? m[1] : null;
+        }
+
+        let startIdx = null;
+        if (turnKey) {
+            if (!(turnKey in map)) {
+                return { found: false, message: '⚠️ ' + window._t(turnKey + ' 대화를 찾지 못했습니다 — 지금 대화에 그 번호가 없습니다.',
+                                                                    'Could not find ' + turnKey + ' — no such turn in this conversation.') };
+            }
+            startIdx = map[turnKey];
+        }
+
+        if (!rowM) return null;   // 턴 참조만 있고 행 번호가 없으면 건드리지 않는다
+        const rowNo = +rowM[1];
+
+        let tableId = null;
+        if (startIdx != null) {
+            tableId = tableIdIn(hist[startIdx]);
+            for (let i = startIdx + 1; !tableId && i < hist.length && i <= startIdx + 5; i++) {
+                if (hist[i].role === 'user') break;
+                tableId = tableIdIn(hist[i]);
+            }
+            if (!tableId) {
+                return { found: false, message: '⚠️ ' + window._t(turnKey + ' 답변에는 번호 매긴 목록이 없습니다.',
+                                                                    'No numbered list found in ' + turnKey + '.') };
+            }
+        } else {
+            for (let j = hist.length - 1; j >= 0 && !tableId; j--) tableId = tableIdIn(hist[j]);
+            if (!tableId) {
+                return { found: false, message: '⚠️ ' + window._t('아직 번호 매긴 목록을 보여드린 적이 없습니다.',
+                                                                    'No numbered list has been shown yet.') };
+            }
+        }
+
+        const rows = (window._qaRowChipStore || {})[tableId];
+        if (!rows || !rows.length) {
+            return { found: false, message: '⚠️ ' + window._t('그 목록을 더 이상 찾을 수 없습니다 — 다시 조회해 주세요.',
+                                                                'That list is no longer available — please look it up again.') };
+        }
+        if (rowNo < 1 || rowNo > rows.length) {
+            return { found: false, message: '⚠️ ' + window._t(rowNo + '번은 그 목록(' + rows.length + '건)에 없습니다.',
+                                                                '#' + rowNo + ' is out of range for that list (' + rows.length + ' item(s)).') };
+        }
+        const row = rows[rowNo - 1];
+
+        let kind = null;
+        for (let k = 0; k < hist.length && !kind; k++) {
+            const h = hist[k];
+            if (h && h.rawHtml && h.text && h.text.indexOf('data-qa-table-id="' + tableId + '"') !== -1) {
+                const km = h.text.match(/data-qa-kind="([^"]+)"/);
+                if (km) kind = km[1];
+            }
+        }
+        const cfg = kind ? (window.QA_ROW_CHIP_KINDS || {})[kind] : null;
+        const desc = (cfg && cfg.describe) ? cfg.describe(row)
+            : (cfg && cfg.header) ? String(cfg.header(row)).replace(/\s*[—–-]\s*(무엇을 할까요\?|What would you like to do\?)\s*$/, '')
+            : rowNo + '번 행';
+
+        let stripped = text.replace(rowM[0], ' ');
+        if (turnSpan) stripped = stripped.replace(turnSpan, ' ');
+        stripped = stripped.replace(/\s+/g, ' ').trim();
+        return { found: true, rewritten: ('[참조: ' + desc + '] ' + stripped).trim(), row: row, kind: kind };
     };
     // 도구 루프 결과(calls)에서 "표로 보여줄 것"만 골라 말풍선으로 덧붙인다.
     // ⚠️ [2026-10-29] `calls` 에 `rows` 가 실려 있어야 한다 — js/40 이 표를 쓰는 도구일 때만
@@ -5064,6 +5173,98 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
+        // 🪐 [2026-11-18 사용자 요청] JIRA 표 행 클릭 칩 — 메일(`__gwMail`)과 **같은 패턴**.
+        //    칩 목록은 js/40 `QA_ROW_CHIP_KINDS.jira`(데이터) — 여기는 그 값을 받아 실행만 한다.
+        //  ⚠️ 행은 `_qaJiraRowStore`에 키로 두고 key 만 넘긴다(새로고침하면 비므로 "다시 조회해
+        //     달라"고 정직하게 답한다) — 메일·BOM부품과 같은 이유.
+        if (question.indexOf('__jira') === 0) {
+            const _jiM = question.match(/^__jira([A-Za-z]+)__(.+)$/);
+            const _jiAct = _jiM ? _jiM[1] : '';
+            const _jiRow = _jiM ? ((window._qaJiraRowStore || {})[_jiM[2]]) : null;
+            input.value = '';
+            if (!_jiRow) {
+                window._ganttQaHistory.push({ role: 'ai', error: true,
+                    text: '⚠️ ' + window._t('그 JIRA 이슈 정보를 찾지 못했습니다 — 목록을 다시 조회해 주세요.',
+                                             'Could not find that JIRA issue — please look up the list again.') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            const _jiCfg = (window.QA_ROW_CHIP_KINDS || {}).jira;
+            const _jiDesc = (_jiCfg && _jiCfg.describe) ? _jiCfg.describe(_jiRow) : ('JIRA ' + (_jiRow.key || ''));
+            const _jiSend = function (q) { input.value = q; return window.sendGanttQaMessage(); };
+            if (_jiAct === 'Open') {
+                if (_jiRow.url) window.open(_jiRow.url, '_blank');
+                input.focus(); return;
+            }
+            if (_jiAct === 'Detail') {
+                if (window._jiraOpenIssueModal) { window._jiraOpenIssueModal(_jiRow.key); input.focus(); return; }
+                window._ganttQaHistory.push({ role: 'ai', text: _jiDesc + (_jiRow.description ? '\n\n' + _jiRow.description : '') });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            if (_jiAct === 'Task') {
+                //  ⚠️ 쓰기(간트 행 추가)는 **결정론으로 바로** 실행한다 — 이미 js/70 자체 버튼이
+                //     "사람이 눌러야만" 이라는 조건을 만족시키므로(칩 클릭 자체가 그 "누름"이다),
+                //     여기서 또 자연어로 되돌려 AI에게 묻지 않는다(엉뚱한 재해석 위험을 없앤다).
+                if (!window._jiraRegisterAsTask) {
+                    window._ganttQaHistory.push({ role: 'ai', error: true,
+                        text: '⚠️ ' + window._t('JIRA 탭 스크립트가 로드되지 않았습니다.', 'JIRA tab script is not loaded.') });
+                    window._renderGanttQaMessages(); input.focus(); return;
+                }
+                window._ganttQaHistory.push({ role: 'user',
+                    text: window._t('이 JIRA 이슈 간트 업무로 등록해줘: ', 'Register this JIRA issue as a gantt task: ') + _jiDesc });
+                window._renderGanttQaMessages();
+                await window._jiraRegisterAsTask(_jiRow.key);
+                input.focus(); return;
+            }
+            if (_jiAct === 'Mail') {
+                return _jiSend(window._t('그룹웨어 메일 보내줘', 'Send a groupware mail')
+                    + ' — ' + window._t('받는사람', 'to') + ' ' + (_jiRow.assignee || '')
+                    + ', ' + window._t('제목', 'subject') + ' "[' + (_jiRow.key || '') + '] ' + (_jiRow.summary || '') + '"'
+                    + ', ' + window._t('본문은 이 JIRA 이슈에 대한 안내로 짧게 써줘.',
+                                       'write a short notice about this JIRA issue.')
+                    + '\n\n[JIRA] ' + _jiDesc + (_jiRow.url ? ' (' + _jiRow.url + ')' : ''));
+            }
+            if (_jiAct === 'Cal') {
+                return _jiSend(window._t('일정 등록해줘', 'add a calendar event') + ': ' + _jiDesc);
+            }
+            if (_jiAct === 'Tg') {
+                if (window._qaTelegramDeliver) {
+                    await window._qaTelegramDeliver(_jiDesc + (_jiRow.url ? '\n' + _jiRow.url : ''),
+                        { label: window._t('내 텔레그램', 'my Telegram') });
+                }
+                input.focus(); return;
+            }
+            if (_jiAct === 'Ask') {
+                const _jiKey2 = window.getActiveAiKey ? window.getActiveAiKey() : null;
+                if (!_jiKey2) {
+                    window._ganttQaHistory.push({ role: 'ai', error: true,
+                        text: '⚠️ ' + window._t('AI 키가 없어 요약할 수 없습니다 — 설정에서 키를 등록해 주세요.',
+                                                 'No AI key — please register one in settings.') });
+                    window._renderGanttQaMessages(); input.focus(); return;
+                }
+                window._ganttQaHistory.push({ role: 'user', text: '🤖 ' + window._t('이 JIRA 이슈 요약·조치 제안', 'Summarize this JIRA issue') + ': ' + (_jiRow.key || '') });
+                window._ganttQaHistory.push({ role: 'ai', pending: true,
+                    text: '⏳ ' + window._t('이슈를 읽고 요약하는 중...', 'Summarizing the issue...') });
+                window._renderGanttQaMessages();
+                let _jiAns;
+                try {
+                    const _jiP = '아래는 사내 JIRA 이슈 **한 건**이다.\n\n[' + _jiDesc + ']\n\n'
+                        + '요청: 한국어로 ① 무슨 내용인지 1~2줄로 요약하고 ② 내가 해야 할 조치가 있으면 '
+                        + '글머리표로 적어라. 주어진 내용에 없는 걸 지어내지 마라. 표는 만들지 마라.';
+                    const _jiR = await window._withTimeout(window.callAiBackend(_jiKey2, _jiP, {}), 60000,
+                        window._t('AI 요약 시간 초과', 'AI summary timed out'));
+                    const _jiT = (_jiR && _jiR.ok) ? window._extractGanttQaAiText(_jiR) : '';
+                    _jiAns = (_jiT && _jiT.trim()) ? _jiT.trim()
+                        : ('⚠️ ' + window._t('AI 요약에 실패했습니다.', 'AI summary failed.'));
+                } catch (e) { _jiAns = '⚠️ ' + (e && e.message ? e.message : e); }
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: _jiAns });
+                window._renderGanttQaMessages(); input.focus(); return;
+            }
+            window._ganttQaHistory.push({ role: 'ai', error: true,
+                text: '⚠️ ' + window._t('모르는 JIRA 동작입니다: ', 'Unknown JIRA action: ') + _jiAct });
+            window._renderGanttQaMessages(); input.focus(); return;
+        }
+
         // 🔎 [2026-11-02 신규, 사용자 요청] BOM 에서 찾은 부품 표 행 클릭 칩.
         //    칩 목록은 js/40 `QA_ROW_CHIP_KINDS.bompart`(데이터), 동작은 js/56 — 여기는 그 값을
         //    받아 실행만 한다. SAP 조회 칩은 평문이라 이 블록에 안 오고 기존 조회 경로로 간다
@@ -5407,6 +5608,26 @@ ${docsJson}`;
         //    경우) 같은 대화 배열(window._ganttQaHistory)을 두 호출이 동시에 건드려 메시지 순서가
         //    꼬이거나 화면이 멈춘 것처럼 보일 수 있다 — 이미 처리 중이면 새 호출은 조용히 무시한다.
         if (window._ganttQaSending) return;
+
+        // 🔢 [2026-11-18 사용자 요청] "A8 대화 5번 문서 ~해줘" 같은 턴+행 참조 — 모든 `__xxx__`
+        //    내부 명령 분기(위)를 다 지난, **사람이 친 진짜 질문**에만 건다. 찾으면 그 행을
+        //    구체적인 글로 바꿔 문장 앞에 붙이고 **그대로 아래 기존 파이프라인**(일반 AI → 도구
+        //    루프 → 쓰기 초안/확인)에 흘려보낸다 — 새 안전장치가 필요 없다(초안→"발송" 확인
+        //    가드는 그 흐름 안에 이미 있다). 못 찾으면 지어내지 않고 되묻는다.
+        if (question.indexOf('__') !== 0 && window._ganttQaResolveTurnRowRef) {
+            const _refR = window._ganttQaResolveTurnRowRef(question);
+            if (_refR) {
+                if (!_refR.found) {
+                    window._ganttQaHistory.push({ role: 'user', text: question });
+                    window._ganttQaHistory.push({ role: 'ai', error: true, text: _refR.message });
+                    input.value = '';
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+                question = _refR.rewritten;
+            }
+        }
 
         // 🎙️ [2026-09-08 신규] "음성기능 꺼줘"/"음성 답변 켜줘" 같은 음성 제어 명령은 AI에게 물어보지
         //    않고 여기서 바로 처리하고 끝낸다(API 키 없어도 동작, AI가 깜빡할 위험도 없음).

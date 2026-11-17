@@ -775,6 +775,50 @@
             menu: function (r) {
                 return [{ label: '📰 ' + window._t('본문 보기', 'View post'), value: '__gwBoardRead__' + r.boardId + ':' + r.id }];
             }
+        },
+        // 🪐 [2026-11-18 사용자 요청 "구현 가능한 칩 버튼도 검토해서 생성해줘"] JIRA 이슈 목록도
+        //    메일/전자결재와 같은 행 클릭 칩 표로 — AI가 글로 풀어쓴 번호와 달리 이 표의 번호는
+        //    **코드가 정하므로** "5번"이라는 말이 항상 정확히 같은 행을 가리킨다(js/04h
+        //    `_ganttQaResolveTurnRowRef`가 이 번호로 턴+행 참조를 푼다). 칩은 전부 **이미 있는**
+        //    경로만 다시 쓴다(새 백엔드 없음) — 간트 등록은 이 세션에서 만든 `_jiraRegisterAsTask`,
+        //    나머지는 메일 칩(`__gwMail*`)이 쓰는 "자연어로 채워 다시 보내기" 패턴 그대로.
+        jira: {
+            cols: [
+                { label: 'Key', w: '72px', get: function (r) { return r.key || ''; } },
+                { label: function () { return window._t('요약', 'Summary'); }, get: function (r) { return r.summary || ''; } },
+                { label: function () { return window._t('상태', 'Status'); }, w: '68px', get: function (r) { return r.status || ''; } },
+                { label: function () { return window._t('담당자', 'Assignee'); }, w: '66px', get: function (r) { return r.assignee || ''; },
+                  title: function (r) { return (r.assignee || '') + (r.priority ? ' · ' + r.priority : ''); } }
+            ],
+            header: function (r) {
+                return (r.key ? r.key + ' ' : '') + (r.summary || '') + ' — ' + window._t('무엇을 할까요?', 'What would you like to do?');
+            },
+            // 💬 번호 참조("A8 대화 5번")로 이 행을 가리킬 때 AI/쓰기 흐름에 넘길 구체적인 문장
+            //    — 실제 필드만 쓴다(지어내지 않는다).
+            describe: function (r) {
+                var bits = [r.key || ''];
+                if (r.summary) bits.push(r.summary);
+                if (r.status) bits.push(window._t('상태: ', 'status: ') + r.status);
+                if (r.assignee) bits.push(window._t('담당: ', 'assignee: ') + r.assignee);
+                return 'JIRA ' + bits.join(' · ');
+            },
+            menu: function (r) {
+                var t = window._t;
+                window._qaJiraRowStore = window._qaJiraRowStore || {};
+                window._qaJiraRowStore[r.key] = r;      // 칩이 쓸 원본 행(설명·URL이 값에 안 실린다)
+                var out = [
+                    { label: '📜 ' + t('상세 보기', 'View detail'), value: '__jiraDetail__' + r.key },
+                    { label: '📋 ' + t('간트 업무 등록', 'Add as gantt task'), value: '__jiraTask__' + r.key }
+                ];
+                if (r.url) out.push({ label: '🔗 ' + t('JIRA에서 열기', 'Open in JIRA'), value: '__jiraOpen__' + r.key });
+                // ⚠️ 받는 사람이 없으면 메일을 못 쓴다 — 할 수 없는 칩을 보여주지 않는다(메일
+                //    kind 의 "답장" 칩과 같은 원칙).
+                if (r.assignee) out.push({ label: '✉️ ' + t('메일 발송', 'Send mail'), value: '__jiraMail__' + r.key });
+                out.push({ label: '📅 ' + t('일정 등록', 'To calendar'), value: '__jiraCal__' + r.key });
+                out.push({ label: '💬 ' + t('텔레그램으로', 'To Telegram'), value: '__jiraTg__' + r.key });
+                out.push({ label: '🤖 ' + t('요약·조치 제안', 'Summarize'), value: '__jiraAsk__' + r.key });
+                return out;
+            }
         }
     };
 
@@ -790,7 +834,12 @@
         gw_approval_box: { kind: 'approval' },
         gw_board: { kind: 'board' },
         gw_mail: { kind: 'gwmail' },
-        sap_goods_receipt_targets: { kind: 'goodsreceipt' }
+        sap_goods_receipt_targets: { kind: 'goodsreceipt' },
+        // 🪐 [2026-11-18] jira_issue(단건 조회)는 rows 배열이 아니라 이슈 객체 하나를 돌려주므로
+        //    (`_qaAttachRowChips`의 `Array.isArray(c.rows)` 가드에 자연히 걸러져) 여기 안 넣는다 —
+        //    목록을 돌려주는 도구만 칩 표가 맞다.
+        jira_search: { kind: 'jira' },
+        jira_project_issues: { kind: 'jira' }
     };
 
     // 🏭 메일 글자에서 SAP 조회로 이어 줄 번호 후보 — **데이터로 관리**한다(코드에 자릿수를
