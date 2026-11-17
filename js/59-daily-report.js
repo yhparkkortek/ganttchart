@@ -1141,14 +1141,23 @@
      * ⚠️ 모달 전체를 다시 그리면 **사람이 치던 칸에서 포커스가 날아간다** — 다른 프로젝트는
      *    뒤에서 한 건씩 들어오므로, 바뀌는 건 이 목록뿐이다. 그래서 여기만 갈아 끼운다.
      */
+    /** "이번주"/"지난주" 의 월요일 — **월~일 달력 주**(js/62 `weekStartsMonday` 와 같은 규칙 —
+     *  롤링 7일 아님, 일요일이 그 주의 7번째 날). `weeksBack` 만큼 더 앞선 주로 민다. */
+    function mondayOf(dateStr, weeksBack) {
+        var b = new Date(dateStr + 'T00:00:00');
+        var dow = b.getDay(), back = (dow + 6) % 7 + (weeksBack || 0) * 7;
+        return new Date(b.getFullYear(), b.getMonth(), b.getDate() - back);
+    }
+
     /** 기간 모드의 [시작,끝] — 거꾸로 골라도 바꿔 끼운다(js/62 와 같은 규칙). 오늘 모드거나
-     *  시작일을 아직 안 골랐으면 그냥 오늘 하루. "이번주"는 **월~일 달력 주**(js/62 `weekStartsMonday`
-     *  와 같은 규칙 — 롤링 7일 아님, 일요일이 그 주의 7번째 날). */
+     *  시작일을 아직 안 골랐으면 그냥 오늘 하루. */
     function candRange() {
-        if (_candPeriod.mode === 'week') {
-            var b = new Date(_date + 'T00:00:00');
-            var dow = b.getDay(), back = (dow + 6) % 7;
-            var mon = new Date(b.getFullYear(), b.getMonth(), b.getDate() - back);
+        if (_candPeriod.mode === 'yesterday') {
+            var y = ymd(new Date(new Date(_date + 'T00:00:00').getTime() - 86400000));
+            return { start: y, end: y };
+        }
+        if (_candPeriod.mode === 'week' || _candPeriod.mode === 'lastweek') {
+            var mon = mondayOf(_date, _candPeriod.mode === 'lastweek' ? 1 : 0);
             var sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
             return { start: ymd(mon), end: ymd(sun) };
         }
@@ -1290,7 +1299,8 @@
     //    (검색칸은 같은 정적 영역에 있어 모드 전환 중 타이핑하고 있었다면 같이 날아간다 — 드문
     //    동시 상황이라 감수한다, 다른 전체-재렌더 동작들과 같은 수준의 트레이드오프.)
     window._dailySetCandPeriodMode = function (mode) {
-        _candPeriod.mode = (mode === 'range') ? 'range' : (mode === 'week') ? 'week' : 'today';
+        var modes = ['range', 'week', 'yesterday', 'lastweek'];
+        _candPeriod.mode = (modes.indexOf(mode) !== -1) ? mode : 'today';
         render();
         rescanCandPeriod();
     };
@@ -1429,7 +1439,9 @@
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">' +
       '<select onchange="window._dailySetCandPeriodMode(this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">' +
         '<option value="today"' + (_candPeriod.mode === 'today' ? ' selected' : '') + '>' + esc(T('오늘', 'Today')) + '</option>' +
+        '<option value="yesterday"' + (_candPeriod.mode === 'yesterday' ? ' selected' : '') + '>' + esc(T('어제', 'Yesterday')) + '</option>' +
         '<option value="week"' + (_candPeriod.mode === 'week' ? ' selected' : '') + '>' + esc(T('이번주', 'This week')) + '</option>' +
+        '<option value="lastweek"' + (_candPeriod.mode === 'lastweek' ? ' selected' : '') + '>' + esc(T('지난주', 'Last week')) + '</option>' +
         '<option value="range"' + (_candPeriod.mode === 'range' ? ' selected' : '') + '>' + esc(T('기간 설정', 'Date range')) + '</option>' +
       '</select>' +
       (_candPeriod.mode === 'range'

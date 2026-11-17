@@ -271,6 +271,35 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
             win._dailyOtherScan && win._dailyOtherScan.at);
     }
 
+    // 📅 [2026-11-17 요청] "어제"·"지난주" 모드 추가.
+    console.log('\n■ 후보 기간 "어제"·"지난주" 모드(2026-11-17)');
+    {
+        const yExpect = win._dailyYmd(new Date(t0 - 86400000));
+        await win.dailyOpenModal(today);
+        win._dailySetCandPeriodMode('yesterday');
+        ok('어제 모드는 어제|어제 캐시 열쇠로 훑는다',
+            win._dailyOtherScan && win._dailyOtherScan.at === (yExpect + '|' + yExpect),
+            'got=' + (win._dailyOtherScan && win._dailyOtherScan.at) + ' want=' + yExpect + '|' + yExpect);
+
+        // 독립 공식 — "이번주"와 같은 요일 계산에서 7일을 통째로 뺀다(candRange()의 mondayOf 를
+        // 그대로 베끼지 않는다).
+        const dow = new Date(today + 'T00:00:00').getDay();
+        const diff = (dow === 0) ? -6 : (1 - dow);
+        const d0date = new Date(today + 'T00:00:00');
+        const thisMon = new Date(d0date.getFullYear(), d0date.getMonth(), d0date.getDate() + diff);
+        const lastMon = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate() - 7);
+        const lastSun = new Date(lastMon.getFullYear(), lastMon.getMonth(), lastMon.getDate() + 6);
+        const lwExpectKey = win._dailyYmd(lastMon) + '|' + win._dailyYmd(lastSun);
+
+        win._dailySetCandPeriodMode('lastweek');
+        ok('지난주 모드는 그 전 월~일 범위로 훑는다(오늘 모드를 그대로 한 주 민 값과 다르다)',
+            win._dailyOtherScan && win._dailyOtherScan.at === lwExpectKey,
+            'got=' + (win._dailyOtherScan && win._dailyOtherScan.at) + ' want=' + lwExpectKey);
+
+        win._dailySetCandPeriodMode('today');
+        ok('"오늘"로 되돌리면 다시 오늘|오늘', win._dailyOtherScan && win._dailyOtherScan.at === (today + '|' + today));
+    }
+
     // ══ 4. 저장 가드 ════════════════════════════════════════════════════════
     console.log('\n■ dailySave 가드');
     const doc = { date: today, key: 'yhpark', dayType: 'work',
