@@ -8941,6 +8941,31 @@ ${docsJson}`;
             return;
         }
 
+        // 📒 [2026-11-17 신규] "이 프로젝트 이름이 뭐야" 로컬 명령(🚫🤖) ──────────────────────────────
+        //    가장 단순한 질문인데도 이 블록이 없으면 바로 아래 AI 호출 경로로 떨어져, AI 키가 없는
+        //    PC/계정에서는 user 말풍선조차 못 넣고 alert() 만 뜨고 끝났다(tests/telegram-qa-bridge
+        //    .browser.js·tests/qa-routing.browser.js 둘 다 이 질문을 "AI-free 로컬 명령"으로
+        //    가정하고 있었는데 실제로는 없었다 — 2026-11-17 실측으로 확인한 실제 버그).
+        //    답은 상단바 파일명과 같은 식(window.currentDriveFileName 우선, js/04g 컨텍스트 빌더와
+        //    동일한 우선순위)으로 구한다. SAP 프로젝트코드 조회(js/32 projectcode, kw 에 "프로젝트
+        //    이름"도 있음)·이름 바꾸기 요청과 겹치지 않도록 숫자가 있거나 수정 동사가 있으면 양보한다.
+        const _projNameAskRe = /(?:이|현재|지금)?\s*프로젝트\s*(?:이름|명)\s*(?:이|가)?\s*(?:뭐|무엇|뭔지|알려줘|말해줘|궁금)|\bwhat(?:'s| is)\s+(?:this|the current|the)\s+project(?:'s)?\s+name\b/i;
+        const _projNameModifyRe = /바꿔|바꾸|변경|수정|rename|change/i;
+        const _isProjNameQ = _projNameAskRe.test(question) && !_projNameModifyRe.test(question) && !/\d/.test(question);
+        if (_isProjNameQ) {
+            if (!_skipUserHistoryPush) { window._ganttQaHistory.push({ role: 'user', text: question }); input.value = ''; }
+            if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+            const _pnPm = window.projectMeta || {};
+            const _pnCurName = window.currentDriveFileName || _pnPm.프로젝트명 || _pnPm.고객모델명 || window._t('(파일명 미지정)', '(unnamed)');
+            window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                `📒 지금 열려있는 프로젝트는 **${_pnCurName}** 입니다.`,
+                `📒 The project currently open is **${_pnCurName}**.`
+            )});
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 🏷 [Phase 11] 질문 라우터 — 확실할 때만 동작을 바꾼다(SAP 패턴 조회/미지원 SAP 안내/일반 추론). 애매하면 기존 경로 그대로.
         let _qaRoute = null;
         try {
