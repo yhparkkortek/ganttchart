@@ -1391,6 +1391,13 @@
     // 8. 공용 팝업(가벼운 카드) — 모달 하나를 돌려 쓴다
     // ──────────────────────────────────────────────────────────────────────────
     var _popup = function (title, html, wide) {
+        // 🛡️ [2026-11-17] 헤더 더블클릭(js/19 자동 최소화)으로 이 팝업이 접혀 하단 타스크바 칩으로
+        //  내려가 있을 수 있다 — 그 상태를 모르고 그대로 다시 부르면(`window._modalMinimized`에
+        //  남은 기록) 다음 번 최소화 클릭이 먹통이 되거나 칩이 중복으로 남는다. 우리 코드가 다시
+        //  여는 거면 그 기록부터 정리한다.
+        if (window._modalMinimized && window._modalMinimized['pl-popup']) {
+            try { window._restoreModal('pl-popup'); } catch (e) { /* 정리 실패해도 아래서 display:flex 로 강제 노출 */ }
+        }
         var box = document.getElementById('pl-popup');
         if (!box) {
             box = document.createElement('div');
@@ -2918,9 +2925,25 @@
         }, 80);
     };
 
-    window.plCheckAgainstProjects = async function (fileNameOverride) {
+    // 🛡️ [2026-11-17 사용자 제보] "정보 확인 모달이 한 번만 보이고 그 다음부터 안 보인다" —
+    //  이 함수는 `onclick="window.plCheckAgainstProjects && window.plCheckAgainstProjects()"`로
+    //  바로 호출돼 에러를 받아줄 `.catch()`가 없다. async 함수라 안에서 뭐가 하나라도 throw 하면
+    //  **콘솔에만 찍히는 unhandled rejection**이 되어 버튼을 눌러도 화면엔 정말 아무 일도 안
+    //  일어난다(토스트도 모달도 없음) — 디버깅할 단서가 전혀 안 남는 게 진짜 문제였다. 바깥을
+    //  얇은 래퍼로 감싸 **무슨 일이 있어도 모달이 뜨게**(에러면 에러 내용을 그 안에 적는다) 한다.
+    window.plCheckAgainstProjects = function (fileNameOverride) {
+        return window._plCheckAgainstProjectsImpl(fileNameOverride).catch(function (e) {
+            console.error('[pl-check]', e);
+            try {
+                _popup(PL_CHECK_TITLE(), '<div style="color:#b1432f; padding:6px 0;">⚠️ '
+                    + _t('오류가 발생했습니다: ', 'An error occurred: ') + _esc(String((e && e.message) || e)) + '</div>', true);
+            } catch (e2) { /* 팝업조차 못 띄우면 더 할 수 있는 게 없다 */ }
+        });
+    };
+    window._plCheckAgainstProjectsImpl = async function (fileNameOverride) {
         if (typeof window._msLoadProjectIndex !== 'function' || !window.nasAppFile || !window.nasAppFile.get) {
-            _toast('⚠️ ' + _t('프로젝트 파일 조회 기능을 불러오지 못했습니다.', 'Could not load project-file lookup.'), 'error');
+            _popup(PL_CHECK_TITLE(), '<div style="color:#b1432f; padding:6px 0;">⚠️ '
+                + _t('프로젝트 파일 조회 기능을 불러오지 못했습니다.', 'Could not load project-file lookup.') + '</div>', true);
             return;
         }
         window._plCheckPending = {}; // 다시 그릴 때마다 비운다 — 번호가 옛 값을 가리키지 않게
@@ -2932,7 +2955,11 @@
         var mine = (idx || []).filter(function (p) { return p && p.file_name && (!team || String(p.team || '').trim() === team); })
             .map(function (p) { return Object.assign({}, p, { _fileModel: _plFileModelOf(p.file_name) }); })
             .filter(function (p) { return p._fileModel; });
-        if (!mine.length) { _toast('⚠️ ' + _t('이 팀의 프로젝트 파일을 찾지 못했습니다.', 'No project files found for this team.'), 'warning'); return; }
+        if (!mine.length) {
+            _popup(PL_CHECK_TITLE(), '<div style="color:#b1432f; padding:6px 0;">⚠️ '
+                + _t('이 팀의 프로젝트 파일을 찾지 못했습니다.', 'No project files found for this team.') + '</div>', true);
+            return;
+        }
 
         // 기본값: **지금 열린 프로젝트**(2026-11-12 사용자 요청) — id 로 찾는다(이름은 바뀔 수 있다,
         //  js/59 와 같은 방법). 없으면 첫 번째 프로젝트, 드롭다운으로 바꿀 수 있다.
