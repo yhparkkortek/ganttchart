@@ -640,6 +640,14 @@ window.addEventListener('resize', function() {
 //    구조를 일일이 알 필요 없이 이 파일 하나만으로 전체에 적용됨.
 window._modalMinimized = window._modalMinimized || {};
 
+// 📌 [2026-11-17 사용자 요청 "4개 모달 탭은 x 를 눌러도 항상 하단에 보이도록 유지"] 하단 taskbar
+//    기본 바로가기 4개(AI 문답/AI 메일 분석/AI 업무 보관함/AI 요약, 아래 DEFAULTS 와 같은 handleId
+//    목록)는 "자주 쓰는 걸 매번 메뉴에서 안 찾아도 되게" 만든 고정 자리다 — 그런데 칩의 ✕는 그
+//    칩 자체를 없애(완전히 닫아)버려서, 한 번 닫으면 다시 메뉴에서 열어야 했다. 이 4개만 칩에서
+//    ✕(닫기) 버튼을 **아예 안 만든다**(▲/▼ 복원·재최소화만 남김) — 눌러도 안 닫히는 죽은 버튼을
+//    남기는 대신, 애초에 "닫을 수 없다"는 걸 버튼이 없는 것으로 보여준다.
+var PINNED_TASKBAR_HANDLE_IDS = ['gantt-qa-drag', 'mail-drag-handle', 'inbox-drag-handle', 'ai-summary-drag'];
+
 // 핸들(헤더) 안에서 실제 ✕ 닫기 버튼을 찾는다. 모든 모달이 --modal-icon-bg 스타일을 공용으로 쓰는
 // 규칙(styles.css 참고)을 이용 — 못 찾으면 텍스트가 ✕/×/X인 버튼으로 한 번 더 시도.
 function _findModalCloseBtn(handle) {
@@ -982,8 +990,9 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     restoreBtn.className += ' mtc-restore-btn';
     restoreBtn.addEventListener('click', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
 
-    const xBtn = _modalIconBtn('<i class="ti ti-x"></i>', (window._currentLang === 'en') ? 'Close' : '닫기');
-    xBtn.addEventListener('click', function(e) {
+    const isPinned = PINNED_TASKBAR_HANDLE_IDS.indexOf(handleId) !== -1;
+    const xBtn = isPinned ? null : _modalIconBtn('<i class="ti ti-x"></i>', (window._currentLang === 'en') ? 'Close' : '닫기');
+    if (xBtn) xBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         const info = window._modalMinimized[modalId];
         if (info && info.observer) info.observer.disconnect();
@@ -998,7 +1007,7 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
 
     chip.appendChild(label);
     chip.appendChild(restoreBtn);
-    chip.appendChild(xBtn);
+    if (xBtn) chip.appendChild(xBtn);
     // 💡 [2026-09-02 개선] 축소 모드에서 ▲ 버튼이 사라지므로, 칩 라벨 단일 클릭으로도 복원.
     //    ✕·▲ 버튼은 각자 stopPropagation()이 있어 중복 호출 없음.
     chip.addEventListener('click', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
@@ -1092,11 +1101,34 @@ window._restoreModal = function(modalId) {
     const refreshFn = window._modalRefreshOnRestore && window._modalRefreshOnRestore[modalId];
     if (refreshFn) { try { refreshFn(); } catch (e) { console.warn('[modal-taskbar] 복원 시 새로고침 실패:', modalId, e); } }
     if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-down"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Minimize' : '최소화'; }
-    // 모달이 자체 ✕로 닫히면 칩도 자동 제거
+    // 📌 [2026-11-17] 고정 4개 칩은 **자체 ✕로 닫혀도 사라지지 않는다** — 칩 자신의 ✕는 이미
+    //    없앴지만(위 PINNED_TASKBAR_HANDLE_IDS), 복원(▲)해서 연 뒤 모달 **자신의** 진짜 ✕를
+    //    눌러도 같은 보장을 지켜야 "항상 하단에 보이도록 유지"가 된다 — 지우는 대신 ▼를 다시
+    //    누른 것처럼 **재최소화**한다(칩은 그대로, 내용만 접힘).
+    const _isPinnedModal = PINNED_TASKBAR_HANDLE_IDS.indexOf(info.handle && info.handle.id) !== -1;
+    // 모달이 자체 ✕로 닫히면 칩도 자동 제거(고정 4개는 예외 — 재최소화만)
     info.observer = new MutationObserver(function() {
         if (info.toggleEl.style.display !== 'none') return;
         info.observer.disconnect();
         if (!window._modalMinimized[modalId]) return;
+        if (_isPinnedModal) {
+            // 모달이 이미 스스로 'none'으로 닫혔으니, 재최소화 분기와 같은 뒷정리만 한다
+            // (toggleEl.style.display는 건드리지 않음 — 이미 'none').
+            info.isRestored = false;
+            if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-up"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Restore' : '복원'; }
+            info.observer = new MutationObserver(function() {
+                if (info.toggleEl.style.display === 'none') return;
+                info.observer.disconnect();
+                if (!window._modalMinimized[modalId]) return;
+                const chip2 = window._modalMinimized[modalId].chip;
+                if (chip2 && chip2.parentNode) chip2.parentNode.removeChild(chip2);
+                delete window._modalMinimized[modalId];
+                _relayoutTaskbarChips(bar);
+                _bringModalStackToFront(info.toggleEl);
+            });
+            info.observer.observe(info.toggleEl, { attributes: true, attributeFilter: ['style'] });
+            return;
+        }
         const chip = window._modalMinimized[modalId].chip;
         if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
         delete window._modalMinimized[modalId];
