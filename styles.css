@@ -1035,18 +1035,23 @@
     overflow: hidden;
     margin-bottom: 0 !important;
 }
-/* 3개 서브뷰: 활성화 시 JS(_switchElecView)가 display:'flex'/'none' 으로 전환 (23-sidebar-tabs.js 동시 수정) */
-#elec-view-panel, #elec-view-adbd, #elec-view-convbd {
+/* 서브뷰: PANEL/ADBD/CONVBD/TOUCH CTRL은 JS(_switchElecView, 23-sidebar-tabs.js)가,
+   BOM은 _elecBomOpen/_elecBomClose(38-bom-tab.js)가 display:'flex'/'none' 으로 전환 */
+#elec-view-panel, #elec-view-adbd, #elec-view-convbd, #elec-view-touchctrl, #elec-view-bom {
     flex: 1;
     flex-direction: column;
     overflow: hidden;
 }
-#pc-table-scroll, #ep-adbd-table-scroll, #ep-convbd-table-scroll {
+/* 💡 [2026-11-17] TOUCH CTRL·BOM은 PANEL/ADBD/CONVBD와 같은 flex:1 규칙에서 빠져 있었다 —
+   고정 max-height(calc(70vh + 160px - mt-reserve))만 걸려 있어서, BOM처럼 경고 줄이 여러 줄
+   붙어 위쪽 헤더가 길어지면 표 영역이 부모(.concept-section, overflow:hidden)의 남은 높이를
+   넘어서고 그만큼이 화면 밖으로 잘려 "뒷부분 행이 안 보인다"가 났다(사용자 제보, PARTS BOM). */
+#pc-table-scroll, #ep-adbd-table-scroll, #ep-convbd-table-scroll, #ep-touchctrl-table-scroll, #ep-bom-table-scroll {
     flex: 1 !important;
     overflow-y: auto !important;
     max-height: none !important;
 }
-#pc-history-box, #ep-adbd-history-box, #ep-convbd-history-box { flex-shrink: 0; }
+#pc-history-box, #ep-adbd-history-box, #ep-convbd-history-box, #ep-touchctrl-history-box { flex-shrink: 0; }
 
 /* 9. Gantt Chart 탭: flex column 으로 뷰포트 채우기
    .tab-panel.active { display:block } 보다 높은 명시도(ID+class)로 display:flex 를 강제.
