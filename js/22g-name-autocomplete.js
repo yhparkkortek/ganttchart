@@ -285,6 +285,28 @@ window._renderModelCardHtml = function(model, idx) {
     '</div>';
 };
 
+// 🧹 [2026-11-17 버그 수정] 모델 카드가 다른 제품군으로 재배정/삭제되어 그 제품군을 쓰는 카드가
+//    하나도 안 남으면, getMcUnits()는 누적만 하고 빼지 않으므로 BOM·M.C Table·Customer SPEC·
+//    Document의 제품구분자 목록(◀📦▶)에 "유령"으로 계속 남는다 — 신고: "summary 정보를 바꾸면
+//    연동되는데 초기에 만든 MVD가 없어지지 않음"(모델 #1을 MVD에서 MVD(FHD)로 재배정했는데 다른
+//    탭엔 옛 "MVD"가 그대로 남아 있었다). mcRemoveUnit과 같은 원칙으로 목록에서만 뺀다 — 저장된
+//    데이터(mcRevisionsByUnit 등)는 그대로 둔다(같은 이름을 다시 추가하면 되살아난다).
+window._mcPruneUnusedUnit = function(unit) {
+    if (!unit || !window.getMcUnits) return;
+    var models = (window.tabData && window.tabData.projectModels) || [];
+    if (models.some(function(m) { return (m.unitId || '') === unit; })) return; // 아직 쓰는 카드가 있음
+    var units = window.getMcUnits();
+    var oi = units.indexOf(unit);
+    if (oi === -1) return;
+    units.splice(oi, 1);
+    if (window.mcActiveUnit === unit) window.mcActiveUnit = '';
+    if (window.mcRenderUnitTabs) window.mcRenderUnitTabs();
+    var _en2 = window._currentLang === 'en';
+    if (window.showToast) window.showToast(
+        _en2 ? '"' + unit + '" is no longer used by any model card — removed from the BOM/M.C Table/Customer SPEC/Document family list (its data is kept; re-add the same name to see it again).'
+             : '"' + unit + '"을(를) 쓰는 모델 카드가 없어 BOM·M.C Table·Customer SPEC·Document 제품구분자 목록에서 뺐습니다(데이터는 남아있습니다 — 같은 이름으로 다시 추가하면 되살아납니다).', 'info', 6000);
+};
+
 // 🏷️ [2026-10-15] 모델 카드의 제품군(unitId)을 직접 고른다.
 //    예전엔 addProjectModel이 "안 쓰인 첫 제품군"을 자동 배정하고 끝이라, 프로젝트마다
 //    구성이 다른 경우(MVD+TPR / MVD+BTN 등)를 순서 바꾸기만으로는 표현할 수 없었다.
@@ -313,7 +335,9 @@ window.setProjectModelUnit = function(idx, val) {
         window.renderProjectModels();
         return;
     }
+    const oldUnit = models[idx].unitId || '';
     models[idx].unitId = val;
+    if (oldUnit && oldUnit !== val) window._mcPruneUnusedUnit(oldUnit);
     window.renderProjectModels();
 };
 
@@ -399,7 +423,9 @@ window.removeProjectModel = function(idx) {
     if (!window.tabData || !window.tabData.projectModels || idx === 0) return;
     window._syncProjectModelsFromDom();
     if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
+    const _removedUnit = (window.tabData.projectModels[idx] || {}).unitId || '';
     window.tabData.projectModels.splice(idx, 1);
+    if (_removedUnit) window._mcPruneUnusedUnit(_removedUnit);
     // 접힘 상태도 같이 당겨서 번호가 밀리지 않게 한다
     if (window._materialsCollapsed) {
         var _next = {};
