@@ -268,6 +268,51 @@ B.DAILY_BRIEF['skipMailRowsInLate'] = True
 
 B.BRIEF_ROLE_FIELD.update(saved_rf)
 
+# ══ 🔧 [2026-11-17] "브리핑은 오는데 업무 정리는 안 온다" — 기간이 길어서(끝나는 날이
+#    오늘·이번 주 어디에도 안 걸리는) 지연·마감·시작·이번 주 어디에도 안 잡히는 업무를
+#    "진행 중" 한 칸으로 따로 보여 준다. ════════════════════════════════════
+print('\n[10] "진행 중" — 지연·마감·시작·이번 주 어디에도 안 걸리는 긴 기간 업무')
+PLONG = project_doc([
+    row(1, 'PM 긴 진행 업무', 'PM', D(-20), D(30)),     # 오늘이 기간 안 — 지연도 이번주도 아니다
+    row(1, 'PM 오늘 마감', 'PM', D(-5), D(0)),           # 오늘 마감 — 진행 중엔 안 겹친다
+], META)
+reset([('LONG.json', PLONG, None)])
+B._daily_brief_tick(force=True, only_key='yhpark')
+m10b = my_msg()[0] if my_msg() else ''
+ok('긴 기간 업무가 "진행 중" 에 뜬다', '진행 중' in m10b and 'PM 긴 진행 업무' in m10b, m10b)
+ok('오늘 마감인 업무는 "진행 중" 에 안 겹친다(이미 오늘 마감에 있다)',
+   m10b.count('PM 오늘 마감') == 1, m10b)
+
+PNONE = project_doc([
+    row(1, '7일 밖 먼 미래', 'PM', D(20), D(40)),
+    row(1, '오늘 마감 하나는 있어야 발송된다', 'PM', D(-1), D(0)),   # 메시지가 실제로 가게만 둔다
+], META)
+reset([('FUTURE.json', PNONE, None)])
+B._daily_brief_tick(force=True, only_key='yhpark')
+m10c = my_msg()[0] if my_msg() else ''
+ok('메시지는 간다(아래 부재 확인이 "발송 자체가 없어서"가 아니게)', bool(m10c), m10c)
+ok('아직 시작 안 한 업무는 "진행 중" 에 안 든다(오늘이 기간 밖)', '진행 중' not in m10c, m10c)
+
+# ══ 🗺 [2026-11-17] 색인의 file_name 이 낡았어도(다른 PC 에서 고쳐 저장) drive_file_id 로
+#    다시 풀어 읽는다 — 실측(2026-11-17): 개발3팀 28개 중 7개가 이 모양으로 "읽기 실패" 였다.
+#    ════════════════════════════════════════════════════════════════════
+print('\n[11] 색인 file_name 이 낡았어도 drive_file_id 로 다시 풀어 읽는다')
+PRENAMED = project_doc([row(1, 'PM 이사간 업무 오늘 마감', 'PM', D(-5), D(0))], META)
+reset([('LNW_STELLAR32.json', P1, None)])
+# ⚠️ 색인엔 옛 이름(`OLD_NAME.json`)이 남아 있지만, 실제 파일은 이미 `NEW_NAME.json` 으로
+#    저장돼 있다 — `nas_id_map.json` 만 그 사실을 안다.
+NAS.files['개발3팀/NEW_NAME.json'] = json.dumps(PRENAMED, ensure_ascii=False)
+idx = json.loads(NAS.files['App_Config/project_index.json'])
+idx['projects'].append({'file_name': 'OLD_NAME.json', 'team': '개발3팀',
+                         'updated_at': '2026-11-08T00:00:00', 'completed': False,
+                         'drive_file_id': 'nas_f_renamed'})
+NAS.files['App_Config/project_index.json'] = json.dumps(idx, ensure_ascii=False)
+NAS.files['App_Config/nas_id_map.json'] = json.dumps({'map': {'nas_f_renamed': '개발3팀/NEW_NAME.json'}}, ensure_ascii=False)
+r11 = B._daily_brief_tick(force=True, only_key='yhpark')
+m11 = my_msg()[-1] if my_msg() else ''
+ok('옛 이름으로는 못 읽어도 id 로 다시 찾아 업무를 담는다', 'PM 이사간 업무 오늘 마감' in m11, m11)
+ok('errors 로 세지 않는다(다시 찾아 읽었으니 실패가 아니다)', r11.get('projectsFailed', 0) == 0, r11)
+
 try:
     os.remove(STATE)
 except OSError:

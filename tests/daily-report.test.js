@@ -203,6 +203,12 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('＊AI📧 꼬리표는 업무명에서 뗀다', d1.mine[0].name.indexOf('AI📧') === -1, d1.mine[0].name);
     ok('메일 유래 표시', d1.mine[0].isMail === true);
 
+    // 📅 [2026-11-17 요청] "왜 이 날짜에 이 업무가 뜨지?" — 후보 카드가 기간을 보여줄 수
+    // 있게 start/end 를 그대로 싣는다(화면은 브라우저에서 확인, 여긴 데이터만).
+    ok('후보에 그 업무의 start/end 가 그대로 실린다',
+        d1.mine[0].start === t0 && d1.mine[0].end === t0 + 86400000,
+        JSON.stringify({ start: d1.mine[0].start, end: d1.mine[0].end }));
+
     // `영업`(정규화 전) 도 SAL 로 풀려 장영익에게 간다 — 나와 안 섞인다
     ok('SAL/영업 정규화가 먹는다', !d1.mine.some((x) => x.name === '영업 확인'));
 

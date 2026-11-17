@@ -1891,6 +1891,8 @@ def _brief_load_items(teams):
     idx = _daily_nas_json('App_Config/project_index.json') or {}
     projects = [p for p in (idx.get('projects') or []) if p and p.get('file_name')]
     items, errors, n = [], [], 0
+    _id_map = {}            # ⚠️ 실패가 한 번도 안 나면 안 읽는다 — 흔한 길은 NAS 왕복 0회
+    _id_map_loaded = False
     for p in projects:
         if p.get('completed'):
             continue
@@ -1913,6 +1915,34 @@ def _brief_load_items(teams):
             _BRIEF_CACHE[key] = got
             items.extend(got)
         except Exception as e:
+            # ⚠️⚠️ [2026-11-17 실측 — 28개 중 7개] 색인의 `file_name` 이 낡았을 수 있다 —
+            #    프로젝트를 "고객사>프로젝트명" 등으로 고쳐 저장하면 앱이 파일명을 다시 조립
+            #    하는데, 그 저장이 일어난 PC 가 아니면 색인엔 옛 이름이 그대로 남는다
+            #    (docs/nas-dsm.md). 그 옛 이름으로 읽으면 404 → 그 프로젝트 담당자 몫 업무가
+            #    통째로 브리핑에서 빠진다. js/59 `scanProjectFile` 과 같은 방법으로 id 를
+            #    `nas_id_map.json` 에서 다시 풀어 한 번 더 시도한다.
+            doc2 = None
+            fid = p.get('drive_file_id')
+            if fid:
+                if not _id_map_loaded:
+                    try:
+                        _id_map = (_daily_nas_json(NAS_ID_MAP_REL) or {}).get('map') or {}
+                    except Exception:
+                        _id_map = {}
+                    _id_map_loaded = True
+                live_rel = _index_entry_rel(fid, _id_map)
+                if live_rel and live_rel != rel:
+                    try:
+                        cand = _daily_nas_json(live_rel)
+                        if cand and isinstance(cand.get('globalData'), list):
+                            doc2 = cand
+                    except Exception:
+                        doc2 = None
+            if doc2 is not None:
+                got = _brief_scan_project(doc2, re.sub(r'\.json$', '', str(p['file_name'])))
+                _BRIEF_CACHE[key] = got
+                items.extend(got)
+                continue
             errors.append('%s — %s' % (p['file_name'], e))
             print("[브리핑] 프로젝트 읽기 실패: %s — %s" % (p['file_name'], e))
     return items, errors
@@ -1939,6 +1969,18 @@ def _brief_text_for(member, items, today, errors, yesterday_written):
     due_today = [it for it in mine if it['end'] == today and it['status'] != '완료']
     start_today = [it for it in mine if it['start'] == today]
     week = [it for it in mine if it['end'] and today < it['end'] <= week_end and it['status'] != '완료']
+    # 🔧 [2026-11-17 요청] "브리핑은 오는데 업무 정리는 안 온다" — 실측해 보니 일일보고
+    #    후보(js/59 scanOne)는 **기간이 겹치기만 해도** 보여 주는데(몇 주짜리 회의·출하
+    #    일정이 매일 뜨는 이유), 브리핑은 지연·오늘 마감·오늘 시작·이번 주 마감처럼
+    #    **날짜가 꼭 맞을 때만** 집었다. 그래서 긴 기간으로 적힌(=끝나는 날이 멀어
+    #    "이번 주" 에도 안 걸리는) 진행 중 업무는 어디에도 안 잡혀 "업무 정리" 가 통째로
+    #    비어 보였다. → 위 네 칸에 이미 든 건 빼고, **오늘이 그 기간 안에 든** 업무만
+    #    따로 한 칸 더(지연·오늘 마감·오늘 시작과 겹칠 일은 없다 — 끝난 날이 지나지도
+    #    오늘도 아니어야 하니까).
+    _already = set((it['name'], it['project']) for it in late + due_today + start_today)
+    in_progress = [it for it in mine
+                   if it['start'] and it['end'] and it['start'] < today < it['end']
+                   and it['status'] != '완료' and (it['name'], it['project']) not in _already]
     cap = DAILY_BRIEF['maxPerSection']
 
     def sec(title, rows, with_date):
@@ -1958,8 +2000,9 @@ def _brief_text_for(member, items, today, errors, yesterday_written):
     lines += sec('\U0001F534 지연(미완료)', late, True)
     lines += sec('\U0001F4C5 오늘 마감', due_today, False)
     lines += sec('\u25B6\ufe0f 오늘 시작', start_today, False)
+    lines += sec('\U0001F527 진행 중', in_progress, True)
     lines += sec('\U0001F4C6 이번 주 마감', week, True)
-    has_tasks = bool(late or due_today or start_today or week)
+    has_tasks = bool(late or due_today or start_today or in_progress or week)
     if yesterday_written is False:
         lines.append('\n\U0001F4D4 어제 일일보고가 <b>없습니다</b> — 이 대화에 적어 보내면 저장됩니다.')
     if not has_tasks and yesterday_written is not False and not DAILY_BRIEF['sendIfEmpty']:

@@ -143,6 +143,13 @@
     }
     window._dailyYmd = ymd;
 
+    /** `M/D` — 후보 카드에 짧게 기간을 보여줄 때만 쓴다(날짜 없으면 ''). */
+    function md(ts) {
+        if (!ts) return '';
+        var d = new Date(ts);
+        return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
     // 🪪 NAS 계정 id — 파일 이름의 **유일한** 근거. 한 번 확인하면 들고 있는다.
     var _acct = null;
 
@@ -598,7 +605,12 @@
                 // 🔴 '지연' 판정은 `_ganttIsOverdue`(js/04a) 한 곳에서 — 메일 행은 안 센다.
                 late: (typeof window._ganttIsOverdue === 'function')
                     ? window._ganttIsOverdue(row, ci, day)
-                    : !!(e && e < day && String((ci.status !== -1 && row[ci.status]) || '') !== '완료')
+                    : !!(e && e < day && String((ci.status !== -1 && row[ci.status]) || '') !== '완료'),
+                // 📅 [2026-11-17 요청] "이 업무가 왜 이 날짜에 뜨지?" — 기간이 겹치기만 해도
+                //    후보로 든다(진행 중인 업무도 매일 다시 챙기라고 일부러 넓게 잡은 설계).
+                //    여러 날에 걸친 업무(회의 시리즈·출하 일정 등)는 화면에 그 기간을 같이
+                //    보여 줘서 "오늘만의 일"로 오인하지 않게 한다.
+                start: s || 0, end: e || 0
             };
             (isMine(row, ctx) ? out.mine : out.others).push(item);
         }
@@ -1262,6 +1274,15 @@
                            '" style="cursor:pointer; text-decoration:underline dotted;">📧</span>'
                        : (c.isMail ? ' <span title="' + esc(T('메일 분석에서 온 업무', 'From mail analysis')) + '">📧</span>' : '')) +
                      (c.late ? ' <span style="color:#b1432f; font-size:10.5px;">' + esc(T('지연', 'late')) + '</span>' : '') +
+                     // 📅 [2026-11-17 요청] "왜 이 날짜에 이 업무가 뜨지?" — 기간이 겹치기만
+                     //    해도 후보로 든다(진행 중인 일도 매일 다시 챙기라는 설계, scanOne 참고).
+                     //    그 기간을 같이 보여 줘야 "오늘만의 일"로 오인하지 않는다 — 여러 날에
+                     //    걸친 업무(회의 시리즈 등)만, 하루짜리는 굳이 안 보여준다.
+                     (c.start && c.end && md(c.start) !== md(c.end)
+                       ? ' <span style="color:#999; font-size:10.5px; font-weight:normal;" title="' +
+                         esc(T('이 업무의 전체 기간 — 겹치는 날마다 후보로 뜹니다', "This task's full date range — it's a candidate on every day it covers")) +
+                         '">📆 ' + esc(md(c.start)) + '~' + esc(md(c.end)) + '</span>'
+                       : '') +
                      // 📒 어느 프로젝트 것인지 — **언제나** 적는다.
                      //    ⚠️ [2026-11-09 신고 "아래 정보는 뭐야?"] 예전엔 열린 프로젝트면 생략했는데,
                      //       그래서 라벨 없는 줄과 있는 줄이 섞여 사람이 "이건 뭐지?" 하고 멈췄다.
