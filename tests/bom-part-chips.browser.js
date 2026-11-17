@@ -90,7 +90,12 @@
             const u = String(url);
             if (u.indexOf('/sap-bom') >= 0) {
                 bomCalls++;
-                return { ok: true, json: async () => ({ ok: true, text: BOM }) };
+                // 🐛 [2026-11-17, 사용자 지시로 다른 테스트 파일들을 돌려보다 발견] 2026-11-12에
+                // js/56이 "결과 그리드 대신 선택화면(source!=='grid')이면 1회 재시도" 로직을
+                // 받았는데(js/38과 같은 재시도), 이 가짜 응답엔 `source` 가 없어 매번 재시도를
+                // 태우고 결국 "다른 화면을 돌려줬다" 에러로 끝났다 — bomCalls 가 1이 아니라 항상
+                // 2가 되는 것도 이 때문. 진짜 SAP 성공 응답과 같은 모양으로 맞춘다.
+                return { ok: true, json: async () => ({ ok: true, text: BOM, source: 'grid' }) };
             }
             blocked.push(u);                             // 칩을 눌러도 밖으로 안 나가게
             return { ok: true, json: async () => ({ ok: false, error: '(하네스: 네트워크 차단) ' + u }) };
