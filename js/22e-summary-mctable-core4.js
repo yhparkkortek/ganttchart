@@ -174,7 +174,8 @@ window.renderElecCompareTab = async function(type) {
         }
     });
     // 💡 [2026-08-26 신규] 사진(최대 2장) — 도표 맨 하단에 한 행으로. 한 번에 1장만 보여주고
-    //    클릭하면 다음 장으로 순환(마지막 다음은 다시 1장) — window._epCycleImage가 재렌더 없이 img만 갱신.
+    //    클릭하면 바로 크게 보기(라이트박스) — 여러 장이면 라이트박스 자체의 ‹/›·방향키로 넘긴다
+    //    (2026-11-17, 더블클릭 요구 제거 — 한 번 클릭이면 충분).
     html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[Picture]</td></tr>`;
     html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">Picture</td>`;
     for (let i = 0; i < slotCount; i++) {
@@ -183,9 +184,8 @@ window.renderElecCompareTab = async function(type) {
         html += `<td style="border:1px solid #e9ecef; padding:4px 6px;">`;
         if (selected[i] && images.length) {
             html += `<img id="ep-img-thumb-${escapeHtml(type)}-${i}" src="${images[0].data}" data-idx="0"
-                    onclick="window._epCycleImage(${escapeHtml(JSON.stringify(type))}, ${i})"
-                    ondblclick="event.stopPropagation(); window.showElecPhotoLightbox(${escapeHtml(JSON.stringify(type))}, ${i})"
-                    title="${_en ? 'Click for next photo, double-click to zoom in' : '클릭하면 다음 사진, 더블클릭하면 크게 보기'}"
+                    onclick="window.showElecPhotoLightbox(${escapeHtml(JSON.stringify(type))}, ${i})"
+                    title="${_en ? 'Click to zoom in' : '클릭하면 크게 보기'}"
                     style="max-width:120px; max-height:88px; cursor:pointer; border:1px solid #ced4da; border-radius:4px; object-fit:cover;">`;
             if (images.length > 1) html += `<div id="ep-img-counter-${escapeHtml(type)}-${i}" style="font-size:9.5px; color:#999; margin-top:2px;">1/${images.length}</div>`;
         } else if (selected[i]) {
@@ -195,7 +195,7 @@ window.renderElecCompareTab = async function(type) {
     }
     html += `<td style="border:1px solid #e9ecef;"></td></tr>`;
     tbodyEl.innerHTML = html;
-    window._epRenderedEntries[type] = entries; // _epCycleImage가 재조회 없이 바로 참조하도록 캐시
+    window._epRenderedEntries[type] = entries; // showElecPhotoLightbox가 재조회 없이 바로 참조하도록 캐시
     window._epApplyZebra(type);
 
     const toggleBtn = document.getElementById('ep-' + type + '-toggle-btn');
@@ -231,21 +231,6 @@ window._epApplyZebra = function(type) {
         tr.classList.add(i % 2 === 0 ? 'mc-zebra-a' : 'mc-zebra-b');
         i++;
     });
-};
-
-// 💡 사진 클릭 → 다음 장으로 순환. 표 전체를 다시 그리지 않고 그 셀의 img/카운터만 갱신한다.
-window._epCycleImage = function(type, i) {
-    const entries = window._epRenderedEntries[type];
-    const entry = entries && entries[i];
-    const images = entry && Array.isArray(entry.images) ? entry.images : [];
-    if (images.length < 2) return; // 0~1장이면 순환할 게 없음
-    const imgEl = document.getElementById('ep-img-thumb-' + type + '-' + i);
-    if (!imgEl) return;
-    const nextIdx = (parseInt(imgEl.dataset.idx || '0', 10) + 1) % images.length;
-    imgEl.dataset.idx = nextIdx;
-    imgEl.src = images[nextIdx].data;
-    const counterEl = document.getElementById('ep-img-counter-' + type + '-' + i);
-    if (counterEl) counterEl.textContent = (nextIdx + 1) + '/' + images.length;
 };
 
 // ─── 📷 사진 크게 보기(라이트박스) — 여러 장이면 좌우로 이동 가능. Elec Parts 표뿐 아니라 Summary
