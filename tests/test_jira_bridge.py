@@ -133,7 +133,7 @@ raw = {
         'updated': '2026-11-10T09:00:00.000+0900',
         'components': [{'name': 'MECH'}],
         'labels': ['urgent'],
-        'comment': {'comments': [{'author': {'displayName': '박영희'}, 'body': '확인했습니다', 'created': '2026-11-10T10:00:00.000+0900'}]},
+        'comment': {'comments': [{'id': '55012', 'author': {'displayName': '박영희'}, 'body': '확인했습니다', 'created': '2026-11-10T10:00:00.000+0900'}]},
         'attachment': [{'filename': '온도별 휘도 내역.jpg', 'size': 42234, 'mimeType': 'image/jpeg',
                         'content': jb.JIRA_BASE + '/secure/attachment/39143/x.jpg',
                         'author': {'displayName': '홍철기'}, 'created': '2026-11-09T08:51:38.000+0900'}],
@@ -150,6 +150,7 @@ check('priority', shaped['priority'] == 'High' and shaped['priorityId'] == '2')
 check('components', shaped['components'] == ['MECH'])
 check('labels', shaped['labels'] == ['urgent'])
 check('comments 1건', len(shaped['comments']) == 1 and shaped['comments'][0]['author'] == '박영희')
+check('comments에 id가 실린다(수정/삭제가 가리킬 자원)', shaped['comments'][0]['id'] == '55012', shaped['comments'][0])
 check('attachments 1건 — 댓글이 아니라 이슈에 붙는다', len(shaped['attachments']) == 1
       and shaped['attachments'][0]['filename'] == '온도별 휘도 내역.jpg'
       and shaped['attachments'][0]['url'] == jb.JIRA_BASE + '/secure/attachment/39143/x.jpg')
@@ -354,6 +355,53 @@ try:
 except jb.JiraApiError as e:
     check('둘 다 안 되면 원래 404를 그대로 올린다(가리지 않는다)', '404' in str(e), str(e))
     check('JIRA가 본문에 실어 보낸 사유도 메시지에 담긴다', '첨부가 비활성화되어 있습니다' in str(e), str(e))
+
+print('\n[11.6] edit_comment/delete_comment — 수정·삭제 (2026-11-17 사용자 요청)')
+fresh(); stub_auth(True)
+seen_edit = {}
+
+
+def fake_edit(method, url, **kw):
+    seen_edit['method'] = method
+    seen_edit['url'] = url
+    seen_edit['json'] = kw.get('json')
+    return FakeResp(200, {'id': '55012', 'body': kw.get('json', {}).get('body')})
+
+
+jb.requests.request = fake_edit
+jb.edit_comment('GABJO-14', '55012', '수정된 내용')
+check('PUT 메서드', seen_edit['method'] == 'PUT')
+check('/comment/<id> 자원을 가리킨다', seen_edit['url'].endswith('/rest/api/2/issue/GABJO-14/comment/55012'), seen_edit['url'])
+check('새 본문을 그대로 싣는다', seen_edit['json'] == {'body': '수정된 내용'}, seen_edit['json'])
+
+seen_del = {}
+
+
+def fake_delete(method, url, **kw):
+    seen_del['method'] = method
+    seen_del['url'] = url
+    return FakeResp(204, None)
+
+
+jb.requests.request = fake_delete
+jb.delete_comment('GABJO-14', '55012')
+check('DELETE 메서드', seen_del['method'] == 'DELETE')
+check('/comment/<id> 자원을 가리킨다(삭제도 같은 자원)', seen_del['url'].endswith('/rest/api/2/issue/GABJO-14/comment/55012'), seen_del['url'])
+
+# 본인 댓글이 아니거나 권한이 없으면 JIRA가 403을 준다 — 계정 잠금과 무관(위 [3]과 같은 원칙),
+# 그대로 예외로 올라가야 한다(화면에서 "권한 없음"을 그대로 보여줄 수 있게).
+jb.requests.request = lambda method, url, **kw: FakeResp(403, {'errorMessages': ['no perm'], 'errors': {}})
+try:
+    jb.edit_comment('GABJO-14', '55012', '수정')
+    check('403이면 예외를 던진다(edit)', False)
+except jb.JiraApiError:
+    check('본인 댓글이 아니면 403 그대로 올라간다(edit)', True)
+check('403은 계정을 잠그지 않는다', not jb._BLOCKED['reason'], jb._BLOCKED)
+try:
+    jb.delete_comment('GABJO-14', '55012')
+    check('403이면 예외를 던진다(delete)', False)
+except jb.JiraApiError:
+    check('권한이 없으면 403 그대로 올라간다(delete)', True)
 
 print('\n[12] open_attachment_native — 받은 바이트를 임시 폴더에 쓰고 연다(os.startfile은 가짜)')
 #    ⚠️ os.startfile은 실제로 창을 띄우므로 테스트에선 경계로 삼는다 — 그 앞(다운로드·파일쓰기·

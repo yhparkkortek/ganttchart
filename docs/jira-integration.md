@@ -440,6 +440,33 @@ Token` 헤더 **값 자체**가 Jira 버전마다 다를 수 있다는 점을 �
 (안 그러면 열 때마다 쌓인다) 매번 "지금 그 칸이 보이나"만 확인한다. → `docs/file-upload-
 dragdrop-audit.md`에 이번에 **앱 전체**에서 같이 검토한 다른 자리들을 정리했다.
 
+## 💬 (2026-11-17 사용자 요청) 댓글 수정·삭제
+
+댓글 등록(`add_comment`)만 있고 수정·삭제가 없었다 — JIRA REST의 `/rest/api/2/issue/<key>/
+comment/<id>` 자원을 그대로 쓴다(수정은 PUT, 삭제는 DELETE). `_shape_issue`의 댓글 모양에
+**`id`**를 추가해야 이 자원을 가리킬 수 있다(기존엔 author/body/created만 있어 어느 댓글인지
+구분할 방법이 없었다).
+
+- `jira_bridge.edit_comment(key, comment_id, body)` → `PUT .../comment/<id>` `{'body': body}`
+- `jira_bridge.delete_comment(key, comment_id)` → `DELETE .../comment/<id>`
+- 백엔드 라우트 `PUT`/`DELETE /jira/issue/<key>/comment/<comment_id>`(`kortek_backend.py`) —
+  둘 다 성공하면 바뀐 이슈 전체(`get_issue`)를 돌려줘 화면이 바로 새로고침되는 기존 쓰기
+  라우트들과 같은 관례를 따른다.
+- 화면(`js/70`): 각 댓글 줄에 ✏️ 수정·🗑 삭제를 **모든 댓글에** 보여준다 — "본인 댓글인지"를
+  미리 판정해서 버튼을 숨기지 않는다(JIRA의 권한 스킴은 "Edit Own"뿐 아니라 "Edit All"도
+  있을 수 있어 앱이 미리 추측하면 오히려 될 걸 못 하게 막는다). 권한이 없으면 JIRA가 403을
+  주고 그 사유를 상태줄에 그대로 띄운다(추측이 아니라 서버 판정을 그대로 노출). 수정은
+  인라인으로 댓글 본문 자리가 textarea로 바뀌고(저장/취소), 삭제는 `confirm()`으로 한 번
+  확인한다(되돌릴 수 없는 작업 — 이 앱의 다른 삭제 확인들과 같은 관례, Task Inbox의
+  "확인창 없이 취소 칩" 예외는 여기 해당 안 됨). 첨부 목록(`_attachList`)과 같은 이유로
+  onclick에 댓글 내용을 직접 안 박고 **인덱스**(`_commentList[i]`)로 찾는다 — 따옴표·줄바꿈이
+  섞인 댓글에서 깨지지 않게.
+- CORS는 이미 해결돼 있다 — 바로 위 CORS PUT 수정이 `Access-Control-Allow-Methods`에 PUT을
+  추가했고, DELETE는 원래부터 있었다(그룹웨어 연동 쓰기 라우트가 먼저 썼다).
+
+⚠️ **아직 실제 서버로 확인 못 함** — 가짜 `requests.request` 경계로 `tests/test_jira_bridge.py`
+[11.6]은 확인했지만, 실제 JIRA에서 내 댓글/남의 댓글 양쪽으로 수정·삭제를 눌러보지는 않았다.
+
 ## 🐛 (2026-11-11) "로그인 테스트"가 항상 실패했던 진짜 원인 — `/rest/api/2/myself`가 이 서버엔 없다
 
 사용자가 🔑 설정에서 실제 계정을 저장하고 로그인 테스트를 눌렀는데 **"해당 이슈를 찾을 수
@@ -466,7 +493,7 @@ dragdrop-audit.md`에 이번에 **앱 전체**에서 같이 검토한 다른 자
 python tests/test_jira_bridge.py
 ```
 
-**90건** — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `verify_login`이
+**99건** — 401/CAPTCHA 헤더 1회 실패 후 잠금(네트워크 재시도 0회), 403은 안 잠금, `verify_login`이
 `/rest/api/2/user?username=`을 쓰는지(위 버그의 회귀 방지), `_shape_issue` 필드 매핑
 (요약·설명·상태·담당자·우선순위·댓글·첨부·구성요소·해결책·Milestone), `search` 집계, `save_config`/
 `delete_config`는 **진짜 Windows DPAPI**로 암복호화 왕복까지, `list_projects`/`resolve_project_key`는
@@ -479,8 +506,10 @@ SSRF 화이트리스트, 📎 첨부 저장(업로드, `X-Atlassian-Token`)·�
 선택 필드는 비면 아예 안 실음, 생성 직후 전체 이슈로 돌려줌)·**🔁 add_attachment의 헤더값
 재시도**(2026-11-17 2차 — `no-check`로 먼저 시도하고 404면 같은 키로 `nocheck`을 한 번 더,
 그래도 404면 원래 오류 그대로, JIRA가 본문에 실어 보낸 사유도 메시지에 담기는지. 1차였던
-숫자-id 폴백은 실측으로 틀려서 뺐다)까지 포함한다. 같은 날 추가된 CORS PUT 회귀는 별도
-파일 `tests/test_cors_put.py`(6건, 진짜 Flask `app.test_client()`)로 돈다.
+숫자-id 폴백은 실측으로 틀려서 뺐다)·**💬 edit_comment/delete_comment**(PUT/DELETE가
+`/comment/<id>` 자원을 가리키는지, 본문을 그대로 싣는지, 권한 없으면 403이 그대로 올라가고
+계정은 잠기지 않는지)까지 포함한다. 같은 날 추가된 CORS PUT 회귀는 별도 파일
+`tests/test_cors_put.py`(6건, 진짜 Flask `app.test_client()`)로 돈다.
 가짜는 `requests.request` 경계 하나뿐(`os.startfile`만 추가로 스텁).
 
 ✅ **실제 서버로 확인한 것**(2026-11-11, 저장된 실제 계정으로): 로그인(whoami) 성공, 실제
@@ -503,6 +532,8 @@ SSRF 화이트리스트, 📎 첨부 저장(업로드, `X-Atlassian-Token`)·�
 ⚠️ **아직 확인 못 한 것**:
 - CORS PUT 수정 뒤 **필드 저장이 실제로 되는지**(코드 검토·테스트로는 확실하지만 실제 브라우저
   재클릭 확인은 아직) · 헤더값 재시도로 **첨부 저장이 실제로 되는지**(여전히 가설) ·
+  💬 **댓글 수정·삭제가 실제 서버에서 되는지**(가짜 경계로만 확인, 403 권한 분기도 실제
+  권한 스킴으로는 안 눌러봄) ·
   📋 **붙여넣기(Ctrl+V) 첨부**가 실제 서버·실제 화면에서 기대대로 동작하는지 — 브라우저
   자동화가 이 세션에서 로컬 백엔드에 연결하지 못해 코드 리뷰로만 확인했다
 - 드롭존 애니메이션이 의도대로 보이는지

@@ -5947,6 +5947,32 @@ def jira_issue_comment(key):
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/jira/issue/<key>/comment/<comment_id>', methods=['PUT'])
+def jira_issue_comment_update(key, comment_id):
+    """댓글 수정(2026-11-17 사용자 요청) — js/70 `_jiraSaveEditComment`."""
+    body = request.get_json(silent=True) or {}
+    text = str(body.get('body') or '').strip()
+    if not text:
+        return jsonify({'ok': False, 'message': '댓글 내용을 입력해주세요.'}), 400
+    try:
+        import jira_bridge
+        jira_bridge.edit_comment(key, comment_id, text)
+        return jsonify({'ok': True, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
+@app.route('/jira/issue/<key>/comment/<comment_id>', methods=['DELETE'])
+def jira_issue_comment_delete(key, comment_id):
+    """댓글 삭제(2026-11-17 사용자 요청) — js/70 `_jiraDeleteComment`."""
+    try:
+        import jira_bridge
+        jira_bridge.delete_comment(key, comment_id)
+        return jsonify({'ok': True, 'issue': jira_bridge.get_issue(key)})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/jira/issue/<key>/transitions', methods=['GET'])
 def jira_issue_transitions_get(key):
     try:

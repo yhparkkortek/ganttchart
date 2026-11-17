@@ -870,6 +870,87 @@
         }
     };
 
+    // 💬 [2026-11-17 사용자 요청] 댓글 수정/삭제 — onclick에 댓글 내용을 그대로 박으면
+    // 따옴표·줄바꿈 섞인 글에서 깨진다(JIRA 프로젝트 이름 사고와 같은 이유) — 첨부 목록과
+    // 같은 방식으로 인덱스로 찾는다. 수정/삭제 권한은 JIRA가 가진다(본인 댓글이 아니거나
+    // "Edit/Delete" 권한이 없으면 403) — 그래서 버튼은 모든 댓글에 보여주고, 서버가 막으면
+    // 그 사유를 그대로 상태줄에 띄운다(추측으로 미리 숨기지 않는다).
+    var _commentList = [];
+
+    function renderComments(list, key) {
+        _commentList = list || [];
+        if (!list || !list.length) {
+            return '<div style="color:#aaa; text-align:center;">' + T('댓글 없음', 'No comments') + '</div>';
+        }
+        return list.map(function (c, i) {
+            return '<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed #e5e5e5;">'
+                + '<div style="display:flex; align-items:baseline; gap:8px;">'
+                + '<div style="font-size:11px; color:#888; flex:1; min-width:0;">' + esc(c.author || '') + ' · ' + esc((c.created || '').slice(0, 16).replace('T', ' ')) + '</div>'
+                + '<a onclick="window._jiraEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#00707d; cursor:pointer; white-space:nowrap;">✏️ ' + T('수정', 'Edit') + '</a>'
+                + '<a onclick="window._jiraDeleteComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#a3281c; cursor:pointer; white-space:nowrap;">🗑 ' + T('삭제', 'Delete') + '</a>'
+                + '</div>'
+                + '<div id="jira-comment-body-' + i + '" style="white-space:pre-wrap;">' + esc(c.body) + '</div></div>';
+        }).join('');
+    }
+
+    window._jiraEditComment = function (key, i) {
+        var c = _commentList[i];
+        var holder = document.getElementById('jira-comment-body-' + i);
+        if (!c || !holder) return;
+        holder.innerHTML =
+            '<textarea id="jira-comment-edit-' + i + '" rows="2" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; resize:vertical;">' + esc(c.body) + '</textarea>'
+            + '<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">'
+            + '<a onclick="window._jiraCancelEditComment(' + i + ')" style="font-size:11px; color:#777; cursor:pointer;">' + T('취소', 'Cancel') + '</a>'
+            + '<a onclick="window._jiraSaveEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#00707d; cursor:pointer; font-weight:bold;">' + T('저장', 'Save') + '</a>'
+            + '</div>';
+        var ta = document.getElementById('jira-comment-edit-' + i);
+        if (ta) ta.focus();
+    };
+
+    window._jiraCancelEditComment = function (i) {
+        var c = _commentList[i];
+        var holder = document.getElementById('jira-comment-body-' + i);
+        if (!c || !holder) return;
+        holder.innerHTML = esc(c.body);
+    };
+
+    window._jiraSaveEditComment = async function (key, i) {
+        var c = _commentList[i];
+        var ta = document.getElementById('jira-comment-edit-' + i);
+        if (!c || !ta) return;
+        var text = ta.value.trim();
+        if (!text) return;
+        modalSetStatus('⏳ ' + T('수정 중...', 'Saving...'), '');
+        try {
+            var d = await fetch(BASE + '/jira/issue/' + encodeURIComponent(key) + '/comment/' + encodeURIComponent(c.id), {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body: text })
+            }).then(function (r) { return r.json(); });
+            if (!d || d.ok === false) { modalSetStatus('⚠️ ' + esc((d && d.message) || ''), 'err'); return; }
+            await window._jiraRenderIssueBody(key);
+            modalSetStatus('✅ ' + T('수정했습니다.', 'Saved.'), 'ok');
+        } catch (e) {
+            modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
+        }
+    };
+
+    window._jiraDeleteComment = async function (key, i) {
+        var c = _commentList[i];
+        if (!c) return;
+        if (!confirm(T('이 댓글을 삭제할까요? 되돌릴 수 없습니다.', 'Delete this comment? This cannot be undone.'))) return;
+        modalSetStatus('⏳ ' + T('삭제 중...', 'Deleting...'), '');
+        try {
+            var d = await fetch(BASE + '/jira/issue/' + encodeURIComponent(key) + '/comment/' + encodeURIComponent(c.id), {
+                method: 'DELETE'
+            }).then(function (r) { return r.json(); });
+            if (!d || d.ok === false) { modalSetStatus('⚠️ ' + esc((d && d.message) || ''), 'err'); return; }
+            await window._jiraRenderIssueBody(key);
+            modalSetStatus('✅ ' + T('삭제했습니다.', 'Deleted.'), 'ok');
+        } catch (e) {
+            modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
+        }
+    };
+
     function modalSetStatus(msg, kind) {
         var el = document.getElementById('jira-issue-status');
         if (!el) return;
@@ -976,13 +1057,7 @@
             + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 12px;"></div>'
             + '<div style="font-weight:bold; color:#555; margin-bottom:6px;">💬 ' + T('댓글(대응)', 'Comments') + '</div>'
             + '<div id="jira-comments-list" style="max-height:160px; overflow-y:auto; border:1px solid #eee; border-radius:6px; padding:8px; margin-bottom:8px; background:#fafafa;">'
-            + (issue.comments.length
-                ? issue.comments.map(function (c) {
-                    return '<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed #e5e5e5;">'
-                        + '<div style="font-size:11px; color:#888;">' + esc(c.author || '') + ' · ' + esc((c.created || '').slice(0, 16).replace('T', ' ')) + '</div>'
-                        + '<div style="white-space:pre-wrap;">' + esc(c.body) + '</div></div>';
-                }).join('')
-                : '<div style="color:#aaa; text-align:center;">' + T('댓글 없음', 'No comments') + '</div>')
+            + renderComments(issue.comments, key)
             + '</div>'
             + '<textarea id="jira-comment-input" rows="2" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; resize:vertical;" placeholder="' + T('댓글을 입력하세요...', 'Write a comment...') + '"></textarea>'
             + '<div style="display:flex; justify-content:flex-end; margin-top:6px;">'

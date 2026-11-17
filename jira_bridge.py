@@ -272,7 +272,8 @@ def _shape_issue(raw, milestone_field_id=None):
         'resolution': resolution.get('name') or '',
         'milestone': milestone,
         'labels': f.get('labels') or [],
-        'comments': [{'author': (c.get('author') or {}).get('displayName'),
+        # 🆕 [2026-11-17] 댓글 수정/삭제 — `id`가 있어야 /comment/<id> 자원을 가리킬 수 있다.
+        'comments': [{'id': c.get('id'), 'author': (c.get('author') or {}).get('displayName'),
                       'body': c.get('body'), 'created': c.get('created')} for c in comments],
         # 📎 [2026-11-11 사용자 요청] 댓글에 "첨부 파일 참조"라고만 적혀 있고 정작 파일은
         # 안 보이는 문제 — JIRA는 첨부를 **댓글이 아니라 이슈**에 붙인다(실측 GABJQ-4,
@@ -311,6 +312,19 @@ def search(jql, max_results=50):
 
 def add_comment(key, body):
     _request('POST', '/rest/api/2/issue/' + key + '/comment', json={'body': body})
+    return {'ok': True}
+
+
+def edit_comment(key, comment_id, body):
+    """댓글 수정(2026-11-17 사용자 요청) — 본인 댓글이 아니거나 "Edit Own/All Comments" 권한이
+    없으면 JIRA가 403을 준다(`_request`가 잠그지 않고 그대로 올린다 — 계정 문제가 아니다)."""
+    _request('PUT', '/rest/api/2/issue/' + key + '/comment/' + str(comment_id), json={'body': body})
+    return {'ok': True}
+
+
+def delete_comment(key, comment_id):
+    """댓글 삭제(2026-11-17 사용자 요청) — 권한은 edit_comment와 같다."""
+    _request('DELETE', '/rest/api/2/issue/' + key + '/comment/' + str(comment_id))
     return {'ok': True}
 
 
