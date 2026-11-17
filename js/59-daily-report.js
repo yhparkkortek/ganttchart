@@ -1446,11 +1446,16 @@
     '<span>📔 ' + esc(T('일일 업무보고', 'Daily Report')) + ' — ' + esc(dayLabel(_date)) +
       (me().name ? ' <span style="font-weight:normal; font-size:11.5px; color:#5a8ab5;">' + esc(me().name) + '</span>' : '') + '</span>' +
     // 🔧 [2026-11-11 요청] "AI로 정리" 를 헤더로 — 팔레트 공식(bg #e0f5f7 · 테두리 #a3d9e0 ·
-    //    글자 #00707d, "+추가" 버튼과 같은 조합)이라 테마를 바꾸면 같이 바뀐다.
+    //    글자 #00707d, "+추가"/"저장" 버튼과 같은 조합)이라 테마를 바꾸면 같이 바뀐다.
+    // 🐛 [2026-11-17 수정] "테두리 없이" 로 뒀더니(border:none) 이 버튼만 Chromium 렌더에서
+    //    author 배경이 안 먹히고 짙은 남색으로 그려지는 실측 버그가 있었다(computed style은
+    //    항상 팔레트대로 옅은 하늘색이었는데 실제 화면만 남색 — border:1px 를 주는 순간
+    //    사라짐). onmouseover/onmouseout 로 직접 hex 를 건드리는 것도 js/21 의 "JS가
+    //    el.style 를 직접 쓰면 브라우저가 rgb()로 재직렬화해 [style*="#hex"] 매칭이 깨진다"
+    //    경고(line 193)에 해당 — 그래서 호버 없이 "저장"/"+추가" 와 완전히 같은 정적 공식으로
+    //    통일한다(이 줄에 호버 효과가 있는 형제 버튼이 원래 없다).
     '<div style="display:flex; align-items:center; gap:7px; flex-shrink:0;">' +
-      // 🎨 [2026-11-11 요청] 헤더 보조 버튼 패턴(docs/ui-conventions.md) — 테두리 없이,
-      //    hover 때 배경만 한 단계 진해진다(팔레트 hoverBg 역할 #a3d9e0 재사용 — 새 색 안 만든다).
-      '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';" style="padding:5px 11px; border:none; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
+      '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" style="padding:5px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
       '<button onclick="window.dailyCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; flex-shrink:0;">✕</button>' +
     '</div>' +
   '</div>' +
