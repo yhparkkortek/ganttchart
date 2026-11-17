@@ -200,6 +200,28 @@
                 { name: 'q', type: 'text', max: 60, required: false, desc: '코드/이름 부분일치 검색어(대소문자 무시)' }
             ]
         },
+        // 🪐 [2026-11-17 사용자 요청] "JIRA 연동 현황"·"이 프로젝트 JIRA 뭐 있어" 같은 질문이
+        //    jira_issue/jira_search 가 요구하는 **키·JQL** 을 모른다는 이유로 일반 AI("데이터에
+        //    JIRA 관련 내용 없음")로 떨어지는 사고를 막는다 — 지금 열린 프로젝트의 **결정론
+        //    연결**(js/70 `_jiraProjectKeysOf`, Summary 탭 "JIRA 코드" 칸과 같은 저장소)을
+        //    코드가 먼저 풀어 주므로 AI는 프로젝트 키를 몰라도 된다.
+        {
+            id: 'jira_project_issues', mode: 'read', requires: 'jira',
+            title: '지금 프로젝트에 연결된 JIRA 이슈',
+            desc: '지금 열려 있는 간트 프로젝트에 **연결된 JIRA 프로젝트 코드**(JIRA 탭에서 등록한 '
+                + '프로젝트 코드, Summary 탭 "JIRA 코드" 칸과 같은 값)로 최근 이슈를 조회한다. '
+                + 'jira_projects/jira_search로 키를 먼저 찾을 필요가 없다. '
+                + '"이 프로젝트 JIRA 이슈 뭐 있어", "지금 프로젝트 JIRA 지연된 거 있어?", '
+                + '"이 프로젝트 JIRA 최근 변경사항", "우리 프로젝트 JIRA 연동 현황", '
+                + '"이 프로젝트 JIRA 구성 요소/해결책/Milestone 뭐 있어" 같은 질문에 쓴다. '
+                + '⚠️ 연결이 안 돼 있으면(JIRA 탭에서 프로젝트 코드를 아직 등록 안 함) '
+                + 'projectKeys가 빈 배열로 온다 — 그때는 "이 프로젝트는 JIRA에 연결돼 있지 않다"고 '
+                + '사실대로 답하라(지어내지 마라).',
+            local: '_jiraLocalProjectIssues', pick: 'issues',
+            params: [
+                { name: 'maxResults', type: 'number', required: false, min: 1, max: 50, def: 30 }
+            ]
+        },
         {
             id: 'gw_mail', mode: 'read', requires: 'gw',
             title: '그룹웨어 메일 목록',

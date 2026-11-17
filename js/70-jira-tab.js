@@ -1037,6 +1037,10 @@
             // 압축한다(metaLineHtml, 위 "구성 요소·해결책·Milestone" 절).
             + fieldRow('📋', '<div style="flex:1; min-width:0; display:flex; align-items:center;'
                 + ' flex-wrap:wrap; padding-top:6px; font-size:12px; line-height:1.7;">' + metaLineHtml(issue) + '</div>')
+            // 🪂 [2026-11-17 사용자 요청] JIRA 이슈 → 간트 업무로 기록 이동/등록. 사람이 이
+            // 버튼을 눌러야만 실행된다(쓰기는 읽기와 경로 분리, 위 헤더 주석과 같은 원칙).
+            + '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;">'
+            + '<button onclick="window._jiraRegisterAsTask(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + '">📋 ' + T('간트 업무로 등록', 'Register as gantt task') + '</button></div>'
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
             + renderAttachments(issue.attachments)
@@ -1200,6 +1204,90 @@
         } catch (e) {
             modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
         }
+    };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 📋 [2026-11-17 사용자 요청] JIRA 이슈 → 지금 열린 간트 프로젝트의 업무로 등록.
+    //    메일 자동등록(js/14b `buildMailTaskRow`)과는 **다른 함수** — 그건 "메일"이
+    //    전제(자동알림 판정·＊AI📧 표식·`_mailRaw`)라 그대로 쓰면 JIRA 업무가 메일
+    //    유래로 잘못 분류된다(기간요약 js/62가 `[출처]`로 메일을 가른다). 중복 방지는
+    //    **JIRA 키 자체**로 한다(메일의 `[출처]` 태그와 같은 역할의 다른 태그 `[JIRA]`).
+    //    ⚠️ 사람이 이 버튼을 눌러야만 실행된다 — AI 문답 도구는 mode:'read'만 등록돼
+    //    있어 이 경로를 못 탄다(js/40 QA_TOOLS "쓰기는 읽기와 경로 분리" 원칙).
+    // ══════════════════════════════════════════════════════════════════════
+    function jiraFindExistingTaskRow(key, gd, ci) {
+        if (!key || !Array.isArray(gd) || !ci || ci.content == null || ci.content === -1) return null;
+        var tag = '[JIRA] ' + key;
+        for (var i = 1; i < gd.length; i++) {
+            var row = gd[i];
+            if (row && String(row[ci.content] || '').indexOf(tag) !== -1) return row;
+        }
+        return null;
+    }
+    function todayYmd() {
+        var d = new Date();
+        function p(n) { return String(n).padStart(2, '0'); }
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+    window._jiraRegisterAsTask = async function (key) {
+        var gd = window.globalData, ci = window.colIdx;
+        if (!Array.isArray(gd) || !gd.length || !ci) {
+            if (window.showToast) window.showToast(T('열린 프로젝트가 없습니다.', 'No project is open.'), 'error');
+            return;
+        }
+        var iss = _issueCache[key];
+        if (!iss || !iss.summary) {
+            try { var d2 = await fetchJson(BASE + '/jira/issue/' + encodeURIComponent(key)); if (d2 && d2.ok !== false) iss = d2.issue; } catch (e) { /* 아래서 처리 */ }
+        }
+        if (!iss) {
+            if (window.showToast) window.showToast(T('이슈 정보를 못 불러왔습니다.', 'Could not load the issue.'), 'error');
+            return;
+        }
+        if (jiraFindExistingTaskRow(key, gd, ci)) {
+            if (window.showToast) window.showToast(T('이미 간트 업무로 등록돼 있습니다.', 'Already registered as a gantt task.'), 'info');
+            return;
+        }
+
+        var newRow = new Array(gd[0].length).fill('');
+        newRow._level = 1;
+        newRow._origDev = ''; newRow._origT1 = ''; newRow._origT2 = ''; newRow._origT3 = ''; newRow._origT4 = '';
+        newRow._origT1 = '[' + key + '] ' + (iss.summary || '') + ' ＊JIRA🪐';
+        newRow._startForced = true; newRow._planForced = true;
+
+        var refRow = null;
+        for (var i = 1; i < gd.length; i++) { if (gd[i]) { refRow = gd[i]; break; } }
+        if (ci.customer !== -1) newRow[ci.customer] = refRow ? (refRow[ci.customer] || '') : '';
+        if (ci.model !== -1) newRow[ci.model] = refRow ? (refRow[ci.model] || '') : '';
+        if (ci.inch !== -1) newRow[ci.inch] = refRow ? (refRow[ci.inch] || '') : '';
+        if (ci.assignee !== -1) newRow[ci.assignee] = refRow ? (refRow[ci.assignee] || '') : '';
+
+        var today = todayYmd();
+        if (ci.start !== -1) newRow[ci.start] = today;
+        if (ci.plan !== -1) newRow[ci.plan] = today;
+        if (ci.dur1 !== -1) newRow[ci.dur1] = '1';
+        var doneLike = /done|closed|resolved|완료|해결|종료/i.test(iss.status || '');
+        if (ci.status !== -1) newRow[ci.status] = doneLike ? T('완료', 'Done') : T('진행', 'In progress');
+
+        var bits = ['[JIRA] ' + key, T('요약: ', 'Summary: ') + (iss.summary || '')];
+        if (iss.status) bits.push(T('상태: ', 'Status: ') + iss.status);
+        if (iss.assignee) bits.push(T('담당(JIRA): ', 'Assignee(JIRA): ') + iss.assignee);
+        if (iss.priority) bits.push(T('우선순위: ', 'Priority: ') + iss.priority);
+        if (iss.resolution) bits.push(T('해결책: ', 'Resolution: ') + iss.resolution);
+        if (iss.milestone) bits.push('Milestone: ' + iss.milestone);
+        if (iss.components && iss.components.length) bits.push(T('구성 요소: ', 'Components: ') + iss.components.join(', '));
+        if (iss.url) bits.push(iss.url);
+        if (ci.content !== -1) newRow[ci.content] = bits.join('\n');
+        newRow._jiraKey = key;
+
+        gd.push(newRow);
+        // ⚠️ pushUndoSnapshot 을 따로 안 부른다 — recalculateSchedules() 종료 시 자동으로
+        //    찍는다(js/04e 헤더 주석, "되돌리기 지점은 바꾼 뒤에" CLAUDE.md 규칙 그대로).
+        if (window.recalculateSchedules) window.recalculateSchedules();
+        if (window.renderTable) window.renderTable();
+        if (window.saveToGoogleDrive) window.saveToGoogleDrive();
+        if (window.showToast) window.showToast('✅ ' + T('간트 업무로 등록했습니다.', 'Registered as a gantt task.'), 'success');
+        var statusEl = document.getElementById('jira-issue-status');
+        if (statusEl) { statusEl.style.display = 'block'; statusEl.style.color = '#2f9e44'; statusEl.textContent = '✅ ' + T('간트 업무로 등록했습니다.', 'Registered as a gantt task.'); }
     };
 
     window._jiraDoTransition = async function (key) {
@@ -1547,5 +1635,56 @@
         } catch (e) {
             box.innerHTML = '<div style="padding:8px; color:#a3281c;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
         }
+    };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 📅 [2026-11-17 사용자 요청] 다른 기능(AI 요약 등)이 재사용하는 공용 조회 —
+    //    **결정론(프로젝트 코드)만**. 이 파일의 BASE/fetchJson/jql 을 그대로 쓴다
+    //    (HTTP 호출 로직을 다른 파일에 또 베끼지 않는다). 수동 키·검색어·메일 추정은
+    //    모델끼리 섞이는 사고가 있어(위 헤더 주석) 사람이 "더 찾기"를 눌러야만 돈다 —
+    //    그래서 여기선 안 쓴다. 쓰기(댓글/상태전환/필드수정)는 여전히 js/70 모달에서만.
+    // ══════════════════════════════════════════════════════════════════════
+    window._jiraProjectKeysOf = function (jiraLinksByUnit) {
+        var store = jiraLinksByUnit || {};
+        var seen = {}, out = [];
+        Object.keys(store).forEach(function (u) {
+            var pk = String((store[u] || {}).projectKey || '').trim();
+            if (pk && !seen[pk]) { seen[pk] = true; out.push(pk); }
+        });
+        return out;
+    };
+
+    window._jiraFetchIssuesByKeys = async function (projectKeys, opts) {
+        var keys = (projectKeys || []).filter(Boolean);
+        if (!keys.length) return { ok: true, issues: [] };
+        var o = opts || {};
+        var parts = ['project in (' + keys.join(',') + ')'];
+        if (o.updatedFrom) parts.push('updated >= "' + o.updatedFrom + '"');
+        if (o.updatedTo) parts.push('updated <= "' + o.updatedTo + '"');
+        var max = o.maxResults || 50;
+        try {
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent(jql(parts) + ' ORDER BY updated DESC') + '&maxResults=' + max);
+            if (!d || d.ok === false) return { ok: false, issues: [], error: (d && d.message) || 'failed' };
+            return { ok: true, issues: d.issues || [] };
+        } catch (e) {
+            return { ok: false, issues: [], error: String(e && e.message || e) };
+        }
+    };
+
+    // 🤖 [2026-11-17] AI 문답 도구 루프(js/40 `jira_project_issues`)가 부르는 로컬 도구 —
+    //    지금 열린 프로젝트의 연결(프로젝트 코드)을 코드가 먼저 풀어 주므로 AI는 키를 몰라도 된다.
+    //    QA_TOOLS의 `local` 계약대로 **항상 객체를 반환**하고(실패해도 throw 하지 않는다 —
+    //    "연결 안 됨"은 오류가 아니라 사실이다), 네트워크 실패만 throw 해 도구 루프가 그대로 드러낸다.
+    window._jiraLocalProjectIssues = async function (args) {
+        var keys = window._jiraProjectKeysOf((window.tabData || {}).jiraLinksByUnit);
+        if (!keys.length) {
+            return { ok: true, issues: [], projectKeys: [],
+                     message: T('이 프로젝트는 JIRA에 연결돼 있지 않습니다(JIRA 탭에서 프로젝트 코드를 등록하세요).',
+                                 'This project has no linked JIRA project (link a project code in the JIRA tab).') };
+        }
+        var max = (args && args.maxResults) || 30;
+        var r = await window._jiraFetchIssuesByKeys(keys, { maxResults: max });
+        if (!r.ok) throw new Error(r.error || T('JIRA 조회 실패', 'JIRA lookup failed'));
+        return { ok: true, issues: r.issues, projectKeys: keys };
     };
 })();

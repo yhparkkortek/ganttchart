@@ -43,6 +43,15 @@
         modeKey: 'gantt_ps_mode',
         filterKey: 'gantt_ps_filter',          // 담당자·프로젝트·직접 기간 — 이 브라우저에 기억
         scanProjects: true,                    // 🗂 내가 맡은 **다른** 프로젝트도 모은다(js/59 공용 스캐너)
+        // 🪐 [2026-11-17 사용자 요청] JIRA 변경사항도 같은 사실 목록에 — **열린 프로젝트의
+        //    결정론 연결(프로젝트 코드, js/70)만** 쓴다. 수동 키·검색어·메일 추정은 모델끼리
+        //    섞이는 사고가 있어(js/70 헤더 주석) 사람이 "더 찾기"를 눌러야만 도는데, 여긴 그
+        //    버튼이 없으니 섞인 걸 걸러낼 길이 없다 → 자동으로는 결정론 하나만.
+        //    ⚠️ 범위는 **열린 프로젝트뿐**이다 — 다른 팀 프로젝트의 jiraLinksByUnit 을 읽으려면
+        //    그 프로젝트 전체를 또 열어야 해서(js/59 스캐너는 globalData/projectMeta만 돌려준다)
+        //    비용이 크다. 모르면 안 넣는다 — 다음에 필요해지면 ctx 에 jiraLinks 를 더해 확장.
+        jiraEnabled: true,
+        jiraMaxIssues: 40,
         includeNonMail: false,                 // true 면 메일 유래가 아닌 업무(사람이 친 것)도 사실 목록에
         weekStartsMonday: true,
         maxFacts: 80,
@@ -293,6 +302,67 @@
         window._psScan();
     };
 
+    // 🪐 [2026-11-17] JIRA — 열린 프로젝트의 결정론 연결(프로젝트 코드)만, 캐시는 그 코드
+    //    집합이 바뀔 때만 다시 받는다(모델을 바꾸거나 연결 설정을 고치면 `sig` 가 달라진다).
+    var _psJira = { key: '', issues: [], busy: false, loaded: false, err: '' };
+    window._psJiraScan = _psJira;
+
+    /** 🧹 사람이 바뀌면(js/64) 앞사람 기준 캐시는 버린다 — `_psResetScan` 과 짝. */
+    window._psResetJiraScan = function () {
+        _psJira = { key: '', issues: [], busy: false, loaded: false, err: '' };
+        window._psJiraScan = _psJira;
+    };
+
+    window._psScanJira = function () {
+        if (!P.jiraEnabled || typeof window._jiraProjectKeysOf !== 'function' || typeof window._jiraFetchIssuesByKeys !== 'function') return;
+        var keys = window._jiraProjectKeysOf((window.tabData || {}).jiraLinksByUnit);
+        var sig = keys.slice().sort().join(',');
+        if (_psJira.key === sig && (_psJira.loaded || _psJira.busy)) return;
+        if (!keys.length) {
+            _psJira = { key: sig, issues: [], busy: false, loaded: true, err: '' };
+            window._psJiraScan = _psJira;
+            return;
+        }
+        _psJira = { key: sig, issues: [], busy: true, loaded: false, err: '' };
+        window._psJiraScan = _psJira;
+        var mine = _psJira;
+        window._jiraFetchIssuesByKeys(keys, { maxResults: P.jiraMaxIssues }).then(function (r) {
+            mine.issues = r.issues || [];
+            mine.err = r.ok ? '' : (r.error || '');
+            mine.busy = false;
+            mine.loaded = true;
+            if (window._renderAiProjectSummaryBody && mode() !== P.legacyId) window._renderAiProjectSummaryBody();
+        }).catch(function (e) {
+            mine.err = String(e && e.message || e);
+            mine.busy = false;
+            mine.loaded = true;
+        });
+    };
+
+    /** JIRA 이슈 한 건 → 사실 객체(기존 메일 사실과 **같은 모양**이라 렌더·프롬프트·접지검사를
+     *  손 안 대고 그대로 탄다). `idx` 는 간트 행 인덱스와 안 겹치게 10만을 더한다 — `local:false`
+     *  라 `link()` 를 안 타므로(위 `collectFrom` 의 `f.local` 분기) 클릭 이동은 안 되지만, 라벨에
+     *  이미 JIRA 키가 박혀 있어 어떤 이슈인지는 바로 보인다. */
+    function jiraToFact(iss, i, openName, pmName) {
+        var d = parseAnyDate(iss.updated) || new Date();
+        var bits = [];
+        if (iss.status) bits.push(iss.status);
+        if (iss.resolution) bits.push(T('해결: ', 'Resolved: ') + iss.resolution);
+        if (iss.milestone) bits.push('MS ' + iss.milestone);
+        if (iss.components && iss.components.length) bits.push(iss.components.join(', '));
+        return {
+            idx: 100000 + i, date: ymd(d), _ts: d.getTime(),
+            task: '[' + (iss.key || '') + '] ' + (iss.summary || ''),
+            // 🧑‍💼 pm 은 **그 프로젝트를 총괄하는 사람**(JIRA 는 모른다) — 비워 두면 PM 으로
+            //    거를 때마다 JIRA 사실이 통째로 사라진다(위 `afterPm` 필터). 열린 프로젝트
+            //    것이니 그 프로젝트 PM 을 그대로 물려준다.
+            cat: 'JIRA', pm: pmName || '', assignee: iss.assignee || '',
+            project: openName, local: false,
+            status: iss.status || '', sender: '', receiver: '',
+            core: bits.join(' · '), todo: '', issue: '', fix: '', answer: ''
+        };
+    }
+
     /**
      * 화면·AI·글이 **모두 이걸** 쓴다 — 열린 프로젝트 + 모아 둔 다른 프로젝트, 그리고 필터 적용.
      * ⚠️ 동기 함수다(렌더가 바로 부른다). 다른 프로젝트는 `_psScan` 이 뒤에서 채운 것을 꺼내 쓴다.
@@ -310,7 +380,12 @@
         var inRange = (other.facts || []).filter(function (f) {
             return f._ts >= R.from.getTime() && f._ts <= R.to.getTime();
         });
-        var all = here.facts.concat(inRange);
+        // 🪐 JIRA — 열린 프로젝트의 결정론 연결만, 이미 받아 둔 것(비동기)만 이 기간으로 거른다.
+        var pmName = String((window.projectMeta || {}).프로젝트담당자 || '').trim();
+        var jiraFacts = (P.jiraEnabled ? (_psJira.issues || []) : [])
+            .map(function (iss, i) { return jiraToFact(iss, i, openName, pmName); })
+            .filter(function (f) { return f._ts >= R.from.getTime() && f._ts <= R.to.getTime(); });
+        var all = here.facts.concat(inRange).concat(jiraFacts);
         var scanned = here.scanned + other.scanned;
 
         var F = filt();
@@ -363,8 +438,11 @@
             filtered: !!(F.pm || F.who || F.proj), filter: F,
             // 🔑 AI 요약 캐시 열쇠 — 기간뿐 아니라 **필터도** 들어가야 한다(다른 조건의 요약을
             //    같은 것으로 보여 주면 조용한 오답이다).
-            sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : ''),
-            scan: other
+            sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : '') + '|j=' + _psJira.key,
+            scan: other,
+            // 🪐 화면의 "로딩 중"·개수 표시용 — `out` 안의 jira 건수와 받는 중인지 둘 다 필요하다.
+            jiraCount: out.filter(function (f) { return f.cat === 'JIRA'; }).length,
+            jiraScan: _psJira
         };
     };
 
@@ -382,9 +460,10 @@
             if (f.answer) s += ' | 대응: ' + f.answer;
             return s;
         }).join('\n');
+        var hasJira = col.facts.some(function (f) { return f.cat === 'JIRA'; });
         return (en
-            ? 'You are summarizing a project\'s email-derived task log. Use ONLY the facts below. Do not add, infer, evaluate or predict anything that is not literally in the list. No counts or status statistics.'
-            : '당신은 프로젝트의 메일 유래 업무 기록을 요약합니다. **아래 사실 목록에 있는 내용만** 쓰세요. 목록에 없는 정보·추정·평가·전망·일정 판단을 넣지 마세요. 완료/진행/지연 같은 집계 숫자도 쓰지 마세요.') +
+            ? (hasJira ? 'You are summarizing a project\'s email-derived task log and its linked JIRA issue changes.' : 'You are summarizing a project\'s email-derived task log.') + ' Use ONLY the facts below. Do not add, infer, evaluate or predict anything that is not literally in the list. No counts or status statistics.'
+            : (hasJira ? '당신은 프로젝트의 메일 유래 업무 기록과 연결된 JIRA 이슈 변경사항을 요약합니다.' : '당신은 프로젝트의 메일 유래 업무 기록을 요약합니다.') + ' **아래 사실 목록에 있는 내용만** 쓰세요. 목록에 없는 정보·추정·평가·전망·일정 판단을 넣지 마세요. 완료/진행/지연 같은 집계 숫자도 쓰지 마세요.') +
             '\n\n[프로젝트] ' + (pm.고객사 || '') + ' ' + (pm.고객모델명 || pm.모델명 || '') + '\n[기간] ' + col.range.label + ' (사실 ' + col.facts.length + '건)\n\n[사실 목록]\n' + (lines || '(없음)') +
             '\n\n[규칙]\n- 문장마다 근거가 된 사실의 "#G숫자" 를 **반드시** 그대로 붙이세요(예: "… 요청받음 #G12"). 근거 번호 없는 문장은 버려집니다.\n' +
             '- 같은 업무의 여러 사실은 한 문장으로 묶어도 됩니다(번호를 모두 붙이세요).\n- 사람 이름·모델명·수치는 목록의 표기 그대로.\n- 각 배열 최대 8개. 해당 없으면 빈 배열 [].\n' +
@@ -528,6 +607,7 @@
         var col = window._psCollectFacts(kind);
         // 🗂 다른 프로젝트는 뒤에서 — 기다리지 않는다(끝나면 스스로 다시 그린다).
         try { window._psScan(); } catch (e) { /* 훑기 실패가 화면을 막지는 않는다 */ }
+        try { window._psScanJira(); } catch (e) { /* JIRA 훑기 실패가 화면을 막지는 않는다 */ }
         var pm = window.projectMeta || {};
         var cache = (pm.aiPeriodSummary || {})[kind];
         // ⚠️ 캐시는 **기간 + 필터**가 같을 때만 "이 화면의 요약" 이다.
@@ -535,7 +615,10 @@
         var h = [];
         h.push('<div id="ai-summary-report-content">');
         h.push('<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;"><div style="font-size:13.5px; font-weight:bold; color:#2c5f8a;">📅 ' + esc(col.range.label) + '</div>' +
-               '<div style="font-size:11.5px; color:#777;">' + esc(T('메일 유래 업무 ' + col.facts.length + '건' + (col.total > col.facts.length ? ' (표시 상한 ' + col.facts.length + ')' : '') + ' · 전체 메일 업무 ' + col.scanned + '건 중' + (col.filtered ? ' · 필터 적용 중' : '') + (col.projects.length > 1 ? ' · 프로젝트 ' + col.projects.length + '개' : ''), col.facts.length + ' mail-derived tasks of ' + col.scanned + (col.filtered ? ' · filtered' : ''))) + '</div></div>');
+               '<div style="font-size:11.5px; color:#777;">' + esc(T('메일 유래 업무 ' + col.facts.length + '건' + (col.total > col.facts.length ? ' (표시 상한 ' + col.facts.length + ')' : '') + ' · 전체 메일 업무 ' + col.scanned + '건 중' + (col.jiraCount ? ' · JIRA ' + col.jiraCount + '건' : '') + (col.filtered ? ' · 필터 적용 중' : '') + (col.projects.length > 1 ? ' · 프로젝트 ' + col.projects.length + '개' : ''), col.facts.length + ' mail-derived tasks of ' + col.scanned + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.filtered ? ' · filtered' : ''))) +
+               (col.jiraScan && col.jiraScan.busy ? ' <span style="color:#1971c2;">⏳ ' + esc(T('JIRA 확인 중…', 'Checking JIRA…')) + '</span>' : '') +
+               (col.jiraScan && col.jiraScan.err ? ' <span style="color:#b1432f;">⚠️ JIRA: ' + esc(col.jiraScan.err) + '</span>' : '') +
+               '</div></div>');
         if (fresh) {
             var li = function (s) { var c = esc(s); return '<li style="margin-bottom:4px;">' + (window._linkifyTaskRefs ? window._linkifyTaskRefs(c) : c) + '</li>'; };
             var sec = function (icon, title, arr) { if (!arr || !arr.length) return ''; return '<div style="margin-bottom:10px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">' + icon + ' ' + esc(title) + '</div><ul style="margin:0; padding-left:18px; font-size:12.5px;">' + arr.map(li).join('') + '</ul></div>'; };

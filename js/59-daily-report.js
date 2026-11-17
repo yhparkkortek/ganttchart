@@ -1145,6 +1145,31 @@
         //    끝날 때마다 후보 목록만 다시 그린다.
         try { window.dailyScanOtherProjects(_date); } catch (e) { /* 훑기 실패가 모달을 막지는 않는다 */ }
         try { window._dailyEnsureCarryOver(_date); } catch (e) { /* 이월 알림 실패가 모달을 막지는 않는다 */ }
+        try { window._dailyFillJiraRef(); } catch (e) { /* JIRA 참고 칸 실패가 모달을 막지는 않는다 */ }
+    };
+
+    /** 🪐 [2026-11-17] 연결된 JIRA 프로젝트의 **오늘 변경된** 이슈를 참고용으로만 보여준다
+     *  — items[]/저장에는 손 안 댄다(위 render() 주석 참고). 연결이 없거나 조회가 실패하면
+     *  조용히 빈 칸으로 둔다(보고 작성 자체를 막지 않는다). */
+    window._dailyFillJiraRef = async function () {
+        if (typeof window._jiraProjectKeysOf !== 'function' || typeof window._jiraFetchIssuesByKeys !== 'function') return;
+        var keys = window._jiraProjectKeysOf((window.tabData || {}).jiraLinksByUnit);
+        if (!keys.length) return;
+        var today = ymd();
+        var r;
+        try { r = await window._jiraFetchIssuesByKeys(keys, { updatedFrom: today, maxResults: 20 }); }
+        catch (e) { return; }
+        var el = document.getElementById('daily-jira-ref');   // 그 사이 모달이 닫혔을 수 있다
+        if (!el || !r || !r.ok) return;
+        var issues = (r.issues || []).filter(function (iss) { return String(iss.updated || '').slice(0, 10) === today; });
+        if (!issues.length) return;
+        el.innerHTML = '<div style="font-size:11px; color:#888; margin:2px 0 6px; padding:6px 8px; background:#fafcff; border:1px dashed #d6e6f2; border-radius:6px;">' +
+            '🪐 ' + esc(T('오늘 변경된 연결 JIRA 이슈(참고용 — 보고에 직접 옮겨 적으세요): ',
+                          'JIRA issues linked to this project, changed today (reference — copy into your report yourself): ')) +
+            issues.map(function (iss) {
+                return '<a href="' + esc(iss.url || '#') + '" target="_blank" rel="noopener" style="color:#1971c2;">' + esc(iss.key) + '</a> ' +
+                       esc(iss.summary || '') + (iss.status ? ' <span style="color:#aaa;">(' + esc(iss.status) + ')</span>' : '');
+            }).join(' · ') + '</div>';
     };
 
     /**
@@ -1450,6 +1475,14 @@
     // 🔧 [2026-11-11 3차 요청] "저장" 버튼은 위 "일 종류" 줄로 옮겼다 — 이 박스는 다시
     //    목록 전용 스크롤 영역 하나로.
     '<div style="border:1px solid #e8e8e8; border-radius:7px; padding:7px 10px; margin-bottom:6px; max-height:420px; overflow-y:auto;">' + chk + '</div>' +
+    // 🪐 [2026-11-17 사용자 요청] "JIRA 연동"의 일일보고 쪼각 — 연결된 JIRA 프로젝트가
+    //    있으면 **참고용으로만** 보여준다(items[]에는 안 쓴다). 과거 "자동 적립이 No./851/
+    //    고객을 담았다" 사고(2026-11-05)가 "행 인덱스/엉뚱한 값을 업무명으로 자동 저장"
+    //    에서 났던 터라, JIRA 도 똑같이 자동 채우면 같은 종류 오염이 또 난다 — 그래서
+    //    사람이 읽고 **직접 옮겨 적어야만** 보고에 들어간다(빈 상자로 안 둔다 — 연결 없으면
+    //    아무것도 안 그린다, 아래 `_dailyFillJiraRef`). 연결 안 된 프로젝트가 대부분이라
+    //    빈 칸을 늘 보여주면 "이게 뭐지"가 되므로 처음엔 비워 두고 뒤에서 채운다.
+    '<div id="daily-jira-ref"></div>' +
     '<div style="display:flex; gap:6px; margin-bottom:12px;">' +
       '<input id="daily-manual" placeholder="' + esc(T('직접 추가 — 업무명', 'Add manually — task name')) + '" style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:5px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){window._dailyAddManual();}">' +
       '<button onclick="window._dailyAddManual()" style="padding:5px 12px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">+ ' + esc(T('추가', 'Add')) + '</button>' +
