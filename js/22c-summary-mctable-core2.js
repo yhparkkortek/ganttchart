@@ -1070,7 +1070,7 @@ window.deleteMember3Row = function(idx) {
 //    전부 "이 프로젝트 확증 신호"로 AI에게 주면 오매칭 위험이 있음 → PN이 겹칠 확률이 낮은 PANEL만
 //    기본으로 체크해서 "분석용"(신뢰 가능한 식별 신호)으로, 나머지는 기본 미체크(참고용만)로 시작.
 //    체크 여부는 프로젝트마다 사용자가 직접 조정 가능.
-window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIM/CUT','TOUCH / GLASS','TOUCH CTRL','AD BOARD','CONVERTER','BLU','POWER','METAL','MOLD','DIE CAST','PACKING','ETC'];
+window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIM/CUT','TSP PCT','GLASS TEMP','GLASS CHEM','GLASS SEMI','GLASS NON','TOUCH CTRL','AD BOARD','CONVERTER','BLU','POWER','METAL','MOLD','DIE CAST','PACKING','ETC'];
 // 💡 구분명 변경(SLIMMING/CUTTING → SLIM/CUT) 이전에 이미 저장된 데이터도 그대로 이어받기 위한 별칭
 window._MATERIAL_CATEGORY_ALIASES = { 'SLIM/CUT': ['SLIMMING/CUTTING'] };
 

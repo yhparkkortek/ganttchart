@@ -184,7 +184,11 @@
     window.ELEC_CATEGORY_META = {
         'PANEL':         { icon: '🖥️', view: 'panel',     nasFull: 'PARTS/PANEL' },
         'SLIM/CUT':      { icon: '✂️',                     nas: 'SLIM CUT' },
-        'TOUCH / GLASS': { icon: '🪟',                     nas: 'TOUCH GLASS' },
+        'TSP PCT':       { icon: '🖐️', view: 'tsppct',    nas: 'TSP PCT' },
+        'GLASS TEMP':    { icon: '🟨', view: 'glasstemp', nas: 'GLASS TEMP' },
+        'GLASS CHEM':    { icon: '💎', view: 'glasschem', nas: 'GLASS CHEM' },
+        'GLASS SEMI':    { icon: '🔷', view: 'glasssemi', nas: 'GLASS SEMI' },
+        'GLASS NON':     { icon: '◻️', view: 'glassnon',  nas: 'GLASS NON' },
         'TOUCH CTRL':    { icon: '👆', view: 'touchctrl',  nas: 'TOUCH CTRL' },
         'AD BOARD':      { icon: '🔲', view: 'adbd',       nas: 'AD BD' },
         'CONVERTER':     { icon: '🔌', view: 'convbd',     nas: 'CONV' },
@@ -202,6 +206,11 @@
         adbd:      { label: 'AD BD', icon: '🔲' },
         convbd:    { label: 'CONV',  icon: '🔌' },
         touchctrl: { label: 'TOUCH CTRL', icon: '👆' },
+        tsppct:    { label: 'TSP PCT', icon: '🖐️' },
+        glasstemp: { label: 'GLASS TEMP', icon: '🟨' },
+        glasschem: { label: 'GLASS CHEM', icon: '💎' },
+        glasssemi: { label: 'GLASS SEMI', icon: '🔷' },
+        glassnon:  { label: 'GLASS NON', icon: '◻️' },
     };
     // 전용 도표가 없는 구분의 뷰 키 — localStorage에 남고 DOM id에도 들어가므로 영숫자만 남긴다.
     window._elecCatSlug = function(cat) {
