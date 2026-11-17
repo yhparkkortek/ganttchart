@@ -316,54 +316,43 @@ check('X-Atlassian-Token 헤더 필수(옛 Jira XSRF 우회)', (seen_up['headers
 check('files에 파일을 실어 보낸다', seen_up['files'] is not None and 'file' in seen_up['files'], seen_up['files'])
 check('결과가 attachments 모양(_shape_issue와 같은 키)', result[0]['filename'] == '측정데이터.xlsx' and result[0]['url'].startswith(jb.JIRA_BASE), result)
 
-print('\n[11.5] add_attachment — 키로 404 나면 실제 숫자 id로 한 번 더 시도한다 (2026-11-17 실측)')
-#    ⚠️ 사용자가 실제 서버에서 GABJO-14(키)로 첨부 저장을 눌렀더니 404가 났다 — 같은 키로
-#    조회(GET)는 멀쩡히 된다. 이 옛 서버(2013년 빌드)가 첨부 생성만 숫자 id를 요구할 수
-#    있다는 가설로, 키 실패 시 **조회로 확인한 진짜 id**(추측 아님)를 한 번 더 시도한다.
+print('\n[11.5] add_attachment — 404면 X-Atlassian-Token 값을 nocheck(하이픈 없이)로 한 번 더 (2026-11-17 2차 실측)')
+#    ⚠️ 1차 가설(키 대신 숫자 id)은 실측으로 틀렸음이 확인됐다 — 숫자 id(26721)로도 404가
+#    그대로 났다. Atlassian 커뮤니티 사례로 다시 좁혀 보니, 이 XSRF 우회 헤더의 기대 값이
+#    버전마다 다르다 — 최신은 `no-check`(하이픈 있음)이지만 오래된 빌드 일부는 하이픈 없는
+#    `nocheck`을 기대하고, 그 경우 403이 아니라 **404**로 거부된 사례가 보고돼 있다.
 fresh(); stub_auth(True)
-jb._FIELD_META_CACHE['id_by_name'] = {}
-jb._FIELD_META_CACHE['ts'] = float('inf')
-seen_calls = []
+seen_tokens = []
 
 
-def fake_retry(method, url, **kw):
-    seen_calls.append((method, url))
-    if method == 'POST' and url.endswith('/rest/api/2/issue/GABJO-14/attachments'):
+def fake_token_404_then_ok(method, url, **kw):
+    tok = (kw.get('headers') or {}).get('X-Atlassian-Token')
+    seen_tokens.append(tok)
+    if tok == 'no-check':
         return FakeResp(404, {'errorMessages': [], 'errors': {}})
-    if method == 'GET' and url.endswith('/rest/api/2/issue/GABJO-14'):
-        return FakeResp(200, {'key': 'GABJO-14', 'id': '40099', 'fields': {'summary': '조회'}})
-    if method == 'POST' and url.endswith('/rest/api/2/issue/40099/attachments'):
-        return FakeResp(200, [{'filename': 'x.png', 'size': 10, 'mimeType': 'image/png',
-                                'content': jb.JIRA_BASE + '/secure/attachment/1/x.png',
-                                'author': {}, 'created': ''}])
-    raise AssertionError('예상하지 못한 호출: %s %s' % (method, url))
+    return FakeResp(200, [{'filename': 'x.png', 'size': 10, 'mimeType': 'image/png',
+                           'content': jb.JIRA_BASE + '/secure/attachment/1/x.png',
+                           'author': {}, 'created': ''}])
 
 
-jb.requests.request = fake_retry
+jb.requests.request = fake_token_404_then_ok
 result15 = jb.add_attachment('GABJO-14', 'x.png', b'bytes', 'image/png')
-check('키로 먼저 시도한다', seen_calls[0] == ('POST', jb.JIRA_BASE + '/rest/api/2/issue/GABJO-14/attachments'), seen_calls)
-check('404면 조회로 진짜 숫자 id를 얻는다(추측 아님)', seen_calls[1] == ('GET', jb.JIRA_BASE + '/rest/api/2/issue/GABJO-14'), seen_calls)
-check('숫자 id로 한 번 더 시도해 성공한다', seen_calls[2] == ('POST', jb.JIRA_BASE + '/rest/api/2/issue/40099/attachments'), seen_calls)
-check('결과는 정상 attachments 모양', result15[0]['filename'] == 'x.png', result15)
+check('먼저 no-check(하이픈 있음, 최신 문서 값)으로 시도한다', seen_tokens[0] == 'no-check', seen_tokens)
+check('404면 같은 키로 nocheck(하이픈 없이)을 한 번 더 시도한다', seen_tokens[1] == 'nocheck', seen_tokens)
+check('그걸로 성공하면 정상 attachments 모양을 돌려준다', result15[0]['filename'] == 'x.png', result15)
 
-# 숫자 id로도 404면 원래 오류를 그대로 올린다(두 번째 시도가 진짜 원인을 가리지 않는다) +
-# JIRA가 본문에 사유를 실어 보내면 그 메시지도 덧붙여진다(진단성 개선, 같은 날).
-jb._FIELD_META_CACHE['id_by_name'] = {}
-jb._FIELD_META_CACHE['ts'] = float('inf')
-
-
-def fake_still_404(method, url, **kw):
-    if method == 'GET' and url.endswith('/rest/api/2/issue/GABJO-99'):
-        return FakeResp(200, {'key': 'GABJO-99', 'id': '40100', 'fields': {'summary': '조회'}})
+# 둘 다 404면 원래 오류를 그대로 올린다(두 번째 시도가 진짜 원인을 가리지 않는다) + JIRA가
+# 본문에 사유를 실어 보내면 그 메시지도 덧붙여진다(진단성 개선, 같은 날).
+def fake_both_404(method, url, **kw):
     return FakeResp(404, {'errorMessages': ['첨부가 비활성화되어 있습니다.'], 'errors': {}})
 
 
-jb.requests.request = fake_still_404
+jb.requests.request = fake_both_404
 try:
     jb.add_attachment('GABJO-99', 'x.png', b'bytes', 'image/png')
-    check('숫자 id로도 404면 예외를 던진다', False)
+    check('둘 다 404면 예외를 던진다', False)
 except jb.JiraApiError as e:
-    check('숫자 id로도 안 되면 원래 404를 그대로 올린다(가리지 않는다)', '404' in str(e), str(e))
+    check('둘 다 안 되면 원래 404를 그대로 올린다(가리지 않는다)', '404' in str(e), str(e))
     check('JIRA가 본문에 실어 보낸 사유도 메시지에 담긴다', '첨부가 비활성화되어 있습니다' in str(e), str(e))
 
 print('\n[12] open_attachment_native — 받은 바이트를 임시 폴더에 쓰고 연다(os.startfile은 가짜)')

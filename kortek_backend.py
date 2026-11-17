@@ -91,7 +91,12 @@ def add_cors_headers(resp):
     origin = request.headers.get("Origin", "")
     if origin in ALLOWED_ORIGINS or not origin:
         resp.headers["Access-Control-Allow-Origin"]  = origin or "*"
-        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+        # ⚠️⚠️ [2026-11-17 실측] PUT이 빠져 있었다 — `/jira/issue/<key>`(필드 저장, js/70)가
+        # 이 백엔드의 **첫 PUT 라우트**라 그동안 아무도 이 구멍을 못 봤다. PUT은 JSON 바디라
+        # "단순 요청"이 아니어서 브라우저가 OPTIONS 프리플라이트를 먼저 보내는데, 그 응답에
+        # PUT이 허용 목록에 없으니 브라우저가 실제 요청을 보내지도 않고 막아 "Failed to
+        # fetch"로만 보였다(서버 로그에도 안 남는다 — 요청이 서버 라우트까지 간 적이 없다).
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
         # 📦 /doc/export-zip 이 내려주는 파일 개수 — 기본값은 커스텀 헤더를 JS에서 못 읽는다.
         resp.headers["Access-Control-Expose-Headers"] = "X-File-Count"

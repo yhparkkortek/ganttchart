@@ -391,9 +391,9 @@ def open_attachment_native(url, filename):
     return fp
 
 
-def _add_attachment_raw(id_or_key, filename, content, mime_type=None):
+def _add_attachment_raw(id_or_key, filename, content, mime_type=None, token_header='no-check'):
     r = _request('POST', '/rest/api/2/issue/' + id_or_key + '/attachments',
-                  headers={'X-Atlassian-Token': 'no-check'},
+                  headers={'X-Atlassian-Token': token_header},
                   files={'file': (filename, content, mime_type or 'application/octet-stream')})
     return [{'filename': a.get('filename') or '',
              'size': a.get('size') or 0,
@@ -406,31 +406,24 @@ def _add_attachment_raw(id_or_key, filename, content, mime_type=None):
 def add_attachment(key, filename, content, mime_type=None):
     """이슈에 새 파일을 올린다(첨부 저장, 2026-11-11 추가).
 
-    ⚠️ `X-Atlassian-Token: no-check` 헤더가 필수다 — 옛 Jira는 파일 업로드에 XSRF 토큰을
-    요구하는데, REST API 클라이언트는 그 토큰을 받을 방법이 없어 이 헤더로 그 검사를
-    건너뛴다(공식 문서에 적힌 값 그대로). `_request`가 `**kw`를 그대로 `requests.request`에
-    넘기므로 `files=`/`headers=`도 기존 401/403/CAPTCHA/잠금 판정을 그대로 탄다.
+    ⚠️⚠️ [2026-11-17 2차 실측, 사용자 제보] 처음엔 "키 대신 숫자 id를 요구하나" 의심해
+    id 폴백을 넣었는데, 실제 서버에서 **숫자 id(`26721`)로도 똑같이 404**가 나서 그 가설은
+    틀렸다(id/key 문제가 아니다) — 그 폴백은 뺐다.
 
-    ⚠️⚠️ [2026-11-17 실측, 사용자 제보] 실제 서버에서 `GABJO-14`(키)로 호출하면 **404**가
-    났다 — 그런데 같은 키로 `GET /rest/api/2/issue/<key>`(조회)는 멀쩡히 된다. 이 서버는
-    2013년 빌드(Jira 5.2.11)라 첨부 생성 자원만 키가 아니라 **숫자 id**를 요구했을 가능성이
-    있다 — 키로 먼저 시도하고 404면, **이미 조회로 확인된 그 이슈의 진짜 숫자 id**(추측 아님,
-    `get_issue`가 돌려주는 `id`)로 한 번만 다시 시도한다. 숫자 id로도 안 되면 원래 404를
-    그대로 올린다(두 번째 시도가 진짜 원인을 가리면 안 된다 — CLAUDE.md "하네스부터 의심"과
-    같은 태도로, 여기선 "키 자체가 안 통할 수 있다"를 먼저 의심한다).
+    다시 좁혀 보니 **`X-Atlassian-Token` 헤더 값 자체가 Jira 버전마다 다르다.** 최신
+    Jira는 `no-check`(하이픈 있음)를 문서에 적어 두지만, Atlassian 커뮤니티에는 **하이픈
+    없는 `nocheck`을 기대하는 더 오래된 빌드**(지금 이 서버처럼 2013년 빌드 계열)에서
+    `no-check`를 보내면 XSRF 검사가 조용히 실패하며 **403이 아니라 404**로 거부된 사례가
+    보고돼 있다. → `no-check`로 먼저 시도하고(최신 문서 값, 바뀌지 않는 기본 경로), 404면
+    **같은 키로** `nocheck`(하이픈 없이)을 한 번 더 시도한다. 둘 다 안 되면 원래 404를
+    그대로 올린다(두 번째 시도가 진짜 원인을 가리면 안 된다).
     """
     try:
-        return _add_attachment_raw(key, filename, content, mime_type)
+        return _add_attachment_raw(key, filename, content, mime_type, 'no-check')
     except JiraApiError as e:
         if e.status != 404:
             raise
-        try:
-            numeric_id = str(get_issue(key).get('id') or '')
-        except Exception:
-            numeric_id = ''
-        if not numeric_id or numeric_id == key:
-            raise
-        return _add_attachment_raw(numeric_id, filename, content, mime_type)
+        return _add_attachment_raw(key, filename, content, mime_type, 'nocheck')
 
 
 def do_transition(key, transition_id, comment=None):
