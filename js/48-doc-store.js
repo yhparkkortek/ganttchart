@@ -682,6 +682,17 @@ window._dsOpenPicker = async function (opts) {
             _dsSetDropHighlight(false);
             _dsDoUpload(_dsPick.folder, e.dataTransfer.files);
         });
+        // 📋 [2026-11-17 사용자 요청] 붙여넣기(Ctrl+V)도 — 이 블록이 모달을 처음 만들 때 딱
+        // 한 번만 도므로(위 `if (!m)` 가드), 여기 걸어도 창을 여닫을 때마다 쌓이지 않는다.
+        document.addEventListener('paste', function (e) {
+            if (dsBox.style.display === 'none' || !document.body.contains(dsBox)) return;
+            var m2 = document.getElementById('ds-pick-modal');
+            if (!m2 || m2.style.display === 'none') return;
+            var files = window._dzFilesFromClipboard ? window._dzFilesFromClipboard(e, 'nas') : [];
+            if (!files.length) return;   // 검색창 글자 붙여넣기는 그대로 입력칸으로
+            e.preventDefault(); e.stopPropagation();
+            _dsDoUpload(_dsPick.folder, files);
+        });
     }
     m.style.display = 'block';
     if (window.bringModalToFront) window.bringModalToFront('ds-pick-modal');

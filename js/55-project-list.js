@@ -1925,6 +1925,21 @@
         if (fail.length) _toast('⚠️ ' + fail.join(' / '), 'error', 9000);
     };
 
+    // 📋 [2026-11-17 사용자 요청] 문서함 드롭존에 붙여넣기(Ctrl+V)도 — 끌어다 놓기와 같은
+    // 보관(스테이징, `window._plStaged`)에 모은다(id는 [저장] 버튼을 누를 때만 필요하므로
+    // 여기선 몰라도 된다). ⚠️ `#pl-popup`은 이 페이지의 **여러** 팝업이 공유하는 상자라 지금
+    // 그 안에 문서함이 떠 있는지는 `#pl-doc-drop`이 실제로 있는지로 판단한다. `_plRenderDocBody`
+    // 가 매번 다시 그리므로 이 등록은 **여기, 모듈이 처음 로드될 때 한 번만** 한다.
+    document.addEventListener('paste', function (e) {
+        var box = document.getElementById('pl-doc-drop');
+        if (!box) return;
+        var files = window._dzFilesFromClipboard ? window._dzFilesFromClipboard(e, 'doc') : [];
+        if (!files.length) return;   // 번호 입력칸 등 글자 붙여넣기는 그대로 둔다
+        e.preventDefault(); e.stopPropagation();
+        window._plStaged = (window._plStaged || []).concat(files);
+        _renderStaged();
+    });
+
     // ══════════════════════════════════════════════════════════════════════════
     // 📐 결정론 추출기 — 도면 글자에서 **AI 없이** 읽어낸다.
     //    NAS 도면 67개를 실제로 전부 열어 보고 만든 규칙이라, 대부분의 항목이 여기서 끝난다

@@ -632,6 +632,21 @@ window._epDeletePendingPhoto = function(i) {
     window._epSyncImageSlotsUI();
 };
 
+// 📋 [2026-11-17 사용자 요청] 사진 칸에 붙여넣기(Ctrl+V)도 — 드래그앤드롭과 같은 처리기
+// (`_epProcessDroppedImage`)를 그대로 쓴다. 이 모달(`ep-add-modal`)은 PARTS/Elec Parts가
+// 같이 쓰는 엔진이라(js/50이 화면을 복제해 쓴다) 여기 한 곳만 고치면 둘 다 된다.
+(function bindEpPhotoPasteOnce() {
+    document.addEventListener('paste', function(e) {
+        const modal = document.getElementById('ep-add-modal');
+        if (!modal || modal.style.display === 'none') return;
+        const files = window._dzFilesFromClipboard ? window._dzFilesFromClipboard(e, 'photo') : [];
+        if (!files.length) return;   // 글자 붙여넣기(검색어·스펙 텍스트)는 그대로 입력칸으로
+        e.preventDefault();
+        e.stopPropagation();
+        files.forEach(function(f) { window._epProcessDroppedImage(f); });
+    });
+})();
+
 // 💡 슬롯 목록을 다시 그린다 — 개수 제한이 없어 "+ 추가" 타일 하나를 항상 끝에 붙인다.
 //    클릭/드래그앤드롭 핸들러는 매번 다시 그릴 때 새로 붙인다(정적 DOM이 아니라서).
 window._epSyncImageSlotsUI = function() {

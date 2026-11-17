@@ -167,7 +167,13 @@ def _request(method, path, **kw):
         # 권한 문제는 계정 자체가 틀린 게 아니다 — 잠그지 않는다.
         raise JiraApiError(_err_text(r) or '이 이슈를 볼 권한이 없습니다.', status=403)
     if r.status_code == 404:
-        raise JiraApiError('요청한 대상을 찾을 수 없습니다 (HTTP 404, %s).' % path, status=404)
+        # ⚠️ [2026-11-17] 그냥 "못 찾았다"로만 끝내면 진단이 안 된다 — JIRA가 본문에 사유를
+        # 실어 보내는 경우가 있어(예: 첨부가 서버에서 꺼져 있을 때) 있으면 덧붙인다.
+        msg = '요청한 대상을 찾을 수 없습니다 (HTTP 404, %s).' % path
+        extra = _err_text(r)
+        if extra:
+            msg += ' ' + extra
+        raise JiraApiError(msg, status=404)
     if r.status_code >= 400:
         raise JiraApiError(_err_text(r) or ('JIRA 오류 (HTTP %d)' % r.status_code), status=r.status_code)
     return r
@@ -248,6 +254,7 @@ def _shape_issue(raw, milestone_field_id=None):
     milestone = _field_display_value(f.get(milestone_field_id)) if milestone_field_id else ''
     return {
         'key': raw.get('key'),
+        'id': raw.get('id'),  # ⚠️ 숫자 id — 일부 자원(첨부 생성 등)이 key를 안 받는 경우의 폴백용
         'url': JIRA_BASE + '/browse/' + str(raw.get('key') or ''),
         'summary': f.get('summary') or '',
         'description': f.get('description') or '',
@@ -384,15 +391,8 @@ def open_attachment_native(url, filename):
     return fp
 
 
-def add_attachment(key, filename, content, mime_type=None):
-    """이슈에 새 파일을 올린다(첨부 저장, 2026-11-11 추가).
-
-    ⚠️ `X-Atlassian-Token: no-check` 헤더가 필수다 — 옛 Jira는 파일 업로드에 XSRF 토큰을
-    요구하는데, REST API 클라이언트는 그 토큰을 받을 방법이 없어 이 헤더로 그 검사를
-    건너뛴다(공식 문서에 적힌 값 그대로). `_request`가 `**kw`를 그대로 `requests.request`에
-    넘기므로 `files=`/`headers=`도 기존 401/403/CAPTCHA/잠금 판정을 그대로 탄다.
-    """
-    r = _request('POST', '/rest/api/2/issue/' + key + '/attachments',
+def _add_attachment_raw(id_or_key, filename, content, mime_type=None):
+    r = _request('POST', '/rest/api/2/issue/' + id_or_key + '/attachments',
                   headers={'X-Atlassian-Token': 'no-check'},
                   files={'file': (filename, content, mime_type or 'application/octet-stream')})
     return [{'filename': a.get('filename') or '',
@@ -401,6 +401,36 @@ def add_attachment(key, filename, content, mime_type=None):
              'url': a.get('content') or '',
              'author': (a.get('author') or {}).get('displayName'),
              'created': a.get('created') or ''} for a in r.json()]
+
+
+def add_attachment(key, filename, content, mime_type=None):
+    """이슈에 새 파일을 올린다(첨부 저장, 2026-11-11 추가).
+
+    ⚠️ `X-Atlassian-Token: no-check` 헤더가 필수다 — 옛 Jira는 파일 업로드에 XSRF 토큰을
+    요구하는데, REST API 클라이언트는 그 토큰을 받을 방법이 없어 이 헤더로 그 검사를
+    건너뛴다(공식 문서에 적힌 값 그대로). `_request`가 `**kw`를 그대로 `requests.request`에
+    넘기므로 `files=`/`headers=`도 기존 401/403/CAPTCHA/잠금 판정을 그대로 탄다.
+
+    ⚠️⚠️ [2026-11-17 실측, 사용자 제보] 실제 서버에서 `GABJO-14`(키)로 호출하면 **404**가
+    났다 — 그런데 같은 키로 `GET /rest/api/2/issue/<key>`(조회)는 멀쩡히 된다. 이 서버는
+    2013년 빌드(Jira 5.2.11)라 첨부 생성 자원만 키가 아니라 **숫자 id**를 요구했을 가능성이
+    있다 — 키로 먼저 시도하고 404면, **이미 조회로 확인된 그 이슈의 진짜 숫자 id**(추측 아님,
+    `get_issue`가 돌려주는 `id`)로 한 번만 다시 시도한다. 숫자 id로도 안 되면 원래 404를
+    그대로 올린다(두 번째 시도가 진짜 원인을 가리면 안 된다 — CLAUDE.md "하네스부터 의심"과
+    같은 태도로, 여기선 "키 자체가 안 통할 수 있다"를 먼저 의심한다).
+    """
+    try:
+        return _add_attachment_raw(key, filename, content, mime_type)
+    except JiraApiError as e:
+        if e.status != 404:
+            raise
+        try:
+            numeric_id = str(get_issue(key).get('id') or '')
+        except Exception:
+            numeric_id = ''
+        if not numeric_id or numeric_id == key:
+            raise
+        return _add_attachment_raw(numeric_id, filename, content, mime_type)
 
 
 def do_transition(key, transition_id, comment=None):

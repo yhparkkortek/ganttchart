@@ -1052,6 +1052,22 @@ window._renderProductImageSlots = function () {
     setTimeout(function () { window._prodImgMigrateLegacy(); }, 3000);
 };
 
+// 📋 [2026-11-17 사용자 요청] 제품 사진 칸에 붙여넣기(Ctrl+V)도 — 드래그앤드롭과 같은 경로
+// (`_uploadProductImage`)로 보낸다. ⚠️ `_renderProductImageSlots`는 Summary 탭을 열 때마다
+// 다시 불리므로 그 안에서 `document.addEventListener`를 걸면 리스너가 쌓인다 — **여기,
+// 모듈이 처음 로드될 때 한 번만** 걸고, 그때그때 "그 칸이 지금 보이나"만 확인한다.
+(function bindProdImgPasteOnce() {
+    document.addEventListener('paste', function (e) {
+        var slot = document.getElementById('prod-img-add');
+        if (!slot || !slot.offsetParent) return;   // 탭이 안 보이면(display:none 조상) offsetParent가 null
+        var files = window._dzFilesFromClipboard ? window._dzFilesFromClipboard(e, 'product') : [];
+        if (!files.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        files.forEach(function (f) { window._uploadProductImage(f); });
+    });
+})();
+
 // 💡 [호환용] 예전 이름을 그대로 불러도 동작하게 — DOMContentLoaded 등 기존 호출부를 안 건드린다.
 window.initProductImageSlots = function() { window._renderProductImageSlots(); };
 

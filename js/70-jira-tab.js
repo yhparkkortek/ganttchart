@@ -961,7 +961,7 @@
             + renderAttachments(issue.attachments)
             + '<div id="jira-attach-dropzone" style="border:1.5px dashed #a3d9e0; border-radius:6px; padding:9px 10px;'
             + ' text-align:center; background:#fafefe; font-size:11.5px; color:#789; cursor:pointer; margin-bottom:8px; transition:background .15s;">'
-            + '📎 <span id="jira-attach-filename">' + T('파일을 여기로 끌어놓거나 클릭해서 고르세요', 'Drop a file here or click to choose') + '</span>'
+            + '📎 <span id="jira-attach-filename">' + T('파일을 여기로 끌어놓거나 클릭해서 고르세요 · 붙여넣기(Ctrl+V)도 됩니다', 'Drop a file here or click to choose · Ctrl+V to paste too') + '</span>'
             + '<input type="file" id="jira-attach-file" style="display:none;">'
             + '</div>'
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
@@ -1005,7 +1005,7 @@
         var dz = document.getElementById('jira-attach-dropzone');
         var attFileEl = document.getElementById('jira-attach-file');
         var fnameEl = document.getElementById('jira-attach-filename');
-        var defaultFnameMsg = T('파일을 여기로 끌어놓거나 클릭해서 고르세요', 'Drop a file here or click to choose');
+        var defaultFnameMsg = T('파일을 여기로 끌어놓거나 클릭해서 고르세요 · 붙여넣기(Ctrl+V)도 됩니다', 'Drop a file here or click to choose · Ctrl+V to paste too');
         var paintFname = function () {
             var f = attFileEl.files && attFileEl.files[0];
             fnameEl.textContent = f ? f.name : defaultFnameMsg;
@@ -1026,6 +1026,32 @@
             }
         });
     };
+
+    // 📋 [2026-11-17 사용자 요청] 첨부 칸에 붙여넣기(Ctrl+V)도 — 스크린샷 찍어서 파일로
+    // 저장하는 번거로움 없이 바로 붙여넣을 수 있다(js/73 `_dzFilesFromClipboard` 공용 헬퍼).
+    // ⚠️ 상세 모달은 `_jiraRenderIssueBody`가 매번 본문을 통째로 다시 그리므로, 그 안에서
+    // `document.addEventListener`를 걸면 열 때마다 리스너가 쌓인다 — 그래서 **한 번만** 걸고
+    // "지금 첨부 칸이 떠 있나"만 매번 확인한다(일일보고 js/59 `bindFileDropOnce`와 같은 패턴).
+    (function bindJiraAttachPasteOnce() {
+        document.addEventListener('paste', function (e) {
+            var wrap = document.getElementById('jira-issue-modal');
+            var dz = document.getElementById('jira-attach-dropzone');
+            var attFileEl = document.getElementById('jira-attach-file');
+            var fnameEl = document.getElementById('jira-attach-filename');
+            if (!wrap || wrap.style.display === 'none' || !dz || !attFileEl || !fnameEl) return;
+            var files = window._dzFilesFromClipboard ? window._dzFilesFromClipboard(e, 'jira') : [];
+            if (!files.length) return;   // 글자 붙여넣기는 그대로 입력칸으로
+            e.preventDefault(); e.stopPropagation();
+            try {
+                var dt = new DataTransfer();
+                files.forEach(function (f) { dt.items.add(f); });
+                attFileEl.files = dt.files;
+            } catch (e2) { /* DataTransfer 생성자가 없는 오래된 브라우저 — 조용히 포기 */ return; }
+            fnameEl.textContent = files[0].name;
+            dz.style.background = '#e0f5f7';
+            setTimeout(function () { dz.style.background = '#fafefe'; }, 200);
+        });
+    })();
 
     // 👤 [2026-11-11 사용자 요청] 담당자 변경 확장 — 아이디를 몰라도 이름으로 찾는다.
     //  ⚠️ JIRA 자체 검색(query=)은 이 서버에서 조용히 무시된다(실측) — 전체를 받아
@@ -1065,8 +1091,13 @@
                 method: 'POST', body: fd
             }).then(function (r) { return r.json(); });
             if (!d || d.ok === false) { modalSetStatus('⚠️ ' + esc((d && d.message) || ''), 'err'); return; }
+            // ⚠️⚠️ [2026-11-17 사용자 제보 "필드 저장·첨부 저장 안됨"] 성공 메시지를 먼저 띄우고
+            // 그 다음에 본문을 다시 그리면, 다시 그리기가 body.innerHTML을 통째로 바꾸면서
+            // 방금 띄운 "✅" 메시지가 그 즉시 지워진다(새 #jira-issue-status는 display:none으로
+            // 다시 시작한다) — 사람 눈엔 "아무 반응도 없다"로 보인다. **다시 그린 뒤에** 메시지를
+            // 띄워야 실제로 화면에 남는다(아래 세 함수도 전부 같은 순서로 고쳤다).
+            await window._jiraRenderIssueBody(key);
             modalSetStatus('✅ ' + T('첨부를 저장했습니다.', 'Attachment saved.'), 'ok');
-            window._jiraRenderIssueBody(key);
         } catch (e) {
             modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
         }
@@ -1088,8 +1119,8 @@
                 body: JSON.stringify({ fields: fields })
             }).then(function (r) { return r.json(); });
             if (!d || d.ok === false) { modalSetStatus('⚠️ ' + esc((d && d.message) || ''), 'err'); return; }
+            await window._jiraRenderIssueBody(key);
             modalSetStatus('✅ ' + T('저장했습니다.', 'Saved.'), 'ok');
-            window._jiraRenderIssueBody(key);
             window._jiraRefresh();
         } catch (e) {
             modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
@@ -1106,8 +1137,8 @@
                 body: JSON.stringify({ transitionId: sel.value })
             }).then(function (r) { return r.json(); });
             if (!d || d.ok === false) { modalSetStatus('⚠️ ' + esc((d && d.message) || ''), 'err'); return; }
+            await window._jiraRenderIssueBody(key);
             modalSetStatus('✅ ' + T('전환했습니다.', 'Transitioned.'), 'ok');
-            window._jiraRenderIssueBody(key);
             window._jiraRefresh();
         } catch (e) {
             modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
@@ -1125,8 +1156,8 @@
                 body: JSON.stringify({ body: text })
             }).then(function (r) { return r.json(); });
             if (!d || d.ok === false) { modalSetStatus('⚠️ ' + esc((d && d.message) || ''), 'err'); return; }
+            await window._jiraRenderIssueBody(key);
             modalSetStatus('✅ ' + T('등록했습니다.', 'Posted.'), 'ok');
-            window._jiraRenderIssueBody(key);
         } catch (e) {
             modalSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
         }

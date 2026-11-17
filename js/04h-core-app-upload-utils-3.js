@@ -909,6 +909,22 @@
         await window._ganttQaProcessAttachedFiles(files);
     };
 
+    // 📋 [2026-11-17 사용자 요청] 모달 어디서든 붙여넣기(Ctrl+V)로도 스크린샷을 바로 첨부할
+    // 수 있다 — 드래그앤드롭(위)과 같은 처리기(`_ganttQaProcessAttachedFiles`)를 공유한다.
+    // ⚠️ 이 모달은 한 번만 만들어지고 계속 재사용되므로(열 때마다 다시 그리지 않는다) 리스너도
+    // 한 번만 건다(js/70 JIRA 상세 모달과 달리 여기는 본문을 통째로 다시 그리지 않아 안전).
+    (function bindGanttQaPasteOnce() {
+        document.addEventListener('paste', async function(ev) {
+            const modal = document.getElementById('gantt-qa-modal');
+            if (!modal || modal.style.display === 'none') return;
+            const files = window._dzFilesFromClipboard ? window._dzFilesFromClipboard(ev, 'qa') : [];
+            if (!files.length) return;   // 글자 붙여넣기는 그대로 입력창으로
+            ev.preventDefault();
+            ev.stopPropagation();
+            await window._ganttQaProcessAttachedFiles(files);
+        });
+    })();
+
     window._ganttQaRemoveAttachment = function(idx) {
         window._ganttQaPendingAttachments.splice(idx, 1);
         window._ganttQaRenderAttachmentStrip();

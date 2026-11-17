@@ -5092,18 +5092,17 @@
     };
 
     // 📋 Ctrl+V — Document 탭이 보일 때만, 첫 첨부 구역으로 받는다
+    // 🔧 [2026-11-17] 클립보드에서 파일을 뽑는 부분을 공용 헬퍼(js/73)로 바꿨다 — 스크린샷에
+    //    이름이 없을 때(`image.png`/`blob`) 날짜로 지어 주는 로직까지 같이 딸려 온다.
     document.addEventListener('paste', function (ev) {
         var tab = document.getElementById('tab-document');
         if (!tab || !tab.classList.contains('active')) return;
-        var items = (ev.clipboardData && ev.clipboardData.items) || [];
-        var files = [];
-        for (var i = 0; i < items.length; i++) {
-            if (items[i].kind === 'file') { var f = items[i].getAsFile(); if (f) files.push(f); }
-        }
+        var files = window._dzFilesFromClipboard ? window._dzFilesFromClipboard(ev, 'doc') : [];
         if (!files.length) return;
         var zone = document.querySelector('#doc-page-body [data-doc-att]');
         if (!zone) return;
         ev.preventDefault();
+        ev.stopPropagation();
         window._docAttachAdd(window._docState.formId, zone.getAttribute('data-doc-att'), files);
     });
 
