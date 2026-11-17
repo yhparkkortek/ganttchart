@@ -360,9 +360,14 @@
             // ═══ 5-3. 점검표 — 해상도 연결 · 묶음 · 내역 수정 ═══════════════
             window._docPick('sample-report');
             window._docSetRound('PROTO A');
+            // 🐛 [2026-11-17, 사용자 지시로 다른 테스트 파일들을 돌려보다 발견] 구역 제목은 뒤에
+            // 접기/펼치기 토글 글자("▼ 접기"/"▲ 접기")가 붙어서 그려진다(2026-11-12 추가분) —
+            // 완전일치로 찾으면 실제로는 다 있는 구역(SAMPLE CHECK SHEET(펌웨어) 3 등)을 "없다"고
+            // 보고하는 가짜 실패였다(document-page.browser.js에서 먼저 발견한 것과 같은 원인).
+            // 앞부분 일치로 — docs에 이미 "구역 제목은 앞부분으로 찾을 것"이라 적혀 있다.
             var sheetOf = function (name) {
                 var secs = [].map.call(document.querySelectorAll('#doc-page-body .doc-sec'), function (e) { return e.textContent; });
-                var i = secs.indexOf(name);
+                var i = secs.findIndex(function (s) { return s.indexOf(name) === 0; });
                 return i < 0 ? null : document.querySelectorAll('#doc-page-body .doc-sec')[i].nextElementSibling;
             };
             var RES_SHEET = 'SAMPLE CHECK SHEET(펌웨어) 3';
@@ -459,19 +464,24 @@
                '보탠 내역이 엑셀에 안 들어간다');
 
             // ✅ 점검요청만 보기
+            // 🐛 [2026-11-17, 사용자 지시로 다른 테스트 파일들을 돌려보다 발견] "[점검요청만]" 은
+            // 전역 버튼이 아니다 — 2026-11-12 5차 요청으로 **시트 헤더 버튼 하나가 3단을 순환**하게
+            // 바뀌었다(접기→점검요청만(req)→전체(all)→…, `_docToggleSheetCollapse`, 시트별
+            // `_docState.chkSheetState[시트키]`). "점검요청만"/"전체 보기"라는 글자의 버튼은
+            // 어디에도 없다(버튼 글자는 "펼치기"/"전체 보기"/"접기"뿐이고 그마저 **다음에 될 상태**를
+            // 가리킨다). 전체 화면에서 "점검요청 켠 것만" 보려면 6개 시트를 **전부** req로 돌려야
+            // 하므로, 버튼 글자를 찾지 않고 그 상태를 직접 돌린다(실제 클릭도 결국 이 state를 바꿀
+            // 뿐이라 같은 경로).
             var nItems = function () { return document.querySelectorAll('#doc-page-body input[data-doc-text],#doc-page-body input[data-doc-add]').length; };
             var allN = nItems();
-            var chkBtn = [].filter.call(document.querySelectorAll('#doc-page-body button'), function (b) {
-                return /점검요청만|Requested only/.test(b.textContent);
-            })[0];
-            ok(!!chkBtn, '[점검요청만] 버튼이 없다');
-            chkBtn.click();
+            var sheetKeys = (window.DOC_CHECK_SHEETS || []).map(function (s) { return s.key; });
+            ok(sheetKeys.length > 0, '점검표 시트 목록이 비어 있다');
+            window._docState.chkSheetState = window._docState.chkSheetState || {};
+            sheetKeys.forEach(function (k) { window._docState.chkSheetState[k] = 'req'; });
+            window._docRender();
             ok(nItems() === 1, '점검요청 켠 1줄만 남아야 한다 (' + nItems() + ')');
-            var backBtn = [].filter.call(document.querySelectorAll('#doc-page-body button'), function (b) {
-                return /전체 보기|Show all/.test(b.textContent);
-            })[0];
-            ok(!!backBtn, '[전체 보기] 로 안 바뀐다');
-            backBtn.click();
+            sheetKeys.forEach(function (k) { window._docState.chkSheetState[k] = 'all'; });
+            window._docRender();
             ok(nItems() === allN, '다시 펼쳐도 전체가 안 돌아온다 (' + nItems() + ' ≠ ' + allN + ')');
             // 보탠 줄 빼기 — 확인창은 건너뛴다
             var oc = window.confirm; window.confirm = function () { return true; };
