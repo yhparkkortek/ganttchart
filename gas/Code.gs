@@ -27,6 +27,7 @@ function doPost(e) {
     var model      = params.model;
     var provider   = params.provider || 'gemini';
     var imageParts = params.imageParts || null; // [{mimeType, data}] — Gemini 비전 전용
+    var webSearch  = !!params.search; // 🔎 [2026-11-17] "추론" 모드에서만 프런트가 켜서 보냄 — Gemini 전용(Grounding with Google Search)
 
     if (!userKey) throw new Error('[HTTP 401] API 키가 없습니다 — 앱의 ⚙️ AI 분석 설정에서 개인 API 키를 저장하세요.');
     if (!prompt) throw new Error('[HTTP 400] 프롬프트가 비어 있습니다.');
@@ -45,7 +46,7 @@ function doPost(e) {
       text = callOpenAiCompatible_('OpenRouter', 'https://openrouter.ai/api/v1/chat/completions', userKey, prompt,
         model || 'deepseek/deepseek-r1:free', { max_tokens: 4096 });
     } else {
-      text = callGemini_(userKey, prompt, model, imageParts);
+      text = callGemini_(userKey, prompt, model, imageParts, webSearch);
     }
 
     return json_({ status: 'success', result: { candidates: [{ content: { parts: [{ text: text.text }] }, finishReason: text.finish }] } });
@@ -76,7 +77,7 @@ function errorMessage_(label, code, body, raw) {
   return '[HTTP ' + code + '] ' + msg;
 }
 
-function callGemini_(apiKey, prompt, model, imageParts) {
+function callGemini_(apiKey, prompt, model, imageParts, webSearch) {
   var geminiModel = model || 'gemini-3.5-flash-lite';
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + geminiModel + ':generateContent';
   // 이미지가 있으면 image parts 먼저, 그 다음 텍스트 프롬프트 (Gemini Vision)
@@ -91,6 +92,13 @@ function callGemini_(apiKey, prompt, model, imageParts) {
     contents: [{ parts: parts }],
     generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
   };
+  // 🔎 [2026-11-17] "추론" 모드 — 구글 웹 Gemini가 쓰는 "Grounding with Google Search"와 같은
+  //    tools 옵션. 기본 generateContent 호출엔 안 붙어 있어 날씨처럼 실시간 정보가 필요한 질문에
+  //    모델이 "모른다"고만 답했었다 — 사용자가 추론 모드로 명시 선택했을 때만 켠다(무료 한도 보호,
+  //    이미지 분석(imageParts)엔 안 붙인다 — 비전 호출은 검색이 필요한 경로가 아님).
+  if (webSearch && !(imageParts && imageParts.length)) {
+    payload.tools = [{ google_search: {} }];
+  }
   var res = UrlFetchApp.fetch(url, {
     method: 'post', contentType: 'application/json',
     headers: { 'x-goog-api-key': apiKey },

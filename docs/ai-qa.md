@@ -919,3 +919,23 @@ SAP, 자유추론… 쉽게 구분할 방법이 필요한데." → **먼저 재 
 #추론 을 붙여 다시 물어보세요" 안내를 추가했다(`js/32` `_qaOutOfScopeAnswer`). ⚠️ `_qaTurnForced`는
 접두어 파싱 직후(04h 상단)부터 라우터가 그 턴 끝에 `null`로 되돌리기 전까지 유효하므로, 즉답
 검사가 라우터보다 먼저 일어나도 같은 값을 그대로 읽을 수 있다.
+
+**🔎 (2026-11-17) 추론 모드에서는 Gemini 웹 검색(Grounding)도 같이 켠다** — 위 우회로 날씨를
+물어봐도 AI(LLM)는 학습 데이터만 갖고 있어 "실시간 정보는 모른다"고 정직하게 답할 뿐이었다
+(구글 웹 Gemini의 "웹 검색" 자체가 모델 능력이 아니라 요청에 `tools:[{google_search:{}}]`를
+얹는 별도 옵션이고, 우리 프록시(`gas/Code.gs` `callGemini_`)는 그걸 안 보내고 있었다). 사용자
+지적("일반 구글 웹 Gemini 가 하듯이 웹 검색해서 답변해줘야 하는거 아닌가?")으로 추가.
+- `js/04h`가 `_qaRoute.cls === 'general'`일 때만 `callAiBackend(apiKey, prompt, {webSearch:true})`
+  로 켠다(일반 프로젝트/SAP 질문까지 켜면 호출마다 검색이 붙어 사람마다의 무료 한도가 더
+  빨리 소진된다 — 추론 모드로 명시 선택했을 때만으로 좁힘).
+- `callAiBackend`(js/14a)가 `opts.webSearch`를 GAS POST 바디의 `search` 필드로 그대로 전달,
+  `gas/Code.gs` `doPost`가 `callGemini_(..., webSearch)`로 넘긴다.
+- `callGemini_`는 `webSearch`가 true이고 이미지 분석(`imageParts`)이 아닐 때만 payload에
+  `tools:[{google_search:{}}]`를 추가한다 — Gemini 전용(Grounding with Google Search),
+  Groq/Mistral/OpenAI/OpenRouter 경로는 안 건드린다(그 제공사들은 같은 방식의 검색 툴이 없음).
+- ⚠️ `gas/Code.gs`는 Apps Script 코드 **사본**이다 — 수정 후 Apps Script 편집기에서 **기존
+  배포를 새 버전으로 재배포**해야 실제로 반영된다(파일 코드 변경 자체는 .gitignore 밖이라
+  저장소에는 바로 들어가지만, 실행되는 쪽은 배포된 버전).
+- ⚠️ 검증은 Node 문법 체크(`node --check`, `.gs`는 임시로 `.js` 복사해 확인)만 했다 — 실제
+  Apps Script 배포 후 "추론 모드로 날씨 질문 → 실제 날짜/수치가 답에 포함되는지"는 사람이
+  배포하고 한 번 테스트해야 한다(이 저장소 하네스가 Apps Script 실행 환경을 흉내 낼 수 없음).

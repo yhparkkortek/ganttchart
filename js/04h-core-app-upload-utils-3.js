@@ -9194,7 +9194,13 @@ ${docsJson}`;
             const stopWaitingHints = window._ganttQaStartWaitingHints ? window._ganttQaStartWaitingHints() : function() {};
             let result;
             try {
-                result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, window._currentLang === 'en'
+                // 🔎 [2026-11-17 사용자 요청] "추론" 모드(범위 밖 즉답을 우회해 들어온 질문)에서는
+                //    구글 웹 Gemini처럼 실시간 웹 검색(Grounding with Google Search)을 쓸 수 있게
+                //    opts.webSearch를 켠다 — Gemini 제공사일 때만 gas/Code.gs가 tools를 붙인다.
+                //    프로젝트/SAP 질문까지 켜면 매 호출마다 검색이 붙어 무료 한도를 더 빨리 태우므로
+                //    "추론 모드로 직접 선택했을 때만"으로 좁혀 둔다.
+                const _qaWebSearch = !!(_qaRoute && _qaRoute.cls === 'general');
+                result = await window._withTimeout(window.callAiBackend(apiKey, prompt, { webSearch: _qaWebSearch }), 60000, window._currentLang === 'en'
                     ? '⏱️ Still no response after 60 seconds. Please check your connection and try again.'
                     : '⏱️ 60초가 지나도 응답이 오지 않고 있어요. 네트워크 상태를 확인하고 다시 시도해주세요.');
             } finally {
