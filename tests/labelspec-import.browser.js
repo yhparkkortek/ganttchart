@@ -335,7 +335,17 @@
         try {
             window.switchTab && window.switchTab('document');
             window._docPick('label-spec');
-            var d = window.tabData.documents['label-spec'] = window.tabData.documents['label-spec'] || { fields: {}, att: {} };
+            // 🐛 [2026-11-17, 사용자 지시로 재점검 — __labelSpecTest()에서 찾은 것과 같은 원인]
+            // 'label-spec'은 2026-11-13에 perRevision이 붙어서, 실제로 화면이 읽는 자리는
+            // tabData.documents['label-spec'].labelItems가 아니라
+            // .revisions[그 리비전].labelItems다(_docData 참고) — 최상위에 바로 꽂으면 앱은
+            // 그 라벨을 "코드 없음"으로 본다(실측: "⚠️ 6자리 코드를 먼저 적으세요"로 막혀
+            // 이후 전부 연쇄 실패). _docActiveRevision으로 고른 리비전 자리에 심는다.
+            var lsRev = (window._docActiveRevision && window._docActiveRevision('label-spec')) || 'R1';
+            window.tabData.documents['label-spec'] = window.tabData.documents['label-spec'] || {};
+            window.tabData.documents['label-spec'].revisions = window.tabData.documents['label-spec'].revisions || {};
+            var d = window.tabData.documents['label-spec'].revisions[lsRev] =
+                window.tabData.documents['label-spec'].revisions[lsRev] || { fields: {}, att: {} };
             d.labelItems = [{ size: '75 X 70', code: FAKE_CODE, position: '제품', note: '' }];
             window._docRender();
 
