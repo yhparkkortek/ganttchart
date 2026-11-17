@@ -16,6 +16,17 @@ window._epBuildExtractPrompt = function(type, rawText) {
     const outputChannelsRule = hasOutputChannels
         ? '\n8. "Output Channels"(채널 수)는 문서에 그 문구 그대로 나오는 경우가 드뭅니다. 아래 순서로 값을 찾으세요:\n   ① "Sub-Description"/"Item Description" 등에 다른 값과 콤마로 묶여 나오는 "N CH"/"NCH" 표기(예: "0.48A,4CH,ADM"의 "4CH") → 숫자만 취해 "4"로 답하세요.\n   ② ①이 없으면 "Suitable Load"에 적힌 스트링(string) 개수(예: "4strings x 1bar"의 "4")를 채널 수로 간주하세요(이 보드류는 보통 1 string = 1 channel).\n   ③ 위 두 방법으로도 근거를 못 찾으면 "-"로 답하세요(지어내지 마세요).'
         : '';
+    // 🇨🇳 [2026-11-17 사용자 요청] TSP/GLASS는 중국 협력사 승인원(承认书)이 대부분이라 라벨이
+    //    중국어다 — 매칭표(js/22d SPEC_LABEL_GLOSSARY_ZH)에서 지금 종류의 필드에 해당하는
+    //    것만 골라 알려준다(종류마다 다른 필드를 쓰므로 없는 필드 라벨을 주면 오히려 헷갈린다).
+    const zhGlossary = window.SPEC_LABEL_GLOSSARY_ZH || {};
+    const zhLines = fields.map(function(f) {
+        const zh = zhGlossary[f[0]];
+        return (zh && zh.length) ? `   - "${f[0]}" ↔ ${zh.join(' / ')}` : null;
+    }).filter(Boolean);
+    const chineseRule = zhLines.length
+        ? `\n9. 원문이 중국어(承认书 등)로 작성되어 있을 수 있습니다. 아래 중국어 라벨이 보이면 같은 뜻의 영문 스펙 항목으로 보고 값을 채우세요(라벨만 중국어일 뿐 값은 원문 표기 그대로 유지):\n${zhLines.join('\n')}`
+        : '';
     return `당신은 디스플레이용 ${cfg.domain}(${cfg.label}) 데이터시트 분석 전문가입니다.
 아래 [원문 텍스트]는 ${cfg.label} 스펙 문서(승인원, Specification 등)에서 사용자가 복사했거나 PDF에서 추출한 내용입니다.
 여기서 스펙 정보를 추출해서, 아래 형식의 JSON 객체 하나로만 답하세요(다른 설명이나 마크다운 코드블럭 없이 JSON 객체 하나만).
@@ -35,7 +46,7 @@ ${keyListText}
 4. "Brand"는 문서에 제조사명이 명시되어 있으면 그대로 쓰고, 없으면 "-"로 답하세요(내부 제작 문서라면 회사명이 곧 Brand입니다).
 5. "Item Code"는 사내 관리번호(예: 301782)처럼 숫자/코드 형태의 고유 식별자, "Part Name"은 제품/모델 명칭(예: KCB-02508B-60, GH765A(A1))입니다 — 문서에 원래 하나로만 표기되어 있어도 이 두 성격에 맞게 나눠서 채우세요.
 6. 위에 나열된 스펙 키 이름을 한 글자도 다르지 않게 정확히 그대로 사용하세요. "Connectors"의 하위 키(name/role/model/pins/no/symbol/desc)도 정확히 그대로 사용하세요.
-7. 한 항목에 값이 여러 줄/여러 개로 나열된 경우(예: "Suitable Load"가 "8strings x 2bars"와 "4strings x 4bars"처럼 서로 다른 두 가지 구성으로 표기된 경우) — 절대 하나만 골라서 답하거나 빈칸("-")으로 남기지 말고, 발견한 값 전부를 세미콜론과 공백("; ")으로 이어붙여 하나의 문자열로 답하세요(예: "8strings x 2bars; 4strings x 4bars"). 이 규칙은 위 3번(Min/Typ/Max 전용 " / " 구분자)과는 별개이며, Min/Typ/Max처럼 정해진 자리가 없는 임의 개수의 나열형 값에 적용합니다.${outputChannelsRule}
+7. 한 항목에 값이 여러 줄/여러 개로 나열된 경우(예: "Suitable Load"가 "8strings x 2bars"와 "4strings x 4bars"처럼 서로 다른 두 가지 구성으로 표기된 경우) — 절대 하나만 골라서 답하거나 빈칸("-")으로 남기지 말고, 발견한 값 전부를 세미콜론과 공백("; ")으로 이어붙여 하나의 문자열로 답하세요(예: "8strings x 2bars; 4strings x 4bars"). 이 규칙은 위 3번(Min/Typ/Max 전용 " / " 구분자)과는 별개이며, Min/Typ/Max처럼 정해진 자리가 없는 임의 개수의 나열형 값에 적용합니다.${outputChannelsRule}${chineseRule}
 
 [원문 텍스트]
 ${(rawText || '').substring(0, window._EP_EXTRACT_TEXT_LIMIT)}`;

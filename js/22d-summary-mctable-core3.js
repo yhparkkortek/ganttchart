@@ -1156,6 +1156,36 @@ window.TSP_GLASS_SPEC_SCHEMA = [
     ]},
 ];
 
+// 🇨🇳 [2026-11-17 사용자 요청 "중국 SPEC 분석 가능하도록 — TSP/GLASS가 대부분 중국 협력사"]
+// TSP PCT·GLASS 협력사(广东市润/四川市润 등) 승인원(承认书)은 라벨이 전부 중국어다 —
+// "AI로 추출" 프롬프트(js/22e `_epBuildExtractPrompt`)는 한국어 지시문만 주고 있어서,
+// 중국어 라벨(光透过率 등)을 같은 뜻의 영문 스펙 항목으로 못 맞춰 빈칸("-")으로 남기기
+// 쉽다. **어휘는 데이터로** — 새 중국어 라벨이 나오면 코드를 고치지 않고 여기 한 줄만
+// 추가하면 모든 부품 종류의 AI 추출에 자동 반영된다(프롬프트가 지금 종류의 필드만 골라
+// 넣는다). 키는 TSP_GLASS_SPEC_SCHEMA/GLASS_SPEC_SCHEMA 등 기존 영문 필드 이름과 정확히
+// 같아야 한다 — 다르면 AI가 엉뚱한 키로 답해 결과가 안 들어간다.
+window.SPEC_LABEL_GLOSSARY_ZH = {
+    'Brand': ['品牌', '公司名称', '制造商'],
+    'Item Code': ['物料编号', '料号'],
+    'Part Name': ['型号', '产品名称', '物料名称'],
+    'Revision': ['版本', '版次'],
+    'Transmittance': ['光透过率', '透光率', '透过率'],
+    'Haze': ['雾度'],
+    'Hardness': ['硬度', '铅笔硬度'],
+    'Surface Hardness': ['硬度', '铅笔硬度', '表面硬度'],
+    'Warpage': ['翘曲', '翘曲度'],
+    'Strengthening Spec (CS/DOL)': ['强化特性', '化学强化特性', '表面压缩应力'],
+    'Coating': ['涂层', '镀膜'],
+    'Printing / Logo': ['印刷', '丝印', 'Logo'],
+    'Ball Drop': ['落球', '落球试验'],
+    'Operating Voltage': ['工作电压'],
+    'Operating Temperature/Humidity': ['工作温度', '工作温湿度'],
+    'Storage Temperature/Humidity': ['储存温度', '存储温度'],
+    'Interface': ['接口'],
+    'Dimension (WxHxT)': ['尺寸'],
+    'Thickness (Tolerance)': ['厚度'],
+};
+
 // 🗂 [2026-10-22] 공용 기본 스펙 항목 — **전용 도표가 아직 설계되지 않은 구분**이 쓴다
 //    (SLIM/CUT · TOUCH/GLASS · BLU · POWER · METAL · MOLD · DIE CAST · PACKING · ETC,
 //     그리고 사람이 주요자재에 직접 넣은 구분).
