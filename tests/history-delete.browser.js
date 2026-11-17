@@ -41,6 +41,19 @@
                   'epRenderHistoryTable'];
   RERENDER.forEach(function (k) { saved[k] = window[k]; });
 
+  // 🐛 [2026-11-17] `saved.tabData`는 "그 객체를 가리키는 참조"일 뿐이다 — 프로젝트가 열려
+  //    있으면(window.tabData가 이미 있으면) 아래 CASES의 put()들이 그 같은 객체의
+  //    sumChangeLog/bsChangeLog/mcChangeLog/addressChangeLog/panelCompareChangeLog/
+  //    elecCompareChangeLog 를 직접 덮어쓰는데, finally의 "window.tabData = saved.tabData"는
+  //    같은 참조를 자기 자신에 도로 대입하는 것뿐이라 이 6개 필드는 복구되지 않는다
+  //    (실 프로젝트를 열어둔 채 이 하네스를 돌리면 6개 변경이력이 테스트용 가짜 데이터로
+  //    영구히 덮인다 — "프로젝트는 안 열어도 됨" 안내 덕에 지금까지 안 걸렸을 뿐).
+  //    → 그 필드들만 따로 참조를 보관해뒀다가 finally에서 각각 되돌린다.
+  var TD_FIELDS = ['sumChangeLog', 'bsChangeLog', 'mcChangeLog', 'addressChangeLog',
+                   'panelCompareChangeLog', 'elecCompareChangeLog'];
+  var savedTdFields = {};
+  TD_FIELDS.forEach(function (k) { savedTdFields[k] = window.tabData ? window.tabData[k] : undefined; });
+
   var madeEls = [];                    // 이 하네스가 만든 입력칸만 지운다
   function inputEl(id, type, value) {
     var el = document.getElementById(id);
@@ -193,6 +206,13 @@
   } finally {
     // ── 되돌리기 ─────────────────────────────────────────────────────────
     Object.keys(saved).forEach(function (k) { window[k] = saved[k]; });
+    // 위 한 줄로는 안 돌아오는 tabData 내부 6개 필드를 각각 되돌린다(바로 위 주석 참고).
+    if (window.tabData) {
+      TD_FIELDS.forEach(function (k) {
+        if (savedTdFields[k] === undefined) { delete window.tabData[k]; }
+        else { window.tabData[k] = savedTdFields[k]; }
+      });
+    }
     madeEls.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
   }
 
