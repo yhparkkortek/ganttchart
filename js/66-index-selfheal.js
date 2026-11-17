@@ -104,7 +104,8 @@
             return null;
         }
         const mats = ((doc.tabData || {}).projectMaterials) || [];
-        const e = window.buildProjectIndexEntry(file.id, file.name, pm, mats);
+        const jiraKeys = window._jiraProjectKeysOf ? window._jiraProjectKeysOf((doc.tabData || {}).jiraLinksByUnit) : [];
+        const e = window.buildProjectIndexEntry(file.id, file.name, pm, mats, jiraKeys);
         const color = String(((doc.tabData || {}).themeColor) || '').trim();
         if (color && !e.themeColor) e.themeColor = color;
         return e;

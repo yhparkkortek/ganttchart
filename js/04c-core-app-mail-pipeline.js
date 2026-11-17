@@ -188,7 +188,7 @@
     //    남아있는" 구버전 인덱스 항목(인치를 채우기 전에 저장된 것들 — 이 파일이 다시 저장돼야만
     //    갱신됨)의 inch를 읽기 시점에 즉석으로 보정할 수 있도록 전역에 노출.
     window._inchFromFileName = _inchFromFileName;
-    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride) {
+    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride, jiraKeywordsOverride) {
         const pm = pmOverride || window.projectMeta || {};
         // 💡 [2026-11-12] 고객사 칸은 2026-10-22부터 "고객사>프로젝트명(>세부모델)"처럼 여러 단을
         //    한 칸에 담는다(파일명 조립이 이 칸 하나로 고정됨 — updatePrintTitle 참고). 그래서 첫
@@ -209,7 +209,11 @@
         const multiModelKeywords = hasMultiModel
             ? pm.models.flatMap(function(m) { return [m && m.고객모델명, m && m.프로젝트명칭].filter(Boolean); })
             : [];
-        const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].concat(customerProjectParts)
+        // 🆕 [2026-11-17, 사용자 요청] 프로젝트코드·KTK PN·KTK모델명·PN_모델명도 매칭 키워드에 —
+        //    전부 이 프로젝트 하나만 가리키는 구체적인 코드라(공용 부품 PN과 달리) 변별력 있는
+        //    정보다. SAP/승인원 등 사내 문서는 모델명보다 이 코드들로 메일 본문을 적는 경우가 많다.
+        const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명, pm.프로젝트코드, pm.KTKPN, pm.KTK모델명, pm.PN_모델명]
+            .concat(customerProjectParts)
             .concat(multiModelKeywords).filter(Boolean);
         // 💡 [2026-08-29 버그 수정] "발신인 이름만으로 오매칭됐다"는 지적 — 메일키워드 칸에 사람 이름이
         //    (직접 입력 등으로) 들어가 있으면, 그 사람이 보내는 모든 메일이 서명란 때문에 내용과 무관하게
@@ -222,7 +226,14 @@
         const materialKeywords = materials
             .filter(function(m) { return m && m.useForAnalysis; })
             .flatMap(function(m) { return [m.ktkPn, m.description].filter(Boolean); });
-        const keywords = Array.from(new Set(baseFields.concat(customKeywords).concat(materialKeywords)));
+        // 🆕 [2026-11-17, 사용자 요청] JIRA 프로젝트 코드도 매칭 키워드에 — JIRA 알림 메일(이슈 키,
+        //    예: GABJO-1)은 본문에 모델명 없이 이슈 키만 있는 경우가 많아, 그 프로젝트 코드(GABJO)를
+        //    모르면 Stage 1 후보 필터링에서부터 빠져 "애매합니다"로 대기에 쌓인다(실측 사례:
+        //    TSP Tail 접촉 Risk 검토 — JIRA 알림인데 매칭 신뢰도 '하'로 대기). 모델(제품구분자)별
+        //    연결(tabData.jiraLinksByUnit[unit].projectKey, js/70)을 전부 모아 넣는다.
+        const jiraKeywords = jiraKeywordsOverride
+            || (window._jiraProjectKeysOf ? window._jiraProjectKeysOf((window.tabData || {}).jiraLinksByUnit) : []);
+        const keywords = Array.from(new Set(baseFields.concat(customKeywords).concat(materialKeywords).concat(jiraKeywords)));
         // ✅ [토픽 프로파일] 프로파일은 한 번만 읽어서 아래 네 필드가 같이 쓴다
         //    (예전엔 topicKeywords IIFE 안에서만 읽었음)
         const _topicProf = (window._getTopicProfile && window._getTopicProfile(driveFileId)) || null;
@@ -313,6 +324,9 @@
         const pmSnapshot = Object.assign({}, window.projectMeta || {});
         // 💡 주요 자재 목록도 같은 이유로 await 전에 스냅샷 — 그 사이 다른 시트로 전환돼도 안전하게
         const materialsSnapshot = ((window.tabData && window.tabData.projectMaterials) || []).slice();
+        // 💡 JIRA 연결도 같은 이유로 await 전에 스냅샷(코드 문자열 배열로 — 참조가 아니라 값으로 떼어둠)
+        const jiraKeywordsSnapshot = window._jiraProjectKeysOf
+            ? window._jiraProjectKeysOf((window.tabData || {}).jiraLinksByUnit) : [];
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -338,7 +352,7 @@
                 indexData = loaded;
             }
 
-            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot);
+            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot, jiraKeywordsSnapshot);
             // 🎯 [2026-11-09] 항목을 찾는 열쇠는 id 하나가 아니다 — **경로**도 본다.
             //    왜: NAS 모드에선 한 경로에 옛 Drive id 가 여럿 걸려 있고(이사 때 이름이 겹친 파일),
             //    목록이 내놓는 "승자" id 는 **파일 이름이 바뀌는 순간 뒤바뀐다**(`remapIdPath`).
