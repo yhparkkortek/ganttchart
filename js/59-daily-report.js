@@ -51,7 +51,6 @@
         autoOpenModal: false,    // ⚠️ 켜면 프로젝트 목록 자동열기(STORAGE_POLICY)와 팝업이 겹친다
         draftKey: 'gantt_daily_draft_v1',
         keepMonths: 24,
-        aiPerDay: 1,             // 2단계에서 쓸 상한(1단계는 AI 호출이 없다)
         // 📎 첨부 — 한계값은 전부 여기(코드에 박지 않는다)
         fileMaxMB: 20,           // 한 파일 상한. 텔레그램 봇 내려받기도 20MB 가 천장이다
         filesMax: 12,            // 한 보고당 개수 상한
@@ -1455,7 +1454,7 @@
     //    경고(line 193)에 해당 — 그래서 호버 없이 "저장"/"+추가" 와 완전히 같은 정적 공식으로
     //    통일한다(이 줄에 호버 효과가 있는 형제 버튼이 원래 없다).
     '<div style="display:flex; align-items:center; gap:7px; flex-shrink:0;">' +
-      '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다 (하루 1회)', 'Groups the picked tasks into report sentences (once a day)')) + '" style="padding:5px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
+      '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다', 'Groups the picked tasks into report sentences')) + '" style="padding:5px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
       '<button onclick="window.dailyCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; flex-shrink:0;">✕</button>' +
     '</div>' +
   '</div>' +
@@ -2856,38 +2855,16 @@
     }, 8000);
 
     // ══════════════════════════════════════════════════════════════════════
-    // 7-A. [2단계] AI 사다리 2단 — 다듬기. **사람이 누를 때만, 하루 1회.**
+    // 7-A. [2단계] AI 사다리 2단 — 다듬기. **사람이 누를 때만.**
     // ══════════════════════════════════════════════════════════════════════
     // ⚠️ 모달을 여는 것만으로는 절대 호출하지 않는다 — Phase 9 가 "모달 열 때마다"
-    //    AI 를 내보내 하루 한도를 태운 적이 있다(2026-10-21).
+    //    AI 를 내보내 하루 한도를 태운 적이 있다(2026-10-21). 버튼 클릭 한 번에 호출
+    //    한 번뿐이라 하루 횟수 제한은 없다(2026-11-17 요청으로 해제).
     // ⚠️ 원문 전문을 싣지 않는다 — 이미 요약된 글([핵심내용])을 또 요약하는 건 한도만 먹는다.
-    var AI_USED_KEY = 'gantt_daily_ai_used_v1';
-
-    function aiUsedToday(date) {
-        try {
-            var o = JSON.parse(localStorage.getItem(AI_USED_KEY) || '{}');
-            return (o && o[date]) || 0;
-        } catch (e) { return 0; }
-    }
-    function aiMarkUsed(date) {
-        try {
-            var o = JSON.parse(localStorage.getItem(AI_USED_KEY) || '{}');
-            o[date] = (o[date] || 0) + 1;
-            // 오래된 날짜는 버린다(이 키가 무한히 자라지 않게)
-            Object.keys(o).forEach(function (k) { if (k < date.slice(0, 8) + '01') delete o[k]; });
-            localStorage.setItem(AI_USED_KEY, JSON.stringify(o));
-        } catch (e) { /* 저장소가 꽉 찬 건 js/34 가 다룬다 */ }
-    }
 
     /** 1단 초안 → 보고 문장. 실패·키없음·쿨다운이면 **1단 결과를 그대로 둔다.** */
     window.dailyAiTidy = async function () {
         var btn = document.getElementById('daily-ai-btn');
-        var date = _date;
-        if (aiUsedToday(date) >= (window.DAILY_POLICY.aiPerDay || 1)) {
-            toast(T('오늘은 이미 AI로 정리했습니다 — 그대로 고쳐 쓰세요.',
-                    'Already tidied with AI today — edit the text instead.'), 'info', 6000);
-            return;
-        }
         var key = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!key) {
             toast(T('AI 키가 없습니다 — 간트에서 불러온 내용을 그대로 쓰세요.',
@@ -2937,7 +2914,6 @@
             _doc.aiDone = done;
             if (next) _doc.next = next;
             if (iss) _doc.issue = iss;
-            aiMarkUsed(date);
             saveDraftLocal();
             render();
             toast('🤖 ' + T('AI가 정리했습니다 — 확인하고 고친 뒤 저장하세요.',
