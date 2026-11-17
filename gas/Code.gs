@@ -77,6 +77,17 @@ function errorMessage_(label, code, body, raw) {
   return '[HTTP ' + code + '] ' + msg;
 }
 
+/** Gemini generateContent 1회 호출 — {code, raw, body} 그대로 반환(오류 판단은 호출부가) */
+function _fetchGemini_(url, apiKey, payload) {
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post', contentType: 'application/json',
+    headers: { 'x-goog-api-key': apiKey },
+    payload: JSON.stringify(payload), muteHttpExceptions: true
+  });
+  var code = res.getResponseCode(), raw = res.getContentText();
+  return { code: code, raw: raw, body: parseJsonSafe_(raw) };
+}
+
 function callGemini_(apiKey, prompt, model, imageParts, webSearch) {
   var geminiModel = model || 'gemini-3.5-flash-lite';
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + geminiModel + ':generateContent';
@@ -96,15 +107,23 @@ function callGemini_(apiKey, prompt, model, imageParts, webSearch) {
   //    tools 옵션. 기본 generateContent 호출엔 안 붙어 있어 날씨처럼 실시간 정보가 필요한 질문에
   //    모델이 "모른다"고만 답했었다 — 사용자가 추론 모드로 명시 선택했을 때만 켠다(무료 한도 보호,
   //    이미지 분석(imageParts)엔 안 붙인다 — 비전 호출은 검색이 필요한 경로가 아님).
-  if (webSearch && !(imageParts && imageParts.length)) {
-    payload.tools = [{ google_search: {} }];
+  var wantsSearch = webSearch && !(imageParts && imageParts.length);
+  if (wantsSearch) payload.tools = [{ google_search: {} }];
+
+  var r = _fetchGemini_(url, apiKey, payload);
+  // 🐛 [2026-11-17 실사용 확인] Grounding with Google Search는 무료 등급 키 중 일부(빌링 미연결
+  //    프로젝트)에서 "exceeded your current quota / check your plan and billing"로 거부됐다 —
+  //    하루 요청 수 한도와 똑같은 문구라 구분이 안 되지만, 검색 tools를 붙였을 때만 나는 오류라면
+  //    tools를 빼고 한 번 더 시도해서 "검색 기능이 없어서 전체가 막히는 것"을 막는다(사람에게는
+  //    평소처럼 일반 지식 답변이라도 가게). 진짜 하루 한도 소진이면 이 재시도도 똑같이 막혀 원래
+  //    오류 그대로 올라간다 — 조용히 삼키지 않는다.
+  if (wantsSearch && (r.code === 429 || r.code === 403 || r.code === 400)) {
+    var payloadNoTools = JSON.parse(JSON.stringify(payload));
+    delete payloadNoTools.tools;
+    var r2 = _fetchGemini_(url, apiKey, payloadNoTools);
+    if (r2.code === 200 && r2.body) r = r2;
   }
-  var res = UrlFetchApp.fetch(url, {
-    method: 'post', contentType: 'application/json',
-    headers: { 'x-goog-api-key': apiKey },
-    payload: JSON.stringify(payload), muteHttpExceptions: true
-  });
-  var code = res.getResponseCode(), raw = res.getContentText(), body = parseJsonSafe_(raw);
+  var code = r.code, raw = r.raw, body = r.body;
   if (code !== 200 || !body) throw new Error(errorMessage_('Gemini', code, body, raw));
 
   var cand = body.candidates && body.candidates[0];
