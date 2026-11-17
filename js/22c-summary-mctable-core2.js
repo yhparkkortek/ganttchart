@@ -1070,9 +1070,15 @@ window.deleteMember3Row = function(idx) {
 //    전부 "이 프로젝트 확증 신호"로 AI에게 주면 오매칭 위험이 있음 → PN이 겹칠 확률이 낮은 PANEL만
 //    기본으로 체크해서 "분석용"(신뢰 가능한 식별 신호)으로, 나머지는 기본 미체크(참고용만)로 시작.
 //    체크 여부는 프로젝트마다 사용자가 직접 조정 가능.
-window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIM/CUT','TSP PCT','GLASS TEMP','GLASS CHEM','GLASS SEMI','GLASS NON','TOUCH CTRL','AD BOARD','CONVERTER','BLU','POWER','METAL','MOLD','DIE CAST','PACKING','ETC'];
-// 💡 구분명 변경(SLIMMING/CUTTING → SLIM/CUT) 이전에 이미 저장된 데이터도 그대로 이어받기 위한 별칭
-window._MATERIAL_CATEGORY_ALIASES = { 'SLIM/CUT': ['SLIMMING/CUTTING'] };
+window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIM/CUT','TSP/GLASS','TOUCH CTRL','AD BOARD','CONVERTER','BLU','POWER','METAL','MOLD','DIE CAST','PACKING','ETC'];
+// 💡 구분명 변경 이전에 이미 저장된 데이터도 그대로 이어받기 위한 별칭.
+//   TSP/GLASS: 같은 날(2026-11-17) 잠깐 5개로 나눴다가("TSP PCT"/"GLASS TEMP"/"GLASS CHEM"/
+//   "GLASS SEMI"/"GLASS NON") "구분하지 말고 하나로" 지시로 다시 합침 — 그 사이 저장된 값이
+//   있으면 이 별칭으로 주워 담는다.
+window._MATERIAL_CATEGORY_ALIASES = {
+    'SLIM/CUT': ['SLIMMING/CUTTING'],
+    'TSP/GLASS': ['TSP PCT', 'GLASS TEMP', 'GLASS CHEM', 'GLASS SEMI', 'GLASS NON'],
+};
 
 // 💡 화면 DOM에서 현재 입력 중인 값을 그대로 읽어 배열로 재구성 (add/delete 시 다른 행의
 //    미저장 편집내용이 날아가지 않도록 collectTabData() 전체를 부르지 않고 이 테이블만 직접 읽음)

@@ -1122,56 +1122,34 @@ window.TOUCH_CTRL_SPEC_SCHEMA = [
     ]},
 ];
 
-// 💡 [2026-11-17 신규] TSP PCT(Touch Sensor Panel, 정전용량식 터치센서) 스펙 스키마 — 실제
-// 공급사 승인원(중국어 承认书·한국어 승인서 둘 다 확인, 예: 9.03.0724-A2_IGT_27) 기준 필드 구성.
-// CONV/TOUCH CTRL과 같은 엔진(js/22e)을 그대로 타므로 스키마만 추가하면 끝난다.
-window.TSP_PCT_SPEC_SCHEMA = [
+// 💡 [2026-11-17 신규, 같은 날 사용자 지시로 통합] TSP PCT(정전용량식 터치센서패널)와
+// GLASS TEMP/CHEM/SEMI/NON(커버글래스 — 열강화/화학강화/반강화/비강화)을 **구분하지 않고
+// "TSP/GLASS" 하나로 관리**한다(드롭다운·NAS 폴더·라이브러리 전부 1개). 처음엔 2개(TSP/GLASS)
+// 또는 5개(세부 구분)로 나눠 만들었다가, "구분하지말고 TSP/GLASS 하나만 관리" 요청으로 합침 —
+// 어느 쪽인지는 Item Description(원본 SAP MAKTX, 예: "TSP PCT>..."/"GLASS SEMI>...")에 이미
+// 적혀 있어 **별도 구분 칸을 안 둬도** 사람이 읽을 수 있다. 필드는 TSP·GLASS 각 스펙의
+// 합집합(겹치는 Transmittance/Haze/Coating/Ball Drop은 한 칸으로 합침).
+window.TSP_GLASS_SPEC_SCHEMA = [
     { section: 'Basic Information', fields: [
         ['Brand', 1], ['Item Code', 1], ['Part Name', 1], ['Revision', 1], ['Item Description', 2],
     ]},
     { section: 'Dimension', fields: [
         ['Size (inch)', 1], ['Glass O/D (WxH)', 1], ['Sensor O/D (WxH)', 1], ['Viewing Area (WxH)', 1],
-        ['Structure', 2],
+        ['Structure', 2], ['Dimension (WxHxT)', 2], ['Thickness (Tolerance)', 1],
     ]},
-    { section: 'Performance', fields: [
+    { section: 'Material / Performance', fields: [
         ['Touch Type', 1], ['Interface', 1], ['Surface Hardness', 1],
+        ['Strengthening Spec (CS/DOL)', 2], ['Hardness', 1], ['Warpage', 1],
+    ]},
+    { section: 'Optical', fields: [
         ['Transmittance', 1], ['Haze', 1],
     ]},
     { section: 'Electrical Specification', fields: [
         ['Operating Voltage', 1], ['ESD', 1],
         ['Operating Temperature/Humidity', 1], ['Storage Temperature/Humidity', 1],
     ]},
-    { section: 'Reliability', fields: [
-        ['Ball Drop', 2], ['Coating', 1],
-    ]},
-    { section: 'Other', fields: [
-        ['Expected Price', 1], ['Note', 1],
-    ]},
-];
-
-// 💡 [2026-11-17 신규] 커버 글래스 스펙 스키마 — GLASS TEMP(열강화)·GLASS CHEM(화학강화)·
-// GLASS SEMI(반강화)·GLASS NON(비강화) 4개 구분이 **같이 쓴다**(물리적으로 같은 부품,
-// 처리 방식만 다르다) — "Glass Type"에 어느 쪽인지 적어 둔다. 실제 승인원(한국어 PDF,
-// 예: Slimline 32inch GLASS CHEM) 기준 필드 구성.
-window.GLASS_SPEC_SCHEMA = [
-    { section: 'Basic Information', fields: [
-        ['Brand', 1], ['Item Code', 1], ['Part Name', 1], ['Revision', 1], ['Item Description', 2],
-        ['Glass Type', 1],
-    ]},
-    { section: 'Dimension', fields: [
-        ['Size (inch)', 1], ['Dimension (WxHxT)', 2], ['Thickness (Tolerance)', 1],
-    ]},
-    { section: 'Material / Strengthening', fields: [
-        ['Strengthening Spec (CS/DOL)', 2], ['Hardness', 1], ['Warpage', 1],
-    ]},
-    { section: 'Optical', fields: [
-        ['Transmittance', 1], ['Haze', 1],
-    ]},
-    { section: 'Appearance', fields: [
-        ['Printing / Logo', 2], ['Coating', 1],
-    ]},
-    { section: 'Reliability', fields: [
-        ['Ball Drop', 2],
+    { section: 'Appearance / Reliability', fields: [
+        ['Ball Drop', 2], ['Coating', 1], ['Printing / Logo', 2],
     ]},
     { section: 'Other', fields: [
         ['Expected Price', 1], ['Note', 1],
@@ -1212,11 +1190,7 @@ window.ELEC_PART_TYPES = {
     convbd: { label: 'CONV', icon: '🔌', domain: 'LED 드라이버/컨버터 보드', libFilename: 'ElecPartLib_CONVBD_Shared.json', schema: window.CONV_BD_SPEC_SCHEMA },
     adbd: { label: 'AD BD', icon: '🔲', domain: '스케일러(A/D) 보드', libFilename: 'ElecPartLib_ADBD_Shared.json', schema: window.AD_BD_SPEC_SCHEMA },
     touchctrl: { label: 'TOUCH CTRL', icon: '👆', domain: '터치 컨트롤러 보드', libFilename: 'ElecPartLib_TOUCHCTRL_Shared.json', schema: window.TOUCH_CTRL_SPEC_SCHEMA },
-    tsppct:    { label: 'TSP PCT', icon: '🖐️', domain: '정전용량식 터치센서패널(TSP)', libFilename: 'ElecPartLib_TSPPCT_Shared.json', schema: window.TSP_PCT_SPEC_SCHEMA },
-    glasstemp: { label: 'GLASS TEMP', icon: '🟨', domain: '열강화 커버글래스', libFilename: 'ElecPartLib_GLASSTEMP_Shared.json', schema: window.GLASS_SPEC_SCHEMA },
-    glasschem: { label: 'GLASS CHEM', icon: '💎', domain: '화학강화 커버글래스', libFilename: 'ElecPartLib_GLASSCHEM_Shared.json', schema: window.GLASS_SPEC_SCHEMA },
-    glasssemi: { label: 'GLASS SEMI', icon: '🔷', domain: '반강화 커버글래스', libFilename: 'ElecPartLib_GLASSSEMI_Shared.json', schema: window.GLASS_SPEC_SCHEMA },
-    glassnon:  { label: 'GLASS NON', icon: '◻️', domain: '비강화 커버글래스', libFilename: 'ElecPartLib_GLASSNON_Shared.json', schema: window.GLASS_SPEC_SCHEMA },
+    tspglass:  { label: 'TSP/GLASS', icon: '🖐️', domain: '터치센서패널(TSP) · 커버글래스(GLASS)', libFilename: 'ElecPartLib_TSPGLASS_Shared.json', schema: window.TSP_GLASS_SPEC_SCHEMA },
 };
 
 // 💡 [2026-08-26] 예전엔 라벨 문자열만 뽑았는데, enum 필드(Resize Function 등)의 허용값을 AI 프롬프트에도

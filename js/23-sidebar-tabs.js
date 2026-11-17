@@ -184,13 +184,12 @@
     window.ELEC_CATEGORY_META = {
         'PANEL':         { icon: '🖥️', view: 'panel',     nasFull: 'PARTS/PANEL' },
         'SLIM/CUT':      { icon: '✂️',                     nas: 'SLIM CUT' },
-        // 💡 [2026-11-17] 5개 다 전용 스펙표가 따로 있지만(옛 "TOUCH / GLASS" 공용 구분을 쪼갠
-        //    것), 드롭다운에선 흩어 보이지 않게 "TSP/GLASS" 한 묶음으로 머리글을 단다 — group.
-        'TSP PCT':       { icon: '🖐️', view: 'tsppct',    nas: 'TSP PCT', group: 'TSP/GLASS' },
-        'GLASS TEMP':    { icon: '🟨', view: 'glasstemp', nas: 'GLASS TEMP', group: 'TSP/GLASS' },
-        'GLASS CHEM':    { icon: '💎', view: 'glasschem', nas: 'GLASS CHEM', group: 'TSP/GLASS' },
-        'GLASS SEMI':    { icon: '🔷', view: 'glasssemi', nas: 'GLASS SEMI', group: 'TSP/GLASS' },
-        'GLASS NON':     { icon: '◻️', view: 'glassnon',  nas: 'GLASS NON', group: 'TSP/GLASS' },
+        // 💡 [2026-11-17, 사용자 지시로 통합] 터치센서패널(TSP PCT)과 커버글래스(GLASS
+        //    TEMP/CHEM/SEMI/NON)를 "구분하지 말고" 하나로 — 드롭다운 1개·NAS 폴더 1개·
+        //    라이브러리 1개(js/22d TSP_GLASS_SPEC_SCHEMA). 어느 쪽인지는 Item Description에
+        //    원본 SAP 내역이 그대로 남아 있어 구분 칸 없이도 사람이 읽을 수 있다. 폴더명에
+        //    `/` 를 못 써서 `nas` 는 `TSP_GLASS`.
+        'TSP/GLASS':     { icon: '🖐️', view: 'tspglass', nas: 'TSP_GLASS' },
         'TOUCH CTRL':    { icon: '👆', view: 'touchctrl',  nas: 'TOUCH CTRL' },
         'AD BOARD':      { icon: '🔲', view: 'adbd',       nas: 'AD BD' },
         'CONVERTER':     { icon: '🔌', view: 'convbd',     nas: 'CONV' },
@@ -208,11 +207,7 @@
         adbd:      { label: 'AD BD', icon: '🔲' },
         convbd:    { label: 'CONV',  icon: '🔌' },
         touchctrl: { label: 'TOUCH CTRL', icon: '👆' },
-        tsppct:    { label: 'TSP PCT', icon: '🖐️' },
-        glasstemp: { label: 'GLASS TEMP', icon: '🟨' },
-        glasschem: { label: 'GLASS CHEM', icon: '💎' },
-        glasssemi: { label: 'GLASS SEMI', icon: '🔷' },
-        glassnon:  { label: 'GLASS NON', icon: '◻️' },
+        tspglass:  { label: 'TSP/GLASS', icon: '🖐️' },
     };
     // 전용 도표가 없는 구분의 뷰 키 — localStorage에 남고 DOM id에도 들어가므로 영숫자만 남긴다.
     window._elecCatSlug = function(cat) {
@@ -264,9 +259,7 @@
                 // 비교표를 그릴 수 있는가 — PANEL은 전용 엔진, 나머지는 ELEC_PART_TYPES 등록 여부.
                 hasSchema: !!(vm || pt),
                 // 전용 항목이 아니라 **공용 기본 항목**을 쓰는 중이라는 표시(드롭다운 꼬리표).
-                generic: !!(pt && pt.generic),
-                // 드롭다운에서 묶어 보여줄 상위 머리글(없으면 묶지 않음) — ELEC_CATEGORY_META.group.
-                group: meta.group || null
+                generic: !!(pt && pt.generic)
             });
         });
         return out;
@@ -308,15 +301,7 @@
         if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
         const options = window._getElecDropdownOptions();
         const _ddEn = window._currentLang === 'en';
-        // 💡 [2026-11-17] group이 같은 항목끼리는(TSP PCT/GLASS *) 흩어 보이지 않게 그 묶음
-        //    앞에 작은 머리글을 한 번만 꽂고, 항목 자체도 살짝 들여써서 한 덩어리로 보이게 한다.
-        let lastGroup = null;
-        const pieces = [];
-        options.forEach(function(o) {
-            if (o.group && o.group !== lastGroup) {
-                pieces.push('<div style="padding:6px 10px 2px; font-size:10.5px; font-weight:bold; color:#888; white-space:nowrap;">' + o.group + '</div>');
-            }
-            lastGroup = o.group || null;
+        popup.innerHTML = options.map(function(o) {
             const active = o.key === window._elecView;
             // 전용 도표가 아니라 공용 기본 항목을 쓰는 구분은 꼬리표를 붙인다 — 항목이
             // 그 부품에 맞춰 설계된 게 아니라는 걸 눌러본 뒤에 알게 되면 안 된다.
@@ -324,14 +309,12 @@
             const mark = !o.generic ? '' :
                 '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">'
                 + (_ddEn ? 'basic' : '기본항목') + '</span>';
-            const indent = o.group ? 'margin-left:10px;' : '';
-            pieces.push(`<div onclick="window._switchElecView('${o.key}'); document.getElementById('elec-view-dropdown').style.display='none';"
-                         style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap; ${indent}
+            return `<div onclick="window._switchElecView('${o.key}'); document.getElementById('elec-view-dropdown').style.display='none';"
+                         style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;
                                 background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
                          onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
-                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}${mark}</div>`);
-        });
-        popup.innerHTML = pieces.join('');
+                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}${mark}</div>`;
+        }).join('');
         const rect = btn.getBoundingClientRect();
         popup.style.left = rect.left + 'px';
         popup.style.top = (rect.bottom + 4) + 'px';
