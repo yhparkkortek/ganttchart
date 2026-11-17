@@ -291,20 +291,33 @@ window._renderModelCardHtml = function(model, idx) {
 //    연동되는데 초기에 만든 MVD가 없어지지 않음"(모델 #1을 MVD에서 MVD(FHD)로 재배정했는데 다른
 //    탭엔 옛 "MVD"가 그대로 남아 있었다). mcRemoveUnit과 같은 원칙으로 목록에서만 뺀다 — 저장된
 //    데이터(mcRevisionsByUnit 등)는 그대로 둔다(같은 이름을 다시 추가하면 되살아난다).
-window._mcPruneUnusedUnit = function(unit) {
-    if (!unit || !window.getMcUnits) return;
+// ⚠️ [같은 날 2차 수정] 처음엔 재배정/삭제하는 그 순간에만 돌게 짰더니, **이미 유령이 생겨버린
+//    기존 프로젝트**(재배정은 지난 일이고 지금 열 땐 그냥 파일을 읽기만 함)는 재배정을 다시 한
+//    번 더 하기 전엔 전혀 청소가 안 됐다 — 신고: "백·프론트 모두 재시작했는데 MVD 유령 그대로
+//    남아있음"(당연한 결과였다, 재시작은 "다음 재배정부터 안 생기게"만 했을 뿐 과거 유령은
+//    안 건드렸다). → 특정 유닛 하나만 보는 게 아니라, **renderProjectModels()가 돌 때마다**
+//    "지금 모델 카드 중 아무도 안 쓰는 제품군"을 전부 쓸어낸다. renderProjectModels()는
+//    populateTabData()가 프로젝트를 열 때마다 이미 부르므로, 사람이 아무것도 안 눌러도
+//    **프로젝트를 다시 열기만 하면** 과거에 생긴 유령도 같이 청소된다.
+window._mcPruneOrphanUnits = function() {
+    if (!window.getMcUnits) return;
     var models = (window.tabData && window.tabData.projectModels) || [];
-    if (models.some(function(m) { return (m.unitId || '') === unit; })) return; // 아직 쓰는 카드가 있음
+    var used = {};
+    models.forEach(function(m) { if (m && m.unitId) used[m.unitId] = true; });
     var units = window.getMcUnits();
-    var oi = units.indexOf(unit);
-    if (oi === -1) return;
-    units.splice(oi, 1);
-    if (window.mcActiveUnit === unit) window.mcActiveUnit = '';
+    var removed = [];
+    for (var i = units.length - 1; i >= 0; i--) {
+        if (!used[units[i]]) { removed.unshift(units[i]); units.splice(i, 1); }
+    }
+    if (!removed.length) return;
+    if (window.mcActiveUnit && used[window.mcActiveUnit] !== true && removed.indexOf(window.mcActiveUnit) !== -1) {
+        window.mcActiveUnit = '';
+    }
     if (window.mcRenderUnitTabs) window.mcRenderUnitTabs();
     var _en2 = window._currentLang === 'en';
     if (window.showToast) window.showToast(
-        _en2 ? '"' + unit + '" is no longer used by any model card — removed from the BOM/M.C Table/Customer SPEC/Document family list (its data is kept; re-add the same name to see it again).'
-             : '"' + unit + '"을(를) 쓰는 모델 카드가 없어 BOM·M.C Table·Customer SPEC·Document 제품구분자 목록에서 뺐습니다(데이터는 남아있습니다 — 같은 이름으로 다시 추가하면 되살아납니다).', 'info', 6000);
+        _en2 ? 'Removed unused product families from the BOM/M.C Table/Customer SPEC/Document family list (data is kept; re-add the same name to see it again): ' + removed.join(', ')
+             : '어떤 모델 카드도 안 쓰는 제품구분자를 BOM·M.C Table·Customer SPEC·Document 목록에서 뺐습니다(데이터는 남아있습니다 — 같은 이름으로 다시 추가하면 되살아납니다): ' + removed.join(', '), 'info', 7000);
 };
 
 // 🏷️ [2026-10-15] 모델 카드의 제품군(unitId)을 직접 고른다.
@@ -335,9 +348,7 @@ window.setProjectModelUnit = function(idx, val) {
         window.renderProjectModels();
         return;
     }
-    const oldUnit = models[idx].unitId || '';
     models[idx].unitId = val;
-    if (oldUnit && oldUnit !== val) window._mcPruneUnusedUnit(oldUnit);
     window.renderProjectModels();
 };
 
@@ -345,6 +356,7 @@ window.renderProjectModels = function() {
     var container = document.getElementById('sum-models-container');
     if (!container) return;
     window.tabData = window.tabData || {};
+    window._mcPruneOrphanUnits(); // 이 함수가 돌 때마다(프로젝트를 열 때도 포함) 유령 제품구분자를 쓸어낸다
     var models = window.tabData.projectModels;
     if (!models || !models.length) {
         models = [{ unitId: '', 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' }];
@@ -423,9 +435,7 @@ window.removeProjectModel = function(idx) {
     if (!window.tabData || !window.tabData.projectModels || idx === 0) return;
     window._syncProjectModelsFromDom();
     if (window._syncMaterialsFromDom) window._syncMaterialsFromDom();
-    const _removedUnit = (window.tabData.projectModels[idx] || {}).unitId || '';
     window.tabData.projectModels.splice(idx, 1);
-    if (_removedUnit) window._mcPruneUnusedUnit(_removedUnit);
     // 접힘 상태도 같이 당겨서 번호가 밀리지 않게 한다
     if (window._materialsCollapsed) {
         var _next = {};
