@@ -154,11 +154,17 @@
             var buf = window.XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
             var file = new File([buf], 'test.xlsx', { type: 'application/octet-stream' });
             await window._docImportFile(file);
-            // `_docData` 의 실제 키 규칙(회차 접미사 등)을 몰라도 되게 — documents 를 통째로 훑는다
-            var found = null;
-            Object.keys(window.tabData.documents || {}).forEach(function (k) {
-                if (window.tabData.documents[k] && window.tabData.documents[k].labelItems) found = window.tabData.documents[k];
-            });
+            // 🐛 [2026-11-17, 사용자 지시로 재점검 — "labelspec-import.browser.js도 같은 인증
+            // 테스트 지우기"로 돌려보다가 더 큰 문제를 먼저 발견] 'label-spec'은 2026-11-13에
+            // perRevision이 붙어서(M.C Table과 같은 R1/R2… 리비전 관리), 실제 데이터는
+            // `tabData.documents['label-spec'].labelItems`가 아니라
+            // `.revisions[그 리비전].labelItems`에 있다(js/67 `_docData` 참고). "문서를 통째로
+            // 훑어 최상위에 labelItems 있는 걸 찾기"는 perRevision 이전 구조를 가정한 것이라
+            // 지금은 **항상** 못 찾는다(실측: 찾기 실패 → 이후 전부 연쇄 실패). 앱과 같은 방식
+            // (`_docActiveRevision`)으로 고른 리비전을 그대로 쓴다.
+            var lsDoc = window.tabData.documents['label-spec'];
+            var lsRev = (window._docActiveRevision && window._docActiveRevision('label-spec')) || 'R1';
+            var found = lsDoc && lsDoc.revisions && lsDoc.revisions[lsRev];
             ok(!!found, '📂 불러오기 경로로는 labelItems 가 하나도 안 채워졌다');
             if (found) {
                 ok(found.labelItems.length === 3, '불러오기 후 라벨 개수가 다르다: ' + found.labelItems.length);
@@ -166,29 +172,27 @@
             }
 
             // ═══ 3. 화면에 실제로 그려지는가 + 엑셀 내보내기(aoa)에도 들어가는가 ═══
-            // ⚠️ 라벨 코드·인증/정격 이름은 **입력칸 value** 다 — `.innerText` 는 input 값을
-            //    안 읽으므로(값이 있어도 안 잡힌다) data-doc-* 셀렉터로 실제 칸 값을 본다.
+            // ⚠️ 라벨 코드는 **입력칸 value** 다 — `.innerText` 는 input 값을 안 읽으므로(값이
+            //    있어도 안 잡힌다) data-doc-* 셀렉터로 실제 칸 값을 본다.
+            // 🐛 [2026-11-17] 인증/정격 **편집 UI**(`data-doc-lcert`)와 **엑셀 내보내기의 인증
+            // 표**는 둘 다 2026-11-13 "인증·정격 표시 항목은 삭제하고 도면 추가"(사용자 요청)로
+            // `labelattach`가 대체하며 사라졌다(js/67 DOC_FORMS 'label-spec'.sections에
+            // 'labelcerts' 항목이 없다 — 그 DOM/내보내기를 만드는 코드가 0줄, 실측). 파서(js/72)가
+            // 인증/정격을 **데이터로는** 계속 담는 것은 위 2번에서 이미 확인했으니(실측 상단 3개
+            // 파일이 그 표를 갖고 있어 파싱 자체는 여전히 유효), 사라진 화면/내보내기는 더 테스트
+            // 하지 않는다.
             window._docRender();
             var codeIn = document.querySelector('[data-doc-litem="0|code"]');
             ok(codeIn && codeIn.value === '124291', '불러온 코드가 화면 입력칸에 없다: ' + (codeIn && codeIn.value));
-            var ratingNameIn = document.querySelector('[data-doc-lcert="r|0|name"]');
-            ok(ratingNameIn && ratingNameIn.value === 'Set Rating SPEC',
-               '정격 항목이 화면 입력칸에 없다: ' + (ratingNameIn && ratingNameIn.value));
             var aoa2 = window._docToAoa('label-spec');
             var flat = aoa2.map(function (r) { return (r || []).join('|'); }).join('\n');
             ok(flat.indexOf('124291') >= 0, '엑셀 내보내기(aoa)에 라벨 코드가 없다');
-            ok(flat.indexOf('CE') >= 0 && flat.indexOf('O') >= 0, '엑셀 내보내기에 인증 표가 없다');
 
-            // ═══ 4. 행 추가/삭제 + 토글이 실제 저장소에 반영되는가 ═══
+            // ═══ 4. 라벨 행 추가/삭제가 실제 저장소에 반영되는가 ═══
             window._docLabelItemAdd('label-spec');
             ok(found.labelItems.length === 4, '라벨 추가가 안 먹는다');
             window._docLabelItemDel('label-spec', 3);
             ok(found.labelItems.length === 3, '라벨 삭제가 안 먹는다(빈 줄이라 확인창 없이 지워져야 한다)');
-            window._docLabelCertAdd('label-spec', 'r');
-            var newR = found.labelCerts.ratings[found.labelCerts.ratings.length - 1];
-            ok(newR && newR.name === '' && newR.spec === '', '정격 행 추가 모양이 다르다: ' + JSON.stringify(newR));
-            window._docLabelCertDel('label-spec', 'r', found.labelCerts.ratings.length - 1);
-            ok(found.labelCerts.ratings.length === 2, '정격 행 삭제가 안 먹는다');
 
         } catch (e) {
             fail++; notes.push('💥 ' + (e && e.stack || e));
