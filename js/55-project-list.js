@@ -2526,6 +2526,32 @@
     //        바로 여는 것으로 바뀌면서(plOpenNas) 호출하는 곳이 없어져 삭제했다 — NAS 의
     //        엑셀/CSV 선택이 같은 _plApplyWorkbook 으로 들어간다(plNasPick ②).
     // ──────────────────────────────────────────────────────────────────────────
+    // 🐛 [2026-11-17] "NAS 에 엑셀 올리고 등록" 했는데 Agile REV 등 일부 열이 첫 행만 차고
+    //    나머지가 빈 채로 들어오는 사고 — 원인은 **병합된 셀**이다. 여러 모델 행에 걸친 메모
+    //    (예: Agile REV)를 한 번만 적고 세로로 병합하는 게 실제 엑셀에서 흔한데, SheetJS
+    //    sheet_to_json 은 병합 범위의 **맨 위/왼쪽 칸에만** 값을 주고 나머지는 빈 문자열로
+    //    돌려준다(실측 확인 — xlsx-js-style 로 재현). 그래서 머리글 칸은 멀쩡히 맞았는데도
+    //    (Agile REV 열 자체는 import 됐다) 그 밑의 행들만 비어 보였다.
+    //    ⚠️ 머리글 행(또는 그 이전)의 병합은 건드리지 않는다 — 그룹 제목 병합까지 펴면
+    //    옆 칸 머리글이 같은 글자로 덮여 열 매핑이 오히려 꼬일 수 있다. 데이터 행 병합만 편다.
+    var _plFillMergedCells = function (ws, headRow) {
+        var merges = (ws && ws['!merges']) || [];
+        merges.forEach(function (m) {
+            if (m.s.r <= headRow) return;
+            var anchorAddr = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
+            var anchor = ws[anchorAddr];
+            if (!anchor || anchor.v == null || anchor.v === '') return;
+            for (var r = m.s.r; r <= m.e.r; r++) {
+                for (var c = m.s.c; c <= m.e.c; c++) {
+                    if (r === m.s.r && c === m.s.c) continue;
+                    var addr = XLSX.utils.encode_cell({ r: r, c: c });
+                    var cell = ws[addr];
+                    if (!cell || cell.v == null || cell.v === '') ws[addr] = { t: anchor.t, v: anchor.v };
+                }
+            }
+        });
+    };
+
     window._plApplyWorkbook = async function (arrayBuffer, label) {
         var wb = XLSX.read(arrayBuffer, { type: 'array' });
         // 머리글이 가장 많이 맞는 시트를 고른다 — 파일에 의뢰서/리스트 등 다른 시트가 섞여 있다.
@@ -2543,6 +2569,9 @@
                               'Could not find product-list headers (KTK PN, CUSTOMER, Panel…) in this file.'), 'error', 8000);
             return;
         }
+        // 고른 시트의 병합 셀을 펴서 다시 읽는다(데이터 행만 — 위에서 headRow 를 이미 정했다).
+        _plFillMergedCells(wb.Sheets[best.sheet], best.headRow);
+        best.aoa = XLSX.utils.sheet_to_json(wb.Sheets[best.sheet], { header: 1, defval: '', blankrows: false });
         var head = best.aoa[best.headRow] || [];
         var map = head.map(function (h) { return _keyOfHeader(h); });
         var rows = [];
