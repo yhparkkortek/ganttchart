@@ -262,10 +262,15 @@
             window._docPick('sample-report'); await sleep(60);
             var sbody = document.getElementById('doc-page-body');
             var ssecs = [].slice.call(sbody.querySelectorAll('.doc-sec')).map(function (d) { return d.textContent.trim(); });
+            // 🐛 [2026-11-17, 이 하네스를 __docPageTest()로 끝까지 돌려서 발견] 구역 제목은 뒤에
+            // 접기/펼치기 토글 글자("▼ 접기"/"▲ 접기")가 붙어서 그려진다(2026-11-12 "점검요청 켬
+            // 것만 보기" 접기 기능 추가分) — 그런데 여기만 아직 **완전일치**로 찾고 있어 실제로는
+            // 다 있는 구역을 "없다"고 보고하는 가짜 실패였다(docs에 이미 "구역 제목은 앞부분으로
+            // 찾을 것"이라 적혀 있는데 이 두 줄만 그 규칙을 안 따르고 있었다). → 앞부분 일치로.
+            var hasSec = function (prefix) { return ssecs.some(function (s) { return s.indexOf(prefix) === 0; }); };
             ok('Sample Report 구역이 10개 넘는다', ssecs.length >= 10, String(ssecs.length));
             ok('제품 외관·내부·문제점 구역이 있다',
-               ssecs.indexOf('# 제품 외관') >= 0 && ssecs.indexOf('# 제품 내부') >= 0
-               && ssecs.indexOf('# 문제점 개선 요청') >= 0, JSON.stringify(ssecs));
+               hasSec('# 제품 외관') && hasSec('# 제품 내부') && hasSec('# 문제점 개선 요청'), JSON.stringify(ssecs));
             var zones = [].slice.call(sbody.querySelectorAll('[data-doc-att]'))
                 .map(function (z) { return z.getAttribute('data-doc-att'); });
             eq('첨부 구역 4개', zones.length, 4);
@@ -273,7 +278,7 @@
                [].slice.call(sbody.querySelectorAll('button'))
                  .filter(function (b) { return /첨부/.test(b.textContent); }).length === 4);
             // ⚠️ 시제품 제작의뢰서 표는 **한 번 만들어 양쪽이 같이 쓴다**(베끼지 않는다)
-            ok('시제품 제작의뢰서 표를 같이 들고 있다', ssecs.indexOf('# 주요자재') >= 0);
+            ok('시제품 제작의뢰서 표를 같이 들고 있다', hasSec('# 주요자재'), JSON.stringify(ssecs));
 
             // ── D-3. 광학·F/W·EDID 는 Customer SPEC **실측 이름**에서 온다 ──
             LOG.push(''); LOG.push('── D-3. 광학 · F/W · EDID (Customer SPEC 실측 이름) ──');
@@ -481,7 +486,11 @@
             var revBtn = document.getElementById('doc-rev-bar');
             ok('리비전 바가 보인다(라벨사양서는 perRevision)', !!revBtn, document.getElementById('doc-header-tools').textContent);
             ok('기본값은 R1', revBtn && /R1/.test(revBtn.textContent), revBtn && revBtn.textContent);
-            ok('리비전이 하나뿐이면 VS 버튼이 없다', !/🆚 VS/.test(document.getElementById('doc-header-tools').textContent));
+            // 🐛 [2026-11-17, __docPageTest() 를 끝까지 돌려서 발견] VS 버튼 글자는 "🆚 VS" 가 아니라
+            // **"VS" 뿐**이다(js/67 "🆚 아이콘 없이 글자만(사용자 요청 2026-11-13 3차)") — `/🆚 VS/` 는
+            // 실제로 한 번도 매칭된 적이 없어서, 이 "없다" 쪽 검사는 **버튼이 있든 없든 항상 통과**하는
+            // 눈 가린 검사였다(아래 "뜬다" 쪽만 늘 가짜 실패였다). 실제 글자로 바꾼다.
+            ok('리비전이 하나뿐이면 VS 버튼이 없다', !/\bVS\b/.test(document.getElementById('doc-header-tools').textContent));
 
             // R1 에 라벨 1개
             window._docLabelItemAdd('label-spec'); await sleep(30);
@@ -493,8 +502,14 @@
                (window.tabData.documents['label-spec'].revisions.R1.labelItems[0] || {}).code, '124291');
 
             // ➕ 리비전 추가 — 복사 확인(기존 confirmAnswer 스위치 재사용)
+            // 🐛 [2026-11-17, __docPageTest() 전체(A~H)를 처음부터 끝까지 돌려서 발견] A~G 를 먼저
+            // 돌린 뒤라 DOM/타이머가 쌓여 있는 상태에선 이 다시 그리기가 30ms 안에 안 끝날 때가
+            // 있었다(실측: 재현율 100% — 데이터(`revisions.R2...`)는 이미 들어가 있는데 DOM 의
+            // "0|position" 입력칸이 아직 안 나와 바로 다음 줄에서 null.value 로 죽었다. H 단독으로만
+            // 돌리면 30ms로 충분해 재현이 안 됐다 — "하네스부터 의심" 원칙대로 사람 몫이 아니라
+            // 이 하네스가 쌓인 부하를 안 봐준 것). 되는 걸 확인한 값(80ms)으로 여유를 둔다.
             confirmAnswer = true;
-            window._docRevAdd('label-spec'); await sleep(30);
+            window._docRevAdd('label-spec'); await sleep(80);
             revBtn = document.getElementById('doc-rev-bar');
             ok('추가하면 R2 로 전환되고 바에도 R2 가 보인다', revBtn && /R2/.test(revBtn.textContent), revBtn && revBtn.textContent);
             eq('R2 는 R1 내용을 복사해서 시작한다(라벨 1개)',
@@ -507,10 +522,16 @@
             qlit('1|code').value = '309213'; qlit('1|code').dispatchEvent(new Event('input', { bubbles: true }));
             qlit('1|position').value = '박스'; qlit('1|position').dispatchEvent(new Event('input', { bubbles: true }));
 
-            // 인증 항목도 하나 적어 VS 가 인증 쪽도 비교하는지 확인
-            window._docLabelCertAdd('label-spec', 'c'); await sleep(30);
-            var qlcert = function (k) { return document.querySelector('#doc-page-body input[data-doc-lcert="' + k + '"]'); };
-            qlcert('c|0|name').value = 'CE'; qlcert('c|0|name').dispatchEvent(new Event('input', { bubbles: true }));
+            // 🐛 [2026-11-17, __docPageTest() 를 끝까지 돌려서 발견] 여기서 예전엔 `_docLabelCertAdd`
+            // + `input[data-doc-lcert=...]` 로 인증 항목을 적어 VS 의 인증 비교까지 같이 확인했는데,
+            // 그 DOM 이 **존재하지 않는다**(`data-doc-lcert` 를 만드는 코드가 js/67 에 한 줄도 없다 —
+            // 읽는 핸들러와 엑셀 내보내기 분기만 남아 있다). 원인은 js/67 바로 위 DOC_FORMS 'label-spec'
+            // 섹션 주석(2026-11-13): "인증·정격 표시 항목은 **삭제**하고 도면 추가해서 부착 위치
+            // 표현하는 기능을 추가"(사용자 요청) — 인증/정격 UI는 그 날 `labelattach`(도면 위 표시)로
+            // 의도적으로 대체됐다. `_docLabelCertAdd`/`_docRevVsBuildCertRows` 자체는 옛 데이터 호환을
+            // 위해 남아 있지만(어느 live onclick 도 더 이상 안 부른다 — 호출부가 테스트 파일뿐), 지금
+            // 화면엔 채울 입력칸이 없다. → 사라진 기능을 테스트하지 않는다(라벨 추가/리비전 분리/VS
+            // 비교 자체는 라벨 항목만으로 아래에서 그대로 확인한다).
 
             // ◀ 로 R1 로 돌아가 — 실제 화면에 R1 의 옛값이 그대로 보이는지(R2 수정이 안 섞였는지)
             window._docRevGo('label-spec', -1); await sleep(30);
@@ -521,9 +542,13 @@
             eq('R1 부착위치는 제품 그대로(R2 에서 후면으로 고친 게 안 번진다)', qlit('0|position').value, '제품');
 
             // ▶ 로 다시 R2 로 — VS 버튼이 떴는지(리비전 2개 다 내용 있음)
+            // 🐛 [2026-11-17, __docPageTest() 를 끝까지 돌려서 발견 — 처음엔 타이밍(30→80ms) 문제로
+            // 오인했으나 80ms 로도 그대로 재현돼 진짜 원인을 봤다] 위와 같은 이유 — 실제 버튼 글자는
+            // "VS" 뿐이고 "🆚 VS" 는 한 번도 안 뜬다. 바로 아래 "VS 모달이 열린다"는 버튼 글자가 아니라
+            // `_docRevVsOpen()` 을 직접 불러서 통과해 온 것이라 이 가짜 실패를 가려 주지 못했다.
             window._docRevGo('label-spec', 1); await sleep(30);
             ok('VS 버튼은 내용 있는 리비전이 2개 이상일 때만 뜬다',
-               /🆚 VS/.test(document.getElementById('doc-header-tools').textContent));
+               /\bVS\b/.test(document.getElementById('doc-header-tools').textContent));
 
             window._docRevVsOpen('label-spec'); await sleep(30);
             var vsOv = document.getElementById('docrevvs-overlay');
@@ -532,7 +557,6 @@
             ok('요약에 추가된 라벨(309213)이 나온다', vsBody.indexOf('309213') >= 0, vsBody);
             ok('요약에 바뀐 부착위치(제품→후면)가 나온다', vsBody.indexOf('제품') >= 0 && vsBody.indexOf('후면') >= 0, vsBody);
             ok('표에도 두 리비전(R1/R2) 열이 있다', vsBody.indexOf('R1') >= 0 && vsBody.indexOf('R2') >= 0);
-            ok('표에 인증 항목(CE)도 나온다', vsBody.indexOf('CE') >= 0, vsBody);
 
             window._docRevVsClose();
             ok('닫으면 모달이 숨는다', document.getElementById('docrevvs-overlay').style.display === 'none');
