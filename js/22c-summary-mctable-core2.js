@@ -1077,7 +1077,10 @@ window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIM/CUT','TSP/GLASS','TOUCH CTRL',
 //   있으면 이 별칭으로 주워 담는다.
 window._MATERIAL_CATEGORY_ALIASES = {
     'SLIM/CUT': ['SLIMMING/CUTTING'],
-    'TSP/GLASS': ['TSP PCT', 'GLASS TEMP', 'GLASS CHEM', 'GLASS SEMI', 'GLASS NON'],
+    // 'TOUCH / GLASS'는 오늘 5개로 쪼개기 전부터 있던 옛 공용 구분 이름(2026-10-22, CLAUDE.md
+    // "PARTS 부품 종류" 절) — 저장된 프로젝트에 이 이름의 행이 있으면 드롭다운에 별도 항목으로
+    // 또 뜬다(실사용 제보: PARTS 드롭다운에 "TOUCH / GLASS 기본항목"이 중복으로 보임).
+    'TSP/GLASS': ['TSP PCT', 'GLASS TEMP', 'GLASS CHEM', 'GLASS SEMI', 'GLASS NON', 'TOUCH / GLASS'],
 };
 
 // 💡 화면 DOM에서 현재 입력 중인 값을 그대로 읽어 배열로 재구성 (add/delete 시 다른 행의

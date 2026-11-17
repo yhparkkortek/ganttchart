@@ -48,7 +48,7 @@
         { item: 'LCM(Panel)', cat: 'PANEL' },
         { item: 'A/D Board',  cat: 'AD BOARD' },
         { item: 'Converter',  cat: 'CONVERTER' },
-        { item: 'TSP(Glass)', cat: 'TOUCH / GLASS' },
+        { item: 'TSP(Glass)', cat: 'TSP/GLASS' },
         { item: 'TSP CTRL',   cat: 'TOUCH CTRL' }
     ];
     // 시제품 제작의뢰서 구역 — Sample Report 안에도 **같은 표**가 들어간다(실측).

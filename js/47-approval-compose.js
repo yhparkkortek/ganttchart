@@ -158,8 +158,8 @@
             'A/D Board 부품 명':     { from: 'mat', matCat: 'AD BOARD',    matKey: 'description' },
             'Converter 코드':       { from: 'mat', matCat: 'CONVERTER',   matKey: 'ktkPn' },
             'Converter 부품 명':     { from: 'mat', matCat: 'CONVERTER',   matKey: 'description' },
-            'TSP(Glass) 코드':      { from: 'mat', matCat: 'TOUCH / GLASS', matKey: 'ktkPn' },
-            'TSP(Glass) 부품 명':    { from: 'mat', matCat: 'TOUCH / GLASS', matKey: 'description' },
+            'TSP(Glass) 코드':      { from: 'mat', matCat: 'TSP/GLASS', matKey: 'ktkPn' },
+            'TSP(Glass) 부품 명':    { from: 'mat', matCat: 'TSP/GLASS', matKey: 'description' },
             'TSP CTRL 코드':        { from: 'mat', matCat: 'TOUCH CTRL',  matKey: 'ktkPn' },
             'TSP CTRL 부품 명':      { from: 'mat', matCat: 'TOUCH CTRL',  matKey: 'description' }
             // 개발 단계·제작 회차·총 제작수량·출고 수량·출고 요청일·조립 예상일·제작 기간·

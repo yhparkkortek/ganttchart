@@ -42,7 +42,7 @@
         { id: 'touch',   ko: '터치',      en: 'Touch',
           kw: ['터치', 'touch', 'tsp', '터치스크린'],
           groups: ['TOUCH SCREEN MODULE', 'TOUCH SCREEN ASSY', 'TOUCH CONTROLLER', 'IC-TOUCH CONTROLLER'],
-          cats: ['TOUCH CTRL', 'TOUCH / GLASS'] },
+          cats: ['TOUCH CTRL', 'TSP/GLASS'] },
         { id: 'blu',     ko: 'BLU',       en: 'BLU',
           kw: ['blu', '백라이트', 'backlight', '광원', 'bm'],
           groups: ['BLU MODULE', 'BM PART MODULE', 'BM PART(ASSY)', 'LED MODULE'], cats: ['BLU'] },

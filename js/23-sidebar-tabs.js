@@ -234,9 +234,18 @@
     // Summary 주요자재 순서대로 — 고정 13개 + 사람이 더 넣은 구분까지 **전부**.
     window._getElecDropdownOptions = function() {
         const cats = (window.MATERIAL_FIXED_CATEGORIES || Object.keys(window.ELEC_CATEGORY_META)).slice();
+        // 옛 구분명(별칭) → 지금 고정 구분명. js/22c _MATERIAL_CATEGORY_ALIASES 역방향 —
+        // 안 거치면 "TOUCH / GLASS"처럼 합쳐지기 전 이름이 저장된 프로젝트가 드롭다운에
+        // 중복 항목("…기본항목")으로 또 뜬다(실사용 제보, 2026-11-17).
+        const aliasToFixed = {};
+        const aliasMap = window._MATERIAL_CATEGORY_ALIASES || {};
+        Object.keys(aliasMap).forEach(function(fixed) {
+            aliasMap[fixed].forEach(function(old) { aliasToFixed[old] = fixed; });
+        });
         // 자유추가 구분("앞으로 파생될 것들")도 올린다 — 주요자재에 적는 순간 화면이 생긴다.
         ((window.tabData && window.tabData.projectMaterials) || []).forEach(function(r) {
-            const c = String((r && r.category) || '').trim();
+            let c = String((r && r.category) || '').trim();
+            if (aliasToFixed[c]) c = aliasToFixed[c];
             if (c && cats.indexOf(c) === -1) cats.push(c);
         });
         const seen = {};
