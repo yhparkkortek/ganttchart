@@ -308,6 +308,20 @@ window.openTaskInbox = function() {
     if (window.refreshInboxCleanupModeButton) window.refreshInboxCleanupModeButton(); // 💡 처리됨 자동삭제/보관 토글 버튼 상태 갱신
     document.getElementById('task-inbox-overlay').style.display = 'flex';
     window.bringModalToFront('task-inbox-overlay');
+    // 🐛 [2026-11-17 버그수정, 사용자 제보] 프로젝트별 집계·필터(_tiProjectOf)가 쓰는
+    // window._projectIndexCache 는 5분 캐시라, 다른 프로젝트를 저장해서 project_index.json의
+    // model/customer가 방금 바뀌어도 이 모달은 그 사실을 몰랐다(실측: STELLAR32 항목이 한때
+    // K43 프로젝트의 model/keywords를 그대로 덮어쓰고 있었는데, 그걸 바로잡은 뒤에도 열려있던
+    // 탭은 옛 값을 계속 보여줬다) — 보관함은 사람이 "지금 확인하려고" 여는 화면이라, 열 때마다
+    // 캐시를 비우고 다시 받아 정확한 최신 그룹으로 다시 그린다(첫 렌더는 그대로 두어 깜빡임 없이
+    // 먼저 보여주고, 새 데이터가 오면 한 번 더 그린다 — 모달이 이미 닫혔으면 건너뜀).
+    window._projectIndexCache = { data: null, at: 0 };
+    if (window._msLoadProjectIndex) {
+        window._msLoadProjectIndex().then(function() {
+            var el = document.getElementById('task-inbox-overlay');
+            if (el && el.style.display !== 'none') window.renderTaskInbox();
+        });
+    }
 };
 window.closeTaskInbox = function() {
     document.getElementById('task-inbox-overlay').style.display = 'none';
