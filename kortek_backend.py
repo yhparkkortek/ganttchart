@@ -3961,11 +3961,20 @@ def sap_download_documents_batch():
 #    (검색도움말 `partial` 선례) ④ 진행 상황을 `/sap-doc-batch-progress` 로 노출한다
 #    ("멈춘 것처럼 보인다" 가 반복된 불만이었다).
 # 숫자는 전부 데이터 — 코드에 흩어 박지 않는다.
+# ⚠️⚠️ [2026-11-17 실사용 사고] TSP PCT 73건 다운로드 중 한 청크(7건)가 **158MB**(다른
+#    청크는 16~21MB)였다 — perChunkBase/Each 가 작은 파일 기준이라 138초(30+9*7+45) 안에
+#    못 끝났고, `proc.kill()` 이 **SAP 쪽 전송은 멈추지 못한 채**(그 7개 자재 문서 폴더가
+#    몇 분 뒤 디스크에 전부 멀쩡히 나타났다 — 바이트 수까지 상태바와 일치) 우리 쪽 결과
+#    보고만 끊어버렸다. 그 결과 ① 성공한 청크가 "실패"로 기록돼 매번 **같은 7건을 재시도**
+#    했고 ② 한창 진행 중인 SAP GUI 다운로드를 중간에 죽이는 걸 반복하면서 SAP Logon 로그인
+#    창이 계속 다시 뜨는 부작용까지 겹쳤다(스크립팅 클라이언트가 응답을 못 받고 끊기면
+#    세션이 불안정해지는 것으로 보임). → 큰 파일도 버틸 수 있게 청크당 예산을 크게 올린다
+#    (158MB 사례 기준 138→463초, 약 3.4배).
 SAP_DOC_BATCH_LIMITS = {
     'chunkSize':    7,      # ZDMSR004 팝업 한 화면 입력 행 수(8개 이상 스크롤은 미검증)
-    'perChunkBase': 30, 'perChunkEach': 9,        # 청크 1회 타임아웃 = base + each*건수
-    'totalBase':   120, 'totalEach':   25,        # 전체 예산 = base + each*건수
-    'totalCap':   3600,                           # 전체 예산 상한(초)
+    'perChunkBase': 90, 'perChunkEach': 40,       # 청크 1회 타임아웃 = base + each*건수
+    'totalBase':   180, 'totalEach':   60,        # 전체 예산 = base + each*건수
+    'totalCap':   5400,                           # 전체 예산 상한(초)
 }
 
 _SAP_DOC_PROGRESS_LOCK = threading.Lock()
