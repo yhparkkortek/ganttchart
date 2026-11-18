@@ -2101,25 +2101,37 @@
      *  INFORMATION MATRIX" 를 찾아**(리비전 H 의 변경내용 문장 속에 우연히 그 문구가 들어 있었다)
      *  머리글 자리에 리비전 기록 문장이 통째로 섞여 들어갔다(실측: "FIRMWARE TABLE 6. CABLE/LINE
      *  INSTALLTION: …" 글자 수프). C 양식을 추가하니 그 줄=칸 경로를 아예 안 타고 25행이 깨끗하게 나온다. */
+    // 📋 [2026-11-18 "칸 이름 매칭 재설계"] VENDOR 토큰 자리(vi)별 머리글 양식 — 전부 데이터.
+    //    새 양식이 실측으로 확인되면 여기 **한 줄**(배열 항목)만 추가한다 — 아래 로직에
+    //    또 하나의 삼항식 가지를 늘리지 않는다. `gate(L)` 가 있으면 그 줄들을 봐서 참일 때만
+    //    그 항목을 쓴다(같은 vi 를 쓰는 양식이 둘 이상일 때 구분용, 아래 SCALER 항목 참고).
+    //    같은 vi 를 가진 항목이 여럿이면 **배열 순서대로** 먼저 맞는 것을 쓴다.
+    //    ⚠️ vi===0 (VENDOR 가 리비전 바로 다음 토큰)은 **DESCRIPTION 칸 값에 공백이 섞이는
+    //    문서가 실측으로 있었다**(1569940/1570975 — "ASY,27IN TOPPER"처럼 한 칸 값이 토큰
+    //    둘로 쪼개져 뒤 칸 전부가 한 칸씩 밀린다). 그 두 칸 이름은 **확정이 아니라 근사치**다.
+    //    고치려면 그 문서의 MATRIX 표를 **사람이 실제로 보고** 진짜 칸 순서를 확인해야 한다
+    //    (흩어진 텍스트만으로 되짚어 보려다 1555073 REV M 에 없던 칸이 생기는 사고가 났다 —
+    //    바로 아래 "되돌림" 주석 참고). → `docs/project-list.md` "칸 이름 매칭 재설계" 절.
+    window.PL_MATRIX_TEMPLATES = window.PL_MATRIX_TEMPLATES || [
+        { vi: 2, gate: function (L) { return /PANEL\s+SCALER\b/i.test(L.join(' ')); },
+          // ⚠️⚠️ [2026-11-18 실측 1555073 REV M] 스케일러 내장형은 아래 vi===2 양식의 8칸 뒤에
+          // **SCALER·SCALER F/W 두 칸이 더** 붙는다(실측: "...DV430QUB NR NR" 의 끝 두 NR).
+          // VENDOR 자리가 완전히 같아 칸 수로만 가른다 — 그래서 "SCALER" 한 낱말이 아니라
+          // **PANEL 칸 바로 다음에 SCALER 칸이 오는지**(실측 1570975 REV H 는 REVISIONS 문장에
+          // "SCALER" 라는 말만 있고 이 어구가 없어 오탐을 피했다)로만 가른다.
+          cols: ['REVISION', 'MANUFACTURER PART NUMBER', 'PART NUMBER', 'VENDOR',
+                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'SCALER', 'SCALER F/W'] },
+        { vi: 2,
+          cols: ['REVISION', 'MANUFACTURER PART NUMBER', 'PART NUMBER', 'VENDOR',
+                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL'] },
+        { vi: 1,
+          cols: ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
+                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'] },
+        { vi: 0,
+          cols: ['REVISION', 'VENDOR', 'PART NUMBER', 'MODEL', 'DESCRIPTION',
+                 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'] }
+    ];
     var _matFromLineRows = function (L, hasTitleAnywhere) {
-        var A = ['REVISION', 'MANUFACTURER PART NUMBER', 'PART NUMBER', 'VENDOR',
-                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL'];
-        // ⚠️⚠️ [2026-11-18 실측 1555073 REV M] 스케일러 내장형은 A 의 8칸 뒤에 **SCALER·SCALER
-        //    F/W 두 칸이 더** 붙는다(실측: "...DV430QUB NR NR" — 끝 두 NR 이 그 두 칸이다).
-        //    VENDOR 위치(vi===2)는 A 와 완전히 같아서 칸 수로만 가른다 — 그래서 A 를 그대로
-        //    두고(기존 8칸 문서를 안 건드리려고) 머리글에 "SCALER" 글자가 있을 때만 10칸 A2 를 쓴다.
-        // ⚠️⚠️ [2026-11-18 2차 실측 1570975 REV H] "SCALER" 한 낱말만 보면 오탐이 난다 — 그
-        //    문서는 REVISIONS 문장("REVISION TO CAPTURE NEW MEDIATEK SCALER CHIP")에 그 말이
-        //    쓰였을 뿐 MATRIX 에 SCALER 칸이 없는데도 걸려서, 엉뚱하게 10칸으로 읽으려다가
-        //    더 깨졌다. 실제 머리글은 PANEL 칸 바로 다음에 SCALER 칸이 오므로("…PANEL SCALER…",
-        //    1555073 REV M 실측) 그 **인접 어구**로만 가른다 — 산문 속 "SCALER" 는 거의 절대
-        //    "PANEL" 바로 뒤에 안 온다.
-        var A2 = A.concat(['SCALER', 'SCALER F/W']);
-        var hasScalerCol = /PANEL\s+SCALER\b/i.test(L.join(' '));
-        var B = ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
-                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
-        var C = ['REVISION', 'VENDOR', 'PART NUMBER', 'MODEL', 'DESCRIPTION',
-                 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
         var headers = null, rows = [];
         for (var i = 0; i < L.length; i++) {
             // ⚠️⚠️ [2026-11-18 실측] 테두리 구역 글자가 줄 앞뒤에 혼자 끼면("A M L43E8LTMSG-SV …
@@ -2141,7 +2153,13 @@
                 if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { vi = k; break; }
             }
             if (vi < 0) continue;
-            var cols = (vi === 2) ? (hasScalerCol ? A2 : A) : (vi === 1 ? B : (vi === 0 ? C : null));
+            var cols = null;
+            for (var ti = 0; ti < window.PL_MATRIX_TEMPLATES.length; ti++) {
+                var tpl = window.PL_MATRIX_TEMPLATES[ti];
+                if (tpl.vi !== vi) continue;
+                if (tpl.gate && !tpl.gate(L)) continue;
+                cols = tpl.cols; break;
+            }
             if (!cols) continue;
             // ⚠️⚠️ [2026-11-11] 토큰이 양식이 요구하는 칸 수보다 **적은** 행(실측 "1570704_H":
             // MODEL 칸이 빠진 행 4/8건)을 그대로 slice 하면 뒤 칸이 전부 한 칸씩 당겨져 틀린
@@ -2149,6 +2167,18 @@
             if (toks.length < cols.length - 1) continue;
             if (!headers) headers = cols;
             if (headers !== cols) continue;                       // 한 도면에 양식이 섞이진 않는다
+            // ⚠️⚠️ [2026-11-18 4차, 되돌림] "남는 토큰을 버리지 말고 '추가정보' 한 칸에 모으자"는
+            // 시도를 1555073 REV M 으로 실제로 돌려보니 **더 나빠졌다** — 그 문서는 원래 9칸에
+            // 정확히 맞는(딱 떨어지는) 문서인데, 같은 줄에 섞여 들어온 **BOM 표 글자**("9 1
+            // 1554874 SOUND BAR ASSY, SK-1" 등, 치수선·구역 글자와 같은 뿌리의 줄 병합 사고)가
+            // 그대로 "추가정보"에 찍혔다. `_truncAtProse` 로 뒷부분 산문을 끊어 봐도 "9 1
+            // 1554874"처럼 **앞부분 숫자 찌꺼기**는 그대로 남아, 결과적으로 멀쩡했던 문서에
+            // 없던 칸이 생기고 그 칸에 가짜 같은 값이 보였다 — "틀린 이름보다 못한, 이름 없는
+            // 가짜 값"이 된 것. 행마다 남는 토큰이 **진짜 칸인지 줄 병합 찌꺼기인지**를 텍스트만
+            // 보고 구분할 believable 신호가 없어서(1569940 류도 섞여 있는 건 마찬가지였다),
+            // 원래의 "모자라면 버린다"와 대칭으로 **넘치면 버린다**(틀리게/불확실하게 채우지
+            // 않는다)로 되돌린다. 진짜 칸이 더 있는 문서는 1555073 의 SCALER 처럼 **그 문서
+            // 전용 확인된 열 개수**로 새 템플릿을 늘릴 것 — 행마다 다른 길이를 믿지 않는다.
             rows.push([m[1].replace(/\s*-\s*/, '-')].concat(toks.slice(0, cols.length - 1)));
             if (rows.length > 40) break;
         }
