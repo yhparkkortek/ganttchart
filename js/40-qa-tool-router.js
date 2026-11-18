@@ -1254,7 +1254,14 @@
             var wanted = window._qaParseToolCalls(text);
             if (!wanted.length) {
                 // ③ 태그가 없으면 최종 답변으로 본다
-                if (text.trim()) return { reply: text.trim(), calls: calls };
+                //    📖 [2026-11-18] 읽기 전용 답변도 이메일 주소는 그라운딩한다(js/41
+                //    `_qaGroundEmailsInText`) — 조회 결과에 없는 주소를 그대로 보여주면
+                //    사람이 믿고 옮겨 적을 수 있다(메일 발송 화이트리스트와 같은 사고).
+                if (text.trim()) {
+                    var grounded1 = window._qaGroundEmailsInText
+                        ? window._qaGroundEmailsInText(text.trim(), steps, question) : text.trim();
+                    return { reply: grounded1, calls: calls };
+                }
                 break;
             }
             if (!gwChecked && wanted.some(function (w) {
@@ -1333,7 +1340,11 @@
                                        'AI summary failed — raw results below.')
                   + '\n\n```\n' + window._qaToolResultsText(steps).slice(0, 4000) + '\n```';
         }
-        return { reply: reply, calls: calls };
+        // 📖 [2026-11-18] 턴을 다 써서 강제로 요약한 답변도 같은 그라운딩을 거친다 —
+        //    실측으로 이 경로에서도 이메일을 지어내는 것을 확인했다.
+        var groundedReply = window._qaGroundEmailsInText
+            ? window._qaGroundEmailsInText(reply, steps, question) : reply;
+        return { reply: groundedReply, calls: calls };
     };
 
     // 사용자에게 "무엇을 어떤 인자로 불렀는지" 그대로 보여준다(블랙박스 방지)

@@ -371,6 +371,24 @@
         return String(csv || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)
             .filter(function (addr) { return !known[addr.toLowerCase()]; });
     }
+    // 📖 [2026-11-18 사용자 요청 "읽기 답변도 고쳐줘"] gw_mail_send(쓰기) 는 위에서 막았지만,
+    //    **읽기 전용** 질문("주소록에서 박용훈 찾아줘")도 AI가 조회 결과와 다른 주소를 요약
+    //    답변에 **그대로 지어내는** 걸 실측으로 확인했다 — 메일을 안 보내니 사고는 안 나지만,
+    //    사람이 그 답을 믿고 다른 곳(메일 투두·연락처 등)에 옮겨 적으면 똑같이 위험하다.
+    //    → 도구 루프의 **모든 최종 답변 문자열**(js/40 `_qaToolLoop`, 조기 반환·턴 소진 폴백
+    //    두 군데 다)에 이 함수를 거쳐, 조회 결과·질문 원문 어디에도 없는 이메일 뒤에 경고를
+    //    붙인다(지우지 않는다 — AI가 왜 그 주소를 썼는지 맥락이 사라지면 더 헷갈린다).
+    window._qaCollectKnownEmails = _qaCollectKnownEmails;
+    window._qaGroundEmailsInText = function (text, steps, question) {
+        if (!text) return text;
+        var known = _qaCollectKnownEmails(steps, question);
+        var EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+        return String(text).replace(EMAIL_RE, function (m) {
+            return known[m.toLowerCase()] ? m
+                : (m + window._t(' (⚠️조회 결과에 없음 — 지어낸 주소일 수 있음)',
+                                  ' (⚠️not found in lookup results — may be fabricated)'));
+        });
+    };
 
     // ── 초안 만들기 (실행하지 않는다) ────────────────────────────────
     // AI가 `[[WRITE:id {json}]]`을 내놓거나 코드가 직접 부른다. 결과는 **확인 카드용 초안**.
