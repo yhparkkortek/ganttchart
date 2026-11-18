@@ -2023,6 +2023,12 @@
         // 관례일 뿐 변경내용 문장의 어법이 아니다. 라벨이 무엇이든 이 모양이면 거른다.
         if (/^\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:/.test(s)) return false;
         if (/[A-Za-z]{2,}\s*:(?:\s|$)/.test(s)) return false;
+        // ⚠️⚠️ [2026-11-18 12차] "DATE CODE (YR/WK), AND COUNTRY OF ORIGIN" 처럼 콜론도 번호도
+        // 없이 이어지는 IDENTIFICATION 주석 조각도 있다 — 조각 단계에서 걸러야 **그 옆에 붙은
+        // 진짜 조각**(실측 "SHT2 ZNC6: ADDED 1X …" 처럼 도면 구역 표기가 진짜 설명인 경우)은
+        // 안 다치고 오염된 조각만 빠진다(`_NOTES_BOILERPLATE_RE`, 아래 plParseRevisions 근처
+        // 정의 — 같은 목록을 여기서도 쓴다).
+        if (_NOTES_BOILERPLATE_RE.test(s)) return false;
         var up = s.toUpperCase();
         if (_REVCELL_RE.test(s) && _VENDORS.some(function (v) { return up.indexOf(v) !== -1; })) return false;
         return (s.match(/[A-Za-z]/g) || []).length >= 6;
@@ -2423,7 +2429,15 @@
     // 오는 "라벨: " 모양을 아예 안 쓴다**는 공통점(수백 건 실측)만 쓴다. `_isDescFrag` 에서
     // 이미 걸러 대부분은 조각 단계에서 안 붙지만, 날짜줄에 바로 딸린 inline 글(그 줄 전체가
     // 하나로 이미 합쳐져 있어 _isDescFrag 를 안 거친다) 에 섞여 있으면 여기서 한 번 더 걸러낸다.
-    var _NOTES_BOILERPLATE_RE = /IDENTIFY WITH|BILL OF MATERIAL|ENVIRONMENTAL REQUIREMENT|SUITABLY PACKED|REFERENCE ONLY\. PRIMARY|AGILE DATABASE|CONFLICT MINERALS|\b\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:|[A-Za-z]{2,}\s*:(?:\s|$)/;
+    // ⚠️⚠️ [2026-11-18 12차, 사용자 재요청 "번호 없이 이어지는 NOTES 줄도 확인"으로 재발견]
+    // 콜론 모양 없이 섞이는 IDENTIFICATION 주석 조각도 있었다("DATE CODE (YR/WK), AND COUNTRY
+    // OF ORIGIN…" — "IDENTIFY WITH…" 트리거 낱말은 **다른** 리비전 행으로 먼저 붙고, 이어지는
+    // 조각만 이 행에 떨어져 콜론도 기존 트리거 낱말도 없이 샜다). 실측으로 **진짜 섞임만**
+    // 추려 추가했다(같은 "흔한 연결어 여러 개"로 거칠게 훑어본 34건 후보 중, 1555073 REV M·
+    // 1604319 A.1 같은 **길지만 진짜인** 설명을 오탐으로 가려낸 뒤 남은 것만). "SPECIFICATIONS
+    // 200100"은 MATERIAL COMPLIANCE 주석의 고정 숫자라 "SCIENTIFIC GAMES"·"L&W" 등 회사명이
+    // 바뀌어도 그대로 걸린다.
+    var _NOTES_BOILERPLATE_RE = /IDENTIFY WITH|BILL OF MATERIAL|ENVIRONMENTAL REQUIREMENT|SUITABLY PACKED|REFERENCE ONLY\. PRIMARY|AGILE DATABASE|CONFLICT MINERALS|DATE CODE\s*\((?:YR\/WK|WK\/YR)\)|COUNTRY OF ORIGIN|ORACLE SUPPLIER NUMBER|REVISION LETTER|SPECIFICATIONS\s*200100|\b\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:|[A-Za-z]{2,}\s*:(?:\s|$)/;
     var _plFlagNotesMixedDesc = function (recs) {
         return recs.map(function (r) {
             if (!r.desc || !_NOTES_BOILERPLATE_RE.test(r.desc)) return r;
