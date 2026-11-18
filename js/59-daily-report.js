@@ -319,11 +319,23 @@
      */
     function mergeRoster(filed) {
         var out = (filed || []).map(function (m) { return Object.assign({}, m); });
-        var byKey = {};
-        out.forEach(function (m) { byKey[String(m.key || '').toLowerCase()] = m; });
+        var byKey = {}, byName = {};
+        out.forEach(function (m) {
+            byKey[String(m.key || '').toLowerCase()] = m;
+            var n = String(m.name || '').trim();
+            if (n) byName[n] = m;
+        });
+        // 🪪 [2026-11-18 실측 — 김시윤] 계정id 는 "메일 @ 앞부분" 으로 **추정**한 값이라
+        //    실제 NAS 로그인 계정과 다를 수 있다(실측: 주소록 메일은 ksy7390@…이지만 NAS
+        //    로그인은 bykim — WriteLog 로 그가 자기 프로젝트(LNW_32.0.json, 프로젝트담당자
+        //    "김시윤")를 사흘째 `bykim` 으로 저장하고 있는 게 확인됐다). 그래서 명단 파일의
+        //    `key` 를 "bykim" 으로 **교정**해야 하는데, 교정 전엔 키만으로 매칭하면
+        //    주소록이 매번 "ksy7390" 키로 **같은 사람을 또 추가**해 김시윤이 명단에 두 줄로
+        //    보인다. → 이름이 이미 있으면 **키가 달라도** 같은 사람으로 보고 빈 칸만 채운다
+        //    (키 교정이 끝난 뒤에도 주소록 자동반영이 중복을 안 만들게 하는 안전장치).
         window.dailyRosterFromAddressBook(myTeam(filed)).forEach(function (a) {
-            var hit = byKey[a.key];
-            if (!hit) { out.push(a); byKey[a.key] = a; return; }
+            var hit = byKey[a.key] || byName[String(a.name || '').trim()];
+            if (!hit) { out.push(a); byKey[a.key] = a; if (a.name) byName[String(a.name).trim()] = a; return; }
             if (!String(hit.name || '').trim()) hit.name = a.name;
             if (!String(hit.team || '').trim()) hit.team = a.team;
             if (!String(hit.tgChatId || '').trim()) hit.tgChatId = a.tgChatId;
