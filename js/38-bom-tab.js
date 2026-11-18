@@ -101,9 +101,13 @@
     };
 
     // ── 헤더 클릭 정렬 ─────────────────────────────────────────────────
-    //  `st._sort = {key, dir}` 이면 그 열 기준 평면 정렬로 그리고, null이면 SAP이 준 원래
+    //  `st._sort = {key, dir}` 이면 그 열 기준으로 정렬하고, null이면 SAP이 준 원래
     //  순서(계층 트리/레벨 블록)로 돌아간다. 레벨 헤더가 "초기값으로 되돌리기" 역할을 한다.
-    //  정렬 중에는 모자 관계가 의미를 잃으므로 접기/펴기 없이 평면으로 그린다.
+    //  ⚠️ [2026-11-18 사용자 제보] 계층이 정상인 동안은 정렬도 모자 관계를 보존한다 —
+    //  **형제(같은 부모 밑)끼리만** 정렬값으로 다시 줄 세우고, 부모 바로 다음에 그 자식들이
+    //  오는 건 그대로 둔다(`_bomVisibleWalk`). 예전엔 전체를 평면 정렬해서 부모·자식이 각자
+    //  정렬값대로 흩어졌다. 계층이 이미 깨진 응답(ALV 정렬)에서만 모자 관계 자체가 의미 없으니
+    //  기존처럼 완전 평면 정렬로 폴백한다.
     var _sortVal = function (st, r, c) {
         if (c.key === '_UNITPRICE') {
             var p = parseFloat(String(r.STPRS1 || '').replace(/,/g, ''));
@@ -175,19 +179,9 @@
         return out;
     };
     // 빈 값은 방향과 무관하게 항상 뒤로. 문자는 숫자 섞인 값을 자연 정렬(R2 < R10, 101099 < 132487).
-    // ⚠️⚠️ [2026-10-19 사용자 제보] 예전엔 `st.rows` **전체**를 정렬해서, 레벨1만 보이게
-    //   접어둔 상태에서 열 머리글을 누르면 **다단계가 통째로 펼쳐지며** 정렬됐다.
-    //   정렬은 보기 방식이지 펼치기 명령이 아니다 → **보이는 행만** 정렬한다.
-    //   (접은 상태는 접은 대로, 펼친 상태는 펼친 대로.)
-    var _sortRows = function (st) {
-        if (!st || !st._sort) return null;
-        var c = null;
-        for (var i = 0; i < BOM_COLUMNS.length; i++) {
-            if (BOM_COLUMNS[i].key === st._sort.key) { c = BOM_COLUMNS[i]; break; }
-        }
-        if (!c) return null;
+    var _bomRowComparator = function (st, c) {
         var desc = st._sort.dir === 'desc';
-        return _bomTreeRows(st).slice().sort(function (x, y) {
+        return function (x, y) {
             var a = _sortVal(st, x, c), b = _sortVal(st, y, c);
             var ae = (a === null || a === ''), be = (b === null || b === '');
             if (ae || be) return (ae && be) ? 0 : (ae ? 1 : -1);
@@ -195,7 +189,70 @@
                 ? (a - b)
                 : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
             return desc ? -r : r;
+        };
+    };
+    // ⚠️⚠️ [2026-11-18 사용자 제보 "그룹 정렬하면 하위 자재가 사라지거나 모자 관계가 풀림"]
+    //   예전엔 st.rows(또는 보이는 행) **전체**를 한 번에 평면 정렬해서, 부모와 자식이 각자
+    //   자기 정렬값에 따라 뿔뿔이 흩어졌다(부모는 'BD 반제품' 묶음에, 그 자식은 'HARNESS'·
+    //   'TAPE' 등 전혀 다른 묶음에 — 펼쳐 보면 자식이 부모 옆이 아니라 표 반대편에 가 있었다).
+    //   → 이제 **형제(같은 부모 밑에 있는 애들)끼리만** 정렬값으로 다시 줄 세우고, 부모 바로
+    //   다음에 그 자식들이 오는 모자 관계 자체는 전혀 건드리지 않는다(재귀적으로 모든 깊이에).
+    var _bomBuildTree = function (rows) {
+        var roots = [], stack = [];
+        rows.forEach(function (r, i) {
+            var node = { row: r, idx: i, children: [] };
+            while (stack.length && stack[stack.length - 1].level >= r._level) stack.pop();
+            (stack.length ? stack[stack.length - 1].node.children : roots).push(node);
+            stack.push({ level: r._level, node: node });
         });
+        return roots;
+    };
+    var _bomSortSiblings = function (nodes, rowCmp) {
+        var nodeCmp = function (a, b) { return rowCmp(a.row, b.row); };
+        var ordered = nodes.slice().sort(nodeCmp);
+        ordered.forEach(function (n) { if (n.children.length) n.children = _bomSortSiblings(n.children, rowCmp); });
+        return ordered;
+    };
+    // 계층이 정상일 때 "지금 보이는 순서"를 모자 관계·접힘을 전부 반영해 만든다 — 정렬이 없으면
+    // SAP 깊이우선 그대로, 있으면 위 설명대로 형제끼리만 재배열. 계층이 깨졌으면 null(호출 쪽이
+    // 레벨 블록 폴백을 쓰라는 신호 — 그 경우는 모자 관계 자체가 의미 없어 기존처럼 평면 정렬한다).
+    var _bomVisibleWalk = function (st) {
+        if (!st || !st.rows || !window._bomHierOk(st)) return null;
+        var tree = _bomBuildTree(st.rows);
+        var sortCol = null;
+        if (st._sort) {
+            for (var k = 0; k < BOM_COLUMNS.length; k++) { if (BOM_COLUMNS[k].key === st._sort.key) { sortCol = BOM_COLUMNS[k]; break; } }
+        }
+        if (sortCol) tree = _bomSortSiblings(tree, _bomRowComparator(st, sortCol));
+        var collapsed = st._collapsed || {};
+        var out = [];
+        (function walk(nodes) {
+            nodes.forEach(function (n) {
+                var hasChild = n.children.length > 0;
+                var isCollapsed = hasChild && !!collapsed[n.idx];
+                out.push({ row: n.row, idx: n.idx, hasChild: hasChild, collapsed: isCollapsed });
+                if (hasChild && !isCollapsed) walk(n.children);
+            });
+        })(tree);
+        return out;
+    };
+    // ⚠️⚠️ [2026-10-19 사용자 제보] 예전엔 `st.rows` **전체**를 정렬해서, 레벨1만 보이게
+    //   접어둔 상태에서 열 머리글을 누르면 **다단계가 통째로 펼쳐지며** 정렬됐다.
+    //   정렬은 보기 방식이지 펼치기 명령이 아니다 → **보이는 행만** 정렬한다.
+    //   (접은 상태는 접은 대로, 펼친 상태는 펼친 대로.)
+    var _sortRows = function (st) {
+        if (!st || !st._sort) return null;
+        if (window._bomHierOk(st)) {
+            var w = _bomVisibleWalk(st);
+            return w ? w.map(function (x) { return x.row; }) : null;
+        }
+        // 계층이 깨졌으면 모자 관계가 의미 없으니 기존처럼 전체를 평면 정렬한다.
+        var c = null;
+        for (var i = 0; i < BOM_COLUMNS.length; i++) {
+            if (BOM_COLUMNS[i].key === st._sort.key) { c = BOM_COLUMNS[i]; break; }
+        }
+        if (!c) return null;
+        return _bomTreeRows(st).slice().sort(_bomRowComparator(st, c));
     };
     var _sortStoreOf = function (scope) {
         return scope === 'elec' ? window._elecBomGetStore(window._elecBomType) : window._bomStore();
@@ -890,54 +947,16 @@
                 + '</tr>';
         }
 
-        // ── 헤더 정렬 중 — 모자 관계가 의미를 잃으므로 평면으로 그린다 ──────
-        var sortedRows = _sortRows(st);
-        if (sortedRows) {
-            sortedRows.forEach(function (r, vi) {
-                var note = (st.notes && st.notes[r.IDNRK]) || '';
-                var mEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                html += '<tr class="bom-row ' + zebraClass(r._level, vi) + '" style="cursor:pointer;"'
-                    + ' onclick="window.bomSelectComponent(\'' + mEsc + '\')">'
-                    + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
-                    + BOM_COLUMNS.map(function (c) {
-                        if (c.loc) {
-                            var lv = valueOf(r, c);
-                            return '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
-                                + '<input type="text" value="' + _esc(lv) + '" data-bom-loc="' + _esc(r.IDNRK) + '" title="' + _esc(lv) + '" '
-                                + 'oninput="window.bomSetLocation(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
-                                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
-                        }
-                        var v = valueOf(r, c);
-                        return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
-                    }).join('')
-                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
-                    + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(note) + '" '
-                    + 'oninput="window.bomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
-                    + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
-                    + '</tr>';
-            });
-            tbody.innerHTML = html;
-            window._bomSyncToggleBtn();
-            window._bomRenderMeta(st);
-            return;
-        }
-
-        if (window._bomHierOk(st)) {
-            // ── 계층 정상(깊이 우선) — 진짜 모자 관계를 그린다 ──────────────
+        // ── 계층 정상 — 모자 관계를 그린다(정렬 중이어도 동일: 형제끼리만 재배열,
+        //    부모 바로 다음에 그 자식들이 오는 건 그대로다 — 2026-11-18 사용자 제보 대응) ──
+        var walk = _bomVisibleWalk(st);
+        if (walk) {
             // 💡 [2026-10-15] 레벨1 행은 테마 틴트로 경계 역할을 하고, 그 아래 하위 행들은
             //    제브라로 읽기를 돕는다. 제브라는 **실제로 화면에 그려지는 행** 기준이라
             //    가지를 접었다 펴도 줄무늬가 어긋나지 않는다(행 인덱스 기준이면 숨은 행 때문에 깨짐).
-            var hidden = -1, visIdx = 0;
-            st.rows.forEach(function (r, i) {
-                if (hidden !== -1) {
-                    if (r._level > hidden) return;      // 접힌 가지의 자식
-                    hidden = -1;
-                }
-                var next = st.rows[i + 1];
-                var hasChild = !!(next && next._level > r._level);
-                var collapsed = !!st._collapsed[i];
-                if (hasChild && collapsed) hidden = r._level;
-
+            var visIdx = 0;
+            walk.forEach(function (item) {
+                var r = item.row, i = item.idx, hasChild = item.hasChild, collapsed = item.collapsed;
                 var zcls = zebraClass(r._level, visIdx);
                 visIdx++;
                 var sp = '';
@@ -970,6 +989,39 @@
                     }).join('')
                     + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + ';' + sp + ' position:relative;" onclick="event.stopPropagation()">'
                     + '<input type="text" value="' + _esc(nt) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(nt) + '" '
+                    + 'oninput="window.bomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                    + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+            window._bomSyncToggleBtn();
+            window._bomRenderMeta(st);
+            return;
+        }
+
+        // ── 계층이 깨진 상태에서 정렬까지 걸려 있으면 — 모자 관계가 의미 없으니 평면으로
+        //    그린다(기존 동작 그대로, 계층 정상일 땐 위 분기에서 이미 return 했다) ──────
+        var sortedRows = _sortRows(st);
+        if (sortedRows) {
+            sortedRows.forEach(function (r, vi) {
+                var note = (st.notes && st.notes[r.IDNRK]) || '';
+                var mEsc = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                html += '<tr class="bom-row ' + zebraClass(r._level, vi) + '" style="cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + mEsc + '\')">'
+                    + '<td style="' + TD + ' text-align:center; color:#666;">' + r._level + '</td>'
+                    + BOM_COLUMNS.map(function (c) {
+                        if (c.loc) {
+                            var lv = valueOf(r, c);
+                            return '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                                + '<input type="text" value="' + _esc(lv) + '" data-bom-loc="' + _esc(r.IDNRK) + '" title="' + _esc(lv) + '" '
+                                + 'oninput="window.bomSetLocation(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                                + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>';
+                        }
+                        var v = valueOf(r, c);
+                        return '<td style="' + cellStyle(c) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    }).join('')
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                    + '<input type="text" value="' + _esc(note) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(note) + '" '
                     + 'oninput="window.bomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
                     + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
                     + '</tr>';
@@ -1590,7 +1642,46 @@
                 + '<td style="' + TD + '"></td></tr>';
         }
 
-        // 헤더 정렬 중에는 평면으로 그린다(메인 BOM 탭과 같은 규칙)
+        // ── 계층 정상 — 모자 관계를 그린다(정렬 중이어도 동일: 형제끼리만 재배열,
+        //    부모 바로 다음에 그 자식들이 오는 건 그대로다 — 2026-11-18 사용자 제보 대응,
+        //    메인 BOM 탭과 같은 규칙) ──────────────────────────────────────
+        var walk = _bomVisibleWalk(st);
+        if (walk) {
+            var visIdx3 = 0;
+            walk.forEach(function (item) {
+                var r = item.row, i = item.idx, hasChild = item.hasChild, collapsed = item.collapsed;
+                var zcls = zebraClass(r._level, visIdx3);
+                visIdx3++;
+                var ind = (r._level - 1) * 12;
+                var tw = hasChild
+                    ? '<span onclick="event.stopPropagation(); window._elecBomToggle(' + i + ')" title="' + _esc(_t('하위 구성품 접기/펴기', 'Collapse/expand')) + '" style="cursor:pointer; color:#00707d; user-select:none; display:inline-block; width:20px; height:20px; line-height:20px; text-align:center; font-size:13px; vertical-align:middle;">' + (collapsed ? '&#9658;' : '&#9660;') + '</span>'
+                    : '<span style="color:#cfe3e5;">&#183;</span>';
+                var nt = (st.notes && st.notes[r.IDNRK]) || '';
+                var meH = String(r.IDNRK || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                html += '<tr class="bom-row ' + zcls + '" style="cursor:pointer;"'
+                    + ' onclick="window.bomSelectComponent(\'' + meH + '\')">'
+                    + '<td style="' + TD + ' white-space:nowrap;">'
+                    + '<span style="display:inline-block; width:' + ind + 'px;"></span>' + tw
+                    + ' <span style="color:#666;">' + r._level + '</span></td>'
+                    + BOM_COLUMNS.map(function (c) {
+                        if (c.loc) return renderLocCell(r, '');
+                        var v = valueOf(r, c);
+                        var pad = (c.key === 'OJTXP') ? ' padding-left:' + (5 + ind) + 'px;' : '';
+                        return '<td' + alCls(c) + ' style="' + cellStyle(c, pad) + '" title="' + _esc(v) + '">' + _esc(v) + '</td>';
+                    }).join('')
+                    + '<td style="padding:1px 3px; border:1px solid #cfe3e5; box-sizing:border-box; height:' + ROW_H + '; position:relative;" onclick="event.stopPropagation()">'
+                    + '<input type="text" value="' + _esc(nt) + '" data-bom-note="' + _esc(r.IDNRK) + '" title="' + _esc(nt) + '" '
+                    + 'oninput="window._elecBomSetNote(this)" onfocus="window._bomNoteFocus(this)" onblur="window._bomNoteBlur(this)" '
+                    + 'style="border:none; width:100%; box-sizing:border-box; background:transparent; font-size:11.5px;" placeholder="-"></td>'
+                    + '</tr>';
+            });
+            tbody.innerHTML = html;
+            _elecBomRenderMeta(st, en);
+            return;
+        }
+
+        // ── 계층이 깨진 상태에서 정렬까지 걸려 있으면 — 평면으로 그린다(기존 동작 그대로,
+        //    계층 정상일 땐 위 분기에서 이미 return 했다) ──────────────────────
         var epSorted = _sortRows(st);
         if (epSorted) {
             epSorted.forEach(function (r, vi) {
@@ -1621,6 +1712,7 @@
         // ⚠️ [2026-11-05] 계층이 깨진 응답(ALV에 정렬이 걸린 경우)에서는 **모자 관계를 그리지 않는다** —
         //    접기 화살표와 들여쓰기가 곧 "이 행이 저 행의 자식"이라는 주장이라, 그대로 두면
         //    메인 BOM 탭에서 났던 그 조용한 오답(뒤섞인 모자 관계)이 여기서 그대로 재현된다.
+        //    (여기 도달했다는 건 이미 계층이 깨졌다는 뜻 — _hier 는 항상 false)
         var _hier = window._bomHierOk(st);
         var hidden = -1, visIdx = 0;
         st.rows.forEach(function (r, i) {
