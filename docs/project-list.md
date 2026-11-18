@@ -750,3 +750,27 @@ window.plCheckAgainstProjects()"`가 `async` 함수를 **`.catch()` 없이 바�
 MATRIX 행으로 잘못 집는 **별개의, 전부터 있던** 문제를 발견했다 — 이번 신고(1555073 REV M,
 템플릿 A 경로)와는 다른 코드 경로(`vi===1`)이고 범위가 넓어 따로 검증해야 한다. 다음에 그
 템플릿을 손볼 때 참고할 것.
+
+### 🎯🎯 (2026-11-18 6차) 위 "vi===1 발견만 하고 안 고친 것"도 바로 고침 — 날짜 가드 하나로 템플릿 A/B/C 공통 수정
+
+실측(`1569940 REV H.pdf`·`1569940 REV J.pdf`·`1570975 REV H.pdf`)으로 재확인한 메커니즘:
+REVISIONS 표의 변경내용 문장도 리비전 글자로 시작하고("H KORTEK 27" PANEL TO BOE
+MV270FHB-N20-A850 DUE TO V.BERNARD 3/6/2026") 첫 5토큰 안에 벤더 이름이 우연히 섞여,
+`_matFromLineRows`(템플릿 A/B/C 전체)가 그 문장을 MATRIX 행으로 오인식했다
+(`_matGeneric`엔 이미 있던 가드가 A/B/C 쪽엔 빠져 있었다). **진짜 MATRIX 행은 날짜가
+없고 REVISIONS 행은 끝에 반드시 날짜가 있다** — `_DATE_RE.test(m[2])`면 건너뛰는 한 줄로
+세 템플릿 전부 같이 고쳤다.
+
+고치면서 **같은 자리에서 또 하나**(SCALER 열 게이트 오탐)를 실측으로 더 찾았다 —
+`1570975 REV H.pdf`는 MATRIX에 SCALER 칸이 없는데 REVISIONS 문장("REVISION TO CAPTURE NEW
+MEDIATEK SCALER CHIP")의 "SCALER" 한 낱말 때문에 10칸(A2)으로 잘못 넓혀져 더 깨졌다.
+→ 전체 문서에서 "SCALER" 낱말 하나만 보던 걸 **"PANEL SCALER" 인접 어구**(실제 머리글은
+PANEL 칸 바로 다음에 SCALER 칸이 온다, 1555073 REV M 실측)로 좁혔다 — 산문 속 "SCALER"는
+거의 "PANEL" 바로 뒤에 안 오므로 오탐이 크게 준다.
+
+**검증**: 1555073 REV M(이번 수정과 무관 — 16행·10칸 그대로 유지, 회귀 없음) +
+1569940 REV H/J(가짜 행 1건 사라지고 진짜 6~7행만 남음) + 1570975 REV H(가짜 행 사라지고
+SCALER 오탐도 없어짐, 단 "B THRU D" 같은 글말 리비전 범위 표기는 **이번 수정과 무관한
+별개 한계**로 남아 있음 — 다음 과제) + 같은 폴더 다른 실측 도면 28개 재확인, 그 중 두
+문서에서 줄어든 행(`1569779 UPPER DISPLAY REV E`·`1602012 REV H`)은 둘 다 날짜 있는
+REVISIONS 가짜 행이었음을 원문 대조로 확인(진짜 데이터 유실 아님).

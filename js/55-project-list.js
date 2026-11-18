@@ -2099,8 +2099,14 @@
         //    F/W 두 칸이 더** 붙는다(실측: "...DV430QUB NR NR" — 끝 두 NR 이 그 두 칸이다).
         //    VENDOR 위치(vi===2)는 A 와 완전히 같아서 칸 수로만 가른다 — 그래서 A 를 그대로
         //    두고(기존 8칸 문서를 안 건드리려고) 머리글에 "SCALER" 글자가 있을 때만 10칸 A2 를 쓴다.
+        // ⚠️⚠️ [2026-11-18 2차 실측 1570975 REV H] "SCALER" 한 낱말만 보면 오탐이 난다 — 그
+        //    문서는 REVISIONS 문장("REVISION TO CAPTURE NEW MEDIATEK SCALER CHIP")에 그 말이
+        //    쓰였을 뿐 MATRIX 에 SCALER 칸이 없는데도 걸려서, 엉뚱하게 10칸으로 읽으려다가
+        //    더 깨졌다. 실제 머리글은 PANEL 칸 바로 다음에 SCALER 칸이 오므로("…PANEL SCALER…",
+        //    1555073 REV M 실측) 그 **인접 어구**로만 가른다 — 산문 속 "SCALER" 는 거의 절대
+        //    "PANEL" 바로 뒤에 안 온다.
         var A2 = A.concat(['SCALER', 'SCALER F/W']);
-        var hasScalerCol = L.join(' ').toUpperCase().indexOf('SCALER') >= 0;
+        var hasScalerCol = /PANEL\s+SCALER\b/i.test(L.join(' '));
         var B = ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
                  'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
         var C = ['REVISION', 'VENDOR', 'PART NUMBER', 'MODEL', 'DESCRIPTION',
@@ -2113,6 +2119,14 @@
             var m = _stripZoneLetters(L[i]).match(/^([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(.*)$/);
             if (!m) continue;
             var toks = m[2].split(/\s+/);
+            // ⚠️⚠️ [2026-11-18 2차 실측 1569940/1570975 REV H] REVISIONS 표의 변경내용 문장도
+            // 리비전 글자로 시작하고(그 줄만 보면 rev-cell 모양과 똑같다) 첫 5토큰 안에 벤더
+            // 이름이 우연히 섞인다("H UPDATE TOVIS PANEL TO VAVE BOE MV270FHB-N20. NO MECH
+            // CHANGES. V.BERNARD 6/15/2025" — PANEL 교체를 적은 문장일 뿐인데 TOVIS 가 1번째
+            // 토큰이라 vi===1(템플릿 B)로 오인식돼 MATRIX 행인 척 끼어들었다). 진짜 MATRIX
+            // 행은 날짜가 없고, REVISIONS 행은 끝에 **반드시** 날짜가 있다 — 그 한 가지로 가른다
+            // (_matGeneric 은 이 가드가 이미 있었는데 A/B/C 템플릿 쪽엔 빠져 있었다).
+            if (_DATE_RE.test(m[2])) continue;
             var vi = -1;
             for (var k = 0; k < toks.length && k < 5; k++) {
                 if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { vi = k; break; }
