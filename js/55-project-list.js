@@ -2015,7 +2015,14 @@
         // 착각해 번호를 떼어 버려서, 그 뒤 plParseRevisions 의 "섞임" 감지가 이 줄에 번호가
         // 있었다는 것조차 못 보게 된다(실측: "7.4 VIDEO INPUT SIGNAL: …"가 번호만 사라진 채
         // 리비전 설명으로 그대로 붙었다). 번호를 가진 채로 여기서 거르면 애초에 안 붙는다.
+        // ⚠️⚠️ [2026-11-18 11차] 번호가 **그 앞 줄에만** 있고 이 줄엔 없는 NOTES 이어짐도 있다
+        // ("AVERAGE BRIGHTNESS: 400 cd/M^2" · "ACTIVE AREA:604MM X 1073.78MM") — 번호마다
+        // 다른 라벨을 전부 쫓아가는 건 끝이 없다(CLAUDE.md "하드코딩 지양"). 대신 **이 집안
+        // 문서의 진짜 리비전 설명(실측 1555073·1569940·1570705 수백 건)은 전수로 봐도 "라벨: "
+        // 모양(글자+콜론+공백)을 단 한 번도 안 쓴다**는 공통점을 쓴다 — NOTES 쪽 사양값 표기
+        // 관례일 뿐 변경내용 문장의 어법이 아니다. 라벨이 무엇이든 이 모양이면 거른다.
         if (/^\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:/.test(s)) return false;
+        if (/[A-Za-z]{2,}\s*:(?:\s|$)/.test(s)) return false;
         var up = s.toUpperCase();
         if (_REVCELL_RE.test(s) && _VENDORS.some(function (v) { return up.indexOf(v) !== -1; })) return false;
         return (s.match(/[A-Za-z]/g) || []).length >= 6;
@@ -2411,7 +2418,12 @@
     // 같은 줄 안 어딘가에 이 모양이 보이면 그 줄도 섞인 것으로 본다 — 진짜 설명 문장은 이
     // "숫자. 대문자...．:" 모양을 쓸 일이 없다(실측 1555073·1569940·1570705 의 정상 설명
     // 12+3+14행 전부 이 모양이 없음을 확인).
-    var _NOTES_BOILERPLATE_RE = /IDENTIFY WITH|BILL OF MATERIAL|ENVIRONMENTAL REQUIREMENT|SUITABLY PACKED|REFERENCE ONLY\. PRIMARY|AGILE DATABASE|CONFLICT MINERALS|\b\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:/;
+    // ⚠️⚠️ [2026-11-18 11차] 번호 없이 이어지는 NOTES 줄("AVERAGE BRIGHTNESS: 400 cd/M^2")도
+    // 같은 이유로 잡는다 — 라벨을 하나하나 늘리는 대신, 진짜 리비전 설명은 **콜론 뒤에 공백이
+    // 오는 "라벨: " 모양을 아예 안 쓴다**는 공통점(수백 건 실측)만 쓴다. `_isDescFrag` 에서
+    // 이미 걸러 대부분은 조각 단계에서 안 붙지만, 날짜줄에 바로 딸린 inline 글(그 줄 전체가
+    // 하나로 이미 합쳐져 있어 _isDescFrag 를 안 거친다) 에 섞여 있으면 여기서 한 번 더 걸러낸다.
+    var _NOTES_BOILERPLATE_RE = /IDENTIFY WITH|BILL OF MATERIAL|ENVIRONMENTAL REQUIREMENT|SUITABLY PACKED|REFERENCE ONLY\. PRIMARY|AGILE DATABASE|CONFLICT MINERALS|\b\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:|[A-Za-z]{2,}\s*:(?:\s|$)/;
     var _plFlagNotesMixedDesc = function (recs) {
         return recs.map(function (r) {
             if (!r.desc || !_NOTES_BOILERPLATE_RE.test(r.desc)) return r;
