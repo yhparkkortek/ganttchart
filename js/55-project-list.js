@@ -2437,7 +2437,21 @@
     // 1604319 A.1 같은 **길지만 진짜인** 설명을 오탐으로 가려낸 뒤 남은 것만). "SPECIFICATIONS
     // 200100"은 MATERIAL COMPLIANCE 주석의 고정 숫자라 "SCIENTIFIC GAMES"·"L&W" 등 회사명이
     // 바뀌어도 그대로 걸린다.
-    var _NOTES_BOILERPLATE_RE = /IDENTIFY WITH|BILL OF MATERIAL|ENVIRONMENTAL REQUIREMENT|SUITABLY PACKED|REFERENCE ONLY\. PRIMARY|AGILE DATABASE|CONFLICT MINERALS|DATE CODE\s*\((?:YR\/WK|WK\/YR)\)|COUNTRY OF ORIGIN|ORACLE SUPPLIER NUMBER|REVISION LETTER|SPECIFICATIONS\s*200100|\b\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:|[A-Za-z]{2,}\s*:(?:\s|$)/;
+    // ⚠️⚠️ [2026-11-18 13차, 사용자 재요청 "다른 도면에도 같은 패턴" 4번째 재확인으로 발견]
+    // "NOTES (UNLESS OTHERWISE SPECIFIED):"·"ASSEMBLY NOTES (UNLESS OTHERWISE SPECIFIED):"는
+    // REVISIONS 표 바로 위에 찍히는 **그 표 자신의 캡션 줄**(실측: "REVISIONS" 헤더 다음, 칸
+    // 머리글 "REV. DESCRIPTION DRAWN BY DATE" 앞)인데, 닫는 괄호 ")" 가 콜론 앞에 끼어 있어
+    // 기존 "라벨: " 콜론 규칙(`[A-Za-z]{2,}\s*:`)을 안 타고 새 줄로 조용히 붙었다(1599823 REV
+    // D/E/F "A PRODUCTION RELEASE" 앞에 통째로 붙어 "ASSEMBLY NOTES (UNLESS OTHERWISE
+    // SPECIFIED): PRODUCTION RELEASE"가 됐다 — 정답은 원래 "PRODUCTION RELEASE" 하나뿐이었다).
+    // `_isDescFrag`가 이미 이 목록을 조각 단계에서도 쓰므로, 이 한 줄 추가만으로 **붙기 전에
+    // 막혀** 1599823 은 더 이상 "섞임" 경고 없이 원래 정답으로 돌아간다. 실측 전수(524건) 중
+    // 16건이 "UNLESS OTHERWISE SPECIFIED"(직접 쓰이거나 NOTES 캡션 안), 2건이 "UNLESS
+    // OTHERWISE NOTED"(1602012, 토크 사양 문장 "199.9 G" 가 리비전란 날짜와 같은 줄에 겹쳐
+    // rev 빈칸으로 새는 변종) — 전부 원문 대조로 진짜 오염임을 확인했다. "CONFIDENTIAL" 은
+    // 1452681 의 제목란 저작권 문구("CONFIDENTIAL AND PROPRIETARY")가 REVISIONS 와 같은 Y
+    // 좌표로 접혀 rev 빈칸 통째 조각이 된 경우 — 진짜 변경내용 문장이 이 낱말을 쓸 일이 없다.
+    var _NOTES_BOILERPLATE_RE = /IDENTIFY WITH|BILL OF MATERIAL|ENVIRONMENTAL REQUIREMENT|SUITABLY PACKED|REFERENCE ONLY\. PRIMARY|AGILE DATABASE|CONFLICT MINERALS|DATE CODE\s*\((?:YR\/WK|WK\/YR)\)|COUNTRY OF ORIGIN|ORACLE SUPPLIER NUMBER|REVISION LETTER|SPECIFICATIONS\s*200100|UNLESS OTHERWISE (?:SPECIFIED|NOTED)|CONFIDENTIAL|SUBSIDIARIES|PROTECTION UNDER STATE|\b\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:|[A-Za-z]{2,}\s*:(?:\s|$)/;
     var _plFlagNotesMixedDesc = function (recs) {
         return recs.map(function (r) {
             if (!r.desc || !_NOTES_BOILERPLATE_RE.test(r.desc)) return r;

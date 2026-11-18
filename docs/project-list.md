@@ -974,3 +974,52 @@ DEFORMING. THIS HELPS THE DISPLAY TO CORRECTLY BE RECESSED IN THE DOOR CASTING�
 
 **검증**: 73개 전수 예외 0건. MATRIX 쪽은 손 안 댔으니 전부 그대로. 1555073 REV M·
 1569940 REV H·1604319 REV B(새로 검증한 "길지만 진짜" 사례)는 토씨 하나 안 바뀜.
+
+### 🎯🎯🎯🎯🎯🎯🎯 (2026-11-18 13차, 사용자 네 번째 재요청 "다른 도면에도 같은 패턴 있는지 한 번 더") `by`/`date`/빈 `rev` 필드까지 넓혀서 봄 — "NOTES (UNLESS OTHERWISE SPECIFIED):" 캡션 줄이 조각으로 안 걸리던 구멍
+
+**이전 12차례는 전부 `desc` 필드만 봤다** — 이번엔 지금까지 한 번도 안 열어본 `by`
+(작성자)·`date`(날짜)·빈 `rev`(리비전 글자가 안 잡힌 행) 세 필드를 73개 전수(524건)로
+감사했다. `badBy` **0건**(작성자 칸은 깨끗함) · `badDate` 11건은 조사해보니 전부 "26 JUL
+24"·"20 JAN 2025" 같은 **공백 구분 날짜**(`_DATE_RE`가 이미 정식으로 지원하는 네 번째
+모양)를 내 진단 스크립트의 간이 정규식이 몰라서 생긴 **내 쪽 거짓 양성**이었다(실제
+파서는 멀쩡함, 1604319 REV B의 "20 JAN 2025"로 직접 확인) — 코드 수정 불필요.
+
+**`emptyRev` 77/524(15%)는 대부분 정상**(여러 줄에 걸친 리비전의 완결 줄)이지만, 그중
+하나(`1602012 REV H.pdf`)를 원문과 대조하니 **완전히 다른 성격의 새 버그**가 나왔다 —
+"199.9 G C.SHANE 9/16/2025"(토크 사양 문장의 일부)가 글자+이름+날짜 모양으로 보여
+리비전 "행"으로 잘못 뜯겼고(rev 글자 자리가 숫자라 rev는 빈칸), 그 설명에 진짜 리비전
+문장("1594626-VAR REPLACED PCA1590575-0-0...")과 NOTES 토크 문장("UNLESS OTHERWISE
+NOTED, ALL SCREWS...")이 한 줄에 같이 붙어 있었다.
+
+**73개 전수로 "UNLESS OTHERWISE SPECIFIED"/"UNLESS OTHERWISE NOTED"를 검사하니 16건이
+걸렸다** — 그중 하나(`1599823 REV D/E/F.pdf`)를 원문 대조하니 **더 근본적인 구멍**을
+찾았다: `REVISIONS` 머리글과 칸 머리글 사이에 찍히는 그 표 **자신의 캡션 줄**
+("ASSEMBLY NOTES (UNLESS OTHERWISE SPECIFIED):")이 닫는 괄호 `)`가 콜론 앞에 끼어
+있어서 기존 "라벨: " 콜론 규칙(`[A-Za-z]{2,}\s*:`)을 안 타고, rev A의 진짜 답
+("PRODUCTION RELEASE")에 **조각으로 붙어버렸다**("ASSEMBLY NOTES (UNLESS OTHERWISE
+SPECIFIED): PRODUCTION RELEASE"). `CONFIDENTIAL`(1452681 제목란 저작권 문구)·
+`SUBSIDIARIES`/`PROTECTION UNDER STATE`(같은 문서의 법적 고지문)도 같은 방식으로 원문
+대조 후 추가.
+
+**고친 것**: `_NOTES_BOILERPLATE_RE`(`_isDescFrag`가 조각 단계에서도 같은 목록을 쓰므로
+한 줄 추가로 양쪽 다 적용됨)에 `UNLESS OTHERWISE (?:SPECIFIED|NOTED)` · `CONFIDENTIAL` ·
+`SUBSIDIARIES` · `PROTECTION UNDER STATE` 추가. 결과: `1599823`의 rev A/B는 더 이상
+"섞임" 경고 없이 원래 정답("PRODUCTION RELEASE"/"LOWER LEVEL CHANGES TO 1610803")으로
+돌아왔고(조각 단계에서 막혀 whole-row 폐기가 필요 없어짐), `1555073 REV J4`·`1604319 REV
+B`·`1569940 REV H.2`처럼 진짜 설명 뒤에 캡션이 꼬리로 붙던 행들도 꼬리만 빠지고 본문은
+그대로 살아남았다(예: "REPLACED PCA1551843-0-0 WITH 1570398-VAR"). `1452681_VAR_REV
+H.PDF`는 이번에 처음으로 **진짜 리비전 C.1~H**(이전엔 안 보였던 깨끗한 내용)가 드러났다.
+
+**남은 한계(의도적으로 안 건드림)**: ① `1602012`의 "199.9 G" 잔여물은 NOTES 캡션처럼
+자기 혼자 한 줄이 아니라 **앵커 줄 자체에 인라인으로 섞여** 있어 조각 제외로는 못 뗀다
+(전체 흐름은 읽을 만해서 당장은 그대로 둠) ② `1571018 REV F`의 rev D는 "8. FLAT PANEL
+DISPLAY SPECIFICATIONS:"(번호 있는 NOTES 제목)가 진짜 D 설명과 **한 줄에 같이** 있어서
+전체 조각이 버려져 desc가 빈칸이 됨 — 이건 12차 이전부터 있던 동작이고 **틀리게 보여주는
+게 아니라 비워서 정직하게 모름을 드러내는 것**이라 "모자라면 버린다" 원칙과 같은 결이라
+손대지 않음 ③ `1599823`/`1580044`/`1629124` 등에 남아 있는 "2 C"·"1 F" 식 **선행 숫자가
+리비전 글자 앞에 붙는** 잔여 패턴은 이번 조사 범위 밖의 별개 현상(원인 미조사).
+
+**검증**: 73개 전수 예외 0건, `revTotal` 524 그대로(행 소실 없음), "섞임" 표시 47 →
+50(조각 단계에서 더 세밀하게 걸러 늘어난 안전망, desc 손실 아님). 1555073 REV M·1569940
+REV H·1604319 REV B 세 골드스탠다드 전부 재검증 — 토씨 하나 안 바뀜, 새 오탐 0건.
+MATRIX 쪽(140행)도 콜론·같은 문구로 재검사 — 0건, 구조적으로 그대로 깨끗함.
