@@ -2010,6 +2010,12 @@
         if (_DATE_RE.test(s)) return false;
         if (/^[\d\s.,°R()+-]+$/.test(s)) return false;                 // 605.214 · 228.2 · R3048
         if (/^\d+\s+\d+\s+\S/.test(s)) return false;                   // BOM 행 "8 1 1554302-00-0 …"
+        // ⚠️⚠️ [2026-11-18 10차] "5. DESCRIPTION:" · "7.4 VIDEO INPUT SIGNAL:" 처럼 NOTES 항목
+        // 번호로 시작하는 줄은 여기서 먼저 걸러야 한다 — 아니면 위 _stripBorderNoise 가 치수로
+        // 착각해 번호를 떼어 버려서, 그 뒤 plParseRevisions 의 "섞임" 감지가 이 줄에 번호가
+        // 있었다는 것조차 못 보게 된다(실측: "7.4 VIDEO INPUT SIGNAL: …"가 번호만 사라진 채
+        // 리비전 설명으로 그대로 붙었다). 번호를 가진 채로 여기서 거르면 애초에 안 붙는다.
+        if (/^\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:/.test(s)) return false;
         var up = s.toUpperCase();
         if (_REVCELL_RE.test(s) && _VENDORS.some(function (v) { return up.indexOf(v) !== -1; })) return false;
         return (s.match(/[A-Za-z]/g) || []).length >= 6;
@@ -2388,7 +2394,35 @@
      *     A) `REV. | DESCRIPTION | DRAWN BY | DATE` — 작성자와 날짜가 **각각 한 줄**
      *     B) `REVISION | DESCRIPTION | BY/ DATE`   — 둘이 **한 줄**("JG 06/06/22")
      *     그래서 "날짜로 끝난다"를 두 모양 다 받는다. */
-    window.plParseRevisions = function (text) {
+    // 🎯🎯🎯 [2026-11-18 10차, 사용자 요청 "다른 도면에도 같은 패턴 있는지 확인"으로 발견]
+    //    같은 폴더 73개 중 **38개(52%)** 가 REVISIONS 설명에 NOTES(주석) 문구가 섞여 있었다
+    //    (실측 1576437/1602012/1622777 등). 원인은 지금까지와 다르다 — 이 문서들은 NOTES
+    //    구역과 REVISIONS 표가 페이지에 **나란히** 있어서, pdf.js 가 같은 높이의 왼쪽(NOTES)
+    //    글자와 오른쪽(REVISIONS) 글자를 **한 줄로 합쳐** 뽑는다(실측: "IDENTIFY WITH
+    //    SCIENTIFIC GAMES P/N, REVISION LETTER... AND REVISION TO ADD NEW COMMERICAL LG
+    //    PANEL" 처럼 **거의 모든 줄**이 두 구역 글자의 혼합이다). 지금까지 고친 건 가끔
+    //    끼어드는 몇 낱말이었는데, 이건 **경계 표시가 전혀 없는 통짜 혼합**이라 어디서 잘라야
+    //    NOTES 와 REVISIONS 를 가를 수 있는지 알 방법이 없다 — 억지로 자르면 또 다른 "그럴듯한
+    //    오답"이 된다. 그래서 **복원을 시도하지 않고**, 이 회사 NOTES 문구는 도면마다 거의
+    //    토씨 하나 안 바뀌고 반복된다는 점(표준 양식 문구)만 이용해 "섞였다"를 감지하고,
+    //    **정직하게 못 읽었다고 적는다**(사용자 결정 — 억지로 이어붙이지 않는다).
+    // ⚠️⚠️ 고정 문구 목록만으로는 못 잡는다 — NOTES 항목은 전부 "번호. 제목:" 모양으로 시작해서
+    // ("5. DESCRIPTION:" · "4. MATERIAL COMPLIANCE:" · "6.1 INTEGRATOR:" · "7.3 SIZE, TOPPER:")
+    // 같은 줄 안 어딘가에 이 모양이 보이면 그 줄도 섞인 것으로 본다 — 진짜 설명 문장은 이
+    // "숫자. 대문자...．:" 모양을 쓸 일이 없다(실측 1555073·1569940·1570705 의 정상 설명
+    // 12+3+14행 전부 이 모양이 없음을 확인).
+    var _NOTES_BOILERPLATE_RE = /IDENTIFY WITH|BILL OF MATERIAL|ENVIRONMENTAL REQUIREMENT|SUITABLY PACKED|REFERENCE ONLY\. PRIMARY|AGILE DATABASE|CONFLICT MINERALS|\b\d{1,2}\.\d*\s+[A-Z][A-Z\s,/&]{2,40}:/;
+    var _plFlagNotesMixedDesc = function (recs) {
+        return recs.map(function (r) {
+            if (!r.desc || !_NOTES_BOILERPLATE_RE.test(r.desc)) return r;
+            return {
+                rev: r.rev, by: r.by, date: r.date,
+                desc: _t('⚠️ 주석(NOTES)과 섞여 정확히 읽지 못했습니다 — "도면 열기"로 직접 확인해주세요.',
+                          '⚠️ Mixed with the NOTES text and could not be read accurately — open the drawing to check.')
+            };
+        });
+    };
+    var _plParseRevisionsRaw = function (text) {
         var L = _lines(text);
         var byLine = _revFromLineRows(L);          // pdf.js 모양 먼저(앱이 실제로 받는 글자)
         if (byLine.length) return byLine;
@@ -2423,6 +2457,9 @@
             if (buf.length > 14) buf.shift();                   // 표 밖 글이 섞여도 폭주하지 않게
         }
         return out;
+    };
+    window.plParseRevisions = function (text) {
+        return _plFlagNotesMixedDesc(_plParseRevisionsRaw(text));
     };
 
     // DISPLAY INFORMATION MATRIX 의 **열 이름 사전**(데이터) — PDF 는 머리글도 줄바꿈으로 쪼개 주므로
