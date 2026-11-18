@@ -2126,11 +2126,66 @@
                  'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL'] },
         { vi: 1,
           cols: ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
-                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'] },
-        { vi: 0,
-          cols: ['REVISION', 'VENDOR', 'PART NUMBER', 'MODEL', 'DESCRIPTION',
-                 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'] }
+                 'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'] }
+        // ⚠️ vi===0 (VENDOR 가 리비전 바로 다음 토큰)은 고정 칸 수 템플릿으로 못 둔다 — 아래
+        // `_matVi0Split` 참고(2026-11-18, 사용자가 보내준 실제 도면 캡처로 확정).
     ];
+    // 🎯🎯 [2026-11-18 5차, 사용자가 보내준 실제 도면 캡처로 확정] vi===0 (VENDOR 가 리비전
+    //    바로 다음 토큰) 문서의 **진짜** 칸 순서 — 1569940·1570975·1569779 세 도면의 MONITOR
+    //    INFORMATION MATRIX 캡처로 직접 확인했다:
+    //    REVISION | VENDOR | VENDOR MODEL # | PART NUMBER | DESCRIPTION | TOUCH SCREEN
+    //    CONTROLLER | TOUCH SENSOR | TOUCH F/W | PANEL | VIDEO F/W
+    //    (예전 템플릿 C 는 "MODEL"/"DESCRIPTION" 자리와 TOUCH SCREEN CONTROLLER 칸 자체가
+    //    틀려 있었다 — 그래서 아래는 **고정 칸 수 템플릿이 아니라 전용 함수**다.)
+    //    ⚠️⚠️ DESCRIPTION 값 자체가 공백을 포함해서("ASY,27IN TOPPER") 토큰 수로 칸을 못
+    //    나눈다 — 그래서 **PANEL 의 두 번째 벤더 이름**(브랜드+모델 2토큰)을 이정표로 삼아
+    //    거꾸로 센다: 그 이정표 앞 3칸은 항상 TOUCH SCREEN CONTROLLER·TOUCH SENSOR·
+    //    TOUCH F/W(한 토큰씩), 그 앞 전부가 DESCRIPTION, 이정표+1칸 뒤가 VIDEO F/W.
+    //    ⚠️ 이정표를 못 찾으면(실측: PANEL·DESCRIPTION 값이 앞뒤 다른 줄로 흩어진 행이 실제로
+    //    있었다 — "C-D"·"E-F" 등) **그 행은 버린다** — 모자랄 때와 같은 이유(틀리게 채우지
+    //    않는다). 일부 행이 덜 잡히는 건 아쉽지만, 잡힌 행은 전부 진짜 칸에 진짜 값이 든다.
+    var VI0_NAMES = ['REVISION', 'VENDOR', 'VENDOR MODEL #', 'PART NUMBER', 'DESCRIPTION',
+                      'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
+    // ⚠️ [2026-11-18 7차 실측 1570705 REV M] vi===0 의 **다른** 집안 — 공백 분리 없이 8토큰이
+    // 딱 떨어지는 문서용(예전 템플릿 C 와 동일한 고정 칸 수). 이 칸 이름은 실측 이미지로
+    // 확정한 게 **아니라** 예전부터 쓰던 근사치 그대로다(이번엔 행이 안 버려지게 하는 게
+    // 목적 — 이름 정확도는 사람이 이 문서를 직접 보고 확인해야 한다).
+    var VI0_RIGID_NAMES = ['REVISION', 'VENDOR', 'PART NUMBER', 'MODEL', 'DESCRIPTION',
+                            'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
+    var _matVi0Split = function (toks) {
+        if (toks.length < 10) return null;             // VENDOR+MODEL#+PN(3) + 설명1+ + touch3 + panel2 + videoFw1
+        var rest = toks.slice(3);
+        var vi2 = -1;
+        for (var k = 1; k < rest.length; k++) {         // 0번은 설명의 일부일 수 있으니 1부터 찾는다
+            if (_VENDORS.indexOf(rest[k].toUpperCase()) !== -1) { vi2 = k; break; }
+        }
+        if (vi2 < 4) return null;
+        // ⚠️⚠️ [2026-11-18 6차 실측 1570975] TOUCH F/W 도 PANEL·DESCRIPTION 과 같은 이유로
+        // "V 0.02"처럼 공백 때문에 토큰 **둘**일 수 있다 — PANEL 이정표 바로 앞 두 토큰이
+        // "V"+숫자 모양이면 그 둘을 한 칸(TOUCH F/W)으로 본다(1569940 류는 N/A 한 토큰뿐이라
+        // 그동안 안 드러났다). 이걸 안 보면 touch 세 칸이 한 칸씩 밀려 **TOUCH SCREEN
+        // CONTROLLER 값이 DESCRIPTION 뒤에 잘못 붙는다**(실측: "…FILLER,27IN.LOWER,UK
+        // SA270HA | TP270WT6A | V | 0.01 | …" 처럼 컨트롤러 모델명이 DESCRIPTION 으로 샜다).
+        var touchFwSpan = (/^V$/i.test(rest[vi2 - 2]) && /^[\d.]+$/.test(rest[vi2 - 1])) ? 2 : 1;
+        var touchSpan = 2 + touchFwSpan;
+        var descEnd = vi2 - touchSpan;
+        if (descEnd < 1 || rest.length < vi2 + 3) return null;
+        var desc = rest.slice(0, descEnd).join(' ');
+        // ⚠️⚠️ [2026-11-18 6차 실측 1570975] DESCRIPTION 값 자체가(REVISIONS 쪽 "SUFFIX"/
+        // "SENSOR FOR…"와 똑같은 뿌리로) **다른 줄로 흩어져 이 줄엔 아예 없는** 행도 있었다 —
+        // 그런 행은 위 보정을 해도 descEnd 가 0 이하로 떨어지거나(`descEnd<1`로 걸러짐) 짧은
+        // 모델 코드 하나만 남는다. 진짜 DESCRIPTION은 이 집안 문서 전부 "ASY,…"/"DOOR POD,"
+        // 처럼 **글자가 넉넉한 서술문**이고, 컨트롤러/센서 모델 코드는 글자 수가 적다 — 그
+        // 차이로 가른다. 모자라면(=이 줄에 DESCRIPTION 이 없었다는 신호) 억지로 못 맞추고
+        // 그 행은 버린다(틀리게 채우지 않는다).
+        if ((desc.match(/[A-Za-z]/g) || []).length < 6) return null;
+        return {
+            desc: desc,
+            touch: [rest[descEnd], rest[descEnd + 1], rest.slice(descEnd + 2, vi2).join(' ')],
+            panel: rest.slice(vi2, vi2 + 2).join(' '),
+            videoFw: rest[vi2 + 2]
+        };
+    };
     var _matFromLineRows = function (L, hasTitleAnywhere) {
         var headers = null, rows = [];
         for (var i = 0; i < L.length; i++) {
@@ -2153,6 +2208,36 @@
                 if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { vi = k; break; }
             }
             if (vi < 0) continue;
+            if (vi === 0) {
+                // ⚠️⚠️ [2026-11-18 7차 실측 1570705 REV M] vi===0 가 전부 1569940/1570975 류의
+                // 10칸(VENDOR MODEL #·DESCRIPTION 공백분리) 모양은 아니다 — 1570705 는 매 행이
+                // 정확히 8토큰으로 **공백 없이 딱 떨어진다**("A TOVIS 1570705-ALT1 L21C3ATxSG
+                // TP194SUC3A/CTS108 TC0194004A V0.14 T215HVN01.1 21.7.G"). 위 elastic 분해는
+                // 최소 10토큰을 요구해서 이런 문서의 행을 전부 버렸다(실측: 21행 → 0행, 진짜
+                // 퇴보). → **elastic 을 먼저 시도하고, 실패하면 옛 고정 9칸으로 재시도**한다.
+                // 한 도면 안에서 둘을 섞지 않는다(먼저 자리 잡은 쪽으로 `headers` 를 고정).
+                if (!headers || headers === VI0_NAMES) {
+                    var v0 = _matVi0Split(toks);
+                    if (v0) {
+                        headers = VI0_NAMES;
+                        rows.push([m[1].replace(/\s*-\s*/, '-'), toks[0], toks[1], toks[2],
+                                   v0.desc, v0.touch[0], v0.touch[1], v0.touch[2], v0.panel, v0.videoFw]);
+                        if (rows.length > 40) break;
+                        continue;
+                    }
+                }
+                // ⚠️⚠️ 토큰이 "8개 이상"이면 거의 다 받아줘서는 안 된다 — elastic 이 실패한
+                // family-A 행(설명이 흩어져서 짧게 끝나야 할 자리에 법적 문구 꼬리까지 줄줄이
+                // 붙은 긴 줄, 실측 1570975 "A THRU D … -- ON SCIENTIFIC GAMES DRAWING …")도
+                // `>=`면 걸려서 엉뚱한 고정 9칸으로 잘못 확정돼 버렸다. **정확히** 8개일 때만
+                // (1570705 실측 전부 0~1개 오차 없이 딱 떨어짐) family-B 로 받는다.
+                if ((!headers || headers === VI0_RIGID_NAMES) && toks.length === VI0_RIGID_NAMES.length - 1) {
+                    headers = VI0_RIGID_NAMES;
+                    rows.push([m[1].replace(/\s*-\s*/, '-')].concat(toks));
+                    if (rows.length > 40) break;
+                }
+                continue;
+            }
             var cols = null;
             for (var ti = 0; ti < window.PL_MATRIX_TEMPLATES.length; ti++) {
                 var tpl = window.PL_MATRIX_TEMPLATES[ti];

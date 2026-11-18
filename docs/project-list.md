@@ -831,3 +831,44 @@ DESCRIPTION 칸 값이 "ASY,27IN TOPPER"처럼 **공백을 포함**해서, 단�
 사고(지난번에 고침)와 칸 이름이 실제 뜻과 정확히 맞는가(이번에 못 고침)는 별개의 문제다.
 고치려면 **사람이 그 도면의 MATRIX 표를 직접 보고** 진짜 칸 순서를 한 번 확인해 주는 것이
 제일 빠르다 — 텍스트 추출만으로 계속 되짚다간 ②처럼 없던 칸이 생기는 사고가 반복된다.
+
+### 🎯🎯🎯 (2026-11-18 9차) 사용자가 실제 도면 캡처 2장을 보내줘서 vi===0 칸 이름을 확정함
+
+위 ③에서 "사람이 직접 봐야 한다"고 적은 바로 그 확인을 사용자가 1569940·1570975 REV H 의
+**MONITOR INFORMATION MATRIX 표 원본 캡처**로 해줬다. 진짜 칸 순서:
+
+```
+REVISION | VENDOR | VENDOR MODEL # | PART NUMBER | DESCRIPTION |
+TOUCH SCREEN CONTROLLER | TOUCH SENSOR | TOUCH F/W | PANEL | VIDEO F/W
+```
+
+(예전 템플릿 C 는 "VENDOR MODEL #" 자리를 "PART NUMBER"로, "PART NUMBER" 자리를 "MODEL"로
+부르고 "TOUCH SCREEN CONTROLLER" 칸 자체가 없었다 — 이름만 틀린 게 아니라 **칸 하나가
+통째로 빠져** 있었다.)
+
+**값 쪽 난관**: DESCRIPTION 값 자체가 "ASY,27IN TOPPER"처럼 **공백을 포함**해서 토큰 수로
+칸을 못 가른다 — 그래서 **PANEL 의 두 번째 벤더 이름**(브랜드+모델 2토큰)을 이정표 삼아
+거꾸로 센다(그 앞 3칸은 TOUCH SCREEN CONTROLLER·TOUCH SENSOR·TOUCH F/W, 그 앞 전부가
+DESCRIPTION). 실측으로 **세 겹의 함정**을 더 찾아 같이 고쳤다:
+1. **TOUCH F/W 도 공백으로 쪼개질 수 있다**(실측 1570975 "V 0.01") — 안 보면 touch 세 칸이
+   한 칸씩 밀려 TOUCH SCREEN CONTROLLER 값이 DESCRIPTION 으로 잘못 흡수된다. PANEL 이정표
+   바로 앞 두 토큰이 "V"+숫자 모양이면 그 둘을 TOUCH F/W 한 칸으로 묶는다.
+2. **DESCRIPTION 이 이 줄에 아예 없는 행도 있다**(흩어져서 다른 줄로 — REVISIONS 표의
+   "SUFFIX"/"SENSOR FOR…"와 같은 뿌리). 그런 행은 억지로 못 맞추고 **글자 수 검사**(진짜
+   DESCRIPTION은 늘 글자가 넉넉한 서술문, 컨트롤러/센서 코드는 글자가 적다)로 걸러 버린다.
+3. **vi===0 이 전부 이 10칸 집안은 아니었다** — 1570705 REV M 류는 공백 분리 없이 **정확히
+   8토큰**으로 딱 떨어지는 다른(예전 템플릿 C 와 같은) 양식이다. 처음엔 이 문서들을 전부
+   10칸 전용으로 돌렸다가 **21~26행 전부가 0행으로 사라지는 진짜 퇴보**를 냈다(최소 토큰
+   수 10개 요구가 8토큰짜리 문서를 전부 버렸다) — 10칸을 먼저 시도하고 실패하면 **예전
+   고정 9칸으로 다시 시도**하도록 되돌렸다(한 도면 안에서 둘을 안 섞는다). ⚠️⚠️ 이 되돌림
+   자체도 한 번 더 깨질 뻔했다 — "토큰이 8개 **이상**이면" 받아주면, 10칸 집안에서 DESCRIPTION
+   이 흩어져 법적 문구 꼬리까지 길게 붙은 줄("-- ON SCIENTIFIC GAMES DRAWING 201000,
+   ENVIRONMENTAL RESTRICTIONS…")도 걸려서 엉뚱한 9칸으로 잘못 확정됐다 — **정확히** 8개일
+   때만(1570705 실측 전부 오차 없이 딱 떨어짐) 받도록 좁혀야 했다.
+
+**검증**: 1569940/1570975 는 이제 **실측 이미지와 글자 그대로 일치**(TOUCH SCREEN
+CONTROLLER·TOUCH SENSOR·TOUCH F/W·PANEL·VIDEO F/W 전부 제자리) — 단 DESCRIPTION 이
+흩어진 행(1570975 의 ALT1/ALT2 대부분)은 **억지로 채우지 않고 행째 버렸다**(실측 6행 →
+2행, 남은 2행은 전부 정확). 1570705 계열(M/M(2)/N_1/REVL) 은 **21~26행이 그대로 돌아옴**
+(퇴보 없음). 1555073 REV M(전혀 다른 vi===2 경로)은 손 하나 안 댔으니 16행·10칸 그대로.
+같은 폴더 전체 73개(그사이 사용자가 3개를 더 올렸다) 로 재확인해 예외·새 regressions 0건.
