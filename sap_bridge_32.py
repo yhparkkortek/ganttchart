@@ -1990,6 +1990,25 @@ def fetch_where_used(materials, plant='1000'):
             wnd = session.findById('wnd[0]')
             _navigate_to_where_used_screen(session, wnd, mat, plant)
             wnd = session.findById('wnd[0]')
+            # 🎯 [2026-11-18 실측, 사용자 제보 "108904 사용처 조회해줘"가 빈 라벨만 돌려줌]
+            # 결과 그리드로 못 들어갔을 때 SAP이 남기는 "E: 자재 X을(를) BOM에서
+            # 찾지못했습니다" 상태표시줄 메시지를 안 보고 바로 _sap_dump_screen_body로
+            # 넘어갔던 게 원인 — 그리드/트리가 없으니 'fields' 폴백이 "뷤"(결과 보기 설정)
+            # 화면의 빈 입력칸 라벨(요청수량/결과수량/품목범주/용도/다중레벨 등)만 주워
+            # 마치 조회가 깨진 것처럼 보이는 결과를 냈다. 라이브 세션으로 직접 재현·확인:
+            # 104446(실제 사용처 많음)은 정상 그리드가 나오고, 108904은 매번 이 에러로
+            # 끝나 뷤 화면에 머무른다 — 즉 네비게이션 버그가 아니라 "이 자재는 지금 조회
+            # 범위(자재 BOM·직접 사용처)에서 상위 품목이 없다"는 SAP의 정상 응답이다.
+            # 이걸 "사용처 없음"으로 명확히 알리지 않으면 매번 빈 라벨 더미로 보여
+            # "고장났다"는 오해를 반복시킨다.
+            try:
+                sbar_text = session.findById('wnd[0]/sbar').Text
+            except Exception:
+                sbar_text = ''
+            if sbar_text.startswith('E:') and ('찾지못했습니다' in sbar_text or '찾지 못했습니다' in sbar_text):
+                sections.append(f'[자재 {mat}]\n(사용처 없음 — SAP 응답: "{sbar_text[2:].strip()}". 지금 조회 범위(자재 BOM·직접 사용처)에서 이 자재를 쓰는 상위 품목을 찾지 못했습니다.)')
+                ok_count += 1
+                continue
             body, _source = _sap_dump_screen_body(wnd)
             if body:
                 sections.append(f'[자재 {mat}]\n{body}')
