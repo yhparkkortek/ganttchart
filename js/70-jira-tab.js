@@ -1510,17 +1510,18 @@
     //  "동기화"할 코드 자체가 없다(한쪽에서 바꾸면 다른 쪽은 다음에 그릴 때 그 값을 본다).
     // ⚠️⚠️ [2026-11-11 사용자 정정] 첫 시도는 JIRA 코드를 **새 줄**로 맨 아래에 붙였는데,
     //  사용자가 원한 건 "프로젝트 코드" 자리를 **같은 줄에서** 4칸 → 6칸으로 늘려 그 옆에
-    //  넣는 것이었다(첨부 스크린샷 — 고객모델명·프로젝트코드 다음 칸에 JIRA 코드가 나란히).
-    //  그래서 끝에 덧붙이지 않고, 프로젝트 코드 칸 **바로 뒤·프로젝트 명칭 칸 바로 앞**에
-    //  끼워 넣고 그리드를 4열→6열로 늘린다. 원본(js/22g) 문자열이 바뀌면(다른 버전) 그
-    //  이정표를 못 찾을 수 있으니, 그때는 예전처럼 맨 끝에 붙이는 것으로 안전하게 물러난다.
+    //  넣는 것이었다. 그때는 js/22g 그리드가 4열(고객모델명·프로젝트코드 / 프로젝트명칭·KTK)
+    //  뿐이라 6열로 늘리고 "프로젝트 명칭" 앞에 끼워 넣는 이정표 매칭이 필요했다.
+    // 🔀 [2026-11-18 사용자 요청] "프로젝트 코드·명칭은 pair로, 고객모델명은 새 고객모델내역과
+    //  pair로" 배치를 다시 짜면서 js/22g 자체가 **이미 6열**(고객모델명·프로젝트코드·KTK /
+    //  고객모델내역·프로젝트명칭·(빈칸))을 반환하도록 바뀌었다 — 2행 3번째 칸이 바로 이
+    //  JIRA 칸 자리라, 이제 그리드 폭을 늘릴 필요 없이 **원본 HTML의 맨 끝에 붙이기만** 하면
+    //  정확히 그 빈칸을 채운다(아래 전신 fallback과 같은 방식 — 그래서 이정표 매칭 자체를
+    //  없앴다). js/22g가 다시 열 수를 바꾸면 이 자리도 같이 맞춰야 한다.
     (function () {
         var orig = window._renderModelCardHtml;
         if (typeof orig !== 'function' || orig.__jiraWrapped) return;
-        var GRID4 = 'grid-template-columns:140px 1fr 140px 1fr; padding:10px 12px;';
-        var GRID6 = 'grid-template-columns:140px 1fr 140px 1fr 110px 1fr; padding:10px 12px;';
         var LBL = '<label style="font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; background:#fff; white-space:nowrap;">';
-        var PROJNAME_ANCHOR = LBL + '프로젝트 명칭</label>';
         var fn = function (model, idx) {
             var html = orig(model, idx);
             var unit = model.unitId || '';
@@ -1540,12 +1541,8 @@
                 + ' style="flex:0 0 auto; padding:0 9px; border-radius:5px; font-size:12px; cursor:pointer; border:none;'
                 + ' background:#e0f5f7; color:#00707d; transition:background .15s;">🔍</button>'
                 + '</div>';
-            if (html.indexOf(GRID4) !== -1 && html.indexOf(PROJNAME_ANCHOR) !== -1) {
-                html = html.replace(GRID4, GRID6).replace(PROJNAME_ANCHOR, field + PROJNAME_ANCHOR);
-            } else {
-                var tail = '</div></div>';
-                if (html.slice(-tail.length) === tail) html = html.slice(0, -tail.length) + field + tail;
-            }
+            var tail = '</div></div>';
+            if (html.slice(-tail.length) === tail) html = html.slice(0, -tail.length) + field + tail;
             return html;
         };
         fn.__jiraWrapped = true;

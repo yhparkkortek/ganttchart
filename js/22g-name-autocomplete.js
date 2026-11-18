@@ -272,15 +272,23 @@ window._renderModelCardHtml = function(model, idx) {
             _unitSel +
             _moveBtns + _delBtn +
         '</div>' +
-        '<div class="concept-grid" style="grid-template-columns:140px 1fr 140px 1fr; padding:10px 12px;">' +
+        '<div class="concept-grid" style="grid-template-columns:140px 1fr 140px 1fr 140px 1fr; padding:10px 12px;">' +
+            // 🔀 [2026-11-18 사용자 요청] "프로젝트 코드·프로젝트 명칭은 pair로 같이 다녀야
+            // 함" + "고객 모델명과 pair로 쓸 고객 모델내역을 신설" — 6열(3쌍)로 짝을 맞춘다:
+            // 1행 [고객모델명|프로젝트코드|KTK PN_모델명], 2행 [고객모델내역|프로젝트명칭|(JIRA
+            // 코드, js/70이 끝에 덧붙임)]. js/70-jira-tab.js의 _renderModelCardHtml 감싸기가
+            // 이 HTML의 "맨 끝"에 JIRA 필드를 붙여 2행 3번째 칸을 채운다 — 이 함수가 끝나는
+            // 순서를 바꾸면 그쪽 삽입 위치도 같이 바뀐다.
             _lbl + '고객 모델명</label>' +
             '<input type="text" class="u-input" data-model-field="고객모델명" placeholder="예: STELLAR32" value="' + escapeHtml(model.고객모델명 || '') + '">' +
             _lbl + '프로젝트 코드</label>' +
             '<input type="text" class="u-input" data-model-field="프로젝트코드" placeholder="예: G2608OB" value="' + escapeHtml(model.프로젝트코드 || '') + '">' +
-            _lbl + '프로젝트 명칭</label>' +
-            '<input type="text" class="u-input" data-model-field="프로젝트명칭" placeholder="예: LNW>S32>LOWER" value="' + escapeHtml(model.프로젝트명칭 || '') + '">' +
             _lbl + 'KTK PN_모델명 <span style="color:#e03131;">*</span></label>' +
             '<input type="text" class="u-input req-field" data-model-field="KTK" placeholder="예: 502574_MVD>KTS320DPS01" value="' + ktkVal + '" oninput="window._checkRequiredField(this)">' +
+            _lbl + '고객 모델내역</label>' +
+            '<input type="text" class="u-input" data-model-field="고객모델내역" placeholder="예: STELLAR 32 LOWER" value="' + escapeHtml(model.고객모델내역 || '') + '">' +
+            _lbl + '프로젝트 명칭</label>' +
+            '<input type="text" class="u-input" data-model-field="프로젝트명칭" placeholder="예: LNW>S32>LOWER" value="' + escapeHtml(model.프로젝트명칭 || '') + '">' +
         '</div>' +
     '</div>';
 };
@@ -359,7 +367,7 @@ window.renderProjectModels = function() {
     window._mcPruneOrphanUnits(); // 이 함수가 돌 때마다(프로젝트를 열 때도 포함) 유령 제품구분자를 쓸어낸다
     var models = window.tabData.projectModels;
     if (!models || !models.length) {
-        models = [{ unitId: '', 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' }];
+        models = [{ unitId: '', 고객모델명: '', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' }];
         window.tabData.projectModels = models;
     }
     container.innerHTML = models.map(function(m, i) { return window._renderModelCardHtml(m, i); }).join('');
@@ -384,6 +392,7 @@ window._syncProjectModelsFromDom = function() {
         out.push(Object.assign({}, prev[i] || {}, {
             unitId: card.dataset.unitId || '',
             고객모델명: gf('고객모델명'),
+            고객모델내역: gf('고객모델내역'),
             프로젝트코드: gf('프로젝트코드'),
             프로젝트명칭: gf('프로젝트명칭'),
             KTKPN: us === -1 ? ktkRaw : ktkRaw.slice(0, us),
@@ -414,7 +423,7 @@ window.moveProjectModel = function(idx, dir) {
 window.addProjectModel = function() {
     window.tabData = window.tabData || {};
     if (!window.tabData.projectModels || !window.tabData.projectModels.length) {
-        window.tabData.projectModels = [{ unitId: '', 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' }];
+        window.tabData.projectModels = [{ unitId: '', 고객모델명: '', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '' }];
     }
     var units = window.getMcUnits ? window.getMcUnits() : [];
     var usedIds = window.tabData.projectModels.map(function(m) { return m.unitId; });
@@ -427,7 +436,7 @@ window.addProjectModel = function() {
     var _copied = _base.map(function(r) {
         return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: !!r.useForAnalysis };
     });
-    window.tabData.projectModels.push({ unitId: nextUnit, 고객모델명: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '', materials: _copied });
+    window.tabData.projectModels.push({ unitId: nextUnit, 고객모델명: '', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '', KTKPN: '', KTK모델명: '', materials: _copied });
     window.renderProjectModels();
 };
 
@@ -490,6 +499,7 @@ window.collectTabData = function() {
     // 선택 1: 첫 번째 카드를 단일값 필드에 반영 (기존 downstream 코드 하위 호환)
     if (_cardModels.length > 0) {
         pm.고객모델명 = _cardModels[0].고객모델명;
+        pm.고객모델내역 = _cardModels[0].고객모델내역;
         pm.프로젝트코드 = _cardModels[0].프로젝트코드;
         pm.프로젝트명 = _cardModels[0].프로젝트명칭;
         pm.KTKPN = _cardModels[0].KTKPN;
@@ -502,7 +512,7 @@ window.collectTabData = function() {
     // 프롬프트가 이 pm.models를 읽어 각 모델의 식별자를 keywords에 포함하도록 지시한다 —
     // 헤드리스 재생성(_tpMaybeAutoRegen)도 ctx.projectMeta로 이 필드를 그대로 넘겨받는다.
     pm.models = _cardModels.map(function(m) {
-        return { 고객모델명: m.고객모델명, 프로젝트코드: m.프로젝트코드,
+        return { 고객모델명: m.고객모델명, 고객모델내역: m.고객모델내역, 프로젝트코드: m.프로젝트코드,
                  프로젝트명칭: m.프로젝트명칭, KTKPN: m.KTKPN, KTK모델명: m.KTK모델명 };
     });
     bind('sum-pm', '프로젝트담당자');
@@ -611,6 +621,7 @@ window.populateTabData = function() {
             td.projectModels = [{
                 unitId: _firstUnit,
                 고객모델명: pm.고객모델명 || pm.모델명 || '',
+                고객모델내역: pm.고객모델내역 || '',
                 프로젝트코드: pm.프로젝트코드 || '',
                 프로젝트명칭: pm.프로젝트명 || '',
                 KTKPN: pm.KTKPN || '',
