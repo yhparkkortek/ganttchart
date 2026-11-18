@@ -307,25 +307,6 @@
         { key: 'back', label: '후면', labelEn: 'Back' },
         { key: 'side', label: '측면', labelEn: 'Side' }
     ];
-    // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘(DC 표시 등) / 필요시 추가할 수 있도록" —
-    //    라벨에 자주 쓰이는 전기·기호 글자. 코드 안 고치고 **이 목록에 한 줄만** 더하면 는다.
-    // 🔁 [2026-11-13 2차, 사용자 요청] DC/AC 는 글자(유니코드)가 아니라 "작은 그림(이미지)"으로
-    //    정확히 맞추기로 해서(폰트마다 막대+점선/물결 모양이 다르게 보임) — 인증마크와 같은
-    //    `CERT_MARK_CATALOG`(DC/AC 항목)로 옮기고 여기서는 뺐다.
-    var DOC_LABEL_SPECIAL_CHARS = [
-        { ch: 'Ω', title: '옴' },
-        { ch: '±', title: '플러스마이너스' },
-        { ch: '°', title: '도' },
-        { ch: 'µ', title: '마이크로' },
-        { ch: '≥', title: '이상' },
-        { ch: '≤', title: '이하' },
-        { ch: '×', title: '곱하기/바이' },
-        { ch: '→', title: '화살표' },
-        { ch: '℃', title: '섭씨' },
-        { ch: '™', title: '트레이드마크' },
-        { ch: '®', title: '등록상표' },
-        { ch: '©', title: '저작권' }
-    ];
 
     var _pad = function (n) { return (n < 10 ? '0' : '') + n; };
     var _today = function () { var d = new Date(); return d.getFullYear() + _pad(d.getMonth() + 1) + _pad(d.getDate()); };
@@ -1552,8 +1533,11 @@
                 + (isSel ? ' outline:2px dashed #2f9e44; outline-offset:2px;' : '');
             var inner;
             if (cat.noImage) {
+                // 🔳 [2026-11-19, 사용자 요청] "글자가 서로 겹쳐서 가려지지 않도록" — CB 처럼 그림
+                //    없이 글자만 찍는 배지도 흰 배경이었다. 투명으로 바꿔 다른 표시와 겹쳐도
+                //    서로를 가리지 않게 한다.
                 inner = '<span style="display:inline-block; border:0.12em solid #e03131; border-radius:0.2em; padding:0.1em 0.4em;'
-                    + ' font-weight:bold; background:#fff; color:#e03131; font-size:1.3em; white-space:nowrap;">' + _esc(cat.label) + '</span>';
+                    + ' font-weight:bold; background:transparent; color:#e03131; font-size:1.3em; white-space:nowrap;">' + _esc(cat.label) + '</span>';
             } else {
                 wrapStyle += ' width:' + (m.wem || 4) + 'em; aspect-ratio:' + cat.w + '/' + cat.h + ';';
                 var markUrl = 'assets/certmarks/' + cat.key + '.png';
@@ -1663,25 +1647,6 @@
     window._docLabelNoteLivePatch = function (code, i, val) {
         var sel = '[data-note-text][data-note-code="' + CSS.escape(code) + '"][data-note-idx2="' + i + '"]';
         [].slice.call(document.querySelectorAll(sel)).forEach(function (el) { el.textContent = val; });
-    };
-    // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘 / 필요시 추가할수 있도록" — 마지막으로
-    //    커서가 있던 textarea(`window._docLabelActiveTextarea`, focusin 으로 기억해 둠)의 커서
-    //    위치에 글자를 끼워 넣는다. `input` 이벤트를 직접 쏴서 기존 `oninput`(실시간 반영)·
-    //    `onchange`(저장) 핸들러가 그대로 걸리게 한다(새 경로를 안 만든다).
-    window._docLabelInsertChar = function (ch) {
-        var ta = window._docLabelActiveTextarea;
-        if (!ta || !document.contains(ta)) {
-            _toast('⚠️ ' + _t('먼저 표시 입력칸을 한 번 눌러 커서를 둔 뒤 눌러주세요.', 'Click into a note field first.'), 'error');
-            return;
-        }
-        var s = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
-        var e = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
-        ta.value = ta.value.slice(0, s) + ch + ta.value.slice(e);
-        var pos = s + ch.length;
-        ta.focus();
-        try { ta.setSelectionRange(pos, pos); } catch (errSel) { /* 일부 input 타입은 지원 안 함 */ }
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
-        ta.dispatchEvent(new Event('change', { bubbles: true }));
     };
     // ↔ [2026-11-13, 사용자 요청] "정렬 기능 추가해줘(왼쪽·가운데·오른쪽)"
     window._docLabelNoteAlignSet = async function (code, i, align) {
@@ -1843,8 +1808,12 @@
                 //    `data-note-text` 를 달아 둔다 — 목록 textarea 의 `oninput` 이 전체를 다시
                 //    그리지 않고(그러면 타이핑 중 포커스가 날아간다) 이 칸 **글자만** 바로 고쳐
                 //    쓴다(모달·표 썸네일 둘 다, 같은 code·idx 를 가진 칸이면 전부).
+                // 🔳 [2026-11-19, 사용자 요청] "글자가 서로 겹쳐서 가려지지 않도록 배경을
+                //    투명으로" — 흰 배경이 거의 불투명(.94)이라 표시 두 개가 겹치면 뒤쪽 글자가
+                //    통째로 가려졌다. 투명으로 바꿔 겹쳐도 둘 다 보이게 한다(겹친 자리는 글자끼리
+                //    섞여 읽기 어려울 수 있지만, 최소한 한쪽이 완전히 숨어 "없는 셈" 되진 않는다).
                 + '<span data-note-text data-note-code="' + _esc(code) + '" data-note-idx2="' + ni
-                + '" style="display:block; background:rgba(255,255,255,.94); color:#b1432f; font-weight:bold;'
+                + '" style="display:block; background:transparent; color:#b1432f; font-weight:bold;'
                 + ' padding:0.15em 0.45em; border-radius:0.3em; text-align:'
                 + (n.align || 'left') + ';'
                 + ' white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
@@ -2341,17 +2310,13 @@
             document.body.appendChild(ov);
             if (window._makeDraggable) { try { window._makeDraggable('doclabelart-box', 'doclabelart-head'); } catch (e) { /* 〃 */ } }
             if (window._bindClickToFront) { try { window._bindClickToFront('doclabelart-overlay'); } catch (e) { /* 〃 */ } }
-            // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘(DC 표시 등)" — 어느 표시 textarea에
-            //    커서가 있었는지 기억해 둔다(버튼을 눌러도 포커스가 안 날아가게 mousedown 은
-            //    막고, 여기서 **포커스 들어올 때**(focusin) 참조를 들고 있는다). `innerHTML`
-            //    교체로 textarea 자체가 매번 새로 생겨도 이 리스너는 한 번만 달면 된다(위임).
+            // 🔤 [2026-11-13, 사용자 요청] 어느 표시 textarea에 커서/포커스가 있었는지 기억해
+            //    둔다(**포커스 들어올 때**(focusin) — `innerHTML` 교체로 textarea 자체가 매번
+            //    새로 생겨도 이 리스너는 한 번만 달면 된다(위임)). `{code, idx}` 순수 데이터로
+            //    기억해 두면 재렌더로 textarea DOM 참조가 끊겨도(+/- 를 연속으로 눌러도) 선택이
+            //    안 풀린다.
             ov.addEventListener('focusin', function (ev) {
                 if (ev.target && ev.target.tagName === 'TEXTAREA') {
-                    window._docLabelActiveTextarea = ev.target;
-                    // 🔤 [2026-11-13 3차, 사용자 요청] "+/- 한번 누르면 선택이 자동으로 풀리는데" —
-                    //    `_docLabelActiveTextarea` 는 재렌더로 textarea 자체가 새로 생기면 끊어진다
-                    //    (DOM 참조라서). `{code, idx}` 순수 데이터로도 같이 기억해 두면 재렌더 뒤에도
-                    //    살아남아 +/- 를 연속으로 눌러도 선택이 안 풀린다.
                     var row = ev.target.closest('[data-note-row]');
                     var listEl = ev.target.closest('[data-note-list]');
                     if (row && listEl) {
@@ -2511,16 +2476,9 @@
               + ' · <a href="#" onclick="window._docLabelCodeAdd(\'' + _esc(code) + '\',\'barcode\');return false;"'
               + ' style="color:#000; font-weight:bold;">▮ ' + _esc(_t('바코드 추가', 'Add barcode')) + '</a>'
               + '</div>' : '')
-            // 🔣 [2026-11-13, 사용자 요청] "특수 문자 만들어줘(DC 표시 등) / 필요시 추가할수 있도록" —
-            //    아래 표시 입력칸 중 마지막으로 커서가 있던 곳에 끼워 넣는다. `onmousedown`
-            //    에서 기본 동작을 막아 버튼을 눌러도 그 textarea 가 포커스를 안 잃게 한다
-            //    (안 막으면 블러로 `window._docLabelActiveTextarea` 를 다시 잡기 전에 값이 꼬인다).
-            + (idle ? '<div style="margin-top:6px; font-size:12px; color:#000;">🔣 ' + _esc(_t('특수문자', 'Symbols')) + ': '
-              + DOC_LABEL_SPECIAL_CHARS.map(function (sc) {
-                  return '<a href="#" onmousedown="event.preventDefault();" onclick="window._docLabelInsertChar(\'' + _esc(sc.ch).replace(/'/g, "\\'")
-                      + '\');return false;" title="' + _esc(sc.title) + '" style="margin-right:8px; color:#000; font-weight:bold; font-size:14px;">'
-                      + _esc(sc.ch) + '</a>';
-              }).join('') + '</div>' : '')
+            // 🔣❌ [2026-11-19, 사용자 요청] "특수 문자는 TXT 로 넣을수 있으니 삭제" — 표시
+            //    입력칸(textarea)에 그냥 복사·붙여넣거나 직접 타이핑해도 되므로, 버튼 줄을
+            //    따로 둘 필요가 없다고 판단해 없앴다(되돌리려면 이 커밋을 되돌릴 것).
             // 📋 [2026-11-13, 사용자 요청] "빈 라벨지에 기입해야 하는 내용을 도표 형태로도 작성 가능했으면
             //    좋겠음" — 번호 목록을 **입력칸으로** 바꿔 클릭 위치 없이 타이핑만으로 고칠 수 있게 하고,
             //    맨 아래에 "입력 후 추가" 줄을 둬서 도안을 클릭하지 않고도 표처럼 줄줄이 적을 수 있다
