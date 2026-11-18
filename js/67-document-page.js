@@ -1032,6 +1032,11 @@
         };
         handle.onmousedown = function (ev) {
             ev.preventDefault(); ev.stopPropagation();
+            // 🔲 [2026-11-18 2차, 사용자 요청] 박스도 같은 선택 표시 — 끄는 띠를 누르는 순간
+            //    "지금 조절 대상"으로 기억한다.
+            window._docLabelClearOtherActive('box');
+            window._docLabelActiveBox = { code: code, idx: idx };
+            window._docLabelMarkerSyncSelection();
             moved = false;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
@@ -1071,11 +1076,16 @@
     //    ⚠️ "박스 색상은 TXT 와 같은 색상으로" — 표시(notes)와 같은 빨강(#e03131) 계열로 통일.
     //    ⚠️ z-index 를 표시·마크(1)보다 낮게(0) 둬서 시각적으로도 **뒤에 깔린다**(표 밑그림처럼).
     var _docLabelBoxMarkersHtml = function (boxes, draggable, code) {
+        // 🔲 [2026-11-18 2차] 선택된 박스엔 바깥쪽에 초록 점선 외곽선을 하나 더 두른다(박스
+        //    자신의 빨간 테두리·모서리 R값은 그대로 — `outline` 은 별개 레이어라 안 건드린다).
+        var activeBox = window._docLabelActiveBox;
         return (boxes || []).map(function (b, bi) {
+            var isSel = draggable && activeBox && activeBox.code === code && activeBox.idx === bi;
             var wrapStyle = 'position:absolute; left:' + (b.x * 100) + '%; top:' + (b.y * 100) + '%;'
                 + ' width:' + (b.wem || 10) + 'em; height:' + (b.hem || 1.3) + 'em;'
                 // 🔵 [2026-11-13, 사용자 요청] "박스 모서리 R값 적용해줘" — 0.3em → 0.5em(더 뚜렷하게).
-                + ' border:2px solid #e03131; border-radius:0.5em; background:transparent; z-index:0; pointer-events:none;';
+                + ' border:2px solid #e03131; border-radius:0.5em; background:transparent; z-index:0; pointer-events:none;'
+                + (isSel ? ' outline:2px dashed #2f9e44; outline-offset:2px;' : '');
             return '<span data-box-wrap data-box-idx="' + bi + '" style="' + wrapStyle + '">'
                 + (draggable ? '<span data-box-drag title="' + _esc(_t('끌어서 옮기기', 'drag to move')) + '"'
                   + ' style="position:absolute; left:-2px; right:-2px; top:-2px; height:10px; cursor:grab; pointer-events:auto;"></span>'
@@ -1149,6 +1159,11 @@
         wrap.onmousedown = function (ev) {
             if (ev.target && ev.target.closest && ev.target.closest('[data-code-resize], a')) return;
             ev.preventDefault(); ev.stopPropagation();
+            // 🔲 [2026-11-18 2차, 사용자 요청] "바코드 또는 이미지 모두 기능 적용" — QR·바코드도
+            //    누르면(끌지 않아도) 선택 표시가 켜진다.
+            window._docLabelClearOtherActive('code');
+            window._docLabelActiveCode = { code: code, idx: idx };
+            window._docLabelMarkerSyncSelection();
             moved = false;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
@@ -1189,13 +1204,18 @@
     //    작은 정사각형이라 배경과 구분이 잘 안 돼 그대로 둔다).
     // 🖱️ [같은 요청] "이동하려고 마우스로 잡는데 잘 안잡힘" — 얇은 띠 대신 몸통 전체가 손잡이.
     var _docLabelCodeMarkersHtml = function (codes, draggable, code) {
+        // 🔲 [2026-11-18 2차, 사용자 요청] "바코드 또는 이미지 모두 기능 적용" — QR·바코드도
+        //    선택되면 같은 초록 점선 외곽선.
+        var activeCode = window._docLabelActiveCode;
         return (codes || []).map(function (c, ci) {
+            var isSel = draggable && activeCode && activeCode.code === code && activeCode.idx === ci;
             var wrapStyle = 'position:absolute; left:' + (c.x * 100) + '%; top:' + (c.y * 100) + '%;'
                 + ' transform:translate(-50%,-50%); width:' + (c.wem || (c.kind === 'qr' ? 6 : 10)) + 'em;'
                 + ' height:' + (c.hem || (c.kind === 'qr' ? 6 : 3.5)) + 'em; background:#fff;'
                 + (c.kind === 'qr' ? ' border:1px solid #e03131;' : '')
                 + ' border-radius:0.2em; z-index:1; box-sizing:border-box; padding:0.2em;'
-                + (draggable ? ' cursor:grab;' : '');
+                + (draggable ? ' cursor:grab;' : '')
+                + (isSel ? ' outline:2px dashed #2f9e44; outline-offset:2px;' : '');
             return '<span data-code-wrap data-code-idx="' + ci + '" data-code-kind="' + _esc(c.kind) + '"'
                 + ' data-code-value="' + _esc(c.value) + '" title="' + _esc(c.value) + '" style="' + wrapStyle + '">'
                 + '<span data-code-canvas style="display:block; width:100%; height:100%; pointer-events:none;"></span>'
@@ -1472,6 +1492,11 @@
         };
         wrap.onmousedown = function (ev) {
             ev.preventDefault(); ev.stopPropagation();
+            // 🔲 [2026-11-18 2차, 사용자 요청] "바코드 또는 이미지 모두 기능 적용" — 인증마크를
+            //    누르면(끌지 않고 짧게 눌러도) "지금 조절 대상"으로 기억 + 외곽선을 켠다.
+            window._docLabelClearOtherActive('mark');
+            window._docLabelActiveMark = { code: code, idx: idx };
+            window._docLabelMarkerSyncSelection();
             moved = false;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
@@ -1513,13 +1538,18 @@
     //    `background-color` 가 그대로 네모로 드러나는 버그가 있어(2026-11-13 실측, "빨간색 상자로
     //    나오는데") 버렸다 — 색이 이미 파일에 구워져 있으니 그냥 `<img>` 로 충분하다.
     var _docLabelMarkMarkersHtml = function (marks, draggable, code) {
+        // 🔲 [2026-11-18 2차, 사용자 요청] "바코드 또는 이미지 모두 기능 적용" — 인증마크
+        //    (이미지)도 선택되면 같은 초록 점선 외곽선.
+        var activeMark = window._docLabelActiveMark;
         return (marks || []).map(function (m, mi) {
             var cat = CERT_MARK_CATALOG.filter(function (c) { return c.key === m.key; })[0] || { key: m.key, label: m.key };
+            var isSel = draggable && activeMark && activeMark.code === code && activeMark.idx === mi;
             // 🔝 [2026-11-13, 사용자 요청 "특수 문자는 항상 맨 위로 올라와야"] 인증마크(UL·CE·FCC·
             //    DC·AC)는 글자상자(z-index:3)·박스(0)·QR·바코드(1)보다 **항상 위**에 있어야 다른
             //    표시에 가려지지 않는다 — 4 로 전부보다 높게.
             var wrapStyle = 'position:absolute; left:' + (m.x * 100) + '%; top:' + (m.y * 100) + '%; transform:translate(-50%,-50%);'
-                + ' z-index:4;' + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;');
+                + ' z-index:4;' + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;')
+                + (isSel ? ' outline:2px dashed #2f9e44; outline-offset:2px;' : '');
             var inner;
             if (cat.noImage) {
                 inner = '<span style="display:inline-block; border:0.12em solid #e03131; border-radius:0.2em; padding:0.1em 0.4em;'
@@ -1546,7 +1576,14 @@
     window._docLabelNoteArm = function (code) { window._docLabelNotePlacing = code; _docLabelRefresh(); };
     window._docLabelNoteDisarm = function () { window._docLabelNotePlacing = null; _docLabelRefresh(); };
     window._docLabelImgClick = async function (ev, code) {
-        if (window._docLabelNotePlacing !== code) return;   // 그냥 보는 중이면 클릭은 아무 일도 안 한다
+        if (window._docLabelNotePlacing !== code) {
+            // 🔲 [2026-11-18 2차, 사용자 요청] "배경 클릭하면 해제" — 마커(표시·인증마크·박스·
+            //    QR/바코드)는 이미지 **위에 겹친 별도 요소**라 마커를 누르면 이 핸들러가 아예
+            //    안 불린다(형제 요소라 클릭이 안 거친다) — 그러니 여기 들어왔다는 것 자체가
+            //    "빈 배경을 눌렀다"는 뜻이다. 선택된 게 있으면 전부 푼다.
+            if (window._docLabelClearActiveMarkers) window._docLabelClearActiveMarkers();
+            return;
+        }
         var rect = ev.target.getBoundingClientRect();
         var x = (ev.clientX - rect.left) / rect.width;
         var y = (ev.clientY - rect.top) / rect.height;
@@ -1667,19 +1704,43 @@
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
-    // 🔲 [2026-11-18, 사용자 요청] "클릭하면 잡혔다는 의미로 외곽 박스 표시" — 전체를 다시
-    //    그리지 않고(그러면 드래그 중인 `wrap`/`img` 클로저가 끊긴다) **이미 있는 DOM 만** 보고
-    //    선택 테두리를 켜고 끈다. 모달이 항상 한 코드만 보여주므로 idx 만으로 구분해도 충분하다.
-    window._docLabelNoteSyncSelection = function () {
+    // 🔲🔲 [2026-11-18 2차, 사용자 요청] "바코드 또는 이미지 모두 기능 적용 / 배경 클릭하면 해제" —
+    //    표시(note) 하나에만 있던 선택 테두리를 인증마크(mark)·박스(box)·QR·바코드(code)까지
+    //    전부로 넓힌다. 네 가지는 **서로 배타적으로 하나만** 선택되게(마크를 고르면 표시 선택은
+    //    풀린다) — 안 그러면 두 군데가 동시에 테두리로 보여 "지금 화살표키가 뭘 움직이는지"가
+    //    애매해진다. `window._docLabelActiveNote` 는 글자크기 +/- 등 기존 기능이 그대로 읽으므로
+    //    이름을 안 바꾸고, 마크·박스·코드도 **같은 모양**(`{code, idx}`)으로 나란히 둔다.
+    window._docLabelClearOtherActive = function (keep) {
+        if (keep !== 'note') window._docLabelActiveNote = null;
+        if (keep !== 'mark') window._docLabelActiveMark = null;
+        if (keep !== 'box') window._docLabelActiveBox = null;
+        if (keep !== 'code') window._docLabelActiveCode = null;
+    };
+    window._docLabelClearActiveMarkers = function () {
+        window._docLabelClearOtherActive(null);
+        window._docLabelMarkerSyncSelection();
+    };
+    // 전체를 다시 그리지 않고(그러면 드래그 중인 `wrap`/`img` 클로저가 끊긴다) **이미 있는
+    //    DOM 만** 보고 선택 테두리를 켜고 끈다. 모달이 항상 한 코드만 보여주므로 idx 만으로
+    //    구분해도 충분하다. 표시(note)만 **own 테두리가 없어** 선택 시에만 둥근 모서리를
+    //    같이 주고, 마크·박스·코드는 자기 테두리가 따로 있어 `border-radius` 는 건드리지 않는다
+    //    (건드리면 박스의 원래 모서리 R값이 선택을 풀 때 지워진다).
+    window._docLabelMarkerSyncSelection = function () {
         var bodyEl = document.getElementById('doclabelart-body');
         if (!bodyEl) return;
-        var active = window._docLabelActiveNote;
-        [].slice.call(bodyEl.querySelectorAll('[data-note-wrap]')).forEach(function (wrap) {
-            var idx = Number(wrap.getAttribute('data-note-idx'));
-            var isSel = active && idx === active.idx;
-            wrap.style.outline = isSel ? '2px dashed #2f9e44' : 'none';
-            wrap.style.outlineOffset = isSel ? '1px' : '';
-            wrap.style.borderRadius = isSel ? '6px' : '';
+        [
+            { sel: '[data-note-wrap]', attr: 'data-note-idx', active: window._docLabelActiveNote, radius: true },
+            { sel: '[data-mark-wrap]', attr: 'data-mark-idx', active: window._docLabelActiveMark, radius: false },
+            { sel: '[data-box-wrap]', attr: 'data-box-idx', active: window._docLabelActiveBox, radius: false },
+            { sel: '[data-code-wrap]', attr: 'data-code-idx', active: window._docLabelActiveCode, radius: false }
+        ].forEach(function (s) {
+            [].slice.call(bodyEl.querySelectorAll(s.sel)).forEach(function (wrap) {
+                var idx = Number(wrap.getAttribute(s.attr));
+                var isSel = s.active && idx === s.active.idx;
+                wrap.style.outline = isSel ? '2px dashed #2f9e44' : 'none';
+                wrap.style.outlineOffset = isSel ? '1px' : '';
+                if (s.radius) wrap.style.borderRadius = isSel ? '6px' : '';
+            });
         });
     };
     // 🖱 [2026-11-13, 사용자 요청] "개별 글자 위치 조정 가능" — 마커(원+글자상자)를 끌어서 옮긴다.
@@ -1706,8 +1767,9 @@
             // 🔤 [2026-11-13 3차, 사용자 요청] "하단 박스 말고 그림 박스 클릭해도 변경 가능하게" —
             //    도안 위 마커(그림 박스)를 눌러도 글자크기 조정 대상이 되도록, 드래그 시작과
             //    동시에 이 표시를 "지금 조절 대상"으로 기억한다(실제로 끌지 않고 짧게 눌러도 된다).
+            window._docLabelClearOtherActive('note');
             window._docLabelActiveNote = { code: code, idx: idx };
-            window._docLabelNoteSyncSelection();
+            window._docLabelMarkerSyncSelection();
             moved = false;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
@@ -2293,18 +2355,20 @@
                     var row = ev.target.closest('[data-note-row]');
                     var listEl = ev.target.closest('[data-note-list]');
                     if (row && listEl) {
+                        window._docLabelClearOtherActive('note');
                         window._docLabelActiveNote = { code: listEl.getAttribute('data-note-list-code'), idx: Number(row.getAttribute('data-note-idx2')) };
                         // 🔲 [2026-11-18] 아래 목록 칸을 클릭해 고를 때도 도안 위 그 마커에 외곽
                         //    박스를 켜서 "지금 뭘 조절 중인지" 바로 보이게 한다.
-                        if (window._docLabelNoteSyncSelection) window._docLabelNoteSyncSelection();
+                        if (window._docLabelMarkerSyncSelection) window._docLabelMarkerSyncSelection();
                     }
                 }
             });
-            // ⌨️ [2026-11-13, 사용자 요청] "키보드로 TXT 박스 이동 — 정밀하게" — 화살표 키로
-            //    "지금 조절 대상"(`window._docLabelActiveNote`, 클릭이나 포커스로 지정됨)인 표시를
-            //    1px 씩(Shift 누르면 10px) 옮긴다. textarea/input 에 포커스가 있을 땐(타이핑 중)
-            //    커서 이동을 가로채지 않게 건너뛴다. 드래그와 같은 이유로 **놓을 때처럼** 저장은
-            //    디바운스(400ms) — 키를 누르고 있으면(자동반복) 매번 NAS 에 쓰지 않는다.
+            // ⌨️⌨️ [2026-11-13, 사용자 요청 "키보드로 TXT 박스 이동" → 2026-11-18 2차 "바코드
+            //    또는 이미지 모두 적용"] 화살표 키로 "지금 조절 대상"(표시·인증마크·박스·QR/
+            //    바코드 중 클릭/드래그로 고른 것 하나)을 1px 씩(Shift 면 10px) 옮긴다. 넷 중
+            //    **딱 하나만** 활성 상태로 유지되므로(`_docLabelClearOtherActive`) 순서대로 훑어
+            //    처음 걸리는 것을 움직이면 된다. textarea/input 포커스 중엔 타이핑 커서 이동을
+            //    가로채지 않게 건너뛴다. 저장은 드래그와 같은 이유로 디바운스(400ms).
             // ⚠️ `document` 에 건다 — 드래그는 `mousedown`에서 `preventDefault()` 해서 아무 데도
             //    포커스가 안 가므로(기본은 `document.body`), `ov`(모달 자신)에 걸면 `body` 에서
             //    일어난 keydown 이 **그 위 조상(document)으로만** 올라가 `ov`(body 의 자식)까지
@@ -2315,12 +2379,22 @@
                 var dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
                 var d = dirs[ev.key];
                 if (!d) return;
-                var active = window._docLabelActiveNote;
                 var m2 = window._docLabelArtModal;
-                if (!active || !m2 || active.code !== m2.code) return;
-                var list = window._docLabelNotesCache[active.code] || [];
-                var note = list[active.idx];
-                if (!note) return;
+                if (!m2) return;
+                var kinds = [
+                    { active: window._docLabelActiveNote, cache: window._docLabelNotesCache, sel: '[data-note-wrap]', attr: 'data-note-idx' },
+                    { active: window._docLabelActiveMark, cache: window._docLabelMarksCache, sel: '[data-mark-wrap]', attr: 'data-mark-idx' },
+                    { active: window._docLabelActiveBox, cache: window._docLabelBoxesCache, sel: '[data-box-wrap]', attr: 'data-box-idx' },
+                    { active: window._docLabelActiveCode, cache: window._docLabelCodesCache, sel: '[data-code-wrap]', attr: 'data-code-idx' }
+                ];
+                var hit = null;
+                for (var ki = 0; ki < kinds.length; ki++) {
+                    if (kinds[ki].active && kinds[ki].active.code === m2.code) { hit = kinds[ki]; break; }
+                }
+                if (!hit) return;
+                var list = hit.cache[m2.code] || [];
+                var item = list[hit.active.idx];
+                if (!item) return;
                 ev.preventDefault();
                 var bodyEl = document.getElementById('doclabelart-body');
                 var img = document.getElementById('doclabelart-img');
@@ -2328,16 +2402,16 @@
                 var stepPx = ev.shiftKey ? 10 : 1;
                 var dx = (r && r.width) ? (stepPx / r.width) : 0.002;
                 var dy = (r && r.height) ? (stepPx / r.height) : 0.002;
-                note.x = Math.min(1, Math.max(0, note.x + d[0] * dx));
-                note.y = Math.min(1, Math.max(0, note.y + d[1] * dy));
+                item.x = Math.min(1, Math.max(0, item.x + d[0] * dx));
+                item.y = Math.min(1, Math.max(0, item.y + d[1] * dy));
                 // ⚠️⚠️ [2026-11-18 버그수정] `document.querySelector` 가 모달 **밖**(메인 표 썸네일도
-                //    같은 `[data-note-wrap][data-note-idx]` 를 쓴다)에서 idx 가 같은 첫 번째 것을
-                //    집을 수 있었다 — 값은 맞는 라벨에 저장되는데 화면은 엉뚱한(또는 화면 밖) 요소가
-                //    움직였다. 모달 본문(`#doclabelart-body`) 안에서만 찾는다.
-                var wrap = bodyEl && bodyEl.querySelector('[data-note-wrap][data-note-idx="' + active.idx + '"]');
-                if (wrap) { wrap.style.left = (note.x * 100) + '%'; wrap.style.top = (note.y * 100) + '%'; }
+                //    같은 `data-*-wrap`/idx 를 쓴다)에서 idx 가 같은 첫 번째 것을 집을 수 있었다 —
+                //    값은 맞는 라벨에 저장되는데 화면은 엉뚱한(또는 화면 밖) 요소가 움직였다.
+                //    모달 본문(`#doclabelart-body`) 안에서만 찾는다.
+                var wrap = bodyEl && bodyEl.querySelector(hit.sel + '[' + hit.attr + '="' + hit.active.idx + '"]');
+                if (wrap) { wrap.style.left = (item.x * 100) + '%'; wrap.style.top = (item.y * 100) + '%'; }
                 clearTimeout(window._docLabelNoteKeyNudgeTimer);
-                window._docLabelNoteKeyNudgeTimer = setTimeout(function () { window._docLabelNotesSave(active.code); }, 400);
+                window._docLabelNoteKeyNudgeTimer = setTimeout(function () { window._docLabelNotesSave(m2.code); }, 400);
             });
         }
         ov.style.display = 'flex';
