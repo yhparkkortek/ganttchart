@@ -1667,6 +1667,21 @@
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
+    // 🔲 [2026-11-18, 사용자 요청] "클릭하면 잡혔다는 의미로 외곽 박스 표시" — 전체를 다시
+    //    그리지 않고(그러면 드래그 중인 `wrap`/`img` 클로저가 끊긴다) **이미 있는 DOM 만** 보고
+    //    선택 테두리를 켜고 끈다. 모달이 항상 한 코드만 보여주므로 idx 만으로 구분해도 충분하다.
+    window._docLabelNoteSyncSelection = function () {
+        var bodyEl = document.getElementById('doclabelart-body');
+        if (!bodyEl) return;
+        var active = window._docLabelActiveNote;
+        [].slice.call(bodyEl.querySelectorAll('[data-note-wrap]')).forEach(function (wrap) {
+            var idx = Number(wrap.getAttribute('data-note-idx'));
+            var isSel = active && idx === active.idx;
+            wrap.style.outline = isSel ? '2px dashed #2f9e44' : 'none';
+            wrap.style.outlineOffset = isSel ? '1px' : '';
+            wrap.style.borderRadius = isSel ? '6px' : '';
+        });
+    };
     // 🖱 [2026-11-13, 사용자 요청] "개별 글자 위치 조정 가능" — 마커(원+글자상자)를 끌어서 옮긴다.
     //    모달에서만(표 썸네일은 보기 전용) `idle`(표시추가·자르기 중이 아닐 때)에만 건다 —
     //    그래야 "표시 추가" 클릭 대기 중에 마커를 끌다가 새 표시가 같이 찍히는 혼선이 없다.
@@ -1692,6 +1707,7 @@
             //    도안 위 마커(그림 박스)를 눌러도 글자크기 조정 대상이 되도록, 드래그 시작과
             //    동시에 이 표시를 "지금 조절 대상"으로 기억한다(실제로 끌지 않고 짧게 눌러도 된다).
             window._docLabelActiveNote = { code: code, idx: idx };
+            window._docLabelNoteSyncSelection();
             moved = false;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
@@ -1732,8 +1748,13 @@
     //    기본값이고, 오른쪽 손잡이로 끌면 `n.wem`(글자크기 em 단위 — px 로 저장하면 글자 크기를
     //    바꿀 때마다 상자 크기가 어긋난다)에 저장돼 다음부터 그 너비로 열린다.
     var _docLabelNoteMarkersHtml = function (notes, draggable, code) {
+        // 🔲 [2026-11-18, 사용자 요청] "잡았다는 의미로 외곽 박스 표시" — 지금 조절 대상
+        //    (`window._docLabelActiveNote`)인 표시엔 테두리를 둘러 "이게 선택된 것"임을 눈으로
+        //    보여준다. 표(`draggable===false`) 썸네일에선 끌 수 없으니 선택 표시도 안 보인다.
+        var active = window._docLabelActiveNote;
         return (notes || []).map(function (n, ni) {
             var wStyle = (n.wem ? (' width:' + n.wem + 'em; max-width:none;') : ' max-width:14em;');
+            var isSel = draggable && active && active.code === code && active.idx === ni;
             // ⚠️ [2026-11-13, 사용자 요청] 번호 원을 글자상자 **오른쪽**으로 — flex 자식 순서만
             //    바꾼다(위치 기준점은 전체 묶음 가운데라 순서를 바꿔도 끌기 좌표 계산은 그대로).
             // 🔝 [2026-11-13, 사용자 신고 "동그라미 번호가 바코드와 겹치면 안보임"] 바코드 wrap 이
@@ -1744,8 +1765,9 @@
             //    어느 번호가 어느 박스 것인지 눈으로 바로 붙어 보이게 한다.
             return '<span data-note-wrap data-note-idx="' + ni + '" title="' + _esc(n.text) + '" style="position:absolute;'
                 + ' left:' + (n.x * 100) + '%; top:' + (n.y * 100) + '%; transform:translate(-50%,-50%);'
-                + ' display:flex; align-items:center; gap:0.05em; z-index:3;'
-                + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;') + '">'
+                + ' display:flex; align-items:center; gap:0.05em; z-index:3; padding:3px;'
+                + (draggable ? ' pointer-events:auto; cursor:grab;' : ' pointer-events:none;')
+                + (isSel ? ' outline:2px dashed #2f9e44; outline-offset:1px; border-radius:6px;' : '') + '">'
                 + '<span data-note-widthbox style="position:relative; display:inline-block;' + wStyle + '">'
                 // ⚠️⚠️ [2026-11-13, 사용자 신고 "줄바꿈 이미지에는 반영 안 됨"] `white-space:normal` 은
                 //    HTML 이 원래 그런 것처럼 줄바꿈 문자(`\n`)를 **공백 하나로 뭉갠다** — 입력칸엔
@@ -2272,6 +2294,9 @@
                     var listEl = ev.target.closest('[data-note-list]');
                     if (row && listEl) {
                         window._docLabelActiveNote = { code: listEl.getAttribute('data-note-list-code'), idx: Number(row.getAttribute('data-note-idx2')) };
+                        // 🔲 [2026-11-18] 아래 목록 칸을 클릭해 고를 때도 도안 위 그 마커에 외곽
+                        //    박스를 켜서 "지금 뭘 조절 중인지" 바로 보이게 한다.
+                        if (window._docLabelNoteSyncSelection) window._docLabelNoteSyncSelection();
                     }
                 }
             });
@@ -2297,6 +2322,7 @@
                 var note = list[active.idx];
                 if (!note) return;
                 ev.preventDefault();
+                var bodyEl = document.getElementById('doclabelart-body');
                 var img = document.getElementById('doclabelart-img');
                 var r = img ? img.getBoundingClientRect() : null;
                 var stepPx = ev.shiftKey ? 10 : 1;
@@ -2304,7 +2330,11 @@
                 var dy = (r && r.height) ? (stepPx / r.height) : 0.002;
                 note.x = Math.min(1, Math.max(0, note.x + d[0] * dx));
                 note.y = Math.min(1, Math.max(0, note.y + d[1] * dy));
-                var wrap = document.querySelector('[data-note-wrap][data-note-idx="' + active.idx + '"]');
+                // ⚠️⚠️ [2026-11-18 버그수정] `document.querySelector` 가 모달 **밖**(메인 표 썸네일도
+                //    같은 `[data-note-wrap][data-note-idx]` 를 쓴다)에서 idx 가 같은 첫 번째 것을
+                //    집을 수 있었다 — 값은 맞는 라벨에 저장되는데 화면은 엉뚱한(또는 화면 밖) 요소가
+                //    움직였다. 모달 본문(`#doclabelart-body`) 안에서만 찾는다.
+                var wrap = bodyEl && bodyEl.querySelector('[data-note-wrap][data-note-idx="' + active.idx + '"]');
                 if (wrap) { wrap.style.left = (note.x * 100) + '%'; wrap.style.top = (note.y * 100) + '%'; }
                 clearTimeout(window._docLabelNoteKeyNudgeTimer);
                 window._docLabelNoteKeyNudgeTimer = setTimeout(function () { window._docLabelNotesSave(active.code); }, 400);
