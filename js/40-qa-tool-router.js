@@ -1241,7 +1241,10 @@
             // ① 쓰기 초안 — 실행하지 않는다
             var writes = window._qaParseWriteCalls ? window._qaParseWriteCalls(text) : [];
             if (writes.length) {
-                var draft = window._qaMakeWriteDraft(writes[0].id, writes[0].args);
+                // ✉️ [2026-11-18] 메일 발송 수신자 화이트리스트 검증용 — 이 턴에 실제로
+                //    조회한 결과(steps)와 사용자 원문(question)만 "지어내지 않은 주소"의
+                //    근거로 인정한다(js/41 `_qaMakeWriteDraft` 참고).
+                var draft = window._qaMakeWriteDraft(writes[0].id, writes[0].args, { steps: steps, question: question });
                 var pre = String(text).replace(/\[\[\s*WRITE[\s\S]*?\]\]/g, '').trim();
                 return { draft: draft, calls: calls,
                          reply: (pre ? pre + '\n\n' : '') + window._qaWriteDraftText(draft) };

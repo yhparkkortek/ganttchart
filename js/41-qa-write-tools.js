@@ -340,13 +340,58 @@
 
     window._qaValidateWriteArgs = validateWriteArgs;
 
+    // ✉️ [2026-11-18 사용자 제보] "박용훈한테 메일 보내줘"가 실제로는 주소록에 없는
+    //    `yhpark@daowin.com`으로 나갔다 — gw_mail_send 의 to/cc 는 AI가 **자유 텍스트로
+    //    직접 쓴다**(위 프롬프트는 "조회 결과를 쓰라"고 말로만 지시할 뿐, 구조적으로 강제하지
+    //    않는다). 그래서 AI가 이름과 비슷한 그럴듯한 주소를 지어내도 걸러낼 길이 없었다.
+    //    → **이 턴에 실제로 조회한 결과(주소록·메일 목록)나 사용자가 직접 친 글에 글자 그대로
+    //    나온 주소만** 화이트리스트로 인정한다. 그 밖의 주소는 사람에게 보내기 **전에** 막는다
+    //    (발송 전 "발송" 확인 문구보다 더 앞선 관문 — 확인창까지 가면 사람이 봐도 지어낸 주소인지
+    //    구분이 안 된다). `_psGround`(js/62, #G 근거 없는 AI 문장을 버리는 것)와 같은 철학.
+    function _qaCollectKnownEmails(steps, question) {
+        var EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+        var known = {};
+        (steps || []).forEach(function (s) {
+            if (!s || !Array.isArray(s.rows)) return;
+            s.rows.forEach(function (r) {
+                if (!r || typeof r !== 'object') return;
+                ['email', 'from', 'to', 'cc'].forEach(function (k) {
+                    var v = r[k];
+                    if (!v) return;
+                    var m, re = new RegExp(EMAIL_RE.source, 'g');
+                    while ((m = re.exec(String(v))) !== null) known[m[0].toLowerCase()] = true;
+                });
+            });
+        });
+        var m2, re2 = new RegExp(EMAIL_RE.source, 'g');
+        while ((m2 = re2.exec(String(question || ''))) !== null) known[m2[0].toLowerCase()] = true;
+        return known;
+    }
+    function _qaUnknownEmails(csv, known) {
+        return String(csv || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+            .filter(function (addr) { return !known[addr.toLowerCase()]; });
+    }
+
     // ── 초안 만들기 (실행하지 않는다) ────────────────────────────────
     // AI가 `[[WRITE:id {json}]]`을 내놓거나 코드가 직접 부른다. 결과는 **확인 카드용 초안**.
-    window._qaMakeWriteDraft = function (id, rawArgs) {
+    // `context` = { steps, question } — 메일 발송 수신자 화이트리스트 검증에만 쓰인다(선택값,
+    // 안 넘기면 그 검증을 건너뛴다 — 코드가 직접 부르는 다른 자리를 깨뜨리지 않기 위해서다).
+    window._qaMakeWriteDraft = function (id, rawArgs, context) {
         var tool = window._qaWriteToolById(id);
         if (!tool) return { ok: false, message: '없는 쓰기 도구입니다: ' + id };
         var v = validateWriteArgs(tool, rawArgs);
         if (v.error) return { ok: false, tool: tool, message: v.error };
+
+        if (tool.id === 'gw_mail_send' && context) {
+            var known = _qaCollectKnownEmails(context.steps, context.question);
+            var bad = _qaUnknownEmails(v.args.to, known).concat(_qaUnknownEmails(v.args.cc, known));
+            if (bad.length) {
+                return { ok: false, tool: tool,
+                    message: '⚠️ ' + bad.join(', ') + ' — 이 주소는 방금 조회 결과나 질문 어디에도 '
+                        + '없습니다(AI가 지어냈을 수 있습니다). 주소록에서 다시 찾아달라고 하거나 '
+                        + '정확한 주소를 알려주세요. 보내지 않았습니다.' };
+            }
+        }
 
         var nonce = 'w' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
         var draft = {
