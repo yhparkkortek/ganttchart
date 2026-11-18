@@ -1964,9 +1964,18 @@
     //    PDF 글자는 칸 단위로 줄이 쪼개져 들어온다. 그래서 **끝나는 신호**를 기준으로 끊는다 —
     //    REVISIONS 는 날짜(m/d/yyyy), MATRIX 는 터치 F/W(V0.02 같은 것). 그 앞뒤로 칸을 센다.
     // ══════════════════════════════════════════════════════════════════════════
+    // ⚠️⚠️ [2026-11-18 3차 실측 1570975 REV G/H] 리비전 범위를 하이픈("H-K")이 아니라
+    //    **글말 "THRU"**로 적는 도면이 있다("B THRU D" · "A THRU D") — 범위 칸 정규식이
+    //    전부 하이픈만 알아서 "B"만 리비전으로 잡히고 "THRU"·"D"가 그대로 데이터 칸에
+    //    흘러들었다(실측: "B | THRU | D | KORTEK | …"). 아예 다른 표기일 뿐 다른 뜻이 아니므로
+    //    줄 단계에서 하이픈 모양으로 통일해 버리면 그 아래 모든 리비전-칸 정규식이 안 바뀌어도 된다.
+    var _normThru = function (s) {
+        return String(s || '').replace(/\b([A-Z](?:\.\d+)?)\s+THRU\s+([A-Z](?:\.\d+)?)\b/gi,
+            function (m, a, b) { return a.toUpperCase() + '-' + b.toUpperCase(); });
+    };
     var _lines = function (t) {
         return String(t || '').replace(/\r\n?/g, '\n').split('\n')
-            .map(function (x) { return x.replace(/\s+/g, ' ').trim(); });
+            .map(function (x) { return _normThru(x.replace(/\s+/g, ' ').trim()); });
     };
     // 날짜 모양이 도면마다 다르다(실측 4종): `6/15/2021` · `06/06/22` · `12-FEB-25` · `16 JAN 26`
     var _isDate = function (s) {
