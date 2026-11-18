@@ -2006,6 +2006,32 @@
         return (s.match(/[A-Za-z]/g) || []).length >= 6;
     };
 
+    // 🎯🎯 [2026-11-18, 사용자 신고 "환각" 재현 — 1555073 REV M 실측] pdf.js 는 도면 **테두리 구역
+    //    참조 글자(A~F)·치수선 숫자(605.214)·지름 콜아웃(R3048·R3050 (RIB))**을 같은 Y 높이 줄에
+    //    묶어 설명 조각 앞뒤에 그대로 끼워 넣는다 — AI 환각이 아니라 **결정론 파서가 표 밖 글자를
+    //    설명으로 잘못 붙이는 것**이다(이 파일은 AI 를 전혀 안 쓴다 — 아래 _revFromLineRows/
+    //    _matFromLineRows/_matGeneric 어디에도 callAiBackend 호출이 없다). 실측(원본 H 행 =
+    //    "UPDATED 1558692-ALT1 & 1558692-ALT2")과 비교해 재현: 앞에 "605.214 SUFFIX "가 붙어
+    //    "605.214 SUFFIX UPDATED 1558692-ALT1 & 1558692-ALT2"로 보였다.
+    /** REVISIONS 설명 조각 앞뒤에 섞여 들어온 치수·지름 콜아웃을 뗀다(실제 설명 글자는 안 건드림). */
+    var _stripBorderNoise = function (s) {
+        s = String(s || '');
+        s = s.replace(/^\d+(?:\.\d+)?\s+(?=[A-Za-z])/, '')
+             .replace(/^R\d+(?:\s*\([A-Z]+\))?\s+(?=[A-Za-z])/i, '')
+             .replace(/^[A-Z]\s+(?=[A-Za-z]{2})/, '')
+             .replace(/\s+[A-Z]$/, '');
+        return s.trim();
+    };
+    /** MATRIX 행 앞뒤에 혼자 끼어든 테두리 구역 글자를 뗀다(실측 "A M L43E8LTMSG-SV … 43.U.2 A" —
+     *  진짜 리비전은 M, 앞뒤 A 는 테두리 참조 글자. 이것 때문에 VENDOR 자리가 한 칸 밀려 그 행
+     *  전체가 통째로 버려졌었다 — 환각이 아니라 **행이 조용히 빠지는** 쪽의 사고). */
+    var _stripZoneLetters = function (s) {
+        s = String(s || '');
+        var m = s.match(/^[A-Z]\s+(?=[A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?\s+\S)/);
+        if (m) s = s.slice(m[0].length);
+        return s.replace(/\s+[A-Z]$/, '');
+    };
+
     /** pdf.js 모양(한 줄 = 한 행) 전용 REVISIONS 읽기. 못 읽으면 빈 배열. */
     var _revFromLineRows = function (L) {
         var PERSON = /([A-Z][.,]\s?[A-Z][A-Za-z'-]+|[A-Z]{2,4})\s*$/;
@@ -2023,16 +2049,33 @@
         }
         if (recs.length < 2) return [];
         // 설명 조각은 **가장 가까운 기록**에 붙인다 — 앞 기록이 뒤 기록 설명을 가져가면 표가 어긋난다.
+        // ⚠️⚠️ [2026-11-18 실측 1555073 REV M] 거리가 "같을 때" 무조건 **뒤** 기록을 집었더니
+        //    틀렸다 — 설명이 날짜줄 **앞**에 걸리는 기록(desc-start)도 있고 **뒤**에 걸리는
+        //    기록(desc-tail)도 있어서, "뒤를 우선"이 둘 중 하나는 항상 틀렸다(실측: "SUFFIX"가
+        //    H 로, "SENSOR FOR -ALT5…"가 J.3 로 새어 들어갔다). 그렇다고 "항상 앞을 우선"으로
+        //    뒤집으면 **다른** 동점에서 또 틀린다(실측: K/M 사이의 "RELEASE TOVIS REALTEK…"는
+        //    진짜 M 의 시작인데 "앞 우선"은 그걸 K 의 꼬리로 붙여 버린다) — 방향 자체엔 고정된
+        //    정답이 없다. 믿을 신호는 **그 조각이 들어갈 자리**(앞이면 pre, 뒤면 post)가
+        //    **그 기록에서 아직 비어 있는가** — 이미 그 자리를 채운 기록은 더 필요 없다.
+        //    둘 다 비어 있으면(같은 기록의 첫 조각들끼리 경합) 그제서야 inline 이 더 짧은 쪽
+        //    (더 안 채워진 쪽)을 고른다.
         var at = recs.map(function (r) { return r.i; });
         for (var j = 0; j < L.length; j++) {
-            if (at.indexOf(j) !== -1 || !_isDescFrag(L[j])) continue;
-            var best = -1, bd = 99;
+            if (at.indexOf(j) !== -1) continue;
+            var frag = _stripBorderNoise(L[j]);
+            if (!_isDescFrag(frag)) continue;
+            var best = -1, bd = Infinity;
             for (var k = 0; k < at.length; k++) {
                 var d = Math.abs(at[k] - j);
-                if (d < bd || (d === bd && at[k] > j)) { best = k; bd = d; }
+                if (d > bd) continue;
+                if (d < bd) { best = k; bd = d; continue; }
+                var kSide = (j < recs[k].i) ? recs[k].pre : recs[k].post;
+                var bSide = (j < recs[best].i) ? recs[best].pre : recs[best].post;
+                if (kSide.length !== bSide.length) { if (kSide.length < bSide.length) best = k; continue; }
+                if (recs[k].inline.length < recs[best].inline.length) best = k;
             }
             if (best < 0 || bd > 2) continue;
-            (j < recs[best].i ? recs[best].pre : recs[best].post).push(L[j]);
+            (j < recs[best].i ? recs[best].pre : recs[best].post).push(frag);
         }
         return recs.map(function (r) {
             var desc = r.pre.concat(r.inline ? [r.inline] : []).concat(r.post).join(' ');
@@ -2052,13 +2095,22 @@
     var _matFromLineRows = function (L, hasTitleAnywhere) {
         var A = ['REVISION', 'MANUFACTURER PART NUMBER', 'PART NUMBER', 'VENDOR',
                  'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL'];
+        // ⚠️⚠️ [2026-11-18 실측 1555073 REV M] 스케일러 내장형은 A 의 8칸 뒤에 **SCALER·SCALER
+        //    F/W 두 칸이 더** 붙는다(실측: "...DV430QUB NR NR" — 끝 두 NR 이 그 두 칸이다).
+        //    VENDOR 위치(vi===2)는 A 와 완전히 같아서 칸 수로만 가른다 — 그래서 A 를 그대로
+        //    두고(기존 8칸 문서를 안 건드리려고) 머리글에 "SCALER" 글자가 있을 때만 10칸 A2 를 쓴다.
+        var A2 = A.concat(['SCALER', 'SCALER F/W']);
+        var hasScalerCol = L.join(' ').toUpperCase().indexOf('SCALER') >= 0;
         var B = ['REVISION', 'PART NUMBER', 'VENDOR', 'VENDOR P/N', 'TOUCH SCREEN',
                  'TOUCH SCREEN CONTROLLER', 'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
         var C = ['REVISION', 'VENDOR', 'PART NUMBER', 'MODEL', 'DESCRIPTION',
                  'TOUCH SENSOR', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'];
         var headers = null, rows = [];
         for (var i = 0; i < L.length; i++) {
-            var m = L[i].match(/^([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(.*)$/);
+            // ⚠️⚠️ [2026-11-18 실측] 테두리 구역 글자가 줄 앞뒤에 혼자 끼면("A M L43E8LTMSG-SV …
+            //    43.U.2 A") VENDOR 자리가 한 칸 밀려 vi 가 템플릿 밖으로 나가 행이 통째로
+            //    버려졌다(실측: M/ALT6 행 하나가 통째로 안 보임). 매칭 전에 뗀다.
+            var m = _stripZoneLetters(L[i]).match(/^([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(.*)$/);
             if (!m) continue;
             var toks = m[2].split(/\s+/);
             var vi = -1;
@@ -2066,7 +2118,7 @@
                 if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { vi = k; break; }
             }
             if (vi < 0) continue;
-            var cols = (vi === 2) ? A : (vi === 1 ? B : (vi === 0 ? C : null));
+            var cols = (vi === 2) ? (hasScalerCol ? A2 : A) : (vi === 1 ? B : (vi === 0 ? C : null));
             if (!cols) continue;
             // ⚠️⚠️ [2026-11-11] 토큰이 양식이 요구하는 칸 수보다 **적은** 행(실측 "1570704_H":
             // MODEL 칸이 빠진 행 4/8건)을 그대로 slice 하면 뒤 칸이 전부 한 칸씩 당겨져 틀린
@@ -2123,7 +2175,7 @@
     var _matGeneric = function (L) {
         var rows = [], shape = null, midCount = 0, hasPanel2 = false;
         for (var i = 0; i < L.length; i++) {
-            var m = L[i].match(/^([A-Z]\d*(?:\.\d+)?(?:\s*-\s*[A-Z]\d*(?:\.\d+)?)?)\s+(.*)$/);
+            var m = _stripZoneLetters(L[i]).match(/^([A-Z]\d*(?:\.\d+)?(?:\s*-\s*[A-Z]\d*(?:\.\d+)?)?)\s+(.*)$/);
             if (!m) continue;
             var toks = m[2].split(/\s+/);
             if (toks.length < 4) continue;
