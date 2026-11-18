@@ -1446,15 +1446,16 @@
       (me().name ? ' <span style="font-weight:normal; font-size:11.5px; color:#5a8ab5;">' + esc(me().name) + '</span>' : '') + '</span>' +
     // 🔧 [2026-11-11 요청] "AI로 정리" 를 헤더로 — 팔레트 공식(bg #e0f5f7 · 테두리 #a3d9e0 ·
     //    글자 #00707d, "+추가"/"저장" 버튼과 같은 조합)이라 테마를 바꾸면 같이 바뀐다.
-    // 🐛 [2026-11-17 수정] "테두리 없이" 로 뒀더니(border:none) 이 버튼만 Chromium 렌더에서
-    //    author 배경이 안 먹히고 짙은 남색으로 그려지는 실측 버그가 있었다(computed style은
-    //    항상 팔레트대로 옅은 하늘색이었는데 실제 화면만 남색 — border:1px 를 주는 순간
-    //    사라짐). onmouseover/onmouseout 로 직접 hex 를 건드리는 것도 js/21 의 "JS가
-    //    el.style 를 직접 쓰면 브라우저가 rgb()로 재직렬화해 [style*="#hex"] 매칭이 깨진다"
-    //    경고(line 193)에 해당 — 그래서 호버 없이 "저장"/"+추가" 와 완전히 같은 정적 공식으로
-    //    통일한다(이 줄에 호버 효과가 있는 형제 버튼이 원래 없다).
+    // 🐛 [2026-11-17] "테두리 없이"(border:none) + onmouseover/onmouseout 조합에서 한 번
+    //    Chromium 실측 렌더 버그(computed style 은 옅은 하늘색인데 실제 화면만 짙은 남색)가
+    //    나서, 그땐 호버 없이 "저장"/"+추가" 와 같은 정적 테두리(border:1px)로 되돌렸었다.
+    // 🎨 [2026-11-18 사용자 요청 "테두리 삭제, 팔레트 호버 기능 통일화"] js/70 `btnSt`/`btnHover`
+    //    와 같은 "테두리 없음 + hover 시 배경만 진해짐" 패턴으로 다시 바꾸고, 이번엔 같은 버그가
+    //    재현되는지 **실제 스크린샷(정지·호버, 새 탭 포함)으로 픽셀을 직접 확인** — 재현 없음.
     '<div style="display:flex; align-items:center; gap:7px; flex-shrink:0;">' +
-      '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다', 'Groups the picked tasks into report sentences')) + '" style="padding:5px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
+      '<button id="daily-ai-btn" onclick="window.dailyAiTidy()" title="' + esc(T('담은 업무를 보고 문장으로 묶어 줍니다', 'Groups the picked tasks into report sentences')) + '"' +
+        ' onmouseover="this.style.background=\'#a3d9e0\';" onmouseout="this.style.background=\'#e0f5f7\';"' +
+        ' style="padding:5px 11px; border:none; background:#e0f5f7; color:#00707d; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s;">🤖 ' + esc(T('AI로 정리', 'Tidy with AI')) + '</button>' +
       '<button onclick="window.dailyCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; flex-shrink:0;">✕</button>' +
     '</div>' +
   '</div>' +
