@@ -6520,25 +6520,33 @@
     // ── 📗📊📁 옵션 출력 ───────────────────────────────────────────────
     window._docToAoa = function (formId) {
         var form = _formById(formId), ctx = window._dgCollect(), d = _docData(formId);
-        var rows = [], val = function (key, from) {
+        var val = function (key, from) {
             return _hasOwn(formId, key) ? d.fields[key] : _autoOf(ctx, from).v;
         };
-        rows.push([form.label]);
-        rows.push([(ctx.meta.고객사 || '') + ' ' + (ctx.meta.모델명 || ''), '', '', _t('출력일', 'date') + ': ' + _todayDash()]);
-        rows.push([]);
+        // 📗 [2026-11-19, 사용자 요청 "출력 엑셀 문서는 원본과 동일한 모양으로"] 엑셀 전용 스타일
+        //    입히기(`_docBuildStyledSheet`)가 "이 줄이 제목인지·구역띠인지·표머리글인지"를 알아야
+        //    색·병합·테두리를 입힐 수 있다. 내용(`rows`)은 그대로 두고 **`rows` 에 안 보이는
+        //    꼬리표**(`rows.__kinds`, 배열 인덱스가 아니라 추가 속성이라 `JSON.stringify` 로 보내는
+        //    .docx 경로에는 안 실린다 — 숫자 인덱스만 직렬화된다)만 같이 쌓는다. 내용 생성 로직은
+        //    **한 벌만**(여기) — 엑셀용과 화면/워드용을 따로 만들면 다음 구역 추가 때 한쪽만 고쳐진다.
+        var rows = [], kinds = [];
+        var push = function (row, kind) { rows.push(row); kinds.push(kind || 'kv'); };
+        push([form.label], 'title');
+        push([(ctx.meta.고객사 || '') + ' ' + (ctx.meta.모델명 || ''), '', '', _t('출력일', 'date') + ': ' + _todayDash()], 'subtitle');
+        push([], 'gap');
         form.sections.forEach(function (s) {
-            rows.push([s.title]);
+            push([s.title], 'sect');
             if (s.kind === 'history') {
-                rows.push([_t('회차', 'Stage'), _t('출고 일자', 'Shipped'), _t('수량', 'Qty'),
-                           _t('샘플/시제품 의뢰서', 'Sample request'), _t('제목', 'Title')]);
+                push([_t('회차', 'Stage'), _t('출고 일자', 'Shipped'), _t('수량', 'Qty'),
+                      _t('샘플/시제품 의뢰서', 'Sample request'), _t('제목', 'Title')], 'thead');
                 _hist().forEach(function (r) {
-                    rows.push([r.stage || '', r.date || '', r.qty || '', r.doc || '', r.docTitle || '']);
+                    push([r.stage || '', r.date || '', r.qty || '', r.doc || '', r.docTitle || ''], 'tdata');
                 });
             } else if (s.kind === 'check') {
                 (window.DOC_CHECK_SHEETS || []).forEach(function (sh) {
-                    rows.push([sh.key]);
-                    rows.push([_t('항목', 'Group'), _t('내역', 'Item'), _t('개발', 'Dev'),
-                               _t('시제품', 'Proto'), _t('보증', 'QA'), _t('확인자 의견', 'Comment')]);
+                    push([sh.key], 'subsect');
+                    push([_t('항목', 'Group'), _t('내역', 'Item'), _t('개발', 'Dev'),
+                          _t('시제품', 'Proto'), _t('보증', 'QA'), _t('확인자 의견', 'Comment')], 'thead');
                     // ⚠️ 화면과 **같은 목록**(해상도 연결·내역 수정 포함)을 쓴다 — 두 벌로 두면 갈라진다
                     _sheetItems(sh, formId).forEach(function (it) {
                         var base = 'chk|' + sh.key + '|' + it.id + '|';
@@ -6546,67 +6554,67 @@
                             return cols.filter(function (c) { return d.fields[base + c] === 'O'; }).join(',');
                         };
                         var tkey = base + 'text';
-                        rows.push([it.g, _hasOwn(formId, tkey) ? d.fields[tkey] : it.q,
-                                   on(['점검요청', '해당없음']),
-                                   on(['합격', '불합격', 'N/A']), on(['합격', '불합격', 'N/A']),
-                                   d.fields[base + 'note'] || '']);
+                        push([it.g, _hasOwn(formId, tkey) ? d.fields[tkey] : it.q,
+                              on(['점검요청', '해당없음']),
+                              on(['합격', '불합격', 'N/A']), on(['합격', '불합격', 'N/A']),
+                              d.fields[base + 'note'] || ''], 'tdata');
                     });
-                    rows.push([]);
+                    push([], 'gap');
                 });
             } else if (s.kind === 'resolution') {
                 var xports = window.RES_PORTS || [];
-                rows.push(['NO', 'RESOLUTION'].concat(xports.map(function (p) { return p.label; })));
+                push(['NO', 'RESOLUTION'].concat(xports.map(function (p) { return p.label; })), 'thead');
                 (window.resSelectedRows ? window.resSelectedRows() : []).forEach(function (r, i) {
-                    rows.push([i + 1, r.label].concat(xports.map(function (p) { return r.ports[p.key] ? 'O' : ''; })));
+                    push([i + 1, r.label].concat(xports.map(function (p) { return r.ports[p.key] ? 'O' : ''; })), 'tdata');
                 });
             } else if (s.kind === 'labelitems') {
-                rows.push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note'),
-                           _t('인증마크', 'Cert marks'), _t('도안 표시사항', 'Artwork notes')]);
+                push([_t('라벨규격', 'Size'), _t('라벨품목코드', 'Code'), _t('부착위치', 'Position'), _t('비고', 'Note'),
+                      _t('인증마크', 'Cert marks'), _t('도안 표시사항', 'Artwork notes')], 'thead');
                 (d.labelItems || []).forEach(function (it) {
                     // 📍 도안 위 표시(화면의 번호 목록)·인증마크도 같이 — 불러온 적 없으면 빈칸(강제로 불러오진 않는다)
                     var codeKey = String(it.code || '').trim();
                     var notes = (window._docLabelNotesCache && window._docLabelNotesCache[codeKey]) || [];
                     var marksHere = (window._docLabelMarksCache && window._docLabelMarksCache[codeKey]) || [];
-                    rows.push([it.size || '', it.code || '', it.position || '', it.note || '',
-                               marksHere.map(function (m) { return m.key; }).join(' / '),
-                               notes.map(function (n, ni) { return (ni + 1) + '. ' + n.text; }).join(' / ')]);
+                    push([it.size || '', it.code || '', it.position || '', it.note || '',
+                          marksHere.map(function (m) { return m.key; }).join(' / '),
+                          notes.map(function (n, ni) { return (ni + 1) + '. ' + n.text; }).join(' / ')], 'tdata');
                 });
             } else if (s.kind === 'labelcerts') {
                 var lc = d.labelCerts || {};
-                rows.push([_t('인증 항목', 'Certifications')]);
-                rows.push([_t('항목', 'Item'), 'Check', _t('인쇄 적용', 'Printed'), _t('인쇄 구분', 'Print type')]);
+                push([_t('인증 항목', 'Certifications')], 'subsect');
+                push([_t('항목', 'Item'), 'Check', _t('인쇄 적용', 'Printed'), _t('인쇄 구분', 'Print type')], 'thead');
                 (lc.certs || []).forEach(function (r) {
-                    rows.push([r.name || '', r.check || '', r.print || '', r.printType || '']);
+                    push([r.name || '', r.check || '', r.print || '', r.printType || ''], 'tdata');
                 });
-                rows.push([]);
-                rows.push([_t('정격 표시', 'Rating spec')]);
-                rows.push([_t('항목', 'Item'), _t('규격값', 'Spec'), _t('인쇄 적용', 'Printed')]);
+                push([], 'gap');
+                push([_t('정격 표시', 'Rating spec')], 'subsect');
+                push([_t('항목', 'Item'), _t('규격값', 'Spec'), _t('인쇄 적용', 'Printed')], 'thead');
                 (lc.ratings || []).forEach(function (r) {
-                    rows.push([r.name || '', r.spec || '', r.print || '']);
+                    push([r.name || '', r.spec || '', r.print || ''], 'tdata');
                 });
             } else if (s.kind === 'attach') {
                 var list = (d.att[s.key] || []);
-                rows.push([_t('첨부', 'attachments') + ' ' + list.length + _t('건', '')]);
-                list.forEach(function (a) { rows.push(['', a.orig || a.name]); });
+                push([_t('첨부', 'attachments') + ' ' + list.length + _t('건', '')], 'subsect');
+                list.forEach(function (a) { push(['', a.orig || a.name], 'tdata'); });
             } else if (s.kind === 'photomark') {
                 var pmList3 = (d.att[s.key] || []);
-                rows.push([_t('사진', 'Photos') + ' ' + pmList3.length + _t('장', '')]);
+                push([_t('사진', 'Photos') + ' ' + pmList3.length + _t('장', '')], 'subsect');
                 pmList3.forEach(function (a) {
-                    rows.push(['', a.orig || a.name]);
-                    (a.marks || []).forEach(function (m, mi) { rows.push(['', '', (mi + 1) + '. ' + m.text]); });
+                    push(['', a.orig || a.name], 'tdata');
+                    (a.marks || []).forEach(function (m, mi) { push(['', '', (mi + 1) + '. ' + m.text], 'tdata'); });
                 });
             } else if (s.kind === 'text') {
-                rows.push([val(s.key, null) || '']);
+                push([val(s.key, null) || ''], 'text');
             } else if (s.kind === 'table') {
-                rows.push(s.columns.slice());
+                push(s.columns.slice(), 'thead');
                 s.rows.forEach(function (r) {
-                    rows.push(r.cells.map(function (c) { return c.fixed !== undefined ? c.fixed : val(c.key, c.from); }));
+                    push(r.cells.map(function (c) { return c.fixed !== undefined ? c.fixed : val(c.key, c.from); }), 'tdata');
                 });
             } else if (s.kind === 'optical') {
                 // 🔬 이 문서(=이 회차)의 측정 이력만 — 전체 회차 집계는 화면 전용(인쇄물은 한 회차 보고서다)
-                rows.push([_t('바코드/라벨', 'Barcode/Label'), _t('측정일시', 'Measured'), 'Native X', 'Native Y',
-                           'Max PWM Lv', _t('균일도(%)', 'Uniformity(%)'), 'Gamut(%NTSC)', 'PQ',
-                           'Dimming', _t('등급', 'Grade'), _t('구분', 'Category'), 'Aging', _t('비고', 'Remark')]);
+                push([_t('바코드/라벨', 'Barcode/Label'), _t('측정일시', 'Measured'), 'Native X', 'Native Y',
+                      'Max PWM Lv', _t('균일도(%)', 'Uniformity(%)'), 'Gamut(%NTSC)', 'PQ',
+                      'Dimming', _t('등급', 'Grade'), _t('구분', 'Category'), 'Aging', _t('비고', 'Remark')], 'thead');
                 (d.opticalLogs || []).forEach(function (it) {
                     var uni = window._opticalUniformity ? window._opticalUniformity(it.points) : null;
                     var gam = (it.primaries && window._opticalGamut) ? window._opticalGamut(it.primaries) : null;
@@ -6615,32 +6623,105 @@
                     var uChk = window._opticalSpecCheck ? window._opticalSpecCheck('Uniformity(%)', uni ? uni.pct : null) : null;
                     var gChk = window._opticalSpecCheck ? window._opticalSpecCheck('Color Gamut', gamPctX !== '' && gamPctX != null ? parseFloat(gamPctX) : null) : null;
                     var pqTxt = it.pqTotal > 0 ? (it.pqFail === 0 ? 'PASS' : it.pqFail + '/' + it.pqTotal + ' FAIL') : (it.pqManual || '');
-                    rows.push([it.barcode || it.label || '', it.startTime, it.nativeX, it.nativeY, it.maxPwmLv,
-                               (uni ? uni.pct : '') + (uChk ? (uChk.pass ? ' (PASS)' : ' (FAIL)') : ''),
-                               (gamPctX != null ? gamPctX : '') + (gChk ? (gChk.pass ? ' (PASS)' : ' (FAIL)') : ''), pqTxt,
-                               it.dimming || '', it.grade || '', it.category || '', it.aging || '', it.remark || '']);
+                    push([it.barcode || it.label || '', it.startTime, it.nativeX, it.nativeY, it.maxPwmLv,
+                          (uni ? uni.pct : '') + (uChk ? (uChk.pass ? ' (PASS)' : ' (FAIL)') : ''),
+                          (gamPctX != null ? gamPctX : '') + (gChk ? (gChk.pass ? ' (PASS)' : ' (FAIL)') : ''), pqTxt,
+                          it.dimming || '', it.grade || '', it.category || '', it.aging || '', it.remark || ''], 'tdata');
                 });
             } else if (s.kind === 'milestones') {
-                rows.push([_t('구분', 'Stage')].concat((window.DOC_MILESTONES || []).map(function (m) { return m.label; })));
+                push([_t('구분', 'Stage')].concat((window.DOC_MILESTONES || []).map(function (m) { return m.label; })), 'thead');
                 ['plan', 'actual'].forEach(function (k) {
-                    rows.push([k === 'plan' ? _t('계획', 'Plan') : _t('실적', 'Actual')]
-                        .concat((window.DOC_MILESTONES || []).map(function (m) { return ctx.milestones[k][m.stage] || ''; })));
+                    push([k === 'plan' ? _t('계획', 'Plan') : _t('실적', 'Actual')]
+                        .concat((window.DOC_MILESTONES || []).map(function (m) { return ctx.milestones[k][m.stage] || ''; })), 'tdata');
                 });
             } else if (s.kind === 'members') {
-                rows.push([_t('구분', 'Role'), _t('성명', 'Name')]);
-                ctx.members.forEach(function (m) { rows.push([m.role, m.name]); });
+                push([_t('구분', 'Role'), _t('성명', 'Name')], 'thead');
+                ctx.members.forEach(function (m) { push([m.role, m.name], 'tdata'); });
             } else if (s.kind === 'spec') {
-                rows.push(['NO', 'TYPE', 'Description', 'KTK Note']);
-                ctx.spec.forEach(function (r, i) { rows.push([i + 1, r.label, r.value, r.note]); });
+                push(['NO', 'TYPE', 'Description', 'KTK Note'], 'thead');
+                ctx.spec.forEach(function (r, i) { push([i + 1, r.label, r.value, r.note], 'tdata'); });
             } else if (s.kind === 'materials') {
-                rows.push([_t('구분', 'Category'), _t('코드', 'PN'), _t('내역', 'Description')]);
-                ctx.materials.forEach(function (m) { rows.push([m.cat, m.pn, m.desc]); });
+                push([_t('구분', 'Category'), _t('코드', 'PN'), _t('내역', 'Description')], 'thead');
+                ctx.materials.forEach(function (m) { push([m.cat, m.pn, m.desc], 'tdata'); });
             } else {
-                (s.fields || []).forEach(function (f) { rows.push([f.label || f.key, val(f.key, f.from)]); });
+                (s.fields || []).forEach(function (f) { push([f.label || f.key, val(f.key, f.from)], f.wide ? 'kv-wide' : 'kv'); });
             }
-            rows.push([]);
+            push([], 'gap');
         });
+        rows.__kinds = kinds;
         return rows;
+    };
+
+    // ── 📗📗 엑셀만 — 원본 문서처럼 제목띠·구역띠·표머리글·2단 라벨|값 에 색·테두리·병합을
+    //    입힌다(.docx·화면은 그대로). 색은 js/42 와 같은 원칙으로 **현재 테마 팔레트**
+    //    (`_cpXlsxRole`)에서 가져온다 — 팔레트를 바꾸면 이 엑셀도 같이 바뀐다.
+    var _dxRole = function (k, fb) { try { return window._cpXlsxRole(k) || fb; } catch (e) { return fb; } };
+    var _dxFill = function (hex) { return { patternType: 'solid', fgColor: { rgb: hex } }; };
+    var _dxFont = function (sz, bold, color) { return { name: '맑은 고딕', sz: sz, bold: !!bold, color: { rgb: color || '1F2937' } }; };
+    var _dxBorderAll = function (hex) {
+        var e = { style: 'thin', color: { rgb: hex } };
+        return { top: e, bottom: e, left: e, right: e };
+    };
+    window._docBuildStyledSheet = function (formId) {
+        var rows = window._docToAoa(formId), kinds = rows.__kinds || [];
+        var dark = _dxRole('darkText', '00707D'), tint = _dxRole('bg', 'E0F5F7');
+        var head = _dxRole('hoverBg', 'A3D9E0'), line = _dxRole('border', 'CFE3E5');
+        var width = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 1);
+        var ws = window.XLSX.utils.aoa_to_sheet(rows);
+        var rowsMeta = [], merges = [], colW = [];
+        kinds.forEach(function (kind, r) {
+            if (kind === 'title' || kind === 'sect' || kind === 'subsect' || kind === 'text') {
+                merges.push({ s: { r: r, c: 0 }, e: { r: r, c: Math.max(0, width - 1) } });
+            } else if (kind === 'subtitle') {
+                merges.push({ s: { r: r, c: 0 }, e: { r: r, c: 1 } });
+            }
+            rowsMeta[r] = { hpt: kind === 'title' ? 26 : (kind === 'sect' ? 20 : (kind === 'gap' ? 6 : 18)) };
+            for (var c = 0; c < width; c++) {
+                var addr = window.XLSX.utils.encode_cell({ r: r, c: c });
+                var cell = ws[addr];
+                if (!cell) { ws[addr] = cell = { t: 's', v: '' }; }
+                var txt = String(cell.v == null ? '' : cell.v);
+                var w = 0; for (var ci = 0; ci < txt.length; ci++) w += /[가-힣ㄱ-ㅎ]/.test(txt.charAt(ci)) ? 2 : 1;
+                if (kind !== 'title' && kind !== 'sect' && kind !== 'subsect') {
+                    colW[c] = Math.min(46, Math.max(colW[c] || 8, w + 2));
+                }
+                if (kind === 'title') {
+                    cell.s = { font: _dxFont(14, true, 'FFFFFF'), fill: _dxFill(dark),
+                               alignment: { vertical: 'center', horizontal: 'left', indent: 1 } };
+                } else if (kind === 'subtitle') {
+                    cell.s = { font: _dxFont(9, false, '495057'), alignment: { vertical: 'center' } };
+                } else if (kind === 'sect') {
+                    cell.s = { font: _dxFont(11.5, true, 'FFFFFF'), fill: _dxFill(head),
+                               alignment: { vertical: 'center', horizontal: 'left', indent: 1 } };
+                } else if (kind === 'subsect') {
+                    cell.s = { font: _dxFont(10.5, true, dark), fill: _dxFill(tint),
+                               alignment: { vertical: 'center', horizontal: 'left', indent: 1 } };
+                } else if (kind === 'gap') {
+                    cell.s = { border: {} };
+                } else if (kind === 'thead') {
+                    cell.s = { font: _dxFont(10, true, 'FFFFFF'), fill: _dxFill(dark),
+                               alignment: { vertical: 'center', horizontal: 'center', wrapText: true },
+                               border: _dxBorderAll(line) };
+                } else if (kind === 'tdata') {
+                    cell.s = { font: _dxFont(10), fill: _dxFill('FFFFFF'),
+                               alignment: { vertical: 'center', wrapText: true }, border: _dxBorderAll(line) };
+                } else if (kind === 'text') {
+                    cell.s = { font: _dxFont(10), fill: _dxFill('FFFFFF'),
+                               alignment: { vertical: 'top', wrapText: true }, border: _dxBorderAll(line) };
+                } else {   // kv · kv-wide — 라벨|값 2열
+                    var isLabel = (c === 0);
+                    cell.s = { font: _dxFont(10, isLabel, isLabel ? dark : '1F2937'),
+                               fill: _dxFill(isLabel ? tint : 'FFFFFF'),
+                               alignment: { vertical: 'center', wrapText: kind === 'kv-wide' },
+                               border: _dxBorderAll(line) };
+                }
+            }
+        });
+        ws['!merges'] = merges;
+        ws['!rows'] = rowsMeta;
+        ws['!cols'] = [];
+        for (var c2 = 0; c2 < width; c2++) ws['!cols'].push({ wch: colW[c2] || 14 });
+        return ws;
     };
 
     window._docExport = async function (how) {
@@ -6663,8 +6744,7 @@
             _toast('⚠️ ' + _t('엑셀 라이브러리를 불러오지 못했습니다.', 'XLSX not loaded.'), 'error'); return;
         }
         var wb = XLSX.utils.book_new();
-        var ws = XLSX.utils.aoa_to_sheet(window._docToAoa(form.id));
-        ws['!cols'] = [{ wch: 20 }, { wch: 34 }, { wch: 26 }, { wch: 22 }];
+        var ws = window._docBuildStyledSheet(form.id);
         XLSX.utils.book_append_sheet(wb, ws, form.label.slice(0, 28));
         var name = form.nameOf(ctx, opt).replace(/\.(pptx|xlsx)$/i, '') + '.xlsx';
 
