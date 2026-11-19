@@ -2899,7 +2899,7 @@
     //    파일명에 치수가 공백 없이 그대로 들어 있다(`...SLV,75X70 (1).XLSX`). 코드/규격 둘 다
     //    같은 결과 렌더링(`_docLabelRenderMatches`)·같은 "SAP 에서 새로 받기" 흐름을 타게
     //    **공용 실행기 하나**로 모은다(검색 경로가 둘이어도 결과 처리는 한 곳).
-    var _docLabelSearchRun = async function (formId, idx, qs, allowSapRefresh, notFoundLabel) {
+    var _docLabelSearchRun = async function (formId, idx, qs, allowSapRefresh, notFoundLabel, showCrossProject) {
         var key = formId + '|' + idx;
         window._docLabelFindResult[key] = '⏳ ' + _esc(_t('찾는 중…', 'Searching…'));
         window._docRender();
@@ -2925,7 +2925,12 @@
             window._docLabelFindResult[key] = '⚠️ ' + _esc((res && res.error) || _t('검색 실패', 'Search failed'));
         } else if (!res.matches || !res.matches.length) {
             window._docLabelFindResult[key] = '🔍 ' + _esc(_t('도안을 못 찾았습니다(확인해 주세요): ', 'No drawing found for: ')) + _esc(notFoundLabel)
-                + (allowSapRefresh ? _docLabelSapRefreshLink(key, false) : '');
+                + (allowSapRefresh ? _docLabelSapRefreshLink(key, false) : '')
+                // 🗂️ [2026-11-19, 사용자 요청] 못 찾았을 때 "다른 프로젝트에 등록된 비슷한 라벨"을
+                //    보여주는 입구 — 코드 검색일 때만(규격 검색은 코드를 몰라 비교 기준이 없다).
+                + (showCrossProject ? ' · <a href="#" onclick="window._docLabelCrossProjectBrowse(\'' + _esc(formId) + '\',' + idx
+                    + ');return false;" style="color:#2f9e44;">📂 ' + _esc(_t('다른 프로젝트에 등록된 라벨 보기', 'See labels from other projects'))
+                    + '</a>' : '');
         } else {
             window._docLabelFindMatches[key] = res.matches;
             _docLabelRenderMatches(formId, idx, key, res.matches, res.partial, allowSapRefresh);
@@ -2941,7 +2946,7 @@
             window._docRender(); return;
         }
         window._docLabelFetchSapDesc(formId, idx, code);   // 도안 찾기와 별개로 끝날 때까지 안 기다림
-        await _docLabelSearchRun(formId, idx, 'code=' + encodeURIComponent(code), true, code);
+        await _docLabelSearchRun(formId, idx, 'code=' + encodeURIComponent(code), true, code, true);
     };
     // 📋 [2026-11-13, 사용자 요청] "라벨 규격은 라벨 품목 코드 조회하면 SAP 의 내역을 표시해주면" —
     //    코드로 도안을 찾을 때 SAP 자재 내역(`/sap-material-rows`, ZMM009 — BOM·QA 문답과 같은 경로,
@@ -2993,6 +2998,228 @@
         }
         // ⚠️ 규격만으로는 코드를 모르니 SAP "다시 받기"(자재번호 필요)는 못 쓴다 — 링크를 안 보인다.
         await _docLabelSearchRun(formId, idx, 'q=' + encodeURIComponent(size), false, size);
+    };
+    // 🗂️🗂️ [2026-11-19, 사용자 요청] "다른 프로젝트에서 라벨 도안을 불러오고 라벨정보를 새로
+    //    적는 것보다, 다른 프로젝트의 라벨 사양을 가져오면 일부 정보만 수정하면 좋겠다" — 표시·
+    //    인증마크·QR/바코드까지 포함한 **라벨 하나 전체**를 다른 프로젝트에서 그대로 복사해 와서
+    //    시작점으로 삼고, 다른 값만 고치게 한다. 범위는 **같은 팀만**(다른 팀까지 훑지 않음).
+    //    ⚠️ 도안(사진)·표시 내용은 이미 "코드 하나당 파일 하나"로 전사 공용(`_LABEL_ART_FOLDER`)
+    //    이다 — 그래서 다른 프로젝트 라벨 목록에서 **코드만** 모으면, 그 뒤 미리보기는 기존
+    //    코드-공용 경로(`_docLabelNotesLoad`/`_docLabelArtIndex`)를 그대로 타면 된다. "불러오기"는
+    //    그 공용 내용을 **새 코드로 복사**하는 것(원본은 그대로, 복사 뒤엔 서로 독립).
+    window._docLabelCrossProjectCache = window._docLabelCrossProjectCache || null;   // {items, at}
+    window._docLabelCrossProjectScan = async function () {
+        var cache = window._docLabelCrossProjectCache;
+        if (cache && (Date.now() - cache.at) < 10 * 60 * 1000) return cache.items;
+        var myTeam = String((window.projectMeta && window.projectMeta.팀) || '').trim();
+        var items = [];
+        if (myTeam && window._msLoadProjectIndex && window.nasAppFile) {
+            var list = [];
+            try { list = await window._msLoadProjectIndex(); } catch (e) { list = []; }
+            var mine = (list || []).filter(function (p) { return p && String(p.team || '').trim() === myTeam; });
+            for (var pi = 0; pi < mine.length; pi++) {
+                var p = mine[pi], d = null;
+                try {
+                    var rel = (p.team ? p.team + '/' : '') + p.file_name;
+                    d = await window.nasAppFile.get(rel, { json: true });
+                    if (!d && window._storageRelOfId && p.drive_file_id) {
+                        var liveRel = window._storageRelOfId(p.drive_file_id);
+                        if (liveRel && liveRel !== rel) d = await window.nasAppFile.get(liveRel, { json: true });
+                    }
+                } catch (e) { d = null; }
+                if (!d || !d.tabData || !d.tabData.documents) continue;
+                var plabel = p.model || p.customer || p.file_name;
+                Object.keys(d.tabData.documents).forEach(function (dk) {
+                    if (!/^label-spec(#.+)?$/.test(dk)) return;
+                    var revs = (d.tabData.documents[dk] && d.tabData.documents[dk].revisions) || {};
+                    Object.keys(revs).forEach(function (rk) {
+                        (revs[rk].labelItems || []).forEach(function (it) {
+                            var c = String((it && it.code) || '').trim();
+                            if (!/^\d{4,7}$/.test(c)) return;
+                            items.push({ code: c, projectLabel: plabel });
+                        });
+                    });
+                });
+            }
+        }
+        var seen = {}, dedup = [];
+        items.forEach(function (it) {
+            var k = it.code + '|' + it.projectLabel;
+            if (seen[k]) return;
+            seen[k] = 1; dedup.push(it);
+        });
+        window._docLabelCrossProjectCache = { items: dedup, at: Date.now() };
+        return dedup;
+    };
+    window._docLabelCrossProjectState = null;   // {formId, idx, items, filterProject, slide}
+    var _docLabelCrossProjectFiltered = function (st) {
+        var f = st.filterProject ? st.items.filter(function (it) { return it.projectLabel === st.filterProject; }) : st.items;
+        return f.length ? f : st.items;
+    };
+    window._docLabelCrossProjectBrowse = async function (formId, idx) {
+        _toast('⏳ ' + _t('우리 팀 다른 프로젝트를 훑는 중…(시간이 걸릴 수 있습니다)',
+                           'Scanning other projects on your team… (may take a moment)'), 'info');
+        var items;
+        try { items = await window._docLabelCrossProjectScan(); } catch (e) { items = []; }
+        if (!items.length) {
+            _toast('⚠️ ' + _t('우리 팀 다른 프로젝트에 등록된 라벨을 찾지 못했습니다.',
+                               'No labels found in other projects on your team.'), 'error');
+            return;
+        }
+        if (!window._docLabelArtIndex && window._docLabelArtLoad) await window._docLabelArtLoad();
+        window._docLabelCrossProjectState = { formId: formId, idx: idx, items: items, filterProject: '', slide: 0 };
+        _docLabelCrossProjectRender();
+    };
+    window._docLabelCrossProjectFilterSet = function (v) {
+        var st = window._docLabelCrossProjectState; if (!st) return;
+        st.filterProject = v; st.slide = 0;
+        _docLabelCrossProjectRender();
+    };
+    window._docLabelCrossProjectNav = function (dir) {
+        var st = window._docLabelCrossProjectState; if (!st) return;
+        var filtered = _docLabelCrossProjectFiltered(st);
+        if (!filtered.length) return;
+        st.slide = (st.slide + dir + filtered.length) % filtered.length;
+        _docLabelCrossProjectRender();
+    };
+    window._docLabelCrossProjectClose = function () {
+        window._docLabelCrossProjectState = null;
+        var ov = document.getElementById('doclabelcp-overlay');
+        if (ov) ov.style.display = 'none';
+    };
+    var _docLabelCrossProjectRender = function () {
+        var st = window._docLabelCrossProjectState; if (!st) return;
+        var filtered = _docLabelCrossProjectFiltered(st);
+        if (st.slide >= filtered.length) st.slide = 0;
+        var cur = filtered[st.slide];
+        var seenP = {}, projects = [];
+        st.items.forEach(function (it) { if (!seenP[it.projectLabel]) { seenP[it.projectLabel] = 1; projects.push(it.projectLabel); } });
+        var ov = document.getElementById('doclabelcp-overlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'doclabelcp-overlay';
+            ov.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9650; pointer-events:none; background:none;';
+            document.body.appendChild(ov);
+        }
+        ov.style.display = 'flex';
+        var needLoad = cur && window._docLabelNotesCache[cur.code] === undefined;
+        var previewHtml;
+        if (!cur) {
+            previewHtml = '<div style="padding:30px; color:#868e96;">' + _esc(_t('표시할 라벨이 없습니다.', 'No labels to show.')) + '</div>';
+        } else if (needLoad) {
+            previewHtml = '<div style="padding:30px; color:#868e96;">⏳ ' + _esc(_t('불러오는 중…', 'Loading…')) + '</div>';
+            window._docLabelNotesLoad(cur.code).then(function () { _docLabelCrossProjectRender(); });
+        } else {
+            var artFile = window._docLabelArtIndex && window._docLabelArtIndex[cur.code];
+            var notes = window._docLabelNotesCache[cur.code] || [];
+            var marks = window._docLabelMarksCache[cur.code] || [];
+            var boxes = window._docLabelBoxesCache[cur.code] || [];
+            var codes = window._docLabelCodesCache[cur.code] || [];
+            previewHtml = '<div style="padding:14px; text-align:center;">'
+                + (artFile
+                    ? '<div id="doclabelcp-imgwrap" style="position:relative; display:inline-block;">'
+                      + '<img id="doclabelcp-img" src="' + _esc(_docLabelArtSrc(cur.code, artFile)) + '"'
+                      + ' style="max-width:100%; max-height:280px; border:1px solid #dee2e6; border-radius:3px; display:block;">'
+                      + _docLabelNoteMarkersHtml(notes, false, cur.code)
+                      + _docLabelMarkMarkersHtml(marks, false, cur.code)
+                      + _docLabelBoxMarkersHtml(boxes, false, cur.code)
+                      + _docLabelCodeMarkersHtml(codes, false, cur.code)
+                      + '</div>'
+                    : '<div style="color:#868e96; padding:30px;">' + _esc(_t('도안 이미지가 없습니다.', 'No artwork image.')) + '</div>');
+        }
+        ov.innerHTML = '<div id="doclabelcp-box" style="pointer-events:all; position:fixed; left:50%; top:8%;'
+            + ' transform:translateX(-50%); width:min(520px,92vw); max-height:84vh; display:flex; flex-direction:column;'
+            + ' background:#fff; border:1px solid #a3d9e0; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18); overflow:hidden;">'
+            + '<div style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:9px 12px;'
+            + ' background:#e0f5f7; border-bottom:1px solid #a3d9e0; color:#00707d; font-weight:bold; font-size:13px;">'
+            + '<span>📂 ' + _esc(_t('다른 프로젝트 라벨 불러오기', 'Import label from another project')) + '</span>'
+            + '<button onclick="window._docLabelCrossProjectClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
+            + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+            // 🏷 [2026-11-19, 사용자 요청] "검색된 라벨을 프로젝트명 드롭다운으로 — 더 빨리 찾게" —
+            //    슬라이드로 하나씩 넘기지 않고 프로젝트를 바로 골라 그 프로젝트 라벨들만 본다.
+            + '<div style="flex-shrink:0; padding:8px 12px; border-bottom:1px solid #e9ecef; font-size:12.5px;">'
+            + _esc(_t('프로젝트', 'Project')) + ': <select onchange="window._docLabelCrossProjectFilterSet(this.value)" style="font-size:12.5px;">'
+            + '<option value="">' + _esc(_t('전체', 'All')) + '</option>'
+            + projects.map(function (pl) {
+                return '<option value="' + _esc(pl) + '"' + (st.filterProject === pl ? ' selected' : '') + '>' + _esc(pl) + '</option>';
+            }).join('') + '</select></div>'
+            + '<div style="flex:1; min-height:0; overflow:auto;">'
+            + '<div style="display:flex; align-items:center; justify-content:center; gap:10px; padding:6px 0 0;">'
+            + '<a href="#" onclick="window._docLabelCrossProjectNav(-1);return false;" style="font-size:18px; color:#1971c2; text-decoration:none;">◀</a>'
+            + '<span style="font-size:12.5px; color:#495057;">' + (cur ? ('<b>' + _esc(cur.code) + '</b> — ' + _esc(cur.projectLabel)) : '') + '</span>'
+            + '<a href="#" onclick="window._docLabelCrossProjectNav(1);return false;" style="font-size:18px; color:#1971c2; text-decoration:none;">▶</a>'
+            + '</div>'
+            + '<div style="font-size:11px; color:#868e96; text-align:center;">' + (filtered.length ? (st.slide + 1) + ' / ' + filtered.length : '') + '</div>'
+            + previewHtml
+            + '</div>'
+            + '<div style="flex-shrink:0; padding:10px 12px; border-top:1px solid #e9ecef; text-align:center;">'
+            + (cur && !needLoad
+                ? '<button onclick="window._docLabelCrossProjectImport()" style="padding:7px 16px; font-size:12.5px; font-weight:bold;'
+                  + ' cursor:pointer; border:1px solid #2f9e44; background:#ebfbee; color:#2f9e44; border-radius:6px;">'
+                  + '📥 ' + _esc(_t('이 라벨 불러오기', 'Import this label')) + '</button>'
+                : '')
+            + '</div></div>';
+        if (cur && !needLoad) {
+            var img = document.getElementById('doclabelcp-img');
+            var wrap = document.getElementById('doclabelcp-imgwrap');
+            if (img && wrap) {
+                var applyFont = function () {
+                    window._docLabelNotesApplyFont(wrap, img, cur.code);
+                    window._docLabelLinesApply(wrap, img, cur.code, false);
+                    window._docLabelCodesApply(wrap, cur.code);
+                };
+                if (img.complete) applyFont(); else img.addEventListener('load', applyFont, { once: true });
+            }
+        }
+    };
+    window._docLabelCrossProjectImport = async function () {
+        var st = window._docLabelCrossProjectState; if (!st) return;
+        var filtered = _docLabelCrossProjectFiltered(st);
+        var cur = filtered[st.slide]; if (!cur) return;
+        var it = (_docData(st.formId).labelItems || [])[st.idx];
+        var targetCode = String((it && it.code) || '').trim();
+        if (!targetCode) { _toast('⚠️ ' + _t('먼저 코드를 적으세요.', 'Enter the code first.'), 'error'); return; }
+        if (targetCode === cur.code) {
+            _toast('⚠️ ' + _t('같은 코드입니다 — 이미 자동으로 같은 내용을 씁니다.', 'Same code — content is already shared automatically.'), 'error');
+            return;
+        }
+        if (!confirm(_t('"' + cur.code + '"(' + cur.projectLabel + ')의 도안·표시 내용을 복사해서 "' + targetCode + '"로 저장합니다. 계속할까요?',
+                          'Copy the artwork and overlay content to "' + targetCode + '". Continue?'))) return;
+        _toast('⏳ ' + _t('복사하는 중…', 'Copying…'), 'info');
+        try { await window._docLabelNotesLoad(cur.code); } catch (e) { /* 무시 */ }
+        var srcArtFile = window._docLabelArtIndex && window._docLabelArtIndex[cur.code];
+        if (srcArtFile) {
+            try {
+                var r = await fetch(BACKEND + '/doc/get?folder=' + encodeURIComponent(_LABEL_ART_FOLDER) + '&name=' + encodeURIComponent(srcArtFile));
+                if (r.ok) {
+                    var blob = await r.blob();
+                    var ext = (srcArtFile.split('.').pop() || 'png').toLowerCase();
+                    var fname = targetCode + '.' + ext;
+                    var up = await window._dgUploadBlob(_LABEL_ART_FOLDER, fname, blob, { forceOverwrite: true });
+                    if (up.ok) {
+                        window._docLabelArtIndex = window._docLabelArtIndex || {};
+                        window._docLabelArtIndex[targetCode] = fname;
+                        _docLabelBumpVer(targetCode);
+                    }
+                }
+            } catch (e) { /* 사진 복사가 실패해도 표시 내용만이라도 복사한다 */ }
+        }
+        // ⚠️ 깊은 복사 — 원본 배열/객체를 그대로 물려주면 나중에 원본 프로젝트(코드)에도 영향을 준다.
+        window._docLabelNotesCache[targetCode] = JSON.parse(JSON.stringify(window._docLabelNotesCache[cur.code] || []));
+        window._docLabelMarksCache[targetCode] = JSON.parse(JSON.stringify(window._docLabelMarksCache[cur.code] || []));
+        window._docLabelBoxesCache[targetCode] = JSON.parse(JSON.stringify(window._docLabelBoxesCache[cur.code] || []));
+        window._docLabelLinesCache[targetCode] = JSON.parse(JSON.stringify(window._docLabelLinesCache[cur.code] || []));
+        window._docLabelCodesCache[targetCode] = JSON.parse(JSON.stringify(window._docLabelCodesCache[cur.code] || []));
+        window._docLabelSizeCache[targetCode] = window._docLabelSizeCache[cur.code] ? JSON.parse(JSON.stringify(window._docLabelSizeCache[cur.code])) : null;
+        window._docLabelThumbSizeCache[targetCode] = null;   // 표 썸네일 크기는 새로 맞추게 비워둔다
+        window._docLabelNoteFontScale[targetCode] = window._docLabelNoteFontScale[cur.code] || 1;
+        var saved = await window._docLabelNotesSave(targetCode);
+        if (!saved) { _toast('⚠️ ' + _t('저장하지 못했습니다.', 'Could not save.'), 'error'); return; }
+        window._docLabelCrossProjectClose();
+        delete window._docLabelFindResult[st.formId + '|' + st.idx];
+        _toast('✅ ' + _t('다른 프로젝트의 라벨을 복사했습니다 — 다른 값만 고치면 됩니다.',
+                           'Imported the label from the other project — just edit the parts that differ.'), 'success');
+        _docLabelRefresh();
     };
     window._docLabelToggleImages = async function (key, mi) {
         var parts = key.split('|'), formId = parts[0], idx = Number(parts[1]);
