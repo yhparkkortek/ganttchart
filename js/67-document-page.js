@@ -1254,7 +1254,14 @@
             var kind = wrap.getAttribute('data-code-kind');
             var value = wrap.getAttribute('data-code-value');
             if (!value) return;
-            var r = wrap.getBoundingClientRect();
+            // ⚠️⚠️ [2026-11-19, 사용자 신고 "QR 테두리 사각형이 QR 외곽에 맞지 않고 틀어져
+            //    있다"] 그림 크기를 **wrap(테두리 포함 바깥 박스)** 기준으로 쟀다 — wrap 은
+            //    `box-sizing:border-box` 라 테두리(1px)·여백(0.2em)까지 포함한 더 큰 치수인데,
+            //    그 안의 그림은 테두리·여백을 뺀 **더 작은** `data-code-canvas`(이 칸, 100%) 안에
+            //    들어간다. 그래서 실제로 그려지는 QR/바코드가 담을 자리보다 커서 테두리 밖으로
+            //    삐져나왔다 — 모서리의 ✕·✏ 버튼과 겹쳐 "대각선처럼 틀어져 보인다"는 착시였다.
+            //    → 그림이 **실제로 들어갈 칸**(`canvas`, 이 div 자신) 크기를 재야 한다.
+            var r = canvas.getBoundingClientRect();
             var w = Math.max(20, Math.round(r.width)), h = Math.max(20, Math.round(r.height));
             try {
                 if (kind === 'qr') {
@@ -1750,25 +1757,9 @@
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
-    // 📋➕ [2026-11-19, 사용자 요청] "+ 새 표시 내용 입력할 수 있도록 행 추가되는 걸로 + 버튼
-    //    추가(오른쪽 하단 모서리에 있는 건 삭제)" — 옛 우하단 구석 칸(먼저 입력 → 추가)을
-    //    없애고, 목록 맨 끝에 **빈 행을 바로 하나 추가**해 그 자리에서 곧장 타이핑하게 한다.
-    //    자리는 기본값(왼쪽 위부터 아래로 쌓기)이고, 정확한 위치는 추가한 뒤 끌어서 옮기면 된다.
-    window._docLabelNoteAddBlankRow = async function (code) {
-        var list = window._docLabelNotesCache[code] = window._docLabelNotesCache[code] || [];
-        var y = Math.min(0.92, 0.08 + list.length * 0.09);
-        var newIdx = list.length;
-        list.push({ x: 0.1, y: y, text: '' });
-        window._docLabelClearOtherActive('note');
-        window._docLabelActiveNote = { code: code, idx: newIdx };
-        _docLabelRefresh();
-        // `_docLabelRefresh` 는 동기적으로 `innerHTML` 을 바꾸므로 그 직후 바로 새 행의 textarea 를
-        //    찾아 포커스할 수 있다 — 사람이 "+" 를 누르자마자 타이핑만 하면 되게.
-        var row = document.querySelector('[data-note-list-code="' + CSS.escape(code) + '"] [data-note-row][data-note-idx2="' + newIdx + '"]');
-        var ta = row && row.querySelector('textarea');
-        if (ta) ta.focus();
-        await window._docLabelNotesSave(code);
-    };
+    // 🗑️ [2026-11-19, 사용자 요청] "그러면 새표시 추가는 삭제해도 될것 같아" — Ctrl+C/Ctrl+V(복제)
+    //    로 새 표시를 만들 수 있게 되면서, 빈 행을 바로 추가하던 이 버튼·함수는 더 안 쓴다
+    //    (되돌리려면 이 커밋을 되돌릴 것). 새 표시는 ① 도안 클릭 ② 기존 표시 Ctrl+C/V 로.
     // 🔲🔲 [2026-11-18 2차, 사용자 요청] "바코드 또는 이미지 모두 기능 적용 / 배경 클릭하면 해제" —
     //    표시(note) 하나에만 있던 선택 테두리를 인증마크(mark)·박스(box)·QR·바코드(code)까지
     //    전부로 넓힌다. 네 가지는 **서로 배타적으로 하나만** 선택되게(마크를 고르면 표시 선택은
@@ -2478,6 +2469,27 @@
                     }
                     return;
                 }
+                // 🗑️⌨️ [2026-11-19, 사용자 요청] "DEL 도 가능하게" — 지금 선택된 것(표시·인증마크·
+                //    박스·QR/바코드 중 하나)을 Delete 키로도 지울 수 있게 한다. 각자의 기존 삭제
+                //    함수(확인창 포함)를 그대로 불러서 — 화면 ✕ 버튼을 누른 것과 똑같이 동작한다.
+                if (ev.key === 'Delete') {
+                    var m5 = window._docLabelArtModal;
+                    if (!m5) return;
+                    var delKinds = [
+                        { active: window._docLabelActiveNote, fn: window._docLabelNoteDel },
+                        { active: window._docLabelActiveMark, fn: window._docLabelMarkDel },
+                        { active: window._docLabelActiveBox, fn: window._docLabelBoxDel },
+                        { active: window._docLabelActiveCode, fn: window._docLabelCodeDel }
+                    ];
+                    for (var dk = 0; dk < delKinds.length; dk++) {
+                        if (delKinds[dk].active && delKinds[dk].active.code === m5.code) {
+                            ev.preventDefault();
+                            delKinds[dk].fn(m5.code, delKinds[dk].active.idx);
+                            break;
+                        }
+                    }
+                    return;
+                }
                 var dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
                 var d = dirs[ev.key];
                 if (!d) return;
@@ -2631,10 +2643,8 @@
             //    은 Enter 로 줄을 못 나눈다. 새로 추가하는 칸은 Enter 가 줄바꿈으로 바뀌었으니 **추가는
             //    Ctrl+Enter 로**(또는 ＋ 추가 버튼).
             // 📜 [2026-11-19, 사용자 요청] "5개 넘어가면 스크롤" — 목록 자체가 끝없이 길어지던 것을
-            //    5줄 높이로 고정하고 그 안에서만 스크롤(`overflow-y:auto`). ⚠️ 목록은 이제 항목이
-            //    0개여도 **항상 그린다** — 아래 "+추가" 줄이 유일한 추가 입구라 숨기면 안 된다(옛
-            //    우하단 구석 칸을 없앴다).
-            + '<div data-note-list data-note-list-code="' + _esc(code) + '" style="text-align:left; font-size:11.5px;'
+            //    5줄 높이로 고정하고 그 안에서만 스크롤(`overflow-y:auto`).
+            + (notes.length ? '<div data-note-list data-note-list-code="' + _esc(code) + '" style="text-align:left; font-size:11.5px;'
                 + ' color:#495057; margin-top:8px; border-top:1px solid #e9ecef; padding-top:6px;'
                 + (notes.length > 5 ? ' max-height:150px; overflow-y:auto;' : '') + '">'
                 + notes.map(function (n, ni) {
@@ -2652,8 +2662,9 @@
                     // ⠿ [2026-11-13, 사용자 요청] "마우스로 잡아서 위치 이동가능하도록 / 번호 순서
                     //    변경되도록" — 손잡이를 끌면 그 자리에 끼워 넣고 번호(N.)는 새 자리 기준으로
                     //    다시 매겨진다(순서 자체가 배열 순서라 따로 번호를 옮길 필요가 없다).
-                    // 🗑🗑 [2026-11-19, 사용자 요청] "X 버튼은 끝으로 이동" — 번호 왼쪽에 있던 ✕ 를
-                    //    정렬 버튼(좌중우) 뒤, 줄 맨 끝으로 옮긴다.
+                    // 🗑🗑 [2026-11-19, 사용자 요청] "각 행에 붙여둔 X 버튼도 삭제" — Delete 키로
+                    //    지금 선택된 표시를 지울 수 있게 되면서(⌨️ 키다운 핸들러), 줄마다 있던
+                    //    ✕ 버튼은 더 안 둔다.
                     return '<div data-note-row data-note-idx2="' + ni + '" style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
                         + '<span data-note-reorder-handle title="' + _esc(_t('끌어서 순서 바꾸기', 'drag to reorder')) + '"'
                         + ' style="flex:0 0 1.1em; text-align:center; padding-top:2px; cursor:grab; color:#adb5bd; user-select:none;">⠿</span>'
@@ -2668,24 +2679,8 @@
                         + ' onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
                         + _esc(n.text) + '</textarea>'
-                        + '<span style="white-space:nowrap;">' + alignBtns + '</span>'
-                        + '<a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni + ');return false;"'
-                        + ' title="' + _esc(_t('이 표시 빼기', 'remove')) + '"'
-                        + ' style="flex:0 0 14px; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px;'
-                        + ' margin-top:2px; border:1px solid #808080; border-radius:3px; color:#808080; text-decoration:none;'
-                        + ' font-weight:bold; font-size:9px; line-height:1;">✕</a></div>';
-                }).join('')
-                // ➕ [2026-11-19, 사용자 요청] "+ 새 표시 내용 입력할 수 있도록 행 추가되는 걸로 +
-                //    버튼 추가 (오른쪽 하단 모서리에 있는 건 삭제)" — 목록 맨 끝에 빈 행을 하나
-                //    더하고(`_docLabelNoteAddBlankRow`) 그 자리에서 바로 타이핑한다. 옛 우하단
-                //    구석 칸(먼저 입력 → 추가)은 없앴다.
-                + '<div style="display:flex; align-items:center; gap:4px; margin-top:4px;">'
-                + '<span style="flex:0 0 1.1em;"></span>'
-                + '<a href="#" onclick="window._docLabelNoteAddBlankRow(\'' + _esc(code) + '\');return false;"'
-                + ' style="flex:1; text-align:center; padding:3px; border:1px dashed #a3d9e0; border-radius:4px;'
-                + ' color:#00707d; font-weight:bold; font-size:11.5px; text-decoration:none; background:#e0f5f7;">'
-                + '＋ ' + _esc(_t('새 표시 추가', 'Add note')) + '</a></div>'
-                + '</div>';
+                        + '<span style="white-space:nowrap;">' + alignBtns + '</span></div>';
+                }).join('') + '</div>' : '');
         var bodyEl = document.getElementById('doclabelart-body');
         if (bodyEl) bodyEl.innerHTML = h;
         // 렌더 직후 한 번만 — `innerHTML` 교체로 옛 리스너는 이미 사라졌다(따로 뗄 필요 없음).
