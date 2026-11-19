@@ -6537,6 +6537,37 @@
         return { fields: fields, checksheets: checksheets, attachments: attachments };
     };
 
+    // 📊 [2026-11-19] DR/DVR 발표자료 전용 — `_dgBuildStageDeck`(js/66, 기존 pptxgenjs 조립기)와
+    //    **똑같은 계산**(titleLine/subLine/stageName)을 그대로 베껴 쓴다 — 두 경로가 다른 문구를
+    //    내면 "새로 조립 PPT 와 원본 양식 PPT 가 서로 다른 제목"이라는 조용한 불일치가 생긴다.
+    window._docStageDrFields = function (ctx, opt) {
+        var stageName = (opt && opt.stage) || 'DR';
+        var titleLine = [ctx.meta.고객사, ctx.meta.모델명].filter(Boolean).join(' > ')
+                      + (ctx.meta.인치 ? (' ' + ctx.meta.인치 + '"') : '');
+        var subLine = 'Project No : ' + (ctx.meta.프로젝트코드 || '-')
+                    + '   /   Model No : ' + (ctx.meta.제품코드 || '-')
+                    + '   /   Model : ' + (ctx.meta.모델풀네임 || '-');
+        var overview = [];
+        if (ctx.overview.purpose) overview.push('· ' + _t('적용 목적: ', 'Purpose: ') + ctx.overview.purpose);
+        if (ctx.overview.volume) overview.push('· ' + _t('연간 수요량: ', 'Annual demand: ') + ctx.overview.volume);
+        if (ctx.overview.mpDate) overview.push('· ' + _t('목표 양산 일정: ', 'MP target: ') + ctx.overview.mpDate);
+        if (ctx.overview.background) overview.push('· ' + _t('추진 배경: ', 'Background: ') + ctx.overview.background);
+        var mh = [], mp = [], ma = [];
+        (window.DOC_MILESTONES || []).forEach(function (m) {
+            mh.push(m.label); mp.push(ctx.milestones.plan[m.stage] || ''); ma.push(ctx.milestones.actual[m.stage] || '');
+        });
+        return {
+            titleLine: titleLine, subLine: subLine, stageName: stageName,
+            dateStr: window._dgEnDate ? window._dgEnDate() : '',
+            summary: [ctx.meta.프로젝트코드, ctx.meta.제품코드, ctx.meta.모델풀네임, ctx.meta.고객사, ctx.overview.volume],
+            overview: overview,
+            members: (ctx.members || []).map(function (m) { return { role: m.role, name: m.name }; }),
+            milestoneHeader: mh, milestonePlan: mp, milestoneActual: ma,
+            spec: (ctx.spec || []).map(function (r, i) { return { no: i + 1, label: r.label, value: r.value, note: r.note }; }),
+            materials: (ctx.materials || []).map(function (m) { return { cat: m.cat, pn: m.pn, desc: m.desc }; })
+        };
+    };
+
     window._docSaveDocx = async function () {
         var st = window._docState, form = _formById(st.formId);
         if (!form) { _toast('⚠️ ' + _t('문서를 고르세요.', 'Pick a document.'), 'error'); return; }
@@ -6869,6 +6900,33 @@
         if (how === 'pptx') {
             if (!form.builder || !window._dgBuildStageDeck) {
                 _toast('⚠️ ' + _t('이 문서는 PPT 출력이 없습니다.', 'No PPT builder.'), 'error'); return;
+            }
+            // 📊 [2026-11-19, 사용자 요청] DR/DVR 발표자료도 원본 파일을 그대로 양식으로 —
+            //    백엔드 `/doc/stage-dr-pptx`가 `templates/DR_발표자료_양식.pptx`에 값만 채운다.
+            //    백엔드가 없거나 재시작 전이면(404) 기존 pptxgenjs 조립(`_dgBuildStageDeck`)으로
+            //    **조용히 돌아간다**.
+            if (form.id === 'stage-dr') {
+                var drName = form.nameOf(ctx, opt) + '.pptx';
+                var drBlob = null, drWhy = '';
+                try {
+                    var drRes = await fetch(BACKEND + '/doc/stage-dr-pptx', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: drName, fields: window._docStageDrFields(ctx, opt) })
+                    });
+                    if (drRes.ok) { drBlob = await drRes.blob(); }
+                    else { try { drWhy = (await drRes.json()).error || ''; } catch (eJ) { /* HTML 404 */ } }
+                } catch (eF) { drWhy = (eF && eF.message) || String(eF); }
+                if (drBlob) {
+                    var drUrl = URL.createObjectURL(drBlob);
+                    var drA = document.createElement('a');
+                    drA.href = drUrl; drA.download = drName;
+                    document.body.appendChild(drA); drA.click(); drA.remove();
+                    setTimeout(function () { URL.revokeObjectURL(drUrl); }, 10000);
+                    _toast('📊 ' + drName + ' (' + _t('원본 양식', 'original template') + ')', 'success');
+                    return;
+                }
+                _toast('ℹ️ ' + _t('원본 양식을 못 써서(' + drWhy + ') 새로 조립한 PPT 로 대신 만듭니다.',
+                                  'Could not use the original template — falling back to a built-from-scratch deck.'), 'info');
             }
             try {
                 var pptx = window._dgBuildStageDeck(ctx, opt);

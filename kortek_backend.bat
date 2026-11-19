@@ -27,7 +27,7 @@ echo  [1/3] 필수 패키지 확인 중...
 python -c "import flask, flask_cors, requests, cryptography, openpyxl, docx, xlwt, websockets" > nul 2>&1
 if errorlevel 1 (
     echo  [2/3] 패키지 설치 중... (최초 1회만 실행됩니다)
-    pip install flask flask-cors requests cryptography openpyxl python-docx xlwt websockets --quiet
+    pip install flask flask-cors requests cryptography openpyxl python-docx python-pptx xlwt websockets --quiet
     if errorlevel 1 (
         echo  [오류] 패키지 설치 실패. 인터넷 연결을 확인하세요.
         pause

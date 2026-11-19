@@ -7215,6 +7215,7 @@ _SELF_UPDATE_FILES = [
     'templates/모델명세서_양식.xlsx',
     'templates/라벨사양서_양식.xlsx',
     'templates/Sample Report_양식.docx',
+    'templates/DR_발표자료_양식.pptx',
 ]
 # ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
 # 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
@@ -9242,6 +9243,174 @@ def doc_sample_report_docx():
         name += '.docx'
     return send_file(bio, as_attachment=True, download_name=name,
                      mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+
+# ── 📊 DR/DVR 발표자료 — 원본 pptx 를 그대로 양식으로 (2026-11-19) ──────────────────────
+#    실측: Kickoff & Proto DR 와 PRA 두 파일이 **텍스트(단계명)만 다르고 레이아웃은 완전히
+#    같다** — 양식 하나(`templates/DR_발표자료_양식.pptx`)로 4단계(Kickoff & Proto DR/
+#    Proto DR/DVR/PRA) 전부 쓴다. 내용(`_dgBuildStageDeck`, js/66 의 기존 pptxgenjs 조립기)과
+#    **같은 계산**을 프런트 `_docStageDrFields` 가 그대로 베껴 보낸다 — 두 경로의 문구가
+#    갈리면 "새로 조립 PPT 와 원본 양식 PPT 가 서로 다른 제목"이라는 조용한 불일치가 된다.
+_DR_TEMPLATE_PPTX = os.path.join(BASE_DIR, 'templates', 'DR_발표자료_양식.pptx')
+_PPTX_A_NS = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
+
+
+def _dr_fill_table_rows(tbl, rows):
+    """표의 데이터 행 개수를 `rows` 개수에 맞추고(모자라면 데이터 행 하나를 복제, 남으면
+    뒤에서부터 지운다) 값을 채운다. 0행(머리글)은 건드리지 않는다.
+    ⚠️ python-pptx 엔 표 행 추가/삭제 API 가 없어 XML(`<a:tr>`)을 직접 조작한다 — 추측하지
+    않고 먼저 복제·삭제·저장·재로딩까지 실측으로 확인했다(조직도·주요자재·SPEC 표는
+    프로젝트마다 행 수가 다르다)."""
+    import copy
+    tbl_el = tbl._tbl
+    cur_data = len(tbl.rows) - 1
+    if not rows:
+        rows = [[''] * len(tbl.columns)]
+    want = len(rows)
+    trs = tbl_el.findall('.//' + _PPTX_A_NS + 'tr')
+    if cur_data > want:
+        for tr in trs[1 + want:]:
+            tbl_el.remove(tr)
+    elif cur_data < want:
+        template_tr = trs[1] if len(trs) > 1 else trs[0]
+        for _ in range(want - cur_data):
+            tbl_el.append(copy.deepcopy(template_tr))
+    for ri, row_vals in enumerate(rows):
+        row = tbl.rows[ri + 1]
+        for ci, val in enumerate(row_vals):
+            if ci < len(row.cells):
+                row.cells[ci].text = str(val) if val not in (None, '') else '-'
+
+
+def _dr_clone_slide(prs, index):
+    """index 번 슬라이드를 복제해 바로 뒤에 끼워 넣고 새 슬라이드를 돌려준다(SPECIFICATION 이
+    두 장을 넘칠 때만 쓴다 — 실측 원본은 30항목·2장이라 흔한 경로는 아니다). python-pptx 는
+    공식 슬라이드 복제 API가 없어 XML 레벨로 직접 복사한다(실측으로 복제·순서이동·저장까지 확인)."""
+    import copy
+    source = prs.slides[index]
+    new_slide = prs.slides.add_slide(source.slide_layout)
+    for shape in list(new_slide.shapes):
+        shape._element.getparent().remove(shape._element)
+    for shape in source.shapes:
+        new_slide.shapes._spTree.append(copy.deepcopy(shape._element))
+    xml_slides = prs.slides._sldIdLst
+    slides_list = list(xml_slides)
+    xml_slides.remove(slides_list[-1])
+    xml_slides.insert(index + 1, slides_list[-1])
+    return prs.slides[index + 1]
+
+
+@app.route('/doc/stage-dr-pptx', methods=['POST'])
+def doc_stage_dr_pptx():
+    """📊 DR/DVR 발표자료를 원본 양식 그대로(레이아웃·글꼴 보존) 채워 돌려준다.
+    받는 것: `{ name, fields: { titleLine, subLine, stageName, dateStr, summary:[...],
+    overview:[...], members:[{role,name}], milestoneHeader/Plan/Actual:[...],
+    spec:[{no,label,value,note}], materials:[{cat,pn,desc}] } }` — `js/67` `_docStageDrFields`.
+    ⚠️ 읽기 전용 — NAS 에 쓰지 않는다."""
+    try:
+        from pptx import Presentation
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'python-pptx 가 없습니다: %s' % e}), 500
+    if not os.path.exists(_DR_TEMPLATE_PPTX):
+        return jsonify({'ok': False, 'error': '양식 파일을 찾을 수 없습니다 — 백엔드를 재시작해 주세요.'}), 404
+    req = request.get_json(silent=True) or {}
+    f = req.get('fields') or {}
+    if not isinstance(f, dict):
+        f = {}
+    try:
+        prs = Presentation(_DR_TEMPLATE_PPTX)
+
+        def set_run(shape, text):
+            p = shape.text_frame.paragraphs[0]
+            if p.runs:
+                p.runs[0].text = text
+                for extra in p.runs[1:]:
+                    extra._r.getparent().remove(extra._r)
+            else:
+                p.add_run().text = text
+
+        cover = prs.slides[0]
+        set_run(cover.shapes[1], (f.get('titleLine') or '-') + '  ' + (f.get('stageName') or ''))
+        set_run(cover.shapes[2], f.get('subLine') or '')
+        set_run(cover.shapes[3], (f.get('dateStr') or '') + '\nKORTEK CORPORATION')
+
+        for i in range(1, 7):
+            shapes = list(prs.slides[i].shapes)
+            set_run(shapes[0], f.get('titleLine') or '-')
+            set_run(shapes[1], f.get('stageName') or '')
+            set_run(shapes[3], f.get('subLine') or '')
+
+        # 슬라이드1 — PROJECT SUMMARY 표 + 개요 문단
+        s1_shapes = list(prs.slides[1].shapes)
+        tbl1 = next(s.table for s in s1_shapes if s.has_table)
+        summary = f.get('summary') or []
+        for ci, val in enumerate(summary[:5]):
+            tbl1.rows[1].cells[ci].text = str(val) if val not in (None, '') else '-'
+        ov_lines = [str(x) for x in (f.get('overview') or []) if x]
+        ov_shapes = [s for s in s1_shapes if s.has_text_frame]
+        if len(ov_shapes) > 6:
+            set_run(ov_shapes[6], '\n'.join(ov_lines) if ov_lines
+                    else '(Summary 탭 ▸ 프로젝트 개요가 비어 있습니다)')
+
+        # 슬라이드2 — 조직도
+        tbl2 = next(s.table for s in prs.slides[2].shapes if s.has_table)
+        members = f.get('members') or []
+        _dr_fill_table_rows(tbl2, [[m.get('role', '-'), m.get('name', '')] for m in members])
+
+        # 슬라이드3 — PROJECT SCHEDULE
+        tbl3 = next(s.table for s in prs.slides[3].shapes if s.has_table)
+        mh, mp, ma = f.get('milestoneHeader') or [], f.get('milestonePlan') or [], f.get('milestoneActual') or []
+        for ci, label in enumerate(mh):
+            if ci + 1 < len(tbl3.columns):
+                tbl3.rows[0].cells[ci + 1].text = str(label)
+        for ci, v in enumerate(mp):
+            if ci + 1 < len(tbl3.columns):
+                tbl3.rows[1].cells[ci + 1].text = str(v) if v not in (None, '') else '-'
+        for ci, v in enumerate(ma):
+            if ci + 1 < len(tbl3.columns):
+                tbl3.rows[2].cells[ci + 1].text = str(v) if v not in (None, '') else '-'
+
+        # 슬라이드4·5 — SPECIFICATION (16행 넘으면 슬라이드4 복제)
+        spec = f.get('spec') or []
+        PER = 16
+        pages = [spec[i:i + PER] for i in range(0, len(spec), PER)] or [[]]
+        for pi, rows in enumerate(pages):
+            if pi == 0:
+                sl = prs.slides[4]
+            elif pi == 1:
+                sl = prs.slides[5]
+            else:
+                sl = _dr_clone_slide(prs, 4 + pi - 1)
+                shapes = list(sl.shapes)
+                set_run(shapes[0], f.get('titleLine') or '-')
+                set_run(shapes[1], f.get('stageName') or '')
+                set_run(shapes[3], f.get('subLine') or '')
+                set_run(shapes[4], 'SPECIFICATION (%d)' % (pi + 1))
+            tbl = next(s.table for s in sl.shapes if s.has_table)
+            _dr_fill_table_rows(tbl, [[r.get('no', ''), r.get('label', ''), r.get('value', ''), r.get('note', '')]
+                                       for r in rows])
+        # ⚠️ SPEC 이 1장(16행 이하)뿐이면 양식에 이미 있던 슬라이드5(2쪽째, 데이터 행 14개)가
+        #    안 채워진 채 남아 — 빈 줄 14개짜리 표가 그대로 보인다. 빈 줄 1개로 줄인다.
+        if len(pages) < 2:
+            tbl5 = next(s.table for s in prs.slides[5].shapes if s.has_table)
+            _dr_fill_table_rows(tbl5, [])
+
+        # 슬라이드6(마지막, pi>=2 면 뒤로 밀림) — 주요 자재
+        materials_slide_idx = 6 + max(0, len(pages) - 2)
+        tbl6 = next(s.table for s in prs.slides[materials_slide_idx].shapes if s.has_table)
+        materials = f.get('materials') or []
+        _dr_fill_table_rows(tbl6, [[m.get('cat', '-'), m.get('pn', ''), m.get('desc', '')] for m in materials])
+
+        bio = io.BytesIO()
+        prs.save(bio)
+        bio.seek(0)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': '양식을 채우지 못했습니다: %s' % e}), 500
+    name = _docstore_safe_name(req.get('name') or 'DR발표자료') or 'DR발표자료'
+    if not name.lower().endswith('.pptx'):
+        name += '.pptx'
+    return send_file(bio, as_attachment=True, download_name=name,
+                     mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation')
 
 
 @app.route('/doc/export-zip', methods=['POST'])

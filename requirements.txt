@@ -5,11 +5,14 @@ cryptography
 google-auth
 openpyxl
 python-docx
+python-pptx
 xlwt
 websockets
 # 💡 openpyxl/python-docx는 "승인원 표지 생성"(엑셀/워드 양식 채우기, 2026-09-15 신규)
 # 전용 — 이 둘은 순수 Python 라이브러리라 SAP COM처럼 32/64비트를 가리지 않고 메인
 # 64비트 환경(이 파일)에 바로 설치하면 된다.
+# 💡 python-pptx는 "DR/DVR 발표자료 원본 양식 채우기"(2026-11-19 신규) 전용 — 같은 이유로
+# 순수 Python, 메인 64비트 환경에 바로 설치.
 # 💡 xlwt는 "구매오더 요청" 엑셀(레거시 BIFF .xls 포맷) 생성 전용(2026-09-15 신규) — openpyxl은
 # 이 구형 포맷을 못 써서 별도로 필요.
 # 💡 pywin32는 여기 없음 — SAP 조회(sap_bridge_32.py)는 SAP GUI Scripting의 COM이 32비트로만
