@@ -2376,7 +2376,6 @@
             //    (buildProjectIndexEntry 의 mech 칸 → js/57 attachAppProps 의 appProperties.me).
             //    값이 없으면(아직 배정 안 됐거나 색인이 못 찾은 경우) 조용히 생략한다.
             const meName = (file.appProperties && file.appProperties.me) ? String(file.appProperties.me).trim() : '';
-            const meTxt = meName ? '<div style="font-size:10px; color:#adb5bd; white-space:nowrap;">M/E:' + escapeHtml(meName) + '</div>' : '';
             const doneBadge = isCompleted ? ` <span style="font-size:10.5px; font-weight:bold; color:#2f9e44; background:#e7f6ec; border-radius:9px; padding:1px 8px; vertical-align:middle;">✅ ${_dmEn ? 'Done' : '완료'}</span>` : '';
             const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd' };
             const fileBtn = document.createElement('div');
@@ -2401,9 +2400,11 @@
                 fileBtn.onmouseover = function() { this.style.background = openHoverBg; this.style.borderColor = openHoverBorder; };
                 fileBtn.onmouseout  = function() { this.style.background = openBg;      this.style.borderColor = openBorder; };
                 fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
+                // 🔧 [2026-11-19 2차 요청] M/E 는 "날짜 아래 줄"이 아니라 **날짜 왼쪽, 같은 줄**로.
+                const meInline = meName ? '<span style="font-size:10px; color:#adb5bd; white-space:nowrap;">M/E:' + escapeHtml(meName) + '</span>' : '';
                 fileBtn.innerHTML = '<div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📜 ' + escapeHtml(file.name) + doneBadge + '</div>' +
-                    '<div style="display:flex; flex-direction:column; align-items:flex-end; gap:1px; flex-shrink:0;">' +
-                    '<div style="font-size:12px; color:#868e96; white-space:nowrap;">' + dateStr + '</div>' + meTxt + '</div>';
+                    '<div style="display:flex; align-items:center; gap:7px; flex-shrink:0;">' + meInline +
+                    '<div style="font-size:12px; color:#868e96; white-space:nowrap;">' + dateStr + '</div></div>';
             }
             return fileBtn;
         }
