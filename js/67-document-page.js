@@ -4087,17 +4087,22 @@
         if (!pop) return;
         if (pop.style.display === 'block') { pop.style.display = 'none'; return; }
         var cur = window._docState.formId;
+        // ⠿ 손잡이 — BOM(js/04j `.row-drag-handle`)·이 파일의 도안 표시 목록과 **같은 기호·색**
+        //    (사용자가 "다른 서식에도 드래그 핸들 아이콘 보여줘"로 요청, 끌기 자체는 손잡이가
+        //    아니라 행 전체에 걸려 있다 — 아이콘은 "끌 수 있다"는 신호일 뿐).
         pop.innerHTML = _docOrderForms(window._docVisibleForms()).map(function (f) {
             var on = f.id === cur;
             return '<div data-doc-form-id="' + _esc(f.id) + '" onclick="window._docPick(\'' + _esc(f.id) + '\')"'
                  + ' style="padding:8px 10px; cursor:grab; border-radius:4px; font-size:13px;'
-                 + ' font-weight:bold; white-space:nowrap;'
+                 + ' font-weight:bold; white-space:nowrap; display:flex; align-items:center; gap:6px;'
                  + ' background:' + (on ? '#00707d' : 'transparent') + '; color:' + (on ? '#fff' : '#333') + ';"'
                  + ' onmouseover="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'#f1f3f5\';"'
                  + ' onmouseout="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'transparent\';">'
-                 + (f.icon || '📄') + ' ' + _esc(f.label)
+                 + '<span title="' + _esc(_t('끌어서 순서 바꾸기', 'drag to reorder')) + '"'
+                 + ' style="flex:0 0 auto; color:' + (on ? 'rgba(255,255,255,.7)' : '#adb5bd') + '; user-select:none;">⠿</span>'
+                 + '<span style="flex:1 1 auto;">' + (f.icon || '📄') + ' ' + _esc(f.label)
                  + (f.builder ? '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">PPT</span>' : '')
-                 + '</div>';
+                 + '</span></div>';
         }).join('');
         _docInitFormDragReorder(pop);
         // 📍 [2026-11-11 신고 "드롭다운 가려짐"] 자리를 **직접 잡는다** — PARTS 와 같은 방식
