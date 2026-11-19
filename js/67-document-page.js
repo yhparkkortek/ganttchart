@@ -4854,7 +4854,14 @@
                         : ((window._docLabelArtIndex && itCode) ? window._docLabelArtIndex[itCode] : null);
                     // ⚠️ [2026-11-13] 비고 열에서도 표시 목록을 보여주려면 artFile 유무와 상관없이 필요하다
                     //    — if/else 안에서만 선언하면 도안 없는 줄에선 `notes` 가 비어 쓰레기값(undefined).
-                    if (itCode && window._docLabelNotesCache[itCode] === undefined) window._docLabelNotesLoad(itCode);
+                    // 🔁 [2026-11-19, 사용자 신고 "수정사항 동기화 — 도안 클릭하면 양쪽 모두
+                    //    동기화되어야 함"] 이 표 줄은 **지금 당장**(fetch 가 끝나기 전) 그려지므로
+                    //    `notes`/`codes` 등이 아직 빈 채다 — 모달을 열 때는 그 사이 fetch 가 이미
+                    //    끝나 있어 모달엔 보이는데, 표 썸네일은 그 뒤로 **다시 그려진 적이 없어**
+                    //    QR 을 추가해도 영영 안 보였다. fetch 가 끝나면 표를 한 번 더 그린다.
+                    if (itCode && window._docLabelNotesCache[itCode] === undefined) {
+                        window._docLabelNotesLoad(itCode).then(function () { if (window._docRender) window._docRender(); });
+                    }
                     var notes = (itCode && window._docLabelNotesCache[itCode]) || [];
                     var marks = (itCode && window._docLabelMarksCache[itCode]) || [];
                     var boxes = (itCode && window._docLabelBoxesCache[itCode]) || [];
