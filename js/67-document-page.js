@@ -3811,8 +3811,12 @@
     };
     // 🖱️ 끌기 — QR·바코드와 같은 "몸통 전체가 손잡이" 방식(크기조절 손잡이·✕ 위를 누른 건
     //    그쪽이 먼저 처리).
+    // ⚠️ [2026-11-19, 사용자 요청] "도면에 라벨 위치를 변경하면 '위치를 변경하시겠습니까?'
+    //    물어봐줘 — 너무 쉽게 이동되면 나중에 실수로 위치 이동되어 저장될 수 있을 것 같음" —
+    //    끄는 동안엔 그대로 눈으로 보여주되(기존과 동일), **놓을 때** 한 번 확인창을 띄운다.
+    //    취소하면 원래 자리(끌기 시작 전 x/y)로 데이터·화면 둘 다 되돌리고 저장하지 않는다.
     window._docLabelAttachMarkDragWire = function (wrap, img, id, scope, idx) {
-        var moved = false;
+        var moved = false, origX, origY;
         var onMove = function (ev) {
             moved = true;
             var r = img.getBoundingClientRect();
@@ -3826,12 +3830,25 @@
         var onUp = function () {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
-            if (moved) _markDirty();
+            if (!moved) return;
+            var la = _docLabelAttachData(id, scope);
+            var list = la.views[la.view].marks || [];
+            var it = list[idx];
+            if (!it) return;
+            if (confirm(_t('위치를 변경하시겠습니까?', 'Change the position?'))) {
+                _markDirty();
+            } else {
+                it.x = origX; it.y = origY;
+                wrap.style.left = (origX * 100) + '%'; wrap.style.top = (origY * 100) + '%';
+            }
         };
         wrap.onmousedown = function (ev) {
             if (ev.target && ev.target.closest && ev.target.closest('a, [data-attach-mark-resize]')) return;
             ev.preventDefault(); ev.stopPropagation();
             moved = false;
+            var la0 = _docLabelAttachData(id, scope);
+            var it0 = (la0.views[la0.view].marks || [])[idx];
+            origX = it0 ? it0.x : 0; origY = it0 ? it0.y : 0;
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         };
