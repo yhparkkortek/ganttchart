@@ -1077,9 +1077,12 @@
             return '<span data-box-wrap data-box-idx="' + bi + '" style="' + wrapStyle + '">'
                 + (draggable ? '<span data-box-drag title="' + _esc(_t('끌어서 옮기기', 'drag to move')) + '"'
                   + ' style="position:absolute; left:-2px; right:-2px; top:-2px; height:10px; cursor:grab; pointer-events:auto;"></span>'
+                  // 🧹 [2026-11-19, 사용자 요청] "크기 조정용 모서리 사각형 표시 삭제해줘(모두)" —
+                  //    보이는 사각형만 없앤다(표시·마크 손잡이와 같은 방식) — 잡는 영역(끌 수 있는
+                  //    1em 범위) 자체는 그대로 투명하게 남겨 끌기는 그대로 된다.
                   + '<span data-box-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
-                  + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em; border-radius:0.25em;'
-                  + ' background:#808080; border:2px solid #fff; box-shadow:0 0 0 1px #808080; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
+                  + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em;'
+                  + ' background:transparent; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
                   + '<a href="#" onclick="window._docLabelBoxDel(\'' + _esc(code) + '\',' + bi + ');return false;"'
                   + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
                   + ' background:#808080; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
@@ -1161,6 +1164,16 @@
     //    (가로만 보고 세로를 맞춘다 — 비뚤어진 QR 은 못 읽는 경우가 있어서 항상 고정).
     window._docLabelCodeResizeWire = function (handle, wrap, code, idx) {
         var startX, startY, startW, startH, fontPx, moved = false;
+        // ⚠️⚠️ [2026-11-19, 사용자 신고 "QR 이미지 크기 변경이 안됨"] 이 함수는 wrap 의 CSS
+        //    width/height 만 바꿨다 — 그 안의 실제 QR 그림(`data-code-canvas`, QRCode.js 가 그
+        //    순간 **고정 픽셀**로 그려 넣는 canvas/table)은 CSS 크기와 무관하게 그대로 남아서,
+        //    테두리만 커지고 QR 자신은 그대로였다(바코드는 SVG가 100%라 운 좋게 늘어나 보였다).
+        //    → 끄는 동안 매번 `_docLabelCodesApply` 로 **그 새 크기에 맞춰 다시 그린다**(박스
+        //    다시 그리듯 가벼운 연산 — QR 1~3개뿐이라 매 move 마다 돌려도 무리 없다).
+        var redraw = function () {
+            var bodyEl2 = document.getElementById('doclabelart-body');
+            if (bodyEl2) window._docLabelCodesApply(bodyEl2, code);
+        };
         var onMove = function (ev) {
             moved = true;
             var list = window._docLabelCodesCache[code] || [];
@@ -1169,11 +1182,12 @@
             var h = (it && it.kind === 'qr') ? w : Math.max(fontPx * 1, startH + (ev.clientY - startY));
             wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
             if (it) { it.wem = Math.round((w / fontPx) * 100) / 100; it.hem = Math.round((h / fontPx) * 100) / 100; }
+            redraw();
         };
         var onUp = function () {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
-            if (moved) window._docLabelNotesSave(code);
+            if (moved) { redraw(); window._docLabelNotesSave(code); }
         };
         handle.onmousedown = function (ev) {
             ev.preventDefault(); ev.stopPropagation();
@@ -1207,9 +1221,11 @@
             return '<span data-code-wrap data-code-idx="' + ci + '" data-code-kind="' + _esc(c.kind) + '"'
                 + ' data-code-value="' + _esc(c.value) + '" title="' + _esc(c.value) + '" style="' + wrapStyle + '">'
                 + '<span data-code-canvas style="display:block; width:100%; height:100%; pointer-events:none;"></span>'
+                // 🧹 [2026-11-19, 사용자 요청] "크기 조정용 모서리 사각형 표시 삭제해줘(모두)" —
+                //    보이는 사각형만 없앤다 — 잡는 영역은 그대로 투명하게 남겨 끌기는 그대로 된다.
                 + (draggable ? '<span data-code-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
-                  + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em; border-radius:0.25em;'
-                  + ' background:#808080; border:2px solid #fff; box-shadow:0 0 0 1px #808080; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
+                  + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em;'
+                  + ' background:transparent; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
                   + '<a href="#" onclick="window._docLabelCodeEdit(\'' + _esc(code) + '\',' + ci + ');return false;"'
                   + ' title="' + _esc(_t('값 고치기', 'edit value')) + '" style="position:absolute; left:-0.6em; bottom:-0.6em; width:1em; height:1em;'
                   + ' line-height:1em; text-align:center; background:#1971c2; color:#fff; border-radius:50%; font-size:0.6em;'
@@ -2492,9 +2508,11 @@
                 + ' left:' + (cropSel.x0 * 100) + '%; top:' + (cropSel.y0 * 100) + '%;'
                 + ' width:' + ((cropSel.x1 - cropSel.x0) * 100) + '%; height:' + ((cropSel.y1 - cropSel.y0) * 100) + '%;'
                 + ' border:2px dashed #1971c2; border-radius:3px; background:rgba(25,113,194,.15);"></div>' : '')
+            // 🧹 [2026-11-19, 사용자 요청] "크기 조정용 모서리 사각형 표시 삭제해줘(모두)" — 도안
+            //    전체 크기조절 손잡이도 같이 — 보이는 사각형만 없애고 잡는 영역(15px)은 그대로.
             + (idle ? '<div data-resize-handle title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
-                + ' style="position:absolute; right:-7px; bottom:-7px; width:15px; height:15px; border-radius:3px;'
-                + ' background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2; cursor:nwse-resize; z-index:2;"></div>' : '')
+                + ' style="position:absolute; right:-7px; bottom:-7px; width:15px; height:15px;'
+                + ' background:transparent; cursor:nwse-resize; z-index:2;"></div>' : '')
             + '</div>'
             + '<div style="margin-top:8px; font-size:12px;">'
             + (placing
