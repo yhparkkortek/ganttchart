@@ -4934,10 +4934,12 @@
                                 + _docLabelMarkMarkersHtml(marks, false, itCode)
                                 + _docLabelBoxMarkersHtml(boxes, false, itCode)
                                 + _docLabelCodeMarkersHtml(codes, false, itCode)
+                                // 🧹 [2026-11-19, 사용자 요청] "썸네일 오른쪽 하단 모서리 사각형도
+                                //    삭제" — 다른 크기조절 손잡이와 같은 방식(보이는 사각형만
+                                //    없애고, 끌 수 있는 영역은 그대로 투명하게 남긴다).
                                 + '<div data-thumb-resize="' + _esc(itCode) + '" title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                                 + ' class="doc-noprint" style="position:absolute; right:2px; bottom:2px; width:13px; height:13px;'
-                                + ' border-radius:3px; background:#1971c2; border:2px solid #fff; box-shadow:0 0 0 1px #1971c2;'
-                                + ' cursor:nwse-resize; z-index:2;"></div></div>'
+                                + ' background:transparent; cursor:nwse-resize; z-index:2;"></div></div>'
                                 + '<div style="margin-top:3px;"><a href="#" onclick="window._docLabelArtModalOpen(\''
                                 + _esc(form.id) + '\',' + i + ');return false;" style="color:#1971c2; font-weight:bold; font-size:11px;">🔍 '
                                 + _esc(_t('크게 보기', 'View / edit')) + (notes.length ? ' (' + notes.length + ')' : '') + '</a>'
