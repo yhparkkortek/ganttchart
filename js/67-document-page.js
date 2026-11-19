@@ -1211,9 +1211,15 @@
         var activeCode = window._docLabelActiveCode;
         return (codes || []).map(function (c, ci) {
             var isSel = draggable && activeCode && activeCode.code === code && activeCode.idx === ci;
+            // 🔳 [2026-11-19, 사용자 요청] "직접 올린 이미지(사진)에 QR/바코드를 겹쳐 놓으면 흰
+            //    배경이 사진을 가린다" — 상자 배경을 투명으로(QR 테두리 1px만 남겨 자리는 알 수
+            //    있게). ⚠️ QR·바코드의 "밝은 칸"(colorLight/background) 도 따로 흰색으로 그려지고
+            //    있어 상자만 투명해선 부족하다 — `_docLabelCodesApply` 에서 그 색도 같이 투명으로
+            //    바꿔야 한다. 이러면 사진의 다른 그림·글자가 QR/바코드의 밝은 칸 사이로 비쳐
+            //    **스캔 인식률이 떨어질 수 있다**(요청한 사람도 인지하고 진행).
             var wrapStyle = 'position:absolute; left:' + (c.x * 100) + '%; top:' + (c.y * 100) + '%;'
                 + ' transform:translate(-50%,-50%); width:' + (c.wem || (c.kind === 'qr' ? 6 : 10)) + 'em;'
-                + ' height:' + (c.hem || (c.kind === 'qr' ? 6 : 3.5)) + 'em; background:#fff;'
+                + ' height:' + (c.hem || (c.kind === 'qr' ? 6 : 3.5)) + 'em; background:transparent;'
                 + (c.kind === 'qr' ? ' border:1px solid #808080;' : '')
                 + ' border-radius:0.2em; z-index:1; box-sizing:border-box; padding:0.2em;'
                 + (draggable ? ' cursor:grab;' : '')
@@ -1258,8 +1264,12 @@
                     //    두 라이브러리 다 기본값(검정)으로 그린다. 표시·박스·마크와 같은 색을 맞추려면
                     //    라이브러리 호출에 **직접 색을 넘겨야** 한다(CSS로는 캔버스/SVG 안쪽 모듈을
                     //    못 칠한다).
+                    // 🔳 [2026-11-19, 사용자 요청] "직접 올린 이미지에 겹치면 흰 배경이 사진을
+                    //    가린다" — 밝은 칸(colorLight)도 투명으로. ⚠️ 어두운 칸(colorDark)만 남아
+                    //    사진이 그 사이로 비치므로, 배경 대비가 약한 사진에서는 QR 인식률이 떨어질
+                    //    수 있다(요청한 사람도 인지한 트레이드오프).
                     new window.QRCode(canvas, { text: value, width: w, height: w,
-                        colorDark: '#808080', colorLight: '#ffffff',
+                        colorDark: '#808080', colorLight: 'rgba(0,0,0,0)',
                         correctLevel: window.QRCode.CorrectLevel.M });
                 } else {
                     if (!window.JsBarcode) return;
@@ -1267,7 +1277,7 @@
                     canvas.appendChild(svg);
                     window.JsBarcode(svg, value, { format: 'CODE128', displayValue: true,
                         height: Math.max(10, h * 0.62), fontSize: Math.max(8, h * 0.18), margin: 0,
-                        lineColor: '#808080' });
+                        lineColor: '#808080', background: 'transparent' });
                     svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%');
                     svg.style.display = 'block';
                 }
