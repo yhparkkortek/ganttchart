@@ -7214,6 +7214,7 @@ _SELF_UPDATE_FILES = [
     'templates/승인원_양식.docx',
     'templates/모델명세서_양식.xlsx',
     'templates/라벨사양서_양식.xlsx',
+    'templates/Sample Report_양식.docx',
 ]
 # ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
 # 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
@@ -9034,6 +9035,213 @@ def doc_label_spec_xlsx():
         name += '.xlsx'
     return send_file(bio, as_attachment=True, download_name=name,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ── 📑 Sample Report — 원본 .docx(표 19개·체크시트 6장) 그대로 (2026-11-19) ──────────────
+#    🚨🚨🚨 실측(사고): 양식을 만들며 `inline_shapes`(python-docx, 8개)만 믿고 사진 3곳만
+#    지웠다가, 표 밖에 떠 있는 **OLE 개체**(펼쳐 붙인 엑셀 시트 3개·PPT 1개·바이너리 7개,
+#    합쳐 20MB 넘게)와 실제 결재된 의뢰서 스캔 이미지(실명 서명 6명 포함)를 놓쳤다. 표·문단
+#    단위로만 훑으면 안 잡힌다 — 전체 XML 을 재귀로 훑어야 한다(상세: 양식 생성 스크립트
+#    주석, 세션 로그). `templates/Sample Report_양식.docx` 는 그 전부를 지운 뒤의 결과다.
+#    ⚠️ 체크시트 항목(SOP 고정 문구·그룹명)은 **양식에 그대로 남겨 두고** 체크 표시(O)·
+#       Note> 내용만 지웠다 — 고객사 이름과 달리 이건 전 프로젝트 공통 점검 절차라서다.
+_SR_TEMPLATE_DOCX = os.path.join(BASE_DIR, 'templates', 'Sample Report_양식.docx')
+# 표2 "시제품 제작의뢰서" — `_protoReqSections()`(js/67) 과 **같은 칸 이름**을 그대로 받는다.
+_SR_T2_CELLS = {
+    '프로젝트 코드': (1, 3), '기구 담당자': (2, 3), '제품 코드': (3, 3), 'B U Y E R': (4, 3),
+    '총 제작수량': (5, 3), '출고 수량': (6, 3), '개발 단계': (7, 3),
+    '모델 담당자': (1, 10), 'FW 담당자': (2, 10), '모 델 명': (3, 10), '출고 요청일': (4, 10),
+    '조립 예상일': (5, 10), '제작 기간': (6, 10), '제작 회차': (7, 10),
+    'X': (8, 3), 'Y': (9, 3), 'Lv': (10, 3), 'FW Ver': (8, 10), 'EDID CHECK SUM': (10, 10),
+    '요청사항': (19, 0),
+}
+_SR_T2_MAT_ROWS = [('LCM(Panel)', 13), ('A/D Board', 14), ('Converter', 15), ('TSP(Glass)', 16), ('TSP CTRL', 17)]
+# 표3/4 "시제품 라벨 사양" — 모델별 소제목은 양식에 그대로 두고(실제 모델코드는 뺐다), 내용줄만 채운다.
+_SR_T34_CONTENT = [(3, 2, 0), (4, 2, 0), (4, 4, 0)]   # (table_idx, row, col) × 3모델분
+# 표5 "시제품 검토 내역서(시제품팀)"
+_SR_T5_CELLS = {
+    '작 성 일': (1, 2), '작 성 자': (2, 2), '제 목': (3, 2),
+    '작 성 부 서': (1, 7), '제품 출고일': (2, 7),
+    '요청부서': (6, 2), 'PM 담당자': (6, 7),
+    '총 제작수량(검토)': (8, 2), '출고 수량(검토)': (8, 7),
+    'X5': (11, 1), 'Y5': (12, 1), 'Lv5': (13, 1),
+}
+# 표6 "시제품 검토 내역서(제품보증팀)+광학측정" — 모델 3개 중 **첫 번째 것만** 채운다
+#    (앱은 모델별로 따로 저장하지 않는다 — 표7/8 은 양식 상태 그대로 둔다, 알려진 단순화).
+_SR_T6_CELLS = {'접수일': (1, 1), '검사일자': (1, 4), 'Label No.': (1, 10), '검사자': (1, 15),
+                '부적합 내역': (2, 2), '특이사항': (19, 0)}
+_SR_T6_OPT = [('opt|x1', 7, 2), ('opt|x2', 7, 3), ('opt|xn', 7, 4),
+              ('opt|y1', 8, 2), ('opt|y2', 8, 3), ('opt|yn', 8, 4),
+              ('opt|lv1', 9, 2), ('opt|lv2', 9, 3), ('opt|lvn', 9, 4)]
+# 표18 "디버깅 내역"
+_SR_T18_CELLS = {'발생 부문': (2, 1), '발생 일자': (2, 3), '디버깅 담당자': (2, 5),
+                 '디버깅 제목': (1, 0), '문제 발생': (4, 0), '발생 요인': (6, 0), '해결 방법': (8, 0)}
+# 체크시트 표(12~17) — js/68 DOC_CHECK_SHEETS 와 같은 순서(하드웨어1/2·펌웨어1/2/3·기구설계).
+_SR_CHECK_TABLES = [
+    'SAMPLE CHECK SHEET(하드웨어) 1', 'SAMPLE CHECK SHEET(하드웨어) 2',
+    'SAMPLE CHECK SHEET(펌웨어) 1', 'SAMPLE CHECK SHEET(펌웨어) 2',
+    'SAMPLE CHECK SHEET(펌웨어) 3', 'SAMPLE CHECK SHEET(기구설계)',
+]
+_SR_MARK_COLS = {'점검요청': 2, '해당없음': 3, '합격': 4, '불합격': 5, 'N/A': 6}  # 시제품/보증 둘 다 같은 칸(앱도 그렇다)
+_SR_MARK_COLS2 = {'합격': 7, '불합격': 8, 'N/A': 9}
+# 표16(펌웨어3·Resolution)만 DP/DVI/HDMI ×2 가 앞에 더 있어 15열 — 칸이 5 만큼 밀린다(실측).
+_SR_MARK_COLS_RES = {'점검요청': 7, '해당없음': 8, '합격': 9, '불합격': 10, 'N/A': 11}
+_SR_MARK_COLS2_RES = {'합격': 12, '불합격': 13, 'N/A': 14}
+
+
+def _sr_set(tbl, addr, value):
+    if value not in (None, ''):
+        r, c = addr
+        tbl.cell(r, c).text = str(value)
+
+
+def _sr_fill_check_table(tbl, items, dev_cols=None, qa_cols=None):
+    """체크시트 한 장 — `items` 는 프런트가 `_sheetItems()` 로 이미 펼쳐 보낸 순서 그대로.
+    고정 항목(해상도 제외)은 **자리(위치)로** 맞춘다 — 양식의 항목·내역 글자는 안 건드린다
+    (그 글자가 전 프로젝트 공통 SOP 라서 라벨사양서 N 칸처럼 값만 얹는다). 해상도 묶음은
+    개수가 프로젝트마다 달라 **해상도 이름으로 그 줄을 찾아** 표시만 더한다.
+    ⚠️ 해상도 표(펌웨어3)는 DP/DVI/HDMI 를 앞에 두 벌 더 가진 15열짜리라 칸 번호가 다르다
+    — 호출하는 쪽이 `dev_cols`/`qa_cols` 로 넘긴다(기본은 표준 10열)."""
+    dev_cols = dev_cols or _SR_MARK_COLS
+    qa_cols = qa_cols or _SR_MARK_COLS2
+    data_rows = len(tbl.rows) - 3        # 머리글 3줄 제외
+    pos = 0
+    for it in (items or []):
+        is_res = bool(it.get('res'))
+        if is_res:
+            label = str(it.get('text') or '').split('  (')[0].strip()
+            row_idx = None
+            for r in range(3, len(tbl.rows)):
+                # ⚠️ col0 은 "Resolution" 묶음 이름(세로 병합)이고 **해상도 이름은 col1**이다(실측).
+                if tbl.cell(r, 1).text.strip() == label or label in tbl.cell(r, 1).text:
+                    row_idx = r
+                    break
+            if row_idx is None:
+                continue
+        else:
+            if pos >= data_rows:
+                break
+            row_idx = 3 + pos
+            pos += 1
+        marks = it.get('marks') or {}
+        for name, col in dev_cols.items():
+            if name in (marks.get('dev') or []) or name in (marks.get('qa') or []):
+                tbl.cell(row_idx, col).text = 'O'
+        for name, col in qa_cols.items():
+            if name in (marks.get('qa') or []):
+                tbl.cell(row_idx, col).text = 'O'
+        note = it.get('note')
+        if note and row_idx + 1 < len(tbl.rows):
+            note_cell = tbl.cell(row_idx + 1, 1)
+            m = re.match(r'^(Note\s*>\s*)', note_cell.text or '')
+            prefix = m.group(1) if m else 'Note> '
+            note_cell.text = prefix + str(note)
+
+
+@app.route('/doc/sample-report-docx', methods=['POST'])
+def doc_sample_report_docx():
+    """📑 Sample Report 를 원본 양식 그대로(표 19개·체크시트 6장) 채워 돌려준다.
+    받는 것: `{ name, fields:{...}, checksheets:{시트키:[항목…]}, attachments:{att_out:[...],…} }`
+    ⚠️ 읽기 전용 — NAS 에 쓰지 않는다. 사진은 백엔드가 직접 NAS 공유를 읽어(`_docstore_dir`)
+    **실제 이미지로** 끼워 넣는다(엑셀 양식들과 달리 python-docx 는 이게 된다)."""
+    try:
+        from docx import Document
+        from docx.shared import Inches
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'python-docx 가 없습니다: %s' % e}), 500
+    if not os.path.exists(_SR_TEMPLATE_DOCX):
+        return jsonify({'ok': False, 'error': '양식 파일을 찾을 수 없습니다 — 백엔드를 재시작해 주세요.'}), 404
+    req = request.get_json(silent=True) or {}
+    fields = req.get('fields') or {}
+    checksheets = req.get('checksheets') or {}
+    attachments = req.get('attachments') or {}
+    if not isinstance(fields, dict):
+        fields = {}
+    try:
+        doc = Document(_SR_TEMPLATE_DOCX)
+        t = doc.tables
+        if fields.get('customer'):
+            t[0].cell(0, 1).text = str(fields['customer'])
+        if fields.get('projectName'):
+            t[0].cell(1, 1).text = str(fields['projectName'])
+        if fields.get('modelName'):
+            t[0].cell(2, 1).text = str(fields['modelName'])
+        for k, addr in _SR_T2_CELLS.items():
+            _sr_set(t[2], addr, fields.get(k))
+        for cat, row in _SR_T2_MAT_ROWS:
+            mat = (fields.get('mat') or {}).get(cat) or {}
+            if mat.get('code'):
+                t[2].cell(row, 3).text = str(mat['code'])
+            if mat.get('desc'):
+                t[2].cell(row, 5).text = str(mat['desc'])
+        lbl_text = fields.get('라벨 인쇄 사양') or ''
+        pos_text = fields.get('부착 위치') or ''
+        combo = ' / '.join([x for x in (lbl_text, pos_text) if x])
+        if combo:
+            for ti, r, c in _SR_T34_CONTENT:
+                t[ti].cell(r, c).text = combo
+        for k, addr in _SR_T5_CELLS.items():
+            # X5/Y5/Lv5 는 표2 의 X/Y/Lv(Customer SPEC 값) 를 그대로 되풀이해 적는 칸이다.
+            src_key = {'X5': 'X', 'Y5': 'Y', 'Lv5': 'Lv'}.get(k, k)
+            _sr_set(t[5], addr, fields.get(src_key))
+        for k, addr in _SR_T6_CELLS.items():
+            _sr_set(t[6], addr, fields.get(k) if k != '특이사항' else fields.get('제작특이사항'))
+        for k, r, c in _SR_T6_OPT:
+            v = fields.get(k)
+            if v not in (None, ''):
+                t[6].cell(r, c).text = str(v)
+        for k, addr in _SR_T18_CELLS.items():
+            _sr_set(t[18], addr, fields.get(k))
+
+        for sheet_key, ti in zip(_SR_CHECK_TABLES, range(12, 18)):
+            items = checksheets.get(sheet_key)
+            if not items:
+                continue
+            if ti == 16:
+                _sr_fill_check_table(t[ti], items, _SR_MARK_COLS_RES, _SR_MARK_COLS2_RES)
+            else:
+                _sr_fill_check_table(t[ti], items)
+
+        att_tables = {'att_out': 9, 'att_in': 10, 'att_issue': 11}
+        for att_key, ti in att_tables.items():
+            files = attachments.get(att_key) or []
+            if not files:
+                continue
+            cell = t[ti].cell(1, 0)
+            cell.text = ''
+            para = cell.paragraphs[0]
+            added = 0
+            for f in files[:4]:   # 칸 하나에 너무 많이 넣으면 문서가 무거워진다 — 4장까지
+                folder = str((f or {}).get('folder') or '')
+                name_f = _docstore_safe_name((f or {}).get('name'))
+                if not folder or not name_f:
+                    continue
+                path, err = _docstore_dir(folder)
+                if err:
+                    continue
+                fp = os.path.join(path, name_f)
+                if not os.path.isfile(fp):
+                    continue
+                try:
+                    run = para.add_run()
+                    run.add_picture(fp, width=Inches(3.6))
+                    para.add_run().add_break()
+                    added += 1
+                except Exception:
+                    pass
+            if not added:
+                cell.text = ''
+
+        bio = io.BytesIO()
+        doc.save(bio)
+        bio.seek(0)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': '양식을 채우지 못했습니다: %s' % e}), 500
+    name = _docstore_safe_name(req.get('name') or 'Sample Report') or 'Sample Report'
+    if not name.lower().endswith('.docx'):
+        name += '.docx'
+    return send_file(bio, as_attachment=True, download_name=name,
+                     mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
 
 @app.route('/doc/export-zip', methods=['POST'])

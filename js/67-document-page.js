@@ -6480,6 +6480,63 @@
     //     여기서 따로 조립하면 구역을 하나 늘릴 때마다 세 곳을 고쳐야 하고, 곧 갈라진다.
     //  ⚠️ 만드는 일은 **백엔드**가 한다(python-docx). 브라우저엔 Word 를 만들 수단이 없다.
     //  ⚠️ 백엔드 재시작 전엔 404 — 그때는 "엑셀 저장"으로 받으라고 정직하게 안내한다.
+    // 📑 [2026-11-19] Sample Report 전용 — 백엔드 `/doc/sample-report-docx`(원본 .docx 양식
+    //    채우기)가 기대하는 모양으로 칸·체크시트·첨부를 모아 준다. `_docToAoa` 와 **같은
+    //    `_sheetItems` 호출**을 써서(두 벌로 안 둔다) 체크시트를 펼친다.
+    window._docSampleReportFields = function (formId) {
+        var ctx = window._dgCollect(), d = _docData(formId);
+        var val = function (key, from) { return _hasOwn(formId, key) ? d.fields[key] : _autoOf(ctx, from).v; };
+        var fields = {
+            customer: val('Customer', 'meta.고객사'), projectName: val('Project Name', 'meta.프로젝트명'),
+            modelName: val('Model Name', 'meta.KTK모델명'),
+            '프로젝트 코드': val('프로젝트 코드', 'meta.프로젝트코드'), '모델 담당자': val('모델 담당자', 'meta.HW담당자'),
+            '기구 담당자': val('기구 담당자', 'meta.기구담당자'), 'FW 담당자': val('FW 담당자', 'meta.FW담당자'),
+            '제품 코드': val('제품 코드', 'meta.제품코드'), '모 델 명': val('모 델 명', 'meta.모델풀네임'),
+            'B U Y E R': val('B U Y E R', 'meta.고객사'), '출고 요청일': val('출고 요청일'),
+            '총 제작수량': val('총 제작수량'), '조립 예상일': val('조립 예상일'), '출고 수량': val('출고 수량'),
+            '제작 기간': val('제작 기간'), '개발 단계': val('개발 단계', 'round'), '제작 회차': val('제작 회차'),
+            X: val('X', 'specX'), Y: val('Y', 'specY'), Lv: val('Lv', 'specLv'),
+            'FW Ver': val('FW Ver', 'specFw'), 'EDID CHECK SUM': val('EDID CHECK SUM', 'specEdid'),
+            '요청사항': val('요청사항'), '라벨 인쇄 사양': val('라벨 인쇄 사양'), '부착 위치': val('부착 위치'),
+            '작 성 일': val('작 성 일', 'today'), '작 성 부 서': val('작 성 부 서'), '작 성 자': val('작 성 자'),
+            '제품 출고일': val('제품 출고일'), '제 목': val('제 목'), '요청부서': val('요청부서', 'meta.팀'),
+            'PM 담당자': val('PM 담당자', 'meta.프로젝트담당자'),
+            '총 제작수량(검토)': val('총 제작수량(검토)'), '출고 수량(검토)': val('출고 수량(검토)'),
+            '접수일': val('접수일'), '검사일자': val('검사일자'), 'Label No.': val('Label No.'),
+            '검사자': val('검사자'), '부적합 내역': val('부적합 내역'), '계측기': val('계측기'),
+            '제작특이사항': val('제작특이사항'),
+            '디버깅 제목': val('디버깅 제목'), '발생 부문': val('발생 부문'), '발생 일자': val('발생 일자'),
+            '디버깅 담당자': val('디버깅 담당자'), '문제 발생': val('문제 발생'), '발생 요인': val('발생 요인'),
+            '해결 방법': val('해결 방법'),
+            mat: {}
+        };
+        ['opt|x1', 'opt|x2', 'opt|xn', 'opt|y1', 'opt|y2', 'opt|yn', 'opt|lv1', 'opt|lv2', 'opt|lvn']
+            .forEach(function (k) { fields[k] = val(k); });
+        ['LCM(Panel)', 'A/D Board', 'Converter', 'TSP(Glass)', 'TSP CTRL'].forEach(function (item) {
+            fields.mat[item] = { code: val(item + '|코드'), desc: val(item + '|부품명') };
+        });
+        // 체크시트 — _sheetItems 가 이미 화면·엑셀과 같은 순서로 펼쳐 준다(해상도 묶음 포함).
+        var checksheets = {};
+        (window.DOC_CHECK_SHEETS || []).forEach(function (sh) {
+            checksheets[sh.key] = _sheetItems(sh, formId).map(function (it) {
+                var base = 'chk|' + sh.key + '|' + it.id + '|';
+                var markCols = function (cols) {
+                    return cols.filter(function (c) { return d.fields[base + c] === 'O'; });
+                };
+                return {
+                    res: !!it.res, text: it.q,
+                    marks: { dev: markCols(['점검요청', '해당없음']), qa: markCols(['합격', '불합격', 'N/A']) },
+                    note: d.fields[base + 'note'] || ''
+                };
+            });
+        });
+        var attachments = {};
+        ['att_out', 'att_in', 'att_issue'].forEach(function (key) {
+            attachments[key] = (d.att[key] || []).map(function (a) { return { folder: a.folder, name: a.name }; });
+        });
+        return { fields: fields, checksheets: checksheets, attachments: attachments };
+    };
+
     window._docSaveDocx = async function () {
         var st = window._docState, form = _formById(st.formId);
         if (!form) { _toast('⚠️ ' + _t('문서를 고르세요.', 'Pick a document.'), 'error'); return; }
@@ -6488,6 +6545,35 @@
         var ctx = window._dgCollect(), opt = { stage: st.stage };
         var name = form.nameOf(ctx, opt).replace(/\.(pptx|xlsx|docx)$/i, '') + '.docx';
         _toast('⏳ ' + _t('원본 문서를 만드는 중…', 'Building…'), 'info');
+
+        // 📑 [2026-11-19] Sample Report 는 **원본 .docx 양식**을 그대로 쓴다(표 19개·체크시트
+        //    6장·사진 실제 삽입). 백엔드가 재시작 전이면(404) 기존 일반 `/doc/docx` 로 조용히
+        //    돌아간다(헤딩+표 나열이라 모양은 다르지만 적어도 만들어지긴 한다).
+        if (form.id === 'sample-report') {
+            var srRes, srBlob = null, srWhy = '';
+            try {
+                var srPayload = window._docSampleReportFields(form.id);
+                srPayload.name = name;
+                srRes = await fetch(BACKEND + '/doc/sample-report-docx', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(srPayload)
+                });
+                if (srRes.ok) { srBlob = await srRes.blob(); }
+                else { try { srWhy = (await srRes.json()).error || ''; } catch (e0) { /* HTML 404 */ } }
+            } catch (eSr) { srWhy = (eSr && eSr.message) || String(eSr); }
+            if (srBlob) {
+                var srUrl = URL.createObjectURL(srBlob);
+                var srA = document.createElement('a');
+                srA.href = srUrl; srA.download = name;
+                document.body.appendChild(srA); srA.click(); srA.remove();
+                setTimeout(function () { URL.revokeObjectURL(srUrl); }, 10000);
+                _toast('💾 ' + name + ' (' + Math.round(srBlob.size / 1024) + 'KB, ' + _t('원본 양식', 'original template') + ')', 'success');
+                return;
+            }
+            _toast('ℹ️ ' + _t('원본 양식을 못 써서(' + (srWhy || '백엔드 응답 없음') + ') 일반 문서로 대신 만듭니다.',
+                              'Could not use the original template — falling back to a plain document.'), 'info');
+        }
+
         var res;
         try {
             res = await fetch(BACKEND + '/doc/docx', {
