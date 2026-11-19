@@ -294,6 +294,134 @@
                 //    위치(포장 박스) 추가" — 같은 엔진을 `scope` 만 다르게 재사용(복제 아님).
                 { title: '# 부착 위치 (포장 박스)', kind: 'labelattach', scope: 'box' }
             ]
+        },
+        // 📘 [2026-11-19 신규] 모델명세서(제품규격서) — 실측 원본(`P04-모델명세서_<제품코드>_<모델>.xlsx`)
+        //    구성: 표지(승인란)·REVISION HISTORY·Model Description·Electric/Optical/Software
+        //    SPEC·RESOLUTION SPEC·사진 5종(Sample Picture·Packing·Pallet·Container·2D Drawing).
+        //    라벨사양서와 같은 R1/R2/R3… `perRevision` 관리(사용자 결정) — REVISION HISTORY 한
+        //    줄짜리 표를 따로 안 두고, 리비전을 넘길 때마다 "이 리비전에서 뭐가 바뀌었는지"를
+        //    적는 칸 하나로 대신한다(전체 변경 흐름은 헤더의 🆚 VS 비교가 보여준다, 위에서
+        //    `_docRevVsBuildFieldRows` 로 일반 `fields` 도 비교하게 넓혔다).
+        {
+            id: 'model-spec', icon: '📘', label: '모델명세서', folder: '모델명세서',
+            perRevision: true,
+            note: 'Optical·F/W(1)·EDID(DP)는 Customer SPEC 값을 자동으로 가져오고, RESOLUTION SPEC 은'
+                + ' 기존 "지원 해상도" 선택을 그대로 씁니다. 사진 5종은 사진을 누르면 번호 표시(📍)를'
+                + ' 붙일 수 있습니다(라벨 목록이 없는 사진이라 라벨사양서의 부착위치 표시와는 다른 방식'
+                + ' 입니다). M.C Table·라벨사양서와 같은 R1/R2/R3… 리비전 관리가 됩니다.',
+            nameOf: function (ctx) { return _projKey(ctx) + '_모델명세서_' + _today(); },
+            sections: [
+                {
+                    title: '1. Model Description', cols: 2,
+                    fields: [
+                        { key: 'PART NUMBER',   from: 'meta.제품코드' },
+                        { key: 'MODEL NAME',    from: 'meta.모델풀네임' },
+                        { key: 'BUYER NAME',    from: 'meta.고객사' },
+                        { key: 'REV. NO',       from: 'revision' },
+                        { key: 'REPORTING DATE', from: 'today', date: true },
+                        { key: 'DRAFTER (HW/FW)', from: 'meta.HW담당자' },
+                        { key: 'DESIGN',        from: 'meta.기구담당자' },
+                        { key: 'NOTE', wide: true, hint: '예: KM270EUG-SBEA28, TULIP-D2PU, FCC, CE Class A' }
+                    ]
+                },
+                {
+                    title: '승인', kind: 'table',
+                    columns: ['구분', '성명', '일자'],
+                    rows: [
+                        { cells: [{ fixed: '작성-1 (회로)' }, { key: 'apv1|성명' }, { key: 'apv1|일자', date: true }] },
+                        { cells: [{ fixed: '작성-2 (기구)' }, { key: 'apv2|성명' }, { key: 'apv2|일자', date: true }] },
+                        { cells: [{ fixed: '검토' },        { key: 'apv3|성명' }, { key: 'apv3|일자', date: true }] },
+                        { cells: [{ fixed: '승인' },        { key: 'apv4|성명' }, { key: 'apv4|일자', date: true }] }
+                    ]
+                },
+                {
+                    // 📜 엑셀의 '2. REVISION HISTORY' — perRevision 리비전마다 "이번에 뭐가 바뀌었는지"
+                    //    한 줄을 적는다(전체 리비전을 가로지르는 목록은 🆚 VS 비교가 대신한다).
+                    title: '2. REVISION HISTORY (이 리비전)', cols: 2,
+                    fields: [
+                        { key: '변경일자', label: '변경 일자', from: 'today', date: true },
+                        { key: '적용 Page', hint: '예: ALL' },
+                        { key: 'ECO #' },
+                        { key: '담당' },
+                        { key: '변경 내용', wide: true, hint: '예: 최초 등록' }
+                    ]
+                },
+                {
+                    title: '3. ELECTRIC SPEC', kind: 'table',
+                    columns: ['NO', 'ITEMS', 'SPECIFICATION', 'NOTE'],
+                    rows: [
+                        { cells: [{ fixed: '1' }, { fixed: 'POWER RATING' },
+                                  { key: 'elecPower', hint: '예: DC 24V / 2A' },
+                                  { key: 'elecPowerNote', hint: '예: Monitor (1EA)' }] },
+                        { cells: [{ fixed: '' }, { fixed: 'POWER RATING2' }, { key: 'elecPower2' }, { key: 'elecPower2Note' }] },
+                        { cells: [{ fixed: '' }, { fixed: 'POWER RATING3' }, { key: 'elecPower3' }, { key: 'elecPower3Note' }] },
+                        { cells: [{ fixed: '2' }, { fixed: 'CERTIFICATION' },
+                                  { key: 'elecCert', hint: '예: CE, CB, UL, FCC, RoHS II, SABS' },
+                                  { key: 'elecCertNote', hint: '예: CB safety(EN62368-1), CE EMC(EN55032/24/35)' }] },
+                        { cells: [{ fixed: '3' }, { fixed: 'ESD (Air)' },
+                                  { key: 'elecEsdAir', hint: '예: ±20kV No Effect / ±27kV Recoverable' },
+                                  { key: 'elecEsdAirNote' }] },
+                        { cells: [{ fixed: '' }, { fixed: 'ESD (Contact)' },
+                                  { key: 'elecEsdContact', hint: '예: ±8kV No Effect / ±10kV Recoverable' },
+                                  { key: 'elecEsdContactNote' }] },
+                        { cells: [{ fixed: '4' }, { fixed: 'Leakage Current' }, { key: 'elecLeakage' }, { key: 'elecLeakageNote' }] },
+                        { cells: [{ fixed: '5' }, { fixed: 'Hi-Pot Test' }, { key: 'elecHipot' }, { key: 'elecHipotNote' }] }
+                    ]
+                },
+                {
+                    // 🎯 x/y·Lv·Temp·Uniformity·Gamut 은 전부 Customer SPEC 에서 온다(실측 이름,
+                    //    위 `_SPEC_ALIAS` 참고) — 시제품 제작의뢰서의 '광학 사양' 과 같은 원칙.
+                    title: '4. OPTICAL SPECIFICATION', cols: 2,
+                    fields: [
+                        { key: 'White x', from: 'specX' },
+                        { key: 'White y', from: 'specY' },
+                        { key: 'Color Temp(K)', from: 'specTemp' },
+                        { key: 'Luminance (min~max)', from: 'specLv' },
+                        { key: 'Uniformity(%)', from: 'specUniformity' },
+                        { key: 'Color Gamut(NTSC)', from: 'specGamut' },
+                        { key: 'OSD Brightness', hint: '예: 75' },
+                        { key: 'OSD Contrast', hint: '예: 50' },
+                        { key: 'OSD Color Temp', hint: '예: 6500K' },
+                        { key: 'OSD R/G/B Setting', hint: '예: 128 / 128 / 128' }
+                    ]
+                },
+                // 🖥 이미 있는 "지원 해상도" 선택(js/69)을 그대로 쓴다 — 137줄 카탈로그를
+                //    여기 다시 만들지 않는다(시제품 제작의뢰서와 같은 재사용).
+                { title: '# 5. RESOLUTION SPEC', kind: 'resolution' },
+                {
+                    title: '6. SOFTWARE SPEC — F/W VERSION', kind: 'table',
+                    columns: ['항목', 'Factory Date', 'Firmware Name', 'NOTE'],
+                    rows: [
+                        { cells: [{ fixed: 'AD F/W VER1' }, { key: 'swAdDate1', date: true },
+                                  { key: 'swAdFile1', from: 'specFw' }, { key: 'swAdNote1' }] },
+                        { cells: [{ fixed: 'AD F/W VER2' }, { key: 'swAdDate2', date: true },
+                                  { key: 'swAdFile2' }, { key: 'swAdNote2' }] },
+                        { cells: [{ fixed: 'TSP F/W VER1' }, { key: 'swTspDate1', date: true },
+                                  { key: 'swTspFile1' }, { key: 'swTspNote1' }] },
+                        { cells: [{ fixed: 'TSP F/W VER2' }, { key: 'swTspDate2', date: true },
+                                  { key: 'swTspFile2' }, { key: 'swTspNote2' }] }
+                    ]
+                },
+                {
+                    title: '6. SOFTWARE SPEC — EDID', kind: 'table',
+                    columns: ['항목', 'Check Sum', 'File', 'NOTE'],
+                    rows: [
+                        { cells: [{ fixed: 'EDID (Analog)' }, { key: 'edidAnalogSum' }, { key: 'edidAnalogFile' }, { key: 'edidAnalogNote' }] },
+                        { cells: [{ fixed: 'EDID (DVI)' }, { key: 'edidDviSum' }, { key: 'edidDviFile' }, { key: 'edidDviNote' }] },
+                        { cells: [{ fixed: 'EDID (DP)' }, { key: 'edidDpSum', from: 'specEdid' }, { key: 'edidDpFile' }, { key: 'edidDpNote' }] }
+                    ]
+                },
+                { title: "# 7. SAMPLE PICTURE", kind: 'photomark', key: 'att_pic_sample',
+                  hint: '제품 사진을 올려 주세요. 사진을 누르면 번호 표시(📍)를 추가할 수 있습니다.' },
+                { title: "# 8. PACKING ASS'Y", kind: 'photomark', key: 'att_pic_packing',
+                  hint: '포장 사진을 올려 주세요.' },
+                { title: "# 9. PALLET ASS'Y", kind: 'photomark', key: 'att_pic_pallet',
+                  hint: '파렛트 적재 사진을 올려 주세요.' },
+                { title: '# 10. CONTAINER SHIPPING', kind: 'photomark', key: 'att_pic_container',
+                  hint: '컨테이너 적재 사진을 올려 주세요.' },
+                { title: '# 11. 2D DRAWING', kind: 'photomark', key: 'att_pic_2d',
+                  hint: '2D 도면을 올려 주세요.' }
+            ]
         }
     ];
     // 🗺️ [2026-11-13, 사용자 요청] 도면은 면(보통 전면·후면·측면)마다 따로 — 작은 고정 목록이라
@@ -414,7 +542,11 @@
         specTemp: { names: ['Color Temperature(K)', 'Color Temp'] },
         specRes:  { names: ['Native Resolution', '해상도', 'Resolution'] },
         specPanel:{ names: ['Panel'] },
-        specVolt: { names: ['Input voltage', '입력 전압'] }
+        specVolt: { names: ['Input voltage', '입력 전압'] },
+        // 📘 [2026-11-19] 모델명세서(js/67 'model-spec') Optical Spec 가 쓴다 — js/55
+        //    `PL_CHECK_SPEC_FIELDS` 가 실측해 둔 이름과 같다('Uniformity(%)'/'Color Gamut').
+        specUniformity: { names: ['Uniformity(%)', 'Uniformity'] },
+        specGamut:      { names: ['Color Gamut', 'Color Gamut(NTSC)', 'Color Gamut(%/NTSC)'] }
     };
     var _norm = function (s) { return String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase(); };
     var _SRC_WHERE = { meta: 'Summary ▸ 프로젝트 정보', overview: 'Summary ▸ 프로젝트 개요' };
@@ -443,6 +575,14 @@
         if (from === 'round') {
             return { v: (window._docState && window._docState.round) || '',
                      src: _t('샘플 출고 이력 ▸ 회차', 'Shipping history ▸ stage') };
+        }
+        // 📘 [2026-11-19] perRevision 서식의 "REV. NO" — 지금 보고 있는 리비전(R1→00, R2→01…).
+        //    label-spec 과 같은 R1/R2/R3 통을 그대로 쓰므로 번호만 0-인덱스로 바꿔 보여준다.
+        if (from === 'revision') {
+            var revId0 = (window._docState && window._docState.formId) || '';
+            var revNow0 = (revId0 && window._docActiveRevision) ? window._docActiveRevision(revId0) : null;
+            var revNum0 = Math.max(0, (parseInt(String(revNow0 || 'R1').slice(1), 10) || 1) - 1);
+            return { v: (revNum0 < 10 ? '0' : '') + revNum0, src: _t('지금 보는 리비전', 'current revision') };
         }
         if (from.indexOf('mat:') === 0) {
             var p = from.split(':');
@@ -705,6 +845,26 @@
         });
         return order;
     };
+    // 📘 [2026-11-19] 모델명세서처럼 labelItems/labelCerts 가 없는(일반 `fields` 만 쓰는)
+    //    perRevision 서식도 VS 에서 뭐가 바뀌었는지 보이게 — label-spec 전용으로 박지 않고
+    //    이 서식의 `d.fields` 키를 전부 리비전별로 모은다(라벨 목록·인증표는 위 두 함수가
+    //    이미 다루므로 겹치지 않는다).
+    window._docRevVsBuildFieldRows = function (formId, revs) {
+        var container = _docContainer(formId), order = [], byKey = {};
+        revs.forEach(function (rev) {
+            var d = (container.revisions || {})[rev] || {};
+            Object.keys(d.fields || {}).forEach(function (k) {
+                var entry = byKey[k];
+                if (!entry) {
+                    var f = _findField(formId, k);
+                    entry = { key: k, label: (f && (f.label || f.key)) || k, byRev: {} };
+                    byKey[k] = entry; order.push(entry);
+                }
+                entry.byRev[rev] = d.fields[k];
+            });
+        });
+        return order;
+    };
     var _docRevVsDiffText = function (a, b, fields, labels) {
         var out = [];
         fields.forEach(function (f, i) {
@@ -718,6 +878,7 @@
         var itemRows = window._docRevVsBuildItemRows(formId, revs);
         var certRows = window._docRevVsBuildCertRows(formId, revs, 'certs')
             .concat(window._docRevVsBuildCertRows(formId, revs, 'ratings'));
+        var fieldRows = window._docRevVsBuildFieldRows(formId, revs);
         var lines = [];
         for (var i = 1; i < revs.length; i++) {
             var prev = revs[i - 1], cur = revs[i];
@@ -745,6 +906,16 @@
                     if (d2.length) cChanged.push(row.label + '(' + d2.join(', ') + ')');
                 }
             });
+            // 📘 [2026-11-19] 모델명세서처럼 일반 입력칸만 쓰는 서식의 변경 — 있던 값이 없어지거나
+            //    새로 생긴 경우도 포함(perRevision 은 새 리비전이 빈 칸으로 시작할 수 있다).
+            var fChanged = [];
+            fieldRows.forEach(function (row) {
+                var a = row.byRev[prev], b = row.byRev[cur];
+                if (a === undefined && b === undefined) return;
+                if (String(a == null ? '' : a) !== String(b == null ? '' : b)) {
+                    fChanged.push(row.label + ' ' + (a || '-') + '→' + (b || '-'));
+                }
+            });
             var parts = [];
             if (added.length) parts.push('➕ ' + added.length + _t('개 라벨 추가(', ' label(s) added (') + added.join(', ') + ')');
             if (removed.length) parts.push('➖ ' + removed.length + _t('개 라벨 삭제(', ' label(s) removed (') + removed.join(', ') + ')');
@@ -752,6 +923,7 @@
             if (cAdded.length) parts.push('➕ ' + cAdded.length + _t('개 인증/정격 추가(', ' cert(s) added (') + cAdded.join(', ') + ')');
             if (cRemoved.length) parts.push('➖ ' + cRemoved.length + _t('개 인증/정격 삭제(', ' cert(s) removed (') + cRemoved.join(', ') + ')');
             if (cChanged.length) parts.push('✏️ ' + cChanged.length + _t('개 인증/정격 변경: ', ' cert(s) changed: ') + cChanged.join(' · '));
+            if (fChanged.length) parts.push('✏️ ' + fChanged.length + _t('개 항목 변경: ', ' field(s) changed: ') + fChanged.join(' · '));
             if (!parts.length) parts.push(_t('차이 없음', 'No changes'));
             lines.push({ from: prev, to: cur, text: parts.join(' · ') });
         }
@@ -3950,6 +4122,54 @@
         return BACKEND + '/doc/get?folder=' + encodeURIComponent(folder) + '&name=' + encodeURIComponent(name);
     };
 
+    // ── 📍 [2026-11-19, 모델명세서] 사진 위에 번호 표시 — 라벨사양서의 `labelattach`는 미리
+    //    만들어 둔 "라벨 목록" 위의 항목을 도면에 배치하는 기능이라, 라벨 목록이 없는 사진
+    //    (Sample Picture·Packing·Pallet·Container·2D Drawing)에는 그대로 못 쓴다. 여기는
+    //    사진 자체에 **그 자리에서 새로 적는** 번호 핀 + 설명을 붙인다 — 핀은 사진(`att`
+    //    첨부 항목)의 `marks` 배열에 그대로 얹혀서(따로 저장소를 안 둠) 사진을 떼면 같이 없어진다.
+    window._docPhotoMarkPlacing = window._docPhotoMarkPlacing || null;   // {id, key, idx} | null
+    window._docPhotoMarkArm = function (id, key, idx) {
+        window._docPhotoMarkPlacing = { id: id, key: key, idx: idx };
+        window._docRender();
+    };
+    window._docPhotoMarkDisarm = function () {
+        window._docPhotoMarkPlacing = null;
+        window._docRender();
+    };
+    window._docPhotoMarkImgClick = function (ev, id, key, idx) {
+        var p = window._docPhotoMarkPlacing;
+        if (!p || p.id !== id || p.key !== key || p.idx !== idx) return;   // 그냥 보는 중이면 클릭은 아무 일도 안 한다
+        var rect = ev.target.getBoundingClientRect();
+        var x = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+        var y = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
+        var text = prompt(_t('이 위치에 대한 설명을 입력하세요.', 'Enter a note for this spot.'));
+        window._docPhotoMarkPlacing = null;
+        if (text == null || !text.trim()) { window._docRender(); return; }
+        var list = _docData(id).att[key] || [];
+        var a = list[idx];
+        if (!a) { window._docRender(); return; }
+        a.marks = a.marks || [];
+        a.marks.push({ x: x, y: y, text: text.trim() });
+        _markDirty(); window._docRender();
+    };
+    window._docPhotoMarkNoteDel = function (id, key, idx, mi) {
+        var list = _docData(id).att[key] || [];
+        var a = list[idx];
+        if (!a || !a.marks || !a.marks[mi]) return;
+        if (!confirm(_t('이 표시를 지웁니다.', 'Delete this mark?'))) return;
+        a.marks.splice(mi, 1);
+        _markDirty(); window._docRender();
+    };
+    var _docPhotoMarkMarkersHtml = function (marks) {
+        return (marks || []).map(function (m, mi) {
+            return '<span style="position:absolute; left:' + (m.x * 100) + '%; top:' + (m.y * 100) + '%;'
+                + ' transform:translate(-50%,-50%); display:flex; width:20px; height:20px; border-radius:50%;'
+                + ' background:#e03131; color:#fff; font-weight:bold; align-items:center; justify-content:center;'
+                + ' font-size:11px; box-shadow:0 0 0 2px #fff; z-index:1;" title="' + _esc(m.text) + '">'
+                + (mi + 1) + '</span>';
+        }).join('');
+    };
+
     // ── 🗺️📦 [2026-11-13, 사용자 요청] 부착 위치 — 도면(제품 또는 포장 박스) 위에 위 라벨
     //    목록의 각 라벨이 어디에 붙는지 표시한다. 두 종류(`scope`: 'product'|'box')가
     //    **완전히 독립**된 도면·표시 세트를 갖되 **같은 엔진 하나**를 돌린다(복제 아님) —
@@ -4810,6 +5030,58 @@
                    + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
                    + _esc(_t('끌어다 놓기 · Ctrl+V 붙여넣기도 됩니다. 파일은 NAS 에 올라가고 문서엔 참조만 남습니다.',
                              'Drag & drop or paste.')) + '</span></div></td></tr>';
+            } else if (s.kind === 'photomark') {
+                // 📍 [2026-11-19, 모델명세서] 사진 올리기는 'attach'와 같은 저장소(`att[key]`)를
+                //    그대로 쓰고(`_docAttachAdd`/`_docAttachPick`/`_docAttachRemove` 재사용),
+                //    사진마다 전체 크기로 보여주며 클릭으로 번호 표시(📍)를 더하는 점만 다르다.
+                var pmList = (_docData(form.id).att[s.key]) || [];
+                h += '<tr><td style="padding:8px;"><div class="doc-att" data-doc-att="' + _esc(s.key) + '">';
+                if (!pmList.length) {
+                    h += '<div style="color:#868e96; font-size:11.5px; padding:14px 6px;">'
+                       + _esc(s.hint || _t('사진을 끌어다 놓거나 아래 버튼으로 올려 주세요.', 'Drop photos here.')) + '</div>';
+                }
+                pmList.forEach(function (a, i) {
+                    var isImg = /^image\//.test(a.type || '') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.name || '');
+                    var armedPM = !!(window._docPhotoMarkPlacing && window._docPhotoMarkPlacing.id === form.id
+                        && window._docPhotoMarkPlacing.key === s.key && window._docPhotoMarkPlacing.idx === i);
+                    h += '<div style="margin-bottom:16px; max-width:480px;">';
+                    if (isImg) {
+                        h += '<div style="position:relative; display:inline-block; max-width:100%;">'
+                           + '<img src="' + _esc(_attUrl(a)) + '" style="max-width:100%; display:block; border:1px solid #dee2e6;'
+                           + ' border-radius:3px;' + (armedPM ? ' cursor:crosshair;' : ' cursor:default;') + '"'
+                           + ' onclick="window._docPhotoMarkImgClick(event,\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\',' + i + ')">'
+                           + _docPhotoMarkMarkersHtml(a.marks)
+                           + '</div>';
+                    } else {
+                        h += '<div style="height:76px; display:flex; align-items:center; justify-content:center; font-size:26px;">📄</div>';
+                    }
+                    h += '<div style="font-size:10px; word-break:break-all; margin-top:3px;">' + _esc(a.orig || a.name) + '</div>';
+                    if ((a.marks || []).length) {
+                        h += '<div style="margin-top:4px; font-size:11px;">' + a.marks.map(function (m, mi) {
+                            return '<div style="padding-left:1.1em; text-indent:-1.1em; display:flex; justify-content:space-between; gap:6px;">'
+                                 + '<span>' + (mi + 1) + '. ' + _esc(m.text) + '</span>'
+                                 + '<a href="#" class="doc-noprint" onclick="window._docPhotoMarkNoteDel(\'' + _esc(form.id) + '\',\''
+                                 + _esc(s.key) + '\',' + i + ',' + mi + ');return false;" style="color:#b1432f;">✕</a></div>';
+                        }).join('') + '</div>';
+                    }
+                    h += '<div class="doc-noprint" style="margin-top:4px;">'
+                       + (isImg ? ('<a href="#" onclick="window._docPhotoMarkArm(\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\','
+                            + i + ');return false;" style="font-size:10px; color:#1971c2; margin-right:8px;">📍 '
+                            + _esc(_t('표시 추가', 'Add mark')) + '</a>') : '')
+                       + '<a href="' + _esc(_attUrl(a)) + '" target="_blank" style="font-size:10px; color:#1971c2; margin-right:8px;">'
+                       + _esc(_t('열기', 'Open')) + '</a>'
+                       + '<a href="#" onclick="window._docAttachRemove(\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\',' + i + ');return false;"'
+                       + ' style="font-size:10px; color:#b1432f;">' + _esc(_t('떼기', 'Remove')) + '</a>'
+                       + '</div></div>';
+                });
+                h += '</div><div class="doc-noprint" style="margin-top:6px;">'
+                   + '<button onclick="window._docAttachPick(\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\')"'
+                   + ' style="padding:4px 10px; font-size:11.5px; cursor:pointer; border:1px solid #a3d9e0;'
+                   + ' background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">📎 '
+                   + _esc(_t('사진 올리기', 'Upload photo')) + '</button>'
+                   + '<span style="margin-left:8px; font-size:11px; color:#868e96;">'
+                   + _esc(_t('끌어다 놓기 · Ctrl+V 붙여넣기도 됩니다. 사진을 누르면 위치 표시(📍)를 추가합니다.',
+                             'Drag & drop or paste. Click a photo to add a numbered mark.')) + '</span></div></td></tr>';
             } else if (s.kind === 'check') {
                 // ✅ SPL Check sheet — 6장·167항목. 체크는 **라디오가 아니라 칸 클릭**이다
                 //    (원본이 O 를 손으로 적는 표라, 같은 모양으로 눌러 O 를 켠다).
@@ -5999,7 +6271,7 @@
     var _formFieldList = function (form) {
         var out = [];
         (form.sections || []).forEach(function (s) {
-            if (s.kind === 'check' || s.kind === 'attach' || s.kind === 'optical') return;
+            if (s.kind === 'check' || s.kind === 'attach' || s.kind === 'optical' || s.kind === 'photomark') return;
             (s.fields || []).forEach(function (f) { out.push({ key: f.key, label: f.label || f.key }); });
             (s.rows || []).forEach(function (r) {
                 (r.cells || []).forEach(function (c) { if (c.key) out.push({ key: c.key, label: c.key }); });
@@ -6262,6 +6534,13 @@
                 var list = (d.att[s.key] || []);
                 rows.push([_t('첨부', 'attachments') + ' ' + list.length + _t('건', '')]);
                 list.forEach(function (a) { rows.push(['', a.orig || a.name]); });
+            } else if (s.kind === 'photomark') {
+                var pmList3 = (d.att[s.key] || []);
+                rows.push([_t('사진', 'Photos') + ' ' + pmList3.length + _t('장', '')]);
+                pmList3.forEach(function (a) {
+                    rows.push(['', a.orig || a.name]);
+                    (a.marks || []).forEach(function (m, mi) { rows.push(['', '', (mi + 1) + '. ' + m.text]); });
+                });
             } else if (s.kind === 'text') {
                 rows.push([val(s.key, null) || '']);
             } else if (s.kind === 'table') {
