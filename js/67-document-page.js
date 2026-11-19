@@ -1237,14 +1237,21 @@
             try {
                 if (kind === 'qr') {
                     if (!window.QRCode) return;   // CDN 이 아직 안 불러와졌으면 다음 렌더에서 다시 시도
+                    // ⚠️⚠️ [2026-11-19, 사용자 신고 "QR·바코드는 50% 그레이 왜 적용 안됨"] QR·바코드는
+                    //    인증마크(PNG)와 달리 **그 순간 JS 라이브러리가 그린다** — 색을 안 주면
+                    //    두 라이브러리 다 기본값(검정)으로 그린다. 표시·박스·마크와 같은 색을 맞추려면
+                    //    라이브러리 호출에 **직접 색을 넘겨야** 한다(CSS로는 캔버스/SVG 안쪽 모듈을
+                    //    못 칠한다).
                     new window.QRCode(canvas, { text: value, width: w, height: w,
+                        colorDark: '#808080', colorLight: '#ffffff',
                         correctLevel: window.QRCode.CorrectLevel.M });
                 } else {
                     if (!window.JsBarcode) return;
                     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                     canvas.appendChild(svg);
                     window.JsBarcode(svg, value, { format: 'CODE128', displayValue: true,
-                        height: Math.max(10, h * 0.62), fontSize: Math.max(8, h * 0.18), margin: 0 });
+                        height: Math.max(10, h * 0.62), fontSize: Math.max(8, h * 0.18), margin: 0,
+                        lineColor: '#808080' });
                     svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%');
                     svg.style.display = 'block';
                 }
@@ -1650,6 +1657,57 @@
         await window._docLabelNotesSave(code);
         _docLabelRefresh();
     };
+    // ✏️✏️ [2026-11-19, 사용자 요청] "모달 하단에서 수정하지 않고도 상자(글자상자)를 더블클릭하면
+    //    바로 수정 가능하도록" — 도안 위 그 글자상자 자신을 `contentEditable` 로 바꿔 그 자리에서
+    //    바로 고친다. 아래 목록 textarea 는 그대로 남겨둔다(둘 다 같은 저장 함수(`_docLabelNoteTextEdit`)
+    //    를 거치므로 어느 쪽으로 고쳐도 똑같이 저장된다).
+    //    ⚠️ 편집 중엔 **이 칸의 mousedown 이 wrap(드래그 시작)으로 안 번지게** 막아야 한다 — 안 막으면
+    //      글자를 선택하려고 안에서 클릭하는 순간 마커 전체가 같이 끌린다.
+    //    ⚠️ 편집 중 Enter 는 **줄바꿈**(아래 목록 textarea 와 같은 `\n`) — contentEditable 기본
+    //      동작(`<div>`/`<br>` 삽입)은 저장 형식과 안 맞아 `execCommand('insertText')` 로 직접 넣는다.
+    //    ⚠️ 화살표 키 너지(마커 이동) 핸들러가 `TEXTAREA`/`INPUT` 만 걸러서 이 `<span>` 은 안 걸러졌다
+    //      — 아래 화살표키 핸들러에 `isContentEditable` 체크를 같이 추가해 둬야 글자 커서 이동이
+    //      마커 이동으로 가로채이지 않는다.
+    window._docLabelNoteInlineEditStart = function (ev, code, idx) {
+        ev.preventDefault(); ev.stopPropagation();
+        var el = ev.currentTarget;
+        if (!el || el.getAttribute('contenteditable') === 'true') return;
+        window._docLabelClearOtherActive('note');
+        window._docLabelActiveNote = { code: code, idx: idx };
+        if (window._docLabelMarkerSyncSelection) window._docLabelMarkerSyncSelection();
+        el.setAttribute('contenteditable', 'true');
+        el.style.outline = '1px dashed #1971c2';
+        el.style.outlineOffset = '1px';
+        el.style.background = 'rgba(255,255,255,0.88)';
+        el.style.cursor = 'text';
+        el.onmousedown = function (mev) { mev.stopPropagation(); };
+        el.focus();
+        try {
+            var range = document.createRange();
+            range.selectNodeContents(el);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        } catch (e) { /* 선택 실패해도 포커스는 됨 — 편집은 그대로 된다 */ }
+        var commit = function () {
+            el.removeEventListener('blur', commit);
+            el.removeEventListener('keydown', onKeydown);
+            el.setAttribute('contenteditable', 'false');
+            el.onmousedown = null;
+            window._docLabelNoteTextEdit(code, idx, el.textContent);
+        };
+        var onKeydown = function (kev) {
+            if (kev.key === 'Enter') {
+                kev.preventDefault();
+                document.execCommand('insertText', false, '\n');
+            } else if (kev.key === 'Escape') {
+                kev.preventDefault();
+                el.blur();
+            }
+        };
+        el.addEventListener('blur', commit);
+        el.addEventListener('keydown', onKeydown);
+    };
     // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] 타이핑하는 **즉시**
     //    도안 위 글자상자(모달·표 썸네일 둘 다)만 가볍게 고쳐 쓴다 — `_docLabelRefresh()` 는
     //    안 부른다(그러면 이 textarea 자체가 매번 다시 만들어져 포커스·커서가 날아간다).
@@ -1823,7 +1881,9 @@
                 //    통째로 가려졌다. 투명으로 바꿔 겹쳐도 둘 다 보이게 한다(겹친 자리는 글자끼리
                 //    섞여 읽기 어려울 수 있지만, 최소한 한쪽이 완전히 숨어 "없는 셈" 되진 않는다).
                 + '<span data-note-text data-note-code="' + _esc(code) + '" data-note-idx2="' + ni
-                + '" style="display:block; background:transparent; color:#808080; font-weight:bold;'
+                + '"' + (draggable ? ' ondblclick="window._docLabelNoteInlineEditStart(event,\'' + _esc(code) + '\',' + ni + ');"'
+                  + ' title="' + _esc(_t('더블클릭하면 여기서 바로 고칠 수 있습니다', 'Double-click to edit here')) + '"' : '')
+                + ' style="display:block; background:transparent; color:#808080; font-weight:bold;'
                 + ' padding:0.15em 0.45em; border-radius:0.3em; text-align:'
                 + (n.align || 'left') + ';'
                 + ' white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
@@ -2350,7 +2410,10 @@
             //    안 들어온다.
             document.addEventListener('keydown', function (ev) {
                 if (!ov || ov.style.display === 'none') return;
-                if (ev.target && (ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT')) return;
+                // ⚠️ [2026-11-19] 도안 위 글자상자를 더블클릭해 `contentEditable` 로 바로 고치는 중엔
+                //    `isContentEditable` 도 같이 걸러야 한다 — 안 그러면 글자 커서를 옮기려는 화살표
+                //    키를 이 핸들러가 가로채 마커 전체를 움직여 버린다.
+                if (ev.target && (ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT' || ev.target.isContentEditable)) return;
                 var dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
                 var d = dirs[ev.key];
                 if (!d) return;
