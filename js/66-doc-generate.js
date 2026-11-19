@@ -113,6 +113,17 @@
         if (window.collectTabData) { try { window.collectTabData(); } catch (e) { /* 있는 값으로 */ } }
         var pm = window.projectMeta || {};
         var td = window.tabData || {};
+        // 🔀 [2026-11-19, 사용자 제보 "MVD TVD TPR 기본 정보는 연동되어야?"] Customer SPEC·M.C·BOM·
+        //    해상도는 이미 `mcActiveUnit`(제품구분자)별로 갈리는데, 아래 meta.KTKPN/KTK모델명/
+        //    고객모델명/프로젝트코드/프로젝트명은 **항상 모델 #1 카드**(js/22g `collectTabData`가
+        //    `pm.KTKPN = _cardModels[0].KTKPN` 으로 못박는다)만 본다. Summary 탭 "프로젝트 모델"
+        //    카드의 `unitId` 가 바로 그 제품구분자라서(`_renderModelCardHtml` — "제품군 선택" 드롭
+        //    다운이 `getMcUnits()` 를 그대로 쓴다), TVD/TPR 로 전환해도 문서엔 MVD(모델 #1) 값이
+        //    그대로 나왔다. 지금 보는 유닛에 **자기 카드가 있으면** 그 카드 값으로 덮어쓴다(아래
+        //    meta 조립부) — 카드가 없는 유닛(제품구분자만 늘리고 모델 카드는 안 늘린 프로젝트)은
+        //    기존처럼 모델 #1 = 프로젝트 공통 기본값을 그대로 쓴다(동작 불변).
+        var activeUnit = window.mcActiveUnit || '';
+        var unitCard = activeUnit ? (td.projectModels || []).filter(function (m) { return m && m.unitId === activeUnit; })[0] : null;
 
         // ⚠️⚠️ **저장된 값을 먼저, 화면 입력칸은 폴백**이다.
         //    처음엔 DOM 만 읽었는데 Summary 탭을 한 번도 안 열면(= 다른 탭에서 문서를 만들면)
@@ -162,10 +173,11 @@
             if (label) spec.push({ label: label, value: v, note: String(r.note || '').trim() });
         });
 
-        // 주요 자재 — 고정 구분 순서대로(모델 #1 기준, 합본 폴백)
+        // 주요 자재 — 고정 구분 순서대로(지금 보는 유닛의 카드 우선, 나머지 모델·합본은 폴백)
         var mats = [];
         var lists = [];
-        (td.projectModels || []).forEach(function (m) { if (Array.isArray(m.materials)) lists.push(m.materials); });
+        if (unitCard && Array.isArray(unitCard.materials)) lists.push(unitCard.materials);
+        (td.projectModels || []).forEach(function (m) { if (m !== unitCard && Array.isArray(m.materials)) lists.push(m.materials); });
         if (Array.isArray(td.projectMaterials)) lists.push(td.projectMaterials);
         (window.MATERIAL_FIXED_CATEGORIES || []).forEach(function (cat) {
             var hit = null;
@@ -212,6 +224,19 @@
         (window.DOC_MEMBER_ROLES || []).forEach(function (r) {
             ctx.meta[r.metaKey] = pick(pm[r.metaKey], r.id);
         });
+        // 🔀 지금 보는 제품구분자에 **자기 카드**가 있으면 그 카드 값으로 덮어쓴다(위 주석 참고) —
+        //    카드가 없으면(단일모델 프로젝트, 또는 모델 카드를 안 늘린 채 제품구분자만 늘린
+        //    경우) 지금까지처럼 모델 #1 = 프로젝트 기본값 그대로.
+        if (unitCard) {
+            if (unitCard.KTKPN)       ctx.meta.KTKPN = String(unitCard.KTKPN).trim();
+            if (unitCard.KTK모델명)    ctx.meta.KTK모델명 = String(unitCard.KTK모델명).trim();
+            if (unitCard.고객모델명)   { ctx.meta.고객모델명 = String(unitCard.고객모델명).trim(); ctx.meta.모델명 = ctx.meta.고객모델명; }
+            if (unitCard.프로젝트코드) ctx.meta.프로젝트코드 = String(unitCard.프로젝트코드).trim();
+            if (unitCard.프로젝트명칭) ctx.meta.프로젝트명 = String(unitCard.프로젝트명칭).trim();
+            ctx.meta.PN_모델명 = (unitCard.KTKPN && unitCard.KTK모델명)
+                ? (String(unitCard.KTKPN).trim() + '_' + String(unitCard.KTK모델명).trim())
+                : (ctx.meta.KTK모델명 || ctx.meta.KTKPN || ctx.meta.PN_모델명);
+        }
         // 제품코드 — Summary 는 KTKPN 에 앞 6자리를 담는다(모델명은 뒤쪽).
         ctx.meta.제품코드 = ctx.meta.KTKPN;
         ctx.meta.모델풀네임 = ctx.meta.PN_모델명
