@@ -3896,9 +3896,11 @@
                 + (artFile ? '<span style="position:absolute; left:-7px; top:-7px; width:20px; height:20px; line-height:20px;'
                   + ' text-align:center; background:#1971c2; color:#fff; border-radius:50%; font-size:11px; font-weight:bold;'
                   + ' box-shadow:0 0 0 1px #fff;">' + (m.labelIdx + 1) + '</span>' : '')
+                // 🧹 [2026-11-19, 사용자 요청] "여기도" — 다른 크기조절 손잡이와 같은 방식으로
+                //    보이는 사각형만 없앤다(끌 수 있는 영역은 투명하게 그대로).
                 + (draggable && artFile ? '<span data-attach-mark-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
-                  + ' style="position:absolute; right:-7px; bottom:-7px; width:14px; height:14px; border-radius:3px; background:#1971c2;'
-                  + ' border:2px solid #fff; box-shadow:0 0 0 1px #1971c2; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>' : '')
+                  + ' style="position:absolute; right:-7px; bottom:-7px; width:14px; height:14px;'
+                  + ' background:transparent; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>' : '')
                 + (draggable ? '<a href="#" onclick="window._docLabelAttachMarkDel(\'' + _esc(id) + '\',\'' + _esc(scope) + '\',' + mi + ');return false;"'
                   + ' style="position:absolute; right:-7px; top:-7px; width:20px; height:20px; line-height:20px; text-align:center;'
                   + ' background:#b1432f; color:#fff; border-radius:50%; font-size:11px; font-weight:bold; text-decoration:none;'
