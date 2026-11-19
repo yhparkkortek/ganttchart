@@ -664,7 +664,12 @@ window.populateTabData = function() {
     const setLabelVal = function(id, val) { const el = document.getElementById(id); if (el) el.value = val || window.DEFAULT_MEMBER_LABELS[id] || ''; };
     const ml = pm.memberLabels || {};
     setLabelVal('sum-pm-label', ml.프로젝트담당자);
-    setLabelVal('sum-mech-label', ml.기구담당자);
+    // 🏷 [2026-11-19 사용자 요청 "기구 담당자 → M/E 담당자"] 저장 시 항상 el.value 를 그대로
+    //    pm.memberLabels 에 적기 때문에(위 ①), 이미 저장된 프로젝트는 **옛 기본값 문자열**
+    //    "기구 담당자"가 그대로 박혀 있다 — DEFAULT_MEMBER_LABELS 만 바꾸면 "저장값 있음"으로
+    //    보여 안 바뀐다. 옛 기본값 그대로면 "사람이 고친 적 없다"로 보고 새 기본값을 보여준다
+    //    (29개 기존 프로젝트를 다시 저장하지 않아도 전부 즉시 새 라벨로 보인다).
+    setLabelVal('sum-mech-label', ml.기구담당자 === '기구 담당자' ? '' : ml.기구담당자);
     setLabelVal('sum-hw-label', ml.HW담당자);
     setLabelVal('sum-fw-label', ml.FW담당자);
     setLabelVal('sum-module-label', ml.Module담당자);

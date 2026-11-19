@@ -920,6 +920,7 @@
                     if (!p || !p.drive_file_id) return;
                     var props = {
                         pm: p.assignee || '',
+                        me: p.mech || '',   // 🔧 [2026-11-19] M/E(기구) 담당자 — "프로젝트 불러오기" 목록 작은 글씨용
                         team: p.team || '',
                         completed: p.completed ? '1' : '',   // Drive 는 문자열만 담았다 — 읽는 쪽이 '1' 을 본다
                         themeColor: p.themeColor || ''

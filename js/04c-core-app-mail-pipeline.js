@@ -254,6 +254,10 @@
                 : (pm.모델명 || pm.고객모델명 || pm.프로젝트명 || customerProjectParts.join(' ') || ''),
             customer: pm.고객사 || '',
             assignee: pm.프로젝트담당자 || '',
+            // 🔧 [2026-11-19 사용자 요청] "프로젝트 불러오기" 목록에 M/E(기구) 담당자를 작게
+            //    같이 보여주기 위한 칸 — assignee(PM)와 같은 자리에 같이 싣는다(js/57 이 NAS
+            //    모드에서 appProperties.me 로 꺼내 쓴다).
+            mech: pm.기구담당자 || '',
             inch: pm.인치 || _inchFromFileName(dynamicFileName) || '',
             keywords: keywords,          // Stage 1 AI 매칭에 사용할 전체 키워드 (4필드 + 커스텀)
             completed: pm.완료여부 === '완료', // 💡 [2026-08-29 신규] 완료 프로젝트 메일 자동매칭 제외용 — _msMatchProjects 참고
@@ -614,7 +618,7 @@
     //    그대로 남는 사고) 무조건 지워버리는(→ 매번 빈칸이 되는 사고) 문제가 있었음.
     window.DEFAULT_MEMBER_LABELS = {
         'sum-pm-label': '프로젝트 담당자',
-        'sum-mech-label': '기구 담당자',
+        'sum-mech-label': 'M/E 담당자',
         'sum-hw-label': 'H/W 담당자',
         'sum-fw-label': 'F/W 담당자',
         'sum-module-label': 'BLU 담당자',
@@ -2367,6 +2371,12 @@
             const d = new Date(file.modifiedTime);
             const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
             const isCompleted = !!(file.appProperties && file.appProperties.completed === '1');
+            // 🔧 [2026-11-19 사용자 요청] 날짜 옆에 M/E(기구) 담당자를 작게 — 기존 29개 프로젝트는
+            //    tools/backfill-index-meta.py 로 한 번 채웠고, 그 뒤로는 저장할 때마다 저절로 채워진다
+            //    (buildProjectIndexEntry 의 mech 칸 → js/57 attachAppProps 의 appProperties.me).
+            //    값이 없으면(아직 배정 안 됐거나 색인이 못 찾은 경우) 조용히 생략한다.
+            const meName = (file.appProperties && file.appProperties.me) ? String(file.appProperties.me).trim() : '';
+            const meTxt = meName ? '<div style="font-size:10px; color:#adb5bd; white-space:nowrap;">M/E:' + escapeHtml(meName) + '</div>' : '';
             const doneBadge = isCompleted ? ` <span style="font-size:10.5px; font-weight:bold; color:#2f9e44; background:#e7f6ec; border-radius:9px; padding:1px 8px; vertical-align:middle;">✅ ${_dmEn ? 'Done' : '완료'}</span>` : '';
             const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd' };
             const fileBtn = document.createElement('div');
@@ -2391,7 +2401,9 @@
                 fileBtn.onmouseover = function() { this.style.background = openHoverBg; this.style.borderColor = openHoverBorder; };
                 fileBtn.onmouseout  = function() { this.style.background = openBg;      this.style.borderColor = openBorder; };
                 fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
-                fileBtn.innerHTML = '<div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📜 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96;">' + dateStr + '</div>';
+                fileBtn.innerHTML = '<div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📜 ' + escapeHtml(file.name) + doneBadge + '</div>' +
+                    '<div style="display:flex; flex-direction:column; align-items:flex-end; gap:1px; flex-shrink:0;">' +
+                    '<div style="font-size:12px; color:#868e96; white-space:nowrap;">' + dateStr + '</div>' + meTxt + '</div>';
             }
             return fileBtn;
         }

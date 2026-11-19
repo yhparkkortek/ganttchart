@@ -55,6 +55,8 @@ FIELDS = [
     ('model',      lambda pm, td: pm.get('모델명') or pm.get('고객모델명') or ''),
     ('customer',   lambda pm, td: pm.get('고객사') or ''),
     ('themeColor', lambda pm, td: td.get('themeColor') or ''),
+    # 🔧 [2026-11-19] M/E(기구) 담당자 — "프로젝트 불러오기" 목록 작은 글씨용(js/57 appProperties.me)
+    ('mech',       lambda pm, td: pm.get('기구담당자') or ''),
 ]
 
 

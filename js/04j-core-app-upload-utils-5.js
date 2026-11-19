@@ -353,7 +353,7 @@
             //    안 걸렸었음 — 전용 data-i18n-value 속성 + 맵 신설.
             i18nValue: {
                 'sum-pm-label':       '프로젝트 담당자 *',
-                'sum-mech-label':     '기구 담당자',
+                'sum-mech-label':     'M/E 담당자',
                 'sum-hw-label':       'H/W 담당자',
                 'sum-fw-label':       'F/W 담당자',
                 'sum-module-label':   'BLU 담당자',
@@ -650,7 +650,7 @@
             },
             i18nValue: {
                 'sum-pm-label':       'Project Owner *',
-                'sum-mech-label':     'Mechanical',
+                'sum-mech-label':     'M/E',
                 'sum-hw-label':       'H/W',
                 'sum-fw-label':       'F/W',
                 'sum-module-label':   'BLU',
