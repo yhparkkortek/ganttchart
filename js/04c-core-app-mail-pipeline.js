@@ -249,9 +249,22 @@
             //    아직도 그런다"는 재제보가 있었다. 모델 2개 이상이면 고객사 칸의 프로젝트명
             //    (customerProjectParts, 예: "STELLAR32")을 우선하고, 1개뿐이면 그 모델 번호를
             //    그대로 쓴다(단일모델 프로젝트는 기존 동작 불변).
-            model: hasMultiModel
-                ? (customerProjectParts.join(' ') || pm.프로젝트명 || pm.모델명 || pm.고객모델명 || '')
-                : (pm.모델명 || pm.고객모델명 || pm.프로젝트명 || customerProjectParts.join(' ') || ''),
+            // 🆕 [2026-11-19, 사용자 제보 "STELLAR는 고쳤는데 확대 적용이 안 됨"] 위 수정은
+            //    모델이 "여러 개"일 때만 번호 대신 이름을 썼다 — LNW_SHUFFLER(모델 1개, 고객모델명
+            //    "1640994-ALT1")처럼 **모델이 하나뿐인데 그 하나가 번호**인 경우는 그대로 번호가
+            //    업무 보관함 그룹 라벨로 샜다. 같은 원칙을 단일모델에도 넓힌다 — 고객모델명이
+            //    "숫자 5자리 이상 + 하이픈/언더스코어"(순수 코드·PN 패턴, 예: "1640994-ALT1")로
+            //    보이고 고객사 칸에 프로젝트명(SHUFFLER 등)이 있으면 그 이름을 우선한다.
+            //    "KGP-4"·"55J-R1500"처럼 글자로 시작하는 짧은 제품코드는 안 걸린다(숫자로 시작하는
+            //    5자리+ 패턴만 코드로 본다) — 실제 모델명들을 전수로 맞춰본 패턴.
+            model: (function() {
+                var custPart = customerProjectParts.join(' ');
+                var repName = pm.모델명 || pm.고객모델명 || '';
+                if (hasMultiModel) return custPart || pm.프로젝트명 || repName || '';
+                var looksLikeCode = /^\d{5,}[-_]/.test(String(repName).trim());
+                if (looksLikeCode && custPart) return custPart;
+                return repName || pm.프로젝트명 || custPart || '';
+            })(),
             customer: pm.고객사 || '',
             assignee: pm.프로젝트담당자 || '',
             // 🔧 [2026-11-19 사용자 요청] "프로젝트 불러오기" 목록에 M/E(기구) 담당자를 작게
