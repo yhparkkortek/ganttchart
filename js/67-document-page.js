@@ -6755,6 +6755,26 @@
         };
     };
 
+    // 🏷 [2026-11-19] 라벨사양서 전용 — 백엔드 `/doc/label-spec-xlsx`(원본 라벨 블록 + 실제
+    //    도안 이미지)가 기대하는 모양으로 라벨 목록·인증/정격을 모아 준다.
+    window._docLabelSpecFields = function (formId) {
+        var ctx = window._dgCollect(), d = _docData(formId);
+        var val = function (key, from) { return _hasOwn(formId, key) ? d.fields[key] : _autoOf(ctx, from).v; };
+        var lc = d.labelCerts || {};
+        var certs = (lc.certs || []).map(function (r) { return { name: r.name || '', value: r.check || '' }; })
+            .concat((lc.ratings || []).map(function (r) { return { name: r.name || '', value: r.spec || '' }; }));
+        return {
+            fields: {
+                buyer: val('BUYER', 'meta.고객사'), model: val('MODEL', 'meta.모델풀네임'),
+                itemCode: val('품목코드', 'meta.제품코드'), rev: val('REV'), date: val('작성일자', 'today')
+            },
+            items: (d.labelItems || []).map(function (it) {
+                return { size: it.size || '', code: it.code || '', position: it.position || '' };
+            }),
+            certs: certs
+        };
+    };
+
     window._docExport = async function (how) {
         var st = window._docState, form = _formById(st.formId);
         if (!form) { _toast('⚠️ ' + _t('문서를 고르세요.', 'Pick a document.'), 'error'); return; }
@@ -6773,40 +6793,50 @@
         }
         var name = form.nameOf(ctx, opt).replace(/\.(pptx|xlsx)$/i, '') + '.xlsx';
 
-        // 📘 [2026-11-19, 사용자 요청 "첨부해준 엑셀 문서랑 똑같이 못 만들어?"] 모델명세서는
-        //    **원본 파일을 그대로 양식으로** 쓴다(병합 726개·고정 카탈로그·열너비 — 새로 조립하면
-        //    흉내일 뿐 원본이 아니다). 백엔드 `/doc/model-spec-xlsx`가 `templates/모델명세서_양식.xlsx`
-        //    (고객·제품·담당자 값은 전부 지운 빈 양식)를 열어 값만 채워 돌려준다. 백엔드가 없거나
-        //    재시작 전이면(404) 아래 일반 스타일 엑셀로 **조용히 돌아간다**(둘 다 안 되는 건 아니다).
-        if (form.id === 'model-spec') {
-            var msBlob = null, msWhy = '';
+        // 📘🏷 [2026-11-19, 사용자 요청 "첨부해준 엑셀 문서랑 똑같이 못 만들어?"] 일부 서식은
+        //    **원본 파일을 그대로 양식으로** 쓴다(새로 조립하면 병합·레이아웃이 반드시 달라진다).
+        //    백엔드가 `templates/*.xlsx`(고객·제품·담당자 값은 전부 지운 빈 양식)를 열어 값만
+        //    채워 돌려준다. 백엔드가 없거나 재시작 전이면(404) 일반 스타일 엑셀로 **조용히
+        //    돌아간다**(둘 다 안 되는 건 아니다) — 그래서 이 한 함수가 성공 여부를 돌려준다.
+        var _tplFill = async function (endpoint, payload) {
+            var blob = null, why = '';
             try {
-                var msRes = await fetch(BACKEND + '/doc/model-spec-xlsx', {
+                var res = await fetch(BACKEND + endpoint, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name, fields: window._docModelSpecFields(form.id) })
+                    body: JSON.stringify(payload)
                 });
-                if (msRes.ok) { msBlob = await msRes.blob(); }
-                else { try { msWhy = (await msRes.json()).error || ''; } catch (e0) { /* HTML 404 */ } }
-            } catch (eMs) { msWhy = (eMs && eMs.message) || String(eMs); }
-            if (msBlob) {
-                if (how === 'nas') {
-                    if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
-                    _toast('⏳ ' + _t('NAS 에 올리는 중…', 'Uploading…'), 'info');
-                    var msR = await window._dgUploadBlob(_docFolder(ctx), name, msBlob);
-                    if (msR.ok) _toast('📁 ' + _docFolder(ctx) + '/' + msR.name + ' (' + Math.round((msR.size || 0) / 1024) + 'KB)', 'success');
-                    else if (msR.skipped) _toast(_t('올리지 않았습니다.', 'Not uploaded.'), 'info');
-                    else _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + msR.error, 'error');
-                    return;
-                }
-                var msUrl = URL.createObjectURL(msBlob);
-                var msA = document.createElement('a');
-                msA.href = msUrl; msA.download = name;
-                document.body.appendChild(msA); msA.click(); msA.remove();
-                setTimeout(function () { URL.revokeObjectURL(msUrl); }, 10000);
-                _toast('📗 ' + name + ' (' + _t('원본 양식', 'original template') + ')', 'success');
-                return;
+                if (res.ok) { blob = await res.blob(); }
+                else { try { why = (await res.json()).error || ''; } catch (e0) { /* HTML 404 */ } }
+            } catch (e1) { why = (e1 && e1.message) || String(e1); }
+            if (!blob) return why || _t('백엔드 응답 없음', 'no backend response');
+            if (how === 'nas') {
+                if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return true; }
+                _toast('⏳ ' + _t('NAS 에 올리는 중…', 'Uploading…'), 'info');
+                var r = await window._dgUploadBlob(_docFolder(ctx), name, blob);
+                if (r.ok) _toast('📁 ' + _docFolder(ctx) + '/' + r.name + ' (' + Math.round((r.size || 0) / 1024) + 'KB)', 'success');
+                else if (r.skipped) _toast(_t('올리지 않았습니다.', 'Not uploaded.'), 'info');
+                else _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + r.error, 'error');
+                return true;
             }
-            _toast('ℹ️ ' + _t('원본 양식을 못 써서(' + (msWhy || '백엔드 응답 없음') + ') 일반 엑셀로 대신 만듭니다.',
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+            _toast('📗 ' + name + ' (' + _t('원본 양식', 'original template') + ')', 'success');
+            return true;
+        };
+        if (form.id === 'model-spec') {
+            var msR2 = await _tplFill('/doc/model-spec-xlsx', { name: name, fields: window._docModelSpecFields(form.id) });
+            if (msR2 === true) return;
+            _toast('ℹ️ ' + _t('원본 양식을 못 써서(' + msR2 + ') 일반 엑셀로 대신 만듭니다.',
+                              'Could not use the original template — falling back to a plain export.'), 'info');
+        } else if (form.id === 'label-spec') {
+            var payload2 = window._docLabelSpecFields(form.id);
+            payload2.name = name;
+            var lsR = await _tplFill('/doc/label-spec-xlsx', payload2);
+            if (lsR === true) return;
+            _toast('ℹ️ ' + _t('원본 양식을 못 써서(' + lsR + ') 일반 엑셀로 대신 만듭니다.',
                               'Could not use the original template — falling back to a plain export.'), 'info');
         }
 

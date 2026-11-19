@@ -7213,6 +7213,7 @@ _SELF_UPDATE_FILES = [
     'templates/승인원_양식.xlsx',
     'templates/승인원_양식.docx',
     'templates/모델명세서_양식.xlsx',
+    'templates/라벨사양서_양식.xlsx',
 ]
 # ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
 # 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
@@ -8929,6 +8930,106 @@ def doc_model_spec_xlsx():
     except Exception as e:
         return jsonify({'ok': False, 'error': '양식을 채우지 못했습니다: %s' % e}), 500
     name = _docstore_safe_name(req.get('name') or '모델명세서') or '모델명세서'
+    if not name.lower().endswith('.xlsx'):
+        name += '.xlsx'
+    return send_file(bio, as_attachment=True, download_name=name,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ── 🏷 라벨사양서 — 원본처럼 라벨마다 도안 이미지를 박아서 (2026-11-19) ──────────────────
+#    원본 파일들은 라벨 개수마다 블록 높이가 사람 손으로 제각각이라(실측) 그대로 베낄 수
+#    없다 — 대신 **고정 칸 수(N)·균일한 블록**(`templates/라벨사양서_양식.xlsx`)으로 통일하고,
+#    각 블록에 **그 라벨의 실제 도안**을 공용 라이브러리(`라벨도안/<코드>.<ext>`, js/67 이미
+#    쓰는 그 폴더)에서 찾아 박아 넣는다. 라벨이 N개보다 적으면 남는 블록을 숨긴다.
+_LABEL_SPEC_TEMPLATE_XLSX = os.path.join(BASE_DIR, 'templates', '라벨사양서_양식.xlsx')
+_LABEL_SPEC_N = 8            # 양식의 최대 라벨 블록 수(templates 생성 스크립트와 맞출 것)
+_LABEL_SPEC_HEADER_ROWS = 6
+_LABEL_SPEC_BLOCK_H = 15
+
+
+def _label_spec_art_path(code):
+    """공용 라벨도안 라이브러리에서 그 코드의 이미지 파일 경로를 찾는다(없으면 None)."""
+    code = str(code or '').strip()
+    if not code:
+        return None
+    folder, err = _docstore_dir('라벨도안')
+    if err or not folder:
+        return None
+    for ext in ('.png', '.jpg', '.jpeg', '.bmp'):
+        p = os.path.join(folder, code + ext)
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+@app.route('/doc/label-spec-xlsx', methods=['POST'])
+def doc_label_spec_xlsx():
+    """🏷 라벨사양서를 양식에 채워 돌려준다 — 라벨마다 규격·코드·부착위치 + 실제 도안 이미지.
+    받는 것: `{ name, fields:{buyer,model,itemCode,rev,date}, items:[{size,code,position}…],
+               certs:[{name,value}…] }`. 라벨이 없는 블록은 숨긴다. ⚠️ 읽기 전용(NAS 에 안 쓴다)."""
+    try:
+        import openpyxl
+        from openpyxl.drawing.image import Image as XLImage
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'openpyxl이 없습니다: %s' % e}), 500
+    if not os.path.exists(_LABEL_SPEC_TEMPLATE_XLSX):
+        return jsonify({'ok': False, 'error': '양식 파일을 찾을 수 없습니다 — 백엔드를 재시작해 주세요.'}), 404
+    req = request.get_json(silent=True) or {}
+    fields = req.get('fields') or {}
+    items = req.get('items') or []
+    certs = req.get('certs') or []
+    if not isinstance(fields, dict):
+        fields = {}
+    if not isinstance(items, list):
+        items = []
+    if not isinstance(certs, list):
+        certs = []
+    items = items[:_LABEL_SPEC_N]
+    try:
+        wb = openpyxl.load_workbook(_LABEL_SPEC_TEMPLATE_XLSX)
+        ws = wb[wb.sheetnames[0]]
+        ws['T1'] = fields.get('date') or ''
+        ws['T3'] = fields.get('rev') or ''
+        ws['D5'] = fields.get('buyer') or ''
+        ws['L5'] = fields.get('model') or ''
+        ws['T5'] = fields.get('itemCode') or ''
+
+        for i in range(1, _LABEL_SPEC_N + 1):
+            r0 = _LABEL_SPEC_HEADER_ROWS + 1 + _LABEL_SPEC_BLOCK_H * (i - 1)
+            r1 = r0 + _LABEL_SPEC_BLOCK_H - 1
+            it = items[i - 1] if i <= len(items) else None
+            # ⚠️ 쓰기는 **병합 칸의 왼쪽-위 셀에만** — openpyxl 은 병합된 나머지 칸에 값을 쓰면 예외를 낸다.
+            if it:
+                ws.cell(row=r0, column=15, value=it.get('size') or '')     # O{r0}
+                ws.cell(row=r0, column=18, value=it.get('code') or '')     # R{r0}
+                ws.cell(row=r0, column=22, value=it.get('position') or '')  # V{r0}
+                art = _label_spec_art_path(it.get('code'))
+                if art:
+                    try:
+                        img = XLImage(art)
+                        # 블록(14열×15행)에 대충 맞도록 — 원본 비율은 유지하고 폭만 맞춘다.
+                        max_w = 330
+                        if img.width > max_w:
+                            ratio = max_w / float(img.width)
+                            img.width = max_w
+                            img.height = int(img.height * ratio)
+                        ws.add_image(img, f'A{r0}')
+                    except Exception:
+                        pass  # 도안을 못 읽어도 칸 값(규격/코드/부착위치)은 그대로 나간다
+                if i == 1:
+                    for j, c in enumerate(certs[:_LABEL_SPEC_BLOCK_H - 2]):
+                        rr = r0 + 1 + j
+                        ws.cell(row=rr, column=26, value=str((c or {}).get('name') or ''))   # Z{rr}
+                        ws.cell(row=rr, column=28, value=str((c or {}).get('value') or ''))  # AB{rr}
+            else:
+                for rr in range(r0, r1 + 1):
+                    ws.row_dimensions[rr].hidden = True
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': '양식을 채우지 못했습니다: %s' % e}), 500
+    name = _docstore_safe_name(req.get('name') or '라벨사양서') or '라벨사양서'
     if not name.lower().endswith('.xlsx'):
         name += '.xlsx'
     return send_file(bio, as_attachment=True, download_name=name,
