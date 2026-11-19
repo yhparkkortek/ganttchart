@@ -4033,16 +4033,64 @@
     };
 
     // ── 📄 드롭다운 (PARTS 와 같은 방식·같은 팝업 클래스) ────────────────
+    // 🖱️ [2026-11-19 요청] 마우스로 끌어서 순서를 바꿀 수 있게 — js/23 사이드바 메뉴와
+    //    **같은 패턴**(별도 placeholder 없이 걸쳐진 항목의 위/아래로 바로 옮긴다). 순서는
+    //    사람 취향이라 프로젝트 데이터가 아니라 **이 PC 의 localStorage** 에 둔다.
+    var DOC_FORM_ORDER_KEY = 'gantt_docform_order_v1';
+    var _docOrderForms = function (forms) {
+        var saved;
+        try { saved = JSON.parse(localStorage.getItem(DOC_FORM_ORDER_KEY) || 'null'); } catch (e) { saved = null; }
+        if (!saved || !saved.length) return forms;
+        var byId = {};
+        forms.forEach(function (f) { byId[f.id] = f; });
+        var out = [];
+        saved.forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
+        // 저장 뒤 새로 생긴(또는 숨김이 풀린) 서식은 원래 순서 그대로 끝에 붙는다.
+        forms.forEach(function (f) { if (byId[f.id]) out.push(f); });
+        return out;
+    };
+    var _docSaveFormOrder = function (pop) {
+        var order = Array.prototype.map.call(
+            pop.querySelectorAll('[data-doc-form-id]'),
+            function (el) { return el.getAttribute('data-doc-form-id'); }
+        );
+        try { localStorage.setItem(DOC_FORM_ORDER_KEY, JSON.stringify(order)); } catch (e) { /* ignore */ }
+    };
+    var _docInitFormDragReorder = function (pop) {
+        var dragEl = null;
+        pop.querySelectorAll('[data-doc-form-id]').forEach(function (el) {
+            el.setAttribute('draggable', 'true');
+            el.addEventListener('dragstart', function (e) {
+                dragEl = el;
+                el.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', el.getAttribute('data-doc-form-id')); } catch (err) { /* ignore */ }
+            });
+            el.addEventListener('dragend', function () {
+                el.style.opacity = '';
+                dragEl = null;
+                _docSaveFormOrder(pop);
+            });
+            el.addEventListener('dragover', function (e) {
+                if (!dragEl || dragEl === el) return;
+                e.preventDefault();
+                var rect = el.getBoundingClientRect();
+                var before = (e.clientY - rect.top) < rect.height / 2;
+                pop.insertBefore(dragEl, before ? el : el.nextSibling);
+            });
+            el.addEventListener('drop', function (e) { e.preventDefault(); });
+        });
+    };
     window._toggleDocFormDropdown = function (ev) {
         if (ev) ev.stopPropagation();
         var pop = document.getElementById('doc-form-dropdown');
         if (!pop) return;
         if (pop.style.display === 'block') { pop.style.display = 'none'; return; }
         var cur = window._docState.formId;
-        pop.innerHTML = window._docVisibleForms().map(function (f) {
+        pop.innerHTML = _docOrderForms(window._docVisibleForms()).map(function (f) {
             var on = f.id === cur;
-            return '<div onclick="window._docPick(\'' + _esc(f.id) + '\')"'
-                 + ' style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px;'
+            return '<div data-doc-form-id="' + _esc(f.id) + '" onclick="window._docPick(\'' + _esc(f.id) + '\')"'
+                 + ' style="padding:8px 10px; cursor:grab; border-radius:4px; font-size:13px;'
                  + ' font-weight:bold; white-space:nowrap;'
                  + ' background:' + (on ? '#00707d' : 'transparent') + '; color:' + (on ? '#fff' : '#333') + ';"'
                  + ' onmouseover="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'#f1f3f5\';"'
@@ -4051,6 +4099,7 @@
                  + (f.builder ? '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">PPT</span>' : '')
                  + '</div>';
         }).join('');
+        _docInitFormDragReorder(pop);
         // 📍 [2026-11-11 신고 "드롭다운 가려짐"] 자리를 **직접 잡는다** — PARTS 와 같은 방식
         //    (js/23 `_toggleElecViewDropdown`: `rect.left` · `rect.bottom + 4`).
         //    ⚠️⚠️ `.row-action-popup` 은 `position:fixed` 인데 제 `top/left` 가 없다. 안 잡아 주면
