@@ -2542,6 +2542,56 @@
         return headers;
     };
 
+    // ⚠️⚠️ [2026-11-19, 사용자 실측 1625820 등] **4번째 MATRIX 모양** — 행이 REVISION이
+    // 아니라 **부품번호(-ALTn/-VAR)로 시작**하고 "DISPLAY INFORMATION MATRIX" 캡션 자체가
+    // 없는 문서 집안(실측: 1625820·1632736·1644741·1617498·1622777·1602012). 드문 경우
+    // (1576437)는 반대로 **VENDOR·모델#이 먼저**다. 뒤 칸(모델#·설명·터치·패널·VIDEO F/W)은
+    // 문서마다 앞/뒤 다른 줄로 흩어지고(pdf.js Y띠 혼합) 구성도 제각각이라 — **PN·REV·VENDOR
+    // 세 칸만 확실히 건지고**(실측 전부 한 줄에 흩어짐 없이 있음), 그 뒤는 **실측으로 확인된
+    // 두 가지 깨끗한 모양일 때만** 더 채운다. 안 맞으면 그 칸은 비운다(모자라면 그대로 둔다 —
+    // 틀리게 채우지 않는다). 나머지는 "📷 표제란 그림으로 보기"로 사람이 직접 읽는다.
+    var _MAT_PN_FIRST_RE = /^(\S*\d{5,}\S*-(?:ALT\d*|VAR))\s+([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(\S+)(?:\s+(.*))?$/;
+    var _MAT_VENDOR_FIRST_RE = /^(\S+)\s+(\S+)\s+([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(\S*\d{5,}\S*-(?:ALT\d*|VAR))\s*$/;
+    var _matPnFirstRows = function (L) {
+        var rows = [], seen = {};
+        var addRow = function (row) {
+            var key = row[0] + '|' + row[1];
+            if (seen[key]) return;
+            seen[key] = true;
+            rows.push(row);
+        };
+        for (var i = 0; i < L.length; i++) {
+            var m = L[i].match(_MAT_PN_FIRST_RE);
+            if (m && _VENDORS.indexOf(m[3].toUpperCase()) !== -1) {
+                var pn = m[1].replace(/\s*-\s*/, '-'), rev = m[2].replace(/\s*-\s*/, '-');
+                var row = [pn, rev, m[3], '', '', '', '', '', '', ''];
+                var tail = m[4] ? m[4].trim().replace(/\s+/g, ' ').split(' ') : [];
+                // 모양 1: "터치센서 컨트롤러 V실수.실수(F/W) 패널 VIDEO F/W" 딱 5토큰
+                //    (실측 1632736·1644741·1617498).
+                if (tail.length === 5 && /^V[\d.]+$/i.test(tail[2])) {
+                    row[5] = tail[0]; row[6] = tail[1]; row[7] = tail[2]; row[8] = tail[3]; row[9] = tail[4];
+                } else if (tail.length === 6 && /\d/.test(tail[0]) && /^N\/A$/i.test(tail[1])
+                           && /^N\/A$/i.test(tail[2]) && /^N\/A$/i.test(tail[3])) {
+                    // 모양 2: "모델# N/A N/A N/A 패널 VIDEO F/W" (실측 1622777·1602012 일부 행).
+                    row[3] = tail[0]; row[5] = row[6] = row[7] = 'N/A'; row[8] = tail[4]; row[9] = tail[5];
+                }
+                addRow(row);
+                continue;
+            }
+            var m2 = L[i].match(_MAT_VENDOR_FIRST_RE);
+            if (m2 && _VENDORS.indexOf(m2[1].toUpperCase()) !== -1) {
+                // 드문 반대 순서(실측 1576437): VENDOR 모델# REV PN, 그 뒤엔 아무것도 안 달려 있다.
+                addRow([m2[4].replace(/\s*-\s*/, '-'), m2[3].replace(/\s*-\s*/, '-'), m2[1], m2[2], '', '', '', '', '', '']);
+            }
+        }
+        if (!rows.length) return null;
+        return {
+            headers: ['PART NUMBER', 'REVISION', 'VENDOR', 'VENDOR MODEL #', 'DESCRIPTION',
+                      'TOUCH SENSOR', 'TOUCH SCREEN CONTROLLER', 'TOUCH F/W', 'PANEL', 'VIDEO F/W'],
+            rows: rows
+        };
+    };
+
     /** ① REVISIONS 표 → [{rev, desc, by, date}] (도면에 적힌 순서 그대로)
      *  ⚠️ 양식이 두 가지다(실측):
      *     A) `REV. | DESCRIPTION | DRAWN BY | DATE` — 작성자와 날짜가 **각각 한 줄**
@@ -2671,7 +2721,10 @@
             if (atLoose < 0 && /DISPLAY INFORMATION MATRIX/i.test(L[i])) atLoose = i;
         }
         if (at < 0) at = atLoose;
-        if (at < 0) return { headers: [], rows: [] };
+        if (at < 0) {
+            var pnFirst = _matPnFirstRows(L);
+            return pnFirst || { headers: [], rows: [] };
+        }
 
         // 머리글 — 첫 리비전 칸이 나오기 전까지
         // ⚠️⚠️ [2026-11-11] "줄=칸"(PyMuPDF) 모양 전용 가정 — 리비전 칸이 **그 줄 하나뿐**이어야
@@ -2763,6 +2816,26 @@
             text = await window._pxExtractText(file, null);
         }
         return text || '';
+    };
+
+    // ⚠️⚠️ [2026-11-19] MATRIX 표가 부품번호로 시작하는 등 양식이 너무 다양해(사용자 실측
+    // 1625820 등) 글자만으로 칸을 다 못 꿰맨다 — 그런 칸은 억지로 채우지 않고, **그 자리를
+    // 사진으로 대신 보여준다**(사용자 제안: "스캔 문자화 하지 말고 그림으로 가져와도 됨").
+    // js/22d `_pcRenderPdfAsImages`와 같은 pdf.js 캔버스 렌더링 — 매트릭스·REVISIONS 모두
+    // 보통 1페이지(표제란)에 있어 기본은 1페이지만. 느려서(렌더+인코딩) **누를 때만** 돈다.
+    window._plDocPageImage = async function (folder, fileName, pageNum) {
+        if (!window.pdfjsLib) throw new Error(_t('PDF 처리 기능을 불러오지 못했습니다.', 'PDF support failed to load.'));
+        if (!window._dsFileOf) throw new Error(_t('파일을 가져오는 기능이 없습니다.', 'No file-fetch function available.'));
+        var file = await window._dsFileOf(folder, fileName);
+        var buf = await file.arrayBuffer();
+        var pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+        var page = await pdf.getPage(pageNum || 1);
+        var viewport = page.getViewport({ scale: 2 });
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+        return { dataUrl: canvas.toDataURL('image/jpeg', 0.9), numPages: pdf.numPages };
     };
 
     window.plOpenRevisions = async function (id, fileName) {
@@ -2899,16 +2972,42 @@
                 + ' <span style="color:#888;">' + mat.rows.length + _t('건 · KORTEK 행은 연한 배경', ' rows · KORTEK rows tinted') + '</span></div>'
                 + '<div style="max-height:30vh; overflow:auto; border:1px solid #e3e6ea; border-radius:6px;">' + matHtml + '</div>'
               : '')
-          + '<div style="margin-top:11px; display:flex; gap:6px; align-items:center;">'
+          // ⚠️ [2026-11-19] 글자로 못 꿰맨 칸(모델#·설명 등)은 억지로 채우지 않고 **표제란을
+          // 그림으로** 보여준다(사용자 제안) — 누를 때만 렌더링(느림: 캔버스+인코딩).
+          + '<div id="pl-rev-pageimg" style="display:none; margin-top:10px; text-align:center; border:1px solid #e3e6ea; border-radius:6px; padding:6px; max-height:60vh; overflow:auto;"></div>'
+          + '<div style="margin-top:11px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">'
           + (revs.length
               ? _plBtn('success', '✅ ' + _t('최신 REV(', 'Use latest REV (') + _esc(revs[revs.length - 1].rev) + _t(')를 이 행에 넣기', ') for this row'), 'window.plUseLatestRev()')
               : '')
           + _plBtn('primary', '📜 ' + _t('도면 열기', 'Open drawing'), 'window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(pick) + '\')')
+          + _plBtn('neutral', '📷 ' + _t('표제란 그림으로 보기', 'View title block as image'), 'window._plTogglePageImage()')
           + _plBtn('neutral', '📁 ' + _t('문서함', 'Documents'), 'window.plOpenDocBox(\'' + id + '\')')
           + '<span style="margin-left:auto;">' + _plBtn('close', _t('닫기', 'Close'), 'window.plClosePopup()') + '</span>'
           + '</div>';
         var b = document.getElementById('pl-rev-body');
         if (b) { b.style.color = ''; b.innerHTML = html; }
+    };
+
+    /** 📷 표제란(보통 1페이지)을 그림으로 보여준다 — 글자로 못 읽은 칸(모델#·설명 등)을
+     *  사람이 직접 읽게 한다. 누를 때만 렌더링하고(느림), 한 번 그리면 다시 안 그린다. */
+    window._plTogglePageImage = async function () {
+        var box = document.getElementById('pl-rev-pageimg');
+        var c = window._plRevCache;
+        if (!box || !c) return;
+        if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        if (box.getAttribute('data-loaded') === '1') return;
+        box.innerHTML = '<div style="color:#888; padding:10px;">' + _t('그리는 중…', 'Rendering…') + '</div>';
+        try {
+            var img = await window._plDocPageImage(NAS_FOLDER, c.file, 1);
+            box.setAttribute('data-loaded', '1');
+            box.innerHTML = '<img src="' + img.dataUrl + '" style="max-width:100%; height:auto;">'
+                + (img.numPages > 1
+                    ? '<div style="font-size:11px; color:#888; margin-top:4px;">' + _t('1페이지만 표시(전체 ', 'Showing page 1 only (') + img.numPages + _t('페이지 중)', ' pages total)') + '</div>'
+                    : '');
+        } catch (e) {
+            box.innerHTML = '<div style="color:#b1432f; padding:10px;">' + _esc(e && e.message ? e.message : e) + '</div>';
+        }
     };
 
     /** 도면의 최신 REV 를 이 행의 Agile REV 칸에 넣는다(사람이 눌렀을 때만) */
