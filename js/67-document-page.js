@@ -1750,17 +1750,23 @@
         _docLabelRefresh();
         await window._docLabelNotesSave(code);
     };
-    // 📋 [2026-11-13, 사용자 요청] "도표 형태로도 작성 가능했으면" — 도안을 클릭하지 않고 글만 입력해
-    //    표처럼 줄줄이 추가한다. 자리는 기본값(왼쪽 위부터 아래로 쌓기)이고, 정확한 위치는 추가한
-    //    뒤 끌어서(드래그) 옮기면 된다 — 빈 라벨지에 Part No·Q'ty 같은 여러 항목을 한 번에 채울 때 유용.
-    window._docLabelNoteQuickAdd = async function (code) {
-        var inp = document.getElementById('doclabelart-newnote');
-        var text = inp && inp.value && inp.value.trim();
-        if (!text) return;
+    // 📋➕ [2026-11-19, 사용자 요청] "+ 새 표시 내용 입력할 수 있도록 행 추가되는 걸로 + 버튼
+    //    추가(오른쪽 하단 모서리에 있는 건 삭제)" — 옛 우하단 구석 칸(먼저 입력 → 추가)을
+    //    없애고, 목록 맨 끝에 **빈 행을 바로 하나 추가**해 그 자리에서 곧장 타이핑하게 한다.
+    //    자리는 기본값(왼쪽 위부터 아래로 쌓기)이고, 정확한 위치는 추가한 뒤 끌어서 옮기면 된다.
+    window._docLabelNoteAddBlankRow = async function (code) {
         var list = window._docLabelNotesCache[code] = window._docLabelNotesCache[code] || [];
         var y = Math.min(0.92, 0.08 + list.length * 0.09);
-        list.push({ x: 0.1, y: y, text: text });
+        var newIdx = list.length;
+        list.push({ x: 0.1, y: y, text: '' });
+        window._docLabelClearOtherActive('note');
+        window._docLabelActiveNote = { code: code, idx: newIdx };
         _docLabelRefresh();
+        // `_docLabelRefresh` 는 동기적으로 `innerHTML` 을 바꾸므로 그 직후 바로 새 행의 textarea 를
+        //    찾아 포커스할 수 있다 — 사람이 "+" 를 누르자마자 타이핑만 하면 되게.
+        var row = document.querySelector('[data-note-list-code="' + CSS.escape(code) + '"] [data-note-row][data-note-idx2="' + newIdx + '"]');
+        var ta = row && row.querySelector('textarea');
+        if (ta) ta.focus();
         await window._docLabelNotesSave(code);
     };
     // 🔲🔲 [2026-11-18 2차, 사용자 요청] "바코드 또는 이미지 모두 기능 적용 / 배경 클릭하면 해제" —
@@ -2440,6 +2446,38 @@
                 //    `isContentEditable` 도 같이 걸러야 한다 — 안 그러면 글자 커서를 옮기려는 화살표
                 //    키를 이 핸들러가 가로채 마커 전체를 움직여 버린다.
                 if (ev.target && (ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT' || ev.target.isContentEditable)) return;
+                // 📋📋 [2026-11-19, 사용자 요청] "이미 작성된 상자를 복사·붙여넣기 — 번호는 다음
+                //    번호로 채번(내용은 동일), Ctrl+C·Ctrl+V" — 지금 선택된 표시(TXT) 하나를
+                //    Ctrl+C 로 기억해 두고 Ctrl+V 로 그 내용 그대로 새 표시를 맨 뒤에 추가한다
+                //    (배열 끝에 붙으므로 번호는 저절로 "다음 번호"). 완전히 겹치면 구분이 안
+                //    되니 살짝 어긋나게 둔다 — 정확한 자리는 그 뒤 끌어서 옮기면 된다.
+                if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'c' || ev.key === 'C')) {
+                    var activeNote = window._docLabelActiveNote;
+                    var m3 = window._docLabelArtModal;
+                    if (activeNote && m3 && activeNote.code === m3.code) {
+                        var srcList = window._docLabelNotesCache[activeNote.code] || [];
+                        var srcNote = srcList[activeNote.idx];
+                        if (srcNote) window._docLabelNoteClipboard = JSON.parse(JSON.stringify(srcNote));
+                    }
+                    return;
+                }
+                if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'v' || ev.key === 'V')) {
+                    var m4 = window._docLabelArtModal;
+                    if (m4 && window._docLabelNoteClipboard) {
+                        ev.preventDefault();
+                        var list4 = window._docLabelNotesCache[m4.code] = window._docLabelNotesCache[m4.code] || [];
+                        var pasted = JSON.parse(JSON.stringify(window._docLabelNoteClipboard));
+                        pasted.x = Math.min(0.97, (pasted.x || 0) + 0.03);
+                        pasted.y = Math.min(0.97, (pasted.y || 0) + 0.03);
+                        var pastedIdx = list4.length;
+                        list4.push(pasted);
+                        window._docLabelClearOtherActive('note');
+                        window._docLabelActiveNote = { code: m4.code, idx: pastedIdx };
+                        _docLabelRefresh();
+                        window._docLabelNotesSave(m4.code);
+                    }
+                    return;
+                }
                 var dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
                 var d = dirs[ev.key];
                 if (!d) return;
@@ -2592,8 +2630,13 @@
             // ⚠️ [2026-11-13, 사용자 요청] 표시 입력칸도 비고·기재내용과 같이 textarea — 한 줄 `<input>`
             //    은 Enter 로 줄을 못 나눈다. 새로 추가하는 칸은 Enter 가 줄바꿈으로 바뀌었으니 **추가는
             //    Ctrl+Enter 로**(또는 ＋ 추가 버튼).
-            + (notes.length ? '<div data-note-list data-note-list-code="' + _esc(code) + '" style="text-align:left; font-size:11.5px;'
-                + ' color:#495057; margin-top:8px; border-top:1px solid #e9ecef; padding-top:6px;">'
+            // 📜 [2026-11-19, 사용자 요청] "5개 넘어가면 스크롤" — 목록 자체가 끝없이 길어지던 것을
+            //    5줄 높이로 고정하고 그 안에서만 스크롤(`overflow-y:auto`). ⚠️ 목록은 이제 항목이
+            //    0개여도 **항상 그린다** — 아래 "+추가" 줄이 유일한 추가 입구라 숨기면 안 된다(옛
+            //    우하단 구석 칸을 없앴다).
+            + '<div data-note-list data-note-list-code="' + _esc(code) + '" style="text-align:left; font-size:11.5px;'
+                + ' color:#495057; margin-top:8px; border-top:1px solid #e9ecef; padding-top:6px;'
+                + (notes.length > 5 ? ' max-height:150px; overflow-y:auto;' : '') + '">'
                 + notes.map(function (n, ni) {
                     // ↔ [2026-11-13, 사용자 요청] "정렬 기능 추가해줘(왼쪽·가운데·오른쪽)" — 글자 하나씩
                     //    고르는 토글 셋, 지금 값은 굵게 표시.
@@ -2609,17 +2652,11 @@
                     // ⠿ [2026-11-13, 사용자 요청] "마우스로 잡아서 위치 이동가능하도록 / 번호 순서
                     //    변경되도록" — 손잡이를 끌면 그 자리에 끼워 넣고 번호(N.)는 새 자리 기준으로
                     //    다시 매겨진다(순서 자체가 배열 순서라 따로 번호를 옮길 필요가 없다).
-                    // 🗑🗑 [2026-11-13 4차, 사용자 요청] "이 라벨 빼기 X 버튼은 숫자 왼쪽으로 X 박스로
-                    //    만들어서 배치해줘" — 줄 끝에 있던 ✕ 를 손잡이 바로 다음, 번호 왼쪽으로 옮기고
-                    //    테두리 있는 작은 박스로(메인 표 NO 칸의 ✕ 와 같은 모양).
+                    // 🗑🗑 [2026-11-19, 사용자 요청] "X 버튼은 끝으로 이동" — 번호 왼쪽에 있던 ✕ 를
+                    //    정렬 버튼(좌중우) 뒤, 줄 맨 끝으로 옮긴다.
                     return '<div data-note-row data-note-idx2="' + ni + '" style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
                         + '<span data-note-reorder-handle title="' + _esc(_t('끌어서 순서 바꾸기', 'drag to reorder')) + '"'
                         + ' style="flex:0 0 1.1em; text-align:center; padding-top:2px; cursor:grab; color:#adb5bd; user-select:none;">⠿</span>'
-                        + '<a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni + ');return false;"'
-                        + ' title="' + _esc(_t('이 표시 빼기', 'remove')) + '"'
-                        + ' style="flex:0 0 14px; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px;'
-                        + ' margin-top:2px; border:1px solid #808080; border-radius:3px; color:#808080; text-decoration:none;'
-                        + ' font-weight:bold; font-size:9px; line-height:1;">✕</a>'
                         + '<span style="flex:0 0 1.6em; text-align:right; padding-top:2px;">' + (ni + 1) + '.</span>'
                         // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] `oninput`
                         //    으로 타이핑하는 즉시 도안 위 글자상자만 가볍게 고쳐쓴다(전체 다시 그리기는
@@ -2631,40 +2668,26 @@
                         + ' onchange="window._docLabelNoteTextEdit(\'' + _esc(code) + '\',' + ni + ',this.value)"'
                         + ' style="flex:1; font-size:11.5px; padding:2px 5px; text-align:left; resize:vertical; font-family:inherit;">'
                         + _esc(n.text) + '</textarea>'
-                        + '<span style="white-space:nowrap;">' + alignBtns + '</span></div>';
-                }).join('') + '</div>' : '');
-            // 📍 [2026-11-13 4차, 사용자 요청] "하단 구석으로 배치하는게 좋을것 같음 실수로 누르지
-            //    않게" — "새 표시 내용" 입력+추가는 번호 목록 흐름 속에 있으면 스크롤·드래그 중
-            //    실수로 눌리기 쉬웠다. 목록 밖, 모달 하단 구석에 고정된 별도 칸으로 뺀다
-            //    (`#doclabelart-newnote-corner`, 아래에서 따로 그린다).
+                        + '<span style="white-space:nowrap;">' + alignBtns + '</span>'
+                        + '<a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni + ');return false;"'
+                        + ' title="' + _esc(_t('이 표시 빼기', 'remove')) + '"'
+                        + ' style="flex:0 0 14px; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px;'
+                        + ' margin-top:2px; border:1px solid #808080; border-radius:3px; color:#808080; text-decoration:none;'
+                        + ' font-weight:bold; font-size:9px; line-height:1;">✕</a></div>';
+                }).join('')
+                // ➕ [2026-11-19, 사용자 요청] "+ 새 표시 내용 입력할 수 있도록 행 추가되는 걸로 +
+                //    버튼 추가 (오른쪽 하단 모서리에 있는 건 삭제)" — 목록 맨 끝에 빈 행을 하나
+                //    더하고(`_docLabelNoteAddBlankRow`) 그 자리에서 바로 타이핑한다. 옛 우하단
+                //    구석 칸(먼저 입력 → 추가)은 없앴다.
+                + '<div style="display:flex; align-items:center; gap:4px; margin-top:4px;">'
+                + '<span style="flex:0 0 1.1em;"></span>'
+                + '<a href="#" onclick="window._docLabelNoteAddBlankRow(\'' + _esc(code) + '\');return false;"'
+                + ' style="flex:1; text-align:center; padding:3px; border:1px dashed #a3d9e0; border-radius:4px;'
+                + ' color:#00707d; font-weight:bold; font-size:11.5px; text-decoration:none; background:#e0f5f7;">'
+                + '＋ ' + _esc(_t('새 표시 추가', 'Add note')) + '</a></div>'
+                + '</div>';
         var bodyEl = document.getElementById('doclabelart-body');
         if (bodyEl) bodyEl.innerHTML = h;
-        // 📍 [2026-11-13 4차, 사용자 요청] "새 표시 내용을 하단 구석으로 — 실수로 누르지 않게" —
-        //    목록 흐름 밖, 모달 상자(`#doclabelart-box`) 우하단 구석에 고정된 별도 칸을 둔다.
-        //    `idle` 이 아닐 때(표시추가·자르기 중)는 치운다.
-        (function () {
-            var boxEl = document.getElementById('doclabelart-box');
-            var corner = document.getElementById('doclabelart-newnote-corner');
-            if (!idle) { if (corner) corner.remove(); return; }
-            if (!corner && boxEl) {
-                corner = document.createElement('div');
-                corner.id = 'doclabelart-newnote-corner';
-                corner.style.cssText = 'position:absolute; right:10px; bottom:10px; width:230px; display:flex;'
-                    + ' flex-direction:column; gap:4px; background:#fff; border:1px solid #a3d9e0; border-radius:8px;'
-                    + ' padding:6px; box-shadow:0 2px 8px rgba(0,0,0,.18); z-index:5;';
-                boxEl.appendChild(corner);
-            }
-            if (corner) {
-                corner.innerHTML = '<textarea id="doclabelart-newnote" rows="1" placeholder="' + _esc(_t('새 표시 내용을 입력(추가는 Ctrl+Enter)',
-                      'Type a new note (Ctrl+Enter to add)')) + '"'
-                    + ' onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){window._docLabelNoteQuickAdd(\'' + _esc(code)
-                    + '\');return false;}" style="width:100%; font-size:11.5px; padding:4px 6px; text-align:left; resize:vertical;'
-                    + ' font-family:inherit; box-sizing:border-box;"></textarea>'
-                    + '<button onclick="window._docLabelNoteQuickAdd(\'' + _esc(code) + '\')" style="padding:4px 10px; font-size:11.5px;'
-                    + ' cursor:pointer; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;'
-                    + ' align-self:flex-end;">＋ ' + _esc(_t('추가', 'Add')) + '</button>';
-            }
-        })();
         // 렌더 직후 한 번만 — `innerHTML` 교체로 옛 리스너는 이미 사라졌다(따로 뗄 필요 없음).
         var img = document.getElementById('doclabelart-img');
         var handle = bodyEl && bodyEl.querySelector('[data-resize-handle]');
