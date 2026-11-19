@@ -2823,19 +2823,96 @@
     // 사진으로 대신 보여준다**(사용자 제안: "스캔 문자화 하지 말고 그림으로 가져와도 됨").
     // js/22d `_pcRenderPdfAsImages`와 같은 pdf.js 캔버스 렌더링 — 매트릭스·REVISIONS 모두
     // 보통 1페이지(표제란)에 있어 기본은 1페이지만. 느려서(렌더+인코딩) **누를 때만** 돈다.
-    window._plDocPageImage = async function (folder, fileName, pageNum) {
+    /** 📷 [2026-11-19 2차, 사용자 요청 "해당 도표만 그림으로" + "오른쪽 상단(REVISIONS)도
+     *  어려우면 그 표도 그림으로"] 표제란 전체가 아니라 **REVISIONS·MATRIX 표가 있는 Y 띠만
+     *  각각 잘라서** 돌려준다. pdf.js `getTextContent()`의 글자별 y좌표(`transform[5]`)로 어느
+     *  줄이 표 행인지 찾는다 — `_lines()`가 이미 하는 "y좌표로 같은 줄 묶기"를 여기선 **좌표를
+     *  보존한 채로** 다시 한다(캐시된 글자만으론 좌표가 사라져 있어 못 쓴다). 둘 다 못 찾으면
+     *  **표제란 전체**로 조용히 물러난다 — 잘못 잘라 표의 반쪽만 보여주느니 전체를 보여주는
+     *  쪽이 안전하다(틀리게 자르지 않는다). */
+    var _plCropByLineRange = function (canvas, viewport, raw, topIdx, lastIdx, padPdf, pageWidthPdf) {
+        var yTop = raw[topIdx].y + padPdf, yBot = raw[lastIdx].y - padPdf;
+        var pTopLeft = viewport.convertToViewportPoint(0, yTop);
+        var pBotRight = viewport.convertToViewportPoint(pageWidthPdf, yBot);
+        var sy = Math.max(0, Math.min(pTopLeft[1], pBotRight[1]));
+        var sh = Math.min(canvas.height, Math.max(pTopLeft[1], pBotRight[1])) - sy;
+        if (sh <= 10) return null;
+        var out = document.createElement('canvas');
+        out.width = canvas.width; out.height = sh;
+        out.getContext('2d').drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+        return out.toDataURL('image/jpeg', 0.9);
+    };
+    window._plTableCropImages = async function (folder, fileName, pageNum) {
         if (!window.pdfjsLib) throw new Error(_t('PDF 처리 기능을 불러오지 못했습니다.', 'PDF support failed to load.'));
         if (!window._dsFileOf) throw new Error(_t('파일을 가져오는 기능이 없습니다.', 'No file-fetch function available.'));
         var file = await window._dsFileOf(folder, fileName);
         var buf = await file.arrayBuffer();
         var pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
         var page = await pdf.getPage(pageNum || 1);
-        var viewport = page.getViewport({ scale: 2 });
+        var scale = 2.5;
+        var viewport = page.getViewport({ scale: scale });
+        var pageWidthPdf = viewport.viewBox ? viewport.viewBox[2] : viewport.width / scale;
         var canvas = document.createElement('canvas');
         canvas.width = Math.round(viewport.width);
         canvas.height = Math.round(viewport.height);
         await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
-        return { dataUrl: canvas.toDataURL('image/jpeg', 0.9), numPages: pdf.numPages };
+        var fullDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+        var content = await page.getTextContent();
+        var raw = [];
+        content.items.forEach(function (it) {
+            var y = (it.transform && typeof it.transform[5] === 'number') ? it.transform[5] : 0;
+            var x = (it.transform && typeof it.transform[4] === 'number') ? it.transform[4] : 0;
+            var line = raw.filter(function (l) { return Math.abs(l.y - y) <= 2; })[0];
+            if (!line) { line = { y: y, items: [] }; raw.push(line); }
+            line.items.push({ x: x, str: it.str });
+        });
+        raw.sort(function (a, b) { return b.y - a.y; });
+        var L = raw.map(function (l) {
+            l.items.sort(function (a, b) { return a.x - b.x; });
+            return l.items.map(function (it) { return it.str; }).join(' ').replace(/\s+/g, ' ').trim();
+        });
+
+        // ① MATRIX 행 — PN-시작·VENDOR-시작(새 4번째 양식) + 기존 REV-시작(vi0/vi1/vi2) 양식.
+        var matHit = [];
+        for (var i = 0; i < L.length; i++) {
+            var s = _stripZoneLetters(L[i]);
+            var mpn = s.match(_MAT_PN_FIRST_RE);
+            if (mpn && _VENDORS.indexOf((mpn[3] || '').toUpperCase()) !== -1) { matHit.push(i); continue; }
+            var mv = s.match(_MAT_VENDOR_FIRST_RE);
+            if (mv && _VENDORS.indexOf((mv[1] || '').toUpperCase()) !== -1) { matHit.push(i); continue; }
+            var mr = s.match(/^([A-Z](?:\.\d+)?(?:\s*-\s*[A-Z](?:\.\d+)?)?)\s+(.*)$/);
+            if (mr && !_DATE_RE.test(mr[2])) {
+                var toks = mr[2].split(/\s+/);
+                for (var k = 0; k < toks.length && k < 5; k++) {
+                    if (_VENDORS.indexOf(toks[k].toUpperCase()) !== -1) { matHit.push(i); break; }
+                }
+            }
+        }
+        // ② REVISIONS 행 — 줄 끝이 날짜로 끝나는 줄(=`_revFromLineRows`와 같은 anchor 신호).
+        var revHit = [];
+        for (var j = 0; j < L.length; j++) {
+            if (new RegExp(_DATE_RE.source + '\\s*$', 'i').test(L[j])) revHit.push(j);
+        }
+
+        var cropRange = function (hit, headerRe) {
+            if (!hit.length) return null;
+            var first = Math.min.apply(null, hit), last = Math.max.apply(null, hit);
+            var top = first;
+            for (var up = first - 1; up >= 0 && up >= first - 6; up--) {
+                if (headerRe.test(L[up])) top = up;
+            }
+            return _plCropByLineRange(canvas, viewport, raw, top, last, 14, pageWidthPdf);
+        };
+        var revisionsUrl = cropRange(revHit, /^(REVISIONS?|REV\.?\s+DESCRIPTION)\b/i);
+        var matrixUrl = cropRange(matHit, /DISPLAY INFORMATION MATRIX|PART NUMBER|^REVISION\b/i);
+
+        return {
+            numPages: pdf.numPages,
+            full: fullDataUrl,
+            revisions: revisionsUrl,
+            matrix: matrixUrl
+        };
     };
 
     window.plOpenRevisions = async function (id, fileName) {
@@ -2980,7 +3057,7 @@
               ? _plBtn('success', '✅ ' + _t('최신 REV(', 'Use latest REV (') + _esc(revs[revs.length - 1].rev) + _t(')를 이 행에 넣기', ') for this row'), 'window.plUseLatestRev()')
               : '')
           + _plBtn('primary', '📜 ' + _t('도면 열기', 'Open drawing'), 'window._dsOpenInNewTab(\'' + NAS_FOLDER + '\',\'' + _esc(pick) + '\')')
-          + _plBtn('neutral', '📷 ' + _t('표제란 그림으로 보기', 'View title block as image'), 'window._plTogglePageImage()')
+          + _plBtn('neutral', '📷 ' + _t('표 그림으로 보기', 'View tables as image'), 'window._plTogglePageImage()')
           + _plBtn('neutral', '📁 ' + _t('문서함', 'Documents'), 'window.plOpenDocBox(\'' + id + '\')')
           + '<span style="margin-left:auto;">' + _plBtn('close', _t('닫기', 'Close'), 'window.plClosePopup()') + '</span>'
           + '</div>';
@@ -2988,8 +3065,9 @@
         if (b) { b.style.color = ''; b.innerHTML = html; }
     };
 
-    /** 📷 표제란(보통 1페이지)을 그림으로 보여준다 — 글자로 못 읽은 칸(모델#·설명 등)을
-     *  사람이 직접 읽게 한다. 누를 때만 렌더링하고(느림), 한 번 그리면 다시 안 그린다. */
+    /** 📷 [2026-11-19 2차] REVISIONS·MATRIX 표가 있는 자리만 각각 그림으로 보여준다 — 글자로
+     *  못 읽은 칸(모델#·설명 등)이나 애매하게 섞인 설명을 사람이 직접 읽게 한다. 둘 다 못
+     *  찾으면 표제란 전체로 물러난다. 누를 때만 렌더링하고(느림), 한 번 그리면 다시 안 그린다. */
     window._plTogglePageImage = async function () {
         var box = document.getElementById('pl-rev-pageimg');
         var c = window._plRevCache;
@@ -2999,12 +3077,18 @@
         if (box.getAttribute('data-loaded') === '1') return;
         box.innerHTML = '<div style="color:#888; padding:10px;">' + _t('그리는 중…', 'Rendering…') + '</div>';
         try {
-            var img = await window._plDocPageImage(NAS_FOLDER, c.file, 1);
+            var r = await window._plTableCropImages(NAS_FOLDER, c.file, 1);
             box.setAttribute('data-loaded', '1');
-            box.innerHTML = '<img src="' + img.dataUrl + '" style="max-width:100%; height:auto;">'
-                + (img.numPages > 1
-                    ? '<div style="font-size:11px; color:#888; margin-top:4px;">' + _t('1페이지만 표시(전체 ', 'Showing page 1 only (') + img.numPages + _t('페이지 중)', ' pages total)') + '</div>'
-                    : '');
+            var parts = [];
+            if (r.revisions) parts.push('<div style="font-size:11px; color:#888; margin-bottom:3px;">REVISIONS</div><img src="' + r.revisions + '" style="max-width:100%; height:auto; margin-bottom:10px;">');
+            if (r.matrix) parts.push('<div style="font-size:11px; color:#888; margin-bottom:3px;">MATRIX</div><img src="' + r.matrix + '" style="max-width:100%; height:auto;">');
+            if (!parts.length) {
+                parts.push('<img src="' + r.full + '" style="max-width:100%; height:auto;">');
+                if (r.numPages > 1) {
+                    parts.push('<div style="font-size:11px; color:#888; margin-top:4px;">' + _t('1페이지만 표시(전체 ', 'Showing page 1 only (') + r.numPages + _t('페이지 중)', ' pages total)') + '</div>');
+                }
+            }
+            box.innerHTML = parts.join('');
         } catch (e) {
             box.innerHTML = '<div style="color:#b1432f; padding:10px;">' + _esc(e && e.message ? e.message : e) + '</div>';
         }

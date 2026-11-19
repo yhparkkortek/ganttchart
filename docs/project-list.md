@@ -1243,3 +1243,24 @@ REV-시작 템플릿, `DISPLAY INFORMATION MATRIX` 유무와 무관하게 이미
 **전부 `headers[0]==='REVISION'` 그대로**로 확인해 내 새 코드가 전혀 안 건드렸음을
 확인했다(1569940·1555073·1604319 포함). REVISIONS 쪽 `revCount=0`/"섞임" 건수도
 그대로(0건 / 1건). `node --check` 통과.
+
+**(같은 날 2차, 사용자 재요청 "해당 도표만 그림으로" + "오른쪽 상단(REVISIONS)도
+어려우면 그 표도") 표제란 전체가 아니라 REVISIONS·MATRIX 표 자리만 각각 잘라서
+보여준다** — `window._plTableCropImages`. pdf.js `getTextContent()`의 글자별
+y좌표(`transform[5]`)로 어느 줄이 어느 표 행인지 찾는다(`_lines()`가 하는 "y좌표로
+같은 줄 묶기"를 **좌표를 보존한 채** 다시 함 — 캐시된 글자만으론 좌표가 이미 사라져
+있어 못 쓴다). MATRIX 행은 18차의 PN-시작/VENDOR-시작 정규식 + 기존 REV-시작(vi0/
+vi1/vi2) 양식 둘 다로 찾고, REVISIONS 행은 `_revFromLineRows`와 같은 "줄 끝이 날짜"
+신호로 찾는다. 찾은 행들의 최소~최대 Y(+ 위로 몇 줄 안의 머리글 캡션까지)를
+`viewport.convertToViewportPoint`로 캔버스 픽셀로 바꿔 그 띠만 잘라낸다. **둘 다
+못 찾으면 표제란 전체로 물러난다**(잘못 잘라 반쪽만 보여주느니 전체가 안전 —
+"모자라면 그대로 둔다" 원칙 그대로). 실측(`1599823 REV F.pdf`, 136줄짜리 페이지):
+MATRIX 행 6개(인덱스 96~132) · REVISIONS 행 6개(인덱스 4~25) — 화면에 보이는
+REVISIONS 6건 · MATRIX 6건과 정확히 일치, 두 구간이 겹치지 않고 또렷이 분리됨(위
+REVISIONS 블록·아래 MATRIX 블록이 문서 레이아웃과 맞아떨어짐). ⚠️⚠️ **캔버스에
+실제로 그리는 `page.render()` 자체는 이 세션(Claude 자동화 브라우저)에서 여전히
+안 끝난다**(18차와 같은 환경 한계, `getTextContent()`만 쓰는 줄 찾기 쪽은 정상
+동작 확인) — 자르는 **범위를 고르는 로직**만 실제 문서로 검증했고, 실제 잘린
+그림이 뜨는지는 사람이 회사 PC에서 확인해야 한다. REVISIONS+MATRIX 전체 regression
+(83개) 수치는 이번 변경으로 전혀 안 바뀜(파서 자체는 손 안 댐 — 화면 전용 추가).
+`node --check` 통과.
