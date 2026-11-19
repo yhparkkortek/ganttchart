@@ -2062,7 +2062,12 @@
 
     /** pdf.js 모양(한 줄 = 한 행) 전용 REVISIONS 읽기. 못 읽으면 빈 배열. */
     var _revFromLineRows = function (L) {
-        var PERSON = /([A-Z][.,]\s?[A-Z][A-Za-z'-]+|[A-Z]{2,4})\s*$/;
+        // ⚠️⚠️ [2026-11-19 14차 2차] "N RODRIGUEZ"(이니셜+공백+성, 마침표 없음)가 기존 두
+        // 모양(이니셜+마침표+성 · 2~4글자 약어) 어디에도 안 맞아 `[A-Z]{2,4}` 가 성의 **끝
+        // 4글자만**(RODRIGUEZ → GUEZ) 작성자로 떼어가고 나머지(RODRI)가 설명 쪽에 쓰레기로
+        // 남았다(실측 1572322 REV F/G). 가운데 모양을 추가하고, 마지막 약어 모양도 4글자
+        // 상한을 없애 **마침표 없는 긴 성**(공백 전까지 전부) 하나를 통째로 잡게 했다.
+        var PERSON = /([A-Z][.,]\s?[A-Z][A-Za-z'-]+|[A-Z]\s+[A-Z][A-Za-z'-]{2,}|[A-Z]{2,})\s*$/;
         var recs = [];
         for (var i = 0; i < L.length; i++) {
             var m = L[i].match(new RegExp(_DATE_RE.source + '\\s*$', 'i'));
@@ -2072,8 +2077,43 @@
             var by = mp ? mp[1] : '';
             var rest = mp ? before.slice(0, mp.index).trim() : before;
             var mr = rest.match(/^([A-Z](?:\.\d+)?)\b\s*/);
+            // ⚠️⚠️ [2026-11-19 14차, 사용자 신고 "왼쪽 하단 정보를 대부분 인식 못함"] NOTES 단락과
+            // REVISIONS 칸이 같은 줄에 묶이면, 진짜 리비전 글자가 줄 **맨 앞**이 아니라 NOTES
+            // 머리말 뒤에 끼어 있는 경우가 많다(실측 1576437: "...PRIMARY BILL OF MATERIAL IS
+            // LOCATED IN SCIENTIFIC GAMES' G.1 KORTEK MOVED PRODUCTION TO VIETNAM" — 진짜 답은
+            // "G.1 KORTEK MOVED PRODUCTION TO VIETNAM" 뿐인데 맨 앞 매칭만 보면 rev 가 안 잡혀
+            // 전부 "섞여서 못 읽음"으로 버려졌다). 맨 앞에서 안 잡히고 이 줄에 NOTES 어휘가
+            // 섞여 있다는 **증거가 있을 때만**(`_NOTES_BOILERPLATE_RE`), 줄 안에서 "공백+글자
+            // (+.숫자)+공백+대문자" 모양의 **마지막** 자리를 찾아 그 자리부터를 rev+설명으로
+            // 쓴다(그 앞은 전부 NOTES 머리말로 버린다). 못 찾으면 기존처럼 빈 rev 로 남아
+            // 아래 `_plFlagNotesMixedDesc` 가 정직하게 "섞여서 못 읽음"을 보여준다 — 틀리게
+            // 채우느니 버리는 기존 원칙 그대로, 찾아지는 만큼만 더 건진다.
+            var noFrag = false;
+            if (!mr && _NOTES_BOILERPLATE_RE.test(rest)) {
+                var mm, lastMm = null, re2 = /(?:^|\s)([A-Z](?:\.\d+)?)\s+(?=[A-Z])/g;
+                while ((mm = re2.exec(rest))) lastMm = mm;
+                if (lastMm) {
+                    var tail = rest.slice(lastMm.index).trim();
+                    var mr2 = tail.match(/^([A-Z](?:\.\d+)?)\b\s*/);
+                    var tailDesc = mr2 ? tail.slice(mr2[0].length).trim() : '';
+                    if (mr2 && (tailDesc.match(/[A-Za-z]/g) || []).length >= 6) {
+                        mr = mr2; rest = tail;
+                        // ⚠️⚠️ 이 줄 자체가 NOTES 와 겹친 줄이라는 뜻 — 둘레도 같은 Y 띠에서
+                        // 겹쳐 있을 가능성이 높다(실측: 위 복구가 성공한 H/J.1/L 세 건 중
+                        // H·J.1·L 셋 다 바로 옆 줄의 **다른 NOTES 항목 글**("A. DIGITAL
+                        // AUDIO/VIDEO"·"BOTH DISPLAYS." 등, 전부 `_isDescFrag`는 통과하는
+                        // 멀쩡한 글)이 조각으로 붙어 desc 를 더 틀리게 만들었다 — "못 읽음"
+                        // 보다 더 나쁜 "확신에 찬 오답"이 된다. 그래서 이 복구 경로로 얻은
+                        // 기록은 **조각을 더 안 받는다**(이 줄 하나에서 얻은 것으로 끝) —
+                        // G.1·G.2 처럼 이 줄 하나로 이미 완결된 문장은 그대로 살고, 조각이
+                        // 꼭 필요한 H/J.1/L 류는 불완전한 채로 남는다(모자라면 그대로 둔다
+                        // — 틀리게 채우지 않는다, 아래 noFrag 로 표시).
+                        noFrag = true;
+                    }
+                }
+            }
             recs.push({ i: i, rev: mr ? mr[1] : '', inline: mr ? rest.slice(mr[0].length).trim() : rest,
-                        by: by, date: m[1], pre: [], post: [] });
+                        by: by, date: m[1], pre: [], post: [], noFrag: noFrag });
         }
         if (recs.length < 2) return [];
         // 설명 조각은 **가장 가까운 기록**에 붙인다 — 앞 기록이 뒤 기록 설명을 가져가면 표가 어긋난다.
@@ -2094,6 +2134,7 @@
             if (!_isDescFrag(frag)) continue;
             var best = -1, bd = Infinity;
             for (var k = 0; k < at.length; k++) {
+                if (recs[k].noFrag) continue;
                 var d = Math.abs(at[k] - j);
                 if (d > bd) continue;
                 if (d < bd) { best = k; bd = d; continue; }
@@ -2108,6 +2149,16 @@
         return recs.map(function (r) {
             var desc = r.pre.concat(r.inline ? [r.inline] : []).concat(r.post).join(' ');
             desc = desc.replace(/\s+/g, ' ').trim().replace(/^[A-Z]\s+(?=[A-Z]{2})/, '');
+            // ⚠️⚠️ [2026-11-19 14차] "...VIDEO FW VERSION. NOTE:" 처럼 진짜 설명 문장이 끝난
+            // 뒤에 **다음 NOTES 항목으로 넘어가는 자리표시 라벨만** 꼬리로 붙는 경우가 있다
+            // (실측 1576437 J.2: "7. FLAT PANEL DISPLAY SPECIFICATIONS: J.2 PART NUMBER AND
+            // VIDEO FW VERSION. NOTE: V.BERNARD 10/20/2025" — rev/날짜는 이미 제대로 잡혔고
+            // "NOTE:" 뒤엔 같은 줄에 아무것도 없다, 다음 NOTES 항목 "7.1 LCD PANEL OPTIONS…"는
+            // 완전히 다른 줄). 끝에 덩그러니 남은 짧은 "라벨:" 하나는 지워도 뜻이 안 바뀌고,
+            // 지우지 않으면 아래 `_plFlagNotesMixedDesc` 가 이미 맞게 읽은 문장 전체를
+            // "섞여서 못 읽음"으로 버린다 — 1~3 낱말짜리 꼬리에**만** 적용해 중간에 낀 진짜
+            // 오염(여러 낱말짜리 문단)은 그대로 걸리게 둔다.
+            desc = desc.replace(/\s+[A-Za-z]{2,}(?:\s+[A-Za-z]{2,}){0,2}:\s*$/, '');
             return { rev: r.rev, desc: desc, by: r.by, date: r.date };
         });
     };
