@@ -1282,11 +1282,29 @@
                     if (!window.JsBarcode) return;
                     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                     canvas.appendChild(svg);
-                    window.JsBarcode(svg, value, { format: 'CODE128', displayValue: true,
-                        height: Math.max(10, h * 0.62), fontSize: Math.max(8, h * 0.18), margin: 0,
-                        lineColor: '#808080', background: 'transparent' });
+                    // 📍 [2026-11-19, 사용자 요청] "바코드 하단 표시를 중앙으로" — JsBarcode 는
+                    //    displayValue 글자 위치로 top/bottom 만 주고 "중앙"은 없다 → displayValue
+                    //    를 끄고 막대 전체 높이로 그린 뒤, 세로 중앙에 직접 글자를 겹쳐 그린다.
+                    //    막대와 겹치면 안 읽히므로 글자 뒤에 옅은 흰 띠를 깔아 가독성을 확보한다.
+                    var fontSize = Math.max(8, h * 0.18);
+                    window.JsBarcode(svg, value, { format: 'CODE128', displayValue: false,
+                        height: h, margin: 0, lineColor: '#808080', background: 'transparent' });
                     svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%');
                     svg.style.display = 'block';
+                    var vb = svg.viewBox && svg.viewBox.baseVal;
+                    var vbW = (vb && vb.width) || w, vbH = (vb && vb.height) || h;
+                    var midY = vbH / 2;
+                    var bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    bg.setAttribute('x', '0'); bg.setAttribute('y', String(Math.max(0, midY - fontSize * 0.65)));
+                    bg.setAttribute('width', String(vbW)); bg.setAttribute('height', String(fontSize * 1.3));
+                    bg.setAttribute('fill', 'rgba(255,255,255,0.85)');
+                    svg.appendChild(bg);
+                    var txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    txt.setAttribute('x', String(vbW / 2)); txt.setAttribute('y', String(midY));
+                    txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('dominant-baseline', 'middle');
+                    txt.setAttribute('font-size', String(fontSize)); txt.setAttribute('fill', '#808080');
+                    txt.textContent = value;
+                    svg.appendChild(txt);
                 }
             } catch (e) {
                 canvas.innerHTML = '<span style="color:#808080; font-size:0.6em;">' + _esc(_t('생성 실패', 'render failed')) + '</span>';
