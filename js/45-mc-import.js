@@ -120,7 +120,33 @@
         // 한 파일에 시트가 여럿이면 시트 이름의 괄호를 덧붙여 구분 — R1(CAP) → "32in TPR CAP"
         var pm = String(cand.sheet || '').match(/\(([^)]+)\)/);
         if (pm) base = (base + ' ' + pm[1]).trim();
-        return base || String(cand.sheet || '');
+        base = base || String(cand.sheet || '');
+
+        // 🎯 [2026-11-19 버그 수정, 사용자 제보 "FHD로 불러오면 QHD로 바뀌고 토글하면 데이터가
+        // 없어짐/저장이 안 됨" — 실측: LNW(SG)_SSBT(FHD,QHD,UHD) 프로젝트, 제품구분자
+        // MVD(FHD)/MVD(QHD)/MVD(UHD) 가 이미 있는데 벤더 파일명이 "..._MVD(FHD)_MC_R1.xlsx"
+        // 라 "_MC Table"이 없어 위 규칙이 전부 빗나가고, 시트 "MODEL :" 제목 글자
+        // ('SSBT 27"_MVD_500nit(FHD)')를 그대로 썼다] 그 글자는 기존 제품구분자와 전혀
+        // 달라서, 그대로 적용하면 **새 "유령" 제품구분자**가 생기고 실제 FHD 탭은 빈 채로
+        // 남는다 — `_mcImpApply`가 그 유령 이름을 화면에 활성 유닛으로 세워 버리는데,
+        // `mcCycleUnit`은 목록에 없는 유닛에서 출발하면 바로 다음 유닛(= 목록 맨 앞)으로
+        // 튀어버려(인덱스 -1 → (-1+1)%len = 0) 마치 "토글 한 번에 데이터가 사라진" 것처럼
+        // 보인다(데이터 자체는 유령 키 밑에 살아있지만 어느 탭도 그 키를 보지 않는다).
+        // → 제목/파일명 괄호 안 토큰(FHD/QHD/UHD 등)이 **이미 있는 제품구분자** 이름에도
+        // 그대로 들어있으면(대소문자 무시, 토큰 하나당 정확히 한 곳과만 겹칠 때) 새로
+        // 짓지 않고 그 기존 이름을 그대로 제안한다 — 모호하면(겹치는 후보가 0개나 2개
+        // 이상) 손대지 않고 기존 추정값을 그대로 둔다.
+        var units = window.getMcUnits ? (window.getMcUnits() || []) : [];
+        if (units.length) {
+            var tokenSrc = String(cand.title || '') + ' ' + String(cand.file || '');
+            var tokens = tokenSrc.match(/\(([^)]+)\)/g) || [];
+            for (var i = 0; i < tokens.length; i++) {
+                var tok = tokens[i].toLowerCase();
+                var hit = units.filter(function (u) { return String(u).toLowerCase().indexOf(tok) !== -1; });
+                if (hit.length === 1) return hit[0];
+            }
+        }
+        return base;
     };
 
     // ── 선택 화면 ──────────────────────────────────────────────────────
@@ -251,8 +277,15 @@
         // 🛡️ [2026-10-27 신규] 되돌리기 번거로운 "덮어쓰기"라 적용 직전에 한 번 더 확인한다
         //    (사용자 요청) — 리비전을 바로 고칠 수 있게 된 뒤로, 고친 걸 깜빡하고 그대로
         //    누르면 엉뚱한 리비전에 들어갈 수 있어서 요약을 보여주고 승인받는다.
+        // 🎯 [2026-11-19 추가] 타이핑/제안값이 **기존 제품구분자와 한 글자라도 다르면** 조용히
+        //    새 유닛을 만들어버린다(실측 사고: "MVD(FHD)" 대신 "SSBT 27"_MVD_500nit(FHD)" 로
+        //    들어가 실제 FHD 탭은 빈 채로 남음) — 여기서 새로 생기는 이름만 눈에 띄게 표시해
+        //    "어, 이거 기존 탭 이름이 아닌데?"를 적용 전에 알아챌 기회를 준다.
+        var existingUnits = window.getMcUnits ? (window.getMcUnits() || []) : [];
         var summary = picked.map(function (p) {
-            return '· ' + p.unit + ' · ' + p.rev + ' (' + p.c.file + ' / ' + p.c.sheet + ', ' + p.c.rows.length + _t('행', ' rows') + ')';
+            var isNew = existingUnits.indexOf(p.unit) === -1;
+            var tag = isNew ? ' 🆕' + _t('(새 제품구분자)', '(new unit)') : '';
+            return '· ' + p.unit + tag + ' · ' + p.rev + ' (' + p.c.file + ' / ' + p.c.sheet + ', ' + p.c.rows.length + _t('행', ' rows') + ')';
         }).join('\n');
         var ok = confirm(_t(
             '아래 내용으로 적용합니다 — 같은 제품구분자·리비전이 이미 있으면 덮어씁니다.\n\n' + summary

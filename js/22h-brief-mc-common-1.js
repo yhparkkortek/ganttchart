@@ -810,6 +810,17 @@ window.mcCycleUnit = function() {
     if (!units.length) return;
     const cur = window.mcActiveUnit || units[0];
     const idx = units.indexOf(cur);
+    // 🎯 [2026-11-19 버그 수정, 사용자 제보 "토글 한 번에 데이터가 사라짐"] 지금 보고 있는
+    // 유닛이 목록에 없을 때(예: 불러오기가 목록 밖 이름으로 데이터를 넣어버린 경우) idx가
+    // -1이라 (idx+1)%len이 **항상 0** — 조용히 맨 앞 유닛으로 튀어, 사람 눈엔 "누르자마자
+    // 데이터가 사라졌다"로 보였다(실제로는 지금 보던 유닛의 데이터가 그 목록 밖 이름 밑에
+    // 그대로 남아있을 뿐). 데이터를 지우지 않는 건 똑같지만, 이 경우만은 조용히 넘어가지
+    // 않고 알려준다.
+    if (idx === -1 && window.showToast) {
+        window.showToast('⚠️ ' + ((window._t && window._t(
+            '지금 보고 있는 "' + cur + '"가 제품구분자 목록에 없습니다 — 맨 앞으로 이동합니다(데이터는 그대로 남아있습니다).',
+            '"' + cur + '" is not in the product-family list — moving to the first one (its data is still kept).')) || cur), 'warning', 6000);
+    }
     const next = units[(idx + 1) % units.length];
     window.mcSwitchUnit(next);
 };
