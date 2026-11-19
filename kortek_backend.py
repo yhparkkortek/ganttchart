@@ -7212,6 +7212,7 @@ _SELF_UPDATE_FILES = [
     'matgroups.json',
     'templates/승인원_양식.xlsx',
     'templates/승인원_양식.docx',
+    'templates/모델명세서_양식.xlsx',
 ]
 # ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
 # 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
@@ -8861,6 +8862,77 @@ def doc_docx():
         name += '.docx'
     return send_file(bio, as_attachment=True, download_name=name,
                      mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+
+# ── 📘 모델명세서 — 원본 엑셀을 그대로 양식으로 (2026-11-19, 사용자 요청) ──────────────
+#    "첨부해준 엑셀 문서랑 똑같이 못 만들어?" — `_docBuildStyledSheet`(프런트, 새로 조립)는
+#    흉내지 원본이 아니다(병합 726개·38열짜리 실제 레이아웃을 새로 그리면 반드시 달라진다).
+#    여기는 **실제 원본 파일**(고객·제품·담당자 값은 전부 지우고 라벨·병합·서식·고정
+#    카탈로그만 남긴 `templates/모델명세서_양식.xlsx`)을 열어 **값만** 써넣는다 — 승인원
+#    표지 생성(`_approval_fill_xlsx`)과 같은 원칙. 병합·테두리·색·열너비·행높이는 손 안
+#    대므로 원본과 똑같다(해상도 호환표·사진 섹션 5종은 이 양식에 그대로 남아있지만 값은
+#    안 채운다 — 137줄 카탈로그는 바꿀 일이 없고, 사진은 엑셀 라이브러리로 못 넣는다).
+_MODEL_SPEC_TEMPLATE_XLSX = os.path.join(BASE_DIR, 'templates', '모델명세서_양식.xlsx')
+# 칸 이름 → 원본 셀 주소(실측, P04-모델명세서_502382_...xlsx). 병합 칸이라 **왼쪽-위 셀**에만 쓴다.
+_MODEL_SPEC_CELLS = {
+    'partNumber': 'E19', 'modelName': 'K19', 'docDate': 'O25',
+    'apv1Name': 'K31', 'apv1Date': 'W31',       # 작성-1(회로)
+    'apv2Name': 'K35', 'apv2Date': 'W35',       # 작성-2(기구)
+    'apv3Name': 'K39', 'apv3Date': 'W39',       # 검토
+    'apv4Name': 'K43', 'apv4Date': 'W43',       # 승인
+    'revDate': 'C54', 'revPage': 'G54', 'revDesc': 'I54', 'revEco': 'Z54', 'revIncharge': 'AD54',
+    'mdModelName': 'G103', 'mdRevNo': 'W103',
+    'mdProductCode': 'G104', 'mdReportDate': 'W104',
+    'mdBuyer': 'G105', 'mdDrafterHwFw': 'AB105', 'mdDesign': 'AB106', 'mdNote': 'G107',
+    'elecPower': 'J142', 'elecPowerNote': 'AB142',
+    'optX': 'V155', 'optY': 'V156', 'optTemp': 'V157', 'optLv': 'V158',
+    'optUniformity': 'V159', 'optGamut': 'V160',
+    'osdBrightness': 'P161', 'osdContrast': 'P162', 'osdColorTemp': 'P163',
+    'swAdDate1': 'H169', 'swAdFile1': 'M169',
+    'swTspDate1': 'H175', 'swTspFile1': 'M175',
+    'edidDviSum': 'M185', 'edidDpSum': 'M188',
+}
+# CERTIFICATION 체크(○) — 원본은 CE/CB/UL/FCC/RoHS II/SABS 여섯 칸짜리 체크 그리드다.
+# 프런트는 자유 텍스트 한 칸(elecCert, 예 "CE, CB, UL, FCC")만 받으므로 그 글자로 가른다.
+_MODEL_SPEC_CERT_CELLS = {'CE': 'J146', 'CB': 'L146', 'UL': 'N146', 'FCC': 'P146', 'ROHS': 'R146', 'SABS': 'T146'}
+
+
+@app.route('/doc/model-spec-xlsx', methods=['POST'])
+def doc_model_spec_xlsx():
+    """📘 모델명세서를 원본 양식 그대로(병합·서식 보존) 채워 돌려준다.
+    받는 것: `{ name, fields: { partNumber, modelName, ... } }` — 키는 `_MODEL_SPEC_CELLS` 참고.
+    ⚠️ 읽기 전용이다 — NAS 에 쓰지 않는다."""
+    try:
+        import openpyxl
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'openpyxl이 없습니다: %s' % e}), 500
+    if not os.path.exists(_MODEL_SPEC_TEMPLATE_XLSX):
+        return jsonify({'ok': False, 'error': '양식 파일을 찾을 수 없습니다 — 백엔드를 재시작해 주세요.'}), 404
+    req = request.get_json(silent=True) or {}
+    fields = req.get('fields') or {}
+    if not isinstance(fields, dict):
+        fields = {}
+    try:
+        wb = openpyxl.load_workbook(_MODEL_SPEC_TEMPLATE_XLSX)
+        ws = wb[wb.sheetnames[0]]
+        for key, addr in _MODEL_SPEC_CELLS.items():
+            v = fields.get(key)
+            if v not in (None, ''):
+                ws[addr] = v
+        cert_text = str(fields.get('elecCert') or '').upper()
+        for cname, addr in _MODEL_SPEC_CERT_CELLS.items():
+            if cname in cert_text:
+                ws[addr] = '○'
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': '양식을 채우지 못했습니다: %s' % e}), 500
+    name = _docstore_safe_name(req.get('name') or '모델명세서') or '모델명세서'
+    if not name.lower().endswith('.xlsx'):
+        name += '.xlsx'
+    return send_file(bio, as_attachment=True, download_name=name,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 @app.route('/doc/export-zip', methods=['POST'])

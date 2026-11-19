@@ -6724,6 +6724,37 @@
         return ws;
     };
 
+    // 📘 [2026-11-19] 모델명세서 전용 — 화면 칸 값을 백엔드 `/doc/model-spec-xlsx`(원본 양식
+    //    채우기, `_MODEL_SPEC_CELLS`)가 기대하는 이름으로 모아 준다. PART NUMBER/MODEL NAME 은
+    //    표지와 "1. Model Description" 블록 **둘 다**에 쓰인다(원본도 같은 값을 두 번 적는다).
+    window._docModelSpecFields = function (formId) {
+        var ctx = window._dgCollect(), d = _docData(formId);
+        var val = function (key, from) { return _hasOwn(formId, key) ? d.fields[key] : _autoOf(ctx, from).v; };
+        var pn = val('PART NUMBER', 'meta.제품코드'), mn = val('MODEL NAME', 'meta.모델풀네임');
+        var reportDate = val('REPORTING DATE', 'today');
+        return {
+            partNumber: pn, modelName: mn, docDate: reportDate,
+            apv1Name: val('apv1|성명'), apv1Date: val('apv1|일자'),
+            apv2Name: val('apv2|성명'), apv2Date: val('apv2|일자'),
+            apv3Name: val('apv3|성명'), apv3Date: val('apv3|일자'),
+            apv4Name: val('apv4|성명'), apv4Date: val('apv4|일자'),
+            revDate: val('변경일자', 'today'), revPage: val('적용 Page'), revDesc: val('변경 내용'),
+            revEco: val('ECO #'), revIncharge: val('담당'),
+            mdModelName: mn, mdRevNo: val('REV. NO', 'revision'),
+            mdProductCode: pn, mdReportDate: reportDate,
+            mdBuyer: val('BUYER NAME', 'meta.고객사'), mdDrafterHwFw: val('DRAFTER (HW/FW)', 'meta.HW담당자'),
+            mdDesign: val('DESIGN', 'meta.기구담당자'), mdNote: val('NOTE'),
+            elecPower: val('elecPower'), elecPowerNote: val('elecPowerNote'), elecCert: val('elecCert'),
+            optX: val('White x', 'specX'), optY: val('White y', 'specY'),
+            optTemp: val('Color Temp(K)', 'specTemp'), optLv: val('Luminance (min~max)', 'specLv'),
+            optUniformity: val('Uniformity(%)', 'specUniformity'), optGamut: val('Color Gamut(NTSC)', 'specGamut'),
+            osdBrightness: val('OSD Brightness'), osdContrast: val('OSD Contrast'), osdColorTemp: val('OSD Color Temp'),
+            swAdDate1: val('swAdDate1'), swAdFile1: val('swAdFile1', 'specFw'),
+            swTspDate1: val('swTspDate1'), swTspFile1: val('swTspFile1'),
+            edidDviSum: val('edidDviSum'), edidDpSum: val('edidDpSum', 'specEdid')
+        };
+    };
+
     window._docExport = async function (how) {
         var st = window._docState, form = _formById(st.formId);
         if (!form) { _toast('⚠️ ' + _t('문서를 고르세요.', 'Pick a document.'), 'error'); return; }
@@ -6740,13 +6771,51 @@
             } catch (e) { _toast('⚠️ ' + (e && e.message || e), 'error'); }
             return;
         }
+        var name = form.nameOf(ctx, opt).replace(/\.(pptx|xlsx)$/i, '') + '.xlsx';
+
+        // 📘 [2026-11-19, 사용자 요청 "첨부해준 엑셀 문서랑 똑같이 못 만들어?"] 모델명세서는
+        //    **원본 파일을 그대로 양식으로** 쓴다(병합 726개·고정 카탈로그·열너비 — 새로 조립하면
+        //    흉내일 뿐 원본이 아니다). 백엔드 `/doc/model-spec-xlsx`가 `templates/모델명세서_양식.xlsx`
+        //    (고객·제품·담당자 값은 전부 지운 빈 양식)를 열어 값만 채워 돌려준다. 백엔드가 없거나
+        //    재시작 전이면(404) 아래 일반 스타일 엑셀로 **조용히 돌아간다**(둘 다 안 되는 건 아니다).
+        if (form.id === 'model-spec') {
+            var msBlob = null, msWhy = '';
+            try {
+                var msRes = await fetch(BACKEND + '/doc/model-spec-xlsx', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, fields: window._docModelSpecFields(form.id) })
+                });
+                if (msRes.ok) { msBlob = await msRes.blob(); }
+                else { try { msWhy = (await msRes.json()).error || ''; } catch (e0) { /* HTML 404 */ } }
+            } catch (eMs) { msWhy = (eMs && eMs.message) || String(eMs); }
+            if (msBlob) {
+                if (how === 'nas') {
+                    if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
+                    _toast('⏳ ' + _t('NAS 에 올리는 중…', 'Uploading…'), 'info');
+                    var msR = await window._dgUploadBlob(_docFolder(ctx), name, msBlob);
+                    if (msR.ok) _toast('📁 ' + _docFolder(ctx) + '/' + msR.name + ' (' + Math.round((msR.size || 0) / 1024) + 'KB)', 'success');
+                    else if (msR.skipped) _toast(_t('올리지 않았습니다.', 'Not uploaded.'), 'info');
+                    else _toast('⚠️ ' + _t('올리지 못했습니다: ', 'Upload failed: ') + msR.error, 'error');
+                    return;
+                }
+                var msUrl = URL.createObjectURL(msBlob);
+                var msA = document.createElement('a');
+                msA.href = msUrl; msA.download = name;
+                document.body.appendChild(msA); msA.click(); msA.remove();
+                setTimeout(function () { URL.revokeObjectURL(msUrl); }, 10000);
+                _toast('📗 ' + name + ' (' + _t('원본 양식', 'original template') + ')', 'success');
+                return;
+            }
+            _toast('ℹ️ ' + _t('원본 양식을 못 써서(' + (msWhy || '백엔드 응답 없음') + ') 일반 엑셀로 대신 만듭니다.',
+                              'Could not use the original template — falling back to a plain export.'), 'info');
+        }
+
         if (typeof XLSX === 'undefined') {
             _toast('⚠️ ' + _t('엑셀 라이브러리를 불러오지 못했습니다.', 'XLSX not loaded.'), 'error'); return;
         }
         var wb = XLSX.utils.book_new();
         var ws = window._docBuildStyledSheet(form.id);
         XLSX.utils.book_append_sheet(wb, ws, form.label.slice(0, 28));
-        var name = form.nameOf(ctx, opt).replace(/\.(pptx|xlsx)$/i, '') + '.xlsx';
 
         if (how !== 'nas') { XLSX.writeFile(wb, name); _toast('📗 ' + name, 'success'); return; }
         if (!window._dgUploadBlob) { _toast('⚠️ ' + _t('업로드 기능을 불러오지 못했습니다.', 'Upload unavailable.'), 'error'); return; }
