@@ -2098,13 +2098,21 @@
             // 채우느니 버리는 기존 원칙 그대로, 찾아지는 만큼만 더 건진다.
             var noFrag = false;
             if (!mr && _NOTES_BOILERPLATE_RE.test(rest)) {
-                var mm, lastMm = null, re2 = /(?:^|\s)([A-Z](?:\.\d+)?)\s+(?=[A-Z])/g;
+                // ⚠️⚠️ [2026-11-19 16차 2차, 실측 1598317] 뒤따르는 진짜 내용이 **자재번호
+                // 목록**처럼 숫자로 시작할 수도 있다("1. IDENTIFICATION: B 1602257, 1606486,
+                // ADDED 1613467, …" — 정답은 "B" 뒤 숫자목록인데 대문자만 찾던 `(?=[A-Z])`
+                // 가 아예 못 찾았다) — `[A-Z0-9]` 로 넓힘. 글자 수 문턱도 6→2 로 낮췄다
+                // ("NPI"·"NPR" 처럼 이 집안 문서에 실제로 쓰이는 3글자 약어가 6자 문턱에 막혀
+                // 못 건져졌었다, 1571018 실측) — 숫자 위주 내용은 글자 수가 적어도 괜찮다는
+                // 걸 "B 1602257, 1606486, ADDED …" 에서 확인(ADDED 하나만 글자 5개, 숫자는
+                // 안 센다).
+                var mm, lastMm = null, re2 = /(?:^|\s)([A-Z](?:\.\d+)?)\s+(?=[A-Z0-9])/g;
                 while ((mm = re2.exec(rest))) lastMm = mm;
                 if (lastMm) {
                     var tail = rest.slice(lastMm.index).trim();
                     var mr2 = tail.match(/^([A-Z](?:\.\d+)?)\b\s*/);
                     var tailDesc = mr2 ? tail.slice(mr2[0].length).trim() : '';
-                    if (mr2 && (tailDesc.match(/[A-Za-z]/g) || []).length >= 6) {
+                    if (mr2 && (tailDesc.match(/[A-Za-z]/g) || []).length >= 2) {
                         mr = mr2; rest = tail;
                         // ⚠️⚠️ 이 줄 자체가 NOTES 와 겹친 줄이라는 뜻 — 둘레도 같은 Y 띠에서
                         // 겹쳐 있을 가능성이 높다(실측: 위 복구가 성공한 H/J.1/L 세 건 중
@@ -2118,6 +2126,24 @@
                         // — 틀리게 채우지 않는다, 아래 noFrag 로 표시).
                         noFrag = true;
                     }
+                }
+                // ⚠️⚠️ [2026-11-19 16차, 사용자 재요청 "남은 16건도 같은 패턴 확인"으로 발견]
+                // 위 시도가 실패하는 집안이 또 있다 — 리비전 글자가 **이 줄의 맨 끝**(작성자
+                // 바로 앞)에만 있고 뒤따르는 설명이 하나도 없는 경우(실측 1570705 REV M:
+                // "…TOUCH SCREEN MANUFACTURER AND CONTROLLER FIRMWARE A.1 J. GOSCINIAK
+                // 10/28/2021" — by 를 떼고 나면 rest 가 "…FIRMWARE A.1" 로 **A.1 뒤에 아무
+                // 것도 안 남는다**, 위 시도는 "뒤에 이어지는 대문자 낱말"을 요구해서 못
+                // 찾는다). 이 경우 진짜 설명은 전부 **앞/뒤 줄 조각**에 있다(실측: 바로 앞
+                // 줄 "UPDATE RENDERING TO SHOW PEM HARDWARE, UPDATE" + 바로 뒤 줄 "NOTE TO
+                // INCLUDE -ALT AND -VAR PART NUMBERS" = 온전한 한 문장). → rest 가 "공백+
+                // 글자(+.숫자)" 모양으로 **끝나기만** 하면(뒤에 아무 것도 안 남아 위 inline
+                // 없음 자체가 신호) rev 만 건지고 `inline` 은 빈 채로 둔다 — `noFrag` 를
+                // **안 켠다**(위 경우와 달리 이 줄 자체엔 섞일 내용이 없어, 조각이 꼭
+                // 있어야 완성되고 조각 매칭 루프의 기존 "가장 가까운 기록" 규칙을 그대로
+                // 믿어도 된다).
+                if (!mr) {
+                    var mrEnd = rest.match(/(?:^|\s)([A-Z](?:\.\d+)?)\s*$/);
+                    if (mrEnd) { rest = mrEnd[1]; mr = [mrEnd[1], mrEnd[1]]; }
                 }
             }
             recs.push({ i: i, rev: mr ? mr[1] : '', inline: mr ? rest.slice(mr[0].length).trim() : rest,
