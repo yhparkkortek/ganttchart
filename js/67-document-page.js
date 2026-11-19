@@ -957,6 +957,11 @@
     //    이미지를 채우므로, 파일을 다시 구워 비율이 바뀌었는데 이 숫자를 안 고치면 **눌리거나
     //    늘어나 보인다**(실측: 347x244로 다시 구운 뒤에도 348x522가 남아 있어 세로로 짜부라짐).
     //    PNG 다시 구울 때마다 같이 맞출 것.
+    // ⚠️⚠️ [2026-11-19, 사용자 신고 "이미지는 미적용되었음"] `assets/certmarks/*.png` 를 다시
+    //    구워도 `<img src="...png">` 에 쿼리스트링이 없어 브라우저·GitHub Pages CDN 캐시가
+    //    옛 파일을 계속 물고 있었다 — 색을 또 바꿀 때마다 이 번호를 올릴 것(파일 내용이 아니라
+    //    **이 번호**가 새 URL 을 만들어야 캐시를 비켜간다).
+    var CERT_MARK_ASSET_VER = 2;
     var CERT_MARK_CATALOG = [
         { key: 'UL', label: 'UL', w: 256, h: 105 },
         { key: 'CE', label: 'CE', w: 433, h: 429 },
@@ -1054,7 +1059,7 @@
     //    ⚠️⚠️ "박스가 제일 위로 올라와서 다른 것들을 손댈 수 없음" — 몸통은 `pointer-events:none`
     //    이라 클릭이 그대로 통과해 안의 표시·마크를 집을 수 있다. 옮기려면 **위 테두리 가는 띠**
     //    (`data-box-drag`)만, 크기는 모서리 손잡이만, 지우기는 ✕ 만 — 이 셋만 클릭을 받는다.
-    //    ⚠️ "박스 색상은 TXT 와 같은 색상으로" — 표시(notes)와 같은 색(#4d4d4d, 70% 그레이)으로
+    //    ⚠️ "박스 색상은 TXT 와 같은 색상으로" — 표시(notes)와 같은 색(#808080, 50% 그레이)으로
     //    통일(2026-11-19 이전엔 빨강 #e03131/#b1432f 계열이었다 — "글자가 겹쳐서 가려지지
     //    않도록" 요청으로 전부 그레이로 교체).
     //    ⚠️ z-index 를 표시·마크(1)보다 낮게(0) 둬서 시각적으로도 **뒤에 깔린다**(표 밑그림처럼).
@@ -1067,17 +1072,17 @@
             var wrapStyle = 'position:absolute; left:' + (b.x * 100) + '%; top:' + (b.y * 100) + '%;'
                 + ' width:' + (b.wem || 10) + 'em; height:' + (b.hem || 1.3) + 'em;'
                 // 🔵 [2026-11-13, 사용자 요청] "박스 모서리 R값 적용해줘" — 0.3em → 0.5em(더 뚜렷하게).
-                + ' border:2px solid #4d4d4d; border-radius:0.5em; background:transparent; z-index:0; pointer-events:none;'
+                + ' border:2px solid #808080; border-radius:0.5em; background:transparent; z-index:0; pointer-events:none;'
                 + (isSel ? ' outline:2px dashed #2f9e44; outline-offset:2px;' : '');
             return '<span data-box-wrap data-box-idx="' + bi + '" style="' + wrapStyle + '">'
                 + (draggable ? '<span data-box-drag title="' + _esc(_t('끌어서 옮기기', 'drag to move')) + '"'
                   + ' style="position:absolute; left:-2px; right:-2px; top:-2px; height:10px; cursor:grab; pointer-events:auto;"></span>'
                   + '<span data-box-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                   + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em; border-radius:0.25em;'
-                  + ' background:#4d4d4d; border:2px solid #fff; box-shadow:0 0 0 1px #4d4d4d; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
+                  + ' background:#808080; border:2px solid #fff; box-shadow:0 0 0 1px #808080; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
                   + '<a href="#" onclick="window._docLabelBoxDel(\'' + _esc(code) + '\',' + bi + ');return false;"'
                   + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
-                  + ' background:#4d4d4d; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
+                  + ' background:#808080; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
                   + ' box-shadow:0 0 0 1px #fff; pointer-events:auto; z-index:2;">✕</a>' : '')
                 + '</span>';
         }).join('');
@@ -1195,7 +1200,7 @@
             var wrapStyle = 'position:absolute; left:' + (c.x * 100) + '%; top:' + (c.y * 100) + '%;'
                 + ' transform:translate(-50%,-50%); width:' + (c.wem || (c.kind === 'qr' ? 6 : 10)) + 'em;'
                 + ' height:' + (c.hem || (c.kind === 'qr' ? 6 : 3.5)) + 'em; background:#fff;'
-                + (c.kind === 'qr' ? ' border:1px solid #4d4d4d;' : '')
+                + (c.kind === 'qr' ? ' border:1px solid #808080;' : '')
                 + ' border-radius:0.2em; z-index:1; box-sizing:border-box; padding:0.2em;'
                 + (draggable ? ' cursor:grab;' : '')
                 + (isSel ? ' outline:2px dashed #2f9e44; outline-offset:2px;' : '');
@@ -1204,14 +1209,14 @@
                 + '<span data-code-canvas style="display:block; width:100%; height:100%; pointer-events:none;"></span>'
                 + (draggable ? '<span data-code-resize title="' + _esc(_t('끌어서 크기 조절', 'drag to resize')) + '"'
                   + ' style="position:absolute; right:-0.5em; bottom:-0.5em; width:1em; height:1em; border-radius:0.25em;'
-                  + ' background:#4d4d4d; border:2px solid #fff; box-shadow:0 0 0 1px #4d4d4d; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
+                  + ' background:#808080; border:2px solid #fff; box-shadow:0 0 0 1px #808080; cursor:nwse-resize; z-index:2; pointer-events:auto;"></span>'
                   + '<a href="#" onclick="window._docLabelCodeEdit(\'' + _esc(code) + '\',' + ci + ');return false;"'
                   + ' title="' + _esc(_t('값 고치기', 'edit value')) + '" style="position:absolute; left:-0.6em; bottom:-0.6em; width:1em; height:1em;'
                   + ' line-height:1em; text-align:center; background:#1971c2; color:#fff; border-radius:50%; font-size:0.6em;'
                   + ' text-decoration:none; box-shadow:0 0 0 1px #fff; pointer-events:auto; z-index:2;">✏</a>'
                   + '<a href="#" onclick="window._docLabelCodeDel(\'' + _esc(code) + '\',' + ci + ');return false;"'
                   + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
-                  + ' background:#4d4d4d; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
+                  + ' background:#808080; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
                   + ' box-shadow:0 0 0 1px #fff; pointer-events:auto; z-index:2;">✕</a>' : '')
                 + '</span>';
         }).join('');
@@ -1244,7 +1249,7 @@
                     svg.style.display = 'block';
                 }
             } catch (e) {
-                canvas.innerHTML = '<span style="color:#4d4d4d; font-size:0.6em;">' + _esc(_t('생성 실패', 'render failed')) + '</span>';
+                canvas.innerHTML = '<span style="color:#808080; font-size:0.6em;">' + _esc(_t('생성 실패', 'render failed')) + '</span>';
             }
         });
     };
@@ -1348,7 +1353,7 @@
             wrap.style.cssText = 'position:absolute; left:' + x1 + 'px; top:' + y1 + 'px; width:' + len + 'px; height:0;'
                 + ' transform:rotate(' + angle + 'deg); transform-origin:0 0; z-index:0; pointer-events:none;';
             var bar = document.createElement('span');
-            bar.style.cssText = 'display:block; width:100%; height:3px; margin-top:-1.5px; background:#4d4d4d; border-radius:1.5px;';
+            bar.style.cssText = 'display:block; width:100%; height:3px; margin-top:-1.5px; background:#808080; border-radius:1.5px;';
             wrap.appendChild(bar);
             if (draggable) {
                 // 🖐 [2026-11-13] 3px 짜리 선은 그대로 잡기엔 너무 얇다(핀 막대와 같은 함정) —
@@ -1364,8 +1369,8 @@
                     var dot = document.createElement('span');
                     dot.setAttribute('data-line-handle', which);
                     dot.style.cssText = 'position:absolute; top:-5px; ' + (which === 'a' ? 'left:-5px;' : 'left:' + (len - 5) + 'px;')
-                        + ' width:10px; height:10px; border-radius:50%; background:#4d4d4d; border:2px solid #fff;'
-                        + ' box-shadow:0 0 0 1px #4d4d4d; cursor:move; pointer-events:auto;';
+                        + ' width:10px; height:10px; border-radius:50%; background:#808080; border:2px solid #fff;'
+                        + ' box-shadow:0 0 0 1px #808080; cursor:move; pointer-events:auto;';
                     wrap.appendChild(dot);
                     window._docLabelLineEndpointWire(dot, img, code, li, which);
                 });
@@ -1374,7 +1379,7 @@
                 delBtn.textContent = '✕';
                 delBtn.setAttribute('data-line-del', '');
                 delBtn.style.cssText = 'position:absolute; left:' + (len / 2 - 7) + 'px; top:-18px; width:14px; height:14px;'
-                    + ' line-height:14px; text-align:center; background:#4d4d4d; color:#fff; border-radius:50%;'
+                    + ' line-height:14px; text-align:center; background:#808080; color:#fff; border-radius:50%;'
                     + ' font-size:9px; font-weight:bold; text-decoration:none; box-shadow:0 0 0 1px #fff; pointer-events:auto; transform:rotate(' + (-angle) + 'deg);';
                 delBtn.onclick = function (ev) { ev.preventDefault(); window._docLabelLineDel(code, li); };
                 wrap.appendChild(delBtn);
@@ -1517,7 +1522,7 @@
     //    ⚠️⚠️ [2026-11-13, 사용자 요청] "추가로 넣는 인증마크는 TXT 색상과 같은 색상으로 적용해줘
     //    기존 도안에 있는 마크와 구별" — `assets/certmarks/*.png` 자체를 TXT 와 같은 색
     //    + 투명배경으로 구워 뒀다(브라우저 canvas 로 원본 흑백 마크를 재색칠). ⚠️ [2026-11-19]
-    //    "글자가 겹쳐서 가려지지 않도록" 요청으로 **빨강(#e03131) → 70% 그레이(#4d4d4d)**
+    //    "글자가 겹쳐서 가려지지 않도록" 요청으로 **빨강(#e03131) → 50% 그레이(#808080)**
     //    로 다시 구웠다(PIL 로 알파채널은 그대로 두고 RGB 만 치환 — `tools/recolor-certmarks.py`
     //    가 있으면 재사용, 없으면 같은 방식으로 새로 만들 것). CSS `mask-image` 는 실제 배포
     //    환경에서 마스크 로드가 실패하면
@@ -1541,11 +1546,11 @@
                 // 🔳 [2026-11-19, 사용자 요청] "글자가 서로 겹쳐서 가려지지 않도록" — CB 처럼 그림
                 //    없이 글자만 찍는 배지도 흰 배경이었다. 투명으로 바꿔 다른 표시와 겹쳐도
                 //    서로를 가리지 않게 한다.
-                inner = '<span style="display:inline-block; border:0.12em solid #4d4d4d; border-radius:0.2em; padding:0.1em 0.4em;'
-                    + ' font-weight:bold; background:transparent; color:#4d4d4d; font-size:1.3em; white-space:nowrap;">' + _esc(cat.label) + '</span>';
+                inner = '<span style="display:inline-block; border:0.12em solid #808080; border-radius:0.2em; padding:0.1em 0.4em;'
+                    + ' font-weight:bold; background:transparent; color:#808080; font-size:1.3em; white-space:nowrap;">' + _esc(cat.label) + '</span>';
             } else {
                 wrapStyle += ' width:' + (m.wem || 4) + 'em; aspect-ratio:' + cat.w + '/' + cat.h + ';';
-                var markUrl = 'assets/certmarks/' + cat.key + '.png';
+                var markUrl = 'assets/certmarks/' + cat.key + '.png?v=' + CERT_MARK_ASSET_VER;
                 inner = '<img data-mark-img src="' + markUrl + '" draggable="false" ondragstart="return false;"'
                     + ' style="display:block; width:100%; height:100%;">';
             }
@@ -1557,7 +1562,7 @@
                   + ' style="position:absolute; right:-0.5em; top:0; bottom:0; width:1em; cursor:ew-resize; z-index:2;"></span>' : '')
                 + (draggable ? '<a href="#" onclick="window._docLabelMarkDel(\'' + _esc(code) + '\',' + mi + ');return false;"'
                   + ' style="position:absolute; left:-0.6em; top:-0.6em; width:1em; height:1em; line-height:1em; text-align:center;'
-                  + ' background:#4d4d4d; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
+                  + ' background:#808080; color:#fff; border-radius:50%; font-size:0.7em; font-weight:bold; text-decoration:none;'
                   + ' box-shadow:0 0 0 1px #fff;">✕</a>' : '')
                 + '</span>';
         }).join('');
@@ -1818,7 +1823,7 @@
                 //    통째로 가려졌다. 투명으로 바꿔 겹쳐도 둘 다 보이게 한다(겹친 자리는 글자끼리
                 //    섞여 읽기 어려울 수 있지만, 최소한 한쪽이 완전히 숨어 "없는 셈" 되진 않는다).
                 + '<span data-note-text data-note-code="' + _esc(code) + '" data-note-idx2="' + ni
-                + '" style="display:block; background:transparent; color:#4d4d4d; font-weight:bold;'
+                + '" style="display:block; background:transparent; color:#808080; font-weight:bold;'
                 + ' padding:0.15em 0.45em; border-radius:0.3em; text-align:'
                 + (n.align || 'left') + ';'
                 + ' white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; line-height:1.25;">'
@@ -1836,7 +1841,7 @@
                 //    font-size 를 (배율 없는) 고정 기준으로 직접 덮어써 라벨마다 달라지지 않는다.
                 // 🔵🔵 [2026-11-13 6차, 사용자 요청] "지름 1.2 적용해줘" — 1.64em → 1.2em(같은 비율로
                 //    안쪽 숫자도 0.88em → 0.64em).
-                + '<span data-note-circle style="width:1.2em; height:1.2em; min-width:1.2em; border-radius:50%; background:#4d4d4d;'
+                + '<span data-note-circle style="width:1.2em; height:1.2em; min-width:1.2em; border-radius:50%; background:#808080;'
                 + ' color:#fff; font-weight:bold; font-size:0.64em; display:flex; align-items:center; justify-content:center;'
                 + ' box-shadow:0 0 0 2px #fff; flex-shrink:0;">' + (ni + 1) + '</span>'
                 + '</span>';
@@ -2387,7 +2392,10 @@
         ov.style.display = 'flex';
         if (window.bringModalToFront) { try { window.bringModalToFront('doclabelart-overlay'); } catch (e) { /* 〃 */ } }
         var titleEl = document.getElementById('doclabelart-title');
-        if (titleEl) titleEl.textContent = '🏷 ' + _t('라벨 도안 — ', 'Artwork — ') + code;
+        // 🖼️ [2026-11-19, 사용자 요청] 헤더 아이콘 변경 — 이 모달은 "라벨" 자체가 아니라 그
+        //    라벨의 **도안(그림)** 을 보여주고 고치는 창이라 가격표 모양 🏷 보다 액자 🖼️ 가 더
+        //    맞는다.
+        if (titleEl) titleEl.textContent = '🖼️ ' + _t('라벨 도안 — ', 'Artwork — ') + code;
 
         var notes = window._docLabelNotesCache[code] || [];
         var marks = window._docLabelMarksCache[code] || [];
@@ -2427,7 +2435,7 @@
             + '</div>'
             + '<div style="margin-top:8px; font-size:12px;">'
             + (placing
-               // ⚠️ [2026-11-19] 이 안내 글도 도안 위 표시 색(70% 그레이)과 달리 "지금 클릭을
+               // ⚠️ [2026-11-19] 이 안내 글도 도안 위 표시 색(50% 그레이)과 달리 "지금 클릭을
                //    기다리는 중"임을 눈에 띄게 알려야 해서 빨강 그대로 둔다.
                ? '<span style="color:#e03131;">' + _esc(_t('이미지를 클릭하세요…', 'Click the image…')) + '</span>'
                  + ' <a href="#" onclick="window._docLabelNoteDisarm();return false;">' + _esc(_t('취소', 'cancel')) + '</a>'
@@ -2519,7 +2527,7 @@
                         + '<a href="#" onclick="window._docLabelNoteDel(\'' + _esc(code) + '\',' + ni + ');return false;"'
                         + ' title="' + _esc(_t('이 표시 빼기', 'remove')) + '"'
                         + ' style="flex:0 0 14px; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px;'
-                        + ' margin-top:2px; border:1px solid #4d4d4d; border-radius:3px; color:#4d4d4d; text-decoration:none;'
+                        + ' margin-top:2px; border:1px solid #808080; border-radius:3px; color:#808080; text-decoration:none;'
                         + ' font-weight:bold; font-size:9px; line-height:1;">✕</a>'
                         + '<span style="flex:0 0 1.6em; text-align:right; padding-top:2px;">' + (ni + 1) + '.</span>'
                         // ⚡ [2026-11-13, 사용자 신고 "모달에서 수정하면 실시간으로 안 바뀜"] `oninput`
@@ -2677,7 +2685,7 @@
                     if (st.loading) {
                         line += '<div style="margin-top:3px; color:#868e96;">⏳ ' + _esc(_t('이미지 찾는 중…', 'loading…')) + '</div>';
                     } else if (st.error) {
-                        // ⚠️ [2026-11-19] 아래 표시/마크/박스/직선/QR·바코드 색은 70% 그레이로
+                        // ⚠️ [2026-11-19] 아래 표시/마크/박스/직선/QR·바코드 색은 50% 그레이로
                         //    바꿨지만, 이건 도안 위에 그려지는 내용이 아니라 **오류 안내**라
                         //    눈에 띄어야 하므로 빨강을 그대로 둔다.
                         line += '<div style="margin-top:3px; color:#e03131;">⚠️ ' + _esc(st.error) + '</div>';
