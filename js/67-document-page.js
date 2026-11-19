@@ -2372,6 +2372,12 @@
         }
         window._docLabelArtModal = { formId: formId, idx: idx, code: code, artFile: artFile };
         if (window._docLabelNotesCache[code] === undefined) window._docLabelNotesLoad(code);
+        // 🔁 [2026-11-19, 사용자 요청] "무언가를 바꾸고 나서 썸네일을 클릭하면 바뀌어야 되는데
+        //    (현재 Document 페이지 버튼을 누르면 바뀜 기능 동일하게 적용)" — 다른 자리에서 고친
+        //    내용이 아직 표 썸네일엔 안 옮겨졌을 수 있으니(위 레이스 컨디션 수정과는 별개로,
+        //    **클릭 자체**가 항상 최신으로 맞추는 확실한 계기가 되도록) 모달을 열기 **전에**
+        //    표를 한 번 더 그린다. 썸네일을 가진 바로 이 행도 같이 새로고침된다.
+        if (window._docRender) window._docRender();
         _docLabelArtModalRender();
     };
     window._docLabelArtModalClose = function () {
