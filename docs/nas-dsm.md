@@ -1055,3 +1055,26 @@ await window._storageWriteLogFlush()   // 지금 올리기(기다리지 않고 �
   시험 파일은 `App_Config/zz_wj_probe_*` 로 만들고 끝나면 지운다.
 - ⚠️ **색인 가드는 실제 색인으로 시험하지 않는다** — 가드가 혹시 깨져 있으면 그 시험 한 번이
   색인을 통째로 날린다. "막혔다는 표시가 줄에 실리는가" 만 본다.
+
+## 🔍 Drive 잔재 점검 (2026-11-21, 사용자 요청 "이사했는데 여전히 구글드라이브를 바라보는 곳이 있는지")
+
+전수 조사(js 81개·HTML·백엔드) 결론: **Drive 데이터가 실제로 구글로 나가는 길은 없다** — 어댑터(js/57)의 `window.fetch`(`DRIVE_RE`)
+와 `gapi.client.drive.files.{list,get}`/`about.get` 스텁이 앱이 쓰는 호출 전부를 받는다(`gapi.client.request`·XHR·sheets 호출 0건,
+57 보다 먼저 fetch 를 잡아 두는 파일은 js/30 하나고 그건 이음쇠로 연결돼 있다). 그 대신 **어댑터가 몰라서 조용히 가짜 성공**하던
+Drive 동작 둘과 진짜 구글 왕복 하나가 있었다 — 전부 고쳤다.
+
+| # | 자리 | 무엇이 문제였나 | 고친 것 |
+|---|---|---|---|
+| 1 | js/04b `deleteProjectFlow`·`_mergeDuplicateDriveFiles` → `PATCH {trashed:true}` | 어댑터가 `trashed` 를 몰라 **200 을 돌려주고 아무것도 안 지웠다**. 삭제가 성공으로 보이는데 파일은 남고, js/66 자가치유가 색인에 되살려 "삭제가 되돌아오는" 모양 | 57 `driveTrash`: `Trash/<YYYYMMDD_HHMM>__<이름>` 으로 옮긴다(읽기→쓰기 확인→원본 삭제, id 지도도 옮김). `Trash` 는 `APP_NON_PROJECT_FOLDERS` 에 등록. 삭제 확인창 문구도 저장소별로 |
+| 2 | js/04b `_moveFileToTeamFolder`·`_findOrMigrateFile2` → `PATCH ?addParents=&removeParents=`(URL 쿼리, 본문 `{}`) | 어댑터는 본문만 읽어 **폴더 이동이 no-op**, 04b 는 "옮겼다" 고 캐시 | 57 PATCH 분기가 쿼리의 `addParents/removeParents` 를 meta 에 합친다 |
+| 3 | js/04b `intializeGapiClient` → `gapi.client.init({apiKey, discoveryDocs:[drive/v3]})` | NAS 모드에서 **유일하게 구글로 실제로 나가는 API 호출**(API 키 포함), 구글이 느리면 부팅 지연 | 57 래퍼가 NAS 모드에선 원본을 안 부르고 `gapiInited=true` + 스텁만 심는다 |
+| 4 | `kortek_backend.py` 알람 프로젝트 읽기(`_project_doc_by_id`)·주소록(`_load_address_book`) | NAS 실패 시 **서비스계정으로 낡은 Drive 사본** 폴백 → 옛 담당자·텔레그램 id 로 알람 | `DRIVE_FALLBACK_ENABLED`(환경변수 `GANTT_DRIVE_FALLBACK=1`, 기본 꺼짐). 꺼져 있으면 그 알람을 건너뛰고 사유를 남긴다 |
+| 5 | js/04c 백업 복원 목록·js/22f 주소록 백업 `orderBy createdTime desc` | 어댑터가 그 정렬을 몰라 이름순(=오래된 것부터) | 57 `createdTime desc` 분기 |
+| 6 | 문구 | 언어 토글이 상단 배지를 "(드라이브 연동하기)" 로 되돌림(04j) · 휴일 안내 "구글 드라이브 미연동"(04d) · 삭제/복원 툴팁 "구글 드라이브" | 04j 는 NAS 모드에서 `auth_button` 을 건너뛰고(57 이 그린다), 04d 는 `_storeName()`/`_storeConnectHint()`, 툴팁은 저장소 중립 문구 |
+| 7 | js/04b `_getChildFolderIds` 의 `catch → []` | 백엔드 일시 500 한 번이면 **그 호출의 목록에서 팀 폴더가 조용히 빠졌다** | 동작은 그대로(호출자가 배열 기대), 콘솔 경고 + `_issueLog('child_folders_failed')` |
+
+남긴 것(의도된 Drive 참조): script.google.com AI 프록시·translate.googleapis(번역)·Drive **모드** 전용 분기와 `DRIVE_ONLY_SETTINGS`·
+`backupToDrive` 의 `files/copy` 빠른 길(어댑터가 `expected` 오류로 막고 앱이 직접 업로드로 폴백 — 정상). `appProperties` 쓰기(`me`·
+`kind:'mailbody'`)는 어댑터가 버리므로 색인에 없는 키는 NAS 에서 늘 빈 값 — 소비자 쪽에서 쓰지 않는다(변경 없음).
+⚠️ **확인한 것**: js 파싱·어댑터 분기(정적). **못 한 것**: 실제 NAS 에서 프로젝트 삭제 → `Trash/` 에 생기는지, 팀 변경 → 폴더 이동, 네트워크
+탭에 `discovery/v1/apis/drive/v3/rest` 요청이 더 안 나가는지 — 회사 PC 에서 한 번씩 볼 것(백엔드 재시작 필요: 4번).

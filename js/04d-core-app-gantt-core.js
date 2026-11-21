@@ -197,9 +197,12 @@
         if (window.isDriveConnected) {
             if (notice) notice.textContent = _hEn ? '🔄 Loading shared team holiday list...' : '🔄 팀 공용 휴일 목록을 불러오는 중...';
             await window.loadHolidaysFromDrive();
-            if (notice) notice.textContent = _hEn ? '☁️ This is the shared team holiday list (Drive). Changes sync with the whole team.' : '☁️ 팀 공용(드라이브) 휴일 목록입니다. 등록/삭제하면 전체 팀과 공유됩니다.';
+            // 🗄️ [2026-11-21] 저장소 이름은 `_storeName()`(js/04a) — "드라이브" 로 박아 두면 NAS 로 옮긴 뒤 틀린 안내가 된다
+            const _sn = window._storeName ? window._storeName(_hEn) : (_hEn ? 'Drive' : '드라이브');
+            if (notice) notice.textContent = _hEn ? `☁️ This is the shared team holiday list (${_sn}). Changes sync with the whole team.` : `☁️ 팀 공용(${_sn}) 휴일 목록입니다. 등록/삭제하면 전체 팀과 공유됩니다.`;
         } else if (notice) {
-            notice.textContent = _hEn ? '⚠️ Google Drive not connected. Changes will not be shared with the team.' : '⚠️ 구글 드라이브 미연동 상태입니다. [파일 → 🔵 드라이브 연동하기]를 먼저 눌러주세요. 지금 등록해도 팀과 공유되지 않습니다.';
+            const _hint = window._storeConnectHint ? window._storeConnectHint(_hEn) : (_hEn ? 'Connect the storage first.' : '[파일 → 🔵 드라이브 연동하기]를 먼저 눌러주세요.');
+            notice.textContent = _hEn ? `⚠️ Storage not connected. ${_hint} Changes will not be shared with the team.` : `⚠️ 저장소 미연결 상태입니다. ${_hint} 지금 등록해도 팀과 공유되지 않습니다.`;
         }
         window.renderCustomHolidayList();
     };

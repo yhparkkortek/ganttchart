@@ -467,7 +467,13 @@
             try { localStorage.setItem(_FOLDER_CACHE_KEY, JSON.stringify(_childFolderCache)); } catch(e) {}
             return excludeNames ? items.filter(function(o) { return !excludeNames.includes(o.name); }).map(function(o) { return o.id; })
                                 : items.map(function(o) { return o.id; });
-        } catch(e) { return []; }
+        } catch(e) {
+            // ⚠️ [2026-11-21] 빈 배열로 삼키면 `_buildParentsQuery` 가 루트만 묻게 되어 **그 호출의 목록에서 팀 폴더가 조용히
+            //    빠진다**(백엔드 일시 500 한 번으로). 동작은 그대로 두되(호출자가 배열을 기대한다) 조용히 넘기지 않는다.
+            console.warn('[폴더 목록] 자식 폴더 조회 실패 — 이번 목록엔 팀 폴더가 빠질 수 있습니다:', parentId, e && e.message);
+            try { window._issueLog && window._issueLog({ domain: 'storage', kind: 'child_folders_failed', route: 'files.list', result: { parentId: parentId, errorRaw: String(e && e.message || e) } }); } catch (e2) { /* 무시 */ }
+            return [];
+        }
     };
     // 팀 폴더 구조가 실제로 바뀐 경우(폴더 추가/이름 변경) 수동으로 캐시를 무효화하는 함수.
     window._clearFolderCache = function() {
@@ -698,9 +704,11 @@
             return;
         }
         // ② 최종 confirm — 삭제 대상 파일명을 명시하여 실수 방지 (타이핑 불필요)
+        // 🗑 [2026-11-21] 저장소별 문구 — NAS 는 어댑터가 `Trash/` 폴더로 옮긴다(영구 삭제 아님), Drive 는 휴지통(30일)
+        const _isNas = window._storageMode && window._storageMode() === 'nas';
         const ok = confirm(_en
-            ? `⚠️ Delete this project?\n\n📜 ${file.name}\n\nThe file will be moved to Google Drive Trash (recoverable for 30 days).`
-            : `⚠️ 이 프로젝트를 삭제할까요?\n\n📜 ${file.name}\n\n구글 드라이브 휴지통으로 이동합니다 (30일 내 복구 가능).`);
+            ? `⚠️ Delete this project?\n\n📜 ${file.name}\n\n` + (_isNas ? 'The file will be moved to the NAS "Trash" folder (backups in Backups/ stay as they are).' : 'The file will be moved to Google Drive Trash (recoverable for 30 days).')
+            : `⚠️ 이 프로젝트를 삭제할까요?\n\n📜 ${file.name}\n\n` + (_isNas ? 'NAS 의 "Trash" 폴더로 옮깁니다 (Backups 의 백업은 그대로 남습니다).' : '구글 드라이브 휴지통으로 이동합니다 (30일 내 복구 가능).'));
         if (!ok) return;
         try {
             const tokenObj = gapi.client.getToken();

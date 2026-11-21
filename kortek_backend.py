@@ -144,6 +144,10 @@ def humanize_mail_conn_error(e, host, port, proto):
 #    kortek_pm.html(js/04a-core-app-globals.js의 SHARED_FOLDER_ID)과 동일한 폴더.
 #    이 폴더 밑에 프로젝트 파일들과 App_Config/AddressBook_Shared.json이 들어있다.
 GANTT_SHARED_FOLDER_ID     = '1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS'
+# 🚫 [2026-11-21 Drive 잔재 점검] 알람·주소록이 NAS 를 못 읽을 때 **구글 Drive 서비스계정 사본으로 폴백**하던 길.
+#    Drive 사본은 11-03 이사 뒤 갱신이 끊긴 낡은 파일이라, 폴백이 살아 있으면 NAS 가 잠깐 안 될 때 담당자·텔레그램 id
+#    옛값으로 알람이 나간다(틀린 사람에게, 조용히). 기본 **꺼짐** — 켜려면 환경변수 GANTT_DRIVE_FALLBACK=1.
+DRIVE_FALLBACK_ENABLED      = os.environ.get('GANTT_DRIVE_FALLBACK', '0') == '1'
 GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get(
     'GOOGLE_SERVICE_ACCOUNT_FILE',
     os.path.join(BASE_DIR, 'google_service_account.json')
@@ -2505,6 +2509,9 @@ def _project_doc_by_id(fid):
             nas_err = nas_err or ('NAS 지도·색인에 id %s… 가 없습니다' % fid[:12])
     except Exception as e:
         nas_err = nas_err or ('NAS 읽기 실패: %s' % e)
+    if not DRIVE_FALLBACK_ENABLED:
+        # 낡은 Drive 사본으로 알람을 내보내는 것보다 **이번 알람을 건너뛰고 사유를 남기는** 쪽이 안전하다
+        raise RuntimeError('%s (Drive 폴백은 꺼져 있음 — GANTT_DRIVE_FALLBACK=1 로 켬)' % nas_err)
     try:
         return _drive_read_json_file(fid), 'drive'
     except Exception as e:
@@ -2528,9 +2535,12 @@ def _load_address_book(force=False):
             c['loadedAt'] = now
             return c['data']
     except Exception as e:
-        print("[업무알람] NAS 주소록 읽기 실패(Drive 로 폴백): %s" % e)
+        print("[업무알람] NAS 주소록 읽기 실패: %s" % e)
     if c['data'] is not None:
-        return c['data']
+        return c['data']          # 직전에 읽어 둔 NAS 사본(TTL 지나도) — 낡은 Drive 사본보다 낫다
+    if not DRIVE_FALLBACK_ENABLED:
+        print("[업무알람] 주소록을 못 읽었습니다 — Drive 폴백은 꺼져 있어(GANTT_DRIVE_FALLBACK) 빈 목록으로 진행합니다")
+        return []
     return _drive_load_address_book(force)
 
 

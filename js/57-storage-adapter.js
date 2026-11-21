@@ -1068,6 +1068,9 @@
         }
         if (/modifiedTime\s+desc/i.test(params.orderBy || '')) {
             files.sort(function (a, b) { return (b.modifiedTime || '') > (a.modifiedTime || '') ? 1 : -1; });
+        } else if (/createdTime\s+desc/i.test(params.orderBy || '')) {
+            // 📅 [2026-11-21] 백업 복원 목록(js/04c)·주소록 백업(js/22f)이 쓰는 정렬 — 몰라서 이름순(=오래된 것부터)으로 나갔다
+            files.sort(function (a, b) { return (b.createdTime || b.modifiedTime || '') > (a.createdTime || a.modifiedTime || '') ? 1 : -1; });
         } else if (/\bname\b/i.test(params.orderBy || '')) {
             files.sort(function (a, b) { return a.name.localeCompare(b.name); });
         }
@@ -1121,6 +1124,35 @@
         return toDriveFile({ name: nm, isdir: false,
                              size: (put && put.bytes != null) ? put.bytes : undefined,
                              mtime: Math.floor(Date.now() / 1000) }, parts.join('/'));
+    }
+
+    /** 🗑 Drive `trashed:true` 의 NAS 판 — `Trash/<YYYYMMDD_HHMM>__<이름>` 으로 옮긴다(읽기→쓰기 확인→원본 삭제).
+     *  `Trash` 는 `APP_NON_PROJECT_FOLDERS`(js/04a)에 있어 프로젝트 목록이 뒤지지 않는다. id 지도도 같이 옮겨
+     *  옛 id 가 허공을 가리키지 않게 한다. */
+    window.STORAGE_TRASH_DIR = window.STORAGE_TRASH_DIR || 'Trash';
+    async function driveTrash(id) {
+        var cur = relOf(id);
+        if (!cur) throw new Error('모르는 파일 id: ' + id);
+        if (cur.isdir) throw new Error('폴더는 휴지통으로 옮기지 않습니다: ' + cur.rel);
+        var d = new Date();
+        var stamp = d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '_' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2);
+        var base = normRel(cur.rel).split('/').pop();
+        var newRel = joinRel(window.STORAGE_TRASH_DIR, stamp + '__' + base);
+        var res = await readRel(cur.rel);
+        var buf = await res.arrayBuffer();
+        await writeRel(newRel, bytesToB64(buf), true);           // put 라우트가 되읽어 확인한다
+        var delErr = null;
+        for (var tryN = 0; tryN < 2; tryN++) {
+            try { await nasJson('POST', '/nas/app/delete', { rel: cur.rel }); delErr = null; break; }
+            catch (e) { delErr = e; }
+        }
+        if (delErr) {
+            try { await nasJson('POST', '/nas/app/delete', { rel: newRel }); } catch (e2) { /* 사본이 남아도 원본이 진실 */ }
+            throw new Error('휴지통으로 옮기지 못했습니다(원본 삭제 실패): ' + (delErr && delErr.message || delErr));
+        }
+        note('trashed', { from: cur.rel, to: newRel });
+        await remapIdPath(cur.rel, newRel);
+        return { id: id, name: base, trashed: true, trashedTo: newRel };
     }
 
     async function driveUpdate(id, meta, media, isB64) {
@@ -1498,6 +1530,16 @@
                 }
                 var meta2 = {};
                 try { meta2 = JSON.parse(body); } catch (e) { /* ignore */ }
+                // 🗑 [2026-11-21 Drive 잔재 점검] `{trashed:true}` — Drive 의 "휴지통으로" 를 여기서 모르면 **200 을 돌려주고
+                //    아무것도 안 지웠다**(프로젝트 삭제 js/04b deleteProjectFlow · 중복 정리 _mergeDuplicateDriveFiles).
+                //    삭제가 성공으로 보이는데 파일은 남고, js/66 자가치유가 색인에 다시 살려 넣어 "삭제가 되돌아오는" 모양이 됐다.
+                //    NAS 엔 휴지통이 없으니 `Trash/<시각>__<이름>` 으로 옮긴다(영구 삭제가 아니다 — 사람이 되돌릴 수 있다).
+                if (meta2 && meta2.trashed === true) return jsonResponse(await driveTrash(fileId));
+                // 📁 [2026-11-21] Drive 는 `addParents/removeParents` 를 **URL 쿼리**로도 받는다(js/04b `_moveFileToTeamFolder`·
+                //    `_findOrMigrateFile2` 가 그렇게 보낸다). 본문만 보던 탓에 폴더 이동이 조용한 no-op 였고 04b 는 "옮겼다" 고
+                //    캐시까지 했다. 쿼리의 것을 meta 에 합친다(본문이 이기고, 없을 때만).
+                if (params.addParents && !meta2.addParents) meta2.addParents = params.addParents;
+                if (params.removeParents && !meta2.removeParents) meta2.removeParents = params.removeParents;
                 return jsonResponse(await driveUpdate(fileId, meta2, null, false));
             }
             if (method === 'DELETE') {
@@ -1630,7 +1672,13 @@
         }
     }
 
+    /** 🗄️ 상단 배지 — NAS 모드에선 "🔵 드라이브 연동하기" 가 뜰 자리가 없다(2026-11-21 Drive 잔재 점검).
+     *  연결 전엔 "연결 중", 못 붙으면 "미연결(🔑 설정)", 붙으면 nasMarkConnected 가 이름을 그린다. */
+    function paintAuthButton(text) {
+        try { var ab = document.getElementById('auth_button'); if (ab) ab.innerText = text; } catch (e) { /* 무시 */ }
+    }
     (async function _nasIdentity() {
+        paintAuthButton(window._currentLang === 'en' ? '🗄️ Connecting to NAS…' : '🗄️ NAS 연결 중…');
         try {
             var s = await (await nas('GET', '/nas/status')).json();
             // 백엔드가 막 떴으면 세션이 없다 — 저장된 계정으로 한 번만 붙어 본다.
@@ -1654,11 +1702,13 @@
                 // ⚠️ 전엔 콘솔에만 적었다 — 사람 눈엔 **[📂 프로젝트 열기] 가 회색인 것**만 보이고
                 //    왜 그런지는 알 길이 없었다. 사유별로 다르게 말한다(고치는 방법이 다르다).
                 nasOfflineBanner(s || {});
+                paintAuthButton(window._currentLang === 'en' ? '🗄️ NAS not connected (🔑 Settings)' : '🗄️ NAS 미연결 (🔑 설정)');
             }
         } catch (e) {
             note('nas-offline', String((e && e.message) || e));
             console.warn('[storage-adapter] 백엔드에 못 붙었습니다 — kortek_backend.bat 이 떠 있는지 확인하세요.');
             nasOfflineBanner({ reason: 'backend' });
+            paintAuthButton(window._currentLang === 'en' ? '🗄️ Backend off' : '🗄️ 백엔드 꺼짐');
         }
         implant();          // 상태를 알아낸 뒤 한 번 더 — 그 사이 가드가 돌았을 수 있다
         if (window._updateDriveConnBadge) { try { window._updateDriveConnBadge(); } catch (e) { /* ignore */ } }
@@ -1768,11 +1818,15 @@
     implant();
     // ② gapi 초기화가 끝나는 **그 순간** 다시 심는다(폴링을 기다리지 않는다).
     if (typeof window.intializeGapiClient === 'function') {
-        var _origInit = window.intializeGapiClient;
         window.intializeGapiClient = async function () {
-            var r;
-            try { r = await _origInit.apply(this, arguments); } finally { implant(); }
-            return r;
+            // 🚫 [2026-11-21 Drive 잔재 점검] 예전엔 여기서 원본 `gapi.client.init({apiKey, discoveryDocs:[drive/v3]})` 를
+            //    그대로 돌렸다 — NAS 모드에서 **유일하게 구글로 실제로 나가는 API 호출**(API 키 포함)이었고, 구글이
+            //    느리면 부팅(js/05 의 60×250ms 대기)이 그만큼 늦었다. NAS 모드엔 discovery 문서가 필요 없다(drive 는
+            //    우리 스텁이다). 플래그만 세우고 스텁을 심는다. ⚠️ `gapiInited` 는 js/04a 의 `let` — 전역 어휘 환경이라
+            //    여기서도 그 이름으로 바로 닿는다.
+            try { gapiInited = true; } catch (e) { /* 선언 전이면 다음 implant 가 처리 */ }
+            implant();
+            note('gapi-init-skipped', 'nas');
         };
     }
     // ③ 백스톱 — 위 둘이 다 빗나가도 되돌린다. ⚠️ [2026-11-21] 예전엔 **1초 영구** 인터벌이었다(NAS 모드 전원,

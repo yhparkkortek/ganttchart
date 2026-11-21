@@ -366,10 +366,10 @@
             i18nTitle: {
                 "color-palette-view": "🎨 컬러 팔레트 보기",
                 "drive-sync-issue-hint": "💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요. | Shift+클릭: 계정 전환",
-                "drive-restore-backup": "드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)",
+                "drive-restore-backup": "저장소 Backups 폴더의 이전 저장본으로 복원",
                 "doc-export-zip-hint": "CUSTOMER·M.C·SUMMARY 등 NAS 자료실에서 이 프로젝트(모든 모델) 몫만 모아 zip으로 내려받습니다",
                 "new-project-clear": "현재 화면을 비우고 새 프로젝트를 시작합니다",
-                "drive-delete-project": "구글 드라이브의 프로젝트 파일을 영구 삭제합니다 (관리자 비밀번호 필요)",
+                "drive-delete-project": "저장소의 프로젝트 파일을 삭제합니다 — NAS 는 Trash 폴더로 이동, 드라이브는 휴지통 (관리자 비밀번호 필요)",
                 "ai-summary-risk-hint": "지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다",
                 "gantt-qa-hint": "이 프로젝트 데이터에 대해 자유롭게 질문하고 AI 답변을 받습니다",
                 "ai-context-len-hint": "AI 요약·AI 문답이 업무 상세내용/답변을 읽을 때 최대 몇 자까지 참고할지 설정합니다",
@@ -663,10 +663,10 @@
             i18nTitle: {
                 "color-palette-view": "🎨 View color palette",
                 "drive-sync-issue-hint": "💡 If Google sync has an issue, press [CTRL + F5]. | Shift+Click: switch account",
-                "drive-restore-backup": "Restore a previous save from the Drive Backups folder (last 7 days)",
+                "drive-restore-backup": "Restore a previous save from the storage's Backups folder",
                 "doc-export-zip-hint": "Downloads a zip of this project's (all models') files from the NAS folders — CUSTOMER, M.C, SUMMARY, etc.",
                 "new-project-clear": "Clears the current screen and starts a new project",
-                "drive-delete-project": "Permanently deletes the project file on Google Drive (admin password required)",
+                "drive-delete-project": "Deletes the project file — NAS: moved to the Trash folder, Drive: to the trash bin (admin password required)",
                 "ai-summary-risk-hint": "AI summarizes delayed/upcoming tasks and recent changes to flag risks and actions",
                 "gantt-qa-hint": "Ask anything about this project's data and get an AI answer",
                 "ai-context-len-hint": "Sets the max characters AI Summary/AI Q&A will read from task details/answers",
@@ -751,7 +751,11 @@
         // UI 버튼 텍스트 일괄 업데이트
         const uiMap = LANG[window._currentLang].ui;
         const name = window.currentUserName || '';
+        const _nasMode = window._storageMode && window._storageMode() === 'nas';
         Object.entries(uiMap).forEach(([id, text]) => {
+            // 🗄️ [2026-11-21] NAS 모드의 상단 배지는 js/57 이 `🗄️ 이름` 으로 그린다 — 언어 토글이 "(드라이브 연동하기)" 로
+            //    되돌리던 것(Drive 잔재 점검 C1). 그 글자는 57 에 맡긴다.
+            if (_nasMode && id === 'auth_button') return;
             const el = document.getElementById(id) || document.querySelector(`.${id}`);
             if (!el) return;
             const t = text.replace('{name}', name);

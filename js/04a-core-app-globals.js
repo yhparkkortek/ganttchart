@@ -212,6 +212,8 @@ ${mailText}`;
         'Backups',          // 자동 백업
         'App_Config',       // 팀 공용 설정(주소록·공휴일·프롬프트·project_index …)
         'MailBodies',       // 메일 원문 사본(js/54) — text/plain 이라 어차피 안 걸리지만 조회 자체를 뺀다
+        'Trash',            // 🗑 Drive 의 trashed:true 를 어댑터(js/57 driveTrash)가 여기로 옮긴다 — 지운 프로젝트가 목록에 또 뜨면 안 된다
+        'MailRoutes',       // 🧭 메일 배분 팀 공용 기록(js/74) — .json 이지만 프로젝트가 아니다
         '개발자료실'        // 사양서·도면 저장소(문서 저장소 root). 파일이 수만 건이라 절대 뒤지면 안 된다.
     ];
 
