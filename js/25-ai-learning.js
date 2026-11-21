@@ -78,7 +78,9 @@
     //    on(기본): 배너로 물어보지 않고 즉시 자동 재분석 후 결과만 토스트로 알림.
     //    off: 즉시 실행하지 않고 조용히 대기시켜서, 나중에 그 설정 그룹의
     //    "🔄 지금 일괄 재분석" 버튼으로 한 번에 몰아서 처리할 수 있게 함(1건 갱신마다 끼어들지 않음).
-    window._AI_RETRY_AUTO_DEFAULT = true;
+    // ⏸ [2026-11-21 사용자 결정] 기본 **꺼짐** — 재시도 엔진(`_alRunRetry`)은 프롬프트만 다시 만들고 판정·재배치
+    //    없이 행의 신뢰도 글자만 바꾼다(실측). AI 호출만 쓰고 결과가 배분에 안 닿는다. 켜기: ⚙️ AI 분석 설정 체크박스.
+    window._AI_RETRY_AUTO_DEFAULT = false;
     window.getAiRetryAutoEnabled = function() {
         var v = localStorage.getItem('gantt_ai_retry_auto');
         if (v === null) return window._AI_RETRY_AUTO_DEFAULT;

@@ -101,20 +101,6 @@ window.msOpenEmailServerSettings = function() {
 };
 
     (function() {
-    // 저장된 API 키 상태 표시 (선택된 AI 제공사 기준)
-    const savedKey = window.getActiveAiKey();
-    const keyInput  = document.getElementById('ms-personal-apikey');
-    const keyStatus = document.getElementById('ms-key-status');
-    if (savedKey && keyInput) {
-        keyInput.value = savedKey;
-        if (keyStatus) {
-            keyStatus.textContent = '✅ 저장된 키 있음';
-            keyStatus.style.color = '#28a745';
-        }
-    } else if (keyStatus) {
-        keyStatus.textContent = window._currentLang === 'en' ? '⚠️ Please enter your API key' : '⚠️ API 키를 입력해주세요';
-        keyStatus.style.color = '#e67e22';
-    }
     // 날짜 기본값: 오늘 기준
     const today = new Date();
     const week  = new Date(today);
@@ -189,6 +175,7 @@ window.msFetchMail = async function() {
         document.getElementById('ms-status').textContent    = _msEn0 ? `✅ ${data.count} mails collected` : `✅ ${data.count}개 메일 수집 완료`;
         document.getElementById('ms-result-count').textContent = data.count;
 
+        if (data.data) window._msTrimMailBodies(data.data);
         // 💡 건별로 채워나갈 배열 (중단하더라도 여기까지 담긴 내용은 그대로 표시됨)
         window._msResults = [];
         document.getElementById('ms-list-header').style.display = 'block'; // 0개부터 바로 보여줌
@@ -209,7 +196,7 @@ window.msFetchMail = async function() {
                     : matched.length === 1 ? { status: 'matched', candidates: matched }
                     : { status: 'ambiguous', candidates: matched };
                 return {
-                    idx: i, fileName: mail.fileName,
+                    idx: i, fileName: mail.fileName, key: mail.key || '',
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     body: mail.body, project: window._msProjectTagLabel(projectTag), task: null,
                     _projectTag: projectTag,
@@ -263,7 +250,7 @@ window.msFetchMail = async function() {
                 const scoreResult = task ? window._msComputeTotalScore(mail, task, priorityConfig) : null;
 
                 item = {
-                    idx: i, fileName: mail.fileName,
+                    idx: i, fileName: mail.fileName, key: mail.key || '',
                     subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
                     body: mail.body,
                     // 💡 [2026-08-24 버그 수정] 이 필드가 없어서 "⚡ 선택항목 연속등록"(AR.batchInsert)이
@@ -272,7 +259,7 @@ window.msFetchMail = async function() {
                     // 🐛 [2026-09-12 버그수정] to/cc(실제 수신자/참조 주소)를 여기서부터 버리고 있었음 —
                     //    "메일 원문 보기"에 수신자가 안 뜨고, 발송/알람 등 나중에 실제 주소가 필요한
                     //    기능도 이 mailRaw를 거치는 한 영영 못 구했다. 원본 헤더 그대로 보존.
-                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
+                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '', attachments: mail.attachments || [] },
                     project: window._msProjectTagLabel(projectTag), task,
                     _projectTag: projectTag,
                     _score: scoreResult ? scoreResult.total : null,
@@ -286,10 +273,10 @@ window.msFetchMail = async function() {
                 };
             } catch(e) {
                 item = {
-                    idx: i, fileName: mail.fileName,
+                    idx: i, fileName: mail.fileName, key: mail.key || '',
                     subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
                     body: mail.body,
-                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
+                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '', attachments: mail.attachments || [] },
                     project: null, task: null,
                     selected: false, registered: false, error: e.message
                 };
@@ -965,115 +952,6 @@ window._msMatchProjects = function(mail, projectList) {
     return filtered.map(s => s.project);
 };
 
-// ─── [⑥] 우선순위 점수 설정 UI ──
-window.openPriorityConfigModal = async function() {
-    const cfg = await window.loadPriorityConfig();
-    let modal = document.getElementById('priority-config-modal');
-    if (!modal) {
-        const _en = window._currentLang === 'en';
-        modal = document.createElement('div');
-        modal.id = 'priority-config-modal';
-        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
-        modal.innerHTML = `
-        <div id="priority-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
-            <div id="priority-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
-                <span>⭐ <span id="priority-config-title">${_en ? 'Priority Score Settings' : '우선순위 점수 설정'}</span></span>
-                <button onclick="document.getElementById('priority-config-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
-            </div>
-            <div style="overflow-y:auto; flex:1; padding:14px 18px;">
-                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">👤 직급별 점수</div>
-                <div id="pc-title-rows" style="margin-bottom:14px;"></div>
-                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🚨 긴급 키워드 사전</div>
-                <div id="pc-keyword-rows" style="margin-bottom:6px;"></div>
-                <button onclick="window._pcAddKeywordRow('', 5)" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:4px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-bottom:14px; transition:background .15s, border-color .15s;">+ 키워드 추가</button>
-                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin:10px 0 6px;">⚙️ 기타 점수</div>
-                <div style="display:grid; grid-template-columns:1fr 60px; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:14px;">
-                    <span>외부(고객사) 발신 가산</span><input id="pc-external" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
-                    <span>To(직접수신) 가산</span><input id="pc-tome" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
-                    <span>Cc(참조) 가산</span><input id="pc-ccme" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
-                    <span>중요도 헤더(Outlook 높음) 가산</span><input id="pc-importance" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
-                </div>
-                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🎯 커트라인 (이 점수 이상 🔴 긴급)</div>
-                <input id="pc-cutline" type="number" min="0" max="100" style="width:80px; padding:5px 8px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
-            </div>
-            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px;">
-                <button onclick="window._pcSave()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">저장</button>
-                <button onclick="document.getElementById('priority-config-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
-            </div>
-        </div>`;
-        document.body.appendChild(modal);
-        window._makeDraggable('priority-config-box', 'priority-config-drag');
-        window._bindClickToFront('priority-config-modal');
-    }
-
-    window._pcCurrentConfig = cfg;
-    window._pcRenderTitleRows(cfg.titleScores);
-    window._pcRenderKeywordRows(cfg.urgentKeywords);
-    document.getElementById('pc-external').value = cfg.externalCustomerScore;
-    document.getElementById('pc-tome').value = cfg.toMeScore;
-    document.getElementById('pc-ccme').value = cfg.ccMeScore;
-    document.getElementById('pc-importance').value = cfg.importanceHighScore;
-    document.getElementById('pc-cutline').value = cfg.cutline;
-
-    modal.style.display = 'block';
-    window.bringModalToFront('priority-config-modal');
-};
-
-window._pcRenderTitleRows = function(titleScores) {
-    const box = document.getElementById('pc-title-rows');
-    box.innerHTML = Object.keys(titleScores).map(title => `
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px;">
-            <span style="flex:1;">${title}</span>
-            <input class="pc-title-score" data-title="${title}" type="number" value="${titleScores[title]}"
-                style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
-        </div>`).join('');
-};
-
-window._pcAddKeywordRow = function(word, score) {
-    const box = document.getElementById('pc-keyword-rows');
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
-    row.innerHTML = `
-        <input class="pc-kw-word" type="text" value="${word}" placeholder="${window._currentLang === 'en' ? 'Keyword' : '키워드'}"
-            style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-        <input class="pc-kw-score" type="number" value="${score}"
-            style="width:55px; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-        <button onclick="this.parentElement.remove()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px; transition:background .15s, border-color .15s;">🗑</button>`;
-    box.appendChild(row);
-};
-
-window._pcRenderKeywordRows = function(urgentKeywords) {
-    document.getElementById('pc-keyword-rows').innerHTML = '';
-    (urgentKeywords || []).forEach(kw => window._pcAddKeywordRow(kw.word, kw.score));
-};
-
-window._pcSave = async function() {
-    const titleScores = {};
-    document.querySelectorAll('.pc-title-score').forEach(el => {
-        titleScores[el.dataset.title] = parseInt(el.value, 10) || 0;
-    });
-    const urgentKeywords = [];
-    document.querySelectorAll('#pc-keyword-rows > div').forEach(row => {
-        const word = row.querySelector('.pc-kw-word').value.trim();
-        const score = parseInt(row.querySelector('.pc-kw-score').value, 10) || 0;
-        if (word) urgentKeywords.push({ word, score });
-    });
-    const newConfig = {
-        titleScores,
-        urgentKeywords,
-        externalCustomerScore: parseInt(document.getElementById('pc-external').value, 10) || 0,
-        toMeScore: parseInt(document.getElementById('pc-tome').value, 10) || 0,
-        ccMeScore: parseInt(document.getElementById('pc-ccme').value, 10) || 0,
-        importanceHighScore: parseInt(document.getElementById('pc-importance').value, 10) || 0,
-        cutline: Math.max(0, Math.min(100, parseInt(document.getElementById('pc-cutline').value, 10) || 50))
-    };
-    const ok = await window.savePriorityConfig(newConfig);
-    if (window.showToast) {
-        window.showToast(ok ? window._t('✅ 우선순위 점수 설정이 저장되었습니다.', '✅ Priority score settings saved.') : window._t('⚠️ 저장 실패 (콘솔 확인)', '⚠️ Save failed (check console)'), ok ? 'info' : 'error');
-    }
-    if (ok) document.getElementById('priority-config-modal').style.display = 'none';
-};
-
 // ─── [메일 자동처리 ④] 우선순위 점수 — 규칙(직급/외부고객/긴급키워드/커스텀키워드/수신방식/중요도헤더) + AI(마감임박도/업무영향도) ──
 const MS_INTERNAL_DOMAIN = 'kortek.co.kr';
 const MS_CUSTOM_KEYWORD_SCORE = 7;
@@ -1341,6 +1219,54 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
 //    각자 상태/이력을 따로 추적한다(기존 "uid=1건=1프로젝트" 설계를 그대로 유지). targets[0]이 주매칭, 나머지가
 //    AI가 "상" 신뢰도로 확신한 추가매칭(최대 2개, _msResolveAiProjectMatch에서 이미 캡 걸림).
 //    onEachDone(target, result, idx)는 대상 하나가 끝날 때마다(성공/실패 무관) 호출됨.
+// 🧠 [2026-11-21 메모리] 수신 본문은 메모리 큐(_msResults)·보관함(mailRaw.body2000)에 **통째로** 머물렀다
+//    (실측 보관함 항목 1건 mailRaw 13.5KB, 큐는 저장할 때만 1,500자로 줄였다). AI 가 보는 길이는 기본 2,000자
+//    (`gantt_ai_mail_maxlen`, 사람이 올릴 수 있다)라 그 2배+여유를 두고 받는 즉시 잘라 둔다. 전문은 NAS .eml 에 있다.
+window.MS_BODY_KEEP_CHARS = window.MS_BODY_KEEP_CHARS || 8000;
+window._msTrimMailBodies = function(list) {
+    const keep = Math.max(window.MS_BODY_KEEP_CHARS, (window.getAiMailMaxLen ? window.getAiMailMaxLen() : 2000) * 2);
+    (list || []).forEach(function(m) {
+        if (m && typeof m.body === 'string' && m.body.length > keep) m.body = m.body.slice(0, keep) + '\n…(이하 생략 — 원문은 .eml)';
+    });
+    return list;
+};
+// 🔑 [2026-11-21] "이 메일이 이미 보관함에 있나" — 네 곳에 복사돼 있던 fileName 비교를 한 곳으로.
+//    열쇠(key)가 양쪽에 있으면 열쇠로, 아니면 fileName 으로(옛 항목·옛 백엔드 호환).
+window._msMailAlreadyInInbox = function(mailLike) {
+    if (!window.TaskInbox || !mailLike) return false;
+    const key = mailLike.key || '';
+    const fn = mailLike.fileName || '';
+    return window.TaskInbox.load().some(function(it) {
+        const mr = it.mailRaw; if (!mr) return false;
+        if (key && mr.key) return mr.key === key;
+        return !!fn && mr.fileName === fn;
+    });
+};
+// 🧭 [2026-11-21] 보관함에 새로 넣은 항목을 **같은 규칙**으로 바로 배치한다 — 일괄재분석·단건재분석 경로가
+//    "상" 이어도 자동배치하지 않아 대기 97건 중 87건이 거기서 나왔다(실측). 자동틱과 같은 조건(완전자동 모드·
+//    matched·날짜 확정)이면 배치하고, 아니면 대기로 남긴다. 반환: 'placed'|'pending'|'failed'.
+window._msAutoPlaceNewInboxItem = async function(task, projectTag, mailRawObj, howLabel) {
+    const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 맨 앞이 방금 추가한 항목
+    if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) return 'pending';
+    if (!projectTag || projectTag.status !== 'matched') return 'pending';
+    const target = projectTag.candidates && projectTag.candidates[0];
+    if (!target || !target.drive_file_id) return 'pending';
+    const hasValidDate = !String(task['시작일'] || '').includes('날짜확인필요') && !String(task['완료일'] || '').includes('날짜확인필요');
+    if (!hasValidDate) return 'pending';
+    try {
+        const result = await window._msAutoRegisterToProject(newUid, task, target.drive_file_id, target.file_name, mailRawObj, 0, false, { coalesce: false });
+        if (result && result.ok) {
+            window.TaskInbox.setStatus(newUid, '자동배치됨', { type: howLabel || '메일자동배치', target: target.file_name, at: new Date().toISOString() });
+            return 'placed';
+        }
+        if (window._ibMarkAutoPlaceFail) window._ibMarkAutoPlaceFail(newUid, (result && result.reason) || 'unknown');
+        return 'failed';
+    } catch (e) {
+        if (window._ibMarkAutoPlaceFail) window._ibMarkAutoPlaceFail(newUid, e.message);
+        return 'failed';
+    }
+};
+
 window._msRegisterToProjectTargets = function(targets, task, mailRawObj, sourceLabel, alarmWorthy, historyType, onEachDone) {
     targets.forEach(function(target, idx) {
         if (!target || !target.drive_file_id) { if (onEachDone) onEachDone(target, { ok: false, reason: 'no_drive_file_id' }, idx); return; }
@@ -1528,6 +1454,7 @@ window._autoMailFetchTick = async function() {
             localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
             return;
         }
+        window._msTrimMailBodies(data.data);
 
         // 💡 [2026-08-24 버그 수정] fileName 기준 중복 제거 — 백엔드 /fetch-mail이 날짜(day) 단위로만
         //    필터링해서(시:분:초 없음), 하루 안에서는 자동틱이 돌 때마다 그날 메일 전체를 매번 다시
@@ -1538,12 +1465,20 @@ window._autoMailFetchTick = async function() {
         window._msResults = window._msResults || [];
         const discardedNames = (JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]')).map(r => r.fileName);
         const newSenderNames = (JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')).map(r => r.fileName);
+        // 🔑 [2026-11-21] 열쇠(key)가 있으면 열쇠로 가른다 — fileName(날짜+제목 20자)은 같은 날 같은
+        //    스레드 답장이 전부 같은 이름이라(실측 8.5% 충돌) 두 번째 메일이 여기서 조용히 버려졌다.
+        //    열쇠가 없는 옛 항목·옛 백엔드는 예전처럼 fileName 으로.
+        const existingKeys = new Set([
+            ...window._msResults.map(r => r.key).filter(Boolean),
+            ...(JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]')).map(r => r.key).filter(Boolean),
+            ...(JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')).map(r => r.key).filter(Boolean)
+        ]);
         const existingNames = new Set([
             ...window._msResults.map(r => r.fileName),
             ...discardedNames,
             ...newSenderNames
         ]);
-        const dedupedMails = data.data.filter(m => !existingNames.has(m.fileName));
+        const dedupedMails = data.data.filter(m => m.key ? !existingKeys.has(m.key) : !existingNames.has(m.fileName));
         if (!dedupedMails.length) {
             localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
             return;
@@ -1590,7 +1525,7 @@ window._autoMailFetchTick = async function() {
             let item;
             if (!apiKey) {
                 item = {
-                    idx: window._msResults.length, fileName: mail.fileName,
+                    idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '',
                     subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
                     project: null, _projectTag: null,
                     task: null, selected: false, registered: false, error: 'API키 미설정'
@@ -1609,7 +1544,7 @@ window._autoMailFetchTick = async function() {
                     }
 
                     item = {
-                        idx: window._msResults.length, fileName: mail.fileName,
+                        idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '',
                         subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body: mail.body,
                         project: window._msProjectTagLabel(resolvedProjectTag), _projectTag: resolvedProjectTag,
                         task, selected: !!task, registered: false,
@@ -1618,7 +1553,7 @@ window._autoMailFetchTick = async function() {
                     };
                 } catch(e) {
                     item = {
-                        idx: window._msResults.length, fileName: mail.fileName,
+                        idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '',
                         subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body: mail.body,
                         project: null, _projectTag: null,
                         task: null, selected: false, registered: false, error: e.message
@@ -1632,10 +1567,7 @@ window._autoMailFetchTick = async function() {
             //    💡 fileName 기준 중복 체크 — 큐가 초기화돼도(캐시삭제 등) 같은 메일이 보관함에 재등록되지 않도록
             const finalProjectTag = item._projectTag;
             if (item.task && finalProjectTag && window.TaskInbox) {
-                const alreadyInInbox = window.TaskInbox.load().some(function(it) {
-                    return it.mailRaw && it.mailRaw.fileName === mail.fileName;
-                });
-                if (!alreadyInInbox) {
+                if (!window._msMailAlreadyInInbox(mail)) {
                     // 💡 [④] 우선순위 점수 계산 — 라벨 맨 앞에 등급 표시
                     const scoreResult = window._msComputeTotalScore(mail, item.task, priorityConfig);
                     const grade = scoreResult.total >= priorityConfig.cutline ? '🔴' : (scoreResult.total >= priorityConfig.cutline * 0.6 ? '🟡' : '⚪');
@@ -1643,7 +1575,7 @@ window._autoMailFetchTick = async function() {
                     const sourceLabel = finalProjectTag.status === 'ambiguous'
                         ? `${grade}${scoreResult.total}점 메일자동분석(AI판단 후보: ${candidateNames})`
                         : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})`;
-                    const mailRawObj = { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName };
+                    const mailRawObj = { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '' };
                     window.TaskInbox.add(item.task, {
                         source: sourceLabel, mailRaw: mailRawObj,
                         matchedProject: finalProjectTag,
@@ -2313,16 +2245,16 @@ window._msBulkReanalyzeUnmatched = async function(opts) {
                 }
 
                 if (wasUnmatched && projectTag && task && window.TaskInbox) {
-                    const alreadyInInbox = window.TaskInbox.load().some(
-                        it => it.mailRaw && it.mailRaw.fileName === r.fileName);
-                    if (!alreadyInInbox) {
+                    if (!window._msMailAlreadyInInbox(r)) {
                         const grade          = r._scoreGrade || '⚪';
                         const candidateNames = projectTag.candidates.map(c => c.model || c.customer).join(', ');
                         const sourceLabel    = `${grade}${r._score || 0}점 메일자동분석(일괄재분석` +
                             (projectTag.status === 'ambiguous'
                                 ? `, AI판단 후보: ${candidateNames})` : `, ${candidateNames})`);
-                        const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName };
+                        const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName, key: r.key || '' };
                         window.TaskInbox.add(task, { source: sourceLabel, mailRaw: mailRawObj, matchedProject: projectTag, alarmWorthy: !!r._alarmWorthy });
+                        // 🧭 [2026-11-21] 예전엔 여기서 끝 — "상" 인데도 대기에 남았다. 자동틱과 같은 조건이면 바로 배치.
+                        await window._msAutoPlaceNewInboxItem(task, projectTag, mailRawObj, '일괄재분석 배치');
                     }
                 }
 
@@ -2653,13 +2585,14 @@ window._msQueueReanalyze = async function(fileName, hint) {
         }
 
         if (wasUnmatched && projectTag && task && window.TaskInbox) {
-            const alreadyInInbox = window.TaskInbox.load().some(it => it.mailRaw && it.mailRaw.fileName === r.fileName);
-            if (!alreadyInInbox) {
+            if (!window._msMailAlreadyInInbox(r)) {
                 const grade = r._scoreGrade || '⚪';
                 const candidateNames = projectTag.candidates.map(c => c.model || c.customer).join(', ');
                 const sourceLabel = `${grade}${r._score || 0}점 메일자동분석(재분석` + (projectTag.status === 'ambiguous' ? `, AI판단 후보: ${candidateNames})` : `, ${candidateNames})`);
-                const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName };
+                const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName, key: r.key || '' };
                 window.TaskInbox.add(task, { source: sourceLabel, mailRaw: mailRawObj, matchedProject: projectTag, alarmWorthy: !!r._alarmWorthy });
+                // 🧭 [2026-11-21] 재분석도 자동틱과 같은 조건이면 바로 배치(사람 힌트로 확정된 건을 또 기다리게 하지 않는다)
+                await window._msAutoPlaceNewInboxItem(task, projectTag, mailRawObj, '재분석 배치');
             }
         }
 
@@ -2712,7 +2645,7 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
 
         if (window.showToast) window.showToast(window._t('📤 ' + targets.length + '개 프로젝트로 전송 중...', '📤 Sending to ' + targets.length + ' project(s)...'), 'info');
         // 🐛 [2026-09-12 버그수정] mailRaw를 안 넘겨서 이 경로로 배분된 업무는 "원문 보기" 버튼이 사라졌음
-        const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName };
+        const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName, key: r.key || '' };
         const result = await window.distSendTaskToTargets(task, targets, { source: '미분류 재분석(다중전송)', mailRaw: mailRawObj });
 
         r.error = null;

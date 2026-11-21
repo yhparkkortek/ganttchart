@@ -27,6 +27,11 @@
     //    (판정은 군집당 AI 1회뿐이고 결과도 "사람에게 제안"일 뿐이라 낮춰도 비용·위험이 작다.)
     var _NCD_THRESHOLD       = 5;     // 같은 군집으로 묶이는 미분류 메일 건수 기준
     var _NCD_FLUSH_DELAY_MS  = 30000; // project_index.json 갱신 디바운스 (토픽 신호와 동일 관례)
+    // ⏸ [2026-11-21 사용자 결정 "스위치 OFF + UI 숨김"] 기본 **꺼짐**. 실측(NAS 스냅샷 11-05): 군집 803개가
+    //    전부 count≤4 의 토큰 잡음('DESCRIPTION'·'발주서'·'PBA'…)이었고 색인 780KB 중 532KB 를 차지하며
+    //    메일 분석마다 내려받혔다. 켜기: localStorage.gantt_ncd_on='1'(설정 ▸ 📬 메일 자동배치 설정 ▸ 자동 동작).
+    function _ncdEnabled() { try { return localStorage.getItem('gantt_ncd_on') === '1'; } catch (e) { return false; } }
+    window._ncdEnabled = _ncdEnabled;
 
     // 📦 [2026-10-29] 상태별 예시 메일 보관 개수 — project_index.json 이 830KB까지 커졌고 그중 예시가
     //    654KB였다(군집 610개). 이 파일은 메일 처리·AI 업무 분석 모달마다 통째로 오간다.
@@ -181,6 +186,7 @@
 
     // ── ② 버퍼 기록 + Drive 디바운스 flush (js/26-topic-profile.js _tpFlushSignals와 동일 패턴) ──
     window._ncdRecordCandidate = function(task) {
+        if (!_ncdEnabled()) return;
         var key = _extractKey(task);
         if (!key) return; // 특이 키워드가 없으면 군집화 불가 — 조용히 스킵
         var b = _buffer[key] || (_buffer[key] = { count: 0, samples: [] });
@@ -232,6 +238,11 @@
 
     // ── ③ 임계치 확인 + AI 재확인 (군집당 1회만 — 판정 후엔 재판정 안 함) ─────
     window._ncdCheckAndSuggest = async function() {
+        if (!_ncdEnabled()) {
+            var _bn = document.getElementById('ncd-suggestion-banner');
+            if (_bn) { _bn.style.display = 'none'; _bn.innerHTML = ''; }
+            return;
+        }
         try {
             var tokenObj = gapi.client.getToken && gapi.client.getToken();
             var token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;

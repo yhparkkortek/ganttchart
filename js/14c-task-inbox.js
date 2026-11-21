@@ -638,10 +638,15 @@ window.renderTaskInbox = function() {
     }
 
     const l0List = window.getCurrentL0List();
-    const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;', '자동배치됨': 'background:#f3f0ff;color:#7048e8;', '전송 중': 'background:#fff8dc;color:#8a6500;' };
+    // 🧭 [2026-11-21 UI 정리] 사람에게 보이는 상태는 **둘** — 대기 / 처리됨(+ 전송 중). 저장값(배치됨·자동배치됨·
+    //    전송됨)은 그대로 두고 **표시만** 합친다(다른 코드가 문자열로 비교한다). 자동/수동/대상은 툴팁에.
+    const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#d4edda;color:#2f9e44;', '자동배치됨': 'background:#d4edda;color:#2f9e44;', '전송 중': 'background:#fff8dc;color:#8a6500;' };
     const statusLabel = _ibEn
-        ? _TI_STATUS_LABEL_EN
-        : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨', '자동배치됨': '자동배치됨', '전송 중': '전송 중' };
+        ? { '대기': 'Pending', '배치됨': 'Done', '전송됨': 'Done', '자동배치됨': 'Done', '전송 중': 'Sending…' }
+        : { '대기': '대기', '배치됨': '처리됨', '전송됨': '처리됨', '자동배치됨': '처리됨', '전송 중': '전송 중' };
+    const statusHow = _ibEn
+        ? { '배치됨': 'placed by a person', '전송됨': 'sent by a person', '자동배치됨': 'placed automatically' }
+        : { '배치됨': '사람이 배치', '전송됨': '사람이 전송', '자동배치됨': '자동 배치' };
     let html = '';
     filteredItems.forEach(function(it) {
         const t = it.task || {};
@@ -710,7 +715,7 @@ window.renderTaskInbox = function() {
                                      : `후보 ${it.matchedProject.multiCount || it.matchedProject.candidates.length}개`)
                             : '')
                     : ''}
-                <span title="${(it.matchedProject && it.matchedProject.matchBasis) ? escapeHtml((it.matchedProject.confidence ? '[' + (_ibEn ? 'AI match confidence: ' : 'AI 매칭 신뢰도: ') + it.matchedProject.confidence + '] ' : '') + it.matchedProject.matchBasis) : ''}" style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
+                <span title="${escapeHtml([statusHow[it.status] || '', (it.history && it.history.length) ? ('→ ' + (it.history[it.history.length - 1].target || '')) : '', (it.matchedProject && it.matchedProject.matchBasis) ? ((it.matchedProject.confidence ? '[' + (_ibEn ? 'AI match confidence: ' : 'AI 매칭 신뢰도: ') + it.matchedProject.confidence + '] ' : '') + it.matchedProject.matchBasis) : ''].filter(Boolean).join(' · '))}" style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
                 </div>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
@@ -812,51 +817,37 @@ window.inboxDistributeToMultiCandidates = function(uid) {
     // 💡 [2026-09-10] 체크박스로 대상 프로젝트를 직접 골라 [배분] 버튼까지 누른 시점에 이미 의사표시가
     //    끝난 것이므로 confirm() 없이 바로 진행 — 결과는 아래 showToast로 안내한다.
 
-    let queue = [];
-    try { queue = JSON.parse(localStorage.getItem('gantt_ai_reassign_queue_v1') || '[]'); } catch(e) {}
-    checked.forEach(function(c) {
-        queue.push({
-            id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-            ts: new Date().toISOString(),
-            targetProjectId: c.drive_file_id,
-            targetProjectName: c.file_name || c.model || c.customer || '',
-            taskData: {
-                업무명: taskName,
-                상세내용: (it.task && it.task['상세내용']) || '',
-                시작일: (it.task && it.task['시작일']) || '',
-                완료일: (it.task && it.task['완료일']) || '',
-                상태: (it.task && it.task['상태']) || '진행',
-                개발단계: (it.task && it.task['개발단계']) || '',
-                담당구분: (it.task && it.task['담당구분']) || '',
-                wbs레벨: (it.task && it.task['wbs레벨'] != null) ? String(it.task['wbs레벨']) : '3',
-                _aiMeta: {
-                    confidence: '하',
-                    matchBasis: '복수 프로젝트 공통 이슈(업무 보관함에서 배분)',
-                    keywords: [],
-                    snippet: ((it.task && it.task['상세내용']) || '').substring(0, 150)
-                }
-            },
-            status: 'pending'
-        });
-    });
-    try {
-        localStorage.setItem('gantt_ai_reassign_queue_v1', JSON.stringify(queue));
-    } catch (e) {
-        alert((_en ? 'Failed to queue: ' : '배분 큐 저장 실패: ') + e.message);
+    // 🧭 [2026-11-21] 예전엔 **브라우저 로컬 재배치 큐**(gantt_ai_reassign_queue_v1)에만 넣고 '전송됨' 으로
+    //    표시했다 — 실제 삽입은 "그 브라우저에서 그 프로젝트를 열 때" 였고, 배너는 12초 뒤 사라져 놓치면
+    //    영구 소실, 다른 PC 에선 영영 안 떴다(흐름 분석 §7-10). 이제 다른 배치 버튼과 **같은 길**
+    //    (`_msAutoRegisterToProject`, 헤드리스 즉시 쓰기)로 바로 넣는다 — 성공한 것만 '배치됨'.
+    window._ibRepairDatesFromMail(it);
+    const fresh = window.TaskInbox.load().find(function(x) { return x.uid === uid; }) || it;
+    const task = JSON.parse(JSON.stringify(fresh.task || {}));
+    if (String(task['시작일'] || '').includes('날짜확인필요') || String(task['완료일'] || '').includes('날짜확인필요')) {
+        alert(_en ? '⚠️ Start/end date is unconfirmed. Please confirm the date first.' : '⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다. 날짜를 먼저 확정해주세요.');
         return;
     }
-
-    window.TaskInbox.setStatus(uid, '전송됨', {
-        type: '복수 배분',
-        target: targetNames.join(', '),
-        at: new Date().toISOString()
-    });
-    if (window.showToast) {
-        window.showToast(_en
-            ? `📤 "${taskName}" → ${checked.length} project(s) queued — a notice will show when each is opened`
-            : `📤 "${taskName}" → ${checked.length}개 프로젝트에 배분 완료 — 각 프로젝트를 열면 알림이 표시됩니다`, 'info');
-    }
+    window.TaskInbox.setStatus(uid, '전송 중', { type: '복수 배분', target: targetNames.join(', '), at: new Date().toISOString() });
     window.renderTaskInbox();
+    (async function() {
+        const okNames = [], failNames = [];
+        for (let i = 0; i < checked.length; i++) {
+            const c = checked[i];
+            try {
+                const r = await window._msAutoRegisterToProject(uid, task, c.drive_file_id, c.file_name, fresh.mailRaw, 0, !!fresh.alarmWorthy, { coalesce: false });
+                if (r && r.ok) okNames.push(targetNames[i]); else failNames.push(targetNames[i] + (r && r.reason ? ' (' + r.reason + ')' : ''));
+            } catch (e) { failNames.push(targetNames[i] + ' (' + e.message + ')'); }
+        }
+        window.TaskInbox.setStatus(uid, okNames.length ? '배치됨' : '대기', {
+            type: '복수 배분', target: okNames.join(', ') || '-', failed: failNames.join(', ') || undefined, at: new Date().toISOString()
+        });
+        if (window.showToast) {
+            window.showToast((okNames.length ? `📤 "${taskName}" → ${okNames.join(', ')} ` + (_en ? 'placed' : '배치 완료') : '') +
+                (failNames.length ? ` ⚠️ ${_en ? 'failed' : '실패'}: ${failNames.join(', ')}` : ''), failNames.length ? 'warning' : 'info', 7000);
+        }
+        window.renderTaskInbox();
+    })();
 };
 
 // 💡 [매칭/점수 통일화] Stage1이 단일 프로젝트로 확정한 항목은 "다른 프로젝트" 모달로 전체 목록을
@@ -1015,6 +1006,18 @@ window._ibPendingReason = function(it) {
     if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) {
         return T('메일 자동배치가 OFF입니다 — 상단 [🟢 메일 완전자동]으로 켜면 자동으로 배치됩니다',
                  'Mail auto-placement is OFF — turn on [🟢 Mail Auto (Gantt)] in the top menu');
+    }
+    // 🧭 [2026-11-21] 새 판정(js/74)이 "왜 대기인지"를 한 문장으로 적어 둔다 — 그게 있으면 그대로 보여준다
+    if (mp && mp.routing && mp.routing.basis && mp.status !== 'matched') {
+        const rb = mp.routing.basis;
+        const hint = {
+            conflict:          T(' → 후보 중 하나를 골라 [📤 배치]', ' → pick one candidate and [📤 Place]'),
+            family_unresolved: T(' → ⚙️ 메일 자동배치 설정 ▸ 가족 대표를 정하면 다음부터 자동', ' → set a family primary in settings to auto-place next time'),
+            customer_only:     T(' → 후보 중 하나를 골라 [📤 배치]', ' → pick one candidate and [📤 Place]'),
+            ai_unverified:     T(' → 맞으면 [✅ 배치], 아니면 ❌', ' → [✅ Place] if right, ❌ if not'),
+            ai_low:            T(' → 맞는 후보가 있으면 골라 [📤 배치]', ' → pick the right candidate and [📤 Place]')
+        }[rb] || '';
+        return String(mp.matchBasis || '').replace(/^🧭\s*/, '').split(' · 🤖 ')[0] + hint;
     }
     if (!mp || !mp.candidates || !mp.candidates.length) {
         return T('매칭된 프로젝트가 없습니다(미분류) — [➕ 새 Proj 생성]이나 [📤 다른 프로젝트]로 처리하세요',

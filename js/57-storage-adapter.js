@@ -610,7 +610,31 @@
     //    프런트에서도 막는다 — 둘 다 걸어 두는 쪽이 맞다.
     //    ⚠️ cache:'no-store' 는 그 요청만 막는다. 이미 캐시에 들어앉은 항목까지 피하려면
     //       **URL 을 다르게** 해야 해서 _cb 도 같이 붙인다.
+    // 🔌 [2026-11-21] 백엔드 꺼짐 회로차단기 — 연결 거부가 나면 30초 동안은 **같은 실패를 즉시 돌려준다**.
+    //    실측(백엔드 없이 부팅): 로더 10여 개가 각자 실패하며 콘솔을 수십 줄 채웠고, 전부 네트워크 왕복을 기다렸다.
+    //    차단 중에도 예외는 그대로 던진다(호출한 쪽의 동작은 안 바뀐다) — 기다리는 시간과 소음만 줄인다.
+    var _downUntil = 0, _downNoted = 0;
+    window._nasBackendDown = function () { return Date.now() < _downUntil; };
     async function nas(method, route, payload) {
+        if (Date.now() < _downUntil) {
+            var e0 = new TypeError('Failed to fetch (backend down — circuit open)');
+            e0.circuitOpen = true;
+            throw e0;
+        }
+        try { return await _nasRaw(method, route, payload); }
+        catch (e) {
+            if (e && e.name === 'TypeError' && !e.circuitOpen) {
+                _downUntil = Date.now() + 30000;
+                if (Date.now() - _downNoted > 60000) {
+                    _downNoted = Date.now();
+                    console.warn('[storage-adapter] 백엔드(' + BACKEND + ')에 닿지 않습니다 — 30초 동안 NAS 호출을 바로 실패시킵니다(재시도는 그 뒤에).');
+                    note('backend-down', route);
+                }
+            }
+            throw e;
+        }
+    }
+    async function _nasRaw(method, route, payload) {
         var url = BACKEND + route;
         var opts = { method: method };
         if (method === 'GET') {
@@ -1751,7 +1775,13 @@
             return r;
         };
     }
-    setInterval(implant, 1000);   // ③ 백스톱 — 위 둘이 다 빗나가도 1초 안에 되돌린다
+    // ③ 백스톱 — 위 둘이 다 빗나가도 되돌린다. ⚠️ [2026-11-21] 예전엔 **1초 영구** 인터벌이었다(NAS 모드 전원,
+    //    탭이 살아 있는 내내). gapi 초기화는 부팅 직후 한 번 일어나는 일이라 처음 2분은 1초, 그 뒤엔 30초로 늦춘다
+    //    (앱 전반 점검에서 "배경 탭 CPU 바닥값" 1순위로 꼽힌 자리).
+    (function backstop(n) {
+        implant();
+        setTimeout(function () { backstop(n + 1); }, n < 120 ? 1000 : 30000);
+    })(0);
 
     // 📝 쓰기 기록 — 모아 둔 것을 주기적으로 한 번만 올린다(쓰기 경로는 안 건드린다).
     //    ⚠️ 이 타이머는 **어댑터가 켜졌을 때만** 걸린다(플래그 OFF 면 이 블록까지 안 온다).

@@ -1174,6 +1174,11 @@
 
     window._tpAppendMailSignal = function(driveFileId, task, mailRaw) {
         if (!driveFileId) return;
+        // 🧭 [2026-11-21] 제목 낱말을 토픽 키워드에 **자동 누적하는 것은 끈다**(`MAIL_ROUTING_POLICY.autoKeywordSignal`).
+        //    실측: 불용어 없이 2자 이상 전부가 들어가 범용어를 흡수했고, 15개에서 옛것 우선으로 동결돼 학습도
+        //    멈춰 있었다. 이 함수는 **확정 배분의 훅**으로 계속 불린다(48 NAS 이동·61 근거·74 기록이 감싼다) —
+        //    그 사슬은 그대로 두고 안쪽 누적만 건너뛴다. 켜려면 정책 값을 true 로.
+        if (window.MAIL_ROUTING_POLICY && window.MAIL_ROUTING_POLICY.autoKeywordSignal === false) return;
         var kws = _tpExtractMailKw(task, mailRaw);
         // [2026-10-29] 사람 이름·사람이 지운 키워드는 메일 신호로도 되살리지 않는다
         var _sigProf = _getStore()[driveFileId];
@@ -1348,6 +1353,11 @@
         if (typeof _orig !== 'function') return; // 아직 없으면 스킵 (DOMContentLoaded 후 재시도)
         window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mailDate) {
             var base = _orig.call(this, assignee, customer, model, inch, mailText, mailDate);
+            // 🧭 [2026-11-21] **매칭 프롬프트엔 넣지 않는다.** 이 스니펫은 "지금 열려 있는 프로젝트" 것인데
+            //    자동수집은 사람이 아무 프로젝트나 열어 둔 채 돈다 — 라벨도 없이 후보 목록 앞에 들어가
+            //    AI 가 그 프로젝트로 끌렸다(2026-08-21 에 막았던 "열린 프로젝트 편향"이 이 래퍼로 살아 있었다).
+            //    후보 목록이 있는 호출(js/15c msCallGemini)은 플래그로 알려 주고, 직접입력(열린 프로젝트 전용)만 유지.
+            if (window._tpSuppressPromptSnippet) return base;
             var snippet = window._topicProfileSnippet ? window._topicProfileSnippet() : '';
             if (!snippet) return base;
             // 💡 [버그 수정] 이전엔 base 맨 끝에 붙여서 메일 본문 이후(97% 위치)에 삽입됐음.

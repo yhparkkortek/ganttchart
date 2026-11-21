@@ -125,10 +125,15 @@
     /**
      * 오염 배지 DOM 갱신 (AI 업무 보관함 토픽 영역에 항상 표시)
      */
+    // ⏸ [2026-11-21 사용자 결정 "스위치 OFF + UI 숨김"] 기본 **꺼짐** — 진단의 입력(토픽 키워드 자동 누적,
+    //    js/26)을 끈 뒤라 진단할 대상이 없다. 켜기: localStorage.gantt_tc_on='1'.
+    function _tcEnabled() { try { return localStorage.getItem('gantt_tc_on') === '1'; } catch (e) { return false; } }
+    window._tcEnabled = _tcEnabled;
     window._tcRefreshBadge = function(key) {
         var badge = document.getElementById('topic-contamination-badge');
         var diagBtn = document.getElementById('topic-diagnosis-btn');
         if (!badge) return;
+        if (!_tcEnabled()) { badge.style.display = 'none'; if (diagBtn) diagBtn.style.display = 'none'; return; }
 
         key = key || _key();
         var st = window._tcGetScore(key);
@@ -560,7 +565,9 @@
         window._msResolveAiProjectMatch = function(task, candidatesForAI) {
             var result = _origResolve.call(this, task, candidatesForAI);
             // 반환값이 null(미분류) & task에 '매칭근거'(AI가 분석했음)가 있을 때만 기록
-            if (!result && task && (task['매칭근거'] || task['업무명'])) {
+            // ⏸ [2026-11-21] 기본 꺼짐 — 실측 학습로그 1,300건 중 1,114건이 이 no_match 더미였고, 그때 열려 있던
+            //    프로젝트 파일에 적혔다(AMUSNET 55C 파일에 Dice Popper RFQ 기록). 사람 교정은 4건뿐.
+            if (_tcEnabled() && !result && task && (task['매칭근거'] || task['업무명'])) {
                 // 💡 [버그 수정 2026-09-06] 예전엔 이 no_match를 "지금 화면에 열려있는 프로젝트"
                 //    (window.currentDriveFileId)로 무조건 기록했음. 그런데 자동수집/배치분석은 열려있는
                 //    프로젝트와 무관하게 전체 후보를 대상으로 도는 백그라운드 작업이라, 미분류 메일이

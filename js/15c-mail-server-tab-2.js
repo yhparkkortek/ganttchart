@@ -548,7 +548,7 @@ window._macRefreshLang = function() {
         const el = document.getElementById(id);
         if (el) el.textContent = _en ? t.en : t.ko;
     });
-    ['mac-sec-collect','mac-sec-score','mac-sec-filter'].forEach(sid => {
+    ['mac-sec-collect','mac-sec-routing','mac-sec-score','mac-sec-filter'].forEach(sid => {
         const sec   = document.getElementById(sid);
         const arrow = document.getElementById(sid + '-arrow');
         if (!sec || !arrow) return;
@@ -614,6 +614,36 @@ window.openMailAutoConfigModal = async function() {
                             <span id="mac-topic-auto-disable-label" style="flex:1;">🧠 토픽 프로파일 자동 생성 끄기</span>
                         </label>
                         <div id="mac-topic-auto-disable-desc" style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">체크하면 프로젝트 로드 시 및 AI 업무 누적 시 자동 토픽 프로파일 생성을 완전히 끕니다. 수동 생성(토픽 프로파일 뷰어 내 버튼)은 계속 사용할 수 있습니다. 무료 API 한도가 빠듯할 때 권장.</div>
+                    </div>
+                </div>
+
+                <!-- ══ 🧭 [2026-11-21] 배분 판정 · 자동 동작 — 콘솔에서만 끌 수 있던 스위치 5개 + 가족 대표 + 대기 재판정 ══ -->
+                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
+                    <div onclick="window._toggleAlarmSection('mac-sec-routing')"
+                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
+                        <span id="mac-sec-routing-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🧭 배분 판정 · 자동 동작</span>
+                        <span id="mac-sec-routing-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+                    </div>
+                    <div id="mac-sec-routing" style="display:block; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                        <div id="mac-routing-desc" style="font-size:11px; color:#666; margin-bottom:8px; line-height:1.5;">배치는 <b>고객·프로젝트(가족) → 모델</b> 두 단계로 정합니다. 가족은 식별자로 확정하고, 가족 안의 모델은 <b>식별자 → 가족 대표 → AI 판단</b> 순. 가족조차 못 가를 때만 대기합니다.</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px;">
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-routing" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-routing-label">🧭 두 단계 판정 사용 (끄면 AI 상=자동배치 옛 규칙)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-sweep" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-sweep-label">🔁 유휴 시간 자동배치 스윕</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-evidence" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-evidence-label">📎 근거층(스레드·발신자·관리번호) 보정</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-ncd" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-ncd-label">🆕 미분류 군집 감지(AI 판정, 기본 꺼짐)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-tc" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-tc-label">🔬 토픽 오염 진단(기본 꺼짐)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-issue" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-issue-label">🧾 이슈 수집(진단 로그 업로드)</span></label>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input id="mac-sw-tgqa" type="checkbox" style="width:15px; height:15px;"><span id="mac-sw-tgqa-label">📱 텔레그램 ↔ AI 문답 다리</span></label>
+                        </div>
+                        <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <button id="mac-rejudge-btn" onclick="window._macRejudgeNow()" style="padding:5px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">🧭 대기 중인 보관함 항목 지금 재판정</button>
+                            <button id="mac-compact-btn" onclick="window._macCompactIndex()" style="padding:5px 12px; background:#f8f9fa; color:#555; border:1px solid #ced4da; border-radius:5px; font-size:12px; cursor:pointer;" title="색인(project_index.json)에서 군집 백로그를 떼어 보관 파일로 옮깁니다 — 메일 분석마다 내려받는 크기가 줄어듭니다">🧹 색인 다이어트(군집 백로그 분리)</button>
+                            <span id="mac-routing-stats" style="font-size:11px; color:#888;"></span>
+                        </div>
+                        <div id="mac-family-wrap" style="margin-top:10px;">
+                            <div id="mac-family-title" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">👨‍👩‍👧 프로젝트 가족과 대표 <span style="font-weight:normal; color:#888; font-size:11px;">(가족만 확정되고 모델 단서가 없는 메일이 가는 곳)</span></div>
+                            <div id="mac-family-list" style="font-size:11.5px; color:#444;">불러오는 중…</div>
+                        </div>
                     </div>
                 </div>
 
@@ -725,6 +755,20 @@ window.openMailAutoConfigModal = async function() {
     window._macRenderKeywordRows(cfg.urgentKeywords);
     // 💡 미분류/신규발신자/자동폐기 큐 열람은 업무 보관함 모달에만 있음(중복 제거) — 이 모달에선 필터 규칙만 갱신
     if (window._macRenderFilterRules) window._macRenderFilterRules();
+    // 🧭 자동 동작 스위치 — 킬스위치 키는 각 파일이 정한 그대로(데이터), 여기선 읽고 쓰기만
+    window._macSwitchDefs().forEach(function(d) {
+        const el = document.getElementById(d.id);
+        if (el) el.checked = d.get();
+    });
+    window._macRenderFamilies();
+    try {
+        const st = window.mailRouteStats ? window.mailRouteStats() : {};
+        const el = document.getElementById('mac-routing-stats');
+        if (el) {
+            const keys = Object.keys(st).filter(k => k !== 'at');
+            el.textContent = keys.length ? ('집계: ' + keys.map(k => k + ' ' + st[k]).join(' · ')) : '';
+        }
+    } catch (e) { /* 집계 없음 */ }
     // 💡 처음 여는 순간이 영문 모드일 수도 있으므로(모달 뼈대는 항상 한글로 그려짐), 열 때마다
     // 현재 언어로 다시 맞춰준다 — toggleLang()이 나중에 또 호출해도 안전(멱등).
     window._macRefreshLang();
@@ -797,13 +841,83 @@ window._macRemoveFilterRule = function(type, idx) {
     window._macRenderFilterRules();
 };
 
+// 🧭 [2026-11-21] 자동 동작 스위치 목록(데이터) — 각 기능의 킬스위치 키는 그 파일이 정한 그대로.
+//    `off` 류 키는 '1' 이면 꺼짐, `on` 류 키는 '1' 이면 켜짐 — 체크박스는 늘 "켜짐" 을 뜻한다.
+window._macSwitchDefs = function() {
+    const offKey = function(id, key) {
+        return { id: id, get: () => localStorage.getItem(key) !== '1', set: (on) => { if (on) localStorage.removeItem(key); else localStorage.setItem(key, '1'); } };
+    };
+    const onKey = function(id, key) {
+        return { id: id, get: () => localStorage.getItem(key) === '1', set: (on) => { if (on) localStorage.setItem(key, '1'); else localStorage.removeItem(key); } };
+    };
+    return [
+        offKey('mac-sw-routing',  (window.MAIL_ROUTING_POLICY && window.MAIL_ROUTING_POLICY.offKey) || 'gantt_mail_routing_off'),
+        offKey('mac-sw-sweep',    'gantt_autoplace_sweep_off'),
+        offKey('mac-sw-evidence', (window.MAIL_EVIDENCE_POLICY && window.MAIL_EVIDENCE_POLICY.offKey) || 'gantt_mail_evidence_off'),
+        onKey('mac-sw-ncd',       'gantt_ncd_on'),
+        onKey('mac-sw-tc',        'gantt_tc_on'),
+        offKey('mac-sw-issue',    'gantt_issue_collect_off'),
+        offKey('mac-sw-tgqa',     'gantt_tgqa_off')
+    ];
+};
+window._macFamilyDraft = null;
+window._macRenderFamilies = async function() {
+    const el = document.getElementById('mac-family-list');
+    if (!el) return;
+    const _en = window._currentLang === 'en';
+    if (!window.mailRoutingFamilies) { el.textContent = _en ? 'Routing module not loaded.' : '배분 판정 모듈(js/74)이 로드되지 않았습니다.'; return; }
+    let cands = [];
+    try { cands = window._msFilterCandidateProjects(await window._msLoadProjectIndex()); } catch (e) { cands = []; }
+    if (!cands.length) { el.textContent = _en ? 'No project index (sign in first).' : '프로젝트 색인을 못 읽었습니다(저장소 연결 뒤에 다시 여세요).'; return; }
+    if (window.mailRoutingLoadConfig) { try { await window.mailRoutingLoadConfig(); } catch (e) { /* 기본값 */ } }
+    const cfg = (window.mailRoutingConfig && window.mailRoutingConfig()) || { families: {} };
+    window._macFamilyDraft = JSON.parse(JSON.stringify(cfg));
+    const fams = window.mailRoutingFamilies(cands).filter(f => f.members.length > 1);
+    if (!fams.length) { el.textContent = _en ? 'No sibling projects detected (each project is its own family).' : '형제 프로젝트 묶음이 없습니다(모두 단독 가족).'; return; }
+    const esc = window.escapeHtml || (s => String(s));
+    el.innerHTML = fams.map(function(f) {
+        const name = f.name || f.label;
+        const cur = (cfg.families[name] && cfg.families[name].primary) || (f.primary && f.primary.drive_file_id) || '';
+        return `<div style="border:1px solid #e6e9ef; border-radius:5px; padding:6px 8px; margin-bottom:6px; background:#fafbfc;">
+            <div style="font-weight:bold; color:#333; margin-bottom:3px;">${esc(name)} <span style="font-weight:normal; color:#888;">(${f.members.length}${_en ? ' projects' : '개 프로젝트'})</span></div>
+            <div style="display:flex; flex-direction:column; gap:2px;">
+                ${f.members.map(function(c) {
+                    const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name;
+                    return `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="mac-fam-${esc(f.id)}" value="${esc(c.drive_file_id)}" ${c.drive_file_id === cur ? 'checked' : ''} onchange="window._macFamilyPick('${esc(name).replace(/'/g, '')}', this.value, ${JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;')})"><span>${esc(label)}</span><span style="color:#888;">${esc(c.file_name || '')}</span></label>`;
+                }).join('')}
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#888;"><input type="radio" name="mac-fam-${esc(f.id)}" value="" ${!cur ? 'checked' : ''} onchange="window._macFamilyPick('${esc(name).replace(/'/g, '')}', '', ${JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;')})"><span>${_en ? 'No primary — model-less mails wait (or follow AI)' : '대표 없음 — 모델 단서 없는 메일은 AI 판단(상·중)으로, 그마저 없으면 대기'}</span></label>
+            </div>
+        </div>`;
+    }).join('');
+};
+window._macFamilyPick = function(name, fid, members) {
+    const d = window._macFamilyDraft || (window._macFamilyDraft = { families: {} });
+    d.families = d.families || {};
+    d.families[name] = { members: members || [], primary: fid || '' };
+};
+window._macRejudgeNow = async function() {
+    const btn = document.getElementById('mac-rejudge-btn');
+    if (!window.mailRouteRejudgePending) { alert('배분 판정 모듈(js/74)이 로드되지 않았습니다.'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 재판정 중…'; }
+    try { await window.mailRouteRejudgePending({ force: true, max: 50 }); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '🧭 대기 중인 보관함 항목 지금 재판정'; } }
+};
+window._macCompactIndex = async function() {
+    if (!window.mailRoutingCompactIndex) { alert('배분 판정 모듈(js/74)이 로드되지 않았습니다.'); return; }
+    if (!confirm(window._t('색인에서 미분류 군집 백로그를 떼어 보관 파일(App_Config/unmatchedClusters_archive.json)로 옮깁니다. 군집 감지가 꺼져 있을 때만 권장합니다. 진행할까요?',
+                           'Move the unmatched-cluster backlog out of the index into an archive file (App_Config/unmatchedClusters_archive.json)? Recommended only while cluster detection is off.'))) return;
+    try {
+        const r = await window.mailRoutingCompactIndex();
+        alert(r.ok ? window._t(`✅ 군집 ${r.moved}개를 분리했습니다 (${r.beforeKB}KB → ${r.afterKB}KB)`, `✅ Moved ${r.moved} clusters (${r.beforeKB}KB → ${r.afterKB}KB)`)
+                   : window._t('⚠️ 분리하지 않았습니다: ' + (r.reason || ''), '⚠️ Not compacted: ' + (r.reason || '')));
+    } catch (e) { alert('⚠️ ' + e.message); }
+};
+
 window._macSave = async function() {
     // 수집 주기
     const sel = document.getElementById('mac-interval');
     if (sel) {
         localStorage.setItem('mail_auto_process_interval_min', sel.value);
-        const orig = document.getElementById('mail-process-interval');
-        if (orig) orig.value = sel.value;
     }
 
     // 완료 프로젝트 수집 여부
@@ -817,6 +931,16 @@ window._macSave = async function() {
     // 토픽 프로파일 자동 생성 비활성화
     const topicAutoDisableEl = document.getElementById('mac-topic-auto-disable');
     if (topicAutoDisableEl) localStorage.setItem('topic_profile_auto_disabled', topicAutoDisableEl.checked ? '1' : '0');
+
+    // 🧭 자동 동작 스위치
+    window._macSwitchDefs().forEach(function(d) {
+        const el = document.getElementById(d.id);
+        if (el) d.set(el.checked);
+    });
+    // 👨‍👩‍👧 가족 대표 — 팀 공용 설정 파일로(NAS 모드에서만 저장된다)
+    try {
+        if (window.mailRoutingSaveConfig && window._macFamilyDraft) await window.mailRoutingSaveConfig(window._macFamilyDraft);
+    } catch (e) { console.warn('[메일 설정] 가족 설정 저장 실패:', e && e.message); }
 
     // 우선순위 점수
     const titleScores = {};
@@ -905,182 +1029,6 @@ window.msClearResults = function() {
     document.getElementById('mail-right-detail').style.display = 'none';
 };
 
-// ─── 목록 렌더링 (파일첨부 탭과 동일 구조) ──────────────
-
-window.msDeleteItem = function(idx) {
-    const r = window._msResults[idx];
-    if (!r) return;
-    const label = r.task ? (r.task['업무명'] || '새업무') : r.subject;
-    if (!confirm(`"${label}"\n이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`)) return;
-    window._msResults.splice(idx, 1);
-    msRenderList(window._msResults);
-};
-function msRenderList(results) {
-    const list = document.getElementById('ms-result-list');
-    let html = '';
-    results.forEach((r, i) => {
-        const canSel = !!r.task;
-        const bg     = r.registered ? '#d4edda' : canSel ? '#fff' : '#fafafa';
-        const taskName = r.task ? (r.task['업무명'] || '새업무') : null;
-        html += `
-        <div id="ms-list-item-${i}" data-idx="${i}"
-             style="display:flex; align-items:center; gap:6px;
-                    padding:7px 8px; border-bottom:1px solid #f0f0f0;
-                    background:${bg}; cursor:pointer;">
-            <input type="checkbox" data-idx="${i}"
-                   ${canSel && r.selected ? 'checked' : ''}
-                   ${canSel ? '' : 'disabled'} style="flex-shrink:0;">
-            <span style="font-size:10px; color:#aaa; flex-shrink:0; width:16px;">${i+1}</span>
-            <div style="flex:1; min-width:0;">
-                <div style="font-size:12px; font-weight:${canSel?'bold':'normal'};
-                            color:${canSel?'#333':'#aaa'};
-                            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                    ${canSel ? escapeHtml(taskName) + ' 📧' : escapeHtml(r.subject.substring(0,35))}
-                </div>
-                <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap; align-items:center;">
-                    <span style="font-size:10px; color:#aaa;">${r.date||''}</span>
-                    ${r.project
-                        ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r.project}</span>`
-                        : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
-                    ${(window._confBadge && r.task) ? window._confBadge((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도'] || '', 'match', window._confNoteFromTask && window._confNoteFromTask(r.task)) : ''}
-                    ${r.registered
-                        ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>`
-                        : `<span style="color:#999; font-size:10px;">⬜미등록</span>`}
-                </div>
-            </div>
-            <button data-del-idx="${i}" title="목록에서 삭제"
-                    style="flex-shrink:0; border:none; background:none; color:#bbb; cursor:pointer; font-size:13px; padding:2px 4px;"
-                    onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑</button>
-        </div>`;
-    });
-
-    list.innerHTML = html || '<div style="padding:20px; text-align:center; color:#aaa;">결과 없음</div>';
-
-    results.forEach((r, i) => {
-        const row = document.getElementById(`ms-list-item-${i}`);
-        if (!row) return;
-        row.addEventListener('click', function(e) {
-            if (e.target.type === 'checkbox' || e.target.dataset.delIdx !== undefined) return;
-            window.msSelectItem(i);
-        });
-        const delBtn = row.querySelector('[data-del-idx]');
-        if (delBtn) {
-            delBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                window.msDeleteItem(i);
-            });
-        }
-        const cb = row.querySelector('input[type=checkbox]');
-        if (cb) cb.addEventListener('change', function() {
-            window._msResults[i].selected = this.checked;
-            window.msSyncCheckAll();
-        });
-        row.addEventListener('mouseover', function() {
-            if (!this.classList.contains('ms-active')) this.style.background = '#e7f3ff';
-        });
-        row.addEventListener('mouseout', function() {
-            if (!this.classList.contains('ms-active')) {
-                this.style.background = window._msResults[i].registered ? '#d4edda' : (window._msResults[i].task ? '#fff' : '#fafafa');
-            }
-        });
-    });
-}
-
-// ─── 항목 선택 → 오른쪽 패널 ────────────────────────────
-window.msSelectItem = function(idx) {
-    const r = window._msResults[idx];
-    if (!r || !r.task) return;
-
-    // 활성 항목 하이라이트
-    if (window._msCurrentIdx >= 0) {
-        const prev = document.getElementById(`ms-list-item-${window._msCurrentIdx}`);
-        if (prev) { prev.classList.remove('ms-active'); prev.style.background = window._msResults[window._msCurrentIdx]?.registered ? '#d4edda' : '#fff'; }
-    }
-    window._msCurrentIdx = idx;
-    const cur = document.getElementById(`ms-list-item-${idx}`);
-    if (cur) { cur.classList.add('ms-active'); cur.style.background = '#fff3e0'; }
-
-    // 공통 오른쪽 패널 표시
-    mailShowRightDetail(r.subject, r.sender, r.date||'', r.body||'', r.project, r.task, () => {
-        r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
-        if (!mfDirectInsert(r.task, r.mailRaw || window._mailParsedRaw)) return;
-        r.registered = true;
-        const item = document.getElementById(`mf-list-item-${idx}`);
-        if (item) {
-            item.style.background = '#d4edda';
-            const badge = item.querySelector('div > div:last-child');
-            if (badge) {
-                const existing = badge.querySelector('.reg-badge');
-                if (!existing) badge.innerHTML += `<span class="reg-badge" style="color:#dc3545;font-size:10px;font-weight:bold;">🔴 개별등록완료</span>`;
-            }
-            const cb = item.querySelector('input[type=checkbox]');
-            if (cb) cb.checked = false;
-        }
-        window._mfResults[idx].selected = false;
-        window._msCurrentIdx = -1;
-        mfDirectInsert(r.task, r.mailRaw);
-        window.recalculateSchedules();
-    }, r.mailRaw);
-};
-
-// msRightInsert → mailRightInsert 으로 통합
-
-window.msBatchInsert = async function() {
-    // 1. 제외 로직: 날짜가 없는 항목 필터링
-    const validTargets = window._msResults.filter(r => 
-        r.selected && r.task && !r.registered &&
-        !( (r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요') )
-    );
-
-    const excludedCount = window._msResults.filter(r => r.selected && r.task && !r.registered).length - validTargets.length;
-
-    if (!validTargets.length) {
-        alert(excludedCount > 0 ? '⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)' : '등록할 항목을 체크해주세요.');
-        return;
-    }
-
-    // 2. 미리보기 검토 안전장치
-    let previewMsg = `✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`;
-    if (excludedCount > 0) previewMsg += `\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`;
-    previewMsg += '\n\n[등록할 업무 목록]\n' + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
-    
-    if (!confirm(previewMsg + '\n\n위 내용으로 등록하시겠습니까?')) return;
-
-    // 3. 등록 실행
-    for (let i = window._msResults.length - 1; i >= 0; i--) {
-        const r = window._msResults[i];
-        if (validTargets.includes(r)) {
-            try {
-                if (mfDirectInsert(r.task, r.mailRaw)) {
-                    r.registered = true;
-                    r.selected = false;
-                }
-            } catch(e) { console.error(e); }
-        }
-    }
-
-    msRenderList(window._msResults);
-    window.recalculateSchedules();
-    alert(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`));
-};
-
-window.msSyncCheckAll = function() {
-    const all = document.querySelectorAll('#ms-result-list input[type=checkbox]:not(:disabled)');
-    const chk = document.querySelectorAll('#ms-result-list input[type=checkbox]:not(:disabled):checked');
-    const ca  = document.getElementById('ms-check-all');
-    if (ca) ca.checked = all.length > 0 && all.length === chk.length;
-};
-
-window.msSelectAll = function(select) {
-    document.querySelectorAll('#ms-result-list input[type=checkbox]:not(:disabled)')
-        .forEach(cb => {
-            cb.checked = select;
-            const idx = parseInt(cb.dataset.idx);
-            if (!isNaN(idx)) window._msResults[idx].selected = select;
-        });
-};
-
-// ═══════════════════════════════════════════════════════════
 // 🧩 AR: 직접입력/파일첨부/메일서버 3탭 공용 분석결과 목록 엔진
 //    렌더링/체크박스/삭제/일괄등록/실패항목 수동전환을 여기 한 곳에서만 관리.
 //    아래에서 mf*/ms*/paste* 기존 함수들을 이 엔진으로 재연결합니다.
@@ -1666,7 +1614,11 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     //    동일하게 신뢰 가능한 원본 주소)를 그대로 같이 보관 — AI가 만드는 "수신인 미상"/"OO팀" 같은
     //    화면 표시용 문구와는 별개로, 실제 메일 주소는 여기 원문 그대로 계속 따라다녀야 한다.
     window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', to: parsed.to || '', cc: parsed.cc || '', date: parsed.date || '', body2000: mailText };
-    let prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null);
+    // 🧭 [2026-11-21] 후보 목록을 주는 매칭 호출엔 "열린 프로젝트 토픽 프로파일" 주입(js/26 래퍼)을 막는다
+    window._tpSuppressPromptSnippet = !!(candidateProjects && candidateProjects.length);
+    let prompt;
+    try { prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null); }
+    finally { window._tpSuppressPromptSnippet = false; }
 
     // 💡 [2026-08-20][AI 직접 매칭 v3] 예전엔 키워드 사전매칭으로 후보가 2개 이상 걸릴 때만 AI에게
     //    맥락 판단을 맡겼음 — project_index.json 키워드 목록이 노후화되면 AI가 애초에 이 판단 기회조차

@@ -662,7 +662,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.renderSummaryTimeline) window.renderSummaryTimeline();
     if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
     if (window.refreshMailModeButton) window.refreshMailModeButton();
-    if (window.refreshMailIntervalSelect) window.refreshMailIntervalSelect();
     if (window._msLoadQueueFromStorage) window._msLoadQueueFromStorage();
     if (window._startMailAutoScheduler) window._startMailAutoScheduler();
     if (window.refreshAutoRegisterButton) window.refreshAutoRegisterButton();
@@ -876,6 +875,9 @@ window._checkAndSendAlarmsAllSheets = async function(isManual) {
 const ALARM_CHECK_HOURS = [10, 13, 17];
 let _lastAutoAlarmHourStamp = null;
 function _autoAlarmHourlyTick() {
+    // 🔕 [2026-11-21] 끄는 스위치 — 다른 상시 루프는 전부 킬스위치가 있는데 이것만 없었다(알람 중복 발송 사고 때
+    //    멈출 길이 재시작뿐이었다). localStorage.gantt_alarm_tick_off='1' 이면 돌지 않는다.
+    try { if (localStorage.getItem('gantt_alarm_tick_off') === '1') return; } catch (e) { /* 무시 */ }
     const now = new Date();
     if (!ALARM_CHECK_HOURS.includes(now.getHours())) return;
     const stamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}_${now.getHours()}`;

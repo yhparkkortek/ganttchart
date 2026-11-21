@@ -633,8 +633,13 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
     # 📬 [2026-10-22] 원본 .eml 을 staging 에 둔다 — 나중에 프로젝트가 확정되면 그쪽으로 옮긴다.
     #    ⚠️ 수신을 절대 막지 않는다(실패는 _stage_raw_mail 안에서 삼키고 None 반환).
     _fname = f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml"
+    # 🔑 [2026-11-21] 메일의 **고유 열쇠**. fileName(날짜+제목 20자)은 같은 날 같은 스레드 답장이
+    #    전부 같은 이름이라(실측 1,459건 중 124건·8.5% 충돌) 두 번째 메일이 "이미 처리됨"으로
+    #    조용히 버려졌다. Message-ID 가 있으면 그 해시, 없으면 (날짜|발신자|제목) 해시 — 프런트는
+    #    같은 재료로 같은 값을 만들 수 있다(js/74 `mailKeyOf`). fileName 은 표시용으로만 남긴다.
+    _key = _mail_key(msg, msg_dt, sender, subject)
     if stage_dir:
-        _stage_raw_mail(stage_dir, _fname, raw)
+        _stage_raw_mail(stage_dir, _fname, raw, _key)
 
     return ('ok', {
         "subject":     subject,
@@ -644,6 +649,7 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
         "date":        msg_dt.strftime("%Y-%m-%d %H:%M"),
         "body":        body,
         "fileName":    _fname,
+        "key":         _key,
         "importance":  importance_high,
         "isToMe":      is_to_me,
         "isCcMe":      is_cc_me,
@@ -9698,8 +9704,28 @@ def _eml_heal_file(path):
         return False
 
 
-def _stage_raw_mail(stage_dir, file_name, raw):
-    """원본 .eml을 staging에 저장. 이미 있으면 건너뛴다. 실패해도 예외를 올리지 않는다."""
+def _mail_key(msg, msg_dt, sender, subject):
+    """🔑 메일 고유 열쇠(16자 hex). Message-ID 우선, 없으면 날짜|발신자|제목.
+    프런트(js/74 `mailKeyOf`)가 **같은 재료·같은 정규화**로 같은 값을 만들 수 있어야 하므로
+    규칙을 바꾸면 양쪽을 같이 바꿀 것: 날짜는 'YYYY-MM-DD HH:MM', 발신자는 <...> 안 주소(없으면 전체) 소문자,
+    제목은 공백 정리."""
+    try:
+        mid = str((msg.get('Message-ID') if msg is not None else '') or '').strip()
+        if mid:
+            return hashlib.sha1(('mid|' + mid).encode('utf-8')).hexdigest()[:16]
+        m = re.search(r'<([^>]+)>', sender or '')
+        addr = (m.group(1) if m else (sender or '')).strip().lower()
+        subj = re.sub(r'\s+', ' ', str(subject or '')).strip()
+        base = f"{msg_dt.strftime('%Y-%m-%d %H:%M')}|{addr}|{subj}"
+        return hashlib.sha1(('hdr|' + base).encode('utf-8')).hexdigest()[:16]
+    except Exception:
+        return ''
+
+
+def _stage_raw_mail(stage_dir, file_name, raw, mail_key=None):
+    """원본 .eml을 staging에 저장. 이미 있으면 건너뛴다. 실패해도 예외를 올리지 않는다.
+    [2026-11-21] 이름 꼬리에 `__k<열쇠8자>` 를 더 붙인다 — `/doc/mail-assign` 이 fileName 접두어
+    (충돌함)가 아니라 열쇠로 **정확히 그 메일**을 집을 수 있게. 옛 이름(`<prefix>__<h>.eml`)도 그대로 읽힌다."""
     if not stage_dir or not raw:
         return None
     try:
@@ -9707,7 +9733,11 @@ def _stage_raw_mail(stage_dir, file_name, raw):
         # 같은 날·같은 제목 충돌 방지. 해시는 **줄바꿈을 LF로 맞춘 내용**으로 낸다 — CRLF로 바꾼 뒤에도
         # 같은 메일이면 예전(LF 시절) 파일과 이름이 같아야 중복 보관이 안 생긴다.
         h = hashlib.sha1(raw.replace(b'\r\n', b'\n')).hexdigest()[:8]
-        name = f'{key}__{h}.eml'
+        legacy = os.path.join(stage_dir, f'{key}__{h}.eml')
+        if os.path.exists(legacy):
+            return os.path.basename(legacy)          # 옛 이름으로 이미 보관됨 — 중복 저장 안 함
+        tail = f'__k{str(mail_key)[:8]}' if mail_key else ''
+        name = f'{key}__{h}{tail}.eml'
         path = os.path.join(stage_dir, name)
         if not os.path.exists(path):
             with open(path, 'wb') as f:
@@ -9728,13 +9758,19 @@ def doc_mail_assign():
         return jsonify({'ok': False, 'error': '문서 저장소가 설정되지 않았습니다.'}), 400
     req = request.get_json(force=True, silent=True) or {}
     file_name = str(req.get('fileName') or '')
+    mail_key = re.sub(r'[^0-9a-f]', '', str(req.get('key') or '').lower())[:8]
     project = _docstore_safe_name(req.get('project'))
-    if not file_name or not project:
-        return jsonify({'ok': False, 'error': 'fileName과 project가 필요합니다.'}), 400
+    if (not file_name and not mail_key) or not project:
+        return jsonify({'ok': False, 'error': 'fileName(또는 key)과 project가 필요합니다.'}), 400
 
-    key = _mail_stage_key(file_name)
+    key = _mail_stage_key(file_name) if file_name else ''
     try:
-        cands = [n for n in os.listdir(stage) if n.startswith(key + '__')]
+        names = os.listdir(stage)
+        # 🔑 [2026-11-21] 열쇠가 있으면 **그 메일 하나**만. 없으면 옛 방식(접두어 일치 중 최신 1개 —
+        #    같은 날 같은 스레드 답장이 섞이면 남의 메일을 옮길 수 있는 자리라 열쇠가 우선이다).
+        cands = [n for n in names if mail_key and ('__k' + mail_key) in n]
+        if not cands and key:
+            cands = [n for n in names if n.startswith(key + '__')]
     except Exception as e:
         return jsonify({'ok': False, 'error': f'staging 조회 실패: {e}'}), 500
     if not cands:

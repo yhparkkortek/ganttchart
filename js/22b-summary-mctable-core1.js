@@ -1269,18 +1269,6 @@ window.getTopicProfileAutoDisabled = function() {
     return localStorage.getItem('topic_profile_auto_disabled') === '1';
 };
 
-window.onMailIntervalChange = function() {
-    const sel = document.getElementById('mail-process-interval');
-    if (!sel) return;
-    localStorage.setItem('mail_auto_process_interval_min', sel.value);
-};
-
-window.refreshMailIntervalSelect = function() {
-    const sel = document.getElementById('mail-process-interval');
-    if (!sel) return;
-    sel.value = String(window.getMailAutoInterval());
-};
-
 // 설정 모달 열기
 window.openAlarmSettings = function() {
     const cfg  = window.loadAlarmSettings();

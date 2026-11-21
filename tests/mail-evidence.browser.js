@@ -12,7 +12,11 @@
     function ok(n, c, d) { if (c) { pass++; out.push('  OK   ' + n); } else { fail++; out.push('  FAIL ' + n + (d !== undefined ? '  — ' + JSON.stringify(d).slice(0, 300) : '')); } }
     var P = window.MAIL_EVIDENCE_POLICY;
     if (!P || !window.mailEvidenceFor) { console.error('js/61 이 로드되지 않았다'); return; }
-    var keep = {}; [P.historyKey, P.statsKey, P.offKey].forEach(function (k) { keep[k] = localStorage.getItem(k); });
+    // 🧭 [2026-11-21] js/74(두 단계 판정)가 61 보다 바깥에서 projectTag 를 바꾼다 — 이 하네스는 61 의 보정만 보므로
+    //    그동안 74 를 잠깐 끈다(끝나면 되돌림). 74 를 켠 채 돌리면 식별자 규칙이 앞서 6/15 로 떨어지는 게 정상이다.
+    var MR_OFF = (window.MAIL_ROUTING_POLICY && window.MAIL_ROUTING_POLICY.offKey) || 'gantt_mail_routing_off';
+    var keep = {}; [P.historyKey, P.statsKey, P.offKey, MR_OFF].forEach(function (k) { keep[k] = localStorage.getItem(k); });
+    localStorage.setItem(MR_OFF, '1');
     var C = [
         { drive_file_id: 'tA', file_name: 'T_STELLAR32.json', model: 'STELLAR32', customer: 'LNW', keywords: ['STELLAR32', '502319', 'LNW'] },
         { drive_file_id: 'tB', file_name: 'T_OBSIDIAN27.json', model: 'OBSIDIAN', customer: 'LNW', keywords: ['OBSIDIAN', '502888', 'LNW'] },

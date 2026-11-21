@@ -487,6 +487,16 @@ window._mailFindDupBySourceTag = function(detailText, gd, ci) {
     }
     return null;
 };
+// 🔑 [2026-11-21] 메일 열쇠(`row._mailKey`, js/74 `mailKeyOf`)로도 중복을 본다 — [출처] 태그는 사람이
+//    상세내용을 고치면 깨지고, 직접입력 경로엔 태그가 없다. 열쇠가 있는 행끼리는 열쇠가 먼저다.
+window._mailFindDupByKey = function(key, gd) {
+    if (!key || !gd) return null;
+    for (let i = 1; i < gd.length; i++) {
+        const row = gd[i];
+        if (row && row._mailKey && row._mailKey === key) return row;
+    }
+    return null;
+};
 
 // 📅 [2026-11-17 요청] 반복회의 일정이 바뀔 때마다 Outlook/Exchange가 스스로 보내는
 //    "자동 업데이트" 알림 메일 — 실행할 내용이 없는 시스템 메일인데, 올 때마다 새 업무로
@@ -517,7 +527,8 @@ window._mailIsAutoNotice = function(mailRaw) {
 window.buildMailTaskRow = function(r, gd, ci, mailRaw, targetMeta) {
     gd = gd || globalData;
     ci = ci || colIdx;
-    if (window._mailFindDupBySourceTag(r['상세내용'], gd, ci)) {
+    const _mailKey = window.mailKeyOf ? window.mailKeyOf(mailRaw) : '';
+    if (window._mailFindDupBySourceTag(r['상세내용'], gd, ci) || (_mailKey && window._mailFindDupByKey(_mailKey, gd))) {
         return { row: null, taskName: (r['업무명'] || '새 업무'), duplicate: true, skipReason: 'dup' };
     }
     if (window._mailIsAutoNotice(mailRaw)) {
@@ -543,6 +554,7 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw, targetMeta) {
     else if (wbsLevel === 4) newRow._origT4 = taskName;
 
     newRow._startForced = false; newRow._planForced = false;
+    if (_mailKey) newRow._mailKey = _mailKey;   // 🔑 메일 열쇠 — `_` 속성이라 저장에 실린다(js/04c _serializeGD)
 
     // ✅ 고객/모델/인치/담당자는 대상 데이터의 기존 행에서 직접 복사
     let refRow = null;

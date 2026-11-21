@@ -397,12 +397,13 @@
             r.project = window._msProjectTagLabel ? window._msProjectTagLabel(tag) : (tag.candidates[0].model || tag.candidates[0].file_name);
             r.matchReason = tag.matchBasis;
             if (window.TaskInbox) {
-                var already = window.TaskInbox.load().some(function (it) { return it.mailRaw && it.mailRaw.fileName === r.fileName; });
+                var already = window._msMailAlreadyInInbox ? window._msMailAlreadyInInbox(r)
+                    : window.TaskInbox.load().some(function (it) { return it.mailRaw && it.mailRaw.fileName === r.fileName; });
                 if (!already) {
                     var c0 = tag.candidates[0];
                     window.TaskInbox.add(r.task, {
                         source: '📎 ' + T('배분 기록 근거(AI 0 → 후보: ', 'evidence (AI none → candidate: ') + (c0.model || c0.customer || c0.file_name) + ')',
-                        mailRaw: { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName },
+                        mailRaw: { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName, key: r.key || '' },
                         matchedProject: tag, alarmWorthy: !!r._alarmWorthy
                     });
                 }
