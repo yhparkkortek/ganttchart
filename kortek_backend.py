@@ -650,6 +650,7 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
         "body":        body,
         "fileName":    _fname,
         "key":         _key,
+        "reply":       _mail_latest_reply(body),   # ✂️ 이번 답장 글만(없으면 '' — 프런트가 body 로 폴백)
         # 🧵 [2026-11-21] 답장 스레드의 **진짜** 연결 — In-Reply-To/References 의 Message-ID 를 key 와 같은 해시로.
         #    제목 정규화로 스레드를 추정하던 것(js/74 threadTarget)이 "Weekly meeting" 같은 범용 제목에서 틀리는 자리.
         #    JWZ threading 알고리즘의 핵심이 이 두 헤더다 — 라이브러리 없이 헤더만 넘긴다(연결은 프런트 기록이 안다).
@@ -2467,6 +2468,72 @@ def _drive_read_json_file(file_id: str) -> dict:
     return resp.json()
 
 
+
+def _project_doc_by_id(fid):
+    """🗄️ 알람 규칙의 `driveFileId` → 프로젝트 JSON. **NAS 먼저**, Drive 는 폴백.
+
+    2026-11-04 에 저장소가 NAS 로 옮겨간 뒤에도 핀셋 "기간·반복" 알람은 `_drive_read_json_file`
+    (구글 Drive 서비스계정)로 프로젝트를 읽고 있었다 — Drive 사본은 11-03 이사 뒤 **읽기만** 남은
+    낡은 파일이라 담당자·마감일이 옛값이거나(옛 Drive id 별칭), `nas_f_…` id 면 404 였다.
+    아침 브리핑(`_brief_load_items`)이 쓰는 같은 길(id 지도 → 색인 → NAS)로 읽는다.
+    돌려주는 것: (doc, source) — source 는 'nas' | 'drive'. 둘 다 실패면 예외(사유 둘 다 포함)."""
+    fid = str(fid or '').strip()
+    if not fid:
+        raise RuntimeError('driveFileId 가 비어 있습니다')
+    nas_err = ''
+    try:
+        id_map = {}
+        try:
+            id_map = (_daily_nas_json(NAS_ID_MAP_REL) or {}).get('map') or {}
+        except Exception as e:
+            nas_err = 'id 지도 읽기 실패: %s' % e
+        rel = _index_entry_rel(fid, id_map)
+        if not rel:
+            # 지도에 없으면 색인에서 `drive_file_id` 가 같은 항목의 team/file_name 으로
+            idx = _daily_nas_json('App_Config/project_index.json') or {}
+            for p in (idx.get('projects') or []):
+                if p and str(p.get('drive_file_id') or '') == fid and p.get('file_name'):
+                    team = str(p.get('team') or '').strip()
+                    rel = (team + '/' if team else '') + str(p['file_name'])
+                    break
+        if rel:
+            doc = _daily_nas_json(rel)
+            if doc and isinstance(doc.get('globalData'), list):
+                return doc, 'nas'
+            nas_err = nas_err or ('NAS 에 %s 가 없거나 비어 있습니다' % rel)
+        else:
+            nas_err = nas_err or ('NAS 지도·색인에 id %s… 가 없습니다' % fid[:12])
+    except Exception as e:
+        nas_err = nas_err or ('NAS 읽기 실패: %s' % e)
+    try:
+        return _drive_read_json_file(fid), 'drive'
+    except Exception as e:
+        raise RuntimeError('%s / Drive 폴백 실패: %s' % (nas_err, e))
+
+
+_nas_address_book_cache = {'data': None, 'loadedAt': 0.0}
+
+
+def _load_address_book(force=False):
+    """📒 주소록 — **NAS `App_Config/AddressBook_Shared.json` 먼저**, 못 읽으면 Drive(옛 길).
+    `_drive_load_address_book` 은 NAS 이사 뒤 낡은 사본을 돌려준다(텔레그램 id 가 그 뒤 바뀐 사람은 못 받는다)."""
+    now = time.time()
+    c = _nas_address_book_cache
+    if not force and c['data'] is not None and (now - c['loadedAt']) < ADDRESS_BOOK_CACHE_TTL_SEC:
+        return c['data']
+    try:
+        doc = _daily_nas_json('App_Config/AddressBook_Shared.json')
+        if doc and isinstance(doc.get('addressBook'), list):
+            c['data'] = doc['addressBook']
+            c['loadedAt'] = now
+            return c['data']
+    except Exception as e:
+        print("[업무알람] NAS 주소록 읽기 실패(Drive 로 폴백): %s" % e)
+    if c['data'] is not None:
+        return c['data']
+    return _drive_load_address_book(force)
+
+
 _app_config_folder_cache = {'id': None}
 
 
@@ -2673,7 +2740,7 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
     sender_raw   = strip_tag(arrow_match.group(1)) if arrow_match else str(col('assignee') or '-').strip()
     receiver_raw = strip_tag(arrow_match.group(2)) if arrow_match else ''
 
-    address_book   = _drive_load_address_book()
+    address_book   = _load_address_book()
     sender_names   = _addr_split_names(sender_raw)
     receiver_names = _addr_split_names(receiver_raw)
     all_people     = list(dict.fromkeys([n for n in (sender_names + receiver_names) if n]))
@@ -2737,22 +2804,34 @@ def _fire_notice_rule(rule: dict):
     subject    = f"[예약 발송] {title}"
     body_html  = '<div style="white-space:pre-wrap; font-family:\'맑은 고딕\',sans-serif;">' \
                  + html.escape(message).replace('\n', '<br>') + '</div>'
+    out = {'email': 0, 'telegram': 0, 'errors': []}
     for r in recipients:
         try:
             if r.get('emailOn') and r.get('email'):
                 ok, err, _ = _send_mail_core(r['email'], subject, body_html)
                 if not ok:
                     print(f"[예약발송 실패-메일] {r.get('name','')} <{r['email']}>: {err}")
+                    out['errors'].append('메일 실패(%s): %s' % (r.get('name', ''), err))
+                else:
+                    out['email'] += 1
         except Exception as e:
             print(f"[예약발송 예외-메일] {r.get('name','')}: {e}")
+            out['errors'].append('메일 예외(%s): %s' % (r.get('name', ''), e))
         try:
             if r.get('tgOn') and r.get('telegramId'):
                 res = send_telegram_msg(f"📢 <b>{html.escape(title)}</b>\n{html.escape(message)}", r['telegramId'])
                 if not res.get('ok'):
                     print(f"[예약발송 실패-텔레그램] {r.get('name','')}: {res}")
+                    out['errors'].append('텔레그램 실패(%s): %s' % (r.get('name', ''), (res or {}).get('description') or (res or {}).get('error') or res))
+                else:
+                    out['telegram'] += 1
         except Exception as e:
             print(f"[예약발송 예외-텔레그램] {r.get('name','')}: {e}")
+            out['errors'].append('텔레그램 예외(%s): %s' % (r.get('name', ''), e))
+    if not recipients:
+        out['skipped'] = '수신자 0명'
     print(f"[예약발송] '{title}' → 수신자 {len(recipients)}명 처리 ({datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')})")
+    return out
 
 
 def _fire_alarm_rule(rule: dict):
@@ -2761,23 +2840,24 @@ def _fire_alarm_rule(rule: dict):
     drive_file_id = rule.get('driveFileId')
     row_idx       = rule.get('rowIdx')
     label         = rule.get('taskNameSnapshot') or rule.get('title') or '(제목 없음)'
+    out = {'email': 0, 'telegram': 0, 'errors': [], 'source': ''}
     if not drive_file_id or row_idx is None:
         print(f"[업무알람 실패] driveFileId/rowIdx가 없는 규칙입니다: {label}")
-        return
+        out['errors'].append('driveFileId/rowIdx 없음'); return out
     try:
-        project_data = _drive_read_json_file(drive_file_id)
+        project_data, out['source'] = _project_doc_by_id(drive_file_id)
     except Exception as e:
         print(f"[업무알람 실패] '{label}' — 프로젝트 파일 조회 실패: {e}")
-        return
+        out['errors'].append('프로젝트 파일 조회 실패: %s' % e); return out
 
     try:
         snap = _build_alarm_task_snapshot(project_data, int(row_idx))
     except Exception as e:
         print(f"[업무알람 실패] '{label}' — 업무 상태 계산 중 오류: {e}")
-        return
+        out['errors'].append('업무 상태 계산 오류: %s' % e); return out
     if not snap:
         print(f"[업무알람 건너뜀] '{label}' — 업무를 찾을 수 없거나(삭제됨) 알림이 꺼져있거나 완료예정일이 없습니다.")
-        return
+        out['skipped'] = '업무 없음/알림 꺼짐/완료예정일 없음'; return out
 
     allowed_domains = rule.get('allowedExternalDomainsSnapshot') or []
     assignee_email  = snap['assigneeEmail'] if _is_alarm_domain_allowed(snap['assigneeEmail'], allowed_domains) else ''
@@ -2798,6 +2878,7 @@ def _fire_alarm_rule(rule: dict):
 
     if not to_email:
         print(f"[업무알람 건너뜀] '{snap['taskName']}' — 발송 가능한 이메일이 없습니다(담당자/수신인 이메일 미등록 또는 외부 도메인 차단).")
+        out['emailSkipped'] = '발송 가능한 이메일 없음'
     else:
         subject = f'[Gantt 알람] {proj_title} — "{snap["taskName"]}" 완료일 {d_day_plain}'
         content_html = html.escape(snap['content']).replace('\n', '<br>') if snap['content'] else ''
@@ -2820,12 +2901,14 @@ def _fire_alarm_rule(rule: dict):
         ok, err, _ = _send_mail_core(to_email, subject, body, cc_mails)
         if not ok:
             print(f"[업무알람 실패-메일] '{snap['taskName']}': {err}")
+            out['errors'].append('메일 실패: %s' % err)
         else:
+            out['email'] += 1
             print(f"[업무알람] '{snap['taskName']}' → {to_email} 발송 완료 ({datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')})")
 
     # 텔레그램 — 담당자/수신인 중 (이메일 미등록이라 판단 불가하거나) 도메인이 허용된 사람만
     try:
-        address_book = _drive_load_address_book()
+        address_book = _load_address_book()
         tg_msg = f"📌 [Gantt 알람] {proj_title}\n업무: {snap['taskName']}\n담당: {snap['assignee']}\n기한: {snap['dueStr']} ({d_day_plain})"
         if snap['content']:
             tg_msg += '\n내용: ' + snap['content'].replace('\n', ' ')[:2000]
@@ -2838,6 +2921,9 @@ def _fire_alarm_rule(rule: dict):
             res = send_telegram_msg(tg_msg, chat_id)
             if not res.get('ok'):
                 print(f"[업무알람 실패-텔레그램] {label}: {res}")
+                out['errors'].append('텔레그램 실패(%s): %s' % (label, (res or {}).get('description') or (res or {}).get('error') or res))
+            else:
+                out['telegram'] += 1
 
         for name in snap['allPeopleNames']:
             person = _addr_find_by_name(address_book, name)
@@ -2858,14 +2944,18 @@ def _fire_alarm_rule(rule: dict):
             _tg_send_once(r['telegramId'], r.get('name', ''))
     except Exception as e:
         print(f"[업무알람 텔레그램 예외] {snap['taskName']}: {e}")
+        out['errors'].append('텔레그램 예외: %s' % e)
+    if not out['telegram'] and not out.get('errors'):
+        # 받을 사람이 한 명도 안 잡혔다 — 주소록에 텔레그램 id 가 없거나 외부 도메인 차단. 조용히 넘기면 "안 온다"만 남는다.
+        out['telegramSkipped'] = '텔레그램 id 가 있는 담당자/수신인 없음(주소록 확인)'
+    return out
 
 
 def _fire_rule(rule: dict):
-    """규칙 종류에 따라 실제 발송 로직을 분기한다."""
+    """규칙 종류에 따라 실제 발송 로직을 분기한다. 결과 요약(dict)을 돌려준다 — `_scheduler_tick` 이 규칙에 적어 둔다."""
     if rule.get('type') == 'alarm':
-        _fire_alarm_rule(rule)
-    else:
-        _fire_notice_rule(rule)
+        return _fire_alarm_rule(rule)
+    return _fire_notice_rule(rule)
 
 
 def _scheduler_tick():
@@ -2882,63 +2972,188 @@ def _scheduler_tick():
         rules_snapshot = list(SCHEDULE_RULES)
 
     fired_any = False
+    fired, errors, active_today = [], [], 0
     for rule in rules_snapshot:
         if not rule.get('enabled', True):
             continue
         try:
             if not _rule_active_today(rule, today):
                 continue
+            active_today += 1
             for bm in _rule_today_buckets(rule):
                 if bm > cur_minutes or (cur_minutes - bm) > GRACE_MINUTES:
                     continue  # 아직 안 됐거나, 유예시간 넘겨 지나침(=건너뜀)
                 bucket_key = f"{today_str}T{bm//60:02d}:{bm%60:02d}"
                 if rule.get('lastFiredBucket') == bucket_key:
                     continue  # 이미 이 시각엔 발송함
-                _fire_rule(rule)
+                res = _fire_rule(rule) or {}
                 rule['lastFiredBucket'] = bucket_key
                 rule['lastFiredAt']     = now.isoformat()
+                # 📋 [2026-11-21] 결과를 규칙에 적어 둔다 — 전엔 콘솔 print 뿐이라 "울렸는데 왜 안 왔나" 를 볼 자리가 없었다
+                rule['lastResult'] = {'at': now.isoformat(), 'email': res.get('email', 0), 'telegram': res.get('telegram', 0),
+                                      'errors': (res.get('errors') or [])[:5], 'skipped': res.get('skipped') or res.get('telegramSkipped') or '',
+                                      'source': res.get('source', '')}
+                fired.append(rule.get('title', ''))
+                errors.extend(res.get('errors') or [])
                 fired_any = True
         except Exception as e:
             print(f"[예약발송 규칙 처리 오류] {rule.get('title','')}: {e}")
+            errors.append('%s: %s' % (rule.get('title', ''), e))
 
     if fired_any:
         with _SCHEDULE_LOCK:
             save_schedule_rules(SCHEDULE_RULES)
+    return {'ok': not errors, 'fired': fired, 'rules': len(rules_snapshot), 'activeToday': active_today,
+            'sent': len(fired), 'errors': errors[:10], 'message': '; '.join(errors[:3])}
+
+
+# ══════════════════════════════════════════════════════════════
+# 📋 알림 채널 상태판 (2026-11-21, 사용자: "매일 텔레그램 알람이 제대로 안 온다 / 정리가 안 된다")
+#   스케줄러가 틱의 반환값('skipped: not-notifier/disabled/before-time', 오류)을 **버리고** 있어서
+#   "오늘 왜 안 왔나" 를 볼 자리가 없었다(`/health` 는 토큰·규칙 수만). 채널마다 마지막 실행·결과·
+#   마지막 발송·마지막 오류를 메모리에 적고 `GET /notify/status` 로 내려 준다 — 프런트 👥 명단 모달 상태판.
+#   ⚠️ 이 PC 의 백엔드가 본 것만이다(채널마다 발신 PC 가 다르다 — 예약 규칙은 PC 로컬 파일,
+#      일일보고 3채널은 명단의 📣 담당 PC, 메일 감시는 그룹웨어 세션이 있는 PC).
+# ══════════════════════════════════════════════════════════════
+NOTIFY_CHANNELS = [        # (키, 사람이 읽을 이름, 설명) — 데이터
+    ('schedule',    '⏰ 예약 발송(핀셋 알람·공지)', '이 PC 의 schedule_rules.json 규칙. 시각이 되면 메일+텔레그램'),
+    ('mailWatch',   '📧 새 메일 알림',             '그룹웨어 받은메일함 → 텔레그램 요약(그룹웨어 로그인 필요)'),
+    ('tgInbound',   '📱 텔레그램 수신(보고·/ai·/배분)', '📣 담당 PC 가 봇 메시지를 받아 일일보고 파일에 적는다'),
+    ('dailyRemind', '📔 일일보고 미작성 알림',      '📣 담당 PC, 마감 시각 뒤 하루 1회'),
+    ('brief',       '☀️ 아침 브리핑',               '📣 담당 PC, 근무일 지정 시각, 볼 게 있는 사람에게만'),
+]
+NOTIFY_STATUS = {k: {'lastRunAt': '', 'lastResult': None, 'lastSentAt': '', 'lastError': '', 'runs': 0}
+                 for k, _, _ in NOTIFY_CHANNELS}
+_SCHEDULER_HEARTBEAT = {'startedAt': '', 'lastLoopAt': '', 'loops': 0}
+
+
+def _notify_record(channel, res, exc=None):
+    """틱 결과를 상태판에 적는다. 보낸 것이 있으면 lastSentAt, 실패면 lastError."""
+    st = NOTIFY_STATUS.setdefault(channel, {'lastRunAt': '', 'lastResult': None, 'lastSentAt': '', 'lastError': '', 'runs': 0})
+    now = datetime.now(KST).isoformat()
+    st['lastRunAt'] = now
+    st['runs'] = (st.get('runs') or 0) + 1
+    if exc is not None:
+        st['lastError'] = '%s (%s)' % (exc, now[:16])
+        st['lastResult'] = {'ok': False, 'message': str(exc)}
+        return
+    res = res if isinstance(res, dict) else {'ok': True, 'raw': res}
+    st['lastResult'] = res
+    sent = res.get('sent')
+    sent_n = len(sent) if isinstance(sent, (list, tuple)) else (int(sent or 0) if isinstance(sent, (int, float)) else 0)
+    if sent_n > 0 or (res.get('handled') or 0) > 0:
+        st['lastSentAt'] = now
+    if res.get('ok') is False:
+        st['lastError'] = '%s (%s)' % (res.get('message') or res.get('error') or 'ok:false', now[:16])
+
+
+def _notify_run(channel, fn, label):
+    try:
+        _notify_record(channel, fn())
+    except Exception as e:
+        print(f"[{label} 스케줄러 오류] {e}")
+        _notify_record(channel, None, exc=e)
 
 
 def _scheduler_loop():
+    _SCHEDULER_HEARTBEAT['startedAt'] = datetime.now(KST).isoformat()
     while True:
-        try:
-            _scheduler_tick()
-        except Exception as e:
-            print(f"[예약발송 스케줄러 오류] {e}")
+        _SCHEDULER_HEARTBEAT['lastLoopAt'] = datetime.now(KST).isoformat()
+        _SCHEDULER_HEARTBEAT['loops'] += 1
+        _notify_run('schedule', _scheduler_tick, '예약발송')
         try:
             _sap_cleanup_daily_tick()
         except Exception as e:
             print(f"[SAP_DMS 자동정리 스케줄러 오류] {e}")
-        try:
-            _mail_watch_tick()
-        except Exception as e:
-            print(f"[메일 알림 스케줄러 오류] {e}")
+        _notify_run('mailWatch', _mail_watch_tick, '메일 알림')
         # 📔 일일보고 — 텔레그램 수신(입력) + 미작성 알림. 담당 PC 한 대에서만 돈다.
-        try:
-            _daily_tg_tick()
-        except Exception as e:
-            print(f"[일일보고 수신 스케줄러 오류] {e}")
-        try:
-            _daily_report_tick()
-        except Exception as e:
-            print(f"[일일보고 알림 스케줄러 오류] {e}")
-        try:
-            _daily_brief_tick()
-        except Exception as e:
-            print(f"[브리핑 스케줄러 오류] {e}")
+        _notify_run('tgInbound', _daily_tg_tick, '일일보고 수신')
+        _notify_run('dailyRemind', _daily_report_tick, '일일보고 알림')
+        _notify_run('brief', _daily_brief_tick, '브리핑')
         # 🧹 NAS 임시 폴더(.ganttput-*) — 하루 1회. 부르는 곳이 없어 154개까지 쌓였다(2026-11-09).
         try:
             _nas_tmp_sweep_tick()
         except Exception as e:
             print(f"[NAS 임시폴더 청소 오류] {e}")
         time.sleep(60)
+
+
+def _notify_status_snapshot():
+    """상태판 한 장. 조회만 한다 — 로그인·발송을 시도하지 않는다. NAS 왕복은 명단 1회(+비근무일 1회)."""
+    now = datetime.now(KST)
+    today = now.strftime('%Y-%m-%d')
+    out = {'ok': True, 'now': now.isoformat(), 'pc': {}, 'channels': [], 'scheduler': dict(_SCHEDULER_HEARTBEAT)}
+    me = ''
+    nas_ok = False
+    nas_reason = ''
+    try:
+        nas = _nas()
+        s = nas.status() or {}
+        nas_ok = bool(s.get('ok'))
+        nas_reason = s.get('reason') or s.get('message') or ''
+        me = (nas.load_config() or {}).get('user') or ''
+    except Exception as e:
+        nas_reason = 'nas_dsm: %s' % e
+    is_notifier, roster = (False, None)
+    try:
+        is_notifier, roster = _daily_is_notifier()
+    except Exception:
+        pass
+    notifiers = [m.get('name') or m.get('key') for m in (roster or []) if m.get('notifier')]
+    with_chat = sum(1 for m in (roster or []) if m.get('tgChatId'))
+    out['pc'] = {
+        'user': me, 'telegramToken': bool(TELEGRAM_TOKEN), 'defaultChatId': bool(TELEGRAM_CHAT_ID),
+        'telegramMembers': len(TELEGRAM_MEMBERS), 'nasOk': nas_ok, 'nasReason': nas_reason,
+        'isNotifier': bool(is_notifier), 'notifiers': notifiers,
+        'rosterCount': (len(roster) if roster is not None else None), 'rosterWithChat': with_chat,
+        'nonworkdayToday': None,
+    }
+    try:
+        out['pc']['nonworkdayToday'] = bool(_daily_nonworkday(today)) if nas_ok else None
+    except Exception:
+        pass
+    st = _daily_state()
+    mw = _mail_watch_load()
+    with _SCHEDULE_LOCK:
+        rules = [dict(r) for r in SCHEDULE_RULES]
+    gw_ok = None
+    try:
+        import gw_bridge
+        gw_ok = bool((gw_bridge.session_info() or {}).get('ok'))
+    except Exception:
+        gw_ok = None
+    cfg_by = {
+        'schedule': {
+            'rules': len(rules), 'enabled': sum(1 for r in rules if r.get('enabled', True)),
+            'alarmRules': sum(1 for r in rules if r.get('type') == 'alarm'),
+            'activeToday': sum(1 for r in rules if r.get('enabled', True) and _rule_active_today(r, now.date())),
+            'recent': sorted([{'title': r.get('title', ''), 'type': r.get('type', ''), 'enabled': r.get('enabled', True),
+                               'lastFiredAt': r.get('lastFiredAt') or '', 'lastResult': r.get('lastResult')}
+                              for r in rules], key=lambda x: x['lastFiredAt'], reverse=True)[:12],
+            'storage': 'this-pc',
+        },
+        'mailWatch': {'enabled': bool(mw.get('enabled')), 'intervalMin': mw.get('intervalMin'), 'chatId': bool(mw.get('chatId') or TELEGRAM_CHAT_ID),
+                      'lastCheckAt': mw.get('lastCheckAt') or '', 'lastSentAt': mw.get('lastSentAt') or '', 'lastError': mw.get('lastError') or '',
+                      'gwSession': gw_ok, 'quietNow': _mail_watch_is_quiet(mw, now)},
+        'tgInbound': {'offset': st.get('offset') or 0, 'primed': bool(st.get('primed')), 'requiresNotifier': True},
+        'dailyRemind': {'dueAt': st.get('dueAt') or '17:00', 'firedToday': sum(1 for k, v in (st.get('lastFired') or {}).items() if v == today),
+                        'requiresNotifier': True},
+        'brief': {'briefAt': st.get('briefAt') or DAILY_BRIEF['at'], 'enabled': bool(st.get('briefEnabled', DAILY_BRIEF['enabled'])),
+                  'firedToday': sum(1 for k, v in (st.get('briefLastFired') or {}).items() if v == today), 'requiresNotifier': True},
+    }
+    for key, label, desc in NOTIFY_CHANNELS:
+        row = {'key': key, 'label': label, 'desc': desc, 'config': cfg_by.get(key, {})}
+        row.update(NOTIFY_STATUS.get(key) or {})
+        out['channels'].append(row)
+    return out
+
+
+@app.route('/notify/status', methods=['GET'])
+def notify_status_api():
+    try:
+        return jsonify(_notify_status_snapshot())
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
 
 
 # ══════════════════════════════════════════════════════════════
@@ -9706,6 +9921,56 @@ def _eml_heal_file(path):
     except Exception as e:
         print(f'[메일보관] CRLF 교정 실패(원본 그대로 엶): {path} · {e}')
         return False
+
+
+# ✂️ [2026-11-21] 답장 메일에서 **이번에 새로 쓴 글**만 떼어 낸다 — 인용 체인·서명·면책 문구를 뺀 것.
+#    AI 가 보는 본문은 2,000자(프런트 `gantt_ai_mail_maxlen`)라, Outlook 머리·과거 인용이 그 창을 먼저
+#    먹으면 정작 이 메일의 내용이 잘려 나갔다. 라이브러리 `mail-parser-reply`(MIT, 언어별 정규식 사전 — `ko` 있음)
+#    를 쓰되 **없으면 조용히 빈 값**(프런트가 전체 본문으로 폴백) — 수신을 절대 막지 않는다.
+#    ⚠️ 그 라이브러리의 ko `wrote_header`(Gmail 식 "…님이 작성하였습니다:")는 부정 전방탐색이 자기 패턴을 막아
+#       **한 번도 맞지 않는다**(실측 2026-11-21, ko 는 README 에도 untested) → 아래 보조 구분선(데이터)으로 우리가 자른다.
+MAIL_REPLY_EXTRA_SEPARATORS = [
+    r'^\s*(?:>\s*)*\d{4}년\s*\d{1,2}월\s*\d{1,2}일.*님이\s*작성(?:하였습니다|했습니다)\s*:\s*$',   # Gmail(ko)
+    r'^\s*(?:>\s*)*On\s.+?\swrote:\s*$',                                                          # Gmail(en) 1줄형
+    r'^\s*-{3,}\s*(?:Original Message|원본 메시지|원본 메일|Forwarded message|전달된 메일)\s*-{3,}\s*$',
+    r'^\s*(?:보낸\s?사람|From)\s*:\s.+$',                                                        # Outlook 머리 첫 줄(폴백)
+]
+_MAIL_REPLY_EXTRA_RE = [re.compile(p, re.I | re.M) for p in MAIL_REPLY_EXTRA_SEPARATORS]
+_MAIL_REPLY_MIN_CHARS = 20
+try:
+    from mailparser_reply import EmailReplyParser as _EmailReplyParser   # pip install mail-parser-reply
+    _REPLY_PARSER = _EmailReplyParser(languages=['ko', 'en'])
+except Exception:
+    _REPLY_PARSER = None
+
+
+def _mail_latest_reply(body):
+    """본문 → 이번 답장 글(서명 제거). 못 가르면 ''(호출한 쪽이 전체 본문으로 폴백)."""
+    text = str(body or '')
+    if not text.strip():
+        return ''
+    out = text
+    try:
+        if _REPLY_PARSER is not None:
+            m = _REPLY_PARSER.read(text=text)
+            if m and m.replies:
+                first = (m.replies[0].body or '').strip()
+                if first:
+                    out = first
+    except Exception:
+        out = text
+    # 보조 구분선 — 가장 앞에 나오는 것에서 자른다(첫 줄은 제외: 머리글 자체로 시작하는 전달 메일은 그대로)
+    cut = None
+    for rx in _MAIL_REPLY_EXTRA_RE:
+        mm = rx.search(out)
+        if mm and mm.start() > 0 and (cut is None or mm.start() < cut):
+            cut = mm.start()
+    if cut is not None:
+        out = out[:cut]
+    out = out.strip()
+    if len(out) < _MAIL_REPLY_MIN_CHARS or out == text.strip():
+        return ''        # 가른 게 없거나 너무 짧다 — 프런트는 전체 본문을 쓴다
+    return out
 
 
 def _mail_key(msg, msg_dt, sender, subject):

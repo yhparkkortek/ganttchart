@@ -217,3 +217,9 @@ AI 업무 분석 모달(직접입력·파일첨부·메일서버 3탭 + 군집 �
 | 보관함 `mailRaw.body2000` | 대기 항목은 본문 전문(13.5KB/건) 유지, 처리된 건은 이미 비움 | 15b 트림으로 새 항목은 8,000자 이하 |
 | 상시 루프 11~12개/탭 | 메일틱·스윕·본문 이전·텔레그램 15초 등 | 그대로(스위치는 설정 모달에) — 수치 없이 줄이지 않는다 |
 📏 **재는 법**(회사 PC): 프로젝트 열고 `performance.memory.usedJSHeapSize/1048576` 를 열자마자·30분 뒤·2시간 뒤 적는다 + `document.querySelectorAll('*').length`. 증가분이 크면 `_pcCache.size`·`_msResults.length`·`window._undoStack.length` 를 같이 본다. 그 수치가 있어야 `docs/improvements.md` 규칙("숫자 없는 항목은 적지 않는다")에 맞게 다음 조치를 정할 수 있다.
+
+### 7-3. ✂️ 답장 글만 떼어 AI 에 (2026-11-21, 같은 날 후속 — `mail-parser-reply` 도입)
+- 백엔드 `/fetch-mail` 이 `reply`(이번 답장 글, 서명·면책 제거)를 함께 내린다(`_mail_latest_reply`). 라이브러리 `mail-parser-reply`(MIT, `ko` 사전 있음)를 쓰되 **없으면 보조 구분선(데이터 `MAIL_REPLY_EXTRA_SEPARATORS`)만으로** 자르고, 그마저 못 가르면 `''`.
+- ⚠️ 실측: 라이브러리의 ko `wrote_header`(Gmail "…님이 작성하였습니다:")는 부정 전방탐색이 자기 패턴을 막아 **한 번도 안 맞는다** → 우리 보조 구분선이 자른다. Outlook(보낸 사람/보낸 날짜…) 머리와 서명(`감사합니다.` 이하)은 라이브러리가 잘 뗀다.
+- 프런트 `msCallGemini`(15c): `reply` 가 있으면 **새 글을 맨 앞**, 그 뒤 `[이전 메일 인용]` + 나머지 — 2,000자 창을 새 내용이 먼저 채우고, 식별자가 인용에만 있어도 남은 창에 보인다. `body` 자체는 전문 그대로(스테이징·원문 보기 불변).
+- 설치: `requirements.txt`·`kortek_backend.bat` 에 추가. 검증 `py -3 -X utf8 tests/test_mail_reply_split.py` **12/12**(가짜 0, 합성 .eml) + 미설치 흉내(`_REPLY_PARSER=None`)에서 Outlook 머리 앞까지 자르는 것 확인.

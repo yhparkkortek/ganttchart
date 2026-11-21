@@ -1606,7 +1606,18 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
         ? ('받는사람: ' + (_recipHint.to || '(본문에 명시 안 됨)') + (_recipHint.cc ? '\n참조: ' + _recipHint.cc : '') + '\n')
         : '';
     // 💡 [2026-08-27] 하드코딩된 2000자를 "⚙️ 설정 → AI 분석 설정"에서 조절 가능하도록 변경
-    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + _recipLine + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, window.getAiMailMaxLen());
+    // ✂️ [2026-11-21] 백엔드가 떼어 준 "이번 답장 글"(parsed.reply, 서명·면책 제거)이 있으면 **그것을 맨 앞에**, 그 뒤에
+    //    나머지(과거 인용)를 붙인다 — 2,000자 창을 이 메일의 새 내용이 먼저 채우고, 식별자가 인용 안에만 있을 때도
+    //    창에 남은 만큼은 보인다. 없으면(옛 백엔드·.eml 탭·직접입력) 예전처럼 전체 본문. 인용 검증(js/61)도 이 mailText 를 본다.
+    const _bodyFull = cleanMailBody(parsed.body);
+    let _bodyForAi = _bodyFull;
+    if (parsed.reply && String(parsed.reply).length >= 20) {
+        const _rep = cleanMailBody(parsed.reply);
+        const _ix = _bodyFull.indexOf(_rep.slice(0, 60));
+        const _rest = _ix !== -1 ? (_bodyFull.slice(0, _ix) + _bodyFull.slice(_ix + _rep.length)).trim() : _bodyFull;
+        _bodyForAi = _rep + (_rest ? '\n\n[이전 메일 인용 — 아래는 이 메일에 딸린 과거 내용]\n' + _rest : '');
+    }
+    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + _recipLine + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + _bodyForAi.substring(0, window.getAiMailMaxLen());
     // 💡 파싱 원문 전역 보관
     // 🐛 [2026-09-12 버그수정] 수신자(to/cc) 실제 헤더 주소를 여태 여기서부터 버리고 있었음 — 위에서
     //    AI 프롬프트용 힌트(_recipHint)로만 잠깐 쓰고 끝났고, "메일 원문 보기"/추후 발송·알람 기능이

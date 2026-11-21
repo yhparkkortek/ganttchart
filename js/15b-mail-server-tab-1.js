@@ -240,7 +240,7 @@ window.msFetchMail = async function() {
                     cc:      mail.cc,
                     date:    mail.date,
                     body:    mail.body,
-                    fileName: mail.fileName, key: mail.key || '', refs: mail.refs || []
+                    fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [], reply: mail.reply || ''
                 }, candidatesForAI, null);
 
                 // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 확정 (mf/자동틱과 동일 공용 헬퍼)
@@ -1534,7 +1534,7 @@ window._autoMailFetchTick = async function() {
                 try {
                     const task = await msCallGemini(apiKey, {
                         subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
-                        body: mail.body, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || []
+                        body: mail.body, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [], reply: mail.reply || ''
                     }, candidatesForAI, null);
 
                     // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 확정 (ms/mf와 동일 공용 헬퍼)

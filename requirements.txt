@@ -8,6 +8,9 @@ python-docx
 python-pptx
 xlwt
 websockets
+mail-parser-reply
+# 💡 mail-parser-reply 는 "/fetch-mail 이 이번 답장 글만 떼어 내리기"(2026-11-21, reply 필드) 전용 —
+# 순수 Python(언어별 정규식 사전, ko 포함). 없어도 수신은 되고 reply 만 빈 값이 된다(프런트가 전체 본문 폴백).
 # 💡 openpyxl/python-docx는 "승인원 표지 생성"(엑셀/워드 양식 채우기, 2026-09-15 신규)
 # 전용 — 이 둘은 순수 Python 라이브러리라 SAP COM처럼 32/64비트를 가리지 않고 메인
 # 64비트 환경(이 파일)에 바로 설치하면 된다.
