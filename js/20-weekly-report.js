@@ -3,15 +3,17 @@
     // ====================================================
     // ── 날짜 유틸 ─────────────────────────────────────────
     function wrGetWeekRange(baseDate) {
-        // 월요일 00:00 ~ 금요일 23:59:59 기준 주간 범위
+        // 월요일 00:00 ~ 일요일 23:59:59 기준 주간 범위.
+        // 📅 [2026-11-21 사용자 결정 "월~일로"] 전엔 금요일까지라 토·일에만 걸친 업무가 이번 주에도 다음 주에도
+        //    안 들어가 주간보고에서 사라졌다(AI 요약 js/62 는 원래 월~일). 이제 두 화면의 "주" 가 같다.
         const d = new Date(baseDate);
         const day = d.getDay(); // 0=일 ... 6=토
         const diffToMon = (day === 0) ? -6 : (1 - day);
         const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMon);
         mon.setHours(0,0,0,0);
-        const fri = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 4);
-        fri.setHours(23,59,59,999);
-        return { start: mon.getTime(), end: fri.getTime() };
+        const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+        sun.setHours(23,59,59,999);
+        return { start: mon.getTime(), end: sun.getTime() };
     }
     function wrFormatMD(ts) {
         if (!ts) return "";
