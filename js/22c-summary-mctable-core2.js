@@ -630,14 +630,14 @@ window._asRemoveSpecificDate = function(d) {
 
 // ── 기간·반복 예약 저장/해제 (백엔드 /schedule API, type='alarm') ─────────────
 // 💡 공지(notice)와 달리 title/message/recipients를 고정 저장하지 않는다 — driveFileId+rowIdx만
-//    기억해두면 백엔드가 발송 직전 구글드라이브에서 이 업무의 최신 상태를 다시 읽는다
+//    기억해두면 백엔드가 발송 직전 저장소(NAS 먼저, Drive 는 폴백 — `_project_doc_by_id`, 2026-11-21)에서 이 업무의 최신 상태를 다시 읽는다
 //    (kortek_backend.py의 _fire_alarm_rule/_build_alarm_task_snapshot 참고).
 window._asSaveRecurRule = async function() {
     const item = window._alarmScheduleItem;
     if (!item) return;
     const driveFileId = window.currentDriveFileId;
     if (!driveFileId) {
-        const msg = '이 프로젝트가 구글드라이브에 저장된 후에만 기간·반복 예약이 가능합니다. 먼저 저장해주세요.';
+        const msg = window._t('이 프로젝트가 ' + (window._storeName ? window._storeName() : '저장소') + '에 저장된 후에만 기간·반복 예약이 가능합니다. 먼저 저장해주세요.', 'Save the project to storage first — period/recurring schedules need a saved file.');
         if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
         return;
     }

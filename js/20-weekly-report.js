@@ -120,9 +120,12 @@
 
     function wrExtractIssue(contentStr) {
         if (!contentStr) return { issue: "", fix: "" };
-        const issueM = contentStr.match(/\[문제점\]([^\n\[]*)/);
-        const fixM   = contentStr.match(/\[대책\]([^\n\[]*)/);
-        return { issue: issueM ? issueM[1].trim() : "", fix: fixM ? fixM[1].trim() : "" };
+        // ✂️ [2026-11-21] 전엔 `[^\n\[]*` 라 **첫 줄만**, 그리고 `[` 가 나오면 거기서 끊었다 — 여러 줄 [문제점] 이나 다음 줄에서 시작하는
+        //    글이 주간보고·PPT·일일보고 초안(`_mailContentParse` 가 이 함수를 쓴다)에서 통째로 비었다. `_mailContentParse.pick` 과 같은 "다음 [태그] 줄 앞까지".
+        const issueM = contentStr.match(/\[문제점\]\s*([\s\S]*?)(?=\n\s*\[[^\]\n]{1,20}\]|$)/);
+        const fixM   = contentStr.match(/\[대책\]\s*([\s\S]*?)(?=\n\s*\[[^\]\n]{1,20}\]|$)/);
+        const one = function (m) { return m ? m[1].replace(/\s*\n\s*/g, ' ').trim() : ""; };
+        return { issue: one(issueM), fix: one(fixM) };
     }
     
     // 상세내용 표시용: [문제점]/[대책] 줄은 하단 표에서 이미 보여주므로 본문에서는 제거
@@ -714,6 +717,7 @@ ${nextRaw}
 ${issRaw}
 
 규칙:
+- 위 목록에 **없는** 업무·날짜·담당자·수치를 만들어 넣지 말 것(지어낸 문장이 결재선을 타고 올라가는 게 가장 위험)
 - 중요도가 낮거나 단순 반복 업무는 생략 가능. 보고 가치가 있는 업무를 우선 선택
 - 각 항목은 "✓ 업무명" 형식으로 시작하고, 핵심 내용을 1~2줄로 요약
 - 날짜 범위(예: 09/01~09/11)가 업무 목록에 있으면 업무명 뒤 담당자 앞에 (MM/DD~MM/DD) 형태로 반드시 표시
@@ -730,7 +734,7 @@ ${issRaw}
 ===끝===`;
           if (_en) prompt += '\n\n[Output language] Write all summary content in English. Keep the section delimiters (===주요실적===, ===추진계획===, ===문제점및이슈===, ===끝===) exactly as shown — do not translate them.';
 
-          window.callAiBackend(apiKey, prompt, {}).then(result => {
+          window.callAiBackend(apiKey, prompt, { feature: 'weekly-report' }).then(result => {
               if (!result.ok) throw result.error || new Error(_en ? 'AI response error' : 'AI 응답 오류');
               const text = (result.data?.result?.candidates?.[0]?.content?.parts?.[0]?.text) || '';
               const parse = (tag1, tag2) => {

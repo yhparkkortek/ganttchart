@@ -157,11 +157,10 @@
     /** 사실의 날짜 — 메일 발송일이 1순위(그 업무가 "언제 들어온 사실"인지), 없으면 [출처] 꼬리, 없으면 시작일. */
     window._psFactDate = function (row, content, ci) {
         var d = null;
-        if (row && row._mailRaw && row._mailRaw.date) d = parseAnyDate(row._mailRaw.date);
-        if (!d) {
-            var src = String(content || '').match(/\[출처\][^\n]*?_((?:\d{1,2}\s+[A-Za-z]{3}\s+\d{4}|\d{4}[-./]\d{1,2}[-./]\d{1,2})[^_\n]*)_/);
-            if (src) d = parseAnyDate(src[1]);
-        }
+        // 📅 [2026-11-21] 칸 내용([출처] 꼬리의 날짜) 을 **먼저** — 메일 유래 판정과 같은 규칙(표식 `_mailRaw` 는 2026-11-04 에 통째로 날아간 전력이 있다). 없을 때만 표식.
+        var src = String(content || '').match(/\[출처\][^\n]*?_((?:\d{1,2}\s+[A-Za-z]{3}\s+\d{4}|\d{4}[-./]\d{1,2}[-./]\d{1,2})[^_\n]*)_/);
+        if (src) d = parseAnyDate(src[1]);
+        if (!d && row && row._mailRaw && row._mailRaw.date) d = parseAnyDate(row._mailRaw.date);
         if (!d && row && row._calcStartTs) { var t = new Date(row._calcStartTs); d = new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
         if (!d && ci && ci.start != null && ci.start !== -1 && row) d = parseAnyDate(row[ci.start]);
         return d;
@@ -268,8 +267,14 @@
         function repaint() {
             if (window._renderAiProjectSummaryBody && mode() !== P.legacyId) window._renderAiProjectSummaryBody();
         }
+        var projOrdinal = 0;
         window.dailyScanMyProjects('psfacts', function (ctx) {
             var g = collectFrom(ctx, null);          // 기간은 여기서 안 거른다
+            // 🔢 [2026-11-21] 다른 프로젝트 행의 `idx` 는 그 파일 안 행 번호라 열린 프로젝트와 **겹친다** — 프롬프트에 #G12 가 둘,
+            //    `_psGround` 는 어느 쪽이든 통과, 요약 링크는 열린 프로젝트 행으로 튄다. 프로젝트마다 다른 대역을 준다
+            //    (JIRA 는 100000+, 여기는 200000 + 5000×n — 행 5,000 미만 전제·`local:false` 라 링크는 안 만든다).
+            var base = 200000 + 5000 * (++projOrdinal);
+            g.facts.forEach(function (f) { if (!f.local) { f.rowIdx = f.idx; f.idx = base + f.idx; } });
             var got = { project: ctx.project, facts: g.facts, scanned: g.scanned };
             // 한 건 끝나자마자 합친다 — 화면이 차오르는 게 보여야 "도는 중" 임을 안다.
             mine.facts = mine.facts.concat(got.facts);
@@ -438,7 +443,8 @@
             filtered: !!(F.pm || F.who || F.proj), filter: F,
             // 🔑 AI 요약 캐시 열쇠 — 기간뿐 아니라 **필터도** 들어가야 한다(다른 조건의 요약을
             //    같은 것으로 보여 주면 조용한 오답이다).
-            sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : '') + '|j=' + _psJira.key,
+            // 📏 [2026-11-21] 사실 **개수**도 열쇠에 — 다른 프로젝트 훑기가 덜 끝났을 때 만든 요약이 끝난 뒤에도 "최신" 으로 남았다
+            sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : '') + '|j=' + _psJira.key + '|n=' + out.length,
             scan: other,
             // 🪐 화면의 "로딩 중"·개수 표시용 — `out` 안의 jira 건수와 받는 중인지 둘 다 필요하다.
             jiraCount: out.filter(function (f) { return f.cat === 'JIRA'; }).length,
@@ -620,7 +626,16 @@
                (col.jiraScan && col.jiraScan.err ? ' <span style="color:#b1432f;">⚠️ JIRA: ' + esc(col.jiraScan.err) + '</span>' : '') +
                '</div></div>');
         if (fresh) {
-            var li = function (s) { var c = esc(s); return '<li style="margin-bottom:4px;">' + (window._linkifyTaskRefs ? window._linkifyTaskRefs(c) : c) + '</li>'; };
+            var byIdx = {}; (col.facts || []).forEach(function (f) { byIdx[f.idx] = f; });
+            var li = function (s) {
+                // 🔗 [2026-11-21] 열린 프로젝트 행(`local`)만 #G 링크로. 다른 프로젝트 사실은 "(프로젝트 #행)" 글자로 바꿔 링크기가 못 집게 한다.
+                var c = esc(s).replace(/#G(\d+)/g, function (m, n) {
+                    var f = byIdx[+n];
+                    if (!f || f.local) return m;
+                    return '<span style="color:#888; font-size:11px;" title="' + esc(T('다른 프로젝트의 행', 'row in another project')) + '">[' + esc(f.project || '?') + ' #' + (f.rowIdx != null ? f.rowIdx : n) + ']</span>';
+                });
+                return '<li style="margin-bottom:4px;">' + (window._linkifyTaskRefs ? window._linkifyTaskRefs(c) : c) + '</li>';
+            };
             var sec = function (icon, title, arr) { if (!arr || !arr.length) return ''; return '<div style="margin-bottom:10px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">' + icon + ' ' + esc(title) + '</div><ul style="margin:0; padding-left:18px; font-size:12.5px;">' + arr.map(li).join('') + '</ul></div>'; };
             h.push('<div style="padding:12px 14px; background:#f3f8ff; border:1px solid #d6e6fb; border-radius:8px; margin-bottom:14px;">' +
                    '<div style="font-size:11px; color:#999; margin-bottom:8px;">🤖 ' + esc(T('AI 요약 · 사실 목록 ' + cache.factCount + '건만으로 · ', 'AI summary from ' + cache.factCount + ' facts · ') + String(cache.at).replace('T', ' ').slice(0, 16)) + (cache.dropped ? ' · ' + esc(T('근거 없는 문장 ' + cache.dropped + '개 제거', cache.dropped + ' ungrounded removed')) : '') + '</div>' +
@@ -736,7 +751,8 @@
             try {
                 var col = window._psCollectFacts(kind);
                 var cache = ((window.projectMeta || {}).aiPeriodSummary || {})[kind];
-                if (col.facts.length && window.getActiveAiKey && window.getActiveAiKey() && !(cache && cache.rangeKey === col.range.key)) {
+                // ⚠️ [2026-11-21] 저장은 `col.sig`, 비교는 `col.range.key` 였다 — 둘이 같을 수 없어 문답 "주간 요약" 마다 AI 를 새로 불렀다(무료 키 하루 한도)
+                if (col.facts.length && window.getActiveAiKey && window.getActiveAiKey() && !(cache && cache.rangeKey === col.sig)) {
                     await window.generatePeriodSummary(kind);
                 }
                 txt = window.periodSummaryText(kind, col);

@@ -818,7 +818,14 @@
         _other = { at: cacheKey, mine: [], others: [], done: 0, total: 0, kept: 0, busy: true, errs: [] };
         window._dailyOtherScan = _other;
         var r = await window.dailyScanMyProjects('draft|' + cacheKey, function (ctx) {
-            return scanOne(ctx, date, endDate);
+            var g = scanOne(ctx, date, endDate);
+            // 📥 [2026-11-21] 한 프로젝트가 끝날 때마다 바로 담는다 — 전엔 **전부** 끝난 뒤에만 `_other.mine` 을 채워서,
+            //    js/63 "오늘 보고 초안" 이 시간 안에 못 끝나면 다른 프로젝트 업무가 **0건** 으로 나갔다(머리글의 약속과 달랐다).
+            if (_other.at === cacheKey && g) {
+                _other.mine = _other.mine.concat(g.mine || []);
+                _other.others = _other.others.concat(g.others || []);
+            }
+            return g;
         }, function (st) {
             if (_other.at !== cacheKey) return;   // 더 새 기간으로 바뀌었다 — 이 진행률은 버린다
             _other.done = st.done; _other.total = st.total; _other.kept = st.kept;
@@ -2566,6 +2573,15 @@
      '<span id="daily-brief-note" style="flex-basis:100%; font-size:11px; color:#777;">' + esc(T('근무일 아침에 지연·오늘 마감·오늘 시작·이번 주 마감 업무와 어제 보고 여부를 텔레그램으로. AI 는 쓰지 않습니다. 📣 담당 PC 의 백엔드가 보냅니다.',
                                                                                                  'On workdays: late / due today / starting today / due this week + yesterday\'s report status, via Telegram. No AI. Sent by the 📣 PC\'s backend.')) + '</span>' +
    '</div>' +
+   // 📋 [2026-11-21] 알림 채널 상태판 — 사용자: "매일 텔레그램 알람이 제대로 안 온다 / 정리가 안 된다".
+   //    채널 5개(예약발송·새메일·텔레그램수신·미작성알림·브리핑)의 마지막 실행·결과·발송·오류를 **한 자리**에.
+   //    값은 백엔드 `GET /notify/status`(이 PC 백엔드가 본 것) — 판단·발송은 여기서 하지 않는다.
+   '<div id="daily-notify-status" style="margin-top:12px; padding:10px 12px; border:1px dashed #cfe3e5; border-radius:6px; font-size:12px; color:#333;">' +
+     '<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;"><b style="color:#2c5f8a;">📋 ' + esc(T('알림 채널 상태판 (이 PC 백엔드 기준)', 'Notification channels (this PC\'s backend)')) + '</b>' +
+       '<button onclick="window.dailyNotifyStatusLoad()" title="' + esc(T('다시 읽기', 'Reload')) + '" style="padding:2px 8px; border:1px solid #ccc; background:#fff; border-radius:4px; font-size:11px; cursor:pointer;">🔄</button>' +
+       '<span style="font-size:11px; color:#888;">' + esc(T('"오늘 왜 안 왔나" 는 여기서 먼저 본다 — 채널마다 보내는 PC 가 다르다', 'Check here first when something did not arrive — channels are sent by different PCs')) + '</span></div>' +
+     '<div id="daily-notify-status-body" style="font-size:11.5px; color:#777;">⏳ ' + esc(T('읽는 중…', 'Loading…')) + '</div>' +
+   '</div>' +
  '</div>' +
  '<div style="flex-shrink:0; padding:10px 17px; border-top:1px solid #eee; display:flex; gap:8px; justify-content:flex-end;">' +
    '<button onclick="document.getElementById(\'daily-roster-modal\').style.display=\'none\'" style="padding:6px 14px; border:1px solid #ccc; background:#fff; color:#555; border-radius:6px; font-size:12.5px; cursor:pointer;">' + esc(T('닫기', 'Close')) + '</button>' +
@@ -2575,6 +2591,7 @@
         if (window._makeDraggable) window._makeDraggable('daily-roster-box', 'daily-roster-drag');
         if (window.bringModalToFront) window.bringModalToFront('daily-roster-modal');
         if (window.dailyBriefLoadConfig) window.dailyBriefLoadConfig();   // ☀️ 브리핑 설정 칸 채우기(백엔드에서)
+        if (window.dailyNotifyStatusLoad) window.dailyNotifyStatusLoad();  // 📋 알림 채널 상태판
     }
 
     window._dailyRosterSet = function (i, k, v) {
@@ -2659,7 +2676,7 @@
     //    ⚠️ 탭이 안 보이면 **네트워크도 안 쓴다** — 배경 탭이 1분마다 NAS 를 두드릴 이유가 없다.
     //    주기는 백엔드 수신 틱과 같은 60초(`DAILY_POLL_MS`, 데이터).
     var DAILY_POLL_MS = 60000;
-    var _pollTimer = null, _pollSig = null, _pollBusy = false;
+    var _pollTimer = null, _pollSig = null, _pollBusy = false, _pollSigDate = '';
 
     async function pollTick() {
         if (_pollBusy) return;
@@ -2677,7 +2694,9 @@
             }).map(function (it) {
                 return it.name + ':' + (it.size || '') + ':' + (it.mtime || '');
             }).sort().join('|');
-            if (_pollSig === null) { _pollSig = sig; return; }    // 첫 바퀴는 기준만 잡는다
+            // ⚠️ [2026-11-21] 날짜를 옮긴 뒤(◀▶·달력 클릭) 첫 바퀴는 다른 날 파일 목록이라 서명이 반드시 다르다 —
+            //    그걸 "갱신" 으로 보고 통째로 다시 그리며 토스트를 띄웠다(사람이 바꾼 걸 남이 바꾼 것처럼). 기준만 다시 잡는다.
+            if (_pollSig === null || _pollSigDate !== date) { _pollSig = sig; _pollSigDate = date; return; }    // 첫 바퀴·날짜 바뀜은 기준만 잡는다
             if (sig === _pollSig) return;
             _pollSig = sig;
             await window.dailyRenderTab();
@@ -2751,6 +2770,8 @@
                   body: JSON.stringify({ inbound: false, notify: false, brief: true, force: true, briefOnly: key }) });
             if (r.status === 404) { toast(T('백엔드가 구버전입니다 — kortek_backend 를 재시작해주세요.', 'Backend is outdated — restart kortek_backend.'), 'warning', 9000); return; }
             var j = await r.json(), b = j.brief || {};
+            // ⚠️ [2026-11-21] 라우트 자체가 실패(HTTP 500·ok:false)해도 "보낼 내용이 없다" 로 읽혔다 — 먼저 가른다.
+            if (!r.ok || !j || j.ok === false || !j.brief) { toast('⚠️ ' + T('백엔드가 브리핑을 돌리지 못했습니다', 'Backend could not run the brief') + ' (HTTP ' + r.status + (j && j.message ? ' · ' + j.message : '') + ')', 'warning', 9000); return; }
             if (b.ok === false) { toast('⚠️ ' + (b.message || T('실패', 'failed')), 'warning', 9000); return; }
             if ((b.sent || []).length) toast('📱 ' + T('내 텔레그램으로 브리핑을 보냈습니다', 'Brief sent to my Telegram') + (b.projectsFailed ? ' (' + T('읽지 못한 프로젝트 ', 'unreadable projects: ') + b.projectsFailed + ')' : ''), 'info', 8000);
             else toast(T('보낼 내용이 없거나(지연·마감 없음 + 어제 보고 있음) 명단에 내 텔레그램 ID 가 없습니다.', 'Nothing to send, or my Telegram ID is missing from the roster.') + (b.skipped ? ' [' + b.skipped + ']' : ''), 'info', 9000);
@@ -2770,10 +2791,14 @@
                 return;
             }
             var j = await r.json();
+            if (!r.ok || !j || j.ok === false) { toast('⚠️ ' + T('백엔드가 알림 확인을 돌리지 못했습니다', 'Backend could not run the check') + ' (HTTP ' + r.status + (j && j.message ? ' · ' + j.message : '') + ')', 'warning', 9000); return; }
             var n = (j.notify && j.notify.sent || []).length, h = (j.inbound && j.inbound.handled) || 0;
-            toast('📔 ' + T('알림 ' + n + '건 발송 · 수신 ' + h + '건 처리' +
-                            ((j.notify && j.notify.message) ? ' — ' + j.notify.message : ''),
-                            'Sent ' + n + ' reminder(s), handled ' + h + ' inbound'), 'info', 9000);
+            var bad = [j.notify, j.inbound].filter(function (x) { return x && x.ok === false; }).map(function (x) { return x.message || 'ok:false'; });
+            var skip = [j.notify, j.inbound].filter(function (x) { return x && x.skipped; }).map(function (x) { return _nsReason(x.skipped); });
+            toast((bad.length ? '⚠️ ' : '📔 ') + T('알림 ' + n + '건 발송 · 수신 ' + h + '건 처리' +
+                            (bad.length ? ' — ' + bad.join(' / ') : (skip.length ? ' — ' + skip.join(' / ') : '')),
+                            'Sent ' + n + ' reminder(s), handled ' + h + ' inbound' + (bad.length ? ' — ' + bad.join(' / ') : '')), bad.length ? 'warning' : 'info', 9000);
+            if (window.dailyNotifyStatusLoad) window.dailyNotifyStatusLoad();
             // 방금 들어온 보고가 **지금 표에 보이게** 한다(전엔 탭을 다시 열어야 했다).
             _pollSig = null;
             await window.dailyRenderTab();
@@ -2781,6 +2806,112 @@
             toast(T('백엔드에 연결하지 못했습니다 — kortek_backend 가 떠 있는지 확인해주세요.',
                     'Could not reach the backend.'), 'warning', 8000);
         }
+    };
+
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 7-b. 📋 알림 채널 상태판 (2026-11-21) — 백엔드 `GET /notify/status` 를 그려 준다.
+    //    ⚠️ 여기서 보내지도 판단하지도 않는다. 백엔드 틱이 돌려준 skip 사유를 **사람 말**로 바꿔 보여 주는 게 전부다.
+    //    사유 어휘는 데이터(`DAILY_NOTIFY_REASONS`) — 백엔드가 새 사유를 내려 주면 한 줄 추가.
+    // ══════════════════════════════════════════════════════════════════════
+    window.DAILY_NOTIFY_REASONS = window.DAILY_NOTIFY_REASONS || {
+        'not-notifier': ['이 PC 는 📣 담당이 아님 — 담당 PC 가 보냄', 'this PC is not the 📣 notifier'],
+        'disabled':     ['꺼져 있음(설정에서 켤 수 있음)', 'disabled in settings'],
+        'before-time':  ['아직 발송 시각 전', 'before send time'],
+        'before-due':   ['아직 마감 시각 전', 'before due time'],
+        'non-workday':  ['비근무일(주말·공휴일) — 안 보냄', 'non-workday'],
+        'no-targets':   ['오늘 보낼 사람 없음(전원 발송됨·휴가·텔레그램 ID 없음)', 'no one to send to today'],
+        'first-run':    ['처음 켜져 기준점만 잡음 — 다음 틱부터', 'first run: baseline only'],
+        'interval':     ['확인 간격 대기 중', 'waiting for next interval'],
+        'quiet':        ['조용한 시간 — 끝나면 모아서 보냄', 'quiet hours'],
+    };
+    function _nsReason(code) {
+        var r = window.DAILY_NOTIFY_REASONS[code];
+        return r ? T(r[0], r[1]) : String(code || '');
+    }
+    function _nsTime(iso) {
+        if (!iso) return '—';
+        var s = String(iso);
+        return s.length >= 16 ? s.slice(5, 16).replace('T', ' ') : s;
+    }
+    /** 채널 한 줄의 "지금 상태" 글. 백엔드 lastResult/lastError 를 사람 말로. */
+    function _nsState(ch, pc) {
+        var cfg = ch.config || {}, lr = ch.lastResult, bits = [];
+        if (cfg.requiresNotifier && pc && !pc.isNotifier) {
+            bits.push('📣 ' + T('담당 PC 아님', 'not the 📣 PC') + ((pc.notifiers || []).length ? ' → ' + pc.notifiers.join(', ') : ' (' + T('📣 담당이 아무도 없음 — 명단에서 한 명 지정', 'nobody is 📣 — pick one in the roster') + ')'));
+        }
+        if (ch.key === 'mailWatch') {
+            if (!cfg.enabled) bits.push(T('꺼짐', 'off'));
+            else if (cfg.gwSession === false) bits.push('⚠️ ' + T('그룹웨어 로그인 필요(앱에서 1회)', 'groupware login needed'));
+            if (cfg.lastError) bits.push('⚠️ ' + cfg.lastError);
+        }
+        if (ch.key === 'schedule') {
+            bits.push(T('규칙 ' + cfg.rules + '개 · 오늘 ' + cfg.activeToday + '개', cfg.rules + ' rules · ' + cfg.activeToday + ' today'));
+            var rc = (cfg.recent || [])[0];
+            if (rc && rc.lastResult) {
+                var r0 = rc.lastResult;
+                if ((r0.errors || []).length) bits.push('⚠️ ' + rc.title + ': ' + r0.errors[0]);
+                else if (r0.skipped) bits.push('⚠️ ' + rc.title + ': ' + r0.skipped);
+            }
+        }
+        if (!lr) bits.push(T('아직 한 번도 안 돌았음(백엔드 시작 뒤 1분 안에 돈다)', 'not run yet'));
+        else if (lr.ok === false) bits.push('⚠️ ' + (lr.message || lr.error || 'ok:false'));
+        else if (lr.skipped) bits.push(_nsReason(lr.skipped));
+        else {
+            var n = Array.isArray(lr.sent) ? lr.sent.length : (typeof lr.sent === 'number' ? lr.sent : 0);
+            if (n > 0) bits.push('✅ ' + T('보냄 ' + n + '건', 'sent ' + n));
+            else if (lr.handled != null) bits.push('✅ ' + T('수신 ' + lr.handled + '건 처리', 'handled ' + lr.handled));
+            else bits.push('✅ ' + T('확인함 — 보낼 것 없음', 'checked — nothing to send'));
+        }
+        return bits.join(' · ');
+    }
+    function _nsConfig(ch, pc) {
+        var c = ch.config || {};
+        if (ch.key === 'brief') return (c.enabled ? '☀️ ' + c.briefAt : T('꺼짐', 'off')) + ' · ' + T('오늘 ' + (c.firedToday || 0) + '명', (c.firedToday || 0) + ' today');
+        if (ch.key === 'dailyRemind') return '⏰ ' + c.dueAt + ' · ' + T('오늘 ' + (c.firedToday || 0) + '명', (c.firedToday || 0) + ' today');
+        if (ch.key === 'mailWatch') return (c.enabled ? T(c.intervalMin + '분마다', 'every ' + c.intervalMin + ' min') : T('꺼짐', 'off')) + (c.quietNow ? ' · 🌙' : '');
+        if (ch.key === 'tgInbound') return c.primed ? T('수신 중(offset ' + c.offset + ')', 'listening') : T('기준점 전', 'not primed');
+        if (ch.key === 'schedule') return T('이 PC 파일(schedule_rules.json)', 'this PC\'s file');
+        return '';
+    }
+    window.dailyNotifyStatusLoad = async function () {
+        var body = document.getElementById('daily-notify-status-body');
+        if (!body) return;
+        var j;
+        try {
+            var r = await fetch('http://127.0.0.1:5000/notify/status?_cb=' + Date.now(), { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+            if (r.status === 404) { body.innerHTML = '⚠️ ' + esc(T('백엔드가 구버전입니다 — kortek_backend 를 재시작하면 상태판이 생깁니다.', 'Backend is outdated — restart kortek_backend.')); return; }
+            j = await r.json();
+        } catch (e) {
+            body.innerHTML = '⚠️ ' + esc(T('로컬 백엔드(kortek_backend.py)에 연결하지 못했습니다 — 이 PC 에선 어떤 알림도 나가지 않습니다.', 'Could not reach the local backend — this PC sends nothing.'));
+            return;
+        }
+        if (!j || j.ok === false) { body.innerHTML = '⚠️ ' + esc((j && j.message) || T('상태를 읽지 못했습니다', 'could not read status')); return; }
+        var pc = j.pc || {}, sch = j.scheduler || {};
+        var pcLine = [
+            (pc.isNotifier ? '📣 ' + T('이 PC 가 담당', 'this PC is 📣') : T('📣 담당: ', '📣: ') + ((pc.notifiers || []).join(', ') || T('없음!', 'none!'))),
+            (pc.telegramToken ? '🤖 ' + T('봇 토큰 있음', 'bot token ok') : '⚠️ ' + T('봇 토큰 없음(메일·메신저 서버 설정)', 'no bot token')),
+            (pc.nasOk ? '🗄️ NAS ' + T('연결', 'ok') : '⚠️ NAS ' + T('세션 없음', 'no session') + (pc.nasReason ? '(' + pc.nasReason + ')' : '')),
+            (pc.rosterCount == null ? '👥 ' + T('명단 못 읽음', 'roster unreadable') : '👥 ' + T('명단 ' + pc.rosterCount + '명 · 텔레그램 ID ' + pc.rosterWithChat + '명', pc.rosterCount + ' people · ' + pc.rosterWithChat + ' with Telegram')),
+            (pc.nonworkdayToday === true ? '🛌 ' + T('오늘은 비근무일', 'non-workday today') : ''),
+            (sch.lastLoopAt ? '🔁 ' + T('스케줄러 마지막 바퀴 ', 'last loop ') + _nsTime(sch.lastLoopAt) : '⚠️ ' + T('스케줄러 미동작', 'scheduler not running')),
+        ].filter(Boolean).map(esc).join(' · ');
+        var rows = (j.channels || []).map(function (ch) {
+            var st = _nsState(ch, pc), bad = /⚠️/.test(st);
+            return '<tr>' +
+              '<td style="padding:4px 6px; border:1px solid #e3e6ea; white-space:nowrap;" title="' + esc(ch.desc || '') + '">' + esc(ch.label) + '</td>' +
+              '<td style="padding:4px 6px; border:1px solid #e3e6ea; color:' + (bad ? '#b1432f' : '#333') + ';">' + esc(st) + '</td>' +
+              '<td style="padding:4px 6px; border:1px solid #e3e6ea; white-space:nowrap; color:#555;">' + esc(_nsTime(ch.lastSentAt)) + '</td>' +
+              '<td style="padding:4px 6px; border:1px solid #e3e6ea; white-space:nowrap; color:#555;">' + esc(_nsTime(ch.lastRunAt)) + '</td>' +
+              '<td style="padding:4px 6px; border:1px solid #e3e6ea; color:#555;">' + esc(_nsConfig(ch, pc)) + '</td>' +
+            '</tr>';
+        }).join('');
+        body.innerHTML =
+            '<div style="margin-bottom:6px; color:#555;">' + pcLine + '</div>' +
+            '<table style="border-collapse:collapse; font-size:11.5px; width:100%;"><thead><tr style="background:#f4f6f8;">' +
+            [['채널', 'Channel'], ['지금 상태', 'State'], ['마지막 발송', 'Last sent'], ['마지막 확인', 'Last check'], ['설정', 'Config']].map(function (h) {
+                return '<th style="padding:4px 6px; border:1px solid #e3e6ea; color:#2c5f8a; text-align:left;">' + esc(T(h[0], h[1])) + '</th>';
+            }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>';
     };
 
     // ══════════════════════════════════════════════════════════════════════
