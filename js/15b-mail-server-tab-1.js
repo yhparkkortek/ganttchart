@@ -196,7 +196,7 @@ window.msFetchMail = async function() {
                     : matched.length === 1 ? { status: 'matched', candidates: matched }
                     : { status: 'ambiguous', candidates: matched };
                 return {
-                    idx: i, fileName: mail.fileName, key: mail.key || '',
+                    idx: i, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [],
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     body: mail.body, project: window._msProjectTagLabel(projectTag), task: null,
                     _projectTag: projectTag,
@@ -240,7 +240,7 @@ window.msFetchMail = async function() {
                     cc:      mail.cc,
                     date:    mail.date,
                     body:    mail.body,
-                    fileName: mail.fileName
+                    fileName: mail.fileName, key: mail.key || '', refs: mail.refs || []
                 }, candidatesForAI, null);
 
                 // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 확정 (mf/자동틱과 동일 공용 헬퍼)
@@ -250,7 +250,7 @@ window.msFetchMail = async function() {
                 const scoreResult = task ? window._msComputeTotalScore(mail, task, priorityConfig) : null;
 
                 item = {
-                    idx: i, fileName: mail.fileName, key: mail.key || '',
+                    idx: i, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [],
                     subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
                     body: mail.body,
                     // 💡 [2026-08-24 버그 수정] 이 필드가 없어서 "⚡ 선택항목 연속등록"(AR.batchInsert)이
@@ -259,7 +259,7 @@ window.msFetchMail = async function() {
                     // 🐛 [2026-09-12 버그수정] to/cc(실제 수신자/참조 주소)를 여기서부터 버리고 있었음 —
                     //    "메일 원문 보기"에 수신자가 안 뜨고, 발송/알람 등 나중에 실제 주소가 필요한
                     //    기능도 이 mailRaw를 거치는 한 영영 못 구했다. 원본 헤더 그대로 보존.
-                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '', attachments: mail.attachments || [] },
+                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [], attachments: mail.attachments || [] },
                     project: window._msProjectTagLabel(projectTag), task,
                     _projectTag: projectTag,
                     _score: scoreResult ? scoreResult.total : null,
@@ -273,10 +273,10 @@ window.msFetchMail = async function() {
                 };
             } catch(e) {
                 item = {
-                    idx: i, fileName: mail.fileName, key: mail.key || '',
+                    idx: i, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [],
                     subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
                     body: mail.body,
-                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '', attachments: mail.attachments || [] },
+                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [], attachments: mail.attachments || [] },
                     project: null, task: null,
                     selected: false, registered: false, error: e.message
                 };
@@ -1525,7 +1525,7 @@ window._autoMailFetchTick = async function() {
             let item;
             if (!apiKey) {
                 item = {
-                    idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '',
+                    idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [],
                     subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
                     project: null, _projectTag: null,
                     task: null, selected: false, registered: false, error: 'API키 미설정'
@@ -1534,7 +1534,7 @@ window._autoMailFetchTick = async function() {
                 try {
                     const task = await msCallGemini(apiKey, {
                         subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
-                        body: mail.body, fileName: mail.fileName
+                        body: mail.body, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || []
                     }, candidatesForAI, null);
 
                     // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 확정 (ms/mf와 동일 공용 헬퍼)
@@ -1544,7 +1544,7 @@ window._autoMailFetchTick = async function() {
                     }
 
                     item = {
-                        idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '',
+                        idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [],
                         subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body: mail.body,
                         project: window._msProjectTagLabel(resolvedProjectTag), _projectTag: resolvedProjectTag,
                         task, selected: !!task, registered: false,
@@ -1553,7 +1553,7 @@ window._autoMailFetchTick = async function() {
                     };
                 } catch(e) {
                     item = {
-                        idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '',
+                        idx: window._msResults.length, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [],
                         subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body: mail.body,
                         project: null, _projectTag: null,
                         task: null, selected: false, registered: false, error: e.message
@@ -1575,7 +1575,7 @@ window._autoMailFetchTick = async function() {
                     const sourceLabel = finalProjectTag.status === 'ambiguous'
                         ? `${grade}${scoreResult.total}점 메일자동분석(AI판단 후보: ${candidateNames})`
                         : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})`;
-                    const mailRawObj = { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '' };
+                    const mailRawObj = { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, key: mail.key || '', refs: mail.refs || [] };
                     window.TaskInbox.add(item.task, {
                         source: sourceLabel, mailRaw: mailRawObj,
                         matchedProject: finalProjectTag,

@@ -136,6 +136,15 @@ window.__mailRoutingTest = async function () {
         ok(routes.some(e => e.type === 'placed' && e.fid === 'S4'), '7-2 팀 공용 기록 버퍼에 placed 가 적힌다(계정이 있을 때)', routes.length);
         window.mailRouteCorrect('S4', { subject: 'hook test', date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, '오매칭');
         ok(window._mailRoutes().some(e => e.type === 'correct' && e.fid === 'S4'), '7-3 교정이 기록된다');
+        // 7-4 진짜 스레드(In-Reply-To/References → refs) — 제목이 범용이어도 기록된 메일의 key 와 맞으면 그 프로젝트
+        window._mailRoutePlaced('S3', 'LNW_SHUFFLER_03.0.json', { 업무명: 'root' }, { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: 'kthreadroot00001' }, 'auto');
+        let jt = J(M('Re: 회의록', '네 확인했습니다'), cands, null);
+        ok(jt.decision !== 'auto', '7-4a 범용 제목만으론 스레드로 안 묶는다(threadMinLen)', jt);
+        jt = J({ subject: 'Re: 회의록', body: '네 확인했습니다', sender: 'e <e@x.com>', refs: ['kthreadroot00001'] }, cands, null);
+        ok(jt.decision === 'auto' && jt.target.drive_file_id === 'S3' && jt.basis === 'thread', '7-4b refs 가 기록된 메일을 가리키면 그 프로젝트로(진짜 스레드)', jt);
+        window.mailRouteCorrect('S3', { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: 'kthreadroot00001' }, '오매칭');
+        jt = J({ subject: 'Re: 회의록', body: '네', sender: 'e <e@x.com>', refs: ['kthreadroot00001'] }, cands, null);
+        ok(jt.decision !== 'auto', '7-4c 교정된 스레드는 근거로 안 쓴다', jt);
         window._appUserKey = realUserKey;
     } finally {
         TI.load = realLoad; TI.save = realSave; TI.setStatus = realSetStatus;

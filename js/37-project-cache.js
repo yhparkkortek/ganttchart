@@ -84,6 +84,26 @@
 
     window._pcDelete = function(fileId) { window._pcCache.delete(fileId); };
 
+    // 🧠 [2026-11-21 메모리] 만료 항목은 **읽을 때만** 지워졌다 — 닫은 프로젝트·pre-fetch 3개의 스냅샷(1.5~5MB JSON 씩)이
+    //    다시 열지 않는 한 탭이 살아 있는 내내 메모리에 남았다. 5분마다 만료분을 걷고, 개수 상한(최근 5개)을 둔다.
+    //    현재 열린 프로젝트의 스냅샷은 상한에서 보호한다(닫기 직전 저장용).
+    window.PC_CACHE_MAX_ENTRIES = window.PC_CACHE_MAX_ENTRIES || 5;
+    window._pcSweep = function() {
+        var now = Date.now(), removed = 0;
+        window._pcCache.forEach(function(entry, fid) {
+            if (now - entry.fetchedAt > _CACHE_TTL_MS && fid !== window.currentDriveFileId) { window._pcCache.delete(fid); removed++; }
+        });
+        if (window._pcCache.size > window.PC_CACHE_MAX_ENTRIES) {
+            var ordered = Array.from(window._pcCache.entries()).sort(function(a, b) { return a[1].fetchedAt - b[1].fetchedAt; });
+            for (var i = 0; i < ordered.length && window._pcCache.size > window.PC_CACHE_MAX_ENTRIES; i++) {
+                if (ordered[i][0] === window.currentDriveFileId) continue;
+                window._pcCache.delete(ordered[i][0]); removed++;
+            }
+        }
+        return removed;
+    };
+    setInterval(function() { try { window._pcSweep(); } catch (e) { /* 무시 */ } }, 5 * 60 * 1000);
+
     // 현재 활성 프로젝트를 캐시에 저장 (Drive 저장 완료 후·전환 전 등)
     window._pcCacheCurrentProject = function() {
         var fileId = window.currentDriveFileId;

@@ -180,3 +180,23 @@ README 의 "피드백으로 재학습" 은 **코드가 없다**(정적 모델 + 
 (`docs/mail-distribution-audit-2026-11-21.md`)의 결론 — 오배송의 대부분이 **같은 가족 안의 형제 모델** 사이에서 난다 —
 과 같은 방향이고, 그래서 재편안이 "프로젝트(가족) → 모델(제품구분자)" 두 단계 판정을 택했다. 그 생각은 코드 없이도
 가져온 것이라 라이브러리 도입은 필요 없다.
+
+---
+
+## 📧 (2026-11-21, 사용자 요청 "참조할 만한 오픈소스 찾아봐") 메일 배분 쪽 GitHub 재조사
+
+실측 기준: GitHub 페이지·README·일부 소스를 직접 읽음(2026-11-21). "last commit" 은 페이지 텍스트에 안 보여 대부분 미확인.
+
+| 후보 | 실측 | 판정 | 가져올 것 |
+|---|---|---|---|
+| **In-Reply-To / References 헤더 (JWZ 스레딩)** — [FreeDiscovery/jwzthreading](https://github.com/FreeDiscovery/jwzthreading) 15★ BSD, Python 2.7/3.4+ | 알고리즘의 핵심은 두 헤더다. 우리 백엔드는 지금까지 Message-ID 도 헤더도 안 넘겼다 | ✅ **생각만, 라이브러리 없이** — `kortek_backend.py _mail_ref_keys` 가 `refs`(Message-ID 해시 목록)를 내리고 js/74 `threadTarget` 이 기록의 `key` 와 맞춘다(**같은 날 구현**). 제목 정규화 스레드는 폴백 | 진짜 스레드 연결 |
+| **[alfonsrv/mail-parser-reply](https://github.com/alfonsrv/mail-parser-reply)** 86★ MIT Python | 언어별 regex dict(`MAIL_LANGUAGES`) — **`ko` 있음**(`…님이 작성하였습니다:`, 보낸사람/보낸날짜/받는사람/제목/참조 Outlook 머리, 감사합니다 서명, `-----Original Message-----` 공용). 다만 ko 는 "untested" 표시 | 🟡 **Tier B** — 백엔드 `/fetch-mail` 에서 **최신 답장만** 잘라 `body` 로 내리면 AI 본문 2,000자가 인용 체인 대신 새 글로 채워진다(인용 검증·식별자 매칭 둘 다 정확도 ↑). 한국어 패턴은 우리가 보강해 PR 가능 | 답장 본문 분리 |
+| [zapier/email-reply-parser](https://github.com/zapier/email-reply-parser) 529★ MIT | GitHub Ruby 포트, **영어만** | ❌ | — |
+| [mailgun/talon](https://github.com/mailgun/talon) 1.4k★ Apache | `extract_from_plain` 은 ML 없이 돈다(인용 분리), 서명은 ML(`talon[ml]` = scikit-learn). 한국어 언급 없음 | ❌ 무겁고 한국어 미확인 — mail-parser-reply 가 같은 자리에 더 맞다 | — |
+| [gniewkob/mAIl](https://github.com/gniewkob/mAIl) 0★ | 규칙 먼저 → 애매할 때만 로컬 Ollama. 규칙은 **코드**(`rule_engine.py`), SQLite 상태, JSONL 감사로그. 학습은 **사람이 승인하는 패치**(`quality_learning_cli` 가 제안만) | ❌ 코드 도입 아님. **설계 일치 확인용** — 우리 CLAUDE.md "사람 승인 후 적용"·js/74 "결정론 먼저" 와 같은 결론을 독립적으로 낸 사례 | 없음 |
+| [fjacquet/mailtag](https://github.com/fjacquet/mailtag) 2★ MIT, Python 3.13, **Apple MLX 전용** | 발신자/도메인 규칙(JSON) → nomic 임베딩 centroid → Gemma 2차 의견. 사람이 폴더로 옮기면 **발신자 규칙이 자동 생성**(2회 일치 뒤) | ❌ 플랫폼(Apple Silicon) 불일치 | 💡 "사람이 옮기면 발신자 규칙이 생긴다" — 우리 `MailRoutes` 기록의 `correct` 를 발신자 규칙으로 승격하는 다음 단계 아이디어 |
+| [71/oktjs](https://github.com/71/oktjs) 4★ Apache | Open Korean Text JS 포트, 의존성 0, **index.js 3.22MB**, UMD 여부 미확인 | ❌ 3MB 를 매 로드마다 — 식별자 매칭엔 형태소가 필요 없다(정규화 substring + 경계 검사로 충분) | — |
+| [toss/es-hangul](https://github.com/toss/es-hangul) 1.9k★ MIT | ESM(`dist/`), `getChoseong`·`josa` | 🟡 기존 Tier A 그대로(초성 검색) — 메일 배분과는 무관 | — |
+| 한국어 임베딩 — [dragonkue/multilingual-e5-small-ko](https://huggingface.co/dragonkue/multilingual-e5-small-ko)(118M·dim 384·Apache, Ko 평균 NDCG 0.689) · KoEn-E5-Tiny 37M · [HiEmbed_base_onnx](https://huggingface.co/InSpaceAI/HiEmbed_base_onnx_v1)(한컴, Apache) | CPU 수치 없음. 모델이지 코드가 아님 | 🟡 **Tier B(보류)** — 쓸 자리는 하나: 접어 둔 Phase 9 군집 감지를 **AI 호출 0회**(로컬 임베딩 + 코사인)로 되살릴 때. 형제 모델 구별엔 못 쓴다(같은 어휘) | 미분류 묶기 |
+
+**결론**: 코드로 들여올 것은 **mail-parser-reply 하나**(백엔드, 선택), 생각으로 들여온 것은 **JWZ 두 헤더**(이미 구현)와 **교정→발신자 규칙 승격**(다음). 한국어 형태소·임베딩은 지금 문제(형제 모델 구별)에 효과가 없어 보류.

@@ -456,14 +456,20 @@
         }).sort(function (a, b) { return b.members.length - a.members.length; });
     };
 
-    /** 같은 제목이 이미 확정돼 간 곳 — 교정(correct/undo)된 스레드는 제외. 두 프로젝트로 갈렸으면 null. */
+    /** 같은 스레드가 이미 확정돼 간 곳 — ① In-Reply-To/References(백엔드 `refs`, Message-ID 해시)가 기록된 메일의 key 와 맞으면
+     *  **진짜 스레드**(JWZ 알고리즘의 핵심 — 제목이 범용이어도 틀리지 않는다) ② 없으면 정규화 제목(길이 ≥ threadMinLen).
+     *  교정(correct/undo)된 스레드는 제외. 두 프로젝트로 갈렸으면 null. */
     function threadTarget(mail, cands) {
+        var refs = (mail && Array.isArray(mail.refs)) ? mail.refs : [];
         var sn = normSubject(mail && mail.subject);
-        if (sn.length < P.threadMinLen) return null;
+        var bySubject = sn.length >= P.threadMinLen;
+        if (!refs.length && !bySubject) return null;
         var since = Date.now() - P.threadDays * 86400000;
         var votes = {}, bad = {};
         _routes.entries.forEach(function (e) {
-            if (!e || e.subj !== sn) return;
+            if (!e) return;
+            var hit = (refs.length && e.key && refs.indexOf(e.key) !== -1) || (bySubject && e.subj === sn);
+            if (!hit) return;
             if (Date.parse(e.at || 0) < since) return;
             if (e.type === 'correct' || e.type === 'undo') { bad[e.fid] = 1; return; }
             if (e.type === 'placed' && e.fid) votes[e.fid] = (votes[e.fid] || 0) + 1;
@@ -539,7 +545,7 @@
             try {
                 var raw = window._mailParsedRaw || {};
                 var lines = String(mailText || '').split('\n');
-                remember({ subject: raw.subject || lines[0] || '', sender: raw.sender || lines[1] || '', body: mailText || '' }, cands);
+                remember({ subject: raw.subject || lines[0] || '', sender: raw.sender || lines[1] || '', body: mailText || '', refs: raw.refs || [] }, cands);
             } catch (e) { /* 기억 실패는 판정을 막지 않는다 */ }
             return orig.apply(this, arguments);
         };
@@ -672,7 +678,7 @@
             res.looked++;
             var mr = it.mailRaw || {};
             var body = mr.body2000 || (it.task && it.task['상세내용']) || '';
-            var mail = { subject: mr.subject || (it.task && it.task['업무명']) || '', sender: mr.sender || '', body: body };
+            var mail = { subject: mr.subject || (it.task && it.task['업무명']) || '', sender: mr.sender || '', body: body, refs: mr.refs || [] };
             // 저장돼 있던 AI 판정을 되살려 AI 보조로만 쓴다(후보 참조는 지금 색인으로 다시 맞춘다)
             var mp = it.matchedProject || null;
             var aiTag = null;

@@ -203,3 +203,17 @@ AI 업무 분석 모달(직접입력·파일첨부·메일서버 3탭 + 군집 �
 - ❌ **실제 메일로는 못 봤다**(회사 서버 접근 불가). 회사 PC 에서 할 일: ① 백엔드 재시작 뒤 `/fetch-mail` 응답에 `key` 가 있는지 ② 설정 ▸ 가족 대표를 AMUSNET(3)·SHUFFLER(2)에 정하고 저장 → `App_Config/MailRouting_Shared.json` 생김 ③ `🧭 대기 재판정` 눌러 보관함 대기 322건이 얼마나 빠지나(기대: 식별자·가족 대표 있는 것 다수) ④ 일주일 뒤 `mailRouteStats()` 와 ❌오매칭 건수 — `wait:*` 가 많으면 `MAIL_ROUTING_POLICY` 문턱, `correct` 가 많으면 가족 규칙을 본다.
 - ⚠️ `tests/mail-evidence.browser.js` 는 61 만 보는 하네스라 74 를 잠깐 끄고 돈다(파일에 적어 둠).
 - ⚠️ 보관함 파일 이름(`TaskInbox_<표시이름>`)·project_index RMW 경쟁·헤드리스 PATCH 3벌 통합은 **이번에 손대지 않았다**(§2-2·§2-5) — 다음 과제.
+
+### 7-2. 브라우저 메모리 (사용자 지적 "메모리 잠식도 문제") — 코드로 확인한 자리와 조치
+실측(힙 측정)은 회사 PC 에서 실데이터를 열어야 한다 — 집 PC 엔 백엔드가 없어 **못 잤다**. 코드로 확인한 "쥐고 있는 자리":
+| 자리 | 사실 | 조치 |
+|---|---|---|
+| js/37 `_pcCache` | 닫은 프로젝트·pre-fetch 3개의 스냅샷(파일 1.5~5MB JSON)이 **읽을 때만** 만료 삭제 — 다시 열지 않으면 평생 | ✅ 5분 스윕 + 최근 5개 상한(`_pcSweep`, 열린 프로젝트 보호) |
+| 15b `_msResults` | 수신 본문 전문을 메모리에 그대로(저장 때만 1,500자) | ✅ 받는 즉시 8,000자(`_msTrimMailBodies`) |
+| 색인 `unmatchedClusters` | 532KB 를 메일 분석마다 내려받아 파싱 | ✅ 분리 버튼(`mailRoutingCompactIndex`) + 군집 감지 OFF |
+| js/57 1초 `setInterval(implant)` | 영구, NAS 모드 전원 | ✅ 2분 뒤 30초 |
+| js/04e Undo | `UNDO_MAX=50` 스냅샷(구조 공유 증분) | 그대로 — 증분이라 전체 복사가 아니다. 906행 프로젝트에서 실측 필요 |
+| 14c `TaskInbox.load()` | localStorage JSON(0.5~2.6MB) 을 **호출마다 파싱**(14c 22곳·15b 4곳·74 5곳) | ⏳ 미조치 — 메모리 보유가 아니라 GC 부담. 한 번 파싱해 들고 있는 캐시 + `save` 때 무효화로 바꿀 수 있다(다음) |
+| 보관함 `mailRaw.body2000` | 대기 항목은 본문 전문(13.5KB/건) 유지, 처리된 건은 이미 비움 | 15b 트림으로 새 항목은 8,000자 이하 |
+| 상시 루프 11~12개/탭 | 메일틱·스윕·본문 이전·텔레그램 15초 등 | 그대로(스위치는 설정 모달에) — 수치 없이 줄이지 않는다 |
+📏 **재는 법**(회사 PC): 프로젝트 열고 `performance.memory.usedJSHeapSize/1048576` 를 열자마자·30분 뒤·2시간 뒤 적는다 + `document.querySelectorAll('*').length`. 증가분이 크면 `_pcCache.size`·`_msResults.length`·`window._undoStack.length` 를 같이 본다. 그 수치가 있어야 `docs/improvements.md` 규칙("숫자 없는 항목은 적지 않는다")에 맞게 다음 조치를 정할 수 있다.

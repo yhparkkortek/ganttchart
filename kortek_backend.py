@@ -650,6 +650,10 @@ def _mail_parse_entry(raw, mail_user, start_dt, end_dt,
         "body":        body,
         "fileName":    _fname,
         "key":         _key,
+        # 🧵 [2026-11-21] 답장 스레드의 **진짜** 연결 — In-Reply-To/References 의 Message-ID 를 key 와 같은 해시로.
+        #    제목 정규화로 스레드를 추정하던 것(js/74 threadTarget)이 "Weekly meeting" 같은 범용 제목에서 틀리는 자리.
+        #    JWZ threading 알고리즘의 핵심이 이 두 헤더다 — 라이브러리 없이 헤더만 넘긴다(연결은 프런트 기록이 안다).
+        "refs":        _mail_ref_keys(msg),
         "importance":  importance_high,
         "isToMe":      is_to_me,
         "isCcMe":      is_cc_me,
@@ -9720,6 +9724,28 @@ def _mail_key(msg, msg_dt, sender, subject):
         return hashlib.sha1(('hdr|' + base).encode('utf-8')).hexdigest()[:16]
     except Exception:
         return ''
+
+
+def _mail_ref_keys(msg):
+    """🧵 In-Reply-To + References 의 Message-ID 들을 `_mail_key` 와 같은 규칙(sha1('mid|'+id)[:16])으로.
+    프런트는 이 값과 자기 기록의 key 를 맞춰 "이 답장이 어느 메일에 달린 것인가" 를 안다. 최근 것부터 최대 12개."""
+    try:
+        ids = []
+        for h in ('In-Reply-To', 'References'):
+            v = str(msg.get(h, '') or '')
+            ids += re.findall(r'<[^>]+>', v)
+        seen, out = set(), []
+        for mid in reversed(ids):
+            mid = mid.strip()
+            if not mid or mid in seen:
+                continue
+            seen.add(mid)
+            out.append(hashlib.sha1(('mid|' + mid).encode('utf-8')).hexdigest()[:16])
+            if len(out) >= 12:
+                break
+        return out
+    except Exception:
+        return []
 
 
 def _stage_raw_mail(stage_dir, file_name, raw, mail_key=None):

@@ -1613,7 +1613,7 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     //    쓸 수 있는 구조화된 필드로는 전혀 남지 않았다. parsed.to/parsed.cc(실제 SMTP 헤더, 발신자와
     //    동일하게 신뢰 가능한 원본 주소)를 그대로 같이 보관 — AI가 만드는 "수신인 미상"/"OO팀" 같은
     //    화면 표시용 문구와는 별개로, 실제 메일 주소는 여기 원문 그대로 계속 따라다녀야 한다.
-    window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', to: parsed.to || '', cc: parsed.cc || '', date: parsed.date || '', body2000: mailText };
+    window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', to: parsed.to || '', cc: parsed.cc || '', date: parsed.date || '', body2000: mailText, key: parsed.key || '', refs: parsed.refs || [] };
     // 🧭 [2026-11-21] 후보 목록을 주는 매칭 호출엔 "열린 프로젝트 토픽 프로파일" 주입(js/26 래퍼)을 막는다
     window._tpSuppressPromptSnippet = !!(candidateProjects && candidateProjects.length);
     let prompt;
