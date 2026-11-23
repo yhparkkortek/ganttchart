@@ -899,7 +899,11 @@ window._macRejudgeNow = async function() {
     const btn = document.getElementById('mac-rejudge-btn');
     if (!window.mailRouteRejudgePending) { alert('배분 판정 모듈(js/74)이 로드되지 않았습니다.'); return; }
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 재판정 중…'; }
-    try { await window.mailRouteRejudgePending({ force: true, max: 50 }); }
+    try {
+        await window.mailRouteRejudgePending({ force: true, max: 50 });
+        // [2026-11-23] 📭 미분류(후보 0개라 보관함에 없던 메일)도 AI 없이 결정론으로 다시 본다
+        if (window.mailRouteRejudgeUnmatched) await window.mailRouteRejudgeUnmatched({ force: true, max: 50 });
+    }
     finally { if (btn) { btn.disabled = false; btn.textContent = '🧭 대기 중인 보관함 항목 지금 재판정'; } }
 };
 window._macCompactIndex = async function() {

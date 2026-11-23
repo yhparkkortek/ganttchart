@@ -946,6 +946,60 @@
         }
         return res;
     };
+    // ── ⑤-b 📭 미분류 재판정 — 메일 서버 큐(js/15b _msResults)에서 프로젝트가 빈 줄을 AI 없이 결정론으로만 다시 본다 ──
+    /** [2026-11-23 사용자 요청] 미분류(후보 0개)는 보관함에 안 들어가서 대기 재판정을 못 받았다. 오늘 규칙(제목 먼저·인치·
+     *  믿을 만한 스레드)이면 정해지는 메일이 거기 남아 있을 수 있다.
+     *  · 확정(mailRoutePreJudge — 결정론 근거만, AI 판단 없음)되는 줄만 보관함에 넣고 평소 자동배치와 같은 함수로 배치한다.
+     *  · 확정 안 되는 줄은 그대로 둔다(미분류 유지). AI 분석이 실패해 업무 내용(task)이 없는 줄은 넣을 게 없어 건드리지 않는다.
+     *  @returns {looked, placed, pending, still, noTask, dup, failed} */
+    window.mailRouteRejudgeUnmatched = async function (opts) {
+        opts = opts || {};
+        var res = { looked: 0, placed: 0, pending: 0, still: 0, noTask: 0, dup: 0, failed: 0 };
+        if (off() || !window.TaskInbox || !Array.isArray(window._msResults)) return res;
+        if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled()) && !opts.force) { res.skipped = 'mode_off'; return res; }
+        var cands;
+        try { cands = window._msFilterCandidateProjects(await window._msLoadProjectIndex()); } catch (e) { cands = []; }
+        if (!cands || !cands.length) { res.skipped = 'no_candidates'; return res; }
+        var rows = window._msResults.filter(function (r) { return r && !r.project && !r.registered; });
+        var max = opts.max || P.rejudgeMax, moved = 0, changedQueue = false;
+        for (var i = 0; i < rows.length && moved < max; i++) {
+            var r = rows[i];
+            if (i % 5 === 4) await new Promise(function (r2) { setTimeout(r2, 0); });
+            res.looked++;
+            if (!r.task) { res.noTask++; continue; }
+            var mail = { subject: r.subject || '', sender: r.sender || '', body: r.body || '', refs: r.refs || [] };
+            var pre = null;
+            try { pre = window.mailRoutePreJudge(mail, cands); } catch (e) { pre = null; }
+            if (!pre) { res.still++; continue; }
+            var tag = tagFromJudge({ decision: 'auto', target: pre.target, candidates: [pre.target], basis: pre.basis,
+                                     reason: pre.reason + T(' (미분류 재판정)', ' (unclassified re-judge)'), family: pre.family }, null);
+            var label = window._msProjectTagLabel ? window._msProjectTagLabel(tag) : (pre.target.model || pre.target.file_name);
+            r.project = label; r._projectTag = tag; changedQueue = true;   // 미분류 목록에서 빠진다
+            if (window._msMailAlreadyInInbox && window._msMailAlreadyInInbox(r)) { res.dup++; continue; }
+            moved++;
+            var task = r.task;
+            task._routing = { basis: pre.basis, decision: 'auto', reason: pre.reason };
+            var mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName, key: r.key || '', refs: r.refs || [] };
+            try {
+                window.TaskInbox.add(task, { source: '🧭 ' + T('미분류 재판정', 'unclassified re-judge') + '(' + (pre.target.model || pre.target.file_name || '') + ')', mailRaw: mailRawObj, matchedProject: tag, alarmWorthy: false });
+                var st = window._msAutoPlaceNewInboxItem ? await window._msAutoPlaceNewInboxItem(task, tag, mailRawObj, '미분류 재판정(' + pre.basis + ')') : 'pending';
+                if (st === 'placed') res.placed++; else if (st === 'failed') res.failed++; else res.pending++;
+            } catch (e) { res.failed++; }
+            await new Promise(function (r2) { setTimeout(r2, 400); });
+        }
+        if (changedQueue) {
+            try { if (window._msSaveQueueToStorage) window._msSaveQueueToStorage(); } catch (e) { /* 무시 */ }
+            try { if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); } catch (e) { /* 무시 */ }
+        }
+        try { console.info('[메일 배분] 미분류 재판정:', JSON.stringify(res)); } catch (e) { /* 무시 */ }
+        if (opts.toast !== false && window.showToast && (res.placed || res.pending || opts.force)) {
+            window.showToast(T('📭 미분류 ' + res.looked + '건 재판정 — 배치 ' + res.placed + '건' + (res.pending ? ' · 보관함 대기 ' + res.pending : '') +
+                               (res.noTask ? ' · AI 분석 실패라 건너뜀 ' + res.noTask : '') + (res.failed ? ' · 실패 ' + res.failed : ''),
+                               '📭 Re-judged ' + res.looked + ' unclassified — placed ' + res.placed + (res.pending ? ' · pending ' + res.pending : '') +
+                               (res.noTask ? ' · skipped (AI failed) ' + res.noTask : '') + (res.failed ? ' · failed ' + res.failed : '')), 'info', 7000);
+        }
+        return res;
+    };
     /** 유휴 스윕(js/14c)에 편승 — 스윕이 돌 때 재판정도 한 번(상한 안에서) */
     function wrapSweep() {
         var orig = window._ibAutoPlaceSweep;
@@ -955,7 +1009,10 @@
             try {
                 // [2026-11-23] 'none'(자동배치할 '매칭 확정' 건이 없다)도 돌린다 — 대기가 전부 모호(ambiguous)일 때가 바로
                 //  재판정이 필요한 때인데, 예전엔 그 경우 스윕이 'none' 을 돌려줘 재판정이 한 번도 안 돌았다(실측: 대기 144건 중 routing 0).
-                if (!off() && r && (!r.skipped || r.skipped === 'none')) await window.mailRouteRejudgePending({ toast: false, max: 5 });
+                if (!off() && r && (!r.skipped || r.skipped === 'none')) {
+                    await window.mailRouteRejudgePending({ toast: false, max: 5 });
+                    await window.mailRouteRejudgeUnmatched({ toast: false, max: 5 });   // [2026-11-23] 📭 미분류도
+                }
             } catch (e) { /* 무시 */ }
             return r;
         };

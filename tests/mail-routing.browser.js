@@ -212,6 +212,27 @@ window.__mailRoutingTestBody = async function () {
         ok(store[0].matchedProject.routing.v === window.MAIL_ROUTING_RULE_V, '9-9 재판정한 카드에 규칙 버전이 적힌다', store[0].matchedProject.routing);
         const rBg = await window.mailRouteRejudgePending({ toast: false });
         ok(rBg.looked === 0 && rBg.skipped.same_rule === 1, '9-10 배경 재판정은 같은 규칙으로 본 카드를 다시 안 본다', rBg);
+        // 12. [2026-11-23] 📭 미분류(메일 서버 큐, 후보 0개) 재판정 — AI 없이 결정론으로 확정되는 것만 보관함에 넣고 배치
+        {
+            const realQ = window._msResults, realSaveQ = window._msSaveQueueToStorage, realBadge = window._msRefreshQueueBadges;
+            window._msSaveQueueToStorage = () => {}; window._msRefreshQueueBadges = () => {};
+            store = []; placed.length = 0;
+            const T12 = { 업무명: 'ESD', 시작일: '2026-11-01', 완료일: '2026-11-02', 상세내용: 'x' };
+            window._msResults = [
+                { fileName: 'q1', key: 'kq1' + RUN, subject: 'Re: Shuffler Display 4.3" ESD 결과', sender: 'a <a@x.com>', date: '2026-11-01 09:00', body: '첨부', project: null, task: Object.assign({}, T12) },
+                { fileName: 'q2', key: 'kq2' + RUN, subject: '회의 일정 안내', sender: 'b <b@x.com>', date: '2026-11-01 09:00', body: '안녕하세요', project: null, task: Object.assign({}, T12) },
+                { fileName: 'q3', key: 'kq3' + RUN, subject: 'STELLAR32 일정', sender: 'c <c@x.com>', date: '2026-11-01 09:00', body: '', project: null, task: null },
+                { fileName: 'q4', key: 'kq4' + RUN, subject: 'STELLAR32 확인', sender: 'd <d@x.com>', date: '2026-11-01 09:00', body: '', project: 'STELLAR32', task: Object.assign({}, T12) }
+            ];
+            try {
+                const ru = await window.mailRouteRejudgeUnmatched({ force: true, toast: false });
+                ok(ru.looked === 3 && ru.placed === 1 && ru.still === 1 && ru.noTask === 1, '12-1 미분류 3건만 본다 — 확정 1·그대로 1·AI실패(업무 없음) 1', ru);
+                ok(placed.length === 1 && placed[0].fid === 'S4', '12-2 확정된 메일은 보관함을 거쳐 SHUFFLER 4.3 에 배치된다(진짜 _msAutoPlaceNewInboxItem)', placed);
+                ok(store.length === 1 && store[0].status === '자동배치됨' && store[0].matchedProject.routing && /subject_/.test(store[0].matchedProject.routing.basis), '12-3 보관함 카드가 생기고 결정론 근거로 자동배치됨 표시', store[0] && store[0].matchedProject && store[0].matchedProject.routing);
+                ok(window._msResults[0].project && !window._msResults[1].project && !window._msResults[2].project, '12-4 확정된 줄만 미분류에서 빠진다(나머지는 그대로)', window._msResults.map(r => r.project));
+                ok(placed[0] && placed[0].opts && placed[0].opts.coalesce === false && !placed[0].opts.byHuman, '12-5 자동 배치로 기록된다(사람 배치 아님)', placed[0] && placed[0].opts);
+            } finally { window._msResults = realQ; window._msSaveQueueToStorage = realSaveQ; window._msRefreshQueueBadges = realBadge; }
+        }
         // 9-4 유휴 스윕이 'none'(매칭 확정 건 없음)을 돌려줘도 재판정은 돈다 — 대기가 전부 모호할 때가 그 때다
         store = [{ uid: 'n1', status: '대기', task: { 업무명: 'x', 시작일: '2026-11-01', 완료일: '2026-11-02' }, mailRaw: { subject: 'x' },
                    matchedProject: { status: 'ambiguous', candidates: [cands[4]], confidence: '중' } }];
