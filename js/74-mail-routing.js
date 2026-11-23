@@ -747,7 +747,7 @@
             tried++;
             t._routing = { basis: j.basis, decision: j.decision, reason: j.reason };
             try {
-                var r = await window._msAutoRegisterToProject(it.uid, t, j.target.drive_file_id, j.target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false });
+                var r = await window._msAutoRegisterToProject(it.uid, t, j.target.drive_file_id, j.target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false, noTopicRegen: true });
                 if (r && r.ok) {
                     window.TaskInbox.setStatus(it.uid, '자동배치됨', { type: '재판정 배치(' + j.basis + ')', target: j.target.file_name, at: new Date().toISOString() });
                     res.placed++;

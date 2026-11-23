@@ -113,7 +113,7 @@ window.__mailRoutingTestBody = async function () {
         TI.save = (l) => { store = l.map(x => JSON.parse(JSON.stringify(x))); };
         TI.setStatus = (uid, st, h) => { const it = store.find(x => x.uid === uid); if (it) { it.status = st; (it.history = it.history || []).push(h); } };
         const placed = [];
-        window._msAutoRegisterToProject = async (uid, task, fid, fname) => { placed.push({ uid, fid, fname }); return { ok: true, label: 'fake' }; };
+        window._msAutoRegisterToProject = async (uid, task, fid, fname, mr, att, al, opts) => { placed.push({ uid, fid, fname, opts }); return { ok: true, label: 'fake' }; };
         window.isAutoRegisterEnabled = () => true;
         window._msLoadProjectIndex = async () => cands;
         window._msFilterCandidateProjects = (l) => l;
@@ -131,6 +131,7 @@ window.__mailRoutingTestBody = async function () {
         ok(r.looked === 2, '6-1 대기 2건만 본다(처리된 건은 안 본다)', r);
         ok(placed.length === 1 && placed[0].uid === 'u1' && placed[0].fid === 'S4', '6-2 식별자(4.3" Shuffler)가 있는 대기 건은 SHUFFLER 4.3 으로 배치', placed);
         ok(store.find(x => x.uid === 'u1').status === '자동배치됨', '6-3 배치된 건의 상태가 바뀐다');
+        ok(placed[0] && placed[0].opts && placed[0].opts.noTopicRegen === true, '6-3b 재판정 배치는 토픽 프로파일 AI 재생성을 건너뛴다(건당 몇 분·무료 한도)', placed[0] && placed[0].opts);
         ok(store.find(x => x.uid === 'u2').status === '대기', '6-4 단서 없는 건은 대기 그대로');
         // 7. 쓰기 훅 — 성공한 배치가 기록·신호 사슬을 지난다 (기록은 계정이 있어야 적힌다 — 없으면 하네스 계정)
         const realUserKey = window._appUserKey; if (!window._appUserKey && !window._nasAccount) window._appUserKey = 'harness';

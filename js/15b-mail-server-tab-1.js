@@ -1178,7 +1178,10 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         // ✅ [A: 토픽 자동갱신 - 헤드리스] 지금 열려있지 않은 프로젝트라도 AI 업무가 충분히 늘었으면
         //    프로파일을 갱신해서 이 PATCH 한 번에 같이 실어 보낸다(별도 Drive 왕복 없음 — js/26-topic-profile.js
         //    _tpMaybeAutoRegen 참고). 실패해도 업무 자동배치 자체는 막지 않도록 조용히 무시.
-        if (window._tpMaybeAutoRegen) {
+        // ⏩ [2026-11-23] 일괄 처리(대기 재판정 등)는 opts.noTopicRegen 으로 건너뛴다 — 건마다 AI 재생성이 끼어
+        //    한 건에 몇 분씩 걸렸고(실측: 25건에 38분, 그 사이 토픽 프로파일이 건마다 새로 생성됨) 무료 한도도 먹었다.
+        //    재생성은 다음 평소 배치 때 AI 업무 수를 보고 따라잡는다(_tpShouldRegen).
+        if (window._tpMaybeAutoRegen && !opts.noTopicRegen) {
             try {
                 const _tpProfile = await window._tpMaybeAutoRegen(driveFileId, rows, saveData.colIdx, saveData.projectMeta || {});
                 if (_tpProfile) saveData.topicProfile = _tpProfile;
@@ -1195,7 +1198,7 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         const checkResp = await gapi.client.drive.files.get({ fileId: driveFileId, fields: 'modifiedTime', supportsAllDrives: true });
         if (checkResp.result.modifiedTime !== metaResp.result.modifiedTime) {
             if ((attempt || 0) >= 1) return { ok: false, reason: 'conflict_retry_exhausted' };
-            return await window._msAutoRegisterToProject(uid, task, driveFileId, fileName, mailRaw, (attempt || 0) + 1, setAlarm);
+            return await window._msAutoRegisterToProject(uid, task, driveFileId, fileName, mailRaw, (attempt || 0) + 1, setAlarm, opts);
         }
 
         const boundary = 'ms_auto_register_boundary';

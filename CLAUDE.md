@@ -569,7 +569,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 - 🧭 판정 흐름·정책 상수 `MAIL_ROUTING_POLICY`·접은 모듈·UI 정리 목표·**회사 PC 에서 확인해야 할 것**(백엔드 재시작 뒤 `key` 가 내려오는지, 가족 대표 설정 저장, 대기 재판정 실효과)이 §7 에
 - ⚠️ 하네스 `tests/mail-routing.browser.js` 는 **백엔드·NAS·AI 없이** 돈다(집 PC 에서 39/39 실측) — 실제 메일로 효과를 재는 건 운영 집계 `mailRouteStats()`(decision:basis 별 건수)로
 - 📌 **email-classifier(shxntanu) 검토는 비권장** — `docs/opensource-synergy-review.md` 맨 아래
-- 🩺 **(2026-11-23) 대기 폭증 원인 셋** — ① 재판정이 스윕 `skipped:'none'` 일 때 안 돌아 **한 번도 실행된 적 없음** ② 서명의 `kortek` 이 고객 단서(→ `MAIL_ROUTING_SELF_ORG`) ③ 부분일치 거짓 적중(`horizon`⊂horizontal → 낱말 경계). ⚠️ 그 하네스는 **NAS 붙은 PC 에서 진짜 NAS 에 썼다** — 이제 `nasAppFile` 메모리 가짜로 돈다. §8 · 고객만 확정 + AI 가 하나 고름(중) → 배치(`customerAiSingleMid`, 사용자 결정)
+- 🩺 **(2026-11-23) 대기 폭증 원인 셋** — ① 재판정이 스윕 `skipped:'none'` 일 때 안 돌아 **한 번도 실행된 적 없음** ② 서명의 `kortek` 이 고객 단서(→ `MAIL_ROUTING_SELF_ORG`) ③ 부분일치 거짓 적중(`horizon`⊂horizontal → 낱말 경계). ⚠️ 그 하네스는 **NAS 붙은 PC 에서 진짜 NAS 에 썼다** — 이제 `nasAppFile` 메모리 가짜로 돈다. §8 · 고객만 확정 + AI 가 하나 고름(중) → 배치(`customerAiSingleMid`, 사용자 결정) · 재판정 배치는 `noTopicRegen`(건마다 토픽 AI 재생성에 몇 분씩 묶였다) · ⚠️ **미리보기 탭을 같은 계정으로 띄워 두지 말 것** — 보관함 백업을 서로 덮어쓴다
 
 ### `docs/mail-evidence.md` — 📎 메일 배분 결정론 근거층 (js/61, 2026-11-08)
 - **읽을 때**: 메일이 엉뚱한 프로젝트로 자동배치됐을 때, 미분류·대기가 쌓일 때, 판정 문턱을 손볼 때
