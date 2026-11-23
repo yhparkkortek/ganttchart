@@ -208,6 +208,32 @@ window.__mailRoutingTestBody = async function () {
         window._msLoadProjectIndex = realLoadIdx; window._msFilterCandidateProjects = realFilter; window._ibRepairDatesFromMail = realRepair;
     }
 
+    // ── 10. [2026-11-23 사용자 지시] 결정론 판정 먼저, AI 는 업무 정리만 — 진짜 msCallGemini(15c) → 진짜 resolve(15b·61·74)
+    //     가짜는 AI 호출(callAiBackend) 하나 — 받은 프롬프트를 기록하고 정해진 JSON 을 돌려준다.
+    if (typeof window.msCallGemini === 'function') {
+        const realAi = window.callAiBackend;
+        const prompts = [];
+        window.callAiBackend = async (key, prompt) => {
+            prompts.push(String(prompt));
+            const txt = JSON.stringify({ 업무명: 'ESD 재시험', 상세내용: '[핵심내용] 재시험', 시작일: '2026-11-20', 완료일: '2026-11-21', 담당구분: 'HW',
+                                         주매칭프로젝트번호: 5, 매칭신뢰도: '중', 매칭근거: 'fake' });
+            return { ok: true, data: { result: { candidates: [{ content: { parts: [{ text: txt }] } }] } } };
+        };
+        try {
+            const parsed = (subj) => ({ subject: subj, sender: 'a <a@customer.com>', date: '2026-11-20 10:00', body: '본문입니다. 확인 부탁드립니다.', to: '', cc: '', key: '', refs: [] });
+            const r1 = await window.msCallGemini('fake-key', parsed('Re: Shuffler Display 4.3" ESD 재시험 결과'), cands, null, null);
+            const p1 = prompts[prompts.length - 1] || '';
+            ok(r1 && r1._preRouted && r1._preRouted.fid === 'S4', '10-1 결정론으로 확정되면 AI 호출 전에 프로젝트가 정해진다(_preRouted=S4)', r1 && r1._preRouted);
+            ok(p1.indexOf('주매칭프로젝트번호') === -1 && p1.indexOf('규칙으로 이미 정해졌습니다') !== -1, '10-2 그때 프롬프트엔 후보 목록·매칭 지시가 없다(업무 정리만)', p1.slice(-300));
+            const t1 = window._msResolveAiProjectMatch(r1, cands);
+            ok(t1 && t1.status === 'matched' && t1.candidates[0].drive_file_id === 'S4' && t1.routing && t1.routing.pre, '10-3 resolve 는 AI 답(5번·중)을 무시하고 결정론 판정 그대로 확정', t1 && t1.routing);
+            const r2 = await window.msCallGemini('fake-key', parsed('회의 일정 안내'), cands, null, null);
+            const p2 = prompts[prompts.length - 1] || '';
+            ok(r2 && !r2._preRouted && p2.indexOf('주매칭프로젝트번호') !== -1, '10-4 결정론으로 못 정하면 예전처럼 후보 목록을 주고 AI 가 고른다', p2.length);
+            ok(p1.length < p2.length, '10-5 확정된 메일의 프롬프트가 더 짧다(후보 목록이 빠짐)', [p1.length, p2.length]);
+        } finally { window.callAiBackend = realAi; }
+    } else { ok(false, '10-0 msCallGemini 가 전역에 없음'); }
+
     // ── 8. 감싸기가 실제로 설치됐나 ─────────────────────────────────────────
     ok(window._msResolveAiProjectMatch && window._msResolveAiProjectMatch._mrWrapped, '8-1 _msResolveAiProjectMatch 를 js/74 가 감쌌다(가장 바깥)');
     ok(window._msAutoRegisterToProject && window._msAutoRegisterToProject._mrWrapped, '8-2 _msAutoRegisterToProject 쓰기 훅 설치');

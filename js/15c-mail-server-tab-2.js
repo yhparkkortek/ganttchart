@@ -1625,6 +1625,21 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     //    동일하게 신뢰 가능한 원본 주소)를 그대로 같이 보관 — AI가 만드는 "수신인 미상"/"OO팀" 같은
     //    화면 표시용 문구와는 별개로, 실제 메일 주소는 여기 원문 그대로 계속 따라다녀야 한다.
     window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', to: parsed.to || '', cc: parsed.cc || '', date: parsed.date || '', body2000: mailText, key: parsed.key || '', refs: parsed.refs || [] };
+    // 🧭 [2026-11-23 사용자 지시] 결정론 판정 먼저, AI 는 업무 정리만.
+    //    코드(js/74 mailRoutePreJudge)가 제목·식별자·가족·인치·스레드 기록으로 프로젝트를 **확정**하면 후보 목록을
+    //    프롬프트에서 빼고(AI 가 프로젝트를 고르지 않는다), 그 프로젝트의 담당자·고객·모델만 맥락으로 준다.
+    //    확정 못 하면 예전처럼 후보 목록을 주고 AI 가 고른 뒤 js/61·74 판정을 거친다.
+    let _pre = null;
+    if (candidateProjects && candidateProjects.length && window.mailRoutePreJudge) {
+        try { _pre = window.mailRoutePreJudge({ subject: parsed.subject || '', sender: parsed.sender || '', body: _bodyFull, refs: parsed.refs || [] }, candidateProjects); }
+        catch (e) { console.warn('[메일 분석] 결정론 사전 판정 실패(AI 매칭으로 진행):', e && e.message); _pre = null; }
+    }
+    if (_pre && _pre.target) {
+        if (!assignee) assignee = _pre.target.assignee || '';
+        if (!customer) customer = _pre.target.customer || '';
+        if (!model) model = _pre.target.model || '';
+        if (!inch) inch = _pre.target.inch || '';
+    }
     // 🧭 [2026-11-21] 후보 목록을 주는 매칭 호출엔 "열린 프로젝트 토픽 프로파일" 주입(js/26 래퍼)을 막는다
     window._tpSuppressPromptSnippet = !!(candidateProjects && candidateProjects.length);
     let prompt;
@@ -1639,7 +1654,13 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     //    이름이 아니라 "번호"로 답하게 해서 확실히 구별함. 인치 정보 + 등록된 키워드도 참고용으로 같이 제공
     //    (키워드는 더 이상 매칭 게이트가 아니라, AI 판단을 돕는 힌트일 뿐 — 없어도 다른 근거로 고를 수 있음).
     //    → 실제 힌트 조립 로직은 window._msBuildProjectMatchSection()으로 분리(재시도 엔진과 공용).
-    prompt += window._msBuildProjectMatchSection(candidateProjects, mailText, userHint);
+    if (_pre && _pre.target) {
+        prompt += '\n\n[프로젝트] 이 메일의 프로젝트는 규칙으로 이미 정해졌습니다: ' + (_pre.target.model || _pre.target.file_name || '') +
+                  (_pre.target.customer ? ' (' + _pre.target.customer + ')' : '') +
+                  '. 프로젝트를 고르지 말고 업무 내용만 정리하세요.\n';
+    } else {
+        prompt += window._msBuildProjectMatchSection(candidateProjects, mailText, userHint);
+    }
 
     const callResult = await window.callAiBackend(apiKey, prompt);
     if (!callResult.ok) {
@@ -1676,7 +1697,15 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
 
         // ✅ [AI 학습 Phase 1] AI 등록 메타데이터 첨부 — buildMailTaskRow()가 읽어서 row._aiRegistered 등으로 저장.
         //    재배치/오매칭 삭제 피드백 시 이 데이터로 학습 항목을 기록한다.
-        if (candidateProjects && candidateProjects.length > 0) {
+        if (_pre && _pre.target) {
+            // 결정론으로 정해진 건 — 판정 근거를 달고 간다(js/74 wrapResolve 가 이걸 보고 AI 매칭 해석을 건너뛴다)
+            result._preRouted = { fid: _pre.target.drive_file_id || '', basis: _pre.basis, reason: _pre.reason, family: _pre.family || null };
+            result['_aiMeta'] = {
+                confidence: '규칙', matchedProjectId: _pre.target.drive_file_id || '', matchedProjectName: _pre.target.file_name || '',
+                matchBasis: '🧭 ' + (_pre.reason || ''), keywords: (_pre.target.keywords || []).slice(0, 8),
+                snippet: ((parsed && parsed.subject) || '') + ' | ' + ((parsed && parsed.body) || '').substring(0, 150)
+            };
+        } else if (candidateProjects && candidateProjects.length > 0) {
             const _mIdx = parseInt(result['주매칭프로젝트번호'] || 0, 10) - 1;
             const _mProj = (_mIdx >= 0 && _mIdx < candidateProjects.length) ? candidateProjects[_mIdx] : null;
             result['_aiMeta'] = {

@@ -44,6 +44,7 @@
         aiCitedAuto: true,       // 가족 근거도 없을 때 AI 상 + 인용 검증(특정 토큰 포함) → 배치
         customerAiSingleMid: true, // [2026-11-23 사용자 결정] 고객만 확정 + AI 가 그 고객 안에서 하나만 고름(중) → 배치
         subjectFirst: true,      // [2026-11-23] 제목만으로 결정론 판정이 나오면 본문(인용·서명)보다 우선
+        deterministicFirst: true, // [2026-11-23 사용자 지시] AI 호출 전 결정론 판정 → 확정되면 AI 는 업무 정리만(후보 목록 안 줌)
         routeDir: 'App_Config/MailRoutes',
         flushSec: 60,
         reloadMin: 10,
@@ -53,7 +54,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23c';
+    var RULE_V = '2026-11-23d';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -268,6 +269,17 @@
         }
         return judgeCore(mail, cands, aiTag);
     };
+    /** 🧭 [2026-11-23 사용자 지시 "결정론 판정 먼저 하고 AI 는 업무 정리만"] AI 호출 **전에** 부른다(js/15c msCallGemini).
+     *  AI 없이(aiTag=null) 판정해 결정론 근거로 한 곳이 확정되면 {target, basis, reason, family}, 아니면 null.
+     *  null 이면 호출부가 예전처럼 후보 목록을 주고 AI 에게 고르게 한다. 끄기: P.deterministicFirst=false 또는 offKey. */
+    var PRE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1 };
+    window.mailRoutePreJudge = function (mail, cands) {
+        if (off() || P.deterministicFirst === false || !cands || !cands.length || !mail) return null;
+        var j = window.mailRouteJudge(mail, cands, null);
+        if (j.decision !== 'auto' || !j.target || !j.target.drive_file_id) return null;
+        if (!PRE_BASES[String(j.basis || '').replace(/^subject_/, '')]) return null;
+        return { target: j.target, basis: j.basis, reason: j.reason, family: j.family || null };
+    };
     // ⚡ [2026-11-23] 후보 목록이 같으면 식별자·가족·가족 토큰을 다시 만들지 않는다 — 실측(대기 96건·후보 29개):
     //  판정 1건 24ms 의 대부분이 메일마다 29개 후보의 식별자(사람 이름 판정 포함)를 새로 만드는 비용이었다.
     //  열쇠는 배열 참조 + 길이·id 서명 + 가족 설정 버전(설정을 바꾸면 다시 만든다).
@@ -443,11 +455,11 @@
         var basisTxt = '🧭 ' + j.reason + (aiTag && aiTag.matchBasis ? ' · 🤖 ' + aiTag.matchBasis : '');
         if (j.decision === 'auto') {
             return { status: 'matched', candidates: [j.target], extraCandidates: [], confidence: '상',
-                     matchBasis: basisTxt, routing: { basis: j.basis, family: j.family, aiConfidence: conf || '' } };
+                     matchBasis: basisTxt, routing: { basis: j.basis, family: j.family, aiConfidence: conf || '', v: RULE_V } };
         }
         if (j.decision === 'wait') {
             return { status: 'ambiguous', candidates: j.candidates, extraCandidates: [], confidence: conf || '중',
-                     matchBasis: basisTxt, routing: { basis: j.basis, family: j.family, aiConfidence: conf || '' },
+                     matchBasis: basisTxt, routing: { basis: j.basis, family: j.family, aiConfidence: conf || '', v: RULE_V },
                      ambiguousReason: j.basis };
         }
         return null;
@@ -666,6 +678,19 @@
         var orig = window._msResolveAiProjectMatch;
         if (typeof orig !== 'function' || orig._mrWrapped) return false;
         window._msResolveAiProjectMatch = function (task, cands) {
+            // 🧭 [2026-11-23] AI 호출 전에 결정론으로 이미 정해진 건(js/15c 가 task._preRouted 를 단다) — AI 매칭 해석(15b·61)을
+            //  건너뛰고 그 판정 그대로. AI 는 이 메일에서 프로젝트 후보를 보지도 않았다(업무 정리만 했다).
+            if (!off() && task && task._preRouted && task._preRouted.fid && cands && cands.length) {
+                var pr = task._preRouted;
+                var tgt = cands.filter(function (c) { return c.drive_file_id === pr.fid; })[0];
+                if (tgt) {
+                    task._routing = { basis: pr.basis, decision: 'auto', reason: pr.reason };
+                    bump('auto:pre_' + pr.basis);
+                    var pt = tagFromJudge({ decision: 'auto', target: tgt, candidates: [tgt], basis: pr.basis, reason: pr.reason + ' (AI 매칭 생략)', family: pr.family }, null);
+                    pt.routing.pre = true;
+                    return pt;
+                }
+            }
             var tag = orig.apply(this, arguments);
             if (off() || !cands || !cands.length) return tag;
             try {
