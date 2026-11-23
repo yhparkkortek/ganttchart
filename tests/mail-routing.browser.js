@@ -45,7 +45,7 @@ window.__mailRoutingTestBody = async function () {
 
     // ── 2. 식별자 → 배치 ──────────────────────────────────────────────────────
     let j = J(M('Re: 4.3" Shuffler ESD 재시험 일정', '첨부 참고'), cands, null);
-    ok(j.decision === 'auto' && j.target.drive_file_id === 'S4' && j.basis === 'identifier', '2-1 "4.3\\" Shuffler" → SHUFFLER 4.3 식별자', j);
+    ok(j.decision === 'auto' && j.target.drive_file_id === 'S4' && /identifier$/.test(j.basis), '2-1 "4.3\\" Shuffler" → SHUFFLER 4.3 식별자', j);
     j = J(M('관리번호 #125202 샘플 입고', 'AMUSNET 샘플'), cands, null);
     ok(j.decision === 'auto' && j.target.drive_file_id === 'A2', '2-2 관리번호 125202 → 55C(형제 중 고유 코드)', j);
     j = J(M('부품 1125202X 확인', ''), cands, null);
@@ -67,7 +67,7 @@ window.__mailRoutingTestBody = async function () {
     window._mailRoutingTestSetCfg = null;
     await window.mailRoutingSaveConfig({ families: { 'AMUSNET': { members: ['A1', 'A2', 'A3'], primary: 'A1' } } }).catch(() => {});
     j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '공통'), cands, null);
-    ok(j.decision === 'auto' && j.target.drive_file_id === 'A1' && j.basis === 'family_primary', '3-4 가족 대표(55FLAT)를 정하면 모델 단서 없는 공통 메일은 대표로 배치', j);
+    ok(j.decision === 'auto' && j.target.drive_file_id === 'A1' && /family_primary$/.test(j.basis), '3-4 가족 대표(55FLAT)를 정하면 모델 단서 없는 공통 메일은 대표로 배치', j);
     await window.mailRoutingSaveConfig(cfg0).catch(() => {});
     j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW>ODB>MVD>270>FA', '박스 2EA'), cands, AI(5, '상'));
     ok(j.decision === 'auto' && j.target.drive_file_id === 'O1', '3-5 LNW 만 확정(제품 단서 없음) + AI 상(OBSIDIAN27) → 같은 고객 안 AI 상 → 배치', j);
@@ -170,6 +170,26 @@ window.__mailRoutingTestBody = async function () {
         ok(j9.decision === 'auto' && j9.target.drive_file_id === 'S4', '9-3 "horizontal" 안의 horizon 은 HORIZON 식별자가 아니다(낱말 경계)', j9);
         j9 = J(M('HORIZON 75 일정', 'HORIZON75 샘플'), cands9, null);
         ok(j9.decision === 'auto' && j9.target.drive_file_id === 'H1', '9-3b 진짜 "HORIZON 75" 는 그대로 잡힌다', j9);
+        // 9-5 제목 먼저 — 본문(인용)에 다른 프로젝트 단어가 많아도 제목의 고유 번호가 이긴다
+        j9 = J(M('[회의록] LNW Obsidian 27" with DB (#502627) 후속 생산 계획', '> Obsidian Digital Wheel ODW SUNON 1576437 STELLAR32 ADONIS-QLW 회의 참석'), cands9, null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'O1' && /^subject_/.test(j9.basis), '9-5 제목의 고유 번호(#502627)가 본문 인용의 다른 프로젝트 단어를 이긴다', j9);
+        j9 = J(M('ZITRO ICONIC & LnW STELLAR32 & Obsidian Digital Wheel 일정', ''), cands9, null);
+        ok(j9.decision !== 'auto', '9-6 제목에 여러 프로젝트가 같이 나오면 한 곳으로 보내지 않는다', j9);
+        // 9-7 가족 안 인치로 형제 가르기
+        j9 = J(M('Shuffler Display 4.3" ESD 관련 논의', '첨부 참조'), cands9, null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'S4' && /family_inch$/.test(j9.basis), '9-7 SHUFFLER 가족 + 4.3" → 4.3 (인치로 형제 가름)', j9);
+        j9 = J(M('Shuffler 3" 와 4.3" 비교', ''), cands9, null);
+        ok(j9.decision !== 'auto' || j9.basis.indexOf('inch') === -1, '9-7b 두 인치가 같이 나오면 인치로 고르지 않는다', j9);
+        // 9-8 사유 글이 재판정마다 겹겹이 길어지지 않는다
+        store = [{ uid: 'g1', status: '대기', task: { 업무명: 'x', 시작일: '2026-11-01', 완료일: '2026-11-02' }, mailRaw: { subject: '단서 없는 메일', body2000: '안녕하세요' },
+                   matchedProject: { status: 'ambiguous', candidates: [cands[4]], confidence: '중', matchBasis: '🧭 이전 판정 · 🤖 AI 사유 원문', routing: { basis: 'ai_low', aiConfidence: '중' } } }];
+        await window.mailRouteRejudgePending({ force: true, toast: false });
+        await window.mailRouteRejudgePending({ force: true, toast: false });
+        const mb9 = store[0].matchedProject.matchBasis;
+        ok((mb9.match(/🤖/g) || []).length === 1 && mb9.indexOf('AI 사유 원문') !== -1, '9-8 재판정을 두 번 해도 사유의 🤖 는 한 번만', mb9);
+        ok(store[0].matchedProject.routing.v === window.MAIL_ROUTING_RULE_V, '9-9 재판정한 카드에 규칙 버전이 적힌다', store[0].matchedProject.routing);
+        const rBg = await window.mailRouteRejudgePending({ toast: false });
+        ok(rBg.looked === 0 && rBg.skipped.same_rule === 1, '9-10 배경 재판정은 같은 규칙으로 본 카드를 다시 안 본다', rBg);
         // 9-4 유휴 스윕이 'none'(매칭 확정 건 없음)을 돌려줘도 재판정은 돈다 — 대기가 전부 모호할 때가 그 때다
         store = [{ uid: 'n1', status: '대기', task: { 업무명: 'x', 시작일: '2026-11-01', 완료일: '2026-11-02' }, mailRaw: { subject: 'x' },
                    matchedProject: { status: 'ambiguous', candidates: [cands[4]], confidence: '중' } }];
@@ -177,10 +197,11 @@ window.__mailRoutingTestBody = async function () {
         let rj = 0;
         window.mailRouteRejudgePending = async () => { rj++; return {}; };
         if (!window.googleAccessToken) window.googleAccessToken = 'harness';
+        const realOff = localStorage.getItem('gantt_autoplace_sweep_off'); localStorage.removeItem('gantt_autoplace_sweep_off');
         try {
             const sw = await window._ibAutoPlaceSweep({ force: true });
             ok(sw && sw.skipped === 'none' && rj === 1, '9-4 스윕 결과가 none 이어도 재판정이 한 번 돈다', { sw, rj });
-        } finally { window.mailRouteRejudgePending = realRj; window.googleAccessToken = realTok; }
+        } finally { window.mailRouteRejudgePending = realRj; window.googleAccessToken = realTok; if (realOff != null) localStorage.setItem('gantt_autoplace_sweep_off', realOff); }
     } finally {
         TI.load = realLoad; TI.save = realSave; TI.setStatus = realSetStatus;
         window._msAutoRegisterToProject = realReg; window.isAutoRegisterEnabled = realEnabled;

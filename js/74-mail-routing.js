@@ -43,6 +43,7 @@
         familyAiAuto: true,      // 가족 확정 + 모델 식별자 없음 + 대표 없음 → AI 픽(상/중)으로 배치
         aiCitedAuto: true,       // 가족 근거도 없을 때 AI 상 + 인용 검증(특정 토큰 포함) → 배치
         customerAiSingleMid: true, // [2026-11-23 사용자 결정] 고객만 확정 + AI 가 그 고객 안에서 하나만 고름(중) → 배치
+        subjectFirst: true,      // [2026-11-23] 제목만으로 결정론 판정이 나오면 본문(인용·서명)보다 우선
         routeDir: 'App_Config/MailRoutes',
         flushSec: 60,
         reloadMin: 10,
@@ -50,6 +51,18 @@
         autoKeywordSignal: false // js/26 의 "메일 제목 단어를 토픽 키워드에 자동 누적" — 끈다(범용어 흡수·15개 동결)
     };
     var P = window.MAIL_ROUTING_POLICY;
+    // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
+    //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
+    var RULE_V = '2026-11-23c';
+    window.MAIL_ROUTING_RULE_V = RULE_V;
+    /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
+    function aiReasonOnly(mb) {
+        var t = String(mb || '');
+        var k = t.lastIndexOf(' · 🤖 ');
+        if (k !== -1) t = t.slice(k + 5);
+        else if (/^\s*🧭/.test(t)) t = '';
+        return t.slice(0, 400);
+    }
     function off() { try { return localStorage.getItem(P.offKey) === '1'; } catch (e) { return false; } }
     function T(ko, en) { return window._t ? window._t(ko, en) : ko; }
 
@@ -229,23 +242,66 @@
      * @param aiTag _msResolveAiProjectMatch 결과(있으면) — {status, candidates, confidence, evidence?}
      * @returns {decision:'auto'|'wait'|'none', target, candidates, basis, reason, family, hits}
      */
+    /** 인치 값이 본문에 "크기"로 나오나 — 4.3 → 4.3" / 4.3” / 4.3인치 / 4.3 inch / 4.3 (앞뒤가 숫자·점 아님).
+     *  3.0 처럼 .0 이면 "3\"" "3인치" 처럼 단위가 붙은 3 도 받는다(단위 없는 3 은 너무 흔하다). */
+    function inchHit(raw, inch) {
+        var v = String(inch || '').trim();
+        if (!/^\d+(\.\d+)?$/.test(v)) return false;
+        var esc = v.replace('.', '\\.');
+        if (new RegExp('(^|[^0-9.])' + esc + '(?![0-9])(?!\\.[0-9])').test(raw)) return true;
+        var m = /^(\d+)\.0$/.exec(v);
+        if (m && new RegExp('(^|[^0-9.])' + m[1] + '\\s*(["”″]|인치|inch)', 'i').test(raw)) return true;
+        return false;
+    }
+    /** 📨 [2026-11-23] 제목 먼저 — 제목만으로 **결정론**(식별자·단독 가족·가족 인치·가족 대표)으로 한 곳이 나오면 그걸로 정한다.
+     *  본문엔 인용된 옛 메일·서명·참조 목록이 섞여 다른 프로젝트 단어가 거의 늘 있다 — 그 때문에 제목에 고유 번호(#502627)가
+     *  있는 메일도 "다른 프로젝트 단어도 여럿" 충돌로 대기였다(실측 대기 96건 중 다수). 제목으로 안 정해지면 예전처럼 제목+본문. */
+    var SUBJECT_FIRST_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1 };
     window.mailRouteJudge = function (mail, cands, aiTag) {
+        if (P.subjectFirst !== false && mail && mail.subject) {
+            var js = judgeCore({ subject: mail.subject, body: '', sender: mail.sender, refs: [] }, cands, null, true);
+            if (js.decision === 'auto' && SUBJECT_FIRST_BASES[js.basis]) {
+                js.basis = 'subject_' + js.basis;
+                js.reason = T('제목: ', 'subject: ') + js.reason;
+                return js;
+            }
+        }
+        return judgeCore(mail, cands, aiTag);
+    };
+    // ⚡ [2026-11-23] 후보 목록이 같으면 식별자·가족·가족 토큰을 다시 만들지 않는다 — 실측(대기 96건·후보 29개):
+    //  판정 1건 24ms 의 대부분이 메일마다 29개 후보의 식별자(사람 이름 판정 포함)를 새로 만드는 비용이었다.
+    //  열쇠는 배열 참조 + 길이·id 서명 + 가족 설정 버전(설정을 바꾸면 다시 만든다).
+    var _cfgVer = 0;
+    var _famCache = (typeof WeakMap === 'function') ? new WeakMap() : null;
+    function prepared(cands) {
+        var sig = _cfgVer + '|' + cands.length + '|' + cands.map(function (c) { return (c.drive_file_id || c.file_name || '') + ':' + (c.updated_at || '') + ':' + ((c.keywords || []).length); }).join(',');
+        var hitC = _famCache && _famCache.get(cands);
+        if (hitC && hitC.sig === sig) return hitC;
+        var F = buildFamilies(cands);
+        var owner = {};
+        F.idents.forEach(function (m, i) { for (var k in m) owner[k] = (owner[k] === undefined) ? i : -1; });
+        var famToks = {};
+        Object.keys(F.fams).forEach(function (fid) { famToks[fid] = Object.keys(familyTokens(cands, F.fams[fid], F.idents)); });
+        var rec = { sig: sig, F: F, owner: owner, famToks: famToks };
+        if (_famCache) _famCache.set(cands, rec);
+        return rec;
+    }
+    function judgeCore(mail, cands, aiTag, strictOther) {
         var raw = String((mail && mail.subject) || '') + '\n' + String((mail && mail.body) || '');
         var hayNorm = buildHay(raw), hayRaw = raw.replace(/\s+/g, ' ');
-        var F = buildFamilies(cands || []);
+        cands = cands || [];
+        var PR = prepared(cands);
+        var F = PR.F;
         var idents = F.idents;
         // 어느 후보에도 겹치지 않는 "고유" 식별자 vs 공유 식별자
-        var owner = {};
-        idents.forEach(function (m, i) { for (var k in m) owner[k] = (owner[k] === undefined) ? i : -1; });
+        var owner = PR.owner;
         var uniqHits = cands.map(function () { return []; });
         var famHit = {};   // famId → hits
         idents.forEach(function (m, i) {
             for (var k in m) if (owner[k] === i && hit(hayNorm, hayRaw, k)) uniqHits[i].push(k);
         });
         Object.keys(F.fams).forEach(function (fid) {
-            var toks = familyTokens(cands, F.fams[fid], idents);
-            var hs = [];
-            for (var k in toks) if (hit(hayNorm, hayRaw, k)) hs.push(k);
+            var hs = PR.famToks[fid].filter(function (k) { return hit(hayNorm, hayRaw, k); });
             if (hs.length) famHit[fid] = hs;
         });
         var famOfIdx = function (i) { var c = cands[i]; return F.famOf[c.drive_file_id || c.file_name || i]; };
@@ -258,7 +314,14 @@
         //    "AMUSNET 처럼" 같은 지나가는 언급일 수 있어 봐준다) 충돌로 보고 사람에게 넘긴다.
         if (withUniq.length === 1) {
             var i1 = withUniq[0], myFam = famOfIdx(i1);
-            var otherStrong = Object.keys(famHit).filter(function (f) { return f !== myFam && famHit[f].length >= 2; });
+            // [2026-11-23] 내 가족도 맞은 단어(고객 root 'lnw'·공통 'obsidian' 등)는 "다른 가족의 증거"로 세지 않는다 —
+            //  안 빼면 제목에 고유 번호(#502627)가 있는 OBSIDIAN27 메일이 Digital Wheel 의 lnw·obsidian 2개로 충돌이 됐다(실측).
+            var mine = {}; (famHit[myFam] || []).forEach(function (t) { mine[t] = 1; }); uniqHits[i1].forEach(function (t) { mine[t] = 1; });
+            var otherStrong = Object.keys(famHit).filter(function (f) {
+                // 제목 판정(strictOther)에선 다른 프로젝트 단어가 **하나**만 있어도 충돌 — 제목은 짧아서 거기 나온 다른 프로젝트는
+                //  지나가는 언급이 아니다("ZITRO ICONI & LnW STELLAR & LnW OBSIDIAN…" 가 한 곳으로 가면 안 된다).
+                return f !== myFam && famHit[f].filter(function (t) { return !mine[t]; }).length >= (strictOther ? 1 : 2);
+            });
             if (otherStrong.length) {
                 return out({ decision: 'wait', target: null,
                     candidates: [cands[i1]].concat(otherStrong.slice(0, 2).reduce(function (a, f) { return a.concat(F.fams[f].members.map(function (i) { return cands[i]; })); }, [])).slice(0, 6),
@@ -326,6 +389,15 @@
                     reason: T('프로젝트 단어 일치: ', 'project words: ') + (famHit[famId] || []).slice(0, 3).join(', '), family: famId });
             }
             // 형제가 여럿 — 모델 식별자(여러 형제가 동시에 맞은 경우는 위 ②에서 걸러짐·여기선 0개)
+            // 📐 [2026-11-23] 형제가 인치로 갈리면(SHUFFLER 3.0/4.3) 색인의 inch 칸으로 가른다 — "4.3" 은 숫자가
+            //  짧아 식별자에서 빠지므로 "Shuffler Display 4.3\" ESD" 가 가족까지만 확정되고 대기였다(실측).
+            //  가족이 이미 확정된 뒤에만 쓴다(아무 메일의 "4.3" 으로 프로젝트를 고르지 않는다). 둘 이상 맞으면 안 쓴다.
+            var inchHits = fam.members.filter(function (i) { return inchHit(raw, cands[i].inch); });
+            var inchVals = {}; fam.members.forEach(function (i) { inchVals[String(cands[i].inch || '')] = 1; });
+            if (inchHits.length === 1 && Object.keys(inchVals).length === fam.members.length) {
+                return out({ decision: 'auto', target: cands[inchHits[0]], candidates: members, basis: 'family_inch',
+                    reason: T('가족 확정(' + fam.label + ') · 인치 ' + cands[inchHits[0]].inch + ' 로 모델 확정', 'family ' + fam.label + ' · model by size ' + cands[inchHits[0]].inch), family: famId });
+            }
             if (fam.primary != null) {
                 return out({ decision: 'auto', target: cands[fam.primary], candidates: members, basis: 'family_primary',
                     reason: T('가족 확정(' + fam.label + ') · 모델 단서 없음 → 가족 대표로', 'family ' + fam.label + ' confirmed, no model cue → family primary'), family: famId });
@@ -363,7 +435,7 @@
         }
         return out({ decision: 'none', target: null, candidates: [], basis: 'none',
             reason: T('어느 프로젝트의 식별자·고객·스레드도 없음', 'no identifier, customer or thread cue') });
-    };
+    }
 
     // ── 판정 → projectTag(15b 모양) ────────────────────────────────────────
     function tagFromJudge(j, aiTag) {
@@ -472,12 +544,12 @@
     window._mailRoutingCfgRel = CFG_REL;
     window.mailRoutingLoadConfig = async function () {
         if (!storageReady()) return _cfg;
-        try { var d = await window.nasAppFile.get(CFG_REL, { json: true }); if (d && typeof d === 'object') _cfg = { families: d.families || {} }; }
+        try { var d = await window.nasAppFile.get(CFG_REL, { json: true }); if (d && typeof d === 'object') { _cfg = { families: d.families || {} }; _cfgVer++; } }
         catch (e) { console.warn('[메일 배분] 가족 설정 읽기 실패(기본값):', e && e.message); }
         return _cfg;
     };
     window.mailRoutingSaveConfig = async function (cfg) {
-        _cfg = { families: (cfg && cfg.families) || {} };
+        _cfg = { families: (cfg && cfg.families) || {} }; _cfgVer++;
         if (!storageReady()) return false;
         await window.nasAppFile.put(CFG_REL, { v: 1, savedAt: new Date().toISOString(), families: _cfg.families });
         return true;
@@ -707,38 +779,57 @@
         var cands;
         try { cands = window._msFilterCandidateProjects(await window._msLoadProjectIndex()); } catch (e) { cands = []; }
         if (!cands || !cands.length) { res.skipped.no_candidates = 1; return res; }
+        // ⚡ [2026-11-23] "앱을 쓸 수 없을 만큼 느림" 대응 — 실측(대기 96건): 판정 24ms×96 + 건마다 보관함(1.3MB) 읽기·쓰기가
+        //  한 덩어리로 화면을 붙잡았고, 그게 유휴 스윕마다(10분) 반복됐다.
+        //  · 보관함은 **한 번** 읽고, 바뀐 카드는 모아 두었다가 배치 직전·끝에 **한 번에** 쓴다(그 사이 다른 경로가 바꾼 건 덮지 않게
+        //    쓰기 직전에 다시 읽어 '대기' 인 카드에만 얹는다).
+        //  · 몇 건마다 화면에 양보한다.
+        //  · 스윕(배경)은 **지금 규칙으로 이미 판정한 카드는 건너뛴다**(routing.v === RULE_V). 버튼(force)은 전부 본다.
         var list = window.TaskInbox.load();
         var pend = list.filter(function (it) { return it.status === '대기' && it.task; });
         var max = opts.max || P.rejudgeMax, tried = 0;
+        var pendingTags = {};   // uid → 새 matchedProject
+        var flushTags = function () {
+            var uids = Object.keys(pendingTags);
+            if (!uids.length) return;
+            var fresh = window.TaskInbox.load();
+            var n = 0;
+            fresh.forEach(function (x) { if (pendingTags[x.uid] && x.status === '대기') { x.matchedProject = pendingTags[x.uid]; n++; } });
+            pendingTags = {};
+            if (n) window.TaskInbox.save(fresh);
+        };
+        var yieldUi = function () { return new Promise(function (r2) { setTimeout(r2, 0); }); };
         for (var i = 0; i < pend.length && tried < max; i++) {
             var it = pend[i];
+            var mp = it.matchedProject || null;
+            if (!opts.force && mp && mp.routing && mp.routing.v === RULE_V) { res.skipped.same_rule = (res.skipped.same_rule || 0) + 1; continue; }
+            if (i % 5 === 4) await yieldUi();
             res.looked++;
             var mr = it.mailRaw || {};
             var body = mr.body2000 || (it.task && it.task['상세내용']) || '';
             var mail = { subject: mr.subject || (it.task && it.task['업무명']) || '', sender: mr.sender || '', body: body, refs: mr.refs || [] };
             // 저장돼 있던 AI 판정을 되살려 AI 보조로만 쓴다(후보 참조는 지금 색인으로 다시 맞춘다)
-            var mp = it.matchedProject || null;
             var aiTag = null;
             if (mp && mp.candidates && mp.candidates.length) {
                 var live = mp.candidates.map(function (c) { return cands.filter(function (x) { return x.drive_file_id === c.drive_file_id; })[0]; }).filter(Boolean);
                 var conf = mp.routing ? mp.routing.aiConfidence : mp.confidence;
-                if (live.length) aiTag = { status: (conf === '상' && live.length === 1) ? 'matched' : 'ambiguous', candidates: live, confidence: conf || '', matchBasis: mp.matchBasis || '' };
+                if (live.length) aiTag = { status: (conf === '상' && live.length === 1) ? 'matched' : 'ambiguous', candidates: live, confidence: conf || '', matchBasis: aiReasonOnly(mp.matchBasis) };
             }
             var j;
-            try { j = window.mailRouteJudge(mail, cands, aiTag); } catch (e) { res.failed++; continue; }
+            try { j = window.mailRouteJudge(mail, cands, aiTag); } catch (e) { res.failed++; res.skipped.judge_error = (res.skipped.judge_error || 0) + 1; continue; }
             var newTag = tagFromJudge(j, aiTag);
-            // 판정 결과를 카드에 반영(후보·근거) — 사람이 "왜 대기인지" 를 새 규칙으로 본다
-            // [2026-11-23] 판정이 그대로면 저장하지 않는다 — 이제 스윕마다(10분) 돌기 때문에, 대기 144건이면
-            //  보관함 통째(실측 2MB) 읽기·쓰기를 매번 144번 하게 된다(14c 가 경고한 "화면이 멈춤" 의 그 비용).
-            var sameTag = newTag && mp && mp.routing && mp.routing.basis === newTag.routing.basis
+            if (!newTag) {
+                // 'none' 도 "지금 규칙으로 봤다" 는 표시는 남긴다(다음 스윕이 또 보지 않게) — 후보·사유는 원래 것 그대로
+                newTag = Object.assign({}, mp || { status: 'ambiguous', candidates: [], confidence: '' });
+                newTag.routing = Object.assign({}, (mp && mp.routing) || {}, { basis: 'none' });
+            }
+            newTag.routing.v = RULE_V;
+            var sameTag = mp && mp.routing && mp.routing.v === RULE_V && mp.routing.basis === newTag.routing.basis
                 && (mp.candidates || []).map(function (c) { return c.drive_file_id; }).join('|')
                    === (newTag.candidates || []).map(function (c) { return c.drive_file_id; }).join('|');
-            if (newTag && !sameTag) {
-                var fresh = window.TaskInbox.load();
-                var cur = fresh.filter(function (x) { return x.uid === it.uid; })[0];
-                if (cur) { cur.matchedProject = newTag; window.TaskInbox.save(fresh); res.changed++; }
-            }
+            if (!sameTag) { pendingTags[it.uid] = newTag; res.changed++; }
             if (j.decision !== 'auto' || !j.target || !j.target.drive_file_id) continue;
+            flushTags();   // 배치 경로가 보관함을 읽고 쓰기 전에, 모아 둔 카드 갱신을 먼저 쓴다
             var t = it.task;
             if (window._ibRepairDatesFromMail) { try { window._ibRepairDatesFromMail(it.uid); } catch (e) { /* 무시 */ } }
             var fresh2 = window.TaskInbox.load().filter(function (x) { return x.uid === it.uid; })[0];
@@ -758,6 +849,8 @@
             } catch (e) { res.failed++; }
             await new Promise(function (r2) { setTimeout(r2, 400); });
         }
+        flushTags();
+        try { console.info('[메일 배분] 대기 재판정:', JSON.stringify(res)); } catch (e) { /* 무시 */ }
         if (typeof window.renderTaskInbox === 'function') { try { window.renderTaskInbox(); } catch (e) { /* 무시 */ } }
         if (opts.toast !== false && window.showToast && (res.placed || opts.force)) {
             window.showToast(T('🧭 대기 ' + res.looked + '건 재판정 — 배치 ' + res.placed + '건' + (res.failed ? ' · 실패 ' + res.failed : ''),
