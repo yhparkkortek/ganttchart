@@ -1212,8 +1212,6 @@
                 style="width:170px; padding:6px 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; box-sizing:border-box; margin-right:4px;">
             <button id="pl-btn-search" class="concept-add-row-btn" onclick="window.plSearchNow()"
                 style="margin:0 6px 0 0; padding:6px 10px; border:none; border-radius:6px; white-space:nowrap;">🔍</button>
-            <span id="pl-filter-box" style="display:inline-flex; align-items:center;"></span>
-            <button id="pl-btn-reset" class="concept-add-row-btn" onclick="window.plClearFilters()" style="margin:0 6px 0 0; padding:6px 12px; border:none; border-radius:6px; font-size:13px; white-space:nowrap;"></button>
             <span id="pl-count" style="font-size:12px; color:#888; margin-right:8px;"></span>
             <div class="btn-group" style="margin-left:auto;">
                 <button id="pl-btn-check" class="concept-add-row-btn" onclick="window.plCheckAgainstProjects && window.plCheckAgainstProjects()" style="margin:0 4px 0 0; padding:6px 12px; border:none; border-radius:6px; font-size:13px; white-space:nowrap;"></button>
@@ -1227,8 +1225,10 @@
             ondragover="event.preventDefault(); event.stopPropagation(); this.style.outline='3px dashed #52a5af'; this.style.outlineOffset='-3px';"
             ondragleave="this.style.outline='none';"
             ondrop="window.plDropImport(event)">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
                 <span id="pl-group-chips"></span>
+                <span id="pl-filter-box" style="display:inline-flex; align-items:center; flex-wrap:wrap; row-gap:4px;"></span>
+                <button id="pl-btn-reset" class="concept-add-row-btn" onclick="window.plClearFilters()" style="margin:0; height:28px; box-sizing:border-box; padding:0 10px; display:inline-flex; align-items:center; border:none; border-radius:6px; font-size:13px; white-space:nowrap;"></button>
                 <span style="flex:1;"></span>
                 <span id="pl-saved-mark" style="font-size:11px; color:#789;"></span>
             </div>
