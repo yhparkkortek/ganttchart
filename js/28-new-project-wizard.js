@@ -601,16 +601,36 @@ window._npwPickFromDict = function() {
     }
     window._ppOpenPicker(function(p) {
         window._npwData = window._npwData || {};
+        var _nz = function(x) { return String(x || '').toLowerCase().replace(/[^0-9a-z가-힣]+/g, ''); };
         var cust = document.getElementById('npw-customer');
-        if (cust && p.customer) {
+        // 🐛 [2026-11-23 실사고 — 보관함 제안으로 연 K27 마법사] 사전에서 고르면 이미 채워진 값을 **덮어썼다**:
+        //    고객사 'LNW>K27' → 'LNW', 메일 키워드 'K27, 502246' → 'K, 27, T215HVN01.1, KM270EUG-SBEA27 ×3'.
+        //    'K27' 모델명이 사전엔 'K 27' 로 적혀 있어 **띄어쓰기로 쪼개진** 'K'·'27' 이 키워드가 됐고, '27' 하나로는
+        //    27인치 메일이 전부 걸린다. → 이미 '고객사>…' 로 채워져 있으면 고객사는 그대로 두고, 키워드는 **합친다**,
+        //    모델명은 통째로(+띄어쓰기 없앤 꼴)만, 3자 미만·숫자만인 토큰은 버린다, 같은 PN 은 한 번만.
+        var curCust = (cust && cust.value.trim()) || window._npwData.customer || _prefill.customer || '';
+        var keepCust = p.customer && curCust && curCust.toLowerCase().indexOf(String(p.customer).toLowerCase() + '>') === 0;
+        if (cust && p.customer && !keepCust) {
             cust.value = p.customer;
             cust.dispatchEvent(new Event('input', { bubbles: true }));
         }
-        window._npwData.customer = p.customer || (cust ? cust.value : '');
-        window._npwData.model = p.model || p.name;
-        // 메일 키워드 씨앗 — 모델명 토큰 + 채택(●) 패널 PN. 다음 분석부터 바로 쓰인다.
-        var kw = String(p.model || '').split(/\s+/).filter(Boolean);
-        (p.panels || []).forEach(function(x) { if (x.chosen && kw.length < 10) kw.push(x.pn); });
+        window._npwData.customer = keepCust ? curCust : (p.customer || (cust ? cust.value : ''));
+        var curModel = window._npwData.model || _prefill.model || '';
+        var dictModel = p.model || p.name || '';
+        window._npwData.model = (curModel && _nz(curModel) === _nz(dictModel)) ? curModel : dictModel;
+        // 메일 키워드 씨앗 — 지금 있는 키워드 + 모델명(통째·붙여 쓴 꼴) + 채택(●) 패널 PN. 다음 분석부터 바로 쓰인다.
+        var curKw = window._npwData.keywords || (Array.isArray(_prefill.keywords) ? _prefill.keywords.join(', ') : (_prefill.keywords || ''));
+        var kw = [], seen = {};
+        // 거르기(3자 미만·숫자만)는 **사전에서 새로 들어오는 토큰에만** — 이미 있던 키워드(관리번호 502246 같은)는 그대로 둔다
+        var add = function(t, keepAsIs) {
+            t = String(t || '').trim(); var n = _nz(t);
+            if (!t || !n || seen[n]) return;
+            if (!keepAsIs && (n.length < 3 || /^\d+$/.test(n))) return;
+            seen[n] = 1; kw.push(t);
+        };
+        String(curKw).split(',').forEach(function(t) { add(t, true); });
+        add(dictModel); if (/\s/.test(dictModel)) add(String(dictModel).replace(/\s+/g, ''));
+        (p.panels || []).forEach(function(x) { if (x.chosen && kw.length < 12) add(x.pn); });
         window._npwData.keywords = kw.join(', ');
         if (window.showToast) window.showToast(_t(
             '🏷 "' + p.name + '" 을(를) 가져왔습니다 — 모델명과 메일 키워드는 다음 단계에 채워집니다.',
