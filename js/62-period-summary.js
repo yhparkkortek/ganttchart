@@ -1029,7 +1029,11 @@
         // 📌 [2026-11-23 "BOM 헤더와 차이가 뭐야"] BOM 과 같은 구조 — 조작 영역은 스크롤 **밖**(#ps-sticky),
         //    표·근거 목록만 따로 스크롤(#ps-scroll)하고 표 머리글은 그 상자 맨 위(top:0)에 붙는다.
         //    (전엔 한 상자 안에서 같이 스크롤하며 머리 높이를 재서 맞췄다 — 화면마다 어긋나 머리글이 움직였다.)
-        body.innerHTML = '<div id="ps-sticky" style="flex-shrink:0; padding-bottom:4px; margin-bottom:6px; border-bottom:1px solid #a3d9e0;">' +
+        // 🐛 [2026-11-23 "이번엔 투명하게 비침"] 바깥 상자가 스크롤되면(옛 CSS 가 남은 브라우저) 표가 배경 없는 머리 밑으로 비쳤다 →
+        //    ① 페이지면 바깥 상자의 '스크롤 안 함 + 세로 배치' 를 **여기서 직접** 건다(CSS 가 늦게 와도 같은 결과)
+        //    ② 머리에 불투명 팔레트 배경(#e0f5f7 — js/21 이 테마색으로 바꾼다)과 쌓임 순서.
+        if (body.id === 'psummary-page') { body.style.display = 'flex'; body.style.flexDirection = 'column'; body.style.overflow = 'hidden'; body.style.minHeight = '0'; }
+        body.innerHTML = '<div id="ps-sticky" style="flex-shrink:0; position:relative; z-index:6; background:#e0f5f7; padding-bottom:4px; margin-bottom:6px; border-bottom:1px solid #a3d9e0;">' +
             toolbarHtml(kind, col) + headHtml + secHtml + '</div>' +
             '<div id="ps-scroll" style="flex:1; min-height:0; overflow:auto;">' + h.join('') + '</div>';
         syncHeadH();
