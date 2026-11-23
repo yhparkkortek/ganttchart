@@ -145,7 +145,12 @@
                 var f0 = parts.reduce(function (m, r) { return r.from < m ? r.from : m; }, parts[0].from);
                 var t0 = parts.reduce(function (m, r) { return r.to > m ? r.to : m; }, parts[0].to);
                 key = ymd(f0) + '~' + ymd(t0);
-                label = parts.map(function (r) { return r.label; }).join(' + ');
+                // 🗜 [2026-11-23 사용자 요청 "컴팩트하게"] 기간마다 날짜를 다 적지 않고 합친 범위 하나 + 고른 이름만.
+                var en0 = window._currentLang === 'en';
+                label = splitKinds(kind).map(function (k) {
+                    var p = P.periods.filter(function (x) { return x.id === k; })[0];
+                    return p ? (en0 ? p.en : p.ko) : k;
+                }).join('·') + ' ' + key;
                 return { kind: kind, from: new Date(f0), to: new Date(t0), key: key, label: label };
             }
         }
@@ -684,8 +689,9 @@
         var fresh = cache && cache.rangeKey === col.sig;
         var h = [];
         h.push('<div id="ai-summary-report-content">');
-        h.push('<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;"><div style="font-size:13.5px; font-weight:bold; color:#2c5f8a;">📅 ' + esc(col.range.label) + '</div>' +
-               '<div style="font-size:11.5px; color:#777;">' + esc(T('메일 유래 업무 ' + col.facts.length + '건' + (col.total > col.facts.length ? ' (표시 상한 ' + col.facts.length + ')' : '') + ' · 전체 메일 업무 ' + col.scanned + '건 중' + (col.jiraCount ? ' · JIRA ' + col.jiraCount + '건' : '') + (col.filtered ? ' · 필터 적용 중' : '') + (col.projects.length > 1 ? ' · 프로젝트 ' + col.projects.length + '개' : ''), col.facts.length + ' mail-derived tasks of ' + col.scanned + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.filtered ? ' · filtered' : ''))) +
+        // 🗜 [2026-11-23 사용자 요청 "컴팩트하게"] 기간 · 건수를 한 줄에, 말은 짧게(뜻은 title 말풍선에).
+        h.push('<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:baseline; margin-bottom:8px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📅 ' + esc(col.range.label) + '</div>' +
+               '<div style="font-size:11px; color:#777;" title="' + esc(T('메일 유래 업무 / 전체 메일 업무', 'mail-derived tasks / all mail tasks')) + '">' + esc(T('메일 ' + (col.total > col.facts.length ? col.facts.length + '(상한)' : col.facts.length) + '/' + col.scanned + '건' + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · 프로젝트 ' + col.projects.length : '') + (col.filtered ? ' · 필터' : ''), 'Mail ' + col.facts.length + '/' + col.scanned + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · ' + col.projects.length + ' projects' : '') + (col.filtered ? ' · filtered' : ''))) +
                (col.jiraScan && col.jiraScan.busy ? ' <span style="color:#1971c2;">⏳ ' + esc(T('JIRA 확인 중…', 'Checking JIRA…')) + '</span>' : '') +
                (col.jiraScan && col.jiraScan.err ? ' <span style="color:#b1432f;">⚠️ JIRA: ' + esc(col.jiraScan.err) + '</span>' : '') +
                '</div></div>');
