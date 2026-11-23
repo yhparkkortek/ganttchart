@@ -465,3 +465,15 @@ AI 분석 실패로 업무 내용(task)이 없는 줄은 넣을 게 없어 건�
 - 카드의 복수 후보 칸 버튼 줄을 둘로: `📤 체크한 프로젝트에 배분` | `🏢 팀 전체 프로젝트에 배분`(`inboxDistributeToTeamAll`, 후보 목록 =
   `_msFilterCandidateProjects`, 잡무 제외). 두 버튼은 같은 길 `_ibDistributeToTargets` 를 쓴다. 체크박스 `전체 해제/전체 선택` 토글도 같은 날 추가.
 - 검증 `tests/mail-routing.browser.js` 98/98(4-6~4-10 추가).
+
+### 8-17. 고객만 확정 + 유일 인치(`customer_inch`) · 공통 건에 '요구사항'(2026-11-23, 사용자 결정)
+
+- 고객만 확정된 메일에서 메일의 크기(단위 붙은 3.0” · 소수 4.3)가 그 고객 안 **한 프로젝트**하고만 맞으면 배치한다(`customerInchPick`, 끄기 `customerUniqueInch`). 결정론이라 AI 전에 판정(`PRE_BASES`).
+- ⚠️ 처음엔 인치만 봤더니 **실제 대기 카드 5건 중 4건이 틀렸다**(K27 FA → OBSIDIAN27, 27” SSBT → OBSIDIAN27, INX 31.5" → L7 Jackpot Wheel). 그래서 막는 조건이 넷이다:
+  ① 같은 크기를 **키워드·모델명**에 적은 프로젝트도 센다(`Obsidian Digital Wheel 31.5"`)
+  ② 문자+그 숫자 모델 코드(K27)가 그 프로젝트 단어가 아니면 안 씀
+  ③ 크기 바로 앞뒤 영문 낱말이 일반어(`MAIL_ROUTING_INCH_GENERIC`, 데이터)·그 프로젝트 단어가 아니면 안 씀(27” SSBT·INX 31.5")
+  ④ 어느 프로젝트에도 없는 관리번호(50xxxx)가 있으면 안 씀
+- 공통 건 어휘(`MAIL_ROUTING_COMMON_WORDS`)에 `요구사항`·`requirement`·`requirements` — 'New Traceability Requirements for Molded Plastic Components' 가 LNW 프로젝트 전부로.
+- 검증: `tests/mail-routing.browser.js` 107/107(4-11~4-19). 실제 대기 카드 20건 시험 판정(배치 안 함): 새 규칙으로 배치되는 건 NRE 3.0” → SHUFFLER 3.0 과 Requirements → LNW 12곳 둘뿐, K27·SSBT·INX 는 대기 그대로. `RULE_V` 2026-11-23l.
+

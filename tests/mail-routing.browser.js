@@ -135,6 +135,29 @@ window.__mailRoutingTestBody = async function () {
        '4-9 공통 건 어휘는 낱말 경계(Momentum·Homeland 는 아님, Road Map·회의록은 맞음)');
     j = J(M('STELLAR32 진행 회의록', ''), cands, null);
     ok(j.decision === 'auto' && j.basis !== 'common_customer' && j.target.drive_file_id === 'T1', '4-10 회의록이어도 한 프로젝트가 분명하면 그 한 곳(뿌리지 않는다)', { basis: j.basis, t: j.target && j.target.drive_file_id });
+    // 📐 [2026-11-23 사용자 결정] 고객만 확정 + 그 고객 안 유일 인치 → 배치
+    j = J(M('[LNW] PO.214477 NRE 확인요청', 'LNW 3.0” AD BD NRE 비용 확인 부탁드립니다.'), cands, null);
+    ok(j.decision === 'auto' && j.basis === 'customer_inch' && j.target.drive_file_id === 'S3', '4-11 고객(LNW)만 확정 + 3.0” → LNW 안 3인치는 SHUFFLER 3.0 하나뿐 → 배치', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id });
+    j = J(M('[LNW] 패널 문의', 'LNW 32" 패널 수급 문의드립니다.'), cands, null);
+    ok(j.decision === 'wait', '4-12 같은 인치(32") 프로젝트가 둘(STELLAR32·Digital Wheel) → 대기', { d: j.decision, basis: j.basis });
+    j = J(M('[LNW] 견적 요청', 'LNW 3.0” 와 27” 견적 요청'), cands, null);
+    ok(j.decision === 'wait', '4-13 메일에 인치가 둘(3.0”·27”) → 대기', { d: j.decision, basis: j.basis });
+    j = J(M('[LNW] NRE 확인요청 (GABKJ-3)', 'LNW NRE 비용 확인'), cands, null);
+    ok(j.basis !== 'customer_inch', '4-14 단위 없는 숫자(-3)는 인치로 안 읽는다', { d: j.decision, basis: j.basis });
+    // 실데이터에서 인치만 보고 틀린 4건 — 막아야 한다
+    j = J(M('LNW>K27 3종>FA Sample 출고 문의', 'LNW 27inch BOE suffix 변경당시 K27은 FA Sample도 제작'), cands, null);
+    ok(j.basis !== 'customer_inch', '4-16 모델 코드 K27(프로젝트 없음)이 있으면 27인치로 OBSIDIAN27 에 보내지 않는다', { d: j.decision, basis: j.basis });
+    j = J(M('1570975-ALT3 Various > Kortek2', 'LNW quote: 1. Variant of 27” SSBT w/Touch'), cands, null);
+    ok(j.basis !== 'customer_inch', '4-17 크기 옆 낱말(27” SSBT)이 그 프로젝트 단어가 아니면 안 보낸다', { d: j.decision, basis: j.basis });
+    j = J(M('[LNW] 패널 #509999 문의', 'LNW 3.0” AD BD 샘플'), cands, null);
+    ok(j.basis !== 'customer_inch', '4-18 어느 프로젝트에도 없는 관리번호(#509999)가 있으면 안 보낸다', { d: j.decision, basis: j.basis });
+    const candsDW = cands.concat([C('L7', 'LNW_L7 Jackpot Wheel_31.5.json', 'L7 Jackpot Wheel', 'LNW>L7 Jackpot Wheel', '31.5', ['L7 Jackpot Wheel'])]);
+    candsDW.forEach(c => { if (c.drive_file_id === 'D1') c.keywords = c.keywords.concat(['Obsidian Digital Wheel 31.5"']); });
+    j = J(M('[LNW] 31.5" UHD LCM 개선 요청', 'LNW 31.5" UHD LCM'), candsDW, null);
+    ok(j.basis !== 'customer_inch', '4-19 같은 인치가 다른 프로젝트 키워드에도 있으면(31.5" Digital Wheel) 안 보낸다', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id });
+    candsDW.forEach(c => { if (c.drive_file_id === 'D1') c.keywords = c.keywords.filter(k => k !== 'Obsidian Digital Wheel 31.5"'); });
+    j = J(M('RE: New Traceability Requirements for Molded Plastic Components', 'LNW supplier reminder'), cands, null);
+    ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-15 고객 전반 요구사항(Requirements) → LNW 프로젝트 전부', { d: j.decision, basis: j.basis, ids: allOf(j) });
 
     // ── 5. 열쇠 ────────────────────────────────────────────────────────────────
     const k1 = window.mailKeyOf({ subject: 'RE: LNW K27 iDeck v1.4', date: '2026-09-03 08:39', sender: 'a <a@x.com>' });

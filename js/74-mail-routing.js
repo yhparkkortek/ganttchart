@@ -42,6 +42,7 @@
         threadDays: 180,         // 이보다 오래된 기록은 스레드 근거로 안 쓴다
         familyAiAuto: true,      // 가족 확정 + 모델 식별자 없음 + 대표 없음 → AI 픽(상/중)으로 배치
         aiCitedAuto: true,       // 가족 근거도 없을 때 AI 상 + 인용 검증(특정 토큰 포함) → 배치
+        customerUniqueInch: true,  // [2026-11-23 사용자 결정] 고객만 확정 + 그 고객 안에서 인치가 맞는 프로젝트가 하나뿐 → 배치('LNW 3.0” AD BD' → SHUFFLER 3.0)
         customerAiSingleMid: true, // [2026-11-23 사용자 결정] 고객만 확정 + AI 가 그 고객 안에서 하나만 고름(중) → 배치
         subjectFirst: true,      // [2026-11-23] 제목만으로 결정론 판정이 나오면 본문(인용·서명)보다 우선
         deterministicFirst: true, // [2026-11-23 사용자 지시] AI 호출 전 결정론 판정 → 확정되면 AI 는 업무 정리만(후보 목록 안 줌)
@@ -61,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23k';
+    var RULE_V = '2026-11-23l';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -137,7 +138,8 @@
     /** 📋 [2026-11-23 사용자 결정] 공통 건 어휘 — **제목**에 이 말이 있으면 "여러 프로젝트에 공통인 메일"로 본다(데이터).
      *  영문은 낱말 경계, 한글은 부분 일치. 본문은 안 본다(본문엔 meeting 같은 말이 흔하다). */
     window.MAIL_ROUTING_COMMON_WORDS = window.MAIL_ROUTING_COMMON_WORDS ||
-        ['회의록', '주간회의', '주간 회의', '정기회의', '로드맵', 'weekly', 'meeting', 'meet', 'minutes', 'mom', 'roadmap', 'road map'];
+        ['회의록', '주간회의', '주간 회의', '정기회의', '로드맵', 'weekly', 'meeting', 'meet', 'minutes', 'mom', 'roadmap', 'road map',
+         '요구사항', 'requirement', 'requirements'];   // [2026-11-23] 'New Traceability Requirements …' 같은 고객 전반 요구사항
     function isCommonSubject(subj) {
         var t = String(subj || '').toLowerCase();
         if (!t) return false;
@@ -342,6 +344,51 @@
         var esc = v.replace('.', '\\.');
         return new RegExp('(^|[^0-9A-Za-z.\\-])' + esc + '(?![0-9])(?!\\.[0-9])').test(raw);
     }
+    /** 📐 [2026-11-23 사용자 결정] 고객만 확정된 메일에서 **인치로 한 프로젝트**를 고른다(결정론). 못 고르면 null.
+     *  실데이터로 돌려 보니 인치만 보면 5건 중 4건이 틀렸다 — 그래서 막는 조건이 넷이다:
+     *   ① 메일의 인치(단위 붙은 3.0”·소수 4.3)가 그 고객 안 **한 프로젝트**의 인치와만 맞을 것(둘 이상 크기가 걸리면 안 씀)
+     *   ② 그 인치를 가진 프로젝트가 고객 안에 **하나뿐**일 것 — 인치 칸뿐 아니라 키워드·모델명에 적힌 크기도 센다
+     *      ('Obsidian Digital Wheel 31.5"' 가 키워드에 있어 INX 31.5" 메일이 L7 Jackpot Wheel 로 가면 안 된다)
+     *   ③ 메일에 **문자+그 숫자** 모델 코드(K27·S32·ALT3)가 있는데 그 프로젝트 단어가 아니면 안 씀 — 프로젝트가 없는 제품(K27)이다
+     *   ④ 크기 바로 앞뒤의 영문 낱말이 일반어(MAIL_ROUTING_INCH_GENERIC)·그 프로젝트 단어가 아니면 안 씀 — '27” SSBT'·'INX 31.5"'
+     *   ⑤ 어느 프로젝트에도 없는 관리번호(50xxxx)가 있으면 안 씀 — 다른 제품 얘기다 */
+    window.MAIL_ROUTING_INCH_GENERIC = window.MAIL_ROUTING_INCH_GENERIC ||
+        ['lcd', 'lcds', 'lcm', 'panel', 'panels', 'display', 'displays', 'monitor', 'screen', 'uhd', 'fhd', 'qhd', 'hd', '4k', 'tft', 'oled', 'touch',
+         'ad', 'bd', 'board', 'adbd', 'nre', 'sample', 'samples', 'w', 'with', 'and', 'or', 'the', 'a', 'of', 'for', 'to', 'in', 'is', 'inch', 'size',
+         'kortek', 'ktk', 'mvd', 'tvd', 'ptd', 'set', 'sets', 'model', 'pcb', 'cover', 'glass', 'lcm'];
+    function inchesOf(c) {
+        var out = {}, v = String((c && c.inch) || '').trim();
+        if (/^\d+(\.\d+)?$/.test(v)) out[String(parseFloat(v))] = 1;
+        var txt = [c && c.model, c && c.customer].concat((c && c.keywords) || []).join(' | ');
+        var re = /(^|[^0-9.])(\d{1,3}(?:\.\d+)?)\s*(?:["”″]|''|인치|inch)/gi, m;
+        while ((m = re.exec(txt))) out[String(parseFloat(m[2]))] = 1;
+        return out;
+    }
+    function customerInchPick(raw, grp, allCands) {
+        var gIn = grp.filter(function (c) { return !isCatchAll(c) && /^\d+(\.\d+)?$/.test(String(c.inch || '').trim()); });
+        var gHit = gIn.filter(function (c) { return inchHit(raw, c.inch); });
+        if (gHit.length !== 1) return null;
+        var t = gHit[0], iv = String(parseFloat(t.inch));
+        if (grp.filter(function (c) { return !isCatchAll(c) && inchesOf(c)[iv]; }).length !== 1) return null;          // ②
+        var tTok = norm([t.model, t.customer, t.file_name].concat(t.keywords || []).join(' '));
+        var GEN = {}; window.MAIL_ROUTING_INCH_GENERIC.forEach(function (w) { GEN[String(w).toLowerCase()] = 1; });
+        var okWord = function (w) { w = String(w || '').toLowerCase(); return !w || GEN[w] || tTok.indexOf(norm(w)) !== -1; };
+        var reCode = /(^|[^A-Za-z0-9])([A-Za-z]{1,8})(\d{1,3}(?:\.\d+)?)(?![0-9.])/g, m;                                 // ③
+        while ((m = reCode.exec(raw))) { if (String(parseFloat(m[3])) === iv && !okWord(m[2] + m[3])) return null; }
+        var ivEsc = iv.replace('.', '\.') + (iv.indexOf('.') === -1 ? '(?:\.0)?' : '');                               // ④
+        var reAdj = new RegExp('([A-Za-z][A-Za-z0-9]*)?[^A-Za-z0-9.]{0,2}' + ivEsc + '\s*(?:["”″]|인치|inch)?[^A-Za-z0-9가-힣]{0,2}([A-Za-z][A-Za-z0-9]*)?', 'gi');
+        var reUnit = new RegExp('(^|[^0-9A-Za-z.\-])' + ivEsc + '\s*(["”″]|인치|inch)', 'i');
+        while ((m = reAdj.exec(raw))) {
+            if (!reUnit.test(m[0]) && iv.indexOf('.') === -1) continue;            // 단위 없는 정수는 크기 언급이 아니다
+            if (!okWord(m[1]) || !okWord(m[2])) return null;
+            if (reAdj.lastIndex === m.index) reAdj.lastIndex++;
+        }
+        var known = {}; (allCands || grp).forEach(function (c) {                              // ⑤
+            (c.keywords || []).forEach(function (k) { (String(k).match(/\d{6}/g) || []).forEach(function (x) { known[x] = 1; }); }); });
+        var codes = raw.match(/(^|[^0-9])(50\d{4})(?![0-9])/g) || [];
+        if (codes.some(function (x) { return !known[x.replace(/\D/g, '')]; })) return null;
+        return t;
+    }
     /** 📨 [2026-11-23] 제목 먼저 — 제목만으로 **결정론**(식별자·단독 가족·가족 인치·가족 대표)으로 한 곳이 나오면 그걸로 정한다.
      *  본문엔 인용된 옛 메일·서명·참조 목록이 섞여 다른 프로젝트 단어가 거의 늘 있다 — 그 때문에 제목에 고유 번호(#502627)가
      *  있는 메일도 "다른 프로젝트 단어도 여럿" 충돌로 대기였다(실측 대기 96건 중 다수). 제목으로 안 정해지면 예전처럼 제목+본문. */
@@ -380,7 +427,7 @@
     /** 🧭 [2026-11-23 사용자 지시 "결정론 판정 먼저 하고 AI 는 업무 정리만"] AI 호출 **전에** 부른다(js/15c msCallGemini).
      *  AI 없이(aiTag=null) 판정해 결정론 근거로 한 곳이 확정되면 {target, basis, reason, family}, 아니면 null.
      *  null 이면 호출부가 예전처럼 후보 목록을 주고 AI 에게 고르게 한다. 끄기: P.deterministicFirst=false 또는 offKey. */
-    var PRE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1, family_all: 1, family_named: 1, common_customer: 1 };
+    var PRE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1, family_all: 1, family_named: 1, common_customer: 1, customer_inch: 1 };
     window.mailRoutePreJudge = function (mail, cands) {
         if (off() || P.deterministicFirst === false || !cands || !cands.length || !mail) return null;
         var j = window.mailRouteJudge(mail, cands, null);
@@ -499,6 +546,17 @@
         if (custOnly) {
             // 고객은 확정, 제품은 미확정 — 같은 고객 안에서 AI 가 "상"(인용 검증까지 통과) 이면 따른다. 그 외는 대기(그 고객 후보만).
             var grp = customerGroup(cands, custOnly);
+            // 📐 [2026-11-23 사용자 결정] 결정론 먼저 — 그 고객 안에서 메일의 인치(단위 붙은 3.0” · 소수 4.3)와 맞는 프로젝트가
+            //  **하나뿐**이고 그 인치를 가진 프로젝트도 그 하나뿐이면 배치. 인치가 둘 이상 걸리거나(인용된 다른 크기) 같은 인치
+            //  프로젝트가 둘이면(STELLAR32·Digital Wheel 둘 다 32) 안 쓴다. 잡무 프로젝트는 뺀다.
+            if (P.customerUniqueInch) {
+                var cInch = customerInchPick(raw, grp, cands);
+                if (cInch) {
+                    return out({ decision: 'auto', target: cInch, candidates: grp, basis: 'customer_inch',
+                        reason: T('고객 확정(' + custOnly.toUpperCase() + ') · 그 고객의 ' + cInch.inch + '인치 프로젝트는 하나뿐', 'customer ' + custOnly.toUpperCase() + ' · only one ' + cInch.inch + '" project'),
+                        family: famOfIdx(cands.indexOf(cInch)) });
+                }
+            }
             var gC = (aiIdx !== -1) ? aiGrounded(aiTag, mail, grp, cands[aiIdx]) : null;
             if (aiIdx !== -1 && customerRoot(cands[aiIdx].customer) === custOnly && aiConf === '상' && gC.ok) {
                 return out({ decision: 'auto', target: cands[aiIdx], candidates: grp, basis: 'customer_ai',
