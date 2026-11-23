@@ -278,7 +278,9 @@
             parseQ: parseQ, adoptIdMap: adoptIdMap, parseMultipart: parseMultipart,
             mimeOf: mimeOf, toDriveFile: toDriveFile, rootId: rootId,
             backupStampOf: backupStampOf, backupOrigNameOf: backupOrigNameOf,
-            aliasOnRename: aliasOnRename
+            aliasOnRename: aliasOnRename, mergeIdMap: mergeIdMap, relOfFresh: relOfFresh,
+            _idMapState: function () { return { map: _idMap, rep: _relToOldId, freshAt: _idMapFreshAt }; },
+            _setIdMapFreshAt: function (t) { _idMapFreshAt = t; }
         }
     };
 
@@ -677,6 +679,7 @@
                 var res = await nas('GET', '/nas/app/get' + qs('App_Config/nas_id_map.json'));
                 if (!res.ok) { note('idmap-none', 'HTTP ' + res.status); return 0; }
                 var n = adoptIdMap(JSON.parse(await res.text()));
+                _idMapFreshAt = Date.now();
                 note('idmap', n + '건');
                 return n;
             } catch (e) {
@@ -685,6 +688,63 @@
             }
         })();
         return _idMapOnce;
+    }
+
+    // 🔁 [2026-11-23 "프로젝트 정보 고치면 파일이 또 하나 생긴다" 근본 원인]
+    //    지도를 **페이지당 한 번만** 읽었다. 그런데 이름 바꾸기는 **다른 탭(다른 PC)** 에서도 일어난다.
+    //    실측(LnW_Obsidian): 탭 1 이 `LnW_Obsidian.json` → `LnW_Obsidian_55.0.json` 으로 이름을 바꿨는데,
+    //    17:29 상태를 들고 있던 탭 2 는 제 메모리 지도대로 옛 id 를 옛 경로로 풀어 **내용만** 썼다 →
+    //    ① 옛 경로에 파일이 **다시 생겼고**(중복) ② 옛 경로는 없었으니 충돌 검사(원격 읽기)도 비교할 게 없어
+    //    17:41 의 수정(KTKPN·JIRA 코드)이 들어 있지 않은 **옛 내용**이 그대로 써졌다.
+    //    → id 로 읽고 쓰기 전에 지도를 다시 맞춘다(`relOfFresh`). 비용은 `ID_MAP_FRESH_MS` 마다 지도 1회 읽기(≈70ms)뿐이고,
+    //      프로젝트 저장(수 MB·수 초)에 비하면 없는 것과 같다.
+    var ID_MAP_FRESH_MS = 15000;
+    var _idMapFreshAt = 0, _idMapFreshP = null;
+
+    /** NAS 지도를 메모리에 **합친다**(통째로 갈아 끼우지 않는다). 대표 id(`_relToOldId`)는 **지금 대표가
+     *  여전히 그 경로를 가리키면 그대로 둔다** — 새로 읽을 때마다 대표가 바뀌면 목록이 내놓는 id 가 흔들리고,
+     *  색인 항목이 유령으로 보여 지워진다(2026-11-09 사고). @returns 바뀐 항목 수 */
+    function mergeIdMap(docMap) {
+        var changed = 0;
+        Object.keys(docMap || {}).forEach(function (k) {
+            var v = String(docMap[k] || '');
+            if (!v) return;
+            if (_idMap[k] !== v) { _idMap[k] = v; changed++; }
+        });
+        if (!changed) return 0;
+        Object.keys(_relToOldId).forEach(function (rel) {
+            if (_idMap[_relToOldId[rel]] !== rel) delete _relToOldId[rel];
+        });
+        var fresh = {};                                      // 대표를 잃은 경로만 새로 뽑는다 — 마지막이 이긴다(adoptIdMap 과 같은 규칙)
+        Object.keys(_idMap).forEach(function (k) {
+            var rel = _idMap[k];
+            if (!_relToOldId[rel] || fresh[rel]) { _relToOldId[rel] = k; fresh[rel] = 1; }
+        });
+        return changed;
+    }
+
+    /** id → 경로, 단 **다른 탭이 옮겨 둔 것까지** 반영해서. 쓰기·id 로 읽기의 입구는 전부 이걸 쓴다.
+     *  지도를 못 읽으면 **아는 대로** 간다(읽기 실패 한 번이 저장을 막으면 더 나쁘다) — 대신 기록은 남긴다. */
+    async function relOfFresh(id, opts) {
+        await ensureIdMap();
+        var force = opts && opts.force;
+        if (force || Date.now() - _idMapFreshAt > ID_MAP_FRESH_MS) {
+            if (!_idMapFreshP) {
+                _idMapFreshP = (async function () {
+                    try {
+                        var res = await nas('GET', '/nas/app/get' + qs(ID_MAP_REL_ADAPTER));
+                        if (res.ok) {
+                            var n = mergeIdMap((JSON.parse(await res.text()) || {}).map);
+                            if (n) note('idmap-refresh', n + '건');
+                        }
+                    } catch (e) {
+                        note('idmap-refresh-fail', String((e && e.message) || e));
+                    } finally { _idMapFreshAt = Date.now(); _idMapFreshP = null; }
+                })();
+            }
+            await _idMapFreshP;
+        }
+        return relOf(id);
     }
 
     async function listRel(rel) {
@@ -1132,7 +1192,7 @@
      *  옛 id 가 허공을 가리키지 않게 한다. */
     window.STORAGE_TRASH_DIR = window.STORAGE_TRASH_DIR || 'Trash';
     async function driveTrash(id) {
-        var cur = relOf(id);
+        var cur = await relOfFresh(id);
         if (!cur) throw new Error('모르는 파일 id: ' + id);
         if (cur.isdir) throw new Error('폴더는 휴지통으로 옮기지 않습니다: ' + cur.rel);
         var d = new Date();
@@ -1157,7 +1217,7 @@
     }
 
     async function driveUpdate(id, meta, media, isB64) {
-        var cur = relOf(id);
+        var cur = await relOfFresh(id);
         if (!cur) throw new Error('모르는 파일 id: ' + id);
         // 내용 갱신
         if (media !== null && media !== undefined) {
@@ -1258,9 +1318,16 @@
             var res = await nas('GET', '/nas/app/get' + qs(ID_MAP_REL_ADAPTER));
             var doc = res.ok ? JSON.parse(await res.text()) : { version: 1, map: {} };
             moved.forEach(function (id) { doc.map[id] = newRel; });
+            // 🔁 [2026-11-23] **다른 탭이 만든 별칭도 같이 옮긴다** — 이 탭 메모리에 없는 id 가 NAS 지도엔 옛 경로를
+            //    가리키고 있을 수 있다(실측: 탭 2 의 옛 id 가 `LnW_Obsidian.json` 을 계속 가리켜 그 탭이 옛 이름 파일을
+            //    다시 만들었다). 메모리에도 넣어 둔다(대표 id 는 그대로 — 위에서 정했다).
+            var oldN = normRel(oldRel), newN = normRel(newRel), extra = 0;
+            Object.keys(doc.map || {}).forEach(function (k) {
+                if (doc.map[k] === oldN) { doc.map[k] = newN; _idMap[k] = newN; extra++; }
+            });
             doc.movedAt = new Date().toISOString();
             await nasJson('POST', '/nas/app/put', { rel: ID_MAP_REL_ADAPTER, text: JSON.stringify(doc) });
-            note('idmap-remap', { from: oldRel, to: newRel, ids: moved.length });
+            note('idmap-remap', { from: oldRel, to: newRel, ids: moved.length, otherTabIds: extra });
         } catch (e) {
             note('idmap-remap-fail', String((e && e.message) || e));
             console.warn('[storage-adapter] 파일은 옮겼는데 **id 지도를 못 고쳤습니다** — '
@@ -1524,7 +1591,7 @@
                 return jsonResponse(await driveList(params));
             }
             if (method === 'GET' && fileId) {
-                var g = relOf(fileId);
+                var g = await relOfFresh(fileId);
                 if (!g) throw new Error('모르는 파일 id: ' + fileId);
                 if (params.alt === 'media') return await readRel(g.rel);
                 return jsonResponse(await driveGetMeta(g.rel, g.isdir));
@@ -1560,7 +1627,7 @@
                 return jsonResponse(await driveUpdate(fileId, meta2, null, false));
             }
             if (method === 'DELETE') {
-                var d = relOf(fileId);
+                var d = await relOfFresh(fileId);
                 if (!d) throw new Error('모르는 파일 id: ' + fileId);
                 await nasJson('POST', '/nas/app/delete', { rel: d.rel });
                 // ⚠️ 204 는 **본문을 가질 수 없다** — `new Response('', …)` 는 빈 문자열도
@@ -1591,7 +1658,7 @@
             get: async function (p) {
                 await ensureIdMap();
                 p = p || {};
-                var g = relOf(p.fileId);
+                var g = await relOfFresh(p.fileId);
                 if (!g) throw new Error('모르는 파일 id: ' + p.fileId);
                 if (p.alt === 'media') {
                     // ⚠️⚠️ **`result` 를 같이 줘야 한다**(2026-11-04 실사고).

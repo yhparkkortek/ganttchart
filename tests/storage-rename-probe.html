@@ -57,6 +57,33 @@ function loadFresh(src) { return new Promise(function (res, rej) { var e = docum
         r = await fetch("https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent("'" + dirId + "' in parents and trashed=false") + "&fields=files(id,name)&supportsAllDrives=true");
         const lj = await r.json();
         ok((lj.files || []).length === 1 && lj.files[0].id === id0, '7 목록이 돌려주는 id 도 처음 id 그대로', lj.files);
+        // 6) 🔁 [2026-11-23] **다른 탭이 이름을 바꾼 경우** — 이 탭 메모리 지도는 id0 → P_C 그대로다.
+        //    다른 탭 흉내: P_C 를 P_D 로 옮기고(NAS 에 직접) NAS 지도만 id0 → P_D 로 고친다.
+        const putT = (rel, text) => fetch(B + '/nas/app/put', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rel, text }) });
+        await putT(DIR + '/P_D.json', '{"v":5}');
+        await fetch(B + '/nas/app/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rel: DIR + '/P_C.json' }) });
+        let m6 = await readMap(); m6.map[id0] = DIR + '/P_D.json'; await putT('App_Config/nas_id_map.json', JSON.stringify(m6));
+        ok(F._idMapState().map[id0] === DIR + '/P_C.json', '8 (전제) 이 탭 메모리 지도는 아직 옛 경로(P_C)를 들고 있다', F._idMapState().map[id0]);
+        F._setIdMapFreshAt(0);   // 15초가 지난 것처럼
+        r = await fetch('https://www.googleapis.com/drive/v3/files/' + id0 + '?alt=media&supportsAllDrives=true');
+        ok(r.ok && (await r.text()) === '{"v":5}', '9 옛 id 로 읽으면 다른 탭이 옮긴 새 파일(P_D)을 읽는다 — 충돌 검사가 비교할 원격을 본다');
+        F._setIdMapFreshAt(0);
+        r = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + id0 + '?uploadType=multipart&supportsAllDrives=true',
+            { method: 'PATCH', headers: H, body: mp({ mimeType: 'application/json' }, '{"v":6}') });
+        await r.json();
+        ok(JSON.stringify(await list()) === JSON.stringify(['P_D.json']) && (await readFile('P_D.json')) === '{"v":6}',
+           '10 옛 id 로 내용만 써도 옛 경로(P_C)가 **다시 생기지 않고** P_D 에 들어간다 (2026-11-23 LnW_Obsidian 중복 재현)', { files: await list(), body: await readFile('P_D.json') });
+        // 7) 이름 바꿀 때 **이 탭이 모르는** 별칭(다른 탭이 지도에 적은 id)도 같이 옮겨지나
+        const otherId = 'zz_other_tab_' + Date.now().toString(36);
+        let m7 = await readMap(); m7.map[otherId] = DIR + '/P_D.json'; await putT('App_Config/nas_id_map.json', JSON.stringify(m7));
+        F._setIdMapFreshAt(Date.now());   // 새로 읽지 않게 — 메모리엔 otherId 가 없는 상태로
+        r = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + id0 + '?uploadType=multipart&supportsAllDrives=true',
+            { method: 'PATCH', headers: H, body: mp({ name: 'P_E.json', mimeType: 'application/json' }, '{"v":7}') });
+        const up7 = await r.json();
+        map = await readMap();
+        ok(up7.id === id0 && map.map[id0] === DIR + '/P_E.json' && map.map[otherId] === DIR + '/P_E.json',
+           '11 이름을 바꾸면 다른 탭이 적어 둔 별칭도 새 경로로 옮겨진다(그 탭이 옛 파일을 다시 만들지 않게)', { id: up7.id, a: map.map[id0], other: map.map[otherId] });
+        ok(F.idOf(DIR + '/P_E.json') === id0, '12 대표 id 는 그대로 id0 (다른 별칭에 밀리지 않는다)', F.idOf(DIR + '/P_E.json'));
     } catch (e) {
         ok(false, '예외', String(e && e.stack || e));
     } finally {
