@@ -938,7 +938,8 @@
         var h = [];
         h.push('<div id="ai-summary-report-content">');
         // 🗜 [2026-11-23 사용자 요청 "컴팩트하게"] 기간 · 건수를 한 줄에, 말은 짧게(뜻은 title 말풍선에).
-        h.push('<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:baseline; margin-bottom:8px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📅 ' + esc(col.range.label) + '</div>' +
+        // 📌 [2026-11-23 "첨부 영역은 스크롤 시 고정"] 기간 제목 줄은 아래 고정 머리(#ps-sticky)로 간다.
+        var headHtml = ('<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:baseline; margin-bottom:8px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📅 ' + esc(col.range.label) + '</div>' +
                '<div style="font-size:11px; color:#777;" title="' + esc(T('메일 유래 업무 / 전체 메일 업무', 'mail-derived tasks / all mail tasks')) + '">' + esc(T('메일 ' + (col.total > col.facts.length ? col.facts.length + '(상한)' : col.facts.length) + '/' + col.scanned + '건' + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · 프로젝트 ' + col.projects.length : '') + (col.filtered ? ' · 필터' : ''), 'Mail ' + col.facts.length + '/' + col.scanned + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · ' + col.projects.length + ' projects' : '') + (col.filtered ? ' · filtered' : ''))) +
                (col.jiraScan && col.jiraScan.busy ? ' <span style="color:#1971c2;">⏳ ' + esc(T('JIRA 확인 중…', 'Checking JIRA…')) + '</span>' : '') +
                (col.jiraScan && col.jiraScan.err ? ' <span style="color:#b1432f;">⚠️ JIRA: ' + esc(col.jiraScan.err) + '</span>' : '') +
@@ -970,7 +971,8 @@
         }
         var factByKey = {}; (col.facts || []).forEach(function (f) { factByKey[factKey(f)] = f; });
         _psLast = { shown: shown, openName: openName, label: shown && shown.archiveView ? shown.archiveView.label : col.range.label, kind: kind, factByKey: factByKey };
-        h.push('<div id="ps-ai-sec">' + aiSectionHtml() + '</div>');
+        var secHtml = '<div id="ps-ai-sec">' + aiSectionHtml() + '</div>';   // 분류 칩·엑셀·보관함 — 고정 머리로
+        if (shown && shown.rows.length) h.push('<div id="ps-ai-tbl" style="margin-bottom:10px;">' + tableHtml() + '</div>');
         if (shown && shown.rows.length) h.push('<details id="ps-facts-det" style="margin-top:4px;"><summary style="cursor:pointer; font-size:12px; color:#2c5f8a; font-weight:bold;">📋 ' + esc(T('근거 사실 목록 ' + col.facts.length + '건 (AI 없이 만든 원본)', 'Source facts (' + col.facts.length + ', no AI)')) + '</summary>');
         if (!col.facts.length) {
             // ⚠️ 훑는 중에 "없습니다" 라고 하면 **없는 것과 아직 못 읽은 것**을 구분할 수 없다.
@@ -1010,7 +1012,11 @@
         }
         if (shown && shown.rows.length) h.push('</details>');
         h.push('</div>');
-        body.innerHTML = toolbarHtml(kind, col) + h.join('');
+        // 📌 고정 머리 — 기간 칩·필터·기간 제목·(표가 있으면) 분류 칩·엑셀·보관함. 스크롤해도 위에 남는다.
+        //    본문 상자(.concept-section)의 안쪽 여백만큼 음수 여백으로 넓혀 위·옆 틈 없이 덮는다.
+        body.innerHTML = '<div id="ps-sticky" style="position:sticky; top:-12px; z-index:6; background:#fff; margin:-12px -18px 8px; padding:12px 18px 4px; border-bottom:1px solid #e3e8ee;">' +
+            toolbarHtml(kind, col) + headHtml + secHtml + '</div>' + h.join('');
+        syncHeadH();
         fillArchiveSelect();
     }
 
@@ -1165,7 +1171,7 @@
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
         var th = function (id, label, w) {
             var on = _psTbl.sort === id;
-            return '<th onclick="window._psTblSort(\'' + id + '\')" style="cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
+            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:var(--ps-head-h, 0px); z-index:4; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
                    esc(label) + ' <span style="color:' + (on ? '#1971c2' : '#b8c4d0') + ';">' + (on ? (_psTbl.dir > 0 ? '▲' : '▼') : '↕') + '</span></th>';
         };
         var td = 'padding:5px 6px; border:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
@@ -1183,7 +1189,7 @@
         if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         return '<table style="width:100%; border-collapse:collapse; table-layout:auto;"><thead><tr>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
-            '<th style="padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
+            '<th style="position:sticky; top:var(--ps-head-h, 0px); z-index:4; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행', rows.length + ' / ' + all.length + ' rows')) + '</div>';
     }
@@ -1240,8 +1246,7 @@
             (s.archiveView ? '' : '<button onclick="window._psRegenerate()" style="' + smallBtn + '" title="' + esc(T('보관본을 두고 AI 로 새로 만든다', 'Generate again with AI')) + '">🔄 ' + esc(T('새로 생성', 'Regenerate')) + '</button>') +
             archiveSelectHtml() +
             '</div>' +
-            '<div style="font-size:10.5px; color:#999; margin-bottom:4px;">' + meta + '</div>' +
-            '<div id="ps-ai-tbl" style="margin-bottom:10px;">' + tableHtml() + '</div>';
+            '<div style="font-size:10.5px; color:#999; margin-bottom:4px;">' + meta + '</div>';
     }
     function archiveSelectHtml() {
         return '<select id="ps-arch-sel" onchange="if(this.value) window._psOpenArchive(this.value)" title="' + esc(T('보관된 AI 요약 — 골라서 다시 보기(AI 0회)', 'Archived summaries')) + '" style="' + window._uiSelectStyle(false) + ' max-width:180px; background:#fffbea; border-color:#e0c97a;' + '"><option value="">📚 ' + esc(T('보관함', 'Archive')) + '</option></select>';
@@ -1262,6 +1267,14 @@
     function rerenderAi() {
         var sec = document.getElementById('ps-ai-sec');
         if (sec) { sec.innerHTML = aiSectionHtml(); fillArchiveSelect(); }
+        var t = document.getElementById('ps-ai-tbl'); if (t) t.innerHTML = tableHtml();
+        syncHeadH();
+    }
+    /** 표 머리글이 고정 머리 **바로 아래**에 붙게 그 높이를 알려 준다(칩 줄이 접혀 높이가 바뀔 수 있다). */
+    function syncHeadH() {
+        var st = document.getElementById('ps-sticky');
+        if (!st || !st.parentNode) return;
+        st.parentNode.style.setProperty('--ps-head-h', Math.max(0, st.offsetHeight - 12) + 'px');
     }
     window._psTblSort = function (col) {
         if (_psTbl.sort === col) _psTbl.dir = -_psTbl.dir; else { _psTbl.sort = col; _psTbl.dir = (col === 'date') ? -1 : 1; }
