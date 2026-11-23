@@ -588,6 +588,17 @@ window._tiBuildSummaryHtml = function(items) {
     return html;
 };
 
+// ☑ [2026-11-23] 복수 후보 체크박스 전체 선택/해제 — 하나라도 켜져 있으면 전부 끄고, 다 꺼져 있으면 전부 켠다.
+window.inboxMultiToggleAll = function(uid, btn) {
+    const box = document.getElementById('inbox-multi-' + uid);
+    if (!box) return;
+    const cbs = Array.from(box.querySelectorAll('input[type=checkbox][data-idx]'));
+    const turnOn = !cbs.some(cb => cb.checked);
+    cbs.forEach(cb => { cb.checked = turnOn; });
+    const en = window._t && window._t('a', 'b') === 'b';
+    if (btn) btn.textContent = turnOn ? (en ? 'Uncheck all' : '전체 해제') : (en ? 'Check all' : '전체 선택');
+};
+
 // 🧭 [2026-11-23] 요약 줄의 재판정 칩 — 설정 모달의 버튼(_macRejudgeNow, js/15c)과 같은 일을 한다.
 window._tiRejudgeNow = async function() {
     if (window._tiRejudgeBusy || !window.mailRouteRejudgePending) return;
@@ -774,7 +785,11 @@ window.renderTaskInbox = function() {
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             ${(it.matchedProject && it.matchedProject.status === 'ambiguous' && it.matchedProject.candidates && it.matchedProject.candidates.length > 1) ? `
             <div id="inbox-multi-${it.uid}" style="margin-top:8px; padding:8px 10px; background:#eef6ff; border:1px solid #a5c8f0; border-radius:6px;">
-                <div style="font-size:11px; font-weight:bold; color:#1a4f7a; margin-bottom:5px;">🔀 ${_ibEn ? 'May belong to several projects at once (check all that apply, then distribute)' : '여러 프로젝트에 공통으로 해당될 수 있는 후보 — 체크한 곳에 모두 배분'}</div>
+                <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:bold; color:#1a4f7a; margin-bottom:5px;">
+                    <span style="flex:1;">🔀 ${_ibEn ? 'May belong to several projects at once (check all that apply, then distribute)' : '여러 프로젝트에 공통으로 해당될 수 있는 후보 — 체크한 곳에 모두 배분'}</span>
+                    <!-- ☑ [2026-11-23 사용자 요청] 후보가 많을 때 하나씩 끄기 번거롭다 — 전체 선택/해제 한 번에 -->
+                    <span onclick="window.inboxMultiToggleAll('${it.uid}', this)" title="${_ibEn ? 'Check / uncheck all' : '전체 선택 / 전체 해제'}" style="flex-shrink:0; font-weight:normal; font-size:10.5px; padding:1px 7px; border:1px solid #a5c8f0; border-radius:10px; background:#fff; color:#1a4f7a; cursor:pointer; white-space:nowrap;">${_ibEn ? 'Uncheck all' : '전체 해제'}</span>
+                </div>
                 <div style="display:flex; flex-direction:column; gap:3px; max-height:120px; overflow-y:auto;">
                     ${it.matchedProject.candidates.map(function(c, ci) {
                         const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || (_ibEn ? '(no name)' : '(이름없음)');
@@ -801,7 +816,7 @@ window.renderTaskInbox = function() {
                      지금 후보를 이 카드의 제외 목록(excludedFids)에 넣은 뒤 AI 없이 다시 판단한다(js/74 mailRouteRejudgeOne). -->
                 <button onclick="window.inboxQuickClassify('${it.uid}', '오매칭')" title="${_ibEn ? 'Wrong project — exclude it and judge again' : '오매칭 — 이 프로젝트가 아님 · 빼고 다시 판단'}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#f0fff4'; this.style.borderColor='#a3d9b5';" style="flex:0 0 31px; width:31px; font-size:13px; padding:0; height:31px; text-align:center; line-height:1; box-sizing:border-box; border:1px solid #a3d9b5; border-radius:6px; background:#f0fff4; color:#1a6b35; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">♻️</button>
                 <!-- 🗑 [2026-11-23 사용자 결정] 삭제 버튼은 남긴다 — 회사 공지처럼 프로젝트 업무가 아닌 메일을 한 건씩 지우는 길. 확인창 없이 바로 지우고 학습 기록('불필요')을 남긴다(기존 inboxQuickClassify '불필요' 경로 재사용). -->
-                <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Delete — not a project task (notice, etc.)' : '삭제 — 프로젝트 업무가 아님(공지 등)'}" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ced4da';" style="flex:0 0 31px; width:31px; font-size:13px; padding:0; height:31px; text-align:center; line-height:1; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; background:#f8f9fa; color:#555; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
+                <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Delete — not a project task (notice, etc.)' : '삭제 — 프로젝트 업무가 아님(공지 등)'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 31px; width:31px; font-size:13px; padding:0; height:31px; text-align:center; line-height:1; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             ${_hasCand
