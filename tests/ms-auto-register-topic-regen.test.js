@@ -13,7 +13,7 @@ const fnSrc = src.slice(start, end);
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('✅ ' + m); } else { fail++; console.log('❌ ' + m); } };
 
-async function run(opts, conflictOnce) {
+async function run(opts, conflictOnce, policy) {
     let regen = 0, puts = 0, metaCalls = 0;
     const win = {
         currentDriveFileId: 'OTHER', currentUserName: 'tester',
@@ -24,6 +24,7 @@ async function run(opts, conflictOnce) {
         _tpMaybeAutoRegen: async () => { regen++; return { patterns: [] }; },
     };
     win.window = win;
+    if (policy) win.MAIL_ROUTING_POLICY = policy;
     win.globalData = undefined;
     win.gapi = { client: { getToken: () => ({ access_token: 'tok' }), drive: { files: { get: async (q) => {
         if (q.alt === 'media') return { result: { globalData: [{ data: ['h'] }], colIdx: { devStage: -1 }, projectMeta: {} } };
@@ -40,12 +41,15 @@ async function run(opts, conflictOnce) {
 }
 
 (async () => {
-    let x = await run(undefined, false);
-    ok(x.r.ok && x.regen === 1, '1 평소 배치(opts 없음)는 토픽 재생성 판정을 부른다(동작 불변)');
-    x = await run({ noTopicRegen: true }, false);
-    ok(x.r.ok && x.regen === 0 && x.puts === 1, '2 noTopicRegen 이면 AI 재생성을 부르지 않고 저장은 한다');
-    x = await run({ noTopicRegen: true }, true);
+    const ON = { headlessTopicRegen: true };
+    let x = await run(undefined, false, ON);
+    ok(x.r.ok && x.regen === 1, '1 정책을 켜면(headlessTopicRegen) 평소 배치는 토픽 재생성 판정을 부른다');
+    x = await run({ noTopicRegen: true }, false, ON);
+    ok(x.r.ok && x.regen === 0 && x.puts === 1, '2 noTopicRegen 이면 정책과 무관하게 AI 재생성을 부르지 않고 저장은 한다');
+    x = await run({ noTopicRegen: true }, true, ON);
     ok(x.r.ok && x.regen === 0, '3 충돌 재시도 경로도 opts 를 물려받아 AI 재생성을 건너뛴다');
+    x = await run(undefined, false, null);
+    ok(x.r.ok && x.regen === 0 && x.puts === 1, '4 [2026-11-23 기본] 정책이 없거나 꺼져 있으면 헤드리스 배치는 AI 재생성을 기다리지 않는다');
     console.log(`ms-auto-register-topic-regen: ${pass}/${pass + fail}`);
     process.exit(fail ? 1 : 0);
 })();

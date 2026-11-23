@@ -1181,7 +1181,11 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         // ⏩ [2026-11-23] 일괄 처리(대기 재판정 등)는 opts.noTopicRegen 으로 건너뛴다 — 건마다 AI 재생성이 끼어
         //    한 건에 몇 분씩 걸렸고(실측: 25건에 38분, 그 사이 토픽 프로파일이 건마다 새로 생성됨) 무료 한도도 먹었다.
         //    재생성은 다음 평소 배치 때 AI 업무 수를 보고 따라잡는다(_tpShouldRegen).
-        if (window._tpMaybeAutoRegen && !opts.noTopicRegen) {
+        // ⏩ [2026-11-23] 평소 자동배치(헤드리스)도 기본으로 건너뛴다 — MAIL_ROUTING_POLICY.headlessTopicRegen(데이터, 기본 false).
+        //    배치 한 건이 AI 재생성(시간제한 없는 호출)에 몇 분씩 묶여 "앱을 쓸 수 없을 만큼 느림"의 한 원인이었다.
+        //    프로파일은 그 프로젝트가 **열려 있을 때** 배치되면 _tpCheckAutoRegen(기다리지 않음)이 따라잡는다.
+        const _hlRegen = !!(window.MAIL_ROUTING_POLICY && window.MAIL_ROUTING_POLICY.headlessTopicRegen);
+        if (window._tpMaybeAutoRegen && !opts.noTopicRegen && _hlRegen) {
             try {
                 const _tpProfile = await window._tpMaybeAutoRegen(driveFileId, rows, saveData.colIdx, saveData.projectMeta || {});
                 if (_tpProfile) saveData.topicProfile = _tpProfile;

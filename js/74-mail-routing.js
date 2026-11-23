@@ -45,6 +45,8 @@
         customerAiSingleMid: true, // [2026-11-23 사용자 결정] 고객만 확정 + AI 가 그 고객 안에서 하나만 고름(중) → 배치
         subjectFirst: true,      // [2026-11-23] 제목만으로 결정론 판정이 나오면 본문(인용·서명)보다 우선
         deterministicFirst: true, // [2026-11-23 사용자 지시] AI 호출 전 결정론 판정 → 확정되면 AI 는 업무 정리만(후보 목록 안 줌)
+        aiRequiresCitation: true, // [2026-11-23 사용자 지시] AI 가 고른 후보는 본문 근거(인용 검증·결정론 기록)가 있을 때만 따른다
+        headlessTopicRegen: false, // [2026-11-23] 다른 프로젝트 파일에 배치할 때 토픽 프로파일 AI 재생성을 기다리지 않는다(js/15b)
         routeDir: 'App_Config/MailRoutes',
         flushSec: 60,
         reloadMin: 10,
@@ -54,7 +56,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23d';
+    var RULE_V = '2026-11-23e';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -122,11 +124,18 @@
     //  사내 공용 프로젝트(KORTEK>개발업무)가 늘 "다른 고객"으로 같이 걸려 거의 모든 메일이 충돌(대기)이 됐다(실측 60/144).
     window.MAIL_ROUTING_SELF_ORG = window.MAIL_ROUTING_SELF_ORG || ['kortek', '코텍'];
     var SELF = {}; window.MAIL_ROUTING_SELF_ORG.forEach(function (w) { SELF[norm(w)] = 1; });
+    // [2026-11-23] 사내 공용(잡무) 프로젝트 — 모델명이나 고객사 칸 끝 조각이 이 이름이면 그 키워드(부탁·FYI·agile·cs…)는
+    //  식별자·가족 토큰으로 쓰지 않는다. 실측: Cosmic Upright 메일이 'agile' 하나로 "식별자는 한 곳(agile)" 충돌.
+    //  이 프로젝트로는 스레드 기록·사람 배치·근거 검증된 AI 선택으로만 간다. 데이터 — 이름만 더하면 된다.
+    window.MAIL_ROUTING_CATCHALL = window.MAIL_ROUTING_CATCHALL || ['개발업무'];
+    var CATCH = {}; window.MAIL_ROUTING_CATCHALL.forEach(function (w) { CATCH[norm(w)] = 1; });
+    function isCatchAll(c) { return !!(c && (CATCH[norm(c.model)] || CATCH[norm(String(c.customer || '').split('>').pop())])); }
 
     /** 후보 1개의 식별자 토큰(정규화) — 모델·고객모델명·코드류 keywords(+낱말·연속 두 낱말 조각).
      *  사람 이름·자재내역·범용어·짧은 것 제외. 고유한지(다른 후보에 없는지)는 부르는 쪽이 가른다. */
     function identsOf(c) {
         var out = {};
+        if (isCatchAll(c)) return out;
         var root = customerRoot(c.customer);
         var add = function (k, src) {
             if (k == null) return;
@@ -203,6 +212,7 @@
         for (k in cnt) if (fam.members.length === 1 || cnt[k] >= 2) toks[k] = 1;
         fam.members.forEach(function (i) {
             var c = cands[i], root = customerRoot(c.customer);
+            if (isCatchAll(c)) return;
             if (root && root.length >= 3 && !SELF[root]) toks[root] = 1;
             String(c.customer || '').split('>').slice(1).forEach(function (p) { var n = norm(p); if (n.length >= 3 && !SELF[n]) toks[n] = 1; });
         });
@@ -243,6 +253,36 @@
      * @param aiTag _msResolveAiProjectMatch 결과(있으면) — {status, candidates, confidence, evidence?}
      * @returns {decision:'auto'|'wait'|'none', target, candidates, basis, reason, family, hits}
      */
+    /** 🧷 [2026-11-23 사용자 지시 "분류 배치에 환각이 작용되지 않도록"] AI 가 고른 후보를 따르기 전에 **본문 근거**를 확인한다.
+     *  통과 조건(하나라도): ① 이 앱의 결정론 기록이 같은 후보를 가리킴(js/61 evidence agree_strong·promote)
+     *  ② AI 가 낸 "근거인용" 이 본문에 글자 그대로 있고, 그 문장에 **형제(group) 중 이 후보만 가진 단어**가 들어 있음
+     *     (js/61 mailEvidenceVerifyCitation, group 을 후보 목록으로 넘겨 형제끼리의 구별을 본다).
+     *  예전엔 js/61 이 AI "상" 에만 이 검사를 해서, AI "중" 으로 형제를 고른 family_ai·customer_ai_single 은 근거 없이 배치됐다.
+     *  끄기: P.aiRequiresCitation=false. 검증 모듈(js/61)이 없으면 **통과시키지 않는다**(모르면 따르지 않는다). */
+    function aiGrounded(aiTag, mail, group, target) {
+        if (P.aiRequiresCitation === false) return { ok: true, reason: 'off' };
+        if (!aiTag || !target) return { ok: false, reason: 'no_ai' };
+        if (aiTag.evidence === 'agree_strong' || aiTag.evidence === 'promote') return { ok: true, reason: aiTag.evidence };
+        if (!window.mailEvidenceVerifyCitation || !window.mailEvidenceFor) return { ok: false, reason: 'no_verifier' };
+        var task = aiTag.task || null;
+        if (!task || !task['근거인용']) return { ok: false, reason: 'no_citation' };
+        try {
+            var g = (group && group.length) ? group : [target];
+            var ev = window.mailEvidenceFor({ subject: (mail && mail.subject) || '', sender: (mail && mail.sender) || '', body: (mail && mail.body) || '' }, g);
+            var v = window.mailEvidenceVerifyCitation(task, ev, g, g.indexOf(target));
+            return { ok: !!(v.ok && v.specific), reason: v.reason };
+        } catch (e) { return { ok: false, reason: 'verify_error:' + e.message }; }
+    }
+    /** 🆕 본문의 6자리 관리번호(#502246 등)가 **어느 후보 키워드에도 없으면** — 등록된 프로젝트가 없는 제품일 수 있다 */
+    function unknownCodeHint(raw, cands) {
+        var codes = {}; var re = /#\s?(\d{6})(?!\d)/g, m;
+        while ((m = re.exec(raw))) codes[m[1]] = 1;
+        var known = {};
+        cands.forEach(function (c) { (c.keywords || []).forEach(function (k) { var mm = String(k).match(/\d{6}/g); (mm || []).forEach(function (x) { known[x] = 1; }); }); });
+        var unk = Object.keys(codes).filter(function (k) { return !known[k]; });
+        return unk.length ? T(' · 관리번호 #' + unk.slice(0, 2).join(', #') + ' 는 어느 프로젝트에도 등록돼 있지 않음 — 새 프로젝트가 필요할 수 있음',
+                              ' · control no. #' + unk.slice(0, 2).join(', #') + ' is not registered in any project — may need a new project') : '';
+    }
     /** 인치 값이 본문에 "크기"로 나오나 — 4.3 → 4.3" / 4.3” / 4.3인치 / 4.3 inch / 4.3 (앞뒤가 숫자·점 아님).
      *  3.0 처럼 .0 이면 "3\"" "3인치" 처럼 단위가 붙은 3 도 받는다(단위 없는 3 은 너무 흔하다). */
     function inchHit(raw, inch) {
@@ -377,7 +417,8 @@
         if (custOnly) {
             // 고객은 확정, 제품은 미확정 — 같은 고객 안에서 AI 가 "상"(인용 검증까지 통과) 이면 따른다. 그 외는 대기(그 고객 후보만).
             var grp = customerGroup(cands, custOnly);
-            if (aiIdx !== -1 && customerRoot(cands[aiIdx].customer) === custOnly && aiConf === '상' && (!aiTag.evidence || aiTag.evidence === 'cited' || aiTag.evidence === 'agree_strong')) {
+            var gC = (aiIdx !== -1) ? aiGrounded(aiTag, mail, grp, cands[aiIdx]) : null;
+            if (aiIdx !== -1 && customerRoot(cands[aiIdx].customer) === custOnly && aiConf === '상' && gC.ok) {
                 return out({ decision: 'auto', target: cands[aiIdx], candidates: grp, basis: 'customer_ai',
                     reason: T('고객 확정(' + custOnly.toUpperCase() + ') · 제품은 AI 판단(상)', 'customer ' + custOnly.toUpperCase() + ' confirmed · product by AI (high)'), family: famOfIdx(aiIdx) });
             }
@@ -385,13 +426,15 @@
             //  AI 가 둘 이상을 후보로 냈으면(못 좁혔으면) 그대로 대기. 스위치는 P.customerAiSingleMid(데이터).
             if (P.customerAiSingleMid && aiIdx !== -1 && aiConf === '중' && customerRoot(cands[aiIdx].customer) === custOnly) {
                 var aiInCust = (aiTag.candidates || []).filter(function (c) { return customerRoot(c.customer) === custOnly; });
-                if (aiInCust.length === 1) {
+                if (aiInCust.length === 1 && gC.ok) {
                     return out({ decision: 'auto', target: cands[aiIdx], candidates: grp, basis: 'customer_ai_single',
                         reason: T('고객 확정(' + custOnly.toUpperCase() + ') · AI 가 제품 하나를 고름(중)', 'customer ' + custOnly.toUpperCase() + ' confirmed · AI picked one product (med)'), family: famOfIdx(aiIdx) });
                 }
             }
             return out({ decision: 'wait', target: null, candidates: grp.slice(0, 6), basis: 'customer_only',
-                reason: T('고객(' + custOnly.toUpperCase() + ')은 확실한데 어느 제품인지 단서가 없음', 'customer ' + custOnly.toUpperCase() + ' is clear but not which product') });
+                reason: T('고객(' + custOnly.toUpperCase() + ')은 확실한데 어느 제품인지 단서가 없음', 'customer ' + custOnly.toUpperCase() + ' is clear but not which product')
+                        + (gC && !gC.ok && (aiConf === '상' || aiConf === '중') ? T(' · AI 선택(' + (cands[aiIdx].model || '') + ')은 본문 근거가 없어 따르지 않음', ' · AI pick ignored: no grounding in the mail') : '')
+                        + unknownCodeHint(raw, cands) });
         }
         if (famId) {
             var fam = F.fams[famId];
@@ -414,12 +457,14 @@
                 return out({ decision: 'auto', target: cands[fam.primary], candidates: members, basis: 'family_primary',
                     reason: T('가족 확정(' + fam.label + ') · 모델 단서 없음 → 가족 대표로', 'family ' + fam.label + ' confirmed, no model cue → family primary'), family: famId });
             }
-            if (P.familyAiAuto && aiIdx !== -1 && famOfIdx(aiIdx) === famId && (aiConf === '상' || aiConf === '중')) {
+            var gF = (aiIdx !== -1 && famOfIdx(aiIdx) === famId) ? aiGrounded(aiTag, mail, members, cands[aiIdx]) : null;
+            if (P.familyAiAuto && gF && gF.ok && (aiConf === '상' || aiConf === '중')) {
                 return out({ decision: 'auto', target: cands[aiIdx], candidates: members, basis: 'family_ai',
                     reason: T('가족 확정(' + fam.label + ') · 모델은 AI 판단(' + aiConf + ')', 'family ' + fam.label + ' confirmed · model by AI (' + aiConf + ')'), family: famId });
             }
             return out({ decision: 'wait', target: null, candidates: members, basis: 'family_unresolved',
-                reason: T('가족은 확정(' + fam.label + ')인데 어느 모델인지 단서가 없음 — 설정에서 가족 대표를 정하면 자동 배치', 'family ' + fam.label + ' confirmed but model unknown — set a family primary in settings to auto-place'), family: famId });
+                reason: T('가족은 확정(' + fam.label + ')인데 어느 모델인지 단서가 없음 — 설정에서 가족 대표를 정하면 자동 배치', 'family ' + fam.label + ' confirmed but model unknown — set a family primary in settings to auto-place')
+                        + (gF && !gF.ok ? T(' · AI 선택(' + (cands[aiIdx].model || '') + ')은 본문 근거가 없어 따르지 않음', ' · AI pick ignored: no grounding in the mail') : ''), family: famId });
         }
         // ④ 스레드(팀 공용 기록) — 같은 제목이 이미 확정돼 간 곳
         var th = threadTarget(mail, cands);
@@ -580,6 +625,12 @@
     /** 같은 스레드가 이미 확정돼 간 곳 — ① In-Reply-To/References(백엔드 `refs`, Message-ID 해시)가 기록된 메일의 key 와 맞으면
      *  **진짜 스레드**(JWZ 알고리즘의 핵심 — 제목이 범용이어도 틀리지 않는다) ② 없으면 정규화 제목(길이 ≥ threadMinLen).
      *  교정(correct/undo)된 스레드는 제외. 두 프로젝트로 갈렸으면 null. */
+    var TRUSTED_PLACE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1 };
+    function trustedPlacement(e) {
+        if (e.how === 'human') return true;
+        var b = e.routing && e.routing.basis ? String(e.routing.basis).replace(/^subject_/, '').replace(/^pre_/, '') : '';
+        return !!TRUSTED_PLACE_BASES[b];
+    }
     function threadTarget(mail, cands) {
         var refs = (mail && Array.isArray(mail.refs)) ? mail.refs : [];
         var sn = normSubject(mail && mail.subject);
@@ -593,7 +644,10 @@
             if (!hit) return;
             if (Date.parse(e.at || 0) < since) return;
             if (e.type === 'correct' || e.type === 'undo') { bad[e.fid] = 1; return; }
-            if (e.type === 'placed' && e.fid) votes[e.fid] = (votes[e.fid] || 0) + 1;
+            // 🧷 [2026-11-23] 표만 믿을 만한 배치에서 받는다 — 사람이 배치했거나 결정론 근거로 배치된 것.
+            //  AI 판단으로 배치된 기록(옛 규칙의 AI "상"·family_ai 등, routing 없음 포함)을 스레드 근거로 쓰면
+            //  AI 의 추측이 "같은 스레드가 여기로 갔다"는 **결정론 근거로 둔갑**해 번식한다. 교정(correct/undo)은 그대로 본다.
+            if (e.type === 'placed' && e.fid && trustedPlacement(e)) votes[e.fid] = (votes[e.fid] || 0) + 1;
         });
         var fids = Object.keys(votes).filter(function (f) { return !bad[f]; });
         if (fids.length !== 1) return null;
@@ -696,7 +750,7 @@
             try {
                 var mail = recall(task, cands);
                 if (!mail) return tag;
-                var j = window.mailRouteJudge(mail, cands, tag);
+                var j = window.mailRouteJudge(mail, cands, tag ? Object.assign({}, tag, { task: task }) : null);   // task: AI 근거인용 검증용
                 var out = tagFromJudge(j, tag);
                 if (task && typeof task === 'object') task._routing = { basis: j.basis, decision: j.decision, reason: j.reason };
                 bump(j.decision + ':' + j.basis);
@@ -710,9 +764,11 @@
     function wrapRegister() {
         var orig = window._msAutoRegisterToProject;
         if (typeof orig !== 'function' || orig._mrWrapped) return false;
-        window._msAutoRegisterToProject = async function (uid, task, driveFileId, fileName, mailRaw) {
+        window._msAutoRegisterToProject = async function (uid, task, driveFileId, fileName, mailRaw, attempt, setAlarm, opts) {
             var r = await orig.apply(this, arguments);
-            try { if (r && r.ok && !r.alreadyPlaced) window._mailRoutePlaced(driveFileId, fileName, task, mailRaw, 'auto'); } catch (e) { /* 무시 */ }
+            // [2026-11-23] 보관함에서 사람이 누른 배치(opts.byHuman, js/14c)는 'human' 으로 적는다 — 스레드 근거로 믿을 수 있는 건
+            //  사람·결정론 배치뿐이라(trustedPlacement), 이게 'auto' 로 적히면 사람의 교정이 근거로 쌓이지 않는다.
+            try { if (r && r.ok && !r.alreadyPlaced) window._mailRoutePlaced(driveFileId, fileName, task, mailRaw, (opts && opts.byHuman) ? 'human' : 'auto'); } catch (e) { /* 무시 */ }
             return r;
         };
         window._msAutoRegisterToProject._mrWrapped = true;
@@ -838,7 +894,7 @@
             if (mp && mp.candidates && mp.candidates.length) {
                 var live = mp.candidates.map(function (c) { return cands.filter(function (x) { return x.drive_file_id === c.drive_file_id; })[0]; }).filter(Boolean);
                 var conf = mp.routing ? mp.routing.aiConfidence : mp.confidence;
-                if (live.length) aiTag = { status: (conf === '상' && live.length === 1) ? 'matched' : 'ambiguous', candidates: live, confidence: conf || '', matchBasis: aiReasonOnly(mp.matchBasis) };
+                if (live.length) aiTag = { status: (conf === '상' && live.length === 1) ? 'matched' : 'ambiguous', candidates: live, confidence: conf || '', matchBasis: aiReasonOnly(mp.matchBasis), task: it.task };
             }
             var j;
             try { j = window.mailRouteJudge(mail, cands, aiTag); } catch (e) { res.failed++; res.skipped.judge_error = (res.skipped.judge_error || 0) + 1; continue; }

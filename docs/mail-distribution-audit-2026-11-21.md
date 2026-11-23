@@ -334,3 +334,30 @@ Zitro·Intralot 32" Landscape·Shuffler·KGP-4 메일은 충돌에서 풀려 제
   돌연변이(끄기) → 10-1·2·3·5 실패. ⚠️ 실제 메일 수신 흐름(POP3 → 자동틱)으로는 아직 못 봤다.
 - 다른 입구(첨부 탭 js/15a, 재시도 엔진 js/25)는 `msCallGemini` 를 안 지나므로 예전 경로 그대로다.
 
+### 8-8. 🧷 "분류 배치에 환각이 작용되지 않도록" — 순차 개선 (같은 날, 사용자 지시)
+
+**원칙: AI 의 판단만으로는 프로젝트를 정하지 않는다.** AI 가 고른 후보는 본문 근거가 확인될 때만 따른다.
+
+1. **AI 가 끼는 자동배치에 근거 의무화**(`aiGrounded`, `P.aiRequiresCitation`). 예전엔 js/61 인용 검증이 AI "상" 에만 돌아,
+   AI "중" 으로 형제를 고른 `family_ai`·`customer_ai_single` 은 **본문 근거 없이** 배치됐다. 이제 AI 선택은
+   ① 결정론 기록이 같은 후보(`agree_strong`·`promote`) 또는 ② AI 의 `근거인용` 이 본문에 글자 그대로 있고 **형제 중 그 후보만 가진 단어**를
+   담을 때만 따른다(검증기는 js/61 `mailEvidenceVerifyCitation`, 형제 목록을 넘겨 형제끼리 구별을 본다). 검증 모듈이 없으면 따르지 않는다.
+   ⚠️ 논리상 형제를 가르는 단어가 본문에 있으면 결정론 식별자가 먼저 잡으므로, **가족 안 AI 선택은 사실상 쓰이지 않는다** —
+   그 자리에서 AI 가 하던 건 추측이었다. 대신 가족 대표(⚙️ 메일 자동배치 설정)가 그 역할을 한다.
+   실측(유령 뺀 색인 21개, 앱과 같은 후보): 박용훈 대기 96건 자동 46→38, tester 118건 90→75 — 빠진 건 전부 무근거 AI 선택
+   (예: `K27 3종 FA Sample`→L7 Jackpot Wheel, `Weekly call minutes`→SHUFFLER, `Panel Roadmap`→POLED).
+2. **스레드 근거는 믿을 만한 배치에서만**(`trustedPlacement`): 사람 배치 또는 결정론 근거(identifier·family·family_inch·family_primary·thread, subject_/pre_ 포함)로
+   배치된 기록만 표를 준다. AI 판단 배치·근거 없는 옛 배치(routing 없음)는 스레드 근거가 되지 않는다 — **AI 추측이 결정론 근거로 둔갑해 번식하지 않게**.
+   보관함에서 사람이 누른 배치 세 곳(복수 배분·매칭 전송·AI 후보 전송, js/14c)은 `byHuman` 으로 'human' 기록 — 사람의 교정이 근거로 쌓인다.
+3. **사내 공용(잡무) 프로젝트 키워드는 단서 아님**(`MAIL_ROUTING_CATCHALL`, 데이터 `['개발업무']`) — `agile` 하나로 Cosmic 메일이 충돌하던 것.
+4. **프로젝트 없는 메일을 드러낸다**(`unknownCodeHint`): 고객만 확정된 대기에 "관리번호 #502246 은 어느 프로젝트에도 등록돼 있지 않음 — 새 프로젝트가 필요할 수 있음".
+5. **평소 자동배치도 헤드리스 토픽 재생성을 기다리지 않는다**(`P.headlessTopicRegen=false`, js/15b) — 열린 프로젝트는 `_tpCheckAutoRegen`(안 기다림)이 따라잡는다.
+
+**데이터 문제(코드로 안 고침, 사람 확인 필요)** — 색인 `project_index.json` 29건 중 **8건이 파일 없는 유령**(이름이 바뀌며 남은 옛 항목:
+`LNW_27.0.json`·`LNW_OBSIDIAN AGARAF_27.0.json`·`LNW_POLED_21.0.json`·`LNW(SG)_SSBT(FHD,QHD,UHD).json` 등). 앱은 매칭 때 메모리에서 빼므로 배치엔 안 끼지만 색인에 남아 있다.
+더 심각한 건 **`LNW_SHUFFLER_03.0.json` 항목의 모델·고객이 `KGP-4 / KONAMI>KGP-4`** 로 낡아 있는 것(파일 자체는 SHUFFLER). 그대로면 KGP-4 메일이
+SHUFFLER 3.0 파일 후보로 섞이고 SHUFFLER 3.0 메일은 제 프로젝트를 못 찾는다. 그 프로젝트를 한 번 열어 저장하거나 `tools/` 로 색인 항목을 고쳐야 한다.
+
+검증: 하네스 67/67(3-2·3-5·3-6·3-6d·7-4d·7-4e 신설/변경) — 근거 검사를 끄면 정확히 4건 실패(돌연변이). `node tests/ms-auto-register-topic-regen.test.js` 4/4.
+규칙 버전 `RULE_V` 2026-11-23e. ⚠️ 실제 메일 흐름으로는 아직 못 봤다.
+

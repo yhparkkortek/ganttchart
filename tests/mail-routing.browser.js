@@ -59,7 +59,7 @@ window.__mailRoutingTestBody = async function () {
     j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '55F / 55C / 55J 공통'), cands, null);
     ok(j.decision === 'wait' && j.basis === 'family_unresolved' && j.candidates.length === 3, '3-1 AMUSNET 공통 메일 · 대표 없음 · AI 없음 → 가족 3개를 후보로 대기', j);
     j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '공통'), cands, AI(0, '중'));
-    ok(j.decision === 'auto' && j.target.drive_file_id === 'A1' && j.basis === 'family_ai', '3-2 같은 메일 + AI 중(55FLAT) → 가족 안이면 AI 픽으로 배치(대기 아님)', j);
+    ok(j.decision === 'wait' && j.basis === 'family_unresolved', '3-2 [2026-11-23 바뀜] 가족 확정 + AI 중(55FLAT)이라도 본문 근거(인용)가 없으면 따르지 않는다 — 같은 메일 + AI 중(55FLAT) → 가족 안이면 AI 픽으로 배치(대기 아님)', j);
     j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '공통'), cands, AI(7, '상'));
     ok(j.decision === 'wait', '3-3 AI 가 가족 밖(STELLAR32)을 "상" 으로 찍어도 따르지 않는다(대기)', j);
     // 가족 대표 설정 → 자동
@@ -70,9 +70,16 @@ window.__mailRoutingTestBody = async function () {
     ok(j.decision === 'auto' && j.target.drive_file_id === 'A1' && /family_primary$/.test(j.basis), '3-4 가족 대표(55FLAT)를 정하면 모델 단서 없는 공통 메일은 대표로 배치', j);
     await window.mailRoutingSaveConfig(cfg0).catch(() => {});
     j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW>ODB>MVD>270>FA', '박스 2EA'), cands, AI(5, '상'));
-    ok(j.decision === 'auto' && j.target.drive_file_id === 'O1', '3-5 LNW 만 확정(제품 단서 없음) + AI 상(OBSIDIAN27) → 같은 고객 안 AI 상 → 배치', j);
+    ok(j.decision === 'wait' && j.basis === 'customer_only', '3-5 [2026-11-23 바뀜] AI 상이라도 인용 근거가 없으면 고객 안에서 고르지 않는다 — 옛: LNW 만 확정(제품 단서 없음) + AI 상(OBSIDIAN27) → 같은 고객 안 AI 상 → 배치', j);
     j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW', '박스 2EA'), cands, AI(5, '중'));
-    ok(j.decision === 'auto' && j.target.drive_file_id === 'O1' && j.basis === 'customer_ai_single', '3-6 LNW 만 확정 + AI 가 하나만 고름(중) → 배치(2026-11-23 사용자 결정)', j);
+    ok(j.decision === 'wait' && j.basis === 'customer_only', '3-6 [2026-11-23 바뀜] AI 가 하나 골라도(중) 본문 근거가 없으면 대기 — 옛: LNW 만 확정 + AI 가 하나만 고름(중) → 배치(2026-11-23 사용자 결정)', j);
+    j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW>ODB>MVD>270>FA', '박스 2EA'), cands, AI(5, '상', 'agree_strong'));
+    ok(j.decision === 'auto' && j.target.drive_file_id === 'O1' && j.basis === 'customer_ai', '3-5b AI 상 + 결정론 기록이 같은 후보(agree_strong) → 배치', j);
+    j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW', '박스 2EA'), cands, AI(5, '중', 'promote'));
+    ok(j.decision === 'auto' && j.target.drive_file_id === 'O1' && j.basis === 'customer_ai_single', '3-6a AI 가 하나 고름(중) + 결정론 기록 일치(promote) → 배치', j);
+    { const t = { 근거인용: ['이 문장은 메일 본문에 없는 지어낸 문장입니다 OBSIDIAN AG/AR/AF'] };
+      j = J(M('[코텍_일신] BOX SPL 요청의 건_LNW', '박스 2EA 요청드립니다'), cands, Object.assign(AI(5, '상'), { task: t }));
+      ok(j.decision !== 'auto', '3-6d AI 가 본문에 없는 문장을 인용하면(환각) 따르지 않는다', j); }
     j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW', '박스 2EA'), cands,
           { status: 'ambiguous', candidates: [cands[5], cands[6]], confidence: '중', matchBasis: 'ai' });
     ok(j.decision === 'wait' && j.basis === 'customer_only', '3-6b LNW 만 확정 + AI 가 둘 이상을 후보로(중) → 대기(그 고객 후보만)', j);
@@ -146,7 +153,7 @@ window.__mailRoutingTestBody = async function () {
         window.mailRouteCorrect('S4', { subject: HOOK_SUBJ, date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, '오매칭');
         ok(window._mailRoutes().some(e => e.type === 'correct' && e.fid === 'S4'), '7-3 교정이 기록된다');
         // 7-4 진짜 스레드(In-Reply-To/References → refs) — 제목이 범용이어도 기록된 메일의 key 와 맞으면 그 프로젝트
-        window._mailRoutePlaced('S3', 'LNW_SHUFFLER_03.0.json', { 업무명: 'root' }, { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: THREAD_KEY }, 'auto');
+        window._mailRoutePlaced('S3', 'LNW_SHUFFLER_03.0.json', { 업무명: 'root', _routing: { basis: 'identifier' } }, { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: THREAD_KEY }, 'auto');
         let jt = J(M('Re: 회의록', '네 확인했습니다'), cands, null);
         ok(jt.decision !== 'auto', '7-4a 범용 제목만으론 스레드로 안 묶는다(threadMinLen)', jt);
         jt = J({ subject: 'Re: 회의록', body: '네 확인했습니다', sender: 'e <e@x.com>', refs: [THREAD_KEY] }, cands, null);
@@ -154,6 +161,15 @@ window.__mailRoutingTestBody = async function () {
         window.mailRouteCorrect('S3', { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: THREAD_KEY }, '오매칭');
         jt = J({ subject: 'Re: 회의록', body: '네', sender: 'e <e@x.com>', refs: [THREAD_KEY] }, cands, null);
         ok(jt.decision !== 'auto', '7-4c 교정된 스레드는 근거로 안 쓴다', jt);
+        // 7-4d [2026-11-23] AI 판단으로 배치된 기록은 스레드 근거가 되지 않는다(추측이 결정론으로 둔갑하지 않게) — 사람 배치는 된다
+        const TK2 = 'kthreadai' + RUN;
+        window._mailRoutePlaced('S3', 'LNW_SHUFFLER_03.0.json', { 업무명: 'r', _routing: { basis: 'family_ai' } }, { subject: '샘플 회의록', date: '2026-11-03 10:00', sender: 'd <d@x.com>', key: TK2 }, 'auto');
+        jt = J({ subject: 'Re: 샘플 회의록', body: '네', sender: 'e <e@x.com>', refs: [TK2] }, cands, null);
+        ok(jt.decision !== 'auto', '7-4d AI 판단(family_ai)으로 배치된 스레드는 근거로 안 쓴다', jt);
+        const TK3 = 'kthreadhu' + RUN;
+        window._mailRoutePlaced('S3', 'LNW_SHUFFLER_03.0.json', { 업무명: 'r', _routing: { basis: 'family_ai' } }, { subject: '샘플 회의록2', date: '2026-11-03 11:00', sender: 'd <d@x.com>', key: TK3 }, 'human');
+        jt = J({ subject: 'Re: 샘플 회의록2', body: '네', sender: 'e <e@x.com>', refs: [TK3] }, cands, null);
+        ok(jt.decision === 'auto' && jt.target.drive_file_id === 'S3' && jt.basis === 'thread', '7-4e 사람이 배치한 스레드는 근거가 된다', jt);
         window._appUserKey = realUserKey;
 
         // ── 9. [2026-11-23] 실데이터 재생(박용훈 보관함 대기 144건)에서 찾은 세 가지 ─────────

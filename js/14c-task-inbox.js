@@ -835,7 +835,7 @@ window.inboxDistributeToMultiCandidates = function(uid) {
         for (let i = 0; i < checked.length; i++) {
             const c = checked[i];
             try {
-                const r = await window._msAutoRegisterToProject(uid, task, c.drive_file_id, c.file_name, fresh.mailRaw, 0, !!fresh.alarmWorthy, { coalesce: false });
+                const r = await window._msAutoRegisterToProject(uid, task, c.drive_file_id, c.file_name, fresh.mailRaw, 0, !!fresh.alarmWorthy, { coalesce: false, byHuman: true });
                 if (r && r.ok) okNames.push(targetNames[i]); else failNames.push(targetNames[i] + (r && r.reason ? ' (' + r.reason + ')' : ''));
             } catch (e) { failNames.push(targetNames[i] + ' (' + e.message + ')'); }
         }
@@ -874,7 +874,7 @@ window.inboxQuickRegisterMatched = function(uid) {
     const taskName = it.task['업무명'] || '새 업무';
     window.TaskInbox.setStatus(uid, '전송 중', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
     window.renderTaskInbox();
-    window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false })
+    window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false, byHuman: true })
         .then(function(result) {
             if (result.ok) {
                 window.TaskInbox.setStatus(uid, '배치됨', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
@@ -917,7 +917,7 @@ window.inboxPlaceToCandidate = function(uid) {
     const taskName = it.task['업무명'] || '새 업무';
     window.TaskInbox.setStatus(uid, '전송 중', { type: 'AI분석 프로젝트 전송', target: target.file_name, at: new Date().toISOString() });
     window.renderTaskInbox();
-    window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false })
+    window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy, { coalesce: false, byHuman: true })
         .then(function(result) {
             if (result.ok) {
                 window.TaskInbox.setStatus(uid, '배치됨', { type: 'AI분석 프로젝트 전송', target: target.file_name, at: new Date().toISOString() });
