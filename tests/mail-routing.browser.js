@@ -72,7 +72,12 @@ window.__mailRoutingTestBody = async function () {
     j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW>ODB>MVD>270>FA', '박스 2EA'), cands, AI(5, '상'));
     ok(j.decision === 'auto' && j.target.drive_file_id === 'O1', '3-5 LNW 만 확정(제품 단서 없음) + AI 상(OBSIDIAN27) → 같은 고객 안 AI 상 → 배치', j);
     j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW', '박스 2EA'), cands, AI(5, '중'));
-    ok(j.decision === 'wait' && j.basis === 'customer_only', '3-6 LNW 만 확정 + AI 중 → 대기(그 고객 후보만)', j);
+    ok(j.decision === 'auto' && j.target.drive_file_id === 'O1' && j.basis === 'customer_ai_single', '3-6 LNW 만 확정 + AI 가 하나만 고름(중) → 배치(2026-11-23 사용자 결정)', j);
+    j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW', '박스 2EA'), cands,
+          { status: 'ambiguous', candidates: [cands[5], cands[6]], confidence: '중', matchBasis: 'ai' });
+    ok(j.decision === 'wait' && j.basis === 'customer_only', '3-6b LNW 만 확정 + AI 가 둘 이상을 후보로(중) → 대기(그 고객 후보만)', j);
+    j = J(M('[코텍_일신] 26년 10월 BOX SPL 요청의 건_LNW', '박스 2EA'), cands, AI(5, '하'));
+    ok(j.decision === 'wait' && j.basis === 'customer_only', '3-6c LNW 만 확정 + AI 하 → 대기', j);
 
     // ── 4. 충돌·미분류 ──────────────────────────────────────────────────────
     j = J(M('4.3" Shuffler 와 KGI 75C 동시 출하 문의', ''), cands, AI(9, '상'));

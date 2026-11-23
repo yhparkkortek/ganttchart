@@ -268,8 +268,11 @@ Zitro·Intralot 32" Landscape·Shuffler·KGP-4 메일은 충돌에서 풀려 제
 
 ### 8-3. 남은 것 (정책 결정 필요 — 코드는 안 바꿨다)
 
-- **customer_only 19건**: LNW 는 프로젝트가 9개 이상이라 "LNW" 만으론 못 가른다. AI 가 **중**이면 대기가 설계다(3-6).
-  "고객 확정 + AI 중 + 후보 1개면 배치" 로 풀지는 사람이 정할 일.
+- ✅ **customer_only — 사용자 결정(같은 날)**: "AI 가 하나 골랐으면 자동배치". 고객만 확정 + AI 가 그 고객 안에서
+  **하나만** 골랐으면 "중" 이어도 배치(`customer_ai_single`, 스위치 `MAIL_ROUTING_POLICY.customerAiSingleMid`).
+  AI 가 둘 이상을 냈거나 "하" 면 대기 그대로. 재생: 19건 중 **8건 배치**·11건 대기(자동 합계 68→76).
+  ⚠️ AI "중" 판단이라 미심쩍은 것도 섞였다 — 예: `K27 3종 FA Sample` → L7 Jackpot Wheel, `Weekly call minutes` → SHUFFLER,
+  `Obsidian Wheel Stand/Skirt` → OBSIDIAN27(Digital Wheel 이 아니라). 틀리면 ❌오매칭으로 교정 기록이 남는다.
 - **충돌 40건** 중 상당수는 진짜 여러 프로젝트 메일(E3 현황·HiDeep 재고 목록·내재화 LCM 회의).
 - 두 낱말 이상 경계 판정이 안 되는 한글 토큰(`단종대체` 등)은 그대로.
 - 브로드캐스트성 메일(HiDeep 재고 목록)이 `kgi` 한 단어로 KGI 로 가는 경우가 생겼다(전엔 kortek 덕분에 우연히 충돌).

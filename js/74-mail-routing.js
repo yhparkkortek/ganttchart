@@ -42,6 +42,7 @@
         threadDays: 180,         // 이보다 오래된 기록은 스레드 근거로 안 쓴다
         familyAiAuto: true,      // 가족 확정 + 모델 식별자 없음 + 대표 없음 → AI 픽(상/중)으로 배치
         aiCitedAuto: true,       // 가족 근거도 없을 때 AI 상 + 인용 검증(특정 토큰 포함) → 배치
+        customerAiSingleMid: true, // [2026-11-23 사용자 결정] 고객만 확정 + AI 가 그 고객 안에서 하나만 고름(중) → 배치
         routeDir: 'App_Config/MailRoutes',
         flushSec: 60,
         reloadMin: 10,
@@ -304,6 +305,15 @@
             if (aiIdx !== -1 && customerRoot(cands[aiIdx].customer) === custOnly && aiConf === '상' && (!aiTag.evidence || aiTag.evidence === 'cited' || aiTag.evidence === 'agree_strong')) {
                 return out({ decision: 'auto', target: cands[aiIdx], candidates: grp, basis: 'customer_ai',
                     reason: T('고객 확정(' + custOnly.toUpperCase() + ') · 제품은 AI 판단(상)', 'customer ' + custOnly.toUpperCase() + ' confirmed · product by AI (high)'), family: famOfIdx(aiIdx) });
+            }
+            // [2026-11-23 사용자 결정] 고객 확정 + AI 가 그 고객 안에서 **하나만** 골랐으면 "중" 이어도 배치.
+            //  AI 가 둘 이상을 후보로 냈으면(못 좁혔으면) 그대로 대기. 스위치는 P.customerAiSingleMid(데이터).
+            if (P.customerAiSingleMid && aiIdx !== -1 && aiConf === '중' && customerRoot(cands[aiIdx].customer) === custOnly) {
+                var aiInCust = (aiTag.candidates || []).filter(function (c) { return customerRoot(c.customer) === custOnly; });
+                if (aiInCust.length === 1) {
+                    return out({ decision: 'auto', target: cands[aiIdx], candidates: grp, basis: 'customer_ai_single',
+                        reason: T('고객 확정(' + custOnly.toUpperCase() + ') · AI 가 제품 하나를 고름(중)', 'customer ' + custOnly.toUpperCase() + ' confirmed · AI picked one product (med)'), family: famOfIdx(aiIdx) });
+                }
             }
             return out({ decision: 'wait', target: null, candidates: grp.slice(0, 6), basis: 'customer_only',
                 reason: T('고객(' + custOnly.toUpperCase() + ')은 확실한데 어느 제품인지 단서가 없음', 'customer ' + custOnly.toUpperCase() + ' is clear but not which product') });
