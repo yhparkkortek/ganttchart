@@ -21,6 +21,8 @@
     // strategy: {type:'drop'} | {type:'fn', fn:'전역함수명'} | {type:'array', keep, order:'newest-first'|'newest-last'} | {type:'byProject', perProject, maxProjects}
     window.STORAGE_REGISTRY = window.STORAGE_REGISTRY || [
         { key: 'gantt_folder_cache_v1',           label: 'Drive 폴더 캐시',                 labelEn: 'Drive folder cache',      cls: 'cache', strategy: { type: 'drop' } },
+        // 📍 [2026-11-23] 모달을 옮겨 둔 자리(js/19 _modalPosSave) — 지우면 모달이 다시 가운데서 열릴 뿐이다
+        { key: 'gantt_modal_pos_v1',              label: '모달 위치 기억(옮겨 둔 자리)',      labelEn: 'Remembered modal positions', cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_ai_usage_v1',               label: 'AI 사용량 원장(최근 7일, 일일 한도 소진 표시)', labelEn: 'AI usage ledger (7 days)', cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_qa_cluster_cache_v1',       label: '자주 묻는 질문 묶기 캐시',        labelEn: 'FAQ grouping cache',      cls: 'cache', strategy: { type: 'drop' } },
         { key: 'gantt_mailbody_batch_clean_v1',   label: '메일 원문 일괄 옮기기 — 다 줄인 프로젝트 기록', labelEn: 'Mail body batch offload — cleaned projects', cls: 'cache', strategy: { type: 'drop' } },

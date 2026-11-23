@@ -59,6 +59,7 @@ window._makeDraggable = function(modalId, handleId) {
         window._mreszDragging = false;
         const handle = document.getElementById(handleId);
         if (handle) handle.style.cursor = 'grab';
+        if (window._modalPosSave) window._modalPosSave(modalId);   // 📍 옮긴 자리를 기억(다음에 열 때 그 자리)
     };
 
     document.addEventListener('mousedown', function(e) {
@@ -189,6 +190,51 @@ window._mreszRefit = function(boxId) {
     requestAnimationFrame(function() {
         if (window._clampModalToViewport) window._clampModalToViewport(box);
     });
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// 📍 [2026-11-23 사용자 요청] 모달을 옮겨 둔 자리를 기억해 **다음에 열 때 그 자리에서** 연다.
+//    "이슈를 클릭하면 모달이 열리는데 겹치지 않도록 옮겨 두면, 다시 클릭할 때 기본값(중앙)으로
+//    열려 또 옮겨야 한다 — 다른 모달도 같다." → 모달마다 따로 고치지 않고 **모든 모달이 지나는
+//    여기 한 곳**에서 한다(_makeMinimizable·_makeResizable 과 같은 방식).
+//    · 저장: 드래그를 놓을 때·크기조절을 놓을 때(왼쪽/위 가장자리로 줄이면 위치도 바뀐다)
+//    · 복원: 모달이 **열리는 순간**(숨김→보임) — 열 때마다 innerHTML 로 박스를 새로 만드는 모달
+//      (JIRA 상세 등)은 새 박스를 설정하는 순간이 곧 열리는 순간이라 그때도 복원한다
+//    · 저장하는 건 **위치(left/top)만** — 크기는 모달 코드가 정한 값을 그대로 둔다
+//    · 화면 크기가 바뀌었으면(다른 모니터 등) 복원 뒤 _clampModalToViewport 가 화면 안으로 들인다
+//    · 한 번도 안 옮긴 모달은 기록이 없어 예전처럼 코드가 정한 자리(보통 가운데)에서 열린다
+//    ⚠️ 열쇠는 **박스 id**(_makeDraggable 의 첫 인자) — 모달 종류마다 하나. 같은 종류의 모달은
+//       어느 이슈를 열든 같은 자리다(사람이 원한 동작).
+// ══════════════════════════════════════════════════════════════════════
+window.MODAL_POS_POLICY = window.MODAL_POS_POLICY || { key: 'gantt_modal_pos_v1', maxEntries: 200 };
+window._modalPosRead = function() {
+    try { return JSON.parse(localStorage.getItem(window.MODAL_POS_POLICY.key) || '{}') || {}; } catch (e) { return {}; }
+};
+window._modalPosSave = function(boxId) {
+    const box = document.getElementById(boxId);
+    if (!box || !window._mreszIsShown(box)) return;
+    const r = box.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const all = window._modalPosRead();
+    all[boxId] = { l: Math.round(r.left), t: Math.round(r.top), at: Date.now() };
+    const ids = Object.keys(all);
+    if (ids.length > window.MODAL_POS_POLICY.maxEntries) {
+        ids.sort(function(a, b) { return (all[a].at || 0) - (all[b].at || 0); })
+           .slice(0, ids.length - window.MODAL_POS_POLICY.maxEntries).forEach(function(k) { delete all[k]; });
+    }
+    try { localStorage.setItem(window.MODAL_POS_POLICY.key, JSON.stringify(all)); } catch (e) { /* 꽉 차도 모달 동작은 그대로 */ }
+};
+window._modalPosRestore = function(boxId) {
+    const box = document.getElementById(boxId);
+    if (!box) return false;
+    const p = window._modalPosRead()[boxId];
+    if (!p || typeof p.l !== 'number' || typeof p.t !== 'number') return false;
+    // 드래그 시작(startDrag)과 **같은 방식**으로 놓는다 — 가운데 정렬 transform 을 풀고 실제 좌표로
+    box.style.transform = 'none';
+    box.style.left = p.l + 'px';
+    box.style.top  = p.t + 'px';
+    window._clampModalToViewport(box);
+    return true;
 };
 
 window._makeResizable = function(boxId, _retry, handleId) {
@@ -383,6 +429,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
         if (_rafId) { cancelAnimationFrame(_rafId); _rafId = 0; }
         if (!rs) return;
         rs = null;
+        if (window._modalPosSave) window._modalPosSave(boxId);   // 왼쪽/위 가장자리로 줄이면 위치도 바뀐다
         document.body.style.userSelect = '';
         window._mreszSetCursor('');
         window._mreszActive = false;
@@ -432,11 +479,19 @@ window._makeResizable = function(boxId, _retry, handleId) {
 
     // 열릴 때마다 화면 안으로 — 모달마다 "무엇의 display를 바꿔 여는지"가 제각각이라(박스 자신일 수도,
     // 바깥 오버레이일 수도) 둘 다 관찰한다. _makeMinimizable이 ✕ 버튼에서 대상을 알아내는 것과 같은 사정.
+    // 📍 "열리는 순간"(숨김→보임)만 가려내려고 직전 상태를 들고 있는다 — 열려 있는 동안의 다른
+    //    style 변화(크기·테두리 등)마다 기억한 자리로 되돌리면 사람이 방금 옮긴 것을 빼앗는다.
+    let _wasShown = window._mreszIsShown(box);
     const onShown = function() {
         // 드래그·리사이즈 중엔 style 이 매 프레임 바뀐다 — 그때마다 레이아웃을 다시 재면 끊긴다.
         if (window._mreszDragging || window._mreszActive) return;
-        if (!window._mreszIsShown(box)) return;
+        const shown = window._mreszIsShown(box);
+        const justOpened = shown && !_wasShown;
+        _wasShown = shown;
+        if (!shown) return;
         requestAnimationFrame(function() {
+            // 모달 코드가 열면서 가운데로 되돌려도(observer 는 그 코드가 끝난 뒤 돈다) 기억한 자리가 이긴다
+            if (justOpened && window._modalPosRestore) window._modalPosRestore(boxId);
             window._clampModalToViewport(box);
             // 헤더가 열릴 때 그려지는 모달이 있어, 보일 때 색을 다시 읽는다(숨어 있으면 못 읽는다)
             if (window._mreszApplyBorder) window._mreszApplyBorder(boxId);
@@ -448,6 +503,9 @@ window._makeResizable = function(boxId, _retry, handleId) {
             new MutationObserver(onShown).observe(box.parentElement, { attributes: true, attributeFilter: ['style', 'class'] });
         }
     } catch (e) { /* 구형 브라우저 — 창 크기 변경 시 보정은 아래에서 계속 동작 */ }
+    // 📍 열 때마다 박스를 새로 만드는 모달(JIRA 상세 등)은 지금 이 설정 순간이 곧 "열리는 순간"이다 —
+    //    관찰자는 이미 보이는 상태에서 붙어 숨김→보임 전환을 못 보므로 여기서 한 번 복원한다.
+    if (_wasShown) requestAnimationFrame(function() { if (window._modalPosRestore) window._modalPosRestore(boxId); });
 };
 
 // ══════════════════════════════════════════════════════════════════════
