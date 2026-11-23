@@ -103,6 +103,13 @@
         if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
     };
     /** 화면의 날짜칸 두 개를 읽어 적용 — 둘 다 차야 움직인다(한쪽만이면 기간이 아니다). */
+    /** 📅 기간설정 날짜 칸이 열려 있나 — 처음 고를 때·다시 누를 때만 연다. */
+    var _psCustomOpen = false;
+    window._psCustomClick = function () {
+        if (mode() === P.customId) _psCustomOpen = !_psCustomOpen;   // 이미 기간설정이면 칸만 열고 닫는다
+        else _psCustomOpen = true;
+        window._psSetMode(P.customId);
+    };
     window._psApplyCustom = function () {
         var a = document.getElementById('ps-from'), b = document.getElementById('ps-to');
         var from = a ? String(a.value || '').trim() : '', to = b ? String(b.value || '').trim() : '';
@@ -111,6 +118,7 @@
             return;
         }
         if (from > to) { var x = from; from = to; to = x; }   // 거꾸로 골라도 되게
+        _psCustomOpen = false;   // 📅 [2026-11-23] 적용하면 날짜 칸을 접는다 — 기간은 아래 제목 줄에 보인다
         window._psSetFilter({ from: from, to: to });
     };
     window._psSetMode = function (m) { try { localStorage.setItem(P.modeKey, m); } catch (e) { /* 무시 */ } if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody(); };
@@ -865,7 +873,7 @@
         var b = P.periods.map(function (p) {
             return btn(p.id, en ? p.en : p.ko, curKinds.indexOf(p.id) >= 0).replace('window._psSetMode(', 'window._psToggleMode(');
         }).join('');
-        b += btn(P.customId, en ? '📅 Range' : '📅 기간설정', cur === P.customId);
+        b += btn(P.customId, en ? '📅 Range' : '📅 기간설정', cur === P.customId).replace("window._psSetMode('" + P.customId + "')", 'window._psCustomClick()');
         if (P.showLegacy) {
             b += '<span style="flex:1"></span>' + btn(P.legacyId, en ? '📊 Schedule view' : '📊 일정 현황', cur === P.legacyId);
         }
@@ -890,7 +898,8 @@
         //    필터는 이름표를 붙여 "프로젝트 담당자 / 프로젝트 / 업무 담당자" 가 무엇인지 보이게 한다.
         // 📅 기간설정 — 시작·끝 두 칸을 그 버튼 바로 옆에. 아직 안 골랐으면 지금 기간을 채워 둔다
         //    (빈 칸부터 시작하면 무엇을 고르라는 건지 알 수 없다).
-        if (cur === P.customId) {
+        // 날짜 칸은 열려 있을 때만(아직 기간을 안 골랐으면 늘 연다) — 적용하면 접혀 버튼만 남는다.
+        if (cur === P.customId && (_psCustomOpen || !F.from || !F.to)) {
             var R = (col && col.range) || window._psRange(cur);
             var inp = function (id, v) {
                 return '<input id="' + id + '" type="date" value="' + esc(v) + '" style="' + window._uiInputStyle() + ' width:120px; padding:0 4px;' + '">';
