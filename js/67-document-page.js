@@ -3320,8 +3320,8 @@
         ov.innerHTML = '<div id="doclabelcp-box" style="pointer-events:all; position:fixed; left:50%; top:8%;'
             + ' transform:translateX(-50%); width:min(520px,92vw); max-height:84vh; display:flex; flex-direction:column;'
             + ' background:#fff; border:1px solid #a3d9e0; border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18); overflow:hidden;">'
-            + '<div style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:9px 12px;'
-            + ' background:#e0f5f7; border-bottom:1px solid #a3d9e0; color:#00707d; font-weight:bold; font-size:13px;">'
+            + '<div id="doclabelcp-drag" style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:9px 12px;'
+            + ' background:#e0f5f7; border-bottom:1px solid #a3d9e0; color:#00707d; font-weight:bold; font-size:13px; cursor:grab;">'
             + '<span>📂 ' + _esc(_t('다른 프로젝트 라벨 불러오기', 'Import label from another project')) + '</span>'
             + '<button onclick="window._docLabelCrossProjectClose()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);'
             + ' color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
@@ -3349,6 +3349,13 @@
                   + '📥 ' + _esc(_t('이 라벨 불러오기', 'Import this label')) + '</button>'
                 : '')
             + '</div></div>';
+        // 🪟 [2026-11-23 사용자 제보 "모달 통일성 미적용"] 이 모달만 _makeDraggable을 한 번도
+        // 안 불러서 드래그·8방향 리사이즈·최소화·헤더색 테두리가 전부 빠져 있었다 — 같은
+        // 계열(docrevvs·doclabelart·docopt 등) 형제 모달은 전부 걸려 있었는데 이것만 빠졌다.
+        // 매번 innerHTML을 통째로 다시 그리므로(위) JIRA 상세 모달과 같은 방식으로 그릴 때마다 다시 건다.
+        if (window._makeDraggable) window._makeDraggable('doclabelcp-box', 'doclabelcp-drag');
+        if (window._bindClickToFront) window._bindClickToFront('doclabelcp-overlay');
+        if (window.bringModalToFront) window.bringModalToFront('doclabelcp-overlay');
         if (cur && !needLoad) {
             var img = document.getElementById('doclabelcp-img');
             var wrap = document.getElementById('doclabelcp-imgwrap');

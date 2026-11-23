@@ -273,7 +273,7 @@
                 + ' border-radius:10px; min-width:460px; min-height:420px; display:flex; flex-direction:column;">'
                 // 헤더 — AI/SAP 계열이라 하늘색(ui-conventions.md)
                 + '<div id="matcart-drag" style="padding:10px 14px; background:#e7f3ff;'
-                + ' border-bottom:1px solid #a5c8f0; color:#1971c2; cursor:move; display:flex;'
+                + ' border-bottom:1px solid #a5c8f0; color:#1971c2; cursor:grab; display:flex;'
                 + ' align-items:center; gap:8px; flex:0 0 auto;">'
                 + '<strong style="font-size:14px;">🧺 ' + T('자재 보관함', 'Material Cart') + '</strong>'
                 + '<span id="matcart-count" style="font-size:12px; opacity:.8;"></span>'

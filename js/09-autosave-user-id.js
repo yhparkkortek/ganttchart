@@ -61,8 +61,8 @@
         const isManual = (function() { try { return localStorage.getItem('gantt_my_team_manual') === '1'; } catch(e) { return false; } })();
         const current = window.getMyTeam();
         modal.innerHTML = `
-            <div id="my-team-drag" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); top:50%; left:50%; transform:translate(-50%,-50%);">
-                <div style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
+            <div id="my-team-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); top:50%; left:50%; transform:translate(-50%,-50%);">
+                <div id="my-team-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>👥 <span id="my-team-title">${_en ? 'My Team' : '내 팀 설정'}</span></span>
                     <button onclick="document.getElementById('my-team-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
                 </div>
@@ -83,6 +83,11 @@
                 </div>
             </div>`;
         modal.style.display = 'flex';
+        // 🪟 [2026-11-23 사용자 제보 "모달 통일성 미적용"] 헤더에 cursor:grab 만 그려 놓고
+        // _makeDraggable 을 한 번도 안 불러서 손 모양은 뜨는데 실제로 안 끌렸다(테두리·리사이즈·
+        // 최소화도 없음). 바깥 상자 id 가 "-drag" 라 헷갈렸던 것도 같이 바로잡았다 — 다른 모달과
+        // 같은 규칙으로 상자는 "-box", 헤더(손잡이)가 "-drag".
+        window._makeDraggable && window._makeDraggable('my-team-box', 'my-team-drag');
         window.bringModalToFront && window.bringModalToFront('my-team-modal');
 
         // 팀 목록은 project_index.json에서 비동기로 채움(모달은 먼저 열어서 반응성 확보)
