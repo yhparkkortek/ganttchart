@@ -21,6 +21,9 @@
 
     var T = function (ko, en) { return window._t ? window._t(ko, en) : ko; };
     var esc = function (s) { return window.escapeHtml ? window.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); };
+    // 💊 칩·드롭다운 모양은 앱 공용 한 벌(js/04a) — 그 파일 없이 도는 node 하네스에선 빈 스타일.
+    function uiPill(on) { return window._uiPillStyle ? window._uiPillStyle(on) : ''; }
+    function uiSel(a) { return window._uiSelectStyle ? window._uiSelectStyle(a) : ''; }
     var toast = function (m, k, ms) { if (window.showToast) window.showToast(m, k || 'info', ms || 4000); };
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1289,7 +1292,7 @@
         var pickTxt = '';
         if (projOpts.length > 1) {
             pickTxt = '<div style="margin-bottom:5px;"><select onchange="window._dailySetCandProj(this.value)" ' +
-                      'style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px; max-width:260px;">' +
+                      'style="' + uiSel(!!_candProj) + ' max-width:260px;">' +
                       '<option value=""' + (_candProj ? '' : ' selected') + '>' +
                       esc(T('프로젝트 전체', 'All projects')) + ' (' + cand.length + ')</option>' +
                       projOpts.map(function (p) {
@@ -1403,8 +1406,8 @@
         wrap.style.display = 'flex';
         var types = window.DAILY_DAY_TYPES.map(function (t) {
             var on = _doc.dayType === t.key;
-            return '<button onclick="window._dailySetType(\'' + t.key + '\')" style="padding:5px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid ' +
-                   (on ? '#a5c8f0' : '#ddd') + '; background:' + (on ? '#e7f3ff' : '#fff') + '; color:' + (on ? '#1971c2' : '#555') + '; font-weight:' + (on ? 'bold' : 'normal') + ';">' +
+            // 💊 [2026-11-23] AI 요약 기간 버튼과 같은 칩(js/04a `_uiPillStyle`).
+            return '<button onclick="window._dailySetType(\'' + t.key + '\')" style="' + uiPill(on) + '">' +
                    esc(window._currentLang === 'en' ? t.en : t.ko) + '</button>';
         }).join('');
 
@@ -1515,17 +1518,14 @@
     // 📅 [2026-11-12 요청] 기본은 오늘, 필요하면 기간으로 넓힌다 — 정적 영역(배경 스캔이
     //    `#daily-cand` 만 다시 그리므로 여기 둬야 검색칸 타이핑이 안 날아간다).
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">' +
-      '<select onchange="window._dailySetCandPeriodMode(this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">' +
-        '<option value="today"' + (_candPeriod.mode === 'today' ? ' selected' : '') + '>' + esc(T('오늘', 'Today')) + '</option>' +
-        '<option value="yesterday"' + (_candPeriod.mode === 'yesterday' ? ' selected' : '') + '>' + esc(T('어제', 'Yesterday')) + '</option>' +
-        '<option value="week"' + (_candPeriod.mode === 'week' ? ' selected' : '') + '>' + esc(T('이번주', 'This week')) + '</option>' +
-        '<option value="lastweek"' + (_candPeriod.mode === 'lastweek' ? ' selected' : '') + '>' + esc(T('지난주', 'Last week')) + '</option>' +
-        '<option value="range"' + (_candPeriod.mode === 'range' ? ' selected' : '') + '>' + esc(T('기간 설정', 'Date range')) + '</option>' +
-      '</select>' +
+      // 💊 [2026-11-23 사용자 요청] 드롭다운 → AI 요약과 같은 칩 줄(전일·금일·전주·금주·기간설정).
+      [['yesterday', '전일', 'Yesterday'], ['today', '금일', 'Today'], ['lastweek', '전주', 'Last week'], ['week', '금주', 'This week'], ['range', '📅 기간설정', '📅 Range']].map(function (m) {
+          return '<button onclick="window._dailySetCandPeriodMode(\'' + m[0] + '\')" style="' + uiPill(_candPeriod.mode === m[0]) + '">' + esc(T(m[1], m[2])) + '</button>';
+      }).join('') +
       (_candPeriod.mode === 'range'
-        ? '<input type="date" value="' + esc(_candPeriod.start) + '" onchange="window._dailySetCandPeriodDate(\'start\', this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">' +
+        ? '<input type="date" value="' + esc(_candPeriod.start) + '" onchange="window._dailySetCandPeriodDate(\'start\', this.value)" style="padding:1px 2px; border:1px solid #cfd8e3; border-radius:5px; font-size:10.5px; width:100px; box-sizing:border-box;">' +
           '<span style="color:#aaa; font-size:11px;">~</span>' +
-          '<input type="date" value="' + esc(_candPeriod.end) + '" onchange="window._dailySetCandPeriodDate(\'end\', this.value)" style="padding:3px 6px; border:1px solid #cfe3e5; border-radius:5px; font-size:11.5px;">'
+          '<input type="date" value="' + esc(_candPeriod.end) + '" onchange="window._dailySetCandPeriodDate(\'end\', this.value)" style="padding:1px 2px; border:1px solid #cfd8e3; border-radius:5px; font-size:10.5px; width:100px; box-sizing:border-box;">'
         : '') +
     '</div>' +
     '<div style="display:flex; gap:6px; margin-bottom:6px;">' +
@@ -2321,8 +2321,7 @@
         });
         function sel(key, label, opts, cur) {
             return '<select onchange="window.dailySetFilter(\'' + key + '\', this.value)" ' +
-                'style="padding:3px 6px; border:1px solid ' + (cur ? '#a5c8f0' : '#ddd') + '; border-radius:5px; ' +
-                'background:' + (cur ? '#eef6ff' : '#fff') + '; font-size:11.5px; color:#50616f;">' +
+                'style="' + uiSel(!!cur) + ' color:#50616f;">' +
                 '<option value="">' + esc(label) + '</option>' +
                 opts.map(function (o) {
                     return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>';

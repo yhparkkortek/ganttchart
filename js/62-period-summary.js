@@ -91,9 +91,9 @@
     function filt() {
         try {
             var o = JSON.parse(localStorage.getItem(P.filterKey) || 'null');
-            if (o && typeof o === 'object') return { pm: o.pm || '', who: o.who || '', proj: o.proj || '', from: o.from || '', to: o.to || '' };
+            if (o && typeof o === 'object') return { pm: o.pm || '', who: o.who || '', proj: o.proj || '', from: o.from || '', to: o.to || '', q: o.q || '' };
         } catch (e) { /* 아래 */ }
-        return { pm: '', who: '', proj: '', from: '', to: '' };
+        return { pm: '', who: '', proj: '', from: '', to: '', q: '' };
     }
     window._psFilter = filt;
     window._psSetFilter = function (patch) {
@@ -494,20 +494,28 @@
         });
         if (F.who) people[F.who] = 1;
 
+        // 🔍 [2026-11-23 사용자 요청] 일일보고의 '업무 검색' 을 이어받는다 — 띄어쓰기로 나눈 낱말이 **모두** 들어 있는 사실만.
+        var qWords = String(F.q || '').toLowerCase().split(/\s+/).filter(Boolean);
         var out = afterProj.filter(function (f) {
-            if (!F.who) return true;
-            var list = String(f.assignee || '').split(',').map(function (x) { return x.trim(); });
-            return list.indexOf(F.who) !== -1;
+            if (F.who) {
+                var list = String(f.assignee || '').split(',').map(function (x) { return x.trim(); });
+                if (list.indexOf(F.who) === -1) return false;
+            }
+            if (qWords.length) {
+                var hay = [f.task, f.cat, f.core, f.todo, f.issue, f.fix, f.answer, f.sender, f.receiver, f.project, f.assignee].join(' ').toLowerCase();
+                if (!qWords.every(function (w) { return hay.indexOf(w) !== -1; })) return false;
+            }
+            return true;
         });
         out.sort(function (a, b) { return a.date < b.date ? 1 : (a.date > b.date ? -1 : a.idx - b.idx); });
         return {
             range: R, facts: out.slice(0, P.maxFacts), total: out.length, scanned: scanned,
             pms: Object.keys(pms).sort(), people: Object.keys(people).sort(), projects: Object.keys(projs).sort(),
-            filtered: !!(F.pm || F.who || F.proj), filter: F,
+            filtered: !!(F.pm || F.who || F.proj || F.q), filter: F,
             // 🔑 AI 요약 캐시 열쇠 — 기간뿐 아니라 **필터도** 들어가야 한다(다른 조건의 요약을
             //    같은 것으로 보여 주면 조용한 오답이다).
             // 📏 [2026-11-21] 사실 **개수**도 열쇠에 — 다른 프로젝트 훑기가 덜 끝났을 때 만든 요약이 끝난 뒤에도 "최신" 으로 남았다
-            sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : '') + '|j=' + _psJira.key + '|n=' + out.length,
+            sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : '') + (F.q ? '|q=' + F.q : '') + '|j=' + _psJira.key + '|n=' + out.length,
             scan: other,
             // 🪐 화면의 "로딩 중"·개수 표시용 — `out` 안의 jira 건수와 받는 중인지 둘 다 필요하다.
             jiraCount: out.filter(function (f) { return f.cat === 'JIRA'; }).length,
@@ -535,10 +543,160 @@
             : (hasJira ? '당신은 프로젝트의 메일 유래 업무 기록과 연결된 JIRA 이슈 변경사항을 요약합니다.' : '당신은 프로젝트의 메일 유래 업무 기록을 요약합니다.') + ' **아래 사실 목록에 있는 내용만** 쓰세요. 목록에 없는 정보·추정·평가·전망·일정 판단을 넣지 마세요. 완료/진행/지연 같은 집계 숫자도 쓰지 마세요.') +
             '\n\n[프로젝트] ' + (pm.고객사 || '') + ' ' + (pm.고객모델명 || pm.모델명 || '') + '\n[기간] ' + col.range.label + ' (사실 ' + col.facts.length + '건)\n\n[사실 목록]\n' + (lines || '(없음)') +
             '\n\n[규칙]\n- 문장마다 근거가 된 사실의 "#G숫자" 를 **반드시** 그대로 붙이세요(예: "… 요청받음 #G12"). 근거 번호 없는 문장은 버려집니다.\n' +
-            '- 같은 업무의 여러 사실은 한 문장으로 묶어도 됩니다(번호를 모두 붙이세요).\n- 사람 이름·모델명·수치는 목록의 표기 그대로.\n- 각 배열 최대 8개. 해당 없으면 빈 배열 [].\n' +
+            '- 같은 업무의 여러 사실은 한 행으로 묶어도 됩니다(번호를 모두 넣으세요).\n- 사람 이름·모델명·수치는 목록의 표기 그대로.\n' +
             (en ? '- Write the sentence VALUES in English (keep #G numbers as they are).\n' : '') +
-            '\n다음 JSON 으로만 답하세요:\n{\n  "요약": ["이 기간에 무엇이 들어왔고 무엇이 진행됐는지 사실 문장 #G.."],\n  "요청·결정": ["누가 무엇을 요청/결정/회신했는지 #G.."],\n  "미해결": ["문제점·대책이 적힌 것 중 아직 답이 없는 것 #G.."]\n}';
+            // 📊 [2026-11-23 사용자 요청 "엑셀 표처럼 · 한일/할일/막힌일 분류"] 문단 셋 대신 **행 목록**.
+            //    AI 는 분류·내용·근거만 낸다 — 프로젝트·담당자·날짜는 **코드가 근거 사실에서** 채운다(지어낼 수 없게).
+            '- 분류는 넷 중 하나: "한 일"(이 기간에 처리·회신·완료된 것) · "할 일"(To do·앞으로 해야 할 것) · "막힌 일"(문제점·답을 기다리는 것·미해결) · "결정·요청"(고객/상대의 요청, 정해진 사항).\n' +
+            '- 여러 프로젝트에 걸친 **같은 이슈**는 한 행으로 합치고 근거 번호를 모두 넣으세요(공통 이슈로 표시됩니다).\n' +
+            '- "내용"은 회의 자료에 그대로 쓸 한 문장(60자 안팎). 최대 ' + (P.maxItems || 30) + '행.\n' +
+            '\n다음 JSON 으로만 답하세요:\n{\n  "items": [\n    {"분류": "한 일", "내용": "…", "근거": ["#G12", "#G15"]}\n  ]\n}';
     };
+
+    // ── 📊 행 목록 · 보관함 ─────────────────────────────────────────────────────
+    //  분류 어휘는 데이터(일일보고 칸 이름과 같은 말 + 회의에 꼭 필요한 '결정·요청' 하나).
+    P.summaryCats = P.summaryCats || [
+        { id: 'done',     ko: '한 일',     en: 'Done',     color: '#2f9e44', bg: '#ebfbee', words: /한\s*일|완료|처리|회신|done/i },
+        { id: 'todo',     ko: '할 일',     en: 'To do',    color: '#1971c2', bg: '#e7f5ff', words: /할\s*일|to\s*do|예정|todo/i },
+        { id: 'blocked',  ko: '막힌 일',   en: 'Blocked',  color: '#c92a2a', bg: '#fff5f5', words: /막힌|미해결|문제|이슈|blocked|issue/i },
+        { id: 'decision', ko: '결정·요청', en: 'Decision', color: '#7048e8', bg: '#f3f0ff', words: /결정|요청|decision|request/i }
+    ];
+    P.archiveDir = P.archiveDir || 'App_Config/AiSummary';   // 팀 공용 — 같은 조건이면 누구의 요약이든 다시 쓴다
+    P.archiveLocalKey = P.archiveLocalKey || 'gantt_ps_archive_v1';
+    P.archiveLocalMax = P.archiveLocalMax || 30;
+    P.maxItems = P.maxItems || 30;
+    function catOf(id) { return P.summaryCats.filter(function (c) { return c.id === id; })[0] || P.summaryCats[0]; }
+    function catName(id) { var c = catOf(id); return window._currentLang === 'en' ? c.en : c.ko; }
+    function catFromText(s) {
+        s = String(s || '');
+        for (var i = 0; i < P.summaryCats.length; i++) if (s === P.summaryCats[i].ko || s === P.summaryCats[i].en) return P.summaryCats[i].id;
+        for (var j = 0; j < P.summaryCats.length; j++) if (P.summaryCats[j].words.test(s)) return P.summaryCats[j].id;
+        return 'done';
+    }
+    function uniq(a) { var o = {}, r = []; a.forEach(function (x) { x = String(x || '').trim(); if (x && !o[x]) { o[x] = 1; r.push(x); } }); return r; }
+
+    /**
+     * AI 응답 → 표 행. 근거(#G)가 사실 목록에 하나도 없으면 **버린다**(_psGround 와 같은 규칙).
+     * 옛 모양({요약,요청·결정,미해결})도 받는다 — 보관본·하네스·옛 캐시가 그 모양이다.
+     */
+    window._psRowsFromAi = function (j, facts) {
+        var byIdx = {}; (facts || []).forEach(function (f) { byIdx[f.idx] = f; });
+        var items = [];
+        if (j && Array.isArray(j.items)) items = j.items;
+        else if (j) {
+            [['요약', 'done'], ['요청·결정', 'decision'], ['요청/결정', 'decision'], ['결정', 'decision'], ['미해결', 'blocked']].forEach(function (p) {
+                (Array.isArray(j[p[0]]) ? j[p[0]] : []).forEach(function (s) { items.push({ 분류: catOf(p[1]).ko, 내용: s, 근거: [] }); });
+            });
+        }
+        var rows = [], dropped = 0;
+        items.forEach(function (it) {
+            if (!it) { dropped++; return; }
+            var text = String(it['내용'] || it.text || it.content || '');
+            var refsRaw = [].concat(it['근거'] || it.refs || []).join(' ') + ' ' + text;
+            var ids = uniq((refsRaw.match(/#G(\d+)/g) || []).map(function (r) { return r.slice(2); }))
+                .map(Number).filter(function (n) { return byIdx[n]; });
+            if (!ids.length) { dropped++; return; }
+            var fs = ids.map(function (n) { return byIdx[n]; });
+            var projects = uniq(fs.map(function (f) { return f.project; }));
+            var people = uniq([].concat.apply([], fs.map(function (f) { return String(f.assignee || '').split(','); })));
+            var dates = fs.map(function (f) { return f.date; }).filter(Boolean).sort();
+            rows.push({
+                cat: catFromText(it['분류'] || it.cat || ''),
+                text: text.replace(/\s*#G\d+[,\s]*/g, ' ').replace(/\s+/g, ' ').trim(),
+                projects: projects, people: people,
+                date: dates.length ? dates[dates.length - 1] : '',
+                common: projects.length > 1,
+                refs: fs.map(function (f) { return { g: f.idx, p: f.project || '', row: f.rowIdx != null ? f.rowIdx : null, task: f.task || '' }; })
+            });
+        });
+        return { rows: rows.slice(0, P.maxItems * 2), dropped: dropped };
+    };
+    /** 옛 화면·텔레그램 글이 쓰는 세 칸을 행에서 다시 만든다(같은 내용이 두 벌로 갈리지 않게 **파생**만). */
+    function compatArrays(rows) {
+        var s = function (r) { return r.text + ' ' + r.refs.map(function (x) { return '#G' + x.g; }).join(' '); };
+        return {
+            요약: rows.filter(function (r) { return r.cat === 'done' || r.cat === 'todo'; }).map(s),
+            요청결정: rows.filter(function (r) { return r.cat === 'decision'; }).map(s),
+            미해결: rows.filter(function (r) { return r.cat === 'blocked'; }).map(s)
+        };
+    }
+
+    // 📚 보관함 — AI 호출이 아까우니 만든 요약은 버리지 않는다(사용자 요청).
+    //    NAS 면 팀 공용 폴더에 1건 1파일(이름에 조건 해시 → 목록 1콜로 같은 조건을 찾는다),
+    //    NAS 가 아니면 이 브라우저(localStorage)에. 실패는 저장만 못 할 뿐 화면은 막지 않는다.
+    function fnv8(s) { var h = 0x811c9dc5; s = String(s); for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; } return ('0000000' + h.toString(16)).slice(-8); }
+    function useNas() { return !!(window.nasAppFile && window._storageMode && window._storageMode() === 'nas'); }
+    function stamp(d) { return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); }
+    function archNameOf(rec) {
+        var f = rec.filter || {};
+        var tail = [rec.label, f.pm, f.proj, f.who].filter(Boolean).join('_').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 90);
+        return stamp(new Date(rec.at)) + '__' + fnv8(rec.sig) + '__' + tail + '.json';
+    }
+    window._psArchiveParseName = function (name) {
+        var m = String(name || '').match(/^(\d{8})_(\d{4})\d*__([0-9a-f]{8})__(.*)\.json$/);
+        if (!m) return null;
+        return { at: m[1].slice(0, 4) + '-' + m[1].slice(4, 6) + '-' + m[1].slice(6) + ' ' + m[2].slice(0, 2) + ':' + m[2].slice(2), hash: m[3], title: m[4].replace(/_/g, ' ') };
+    };
+    var _psArch = { names: null, at: 0, busy: null };
+    function localArch() { try { return JSON.parse(localStorage.getItem(P.archiveLocalKey) || '[]') || []; } catch (e) { return []; } }
+    window._psArchiveList = async function (force) {
+        if (!force && _psArch.names && Date.now() - _psArch.at < 60000) return _psArch.names;
+        if (_psArch.busy) return _psArch.busy;
+        _psArch.busy = (async function () {
+            var names;
+            if (useNas()) {
+                var items = await window.nasAppFile.list(P.archiveDir);
+                names = items.map(function (it) { return it && it.name; }).filter(function (n) { return /\.json$/.test(n || ''); });
+            } else {
+                names = localArch().map(function (r) { return r.name; });
+            }
+            names.sort().reverse();   // 이름이 시각으로 시작한다 → 최신이 위
+            _psArch.names = names; _psArch.at = Date.now();
+            return names;
+        })();
+        try { return await _psArch.busy; } finally { _psArch.busy = null; }
+    };
+    window._psArchiveGet = async function (name) {
+        if (useNas()) return await window.nasAppFile.get(P.archiveDir + '/' + name, { json: true });
+        return localArch().filter(function (r) { return r.name === name; })[0] || null;
+    };
+    window._psArchivePut = async function (rec) {
+        rec.name = archNameOf(rec);
+        if (useNas()) await window.nasAppFile.put(P.archiveDir + '/' + rec.name, rec);
+        else {
+            var a = localArch().filter(function (r) { return r.name !== rec.name; });
+            a.push(rec);
+            while (a.length > P.archiveLocalMax) a.shift();
+            try { localStorage.setItem(P.archiveLocalKey, JSON.stringify(a)); } catch (e) { /* 꽉 차면 이번 것만 못 남긴다 */ }
+        }
+        if (_psArch.names) { _psArch.names.unshift(rec.name); }
+        _psLooked = {};   // 새 보관본이 생겼으니 "찾아봤는데 없더라" 기억은 버린다
+        return rec.name;
+    };
+    /** 같은 조건(sig)으로 만든 보관본이 있으면 가장 최신 것을 — **AI 를 다시 부르지 않기 위해서**. */
+    window._psArchiveFind = async function (sig) {
+        var h = fnv8(sig);
+        var names = await window._psArchiveList();
+        for (var i = 0; i < names.length; i++) {
+            if (names[i].indexOf('__' + h + '__') < 0) continue;
+            try {
+                var rec = await window._psArchiveGet(names[i]);
+                if (rec && rec.sig === sig && Array.isArray(rec.rows)) return rec;   // 해시가 겹쳐도 열쇠로 한 번 더
+            } catch (e) { /* 다음 후보 */ }
+        }
+        return null;
+    };
+    function adoptRec(kind, rec) {
+        window.projectMeta = window.projectMeta || {};
+        window.projectMeta.aiPeriodSummary = window.projectMeta.aiPeriodSummary || {};
+        var c = compatArrays(rec.rows || []);
+        window.projectMeta.aiPeriodSummary[kind] = {
+            rangeKey: rec.sig, at: rec.at, factCount: rec.factCount, rows: rec.rows, dropped: rec.dropped || 0,
+            by: rec.by || '', archived: rec.name || '', reused: !!rec._reused,
+            요약: c.요약, 요청결정: c.요청결정, 미해결: c.미해결
+        };
+        return window.projectMeta.aiPeriodSummary[kind];
+    }
     /** AI 문장 중 사실 목록에 **있는** #G 를 하나도 안 단 문장은 버린다. */
     window._psGround = function (arr, facts) {
         var ok = {}; (facts || []).forEach(function (f) { ok[f.idx] = 1; });
@@ -551,12 +709,25 @@
         return { kept: kept, dropped: dropped };
     };
 
-    window.generatePeriodSummary = async function (kind) {
+    window.generatePeriodSummary = async function (kind, opts) {
         kind = kind || mode();
-        var key = window.getActiveAiKey ? window.getActiveAiKey() : null;
-        if (!key) { alert(T('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please set your AI API key first.')); return null; }
+        opts = opts || {};
         var col = window._psCollectFacts(kind);
         if (!col.facts.length) { if (window.showToast) window.showToast(T('이 기간에 메일 분석으로 들어온 업무가 없습니다 — 요약할 사실이 없습니다.', 'No mail-derived tasks in this period — nothing to summarize.'), 'info'); return null; }
+        // ♻️ 같은 조건(기간·필터·사실 수)의 보관본이 있으면 AI 를 부르지 않는다 — `force` 일 때만 새로.
+        if (!opts.force) {
+            var old = null;
+            try { old = await window._psArchiveFind(col.sig); } catch (e) { old = null; }
+            if (old) {
+                old._reused = true;
+                var c0 = adoptRec(kind, old);
+                if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+                if (window.showToast) window.showToast(T('♻️ 같은 조건의 보관된 요약을 다시 썼습니다 (AI 호출 0회)', '♻️ Reused the archived summary (0 AI calls)'), 'info');
+                return c0;
+            }
+        }
+        var key = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        if (!key) { alert(T('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please set your AI API key first.')); return null; }
         var btn = document.getElementById('ai-summary-generate-btn');
         if (btn) { btn.disabled = true; btn.textContent = T('⏳ 생성 중...', '⏳ Generating...'); }
         try {
@@ -566,13 +737,19 @@
             var m = String(text).replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
             if (!m) throw new Error(T('AI 응답에서 JSON 을 찾지 못했습니다.', 'No JSON in the AI response.'));
             var j = JSON.parse(m[0]);
-            var g1 = window._psGround(j['요약'], col.facts), g2 = window._psGround(j['요청·결정'] || j['요청/결정'] || j['결정'], col.facts), g3 = window._psGround(j['미해결'], col.facts);
-            window.projectMeta = window.projectMeta || {};
-            window.projectMeta.aiPeriodSummary = window.projectMeta.aiPeriodSummary || {};
-            window.projectMeta.aiPeriodSummary[kind] = {
-                rangeKey: col.sig, at: new Date().toISOString(), factCount: col.facts.length,
-                요약: g1.kept, 요청결정: g2.kept, 미해결: g3.kept, dropped: g1.dropped + g2.dropped + g3.dropped
+            var conv = window._psRowsFromAi(j, col.facts);
+            var F0 = filt();
+            var rec = {
+                v: 2, sig: col.sig, kind: kind, label: col.range.label,
+                range: { from: ymd(col.range.from), to: ymd(col.range.to) },
+                filter: { pm: F0.pm || '', proj: F0.proj || '', who: F0.who || '' },
+                at: new Date().toISOString(), by: window._appUserKey || window.currentUserName || '',
+                factCount: col.facts.length, rows: conv.rows, dropped: conv.dropped
             };
+            // 📚 보관 — 실패해도 요약은 보여 준다(다음에 같은 조건이면 그때 또 부를 뿐이다).
+            try { await window._psArchivePut(rec); }
+            catch (e) { console.warn('[기간 요약] 보관 실패:', e && e.message); if (window._issueLog) try { window._issueLog({ domain: 'ai', kind: 'ps_archive_fail', rid: '', route: '', params: { msg: String(e && e.message || e).slice(0, 200) } }); } catch (e2) { /* 무시 */ } }
+            adoptRec(kind, rec);
             if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
             if (window.showToast) window.showToast(T('🤖 ' + col.range.label + ' 요약을 만들었습니다', '🤖 Summary generated') + (window.projectMeta.aiPeriodSummary[kind].dropped ? T(' (근거 없는 문장 ' + window.projectMeta.aiPeriodSummary[kind].dropped + '개 제거)', ' (' + window.projectMeta.aiPeriodSummary[kind].dropped + ' ungrounded sentence(s) removed)') : ''), 'info');
             return window.projectMeta.aiPeriodSummary[kind];
@@ -592,8 +769,21 @@
         var cache = ((pm.aiPeriodSummary || {})[kind]);
         var L = ['📅 **' + col.range.label + ' ' + T('업무 요약', 'summary') + '** — ' + (pm.고객사 || '') + ' ' + (pm.고객모델명 || pm.모델명 || '') + ' (' + T('메일 유래 업무 ', 'mail-derived tasks: ') + col.facts.length + T('건', '') + ')'];
         if (cache && cache.rangeKey === col.sig) {
-            var sec = function (title, arr) { if (arr && arr.length) { L.push('', '**' + title + '**'); arr.forEach(function (s) { L.push('- ' + s); }); } };
-            sec(T('요약', 'Summary'), cache.요약); sec(T('요청·결정', 'Requests / decisions'), cache.요청결정); sec(T('미해결', 'Open issues'), cache.미해결);
+            if (Array.isArray(cache.rows)) {
+                // 📊 행 목록 — 분류별로 묶어 글로(텔레그램·문답). 표와 **같은 행**이다.
+                P.summaryCats.forEach(function (c) {
+                    var rs = cache.rows.filter(function (r) { return r.cat === c.id; });
+                    if (!rs.length) return;
+                    L.push('', '**' + catName(c.id) + '**');
+                    rs.forEach(function (r) {
+                        L.push('- ' + (r.common ? '[' + T('공통', 'Common') + '] ' : (r.projects.length ? '[' + r.projects[0] + '] ' : '')) + r.text +
+                               (r.people.length ? ' (' + r.people.join(', ') + ')' : '') + ' ' + r.refs.map(function (x) { return '#G' + x.g; }).join(' '));
+                    });
+                });
+            } else {
+                var sec = function (title, arr) { if (arr && arr.length) { L.push('', '**' + title + '**'); arr.forEach(function (s) { L.push('- ' + s); }); } };
+                sec(T('요약', 'Summary'), cache.요약); sec(T('요청·결정', 'Requests / decisions'), cache.요청결정); sec(T('미해결', 'Open issues'), cache.미해결);
+            }
             if (cache.dropped) L.push('', '_' + T('근거 없는 문장 ' + cache.dropped + '개는 제거됨', cache.dropped + ' ungrounded sentence(s) removed') + '_');
         } else {
             L.push('', '_' + T('AI 요약은 아직 없습니다 — 아래는 사실 목록입니다.', 'No AI summary yet — facts below.') + '_');
@@ -618,7 +808,8 @@
     function toolbarHtml(cur, col) {
         var en = window._currentLang === 'en';
         var btn = function (id, label, on) {
-            return '<button onclick="window._psSetMode(\'' + id + '\')" style="border:1px solid ' + (on ? '#1971c2' : '#cfd8e3') + '; background:' + (on ? '#1971c2' : '#fff') + '; color:' + (on ? '#fff' : '#2c5f8a') + '; border-radius:12px; font-size:11px; font-weight:bold; cursor:pointer; padding:2px 6px; white-space:nowrap; line-height:1.4;">' + esc(label) + '</button>';
+            // 💊 모양은 앱 공용 한 벌(js/04a `_uiPillStyle`) — 일일보고 칩과 같다.
+            return '<button onclick="window._psSetMode(\'' + id + '\')" style="' + window._uiPillStyle(on) + '">' + esc(label) + '</button>';
         };
         var curKinds = splitKinds(cur);
         var b = P.periods.map(function (p) {
@@ -642,7 +833,7 @@
             // 💡 캐스케이딩 — 상위 선택이 바뀌면 그 아래(하위) 선택은 더 이상 안 맞을 수 있어 같이 비운다.
             var patch = '{' + id + ': this.value' + (resetKeys || []).map(function (k) { return ', ' + k + ": ''"; }).join('') + '}';
             return '<select onchange="window._psSetFilter(' + patch + ')" title="' + esc(label) + '" ' +
-                   'style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px; max-width:220px;' + (extraStyle || '') + '">' + o + '</select>';
+                   'style="' + window._uiSelectStyle(!!cur2) + ' max-width:220px;' + (extraStyle || '') + '">' + o + '</select>';
         };
         var sc = (col && col.scan) || {};
         // 💡 [2026-11-23 사용자 요청] 1줄 = 기간(전일~금월·기간설정+달력), 2줄 = 필터.
@@ -668,7 +859,10 @@
              sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('전체', 'All'), [], ' max-width:150px;') + slash +
              lab(T('업무 담당자', 'Task assignee')) +
              sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('전체', 'All'), [], ' max-width:95px;') +
-             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="padding:2px 8px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:13px; line-height:1.2; cursor:pointer;">↺</button>' : '') +
+             // 🔍 업무 검색 — 일일보고와 같은 모양(입력칸 + 🔍), Enter 나 🔍 로 적용(타자마다 다시 그리면 포커스가 날아간다).
+             '<input id="ps-q" value="' + esc(F.q || '') + '" placeholder="' + esc(T('업무 검색', 'Search tasks')) + '" onkeydown="if(event.key===\'Enter\') window._psSetFilter({q:this.value.trim()})" style="padding:2px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11px; width:120px; margin-left:4px;">' +
+             '<button onclick="window._psSetFilter({q:(document.getElementById(\'ps-q\')||{}).value.trim()})" title="' + esc(T('업무 검색', 'Search tasks')) + '" style="padding:2px 7px; border:1px solid #cfd8e3; background:#e7f5ff; color:#1971c2; border-radius:5px; font-size:11px; cursor:pointer;">🔍</button>' +
+             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\', q:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="padding:2px 8px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:13px; line-height:1.2; cursor:pointer;">↺</button>' : '') +
              (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
              ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
 
@@ -695,27 +889,33 @@
                (col.jiraScan && col.jiraScan.busy ? ' <span style="color:#1971c2;">⏳ ' + esc(T('JIRA 확인 중…', 'Checking JIRA…')) + '</span>' : '') +
                (col.jiraScan && col.jiraScan.err ? ' <span style="color:#b1432f;">⚠️ JIRA: ' + esc(col.jiraScan.err) + '</span>' : '') +
                '</div></div>');
-        if (fresh) {
-            var byIdx = {}; (col.facts || []).forEach(function (f) { byIdx[f.idx] = f; });
-            var li = function (s) {
-                // 🔗 [2026-11-21] 열린 프로젝트 행(`local`)만 #G 링크로. 다른 프로젝트 사실은 "(프로젝트 #행)" 글자로 바꿔 링크기가 못 집게 한다.
-                var c = esc(s).replace(/#G(\d+)/g, function (m, n) {
-                    var f = byIdx[+n];
-                    if (!f || f.local) return m;
-                    return '<span style="color:#888; font-size:11px;" title="' + esc(T('다른 프로젝트의 행', 'row in another project')) + '">[' + esc(f.project || '?') + ' #' + (f.rowIdx != null ? f.rowIdx : n) + ']</span>';
-                });
-                return '<li style="margin-bottom:4px;">' + (window._linkifyTaskRefs ? window._linkifyTaskRefs(c) : c) + '</li>';
-            };
-            var sec = function (icon, title, arr) { if (!arr || !arr.length) return ''; return '<div style="margin-bottom:10px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">' + icon + ' ' + esc(title) + '</div><ul style="margin:0; padding-left:18px; font-size:12.5px;">' + arr.map(li).join('') + '</ul></div>'; };
-            h.push('<div style="padding:12px 14px; background:#f3f8ff; border:1px solid #d6e6fb; border-radius:8px; margin-bottom:14px;">' +
-                   '<div style="font-size:11px; color:#999; margin-bottom:8px;">🤖 ' + esc(T('AI 요약 · 사실 목록 ' + cache.factCount + '건만으로 · ', 'AI summary from ' + cache.factCount + ' facts · ') + String(cache.at).replace('T', ' ').slice(0, 16)) + (cache.dropped ? ' · ' + esc(T('근거 없는 문장 ' + cache.dropped + '개 제거', cache.dropped + ' ungrounded removed')) : '') + '</div>' +
-                   sec('📝', T('요약', 'Summary'), cache.요약) + sec('📨', T('요청·결정', 'Requests / decisions'), cache.요청결정) + sec('⚠️', T('미해결', 'Open issues'), cache.미해결) +
-                   ((!cache.요약.length && !cache.요청결정.length && !cache.미해결.length) ? '<div style="font-size:12px; color:#999;">' + esc(T('근거 있는 문장이 없었습니다 — 사실 목록을 직접 보세요.', 'No grounded sentences — see the facts below.')) + '</div>' : '') +
-                   '</div>');
-        } else {
-            h.push('<div style="padding:10px 14px; background:#fafafa; border:1px dashed #ddd; border-radius:8px; margin-bottom:14px; font-size:12px; color:#777;">' +
-                   esc(T('AI 요약은 아래 [🤖 AI 요약 생성] 을 누르면 이 기간의 사실 목록만으로 만듭니다(목록 밖의 말은 버립니다). 아래 사실 목록은 AI 없이 그린 것입니다.', 'Press [🤖 Generate AI summary] to summarize only the facts below (ungrounded sentences are dropped). The fact list needs no AI.')) + '</div>');
+        // 🖥 표가 들어가니 모달을 한 번 넓힌다(사람이 줄여 둔 폭은 그 뒤로 건드리지 않는다).
+        try {
+            var box = document.getElementById('ai-summary-modal'); box = box && box.firstElementChild;
+            if (box && !box._psWide) { box._psWide = 1; if (box.getBoundingClientRect().width < 900) box.style.width = 'min(1040px, 94vw)'; }
+        } catch (e) { /* 폭은 못 바꿔도 된다 */ }
+        var openName = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
+        var shown = null;   // 지금 표로 그릴 것: { rows, at, by, factCount, dropped, reused, archiveView }
+        if (_psView) {
+            shown = { rows: _psView.rows || [], at: _psView.at, by: _psView.by, factCount: _psView.factCount, dropped: _psView.dropped, archiveView: _psView };
+        } else if (fresh) {
+            var rows0 = Array.isArray(cache.rows) ? cache.rows
+                : window._psRowsFromAi({ '요약': cache.요약, '요청·결정': cache.요청결정, '미해결': cache.미해결 }, col.facts).rows;   // 옛 캐시
+            shown = { rows: rows0, at: cache.at, by: cache.by, factCount: cache.factCount, dropped: cache.dropped, reused: cache.reused };
+        } else if (col.facts.length && !_psLooked[col.sig]) {
+            // ♻️ 같은 조건의 보관본이 있으면 버튼을 안 눌러도 바로 보여 준다(AI 0회).
+            _psLooked[col.sig] = 1;
+            var sigNow = col.sig;
+            window._psArchiveFind(sigNow).then(function (rec) {
+                if (!rec || mode() !== kind) return;
+                if (window._psCollectFacts(kind).sig !== sigNow) return;
+                rec._reused = true; adoptRec(kind, rec);
+                if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+            }).catch(function () { /* 보관함을 못 읽으면 그냥 버튼을 누르면 된다 */ });
         }
+        _psLast = { shown: shown, openName: openName, label: shown && shown.archiveView ? shown.archiveView.label : col.range.label, kind: kind };
+        h.push('<div id="ps-ai-sec">' + aiSectionHtml() + '</div>');
+        if (shown && shown.rows.length) h.push('<details style="margin-top:4px;"><summary style="cursor:pointer; font-size:12px; color:#2c5f8a; font-weight:bold;">📋 ' + esc(T('근거 사실 목록 ' + col.facts.length + '건 (AI 없이 만든 원본)', 'Source facts (' + col.facts.length + ', no AI)')) + '</summary>');
         if (!col.facts.length) {
             // ⚠️ 훑는 중에 "없습니다" 라고 하면 **없는 것과 아직 못 읽은 것**을 구분할 수 없다.
             //    (그게 "못 가져오는 건지 표현이 안 되는 건지 모르겠다" 는 신고의 정체였다)
@@ -742,9 +942,204 @@
                 });
             });
         }
+        if (shown && shown.rows.length) h.push('</details>');
         h.push('</div>');
         body.innerHTML = toolbarHtml(kind, col) + h.join('');
+        fillArchiveSelect();
     }
+
+    // ── 📊 AI 요약 표 ───────────────────────────────────────────────────────────
+    var _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false };
+    var _psView = null;      // 📚 보관본을 열어 보는 중이면 그 기록
+    var _psLooked = {};      // 같은 조건으로 보관함을 이미 찾아봤는가(렌더마다 NAS 를 두드리지 않게)
+    var _psLast = null;
+    window._psTblState = function () { return _psTbl; };
+
+    function rowProj(r) { return r.common ? T('공통', 'Common') + ' (' + r.projects.length + ')' : (r.projects[0] || ''); }
+    function viewRows() {
+        var rows = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
+        var anyCat = Object.keys(_psTbl.cats).some(function (k) { return _psTbl.cats[k]; });
+        var q = String(_psTbl.q || '').trim().toLowerCase();
+        var out = rows.filter(function (r) {
+            if (anyCat && !_psTbl.cats[r.cat]) return false;
+            if (_psTbl.common && !r.common) return false;
+            if (_psTbl.proj && r.projects.indexOf(_psTbl.proj) < 0) return false;
+            if (_psTbl.who && r.people.indexOf(_psTbl.who) < 0) return false;
+            if (q && (r.text + ' ' + r.projects.join(' ') + ' ' + r.people.join(' ') + ' ' + r.refs.map(function (x) { return x.task; }).join(' ')).toLowerCase().indexOf(q) < 0) return false;
+            return true;
+        });
+        var catIdx = {}; P.summaryCats.forEach(function (c, i) { catIdx[c.id] = i; });
+        var key = {
+            cat: function (r) { return pad(catIdx[r.cat] || 0) + (r.date ? '' : ''); },
+            proj: function (r) { return (r.common ? '0' : '1') + rowProj(r); },
+            who: function (r) { return r.people.join(', '); },
+            date: function (r) { return r.date || ''; },
+            text: function (r) { return r.text; }
+        }[_psTbl.sort] || function () { return ''; };
+        var d = _psTbl.dir;
+        return out.map(function (r, i) { return { r: r, i: i }; }).sort(function (a, b) {
+            var x = key(a.r), y = key(b.r);
+            if (x !== y) return (x < y ? -1 : 1) * d;
+            // 같으면 최근 날짜가 위, 그다음 원래 순서
+            if ((a.r.date || '') !== (b.r.date || '')) return (a.r.date || '') < (b.r.date || '') ? 1 : -1;
+            return a.i - b.i;
+        }).map(function (o) { return o.r; });
+    }
+    function refHtml(x, showProj) {
+        var open = _psLast && _psLast.openName;
+        var title = esc((x.p ? x.p + ' · ' : '') + (x.task || ''));
+        if (x.p && x.p === open) return '<span title="' + title + '">' + link(x.g) + '</span>';
+        // 다른 프로젝트 행은 링크 대신 글자 — 프로젝트 칸에 이미 이름이 있으면(공통이 아니면) 번호만.
+        return '<span style="color:#888; white-space:nowrap;" title="' + title + '">' + (showProj ? esc(x.p || '?') + ' ' : '') + '#' + esc(x.row != null ? x.row : x.g) + '</span>';
+    }
+    function tableHtml() {
+        var rows = viewRows();
+        var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
+        var th = function (id, label, w) {
+            var on = _psTbl.sort === id;
+            return '<th onclick="window._psTblSort(\'' + id + '\')" style="cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
+                   esc(label) + ' <span style="color:' + (on ? '#1971c2' : '#b8c4d0') + ';">' + (on ? (_psTbl.dir > 0 ? '▲' : '▼') : '↕') + '</span></th>';
+        };
+        var td = 'padding:5px 6px; border:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
+        var body = rows.map(function (r) {
+            var c = catOf(r.cat);
+            return '<tr>' +
+                '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
+                '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
+                '<td style="' + td + '">' + esc(r.people.join(', ')) + '</td>' +
+                '<td style="' + td + ' white-space:nowrap; color:#555;">' + esc(r.date || '') + '</td>' +
+                '<td style="' + td + ' color:#222;">' + esc(r.text) + '</td>' +
+                '<td style="' + td + ' font-size:11px;">' + r.refs.map(function (x) { return refHtml(x, r.common); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
+        }).join('');
+        if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
+        return '<table style="width:100%; border-collapse:collapse; table-layout:auto;"><thead><tr>' +
+            th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
+            '<th style="padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
+            '</tr></thead><tbody>' + body + '</tbody></table>' +
+            '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행', rows.length + ' / ' + all.length + ' rows')) + '</div>';
+    }
+    function aiSectionHtml() {
+        var s = _psLast && _psLast.shown;
+        if (!s) {
+            // 🧹 [2026-11-23 사용자 요청] 안내문은 지웠다 — 보관함 고르기만 남긴다.
+            return '<div style="display:flex; justify-content:flex-end; margin-bottom:6px;">' + archiveSelectHtml() + '</div>';
+        }
+        var all = s.rows;
+        var cnt = {}; all.forEach(function (r) { cnt[r.cat] = (cnt[r.cat] || 0) + 1; });
+        var chips = P.summaryCats.map(function (c) {
+            var on = !!_psTbl.cats[c.id];
+            return '<button onclick="window._psTblSet({toggleCat:\'' + c.id + '\'})" style="padding:2px 8px; border-radius:11px; font-size:11px; font-weight:bold; cursor:pointer; border:1px solid ' + c.color + '; background:' + (on ? c.color : c.bg) + '; color:' + (on ? '#fff' : c.color) + ';">' + esc(catName(c.id)) + ' ' + (cnt[c.id] || 0) + '</button>';
+        }).join('');
+        var nCommon = all.filter(function (r) { return r.common; }).length;
+        var projs = uniq([].concat.apply([], all.map(function (r) { return r.projects; }))).sort();
+        var people = uniq([].concat.apply([], all.map(function (r) { return r.people; }))).sort();
+        var opt = function (list, cur, allLabel) { return '<option value="">' + esc(allLabel) + '</option>' + list.map(function (v) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join(''); };
+        var selS = 'padding:2px 4px; border:1px solid #cfd8e3; border-radius:5px; font-size:11px; max-width:130px;';
+        var smallBtn = 'padding:2px 8px; border:1px solid #cfd8e3; background:#fff; color:#2c5f8a; border-radius:5px; font-size:11px; cursor:pointer; white-space:nowrap;';
+        var meta = '🤖 ' + esc(T('사실 ' + (s.factCount || 0) + '건만으로', 'from ' + (s.factCount || 0) + ' facts')) + ' · ' + esc(String(s.at || '').replace('T', ' ').slice(0, 16)) +
+            (s.by ? ' · ' + esc(s.by) : '') + (s.dropped ? ' · ' + esc(T('근거 없는 항목 ' + s.dropped + '개 제거', s.dropped + ' ungrounded removed')) : '') +
+            (s.reused ? ' · <b style="color:#2f9e44;">♻️ ' + esc(T('보관본 재사용 (AI 0회)', 'reused (0 AI calls)')) + '</b>' : '');
+        var banner = s.archiveView
+            ? '<div style="padding:5px 10px; margin-bottom:6px; background:#fff9db; border:1px solid #ffe066; border-radius:6px; font-size:11.5px; color:#8f5a00;">📚 ' +
+              esc(T('보관본을 보는 중: ', 'Viewing archived: ') + (s.archiveView.label || '') + ([s.archiveView.filter && s.archiveView.filter.pm, s.archiveView.filter && s.archiveView.filter.proj, s.archiveView.filter && s.archiveView.filter.who].filter(Boolean).length ? ' · ' + [s.archiveView.filter.pm, s.archiveView.filter.proj, s.archiveView.filter.who].filter(Boolean).join(' / ') : '')) +
+              ' <button onclick="window._psCloseArchive()" style="' + smallBtn + ' margin-left:6px;">✕ ' + esc(T('현재 조건으로', 'Back to current')) + '</button></div>'
+            : '';
+        return banner +
+            '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:5px;">' + chips +
+            (nCommon ? '<label style="font-size:11px; color:#8f5a00; display:inline-flex; align-items:center; gap:2px; cursor:pointer; margin-left:2px;"><input type="checkbox"' + (_psTbl.common ? ' checked' : '') + ' onchange="window._psTblSet({common:this.checked})">🔗 ' + esc(T('공통 이슈만', 'Common only')) + ' ' + nCommon + '</label>' : '') +
+            '<select onchange="window._psTblSet({proj:this.value})" title="' + esc(T('프로젝트', 'Project')) + '" style="' + selS + '">' + opt(projs, _psTbl.proj, T('프로젝트 전체', 'All projects')) + '</select>' +
+            '<select onchange="window._psTblSet({who:this.value})" title="' + esc(T('업무 담당자', 'Assignee')) + '" style="' + selS + '">' + opt(people, _psTbl.who, T('담당자 전체', 'All assignees')) + '</select>' +
+            '<input id="ps-tbl-q" value="' + esc(_psTbl.q) + '" oninput="window._psTblSearch(this.value)" placeholder="🔍 ' + esc(T('내용 검색', 'Search')) + '" style="padding:2px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11px; width:110px;">' +
+            '<button onclick="window._psTblSet({reset:1})" title="' + esc(T('표 필터·정렬 초기화', 'Reset table filters')) + '" style="' + smallBtn + '">↺</button>' +
+            '<span style="flex:1;"></span>' +
+            '<button onclick="window._psTblExcel()" style="' + smallBtn + '" title="' + esc(T('지금 보이는 행을 엑셀로', 'Export visible rows')) + '">📗 ' + esc(T('엑셀', 'Excel')) + '</button>' +
+            (s.archiveView ? '' : '<button onclick="window._psRegenerate()" style="' + smallBtn + '" title="' + esc(T('보관본을 두고 AI 로 새로 만든다', 'Generate again with AI')) + '">🔄 ' + esc(T('새로 생성', 'Regenerate')) + '</button>') +
+            archiveSelectHtml() +
+            '</div>' +
+            '<div style="font-size:10.5px; color:#999; margin-bottom:4px;">' + meta + '</div>' +
+            '<div id="ps-ai-tbl" style="margin-bottom:10px;">' + tableHtml() + '</div>';
+    }
+    function archiveSelectHtml() {
+        return '<select id="ps-arch-sel" onchange="if(this.value) window._psOpenArchive(this.value)" title="' + esc(T('보관된 AI 요약 — 골라서 다시 보기(AI 0회)', 'Archived summaries')) + '" style="padding:2px 4px; border:1px solid #e0c97a; background:#fffbea; border-radius:5px; font-size:11px; max-width:170px;"><option value="">📚 ' + esc(T('보관함', 'Archive')) + '</option></select>';
+    }
+    function fillArchiveSelect() {
+        var fill = function (names) {
+            var el = document.getElementById('ps-arch-sel');
+            if (!el) return;
+            var cur = _psView && _psView.name;
+            el.innerHTML = '<option value="">📚 ' + esc(T('보관함', 'Archive')) + ' (' + names.length + ')</option>' + names.slice(0, 60).map(function (n) {
+                var p = window._psArchiveParseName(n);
+                return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(p ? p.at + ' · ' + p.title : n) + '</option>';
+            }).join('');
+        };
+        if (_psArch.names) fill(_psArch.names);
+        window._psArchiveList().then(fill).catch(function () { /* 보관함을 못 읽어도 화면은 그대로 */ });
+    }
+    function rerenderAi() {
+        var sec = document.getElementById('ps-ai-sec');
+        if (sec) { sec.innerHTML = aiSectionHtml(); fillArchiveSelect(); }
+    }
+    window._psTblSort = function (col) {
+        if (_psTbl.sort === col) _psTbl.dir = -_psTbl.dir; else { _psTbl.sort = col; _psTbl.dir = (col === 'date') ? -1 : 1; }
+        var t = document.getElementById('ps-ai-tbl'); if (t) t.innerHTML = tableHtml();
+    };
+    window._psTblSearch = function (v) {
+        _psTbl.q = String(v || '');
+        var t = document.getElementById('ps-ai-tbl'); if (t) t.innerHTML = tableHtml();   // 입력칸은 그대로 둔다(포커스 유지)
+    };
+    window._psTblSet = function (patch) {
+        patch = patch || {};
+        if (patch.reset) _psTbl = { sort: 'cat', dir: 1, cats: {}, proj: '', who: '', q: '', common: false };
+        if (patch.toggleCat) _psTbl.cats[patch.toggleCat] = !_psTbl.cats[patch.toggleCat];
+        ['proj', 'who', 'common'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
+        rerenderAi();
+    };
+    window._psRegenerate = function () {
+        return window.generatePeriodSummary(mode(), { force: true });
+    };
+    window._psOpenArchive = async function (name) {
+        try {
+            var rec = await window._psArchiveGet(name);
+            if (!rec || !Array.isArray(rec.rows)) throw new Error(T('보관본을 읽지 못했습니다', 'Could not read the archive'));
+            rec.name = rec.name || name;
+            _psView = rec;
+            if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+        } catch (e) {
+            if (window.showToast) window.showToast('⚠️ ' + (e && e.message || e), 'error');
+        }
+    };
+    window._psCloseArchive = function () {
+        _psView = null;
+        if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+    };
+    /** 📗 지금 보이는 행(필터·정렬 그대로)을 엑셀로 — 회의 자료로 바로 쓰게 머리글 고정·자동 필터·줄바꿈. */
+    window._psTblExcel = function () {
+        var X = window.XLSX;
+        if (!X) { alert(T('엑셀 라이브러리를 불러오지 못했습니다.', 'Excel library not loaded.')); return; }
+        var rows = viewRows();
+        var head = [T('분류', 'Type'), T('프로젝트', 'Project'), T('업무 담당자', 'Assignee'), T('날짜', 'Date'), T('내용', 'Content'), T('근거', 'Source')];
+        var aoa = [[(_psLast && _psLast.label) || ''], head].concat(rows.map(function (r) {
+            return [catName(r.cat), r.common ? T('공통', 'Common') + ': ' + r.projects.join(', ') : (r.projects[0] || ''), r.people.join(', '), r.date || '', r.text,
+                    r.refs.map(function (x) { return (x.p ? x.p + ' ' : '') + '#' + (x.row != null ? x.row : x.g) + (x.task ? ' ' + x.task : ''); }).join('\n')];
+        }));
+        var ws = X.utils.aoa_to_sheet(aoa);
+        ws['!cols'] = [{ wch: 10 }, { wch: 26 }, { wch: 16 }, { wch: 11 }, { wch: 60 }, { wch: 40 }];
+        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+        ws['!autofilter'] = { ref: 'A2:F' + Math.max(2, aoa.length) };
+        var border = { top: { style: 'thin', color: { rgb: 'C9D3DD' } }, bottom: { style: 'thin', color: { rgb: 'C9D3DD' } }, left: { style: 'thin', color: { rgb: 'C9D3DD' } }, right: { style: 'thin', color: { rgb: 'C9D3DD' } } };
+        var catFill = {}; P.summaryCats.forEach(function (c) { catFill[catName(c.id)] = c.bg.replace('#', '').toUpperCase(); });
+        for (var R = 0; R < aoa.length; R++) for (var C = 0; C < 6; C++) {
+            var ref = X.utils.encode_cell({ r: R, c: C });
+            if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+            if (R === 0) ws[ref].s = { font: { bold: true, sz: 13, color: { rgb: '2C5F8A' } } };
+            else if (R === 1) ws[ref].s = { font: { bold: true, color: { rgb: '2C5F8A' } }, fill: { fgColor: { rgb: 'E7EFF8' } }, border: border, alignment: { vertical: 'center' } };
+            else ws[ref].s = { border: border, alignment: { vertical: 'top', wrapText: true }, fill: (C === 0 && catFill[aoa[R][0]]) ? { fgColor: { rgb: catFill[aoa[R][0]] } } : undefined };
+        }
+        var wb = X.utils.book_new();
+        X.utils.book_append_sheet(wb, ws, T('AI 요약', 'AI summary'));
+        var name = (T('AI요약_', 'AI_summary_') + ((_psLast && _psLast.label) || '')).replace(/[\\/:*?"<>|\s]+/g, '_') + '.xlsx';
+        X.writeFile(wb, name);
+    };
     /**
      * ✏️ 프롬프트 · 📊 PPT 는 **'일정 현황' 리포트 전용**이다.
      * ⚠️ 기간 모드에서 눌러도 `projectMeta.aiSummaryReport`(옛 리포트)를 보므로 "먼저 리포트를

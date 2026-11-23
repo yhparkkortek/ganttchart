@@ -10,7 +10,15 @@
     var P = window.PERIOD_SUMMARY;
     if (!P || !window._psCollectFacts) { console.error('js/62 미로드'); return; }
     var keep = { gd: window.globalData, ci: window.colIdx, pm: window.projectMeta, call: window.callAiBackend, key: window.getActiveAiKey, mode: localStorage.getItem(P.modeKey), hist: window._ganttQaHistory,
-                 filt: localStorage.getItem(P.filterKey), scan: P.scanProjects, fileName: window.currentDriveFileName };
+                 filt: localStorage.getItem(P.filterKey), scan: P.scanProjects, fileName: window.currentDriveFileName, nas: window.nasAppFile };
+    // 📚 보관함(App_Config/AiSummary)은 **메모리 가짜** — 진짜 NAS 에 시험 요약을 남기지 않는다.
+    //    가짜는 nasAppFile 경계 하나라, 이름 짓기·해시로 찾기·재사용은 진짜 코드가 돈다.
+    var ARCH = {}, ADIR = (P.archiveDir || 'App_Config/AiSummary') + '/';
+    window.nasAppFile = Object.assign({}, keep.nas || {}, {
+        list: async function (rel) { return (String(rel).replace(/\/$/, '') + '/') === ADIR ? Object.keys(ARCH).map(function (n) { return { name: n }; }) : (keep.nas ? keep.nas.list(rel) : []); },
+        get: async function (rel, o) { if (String(rel).indexOf(ADIR) === 0) { var t = ARCH[rel.slice(ADIR.length)]; return t ? JSON.parse(t) : null; } return keep.nas ? keep.nas.get(rel, o) : null; },
+        put: async function (rel, b) { if (String(rel).indexOf(ADIR) === 0) { ARCH[rel.slice(ADIR.length)] = JSON.stringify(b); return { ok: true }; } throw new Error('하네스: NAS 쓰기 차단 ' + rel); }
+    });
     // ⚠️ 열린 프로젝트 이름을 픽스처 값으로 — 비워 두면(실제로 열린 프로젝트가 없을 때) 로컬
     //    사실의 `project` 가 '' 가 되어 PM 선택지 보강 로직(_psCollectFacts 의 projDir)이
     //    그 사실을 못 줍는다. 실제 앱에선 프로젝트를 열면 항상 값이 있으므로 그 상태를 흉내낸다.
@@ -35,7 +43,7 @@
     try {
         var hdr = ['No', 'WBS', 'start', 'plan', 'status', 'x', 'content']; hdr._level = undefined;
         window.globalData = [hdr,
-            row(1, '오늘 메일 업무', '[고객→박용훈]\n[핵심내용] 패널 단가 회신 요청\n[To do] 11/10 까지 견적 송부\n[출처]x_8 Nov 2026 09:00:00_a@b.c', D(0)),
+            row(1, '오늘 메일 업무', '[고객→박용훈]\n[핵심내용] 패널 단가 회신 요청\n[To do] 11/10 까지 견적 송부\n[출처]x_' + today.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()] + ' ' + today.getFullYear() + ' 09:00:00_a@b.c', D(0)),   // ⚠️ 날짜를 박으면 그날만 통과한다(11-08 에 쓰여 그 뒤로 실패했다)
             row(1, '이번 주 초 메일 업무', '[핵심내용] 금형 수정 일정 확인\n[문제점] 금형 업체 회신 지연\n[대책] 11/12 재확인\n[출처]y_z_a', D(-2), D(-2)),
             row(1, '지난달 메일 업무', '[핵심내용] 옛날 건\n[출처]q', D(-40)),
             row(1, '사람이 친 업무(메일 아님)', '그냥 메모', null, D(0)),
@@ -63,7 +71,7 @@
         localStorage.setItem(P.modeKey, 'week');
         window.openAiProjectSummaryModal();
         var body = document.getElementById('ai-summary-body');
-        ok('툴바(일일/주간/월간/기간설정)가 그려졌다', !!body.querySelector('#ps-period-toolbar') && /일일|Daily/.test(body.textContent) && /월간|Monthly/.test(body.textContent) && /기간설정|Range/.test(body.textContent));
+        ok('툴바(전일~금월/기간설정)가 그려졌다', !!body.querySelector('#ps-period-toolbar') && /금일|Today/.test(body.textContent) && /전주|Last week/.test(body.textContent) && /금월|This month/.test(body.textContent) && /기간설정|Range/.test(body.textContent));
         // 📊 [2026-11-09] '일정 현황' 은 간트 상태 칸이 관리되지 않아 접었다(showLegacy:false).
         //    ⚠️ 숨기는 것으로 끝나면 안 된다 — 그 모드에만 매인 버튼(프롬프트·PPT)이 남아 있으면
         //       눌러도 "먼저 리포트를 만들어주세요" 만 뜬다.
@@ -104,10 +112,22 @@
         };
         var res = await window.generatePeriodSummary('day');
         ok('프롬프트는 사실 목록만 싣고 #G 근거를 요구한다', prompts.length === 1 && /\[사실 목록\]/.test(prompts[0]) && /#G1 \[/.test(prompts[0]) && /반드시/.test(prompts[0]) && !/완료 \d+/.test(prompts[0]), prompts[0] && prompts[0].slice(0, 300));
-        ok('근거 없는 문장 1개 제거 · 2문장 유지 · 캐시 저장', res && res.dropped === 1 && res.요약.length === 1 && res.요청결정.length === 1 && window.projectMeta.aiPeriodSummary.day.rangeKey === ymd(today), res);
-        ok('화면에 AI 요약과 제거 수가 보인다', /패널 단가 회신을 요청받음/.test(body.textContent) && /근거 없는 문장 1개/.test(body.textContent));
+        ok('근거 없는 문장 1개 제거 · 2행 유지 · 캐시 저장', res && res.dropped === 1 && res.rows.length === 2 && res.요약.length === 1 && res.요청결정.length === 1 && window.projectMeta.aiPeriodSummary.day.rangeKey === window._psCollectFacts('day').sig, res);
+        ok('화면에 AI 요약 표와 제거 수가 보인다', /패널 단가 회신을 요청받음/.test(body.textContent) && /근거 없는 항목 1개/.test(body.textContent) && document.querySelectorAll('#ps-ai-tbl tbody tr').length === 2);
+        ok('보관함에 1건 저장', Object.keys(ARCH).length === 1, Object.keys(ARCH));
+        // ♻️ 같은 조건이면 AI 를 다시 부르지 않는다(보관본 재사용)
+        if (window.projectMeta.aiPeriodSummary) delete window.projectMeta.aiPeriodSummary.day;
+        var res2 = await window.generatePeriodSummary('day');
+        ok('같은 조건 재생성 → 보관본 재사용(AI 0회)', prompts.length === 1 && res2 && res2.reused === true && res2.rows.length === 2, { n: prompts.length });
+        // 🔄 새로 생성은 AI 를 부른다
+        await window.generatePeriodSummary('day', { force: true });
+        ok('새로 생성(force)은 AI 를 다시 부르고 보관본이 하나 더', prompts.length === 2 && Object.keys(ARCH).length >= 1, { n: prompts.length, a: Object.keys(ARCH).length });
+        // 📊 표 정렬·분류 필터
+        window._psTblSet({ toggleCat: 'decision' });
+        ok('분류 칩으로 거르기', document.querySelectorAll('#ps-ai-tbl tbody tr').length === 1);
+        window._psTblSet({ reset: 1 });
         var txt = window.periodSummaryText('day');
-        ok('글 버전(텔레그램용)에 요약·사실이 함께', /요약/.test(txt) && /#G1/.test(txt) && /패널 단가/.test(txt), txt.slice(0, 200));
+        ok('글 버전(텔레그램용)에 분류·사실이 함께', /한 일|결정·요청/.test(txt) && /#G1/.test(txt) && /패널 단가/.test(txt), txt.slice(0, 200));
 
         // AI 문답 입구 "일일 요약" — 캐시가 있어 AI 를 다시 안 부른다
         window._ganttQaHistory = [];
@@ -262,7 +282,7 @@
 
     } finally {
         window.globalData = keep.gd; window.colIdx = keep.ci; window.projectMeta = keep.pm; window.callAiBackend = keep.call; window.getActiveAiKey = keep.key; window._ganttQaHistory = keep.hist || [];
-        window.currentDriveFileName = keep.fileName;
+        window.currentDriveFileName = keep.fileName; window.nasAppFile = keep.nas;
         if (keep.mode == null) localStorage.removeItem(P.modeKey); else localStorage.setItem(P.modeKey, keep.mode);
         if (keep.filt == null) localStorage.removeItem(P.filterKey); else localStorage.setItem(P.filterKey, keep.filt);
         P.scanProjects = keep.scan;

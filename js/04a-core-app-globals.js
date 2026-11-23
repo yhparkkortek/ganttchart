@@ -208,6 +208,18 @@ ${mailText}`;
     //    js/05 는 2개로 **서로 달랐다.** 폴더가 하나 늘 때 한쪽만 고치면, 그 폴더를 매번
     //    쓸데없이 뒤지고(왕복 1회) 그 안의 `.json` 이 프로젝트인 척 목록에 끼어든다.
     //    ⚠️ 새 폴더를 앱 루트에 만들면 **여기 한 줄 추가**할 것.
+    // 💊 [2026-11-23 사용자 요청 "일일 업무보고 칩 버튼도 AI 요약(기준)으로 통일"] 칩 버튼·작은 드롭다운의
+    //    모양 **한 벌** — js/62(AI 요약)·js/59(일일보고)가 같이 쓴다. 따로 적으면 한쪽만 바뀐다.
+    window._uiPillStyle = function (on) {
+        return 'border:1px solid ' + (on ? '#1971c2' : '#cfd8e3') + '; background:' + (on ? '#1971c2' : '#fff') +
+               '; color:' + (on ? '#fff' : '#2c5f8a') + '; border-radius:12px; font-size:11px; font-weight:bold; cursor:pointer;' +
+               ' padding:2px 8px; white-space:nowrap; line-height:1.4;';
+    };
+    window._uiSelectStyle = function (active) {
+        return 'padding:2px 4px; border:1px solid ' + (active ? '#a5c8f0' : '#cfd8e3') + '; background:' + (active ? '#eef6ff' : '#fff') +
+               '; border-radius:5px; font-size:11px;';
+    };
+
     window.APP_NON_PROJECT_FOLDERS = [
         'Backups',          // 자동 백업
         'App_Config',       // 팀 공용 설정(주소록·공휴일·프롬프트·project_index …)
