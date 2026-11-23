@@ -974,6 +974,7 @@
         var factByKey = {}; (col.facts || []).forEach(function (f) { factByKey[factKey(f)] = f; });
         _psLast = { shown: shown, openName: openName, label: shown && shown.archiveView ? shown.archiveView.label : col.range.label, kind: kind, factByKey: factByKey };
         var secHtml = '<div id="ps-ai-sec">' + aiSectionHtml() + '</div>';   // 분류 칩·엑셀·보관함 — 고정 머리로
+        // 📌 표는 고정 머리 **바로 아래**(틈 0) — 틈이 있으면 스크롤 첫 몇 px 동안 머리글이 따라 올라가다 멈춰 "같이 움직인다"(2026-11-23 실측 9px).
         if (shown && shown.rows.length) h.push('<div id="ps-ai-tbl" style="margin-bottom:10px;">' + tableHtml() + '</div>');
         if (shown && shown.rows.length) h.push('<details id="ps-facts-det" style="margin-top:4px;"><summary style="cursor:pointer; font-size:12px; color:#2c5f8a; font-weight:bold;">📋 ' + esc(T('근거 사실 목록 ' + col.facts.length + '건 (AI 없이 만든 원본)', 'Source facts (' + col.facts.length + ', no AI)')) + '</summary>');
         if (!col.facts.length) {
@@ -1016,7 +1017,7 @@
         h.push('</div>');
         // 📌 고정 머리 — 기간 칩·필터·기간 제목·(표가 있으면) 분류 칩·엑셀·보관함. 스크롤해도 위에 남는다.
         //    본문 상자(.concept-section)의 안쪽 여백만큼 음수 여백으로 넓혀 위·옆 틈 없이 덮는다.
-        body.innerHTML = '<div id="ps-sticky" style="position:sticky; top:-12px; z-index:6; background:#e0f5f7; margin:-12px -18px 8px; padding:12px 18px 4px; border-bottom:1px solid #a3d9e0;">' +
+        body.innerHTML = '<div id="ps-sticky" style="position:sticky; top:-12px; z-index:6; background:#e0f5f7; margin:-12px -18px 0; padding:12px 18px 4px; border-bottom:1px solid #a3d9e0;">' +
             toolbarHtml(kind, col) + headHtml + secHtml + '</div>' + h.join('');
         syncHeadH();
         fillArchiveSelect();
