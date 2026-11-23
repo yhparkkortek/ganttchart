@@ -1002,14 +1002,22 @@
 
     // 이름 칸의 글자 → 주소록 1명. 비우면 "나", 두 명 이상 겹치면 누구인지 모르니
     // 보내지 않고 사람에게 되묻는다(추측해서 엉뚱한 사람에게 보내는 게 더 나쁘다).
-    function _jiraShareResolvePerson(q) {
-        q = (q || '').trim();
-        var book = (window.tabData || {}).addressBook || [];
+    // ⚠️ [2026-11-23, 사용자 제보 "박용훈 이(가) 2명과 겹칩니다"] 동명이인이 주소록에
+    // 있으면 자동완성 드롭다운(부서·직함까지 보여줌)에서 분명히 한 명을 골라도, 칸에는
+    // 똑같은 이름 글자만 남아서 글자 다시 찾기가 다시 둘을 집어 똑같이 막혔다 — 자동완성이
+    // "고른 사람"을 기억하게 하고(onPick, nameInp._jiraSharePicked) 그 사람이고 글자를
+    // 그 뒤로 안 고쳤으면 되묻지 않고 바로 확정한다.
+    function _jiraShareResolvePerson(nameInp) {
+        var q = ((nameInp && nameInp.value) || '').trim();
         if (!q) {
             var myName = String(window.currentUserName || '').trim();
             var me = (myName && window._addrFindByName) ? window._addrFindByName(myName) : null;
             return { person: me, label: T('나', 'me'), isMe: true };
         }
+        if (nameInp && nameInp._jiraSharePicked && nameInp._jiraSharePicked.name === q) {
+            return { person: nameInp._jiraSharePicked, label: nameInp._jiraSharePicked.name };
+        }
+        var book = (window.tabData || {}).addressBook || [];
         var hits = book.filter(function (p) { return p && p.name && p.name.indexOf(q) >= 0; });
         if (hits.length === 1) return { person: hits[0], label: hits[0].name };
         if (hits.length > 1) return { person: null, label: q, ambiguous: hits.length };
@@ -1038,7 +1046,7 @@
         var issue = _issueCache[key];
         if (!issue) return;
         var nameInp = document.getElementById('jira-share-name');
-        var r = _jiraShareResolvePerson(nameInp && nameInp.value);
+        var r = _jiraShareResolvePerson(nameInp);
         if (r.ambiguous) { if (window.showToast) window.showToast('⚠️ "' + r.label + '" ' + T('이(가) ' + r.ambiguous + '명과 겹칩니다 — 더 자세히 적어주세요.', 'matches ' + r.ambiguous + ' people — be more specific.'), 'warning'); return; }
         if (r.notFound) { if (window.showToast) window.showToast('⚠️ ' + T('주소록에 없는 이름입니다.', 'No such name in the address book.'), 'warning'); return; }
         var chatId = '';
@@ -1066,7 +1074,7 @@
         var issue = _issueCache[key];
         if (!issue) return;
         var nameInp = document.getElementById('jira-share-name');
-        var r = _jiraShareResolvePerson(nameInp && nameInp.value);
+        var r = _jiraShareResolvePerson(nameInp);
         if (r.ambiguous) { if (window.showToast) window.showToast('⚠️ "' + r.label + '" ' + T('이(가) ' + r.ambiguous + '명과 겹칩니다 — 더 자세히 적어주세요.', 'matches ' + r.ambiguous + ' people — be more specific.'), 'warning'); return; }
         if (r.notFound) { if (window.showToast) window.showToast('⚠️ ' + T('주소록에 없는 이름입니다.', 'No such name in the address book.'), 'warning'); return; }
         if (!r.person || !r.person.email) { if (window.showToast) window.showToast('⚠️ ' + r.label + T(' 님은 이메일 주소가 없습니다 — 주소록에서 등록해주세요.', ' has no email address — please add it in the Address Book.'), 'warning'); return; }
@@ -1200,6 +1208,23 @@
             + '<div style="display:flex; justify-content:flex-end; margin-top:6px;">'
             + '<button onclick="window._jiraAddComment(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">📨 ' + T('댓글 등록', 'Post comment') + '</button></div>'
             + '<div id="jira-issue-status" style="display:none; font-size:11.5px; margin-top:8px; line-height:1.5;"></div>';
+
+        // 📤 공유 이름 칸 자동완성 — 새로 짜지 않고 Summary 멤버 칸과 같은 공용 함수
+        // (window.attachAddressAutocomplete, js/22g)를 그대로 쓴다. 이메일 칸이 따로
+        // 없는 자리라 emailEl은 null, 한 명만 고르는 자리라 isMulti=false. onPick으로
+        // "고른 그 사람"을 칸에 적어둬(_jiraSharePicked) 동명이인이어도 되묻지 않는다
+        // (_jiraShareResolvePerson이 읽음) — 글자를 직접 고치면 더 안 맞을 수 있으니 버린다.
+        if (window.attachAddressAutocomplete) {
+            var shareNameInp = document.getElementById('jira-share-name');
+            window.attachAddressAutocomplete(shareNameInp, null, false, function (person) {
+                shareNameInp._jiraSharePicked = person;
+            });
+            shareNameInp.addEventListener('input', function () {
+                if (shareNameInp._jiraSharePicked && shareNameInp._jiraSharePicked.name !== shareNameInp.value) {
+                    shareNameInp._jiraSharePicked = null;
+                }
+            });
+        }
 
         // 모달 본문을 통째로 다시 그리므로(위 innerHTML) 위임 리스너도 매번 다시 건다.
         document.getElementById('jira-assignee-hits').addEventListener('click', function (e) {
