@@ -1014,7 +1014,7 @@
         h.push('</div>');
         // 📌 고정 머리 — 기간 칩·필터·기간 제목·(표가 있으면) 분류 칩·엑셀·보관함. 스크롤해도 위에 남는다.
         //    본문 상자(.concept-section)의 안쪽 여백만큼 음수 여백으로 넓혀 위·옆 틈 없이 덮는다.
-        body.innerHTML = '<div id="ps-sticky" style="position:sticky; top:-12px; z-index:6; background:#fff; margin:-12px -18px 8px; padding:12px 18px 4px; border-bottom:1px solid #e3e8ee;">' +
+        body.innerHTML = '<div id="ps-sticky" style="position:sticky; top:-12px; z-index:6; background:#e0f5f7; margin:-12px -18px 8px; padding:12px 18px 4px; border-bottom:1px solid #a3d9e0;">' +
             toolbarHtml(kind, col) + headHtml + secHtml + '</div>' + h.join('');
         syncHeadH();
         fillArchiveSelect();
@@ -1187,7 +1187,7 @@
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
         if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
-        return '<table style="width:100%; border-collapse:collapse; table-layout:auto;"><thead><tr>' +
+        return '<table style="width:100%; border-collapse:collapse; table-layout:auto; background:#fff;"><thead><tr>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
             '<th style="position:sticky; top:var(--ps-head-h, 0px); z-index:4; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
@@ -1275,6 +1275,9 @@
         var st = document.getElementById('ps-sticky');
         if (!st || !st.parentNode) return;
         st.parentNode.style.setProperty('--ps-head-h', Math.max(0, st.offsetHeight - 12) + 'px');
+        // 🐛 [2026-11-23 "헤더가 움직인다"] 한 번 재고 끝내면 창 폭·줄바꿈·늦게 들어온 글(JIRA 확인 중 등)로 높이가 바뀔 때
+        //    표 머리글과 틈이 생기거나 겹쳤다 → 높이가 바뀔 때마다 다시 잰다(요소가 새로 그려지면 새로 붙는다).
+        if (window.ResizeObserver && !st._psRO) { st._psRO = new ResizeObserver(function () { syncHeadH(); }); st._psRO.observe(st); }
     }
     window._psTblSort = function (col) {
         if (_psTbl.sort === col) _psTbl.dir = -_psTbl.dir; else { _psTbl.sort = col; _psTbl.dir = (col === 'date') ? -1 : 1; }
