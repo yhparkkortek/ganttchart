@@ -471,10 +471,11 @@ comment/<id>` 자원을 그대로 쓴다(수정은 PUT, 삭제는 DELETE). `_sha
 ⚠️ **아직 실제 서버로 확인 못 함** — 가짜 `requests.request` 경계로 `tests/test_jira_bridge.py`
 [11.6]은 확인했지만, 실제 JIRA에서 내 댓글/남의 댓글 양쪽으로 수정·삭제를 눌러보지는 않았다.
 
-## 📤 (2026-11-23 사용자 요청) 이슈 공유
+## 📤 (2026-11-23 사용자 요청) 이슈 공유 — 클립보드·텔레그램·이메일
 
-새 백엔드 라우트 없이 **기존 공용 입구 둘**만 재사용했다 — 클립보드 복사(브라우저 API)와
-`/send-telegram`(알람 발송·AI 문답 "텔레그램으로 보내줘"와 같은 라우트, `kortek_backend.py`).
+새 백엔드 라우트 없이 **기존 공용 입구 셋**만 재사용했다 — 클립보드 복사(브라우저 API),
+`/send-telegram`(알람 발송·AI 문답 "텔레그램으로 보내줘"와 같은 라우트), `/send-mail`
+(SMTP, 알람 수동발송과 같은 라우트) — 전부 `kortek_backend.py`.
 
 - 상세 모달 헤더에 `📤 공유` 링크 — 누르면 `row-action-popup`(Document 페이지 서식
   드롭다운과 같은 공용 CSS 클래스)이 뜬다.
@@ -489,6 +490,12 @@ comment/<id>` 자원을 그대로 쓴다(수정은 PUT, 삭제는 DELETE). `_sha
   보내야 한다. 직접 `fetch`를 짜지 않고 **`window.sendTelegramAlarm(message, {chatId})`**
   (`js/22b`, AI 문답 텔레그램 발송이 쓰는 그 함수)를 그대로 호출해 이 함정을 피했다 —
   두 경로가 각자 `/send-telegram`을 부르면 파라미터 이름이 갈릴 위험이 있다.
+- **✉️ 이메일로 전달**(2026-11-23 2차, "텔레그램말고도 이메일로 (전달)공유 기능") — 텔레그램과
+  **같은 모양**(이름 검색 입력 + 실시간 필터 + "나에게 보내기")을 수신자 필드만
+  `email`로 바꿔 그대로 복제했다. `POST /send-mail`에 `{to, subject, body}` — `body`는
+  알람 수동발송(`js/22c`)과 같은 모양의 HTML 표(상태·담당자·우선순위 + JIRA 링크)다.
+  텔레그램과 달리 **백엔드에 기본값이 없다** — 받는사람 이메일이 없으면(주소록 미등록)
+  그 자리에서 거부한다(`/send-mail`은 `to`가 없으면 애초에 보낼 수 없다).
 - 첨부 목록·댓글 목록과 같은 이유로 `#jira-share-pop`은 **`document.body` 바로 밑에** 둔다
   — 상세 모달(`#jira-issue-box`)에 `transform: translate(-50%,-50%)`가 걸려 있어 그 안에
   두면 `position:fixed`의 기준이 모달로 바뀌어(새 containing block) 버튼의

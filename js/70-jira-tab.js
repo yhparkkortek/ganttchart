@@ -987,6 +987,8 @@
             pop.className = 'row-action-popup';
             pop.style.width = '260px';
             pop.style.padding = '10px';
+            pop.style.maxHeight = '80vh';
+            pop.style.overflowY = 'auto';
             document.body.appendChild(pop);
             document.addEventListener('click', function (e) {
                 if (pop.style.display === 'block' && !pop.contains(e.target) && e.target.id !== 'jira-share-trigger') {
@@ -998,6 +1000,7 @@
     }
 
     var _shareHits = [];
+    var _shareEmailHits = [];
     var _shareCurKey = ''; // 팝업이 지금 가리키는 이슈 — 주소록 항목 클릭엔 key가 안 실려서 필요
 
     window._jiraToggleShare = function (ev, key) {
@@ -1007,6 +1010,7 @@
         var issue = _issueCache[key];
         if (!issue) return;
         _shareHits = [];
+        _shareEmailHits = [];
         _shareCurKey = key;
         pop.innerHTML =
             '<div style="font-size:11px; color:#555; font-weight:bold; margin-bottom:6px;">📤 ' + T('이슈 공유', 'Share issue') + '</div>'
@@ -1015,9 +1019,15 @@
             + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 8px;"></div>'
             + '<div style="font-size:11px; color:#555; margin-bottom:4px;">💬 ' + T('텔레그램으로 보내기', 'Send via Telegram') + '</div>'
             + '<input id="jira-share-name" placeholder="' + T('이름으로 찾기', 'Find by name') + '" oninput="window._jiraShareFilter()" style="' + inputSt + ' margin-bottom:4px;">'
-            + '<div id="jira-share-hits" style="max-height:120px; overflow-y:auto;"></div>'
+            + '<div id="jira-share-hits" style="max-height:110px; overflow-y:auto;"></div>'
             + '<button onclick="window._jiraShareSend(-1)"' + btnHover + ' style="' + btnSt + ' width:100%; font-weight:bold; margin-top:4px;">💬 ' + T('나에게 보내기', 'Send to me') + '</button>'
-            + '<div id="jira-share-status" style="font-size:11px; margin-top:6px; display:none;"></div>';
+            + '<div id="jira-share-status" style="font-size:11px; margin-top:6px; display:none;"></div>'
+            + '<div style="border-top:1px dashed #e5e5e5; margin:8px 0 8px;"></div>'
+            + '<div style="font-size:11px; color:#555; margin-bottom:4px;">✉️ ' + T('이메일로 전달', 'Forward by email') + '</div>'
+            + '<input id="jira-share-email-name" placeholder="' + T('이름으로 찾기', 'Find by name') + '" oninput="window._jiraShareEmailFilter()" style="' + inputSt + ' margin-bottom:4px;">'
+            + '<div id="jira-share-email-hits" style="max-height:110px; overflow-y:auto;"></div>'
+            + '<button onclick="window._jiraShareSendEmail(-1)"' + btnHover + ' style="' + btnSt + ' width:100%; font-weight:bold; margin-top:4px;">✉️ ' + T('나에게 보내기', 'Send to me') + '</button>'
+            + '<div id="jira-share-email-status" style="font-size:11px; margin-top:6px; display:none;"></div>';
         var btn = ev && ev.currentTarget;
         if (btn) {
             var rect = btn.getBoundingClientRect();
@@ -1094,6 +1104,75 @@
 
     function _jiraShareSetStatus(msg, kind) {
         var el = document.getElementById('jira-share-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'err' ? '#a3281c' : (kind === 'ok' ? '#1f7a3d' : '#555');
+        el.textContent = msg;
+    }
+
+    // ✉️ (2026-11-23 2차, 사용자 요청 "텔레그램말고도 이메일로 (전달)공유 기능") — 기존
+    // `/send-mail`(SMTP, kortek_backend.py)을 재사용한다. 알람 수동발송(js/22c)과 같은
+    // "HTML 표 한 칸짜리" 본문 모양을 그대로 따른다.
+    function _jiraShareEmailHtml(issue) {
+        var row = function (ko, en, val) {
+            return '<tr><td style="padding:4px 8px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; white-space:nowrap;">'
+                + T(ko, en) + '</td><td style="padding:4px 8px; border:1px solid #dcdde1;">' + esc(val || '-') + '</td></tr>';
+        };
+        return '<div style="font-family:sans-serif; font-size:13px; line-height:1.6;">'
+            + '<p>🪐 <b>[' + esc(issue.key) + ']</b> ' + esc(issue.summary) + '</p>'
+            + '<table style="border-collapse:collapse;">'
+            + row('상태', 'Status', issue.status) + row('담당자', 'Assignee', issue.assignee)
+            + row('우선순위', 'Priority', issue.priority) + '</table>'
+            + (issue.url ? '<p><a href="' + esc(issue.url) + '">🔗 ' + T('JIRA에서 보기', 'Open in JIRA') + '</a></p>' : '')
+            + '<p style="color:#888; font-size:12px;">' + T('KORTEK PM 앱의 JIRA 탭에서 공유했습니다.', 'Shared from the JIRA tab in the KORTEK PM app.') + '</p></div>';
+    }
+
+    window._jiraShareEmailFilter = function () {
+        var q = (document.getElementById('jira-share-email-name').value || '').trim();
+        var box = document.getElementById('jira-share-email-hits');
+        if (!box) return;
+        if (!q) { box.innerHTML = ''; _shareEmailHits = []; return; }
+        var book = (window.tabData || {}).addressBook || [];
+        _shareEmailHits = book.filter(function (p) { return p && p.name && p.name.indexOf(q) >= 0; }).slice(0, 20);
+        box.innerHTML = _shareEmailHits.length
+            ? _shareEmailHits.map(function (p, i) {
+                return '<div onclick="window._jiraShareSendEmail(' + i + ')" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;"'
+                    + ' onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'">' + esc(p.name)
+                    + (p.email ? '' : ' <span style="color:#c77; font-size:10px;">(' + T('이메일 없음', 'no email') + ')</span>') + '</div>';
+            }).join('')
+            : '<div style="padding:6px 8px; color:#999;">' + T('일치하는 사람이 없습니다.', 'No match.') + '</div>';
+    };
+
+    window._jiraShareSendEmail = async function (idx) {
+        var issue = _issueCache[_shareCurKey];
+        if (!issue) return;
+        var person = (idx >= 0) ? _shareEmailHits[idx] : null;
+        var label = T('나', 'me');
+        if (!person) {
+            var myName = String(window.currentUserName || '').trim();
+            person = (myName && window._addrFindByName) ? window._addrFindByName(myName) : null;
+        } else {
+            label = person.name;
+        }
+        if (!person || !person.email) {
+            _jiraShareEmailSetStatus('⚠️ ' + T(label + '의 이메일 주소가 없습니다 — 주소록에서 등록해주세요.', 'No email address for ' + label + ' — please add it in the Address Book.'), 'err');
+            return;
+        }
+        _jiraShareEmailSetStatus('⏳ ' + T('보내는 중...', 'Sending...'), '');
+        try {
+            var d = await fetch(BASE + '/send-mail', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: person.email, subject: '[JIRA] [' + issue.key + '] ' + issue.summary, body: _jiraShareEmailHtml(issue) })
+            }).then(function (r) { return r.json(); });
+            if (!d || d.ok === false) { _jiraShareEmailSetStatus('⚠️ ' + esc((d && d.error) || T('발송 실패', 'Send failed')), 'err'); return; }
+            _jiraShareEmailSetStatus('✅ ' + T(label + '에게 보냈습니다.', 'Sent to ' + label + '.'), 'ok');
+        } catch (e) {
+            _jiraShareEmailSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
+        }
+    };
+
+    function _jiraShareEmailSetStatus(msg, kind) {
+        var el = document.getElementById('jira-share-email-status');
         if (!el) return;
         el.style.display = msg ? 'block' : 'none';
         el.style.color = kind === 'err' ? '#a3281c' : (kind === 'ok' ? '#1f7a3d' : '#555');
