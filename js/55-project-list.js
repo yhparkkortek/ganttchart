@@ -1163,7 +1163,7 @@
         }
     };
 
-    // 요약 — "지금 보이는 것"이 무엇인지 한 줄로(고객사·상태 분포). 164건을 훑기 전에 감을 잡게.
+    // 요약 — "지금 보이는 것"이 무엇인지 한 줄로(고객사·상태·담당자 분포). 164건을 훑기 전에 감을 잡게.
     window.plRenderStats = function () {
         var el = document.getElementById('pl-stats');
         if (!el) return;
@@ -1174,8 +1174,27 @@
             return Object.keys(m).sort(function (a, b) { return m[b] - m[a]; }).slice(0, 6)
                 .map(function (v) { return _esc(v) + ' ' + m[v]; }).join(' · ');
         };
+        // 👤 담당자별 프로젝트 수 — 역할 4칸(회로·펌웨어·기구·터치)을 합쳐서 센다. 여러 명은
+        // 콤마/슬래시/공백 어느 것으로 적었든(`_plCheckSameNames`와 같은 split 규칙) 한 사람으로
+        // 묶고, 한 행에 같은 사람이 여러 역할로 겹쳐 있어도 그 행(프로젝트)은 **한 번만** 센다
+        // (회로담당=A, 기구담당=A 인 행이 A 를 2건으로 부풀리면 안 된다).
+        var byOwner = function () {
+            var m = {};
+            rows.forEach(function (r) {
+                var names = {};
+                ['ownerHw', 'ownerFw', 'ownerMech', 'ownerTouch'].forEach(function (k) {
+                    String(r[k] || '').split(/[,\/\s]+/).forEach(function (x) {
+                        x = x.trim(); if (x) names[x] = true;
+                    });
+                });
+                Object.keys(names).forEach(function (n) { m[n] = (m[n] || 0) + 1; });
+            });
+            return Object.keys(m).sort(function (a, b) { return m[b] - m[a]; }).slice(0, 10)
+                .map(function (v) { return _esc(v) + ' ' + m[v]; }).join(' · ');
+        };
         el.innerHTML = '<b>' + _t('고객', 'Customer') + '</b> ' + by('customer')
-                     + ' &nbsp;|&nbsp; <b>' + _t('상태', 'Status') + '</b> ' + by('status');
+                     + ' &nbsp;|&nbsp; <b>' + _t('상태', 'Status') + '</b> ' + by('status')
+                     + ' &nbsp;|&nbsp; <b>' + _t('담당자', 'Owner') + '</b> ' + byOwner();
     };
 
     // 🌐 머리글 바 문구 — docs/ui-conventions.md 규칙대로 **JS 한 곳에서** 한/영을 만든다.
