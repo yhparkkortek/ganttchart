@@ -213,7 +213,7 @@
                     '<span>🧹 ' + esc(T('밀린 업무 정리', 'Overdue cleanup')) + '</span>' +
                     '<div style="display:flex; gap:6px; align-items:center;">' +
                       '<button onclick="window.ovcScan(true)" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px;">🔄 ' + esc(T('다시 읽기', 'Reload')) + '</button>' +
-                      '<button onclick="document.getElementById(\'' + C.modalId + '\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1;">✕</button>' +
+                      '<button onclick="document.getElementById(\'' + C.modalId + '\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:16px; line-height:1;">✕</button>' +
                     '</div>' +
                   '</div>' +
                   '<div id="ovc-body" style="flex:1; min-height:0; overflow-y:auto; padding:14px 17px;"></div>' +

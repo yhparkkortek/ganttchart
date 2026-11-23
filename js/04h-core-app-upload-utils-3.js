@@ -12083,7 +12083,7 @@ ${docsJson}`;
                                    style="width:55px; height:14px; cursor:pointer; accent-color:#1971c2; vertical-align:middle;">
                             <span id="gantt-qa-opacity-label" style="font-size:10px; color:#5585a8; min-width:28px; text-align:right; user-select:none;">100%</span>
                         </div>
-                        <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:26px; height:26px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
+                        <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px; background:transparent;"></div>
