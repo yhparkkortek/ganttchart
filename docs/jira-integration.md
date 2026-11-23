@@ -471,6 +471,34 @@ comment/<id>` 자원을 그대로 쓴다(수정은 PUT, 삭제는 DELETE). `_sha
 ⚠️ **아직 실제 서버로 확인 못 함** — 가짜 `requests.request` 경계로 `tests/test_jira_bridge.py`
 [11.6]은 확인했지만, 실제 JIRA에서 내 댓글/남의 댓글 양쪽으로 수정·삭제를 눌러보지는 않았다.
 
+## 📤 (2026-11-23 사용자 요청) 이슈 공유
+
+새 백엔드 라우트 없이 **기존 공용 입구 둘**만 재사용했다 — 클립보드 복사(브라우저 API)와
+`/send-telegram`(알람 발송·AI 문답 "텔레그램으로 보내줘"와 같은 라우트, `kortek_backend.py`).
+
+- 상세 모달 헤더에 `📤 공유` 링크 — 누르면 `row-action-popup`(Document 페이지 서식
+  드롭다운과 같은 공용 CSS 클래스)이 뜬다.
+- **📋 클립보드로 복사** — `🪐 [키] 요약 / 상태·담당자·우선순위 / 🔗 URL` 네 줄을
+  `navigator.clipboard.writeText`(실패하면 `execCommand('copy')` 폴백)로 복사한다.
+- **💬 텔레그램으로 보내기** — 수신자는 **이 앱의 주소록**(`tabData.addressBook`)에서
+  이름으로 찾는다(입력할 때마다 실시간으로 거른다). 비우고 "나에게 보내기"를 누르면
+  `window.currentUserName`으로 내 주소록 항목을 찾아 그 `telegramId`로 보낸다.
+- ⚠️⚠️ **`/send-telegram`의 `to` 파라미터는 이 주소록이 아니라 백엔드 팀원 명단
+  (`TELEGRAM_MEMBERS`, `/telegram/members`로 따로 등록하는 저장소)의 이름으로 찾는다** —
+  그래서 주소록에서 바로 얻은 숫자 `telegramId`는 `to`가 아니라 **`chatId`** 파라미터로
+  보내야 한다. 직접 `fetch`를 짜지 않고 **`window.sendTelegramAlarm(message, {chatId})`**
+  (`js/22b`, AI 문답 텔레그램 발송이 쓰는 그 함수)를 그대로 호출해 이 함정을 피했다 —
+  두 경로가 각자 `/send-telegram`을 부르면 파라미터 이름이 갈릴 위험이 있다.
+- 첨부 목록·댓글 목록과 같은 이유로 `#jira-share-pop`은 **`document.body` 바로 밑에** 둔다
+  — 상세 모달(`#jira-issue-box`)에 `transform: translate(-50%,-50%)`가 걸려 있어 그 안에
+  두면 `position:fixed`의 기준이 모달로 바뀌어(새 containing block) 버튼의
+  `getBoundingClientRect()` 좌표로 못 띄운다.
+
+⚠️ **아직 실제 서버로 확인 못 함** — 전용 검증 하네스도 아직 없다(기존 공용 라우트를 그대로
+불러 쓰는 UI 전용 추가라 새 백엔드 테스트 대상이 없고, 이 세션엔 브라우저 자동화가 로컬
+백엔드에 연결되지 않았다). 실제로 눌러서 ① 클립보드에 네 줄이 그대로 들어가는지 ②
+주소록 이름 검색이 실시간으로 거르는지 ③ 텔레그램에 실제로 도착하는지 확인이 필요하다.
+
 ## 🐛 (2026-11-11) "로그인 테스트"가 항상 실패했던 진짜 원인 — `/rest/api/2/myself`가 이 서버엔 없다
 
 사용자가 🔑 설정에서 실제 계정을 저장하고 로그인 테스트를 눌렀는데 **"해당 이슈를 찾을 수

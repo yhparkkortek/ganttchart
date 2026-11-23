@@ -959,6 +959,147 @@
         el.innerHTML = msg || '';
     }
 
+    // ── 📤 이슈 공유 (2026-11-23 사용자 요청) ───────────────────────────
+    //  클립보드 복사 + 텔레그램 전송. 수신자는 **주소록**(tabData.addressBook)에서
+    //  이름으로 찾는다 — AI 문답의 "텔레그램으로 보내줘"(js/04h)와 같은 방식
+    //  (이름 매칭 → telegramId, 안 고르면 내 것). 전송은 기존 공용 라우트
+    //  `/send-telegram`(알람 발송과 같은 입구, kortek_backend.py) 하나만 쓴다 —
+    //  JIRA 전용 새 백엔드 라우트는 두지 않는다.
+    //  ⚠️ `#jira-share-pop`은 **body 바로 밑**에 둔다 — 상세 모달(`#jira-issue-box`)에
+    //  `transform`이 걸려 있어 그 안에 두면 `position:fixed`의 기준이 모달 쪽으로
+    //  바뀌어(새 containing block) `getBoundingClientRect()` 좌표로 못 잡는다.
+    function _jiraShareText(issue) {
+        var lines = [
+            '🪐 [' + issue.key + '] ' + issue.summary,
+            T('상태', 'Status') + ': ' + (issue.status || '-')
+                + ' | ' + T('담당자', 'Assignee') + ': ' + (issue.assignee || T('미지정', 'Unassigned'))
+                + ' | ' + T('우선순위', 'Priority') + ': ' + (issue.priority || '-')
+        ];
+        if (issue.url) lines.push('🔗 ' + issue.url);
+        return lines.join('\n');
+    }
+
+    function _jiraSharePop() {
+        var pop = document.getElementById('jira-share-pop');
+        if (!pop) {
+            pop = document.createElement('div');
+            pop.id = 'jira-share-pop';
+            pop.className = 'row-action-popup';
+            pop.style.width = '260px';
+            pop.style.padding = '10px';
+            document.body.appendChild(pop);
+            document.addEventListener('click', function (e) {
+                if (pop.style.display === 'block' && !pop.contains(e.target) && e.target.id !== 'jira-share-trigger') {
+                    pop.style.display = 'none';
+                }
+            });
+        }
+        return pop;
+    }
+
+    var _shareHits = [];
+    var _shareCurKey = ''; // 팝업이 지금 가리키는 이슈 — 주소록 항목 클릭엔 key가 안 실려서 필요
+
+    window._jiraToggleShare = function (ev, key) {
+        if (ev) ev.stopPropagation();
+        var pop = _jiraSharePop();
+        if (pop.style.display === 'block') { pop.style.display = 'none'; return; }
+        var issue = _issueCache[key];
+        if (!issue) return;
+        _shareHits = [];
+        _shareCurKey = key;
+        pop.innerHTML =
+            '<div style="font-size:11px; color:#555; font-weight:bold; margin-bottom:6px;">📤 ' + T('이슈 공유', 'Share issue') + '</div>'
+            + '<textarea id="jira-share-text" readonly rows="4" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:11px; resize:none; margin-bottom:6px; background:#fafafa;">' + esc(_jiraShareText(issue)) + '</textarea>'
+            + '<button onclick="window._jiraShareCopy()"' + btnHover + ' style="' + btnSt + ' width:100%; margin-bottom:8px;">📋 ' + T('클립보드로 복사', 'Copy to clipboard') + '</button>'
+            + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 8px;"></div>'
+            + '<div style="font-size:11px; color:#555; margin-bottom:4px;">💬 ' + T('텔레그램으로 보내기', 'Send via Telegram') + '</div>'
+            + '<input id="jira-share-name" placeholder="' + T('이름으로 찾기', 'Find by name') + '" oninput="window._jiraShareFilter()" style="' + inputSt + ' margin-bottom:4px;">'
+            + '<div id="jira-share-hits" style="max-height:120px; overflow-y:auto;"></div>'
+            + '<button onclick="window._jiraShareSend(-1)"' + btnHover + ' style="' + btnSt + ' width:100%; font-weight:bold; margin-top:4px;">💬 ' + T('나에게 보내기', 'Send to me') + '</button>'
+            + '<div id="jira-share-status" style="font-size:11px; margin-top:6px; display:none;"></div>';
+        var btn = ev && ev.currentTarget;
+        if (btn) {
+            var rect = btn.getBoundingClientRect();
+            pop.style.left = rect.left + 'px';
+            pop.style.top = (rect.bottom + 4) + 'px';
+        }
+        pop.style.display = 'block';
+    };
+
+    window._jiraShareCopy = function () {
+        var ta = document.getElementById('jira-share-text');
+        if (!ta) return;
+        var done = function () { if (window.showToast) window.showToast('📋 ' + T('복사했습니다.', 'Copied.'), 'success'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(ta.value).then(done).catch(function () {
+                ta.select();
+                if (window.showToast) window.showToast('⚠️ ' + T('복사에 실패했습니다 — 직접 선택해 복사해주세요.', 'Copy failed — please select the text and copy it yourself.'), 'warning');
+            });
+        } else {
+            ta.select();
+            document.execCommand('copy');
+            done();
+        }
+    };
+
+    window._jiraShareFilter = function () {
+        var q = (document.getElementById('jira-share-name').value || '').trim();
+        var box = document.getElementById('jira-share-hits');
+        if (!box) return;
+        if (!q) { box.innerHTML = ''; _shareHits = []; return; }
+        var book = (window.tabData || {}).addressBook || [];
+        _shareHits = book.filter(function (p) { return p && p.name && p.name.indexOf(q) >= 0; }).slice(0, 20);
+        box.innerHTML = _shareHits.length
+            ? _shareHits.map(function (p, i) {
+                return '<div onclick="window._jiraShareSend(' + i + ')" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;"'
+                    + ' onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'">' + esc(p.name)
+                    + (p.telegramId ? '' : ' <span style="color:#c77; font-size:10px;">(' + T('텔레그램 ID 없음', 'no Telegram ID') + ')</span>') + '</div>';
+            }).join('')
+            : '<div style="padding:6px 8px; color:#999;">' + T('일치하는 사람이 없습니다.', 'No match.') + '</div>';
+    };
+
+    window._jiraShareSend = async function (idx) {
+        var issue = _issueCache[_shareCurKey];
+        if (!issue) return;
+        var text = _jiraShareText(issue);
+        var person = (idx >= 0) ? _shareHits[idx] : null;
+        var chatId = '', label = T('나', 'me');
+        if (person) {
+            if (!person.telegramId) {
+                _jiraShareSetStatus('⚠️ ' + T('텔레그램 ID가 없습니다 — 주소록에서 등록해주세요.', 'No Telegram ID — please add it in the Address Book.'), 'err');
+                return;
+            }
+            chatId = String(person.telegramId);
+            label = person.name;
+        } else {
+            var myName = String(window.currentUserName || '').trim();
+            var me = (myName && window._addrFindByName) ? window._addrFindByName(myName) : null;
+            if (me && me.telegramId) chatId = String(me.telegramId);
+            // 비어 있으면 백엔드가 알람 설정의 기본 Chat ID로 보낸다.
+        }
+        _jiraShareSetStatus('⏳ ' + T('보내는 중...', 'Sending...'), '');
+        if (!window.sendTelegramAlarm) { _jiraShareSetStatus('⚠️ ' + T('텔레그램 발송 기능을 아직 못 찾았습니다(페이지를 새로고침해보세요).', 'Telegram sender not loaded yet — try reloading the page.'), 'err'); return; }
+        try {
+            // ⚠️ /send-telegram 의 `to`는 백엔드 팀원 명단(TELEGRAM_MEMBERS, 이 앱의 주소록과
+            // 다른 저장소)의 이름으로 찾는다 — 주소록에서 바로 얻은 숫자 chatId는 **`chatId`
+            // 파라미터로만** 보낸다(js/22b `sendTelegramAlarm`, AI 문답 텔레그램 발송과 같은 길).
+            var r = await window.sendTelegramAlarm(text, chatId ? { chatId: chatId } : {});
+            if (!r || !r.ok) { _jiraShareSetStatus('⚠️ ' + esc((r && r.errDesc) || T('전송 실패', 'Send failed')), 'err'); return; }
+            _jiraShareSetStatus('✅ ' + T(label + '에게 보냈습니다.', 'Sent to ' + label + '.'), 'ok');
+        } catch (e) {
+            _jiraShareSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
+        }
+    };
+
+    function _jiraShareSetStatus(msg, kind) {
+        var el = document.getElementById('jira-share-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'err' ? '#a3281c' : (kind === 'ok' ? '#1f7a3d' : '#555');
+        el.textContent = msg;
+    }
+
     window._jiraOpenIssueModal = async function (key) {
         var wrap = document.getElementById('jira-issue-modal');
         if (!wrap) {
@@ -975,6 +1116,7 @@
             + ' cursor:move; display:flex; align-items:center; gap:8px;">'
             + '<strong id="jira-issue-title" style="font-size:14px;">🪐 ' + esc(key) + '</strong>'
             + '<a id="jira-issue-openlink" target="_blank" rel="noopener" style="font-size:11px; color:#00707d;">' + T('JIRA에서 열기 ↗', 'Open in JIRA ↗') + '</a>'
+            + '<a id="jira-share-trigger" onclick="window._jiraToggleShare(event, \'' + esc(key) + '\')" style="font-size:11px; color:#00707d; cursor:pointer;">📤 ' + T('공유', 'Share') + '</a>'
             + '<span style="flex:1;"></span>'
             + '<button onclick="document.getElementById(\'jira-issue-modal\').style.display=\'none\'"'
             + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
