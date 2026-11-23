@@ -530,7 +530,16 @@ window._tiBuildSummaryHtml = function(items) {
             const sc = _TI_STATUS_STYLE[e[0]] || { bg: '#eef3ff', fg: '#1a4f7a' };
             const label = _en ? (_TI_STATUS_LABEL_EN[e[0]] || e[0]) : e[0];
             return chip(label, e[1], sc.bg, sc.fg, e[0], null);
-        }).join('') + `</div>`;
+        }).join('') +
+        // 🧭 [2026-11-23] 재판정 — 상태 칩과 같은 모양으로 그 줄 끝에 둔다(설정 모달까지 안 가도 되게).
+        //    대기 카드 + 📭 미분류를 AI 없이 지금 규칙으로 다시 본다(js/74). 칩 클래스(ti-chip)를 안 쓰는 건 필터 클릭과 갈리게.
+        (window.mailRouteRejudgePending
+            ? `<span class="ti-rejudge" title="${_en ? 'Re-judge pending cards and unmatched mail with the current rules (no AI)' : '대기 카드와 📭 미분류 메일을 지금 규칙으로 다시 판정합니다 (AI 안 씀)'}" ` +
+              `style="display:inline-block;background:#e8f4fd;color:#1a4f7a;border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
+              `font-size:11px;white-space:nowrap;cursor:${window._tiRejudgeBusy ? 'wait' : 'pointer'};border:1px solid #a5c8f0;${window._tiRejudgeBusy ? 'opacity:.7;' : ''}">` +
+              (window._tiRejudgeBusy ? (_en ? '⏳ Re-judging…' : '⏳ 재판정 중…') : (_en ? '🧭 Re-judge' : '🧭 재판정')) + `</span>`
+            : '') +
+        `</div>`;
 
     // 💡 [2026-09-06 개선] "자리를 많이 차지한다"는 피드백 — 기본으로는 위 상태별 건수 줄만 보이고,
     //    상태 칩을 클릭해 그 상태로 필터링된 동안에만(=아코디언, 한 번에 하나) 그 상태의 프로젝트별
@@ -579,6 +588,25 @@ window._tiBuildSummaryHtml = function(items) {
     return html;
 };
 
+// 🧭 [2026-11-23] 요약 줄의 재판정 칩 — 설정 모달의 버튼(_macRejudgeNow, js/15c)과 같은 일을 한다.
+window._tiRejudgeNow = async function() {
+    if (window._tiRejudgeBusy || !window.mailRouteRejudgePending) return;
+    const _en = window._t && window._t('a', 'b') === 'b';
+    window._tiRejudgeBusy = true;
+    window.renderTaskInbox();
+    let a = null, b = null, err = null;
+    try {
+        a = await window.mailRouteRejudgePending({ force: true, max: 50 });
+        if (window.mailRouteRejudgeUnmatched) b = await window.mailRouteRejudgeUnmatched({ force: true, max: 50 });
+    } catch (e) { err = e; console.warn('[inbox] 재판정 실패', e); }
+    finally { window._tiRejudgeBusy = false; window.renderTaskInbox(); }
+    const placed = ((a && a.placed) || 0) + ((b && b.placed) || 0);
+    const looked = ((a && a.looked) || 0) + ((b && b.looked) || 0);
+    if (window.showToast) window.showToast(err
+        ? (_en ? '⚠️ Re-judge failed: ' : '⚠️ 재판정 실패: ') + err.message
+        : (_en ? `🧭 Re-judged ${looked} — placed ${placed}` : `🧭 ${looked}건 재판정 — ${placed}건 배치`));
+};
+
 window.renderTaskInbox = function() {
     const listEl = document.getElementById('inbox-list');
     if (!listEl) return;
@@ -610,6 +638,7 @@ window.renderTaskInbox = function() {
                     return;
                 }
                 if (e.target.closest('.ti-undo-del')) { window._tiUndoBulkDelete(); return; }
+                if (e.target.closest('.ti-rejudge')) { window._tiRejudgeNow(); return; }
                 const chipEl = e.target.closest('.ti-chip');
                 if (!chipEl) return;
                 window._tiSetFilter(chipEl.dataset.status || null, chipEl.dataset.project || null);
