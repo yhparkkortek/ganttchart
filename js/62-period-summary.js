@@ -600,7 +600,7 @@
     function toolbarHtml(cur, col) {
         var en = window._currentLang === 'en';
         var btn = function (id, label, on) {
-            return '<button onclick="window._psSetMode(\'' + id + '\')" style="padding:4px 12px; border:1px solid ' + (on ? '#1971c2' : '#cfd8e3') + '; background:' + (on ? '#1971c2' : '#fff') + '; color:' + (on ? '#fff' : '#2c5f8a') + '; border-radius:14px; font-size:12px; font-weight:bold; cursor:pointer;">' + esc(label) + '</button>';
+            return '<button onclick="window._psSetMode(\'' + id + '\')" style="border:1px solid ' + (on ? '#1971c2' : '#cfd8e3') + '; background:' + (on ? '#1971c2' : '#fff') + '; color:' + (on ? '#fff' : '#2c5f8a') + '; border-radius:12px; font-size:11px; font-weight:bold; cursor:pointer; padding:2px 6px; white-space:nowrap; line-height:1.4;">' + esc(label) + '</button>';
         };
         var curKinds = splitKinds(cur);
         var b = P.periods.map(function (p) {
@@ -634,28 +634,28 @@
         if (cur === P.customId) {
             var R = (col && col.range) || window._psRange(cur);
             var inp = function (id, v) {
-                return '<input id="' + id + '" type="date" value="' + esc(v) + '" style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px;">';
+                return '<input id="' + id + '" type="date" value="' + esc(v) + '" style="padding:1px 2px; border:1px solid #cfd8e3; border-radius:5px; font-size:10.5px; width:100px; box-sizing:border-box;">';
             };
-            b += '<span style="display:inline-flex; gap:4px; align-items:center; font-size:11.5px; color:#555; margin-left:2px;">' +
+            b += '<span style="display:inline-flex; gap:2px; align-items:center; font-size:11px; color:#555; white-space:nowrap;">' +
                  inp('ps-from', F.from || ymd(R.from)) + '~' + inp('ps-to', F.to || ymd(R.to)) +
-                 '<button onclick="window._psApplyCustom()" style="padding:3px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' +
+                 '<button onclick="window._psApplyCustom()" style="padding:1px 6px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' +
                    esc(T('적용', 'Apply')) + '</button></span>';
         }
-        var lab = function (s) { return '<span style="font-size:11.5px; color:#666; white-space:nowrap;">' + esc(s) + '</span>'; };
+        var lab = function (s) { return '<span style="font-size:11px; color:#666; white-space:nowrap;">' + esc(s) + '</span>'; };
         var slash = '<span style="color:#bbb;">/</span>';
-        var f2 = '<span style="font-size:11.5px; color:#888;">🔎</span>' +
+        var f2 = '<span style="font-size:11px; color:#888;">🔎</span>' +
              lab(T('프로젝트 담당자', 'Project owner')) +
-             sel('pm', T('프로젝트 담당자', 'Project owner'), F.pm, (col && col.pms) || [], T('전체', 'All'), ['proj', 'who']) + slash +
+             sel('pm', T('프로젝트 담당자', 'Project owner'), F.pm, (col && col.pms) || [], T('전체', 'All'), ['proj', 'who'], ' max-width:95px;') + slash +
              lab(T('프로젝트', 'Project')) +
-             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('전체', 'All'), ['who']) + slash +
+             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('전체', 'All'), ['who'], ' max-width:150px;') + slash +
              lab(T('업무 담당자', 'Task assignee')) +
-             sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('전체', 'All'), []) +
+             sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('전체', 'All'), [], ' max-width:95px;') +
              (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="padding:2px 8px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:13px; line-height:1.2; cursor:pointer;">↺</button>' : '') +
              (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
              ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
 
-        return '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">' + b + '</div>' +
-               '<div id="ps-filter-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' + f2 + '</div>';
+        return '<div id="ps-period-toolbar" style="display:flex; gap:3px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">' + b + '</div>' +
+               '<div id="ps-filter-toolbar" style="display:flex; gap:3px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' + f2 + '</div>';
     }
     function link(idx) {
         return window._linkifyTaskRefs ? window._linkifyTaskRefs(esc('#G' + idx)) : esc('#G' + idx);
