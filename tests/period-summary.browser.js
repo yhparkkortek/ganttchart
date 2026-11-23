@@ -126,6 +126,18 @@
         window._psTblSet({ toggleCat: 'decision' });
         ok('분류 칩으로 거르기', document.querySelectorAll('#ps-ai-tbl tbody tr').length === 1);
         window._psTblSet({ reset: 1 });
+        // 👷 [2026-11-23] 표에서 업무 담당자(담당 구분) 바꾸기 → 간트 행에 반영. 경계(setWbsDiscipline)만 가짜.
+        var realSetDisc = window.setWbsDiscipline, discCalls = [];
+        window.setWbsDiscipline = function (ri, v) { discCalls.push([ri, v]); window.globalData[ri]._담당구분 = v; };
+        try {
+            var roleSel = document.querySelector('#ps-ai-tbl tbody tr select');
+            ok('열린 프로젝트 행엔 담당 구분 고르기가 있다', !!roleSel);
+            window._psSetRole(0, 'FW');
+            ok('고르면 근거 간트 행의 담당 구분이 바뀐다', discCalls.length >= 1 && discCalls[0][0] === 1 && window.globalData[1]._담당구분 === 'FW', discCalls);
+            // ⚠️ textContent 로 보면 고르기 상자의 **모든 선택지** 글자가 잡혀 늘 통과한다 — 고른 값을 본다.
+            var sel2 = document.querySelector('#ps-ai-tr0-who select') || document.querySelector('#ps-row-0 td:nth-child(3) select');
+            ok('표가 바뀐 담당 구분을 바로 보여 준다', !!sel2 && sel2.value === 'FW', sel2 && sel2.value);
+        } finally { window.setWbsDiscipline = realSetDisc; window.globalData[1]._담당구분 = 'HW'; }
         // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
         var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },
             [{ idx: 7, project: 'P1', date: '2026-11-20', task: 't' }, { idx: 200007, rowIdx: 7, project: 'P1', date: '2026-11-20', task: 't' }]);

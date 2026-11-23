@@ -1015,7 +1015,7 @@
             if (anyCat && !_psTbl.cats[r.cat]) return false;
             if (_psTbl.common && !r.common) return false;
             if (_psTbl.proj && r.projects.indexOf(_psTbl.proj) < 0) return false;
-            if (_psTbl.who && r.people.indexOf(_psTbl.who) < 0) return false;
+            if (_psTbl.who && peopleOf(r).indexOf(_psTbl.who) < 0) return false;
             if (q && (r.text + ' ' + r.projects.join(' ') + ' ' + r.people.join(' ') + ' ' + r.refs.map(function (x) { return x.task; }).join(' ')).toLowerCase().indexOf(q) < 0) return false;
             return true;
         });
@@ -1023,7 +1023,7 @@
         var key = {
             cat: function (r) { return pad(catIdx[r.cat] || 0) + (r.date ? '' : ''); },
             proj: function (r) { return (r.common ? '0' : '1') + rowProj(r); },
-            who: function (r) { return r.people.join(', '); },
+            who: function (r) { return peopleOf(r).join(', ') || ('~' + rolesOf(r).join(', ')); },
             date: function (r) { return r.date || ''; },
             text: function (r) { return r.text; }
         }[_psTbl.sort] || function () { return ''; };
@@ -1036,6 +1036,64 @@
             return a.i - b.i;
         }).map(function (o) { return o.r; });
     }
+    /**
+     * 👷 [2026-11-23 사용자 요청 "업무 담당자를 바꾸고 원본에도 반영"] 담당자는 간트 행의 **담당 구분**(`_담당구분`,
+     *    HW/FW/PM…)을 그 프로젝트의 Summary ▸ 프로젝트 멤버로 푼 값이다. 그래서 바꾸는 곳은 **간트 행의 담당 구분** —
+     *    간트 드롭다운과 같은 `setWbsDiscipline`(상세내용 [담당구분] 태그·변경 이력까지)을 부른다.
+     *    ⚠️ 쓰기는 **지금 열린 프로젝트 행만**(다른 프로젝트 파일을 고치면 그걸 열어 둔 앱이 옛 값으로 되돌린다).
+     *    표의 담당자는 저장된 요약이 아니라 **지금 사실**에서 다시 읽는다 — 간트를 고치면 표가 바로 따라온다.
+     */
+    function liveFacts(r) {
+        var m = (_psLast && _psLast.factByKey) || {};
+        return uniqRefs(r.refs).map(function (x) { return m[fnv8(refKeyRaw(x))]; }).filter(Boolean);
+    }
+    function peopleOf(r) {
+        var fs = liveFacts(r);
+        if (!fs.length) return r.people || [];
+        return uniq([].concat.apply([], fs.map(function (f) { return String(f.assignee || '').split(','); })));
+    }
+    function rolesOf(r) { return uniq(liveFacts(r).map(function (f) { return f.cat; })); }
+    function localRefs(r) {
+        var open = _psLast && _psLast.openName;
+        return open ? uniqRefs(r.refs).filter(function (x) { return x.p === open; }) : [];
+    }
+    function whoCellHtml(r, ai) {
+        var ppl = peopleOf(r), roles = rolesOf(r);
+        var txt = ppl.length ? esc(ppl.join(', ')) : (roles.length ? '<span style="color:#aaa;" title="' + esc(T('담당 구분은 있지만 Summary ▸ 프로젝트 멤버에 그 역할의 담당자가 없습니다', 'Role has no assignee in project members')) + '">' + esc(roles.join(', ')) + '</span>' : '');
+        var canEdit = !(_psLast && _psLast.shown && _psLast.shown.archiveView) && localRefs(r).length && typeof window.setWbsDiscipline === 'function';
+        if (!canEdit) {
+            var why = (_psLast && _psLast.shown && _psLast.shown.archiveView) ? T('보관본 보기에서는 바꿀 수 없습니다', 'Read-only in archive view')
+                : T('이 프로젝트를 열면 여기서 담당 구분을 바꿀 수 있습니다', 'Open this project to change the role here');
+            return '<span title="' + esc(why) + '">' + txt + '</span>';
+        }
+        var meta = window.projectMeta || {}, m3 = (window.tabData && window.tabData.projectMembers3) || [];
+        var cur = roles.length === 1 ? roles[0] : '';
+        var opts = (window.WBS_DISCIPLINE_CATEGORIES || []).map(function (c) {
+            var who = roleOwner(c, meta, m3);
+            return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c + (who ? ' · ' + who : '')) + '</option>';
+        }).join('');
+        // 역할이 여럿(근거 행마다 다름)이면 첫 칸에 그대로 보여 주고, 고르면 전부 그 역할로 맞춘다.
+        if (cur === '') opts = '<option value="" selected>' + esc((roles.length ? roles.join(', ') : T('(없음)', '(none)')) + (ppl.length ? ' · ' + ppl.join(', ') : '')) + '</option>' + opts;
+        // 칸 하나 — 고르기 상자 자체가 "역할 · 이름" 을 보여 준다(행 높이를 늘리지 않는다).
+        return '<select onchange="window._psSetRole(' + ai + ', this.value)" title="' + esc(T('담당 구분 바꾸기 — 간트 행에 바로 반영됩니다', 'Change role — written to the Gantt row')) + '" style="' + window._uiSelectStyle(false) + ' height:20px; font-size:11px; max-width:140px; border-color:transparent; background:transparent; cursor:pointer;" onmouseover="this.style.borderColor=\'#cfd8e3\'" onmouseout="this.style.borderColor=\'transparent\'">' + opts + '</select>';
+    }
+    window._psSetRole = function (ai, role) {
+        var r = _psLast && _psLast.shown && _psLast.shown.rows && _psLast.shown.rows[ai];
+        if (!r || !role) return;
+        var refs = localRefs(r);
+        if (!refs.length) return;
+        var n = 0;
+        refs.forEach(function (x) {
+            var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
+            var row = gd && gd[x.row];
+            if (!row) return;
+            if (String(row._담당구분 || '') !== role) { window.setWbsDiscipline(x.row, role); n++; }
+        });
+        var who = roleOwner(role, window.projectMeta || {}, (window.tabData && window.tabData.projectMembers3) || []);
+        if (window.showToast) window.showToast(n ? T('✅ 간트 ' + n + '행의 담당 구분을 ' + role + (who ? '(' + who + ')' : '') + ' 로 바꿨습니다', 'Changed ' + n + ' Gantt row(s) to ' + role)
+                                               : T('이미 그 담당 구분입니다', 'Already that role'), 'info');
+        if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+    };
     /** 🎯 근거 = 아래 사실 카드로 가는 단추(간트 이동은 카드의 #G 링크가 한다). */
     function refHtml(x, showProj, rowI) {
         var title = esc((x.p ? x.p + ' · ' : '') + (x.task || '') + ' — ' + T('눌러서 상세 보기', 'click for details'));
@@ -1058,7 +1116,7 @@
             return '<tr id="ps-row-' + ai + '" style="transition:background .4s;">' +
                 '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
-                '<td style="' + td + '">' + esc(r.people.join(', ')) + '</td>' +
+                '<td style="' + td + '">' + whoCellHtml(r, ai) + '</td>' +
                 '<td style="' + td + ' white-space:nowrap; color:#555;">' + esc(r.date || '') + '</td>' +
                 '<td style="' + td + ' color:#222;">' + esc(r.text) + '</td>' +
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
@@ -1084,7 +1142,7 @@
         }).join('');
         var nCommon = all.filter(function (r) { return r.common; }).length;
         var projs = uniq([].concat.apply([], all.map(function (r) { return r.projects; }))).sort();
-        var people = uniq([].concat.apply([], all.map(function (r) { return r.people; }))).sort();
+        var people = uniq([].concat.apply([], all.map(function (r) { return peopleOf(r); }))).sort();
         var opt = function (list, cur, allLabel) { return '<option value="">' + esc(allLabel) + '</option>' + list.map(function (v) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join(''); };
         var selS = window._uiSelectStyle(false) + ' max-width:150px;';
         var smallBtn = window._uiBtnStyle();
@@ -1209,7 +1267,7 @@
         var rows = viewRows();
         var head = [T('분류', 'Type'), T('프로젝트', 'Project'), T('업무 담당자', 'Assignee'), T('날짜', 'Date'), T('내용', 'Content'), T('근거', 'Source')];
         var aoa = [[(_psLast && _psLast.label) || ''], head].concat(rows.map(function (r) {
-            return [catName(r.cat), r.common ? T('공통', 'Common') + ': ' + r.projects.join(', ') : (r.projects[0] || ''), r.people.join(', '), r.date || '', r.text,
+            return [catName(r.cat), r.common ? T('공통', 'Common') + ': ' + r.projects.join(', ') : (r.projects[0] || ''), peopleOf(r).join(', ') || rolesOf(r).join(', '), r.date || '', r.text,
                     uniqRefs(r.refs).map(function (x) { return (x.p ? x.p + ' ' : '') + '#' + (x.row != null ? x.row : x.g) + (x.task ? ' ' + x.task : ''); }).join('\n')];
         }));
         var ws = X.utils.aoa_to_sheet(aoa);
