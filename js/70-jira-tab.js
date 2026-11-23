@@ -959,15 +959,19 @@
         el.innerHTML = msg || '';
     }
 
-    // ── 📤 이슈 공유 (2026-11-23 사용자 요청) ───────────────────────────
-    //  클립보드 복사 + 텔레그램 전송. 수신자는 **주소록**(tabData.addressBook)에서
-    //  이름으로 찾는다 — AI 문답의 "텔레그램으로 보내줘"(js/04h)와 같은 방식
-    //  (이름 매칭 → telegramId, 안 고르면 내 것). 전송은 기존 공용 라우트
-    //  `/send-telegram`(알람 발송과 같은 입구, kortek_backend.py) 하나만 쓴다 —
-    //  JIRA 전용 새 백엔드 라우트는 두지 않는다.
-    //  ⚠️ `#jira-share-pop`은 **body 바로 밑**에 둔다 — 상세 모달(`#jira-issue-box`)에
-    //  `transform`이 걸려 있어 그 안에 두면 `position:fixed`의 기준이 모달 쪽으로
-    //  바뀌어(새 containing block) `getBoundingClientRect()` 좌표로 못 잡는다.
+    // ── 📤 이슈 공유 (2026-11-23 사용자 요청, 2차: "팝업 말고 모달 안쪽 제일 상단에
+    //    컴팩트하게 1행으로") ───────────────────────────────────────────
+    //  처음엔 body 바로 밑에 띄우는 별도 팝업(.row-action-popup, z-index:9999 고정)
+    //  이었는데, 모달을 맨 앞으로 가져올 때(bringModalToFront)는 window._topModalZ를
+    //  계속 올려써서(js/19) 모달 쪽 z-index가 금방 9999를 넘어 팝업이 그 뒤로 숨었다
+    //  (사용자 제보 "공유 팝업이 뒤에 숨어서 안보임"). 팝업을 더 높이는 대신, 아예
+    //  모달 **본문 안**(정상적인 문서 흐름, 모달과 같은 쌓임 맥락이라 늘 보인다)에
+    //  한 줄로 넣어 구조적으로 문제를 없앴다. 이름 칸 하나 + 아이콘 버튼 셋(복사·
+    //  텔레그램·이메일) — 이름을 비우면 "나"로 보낸다(기존 팝업과 같은 규칙).
+    //  수신자는 **주소록**(tabData.addressBook)에서 이름으로 찾는다 — AI 문답의
+    //  "텔레그램으로 보내줘"(js/04h)와 같은 방식. 전송은 기존 공용 라우트
+    //  `/send-telegram`·`/send-mail`(kortek_backend.py) 그대로 — JIRA 전용 새
+    //  백엔드 라우트는 두지 않는다.
     function _jiraShareText(issue) {
         var lines = [
             '🪐 [' + issue.key + '] ' + issue.summary,
@@ -977,137 +981,6 @@
         ];
         if (issue.url) lines.push('🔗 ' + issue.url);
         return lines.join('\n');
-    }
-
-    function _jiraSharePop() {
-        var pop = document.getElementById('jira-share-pop');
-        if (!pop) {
-            pop = document.createElement('div');
-            pop.id = 'jira-share-pop';
-            pop.className = 'row-action-popup';
-            pop.style.width = '260px';
-            pop.style.padding = '10px';
-            pop.style.maxHeight = '80vh';
-            pop.style.overflowY = 'auto';
-            document.body.appendChild(pop);
-            document.addEventListener('click', function (e) {
-                if (pop.style.display === 'block' && !pop.contains(e.target) && e.target.id !== 'jira-share-trigger') {
-                    pop.style.display = 'none';
-                }
-            });
-        }
-        return pop;
-    }
-
-    var _shareHits = [];
-    var _shareEmailHits = [];
-    var _shareCurKey = ''; // 팝업이 지금 가리키는 이슈 — 주소록 항목 클릭엔 key가 안 실려서 필요
-
-    window._jiraToggleShare = function (ev, key) {
-        if (ev) ev.stopPropagation();
-        var pop = _jiraSharePop();
-        if (pop.style.display === 'block') { pop.style.display = 'none'; return; }
-        var issue = _issueCache[key];
-        if (!issue) return;
-        _shareHits = [];
-        _shareEmailHits = [];
-        _shareCurKey = key;
-        pop.innerHTML =
-            '<div style="font-size:11px; color:#555; font-weight:bold; margin-bottom:6px;">📤 ' + T('이슈 공유', 'Share issue') + '</div>'
-            + '<textarea id="jira-share-text" readonly rows="4" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:11px; resize:none; margin-bottom:6px; background:#fafafa;">' + esc(_jiraShareText(issue)) + '</textarea>'
-            + '<button onclick="window._jiraShareCopy()"' + btnHover + ' style="' + btnSt + ' width:100%; margin-bottom:8px;">📋 ' + T('클립보드로 복사', 'Copy to clipboard') + '</button>'
-            + '<div style="border-top:1px dashed #e5e5e5; margin:4px 0 8px;"></div>'
-            + '<div style="font-size:11px; color:#555; margin-bottom:4px;">💬 ' + T('텔레그램으로 보내기', 'Send via Telegram') + '</div>'
-            + '<input id="jira-share-name" placeholder="' + T('이름으로 찾기', 'Find by name') + '" oninput="window._jiraShareFilter()" style="' + inputSt + ' margin-bottom:4px;">'
-            + '<div id="jira-share-hits" style="max-height:110px; overflow-y:auto;"></div>'
-            + '<button onclick="window._jiraShareSend(-1)"' + btnHover + ' style="' + btnSt + ' width:100%; font-weight:bold; margin-top:4px;">💬 ' + T('나에게 보내기', 'Send to me') + '</button>'
-            + '<div id="jira-share-status" style="font-size:11px; margin-top:6px; display:none;"></div>'
-            + '<div style="border-top:1px dashed #e5e5e5; margin:8px 0 8px;"></div>'
-            + '<div style="font-size:11px; color:#555; margin-bottom:4px;">✉️ ' + T('이메일로 전달', 'Forward by email') + '</div>'
-            + '<input id="jira-share-email-name" placeholder="' + T('이름으로 찾기', 'Find by name') + '" oninput="window._jiraShareEmailFilter()" style="' + inputSt + ' margin-bottom:4px;">'
-            + '<div id="jira-share-email-hits" style="max-height:110px; overflow-y:auto;"></div>'
-            + '<button onclick="window._jiraShareSendEmail(-1)"' + btnHover + ' style="' + btnSt + ' width:100%; font-weight:bold; margin-top:4px;">✉️ ' + T('나에게 보내기', 'Send to me') + '</button>'
-            + '<div id="jira-share-email-status" style="font-size:11px; margin-top:6px; display:none;"></div>';
-        var btn = ev && ev.currentTarget;
-        if (btn) {
-            var rect = btn.getBoundingClientRect();
-            pop.style.left = rect.left + 'px';
-            pop.style.top = (rect.bottom + 4) + 'px';
-        }
-        pop.style.display = 'block';
-    };
-
-    window._jiraShareCopy = function () {
-        var ta = document.getElementById('jira-share-text');
-        if (!ta) return;
-        var done = function () { if (window.showToast) window.showToast('📋 ' + T('복사했습니다.', 'Copied.'), 'success'); };
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(ta.value).then(done).catch(function () {
-                ta.select();
-                if (window.showToast) window.showToast('⚠️ ' + T('복사에 실패했습니다 — 직접 선택해 복사해주세요.', 'Copy failed — please select the text and copy it yourself.'), 'warning');
-            });
-        } else {
-            ta.select();
-            document.execCommand('copy');
-            done();
-        }
-    };
-
-    window._jiraShareFilter = function () {
-        var q = (document.getElementById('jira-share-name').value || '').trim();
-        var box = document.getElementById('jira-share-hits');
-        if (!box) return;
-        if (!q) { box.innerHTML = ''; _shareHits = []; return; }
-        var book = (window.tabData || {}).addressBook || [];
-        _shareHits = book.filter(function (p) { return p && p.name && p.name.indexOf(q) >= 0; }).slice(0, 20);
-        box.innerHTML = _shareHits.length
-            ? _shareHits.map(function (p, i) {
-                return '<div onclick="window._jiraShareSend(' + i + ')" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;"'
-                    + ' onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'">' + esc(p.name)
-                    + (p.telegramId ? '' : ' <span style="color:#c77; font-size:10px;">(' + T('텔레그램 ID 없음', 'no Telegram ID') + ')</span>') + '</div>';
-            }).join('')
-            : '<div style="padding:6px 8px; color:#999;">' + T('일치하는 사람이 없습니다.', 'No match.') + '</div>';
-    };
-
-    window._jiraShareSend = async function (idx) {
-        var issue = _issueCache[_shareCurKey];
-        if (!issue) return;
-        var text = _jiraShareText(issue);
-        var person = (idx >= 0) ? _shareHits[idx] : null;
-        var chatId = '', label = T('나', 'me');
-        if (person) {
-            if (!person.telegramId) {
-                _jiraShareSetStatus('⚠️ ' + T('텔레그램 ID가 없습니다 — 주소록에서 등록해주세요.', 'No Telegram ID — please add it in the Address Book.'), 'err');
-                return;
-            }
-            chatId = String(person.telegramId);
-            label = person.name;
-        } else {
-            var myName = String(window.currentUserName || '').trim();
-            var me = (myName && window._addrFindByName) ? window._addrFindByName(myName) : null;
-            if (me && me.telegramId) chatId = String(me.telegramId);
-            // 비어 있으면 백엔드가 알람 설정의 기본 Chat ID로 보낸다.
-        }
-        _jiraShareSetStatus('⏳ ' + T('보내는 중...', 'Sending...'), '');
-        if (!window.sendTelegramAlarm) { _jiraShareSetStatus('⚠️ ' + T('텔레그램 발송 기능을 아직 못 찾았습니다(페이지를 새로고침해보세요).', 'Telegram sender not loaded yet — try reloading the page.'), 'err'); return; }
-        try {
-            // ⚠️ /send-telegram 의 `to`는 백엔드 팀원 명단(TELEGRAM_MEMBERS, 이 앱의 주소록과
-            // 다른 저장소)의 이름으로 찾는다 — 주소록에서 바로 얻은 숫자 chatId는 **`chatId`
-            // 파라미터로만** 보낸다(js/22b `sendTelegramAlarm`, AI 문답 텔레그램 발송과 같은 길).
-            var r = await window.sendTelegramAlarm(text, chatId ? { chatId: chatId } : {});
-            if (!r || !r.ok) { _jiraShareSetStatus('⚠️ ' + esc((r && r.errDesc) || T('전송 실패', 'Send failed')), 'err'); return; }
-            _jiraShareSetStatus('✅ ' + T(label + '에게 보냈습니다.', 'Sent to ' + label + '.'), 'ok');
-        } catch (e) {
-            _jiraShareSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
-        }
-    };
-
-    function _jiraShareSetStatus(msg, kind) {
-        var el = document.getElementById('jira-share-status');
-        if (!el) return;
-        el.style.display = msg ? 'block' : 'none';
-        el.style.color = kind === 'err' ? '#a3281c' : (kind === 'ok' ? '#1f7a3d' : '#555');
-        el.textContent = msg;
     }
 
     // ✉️ (2026-11-23 2차, 사용자 요청 "텔레그램말고도 이메일로 (전달)공유 기능") — 기존
@@ -1127,57 +1000,87 @@
             + '<p style="color:#888; font-size:12px;">' + T('KORTEK PM 앱의 JIRA 탭에서 공유했습니다.', 'Shared from the JIRA tab in the KORTEK PM app.') + '</p></div>';
     }
 
-    window._jiraShareEmailFilter = function () {
-        var q = (document.getElementById('jira-share-email-name').value || '').trim();
-        var box = document.getElementById('jira-share-email-hits');
-        if (!box) return;
-        if (!q) { box.innerHTML = ''; _shareEmailHits = []; return; }
+    // 이름 칸의 글자 → 주소록 1명. 비우면 "나", 두 명 이상 겹치면 누구인지 모르니
+    // 보내지 않고 사람에게 되묻는다(추측해서 엉뚱한 사람에게 보내는 게 더 나쁘다).
+    function _jiraShareResolvePerson(q) {
+        q = (q || '').trim();
         var book = (window.tabData || {}).addressBook || [];
-        _shareEmailHits = book.filter(function (p) { return p && p.name && p.name.indexOf(q) >= 0; }).slice(0, 20);
-        box.innerHTML = _shareEmailHits.length
-            ? _shareEmailHits.map(function (p, i) {
-                return '<div onclick="window._jiraShareSendEmail(' + i + ')" style="padding:6px 8px; cursor:pointer; border-bottom:1px solid #f2f2f2;"'
-                    + ' onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'">' + esc(p.name)
-                    + (p.email ? '' : ' <span style="color:#c77; font-size:10px;">(' + T('이메일 없음', 'no email') + ')</span>') + '</div>';
-            }).join('')
-            : '<div style="padding:6px 8px; color:#999;">' + T('일치하는 사람이 없습니다.', 'No match.') + '</div>';
+        if (!q) {
+            var myName = String(window.currentUserName || '').trim();
+            var me = (myName && window._addrFindByName) ? window._addrFindByName(myName) : null;
+            return { person: me, label: T('나', 'me'), isMe: true };
+        }
+        var hits = book.filter(function (p) { return p && p.name && p.name.indexOf(q) >= 0; });
+        if (hits.length === 1) return { person: hits[0], label: hits[0].name };
+        if (hits.length > 1) return { person: null, label: q, ambiguous: hits.length };
+        return { person: null, label: q, notFound: true };
+    }
+
+    window._jiraShareCopy = function (key) {
+        var issue = _issueCache[key];
+        if (!issue) return;
+        var text = _jiraShareText(issue);
+        var done = function () { if (window.showToast) window.showToast('📋 ' + T('복사했습니다.', 'Copied.'), 'success'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(function () {
+                if (window.showToast) window.showToast('⚠️ ' + T('복사에 실패했습니다.', 'Copy failed.'), 'warning');
+            });
+        } else {
+            var ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) { if (window.showToast) window.showToast('⚠️ ' + T('복사에 실패했습니다.', 'Copy failed.'), 'warning'); }
+            ta.remove();
+        }
     };
 
-    window._jiraShareSendEmail = async function (idx) {
-        var issue = _issueCache[_shareCurKey];
+    window._jiraShareSendTg = async function (key) {
+        var issue = _issueCache[key];
         if (!issue) return;
-        var person = (idx >= 0) ? _shareEmailHits[idx] : null;
-        var label = T('나', 'me');
-        if (!person) {
-            var myName = String(window.currentUserName || '').trim();
-            person = (myName && window._addrFindByName) ? window._addrFindByName(myName) : null;
+        var nameInp = document.getElementById('jira-share-name');
+        var r = _jiraShareResolvePerson(nameInp && nameInp.value);
+        if (r.ambiguous) { if (window.showToast) window.showToast('⚠️ "' + r.label + '" ' + T('이(가) ' + r.ambiguous + '명과 겹칩니다 — 더 자세히 적어주세요.', 'matches ' + r.ambiguous + ' people — be more specific.'), 'warning'); return; }
+        if (r.notFound) { if (window.showToast) window.showToast('⚠️ ' + T('주소록에 없는 이름입니다.', 'No such name in the address book.'), 'warning'); return; }
+        var chatId = '';
+        if (r.isMe) {
+            if (r.person && r.person.telegramId) chatId = String(r.person.telegramId);
+            // 비어 있으면 백엔드가 알람 설정의 기본 Chat ID로 보낸다.
         } else {
-            label = person.name;
+            if (!r.person.telegramId) { if (window.showToast) window.showToast('⚠️ ' + r.label + T(' 님은 텔레그램 ID가 없습니다 — 주소록에서 등록해주세요.', ' has no Telegram ID — please add it in the Address Book.'), 'warning'); return; }
+            chatId = String(r.person.telegramId);
         }
-        if (!person || !person.email) {
-            _jiraShareEmailSetStatus('⚠️ ' + T(label + '의 이메일 주소가 없습니다 — 주소록에서 등록해주세요.', 'No email address for ' + label + ' — please add it in the Address Book.'), 'err');
-            return;
+        if (!window.sendTelegramAlarm) { if (window.showToast) window.showToast('⚠️ ' + T('텔레그램 발송 기능을 아직 못 찾았습니다(페이지를 새로고침해보세요).', 'Telegram sender not loaded yet — try reloading the page.'), 'warning'); return; }
+        try {
+            // ⚠️ /send-telegram 의 `to`는 백엔드 팀원 명단(TELEGRAM_MEMBERS, 이 앱의 주소록과
+            // 다른 저장소)의 이름으로 찾는다 — 주소록에서 바로 얻은 숫자 chatId는 **`chatId`
+            // 파라미터로만** 보낸다(js/22b `sendTelegramAlarm`, AI 문답 텔레그램 발송과 같은 길).
+            var res = await window.sendTelegramAlarm(_jiraShareText(issue), chatId ? { chatId: chatId } : {});
+            if (!res || !res.ok) { if (window.showToast) window.showToast('⚠️ ' + ((res && res.errDesc) || T('전송 실패', 'Send failed')), 'warning'); return; }
+            if (window.showToast) window.showToast('✅ ' + T(r.label + '에게 보냈습니다.', 'Sent to ' + r.label + '.'), 'success');
+        } catch (e) {
+            if (window.showToast) window.showToast('⚠️ ' + String(e && e.message || e), 'warning');
         }
-        _jiraShareEmailSetStatus('⏳ ' + T('보내는 중...', 'Sending...'), '');
+    };
+
+    window._jiraShareSendMail = async function (key) {
+        var issue = _issueCache[key];
+        if (!issue) return;
+        var nameInp = document.getElementById('jira-share-name');
+        var r = _jiraShareResolvePerson(nameInp && nameInp.value);
+        if (r.ambiguous) { if (window.showToast) window.showToast('⚠️ "' + r.label + '" ' + T('이(가) ' + r.ambiguous + '명과 겹칩니다 — 더 자세히 적어주세요.', 'matches ' + r.ambiguous + ' people — be more specific.'), 'warning'); return; }
+        if (r.notFound) { if (window.showToast) window.showToast('⚠️ ' + T('주소록에 없는 이름입니다.', 'No such name in the address book.'), 'warning'); return; }
+        if (!r.person || !r.person.email) { if (window.showToast) window.showToast('⚠️ ' + r.label + T(' 님은 이메일 주소가 없습니다 — 주소록에서 등록해주세요.', ' has no email address — please add it in the Address Book.'), 'warning'); return; }
         try {
             var d = await fetch(BASE + '/send-mail', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: person.email, subject: '[JIRA] [' + issue.key + '] ' + issue.summary, body: _jiraShareEmailHtml(issue) })
-            }).then(function (r) { return r.json(); });
-            if (!d || d.ok === false) { _jiraShareEmailSetStatus('⚠️ ' + esc((d && d.error) || T('발송 실패', 'Send failed')), 'err'); return; }
-            _jiraShareEmailSetStatus('✅ ' + T(label + '에게 보냈습니다.', 'Sent to ' + label + '.'), 'ok');
+                body: JSON.stringify({ to: r.person.email, subject: '[JIRA] [' + issue.key + '] ' + issue.summary, body: _jiraShareEmailHtml(issue) })
+            }).then(function (res) { return res.json(); });
+            if (!d || d.ok === false) { if (window.showToast) window.showToast('⚠️ ' + ((d && d.error) || T('발송 실패', 'Send failed')), 'warning'); return; }
+            if (window.showToast) window.showToast('✅ ' + T(r.label + '에게 보냈습니다.', 'Sent to ' + r.label + '.'), 'success');
         } catch (e) {
-            _jiraShareEmailSetStatus('⚠️ ' + esc(String(e && e.message || e)), 'err');
+            if (window.showToast) window.showToast('⚠️ ' + String(e && e.message || e), 'warning');
         }
     };
-
-    function _jiraShareEmailSetStatus(msg, kind) {
-        var el = document.getElementById('jira-share-email-status');
-        if (!el) return;
-        el.style.display = msg ? 'block' : 'none';
-        el.style.color = kind === 'err' ? '#a3281c' : (kind === 'ok' ? '#1f7a3d' : '#555');
-        el.textContent = msg;
-    }
 
     window._jiraOpenIssueModal = async function (key) {
         var wrap = document.getElementById('jira-issue-modal');
@@ -1195,7 +1098,6 @@
             + ' cursor:move; display:flex; align-items:center; gap:8px;">'
             + '<strong id="jira-issue-title" style="font-size:14px;">🪐 ' + esc(key) + '</strong>'
             + '<a id="jira-issue-openlink" target="_blank" rel="noopener" style="font-size:11px; color:#00707d;">' + T('JIRA에서 열기 ↗', 'Open in JIRA ↗') + '</a>'
-            + '<a id="jira-share-trigger" onclick="window._jiraToggleShare(event, \'' + esc(key) + '\')" style="font-size:11px; color:#00707d; cursor:pointer;">📤 ' + T('공유', 'Share') + '</a>'
             + '<span style="flex:1;"></span>'
             + '<button onclick="document.getElementById(\'jira-issue-modal\').style.display=\'none\'"'
             + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
@@ -1237,8 +1139,18 @@
         try { prRes = await fetchJson(BASE + '/jira/priorities'); } catch (e) { prRes = { priorities: [] }; }
         var priorities = (prRes && prRes.priorities) || [];
 
+        var shareBtnSt = 'flex-shrink:0; width:28px; height:26px; padding:0; border-radius:5px; font-size:13px; line-height:26px; cursor:pointer; border:none; background:#e0f5f7; color:#00707d;';
+        var shareRow = '<div style="display:flex; align-items:center; gap:5px; margin-bottom:10px; padding:5px 7px; background:#f7fbfb; border:1px solid #d9eceb; border-radius:6px;">'
+            + '<span style="font-size:11px; color:#555; font-weight:bold; flex-shrink:0;">📤 ' + T('공유', 'Share') + '</span>'
+            + '<input id="jira-share-name" placeholder="' + T('이름(비우면 나)', 'name (blank = me)') + '" style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ccc; border-radius:5px; font-size:11px;">'
+            + '<button onclick="window._jiraShareCopy(\'' + esc(key) + '\')" title="' + T('클립보드로 복사', 'Copy to clipboard') + '"' + btnHover + ' style="' + shareBtnSt + '">📋</button>'
+            + '<button onclick="window._jiraShareSendTg(\'' + esc(key) + '\')" title="' + T('텔레그램으로 보내기', 'Send via Telegram') + '"' + btnHover + ' style="' + shareBtnSt + '">💬</button>'
+            + '<button onclick="window._jiraShareSendMail(\'' + esc(key) + '\')" title="' + T('이메일로 보내기', 'Send via email') + '"' + btnHover + ' style="' + shareBtnSt + '">✉️</button>'
+            + '</div>';
+
         body.innerHTML =
-            fieldRow(T('요약', 'Summary'), '<input id="jira-f-summary" style="' + inputSt + '" value="' + esc(issue.summary) + '">')
+            shareRow
+            + fieldRow(T('요약', 'Summary'), '<input id="jira-f-summary" style="' + inputSt + '" value="' + esc(issue.summary) + '">')
             + fieldRow(T('설명', 'Description'), '<textarea id="jira-f-description" rows="5" style="' + inputSt + ' resize:vertical; font-family:inherit;">' + esc(issue.description) + '</textarea>')
             + fieldRow(T('담당자', 'Assignee'), '<div style="flex:1; min-width:0;">'
                 + '<div style="display:flex; gap:6px;">'

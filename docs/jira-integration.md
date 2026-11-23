@@ -478,13 +478,22 @@ comment/<id>` 자원을 그대로 쓴다(수정은 PUT, 삭제는 DELETE). `_sha
 `/send-telegram`(알람 발송·AI 문답 "텔레그램으로 보내줘"와 같은 라우트), `/send-mail`
 (SMTP, 알람 수동발송과 같은 라우트) — 전부 `kortek_backend.py`.
 
-- 상세 모달 헤더에 `📤 공유` 링크 — 누르면 `row-action-popup`(Document 페이지 서식
-  드롭다운과 같은 공용 CSS 클래스)이 뜬다.
+- **(2026-11-23 3차, 사용자 제보 "공유 팝업이 뒤에 숨어서 안보임" → "팝업 말고 모달
+  안쪽 제일 상단에 컴팩트하게 1행으로") 팝업을 버리고 본문 맨 위에 한 줄로 바꿨다.**
+  원인은 `row-action-popup`의 고정 `z-index:9999`인데, 모달을 맨 앞으로 가져올 때
+  (`bringModalToFront`)는 `window._topModalZ`를 계속 올려써서(js/19) 모달 쪽
+  z-index가 금방 9999를 넘어가 팝업이 그 뒤로 숨었다 — 팝업을 더 높이는 **값 경쟁**
+  대신, 모달 **본문 안**(정상적인 문서 흐름이라 모달과 같은 쌓임 맥락을 그대로 쓴다)에
+  넣어 구조적으로 없앴다. `jira-issue-body`의 첫 줄(`shareRow`)이 이름 입력칸 하나 +
+  아이콘 버튼 셋(📋 복사·💬 텔레그램·✉️ 이메일)이고, 이름을 비우면 "나"로 보낸다.
+  헤더의 `📤 공유` 링크와 별도 팝업 DOM(`#jira-share-pop`)은 제거.
 - **📋 클립보드로 복사** — `🪐 [키] 요약 / 상태·담당자·우선순위 / 🔗 URL` 네 줄을
-  `navigator.clipboard.writeText`(실패하면 `execCommand('copy')` 폴백)로 복사한다.
+  `navigator.clipboard.writeText`(실패하면 임시 textarea + `execCommand('copy')`
+  폴백)로 복사한다.
 - **💬 텔레그램으로 보내기** — 수신자는 **이 앱의 주소록**(`tabData.addressBook`)에서
-  이름으로 찾는다(입력할 때마다 실시간으로 거른다). 비우고 "나에게 보내기"를 누르면
-  `window.currentUserName`으로 내 주소록 항목을 찾아 그 `telegramId`로 보낸다.
+  이름 칸의 글자로 찾는다(`_jiraShareResolvePerson`). 비우면 "나"(`window.currentUserName`
+  으로 내 주소록 항목을 찾아 그 `telegramId`), 겹치는 사람이 여럿이면 **추측하지 않고
+  되묻는다**(토스트로 "더 자세히 적어주세요").
 - ⚠️⚠️ **`/send-telegram`의 `to` 파라미터는 이 주소록이 아니라 백엔드 팀원 명단
   (`TELEGRAM_MEMBERS`, `/telegram/members`로 따로 등록하는 저장소)의 이름으로 찾는다** —
   그래서 주소록에서 바로 얻은 숫자 `telegramId`는 `to`가 아니라 **`chatId`** 파라미터로
@@ -497,15 +506,10 @@ comment/<id>` 자원을 그대로 쓴다(수정은 PUT, 삭제는 DELETE). `_sha
   알람 수동발송(`js/22c`)과 같은 모양의 HTML 표(상태·담당자·우선순위 + JIRA 링크)다.
   텔레그램과 달리 **백엔드에 기본값이 없다** — 받는사람 이메일이 없으면(주소록 미등록)
   그 자리에서 거부한다(`/send-mail`은 `to`가 없으면 애초에 보낼 수 없다).
-- 첨부 목록·댓글 목록과 같은 이유로 `#jira-share-pop`은 **`document.body` 바로 밑에** 둔다
-  — 상세 모달(`#jira-issue-box`)에 `transform: translate(-50%,-50%)`가 걸려 있어 그 안에
-  두면 `position:fixed`의 기준이 모달로 바뀌어(새 containing block) 버튼의
-  `getBoundingClientRect()` 좌표로 못 띄운다.
-
 ⚠️ **아직 실제 서버로 확인 못 함** — 전용 검증 하네스도 아직 없다(기존 공용 라우트를 그대로
-불러 쓰는 UI 전용 추가라 새 백엔드 테스트 대상이 없고, 이 세션엔 브라우저 자동화가 로컬
-백엔드에 연결되지 않았다). 실제로 눌러서 ① 클립보드에 네 줄이 그대로 들어가는지 ②
-주소록 이름 검색이 실시간으로 거르는지 ③ 텔레그램에 실제로 도착하는지 확인이 필요하다.
+불러 쓰는 UI 전용 추가라 새 백엔드 테스트 대상이 없다). 실제로 눌러서 ① 클립보드에 네 줄이
+그대로 들어가는지 ② 겹치는 이름에서 정확히 거부하는지 ③ 텔레그램·이메일에 실제로
+도착하는지 확인이 필요하다.
 
 ## 🐛 (2026-11-11) "로그인 테스트"가 항상 실패했던 진짜 원인 — `/rest/api/2/myself`가 이 서버엔 없다
 
