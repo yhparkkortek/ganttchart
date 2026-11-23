@@ -447,4 +447,9 @@ AI 분석 실패로 업무 내용(task)이 없는 줄은 넣을 게 없어 건�
   AMUSNET 55FLAT 이 형제에서 떨어져 나갔다(설정 화면에 55C·55J 만 보였다).
 - 가족 이름은 형제 고객사 칸의 공통 앞부분(`LNW>SHUFFLER`).
 - 실데이터(주소록으로 사람 이름까지 거른 재생): AMUSNET 55 공통 메일 7건 → 55FLAT·55C·55J 모두. 다른 대기엔 변화 없음. 하네스 93/93. RULE_V 2026-11-23j.
+- **(같은 날) MediaTek 스케일러 단종 ↔ HORIZON75 분리** — 사용자 확인 "별개 제품". 묶인 원인은 데이터: HORIZON75 Summary 의 **프로젝트명**(모델 카드 프로젝트명칭 포함)이
+  `LNW>MediaTek Scaler(Violet ADB) 단종>대체 검토` 라 색인 키워드에 들어갔고, 스케일러 프로젝트 키워드엔 영향 모델 `HORIZON75` 가 있다(정당).
+  14:13 에 두 프로젝트를 한 가족으로 묶고 대표를 MediaTek 으로 정한 설정이 있어 HORIZON75 메일이 MediaTek 으로 갈 수 있었다.
+  → 팀 공용 설정 `MailRouting_Shared.json` 을 **각자 다른 가족**(대표 = 자기 자신)으로 바꿈(백업 `MailRouting_Shared.before-split-20261123-155307.json`).
+  확인: `HORIZON75 O/C 변경 일정`·`Horizon 75 MVD 샘플` → HORIZON75, `VIOLET Scaler EOL …`·`Cosmic Upright49 …` → 스케일러 프로젝트.
 
