@@ -56,7 +56,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23e';
+    var RULE_V = '2026-11-23f';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -369,6 +369,13 @@
             // [2026-11-23] 내 가족도 맞은 단어(고객 root 'lnw'·공통 'obsidian' 등)는 "다른 가족의 증거"로 세지 않는다 —
             //  안 빼면 제목에 고유 번호(#502627)가 있는 OBSIDIAN27 메일이 Digital Wheel 의 lnw·obsidian 2개로 충돌이 됐다(실측).
             var mine = {}; (famHit[myFam] || []).forEach(function (t) { mine[t] = 1; }); uniqHits[i1].forEach(function (t) { mine[t] = 1; });
+            // [2026-11-23] 다른 가족 **둘 이상**이 함께 가진 단어(고객 root 'lnw' 처럼)도 "특정 다른 프로젝트"의 증거가 아니다 —
+            //  실측: SSBT(고객 root 'lnwsg') 제목의 'LNW' 가 다른 LNW 가족 9곳에 하나씩 걸려 제목 판정이 충돌이 됐다.
+            var famsOfTok = {};
+            Object.keys(famHit).forEach(function (f) { if (f !== myFam) famHit[f].forEach(function (t) { famsOfTok[t] = (famsOfTok[t] || 0) + 1; }); });
+            //  ⚠️ **제목 판정에서만** — 본문(인용·표)에선 이 공통 단어들이 "여러 프로젝트 얘기" 라는 실제 신호라 그대로 센다
+            //  (본문에까지 적용했더니 'Panel Roadmap … for Obsidian55' 가 로드맵 표의 패널 부품번호 하나로 AMUSNET 55FLAT 에 갔다 — 실측).
+            if (strictOther) Object.keys(famsOfTok).forEach(function (t) { if (famsOfTok[t] >= 2) mine[t] = 1; });
             var otherStrong = Object.keys(famHit).filter(function (f) {
                 // 제목 판정(strictOther)에선 다른 프로젝트 단어가 **하나**만 있어도 충돌 — 제목은 짧아서 거기 나온 다른 프로젝트는
                 //  지나가는 언급이 아니다("ZITRO ICONI & LnW STELLAR & LnW OBSIDIAN…" 가 한 곳으로 가면 안 된다).

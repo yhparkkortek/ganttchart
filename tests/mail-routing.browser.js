@@ -191,6 +191,12 @@ window.__mailRoutingTestBody = async function () {
         ok(j9.decision === 'auto' && j9.target.drive_file_id === 'O1' && /^subject_/.test(j9.basis), '9-5 제목의 고유 번호(#502627)가 본문 인용의 다른 프로젝트 단어를 이긴다', j9);
         j9 = J(M('ZITRO ICONIC & LnW STELLAR32 & Obsidian Digital Wheel 일정', ''), cands9, null);
         ok(j9.decision !== 'auto', '9-6 제목에 여러 프로젝트가 같이 나오면 한 곳으로 보내지 않는다', j9);
+        // 9-6b [2026-11-23] 제목에서 여러 다른 가족이 함께 가진 단어('LNW')는 다른 프로젝트의 증거가 아니다
+        const SG = C('SG', 'LNW(SG)_SSBT_27.0.json', 'SSBT(FHD,QHD,UHD)', 'LNW(SG)>SSBT(FHD,QHD,UHD)', '27', ['SSBT']);
+        j9 = J(M('LNW UK 견적 의뢰(27" SSBT 사양)', '견적 부탁드립니다'), cands9.concat([SG]), null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'SG' && /^subject_/.test(j9.basis), '9-6b 제목의 공통 고객 이름(LNW)은 SSBT 의 충돌 근거가 아니다', j9);
+        j9 = J(M('Panel Roadmap - Sep 2026', 'LNW Obsidian 55 panel 대체: AMUSNET 55FLAT 적용 검토'), cands9, null);
+        ok(j9.decision !== 'auto', '9-6c 본문에선 공통 단어(LNW·Obsidian)도 여러 프로젝트 신호로 센다(로드맵 표 부품 하나로 배치 안 함)', j9);
         // 9-7 가족 안 인치로 형제 가르기
         j9 = J(M('Shuffler Display 4.3" ESD 관련 논의', '첨부 참조'), cands9, null);
         ok(j9.decision === 'auto' && j9.target.drive_file_id === 'S4' && /family_inch$/.test(j9.basis), '9-7 SHUFFLER 가족 + 4.3" → 4.3 (인치로 형제 가름)', j9);

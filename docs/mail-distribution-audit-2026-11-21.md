@@ -361,3 +361,18 @@ SHUFFLER 3.0 파일 후보로 섞이고 SHUFFLER 3.0 메일은 제 프로젝트�
 검증: 하네스 67/67(3-2·3-5·3-6·3-6d·7-4d·7-4e 신설/변경) — 근거 검사를 끄면 정확히 4건 실패(돌연변이). `node tests/ms-auto-register-topic-regen.test.js` 4/4.
 규칙 버전 `RULE_V` 2026-11-23e. ⚠️ 실제 메일 흐름으로는 아직 못 봤다.
 
+### 8-9. 데이터 정리 + 재판정 결과 (같은 날 13시대)
+
+- 색인 `LNW_SHUFFLER_03.0.json` 항목을 앱의 `buildProjectIndexEntry`(js/04c 를 잘라 프로젝트 파일 실데이터로 실행)로 다시 만들어 교체 —
+  KGP-4/KONAMI>KGP-4 → SHUFFLER/LNW>SHUFFLER(3인치). 백업 `App_Config/project_index.before-shuffler30-20261123-133005.json`.
+- 유령 항목 8건 삭제(29→21, 파일 없는 옛 이름 항목, 앱과 같은 세 기준으로 판정·모든 폴더 확인·보관함 대기 카드 참조 0) —
+  백엔드 색인 가드 `dropped 8 · restored 0`. 백업 `App_Config/project_index.before-ghostclean-20261123-133443.json`. 2분 뒤 재확인 유령 0.
+- 재판정 버튼 실행: 13:41:42~13:42:10 에 **25건 배치(건당 2~5초)**, 대기 96→**53**, 남은 53건 전부 RULE_V 표시(끝까지 봄).
+- 남은 53건에서 찾은 판정 버그: 제목 판정이 **여러 다른 가족이 함께 가진 단어**(고객 root `lnw`)를 "다른 프로젝트의 증거"로 세어
+  `LNW UK 견적 의뢰(27" SSBT …)` 5건이 충돌이었다 → 제목 판정(strictOther)에서만 그 단어를 뺀다. ⚠️ 본문에까지 적용했더니
+  `Panel Roadmap … for Obsidian55` 5건이 로드맵 표의 패널 부품번호 하나로 AMUSNET 55FLAT 에 갔다 — 그래서 **제목에서만**.
+  재생: 박용훈 53건 중 SSBT 5건만 배치로 바뀜, tester·장영익 보관함은 배치 대상 변화 0. 하네스 69/69(9-6b·9-6c). RULE_V 2026-11-23f.
+- 남은 대기의 성격: 여러 프로젝트를 함께 다루는 메일(Amusnet 55 3종 공통·E3 현황·HiDeep 재고·ZITRO&STELLAR&OBSIDIAN·Panel Roadmap) ·
+  **등록된 프로젝트가 없는 제품**(K27 Upper #502246·iView 6.2" #502356) · 회사 공지(연구원 참여율·인사평가) ·
+  AMUSNET 55 공통 메일은 **가족 대표를 정하면** 자동으로 간다.
+
