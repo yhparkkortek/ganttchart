@@ -166,6 +166,22 @@
     }
     function explicitPrimary(name) { var f = _cfg.families[name]; return (f && f.primary) || ''; }
 
+    /** 고객사 칸들의 공통 앞부분('LNW>SHUFFLER 4.3"' · 'LNW>SHUFFLER 3.0"' → 'LNW>SHUFFLER') */
+    function commonCustomerLabel(list) {
+        var segs = (list || []).map(function (c) { return String(c || '').split('>').map(function (x) { return x.trim(); }); });
+        if (!segs.length) return '';
+        var out = [];
+        for (var k = 0; k < segs[0].length; k++) {
+            var v = segs[0][k];
+            if (segs.every(function (s) { return s[k] === v; })) { out.push(v); continue; }
+            var pre = v;
+            segs.forEach(function (s) { var t = s[k] || '', j = 0; while (j < pre.length && j < t.length && pre[j] === t[j]) j++; pre = pre.slice(0, j); });
+            pre = pre.replace(/[\s\-_.(\[\"'”]+$/, '').trim();
+            if (pre.length >= 2) out.push(pre);
+            break;
+        }
+        return out.join('>');
+    }
     /** 가족 묶기 — 사람 설정 > 고객사 칸이 통째로 같음(LNW>SHUFFLER) > 같은 고객 아래 식별자 공유 ≥ familyShareMin.
      *  결과: {famOf:{fid:famId}, fams:{famId:{members:[idx], primary:idx|null, label, name}}, idents} */
     function buildFamilies(cands) {
@@ -200,7 +216,9 @@
         });
         Object.keys(fams).forEach(function (r) {
             var f = fams[r], c0 = cands[f.members[0]];
-            f.label = f.name || (String(c0.customer || '').split('>').slice(0, 2).join('>') || c0.model || '').trim();
+            // [2026-11-23] 가족 이름은 형제들 고객사 칸의 **공통 앞부분** — 첫 프로젝트 칸을 그대로 쓰면
+            //  'LNW>SHUFFLER 4.3"' 처럼 한 형제 이름이 가족 이름이 돼 설정 화면에서 헷갈렸다(사용자 지적).
+            f.label = f.name || commonCustomerLabel(f.members.map(function (i) { return cands[i].customer; })) || (String(c0.customer || '').split('>').slice(0, 2).join('>') || c0.model || '').trim();
             if (f.members.length === 1) f.label = (c0.model || c0.customer || c0.file_name || '').trim();
         });
         return { famOf: famOf, fams: fams, idents: ids };

@@ -641,7 +641,7 @@ window.openMailAutoConfigModal = async function() {
                             <span id="mac-routing-stats" style="font-size:11px; color:#888;"></span>
                         </div>
                         <div id="mac-family-wrap" style="margin-top:10px;">
-                            <div id="mac-family-title" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">👨‍👩‍👧 프로젝트 가족과 대표 <span style="font-weight:normal; color:#888; font-size:11px;">(가족만 확정되고 모델 단서가 없는 메일이 가는 곳)</span></div>
+                            <div id="mac-family-title" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">👨‍👩‍👧 프로젝트 가족과 대표 <span style="font-weight:normal; color:#888; font-size:11px;">(같은 제품군 메일인데 <b>모델 단서가 하나도 없을 때만</b> 쓰입니다 — 4.3\" 처럼 인치·모델명이 적혀 있으면 대표와 상관없이 그 모델로 갑니다)</span></div>
                             <div id="mac-family-list" style="font-size:11.5px; color:#444;">불러오는 중…</div>
                         </div>
                     </div>
@@ -885,7 +885,7 @@ window._macRenderFamilies = async function() {
                     const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name;
                     return `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="mac-fam-${esc(f.id)}" value="${esc(c.drive_file_id)}" ${c.drive_file_id === cur ? 'checked' : ''} onchange="window._macFamilyPick('${esc(name).replace(/'/g, '')}', this.value, ${JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;')})"><span>${esc(label)}</span><span style="color:#888;">${esc(c.file_name || '')}</span></label>`;
                 }).join('')}
-                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#888;"><input type="radio" name="mac-fam-${esc(f.id)}" value="" ${!cur ? 'checked' : ''} onchange="window._macFamilyPick('${esc(name).replace(/'/g, '')}', '', ${JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;')})"><span>${_en ? 'No primary — model-less mails wait (or follow AI)' : '대표 없음 — 모델 단서 없는 메일은 AI 판단(상·중)으로, 그마저 없으면 대기'}</span></label>
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#888;"><input type="radio" name="mac-fam-${esc(f.id)}" value="" ${!cur ? 'checked' : ''} onchange="window._macFamilyPick('${esc(name).replace(/'/g, '')}', '', ${JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;')})"><span>${_en ? 'No primary — model-less mails wait (AI pick only with evidence in the mail)' : '대표 없음 — 모델 단서 없는 메일은 대기(AI 선택은 본문 근거가 있을 때만 따름)'}</span></label>
             </div>
         </div>`;
     }).join('');
