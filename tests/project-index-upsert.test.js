@@ -113,6 +113,21 @@ const REL = '개발3팀/LNW_27.0.json';
         check('경로로 찾았다고 로그에 남는다', env.state.logs.some(function (m) { return /경로로 찾아/.test(m); }));
     }
 
+    console.log('\n=== 1b) [2026-11-23] 저장 직후 다른 프로젝트를 열어도 **저장 당시 값**으로 쓴다 ===');
+    {
+        const PM43 = { 모델명: '1640994-ALT1', 고객사: 'LNW>SHUFFLER 4.3"', 프로젝트담당자: '박용훈', 팀: '개발3팀', 메일키워드: 'SHUFFLER 4.3' };
+        const PM30 = { 모델명: 'SHUFFLER', 고객사: 'LNW>SHUFFLER 3.0"', 프로젝트담당자: '박용훈', 팀: '개발3팀', 메일키워드: 'SHUFFLER 3' };
+        const env = makeEnv({ pm: PM43, projects: [{ drive_file_id: 'S30', file_name: 'LNW_SHUFFLER 3.0_03.0.json', assignee: '박용훈' }] });
+        env.win._parseMailKeywords = function (raw) { return String(raw || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); };
+        env.win.tabData = { projectMaterials: [], themeColor: '#4251c2' };
+        await env.run('S30', 'LNW_SHUFFLER 3.0_03.0.json', { pm: PM30, materials: [], jiraKeys: ['GABKH'], themeColor: '#2f9d82' });
+        const e = env.state.patched.projects.filter(function (p) { return p.drive_file_id === 'S30'; })[0] || {};
+        check('3.0 항목의 고객은 3.0 것(열린 4.3 것이 아님)', e.customer === 'LNW>SHUFFLER 3.0"', e.customer);
+        check('키워드도 3.0 것(SHUFFLER 3 · GABKH)', (e.keywords || []).indexOf('SHUFFLER 3') !== -1 && (e.keywords || []).indexOf('GABKH') !== -1
+              && (e.keywords || []).indexOf('SHUFFLER 4.3') === -1, e.keywords);
+        check('테마색도 저장 당시 것', e.themeColor === '#2f9d82', e.themeColor);
+    }
+
     console.log('\n=== 2) 옛 js 가 만들어 둔 중복을 하나로 모은다 ===');
     {
         const env = makeEnv({

@@ -277,7 +277,8 @@
             idOf: idOf, relOf: relOf, normRel: normRel, joinRel: joinRel,
             parseQ: parseQ, adoptIdMap: adoptIdMap, parseMultipart: parseMultipart,
             mimeOf: mimeOf, toDriveFile: toDriveFile, rootId: rootId,
-            backupStampOf: backupStampOf, backupOrigNameOf: backupOrigNameOf
+            backupStampOf: backupStampOf, backupOrigNameOf: backupOrigNameOf,
+            aliasOnRename: aliasOnRename
         }
     };
 
@@ -1223,13 +1224,29 @@
 
     /** 파일이 옮겨지면 지도도 같이 옮긴다 — 메모리와 NAS 파일 둘 다.
      *  ⚠️ 실패해도 **저장을 깨뜨리지 않는다**(저장은 이미 끝났다). 대신 시끄럽게 남긴다. */
-    async function remapIdPath(oldRel, newRel) {
+    /** 메모리 지도만 옮긴다(순수) — remapIdPath 와 하네스가 같이 쓴다. @returns 옮긴 id 목록(마지막이 그 경로의 대표 id).
+     *  🆔 [2026-11-23 "id 문제가 계속 생긴다" 정밀 점검] **경로로 만든 id(`nas_f_…`)도 이름이 바뀌면 따라가게** 한다.
+     *  그 id 는 지도에 없어서(이사 후 새로 만든 프로젝트) 예전엔 아무것도 안 옮겼다 → 이름이 바뀌면 그 프로젝트는
+     *  **새 경로로 새 id** 를 받고, 옛 id 는 없는 경로를 가리켰다. 그래서 ① 색인에 옛 id 항목이 유령으로 남았고
+     *  (11-23 에 지운 8건이 전부 이 경우) ② 보관함 카드·배분 기록·다른 탭이 옛 id 로 쓰면 **옛 경로에 파일이 다시 생겼다**.
+     *  → 옛 `nas_f_` id 를 지도에 별칭으로 넣어 새 경로를 가리키게 하고, 그 id 를 계속 대표 id 로 쓴다(Drive 처럼 id 가 안 바뀐다). */
+    function aliasOnRename(oldRel, newRel) {
+        oldRel = normRel(oldRel); newRel = normRel(newRel);
         var moved = [];
         Object.keys(_idMap).forEach(function (id) {
             if (_idMap[id] === oldRel) { _idMap[id] = newRel; moved.push(id); }
         });
-        if (!moved.length) return 0;
+        if (!moved.length) {
+            var oldNasId = 'nas_f_' + b64urlEncode(oldRel);
+            _idMap[oldNasId] = newRel; moved.push(oldNasId);
+        }
         delete _relToOldId[oldRel];
+        _relToOldId[newRel] = moved[moved.length - 1];
+        return moved;
+    }
+    async function remapIdPath(oldRel, newRel) {
+        var moved = aliasOnRename(oldRel, newRel);
+        if (!moved.length) return 0;
         // ⚠️⚠️ [2026-11-09] **`adoptIdMap` 과 같은 규칙이어야 한다 — 거기는 "마지막이 이긴다".**
         //    여기만 `moved[0]`(첫째)이라, 한 경로에 id 가 둘인 프로젝트는 **이름이 바뀌는 순간
         //    목록이 내놓는 id 가 뒤바뀌었다**(새로고침하면 또 반대로). 그러면 색인 항목의

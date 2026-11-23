@@ -105,9 +105,10 @@
         }
         const mats = ((doc.tabData || {}).projectMaterials) || [];
         const jiraKeys = window._jiraProjectKeysOf ? window._jiraProjectKeysOf((doc.tabData || {}).jiraLinksByUnit) : [];
-        const e = window.buildProjectIndexEntry(file.id, file.name, pm, mats, jiraKeys);
+        // 🆔 [2026-11-23] 테마색도 **그 파일의 값**으로 — 예전엔 열린 프로젝트(live tabData)의 색이 먼저 들어가고
+        //    파일 색은 "비었을 때만" 채워져, 다른 프로젝트를 열어 둔 채 복구하면 남의 색이 굳었다.
         const color = String(((doc.tabData || {}).themeColor) || '').trim();
-        if (color && !e.themeColor) e.themeColor = color;
+        const e = window.buildProjectIndexEntry(file.id, file.name, pm, mats, jiraKeys, color);
         return e;
     }
 

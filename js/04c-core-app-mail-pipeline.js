@@ -188,7 +188,7 @@
     //    남아있는" 구버전 인덱스 항목(인치를 채우기 전에 저장된 것들 — 이 파일이 다시 저장돼야만
     //    갱신됨)의 inch를 읽기 시점에 즉석으로 보정할 수 있도록 전역에 노출.
     window._inchFromFileName = _inchFromFileName;
-    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride, jiraKeywordsOverride) {
+    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride, jiraKeywordsOverride, themeColorOverride) {
         const pm = pmOverride || window.projectMeta || {};
         // 💡 [2026-11-12] 고객사 칸은 2026-10-22부터 "고객사>프로젝트명(>세부모델)"처럼 여러 단을
         //    한 칸에 담는다(파일명 조립이 이 칸 하나로 고정됨 — updatePrintTitle 참고). 그래서 첫
@@ -282,7 +282,7 @@
             // 🎨 [2026-11-04 신규] 목록에서 보여주는 프로젝트 테마색.
             //    Drive 는 이 값을 파일 꼬리표(appProperties)에 달아 뒀는데 NAS 엔 그런 자리가 없다.
             //    여기 같이 실어 두면 저장소가 뭐든 같은 자리에서 읽힌다(NAS 는 js/57 이 여기서 읽는다).
-            themeColor: (window.tabData || {}).themeColor || '',
+            themeColor: (themeColorOverride != null ? themeColorOverride : (window.tabData || {}).themeColor) || '',   // 🆔 [2026-11-23] 저장 당시 값 우선
             updated_at: new Date().toISOString(),
             // ✅ [토픽 프로파일] project_index.json에 키워드 압축 저장 — 메일 분류 시 추가 Drive 조회 없이 활용
             topicKeywords: (_topicProf && _topicProf.keywords && _topicProf.keywords.length)
@@ -334,16 +334,17 @@
 
     // project_index.json을 통째로 읽어와서 해당 프로젝트 항목만 upsert 후 다시 통째로 저장
     // (프로젝트 수가 많지 않은 전제 — 수백 개 넘어가면 서버 사이드 부분갱신 방식으로 전환 필요)
-    window.updateProjectIndexEntry = async function(driveFileId, dynamicFileName) {
-        // 💡 [긴급 버그 수정] await 시작 전에 지금 이 저장이 실제로 속한 projectMeta를 즉시 스냅샷.
-        //    아래 await들(findProjectIndexFile/fetch) 도중 다른 시트로 전환돼도 이 스냅샷은 안 바뀌므로,
-        //    엉뚱한 프로젝트의 최신 정보가 이 driveFileId 밑에 섞여 들어가는 사고를 막는다.
-        const pmSnapshot = Object.assign({}, window.projectMeta || {});
-        // 💡 주요 자재 목록도 같은 이유로 await 전에 스냅샷 — 그 사이 다른 시트로 전환돼도 안전하게
-        const materialsSnapshot = ((window.tabData && window.tabData.projectMaterials) || []).slice();
-        // 💡 JIRA 연결도 같은 이유로 await 전에 스냅샷(코드 문자열 배열로 — 참조가 아니라 값으로 떼어둠)
-        const jiraKeywordsSnapshot = window._jiraProjectKeysOf
-            ? window._jiraProjectKeysOf((window.tabData || {}).jiraLinksByUnit) : [];
+    window.updateProjectIndexEntry = async function(driveFileId, dynamicFileName, snap) {
+        // 🆔 [2026-11-23 정밀 점검] **저장 당시 값(snap = saveData 에서 뗀 것)을 받는다.** 예전엔 여기서 live
+        //    window.projectMeta 를 찍었는데, 이 함수는 업로드가 **끝난 뒤** 불려서 그 사이 다른 프로젝트를 열면
+        //    **그 프로젝트의 정보가 이 driveFileId 항목에 들어갔다**(실측: SHUFFLER 3.0 저장 직후 4.3 을 열자
+        //    3.0 항목이 4.3 키워드로 덮였다 · 11-17 MediaTek,Realtek 항목도 같은 모양). 변경 감지(_idxSnap)는 이미
+        //    saveData 로 하고 있었는데 쓰는 쪽만 live 를 봤다. snap 이 없으면(옛 호출) 예전처럼 live 로.
+        snap = snap || {};
+        const pmSnapshot = Object.assign({}, snap.pm || window.projectMeta || {});
+        const materialsSnapshot = (snap.materials || ((window.tabData && window.tabData.projectMaterials) || [])).slice();
+        const jiraKeywordsSnapshot = snap.jiraKeys || (window._jiraProjectKeysOf
+            ? window._jiraProjectKeysOf((window.tabData || {}).jiraLinksByUnit) : []);
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -369,7 +370,7 @@
                 indexData = loaded;
             }
 
-            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot, jiraKeywordsSnapshot);
+            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot, jiraKeywordsSnapshot, snap.themeColor != null ? snap.themeColor : null);
             // 🎯 [2026-11-09] 항목을 찾는 열쇠는 id 하나가 아니다 — **경로**도 본다.
             //    왜: NAS 모드에선 한 경로에 옛 Drive id 가 여럿 걸려 있고(이사 때 이름이 겹친 파일),
             //    목록이 내놓는 "승자" id 는 **파일 이름이 바뀌는 순간 뒤바뀐다**(`remapIdPath`).
@@ -1205,7 +1206,14 @@
                 //    값이 지난번과 다른가"를 정확히 보는 신호라 `_preSaveHadChanges`는 군더더기였다.
                 if (_idxChanged) {
                     window._lastIndexedSnap[file.id] = _idxSnap;
-                    window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 fire-and-forget
+                    // 🆔 [2026-11-23] 저장 당시 값(saveData)으로 — live window.projectMeta 는 그 사이 다른 프로젝트일 수 있다
+                    const _sdTab = saveData.tabData || {};
+                    window.updateProjectIndexEntry(file.id, dynamicFileName, {
+                        pm: saveData.projectMeta || {},
+                        materials: _sdTab.projectMaterials || [],
+                        jiraKeys: window._jiraProjectKeysOf ? window._jiraProjectKeysOf(_sdTab.jiraLinksByUnit) : [],
+                        themeColor: _sdTab.themeColor || ''
+                    }); // 💡 fire-and-forget
                 } else {
                     console.info('[저장 계측] 인덱스 관련 필드 불변 — project_index.json 갱신 생략');
                 }

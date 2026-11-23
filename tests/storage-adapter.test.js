@@ -256,6 +256,20 @@ check('백업의 createdTime 은 **이름 기준**(복사 시각 mtime 이 아�
 const pf = F.toDriveFile({ name: 'project.json', isdir: false, mtime: 1762000000 }, '개발3팀');
 eq('보통 파일은 mtime 을 물려받는다', pf.createdTime, pf.modifiedTime);
 
+// 🆔 [2026-11-23] 이름이 바뀌어도 id 가 그대로 — 경로형 id(nas_f_)도 지도에 별칭으로 따라간다
+F.adoptIdMap({ version: 1, map: { 'DRV1': '개발3팀/OLD_DRIVE.json' } });
+const nasOld = F.idOf('개발3팀/LNW_SHUFFLER_04.3.json', false);
+check('경로형 id 는 nas_f_ 로 시작', /^nas_f_/.test(nasOld), nasOld);
+F.aliasOnRename('개발3팀/LNW_SHUFFLER_04.3.json', '개발3팀/LNW_SHUFFLER 4.3_04.3.json');
+eq('이름 바꾼 뒤 옛 nas_f_ id 는 새 경로로 풀린다', (F.relOf(nasOld) || {}).rel, '개발3팀/LNW_SHUFFLER 4.3_04.3.json');
+eq('새 경로의 대표 id 는 옛 id 그대로(Drive 처럼 안 바뀐다)', F.idOf('개발3팀/LNW_SHUFFLER 4.3_04.3.json', false), nasOld);
+F.aliasOnRename('개발3팀/LNW_SHUFFLER 4.3_04.3.json', '개발3팀/LNW_SHUFFLER43.json');
+eq('한 번 더 바꿔도(연쇄) 옛 id 가 따라간다', (F.relOf(nasOld) || {}).rel, '개발3팀/LNW_SHUFFLER43.json');
+eq('연쇄 뒤에도 대표 id 그대로', F.idOf('개발3팀/LNW_SHUFFLER43.json', false), nasOld);
+F.aliasOnRename('개발3팀/OLD_DRIVE.json', '개발3팀/NEW_DRIVE.json');
+eq('Drive id 프로젝트는 Drive id 가 대표로 남는다(nas 별칭을 새로 만들지 않는다)', F.idOf('개발3팀/NEW_DRIVE.json', false), 'DRV1');
+eq('Drive id 도 새 경로로 풀린다', (F.relOf('DRV1') || {}).rel, '개발3팀/NEW_DRIVE.json');
+
 console.log('\n통과 ' + ok + ' · 실패 ' + bad);
 console.log('⚠ 번역기만 검증했다. 앱이 NAS 로 저장하는지는 브라우저에서 확인해야 한다' +
             ' (tests/storage-adapter.browser.js).');

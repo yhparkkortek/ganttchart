@@ -1078,3 +1078,22 @@ Drive 동작 둘과 진짜 구글 왕복 하나가 있었다 — 전부 고쳤�
 `kind:'mailbody'`)는 어댑터가 버리므로 색인에 없는 키는 NAS 에서 늘 빈 값 — 소비자 쪽에서 쓰지 않는다(변경 없음).
 ⚠️ **확인한 것**: js 파싱·어댑터 분기(정적). **못 한 것**: 실제 NAS 에서 프로젝트 삭제 → `Trash/` 에 생기는지, 팀 변경 → 폴더 이동, 네트워크
 탭에 `discovery/v1/apis/drive/v3/rest` 요청이 더 안 나가는지 — 회사 PC 에서 한 번씩 볼 것(백엔드 재시작 필요: 4번).
+
+## 🆔 2026-11-23 — "id 문제가 계속 생긴다" 정밀 점검
+
+`tools/audit-project-index.py` 로 보면 그 순간엔 21건 전부 맞물렸다 — 문제는 **상태**가 아니라 **바뀌는 순간**이었다. 원인 셋:
+
+1. **경로형 id(`nas_f_…`)는 이름이 바뀌면 끊겼다.** 이 id 는 경로를 인코딩한 값이라(js/57 `idOf`), 지도에 등록된 옛 Drive id 와 달리
+   `remapIdPath` 가 옮길 게 없었다 → 이름을 바꾸면 **새 경로로 새 id**. 색인엔 옛 id 항목이 유령으로 남고(11-23 에 지운 8건 전부),
+   보관함 카드·배분 기록·다른 탭이 옛 id 로 쓰면 **옛 경로에 파일이 다시 생겼다**.
+   → `aliasOnRename`: 지도에 옛 `nas_f_` id 를 별칭으로 넣어 새 경로를 가리키게 하고 그 id 를 대표 id 로 계속 쓴다(Drive 처럼 id 불변).
+   연쇄 이름 변경도 따라간다. Drive id 프로젝트는 기존대로 Drive id 가 대표. node `tests/storage-adapter.test.js` 91/0 + 돌연변이(별칭 제거 → 4건 실패).
+2. **색인 갱신이 다른 프로젝트 정보를 썼다.** `updateProjectIndexEntry`(js/04c)는 업로드가 **끝난 뒤** 불리는데 live `window.projectMeta` 를 찍었다 —
+   저장 직후 다른 프로젝트를 열면 그 정보가 이 항목에 들어갔다(실측: SHUFFLER 3.0 저장 14:11:45 → 4.3 저장 14:12:01, 3.0 항목이 4.3 키워드로 · 11-17 MediaTek,Realtek 도 같은 모양).
+   변경 감지(`_idxSnap`)는 이미 `saveData` 로 하고 있었는데 쓰는 쪽만 live 를 봤다. → `saveData` 의 meta·주요자재·JIRA·테마색을 넘긴다
+   (`buildProjectIndexEntry` 6번째 인자 `themeColorOverride`, js/66 복구도 파일의 색으로). node `tests/project-index-upsert.test.js` 33/33(1b).
+3. **헤드리스 쓰기가 옛 파일 이름을 보냈다**(js/15b·14d, 같은 날 앞서 수정) — 이름을 되돌리는 복사+삭제로 파일이 둘이 됐다.
+
+데이터 정리(같은 날): 유령 8건 삭제 · SHUFFLER 3.0/4.3·MediaTek,Realtek 색인 항목을 각 파일 기준으로 재생성 · 4.3 낡은 사본 → `Trash/`. 백업은 `App_Config/project_index.before-*-20261123-*.json`.
+⚠️ 고친 코드는 **모든 PC 에서 새로고침(F5)** 해야 돈다 — 옛 코드가 열린 탭은 계속 옛 동작을 한다.
+
