@@ -210,14 +210,27 @@ ${mailText}`;
     //    ⚠️ 새 폴더를 앱 루트에 만들면 **여기 한 줄 추가**할 것.
     // 💊 [2026-11-23 사용자 요청 "일일 업무보고 칩 버튼도 AI 요약(기준)으로 통일"] 칩 버튼·작은 드롭다운의
     //    모양 **한 벌** — js/62(AI 요약)·js/59(일일보고)가 같이 쓴다. 따로 적으면 한쪽만 바뀐다.
-    window._uiPillStyle = function (on) {
-        return 'border:1px solid ' + (on ? '#1971c2' : '#cfd8e3') + '; background:' + (on ? '#1971c2' : '#fff') +
-               '; color:' + (on ? '#fff' : '#2c5f8a') + '; border-radius:12px; font-size:11px; font-weight:bold; cursor:pointer;' +
-               ' padding:2px 8px; white-space:nowrap; line-height:1.4;';
+    //    [2026-11-23 2차 "칩 버튼 크기 모양 통일"] 칩·버튼·드롭다운·입력칸이 **같은 높이(22px)·같은 둥근 모서리**.
+    var _UI_BOX = ' box-sizing:border-box; height:22px; border-radius:11px; font-size:11px; vertical-align:middle;';
+    /** 칩(켜고 끄는 것). `tone`={color,bg} 를 주면 그 색 칩(분류 칩 등), 없으면 기본 파랑. */
+    window._uiPillStyle = function (on, tone) {
+        var c = (tone && tone.color) || '#1971c2';
+        var offBg = (tone && tone.bg) || '#fff', offBd = tone ? c : '#cfd8e3', offFg = tone ? c : '#2c5f8a';
+        return 'border:1px solid ' + (on ? c : offBd) + '; background:' + (on ? c : offBg) + '; color:' + (on ? '#fff' : offFg) + ';' +
+               _UI_BOX + ' padding:0 9px; line-height:20px; font-weight:bold; cursor:pointer; white-space:nowrap;';
+    };
+    /** 동작 버튼(엑셀·새로 생성·🔍·↺). kind: 'danger'(해제·초기화) | 'accent'(검색) | 기본. */
+    window._uiBtnStyle = function (kind) {
+        var k = { danger: ['#eeb0ac', '#fbe4e2', '#b1432f'], accent: ['#a5c8f0', '#e7f5ff', '#1971c2'] }[kind] || ['#cfd8e3', '#fff', '#2c5f8a'];
+        return 'border:1px solid ' + k[0] + '; background:' + k[1] + '; color:' + k[2] + ';' +
+               _UI_BOX + ' padding:0 9px; line-height:20px; cursor:pointer; white-space:nowrap;';
     };
     window._uiSelectStyle = function (active) {
-        return 'padding:2px 4px; border:1px solid ' + (active ? '#a5c8f0' : '#cfd8e3') + '; background:' + (active ? '#eef6ff' : '#fff') +
-               '; border-radius:5px; font-size:11px;';
+        return 'padding:0 6px; border:1px solid ' + (active ? '#a5c8f0' : '#cfd8e3') + '; background:' + (active ? '#eef6ff' : '#fff') + ';' + _UI_BOX;
+    };
+    /** 입력칸(검색 등) — 칩과 같은 높이. */
+    window._uiInputStyle = function () {
+        return 'padding:0 9px; border:1px solid #cfd8e3; background:#fff;' + _UI_BOX;
     };
 
     window.APP_NON_PROJECT_FOLDERS = [

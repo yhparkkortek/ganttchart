@@ -899,6 +899,9 @@
                 if (!p || !p.file_name) return false;
                 if (S.skipCompleted && p.completed) return false;
                 if (S.myTeamOnly && myTeam && String(p.team || '').trim() !== myTeam) return false;
+                // 🔓 [2026-11-23] `includeOpen` — AI 요약(js/62)은 열린 프로젝트도 훑는다(겹치면 열린 쪽이 이긴다).
+                //    빼 두면 나중에 다른 프로젝트를 열었을 때 이 프로젝트 업무가 통째로 비었다.
+                if (ov.includeOpen) return true;
                 if (openId && String(p.drive_file_id || '').trim() === openId) return false;
                 return String(p.file_name).replace(/\.json$/i, '').trim() !== open;
             }).slice(0, +S.maxProjects || 30);

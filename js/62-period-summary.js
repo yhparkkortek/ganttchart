@@ -253,7 +253,8 @@
                 status: (ci.status != null && ci.status !== -1) ? String(row[ci.status] || '').trim() : '',
                 sender: people.sender || p.from || '', receiver: people.receiver || p.to || '',
                 core: cut(p.core, P.maxCore), todo: cut(p.todo, P.maxTodo), issue: cut(p.issue, P.maxIssue), fix: cut(p.fix, P.maxIssue),
-                answer: (ci.answer != null && ci.answer !== -1) ? cut(row[ci.answer], P.maxTodo) : ''
+                answer: (ci.answer != null && ci.answer !== -1) ? cut(row[ci.answer], P.maxTodo) : '',
+                mailRaw: row._mailRaw || null     // 📧 원문보기용(참조만 — 복사하지 않는다)
             });
         }
         return { facts: out, scanned: scanned };
@@ -307,6 +308,7 @@
      * ⚠️ 기다리게 하지 않는다 — 한 건 끝날 때마다 **바로 합치고** 다시 그린다(전엔 전부 끝난
      *    뒤에야 합쳐서, 3초 내내 아무것도 안 보였다).
      */
+    window._psOrdinalSeq = window._psOrdinalSeq || 0;
     window._psScan = function () {
         if (!P.scanProjects || typeof window.dailyScanMyProjects !== 'function') return;
         if (_psOther.busy || _psOther.loaded) return;
@@ -317,25 +319,35 @@
         function repaint() {
             if (window._renderAiProjectSummaryBody && mode() !== P.legacyId) window._renderAiProjectSummaryBody();
         }
-        var projOrdinal = 0;
+        // 번호 대역은 훑기가 거듭돼도 겹치지 않게 계속 늘린다(캐시로 돌아온 옛 사실의 번호와 부딪히지 않게).
+        var merged = [];   // 이번 훑기에서 콜백으로 합친 것
         window.dailyScanMyProjects('psfacts', function (ctx) {
             var g = collectFrom(ctx, null);          // 기간은 여기서 안 거른다
             // 🔢 [2026-11-21] 다른 프로젝트 행의 `idx` 는 그 파일 안 행 번호라 열린 프로젝트와 **겹친다** — 프롬프트에 #G12 가 둘,
             //    `_psGround` 는 어느 쪽이든 통과, 요약 링크는 열린 프로젝트 행으로 튄다. 프로젝트마다 다른 대역을 준다
             //    (JIRA 는 100000+, 여기는 200000 + 5000×n — 행 5,000 미만 전제·`local:false` 라 링크는 안 만든다).
-            var base = 200000 + 5000 * (++projOrdinal);
+            var base = 200000 + 5000 * (++window._psOrdinalSeq);
             g.facts.forEach(function (f) { if (!f.local) { f.rowIdx = f.idx; f.idx = base + f.idx; } });
             var got = { project: ctx.project, facts: g.facts, scanned: g.scanned };
             // 한 건 끝나자마자 합친다 — 화면이 차오르는 게 보여야 "도는 중" 임을 안다.
             mine.facts = mine.facts.concat(got.facts);
             mine.scanned += got.scanned;
             if (got.facts.length) mine.projects.push(got.project);
+            merged.push(got);
             return got;
         }, function (st) {
             mine.done = st.done; mine.total = st.total;
             repaint();
-        }, { onlyMyProjects: false }).then(function (r) {
+        }, { onlyMyProjects: false, includeOpen: true }).then(function (r) {
             mine.errs = r.errs;
+            // 🐞 [2026-11-23] 스캐너는 같은 파일을 **캐시**로 돌려줄 땐 콜백을 안 부른다 — 훑기를 초기화(사람 전환 등)하고
+            //    다시 훑으면 사실이 0건이 됐다. 콜백으로 못 받은 결과는 여기서 합친다(번호는 첫 수집 때 이미 옮겨져 있다).
+            (r.results || []).forEach(function (got) {
+                if (!got || got._skipped || merged.indexOf(got) !== -1 || !Array.isArray(got.facts)) return;
+                mine.facts = mine.facts.concat(got.facts);
+                mine.scanned += got.scanned || 0;
+                if (got.facts.length) mine.projects.push(got.project);
+            });
             // 📁 [2026-11-11] project_index 항목(팀 전체) — **사실이 0건이어도** PM·프로젝트
             //    선택지에 나와야 하니, 사실과 별도로 그대로 들고 있는다.
             mine.entries = r.entries || [];
@@ -422,17 +434,34 @@
      * 화면·AI·글이 **모두 이걸** 쓴다 — 열린 프로젝트 + 모아 둔 다른 프로젝트, 그리고 필터 적용.
      * ⚠️ 동기 함수다(렌더가 바로 부른다). 다른 프로젝트는 `_psScan` 이 뒤에서 채운 것을 꺼내 쓴다.
      */
+    /**
+     * 🔑 [2026-11-23 신고 "기간에 업무가 있는데 0건"] 열린 프로젝트 이름 — **파일 id 로** 색인에서 찾은 이름이 1순위.
+     *    `currentDriveFileName` 이 경로·꼬리를 달고 오면(팀 폴더/…, 사본 등) 열린 프로젝트 업무가 다른 이름으로 들어가
+     *    프로젝트 필터에 걸리고, 훑기는 같은 파일을 id 로 "열린 것"이라 빼서 **양쪽에서 다 빠졌다**.
+     */
+    function openProjectName() {
+        var id = String(window.currentDriveFileId || '').trim();
+        var ents = (_psOther && _psOther.entries) || [];
+        for (var i = 0; id && i < ents.length; i++) {
+            if (String((ents[i] && ents[i].drive_file_id) || '').trim() === id) return String(ents[i].file_name || '').replace(/\.json$/i, '').trim();
+        }
+        return String(window.currentDriveFileName || '').split('/').pop().replace(/\.json$/i, '').trim();
+    }
+    window._psOpenProjectName = openProjectName;
     window._psCollectFacts = function (kind, base) {
         var R = window._psRange(kind, base);
         var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : (window.globalData || []);
         var ci = window.colIdx || (typeof colIdx !== 'undefined' ? colIdx : {}) || {};
-        var openName = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
+        var openName = openProjectName();
         var here = collectFrom({ rows: gd, ci: ci, meta: window.projectMeta || {},
                                  members3: (window.tabData && window.tabData.projectMembers3) || [],
                                  project: openName, local: true }, R);
         var other = _psOther;
         // 🗓 모아 둔 건 **전 기간**이다 — 보는 기간만 여기서 거른다(NAS 를 다시 읽지 않는다).
         var inRange = (other.facts || []).filter(function (f) {
+            // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 훑기는 **그때** 열린 프로젝트만 뺀다 — 그 뒤 다른 프로젝트를 열면
+            //    같은 행이 열린 프로젝트(here)와 훑은 사본 양쪽에 들어가 AI 가 둘 다 근거로 집었다. 열린 쪽이 이긴다.
+            if (openName && f.project === openName) return false;
             return f._ts >= R.from.getTime() && f._ts <= R.to.getTime();
         });
         // 🪐 JIRA — 열린 프로젝트의 결정론 연결만, 이미 받아 둔 것(비동기)만 이 기간으로 거른다.
@@ -518,6 +547,8 @@
             sig: R.key + (F.pm ? '|pm=' + F.pm : '') + (F.proj ? '|p=' + F.proj : '') + (F.who ? '|w=' + F.who : '') + (F.q ? '|q=' + F.q : '') + '|j=' + _psJira.key + '|n=' + out.length,
             scan: other,
             // 🪐 화면의 "로딩 중"·개수 표시용 — `out` 안의 jira 건수와 받는 중인지 둘 다 필요하다.
+            // 🧮 0건일 때 "어느 조건에서 빠졌나" — 화면이 그대로 말한다(조용한 0건 금지).
+            funnel: { all: all.length, pm: afterPm.length, proj: afterProj.length, out: out.length, open: openName, local: here.facts.length },
             jiraCount: out.filter(function (f) { return f.cat === 'JIRA'; }).length,
             jiraScan: _psJira
         };
@@ -574,6 +605,12 @@
         return 'done';
     }
     function uniq(a) { var o = {}, r = []; a.forEach(function (x) { x = String(x || '').trim(); if (x && !o[x]) { o[x] = 1; r.push(x); } }); return r; }
+    /** 한 행의 정체 = 프로젝트 + 그 파일 안 행 번호(열린 프로젝트는 idx 가 곧 행 번호, 훑은 사본은 rowIdx). */
+    function factKeyRaw(f) { return String(f.project || '') + '#' + (f.rowIdx != null ? f.rowIdx : f.idx); }
+    function refKeyRaw(x) { return String(x.p || '') + '#' + (x.row != null ? x.row : x.g); }
+    function factKey(f) { return fnv8(factKeyRaw(f)); }
+    /** 옛 보관본에 이미 들어간 겹친 근거도 화면·엑셀에서 하나로. */
+    function uniqRefs(refs) { var o = {}; return (refs || []).filter(function (x) { var k = refKeyRaw(x); if (o[k]) return false; o[k] = 1; return true; }); }
 
     /**
      * AI 응답 → 표 행. 근거(#G)가 사실 목록에 하나도 없으면 **버린다**(_psGround 와 같은 규칙).
@@ -596,7 +633,10 @@
             var ids = uniq((refsRaw.match(/#G(\d+)/g) || []).map(function (r) { return r.slice(2); }))
                 .map(Number).filter(function (n) { return byIdx[n]; });
             if (!ids.length) { dropped++; return; }
-            var fs = ids.map(function (n) { return byIdx[n]; });
+            var seen = {};
+            var fs = ids.map(function (n) { return byIdx[n]; }).filter(function (f) {
+                var k = factKeyRaw(f); if (seen[k]) return false; seen[k] = 1; return true;   // 같은 행의 두 사본은 하나로
+            });
             var projects = uniq(fs.map(function (f) { return f.project; }));
             var people = uniq([].concat.apply([], fs.map(function (f) { return String(f.assignee || '').split(','); })));
             var dates = fs.map(function (f) { return f.date; }).filter(Boolean).sort();
@@ -606,7 +646,7 @@
                 projects: projects, people: people,
                 date: dates.length ? dates[dates.length - 1] : '',
                 common: projects.length > 1,
-                refs: fs.map(function (f) { return { g: f.idx, p: f.project || '', row: f.rowIdx != null ? f.rowIdx : null, task: f.task || '' }; })
+                refs: fs.map(function (f) { return { g: f.idx, p: f.project || '', row: f.rowIdx != null ? f.rowIdx : f.idx, task: f.task || '' }; })
             });
         });
         return { rows: rows.slice(0, P.maxItems * 2), dropped: dropped };
@@ -843,11 +883,11 @@
         if (cur === P.customId) {
             var R = (col && col.range) || window._psRange(cur);
             var inp = function (id, v) {
-                return '<input id="' + id + '" type="date" value="' + esc(v) + '" style="padding:1px 2px; border:1px solid #cfd8e3; border-radius:5px; font-size:10.5px; width:100px; box-sizing:border-box;">';
+                return '<input id="' + id + '" type="date" value="' + esc(v) + '" style="' + window._uiInputStyle() + ' width:120px; padding:0 4px;' + '">';
             };
             b += '<span style="display:inline-flex; gap:2px; align-items:center; font-size:11px; color:#555; white-space:nowrap;">' +
                  inp('ps-from', F.from || ymd(R.from)) + '~' + inp('ps-to', F.to || ymd(R.to)) +
-                 '<button onclick="window._psApplyCustom()" style="padding:1px 6px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' +
+                 '<button onclick="window._psApplyCustom()" style="' + window._uiBtnStyle('accent') + '">' +
                    esc(T('적용', 'Apply')) + '</button></span>';
         }
         var lab = function (s) { return '<span style="font-size:11px; color:#666; white-space:nowrap;">' + esc(s) + '</span>'; };
@@ -860,9 +900,9 @@
              lab(T('업무 담당자', 'Task assignee')) +
              sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('전체', 'All'), [], ' max-width:95px;') +
              // 🔍 업무 검색 — 일일보고와 같은 모양(입력칸 + 🔍), Enter 나 🔍 로 적용(타자마다 다시 그리면 포커스가 날아간다).
-             '<input id="ps-q" value="' + esc(F.q || '') + '" placeholder="' + esc(T('업무 검색', 'Search tasks')) + '" onkeydown="if(event.key===\'Enter\') window._psSetFilter({q:this.value.trim()})" style="padding:2px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11px; width:120px; margin-left:4px;">' +
-             '<button onclick="window._psSetFilter({q:(document.getElementById(\'ps-q\')||{}).value.trim()})" title="' + esc(T('업무 검색', 'Search tasks')) + '" style="padding:2px 7px; border:1px solid #cfd8e3; background:#e7f5ff; color:#1971c2; border-radius:5px; font-size:11px; cursor:pointer;">🔍</button>' +
-             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\', q:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="padding:2px 8px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:13px; line-height:1.2; cursor:pointer;">↺</button>' : '') +
+             '<input id="ps-q" value="' + esc(F.q || '') + '" placeholder="' + esc(T('업무 검색', 'Search tasks')) + '" onkeydown="if(event.key===\'Enter\') window._psSetFilter({q:this.value.trim()})" style="' + window._uiInputStyle() + ' width:130px;' + '">' +
+             '<button onclick="window._psSetFilter({q:(document.getElementById(\'ps-q\')||{}).value.trim()})" title="' + esc(T('업무 검색', 'Search tasks')) + '" style="' + window._uiBtnStyle('accent') + '">🔍</button>' +
+             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\', q:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="' + window._uiBtnStyle('danger') + ' font-size:12px;' + '">↺</button>' : '') +
              (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
              ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
 
@@ -894,7 +934,7 @@
             var box = document.getElementById('ai-summary-modal'); box = box && box.firstElementChild;
             if (box && !box._psWide) { box._psWide = 1; if (box.getBoundingClientRect().width < 900) box.style.width = 'min(1040px, 94vw)'; }
         } catch (e) { /* 폭은 못 바꿔도 된다 */ }
-        var openName = String(window.currentDriveFileName || '').replace(/\.json$/i, '').trim();
+        var openName = openProjectName();
         var shown = null;   // 지금 표로 그릴 것: { rows, at, by, factCount, dropped, reused, archiveView }
         if (_psView) {
             shown = { rows: _psView.rows || [], at: _psView.at, by: _psView.by, factCount: _psView.factCount, dropped: _psView.dropped, archiveView: _psView };
@@ -913,9 +953,10 @@
                 if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
             }).catch(function () { /* 보관함을 못 읽으면 그냥 버튼을 누르면 된다 */ });
         }
-        _psLast = { shown: shown, openName: openName, label: shown && shown.archiveView ? shown.archiveView.label : col.range.label, kind: kind };
+        var factByKey = {}; (col.facts || []).forEach(function (f) { factByKey[factKey(f)] = f; });
+        _psLast = { shown: shown, openName: openName, label: shown && shown.archiveView ? shown.archiveView.label : col.range.label, kind: kind, factByKey: factByKey };
         h.push('<div id="ps-ai-sec">' + aiSectionHtml() + '</div>');
-        if (shown && shown.rows.length) h.push('<details style="margin-top:4px;"><summary style="cursor:pointer; font-size:12px; color:#2c5f8a; font-weight:bold;">📋 ' + esc(T('근거 사실 목록 ' + col.facts.length + '건 (AI 없이 만든 원본)', 'Source facts (' + col.facts.length + ', no AI)')) + '</summary>');
+        if (shown && shown.rows.length) h.push('<details id="ps-facts-det" style="margin-top:4px;"><summary style="cursor:pointer; font-size:12px; color:#2c5f8a; font-weight:bold;">📋 ' + esc(T('근거 사실 목록 ' + col.facts.length + '건 (AI 없이 만든 원본)', 'Source facts (' + col.facts.length + ', no AI)')) + '</summary>');
         if (!col.facts.length) {
             // ⚠️ 훑는 중에 "없습니다" 라고 하면 **없는 것과 아직 못 읽은 것**을 구분할 수 없다.
             //    (그게 "못 가져오는 건지 표현이 안 되는 건지 모르겠다" 는 신고의 정체였다)
@@ -923,17 +964,27 @@
                 ? '<div style="padding:24px 10px; text-align:center; color:#1971c2; font-size:12px;">⏳ ' +
                   esc(T('내 프로젝트를 확인하는 중입니다… ' + (col.scan.done || 0) + ' / ' + (col.scan.total || 0),
                         'Scanning my projects… ' + (col.scan.done || 0) + ' / ' + (col.scan.total || 0))) + '</div>'
-                : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>');
+                : (col.funnel && col.funnel.all
+                    // 🧮 기간엔 업무가 있는데 조건에서 다 빠진 경우 — 어디서 빠졌는지 숫자로 말한다.
+                    ? '<div style="padding:18px 10px; text-align:center; color:#b1432f; font-size:12px; line-height:1.7;">' +
+                      esc(T('이 기간 업무 ' + col.funnel.all + '건 → 프로젝트 담당자 조건 ' + col.funnel.pm + '건 → 프로젝트 조건 ' + col.funnel.proj + '건 → 업무 담당자·검색 조건 ' + col.funnel.out + '건',
+                            col.funnel.all + ' in period → owner ' + col.funnel.pm + ' → project ' + col.funnel.proj + ' → assignee/search ' + col.funnel.out)) +
+                      '<br><span style="color:#888;">' + esc(T('열린 프로젝트: ' + (col.funnel.open || '(없음)') + ' · 그 업무 ' + col.funnel.local + '건 — 조건을 바꾸거나 ↺ 로 해제하세요', 'Open project: ' + (col.funnel.open || '(none)') + ' · ' + col.funnel.local + ' tasks')) + '</span></div>'
+                    : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>'));
         } else {
             var byDate = {};
             col.facts.forEach(function (f) { (byDate[f.date] = byDate[f.date] || []).push(f); });
             Object.keys(byDate).sort().reverse().forEach(function (d) {
                 h.push('<div style="font-size:12px; font-weight:bold; color:#555; margin:10px 0 4px; border-bottom:1px solid #eee; padding-bottom:2px;">' + esc(d) + ' <span style="font-weight:normal; color:#999;">(' + byDate[d].length + ')</span></div>');
                 byDate[d].forEach(function (f) {
-                    h.push('<div style="font-size:12px; padding:6px 8px; margin-bottom:4px; background:#fff; border:1px solid #eef1f4; border-radius:6px;">' +
+                    // 🎯 [2026-11-23] 표의 근거를 누르면 이 카드로 온다(id = 프로젝트#행) — 카드를 누르면 표의 그 행으로 돌아간다.
+                    h.push('<div id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="font-size:12px; padding:6px 8px; margin-bottom:4px; background:#fff; border:1px solid #eef1f4; border-radius:6px; transition:box-shadow .3s, background .3s;">' +
                            '<div>' + (f.local ? link(f.idx) : '<span style="color:#bbb;">#G' + f.idx + '</span>') + ' <b>' + esc(f.task) + '</b>' + (f.cat ? ' <span style="font-size:10.5px; padding:1px 6px; border-radius:8px; background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + (f.assignee ? ' · ' + esc(f.assignee) : '') + '</span>' : (f.assignee ? ' <span style="font-size:10.5px; color:#888;">' + esc(f.assignee) + '</span>' : '')) +
                            ((f.project && f.project !== String(window.currentDriveFileName || '').replace(/\.json$/i, '')) ? ' <span style="font-size:10.5px; color:#888;">(' + esc(f.project) + ')</span>' : '') +
-                           ((f.sender || f.receiver) ? ' <span style="color:#888;">' + esc(f.sender || '?') + ' → ' + esc(f.receiver || '?') + '</span>' : '') + '</div>' +
+                           ((f.sender || f.receiver) ? ' <span style="color:#888;">' + esc(f.sender || '?') + ' → ' + esc(f.receiver || '?') + '</span>' : '') +
+                           // 📧 원문 — 일일보고와 같은 공용 뷰어(showMailRawModal). 메일 원문이 남아 있는 행만.
+                           (f.mailRaw && window.showMailRawModal ? ' <button onclick="event.stopPropagation(); window._psShowMail(\'' + factKey(f) + '\')" style="' + window._uiBtnStyle() + ' height:20px; line-height:18px; background:#fff8e6; border-color:#ffe08a; color:#7a5210;">📧 ' + esc(T('원문보기', 'Source')) + '</button>' : '') +
+                           '</div>' +
                            (f.core ? '<div style="color:#333; margin-top:2px;">' + esc(f.core) + '</div>' : '') +
                            (f.todo ? '<div style="color:#1971c2; margin-top:2px;">To do: ' + esc(f.todo) + '</div>' : '') +
                            (f.issue ? '<div style="color:#b1432f; margin-top:2px;">⚠️ ' + esc(f.issue) + (f.fix ? ' → ' + esc(f.fix) : '') + '</div>' : '') +
@@ -985,12 +1036,12 @@
             return a.i - b.i;
         }).map(function (o) { return o.r; });
     }
-    function refHtml(x, showProj) {
-        var open = _psLast && _psLast.openName;
-        var title = esc((x.p ? x.p + ' · ' : '') + (x.task || ''));
-        if (x.p && x.p === open) return '<span title="' + title + '">' + link(x.g) + '</span>';
-        // 다른 프로젝트 행은 링크 대신 글자 — 프로젝트 칸에 이미 이름이 있으면(공통이 아니면) 번호만.
-        return '<span style="color:#888; white-space:nowrap;" title="' + title + '">' + (showProj ? esc(x.p || '?') + ' ' : '') + '#' + esc(x.row != null ? x.row : x.g) + '</span>';
+    /** 🎯 근거 = 아래 사실 카드로 가는 단추(간트 이동은 카드의 #G 링크가 한다). */
+    function refHtml(x, showProj, rowI) {
+        var title = esc((x.p ? x.p + ' · ' : '') + (x.task || '') + ' — ' + T('눌러서 상세 보기', 'click for details'));
+        var key = fnv8(refKeyRaw(x));
+        return '<a href="javascript:void(0)" onclick="window._psGoFact(\'' + key + '\', ' + rowI + ')" title="' + title + '" style="color:#1971c2; text-decoration:underline dotted; white-space:nowrap; cursor:pointer;">' +
+               (showProj ? esc(x.p || '?') + ' ' : '') + '#' + esc(x.row != null ? x.row : x.g) + '</a>';
     }
     function tableHtml() {
         var rows = viewRows();
@@ -1003,13 +1054,14 @@
         var td = 'padding:5px 6px; border:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
         var body = rows.map(function (r) {
             var c = catOf(r.cat);
-            return '<tr>' +
+            var ai = all.indexOf(r);   // 돌아올 자리 — 정렬·필터가 바뀌어도 같은 행을 가리키게 원본 순번
+            return '<tr id="ps-row-' + ai + '" style="transition:background .4s;">' +
                 '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
                 '<td style="' + td + '">' + esc(r.people.join(', ')) + '</td>' +
                 '<td style="' + td + ' white-space:nowrap; color:#555;">' + esc(r.date || '') + '</td>' +
                 '<td style="' + td + ' color:#222;">' + esc(r.text) + '</td>' +
-                '<td style="' + td + ' font-size:11px;">' + r.refs.map(function (x) { return refHtml(x, r.common); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
+                '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
         if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         return '<table style="width:100%; border-collapse:collapse; table-layout:auto;"><thead><tr>' +
@@ -1028,14 +1080,14 @@
         var cnt = {}; all.forEach(function (r) { cnt[r.cat] = (cnt[r.cat] || 0) + 1; });
         var chips = P.summaryCats.map(function (c) {
             var on = !!_psTbl.cats[c.id];
-            return '<button onclick="window._psTblSet({toggleCat:\'' + c.id + '\'})" style="padding:2px 8px; border-radius:11px; font-size:11px; font-weight:bold; cursor:pointer; border:1px solid ' + c.color + '; background:' + (on ? c.color : c.bg) + '; color:' + (on ? '#fff' : c.color) + ';">' + esc(catName(c.id)) + ' ' + (cnt[c.id] || 0) + '</button>';
+            return '<button onclick="window._psTblSet({toggleCat:\'' + c.id + '\'})" style="' + window._uiPillStyle(on, { color: c.color, bg: c.bg }) + '">' + esc(catName(c.id)) + ' ' + (cnt[c.id] || 0) + '</button>';
         }).join('');
         var nCommon = all.filter(function (r) { return r.common; }).length;
         var projs = uniq([].concat.apply([], all.map(function (r) { return r.projects; }))).sort();
         var people = uniq([].concat.apply([], all.map(function (r) { return r.people; }))).sort();
         var opt = function (list, cur, allLabel) { return '<option value="">' + esc(allLabel) + '</option>' + list.map(function (v) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join(''); };
-        var selS = 'padding:2px 4px; border:1px solid #cfd8e3; border-radius:5px; font-size:11px; max-width:130px;';
-        var smallBtn = 'padding:2px 8px; border:1px solid #cfd8e3; background:#fff; color:#2c5f8a; border-radius:5px; font-size:11px; cursor:pointer; white-space:nowrap;';
+        var selS = window._uiSelectStyle(false) + ' max-width:150px;';
+        var smallBtn = window._uiBtnStyle();
         var meta = '🤖 ' + esc(T('사실 ' + (s.factCount || 0) + '건만으로', 'from ' + (s.factCount || 0) + ' facts')) + ' · ' + esc(String(s.at || '').replace('T', ' ').slice(0, 16)) +
             (s.by ? ' · ' + esc(s.by) : '') + (s.dropped ? ' · ' + esc(T('근거 없는 항목 ' + s.dropped + '개 제거', s.dropped + ' ungrounded removed')) : '') +
             (s.reused ? ' · <b style="color:#2f9e44;">♻️ ' + esc(T('보관본 재사용 (AI 0회)', 'reused (0 AI calls)')) + '</b>' : '');
@@ -1049,8 +1101,8 @@
             (nCommon ? '<label style="font-size:11px; color:#8f5a00; display:inline-flex; align-items:center; gap:2px; cursor:pointer; margin-left:2px;"><input type="checkbox"' + (_psTbl.common ? ' checked' : '') + ' onchange="window._psTblSet({common:this.checked})">🔗 ' + esc(T('공통 이슈만', 'Common only')) + ' ' + nCommon + '</label>' : '') +
             '<select onchange="window._psTblSet({proj:this.value})" title="' + esc(T('프로젝트', 'Project')) + '" style="' + selS + '">' + opt(projs, _psTbl.proj, T('프로젝트 전체', 'All projects')) + '</select>' +
             '<select onchange="window._psTblSet({who:this.value})" title="' + esc(T('업무 담당자', 'Assignee')) + '" style="' + selS + '">' + opt(people, _psTbl.who, T('담당자 전체', 'All assignees')) + '</select>' +
-            '<input id="ps-tbl-q" value="' + esc(_psTbl.q) + '" oninput="window._psTblSearch(this.value)" placeholder="🔍 ' + esc(T('내용 검색', 'Search')) + '" style="padding:2px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11px; width:110px;">' +
-            '<button onclick="window._psTblSet({reset:1})" title="' + esc(T('표 필터·정렬 초기화', 'Reset table filters')) + '" style="' + smallBtn + '">↺</button>' +
+            '<input id="ps-tbl-q" value="' + esc(_psTbl.q) + '" oninput="window._psTblSearch(this.value)" placeholder="🔍 ' + esc(T('내용 검색', 'Search')) + '" style="' + window._uiInputStyle() + ' width:120px;' + '">' +
+            '<button onclick="window._psTblSet({reset:1})" title="' + esc(T('표 필터·정렬 초기화', 'Reset table filters')) + '" style="' + window._uiBtnStyle('danger') + ' font-size:12px;">↺</button>' +
             '<span style="flex:1;"></span>' +
             '<button onclick="window._psTblExcel()" style="' + smallBtn + '" title="' + esc(T('지금 보이는 행을 엑셀로', 'Export visible rows')) + '">📗 ' + esc(T('엑셀', 'Excel')) + '</button>' +
             (s.archiveView ? '' : '<button onclick="window._psRegenerate()" style="' + smallBtn + '" title="' + esc(T('보관본을 두고 AI 로 새로 만든다', 'Generate again with AI')) + '">🔄 ' + esc(T('새로 생성', 'Regenerate')) + '</button>') +
@@ -1060,7 +1112,7 @@
             '<div id="ps-ai-tbl" style="margin-bottom:10px;">' + tableHtml() + '</div>';
     }
     function archiveSelectHtml() {
-        return '<select id="ps-arch-sel" onchange="if(this.value) window._psOpenArchive(this.value)" title="' + esc(T('보관된 AI 요약 — 골라서 다시 보기(AI 0회)', 'Archived summaries')) + '" style="padding:2px 4px; border:1px solid #e0c97a; background:#fffbea; border-radius:5px; font-size:11px; max-width:170px;"><option value="">📚 ' + esc(T('보관함', 'Archive')) + '</option></select>';
+        return '<select id="ps-arch-sel" onchange="if(this.value) window._psOpenArchive(this.value)" title="' + esc(T('보관된 AI 요약 — 골라서 다시 보기(AI 0회)', 'Archived summaries')) + '" style="' + window._uiSelectStyle(false) + ' max-width:180px; background:#fffbea; border-color:#e0c97a;' + '"><option value="">📚 ' + esc(T('보관함', 'Archive')) + '</option></select>';
     }
     function fillArchiveSelect() {
         var fill = function (names) {
@@ -1094,6 +1146,44 @@
         ['proj', 'who', 'common'].forEach(function (k) { if (k in patch) _psTbl[k] = patch[k]; });
         rerenderAi();
     };
+    // 🎯 [2026-11-23 사용자 요청] 근거 → 그 사실 카드로 이동(상세·📧 원문) → 카드를 누르면 표의 그 행으로 돌아온다.
+    var _psBackRow = null;
+    function flash(el, color) {
+        if (!el) return;
+        el.style.background = color; el.style.boxShadow = '0 0 0 2px #1971c2';
+        setTimeout(function () { el.style.background = ''; el.style.boxShadow = ''; }, 1600);
+    }
+    window._psGoFact = function (key, rowI) {
+        var det = document.getElementById('ps-facts-det');
+        if (det) det.open = true;
+        var el = document.getElementById('ps-fact-' + key);
+        if (!el) {
+            if (window.showToast) window.showToast(T('이 근거는 지금 조건의 사실 목록에 없습니다(보관본이 다른 조건으로 만들어졌거나 그 사이 바뀜).', 'This source is not in the current fact list.'), 'info');
+            return;
+        }
+        _psBackRow = rowI;
+        var old = document.getElementById('ps-back-hint'); if (old) old.remove();
+        el.insertAdjacentHTML('afterbegin', '<div id="ps-back-hint" style="float:right; font-size:10.5px; color:#1971c2; cursor:pointer;">↩ ' + esc(T('누르면 표로 돌아갑니다', 'Click to go back')) + '</div>');
+        el.style.cursor = 'pointer';
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        flash(el, '#e7f5ff');
+    };
+    window._psFactBack = function (ev) {
+        if (_psBackRow == null) return;
+        var t = ev && ev.target;
+        if (t && t.closest && t.closest('button, a, select, input, textarea') && !t.closest('#ps-back-hint')) return;   // 카드 안 단추(원문·간트)는 그대로
+        var row = document.getElementById('ps-row-' + _psBackRow);
+        _psBackRow = null;
+        var hint = document.getElementById('ps-back-hint'); if (hint) { var card = hint.parentNode; hint.remove(); if (card) card.style.cursor = ''; }
+        if (!row) return;
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        flash(row, '#fff3bf');
+    };
+    window._psShowMail = function (key) {
+        var f = _psLast && _psLast.factByKey && _psLast.factByKey[key];
+        if (f && f.mailRaw && window.showMailRawModal) window.showMailRawModal(f.mailRaw);
+        else if (window.showToast) window.showToast(T('메일 원문이 없습니다', 'No mail source'), 'info');
+    };
     window._psRegenerate = function () {
         return window.generatePeriodSummary(mode(), { force: true });
     };
@@ -1120,7 +1210,7 @@
         var head = [T('분류', 'Type'), T('프로젝트', 'Project'), T('업무 담당자', 'Assignee'), T('날짜', 'Date'), T('내용', 'Content'), T('근거', 'Source')];
         var aoa = [[(_psLast && _psLast.label) || ''], head].concat(rows.map(function (r) {
             return [catName(r.cat), r.common ? T('공통', 'Common') + ': ' + r.projects.join(', ') : (r.projects[0] || ''), r.people.join(', '), r.date || '', r.text,
-                    r.refs.map(function (x) { return (x.p ? x.p + ' ' : '') + '#' + (x.row != null ? x.row : x.g) + (x.task ? ' ' + x.task : ''); }).join('\n')];
+                    uniqRefs(r.refs).map(function (x) { return (x.p ? x.p + ' ' : '') + '#' + (x.row != null ? x.row : x.g) + (x.task ? ' ' + x.task : ''); }).join('\n')];
         }));
         var ws = X.utils.aoa_to_sheet(aoa);
         ws['!cols'] = [{ wch: 10 }, { wch: 26 }, { wch: 16 }, { wch: 11 }, { wch: 60 }, { wch: 40 }];

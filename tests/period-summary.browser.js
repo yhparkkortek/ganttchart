@@ -126,6 +126,10 @@
         window._psTblSet({ toggleCat: 'decision' });
         ok('분류 칩으로 거르기', document.querySelectorAll('#ps-ai-tbl tbody tr').length === 1);
         window._psTblSet({ reset: 1 });
+        // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
+        var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },
+            [{ idx: 7, project: 'P1', date: '2026-11-20', task: 't' }, { idx: 200007, rowIdx: 7, project: 'P1', date: '2026-11-20', task: 't' }]);
+        ok('같은 행의 두 사본은 근거 하나', dup.rows.length === 1 && dup.rows[0].refs.length === 1, dup);
         var txt = window.periodSummaryText('day');
         ok('글 버전(텔레그램용)에 분류·사실이 함께', /한 일|결정·요청/.test(txt) && /#G1/.test(txt) && /패널 단가/.test(txt), txt.slice(0, 200));
 
