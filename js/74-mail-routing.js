@@ -56,7 +56,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23f';
+    var RULE_V = '2026-11-23g';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -288,11 +288,13 @@
     function inchHit(raw, inch) {
         var v = String(inch || '').trim();
         if (!/^\d+(\.\d+)?$/.test(v)) return false;
+        // [2026-11-23] 정수 인치(3·27·55, 또는 3.0)는 **단위가 붙었을 때만**("3\"·3인치·3 inch") — 맨 숫자로 받으니
+        //  `(GABKJ-3)` 의 -3 이 3인치로 읽혀 SHUFFLER 3.0 에 갈 뻔했다(실측). 소수(4.3)는 단위 없이도 받되
+        //  앞이 글자·하이픈·숫자·점이면 안 받는다("V4.3", "ALT-4.3" 같은 버전·코드).
+        var m = /^(\d+)(?:\.0)?$/.exec(v);
+        if (m) return new RegExp('(^|[^0-9A-Za-z.\\-])' + m[1] + '(?:\\.0)?\\s*(["”″]|인치|inch)', 'i').test(raw);
         var esc = v.replace('.', '\\.');
-        if (new RegExp('(^|[^0-9.])' + esc + '(?![0-9])(?!\\.[0-9])').test(raw)) return true;
-        var m = /^(\d+)\.0$/.exec(v);
-        if (m && new RegExp('(^|[^0-9.])' + m[1] + '\\s*(["”″]|인치|inch)', 'i').test(raw)) return true;
-        return false;
+        return new RegExp('(^|[^0-9A-Za-z.\\-])' + esc + '(?![0-9])(?!\\.[0-9])').test(raw);
     }
     /** 📨 [2026-11-23] 제목 먼저 — 제목만으로 **결정론**(식별자·단독 가족·가족 인치·가족 대표)으로 한 곳이 나오면 그걸로 정한다.
      *  본문엔 인용된 옛 메일·서명·참조 목록이 섞여 다른 프로젝트 단어가 거의 늘 있다 — 그 때문에 제목에 고유 번호(#502627)가

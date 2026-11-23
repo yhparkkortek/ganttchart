@@ -202,6 +202,12 @@ window.__mailRoutingTestBody = async function () {
         ok(j9.decision === 'auto' && j9.target.drive_file_id === 'S4' && /family_inch$/.test(j9.basis), '9-7 SHUFFLER 가족 + 4.3" → 4.3 (인치로 형제 가름)', j9);
         j9 = J(M('Shuffler 3" 와 4.3" 비교', ''), cands9, null);
         ok(j9.decision !== 'auto' || j9.basis.indexOf('inch') === -1, '9-7b 두 인치가 같이 나오면 인치로 고르지 않는다', j9);
+        j9 = J(M('[JIRA 알림] (SHUF-3) Shuffler TSP 검토', ''), cands9, null);
+        ok(!(j9.decision === 'auto' && /inch$/.test(j9.basis)), '9-7c 코드 속 숫자(SHUF-3)는 인치가 아니다(정수 인치는 단위가 붙어야)', j9);
+        j9 = J(M('Shuffler 3인치 샘플 일정', ''), cands9, null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'S3', '9-7d "3인치" 는 3.0 으로(단위 붙은 정수 인치)', j9);
+        j9 = J(M('Shuffler firmware V4.3 배포', ''), cands9, null);
+        ok(!(j9.decision === 'auto' && /inch$/.test(j9.basis)), '9-7e 버전 표기(V4.3)는 인치가 아니다', j9);
         // 9-8 사유 글이 재판정마다 겹겹이 길어지지 않는다
         store = [{ uid: 'g1', status: '대기', task: { 업무명: 'x', 시작일: '2026-11-01', 완료일: '2026-11-02' }, mailRaw: { subject: '단서 없는 메일', body2000: '안녕하세요' },
                    matchedProject: { status: 'ambiguous', candidates: [cands[4]], confidence: '중', matchBasis: '🧭 이전 판정 · 🤖 AI 사유 원문', routing: { basis: 'ai_low', aiConfidence: '중' } } }];
