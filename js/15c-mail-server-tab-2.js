@@ -557,7 +557,7 @@ window._macRefreshLang = function() {
     });
 };
 
-window.openMailAutoConfigModal = async function() {
+window.openMailAutoConfigModal = async function(opts) {
     const cfg = await window.loadPriorityConfig();
     let modal = document.getElementById('mail-auto-config-modal');
     if (!modal) {
@@ -772,6 +772,18 @@ window.openMailAutoConfigModal = async function() {
     // 💡 처음 여는 순간이 영문 모드일 수도 있으므로(모달 뼈대는 항상 한글로 그려짐), 열 때마다
     // 현재 언어로 다시 맞춰준다 — toggleLang()이 나중에 또 호출해도 안전(멱등).
     window._macRefreshLang();
+
+    // 🚫 [2026-11-23 사용자 요청 "자동폐기 필터 열어줘"] 큐 모달의 바로가기 버튼으로 들어오면
+    //    기본 접힘인 이 섹션을 바로 펼쳐서 보여준다(안 그러면 또 한 번 클릭해야 한다).
+    if (opts && opts.openFilter) {
+        const sec = document.getElementById('mac-sec-filter');
+        const arrow = document.getElementById('mac-sec-filter-arrow');
+        if (sec && sec.style.display === 'none') {
+            sec.style.display = 'block';
+            if (arrow) arrow.textContent = window._currentLang === 'en' ? '▼ Collapse' : '▼ 접기';
+        }
+        if (sec && sec.scrollIntoView) setTimeout(function () { sec.scrollIntoView({ block: 'nearest' }); }, 0);
+    }
 
     modal.style.display = 'block';
     window.bringModalToFront('mail-auto-config-modal');

@@ -1971,6 +1971,8 @@ window._msRenderQueueModal = function(type) {
                 <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"></button>
                 <button id="ms-queue-reanalyze-all-btn" onclick="window._msQueueBulkClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="display:none; flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 전체 재분석</button>
                 <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1; padding:7px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;"></button>
+                <!-- 🚫 [2026-11-23 사용자 요청] "자동폐기 필터 열어줘" — 큐 모달에서 바로 그 설정 섹션으로 간다 -->
+                <button id="ms-queue-filter-btn" onclick="window.openMailAutoConfigModal({openFilter:true})" title="자동폐기 필터 설정 열기" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="flex:0 0 auto; padding:7px 10px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s;">🚫 자동폐기 필터</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -1979,7 +1981,28 @@ window._msRenderQueueModal = function(type) {
         // 💡 삭제 버튼은 이벤트 위임으로 처리 — data-filename 속성 사용, onclick 문자열 조립 안 함(따옴표 깨짐 방지)
         document.getElementById('ms-queue-body').addEventListener('click', function(e) {
             const delBtn = e.target.closest('.ms-queue-del-btn');
-            if (delBtn) { window._msQueueRemoveRow(window._msQueueCurrentType, delBtn.dataset.filename); return; }
+            if (delBtn) {
+                const filename = delBtn.dataset.filename;
+                // 🗑📝 [2026-11-23 사용자 요청] 미분류 메일 삭제 시 "자동폐기 키워드로도 등록할지" 물어본다 —
+                //    신규발신자 큐의 🚫(도메인 차단)과 달리, 미분류는 발신 도메인이 보통 사내(kortek.co.kr)
+                //    라 도메인 차단이 안 맞는다 — 제목 키워드가 맞는 규칙이다. Cancel/빈칸이어도 삭제는 그대로 진행.
+                if (window._msQueueCurrentType === 'unmatched') {
+                    const r = (window._msQueueRows || []).filter(function (x) { return x.fileName === filename; })[0];
+                    const kw = window.prompt(window._t(
+                        '이 메일을 삭제합니다. 제목에서 앞으로도 자동폐기할 키워드가 있으면 입력하세요(비우면 삭제만 합니다).',
+                        'Deleting this mail. Enter a subject keyword to auto-discard going forward (leave blank to just delete).'
+                    ), r ? r.subject : '');
+                    const v = (kw || '').trim();
+                    if (v) {
+                        const added = window._msAddFilterRule('subjectKeywords', v);
+                        if (window.showToast) window.showToast(added
+                            ? window._t('✅ "' + v + '" 자동폐기 키워드로 등록됨', '✅ "' + v + '" registered as an auto-discard keyword')
+                            : window._t('이미 등록된 키워드입니다', 'Already registered'), 'info');
+                    }
+                }
+                window._msQueueRemoveRow(window._msQueueCurrentType, filename);
+                return;
+            }
             const viewBtn = e.target.closest('.ms-queue-view-btn');
             if (viewBtn) {
                 const r = window._msQueueRows && window._msQueueRows[Number(viewBtn.dataset.idx)];
@@ -2027,6 +2050,8 @@ window._msRenderQueueModal = function(type) {
     }
     const clearAllBtn = document.getElementById('ms-queue-clear-all-btn');
     if (clearAllBtn) clearAllBtn.textContent = _msQEn ? '🗑 Clear All' : '🗑 일괄삭제';
+    const filterBtn = document.getElementById('ms-queue-filter-btn');
+    if (filterBtn) filterBtn.textContent = _msQEn ? '🚫 Auto-discard Filters' : '🚫 자동폐기 필터';
     const reanalyzeAllBtn = document.getElementById('ms-queue-reanalyze-all-btn');
     if (reanalyzeAllBtn) {
         // 💡 [2026-10-21] 신규발신자·폐기 큐에서도 쓴다 — 걸러진 메일을 한꺼번에 분석기로 되돌리는 경로.
