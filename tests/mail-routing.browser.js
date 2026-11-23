@@ -57,11 +57,32 @@ window.__mailRoutingTestBody = async function () {
 
     // ── 3. 가족 확정 + 모델 미확정 ──────────────────────────────────────────
     j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '55F / 55C / 55J 공통'), cands, null);
-    ok(j.decision === 'wait' && j.basis === 'family_unresolved' && j.candidates.length === 3, '3-1 AMUSNET 공통 메일 · 대표 없음 · AI 없음 → 가족 3개를 후보로 대기', j);
+    ok(j.decision === 'auto' && j.basis === 'family_all' && j.target && (j.extra || []).length === 2 && [j.target].concat(j.extra).every(c => /^A/.test(c.drive_file_id)), '3-1 [2026-11-23 사용자 결정] AMUSNET 공통 메일 · 대표 없음 → 형제 3곳 모두에 배치', j);
     j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '공통'), cands, AI(0, '중'));
-    ok(j.decision === 'wait' && j.basis === 'family_unresolved', '3-2 [2026-11-23 바뀜] 가족 확정 + AI 중(55FLAT)이라도 본문 근거(인용)가 없으면 따르지 않는다 — 같은 메일 + AI 중(55FLAT) → 가족 안이면 AI 픽으로 배치(대기 아님)', j);
+    ok(j.decision === 'auto' && j.basis === 'family_all', '3-2 가족 확정 + AI 중(55FLAT, 본문 근거 없음) → AI 하나를 따르지 않고 형제 모두에', j);
     j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '공통'), cands, AI(7, '상'));
-    ok(j.decision === 'wait', '3-3 AI 가 가족 밖(STELLAR32)을 "상" 으로 찍어도 따르지 않는다(대기)', j);
+    ok(j.decision === 'auto' && j.basis === 'family_all' && /^A/.test(j.target.drive_file_id), '3-3 AI 가 가족 밖(STELLAR32)을 "상" 으로 찍어도 따르지 않는다(AMUSNET 형제에)', j);
+    // 3-7~9 [2026-11-23] 가족별 '대기' · 모델명 앞부분 형제 · 상한
+    {
+        const c0 = JSON.parse(JSON.stringify(window.mailRoutingConfig()));
+        await window.mailRoutingSaveConfig({ families: { 'AMUSNET': { members: ['A1', 'A2', 'A3'], primary: '', mode: 'wait' } } }).catch(() => {});
+        j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '공통'), cands, null);
+        ok(j.decision === 'wait' && j.basis === 'family_unresolved', "3-7 가족에 '대기' 를 고르면 형제 모두에 넣지 않고 대기", j);
+        await window.mailRoutingSaveConfig(c0).catch(() => {});
+        const PX = [C('P1', 'AM_55F.json', 'AMUSNET 55FLAT', 'AMUSNET', '55', ['Georgi']), C('P2', 'AM_55C.json', 'AMUSNET 55C-R2100', 'AMUSNET', '55', ['Konstantin']),
+                    C('Q1', 'LNW_X.json', 'STELLAR32', 'LNW>STELLAR32', '32', ['STELLAR32'])];
+        const famPX = window.mailRoutingFamilies(PX).filter(f => f.members.length > 1);
+        ok(famPX.length === 1 && famPX[0].members.length === 2, '3-8 공유 키워드가 없어도 같은 고객 + 모델명 앞부분(amusnet55)이 같으면 형제', famPX.map(f => f.members.map(m => m.drive_file_id)));
+        const BIG = ['B1', 'B2', 'B3', 'B4'].map((id, k) => C(id, 'BIG_' + k + '.json', 'BIGLINE MODEL' + k, 'BIGCO>BIGLINE', '' + (10 + k), ['BIGLINE', 'BIGCO-A', 'BIGCO-B', 'BIGCO-C', 'BIGCO-D']));
+        j = J(M('BIGLINE 공통 일정', ''), BIG, null);
+        ok(j.decision === 'wait', '3-9 형제가 상한(3)보다 많으면 모두에 뿌리지 않고 대기', j);
+        const NS = [C('N1', 'AM_F.json', 'AMUSNET 55FLAT', 'AMUSNET', '55', ['502638']), C('N2', 'AM_C.json', 'AMUSNET 55C-R2100', 'AMUSNET', '55', ['502637']),
+                    C('N3', 'AM_J.json', 'AMUSNET 55J-R1500', 'AMUSNET', '55', ['502639'])];
+        j = J(M('[부족자재 일정 확인 요청] Amusnet 55 Series (55F 502638 / 55C 502637)', ''), NS, null);
+        const nsT = j.target ? [j.target].concat(j.extra || []).map(c => c.drive_file_id).sort() : [];
+        ok(j.decision === 'auto' && j.basis.indexOf('family_named') !== -1 && JSON.stringify(nsT) === JSON.stringify(['N1', 'N2']),
+           '3-10 메일에 형제 둘의 코드가 적혀 있으면 그 둘에만(적히지 않은 55J 는 빼고)', { b: j.basis, t: nsT });
+    }
     // 가족 대표 설정 → 자동
     const cfg0 = JSON.parse(JSON.stringify(window.mailRoutingConfig()));
     window._mailRoutingTestSetCfg = null;
@@ -140,6 +161,17 @@ window.__mailRoutingTestBody = async function () {
         ok(store.find(x => x.uid === 'u1').status === '자동배치됨', '6-3 배치된 건의 상태가 바뀐다');
         ok(placed[0] && placed[0].opts && placed[0].opts.noTopicRegen === true, '6-3b 재판정 배치는 토픽 프로파일 AI 재생성을 건너뛴다(건당 몇 분·무료 한도)', placed[0] && placed[0].opts);
         ok(store.find(x => x.uid === 'u2').status === '대기', '6-4 단서 없는 건은 대기 그대로');
+        // 6-5 [2026-11-23] 재판정이 형제 모두 배치를 실제로 한다(대표는 카드, 나머지는 _msRegisterToProjectTargets 로 새 카드)
+        {
+            store = [{ uid: 'fa1', status: '대기', task: { 업무명: '라벨', 시작일: '2026-11-01', 완료일: '2026-11-02', 상세내용: 'x' },
+                       mailRaw: { subject: 'Amusnet 55 Series 라벨 사양 확인 요청', date: '2026-11-01 09:00', sender: 'f <f@x.com>', body2000: '확인 부탁드립니다' },
+                       matchedProject: { status: 'ambiguous', candidates: [cands[0]], confidence: '중', matchBasis: 'ai' } }];
+            placed.length = 0;
+            await window.mailRouteRejudgePending({ force: true, toast: false });
+            await new Promise(r => setTimeout(r, 800));
+            const fids = placed.map(p => p.fid).sort();
+            ok(JSON.stringify(fids) === JSON.stringify(['A1', 'A2', 'A3']), '6-5 대표 없는 가족 메일은 재판정에서 형제 3곳 모두에 배치된다', fids);
+        }
         // 7. 쓰기 훅 — 성공한 배치가 기록·신호 사슬을 지난다 (기록은 계정이 있어야 적힌다 — 없으면 하네스 계정)
         const realUserKey = window._appUserKey; if (!window._appUserKey && !window._nasAccount) window._appUserKey = 'harness';
         let sig = 0; const realSig = window._tpAppendMailSignal;

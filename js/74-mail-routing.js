@@ -47,6 +47,9 @@
         deterministicFirst: true, // [2026-11-23 사용자 지시] AI 호출 전 결정론 판정 → 확정되면 AI 는 업무 정리만(후보 목록 안 줌)
         aiRequiresCitation: true, // [2026-11-23 사용자 지시] AI 가 고른 후보는 본문 근거(인용 검증·결정론 기록)가 있을 때만 따른다
         headlessTopicRegen: false, // [2026-11-23] 다른 프로젝트 파일에 배치할 때 토픽 프로파일 AI 재생성을 기다리지 않는다(js/15b)
+        familyAllWhenNoPrimary: true, // [2026-11-23 사용자 결정] 가족은 확정·모델 단서 없음·대표 없음 → 형제 **모두**에 배치(가족별로 '대기' 선택 가능)
+        familyAllMax: 3,          // 형제 모두 배치의 상한 — 이보다 큰 가족은 모두에 뿌리지 않고 대기
+        familyModelPrefixMin: 9,  // 같은 고객 + 모델명 앞부분(정규화)이 이만큼 같으면 형제('AMUSNET 55…' → 'amusnet55')
         routeDir: 'App_Config/MailRoutes',
         flushSec: 60,
         reloadMin: 10,
@@ -56,7 +59,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23g';
+    var RULE_V = '2026-11-23j';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -165,6 +168,8 @@
         return c.family || '';
     }
     function explicitPrimary(name) { var f = _cfg.families[name]; return (f && f.primary) || ''; }
+    /** 가족별 방식(설정 화면) — 'all'(형제 모두) · 'wait'(대기) · ''(기본 = P.familyAllWhenNoPrimary) */
+    function familyModeOf(fam) { var nm = fam && (fam.name || fam.label); var f = nm ? _cfg.families[nm] : null; return (f && f.mode) || ''; }
 
     /** 고객사 칸들의 공통 앞부분('LNW>SHUFFLER 4.3"' · 'LNW>SHUFFLER 3.0"' → 'LNW>SHUFFLER') */
     function commonCustomerLabel(list) {
@@ -200,7 +205,12 @@
                 if (ca.indexOf(ra) === 0 && ca.length > ra.length && ca === cb) { union(i, j); continue; }  // "LNW>SHUFFLER" 둘
                 var shared = 0;
                 for (var k in ids[i]) if (ids[j][k]) shared++;
-                if (shared >= P.familyShareMin) union(i, j);
+                if (shared >= P.familyShareMin) { union(i, j); continue; }
+                // [2026-11-23] 같은 고객 + 모델명 앞부분이 길게 같으면 형제 — 실제 앱에선 주소록의 사람 이름(Georgi 등)이 식별자에서 빠져
+                //  AMUSNET 55FLAT 이 공유 단어 4개를 못 채우고 떨어져 나갔다('Amusnet 55 Series' 메일이 두 가족 충돌로 대기).
+                var ma = norm(a.model), mb = norm(b.model), pl = 0;
+                while (pl < ma.length && pl < mb.length && ma[pl] === mb[pl]) pl++;
+                if (pl >= (P.familyModelPrefixMin || 9)) union(i, j);
             }
         }
         var fams = {}, famOf = {};
@@ -332,13 +342,13 @@
     /** 🧭 [2026-11-23 사용자 지시 "결정론 판정 먼저 하고 AI 는 업무 정리만"] AI 호출 **전에** 부른다(js/15c msCallGemini).
      *  AI 없이(aiTag=null) 판정해 결정론 근거로 한 곳이 확정되면 {target, basis, reason, family}, 아니면 null.
      *  null 이면 호출부가 예전처럼 후보 목록을 주고 AI 에게 고르게 한다. 끄기: P.deterministicFirst=false 또는 offKey. */
-    var PRE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1 };
+    var PRE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1, family_all: 1, family_named: 1 };
     window.mailRoutePreJudge = function (mail, cands) {
         if (off() || P.deterministicFirst === false || !cands || !cands.length || !mail) return null;
         var j = window.mailRouteJudge(mail, cands, null);
         if (j.decision !== 'auto' || !j.target || !j.target.drive_file_id) return null;
         if (!PRE_BASES[String(j.basis || '').replace(/^subject_/, '')]) return null;
-        return { target: j.target, basis: j.basis, reason: j.reason, family: j.family || null };
+        return { target: j.target, extra: (j.extra || []).slice(), basis: j.basis, reason: j.reason, family: j.family || null };
     };
     // ⚡ [2026-11-23] 후보 목록이 같으면 식별자·가족·가족 토큰을 다시 만들지 않는다 — 실측(대기 96건·후보 29개):
     //  판정 1건 24ms 의 대부분이 메일마다 29개 후보의 식별자(사람 이름 판정 포함)를 새로 만드는 비용이었다.
@@ -419,6 +429,7 @@
         var aiIdx = aiPick ? cands.findIndex(function (c) { return c === aiPick || (aiPick.drive_file_id && c.drive_file_id === aiPick.drive_file_id); }) : -1;
         var aiConf = aiTag ? (aiTag.confidence || '') : '';
         var custOnly = null;   // 고객만 확정된 경우의 root
+        var otherCustomer = false;   // 가족을 고를 때 다른 고객의 단어도 있었나(형제 모두 배치를 막는다)
         // ③ 가족 토큰으로만 가족 확정(정확히 한 가족)
         if (!famId) {
             var fk = Object.keys(famHit);
@@ -429,7 +440,13 @@
                 fk.forEach(function (f) { famHit[f].forEach(function (t) { tokFams[t] = (tokFams[t] || 0) + 1; }); });
                 var score = {}; fk.forEach(function (f) { score[f] = famHit[f].filter(function (t) { return tokFams[t] === 1; }).length; });
                 fk.sort(function (a, b) { return score[b] - score[a]; });
-                if (score[fk[0]] >= 1 && score[fk[0]] >= 2 * score[fk[1]]) famId = fk[0];
+                if (score[fk[0]] >= 1 && score[fk[0]] >= 2 * score[fk[1]]) {
+                    famId = fk[0];
+                    // [2026-11-23] 다른 **고객**의 단어도 함께 있었다면 기록 — 형제 모두 배치(family_all)는 이때 하지 않는다
+                    //  ('Panel Roadmap … LNW Obsidian 55 … AMUSNET 55FLAT' 이 AMUSNET 형제 3곳에 뿌려질 뻔했다 — 하네스 9-6c).
+                    var myRoot = customerRoot(cands[F.fams[famId].members[0]].customer);
+                    otherCustomer = fk.some(function (f) { return f !== famId && F.fams[f].members.some(function (i) { return customerRoot(cands[i].customer) !== myRoot; }); });
+                }
                 else {
                     // 가르는 토큰이 없다 = 같은 고객의 여러 제품(STELLAR32·OBSIDIAN…)만 같이 걸림.
                     var roots = {}; fk.forEach(function (f) { F.fams[f].members.forEach(function (i) { roots[customerRoot(cands[i].customer)] = 1; }); });
@@ -480,6 +497,13 @@
                 return out({ decision: 'auto', target: cands[inchHits[0]], candidates: members, basis: 'family_inch',
                     reason: T('가족 확정(' + fam.label + ') · 인치 ' + cands[inchHits[0]].inch + ' 로 모델 확정', 'family ' + fam.label + ' · model by size ' + cands[inchHits[0]].inch), family: famId });
             }
+            // [2026-11-23] 메일이 형제 **여럿의** 고유 식별자를 직접 적었으면(“55F 502638 / 55C-R2100 / 55J-R1500”) 그 적힌 형제 모두에 —
+            //  AI 가 그중 하나를 골라도(근거가 있어도) 하나만 넣으면 나머지 형제 업무가 빠진다.
+            var namedSibs = withUniq.filter(function (i) { return famOfIdx(i) === famId; });
+            if (namedSibs.length > 1 && !otherCustomer && namedSibs.length <= (P.familyAllMax || 3) && familyModeOf(fam) !== 'wait') {
+                return out({ decision: 'auto', target: cands[namedSibs[0]], extra: namedSibs.slice(1).map(function (i) { return cands[i]; }), candidates: members, basis: 'family_named',
+                    reason: T('가족 확정(' + fam.label + ') · 메일에 적힌 모델 ' + namedSibs.length + '곳 모두에', 'family ' + fam.label + ' · all ' + namedSibs.length + ' models named in the mail'), family: famId });
+            }
             if (fam.primary != null) {
                 return out({ decision: 'auto', target: cands[fam.primary], candidates: members, basis: 'family_primary',
                     reason: T('가족 확정(' + fam.label + ') · 모델 단서 없음 → 가족 대표로', 'family ' + fam.label + ' confirmed, no model cue → family primary'), family: famId });
@@ -488,6 +512,14 @@
             if (P.familyAiAuto && gF && gF.ok && (aiConf === '상' || aiConf === '중')) {
                 return out({ decision: 'auto', target: cands[aiIdx], candidates: members, basis: 'family_ai',
                     reason: T('가족 확정(' + fam.label + ') · 모델은 AI 판단(' + aiConf + ')', 'family ' + fam.label + ' confirmed · model by AI (' + aiConf + ')'), family: famId });
+            }
+            // 👨‍👩‍👧 [2026-11-23 사용자 결정] 대표가 없으면 **형제 모두**에 — 형제 사이 오배송은 담당자가 같아 피해가 작고,
+            //  "어느 모델인지 모르면 사람이 고른다" 보다 "형제 모두에 넣어 두고 아니면 ♻️" 가 낫다는 판단. 가족별로 '대기' 를 고를 수 있다
+            //  (잘못 묶인 가족 대비). 상한(familyAllMax)을 넘는 큰 가족은 뿌리지 않는다.
+            var famMode = familyModeOf(fam);
+            if (famMode !== 'wait' && (famMode === 'all' || P.familyAllWhenNoPrimary) && members.length <= (P.familyAllMax || 3) && !otherCustomer) {
+                return out({ decision: 'auto', target: members[0], extra: members.slice(1), candidates: members, basis: 'family_all',
+                    reason: T('가족 확정(' + fam.label + ') · 모델 단서 없음 → 형제 ' + members.length + '곳 모두에', 'family ' + fam.label + ' · no model cue → all ' + members.length + ' siblings'), family: famId });
             }
             return out({ decision: 'wait', target: null, candidates: members, basis: 'family_unresolved',
                 reason: T('가족은 확정(' + fam.label + ')인데 어느 모델인지 단서가 없음 — 설정에서 가족 대표를 정하면 자동 배치', 'family ' + fam.label + ' confirmed but model unknown — set a family primary in settings to auto-place')
@@ -526,7 +558,7 @@
         var conf = aiTag && aiTag.confidence;
         var basisTxt = '🧭 ' + j.reason + (aiTag && aiTag.matchBasis ? ' · 🤖 ' + aiTag.matchBasis : '');
         if (j.decision === 'auto') {
-            return { status: 'matched', candidates: [j.target], extraCandidates: [], confidence: '상',
+            return { status: 'matched', candidates: [j.target], extraCandidates: (j.extra || []).slice(), confidence: '상',
                      matchBasis: basisTxt, routing: { basis: j.basis, family: j.family, aiConfidence: conf || '', v: RULE_V } };
         }
         if (j.decision === 'wait') {
@@ -767,7 +799,8 @@
                 if (tgt) {
                     task._routing = { basis: pr.basis, decision: 'auto', reason: pr.reason };
                     bump('auto:pre_' + pr.basis);
-                    var pt = tagFromJudge({ decision: 'auto', target: tgt, candidates: [tgt], basis: pr.basis, reason: pr.reason + ' (AI 매칭 생략)', family: pr.family }, null);
+                    var extras = (pr.extraFids || []).map(function (f) { return cands.filter(function (c) { return c.drive_file_id === f; })[0]; }).filter(Boolean);
+                    var pt = tagFromJudge({ decision: 'auto', target: tgt, extra: extras, candidates: [tgt].concat(extras), basis: pr.basis, reason: pr.reason + ' (AI 매칭 생략)', family: pr.family }, null);
                     pt.routing.pre = true;
                     return pt;
                 }
@@ -978,6 +1011,7 @@
                 if (r && r.ok) {
                     window.TaskInbox.setStatus(it.uid, '자동배치됨', { type: '재판정 배치(' + j.basis + ')', target: j.target.file_name, at: new Date().toISOString() });
                     res.placed++;
+                    placeExtras(j, t, it.mailRaw, '🧭 재판정(' + j.basis + ')', !!it.alarmWorthy, res);
                 } else {
                     res.failed++;
                     if (window._ibMarkAutoPlaceFail) window._ibMarkAutoPlaceFail(it.uid, (r && r.reason) || 'rejudge_failed');
@@ -1000,6 +1034,16 @@
      *  · 확정(mailRoutePreJudge — 결정론 근거만, AI 판단 없음)되는 줄만 보관함에 넣고 평소 자동배치와 같은 함수로 배치한다.
      *  · 확정 안 되는 줄은 그대로 둔다(미분류 유지). AI 분석이 실패해 업무 내용(task)이 없는 줄은 넣을 게 없어 건드리지 않는다.
      *  @returns {looked, placed, pending, still, noTask, dup, failed} */
+    /** 👨‍👩‍👧 형제 모두 배치 — 대표 배치가 끝난 뒤 나머지 형제에도 같은 업무를(카드 하나씩, 기존 _msRegisterToProjectTargets 로) */
+    function placeExtras(j, task, mailRaw, sourceLabel, alarm, res) {
+        var ex = (j && j.extra) || [];
+        if (!ex.length || typeof window._msRegisterToProjectTargets !== 'function') return;
+        var t2 = Object.assign({}, task, { _routing: { basis: j.basis, decision: 'auto', reason: 'family_all extra' } });
+        // _msRegisterToProjectTargets 는 첫 대상을 '주' 로 표시한다 — 여기선 전부 추가분이라 자리표시 null 을 앞에 둔다
+        window._msRegisterToProjectTargets([null].concat(ex), t2, mailRaw, sourceLabel, alarm, '형제 모두 배치(' + j.basis + ')', function (tg, r2) {
+            if (tg && r2 && r2.ok) res.placedExtra = (res.placedExtra || 0) + 1;
+        });
+    }
     /** AI 없이 메일에서 그대로 만든 업무 — 업무명=제목(RE:/FW: 접두어만 뗌), 상세=본문 앞부분 + [출처](15c 와 같은 모양 —
      *  중복 판정이 이 태그를 본다), 날짜=메일 수신일(+기본 마감일). 담당구분은 모르면 '미분류'. 해석·요약은 하지 않는다. */
     function buildTaskFromMail(r) {
@@ -1061,7 +1105,8 @@
             try {
                 window.TaskInbox.add(task, { source: '🧭 ' + T('미분류 재판정', 'unclassified re-judge') + '(' + (pre.target.model || pre.target.file_name || '') + ')', mailRaw: mailRawObj, matchedProject: tag, alarmWorthy: false });
                 var st = window._msAutoPlaceNewInboxItem ? await window._msAutoPlaceNewInboxItem(task, tag, mailRawObj, '미분류 재판정(' + pre.basis + ')') : 'pending';
-                if (st === 'placed') res.placed++; else if (st === 'failed') res.failed++; else res.pending++;
+                if (st === 'placed') { res.placed++; placeExtras({ extra: pre.extra, basis: pre.basis }, task, mailRawObj, '🧭 ' + T('미분류 재판정', 'unclassified re-judge'), false, res); }
+                else if (st === 'failed') res.failed++; else res.pending++;
             } catch (e) { res.failed++; }
             await new Promise(function (r2) { setTimeout(r2, 400); });
         }

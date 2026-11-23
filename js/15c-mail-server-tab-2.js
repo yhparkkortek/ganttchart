@@ -877,7 +877,11 @@ window._macRenderFamilies = async function() {
     const esc = window.escapeHtml || (s => String(s));
     el.innerHTML = fams.map(function(f) {
         const name = f.name || f.label;
-        const cur = (cfg.families[name] && cfg.families[name].primary) || (f.primary && f.primary.drive_file_id) || '';
+        // [2026-11-23] 가족별 방식: 대표(fid) · '__all__' 형제 모두(기본) · '__wait__' 대기
+        const _fc = cfg.families[name] || {};
+        const cur = _fc.primary || (f.primary && f.primary.drive_file_id) || (_fc.mode === 'wait' ? '__wait__' : '__all__');
+        const _mem = JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;');
+        const _nm = esc(name).replace(/'/g, '');
         return `<div style="border:1px solid #e6e9ef; border-radius:5px; padding:6px 8px; margin-bottom:6px; background:#fafbfc;">
             <div style="font-weight:bold; color:#333; margin-bottom:3px;">${esc(name)} <span style="font-weight:normal; color:#888;">(${f.members.length}${_en ? ' projects' : '개 프로젝트'})</span></div>
             <div style="display:flex; flex-direction:column; gap:2px;">
@@ -885,7 +889,8 @@ window._macRenderFamilies = async function() {
                     const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name;
                     return `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="mac-fam-${esc(f.id)}" value="${esc(c.drive_file_id)}" ${c.drive_file_id === cur ? 'checked' : ''} onchange="window._macFamilyPick('${esc(name).replace(/'/g, '')}', this.value, ${JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;')})"><span>${esc(label)}</span><span style="color:#888;">${esc(c.file_name || '')}</span></label>`;
                 }).join('')}
-                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#888;"><input type="radio" name="mac-fam-${esc(f.id)}" value="" ${!cur ? 'checked' : ''} onchange="window._macFamilyPick('${esc(name).replace(/'/g, '')}', '', ${JSON.stringify(f.members.map(m => m.drive_file_id)).replace(/"/g, '&quot;')})"><span>${_en ? 'No primary — model-less mails wait (AI pick only with evidence in the mail)' : '대표 없음 — 모델 단서 없는 메일은 대기(AI 선택은 본문 근거가 있을 때만 따름)'}</span></label>
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#1a6b35;"><input type="radio" name="mac-fam-${esc(f.id)}" value="__all__" ${cur === '__all__' ? 'checked' : ''} onchange="window._macFamilyPick('${_nm}', '__all__', ${_mem})"><span>${_en ? 'No primary — place into all siblings (default)' : '대표 없음 — 형제 모두에 배치(기본)'}</span></label>
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#888;"><input type="radio" name="mac-fam-${esc(f.id)}" value="__wait__" ${cur === '__wait__' ? 'checked' : ''} onchange="window._macFamilyPick('${_nm}', '__wait__', ${_mem})"><span>${_en ? 'No primary — wait for a person (use for wrongly grouped families)' : '대표 없음 — 대기(사람이 고름 · 잘못 묶인 가족이면 이걸로)'}</span></label>
             </div>
         </div>`;
     }).join('');
@@ -893,7 +898,9 @@ window._macRenderFamilies = async function() {
 window._macFamilyPick = function(name, fid, members) {
     const d = window._macFamilyDraft || (window._macFamilyDraft = { families: {} });
     d.families = d.families || {};
-    d.families[name] = { members: members || [], primary: fid || '' };
+    if (fid === '__all__') d.families[name] = { members: members || [], primary: '', mode: 'all' };
+    else if (fid === '__wait__') d.families[name] = { members: members || [], primary: '', mode: 'wait' };
+    else d.families[name] = { members: members || [], primary: fid || '', mode: '' };
 };
 window._macRejudgeNow = async function() {
     const btn = document.getElementById('mac-rejudge-btn');
@@ -1719,7 +1726,7 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
         //    재배치/오매칭 삭제 피드백 시 이 데이터로 학습 항목을 기록한다.
         if (_pre && _pre.target) {
             // 결정론으로 정해진 건 — 판정 근거를 달고 간다(js/74 wrapResolve 가 이걸 보고 AI 매칭 해석을 건너뛴다)
-            result._preRouted = { fid: _pre.target.drive_file_id || '', basis: _pre.basis, reason: _pre.reason, family: _pre.family || null };
+            result._preRouted = { fid: _pre.target.drive_file_id || '', extraFids: (_pre.extra || []).map(function(c) { return c.drive_file_id; }).filter(Boolean), basis: _pre.basis, reason: _pre.reason, family: _pre.family || null };
             result['_aiMeta'] = {
                 confidence: '규칙', matchedProjectId: _pre.target.drive_file_id || '', matchedProjectName: _pre.target.file_name || '',
                 matchBasis: '🧭 ' + (_pre.reason || ''), keywords: (_pre.target.keywords || []).slice(0, 8),
