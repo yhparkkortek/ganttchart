@@ -156,6 +156,13 @@ window.__mailRoutingTestBody = async function () {
     j = J(M('[LNW] 31.5" UHD LCM 개선 요청', 'LNW 31.5" UHD LCM'), candsDW, null);
     ok(j.basis !== 'customer_inch', '4-19 같은 인치가 다른 프로젝트 키워드에도 있으면(31.5" Digital Wheel) 안 보낸다', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id });
     candsDW.forEach(c => { if (c.drive_file_id === 'D1') c.keywords = c.keywords.filter(k => k !== 'Obsidian Digital Wheel 31.5"'); });
+    // [2026-11-23] 고객사 프로젝트가 13곳이 돼도(K27 등록) 회의록은 전부에 — 상한을 넘으면 대기 + 사유에 적는다
+    const lnw13 = cands.concat(Array.from({ length: 8 }, (_, i) => C('X' + i, 'LNW_X' + i + '.json', 'X' + i, 'LNW>X' + i, '', ['XQZ' + i])));
+    j = J(M('Kortek Weekly call minutes > Kortek2', 'LNW UK shipping update'), lnw13, null);
+    ok(j.decision === 'auto' && j.basis === 'common_customer' && allOf(j).length === 13, '4-20 고객사 프로젝트 13곳이어도 회의록(minutes)은 13곳 모두에', { d: j.decision, basis: j.basis, n: allOf(j).length });
+    const lnw25 = cands.concat(Array.from({ length: 20 }, (_, i) => C('Y' + i, 'LNW_Y' + i + '.json', 'Y' + i, 'LNW>Y' + i, '', ['YQZ' + i])));
+    j = J(M('Kortek Weekly call minutes > Kortek2', 'LNW UK shipping update'), lnw25, null);
+    ok(j.decision === 'wait' && /상한/.test(j.reason || ''), '4-21 상한을 넘으면 대기 — 조용히 빠지지 않고 사유에 상한을 적는다', { d: j.decision, r: j.reason });
     j = J(M('RE: New Traceability Requirements for Molded Plastic Components', 'LNW supplier reminder'), cands, null);
     ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-15 고객 전반 요구사항(Requirements) → LNW 프로젝트 전부', { d: j.decision, basis: j.basis, ids: allOf(j) });
 

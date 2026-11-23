@@ -52,7 +52,7 @@
         familyAllMax: 3,          // 형제 모두 배치의 상한 — 이보다 큰 가족은 모두에 뿌리지 않고 대기
         familyModelPrefixMin: 9,
         commonToCustomer: true,   // [2026-11-23 사용자 결정] 회의록·로드맵 같은 공통 건(제목 어휘 MAIL_ROUTING_COMMON_WORDS)이 한 고객사로 모이면 그 고객사 프로젝트 **전부**에
-        commonCustomerMax: 12,    // 공통 건을 뿌릴 고객사 프로젝트 수 상한(실측 LNW 11개) — 넘으면 대기  // 같은 고객 + 모델명 앞부분(정규화)이 이만큼 같으면 형제('AMUSNET 55…' → 'amusnet55')
+        commonCustomerMax: 20,    // 공통 건을 뿌릴 고객사 프로젝트 수 상한 — 넘으면 대기(사유에 적는다). 12 였는데 K27 등록으로 LNW 가 13곳이 되자 회의록이 조용히 대기로 빠졌다(2026-11-23)  // 같은 고객 + 모델명 앞부분(정규화)이 이만큼 같으면 형제('AMUSNET 55…' → 'amusnet55')
         routeDir: 'App_Config/MailRoutes',
         flushSec: 60,
         reloadMin: 10,
@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23l';
+    var RULE_V = '2026-11-23m';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -419,7 +419,12 @@
         var rk = Object.keys(roots);
         if (rk.length !== 1 || SELF[rk[0]]) return j;
         var grp = customerGroup(cands || [], rk[0]).filter(function (c) { return c && c.drive_file_id && !isCatchAll(c); });
-        if (!grp.length || grp.length > (P.commonCustomerMax || 12)) return j;
+        if (!grp.length) return j;
+        if (grp.length > (P.commonCustomerMax || 20)) {   // 조용히 빠지지 않게 — 사유에 상한을 적는다
+            j.reason = (j.reason || '') + T(' · 공통 건이지만 고객사 프로젝트가 ' + grp.length + '곳(상한 ' + (P.commonCustomerMax || 20) + ')이라 모두에 뿌리지 않음',
+                                            ' · common mail but the customer has ' + grp.length + ' projects (limit ' + (P.commonCustomerMax || 20) + ')');
+            return j;
+        }
         var lbl = commonCustomerLabel(grp.map(function (c) { return c.customer; })) || rk[0].toUpperCase();
         return { decision: 'auto', target: grp[0], extra: grp.slice(1), candidates: grp, basis: 'common_customer', family: null, hits: j.hits,
             reason: T('공통 건(회의록·로드맵 등) · 고객사 ' + lbl + ' 프로젝트 ' + grp.length + '곳 모두에', 'common mail (minutes/roadmap) · all ' + grp.length + ' projects of ' + lbl) };
