@@ -14,7 +14,7 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('✅ ' + m); } else { fail++; console.log('❌ ' + m); } };
 
 async function run(opts, conflictOnce, policy) {
-    let regen = 0, puts = 0, metaCalls = 0;
+    let regen = 0, puts = 0, metaCalls = 0, lastBody = '';
     const win = {
         currentDriveFileId: 'OTHER', currentUserName: 'tester',
         _t: (k) => k,
@@ -33,11 +33,11 @@ async function run(opts, conflictOnce, policy) {
         const t = (conflictOnce && metaCalls === 2) ? 'T2' : 'T1';
         return { result: { modifiedTime: t } };
     } } } } };
-    win.fetch = async () => { puts++; return { ok: true, json: async () => ({ id: 'F' }) }; };
+    win.fetch = async (url, init) => { puts++; lastBody = String((init && init.body) || ''); return { ok: true, json: async () => ({ id: 'F' }) }; };
     const ctx = vm.createContext(win);
     vm.runInContext(fnSrc, ctx);
     const r = await win._msAutoRegisterToProject('u', { 시작일: '2026-11-01' }, 'F', 'f.json', null, 0, false, opts);
-    return { r, regen, puts };
+    return { r, regen, puts, lastBody };
 }
 
 (async () => {
@@ -50,6 +50,11 @@ async function run(opts, conflictOnce, policy) {
     ok(x.r.ok && x.regen === 0, '3 충돌 재시도 경로도 opts 를 물려받아 AI 재생성을 건너뛴다');
     x = await run(undefined, false, null);
     ok(x.r.ok && x.regen === 0 && x.puts === 1, '4 [2026-11-23 기본] 정책이 없거나 꺼져 있으면 헤드리스 배치는 AI 재생성을 기다리지 않는다');
+    // 5 [2026-11-23] 헤드리스 쓰기는 파일 이름을 보내지 않는다 — 옛 이름(색인이 기억하던)을 보내면 NAS 에서 이름이 되돌아가며 파일이 둘로 갈라졌다
+    x = await run(undefined, false, null);
+    const metaJson = (x.lastBody.split('Content-Type: application/json; charset=UTF-8')[1] || '').split('--')[0].trim();
+    let meta = null; try { meta = JSON.parse(metaJson); } catch (e) { meta = null; }
+    ok(meta && !('name' in meta), '5 헤드리스 PATCH 메타데이터에 name 이 없다(내용만 쓴다)');
     console.log(`ms-auto-register-topic-regen: ${pass}/${pass + fail}`);
     process.exit(fail ? 1 : 0);
 })();

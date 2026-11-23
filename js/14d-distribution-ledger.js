@@ -479,7 +479,10 @@ window.inboxDistExecute = async function(attempt) {
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) { alert(window._t('🔒 구글 인증 토큰이 유실되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.', '🔒 The Google auth token was lost. Please reconnect using the button at the top and try again.')); return; }
         const boundary = 'inbox_dist_boundary';
-        const metadata = { name: ctx.fileName, mimeType: 'application/json' };
+        // 🧾 [2026-11-23] 다른 프로젝트 파일에 **내용만** 쓴다 — 이름(name)은 보내지 않는다. 그 이름은 색인·보관함이 기억하던 값이라
+        //    프로젝트가 이름을 바꾼 뒤엔 **옛 이름**이고, NAS 에선 이름 바꾸기 = 복사+삭제라 파일이 둘로 갈라졌다(실측: LNW_SHUFFLER_04.3).
+        //    파일 이름은 그 프로젝트 자신의 저장(js/04c)만 정한다.
+        const metadata = { mimeType: 'application/json' };
         const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(ctx.saveData)
                    + "\r\n--" + boundary + "--";
@@ -608,7 +611,10 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
             });
 
             const boundary = 'dist_multi_boundary';
-            const metadata = { name: fileName, mimeType: 'application/json' };
+            // 🧾 [2026-11-23] 다른 프로젝트 파일에 **내용만** 쓴다 — 이름(name)은 보내지 않는다. 그 이름은 색인·보관함이 기억하던 값이라
+            //    프로젝트가 이름을 바꾼 뒤엔 **옛 이름**이고, NAS 에선 이름 바꾸기 = 복사+삭제라 파일이 둘로 갈라졌다(실측: LNW_SHUFFLER_04.3).
+            //    파일 이름은 그 프로젝트 자신의 저장(js/04c)만 정한다.
+            const metadata = { mimeType: 'application/json' };
             const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                        + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
                        + "\r\n--" + boundary + "--";

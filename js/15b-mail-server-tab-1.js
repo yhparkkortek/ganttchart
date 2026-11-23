@@ -1206,7 +1206,10 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         }
 
         const boundary = 'ms_auto_register_boundary';
-        const metadata = { name: fileName, mimeType: 'application/json' };
+        // 🧾 [2026-11-23] 다른 프로젝트 파일에 **내용만** 쓴다 — 이름(name)은 보내지 않는다. 그 이름은 색인·보관함이 기억하던 값이라
+        //    프로젝트가 이름을 바꾼 뒤엔 **옛 이름**이고, NAS 에선 이름 바꾸기 = 복사+삭제라 파일이 둘로 갈라졌다(실측: LNW_SHUFFLER_04.3).
+        //    파일 이름은 그 프로젝트 자신의 저장(js/04c)만 정한다.
+        const metadata = { mimeType: 'application/json' };
         const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
                    + "\r\n--" + boundary + "--";
