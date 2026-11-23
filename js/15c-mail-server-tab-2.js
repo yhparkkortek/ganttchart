@@ -1649,6 +1649,22 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     let prompt;
     try { prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null); }
     finally { window._tpSuppressPromptSnippet = false; }
+    // 📘 [2026-11-23 사용자 요청] 결정론으로 확정된 프로젝트의 토픽 프로파일(요약·현재 단계·토픽 키워드)을 업무 정리 맥락으로 넣는다.
+    //    열린 프로젝트 스니펫(js/26, 자동수집에선 막음 — "열린 프로젝트 편향")과 달리 **이 메일이 가는 그 프로젝트** 것이라 끌림 위험이 없다.
+    //    값은 색인(project_index)에 실린 것 — 저장 시점에 프로파일에서 복사된 짧은 값이다(후보 줄과 같은 출처). 배치 판단엔 안 쓴다.
+    if (_pre && _pre.target) {
+        const _t = _pre.target;
+        const _ctx = [];
+        if (_t.topicSummary) _ctx.push('- 요약: ' + String(_t.topicSummary).slice(0, 160));
+        if (_t.topicPhase) _ctx.push('- 현재 단계: ' + String(_t.topicPhase).slice(0, 60));
+        if (_t.topicKeywords && _t.topicKeywords.length) _ctx.push('- 자주 나오는 말: ' + _t.topicKeywords.slice(0, 8).join(', '));
+        if (_ctx.length) {
+            const _block = '[이 메일이 속한 프로젝트 배경 — ' + (_t.model || _t.file_name || '') + ' · 업무 정리 참고용(프로젝트를 다시 고르지 마세요)]\n' + _ctx.join('\n');
+            const _mk = '\n이메일:';
+            const _ix = prompt.lastIndexOf(_mk);
+            prompt = (_ix === -1) ? (prompt + '\n\n' + _block) : (prompt.substring(0, _ix) + '\n\n' + _block + prompt.substring(_ix));
+        }
+    }
 
     // 💡 [2026-08-20][AI 직접 매칭 v3] 예전엔 키워드 사전매칭으로 후보가 2개 이상 걸릴 때만 AI에게
     //    맥락 판단을 맡겼음 — project_index.json 키워드 목록이 노후화되면 AI가 애초에 이 판단 기회조차

@@ -264,10 +264,13 @@ window.__mailRoutingTestBody = async function () {
         };
         try {
             const parsed = (subj) => ({ subject: subj, sender: 'a <a@customer.com>', date: '2026-11-20 10:00', body: '본문입니다. 확인 부탁드립니다.', to: '', cc: '', key: '', refs: [] });
+            const realSum = cands[4].topicSummary; cands[4].topicSummary = 'SHUFFLER 4.3 하네스 요약 문장'; cands[4].topicKeywords = ['TULIP-4.3', 'ESD'];
             const r1 = await window.msCallGemini('fake-key', parsed('Re: Shuffler Display 4.3" ESD 재시험 결과'), cands, null, null);
             const p1 = prompts[prompts.length - 1] || '';
             ok(r1 && r1._preRouted && r1._preRouted.fid === 'S4', '10-1 결정론으로 확정되면 AI 호출 전에 프로젝트가 정해진다(_preRouted=S4)', r1 && r1._preRouted);
             ok(p1.indexOf('주매칭프로젝트번호') === -1 && p1.indexOf('규칙으로 이미 정해졌습니다') !== -1, '10-2 그때 프롬프트엔 후보 목록·매칭 지시가 없다(업무 정리만)', p1.slice(-300));
+            ok(p1.indexOf('SHUFFLER 4.3 하네스 요약 문장') !== -1 && p1.indexOf('TULIP-4.3') !== -1 && p1.indexOf('SHUFFLER 4.3 하네스 요약 문장') < p1.lastIndexOf('이메일:'), '10-2b 확정된 프로젝트의 토픽 요약·키워드가 메일 본문 앞 맥락으로 들어간다', p1.slice(0, 200));
+            cands[4].topicSummary = realSum; delete cands[4].topicKeywords;
             const t1 = window._msResolveAiProjectMatch(r1, cands);
             ok(t1 && t1.status === 'matched' && t1.candidates[0].drive_file_id === 'S4' && t1.routing && t1.routing.pre, '10-3 resolve 는 AI 답(5번·중)을 무시하고 결정론 판정 그대로 확정', t1 && t1.routing);
             const r2 = await window.msCallGemini('fake-key', parsed('회의 일정 안내'), cands, null, null);
