@@ -952,8 +952,8 @@
     margin-bottom: 0 !important;
 }
 
-/* 📑 [2026-11-23] Project Summary — 본문 상자 자체가 스크롤 영역(내용은 js/62 가 그린 블록들이라 flex 로 바꾸지 않는다) */
-#tab-psummary > .concept-tab-wrap > #psummary-page { flex: 1; min-height: 0; overflow-y: auto; margin-bottom: 0 !important; }
+/* 📑 [2026-11-23] Project Review — BOM 과 같은 구조: 본문 상자는 안 스크롤, 안쪽 #ps-scroll(표·근거)만 스크롤 */
+#tab-psummary > .concept-tab-wrap > #psummary-page { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 0 !important; }
 
 /* 3. 테이블을 감싼 .concept-section: 남은 공간 전체 차지 (flex:1) */
 #tab-address   > .concept-tab-wrap > .concept-section,

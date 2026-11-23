@@ -1017,8 +1017,12 @@
         h.push('</div>');
         // 📌 고정 머리 — 기간 칩·필터·기간 제목·(표가 있으면) 분류 칩·엑셀·보관함. 스크롤해도 위에 남는다.
         //    본문 상자(.concept-section)의 안쪽 여백만큼 음수 여백으로 넓혀 위·옆 틈 없이 덮는다.
-        body.innerHTML = '<div id="ps-sticky" style="position:sticky; top:-12px; z-index:6; background:#e0f5f7; margin:-12px -18px 0; padding:12px 18px 4px; border-bottom:1px solid #a3d9e0;">' +
-            toolbarHtml(kind, col) + headHtml + secHtml + '</div>' + h.join('');
+        // 📌 [2026-11-23 "BOM 헤더와 차이가 뭐야"] BOM 과 같은 구조 — 조작 영역은 스크롤 **밖**(#ps-sticky),
+        //    표·근거 목록만 따로 스크롤(#ps-scroll)하고 표 머리글은 그 상자 맨 위(top:0)에 붙는다.
+        //    (전엔 한 상자 안에서 같이 스크롤하며 머리 높이를 재서 맞췄다 — 화면마다 어긋나 머리글이 움직였다.)
+        body.innerHTML = '<div id="ps-sticky" style="flex-shrink:0; padding-bottom:4px; margin-bottom:6px; border-bottom:1px solid #a3d9e0;">' +
+            toolbarHtml(kind, col) + headHtml + secHtml + '</div>' +
+            '<div id="ps-scroll" style="flex:1; min-height:0; overflow:auto;">' + h.join('') + '</div>';
         syncHeadH();
         fillArchiveSelect();
     }
@@ -1174,7 +1178,7 @@
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
         var th = function (id, label, w) {
             var on = _psTbl.sort === id;
-            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:var(--ps-head-h, 0px); z-index:4; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
+            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:4; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
                    esc(label) + ' <span style="color:' + (on ? '#1971c2' : '#b8c4d0') + ';">' + (on ? (_psTbl.dir > 0 ? '▲' : '▼') : '↕') + '</span></th>';
         };
         var td = 'padding:5px 6px; border:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
@@ -1192,7 +1196,7 @@
         if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         return '<table style="width:100%; border-collapse:collapse; table-layout:auto; background:#fff;"><thead><tr>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
-            '<th style="position:sticky; top:var(--ps-head-h, 0px); z-index:4; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
+            '<th style="position:sticky; top:0; z-index:4; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행', rows.length + ' / ' + all.length + ' rows')) + '</div>';
     }
@@ -1286,6 +1290,7 @@
     }
     /** 표 머리글이 고정 머리 **바로 아래**에 붙게 그 높이를 알려 준다(칩 줄이 접혀 높이가 바뀔 수 있다). */
     function syncHeadH() {
+        return;   // 표가 자기 스크롤 상자(#ps-scroll) 안에 있어 머리글은 top:0 — 잴 것이 없다(아래는 옛 방식, 안 쓴다)
         var st = document.getElementById('ps-sticky');
         if (!st || !st.parentNode) return;
         st.parentNode.style.setProperty('--ps-head-h', Math.max(0, st.offsetHeight - 12) + 'px');
