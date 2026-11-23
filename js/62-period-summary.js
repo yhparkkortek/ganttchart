@@ -24,9 +24,10 @@
         // 📅 [2026-11-23 사용자 요청] 전일·금일·전주·금주·전월·금월 — `prev*` 는 같은 단위를 한 칸 앞으로 민 것.
         //    ⚠️ 금일/금주/금월의 id 는 옛 'day'/'week'/'month' 그대로(저장된 모드·캐시·문답 경로가 그 이름을 쓴다).
         periods: [
-            { id: 'prevday', ko: '전일', en: 'Yesterday' }, { id: 'day', ko: '금일', en: 'Today' },
-            { id: 'prevweek', ko: '전주', en: 'Last week' }, { id: 'week', ko: '금주', en: 'This week' },
-            { id: 'prevmonth', ko: '전월', en: 'Last month' }, { id: 'month', ko: '금월', en: 'This month' }
+            // 🗣 [2026-11-23 사용자 요청] 전일·금일… → 어제·오늘·지난주·이번주·지난달·이번달(일일보고 칩도 같은 말)
+            { id: 'prevday', ko: '어제', en: 'Yesterday' }, { id: 'day', ko: '오늘', en: 'Today' },
+            { id: 'prevweek', ko: '지난주', en: 'Last week' }, { id: 'week', ko: '이번주', en: 'This week' },
+            { id: 'prevmonth', ko: '지난달', en: 'Last month' }, { id: 'month', ko: '이번달', en: 'This month' }
         ],
         customId: 'custom',                    // 📅 기간 직접 설정(시작~끝)
         legacyId: 'legacy',
@@ -184,14 +185,14 @@
             else b.setDate(b.getDate() - 7);
             from = new Date(b); to = new Date(b);
         }
-        if (unit === 'day') { key = ymd(b); label = prev ? T('전일 ' + key, 'Yesterday ' + key) : T('오늘 ' + key, 'Today ' + key); }
+        if (unit === 'day') { key = ymd(b); label = prev ? T('어제 ' + key, 'Yesterday ' + key) : T('오늘 ' + key, 'Today ' + key); }
         else if (unit === 'month') {
             from = new Date(b.getFullYear(), b.getMonth(), 1); to = new Date(b.getFullYear(), b.getMonth() + 1, 0);
-            key = b.getFullYear() + '-' + pad(b.getMonth() + 1); label = (prev ? T('전월 ', 'Last month ') : '') + T(key.replace('-', '년 ') + '월', key);
+            key = b.getFullYear() + '-' + pad(b.getMonth() + 1); label = (prev ? T('지난달 ', 'Last month ') : '') + T(key.replace('-', '년 ') + '월', key);
         } else {
             var dow = b.getDay(), back = P.weekStartsMonday ? (dow + 6) % 7 : dow;
             from = new Date(b); from.setDate(b.getDate() - back); to = new Date(from); to.setDate(from.getDate() + 6);
-            key = ymd(from) + '~' + ymd(to); label = prev ? T('지난 주 ' + key, 'Last week ' + key) : T('이번 주 ' + key, 'This week ' + key);
+            key = ymd(from) + '~' + ymd(to); label = prev ? T('지난주 ' + key, 'Last week ' + key) : T('이번주 ' + key, 'This week ' + key);
         }
         to.setHours(23, 59, 59, 999);
         return { kind: kind, from: from, to: to, key: key, label: label };
@@ -1191,10 +1192,10 @@
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
         var th = function (id, label, w) {
             var on = _psTbl.sort === id;
-            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:4; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
+            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:20; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
                    esc(label) + ' <span style="color:' + (on ? '#1971c2' : '#b8c4d0') + ';">' + (on ? (_psTbl.dir > 0 ? '▲' : '▼') : '↕') + '</span></th>';
         };
-        var td = 'padding:5px 6px; border:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
+        var td = 'padding:5px 6px; border-right:1px solid #e3e8ee; border-bottom:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
         var body = rows.map(function (r) {
             var c = catOf(r.cat);
             var ai = all.indexOf(r);   // 돌아올 자리 — 정렬·필터가 바뀌어도 같은 행을 가리키게 원본 순번
@@ -1207,9 +1208,9 @@
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
         if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
-        return '<table style="width:100%; border-collapse:collapse; table-layout:auto; background:#fff;"><thead><tr>' +
+        return '<table style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid #cdd9e6; border-top:1px solid #cdd9e6; table-layout:auto; background:#fff;"><thead><tr>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
-            '<th style="position:sticky; top:0; z-index:4; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
+            '<th style="position:sticky; top:0; z-index:20; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행', rows.length + ' / ' + all.length + ' rows')) + '</div>';
     }

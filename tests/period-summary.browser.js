@@ -74,7 +74,7 @@
         var pageTab = document.getElementById('tab-psummary');
         ok('옛 메뉴(AI 요약)는 프로젝트 요약 페이지로 간다', !!pageTab && pageTab.classList.contains('active'));
         var body = document.getElementById('psummary-page');
-        ok('툴바(전일~금월/기간설정)가 그려졌다', !!body.querySelector('#ps-period-toolbar') && /금일|Today/.test(body.textContent) && /전주|Last week/.test(body.textContent) && /금월|This month/.test(body.textContent) && /기간설정|Range/.test(body.textContent));
+        ok('툴바(어제~이번달/기간설정)가 그려졌다', !!body.querySelector('#ps-period-toolbar') && /오늘|Today/.test(body.textContent) && /지난주|Last week/.test(body.textContent) && /이번달|This month/.test(body.textContent) && /기간설정|Range/.test(body.textContent));
         ok('모달 쪽에는 같은 화면이 없다(id 겹침 방지)', !document.querySelector('#ai-summary-body #ps-period-toolbar'));
         // 📊 [2026-11-09] '일정 현황' 은 간트 상태 칸이 관리되지 않아 접었다(showLegacy:false).
         ok('일정 현황 버튼이 없다', !/일정 현황|Schedule view/.test(body.textContent), body.textContent.slice(0, 80));

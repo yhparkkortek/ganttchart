@@ -1529,7 +1529,7 @@
     //    `#daily-cand` 만 다시 그리므로 여기 둬야 검색칸 타이핑이 안 날아간다).
     '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">' +
       // 💊 [2026-11-23 사용자 요청] 드롭다운 → AI 요약과 같은 칩 줄(전일·금일·전주·금주·기간설정).
-      [['yesterday', '전일', 'Yesterday'], ['today', '금일', 'Today'], ['lastweek', '전주', 'Last week'], ['week', '금주', 'This week'], ['range', '📅 기간설정', '📅 Range']].map(function (m) {
+      [['yesterday', '어제', 'Yesterday'], ['today', '오늘', 'Today'], ['lastweek', '지난주', 'Last week'], ['week', '이번주', 'This week'], ['range', '📅 기간설정', '📅 Range']].map(function (m) {
           return '<button onclick="window._dailySetCandPeriodMode(\'' + m[0] + '\')" style="' + uiPill(_candPeriod.mode === m[0]) + '">' + esc(T(m[1], m[2])) + '</button>';
       }).join('') +
       (_candPeriod.mode === 'range'
