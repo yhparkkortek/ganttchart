@@ -12115,6 +12115,17 @@ ${docsJson}`;
                             </select>
                             <button id="gantt-qa-freq-del-btn" onclick="window._ganttQaDeleteFreqQuestion(window._ganttQaLastFreqSelected)" title="${_qEn ? 'Delete this question from the list' : '이 질문을 목록에서 삭제'}" style="display:none; flex-shrink:0; align-items:center; justify-content:center; width:26px; height:26px; box-sizing:border-box; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';">🗑</button>
                         </div>
+                        <!-- 🔗 [2026-11-23, 사용자 요청] 글자 선택→"AI 문답으로" 아이콘으로 여러 곳의
+                             글을 "조합"하고 싶을 때를 위한 모드 토글. 기본(매번 새로운 글)은 꺼 두고,
+                             이어쓰기(연속 선택을 지우지 않고 계속 붙임)는 켜야만 켜지는 예외 — 체크
+                             상태만 window._ganttQaAppendMode에 적고 끝(js/71이 읽음, 저장 안 함 —
+                             다음에 열면 항상 기본으로 돌아온다). -->
+                        <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+                            <label style="display:flex; align-items:center; gap:5px; min-width:0; font-size:10.5px; color:#555; cursor:pointer; user-select:none;" title="${_qEn ? 'When checked, text picked up from another selection is added below what\'s already in the box instead of replacing it' : '켜두면 다른 곳에서 또 선택해 가져올 때 입력칸 내용을 지우지 않고 아래에 이어 붙입니다'}">
+                                <input type="checkbox" id="gantt-qa-append-toggle" onchange="window._ganttQaAppendMode = this.checked;" style="cursor:pointer; margin:0; flex-shrink:0;">
+                                <span>🔗 ${_qEn ? 'Keep adding selected text (don\'t overwrite)' : '선택한 글 이어쓰기(지우지 않고 계속 추가)'}</span>
+                            </label>
+                        </div>
                     </div>
                     <div style="flex:0 0 72px; display:flex; flex-direction:column; gap:6px; align-items:stretch;">
                         <!-- 🔇/🔊 [2026-10-28, 사용자 요청 "뮤트 버튼도 이전 높이 음성문답 버튼과 나란히

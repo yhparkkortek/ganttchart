@@ -39,7 +39,10 @@
 
     function showBtnAt(x, y) {
         var b = ensureBtn();
-        b.textContent = (window._currentLang === 'en') ? '🤖 Ask AI' : '🤖 AI 문답으로';
+        var appendOn = !!window._ganttQaAppendMode;
+        b.textContent = appendOn
+            ? ((window._currentLang === 'en') ? '🔗 Add to Q&A' : '🔗 이어서 추가')
+            : ((window._currentLang === 'en') ? '🤖 Ask AI' : '🤖 AI 문답으로');
         b.style.display = 'inline-block';
         var w = b.offsetWidth || 110, h = b.offsetHeight || 28;
         var left = Math.min(Math.max(8, x), window.innerWidth - w - 8);
@@ -91,10 +94,19 @@
             }
         }
         window.openGanttQaModal();
+        // 🔗 이어쓰기 모드면 "지금 칸에 있는 내용 + 새 선택"을 한 번만 계산해 둔다 — apply()가
+        // 레이스 방지로 두 번 불리는데, 매번 현재 값을 다시 읽어 이어붙이면 두 번째 호출에서
+        // 중복으로 덧붙여진다. 두 번 다 같은 최종 글을 "그대로 다시 쓰기"만 하면 멱등.
+        var inp0 = document.getElementById('gantt-qa-input');
+        var finalText = text;
+        if (window._ganttQaAppendMode && inp0 && inp0.value && inp0.value.trim()) {
+            var sep = /\n\s*$/.test(inp0.value) ? '' : '\n\n';
+            finalText = inp0.value + sep + text;
+        }
         var apply = function () {
             var inp = document.getElementById('gantt-qa-input');
             if (!inp) return;
-            inp.value = text;
+            inp.value = finalText;
             inp.focus();
             try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (errSet) {}
         };
