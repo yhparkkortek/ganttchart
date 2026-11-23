@@ -2550,7 +2550,7 @@
         }).join('');
         wrap.innerHTML =
 '<div id="daily-roster-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:min(860px,95vw); max-height:88vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,.22); overflow:hidden;">' +
- '<div id="daily-roster-drag" style="flex-shrink:0; padding:12px 17px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#2c5f8a; font-weight:bold; font-size:14px; display:flex; justify-content:space-between; cursor:grab; user-select:none;">' +
+ '<div id="daily-roster-drag" style="flex-shrink:0; padding:13px 18px; background:#fff8e6; border-bottom:1px solid #ffe08a; color:#7a5210; font-weight:bold; font-size:14px; align-items:center; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; cursor:grab; user-select:none;">' +
    '<span>👥 ' + esc(T('일일보고 명단 (팀 공용)', 'Daily report roster (team-shared)')) + '</span>' +
    '<button onclick="document.getElementById(\'daily-roster-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); width:28px; height:28px; cursor:pointer; font-size:16px; line-height:1; flex-shrink:0;">✕</button></div>' +
  '<div style="flex:1; min-height:0; overflow:auto; padding:13px 17px;">' +

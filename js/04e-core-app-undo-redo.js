@@ -1854,7 +1854,7 @@
 
         modal.innerHTML = `
         <div id="gantt-organize-wizard-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:84vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:6vh; left:50%; transform:translateX(-50%); resize:both; overflow:hidden; min-width:380px; min-height:260px;">
-            <div id="gantt-organize-wizard-drag" style="padding:13px 18px; border-bottom:1px solid #8fc4ba; font-weight:bold; font-size:14px; background:#e3f2f0; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#0f6b5c;">
+            <div id="gantt-organize-wizard-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>🧹 ${_en ? `Auto-organize diagnosis (${totalN} found)` : `자동 정리 진단 (${totalN}건)`}</span>
                 <button onclick="document.getElementById('gantt-organize-wizard-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
@@ -2064,7 +2064,7 @@
         const _n = candidates.length;
         modal.innerHTML = `
         <div id="wbs-group-suggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:8vh; left:50%; transform:translateX(-50%); resize:both; overflow:hidden; min-width:360px; min-height:200px;">
-            <div id="wbs-group-suggest-drag" style="padding:13px 18px; border-bottom:1px solid #c0a0d8; font-weight:bold; font-size:14px; background:#ede4f5; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#5a3680;">
+            <div id="wbs-group-suggest-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>🗂 ${_en ? `Group suggestions (${_n} found)` : `그룹 제안 (${_n}개 발견)`}</span>
                 <button onclick="document.getElementById('wbs-group-suggest-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
