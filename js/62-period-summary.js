@@ -442,10 +442,18 @@
     function openProjectName() {
         var id = String(window.currentDriveFileId || '').trim();
         var ents = (_psOther && _psOther.entries) || [];
-        for (var i = 0; id && i < ents.length; i++) {
-            if (String((ents[i] && ents[i].drive_file_id) || '').trim() === id) return String(ents[i].file_name || '').replace(/\.json$/i, '').trim();
+        var relOf = function (x) { try { return (window._storageRelOfId && x) ? String(window._storageRelOfId(x) || '') : ''; } catch (e) { return ''; } };
+        // ⚠️ [2026-11-23 2차] id 형식이 색인과 다를 수 있다(NAS 경로형 id ↔ 옛 Drive id) — **NAS 경로**로도 맞춘다.
+        var myRel = relOf(id);
+        var nm = function (e) { return String(e.file_name || '').replace(/\.json$/i, '').trim(); };
+        for (var i = 0; i < ents.length; i++) {
+            var e = ents[i]; if (!e) continue;
+            if (id && String(e.drive_file_id || '').trim() === id) return nm(e);
+            if (myRel && (relOf(e.drive_file_id) === myRel || ((e.team ? e.team + '/' : '') + e.file_name) === myRel)) return nm(e);
         }
-        return String(window.currentDriveFileName || '').split('/').pop().replace(/\.json$/i, '').trim();
+        // 색인에서 못 찾으면 NAS 경로의 파일 이름(실제 파일) → 그다음 화면에 적힌 이름 순.
+        var base = String(myRel || window.currentDriveFileName || '').split('/').pop().replace(/\.json$/i, '').trim();
+        return base;
     }
     window._psOpenProjectName = openProjectName;
     window._psCollectFacts = function (kind, base) {
@@ -1075,20 +1083,29 @@
         // 역할이 여럿(근거 행마다 다름)이면 첫 칸에 그대로 보여 주고, 고르면 전부 그 역할로 맞춘다.
         if (cur === '') opts = '<option value="" selected>' + esc((roles.length ? roles.join(', ') : T('(없음)', '(none)')) + (ppl.length ? ' · ' + ppl.join(', ') : '')) + '</option>' + opts;
         // 칸 하나 — 고르기 상자 자체가 "역할 · 이름" 을 보여 준다(행 높이를 늘리지 않는다).
-        return '<select onchange="window._psSetRole(' + ai + ', this.value)" title="' + esc(T('담당 구분 바꾸기 — 간트 행에 바로 반영됩니다', 'Change role — written to the Gantt row')) + '" style="' + window._uiSelectStyle(false) + ' height:20px; font-size:11px; max-width:140px; border-color:transparent; background:transparent; cursor:pointer;" onmouseover="this.style.borderColor=\'#cfd8e3\'" onmouseout="this.style.borderColor=\'transparent\'">' + opts + '</select>';
+        return '<select onchange="window._psSetRole(' + ai + ', this.value)" title="' + esc(T('담당 구분 바꾸기 — 간트 행에 바로 반영됩니다', 'Change role — written to the Gantt row')) + '" style="' + window._uiSelectStyle(false) + ' height:20px; font-size:11px; max-width:140px; cursor:pointer;">' + opts + '</select>';
     }
     window._psSetRole = function (ai, role) {
         var r = _psLast && _psLast.shown && _psLast.shown.rows && _psLast.shown.rows[ai];
         if (!r || !role) return;
         var refs = localRefs(r);
         if (!refs.length) return;
-        var n = 0;
+        var n = 0, lost = 0;
+        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
         refs.forEach(function (x) {
-            var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
-            var row = gd && gd[x.row];
-            if (!row) return;
-            if (String(row._담당구분 || '') !== role) { window.setWbsDiscipline(x.row, role); n++; }
+            // ⚠️ 행 번호는 **요약을 만들 때(또는 저장된 파일)** 의 번호다 — 그 뒤 행을 넣거나 지웠으면 밀린다.
+            //    쓰기 전에 업무명이 맞는지 보고, 틀리면 업무명이 **딱 하나** 같은 행을 찾는다. 없으면 쓰지 않는다.
+            var ri = x.row;
+            if (!gd || !gd[ri] || (x.task && taskName(gd[ri]) !== x.task)) {
+                ri = -1;
+                var hits = [];
+                for (var i = 1; x.task && gd && i < gd.length; i++) if (gd[i] && gd[i]._level !== undefined && taskName(gd[i]) === x.task) hits.push(i);
+                if (hits.length === 1) ri = hits[0];
+            }
+            if (ri < 0) { lost++; return; }
+            if (String(gd[ri]._담당구분 || '') !== role) { window.setWbsDiscipline(ri, role); n++; }
         });
+        if (lost && window.showToast) window.showToast(T('⚠️ 근거 행 ' + lost + '개는 간트에서 같은 업무를 찾지 못해 바꾸지 않았습니다', '⚠️ ' + lost + ' source row(s) not found in the Gantt — skipped'), 'info');
         var who = roleOwner(role, window.projectMeta || {}, (window.tabData && window.tabData.projectMembers3) || []);
         if (window.showToast) window.showToast(n ? T('✅ 간트 ' + n + '행의 담당 구분을 ' + role + (who ? '(' + who + ')' : '') + ' 로 바꿨습니다', 'Changed ' + n + ' Gantt row(s) to ' + role)
                                                : T('이미 그 담당 구분입니다', 'Already that role'), 'info');
