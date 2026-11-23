@@ -980,6 +980,30 @@
      *  · 확정(mailRoutePreJudge — 결정론 근거만, AI 판단 없음)되는 줄만 보관함에 넣고 평소 자동배치와 같은 함수로 배치한다.
      *  · 확정 안 되는 줄은 그대로 둔다(미분류 유지). AI 분석이 실패해 업무 내용(task)이 없는 줄은 넣을 게 없어 건드리지 않는다.
      *  @returns {looked, placed, pending, still, noTask, dup, failed} */
+    /** AI 없이 메일에서 그대로 만든 업무 — 업무명=제목(RE:/FW: 접두어만 뗌), 상세=본문 앞부분 + [출처](15c 와 같은 모양 —
+     *  중복 판정이 이 태그를 본다), 날짜=메일 수신일(+기본 마감일). 담당구분은 모르면 '미분류'. 해석·요약은 하지 않는다. */
+    function buildTaskFromMail(r) {
+        try {
+            var subj = String(r.subject || '').trim();
+            if (!subj) return null;
+            var name = subj;
+            for (var k = 0; k < 6; k++) name = name.replace(/^\s*((re|fw|fwd|답장|전달|회신)\s*(\[\d+\])?\s*:\s*)/i, '');
+            name = name.trim().slice(0, 80) || subj.slice(0, 80);
+            var body = String(r.body || '');
+            try { if (typeof window.cleanMailBody === 'function') body = window.cleanMailBody(body); } catch (e) { /* 원문 그대로 */ }
+            body = body.replace(/\s+/g, ' ').trim().slice(0, 400);
+            var ymd = window.parseMailDateToYMD ? window.parseMailDateToYMD(r.date) : '';
+            var src = '[출처]' + subj + '_' + (window.cleanMailDateForTag ? window.cleanMailDateForTag(r.date) : String(r.date || '')) + '_' + (r.sender || '');
+            var t = {
+                '업무명': name, '시작일': ymd || '', '완료일': '', '상태': '진행', '개발단계': '', '담당구분': '미분류', 'wbs레벨': 4,
+                '상세내용': T('[핵심내용] (AI 분석 실패 — 메일 원문으로 만든 업무) ', '[Key] (AI analysis failed — task made from the mail as-is) ') + body + '\n' + src,
+                _noAi: true
+            };
+            if (window._applyDefaultDueDate) window._applyDefaultDueDate(t);
+            if (window._applyMailDateFallback) window._applyMailDateFallback(t, r.date, { allowToday: true });
+            return t;
+        } catch (e) { return null; }
+    }
     window.mailRouteRejudgeUnmatched = async function (opts) {
         opts = opts || {};
         var res = { looked: 0, placed: 0, pending: 0, still: 0, noTask: 0, dup: 0, failed: 0 };
@@ -994,11 +1018,17 @@
             var r = rows[i];
             if (i % 5 === 4) await new Promise(function (r2) { setTimeout(r2, 0); });
             res.looked++;
-            if (!r.task) { res.noTask++; continue; }
             var mail = { subject: r.subject || '', sender: r.sender || '', body: r.body || '', refs: r.refs || [] };
             var pre = null;
             try { pre = window.mailRoutePreJudge(mail, cands); } catch (e) { pre = null; }
             if (!pre) { res.still++; continue; }
+            if (!r.task) {
+                // 🧾 [2026-11-23 사용자 결정] AI 분석이 실패해 업무 내용이 없는 메일 — 결정론으로 프로젝트가 확정됐으면
+                //  AI 없이 **메일 그대로** 업무를 만든다(지어내는 내용 없음). 확정 안 되는 메일은 위에서 이미 건너뛰었다.
+                r.task = buildTaskFromMail(r);
+                if (!r.task) { res.noTask++; continue; }
+                res.builtNoAi = (res.builtNoAi || 0) + 1;
+            }
             var tag = tagFromJudge({ decision: 'auto', target: pre.target, candidates: [pre.target], basis: pre.basis,
                                      reason: pre.reason + T(' (미분류 재판정)', ' (unclassified re-judge)'), family: pre.family }, null);
             var label = window._msProjectTagLabel ? window._msProjectTagLabel(tag) : (pre.target.model || pre.target.file_name);
@@ -1022,7 +1052,7 @@
         try { console.info('[메일 배분] 미분류 재판정:', JSON.stringify(res)); } catch (e) { /* 무시 */ }
         if (opts.toast !== false && window.showToast && (res.placed || res.pending || opts.force)) {
             window.showToast(T('📭 미분류 ' + res.looked + '건 재판정 — 배치 ' + res.placed + '건' + (res.pending ? ' · 보관함 대기 ' + res.pending : '') +
-                               (res.noTask ? ' · AI 분석 실패라 건너뜀 ' + res.noTask : '') + (res.failed ? ' · 실패 ' + res.failed : ''),
+                               (res.builtNoAi ? ' · AI 분석 실패 메일 ' + res.builtNoAi + '건은 메일 그대로 업무로' : '') + (res.noTask ? ' · 업무를 못 만들어 건너뜀 ' + res.noTask : '') + (res.failed ? ' · 실패 ' + res.failed : ''),
                                '📭 Re-judged ' + res.looked + ' unclassified — placed ' + res.placed + (res.pending ? ' · pending ' + res.pending : '') +
                                (res.noTask ? ' · skipped (AI failed) ' + res.noTask : '') + (res.failed ? ' · failed ' + res.failed : '')), 'info', 7000);
         }

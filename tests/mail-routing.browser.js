@@ -226,10 +226,13 @@ window.__mailRoutingTestBody = async function () {
             ];
             try {
                 const ru = await window.mailRouteRejudgeUnmatched({ force: true, toast: false });
-                ok(ru.looked === 3 && ru.placed === 1 && ru.still === 1 && ru.noTask === 1, '12-1 미분류 3건만 본다 — 확정 1·그대로 1·AI실패(업무 없음) 1', ru);
-                ok(placed.length === 1 && placed[0].fid === 'S4', '12-2 확정된 메일은 보관함을 거쳐 SHUFFLER 4.3 에 배치된다(진짜 _msAutoPlaceNewInboxItem)', placed);
-                ok(store.length === 1 && store[0].status === '자동배치됨' && store[0].matchedProject.routing && /subject_/.test(store[0].matchedProject.routing.basis), '12-3 보관함 카드가 생기고 결정론 근거로 자동배치됨 표시', store[0] && store[0].matchedProject && store[0].matchedProject.routing);
-                ok(window._msResults[0].project && !window._msResults[1].project && !window._msResults[2].project, '12-4 확정된 줄만 미분류에서 빠진다(나머지는 그대로)', window._msResults.map(r => r.project));
+                ok(ru.looked === 3 && ru.placed === 2 && ru.still === 1 && ru.noTask === 0 && ru.builtNoAi === 1, '12-1 미분류 3건 — 확정 2(그중 AI 실패 1건은 메일 그대로 업무로)·그대로 1', ru);
+                ok(placed.length === 2 && placed.some(p => p.fid === 'S4') && placed.some(p => p.fid === 'T1'), '12-2 확정된 메일은 보관함을 거쳐 배치된다(SHUFFLER 4.3·STELLAR32, 진짜 _msAutoPlaceNewInboxItem)', placed);
+                ok(store.length === 2 && store.every(x => x.status === '자동배치됨' && x.matchedProject.routing && /subject_/.test(x.matchedProject.routing.basis)), '12-3 보관함 카드가 생기고 결정론 근거로 자동배치됨 표시', store.map(x => x.status));
+                ok(window._msResults[0].project && !window._msResults[1].project && window._msResults[2].project, '12-4 확정된 줄만 미분류에서 빠진다(나머지는 그대로)', window._msResults.map(r => r.project));
+                const bt = (store.find(x => x.mailRaw && x.mailRaw.subject === 'STELLAR32 일정') || {}).task || {};
+                ok(bt._noAi && bt['업무명'] === 'STELLAR32 일정' && String(bt['상세내용'] || '').indexOf('[출처]STELLAR32 일정_') !== -1 && bt['시작일'] === '2026-11-01' && !!bt['완료일'],
+                   '12-6 AI 실패 메일은 AI 없이 메일 그대로 업무(업무명=제목·[출처] 태그·수신일·기본 마감일)', bt);
                 ok(placed[0] && placed[0].opts && placed[0].opts.coalesce === false && !placed[0].opts.byHuman, '12-5 자동 배치로 기록된다(사람 배치 아님)', placed[0] && placed[0].opts);
             } finally { window._msResults = realQ; window._msSaveQueueToStorage = realSaveQ; window._msRefreshQueueBadges = realBadge; }
         }
