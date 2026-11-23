@@ -1174,27 +1174,29 @@
             return Object.keys(m).sort(function (a, b) { return m[b] - m[a]; }).slice(0, 6)
                 .map(function (v) { return _esc(v) + ' ' + m[v]; }).join(' · ');
         };
-        // 👤 담당자별 프로젝트 수 — 역할 4칸(회로·펌웨어·기구·터치)을 합쳐서 센다. 여러 명은
-        // 콤마/슬래시/공백 어느 것으로 적었든(`_plCheckSameNames`와 같은 split 규칙) 한 사람으로
-        // 묶고, 한 행에 같은 사람이 여러 역할로 겹쳐 있어도 그 행(프로젝트)은 **한 번만** 센다
-        // (회로담당=A, 기구담당=A 인 행이 A 를 2건으로 부풀리면 안 된다).
-        var byOwner = function () {
+        // 👤 담당자별 프로젝트 수 — 역할(회로/펌웨어/기구/터치)을 **합치지 않고 따로** 센다
+        // (2026-11-23 사용자 요청: 합쳐서 상위 10명만 보여줬더니 역할별로는 적지 않은 사람이
+        // 공동 10등 언저리에서 잘려 빠졌다 — 실측 장영익=회로담당 30건인데 통합 집계에서
+        // "-"(빈칸 표시) 등 다른 항목과 공동 순위라 순서상 밀려 안 보였다). 사람 수가 역할당
+        // 10명 안팎이라 **자르지 않고 전부** 보여준다. "-"는 담당자가 비어 있다는 표시 문자라
+        // 사람으로 세지 않는다(실측: 기구 18건·터치 12건이 전부 이 표시였다).
+        var byRole = function (k) {
             var m = {};
             rows.forEach(function (r) {
-                var names = {};
-                ['ownerHw', 'ownerFw', 'ownerMech', 'ownerTouch'].forEach(function (k) {
-                    String(r[k] || '').split(/[,\/\s]+/).forEach(function (x) {
-                        x = x.trim(); if (x) names[x] = true;
-                    });
+                String(r[k] || '').split(/[,\/\s]+/).forEach(function (x) {
+                    x = x.trim();
+                    if (x && x !== '-') m[x] = (m[x] || 0) + 1;
                 });
-                Object.keys(names).forEach(function (n) { m[n] = (m[n] || 0) + 1; });
             });
-            return Object.keys(m).sort(function (a, b) { return m[b] - m[a]; }).slice(0, 10)
+            return Object.keys(m).sort(function (a, b) { return m[b] - m[a]; })
                 .map(function (v) { return _esc(v) + ' ' + m[v]; }).join(' · ');
         };
         el.innerHTML = '<b>' + _t('고객', 'Customer') + '</b> ' + by('customer')
                      + ' &nbsp;|&nbsp; <b>' + _t('상태', 'Status') + '</b> ' + by('status')
-                     + ' &nbsp;|&nbsp; <b>' + _t('담당자', 'Owner') + '</b> ' + byOwner();
+                     + ' &nbsp;|&nbsp; <b>' + _t('회로', 'HW') + '</b> ' + byRole('ownerHw')
+                     + ' &nbsp;|&nbsp; <b>' + _t('펌웨어', 'FW') + '</b> ' + byRole('ownerFw')
+                     + ' &nbsp;|&nbsp; <b>' + _t('기구', 'Mech') + '</b> ' + byRole('ownerMech')
+                     + ' &nbsp;|&nbsp; <b>' + _t('터치', 'Touch') + '</b> ' + byRole('ownerTouch');
     };
 
     // 🌐 머리글 바 문구 — docs/ui-conventions.md 규칙대로 **JS 한 곳에서** 한/영을 만든다.
