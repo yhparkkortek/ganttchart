@@ -247,7 +247,9 @@
                 //    값으로, 행마다(HW/FW 등 분야별로) 다를 수 있다. 둘은 다른 사람일 수 있다.
                 //    ⚠️ 해석기는 js/59 `_dailyCatAssignee` 하나를 빌려 쓴다(두 벌이면 화면마다 다른 사람이 나온다).
                 pm: String((ctx.meta || {}).프로젝트담당자 || '').trim(),
-                assignee: roleOwner(cat, ctx.meta, ctx.members3),
+                // 👤 담당자 직접 지정(`row._담당자`)이 있으면 그 이름이 역할보다 먼저(js/04k setRowAssignee).
+                assignee: (row._담당자 && String(row._담당자).trim()) || roleOwner(cat, ctx.meta, ctx.members3),
+                manual: !!(row._담당자 && String(row._담당자).trim()),
                 project: ctx.project || '',
                 local: !!ctx.local,          // 열린 프로젝트의 행인가(#G 링크는 그때만 뜻이 있다)
                 status: (ci.status != null && ci.status !== -1) ? String(row[ci.status] || '').trim() : '',
@@ -1056,10 +1058,21 @@
      *    ⚠️ 쓰기는 **지금 열린 프로젝트 행만**(다른 프로젝트 파일을 고치면 그걸 열어 둔 앱이 옛 값으로 되돌린다).
      *    표의 담당자는 저장된 요약이 아니라 **지금 사실**에서 다시 읽는다 — 간트를 고치면 표가 바로 따라온다.
      */
-    function liveFacts(r) {
+    function factForRef(x) {
         var m = (_psLast && _psLast.factByKey) || {};
-        return uniqRefs(r.refs).map(function (x) { return m[fnv8(refKeyRaw(x))]; }).filter(Boolean);
+        {
+            var f = m[fnv8(refKeyRaw(x))];
+            // ⚠️ 행 번호가 밀렸으면(요약 뒤에 행을 넣거나 지움) 같은 번호의 **다른 업무**가 잡힌다 —
+            //    업무명이 다르면 같은 프로젝트에서 업무명이 **하나뿐인** 사실을 찾는다(쓰기 쪽 resolveGanttRows 와 같은 규칙).
+            if (f && x.task && f.task !== x.task) f = null;
+            if (!f && x.task) {
+                var hits = Object.keys(m).map(function (k) { return m[k]; }).filter(function (y) { return y.project === x.p && y.task === x.task; });
+                if (hits.length === 1) f = hits[0];
+            }
+            return f || null;
+        }
     }
+    function liveFacts(r) { return uniqRefs(r.refs).map(factForRef).filter(Boolean); }
     function peopleOf(r) {
         var fs = liveFacts(r);
         if (!fs.length) return r.people || [];
@@ -1080,26 +1093,25 @@
             return '<span title="' + esc(why) + '">' + txt + '</span>';
         }
         var meta = window.projectMeta || {}, m3 = (window.tabData && window.tabData.projectMembers3) || [];
-        var cur = roles.length === 1 ? roles[0] : '';
+        var manualNow = liveFacts(r).some(function (f) { return f.manual; });
+        var cur = (!manualNow && roles.length === 1) ? roles[0] : '';
         var opts = (window.WBS_DISCIPLINE_CATEGORIES || []).map(function (c) {
             var who = roleOwner(c, meta, m3);
             return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c + (who ? ' · ' + who : '')) + '</option>';
         }).join('');
-        // 역할이 여럿(근거 행마다 다름)이면 첫 칸에 그대로 보여 주고, 고르면 전부 그 역할로 맞춘다.
-        if (cur === '') opts = '<option value="" selected>' + esc((roles.length ? roles.join(', ') : T('(없음)', '(none)')) + (ppl.length ? ' · ' + ppl.join(', ') : '')) + '</option>' + opts;
+        // 첫 칸 — 직접 지정이면 "👤 이름", 역할이 여럿이면 그대로(고르면 전부 그 역할로 맞춘다).
+        if (cur === '') opts = '<option value="" selected>' + esc(manualNow ? '👤 ' + ppl.join(', ') : ((roles.length ? roles.join(', ') : T('(없음)', '(none)')) + (ppl.length ? ' · ' + ppl.join(', ') : ''))) + '</option>' + opts;
+        // 👤 [2026-11-23] 담당자 직접 입력 / 해제 — 간트 행의 `_담당자` 에 쓴다(js/04k setRowAssignee).
+        opts += '<option value="__manual__">' + esc(T('✏️ 담당자 직접 입력…', '✏️ Type assignee…')) + '</option>';
+        if (manualNow) opts += '<option value="__clear__">' + esc(T('↺ 직접 지정 해제(역할로)', '↺ Clear (use role)')) + '</option>';
         // 칸 하나 — 고르기 상자 자체가 "역할 · 이름" 을 보여 준다(행 높이를 늘리지 않는다).
-        return '<select onchange="window._psSetRole(' + ai + ', this.value)" title="' + esc(T('담당 구분 바꾸기 — 간트 행에 바로 반영됩니다', 'Change role — written to the Gantt row')) + '" style="' + window._uiSelectStyle(false) + ' height:20px; font-size:11px; max-width:140px; cursor:pointer;">' + opts + '</select>';
+        return '<select onchange="window._psSetRole(' + ai + ', this.value)" title="' + esc(T('담당 구분 바꾸기 또는 담당자 직접 입력 — 간트 행에 바로 반영됩니다', 'Change role or type an assignee — written to the Gantt row')) + '" style="' + window._uiSelectStyle(manualNow) + ' height:20px; font-size:11px; max-width:140px; cursor:pointer;">' + opts + '</select>';
     }
-    window._psSetRole = function (ai, role) {
-        var r = _psLast && _psLast.shown && _psLast.shown.rows && _psLast.shown.rows[ai];
-        if (!r || !role) return;
-        var refs = localRefs(r);
-        if (!refs.length) return;
-        var n = 0, lost = 0;
+    /** 이 요약 행의 근거 → 지금 간트의 행 번호들. 행 번호가 밀렸으면 업무명이 **하나뿐인** 행을 찾고, 없으면 빼고 센다. */
+    function resolveGanttRows(r) {
         var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
-        refs.forEach(function (x) {
-            // ⚠️ 행 번호는 **요약을 만들 때(또는 저장된 파일)** 의 번호다 — 그 뒤 행을 넣거나 지웠으면 밀린다.
-            //    쓰기 전에 업무명이 맞는지 보고, 틀리면 업무명이 **딱 하나** 같은 행을 찾는다. 없으면 쓰지 않는다.
+        var out = [], lost = 0;
+        localRefs(r).forEach(function (x) {
             var ri = x.row;
             if (!gd || !gd[ri] || (x.task && taskName(gd[ri]) !== x.task)) {
                 ri = -1;
@@ -1107,19 +1119,44 @@
                 for (var i = 1; x.task && gd && i < gd.length; i++) if (gd[i] && gd[i]._level !== undefined && taskName(gd[i]) === x.task) hits.push(i);
                 if (hits.length === 1) ri = hits[0];
             }
-            if (ri < 0) { lost++; return; }
-            if (String(gd[ri]._담당구분 || '') !== role) { window.setWbsDiscipline(ri, role); n++; }
+            if (ri < 0) lost++; else if (out.indexOf(ri) === -1) out.push(ri);
         });
-        if (lost && window.showToast) window.showToast(T('⚠️ 근거 행 ' + lost + '개는 간트에서 같은 업무를 찾지 못해 바꾸지 않았습니다', '⚠️ ' + lost + ' source row(s) not found in the Gantt — skipped'), 'info');
-        var who = roleOwner(role, window.projectMeta || {}, (window.tabData && window.tabData.projectMembers3) || []);
-        if (window.showToast) window.showToast(n ? T('✅ 간트 ' + n + '행의 담당 구분을 ' + role + (who ? '(' + who + ')' : '') + ' 로 바꿨습니다', 'Changed ' + n + ' Gantt row(s) to ' + role)
-                                               : T('이미 그 담당 구분입니다', 'Already that role'), 'info');
+        return { rows: out, lost: lost, gd: gd };
+    }
+    window._psSetRole = function (ai, role) {
+        var r = _psLast && _psLast.shown && _psLast.shown.rows && _psLast.shown.rows[ai];
+        if (!r || !role) return;
+        var res = resolveGanttRows(r), gd = res.gd, n = 0, msg = '';
+        if (!res.rows.length && !res.lost) return;
+        if (role === '__manual__') {
+            var curNames = peopleOf(r).join(', ');
+            var v = prompt(T('담당자 이름(여러 명은 쉼표). 비우면 담당 구분(역할)으로 되돌립니다.', 'Assignee name (comma for several). Empty = back to the role.'), curNames);
+            if (v === null) { if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody(); return; }
+            res.rows.forEach(function (ri) { if (window.setRowAssignee(ri, v)) n++; });
+            msg = String(v).trim() ? T('✅ 간트 ' + n + '행의 담당자를 ' + String(v).trim() + ' 로 직접 지정했습니다', 'Set assignee on ' + n + ' row(s)') : T('✅ 간트 ' + n + '행을 담당 구분(역할)으로 되돌렸습니다', 'Cleared ' + n + ' row(s)');
+        } else if (role === '__clear__') {
+            res.rows.forEach(function (ri) { if (window.setRowAssignee(ri, '')) n++; });
+            msg = T('✅ 간트 ' + n + '행의 직접 지정을 해제했습니다(역할로)', 'Cleared ' + n + ' row(s)');
+        } else {
+            res.rows.forEach(function (ri) {
+                // 역할을 고르면 직접 지정은 푼다 — 안 풀면 이름이 그대로라 "골랐는데 안 바뀐다" 가 된다.
+                var changed = false;
+                if (gd[ri]._담당자 && window.setRowAssignee) changed = window.setRowAssignee(ri, '') || changed;
+                if (String(gd[ri]._담당구분 || '') !== role) { window.setWbsDiscipline(ri, role); changed = true; }
+                if (changed) n++;
+            });
+            var who = roleOwner(role, window.projectMeta || {}, (window.tabData && window.tabData.projectMembers3) || []);
+            msg = n ? T('✅ 간트 ' + n + '행의 담당 구분을 ' + role + (who ? '(' + who + ')' : '') + ' 로 바꿨습니다', 'Changed ' + n + ' Gantt row(s) to ' + role) : T('이미 그 담당 구분입니다', 'Already that role');
+        }
+        if (res.lost && window.showToast) window.showToast(T('⚠️ 근거 행 ' + res.lost + '개는 간트에서 같은 업무를 찾지 못해 바꾸지 않았습니다', '⚠️ ' + res.lost + ' source row(s) not found in the Gantt — skipped'), 'info');
+        if (window.showToast) window.showToast(msg, 'info');
         if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
     };
     /** 🎯 근거 = 아래 사실 카드로 가는 단추(간트 이동은 카드의 #G 링크가 한다). */
     function refHtml(x, showProj, rowI) {
         var title = esc((x.p ? x.p + ' · ' : '') + (x.task || '') + ' — ' + T('눌러서 상세 보기', 'click for details'));
-        var key = fnv8(refKeyRaw(x));
+        var lf = factForRef(x);
+        var key = lf ? factKey(lf) : fnv8(refKeyRaw(x));   // 행 번호가 밀렸어도 그 업무의 카드로
         return '<a href="javascript:void(0)" onclick="window._psGoFact(\'' + key + '\', ' + rowI + ')" title="' + title + '" style="color:#1971c2; text-decoration:underline dotted; white-space:nowrap; cursor:pointer;">' +
                (showProj ? esc(x.p || '?') + ' ' : '') + '#' + esc(x.row != null ? x.row : x.g) + '</a>';
     }

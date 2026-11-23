@@ -137,6 +137,19 @@
             // ⚠️ textContent 로 보면 고르기 상자의 **모든 선택지** 글자가 잡혀 늘 통과한다 — 고른 값을 본다.
             var sel2 = document.querySelector('#ps-ai-tr0-who select') || document.querySelector('#ps-row-0 td:nth-child(3) select');
             ok('표가 바뀐 담당 구분을 바로 보여 준다', !!sel2 && sel2.value === 'FW', sel2 && sel2.value);
+            // 👤 담당자 직접 입력 → 간트 행 `_담당자` → 사실·표가 그 이름을 쓴다(역할보다 먼저)
+            var realSetAsg = window.setRowAssignee, realPrompt = window.prompt, asgCalls = [];
+            window.setRowAssignee = function (ri, v) { asgCalls.push([ri, v]); var t = String(v || '').trim(); if (t) window.globalData[ri]._담당자 = t; else delete window.globalData[ri]._담당자; return true; };
+            window.prompt = function () { return '홍길동'; };
+            try {
+                window._psSetRole(0, '__manual__');
+                ok('직접 입력은 근거 간트 행의 담당자로 저장된다', asgCalls.length === 1 && asgCalls[0][0] === 1 && window.globalData[1]._담당자 === '홍길동', asgCalls);
+                ok('사실의 업무 담당자가 직접 지정 이름이 된다', window._psCollectFacts('day').facts.some(function (f) { return f.assignee === '홍길동' && f.manual; }));
+                var sel3 = document.querySelector('#ps-row-0 td:nth-child(3) select');
+                ok('표에 👤 이름으로 보인다', !!sel3 && /👤 홍길동/.test(sel3.selectedOptions[0].textContent), sel3 && sel3.selectedOptions[0].textContent);
+                window._psSetRole(0, '__clear__');
+                ok('해제하면 역할로 돌아간다', !window.globalData[1]._담당자 && !window._psCollectFacts('day').facts.some(function (f) { return f.manual; }));
+            } finally { window.setRowAssignee = realSetAsg; window.prompt = realPrompt; delete window.globalData[1]._담당자; }
         } finally { window.setWbsDiscipline = realSetDisc; window.globalData[1]._담당구분 = 'HW'; }
         // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
         var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },

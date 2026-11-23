@@ -313,6 +313,15 @@ m11 = my_msg()[-1] if my_msg() else ''
 ok('옛 이름으로는 못 읽어도 id 로 다시 찾아 업무를 담는다', 'PM 이사간 업무 오늘 마감' in m11, m11)
 ok('errors 로 세지 않는다(다시 찾아 읽었으니 실패가 아니다)', r11.get('projectsFailed', 0) == 0, r11)
 
+# 👤 [2026-11-23] 담당자 직접 지정(`_담당자`)은 역할보다 먼저 — 프런트 js/59 isMine·js/62 와 같은 규칙.
+_r1 = row(1, '직접 지정 업무', 'FW', TODAY, TODAY)
+_r1['_담당자'] = '홍길동, 김철수'
+_r2 = row(1, '역할 업무', 'FW', TODAY, TODAY)
+_items = B._brief_scan_project(project_doc([_r1, _r2], meta={'FW담당자': '박용훈'}), 'P')
+_by = {it['name']: it['who'] for it in _items}
+ok('직접 지정이 있으면 그 이름만(역할 담당자는 빠진다)', _by.get('직접 지정 업무') == {'홍길동', '김철수'}, _by)
+ok('직접 지정이 없으면 예전처럼 역할로', _by.get('역할 업무') == {'박용훈'}, _by)
+
 try:
     os.remove(STATE)
 except OSError:

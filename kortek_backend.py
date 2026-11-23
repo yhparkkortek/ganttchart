@@ -1892,7 +1892,12 @@ def _brief_scan_project(doc, project):
         _ctext = str(row[c_content] or '') if (c_content is not None and c_content < len(row)) else ''
         is_mail = ('[출처]' in _ctext) or ('[핵심내용]' in _ctext)
         who = set()
-        disc = str(obj.get('_담당구분') or '').strip()
+        # 👤 [2026-11-23] 담당자 직접 지정(`_담당자`, 프런트 js/04k setRowAssignee)이 있으면 그 이름이 역할보다 먼저.
+        #    프런트 js/59 isMine·js/62 와 **같은 규칙**(사본) — 한쪽만 고치면 화면과 텔레그램이 갈린다.
+        manual = str(obj.get('_담당자') or '').strip()
+        disc = '' if manual else str(obj.get('_담당구분') or '').strip()
+        for nm in _brief_split_names(manual):
+            who.add(nm.lower())
         for part in disc.split(','):
             role = part.strip()
             if not role:

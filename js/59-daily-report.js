@@ -538,6 +538,13 @@
     function isMine(row, ctx) {
         var names = myNames();
         if (!Object.keys(names).length) return false;
+        // 👤 [2026-11-23] 담당자 직접 지정(`row._담당자`, js/04k setRowAssignee)이 있으면 그 이름이 **이긴다**(역할은 안 본다).
+        var ov = row && row._담당자 ? String(row._담당자).trim() : '';
+        if (ov) {
+            var ovList = (typeof window._addrSplitNames === 'function') ? window._addrSplitNames(ov) : ov.split(',');
+            for (var k = 0; k < ovList.length; k++) if (names[String(ovList[k] || '').trim().toLowerCase()]) return true;
+            return false;
+        }
         var disc = row && row._담당구분;
         if (!disc) return false;
         // ⚠️ `SAL` 과 `영업` 이 같이 있다(실측 362/26) — 정규화 전 비교는 조용히 빗나간다.

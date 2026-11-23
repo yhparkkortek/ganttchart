@@ -405,7 +405,8 @@
         const cur = sel.value;
         const cats = window.WBS_DISCIPLINE_CATEGORIES;
         sel.innerHTML = cats.map(c => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('')
-            + (cats.indexOf(cur) === -1 ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(cur)}</option>` : '');
+            + (cats.indexOf(cur) === -1 ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(cur)}</option>` : '')
+            + `<option value="__assignee__">${window._currentLang === 'en' ? '👤 Set assignee…' : '👤 담당자 직접 입력…'}</option>`;
     };
     window._wbsDisciplineWidest = function() {
         return window.WBS_DISCIPLINE_CATEGORIES.reduce((a, b) => (b.length > a.length ? b : a), '');
@@ -445,7 +446,35 @@
     //    상세내용에 [담당구분]... 태그가 이미 있으면 그 값도 같이 바꿔서 서로 어긋나지 않게 한다
     //    (태그가 원래 없던 수동 입력 업무는 새로 끼워넣지 않음). 기존엔 클릭할 때마다 다음 구분으로
     //    순환하는 toggleWbsDiscipline()이었으나, 목록에서 바로 골라 지정하는 방식으로 바뀌었다.
+    // 👤 [2026-11-23 사용자 요청 "업무 담당자를 수기로"] 행마다 **담당자 직접 지정**(`row._담당자`, 쉼표 다중).
+    //    있으면 담당 구분(역할)→프로젝트 멤버로 푸는 규칙보다 **먼저** 쓴다 — AI 요약(js/62)·일일보고(js/59 isMine)·
+    //    아침 브리핑(kortek_backend.py `_brief_scan_project`, 파이썬 사본) 세 곳이 같은 규칙이다(한 곳만 고치면 갈린다).
+    //    저장은 행의 `_` 속성이라 저장·엑셀 왕복·되돌리기가 그대로 따라온다(js/04c _serializeGD).
+    window.setRowAssignee = function(rowIndex, name) {
+        const row = globalData[rowIndex];
+        if (!row) return false;
+        const cur = String(row._담당자 || '').trim();
+        const next = String(name || '').replace(/\s*,\s*/g, ', ').trim();
+        if (cur === next) return false;
+        if (next) row._담당자 = next; else delete row._담당자;
+        logChange(rowIndex, -1, '담당자', (cur || '(역할로)') + ' → ' + (next || '(역할로)'));
+        renderTable(globalData);
+        applyFilters();
+        return true;
+    };
+    window.editRowAssignee = function(rowIndex) {
+        const row = globalData[rowIndex];
+        if (!row) return;
+        const cur = String(row._담당자 || '').trim();
+        const v = prompt(window._currentLang === 'en'
+            ? 'Assignee name (comma for several). Leave empty to go back to the role.'
+            : '담당자 이름(여러 명은 쉼표). 비우면 담당 구분(역할)으로 되돌립니다.', cur);
+        if (v === null) { renderTable(globalData); applyFilters(); return; }   // 취소 — 드롭다운 표시만 되돌린다
+        if (!window.setRowAssignee(rowIndex, v)) { renderTable(globalData); applyFilters(); }
+    };
+
     window.setWbsDiscipline = function(rowIndex, next) {
+        if (next === '__assignee__') { window.editRowAssignee(rowIndex); return; }   // 드롭다운 맨 아래 "👤 직접 입력"
         const row = globalData[rowIndex];
         if (!row || !next) return;
         const cur = row._담당구분 || window._extractDisciplineFromContent(row) || '';

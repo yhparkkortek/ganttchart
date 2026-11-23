@@ -2139,6 +2139,11 @@
                         //    숨은 "가장 긴 값" 옵션은 폭을 채운 뒤와 똑같이 맞추려는 것(누를 때 배지가 안 움직이게).
                         const _wbsDisciplineOpts = `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option><option hidden disabled>${window._wbsDisciplineWidest()}</option>`;
                         const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onfocus="window._wbsDisciplineFillOpts(this)" onclick="event.stopPropagation();" onmousedown="window._wbsDisciplineFillOpts(this); event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Select discipline' : '담당구분 선택'}">${_wbsDisciplineOpts}</select>`;
+                        // 👤 [2026-11-23] 담당자 직접 지정이 있는 행만 이름 배지(누르면 고친다) — 없는 행은 아무것도 안 그린다(행 수만큼 비용이 늘지 않게).
+                        const _rowAssignee = row._담당자 ? String(row._담당자).trim() : '';
+                        const wbsAssigneeBadge = _rowAssignee
+                            ? `<span class="wbs-assignee-badge" onclick="window.editRowAssignee(${i}); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Assignee set by hand — click to edit' : '담당자 직접 지정 — 누르면 고칩니다(비우면 역할로)'}" style="margin-left:3px; padding:0 6px; border-radius:9px; background:#fff3bf; color:#8f5a00; font-size:10.5px; cursor:pointer; white-space:nowrap;">👤 ${escapeHtml(_rowAssignee)}</span>`
+                            : '';
                         const _levelConnectorHtml = row._level > 0
                             ? `<span class="wbs-lv-num">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '';
@@ -2177,9 +2182,9 @@
                         let wbsInnerHtml;
                         if (transModeWbs > 0 && taskTxt.trim() !== '') {
                             let safeTextWbs = encodeURIComponent(taskTxt).replace(/'/g, "%27").replace(/\\/g, "\\\\");
-                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print trans-btn-wbs" data-trans-mode="' + transModeWbs + '" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>' + wbsDisciplineBadge;
+                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print trans-btn-wbs" data-trans-mode="' + transModeWbs + '" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>' + wbsDisciplineBadge + wbsAssigneeBadge;
                         } else {
-                            wbsInnerHtml = prefix + escapeHtml(taskTxt) + wbsDisciplineBadge;
+                            wbsInnerHtml = prefix + escapeHtml(taskTxt) + wbsDisciplineBadge + wbsAssigneeBadge;
                         }
                         bodyHtml += `<td class="wbs-cell wbs-lv${_wbsLv}${_wbsHasChildren ? ' wbs-has-kids' : ''}"${wbsAttrs}>${wbsInnerHtml}${wbsHiddenCountHtml}${wbsBranchArrowHtml}</td>`;
                         continue; 
