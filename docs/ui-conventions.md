@@ -146,8 +146,8 @@ window.CP_ROLES.forEach(r => { compGen[r.key] = window._cpHslToHex(compHue, r.s,
 
 **새 모달을 만들 때 반드시 아래 패턴을 그대로 따를 것** — 기존 모달과 UI 일관성을 유지하기 위함.
 
-#### 헤더 색상 구분
-- **AI 관련 모달** (AI 분석·요약·미리보기 등): **하늘색**
+#### 헤더 색상 구분 — **이 두 색뿐이다** (2026-11-23 전수 통일)
+- **AI 관련 모달** (AI 분석·요약·미리보기 등) + **외부 시스템 연동 모달**(SAP 로그인·자재 보관함·JIRA): **하늘색**
   ```css
   background: #e7f3ff; border-bottom: 1px solid #a5c8f0; color: #1971c2;
   ```
@@ -155,6 +155,13 @@ window.CP_ROLES.forEach(r => { compGen[r.key] = window._cpHslToHex(compHue, r.s,
   ```css
   background: #fff8e6; border-bottom: 1px solid #ffe08a; color: #7a5210;
   ```
+- **헤더 공통**: `padding:13px 18px; font-weight:bold; font-size:14px; border-radius:10px 10px 0 0; cursor:grab;`
+  (`cursor:move` 금지 — 저장소 관례는 손 모양 `grab`). id 는 상자 `xxx-box`, 헤더(드래그 손잡이) `xxx-drag`.
+- ⚠️⚠️ **모달 테두리는 헤더 *아래선* 색을 그대로 따라간다**(js/19 `_mreszHeaderBg` → `_mreszApplyBorder`).
+  그래서 청록 `#cfe3e5` 같은 옅은 아래선을 쓰면 테두리가 흰 배경에 묻혀 **없는 것처럼** 보인다 —
+  2026-11-23 JIRA 모달 4개가 그랬다(실측 rgb(213,223,230)). 연두·청록·보라 헤더 6개도 같은 날 위 두 색으로 맞췄다.
+  ⚠️ 페이지 안 패널·표 머리글의 청록(`#eef6f7`/`#cfe3e5`)은 팔레트를 따르는 **다른 자리**다 — 그걸 근거로
+  "청록도 모달 관례"라고 판단하지 말 것(그 판단으로 한 번 통일이 빠졌다).
 
 #### 구조 패턴 (투명 래퍼 + 내부 박스)
 ```javascript
@@ -173,13 +180,16 @@ window._bindClickToFront('outer-wrap-id');                  // 클릭 시 최상
 window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시 최상단
 ```
 
-#### 닫기 버튼 스타일 — 반드시 CSS 변수 사용
+#### 닫기 버튼 스타일 — 반드시 CSS 변수 사용, 크기는 28×28·16px 고정
 ```html
 <!-- _makeMinimizable 이 버튼을 style 문자열에서 'modal-icon-bg'로 탐지함 — 변수 필수 -->
 <button style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);
                color:var(--modal-icon-text); border-radius:6px; font-size:16px;
                cursor:pointer; width:28px; height:28px;">✕</button>
 ```
+- 최소화(⌄) 버튼은 `_makeMinimizable`이 **닫기 버튼 style 을 그대로 복사**해 만든다 — 닫기 크기가
+  틀리면 최소화도 같이 틀린다(2026-11-23: AI 문답 26×26, 글자 15px·누락 3곳을 맞췄다).
+- 하단 작업표시줄 칩의 ▲/✕(`_modalIconBtn`, 24×24)는 모달 헤더가 아니라 다른 자리라 예외.
 
 #### 헤더의 보조 액션 버튼(새로고침·내보내기·프롬프트편집 등) — 테두리 없이, hover는 배경만 (2026-09-22 추가, 22일 정정)
 **닫기(✕) 버튼뿐 아니라 헤더에 두는 다른 버튼도 전부 hover 필수** — 이 규칙이 "닫기 버튼 스타일"
@@ -198,7 +208,10 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 
 #### 모달 크기 조절 / 이동 / 배경 조작
 - 위 구조(투명 래퍼 + `resize:both`)를 따르면 자동으로 적용됨
-- 헤더에 `cursor:grab; user-select:none;` 추가 권장
+- 헤더에 `cursor:grab` 필수(`user-select:none;`은 권장)
+- ⚠️ `cursor:grab` 을 그려 놓고 `_makeDraggable` 을 안 부르면 **손 모양만 뜨고 안 끌린다**
+  (2026-11-23 내 팀 설정·다른 프로젝트 라벨 불러오기 — 테두리·리사이즈·최소화도 같이 빠져 있었다).
+  innerHTML 을 매번 다시 그리는 모달은 그릴 때마다 `_makeDraggable` 을 다시 부를 것(JIRA 상세 모달과 같은 방식).
 
 ## 📄 한 장으로 내보내기 (`spec.onePage`, js/42) — 2026-10-22
 
