@@ -541,6 +541,30 @@ window._tiBuildSummaryHtml = function(items) {
             : '') +
         `</div>`;
 
+    // 🆕 [2026-11-23] 새 프로젝트 제안 — 대기 카드 여러 장이 **어느 프로젝트에도 없는** 모델 코드·관리번호를
+    //    같은 고객사 안에서 되풀이하면 한 줄로 알린다(판정은 js/74, AI 0회). 누르면 마법사가 미리 채워져 열리고,
+    //    만드는 건 사람(마법사 + 관리자 비밀번호). 후보 목록이 아직 없으면 뒤에서 읽고 다시 그린다.
+    const _npList = (window.mailRouteNewProjectProposals && window.mailRouteTeamCandsSync)
+        ? (function() {
+            const c = window.mailRouteTeamCandsSync(function() { if (window.renderTaskInbox) window.renderTaskInbox(); });
+            return c ? window.mailRouteNewProjectProposals(items, c) : [];
+        })()
+        : [];
+    window._tiNpProposals = _npList;
+    _npList.slice(0, 3).forEach(function(np) {
+        const clueTxt = np.clues.map(t => /^\d/.test(t) ? '#' + t : t).join(' · ');
+        const tip = (np.subjects || []).slice(0, 6).join('\n');
+        html += `<div style="margin-top:6px;padding:5px 8px;background:#fff8e6;border:1px solid #f3d48a;border-radius:6px;" title="${escapeHtml(tip)}">` +
+            `🆕 ${_en ? 'New project?' : '새 프로젝트 제안'}: <b>${escapeHtml(np.customer)} ${escapeHtml(clueTxt)}</b> — ` +
+            `${_en ? 'no project has these; ' + np.cards.length + ' pending cards mention them' : '어느 프로젝트에도 없는 단서 · 대기 카드 ' + np.cards.length + '장'}` +
+            (np.prefill.assignee ? ` · ${_en ? 'owner' : '담당'} ${escapeHtml(np.prefill.assignee)}` : '') + ` ` +
+            `<span class="ti-newproj" data-key="${escapeHtml(np.key)}" title="${_en ? 'Open the new-project wizard pre-filled with these values (you still confirm and save)' : '이 값으로 채운 새 프로젝트 마법사를 엽니다 (확인·저장은 직접)'}" ` +
+            `style="display:inline-block;background:#e8f4fd;color:#1a4f7a;border:1px solid #a5c8f0;border-radius:10px;padding:1px 8px;margin-left:4px;font-size:11px;cursor:pointer;white-space:nowrap;">` +
+            `➕ ${_en ? 'Create' : '만들기'}</span>` +
+            `<span class="ti-newproj-x" data-key="${escapeHtml(np.key)}" title="${_en ? 'Hide this suggestion (this PC)' : '이 제안 숨기기 (이 PC)'}" ` +
+            `style="margin-left:6px;color:#999;cursor:pointer;font-size:11px;">✕</span></div>`;
+    });
+
     // 💡 [2026-09-06 개선] "자리를 많이 차지한다"는 피드백 — 기본으로는 위 상태별 건수 줄만 보이고,
     //    상태 칩을 클릭해 그 상태로 필터링된 동안에만(=아코디언, 한 번에 하나) 그 상태의 프로젝트별
     //    세부 집계를 펼쳐 보여준다. 별도 펼침 상태를 안 두고 window._tiFilter.status를 그대로 재사용 —
@@ -618,6 +642,23 @@ window._tiRejudgeNow = async function() {
         : (_en ? `🧭 Re-judged ${looked} — placed ${placed}` : `🧭 ${looked}건 재판정 — ${placed}건 배치`));
 };
 
+// 🆕 [2026-11-23] 새 프로젝트 제안 → 마법사. 지금 열린 프로젝트는 탭에 남기고 새 빈 시트로 연다
+//    (_ibStartNewProjectFromMismatch·js/29 와 같은 순서). 등록(첫 저장)이 성공하면 js/28 이 _npwOnCreated 를 불러
+//    후보 캐시를 버리고 재판정한다 — 새 프로젝트의 키워드(K27·502246)로 그 카드들이 들어간다.
+window._tiNewProjectOpen = function(key) {
+    const np = (window._tiNpProposals || []).find(function(x) { return x.key === key; });
+    if (!np || !window._npwOpen) return;
+    window._npwOnCreated = function() {
+        if (window.mailRouteTeamCandsReset) window.mailRouteTeamCandsReset();
+        window._projectIndexCache = { data: null, at: 0 };
+        // 색인 갱신(저장 직후 백그라운드)이 끝날 틈을 준다
+        setTimeout(function() { if (window._tiRejudgeNow) window._tiRejudgeNow(); }, 4000);
+    };
+    if (window._openAsNewSheet) window._openAsNewSheet('new_' + Date.now(), null, null);
+    if (window._resetToBlankNoConfirm) window._resetToBlankNoConfirm(true);
+    window._npwOpen(Object.assign({}, np.prefill), 'MP(EC)');
+};
+
 window.renderTaskInbox = function() {
     const listEl = document.getElementById('inbox-list');
     if (!listEl) return;
@@ -650,6 +691,10 @@ window.renderTaskInbox = function() {
                 }
                 if (e.target.closest('.ti-undo-del')) { window._tiUndoBulkDelete(); return; }
                 if (e.target.closest('.ti-rejudge')) { window._tiRejudgeNow(); return; }
+                const npEl = e.target.closest('.ti-newproj');
+                if (npEl) { window._tiNewProjectOpen(npEl.dataset.key); return; }
+                const npX = e.target.closest('.ti-newproj-x');
+                if (npX) { if (window.mailRouteNewProjectHide) window.mailRouteNewProjectHide(npX.dataset.key); window.renderTaskInbox(); return; }
                 const chipEl = e.target.closest('.ti-chip');
                 if (!chipEl) return;
                 window._tiSetFilter(chipEl.dataset.status || null, chipEl.dataset.project || null);

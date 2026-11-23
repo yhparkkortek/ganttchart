@@ -1267,5 +1267,180 @@
             window.STORAGE_REGISTRY.push({ key: P.offKey, label: '메일 배분 판정 끄기 스위치', labelEn: 'Mail routing kill switch', cls: 'setting', strategy: { type: 'keep' } });
         }
     } catch (e) { /* 레지스트리 없음 */ }
+    // ══════════════════════════════════════════════════════════════════════
+    // 🆕 [2026-11-23 사용자 요청] 새 프로젝트 제안 — **AI 없이** 보관함 대기 카드에서 찾는다.
+    //  실측(K27): 대기 카드 5장이 '어느 프로젝트에도 없는' 모델 코드(K27)·관리번호(#502246)를 되풀이했다.
+    //  그런 단서를 **같은 고객사 안에서** 2장 이상이 나눠 가지면 "새 프로젝트가 필요해 보인다" 로 묶고,
+    //  마법사에 넣을 값(고객사·모델·키워드·KTK PN·담당자)을 메일에서 그대로 꺼낸다.
+    //  ⚠️ 프로젝트를 만드는 건 여전히 사람 — 마법사 + 관리자 비밀번호. 여기는 **제안만** 한다.
+    //  ⚠️ Phase 9(js/29)와 다르다: 그쪽은 AI 판정을 스윕마다 돌려 하루 한도를 태웠다(2026-10-21). 여긴 AI 0회.
+    // ══════════════════════════════════════════════════════════════════════
+    P.newProjectMinCards = P.newProjectMinCards || 2;          // 같은 단서를 나눠 가진 대기 카드가 이만큼이면 제안
+    /** 모델 코드로 보지 않을 앞글자(데이터) — 'ALT3'·'PO21'·'FY26'·'W47' 같은 것 */
+    window.MAIL_ROUTING_NEWPROJ_STOP = window.MAIL_ROUTING_NEWPROJ_STOP ||
+        ['ALT', 'PO', 'PI', 'FY', 'Q', 'W', 'WK', 'CW', 'R', 'REV', 'V', 'VER', 'NO', 'NR', 'RE', 'FW', 'ID', 'EA', 'PCS', 'H', 'M', 'D', 'T', 'P', 'S', 'X'];
+    function npKnownTokens(cands) {
+        // ⚠️ 낱말 단위로 본다 — 이어 붙인 문자열의 부분일치로 보면 'LANDMARK276' 안의 'k27' 때문에 K27 이 '아는 단어' 가 됐다(실측).
+        var hay = ' ' + cands.map(function (c) { return [c.model, c.customer, c.file_name].concat(c.keywords || []).join(' '); }).join(' ').toLowerCase().replace(/[^0-9a-z가-힣]+/g, ' ') + ' ';
+        var codes = {};
+        cands.forEach(function (c) { (c.keywords || []).forEach(function (k) { (String(k).match(/\d{6}/g) || []).forEach(function (x) { codes[x] = 1; }); }); });
+        return { hay: hay, codes: codes };
+    }
+    /** 한 메일에서 "어느 프로젝트에도 없는" 단서 — 제목의 모델 코드(K27), 제목·본문의 관리번호(50xxxx) */
+    function npUnknownClues(subject, body, known) {
+        var out = [], seen = {};
+        var STOP = {}; window.MAIL_ROUTING_NEWPROJ_STOP.forEach(function (w) { STOP[String(w).toUpperCase()] = 1; });
+        var re = /(^|[^A-Za-z0-9])([A-Z]{1,3})(\d{2,3})(?![0-9A-Za-z])/g, m;
+        while ((m = re.exec(String(subject || '')))) {
+            var tok = m[2] + m[3];
+            if (STOP[m[2]] || seen[tok] || known.hay.indexOf(' ' + tok.toLowerCase() + ' ') !== -1) continue;
+            seen[tok] = 1; out.push({ kind: 'model', tok: tok });
+        }
+        var reN = /(^|[^0-9])(50\d{4})(?![0-9])/g;
+        var txt = String(subject || '') + '\n' + String(body || '');
+        while ((m = reN.exec(txt))) {
+            if (seen[m[2]] || known.codes[m[2]]) continue;
+            seen[m[2]] = 1; out.push({ kind: 'code', tok: m[2] });
+        }
+        return out;
+    }
+    /** 메일이 어느 고객사 얘긴가 — 후보들의 고객사 첫 마디 중 **하나만** 걸려야 한다(둘이면 모른다) */
+    function npCustomerOf(raw, cands) {
+        var roots = {};
+        cands.forEach(function (c) { var r = customerRoot(c.customer); if (r && r.length >= 3 && !SELF[r] && !isCatchAll(c)) roots[r] = 1; });   // 우리 회사(서명마다 나온다)·잡무는 고객사 아님
+        var hay = buildHay(raw), hr = raw.replace(/\s+/g, ' ');
+        var hits = Object.keys(roots).filter(function (r) { return hit(hay, hr, r); });
+        // 'lnw' 와 'lnwsg' 가 함께 걸리면 긴 쪽(더 구체적)이 이긴다
+        hits = hits.filter(function (r) { return !hits.some(function (o) { return o !== r && o.indexOf(r) === 0; }); });
+        return hits.length === 1 ? hits[0] : '';
+    }
+    function npCustomerLabel(root, cands) {
+        var cnt = {};
+        cands.forEach(function (c) { if (customerRoot(c.customer) === root) { var l = String(c.customer || '').split('>')[0].trim(); if (l) cnt[l] = (cnt[l] || 0) + 1; } });
+        var ks = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; });
+        return ks[0] || root.toUpperCase();
+    }
+    /** 담당자 — 카드들을 보낸 **사내** 사람 중 주소록에서 우리 팀인 사람(가장 자주 나온 사람). 모르면 ''(지어내지 않는다) */
+    function npAssignee(cards, team) {
+        var book = (window.tabData && window.tabData.addressBook) || [];
+        if (!book.length || !team) return '';
+        var cnt = {};
+        cards.forEach(function (it) {
+            var s = String((it.mailRaw && it.mailRaw.sender) || '');
+            var em = (s.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/) || [''])[0].toLowerCase();
+            if (!em) return;
+            var p = book.find(function (x) { return String(x.email || '').toLowerCase() === em; });
+            if (p && p.name && String(p.dept || '').indexOf(team) !== -1) cnt[p.name] = (cnt[p.name] || 0) + 1;
+        });
+        var ks = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; });
+        if (ks.length) return ks[0];
+        // 보낸 사람 중 우리 팀이 없으면 — 본문에 이름이 나온 우리 팀 사람("임희철매니저님" 처럼). 카드 **2장 이상**에 나와야 한다
+        //  (한 장뿐이면 지나가는 참조일 수 있다). 그래도 없으면 비워 둔다 — 사람이 마법사에서 고른다.
+        //  이름 = 부서인 행(그룹 메일 주소)은 사람이 아니다. 여러 명이 같은 장수면 비운다.
+        var mates = book.filter(function (x) { var n = String(x.name || '').trim(); return n.length >= 2 && n !== String(x.dept || '').trim() && String(x.dept || '').indexOf(team) !== -1; });
+        var cards2 = {}, times = {};
+        cards.forEach(function (it) {
+            var t = String((it.mailRaw && (it.mailRaw.body2000 || it.mailRaw.body)) || '') + ' ' + String((it.task && it.task['상세내용']) || '');
+            mates.forEach(function (x) {
+                var n = String(x.name).trim(), k = t.split(n).length - 1;
+                if (k) { cards2[n] = (cards2[n] || 0) + 1; times[n] = (times[n] || 0) + k; }
+            });
+        });
+        //  ⚠️ 언급 횟수로 가르지 않는다 — 실측(K27)에서 "정민희책임님" 처럼 **부르는 상대**가 가장 많이 나와 담당자(임희철)가 아닌 사람을 골랐다.
+        var score = function (n) { return cards2[n]; };
+        var ks2 = Object.keys(cards2).filter(function (n) { return cards2[n] >= 2; }).sort(function (a, b) { return score(b) - score(a); });
+        return (ks2.length && (ks2.length === 1 || score(ks2[0]) > score(ks2[1]))) ? ks2[0] : '';
+    }
+    /**
+     * @param items  보관함 항목(TaskInbox.load())
+     * @param cands  팀 후보 프로젝트(project_index 항목)
+     * @returns [{ key, customer, clues:[tok], cards:[uid], subjects, prefill }]  — 카드 수 많은 순
+     */
+    window.mailRouteNewProjectProposals = function (items, cands) {
+        cands = cands || [];
+        if (!cands.length) return [];
+        var known = npKnownTokens(cands);
+        var teamCnt = {}; cands.forEach(function (c) { if (c.team) teamCnt[c.team] = (teamCnt[c.team] || 0) + 1; });
+        var team = Object.keys(teamCnt).sort(function (a, b) { return teamCnt[b] - teamCnt[a]; })[0] || '';
+        var hidden = {};
+        try { (JSON.parse(localStorage.getItem('gantt_newproj_hidden_v1') || '[]') || []).forEach(function (k) { hidden[k] = 1; }); } catch (e) { /* 없음 */ }
+        // 1) 카드마다 (고객사, 단서들)
+        var rows = [];
+        (items || []).forEach(function (it) {
+            if (!it || it.status !== '대기') return;
+            var mr = it.mailRaw || {};
+            var subj = mr.subject || (it.task && it.task['업무명']) || '';
+            var body = mr.body2000 || (it.task && it.task['상세내용']) || '';
+            var root = npCustomerOf(subj + '\n' + body, cands);
+            if (!root) return;
+            var clues = npUnknownClues(subj, body, known);
+            if (!clues.length) return;
+            rows.push({ it: it, root: root, clues: clues, subj: subj });
+        });
+        // 2) 같은 고객사 + 같은 단서를 나눠 가진 카드끼리 묶는다(이어진 것은 한 덩어리 — K27 과 #502246 이 한 제안으로)
+        var parent = rows.map(function (_, i) { return i; });
+        var find = function (i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+        var byClue = {};
+        rows.forEach(function (r, i) { r.clues.forEach(function (c) { var k = r.root + '|' + c.tok; (byClue[k] = byClue[k] || []).push(i); }); });
+        Object.keys(byClue).forEach(function (k) { var a = byClue[k]; for (var j = 1; j < a.length; j++) parent[find(a[j])] = find(a[0]); });
+        var groups = {};
+        rows.forEach(function (r, i) { var g = find(i); (groups[g] = groups[g] || []).push(i); });
+        var out = [];
+        Object.keys(groups).forEach(function (g) {
+            var idx = groups[g];
+            if (idx.length < P.newProjectMinCards) return;
+            var root = rows[idx[0]].root;
+            // 그 카드에만 나온 단서는 이름·키워드로 안 쓴다 — 2장 이상이 나눈 것만
+            var shared = {};
+            Object.keys(byClue).forEach(function (k) {
+                if (k.indexOf(root + '|') !== 0) return;
+                var a = byClue[k].filter(function (i) { return idx.indexOf(i) !== -1; });
+                if (a.length >= 2) shared[k.slice(root.length + 1)] = a.length;
+            });
+            var toks = Object.keys(shared);
+            if (!toks.length) return;
+            toks.sort(function (a, b) { var am = /^\d/.test(a), bm = /^\d/.test(b); if (am !== bm) return am ? 1 : -1; return shared[b] - shared[a]; });
+            var key = root + '|' + toks.slice().sort().join(',');
+            if (hidden[key]) return;
+            var cards = idx.map(function (i) { return rows[i].it; });
+            var model = toks.filter(function (t) { return !/^\d/.test(t); })[0] || '';
+            var nums = toks.filter(function (t) { return /^\d/.test(t); });
+            var custLabel = npCustomerLabel(root, cands);
+            out.push({
+                key: key, customer: custLabel, clues: toks, cards: cards.map(function (c) { return c.uid; }),
+                subjects: idx.map(function (i) { return rows[i].subj; }),
+                prefill: {
+                    customer: custLabel + (model ? '>' + model : ''),
+                    model: model,
+                    ktkpn: nums.length === 1 ? nums[0] : '',
+                    keywords: toks.slice(),
+                    assignee: npAssignee(cards, team)
+                }
+            });
+        });
+        out.sort(function (a, b) { return b.cards.length - a.cards.length; });
+        return out;
+    };
+    /** 제안 숨기기 — 이 PC 에만(localStorage). 단서가 바뀌면(키가 달라지면) 다시 뜬다. */
+    window.mailRouteNewProjectHide = function (key) {
+        var a = [];
+        try { a = JSON.parse(localStorage.getItem('gantt_newproj_hidden_v1') || '[]') || []; } catch (e) { a = []; }
+        if (a.indexOf(key) === -1) a.push(key);
+        try { localStorage.setItem('gantt_newproj_hidden_v1', JSON.stringify(a.slice(-200))); } catch (e) { /* 꽉 참 */ }
+    };
+    /** 팀 후보 프로젝트(캐시) — 보관함 요약처럼 **동기**로 그려야 하는 곳용. 없으면 null 을 주고 뒤에서 읽어 onReady 를 부른다. */
+    var _npCands = null, _npCandsAt = 0, _npCandsP = null;
+    window.mailRouteTeamCandsSync = function (onReady) {
+        if (_npCands && Date.now() - _npCandsAt < 5 * 60000) return _npCands;
+        if (!_npCandsP && window._msLoadProjectIndex && window._msFilterCandidateProjects) {
+            _npCandsP = window._msLoadProjectIndex().then(function (idx) {
+                _npCands = window._msFilterCandidateProjects(idx) || []; _npCandsAt = Date.now();
+                if (onReady) { try { onReady(); } catch (e) { /* 그리기 실패는 무시 */ } }
+            }).catch(function () { /* 다음에 다시 */ }).then(function () { _npCandsP = null; });
+        }
+        return _npCands;
+    };
+    window.mailRouteTeamCandsReset = function () { _npCands = null; _npCandsAt = 0; };
+
     window._mailRoutingNorm = { norm: norm, normSubject: normSubject, buildFamilies: buildFamilies, identsOf: identsOf };
 })();

@@ -396,6 +396,50 @@ window.__mailRoutingTestBody = async function () {
         } finally { window.callAiBackend = realAi; }
     } else { ok(false, '10-0 msCallGemini 가 전역에 없음'); }
 
+    // ── 11. [2026-11-23 사용자 요청] 새 프로젝트 제안(AI 없이) ─────────────────────
+    if (window.mailRouteNewProjectProposals) {
+        const card = (uid, subject, body, sender, status) => ({ uid, status: status || '대기', mailRaw: { subject, body2000: body || '', sender: sender || 'a@lnw.com' } });
+        const savedTd = window.tabData, savedHidden = localStorage.getItem('gantt_newproj_hidden_v1');
+        localStorage.removeItem('gantt_newproj_hidden_v1');
+        window.tabData = Object.assign({}, savedTd || {}, { addressBook: [
+            { name: '임희철', email: 'hclim@kortek.co.kr', dept: '개발3팀' },
+            { name: '김대환', email: 'kimdh@kortek.co.kr', dept: '영업3팀' }] });
+        try {
+            const items = [
+                card('k1', 'RE: LNW K27 Upper (#502246) FA Sample Preparation', 'Vina prepared F/A samples (502246-1 unit)', '"David Kim" <kimdh@kortek.co.kr>'),
+                card('k2', 'Re: LNW K27 Upper (#502246) FA Sample > Single Package', 'please check', 'Le <vanlg@kortek.vn>'),
+                card('k3', 'LNW>K27 3종>FA Sample 출고 문의', 'LNW 27inch BOE suffix 변경당시 K27', '"Steve Lim" <hclim@kortek.co.kr>'),
+                card('k4', 'LNW 6.2" iView VAVE (#502356) FA Sample', 'LNW iView', 'x@kortek.co.kr'),               // 혼자 — 제안 안 함
+                card('k5', 'STELLAR32 진행', 'LNW S32', 'x@kortek.co.kr'),                                          // 아는 프로젝트
+                card('k6', 'LNW K27 Upper 출고', 'done', 'x@kortek.co.kr', '자동배치됨'),                            // 대기 아님
+                card('k7', 'PO 218739 ALT1 & ALT7 Revision', 'LNW PO', 'x@kortek.co.kr'),                         // ALT·PO 는 모델 코드 아님
+                card('k8', 'PO 218739 ALT1 Revision 2', 'LNW PO', 'x@kortek.co.kr')
+            ];
+            let ps = window.mailRouteNewProjectProposals(items, cands);
+            const k27 = ps.find(p => p.clues.indexOf('K27') !== -1);
+            ok(ps.length === 1 && k27 && JSON.stringify(k27.cards.slice().sort()) === JSON.stringify(['k1', 'k2', 'k3']),
+               '11-1 K27·#502246 을 되풀이한 대기 카드 3장이 한 제안으로 묶인다(혼자·아는 프로젝트·대기 아님·ALT/PO 는 빠짐)', ps.map(p => ({ c: p.clues, cards: p.cards })));
+            ok(k27 && k27.prefill.customer === 'LNW>K27' && k27.prefill.model === 'K27' && k27.prefill.ktkpn === '502246' &&
+               k27.prefill.keywords.indexOf('502246') !== -1 && k27.prefill.assignee === '임희철',
+               '11-2 마법사 값: 고객사 LNW>K27 · 모델 K27 · KTK PN 502246 · 담당 임희철(보낸 사람 중 우리 팀)', k27 && k27.prefill);
+            const withLandmark = cands.concat([C('V1', 'LNW_Violet.json', 'Violet', 'LNW>Violet', '', ['LANDMARK276', 'HORIZON75'])]);
+            ok(window.mailRouteNewProjectProposals(items, withLandmark).length === 1, '11-2b 다른 프로젝트 키워드 LANDMARK276 안의 "k27" 로 K27 을 아는 단어로 보지 않는다(실측 버그)');
+            const withKortek = cands.concat([C('KT', 'KORTEK_내부.json', '내부', 'KORTEK>내부', '', ['사내'])]);
+            const signed = items.map(it => Object.assign({}, it, { mailRaw: Object.assign({}, it.mailRaw, { body2000: it.mailRaw.body2000 + '\nKortek Corporation' }) }));
+            ok(window.mailRouteNewProjectProposals(signed, withKortek).length === 1, '11-2c 우리 회사(KORTEK) 서명은 두 번째 고객사로 세지 않는다(실측 버그)');
+            const withK27 = cands.concat([C('N1', 'LNW_K27.json', 'K27', 'LNW>K27', '27', ['K27', '502246'])]);
+            ok(window.mailRouteNewProjectProposals(items, withK27).length === 0, '11-3 K27 프로젝트가 생기면 제안이 사라진다');
+            window.mailRouteNewProjectHide(k27.key);
+            ok(window.mailRouteNewProjectProposals(items, cands).length === 0, '11-4 ✕ 숨기면 다시 안 뜬다(이 PC)');
+            localStorage.removeItem('gantt_newproj_hidden_v1');
+            const two = [card('z1', 'AMUSNET & LNW K27 sync', 'AMUSNET LNW', 'x@kortek.co.kr'), card('z2', 'AMUSNET & LNW K27 sync 2', 'AMUSNET LNW', 'x@kortek.co.kr')];
+            ok(window.mailRouteNewProjectProposals(two, cands).length === 0, '11-5 고객사가 둘(AMUSNET·LNW)이면 제안하지 않는다');
+        } finally {
+            window.tabData = savedTd;
+            if (savedHidden === null) localStorage.removeItem('gantt_newproj_hidden_v1'); else localStorage.setItem('gantt_newproj_hidden_v1', savedHidden);
+        }
+    }
+
     // ── 8. 감싸기가 실제로 설치됐나 ─────────────────────────────────────────
     ok(window._msResolveAiProjectMatch && window._msResolveAiProjectMatch._mrWrapped, '8-1 _msResolveAiProjectMatch 를 js/74 가 감쌌다(가장 바깥)');
     ok(window._msAutoRegisterToProject && window._msAutoRegisterToProject._mrWrapped, '8-2 _msAutoRegisterToProject 쓰기 훅 설치');

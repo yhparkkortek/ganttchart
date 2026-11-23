@@ -541,11 +541,18 @@ function _applyToSummary() {
         if (btn) btn.click();
     }
 
+    // 🆕 [2026-11-23] 보관함 "새 프로젝트 제안"(js/14c)에서 열었으면, 등록(첫 저장)이 성공한 뒤 그 카드들을 재판정한다.
+    //    콜백은 **지금** 받아 둔다 — 바로 뒤 _npwClose 가 비우기 때문(취소한 마법사의 콜백이 다음 마법사에 남지 않게).
+    const _onCreated = window._npwOnCreated; window._npwOnCreated = null;
     setTimeout(function() {
         _fillSummaryFields();
         // 🆕 [2026-10-07] 필수 정보 입력 완료 직후 자동 저장 — 비밀번호 확인은 saveToGoogleDrive
         //    내부(_saveToGoogleDriveRaw, 신규 파일 생성 시점)에서 그대로 진행되고, 통과하면 바로 저장됨.
-        if (window.saveToGoogleDrive) window.saveToGoogleDrive();
+        const _sp = window.saveToGoogleDrive ? window.saveToGoogleDrive() : null;
+        if (_onCreated && _sp && _sp.then) {
+            _sp.then(function(ok) { if (ok !== false) { try { _onCreated(); } catch (e) { console.warn('[새 프로젝트] 등록 후 처리 실패:', e); } } },
+                     function(e) { console.warn('[새 프로젝트] 저장 실패 — 등록 후 재판정 안 함:', e); });
+        }
     }, 100);
     // 🐛 [2026-10-07] 참조 엑셀 자동 가져오기(_npwOpen에서 시작)가 이 시점까지 안 끝났을 경우를 대비한
     //    안전장치 — 참조 엑셀의 Summary 시트 값(보통 빈 템플릿)이 뒤늦게 적용되어 방금 입력한 값을
@@ -612,6 +619,7 @@ window._npwPickFromDict = function() {
 };
 
 window._npwClose = function() {
+    window._npwOnCreated = null;   // 취소·닫기 — 보관함 제안의 "등록 후 재판정" 콜백을 남기지 않는다
     const m = document.getElementById('npw-modal');
     if (m) m.style.display = 'none';
 };
