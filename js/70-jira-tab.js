@@ -650,11 +650,12 @@
             + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
             + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
             + '<div style="padding:12px 14px 6px;">'
-            + '<div style="font-size:11px; color:#888; margin-bottom:6px;">' + T('지금 연결된 프로젝트와 상관없이 JIRA 전체에서 찾습니다 — 예: 노이즈, 번들림, 외관불량, 신뢰성', 'Searches across all of JIRA, not just the linked project — e.g. noise, warping, cosmetic defect, reliability') + '</div>'
+            + '<div style="font-size:11px; color:#888; margin-bottom:6px;">' + T('지금 연결된 프로젝트와 상관없이 JIRA 전체에서 찾습니다 — 예: 노이즈, 번들림, 외관불량, 신뢰성 · 이슈 키(예: GABJO-2)를 넣으면 그 이슈와 비슷한 이슈를 찾습니다', 'Searches across all of JIRA, not just the linked project — e.g. noise, warping, cosmetic defect, reliability · enter an issue key (e.g. GABJO-2) to find issues similar to it') + '</div>'
             + '<div style="display:flex; gap:6px;">'
-            + '<input id="jira-search-q" placeholder="' + T('검색어', 'Search term') + '" style="' + inputSt + '" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
+            + '<input id="jira-search-q" placeholder="' + T('검색어 또는 이슈 키', 'Search term or issue key') + '" style="' + inputSt + '" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
             + '<button onclick="window._jiraSearchRun()"' + btnHover + ' style="' + btnSt + ' font-weight:bold; flex-shrink:0;">🔎 ' + T('검색', 'Search') + '</button>'
             + '</div></div>'
+            + '<div id="jira-search-sim" style="display:none; padding:0 14px 6px;"></div>'
             + '<div id="jira-search-body" style="padding:0 14px 14px; flex:1; min-height:0; overflow-y:auto; font-size:12px;"></div>'
             + '</div>';
         wrap.style.display = 'block';
@@ -672,6 +673,11 @@
         var qInp = document.getElementById('jira-search-q');
         var q = ((qInp && qInp.value) || '').trim();
         if (!q) { box.innerHTML = ''; return; }
+        // 이슈 키를 넣었으면 "그 이슈와 비슷한 것" 찾기로 넘긴다(아래 유사 이슈 절)
+        if (KEY_RE.test(q.toUpperCase())) { return window._jiraFindSimilar(q.toUpperCase()); }
+        _searchMode = 'text';
+        var simBox = document.getElementById('jira-search-sim');
+        if (simBox) { simBox.style.display = 'none'; simBox.innerHTML = ''; }
         box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('검색 중...', 'Searching...') + '</div>';
         var safe = q.replace(/["\\]/g, '');
         try {
@@ -693,30 +699,335 @@
         var countNote = total > _searchHits.length
             ? T(total + '건 중 ' + _searchHits.length + '건 표시 — 검색어를 더 좁혀보세요', 'Showing ' + _searchHits.length + ' of ' + total + ' — try narrowing the search term')
             : T(_searchHits.length + '건', _searchHits.length + ' result(s)');
+        var sim = _searchMode === 'similar';
+        var th = function (label, w, align) {
+            return '<th style="padding:7px 8px; text-align:' + (align || 'left') + '; width:' + w + '%; border-bottom:2px solid #cfe3e5;">' + label + '</th>';
+        };
+        var td = 'padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
         box.innerHTML = '<div style="font-size:11px; color:#888; margin:6px 0;">' + esc(countNote) + '</div>'
             + '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
-            + '<th style="padding:7px 8px; text-align:left; width:10%; border-bottom:2px solid #cfe3e5;">' + T('프로젝트', 'Project') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:12%; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
-            + '<th style="padding:7px 8px; text-align:left; width:40%; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:12%; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:13%; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
-            + '<th style="padding:7px 8px; text-align:center; width:13%; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
+            + (sim ? th(T('일치', 'Match'), 16) : '')
+            + th(T('프로젝트', 'Project'), sim ? 8 : 10)
+            + th(T('키', 'Key'), sim ? 10 : 12)
+            + th(T('요약', 'Summary'), sim ? 30 : 36)
+            + th(T('상태', 'Status'), 9, 'center')
+            // 🩹 "해결책·대책이 있었나"가 이 검색의 목적이라 해결책 열을 둔다 — 비어 있으면 대책이 댓글에 있을 수 있다(상세에서 확인)
+            + th(T('해결책', 'Resolution'), 10, 'center')
+            + th(T('담당자', 'Assignee'), sim ? 8 : 11, 'center')
+            + th(T('수정일', 'Updated'), sim ? 9 : 12, 'center')
             + '</tr></thead><tbody>'
             + _searchHits.map(function (it) {
                 var c = statusColor(it.status);
                 var proj = (it.key || '').split('-')[0];
+                var matchCell = '';
+                if (sim) {
+                    var m = (it._sim && it._sim.matched) || [];
+                    matchCell = '<td style="' + td + '" title="' + esc(m.join(', ')) + '">'
+                        + (m.length
+                            ? '<b style="color:#00707d;">' + m.length + '</b> ' + m.map(function (w) {
+                                return '<span style="font-size:10.5px; padding:1px 6px; margin-right:2px; border-radius:8px; background:#e0f5f7; color:#00707d;">' + esc(w) + '</span>';
+                            }).join('')
+                            : '<span style="font-size:10.5px; color:#999;">' + T('본문·댓글', 'body/comments') + '</span>')
+                        + '</td>';
+                }
                 return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
-                    + '<td style="padding:7px 8px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(proj) + '</td>'
-                    + '<td style="padding:7px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
-                    + '<td style="padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(it.summary) + '">' + esc(it.summary) + '</td>'
+                    + matchCell
+                    + '<td style="' + td + ' color:#888;">' + esc(proj) + '</td>'
+                    + '<td style="' + td + ' font-weight:bold; color:#00707d;">' + esc(it.key) + '</td>'
+                    + '<td style="' + td + '" title="' + esc(it.summary) + '">' + esc(it.summary) + '</td>'
                     + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
-                    + '<td style="padding:7px 8px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.assignee || '—') + '</td>'
-                    + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
+                    + '<td style="' + td + ' text-align:center; color:' + (it.resolution ? '#1f7a3d' : '#bbb') + ';">' + esc(it.resolution || '—') + '</td>'
+                    + '<td style="' + td + ' text-align:center;">' + esc(it.assignee || '—') + '</td>'
+                    + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
                     + '</tr>';
             }).join('')
             + '</tbody></table>';
     }
+
+    // ── 🔍 유사 이슈 찾기 (2026-11-23 사용자 요청) ──────────────────────────
+    //  "내 프로젝트 이슈를 골라 다른 프로젝트에 비슷한 문제·대책이 있었는지" + **"AI 과다 호출이
+    //  발생되지 않는 방법으로"**(사용자 지시). 그래서 기본 경로는 **AI 0회**다:
+    //   ① 고른 이슈 요약에서 검색어를 뽑는다(결정론 — 구분자로 자르고 조사·불용어를 뺀다)
+    //   ② 같은 뜻 묶음(JIRA_SIMILAR_POLICY.synonyms, 데이터)으로 넓힌다
+    //   ③ JIRA 전체(**내 프로젝트는 빼고**)를 OR 로 **한 번** 검색한다(`/jira/search` 1회)
+    //   ④ 요약에 몇 개의 묶음이 걸렸는지로 **코드가** 줄 세운다(AI 가 순위를 매기지 않는다)
+    //  AI 는 사람이 `🤖 AI로 검색어 넓히기`를 **누를 때만**, 이슈당 **한 번**이다 — 결과를
+    //  localStorage 에 두고 같은 이슈를 다시 열면 그걸 쓴다(호출 0회). 모달을 열거나 검색하는
+    //  것만으로는 절대 부르지 않는다(2026-10-21 군집 판정이 모달 열기마다 돌아 하루 한도를 태운
+    //  사고). 어휘·한계값은 아래 데이터 한 곳 — 코드를 안 고치고 늘린다(CLAUDE.md 학습 방향).
+    window.JIRA_SIMILAR_POLICY = window.JIRA_SIMILAR_POLICY || {
+        maxQueryTerms: 12,   // JQL 에 넣는 검색어 상한(넓힌 말 포함) — 넘으면 앞쪽(원래 말)부터 남긴다
+        maxResults: 50,
+        minTermLen: 2,
+        aiMaxTerms: 8,       // AI 가 돌려주는 검색어 상한
+        aiCacheMax: 300,     // 보관하는 AI 검색어 묶음 수(오래된 것부터 버린다)
+        // 낱말 끝에서 떼는 꼬리(조사·부위 표현) — 떼고 남는 게 minTermLen 이상일 때만
+        suffixes: ['에서', '으로', '부위', '부분', '시', '에', '을', '를', '은', '는', '의'],
+        // 검색어로 쓰면 거의 모든 프로젝트가 걸리는 말(단계·시험명·일반어)
+        stopwords: ['일반성능', '불량', '오류', '문제', '이슈', '현상', '발생', '확인', '요청', '검토', '문의', '보임',
+                    '필요', '개선', '관련', '및', '후', '전', '건', '내측', '외측', '좌측', '우측', '상단', '하단', '조립',
+                    'evt', 'dvt', 'pvt', 'proto', 'es', 'ws', 'mp', 'pp', 'issue', 'error', 'ng', 'the', 'and', 'of', 'ass', 'assy'],
+        // 같은 뜻 묶음 — 요약 낱말에 묶음의 말이 **들어 있으면**(예: '양면테이프' ⊃ '테이프') 그 묶음 전부로 찾는다
+        synonyms: [
+            ['떨어짐', '탈락', '박리', '들뜸', '분리'],
+            ['노이즈', '잡음', 'noise'],
+            ['깨짐', '크랙', 'crack', '파손'],
+            ['긁힘', '스크래치', 'scratch'],
+            ['이물', 'foreign'],
+            ['변형', '뒤틀림', 'warpage'],
+            ['깜빡임', '플리커', 'flicker'],
+            ['얼룩', '무라', 'mura'],
+            ['dead', '데드'],
+            ['날카로움', 'burr'],
+            ['진동', 'vibration'],
+            ['외관', 'cosmetic'],
+            ['신뢰성', 'reliability'],
+            ['누설', 'leak'],
+            ['소손', '탄화', '번트', 'burn'],
+            ['발열', 'thermal'],
+            ['esd', '정전기'],
+            ['쇼트', '단락', 'short'],
+            ['테이프', 'tape'],
+            ['패널', 'panel'],
+            ['터치', 'touch', 'tsp']
+        ]
+    };
+
+    var _searchMode = 'text';   // 'text' = 검색어 그대로 · 'similar' = 기준 이슈와 비슷한 것
+    var _simBase = null;        // { key, summary, description, project }
+    var _simAiBusy = false;
+    var SIM_AI_CACHE = 'gantt_jira_simkw_v1';
+    if (window.STORAGE_REGISTRY && !window.STORAGE_REGISTRY.some(function (r) { return r.key === SIM_AI_CACHE; })) {
+        window.STORAGE_REGISTRY.push({ key: SIM_AI_CACHE, label: 'JIRA 유사 이슈 — AI 검색어 보관(이슈당 1회 호출 결과)',
+            labelEn: 'JIRA similar issues — saved AI search terms', cls: 'cache', strategy: { type: 'drop' } });
+    }
+
+    // 요약 → 검색어(결정론). 같은 말은 한 번만, 원래 순서대로.
+    window._jiraSimTerms = function (text) {
+        var P = window.JIRA_SIMILAR_POLICY;
+        var stop = {}; P.stopwords.forEach(function (w) { stop[w.toLowerCase()] = 1; });
+        var out = [];
+        String(text || '').split(/[\s_\-\[\]\(\)\{\}\/\\,.:;+'"&<>|~!?·…=※#@%^*]+/).forEach(function (raw) {
+            var w = raw.trim().toLowerCase();
+            for (var i = 0; i < P.suffixes.length; i++) {
+                var s = P.suffixes[i];
+                if (w.length - s.length >= P.minTermLen && w.slice(-s.length) === s) { w = w.slice(0, -s.length); break; }
+            }
+            if (w.length < P.minTermLen || /^\d+$/.test(w) || stop[w]) return;
+            if (out.indexOf(w) === -1) out.push(w);
+        });
+        return out;
+    };
+
+    // 검색어 → 묶음 목록. 묶음 사전에 걸리면 그 묶음 전부, 아니면 자기 자신 하나.
+    // ⚠️ 요약 낱말이 묶음의 말을 **품고 있으면** 그 말을 따로 꺼낸다('양면테이프' → '테이프') —
+    //    옛 JIRA 검색은 붙여 쓴 한국어 복합어의 일부로는 못 찾기 때문이다.
+    window._jiraSimGroups = function (terms) {
+        var P = window.JIRA_SIMILAR_POLICY;
+        var groups = [], seen = {};
+        terms.forEach(function (t) {
+            var hit = null;
+            for (var i = 0; i < P.synonyms.length && !hit; i++) {
+                if (P.synonyms[i].some(function (w) { return t.indexOf(w.toLowerCase()) >= 0; })) hit = P.synonyms[i];
+            }
+            var g = hit ? [t].concat(hit.map(function (w) { return w.toLowerCase(); })) : [t];
+            g = g.filter(function (w, j) { return w.length >= P.minTermLen && g.indexOf(w) === j; });
+            var sig = g.slice().sort().join('|');
+            if (seen[sig] || !g.length) return;
+            seen[sig] = 1;
+            groups.push(g);
+        });
+        return groups;
+    };
+
+    // 묶음 → JQL 에 넣을 말(원래 말 먼저, 넓힌 말은 그 뒤) — 상한을 넘으면 뒤쪽을 버린다
+    function simQueryTerms(groups) {
+        var P = window.JIRA_SIMILAR_POLICY, out = [];
+        groups.forEach(function (g) { if (out.indexOf(g[0]) === -1) out.push(g[0]); });
+        groups.forEach(function (g) { g.slice(1).forEach(function (w) { if (out.indexOf(w) === -1) out.push(w); }); });
+        return out.slice(0, P.maxQueryTerms);
+    }
+
+    function simCacheGet(sig) {
+        try { var c = JSON.parse(localStorage.getItem(SIM_AI_CACHE) || '{}'); return c[sig] || null; } catch (e) { return null; }
+    }
+    function simCacheSet(sig, terms) {
+        try {
+            var c = JSON.parse(localStorage.getItem(SIM_AI_CACHE) || '{}');
+            c[sig] = { terms: terms, at: Date.now() };
+            var keys = Object.keys(c);
+            var max = window.JIRA_SIMILAR_POLICY.aiCacheMax;
+            if (keys.length > max) {
+                keys.sort(function (a, b) { return (c[a].at || 0) - (c[b].at || 0); })
+                    .slice(0, keys.length - max).forEach(function (k) { delete c[k]; });
+            }
+            localStorage.setItem(SIM_AI_CACHE, JSON.stringify(c));
+        } catch (e) { /* 보관 실패는 다음에 다시 부르게 될 뿐 — 기능은 막지 않는다 */ }
+    }
+    // 같은 이슈라도 요약이 바뀌면 다시 만들 수 있게 요약까지 열쇠에 넣는다
+    function simSig(base) { return base.key + '|' + String(base.summary || '').slice(0, 120); }
+
+    window._jiraFindSimilar = async function (key) {
+        key = String(key || '').toUpperCase();
+        var issue = _issueCache[key];
+        if (!issue || !issue.description) {
+            try {
+                var d = await fetchJson(BASE + '/jira/issue/' + encodeURIComponent(key));
+                if (!d || d.ok === false) {
+                    if (window.showToast) window.showToast('⚠️ ' + ((d && d.message) || T('이슈를 찾지 못했습니다.', 'Issue not found.')), 'warning');
+                    return;
+                }
+                issue = d.issue;
+            } catch (e) {
+                if (window.showToast) window.showToast('⚠️ ' + (e && e.message ? e.message : e), 'warning');
+                return;
+            }
+        }
+        var modal = document.getElementById('jira-search-modal');
+        if (!modal || modal.style.display === 'none') window._jiraOpenSearchModal();
+        var qInp = document.getElementById('jira-search-q');
+        if (qInp) qInp.value = key;
+        _searchMode = 'similar';
+        _simBase = { key: key, summary: issue.summary || '', description: issue.description || '', project: key.split('-')[0] };
+        var terms = window._jiraSimTerms(_simBase.summary);
+        var cached = simCacheGet(simSig(_simBase));
+        if (cached) cached.terms.forEach(function (t) { if (terms.indexOf(t) === -1) terms.push(t); });
+        renderSimPanel(terms, !!cached);
+        await window._jiraSimRun();
+    };
+
+    function renderSimPanel(terms, aiUsed) {
+        var box = document.getElementById('jira-search-sim');
+        if (!box || !_simBase) return;
+        box.style.display = 'block';
+        box.innerHTML = '<div style="background:#f6fbfb; border:1px solid #cfe3e5; border-radius:8px; padding:8px 10px; font-size:12px;">'
+            + '<div style="margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🎯 ' + T('기준', 'Base') + ': <b style="color:#00707d;">' + esc(_simBase.key) + '</b> '
+            + esc(_simBase.summary) + ' <span style="color:#999;">(' + T(_simBase.project + ' 는 빼고 찾습니다', 'excluding ' + _simBase.project) + ')</span></div>'
+            + '<div style="display:flex; gap:6px; align-items:center;">'
+            + '<span style="flex-shrink:0; color:#555;">' + T('검색어', 'Terms') + '</span>'
+            + '<input id="jira-sim-terms" value="' + esc(terms.join(', ')) + '" title="' + T('쉼표로 구분 — 고친 뒤 다시 찾기', 'Comma-separated — edit and search again') + '" style="' + inputSt + '" onkeydown="if(event.key===\'Enter\')window._jiraSimRun()">'
+            + '<button onclick="window._jiraSimRun()"' + btnHover + ' style="' + btnSt + ' flex-shrink:0;">🔄 ' + T('다시 찾기', 'Search again') + '</button>'
+            + '<button id="jira-sim-ai-btn" onclick="window._jiraSimAiExpand()"' + btnHover
+            + ' title="' + T('AI 가 부품·증상 검색어를 더 만들어 줍니다. 이슈당 한 번만 부르고 결과는 저장됩니다.', 'AI suggests more part/symptom terms. Called once per issue; the result is saved.') + '"'
+            + ' style="' + btnSt + ' flex-shrink:0;">' + (aiUsed ? '🤖 ' + T('AI 검색어 적용됨', 'AI terms applied') : '🤖 ' + T('AI로 검색어 넓히기 (1회)', 'Widen with AI (1 call)')) + '</button>'
+            + '</div>'
+            + '<div id="jira-sim-expanded" style="margin-top:5px; font-size:11px; color:#888;"></div>'
+            + '<div id="jira-sim-ai-status" style="margin-top:3px; font-size:11px; display:none;"></div>'
+            + '</div>';
+    }
+
+    window._jiraSimRun = async function () {
+        var box = document.getElementById('jira-search-body');
+        if (!box || !_simBase) return;
+        var raw = ((document.getElementById('jira-sim-terms') || {}).value || '');
+        var terms = raw.split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+        if (!terms.length) { box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('검색어가 없습니다 — 위 칸에 적어 주세요.', 'No terms — please type some above.') + '</div>'; return; }
+        var groups = window._jiraSimGroups(terms);
+        var q = simQueryTerms(groups);
+        var exp = document.getElementById('jira-sim-expanded');
+        if (exp) exp.textContent = T('실제로 찾는 말', 'Actually searching') + ' (' + q.length + '): ' + q.join(', ');
+        box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('검색 중...', 'Searching...') + '</div>';
+        var jqlStr = 'project != ' + _simBase.project + ' AND ('
+            + q.map(function (w) { return 'text ~ "' + w.replace(/["\\]/g, '') + '*"'; }).join(' OR ')
+            + ') ORDER BY updated DESC';
+        try {
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent(jqlStr) + '&maxResults=' + window.JIRA_SIMILAR_POLICY.maxResults);
+            if (!d || d.ok === false) { box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc((d && d.message) || T('검색 실패', 'Search failed')) + '</div>'; return; }
+            var hits = d.issues || [];
+            // 순위는 코드가 — 요약에 걸린 묶음 수(많을수록 비슷) → 해결책 있는 것 → 최근 순
+            hits.forEach(function (it) {
+                var s = String(it.summary || '').toLowerCase();
+                var matched = [];
+                groups.forEach(function (g) {
+                    var w = g.find(function (x) { return s.indexOf(x) >= 0; });
+                    if (w) matched.push(w);
+                });
+                it._sim = { score: matched.length, matched: matched };
+            });
+            hits.sort(function (a, b) {
+                return (b._sim.score - a._sim.score)
+                    || ((b.resolution ? 1 : 0) - (a.resolution ? 1 : 0))
+                    || String(b.updated || '').localeCompare(String(a.updated || ''));
+            });
+            _searchHits = hits;
+            _jiraRenderSearchResults(d.total || hits.length);
+        } catch (e) {
+            box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
+        }
+    };
+
+    function simAiStatus(msg, kind) {
+        var el = document.getElementById('jira-sim-ai-status');
+        if (!el) return;
+        el.style.display = msg ? 'block' : 'none';
+        el.style.color = kind === 'err' ? '#a3281c' : (kind === 'ok' ? '#1f7a3d' : '#555');
+        el.textContent = msg || '';
+    }
+
+    // 🤖 사람이 누를 때만 — 이슈당 한 번, 결과 보관. 두 번 눌러도(연타) 한 번만 나간다(_simAiBusy).
+    window._jiraSimAiExpand = async function () {
+        if (!_simBase || _simAiBusy) return;
+        var sig = simSig(_simBase);
+        var inp = document.getElementById('jira-sim-terms');
+        var mergeAndRun = function (aiTerms) {
+            var cur = ((inp && inp.value) || '').split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+            aiTerms.forEach(function (t) { if (cur.indexOf(t) === -1) cur.push(t); });
+            if (inp) inp.value = cur.join(', ');
+            var btn = document.getElementById('jira-sim-ai-btn');
+            if (btn) btn.textContent = '🤖 ' + T('AI 검색어 적용됨', 'AI terms applied');
+            return window._jiraSimRun();
+        };
+        var cached = simCacheGet(sig);
+        if (cached) {
+            simAiStatus('♻️ ' + T('저장해 둔 AI 검색어를 썼습니다 — AI 호출 0회', 'Used saved AI terms — 0 AI calls'), 'ok');
+            return mergeAndRun(cached.terms);
+        }
+        var apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        if (!apiKey || !window.callAiBackend) {
+            simAiStatus('⚠️ ' + T('AI 키가 없습니다 — 설정에서 등록해 주세요. (AI 없이 찾은 결과는 그대로 쓸 수 있습니다)', 'No AI key — register one in settings. (The no-AI results are still usable.)'), 'err');
+            return;
+        }
+        _simAiBusy = true;
+        var btn = document.getElementById('jira-sim-ai-btn');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ ' + T('AI 검색어 만드는 중...', 'Asking AI...'); }
+        simAiStatus('', '');
+        try {
+            var P = window.JIRA_SIMILAR_POLICY;
+            var prompt = '아래 사내 JIRA 이슈와 같은 종류의 문제를 다른 제품 프로젝트에서 찾으려 한다. '
+                + 'JIRA 전문검색에 넣을 검색어를 만들어라.\n'
+                + '규칙: 부품 이름과 증상을 짧은 낱말(1~2 단어)로, 한국어와 영어 둘 다, 같은 뜻의 다른 표현 포함, 최대 ' + P.aiMaxTerms + '개. '
+                + '프로젝트 코드·모델명·사람 이름·날짜·개발 단계(EVT/DVT/ES/Proto 등)는 넣지 마라. '
+                + '설명 없이 JSON 배열 하나만 출력하라. 예: ["테이프","tape","탈락","peel"]\n\n'
+                + '[요약] ' + _simBase.summary + '\n'
+                + '[설명] ' + String(_simBase.description || '').slice(0, 400);
+            var r = await window._withTimeout(window.callAiBackend(apiKey, prompt, { feature: 'jira-similar-terms' }), 60000,
+                T('AI 응답 시간 초과', 'AI timed out'));
+            var text = (r && r.ok && window._extractGanttQaAiText) ? window._extractGanttQaAiText(r) : '';
+            var m = String(text || '').match(/\[[\s\S]*?\]/);
+            var arr = [];
+            try { arr = m ? JSON.parse(m[0]) : []; } catch (e) { arr = []; }
+            var stop = {}; P.stopwords.forEach(function (w) { stop[w.toLowerCase()] = 1; });
+            var terms = (Array.isArray(arr) ? arr : []).map(function (x) { return String(x || '').trim().toLowerCase(); })
+                .filter(function (x, i, a) { return x.length >= P.minTermLen && x.length <= 30 && !stop[x] && a.indexOf(x) === i; })
+                .slice(0, P.aiMaxTerms);
+            if (!terms.length) {
+                // 실패는 보관하지 않는다 — 보관하면 다음에 눌러도 빈 결과만 돌려준다
+                simAiStatus('⚠️ ' + T('AI 가 쓸 만한 검색어를 주지 않았습니다. (AI 없이 찾은 결과는 그대로입니다)', 'AI returned no usable terms. (The no-AI results are unchanged.)'), 'err');
+                if (btn) btn.textContent = '🤖 ' + T('AI로 검색어 넓히기 (1회)', 'Widen with AI (1 call)');
+                return;
+            }
+            simCacheSet(sig, terms);
+            simAiStatus('✅ ' + T('AI 검색어 ' + terms.length + '개를 더했습니다(이 이슈는 다음부터 AI 호출 0회): ', 'Added ' + terms.length + ' AI terms (0 AI calls next time for this issue): ') + terms.join(', '), 'ok');
+            await mergeAndRun(terms);
+        } catch (e) {
+            simAiStatus('⚠️ ' + String(e && e.message || e), 'err');
+            if (btn) btn.textContent = '🤖 ' + T('AI로 검색어 넓히기 (1회)', 'Widen with AI (1 call)');
+        } finally {
+            _simAiBusy = false;
+            if (btn) btn.disabled = false;
+        }
+    };
 
     // ── ⚙️ 연결 설정 모달 ────────────────────────────────────────────
     window._jiraOpenLinkSettings = function () {
@@ -1278,7 +1589,8 @@
                 + ' flex-wrap:wrap; padding-top:6px; font-size:12px; line-height:1.7;">' + metaLineHtml(issue) + '</div>')
             // 🪂 [2026-11-17 사용자 요청] JIRA 이슈 → 간트 업무로 기록 이동/등록. 사람이 이
             // 버튼을 눌러야만 실행된다(쓰기는 읽기와 경로 분리, 위 헤더 주석과 같은 원칙).
-            + '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;">'
+            + '<div style="display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px;">'
+            + '<button onclick="window._jiraFindSimilar(\'' + esc(key) + '\')" title="' + T('다른 프로젝트에서 비슷한 이슈·대책 찾기(AI 없이)', 'Find similar issues/fixes in other projects (no AI)') + '"' + btnHover + ' style="' + btnSt + '">🔍 ' + T('유사 이슈', 'Similar issues') + '</button>'
             + '<button onclick="window._jiraRegisterAsTask(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + '">📋 ' + T('간트 업무로 등록', 'Register as gantt task') + '</button></div>'
             + '<div style="display:flex; justify-content:flex-end; margin-bottom:12px;">'
             + '<button onclick="window._jiraSaveFields(\'' + esc(key) + '\')"' + btnHover + ' style="' + btnSt + ' font-weight:bold;">💾 ' + T('필드 저장', 'Save fields') + '</button></div>'
