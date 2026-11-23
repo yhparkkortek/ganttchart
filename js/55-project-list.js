@@ -1163,7 +1163,9 @@
         }
     };
 
-    // 요약 — "지금 보이는 것"이 무엇인지 한 줄로(고객사·상태·담당자 분포). 164건을 훑기 전에 감을 잡게.
+    // 요약 — "지금 보이는 것"이 무엇인지 한 줄로(고객사·담당자 분포). 164건을 훑기 전에 감을 잡게.
+    // ⚠️ [2026-11-23 사용자 요청] "상태 숫자는 카운터 의미 없으니 삭제" — Product Status(Z2·P1…)
+    // 분포는 안 보여준다. `by()` 자체는 고객 집계에 그대로 쓰므로 함수는 남겨 둔다.
     window.plRenderStats = function () {
         var el = document.getElementById('pl-stats');
         if (!el) return;
@@ -1192,7 +1194,6 @@
                 .map(function (v) { return _esc(v) + ' ' + m[v]; }).join(' · ');
         };
         el.innerHTML = '<b>' + _t('고객', 'Customer') + '</b> ' + by('customer')
-                     + ' &nbsp;|&nbsp; <b>' + _t('상태', 'Status') + '</b> ' + by('status')
                      + ' &nbsp;|&nbsp; <b>' + _t('회로', 'HW') + '</b> ' + byRole('ownerHw')
                      + ' &nbsp;|&nbsp; <b>' + _t('펌웨어', 'FW') + '</b> ' + byRole('ownerFw')
                      + ' &nbsp;|&nbsp; <b>' + _t('기구', 'Mech') + '</b> ' + byRole('ownerMech')
