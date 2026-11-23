@@ -21,7 +21,13 @@
 
     window.PERIOD_SUMMARY = window.PERIOD_SUMMARY || {
         showCounts: false,                     // 완료/진행/대기/지연 네 칸 — 화면·PPT 공통
-        periods: [{ id: 'day', ko: '일일', en: 'Daily' }, { id: 'week', ko: '주간', en: 'Weekly' }, { id: 'month', ko: '월간', en: 'Monthly' }],
+        // 📅 [2026-11-23 사용자 요청] 전일·금일·전주·금주·전월·금월 — `prev*` 는 같은 단위를 한 칸 앞으로 민 것.
+        //    ⚠️ 금일/금주/금월의 id 는 옛 'day'/'week'/'month' 그대로(저장된 모드·캐시·문답 경로가 그 이름을 쓴다).
+        periods: [
+            { id: 'prevday', ko: '전일', en: 'Yesterday' }, { id: 'day', ko: '금일', en: 'Today' },
+            { id: 'prevweek', ko: '전주', en: 'Last week' }, { id: 'week', ko: '금주', en: 'This week' },
+            { id: 'prevmonth', ko: '전월', en: 'Last month' }, { id: 'month', ko: '금월', en: 'This month' }
+        ],
         customId: 'custom',                    // 📅 기간 직접 설정(시작~끝)
         legacyId: 'legacy',
         /**
@@ -108,11 +114,41 @@
         window._psSetFilter({ from: from, to: to });
     };
     window._psSetMode = function (m) { try { localStorage.setItem(P.modeKey, m); } catch (e) { /* 무시 */ } if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody(); };
+    /**
+     * ☑ [2026-11-23 사용자 요청] 기간 버튼 **중복 선택** — 전일+금일, 전주+금주 처럼 누르면 켜고/끈다.
+     *    모드는 'prevday+day' 처럼 `+` 로 이은 한 문자열이라 캐시 열쇠(aiPeriodSummary[kind])·저장이 그대로 돈다.
+     *    순서는 P.periods 순으로 정규화(같은 조합이 두 열쇠가 되지 않게). 마지막 하나는 끌 수 없다.
+     */
+    function periodIds() { return P.periods.map(function (p) { return p.id; }); }
+    function splitKinds(kind) {
+        var ids = periodIds();
+        return String(kind || '').split('+').filter(function (k) { return ids.indexOf(k) >= 0; });
+    }
+    window._psToggleMode = function (id) {
+        var ids = periodIds();
+        var cur = splitKinds(mode());
+        var i = cur.indexOf(id);
+        if (i >= 0) { if (cur.length > 1) cur.splice(i, 1); }
+        else cur.push(id);
+        cur.sort(function (a, c) { return ids.indexOf(a) - ids.indexOf(c); });
+        window._psSetMode(cur.join('+'));
+    };
 
     // ── 기간 ────────────────────────────────────────────────────────────────────
     window._psRange = function (kind, base) {
         var b = base ? new Date(base) : new Date(); b.setHours(0, 0, 0, 0);
         var from = new Date(b), to = new Date(b), key, label;
+        // ☑ 여러 기간을 골랐으면 각각 구해 **가장 이른 시작 ~ 가장 늦은 끝**으로 합친다.
+        if (String(kind).indexOf('+') >= 0) {
+            var parts = splitKinds(kind).map(function (k) { return window._psRange(k, base); });
+            if (parts.length) {
+                var f0 = parts.reduce(function (m, r) { return r.from < m ? r.from : m; }, parts[0].from);
+                var t0 = parts.reduce(function (m, r) { return r.to > m ? r.to : m; }, parts[0].to);
+                key = ymd(f0) + '~' + ymd(t0);
+                label = parts.map(function (r) { return r.label; }).join(' + ');
+                return { kind: kind, from: new Date(f0), to: new Date(t0), key: key, label: label };
+            }
+        }
         if (kind === P.customId) {
             // 📅 직접 설정 — 아직 안 골랐으면 **오늘 하루**로 둔다(빈 기간을 만들지 않는다).
             var f = filt();
@@ -126,14 +162,23 @@
             to.setHours(23, 59, 59, 999);
             return { kind: kind, from: from, to: to, key: key, label: label };
         }
-        if (kind === 'day') { key = ymd(b); label = T('오늘 ' + ymd(b), 'Today ' + ymd(b)); }
-        else if (kind === 'month') {
+        // ⏪ 전일/전주/전월 — 기준일을 한 단위 앞으로 옮긴 뒤 같은 계산을 탄다(계산을 두 벌로 두지 않는다).
+        var prev = /^prev/.test(kind);
+        var unit = prev ? kind.slice(4) : kind;
+        if (prev) {
+            if (unit === 'day') b.setDate(b.getDate() - 1);
+            else if (unit === 'month') b = new Date(b.getFullYear(), b.getMonth() - 1, 1);
+            else b.setDate(b.getDate() - 7);
+            from = new Date(b); to = new Date(b);
+        }
+        if (unit === 'day') { key = ymd(b); label = prev ? T('전일 ' + key, 'Yesterday ' + key) : T('오늘 ' + key, 'Today ' + key); }
+        else if (unit === 'month') {
             from = new Date(b.getFullYear(), b.getMonth(), 1); to = new Date(b.getFullYear(), b.getMonth() + 1, 0);
-            key = b.getFullYear() + '-' + pad(b.getMonth() + 1); label = T(key.replace('-', '년 ') + '월', key);
+            key = b.getFullYear() + '-' + pad(b.getMonth() + 1); label = (prev ? T('전월 ', 'Last month ') : '') + T(key.replace('-', '년 ') + '월', key);
         } else {
             var dow = b.getDay(), back = P.weekStartsMonday ? (dow + 6) % 7 : dow;
             from = new Date(b); from.setDate(b.getDate() - back); to = new Date(from); to.setDate(from.getDate() + 6);
-            key = ymd(from) + '~' + ymd(to); label = T('이번 주 ' + key, 'This week ' + key);
+            key = ymd(from) + '~' + ymd(to); label = prev ? T('지난 주 ' + key, 'Last week ' + key) : T('이번 주 ' + key, 'This week ' + key);
         }
         to.setHours(23, 59, 59, 999);
         return { kind: kind, from: from, to: to, key: key, label: label };
@@ -557,7 +602,10 @@
         var btn = function (id, label, on) {
             return '<button onclick="window._psSetMode(\'' + id + '\')" style="padding:4px 12px; border:1px solid ' + (on ? '#1971c2' : '#cfd8e3') + '; background:' + (on ? '#1971c2' : '#fff') + '; color:' + (on ? '#fff' : '#2c5f8a') + '; border-radius:14px; font-size:12px; font-weight:bold; cursor:pointer;">' + esc(label) + '</button>';
         };
-        var b = P.periods.map(function (p) { return btn(p.id, en ? p.en : p.ko, cur === p.id); }).join('');
+        var curKinds = splitKinds(cur);
+        var b = P.periods.map(function (p) {
+            return btn(p.id, en ? p.en : p.ko, curKinds.indexOf(p.id) >= 0).replace('window._psSetMode(', 'window._psToggleMode(');
+        }).join('');
         b += btn(P.customId, en ? '📅 Range' : '📅 기간설정', cur === P.customId);
         if (P.showLegacy) {
             b += '<span style="flex:1"></span>' + btn(P.legacyId, en ? '📊 Schedule view' : '📊 일정 현황', cur === P.legacyId);
@@ -579,32 +627,35 @@
                    'style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px; max-width:220px;' + (extraStyle || '') + '">' + o + '</select>';
         };
         var sc = (col && col.scan) || {};
-        // 💡 [2026-11-11 사용자 요청] 기간 버튼·검색 아이콘·담당자(PM)/프로젝트/업무 담당자
-        //    드롭다운·필터 해제를 한 줄로 — 예전엔 두 개의 flex div로 나뉘어 있어 한 줄에 다 안 보였다.
-        b += '<span style="font-size:11.5px; color:#888; margin-left:4px;">🔎</span>' +
-             sel('pm', T('프로젝트 담당자', 'Project owner'), F.pm, (col && col.pms) || [], T('담당자 전체', 'All owners'), ['proj', 'who']) +
-             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('프로젝트 전체', 'All projects'), ['who']) +
-             // 👷 업무 담당자 — 기본 필터(PM)와 구분되게 옅은 색으로 "보조" 느낌을 준다.
-             sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('업무 담당자 전체', 'All task assignees'), [], ' color:#888;') +
-             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\'})" style="padding:3px 9px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:11px; cursor:pointer;">' + esc(T('필터 해제', 'Clear')) + '</button>' : '') +
-             (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
-             ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
-
-        var h = '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' + b + '</div>';
-
-        // 📅 기간설정 — 시작·끝 두 칸. 아직 안 골랐으면 지금 기간을 채워 둔다(빈 칸부터 시작하면
-        //    무엇을 고르라는 건지 알 수 없다).
+        // 💡 [2026-11-23 사용자 요청] 1줄 = 기간(전일~금월·기간설정+달력), 2줄 = 필터.
+        //    필터는 이름표를 붙여 "프로젝트 담당자 / 프로젝트 / 업무 담당자" 가 무엇인지 보이게 한다.
+        // 📅 기간설정 — 시작·끝 두 칸을 그 버튼 바로 옆에. 아직 안 골랐으면 지금 기간을 채워 둔다
+        //    (빈 칸부터 시작하면 무엇을 고르라는 건지 알 수 없다).
         if (cur === P.customId) {
             var R = (col && col.range) || window._psRange(cur);
             var inp = function (id, v) {
                 return '<input id="' + id + '" type="date" value="' + esc(v) + '" style="padding:3px 6px; border:1px solid #cfd8e3; border-radius:5px; font-size:11.5px;">';
             };
-            h += '<div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap; font-size:11.5px; color:#555;">' +
-                 esc(T('기간', 'Range')) + inp('ps-from', F.from || ymd(R.from)) + '~' + inp('ps-to', F.to || ymd(R.to)) +
+            b += '<span style="display:inline-flex; gap:4px; align-items:center; font-size:11.5px; color:#555; margin-left:2px;">' +
+                 inp('ps-from', F.from || ymd(R.from)) + '~' + inp('ps-to', F.to || ymd(R.to)) +
                  '<button onclick="window._psApplyCustom()" style="padding:3px 11px; border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' +
-                   esc(T('적용', 'Apply')) + '</button></div>';
+                   esc(T('적용', 'Apply')) + '</button></span>';
         }
-        return h;
+        var lab = function (s) { return '<span style="font-size:11.5px; color:#666; white-space:nowrap;">' + esc(s) + '</span>'; };
+        var slash = '<span style="color:#bbb;">/</span>';
+        var f2 = '<span style="font-size:11.5px; color:#888;">🔎</span>' +
+             lab(T('프로젝트 담당자', 'Project owner')) +
+             sel('pm', T('프로젝트 담당자', 'Project owner'), F.pm, (col && col.pms) || [], T('전체', 'All'), ['proj', 'who']) + slash +
+             lab(T('프로젝트', 'Project')) +
+             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('전체', 'All'), ['who']) + slash +
+             lab(T('업무 담당자', 'Task assignee')) +
+             sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('전체', 'All'), []) +
+             (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="padding:2px 8px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:13px; line-height:1.2; cursor:pointer;">↺</button>' : '') +
+             (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
+             ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
+
+        return '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">' + b + '</div>' +
+               '<div id="ps-filter-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' + f2 + '</div>';
     }
     function link(idx) {
         return window._linkifyTaskRefs ? window._linkifyTaskRefs(esc('#G' + idx)) : esc('#G' + idx);
