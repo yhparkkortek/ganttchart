@@ -63,6 +63,8 @@
         if (tabName === 'weekly' && window.showWeeklyReport) window.showWeeklyReport();
         // 📔 Daily Report — 들어올 때마다 그 날짜의 팀 전체를 NAS 에서 다시 읽는다(목록 1콜 + 필요한 파일만)
         if (tabName === 'daily' && window.dailyOnTabShown) window.dailyOnTabShown();
+        // 🗂 프로젝트 요약(js/62) — 들어올 때마다 다시 그린다(그 사이 간트·메일이 바뀌었을 수 있다)
+        if (tabName === 'psummary' && window._psOnTabShown) window._psOnTabShown();
         // 📒 Project list — 들어올 때마다 다시 그리고, 첫 진입에선 Drive 최신본/NAS 문서 개수를 받아온다
         if (tabName === 'projectlist' && window.plOnTabShown) window.plOnTabShown();
         // 📄 Document — 들어올 때마다 다시 그린다(그 사이 Summary·자재·SPEC 이 바뀌었을 수 있다).

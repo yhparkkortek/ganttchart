@@ -778,7 +778,7 @@
         }
         var key = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!key) { alert(T('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please set your AI API key first.')); return null; }
-        var btn = document.getElementById('ai-summary-generate-btn');
+        var btn = genBtn();
         if (btn) { btn.disabled = true; btn.textContent = T('⏳ 생성 중...', '⏳ Generating...'); }
         try {
             var res = await window.callAiBackend(key, window._psBuildPrompt(col), { feature: 'period-summary' });
@@ -945,7 +945,7 @@
                '</div></div>');
         // 🖥 표가 들어가니 모달을 한 번 넓힌다(사람이 줄여 둔 폭은 그 뒤로 건드리지 않는다).
         try {
-            var box = document.getElementById('ai-summary-modal'); box = box && box.firstElementChild;
+            var box = pageActive() ? null : document.getElementById('ai-summary-modal'); box = box && box.firstElementChild;
             if (box && !box._psWide) { box._psWide = 1; if (box.getBoundingClientRect().width < 900) box.style.width = 'min(1040px, 94vw)'; }
         } catch (e) { /* 폭은 못 바꿔도 된다 */ }
         var openName = openProjectName();
@@ -1341,7 +1341,7 @@
                 }
             }
             var m = document.getElementById('ai-summary-modal');
-            if (m && m.style.display !== 'none' && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+            if ((pageActive() || (m && m.style.display !== 'none')) && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
         } catch (err) {
             if (window.showToast) window.showToast('⚠️ ' + (err && err.message || err), 'error');
         }
@@ -1406,8 +1406,11 @@
         if (ppt) ppt.style.display = show ? '' : 'none';
     }
 
+    /** 🗂 지금 보이는 곳의 생성 버튼 — 프로젝트 요약 페이지가 열려 있으면 그 버튼, 아니면 옛 모달 버튼. */
+    function genBtn() { return (pageActive() && document.getElementById('ps-page-gen-btn')) || document.getElementById('ai-summary-generate-btn'); }
+    function pageActive() { var t = document.getElementById('tab-psummary'); return !!(t && t.classList.contains('active')); }
     function setGenerateLabel(cur) {
-        var btn = document.getElementById('ai-summary-generate-btn');
+        var btn = genBtn();
         if (!btn || btn.disabled) return;
         btn.textContent = cur === P.legacyId ? T('🔄 다시 생성', '🔄 Regenerate') : T('🤖 AI 요약 생성', '🤖 Generate AI summary');
     }
@@ -1416,8 +1419,21 @@
         var orig = window._renderAiProjectSummaryBody;
         if (typeof orig !== 'function' || orig._psWrapped) return false;
         window._renderAiProjectSummaryBody = function () {
-            var body = document.getElementById('ai-summary-body');
+            // 🗂 [2026-11-23] 프로젝트 요약 **페이지**가 열려 있으면 거기에 그린다. 같은 화면이 두 군데 있으면
+            //    내부 id(ps-*)가 겹쳐 엉뚱한 쪽을 집으므로, 페이지가 주인일 땐 모달 쪽은 비운다.
+            var page = pageActive() ? document.getElementById('psummary-page') : null;
+            var body = page || document.getElementById('ai-summary-body');
             var cur = mode();
+            if (page) {
+                var mb = document.getElementById('ai-summary-body'); if (mb && mb.innerHTML) mb.innerHTML = '';
+                var mm = document.getElementById('ai-summary-modal'); if (mm) mm.style.display = 'none';
+                if (cur === P.legacyId) cur = P.defaultMode;
+                try { renderPeriod(page, cur); setGenerateLabel(cur); } catch (e) { console.warn('[프로젝트 요약] 렌더 실패:', e && e.message); page.innerHTML = '<div style="padding:20px; color:#b1432f;">⚠️ ' + esc(String(e && e.message || e)) + '</div>'; }
+                return;
+            }
+            // 페이지도 모달도 안 보이면 그리지 않는다(뒤에서 도는 훑기가 숨은 모달에 같은 id 화면을 또 만들지 않게).
+            var mmv = document.getElementById('ai-summary-modal');
+            if (document.getElementById('tab-psummary') && (!mmv || mmv.style.display === 'none' || !mmv.style.display) && !P.showLegacy) return;
             if (!body) return orig.apply(this, arguments);
             paintModeOnlyButtons(cur);
             if (cur !== P.legacyId) { try { renderPeriod(body, cur); setGenerateLabel(cur); return; } catch (e) { console.warn('[기간 요약] 렌더 실패 — 일정 현황으로:', e.message); } }
@@ -1482,10 +1498,27 @@
         window.sendGanttQaMessage._psWrapped = true;
         return true;
     }
-    window._periodSummaryInstall = function () { return { render: wrapRender(), generate: wrapGenerate(), qa: wrapQa() }; };
+    /** 🗂 탭 진입(js/23 switchTab) — 다시 그린다. */
+    window._psOnTabShown = function () {
+        if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+    };
+    /** 옛 진입로(🤖 AI 도구 ▸ AI 요약)는 페이지로 보낸다 — 화면이 두 벌이면 id 가 겹친다. 일정 현황(legacy)을 켠 경우만 모달. */
+    function wrapOpen() {
+        var orig = window.openAiProjectSummaryModal;
+        if (typeof orig !== 'function' || orig._psWrapped) return false;
+        window.openAiProjectSummaryModal = function () {
+            if (!P.showLegacy && document.getElementById('tab-psummary') && typeof window.switchTab === 'function') { window.switchTab('psummary'); return; }
+            return orig.apply(this, arguments);
+        };
+        window.openAiProjectSummaryModal._psWrapped = true;
+        return true;
+    }
+    window._periodSummaryInstall = function () { return { render: wrapRender(), generate: wrapGenerate(), qa: wrapQa(), open: wrapOpen() }; };
     (function install(tries) {
         window._periodSummaryInstall();
-        var done = window._renderAiProjectSummaryBody && window._renderAiProjectSummaryBody._psWrapped && window.generateAiProjectSummary && window.generateAiProjectSummary._psWrapped && window.sendGanttQaMessage && window.sendGanttQaMessage._psWrapped;
+        var done = window._renderAiProjectSummaryBody && window._renderAiProjectSummaryBody._psWrapped && window.generateAiProjectSummary && window.generateAiProjectSummary._psWrapped && window.sendGanttQaMessage && window.sendGanttQaMessage._psWrapped && window.openAiProjectSummaryModal && window.openAiProjectSummaryModal._psWrapped;
+        // ⚠️ 마지막 탭 복원(js/23)이 이 파일보다 **먼저** 돌아 프로젝트 요약이 이미 열려 있으면 스스로 그린다(js/59 와 같은 처지).
+        if (tries === 0 && pageActive() && window._renderAiProjectSummaryBody && window._renderAiProjectSummaryBody._psWrapped) { try { window._psOnTabShown(); } catch (e) { /* 다음 진입 때 그린다 */ } }
         if (!done && tries < 20 && typeof setTimeout === 'function') setTimeout(function () { install(tries + 1); }, 500);
     })(0);
     try {

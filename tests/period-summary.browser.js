@@ -9,7 +9,8 @@
     function ok(n, c, d) { if (c) { pass++; out.push('  OK   ' + n); } else { fail++; out.push('  FAIL ' + n + (d !== undefined ? '  — ' + (typeof d === 'string' ? d : JSON.stringify(d)).slice(0, 300) : '')); } }
     var P = window.PERIOD_SUMMARY;
     if (!P || !window._psCollectFacts) { console.error('js/62 미로드'); return; }
-    var keep = { gd: window.globalData, ci: window.colIdx, pm: window.projectMeta, call: window.callAiBackend, key: window.getActiveAiKey, mode: localStorage.getItem(P.modeKey), hist: window._ganttQaHistory,
+    var _act = document.querySelector('.tab-panel.active');
+    var keep = { tab: _act ? _act.id.replace(/^tab-/, '') : 'gantt', gd: window.globalData, ci: window.colIdx, pm: window.projectMeta, call: window.callAiBackend, key: window.getActiveAiKey, mode: localStorage.getItem(P.modeKey), hist: window._ganttQaHistory,
                  filt: localStorage.getItem(P.filterKey), scan: P.scanProjects, fileName: window.currentDriveFileName, nas: window.nasAppFile };
     // 📚 보관함(App_Config/AiSummary)은 **메모리 가짜** — 진짜 NAS 에 시험 요약을 남기지 않는다.
     //    가짜는 nasAppFile 경계 하나라, 이름 짓기·해시로 찾기·재사용은 진짜 코드가 돈다.
@@ -67,41 +68,36 @@
         var g = window._psGround(['사실 #G1 에 근거', '근거 없는 추정 문장', '#G999 없는 번호', '#G2 와 #G1 둘 다'], [{ idx: 1 }, { idx: 2 }]);
         ok('접지: 유효 #G 없는 문장 2개 버림', g.kept.length === 2 && g.dropped === 2, g);
 
-        // 모달 — 기간 모드가 기본, 숫자 네 칸 없음, 툴바 있음
+        // 🗂 [2026-11-23] 프로젝트 요약은 **페이지**다 — 옛 진입로(AI 도구 ▸ AI 요약)도 페이지로 간다.
         localStorage.setItem(P.modeKey, 'week');
         window.openAiProjectSummaryModal();
-        var body = document.getElementById('ai-summary-body');
+        var pageTab = document.getElementById('tab-psummary');
+        ok('옛 메뉴(AI 요약)는 프로젝트 요약 페이지로 간다', !!pageTab && pageTab.classList.contains('active'));
+        var body = document.getElementById('psummary-page');
         ok('툴바(전일~금월/기간설정)가 그려졌다', !!body.querySelector('#ps-period-toolbar') && /금일|Today/.test(body.textContent) && /전주|Last week/.test(body.textContent) && /금월|This month/.test(body.textContent) && /기간설정|Range/.test(body.textContent));
+        ok('모달 쪽에는 같은 화면이 없다(id 겹침 방지)', !document.querySelector('#ai-summary-body #ps-period-toolbar'));
         // 📊 [2026-11-09] '일정 현황' 은 간트 상태 칸이 관리되지 않아 접었다(showLegacy:false).
-        //    ⚠️ 숨기는 것으로 끝나면 안 된다 — 그 모드에만 매인 버튼(프롬프트·PPT)이 남아 있으면
-        //       눌러도 "먼저 리포트를 만들어주세요" 만 뜬다.
         ok('일정 현황 버튼이 없다', !/일정 현황|Schedule view/.test(body.textContent), body.textContent.slice(0, 80));
-        ok('그 모드 전용 버튼도 같이 숨는다', (function () {
-            var p = document.getElementById('ai-summary-open-prompt-btn');
-            var ppt = document.querySelector('#ai-summary-modal [onclick*="exportAiProjectSummaryPPT"]');
-            return (!p || p.style.display === 'none') && (!ppt || ppt.style.display === 'none');
-        })());
-        ok('🖨️ PDF 는 남는다(기간 모드에서도 찍힌다)', (function () {
-            var pdf = document.querySelector('#ai-summary-modal [onclick*="printAiProjectSummary"]');
-            return !!pdf && pdf.style.display !== 'none';
-        })());
         // ⚠️ 옛 설정이 'legacy' 로 남아 있어도 **갇히지 않는다**(돌아올 버튼이 없으니까).
         localStorage.setItem(P.modeKey, P.legacyId);
         ok('꺼 둔 모드가 저장돼 있어도 기본 모드로 돌아온다', window._psMode() === P.defaultMode, window._psMode());
         ok('기간 모드엔 완료/진행/대기/지연 네 칸이 없다', !/repeat\(4,\s*1fr\)/.test(body.innerHTML));
+        window._renderAiProjectSummaryBody();
         ok('사실 목록이 #G 링크로 그려졌다', /#G1\b/.test(body.textContent) && /패널 단가 회신 요청/.test(body.textContent));
-        ok('생성 버튼 라벨이 기간용', /AI 요약 생성|Generate AI summary/.test(document.getElementById('ai-summary-generate-btn').textContent));
-        // 일정 현황(옛) 모드 — 스위치를 켜면 **여전히 돈다**(지운 게 아니라 접은 것이다).
+        ok('페이지 생성 버튼 라벨이 기간용', /AI 요약 생성|Generate AI summary/.test((document.getElementById('ps-page-gen-btn') || {}).textContent || ''));
+        // 일정 현황(옛) 모드 — 스위치를 켜면 **여전히 돈다**(지운 게 아니라 접은 것이다) — 그땐 옛 모달.
         P.showLegacy = true;
+        window.switchTab('gantt');
+        window.openAiProjectSummaryModal();
+        var mbody = document.getElementById('ai-summary-body');
         window._psSetMode(P.legacyId);
-        ok('켜면 일정 현황이 다시 나온다', /일정 현황|Schedule view/.test(body.textContent));
-        ok('일정 현황 모드에서도 숫자 네 칸은 숨긴다(showCounts=false)', !/repeat\(4,\s*1fr\)/.test(body.innerHTML) && !!body.querySelector('#ps-period-toolbar'));
-        ok('그 모드에선 전용 버튼이 보인다', (function () {
-            var p = document.getElementById('ai-summary-open-prompt-btn');
-            return !p || p.style.display !== 'none';
-        })());
+        ok('켜면 일정 현황이 (모달에) 다시 나온다', !!mbody && /일정 현황|Schedule view/.test(mbody.textContent));
+        ok('일정 현황 모드에서도 숫자 네 칸은 숨긴다(showCounts=false)', !!mbody && !/repeat\(4,\s*1fr\)/.test(mbody.innerHTML) && !!mbody.querySelector('#ps-period-toolbar'));
         P.showLegacy = false;
+        var mm0 = document.getElementById('ai-summary-modal'); if (mm0) mm0.style.display = 'none';
+        window.switchTab('psummary');
         window._psSetMode('day');
+        body = document.getElementById('psummary-page');
 
         // AI 생성 — 가짜 응답(접지 안 된 문장 1개 포함)
         window.getActiveAiKey = function () { return 'fake'; };
@@ -297,13 +293,13 @@
         window._psSetFilter({ from: '2020-01-01', to: '2020-01-31' });   // 확실히 0건인 기간
         window._psSetMode(P.customId);
         await new Promise(function (r) { setTimeout(r, 200); });
-        var busyTxt = document.getElementById('ai-summary-body').innerText;
+        var busyTxt = document.getElementById('psummary-page').innerText;
         ok('훑는 중엔 "확인하는 중" 이라고 말한다', /확인하는 중|Scanning/.test(busyTxt) && !/없습니다/.test(busyTxt),
            busyTxt.split('\n').filter(Boolean).slice(-2));
         window._psOtherScan.busy = false;
         await new Promise(function (r) { setTimeout(r, 150); });
         window._renderAiProjectSummaryBody();
-        ok('다 읽고 나서야 "없습니다"', /없습니다|No mail-derived/.test(document.getElementById('ai-summary-body').innerText));
+        ok('다 읽고 나서야 "없습니다"', /없습니다|No mail-derived/.test(document.getElementById('psummary-page').innerText));
         window._psSetFilter({ from: '', to: '' });
         window.dailyScanMyProjects = realScan;
         window._psResetScan();
@@ -316,6 +312,7 @@
         if (keep.filt == null) localStorage.removeItem(P.filterKey); else localStorage.setItem(P.filterKey, keep.filt);
         P.scanProjects = keep.scan;
         var m = document.getElementById('ai-summary-modal'); if (m) m.style.display = 'none';
+        if (window.switchTab && keep.tab) { try { window.switchTab(keep.tab); } catch (e) { /* 무시 */ } }
         if (window._renderAiProjectSummaryBody) { try { window._renderAiProjectSummaryBody(); } catch (e) { /* 무시 */ } }
     }
     console.log(out.join('\n') + '\n결과: ' + pass + '/' + (pass + fail) + ' 통과');
