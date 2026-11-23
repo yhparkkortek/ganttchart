@@ -620,6 +620,104 @@
 
     window._jiraRefresh = function () { window._jiraOnTabShown(); };
 
+    // ── 🔎 전체 이슈 검색 (2026-11-23 사용자 요청) ──────────────────────────
+    //  "노이즈·벤트·외관불량·신뢰성 등으로 — 나의 프로젝트와 유사한 이슈/해결책이
+    //  있었는지 찾고 싶다(DFMA 참고)." 지금 연결된 프로젝트와 **무관하게 JIRA 전체**를
+    //  뒤진다 — `pullKeyword()`(위)와 같은 JQL(`text ~`)이지만 그건 "이 프로젝트에
+    //  연결할 이슈 찾기"가 목적이라 결과가 현재 표(`_byKey`)에 섞여 들어간다. 이건
+    //  목적이 다르다(참고용 전수 검색) — 결과를 표에 안 섞고 **별도 모달**에 보여준다.
+    //  AI 0회(JIRA 서버 전문검색 그대로) — 결정론 먼저(CLAUDE.md), 새 백엔드 라우트도
+    //  없다(기존 `/jira/search`).
+    var _searchHits = [];
+
+    window._jiraOpenSearchModal = function () {
+        var wrap = document.getElementById('jira-search-modal');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.id = 'jira-search-modal';
+            wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:9400; pointer-events:none; background:none;';
+            document.body.appendChild(wrap);
+        }
+        wrap.innerHTML =
+            '<div id="jira-search-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
+            + ' width:min(760px,94vw); max-height:88vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+            + ' display:flex; flex-direction:column;">'
+            + '<div id="jira-search-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
+            + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
+            + '<strong style="font-size:14px;">🔎 ' + T('전체 이슈 검색', 'Search all issues') + '</strong>'
+            + '<span style="flex:1;"></span>'
+            + '<button onclick="document.getElementById(\'jira-search-modal\').style.display=\'none\'"'
+            + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
+            + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
+            + '<div style="padding:12px 14px 6px;">'
+            + '<div style="font-size:11px; color:#888; margin-bottom:6px;">' + T('지금 연결된 프로젝트와 상관없이 JIRA 전체에서 찾습니다 — 예: 노이즈, 번들림, 외관불량, 신뢰성', 'Searches across all of JIRA, not just the linked project — e.g. noise, warping, cosmetic defect, reliability') + '</div>'
+            + '<div style="display:flex; gap:6px;">'
+            + '<input id="jira-search-q" placeholder="' + T('검색어', 'Search term') + '" style="' + inputSt + '" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
+            + '<button onclick="window._jiraSearchRun()"' + btnHover + ' style="' + btnSt + ' font-weight:bold; flex-shrink:0;">🔎 ' + T('검색', 'Search') + '</button>'
+            + '</div></div>'
+            + '<div id="jira-search-body" style="padding:0 14px 14px; flex:1; min-height:0; overflow-y:auto; font-size:12px;"></div>'
+            + '</div>';
+        wrap.style.display = 'block';
+        if (window._makeDraggable) window._makeDraggable('jira-search-box', 'jira-search-drag');
+        if (window._bindClickToFront) window._bindClickToFront('jira-search-modal');
+        if (window.bringModalToFront) window.bringModalToFront('jira-search-modal');
+        var qEl = document.getElementById('jira-search-q');
+        if (qEl) qEl.focus();
+    };
+
+    // ⚠️ `safe`는 pullKeyword()와 같은 이스케이프(따옴표·역슬래시 제거) — JQL 문자열 안에
+    //    그대로 들어가므로 안 지우면 검색 자체가 깨진다(JQL 파싱 오류).
+    window._jiraSearchRun = async function () {
+        var box = document.getElementById('jira-search-body');
+        var qInp = document.getElementById('jira-search-q');
+        var q = ((qInp && qInp.value) || '').trim();
+        if (!q) { box.innerHTML = ''; return; }
+        box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('검색 중...', 'Searching...') + '</div>';
+        var safe = q.replace(/["\\]/g, '');
+        try {
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('text ~ "' + safe + '*" ORDER BY updated DESC') + '&maxResults=50');
+            if (!d || d.ok === false) { box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc((d && d.message) || T('검색 실패', 'Search failed')) + '</div>'; return; }
+            _searchHits = d.issues || [];
+            _jiraRenderSearchResults(d.total || _searchHits.length);
+        } catch (e) {
+            box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
+        }
+    };
+
+    function _jiraRenderSearchResults(total) {
+        var box = document.getElementById('jira-search-body');
+        if (!box) return;
+        if (!_searchHits.length) { box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('일치하는 이슈가 없습니다.', 'No matching issues.') + '</div>'; return; }
+        // 결과가 상한(50)에 걸렸으면 "전부"가 아니라는 걸 숨기지 않는다 — 검색어를 좁혀야
+        // 더 보인다는 안내까지(CLAUDE.md "끊었으면 끊었다는 사실을 드러낼 것").
+        var countNote = total > _searchHits.length
+            ? T(total + '건 중 ' + _searchHits.length + '건 표시 — 검색어를 더 좁혀보세요', 'Showing ' + _searchHits.length + ' of ' + total + ' — try narrowing the search term')
+            : T(_searchHits.length + '건', _searchHits.length + ' result(s)');
+        box.innerHTML = '<div style="font-size:11px; color:#888; margin:6px 0;">' + esc(countNote) + '</div>'
+            + '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
+            + '<thead><tr style="background:#eef6f7;">'
+            + '<th style="padding:7px 8px; text-align:left; width:10%; border-bottom:2px solid #cfe3e5;">' + T('프로젝트', 'Project') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:12%; border-bottom:2px solid #cfe3e5;">' + T('키', 'Key') + '</th>'
+            + '<th style="padding:7px 8px; text-align:left; width:40%; border-bottom:2px solid #cfe3e5;">' + T('요약', 'Summary') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:12%; border-bottom:2px solid #cfe3e5;">' + T('상태', 'Status') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:13%; border-bottom:2px solid #cfe3e5;">' + T('담당자', 'Assignee') + '</th>'
+            + '<th style="padding:7px 8px; text-align:center; width:13%; border-bottom:2px solid #cfe3e5;">' + T('수정일', 'Updated') + '</th>'
+            + '</tr></thead><tbody>'
+            + _searchHits.map(function (it) {
+                var c = statusColor(it.status);
+                var proj = (it.key || '').split('-')[0];
+                return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
+                    + '<td style="padding:7px 8px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(proj) + '</td>'
+                    + '<td style="padding:7px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
+                    + '<td style="padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + esc(it.summary) + '">' + esc(it.summary) + '</td>'
+                    + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
+                    + '<td style="padding:7px 8px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.assignee || '—') + '</td>'
+                    + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
+                    + '</tr>';
+            }).join('')
+            + '</tbody></table>';
+    }
+
     // ── ⚙️ 연결 설정 모달 ────────────────────────────────────────────
     window._jiraOpenLinkSettings = function () {
         var L = links();
