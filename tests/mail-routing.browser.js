@@ -233,6 +233,42 @@ window.__mailRoutingTestBody = async function () {
                 ok(placed[0] && placed[0].opts && placed[0].opts.coalesce === false && !placed[0].opts.byHuman, '12-5 자동 배치로 기록된다(사람 배치 아님)', placed[0] && placed[0].opts);
             } finally { window._msResults = realQ; window._msSaveQueueToStorage = realSaveQ; window._msRefreshQueueBadges = realBadge; }
         }
+        // 13. [2026-11-23 사용자 결정] ♻️ 하나 — "이 프로젝트 아님, 빼고 다시 판단". 진짜 inboxQuickClassify(14c + 74 래퍼) 를 누른다.
+        {
+            const realSync = TI.syncNow, realRender = window.renderTaskInbox, realLearn = window._writeLearningEntry;
+            let learned = 0;
+            TI.syncNow = async () => 'ok'; window.renderTaskInbox = () => {}; window._writeLearningEntry = () => { learned++; };
+            const T13 = () => ({ 업무명: 'x', 시작일: '2026-11-01', 완료일: '2026-11-02', 상세내용: 'x' });
+            store = [
+                { uid: 'r1', status: '대기', task: T13(), mailRaw: { subject: 'Shuffler Display 4.3" ESD 결과', sender: 'a <a@x.com>', date: '2026-11-01 09:00', body2000: '첨부', key: 'kr1' + RUN },
+                  matchedProject: { status: 'ambiguous', candidates: [cands[4]], confidence: '중', matchBasis: 'ai', routing: { basis: 'ai_low', v: 'old' } } },
+                { uid: 'r2', status: '대기', task: T13(), mailRaw: { subject: 'STELLAR32 일정 확인', sender: 'b <b@x.com>', date: '2026-11-01 09:00', body2000: '확인 부탁', key: 'kr2' + RUN },
+                  matchedProject: { status: 'ambiguous', candidates: [cands[5]], confidence: '중', matchBasis: 'ai', routing: { basis: 'ai_low', v: 'old' } } },
+                { uid: 'r3', status: '대기', task: T13(), mailRaw: { subject: '공지', sender: 'c <c@x.com>', date: '2026-11-01 09:00', body2000: '', key: 'kr3' + RUN },
+                  matchedProject: { status: 'ambiguous', candidates: [], confidence: '' } }
+            ];
+            placed.length = 0;
+            try {
+                window.inboxQuickClassify('r2', '오매칭');
+                await new Promise(r => setTimeout(r, 1500));
+                const c2 = store.find(x => x.uid === 'r2');
+                ok(c2 && c2.excludedFids && c2.excludedFids.indexOf('O1') !== -1, '13-1 ♻️ 는 카드를 지우지 않고 보이던 후보(O1)를 제외 목록에 넣는다', c2 && c2.excludedFids);
+                ok(placed.length === 1 && placed[0].fid === 'T1' && c2.status === '자동배치됨', '13-2 제외 뒤 고유 식별자(STELLAR32)가 있으면 그 프로젝트로 다시 배치', placed);
+                window.inboxQuickClassify('r1', '오매칭');
+                await new Promise(r => setTimeout(r, 1500));
+                const c1 = store.find(x => x.uid === 'r1');
+                ok(c1.status === '대기' && placed.length === 1, '13-3 같은 가족의 남은 형제(SHUFFLER 3.0)로는 자동배치하지 않는다(메일엔 4.3" — 추측 금지)', { st: c1.status, placed: placed.length });
+                ok(c1.matchedProject && c1.matchedProject.candidates.length && c1.matchedProject.candidates.every(c => c.drive_file_id !== 'S4'), '13-4 제외한 후보(S4)는 새 후보에 다시 나오지 않는다', c1.matchedProject && c1.matchedProject.candidates.map(c => c.drive_file_id));
+                window.inboxQuickClassify('r3', '오매칭');
+                const c3 = store.find(x => x.uid === 'r3');
+                ok(c3 && c3.status === '대기' && !c3.excludedFids, '13-5 후보가 없는 카드는 ♻️ 를 눌러도 바뀌지 않는다(지우지 않음)', c3);
+                ok(learned === 2, '13-6 학습 기록은 뺀 후보마다 한 번(r2·r1)', learned);
+                ok(window._mailRoutes().some(e => e.type === 'correct' && e.fid === 'S4'), '13-7 교정 기록이 남는다(같은 스레드의 다음 메일도 그 프로젝트로 안 간다)');
+                const rb = await window.mailRouteRejudgePending({ force: true, toast: false });
+                const c1b = store.find(x => x.uid === 'r1');
+                ok(c1b.matchedProject.candidates.every(c => c.drive_file_id !== 'S4'), '13-8 다음 재판정에서도 제외 목록은 유지된다', c1b.matchedProject.candidates.map(c => c.drive_file_id));
+            } finally { TI.syncNow = realSync; window.renderTaskInbox = realRender; window._writeLearningEntry = realLearn; }
+        }
         // 9-4 유휴 스윕이 'none'(매칭 확정 건 없음)을 돌려줘도 재판정은 돈다 — 대기가 전부 모호할 때가 그 때다
         store = [{ uid: 'n1', status: '대기', task: { 업무명: 'x', 시작일: '2026-11-01', 완료일: '2026-11-02' }, mailRaw: { subject: 'x' },
                    matchedProject: { status: 'ambiguous', candidates: [cands[4]], confidence: '중' } }];

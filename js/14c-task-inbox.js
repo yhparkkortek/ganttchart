@@ -767,13 +767,10 @@ window.renderTaskInbox = function() {
                     ? '<button onclick="window.inboxPlaceToCandidate(\'' + it.uid + '\')" title="' + escapeHtml((_ibEn ? 'Send to AI-analyzed project: ' : 'AI 분석 프로젝트로 전송: ') + (_cand0 ? (_cand0.model || _cand0.customer || _cand0.file_name || '') : '')) + '" onmouseover="this.style.background=\'#c9ecd3\'; this.style.borderColor=\'#7cc494\';" onmouseout="this.style.background=\'#e6f6ea\'; this.style.borderColor=\'#a8dab8\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'AI Proj' : '분석 Proj 전송') + '</button>'
                     : '<button onclick="window.inboxPlaceToCurrent(\'' + it.uid + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ' + (_ibEn ? 'Current Proj' : '현재 Proj 전송') + '</button>'}
                 <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.3 1 0; min-width:0; font-size:11.5px; white-space:nowrap; padding:0 4px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
-                <!-- 🗑 [2026-11-13 요청] 사유 선택 팝업을 띄우던 휴지통 1개를 없애고, 같은 줄에
-                     원클릭 분류 아이콘 3개(오매칭/중복/불필요)를 바로 둔다 — 팝업 한 번을 더 거치지
-                     않고 클릭 한 번으로 학습 기록까지 끝난다(window.inboxQuickClassify, 기존
-                     inboxDeleteWithFeedback 모달의 doLearnAndRemove 로직을 그대로 옮긴 것). -->
-                <button onclick="window.inboxQuickClassify('${it.uid}', '오매칭')" title="${_ibEn ? 'False match — not this project' : '오매칭 — 이 프로젝트 업무가 아님'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fff3f3'; this.style.borderColor='#f5a5a5';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #f5a5a5; border-radius:6px; background:#fff3f3; color:#b10000; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">❌</button>
-                <button onclick="window.inboxQuickClassify('${it.uid}', '중복')" title="${_ibEn ? 'Duplicate — already registered' : '중복 — 이미 등록된 업무'}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#f0fff4'; this.style.borderColor='#a3d9b5';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a3d9b5; border-radius:6px; background:#f0fff4; color:#1a6b35; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">♻️</button>
-                <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Unnecessary / Other' : '불필요 / 기타'}" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ced4da';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; background:#f8f9fa; color:#555; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🚫</button>
+                <!-- ♻️ [2026-11-23 사용자 결정] 원클릭 분류를 하나로 — ❌오매칭/♻️중복/🚫불필요 세 개였는데, 중복은 이 단계에서
+                     사람이 구분할 수 없고 필요한 건 "이 프로젝트가 아니다" 하나라 ♻️ 하나만 남긴다. 누르면 카드를 **지우지 않고**
+                     지금 후보를 이 카드의 제외 목록(excludedFids)에 넣은 뒤 AI 없이 다시 판단한다(js/74 mailRouteRejudgeOne). -->
+                <button onclick="window.inboxQuickClassify('${it.uid}', '오매칭')" title="${_ibEn ? 'Wrong project — exclude it and judge again' : '오매칭 — 이 프로젝트가 아님 · 빼고 다시 판단'}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#f0fff4'; this.style.borderColor='#a3d9b5';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a3d9b5; border-radius:6px; background:#f0fff4; color:#1a6b35; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">♻️</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             ${_hasCand
@@ -2448,6 +2445,54 @@ window.inboxQuickClassify = function(uid, reason) {
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
     const _en = window._currentLang === 'en';
+    // ♻️ [2026-11-23 사용자 결정] 오매칭 = "이 프로젝트가 아님 — 빼고 다시 판단". 카드를 지우지 않는다.
+    //    지금 보이는 후보를 excludedFids 에 넣고(이후 재판정·재분석에서 다시 후보로 안 돌아온다) AI 없이 결정론으로만 다시 본다.
+    //    교정 기록(js/74 mailRouteCorrect, 이 함수를 감싼 래퍼)은 그대로 남아 같은 스레드의 다음 메일도 그 프로젝트로 안 간다.
+    if (reason === '오매칭') {
+        const list = window.TaskInbox.load();
+        const cur = list.find(function(x) { return x.uid === uid; });
+        if (!cur) return;
+        const cands = ((cur.matchedProject && cur.matchedProject.candidates) || []).filter(function(c) { return c && c.drive_file_id; });
+        if (!cands.length) {
+            if (window.showToast) window.showToast(_en
+                ? '♻️ This card has no candidate project to exclude — use [📤 Other Proj] / [➕ New Proj], or bulk-delete from the summary chip.'
+                : '♻️ 이 카드엔 뺄 후보 프로젝트가 없습니다 — [📤 다른 Proj]·[➕ 새 Proj]로 보내거나, 위 요약 칩에서 묶음 삭제하세요.', 'warn', 6000);
+            return;
+        }
+        const ex = new Set(cur.excludedFids || []);
+        cands.forEach(function(c) { ex.add(c.drive_file_id); });
+        const names = cands.map(function(c) { return c.model || c.customer || c.file_name; }).join(', ');
+        const t0 = cur.task || {};
+        if (window._writeLearningEntry) {
+            cands.forEach(function(c) {
+                window._writeLearningEntry(c.drive_file_id, {
+                    type: 'negative_match', reason: '오매칭', taskName: t0['업무명'] || '',
+                    confidence: (cur.matchedProject && cur.matchedProject.confidence) || t0['매칭신뢰도'] || '',
+                    matchedProjectId: c.drive_file_id, matchedProjectName: c.file_name || c.model || c.customer || '',
+                    matchBasis: c.model || c.customer || '', matchKeywords: (c.keywords || []).slice(0, 8),
+                    sourceSnippet: (cur.mailRaw && cur.mailRaw.body2000 ? cur.mailRaw.body2000.slice(0, 300) : '')
+                });
+            });
+        }
+        cur.excludedFids = Array.from(ex);
+        cur.matchedProject = { status: 'ambiguous', candidates: [], extraCandidates: [], confidence: '',
+            matchBasis: '♻️ ' + (_en ? 'Wrong project: ' + names + ' excluded — judging again' : '오매칭: ' + names + ' 제외 — 다시 판단 중'),
+            routing: { basis: 'excluded', v: '' }, ambiguousReason: 'excluded' };
+        window.TaskInbox.save(list);
+        window.renderTaskInbox();
+        if (window.mailRouteRejudgeOne) {
+            window.mailRouteRejudgeOne(uid).then(function(r) {
+                if (!window.showToast) return;
+                if (r && r.placed) window.showToast(_en ? '♻️ Excluded ' + names + ' → placed by deterministic re-judge' : '♻️ ' + names + ' 제외 → 다시 판단해 다른 프로젝트로 배치했습니다', 'info', 6000);
+                else if (r && r.target) window.showToast(_en ? '♻️ Excluded ' + names + ' → new candidate: ' + r.target : '♻️ ' + names + ' 제외 → 새 후보: ' + r.target + ' (자동배치 모드가 꺼져 있어 대기)', 'info', 6000);
+                else window.showToast(_en ? '♻️ Excluded ' + names + ' — no other project could be confirmed; left pending' : '♻️ ' + names + ' 제외 — 다른 곳으로 확정할 근거가 없어 대기로 둡니다([📤 다른 Proj]·[➕ 새 Proj])', 'info', 7000);
+            });
+        } else if (window.showToast) {
+            window.showToast(_en ? '♻️ Excluded ' + names : '♻️ ' + names + ' 제외 — 다음 재판정 때 다시 판단합니다', 'info');
+        }
+        window.TaskInbox.syncNow && window.TaskInbox.syncNow();
+        return;
+    }
     const t = it.task || {};
     const taskName = t['업무명'] || (_en ? '(untitled)' : '(제목없음)');
     const mc = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];

@@ -821,8 +821,9 @@
                 try {
                     if (reason === '오매칭' && window.TaskInbox) {
                         var it = window.TaskInbox.load().filter(function (x) { return x.uid === uid; })[0];
-                        var mc = it && it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
-                        if (it) window.mailRouteCorrect((mc && mc.drive_file_id) || '', it.mailRaw, '오매칭');
+                        // [2026-11-23] ♻️ 는 보이는 후보 **전부**를 뺀다(js/14c) — 교정 기록도 후보마다
+                        var mcs = (it && it.matchedProject && it.matchedProject.candidates) || [];
+                        if (it) mcs.filter(function (c) { return c && c.drive_file_id; }).forEach(function (c) { window.mailRouteCorrect(c.drive_file_id, it.mailRaw, '오매칭'); });
                     }
                 } catch (e) { /* 무시 */ }
                 return o1.apply(this, arguments);
@@ -874,7 +875,7 @@
         //  · 몇 건마다 화면에 양보한다.
         //  · 스윕(배경)은 **지금 규칙으로 이미 판정한 카드는 건너뛴다**(routing.v === RULE_V). 버튼(force)은 전부 본다.
         var list = window.TaskInbox.load();
-        var pend = list.filter(function (it) { return it.status === '대기' && it.task; });
+        var pend = list.filter(function (it) { return it.status === '대기' && it.task && (!opts.onlyUid || it.uid === opts.onlyUid); });
         var max = opts.max || P.rejudgeMax, tried = 0;
         var pendingTags = {};   // uid → 새 matchedProject
         var flushTags = function () {
@@ -890,6 +891,9 @@
         for (var i = 0; i < pend.length && tried < max; i++) {
             var it = pend[i];
             var mp = it.matchedProject || null;
+            // ♻️ [2026-11-23] 사람이 "이 프로젝트 아님" 으로 뺀 후보는 이 카드의 판정에서 영영 뺀다(excludedFids, js/14c)
+            var cc = (it.excludedFids && it.excludedFids.length)
+                ? cands.filter(function (c) { return it.excludedFids.indexOf(c.drive_file_id) === -1; }) : cands;
             if (!opts.force && mp && mp.routing && mp.routing.v === RULE_V) { res.skipped.same_rule = (res.skipped.same_rule || 0) + 1; continue; }
             if (i % 5 === 4) await yieldUi();
             res.looked++;
@@ -899,17 +903,39 @@
             // 저장돼 있던 AI 판정을 되살려 AI 보조로만 쓴다(후보 참조는 지금 색인으로 다시 맞춘다)
             var aiTag = null;
             if (mp && mp.candidates && mp.candidates.length) {
-                var live = mp.candidates.map(function (c) { return cands.filter(function (x) { return x.drive_file_id === c.drive_file_id; })[0]; }).filter(Boolean);
+                var live = mp.candidates.map(function (c) { return cc.filter(function (x) { return x.drive_file_id === c.drive_file_id; })[0]; }).filter(Boolean);
                 var conf = mp.routing ? mp.routing.aiConfidence : mp.confidence;
                 if (live.length) aiTag = { status: (conf === '상' && live.length === 1) ? 'matched' : 'ambiguous', candidates: live, confidence: conf || '', matchBasis: aiReasonOnly(mp.matchBasis), task: it.task };
             }
             var j;
-            try { j = window.mailRouteJudge(mail, cands, aiTag); } catch (e) { res.failed++; res.skipped.judge_error = (res.skipped.judge_error || 0) + 1; continue; }
+            try { j = window.mailRouteJudge(mail, cc, aiTag); } catch (e) { res.failed++; res.skipped.judge_error = (res.skipped.judge_error || 0) + 1; continue; }
+            // ♻️ 사람이 "이 판단은 틀렸다" 고 한 카드 — 가족·고객 수준 근거로 남은 형제에게 넘기면 추측이다
+            //  ("Shuffler 4.3\" ESD" 에서 4.3 을 빼면 SHUFFLER 가족에 3.0 만 남아 '단독 가족' 으로 3.0 에 갈 뻔했다).
+            //  고유 식별자·믿을 만한 스레드 기록일 때만 다시 자동, 그 외엔 새 후보로 보여 주고 대기.
+            //  ⚠️ "고유" 는 **제외 전 전체 후보** 기준으로 본다 — 형제를 빼고 나면 둘이 함께 쓰던 'shuffler' 가 남은 3.0 만의
+            //  고유 식별자처럼 보여 identifier 로 3.0 에 갔다(하네스 13-3 이 잡았다). 전체 후보로 다시 판정해 그 후보에
+            //  고유 식별자가 실제로 있었을 때만 식별자 근거로 인정한다.
+            var fullUniqOk = true;
+            if (it.excludedFids && it.excludedFids.length && j.decision === 'auto' && /identifier$/.test(String(j.basis || '')) && j.target) {
+                var jf = null; try { jf = window.mailRouteJudge(mail, cands, null); } catch (e) { jf = null; }
+                var ti = cands.indexOf(j.target);
+                fullUniqOk = !!(jf && jf.hits && jf.hits.uniq && ti >= 0 && jf.hits.uniq[ti] && jf.hits.uniq[ti].length);
+            }
+            if (it.excludedFids && it.excludedFids.length && j.decision === 'auto' && (!/(identifier|thread)$/.test(String(j.basis || '')) || !fullUniqOk)) {
+                j = { decision: 'wait', target: null, candidates: [j.target], basis: 'excluded_suggest', family: j.family || null,
+                      reason: T('오매칭 뒤 다시 본 후보: ' + (j.target.model || j.target.file_name) + ' (확정 근거가 약해 사람 확인)',
+                                'after exclusion, candidate: ' + (j.target.model || j.target.file_name) + ' (weak evidence — needs a person)') };
+            }
+            if (opts.onlyUid) res.target = (j.decision === 'auto' && j.target) ? (j.target.model || j.target.file_name) : '';
             var newTag = tagFromJudge(j, aiTag);
             if (!newTag) {
                 // 'none' 도 "지금 규칙으로 봤다" 는 표시는 남긴다(다음 스윕이 또 보지 않게) — 후보·사유는 원래 것 그대로
                 newTag = Object.assign({}, mp || { status: 'ambiguous', candidates: [], confidence: '' });
                 newTag.routing = Object.assign({}, (mp && mp.routing) || {}, { basis: 'none' });
+                if (mp && mp.routing && mp.routing.basis === 'excluded') {
+                    newTag.matchBasis = String(newTag.matchBasis || '').replace(' — 다시 판단 중', ' — 다른 곳으로 확정할 근거 없음 ([📤 다른 Proj]·[➕ 새 Proj])')
+                                                                        .replace(' — judging again', ' — no other project confirmed');
+                }
             }
             newTag.routing.v = RULE_V;
             var sameTag = mp && mp.routing && mp.routing.v === RULE_V && mp.routing.basis === newTag.routing.basis
@@ -917,6 +943,8 @@
                    === (newTag.candidates || []).map(function (c) { return c.drive_file_id; }).join('|');
             if (!sameTag) { pendingTags[it.uid] = newTag; res.changed++; }
             if (j.decision !== 'auto' || !j.target || !j.target.drive_file_id) continue;
+            // 한 카드 재판정(♻️)은 자동배치 모드가 꺼져 있으면 배치하지 않고 새 판정만 보여 준다
+            if (opts.onlyUid && !(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) continue;
             flushTags();   // 배치 경로가 보관함을 읽고 쓰기 전에, 모아 둔 카드 갱신을 먼저 쓴다
             var t = it.task;
             if (window._ibRepairDatesFromMail) { try { window._ibRepairDatesFromMail(it.uid); } catch (e) { /* 무시 */ } }
@@ -999,6 +1027,11 @@
                                (res.noTask ? ' · skipped (AI failed) ' + res.noTask : '') + (res.failed ? ' · failed ' + res.failed : '')), 'info', 7000);
         }
         return res;
+    };
+    /** ♻️ 한 카드만 지금 다시 판정 — js/14c inboxQuickClassify('오매칭') 이 부른다. @returns {placed, target} */
+    window.mailRouteRejudgeOne = async function (uid) {
+        var r = await window.mailRouteRejudgePending({ force: true, toast: false, onlyUid: uid, max: 1 });
+        return { placed: r.placed || 0, target: r.target || '' };
     };
     /** 유휴 스윕(js/14c)에 편승 — 스윕이 돌 때 재판정도 한 번(상한 안에서) */
     function wrapSweep() {
