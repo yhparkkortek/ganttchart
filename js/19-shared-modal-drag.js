@@ -210,13 +210,19 @@ window.MODAL_POS_POLICY = window.MODAL_POS_POLICY || { key: 'gantt_modal_pos_v1'
 window._modalPosRead = function() {
     try { return JSON.parse(localStorage.getItem(window.MODAL_POS_POLICY.key) || '{}') || {}; } catch (e) { return {}; }
 };
-window._modalPosSave = function(boxId) {
+// 📐 [2026-11-23 2차, 사용자 요청 "모달 크기도 같이 기억"] 크기는 **사람이 크기조절을 놓았을 때만**
+//    적는다(withSize) — 드래그만 했을 때 그 순간 크기까지 적으면, 내용 따라 자라는 모달(높이 auto)이
+//    그때 높이에 굳어 버린다. 드래그는 위치만 바꾸고 전에 적어 둔 크기는 그대로 둔다.
+window._modalPosSave = function(boxId, withSize) {
     const box = document.getElementById(boxId);
     if (!box || !window._mreszIsShown(box)) return;
     const r = box.getBoundingClientRect();
     if (!r.width || !r.height) return;
     const all = window._modalPosRead();
+    const prev = all[boxId] || {};
     all[boxId] = { l: Math.round(r.left), t: Math.round(r.top), at: Date.now() };
+    if (withSize) { all[boxId].w = Math.round(r.width); all[boxId].h = Math.round(r.height); }
+    else if (typeof prev.w === 'number' && typeof prev.h === 'number') { all[boxId].w = prev.w; all[boxId].h = prev.h; }
     const ids = Object.keys(all);
     if (ids.length > window.MODAL_POS_POLICY.maxEntries) {
         ids.sort(function(a, b) { return (all[a].at || 0) - (all[b].at || 0); })
@@ -229,6 +235,14 @@ window._modalPosRestore = function(boxId) {
     if (!box) return false;
     const p = window._modalPosRead()[boxId];
     if (!p || typeof p.l !== 'number' || typeof p.t !== 'number') return false;
+    // 📐 크기 — 크기조절(startResize/moveResize)과 **같은 방식**: max-* 를 풀고 px 로 못박는다
+    //    (max-height 가 걸려 있으면 세로가 그 값에서 잘린다). 화면보다 크면 아래 clamp 가 줄인다.
+    if (typeof p.w === 'number' && typeof p.h === 'number' && p.w > 0 && p.h > 0) {
+        box.style.maxWidth  = 'none';
+        box.style.maxHeight = 'none';
+        box.style.width  = p.w + 'px';
+        box.style.height = p.h + 'px';
+    }
     // 드래그 시작(startDrag)과 **같은 방식**으로 놓는다 — 가운데 정렬 transform 을 풀고 실제 좌표로
     box.style.transform = 'none';
     box.style.left = p.l + 'px';
@@ -429,7 +443,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
         if (_rafId) { cancelAnimationFrame(_rafId); _rafId = 0; }
         if (!rs) return;
         rs = null;
-        if (window._modalPosSave) window._modalPosSave(boxId);   // 왼쪽/위 가장자리로 줄이면 위치도 바뀐다
+        if (window._modalPosSave) window._modalPosSave(boxId, true);   // 크기 + 위치(왼쪽/위 가장자리로 줄이면 위치도 바뀐다)
         document.body.style.userSelect = '';
         window._mreszSetCursor('');
         window._mreszActive = false;
