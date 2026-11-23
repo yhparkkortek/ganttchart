@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><title>🆔 이름 바꾸기 · id 유지 실측(NAS)</title></head>
+<body style="font:13px/1.5 monospace;padding:12px">
+<h3>🆔 이름 바꾸기 · id 유지 실측 — 진짜 NAS · 진짜 어댑터(js/57)</h3>
+<p>실행 중인 js/57 에 별칭 코드가 있나: <b id="ver"></b><br>앱 전체를 띄우지 않는다(같은 계정의 보관함 백업을 덮어쓰지 않게). 프로젝트 목록이 훑지 않는 <code>App_Config/zz_rename_probe_*</code> 에
+파일 하나를 만들어 앱이 저장할 때와 같은 요청(이름을 바꾼 PATCH)을 보내고, 끝나면 시험 파일과 id 지도의 시험 항목을 지운다.</p>
+<pre id="out">실행 중…</pre>
+<script>
+// ⚠️ 스크립트는 매번 새로 받는다(캐시 버스터) — 캐시된 옛 js/57 로 돌면 돌연변이 검사가 거짓으로 통과한다(실제로 그랬다).
+function loadFresh(src) { return new Promise(function (res, rej) { var e = document.createElement('script'); e.src = src + '?cb=' + Date.now(); e.onload = res; e.onerror = rej; document.head.appendChild(e); }); }
+(async function () {
+    await loadFresh('../js/04a-core-app-globals.js');
+    await loadFresh('../js/57-storage-adapter.js');
+    const B = 'http://127.0.0.1:5000';
+    const out = []; let pass = 0, fail = 0;
+    const ok = (c, m, x) => { if (c) { pass++; out.push('✅ ' + m); } else { fail++; out.push('❌ ' + m + (x !== undefined ? ' — ' + JSON.stringify(x).slice(0, 300) : '')); } };
+    const show = () => { document.getElementById('out').textContent = out.join('\n') + '\n\n결과: ' + pass + '/' + (pass + fail); window.__probe = { pass, fail, out }; };
+    const SA = window.STORAGE_ADAPTER, F = SA && SA._fn;
+    try { document.getElementById('ver').textContent = String(F && F.aliasOnRename && F.aliasOnRename.toString().indexOf('oldNasId') !== -1); } catch (e) {}
+    if (!SA || !F || !SA.installed) { out.push('❌ 어댑터가 NAS 모드로 설치되지 않았다: ' + JSON.stringify({ installed: SA && SA.installed, backend: SA && SA.backend })); return show(); }
+    const DIR = 'App_Config/zz_rename_probe_' + Date.now().toString(36);
+    const dirId = F.idOf(DIR, true);
+    const mp = (meta, body) => '\r\n--b\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) +
+                               '\r\n--b\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + body + '\r\n--b--';
+    const H = { 'Content-Type': 'multipart/related; boundary="b"' };
+    const list = async () => { const r = await fetch(B + '/nas/app/list?rel=' + encodeURIComponent(DIR) + '&_cb=' + Math.random()); const j = await r.json(); return (j.items || []).filter(i => !i.isdir).map(i => i.name).sort(); };
+    const readMap = async () => { const r = await fetch(B + '/nas/app/get?rel=' + encodeURIComponent('App_Config/nas_id_map.json') + '&_cb=' + Math.random(), { cache: 'no-store' }); return JSON.parse(await r.text()); };
+    const readFile = async (name) => { const r = await fetch(B + '/nas/app/get?rel=' + encodeURIComponent(DIR + '/' + name) + '&_cb=' + Math.random(), { cache: 'no-store' }); return r.ok ? await r.text() : null; };
+    let id0 = '';
+    try {
+        await fetch(B + '/nas/app/mkdir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rel: DIR }) });
+        // 1) 새 파일 — 경로형 id(nas_f_)를 받는다(이사 후 새로 만든 프로젝트와 같은 모양)
+        let r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id',
+            { method: 'POST', headers: H, body: mp({ name: 'P_A.json', mimeType: 'application/json', parents: [dirId] }, '{"v":1}') });
+        id0 = (await r.json()).id;
+        ok(/^nas_f_/.test(id0), '1 새 파일은 경로형 id(nas_f_)를 받는다', id0);
+        // 2) 저장 + 이름 바꾸기(앱의 saveToGoogleDrive 와 같은 PATCH: 새 이름 + 내용)
+        r = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + id0 + '?uploadType=multipart&supportsAllDrives=true',
+            { method: 'PATCH', headers: H, body: mp({ name: 'P_B.json', mimeType: 'application/json' }, '{"v":2}') });
+        const up1 = await r.json();
+        ok(up1.id === id0, '2 이름이 바뀌어도 돌려받는 id 가 그대로다(Drive 처럼)', { got: up1.id, want: id0 });
+        ok(JSON.stringify(await list()) === JSON.stringify(['P_B.json']), '3 NAS 에는 새 이름 파일 하나뿐(옛 이름 남지 않음)', await list());
+        let map = await readMap();
+        ok(map.map && map.map[id0] === DIR + '/P_B.json', '4 NAS id 지도에 옛 id → 새 경로가 적혔다', map.map && map.map[id0]);
+        // 3) 한 번 더 이름 바꾸기(연쇄)
+        r = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + id0 + '?uploadType=multipart&supportsAllDrives=true',
+            { method: 'PATCH', headers: H, body: mp({ name: 'P_C.json', mimeType: 'application/json' }, '{"v":3}') });
+        const up2 = await r.json();
+        ok(up2.id === id0 && JSON.stringify(await list()) === JSON.stringify(['P_C.json']), '5 연쇄 이름 변경 뒤에도 id 그대로 · 파일 하나', { id: up2.id, files: await list() });
+        // 4) 옛 id 로 **내용만** 쓰기(보관함 카드·배분 원장·다른 탭이 하는 쓰기) — 옛 경로에 파일이 다시 생기면 안 된다
+        r = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + id0 + '?uploadType=multipart&supportsAllDrives=true',
+            { method: 'PATCH', headers: H, body: mp({ mimeType: 'application/json' }, '{"v":4}') });
+        await r.json();
+        ok(JSON.stringify(await list()) === JSON.stringify(['P_C.json']) && (await readFile('P_C.json')) === '{"v":4}',
+           '6 옛 id 로 내용만 써도 지금 파일(P_C)에 들어가고 옛 경로에 파일이 다시 생기지 않는다', { files: await list(), body: await readFile('P_C.json') });
+        // 5) 목록이 내놓는 id 도 그대로인가(앱이 프로젝트 목록에서 다시 열 때)
+        r = await fetch("https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent("'" + dirId + "' in parents and trashed=false") + "&fields=files(id,name)&supportsAllDrives=true");
+        const lj = await r.json();
+        ok((lj.files || []).length === 1 && lj.files[0].id === id0, '7 목록이 돌려주는 id 도 처음 id 그대로', lj.files);
+    } catch (e) {
+        ok(false, '예외', String(e && e.stack || e));
+    } finally {
+        // 정리 — 시험 파일·폴더, id 지도의 시험 항목(쓰기 직전 다시 읽고 그 항목만 뺀다)
+        try {
+            for (const n of await list()) await fetch(B + '/nas/app/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rel: DIR + '/' + n }) });
+            await fetch(B + '/nas/app/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rel: DIR }) });
+            const m2 = await readMap();
+            const keys = Object.keys(m2.map || {}).filter(k => String(m2.map[k]).indexOf(DIR + '/') === 0);
+            if (keys.length) {
+                keys.forEach(k => delete m2.map[k]);
+                await fetch(B + '/nas/app/put', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rel: 'App_Config/nas_id_map.json', text: JSON.stringify(m2) }) });
+            }
+            const m3 = await readMap();
+            out.push('🧹 정리: 시험 파일 ' + (await list()).length + '개 남음 · id 지도 시험 항목 ' + keys.length + '개 제거 → 남은 시험 항목 ' +
+                     Object.keys(m3.map || {}).filter(k => String(m3.map[k]).indexOf(DIR + '/') === 0).length + '개');
+        } catch (e) { out.push('⚠️ 정리 중 오류: ' + e.message); }
+        show();
+    }
+})();
+</script>
+</body></html>
