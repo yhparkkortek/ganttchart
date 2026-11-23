@@ -8,7 +8,10 @@
      판정·재판정·훅 사슬은 **진짜 js/74 코드**를 지난다.
    · 끝나면 가짜를 전부 되돌린다. 실제 프로젝트가 열려 있어도 아무것도 쓰지 않는다.
    ============================================================================ */
-window.__mailRoutingTest = async function () {
+window.__mailRoutingTestBody = async function () {
+    // 실행마다 다른 열쇠 — 같은 페이지에서 두 번 돌리면 7-1(10분 중복 차단)·7-4b(앞 실행의 교정)가 가짜로 실패했다(2026-11-23 실측)
+    const RUN = Date.now().toString(36);
+    const HOOK_SUBJ = 'hook test ' + RUN, THREAD_KEY = 'kthread' + RUN;
     const out = []; let pass = 0, fail = 0;
     const ok = (c, msg, extra) => { if (c) { pass++; out.push('✅ ' + msg); } else { fail++; out.push('❌ ' + msg + (extra ? ' — ' + JSON.stringify(extra).slice(0, 200) : '')); } };
     const J = window.mailRouteJudge;
@@ -128,24 +131,50 @@ window.__mailRoutingTest = async function () {
         const realUserKey = window._appUserKey; if (!window._appUserKey && !window._nasAccount) window._appUserKey = 'harness';
         let sig = 0; const realSig = window._tpAppendMailSignal;
         window._tpAppendMailSignal = function () { sig++; };
-        window._mailRoutePlaced('S4', 'LNW_SHUFFLER_04.3.json', { 업무명: 't' }, { subject: 'hook test', date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, 'auto');
-        window._mailRoutePlaced('S4', 'LNW_SHUFFLER_04.3.json', { 업무명: 't' }, { subject: 'hook test', date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, 'auto');
+        window._mailRoutePlaced('S4', 'LNW_SHUFFLER_04.3.json', { 업무명: 't' }, { subject: HOOK_SUBJ, date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, 'auto');
+        window._mailRoutePlaced('S4', 'LNW_SHUFFLER_04.3.json', { 업무명: 't' }, { subject: HOOK_SUBJ, date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, 'auto');
         ok(sig === 1, '7-1 같은 메일·같은 프로젝트는 신호 사슬을 한 번만 지난다(10분 내 중복 차단)', sig);
         window._tpAppendMailSignal = realSig;
         const routes = window._mailRoutes();
         ok(routes.some(e => e.type === 'placed' && e.fid === 'S4'), '7-2 팀 공용 기록 버퍼에 placed 가 적힌다(계정이 있을 때)', routes.length);
-        window.mailRouteCorrect('S4', { subject: 'hook test', date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, '오매칭');
+        window.mailRouteCorrect('S4', { subject: HOOK_SUBJ, date: '2026-11-01 10:00', sender: 'c <c@x.com>' }, '오매칭');
         ok(window._mailRoutes().some(e => e.type === 'correct' && e.fid === 'S4'), '7-3 교정이 기록된다');
         // 7-4 진짜 스레드(In-Reply-To/References → refs) — 제목이 범용이어도 기록된 메일의 key 와 맞으면 그 프로젝트
-        window._mailRoutePlaced('S3', 'LNW_SHUFFLER_03.0.json', { 업무명: 'root' }, { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: 'kthreadroot00001' }, 'auto');
+        window._mailRoutePlaced('S3', 'LNW_SHUFFLER_03.0.json', { 업무명: 'root' }, { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: THREAD_KEY }, 'auto');
         let jt = J(M('Re: 회의록', '네 확인했습니다'), cands, null);
         ok(jt.decision !== 'auto', '7-4a 범용 제목만으론 스레드로 안 묶는다(threadMinLen)', jt);
-        jt = J({ subject: 'Re: 회의록', body: '네 확인했습니다', sender: 'e <e@x.com>', refs: ['kthreadroot00001'] }, cands, null);
+        jt = J({ subject: 'Re: 회의록', body: '네 확인했습니다', sender: 'e <e@x.com>', refs: [THREAD_KEY] }, cands, null);
         ok(jt.decision === 'auto' && jt.target.drive_file_id === 'S3' && jt.basis === 'thread', '7-4b refs 가 기록된 메일을 가리키면 그 프로젝트로(진짜 스레드)', jt);
-        window.mailRouteCorrect('S3', { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: 'kthreadroot00001' }, '오매칭');
-        jt = J({ subject: 'Re: 회의록', body: '네', sender: 'e <e@x.com>', refs: ['kthreadroot00001'] }, cands, null);
+        window.mailRouteCorrect('S3', { subject: '회의록', date: '2026-11-02 10:00', sender: 'd <d@x.com>', key: THREAD_KEY }, '오매칭');
+        jt = J({ subject: 'Re: 회의록', body: '네', sender: 'e <e@x.com>', refs: [THREAD_KEY] }, cands, null);
         ok(jt.decision !== 'auto', '7-4c 교정된 스레드는 근거로 안 쓴다', jt);
         window._appUserKey = realUserKey;
+
+        // ── 9. [2026-11-23] 실데이터 재생(박용훈 보관함 대기 144건)에서 찾은 세 가지 ─────────
+        const KD = C('KD', 'KORTEK_개발업무.json', '개발업무', 'KORTEK>개발업무', '', ['개발업무', '개발지원', 'Roadmap', 'FYI']);
+        const H1 = C('H1', 'LNW_HORIZON_75.json', 'HORIZON75', 'LNW>HORIZON', '75', ['HORIZON 75']);
+        const cands9 = cands.concat([KD, H1]);
+        let j9 = J(M('Shuffler 4.3" ESD 협의', '4.3" Shuffler ESD 결과입니다.\nBest regards,\nKortek Corp.'), cands9, null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'S4', '9-1 서명의 "Kortek" 은 고객 단서가 아니다(사내 공용 프로젝트와 충돌 안 함)', j9);
+        //  ⚠️ 실제 사고 모양 그대로 — 고유 식별자 없이 **고객 이름만** 있는 메일(①이 아니라 ③을 지난다).
+        //     식별자가 있는 메일로 시험하면 "Kortek" 토큰 1개는 ①의 '2개 이상' 문턱에 안 걸려 버그가 있어도 통과한다(실측).
+        j9 = J(M('KGI sample request > KORTEK', 'Dear Kortek team, please check the KGI sample.'), cands9, null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'G1', '9-2 고객 이름(KGI)+제목 꼬리 "> KORTEK" → "여러 고객" 충돌이 아니라 KGI', j9);
+        j9 = J(M('Re: 4.3" Shuffler horizontal line issue', 'horizontal lines on panel'), cands9, null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'S4', '9-3 "horizontal" 안의 horizon 은 HORIZON 식별자가 아니다(낱말 경계)', j9);
+        j9 = J(M('HORIZON 75 일정', 'HORIZON75 샘플'), cands9, null);
+        ok(j9.decision === 'auto' && j9.target.drive_file_id === 'H1', '9-3b 진짜 "HORIZON 75" 는 그대로 잡힌다', j9);
+        // 9-4 유휴 스윕이 'none'(매칭 확정 건 없음)을 돌려줘도 재판정은 돈다 — 대기가 전부 모호할 때가 그 때다
+        store = [{ uid: 'n1', status: '대기', task: { 업무명: 'x', 시작일: '2026-11-01', 완료일: '2026-11-02' }, mailRaw: { subject: 'x' },
+                   matchedProject: { status: 'ambiguous', candidates: [cands[4]], confidence: '중' } }];
+        const realRj = window.mailRouteRejudgePending, realTok = window.googleAccessToken;
+        let rj = 0;
+        window.mailRouteRejudgePending = async () => { rj++; return {}; };
+        if (!window.googleAccessToken) window.googleAccessToken = 'harness';
+        try {
+            const sw = await window._ibAutoPlaceSweep({ force: true });
+            ok(sw && sw.skipped === 'none' && rj === 1, '9-4 스윕 결과가 none 이어도 재판정이 한 번 돈다', { sw, rj });
+        } finally { window.mailRouteRejudgePending = realRj; window.googleAccessToken = realTok; }
     } finally {
         TI.load = realLoad; TI.save = realSave; TI.setStatus = realSetStatus;
         window._msAutoRegisterToProject = realReg; window.isAutoRegisterEnabled = realEnabled;
@@ -164,4 +193,30 @@ window.__mailRoutingTest = async function () {
     console.log(out.join('\n'));
     console.log(`🧭 mail-routing: ${pass}/${pass + fail}`);
     return { pass, fail, lines: out };
+};
+
+/* ⚠️⚠️ [2026-11-23] 진짜 NAS 를 절대 건드리지 않는다 — 회사 PC(NAS 연결됨)에서 돌렸더니
+   3-4 의 mailRoutingSaveConfig 가 **팀 공용** App_Config/MailRouting_Shared.json 을 썼고,
+   7절의 가짜 배치·교정 18건이 **사람의 실제 배분 기록**(MailRoutes/<월>__<계정>.json)에 올라갔다.
+   또 실행 도중 js/74 의 NAS 재로딩이 하네스의 메모리 상태를 덮어써 3-4·7-4b 가 가짜로 실패했다.
+   → 실행 동안 nasAppFile 을 메모리 가짜로 바꾸고, 하네스가 만든 기록은 그 가짜로 flush 한 뒤에 되돌린다. */
+window.__mailRoutingTest = async function () {
+    const realNas = window.nasAppFile, mem = {};
+    window.nasAppFile = {
+        get: async (rel) => { if (!(rel in mem)) { const e = new Error('404 (harness memory)'); e.status = 404; throw e; } return JSON.parse(mem[rel]); },
+        put: async (rel, doc) => { mem[rel] = JSON.stringify(doc); return { ok: true }; },
+        list: async (dir) => Object.keys(mem).filter(k => k.indexOf(dir + '/') === 0).map(k => ({ name: k.split('/').pop() }))
+    };
+    try {
+        if (window._mailRoutesReload) await window._mailRoutesReload();   // 진짜 기록을 메모리에서 비우고 시작
+        if (window.mailRoutingLoadConfig) await window.mailRoutingLoadConfig();
+        return await window.__mailRoutingTestBody();
+    } finally {
+        try { if (window._mailRoutesFlush) await window._mailRoutesFlush(); } catch (e) { /* 가짜로 */ }
+        window.nasAppFile = realNas;
+        try { if (window._mailRoutesReload) await window._mailRoutesReload(); } catch (e) { /* 무시 */ }
+        try { if (window.mailRoutingLoadConfig) await window.mailRoutingLoadConfig(); } catch (e) { /* 무시 */ }
+        const wrote = Object.keys(mem);
+        console.log('🧪 하네스가 쓴 파일(메모리에만, NAS 아님):', wrote);
+    }
 };

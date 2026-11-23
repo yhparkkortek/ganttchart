@@ -97,9 +97,16 @@
     window.MAIL_ROUTING_STOPWORDS = window.MAIL_ROUTING_STOPWORDS || [
         'display', 'displays', 'series', 'model', 'project', 'board', 'panel', 'module', 'monitor', 'sample', 'system',
         'glass', 'touch', 'curved', 'flat', 'upright', 'topper', 'wheel', 'back', 'box', 'with', 'and', 'the', 'type',
-        '모니터', '디스플레이', '프로젝트', '모델', '패널', '샘플', '시제품'
+        '모니터', '디스플레이', '프로젝트', '모델', '패널', '샘플', '시제품',
+        // [2026-11-23 실측] 보관함 대기 144건 재생에서 "고유 식별자"로 잘못 잡혀 충돌을 만든 범용 영단어.
+        //  모델명 조각에서 나온 것이라 두 낱말 조각('digitalwheel'·'32landscape'·'dimensionec')은 그대로 남는다.
+        'digital', 'landscape', 'dimension', 'roadmap'
     ];
     var STOP = {}; window.MAIL_ROUTING_STOPWORDS.forEach(function (w) { STOP[norm(w)] = 1; });
+    // [2026-11-23] 우리 회사 이름 — 서명·제목("> KORTEK")·주소에 **모든 메일**에 나온다. 고객/가족 단서로 쓰면
+    //  사내 공용 프로젝트(KORTEK>개발업무)가 늘 "다른 고객"으로 같이 걸려 거의 모든 메일이 충돌(대기)이 됐다(실측 60/144).
+    window.MAIL_ROUTING_SELF_ORG = window.MAIL_ROUTING_SELF_ORG || ['kortek', '코텍'];
+    var SELF = {}; window.MAIL_ROUTING_SELF_ORG.forEach(function (w) { SELF[norm(w)] = 1; });
 
     /** 후보 1개의 식별자 토큰(정규화) — 모델·고객모델명·코드류 keywords(+낱말·연속 두 낱말 조각).
      *  사람 이름·자재내역·범용어·짧은 것 제외. 고유한지(다른 후보에 없는지)는 부르는 쪽이 가른다. */
@@ -112,7 +119,7 @@
             if (!raw || looksMaterialDesc(raw) || isPerson(raw) || isGeneric(raw)) return;
             var n = norm(raw);
             if (n.length < P.identMinLen) return;
-            if (n === root || STOP[n]) return;               // 고객사명 자체는 가족 토큰(아래)
+            if (n === root || STOP[n] || SELF[n]) return;    // 고객사명 자체는 가족 토큰(아래) · 우리 회사 이름은 단서 아님
             if (/^\d+$/.test(n) && n.length < 5) return;     // "4.3"·"2026" 류
             out[n] = src;
         };
@@ -181,17 +188,37 @@
         for (k in cnt) if (fam.members.length === 1 || cnt[k] >= 2) toks[k] = 1;
         fam.members.forEach(function (i) {
             var c = cands[i], root = customerRoot(c.customer);
-            if (root && root.length >= 3) toks[root] = 1;
-            String(c.customer || '').split('>').slice(1).forEach(function (p) { var n = norm(p); if (n.length >= 3) toks[n] = 1; });
+            if (root && root.length >= 3 && !SELF[root]) toks[root] = 1;
+            String(c.customer || '').split('>').slice(1).forEach(function (p) { var n = norm(p); if (n.length >= 3 && !SELF[n]) toks[n] = 1; });
         });
         return toks;
     }
     /** 고객 root 가 같은 후보들(가족과 무관하게) — "고객은 알겠는데 어느 제품인지 모를 때" 쓴다 */
     function customerGroup(cands, rootN) { return cands.filter(function (c) { return customerRoot(c.customer) === rootN; }); }
     /** 토큰이 본문에 있나 — 숫자만인 토큰은 앞뒤가 숫자가 아닌 자리에서만(654321 ⊂ 1654321 오탐 방지) */
-    function hit(hayNorm, hayRaw, tok) {
+    //  [2026-11-23] 영문자로 시작/끝나는 토큰은 **낱말 경계**도 본다 — 정규화(공백 제거) 문자열에서 부분일치만 보면
+    //  'horizon' ⊂ "horizontal", 'kgi' ⊂ "check gift" 처럼 남의 낱말 속에서 걸려 거짓 충돌이 났다(실측).
+    //  한글 쪽 경계는 보지 않는다(조사가 붙는다: "LNW향").
+    function buildHay(raw) {
+        var n = '', pos = [];
+        for (var i = 0; i < raw.length; i++) {
+            var ch = raw[i].toLowerCase();
+            if (/[0-9a-zㄱ-ㆎ가-힣]/.test(ch)) { n += ch; pos.push(i); }
+        }
+        return { n: n, pos: pos, raw: raw };
+    }
+    function hit(hay, hayRaw, tok) {
         if (/^\d+$/.test(tok)) { return new RegExp('(^|\\D)' + tok + '(\\D|$)').test(hayRaw); }
-        return hayNorm.indexOf(tok) !== -1;
+        var hn = hay.n, from = 0, at;
+        var lb = /^[a-z]/.test(tok), rb = /[a-z]$/.test(tok);
+        while ((at = hn.indexOf(tok, from)) !== -1) {
+            from = at + 1;
+            var s0 = hay.pos[at], e0 = hay.pos[at + tok.length - 1];
+            if (lb && s0 > 0 && /[A-Za-z]/.test(hay.raw[s0 - 1])) continue;
+            if (rb && e0 + 1 < hay.raw.length && /[A-Za-z]/.test(hay.raw[e0 + 1])) continue;
+            return true;
+        }
+        return false;
     }
 
     // ── 판정 ────────────────────────────────────────────────────────────────
@@ -203,7 +230,7 @@
      */
     window.mailRouteJudge = function (mail, cands, aiTag) {
         var raw = String((mail && mail.subject) || '') + '\n' + String((mail && mail.body) || '');
-        var hayNorm = norm(raw), hayRaw = raw.replace(/\s+/g, ' ');
+        var hayNorm = buildHay(raw), hayRaw = raw.replace(/\s+/g, ' ');
         var F = buildFamilies(cands || []);
         var idents = F.idents;
         // 어느 후보에도 겹치지 않는 "고유" 식별자 vs 공유 식별자
@@ -691,7 +718,12 @@
             try { j = window.mailRouteJudge(mail, cands, aiTag); } catch (e) { res.failed++; continue; }
             var newTag = tagFromJudge(j, aiTag);
             // 판정 결과를 카드에 반영(후보·근거) — 사람이 "왜 대기인지" 를 새 규칙으로 본다
-            if (newTag) {
+            // [2026-11-23] 판정이 그대로면 저장하지 않는다 — 이제 스윕마다(10분) 돌기 때문에, 대기 144건이면
+            //  보관함 통째(실측 2MB) 읽기·쓰기를 매번 144번 하게 된다(14c 가 경고한 "화면이 멈춤" 의 그 비용).
+            var sameTag = newTag && mp && mp.routing && mp.routing.basis === newTag.routing.basis
+                && (mp.candidates || []).map(function (c) { return c.drive_file_id; }).join('|')
+                   === (newTag.candidates || []).map(function (c) { return c.drive_file_id; }).join('|');
+            if (newTag && !sameTag) {
                 var fresh = window.TaskInbox.load();
                 var cur = fresh.filter(function (x) { return x.uid === it.uid; })[0];
                 if (cur) { cur.matchedProject = newTag; window.TaskInbox.save(fresh); res.changed++; }
@@ -730,7 +762,9 @@
         window._ibAutoPlaceSweep = async function (opts) {
             var r = await orig.apply(this, arguments);
             try {
-                if (!off() && r && !r.skipped) await window.mailRouteRejudgePending({ toast: false, max: 5 });
+                // [2026-11-23] 'none'(자동배치할 '매칭 확정' 건이 없다)도 돌린다 — 대기가 전부 모호(ambiguous)일 때가 바로
+                //  재판정이 필요한 때인데, 예전엔 그 경우 스윕이 'none' 을 돌려줘 재판정이 한 번도 안 돌았다(실측: 대기 144건 중 routing 0).
+                if (!off() && r && (!r.skipped || r.skipped === 'none')) await window.mailRouteRejudgePending({ toast: false, max: 5 });
             } catch (e) { /* 무시 */ }
             return r;
         };
