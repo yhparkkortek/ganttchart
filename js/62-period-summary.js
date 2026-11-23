@@ -916,8 +916,10 @@
              (sc.busy ? '<span style="font-size:11px; color:#aaa;">' + esc(T('개발팀 전체 ' + sc.done + '/' + sc.total + ' 확인 중…', 'Scanning ' + sc.done + '/' + sc.total + '…')) + '</span>' : '') +
              ((sc.errs && sc.errs.length) ? '<span style="font-size:11px; color:#b1432f;">⚠️ ' + esc(T('못 읽은 프로젝트 ' + sc.errs.length + '건', sc.errs.length + ' unreadable')) + '</span>' : '');
 
-        return '<div id="ps-period-toolbar" style="display:flex; gap:3px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">' + b + '</div>' +
-               '<div id="ps-filter-toolbar" style="display:flex; gap:3px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">' + f2 + '</div>';
+        // 📐 [2026-11-23 사용자 요청] 필터 줄을 기간 칩 줄 **오른쪽**으로 — 한 줄로(좁으면 접힌다).
+        return '<div id="ps-period-toolbar" style="display:flex; gap:3px; align-items:center; margin-bottom:8px; flex-wrap:wrap; row-gap:5px;">' + b +
+               '<span style="display:inline-block; width:1px; height:16px; background:#cfd8e3; margin:0 8px;"></span>' +
+               '<span id="ps-filter-toolbar" style="display:contents;">' + f2 + '</span></div>';   // contents — 묶음째 다음 줄로 밀리지 않고 항목별로 흐른다
     }
     function link(idx) {
         return window._linkifyTaskRefs ? window._linkifyTaskRefs(esc('#G' + idx)) : esc('#G' + idx);
@@ -943,7 +945,7 @@
                '<div style="font-size:11px; color:#777;" title="' + esc(T('메일 유래 업무 / 전체 메일 업무', 'mail-derived tasks / all mail tasks')) + '">' + esc(T('메일 ' + (col.total > col.facts.length ? col.facts.length + '(상한)' : col.facts.length) + '/' + col.scanned + '건' + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · 프로젝트 ' + col.projects.length : '') + (col.filtered ? ' · 필터' : ''), 'Mail ' + col.facts.length + '/' + col.scanned + (col.jiraCount ? ' · JIRA ' + col.jiraCount : '') + (col.projects.length > 1 ? ' · ' + col.projects.length + ' projects' : '') + (col.filtered ? ' · filtered' : ''))) +
                (col.jiraScan && col.jiraScan.busy ? ' <span style="color:#1971c2;">⏳ ' + esc(T('JIRA 확인 중…', 'Checking JIRA…')) + '</span>' : '') +
                (col.jiraScan && col.jiraScan.err ? ' <span style="color:#b1432f;">⚠️ JIRA: ' + esc(col.jiraScan.err) + '</span>' : '') +
-               '</div></div>');
+               '</div>' + archivePillHtml() + '</div>');
         // 🖥 표가 들어가니 모달을 한 번 넓힌다(사람이 줄여 둔 폭은 그 뒤로 건드리지 않는다).
         try {
             var box = pageActive() ? null : document.getElementById('ai-summary-modal'); box = box && box.firstElementChild;
@@ -1215,7 +1217,9 @@
             (s.by ? ' · ' + esc(s.by) : '') + (s.dropped ? ' · ' + esc(T('근거 없는 항목 ' + s.dropped + '개 제거', s.dropped + ' ungrounded removed')) : '') +
             (s.reused ? ' · <b style="color:#2f9e44;">♻️ ' + esc(T('보관본 재사용 (AI 0회)', 'reused (0 AI calls)')) + '</b>' : '') +
             (s.stale ? ' · <b style="color:#c77700;">⚠️ ' + esc(T('그 뒤 사실이 ' + s.stale.from + '→' + s.stale.to + '건으로 바뀜 — 🔄 새로 생성하면 반영', 'facts changed ' + s.stale.from + '→' + s.stale.to + ' — regenerate to include')) + '</b>' : '');
-        var banner = s.archiveView
+        // 📚 보관본 안내는 기간 제목 줄로 옮겼다(archivePillHtml).
+        var banner = '';
+        var _oldBanner = false
             ? '<div style="padding:5px 10px; margin-bottom:6px; background:#fff9db; border:1px solid #ffe066; border-radius:6px; font-size:11.5px; color:#8f5a00;">📚 ' +
               esc(T('보관본을 보는 중: ', 'Viewing archived: ') + (s.archiveView.label || '') + ([s.archiveView.filter && s.archiveView.filter.pm, s.archiveView.filter && s.archiveView.filter.proj, s.archiveView.filter && s.archiveView.filter.who].filter(Boolean).length ? ' · ' + [s.archiveView.filter.pm, s.archiveView.filter.proj, s.archiveView.filter.who].filter(Boolean).join(' / ') : '')) +
               ' <button onclick="window._psCloseArchive()" style="' + smallBtn + ' margin-left:6px;">✕ ' + esc(T('현재 조건으로', 'Back to current')) + '</button></div>'
@@ -1242,11 +1246,20 @@
             '<input id="ps-tbl-q" value="' + esc(_psTbl.q) + '" oninput="window._psTblSearch(this.value)" placeholder="🔍 ' + esc(T('내용 검색', 'Search')) + '" style="' + window._uiInputStyle() + ' width:120px;' + '">' +
             '<button onclick="window._psTblSet({reset:1})" title="' + esc(T('표 필터·정렬 초기화', 'Reset table filters')) + '" style="' + window._uiBtnStyle('danger') + ' font-size:12px;">↺</button>' +
             '<span style="flex:1;"></span>' +
-            '<button onclick="window._psTblExcel()" style="' + smallBtn + '" title="' + esc(T('지금 보이는 행을 엑셀로', 'Export visible rows')) + '">📗 ' + esc(T('엑셀', 'Excel')) + '</button>' +
             (s.archiveView ? '' : '<button onclick="window._psRegenerate()" style="' + smallBtn + '" title="' + esc(T('보관본을 두고 AI 로 새로 만든다', 'Generate again with AI')) + '">🔄 ' + esc(T('새로 생성', 'Regenerate')) + '</button>') +
             archiveSelectHtml() +
             '</div>' +
             '<div style="font-size:10.5px; color:#999; margin-bottom:4px;">' + meta + '</div>';
+    }
+    /** 📚 보관본을 보는 중이면 기간 제목 줄 오른쪽에 작은 띠(칩과 같은 높이). */
+    function archivePillHtml() {
+        var v = _psView;
+        if (!v) return '';
+        var f = v.filter || {};
+        var cond = [f.pm, f.proj, f.who].filter(Boolean).join(' / ');
+        return '<span style="display:inline-flex; align-items:center; gap:6px; height:22px; box-sizing:border-box; padding:0 3px 0 10px; border:1px solid #ffe066; background:#fff9db; border-radius:11px; font-size:11px; color:#8f5a00; white-space:nowrap; max-width:100%; overflow:hidden;" title="' + esc((v.label || '') + (cond ? ' · ' + cond : '')) + '">📚 ' +
+            esc(T('보관본: ', 'Archived: ') + (v.label || '') + (cond ? ' · ' + cond : '')) +
+            '<button onclick="window._psCloseArchive()" style="' + window._uiBtnStyle() + ' height:18px; line-height:16px; padding:0 8px;">✕ ' + esc(T('현재 조건으로', 'Back to current')) + '</button></span>';
     }
     function archiveSelectHtml() {
         return '<select id="ps-arch-sel" onchange="if(this.value) window._psOpenArchive(this.value)" title="' + esc(T('보관된 AI 요약 — 골라서 다시 보기(AI 0회)', 'Archived summaries')) + '" style="' + window._uiSelectStyle(false) + ' max-width:180px; background:#fffbea; border-color:#e0c97a;' + '"><option value="">📚 ' + esc(T('보관함', 'Archive')) + '</option></select>';
@@ -1384,6 +1397,10 @@
     window._psTblExcel = function () {
         var X = window.XLSX;
         if (!X) { alert(T('엑셀 라이브러리를 불러오지 못했습니다.', 'Excel library not loaded.')); return; }
+        if (!(_psLast && _psLast.shown && _psLast.shown.rows && _psLast.shown.rows.length)) {   // 헤더 버튼이라 표가 없을 때도 눌린다
+            if (window.showToast) window.showToast(T('먼저 🤖 AI 요약 생성으로 표를 만드세요(같은 조건의 보관본이 있으면 AI 없이 바로 나옵니다).', 'Generate the summary table first.'), 'info');
+            return;
+        }
         var rows = viewRows();
         var head = [T('분류', 'Type'), T('프로젝트', 'Project'), T('업무 담당자', 'Assignee'), T('날짜', 'Date'), T('내용', 'Content'), T('근거', 'Source')];
         var aoa = [[(_psLast && _psLast.label) || ''], head].concat(rows.map(function (r) {
