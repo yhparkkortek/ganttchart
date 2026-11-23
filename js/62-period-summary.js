@@ -929,6 +929,10 @@
         var cache = (pm.aiPeriodSummary || {})[kind];
         // ⚠️ 캐시는 **기간 + 필터**가 같을 때만 "이 화면의 요약" 이다.
         var fresh = cache && cache.rangeKey === col.sig;
+        // 🕰 [2026-11-23] 기간·필터가 같고 **사실 수·JIRA 만** 달라졌으면(JIRA 가 늦게 들어오거나 프로젝트를 열어 행이 더해짐)
+        //    요약을 숨기지 않고 보여 주되 "바뀌었다" 고 말한다 — 숨기면 다시 AI 를 불러야 했다.
+        var baseSig = function (x) { return String(x || '').replace(/\|j=.*$/, ''); };
+        var near = !fresh && cache && Array.isArray(cache.rows) && baseSig(cache.rangeKey) === baseSig(col.sig);
         var h = [];
         h.push('<div id="ai-summary-report-content">');
         // 🗜 [2026-11-23 사용자 요청 "컴팩트하게"] 기간 · 건수를 한 줄에, 말은 짧게(뜻은 title 말풍선에).
@@ -946,10 +950,11 @@
         var shown = null;   // 지금 표로 그릴 것: { rows, at, by, factCount, dropped, reused, archiveView }
         if (_psView) {
             shown = { rows: _psView.rows || [], at: _psView.at, by: _psView.by, factCount: _psView.factCount, dropped: _psView.dropped, archiveView: _psView };
-        } else if (fresh) {
+        } else if (fresh || near) {
             var rows0 = Array.isArray(cache.rows) ? cache.rows
                 : window._psRowsFromAi({ '요약': cache.요약, '요청·결정': cache.요청결정, '미해결': cache.미해결 }, col.facts).rows;   // 옛 캐시
-            shown = { rows: rows0, at: cache.at, by: cache.by, factCount: cache.factCount, dropped: cache.dropped, reused: cache.reused };
+            shown = { rows: rows0, at: cache.at, by: cache.by, factCount: cache.factCount, dropped: cache.dropped, reused: cache.reused,
+                      stale: near ? { from: cache.factCount, to: col.facts.length } : null };
         } else if (col.facts.length && !_psLooked[col.sig]) {
             // ♻️ 같은 조건의 보관본이 있으면 버튼을 안 눌러도 바로 보여 준다(AI 0회).
             _psLooked[col.sig] = 1;
@@ -1068,10 +1073,10 @@
     function whoCellHtml(r, ai) {
         var ppl = peopleOf(r), roles = rolesOf(r);
         var txt = ppl.length ? esc(ppl.join(', ')) : (roles.length ? '<span style="color:#aaa;" title="' + esc(T('담당 구분은 있지만 Summary ▸ 프로젝트 멤버에 그 역할의 담당자가 없습니다', 'Role has no assignee in project members')) + '">' + esc(roles.join(', ')) + '</span>' : '');
-        var canEdit = !(_psLast && _psLast.shown && _psLast.shown.archiveView) && localRefs(r).length && typeof window.setWbsDiscipline === 'function';
+        // 보관본 보기에서도 된다 — 바뀌는 건 보관본이 아니라 간트 행이다.
+        var canEdit = localRefs(r).length && typeof window.setWbsDiscipline === 'function';
         if (!canEdit) {
-            var why = (_psLast && _psLast.shown && _psLast.shown.archiveView) ? T('보관본 보기에서는 바꿀 수 없습니다', 'Read-only in archive view')
-                : T('이 프로젝트를 열면 여기서 담당 구분을 바꿀 수 있습니다', 'Open this project to change the role here');
+            var why = T('이 프로젝트를 열면 여기서 담당 구분을 바꿀 수 있습니다(위 📂 열기)', 'Open this project to change the role here');
             return '<span title="' + esc(why) + '">' + txt + '</span>';
         }
         var meta = window.projectMeta || {}, m3 = (window.tabData && window.tabData.projectMembers3) || [];
@@ -1165,12 +1170,27 @@
         var smallBtn = window._uiBtnStyle();
         var meta = '🤖 ' + esc(T('사실 ' + (s.factCount || 0) + '건만으로', 'from ' + (s.factCount || 0) + ' facts')) + ' · ' + esc(String(s.at || '').replace('T', ' ').slice(0, 16)) +
             (s.by ? ' · ' + esc(s.by) : '') + (s.dropped ? ' · ' + esc(T('근거 없는 항목 ' + s.dropped + '개 제거', s.dropped + ' ungrounded removed')) : '') +
-            (s.reused ? ' · <b style="color:#2f9e44;">♻️ ' + esc(T('보관본 재사용 (AI 0회)', 'reused (0 AI calls)')) + '</b>' : '');
+            (s.reused ? ' · <b style="color:#2f9e44;">♻️ ' + esc(T('보관본 재사용 (AI 0회)', 'reused (0 AI calls)')) + '</b>' : '') +
+            (s.stale ? ' · <b style="color:#c77700;">⚠️ ' + esc(T('그 뒤 사실이 ' + s.stale.from + '→' + s.stale.to + '건으로 바뀜 — 🔄 새로 생성하면 반영', 'facts changed ' + s.stale.from + '→' + s.stale.to + ' — regenerate to include')) + '</b>' : '');
         var banner = s.archiveView
             ? '<div style="padding:5px 10px; margin-bottom:6px; background:#fff9db; border:1px solid #ffe066; border-radius:6px; font-size:11.5px; color:#8f5a00;">📚 ' +
               esc(T('보관본을 보는 중: ', 'Viewing archived: ') + (s.archiveView.label || '') + ([s.archiveView.filter && s.archiveView.filter.pm, s.archiveView.filter && s.archiveView.filter.proj, s.archiveView.filter && s.archiveView.filter.who].filter(Boolean).length ? ' · ' + [s.archiveView.filter.pm, s.archiveView.filter.proj, s.archiveView.filter.who].filter(Boolean).join(' / ') : '')) +
               ' <button onclick="window._psCloseArchive()" style="' + smallBtn + ' margin-left:6px;">✕ ' + esc(T('현재 조건으로', 'Back to current')) + '</button></div>'
             : '';
+        // ✏️ [2026-11-23 신고 "담당자 칸이 안 바뀐다" — 실측: 새로고침 뒤라 **열린 프로젝트가 없었다**]
+        //    편집은 열린 프로젝트 행만 된다(안전장치). 막혀 있는 이유와 여는 버튼을 같이 보여 준다.
+        {
+            var openNow = (_psLast && _psLast.openName) || '';
+            var closed = uniq([].concat.apply([], all.map(function (r) { return localRefs(r).length ? [] : uniqRefs(r.refs).map(function (x) { return x.p; }); })));
+            if (_psLast) _psLast.closed = closed;   // 버튼은 이름 대신 순번을 넘긴다(이름에 따옴표·> 가 들어 있다)
+            if (closed.length) {
+                banner += '<div style="padding:4px 10px; margin-bottom:6px; background:#f4f8fb; border:1px solid #d6e6f2; border-radius:6px; font-size:11.5px; color:#2c5f8a; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">✏️ ' +
+                    esc(T('업무 담당자는 그 프로젝트를 열어야 바꿀 수 있습니다(간트가 원본) · 지금 열린 프로젝트: ' + (openNow || '없음'), 'Open the project to change assignees · open now: ' + (openNow || 'none'))) +
+                    closed.slice(0, 3).map(function (p, pi) {
+                        return '<button onclick="window._psOpenProject(' + pi + ')" style="' + window._uiBtnStyle('accent') + '">📂 ' + esc(p) + ' ' + esc(T('열기', 'open')) + '</button>';
+                    }).join('') + '</div>';
+            }
+        }
         return banner +
             '<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-bottom:5px;">' + chips +
             (nCommon ? '<label style="font-size:11px; color:#8f5a00; display:inline-flex; align-items:center; gap:2px; cursor:pointer; margin-left:2px;"><input type="checkbox"' + (_psTbl.common ? ' checked' : '') + ' onchange="window._psTblSet({common:this.checked})">🔗 ' + esc(T('공통 이슈만', 'Common only')) + ' ' + nCommon + '</label>' : '') +
@@ -1258,6 +1278,36 @@
         var f = _psLast && _psLast.factByKey && _psLast.factByKey[key];
         if (f && f.mailRaw && window.showMailRawModal) window.showMailRawModal(f.mailRaw);
         else if (window.showToast) window.showToast(T('메일 원문이 없습니다', 'No mail source'), 'info');
+    };
+    /** 📂 그 프로젝트를 앱의 평소 열기 경로(executeLoadFile)로 연다 — 열리면 표가 다시 그려져 담당자 칸이 고르기 상자가 된다. */
+    window._psOpenProject = async function (pi) {
+        var name = _psLast && _psLast.closed && _psLast.closed[pi];
+        if (!name) return;
+        try {
+            var files = (typeof window._listProjectFiles === 'function') ? await window._listProjectFiles() : [];
+            var f = (files || []).filter(function (x) { return String(x.name || '').replace(/\.json$/i, '') === name; })[0];
+            if (!f) {
+                var e = ((_psOther && _psOther.entries) || []).filter(function (x) { return String(x.file_name || '').replace(/\.json$/i, '') === name; })[0];
+                if (e) f = { id: e.drive_file_id, name: e.file_name };
+            }
+            if (!f || typeof window.executeLoadFile !== 'function') throw new Error(T('프로젝트 파일을 찾지 못했습니다: ', 'Project not found: ') + name);
+            if (window.showToast) window.showToast(T('📂 ' + name + ' 여는 중…', 'Opening ' + name + '…'), 'info');
+            // 보던 표를 기억해 둔다 — 열면 그 프로젝트 행·JIRA 가 더해져 조건(사실 수)이 달라지고, 같은 요약이 사라져
+            //    다시 AI 를 불러야 했다. 근거는 프로젝트#행 열쇠라 열고 나서도 그대로 맞물린다.
+            var keepShown = _psLast && _psLast.shown, keepKind = _psLast && _psLast.kind;
+            await window.executeLoadFile(f.id, f.name, true);
+            if (keepShown && !keepShown.archiveView && keepKind && keepKind === mode()) {
+                var sigNow = window._psCollectFacts(keepKind).sig;
+                var have = ((window.projectMeta || {}).aiPeriodSummary || {})[keepKind];
+                if (!have || have.rangeKey !== sigNow) {
+                    adoptRec(keepKind, { sig: sigNow, at: keepShown.at, by: keepShown.by, factCount: keepShown.factCount, rows: keepShown.rows, dropped: keepShown.dropped, _reused: true });
+                }
+            }
+            var m = document.getElementById('ai-summary-modal');
+            if (m && m.style.display !== 'none' && window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+        } catch (err) {
+            if (window.showToast) window.showToast('⚠️ ' + (err && err.message || err), 'error');
+        }
     };
     window._psRegenerate = function () {
         return window.generatePeriodSummary(mode(), { force: true });
