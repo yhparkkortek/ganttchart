@@ -1906,8 +1906,12 @@
     //      '엑셀 입력'이라는 말은 이 버튼에만 있었다 — 주소록 탭의 '📂 불러오기'로 맞췄다.
     //   [2026-10-20 3차] 글자 크기를 **주변 버튼과 똑같이** 맞춘다 — 인쇄(PDF) 등 이 줄의
     //   다른 버튼이 전부 13px/padding 6px 8px이라, 혼자 11px이면 눈에 따로 논다.
-    var BTN = 'white-space:nowrap; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none;'
-            + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; line-height:1.2;'
+    //   [2026-11-23 사용자 요청 "페이지 헤더 통일"] 높이를 **31px 로 못 박는다** — 줄 높이에 맡기면
+    //   글자·이모지 모양에 따라 28/29/31px 로 갈려 같은 헤더 줄 안에서 키가 달라졌다(실측 14개 페이지).
+    //   js/53 NAS 버튼도 같은 값이다(둘을 같이 고칠 것).
+    var BTN = 'white-space:nowrap; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center;'
+            + ' background:#e0f5f7; color:#00707d; border:none;'
+            + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;'
             + ' transition:background .15s;';
     var SEP = '<span style="display:inline-block; width:1px; height:13px; background:#ccd9db; margin:0 4px;"></span>';
 

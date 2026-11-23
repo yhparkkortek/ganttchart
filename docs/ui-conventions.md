@@ -206,6 +206,13 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 `#c9ecd3`/`#7cc494`, 빨강(삭제) `#fdecec`/`#f0b8b8` → `#f8d4d4`/`#e59a9a`. 헤더 버튼에 이 테두리형
 패턴을 섞어 쓰지 말 것 — 2026-09-22에 실제로 섞어 썼다가 사용자 지적으로 수정한 사례.)
 
+#### 페이지 헤더(`.concept-header-box`) 버튼 — 높이 31px 고정 (2026-11-23)
+- 📊 엑셀 저장·📂 불러오기·📁 NAS 같은 **글자 버튼**은 `height:31px; box-sizing:border-box; padding:0 12px;
+  display:inline-flex; align-items:center;` — 줄 높이에 맡기면 글자·이모지 모양에 따라 28/29/31px 로 갈려
+  같은 헤더 줄 안에서 키가 달라졌다(14개 페이지 실측). 자동으로 붙이는 곳은 js/42 `BTN`·js/53 `BTN` 둘이고,
+  js/22f 📜 이전 버전·js/67 `OPT`·Project list 📁 NAS(HTML)가 같은 값을 쓴다.
+- 모델 넘기기(◀ PTD ▶)·날짜 이동(◀ 이전/오늘/다음 ▶)·보기 전환 같은 **작은 조작 버튼**은 성격이 달라 예외.
+
 #### 모달 크기 조절 / 이동 / 배경 조작
 - 위 구조(투명 래퍼 + `resize:both`)를 따르면 자동으로 적용됨
 - 헤더에 `cursor:grab` 필수(`user-select:none;`은 권장)

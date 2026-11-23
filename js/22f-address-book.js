@@ -516,8 +516,10 @@ window._abEnsureVersionBtn = function() {
     btn.title = _t('지금까지 자동으로 쌓인 이전 버전을 열어봅니다.', 'Open an earlier automatically-saved version.');
     btn.onclick = function() { window.openAddressBookVersionModal(); };
     btn.textContent = _t('📜 이전 버전', '📜 Earlier versions');
-    btn.style.cssText = 'white-space:nowrap; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none;'
-        + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; line-height:1.2;'
+    // 옆의 js/42 버튼과 같은 모양(높이 31px 고정) — 바꿀 땐 그쪽 BTN 과 같이.
+    btn.style.cssText = 'white-space:nowrap; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center;'
+        + ' background:#e0f5f7; color:#00707d; border:none;'
+        + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;'
         + ' transition:background .15s; margin-right:4px;';
     btn.onmouseover = function() { btn.style.background = '#a3d9e0'; };
     btn.onmouseout  = function() { btn.style.background = '#e0f5f7'; };

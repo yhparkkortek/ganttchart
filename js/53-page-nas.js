@@ -29,7 +29,9 @@
     //    상관없이 **늘 맨 오른쪽**에 선다. js/42 의 엑셀 버튼 묶음(`px-btns-*`)은 뷰를 바꿀 때마다
     //    지워졌다 다시 append 되는데, 그때 어느 쪽 스윕이 나중에 도느냐에 따라 자리가 뒤바뀐다
     //    (실측으로 알람↔공지 전환에서 한 번 뒤집혔다). 순서에 기대지 않으려는 것.
-    var BTN = 'white-space:nowrap; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none;'
+    //   높이 31px 고정 — js/42 엑셀 버튼과 같은 값(줄 높이에 맡기면 이모지 때문에 29px 가 됐다).
+    var BTN = 'white-space:nowrap; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center;'
+            + ' background:#e0f5f7; color:#00707d; border:none;'
             + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;'
             + ' margin-right:4px; order:99;';
 

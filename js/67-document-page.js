@@ -4903,7 +4903,9 @@
         //      매핑해서(`textRoles`), 배경으로 쓰면 테마를 바꿔도 **그 버튼만 청록으로 굳는다**
         //      (사용자 신고 2026-11-11). 배경으로 다시 칠해지는 건 `bgRoles` 에 있는 hex 뿐이다
         //      (`bg #e0f5f7` · `headerTint` · `zebraB` · `hoverBg`).
-        var OPT = 'margin:0 4px 0 0; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none;'
+        // 높이 31px 고정 — 다른 페이지 헤더 버튼(js/42·53)과 같은 값. 줄 높이에 맡기면 📁 만 29px 가 된다.
+        var OPT = 'margin:0 4px 0 0; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center;'
+                + ' background:#e0f5f7; color:#00707d; border:none;'
                 + ' border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;';
         var th = '<div id="doc-form-toggle" style="position:relative; display:flex; align-items:center; flex-shrink:0;">'
             + '<button id="doc-form-trigger" onclick="window._toggleDocFormDropdown(event)"'
