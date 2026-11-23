@@ -122,6 +122,19 @@ window.__mailRoutingTestBody = async function () {
     ok(j.decision === 'auto' && j.basis === 'ai_cited', '4-4 단서 0 + AI 상 + 인용 검증 통과 → 배치', j);
     j = J(M('Dice Popper Marquee RFQ', ''), cands, { status: 'matched', candidates: [cands[0]], extraCandidates: [cands[1], cands[2]], multi: true, confidence: '상' });
     ok(j.decision !== 'auto' || (j.candidates.length === 1), '4-5 복수 후보 "상" 이어도 여러 곳 동시 배치는 없다', j);
+    // 📋 [2026-11-23 사용자 결정] 공통 건(회의록·로드맵) + 한 고객사 → 그 고객사 프로젝트 전부
+    const lnwIds = ['S3', 'S4', 'O1', 'D1', 'T1'];
+    const allOf = (jj) => [jj.target].concat(jj.extra || []).filter(Boolean).map(c => c.drive_file_id).sort();
+    j = J(M('Kortek- Weekly L&W Meet', 'Agenda: STELLAR32 schedule / Obsidian Digital Wheel proto'), cands, null);
+    ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-6 주간 회의(Weekly Meet) + LNW 두 제품 → LNW 프로젝트 5곳 모두에', { basis: j.basis, ids: allOf(j) });
+    j = J(M('RE: Panel Roadmap - Sep 2026 > LD550EQE-FPA1 for Obsidian55', 'AMUSNET 55FLAT 55C-R2100 / Obsidian Digital Wheel'), cands, null);
+    ok(j.decision === 'wait', '4-7 로드맵이어도 고객사가 둘(AMUSNET·LNW)이면 대기 — 팀 전체 배분은 사람이', { d: j.decision, basis: j.basis });
+    j = J(M('STELLAR32 / Obsidian Digital Wheel 동시 출하 문의', ''), cands, null);
+    ok(j.decision === 'wait' && j.basis !== 'common_customer', '4-8 공통 건 어휘가 없으면 같은 고객사 충돌도 그대로 대기', { d: j.decision, basis: j.basis });
+    ok(!window._mailRouteIsCommonSubject('Momentum 시험 결과') && !window._mailRouteIsCommonSubject('Homeland 1500R') && window._mailRouteIsCommonSubject('RE: Road Map 공유') && window._mailRouteIsCommonSubject('12/1 회의록 송부'),
+       '4-9 공통 건 어휘는 낱말 경계(Momentum·Homeland 는 아님, Road Map·회의록은 맞음)');
+    j = J(M('STELLAR32 진행 회의록', ''), cands, null);
+    ok(j.decision === 'auto' && j.basis !== 'common_customer' && j.target.drive_file_id === 'T1', '4-10 회의록이어도 한 프로젝트가 분명하면 그 한 곳(뿌리지 않는다)', { basis: j.basis, t: j.target && j.target.drive_file_id });
 
     // ── 5. 열쇠 ────────────────────────────────────────────────────────────────
     const k1 = window.mailKeyOf({ subject: 'RE: LNW K27 iDeck v1.4', date: '2026-09-03 08:39', sender: 'a <a@x.com>' });

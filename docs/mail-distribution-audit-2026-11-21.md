@@ -453,3 +453,15 @@ AI 분석 실패로 업무 내용(task)이 없는 줄은 넣을 게 없어 건�
   → 팀 공용 설정 `MailRouting_Shared.json` 을 **각자 다른 가족**(대표 = 자기 자신)으로 바꿈(백업 `MailRouting_Shared.before-split-20261123-155307.json`).
   확인: `HORIZON75 O/C 변경 일정`·`Horizon 75 MVD 샘플` → HORIZON75, `VIOLET Scaler EOL …`·`Cosmic Upright49 …` → 스케일러 프로젝트.
 
+
+### 8-16. 📋 공통 건(회의록·로드맵)은 고객사 프로젝트 전부에 · 🏢 팀 전체 배분 버튼 (같은 날, 사용자 결정)
+- 규칙 `common_customer`(js/74 `commonToCustomer`, 규칙 버전 `2026-11-23k`): 결정론 판정이 **conflict / customer_only / family_unresolved** 로 대기인데
+  **제목**에 공통 건 어휘(`MAIL_ROUTING_COMMON_WORDS` — 회의록·weekly·meeting·meet·minutes·roadmap… 영문은 낱말 경계)가 있고,
+  걸린 후보가 **한 고객사**뿐이면 그 고객사 프로젝트 **전부**(잡무 프로젝트 제외, 상한 `commonCustomerMax`=12)에 배치한다.
+- 막는 것: 다른 고객의 단어도 있었으면(`otherCustomer`, 로드맵 표에 AMUSNET 패널 번호 + LNW Obsidian) 그대로 대기 — 하네스 9-6c 가 처음엔 이걸로 깨졌다
+  (family_unresolved 후보가 AMUSNET 만 남아 AMUSNET 3곳에 뿌려짐). 한 프로젝트가 분명한 회의록(`STELLAR32 진행 회의록`)은 한 곳 그대로.
+- 실데이터 드라이런(대기 40건, 본문 포함, 쓰기 없음): `Kortek- Weekly L&W Meet` → LNW 11곳. `Panel Roadmap … for Obsidian55` 5건은
+  AMUSNET 55FLAT 패널 번호(dv550qumn10)가 같이 있어 두 고객 → 대기(→ 아래 버튼).
+- 카드의 복수 후보 칸 버튼 줄을 둘로: `📤 체크한 프로젝트에 배분` | `🏢 팀 전체 프로젝트에 배분`(`inboxDistributeToTeamAll`, 후보 목록 =
+  `_msFilterCandidateProjects`, 잡무 제외). 두 버튼은 같은 길 `_ibDistributeToTargets` 를 쓴다. 체크박스 `전체 해제/전체 선택` 토글도 같은 날 추가.
+- 검증 `tests/mail-routing.browser.js` 98/98(4-6~4-10 추가).

@@ -49,7 +49,9 @@
         headlessTopicRegen: false, // [2026-11-23] 다른 프로젝트 파일에 배치할 때 토픽 프로파일 AI 재생성을 기다리지 않는다(js/15b)
         familyAllWhenNoPrimary: true, // [2026-11-23 사용자 결정] 가족은 확정·모델 단서 없음·대표 없음 → 형제 **모두**에 배치(가족별로 '대기' 선택 가능)
         familyAllMax: 3,          // 형제 모두 배치의 상한 — 이보다 큰 가족은 모두에 뿌리지 않고 대기
-        familyModelPrefixMin: 9,  // 같은 고객 + 모델명 앞부분(정규화)이 이만큼 같으면 형제('AMUSNET 55…' → 'amusnet55')
+        familyModelPrefixMin: 9,
+        commonToCustomer: true,   // [2026-11-23 사용자 결정] 회의록·로드맵 같은 공통 건(제목 어휘 MAIL_ROUTING_COMMON_WORDS)이 한 고객사로 모이면 그 고객사 프로젝트 **전부**에
+        commonCustomerMax: 12,    // 공통 건을 뿌릴 고객사 프로젝트 수 상한(실측 LNW 11개) — 넘으면 대기  // 같은 고객 + 모델명 앞부분(정규화)이 이만큼 같으면 형제('AMUSNET 55…' → 'amusnet55')
         routeDir: 'App_Config/MailRoutes',
         flushSec: 60,
         reloadMin: 10,
@@ -59,7 +61,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23j';
+    var RULE_V = '2026-11-23k';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -132,6 +134,22 @@
     //  이 프로젝트로는 스레드 기록·사람 배치·근거 검증된 AI 선택으로만 간다. 데이터 — 이름만 더하면 된다.
     window.MAIL_ROUTING_CATCHALL = window.MAIL_ROUTING_CATCHALL || ['개발업무'];
     var CATCH = {}; window.MAIL_ROUTING_CATCHALL.forEach(function (w) { CATCH[norm(w)] = 1; });
+    /** 📋 [2026-11-23 사용자 결정] 공통 건 어휘 — **제목**에 이 말이 있으면 "여러 프로젝트에 공통인 메일"로 본다(데이터).
+     *  영문은 낱말 경계, 한글은 부분 일치. 본문은 안 본다(본문엔 meeting 같은 말이 흔하다). */
+    window.MAIL_ROUTING_COMMON_WORDS = window.MAIL_ROUTING_COMMON_WORDS ||
+        ['회의록', '주간회의', '주간 회의', '정기회의', '로드맵', 'weekly', 'meeting', 'meet', 'minutes', 'mom', 'roadmap', 'road map'];
+    function isCommonSubject(subj) {
+        var t = String(subj || '').toLowerCase();
+        if (!t) return false;
+        return window.MAIL_ROUTING_COMMON_WORDS.some(function (w) {
+            w = String(w || '').toLowerCase().trim();
+            if (!w) return false;
+            if (/[가-힣]/.test(w)) return t.indexOf(w) !== -1;
+            return new RegExp('(^|[^a-z0-9])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s*') + '([^a-z0-9]|$)').test(t);
+        });
+    }
+    window._mailRouteIsCommonSubject = isCommonSubject;
+    window._mailRouteIsCatchAll = function (c) { return isCatchAll(c); };
     function isCatchAll(c) { return !!(c && (CATCH[norm(c.model)] || CATCH[norm(String(c.customer || '').split('>').pop())])); }
 
     /** 후보 1개의 식별자 토큰(정규화) — 모델·고객모델명·코드류 keywords(+낱말·연속 두 낱말 조각).
@@ -337,12 +355,32 @@
                 return js;
             }
         }
-        return judgeCore(mail, cands, aiTag);
+        return commonToCustomer(judgeCore(mail, cands, aiTag), mail, cands);
     };
+    /** 📋 [2026-11-23 사용자 결정 "회의록·Road map 같은 공통 건은 고객사 형제 프로젝트로"] 결정론 판정이 '여러 프로젝트라 대기'
+     *  (conflict·customer_only·family_unresolved)로 끝났고, 제목이 공통 건 어휘이고, 걸린 후보가 **한 고객사**뿐이면
+     *  그 고객사의 프로젝트 **전부**에 배치한다. 고객사가 둘 이상이면 그대로 대기(사람이 카드에서 '팀 전체 배분' 등으로 정한다).
+     *  잡무 프로젝트(MAIL_ROUTING_CATCHALL)·자기 회사(SELF_ORG)는 빼고, 상한(commonCustomerMax)을 넘으면 뿌리지 않는다. */
+    var COMMON_FROM = { conflict: 1, customer_only: 1, family_unresolved: 1 };
+    function commonToCustomer(j, mail, cands) {
+        if (!j || j.decision !== 'wait' || !COMMON_FROM[j.basis] || P.commonToCustomer === false) return j;
+        // 가족을 고를 때 **다른 고객**의 단어도 있었으면(로드맵 표에 LNW·AMUSNET 이 같이) 한 고객사 건이 아니다 — 하네스 9-6c
+        if (j.otherCustomer) return j;
+        if (!mail || !isCommonSubject(mail.subject)) return j;
+        var roots = {};
+        (j.candidates || []).forEach(function (c) { var r = customerRoot(c && c.customer); if (r) roots[r] = 1; });
+        var rk = Object.keys(roots);
+        if (rk.length !== 1 || SELF[rk[0]]) return j;
+        var grp = customerGroup(cands || [], rk[0]).filter(function (c) { return c && c.drive_file_id && !isCatchAll(c); });
+        if (!grp.length || grp.length > (P.commonCustomerMax || 12)) return j;
+        var lbl = commonCustomerLabel(grp.map(function (c) { return c.customer; })) || rk[0].toUpperCase();
+        return { decision: 'auto', target: grp[0], extra: grp.slice(1), candidates: grp, basis: 'common_customer', family: null, hits: j.hits,
+            reason: T('공통 건(회의록·로드맵 등) · 고객사 ' + lbl + ' 프로젝트 ' + grp.length + '곳 모두에', 'common mail (minutes/roadmap) · all ' + grp.length + ' projects of ' + lbl) };
+    }
     /** 🧭 [2026-11-23 사용자 지시 "결정론 판정 먼저 하고 AI 는 업무 정리만"] AI 호출 **전에** 부른다(js/15c msCallGemini).
      *  AI 없이(aiTag=null) 판정해 결정론 근거로 한 곳이 확정되면 {target, basis, reason, family}, 아니면 null.
      *  null 이면 호출부가 예전처럼 후보 목록을 주고 AI 에게 고르게 한다. 끄기: P.deterministicFirst=false 또는 offKey. */
-    var PRE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1, family_all: 1, family_named: 1 };
+    var PRE_BASES = { identifier: 1, family: 1, family_inch: 1, family_primary: 1, thread: 1, family_all: 1, family_named: 1, common_customer: 1 };
     window.mailRoutePreJudge = function (mail, cands) {
         if (off() || P.deterministicFirst === false || !cands || !cands.length || !mail) return null;
         var j = window.mailRouteJudge(mail, cands, null);
@@ -521,7 +559,7 @@
                 return out({ decision: 'auto', target: members[0], extra: members.slice(1), candidates: members, basis: 'family_all',
                     reason: T('가족 확정(' + fam.label + ') · 모델 단서 없음 → 형제 ' + members.length + '곳 모두에', 'family ' + fam.label + ' · no model cue → all ' + members.length + ' siblings'), family: famId });
             }
-            return out({ decision: 'wait', target: null, candidates: members, basis: 'family_unresolved',
+            return out({ decision: 'wait', target: null, candidates: members, basis: 'family_unresolved', otherCustomer: otherCustomer,
                 reason: T('가족은 확정(' + fam.label + ')인데 어느 모델인지 단서가 없음 — 설정에서 가족 대표를 정하면 자동 배치', 'family ' + fam.label + ' confirmed but model unknown — set a family primary in settings to auto-place')
                         + (gF && !gF.ok ? T(' · AI 선택(' + (cands[aiIdx].model || '') + ')은 본문 근거가 없어 따르지 않음', ' · AI pick ignored: no grounding in the mail') : ''), family: famId });
         }

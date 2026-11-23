@@ -800,7 +800,11 @@ window.renderTaskInbox = function() {
                         </label>`;
                     }).join('')}
                 </div>
-                <button onclick="window.inboxDistributeToMultiCandidates('${it.uid}')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="margin-top:6px; width:100%; height:28px; box-sizing:border-box; font-size:11.5px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Distribute to checked projects' : '체크한 프로젝트에 배분'}</button>
+                <!-- 🏢 [2026-11-23 사용자 요청] 버튼 줄을 둘로 — 왼쪽은 체크한 후보, 오른쪽은 팀 프로젝트 전체(고객사로 못 묶는 공통 건) -->
+                <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button onclick="window.inboxDistributeToMultiCandidates('${it.uid}')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1 1 0; min-width:0; height:28px; box-sizing:border-box; font-size:11.5px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'To checked projects' : '체크한 프로젝트에 배분'}</button>
+                    <button onclick="window.inboxDistributeToTeamAll('${it.uid}')" title="${_ibEn ? 'Common mail that cannot be grouped by customer — place it in every project of the team (except the catch-all project)' : '고객사로 묶을 수 없는 공통 건 — 팀의 모든 프로젝트에 넣습니다(잡무 프로젝트 제외)'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1 1 0; min-width:0; height:28px; box-sizing:border-box; font-size:11.5px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; transition:background .15s, border-color .15s;">🏢 ${_ibEn ? 'To all team projects' : '팀 전체 프로젝트에 배분'}</button>
+                </div>
             </div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
                 <!-- 🐛 [2026-11-17] l0Options는 "지금 열려있는 프로젝트"의 구간이다 — 이 카드가
@@ -852,6 +856,29 @@ window.inboxDistributeToMultiCandidates = function(uid) {
         alert(_en ? 'Select at least one project to distribute to.' : '배분할 프로젝트를 1개 이상 선택해주세요.');
         return;
     }
+    return window._ibDistributeToTargets(uid, checked);
+};
+
+// 🏢 [2026-11-23 사용자 요청] 고객사 형제로 묶을 수 없는 공통 건 — 팀 프로젝트 **전체**에 배분.
+//    대상은 메일 배분이 쓰는 후보 목록과 같은 것(_msFilterCandidateProjects: 내 팀·완료 아님)이고, 잡무 프로젝트는 뺀다.
+window.inboxDistributeToTeamAll = async function(uid) {
+    const _en = window._currentLang === 'en';
+    let cands = [];
+    try { cands = window._msFilterCandidateProjects(await window._msLoadProjectIndex()) || []; } catch (e) { cands = []; }
+    const isCatch = window._mailRouteIsCatchAll || function() { return false; };
+    cands = cands.filter(function(c) { return c && c.drive_file_id && !isCatch(c); });
+    if (!cands.length) {
+        if (window.showToast) window.showToast(_en ? '⚠️ Could not load the team project list.' : '⚠️ 팀 프로젝트 목록을 불러오지 못했습니다.', 'warning', 5000);
+        return;
+    }
+    return window._ibDistributeToTargets(uid, cands);
+};
+
+/** 카드 하나를 여러 프로젝트에 넣는 공용 길 — 체크한 후보·팀 전체 두 버튼이 같이 쓴다. */
+window._ibDistributeToTargets = function(uid, checked) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it || !checked || !checked.length) return;
+    const _en = window._currentLang === 'en';
     const taskName = (it.task && it.task['업무명']) || (_en ? '(untitled)' : '새 업무');
     // 💡 후보들이 같은 모델명(예: AMUSNET)에 인치만 다른 경우가 흔하므로, 확인창/이력에서도 구별되도록 인치를 함께 표기
     const targetNames = checked.map(function(c) {
