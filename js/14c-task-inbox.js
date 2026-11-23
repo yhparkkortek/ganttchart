@@ -771,6 +771,8 @@ window.renderTaskInbox = function() {
                      사람이 구분할 수 없고 필요한 건 "이 프로젝트가 아니다" 하나라 ♻️ 하나만 남긴다. 누르면 카드를 **지우지 않고**
                      지금 후보를 이 카드의 제외 목록(excludedFids)에 넣은 뒤 AI 없이 다시 판단한다(js/74 mailRouteRejudgeOne). -->
                 <button onclick="window.inboxQuickClassify('${it.uid}', '오매칭')" title="${_ibEn ? 'Wrong project — exclude it and judge again' : '오매칭 — 이 프로젝트가 아님 · 빼고 다시 판단'}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#f0fff4'; this.style.borderColor='#a3d9b5';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a3d9b5; border-radius:6px; background:#f0fff4; color:#1a6b35; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">♻️</button>
+                <!-- 🗑 [2026-11-23 사용자 결정] 삭제 버튼은 남긴다 — 회사 공지처럼 프로젝트 업무가 아닌 메일을 한 건씩 지우는 길. 확인창 없이 바로 지우고 학습 기록('불필요')을 남긴다(기존 inboxQuickClassify '불필요' 경로 재사용). -->
+                <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Delete — not a project task (notice, etc.)' : '삭제 — 프로젝트 업무가 아님(공지 등)'}" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ced4da';" style="flex:0 0 auto; font-size:12px; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; background:#f8f9fa; color:#555; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             ${_hasCand
@@ -2455,8 +2457,8 @@ window.inboxQuickClassify = function(uid, reason) {
         const cands = ((cur.matchedProject && cur.matchedProject.candidates) || []).filter(function(c) { return c && c.drive_file_id; });
         if (!cands.length) {
             if (window.showToast) window.showToast(_en
-                ? '♻️ This card has no candidate project to exclude — use [📤 Other Proj] / [➕ New Proj], or bulk-delete from the summary chip.'
-                : '♻️ 이 카드엔 뺄 후보 프로젝트가 없습니다 — [📤 다른 Proj]·[➕ 새 Proj]로 보내거나, 위 요약 칩에서 묶음 삭제하세요.', 'warn', 6000);
+                ? '♻️ This card has no candidate project to exclude — use [📤 Other Proj] / [➕ New Proj], or 🗑 if it is not a project task.'
+                : '♻️ 이 카드엔 뺄 후보 프로젝트가 없습니다 — [📤 다른 Proj]·[➕ 새 Proj]로 보내거나, 프로젝트 업무가 아니면 🗑 로 지우세요.', 'warn', 6000);
             return;
         }
         const ex = new Set(cur.excludedFids || []);
@@ -2515,7 +2517,7 @@ window.inboxQuickClassify = function(uid, reason) {
     window._ibCollapsedUids && window._ibCollapsedUids.delete(uid);
     window.TaskInbox.remove(uid);
     window.renderTaskInbox();
-    if (window.showToast) window.showToast(_en ? '📚 Learning recorded' : '📚 학습 데이터가 기록됐습니다', 'info');
+    if (window.showToast) window.showToast(_en ? '🗑 Deleted — learning recorded' : '🗑 삭제했습니다 — 학습 데이터가 기록됐습니다', 'info');
     // ⭐ [2026-09-23] 단건 삭제도 3초 대기 없이 바로 드라이브까지 반영
     window.TaskInbox.syncNow().then(function(r) {
         if (r === 'failed' && window.showToast) {

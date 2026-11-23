@@ -267,6 +267,9 @@ window.__mailRoutingTestBody = async function () {
                 const rb = await window.mailRouteRejudgePending({ force: true, toast: false });
                 const c1b = store.find(x => x.uid === 'r1');
                 ok(c1b.matchedProject.candidates.every(c => c.drive_file_id !== 'S4'), '13-8 다음 재판정에서도 제외 목록은 유지된다', c1b.matchedProject.candidates.map(c => c.drive_file_id));
+                const l0 = learned;
+                window.inboxQuickClassify('r3', '불필요');
+                ok(!store.find(x => x.uid === 'r3') && learned === l0 + 1, '13-9 🗑 삭제는 카드를 바로 지우고 학습 기록(불필요)을 남긴다', { left: store.map(x => x.uid), learned });
             } finally { TI.syncNow = realSync; window.renderTaskInbox = realRender; window._writeLearningEntry = realLearn; }
         }
         // 9-4 유휴 스윕이 'none'(매칭 확정 건 없음)을 돌려줘도 재판정은 돈다 — 대기가 전부 모호할 때가 그 때다
