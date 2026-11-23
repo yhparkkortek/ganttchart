@@ -1566,7 +1566,7 @@
                 + ' display:flex; flex-direction:column;">'
                 + '<div id="jira-create-drag" style="padding:10px 14px; background:#eef6f7; border-bottom:1px solid #cfe3e5; color:#00707d;'
                 + ' cursor:move; display:flex; align-items:center; gap:8px;">'
-                + '<strong style="font-size:14px;">🆕 ' + T('새 이슈', 'New issue') + '</strong>'
+                + '<strong style="font-size:14px;">🎫 ' + T('새 이슈', 'New issue') + '</strong>'
                 + '<span id="jira-create-unit-badge" style="font-size:11px; padding:1px 8px; border-radius:10px; background:#e0f5f7; color:#00707d; font-weight:bold;"></span>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="document.getElementById(\'jira-create-modal\').style.display=\'none\'"'
