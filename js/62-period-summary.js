@@ -462,11 +462,23 @@
         Object.keys(projDir).forEach(function (p) { if (projDir[p]) pms[projDir[p]] = 1; });
 
         // 프로젝트 선택지는 PM 을 고르면 그 PM 소속으로 좁힌다(캐스케이딩) — 역시 기간과 무관.
+        // 👷 [2026-11-23 사용자 요청] 업무 담당자를 고르면 그 사람 업무가 있는 프로젝트만 —
+        //    사람의 업무는 사실(기간 적용)에만 있으므로 이 줄만은 기간을 따른다.
+        var hasWho = function (f) {
+            return String(f.assignee || '').split(',').map(function (x) { return x.trim(); }).indexOf(F.who) !== -1;
+        };
+        var whoProj = null;
+        if (F.who) {
+            whoProj = {};
+            all.forEach(function (f) { if (f.project && hasWho(f)) whoProj[f.project] = 1; });
+        }
         var projs = {};
         Object.keys(projDir).forEach(function (p) {
             if (F.pm && projDir[p] !== F.pm) return;
+            if (whoProj && !whoProj[p]) return;
             projs[p] = 1;
         });
+        if (F.proj) projs[F.proj] = 1;   // 고른 값은 목록에서 사라지지 않게(드롭다운이 '전체'로 보이는 착시 방지)
 
         // 👷 업무 담당자(보조)는 여전히 **기간이 적용된** 사실(`all`)에서, PM·프로젝트까지 거른 뒤 만든다.
         var afterPm = all.filter(function (f) { return !F.pm || String(f.pm || '') === F.pm; });
@@ -475,6 +487,7 @@
         afterProj.forEach(function (f) {
             if (f.assignee) f.assignee.split(',').forEach(function (n) { n = n.trim(); if (n) people[n] = 1; });
         });
+        if (F.who) people[F.who] = 1;
 
         var out = afterProj.filter(function (f) {
             if (!F.who) return true;
@@ -647,7 +660,7 @@
              lab(T('프로젝트 담당자', 'Project owner')) +
              sel('pm', T('프로젝트 담당자', 'Project owner'), F.pm, (col && col.pms) || [], T('전체', 'All'), ['proj', 'who'], ' max-width:95px;') + slash +
              lab(T('프로젝트', 'Project')) +
-             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('전체', 'All'), ['who'], ' max-width:150px;') + slash +
+             sel('proj', T('프로젝트', 'Project'), F.proj, (col && col.projects) || [], T('전체', 'All'), [], ' max-width:150px;') + slash +
              lab(T('업무 담당자', 'Task assignee')) +
              sel('who', T('업무 담당자', 'Task assignee'), F.who, (col && col.people) || [], T('전체', 'All'), [], ' max-width:95px;') +
              (col && col.filtered ? '<button onclick="window._psSetFilter({pm:\'\', who:\'\', proj:\'\'})" title="' + esc(T('필터 해제', 'Clear filters')) + '" style="padding:2px 8px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-size:13px; line-height:1.2; cursor:pointer;">↺</button>' : '') +
