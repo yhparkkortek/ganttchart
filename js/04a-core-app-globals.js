@@ -212,21 +212,25 @@ ${mailText}`;
     //    모양 **한 벌** — js/62(AI 요약)·js/59(일일보고)가 같이 쓴다. 따로 적으면 한쪽만 바뀐다.
     //    [2026-11-23 2차 "칩 버튼 크기 모양 통일"] 칩·버튼·드롭다운·입력칸이 **같은 높이(22px)·같은 둥근 모서리**.
     var _UI_BOX = ' box-sizing:border-box; height:22px; border-radius:11px; font-size:11px; vertical-align:middle;';
-    /** 칩(켜고 끄는 것). `tone`={color,bg} 를 주면 그 색 칩(분류 칩 등), 없으면 기본 파랑. */
+    // 🎨 [2026-11-24 "배지·칩 색 통일"] 기본 색은 **팔레트**(`--ui-accent*`, styles.css :root — 모달 헤더와 같은 세 색).
+    //    예전엔 켜진 칩이 고정 파랑 #1971c2 인데 꺼진 칩 글자(#2c5f8a)는 js/21 이 테마색으로 갈아 끼워, 한 줄에 파랑·초록이 섞였다.
+    //    `tone` 을 준 칩(분류 칩 등)은 역할색이라 그대로. 빨강(danger)도 역할색.
+    var ACC = 'var(--ui-accent, #00707d)', ACC_BG = 'var(--ui-accent-bg, #e0f5f7)', ACC_LN = 'var(--ui-accent-line, #a3d9e0)';
+    /** 칩(켜고 끄는 것). `tone`={color,bg} 를 주면 그 색 칩(분류 칩 등), 없으면 테마색. */
     window._uiPillStyle = function (on, tone) {
-        var c = (tone && tone.color) || '#1971c2';
-        var offBg = (tone && tone.bg) || '#fff', offBd = tone ? c : '#cfd8e3', offFg = tone ? c : '#2c5f8a';
+        var c = (tone && tone.color) || ACC;
+        var offBg = (tone && tone.bg) || '#fff', offBd = tone ? c : '#cfd8e3', offFg = tone ? c : ACC;
         return 'border:1px solid ' + (on ? c : offBd) + '; background:' + (on ? c : offBg) + '; color:' + (on ? '#fff' : offFg) + ';' +
                _UI_BOX + ' padding:0 9px; line-height:20px; font-weight:bold; cursor:pointer; white-space:nowrap;';
     };
     /** 동작 버튼(엑셀·새로 생성·🔍·↺). kind: 'danger'(해제·초기화) | 'accent'(검색) | 기본. */
     window._uiBtnStyle = function (kind) {
-        var k = { danger: ['#eeb0ac', '#fbe4e2', '#b1432f'], accent: ['#a5c8f0', '#e7f5ff', '#1971c2'] }[kind] || ['#cfd8e3', '#fff', '#2c5f8a'];
+        var k = { danger: ['#eeb0ac', '#fbe4e2', '#b1432f'], accent: [ACC_LN, ACC_BG, ACC] }[kind] || ['#cfd8e3', '#fff', ACC];
         return 'border:1px solid ' + k[0] + '; background:' + k[1] + '; color:' + k[2] + ';' +
                _UI_BOX + ' padding:0 9px; line-height:20px; cursor:pointer; white-space:nowrap;';
     };
     window._uiSelectStyle = function (active) {
-        return 'padding:0 6px; border:1px solid ' + (active ? '#a5c8f0' : '#cfd8e3') + '; background:' + (active ? '#eef6ff' : '#fff') + ';' + _UI_BOX;
+        return 'padding:0 6px; border:1px solid ' + (active ? ACC_LN : '#cfd8e3') + '; background:' + (active ? ACC_BG : '#fff') + ';' + _UI_BOX;
     };
     /** 입력칸(검색 등) — 칩과 같은 높이. */
     window._uiInputStyle = function () {

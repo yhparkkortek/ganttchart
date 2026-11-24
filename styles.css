@@ -124,6 +124,10 @@
         --modal-hdr-bg: #e0f5f7;
         --modal-hdr-line: #a3d9e0;
         --modal-hdr-text: #00707d;
+        /* 🎨 [2026-11-24] 칩·작은 버튼 강조색(js/04a `_uiPillStyle` 등) — 팔레트 세 색을 그대로 가리킨다(js/21 이 위 세 값을 갈아 끼우면 같이 바뀐다) */
+        --ui-accent: var(--modal-hdr-text);
+        --ui-accent-bg: var(--modal-hdr-bg);
+        --ui-accent-line: var(--modal-hdr-line);
 
         /* 💡 [2026-09-02 신규] 하단 모달 최소화 taskbar가 떠 있는 동안 각 탭 콘텐츠와 안 겹치도록
            빼줄 여백 — 기본은 0(타스크바 없음), js/19-shared-modal-drag.js가 타스크바 높이+간격(15px,
