@@ -213,6 +213,19 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
   js/22f 📜 이전 버전·js/67 `OPT`·Project list 📁 NAS(HTML)가 같은 값을 쓴다.
 - 모델 넘기기(◀ PTD ▶)·날짜 이동(◀ 이전/오늘/다음 ▶)·보기 전환 같은 **작은 조작 버튼**은 성격이 달라 예외.
 
+#### 표 위 줄(필터·칩·검색) — 앱 공용 22px 한 벌 (2026-11-24)
+- 헤더 밑, 표 바로 위에 두는 **표 보기 조작**(열 그룹 칩·필터 드롭다운·검색칸·↺ 초기화)은 js/04a 공용 함수로만 그린다:
+  칩 `_uiPillStyle(on, tone?)` · 드롭다운 `_uiSelectStyle(active)` · 입력칸 `_uiInputStyle()` ·
+  동작 버튼 `_uiBtnStyle(kind)`(`'danger'`=↺ 초기화·해제, `'accent'`=🔍 검색). 전부 `height:22px; border-radius:11px; font-size:11px`.
+- 쓰는 곳: 일일보고(js/59)·Project Review(js/62)·Project list(js/55). 2026-11-24 실측 때 Project list 만
+  제 스타일(필터 24px 각진 모서리·↺ 28px 청록·☑/☐ 칩)로 따로 그려 다른 두 페이지와 달랐다.
+- 드롭다운은 **고른 값이 있으면 `active`** 로 넘겨 연파랑으로 보이게 — 지금 어떤 필터가 걸렸는지가 보여야 한다.
+- ⚠️ 이 줄의 버튼에 `concept-add-row-btn` 클래스를 붙이지 말 것 — 팔레트(js/21 `#cp-live-style`)가 그 클래스에
+  `background … !important` 를 걸어 인라인 색을 덮는다(↺ 가 빨강 대신 파랑회색으로 나왔다).
+- ⚠️ 정적 HTML 에 둔 버튼(예 `#pl-btn-reset`)은 처음 그릴 때도 같은 값이 되도록 인라인 style 을 맞춰 두고,
+  렌더 때 `el.style.cssText = _uiBtnStyle(...)` 로 다시 씌운다(값의 원본은 함수 하나).
+- 헤더(31px)와 표 위 줄(22px)은 **다른 층**이다 — 헤더 버튼을 22px 로, 표 위 줄을 31px 로 섞지 말 것.
+
 #### 모달 크기 조절 / 이동 / 배경 조작
 - 위 구조(투명 래퍼 + `resize:both`)를 따르면 자동으로 적용됨
 - 헤더에 `cursor:grab` 필수(`user-select:none;`은 권장)
