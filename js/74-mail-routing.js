@@ -1155,6 +1155,8 @@
             res.looked++;
             var mr = it.mailRaw || {};
             var body = mr.body2000 || (it.task && it.task['상세내용']) || '';
+            // 📄 결재 카드에 붙인 그룹웨어 본문은 재판정에 쓰지 않는다 — 판정은 js/75 의 좁은 조건(bodyResolve)만(사양표 오배송 실측)
+            if (window.APPROVAL_BODY_MARK && body.indexOf(window.APPROVAL_BODY_MARK) !== -1) body = body.slice(0, body.indexOf(window.APPROVAL_BODY_MARK));
             var mail = { subject: mr.subject || (it.task && it.task['업무명']) || '', sender: mr.sender || '', body: body, refs: mr.refs || [] };
             // 저장돼 있던 AI 판정을 되살려 AI 보조로만 쓴다(후보 참조는 지금 색인으로 다시 맞춘다)
             var aiTag = null;
@@ -1478,6 +1480,8 @@
             var mr = it.mailRaw || {};
             var subj = mr.subject || (it.task && it.task['업무명']) || '';
             var body = mr.body2000 || (it.task && it.task['상세내용']) || '';
+            // 📄 결재 카드에 붙인 그룹웨어 본문은 재판정에 쓰지 않는다 — 판정은 js/75 의 좁은 조건(bodyResolve)만(사양표 오배송 실측)
+            if (window.APPROVAL_BODY_MARK && body.indexOf(window.APPROVAL_BODY_MARK) !== -1) body = body.slice(0, body.indexOf(window.APPROVAL_BODY_MARK));
             var root = npCustomerOf(subj + '\n' + body, cands);
             if (!root) return;
             var clues = npUnknownClues(subj, body, known);

@@ -6614,6 +6614,21 @@ def gw_approval_read():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/gw/approval/body-text', methods=['GET'])
+def gw_approval_body_text():
+    """결재 문서 본문 글자 + 첨부 이름(읽기 전용, 화면 이동 없음) — 메일 배분 판정이 제목만 보지 않게(js/75, 2026-11-24)."""
+    try:
+        import gw_bridge
+        did = (request.args.get('docId') or '').strip()
+        if not did.isdigit():
+            return jsonify({'ok': False, 'message': 'docId(숫자)가 필요합니다.'}), 400
+        r = gw_bridge.approval_body_text(did)
+        r['ok'] = True
+        return jsonify(r)
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/gw/approval/draft-fill', methods=['POST'])
 def gw_approval_draft_fill():
     """이미 열려 있는 작성 화면을 **다시 채운다**(실행 루프용). 원본 문서를 다시 읽지 않는다.

@@ -699,6 +699,8 @@ window._tiRejudgeNow = async function() {
     window.renderTaskInbox();
     let a = null, b = null, err = null;
     try {
+        // 📄 [2026-11-24] 대기 결재 카드에 본문을 먼저 채운다(좁은 조건이면 그 자리에서 배치) — 그룹웨어가 로그인돼 있을 때만 받아진다
+        if (window.approvalBodySweep) { try { await window.approvalBodySweep({ max: 40 }); } catch (e) { console.warn('[inbox] 결재 본문 채우기 실패', e); } }
         a = await window.mailRouteRejudgePending({ force: true, max: 50 });
         if (window.mailRouteRejudgeUnmatched) b = await window.mailRouteRejudgeUnmatched({ force: true, max: 50 });
     } catch (e) { err = e; console.warn('[inbox] 재판정 실패', e); }

@@ -1296,6 +1296,31 @@ for _marker in ['/*__KPM_BODY_PAIR_FN__*/']:
     _READ_JS = _READ_JS.replace(_marker, _BODY_PAIR_FN)
 
 
+def approval_body_text(doc_id, max_chars=2000):
+    """결재 문서의 **본문 글자 + 첨부 이름**만 읽는다(읽기 전용, 화면 이동 없음) — 메일 배분 판정용(js/75).
+
+    2026-11-24 실측: GET /api/approval/document/{id} 한 번에 0.31초. 페이지를 열지 않고 로그인된 탭 안에서 호출한다
+    (approval_read 는 전용 크롬 탭을 그 문서로 **이동**시키고 2초 기다려 사람이 쓰던 화면을 빼앗는다 — 그래서 따로 둔다).
+    `docBodyContent` 는 다 그려진 문서 한 장이라 머리(결재선 서명·사람 이름)가 앞에 있다 → 제목 뒤부터만 쓴다."""
+    import html as _html
+    if not doc_id:
+        raise ValueError('문서 id 가 필요합니다.')
+    j = gw_get('/api/approval/document/%s' % str(doc_id).strip(), timeout=30) or {}
+    d = ((j.get('data') or {}).get('document')) or {}
+    b = d.get('docBodyContent') or ''
+    t = re.sub(r'<(script|style)[^>]*>.*?</\1>', ' ', b, flags=re.S | re.I)
+    t = re.sub(r'<[^>]+>', ' ', t)
+    t = re.sub(r'\s+', ' ', _html.unescape(t)).strip()
+    title = re.sub(r'\s+', ' ', _html.unescape(re.sub(r'<[^>]+>', ' ', d.get('title') or ''))).strip()
+    cut = t.find(title) if title else -1
+    if cut != -1:
+        t = t[cut + len(title):].strip()         # 머리(결재선·문서번호·작성자)를 버린다
+    names = [str(a.get('name') or '') for a in (d.get('attaches') or []) if isinstance(a, dict) and a.get('name')]
+    return {'docId': str(doc_id), 'title': title, 'text': t[:max_chars], 'bodyChars': len(t),
+            'attaches': names[:20], 'attachCount': d.get('attachCount') or len(names),
+            'headCut': cut != -1}
+
+
 def approval_read(doc_num=None, doc_id=None, with_html=False):
     """기존 전자결재 문서를 읽는다(읽기 전용) — 복사 기안의 재료.
 

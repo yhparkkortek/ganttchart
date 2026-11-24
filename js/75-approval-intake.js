@@ -73,7 +73,17 @@
         materialLink: true,
         materialCodeRe: '(^|[^0-9])([13]\\d{5})(?![0-9])',   // 원자재 코드 모양(1xxxxx·3xxxxx). 50xxxx 관리번호는 판정기 몫
         bomCacheKey: 'gantt_apv_bom_codes_v1',             // 프로젝트별 BOM 코드·멤버 — updated_at 이 같으면 파일을 다시 안 읽는다
-        memberCheck: true                                  // 기안자가 그 프로젝트 담당자 칸에 없으면 자동 대신 대기
+        memberCheck: true,                                 // 기안자가 그 프로젝트 담당자 칸에 없으면 자동 대신 대기
+        // 📄 [2026-11-24 사용자 요청 "결재 카드도 메일처럼 본문을"] 제목만으로 확정 안 된 문서는 본문 글자 + 첨부 이름을 받아
+        //    (/gw/approval/body-text, 화면 이동 없음·문서당 0.31초 실측) **좁은 조건**에서만 판정에 쓰고, 카드에는 항상 보여 준다.
+        //    ⚠️ 본문을 메일처럼 통째로 쓰면 안 된다 — 실측 대기 21장 중 8장이 바뀌었는데 절반 이상이 오배송이었다
+        //    (사양표의 'AG/AR/AF' → OBSIDIAN27 · 출장 보고서의 제품 나열 → POLED · ECO 표의 여러 모델).
+        //    따르는 조건: 제목이 이미 고객/가족까지 정했고(충돌 아님) · 본문 판정이 그 안의 후보이고 · 관리번호(5자리+)나
+        //    모델명 통째로 맞았거나 가족 안 여러 모델을 이름으로 적었을 때(family_named). 양식 이름에 bodySkipForms 가 있으면 안 쓴다.
+        bodyFetch: true,
+        bodyMax: 2000,
+        bodySkipForms: ['출장', '교육', '세미나'],
+        bodyMark: '──── 📄 본문(그룹웨어) ────'
     };
     var P = window.APPROVAL_INTAKE;
     var BASE = window.BACKEND_BASE || 'http://127.0.0.1:5000';
@@ -224,6 +234,48 @@
     }
     window._approvalSizesIn = sizesIn;   // 하네스용
 
+    // ── 📄 본문 받기 + 좁은 조건의 본문 판정 ───────────────────────────────
+    window.APPROVAL_BODY_MARK = P.bodyMark;
+    var _bodyRouteMissing = false;
+    async function fetchBody(id) {
+        if (!P.bodyFetch || _bodyRouteMissing || !id) return null;
+        try {
+            var r = await fetch(BASE + '/gw/approval/body-text?docId=' + encodeURIComponent(id));
+            if (r.status === 404) { _bodyRouteMissing = true; console.info('[결재 가져오기] 본문 라우트 없음(백엔드 재시작 전) — 제목만으로 판정'); return null; }
+            var j = await r.json();
+            if (!j || !j.ok) { console.info('[결재 가져오기] 본문 못 받음:', j && j.message); return null; }
+            return { text: String(j.text || '').slice(0, P.bodyMax || 2000), attaches: j.attaches || [] };
+        } catch (e) { return null; }
+    }
+    function bodySkip(formName) { var f = String(formName || ''); return (P.bodySkipForms || []).some(function (w) { return w && f.indexOf(w) !== -1; }); }
+    function bodyMailOf(mail, bd) { return { subject: mail.subject, sender: mail.sender, refs: [], body: mail.body + '\n' + bd.text + '\n' + bd.attaches.join('\n') }; }
+    function nrm(s) { return String(s || '').toLowerCase().replace(/[^0-9a-z가-힣]+/g, ''); }
+    /** 제목 판정(jd)이 정한 무리 안에서만, 강한 단서일 때만 본문 판정을 따른다. 따르면 pre 모양, 아니면 null */
+    function bodyResolve(mail, jd, cands, bd) {
+        if (!jd || !jd.candidates || !jd.candidates.length || !bd || !(bd.text || bd.attaches.length)) return null;
+        if (!/^(customer_only|family_unresolved|ai_low|customer_ai_low)$/.test(String(jd.basis || ''))) return null;   // 충돌은 본문이 더 헷갈리게 한다
+        var group = {}; jd.candidates.forEach(function (c) { if (c && c.drive_file_id) group[c.drive_file_id] = 1; });
+        var j2; try { j2 = window.mailRouteJudge(bodyMailOf(mail, bd), cands, null); } catch (e) { return null; }
+        if (!j2 || j2.decision !== 'auto' || !j2.target || !group[j2.target.drive_file_id]) return null;
+        if ((j2.extra || []).some(function (c) { return !group[c.drive_file_id]; })) return null;
+        var ok = /family_named$/.test(String(j2.basis || ''));
+        if (!ok && j2.hits && j2.hits.uniq) {
+            var ti = cands.indexOf(j2.target), hs = (ti >= 0 && j2.hits.uniq[ti]) || [];
+            ok = hs.some(function (t) { return /^\d{5,}$/.test(t) || t === nrm(j2.target.model); });
+        }
+        if (!ok) return null;
+        return { target: j2.target, extra: j2.extra || [], basis: 'body_' + j2.basis, family: j2.family,
+                 reason: T('본문: ', 'body: ') + (j2.reason || '') };
+    }
+    function withBody(raw, bd) {
+        if (!bd) return raw;
+        raw.body2000 = String(raw.body2000 || '') + '\n\n' + P.bodyMark + '\n' + bd.text +
+            (bd.attaches.length ? '\n[' + T('첨부', 'Attachments') + '] ' + bd.attaches.join(' · ') : '');
+        raw.bodyFetchedAt = new Date().toISOString();
+        return raw;
+    }
+    window._approvalBodyResolve = bodyResolve;   // 하네스용
+
     // ── 🧱 원자재 코드 → 프로젝트(저장된 BOM 만) ───────────────────────────
     function scanCodes(text) {
         var re = new RegExp(P.materialCodeRe, 'g'), out = {}, m;
@@ -295,6 +347,47 @@
 
     /** 🔗 그룹웨어 원문 열기 — 사람이 로그인해 둔 전용 크롬(CDP)에 새 탭으로(/gw/open-doc, js/67 의뢰서 열기와 같은 길).
      *  일반 새 탭은 로그인 화면만 뜬다 → 백엔드가 안 될 때만 폴백. @param apv {id, docNum, url} */
+    /** 📄 이미 보관함에 '대기' 로 있는 결재 카드에 본문을 채우고, 좁은 조건이면 배치한다(🧭 재판정 버튼이 먼저 부른다).
+     *  본문을 한 번 받은 카드는 다시 받지 않는다(bodyFetchedAt). 반환 {looked, filled, placed} */
+    window.approvalBodySweep = async function (opts) {
+        opts = opts || {};
+        var res = { looked: 0, filled: 0, placed: 0 };
+        if (!P.bodyFetch || !window.TaskInbox || !window.mailRouteJudge) return res;
+        var cands;
+        try { cands = window._msFilterCandidateProjects(await window._msLoadProjectIndex()); } catch (e) { cands = []; }
+        if (!cands || !cands.length) return res;
+        var list = window.TaskInbox.load().filter(function (it) {
+            return it && it.status === '대기' && it.mailRaw && /^apv_/.test(it.mailRaw.key || '') && !it.mailRaw.bodyFetchedAt;
+        }).slice(0, opts.max || 40);
+        for (var i = 0; i < list.length; i++) {
+            var it = list[i], ap = it.mailRaw.approval || {};
+            res.looked++;
+            if (bodySkip(ap.formName)) continue;
+            var bd = await fetchBody(ap.id || String(it.mailRaw.key).slice(4));
+            if (!bd) { if (_bodyRouteMissing) break; continue; }
+            var fresh = window.TaskInbox.load(), x = fresh.filter(function (y) { return y.uid === it.uid; })[0];
+            if (!x || x.status !== '대기') continue;
+            withBody(x.mailRaw, bd); window.TaskInbox.save(fresh); res.filled++;
+            var mail = { subject: x.mailRaw.subject || '', sender: x.mailRaw.sender || '', body: [ap.formName || '', ap.docNum || ''].join(' '), refs: [] };
+            var jd = null; try { jd = window.mailRouteJudge(mail, cands, null); } catch (e) { jd = null; }
+            var acc = bodyResolve(mail, jd, cands, bd);
+            if (!acc || sizeMismatch(mail.subject, acc.target) || !window._msAutoRegisterToProject) continue;
+            var t = Object.assign({}, x.task, { _routing: { basis: acc.basis, decision: 'auto', reason: acc.reason } });
+            try {
+                var r = await window._msAutoRegisterToProject(x.uid, t, acc.target.drive_file_id, acc.target.file_name, x.mailRaw, 0, false, { coalesce: false, noTopicRegen: true });
+                if (r && r.ok) {
+                    window.TaskInbox.setStatus(x.uid, '자동배치됨', { type: '본문 판정 배치(' + acc.basis + ')', target: acc.target.file_name, at: new Date().toISOString() });
+                    res.placed++;
+                    if (acc.extra.length && window._msRegisterToProjectTargets)
+                        window._msRegisterToProjectTargets([null].concat(acc.extra), t, x.mailRaw, '📋 ' + T('전자결재', 'Approval'), false, '전자결재 본문 형제 배치(' + acc.basis + ')');
+                }
+            } catch (e) { console.warn('[결재 본문] 배치 실패:', e && e.message); }
+            await new Promise(function (r2) { setTimeout(r2, 300); });
+        }
+        console.info('[결재 본문] 채움:', JSON.stringify(res));
+        return res;
+    };
+
     window.approvalOpenInGw = async function (apv) {
         apv = apv || {};
         var url = apv.url || (apv.id ? 'https://gw.kortek.co.kr/app/approval/document/' + apv.id : '');
@@ -416,6 +509,13 @@
                 if (pre) tag = autoTag(pre);
                 else if (jd && jd.decision === 'auto' && jd.target) tag = waitTag({ candidates: [jd.target], reason: jd.reason, basis: jd.basis, family: jd.family });
                 else if (jd && jd.decision === 'wait' && jd.candidates && jd.candidates.length) tag = waitTag(jd);
+                // 📄 제목만으로 확정 못 했으면 본문을 받아 본다(카드에 보여 주고, 좁은 조건이면 판정도)
+                var bd = null;
+                if (!pre && P.bodyFetch && !bodySkip(d.formName)) {
+                    bd = await fetchBody(d.id);
+                    var acc = bd ? bodyResolve(mail, jd, cands, bd) : null;
+                    if (acc && !sizeMismatch(mail.subject, acc.target)) { pre = acc; tag = autoTag(pre); res.body = (res.body || 0) + 1; }
+                }
                 // 🧱 판정기가 못 잡았으면 원자재 코드(저장된 BOM 만)로 한 번 더 — 한 프로젝트일 때만
                 if (!tag && P.materialLink) {
                     var codes = scanCodes(mail.subject);
@@ -446,7 +546,7 @@
                     store.log.push({ at: new Date().toISOString(), id: d.id, docNum: d.docNum, title: mail.subject, res: 'no_match' });
                     continue;
                 }
-                var task = taskOf(d, boxLabel), raw = mailRawOf(d, boxLabel);
+                var task = taskOf(d, boxLabel), raw = withBody(mailRawOf(d, boxLabel), bd);
                 task._routing = { basis: tag.routing.basis, decision: pre ? 'auto' : 'wait', reason: tag.matchBasis };
                 var tgtName = (tag.candidates[0] && (tag.candidates[0].model || tag.candidates[0].file_name)) || '';
                 try {
