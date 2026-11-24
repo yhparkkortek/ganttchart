@@ -14,7 +14,7 @@
 
     // ─── 상태 ──────────────────────────────────────────────────────────────────
     var _query  = '';          // 현재 검색어
-    var _mode   = 'highlight'; // 'highlight' | 'filter' (filter=비매칭 숨기기)
+    var _mode   = 'filter';    // 'highlight' | 'filter' (filter=비매칭 숨기기) — 🙈 [2026-11-24 사용자 요청] 기본은 숨기기(체크된 채로 연다)
     var _matchedIndices = [];  // 매칭된 globalData 인덱스 목록
     // 🐛🐛 [2026-09-16 실사용 버그수정] "AI 검색 후 V 체크해서 일괄 삭제할 때 어떤 행(특히
     // 오래전 분석된 메일 업무)은 안 지워진다"는 제보 — 원인은 이 Set에 globalData "배열
@@ -142,7 +142,7 @@
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↓</button>' +
             '<span id="gantt-ai-search-count" style="color:' + c.text + ';font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
             '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
-            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:' + c.text + ';"> ' +
+            '  <input type="checkbox" id="gantt-ai-search-filtermode"' + (_mode === 'filter' ? ' checked' : '') + ' style="cursor:pointer;accent-color:' + c.text + ';"> ' +
             '<span id="gantt-ai-search-filtermode-label">' + (_en ? 'Hide non-matching' : '비매칭 숨기기') + '</span></label>' +
             '<button id="gantt-ai-search-clear" title="' + (_en ? 'Clear search (Esc)' : '검색 초기화 (Esc)') + '"' +
             '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">✕ ' + (_en ? 'Clear' : '초기화') + '</button>';
