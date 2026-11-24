@@ -322,6 +322,29 @@ _by = {it['name']: it['who'] for it in _items}
 ok('직접 지정이 있으면 그 이름만(역할 담당자는 빠진다)', _by.get('직접 지정 업무') == {'홍길동', '김철수'}, _by)
 ok('직접 지정이 없으면 예전처럼 역할로', _by.get('역할 업무') == {'박용훈'}, _by)
 
+# 📧 [2026-11-24] 상세내용 `[요청][보낸이 → 받는이]` 의 받는이(사내)가 역할보다 먼저 — js/59 `_mailContentOwner` 사본.
+#    가짜는 주소록 경계(_load_address_book) 하나.
+_real_book = B._load_address_book
+B._load_address_book = lambda force=False: [
+    {'name': '김종진', 'email': 'jj@kortek.co.kr'},
+    {'name': 'Mike', 'nameEn': 'Mike', 'email': 'mike@customer.com'},
+]
+try:
+    NL = chr(10)
+    _c1 = row(1, '검토요청 업무', 'HW', TODAY, TODAY, content='[검토요청][박용훈 → 김종진, 박예빈책임] 2026-11-23' + NL + '[핵심내용]x' + NL + '[출처]y')
+    _c2 = row(1, '고객에게 회신', 'HW', TODAY, TODAY, content='[회신][박용훈 → Mike]' + NL + '[핵심내용]x')
+    _c3 = row(1, '고객만 적힌 줄', 'HW', TODAY, TODAY, content='[문의][고객 → Mike]' + NL + '[핵심내용]x')
+    _c4 = row(1, '직접 지정이 이김', 'HW', TODAY, TODAY, content='[검토요청][박용훈 → 김종진]' + NL + '[핵심내용]x')
+    _c4['_담당자'] = '홍길동'
+    _items2 = B._brief_scan_project(project_doc([_c1, _c2, _c3, _c4], meta={'HW담당자': '조익현,조재준'}), 'P')
+    _by2 = {it['name']: it['who'] for it in _items2}
+    ok('상세내용 받는이(사내, 직함 뗌)가 담당자 — 역할 담당자는 빠진다', _by2.get('검토요청 업무') == {'김종진', '박예빈'}, _by2)
+    ok('받는이가 외부면 보낸이(사내)', _by2.get('고객에게 회신') == {'박용훈'}, _by2)
+    ok('사람이 안 잡히면 예전처럼 역할로', _by2.get('고객만 적힌 줄') == {'조익현', '조재준'}, _by2)
+    ok('직접 지정이 상세내용보다 먼저', _by2.get('직접 지정이 이김') == {'홍길동'}, _by2)
+finally:
+    B._load_address_book = _real_book
+
 try:
     os.remove(STATE)
 except OSError:

@@ -275,38 +275,8 @@
         return { facts: out, scanned: scanned };
     }
 
-    /**
-     * 상세내용에서 업무 담당자 — `[요청][보낸이 → 받는이]` 의 **받는이 중 사내 사람**.
-     * 받는이에 사내 사람이 없으면(우리가 고객에게 보낸 메일) **보낸이 중 사내 사람**.
-     * 사내 판정: 주소록 메일 주소에 `MAIL_ROUTING_SELF_ORG`(데이터, js/74) 단어가 있거나,
-     * 주소록에 없지만 한글 이름(2~4자)이면 사내로 본다. 영문/외부 주소는 담당자로 안 쓴다.
-     */
-    var _psSelfOrg = function () { return (window.MAIL_ROUTING_SELF_ORG || ['kortek', '코텍']).map(function (w) { return String(w).toLowerCase(); }); };
-    // 사람 이름이 아닌데 화살표 칸에 들어오는 말(데이터 — 늘면 여기 한 줄).
-    window.PS_OWNER_SKIP = window.PS_OWNER_SKIP || ['고객', '고객사', '업체', '협력사', '담당자', '팀원', '전원', '각위', '관계자', '수신자', '발신자'];
-    function isInternal(name) {
-        var n = String(name || '').trim(); if (!n) return false;
-        if (window.PS_OWNER_SKIP.indexOf(n) !== -1) return false;
-        var e = window._addrFindByName ? window._addrFindByName(n) : null;
-        if (e) {
-            var em = String(e.email || '').toLowerCase();
-            if (em) return _psSelfOrg().some(function (w) { return em.indexOf(w) !== -1; });
-            return /^[가-힣]{2,4}$/.test(n);
-        }
-        return /^[가-힣]{2,4}$/.test(n);
-    }
-    function cleanName(n) {
-        n = String(n || '').trim();
-        if (window._addrStripTitleSuffix) n = window._addrStripTitleSuffix(n);
-        return n.replace(/님$/, '').trim();
-    }
-    function contentOwner(people, p) {
-        var split = function (s) { return (window._addrSplitNames ? window._addrSplitNames(s) : String(s || '').split(',')).map(cleanName).filter(Boolean); };
-        var to = split((people && people.receiver) || (p && p.to)).filter(isInternal);
-        if (to.length) return uniq(to).join(', ');
-        var fr = split((people && people.sender) || (p && p.from)).filter(isInternal);
-        return fr.length ? uniq(fr).join(', ') : '';
-    }
+    // 📧 상세내용 → 업무 담당자 판정은 js/59 `_mailContentOwner` **한 곳**(일일보고·아침 브리핑과 같은 규칙).
+    function contentOwner(people, p) { return window._mailContentOwnerFrom ? window._mailContentOwnerFrom(people, p) : ''; }
     window._psContentOwner = contentOwner;   // 하네스용
 
     /** 역할 → 그 프로젝트의 담당자 이름. 못 풀면 빈 값(=미지정, 거르지 않는다). */

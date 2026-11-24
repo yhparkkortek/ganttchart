@@ -212,6 +212,23 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     // `영업`(정규화 전) 도 SAL 로 풀려 장영익에게 간다 — 나와 안 섞인다
     ok('SAL/영업 정규화가 먹는다', !d1.mine.some((x) => x.name === '영업 확인'));
 
+    // 📧 [2026-11-24] 상세내용 `[요청][보낸이 → 받는이]` 의 받는이(사내)가 역할보다 먼저 — js/62·브리핑과 같은 규칙.
+    {
+        const keep = win.globalData;
+        win.globalData = keep.slice(0, 1).concat([
+            row(3, 'HW 행인데 나에게 온 검토요청', '[검토요청][조익현 → 박용훈] 2026-11-23\n[핵심내용]x\n[출처]q', t0, t0, 'HW'),
+            row(3, 'PM 행인데 남에게 넘긴 요청', '[검토요청][박용훈 → 김종진, 박예빈] 2026-11-23\n[핵심내용]x\n[출처]q', t0, t0, 'PM'),
+            row(3, '외부로 보낸 회신', '[회신][박용훈 → Mike] 2026-11-23\n[핵심내용]x\n[출처]q', t0, t0, 'HW')
+        ]);
+        const dc = win.dailyBuildDraft(today);
+        const mineN = dc.mine.map((x) => x.name);
+        ok('상세내용 받는이가 나면 역할(HW)이 남이어도 내 일', mineN.indexOf('HW 행인데 나에게 온 검토요청') !== -1, JSON.stringify(mineN));
+        ok('상세내용 받는이가 남이면 역할(PM)이 나여도 남의 일', mineN.indexOf('PM 행인데 남에게 넘긴 요청') === -1, JSON.stringify(mineN));
+        ok('받는이가 외부면 보낸이(나)가 담당', mineN.indexOf('외부로 보낸 회신') !== -1, JSON.stringify(mineN));
+        ok('_mailContentOwner: 받는이 둘', win._mailContentOwner('[검토요청][박용훈 → 김종진, 박예빈] x') === '김종진, 박예빈', win._mailContentOwner('[검토요청][박용훈 → 김종진, 박예빈] x'));
+        win.globalData = keep;
+    }
+
     // 오늘 내가 손댄 업무 — changeLogs 의 ko-KR 시각 문자열을 읽는다.
     // ⚠️⚠️ [2026-11-05 실사용 신고] `rowName` 은 **업무명이 아니라 No. 칸 값**이다
     //    (js/04i `logChange`). 어떤 기록은 아예 **행 인덱스**를 넣는다(js/04g·14d·04d).

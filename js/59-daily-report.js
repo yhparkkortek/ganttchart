@@ -534,6 +534,49 @@
     //    화면마다 다른 사람이 나온다.
     window._dailyCatAssignee = catAssignee;
 
+    /**
+     * 상세내용에서 업무 담당자 — `[요청][보낸이 → 받는이]` 의 **받는이 중 사내 사람**.
+     * 받는이에 사내 사람이 없으면(우리가 고객에게 보낸 메일) **보낸이 중 사내 사람**.
+     * 사내 판정: 주소록 메일 주소에 `MAIL_ROUTING_SELF_ORG`(데이터, js/74) 단어가 있거나,
+     * 주소록에 없지만 한글 이름(2~4자)이면 사내로 본다. 영문/외부 주소는 담당자로 안 쓴다.
+     */
+    var _psSelfOrg = function () { return (window.MAIL_ROUTING_SELF_ORG || ['kortek', '코텍']).map(function (w) { return String(w).toLowerCase(); }); };
+    // 사람 이름이 아닌데 화살표 칸에 들어오는 말(데이터 — 늘면 여기 한 줄).
+    window.PS_OWNER_SKIP = window.PS_OWNER_SKIP || ['고객', '고객사', '업체', '협력사', '담당자', '팀원', '전원', '각위', '관계자', '수신자', '발신자'];
+    function isInternal(name) {
+        var n = String(name || '').trim(); if (!n) return false;
+        if (window.PS_OWNER_SKIP.indexOf(n) !== -1) return false;
+        var e = window._addrFindByName ? window._addrFindByName(n) : null;
+        if (e) {
+            var em = String(e.email || '').toLowerCase();
+            if (em) return _psSelfOrg().some(function (w) { return em.indexOf(w) !== -1; });
+            return /^[가-힣]{2,4}$/.test(n);
+        }
+        return /^[가-힣]{2,4}$/.test(n);
+    }
+    function cleanName(n) {
+        n = String(n || '').trim();
+        if (window._addrStripTitleSuffix) n = window._addrStripTitleSuffix(n);
+        return n.replace(/님$/, '').trim();
+    }
+    function contentOwnerFrom(people, p) {
+        var split = function (s) { return (window._addrSplitNames ? window._addrSplitNames(s) : String(s || '').split(',')).map(cleanName).filter(Boolean); };
+        var to = split((people && people.receiver) || (p && p.to)).filter(isInternal);
+        if (to.length) return uniqN(to).join(', ');
+        var fr = split((people && people.sender) || (p && p.from)).filter(isInternal);
+        return fr.length ? uniqN(fr).join(', ') : '';
+    }
+    function uniqN(a) { var o = {}, r = []; a.forEach(function (x) { if (x && !o[x]) { o[x] = 1; r.push(x); } }); return r; }
+    window._mailContentOwnerFrom = contentOwnerFrom;
+    /** 칸 내용(문자열) → 업무 담당자 이름들('김종진, 박예빈') 또는 ''. js/62·isMine 이 쓴다. ⚠️ 백엔드 `_brief_content_owner` 가 사본. */
+    window._mailContentOwner = function (content) {
+        var c = String(content || '');
+        if (!c) return '';
+        var people = window._extractMailSenderReceiver ? window._extractMailSenderReceiver(c) : null;
+        var p = window._mailContentParse ? window._mailContentParse(c) : null;
+        return contentOwnerFrom(people, p);
+    };
+
     /** `_담당구분` 으로 "이게 내 일인가"를 본다. 못 가리면 **제외하지 않고** false 만 돌려준다. */
     function isMine(row, ctx) {
         var names = myNames();
@@ -543,6 +586,14 @@
         if (ov) {
             var ovList = (typeof window._addrSplitNames === 'function') ? window._addrSplitNames(ov) : ov.split(',');
             for (var k = 0; k < ovList.length; k++) if (names[String(ovList[k] || '').trim().toLowerCase()]) return true;
+            return false;
+        }
+        // 📧 [2026-11-24] 그다음은 **상세내용**의 `[요청][보낸이 → 받는이]` — 받는이(사내)가 그 일의 주인(js/62 와 같은 규칙).
+        var ci0 = (ctx || {}).ci || {};
+        var cown = (row && ci0.content != null && ci0.content !== -1) ? window._mailContentOwner(row[ci0.content]) : '';
+        if (cown) {
+            var cl = cown.split(',');
+            for (var q = 0; q < cl.length; q++) if (names[String(cl[q] || '').trim().toLowerCase()]) return true;
             return false;
         }
         var disc = row && row._담당구분;

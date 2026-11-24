@@ -1813,6 +1813,54 @@ def _brief_split_names(s):
     return out
 
 
+# 📧 [2026-11-24] 상세내용 → 업무 담당자 — 프런트 js/59 `_mailContentOwner` 의 **사본**(한쪽만 고치면 화면과 텔레그램이 갈린다).
+#    `[요청][보낸이 → 받는이]` 의 받는이 중 사내 사람, 없으면 보낸이 중 사내 사람.
+BRIEF_SELF_ORG = ['kortek', '코텍']           # js/74 MAIL_ROUTING_SELF_ORG 와 같은 말
+BRIEF_OWNER_SKIP = ['고객', '고객사', '업체', '협력사', '담당자', '팀원', '전원', '각위', '관계자', '수신자', '발신자']  # js/59 PS_OWNER_SKIP
+BRIEF_TITLE_WORDS = ['책임연구원', '선임연구원', '수석연구원', '연구원', '책임', '선임', '수석', '팀장', '파트장', '부장', '차장', '과장', '대리', '주임', '사원', '매니저', '프로']
+
+
+def _brief_clean_name(n):
+    n = re.sub(r'님$', '', str(n or '').strip()).strip()
+    for t in BRIEF_TITLE_WORDS:
+        if n.endswith(t) and len(n) > len(t):
+            return n[:-len(t)].strip()
+        if n.startswith(t) and len(n) > len(t):
+            return n[len(t):].strip()
+    return n
+
+
+def _brief_is_internal(name, book):
+    n = str(name or '').strip()
+    if not n or n in BRIEF_OWNER_SKIP:
+        return False
+    for e in book or []:
+        if not isinstance(e, dict):
+            continue
+        if str(e.get('name') or '').strip() == n or str(e.get('nameEn') or '').strip().lower() == n.lower():
+            em = str(e.get('email') or '').lower()
+            if em:
+                return any(w in em for w in BRIEF_SELF_ORG)
+            break
+    return bool(re.match(r'^[가-힣]{2,4}$', n))
+
+
+def _brief_content_owner(content, book=None):
+    """칸 내용 → 담당자 이름 목록(없으면 [])."""
+    head = str(content or '').split('\n')[0]
+    m = re.search(r'\[([^\[\]]*?)\s*(?:→|->)\s*([^\[\]]*?)\]', head)
+    if not m:
+        return []
+    def pick(s):
+        out = []
+        for n in _brief_split_names(s):
+            n = _brief_clean_name(n)
+            if n and _brief_is_internal(n, book) and n not in out:
+                out.append(n)
+        return out
+    return pick(m.group(2)) or pick(m.group(1))
+
+
 def _brief_role_assignee(role, meta, members3):
     """역할 → 그 프로젝트의 담당자 이름(쉼표 다중 가능). 없으면 ''."""
     field = BRIEF_ROLE_FIELD.get(role)
@@ -1855,6 +1903,10 @@ def _brief_scan_project(doc, project):
     items = []
     if not isinstance(gd, list) or len(gd) < 2:
         return items
+    try:
+        book = _load_address_book()       # 사내 판정용(캐시됨). 못 읽으면 한글 이름 규칙만.
+    except Exception:
+        book = []
 
     def col(name):
         i = ci.get(name)
@@ -1895,8 +1947,12 @@ def _brief_scan_project(doc, project):
         # 👤 [2026-11-23] 담당자 직접 지정(`_담당자`, 프런트 js/04k setRowAssignee)이 있으면 그 이름이 역할보다 먼저.
         #    프런트 js/59 isMine·js/62 와 **같은 규칙**(사본) — 한쪽만 고치면 화면과 텔레그램이 갈린다.
         manual = str(obj.get('_담당자') or '').strip()
-        disc = '' if manual else str(obj.get('_담당구분') or '').strip()
+        # 📧 [2026-11-24] 그다음은 상세내용의 받는이(사내) — 프런트 js/59 isMine·js/62 와 같은 순서.
+        cown = [] if manual else _brief_content_owner(_ctext, book)
+        disc = '' if (manual or cown) else str(obj.get('_담당구분') or '').strip()
         for nm in _brief_split_names(manual):
+            who.add(nm.lower())
+        for nm in cown:
             who.add(nm.lower())
         for part in disc.split(','):
             role = part.strip()
