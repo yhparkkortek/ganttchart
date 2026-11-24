@@ -271,6 +271,13 @@
             //    같이 보여주기 위한 칸 — assignee(PM)와 같은 자리에 같이 싣는다(js/57 이 NAS
             //    모드에서 appProperties.me 로 꺼내 쓴다).
             mech: pm.기구담당자 || '',
+            // 🔍 [2026-11-24 사용자 요청] "프로젝트 불러오기" 검색용 — 멤버(…담당자 칸 전부)와
+            //    제품군(모델 카드 unitId: MVD·TPR …). 역할 목록을 박지 않고 '담당자'로 끝나는 칸을
+            //    전부 모은다(역할이 늘어도 따라온다). 매칭 키워드(keywords)엔 안 넣는다 — 사람 이름은
+            //    메일 오매칭의 원흉이다(js/26 `_tpStripPersonNames` 참고).
+            members: Array.from(new Set(Object.keys(pm).filter(function(k) { return /담당자$/.test(k); })
+                .map(function(k) { return String(pm[k] || '').trim(); }).filter(Boolean))),
+            units: Array.from(new Set((pm.models || []).map(function(m) { return m && String(m.unitId || '').trim(); }).filter(Boolean))),
             inch: pm.인치 || _inchFromFileName(dynamicFileName) || '',
             keywords: keywords,          // Stage 1 AI 매칭에 사용할 전체 키워드 (4필드 + 커스텀)
             completed: pm.완료여부 === '완료', // 💡 [2026-08-29 신규] 완료 프로젝트 메일 자동매칭 제외용 — _msMatchProjects 참고
@@ -2294,6 +2301,20 @@
         }
     }
 
+    // 🔍 [2026-11-24 사용자 요청] 프로젝트 불러오기 검색 대상 — 데이터. 칸을 하나 더하려면 여기 한 줄.
+    //    get(file, 색인항목, appProperties) → 문자열 배열. 'all' 은 나머지를 전부 합친 것(get 없음).
+    const _arr = function(v) { return Array.isArray(v) ? v.map(String) : (v ? [String(v)] : []); };
+    window.PROJECT_SEARCH_FIELDS = [
+        { key: 'all',      ko: '전체',        en: 'All' },
+        { key: 'name',     ko: '프로젝트명',   en: 'Name',     get: function(f, e) { return [f.name, e.file_name, e.model]; } },
+        { key: 'keyword',  ko: '연관 검색어',  en: 'Keyword',  get: function(f, e) { return _arr(e.keywords).concat(_arr(e.topicKeywords)); } },
+        { key: 'member',   ko: '멤버',        en: 'Member',   get: function(f, e, ap) { return [ap.pm, ap.me, e.assignee, e.mech].concat(_arr(e.members)); } },
+        { key: 'inch',     ko: '인치',        en: 'Inch',     get: function(f, e) { return [e.inch]; } },
+        { key: 'unit',     ko: '제품군',      en: 'Family',   get: function(f, e) { return _arr(e.units); } },
+        { key: 'customer', ko: '고객사',      en: 'Customer', get: function(f, e) { return [e.customer]; } },
+        { key: 'team',     ko: '팀',          en: 'Team',     get: function(f, e, ap) { return [ap.team, e.team]; } }
+    ];
+
     // 💡 [팀 그룹핑] showDriveFileModal — 팀(외부 아코디온) → 담당자(내부 아코디온) → 파일 행
     //    3rd param indexProjects: project_index.json entries (team 보강용).
     //    appProperties.team이 없는 기존 파일도 index 기준으로 팀을 표시할 수 있음.
@@ -2430,11 +2451,107 @@
             return fileBtn;
         }
 
+        // ── 🔍 [2026-11-24 사용자 요청] 검색 — 프로젝트가 쌓이면 팀→담당자 아코디온만으론 못 찾는다.
+        //    무엇으로 찾는지는 PROJECT_SEARCH_FIELDS(데이터) 한 곳. 값은 파일 + project_index 항목.
+        //    ⚠️ 멤버·제품군은 색인에 2026-11-24 부터 실린다 — 그 전에 마지막 저장한 프로젝트는
+        //    한 번 저장해야 걸린다(오류 없이 안 걸리므로 안내 줄에 적는다).
+        function _idxOf(file) {
+            if (!indexProjects.length) return null;
+            return indexProjects.find(function(p) { return p.drive_file_id === file.id; })
+                || indexProjects.find(function(p) { return p.file_name && p.file_name === file.name; }) || null;
+        }
+        const _searchText = {};   // fileId → { fieldKey: 'lowercased text' }
+        files.forEach(function(file) {
+            const e = _idxOf(file) || {};
+            const ap = file.appProperties || {};
+            const vals = {};
+            window.PROJECT_SEARCH_FIELDS.forEach(function(f) {
+                if (f.key === 'all') return;
+                vals[f.key] = f.get(file, e, ap).filter(Boolean).join(' \u0001 ').toLowerCase();
+            });
+            vals.all = Object.keys(vals).map(function(k) { return vals[k]; }).join(' \u0001 ');
+            _searchText[file.id] = vals;
+        });
+        const _norm = function(s) { return String(s || '').toLowerCase().replace(/[\s\-_>\/.,()]+/g, ''); };
+        function _matches(file, query, fieldKey) {
+            const tokens = String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+            if (!tokens.length) return true;
+            const hay = (_searchText[file.id] || {})[fieldKey] || '';
+            const hayN = _norm(hay);
+            // 낱말마다 AND — 글자 그대로 또는 기호·공백 뗀 모양으로(“LNW K43” ↔ “LNW>K43”)
+            return tokens.every(function(t) { return hay.indexOf(t) !== -1 || (_norm(t) && hayN.indexOf(_norm(t)) !== -1); });
+        }
+
+        let _searchBar = document.getElementById('drive-modal-search');
+        if (!_searchBar) {
+            _searchBar = document.createElement('div');
+            _searchBar.id = 'drive-modal-search';
+            _searchBar.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin-bottom:12px;';
+            listContainer.parentNode.insertBefore(_searchBar, listContainer);
+        }
+        const _st = window._driveModalSearchState = window._driveModalSearchState || { q: '', field: 'all' };
+        const _pill = window._uiPillStyle || function(on) { return 'padding:0 9px; border:1px solid #1971c2; border-radius:11px; cursor:pointer; background:' + (on ? '#1971c2' : '#fff') + '; color:' + (on ? '#fff' : '#1971c2') + ';'; };
+        _searchBar.innerHTML =
+            '<div style="display:flex; gap:6px; align-items:center;">' +
+              '<input id="drive-modal-search-input" type="search" autocomplete="off" placeholder="' +
+                (_dmEn ? '🔍 Search projects — name, keyword, member, inch, family, customer…' : '🔍 프로젝트 검색 — 이름·연관 검색어·멤버·인치·제품군·고객사…') + '" ' +
+                'style="flex:1; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #cfd8e3; border-radius:16px; font-size:13px; outline:none;">' +
+              '<span id="drive-modal-search-count" style="font-size:12px; color:#868e96; white-space:nowrap;"></span>' +
+            '</div>' +
+            '<div id="drive-modal-search-fields" style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;"></div>';
+        const _sInput = document.getElementById('drive-modal-search-input');
+        const _sFields = document.getElementById('drive-modal-search-fields');
+        const _sCount = document.getElementById('drive-modal-search-count');
+        _sInput.value = _st.q;
+        function _drawFieldPills() {
+            _sFields.innerHTML = '';
+            window.PROJECT_SEARCH_FIELDS.forEach(function(f) {
+                const b = document.createElement('span');
+                b.style.cssText = _pill(_st.field === f.key) + ' font-size:11.5px;';
+                b.textContent = _dmEn ? f.en : f.ko;
+                b.onclick = function() { _st.field = f.key; _drawFieldPills(); _renderList(); };
+                _sFields.appendChild(b);
+            });
+        }
+        let _sTimer = null;
+        _sInput.oninput = function() {
+            clearTimeout(_sTimer);
+            _sTimer = setTimeout(function() { _st.q = _sInput.value; _renderList(); }, 150);
+        };
+        _sInput.onkeydown = function(e) {
+            if (e.key === 'Escape' && _sInput.value) { e.stopPropagation(); _sInput.value = ''; _st.q = ''; _renderList(); }
+            // Enter: 걸린 게 하나뿐이면 바로 연다
+            if (e.key === 'Enter' && mode === 'open') {
+                const hit = files.filter(function(f) { return _matches(f, _st.q, _st.field); });
+                if (_st.q.trim() && hit.length === 1) window.executeLoadFile(hit[0].id, hit[0].name);
+            }
+        };
+        _drawFieldPills();
+
         // ── 팀 아코디온 렌더링 ─────────────────────────────────────────────────────────
         // 팀이 1개(또는 모두 미지정)이면 팀 헤더를 열어서 보여줌, 여러 팀이면 기본 열림(▾)
         const expandTeam = true; // 기본 펼침 — 팀 목록 스캔이 더 직관적임
+        function _renderList() {
+        listContainer.innerHTML = '';
+        const _searching = !!String(_st.q || '').trim();
+        const _visible = {};
+        let _nVisible = 0;
+        files.forEach(function(f) { if (_matches(f, _st.q, _st.field)) { _visible[f.id] = true; _nVisible++; } });
+        _sCount.textContent = _searching ? (_dmEn ? _nVisible + ' / ' + files.length : _nVisible + ' / ' + files.length + '개') : '';
+        if (_searching && !_nVisible) {
+            const none = document.createElement('div');
+            none.style.cssText = 'padding:18px; text-align:center; color:#868e96; font-size:13px; border:1px dashed #ced4da; border-radius:8px;';
+            none.textContent = _dmEn ? 'No matching project. (Members/families are indexed when a project is saved.)'
+                                     : '찾는 프로젝트가 없습니다. (멤버·제품군은 프로젝트를 한 번 저장한 뒤부터 검색됩니다)';
+            listContainer.appendChild(none);
+        }
         teamNames.forEach(function(teamName) {
-            const pmMap = teamMap[teamName];
+            const pmMap = {};
+            Object.keys(teamMap[teamName]).forEach(function(pmKey) {
+                const fl = teamMap[teamName][pmKey].filter(function(f) { return _visible[f.id]; });
+                if (fl.length) pmMap[pmKey] = fl;
+            });
+            if (!Object.keys(pmMap).length) return;
             const teamFiles = [].concat.apply([], Object.values(pmMap));
             const pal = teamName === UNASSIGNED_TEAM ? { h:'#e9ecef', b:'#ced4da', t:'#495057', hv:'#dee2e6' } : _pal(teamName);
 
@@ -2502,7 +2619,7 @@
                 pmHdr.onmouseout  = function() { pmHdr.style.background = '#f2f4f6'; };
                 const pmArrow = document.createElement('span');
                 pmArrow.style.cssText = 'font-size:10px; width:12px; display:inline-block;';
-                pmArrow.textContent = '▸';
+                pmArrow.textContent = _searching ? '▾' : '▸';
                 const pmLbl = document.createElement('span');
                 pmLbl.textContent = '👤 ' + pmName + ' (' + pmFiles.length + ')';
                 // PM 이름 클릭 → PM 전체 열기 (open 모드, 미지정 아닐 때)
@@ -2519,7 +2636,7 @@
                 }
                 pmHdr.appendChild(pmArrow); pmHdr.appendChild(pmLbl);
                 const pmBody = document.createElement('div');
-                pmBody.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:8px;'; // 기본 접힘
+                pmBody.style.cssText = 'display:' + (_searching ? 'flex' : 'none') + '; flex-direction:column; gap:8px; padding:8px;'; // 기본 접힘, 검색 중엔 펼침
                 pmHdr.onclick = function() {
                     const c = pmBody.style.display === 'none';
                     pmBody.style.display = c ? 'flex' : 'none';
@@ -2535,11 +2652,17 @@
             teamWrap.appendChild(teamBody);
             listContainer.appendChild(teamWrap);
         });
+        if (window._mreszRefit) window._mreszRefit('drive-file-modal');
+        }
+        _renderList();
 
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
+        setTimeout(function() { try { _sInput.focus(); } catch (_) {} }, 30);
     }
-    
+
     window.closeDriveModal = function() {
         document.getElementById('drive-file-modal-overlay').style.display = 'none';
+        // 다음에 열 때는 빈 검색으로(삭제 모드의 '지우고 다시 그리기'는 닫지 않으므로 검색이 유지된다)
+        if (window._driveModalSearchState) window._driveModalSearchState = { q: '', field: 'all' };
     }
 
