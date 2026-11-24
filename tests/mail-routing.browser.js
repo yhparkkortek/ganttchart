@@ -179,6 +179,12 @@ window.__mailRoutingTestBody = async function () {
     j = J(M('[DMS 문서 등록 신청서] P02,P06_LNW_L7 Jackpot Wheel 31.5in_502582', ''), candsL7, null);
     ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'L7', '4-25 관리번호·모델명 통째(L7) vs 키워드 조각(wheel315) → L7', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
     candsL7.forEach(c => { if (c.drive_file_id === 'D1') c.keywords = c.keywords.filter(k => k !== 'Obsidian Digital Wheel 31.5"'); });
+    // [2026-11-24] 'STELLAR32' 같은 모델명은 숫자를 뗀 'Stellar' 로도 찾는다 — 키워드를 사람이 안 고쳐도 되게
+    const candsS = cands.filter(c => c.drive_file_id !== 'T1').concat([C('ST2', 'LNW_STELLAR32_32.0.json', 'STELLAR32', 'LNW>STELLAR32', '32', ['S32'])]);
+    j = J(M('LNW Stellar Proto B 샘플 의뢰서', ''), candsS, null);
+    ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'ST2', '4-26 숫자 뗀 모델명(Stellar → STELLAR32)', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
+    j = J(M('LNW Obsidian 패널 문의', ''), candsO.concat([C('O27', 'LNW_OBSIDIAN27_DB_27.0.json', 'OBSIDIAN27', 'LNW>OBSIDIAN27_DB', '27', ['AGARAF'])]), null);
+    ok(!(j.decision === 'auto' && j.target && j.target.drive_file_id === 'O27'), '4-27 형제가 같이 가진 글자(obsidian)는 한 곳으로 안 보낸다', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id });
     j = J(M('RE: New Traceability Requirements for Molded Plastic Components', 'LNW supplier reminder'), cands, null);
     ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-15 고객 전반 요구사항(Requirements) → LNW 프로젝트 전부', { d: j.decision, basis: j.basis, ids: allOf(j) });
 

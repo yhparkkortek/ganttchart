@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-24c';
+    var RULE_V = '2026-11-24d';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -184,6 +184,19 @@
             for (var i = 0; i + 1 < words.length; i++) { if (root && norm(words[i]) === root && !/\d/.test(words[i + 1])) continue; add(words[i] + words[i + 1], src + ':2'); }
         };
         add(c.model, 'model'); addPieces(c.model, 'model');
+        // 🔤 [2026-11-24 사용자 지적 "메일 키워드를 계속 고치지 않고 코드로 찾아야"] 'STELLAR32' 처럼 **글자 5자+ 뒤에 숫자**인
+        //  모델 이름이면 글자 부분('stellar')도 식별자로 — 결재 제목은 'LNW Stellar Proto B 샘플 의뢰서' 처럼 숫자를 뗀다(실측 4건).
+        //  고유한지(다른 후보에 없는지)는 부르는 쪽이 가르므로 'obsidian27'·'obsidian55' 처럼 형제가 공유하는 글자는 저절로 빠진다.
+        //  모델명·고객사 칸 끝 조각만 본다(키워드는 안 본다 — 사람이 적은 자유 낱말이라 범위가 넓다). 끄기: P.alphaStemIdent=false
+        var addStem = function (k) {
+            if (P.alphaStemIdent === false) return;
+            String(k || '').split(/[^0-9A-Za-z]+/).forEach(function (w) {
+                var m = norm(w).match(/^([a-z]{5,})\d{1,3}$/);
+                if (m) add(m[1], 'stem');
+            });
+        };
+        addStem(c.model);
+        String(c.customer || '').split('>').slice(1).forEach(addStem);
         (c.keywords || []).forEach(function (k) { add(k, 'kw'); if (!looksMaterialDesc(k)) addPieces(k, 'kw'); });
         String(c.customer || '').split('>').slice(1).forEach(function (p) { add(p, 'cust'); });
         return out;
