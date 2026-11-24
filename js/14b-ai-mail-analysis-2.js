@@ -517,7 +517,13 @@ window.MAIL_AUTO_NOTICE_MARKERS = [
 window.MAIL_AUTO_NOTICE_SUBJECT_MARKERS = [
     '신청문서가 최종 승인',
     '신청문서가 반려',
-    '사용일 사전 안내'
+    '사용일 사전 안내',
+    // 👥 [2026-11-24 사용자 요청 "연차·휴가·인사 관련 메일도"] 인사 담당자가 사람 이름으로 보내는 안내 — 실측 STELLAR32 10행
+    //    ('근무계획 확인/수정, 근무변동계 승인 요청의 건' 9 · '결재문서(연차휴가)가 관리자에 의해 삭제' 1).
+    //    ⚠️ 짧은 낱말('휴가'·'외출')은 쓰지 않는다 — 고객 메일의 '담당자 휴가 중', '해외출장'(외출 포함)이 같이 걸린다(실측).
+    '근무변동계',
+    '근무계획 확인',
+    '연차휴가'
 ];
 window._mailIsAutoNotice = function(mailRaw) {
     const body = String((mailRaw && mailRaw.body2000) || '');
