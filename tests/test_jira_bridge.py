@@ -571,6 +571,44 @@ calls2 = arm([FakeResp(200, [{'id': '10', 'name': 'S/W'}, {'id': '11', 'name': '
 comps = jb.project_components('GABJO')
 check('프로젝트 구성 요소 목록', [c['name'] for c in comps] == ['S/W', 'H/W'], comps)
 
+print('\n[11.7] search_users — 이름 일부로 사람 찾기 + search 가 보고자를 같이 받는다 (2026-11-24)')
+fresh(); stub_auth(True)
+seen_u = {}
+
+
+def fake_users(method, url, **kw):
+    seen_u['url'] = url
+    seen_u['params'] = kw.get('params')
+    # 서버가 엉뚱한 사람(gildong)까지 돌려줘도 우리가 한 번 더 거른다 · 끝 공백 이름(실측 '박강태 ')
+    return FakeResp(200, [{'name': 'ktpark', 'displayName': '박강태 '},
+                          {'name': 'yhpark', 'displayName': '박용훈'},
+                          {'name': 'gildong', 'displayName': '홍길동'}])
+
+
+jb.requests.request = fake_users
+us = jb.search_users('박')
+check('/rest/api/2/user/search 를 username 파라미터로 부른다',
+      seen_u['url'].endswith('/rest/api/2/user/search') and seen_u['params'].get('username') == '박', seen_u)
+check('받은 뒤 다시 거른다(홍길동 제외)', [u['name'] for u in us] == ['ktpark', 'yhpark'], us)
+check('표시 이름 끝 공백을 지운다', us[0]['displayName'] == '박강태', us)
+calls = arm([])
+check('빈 검색어는 네트워크를 타지 않는다', jb.search_users('  ') == [] and calls['n'] == 0, calls)
+
+seen_s = {}
+
+
+def fake_search_fields(method, url, **kw):
+    if url.endswith('/rest/api/2/field'):
+        return FakeResp(200, [])
+    seen_s['fields'] = (kw.get('params') or {}).get('fields', '')
+    return FakeResp(200, {'total': 1, 'issues': [{'key': 'GABJO-1', 'fields': {'reporter': {'displayName': '홍철기', 'name': 'hong'}}}]})
+
+
+jb.requests.request = fake_search_fields
+res = jb.search('project = GABJO')
+check('search 가 reporter 필드를 요청한다', 'reporter' in seen_s['fields'].split(','), seen_s)
+check('보고자 표시 이름이 실린다', res['issues'][0]['reporter'] == '홍철기', res)
+
 print('\n' + ('=' * 50))
 print('PASS %d / FAIL %d' % (len(PASS), len(FAIL)))
 if FAIL:

@@ -173,6 +173,8 @@
         { key: 'summary', label: T('요약', 'Summary'), type: 'text', get: function (it) { return it.summary || ''; } },
         { key: 'status', label: T('상태', 'Status'), type: 'select', get: function (it) { return it.status || ''; } },
         { key: 'assignee', label: T('담당자', 'Assignee'), type: 'select', get: function (it) { return it.assignee || ''; } },
+        // 🙋 [2026-11-24 사용자 요청] 이슈를 제기한 사람 — JIRA 화면과 같은 말 '보고자'(Reporter)
+        { key: 'reporter', label: T('보고자', 'Reporter'), type: 'select', title: T('이슈를 제기한 사람', 'Who raised the issue'), get: function (it) { return it.reporter || ''; } },
         { key: 'priority', label: T('우선순위', 'Priority'), type: 'select', get: function (it) { return it.priority || ''; } },
         {
             key: 'meta', label: T('구성/해결/MS', 'Comp/Res/MS'), type: 'text',
@@ -436,12 +438,13 @@
             + '<thead><tr style="background:#eef6f7;">'
             + '<th style="padding:7px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
             + headerCell('key', 7, 'left')
-            + headerCell('summary', 28, 'left')
+            + headerCell('summary', 25, 'left')
             + headerCell('status', 7, 'center')
-            + headerCell('assignee', 9, 'center')
-            + headerCell('priority', 7, 'center')
-            + headerCell('meta', 17, 'left')
-            + headerCell('updated', 11, 'center')
+            + headerCell('assignee', 8, 'center')
+            + headerCell('reporter', 8, 'center')
+            + headerCell('priority', 6, 'center')
+            + headerCell('meta', 15, 'left')
+            + headerCell('updated', 10, 'center')
             + headerCell('src', 10, 'left')
             + '</tr></thead><tbody>'
             + merged.map(function (it, i) {
@@ -453,6 +456,7 @@
                     + '<td style="padding:7px 8px;">' + esc(it.summary) + '</td>'
                     + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
                     + '<td style="padding:7px 8px; text-align:center;">' + esc(it.assignee || '—') + '</td>'
+                    + '<td style="padding:7px 8px; text-align:center;">' + esc(it.reporter || '—') + '</td>'
                     + '<td style="padding:7px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
                     + '<td style="padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555;" title="' + esc(metaTxt) + '">' + (metaTxt ? esc(metaTxt) : '—') + '</td>'
                     + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
@@ -679,17 +683,106 @@
     //    ⚠️ 그룹 이름은 JIRA 에 있는 그대로 — 없는 이름을 넣으면 JQL 이 통째로 실패한다.
     window.JIRA_SEARCH_POLICY = window.JIRA_SEARCH_POLICY || {
         teamGroups: ['개발1팀', '개발2팀', '개발3팀', '개발4팀', '개발5팀', '개발6팀', '개발7팀'],
-        teamStoreKey: 'gantt_jira_search_team_v1'   // 마지막으로 고른 팀(다음에 열 때 그대로)
+        teamStoreKey: 'gantt_jira_search_team_v1',  // 마지막으로 고른 팀(다음에 열 때 그대로)
+        // 🔎 [2026-11-24 사용자 요청] "이슈뿐 아니라 보고자·담당자·프로젝트… 가능한 모든 검색" — 검색 대상.
+        //    'all' 은 글자 검색 + 그 이름의 사람(보고자·담당자) + 그 이름의 프로젝트를 **OR** 로 한 번에.
+        fields: [
+            { id: 'all', label: '🔎 전체', labelEn: '🔎 Everything' },
+            { id: 'text', label: '📝 내용(요약·설명·댓글)', labelEn: '📝 Text (summary/description/comments)' },
+            { id: 'summary', label: '📌 요약만', labelEn: '📌 Summary only' },
+            { id: 'reporter', label: '🙋 보고자', labelEn: '🙋 Reporter' },
+            { id: 'assignee', label: '🧑‍🔧 담당자', labelEn: '🧑‍🔧 Assignee' },
+            { id: 'person', label: '👤 사람(보고자·담당자)', labelEn: '👤 Person (reporter/assignee)' },
+            { id: 'project', label: '📁 프로젝트(코드·이름)', labelEn: '📁 Project (key/name)' }
+        ],
+        fieldStoreKey: 'gantt_jira_search_field_v1',
+        maxUsers: 30,       // 이름으로 찾은 사람을 JQL 에 넣는 상한('박' → 8명 실측)
+        maxProjects: 40     // 이름·코드로 찾은 프로젝트를 JQL 에 넣는 상한(604개 중)
     };
     if (window.STORAGE_REGISTRY && !window.STORAGE_REGISTRY.some(function (r) { return r.key === window.JIRA_SEARCH_POLICY.teamStoreKey; })) {
         window.STORAGE_REGISTRY.push({ key: window.JIRA_SEARCH_POLICY.teamStoreKey, label: 'JIRA 전체 검색 — 마지막으로 고른 개발팀',
             labelEn: 'JIRA search — last chosen team', cls: 'cache', strategy: { type: 'drop' } });
+    }
+    if (window.STORAGE_REGISTRY && !window.STORAGE_REGISTRY.some(function (r) { return r.key === window.JIRA_SEARCH_POLICY.fieldStoreKey; })) {
+        window.STORAGE_REGISTRY.push({ key: window.JIRA_SEARCH_POLICY.fieldStoreKey, label: 'JIRA 전체 검색 — 마지막으로 고른 검색 대상',
+            labelEn: 'JIRA search — last chosen search field', cls: 'cache', strategy: { type: 'drop' } });
     }
     function searchTeam() {
         var el = document.getElementById('jira-search-team');
         if (el) return el.value || '';
         try { return localStorage.getItem(window.JIRA_SEARCH_POLICY.teamStoreKey) || ''; } catch (e) { return ''; }
     }
+    function searchField() {
+        var el = document.getElementById('jira-search-field');
+        if (el) return el.value || 'all';
+        try { return localStorage.getItem(window.JIRA_SEARCH_POLICY.fieldStoreKey) || 'all'; } catch (e) { return 'all'; }
+    }
+    window._jiraSearchFieldChanged = function () {
+        try { localStorage.setItem(window.JIRA_SEARCH_POLICY.fieldStoreKey, searchField()); } catch (e) { /* 기억 못 해도 검색은 된다 */ }
+        var q = ((document.getElementById('jira-search-q') || {}).value || '').trim();
+        if (q && _searchMode !== 'similar') return window._jiraSearchRun();
+    };
+    function jqlStr(v) { return '"' + String(v).replace(/["\\]/g, '') + '"'; }
+
+    // 이름 일부 → JIRA 아이디 목록. ⚠️ 백엔드가 재시작 전이면 `/jira/users` 가 없다(404) — 그때는
+    //    적은 글자를 **전체 이름**으로 그대로 쓴다(JQL 은 표시 이름도 받는다 — `assignee = "박용훈"` 실측
+    //    106건). 그러면 '박' 같은 일부로는 못 찾으니 그 사실을 안내에 적는다.
+    async function findUsers(q) {
+        try {
+            var d = await fetchJson(BASE + '/jira/users?q=' + encodeURIComponent(q));
+            if (d && d.ok !== false && Array.isArray(d.users)) {
+                return { ids: d.users.slice(0, window.JIRA_SEARCH_POLICY.maxUsers).map(function (u) { return u.name; }),
+                         names: d.users.map(function (u) { return u.displayName + '(' + u.name + ')'; }), total: d.users.length };
+            }
+        } catch (e) { /* 아래 폴백 */ }
+        return { ids: [q], names: [q], total: 1, fallback: true };
+    }
+    async function findProjects(q) {
+        try {
+            var d = await fetchJson(BASE + '/jira/projects?q=' + encodeURIComponent(q));
+            if (d && d.ok !== false && Array.isArray(d.projects)) {
+                return { keys: d.projects.slice(0, window.JIRA_SEARCH_POLICY.maxProjects).map(function (p) { return p.key; }), total: d.projects.length };
+            }
+        } catch (e) { /* 프로젝트를 못 찾으면 그 조건만 뺀다 */ }
+        return { keys: [], total: 0 };
+    }
+
+    // 검색 대상 + 검색어 → { jql(조건 부분), note(무엇으로 찾았는지) } — 조건이 하나도 안 서면 jql=''.
+    //    "어떤 사람·프로젝트로 찾았는지"를 숨기지 않는다 — '박' 이 8명에 걸렸다는 걸 모르면 결과를 오해한다.
+    async function buildSearchClause(field, q) {
+        var safe = q.replace(/["\\]/g, '');
+        var parts = [], notes = [];
+        var wantText = field === 'all' || field === 'text';
+        var wantPeople = field === 'all' || field === 'reporter' || field === 'assignee' || field === 'person';
+        var wantProj = field === 'all' || field === 'project';
+        if (wantText) parts.push('text ~ "' + safe + '*"');
+        if (field === 'summary') parts.push('summary ~ "' + safe + '*"');
+        var tasks = [];
+        if (wantPeople) tasks.push(findUsers(q).then(function (u) {
+            if (!u.ids.length) { if (field !== 'all') notes.push(T('👤 "' + q + '" 인 사람을 못 찾았습니다', '👤 No user matches "' + q + '"')); return; }
+            var list = '(' + u.ids.map(jqlStr).join(', ') + ')';
+            if (field === 'reporter') parts.push('reporter in ' + list);
+            else if (field === 'assignee') parts.push('assignee in ' + list);
+            else parts.push('reporter in ' + list, 'assignee in ' + list);
+            // '전체' 에서 폴백이면 검색어가 사람 이름인지조차 모른다 — "깨짐을 이름으로 찾음" 은 소음이라 안 적는다
+            if (u.fallback && field === 'all') return;
+            notes.push('👤 ' + (u.fallback
+                ? T('"' + q + '" 을(를) 전체 이름으로 찾음 — 이름 일부로 찾으려면 백엔드 재시작 필요', '"' + q + '" as a full name — restart the backend to search by part of a name')
+                : T('찾은 사람 ' + u.total + '명: ', u.total + ' user(s): ') + u.names.slice(0, 6).join(', ') + (u.total > 6 ? ' …' : '')
+                  + (u.total > u.ids.length ? T(' (앞 ' + u.ids.length + '명만)', ' (first ' + u.ids.length + ')') : '')));
+        }));
+        if (wantProj) tasks.push(findProjects(q).then(function (p) {
+            if (!p.keys.length) { if (field !== 'all') notes.push(T('📁 "' + q + '" 인 프로젝트를 못 찾았습니다', '📁 No project matches "' + q + '"')); return; }
+            parts.push('project in (' + p.keys.join(', ') + ')');
+            notes.push('📁 ' + T('프로젝트 ' + p.total + '개', p.total + ' project(s)')
+                + (p.total > p.keys.length ? T(' (앞 ' + p.keys.length + '개만)', ' (first ' + p.keys.length + ')') : '')
+                + (p.keys.length <= 5 ? ': ' + p.keys.join(', ') : ''));
+        }));
+        await Promise.all(tasks);
+        return { jql: parts.length ? '(' + parts.join(' OR ') + ')' : '', note: notes.join(' · ') };
+    }
+    var _searchNote = '';
+
     function teamClause() {
         var t = searchTeam().replace(/["\\]/g, '');
         return t ? ' AND (assignee in membersOf("' + t + '") OR reporter in membersOf("' + t + '"))' : '';
@@ -714,6 +807,8 @@
         { key: 'status', label: T('상태', 'Status'), type: 'select', get: function (it) { return it.status || ''; } },
         { key: 'resolution', label: T('해결책', 'Resolution'), type: 'select', get: function (it) { return it.resolution || ''; } },
         { key: 'assignee', label: T('담당자', 'Assignee'), type: 'select', get: function (it) { return it.assignee || ''; } },
+        // 🙋 [2026-11-24 사용자 요청] 이슈를 제기한 사람 — JIRA 화면과 같은 말 '보고자'(Reporter)
+        { key: 'reporter', label: T('보고자', 'Reporter'), type: 'select', title: T('이슈를 제기한 사람', 'Who raised the issue'), get: function (it) { return it.reporter || ''; } },
         { key: 'updated', label: T('수정일', 'Updated'), type: 'date', get: function (it) { return it.updated || ''; } }
     ];
     var SEARCH_COLUMNS_BY_KEY = {};
@@ -742,6 +837,12 @@
             + '<option value="">👥 ' + T('전체 팀', 'All teams') + '</option>'
             + P.teamGroups.map(function (g) { return '<option value="' + esc(g) + '"' + (g === curTeam ? ' selected' : '') + '>' + esc(g) + '</option>'; }).join('')
             + '</select>';
+        var curField = searchField();
+        var fieldSel = '<select id="jira-search-field" onchange="window._jiraSearchFieldChanged()"'
+            + ' title="' + T('무엇으로 찾을지 — 전체는 글자·사람·프로젝트를 한 번에', 'What to search — Everything = text, people and projects at once') + '"'
+            + ' style="' + inputSt + ' flex:0 0 auto; width:auto;">'
+            + P.fields.map(function (f) { return '<option value="' + f.id + '"' + (f.id === curField ? ' selected' : '') + '>' + esc(T(f.label, f.labelEn)) + '</option>'; }).join('')
+            + '</select>';
         // ⚠️ 표가 상자 밖으로 넘치지 않게 — 상자는 `height` 로 잡고(크기 기억이 height 를 다시 줄 수 있다)
         //    본문만 스크롤한다. flex 자식은 기본 min-height:auto 라 **min-height:0 이 없으면 안 줄어든다**
         //    (docs/modal-ux.md "섹션을 더하면 모달이 조용히 잘린다"와 같은 함정).
@@ -760,7 +861,8 @@
             + '<div style="font-size:11px; color:#888; margin-bottom:6px;">' + T('지금 연결된 프로젝트와 상관없이 JIRA 전체에서 찾습니다 — 예: 노이즈, 번들림, 외관불량, 신뢰성 · 이슈 키(예: GABJO-2)를 넣으면 그 이슈와 비슷한 이슈를 찾습니다', 'Searches across all of JIRA, not just the linked project — e.g. noise, warping, cosmetic defect, reliability · enter an issue key (e.g. GABJO-2) to find issues similar to it') + '</div>'
             + '<div style="display:flex; gap:6px;">'
             + teamSel
-            + '<input id="jira-search-q" placeholder="' + T('검색어 또는 이슈 키', 'Search term or issue key') + '" style="' + inputSt + ' min-width:0;" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
+            + fieldSel
+            + '<input id="jira-search-q" placeholder="' + T('검색어 · 이름 · 프로젝트 · 이슈 키', 'Term · name · project · issue key') + '" style="' + inputSt + ' min-width:0;" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
             + '<button onclick="window._jiraSearchRun()"' + btnHover + ' style="' + btnSt + ' font-weight:bold; flex-shrink:0;">🔎 ' + T('검색', 'Search') + '</button>'
             + '</div></div>'
             + '<div id="jira-search-sim" style="flex:0 0 auto; display:none; padding:0 14px 6px;"></div>'
@@ -788,9 +890,15 @@
         var simBox = document.getElementById('jira-search-sim');
         if (simBox) { simBox.style.display = 'none'; simBox.innerHTML = ''; }
         box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('검색 중...', 'Searching...') + '</div>';
-        var safe = q.replace(/["\\]/g, '');
         try {
-            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('text ~ "' + safe + '*"' + teamClause() + ' ORDER BY updated DESC') + '&maxResults=50');
+            var built = await buildSearchClause(searchField(), q);
+            _searchNote = built.note;
+            if (!built.jql) {
+                _searchHits = []; _searchTotal = 0;
+                box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + esc(built.note || T('찾을 조건이 없습니다.', 'Nothing to search.')) + '</div>';
+                return;
+            }
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent(built.jql + teamClause() + ' ORDER BY updated DESC') + '&maxResults=50');
             if (!d || d.ok === false) { box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc((d && d.message) || T('검색 실패', 'Search failed')) + '</div>'; return; }
             _searchHits = d.issues || [];
             _searchTotal = d.total || _searchHits.length;
@@ -816,15 +924,16 @@
         var sim = _searchMode === 'similar';
         var td = 'padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
         var head = '<thead><tr style="background:#eef6f7;">'
-            + (sim ? headerCell('match', 16, 'left', 'search') : '')
-            + headerCell('project', sim ? 9 : 10, 'left', 'search')
-            + headerCell('key', sim ? 10 : 12, 'left', 'search')
-            + headerCell('summary', sim ? 26 : 32, 'left', 'search')
-            + headerCell('status', 9, 'center', 'search')
+            + (sim ? headerCell('match', 15, 'left', 'search') : '')
+            + headerCell('project', sim ? 8 : 9, 'left', 'search')
+            + headerCell('key', sim ? 10 : 11, 'left', 'search')
+            + headerCell('summary', sim ? 22 : 28, 'left', 'search')
+            + headerCell('status', 8, 'center', 'search')
             // 🩹 "해결책·대책이 있었나"가 이 검색의 목적이라 해결책 열을 둔다 — 비어 있으면 대책이 댓글에 있을 수 있다(상세에서 확인)
-            + headerCell('resolution', 11, 'center', 'search')
-            + headerCell('assignee', sim ? 8 : 11, 'center', 'search')
-            + headerCell('updated', sim ? 11 : 15, 'center', 'search')
+            + headerCell('resolution', 10, 'center', 'search')
+            + headerCell('assignee', sim ? 8 : 10, 'center', 'search')
+            + headerCell('reporter', sim ? 8 : 10, 'center', 'search')
+            + headerCell('updated', sim ? 11 : 14, 'center', 'search')
             + '</tr></thead>';
         var bodyRows = view.length ? view.map(function (it) {
                 var c = statusColor(it.status);
@@ -848,15 +957,17 @@
                     + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
                     + '<td style="' + td + ' text-align:center; color:' + (it.resolution ? '#1f7a3d' : '#bbb') + ';">' + esc(it.resolution || '—') + '</td>'
                     + '<td style="' + td + ' text-align:center;">' + esc(it.assignee || '—') + '</td>'
+                    + '<td style="' + td + ' text-align:center;">' + esc(it.reporter || '—') + '</td>'
                     + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
                     + '</tr>';
             }).join('')
-            : '<tr><td colspan="' + (sim ? 8 : 7) + '" style="padding:24px; text-align:center; color:#999;">'
+            : '<tr><td colspan="' + (sim ? 9 : 8) + '" style="padding:24px; text-align:center; color:#999;">'
                 + T('필터 조건에 맞는 이슈가 없습니다 — ', 'No issues match the current filters — ')
                 + '<button onclick="window._jiraClearAllFilters(\'search\')" style="border:none; background:none; color:#00707d; cursor:pointer; text-decoration:underline; font-size:12px;">'
                 + T('필터 초기화', 'clear filters') + '</button></td></tr>';
         // ⚠️ 머리글은 스크롤해도 위에 붙어 있게(sticky) — 50줄을 내리다 보면 어느 열인지 잊는다
-        box.innerHTML = '<div style="font-size:11px; color:#888; margin:6px 0;">' + esc(countNote + teamNote) + '</div>'
+        var whatNote = (_searchMode === 'text' && _searchNote) ? '<div style="font-size:11px; color:#00707d; margin:6px 0 0;">' + esc(_searchNote) + '</div>' : '';
+        box.innerHTML = whatNote + '<div style="font-size:11px; color:#888; margin:6px 0;">' + esc(countNote + teamNote) + '</div>'
             + filterBarHtml('search')
             + '<table class="concept-table jira-search-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + head + '<tbody>' + bodyRows + '</tbody></table>';

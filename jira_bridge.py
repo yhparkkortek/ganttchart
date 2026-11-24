@@ -300,7 +300,8 @@ def search(jql, max_results=50):
     # 달라고 해서 이 필드들을 더했다 — `mid` 조회는 `_field_id_by_name`이 캐시하므로(30분)
     # 검색을 반복해도 매번 새로 묻지 않는다.
     mid = _field_id_by_name('Milestone')
-    fields = 'summary,status,assignee,priority,issuetype,updated,components,resolution'
+    # 🙋 [2026-11-24 사용자 요청] 보고자(이슈를 제기한 사람)도 표에 — reporter 를 더했다
+    fields = 'summary,status,assignee,reporter,priority,issuetype,updated,components,resolution'
     if mid:
         fields += ',' + mid
     r = _request('GET', '/rest/api/2/search', params={
@@ -308,6 +309,27 @@ def search(jql, max_results=50):
     })
     j = r.json()
     return {'total': j.get('total', 0), 'issues': [_shape_issue(i, mid) for i in j.get('issues', [])]}
+
+
+def search_users(q, limit=50):
+    """👤 이름 일부·아이디로 JIRA 사용자 찾기(2026-11-24, 전체 이슈 검색의 사람 검색용).
+
+    실측: 이 서버의 `/rest/api/2/user/search?username=` 은 아이디뿐 아니라 **표시 이름**에도
+    부분일치한다('박' → 8명, 'yhp' → yhpark). 그래도 assignable 검색이 `query` 를 조용히 무시했던
+    전력이 있어(위 절) **받은 뒤 우리가 한 번 더 거른다** — 걸러서 비면 빈 목록(추측 안 함).
+    ⚠️ 표시 이름 끝에 공백이 붙은 사람이 있다('박강태 ', 실측) — strip 해서 비교·반환한다."""
+    q = (q or '').strip()
+    if not q:
+        return []
+    r = _request('GET', '/rest/api/2/user/search', params={'username': q, 'maxResults': limit})
+    ql = q.lower()
+    out = []
+    for u in r.json() or []:
+        name = (u.get('name') or '').strip()
+        disp = (u.get('displayName') or name).strip()
+        if name and (ql in name.lower() or ql in disp.lower()):
+            out.append({'name': name, 'displayName': disp})
+    return out[:limit]
 
 
 def add_comment(key, body):

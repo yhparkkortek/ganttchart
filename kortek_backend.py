@@ -6398,6 +6398,18 @@ def jira_projects():
         return jsonify({'ok': False, 'message': str(e)})
 
 
+@app.route('/jira/users', methods=['GET'])
+def jira_users():
+    """👤 사람 찾기(2026-11-24) — 이름 일부·아이디로 JIRA 사용자를 찾는다. 🔎 전체 이슈 검색의
+    '보고자·담당자·사람' 검색이 이걸로 아이디 목록을 만든 뒤 `reporter in (...)` JQL 을 짠다.
+    읽기 전용."""
+    try:
+        import jira_bridge
+        return jsonify({'ok': True, 'users': jira_bridge.search_users(request.args.get('q'))})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)})
+
+
 @app.route('/jira/project/<key>/assignable-users', methods=['GET'])
 def jira_project_assignable_users(key):
     """🆕 새 이슈 생성 모달의 담당자 찾기(2026-11-12) — 아직 이슈 키가 없으니 project로 묻는다
