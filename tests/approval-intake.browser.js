@@ -177,6 +177,41 @@ window.__approvalIntakeTest = async function () {
             window.APPROVAL_INTAKE.backfillDays = bf;
         }
 
+        // ── 9. 🩹 열린 프로젝트 자리 바로잡기 — 첫 단계 머리 위의 자동 행을 제 단계에 날짜 순으로, 결재 링크는 문장 끝으로 ──
+        //    (실측 K27: 결재 4행이 머리 위에 10-26·08-31·09-02·09-10 순으로 있었다). 재계산·그리기·저장은 이 검사 대상이 아니라 막는다.
+        {
+            const keep = { gd: (typeof globalData !== 'undefined') ? globalData : undefined, ci: (typeof colIdx !== 'undefined') ? colIdx : undefined,
+                           recalc: window.recalculateSchedules, render: window.renderGantt };
+            if (window.currentDriveFileId) { ok(true, '9 (건너뜀) 이 탭에 프로젝트가 열려 있어 바로잡기 시험은 하지 않는다'); }
+            else {
+                try {
+                    window.recalculateSchedules = () => {}; window.renderGantt = () => {};
+                    const RR = (lv, name, date, content, mail) => { const r = [name, date, content || '']; r._level = lv; r._origDev = name; r._calcStartTs = Date.parse(date); if (mail) r._mailRaw = { date }; return r; };
+                    colIdx = { wbs: 0, start: 1, content: 2, devStage: -1 };
+                    const L = 'https://gw.kortek.co.kr/app/approval/document/';
+                    globalData = [['업무', '시작', '상세'],
+                        RR(4, '[결재] c', '2026-10-26', '[핵심내용] c\n🔗 ' + L + '3\n[출처]c_2026-10-26_x', true),
+                        RR(4, '[결재] a', '2026-08-31', '[핵심내용] a\n🔗 ' + L + '1\n[출처]a_2026-08-31_x', true),
+                        RR(4, '사람이 만든 행', '2026-08-01', '메모'),                       // 자동 행 아님 → 그대로
+                        RR(4, '[결재] b', '2026-09-02', '[핵심내용] b\n🔗 ' + L + '2\n[출처]b_2026-09-02_x', true),
+                        RR(0, 'RFQ', '2026-11-02'), RR(1, 'RFQ a', '2026-11-02'), RR(1, 'RFQ b', '2026-11-12')];
+                    const n0 = globalData.length;
+                    const rr = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
+                    const names = globalData.slice(1).map(x => x[0]);
+                    ok(rr.moved === 3 && globalData.length === n0, '9-1 머리 위 자동 행 3개를 옮기고 행 수는 그대로', { rr, names });
+                    ok(JSON.stringify(names) === JSON.stringify(['사람이 만든 행', 'RFQ', '[결재] a', '[결재] b', '[결재] c', 'RFQ a', 'RFQ b']),
+                       '9-2 머리 바로 아래에 날짜 순(08-31·09-02·10-26), 사람이 만든 행은 안 건드림', names);
+                    ok(rr.relinked === 3 && globalData.slice(1).filter(x => /\n🔗/.test(x[2])).length === 0 && / 🔗 https/.test(globalData[3][2]),
+                       '9-3 결재 링크 줄바꿈을 문장 끝으로', globalData[3][2]);
+                    const rr2 = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
+                    ok(rr2.moved === 0 && rr2.relinked === 0, '9-4 두 번째는 고칠 게 없다(멱등)', rr2);
+                } finally {
+                    if (keep.gd !== undefined) globalData = keep.gd; if (keep.ci !== undefined) colIdx = keep.ci;
+                    window.recalculateSchedules = keep.recalc; window.renderGantt = keep.render;
+                }
+            }
+        }
+
         // ── 6. 끄기 ─────────────────────────────────────────────────────────
         localStorage.setItem(window.APPROVAL_INTAKE.offKey, '1');
         r = await window.approvalIntakeRun({ manual: true, toast: false });

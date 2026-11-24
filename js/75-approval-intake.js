@@ -147,7 +147,7 @@
             '개발단계': '', '담당구분': '미분류', 'wbs레벨': 4,
             '상세내용': '[핵심내용] ' + stripTags(d.formName) + (d.docNum ? ' ' + d.docNum : '') + ' · ' +
                        T('기안', 'drafter') + ' ' + (d.drafterName || '') + ' · ' + [d.status, d.apprStatus].filter(Boolean).join('/') +
-                       '\n🔗 ' + (d.url || '') +
+                       (d.url ? ' 🔗 ' + d.url : '') +   // 줄을 바꾸지 않고 문장 끝에(사용자 요청 2026-11-24) — 화면은 주소를 ⬇️ 링크로 그린다(js/04i)
                        '\n[출처]' + title + '_' + dateTag + '_' + (d.drafterName || ''),
             _noAi: true, _approval: true
         };
@@ -458,6 +458,84 @@
                          res.boxErrors.length ? 'error' : 'info', 8000);
         return res;
     }
+
+    // ── 🩹 열린 프로젝트 스스로 바로잡기 (2026-11-24, 사용자 결정 "옮겨줘") ─────────────
+    //  ① 자동배치 자리 버그(js/14b computeL0InsertPos, 2647ca8 에서 수정)로 **첫 단계 머리 위**에 꽂힌 메일·결재 행을 제 단계에 날짜 순으로 다시 넣는다
+    //     (실측: 결재 12행·메일 19행). 사람이 직접 만든 행은 건드리지 않는다 — 메일 원문(_mailRaw)이나 [출처] 표시가 있는 행만.
+    //  ② 결재 행의 '🔗 주소' 줄바꿈을 문장 끝으로(새 행은 처음부터 그렇게 만든다).
+    //  ⚠️ **지금 이 앱에 열린 프로젝트만** 고친다 — 다른 프로젝트 파일을 스크립트로 고치면 그걸 열어 둔 앱이 옛 값으로 되돌린다(2026-10-29).
+    //     그래서 프로젝트를 열 때(populateTabData) 몇 초 뒤 한 번 돈다. 고칠 게 없으면 아무것도 안 쓴다(멱등). Ctrl+Z 로 되돌릴 수 있다.
+    P.repairPlacement = (P.repairPlacement !== false);
+    function rowText(row, ci) { return String((ci && ci.content !== -1 && row[ci.content]) || ''); }
+    function isAutoRow(row, ci) { return !!(row && (row._mailRaw || /\[출처\]/.test(rowText(row, ci)))); }
+    /** @returns {{moved:number, relinked:number}} — 바꾼 게 있으면 저장까지 한다 */
+    window.approvalRepairOpenProject = async function (opts) {
+        opts = opts || {};
+        var out = { moved: 0, relinked: 0 };
+        if (off() && !opts.force) return out;
+        if (typeof globalData === 'undefined' || !globalData || globalData.length <= 2 || typeof colIdx === 'undefined' || !colIdx) return out;
+        var gd = globalData, ci = colIdx;
+        // ② 링크 줄 붙이기 — 결재 원문 주소가 든 줄만
+        for (var i = 1; i < gd.length; i++) {
+            var row = gd[i]; if (!row || ci.content === -1) continue;
+            var t = rowText(row, ci);
+            if (t.indexOf('/app/approval/document/') === -1) continue;
+            var t2 = t.replace(/\r?\n🔗 (https?:\/\/\S*\/app\/approval\/document\/\d+)/, ' 🔗 $1');
+            if (t2 !== t) { row[ci.content] = t2; out.relinked++; }
+        }
+        // ① 첫 단계 머리 위의 자동 행
+        var firstL0 = -1;
+        for (var j = 1; j < gd.length; j++) { if (gd[j] && gd[j]._level === 0) { firstL0 = j; break; } }
+        if (firstL0 > 1) {
+            var stray = [];
+            for (var k = firstL0 - 1; k >= 1; k--) {
+                var r = gd[k];
+                if (r && r._level !== 0 && isAutoRow(r, ci) && ci.start !== -1 && r[ci.start]) { stray.unshift(r); gd.splice(k, 1); }
+            }
+            if (stray.length) {
+                if (window.computeCalcDatesForRows) { try { window.computeCalcDatesForRows(gd.slice(1), ci); } catch (e) { /* 날짜 계산 실패 — 아래 셀 값으로 비교 */ } }
+                stray.sort(function (a, b) { return String(a[ci.start]).localeCompare(String(b[ci.start])); });
+                stray.forEach(function (r) {
+                    var ds = String(r[ci.start]).slice(0, 10);
+                    var L0 = window.pickL0SectionByDate(window.buildL0SectionInfo(gd, ci), ds) || '__END__';
+                    var pos = window.computeL0InsertPos(gd, ci, L0, ds, true, r._mailRaw && r._mailRaw.date).pos;
+                    if (L0 !== '__END__' && ci.devStage !== -1) r[ci.devStage] = L0;
+                    var p = (typeof parseDateValue === 'function') ? parseDateValue(ds) : null;
+                    if (p) r._calcStartTs = p.ts;   // 다음 행이 이 행을 기준으로 자리를 찾게
+                    gd.splice(pos, 0, r);
+                    out.moved++;
+                });
+            }
+        }
+        if (!out.moved && !out.relinked) return out;
+        try { if (typeof logChange === 'function') logChange(1, -1, '없음', '자동배치 자리 바로잡기: 단계 밖 ' + out.moved + '행 이동 · 결재 링크 ' + out.relinked + '행'); } catch (e) { /* 기록 실패는 무시 */ }
+        try { if (window.recalculateSchedules) window.recalculateSchedules(); } catch (e) { console.warn('[자리 바로잡기] 재계산 실패', e); }
+        try { if (window.renderGantt) window.renderGantt(); } catch (e) { /* 다음 렌더에 반영 */ }
+        if (!opts.noSave && window.saveToGoogleDrive) {
+            var okSave = await window.saveToGoogleDrive({ suppressAlert: true });
+            if (!okSave && window._saveLocalBackup) window._saveLocalBackup('approval-repair-save-blocked');
+        }
+        if (window.showToast && !opts.silent) window.showToast(T('🩹 이 프로젝트의 자동배치 자리를 바로잡았습니다 — 단계 밖에 있던 ' + out.moved + '행을 날짜 순으로 옮김' + (out.relinked ? ' · 결재 링크 ' + out.relinked + '행 정리' : '') + ' (Ctrl+Z 로 되돌림)',
+                                                                  '🩹 Fixed auto-placed rows in this project — moved ' + out.moved + ' rows into their stage (Ctrl+Z to undo)'), 'info', 8000);
+        console.info('[자리 바로잡기]', JSON.stringify(out));
+        return out;
+    };
+    (function hookOpen() {
+        var orig = window.populateTabData;
+        if (typeof orig !== 'function') return;
+        window.populateTabData = function () {
+            var r = orig.apply(this, arguments);
+            if (P.repairPlacement) {
+                var fid = window.currentDriveFileId;
+                setTimeout(function () {
+                    // 그 사이 다른 프로젝트로 바꿨으면 하지 않는다
+                    if (fid && window.currentDriveFileId !== fid) return;
+                    window.approvalRepairOpenProject({}).catch(function (e) { console.warn('[자리 바로잡기] 실패:', e); });
+                }, 4000);
+            }
+            return r;
+        };
+    })();
 
     // ── 배경 스케줄 ────────────────────────────────────────────────────────
     function tick() { if (!off() && !document.hidden) window.approvalIntakeRun({ manual: false }).catch(function (e) { console.warn('[결재 가져오기]', e); }); }
