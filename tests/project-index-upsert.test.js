@@ -78,6 +78,7 @@ function makeEnv(opts) {
     const code = '"use strict";\n'
         + SRC.slice(SRC.indexOf('    function _inchFromFileName'),
                     SRC.indexOf('\n    }', SRC.indexOf('    function _inchFromFileName')) + 6) + '\n'
+        + slice('_indexMembersOf') + '\n' + slice('_indexUnitsOf') + '\n'   // 🔍 2026-11-24 검색용 칸
         + slice('buildProjectIndexEntry') + '\n'
         + slice('updateProjectIndexEntry') + '\n'
         + 'return window.updateProjectIndexEntry;';
@@ -213,7 +214,8 @@ const REL = '개발3팀/LNW_27.0.json';
         const code = '"use strict";\n'
             + SRC.slice(SRC.indexOf('    function _inchFromFileName'),
                         SRC.indexOf('\n    }', SRC.indexOf('    function _inchFromFileName')) + 6) + '\n'
-            + slice('buildProjectIndexEntry') + '\n' + slice('updateProjectIndexEntry') + '\n'
+            + slice('_indexMembersOf') + '\n' + slice('_indexUnitsOf') + '\n'   // 🔍 2026-11-24 검색용 칸
+        + slice('buildProjectIndexEntry') + '\n' + slice('updateProjectIndexEntry') + '\n'
             + 'return window.updateProjectIndexEntry;';
         win.projectMeta = PM; win.tabData = { projectMaterials: [] };
         win._parseMailKeywords = function () { return []; };

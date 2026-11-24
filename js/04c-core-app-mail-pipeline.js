@@ -188,7 +188,22 @@
     //    남아있는" 구버전 인덱스 항목(인치를 채우기 전에 저장된 것들 — 이 파일이 다시 저장돼야만
     //    갱신됨)의 inch를 읽기 시점에 즉석으로 보정할 수 있도록 전역에 노출.
     window._inchFromFileName = _inchFromFileName;
-    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride, jiraKeywordsOverride, themeColorOverride) {
+    // 🔍 [2026-11-24] 검색용 멤버·제품군 — 색인 만들기(buildProjectIndexEntry)와 "색인 갱신이 필요한가"
+    //    감시(saveData 스냅샷) 두 곳이 **같은 함수**를 쓴다(따로 계산하면 감시가 변경을 놓친다).
+    //    멤버 = projectMeta 의 '…담당자' 칸 전부 · 제품군 = tabData.mcUnits ∪ 모델 카드 unitId
+    //    (⚠️ pm.models 엔 unitId 가 없다 — 실측. 모델 카드는 tabData.projectModels 다.)
+    //    tools/backfill-index-meta.py 에 같은 식의 파이썬 사본이 있다 — 바꾸면 같이.
+    window._indexMembersOf = function(pm) {
+        pm = pm || {};
+        return Array.from(new Set(Object.keys(pm).filter(function(k) { return /담당자$/.test(k); })
+            .map(function(k) { return String(pm[k] || '').trim(); }).filter(Boolean)));
+    };
+    window._indexUnitsOf = function(td) {
+        td = td || {};
+        const u = [].concat(td.mcUnits || [], (td.projectModels || []).map(function(m) { return m && m.unitId; }));
+        return Array.from(new Set(u.map(function(x) { return String(x || '').trim(); }).filter(Boolean)));
+    };
+    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride, jiraKeywordsOverride, themeColorOverride, unitsOverride) {
         const pm = pmOverride || window.projectMeta || {};
         // 💡 [2026-11-12] 고객사 칸은 2026-10-22부터 "고객사>프로젝트명(>세부모델)"처럼 여러 단을
         //    한 칸에 담는다(파일명 조립이 이 칸 하나로 고정됨 — updatePrintTitle 참고). 그래서 첫
@@ -275,9 +290,8 @@
             //    제품군(모델 카드 unitId: MVD·TPR …). 역할 목록을 박지 않고 '담당자'로 끝나는 칸을
             //    전부 모은다(역할이 늘어도 따라온다). 매칭 키워드(keywords)엔 안 넣는다 — 사람 이름은
             //    메일 오매칭의 원흉이다(js/26 `_tpStripPersonNames` 참고).
-            members: Array.from(new Set(Object.keys(pm).filter(function(k) { return /담당자$/.test(k); })
-                .map(function(k) { return String(pm[k] || '').trim(); }).filter(Boolean))),
-            units: Array.from(new Set((pm.models || []).map(function(m) { return m && String(m.unitId || '').trim(); }).filter(Boolean))),
+            members: window._indexMembersOf(pm),
+            units: Array.isArray(unitsOverride) ? unitsOverride : window._indexUnitsOf(window.tabData),
             inch: pm.인치 || _inchFromFileName(dynamicFileName) || '',
             keywords: keywords,          // Stage 1 AI 매칭에 사용할 전체 키워드 (4필드 + 커스텀)
             completed: pm.완료여부 === '완료', // 💡 [2026-08-29 신규] 완료 프로젝트 메일 자동매칭 제외용 — _msMatchProjects 참고
@@ -377,7 +391,7 @@
                 indexData = loaded;
             }
 
-            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot, jiraKeywordsSnapshot, snap.themeColor != null ? snap.themeColor : null);
+            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot, jiraKeywordsSnapshot, snap.themeColor != null ? snap.themeColor : null, Array.isArray(snap.units) ? snap.units : null);
             // 🎯 [2026-11-09] 항목을 찾는 열쇠는 id 하나가 아니다 — **경로**도 본다.
             //    왜: NAS 모드에선 한 경로에 옛 Drive id 가 여럿 걸려 있고(이사 때 이름이 겹친 파일),
             //    목록이 내놓는 "승자" id 는 **파일 이름이 바뀌는 순간 뒤바뀐다**(`remapIdPath`).
@@ -1201,7 +1215,10 @@
                 const _idxSnap = JSON.stringify({
                     pm: _IDX_WATCH_FIELDS.map(function(f) { return (saveData.projectMeta || {})[f]; }),
                     mat: ((saveData.tabData || {}).projectMaterials || []).filter(function(m) { return m && m.useForAnalysis; }).map(function(m) { return [m.ktkPn, m.description]; }),
-                    topic: window._getTopicProfile ? window._getTopicProfile(file.id) : null
+                    topic: window._getTopicProfile ? window._getTopicProfile(file.id) : null,
+                    // 🔍 [2026-11-24] 검색용 멤버·제품군도 감시 — 안 넣으면 담당자만 바꿔 저장했을 때 색인이 옛 멤버를 든다
+                    members: window._indexMembersOf(saveData.projectMeta),
+                    units: window._indexUnitsOf(saveData.tabData)
                 });
                 window._lastIndexedSnap = window._lastIndexedSnap || {};
                 const _idxChanged = !fileId || window._lastIndexedSnap[file.id] !== _idxSnap;
@@ -1219,7 +1236,8 @@
                         pm: saveData.projectMeta || {},
                         materials: _sdTab.projectMaterials || [],
                         jiraKeys: window._jiraProjectKeysOf ? window._jiraProjectKeysOf(_sdTab.jiraLinksByUnit) : [],
-                        themeColor: _sdTab.themeColor || ''
+                        themeColor: _sdTab.themeColor || '',
+                        units: window._indexUnitsOf(_sdTab)
                     }); // 💡 fire-and-forget
                 } else {
                     console.info('[저장 계측] 인덱스 관련 필드 불변 — project_index.json 갱신 생략');

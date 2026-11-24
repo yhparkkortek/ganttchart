@@ -57,7 +57,27 @@ FIELDS = [
     ('themeColor', lambda pm, td: td.get('themeColor') or ''),
     # 🔧 [2026-11-19] M/E(기구) 담당자 — "프로젝트 불러오기" 목록 작은 글씨용(js/57 appProperties.me)
     ('mech',       lambda pm, td: pm.get('기구담당자') or ''),
+    # 🔍 [2026-11-24] "프로젝트 불러오기" 검색용 목록 칸 — js/04c 와 같은 식.
+    #    members = projectMeta 에서 '담당자'로 끝나는 칸 전부(중복 제거, 순서 유지)
+    #    units   = tabData.mcUnits ∪ tabData.projectModels[].unitId (⚠️ pm.models 엔 unitId 가 없다 — 실측)
+    ('members',    lambda pm, td: _uniq(str(pm.get(k) or '').strip() for k in pm if str(k).endswith('담당자'))),
+    ('units',      lambda pm, td: _uniq(str(x or '').strip() for x in list(td.get('mcUnits') or []) + [(m or {}).get('unitId') for m in (td.get('projectModels') or []) if isinstance(m, dict)])),
 ]
+
+
+def _uniq(it):
+    out = []
+    for v in it:
+        if v and v not in out:
+            out.append(v)
+    return out
+
+
+def blank(v):
+    """목록 칸([])과 글자 칸('') 둘 다 '비었다'로 본다 — str([]) 는 '[]' 라 비어 보이지 않는다."""
+    if isinstance(v, (list, tuple)):
+        return not [x for x in v if str(x or '').strip()]
+    return not str(v or '').strip()
 
 
 def die(msg):
@@ -115,7 +135,7 @@ print('색인 projects %d건 · NAS 프로젝트 파일 %d개' % (len(projects),
 # 빈 칸이 하나라도 있는 항목만 후보
 todo = []
 for p in projects:
-    missing = [f for f, _ in FIELDS if not str(p.get(f) or '').strip()]
+    missing = [f for f, _ in FIELDS if blank(p.get(f))]
     if not missing:
         continue
     rel = id2path.get(p.get('drive_file_id') or '')
@@ -127,7 +147,7 @@ for p in projects:
     todo.append((p, rel, missing))
 
 if not todo:
-    print('\n✅ 채울 것이 없습니다 — 모든 항목의 다섯 칸이 차 있습니다.')
+    print('\n✅ 채울 것이 없습니다 — 모든 항목의 칸이 차 있습니다.')
     sys.exit(0)
 
 print('\n파일에서 값을 읽습니다 — %d개 (파일이 커서 잠시 걸립니다)' % len(todo))
@@ -146,10 +166,11 @@ for p, rel, missing in todo:
     td = d.get('tabData') or {}
     got = {}
     for field, pick in FIELDS:
-        if str(p.get(field) or '').strip():
+        if not blank(p.get(field)):
             continue                   # 이미 있다 — 건드리지 않는다
-        val = str(pick(pm, td) or '').strip()
-        if not val:
+        val = pick(pm, td)
+        val = val if isinstance(val, list) else str(val or '').strip()
+        if blank(val):
             continue                   # 파일에도 없다 — 지어내지 않는다
         got[field] = val
     if got:
@@ -184,7 +205,7 @@ for p in fresh_projects:
     if not want:
         continue
     for field, val in want.items():
-        if str(p.get(field) or '').strip():
+        if not blank(p.get(field)):
             continue                   # 그 사이 누가 채웠다 — 그 값이 이긴다
         p[field] = val
         applied += 1
@@ -203,7 +224,7 @@ nd.put(root + '/' + REL, json.dumps(fresh, ensure_ascii=False).encode('utf-8'))
 # 쓴 뒤 **다시 읽어** 확인한다 — 반환값은 증거가 아니다.
 back = json.loads(nd.download(root + '/' + REL).decode('utf-8'))
 back_projects = back.get('projects') or []
-blank_of = lambda ps: sum(1 for p in ps for f, _ in FIELDS if not str(p.get(f) or '').strip())
+blank_of = lambda ps: sum(1 for p in ps for f, _ in FIELDS if blank(p.get(f)))
 before_blank = blank_of(fresh_projects) + applied     # 얹기 전 상태
 still_blank = blank_of(back_projects)
 ok = (len(back_projects) == len(fresh_projects)) and (still_blank == before_blank - applied)
