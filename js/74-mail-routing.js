@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-23m';
+    var RULE_V = '2026-11-24a';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -165,7 +165,9 @@
             var raw = String(k).trim();
             if (!raw || looksMaterialDesc(raw) || isPerson(raw) || isGeneric(raw)) return;
             var n = norm(raw);
-            if (n.length < P.identMinLen) return;
+            // [2026-11-24] 'K43'·'K27' 처럼 영문 1~2자+숫자 2자 이상인 모델 코드는 3자라도 식별자 — 4자 규칙에 걸려
+            //  'LNW K43 Main (HQ#501823)' 메일이 K43 프로젝트를 못 찾고 '고객만 확정'으로 대기했다(실측). 숫자 뒤 경계는 hit() 가 본다.
+            if (n.length < P.identMinLen && !(P.shortModelCode !== false && /^[a-z]{1,2}\d{2,}$/.test(n))) return;
             if (n === root || STOP[n] || SELF[n]) return;    // 고객사명 자체는 가족 토큰(아래) · 우리 회사 이름은 단서 아님
             if (/^\d+$/.test(n) && n.length < 5) return;     // "4.3"·"2026" 류
             out[n] = src;
@@ -289,6 +291,7 @@
             var s0 = hay.pos[at], e0 = hay.pos[at + tok.length - 1];
             if (lb && s0 > 0 && /[A-Za-z]/.test(hay.raw[s0 - 1])) continue;
             if (rb && e0 + 1 < hay.raw.length && /[A-Za-z]/.test(hay.raw[e0 + 1])) continue;
+            if (/\d$/.test(tok) && e0 + 1 < hay.raw.length && /\d/.test(hay.raw[e0 + 1])) continue;   // 'k43' ⊄ "K430"
             return true;
         }
         return false;

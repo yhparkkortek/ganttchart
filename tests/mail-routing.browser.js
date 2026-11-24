@@ -163,6 +163,12 @@ window.__mailRoutingTestBody = async function () {
     const lnw25 = cands.concat(Array.from({ length: 20 }, (_, i) => C('Y' + i, 'LNW_Y' + i + '.json', 'Y' + i, 'LNW>Y' + i, '', ['YQZ' + i])));
     j = J(M('Kortek Weekly call minutes > Kortek2', 'LNW UK shipping update'), lnw25, null);
     ok(j.decision === 'wait' && /상한/.test(j.reason || ''), '4-21 상한을 넘으면 대기 — 조용히 빠지지 않고 사유에 상한을 적는다', { d: j.decision, r: j.reason });
+    // [2026-11-24] 'K43' 처럼 3자 모델 코드도 식별자 — 4자 규칙에 걸려 'LNW K43 Main (HQ#501823)' 메일이 대기했다(실측)
+    const candsK = cands.concat([C('K4', 'LNW_K43 EC_DV430QUB-PL0_43.0.json', 'K43 EC DV430QUB-PL0', 'LNW>K43 EC>DV430QUB-PL0', '43', ['K43 EC', 'DV430QUB-PL0', 'K43', 'EC'])]);
+    j = J(M('Fwd: RE: LNW K43 Main (HQ#501823) VINA 생산품 채번 관련 문의 사항', 'BOM 일괄 수정 검토 부탁드립니다'), candsK, null);
+    ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'K4', '4-22 3자 모델 코드(K43)로 그 프로젝트에 배치', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
+    j = J(M('[LNW] K430 신규 문의', 'LNW K430 패널'), candsK, null);
+    ok(!(j.target && j.target.drive_file_id === 'K4' && j.decision === 'auto'), '4-23 K430 안의 k43 은 걸리지 않는다(숫자 뒤 경계)', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id });
     j = J(M('RE: New Traceability Requirements for Molded Plastic Components', 'LNW supplier reminder'), cands, null);
     ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-15 고객 전반 요구사항(Requirements) → LNW 프로젝트 전부', { d: j.decision, basis: j.basis, ids: allOf(j) });
 
