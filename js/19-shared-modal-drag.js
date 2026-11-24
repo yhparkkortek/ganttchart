@@ -1011,6 +1011,13 @@ function _syncSummaryScrollHeight() {
 function _syncTabWrapTop() {
     var appMain = document.getElementById('app-main');
     if (!appMain) return;
+    // 📏 [2026-11-24 "여백 통일성"] 보이는 wrap 이 있으면 **그 실제 위치**를 쓴다 — 계산값(#app-main.top + 시트 바)이
+    //    실측 wrap 위치보다 2px 작아서(116 vs 118) 이 변수를 쓰는 탭은 아래 여백이 47px, 직접 재는 Summary 만 49px 였다.
+    //    탭이 다 숨겨져 있을 때만 예전 계산으로 떨어진다(wrap 의 top 은 높이와 무관해 되먹임이 없다).
+    var shown = Array.prototype.find.call(document.querySelectorAll('.concept-tab-wrap'), function(w) {
+        var r = w.getBoundingClientRect(); return r.height > 0 && r.top >= 10;
+    });
+    if (shown) { document.documentElement.style.setProperty('--tab-wrap-top', Math.round(shown.getBoundingClientRect().top) + 'px'); return; }
     var mainTop = Math.round(appMain.getBoundingClientRect().top);
     var sheetBar = document.getElementById('sheet-tabs-bar');
     var sheetH = (sheetBar && sheetBar.offsetHeight) ? sheetBar.offsetHeight : 0;

@@ -235,6 +235,16 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
   (M.C `금액삭제`·Project list `↺` 가 그랬다).
 - 회차/리비전/제품구분자 관리 묶음(`▶` 회색 · `✏️` 테마 배경 · `➕` · `🗑️`)은 세 곳(M.C·Document 회차·Document 리비전)이 같은 모양이라 그대로 둔다.
 
+#### 페이지 여백 — 틀은 한 벌 (2026-11-24)
+- 실측(1400×900) 전 페이지 같다: 헤더 왼쪽 235px(사이드바 뒤)·오른쪽 15px·위 118px · 헤더↔본문 상자 2px · 본문 상자 안 여백 12px 18px
+  (`.concept-section` 가 `!important` 로 정한다) · 본문 상자 아래 끝 = 화면 아래에서 **하단 작업표시줄 자리(`--mt-reserve`)만큼**.
+- **본문 상자는 화면 아래까지 채운다**(`.concept-tab-wrap` 에 `height: calc(100vh - var(--tab-wrap-top) - var(--mt-reserve))` + flex column,
+  본문 상자 `flex:1; overflow-y:auto`) — 내용이 길면 상자 안에서 스크롤, 짧아도 상자는 아래까지. 새 페이지는 styles.css 의 그 목록에 **한 줄 추가**.
+  2026-11-24 에 JIRA·일일보고가 빠져 있어 상자가 내용 길이에서 끝났다(아래 빈 화면 568·283px).
+- `--tab-wrap-top` 은 js/19 `_syncTabWrapTop` 이 **보이는 wrap 의 실제 위치**로 잰다 — 예전 계산(#app-main + 시트 바)은 2px 모자라
+  이 변수를 쓰는 탭 아래 여백이 47px, 스스로 재는 Summary 만 49px 였다.
+- Project list 헤더 위아래 6px 는 예외(좁은 창에서 두 줄로 접힐 때의 여백). 간트는 자기 체계.
+
 #### 글자 크기 — 표는 두 단계 (2026-11-24)
 - 페이지 제목 15px 굵게 · 헤더 버튼 13px · 표 위 줄 11px(공용 22px 칩) — 전 페이지 실측에서 지켜지고 있었다.
 - **표 본문은 두 단계뿐**: 보통 표 **12.5px**(`.concept-table` 기본값 — Summary·Customer SPEC·M.C·JIRA·Address·Alarm·PARTS·일일보고) /

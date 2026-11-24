@@ -1033,6 +1033,26 @@
     margin-bottom: 0 !important;
 }
 
+/* 📏 [2026-11-24 "여백 통일성"] JIRA · 일일보고도 뷰포트 채우기 — 이 둘만 목록에서 빠져 본문 상자가 내용 길이에서
+   끝나(실측 아래 빈 화면 568·283px) 다른 페이지처럼 화면 아래까지 오지 않았다. 같은 flex column 규칙. */
+#tab-jira  > .concept-tab-wrap,
+#tab-daily > .concept-tab-wrap {
+    height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#tab-jira  > .concept-tab-wrap > .concept-header-box,
+#tab-daily > .concept-tab-wrap > .concept-header-box { flex-shrink: 0; }
+#tab-jira  > .concept-tab-wrap > .concept-section,
+#daily-report-page {
+    flex: 1 !important;
+    min-height: 0;
+    overflow-y: auto !important;
+    max-height: none !important;
+    margin-bottom: 0 !important;
+}
+
 /* 9. Elec Parts 탭: concept-tab-wrap 뷰포트 채우기 (PANEL/ADBD/CONVBD 3-way 서브뷰) */
 #tab-elecparts > .concept-tab-wrap {
     height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
