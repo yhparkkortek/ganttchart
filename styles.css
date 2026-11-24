@@ -491,9 +491,8 @@
     .val-old { color: #dc3545; text-decoration: line-through; }
     .val-new { color: #0f5132; font-weight: bold; }
     
-    #drive-file-list::-webkit-scrollbar { width: 8px; }
-    #drive-file-list::-webkit-scrollbar-thumb { background: #adb5bd; border-radius: 4px; }
-    #drive-file-list::-webkit-scrollbar-track { background: #f1f3f5; }
+    /* 🧹 [2026-11-24 "스크롤바 통일"] #drive-file-list(프로젝트 불러오기 목록)만 회색 막대·회색 트랙을 늘 보이게 따로 칠했었다 —
+       지웠다. 이제 앱 전체 규칙(맨 위 `*::-webkit-scrollbar` — 8px, 평소 투명, 그 영역에 마우스를 올리면 보임)을 따른다. */
 
     /* 필터 라벨 버튼화 스타일 */
     .filter-label { cursor: pointer; transition: 0.2s; user-select: none; border: 1px solid transparent; }
@@ -2700,3 +2699,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 .parts-search-hide { display:none !important; }
 .parts-search-show { display:table-row !important; }
 #tab-elecparts td.search-hit { background-color:#fff3bf !important; }
+
+/* 🔍 [2026-11-24] BOM 검색 — 걸린 칸 강조(js/38 _bomSearchAfter). PARTS ▸ BOM 은 위 #tab-elecparts 규칙이 받는다. */
+#bom-body td.search-hit { background-color:#fff3bf !important; }
