@@ -109,6 +109,42 @@
         return Object.keys(_idMap).length;
     }
 
+    /** 🪪 [2026-11-24 실측 — 보관함이 계정 id 파일(TaskInbox_yhpark.json)로 못 옮겨 가고 '이름 충돌' 토스트]
+     *  경로로 만든 id(`nas_f_<경로>`)가 이름 바꾸기 별칭(aliasOnRename)으로 **다른 경로**를 가리키고 있는데,
+     *  그 원래 경로에 파일이 **지금 실제로 있으면** 그 별칭은 낡은 것이다 — 경로 id 는 글자 그대로 그 경로의 이름이다.
+     *  (옛 탭이 yhpark→박용훈 으로 이름을 바꾸며 별칭을 남겼고, 새 코드가 yhpark 파일을 만들자 그 id 가 박용훈 파일로
+     *   새어 계속 거기에 쓰고 이름을 바꾸려다 막혔다.) 목록·생성처럼 **파일이 있다는 게 확인된 자리**에서만 부른다.
+     *  메모리에서 지우고 NAS 지도에서도 지운다(다른 탭이 다시 읽어 되살리지 않게, 묶어서 한 번). */
+    var _staleAliasQ = {}, _staleAliasT = null;
+    function dropStalePathAlias(rel) {
+        rel = normRel(rel);
+        if (!rel) return;
+        var pid = 'nas_f_' + b64urlEncode(rel);
+        if (!_idMap[pid] || _idMap[pid] === rel) return;
+        var was = _idMap[pid];
+        delete _idMap[pid];
+        if (_relToOldId[was] === pid) {
+            delete _relToOldId[was];
+            Object.keys(_idMap).forEach(function (k) { if (_idMap[k] === was) _relToOldId[was] = k; });
+        }
+        _staleAliasQ[pid] = was;
+        note('idmap-stale-alias', { id: rel, pointed: was });
+        if (_staleAliasT) return;
+        _staleAliasT = setTimeout(async function () {
+            _staleAliasT = null;
+            var q = _staleAliasQ; _staleAliasQ = {};
+            try {
+                var res = await nas('GET', '/nas/app/get' + qs(ID_MAP_REL_ADAPTER));
+                if (!res.ok) return;
+                var doc = JSON.parse(await res.text()), n = 0;
+                Object.keys(q).forEach(function (k) { if (doc.map && doc.map[k] === q[k]) { delete doc.map[k]; n++; } });
+                if (!n) return;
+                doc.movedAt = new Date().toISOString();
+                await nasJson('POST', '/nas/app/put', { rel: ID_MAP_REL_ADAPTER, text: JSON.stringify(doc) });
+            } catch (e) { note('idmap-stale-alias-fail', String((e && e.message) || e)); }
+        }, 2000);
+    }
+
     /** 상대경로 → fileId. **이사해 온 파일은 옛 Drive id 를 그대로 돌려준다.** */
     function idOf(rel, isdir) {
         rel = normRel(rel);
@@ -232,6 +268,7 @@
     /** NAS 목록 항목 → Drive files 항목 모양. */
     function toDriveFile(item, parentRel) {
         var rel = joinRel(parentRel, item.name);
+        if (!item.isdir) dropStalePathAlias(rel);
         var f = {
             id: idOf(rel, item.isdir),
             name: item.name,
