@@ -2651,6 +2651,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #psummary-page tr.ps-zebra-b { background: #e8f2f3; }
 /* 🦓 JIRA 연결 이슈·전체 검색 표 — tr 에(마우스 올림 inline 색이 이기게) */
 tr.jira-zebra-b { background: #e8f2f3; }
+/* ⭕ [2026-11-24 "도표 모서리 R 전부"] .concept-table 과 같은 6px.
+   .ui-round-wrap = collapse 표를 감싸는 상자(바깥 칸 테두리는 margin:-1px 로 상자 테두리 밑에 숨긴다, sticky 없는 표만)
+   .ui-round-tbl  = separate 표(표 자신 + 네 모서리 칸) — sticky 머리글이 있어도 된다 */
+.ui-round-wrap { border: 1px solid #cfe3e5; border-radius: 6px; overflow: hidden; }
+.ui-round-wrap > table { margin: -1px; width: calc(100% + 2px) !important; }
+.ui-round-tbl { border-radius: 6px; }
+.ui-round-tbl > thead > tr:first-child > th:first-child { border-top-left-radius: 6px; }
+.ui-round-tbl > thead > tr:first-child > th:last-child { border-top-right-radius: 6px; }
+.ui-round-tbl > tbody > tr:last-child > td:first-child { border-bottom-left-radius: 6px; }
+.ui-round-tbl > tbody > tr:last-child > td:last-child { border-bottom-right-radius: 6px; }
 .daily-none-txt { color: #00707d; }   /* 2026-11-24: 보색 → 테마색 */
 
 /* ══════════════════════════════════════════════════════════════════════════

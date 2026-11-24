@@ -3516,7 +3516,8 @@
             ((F.who || F.proj || F.cat || F.q) ? ' <span style="color:#1971c2;">' + esc(T('(필터 적용 중)', '(filtered)')) + '</span>' : '') +
             (roster && roster.length ? '' : ' <span style="color:#b1432f;">' + esc(T('(명단 파일이 없어 쓴 사람만 보입니다)', '(no roster file — showing authors only)')) + '</span>') +
           '</div>' +
-          '<table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
+          // ⭕ [2026-11-24] 모서리 둥글게 — collapse 표라 칸에 R 이 안 먹는다 → 둥근 상자(.ui-round-wrap)로 감싼다
+          '<div class="ui-round-wrap"><table style="width:100%; border-collapse:collapse; table-layout:fixed;">' +
             '<colgroup>' + DAY_COLS.map(function (c) { return '<col' + (c.w ? ' style="width:' + c.w + ';"' : '') + '>'; }).join('') + '</colgroup>' +
             '<thead><tr style="background:#eef6f7;">' +
               DAY_COLS.map(function (c) {
@@ -3526,7 +3527,7 @@
             '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + DAY_COLS.length + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' +
                 esc((F.who || F.proj || F.cat || F.q)
                     ? T('조건에 맞는 업무가 없습니다 — 필터 해제로 전부 볼 수 있습니다.', 'No task matches — use Clear to see all.')
-                    : T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
+                    : T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table></div>';
         // 🔍 걸린 칸 강조 — 첨부 칸(마지막)은 파일 이름 칩이라 뺀다
         if (sToks.length) {
             Array.prototype.forEach.call(box.querySelectorAll('tbody tr'), function (tr) {

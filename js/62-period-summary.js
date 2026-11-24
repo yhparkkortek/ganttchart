@@ -1293,7 +1293,8 @@
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
         if (!rows.length) body = '<tr><td colspan="7" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
-        return '<table style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid #cdd9e6; border-top:1px solid #cdd9e6; table-layout:auto; background:#fff;"><thead><tr>' +
+        // ⭕ [2026-11-24] 모서리 둥글게 — sticky 머리글이라 overflow:hidden 상자로 못 감싼다 → 표·모서리 칸에 R(.ui-round-tbl)
+        return '<table class="ui-round-tbl" style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid #cdd9e6; border-top:1px solid #cdd9e6; table-layout:auto; background:#fff;"><thead><tr>' +
             '<th style="position:sticky; top:0; z-index:20; width:28px; padding:5px 3px; background:#eef6f7; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:center;" title="' + esc(T('핀셋(알람) — 간트 No. 칸의 막대와 같다. 열린 프로젝트의 업무만', 'Pin (alarm) — same as the Gantt pin bar; open project only')) + '">📌</th>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
             '<th style="position:sticky; top:0; z-index:20; padding:5px 6px; background:#eef6f7; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +

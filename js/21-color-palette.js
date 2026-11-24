@@ -399,6 +399,7 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#daily-report-page tr.daily-zebra-b > td, #weekly-report-page tr.wr-zebra-b > td { background: ' + gen.zebraB + ' !important; }\n'
         // ⚠️ Project Review 제브라는 tr 에 칠하고 !important 를 안 붙인다 — 근거에서 돌아올 때 inline 깜빡임이 이겨야 한다
         + '#psummary-page tr.ps-zebra-b, tr.jira-zebra-b { background: ' + gen.zebraB + '; }\n'
+        + '.ui-round-wrap { border-color: ' + gen.border + ' !important; }\n'
         // Project list 마우스 올림 색도 팔레트를 따른다(고정 청록이었다)
         + '.pl-table tbody tr:hover td { background: ' + gen.bg + ' !important; }\n'
         + '.pl-table td.pl-td:hover { background: ' + gen.border + ' !important; }\n'
