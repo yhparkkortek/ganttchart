@@ -88,7 +88,7 @@
         'scr.r11.c1': [SPEC.temp, 'pl:colorTemp', 'panel:Color Temperature'],
         'scr.r12.c1': ['fn:xyPair', 'panel:White Color Coordinates'],
         'scr.r13.c1': [SPEC.gamut, 'pl:colorGamut', 'panel:NTSC Ratio'],
-        'scr.r14.c1': [SPEC.uni, 'pl:uniformity'],
+        'scr.r14.c1': [SPEC.uni, 'pl:uniformity', 'panel:White Variation (Max/Min)'],
         panelVendor: ['pl:panelMfr', 'panel:Panel Brand'],
         // 시야각 표 — Right · Left · Up · Down (패널 'L/R/U/D' 를 쪼갠다)
         'va.r0.c4': ['fn:va:1'], 'va.r1.c4': ['fn:va:0'], 'va.r2.c4': ['fn:va:2'], 'va.r3.c4': ['fn:va:3'],
@@ -110,7 +110,14 @@
         'tpwr.r1.c2': ['touch:Input Voltage'],
         'tgen.r2.c2': ['touch:Brand'], 'tgen.r3.c2': ['pl:touchFw'],
         'tgen.r6.c2': ['pl:vidPid'],
-        'tglass.r1.c2': ['pl:glassType'], 'tglass.r2.c2': ['pl:airGap']
+        'tglass.r1.c2': ['pl:glassType'], 'tglass.r2.c2': ['pl:airGap'],
+        // [2026-11-24] PARTS 에서 더 가져오는 것 — 실측으로 원본 사양서 값과 맞는지 확인한 칸만
+        'tpwr.r1.c2': ['fn:atSplit:Input Voltage:0'],          // '5V @150mA' → 5V
+        'tpwr.r2.c2': ['fn:atSplit:Input Voltage:1'],          //              → 150mA
+        'tgen.r4.c2': ['fn:ctrlId'],                           // 'Kortek / <품목 코드>'
+        'blu.r2.c3': ['panel:Lamp Current'],                   // LED String Current Typ (전압·전력은 칸이 모호해 안 잇는다)
+        convIn: ['fn:connModel:Input Connector (Model/Pins)'],    // 불러온 값이 없을 때만 — 커넥터 모델명만(핀 번호·제조사는 라이브러리에 없다)
+        convOut: ['fn:connModel:Output Connector (Model/Pins/Qty)']
     };
     // 앱 값의 **모양**을 문서 칸에 맞춘다(데이터) — 단위는 옆 'Unit' 칸에 이미 있어서 값에 또 붙이면
     //   '698.112 mm' + 'mm' 처럼 두 번 찍힌다(실측). 못 맞추면 받은 그대로 둔다(지우지 않는다).
@@ -121,6 +128,7 @@
         'amr.r1.c2': 'signless', 'amr.r1.c3': 'signless', 'amr.r2.c2': 'signless', 'amr.r2.c3': 'signless',
         'parts.r1.c3': 'vendor', 'parts.r2.c3': 'vendor', 'parts.r3.c3': 'vendor', 'parts.r5.c3': 'vendor',
         'tgen.r2.c2': 'vendor',
+        'blu.r2.c3': 'number',
         'parts.r4.c1': 'noneDash', 'parts.r5.c1': 'noneDash', 'parts.r5.c2': 'noneDash', 'parts.r2.c2': 'noneDash',
         'tgen.r3.c2': 'noneDash'
     };
@@ -281,6 +289,17 @@
                 conv: { cat: 'CONVERTER', pl: 'bluDriver', type: 'convbd' },
                 touch: { cat: 'TOUCH CTRL', pl: 'touchCtrl', type: 'touchctrl' } };
     var _libPending = {};
+    // 지금 모델 카드 **자신의** 주요자재 한 줄(다른 카드로 폴백하지 않는다)
+    var _ownMat = function (cat) {
+        var card = ((window.tabData || {}).projectModels || []).filter(function (m) { return m && m.unitId === (window.mcActiveUnit || ''); })[0];
+        return ((card && card.materials) || []).filter(function (m) { return m && m.category === cat && !_isNone(m.description || m.ktkPn); })[0] || null;
+    };
+    // 같은 부품인가 — 영숫자만 남겨 한쪽이 다른 쪽으로 시작하면 같다('ABC-MA_V00' ≈ 'ABC-MA', 'XYZ-QHD' ≠ 'XYZ-QLW')
+    var _samePart = function (a, b) {
+        var x = String(a || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), y = String(b || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!x || !y) return false;
+        return x.indexOf(y) === 0 || y.indexOf(x) === 0;
+    };
     var _libRec = function (ctx, which) {
         var L = LIB[which], cache = window._epLibCache || {};
         var lib = which === 'panel' ? cache.panel : cache[L.type];
@@ -295,8 +314,22 @@
             }
             return null;
         }
+        // 🔎 [2026-11-24 실측] 이름만으로 찾으면 못 찾거나 **다른 부품**을 집는다 —
+        //   · Project list 'ABC-MA_V00' ↔ 라이브러리 '<코드>_PBA-T>ABC-MA,…' 처럼 이름이 달라 못 찾았다(터치 컨트롤러)
+        //   · 이 모델 카드 주요자재엔 **품목 코드**가 있다 → 코드로 찾으면 정확하다.
+        //   ⚠️ 단 문서에 보이는 부품 이름(Project list)과 주요자재가 **다른 부품**이면(실측: AD 보드 이름 끝자리가 달랐다)
+        //      코드로 찾지 않는다 — 같은 문서에서 이름은 이 부품, 사양은 저 부품이 되면 안 된다.
         var row = _plRow(ctx) || {};
-        var names = [row[L.pl], _matDesc(ctx, L.cat)].filter(Boolean);
+        var shown = _isNone(row[L.pl]) ? '' : String(row[L.pl]).trim();
+        var mat = _ownMat(L.cat);
+        var names = [];
+        if (mat && mat.ktkPn && (!shown || _samePart(shown, mat.description))) names.push(String(mat.ktkPn).trim());
+        if (shown) names.push(shown);
+        if (mat && mat.description && (!shown || _samePart(shown, mat.description))) names.push(mat.description);
+        if (!names.length) { var md = _matDesc(ctx, L.cat); if (md) names.push(md); }
+        // 보이는 이름으로 **아무것도 못 찾았을 때만** 주요자재로 — 실측 패널은 Project list 와 주요자재의
+        // 끝 글자가 다른 같은 계열이었고 라이브러리엔 주요자재 쪽 이름만 있었다(이걸 막으면 패널 사양 14줄이 통째로 빈다)
+        if (mat) { if (mat.ktkPn) names.push(String(mat.ktkPn).trim()); if (mat.description) names.push(mat.description); }
         for (var i = 0; i < names.length; i++) {
             var rec = which === 'panel' ? (window.findPanelInLibrary && window.findPanelInLibrary(lib, names[i]))
                                         : (window.findElecPartInLibrary && window.findElecPartInLibrary(lib, names[i]));
@@ -348,6 +381,27 @@
                 has = mats.some(function (m) { return m && m.category === 'TOUCH CTRL' && !_isNone(m.description || m.ktkPn); });
             }
             return { v: has ? 'YES' : 'NO', src: _t('Project list · 이 모델 주요자재 TOUCH CTRL 유무', 'touch controller present?') };
+        },
+        // '5V @150mA' 처럼 한 칸에 둘 — '@' 로 쪼갠다(터치 전원 전압·전류)
+        atSplit: function (ctx, a) {
+            var rec = _libRec(ctx, 'touch');
+            var v = rec && rec.specs[a[0]];
+            var parts = String(v || '').split('@').map(function (x) { return x.trim(); });
+            return { v: parts.length > +a[1] ? parts[+a[1]] : '', src: v ? 'PARTS ▸ TOUCH CTRL ▸ ' + a[0] : '' };
+        },
+        // 'Kortek / <품목 코드>' — 원본 사양서 Controller 칸 모양(제조사 짧은 이름 / 코드)
+        ctrlId: function (ctx) {
+            var rec = _libRec(ctx, 'touch');
+            if (!rec) return { v: '', src: '' };
+            var code = String(rec.specs['Item Code'] || '').trim();
+            var brand = FMT.vendor(String(rec.specs.Brand || '').trim());
+            return { v: [brand, code].filter(Boolean).join(' / '), src: 'PARTS ▸ TOUCH CTRL ▸ Brand · Item Code' };
+        },
+        // 커넥터 모델명만 — '12345WR-12A / 12' → '12345WR-12A'
+        connModel: function (ctx, a) {
+            var rec = _libRec(ctx, 'conv');
+            var v = rec && String(rec.specs[a[0]] || '').split('/')[0].trim();
+            return { v: _isNone(v) ? '' : v, src: v ? 'PARTS ▸ CONVERTER ▸ ' + a[0] : '' };
         },
         // 터치 컨트롤러가 없으면 F/W 도 '-' — Project list 에 컨트롤러는 X 인데 F/W 가 적힌 행이 있다(실측)
         touchFw: function (ctx) {

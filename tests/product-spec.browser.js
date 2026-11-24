@@ -76,6 +76,34 @@ window.__psTest = async function (opt) {
         window._docDataOf('product-spec').fields.hasTouch = 'NO';
         check(window._psPayload().variant === 'base' && f.sections.length < nOn, '터치 끄면 base 판 + 터치 구역 숨김');
         delete window._docDataOf('product-spec').fields.hasTouch;
+        // 🔎 PARTS 라이브러리 찾기 규칙(2026-11-24) — 합성 라이브러리를 잠깐 끼운다(경계: 라이브러리 캐시)
+        var libSaved = window._epLibCache;
+        window._epLibCache = {
+            panel: { panels: [{ model: 'PNL-TEST-01B', specs: { 'Item Code': '', 'Part Name': 'PNL-TEST-01B', 'Lamp Current': '70mA', 'Panel Brand': 'PVEND' } }] },
+            adbd: { items: [{ model: 'ADB-TEST', specs: { 'Item Code': '777010', 'Part Name': 'ADB-TEST', Brand: 'Shown Co' } },
+                            { model: 'ADB-OTHER', specs: { 'Item Code': '777011', 'Part Name': 'ADB-OTHER', Brand: 'Other Co' } }] },
+            convbd: { items: [{ model: '777020_CONV-TEST', specs: { 'Item Code': '777020', 'Part Name': 'CONV-TEST', Brand: 'KORTEK Corporation',
+                            'Input Connector (Model/Pins)': '11111WR-12A / 12' } }] },
+            touchctrl: { items: [{ model: '777030_PBA-T>TCTRL-TEST,R0', specs: { 'Item Code': '777030', 'Part Name': 'PBA-T>TCTRL-TEST,R0',
+                            Brand: 'KORTEK Corporation', 'Input Voltage': '5V @150mA', 'Board Size (WxH)': '100.0 ± 0.2mm x 62.0 ± 0.2mm' } }] }
+        };
+        var mats0 = window.tabData.projectModels[0].materials;
+        window.tabData.projectModels[0].materials = [
+            { category: 'PANEL', ktkPn: '', description: 'PNL-TEST-01B' },            // 보이는 이름(PNL-TEST-01)과 끝이 다른 같은 계열
+            { category: 'AD BOARD', ktkPn: '777011', description: 'ADB-OTHER' },      // 보이는 이름(ADB-TEST)과 다른 부품
+            { category: 'CONVERTER', ktkPn: '777020', description: 'CONV-TEST' },
+            { category: 'TOUCH CTRL', ktkPn: '777030', description: 'TCTRL-TEST' }];
+        window._plData.rows[0].touchCtrl = 'TCTRL-TEST_V00';                         // 이름만으론 못 찾는다
+        var pL = window._psPayload();
+        check(pL.values['tgen.r4.c2'] === 'Kortek / 777030', '터치 컨트롤러를 품목 코드로 찾아 "제조사 / 코드" (' + pL.values['tgen.r4.c2'] + ')');
+        check(pL.values['tpwr.r1.c2'] === '5V' && pL.values['tpwr.r2.c2'] === '150mA', '터치 전원 "5V @150mA" 쪼개기');
+        check(pL.values['tmech.r1.c2'] === '100.0 ± 0.2mm' && pL.values['tmech.r2.c2'] === '62.0 ± 0.2mm', '터치 보드 크기 W·H');
+        check(pL.values['parts.r2.c3'] === 'Shown Co', '보이는 이름과 다른 부품이면 코드로 찾지 않는다 (' + pL.values['parts.r2.c3'] + ')');
+        check(pL.values['blu.r2.c3'] === '70', '보이는 이름으로 못 찾으면 주요자재로 — 패널 LED 전류 Typ (' + pL.values['blu.r2.c3'] + ')');
+        check(pL.values.convIn === '11111WR-12A', '컨버터 입력 커넥터 모델명 (' + pL.values.convIn + ')');
+        window._epLibCache = libSaved;
+        window.tabData.projectModels[0].materials = mats0;
+        window._plData.rows[0].touchCtrl = 'TCTRL-TEST';
         // 다른 서식이 안 깨지는가
         ['model-spec', 'label-spec', 'sample-report', 'stage-dr'].forEach(function (id) {
             try { window._docState.formId = id; window._docRender(); ok++; } catch (e) { fail++; log.push('✗ ' + id + ' 렌더: ' + e.message); }
