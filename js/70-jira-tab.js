@@ -254,6 +254,8 @@
     // merge 결과(_lastRows, 원본)에 지금의 필터·정렬을 입혀 다시 그린다 — 열 머리글
     // 클릭이나 필터 체크박스가 바뀔 때마다 이것만 부르면 된다(서버 재조회 없음).
     function renderFilteredSortedTable() {
+        // 출처 열이 숨으면 그 열에 걸어 둔 필터도 푼다 — 안 보이는 필터가 행을 숨기면 이유를 찾을 길이 없다
+        if (!mainShowsSrc()) delete _tables.main.filters.src;
         renderTable(viewRows('main'), _lastNote);
     }
 
@@ -404,6 +406,19 @@
             + T('전체 해제', 'Clear all') + '</button></div>';
     }
 
+    // 🏷 [2026-11-24 사용자 요청] 출처 열은 **출처가 두 가지 이상 섞일 때만** 보인다 — 평소엔 전부
+    //    '📁 프로젝트'(탭이 자동으로 부르는 건 프로젝트 코드뿐)라 자리만 차지했다. '🔎 더 찾기'로 수동·검색·
+    //    메일 이슈가 섞여 들어오면 그때 나타난다. 판정은 **필터 전 원본**(_lastRows) 기준 — 필터 때문에
+    //    열이 사라졌다 나타났다 하면 안 된다.
+    function mainShowsSrc() {
+        var seen = {}, n = 0;
+        for (var i = 0; i < _lastRows.length; i++) {
+            var arr = _lastRows[i].src || [];
+            for (var j = 0; j < arr.length; j++) { if (!seen[arr[j]]) { seen[arr[j]] = 1; if (++n > 1) return true; } }
+        }
+        return false;
+    }
+
     function renderTable(merged, note) {
         var box = document.getElementById('jira-table-wrap');
         if (!box) return;
@@ -434,20 +449,21 @@
         // 🔽 [2026-11-12 3차, 사용자 요청] 각 열 머리글에 정렬(클릭)·필터(🔽) — headerCell() 한
         //    곳에서 공통으로 그린다(COLUMNS 레지스트리, 위 "헤더 정렬·필터" 절). 정렬은 여기서
         //    다시 안 한다 — merged는 renderFilteredSortedTable이 이미 정렬해서 넘긴다.
+        var showSrc = mainShowsSrc();
         var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
             + '<th style="padding:7px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
             // ⚠️ [2026-11-24] 보고자 열을 넣으며 수정일을 10% 로 줄였더니 '2026-11-19 16:42' 가 두 줄로 접혀
             //    **모든 행 높이가 두 배**가 됐다(사용자 신고) — 수정일 11%·요약 28% 는 그대로(요약도 26% 면 긴 제목이 접힌다, 실측), 줄인 폭은 상태·담당자·구성·출처에서
             + headerCell('key', 7, 'left')
-            + headerCell('summary', 28, 'left')
+            + headerCell('summary', showSrc ? 28 : 37, 'left')   // 출처 열(9%)이 숨으면 그 폭은 요약으로
             + headerCell('status', 6, 'center')
             + headerCell('assignee', 7, 'center')
             + headerCell('reporter', 7, 'center')
             + headerCell('priority', 7, 'center')
             + headerCell('meta', 14, 'left')
             + headerCell('updated', 11, 'center')
-            + headerCell('src', 9, 'left')
+            + (showSrc ? headerCell('src', 9, 'left') : '')
             + '</tr></thead><tbody>'
             + merged.map(function (it, i) {
                 var c = statusColor(it.status);
@@ -462,7 +478,7 @@
                     + '<td style="padding:7px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
                     + '<td style="padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555;" title="' + esc(metaTxt) + '">' + (metaTxt ? esc(metaTxt) : '—') + '</td>'
                     + '<td style="padding:7px 8px; text-align:center; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
-                    + '<td style="padding:7px 8px;">' + srcChip(it.src) + '</td>'
+                    + (showSrc ? '<td style="padding:7px 8px;">' + srcChip(it.src) + '</td>' : '')
                     + '</tr>';
             }).join('')
             + '</tbody></table>'
