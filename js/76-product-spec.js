@@ -133,7 +133,25 @@
         'tpwr.r1.c2': ['fn:atSplit:Input Voltage:0'],          // '5V @150mA' → 5V
         'tpwr.r2.c2': ['fn:atSplit:Input Voltage:1'],          //              → 150mA
         'tgen.r4.c2': ['fn:ctrlId'],                           // 'Kortek / <품목 코드>'
-        'blu.r2.c3': ['panel:Lamp Current'],                   // LED String Current Typ (전압·전력은 칸이 모호해 안 잇는다)
+        // BLU — 라이브러리 값에 적힌 '(Typ.)'·'(Max.)' 표시로 칸을 고른다(표시 없는 전압·전력은 칸이 모호해 안 넣는다,
+        //   전류는 예전처럼 표시가 없으면 Typ). 실측: 'Lamps Power Consumption 26.5W (Typ.)' = 원본 Typ 칸 26.5
+        'blu.r2.c2': ['fn:lampLbl:Lamp Current:min'], 'blu.r2.c3': ['fn:lampLbl:Lamp Current:typ:typ'], 'blu.r2.c4': ['fn:lampLbl:Lamp Current:max'],
+        'blu.r3.c2': ['fn:lampLbl:Lamp Voltage:min'], 'blu.r3.c3': ['fn:lampLbl:Lamp Voltage:typ'], 'blu.r3.c4': ['fn:lampLbl:Lamp Voltage:max'],
+        'blu.r4.c2': ['fn:lampLbl:Lamps Power Consumption|BLU Power Consumption:min'],
+        'blu.r4.c3': ['fn:lampLbl:Lamps Power Consumption|BLU Power Consumption:typ'],
+        'blu.r4.c4': ['fn:lampLbl:Lamps Power Consumption|BLU Power Consumption:max'],
+        // A/D connection Description — AD BD 라이브러리 커넥터 칸('<품번> (<이름>) / N Pin')의 괄호가 설치지점이 아니면
+        //   그게 이름이다(실측: 출력 커넥터 'LVDS_OUT 1' 이 원본 Description 과 같았다). 설치지점(J1)뿐이면 비운다.
+        'adc.r1.c1': ['fn:adcDesc:1'],
+        'adc.r2.c1': ['fn:adcDesc:2'],
+        'adc.r3.c1': ['fn:adcDesc:3'],
+        'adc.r4.c1': ['fn:adcDesc:4'],
+        'adc.r5.c1': ['fn:adcDesc:5'],
+        'adc.r6.c1': ['fn:adcDesc:6'],
+        'adc.r7.c1': ['fn:adcDesc:7'],
+        'adc.r8.c1': ['fn:adcDesc:8'],
+        'adc.r9.c1': ['fn:adcDesc:9'],
+        'adc.r10.c1': ['fn:adcDesc:10'],
         // 컨버터 커넥터 문장 — BOM 의 설치지점·품번·제조사('J1 : <품번> (<제조사>)', 원본 모양 그대로).
         //   어느 쪽이 입력/출력인지는 PARTS 라이브러리의 입력/출력 커넥터 품번과 맞춰 가린다. 없으면 라이브러리 모델명만.
         convIn: ['fn:convConn:in:Input Connector (Model/Pins)', 'fn:connModel:Input Connector (Model/Pins)'],
@@ -148,7 +166,6 @@
         'amr.r1.c2': 'signless', 'amr.r1.c3': 'signless', 'amr.r2.c2': 'signless', 'amr.r2.c3': 'signless',
         'parts.r1.c3': 'vendor', 'parts.r2.c3': 'vendor', 'parts.r3.c3': 'vendor', 'parts.r5.c3': 'vendor',
         'tgen.r2.c2': 'vendor',
-        'blu.r2.c3': 'number',
         'parts.r4.c1': 'noneDash', 'parts.r5.c1': 'noneDash', 'parts.r5.c2': 'noneDash', 'parts.r2.c2': 'noneDash',
         'tgen.r3.c2': 'noneDash'
     };
@@ -347,6 +364,8 @@
     window.PS_BOM_CONN_SEPS = window.PS_BOM_CONN_SEPS || ['CON', 'JACK', 'SWC'];
     // 제조사 한글 이름 → 문서 표기(데이터) — **원본 사양서에서 확인된 것만**. 없는 이름은 그대로 둔다.
     window.PS_MAKER_EN = window.PS_MAKER_EN || { '연호전자': 'YEON-HO', '후성테크': 'FUSUNG', 'CT 전자': 'CT', 'CT전자': 'CT' };
+    // 설치지점 이름 모양(데이터) — 라이브러리 커넥터 괄호가 이 모양이면 '이름'이 아니라 자리다
+    window.PS_DESIGNATOR_RE = window.PS_DESIGNATOR_RE || /^(J|SW|CN|P|U)\d+([~,\-]\s*\d+)?$/i;
     // PARTS 라이브러리에서 그대로 못 찾을 때 떼어 볼 이름 꼬리(데이터) — 끝 괄호(패널 리비전 '(B10)' 등)
     window.PS_LIB_NAME_TRIM = window.PS_LIB_NAME_TRIM || [/\s*\([^()]*\)\s*$/];
     var _maker = function (m) {
@@ -354,6 +373,19 @@
         return t[x] || t[x.replace(/\s+/g, '')] || x;
     };
     var _alnum = function (v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+    // 라이브러리 커넥터 글을 항목으로 — ';' ',' ' / ' 로 자르되 **괄호 안은 자르지 않는다**('(6pin,Inverter)')
+    var _connEntries = function (text) {
+        var s = String(text || ''), out = [], cur = '', depth = 0;
+        for (var i = 0; i < s.length; i++) {
+            var ch = s[i];
+            if (ch === '(') depth++;
+            if (ch === ')') depth = Math.max(0, depth - 1);
+            var cut = depth === 0 && (ch === ';' || ch === ',' || (ch === '/' && s[i - 1] === ' ' && s[i + 1] === ' '));
+            if (cut) { out.push(cur); cur = ''; } else cur += ch;
+        }
+        out.push(cur);
+        return out.map(function (x) { return x.trim(); }).filter(Boolean);
+    };
     var _prefixSame = function (a, b) { var x = _alnum(a), y = _alnum(b); return !!(x && y && (x.indexOf(y) === 0 || y.indexOf(x) === 0)); };
     // 그 보드 바로 아래 커넥터들 — null = BOM 없음 · [] = 보드가 없거나 커넥터 없음
     var _bomConnectors = function (cat) {
@@ -417,6 +449,46 @@
         var card = ((window.tabData || {}).projectModels || []).filter(function (m) { return m && m.unitId === (window.mcActiveUnit || ''); })[0];
         return ((card && card.materials) || []).filter(function (m) { return m && m.category === cat && !_isNone(m.description || m.ktkPn); })[0] || null;
     };
+    // 👥 같은 이름 다른 리비전 기록으로 빈 칸 메우기 — 2026-11-24 실측: BOM 코드로 정확히 찾은 AD 보드 기록(R6)은
+    //    커넥터 칸이 전부 '-' 이고, 같은 이름의 다른 리비전 하나에만 적혀 있었다. 빈 칸만, 형제들이 **한 값으로
+    //    일치할 때만** 빌린다(실측: 같은 이름 형제끼리 값이 다른 칸이 12% — 다르면 고르지 않는다). 빌린 칸은
+    //    `_psFill[칸] = 그 형제 코드` 로 남겨 출처에 보인다. 캐시 객체는 안 건드리고 겉 객체를 만든다.
+    var PS_SIB_SKIP = /^(Item Code|Item Description|Revision|Note|Expected Price|Issue Date|Datasheet Version)$/;
+    var _libMerged = typeof WeakMap === 'function' ? new WeakMap() : null;
+    var _nameKey = function (x) {
+        var n = (x.specs && x.specs['Part Name']) || String(x.model || '').replace(/^\d{6}_/, '');
+        return String(n).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    };
+    var _withSiblings = function (rec, items) {
+        if (_libMerged && _libMerged.has(rec)) return _libMerged.get(rec);
+        var key = _nameKey(rec), out = rec;
+        var sibs = key ? (items || []).filter(function (x) { return x !== rec && x && x.specs && _nameKey(x) === key; }) : [];
+        if (sibs.length) {
+            var specs = {}, fill = {}, f;
+            for (f in rec.specs) specs[f] = rec.specs[f];
+            var fields = {};
+            sibs.forEach(function (x) { for (var k in x.specs) fields[k] = 1; });
+            for (f in fields) {
+                if (PS_SIB_SKIP.test(f) || !_isNone(specs[f])) continue;
+                var vals = [], code = '';
+                sibs.forEach(function (x) {
+                    var v = String(x.specs[f] == null ? '' : x.specs[f]).trim();
+                    if (_isNone(v)) return;
+                    if (vals.indexOf(v) < 0) vals.push(v);
+                    if (!code) code = String(x.specs['Item Code'] || x.model || '').trim();
+                });
+                if (vals.length === 1) { specs[f] = vals[0]; fill[f] = code; }
+            }
+            if (Object.keys(fill).length) { out = Object.create(rec); out.specs = specs; out._psFill = fill; }
+        }
+        if (_libMerged) _libMerged.set(rec, out);
+        return out;
+    };
+    // 출처 꼬리 — 꼬리 떼고 찾았으면 '(찾은 이름)', 형제에게 빌렸으면 '← 같은 이름 <코드>'
+    var _libSrcTail = function (rec, field) {
+        if (!rec) return '';
+        return (rec._psFill && rec._psFill[field] ? ' ← ' + _t('같은 이름 ', 'same name ') + rec._psFill[field] : '');
+    };
     var _libRec = function (ctx, which) {
         var L = LIB[which], cache = window._epLibCache || {};
         var lib = which === 'panel' ? cache.panel : cache[L.type];
@@ -445,9 +517,11 @@
         if (mat) { if (mat.ktkPn) names.push(String(mat.ktkPn).trim()); if (mat.description) names.push(mat.description); }
         if (!_isNone(row[L.pl])) names.push(String(row[L.pl]).trim());
         if (!names.length) { var md = _matDesc(ctx, L.cat); if (md) names.push(md); }
+        var items = which === 'panel' ? lib.panels : lib.items;
         var find = function (nm) {
-            return which === 'panel' ? (window.findPanelInLibrary && window.findPanelInLibrary(lib, nm))
-                                     : (window.findElecPartInLibrary && window.findElecPartInLibrary(lib, nm));
+            var x = which === 'panel' ? (window.findPanelInLibrary && window.findPanelInLibrary(lib, nm))
+                                      : (window.findElecPartInLibrary && window.findElecPartInLibrary(lib, nm));
+            return x && x.specs ? _withSiblings(x, items) : x;
         };
         for (var i = 0; i < names.length; i++) {
             var rec = find(names[i]);
@@ -605,6 +679,71 @@
             return { v: window.PS_TEXT.scope.replace('{inch}', inch).replace('{model}', model),
                      src: 'Summary ▸ KTK ' + _t('모델명·인치', 'model/inch') };
         },
+        // BLU 값을 '(Typ.)'·'(Max.)'·'(Min.)' 표시로 칸에 — 'a: 필드1|필드2 : 원하는 칸 : 표시 없을 때의 칸'
+        lampLbl: function (ctx, a) {
+            var rec = _libRec(ctx, 'panel');
+            if (!rec) return { v: '', src: '' };
+            var fields = a[0].split('|'), want = a[1], dflt = a[2] || '';
+            for (var i = 0; i < fields.length; i++) {
+                var raw = String(rec.specs[fields[i]] || '').trim();
+                if (_isNone(raw)) continue;
+                var segs = raw.split(/\s*\/\s*/);
+                for (var j = 0; j < segs.length; j++) {
+                    var lm = segs[j].match(/\(\s*(typ|max|min)/i);
+                    var lbl = lm ? lm[1].toLowerCase() : (segs.length === 1 ? dflt : '');
+                    if (lbl !== want) continue;
+                    var n = segs[j].match(/-?\d[\d,]*(?:\.\d+)?/);
+                    if (n) return { v: n[0], src: 'PARTS ▸ PANEL' + (rec._psVia ? ' (' + rec._psVia + ')' : '') + ' ▸ ' + fields[i] + _libSrcTail(rec, fields[i]) };
+                }
+            }
+            return { v: '', src: '' };
+        },
+        // A/D connection Description — 그 줄 BOM 품번과 같은 라이브러리 커넥터의 괄호 이름(설치지점이 아닐 때만)
+        adcDesc: function (ctx, a) {
+            // 그 줄 Symbol 을 사람이 적었거나 불러왔으면 **그 설치지점**의 BOM 줄로 — 자리 순서로 집으면
+            //   불러온 문서(원본 줄 순서)와 BOM 정렬 순서가 달라 남의 커넥터 이름이 들어간다(실측)
+            var ownSym = window._docFieldOwn ? window._docFieldOwn(FORM_ID, 'adc.r' + a[0] + '.c0') : undefined;
+            var r;
+            if (ownSym !== undefined && ownSym !== null && String(ownSym).trim() !== '') r = _adcFind(ownSym);
+            else { var rows = _adcRows(); r = rows && rows[+a[0] - 1]; }
+            if (!r || !r.part) return { v: '', src: '' };
+            var rec = _libRec(ctx, 'adbd');
+            if (!rec) return { v: '', src: '' };
+            // ⚠️ 라이브러리 커넥터 칸은 **보드마다 적는 법이 다르다**(실측 8가지 넘음):
+            //   'PART (이름) / N Pin' · '이름: PART' · '이름 (PART)' · 'CN2 PART(6pin,이름)' · 'J302 (PART / 4 Pins)'
+            //   그래서 모양을 박지 않고, 항목에서 품번·설치지점·괄호 안 핀 수를 걷어 내고 남은 글을 이름으로 본다.
+            //   같은 품번이 이름 다른 두 곳에 있으면(전원 4핀·OSD 4핀) **고르지 않는다** — 설치지점이 적혀 있어 맞을 때만.
+            var syms = (r.all || []).map(function (x) { return String(x).toUpperCase(); });
+            var keys = Object.keys(rec.specs).filter(function (k) { return /connector/i.test(k); });
+            var cands = [];
+            keys.forEach(function (k) {
+                _connEntries(rec.specs[k]).forEach(function (e) {
+                    var toks = e.split(/[\s(),:\/]+/).filter(Boolean);
+                    var pt = toks.filter(function (t) { return _alnum(t).length >= 5 && _prefixSame(t, r.part); })[0];
+                    if (!pt) return;
+                    var des = toks.filter(function (t) { return window.PS_DESIGNATOR_RE.test(t); }).map(function (t) { return t.toUpperCase(); });
+                    if (des.length && !des.some(function (d) { return syms.indexOf(d) >= 0; })) return;   // 다른 자리 것
+                    var name = e.split(pt).join(' ')
+                        .replace(/\(([^)]*)\)/g, function (all, inner) { return ' (' + inner.replace(/\b\d+\s*pins?\b/gi, ' ') + ') '; })
+                        .split(/\s+/).filter(function (t) { return !window.PS_DESIGNATOR_RE.test(t.replace(/[(),:]/g, '')); }).join(' ')
+                        .replace(/[()]/g, ' ').replace(/\s*[,:]\s*/g, ' ').replace(/\s+/g, ' ').trim();
+                    if (!/[A-Za-z가-힣]{2,}/.test(name.replace(/\bpins?\b/gi, ''))) return;               // 이름 없음(핀 수뿐)
+                    cands.push({ name: name, key: k, sym: des.length > 0 });
+                });
+            });
+            var bySym = cands.filter(function (c) { return c.sym; });
+            var pick = bySym.length === 1 ? bySym[0] : null;
+            // 같은 품번이 BOM 에 다른 자리로 또 있으면(J1·J7 둘 다 4핀) 설치지점 없는 이름은 어느 쪽 것인지 모른다
+            var allRows = _adcRows() || [];
+            var twins = allRows.filter(function (x) { return x.sym !== r.sym && x.part && _prefixSame(x.part, r.part); }).length;
+            if (!pick && twins) return { v: '', src: cands.length ? _t('BOM 에 같은 품번이 다른 자리에도 있어 고르지 않음', 'same part at other positions') : '' };
+            if (!pick) {
+                var names = cands.map(function (c) { return c.name; }).filter(function (n, i, arr) { return arr.indexOf(n) === i; });
+                if (names.length === 1) pick = cands[0];
+                else if (names.length > 1) return { v: '', src: _t('PARTS AD BOARD 에 이 품번이 이름 다른 곳에 ' + names.length + '번 — 고르지 않음', 'ambiguous in PARTS') };
+            }
+            return pick ? { v: pick.name, src: 'PARTS ▸ AD BOARD ▸ ' + pick.key + _libSrcTail(rec, pick.key) } : { v: '', src: '' };
+        },
         // 'Consumption' — Customer SPEC 소비전력(첫 줄 = LCD Monitor, 디스플레이만)의 숫자만 원본 문장 모양으로
         pwrCons: function (ctx) {
             //   ⚠️ Customer SPEC 은 이 항목을 하위 줄로 나눠 적고(LCD Monitor·Light·Total·Touch) 라벨은 **하위 이름**이다(js/66)
@@ -718,7 +857,7 @@
         if (LIB[kind]) {
             var rec = _libRec(ctx, kind);
             var lv = rec ? String(rec.specs[arg] || '').trim() : '';
-            return { v: lv, src: 'PARTS ▸ ' + LIB[kind].cat + (rec && rec._psVia ? ' (' + rec._psVia + ')' : '') + ' ▸ ' + arg };
+            return { v: lv, src: 'PARTS ▸ ' + LIB[kind].cat + (rec && rec._psVia ? ' (' + rec._psVia + ')' : '') + ' ▸ ' + arg + _libSrcTail(rec, arg) };
         }
         if (kind === 'fn') {
             var a = arg.split(':');

@@ -124,6 +124,19 @@ window.__psTest = async function (opt) {
         check(adc.join(' / ') === 'J1|ABC200-04|YEON-HO / J3|KUSB99|어느전자 / J7|ABC200-04|YEON-HO / SW1~4|9999SB9|CT',
               'BOM 커넥터로 A/D connection 표 (' + adc.join(' / ') + ')');
         check(pB.values.convIn === 'J1 : 11111WR-12 (YEON-HO)', '컨버터 입력 커넥터 문장 = BOM 설치지점·품번·제조사 (' + pB.values.convIn + ')');
+        // 🏷 A/D Description — AD BD 라이브러리 커넥터 글(보드마다 적는 법이 다르다)에서 이름만.
+        //   BOM 코드로 찾은 기록(777010)은 커넥터 칸이 비어 있고 **같은 이름의 다른 리비전**(777012)에만 있다(실측 모양)
+        window._epLibCache.adbd.items.push({ model: '777012_ADB-TEST', specs: { 'Item Code': '777012', 'Part Name': 'ADB-TEST', Brand: 'Shown Co',
+            'Control Connector': '6 Pin Inverter control: ABC200-06; EXT OSD KEY: ABC200-04',
+            'Output Connector (Model/Pins)': 'KUSB99 (USB PORT) / 4 Pin' } });
+        var ad0 = window._epLibCache.adbd.items[0];                     // 형제 병합 결과는 기록 객체마다 기억된다 —
+        window._epLibCache.adbd.items[0] = { model: ad0.model, specs: ad0.specs };   // 라이브러리를 새로 받은 것처럼 새 객체로
+        var cD = window._dgCollect(), H = window.DOC_AUTO_HOOKS.ps;
+        var dJ3 = H(cD, 'adc.r2.c1'), dJ1 = H(cD, 'adc.r1.c1');
+        check(dJ3.v === 'USB PORT' && /같은 이름 777012/.test(dJ3.src), 'Description = 라이브러리 괄호 이름 + 다른 리비전에서 빌림 (' + dJ3.v + ' / ' + dJ3.src + ')');
+        check(dJ1.v === '', '같은 품번이 BOM 두 자리(J1·J7)에 있으면 설치지점 없는 이름을 안 고른다 (' + dJ1.v + ' / ' + dJ1.src + ')');
+        window._epLibCache.adbd.items.pop();
+        window._epLibCache.adbd.items[0] = ad0;
         // 대조 — 사람이 적은(불러온) 값이 BOM 과 다르면 칸 아래 경고, 같으면 조용
         var dX = window._docDataOf('product-spec').fields;
         dX['adc.r1.c0'] = 'J1'; dX['adc.r2.c0'] = 'SW1~4';
@@ -143,6 +156,13 @@ window.__psTest = async function (opt) {
               '이름 꼬리 "(B10)" 떼고 라이브러리 기록 + 출처에 찾은 이름 (' + pT.values['blu.r2.c3'] + ', ' + sT.src + ')');
         check(!window._epLibCache.panel.panels[0]._psVia, '꼬리 떼고 찾아도 라이브러리 캐시 객체는 그대로');
         window.tabData.projectModels[0].materials[0].description = 'PNL-TEST-01B';
+        // 💡 BLU — 값에 적힌 (Typ.)·(Max.) 표시로 칸을 고른다, 표시 없는 전압은 안 넣는다
+        var pSp = window._epLibCache.panel.panels[0].specs;
+        pSp['Lamps Power Consumption'] = '26.5W (Typ.) / 27.8W (Max.)'; pSp['Lamp Voltage'] = '49V';
+        var cB = window._dgCollect();
+        var bl = ['blu.r4.c3', 'blu.r4.c4', 'blu.r4.c2', 'blu.r3.c3'].map(function (k) { return window.DOC_AUTO_HOOKS.ps(cB, k).v; });
+        check(bl.join('|') === '26.5|27.8||', 'BLU 전력 Typ/Max 표시대로, 표시 없는 전압은 비움 (' + bl.join('|') + ')');
+        delete pSp['Lamps Power Consumption']; delete pSp['Lamp Voltage'];
         window._epLibCache = libSaved;
         // 🔌 전원 — Customer SPEC 의 소비전력(하위 줄 'LCD Monitor')·입력 커넥터('/' 뒤, 핀 수 표기 떼기)
         var bs0 = window.tabData.briefSpec;
