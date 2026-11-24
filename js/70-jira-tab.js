@@ -152,7 +152,7 @@
 
     function srcChip(src) {
         return src.map(function (s) {
-            return '<span style="font-size:10px; padding:1px 5px; border-radius:8px; background:#f0f0f0; color:#777; margin-right:2px;">'
+            return '<span style="' + window._uiBadgeStyle() + ' background:#f0f0f0; color:#777; margin-right:2px;">'
                 + (SRC_ICONS[s] || '•') + ' ' + (SRC_LABELS[s] || s) + '</span>';
         }).join('');
     }
@@ -516,7 +516,7 @@
                     + '<td style="padding:6px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
                     + '<td style="padding:6px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
                     + '<td style="padding:6px 8px;">' + esc(it.summary) + '</td>'
-                    + '<td style="padding:6px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
+                    + '<td style="padding:6px 8px; text-align:center;"><span style="' + window._uiBadgeStyle() + ' background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
                     + '<td style="padding:6px 8px; text-align:center;">' + esc(it.assignee || '—') + '</td>'
                     + '<td style="padding:6px 8px; text-align:center;">' + esc(it.reporter || '—') + '</td>'
                     + '<td style="padding:6px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
@@ -1012,7 +1012,7 @@
                     + '<td style="' + td + ' color:#888;">' + esc(proj) + '</td>'
                     + '<td style="' + td + ' font-weight:bold; color:#00707d;">' + esc(it.key) + '</td>'
                     + '<td style="' + td + '" title="' + esc(it.summary) + '">' + esc(it.summary) + '</td>'
-                    + '<td style="padding:6px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
+                    + '<td style="padding:6px 8px; text-align:center;"><span style="' + window._uiBadgeStyle() + ' background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
                     + '<td style="' + td + ' text-align:center; color:' + (it.resolution ? '#1f7a3d' : '#bbb') + ';">' + esc(it.resolution || '—') + '</td>'
                     + '<td style="' + td + ' text-align:center;">' + esc(it.assignee || '—') + '</td>'
                     + '<td style="' + td + ' text-align:center;">' + esc(it.reporter || '—') + '</td>'

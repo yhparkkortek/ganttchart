@@ -232,6 +232,12 @@ ${mailText}`;
     window._uiSelectStyle = function (active) {
         return 'padding:0 6px; border:1px solid ' + (active ? ACC_LN : '#cfd8e3') + '; background:' + (active ? ACC_BG : '#fff') + ';' + _UI_BOX;
     };
+    /** 🏷 [2026-11-24 "배지 통일"] 작은 배지(상태·출처·담당자 표시) 모양 한 벌 — 크기·둥글기만, 색은 부르는 쪽이 붙인다.
+     *  실측: JIRA 상태 11px·패딩 2/8·둥글기 10(19px) · JIRA 출처 10px·1/5·8(15px) · Project Review 담당자 10.5px·1/6·8(16px) 로 제각각이었다.
+     *  간트 업무명 안 구분 배지(9px 드롭다운)는 조밀한 간트용이라 예외. */
+    window._uiBadgeStyle = function () {
+        return 'display:inline-block; font-size:10.5px; line-height:16px; padding:0 7px; border-radius:8px; white-space:nowrap; vertical-align:middle;';
+    };
     /** 입력칸(검색 등) — 칩과 같은 높이. */
     window._uiInputStyle = function () {
         return 'padding:0 9px; border:1px solid #cfd8e3; background:#fff;' + _UI_BOX;
