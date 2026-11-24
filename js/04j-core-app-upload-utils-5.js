@@ -1550,7 +1550,7 @@
         }
 
         const _ibxSubTexts = {
-            'inbox-subqueue-header':     { ko:'📬 미분류 / 신규발신자 / 자동폐기', en:'📬 Unclassified / New Senders / Auto-discarded' },
+            'inbox-subqueue-header':     { ko:'📬 미분류 / 신규발신자', en:'📬 Unclassified / New Senders' },
             'inbox-unmatched-label':     { ko:'📭 미분류',              en:'📭 Unclassified' },
             'inbox-newsender-label':     { ko:'👤 신규발신자',          en:'👤 New Sender' },
             'inbox-discarded-label':     { ko:'🗑️ 자동폐기',            en:'🗑️ Discarded' },

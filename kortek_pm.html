@@ -2177,7 +2177,7 @@
                 <div style="margin-bottom:8px; padding:0 2px;">
                     <span id="topic-contamination-badge" style="font-size:10px;color:#aaa;"></span>
                 </div>
-                <div id="inbox-subqueue-header" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
+                <div id="inbox-subqueue-header" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자</div>
                 <!-- 💡 [2026-09-06] 각 큐를 "초기화"하는 버튼이 여기 따로 있었는데, 모달을 열면 안쪽
                      하단에 있는 "🗑️ 일괄삭제" 버튼과 완전히 동일한 동작(_msQueueClearAll → 결국
                      _msQueueDeleteAll과 같은 로직)이라 중복이었음 — 제거하고 모달 열기 버튼만 남김.
@@ -2191,7 +2191,8 @@
                     <button onclick="window.msShowNewSenderModal()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s, border-color .15s;">
                         <span id="inbox-newsender-label">👤 신규발신자</span> <span id="ms-newsender-count-2">0</span><span id="inbox-newsender-unit">건</span>
                     </button>
-                    <button onclick="window.msShowDiscardedModal()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s, border-color .15s;">
+                    <!-- 🙈 [2026-11-24 사용자 결정] 자동폐기는 안정화 — 검토 버튼만 숨긴다(카운트 id 가 있어 지우지 않음). 되돌리기: display:none 제거 -->
+                    <button onclick="window.msShowDiscardedModal()" data-hidden-by-user="1" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';" style="display:none; flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s, border-color .15s;">
                         <span id="inbox-discarded-label">🗑️ 자동폐기</span> <span id="ms-discarded-count-2">0</span><span id="inbox-discarded-unit">건</span>
                     </button>
                 </div>
