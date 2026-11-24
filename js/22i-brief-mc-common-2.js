@@ -1089,44 +1089,39 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🔍 [2026-11-24 사용자 요청] M.C Table 검색 — 프로젝트 불러오기·Project list·주소록·PARTS·BOM 과 **같은 규칙**
+// 🔍 [2026-11-24 사용자 요청] 입력칸 표 검색 — M.C Table · Customer SPEC
+//    프로젝트 불러오기·Project list·주소록·PARTS·BOM 과 **같은 규칙**
 //    (js/04a `_searchTokens`/`_searchMatchAll`/`_searchMatchAny`: 낱말 AND·공백/기호 무시).
-//    한 행 = TYPE·ITEM·GROUP·P/N·Specification·금액·Note 입력칸(TYPE 은 위 행에서 이어받은 값이 칸에 들어 있다).
-//    ⚠️⚠️ 행을 **지우지 않는다** — 저장(`_readRowsFromTbody('mctable-body')`)이 화면 행을 다시 읽어 가므로
-//       지우면 검색에 안 걸린 항목이 저장 때 사라진다(주소록과 같은 함정). 클래스로만 숨긴다
+//    두 표 모두 "한 행 = data-field 입력칸들"이라 설치기 하나(`_tblSearchInstall`)를 같이 쓴다 —
+//    표마다 다른 건 `TBL_SEARCH_TABLES`(데이터) 한 곳뿐. 같은 꼴의 표가 늘면 여기 한 줄.
+//    ⚠️⚠️ 행을 **지우지 않는다** — 저장(`_readRowsFromTbody`)이 화면 행을 다시 읽어 가므로 지우면 검색에
+//       안 걸린 항목이 저장 때 사라진다(주소록과 같은 함정). 클래스로만 숨긴다
 //       (`.parts-search-hide/-show`, styles.css — PARTS 와 공용). 빈 행 자동 숨김(인라인 display)도 안 건드린다.
 //    ⚠️ 표는 `populateTabData` 가 통째로 다시 그리므로 tbody 의 자식 교체를 지켜보다가 다시 건다.
-//    SUBTOTAL/합계 행(`mc-summary-row`)은 계산 줄이라 검색 중엔 숨긴다.
+//    `skipRow` 에 맞는 줄(M.C 의 SUBTOTAL·합계)은 계산 줄이라 검색 중엔 숨긴다.
 // ─────────────────────────────────────────────────────────────────────────────
+window.TBL_SEARCH_TABLES = [
+    { key: 'mc', tbodyId: 'mctable-body', mount: { into: 'mc-normal-section' },
+      skipRow: /(^|\s)mc-summary-row(\s|$)/,
+      ko: '🔍 검색 — TYPE·ITEM·GROUP·P/N·Spec·Note…', en: '🔍 Search — type, item, group, P/N, spec, note…' },
+    { key: 'bs', tbodyId: 'briefspec-body', mount: { before: 'briefspec-table-scroll' },
+      ko: '🔍 검색 — 항목·값·Note…', en: '🔍 Search — item, value, note…' }
+];
 (function () {
     var _en = function () { return window._currentLang === 'en'; };
-    window._mcSearchTerm = '';
+    window._tblSearchTerms = window._tblSearchTerms || {};
+    var cfgOf = function (key) {
+        for (var i = 0; i < window.TBL_SEARCH_TABLES.length; i++) if (window.TBL_SEARCH_TABLES[i].key === key) return window.TBL_SEARCH_TABLES[i];
+        return null;
+    };
 
-    function ensureBar() {
-        if (document.getElementById('mc-search-input')) return true;
-        var sec = document.getElementById('mc-normal-section');
-        if (!sec) return false;
-        var bar = document.createElement('div');
-        bar.className = 'tbl-search-bar';
-        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:6px;';
-        bar.innerHTML = '<input id="mc-search-input" type="search" autocomplete="off" style="width:240px;'
-            + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
-            + '<span id="mc-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
-        sec.insertBefore(bar, sec.firstChild);
-        var inp = bar.querySelector('input');
-        inp.placeholder = _en() ? '🔍 Search — type, item, group, P/N, spec, note…' : '🔍 검색 — TYPE·ITEM·GROUP·P/N·Spec·Note…';
-        inp.title = _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 행에 낱말이 모두 있으면 걸립니다';
-        var t = null;
-        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { window._mcSearchTerm = inp.value; window._mcSearchApply(); }, 150); };
-        inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._mcSearchTerm = ''; window._mcSearchApply(); } };
-        return true;
-    }
-
-    window._mcSearchApply = function () {
-        var tbody = document.getElementById('mctable-body');
-        var countEl = document.getElementById('mc-search-count');
+    window._tblSearchApply = function (key) {
+        var cfg = cfgOf(key);
+        if (!cfg) return;
+        var tbody = document.getElementById(cfg.tbodyId);
+        var countEl = document.getElementById(key + '-search-count');
         if (!tbody) return;
-        var toks = window._searchTokens ? window._searchTokens(window._mcSearchTerm) : [];
+        var toks = window._searchTokens ? window._searchTokens(window._tblSearchTerms[key]) : [];
         var rows = Array.prototype.slice.call(tbody.rows);
         rows.forEach(function (tr) {
             tr.classList.remove('parts-search-hide', 'parts-search-show');
@@ -1135,9 +1130,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!toks.length) { if (countEl) countEl.textContent = ''; return; }
         var total = 0, shown = 0;
         rows.forEach(function (tr) {
-            if (/(^|\s)mc-summary-row(\s|$)/.test(tr.className || '')) { tr.classList.add('parts-search-hide'); return; }
+            if (cfg.skipRow && cfg.skipRow.test(tr.className || '')) { tr.classList.add('parts-search-hide'); return; }
             var inputs = Array.prototype.slice.call(tr.querySelectorAll('input[data-field]'));
-            if (!inputs.length) return;
+            if (!inputs.length) return;                      // '첫 행 추가' 같은 안내 줄
             total++;
             var hit = window._searchMatchAll(inputs.map(function (el) { return el.value || ''; }).join(' \u0001 '), toks);
             tr.classList.add(hit ? 'parts-search-show' : 'parts-search-hide');   // 자동 숨김 빈 행도 걸리면 보인다
@@ -1150,18 +1145,37 @@ document.addEventListener('DOMContentLoaded', function() {
         if (countEl) countEl.textContent = shown + ' / ' + total + (_en() ? ' rows' : '행');
     };
 
-    function boot() {
-        if (!ensureBar()) return;
-        var tbody = document.getElementById('mctable-body');
-        if (tbody && window.MutationObserver) {
+    window._tblSearchInstall = function (cfg) {
+        if (document.getElementById(cfg.key + '-search-input')) return true;
+        var host = document.getElementById(cfg.mount.into || cfg.mount.before);
+        var tbody = document.getElementById(cfg.tbodyId);
+        if (!host || !tbody) return false;
+        var bar = document.createElement('div');
+        bar.className = 'tbl-search-bar';
+        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:6px;';
+        bar.innerHTML = '<input id="' + cfg.key + '-search-input" type="search" autocomplete="off" style="width:240px;'
+            + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
+            + '<span id="' + cfg.key + '-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+        if (cfg.mount.into) host.insertBefore(bar, host.firstChild);
+        else host.parentNode.insertBefore(bar, host);
+        var inp = bar.querySelector('input');
+        inp.placeholder = _en() ? cfg.en : cfg.ko;
+        inp.title = _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 행에 낱말이 모두 있으면 걸립니다';
+        var t = null;
+        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { window._tblSearchTerms[cfg.key] = inp.value; window._tblSearchApply(cfg.key); }, 150); };
+        inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._tblSearchTerms[cfg.key] = ''; window._tblSearchApply(cfg.key); } };
+        if (window.MutationObserver) {
             var pending = false;
             new MutationObserver(function () {
-                if (pending || !String(window._mcSearchTerm || '').trim()) return;
+                if (pending || !String(window._tblSearchTerms[cfg.key] || '').trim()) return;
                 pending = true;
-                setTimeout(function () { pending = false; window._mcSearchApply(); }, 0);
+                setTimeout(function () { pending = false; window._tblSearchApply(cfg.key); }, 0);
             }).observe(tbody, { childList: true });
         }
-    }
+        return true;
+    };
+
+    function boot() { window.TBL_SEARCH_TABLES.forEach(function (cfg) { window._tblSearchInstall(cfg); }); }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
 })();

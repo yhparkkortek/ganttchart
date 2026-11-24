@@ -207,10 +207,10 @@ const reset = window._driveModalSearchState.q === '';
   Object.defineProperty(broken, '_searchToks', { value: W._searchTokens('panel'), enumerable: false, writable: true, configurable: true });
   chk(W._bomVisibleRows(broken).map(r => r.IDNRK).join(',') === 'X1,X3', '[BOM] 계층 깨진 모드도 걸린 행만');
 }
-// ── M.C Table(js/22i _mcSearchApply) — 진짜 소스를 잘라 돌린다(DOM 만 스텁) ──
+// ── M.C Table · Customer SPEC(js/22i 공용 설치기 _tblSearchApply) — 진짜 소스를 잘라 돌린다(DOM 만 스텁) ──
 {
   const s22i = fs.readFileSync(path.join(__dirname, '..', 'js', '22i-brief-mc-common-2.js'), 'utf8');
-  const ma = s22i.indexOf('// 🔍 [2026-11-24 사용자 요청] M.C Table 검색');
+  const ma = s22i.indexOf('// 🔍 [2026-11-24 사용자 요청] 입력칸 표 검색');
   if (ma < 0) { console.log('FAIL js/22i 소스 자르기'); process.exit(1); }
   const cl = () => { const s = new Set(); return { add: (...c) => c.forEach(x => s.add(x)), remove: (...c) => c.forEach(x => s.delete(x)), has: c => s.has(c) }; };
   const inp = (field, value, type) => ({ value, type: type || 'text', dataset: { field }, classList: cl() });
@@ -221,11 +221,17 @@ const reset = window._driveModalSearchState.q === '';
     mk('', [['type', '회로'], ['item', 'Harness'], ['group', 'LVDS'], ['pn', ''], ['spec', '40P 300mm'], ['note', '']]),
     mk('mc-summary-row', [['x', 'SUBTOTAL']]),
     mk('', [['type', '기구'], ['item', 'Back cover'], ['group', 'SECC'], ['pn', 'P-001', 'hidden'], ['spec', ''], ['note', '도금 확인']])];
-  const ids = { 'mctable-body': { rows }, 'mc-search-count': { textContent: '' } };
+  // Customer SPEC 표(TYPE·TYPE2·값·Note) — 같은 설치기, 다른 tbody
+  const bsRows = [
+    mk('', [['type', 'Optical'], ['sub', 'Brightness(Centre. Min)'], ['modelA', '1000 nit'], ['note', '']]),
+    mk('', [['type', 'Optical'], ['sub', 'Color coordinate(x/y)'], ['modelA', '0.305 / 0.335'], ['note', '']]),
+    mk('', [['type', 'Interface'], ['sub', 'F/W Version'], ['modelA', 'V1.02'], ['note', 'EDID 확인']])];
+  const ids = { 'mctable-body': { rows }, 'mc-search-count': { textContent: '' },
+                'briefspec-body': { rows: bsRows }, 'bs-search-count': { textContent: '' } };
   const W = { _currentLang: 'ko' }; new Function('window', helpers)(W);
   const doc = { readyState: 'complete', getElementById: id => ids[id] || null, createElement: () => ({}) };
   new Function('window', 'document', 'setTimeout', 'clearTimeout', s22i.slice(ma))(W, doc, f => f(), () => {});
-  const vis = q => { W._mcSearchTerm = q; W._mcSearchApply(); return rows.map((r, i) => r.classList.has('parts-search-hide') ? null : i).filter(i => i !== null).join(','); };
+  const vis = q => { W._tblSearchTerms.mc = q; W._tblSearchApply('mc'); return rows.map((r, i) => r.classList.has('parts-search-hide') ? null : i).filter(i => i !== null).join(','); };
   [['', '0,1,2,3', '빈 검색 = 전부(합계 행 포함)'],
    ['회로 lvds', '1', 'TYPE(이어받은 값)+GROUP AND'],
    ['rtd 2556', '0', '기호·공백 무시'],
@@ -240,5 +246,17 @@ const reset = window._driveModalSearchState.q === '';
   chk(!rows[3].inputs[3].classList.has('search-hit'), '[M.C] 숨은 입력칸엔 강조 안 함');
   vis('');
   chk(!rows[1].classList.has('parts-search-show') && !rows[1].inputs[2].classList.has('search-hit'), '[M.C] 검색 지우면 원상복구');
+  // Customer SPEC
+  const bsVis = q => { W._tblSearchTerms.bs = q; W._tblSearchApply('bs'); return bsRows.map((r, i) => r.classList.has('parts-search-hide') ? null : i).filter(i => i !== null).join(','); };
+  [['', '0,1,2', '빈 검색 = 전부'],
+   ['optical color', '1', 'TYPE+TYPE2 AND'],
+   ['0.305 0.335', '1', '색좌표 값 낱말 둘'],
+   ['fw version', '2', '기호(/) 무시'],
+   ['edid', '2', 'Note 도 검색'],
+   ['optical edid', '', 'AND — 한 행에 둘 다 없음']
+  ].forEach(([q, want, label]) => { const got = bsVis(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Customer SPEC] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  bsVis('optical');
+  chk(ids['bs-search-count'].textContent === '2 / 3행' && ids['mc-search-count'].textContent === '', '[Customer SPEC] 개수는 제 표에만 ' + ids['bs-search-count'].textContent);
+  chk(W._tblSearchTerms.mc === '' && rows.every(r => !r.classList.has('parts-search-hide')), '[Customer SPEC] M.C 표 검색 상태와 섞이지 않음');
 }
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

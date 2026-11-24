@@ -2706,3 +2706,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 /* 🔍 [2026-11-24] M.C Table 검색(js/22i _mcSearchApply) — 걸린 입력칸 강조. 행 숨김은 위 .parts-search-hide/-show 를 같이 쓴다. */
 #mctable-body input.search-hit { background-color:#fff3bf !important; }
 @media print { .tbl-search-bar { display:none !important; } }
+
+/* 🔍 [2026-11-24] Customer SPEC 검색 — M.C 와 같은 설치기(js/22i _tblSearchInstall). */
+#briefspec-body input.search-hit { background-color:#fff3bf !important; }
