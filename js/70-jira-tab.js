@@ -248,7 +248,15 @@
     // 순서를 사람이 머리글을 누르기 전까지는 흩뜨리지 않는다).
     function viewRows(tbl) {
         var S = tblState(tbl);
-        var view = S.rows().filter(function (it) { return passesColFilters(it, tbl); });
+        // 🔍 [2026-11-24 사용자 요청] 표 전체 찾기 — 다른 페이지와 같은 규칙(js/04a: 낱말 AND·공백/기호 무시).
+        //    낱말이 한 이슈의 서로 다른 열(키·요약·상태·담당자·보고자·구성…)에 있어도 걸린다.
+        //    ⚠️ 서버를 다시 부르지 않는다 — 이미 받은 연결 이슈만 거른다(JIRA 전체는 헤더 🔍 전체 검색).
+        var qToks = (S.q && window._searchTokens) ? window._searchTokens(S.q) : [];
+        var view = S.rows().filter(function (it) {
+            if (!passesColFilters(it, tbl)) return false;
+            if (!qToks.length) return true;
+            return window._searchMatchAll(S.cols.map(function (c) { return (c.get(it) || '').toString(); }).join(' \u0001 '), qToks);
+        });
         var col = S.sortCol ? S.byKey[S.sortCol] : null;
         if (!col) return view;
         view.sort(function (a, b) {
@@ -263,8 +271,45 @@
     // merge 결과(_lastRows, 원본)에 지금의 필터·정렬을 입혀 다시 그린다 — 열 머리글
     // 클릭이나 필터 체크박스가 바뀔 때마다 이것만 부르면 된다(서버 재조회 없음).
     function renderFilteredSortedTable() {
-        renderTable(viewRows('main'), _lastNote);
+        var v = viewRows('main');
+        renderTable(v, _lastNote);
+        findAfterRender(v.length);
     }
+
+    // ─── 🔍 [2026-11-24] 연결 이슈 찾기칸 — 헤더(상태 글 뒤)에 런타임으로 꽂는다 ───
+    function ensureFindBox() {
+        if (document.getElementById('jira-find-input')) return;
+        var anchor = document.getElementById('jira-tab-state');
+        if (!anchor || !anchor.parentNode) return;
+        var bar = document.createElement('span');
+        bar.style.cssText = 'display:inline-flex; align-items:center; gap:6px; margin-left:10px; flex-shrink:0;';
+        bar.innerHTML = '<input id="jira-find-input" type="search" autocomplete="off" style="width:200px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px; font-size:12px; outline:none;">'
+            + '<span id="jira-find-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+        anchor.parentNode.insertBefore(bar, anchor.nextSibling);
+        var inp = bar.querySelector('input');
+        inp.placeholder = T('🔍 연결 이슈에서 찾기', '🔍 Find in linked issues');
+        inp.title = T('이미 불러온 연결 이슈만 거릅니다(여러 낱말 가능). JIRA 전체는 오른쪽 🔍 전체 검색.',
+                      'Filters the linked issues already loaded (several words OK). Whole JIRA: 🔍 search on the right.');
+        var t = null;
+        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { _tables.main.q = inp.value; renderFilteredSortedTable(); }, 150); };
+        inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; _tables.main.q = ''; renderFilteredSortedTable(); } };
+    }
+    function findAfterRender(nShown) {
+        ensureFindBox();
+        var toks = (_tables.main.q && window._searchTokens) ? window._searchTokens(_tables.main.q) : [];
+        var c = document.getElementById('jira-find-count');
+        if (c) c.textContent = toks.length ? (nShown + ' / ' + _lastRows.length + T('건', '')) : '';
+        if (!toks.length) return;
+        var box = document.getElementById('jira-table-wrap');
+        if (!box) return;
+        Array.prototype.forEach.call(box.querySelectorAll('tbody tr'), function (tr) {
+            // 첫 칸은 No.(순번) — 숫자로 찾으면 순번이 같이 칠해지므로 뺀다
+            Array.prototype.forEach.call(tr.cells, function (td, ci) {
+                if (ci > 0 && td.textContent && window._searchMatchAny(td.textContent, toks)) td.classList.add('search-hit');
+            });
+        });
+    }
+    window._jiraFindInternals = { viewRows: viewRows, state: function () { return _tables.main; }, setRows: function (r) { _lastRows = r; } };
 
     // 날짜·숫자 열은 처음 누르면 큰 것(최근)부터, 글자 열은 가나다/ABC 순부터
     window._jiraSetSort = function (colKey, tbl) {
@@ -379,6 +424,10 @@
     window._jiraClearAllFilters = function (tbl) {
         var S = tblState(tbl);
         S.filters = {};
+        if (!tbl || tbl === 'main') {   // 🔍 찾기칸도 같이 비운다 — 0건 안내의 '필터 초기화'가 그것까지 풀어야 빠져나온다
+            S.q = '';
+            var qi = document.getElementById('jira-find-input'); if (qi) qi.value = '';
+        }
         S.render();
         var box = document.getElementById('jira-colfilter-box');
         if (box) box.style.display = 'none';

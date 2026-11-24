@@ -313,4 +313,31 @@ const reset = window._driveModalSearchState.q === '';
   run('');
   chk(!memLabel.classList.has('search-hit') && !memLabel.classList.has('search-cur') && ids['sum-search-count'].textContent === '', '[Summary] 지우면 강조 원상복구');
 }
+// ── JIRA 연결 이슈(js/70 viewRows) — 진짜 js/70 전체를 스텁 DOM 위에서 불러 돌린다 ──
+{
+  const s70 = fs.readFileSync(path.join(__dirname, '..', 'js', '70-jira-tab.js'), 'utf8');
+  const noop = () => {};
+  const el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop }, addEventListener: noop, appendChild: noop, querySelectorAll: () => [], querySelector: () => null, dataset: {} });
+  const doc = { getElementById: () => null, querySelectorAll: () => [], querySelector: () => null, addEventListener: noop, createElement: el, readyState: 'complete', body: el() };
+  const W = { addEventListener: noop, localStorage: { getItem: () => null, setItem: noop }, _currentLang: 'ko' };
+  new Function('window', helpers)(W);
+  new Function('window', 'document', 'localStorage', 'setTimeout', 'clearInterval', 'setInterval', s70)(W, doc, W.localStorage, noop, noop, noop);
+  const J = W._jiraFindInternals;
+  J.setRows([
+    { key: 'GABJO-7', summary: 'TSP Tail 접촉 Risk 검토', status: 'Open', assignee: '박용훈', reporter: '임희철', priority: 'Major', updated: '2026-11-20', src: ['project'] },
+    { key: 'GABJO-12', summary: '외관 불량 — 벤트 홀 버 발생', status: 'Resolved', assignee: '임희철', reporter: '박용훈', priority: 'Minor', updated: '2026-11-21', src: ['project'] },
+    { key: 'GABKJ-3', summary: 'Noise on HDMI', status: 'Open', assignee: '김시윤', reporter: '김시윤', priority: 'Major', updated: '2026-11-22', src: ['keyword'] }]);
+  const keys = q => { J.state().q = q; return J.viewRows('main').map(r => r.key).sort().join(','); };
+  [['', 'GABJO-12,GABJO-7,GABKJ-3', '빈 검색 = 전부'],
+   ['박용훈 open', 'GABJO-7', '담당자+상태 AND(열이 달라도)'],
+   ['gabjo_12', 'GABJO-12', '키 기호 무시(하이픈↔밑줄)'],   // ⚠️ 'gabjo 12' 는 GABJO-7 도 맞다 — 수정일 2026-11-20 안에 12 가 있다
+   ['벤트', 'GABJO-12', '요약'],
+   ['임희철', 'GABJO-12,GABJO-7', '담당자·보고자 둘 다'],
+   ['noise resolved', '', 'AND — 한 이슈에 둘 다 없음']
+  ].forEach(([q, want, label]) => { const got = keys(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [JIRA] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  J.state().q = 'major'; J.state().filters = { status: { Open: true } };
+  chk(J.viewRows('main').map(r => r.key).sort().join() === 'GABJO-7,GABKJ-3', '[JIRA] 열 필터와 같이 걸린다');
+  W._jiraClearAllFilters();
+  chk(J.state().q === '' && Object.keys(J.state().filters).length === 0, '[JIRA] 필터 초기화가 찾기칸도 비운다');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);
