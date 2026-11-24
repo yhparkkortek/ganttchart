@@ -786,7 +786,14 @@ window._sapPnFind = function (target, hint) {
     setTimeout(function () { q.focus(); q.select(); }, 30);
 
     var pick = function (m) {
-        var v = String(m.MATNR || '').replace(/^0+/, '') + '_' + String(m.MAKTX || '').trim();
+        var code = String(m.MATNR || '').replace(/^0+/, ''), desc = String(m.MAKTX || '').trim();
+        var v = code + '_' + desc;
+        // 칸이 아닌 곳(Project list 처럼 코드·내역이 **다른 열**)은 콜백으로 받는다 — `{ value, onPick }`
+        if (typeof target.onPick === 'function') {
+            ov.style.display = 'none';
+            target.onPick({ code: code, desc: desc, joined: v });
+            return;
+        }
         target.value = v;
         target.dispatchEvent(new Event('input', { bubbles: true }));
         target.dispatchEvent(new Event('change', { bubbles: true }));
