@@ -46,7 +46,15 @@
         //    자동배치하지 않고 대기. 실측 오배치 3건: HORIZON 23.8" → 75" 프로젝트 · KGI>32TPR → 75" · KONAMI 75" → 55" KGP-4.
         //    단위 없는 숫자는 크기로 안 본다 — 단, 아래 접미어가 바로 붙으면 크기다(32TPR·75MVD).
         sizeGuard: true,
-        sizeSuffixes: ['TPR', 'MVD', 'TVD', 'BTN', 'UPR', 'LWR', 'MAIN', 'TOP']
+        sizeSuffixes: ['TPR', 'MVD', 'TVD', 'BTN', 'UPR', 'LWR', 'MAIN', 'TOP'],
+        // 🧱 원자재 코드 연결(2026-11-24 사용자 결정 "넣어줘") — 제목에 원자재 코드만 있는 승인원(Customer Approval Sheet[133152])은
+        //    판정기가 못 잡는다. 그 코드가 **저장된 BOM**(tabData.bomByUnit·elecBomByType) 중 정확히 한 프로젝트에만 있을 때만 그 프로젝트로.
+        //    실측: BOM 코드 763개 중 34% 가 여러 프로젝트 공용 → 공용 코드가 하나라도 있으면 아무것도 안 한다(대기도 안 만든다).
+        //    프로젝트 파일 **전체**(메일 본문 포함)는 근거로 안 쓴다 — 메일에 남의 코드가 섞여 거의 다 '여러 곳'이 된다(실측).
+        materialLink: true,
+        materialCodeRe: '(^|[^0-9])([13]\\d{5})(?![0-9])',   // 원자재 코드 모양(1xxxxx·3xxxxx). 50xxxx 관리번호는 판정기 몫
+        bomCacheKey: 'gantt_apv_bom_codes_v1',             // 프로젝트별 BOM 코드·멤버 — updated_at 이 같으면 파일을 다시 안 읽는다
+        memberCheck: true                                  // 기안자가 그 프로젝트 담당자 칸에 없으면 자동 대신 대기
     };
     var P = window.APPROVAL_INTAKE;
     var BASE = window.BACKEND_BASE || 'http://127.0.0.1:5000';
@@ -174,6 +182,75 @@
     }
     window._approvalSizesIn = sizesIn;   // 하네스용
 
+    // ── 🧱 원자재 코드 → 프로젝트(저장된 BOM 만) ───────────────────────────
+    function scanCodes(text) {
+        var re = new RegExp(P.materialCodeRe, 'g'), out = {}, m;
+        var s = String(text || '');
+        while ((m = re.exec(s))) { out[m[2]] = 1; re.lastIndex = m.index + m[0].length; }
+        return Object.keys(out);
+    }
+    window._approvalCodesIn = scanCodes;   // 하네스용
+    function isCatchAllCand(c) {
+        var CA = window.MAIL_ROUTING_CATCHALL || [];
+        var n = function (s) { return String(s || '').toLowerCase().replace(/[^0-9a-z가-힣]+/g, ''); };
+        return CA.some(function (w) { return w && (n(c.model) === n(w) || n(String(c.customer || '').split('>').pop()) === n(w)); });
+    }
+    /** 프로젝트 파일 하나 읽기(Drive·NAS 둘 다 같은 길 — 어댑터가 gapi 를 감싼다) */
+    async function readProjectDoc(fileId) {
+        var r = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
+        return r && (r.result || (typeof r.body === 'string' ? JSON.parse(r.body) : null));
+    }
+    /** 담당자 이름들 — projectMeta 의 '…담당자' 칸(쉼표·슬래시 다중) */
+    function membersOf(pm) {
+        var out = {};
+        Object.keys(pm || {}).forEach(function (k) {
+            if (!/담당자$/.test(k)) return;
+            String(pm[k] || '').split(/[,\/·;.]+/)   /* 실측: '김충식.김태홍' 처럼 점으로 잇는 칸이 있다 */.forEach(function (n) { n = n.trim(); if (n) out[n] = 1; });
+        });
+        return Object.keys(out);
+    }
+    /** 후보 프로젝트들의 BOM 코드 색인 — { index: {code: [fileId…]}, members: {fileId: [이름…]}, read, cached, failed } */
+    async function bomIndex(cands) {
+        var cache = {};
+        try { cache = JSON.parse(localStorage.getItem(P.bomCacheKey) || '{}') || {}; } catch (e) { cache = {}; }
+        var out = { index: {}, members: {}, read: 0, cached: 0, failed: 0 }, next = {};
+        for (var i = 0; i < cands.length; i++) {
+            var c = cands[i];
+            if (!c || !c.drive_file_id || isCatchAllCand(c)) continue;
+            var id = c.drive_file_id, u = String(c.updated_at || '');
+            var ent = cache[id];
+            if (!(ent && u && ent.u === u)) {
+                try {
+                    var doc = await readProjectDoc(id);
+                    var td = (doc && doc.tabData) || {};
+                    ent = { u: u, codes: scanCodes(JSON.stringify([td.bomByUnit || {}, td.elecBomByType || {}])),
+                            members: membersOf(doc && doc.projectMeta) };
+                    out.read++;
+                } catch (e) {
+                    out.failed++;
+                    console.warn('[결재 가져오기] BOM 읽기 실패 — 이 프로젝트는 코드 연결에서 빠집니다:', c.file_name, e && e.message);
+                    continue;   // 실패는 캐시하지 않는다
+                }
+            } else out.cached++;
+            next[id] = ent;
+            out.members[id] = ent.members || [];
+            (ent.codes || []).forEach(function (code) { (out.index[code] = out.index[code] || []).push(id); });
+        }
+        try { localStorage.setItem(P.bomCacheKey, JSON.stringify(next)); } catch (e) { /* 캐시 못 써도 판정은 한다 */ }
+        return out;
+    }
+    /** 코드들 → 한 프로젝트, 아니면 사유. 공용 코드가 하나라도 있거나 코드끼리 다른 곳을 가리키면 고르지 않는다. */
+    function materialPick(codes, bi, cands) {
+        var hits = codes.filter(function (k) { return bi.index[k] && bi.index[k].length; });
+        if (!hits.length) return { why: 'code_not_in_bom' };
+        if (hits.some(function (k) { return bi.index[k].length > 1; })) return { why: 'shared_code' };
+        var ids = {}; hits.forEach(function (k) { ids[bi.index[k][0]] = 1; });
+        var keys = Object.keys(ids);
+        if (keys.length !== 1) return { why: 'codes_disagree' };
+        var target = cands.filter(function (c) { return c.drive_file_id === keys[0]; })[0];
+        return target ? { target: target, hits: hits } : { why: 'no_candidate' };
+    }
+
     /** 🔗 그룹웨어 원문 열기 — 사람이 로그인해 둔 전용 크롬(CDP)에 새 탭으로(/gw/open-doc, js/67 의뢰서 열기와 같은 길).
      *  일반 새 탭은 로그인 화면만 뜬다 → 백엔드가 안 될 때만 폴백. @param apv {id, docNum, url} */
     window.approvalOpenInGw = async function (apv) {
@@ -257,7 +334,7 @@
             // 오래된 것부터 처리(카드가 시간 순으로 쌓이게)
             fresh.sort(function (a, c) { return docTs(a.d) - docTs(c.d); });
 
-            var done = 0;
+            var done = 0, bi = null;   // bi: BOM 코드 색인 — 이번 실행에서 처음 필요할 때 한 번만 만든다
             for (var i = 0; i < fresh.length; i++) {
                 var d = fresh[i].d, boxLabel = fresh[i].box, ts = docTs(d);
                 var mark = function (r) { store.seen[d.id] = { at: new Date().toISOString(), st: d.status || '', res: r, box: boxLabel }; };
@@ -281,6 +358,31 @@
                 if (pre) tag = autoTag(pre);
                 else if (jd && jd.decision === 'auto' && jd.target) tag = waitTag({ candidates: [jd.target], reason: jd.reason, basis: jd.basis, family: jd.family });
                 else if (jd && jd.decision === 'wait' && jd.candidates && jd.candidates.length) tag = waitTag(jd);
+                // 🧱 판정기가 못 잡았으면 원자재 코드(저장된 BOM 만)로 한 번 더 — 한 프로젝트일 때만
+                if (!tag && P.materialLink) {
+                    var codes = scanCodes(mail.subject);
+                    if (codes.length) {
+                        if (!bi) bi = await bomIndex(cands);
+                        var mp = materialPick(codes, bi, cands);
+                        if (mp.target) {
+                            var mem = bi.members[mp.target.drive_file_id] || [];
+                            var drafterIn = !P.memberCheck || !d.drafterName || mem.indexOf(d.drafterName) !== -1;
+                            var why = T('원자재 코드 ' + mp.hits.join(',') + ' 가 ' + (mp.target.model || mp.target.file_name) + ' BOM 에만 있음',
+                                        'material code ' + mp.hits.join(',') + ' only in ' + (mp.target.model || mp.target.file_name) + ' BOM');
+                            if (drafterIn) {
+                                pre = { target: mp.target, extra: [], basis: 'material_bom', reason: why, family: null };
+                                tag = autoTag(pre);
+                            } else {
+                                tag = waitTag({ candidates: [mp.target], basis: 'material_bom_member', family: null,
+                                                reason: why + T(' · 기안자(' + d.drafterName + ')가 그 프로젝트 담당자 칸에 없어 대기', ' · drafter not a member — pending') });
+                            }
+                            res.material = (res.material || 0) + 1;
+                        } else {
+                            res.materialMiss = res.materialMiss || {};
+                            res.materialMiss[mp.why] = (res.materialMiss[mp.why] || 0) + 1;
+                        }
+                    }
+                }
                 if (!tag) {
                     res.noMatch++; mark('no_match');
                     store.log.push({ at: new Date().toISOString(), id: d.id, docNum: d.docNum, title: mail.subject, res: 'no_match' });

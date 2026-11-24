@@ -237,6 +237,38 @@ ${mailText}`;
         return 'padding:0 9px; border:1px solid #cfd8e3; background:#fff;' + _UI_BOX;
     };
 
+    // 🔍 [2026-11-24] 목록 검색 규칙 한 벌 — 프로젝트 불러오기(js/04c)·Project list(js/55)가 같이 쓴다.
+    //    ① 띄어 쓴 낱말은 **모두** 들어 있어야 걸린다(AND) ② 공백·기호(> - _ / . , ( ))는 무시하고도 본다
+    //    ("LNW K43" ↔ "LNW>K43", "1647180 13p50" ↔ "1647180-13P50") ③ 대소문자 무시.
+    //    따로 두면 "여기선 걸리는데 저기선 안 걸린다"가 생긴다 — 규칙은 여기서만 고칠 것.
+    var _SEARCH_NOISE = /[\s\-_>\/.,()]+/g;
+    window._searchNorm = function (s) { return String(s == null ? '' : s).toLowerCase().replace(_SEARCH_NOISE, ''); };
+    /** 검색어 → 낱말 배열(소문자). 비면 []. */
+    window._searchTokens = function (q) { return String(q == null ? '' : q).trim().toLowerCase().split(/\s+/).filter(Boolean); };
+    /** 한 낱말이 이 글에 있나(글자 그대로 또는 기호 뗀 모양). hayNorm 은 미리 만들어 넘기면 빠르다. */
+    window._searchHasToken = function (hayLower, token, hayNorm) {
+        if (hayLower.indexOf(token) !== -1) return true;
+        var tn = window._searchNorm(token);
+        if (!tn) return false;
+        return (hayNorm != null ? hayNorm : window._searchNorm(hayLower)).indexOf(tn) !== -1;
+    };
+    /** 낱말이 전부 들어 있나(AND). tokens 가 비면 true. */
+    window._searchMatchAll = function (hay, tokens) {
+        if (!tokens || !tokens.length) return true;
+        var low = String(hay == null ? '' : hay).toLowerCase(), norm = window._searchNorm(low);
+        return tokens.every(function (t) { return window._searchHasToken(low, t, norm); });
+    };
+    /** 낱말이 하나라도 들어 있나 — 걸린 칸/글자 강조용. */
+    window._searchMatchAny = function (text, tokens) {
+        if (!tokens || !tokens.length) return false;
+        var low = String(text == null ? '' : text).toLowerCase(), norm = window._searchNorm(low);
+        return tokens.some(function (t) { return window._searchHasToken(low, t, norm); });
+    };
+    /** 강조 표시(이미 escape 된 html 을 감싼다) — 모양 한 벌. */
+    window._searchMarkHtml = function (escapedHtml) {
+        return '<mark style="background:#fff3bf; color:inherit; padding:0 1px; border-radius:2px;">' + escapedHtml + '</mark>';
+    };
+
     window.APP_NON_PROJECT_FOLDERS = [
         'Backups',          // 자동 백업
         'App_Config',       // 팀 공용 설정(주소록·공휴일·프롬프트·project_index …)

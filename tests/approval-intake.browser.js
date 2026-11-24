@@ -43,7 +43,8 @@ window.__approvalIntakeTest = async function () {
     const save = {
         fetch: window.fetch, idx: window._msLoadProjectIndex, reg: window._msAutoRegisterToProject, regT: window._msRegisterToProjectTargets,
         auto: window.isAutoRegisterEnabled, ibKey: window.TaskInbox.KEY, sync: window.TaskInbox.scheduleDriveSync, storeKey: window.APPROVAL_INTAKE.storeKey,
-        toast: window.showToast
+        toast: window.showToast, gget: (window.gapi && gapi.client && gapi.client.drive && gapi.client.drive.files) ? gapi.client.drive.files.get : null,
+        bomKey: window.APPROVAL_INTAKE.bomCacheKey
     };
     const RUN = Date.now().toString(36);
     // 킬스위치는 원래 값을 되돌린다 — 실제 데이터가 든 탭에서 일부러 꺼 둔 것을 하네스가 켜 버리면 배경 스캔이 진짜로 돈다
@@ -52,6 +53,7 @@ window.__approvalIntakeTest = async function () {
     window.TaskInbox.KEY = 'zz_apv_test_inbox_' + RUN;
     window.TaskInbox.scheduleDriveSync = function () {};
     window.APPROVAL_INTAKE.storeKey = 'zz_apv_test_store_' + RUN;
+    window.APPROVAL_INTAKE.bomCacheKey = 'zz_apv_test_bom_' + RUN;
     window.showToast = function () {};
     window.isAutoRegisterEnabled = () => true;
     window._msLoadProjectIndex = async () => cands.slice();
@@ -115,6 +117,44 @@ window.__approvalIntakeTest = async function () {
         r = await window.approvalIntakeRun({ manual: false, toast: false });
         ok(inbox().length === n1 && r.dup >= 4, '5-1 장부를 비워도 이미 카드가 있는 문서는 다시 안 넣는다', { r, before: n1, after: inbox().length });
 
+        // ── 7. 🧱 원자재 코드 → 저장된 BOM 한 프로젝트 ─────────────────────────
+        cands.forEach(c => { c.updated_at = '2026-11-20T00:00:00Z'; });
+        const PROJ = {
+            T1: { projectMeta: { '프로젝트담당자': '홍길동', '회로담당자': '이영희, 박민수' }, tabData: { bomByUnit: { MVD: { rows: [{ code: '133152' }, { code: '133022' }, { code: '300001' }] } } },
+                  globalData: [], changeLogs: [{ note: '메일에 133500 언급' }] },   // ⚠️ 파일 전체엔 133500 이 있지만 BOM 엔 없다 → 근거 아님
+            K1: { projectMeta: { '프로젝트담당자': '김철수' }, tabData: { bomByUnit: { A: { rows: [{ code: '300001' }, { code: '133500' }] } } } }
+        };
+        const reads = [];
+        window.gapi = window.gapi || {}; gapi.client = gapi.client || {}; gapi.client.drive = gapi.client.drive || {}; gapi.client.drive.files = gapi.client.drive.files || {};
+        gapi.client.drive.files.get = async (o) => { reads.push(o.fileId); const doc = PROJ[o.fileId] || { tabData: {} }; return { result: JSON.parse(JSON.stringify(doc)) }; };
+        localStorage.removeItem(window.APPROVAL_INTAKE.bomCacheKey);
+        boxes.draft.push(D('911', 'Customer Approval Sheet[133152]', '원자재 승인 결과서', '완료', 0));
+        boxes.draft.push(D('912', 'Customer Approval Sheet[133152 300001]', '원자재 승인 결과서', '완료', 0));          // 300001 은 공용
+        boxes.draft.push(D('913', 'Customer Approval Sheet[133500]', '원자재 승인 결과서', '완료', 0));                 // 홍길동은 K1 담당자 아님
+        boxes.draft.push(D('914', 'Customer Approval Sheet[133999]', '원자재 승인 결과서', '완료', 0));                 // 어느 BOM 에도 없음
+        const p1 = calls.place.length;
+        r = await window.approvalIntakeRun({ manual: false, toast: false });
+        const c911 = card('911');
+        ok(!!c911 && c911.status === '자동배치됨' && c911.matchedProject.routing.basis === 'material_bom' && calls.place.slice(p1).some(p => p.fid === 'T1'),
+           '7-1 코드가 한 프로젝트 BOM 에만 있고 기안자가 담당자 → 그 프로젝트에 자동배치', c911 && c911.matchedProject);
+        ok(!card('912') && r.materialMiss && r.materialMiss.shared_code === 1, '7-2 공용 코드가 하나라도 섞이면 카드를 안 만든다(대기도 아님)', r);
+        const c913 = card('913');
+        ok(!!c913 && c913.status === '대기' && c913.matchedProject.routing.basis === 'material_bom_member' && !calls.place.slice(p1).some(p => p.fid === 'K1'),
+           '7-3 기안자가 그 프로젝트 담당자 칸에 없으면 자동 대신 대기', c913 && c913.matchedProject);
+        ok(!card('914') && r.materialMiss.code_not_in_bom === 1, '7-4 어느 BOM 에도 없는 코드는 그냥 둔다(파일 전체에 언급돼 있어도 근거로 안 씀)', r.materialMiss);
+        ok(reads.filter(x => x === 'T1').length === 1 && reads.indexOf('A1') !== -1, '7-5 색인은 이번 실행에서 한 번만 만든다(프로젝트마다 1번 읽기)', reads);
+        const n2 = reads.length;
+        boxes.draft.push(D('915', 'Customer Approval Sheet[133022]', '원자재 승인 결과서', '완료', 0));
+        r = await window.approvalIntakeRun({ manual: false, toast: false });
+        ok(!!card('915') && reads.length === n2, '7-6 다음 실행은 updated_at 이 같으면 파일을 다시 안 읽는다(캐시)', { reads: reads.length - n2 });
+        cands.find(c => c.drive_file_id === 'T1').updated_at = '2026-11-24T00:00:00Z';
+        boxes.draft.push(D('916', 'Customer Approval Sheet[133152]_V02', '원자재 승인 결과서', '완료', 0));
+        r = await window.approvalIntakeRun({ manual: false, toast: false });
+        ok(reads.length === n2 + 1 && reads[reads.length - 1] === 'T1', '7-7 저장 시각이 바뀐 프로젝트만 다시 읽는다', reads.slice(n2));
+        const CI = window._approvalCodesIn;
+        ok(CI('Sheet[133007 133008,133009]').join() === '133007,133008,133009' && CI('(502509, KTC490DPZ01)').length === 0 && CI('1330071').length === 0,
+           '7-8 코드 읽기: 1xxxxx·3xxxxx 6자리만, 관리번호(50xxxx)·7자리 숫자는 아님');
+
         // ── 6. 끄기 ─────────────────────────────────────────────────────────
         localStorage.setItem(window.APPROVAL_INTAKE.offKey, '1');
         r = await window.approvalIntakeRun({ manual: true, toast: false });
@@ -128,6 +168,9 @@ window.__approvalIntakeTest = async function () {
         window.fetch = save.fetch; window._msLoadProjectIndex = save.idx; window._msAutoRegisterToProject = save.reg;
         window._msRegisterToProjectTargets = save.regT; window.isAutoRegisterEnabled = save.auto; window.TaskInbox.KEY = save.ibKey;
         window.TaskInbox.scheduleDriveSync = save.sync; window.APPROVAL_INTAKE.storeKey = save.storeKey; window.showToast = save.toast;
+        try { if (save.gget) gapi.client.drive.files.get = save.gget; } catch (e) { /* 무시 */ }
+        try { localStorage.removeItem(window.APPROVAL_INTAKE.bomCacheKey); } catch (e) { /* 무시 */ }   // 하네스가 만든 가짜 색인을 남기지 않는다
+        window.APPROVAL_INTAKE.bomCacheKey = save.bomKey;
         try { window.updateInboxBadge && window.updateInboxBadge(); } catch (e) { /* 무시 */ }
     }
     console.log(out.join('\n'));
