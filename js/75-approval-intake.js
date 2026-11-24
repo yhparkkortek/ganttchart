@@ -48,6 +48,15 @@
         skipForms: ['휴가', '연차', '반차', '근태', '경조', '조퇴', '외출'],  // 양식 이름에 이 말이 있으면 가져오지 않는다
         seenMax: 4000,                 // 장부 상한(오래된 것부터 버린다)
         taskNameMax: 40,               // 업무명(카드 제목)에 쓰는 문서 제목 최대 글자 — 넘으면 '…' (전체 제목은 [출처] 에)
+        // 🚫 [2026-11-24 실측] 메일용 "공통 건(회의록·로드맵) → 고객사 프로젝트 전부" 규칙(js/74 commonToCustomer)을 결재엔 안 쓴다.
+        //    결재 회의록은 특정 회의 문서다 — '[회의록] LNW>L7 Jackpot Wheel>31.5MVD(502582)…' 한 건이 LNW 14곳 전부에 들어갔다.
+        //    끄면 판정은 원래대로(여러 후보 = 대기) 남는다.
+        noCommonFanout: true,
+        // 🧹 일회성 정리(데이터) — 위 규칙으로 잘못 퍼진 결재 행을 그 프로젝트를 열 때 뺀다. keepIds/keepModel 에 맞는 프로젝트엔 남긴다.
+        cleanupPlacements: [
+            { key: 'apv_218142', keepIds: ['1Y_eHKUWFxdKcqRI1XegFDZIu-teMuf6D'], keepModel: 'L7 Jackpot Wheel',
+              why: '[회의록] L7 Jackpot Wheel 31.5MVD 점검회의 — 회의록 공통 규칙으로 LNW 14곳에 퍼짐(2026-11-24)' }
+        ],
         // 📐 크기 가드(2026-11-24 실문서 120건 판정에서 찾음) — 제목에 크기가 적혀 있는데 대상 프로젝트 크기와 하나도 안 맞으면
         //    자동배치하지 않고 대기. 실측 오배치 3건: HORIZON 23.8" → 75" 프로젝트 · KGI>32TPR → 75" · KONAMI 75" → 55" KGP-4.
         //    단위 없는 숫자는 크기로 안 본다 — 단, 아래 접미어가 바로 붙으면 크기다(32TPR·75MVD).
@@ -386,8 +395,13 @@
                 if (inInbox(key)) { res.dup++; mark('dup'); continue; }
 
                 var mail = mailOf(d), pre = null, jd = null, tag = null;
-                try { pre = window.mailRoutePreJudge ? window.mailRoutePreJudge(mail, cands) : null; } catch (e) { pre = null; }
-                if (!pre) { try { jd = window.mailRouteJudge(mail, cands, null); } catch (e) { jd = null; } }
+                // 결재 판정 동안만 '공통 건 → 고객사 전부' 를 끈다(위 noCommonFanout). 메일 판정엔 영향 없게 바로 되돌린다.
+                var MRP = window.MAIL_ROUTING_POLICY, svCommon = MRP ? MRP.commonToCustomer : undefined;
+                if (MRP && P.noCommonFanout) MRP.commonToCustomer = false;
+                try {
+                    try { pre = window.mailRoutePreJudge ? window.mailRoutePreJudge(mail, cands) : null; } catch (e) { pre = null; }
+                    if (!pre) { try { jd = window.mailRouteJudge(mail, cands, null); } catch (e) { jd = null; } }
+                } finally { if (MRP && P.noCommonFanout) MRP.commonToCustomer = svCommon; }
                 if (pre && sizeMismatch(mail.subject, pre.target)) {
                     // 자동 확정을 대기로 내린다 — 후보로는 남긴다(사람이 맞다고 보면 한 번에 보낼 수 있게)
                     jd = { candidates: [pre.target].concat(pre.extra || []), basis: 'size_mismatch', family: pre.family,
@@ -507,6 +521,23 @@
             var t2 = t.replace(/\r?\n🔗 (https?:\/\/\S*\/app\/approval\/document\/\d+)/, ' 🔗 $1');
             if (t2 !== t) { row[ci.content] = t2; out.relinked++; }
         }
+        // ④ 잘못 퍼진 결재 행 빼기(데이터 P.cleanupPlacements) — 지킬 프로젝트(keepIds·keepModel)면 그대로 둔다
+        out.removed = 0;
+        var CL = (P.cleanupPlacements || []).filter(function (c) { return c && c.key; });
+        if (CL.length) {
+            var fidNow = String(window.currentDriveFileId || '');
+            var pm = window.projectMeta || {};
+            var modelNow = [pm['모델명'], pm['고객모델명'], pm['KTK모델명'], pm['프로젝트명']].filter(Boolean).join(' ');
+            for (var z = gd.length - 1; z >= 1; z--) {
+                var rz = gd[z], kz = rz && rz._mailRaw && rz._mailRaw.key;
+                if (!kz) continue;
+                var rule = CL.filter(function (c) { return c.key === kz; })[0];
+                if (!rule) continue;
+                var keep = (rule.keepIds || []).indexOf(fidNow) !== -1 || (rule.keepModel && modelNow.indexOf(rule.keepModel) !== -1);
+                if (keep || !fidNow) continue;   // 어느 프로젝트인지 모르면 지우지 않는다
+                gd.splice(z, 1); out.removed++;
+            }
+        }
         // ③ 긴 결재 업무명 줄이기(2026-11-24 사용자 지적) — 이 기능이 만든 행(_mailRaw.approval)만, 실제로 짧아질 때만.
         //    이름은 _origT* 에 있고 재계산이 화면 칸으로 베낀다. 전체 제목은 상세내용 [출처] 에 남아 있다.
         out.renamed = 0;
@@ -549,12 +580,13 @@
                 });
             }
         }
-        if (!out.moved && !out.relinked && !out.renamed) return out;
+        if (!out.moved && !out.relinked && !out.renamed && !out.removed) return out;
         // 💬 [2026-11-24 사용자 요청 "쉬운 말로"] '자동배치 자리' 같은 내부 말 대신 무엇을 했는지만 — 화면 알림·수정이력 같은 문장
         var partsKo = [], partsEn = [];
         if (out.moved) { partsKo.push('맨 위에 잘못 들어가 있던 업무 ' + out.moved + '건을 날짜에 맞는 단계로 옮겼습니다'); partsEn.push('moved ' + out.moved + ' tasks stuck at the top into the stage matching their date'); }
         if (out.renamed) { partsKo.push('긴 결재 업무 이름 ' + out.renamed + '건을 짧게 줄였습니다'); partsEn.push('shortened ' + out.renamed + ' long approval task names'); }
         if (out.relinked) { partsKo.push('결재 링크 ' + out.relinked + '건을 한 줄로 정리했습니다'); partsEn.push('tidied ' + out.relinked + ' approval link lines'); }
+        if (out.removed) { partsKo.push('다른 프로젝트 결재 문서 ' + out.removed + '건을 이 프로젝트에서 뺐습니다'); partsEn.push('removed ' + out.removed + ' approval rows that belong to another project'); }
         try { if (typeof logChange === 'function') logChange(1, -1, '없음', partsKo.join(' · ')); } catch (e) { /* 기록 실패는 무시 */ }
         try { if (window.recalculateSchedules) window.recalculateSchedules(); } catch (e) { console.warn('[자리 바로잡기] 재계산 실패', e); }
         try { if (window.renderGantt) window.renderGantt(); } catch (e) { /* 다음 렌더에 반영 */ }
@@ -569,13 +601,17 @@
     (function hookOpen() {
         var orig = window.populateTabData;
         if (typeof orig !== 'function') return;
+        // 🐛 [2026-11-24 실측 — K27 을 열어도 안 고쳐졌다] 프로젝트 열기(js/04c)는 populateTabData 를 **먼저** 부르고
+        //    그 뒤에 currentDriveFileId 를 새 파일로 바꾼다. 그래서 여기서 id 를 잡아 두면 **이전 프로젝트 id** 라
+        //    4초 뒤 "같은 프로젝트인가" 검사가 늘 어긋나 건너뛰었다. → id 는 타이머가 울릴 때 읽고, 연달아 불리면 한 번으로 모은다.
+        var timer = null;
         window.populateTabData = function () {
             var r = orig.apply(this, arguments);
             if (P.repairPlacement) {
-                var fid = window.currentDriveFileId;
-                setTimeout(function () {
-                    // 그 사이 다른 프로젝트로 바꿨으면 하지 않는다
-                    if (fid && window.currentDriveFileId !== fid) return;
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(function () {
+                    timer = null;
+                    if (!window.currentDriveFileId) return;   // 열린 프로젝트 파일이 없으면(새 시트·엑셀만) 하지 않는다
                     window.approvalRepairOpenProject({}).catch(function (e) { console.warn('[자리 바로잡기] 실패:', e); });
                 }, 4000);
             }

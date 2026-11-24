@@ -235,6 +235,47 @@ window.__approvalIntakeTest = async function () {
             }
         }
 
+        // ── 11. 🚫 공통 건 규칙은 결재 판정 동안만 끄고 되돌린다 · 🧹 잘못 퍼진 결재 행 빼기 ──
+        {
+            const MRP = window.MAIL_ROUTING_POLICY || {}; const before = MRP.commonToCustomer;
+            boxes = { draft: [D('931', '[회의록] STELLAR32 점검회의', '회의록', '완료', 1)], approve: [], viewer: [], reception: [], deptreceive: [] };
+            await window.approvalIntakeRun({ manual: false, toast: false });
+            ok(MRP.commonToCustomer === before, '11-1 결재 판정이 끝나면 메일용 공통 건 규칙 설정은 원래 값 그대로', { before, after: MRP.commonToCustomer });
+            if (window.currentDriveFileId) ok(true, '11-2 (건너뜀) 프로젝트가 열려 있다');
+            else {
+                const keep = { gd: globalData, ci: colIdx, recalc: window.recalculateSchedules, render: window.renderGantt };
+                const R2 = (key) => { const r = ['[결재] x', '2026-09-22', '[핵심내용] x']; r._level = 4; r._calcStartTs = Date.parse('2026-09-22'); r._mailRaw = { key, approval: { formName: '회의록' }, subject: 'x' }; return r; };
+                try {
+                    window.recalculateSchedules = () => {}; window.renderGantt = () => {};
+                    colIdx = { wbs: 0, start: 1, content: 2, devStage: -1 };
+                    const head = ['업무', '시작', '상세']; const L0 = ['RFQ', '2026-09-01', '']; L0._level = 0; L0._calcStartTs = Date.parse('2026-09-01');
+                    globalData = [head, L0, R2('apv_218142'), R2('apv_other')];
+                    window.currentDriveFileId = 'SOME_OTHER_PROJECT';
+                    const a = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
+                    ok(a.removed === 1 && globalData.length === 3 && globalData[2]._mailRaw.key === 'apv_other', '11-2 정리 목록의 결재 행은 지킬 프로젝트가 아니면 뺀다(다른 행은 그대로)', a);
+                    globalData = [head, L0, R2('apv_218142')];
+                    window.currentDriveFileId = '1Y_eHKUWFxdKcqRI1XegFDZIu-teMuf6D';
+                    const b = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
+                    ok(b.removed === 0 && globalData.length === 3, '11-3 지킬 프로젝트(L7)에선 남긴다', b);
+                } finally { globalData = keep.gd; colIdx = keep.ci; window.recalculateSchedules = keep.recalc; window.renderGantt = keep.render; window.currentDriveFileId = null; }
+            }
+        }
+
+        // ── 10. 프로젝트 열기 순서 그대로 — populateTabData 가 **먼저**, 파일 id 는 그 **뒤에** 바뀐다(js/04c).
+        //     2026-11-24 실측: 훅이 열 때 id 를 잡아 두어 늘 이전 id 와 비교 → 한 번도 안 돌았다(K27). 9절은 함수를 직접 불러 이걸 못 잡았다.
+        if (window.currentDriveFileId) { ok(true, '10 (건너뜀) 이 탭에 프로젝트가 열려 있다'); }
+        else {
+            const svRepair = window.approvalRepairOpenProject; let calls10 = [];
+            window.approvalRepairOpenProject = async (o) => { calls10.push(window.currentDriveFileId); return { moved: 0, relinked: 0, renamed: 0 }; };
+            try {
+                window.populateTabData();                  // ① 열기 도중 — 아직 이전 id(null)
+                window.populateTabData();                  //    (열기 중 두 번 불려도 한 번만)
+                window.currentDriveFileId = 'TEST_OPENED';  // ② 그 다음에 새 파일 id
+                await new Promise(r => setTimeout(r, 4600));
+                ok(calls10.length === 1 && calls10[0] === 'TEST_OPENED', '10 프로젝트를 열면(id 가 나중에 바뀌어도) 바로잡기가 한 번 돈다', calls10);
+            } finally { window.approvalRepairOpenProject = svRepair; window.currentDriveFileId = null; }
+        }
+
         // ── 6. 끄기 ─────────────────────────────────────────────────────────
         localStorage.setItem(window.APPROVAL_INTAKE.offKey, '1');
         r = await window.approvalIntakeRun({ manual: true, toast: false });
