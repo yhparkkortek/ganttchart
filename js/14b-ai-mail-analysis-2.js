@@ -546,7 +546,9 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw, targetMeta) {
     newRow._origDev = ""; newRow._origT1 = ""; newRow._origT2 = ""; newRow._origT3 = ""; newRow._origT4 = "";
     // ✅ 메일 추가 항목임을 표시하기 위해 📧 처리 (사용자가 확인 후 제거 가능)
     // ✅ ＊AI 마커: 병렬(_isParallel) 판정에 걸려서, 실수로 잠금이 풀려도 다른 형제 업무 일정을 밀지 않고 이 업무 하나만 영향받음 + 화면에서 AI가 넣은 업무임을 구분 가능
-    const taskName = (r['업무명'] || "새 업무") + ' ＊AI📧';
+    // 📋 [2026-11-24 사용자 요청] 전자결재 문서에서 온 업무(js/75, r._approval)엔 '＊AI📧' 를 안 붙인다 — AI 분석도 메일도 아니다.
+    //    표식에 기대는 판정은 없다(다른 곳은 전부 표시용으로 떼기만 한다, 메일 유래 판정은 칸 내용으로 — js/04a 주석).
+    const taskName = (r['업무명'] || "새 업무") + (r._approval ? '' : ' ＊AI📧');
     if (wbsLevel === 0) newRow._origDev = taskName;
     else if (wbsLevel === 1) newRow._origT1 = taskName;
     else if (wbsLevel === 2) newRow._origT2 = taskName;

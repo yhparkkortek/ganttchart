@@ -520,7 +520,9 @@
                 var core = v.slice(PFX.length, hasSfx ? v.length - SFX.length : v.length);
                 var full = String(rw._mailRaw.subject || core);   // 원래 제목(옛 행은 90자에서 잘렸을 수 있다)
                 var sh = shortTitleOf(full, rw._mailRaw.approval.formName);
-                if (sh && sh.length < core.length) { rw[f] = PFX + sh + (hasSfx ? SFX : ''); out.renamed++; }
+                // '＊AI📧' 는 결재 업무엔 안 붙인다(2026-11-24 사용자 요청) — 새 행은 js/14b 가 처음부터 안 붙이고, 옛 행은 여기서 뗀다
+                var nv = PFX + ((sh && sh.length < core.length) ? sh : core);
+                if (nv !== v) { rw[f] = nv; out.renamed++; }
             });
         }
         // ① 첫 단계 머리 위의 자동 행

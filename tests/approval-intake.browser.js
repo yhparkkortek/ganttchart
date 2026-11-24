@@ -224,8 +224,8 @@ window.__approvalIntakeTest = async function () {
                     const svToast = window.showToast; window.showToast = (m) => { toastMsg = String(m); };
                     const rr3 = await window.approvalRepairOpenProject({ noSave: true, force: true });
                     window.showToast = svToast;
-                    ok(rr3.renamed === 1 && named._origT4 === '[결재] ' + s1 + ' ＊AI📧' && manual._origT4 === '[결재] ' + longT,
-                       '9-7 이 기능이 만든 결재 행만 이름을 줄인다(＊AI📧 표시는 그대로)', { rr3, n: named._origT4, m: manual._origT4 });
+                    ok(rr3.renamed === 1 && named._origT4 === '[결재] ' + s1 && manual._origT4 === '[결재] ' + longT,
+                       '9-7 이 기능이 만든 결재 행만 이름을 줄이고 ＊AI📧 표시를 뗀다(사람이 만든 행은 그대로)', { rr3, n: named._origT4, m: manual._origT4 });
                     ok(/긴 결재 업무 이름 1건을 짧게 줄였습니다/.test(toastMsg) && !/자동배치 자리/.test(toastMsg) && /Ctrl\+Z/.test(toastMsg),
                        '9-8 알림은 쉬운 말로(무엇을 했는지 + 되돌리는 법)', toastMsg);
                 } finally {
