@@ -7,9 +7,42 @@ window.TaskInbox = {
     KEY: 'gantt_task_inbox',
     _driveFileId: null,
     _syncTimer: null,
+    // 🪪 [2026-11-24 실측 — 같은 사람의 보관함이 두 파일로 갈라짐] 파일 이름이 **표시 이름**(currentUserName)에서 나왔는데
+    //    그 값을 js/57(NAS 계정 id 'yhpark')과 js/64(시작 로그인 실명 '박용훈')가 번갈아 넣어, 앱을 열 때마다
+    //    TaskInbox_yhpark.json / TaskInbox_박용훈.json 중 하나를 읽고 썼다 → 지운 카드 부활·채운 본문 소실·처리 되돌림.
+    //    → 계정 id(_appUserKey → _nasAccount, 일일보고 js/59 와 같은 근거)로 고정한다. 계정 id 를 모르는 Drive 모드만 예전 이름.
+    //    NAS 모드인데 계정 id 를 아직 모르면 **쓰지 않는다**(엉뚱한 파일에 쓰는 것보다 로컬에만 두는 게 낫다).
+    _acctKey: function() {
+        const k = window._appUserKey || window._nasAccount || '';
+        if (!k) return '';
+        return window._dailyKeyClean ? window._dailyKeyClean(k) : String(k).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    },
+    _nameFileOf: function(name) {
+        name = String(name || '').replace(/[\\\/:*?"<>|]/g, '').trim();
+        return (name && name !== '비로그인 (로컬)' && !/^(익명|알 수 없는)/.test(name)) ? ('TaskInbox_' + name + '.json') : null;
+    },
     _fileName: function() {
-        const name = (window.currentUserName || '').replace(/[\\\/:*?"<>|]/g, '').trim();
-        return (name && name !== '비로그인 (로컬)') ? ('TaskInbox_' + name + '.json') : null;
+        const k = this._acctKey();
+        if (k) return 'TaskInbox_' + k + '.json';
+        if (window._storageMode && window._storageMode() === 'nas') return null;
+        return this._nameFileOf(window.currentUserName);
+    },
+    /** 예전 표시 이름으로 쓰던 파일들 — 계정 id 파일로 처음 한 번 합친다 */
+    _legacyFileNames: function() {
+        const out = [], self = this, cur = this._fileName();
+        const add = function(n) { const f = self._nameFileOf(n); if (f && f !== cur && out.indexOf(f) === -1) out.push(f); };
+        add(window.currentUserName);
+        try { const o = JSON.parse(localStorage.getItem('gantt_app_user') || 'null'); if (o && o.name) add(o.name); } catch (e) { /* 없음 */ }
+        try { (window._appUserNames || []).forEach(add); } catch (e) { /* 없음 */ }
+        return out;
+    },
+    /** 같은 카드가 양쪽에 있을 때 — 처리는 되돌리지 않고, 결재 본문은 있는 쪽을 받는다(더하기만). 바뀌면 true */
+    _adoptFrom: function(it, r) {
+        if (!it || !r) return false;
+        let ch = false;
+        if (it.status === '대기' && r.status && r.status !== '대기') { it.status = r.status; it.history = r.history || it.history; ch = true; }
+        if (r.mailRaw && r.mailRaw.bodyFetchedAt && !(it.mailRaw && it.mailRaw.bodyFetchedAt)) { it.mailRaw = r.mailRaw; ch = true; }
+        return ch;
     },
     load: function() {
         try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
@@ -238,6 +271,7 @@ window.TaskInbox = {
         if (!fname || !token) return 'skipped'; // 비로그인: localStorage 단독 동작
         try {
             const folderId = await window.getOrCreateTaskInboxFolder(token);
+            if (this._driveFileName !== fname) { this._driveFileId = null; this._driveFileName = fname; }
             if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
             // 🪦 [2026-11-24 실측 — 지운 DUMMY CODE 카드가 2분 뒤 되살아남] 같은 계정으로 앱을 띄운 다른 곳(다른 탭·브라우저·PC)이
             //    자기 옛 목록을 **통째로** 올리면, 방금 남긴 삭제 묘비까지 같이 사라진다(10:34 삭제·묘비 → 10:36 묘비 없는 34장).
@@ -259,12 +293,8 @@ window.TaskInbox = {
                         //    ② 원격에만 결재 본문(bodyFetchedAt)이 있으면 그 mailRaw 를 받는다.
                         const remoteBy = {}; ((rd && rd.inbox) || []).forEach(function(x) { if (x && x.uid) remoteBy[x.uid] = x; });
                         let adopted = 0;
-                        kept.forEach(function(it) {
-                            const r = it && remoteBy[it.uid];
-                            if (!r) return;
-                            if (it.status === '대기' && r.status && r.status !== '대기') { it.status = r.status; it.history = r.history || it.history; adopted++; }
-                            if (r.mailRaw && r.mailRaw.bodyFetchedAt && !(it.mailRaw && it.mailRaw.bodyFetchedAt)) { it.mailRaw = r.mailRaw; adopted++; }
-                        });
+                        const selfTI = this;
+                        kept.forEach(function(it) { if (it && selfTI._adoptFrom(it, remoteBy[it.uid])) adopted++; });
                         if (kept.length !== cur.length || adopted) {
                             if (kept.length !== cur.length) console.info('[업무 보관함] 다른 곳에서 지운 카드 ' + (cur.length - kept.length) + '장을 올리기 전에 뺐습니다');
                             if (adopted) console.info('[업무 보관함] 다른 곳에서 처리·보강된 카드 ' + adopted + '건을 올리기 전에 받았습니다');
@@ -300,7 +330,9 @@ window.TaskInbox = {
         if (!fname || !token) return;
         try {
             const folderId = await window.getOrCreateTaskInboxFolder(token);
+            this._driveFileName = fname;
             this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
+            await this._mergeLegacyFiles(token, folderId);
             if (!this._driveFileId) { this.scheduleDriveSync(); return; } // 첫 사용: 로컬 내용을 드라이브로 업로드
             const resp = await fetch('https://www.googleapis.com/drive/v3/files/' + this._driveFileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
             if (!resp.ok) return;
@@ -312,7 +344,8 @@ window.TaskInbox = {
             // 💡 uid 기준 병합: 같은 항목은 로컬 우선(현재 기기에서 조작한 상태가 최신), 드라이브에만 있으면 복원
             const local = this.load(); const byUid = {};
             remote.forEach(function(it) { if (it && it.uid) byUid[it.uid] = it; });
-            local.forEach(function(it) { if (it && it.uid) byUid[it.uid] = it; });
+            const selfTI = this;
+            local.forEach(function(it) { if (it && it.uid) { selfTI._adoptFrom(it, byUid[it.uid]); byUid[it.uid] = it; } });
             const merged = Object.keys(byUid)
                 .filter(function(k) { return !tombSet[k]; }) // ⭐ 지운 건은 다시 살리지 않는다
                 .map(function(k) { return byUid[k]; }).sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
@@ -321,6 +354,41 @@ window.TaskInbox = {
             const ov = document.getElementById('task-inbox-overlay');
             if (window.renderTaskInbox && ov && ov.style.display === 'flex') window.renderTaskInbox();
         } catch (e) { console.warn('보관함 드라이브 복원 실패(로컬 유지):', e); }
+    },
+    /** 🪪 예전 이름 파일(TaskInbox_<표시이름>.json)을 계정 id 파일로 **한 번** 합친다 — 묘비·카드·처리·본문.
+     *  옛 파일은 지우지 않는다(백업으로 남김). 계정별로 한 번(localStorage 표시), 실패하면 다음에 다시. */
+    _mergeLegacyFiles: async function(token, folderId) {
+        const k = this._acctKey();
+        if (!k) return;
+        const flag = 'gantt_inbox_legacy_merged_' + k;
+        try { if (localStorage.getItem(flag)) return; } catch (e) { /* 계속 */ }
+        const names = this._legacyFileNames();
+        let total = 0, okAll = true;
+        for (let i = 0; i < names.length; i++) {
+            try {
+                const id = await window._findOrMigrateFile(token, names[i], folderId);
+                if (!id) continue;
+                const r = await fetch('https://www.googleapis.com/drive/v3/files/' + id + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
+                if (!r.ok) { okAll = false; continue; }
+                const d = await r.json();
+                const tombSet = this._mergeTombs((d && d.deleted) || []);
+                const list = this.load(), by = {}, selfTI = this;
+                list.forEach(function(x) { if (x && x.uid) by[x.uid] = x; });
+                let n = 0;
+                ((d && d.inbox) || []).forEach(function(x) {
+                    if (!x || !x.uid || tombSet[x.uid]) return;
+                    if (by[x.uid]) { if (selfTI._adoptFrom(by[x.uid], x)) n++; }
+                    else { list.push(x); by[x.uid] = x; n++; }
+                });
+                const kept = list.filter(function(x) { return !(x && tombSet[x.uid]); })
+                    .sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
+                this.save(kept, true);
+                total += n;
+                console.info('[업무 보관함] 예전 이름 파일 ' + names[i] + ' 을 ' + this._fileName() + ' 로 합침: ' + n + '건');
+            } catch (e) { okAll = false; console.warn('[업무 보관함] 예전 이름 파일 합치기 실패(다음에 다시):', names[i], e && e.message); }
+        }
+        if (okAll) { try { localStorage.setItem(flag, new Date().toISOString()); } catch (e) { /* 무시 */ } }
+        if (total) this.scheduleDriveSync();
     }
 };
 
