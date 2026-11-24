@@ -33,7 +33,8 @@ window.__approvalIntakeTest = async function () {
                   D('905', 'STELLAR32 vs KGP-4 패널 비교 검토', '기안서', '진행중', 4)],
         viewer: [D('903', '연차 휴가 신청', '휴가신청서', '완료', 1),
                  D('904', '사무용품 구매', '구매품의서', '완료', 1),
-                 D('906', 'STELLAR32 옛 문서', '기안서', '완료', 400)]
+                 D('906', 'STELLAR32 옛 문서', '기안서', '완료', 400),
+                 D('908', 'KGP-4 75" C EC PANEL 변경 검토', '업무협조전', '진행중', 1)]   // 크기 어긋남(KGP-4 는 55")
     };
     let gwOk = true, boxFail = '';
     const calls = { status: 0, list: [], place: [], extras: [] };
@@ -45,6 +46,9 @@ window.__approvalIntakeTest = async function () {
         toast: window.showToast
     };
     const RUN = Date.now().toString(36);
+    // 킬스위치는 원래 값을 되돌린다 — 실제 데이터가 든 탭에서 일부러 꺼 둔 것을 하네스가 켜 버리면 배경 스캔이 진짜로 돈다
+    const offWas = localStorage.getItem(window.APPROVAL_INTAKE.offKey);
+    localStorage.removeItem(window.APPROVAL_INTAKE.offKey);
     window.TaskInbox.KEY = 'zz_apv_test_inbox_' + RUN;
     window.TaskInbox.scheduleDriveSync = function () {};
     window.APPROVAL_INTAKE.storeKey = 'zz_apv_test_store_' + RUN;
@@ -74,7 +78,7 @@ window.__approvalIntakeTest = async function () {
         // ── 2. 첫 스캔 ─────────────────────────────────────────────────────
         r = await window.approvalIntakeRun({ manual: false, toast: false });
         ok(calls.list.join(',') === 'draft,approve,viewer', '2-1 기안·결재·참조/열람 세 문서함을 부른다(임시저장 제외)', calls.list);
-        ok(r.looked === 7, '2-2 목록 7건을 봤다', r);
+        ok(r.looked === 8, '2-2 목록 8건을 봤다', r);
         const c901 = card('901');
         ok(!!c901 && calls.place.some(p => p.fid === 'T1'), '2-3 STELLAR32 문서 → 보관함 카드 + STELLAR32 프로젝트에 자동배치', { c901: !!c901, place: calls.place });
         ok(inbox().filter(it => it.mailRaw && it.mailRaw.key === 'apv_901').length === 1, '2-4 두 문서함에 있는 같은 문서는 카드 하나', inbox().map(i => i.mailRaw && i.mailRaw.key));
@@ -86,7 +90,11 @@ window.__approvalIntakeTest = async function () {
         ok(!card('903') && r.skippedForm === 1, '2-9 휴가신청서 양식은 가져오지 않는다', r);
         ok(!card('904') && r.noMatch === 1, '2-10 후보 없는 문서(사무용품)는 카드를 만들지 않는다', r);
         ok(!card('906') && r.old === 1, '2-11 소급 기간보다 오래된 문서는 가져오지 않는다', r);
-        ok(r.placed === 2 && r.pending === 1, '2-12 집계: 배치 2 · 대기 1', r);
+        ok(r.placed === 2 && r.pending === 2, '2-12 집계: 배치 2 · 대기 2', r);
+        const c908 = card('908');
+        ok(!!c908 && c908.status === '대기' && c908.matchedProject.routing.basis === 'size_mismatch' && !calls.place.some(p => p.fid === 'K1'), '2-13 📐 제목 크기(75")가 대상(KGP-4 55")과 다르면 자동배치 대신 대기', c908 && c908.matchedProject);
+        const S = window._approvalSizesIn;
+        ok(S('LNW>HORIZON>23.8" BTN@VINA').join() === '23.8' && S('KGI>32TPR (502579)').join() === '32' && S('Shuffler display 4.3in>ESD').join() === '4.3' && S('자재 추가 및 삭제 요청 (502626)').length === 0 && S('AI 프론티어 2기 29대').length === 0, '2-14 크기 읽기: 23.8" · 32TPR · 4.3in 은 크기, 관리번호·수량은 아님');
 
         // ── 3. 두 번째 스캔 → 새 것 없음 ───────────────────────────────────────
         const n0 = inbox().length, p0 = calls.place.length;
@@ -97,7 +105,7 @@ window.__approvalIntakeTest = async function () {
         boxes.draft.push(D('907', 'KGP-4 1500R 금형 수정 품의', '기안서', '진행중', 0));
         boxFail = 'viewer';
         r = await window.approvalIntakeRun({ manual: false, toast: false });
-        ok(r.fresh === 1 && !!card('907') && calls.place.some(p => p.fid === 'K1'), '4-1 새로 생긴 KGP-4 문서만 처리 → KGP-4 에 배치', r);
+        ok(r.fresh === 1 && !!card('907') && calls.place.some(p => p.fid === 'K1'), '4-1 새로 생긴 KGP-4 문서만 처리 → KGP-4 에 배치(크기 55" 일치 문구 없음)', r);
         ok(r.boxErrors.length === 1 && /참조/.test(r.boxErrors[0]), '4-2 한 문서함이 실패해도 나머지는 돌고, 실패를 드러낸다', r.boxErrors);
         boxFail = '';
 
@@ -116,6 +124,7 @@ window.__approvalIntakeTest = async function () {
         ok(false, '하네스 예외: ' + e.message, String(e.stack || '').slice(0, 300));
     } finally {
         try { localStorage.removeItem(window.TaskInbox.KEY); localStorage.removeItem(window.APPROVAL_INTAKE.storeKey); } catch (e) { /* 무시 */ }
+        try { if (offWas !== null) localStorage.setItem(window.APPROVAL_INTAKE.offKey, offWas); else localStorage.removeItem(window.APPROVAL_INTAKE.offKey); } catch (e) { /* 무시 */ }
         window.fetch = save.fetch; window._msLoadProjectIndex = save.idx; window._msAutoRegisterToProject = save.reg;
         window._msRegisterToProjectTargets = save.regT; window.isAutoRegisterEnabled = save.auto; window.TaskInbox.KEY = save.ibKey;
         window.TaskInbox.scheduleDriveSync = save.sync; window.APPROVAL_INTAKE.storeKey = save.storeKey; window.showToast = save.toast;

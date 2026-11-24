@@ -1646,6 +1646,9 @@ window.showMailRawModal = function(r) {
                      이름뿐이다. NAS 에 .eml 원본이 있으면 **전문과 첨부를 거기서 바로** 읽어 와
                      채운다(아래 코드). 이 버튼은 아웃룩으로 열고 싶을 때만 — 백엔드가 NAS 원본을
                      그 자리에서 여므로 **다운로드 사본이 안 생긴다**. 원본이 없으면 숨긴다. -->
+                <!-- 📋 [2026-11-24] 전자결재 문서(js/75)면 그룹웨어 원문을 **로그인된 전용 크롬**에서 연다(/gw/open-doc).
+                     일반 새 탭으로 열면 그룹웨어 로그인 화면만 뜬다. -->
+                <button id="inbox-mailraw-gw-btn" style="display:none; margin-left:6px; padding:7px 14px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🔗 ${_en ? 'Open in groupware' : '그룹웨어에서 열기'}</button>
                 <button id="inbox-mailraw-eml-btn" style="display:none; margin-left:6px; padding:7px 14px; background:#eaf7ea; color:#1f6a3a; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#d8eedd'; this.style.borderColor='#8ccba1';" onmouseout="this.style.background='#eaf7ea'; this.style.borderColor='#a8dab8';">📧 ${_en ? 'Open in Outlook' : '아웃룩으로 열기'}</button>
                 </span>
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="padding:7px 18px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;">✖ ${_en ? 'Close' : '닫기'}</button>
@@ -1674,6 +1677,15 @@ window.showMailRawModal = function(r) {
         if (!emlBtn) return;
         emlBtn.style.display = 'none';
         emlBtn.onclick = null;
+        // 📋 [2026-11-24] 전자결재 문서 — NAS .eml 이 원래 없다("원본 없음" 안내를 띄우지 않는다). 그룹웨어 열기 버튼만.
+        var gwBtn = document.getElementById('inbox-mailraw-gw-btn');
+        var apv = r && (r.approval || (/^apv_/.test(String(r.key || '')) ? { id: String(r.key).slice(4) } : null));
+        if (gwBtn) { gwBtn.style.display = apv ? '' : 'none'; gwBtn.onclick = apv ? function () { window.approvalOpenInGw && window.approvalOpenInGw(apv); } : null; }
+        if (apv) {
+            var _tt = document.getElementById('inbox-mailraw-title');
+            if (_tt) _tt.textContent = '📋 ' + (_en2 ? 'Approval document' : '전자결재 문서');
+            return;
+        }
         var fn = r && r.fileName;
         var metaEl = document.getElementById('inbox-mailraw-meta');
         // 📧 [2026-10-28] NAS 원본을 못 읽으면(외부 접속·백엔드 꺼짐·10/22 이전 메일) 프로젝트 파일 밖으로

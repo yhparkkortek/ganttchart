@@ -1551,3 +1551,11 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 - 실제 그룹웨어 문서로 판정 품질 미확인 — 제목에 모델명이 없는 결재는 `no_match` 로 많이 빠질 수 있다.
 
 검증 `tests/approval-intake.browser.js` 18/18 (가짜: fetch `/gw/*`·`_msLoadProjectIndex`·`_msAutoRegisterToProject`·`_msRegisterToProjectTargets`·`isAutoRegisterEnabled`·보관함/장부 임시 키).
+
+### 실문서 확인 (2026-11-24, 회사 PC · 실제 그룹웨어 · 실제 색인 24개 프로젝트, 쓰기 없이 판정만)
+- 세 문서함 최근 40건씩 → 중복 빼고 116건: **자동 76 · 대기 13(+크기 가드로 내린 3) · 후보 없음 23** (제외 양식 0).
+- 자동 판정 근거를 하나씩 봤다: `KASCADA43`·`Landmark 27.6`·`502459` 처럼 이상해 보인 것도 **그 프로젝트 키워드에 실제로 있어서** 맞았다.
+- **진짜 오배치 3건은 전부 크기 어긋남** → 📐 크기 가드(`sizeGuard`): 제목 크기(23.8"·32TPR·75")가 대상 프로젝트 크기와 하나도 안 맞으면 자동 대신 대기.
+  HORIZON 23.8" → HORIZON75 · KGI>32TPR → KGI 75 · KONAMI 75" → KGP-4(55"). 색인 크기는 반올림돼 있어(31.5" 모델이 32) 허용 오차 0.6.
+- 후보 없음 23건 대부분은 `Customer Approval Sheet[133152]`(원자재 코드뿐)·AI 도구 구독 품의·교육 — 원자재 코드 → 프로젝트(BOM) 연결이 다음 거리.
+- 🔗 원문 창: 결재 문서면 ".eml 없음" 안내 대신 `🔗 그룹웨어에서 열기` — `/gw/open-doc`(로그인된 전용 크롬에 새 탭, 실측으로 220872 열림). 백엔드 실패 시만 일반 새 탭 폴백(`approvalOpenInGw`, js/75).

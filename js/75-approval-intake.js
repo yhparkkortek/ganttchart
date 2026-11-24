@@ -41,7 +41,12 @@
         firstDelaySec: 90,             // 앱을 연 뒤 첫 배경 스캔까지
         intervalMin: 120,              // 배경 스캔 간격(그룹웨어가 로그인돼 있을 때만)
         skipForms: ['휴가', '연차', '반차', '근태', '경조', '조퇴', '외출'],  // 양식 이름에 이 말이 있으면 가져오지 않는다
-        seenMax: 4000                  // 장부 상한(오래된 것부터 버린다)
+        seenMax: 4000,                 // 장부 상한(오래된 것부터 버린다)
+        // 📐 크기 가드(2026-11-24 실문서 120건 판정에서 찾음) — 제목에 크기가 적혀 있는데 대상 프로젝트 크기와 하나도 안 맞으면
+        //    자동배치하지 않고 대기. 실측 오배치 3건: HORIZON 23.8" → 75" 프로젝트 · KGI>32TPR → 75" · KONAMI 75" → 55" KGP-4.
+        //    단위 없는 숫자는 크기로 안 본다 — 단, 아래 접미어가 바로 붙으면 크기다(32TPR·75MVD).
+        sizeGuard: true,
+        sizeSuffixes: ['TPR', 'MVD', 'TVD', 'BTN', 'UPR', 'LWR', 'MAIN', 'TOP']
     };
     var P = window.APPROVAL_INTAKE;
     var BASE = window.BACKEND_BASE || 'http://127.0.0.1:5000';
@@ -145,6 +150,52 @@
         return { status: 'matched', candidates: [pre.target], extraCandidates: (pre.extra || []).slice(), confidence: '상',
                  matchBasis: '🧭 ' + (pre.reason || ''), routing: { basis: pre.basis, family: pre.family, aiConfidence: '', v: window.MAIL_ROUTING_RULE_V || '' } };
     }
+    /** 제목에 적힌 크기(인치) 목록 — 23.8" · 75인치 · 4.3in · 32TPR */
+    function sizesIn(title) {
+        var s = String(title || ''), out = {}, m;
+        var re1 = /(^|[^0-9.])(\d{1,3}(?:\.\d)?)\s*(?:"|”|″|''|inch|인치|in(?![a-z]))/gi;
+        while ((m = re1.exec(s))) out[String(parseFloat(m[2]))] = 1;
+        var suf = (P.sizeSuffixes || []).join('|');
+        if (suf) {
+            var re2 = new RegExp('(^|[^0-9.A-Za-z])(\\d{2}(?:\\.\\d)?)(?:' + suf + ')(?![a-z])', 'gi');
+            while ((m = re2.exec(s))) out[String(parseFloat(m[2]))] = 1;
+        }
+        return Object.keys(out);
+    }
+    /** 크기가 어긋나나 — 제목에 크기가 있고, 대상의 크기를 알고, 하나도 안 맞으면 true */
+    function sizeMismatch(title, target) {
+        if (!P.sizeGuard || !target) return false;
+        var tin = parseFloat(target.inch);
+        if (!tin) return false;
+        var ss = sizesIn(title);
+        if (!ss.length) return false;
+        // 색인의 크기는 반올림돼 있다(31.5" 모델이 32) — 0.6 안쪽이면 같은 크기로 본다
+        return !ss.some(function (x) { return Math.abs(parseFloat(x) - tin) <= (P.sizeTolerance || 0.6); });
+    }
+    window._approvalSizesIn = sizesIn;   // 하네스용
+
+    /** 🔗 그룹웨어 원문 열기 — 사람이 로그인해 둔 전용 크롬(CDP)에 새 탭으로(/gw/open-doc, js/67 의뢰서 열기와 같은 길).
+     *  일반 새 탭은 로그인 화면만 뜬다 → 백엔드가 안 될 때만 폴백. @param apv {id, docNum, url} */
+    window.approvalOpenInGw = async function (apv) {
+        apv = apv || {};
+        var url = apv.url || (apv.id ? 'https://gw.kortek.co.kr/app/approval/document/' + apv.id : '');
+        if (window.showToast) window.showToast('🔗 ' + T('그룹웨어에서 여는 중…', 'Opening in groupware…'), 'info');
+        var res = null;
+        try {
+            res = await fetch(BASE + '/gw/open-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ docId: String(apv.id || ''), docNum: apv.docNum || '' }) }).then(function (r) { return r.json(); });
+        } catch (e) { res = { ok: false, message: String((e && e.message) || e) }; }
+        if (res && res.ok) { if (window.showToast) window.showToast('🔗 ' + T('그룹웨어 창(전용 크롬)에서 열었습니다.', 'Opened in the groupware window.'), 'success'); return true; }
+        if (url) {
+            var w = window.open(url, '_blank');
+            if (window.showToast) window.showToast(w ? '🔗 ' + T('새 탭에서 열었습니다 — 그룹웨어 로그인이 필요할 수 있습니다. (전용 크롬 실패: ', 'Opened in a new tab — sign-in may be needed. (') + ((res && res.message) || '') + ')'
+                                                     : '⚠️ ' + T('팝업이 막혔습니다: ', 'Popup blocked: ') + url, w ? 'info' : 'error', 8000);
+            return !!w;
+        }
+        if (window.showToast) window.showToast('⚠️ ' + T('문서를 열지 못했습니다: ', 'Could not open: ') + ((res && res.message) || ''), 'error');
+        return false;
+    };
+
     function inInbox(key) {
         try { return window.TaskInbox.load().some(function (it) { return it && it.mailRaw && it.mailRaw.key === key; }); } catch (e) { return false; }
     }
@@ -217,10 +268,16 @@
                 var key = keyOf(d);
                 if (inInbox(key)) { res.dup++; mark('dup'); continue; }
 
-                var mail = mailOf(d), pre = null, jd = null;
+                var mail = mailOf(d), pre = null, jd = null, tag = null;
                 try { pre = window.mailRoutePreJudge ? window.mailRoutePreJudge(mail, cands) : null; } catch (e) { pre = null; }
                 if (!pre) { try { jd = window.mailRouteJudge(mail, cands, null); } catch (e) { jd = null; } }
-                var tag = null;
+                if (pre && sizeMismatch(mail.subject, pre.target)) {
+                    // 자동 확정을 대기로 내린다 — 후보로는 남긴다(사람이 맞다고 보면 한 번에 보낼 수 있게)
+                    jd = { candidates: [pre.target].concat(pre.extra || []), basis: 'size_mismatch', family: pre.family,
+                           reason: T('제목 크기(' + sizesIn(mail.subject).join('/') + '")가 ' + (pre.target.model || '') + '(' + pre.target.inch + '") 와 다름 — 원래 판정: ', 'size in title differs from target — was: ') + pre.reason };
+                    pre = null;
+                    tag = waitTag(jd);
+                }
                 if (pre) tag = autoTag(pre);
                 else if (jd && jd.decision === 'auto' && jd.target) tag = waitTag({ candidates: [jd.target], reason: jd.reason, basis: jd.basis, family: jd.family });
                 else if (jd && jd.decision === 'wait' && jd.candidates && jd.candidates.length) tag = waitTag(jd);
