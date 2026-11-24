@@ -173,6 +173,12 @@ window.__mailRoutingTestBody = async function () {
     const candsO = cands.concat([C('O55', 'LnW_Obsidian_55.0.json', 'LnW Obsidian 55', 'LnW>Obsidian', '55', ['Obsidian55', '502444', 'Obsidian'])]);
     j = J(M('LNW>Obsidian Digital Wheel 31.5">Proto.B 샘플 자료 전달건.', 'Obsidian Digital Wheel 샘플 자료 첨부'), candsO, null);
     ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'D1', '4-24 고객사+낱말 조각(lnwobsidian)으로 충돌하지 않고 Digital Wheel 로', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
+    // [2026-11-24] 강한 단서(관리번호·모델명 통째)가 한 후보에만 있으면, 다른 후보의 키워드 조각('wheel315')은 충돌로 안 본다
+    const candsL7 = candsO.concat([C('L7', 'LNW_L7 Jackpot Wheel_31.5.json', 'L7 Jackpot Wheel', 'LNW>L7 Jackpot Wheel', '31.5', ['L7 Jackpot Wheel', '502582'])]);
+    candsL7.forEach(c => { if (c.drive_file_id === 'D1') c.keywords = c.keywords.concat(['Obsidian Digital Wheel 31.5"']); });
+    j = J(M('[DMS 문서 등록 신청서] P02,P06_LNW_L7 Jackpot Wheel 31.5in_502582', ''), candsL7, null);
+    ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'L7', '4-25 관리번호·모델명 통째(L7) vs 키워드 조각(wheel315) → L7', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
+    candsL7.forEach(c => { if (c.drive_file_id === 'D1') c.keywords = c.keywords.filter(k => k !== 'Obsidian Digital Wheel 31.5"'); });
     j = J(M('RE: New Traceability Requirements for Molded Plastic Components', 'LNW supplier reminder'), cands, null);
     ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-15 고객 전반 요구사항(Requirements) → LNW 프로젝트 전부', { d: j.decision, basis: j.basis, ids: allOf(j) });
 

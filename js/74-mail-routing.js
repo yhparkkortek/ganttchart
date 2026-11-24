@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-24b';
+    var RULE_V = '2026-11-24c';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -123,7 +123,10 @@
         '모니터', '디스플레이', '프로젝트', '모델', '패널', '샘플', '시제품',
         // [2026-11-23 실측] 보관함 대기 144건 재생에서 "고유 식별자"로 잘못 잡혀 충돌을 만든 범용 영단어.
         //  모델명 조각에서 나온 것이라 두 낱말 조각('digitalwheel'·'32landscape'·'dimensionec')은 그대로 남는다.
-        'digital', 'landscape', 'dimension', 'roadmap'
+        'digital', 'landscape', 'dimension', 'roadmap',
+        // [2026-11-24 실측] 패널 제조사 — 여러 제품이 같은 패널사를 쓴다. Obsidian55 키워드 'CSOT' 가 Cosmic Upright 49" 결재 문서
+        //  ('EC Panel(CSOT) + AD BD 변경')에 걸려 충돌했다. 3자 이하(BOE·AUO·INX)는 이미 길이 규칙에 걸린다.
+        'csot', 'innolux', 'tianma', 'sharp', 'samsung', 'lgdisplay'
     ];
     var STOP = {}; window.MAIL_ROUTING_STOPWORDS.forEach(function (w) { STOP[norm(w)] = 1; });
     // [2026-11-23] 우리 회사 이름 — 서명·제목("> KORTEK")·주소에 **모든 메일**에 나온다. 고객/가족 단서로 쓰면
@@ -514,6 +517,29 @@
             }
             return out({ decision: 'auto', target: cands[i1], candidates: [cands[i1]], basis: 'identifier',
                 reason: T('식별자 일치: ', 'identifier: ') + uniqHits[i1].slice(0, 3).join(', '), family: myFam });
+        }
+        // ②-0 [2026-11-24 실측 — L7 Jackpot Wheel 결재 4장 충돌] 강한 단서가 한 후보에만 있으면 그 후보 — 키워드 **통째**
+        //  = **관리번호(숫자 5자리+)나 모델명 통째**만. 키워드 통째는 강하다고 보지 않는다 — KONAMI 키워드 '1500R'(곡률 사양)이
+        //  'Amusnet 55J1500R' 에 걸려 그쪽으로 갈 뻔했다(실측). 공통 건 제목(회의록 등)엔 쓰지 않는다 — 고객사 전부로 가야 한다.
+        //  'LNW_L7 Jackpot Wheel 31.5in_502582' 는 L7 의 502582·모델명 통째에 걸리는데 Digital Wheel 의 키워드
+        //  'Obsidian Digital Wheel 31.5"' 를 쪼갠 'wheel315' 하나 때문에 충돌이 됐다. 약한 쪽 조각은 이 판정에서 뺀다.
+        if (withUniq.length > 1 && famKeys.length > 1 && P.strongBeatsPieces !== false && !isCommonSubject((mail && mail.subject) || '')) {
+            var isStrong = function (i, t) { var src = idents[i][t] || ''; return /^\d{5,}$/.test(t) || src === 'model' || t === norm(cands[i].model || ''); };
+            var strongIdx = withUniq.filter(function (i) { return uniqHits[i].some(function (t) { return isStrong(i, t); }); });
+            if (strongIdx.length === 1) {
+                var weakToks = {};
+                withUniq.forEach(function (i) { if (i !== strongIdx[0]) { uniqHits[i].forEach(function (t) { weakToks[t] = 1; }); uniqHits[i] = []; } });
+                Object.keys(famHit).forEach(function (f) { famHit[f] = famHit[f].filter(function (t) { return !weakToks[t]; }); if (!famHit[f].length) delete famHit[f]; });
+                var w0 = strongIdx[0];
+                withUniq = [w0]; famsWithUniq = {}; famsWithUniq[famOfIdx(w0)] = 1; famKeys = Object.keys(famsWithUniq);
+                var mine2 = {}; (famHit[famOfIdx(w0)] || []).forEach(function (t) { mine2[t] = 1; }); uniqHits[w0].forEach(function (t) { mine2[t] = 1; });
+                var famsOfTok2 = {};
+                Object.keys(famHit).forEach(function (f) { if (f !== famOfIdx(w0)) famHit[f].forEach(function (t) { famsOfTok2[t] = (famsOfTok2[t] || 0) + 1; }); });
+                if (strictOther) Object.keys(famsOfTok2).forEach(function (t) { if (famsOfTok2[t] >= 2) mine2[t] = 1; });
+                var other2 = Object.keys(famHit).filter(function (f) { return f !== famOfIdx(w0) && famHit[f].filter(function (t) { return !mine2[t]; }).length >= (strictOther ? 1 : 2); });
+                if (!other2.length) return out({ decision: 'auto', target: cands[w0], candidates: [cands[w0]], basis: 'identifier',
+                    reason: T('식별자 일치(강한 단서): ', 'identifier (strong): ') + uniqHits[w0].slice(0, 3).join(', '), family: famOfIdx(w0) });
+            }
         }
         // ② 고유 식별자가 여러 후보 — 가족이 다르면 충돌(대기), 같으면 가족 확정
         if (withUniq.length > 1 && famKeys.length > 1) {
