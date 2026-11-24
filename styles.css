@@ -53,6 +53,14 @@ textarea:focus, select:focus {
 #myTable tbody td input:focus, #myTable tbody td textarea:focus,
 .bs-col-label-input:focus { outline: none !important; }
 
+/* 🚫 [2026-11-24 "비활성 버튼 통일"] 비활성 버튼 = 흐림 0.5 + 금지 커서 한 벌(.action-btn 이 쓰던 값). 규칙은 이 셋뿐이었고
+   js 43곳이 `disabled = true` 만 걸어, 인라인 색이 있는 버튼은 **켜진 버튼과 똑같아 보였다**(브라우저 기본 흐림은 인라인 색에 진다).
+   스스로 흐린 색을 칠하던 곳(Summary 모델 ▲▼)은 그 색을 지우고 이 규칙에 맡겼다. 메뉴 항목은 자기 회색 글자가 있어 뺀다. */
+button:disabled:not(.topbar-menu-item), input[type="button"]:disabled, input[type="submit"]:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
 /* ───── 1. head 메인 스타일시트 (:root 변수 등) (원본 줄 31~1085) ───── */
     :root {
         --table-font-size:   clamp(9px, 1.05vw, 13px);

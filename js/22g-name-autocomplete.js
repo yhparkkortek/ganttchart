@@ -254,8 +254,9 @@ window._renderModelCardHtml = function(model, idx) {
     var _navBtn = function(dir, disabled, tip) {
         return '<button type="button"' + (disabled ? ' disabled' : ' onclick="window.moveProjectModel(' + idx + ',' + dir + ')"')
             + ' title="' + tip + '"'
-            + ' style="' + _pill + ' border:1px solid #cfe3e5; background:' + (disabled ? '#f5f7f8' : '#fff')
-            + '; color:' + (disabled ? '#ccc' : '#00707d') + '; cursor:' + (disabled ? 'default' : 'pointer') + '; padding:0 7px;"'
+            // 🚫 [2026-11-24 "비활성 버튼 통일"] 비활성 모양은 styles.css 전역 규칙(button:disabled — 흐림 0.5·금지 커서)에 맡긴다 —
+            //    여기서 회색까지 칠하면 두 번 흐려져 안 보인다.
+            + ' style="' + _pill + ' border:1px solid #cfe3e5; background:#fff; color:#00707d; cursor:pointer; padding:0 7px;"'
             + (disabled ? '' : ' onmouseover="this.style.background=\'#e0f5f7\';" onmouseout="this.style.background=\'#fff\';"')
             + '>' + (dir < 0 ? '▲' : '▼') + '</button>';
     };

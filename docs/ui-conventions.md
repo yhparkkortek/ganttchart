@@ -272,6 +272,14 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 - ⚠️ 토스트는 **최대 3줄**(320×64)이라 긴 글·사유가 길게 붙는 안내는 잘린다 — 그런 건 alert 로 둔다(일정 재계산 "사유: …" 줄이 그래서 남았다).
 - 바꿀 땐 정규식 일괄 변환 금지 — "취소되었"·"실패했" 도 같은 꼴이라 섞인다. 줄 번호+그 줄 글자를 확인하고, `alert(` 의 짝 괄호를 끝까지 따라가 바꿀 것.
 
+#### 비활성(disabled) 버튼 — 흐림 0.5 + 금지 커서 한 벌 (2026-11-24)
+- styles.css 맨 위 `button:disabled` 전역 규칙 하나(`opacity:.5; cursor:not-allowed`, `!important`) — `.action-btn` 이 쓰던 값.
+- 실측: 비활성 모양 규칙은 3개뿐이었고 js 43곳이 `disabled = true` 만 걸어, **인라인 색이 있는 버튼은 켜진 버튼과 똑같아 보였다**
+  (브라우저 기본 흐림은 인라인 색에 진다). Summary 모델 ▲▼ 는 회색을 손으로 칠하고 커서는 그대로였다 → 손 색을 지우고 규칙에 맡겼다
+  (안 지우면 두 번 흐려져 안 보인다). **새 버튼은 `disabled` 만 걸 것 — 회색을 따로 칠하지 말 것.**
+- 예외: 메뉴 항목(`.topbar-menu-item`)은 자기 회색 글자로 비활성을 보인다.
+- 처리 중 잠깐 흐리게 하는 `style.opacity`(0.4~0.75)는 비활성이 아니라 "진행 중" 표시라 이 규칙과 별개.
+
 #### 입력칸 포커스 표시 — 테마색 2px 한 벌 (2026-11-24)
 - 입력칸·textarea·select 에 들어가면 `outline: 2px solid var(--ui-accent-line)` — styles.css 맨 위 전역 규칙 하나(`!important`).
 - 실측: 새 찾기칸 13곳(Summary·BOM·JIRA·PARTS·일일보고·Calendar·Brief·프로젝트 불러오기·간트 AI검색…)이 인라인 `outline:none` 으로
