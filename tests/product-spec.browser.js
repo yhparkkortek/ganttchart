@@ -163,6 +163,24 @@ window.__psTest = async function (opt) {
         var bl = ['blu.r4.c3', 'blu.r4.c4', 'blu.r4.c2', 'blu.r3.c3'].map(function (k) { return window.DOC_AUTO_HOOKS.ps(cB, k).v; });
         check(bl.join('|') === '26.5|27.8||', 'BLU 전력 Typ/Max 표시대로, 표시 없는 전압은 비움 (' + bl.join('|') + ')');
         delete pSp['Lamps Power Consumption']; delete pSp['Lamp Voltage'];
+        // 🕒 타이밍 표 — 1열 패널 원래 해상도, 2·3열 같은 화면비 상세 블록, 4~6열 Established, 값은 표준 표
+        pSp['Dot Resolution'] = '1920 (H) × 1080 (V)';
+        var cT = window._dgCollect(), HT = window.DOC_AUTO_HOOKS.ps;
+        var tv = function (r, c) { return HT(cT, 'tim.r' + r + '.c' + c).v; };
+        var res6 = [1, 2, 3, 4, 5, 6].map(function (c) { return tv(1, c); }).join(',');
+        check(res6 === '1920x1080,1280x720,1366x768,640x480,800x600,1024x768', '타이밍 열 구성(화면비 같은 상세만) (' + res6 + ')');
+        check(tv(3, 1) === '148.5' && tv(11, 2) === '748' && tv(12, 1) === '+hsync' && tv(12, 4) === '' && tv(14, 4) === ''
+              && /표준 타이밍/.test(HT(cT, 'tim.r3.c1').src),
+              '표준 타이밍 값·극성은 상세 열만·출처 (' + [tv(3, 1), tv(11, 2), tv(12, 1), tv(12, 4)].join('|') + ')');
+        pSp['Dot Resolution'] = '1920 x 1200';            // 16:10 패널 — 16:9 상세 모드(1920x1080·1280x720)가 끼면 안 된다
+        var cT3 = window._dgCollect();
+        var d3 = [2, 3].map(function (c) { return HT(cT3, 'tim.r1.c' + c).v; }).join(',');
+        check(d3 === '1680x1050,1440x900', '16:10 패널은 16:10 상세 모드만 (' + d3 + ')');
+        pSp['Dot Resolution'] = '480 x 272';
+        var cT2 = window._dgCollect();
+        check(HT(cT2, 'tim.r1.c1').v === '480x272' && HT(cT2, 'tim.r3.c1').v === '' && /없음/.test(HT(cT2, 'tim.r3.c1').src)
+              && HT(cT2, 'tim.r1.c4').v === '', '표준 표에 없는 해상도는 비우고 이유 · 원래 해상도보다 큰 열은 안 넣음');
+        delete pSp['Dot Resolution'];
         window._epLibCache = libSaved;
         // 🔌 전원 — Customer SPEC 의 소비전력(하위 줄 'LCD Monitor')·입력 커넥터('/' 뒤, 핀 수 표기 떼기)
         var bs0 = window.tabData.briefSpec;

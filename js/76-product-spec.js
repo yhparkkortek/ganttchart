@@ -157,6 +157,44 @@
         convIn: ['fn:convConn:in:Input Connector (Model/Pins)', 'fn:connModel:Input Connector (Model/Pins)'],
         convOut: ['fn:convConn:out:Output Connector (Model/Pins/Qty)', 'fn:connModel:Output Connector (Model/Pins/Qty)']
     };
+    // 🕒 Supply Video Timing Chart(15줄 × 6열) — 전부 'fn:tim:<줄>:<열>' 로. 열 구성은 PS_TIMING_COLS, 값은 PS_STD_TIMINGS(데이터)
+    (function () {
+        for (var tr = 0; tr <= 14; tr++) for (var tc = 1; tc <= 6; tc++) {
+            var tk = 'tim.r' + tr + '.c' + tc;
+            if (!window.PS_AUTO[tk]) window.PS_AUTO[tk] = ['fn:tim:' + tr + ':' + tc];
+        }
+    })();
+    // 🕒 표준 타이밍(데이터) — 'WxH@Hz' → 규격·도트클럭(MHz)·H(활성/싱크시작/싱크끝/전체)·V(〃)·극성.
+    //   ⚠️ 실제 제품 EDID(스케일러 펌웨어)는 표준과 몇 값이 다를 수 있다 — 실측(2026-11-24, 32" QHD 원본 사양서):
+    //   800x600·1024x768 은 DMT 와 글자까지 같고, 나머지 넷은 V Total·싱크 자리·극성이 몇 개 달랐다.
+    //   그래서 출처에 '표준값'임을 밝히고, 실제 값은 사람이 고치거나 기존 사양서를 불러온다.
+    window.PS_STD_TIMINGS = window.PS_STD_TIMINGS || {
+        '640x480@60':   { std: 'VESA DMT', clk: '25.175', h: [640, 656, 752, 800], v: [480, 490, 492, 525], hp: '-', vp: '-' },
+        '800x600@60':   { std: 'VESA DMT', clk: '40', h: [800, 840, 968, 1056], v: [600, 601, 605, 628], hp: '+', vp: '+' },
+        '1024x768@60':  { std: 'VESA DMT', clk: '65', h: [1024, 1048, 1184, 1344], v: [768, 771, 777, 806], hp: '-', vp: '-' },
+        '1280x720@60':  { std: 'VESA CVT', clk: '74.5', h: [1280, 1344, 1472, 1664], v: [720, 723, 728, 748], hp: '-', vp: '+' },
+        '1280x800@60':  { std: 'VESA DMT (CVT)', clk: '83.5', h: [1280, 1352, 1480, 1680], v: [800, 803, 809, 831], hp: '-', vp: '+' },
+        '1280x1024@60': { std: 'VESA DMT', clk: '108', h: [1280, 1328, 1440, 1688], v: [1024, 1025, 1028, 1066], hp: '+', vp: '+' },
+        '1366x768@60':  { std: 'VESA DMT', clk: '85.5', h: [1366, 1436, 1579, 1792], v: [768, 771, 774, 798], hp: '+', vp: '+' },
+        '1440x900@60':  { std: 'VESA DMT (CVT)', clk: '106.5', h: [1440, 1520, 1672, 1904], v: [900, 903, 909, 934], hp: '-', vp: '+' },
+        '1600x900@60':  { std: 'VESA DMT (RB)', clk: '108', h: [1600, 1624, 1704, 1800], v: [900, 901, 904, 1000], hp: '+', vp: '+' },
+        '1680x1050@60': { std: 'VESA DMT (CVT)', clk: '146.25', h: [1680, 1784, 1960, 2240], v: [1050, 1053, 1059, 1089], hp: '-', vp: '+' },
+        '1920x1080@60': { std: 'CTA-861 (VIC 16)', clk: '148.5', h: [1920, 2008, 2052, 2200], v: [1080, 1084, 1089, 1125], hp: '+', vp: '+' },
+        '1920x1200@60': { std: 'VESA DMT (RB)', clk: '154', h: [1920, 1968, 2000, 2080], v: [1200, 1203, 1209, 1235], hp: '+', vp: '-' },
+        '2560x1440@60': { std: 'VESA CVT', clk: '312.25', h: [2560, 2752, 3024, 3488], v: [1440, 1443, 1448, 1493], hp: '-', vp: '+' },
+        '3840x2160@30': { std: 'CTA-861 (VIC 95)', clk: '297', h: [3840, 4016, 4104, 4400], v: [2160, 2168, 2178, 2250], hp: '+', vp: '+' },
+        '3840x2160@60': { std: 'CTA-861 (VIC 97)', clk: '594', h: [3840, 4016, 4104, 4400], v: [2160, 2168, 2178, 2250], hp: '+', vp: '+' }
+    };
+    // 열 구성(데이터) — 원본 사양서 모양: 1열 = 패널 원래 해상도(Preferred), 2·3열 = 상세 블록 후보 중 원래 해상도보다
+    //   크지 않은 앞의 둘, 4~6열 = EDID Established 타이밍. 블록 이름 글자는 원본 그대로(줄바꿈 포함).
+    window.PS_TIMING_COLS = window.PS_TIMING_COLS || {
+        detail: ['1920x1080@60', '1280x720@60', '1366x768@60', '1600x900@60', '1920x1200@60', '1680x1050@60', '1440x900@60', '1280x800@60', '1280x1024@60'],
+        aspectTol: 0.03,   // 상세 블록은 원래 해상도와 화면비가 같은 것만(±3%) — FHD 패널에 16:10 모드가 끼지 않게
+        established: ['640x480@60', '800x600@60', '1024x768@60'],
+        priority: ['Primary', 'Secondary', 'Tertiary', '', '', ''],
+        block: ['Preferred \nBlock', 'Detail \nBlock 1', 'Detail \nBlock 2', 'Established \nBlock', 'Established \nBlock', 'Established \nBlock'],
+        refresh: 'YES'
+    };
     // 앱 값의 **모양**을 문서 칸에 맞춘다(데이터) — 단위는 옆 'Unit' 칸에 이미 있어서 값에 또 붙이면
     //   '698.112 mm' + 'mm' 처럼 두 번 찍힌다(실측). 못 맞추면 받은 그대로 둔다(지우지 않는다).
     window.PS_FMT = window.PS_FMT || {
@@ -566,6 +604,15 @@
         var parts = String(v || '').split(/\s*(?:~|\/|,|to)\s*/i).filter(function (x) { return x !== ''; });
         return parts.length > i ? parts[i] : '';
     };
+    // 패널 원래 해상도 — PARTS 패널 Dot Resolution → Customer SPEC Native Resolution (feat1 과 같은 순서)
+    var _nativeRes = function (ctx) {
+        var rec = _libRec(ctx, 'panel');
+        var fromLib = rec && rec.specs['Dot Resolution'];
+        var nat = fromLib || ((_specVal(ctx, ['Native Resolution', '해상도', 'Resolution']) || {}).v) || '';
+        var m = String(nat).match(/(\d{3,5})\D{1,8}?(\d{3,5})/);
+        if (!m) return null;
+        return { w: +m[1], h: +m[2], src: fromLib ? 'PARTS ▸ PANEL ▸ Dot Resolution' + _libSrcTail(rec, 'Dot Resolution') : 'Customer SPEC ▸ Native Resolution' };
+    };
     var _otherRevField = function (n, key) {
         var f = window._docRevisionFields ? window._docRevisionFields(FORM_ID, 'R' + n) : null;
         return f ? f[key] : undefined;
@@ -743,6 +790,35 @@
                 else if (names.length > 1) return { v: '', src: _t('PARTS AD BOARD 에 이 품번이 이름 다른 곳에 ' + names.length + '번 — 고르지 않음', 'ambiguous in PARTS') };
             }
             return pick ? { v: pick.name, src: 'PARTS ▸ AD BOARD ▸ ' + pick.key + _libSrcTail(rec, pick.key) } : { v: '', src: '' };
+        },
+        // 🕒 타이밍 표 한 칸 — 열 계획(원래 해상도 + 상세 2 + Established 3)을 세우고 표준 표에서 값을 꺼낸다
+        tim: function (ctx, a) {
+            var row = +a[0], col = +a[1];
+            var nat = _nativeRes(ctx);
+            if (!nat) return { v: '', src: _t('패널 원래 해상도 없음(PARTS 패널 Dot Resolution · Customer SPEC)', 'no native resolution') };
+            var C = window.PS_TIMING_COLS, natKey = nat.w + 'x' + nat.h + '@60';
+            var fits = function (k) { var m = k.match(/^(\d+)x(\d+)/); return m && +m[1] <= nat.w && +m[2] <= nat.h && k !== natKey; };
+            var sameAspect = function (k) { var m = k.match(/^(\d+)x(\d+)/); return m && Math.abs((+m[1] / +m[2]) / (nat.w / nat.h) - 1) <= (C.aspectTol || 0.03); };
+            var plan = [natKey].concat(C.detail.filter(function (k) { return fits(k) && sameAspect(k); }).slice(0, 2));
+            while (plan.length < 3) plan.push('');
+            plan = plan.concat(C.established.filter(fits).slice(0, 3));
+            var key = plan[col - 1] || '';
+            if (!key) return { v: '', src: '' };
+            var isDetail = col <= 3;
+            if (row === 0) return { v: C.priority[col - 1] || '', src: _t('타이밍 표 열 구성', 'timing columns') };
+            if (row === 2) return { v: C.block[col - 1] || '', src: _t('타이밍 표 열 구성', 'timing columns') };
+            if (row === 1) return { v: key.replace(/@.*$/, ''), src: col === 1 ? nat.src : _t('타이밍 표 열 구성', 'timing columns') };
+            if (row === 14) return { v: isDetail ? C.refresh : '', src: '' };
+            var t = window.PS_STD_TIMINGS[key];
+            if (!t) return { v: '', src: _t('표준 타이밍 표에 ' + key + ' 없음', key + ' not in standard table') };
+            var src = _t('표준 타이밍 ▸ ', 'standard timing ▸ ') + t.std + _t(' (실제 EDID 와 다를 수 있음)', ' (may differ from EDID)');
+            var v = '';
+            if (row === 3) v = t.clk;
+            else if (row >= 4 && row <= 7) v = String(t.h[row - 4]);
+            else if (row >= 8 && row <= 11) v = String(t.v[row - 8]);
+            else if (row === 12) v = isDetail ? t.hp + 'hsync' : '';
+            else if (row === 13) v = isDetail ? t.vp + 'vsync' : '';
+            return { v: v, src: src };
         },
         // 'Consumption' — Customer SPEC 소비전력(첫 줄 = LCD Monitor, 디스플레이만)의 숫자만 원본 문장 모양으로
         pwrCons: function (ctx) {
