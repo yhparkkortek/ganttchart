@@ -12115,17 +12115,6 @@ ${docsJson}`;
                             </select>
                             <button id="gantt-qa-freq-del-btn" onclick="window._ganttQaDeleteFreqQuestion(window._ganttQaLastFreqSelected)" title="${_qEn ? 'Delete this question from the list' : '이 질문을 목록에서 삭제'}" style="display:none; flex-shrink:0; align-items:center; justify-content:center; width:26px; height:26px; box-sizing:border-box; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';">🗑️</button>
                         </div>
-                        <!-- 🔗 [2026-11-23, 사용자 요청] 글자 선택→"AI 문답으로" 아이콘으로 여러 곳의
-                             글을 "조합"하고 싶을 때를 위한 모드 토글. 기본(매번 새로운 글)은 꺼 두고,
-                             이어쓰기(연속 선택을 지우지 않고 계속 붙임)는 켜야만 켜지는 예외 — 체크
-                             상태만 window._ganttQaAppendMode에 적고 끝(js/71이 읽음, 저장 안 함 —
-                             다음에 열면 항상 기본으로 돌아온다). -->
-                        <div style="display:flex; align-items:center; gap:6px; min-width:0;">
-                            <label style="display:flex; align-items:center; gap:5px; min-width:0; font-size:10.5px; color:#555; cursor:pointer; user-select:none;" title="${_qEn ? 'When checked, text picked up from another selection is added below what\'s already in the box instead of replacing it' : '켜두면 다른 곳에서 또 선택해 가져올 때 입력칸 내용을 지우지 않고 아래에 이어 붙입니다'}">
-                                <input type="checkbox" id="gantt-qa-append-toggle" onchange="window._ganttQaAppendMode = this.checked;" style="cursor:pointer; margin:0; flex-shrink:0;">
-                                <span>🔗 ${_qEn ? 'Keep adding selected text (don\'t overwrite)' : '선택한 글 이어쓰기(지우지 않고 계속 추가)'}</span>
-                            </label>
-                        </div>
                     </div>
                     <div style="flex:0 0 72px; display:flex; flex-direction:column; gap:6px; align-items:stretch;">
                         <!-- 🔇/🔊 [2026-10-28, 사용자 요청 "뮤트 버튼도 이전 높이 음성문답 버튼과 나란히
@@ -12152,7 +12141,7 @@ ${docsJson}`;
                         <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear Chat' : '대화삭제'}</button>
                     </div>
                 </div>
-                <div style="padding:8px 14px 10px; display:flex; gap:8px; align-items:stretch;">
+                <div style="padding:8px 14px 6px; display:flex; gap:8px; align-items:stretch;">
                     <!-- 📎 [2026-09-15 UI 변경] 첨부파일·자동 버튼을 96px 컬럼으로 세로 묶음 → textarea 왼쪽 끝이 자주쓰는질문 select와 정렬됨 -->
                     <div style="flex:0 0 96px; display:flex; flex-direction:column; gap:6px; min-width:0;">
                         <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a file (PDF, Excel, HTML, text…) — its text is sent with your question' : '파일 첨부(PDF·엑셀·HTML·텍스트…) — 글자를 읽어 질문과 함께 보냅니다'}" style="flex:1; width:100%; box-sizing:border-box; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach File' : '첨부파일'}</button>
@@ -12162,6 +12151,17 @@ ${docsJson}`;
                     <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line, ↑↓=History)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈, ↑↓=이전 질문)'}" style="flex:1; min-width:0; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="window._ganttQaHandleInputKeydown(event)"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:0 0 72px; box-sizing:border-box; padding:0 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>
+                <!-- 🔗 [2026-11-23, 사용자 요청] 글자 선택→"AI 문답으로" 아이콘으로 여러 곳의
+                         글을 "조합"하고 싶을 때를 위한 모드 토글. 기본(매번 새로운 글)은 꺼 두고,
+                         이어쓰기(연속 선택을 지우지 않고 계속 붙임)는 켜야만 켜지는 예외 — 체크
+                         상태만 window._ganttQaAppendMode에 적고 끝(js/71이 읽음, 저장 안 함 —
+                         다음에 열면 항상 기본으로 돌아온다). -->
+                    <div style="padding:0 14px 8px; display:flex; align-items:center; gap:6px; min-width:0;">
+                        <label style="display:flex; align-items:center; gap:5px; min-width:0; font-size:10.5px; color:#555; cursor:pointer; user-select:none;" title="${_qEn ? 'When checked, text picked up from another selection is added below what\'s already in the box instead of replacing it' : '켜두면 다른 곳에서 또 선택해 가져올 때 입력칸 내용을 지우지 않고 아래에 이어 붙입니다'}">
+                            <input type="checkbox" id="gantt-qa-append-toggle" onchange="window._ganttQaAppendMode = this.checked;" style="cursor:pointer; margin:0; flex-shrink:0;">
+                            <span>🔗 ${_qEn ? 'Keep adding selected text (don\'t overwrite)' : '선택한 글 이어쓰기(지우지 않고 계속 추가)'}</span>
+                        </label>
+                    </div>
                 </div>
             </div>`;
             document.body.appendChild(modal);
