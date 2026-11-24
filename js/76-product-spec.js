@@ -47,18 +47,21 @@
         'cover.r1.c1': ['meta:KTK모델명'],
         'cover.r1.c2': ['pl:pn', 'meta:고객모델명'],
         // 부품 표 — 1 LCD Panel · 2 Scaler PCB · 3 BLU Converter · 4 Touch Sensor · 5 Touch Controller
-        'parts.r1.c1': ['pl:panel', 'mat:PANEL'],
+        //   ⚠️ [2026-11-24 사용자 결정] **BOM 이 실제 정보** — BOM → 이 모델 카드 주요자재 → Project list 순서.
+        //      실측: Project list 는 AD 보드를 다른 보드로, 주요자재는 패널 끝 글자를 다르게, 터치 없는 모델 카드엔
+        //      복사된 터치 컨트롤러를 들고 있었다. BOM 은 셋 다 원본 사양서와 맞았다.
+        'parts.r1.c1': ['bom:PANEL', 'umat:PANEL', 'pl:panel'],
         'parts.r1.c2': ['const:-'],
         'parts.r1.c3': ['pl:panelMfr', 'panel:Panel Brand'],
-        'parts.r2.c1': ['pl:adbd', 'mat:AD BOARD'],
+        'parts.r2.c1': ['bom:AD BOARD', 'umat:AD BOARD', 'pl:adbd'],
         'parts.r2.c2': ['pl:adFw', SPEC.fw],
         'parts.r2.c3': ['adbd:Brand'],
-        'parts.r3.c1': ['pl:bluDriver', 'mat:CONVERTER'],
+        'parts.r3.c1': ['bom:CONVERTER', 'umat:CONVERTER', 'pl:bluDriver'],
         'parts.r3.c2': ['const:-'],
         'parts.r3.c3': ['conv:Brand'],
-        'parts.r4.c1': ['pl:tsp', 'mat:TSP/GLASS', 'const:-'],
+        'parts.r4.c1': ['fn:touchPart:TSP/GLASS:tsp'],
         'parts.r4.c2': ['const:-'],
-        'parts.r5.c1': ['pl:touchCtrl', 'mat:TOUCH CTRL', 'const:-'],
+        'parts.r5.c1': ['fn:touchPart:TOUCH CTRL:touchCtrl'],
         'parts.r5.c2': ['fn:touchFw'],
         'parts.r5.c3': ['touch:Brand'],
         // 개정 이력 — 리비전 R1..R5 가 각 줄(다른 리비전에 적어 둔 값을 읽어 온다)
@@ -289,16 +292,43 @@
                 conv: { cat: 'CONVERTER', pl: 'bluDriver', type: 'convbd' },
                 touch: { cat: 'TOUCH CTRL', pl: 'touchCtrl', type: 'touchctrl' } };
     var _libPending = {};
+    // 🧾 BOM 에서 부품 종류 가르기(데이터) — 내역 앞 구분자(`LCM IPS>…`·`PBA-AD>…`) 또는 자재그룹(WGBEZ60).
+    //    구분자는 사내 자재그룹표 그대로라 `_bomPartNameOf`(js/56) 가 같은 규칙으로 부품명 자리를 안다.
+    //    ⚠️ 보드는 자재그룹이 다 'BD 반제품/PBA' 라 **구분자로만** 가른다(LED 보드 `PBA-LED` 와 섞이면 안 된다).
+    window.PS_BOM_PARTS = window.PS_BOM_PARTS || {
+        'PANEL': { seps: ['LCM', 'FOG', 'OLED', 'KD LCM', 'KD-LCM', 'KE LCM', 'KE-LCM'], groups: ['DISPLAY/'] },
+        'AD BOARD': { seps: ['PBA-AD', 'PBM AD'] },
+        'CONVERTER': { seps: ['PBA-CNV'] },
+        'TOUCH CTRL': { seps: ['PBA-T', 'PBM TCH-CON'] },
+        'TSP/GLASS': { seps: ['TSP'], groups: ['TOUCH SCREEN MODULE', 'TOUCH SCREEN ASSY'] }
+    };
+    // 이 모델 BOM 에서 그 부품 — null = BOM 을 안 받아서 모름 · false = BOM 엔 없음 · {code,name,desc}
+    var _bomPart = function (cat) {
+        var st = window._bomStore ? window._bomStore() : null;
+        var rows = (st && st.rows) || [];
+        if (!rows.length) return null;
+        var rule = (window.PS_BOM_PARTS || {})[cat];
+        if (!rule) return null;
+        var best = null, bestLv = 99;
+        rows.forEach(function (r) {
+            var d = String(r.OJTXP || '').trim();
+            var gt = d.indexOf('>');
+            var sep = gt > 0 ? d.slice(0, gt).trim().toUpperCase().replace(/\s+/g, ' ') : '';
+            var grp = String(r.WGBEZ60 || '').toUpperCase();
+            var hit = (rule.seps || []).some(function (x) { return sep === x || sep.indexOf(x + ' ') === 0; })
+                   || (rule.groups || []).some(function (x) { return grp.indexOf(x) === 0 || grp.indexOf('/' + x) >= 0; });
+            if (!hit) return;
+            var lv = (typeof r._level === 'number') ? r._level : 9;
+            if (lv < bestLv) { bestLv = lv; best = r; }
+        });
+        if (!best) return false;
+        var nm = window._bomPartNameOf ? window._bomPartNameOf(best.OJTXP) : null;
+        return { code: String(best.IDNRK || '').trim(), name: nm || '', desc: String(best.OJTXP || '').trim() };
+    };
     // 지금 모델 카드 **자신의** 주요자재 한 줄(다른 카드로 폴백하지 않는다)
     var _ownMat = function (cat) {
         var card = ((window.tabData || {}).projectModels || []).filter(function (m) { return m && m.unitId === (window.mcActiveUnit || ''); })[0];
         return ((card && card.materials) || []).filter(function (m) { return m && m.category === cat && !_isNone(m.description || m.ktkPn); })[0] || null;
-    };
-    // 같은 부품인가 — 영숫자만 남겨 한쪽이 다른 쪽으로 시작하면 같다('ABC-MA_V00' ≈ 'ABC-MA', 'XYZ-QHD' ≠ 'XYZ-QLW')
-    var _samePart = function (a, b) {
-        var x = String(a || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), y = String(b || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (!x || !y) return false;
-        return x.indexOf(y) === 0 || y.indexOf(x) === 0;
     };
     var _libRec = function (ctx, which) {
         var L = LIB[which], cache = window._epLibCache || {};
@@ -314,22 +344,20 @@
             }
             return null;
         }
-        // 🔎 [2026-11-24 실측] 이름만으로 찾으면 못 찾거나 **다른 부품**을 집는다 —
-        //   · Project list 'ABC-MA_V00' ↔ 라이브러리 '<코드>_PBA-T>ABC-MA,…' 처럼 이름이 달라 못 찾았다(터치 컨트롤러)
-        //   · 이 모델 카드 주요자재엔 **품목 코드**가 있다 → 코드로 찾으면 정확하다.
-        //   ⚠️ 단 문서에 보이는 부품 이름(Project list)과 주요자재가 **다른 부품**이면(실측: AD 보드 이름 끝자리가 달랐다)
-        //      코드로 찾지 않는다 — 같은 문서에서 이름은 이 부품, 사양은 저 부품이 되면 안 된다.
+        // 🔎 찾는 순서 = 부품 표 이름과 같은 순서(BOM → 주요자재 → Project list) — 한 문서에서 이름은 이 부품,
+        //    사양은 저 부품이 되면 안 된다. 각 출처에선 **품목 코드 먼저**(이름은 라이브러리마다 적는 법이 달라
+        //    못 찾았다 — 실측: 터치 컨트롤러). 패널은 라이브러리에 코드가 비어 있어 이름으로 찾힌다.
         var row = _plRow(ctx) || {};
-        var shown = _isNone(row[L.pl]) ? '' : String(row[L.pl]).trim();
+        var bp = _bomPart(L.cat);
         var mat = _ownMat(L.cat);
+        // BOM 을 받았는데 그 부품이 없으면 **기록도 없다** — 주요자재·Project list 로 넘어가지 않는다
+        //   (터치 없는 모델 카드에 복사돼 남은 터치 컨트롤러로 기록을 찾으면 안 된다)
+        if (bp === false) return null;
         var names = [];
-        if (mat && mat.ktkPn && (!shown || _samePart(shown, mat.description))) names.push(String(mat.ktkPn).trim());
-        if (shown) names.push(shown);
-        if (mat && mat.description && (!shown || _samePart(shown, mat.description))) names.push(mat.description);
-        if (!names.length) { var md = _matDesc(ctx, L.cat); if (md) names.push(md); }
-        // 보이는 이름으로 **아무것도 못 찾았을 때만** 주요자재로 — 실측 패널은 Project list 와 주요자재의
-        // 끝 글자가 다른 같은 계열이었고 라이브러리엔 주요자재 쪽 이름만 있었다(이걸 막으면 패널 사양 14줄이 통째로 빈다)
+        if (bp) { if (bp.code) names.push(bp.code); if (bp.name) names.push(bp.name); }
         if (mat) { if (mat.ktkPn) names.push(String(mat.ktkPn).trim()); if (mat.description) names.push(mat.description); }
+        if (!_isNone(row[L.pl])) names.push(String(row[L.pl]).trim());
+        if (!names.length) { var md = _matDesc(ctx, L.cat); if (md) names.push(md); }
         for (var i = 0; i < names.length; i++) {
             var rec = which === 'panel' ? (window.findPanelInLibrary && window.findPanelInLibrary(lib, names[i]))
                                         : (window.findElecPartInLibrary && window.findElecPartInLibrary(lib, names[i]));
@@ -371,8 +399,14 @@
             // ⚠️ Project list 는 '없음'을 `X` 로 적는다(실측 — 터치 없는 구분자) — 글자가 있다고 '있음'이 아니다.
             //    Project list 에 이 제품이 있으면 그걸 믿고, 없을 때만 **이 모델 카드 자신의** 주요자재를 본다
             //    (ctx.materials 는 다른 모델 카드로 폴백하므로 다른 구분자의 터치가 새어 들어온다).
+            //    [2026-11-24] **BOM 이 있으면 BOM 이 정한다**(터치 컨트롤러나 터치 센서가 BOM 에 있는가).
             var row = _plRow(ctx);
             var has;
+            var bt = _bomPart('TOUCH CTRL'), bs = _bomPart('TSP/GLASS');
+            if (bt !== null || bs !== null) {
+                has = !!(bt || bs);
+                return { v: has ? 'YES' : 'NO', src: 'BOM ▸ ' + _t('터치 컨트롤러·센서 유무', 'touch parts in BOM') };
+            }
             if (row && Object.prototype.hasOwnProperty.call(row, 'touchCtrl')) {
                 has = !_isNone(row.touchCtrl);
             } else {
@@ -381,6 +415,16 @@
                 has = mats.some(function (m) { return m && m.category === 'TOUCH CTRL' && !_isNone(m.description || m.ktkPn); });
             }
             return { v: has ? 'YES' : 'NO', src: _t('Project list · 이 모델 주요자재 TOUCH CTRL 유무', 'touch controller present?') };
+        },
+        // 터치 부품 이름 — 터치가 없으면 '-', 있으면 BOM → 주요자재 → Project list
+        touchPart: function (ctx, a) {
+            if (FN.hasTouch(ctx).v !== 'YES') return { v: '-', src: _t('터치 없음', 'no touch') };
+            var bp = _bomPart(a[0]);
+            if (bp) return { v: bp.name || bp.desc, src: 'BOM ▸ ' + bp.code };
+            var m = _ownMat(a[0]);
+            if (m && bp !== false) return { v: m.description || m.ktkPn, src: 'Summary ▸ ' + _t('주요자재', 'materials') + ' ' + a[0] };
+            var row = _plRow(ctx) || {};
+            return { v: _isNone(row[a[1]]) ? '-' : String(row[a[1]]).trim(), src: 'Project list ▸ ' + a[1] };
         },
         // '5V @150mA' 처럼 한 칸에 둘 — '@' 로 쪼갠다(터치 전원 전압·전류)
         atSplit: function (ctx, a) {
@@ -513,6 +557,16 @@
         if (kind === 'pl') {
             var row = _plRow(ctx);
             return { v: row ? String(row[arg] || '').trim() : '', src: 'Project list ▸ ' + arg };
+        }
+        if (kind === 'bom') {
+            var bp = _bomPart(arg);
+            if (bp === null) return { v: '', src: '' };                 // BOM 을 안 받았다 → 다음 출처
+            if (bp === false) return { v: '-', src: 'BOM ▸ ' + _t('이 부품 없음', 'not in BOM') };   // BOM 에 없다 → 여기서 끝
+            return { v: bp.name || bp.desc, src: 'BOM ▸ ' + bp.code };
+        }
+        if (kind === 'umat') {
+            var um = _ownMat(arg);
+            return { v: um ? String(um.description || um.ktkPn || '').trim() : '', src: 'Summary ▸ ' + _t('주요자재', 'materials') + ' ' + arg };
         }
         if (kind === 'mat') return { v: _matDesc(ctx, arg), src: 'Summary ▸ ' + _t('주요자재', 'materials') + ' ' + arg };
         if (kind === 'spec') {

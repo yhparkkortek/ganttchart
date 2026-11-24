@@ -98,7 +98,23 @@ window.__psTest = async function (opt) {
         check(pL.values['tgen.r4.c2'] === 'Kortek / 777030', '터치 컨트롤러를 품목 코드로 찾아 "제조사 / 코드" (' + pL.values['tgen.r4.c2'] + ')');
         check(pL.values['tpwr.r1.c2'] === '5V' && pL.values['tpwr.r2.c2'] === '150mA', '터치 전원 "5V @150mA" 쪼개기');
         check(pL.values['tmech.r1.c2'] === '100.0 ± 0.2mm' && pL.values['tmech.r2.c2'] === '62.0 ± 0.2mm', '터치 보드 크기 W·H');
-        check(pL.values['parts.r2.c3'] === 'Shown Co', '보이는 이름과 다른 부품이면 코드로 찾지 않는다 (' + pL.values['parts.r2.c3'] + ')');
+        // [2026-11-24 사용자 결정] BOM → 주요자재 → Project list — BOM 이 없으면 주요자재(코드)가 이긴다
+        check(pL.values['parts.r2.c1'] === 'ADB-OTHER' && pL.values['parts.r2.c3'] === 'Other Co',
+              'BOM 없으면 주요자재 기준 — 이름·기록 모두 주요자재 부품 (' + pL.values['parts.r2.c1'] + ', ' + pL.values['parts.r2.c3'] + ')');
+        // 🧾 BOM 이 있으면 BOM 이 정답 — 주요자재에 복사된 터치가 있어도 BOM 에 없으면 터치 없음
+        window.tabData.bomByUnit = { LOWER: { rows: [
+            { _level: 1, IDNRK: '777099', OJTXP: 'LCM IPS>PNL-BOM-01,1920X1080,300=', WGBEZ60: 'DISPLAY/LCM' },
+            { _level: 1, IDNRK: '777010', OJTXP: 'PBA-AD>VIDEO,ADB-TEST,R1,V00', WGBEZ60: 'BD 반제품/PBA' },
+            { _level: 1, IDNRK: '777088', OJTXP: 'PBA-LED>PCB,LED-TEST,V00', WGBEZ60: 'BD 반제품/PBA' },
+            { _level: 1, IDNRK: '777020', OJTXP: 'PBA-CNV>LEDRV,CONV-TEST,R0', WGBEZ60: 'BD 반제품/PBA' }] } };
+        window.mcActiveUnit = 'LOWER';
+        var pB = window._psPayload();
+        check(pB.values['parts.r1.c1'] === 'PNL-BOM-01' && pB.values['parts.r2.c1'] === 'ADB-TEST' && pB.values['parts.r3.c1'] === 'CONV-TEST',
+              'BOM 부품명(구분자 규칙) — LED 보드와 안 섞임 (' + [pB.values['parts.r1.c1'], pB.values['parts.r2.c1'], pB.values['parts.r3.c1']].join(', ') + ')');
+        check(pB.values['parts.r2.c3'] === 'Shown Co', 'BOM 부품 코드로 라이브러리 기록 (' + pB.values['parts.r2.c3'] + ')');
+        check(pB.variant === 'base' && pB.values['parts.r5.c1'] === '-' && pB.values['tgen.r4.c2'] === '',
+              'BOM 에 터치가 없으면 복사된 주요자재가 있어도 터치 없음 (' + pB.variant + ', ' + pB.values['parts.r5.c1'] + ', "' + pB.values['tgen.r4.c2'] + '")');
+        delete window.tabData.bomByUnit;
         check(pL.values['blu.r2.c3'] === '70', '보이는 이름으로 못 찾으면 주요자재로 — 패널 LED 전류 Typ (' + pL.values['blu.r2.c3'] + ')');
         check(pL.values.convIn === '11111WR-12A', '컨버터 입력 커넥터 모델명 (' + pL.values.convIn + ')');
         window._epLibCache = libSaved;
