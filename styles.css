@@ -1443,6 +1443,8 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
 .cal-day-cell { border-right:1px solid #eee; border-bottom:1px solid #eee; min-height:96px; padding:4px; box-sizing:border-box; position:relative; cursor:pointer; transition:background 0.12s; background:#fff; }
 .cal-day-cell.cal-other-month { background:#fafafa; color:#bbb; }
 .cal-day-cell.cal-today { background:#eef6fb; }
+/* 2026-11-24: zebra by week (same selector as js/21 _calZebraSel) */
+.cal-body-row > .cal-day-cell:nth-child(14n+8):not(.cal-other-month):not(.cal-today), .cal-body-row > .cal-day-cell:nth-child(14n+9):not(.cal-other-month):not(.cal-today), .cal-body-row > .cal-day-cell:nth-child(14n+10):not(.cal-other-month):not(.cal-today), .cal-body-row > .cal-day-cell:nth-child(14n+11):not(.cal-other-month):not(.cal-today), .cal-body-row > .cal-day-cell:nth-child(14n+12):not(.cal-other-month):not(.cal-today), .cal-body-row > .cal-day-cell:nth-child(14n+13):not(.cal-other-month):not(.cal-today), .cal-body-row > .cal-day-cell:nth-child(14n+14):not(.cal-other-month):not(.cal-today) { background:#e8f2f3; }
 .cal-day-num { font-size:12px; font-weight:600; color:#333; display:inline-block; padding:1px 6px; border-radius:10px; }
 .cal-day-cell.cal-today .cal-day-num { background:#2c5f8a; color:#fff; }
 .cal-day-cell.cal-weekend-sat .cal-day-num { color:#1971c2; } /* 💡 _cpApplyLive에서 테마색으로 덮어씀(일요일 빨강은 고정 유지) */

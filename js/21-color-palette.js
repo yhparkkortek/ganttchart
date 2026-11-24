@@ -41,6 +41,13 @@ window.CP_ROLES = [
     { key: 'hoverBg',     label: '호버 배경(강조)',    s: 48, l: 75 },
     { key: 'hoverBorder', label: '호버 테두리',       s: 36, l: 51 }
 ];
+// 🦓 [2026-11-24] Calendar 월 보기의 짝수 번째 주(8~14·22~28·36~42번째 칸) — 날짜 칸이 한 grid 에
+//    평평하게 놓여 있어 줄(tr)이 없다. 다른 달·오늘 칸은 제 색을 지킨다. styles.css 에 같은 선택자.
+window._calZebraSel = function () {
+    var s = [];
+    for (var k = 8; k <= 14; k++) s.push('.cal-body-row > .cal-day-cell:nth-child(14n+' + k + '):not(.cal-other-month):not(.cal-today)');
+    return s.join(', ');
+};
 window.CP_CURRENT_TEAL = { bg: '#e0f5f7', headerTint: '#eef6f7', border: '#cfe3e5', zebraB: '#e8f2f3', darkText: '#00707d', hoverBg: '#a3d9e0', hoverBorder: '#52a5af' };
 window.CP_CURRENT_NAV = { base: '#aedae0', hover: '#90cdd5', active: '#72c0ca', text: '#00636e' };
 // 💡 [2026-08-30 버그 수정] 회색 계열(#495057)이 있었는데, 이 팔레트 도구는 "원색의 색상환 각도(hue)만
@@ -332,6 +339,8 @@ window._cpApplyLive = function(hex, skipSave) {
         // 적용해 일요일 빨강/토요일 테마색(위에서 이미 처리) 둘 다 안전하게 유지한다.
         + '.cal-weekday-row > div:not(:first-child):not(:last-child) { color: ' + gen.darkText + ' !important; }\n'
         + '.cal-day-cell { border-color: ' + gen.border + ' !important; }\n'
+        // 🦓 [2026-11-24] 다른 표와 같은 흰색 + 팔레트 제브라 — 주(週) 단위로 번갈아(styles.css 와 같은 선택자)
+        + window._calZebraSel() + ' { background: ' + gen.zebraB + '; }\n'
         // 💡 [2026-08-30 추가] 월/주 토글(.cal-view-toggle) 바깥 테두리도 옛 고정 하늘색이었음.
         + '.cal-view-toggle { border-color: ' + gen.hoverBg + ' !important; }\n'
         // 💡 [2026-08-30 추가] Address 표 헤더 클릭 정렬 호버/정렬 표시(▲▼)도 테마색으로.
