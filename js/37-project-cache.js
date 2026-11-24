@@ -126,6 +126,19 @@
             }
             // 캐시 확인
             var cached = window._pcGet(fileId);
+            // 🐛 [2026-11-24 실측] 캐시는 NAS 를 안 보고 꺼냈다 — 닫은 뒤 15분 안에 다른 PC·배경 배치·스크립트가 그 파일에 쓴 것이
+            //    다시 열 때 안 보였고, 열자마자 도는 자동 정리 저장이 **옛 내용으로 덮어** 지웠다(ZITRO 에 옮겨 넣은 2행이 사라짐).
+            //    → 꺼내기 전에 저장소의 수정 시각을 한 번 묻는다(≈70ms). 캐시를 든 뒤에 바뀌었거나, 묻지 못하면 캐시를 버리고 새로 읽는다.
+            if (cached) {
+                var _fresh = false;
+                try {
+                    var _m = await window.gapi.client.drive.files.get({ fileId: fileId, fields: 'id,modifiedTime' });
+                    var _mt = Date.parse(((_m && _m.result) || {}).modifiedTime || '');
+                    _fresh = !isNaN(_mt) && _mt <= cached.fetchedAt + 1000;   // NAS 시각은 초 단위 — 1초 여유
+                    if (!_fresh) console.info('[PC] 캐시 버림 — 저장소가 더 새것:', fileId, new Date(_mt).toISOString());
+                } catch (e) { _fresh = false; }
+                if (!_fresh) { window._pcDelete(fileId); cached = null; }
+            }
             if (cached) {
                 console.info('[PC] 캐시 히트 — Drive 요청 없이 즉시 복원:', fileId);
                 window.closeDriveModal && window.closeDriveModal();
