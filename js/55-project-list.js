@@ -974,7 +974,7 @@
                     + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔍</span>';
             } else if (c.type === 'sap') {
                 ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPnMenu(\'' + r._id + '\')"'
-                    + ' title="' + _esc(_t('SAP 에서 KTK PN·Description 찾기 · SAP 조회 · 프로젝트 열기', 'Find KTK PN · Description in SAP / SAP lookup / open project')) + '">🏭</span>';
+                    + ' title="' + _esc(_t('SAP 조회 · 프로젝트 열기', 'SAP lookup / open project')) + '">🏭</span>';
             } else if (c.type === 'person') {
                 ico = v ? '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPersonCard(\'' + r._id + '\',\'' + c.k + '\')"'
                     + ' title="' + _esc(_t('담당자 정보 · 이 담당자 제품만 보기', 'Owner info / filter by this owner')) + '">👤</span>' : '';
@@ -1634,36 +1634,13 @@
     };
 
     // ── 8-4. KTK PN 메뉴 — SAP 조회 / 프로젝트 열기 ──────────────────────────
-    // 🏭 [2026-11-24 사용자 요청] "Project list 에도 SAP 에서 KTK PN_모델명 찾기" — 마법사·Summary 와 **같은 함수**
-    //    (js/28 `_sapPnFind`). 여기선 코드와 내역이 **다른 열**(KTK PN · Description)이라 콜백으로 받아 둘 다 채운다.
-    //    칸을 손으로 고친 것과 같은 길(변경 이력 + _persist)로 적는다 — 이력에 전·후가 남아 되돌릴 수 있다.
-    window.plSapFindPn = function (id) {
-        var r = _rowById(id); if (!r) return;
-        window.plClosePopup && window.plClosePopup();
-        if (!window._sapPnFind) { _toast(_t('SAP 찾기를 불러오지 못했습니다.', 'SAP finder not loaded.'), 'error'); return; }
-        var pn = String(r.ktkPn || '').trim();
-        window._sapPnFind({
-            value: pn,
-            onPick: function (m) {
-                var b1 = r.ktkPn == null ? '' : String(r.ktkPn), b2 = r.desc == null ? '' : String(r.desc);
-                r.ktkPn = m.code; r.desc = m.desc;
-                _plPushHistory(r, 'ktkPn', b1, m.code);
-                _plPushHistory(r, 'desc', b2, m.desc);
-                if (b1 !== m.code || b2 !== m.desc) _persist();
-                window.plRender(true);
-                _toast('🏭 ' + _t('넣었습니다: ', 'Filled: ') + m.code + ' · ' + m.desc, 'info');
-            }
-        }, pn ? '' : String(r.desc || r.project || '').trim());
-    };
     window.plOpenPnMenu = function (id) {
         var r = _rowById(id); if (!r) return;
         var pn = String(r.ktkPn || '').trim();
-        // KTK PN 이 비어 있으면 메뉴 대신 바로 SAP 찾기(Description·Project 를 검색어로)
-        if (!pn) { window.plSapFindPn(id); return; }
+        if (!pn) { _toast(_t('KTK PN이 비어 있습니다.', 'KTK PN is empty.'), 'warning'); return; }
         var BLOCK = ' display:block; width:100%; text-align:left; margin-bottom:6px;';
         _popup('🏭 ' + _esc(pn),
-            _plBtn('primary', '🏭 ' + _t('SAP 에서 KTK PN·Description 찾아 넣기', 'Find KTK PN · Description in SAP'), 'window.plSapFindPn(\'' + id + '\')', { extraStyle: BLOCK })
-          + _plBtn('primary', '🔍 ' + _t('SAP 자재 내역 조회', 'SAP material description'), 'window.plAskAi(\'' + _esc(pn) + ' 자재내역 조회해줘\')', { extraStyle: BLOCK })
+            _plBtn('primary', '🔍 ' + _t('SAP 자재 내역 조회', 'SAP material description'), 'window.plAskAi(\'' + _esc(pn) + ' 자재내역 조회해줘\')', { extraStyle: BLOCK })
           + _plBtn('primary', '📦 ' + _t('SAP 재고 조회', 'SAP stock'), 'window.plAskAi(\'' + _esc(pn) + ' 재고 조회해줘\')', { extraStyle: BLOCK })
           + _plBtn('primary', '💰 ' + _t('SAP 가격 조회', 'SAP price'), 'window.plAskAi(\'' + _esc(pn) + ' 가격 조회해줘\')', { extraStyle: BLOCK })
           + _plBtn('primary', '🧱 ' + _t('SAP BOM 조회', 'SAP BOM'), 'window.plAskAi(\'' + _esc(pn) + ' BOM 조회해줘\')', { extraStyle: BLOCK })

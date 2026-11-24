@@ -789,14 +789,7 @@ window._sapPnFind = function (target, hint) {
     setTimeout(function () { q.focus(); q.select(); }, 30);
 
     var pick = function (m) {
-        var code = String(m.MATNR || '').replace(/^0+/, ''), desc = String(m.MAKTX || '').trim();
-        var v = code + '_' + desc;
-        // 칸이 아닌 곳(Project list 처럼 코드·내역이 **다른 열**)은 콜백으로 받는다 — `{ value, onPick }`
-        if (typeof target.onPick === 'function') {
-            ov.style.display = 'none';
-            target.onPick({ code: code, desc: desc, joined: v });
-            return;
-        }
+        var v = String(m.MATNR || '').replace(/^0+/, '') + '_' + String(m.MAKTX || '').trim();
         target.value = v;
         target.dispatchEvent(new Event('input', { bubbles: true }));
         target.dispatchEvent(new Event('change', { bubbles: true }));
@@ -863,84 +856,3 @@ window._sapPnFind = function (target, hint) {
     q.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); run('auto'); } else if (e.key === 'Escape') ov.style.display = 'none'; };
     if (code0) run('auto');   // 칸에 이미 6자리 코드가 있으면 바로 찾는다(조회만, 넣는 건 사람이 고른다)
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🏭 [2026-11-24 사용자 요청] Customer SPEC 에도 같은 SAP 찾기 — 이 페이지의 표엔 모델명 칸이 없고 **제품구분자(모델)
-//    별로** 보이므로, 헤더 버튼이 **지금 보는 모델**의 KTK PN_모델명을 찾아 그 모델의 **Summary 모델 카드**
-//    (`tabData.projectModels` — 앱 전체가 읽는 원본)에 넣는다. 함수는 위 `_sapPnFind` 그대로.
-//    ⚠️ Summary 저장은 화면의 카드에서 다시 거둬 간다(`_syncProjectModelsFromDom`) → 넣기 **전에** 화면을 먼저
-//       거두고, 넣은 **뒤** 카드를 다시 그린다. 안 그러면 다음 저장이 옛 값으로 되돌린다.
-//    ⚠️ 그 모델의 카드가 없으면(제품구분자만 있고 Summary 카드를 안 만든 경우) 지어내지 않고 알린다.
-// ─────────────────────────────────────────────────────────────────────────────
-(function () {
-    var T = function (k, e) { return window._currentLang === 'en' ? e : k; };
-    function activeModel() {
-        if (window._syncProjectModelsFromDom) { try { window.tabData = window.tabData || {}; window.tabData.projectModels = window._syncProjectModelsFromDom(); } catch (e) { /* 화면이 없으면 저장값 그대로 */ } }
-        var models = (window.tabData && window.tabData.projectModels) || [];
-        var unit = String(window.mcActiveUnit || '').trim();
-        var m = unit ? models.filter(function (x) { return x && String(x.unitId || '').trim() === unit; })[0] : null;
-        // 제품구분자를 안 쓰는 프로젝트(바가 없음)는 모델 #1 = 프로젝트 대표값(js/66 과 같은 규칙)
-        if (!m && !unit) m = models[0] || null;
-        return { m: m, unit: unit };
-    }
-    function curText(m) { return m ? (m.KTKPN && m.KTK모델명 ? m.KTKPN + '_' + m.KTK모델명 : (m.KTKPN || m.KTK모델명 || '')) : ''; }
-    window._bsSapPnFind = function () {
-        if (!window._sapPnFind) return;
-        var a = activeModel();
-        if (!a.m) {
-            if (window.showToast) window.showToast('⚠️ ' + T('Summary 에 "' + a.unit + '" 모델 카드가 없습니다 — Summary ▸ 프로젝트 정보에서 모델을 추가하고 제품군을 고른 뒤 다시 눌러 주세요.',
-                'No Summary model card for "' + a.unit + '" — add it under Summary ▸ Project info first.'), 'warning', 7000);
-            return;
-        }
-        var m = a.m, cur = curText(m);
-        window._sapPnFind({
-            value: cur,
-            onPick: function (r) {
-                // 고르는 사이 Summary 에서 고친 게 있으면 먼저 거둔다 — ⚠️ 거두면 **새 객체**가 되므로
-                //    앞에서 잡아 둔 m 에 쓰면 아무 데도 안 남는다(하네스가 잡았다). 다시 찾아서 쓴다.
-                var b = activeModel();
-                var tgt = b.m || m;
-                tgt.KTKPN = r.code; tgt.KTK모델명 = r.desc;
-                if (window.renderProjectModels) window.renderProjectModels();
-                if (window._markNonGanttDirty) window._markNonGanttDirty();
-                if (window.showToast) window.showToast('🏭 ' + (a.unit ? '[' + a.unit + '] ' : '') + T('Summary 모델 카드에 넣었습니다: ', 'Filled the Summary model card: ') + r.joined, 'info');
-                sync();
-            }
-        }, cur ? '' : String(m.고객모델명 || '').trim());
-    };
-    // 버튼을 붙일 페이지 — **데이터**. 둘 다 제품구분자(모델)별로 보이는 페이지다. 같은 꼴 페이지가 늘면 한 줄.
-    //   before: 이 요소 **앞**에 / after: 이 요소 **뒤**에 (없으면 헤더 오른쪽 버튼 묶음 앞)
-    window.MODEL_PN_HEADER_TARGETS = window.MODEL_PN_HEADER_TARGETS || [
-        { tab: 'tab-briefspec', id: 'bs-sap-pn-btn', before: 'bs-resolution-btn' },   // 🖥 지원 해상도 옆
-        { tab: 'tab-mctable',   id: 'mc-sap-pn-btn', after: 'mc-unit-bar' }           // 제품구분자 바 바로 뒤
-    ];
-    var btns = [];
-    function sync() {
-        if (!btns.length) return;
-        var a = activeModel(), cur = curText(a.m);
-        var tip = T('지금 모델' + (a.unit ? '(' + a.unit + ')' : '') + '의 KTK PN_모델명을 SAP 에서 찾아 Summary 모델 카드에 넣습니다', 'Find this model\'s KTK PN_Model in SAP and fill its Summary card')
-                + '\n' + T('지금 값: ', 'Now: ') + (cur || T('(비어 있음)', '(empty)'));
-        btns.forEach(function (b) { b.title = tip; });
-    }
-    function boot() {
-        window.MODEL_PN_HEADER_TARGETS.forEach(function (cfg) {
-            var tab = document.getElementById(cfg.tab);
-            var hdr = tab && tab.querySelector('.concept-header-box');
-            if (!hdr || document.getElementById(cfg.id)) return;
-            var b = document.createElement('button');
-            b.type = 'button'; b.id = cfg.id; b.className = 'ep-theme-hover-btn';
-            b.setAttribute('style', 'margin:0 6px 0 0; height:31px; box-sizing:border-box; padding:0 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap;');
-            b.textContent = '🏭 KTK PN';
-            b.onclick = function () { window._bsSapPnFind(); };
-            b.onmouseenter = sync;
-            var before = cfg.before && document.getElementById(cfg.before);
-            var after = cfg.after && document.getElementById(cfg.after);
-            if (before && before.parentNode === hdr) hdr.insertBefore(b, before);
-            else if (after && after.parentNode === hdr) hdr.insertBefore(b, after.nextSibling);
-            else hdr.insertBefore(b, hdr.querySelector(':scope > .btn-group'));
-            btns.push(b);
-        });
-        sync();
-    }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-})();

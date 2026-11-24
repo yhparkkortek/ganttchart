@@ -4901,44 +4901,7 @@
                   + ' <a href="#" class="doc-noprint" onclick="window._docResetField(\'' + _esc(id) + '\',\'' + _esc(key) + '\');return false;"'
                   + ' style="color:var(--ui-accent, #00707d);">↺ ' + _esc(_t('앱 값으로', 'reset')) + '</a>'
                 : (src ? (/없음|empty|not in/.test(src) ? '⚠️ ' : '📘 ') + _esc(src) : '&nbsp;'))
-            + _sapPnLink(id, key)
             + '</div>' + _cellCheckHtml(id, key, value) + '</td>';
-    };
-    // 🏭 [2026-11-24 사용자 요청] "Document 에도 SAP 에서 KTK PN_모델명 찾기" — 마법사·Summary·Project list 와
-    //    **같은 함수**(js/28 `_sapPnFind`). 대상 칸은 **출처로** 고른다(칸 이름은 서식마다 '모델명'·'MODEL'·
-    //    'MODEL NAME'·'모 델 명' 으로 제각각이라): `meta.모델풀네임`(= Summary KTK PN_모델명, `코드_내역`) 과
-    //    `meta.제품코드`(6자리). 고르면 **이 문서 안의 두 종류 칸을 함께** 채운다(한쪽만 바뀌면 문서 안에서 어긋난다).
-    //    ⚠️ 이 문서의 칸만 고친다 — Summary 값(앱 원본)은 안 건드린다(문서마다 "직접 적음"으로 남고 ↺ 로 되돌린다).
-    var DOC_SAP_PN_SOURCES = { 'meta.모델풀네임': 'joined', 'meta.제품코드': 'code' };
-    var _sapPnLink = function (id, key) {
-        var f = _findField(id, key);
-        if (!f || !DOC_SAP_PN_SOURCES[f.from]) return '';
-        return ' <a href="#" class="doc-noprint" onclick="window._docSapPnFind(\'' + _esc(id) + '\',\'' + _esc(key) + '\');return false;"'
-             + ' title="' + _esc(_t('이미 채번된 KTK PN 이 있으면 SAP 에서 찾아 넣습니다', 'Look up an existing KTK PN in SAP')) + '"'
-             + ' style="color:var(--ui-accent, #00707d); white-space:nowrap;">🏭 ' + _esc(_t('SAP 에서 찾기', 'Find in SAP')) + '</a>';
-    };
-    window._docSapPnFind = function (id, key) {
-        if (!window._sapPnFind) { _toast('⚠️ ' + _t('SAP 찾기를 불러오지 못했습니다.', 'SAP finder not loaded.'), 'error'); return; }
-        var form = _formById(id); if (!form) return;
-        var el = document.querySelector('#doc-page-body [data-doc-key="' + String(key).replace(/"/g, '\\"') + '"]');
-        var cur = el ? el.value : '';
-        var ctx = window._dgCollect ? window._dgCollect() : { meta: {} };
-        window._sapPnFind({
-            value: cur,
-            onPick: function (m) {
-                var n = 0;
-                form.sections.forEach(function (s) {
-                    var all = (s.fields || []).concat([].concat.apply([], (s.rows || []).map(function (r) { return r.cells || []; })));
-                    all.forEach(function (c) {
-                        var kind = c && DOC_SAP_PN_SOURCES[c.from];
-                        if (!kind) return;
-                        window._docSetField(id, c.key, kind === 'joined' ? m.joined : m.code); n++;
-                    });
-                });
-                window._docRender();
-                _toast('🏭 ' + _t('문서 칸 ', '') + n + _t('개에 넣었습니다: ', ' field(s) filled: ') + m.joined, 'info');
-            }
-        }, cur ? '' : String((ctx.meta && (ctx.meta.고객모델명 || ctx.meta.모델명)) || '').trim());
     };
     // 🔌 [2026-11-24] 칸 값 대조 — 서식 파일이 `DOC_CELL_CHECK[서식id](칸, 값)` 으로 경고 글을 돌려주면 칸 아래에 붙인다
     //    (js/76 PRODUCT SPEC: 적힌 커넥터 품번·제조사가 BOM 과 다르면 BOM 값을 보여 준다). 고치지는 않는다 — 사람이 본다.

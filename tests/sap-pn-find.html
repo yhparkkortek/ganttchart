@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>SAP KTK PN_모델명 찾기 시험</title></head><body style="margin:0">
 <!-- 🏭 KTK PN_모델명 SAP 찾기(js/28 `_sapPnFind`) — 진짜 kortek_pm.html 을 iframe 으로 띄워, 새 프로젝트 마법사 4단계와
-     Summary 모델 카드의 🏭 버튼을 진짜로 누른다. 가짜는 SAP 백엔드 fetch(`/sap-material-rows`·`/sap-material-pattern`) 하나.
+     Summary 모델 카드의 🏭 버튼을 진짜로 누른다(2026-11-24 사용자 결정 — 이 둘에만 둔다). 가짜는 SAP 백엔드 fetch(`/sap-material-rows`·`/sap-material-pattern`) 하나.
      실행: chrome --headless=new --allow-file-access-from-files --window-size=1400,900 --virtual-time-budget=30000
            --dump-dom file:///.../tests/sap-pn-find.html   → <pre id="out"> (마지막 줄 N/M) -->
 <iframe id="f" src="../kortek_pm.html?sappn=1" style="border:0;width:1366px;height:800px;"></iframe>
@@ -79,89 +79,7 @@ f.onload = async function () {
     chk(kin.value === '502574_MAIN>KTS320DPS01,LNW', '고르면 그 카드의 KTK 칸에 — ' + kin.value);
     chk(kin.getBoundingClientRect().height <= 34 && btn.getBoundingClientRect().height <= 34, '칸·버튼이 한 줄(두 줄로 안 깨짐)');
     card.remove();   // ⚠️ 남겨 두면 Summary 카드 수집기가 페이지 전체를 훑어 이 시험 카드까지 거둔다(가짜 실패가 났다)
-    // 5) Project list — 코드·내역이 다른 열이라 둘 다 채우고 변경 이력에 남긴다(진짜 plOpenPnMenu → plSapFindPn)
-    var PD = W._plData || (W._plData = { rows: [], history: [] });
-    PD.rows = PD.rows || []; PD.history = PD.history || [];
-    var row = { _id: 'zz_sappn_test', no: '999', ktkPn: '', desc: 'STELLAR32' };
-    PD.rows.push(row);
-    var h0 = PD.history.length;
-    calls.length = 0;
-    W.plOpenPnMenu('zz_sappn_test');          // KTK PN 이 비었으면 메뉴 대신 바로 찾기
-    await sleep(150);
-    chk(D.getElementById('sap-pn-find-overlay').style.display === 'block' && D.getElementById('sap-pn-find-q').value === 'STELLAR32',
-        '[Project list] KTK PN 이 비면 바로 SAP 찾기, Description 이 검색어');
-    D.getElementById('sap-pn-find-go').click(); await sleep(300);
-    D.querySelector('#sap-pn-find-list [data-i="0"]').click(); await sleep(100);
-    chk(row.ktkPn === '502574' && row.desc === 'MAIN>KTS320DPS01,LNW', '[Project list] 고르면 KTK PN·Description 두 열을 채운다 — ' + row.ktkPn + ' / ' + row.desc);
-    var hs = PD.history.slice(h0);
-    chk(hs.some(function (h) { return h.f === 'ktkPn' && h.b === '' && h.a === '502574'; }) &&
-        hs.some(function (h) { return h.f === 'desc' && h.b === 'STELLAR32'; }), '[Project list] 변경 이력에 전·후가 남는다(되돌릴 수 있게)');
-    // 코드가 있으면 메뉴 맨 위에 찾기 항목
-    W.plOpenPnMenu('zz_sappn_test'); await sleep(100);
-    chk(/SAP 에서 KTK PN·Description 찾아 넣기/.test(D.body.innerHTML), '[Project list] 코드가 있으면 🏭 메뉴에 찾기 항목');
-    if (W.plClosePopup) W.plClosePopup();
-    PD.rows = PD.rows.filter(function (x) { return x._id !== 'zz_sappn_test'; });
-    PD.history = PD.history.slice(0, h0);
-    // 6) Document — 모델명세서의 MODEL NAME(meta.모델풀네임)·PART NUMBER(meta.제품코드) 칸, 진짜 _docRender 가 그린 링크
-    W.switchTab('document'); await sleep(200);
-    W._docState.formId = 'model-spec'; W._docRender(); await sleep(200);
-    var body = D.getElementById('doc-page-body');
-    var links = body.querySelectorAll('a[onclick*="_docSapPnFind"]');
-    var keysWithLink = [].map.call(links, function (a) { return (a.getAttribute('onclick').match(/,'([^']+)'\)/) || [])[1]; });
-    chk(keysWithLink.indexOf('MODEL NAME') !== -1 && keysWithLink.indexOf('PART NUMBER') !== -1, '[Document] 모델명·제품코드 칸에만 🏭 링크 — ' + keysWithLink.join(','));
-    chk(!body.querySelector('[data-doc-key="BUYER NAME"]') || !/_docSapPnFind\([^)]*BUYER/.test(body.innerHTML), '[Document] 다른 칸엔 링크 없음');
-    calls.length = 0;
-    [].filter.call(links, function (a) { return /MODEL NAME/.test(a.getAttribute('onclick')); })[0].click();
-    await sleep(150);
-    D.getElementById('sap-pn-find-q').value = '502574';
-    D.getElementById('sap-pn-find-go').click(); await sleep(300);
-    D.querySelector('#sap-pn-find-list [data-i="0"]').click(); await sleep(200);
-    var mn = body.querySelector('[data-doc-key="MODEL NAME"]'), pnIn = body.querySelector('[data-doc-key="PART NUMBER"]');
-    chk(mn && mn.value === '502574_MAIN>KTS320DPS01,LNW' && pnIn && pnIn.value === '502574',
-        '[Document] 고르면 두 칸을 함께 — MODEL NAME=' + (mn && mn.value) + ' / PART NUMBER=' + (pnIn && pnIn.value));
-    chk(/직접 적음|edited/.test(mn.parentNode.textContent), '[Document] "직접 적음" 으로 표시되어 ↺ 로 되돌릴 수 있다');
-    W._docResetField('model-spec', 'MODEL NAME'); W._docResetField('model-spec', 'PART NUMBER');
-    // 7) Customer SPEC — 헤더 🏭 가 **지금 모델**의 Summary 모델 카드에만 넣는다(다른 모델은 그대로)
-    W.tabData = W.tabData || {};
-    var savedModels = W.tabData.projectModels, savedUnit = W.mcActiveUnit;
-    W.tabData.projectModels = [
-      { unitId: 'MVD', 고객모델명: 'STELLAR32', KTKPN: '111111', KTK모델명: 'OLD>MVD', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' },
-      { unitId: 'TPR', 고객모델명: 'TOPPER32',  KTKPN: '',       KTK모델명: '',        고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' }];
-    W.tabData.mcUnits = ['MVD', 'TPR'];
-    W.renderProjectModels();
-    W.mcActiveUnit = 'TPR';
-    var bsBtn = D.getElementById('bs-sap-pn-btn');
-    chk(!!bsBtn && bsBtn.closest('#tab-briefspec .concept-header-box'), '[Customer SPEC] 헤더에 🏭 KTK PN 버튼');
-    bsBtn.click(); await sleep(150);
-    chk(D.getElementById('sap-pn-find-q').value === 'TOPPER32', '[Customer SPEC] 지금 모델(TPR)의 고객 모델명이 검색어');
-    D.getElementById('sap-pn-find-go').click(); await sleep(300);
-    D.querySelector('#sap-pn-find-list [data-i="0"]').click(); await sleep(150);
-    var pm = W.tabData.projectModels;
-    chk(pm[1].KTKPN === '502574' && pm[1].KTK모델명 === 'MAIN>KTS320DPS01,LNW', '[Customer SPEC] TPR 카드에 코드·모델명');
-    chk(pm[0].KTKPN === '111111' && pm[0].KTK모델명 === 'OLD>MVD', '[Customer SPEC] 다른 모델(MVD)은 그대로');
-    var cardInputs = D.querySelectorAll('#sum-models-container [data-model-field="KTK"]');
-    chk(cardInputs.length === 2 && cardInputs[1].value === '502574_MAIN>KTS320DPS01,LNW', '[Customer SPEC] Summary 화면 카드도 다시 그려져 같은 값(다음 저장이 되돌리지 않게) — ' + 'models=' + W.tabData.projectModels.length + ' containers=' + D.querySelectorAll('#sum-models-container').length + ' inputs=' + cardInputs.length + ':' + [].map.call(cardInputs, function (x) { return x.value; }).join('|'));
-    var after = W._syncProjectModelsFromDom();
-    chk(after[1].KTKPN === '502574', '[Customer SPEC] 화면에서 다시 거둬도 값이 남는다');
-    // 카드가 없는 모델이면 지어내지 않고 알린다
-    W.mcActiveUnit = 'BTN'; D.getElementById('sap-pn-find-overlay').style.display = 'none';
-    bsBtn.click(); await sleep(100);
-    chk(D.getElementById('sap-pn-find-overlay').style.display === 'none', '[Customer SPEC] 그 모델 카드가 없으면 창을 안 열고 알린다');
-    // 8) M.C Table — 같은 헤더 버튼(데이터 MODEL_PN_HEADER_TARGETS), 제품구분자 바 바로 뒤
-    var mcBtn = D.getElementById('mc-sap-pn-btn');
-    chk(!!mcBtn && mcBtn.closest('#tab-mctable .concept-header-box') && mcBtn.previousElementSibling && mcBtn.previousElementSibling.id === 'mc-unit-bar',
-        '[M.C Table] 헤더 제품구분자 바 바로 뒤에 🏭 KTK PN');
-    W.tabData.projectModels = [
-      { unitId: 'MVD', 고객모델명: 'STELLAR32', KTKPN: '', KTK모델명: '', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' },
-      { unitId: 'TPR', 고객모델명: 'TOPPER32',  KTKPN: '', KTK모델명: '', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' }];
-    W.renderProjectModels(); W.mcActiveUnit = 'MVD';
-    D.getElementById('sap-pn-find-overlay').style.display = 'none';
-    mcBtn.click(); await sleep(150);
-    chk(D.getElementById('sap-pn-find-q').value === 'STELLAR32', '[M.C Table] 지금 모델(MVD)의 고객 모델명이 검색어');
-    D.getElementById('sap-pn-find-go').click(); await sleep(300);
-    D.querySelector('#sap-pn-find-list [data-i="1"]').click(); await sleep(150);
-    chk(W.tabData.projectModels[0].KTKPN === '502573' && W.tabData.projectModels[1].KTKPN === '', '[M.C Table] MVD 카드에만 넣는다');
-    // 9) 내역으로 찾기 — 📝 버튼은 6자리가 섞여 있어도 내역 패턴, 낱말은 * 로, code_내역 은 코드 떼고
+    // 5) 내역으로 찾기 — 📝 버튼은 6자리가 섞여 있어도 내역 패턴, 낱말은 * 로, code_내역 은 코드 떼고
     var dkt = D.createElement('input'); D.body.appendChild(dkt);
     W._sapPnFind(dkt, ''); await sleep(80);
     var qq = D.getElementById('sap-pn-find-q'), descBtn = D.getElementById('sap-pn-find-desc');
@@ -176,7 +94,6 @@ f.onload = async function () {
     chk(calls.length === 2 && /OBSIDIAN/.test(decodeURIComponent(calls[0])) && /Obsidian/.test(decodeURIComponent(calls[1]))
         && D.querySelectorAll('#sap-pn-find-list [data-i]').length === 1, '[내역] 대문자로 0건이면 원래 글자로 한 번 더 찾는다');
     D.getElementById('sap-pn-find-overlay').style.display = 'none'; dkt.remove();
-    W.tabData.projectModels = savedModels; W.mcActiveUnit = savedUnit; if (savedModels) W.renderProjectModels();
   } catch (e) { out.push('ERROR ' + e.message); }
   out.push(pass + '/' + (pass + fail));
   document.getElementById('out').textContent = out.join('\n');
