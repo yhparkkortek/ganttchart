@@ -407,6 +407,10 @@ window._cpApplyLive = function(hex, skipSave) {
 
     css += '.trans-btn-hide-print { color: ' + gen.darkText + ' !important; }\n';
     document.documentElement.style.setProperty('--trans-text', gen.darkText);
+    // 🎨 [2026-11-24] 모달 헤더(js/19 `_modalHdrRegister`) — 페이지 헤더와 같은 세 색. 기본값은 styles.css :root.
+    document.documentElement.style.setProperty('--modal-hdr-bg', gen.bg);
+    document.documentElement.style.setProperty('--modal-hdr-line', gen.hoverBg);
+    document.documentElement.style.setProperty('--modal-hdr-text', gen.darkText);
     // 💡 [2026-09-02 추가] 하단 taskbar 칩(최소화된 모달 칩 + 기본 바로가기 런처)이 프로젝트/테마 전환
     // 시 색이 안 바뀌던 문제 — 칩의 인라인 style hex는 [style*="#hex"] 규칙에 안 잡히는 경우가 있어서
     // (이전 테마의 bg hex가 CP_CURRENT_TEAL 맵에 없으면 매핑 자체가 없음) 클래스 기반 명시 규칙을
@@ -629,6 +633,7 @@ window._cpRevertLive = function() {
     // 💡 --trans-text는 <style id="cp-live-style"> 안이 아니라 documentElement 인라인으로 직접 설정하므로
     // (CSS 커스텀 프로퍼티라 !important 규칙으로는 못 지움), 되돌리기 시 여기서도 같이 teal 기본값으로 되돌려야 함.
     document.documentElement.style.setProperty('--trans-text', '#00707d');
+    ['--modal-hdr-bg', '--modal-hdr-line', '--modal-hdr-text'].forEach(function(v) { document.documentElement.style.removeProperty(v); });
     window._cpLiveAppliedHex = null;
     window._cpUpdateApplyStatus();
     if (window._cpMarkRevertedForSave) window._cpMarkRevertedForSave();

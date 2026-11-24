@@ -539,7 +539,7 @@ window._dsOpenSettings = async function () {
         + '  </div>'
         + '  <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; justify-content:flex-end;">'
         + '    <button onclick="window._dsCfgTest()" style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; cursor:pointer;">🔌 ' + _t('연결 확인', 'Test') + '</button>'
-        + '    <button onclick="window._dsCfgSave()" style="padding:6px 16px; background:#28a745; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">' + _t('저장', 'Save') + '</button>'
+        + '    <button onclick="window._dsCfgSave()" style="padding:6px 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">' + _t('저장', 'Save') + '</button>'
         + '  </div>'
         + '</div>';
         document.body.appendChild(m);

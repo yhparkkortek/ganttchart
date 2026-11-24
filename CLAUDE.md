@@ -133,7 +133,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `16-wbs-level-colors.js` | WBS 레벨별 고정 회색 계조 |
 | `17-weekly-report-modal-drag.js` | 주간 업무 보고 모달 드래그 |
 | `18-mail-analyzer-modal-drag.js` | 메일 분석기 모달 드래그 |
-| `19-shared-modal-drag.js` | 공통 모달 드래그 + 최소화(하단 taskbar) + **8방향 크기조절·헤더색 테두리·화면 안 보정**. `_makeDraggable(id, handleId)` 하나로 전부 딸려 온다. ⚠️ 잡는 띠는 **테두리가 한가운데**(바깥13/안쪽13, 투명) — 안쪽만 두면 **스크롤바에 덮여** 안 잡힌다. 헤더를 잡으면 드래그만(리사이즈와 동시 시작 금지). `offsetParent`로 보임 판정 금지(fixed는 항상 null) → `docs/modal-ux.md` |
+| `19-shared-modal-drag.js` | 공통 모달 드래그 + 최소화(하단 taskbar) + **8방향 크기조절·헤더색 테두리·화면 안 보정**. `_makeDraggable(id, handleId)` 하나로 전부 딸려 온다 — **헤더·틀·주 버튼 팔레트색도 여기서**(`_modalHdrRegister`·`_modalBoxRestyle`, 2026-11-24). ⚠️ 잡는 띠는 **테두리가 한가운데**(바깥13/안쪽13, 투명) — 안쪽만 두면 **스크롤바에 덮여** 안 잡힌다. 헤더를 잡으면 드래그만(리사이즈와 동시 시작 금지). `offsetParent`로 보임 판정 금지(fixed는 항상 null) → `docs/modal-ux.md` |
 | `20-weekly-report.js` | 주간 업무 보고 기능 본체 |
 | `21-color-palette.js` | 컬러 팔레트 모달 (hex↔HSL) |
 | `22a-summary-mctable-parse.js` | 엑셀 파싱: Summary/Brief SPEC/M.C Table |
@@ -664,7 +664,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/ui-conventions.md` — 🌐 i18n / 🎨 팔레트 / 🪟 모달 컨벤션
 - **읽을 때**: 새 UI 컴포넌트, 언어 대응, 테마 팔레트, 모달 구조, **엑셀/PPT 출력물**
 - 새 UI 완료 기준 3가지: 영문 대응(`_t`/`data-i18n`) + 팔레트 대응(`_cpApplyLive` 좁은 셀렉터) + 모달 컨벤션(`_makeDraggable`·`_bindClickToFront`·`bringModalToFront` 호출)
-- **🪟 (2026-11-23) 모달 헤더는 두 색뿐** — AI 모달·외부 시스템(SAP·JIRA) 하늘색 `#e7f3ff`/아래선 `#a5c8f0`/`#1971c2`, 그 외 살구색 `#fff8e6`/`#ffe08a`/`#7a5210`, `padding:13px 18px`·`cursor:grab`, 상자 `-box`·헤더 `-drag` id, 닫기 ✕ 28×28·16px. ⚠️ 모달 테두리는 **헤더 아래선 색**을 따라가서(js/19 `_mreszApplyBorder`) 청록 `#cfe3e5` 같은 옅은 색이면 테두리가 안 보인다(JIRA 사고)
+- **🪟 (2026-11-24 사용자 결정) 모달은 팔레트 한 벌** — 헤더·테두리·주 동작 버튼 모두 페이지 헤더와 같은 팔레트색(`--modal-hdr-bg/-line/-text`), 상자 둥글기 10px·그림자 한 벌. 옛 "AI·외부=하늘 / 일반=살구" 규칙은 **폐기**(사람이 "AI 인가"를 판단해야 해서 72개 중 10여 개가 어긋났다) — AI 표시는 제목 아이콘(🤖·🏭·🪐)으로. 칠하는 곳은 **js/19 한 곳**(`_makeDraggable` 이 헤더·상자 id 를 모아 `!important` 규칙) — 템플릿에 색을 박아도 진다. `padding:13px 18px`·`cursor:grab`, 상자 `-box`·헤더 `-drag` id, 닫기 ✕ 28×28·16px. ⚠️ `[style*="#hex"]` 선택자는 JS 가 style 을 건드리면 `rgb(…)` 로 바뀌어 깨진다 — 둘 다 잡을 것 · ⚠️ 백그라운드 탭에선 transition 이 멈춰 옛 색이 읽힌다(앞으로 가져와 잴 것)
 - **📏 (2026-11-24) 헤더 버튼 31px · 표 위 줄 22px** — 표 위 필터·칩·검색·↺ 는 js/04a `_uiPillStyle`/`_uiSelectStyle`/`_uiInputStyle`/`_uiBtnStyle` 로만 그린다(일일보고·Project Review·Project list). ⚠️ 그 줄 버튼에 `concept-add-row-btn` 클래스 금지 — 팔레트 `!important` 가 색을 덮는다
 - **🔍 (2026-11-24) 검색칸도 자기 층을 따른다** — 헤더 안 검색칸(`#pl-search`·`#addr-search-input`)은 31px·둥근 16px, 표 위 검색칸은 22px(간트 AI검색 바 js/26 `_GS_BOX`). ⚠️ 간트 검색 바는 **색만 테마색 예외**(`_updateSearchBarColors` 가 팔레트 바뀔 때 다시 칠한다 — 공용 고정 파랑을 쓰면 그 갱신과 싸운다)
 - **🔽 (2026-11-24) 드롭다운·입력칸도 같은 층 규칙** — 헤더 안(`#pl-team`·`#sum-project-status`·BOM `#bom-material/-explosion/-layout/-usd-rate`)은 31px, 표 위 줄은 `_uiSelectStyle` 22px. 색·굵기는 역할별로 달라도 **키는 같게**. ⚠️ `width` 준 칸에 `box-sizing:border-box` 를 더하면 보이는 폭이 줄어든다 — BOM 헤더는 여유 7px 뿐이라 폭을 늘려 보전(환율 64→76px)

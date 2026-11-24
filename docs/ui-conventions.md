@@ -146,22 +146,30 @@ window.CP_ROLES.forEach(r => { compGen[r.key] = window._cpHslToHex(compHue, r.s,
 
 **새 모달을 만들 때 반드시 아래 패턴을 그대로 따를 것** — 기존 모달과 UI 일관성을 유지하기 위함.
 
-#### 헤더 색상 구분 — **이 두 색뿐이다** (2026-11-23 전수 통일)
-- **AI 관련 모달** (AI 분석·요약·미리보기 등) + **외부 시스템 연동 모달**(SAP 로그인·자재 보관함·JIRA): **하늘색**
-  ```css
-  background: #e7f3ff; border-bottom: 1px solid #a5c8f0; color: #1971c2;
-  ```
-- **비-AI 일반 모달** (설정·확인·목록 등): **살구색**
-  ```css
-  background: #fff8e6; border-bottom: 1px solid #ffe08a; color: #7a5210;
-  ```
-- **헤더 공통**: `padding:13px 18px; font-weight:bold; font-size:14px; border-radius:10px 10px 0 0; cursor:grab;`
-  (`cursor:move` 금지 — 저장소 관례는 손 모양 `grab`). id 는 상자 `xxx-box`, 헤더(드래그 손잡이) `xxx-drag`.
-- ⚠️⚠️ **모달 테두리는 헤더 *아래선* 색을 그대로 따라간다**(js/19 `_mreszHeaderBg` → `_mreszApplyBorder`).
-  그래서 청록 `#cfe3e5` 같은 옅은 아래선을 쓰면 테두리가 흰 배경에 묻혀 **없는 것처럼** 보인다 —
-  2026-11-23 JIRA 모달 4개가 그랬다(실측 rgb(213,223,230)). 연두·청록·보라 헤더 6개도 같은 날 위 두 색으로 맞췄다.
-  ⚠️ 페이지 안 패널·표 머리글의 청록(`#eef6f7`/`#cfe3e5`)은 팔레트를 따르는 **다른 자리**다 — 그걸 근거로
-  "청록도 모달 관례"라고 판단하지 말 것(그 판단으로 한 번 통일이 빠졌다).
+#### 헤더·틀·주 버튼 색 — **팔레트 한 벌** (2026-11-24 사용자 결정, 옛 "하늘/살구 두 색" 규칙 폐기)
+- **모든 모달 헤더 = 페이지 헤더(`.concept-header-box`)와 같은 팔레트 세 색**: 배경 `bg` · 아래선 `hoverBg` · 글자 `darkText`
+  (CSS 변수 `--modal-hdr-bg` / `--modal-hdr-line` / `--modal-hdr-text` — 기본값 styles.css `:root`, 팔레트 적용 시 js/21 이 갈아 끼운다).
+- **왜 바꿨나**: 옛 규칙(AI·외부 시스템 = 하늘 `#e7f3ff`, 일반 = 살구 `#fff8e6`)은 "이 모달이 AI 인가"를 만드는 사람이 판단해야 해서
+  하루 만에 다시 어긋났다 — 2026-11-24 실측 72개 중 10여 개가 양쪽으로 틀렸다(내 팀·새 프로젝트 마법사 = 하늘, 프롬프트 개선·로그 = 살구 …).
+  또 모달 헤더만 테마를 안 따라가는 큰 화면 요소였다. **AI·외부 시스템 표시는 색이 아니라 제목 아이콘(🤖·🏭·🪐)으로.**
+- **칠하는 곳은 js/19 한 곳**: `_makeDraggable` 이 헤더 id 를 `_modalHdrRegister` 로 모아 `<style id="modal-hdr-style">` 하나로 칠한다
+  (`!important`). 템플릿 72개는 안 고쳤다 — 인라인 헤더 색은 이 규칙에 **진다**. 그러니 새 모달에 색을 박지 말 것(박아도 소용없다).
+  ⚠️ **클래스가 아니라 id 로 거는 이유**: 헤더만 다시 그리는 모달이 있어 클래스를 달면 다시 그릴 때 떨어진다.
+  ⚠️ `_makeDraggable` 을 안 거치는 모달(`RESIZABLE_EXTRA_MODALS` — 드라이브 열기·보관함 배분·캘린더 동기화 도움말)은
+  첫 자식 `.history-header` 를 같이 등록한다(처음엔 빠져서 살구로 남았다).
+- 제목 글자: h1~h4·b·strong 과 **헤더 바로 밑/한 겹 밑 `<span>`**(자기 배경이 있는 배지는 제외)도 팔레트 글자색.
+  배지(JIRA 모델 PTD 등)는 `background:#fff; border:1px solid #a3d9e0; color:#00707d`. 헤더 안 컨트롤 라벨(AI 문답 🪟 100%)·말풍선은 제외.
+- **헤더 공통**: `padding:13px 18px; font-weight:bold; font-size:14px; cursor:grab;`(`cursor:move` 금지). 윗모서리는 규칙이 9px 로 맞춘다.
+  id 는 상자 `xxx-box`, 헤더(드래그 손잡이) `xxx-drag`.
+- ⚠️⚠️ **모달 테두리는 헤더 *아래선* 색을 그대로 따라간다**(js/19 `_mreszHeaderBg` → `_mreszApplyBorder`) — 이제 아래선이 `hoverBg` 라
+  테두리도 팔레트. ⚠️ **헤더 등록이 `_makeResizable` 보다 먼저**여야 한다 — 뒤면 옛 인라인 아래선(살구)으로 테두리가 칠해진다(실측: PARTS 추가 모달).
+  옅은 `#cfe3e5`(border 역할)를 아래선으로 쓰면 테두리가 안 보인다(2026-11-23 JIRA 사고) — 그래서 아래선은 한 단계 진한 `hoverBg`.
+- **상자 틀**: 둥글기 10px · 그림자 `0 8px 32px rgba(0,0,0,.22)` 한 벌(`_modalBoxRestyle`, 상자 id 로). 실측 전엔 둥글기 10/12/미지정, 그림자 7가지였다.
+- **모달 안 주 동작 버튼(저장·적용·연결 확인)** = 팔레트색. 템플릿 대부분이 고정 파랑 파스텔(`#e8f4fd`/`#1a4f7a`/`#a5c8f0`, 호버 `#cfe6fa`)이라
+  **모달 상자 안에서만** 그 색을 팔레트로 바꿔 읽는다(살구 `#fff8e6` 버튼도). 초록(확인)·빨강(삭제)·회색(취소/닫기)은 역할색이라 그대로.
+  ⚠️⚠️ **`[style*="#hex"]` 선택자는 JS 가 style 을 한 번 건드리면 깨진다** — 브라우저가 속성 전체를 `rgb(232, 244, 253)` 처럼 다시 적는다
+  (onmouseover 한 번이면 끝). hex 와 rgb 표기를 **둘 다** 잡을 것. 새 버튼은 처음부터 팔레트 hex(`#e0f5f7`/`#00707d`/`#a3d9e0`)로.
+- 🧪 검증 함정: 백그라운드 탭에선 CSS `transition` 이 멈춰 **옛 색이 계속 읽힌다**(스타일시트를 전부 꺼도 같은 값) — 탭을 앞으로 가져와서 잴 것.
 
 #### 구조 패턴 (투명 래퍼 + 내부 박스)
 ```javascript

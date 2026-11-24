@@ -119,6 +119,11 @@
         --modal-icon-text: #666;
         --modal-icon-bg: transparent;
         --modal-icon-hover-bg: rgba(0,0,0,0.08);
+        /* 🎨 [2026-11-24] 모달 헤더 = 페이지 헤더(.concept-header-box)와 같은 팔레트 세 색. 칠하는 곳은 js/19
+           `_modalHdrRegister` 하나, 팔레트 적용 시 js/21 이 이 세 값을 갈아 끼운다(두 곳을 같이 고칠 것). */
+        --modal-hdr-bg: #e0f5f7;
+        --modal-hdr-line: #a3d9e0;
+        --modal-hdr-text: #00707d;
 
         /* 💡 [2026-09-02 신규] 하단 모달 최소화 taskbar가 떠 있는 동안 각 탭 콘텐츠와 안 겹치도록
            빼줄 여백 — 기본은 0(타스크바 없음), js/19-shared-modal-drag.js가 타스크바 높이+간격(15px,

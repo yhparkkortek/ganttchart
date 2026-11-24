@@ -113,7 +113,62 @@ window._makeDraggable = function(modalId, handleId) {
 
     // 💡 [2026-10-21 신규] 상하좌우 8방향 크기조절 + 화면 밖 이탈 방지.
     //    드래그를 등록하는 모든 모달에 자동으로 함께 적용된다(_makeMinimizable과 같은 방식).
+    // ⚠️ 헤더 색 등록이 **먼저** — 아래 _makeResizable 이 테두리 색을 헤더 아래선에서 계산하므로,
+    //    순서가 뒤면 옛 인라인 색(살구 #ffe08a 등)으로 테두리가 칠해진다(실측: PARTS 추가 모달).
+    if (window._modalHdrRegister) window._modalHdrRegister(handleId);
     window._makeResizable(modalId, false, handleId);
+};
+
+// 🎨 [2026-11-24 사용자 결정 "팔레트색으로 통일"] 모달 헤더 색은 **팔레트 한 벌**(페이지 헤더 .concept-header-box 와 같은 세 색).
+//    예전 규칙(AI·외부 시스템 = 하늘색, 그 외 = 살구색)은 "이 모달이 AI 인가"를 사람이 판단해야 해서
+//    실측 72개 중 10여 개가 양쪽으로 어긋나 있었다(내 팀=하늘, 프롬프트 개선=살구…). 판단을 없앤다.
+//    → 72개 모달 템플릿을 고치지 않고, 드래그를 등록하는 **이 한 곳**에서 헤더 id 를 모아 규칙 하나로 칠한다.
+//      id 로 거는 이유: 헤더만 다시 그리는 모달이 있어 클래스를 달면 다시 그릴 때 떨어진다.
+//    색은 CSS 변수(--modal-hdr-bg/-line/-text) — 기본값은 styles.css, 팔레트 적용 시 js/21 이 갈아 끼운다.
+//    ⚠️ 템플릿의 인라인 헤더 색은 이 규칙(!important)에 진다 — 새 모달에 색을 박아도 소용없으니 박지 말 것.
+//    🤖 AI 모달 구분은 색이 아니라 제목의 아이콘(🤖·🏭·🪐)으로 한다.
+window._modalHdrIds = window._modalHdrIds || [];
+window._modalHdrRegister = function(handleId) {
+    if (!handleId || window._modalHdrIds.indexOf(handleId) !== -1) return;
+    window._modalHdrIds.push(handleId);
+    let st = document.getElementById('modal-hdr-style');
+    if (!st) { st = document.createElement('style'); st.id = 'modal-hdr-style'; document.head.appendChild(st); }
+    const sel = function(suffix) { return window._modalHdrIds.map(function(id) { return '#' + id + suffix; }).join(', '); };
+    st.textContent =
+        sel('') + ' { background: var(--modal-hdr-bg, #e0f5f7) !important;'
+        + ' border-bottom: 1px solid var(--modal-hdr-line, #a3d9e0) !important;'
+        + ' color: var(--modal-hdr-text, #00707d) !important; }\n'
+        // 제목 글자(h2~h4 · 굵은 글자)도 같은 색 — 인라인 파랑·갈색이 남으면 반쪽만 바뀐 것처럼 보인다.
+        + sel(' :is(h1,h2,h3,h4,b,strong)') + ' { color: var(--modal-hdr-text, #00707d) !important; }\n'
+        // 제목이 <span> 인 모달(휴일·새 프로젝트…) — 헤더 바로 밑/한 겹 밑 span 만. 자기 배경이 있는 배지·말풍선은 뺀다.
+        + sel(' > span:not([style*="background"])') + ', ' + sel(' > div > span:not([style*="background"])')
+        + ' { color: var(--modal-hdr-text, #00707d) !important; }\n'
+        // 상자 둥글기 10px 에 맞춰 헤더 윗모서리도 둥글게(테두리 1px 안쪽이라 9px)
+        + sel('') + ' { border-radius: 9px 9px 0 0 !important; }\n';
+};
+
+// 🖼 [2026-11-24 "모달 박스 테두리도 같이 검토"] 상자 틀도 한 벌 — 실측 72개 중 둥글기는 10px 44 · 12px 1 · 미지정 27,
+//    그림자는 7가지(0 4px 24px .25 / 0 8px 32px .2·.22·.3 / 0 10px 40px .25 / 0 8px 30px .25 …)로 제각각이었다.
+//    테두리는 이미 `.mresz-modal` 1px solid + 색은 헤더 아래선(= 이제 팔레트 hoverBg)이 한 곳에서 정한다(아래 _mreszApplyBorder).
+//    → 둥글기 10px · 그림자 0 8px 32px rgba(0,0,0,.22)(가장 많이 쓰던 값)로 맞춘다. 상자 id 로 거는 이유는 헤더와 같다.
+window._modalBoxRestyle = function() {
+    let st = document.getElementById('modal-box-style');
+    if (!st) { st = document.createElement('style'); st.id = 'modal-box-style'; document.head.appendChild(st); }
+    const list = window._resizableBoxIds || [];
+    const ids = list.map(function(id) { return '#' + id; }).join(', ');
+    const within = function(suffix) { return list.map(function(id) { return '#' + id + ' ' + suffix; }).join(', '); };
+    st.textContent = !ids ? '' :
+        ids + ' { border-radius: 10px !important; box-shadow: 0 8px 32px rgba(0,0,0,.22) !important; }\n'
+        // 🔘 [2026-11-24] 모달 안 "주 동작" 버튼(저장·적용·연결 확인…)도 팔레트색 — 실측 대부분이 고정 파랑 파스텔
+        //    (#e8f4fd/#1a4f7a/#a5c8f0, 호버 #cfe6fa)이고 SAP 로그인만 살구(옛 헤더색)였다. 헤더가 팔레트가 됐으니 같이 따라간다.
+        //    템플릿 150곳을 고치지 않고 **모달 상자 안에서만** 그 색을 팔레트로 바꿔 읽는다(호버는 인라인이 #cfe6fa 로
+        //    바뀌므로 그 값으로 따로 잡는다). 초록(확인)·빨강(삭제)·회색(취소/닫기)은 역할색이라 건드리지 않는다.
+        //    ⚠️ 실측: onmouseover 처럼 JS 가 style 을 한 번이라도 건드리면 브라우저가 속성 전체를 `rgb(…)` 로 다시 적는다
+        //    → hex 만 잡으면 **한 번 호버한 뒤로 옛 파랑으로 돌아간다**. rgb 표기도 같이 잡는다.
+        + within('button:is([style*="#e8f4fd"], [style*="rgb(232, 244, 253)"], [style*="#fff8e6"], [style*="rgb(255, 248, 230)"])')
+        + ' { background: var(--modal-hdr-bg, #e0f5f7) !important; color: var(--modal-hdr-text, #00707d) !important; border-color: var(--modal-hdr-line, #a3d9e0) !important; }\n'
+        + within('button:is([style*="#cfe6fa"], [style*="rgb(207, 230, 250)"], [style*="#e8f4fd"]:hover, [style*="rgb(232, 244, 253)"]:hover, [style*="#fff8e6"]:hover, [style*="rgb(255, 248, 230)"]:hover)')
+        + ' { background: var(--modal-hdr-line, #a3d9e0) !important; color: var(--modal-hdr-text, #00707d) !important; border-color: var(--modal-hdr-text, #00707d) !important; }\n';
 };
 
 // ══════════════════════════════════════════════════════════════════════
@@ -262,6 +317,7 @@ window._makeResizable = function(boxId, _retry, handleId) {
     if (box.dataset.mresz === '1') return;
     box.dataset.mresz = '1';
     if (window._resizableBoxIds.indexOf(boxId) === -1) window._resizableBoxIds.push(boxId);
+    if (window._modalBoxRestyle) window._modalBoxRestyle();
 
     // 기존 CSS resize는 끈다 — 두 방식이 겹치면 모서리에서 네이티브가 먼저 먹어 서로 싸운다
     box.style.resize = 'none';
@@ -694,7 +750,14 @@ window.RESIZABLE_EXTRA_MODALS = window.RESIZABLE_EXTRA_MODALS || [
 ];
 document.addEventListener('DOMContentLoaded', function() {
     (window.RESIZABLE_EXTRA_MODALS || []).forEach(function(id) {
-        if (document.getElementById(id)) window._makeResizable(id);
+        const box = document.getElementById(id);
+        if (!box) return;
+        // 🎨 [2026-11-24] 이 셋은 _makeDraggable 을 안 거쳐 헤더 팔레트 규칙에서 빠져 있었다(살구색으로 남음) —
+        //    첫 자식 헤더(.history-header)를 같이 등록한다. 테두리 계산보다 **먼저**(위 _makeDraggable 과 같은 순서).
+        const hdr = box.firstElementChild;
+        const hid = hdr && hdr.id && hdr.classList.contains('history-header') ? hdr.id : '';
+        if (hid && window._modalHdrRegister) window._modalHdrRegister(hid);
+        window._makeResizable(id, false, hid || undefined);
     });
 });
 
