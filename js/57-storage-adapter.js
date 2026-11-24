@@ -1238,6 +1238,29 @@
             }
             var newRel = joinRel(destParentRel, wantName || oldName);
             if (newRel !== cur.rel) {
+                // 🛑🛑 [2026-11-24 실사고 — AMUSNET 55C-R2100 소실] 바꿀 이름에 **다른 파일이 이미 있으면 이름을 바꾸지 않는다.**
+                //    파일명 규칙이 '고객사>프로젝트명_인치'(js/04k, 모델명 없음)라 고객사 칸이 같은 형제 프로젝트(AMUSNET 55C·55J,
+                //    둘 다 'AMUSNET'·55")가 **같은 이름**(AMUSNET_55.0.json)을 만들었고, 아래 쓰기가 덮어쓰기라
+                //    12:52:43 에 55C 가 그 이름으로 옮겨진 뒤 12:52:49 에 55J 가 **그 위에** 옮겨져 55C 가 사라졌다
+                //    (같은 분의 백업도 같은 이름이라 6초 뒤 덮였다). 이름은 꾸밈이고 덮어쓰기는 데이터 손실이다 —
+                //    옛 이름 그대로 두고 사람에게 알린다. 목록을 못 읽어 **모르면 역시 안 바꾼다**(exists() 는 오류를 '없음'으로 삼킨다).
+                var _nmNew = normRel(newRel).split('/').pop(), _taken = null;
+                try {
+                    var _items = await listRel(normRel(newRel).split('/').slice(0, -1).join('/'));
+                    _taken = _items.some(function (it) { return it && !it.isdir && String(it.name).toLowerCase() === _nmNew.toLowerCase(); });
+                } catch (eList) { _taken = 'unknown'; }
+                if (_taken) {
+                    note('rename-collision', { keep: cur.rel, wanted: newRel, why: _taken === 'unknown' ? 'list-failed' : 'exists' });
+                    console.warn('[storage-adapter] 이름 바꾸기를 하지 않았습니다 — ' + (_taken === 'unknown' ? '대상 폴더를 못 읽어 같은 이름이 있는지 모릅니다' : '같은 이름의 다른 파일이 이미 있습니다')
+                        + ': ' + cur.rel + ' → ' + newRel + ' (내용 저장은 끝났습니다)');
+                    try {
+                        if (window.showToast && _taken !== 'unknown') window.showToast(
+                            (window._t ? window._t : function (k) { return k; })(
+                                '⚠️ 저장했지만 파일 이름은 바꾸지 않았습니다 — "' + _nmNew + '" 이름의 다른 프로젝트 파일이 이미 있습니다. Summary 의 고객사>프로젝트명을 서로 다르게 적어 주세요(예: AMUSNET>55C-R2100).',
+                                '⚠️ Saved, but the file was NOT renamed — another project already uses "' + _nmNew + '". Make Customer>Project different in Summary.'), 'error', 12000);
+                    } catch (eT) { /* 알림 실패는 무시 */ }
+                    return await driveGetMeta(cur.rel, false);
+                }
                 var res = await readRel(cur.rel);
                 var buf = await res.arrayBuffer();
                 await writeRel(newRel, bytesToB64(buf), true);
