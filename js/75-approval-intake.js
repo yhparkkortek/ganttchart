@@ -47,6 +47,7 @@
         intervalMin: 120,              // 배경 스캔 간격(그룹웨어가 로그인돼 있을 때만)
         skipForms: ['휴가', '연차', '반차', '근태', '경조', '조퇴', '외출'],  // 양식 이름에 이 말이 있으면 가져오지 않는다
         seenMax: 4000,                 // 장부 상한(오래된 것부터 버린다)
+        taskNameMax: 40,               // 업무명(카드 제목)에 쓰는 문서 제목 최대 글자 — 넘으면 '…' (전체 제목은 [출처] 에)
         // 📐 크기 가드(2026-11-24 실문서 120건 판정에서 찾음) — 제목에 크기가 적혀 있는데 대상 프로젝트 크기와 하나도 안 맞으면
         //    자동배치하지 않고 대기. 실측 오배치 3건: HORIZON 23.8" → 75" 프로젝트 · KGI>32TPR → 75" · KONAMI 75" → 55" KGP-4.
         //    단위 없는 숫자는 크기로 안 본다 — 단, 아래 접미어가 바로 붙으면 크기다(32TPR·75MVD).
@@ -137,12 +138,35 @@
                         apprStatus: d.apprStatus || '', box: boxLabel, url: d.url || '', drafter: d.drafterName || '' }
         };
     }
+    /** ✂️ [2026-11-24 사용자 지적 "카드 제목이 너무 길다"] 업무명용 짧은 제목.
+     *  ① 맨 앞 [ … ] 가 양식 이름이거나 '…서/요청/신청/의뢰/회의록' 으로 끝나면 뗀다 — 양식은 상세내용 [핵심내용] 에 이미 있다
+     *  ② 끝의 판 번호(V00·_REV00)를 뗀다 ③ 그래도 길면 P.taskNameMax 에서 자르고 '…' (전체 제목은 [출처] 에 그대로 남는다) */
+    function shortTitle(d) { return shortTitleOf(d.title, d.formName) || stripTags(d.formName) || String(d.docNum || d.id); }
+    function shortTitleOf(title, formName) {
+        var d = { title: title, formName: formName || '' };
+        var t = stripTags(d.title), f = stripTags(d.formName).replace(/\s/g, '');
+        var m = /^\s*\[([^\]]{1,40})\]\s*/.exec(t);
+        if (m) {
+            var b = m[1].replace(/\s/g, '');
+            if ((f && (b.indexOf(f) !== -1 || f.indexOf(b) !== -1)) || /(서|요청|신청|의뢰|회의록)$/.test(b)) {
+                // 양식 이름을 통째로 빼면 무슨 문서인지 모른다('[결재] LNW_SHUFFLER 4.3"') → 끝말(의뢰서·요청서…)만 뗀 짧은 꼬리표로
+                var tag = m[1].replace(/\s*(요청서|신청서|의뢰서|결과서|품의서|보고서|통지서|등록서|요청|신청|의뢰|서)\s*$/, '').trim();
+                t = (tag ? tag + ' · ' : '') + t.slice(m[0].length);
+            }
+        }
+        t = t.replace(/[\s_]*(REV|V)\d{2}\s*$/i, '').replace(/\s+/g, ' ').trim();
+        if (!t) t = stripTags(d.title);
+        var max = P.taskNameMax || 40;
+        if (t.length > max) t = t.slice(0, max - 1).trim() + '…';
+        return t;
+    }
+    window._approvalShortTitle = shortTitleOf;   // 하네스용 (title, formName)
     function taskOf(d, boxLabel) {
         var ts = docTs(d), ymd = ymdOf(ts);
         var title = stripTags(d.title) || stripTags(d.formName) || String(d.docNum || d.id);
         var dateTag = ymd + (d.draftedAt && /\d{2}:\d{2}/.test(d.draftedAt) ? ' ' + /\d{2}:\d{2}/.exec(d.draftedAt)[0] : '');
         var t = {
-            '업무명': ('[' + T('결재', 'Approval') + '] ' + title).slice(0, 90),
+            '업무명': '[' + T('결재', 'Approval') + '] ' + shortTitle(d),
             '시작일': ymd, '완료일': statusOf(d) === '완료' ? ymd : '', '상태': statusOf(d),
             '개발단계': '', '담당구분': '미분류', 'wbs레벨': 4,
             '상세내용': '[핵심내용] ' + stripTags(d.formName) + (d.docNum ? ' ' + d.docNum : '') + ' · ' +
@@ -483,6 +507,22 @@
             var t2 = t.replace(/\r?\n🔗 (https?:\/\/\S*\/app\/approval\/document\/\d+)/, ' 🔗 $1');
             if (t2 !== t) { row[ci.content] = t2; out.relinked++; }
         }
+        // ③ 긴 결재 업무명 줄이기(2026-11-24 사용자 지적) — 이 기능이 만든 행(_mailRaw.approval)만, 실제로 짧아질 때만.
+        //    이름은 _origT* 에 있고 재계산이 화면 칸으로 베낀다. 전체 제목은 상세내용 [출처] 에 남아 있다.
+        out.renamed = 0;
+        var PFX = '[' + T('결재', 'Approval') + '] ', SFX = ' ＊AI📧';
+        for (var q = 1; q < gd.length; q++) {
+            var rw = gd[q]; if (!rw || !rw._mailRaw || !rw._mailRaw.approval) continue;
+            ['_origDev', '_origT1', '_origT2', '_origT3', '_origT4'].forEach(function (f) {
+                var v = String(rw[f] || '');
+                if (v.indexOf(PFX) !== 0) return;
+                var hasSfx = v.slice(-SFX.length) === SFX;
+                var core = v.slice(PFX.length, hasSfx ? v.length - SFX.length : v.length);
+                var full = String(rw._mailRaw.subject || core);   // 원래 제목(옛 행은 90자에서 잘렸을 수 있다)
+                var sh = shortTitleOf(full, rw._mailRaw.approval.formName);
+                if (sh && sh.length < core.length) { rw[f] = PFX + sh + (hasSfx ? SFX : ''); out.renamed++; }
+            });
+        }
         // ① 첫 단계 머리 위의 자동 행
         var firstL0 = -1;
         for (var j = 1; j < gd.length; j++) { if (gd[j] && gd[j]._level === 0) { firstL0 = j; break; } }
@@ -507,16 +547,20 @@
                 });
             }
         }
-        if (!out.moved && !out.relinked) return out;
-        try { if (typeof logChange === 'function') logChange(1, -1, '없음', '자동배치 자리 바로잡기: 단계 밖 ' + out.moved + '행 이동 · 결재 링크 ' + out.relinked + '행'); } catch (e) { /* 기록 실패는 무시 */ }
+        if (!out.moved && !out.relinked && !out.renamed) return out;
+        // 💬 [2026-11-24 사용자 요청 "쉬운 말로"] '자동배치 자리' 같은 내부 말 대신 무엇을 했는지만 — 화면 알림·수정이력 같은 문장
+        var partsKo = [], partsEn = [];
+        if (out.moved) { partsKo.push('맨 위에 잘못 들어가 있던 업무 ' + out.moved + '건을 날짜에 맞는 단계로 옮겼습니다'); partsEn.push('moved ' + out.moved + ' tasks stuck at the top into the stage matching their date'); }
+        if (out.renamed) { partsKo.push('긴 결재 업무 이름 ' + out.renamed + '건을 짧게 줄였습니다'); partsEn.push('shortened ' + out.renamed + ' long approval task names'); }
+        if (out.relinked) { partsKo.push('결재 링크 ' + out.relinked + '건을 한 줄로 정리했습니다'); partsEn.push('tidied ' + out.relinked + ' approval link lines'); }
+        try { if (typeof logChange === 'function') logChange(1, -1, '없음', partsKo.join(' · ')); } catch (e) { /* 기록 실패는 무시 */ }
         try { if (window.recalculateSchedules) window.recalculateSchedules(); } catch (e) { console.warn('[자리 바로잡기] 재계산 실패', e); }
         try { if (window.renderGantt) window.renderGantt(); } catch (e) { /* 다음 렌더에 반영 */ }
         if (!opts.noSave && window.saveToGoogleDrive) {
             var okSave = await window.saveToGoogleDrive({ suppressAlert: true });
             if (!okSave && window._saveLocalBackup) window._saveLocalBackup('approval-repair-save-blocked');
         }
-        if (window.showToast && !opts.silent) window.showToast(T('🩹 이 프로젝트의 자동배치 자리를 바로잡았습니다 — 단계 밖에 있던 ' + out.moved + '행을 날짜 순으로 옮김' + (out.relinked ? ' · 결재 링크 ' + out.relinked + '행 정리' : '') + ' (Ctrl+Z 로 되돌림)',
-                                                                  '🩹 Fixed auto-placed rows in this project — moved ' + out.moved + ' rows into their stage (Ctrl+Z to undo)'), 'info', 8000);
+        if (window.showToast && !opts.silent) window.showToast(T('📋 ' + partsKo.join(' · ') + ' — 되돌리려면 Ctrl+Z', '📋 ' + partsEn.join(' · ') + ' — Ctrl+Z to undo'), 'info', 8000);
         console.info('[자리 바로잡기]', JSON.stringify(out));
         return out;
     };

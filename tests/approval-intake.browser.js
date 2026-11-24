@@ -205,6 +205,29 @@ window.__approvalIntakeTest = async function () {
                        '9-3 결재 링크 줄바꿈을 문장 끝으로', globalData[3][2]);
                     const rr2 = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
                     ok(rr2.moved === 0 && rr2.relinked === 0, '9-4 두 번째는 고칠 게 없다(멱등)', rr2);
+
+                    // 9-5~8 ✂️ 긴 결재 업무명 줄이기 + 쉬운 말 알림
+                    const ST = window._approvalShortTitle;
+                    const longT = '[개발품 자재상태 전환 요청서] E2 -> E3_Amusnet 55FLAT / 55C-R2100 / 55J-R1500 3종 (장납기 자재 구매)';
+                    const s1 = ST(longT, '개발품 자재상태 전환 요청서');
+                    ok(s1.length <= 40 && /^개발품 자재상태 전환 · E2/.test(s1) && /…$/.test(s1), '9-5 양식 이름은 짧은 꼬리표로, 40자 넘으면 … (사용자 예시)', s1);
+                    ok(ST('[신뢰성 시험 의뢰서] LNW_SHUFFLER 4.3"', '신뢰성 시험 의뢰서') === '신뢰성 시험 · LNW_SHUFFLER 4.3"' &&
+                       ST(' Amusnet 55J-R1500_HN FFC_엔케이블_REV00', '원자재 승인 결과서') === 'Amusnet 55J-R1500_HN FFC_엔케이블' &&
+                       ST('[ECO2610YH02] GAME_LNW STELLAR', 'E.C.O') === '[ECO2610YH02] GAME_LNW STELLAR',
+                       '9-6 끝말만 떼고(의뢰서) · 판 번호(REV00) 제거 · 양식 아닌 꼬리표(ECO 번호)는 그대로');
+                    const named = RR(4, '', '2026-11-20', '[핵심내용] x', true);
+                    named._origT4 = '[결재] ' + longT + ' ＊AI📧';
+                    named._mailRaw.approval = { formName: '개발품 자재상태 전환 요청서' }; named._mailRaw.subject = longT;
+                    const manual = RR(4, '', '2026-11-21', '메모'); manual._origT4 = '[결재] ' + longT;   // 사람이 같은 글을 적었어도 결재 원문 없으면 안 건드림
+                    globalData.splice(globalData.length, 0, named, manual);
+                    let toastMsg = '';
+                    const svToast = window.showToast; window.showToast = (m) => { toastMsg = String(m); };
+                    const rr3 = await window.approvalRepairOpenProject({ noSave: true, force: true });
+                    window.showToast = svToast;
+                    ok(rr3.renamed === 1 && named._origT4 === '[결재] ' + s1 + ' ＊AI📧' && manual._origT4 === '[결재] ' + longT,
+                       '9-7 이 기능이 만든 결재 행만 이름을 줄인다(＊AI📧 표시는 그대로)', { rr3, n: named._origT4, m: manual._origT4 });
+                    ok(/긴 결재 업무 이름 1건을 짧게 줄였습니다/.test(toastMsg) && !/자동배치 자리/.test(toastMsg) && /Ctrl\+Z/.test(toastMsg),
+                       '9-8 알림은 쉬운 말로(무엇을 했는지 + 되돌리는 법)', toastMsg);
                 } finally {
                     if (keep.gd !== undefined) globalData = keep.gd; if (keep.ci !== undefined) colIdx = keep.ci;
                     window.recalculateSchedules = keep.recalc; window.renderGantt = keep.render;
