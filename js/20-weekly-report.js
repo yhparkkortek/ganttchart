@@ -372,8 +372,9 @@
         });
         const _wiEn = window._currentLang === 'en';
         if (rows.length === 0) return '<div style="color:#999;">' + (_wiEn ? 'No issues this week.' : '이번 주 문제점/이슈 없음') + '</div>';
-        const body = rows.map(r => `
-            <tr>
+        // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라(색은 styles.css / js/21 이 정한다)
+        const body = rows.map((r, ri) => `
+            <tr${ri % 2 ? ' class="wr-zebra-b"' : ''}>
                 <td style="padding:8px; border:1px solid #e0e0e0;"><div style="font-weight:bold; font-size:11px; color:#555; margin-bottom:3px;">${escapeHtml(r.task)}</div>${escapeHtml(r.issue)}</td>
                 <td style="padding:8px; border:1px solid #e0e0e0;">${escapeHtml(r.fix || '-')}</td>
                 <td style="padding:8px; border:1px solid #e0e0e0; white-space:nowrap;">${r.dateLabel}</td>
@@ -381,7 +382,7 @@
             </tr>`).join('');
         return `
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                <thead><tr style="background:#f4f6f8;">
+                <thead><tr style="background:#eef6f7; color:#00707d;">
                     <th style="padding:8px; border:1px solid #e0e0e0;">${_wiEn ? 'Issues' : '문제점 및 Issue'}</th>
                     <th style="padding:8px; border:1px solid #e0e0e0;">${_wiEn ? 'Action' : '대책'}</th>
                     <th style="padding:8px; border:1px solid #e0e0e0;">${_wiEn ? 'Schedule' : '추진일정'}</th>
