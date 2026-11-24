@@ -41,6 +41,18 @@
   background: rgba(0, 0, 0, 0.5);
 }
 
+/* 🎯 [2026-11-24 "입력칸 포커스 통일"] 입력칸에 들어가 있음 표시 — 테마색 2px 테두리선 한 벌.
+   실측: 새 찾기칸 13곳(Summary·BOM·JIRA·PARTS·일일보고·Calendar·Brief·프로젝트 불러오기·간트 AI검색…)이 인라인 `outline:none`
+   으로 포커스 표시를 **아예 지워** 눌러도 아무 표시가 없었고, 나머지는 브라우저 기본 파랑 테두리였다 → 한 벌로.
+   인라인 outline:none 을 이기려고 !important. 자기 포커스 모양이 있는 곳(간트 칸 편집기·Customer SPEC 열 이름)은 아래에서 뺀다. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+textarea:focus, select:focus {
+  outline: 2px solid var(--ui-accent-line, #a3d9e0) !important;
+  outline-offset: 0;
+}
+#myTable tbody td input:focus, #myTable tbody td textarea:focus,
+.bs-col-label-input:focus { outline: none !important; }
+
 /* ───── 1. head 메인 스타일시트 (:root 변수 등) (원본 줄 31~1085) ───── */
     :root {
         --table-font-size:   clamp(9px, 1.05vw, 13px);
