@@ -2647,6 +2647,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 #weekly-report-page tr.wr-zebra-b > td { background: #e8f2f3; }
 /* 🦓 Project Review 표 — tr 에 칠한다(td 에 칠하면 근거→표 돌아올 때의 노란 깜빡임이 가려진다) */
 #psummary-page tr.ps-zebra-b { background: #e8f2f3; }
+/* 🦓 JIRA 연결 이슈·전체 검색 표 — tr 에(마우스 올림 inline 색이 이기게) */
+tr.jira-zebra-b { background: #e8f2f3; }
 .daily-none-txt { color: #00707d; }   /* 2026-11-24: 보색 → 테마색 */
 
 /* ══════════════════════════════════════════════════════════════════════════

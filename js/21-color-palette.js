@@ -389,7 +389,7 @@ window._cpApplyLive = function(hex, skipSave) {
     css += '.daily-cat-cell { color: ' + gen.darkText + ' !important; }\n'
         + '#daily-report-page tr.daily-zebra-b > td, #weekly-report-page tr.wr-zebra-b > td { background: ' + gen.zebraB + ' !important; }\n'
         // ⚠️ Project Review 제브라는 tr 에 칠하고 !important 를 안 붙인다 — 근거에서 돌아올 때 inline 깜빡임이 이겨야 한다
-        + '#psummary-page tr.ps-zebra-b { background: ' + gen.zebraB + '; }\n'
+        + '#psummary-page tr.ps-zebra-b, tr.jira-zebra-b { background: ' + gen.zebraB + '; }\n'
         + '.daily-none-txt { color: ' + gen.darkText + ' !important; }\n';
 
     // 📄 [2026-11-09] Document 페이지(js/67)의 문서 서식 — **클래스 기반**이라

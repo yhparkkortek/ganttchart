@@ -512,7 +512,8 @@
             + merged.map(function (it, i) {
                 var c = statusColor(it.status);
                 var metaTxt = metaCellText(it);
-                return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
+                // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라(tr 에 — hover 의 inline 색이 이기게)
+                return '<tr' + (i % 2 ? ' class="jira-zebra-b"' : '') + ' onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
                     + '<td style="padding:6px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
                     + '<td style="padding:6px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
                     + '<td style="padding:6px 8px;">' + esc(it.summary) + '</td>'
@@ -994,7 +995,7 @@
             + headerCell('reporter', sim ? 8 : 10, 'center', 'search')
             + headerCell('updated', sim ? 11 : 14, 'center', 'search')
             + '</tr></thead>';
-        var bodyRows = view.length ? view.map(function (it) {
+        var bodyRows = view.length ? view.map(function (it, vi) {
                 var c = statusColor(it.status);
                 var proj = (it.key || '').split('-')[0];
                 var matchCell = '';
@@ -1008,7 +1009,7 @@
                             : '<span style="font-size:10.5px; color:#999;">' + T('본문·댓글', 'body/comments') + '</span>')
                         + '</td>';
                 }
-                return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
+                return '<tr' + (vi % 2 ? ' class="jira-zebra-b"' : '') + ' onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
                     + matchCell
                     + '<td style="' + td + ' color:#888;">' + esc(proj) + '</td>'
                     + '<td style="' + td + ' font-weight:bold; color:#00707d;">' + esc(it.key) + '</td>'
