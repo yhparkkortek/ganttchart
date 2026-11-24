@@ -757,8 +757,14 @@
         });
         return found;
     };
+    // ⚠️⚠️ [2026-11-24 실측 버그] 원래 `window.markUnsavedChanges` 를 불렀는데 **그런 함수는 앱 어디에도 없다**
+    //    — 이 페이지에서 적은 값·첨부가 저장 대상으로 표시되지 않아 자동저장이 건너뛰었다(다른 탭 편집이
+    //    우연히 같이 저장될 때만 실렸다). 앱의 진짜 표시는 `_markNonGanttDirty`(js/04a) 다.
     var _markDirty = function () {
-        try { if (window.markUnsavedChanges) window.markUnsavedChanges(); } catch (e) { /* 없으면 넘어간다 */ }
+        try {
+            if (window._markNonGanttDirty) window._markNonGanttDirty();
+            else if (window.markUnsavedChanges) window.markUnsavedChanges();
+        } catch (e) { /* 없으면 넘어간다 */ }
     };
 
     window._docSetField = function (id, key, value) {

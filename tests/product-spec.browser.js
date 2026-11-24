@@ -52,8 +52,26 @@ window.__psTest = async function (opt) {
                      'cie.r2.c1': '0.305', 'cie.r2.c2': '0.335', 'cert.r2.c3': 'X', 'scr.r12.c1': 'x=0.305, y=0.335',
                      vcpTitle: 'LNW VCP Specification', 'rev.r1.c1': '00', 'rev.r1.c2': 'All', 'tglass.r2.c2': '1.00T' };
         Object.keys(want).forEach(function (k) { check(p.values[k] === want[k], '자동값 ' + k + ' = ' + JSON.stringify(p.values[k]) + ' (기대 ' + want[k] + ')'); });
-        check(/31\.5” TFT-LCD MONITOR\. KTS999TEST01 is/.test(p.values.scope), 'Scope 글 틀');
+        // Scope 는 제품 인치(Summary 32), Features 는 패널 실치수(Project list 31.5) — 원본이 그렇다
+        check(/specification of 32” TFT-LCD MONITOR\. KTS999TEST01 is/.test(p.values.scope), 'Scope 글 틀(제품 인치) ' + p.values.scope);
+        // Project list 의 '없음'(X) 은 터치가 없다는 뜻 — 터치 판이 되면 안 된다
+        window._plData.rows[0].touchCtrl = 'X';
+        window.tabData.projectModels[0].materials = window.tabData.projectModels[0].materials.filter(function (m) { return m.category !== 'TOUCH CTRL'; });
+        var pX = window._psPayload();
+        check(pX.variant === 'base' && pX.values['parts.r5.c1'] === '-' && pX.values['parts.r5.c2'] === '-',
+              'touchCtrl=X → base 판·부품 표 "-" (' + pX.variant + ', ' + pX.values['parts.r5.c1'] + ', ' + pX.values['parts.r5.c2'] + ')');
+        window._plData.rows[0].touchCtrl = 'TCTRL-TEST';
+        window.tabData.projectModels[0].materials.push({ category: 'TOUCH CTRL', description: 'TCTRL-TEST' });
         check(p.variant === 'touch', '터치 컨트롤러가 있으면 터치 판');
+        // 💾 칸을 고치면 **저장 대상으로 표시**돼야 한다 — 2026-11-24 실측: js/67 이 앱에 없는 함수
+        //    (`markUnsavedChanges`)를 불러 표시가 안 켜졌고, 실제 프로젝트에 불러온 칸 602개가 자동저장에서 빠졌다.
+        var dirtyBefore = window._nonGanttDirty;
+        window._nonGanttDirty = false;
+        window.markUnsavedChanges = saved.dirty;   // 진짜 상태(없음)로 — 위에서 가짜로 바꿔 둔 것을 되돌린다
+        window._docSetField('product-spec', 'pwrConnPn', 'TEST-CONN-PN');
+        check(window._nonGanttDirty === true, '칸을 고치면 _nonGanttDirty 가 켜져야(자동저장 대상)');
+        window._nonGanttDirty = dirtyBefore;
+        window.markUnsavedChanges = function () {};
         var nOn = f.sections.length;
         window._docDataOf('product-spec').fields.hasTouch = 'NO';
         check(window._psPayload().variant === 'base' && f.sections.length < nOn, '터치 끄면 base 판 + 터치 구역 숨김');

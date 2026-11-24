@@ -59,7 +59,7 @@
         'parts.r4.c1': ['pl:tsp', 'mat:TSP/GLASS', 'const:-'],
         'parts.r4.c2': ['const:-'],
         'parts.r5.c1': ['pl:touchCtrl', 'mat:TOUCH CTRL', 'const:-'],
-        'parts.r5.c2': ['pl:touchFw', 'const:-'],
+        'parts.r5.c2': ['fn:touchFw'],
         'parts.r5.c3': ['touch:Brand'],
         // 개정 이력 — 리비전 R1..R5 가 각 줄(다른 리비전에 적어 둔 값을 읽어 온다)
         'rev.r1.c0': ['fn:rev:1:0'], 'rev.r1.c1': ['fn:rev:1:1'], 'rev.r1.c2': ['fn:rev:1:2'], 'rev.r1.c3': ['fn:rev:1:3'],
@@ -93,9 +93,8 @@
         // 시야각 표 — Right · Left · Up · Down (패널 'L/R/U/D' 를 쪼갠다)
         'va.r0.c4': ['fn:va:1'], 'va.r1.c4': ['fn:va:0'], 'va.r2.c4': ['fn:va:2'], 'va.r3.c4': ['fn:va:3'],
         lumYL: ['fn:lumYL'],
-        'blu.r2.c3': ['panel:Lamp Current'],
-        'blu.r3.c3': ['panel:Lamp Voltage'],
-        'blu.r4.c3': ['panel:Lamps Power Consumption'],
+        // ⚠️ BLU 전류·전압·전력은 **안 잇는다** — 라이브러리엔 값이 하나뿐인데 표는 Min/Typ/Max 세 칸이라
+        //    어느 칸인지 모른다(실측: 라이브러리 전압 값은 원본의 Max 칸 값이었다 — Typ 에 넣으면 조용한 오답이 된다).
         'blu.r5.c2': ['panel:Lamp Life Time (Hrs)'],
         'cie.r2.c1': [SPEC.xy + ':0', 'pl:cieX'],
         'cie.r2.c2': [SPEC.xy + ':1', 'pl:cieY'],
@@ -112,6 +111,47 @@
         'tgen.r2.c2': ['touch:Brand'], 'tgen.r3.c2': ['pl:touchFw'],
         'tgen.r6.c2': ['pl:vidPid'],
         'tglass.r1.c2': ['pl:glassType'], 'tglass.r2.c2': ['pl:airGap']
+    };
+    // 앱 값의 **모양**을 문서 칸에 맞춘다(데이터) — 단위는 옆 'Unit' 칸에 이미 있어서 값에 또 붙이면
+    //   '698.112 mm' + 'mm' 처럼 두 번 찍힌다(실측). 못 맞추면 받은 그대로 둔다(지우지 않는다).
+    window.PS_FMT = window.PS_FMT || {
+        'scr.r1.c1': 'noUnit', 'scr.r5.c1': 'noUnit', 'scr.r10.c1': 'rangeCdTight', 'scr.r11.c1': 'number',
+        'scr.r12.c1': 'xyPair', 'scr.r13.c1': 'number', 'scr.r14.c1': 'minNumber',
+        lumYL: 'rangeCd', 'cie.r2.c1': 'xyOne', 'cie.r2.c2': 'xyOne', 'blu.r5.c2': 'noUnit',
+        'amr.r1.c2': 'signless', 'amr.r1.c3': 'signless', 'amr.r2.c2': 'signless', 'amr.r2.c3': 'signless',
+        'parts.r1.c3': 'vendor', 'parts.r2.c3': 'vendor', 'parts.r3.c3': 'vendor', 'parts.r5.c3': 'vendor',
+        'tgen.r2.c2': 'vendor',
+        'parts.r4.c1': 'noneDash', 'parts.r5.c1': 'noneDash', 'parts.r5.c2': 'noneDash', 'parts.r2.c2': 'noneDash',
+        'tgen.r3.c2': 'noneDash'
+    };
+    // 제조사 이름 → 문서에 쓰는 짧은 이름(데이터). 표지 Vendor 칸이 좁아서 'KORTEK Corporation' 이 두 줄로
+    //   접히면 표지가 길어져 **문서 전체가 한 쪽 밀린다**(실측 22→23쪽). 없는 이름은 그대로 둔다.
+    window.PS_VENDOR_SHORT = window.PS_VENDOR_SHORT || [
+        { re: /^\s*kortek\b/i, name: 'Kortek' }
+    ];
+    // '없음' 표기(데이터) — Project list·주요자재가 빈 칸 대신 쓰는 글자들
+    var PS_NONE_RE = /^\s*(x|-|–|n\/?a|no|none|없음|미적용)?\s*$/i;
+    var _isNone = function (v) { return PS_NONE_RE.test(String(v == null ? '' : v)); };
+    var _num = function (s) { var m = String(s).match(/-?\d[\d,]*(?:\.\d+)?/); return m ? m[0] : ''; };
+    var _range = function (s) { var m = String(s).match(/(\d+(?:\.\d+)?)\s*[~∼\-–]\s*(\d+(?:\.\d+)?)/); return m ? m[1] + ' ~ ' + m[2] : ''; };
+    var _stripXY = function (s) { return String(s).replace(/^\s*[xy]\s*[=:]\s*/i, '').trim(); };
+    var FMT = {
+        noUnit: function (v) { return String(v).replace(/\s*(mm|cm|hrs?|hours?)\s*$/i, '').trim(); },
+        number: function (v) { return _num(v) || v; },
+        minNumber: function (v) { return /^\s*\d+(\.\d+)?\s*%?\s*$/.test(v) ? 'Min = ' + _num(v) : v; },
+        rangeCd: function (v) { var r = _range(v); return r ? r + ' cd/m2' : v; },
+        rangeCdTight: function (v) { var r = _range(v); return r ? r + 'cd/m2' : v; },
+        xyOne: function (v) { return _stripXY(v); },
+        xyPair: function (v) {
+            var m = String(v).match(/(\d*\.\d+)[^\d.]+(\d*\.\d+)/);
+            return m ? 'x=' + m[1] + ', y=' + m[2] : v;
+        },
+        signless: function (v) { return String(v).replace(/^\s*\+/, '').trim(); },
+        noneDash: function (v) { return _isNone(v) ? '-' : v; },
+        vendor: function (v) {
+            var hit = (window.PS_VENDOR_SHORT || []).filter(function (x) { return x.re.test(v); })[0];
+            return hit ? hit.name : v;
+        }
     };
     // 고객 PN 머리글 낱말(표지 표의 'SG PN' 칸) — 고객사 이름에 맞춰 (데이터)
     window.PS_CUST_PN_LABEL = window.PS_CUST_PN_LABEL || [
@@ -295,9 +335,25 @@
     };
     var FN = {
         hasTouch: function (ctx) {
+            // ⚠️ Project list 는 '없음'을 `X` 로 적는다(실측 — 터치 없는 구분자) — 글자가 있다고 '있음'이 아니다.
+            //    Project list 에 이 제품이 있으면 그걸 믿고, 없을 때만 **이 모델 카드 자신의** 주요자재를 본다
+            //    (ctx.materials 는 다른 모델 카드로 폴백하므로 다른 구분자의 터치가 새어 들어온다).
+            var row = _plRow(ctx);
+            var has;
+            if (row && Object.prototype.hasOwnProperty.call(row, 'touchCtrl')) {
+                has = !_isNone(row.touchCtrl);
+            } else {
+                var card = ((window.tabData || {}).projectModels || []).filter(function (m) { return m && m.unitId === (window.mcActiveUnit || ''); })[0];
+                var mats = (card && card.materials) || [];
+                has = mats.some(function (m) { return m && m.category === 'TOUCH CTRL' && !_isNone(m.description || m.ktkPn); });
+            }
+            return { v: has ? 'YES' : 'NO', src: _t('Project list · 이 모델 주요자재 TOUCH CTRL 유무', 'touch controller present?') };
+        },
+        // 터치 컨트롤러가 없으면 F/W 도 '-' — Project list 에 컨트롤러는 X 인데 F/W 가 적힌 행이 있다(실측)
+        touchFw: function (ctx) {
+            if (FN.hasTouch(ctx).v !== 'YES') return { v: '-', src: _t('터치 컨트롤러 없음', 'no touch controller') };
             var row = _plRow(ctx) || {};
-            var has = !!(String(row.touchCtrl || '').trim() || _matDesc(ctx, 'TOUCH CTRL'));
-            return { v: has ? 'YES' : 'NO', src: _t('Project list · 주요자재 TOUCH CTRL 유무', 'touch controller present?') };
+            return { v: _isNone(row.touchFw) ? '-' : String(row.touchFw).trim(), src: 'Project list ▸ touchFw' };
         },
         docRev: function () { return { v: 'V' + _pad(_revNo()), src: _t('지금 보는 리비전', 'current revision') }; },
         revDate: function () { return { v: _todayDash(), src: _t('오늘 날짜', 'today') }; },
@@ -321,18 +377,37 @@
             return { v: n === 1 ? '1’st issued' : '', src: '' };
         },
         scope: function (ctx) {
-            var inch = _inch(ctx), model = (ctx.meta && ctx.meta.KTK모델명) || '';
+            // Scope 는 **제품 인치**(Summary, 예 32”) — 원본이 그렇다. 패널 실치수(31.5”)는 Features 쪽이다.
+            var inch = String((ctx.meta && ctx.meta.인치) || _inch(ctx)).replace(/["”]/g, '').trim();
+            var model = (ctx.meta && ctx.meta.KTK모델명) || '';
             if (!model) return { v: '', src: _t('Summary ▸ KTK 모델명 없음', 'no model name') };
             return { v: window.PS_TEXT.scope.replace('{inch}', inch).replace('{model}', model),
                      src: 'Summary ▸ KTK ' + _t('모델명·인치', 'model/inch') };
         },
         feat1: function (ctx) {
-            var r = _maxRes();
-            if (!r) return { v: '', src: _t('지원 해상도를 안 골랐음', 'no resolution picked') };
+            // "Supports up to" = **패널 원래 해상도**(PARTS 패널 Dot Resolution → Customer SPEC Native Resolution).
+            //   ⚠️ 지원 해상도 중 최대를 쓰면 안 된다 — 실측 프로젝트는 4K@30 을 '받기만' 하는데
+            //   그걸 집어 'Supports up to <4K>, 30Hz' 가 됐다(원본은 패널 원래 해상도·60Hz).
+            var r = null, src = '';
+            var rec = _libRec(ctx, 'panel');
+            var nat = (rec && rec.specs['Dot Resolution']) || ((_specVal(ctx, ['Native Resolution', '해상도', 'Resolution']) || {}).v) || '';
+            var nm = String(nat).match(/(\d{3,5})\D{1,8}?(\d{3,5})/);
+            if (nm) {
+                r = { w: nm[1], h: nm[2], hz: 60 };
+                src = rec ? 'PARTS ▸ PANEL ▸ Dot Resolution' : 'Customer SPEC ▸ Native Resolution';
+                (window.resSelectedRows ? window.resSelectedRows() : []).forEach(function (x) {
+                    var m = String(x.label || '').match(/(\d{3,5})\s*[x×X]\s*(\d{2,5})[ip]?\s*@\s*([\d.]+)/);
+                    if (m && m[1] === r.w && m[2] === r.h) r.hz = Math.round(parseFloat(m[3]));
+                });
+            } else {
+                r = _maxRes();
+                src = _t('지원 해상도 중 최대', 'max picked resolution');
+            }
+            if (!r) return { v: '', src: _t('패널 해상도·지원 해상도 없음', 'no resolution') };
             var row = _plRow(ctx) || {};
             var inch = String(row.panelInch || _inch(ctx)).replace(/["”]/g, '');
             return { v: window.PS_TEXT.feat1.replace('{res}', r.w + ' x ' + r.h).replace('{hz}', r.hz).replace('{inch}', inch),
-                     src: _t('지원 해상도 중 최대', 'max picked resolution') };
+                     src: src };
         },
         cert: function (ctx, a) {
             var row = _plRow(ctx);
@@ -412,7 +487,12 @@
         var lastSrc = '';
         for (var i = 0; i < list.length; i++) {
             var r = _resolve(ctx || {}, list[i]) || { v: '', src: '' };
-            if (r.v !== '' && r.v != null) return { v: String(r.v), src: r.src };
+            if (r.v !== '' && r.v != null) {
+                var fmt = FMT[(window.PS_FMT || {})[key]];
+                var out = String(r.v);
+                if (fmt) { try { out = String(fmt(out)); } catch (eF) { /* 받은 그대로 */ } }
+                return { v: out, src: r.src };
+            }
             if (r.src && !lastSrc) lastSrc = r.src;
         }
         return { v: '', src: lastSrc ? _t('앱에 값 없음 — ', 'empty — ') + lastSrc : '' };
@@ -578,7 +658,8 @@
             var last = (d.att[k] || [])[d.att[k].length - 1];
             if (last) ['cx', 'cy', 'ph', 'pv'].forEach(function (x) { if (typeof im[x] === 'number') last[x] = im[x]; });
         }
-        if (window.markUnsavedChanges) window.markUnsavedChanges();
+        // 저장 대상으로 표시 — 앱의 진짜 표시는 `_markNonGanttDirty`(js/04a). (`markUnsavedChanges` 는 앱에 없다)
+        if (window._markNonGanttDirty) window._markNonGanttDirty();
         _built = null;
         if (window._docRender) window._docRender();
         _toast('📥 ' + _t('불러왔습니다 — 칸 ' + put + '개 채움 · 앱 값 유지 ' + kept + '개 · 그림 ' + keys.length + '장'

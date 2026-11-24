@@ -23,8 +23,12 @@
     var _esc = function (s) { return window.escapeHtml ? window.escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); };
     var _td = function () { window.tabData = window.tabData || {}; return window.tabData; };
     var _toast = function (m, k) { if (window.showToast) window.showToast(m, k || 'info'); };
+    // ⚠️ [2026-11-24] `markUnsavedChanges` 는 앱에 없는 함수였다 — 고른 해상도가 저장 대상으로 표시되지 않았다(js/67 같은 버그).
     var _markDirty = function () {
-        try { if (window.markUnsavedChanges) window.markUnsavedChanges(); } catch (e) { /* 없으면 넘어간다 */ }
+        try {
+            if (window._markNonGanttDirty) window._markNonGanttDirty();
+            else if (window.markUnsavedChanges) window.markUnsavedChanges();
+        } catch (e) { /* 없으면 넘어간다 */ }
     };
 
     // ── 🔌 입력 포트 (데이터) ───────────────────────────────────────────
