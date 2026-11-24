@@ -105,8 +105,13 @@ window.__psTest = async function (opt) {
         window.tabData.bomByUnit = { LOWER: { rows: [
             { _level: 1, IDNRK: '777099', OJTXP: 'LCM IPS>PNL-BOM-01,1920X1080,300=', WGBEZ60: 'DISPLAY/LCM' },
             { _level: 1, IDNRK: '777010', OJTXP: 'PBA-AD>VIDEO,ADB-TEST,R1,V00', WGBEZ60: 'BD 반제품/PBA' },
-            { _level: 1, IDNRK: '777088', OJTXP: 'PBA-LED>PCB,LED-TEST,V00', WGBEZ60: 'BD 반제품/PBA' },
-            { _level: 1, IDNRK: '777020', OJTXP: 'PBA-CNV>LEDRV,CONV-TEST,R0', WGBEZ60: 'BD 반제품/PBA' }] } };
+            { _level: 2, IDNRK: '700001', OJTXP: 'CON>D,NOR,ABC200-04,4P1MS,200', WGBEZ60: '회로자재/CONNECTOR', EBORT: 'J1,J7', MFRPN: '연호전자' },
+            { _level: 2, IDNRK: '700002', OJTXP: 'SWC TACT>S,9999SB9,SR,4P', WGBEZ60: '회로자재/SWITCH', EBORT: 'SW1,SW2,SW3,SW4', MFRPN: 'CT 전자' },
+            { _level: 2, IDNRK: '700003', OJTXP: 'JACK USB>D,2,B,AN,KUSB99,H,4P,PCB,WHT', WGBEZ60: '회로자재/JACK', EBORT: 'J3', MFRPN: '어느전자' },
+            { _level: 1, IDNRK: '777088', OJTXP: 'PBA-LED>PCB,LED-TEST,V00', WGBEZ60: 'BD 반제품/PBA' },   // LED 보드(섞이면 안 된다)
+            { _level: 2, IDNRK: '700099', OJTXP: 'CON>D,NOR,LEDCON-02,2P1MS,200', WGBEZ60: '회로자재/CONNECTOR', EBORT: 'J8', MFRPN: '연호전자' },
+            { _level: 1, IDNRK: '777020', OJTXP: 'PBA-CNV>LEDRV,CONV-TEST,R0', WGBEZ60: 'BD 반제품/PBA' },
+            { _level: 2, IDNRK: '700010', OJTXP: 'CON>S,NOR,11111WR-12,12P1MR,125', WGBEZ60: '회로자재/CONNECTOR', EBORT: 'J1', MFRPN: '연호전자' }] } };
         window.mcActiveUnit = 'LOWER';
         var pB = window._psPayload();
         check(pB.values['parts.r1.c1'] === 'PNL-BOM-01' && pB.values['parts.r2.c1'] === 'ADB-TEST' && pB.values['parts.r3.c1'] === 'CONV-TEST',
@@ -114,6 +119,19 @@ window.__psTest = async function (opt) {
         check(pB.values['parts.r2.c3'] === 'Shown Co', 'BOM 부품 코드로 라이브러리 기록 (' + pB.values['parts.r2.c3'] + ')');
         check(pB.variant === 'base' && pB.values['parts.r5.c1'] === '-' && pB.values['tgen.r4.c2'] === '',
               'BOM 에 터치가 없으면 복사된 주요자재가 있어도 터치 없음 (' + pB.variant + ', ' + pB.values['parts.r5.c1'] + ', "' + pB.values['tgen.r4.c2'] + '")');
+        // 🔌 BOM 커넥터 — A/D connection 표(설치지점 자연 정렬·연속 스위치는 한 줄·제조사 표기) · 컨버터 문장
+        var adc = [1, 2, 3, 4].map(function (r) { return [pB.values['adc.r' + r + '.c0'], pB.values['adc.r' + r + '.c2'], pB.values['adc.r' + r + '.c3']].join('|'); });
+        check(adc.join(' / ') === 'J1|ABC200-04|YEON-HO / J3|KUSB99|어느전자 / J7|ABC200-04|YEON-HO / SW1~4|9999SB9|CT',
+              'BOM 커넥터로 A/D connection 표 (' + adc.join(' / ') + ')');
+        check(pB.values.convIn === 'J1 : 11111WR-12 (YEON-HO)', '컨버터 입력 커넥터 문장 = BOM 설치지점·품번·제조사 (' + pB.values.convIn + ')');
+        // 대조 — 사람이 적은(불러온) 값이 BOM 과 다르면 칸 아래 경고, 같으면 조용
+        var dX = window._docDataOf('product-spec').fields;
+        dX['adc.r1.c0'] = 'J1'; dX['adc.r2.c0'] = 'SW1~4';
+        var chk = window.DOC_CELL_CHECK['product-spec'];
+        check(chk('adc.r1.c2', 'ABC200-05') === 'BOM: ABC200-04 (J1)' && chk('adc.r1.c2', 'ABC200-04') === ''
+              && chk('adc.r1.c3', 'YEON-HO') === '' && chk('adc.r2.c3', 'XX') === 'BOM: CT',
+              'BOM 대조 경고 (' + chk('adc.r1.c2', 'ABC200-05') + ' / ' + chk('adc.r2.c3', 'XX') + ')');
+        delete dX['adc.r1.c0']; delete dX['adc.r2.c0'];
         delete window.tabData.bomByUnit;
         check(pL.values['blu.r2.c3'] === '70', '보이는 이름으로 못 찾으면 주요자재로 — 패널 LED 전류 Typ (' + pL.values['blu.r2.c3'] + ')');
         check(pL.values.convIn === '11111WR-12A', '컨버터 입력 커넥터 모델명 (' + pL.values.convIn + ')');

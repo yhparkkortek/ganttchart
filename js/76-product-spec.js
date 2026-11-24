@@ -114,13 +114,26 @@
         'tgen.r2.c2': ['touch:Brand'], 'tgen.r3.c2': ['pl:touchFw'],
         'tgen.r6.c2': ['pl:vidPid'],
         'tglass.r1.c2': ['pl:glassType'], 'tglass.r2.c2': ['pl:airGap'],
+        // 🧾 A/D Board connection 표 — BOM 에서 A/D 보드 바로 아래 커넥터(설치지점·품번·제조사). 설명 칸은 BOM 에 없다.
+        'adc.r1.c0': ['fn:adc:1:0'], 'adc.r1.c2': ['fn:adc:1:2'], 'adc.r1.c3': ['fn:adc:1:3'],
+        'adc.r2.c0': ['fn:adc:2:0'], 'adc.r2.c2': ['fn:adc:2:2'], 'adc.r2.c3': ['fn:adc:2:3'],
+        'adc.r3.c0': ['fn:adc:3:0'], 'adc.r3.c2': ['fn:adc:3:2'], 'adc.r3.c3': ['fn:adc:3:3'],
+        'adc.r4.c0': ['fn:adc:4:0'], 'adc.r4.c2': ['fn:adc:4:2'], 'adc.r4.c3': ['fn:adc:4:3'],
+        'adc.r5.c0': ['fn:adc:5:0'], 'adc.r5.c2': ['fn:adc:5:2'], 'adc.r5.c3': ['fn:adc:5:3'],
+        'adc.r6.c0': ['fn:adc:6:0'], 'adc.r6.c2': ['fn:adc:6:2'], 'adc.r6.c3': ['fn:adc:6:3'],
+        'adc.r7.c0': ['fn:adc:7:0'], 'adc.r7.c2': ['fn:adc:7:2'], 'adc.r7.c3': ['fn:adc:7:3'],
+        'adc.r8.c0': ['fn:adc:8:0'], 'adc.r8.c2': ['fn:adc:8:2'], 'adc.r8.c3': ['fn:adc:8:3'],
+        'adc.r9.c0': ['fn:adc:9:0'], 'adc.r9.c2': ['fn:adc:9:2'], 'adc.r9.c3': ['fn:adc:9:3'],
+        'adc.r10.c0': ['fn:adc:10:0'], 'adc.r10.c2': ['fn:adc:10:2'], 'adc.r10.c3': ['fn:adc:10:3'],
         // [2026-11-24] PARTS 에서 더 가져오는 것 — 실측으로 원본 사양서 값과 맞는지 확인한 칸만
         'tpwr.r1.c2': ['fn:atSplit:Input Voltage:0'],          // '5V @150mA' → 5V
         'tpwr.r2.c2': ['fn:atSplit:Input Voltage:1'],          //              → 150mA
         'tgen.r4.c2': ['fn:ctrlId'],                           // 'Kortek / <품목 코드>'
         'blu.r2.c3': ['panel:Lamp Current'],                   // LED String Current Typ (전압·전력은 칸이 모호해 안 잇는다)
-        convIn: ['fn:connModel:Input Connector (Model/Pins)'],    // 불러온 값이 없을 때만 — 커넥터 모델명만(핀 번호·제조사는 라이브러리에 없다)
-        convOut: ['fn:connModel:Output Connector (Model/Pins/Qty)']
+        // 컨버터 커넥터 문장 — BOM 의 설치지점·품번·제조사('J1 : <품번> (<제조사>)', 원본 모양 그대로).
+        //   어느 쪽이 입력/출력인지는 PARTS 라이브러리의 입력/출력 커넥터 품번과 맞춰 가린다. 없으면 라이브러리 모델명만.
+        convIn: ['fn:convConn:in:Input Connector (Model/Pins)', 'fn:connModel:Input Connector (Model/Pins)'],
+        convOut: ['fn:convConn:out:Output Connector (Model/Pins/Qty)', 'fn:connModel:Output Connector (Model/Pins/Qty)']
     };
     // 앱 값의 **모양**을 문서 칸에 맞춘다(데이터) — 단위는 옆 'Unit' 칸에 이미 있어서 값에 또 붙이면
     //   '698.112 mm' + 'mm' 처럼 두 번 찍힌다(실측). 못 맞추면 받은 그대로 둔다(지우지 않는다).
@@ -325,6 +338,73 @@
         var nm = window._bomPartNameOf ? window._bomPartNameOf(best.OJTXP) : null;
         return { code: String(best.IDNRK || '').trim(), name: nm || '', desc: String(best.OJTXP || '').trim() };
     };
+    // 🔌 BOM 커넥터(데이터) — 보드 바로 아래 행 중 내역 구분자가 이것으로 시작하면 커넥터·스위치로 본다
+    window.PS_BOM_CONN_SEPS = window.PS_BOM_CONN_SEPS || ['CON', 'JACK', 'SWC'];
+    // 제조사 한글 이름 → 문서 표기(데이터) — **원본 사양서에서 확인된 것만**. 없는 이름은 그대로 둔다.
+    window.PS_MAKER_EN = window.PS_MAKER_EN || { '연호전자': 'YEON-HO', '후성테크': 'FUSUNG', 'CT 전자': 'CT', 'CT전자': 'CT' };
+    var _maker = function (m) {
+        var x = String(m || '').trim(), t = window.PS_MAKER_EN || {};
+        return t[x] || t[x.replace(/\s+/g, '')] || x;
+    };
+    var _alnum = function (v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+    var _prefixSame = function (a, b) { var x = _alnum(a), y = _alnum(b); return !!(x && y && (x.indexOf(y) === 0 || y.indexOf(x) === 0)); };
+    // 그 보드 바로 아래 커넥터들 — null = BOM 없음 · [] = 보드가 없거나 커넥터 없음
+    var _bomConnectors = function (cat) {
+        var st = window._bomStore ? window._bomStore() : null;
+        var rows = (st && st.rows) || [];
+        if (!rows.length) return null;
+        var bp = _bomPart(cat);
+        if (!bp) return [];
+        var at = -1;
+        for (var i = 0; i < rows.length; i++) {
+            if (String(rows[i].IDNRK || '').trim() === bp.code && String(rows[i].OJTXP || '').trim() === bp.desc) { at = i; break; }
+        }
+        if (at < 0) return [];
+        var lv = rows[at]._level, out = [];
+        for (var j = at + 1; j < rows.length && rows[j]._level > lv; j++) {
+            var r = rows[j];
+            if (r._level !== lv + 1) continue;          // 보드에 바로 달린 것만(그 아래 묶음은 안 본다)
+            var d = String(r.OJTXP || '').trim(), gt = d.indexOf('>');
+            var sep = gt > 0 ? d.slice(0, gt).trim().toUpperCase() : '';
+            if (!(window.PS_BOM_CONN_SEPS || []).some(function (x) { return sep === x || sep.indexOf(x + ' ') === 0; })) continue;
+            var eb = String(r.EBORT || '').split(/[,\s]+/).filter(Boolean);
+            if (!eb.length) continue;
+            var nm = window._bomPartNameOf ? window._bomPartNameOf(d) : null;
+            // 자재그룹 규칙에 이름 자리가 없거나 틀리면(실측: USB 잭) **품번처럼 생긴 첫 낱말**(영문+숫자 5자 이상) —
+            //   그것도 없으면 내역 그대로(빈 값으로 속이지 않는다)
+            if (!nm) {
+                var toks = d.slice(gt + 1).split(',').map(function (x) { return x.trim(); });
+                nm = toks.filter(function (x) { return x.length >= 5 && /[A-Z]/i.test(x) && /\d/.test(x); })[0] || '';
+            }
+            out.push({ eb: eb, part: nm || d.slice(gt + 1).trim(), maker: _maker(r.MFRPN), code: String(r.IDNRK || '').trim() });
+        }
+        return out;
+    };
+    // 설치지점 자연 정렬 키(J2 < J10 < J301, SW 는 뒤)
+    var _ebKey = function (e) { var m = String(e).match(/^([A-Z]+)(\d+)/i); return m ? [m[1].toUpperCase(), +m[2]] : [String(e), 0]; };
+    // A/D connection 표의 줄 — 연속 번호 스위치는 'SW1~4' 로 한 줄(원본 모양), 띄엄띄엄인 J1,J7 은 따로 줄
+    var _adcRows = function () {
+        var cs = _bomConnectors('AD BOARD');
+        if (!cs) return null;
+        var rows = [];
+        cs.forEach(function (c) {
+            var ks = c.eb.map(_ebKey);
+            var samePre = ks.every(function (k) { return k[0] === ks[0][0]; });
+            var consec = samePre && ks.length > 1 && ks.every(function (k, i) { return i === 0 || k[1] === ks[i - 1][1] + 1; });
+            if (consec) rows.push({ sym: ks[0][0] + ks[0][1] + '~' + ks[ks.length - 1][1], first: ks[0], all: c.eb, part: c.part, maker: c.maker });
+            else c.eb.forEach(function (e) { rows.push({ sym: e, first: _ebKey(e), all: [e], part: c.part, maker: c.maker }); });
+        });
+        rows.sort(function (a, b) { return a.first[0] === b.first[0] ? a.first[1] - b.first[1] : (a.first[0] < b.first[0] ? -1 : 1); });
+        return rows;
+    };
+    // 문서 Symbol 칸('J1', 'SW1~4', 'J2,J3')에 해당하는 BOM 줄
+    var _adcFind = function (sym) {
+        var rows = _adcRows();
+        if (!rows) return undefined;
+        var first = String(sym || '').toUpperCase().split(/[~,\s]/)[0].trim();
+        if (!first) return undefined;
+        return rows.filter(function (r) { return r.all.some(function (e) { return String(e).toUpperCase() === first; }); })[0] || null;
+    };
     // 지금 모델 카드 **자신의** 주요자재 한 줄(다른 카드로 폴백하지 않는다)
     var _ownMat = function (cat) {
         var card = ((window.tabData || {}).projectModels || []).filter(function (m) { return m && m.unitId === (window.mcActiveUnit || ''); })[0];
@@ -440,6 +520,27 @@
             var code = String(rec.specs['Item Code'] || '').trim();
             var brand = FMT.vendor(String(rec.specs.Brand || '').trim());
             return { v: [brand, code].filter(Boolean).join(' / '), src: 'PARTS ▸ TOUCH CTRL ▸ Brand · Item Code' };
+        },
+        // A/D connection 표 R번째 줄 — 0 Symbol · 2 Parts Number · 3 Manufacture (BOM)
+        adc: function (ctx, a) {
+            var rows = _adcRows();
+            if (!rows) return { v: '', src: '' };
+            var r = rows[+a[0] - 1];
+            if (!r) return { v: '', src: '' };
+            var more = (+a[0] === 10 && rows.length > 10) ? _t(' · BOM 커넥터 ' + rows.length + '개 중 10개만(표 줄 수가 양식 그대로)', ' · only 10 of ' + rows.length) : '';
+            var v = +a[1] === 0 ? r.sym : (+a[1] === 2 ? r.part : r.maker);
+            return { v: v, src: 'BOM ▸ A/D ' + _t('보드 커넥터', 'board connector') + more };
+        },
+        // 컨버터 입력/출력 커넥터 문장 — 라이브러리의 입력/출력 품번과 같은 BOM 커넥터를 찾아 'J1 : 품번 (제조사)'
+        convConn: function (ctx, a) {
+            var cs = _bomConnectors('CONVERTER');
+            if (!cs || !cs.length) return { v: '', src: '' };
+            var rec = _libRec(ctx, 'conv');
+            var lm = rec ? String(rec.specs[a[1]] || '').split('/')[0].trim() : '';
+            if (_isNone(lm)) return { v: '', src: _t('PARTS CONVERTER 에 입출력 커넥터가 없어 BOM 커넥터를 못 가림', 'cannot tell in/out') };
+            var c = cs.filter(function (x) { return _prefixSame(x.part, lm); })[0];
+            if (!c) return { v: '', src: '' };
+            return { v: c.eb.join(',') + ' : ' + c.part + (c.maker ? ' (' + c.maker + ')' : ''), src: 'BOM ▸ CONVERTER ' + _t('커넥터', 'connector') };
         },
         // 커넥터 모델명만 — '12345WR-12A / 12' → '12345WR-12A'
         connModel: function (ctx, a) {
@@ -604,6 +705,27 @@
             if (r.src && !lastSrc) lastSrc = r.src;
         }
         return { v: '', src: lastSrc ? _t('앱에 값 없음 — ', 'empty — ') + lastSrc : '' };
+    };
+
+    // ── ⚠️ BOM 대조 — 사람이 적었거나 불러온 A/D connection 표가 BOM 과 다르면 칸 아래에 BOM 값을 띄운다.
+    //    고치지 않는다(원본 사양서가 틀렸는지 BOM 이 틀렸는지는 사람이 정한다) — 실측으로 원본에서 품번이
+    //    뒤바뀐 줄·핀 수가 다른 줄을 찾았다.
+    window.DOC_CELL_CHECK = window.DOC_CELL_CHECK || {};
+    window.DOC_CELL_CHECK[FORM_ID] = function (key, value) {
+        var m = /^adc\.r(\d+)\.c([023])$/.exec(key);
+        if (!m) return '';
+        var symKey = 'adc.r' + m[1] + '.c0';
+        var own = window._docFieldOwn ? window._docFieldOwn(FORM_ID, symKey) : undefined;
+        if (own === undefined) return '';                  // 앱이 채운 줄은 BOM 그 자체 — 대조할 게 없다
+        var sym = String(own || '').trim();
+        if (!sym) return '';
+        var b = _adcFind(sym);
+        if (b === undefined) return '';                    // BOM 을 안 받았다
+        if (b === null) return m[2] === '0' ? _t('BOM 에 이 설치지점이 없음', 'not in BOM') : '';
+        var v = String(value || '').trim();
+        if (m[2] === '2' && !_prefixSame(v, b.part)) return 'BOM: ' + b.part + ' (' + b.all.join(',') + ')';
+        if (m[2] === '3' && _alnum(_maker(v)) !== _alnum(b.maker)) return 'BOM: ' + (b.maker || '-');
+        return '';
     };
 
     // ── 터치 판인가 ─────────────────────────────────────────────────────

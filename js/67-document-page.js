@@ -4901,7 +4901,16 @@
                   + ' <a href="#" class="doc-noprint" onclick="window._docResetField(\'' + _esc(id) + '\',\'' + _esc(key) + '\');return false;"'
                   + ' style="color:var(--ui-accent, #00707d);">↺ ' + _esc(_t('앱 값으로', 'reset')) + '</a>'
                 : (src ? (/없음|empty|not in/.test(src) ? '⚠️ ' : '📘 ') + _esc(src) : '&nbsp;'))
-            + '</div></td>';
+            + '</div>' + _cellCheckHtml(id, key, value) + '</td>';
+    };
+    // 🔌 [2026-11-24] 칸 값 대조 — 서식 파일이 `DOC_CELL_CHECK[서식id](칸, 값)` 으로 경고 글을 돌려주면 칸 아래에 붙인다
+    //    (js/76 PRODUCT SPEC: 적힌 커넥터 품번·제조사가 BOM 과 다르면 BOM 값을 보여 준다). 고치지는 않는다 — 사람이 본다.
+    var _cellCheckHtml = function (id, key, value) {
+        var fn = window.DOC_CELL_CHECK && window.DOC_CELL_CHECK[id];
+        if (typeof fn !== 'function') return '';
+        var w = '';
+        try { w = fn(key, value) || ''; } catch (e) { w = ''; }
+        return w ? '<div class="doc-src doc-noprint" style="color:#b1432f;">⚠️ ' + _esc(w) + '</div>' : '';
     };
 
     window._docRender = function () {
