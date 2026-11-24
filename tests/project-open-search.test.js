@@ -431,4 +431,28 @@ const reset = window._driveModalSearchState.q === '';
   W.calShowDayPopup(key12);
   chk(popBody.innerHTML.indexOf('EDID 수정') !== -1 && popBody.innerHTML.indexOf('EDID 재검토') === -1, '[Calendar] 날짜 팝업 목록도 같은 찾기로 거른다');
 }
+// ── Gantt(js/26 _rowMatches) — 진짜 js/26 전체를 스텁 DOM 위에서 불러 행 판정을 돌린다 ──
+{
+  const s26 = fs.readFileSync(path.join(__dirname, '..', 'js', '26-gantt-search.js'), 'utf8');
+  const noop = () => {};
+  const el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop, contains: () => false }, addEventListener: noop, appendChild: noop, querySelectorAll: () => [], querySelector: () => null, dataset: {}, setAttribute: noop, getAttribute: () => null });
+  const doc = { getElementById: () => null, querySelectorAll: () => [], querySelector: () => null, addEventListener: noop, createElement: el, readyState: 'complete', body: el(), documentElement: el() };
+  const W = { addEventListener: noop, _currentLang: 'ko', localStorage: { getItem: () => null, setItem: noop } };
+  new Function('window', helpers)(W);
+  new Function('window', 'document', 'colIdx', 'globalData', 'localStorage', 'setTimeout', 'setInterval', 'MutationObserver', s26)
+    (W, doc, { assignee: -1, content: 1, status: 2 }, [], W.localStorage, noop, noop, function () { return { observe: noop }; });
+  const R = (t2, content, status, extra) => Object.assign(['', content, status], { _origDev: '개발', _origT1: '', _origT2: t2, _origT3: '', _origT4: '' }, extra || {});
+  const rows = [R('HARNESS 검토', '[핵심내용] 40P 300mm', '진행'),
+                R('EDID 수정', 'V1.02 배포', '완료', { _aiMatchedProjectName: 'LNW STELLAR32', _aiMatchKeywords: ['GABJO'] }),
+                R('Back cover 도금', '[문제점] 도금 불량', '지연')];
+  const hit = (kw, isProject) => rows.map((r, i) => W._gsRowMatches(r, kw, !!isProject, false, false) ? i : null).filter(i => i !== null).join(',');
+  [['harness 300mm', '0', '업무명+상세내용 AND'],
+   ['v1 02', '1', '기호 무시'],
+   ['도금 지연', '2', '내용+상태 AND'],
+   ['gabjo 완료', '1', 'AI 매칭 키워드+상태'],
+   ['harness 완료', '', 'AND — 한 행에 둘 다 없음'],
+   ['HARNESS', '0', '한 낱말은 예전과 같다']
+  ].forEach(([q, want, label]) => { const got = hit(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Gantt] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  chk(hit('lnw stellar32', true) === '1', '[Gantt] @프로젝트명도 같은 규칙');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

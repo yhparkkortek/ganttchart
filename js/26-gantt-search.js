@@ -286,7 +286,12 @@
     // 매칭 행에 텍스트 하이라이트 삽입 (td 단위)
     function _highlightTextInRow(tr, kw) {
         if (!kw) return;
-        var escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // 🔍 [2026-11-24] 낱말마다 따로 칠한다 — 여러 낱말 검색은 칸마다 다른 낱말이 걸린다
+        //    (통째로 한 정규식이면 "harness 300mm" 같은 검색은 아무 데도 안 칠해진다)
+        var parts = (window._searchTokens ? window._searchTokens(kw) : [kw]).filter(Boolean);
+        if (!parts.length) return;
+        var escaped = parts.map(function (p) { return p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); })
+            .sort(function (a, b) { return b.length - a.length; }).join('|');
         var regex = new RegExp(escaped, 'gi');
         tr.querySelectorAll('td').forEach(function(td) {
             if (!td.hasAttribute('data-hl-done')) {
@@ -354,9 +359,25 @@
 
         var kwL = kw.toLowerCase();
 
+        // 🔍 [2026-11-24 사용자 요청] 다른 페이지와 **같은 규칙**(js/04a `_searchMatchAll`) — 띄어 쓴 낱말이
+        //    한 행의 서로 다른 칸(업무명·상세내용·상태·담당자·AI 근거)에 있어도 **전부 있으면** 걸리고,
+        //    공백·기호는 무시한다("harness 300mm", "v1 02"). 예전엔 검색어 전체가 **한 칸에 글자 그대로**
+        //    있어야 했다. 아래 칸 목록·고객사/모델명 제외 이유는 그대로다. 공용 규칙이 없으면 옛 방식.
+        var toks = window._searchTokens ? window._searchTokens(kw) : [];
         if (isProject) {
             // @프로젝트명 검색 → AI 매칭 프로젝트명
+            if (toks.length && window._searchMatchAll) return window._searchMatchAll(row._aiMatchedProjectName || '', toks);
             return (row._aiMatchedProjectName || '').toLowerCase().includes(kwL);
+        }
+        if (toks.length && window._searchMatchAll) {
+            var hay = [row._origDev, row._origT1, row._origT2, row._origT3, row._origT4];
+            if (typeof colIdx !== 'undefined') {
+                if (colIdx.assignee !== -1) hay.push(row[colIdx.assignee]);
+                if (colIdx.content  !== -1) hay.push(row[colIdx.content]);
+                if (colIdx.status   !== -1) hay.push(row[colIdx.status]);
+            }
+            hay = hay.concat(row._aiMatchKeywords || [], [row._aiSourceSnippet, row._aiMatchBasis]);
+            return window._searchMatchAll(hay.map(function (v) { return v == null ? '' : String(v); }).join(' \u0001 '), toks);
         }
 
         // ── 업무명 (WBS 각 레벨) ──
@@ -402,6 +423,8 @@
 
         return false;
     }
+
+    window._gsRowMatches = _rowMatches;   // 시험용(tests/project-open-search.test.js) — 행 판정 그 자체
 
     function _applySearch() {
         _matchedIndices = [];
