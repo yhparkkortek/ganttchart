@@ -317,7 +317,12 @@ function _renderStep4(body) {
         'onmouseover="this.style.background=\'#d8f0d8\';" onmouseout="this.style.background=\'#eaf7ea\';" ' +
         'title="' + _t('사내 규칙대로 KORTEK 모델명을 만들어 넣습니다', 'Build a KORTEK model name by the in-house rule') + '" ' +
         'style="flex-shrink:0; padding:0 12px; background:#eaf7ea; color:#1f6a3a; border:1.5px solid #a8dab8; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s;">🧩 ' +
-        _t('모델명 만들기', 'Build name') + '</button></div>' +
+        _t('모델명 만들기', 'Build name') + '</button>' +
+        // 🏭 [2026-11-24] 이미 코드가 있으면 SAP 에서 찾아 넣는다(_sapPnFind, 이 파일 맨 아래 — Summary 모델 카드와 같은 함수)
+        '<button type="button" onclick="window._sapPnFind && window._sapPnFind(document.getElementById(\'npw-ktkpn\'), (document.getElementById(\'npw-model\') || {}).value)" ' +
+        'title="' + _t('이미 채번된 KTK PN 이 있으면 SAP 에서 찾아 넣습니다(6자리 코드 또는 모델명 일부)', 'Look up an existing KTK PN in SAP (6-digit code or part of the model name)') + '" ' +
+        'class="ep-theme-hover-btn" style="flex-shrink:0; padding:0 12px; background:#e0f5f7; color:#00707d; border:1.5px solid #a3d9e0; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🏭 ' +
+        _t('SAP 에서 찾기', 'Find in SAP') + '</button></div>' +
         '<div style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">' +
         _t('※ 아직 채번 전(RFQ·견적·문의 단계)이면 비워두세요 — 🟢 <b>MP(EC)(임시)</b>로 등록되어 바로 메일 자동매칭 후보가 됩니다. 🔵 DV로 승격할 때 입력하면 됩니다.',
            '※ Leave it empty if the part number does not exist yet (RFQ / quote / inquiry stage) — the project is registered as 🟢 <b>MP(EC)</b> (draft) and joins mail auto-matching right away. Fill it in when promoting to 🔵 DV.') + '</div>';
@@ -728,3 +733,109 @@ window._npwExtractFromMail = async function(mailRecord) {
 };
 
 })();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🏭 [2026-11-24 사용자 요청] "이미 코드가 있으면 SAP 에서 KTK PN_모델명을 찾게" — 새 프로젝트 마법사 4단계와
+//    Summary 모델 카드가 **같은 함수**(`_sapPnFind`)를 쓴다. AI 0회, SAP 은 **읽기만**:
+//      · 6자리 숫자가 있으면 그 자재를 ZMM009 로 조회(`/sap-material-rows`) — 내역(MAKTX) 하나
+//      · 아니면 자재내역에 그 글자가 든 자재 목록(`/sap-material-pattern`, `*글자*`) — 사람이 하나 고른다
+//    고른 값은 사내 형식 그대로 `코드_내역`(예 502574_MAIN>KTS320DPS01,LNW)으로 칸에 넣는다.
+//    ⚠️ 자동으로 고르지 않는다 — 1건이어도 목록으로 보여 주고 사람이 누른다(남의 모델 코드가 들어가면
+//       메일 매칭·문서 자동값이 전부 그걸 따라간다).
+//    ⚠️ SAP 내역 검색은 **대소문자를 가린다** — 영문은 대문자로 바꿔 찾는다(실측: 품목 내역은 대문자).
+// ─────────────────────────────────────────────────────────────────────────────
+window._sapPnFind = function (target, hint) {
+    if (!target) return;
+    var en = window._currentLang === 'en';
+    var T = function (k, e) { return en ? e : k; };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var ov = document.getElementById('sap-pn-find-overlay');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'sap-pn-find-overlay';
+        ov.style.cssText = 'position:fixed; inset:0; z-index:100200; pointer-events:none; display:none;';
+        ov.innerHTML =
+            '<div id="sap-pn-find-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:560px; max-width:94vw; max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.25); overflow:hidden;">'
+          +   '<div id="sap-pn-find-drag" style="padding:13px 18px; cursor:grab; display:flex; align-items:center; justify-content:space-between; font-weight:bold; font-size:14px;">'
+          +     '<span>🏭 ' + T('SAP 에서 KTK PN_모델명 찾기', 'Find KTK PN_Model in SAP') + '</span>'
+          +     '<button type="button" onclick="document.getElementById(\'sap-pn-find-overlay\').style.display=\'none\'" style="width:28px; height:28px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; font-size:16px;">✕</button>'
+          +   '</div>'
+          +   '<div style="padding:12px 16px; display:flex; flex-direction:column; gap:8px; min-height:0; flex:1;">'
+          +     '<div style="display:flex; gap:6px;">'
+          +       '<input id="sap-pn-find-q" type="text" style="flex:1; min-width:0; height:31px; box-sizing:border-box; padding:0 10px; border:1px solid #cfd8e3; border-radius:6px; font-size:13px;">'
+          +       '<button type="button" id="sap-pn-find-go" class="concept-add-row-btn" style="margin:0; height:31px; padding:0 14px;">🔍 ' + T('찾기', 'Search') + '</button>'
+          +     '</div>'
+          +     '<div style="font-size:11.5px; color:#777; line-height:1.5;">' + T('6자리 KTK PN 이면 그 자재의 내역을, 글자(예: KTS320, STELLAR)면 내역에 그 글자가 든 자재를 찾습니다. SAP 을 읽기만 합니다.',
+                  'A 6-digit KTK PN looks up that material; text (e.g. KTS320) lists materials whose description contains it. Read-only.') + '</div>'
+          +     '<div id="sap-pn-find-status" style="font-size:12px; color:#555;"></div>'
+          +     '<div id="sap-pn-find-list" style="overflow-y:auto; min-height:0; flex:1; border:1px solid #eef1f4; border-radius:6px;"></div>'
+          +   '</div>'
+          + '</div>';
+        document.body.appendChild(ov);
+        if (window._makeDraggable) window._makeDraggable('sap-pn-find-box', 'sap-pn-find-drag');
+        if (window._bindClickToFront) window._bindClickToFront('sap-pn-find-overlay');
+    }
+    var q = document.getElementById('sap-pn-find-q'), go = document.getElementById('sap-pn-find-go');
+    var status = document.getElementById('sap-pn-find-status'), list = document.getElementById('sap-pn-find-list');
+    var cur = String(target.value || '').trim();
+    var code0 = (cur.match(/(?:^|[^\d])(\d{6})(?!\d)/) || [])[1];
+    q.value = code0 || String(hint || cur || '').trim();
+    status.textContent = ''; list.innerHTML = '';
+    ov.style.display = 'block';
+    if (window.bringModalToFront) window.bringModalToFront('sap-pn-find-overlay');
+    setTimeout(function () { q.focus(); q.select(); }, 30);
+
+    var pick = function (m) {
+        var v = String(m.MATNR || '').replace(/^0+/, '') + '_' + String(m.MAKTX || '').trim();
+        target.value = v;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+        ov.style.display = 'none';
+        if (window.showToast) window.showToast('🏭 ' + T('넣었습니다: ', 'Filled: ') + v, 'info');
+    };
+    var run = async function () {
+        var s = String(q.value || '').trim();
+        if (!s) return;
+        var code = (s.match(/^\D*(\d{6})(?!\d)/) || [])[1];
+        var url = code ? ('http://127.0.0.1:5000/sap-material-rows?materials=' + encodeURIComponent(code))
+                       : ('http://127.0.0.1:5000/sap-material-pattern?pattern=' + encodeURIComponent('*' + s.replace(/^\*+|\*+$/g, '').toUpperCase() + '*'));
+        list.innerHTML = '';
+        status.style.color = '#555';
+        status.textContent = '⏳ ' + T('SAP 조회 중… (수십 초 걸릴 수 있습니다)', 'Querying SAP… (may take tens of seconds)');
+        go.disabled = true;
+        try {
+            var r = await fetch(url);
+            var d = await r.json().catch(function () { return null; });
+            if (!d || !d.ok) {
+                status.style.color = '#b1432f';
+                status.textContent = '⚠️ ' + ((d && d.error) || T('SAP 조회에 실패했습니다 — SAP 이 열려 있는지(로그인) 확인해 주세요.', 'SAP lookup failed — check SAP is open and logged in.'));
+                return;
+            }
+            var mats = (d.materials || []).filter(function (m) { return m && m.MATNR; });
+            if (!mats.length) {
+                status.style.color = '#b1432f';
+                status.textContent = code ? T('그 코드의 자재가 SAP 에 없습니다.', 'No such material in SAP.')
+                                          : T('내역에 그 글자가 든 자재가 없습니다 — 다른 글자로 찾아보세요.', 'No material description contains that text.');
+                return;
+            }
+            status.textContent = mats.length + T('건 — 맞는 것을 눌러 넣으세요', ' found — click one to fill');
+            window._sapPnFindRows = mats;
+            list.innerHTML = mats.slice(0, 200).map(function (m, i) {
+                return '<div data-i="' + i + '" style="padding:7px 10px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:12.5px; display:flex; gap:10px;"'
+                    + ' onmouseover="this.style.background=\'#f4f8fc\'" onmouseout="this.style.background=\'\'">'
+                    + '<b style="font-family:monospace; color:#00707d; flex-shrink:0;">' + esc(String(m.MATNR).replace(/^0+/, '')) + '</b>'
+                    + '<span>' + esc(m.MAKTX || '') + '</span></div>';
+            }).join('');
+            list.onclick = function (e) {
+                var row = e.target.closest('[data-i]');
+                if (row) pick(window._sapPnFindRows[+row.getAttribute('data-i')]);
+            };
+        } catch (e) {
+            status.style.color = '#b1432f';
+            status.textContent = '⚠️ ' + T('백엔드에 연결하지 못했습니다 — kortek_backend 가 켜져 있는지 확인해 주세요.', 'Could not reach the backend — is kortek_backend running?');
+        } finally { go.disabled = false; }
+    };
+    go.onclick = run;
+    q.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); run(); } else if (e.key === 'Escape') ov.style.display = 'none'; };
+    if (code0) run();   // 칸에 이미 6자리 코드가 있으면 바로 찾는다(조회만, 넣는 건 사람이 고른다)
+};

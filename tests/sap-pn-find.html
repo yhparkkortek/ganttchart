@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>SAP KTK PN_모델명 찾기 시험</title></head><body style="margin:0">
+<!-- 🏭 KTK PN_모델명 SAP 찾기(js/28 `_sapPnFind`) — 진짜 kortek_pm.html 을 iframe 으로 띄워, 새 프로젝트 마법사 4단계와
+     Summary 모델 카드의 🏭 버튼을 진짜로 누른다. 가짜는 SAP 백엔드 fetch(`/sap-material-rows`·`/sap-material-pattern`) 하나.
+     실행: chrome --headless=new --allow-file-access-from-files --window-size=1400,900 --virtual-time-budget=30000
+           --dump-dom file:///.../tests/sap-pn-find.html   → <pre id="out"> (마지막 줄 N/M) -->
+<iframe id="f" src="../kortek_pm.html?sappn=1" style="border:0;width:1366px;height:800px;"></iframe>
+<pre id="out">running…</pre>
+<script>
+var out = [], pass = 0, fail = 0;
+function chk(c, l) { c ? pass++ : fail++; out.push((c ? 'ok   ' : 'FAIL ') + l); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+var f = document.getElementById('f');
+f.onload = async function () {
+  await sleep(2500);
+  var W = f.contentWindow, D = f.contentDocument, calls = [];
+  // 가짜 SAP — 내용(URL)으로 분기한다(호출 순서에 기대지 않는다)
+  W.fetch = function (url) {
+    url = String(url);
+    if (url.indexOf('/sap-') !== -1) calls.push(url);   // 앱이 스스로 부르는 /health 등은 세지 않는다(그걸로 가짜 실패가 났다)
+    var body;
+    if (url.indexOf('/sap-material-rows') !== -1) {
+      body = /materials=999999/.test(url) ? { ok: false, error: 'SAP 로그인이 필요합니다' }
+           : { ok: true, materials: [{ MATNR: '000000502574', MAKTX: 'MAIN>KTS320DPS01,LNW' }] };
+    } else if (url.indexOf('/sap-material-pattern') !== -1) {
+      body = { ok: true, materials: [{ MATNR: '502574', MAKTX: 'MAIN>KTS320DPS01,LNW' }, { MATNR: '502573', MAKTX: 'UPPER>KTS320DGS01,LNW' }] };
+    } else return Promise.reject(new Error('offline'));
+    return Promise.resolve({ ok: true, json: function () { return Promise.resolve(body); } });
+  };
+  try {
+    // 1) 마법사 4단계 — 🏭 버튼이 있고, 6자리 코드가 칸에 있으면 바로 조회하고 사람이 고르면 넣는다
+    D.querySelectorAll('[id$="-overlay"]').forEach(function (x) { if (x.style) x.style.display = 'none'; });
+    var host = D.createElement('div'); D.body.appendChild(host);
+    host.innerHTML = '<input id="npw-model" value="STELLAR32"><input id="npw-ktkpn" value="">';
+    var ktk = D.getElementById('npw-ktkpn'), inputs = 0;
+    ktk.addEventListener('input', function () { inputs++; });
+    ktk.value = '502574';
+    W._sapPnFind(ktk, 'STELLAR32');
+    await sleep(300);
+    var ov = D.getElementById('sap-pn-find-overlay');
+    chk(ov && ov.style.display === 'block', '창이 열린다');
+    chk(calls.length === 1 && /sap-material-rows\?materials=502574/.test(calls[0]), '칸에 6자리 코드가 있으면 그 코드로 바로 조회(ZMM009) — ' + calls[0]);
+    chk(ktk.value === '502574', '1건이어도 자동으로 넣지 않는다(사람이 고른다)');
+    var row = D.querySelector('#sap-pn-find-list [data-i="0"]');
+    chk(!!row && /502574/.test(row.textContent) && /KTS320DPS01/.test(row.textContent), '결과 줄에 코드(앞 0 뗌)·내역');
+    row.click();
+    chk(ktk.value === '502574_MAIN>KTS320DPS01,LNW', '고르면 사내 형식 코드_내역으로 넣는다 — ' + ktk.value);
+    chk(inputs >= 1 && ov.style.display === 'none', 'input 이벤트를 내고 창을 닫는다');
+    // 2) 글자로 찾기 — 대문자로 바꿔 *글자* 패턴
+    calls.length = 0; ktk.value = '';
+    W._sapPnFind(ktk, 'kts320');
+    await sleep(100);
+    chk(D.getElementById('sap-pn-find-q').value === 'kts320' && calls.length === 0, '코드가 없으면 힌트를 칸에 넣고 기다린다(자동 조회 안 함)');
+    D.getElementById('sap-pn-find-go').click();
+    await sleep(300);
+    chk(calls.length === 1 && /sap-material-pattern\?pattern=\*KTS320\*/.test(decodeURIComponent(calls[0])), '글자는 대문자 *글자* 패턴으로 — ' + decodeURIComponent(calls[0] || ''));
+    chk(D.querySelectorAll('#sap-pn-find-list [data-i]').length === 2 && ktk.value === '', '여러 건을 보여 주고 아무것도 넣지 않는다');
+    D.querySelector('#sap-pn-find-list [data-i="1"]').click();
+    chk(ktk.value === '502573_UPPER>KTS320DGS01,LNW', '두 번째를 고르면 그 값 — ' + ktk.value);
+    // 3) SAP 오류는 그대로 보여 준다
+    ktk.value = '999999'; W._sapPnFind(ktk, '');
+    await sleep(300);
+    chk(/SAP 로그인이 필요합니다/.test(D.getElementById('sap-pn-find-status').textContent) && ktk.value === '999999', 'SAP 오류 문구를 보여 주고 칸은 그대로');
+    D.getElementById('sap-pn-find-overlay').style.display = 'none';
+    // 4) Summary 모델 카드 — 진짜 렌더 함수가 그린 🏭 버튼을 누른다(고객 모델명이 힌트)
+    var card = D.createElement('div'); D.body.appendChild(card);
+    card.innerHTML = W._renderModelCardHtml({ 고객모델명: 'STELLAR32', KTK: '', unitId: '' }, 0);
+    var kin = card.querySelector('[data-model-field="KTK"]');
+    var btn = kin && kin.nextElementSibling;
+    chk(!!btn && btn.textContent.indexOf('🏭') !== -1, 'Summary 모델 카드 KTK 칸 옆에 🏭 버튼');
+    calls.length = 0; btn.click(); await sleep(100);
+    chk(D.getElementById('sap-pn-find-q').value === 'STELLAR32', '카드의 고객 모델명이 검색어로 들어간다');
+    D.getElementById('sap-pn-find-go').click(); await sleep(300);
+    D.querySelector('#sap-pn-find-list [data-i="0"]').click();
+    chk(kin.value === '502574_MAIN>KTS320DPS01,LNW', '고르면 그 카드의 KTK 칸에 — ' + kin.value);
+    chk(kin.getBoundingClientRect().height <= 34 && btn.getBoundingClientRect().height <= 34, '칸·버튼이 한 줄(두 줄로 안 깨짐)');
+  } catch (e) { out.push('ERROR ' + e.message); }
+  out.push(pass + '/' + (pass + fail));
+  document.getElementById('out').textContent = out.join('\n');
+};
+</script></body></html>

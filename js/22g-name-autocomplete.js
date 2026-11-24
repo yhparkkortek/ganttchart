@@ -285,7 +285,11 @@ window._renderModelCardHtml = function(model, idx) {
             _lbl + '프로젝트 코드</label>' +
             '<input type="text" class="u-input" data-model-field="프로젝트코드" placeholder="예: G2608OB" value="' + escapeHtml(model.프로젝트코드 || '') + '">' +
             _lbl + 'KTK PN_모델명 <span style="color:#e03131;">*</span></label>' +
-            '<input type="text" class="u-input req-field" data-model-field="KTK" placeholder="예: 502574_MVD>KTS320DPS01" value="' + ktkVal + '" oninput="window._checkRequiredField(this)">' +
+            // 🏭 [2026-11-24] KTK PN_모델명 칸 옆 SAP 찾기(js/28 `_sapPnFind`, 새 프로젝트 마법사와 같은 함수)
+            '<div style="display:flex; gap:4px; min-width:0;">' +
+            '<input type="text" class="u-input req-field" data-model-field="KTK" placeholder="예: 502574_MVD>KTS320DPS01" value="' + ktkVal + '" oninput="window._checkRequiredField(this)" style="flex:1; min-width:0;">' +
+            '<button type="button" onclick="window._sapPnFind && window._sapPnFind(this.previousElementSibling, ((this.closest(\'.concept-grid\') || document).querySelector(\'[data-model-field=&quot;고객모델명&quot;]\') || {}).value)" title="이미 채번된 KTK PN 이 있으면 SAP 에서 찾아 넣습니다(6자리 코드 또는 모델명 일부)" class="ep-theme-hover-btn" style="flex-shrink:0; padding:0 8px; background:#e0f5f7; color:#00707d; border:1px solid #a3d9e0; border-radius:6px; font-size:12px; cursor:pointer;">🏭</button>' +
+            '</div>' +
             _lbl + '고객 모델내역</label>' +
             '<input type="text" class="u-input" data-model-field="고객모델내역" placeholder="예: STELLAR 32 LOWER" value="' + escapeHtml(model.고객모델내역 || '') + '">' +
             _lbl + '프로젝트 명칭</label>' +
