@@ -297,7 +297,8 @@ window._cpApplyLive = function(hex, skipSave) {
         // 안 먹혀서 항상 파랗게 박혀 보였음 — LEVEL(WBS) 트리거와 같은 톤 규칙으로 편입.
         + '.cal-view-btn { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.cal-view-btn:not(.cal-view-btn-active):hover { background: ' + gen.hoverBg + ' !important; }\n'
-        + '.cal-view-btn.cal-view-btn-active { background: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        // 🎨 [2026-11-24] 고른 쪽은 진한 테마색 채움 + 흰 글자(PARTS SPEC/BOM·공용 칩과 같은 공식) — 기본값은 styles.css
+        + '.cal-view-btn.cal-view-btn-active { background: ' + gen.darkText + ' !important; color: #fff !important; }\n'
         + '.cal-view-btn + .cal-view-btn { border-left-color: ' + gen.hoverBg + ' !important; }\n'
         // 💡 [2026-08-30 추가] 달력 칸 안의 업무 상자(.cal-event-chip, 기본/오늘 표시)가 옛 고정 파랑이라
         // 테마가 안 먹혔음 — 일반 업무 상자와 "오늘" 표시는 현재 테마색을 그대로 따르도록 편입.

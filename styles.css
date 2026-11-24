@@ -1441,7 +1441,8 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
 .cal-view-btn { padding:0 12px; height:31px; border:none; background:#e0f5f7; color:#00707d; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s; }
 .cal-view-btn:not(.cal-view-btn-active):hover { background:#a3d9e0; }
 .cal-view-btn + .cal-view-btn { border-left:1px solid #a3d9e0; }
-.cal-view-btn.cal-view-btn-active { background:#a3d9e0; color:#00707d; }
+/* 🎨 [2026-11-24 "탭 버튼 통일"] 고른 쪽 = 진한 테마색 채움 + 흰 글자 — PARTS SPEC/BOM·제품구분자/회차 전환·공용 칩과 같은 공식(중간색이던 것) */
+.cal-view-btn.cal-view-btn-active { background:#00707d; color:#fff; }
 .cal-chips-grid { display:grid; gap:1px 2px; margin-top:2px; }
 .cal-chips-grid.chips-single { grid-template-columns:1fr; }
 .cal-chips-grid.chips-double { grid-template-columns:1fr 1fr; }
