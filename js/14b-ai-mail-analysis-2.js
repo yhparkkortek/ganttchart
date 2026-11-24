@@ -849,9 +849,15 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto, m
     if (!startTs) return fallback; // 날짜 미확정 → fallback 유지
 
     const newMailTs = _msMailFullTs(mailSentAt);
+    // 🐛 [2026-11-24 실측] 구간 머리(LEVEL 0 행)는 비교하지 않고, 그 위로는 절대 넣지 않는다.
+    //    머리의 시작일은 자식들 중 가장 이른 날이라, 업무가 구간 시작보다 이르면(지난 결재·옛 메일) 머리부터 "더 늦은 행"이 되어
+    //    **머리 앞 = 구간 밖(프로젝트 맨 위)** 에 꽂혔다. 그 뒤 들어오는 것도 같은 자리에 쌓여 날짜 순서도 깨졌다
+    //    (실측: 결재 12행·메일 19행이 4~5개 프로젝트에서 첫 단계 머리 위에 있었다). → 구간 안 첫 자리가 하한.
+    const floor = (rows[first] && rows[first]._level === 0) ? first + 1 : first;
     let bestIndex = -1;
     for (let i = first; i <= last; i++) {
         const row = rows[i]; if (!row) continue;
+        if (row._level === 0) continue;   // 구간 머리 — 위치 기준이 아니다
         // 🔧 [버그수정] _calcStartTs 우선, 없으면 셀 값에서 직접 파싱
         let rowStartTs = row._calcStartTs;
         if (!rowStartTs && ci.start !== -1 && row[ci.start]) {
@@ -870,7 +876,7 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto, m
     }
     if (bestIndex === -1) return fallback; // 구간 내 모든 행보다 늦은 날짜 → 결과적으로 구간 끝과 동일
 
-    const pos = Math.max(bestIndex + 1, first);
+    const pos = Math.max(bestIndex + 1, floor);
     const anchorRow = rows[pos];
     const anchorName = anchorRow ? (anchorRow._origDev || anchorRow._origT1 || anchorRow._origT2 || anchorRow._origT3 || anchorRow._origT4 || '') : '';
     return { pos: pos, usedDateMatch: true, previewLabel: _cliEn
