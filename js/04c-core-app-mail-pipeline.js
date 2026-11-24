@@ -2426,6 +2426,34 @@
             }
         }
 
+        // ── 🔍 [2026-11-24 사용자 요청] 검색 중에는 행 아래에 제품군·멤버를 같이 보여 준다 ─────────
+        //    (평소엔 안 보인다 — 목록이 길어진다). 검색어에 걸린 글자는 <mark> 로.
+        //    멤버는 '노태헌,김진권' 처럼 한 칸에 여럿이 있어 쉼표·마침표로 쪼개 한 사람씩 보인다.
+        function _searchInfoHtml(file) {
+            const st = window._driveModalSearchState;
+            if (!st || !String(st.q || '').trim()) return '';
+            const e = _idxOf(file) || {};
+            const ap = file.appProperties || {};
+            const people = [];
+            [ap.pm, ap.me, e.assignee, e.mech].concat(Array.isArray(e.members) ? e.members : []).forEach(function(v) {
+                String(v || '').split(/[,.，、\/]+/).forEach(function(n) { n = n.trim(); if (n && people.indexOf(n) === -1) people.push(n); });
+            });
+            const units = Array.isArray(e.units) ? e.units : [];
+            const toks = String(st.q).trim().toLowerCase().split(/\s+/).filter(Boolean);
+            const hl = function(s) {
+                const h = escapeHtml(String(s));
+                const low = String(s).toLowerCase();
+                return toks.some(function(t) { return low.indexOf(t) !== -1; })
+                    ? '<mark style="background:#fff3bf; color:inherit; padding:0 1px; border-radius:2px;">' + h + '</mark>' : h;
+            };
+            const parts = [];
+            if (units.length) parts.push('<span style="color:#1971c2;">🏷 ' + units.map(hl).join(' · ') + '</span>');
+            if (e.inch) parts.push('<span>📐 ' + hl(e.inch) + '"</span>');
+            if (people.length) parts.push('<span>👥 ' + people.map(hl).join(', ') + '</span>');
+            if (!parts.length) return '';
+            return '<div style="font-size:11px; color:#6c757d; margin-top:3px; display:flex; flex-wrap:wrap; gap:4px 12px; font-weight:normal;">' + parts.join('') + '</div>';
+        }
+
         // ── 파일 행(fileBtn) 생성 공통 헬퍼 ────────────────────────────────────────────
         function _makeFileRow(file) {
             const d = new Date(file.modifiedTime);
@@ -2445,7 +2473,7 @@
                 fileBtn.style.cssText = 'padding:9px 14px; border:1px solid ' + delBorder + '; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; background:' + delBg + '; transition:background .15s, border-color .15s;';
                 const infoWrap = document.createElement('div');
                 infoWrap.style.cssText = 'flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:12px;';
-                infoWrap.innerHTML = '<div style="font-weight:bold; color:#333; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📜 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96; flex-shrink:0;">' + dateStr + '</div>';
+                infoWrap.innerHTML = '<div style="min-width:0;"><div style="font-weight:bold; color:#333; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📜 ' + escapeHtml(file.name) + doneBadge + '</div>' + _searchInfoHtml(file) + '</div><div style="font-size:12px; color:#868e96; flex-shrink:0;">' + dateStr + '</div>';
                 const delBtn = document.createElement('button');
                 delBtn.textContent = _dmEn ? '🗑️ Delete' : '🗑️ 삭제';
                 delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;';
@@ -2462,7 +2490,7 @@
                 fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
                 // 🔧 [2026-11-19 2차 요청] M/E 는 "날짜 아래 줄"이 아니라 **날짜 왼쪽, 같은 줄**로.
                 const meInline = meName ? '<span style="font-size:10px; color:#adb5bd; white-space:nowrap;">M/E:' + escapeHtml(meName) + '</span>' : '';
-                fileBtn.innerHTML = '<div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📜 ' + escapeHtml(file.name) + doneBadge + '</div>' +
+                fileBtn.innerHTML = '<div style="min-width:0;"><div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📜 ' + escapeHtml(file.name) + doneBadge + '</div>' + _searchInfoHtml(file) + '</div>' +
                     '<div style="display:flex; align-items:center; gap:7px; flex-shrink:0;">' + meInline +
                     '<div style="font-size:12px; color:#868e96; white-space:nowrap;">' + dateStr + '</div></div>';
             }

@@ -62,6 +62,16 @@ q('lnwstellar32', 'customer', 'a', '기호·공백 뗀 모양');
 q('개발1팀', 'team', 'c', '팀');
 q('lnw', 'inch', '', '칸 한정 시 다른 칸은 안 봄');
 q('zzz', 'all', '', '0건');
+// 검색 중엔 행에 제품군·멤버를 같이 보여 준다(걸린 글자는 <mark>), 평소엔 안 보인다
+function rowHtml(id) { let h = null; (function walk(n) { if (n.dataset && n.dataset.fileId === id) h = n.innerHTML; n.children.forEach(walk); })(list); return h || ''; }
+function chk(cond, label) { cond ? pass++ : fail++; console.log((cond ? 'ok  ' : 'FAIL') + ' ' + label); }
+window._driveModalSearchState.field = 'all'; inp.value = '홍회로'; inp.oninput();
+const ha = rowHtml('a');
+chk(/🏷 MVD · TPR/.test(ha), '검색 중 행에 제품군 표시');
+chk(/👥 .*박용훈/.test(ha) && /<mark[^>]*>홍회로<\/mark>/.test(ha), '멤버 표시 + 걸린 이름 강조');
+chk(/김기구/.test(ha), 'M/E 도 멤버에');
+window._driveModalSearchState.field = 'all'; inp.value = ''; inp.oninput();
+chk(!/👥/.test(rowHtml('a')), '검색 안 할 땐 표시 안 함');
 // Enter 로 1건 열기
 window._driveModalSearchState.field = 'all'; inp.value = 'acme'; inp.oninput();
 inp.onkeydown({ key: 'Enter', stopPropagation() {} });
