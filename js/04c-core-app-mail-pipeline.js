@@ -1180,6 +1180,9 @@
                         _savedSheetEntry.snapshot.currentDriveFileId = file.id;
                         _savedSheetEntry.snapshot.currentDriveFileName = dynamicFileName;
                         _savedSheetEntry.snapshot.lastSavedLogCount = _changeLogsCountAtSave;
+                        // 그 탭의 '저장 안 한 변경' 표시도 지운다 — 안 지우면 그 탭으로 돌아왔을 때 또 "저장할까요?"
+                        _savedSheetEntry.snapshot._nonGanttDirty = false;
+                        _savedSheetEntry.snapshot._cpThemeDirty = false;
                     }
                     if (window.renderSheetTabsBar) window.renderSheetTabsBar();
                 }
@@ -1656,6 +1659,11 @@
             projectDistributions: window.projectDistributions,
             changeLogs: window.changeLogs, lastSavedLogCount: window.lastSavedLogCount,
             currentDriveFileId: window.currentDriveFileId, currentDriveFileName: window.currentDriveFileName,
+            // 🐛 [2026-11-24 실측 — AMUSNET 탭에서 "이동하기 전에 저장할까요?" 가 끝없이] '저장 안 한 변경' 표시 둘(Summary 편집·테마색)은
+            //    **전역 하나**였고 탭 스냅샷에 없었다. [저장하고 이동] 은 탭을 먼저 바꾸고 저장을 뒤에서 끝내는데, 그때 이미 다른 탭이라
+            //    전역 표시를 못 지우고 → 그 표시가 **다음 탭으로 그대로 넘어가** 매번 다시 묻고, 같은 내용을 또 저장했다
+            //    (쓰기 기록: 55C 1,759,922B 를 5:47~6:01 사이 다섯 번). → 탭마다 들고 다닌다.
+            _nonGanttDirty: !!window._nonGanttDirty, _cpThemeDirty: !!window._cpThemeDirty,
         };
     };
 
@@ -1672,6 +1680,8 @@
         window.projectDistributions = snap.projectDistributions;
         window.changeLogs = snap.changeLogs; window.lastSavedLogCount = snap.lastSavedLogCount;
         window.currentDriveFileId = snap.currentDriveFileId; window.currentDriveFileName = snap.currentDriveFileName;
+        // 탭마다 들고 다니는 '저장 안 한 변경' 표시(위 _snapshotCurrentSheet 주석) — 옛 스냅샷엔 없으니 없으면 '깨끗함'
+        window._nonGanttDirty = !!snap._nonGanttDirty; window._cpThemeDirty = !!snap._cpThemeDirty;
         if (isFreshOpen && globalData) {
             for (let i = 1; i < globalData.length; i++) { if (globalData[i]) delete globalData[i]._wbsCollapsed; }
         }
