@@ -2778,7 +2778,7 @@
                  + ' <a href="#" onclick="window._docLabelNoteDisarm();return false;">' + _esc(_t('취소', 'cancel')) + '</a>'
                : cropping
                ? (cropSel
-                  ? '<a href="#" onclick="window._docLabelCropApply();return false;" style="color:#1971c2; font-weight:bold;">✅ '
+                  ? '<a href="#" onclick="window._docLabelCropApply();return false;" style="color:var(--ui-accent, #00707d); font-weight:bold;">✅ '
                     + _esc(_t('자르기 적용', 'Apply crop')) + '</a>'
                   : '<span style="color:#1971c2;">' + _esc(_t('드래그해서 영역을 고르세요…', 'Drag to select an area…')) + '</span>')
                  + ' <a href="#" onclick="window._docLabelCropCancel();return false;">' + _esc(_t('취소', 'cancel')) + '</a>'
@@ -2851,7 +2851,7 @@
                         .map(function (a) {
                             return '<a href="#" onclick="window._docLabelNoteAlignSet(\'' + _esc(code) + '\',' + ni + ',\'' + a.v
                                 + '\');return false;" title="' + _esc(a.v) + '" style="padding:0 3px; font-size:10.5px;'
-                                + (curAlign === a.v ? ' font-weight:bold; color:#1971c2;' : ' color:#868e96;') + '">' + _esc(a.l) + '</a>';
+                                + (curAlign === a.v ? ' font-weight:bold; color:var(--ui-accent, #00707d);' : ' color:#868e96;') + '">' + _esc(a.l) + '</a>';
                         }).join('');
                     // 📐 [2026-11-13, 사용자 요청] "번호 줄 맞추어서 들여쓰기 해줘" — 번호가 1자리든
                     //    2자리든 입력칸이 늘 같은 자리에서 시작하도록 번호에 고정폭(오른쪽 정렬)을 준다.
@@ -2976,7 +2976,7 @@
                 var isNas = m.source === 'nas';
                 var line = (isNas ? '☁️ ' : '')
                      + '<a href="#" onclick="window._docLabelOpen(\'' + _esc(key).replace(/'/g, "\\'") + '\',' + mi
-                     + ');return false;" style="color:#1971c2;" title="' + _esc(m.folder || '') + '">📎 ' + _esc(m.name) + '</a>'
+                     + ');return false;" style="color:var(--ui-accent, #00707d);" title="' + _esc(m.folder || '') + '">📎 ' + _esc(m.name) + '</a>'
                      + ' <a href="#" onclick="window._docLabelToggleImages(\'' + _esc(key).replace(/'/g, "\\'") + '\',' + mi
                      + ');return false;" style="color:#7a5210;">🖼 ' + (st && st.open ? _esc(_t('접기', 'hide'))
                                                                                        : _esc(_t('미리보기', 'preview'))) + '</a>'
@@ -3335,9 +3335,9 @@
             }).join('') + '</select></div>'
             + '<div style="flex:1; min-height:0; overflow:auto;">'
             + '<div style="display:flex; align-items:center; justify-content:center; gap:10px; padding:6px 0 0;">'
-            + '<a href="#" onclick="window._docLabelCrossProjectNav(-1);return false;" style="font-size:18px; color:#1971c2; text-decoration:none;">◀</a>'
+            + '<a href="#" onclick="window._docLabelCrossProjectNav(-1);return false;" style="font-size:18px; color:var(--ui-accent, #00707d); text-decoration:none;">◀</a>'
             + '<span style="font-size:12.5px; color:#495057;">' + (cur ? ('<b>' + _esc(cur.code) + '</b> — ' + _esc(cur.projectLabel)) : '') + '</span>'
-            + '<a href="#" onclick="window._docLabelCrossProjectNav(1);return false;" style="font-size:18px; color:#1971c2; text-decoration:none;">▶</a>'
+            + '<a href="#" onclick="window._docLabelCrossProjectNav(1);return false;" style="font-size:18px; color:var(--ui-accent, #00707d); text-decoration:none;">▶</a>'
             + '</div>'
             + '<div style="font-size:11px; color:#868e96; text-align:center;">' + (filtered.length ? (st.slide + 1) + ' / ' + filtered.length : '') + '</div>'
             + previewHtml
@@ -4870,7 +4870,7 @@
             + (own
                 ? '✏️ ' + _esc(_t('직접 적음', 'edited'))
                   + ' <a href="#" class="doc-noprint" onclick="window._docResetField(\'' + _esc(id) + '\',\'' + _esc(key) + '\');return false;"'
-                  + ' style="color:#1971c2;">↺ ' + _esc(_t('앱 값으로', 'reset')) + '</a>'
+                  + ' style="color:var(--ui-accent, #00707d);">↺ ' + _esc(_t('앱 값으로', 'reset')) + '</a>'
                 : (src ? (/없음|empty|not in/.test(src) ? '⚠️ ' : '📘 ') + _esc(src) : '&nbsp;'))
             + '</div></td>';
     };
@@ -5081,7 +5081,7 @@
                                 : '<div style="height:76px; display:flex; align-items:center; justify-content:center; font-size:26px;">📄</div>')
                        + '<div style="font-size:10px; word-break:break-all; margin-top:3px;">' + _esc(a.orig || a.name) + '</div>'
                        + '<div class="doc-noprint" style="text-align:right;">'
-                       + '<a href="' + _esc(_attUrl(a)) + '" target="_blank" style="font-size:10px; color:#1971c2;">열기</a> '
+                       + '<a href="' + _esc(_attUrl(a)) + '" target="_blank" style="font-size:10px; color:var(--ui-accent, #00707d);">열기</a> '
                        + '<a href="#" onclick="window._docAttachRemove(\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\',' + i + ');return false;"'
                        + ' style="font-size:10px; color:#b1432f;">떼기</a></div></div>';
                 });
@@ -5129,9 +5129,9 @@
                     }
                     h += '<div class="doc-noprint" style="margin-top:4px;">'
                        + (isImg ? ('<a href="#" onclick="window._docPhotoMarkArm(\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\','
-                            + i + ');return false;" style="font-size:10px; color:#1971c2; margin-right:8px;">📍 '
+                            + i + ');return false;" style="font-size:10px; color:var(--ui-accent, #00707d); margin-right:8px;">📍 '
                             + _esc(_t('표시 추가', 'Add mark')) + '</a>') : '')
-                       + '<a href="' + _esc(_attUrl(a)) + '" target="_blank" style="font-size:10px; color:#1971c2; margin-right:8px;">'
+                       + '<a href="' + _esc(_attUrl(a)) + '" target="_blank" style="font-size:10px; color:var(--ui-accent, #00707d); margin-right:8px;">'
                        + _esc(_t('열기', 'Open')) + '</a>'
                        + '<a href="#" onclick="window._docAttachRemove(\'' + _esc(form.id) + '\',\'' + _esc(s.key) + '\',' + i + ');return false;"'
                        + ' style="font-size:10px; color:#b1432f;">' + _esc(_t('떼기', 'Remove')) + '</a>'
@@ -5246,7 +5246,7 @@
                                            '<div class="doc-noprint" style="margin-top:3px; font-weight:normal;">'
                                            + '<a href="#" onclick="window._docCheckAddRow(\'' + _esc(form.id) + '\',\''
                                            + _esc(sh.key).replace(/'/g, "\\'") + '\',\'' + _esc(it.g).replace(/'/g, "\\'")
-                                           + '\');return false;" style="color:#1971c2; font-size:10.5px;">＋ '
+                                           + '\');return false;" style="color:var(--ui-accent, #00707d); font-size:10.5px;">＋ '
                                            + _esc(_t('행 추가', 'Add row')) + '</a></div>')
                                         + '</td>' : '')
                            + '<td><input type="text" class="doc-in' + ((it.added || _hasOwn(form.id, tkey)) ? ' own' : '') + '"'
@@ -5279,14 +5279,14 @@
                         h += '<div class="doc-noprint" style="margin:2px 0 8px; font-size:11px; color:#868e96;">🙈 '
                            + _esc(_t(naCount + '건은 ‘해당없음’ 으로 접혀 있습니다.', naCount + ' item(s) hidden (N/A).'))
                            + ' <a href="#" onclick="window._docToggleHideNA();return false;"'
-                           + ' style="color:#1971c2;">' + _esc(_t('펴기', 'show')) + '</a></div>';
+                           + ' style="color:var(--ui-accent, #00707d);">' + _esc(_t('펴기', 'show')) + '</a></div>';
                     }
                     if ((sh.items || []).some(function (x) { return RES_GROUPS.indexOf(x.g) >= 0; })) {
                         h += '<div class="doc-noprint" style="margin:2px 0 8px; font-size:11px; color:#868e96;">🖥 '
                            + _esc(_t('이 장의 항목은 위 [# 지원 해상도]에서 고른 것만 나옵니다.',
                                      'Items come from the picked resolutions.'))
                            + ' <a href="#" onclick="window.resOpenPicker && window.resOpenPicker();return false;"'
-                           + ' style="color:#1971c2;">' + _esc(_t('해상도 고르기', 'pick')) + '</a></div>';
+                           + ' style="color:var(--ui-accent, #00707d);">' + _esc(_t('해상도 고르기', 'pick')) + '</a></div>';
                     }
                 });
                 h += '<table style="display:none;">';
@@ -5345,7 +5345,7 @@
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|doc" value="' + _esc(r.doc || '') + '"'
                        + ' placeholder="' + _esc(_t('그룹웨어 문서번호', 'doc no.')) + '">'
                        + '<div class="doc-src doc-noprint">'
-                       + '<a href="#" onclick="window._docGwPick(' + i + ');return false;" style="color:#1971c2;">🔍 '
+                       + '<a href="#" onclick="window._docGwPick(' + i + ');return false;" style="color:var(--ui-accent, #00707d);">🔍 '
                        + _esc(_t('그룹웨어에서 찾기', 'find in groupware')) + '</a>'
                        + (r.docTitle ? ' <span style="opacity:.8;">' + _esc(r.docTitle) + '</span>' : '')
                        + '</div></td>'
@@ -5353,7 +5353,7 @@
                        // 🔗 그룹웨어에서 그 의뢰서를 연다 (전용 크롬 — 사람이 로그인해 둔 곳)
                        + '<td class="doc-noprint" style="text-align:center; font-size:11px;">'
                        + (String(r.doc || '').trim() || r.docId
-                          ? '<a href="#" onclick="window._docOpenReq(' + i + ');return false;" style="color:#1971c2;">🔗 '
+                          ? '<a href="#" onclick="window._docOpenReq(' + i + ');return false;" style="color:var(--ui-accent, #00707d);">🔗 '
                             + _esc(_t('의뢰서 열기', 'Open')) + '</a>'
                           : '<span style="color:#868e96;">' + _esc(_t('의뢰서를 고르세요', 'pick a document')) + '</span>')
                        + '</td>'
@@ -5540,7 +5540,7 @@
                                 + ' class="doc-noprint" style="position:absolute; right:2px; bottom:2px; width:13px; height:13px;'
                                 + ' background:transparent; cursor:nwse-resize; z-index:2;"></div></div>'
                                 + '<div style="margin-top:3px;"><a href="#" onclick="window._docLabelArtModalOpen(\''
-                                + _esc(form.id) + '\',' + i + ');return false;" style="color:#1971c2; font-weight:bold; font-size:11px;">🔍 '
+                                + _esc(form.id) + '\',' + i + ');return false;" style="color:var(--ui-accent, #00707d); font-weight:bold; font-size:11px;">🔍 '
                                 + _esc(_t('크게 보기', 'View / edit')) + (notes.length ? ' (' + notes.length + ')' : '') + '</a>'
                                 + (thumbSz ? ' · <a href="#" onclick="window._docLabelThumbSizeReset(\'' + _esc(itCode)
                                   + '\');return false;" class="doc-noprint" style="color:#495057; font-size:11px;">↺ '
@@ -5633,7 +5633,7 @@
                 });
                 h += '</table><div class="doc-noprint" style="margin-top:6px; display:flex; align-items:center; gap:14px;">'
                    + '<a href="#" onclick="window._docLabelItemAdd(\'' + _esc(form.id) + '\');return false;"'
-                   + ' style="color:#1971c2; font-size:11.5px; font-weight:bold;">＋ ' + _esc(_t('라벨 추가', 'Add label'))
+                   + ' style="color:var(--ui-accent, #00707d); font-size:11.5px; font-weight:bold;">＋ ' + _esc(_t('라벨 추가', 'Add label'))
                    + '</a>'
                    // 📐 [2026-11-13, 사용자 요청] 썸네일을 끌어서 늘일 때 비율을 지킬지 — 모달의 체크와
                    //    같은 전역 값을 공유한다(둘 다 같은 `_docLabelAspectLock` 을 본다).

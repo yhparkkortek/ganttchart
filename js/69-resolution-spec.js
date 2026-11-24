@@ -386,7 +386,7 @@
             + '<span style="color:#868e96;">' + _esc(_t('보이는 줄 전체:', 'All visible:')) + '</span>'
             + ports.map(function (p) {
                 return '<span style="white-space:nowrap;"><b>' + _esc(p.label) + '</b> '
-                     + '<a href="#" onclick="window.resToggleColumn(\'' + _esc(p.key) + '\',true);return false;" style="color:#1971c2;">'
+                     + '<a href="#" onclick="window.resToggleColumn(\'' + _esc(p.key) + '\',true);return false;" style="color:var(--ui-accent, #00707d);">'
                      + _esc(_t('켜기', 'on')) + '</a> / '
                      + '<a href="#" onclick="window.resToggleColumn(\'' + _esc(p.key) + '\',false);return false;" style="color:#b1432f;">'
                      + _esc(_t('끄기', 'off')) + '</a></span>';
@@ -490,7 +490,7 @@
                + '</tr>';
         });
         h += '<tr><td colspan="' + (2 + ports.length) + '" style="border:1px solid #cfe3e5; padding:5px 6px;">'
-           + '<a href="#" onclick="window.resCustomAdd();return false;" style="color:#1971c2; font-weight:bold;">＋ '
+           + '<a href="#" onclick="window.resCustomAdd();return false;" style="color:var(--ui-accent, #00707d); font-weight:bold;">＋ '
            + _esc(_t('행 추가', 'Add row')) + '</a>'
            + (customs.length ? '' : ' <span style="color:#868e96;">'
               + _esc(_t('고객이 따로 요구하는 해상도를 여기에 적습니다.', 'Add customer resolutions here.')) + '</span>')
