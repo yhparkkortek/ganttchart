@@ -287,6 +287,18 @@ window.__approvalIntakeTest = async function () {
                 ok(/인사 시스템 알림.*2건을 지웠습니다/.test(msg12) && /Ctrl\+Z/.test(msg12), '12-2 알림 문구에 무엇을 지웠는지 + 되돌리는 법', msg12);
                 const c2 = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
                 ok(c2.noticeRemoved === 0, '12-3 두 번째는 지울 게 없다', c2);
+                // 12-4 저장이 막히면(필수 칸 비어 있음 — 실측 '개발업무') "했다" 고 말하지 않고 막힌 이유를 말한다
+                globalData.splice(2, 0, M('연장근로 신청 승인 확인', { subject: '[연장근로 신청서 / OW-1] 신청문서가 최종 승인되었습니다', body2000: '' }));
+                const svSave = window.saveToGoogleDrive, svBk = window._saveLocalBackup, svWhy = window._lastSaveBlockReason;
+                let msg4 = '', kind4 = '';
+                window.saveToGoogleDrive = async () => { window._lastSaveBlockReason = '필수 정보(모델명)를 입력하세요'; return false; };
+                window._saveLocalBackup = () => {};
+                window.showToast = (m, k) => { msg4 = String(m); kind4 = k; };
+                try {
+                    const c4 = await window.approvalRepairOpenProject({ force: true });
+                    ok(c4.saved === false && kind4 === 'error' && /저장되지 않았습니다/.test(msg4) && /모델명/.test(msg4),
+                       '12-4 저장이 막히면 "저장되지 않았습니다 (이유)" 로 알린다', { c4, msg4 });
+                } finally { window.saveToGoogleDrive = svSave; window._saveLocalBackup = svBk; window._lastSaveBlockReason = svWhy; window.showToast = sv12; }
             } finally { globalData = keep12.gd; colIdx = keep12.ci; window.recalculateSchedules = keep12.recalc; window.renderGantt = keep12.render; window.currentDriveFileId = null; }
         }
 

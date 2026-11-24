@@ -643,11 +643,21 @@
         try { if (typeof logChange === 'function') logChange(1, -1, '없음', partsKo.join(' · ')); } catch (e) { /* 기록 실패는 무시 */ }
         try { if (window.recalculateSchedules) window.recalculateSchedules(); } catch (e) { console.warn('[자리 바로잡기] 재계산 실패', e); }
         try { if (window.renderGantt) window.renderGantt(); } catch (e) { /* 다음 렌더에 반영 */ }
+        var okSave = true;
         if (!opts.noSave && window.saveToGoogleDrive) {
-            var okSave = await window.saveToGoogleDrive({ suppressAlert: true });
+            okSave = await window.saveToGoogleDrive({ suppressAlert: true });
             if (!okSave && window._saveLocalBackup) window._saveLocalBackup('approval-repair-save-blocked');
         }
-        if (window.showToast && !opts.silent) window.showToast(T('📋 ' + partsKo.join(' · ') + ' — 되돌리려면 Ctrl+Z', '📋 ' + partsEn.join(' · ') + ' — Ctrl+Z to undo'), 'info', 8000);
+        out.saved = !!okSave;
+        if (window.showToast && !opts.silent) {
+            if (okSave) window.showToast(T('📋 ' + partsKo.join(' · ') + ' — 되돌리려면 Ctrl+Z', '📋 ' + partsEn.join(' · ') + ' — Ctrl+Z to undo'), 'info', 8000);
+            else {
+                // 💾 [2026-11-24 실측 — 개발업무] 저장이 막히면(Summary 필수 칸 비어 있음 등) 화면에서만 고쳐진 채다 — "했다" 고 말하지 않는다
+                var why = String(window._lastSaveBlockReason || '').slice(0, 80);
+                window.showToast(T('⚠️ 화면에서는 정리했지만 저장되지 않았습니다' + (why ? ' (' + why + ')' : '') + ' — 막힌 이유를 고친 뒤 저장하면 반영됩니다. 정리한 내용: ' + partsKo.join(' · '),
+                                   '⚠️ Tidied on screen but NOT saved' + (why ? ' (' + why + ')' : '') + ' — fix the blocker and save. Changes: ' + partsEn.join(' · ')), 'error', 12000);
+            }
+        }
         console.info('[자리 바로잡기]', JSON.stringify(out));
         return out;
     };
