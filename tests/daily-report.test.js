@@ -269,6 +269,55 @@ nas[win.DAILY_PATHS.roster] = JSON.stringify({ members: [
     ok('endDateStr 생략하면(하루만) 지난 업무는 여전히 안 보인다 — 하위호환',
         !d4.mine.concat(d4.others).some((x) => x.name === '지난 업무'));
 
+    // 🚨 [2026-11-24 신고] "DISPLAY MODULE*·PROCUREMENT·BLU* … 빈 업무 12줄이 계속 생긴다".
+    //    ① 상태 일괄 변경이 그룹 머리글(하위가 있는 행)까지 변경이력에 남기는데, "손댄 업무" 경로가
+    //    후보 목록과 달리 **리프 규칙 없이** 모든 행을 업무로 받았다.
+    //    ② ✕ 로 빼도 다음 저장 때 같은 변경이력에서 다시 계산돼 되살아났다(중복 검사가 지금 보고만 봄).
+    console.log('\n■ 손댄 업무 — 그룹 머리글은 업무가 아니다 · 사람이 뺀 자동 항목은 되살리지 않는다(2026-11-24)');
+    {
+        const keepG = win.globalData, keepL = win.changeLogs;
+        const grp = row(1, '그룹 머리글*', '', t0, t0, '');
+        const kid = row(2, '그룹 안 실제 업무', '[핵심내용]x\n[출처]q', t0, t0, 'PM');
+        win.globalData = [hdr, grp, kid];
+        const stamp = new Date(today + 'T11:00:00').toLocaleString('ko-KR');
+        win.changeLogs = [
+            { time: stamp, userName: 'yhpark', rowName: kid[0], colName: '상태' },
+            { time: stamp, userName: 'yhpark', rowName: grp[0], colName: '상태' }
+        ];
+        const dg = win.dailyBuildDraft(today);
+        ok('하위가 있는 그룹 머리글은 "손댄 업무"로 안 담긴다',
+            !dg.touched.some((x) => x.name === '그룹 머리글*'), JSON.stringify(dg.touched));
+        ok('그 안의 실제(리프) 업무는 그대로 담긴다',
+            dg.touched.length === 1 && dg.touched[0].name === '그룹 안 실제 업무', JSON.stringify(dg.touched));
+
+        const relMe = win.DAILY_PATHS.file(today, 'yhpark');
+        delete nas[relMe];
+        localStorage.removeItem('gantt_daily_dismissed_v1');
+        await win.dailyAccrueTouched(true);
+        const a1 = JSON.parse(nas[relMe] || '{"items":[]}');
+        ok('자동 적립은 리프 업무만 보고에 담는다',
+            a1.items.length === 1 && a1.items[0].name === '그룹 안 실제 업무' && a1.items[0].auto === true,
+            JSON.stringify(a1.items));
+
+        // ⚠️ 이 위치의 가짜 NAS 엔 `del` 이 아직 없다(뒤쪽 첨부 시험이 나중에 단다) — 비우고 저장하면
+        //    파일을 **지우는** 길이라 여기서만 잠깐 달아 둔다. 안 달면 지워지지 않아 가짜 실패가 난다.
+        const delKeep = win.nasAppFile.del;
+        win.nasAppFile.del = async (rel) => { delete nas[rel]; return { ok: true }; };
+        await win.dailyOpenModal(today);            // 사람이 지나는 입구 — 모달을 거쳐야 `_doc` 이 선다
+        win._dailyDropItem(0);                       // ✕
+        await win._dailySave();
+        ok('(확인) ✕ 하고 저장하면 그 항목이 보고에서 사라진다', !nas[relMe], nas[relMe]);
+        await win.dailyAccrueTouched(true);          // 다음 저장 때의 자동 적립
+        const raw2 = nas[relMe];
+        ok('✕ 로 뺀 자동 항목은 다음 적립에서 되살아나지 않는다',
+            !raw2 || JSON.parse(raw2).items.length === 0, raw2);
+        win.nasAppFile.del = delKeep;
+
+        win.globalData = keepG; win.changeLogs = keepL;
+        delete nas[relMe];
+        localStorage.removeItem('gantt_daily_dismissed_v1');
+    }
+
     // 📅 [2026-11-12 2차 요청] "이번주" 모드 — 월~일 **달력 주**(js/62 weekStartsMonday 와
     // 같은 규칙, 롤링 7일 아님). 기대값은 독립 공식(dailyWeekDigest, js/59:2699 와 같은
     // "diff = 일요일이면 -6, 그 외엔 1-dow" 표현)으로 — candRange() 코드를 그대로 베끼면

@@ -633,6 +633,7 @@
         var proj = ctx.project || '';
         var catByName = {};        // 업무명 → 구분
         var byNo = {};             // No. 칸 값 → 행 (변경이력이 남기는 게 이 값이다)
+        var leafNo = {};           // No. 칸 값 → 리프 행인가 (그룹 머리글은 업무가 아니다)
 
         // No. 지도는 **전체 행**으로 만든다 — 손댄 업무가 오늘 일정이 아닐 수 있다.
         if (ci.no != null && ci.no !== -1) {
@@ -640,7 +641,12 @@
                 var r0 = gd[n0];
                 if (!r0) continue;
                 var v0 = String(r0[ci.no] == null ? '' : r0[ci.no]).trim();
-                if (v0 && !byNo[v0]) byNo[v0] = r0;
+                if (v0 && !byNo[v0]) {
+                    byNo[v0] = r0;
+                    var l0 = (typeof r0._level === 'number') ? r0._level : 4;
+                    var x0 = gd[n0 + 1];
+                    leafNo[v0] = !(x0 && typeof x0._level === 'number' && x0._level > l0);
+                }
             }
         }
         for (var i = 1; i < gd.length; i++) {
@@ -718,6 +724,11 @@
             var no = String(L.rowName == null ? '' : L.rowName).trim();
             var hitRow = byNo[no];
             if (!hitRow) continue;                       // 간트에서 못 찾으면 담지 않는다
+            // 🚨 [2026-11-24 신고] "DISPLAY MODULE*·PROCUREMENT·BLU* … 빈 업무 12줄이 계속 생긴다".
+            //    상태 일괄 변경이 그룹 머리글(하위가 있는 행)까지 건드려 그 번호가 변경이력에 남았고,
+            //    여기가 **리프만 보는 후보 목록과 달리** 모든 행을 업무로 받아 그룹 이름을 보고에 담았다.
+            //    그룹 머리글은 업무가 아니다 — 후보(위 루프)와 같은 리프 규칙을 쓴다.
+            if (!leafNo[no]) continue;
             var rn = rowName(hitRow);
             if (!rn || seen[rn]) continue;
             seen[rn] = 1;
@@ -1647,7 +1658,11 @@
     window._dailyField = function (k, v) { _doc[k] = v; saveDraftLocal(); };
     // 🗑️ 사람이 **직접** 뺀 것만 표시한다 — 이 표시가 있어야 빈 저장(=지우기)이 통과한다.
     //    ⚠️ 낡은 초안이나 배경 경로가 비운 것은 이 표시를 못 얻는다(그래서 여전히 막힌다).
-    window._dailyDropItem = function (i) { _doc.items.splice(i, 1); _emptiedByUser = true; saveDraftLocal(); render(); };
+    window._dailyDropItem = function (i) {
+        var gone = _doc.items[i];
+        if (gone && gone.auto) dismissAuto(_date, gone);   // 자동으로 담긴 걸 뺐으면 다음 저장에 되살리지 않는다
+        _doc.items.splice(i, 1); _emptiedByUser = true; saveDraftLocal(); render();
+    };
     window._dailyAdd = function (i) {
         var c = (window._dailyCand || [])[i];
         if (!c) return;
@@ -3240,6 +3255,27 @@
     var _accrueAt = 0;
     var ACCRUE_GAP = 5 * 60 * 1000;      // 자동저장이 3분마다 돈다 — 매번 NAS 에 쓰지 않는다
 
+    // 🗑 [2026-11-24 신고] 자동으로 담긴 업무를 ✕ 로 빼도 **다음 저장 때 되살아났다** — 적립은
+    //    "오늘 변경이력"에서 매번 다시 계산하는데, 중복 검사가 지금 보고에 든 것만 봐서 빠진 건
+    //    새것으로 보였다. 사람이 뺀 자동 항목은 날짜별로 기억해 다시 담지 않는다(이 PC 의 기억 —
+    //    적립이 도는 곳이 그 PC 의 저장이라 같은 곳이다). 직접 담은 건 대상이 아니다.
+    var DISMISSED_KEY = 'gantt_daily_dismissed_v1';
+    function dismissKey(it) { return String(it.project || '') + '\u0001' + String(it.name || ''); }
+    function dismissedOf(date) {
+        try {
+            var o = JSON.parse(localStorage.getItem(DISMISSED_KEY) || '{}');
+            return (o && o[date]) || {};
+        } catch (e) { return {}; }
+    }
+    function dismissAuto(date, it) {
+        try {
+            var o = JSON.parse(localStorage.getItem(DISMISSED_KEY) || '{}');
+            (o[date] = o[date] || {})[dismissKey(it)] = 1;
+            Object.keys(o).forEach(function (k) { if (k < date.slice(0, 8) + '01') delete o[k]; });
+            localStorage.setItem(DISMISSED_KEY, JSON.stringify(o));
+        } catch (e) { /* 저장소가 꽉 찬 건 js/34 가 다룬다 */ }
+    }
+
     window.dailyAccrueTouched = async function (force) {
         if (!force && Date.now() - _accrueAt < ACCRUE_GAP) return;
         if (!storageReady()) return;
@@ -3253,8 +3289,10 @@
             var have = {};
             (doc.items || []).forEach(function (it) { have[it.name] = 1; });
             var added = 0;
+            var gone = dismissedOf(date);
             d.touched.forEach(function (t) {
                 if (have[t.name]) return;
+                if (gone[dismissKey(t)]) return;             // 사람이 뺀 자동 항목은 다시 안 담는다
                 doc.items.push({ name: t.name, project: t.project, cat: t.cat || '', note: '', auto: true });
                 have[t.name] = 1; added++;
             });
