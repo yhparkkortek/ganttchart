@@ -18,7 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<link rel="stylesheet" href="styles.css?v=2026112473">
+<link rel="stylesheet" href="styles.css?v=2026112481">
 <!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
      styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
      "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
@@ -1548,12 +1548,12 @@
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" data-i18n-title="revision-add-hint" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:none; background:#e0f5f7; color:#00707d; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold; transition:background .15s;">➕</button>
-            <button id="mc-rev-cycle-btn" class="mc-rev-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)" data-i18n-title="revision-cycle-hint"
-                style="padding:6px 10px; min-width:auto; border:1px solid #a5c8f0; background:#e8f4fd; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
+            <button id="mc-rev-cycle-btn" class="mc-rev-btn unit-cycle-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)" data-i18n-title="revision-cycle-hint"
+                style="padding:6px 10px; min-width:auto; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
                 style="margin-left:4px; padding:6px 10px; min-width:auto; border:1px solid #edbf85; background:#fbead9; color:#a85d0a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="mc-clear-price-btn" class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" data-i18n-title="amount-delete-all" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f;">금액삭제</button>
+            <button id="mc-clear-price-btn" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" data-i18n-title="amount-delete-all" style="margin:0 8px 0 0; height:31px; box-sizing:border-box; padding:0 10px; display:inline-flex; align-items:center; min-width:auto; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:0.2s;">금액삭제</button>
             <div class="btn-group"></div>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
@@ -2737,7 +2737,7 @@
 <script src="js/22f-address-book.js?v=2026112473"></script>
 <script src="js/22g-name-autocomplete.js?v=2026112473"></script>
 <script src="js/22h-brief-mc-common-1.js?v=2026112473"></script>
-<script src="js/22i-brief-mc-common-2.js?v=2026112473"></script>
+<script src="js/22i-brief-mc-common-2.js?v=2026112482"></script>
 
 <script src="js/23-sidebar-tabs.js?v=2026112473"></script>
 

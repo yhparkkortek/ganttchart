@@ -154,9 +154,11 @@ window.mcSwitchUnit = function(unit) {
         const active = b.dataset.rev === (window.tabData.mcActiveRevision || 'R1');
         b.classList.toggle('active', active);
         // 💡 항상 outline(흰바탕+파란글씨) 유지 — hover 시에만 채워지도록. 현재 리비전 표시는 라벨 텍스트로 충분.
-        b.style.background = '#fff';
-        b.style.color = '#2c5f8a';
-        b.style.fontWeight = 'bold';
+        // 🎨 [2026-11-24 "버튼 색 통일"] 색은 .unit-cycle-btn + 팔레트(js/21, !important)가 정한다 — Document 리비전 버튼과 같다.
+        //    여기서 색을 칠하지 않는다(칠해도 !important 에 진다). VS 비교 화면에서 내려갔던 흐림만 되돌린다.
+        b.style.background = '';
+        b.style.color = '';
+        b.style.opacity = '';
     });
 };
 
@@ -606,9 +608,7 @@ window.mcShowComparison = function() {
     // 💡 비교 화면으로 전환하면 R1~R5 버튼은 전부 비활성 — 흰 배경 대신 원래 파스텔 기본색으로 되돌림
     document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
         b.classList.remove('active');
-        b.style.background = '#e8f4fd';
-        b.style.color = '#1a4f7a';
-        b.style.fontWeight = 'bold';
+        b.style.opacity = '.5';   // 색은 팔레트가 정하므로 '비활성'은 흐림으로만 표시
     });
 
     window.mcRenderComparisonTable();
@@ -622,6 +622,8 @@ window.mcHideComparison = function() {
     // 💡 [2026-08-29 버그 수정] 흰 배경 대신 원래 파스텔 기본색으로 되돌림
     const compBtn = document.getElementById('mc-comparison-btn');
     if (compBtn) { compBtn.style.background = '#fbead9'; compBtn.style.color = '#a85d0a'; }
+    // 🎨 [2026-11-24] 비교 화면에서 흐리게 해 둔 리비전 버튼을 되돌린다(색은 팔레트가 정한다)
+    document.querySelectorAll('.mc-rev-btn').forEach(function(b) { b.style.opacity = ''; });
 };
 
 window.mcToggleCompareExpand = function(btnEl) {

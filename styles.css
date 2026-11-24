@@ -1209,8 +1209,8 @@
 .ai-ref-toggle:hover { color:#212529; background:#dee2e6; }
 .ai-ref-extra { display:inline-block; max-width:0; overflow:hidden; opacity:0; transition:max-width .25s ease, opacity .2s ease; vertical-align:middle; white-space:nowrap; }
 .ai-ref-extra.ai-ref-extra-open { max-width:180px; opacity:1; }
+/* 🎨 [2026-11-24] 리비전(R1…) 버튼은 .unit-cycle-btn 을 같이 달고 팔레트 색을 따른다 — 파랑 호버를 박아 두면 테마를 바꿔도 혼자 파랗게 튄다 */
 .mc-rev-btn { transition:0.2s; }
-.mc-rev-btn:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
 .mc-comparison-btn { transition:0.2s; }
 .mc-comparison-btn:hover { background-color:#f4d9b3 !important; border-color:#dba354 !important; color:#a85d0a !important; }
 /* 🧩 [2026-10-21] 보라색 호버는 제품구분자 버튼이 보라였던 시절 것 — 지금은 진한 테마색이라
