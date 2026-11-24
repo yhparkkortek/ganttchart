@@ -4171,7 +4171,12 @@
         d.att[key] = d.att[key] || [];
         for (var i = 0; i < files.length; i++) {
             var f = files[i];
-            var nm = _today() + '_' + id + '_' + key + '_' + (f.name || ('file' + i));
+            // ⚠️⚠️ [2026-11-24 실측 사고] 이름에 **모델(제품구분자)·회차·리비전**을 넣는다 — 첨부 폴더는 프로젝트에
+            //    하나뿐이라, 넣지 않으면 같은 날 다른 모델 문서에 같은 칸으로 올린 그림이 **같은 이름으로 서로를
+            //    덮어썼다**(PRODUCT SPEC TVD 가 MVD 블록도를, TPR 이 TVD 것을 덮어씀 — 세 문서가 한 그림을 가리켰다).
+            var scope = _dataKey(id) + (window._docActiveRevision && _formById(id) && _formById(id).perRevision
+                ? '_' + (window._docActiveRevision(id) || 'R1') : '');
+            var nm = _today() + '_' + scope.replace(/[@#\s]+/g, '_') + '_' + key + '_' + (f.name || ('file' + i));
             nm = nm.replace(/[\\/:*?"<>|]/g, '-');
             _toast('⏳ ' + (f.name || '') + ' ' + _t('올리는 중…', 'uploading…'), 'info');
             var r = await window._dgUploadBlob(_attFolder(_ctx()), nm, f);

@@ -94,6 +94,9 @@ window.__psTest = async function (opt) {
             };
             await window._docImportFile(new File([new Uint8Array([80, 75])], 'spec.docx'));
             check(uploads.length === Object.keys(j.images).length, '그림마다 NAS 첨부 업로드 (' + uploads.length + ')');
+            // 2026-11-24 실측 사고: 이름에 모델이 없어 다른 모델 문서의 그림이 같은 이름으로 서로를 덮어썼다
+            check(uploads.every(function (n) { return /_product-spec_LOWER_R1_img_/.test(n); }),
+                  '첨부 이름에 모델·리비전이 들어가야 (' + uploads[0] + ')');
             var ctx = window._dgCollect(), p2 = window._psPayload(), bad = 0;
             Object.keys(j.values).forEach(function (k) {
                 var auto = window.PS_AUTO[k] ? window.DOC_AUTO_HOOKS.ps(ctx, k).v : '';
