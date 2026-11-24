@@ -278,14 +278,14 @@ window.renderPanelCompareTab = async function() {
             const label = f[0], priority = f[1];
             const rowStyle = priority === 2 ? ('display:' + (window._pcExpanded ? 'table-row' : 'none') + ';') : '';
             html += `<tr class="${priority === 2 ? 'pc-p2-row' : ''}" style="${rowStyle}">`;
-            html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12.5px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
             for (let i = 0; i < slotCount; i++) {
                 const entry = entries[i];
                 const v = entry && entry.specs && entry.specs[label] != null && entry.specs[label] !== '' ? entry.specs[label] : '-';
-                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12.5px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
+                html += `<td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
             }
             const noteVal = pc.notes[label] || '';
-            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12.5px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.panelCompareSetNote(${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:12.5px; padding:2px 4px; background:transparent; text-align:center;"></td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.panelCompareSetNote(${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:12.5px; padding:2px 4px; background:transparent; text-align:center;"></td>`;
             html += '</tr>';
         });
     });

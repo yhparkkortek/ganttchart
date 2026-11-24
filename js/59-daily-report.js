@@ -3364,7 +3364,7 @@
         // 📋 [2026-11-05 요청] 안쪽 표를 없애고 **한 겹**으로 편다 —
         //    업무 하나가 한 줄이고, 이름·종류는 `rowspan` 으로 묶는다.
         //    ⚠️ 그래서 `rows` 는 사람당 **여러 줄**이다(전엔 한 줄이었다).
-        var td = 'padding:5px 8px; border:1px solid #e3e6ea; vertical-align:top; font-size:12.5px;';
+        var td = 'padding:6px 8px; border:1px solid #e3e6ea; vertical-align:top; font-size:12.5px;';
         // 🎨 [2026-11-05 요청] 구분 열은 **모든 줄에서 같은 배경**, 그리고 **회색이 아니라 팔레트 테마색**.
         //    ⚠️ 색을 여기 인라인으로 박으면 팔레트를 바꿔도 이 표만 안 바뀐다(표를 다시 그려야 하니까).
         //    → 클래스만 달고 색은 styles.css(기본 청록) + js/21 `_cpApplyLive`(라이브)가 정한다.

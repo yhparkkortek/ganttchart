@@ -244,6 +244,14 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 - `.concept-table` 이 아닌 일반 `<table>` 의 `th` 는 브라우저 기본 굵기(700)가 된다 — Summary 주요자재 표가 그랬다(12px·700 → 12.5px·600).
 - 예외: Document 서식 표(`doc-t`, 원본 종이 서식을 따라 12px·700), Project list(조밀 표 11px·왼쪽 정렬), PARTS 비교표 첫 열(항목명 칸이라 왼쪽), 간트(자기 체계 13px).
 
+#### 표 본문 줄 높이 — 칸 여백 6px 8px (2026-11-24)
+- 줄 높이는 **칸 여백 + 칸 안에 입력칸이 있나**로 정해진다. 기준은 `.concept-table td { padding:6px 8px }` —
+  글자만 있는 줄 ≈29~30px(일일보고·JIRA), 입력칸이 든 줄 ≈34~35px(Summary·M.C·Address·PARTS).
+- 2026-11-24 에 맞춘 것: PARTS 비교표 3px 6px(26px 줄) · 일일보고 5px 8px · JIRA 7px 8px → 전부 6px 8px.
+  ⚠️ 인라인 `padding` 을 칸마다 적는 표(PARTS·JIRA·일일보고)는 `.concept-table` 규칙을 못 받으니 같은 값을 적을 것.
+- 예외(조밀한 표 — 일부러 좁다): BOM 2px 5px·줄 24px 고정(`ROW_H`) · Project list 30px · Summary 주요자재(좌우 두 표, Cost 열 50px 라
+  여백을 늘리면 숫자가 잘린다 — 2px) · 간트(자기 체계 31px).
+
 #### 아이콘 — 같은 동작엔 같은 아이콘 (2026-11-24)
 - 사이드바 아이콘 = 페이지 제목 아이콘(15개 전부 일치, 실측). 새 페이지도 둘을 같게.
 - 동작별 아이콘: 📊 엑셀 저장/출력 · 📂 불러오기 · 📁 NAS · 🔍 검색/찾기 · 🔄 새로고침/조회 · ➕ 추가 · ✏️ 고치기 · 🗑️ 삭제 ·

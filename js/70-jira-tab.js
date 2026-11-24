@@ -392,7 +392,7 @@
         var S = tblState(tbl);
         var col = S.byKey[colKey];
         var filterActive = !!S.filters[colKey];
-        return '<th style="padding:7px 8px; text-align:' + align + '; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
+        return '<th style="padding:6px 8px; text-align:' + align + '; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
             + (col.title ? (' title="' + esc(col.title) + '"') : '') + '>'
             + '<span onclick="window._jiraSetSort(' + qa(colKey, tbl) + ')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
             + esc(col.label) + ' <span style="font-size:10px; color:#00707d;">' + sortArrow(colKey, tbl) + '</span></span>'
@@ -445,7 +445,7 @@
         //    다시 안 한다 — merged는 renderFilteredSortedTable이 이미 정렬해서 넘긴다.
         var html = '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
             + '<thead><tr style="background:#eef6f7;">'
-            + '<th style="padding:7px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
+            + '<th style="padding:6px 8px; text-align:center; width:4%; background:#eef6f7; border-bottom:2px solid #cfe3e5;">' + T('No.', 'No.') + '</th>'
             // ⚠️ [2026-11-24] 보고자 열을 넣으며 수정일을 10% 로 줄였더니 '2026-11-19 16:42' 가 두 줄로 접혀
             //    **모든 행 높이가 두 배**가 됐다(사용자 신고) — 수정일 11%·요약 28% 는 그대로(요약도 26% 면 긴 제목이 접힌다, 실측), 줄인 폭은 상태·담당자·구성·출처에서
             + headerCell('key', 7, 'left')
@@ -462,16 +462,16 @@
                 var c = statusColor(it.status);
                 var metaTxt = metaCellText(it);
                 return '<tr onclick="window._jiraOpenIssueModal(\'' + esc(it.key) + '\')" style="cursor:pointer; border-bottom:1px solid #f0f0f0;" onmouseover="this.style.background=\'#fafcfc\'" onmouseout="this.style.background=\'\'">'
-                    + '<td style="padding:7px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
-                    + '<td style="padding:7px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
-                    + '<td style="padding:7px 8px;">' + esc(it.summary) + '</td>'
-                    + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
-                    + '<td style="padding:7px 8px; text-align:center;">' + esc(it.assignee || '—') + '</td>'
-                    + '<td style="padding:7px 8px; text-align:center;">' + esc(it.reporter || '—') + '</td>'
-                    + '<td style="padding:7px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
-                    + '<td style="padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555;" title="' + esc(metaTxt) + '">' + (metaTxt ? esc(metaTxt) : '—') + '</td>'
-                    + '<td style="padding:7px 8px; text-align:center; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
-                    + '<td style="padding:7px 8px;">' + srcChip(it.src) + '</td>'
+                    + '<td style="padding:6px 8px; text-align:center; color:#999;">' + (i + 1) + '</td>'
+                    + '<td style="padding:6px 8px; font-weight:bold; color:#00707d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + esc(it.key) + '</td>'
+                    + '<td style="padding:6px 8px;">' + esc(it.summary) + '</td>'
+                    + '<td style="padding:6px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
+                    + '<td style="padding:6px 8px; text-align:center;">' + esc(it.assignee || '—') + '</td>'
+                    + '<td style="padding:6px 8px; text-align:center;">' + esc(it.reporter || '—') + '</td>'
+                    + '<td style="padding:6px 8px; text-align:center;">' + esc(it.priority || '—') + '</td>'
+                    + '<td style="padding:6px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555;" title="' + esc(metaTxt) + '">' + (metaTxt ? esc(metaTxt) : '—') + '</td>'
+                    + '<td style="padding:6px 8px; text-align:center; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc((it.updated || '').slice(0, 16).replace('T', ' ')) + '</td>'
+                    + '<td style="padding:6px 8px;">' + srcChip(it.src) + '</td>'
                     + '</tr>';
             }).join('')
             + '</tbody></table>'
@@ -929,7 +929,7 @@
         var view = viewRows('search');
         if (view.length !== _searchHits.length) countNote += T(' · 필터 후 ' + view.length + '건', ' · ' + view.length + ' after filters');
         var sim = _searchMode === 'similar';
-        var td = 'padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+        var td = 'padding:6px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
         var head = '<thead><tr style="background:#eef6f7;">'
             + (sim ? headerCell('match', 15, 'left', 'search') : '')
             + headerCell('project', sim ? 8 : 9, 'left', 'search')
@@ -961,11 +961,11 @@
                     + '<td style="' + td + ' color:#888;">' + esc(proj) + '</td>'
                     + '<td style="' + td + ' font-weight:bold; color:#00707d;">' + esc(it.key) + '</td>'
                     + '<td style="' + td + '" title="' + esc(it.summary) + '">' + esc(it.summary) + '</td>'
-                    + '<td style="padding:7px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
+                    + '<td style="padding:6px 8px; text-align:center;"><span style="font-size:11px; padding:2px 8px; border-radius:10px; background:' + c.bg + '; color:' + c.fg + ';">' + esc(it.status) + '</span></td>'
                     + '<td style="' + td + ' text-align:center; color:' + (it.resolution ? '#1f7a3d' : '#bbb') + ';">' + esc(it.resolution || '—') + '</td>'
                     + '<td style="' + td + ' text-align:center;">' + esc(it.assignee || '—') + '</td>'
                     + '<td style="' + td + ' text-align:center;">' + esc(it.reporter || '—') + '</td>'
-                    + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
+                    + '<td style="padding:6px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
                     + '</tr>';
             }).join('')
             : '<tr><td colspan="' + (sim ? 9 : 8) + '" style="padding:24px; text-align:center; color:#999;">'
