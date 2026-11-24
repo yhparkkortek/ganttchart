@@ -151,29 +151,29 @@ window.renderElecCompareTab = async function(type) {
 
     let html = '';
     cfg.schema.forEach(function(sec) {
-        html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#e0f5f7; color:#00707d; font-weight:bold; padding:6px 8px; border:1px solid #e3e6ea;">[${escapeHtml(sec.section)}]</td></tr>`;
+        html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[${escapeHtml(sec.section)}]</td></tr>`;
         sec.fields.forEach(function(f) {
             const label = f[0], priority = f[1];
             const rowStyle = priority === 2 ? ('display:' + (window._epExpanded[type] ? 'table-row' : 'none') + ';') : '';
             html += `<tr class="${priority === 2 ? 'ep-p2-row' : ''}" style="${rowStyle}">`;
-            html += `<td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
             for (let i = 0; i < slotCount; i++) {
                 const entry = entries[i];
                 const v = entry && entry.specs && entry.specs[label] != null && entry.specs[label] !== '' ? entry.specs[label] : '-';
-                html += `<td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
+                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
             }
             const noteVal = ec.notes[label] || '';
-            html += `<td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.elecCompareSetNote(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:12.5px; padding:2px 4px; background:transparent; text-align:center;"></td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.elecCompareSetNote(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent; text-align:center;"></td>`;
             html += '</tr>';
         });
         // 💡 Interface 섹션에만 "핀맵 보기" 요약 행을 하나 추가 — 스키마 필드는 아니지만, AI 추출 시
         //    함께 저장해둔 entry.connectors(J1/J2/J3 등 전체 핀아웃)를 여기서만 볼 수 있게 한다.
         if (sec.section === 'Interface') {
-            html += `<tr><td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px; color:#555; white-space:nowrap;">Pin map</td>`;
+            html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">Pin map</td>`;
             for (let i = 0; i < slotCount; i++) {
                 const entry = entries[i];
                 const hasConn = entry && Array.isArray(entry.connectors) && entry.connectors.length;
-                html += `<td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px;">`;
+                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">`;
                 if (selected[i]) {
                     html += hasConn
                         ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" class="ep-theme-hover-btn" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:4px; color:#1a4f7a; font-size:10.5px; cursor:pointer; padding:2px 8px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View' : '보기'}</button>`
@@ -187,8 +187,8 @@ window.renderElecCompareTab = async function(type) {
     // 💡 [2026-08-26 신규] 사진(최대 2장) — 도표 맨 하단에 한 행으로. 한 번에 1장만 보여주고
     //    클릭하면 바로 크게 보기(라이트박스) — 여러 장이면 라이트박스 자체의 ‹/›·방향키로 넘긴다
     //    (2026-11-17, 더블클릭 요구 제거 — 한 번 클릭이면 충분).
-    html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#e0f5f7; color:#00707d; font-weight:bold; padding:6px 8px; border:1px solid #e3e6ea;">[Picture]</td></tr>`;
-    html += `<tr><td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px; color:#555; white-space:nowrap;">Picture</td>`;
+    html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[Picture]</td></tr>`;
+    html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">Picture</td>`;
     for (let i = 0; i < slotCount; i++) {
         const entry = entries[i];
         const images = (entry && Array.isArray(entry.images)) ? entry.images : [];
