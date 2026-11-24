@@ -74,6 +74,7 @@ f.onload = async function () {
     D.querySelector('#sap-pn-find-list [data-i="0"]').click();
     chk(kin.value === '502574_MAIN>KTS320DPS01,LNW', '고르면 그 카드의 KTK 칸에 — ' + kin.value);
     chk(kin.getBoundingClientRect().height <= 34 && btn.getBoundingClientRect().height <= 34, '칸·버튼이 한 줄(두 줄로 안 깨짐)');
+    card.remove();   // ⚠️ 남겨 두면 Summary 카드 수집기가 페이지 전체를 훑어 이 시험 카드까지 거둔다(가짜 실패가 났다)
     // 5) Project list — 코드·내역이 다른 열이라 둘 다 채우고 변경 이력에 남긴다(진짜 plOpenPnMenu → plSapFindPn)
     var PD = W._plData || (W._plData = { rows: [], history: [] });
     PD.rows = PD.rows || []; PD.history = PD.history || [];
@@ -116,6 +117,33 @@ f.onload = async function () {
         '[Document] 고르면 두 칸을 함께 — MODEL NAME=' + (mn && mn.value) + ' / PART NUMBER=' + (pnIn && pnIn.value));
     chk(/직접 적음|edited/.test(mn.parentNode.textContent), '[Document] "직접 적음" 으로 표시되어 ↺ 로 되돌릴 수 있다');
     W._docResetField('model-spec', 'MODEL NAME'); W._docResetField('model-spec', 'PART NUMBER');
+    // 7) Customer SPEC — 헤더 🏭 가 **지금 모델**의 Summary 모델 카드에만 넣는다(다른 모델은 그대로)
+    W.tabData = W.tabData || {};
+    var savedModels = W.tabData.projectModels, savedUnit = W.mcActiveUnit;
+    W.tabData.projectModels = [
+      { unitId: 'MVD', 고객모델명: 'STELLAR32', KTKPN: '111111', KTK모델명: 'OLD>MVD', 고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' },
+      { unitId: 'TPR', 고객모델명: 'TOPPER32',  KTKPN: '',       KTK모델명: '',        고객모델내역: '', 프로젝트코드: '', 프로젝트명칭: '' }];
+    W.tabData.mcUnits = ['MVD', 'TPR'];
+    W.renderProjectModels();
+    W.mcActiveUnit = 'TPR';
+    var bsBtn = D.getElementById('bs-sap-pn-btn');
+    chk(!!bsBtn && bsBtn.closest('#tab-briefspec .concept-header-box'), '[Customer SPEC] 헤더에 🏭 KTK PN 버튼');
+    bsBtn.click(); await sleep(150);
+    chk(D.getElementById('sap-pn-find-q').value === 'TOPPER32', '[Customer SPEC] 지금 모델(TPR)의 고객 모델명이 검색어');
+    D.getElementById('sap-pn-find-go').click(); await sleep(300);
+    D.querySelector('#sap-pn-find-list [data-i="0"]').click(); await sleep(150);
+    var pm = W.tabData.projectModels;
+    chk(pm[1].KTKPN === '502574' && pm[1].KTK모델명 === 'MAIN>KTS320DPS01,LNW', '[Customer SPEC] TPR 카드에 코드·모델명');
+    chk(pm[0].KTKPN === '111111' && pm[0].KTK모델명 === 'OLD>MVD', '[Customer SPEC] 다른 모델(MVD)은 그대로');
+    var cardInputs = D.querySelectorAll('#sum-models-container [data-model-field="KTK"]');
+    chk(cardInputs.length === 2 && cardInputs[1].value === '502574_MAIN>KTS320DPS01,LNW', '[Customer SPEC] Summary 화면 카드도 다시 그려져 같은 값(다음 저장이 되돌리지 않게) — ' + 'models=' + W.tabData.projectModels.length + ' containers=' + D.querySelectorAll('#sum-models-container').length + ' inputs=' + cardInputs.length + ':' + [].map.call(cardInputs, function (x) { return x.value; }).join('|'));
+    var after = W._syncProjectModelsFromDom();
+    chk(after[1].KTKPN === '502574', '[Customer SPEC] 화면에서 다시 거둬도 값이 남는다');
+    // 카드가 없는 모델이면 지어내지 않고 알린다
+    W.mcActiveUnit = 'BTN'; D.getElementById('sap-pn-find-overlay').style.display = 'none';
+    bsBtn.click(); await sleep(100);
+    chk(D.getElementById('sap-pn-find-overlay').style.display === 'none', '[Customer SPEC] 그 모델 카드가 없으면 창을 안 열고 알린다');
+    W.tabData.projectModels = savedModels; W.mcActiveUnit = savedUnit; if (savedModels) W.renderProjectModels();
   } catch (e) { out.push('ERROR ' + e.message); }
   out.push(pass + '/' + (pass + fail));
   document.getElementById('out').textContent = out.join('\n');
