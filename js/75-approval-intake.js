@@ -620,7 +620,9 @@
     })();
 
     // ── 배경 스케줄 ────────────────────────────────────────────────────────
-    function tick() { if (!off() && !document.hidden) window.approvalIntakeRun({ manual: false }).catch(function (e) { console.warn('[결재 가져오기]', e); }); }
+    // 🙈 [2026-11-24 사용자 요청] 탭이 안 보여도 돈다 — 앱을 다른 탭 뒤에 띄워 두고 일하면 하루 종일 한 번도 안 돌았다.
+    //    목록 읽기뿐이라 가볍다. 브라우저가 숨은 탭 타이머를 늦춰도(최대 1분 단위) 2시간 간격엔 영향이 없다.
+    function tick() { if (!off()) window.approvalIntakeRun({ manual: false }).catch(function (e) { console.warn('[결재 가져오기]', e); }); }
     setTimeout(function () {
         tick();
         setInterval(tick, Math.max(10, P.intervalMin) * 60000);
