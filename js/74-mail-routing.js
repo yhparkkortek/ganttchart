@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-24g';
+    var RULE_V = '2026-11-24h';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -709,7 +709,12 @@
             // [2026-11-23] 메일이 형제 **여럿의** 고유 식별자를 직접 적었으면(“55F 502638 / 55C-R2100 / 55J-R1500”) 그 적힌 형제 모두에 —
             //  AI 가 그중 하나를 골라도(근거가 있어도) 하나만 넣으면 나머지 형제 업무가 빠진다.
             var namedSibs = withUniq.filter(function (i) { return famOfIdx(i) === famId; });
-            if (namedSibs.length > 1 && !otherCustomer && namedSibs.length <= (P.familyAllMax || 3) && familyModeOf(fam) !== 'wait') {
+            // 📐 [2026-11-24 사용자 결정] 형제 인치를 **여럿** 적었으면("Shuffler display 4.3\" 3.0\"") 그것도 이름으로 적은 것이다.
+            if (inchHits.length > 1 && Object.keys(inchVals).length === fam.members.length)
+                inchHits.forEach(function (i) { if (namedSibs.indexOf(i) === -1) namedSibs.push(i); });
+            // ⚠️ 가족이 '대기' 여도 적힌 형제엔 넣는다 — '대기' 는 **모델을 모를 때 추측하지 말라**는 뜻이지,
+            //    문서가 형제를 직접 적은 경우까지 막는 뜻이 아니다(사용자 결정 2026-11-24: SHUFFLER 3.0·4.3 결재 카드).
+            if (namedSibs.length > 1 && !otherCustomer && namedSibs.length <= (P.familyAllMax || 3)) {
                 return out({ decision: 'auto', target: cands[namedSibs[0]], extra: namedSibs.slice(1).map(function (i) { return cands[i]; }), candidates: members, basis: 'family_named',
                     reason: T('가족 확정(' + fam.label + ') · 메일에 적힌 모델 ' + namedSibs.length + '곳 모두에', 'family ' + fam.label + ' · all ' + namedSibs.length + ' models named in the mail'), family: famId });
             }

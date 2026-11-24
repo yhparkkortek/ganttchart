@@ -68,6 +68,15 @@ window.__mailRoutingTestBody = async function () {
         await window.mailRoutingSaveConfig({ families: { 'AMUSNET': { members: ['A1', 'A2', 'A3'], primary: '', mode: 'wait' } } }).catch(() => {});
         j = J(M('Amusnet 55 Series 조립용 샘플 cable 발주', '공통'), cands, null);
         ok(j.decision === 'wait' && j.basis === 'family_unresolved', "3-7 가족에 '대기' 를 고르면 형제 모두에 넣지 않고 대기", j);
+        // 3-7b [2026-11-24 사용자 결정] '대기' 가족이어도 문서가 형제 인치를 **여럿** 적었으면 적힌 형제 모두에
+        const sfam = window.mailRoutingFamilies(cands).find(f => f.members.some(m => m.drive_file_id === 'S3'));
+        const fcfg = {}; fcfg[sfam.id] = { members: ['S3', 'S4'], primary: '', mode: 'wait' };
+        await window.mailRoutingSaveConfig({ families: fcfg }).catch(() => {});
+        j = J(M('원자재 코드 등록 신청서[LNW>Shuffler display 4.3" 3.0" 신규 등록]', ''), cands, null);
+        ok(j.decision === 'auto' && j.basis === 'family_named' && [j.target].concat(j.extra || []).map(c => c.drive_file_id).sort().join() === 'S3,S4',
+            "3-7b '대기' 가족이어도 형제 인치 둘을 적으면 둘 다에", j);
+        j = J(M('LnW Shuffler 신규 원자재 코드 생성 요청의 건', ''), cands, null);
+        ok(j.decision === 'wait', "3-7c '대기' 가족 · 모델 단서 없음 → 여전히 대기", j);
         await window.mailRoutingSaveConfig(c0).catch(() => {});
         const PX = [C('P1', 'AM_55F.json', 'AMUSNET 55FLAT', 'AMUSNET', '55', ['Georgi']), C('P2', 'AM_55C.json', 'AMUSNET 55C-R2100', 'AMUSNET', '55', ['Konstantin']),
                     C('Q1', 'LNW_X.json', 'STELLAR32', 'LNW>STELLAR32', '32', ['STELLAR32'])];
