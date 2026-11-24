@@ -2702,3 +2702,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 🔍 [2026-11-24] BOM 검색 — 걸린 칸 강조(js/38 _bomSearchAfter). PARTS ▸ BOM 은 위 #tab-elecparts 규칙이 받는다. */
 #bom-body td.search-hit { background-color:#fff3bf !important; }
+
+/* 🔍 [2026-11-24] M.C Table 검색(js/22i _mcSearchApply) — 걸린 입력칸 강조. 행 숨김은 위 .parts-search-hide/-show 를 같이 쓴다. */
+#mctable-body input.search-hit { background-color:#fff3bf !important; }
+@media print { .tbl-search-bar { display:none !important; } }

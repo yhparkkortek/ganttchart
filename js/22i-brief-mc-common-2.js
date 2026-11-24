@@ -1087,3 +1087,81 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔍 [2026-11-24 사용자 요청] M.C Table 검색 — 프로젝트 불러오기·Project list·주소록·PARTS·BOM 과 **같은 규칙**
+//    (js/04a `_searchTokens`/`_searchMatchAll`/`_searchMatchAny`: 낱말 AND·공백/기호 무시).
+//    한 행 = TYPE·ITEM·GROUP·P/N·Specification·금액·Note 입력칸(TYPE 은 위 행에서 이어받은 값이 칸에 들어 있다).
+//    ⚠️⚠️ 행을 **지우지 않는다** — 저장(`_readRowsFromTbody('mctable-body')`)이 화면 행을 다시 읽어 가므로
+//       지우면 검색에 안 걸린 항목이 저장 때 사라진다(주소록과 같은 함정). 클래스로만 숨긴다
+//       (`.parts-search-hide/-show`, styles.css — PARTS 와 공용). 빈 행 자동 숨김(인라인 display)도 안 건드린다.
+//    ⚠️ 표는 `populateTabData` 가 통째로 다시 그리므로 tbody 의 자식 교체를 지켜보다가 다시 건다.
+//    SUBTOTAL/합계 행(`mc-summary-row`)은 계산 줄이라 검색 중엔 숨긴다.
+// ─────────────────────────────────────────────────────────────────────────────
+(function () {
+    var _en = function () { return window._currentLang === 'en'; };
+    window._mcSearchTerm = '';
+
+    function ensureBar() {
+        if (document.getElementById('mc-search-input')) return true;
+        var sec = document.getElementById('mc-normal-section');
+        if (!sec) return false;
+        var bar = document.createElement('div');
+        bar.className = 'tbl-search-bar';
+        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:6px;';
+        bar.innerHTML = '<input id="mc-search-input" type="search" autocomplete="off" style="width:240px;'
+            + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
+            + '<span id="mc-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+        sec.insertBefore(bar, sec.firstChild);
+        var inp = bar.querySelector('input');
+        inp.placeholder = _en() ? '🔍 Search — type, item, group, P/N, spec, note…' : '🔍 검색 — TYPE·ITEM·GROUP·P/N·Spec·Note…';
+        inp.title = _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 행에 낱말이 모두 있으면 걸립니다';
+        var t = null;
+        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { window._mcSearchTerm = inp.value; window._mcSearchApply(); }, 150); };
+        inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._mcSearchTerm = ''; window._mcSearchApply(); } };
+        return true;
+    }
+
+    window._mcSearchApply = function () {
+        var tbody = document.getElementById('mctable-body');
+        var countEl = document.getElementById('mc-search-count');
+        if (!tbody) return;
+        var toks = window._searchTokens ? window._searchTokens(window._mcSearchTerm) : [];
+        var rows = Array.prototype.slice.call(tbody.rows);
+        rows.forEach(function (tr) {
+            tr.classList.remove('parts-search-hide', 'parts-search-show');
+            Array.prototype.forEach.call(tr.querySelectorAll('input'), function (el) { el.classList.remove('search-hit'); });
+        });
+        if (!toks.length) { if (countEl) countEl.textContent = ''; return; }
+        var total = 0, shown = 0;
+        rows.forEach(function (tr) {
+            if (/(^|\s)mc-summary-row(\s|$)/.test(tr.className || '')) { tr.classList.add('parts-search-hide'); return; }
+            var inputs = Array.prototype.slice.call(tr.querySelectorAll('input[data-field]'));
+            if (!inputs.length) return;
+            total++;
+            var hit = window._searchMatchAll(inputs.map(function (el) { return el.value || ''; }).join(' \u0001 '), toks);
+            tr.classList.add(hit ? 'parts-search-show' : 'parts-search-hide');   // 자동 숨김 빈 행도 걸리면 보인다
+            if (!hit) return;
+            shown++;
+            inputs.forEach(function (el) {
+                if (el.type !== 'hidden' && el.value && window._searchMatchAny(el.value, toks)) el.classList.add('search-hit');
+            });
+        });
+        if (countEl) countEl.textContent = shown + ' / ' + total + (_en() ? ' rows' : '행');
+    };
+
+    function boot() {
+        if (!ensureBar()) return;
+        var tbody = document.getElementById('mctable-body');
+        if (tbody && window.MutationObserver) {
+            var pending = false;
+            new MutationObserver(function () {
+                if (pending || !String(window._mcSearchTerm || '').trim()) return;
+                pending = true;
+                setTimeout(function () { pending = false; window._mcSearchApply(); }, 0);
+            }).observe(tbody, { childList: true });
+        }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+})();

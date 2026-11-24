@@ -207,4 +207,38 @@ const reset = window._driveModalSearchState.q === '';
   Object.defineProperty(broken, '_searchToks', { value: W._searchTokens('panel'), enumerable: false, writable: true, configurable: true });
   chk(W._bomVisibleRows(broken).map(r => r.IDNRK).join(',') === 'X1,X3', '[BOM] 계층 깨진 모드도 걸린 행만');
 }
+// ── M.C Table(js/22i _mcSearchApply) — 진짜 소스를 잘라 돌린다(DOM 만 스텁) ──
+{
+  const s22i = fs.readFileSync(path.join(__dirname, '..', 'js', '22i-brief-mc-common-2.js'), 'utf8');
+  const ma = s22i.indexOf('// 🔍 [2026-11-24 사용자 요청] M.C Table 검색');
+  if (ma < 0) { console.log('FAIL js/22i 소스 자르기'); process.exit(1); }
+  const cl = () => { const s = new Set(); return { add: (...c) => c.forEach(x => s.add(x)), remove: (...c) => c.forEach(x => s.delete(x)), has: c => s.has(c) }; };
+  const inp = (field, value, type) => ({ value, type: type || 'text', dataset: { field }, classList: cl() });
+  const mk = (cls, vals) => { const ins = vals.map(([f, v, t]) => inp(f, v, t)); return { className: cls, classList: cl(), inputs: ins,
+      querySelectorAll: sel => sel === 'input[data-field]' ? ins.filter(i => i.dataset.field) : ins }; };
+  const rows = [
+    mk('', [['type', '회로'], ['item', 'AD Board'], ['group', 'BD'], ['pn', '502572'], ['spec', 'RTD2556'], ['note', '']]),
+    mk('', [['type', '회로'], ['item', 'Harness'], ['group', 'LVDS'], ['pn', ''], ['spec', '40P 300mm'], ['note', '']]),
+    mk('mc-summary-row', [['x', 'SUBTOTAL']]),
+    mk('', [['type', '기구'], ['item', 'Back cover'], ['group', 'SECC'], ['pn', 'P-001', 'hidden'], ['spec', ''], ['note', '도금 확인']])];
+  const ids = { 'mctable-body': { rows }, 'mc-search-count': { textContent: '' } };
+  const W = { _currentLang: 'ko' }; new Function('window', helpers)(W);
+  const doc = { readyState: 'complete', getElementById: id => ids[id] || null, createElement: () => ({}) };
+  new Function('window', 'document', 'setTimeout', 'clearTimeout', s22i.slice(ma))(W, doc, f => f(), () => {});
+  const vis = q => { W._mcSearchTerm = q; W._mcSearchApply(); return rows.map((r, i) => r.classList.has('parts-search-hide') ? null : i).filter(i => i !== null).join(','); };
+  [['', '0,1,2,3', '빈 검색 = 전부(합계 행 포함)'],
+   ['회로 lvds', '1', 'TYPE(이어받은 값)+GROUP AND'],
+   ['rtd 2556', '0', '기호·공백 무시'],
+   ['p001', '3', '숨은 P/N 칸도 검색'],
+   ['도금', '3', 'Note 도 검색'],
+   ['subtotal', '', '합계 행은 검색 중 숨김']
+  ].forEach(([q, want, label]) => { const got = vis(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [M.C] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  vis('회로 lvds');
+  chk(rows[1].inputs[2].classList.has('search-hit') && !rows[1].inputs[1].classList.has('search-hit'), '[M.C] 걸린 칸만 강조');
+  chk(ids['mc-search-count'].textContent === '1 / 3행', '[M.C] 개수 ' + ids['mc-search-count'].textContent);
+  vis('p001');
+  chk(!rows[3].inputs[3].classList.has('search-hit'), '[M.C] 숨은 입력칸엔 강조 안 함');
+  vis('');
+  chk(!rows[1].classList.has('parts-search-show') && !rows[1].inputs[2].classList.has('search-hit'), '[M.C] 검색 지우면 원상복구');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);
