@@ -2182,7 +2182,7 @@
                         let wbsInnerHtml;
                         if (transModeWbs > 0 && taskTxt.trim() !== '') {
                             let safeTextWbs = encodeURIComponent(taskTxt).replace(/'/g, "%27").replace(/\\/g, "\\\\");
-                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print trans-btn-wbs" data-trans-mode="' + transModeWbs + '" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>' + wbsDisciplineBadge + wbsAssigneeBadge;
+                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print trans-btn-wbs" title="' + (window._currentLang === 'en' ? 'Translate / show original' : '번역 / 원문 보기') + '" data-trans-mode="' + transModeWbs + '" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>' + wbsDisciplineBadge + wbsAssigneeBadge;
                         } else {
                             wbsInnerHtml = prefix + escapeHtml(taskTxt) + wbsDisciplineBadge + wbsAssigneeBadge;
                         }
@@ -2214,7 +2214,7 @@
                             //    renderTable()이 다시 그려질 때마다 개별로 펼쳐뒀던 칸이 매번 접혀 보였다.
                             const _hadExpandedClass = / class="[^"]*\bdetail-td-expanded\b[^"]*"/.test(tdAttrs);
                             tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td detail-td-base detail-td-trans content-cell-trans${_hadExpandedClass ? ' detail-td-expanded' : ''}"`;
-                            tdHtml = '<span class="content-span content-span-block">' + displayHtml + '</span><span class="trans-btn-hide-print trans-btn-cell" onclick="toggleTranslation(this, null, ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
+                            tdHtml = '<span class="content-span content-span-block">' + displayHtml + '</span><span class="trans-btn-hide-print trans-btn-cell" title="' + (window._currentLang === 'en' ? 'Translate / show original' : '번역 / 원문 보기') + '" onclick="toggleTranslation(this, null, ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
