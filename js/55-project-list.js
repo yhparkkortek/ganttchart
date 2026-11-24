@@ -1136,17 +1136,19 @@
 
     // 열 그룹 칩 + 필터 드롭다운
     window.plRenderChips = function () {
+        // 💊 [2026-11-24 "표 위 줄 통일성"] 칩·드롭다운·↺ 는 앱 공용 한 벌(js/04a `_uiPillStyle`/`_uiSelectStyle`/`_uiBtnStyle`,
+        //    22px·둥근 모서리) — 일일보고·Project Review 표 위 줄과 같은 모양. 여기서 따로 적으면 한쪽만 바뀐다.
         var box = document.getElementById('pl-group-chips');
         if (box) {
-            var CP = _pal();
             box.innerHTML = window.PL_GROUPS.map(function (g) {
                 var on = !!_view.groups[g.k];
-                return '<span onclick="window.plToggleGroup(\'' + g.k + '\')" style="cursor:pointer; user-select:none; padding:3px 9px; margin-right:4px;'
-                     + ' border-radius:12px; font-size:11.5px; font-weight:bold; border:1px solid ' + (on ? CP.hoverBorder : '#dde3e5') + ';'
-                     + ' background:' + (on ? CP.bg : '#f6f8f9') + '; color:' + (on ? CP.darkText : '#9aa5a9') + ';">'
-                     + (on ? '☑ ' : '☐ ') + _esc(window._currentLang === 'en' ? g.en : g.ko) + '</span>';
+                return '<span onclick="window.plToggleGroup(\'' + g.k + '\')" style="' + window._uiPillStyle(on)
+                     + ' display:inline-block; user-select:none; margin-right:4px;">'
+                     + _esc(window._currentLang === 'en' ? g.en : g.ko) + '</span>';
             }).join('');
         }
+        var rs = document.getElementById('pl-btn-reset');
+        if (rs) rs.style.cssText = window._uiBtnStyle('danger') + ' margin:0;';
         var fb = document.getElementById('pl-filter-box');
         if (fb) {
             fb.innerHTML = window.PL_FILTER_KEYS.map(function (k) {
@@ -1157,7 +1159,7 @@
                     return '<option value="' + _esc(v) + '"' + ((_view.filters || {})[k] === v ? ' selected' : '') + '>' + _esc(v) + ' (' + vals[v] + ')</option>';
                 }).join('');
                 return '<select onchange="window.plSetFilter(\'' + k + '\', this.value)" title="' + _esc(window._currentLang === 'en' ? c.en : c.ko) + '"'
-                     + ' style="margin-right:4px; padding:4px 6px; border:1px solid #cfe3e5; border-radius:6px; font-size:11.5px; max-width:130px;">'
+                     + ' style="' + window._uiSelectStyle(!!(_view.filters || {})[k]) + ' margin-right:4px; max-width:130px;">'
                      + '<option value="">' + _esc(window._currentLang === 'en' ? c.en : c.ko) + ' ' + _t('전체', 'All') + '</option>' + opts + '</select>';
             }).join('');
         }
