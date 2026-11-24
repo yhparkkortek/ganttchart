@@ -754,14 +754,13 @@ window.mcRenderComparisonTable = function() {
         if (rowType) compCurrentType = rowType;
 
         if (isDisplayed) {
-            // 🦓 [2026-11-24] 다른 표와 같은 흰색 + 팔레트 제브라 — 색은 클래스로(styles.css / js/21 zebraBSelectors)
-            const zebraCls = dispIdx % 2 === 0 ? 'mc-zebra-a' : 'mc-zebra-b';
+            const zebra = dispIdx % 2 === 0 ? '#ffffff' : '#fafbfc';
             let showTypeText = (rowType !== lastShownCompType);
             if (showTypeText) lastShownCompType = rowType;
             const otherColor = isForcedRow ? 'transparent' : '#333';
             const priceColor = isForcedRow ? 'transparent' : '#777';
             const typeCellStyle = 'color:' + (showTypeText ? '#333' : 'transparent') + ';' + (showTypeText ? ' border-left:3px solid #2c5f8a;' : '');
-            tbody += '<tr class="' + zebraCls + '"><td style="text-align:center;">' + (dispIdx+1) + '</td>'
+            tbody += '<tr style="background-color:' + zebra + ';"><td style="text-align:center;">' + (dispIdx+1) + '</td>'
                 + '<td style="' + typeCellStyle + '">' + _mcEsc(rowType) + '</td>'
                 + '<td style="color:' + otherColor + ';">' + _mcEsc(r.item) + '</td>'
                 + '<td style="color:' + otherColor + ';">' + _mcEsc(r.group) + '</td>';
