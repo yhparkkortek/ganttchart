@@ -40,7 +40,7 @@
             { key: 'deptreceive', label: '부서 수신함' }
         ],
         listLimit: 40,                 // 문서함마다 최근 몇 건을 보나(최신순)
-        backfillDays: 30,              // 처음 켤 때 소급해서 가져올 기간 — 그보다 오래된 건 '본 것'으로만 표시
+        backfillDays: 90,              // 처음 켤 때 소급해서 가져올 기간 — 그보다 오래된 건 '본 것'으로만 표시 (2026-11-24 사용자 요청 30→90)
         maxAgeDays: 120,               // 그 뒤에도 이보다 오래된 문서가 새로 보이면(참조로 뒤늦게 추가 등) 가져오지 않는다
         maxPerRun: 25,                 // 한 번에 처리할 새 문서 상한
         firstDelaySec: 90,             // 앱을 연 뒤 첫 배경 스캔까지
@@ -339,7 +339,11 @@
                     res.looked++;
                     if (byId[d.id]) return;
                     byId[d.id] = 1;
-                    if (store.seen[d.id]) { store.seen[d.id].st = d.status || store.seen[d.id].st; return; }
+                    var sv = store.seen[d.id];
+                    // 소급 기간을 늘리면(30→90) 예전에 '오래됨'으로만 적어 둔 문서가 새 기간 안에 들 수 있다 — 그건 다시 본다.
+                    //  (안 그러면 기간을 늘려도 이미 한 번 돈 PC 에선 아무것도 안 바뀐다)
+                    if (sv && sv.res === 'old' && docTs(d) >= now - P.backfillDays * 86400000) sv = null;
+                    if (sv) { sv.st = d.status || sv.st; return; }
                     fresh.push({ d: d, box: box.label });
                 });
             }

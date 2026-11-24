@@ -163,6 +163,20 @@ window.__approvalIntakeTest = async function () {
         ok(CI('Sheet[133007 133008,133009]').join() === '133007,133008,133009' && CI('(502509, KTC490DPZ01)').length === 0 && CI('1330071').length === 0,
            '7-8 코드 읽기: 1xxxxx·3xxxxx 6자리만, 관리번호(50xxxx)·7자리 숫자는 아님');
 
+        // ── 8. 소급 기간을 늘리면(30→90) 예전에 '오래됨'으로 적은 문서를 다시 본다 ─────────
+        {
+            const bf = window.APPROVAL_INTAKE.backfillDays;
+            window.approvalIntakeReset();
+            boxes = { draft: [D('921', 'STELLAR32 두 달 전 기안', '기안서', '완료', 60)], approve: [], viewer: [], reception: [], deptreceive: [] };
+            window.APPROVAL_INTAKE.backfillDays = 30;
+            r = await window.approvalIntakeRun({ manual: false, toast: false });
+            ok(r.old === 1 && !card('921'), '8-1 소급 30일로 첫 실행 → 60일 전 문서는 오래됨', r);
+            window.APPROVAL_INTAKE.backfillDays = 90;
+            r = await window.approvalIntakeRun({ manual: false, toast: false });
+            ok(r.fresh === 1 && !!card('921'), '8-2 90일로 늘리면 그 문서를 다시 가져온다', r);
+            window.APPROVAL_INTAKE.backfillDays = bf;
+        }
+
         // ── 6. 끄기 ─────────────────────────────────────────────────────────
         localStorage.setItem(window.APPROVAL_INTAKE.offKey, '1');
         r = await window.approvalIntakeRun({ manual: true, toast: false });
