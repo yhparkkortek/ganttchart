@@ -252,8 +252,22 @@ window.TaskInbox = {
                         const tombSet = this._mergeTombs((rd && rd.deleted) || []);
                         const cur = this.load();
                         const kept = cur.filter(function(it) { return !(it && tombSet[it.uid]); });
-                        if (kept.length !== cur.length) {
-                            console.info('[업무 보관함] 다른 곳에서 지운 카드 ' + (cur.length - kept.length) + '장을 올리기 전에 뺐습니다');
+                        // 🔁 [2026-11-24 실측 — 같은 계정의 다른 앱이 옛 보관함(816KB)을 통째로 올려, 채운 결재 본문 18장이 사라졌다 돌아왔다]
+                        //    삭제만 막아서는 부족하다 — **다른 곳에서 처리된 카드가 여기선 '대기'** 면 그대로 올리는 순간 대기로 되돌아가고,
+                        //    다음 재판정이 같은 업무를 또 배치한다(중복 행). 올리기 전에 원격 카드와 합친다(더하기만):
+                        //    ① 원격이 '대기'가 아닌데 여기는 '대기' → 원격 상태·이력을 따른다(처리는 되돌리지 않는다)
+                        //    ② 원격에만 결재 본문(bodyFetchedAt)이 있으면 그 mailRaw 를 받는다.
+                        const remoteBy = {}; ((rd && rd.inbox) || []).forEach(function(x) { if (x && x.uid) remoteBy[x.uid] = x; });
+                        let adopted = 0;
+                        kept.forEach(function(it) {
+                            const r = it && remoteBy[it.uid];
+                            if (!r) return;
+                            if (it.status === '대기' && r.status && r.status !== '대기') { it.status = r.status; it.history = r.history || it.history; adopted++; }
+                            if (r.mailRaw && r.mailRaw.bodyFetchedAt && !(it.mailRaw && it.mailRaw.bodyFetchedAt)) { it.mailRaw = r.mailRaw; adopted++; }
+                        });
+                        if (kept.length !== cur.length || adopted) {
+                            if (kept.length !== cur.length) console.info('[업무 보관함] 다른 곳에서 지운 카드 ' + (cur.length - kept.length) + '장을 올리기 전에 뺐습니다');
+                            if (adopted) console.info('[업무 보관함] 다른 곳에서 처리·보강된 카드 ' + adopted + '건을 올리기 전에 받았습니다');
                             this.save(kept, true);
                             const ov = document.getElementById('task-inbox-overlay');
                             if (window.renderTaskInbox && ov && ov.style.display === 'flex') window.renderTaskInbox();
