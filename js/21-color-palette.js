@@ -381,8 +381,9 @@ window._cpApplyLive = function(hex, skipSave) {
     //    안 바뀐다. 구분 열은 테마색(headerTint/darkText), '미작성' 은 캘린더 알람 칩과 같은 규칙으로
     //    **보색**(compGen) — 어떤 테마를 골라도 "지금 테마와 대비되는" 색이 자동으로 나온다.
     //    기본값(팔레트 미적용)은 styles.css 에 같은 선택자로 있다.
-    css += '.daily-cat-cell { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
-        + '.daily-none-row > td { background: ' + compGen.bg + ' !important; }\n'
+    //    🦓 [2026-11-24] 줄 배경은 다른 표와 같이 흰색/zebraB(사람 단위) — 보색 배경은 없앴다.
+    css += '.daily-cat-cell { color: ' + gen.darkText + ' !important; }\n'
+        + '#daily-report-page tr.daily-zebra-b > td { background: ' + gen.zebraB + ' !important; }\n'
         + '.daily-none-txt { color: ' + compGen.darkText + ' !important; }\n';
 
     // 📄 [2026-11-09] Document 페이지(js/67)의 문서 서식 — **클래스 기반**이라

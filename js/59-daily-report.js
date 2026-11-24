@@ -3425,8 +3425,10 @@
         // 🎨 [2026-11-05 요청] 구분 열은 **모든 줄에서 같은 배경**, 그리고 **회색이 아니라 팔레트 테마색**.
         //    ⚠️ 색을 여기 인라인으로 박으면 팔레트를 바꿔도 이 표만 안 바뀐다(표를 다시 그려야 하니까).
         //    → 클래스만 달고 색은 styles.css(기본 청록) + js/21 `_cpApplyLive`(라이브)가 정한다.
-        var rows = people.map(function (p) {
+        var rows = people.map(function (p, pi) {
             var d = byKey[String(p.key || '').toLowerCase()];
+            // 🦓 [2026-11-24] 다른 표와 같은 흰색/제브라 — 사람 단위로 번갈아(업무 여러 줄이 한 색)
+            var zc = (pi % 2) ? ' class="daily-zebra-b"' : '';
             var dbl = ' ondblclick="window._dailyRowDbl(\'' + esc(String(p.key || '')) + '\')"'
                     + ' title="' + esc(T('더블클릭하면 내 보고 쓰기가 열립니다', 'Double-click to open your report')) + '"';
             var nameTd = function (span) {
@@ -3435,7 +3437,7 @@
             };
             if (!d) {
                 // 🎨 '미작성' 은 테마색이 아니라 그 **보색** — 한눈에 테마와 갈려 보여야 한다(js/21).
-                return '<tr class="daily-none-row" style="cursor:pointer;"' + dbl + '>' + nameTd(1) +
+                return '<tr' + (zc ? ' class="daily-none-row daily-zebra-b"' : ' class="daily-none-row"') + ' style="cursor:pointer;"' + dbl + '>' + nameTd(1) +
                        '<td style="' + td + '" colspan="' + (DAY_COLS.length - 1) + '">' +
                        '<span class="daily-none-txt" style="font-weight:bold;">' + esc(T('미작성', 'Not written')) + '</span></td></tr>';
             }
@@ -3454,7 +3456,7 @@
 
             var span = items.length + (hasEtc ? 1 : 0);
             if (!span) {   // 일 종류만 적고 넘어간 날(휴가 등)
-                return '<tr style="cursor:pointer;"' + dbl + '>' + nameTd(1) +
+                return '<tr' + zc + ' style="cursor:pointer;"' + dbl + '>' + nameTd(1) +
                        '<td style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' +
                        '<td style="' + td + '" colspan="' + (DAY_COLS.length - 2) + '">-</td></tr>';
             }
@@ -3463,7 +3465,7 @@
             items.forEach(function (it, n) {
                 var pj = String((it && it.project) || '').replace(/\.json$/i, '');
                 var fs = filesOf(d, it.name);
-                out.push('<tr style="cursor:pointer;"' + dbl + '>' +
+                out.push('<tr' + zc + ' style="cursor:pointer;"' + dbl + '>' +
                     (n === 0 ? nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>' : '') +
                     '<td class="daily-cat-cell" style="' + td + '">' + esc(it.cat || '-') + '</td>' +
                     '<td style="' + td + '"><b>' + esc(it.name) + '</b>' +
@@ -3485,7 +3487,7 @@
                 '</tr>');
             });
             if (hasEtc) {
-                out.push('<tr style="cursor:pointer;"' + dbl + '>' +
+                out.push('<tr' + zc + ' style="cursor:pointer;"' + dbl + '>' +
                     (items.length ? '' : nameTd(span) + '<td rowspan="' + span + '" style="' + td + ' white-space:nowrap;">' + esc(typeTxt) + '</td>') +
                     '<td class="daily-cat-cell" style="' + td + '">-</td>' +
                     '<td style="' + td + ' color:#888;">' + esc(T('(기타)', '(other)')) + '</td>' +

@@ -2635,8 +2635,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       `_cpApplyLive` 가 같은 선택자를 !important 로 다시 선언해 이긴다 — 두 곳 중 하나만
       고치면 "기본 테마에서만 색이 안 바뀐다" 가 된다(클래스 규칙이라 인라인 hex 매칭으로는
       절대 안 잡힌다). 되돌리기(`_cpRevertLive`)는 라이브 <style> 을 비우므로 여기로 돌아온다. */
-.daily-cat-cell { text-align: center; white-space: nowrap; background: #e7f7f9; color: #007280; }
-.daily-none-row > td { background: #f9e9e7; }
+/* 🦓 [2026-11-24 사용자 요청 "다른 페이지와 통일 — 흰색 + 팔레트 제브라"] 줄 배경은 다른 표처럼
+   흰색 / zebraB 를 **사람 단위로** 번갈아 칠한다(업무가 여러 줄이어도 한 사람은 한 색).
+   '미작성' 줄의 보색 배경·구분 열의 테마색 배경은 없앴다 — 보색은 '미작성' **글자색**에만 남는다. */
+.daily-cat-cell { text-align: center; white-space: nowrap; color: #007280; }
+#daily-report-page tbody > tr > td { background: #fff; }   /* 바탕(연하늘)이 비쳐 보이지 않게 — 다른 표처럼 흰색 */
+#daily-report-page tr.daily-zebra-b > td { background: #e8f2f3; }
 .daily-none-txt { color: #800d00; }
 
 /* ══════════════════════════════════════════════════════════════════════════
