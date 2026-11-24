@@ -2641,7 +2641,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 .daily-cat-cell { text-align: center; white-space: nowrap; color: #007280; }
 #daily-report-page tbody > tr > td { background: #fff; }   /* 바탕(연하늘)이 비쳐 보이지 않게 — 다른 표처럼 흰색 */
 #daily-report-page tr.daily-zebra-b > td { background: #e8f2f3; }
-.daily-none-txt { color: #800d00; }
+.daily-none-txt { color: #00707d; }   /* 2026-11-24: 보색 → 테마색 */
 
 /* ══════════════════════════════════════════════════════════════════════════
    📄 Document 페이지 (js/67) — 문서 모양 서식

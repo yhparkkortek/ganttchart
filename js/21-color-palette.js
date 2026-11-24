@@ -384,7 +384,7 @@ window._cpApplyLive = function(hex, skipSave) {
     //    🦓 [2026-11-24] 줄 배경은 다른 표와 같이 흰색/zebraB(사람 단위) — 보색 배경은 없앴다.
     css += '.daily-cat-cell { color: ' + gen.darkText + ' !important; }\n'
         + '#daily-report-page tr.daily-zebra-b > td { background: ' + gen.zebraB + ' !important; }\n'
-        + '.daily-none-txt { color: ' + compGen.darkText + ' !important; }\n';
+        + '.daily-none-txt { color: ' + gen.darkText + ' !important; }\n';
 
     // 📄 [2026-11-09] Document 페이지(js/67)의 문서 서식 — **클래스 기반**이라
     //    `[style*="#hex"]` 인라인 매칭으로는 절대 안 잡힌다. 기본 색은 styles.css 에 있고
