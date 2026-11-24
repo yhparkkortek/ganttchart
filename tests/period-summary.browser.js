@@ -131,7 +131,7 @@
             window._psSetRole(0, 'FW');
             ok('고르면 근거 간트 행의 담당 구분이 바뀐다', discCalls.length >= 1 && discCalls[0][0] === 1 && window.globalData[1]._담당구분 === 'FW', discCalls);
             // ⚠️ textContent 로 보면 고르기 상자의 **모든 선택지** 글자가 잡혀 늘 통과한다 — 고른 값을 본다.
-            var sel2 = document.querySelector('#ps-ai-tr0-who select') || document.querySelector('#ps-row-0 td:nth-child(3) select');
+            var sel2 = document.querySelector('#ps-ai-tr0-who select') || document.querySelector('#ps-row-0 select');
             // 📧 [2026-11-24] 1행은 상세내용에 `[고객→박용훈]` 이 있어 담당자가 상세내용에서 온다 — 고른 칸은 "📧 FW · 박용훈".
             ok('표가 바뀐 담당 구분을 바로 보여 준다', !!sel2 && /FW/.test(sel2.selectedOptions[0].textContent), sel2 && sel2.selectedOptions[0].textContent);
             ok('📧 상세내용의 받는이가 담당자로 보인다(역할 담당자가 아니라)', !!sel2 && /📧/.test(sel2.selectedOptions[0].textContent) && /박용훈/.test(sel2.selectedOptions[0].textContent), sel2 && sel2.selectedOptions[0].textContent);
@@ -143,12 +143,28 @@
                 window._psSetRole(0, '__manual__');
                 ok('직접 입력은 근거 간트 행의 담당자로 저장된다', asgCalls.length === 1 && asgCalls[0][0] === 1 && window.globalData[1]._담당자 === '홍길동', asgCalls);
                 ok('사실의 업무 담당자가 직접 지정 이름이 된다', window._psCollectFacts('day').facts.some(function (f) { return f.assignee === '홍길동' && f.manual; }));
-                var sel3 = document.querySelector('#ps-row-0 td:nth-child(3) select');
+                var sel3 = document.querySelector('#ps-row-0 select');
                 ok('표에 👤 이름으로 보인다', !!sel3 && /👤 홍길동/.test(sel3.selectedOptions[0].textContent), sel3 && sel3.selectedOptions[0].textContent);
                 window._psSetRole(0, '__clear__');
                 ok('해제하면 역할로 돌아간다', !window.globalData[1]._담당자 && !window._psCollectFacts('day').facts.some(function (f) { return f.manual; }));
             } finally { window.setRowAssignee = realSetAsg; window.prompt = realPrompt; delete window.globalData[1]._담당자; }
         } finally { window.setWbsDiscipline = realSetDisc; window.globalData[1]._담당구분 = 'HW'; }
+        // 📌 [2026-11-24] 표·사실 카드에서 핀셋(알람) — 근거 간트 행의 `_알림` 을 켜고 끈다. 저장은 경계에서 막혀 있다.
+        {
+            var pinBtn = document.querySelector('#ps-row-0 .ps-pin-btn');
+            ok('열린 프로젝트 행엔 📌 버튼이 있다', !!pinBtn);
+            var was = !!window.globalData[1]._알림;
+            window._psPinRow(0);
+            ok('📌 누르면 근거 간트 행의 알람이 바뀐다', !!window.globalData[1]._알림 === !was);
+            var pinBtn2 = document.querySelector('#ps-row-0 .ps-pin-btn');
+            ok('표가 바뀐 상태를 바로 보여 준다', !!pinBtn2 && pinBtn2.classList.contains('on') === !was, pinBtn2 && pinBtn2.className);
+            var cardBtn = document.querySelector('[id^="ps-fact-"] .ps-pin-btn');
+            ok('사실 카드에도 📌 버튼이 있다', !!cardBtn);
+            if (cardBtn) { var before = window.globalData.slice(1).filter(function (r) { return r && r._알림; }).length; cardBtn.click();
+                ok('카드 📌 도 간트 알람을 바꾼다', window.globalData.slice(1).filter(function (r) { return r && r._알림; }).length !== before); }
+            window.globalData.forEach(function (r) { if (r && typeof r === 'object') delete r._알림; });
+            window._renderAiProjectSummaryBody();
+        }
         // 🔁 [2026-11-23 "엑셀에 근거가 2번"] 같은 행의 두 사본(열린 쪽 #G7 · 훑은 쪽 #G200007)을 근거로 집어도 하나로
         var dup = window._psRowsFromAi({ items: [{ 분류: '한 일', 내용: 'x', 근거: ['#G7', '#G200007', '#G7'] }] },
             [{ idx: 7, project: 'P1', date: '2026-11-20', task: 't' }, { idx: 200007, rowIdx: 7, project: 'P1', date: '2026-11-20', task: 't' }]);

@@ -1017,7 +1017,7 @@
                 byDate[d].forEach(function (f) {
                     // 🎯 [2026-11-23] 표의 근거를 누르면 이 카드로 온다(id = 프로젝트#행) — 카드를 누르면 표의 그 행으로 돌아간다.
                     h.push('<div id="ps-fact-' + factKey(f) + '" onclick="window._psFactBack(event)" style="font-size:12px; padding:6px 8px; margin-bottom:4px; background:#fff; border:1px solid #eef1f4; border-radius:6px; transition:box-shadow .3s, background .3s;">' +
-                           '<div>' + (f.local ? link(f.idx) : '<span style="color:#bbb;">#G' + f.idx + '</span>') + ' <b>' + esc(f.task) + '</b>' + (f.cat ? ' <span style="font-size:10.5px; padding:1px 6px; border-radius:8px; background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + (f.assignee ? ' · ' + esc(f.assignee) : '') + '</span>' : (f.assignee ? ' <span style="font-size:10.5px; color:#888;">' + esc(f.assignee) + '</span>' : '')) +
+                           '<div>' + pinBtnHtml((function () { var ri = factGanttRow(f); return ri >= 0 ? [ri] : []; })(), 'window._psPinFact(\'' + factKey(f) + '\')') + ' ' + (f.local ? link(f.idx) : '<span style="color:#bbb;">#G' + f.idx + '</span>') + ' <b>' + esc(f.task) + '</b>' + (f.cat ? ' <span style="font-size:10.5px; padding:1px 6px; border-radius:8px; background:#eef3f7; color:#2c5f8a;">' + esc(f.cat) + (f.assignee ? ' · ' + esc(f.assignee) : '') + '</span>' : (f.assignee ? ' <span style="font-size:10.5px; color:#888;">' + esc(f.assignee) + '</span>' : '')) +
                            ((f.project && f.project !== String(window.currentDriveFileName || '').replace(/\.json$/i, '')) ? ' <span style="font-size:10.5px; color:#888;">(' + esc(f.project) + ')</span>' : '') +
                            ((f.sender || f.receiver) ? ' <span style="color:#888;">' + esc(f.sender || '?') + ' → ' + esc(f.receiver || '?') + '</span>' : '') +
                            // 📧 원문 — 일일보고와 같은 공용 뷰어(showMailRawModal). 메일 원문이 남아 있는 행만.
@@ -1189,6 +1189,60 @@
         if (window.showToast) window.showToast(msg, 'info');
         if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
     };
+    // 📌 [2026-11-24 사용자 요청 "프로젝트 리뷰에서 검색된 업무를 핀셋 처리 가능하도록"] — 간트 No. 칸의 핀셋 막대와
+    //    **같은 데이터**(`row._알림`, js/04e wrToggleAlarm)를 켜고 끈다. 담당자 편집과 같은 안전장치: 열린 프로젝트의 행만
+    //    (다른 프로젝트 파일을 고치면 그걸 열어 둔 앱이 옛 값으로 되돌린다 — 2026-10-29).
+    function factGanttRow(f) {
+        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
+        var open = _psLast && _psLast.openName;
+        if (!f || !gd || !(f.local || (open && f.project === open))) return -1;
+        var ri = f.rowIdx != null ? f.rowIdx : f.idx;
+        if (gd[ri] && (!f.task || taskName(gd[ri]) === f.task)) return ri;
+        var hits = [];
+        for (var i = 1; f.task && i < gd.length; i++) if (gd[i] && gd[i]._level !== undefined && taskName(gd[i]) === f.task) hits.push(i);
+        return hits.length === 1 ? hits[0] : -1;
+    }
+    /** rows: 간트 행 번호들 → 칸 하나(켜짐/꺼짐/일부). onclick 은 미리 만든 호출문. */
+    function pinBtnHtml(rows, onclick, closedWhy) {
+        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
+        var base = 'display:inline-flex; align-items:center; justify-content:center; width:22px; height:20px; padding:0; border-radius:5px; font-size:12px; line-height:1; box-sizing:border-box;';
+        if (!rows.length) {
+            return '<span title="' + esc(closedWhy || T('이 프로젝트를 열면 핀셋(알람)을 켤 수 있습니다', 'Open this project to pin')) + '" style="' + base + ' border:1px solid #eee; color:#ccc; opacity:.45; filter:grayscale(1); cursor:not-allowed;">📌</span>';
+        }
+        var on = rows.filter(function (ri) { return gd[ri] && gd[ri]._알림; }).length;
+        var all = on === rows.length, some = on > 0 && !all;
+        var tip = all ? T('📌 알람 켜짐 — 누르면 끄기', 'Pinned — click to unpin')
+                : some ? T('📌 일부(' + on + '/' + rows.length + ') 켜짐 — 누르면 전부 켜기', 'Partly pinned — click to pin all')
+                : T('🔕 알람 꺼짐 — 누르면 켜기(간트 핀셋과 같음)', 'Not pinned — click to pin');
+        return '<button class="ps-pin-btn' + (all ? ' on' : '') + '" onclick="event.stopPropagation(); ' + onclick + '" title="' + esc(tip) + '" style="' + base + ' cursor:pointer; border:1px solid ' + (all ? '#f08c00' : some ? '#ffd8a8' : '#dde3ea') + '; background:' + (all ? '#fff4e6' : '#fff') + ';' + (all || some ? '' : ' opacity:.4; filter:grayscale(1);') + '">📌</button>';
+    }
+    function applyPins(rows, lost) {
+        var gd = (typeof globalData !== 'undefined' && globalData) ? globalData : window.globalData;
+        if (!rows.length) {
+            if (window.showToast) window.showToast(T('⚠️ 간트에서 이 업무를 찾지 못해 핀셋을 바꾸지 않았습니다', '⚠️ Task not found in the Gantt — nothing pinned'), 'warning');
+            return;
+        }
+        var newState = !rows.every(function (ri) { return gd[ri] && gd[ri]._알림; });   // 하나라도 꺼져 있으면 전부 켠다
+        rows.forEach(function (ri) { if (gd[ri]) { gd[ri]._알림 = newState; if (window._patchPinRowDom) window._patchPinRowDom(ri); } });
+        if (typeof logChange === 'function') logChange(rows[0], -1, '알림 설정', (newState ? '알림 켜짐' : '알림 꺼짐') + (rows.length > 1 ? ' (' + rows.length + '건)' : '') + ' — Project Review');
+        if (typeof applyFilters === 'function') { try { applyFilters(); } catch (e) {} }
+        var ap = document.getElementById('tab-alarm');
+        if (ap && ap.classList.contains('active') && window.renderAlarmTab) window.renderAlarmTab();
+        if (lost && window.showToast) window.showToast(T('⚠️ 근거 행 ' + lost + '개는 간트에서 같은 업무를 찾지 못해 바꾸지 않았습니다', '⚠️ ' + lost + ' source row(s) not found — skipped'), 'warning');
+        if (window.showToast) window.showToast(T((newState ? '📌 핀셋(알람)을 켰습니다' : '🔕 핀셋(알람)을 껐습니다') + ' — 간트 ' + rows.length + '행', (newState ? 'Pinned ' : 'Unpinned ') + rows.length + ' row(s)'), 'info');
+        if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+    }
+    window._psPinRow = function (ai) {
+        var r = _psLast && _psLast.shown && _psLast.shown.rows && _psLast.shown.rows[ai];
+        if (!r) return;
+        var res = resolveGanttRows(r);
+        applyPins(res.rows, res.lost);
+    };
+    window._psPinFact = function (key) {
+        var f = _psLast && _psLast.factByKey && _psLast.factByKey[key];
+        var ri = factGanttRow(f);
+        applyPins(ri >= 0 ? [ri] : [], 0);
+    };
     /** 🎯 근거 = 아래 사실 카드로 가는 단추(간트 이동은 카드의 #G 링크가 한다). */
     function refHtml(x, showProj, rowI) {
         var title = esc((x.p ? x.p + ' · ' : '') + (x.task || '') + ' — ' + T('눌러서 상세 보기', 'click for details'));
@@ -1210,6 +1264,7 @@
             var c = catOf(r.cat);
             var ai = all.indexOf(r);   // 돌아올 자리 — 정렬·필터가 바뀌어도 같은 행을 가리키게 원본 순번
             return '<tr id="ps-row-' + ai + '" style="transition:background .4s;">' +
+                '<td style="' + td + ' text-align:center; padding:4px 3px;">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '</td>' +
                 '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
                 '<td style="' + td + '">' + whoCellHtml(r, ai) + '</td>' +
@@ -1217,8 +1272,9 @@
                 '<td style="' + td + ' color:#222;">' + esc(r.text) + '</td>' +
                 '<td style="' + td + ' font-size:11px;">' + uniqRefs(r.refs).map(function (x) { return refHtml(x, r.common, ai); }).join(r.common ? '<br>' : ' ') + '</td></tr>';
         }).join('');
-        if (!rows.length) body = '<tr><td colspan="6" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
+        if (!rows.length) body = '<tr><td colspan="7" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         return '<table style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid #cdd9e6; border-top:1px solid #cdd9e6; table-layout:auto; background:#fff;"><thead><tr>' +
+            '<th style="position:sticky; top:0; z-index:20; width:28px; padding:5px 3px; background:#e7eff8; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:center;" title="' + esc(T('핀셋(알람) — 간트 No. 칸의 막대와 같다. 열린 프로젝트의 업무만', 'Pin (alarm) — same as the Gantt pin bar; open project only')) + '">📌</th>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
             '<th style="position:sticky; top:0; z-index:20; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
