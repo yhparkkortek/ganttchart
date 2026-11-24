@@ -273,7 +273,7 @@ window.renderPanelCompareTab = async function() {
 
     let html = '';
     window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
-        html += `<tr class="pc-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[${escapeHtml(sec.section)}]</td></tr>`;
+        html += `<tr class="pc-section-row"><td colspan="${totalCols}" style="background:#e0f5f7; color:#00707d; font-weight:bold; padding:6px 8px; border:1px solid #e3e6ea;">[${escapeHtml(sec.section)}]</td></tr>`;
         sec.fields.forEach(function(f) {
             const label = f[0], priority = f[1];
             const rowStyle = priority === 2 ? ('display:' + (window._pcExpanded ? 'table-row' : 'none') + ';') : '';

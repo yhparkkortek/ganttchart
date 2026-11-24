@@ -408,6 +408,8 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#doc-page-body .doc-hist-now-txt { color: ' + compGen.darkText + ' !important; }\n';
 
     css += '.trans-btn-hide-print { color: ' + gen.darkText + ' !important; }\n';
+    // 🎨 [2026-11-24] 페이지 구역 제목(Summary 등 .concept-section h3) — 기본값은 styles.css
+    css += '.concept-section h3 { color: ' + gen.darkText + ' !important; }\n';
     document.documentElement.style.setProperty('--trans-text', gen.darkText);
     // 🎨 [2026-11-24] 모달 헤더(js/19 `_modalHdrRegister`) — 페이지 헤더와 같은 세 색. 기본값은 styles.css :root.
     document.documentElement.style.setProperty('--modal-hdr-bg', gen.bg);

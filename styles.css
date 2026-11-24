@@ -1132,7 +1132,8 @@
 /* 💡 [2026-09-02] .concept-section 기본 margin-bottom(16px)이 flex:1로 채워야 할 영역을 잡아먹어
    하단에 흰 공간이 생기는 문제 수정 — 바깥 박스(summary-outer-box)만 margin-bottom 제거 */
 .concept-section.summary-outer-box { margin-bottom: 0 !important; }
-.concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
+/* 🎨 [2026-11-24 "소제목 통일"] 구역 제목은 테마 글자색(darkText) — 회색 #444 는 테마를 안 따라갔다. 라이브는 js/21 */
+.concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#00707d; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
 .concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
 .mem3-cols { column-count: 2; column-gap: 16px; }

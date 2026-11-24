@@ -151,7 +151,7 @@ window.renderElecCompareTab = async function(type) {
 
     let html = '';
     cfg.schema.forEach(function(sec) {
-        html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[${escapeHtml(sec.section)}]</td></tr>`;
+        html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#e0f5f7; color:#00707d; font-weight:bold; padding:6px 8px; border:1px solid #e3e6ea;">[${escapeHtml(sec.section)}]</td></tr>`;
         sec.fields.forEach(function(f) {
             const label = f[0], priority = f[1];
             const rowStyle = priority === 2 ? ('display:' + (window._epExpanded[type] ? 'table-row' : 'none') + ';') : '';
@@ -187,7 +187,7 @@ window.renderElecCompareTab = async function(type) {
     // 💡 [2026-08-26 신규] 사진(최대 2장) — 도표 맨 하단에 한 행으로. 한 번에 1장만 보여주고
     //    클릭하면 바로 크게 보기(라이트박스) — 여러 장이면 라이트박스 자체의 ‹/›·방향키로 넘긴다
     //    (2026-11-17, 더블클릭 요구 제거 — 한 번 클릭이면 충분).
-    html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[Picture]</td></tr>`;
+    html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#e0f5f7; color:#00707d; font-weight:bold; padding:6px 8px; border:1px solid #e3e6ea;">[Picture]</td></tr>`;
     html += `<tr><td style="border:1px solid #e9ecef; padding:6px 8px; font-size:12.5px; color:#555; white-space:nowrap;">Picture</td>`;
     for (let i = 0; i < slotCount; i++) {
         const entry = entries[i];

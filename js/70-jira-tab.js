@@ -159,6 +159,8 @@
 
     // ── 🔽 헤더 정렬·필터 (2026-11-12 사용자 요청) ──────────────────────────
     //  열 머리글을 누르면 그 열 기준으로 정렬(오름/내림 토글), 🔽 아이콘을 누르면 필터
+    //  🎨 [2026-11-24 "아이콘 통일"] 필터 표시는 🔽 가 아니라 ▾ — 🔽 는 앱 전체에서 '펼치기'이고, 이모지는 color 가
+    //     안 먹어서 '필터 걸림(테마색)/안 걸림(회색)' 구분이 화면에 안 보였다. ▾ 는 글자라 색이 먹는다.
     //  팝업(체크박스 또는 포함검색)이 뜬다 — 전부 **클라이언트 사이드**: 지금 merge된
     //  `_lastRows`(원본, 필터 전)를 걸러서 다시 그릴 뿐 서버에 다시 묻지 않는다.
     // 🧮 [2026-11-24] 정렬·필터 상태를 **표마다** 따로 든다 — 이 탭의 연결 이슈 표(main)와
@@ -397,7 +399,7 @@
             + '<span onclick="window._jiraSetSort(' + qa(colKey, tbl) + ')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
             + esc(col.label) + ' <span style="font-size:10px; color:#00707d;">' + sortArrow(colKey, tbl) + '</span></span>'
             + (col.noFilter ? '' : (' <span data-jira-filter-btn onclick="window._jiraToggleColFilter(this, ' + qa(colKey, tbl) + ')"'
-                + ' style="cursor:pointer; font-size:11px; color:' + (filterActive ? '#00707d' : '#bbb') + ';" title="' + esc(T('필터', 'Filter')) + '">🔽</span>'))
+                + ' style="cursor:pointer; font-size:13px; padding:0 3px; color:' + (filterActive ? '#00707d' : '#bbb') + ';" title="' + esc(T('필터', 'Filter')) + '">▾</span>'))
             + (col.action && (tbl || 'main') === 'main' ? (' <span data-jira-col-action onclick="event.stopPropagation();' + col.action.onclick + '"'
                 + ' style="cursor:pointer; font-size:11px;" title="' + esc(col.action.title()) + '">' + col.action.icon() + '</span>') : '')
             + '</th>';
@@ -408,7 +410,7 @@
         var n = Object.keys(tblState(tbl).filters).length;
         if (!n) return '';
         return '<div style="padding:5px 8px; font-size:11px; color:#00707d; background:#eef6f7; border-top:1px solid #cfe3e5; display:flex; align-items:center; gap:8px;">'
-            + '🔽 ' + esc(T(n + '개 열에 필터 적용 중', n + ' column filter(s) active'))
+            + '▾ ' + esc(T(n + '개 열에 필터 적용 중', n + ' column filter(s) active'))
             + '<button onclick="window._jiraClearAllFilters(\'' + (tbl || 'main') + '\')" style="border:none; background:none; color:#a3281c; cursor:pointer; font-size:11px; text-decoration:underline;">'
             + T('전체 해제', 'Clear all') + '</button></div>';
     }
