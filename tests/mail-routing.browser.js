@@ -185,6 +185,22 @@ window.__mailRoutingTestBody = async function () {
     ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'ST2', '4-26 숫자 뗀 모델명(Stellar → STELLAR32)', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
     j = J(M('LNW Obsidian 패널 문의', ''), candsO.concat([C('O27', 'LNW_OBSIDIAN27_DB_27.0.json', 'OBSIDIAN27', 'LNW>OBSIDIAN27_DB', '27', ['AGARAF'])]), null);
     ok(!(j.decision === 'auto' && j.target && j.target.drive_file_id === 'O27'), '4-27 형제가 같이 가진 글자(obsidian)는 한 곳으로 안 보낸다', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id });
+    // [2026-11-24] 🎓 사람 배치에서 배운 단서 — 사람이 'STELLA32'(오타) 제목을 한 프로젝트에 배치하면 다음엔 그 낱말로 찾는다.
+    //  가짜 fid 를 쓴다(이 기록이 실제 장부에 올라가도 진짜 후보와 안 이어진다).
+    {
+        const LF = 'LRN' + RUN, candsL = cands.concat([C(LF, 'LNW_LRN_' + RUN + '.json', 'LRNTEST', 'LNW>LRNTEST', '', ['QZQ' + RUN])]);
+        const subjT = 'Artwork 제작 발주 의뢰서(LNW>STELLA' + RUN.slice(-2).replace(/\D/g, '7') + '9 TPR)';
+        const tok = ('stella' + RUN.slice(-2).replace(/\D/g, '7') + '9');
+        j = J(M('LNW>' + tok.toUpperCase() + ' 외관 검토', ''), candsL, null);
+        ok(!(j.decision === 'auto' && j.target && j.target.drive_file_id === LF), '4-28a 배우기 전엔 그 낱말로 못 찾는다', { d: j.decision, t: j.target && j.target.drive_file_id });
+        window._mailRoutePlaced(LF, 'x.json', { '업무명': subjT }, { subject: subjT, key: 'klrn' + RUN }, 'auto');
+        j = J(M('LNW>' + tok.toUpperCase() + ' 외관 검토', ''), candsL, null);
+        ok(!(j.decision === 'auto' && j.target && j.target.drive_file_id === LF), '4-28b 자동 배치는 가르치지 않는다', { d: j.decision, t: j.target && j.target.drive_file_id });
+        window._mailRoutePlaced(LF, 'x.json', { '업무명': subjT }, { subject: subjT, key: 'klrn2' + RUN }, 'human');
+        j = J(M('LNW>' + tok.toUpperCase() + ' 외관 검토', ''), candsL, null);
+        ok(j.decision === 'auto' && j.target && j.target.drive_file_id === LF && /배운 단서/.test(j.reason || ''), '4-28c 사람이 한 번 배치하면 코드형 낱말(' + tok + ')로 찾는다', { d: j.decision, t: j.target && j.target.drive_file_id, r: j.reason, L: window.mailRouteLearnedAliases && window.mailRouteLearnedAliases()[tok] });
+        ok(!(window.mailRouteLearnedAliases() || {}).artwork, '4-28d 글자만인 낱말(artwork)은 한 번으론 안 배운다');
+    }
     j = J(M('RE: New Traceability Requirements for Molded Plastic Components', 'LNW supplier reminder'), cands, null);
     ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-15 고객 전반 요구사항(Requirements) → LNW 프로젝트 전부', { d: j.decision, basis: j.basis, ids: allOf(j) });
 

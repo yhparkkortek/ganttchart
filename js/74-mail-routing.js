@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-24d';
+    var RULE_V = '2026-11-24e';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -467,11 +467,67 @@
     //  열쇠는 배열 참조 + 길이·id 서명 + 가족 설정 버전(설정을 바꾸면 다시 만든다).
     var _cfgVer = 0;
     var _famCache = (typeof WeakMap === 'function') ? new WeakMap() : null;
+    /** 🎓 [2026-11-24 사용자 결정 "사람 배치에서 단서를 배우기"] 사람이 직접 배치한 메일·결재의 **제목 낱말** 중
+     *  한 프로젝트로만 간 것을 그 프로젝트의 식별자로 쓴다 — 'Artwork & PCB 제작 발주 의뢰서(LNW>STELLA32 …)' 를 사람이
+     *  STELLAR32 에 배치하면 다음엔 'stella32' 로 찾는다(오타·별칭·모델명에 없는 이름). 사람의 배치가 곧 승인이다.
+     *  안전장치: ① 사람 배치(how='human')·교정의 옮긴 곳(toFid)만 가르침 — 자동 배치는 가르치지 않는다(추측이 번식하지 않게)
+     *  ② 그 낱말이 **다른 프로젝트로 간 기록이 한 번이라도** 있으면(자동 포함) 안 쓴다 ③ 글자만인 낱말은 사람 배치 2번 이상,
+     *  숫자가 섞인 코드형(stella32·sbea26)은 1번 ④ 교정(correct)된 배치는 빼고 ⑤ 기존 고유 규칙(다른 후보 식별자와 겹치면 안 씀)을 그대로 지난다.
+     *  수치는 P.learn*(데이터), 끄기 P.learnFromHuman=false. 확인: window.mailRouteLearnedAliases() */
+    var _learn = { n: -1, map: {} };
+    function subjWords(raw) {
+        var out = [];
+        String(raw || '').split(/[^0-9A-Za-z가-힣]+/).forEach(function (w) {
+            var n = norm(w);
+            if (!n || !/[a-z0-9]/.test(n) || /[가-힣]/.test(n)) return;            // 영문·숫자 낱말만 — 한글 낱말은 범용어가 대부분(의뢰서·신청서)
+            if (n.length < P.identMinLen && !/^[a-z]{1,2}\d{2,}$/.test(n)) return;
+            if (/^\d+$/.test(n) && n.length < 5) return;
+            if (/^20\d{6}$/.test(n) || /^(rev|ver|v|r|ecr|eco)\d+$/.test(n) || /^(eco|ecr)\d{4}[a-z]{2}\d{2}$/.test(n)) return;   // 날짜·리비전·ECO 번호
+            if (STOP[n] || SELF[n] || CATCH[n] || isGeneric(w) || isPerson(w)) return;
+            if (out.indexOf(n) === -1) out.push(n);
+        });
+        return out;
+    }
+    function learnedAliases() {
+        var E = (_routes && _routes.entries) || [];
+        if (P.learnFromHuman === false) return {};
+        if (_learn.n === E.length) return _learn.map;
+        var since = Date.now() - P.threadDays * 86400000;
+        var teach = {}, anyFid = {}, bad = {};
+        E.forEach(function (e) { if (e && e.type === 'correct' && e.fid) bad[(e.key || e.subj || '') + '|' + e.fid] = 1; });
+        E.forEach(function (e) {
+            if (!e || !e.s || Date.parse(e.at || 0) < since) return;
+            var fid = e.type === 'placed' ? e.fid : (e.type === 'correct' ? e.toFid : '');
+            if (!fid) return;
+            var human = (e.type === 'placed' && e.how === 'human') || e.type === 'correct';
+            if (e.type === 'placed' && bad[(e.key || e.subj || '') + '|' + fid]) return;
+            subjWords(e.s).forEach(function (t) {
+                (anyFid[t] = anyFid[t] || {})[fid] = 1;
+                if (human) { teach[t] = teach[t] || {}; teach[t][fid] = (teach[t][fid] || 0) + 1; }
+            });
+        });
+        var map = {};
+        Object.keys(teach).forEach(function (t) {
+            var fids = Object.keys(anyFid[t] || {});
+            if (fids.length !== 1 || !teach[t][fids[0]]) return;
+            var need = /\d/.test(t) && /[a-z]/.test(t) ? (P.learnMinCode || 1) : (P.learnMinPlain || 2);
+            if (teach[t][fids[0]] >= need) map[t] = fids[0];
+        });
+        _learn = { n: E.length, map: map };
+        return map;
+    }
+    window.mailRouteLearnedAliases = function () { return Object.assign({}, learnedAliases()); };
     function prepared(cands) {
-        var sig = _cfgVer + '|' + cands.length + '|' + cands.map(function (c) { return (c.drive_file_id || c.file_name || '') + ':' + (c.updated_at || '') + ':' + ((c.keywords || []).length); }).join(',');
+        var learned = learnedAliases(), learnedN = Object.keys(learned).length;
+        var sig = _cfgVer + '|L' + _learn.n + '|' + cands.length + '|' + cands.map(function (c) { return (c.drive_file_id || c.file_name || '') + ':' + (c.updated_at || '') + ':' + ((c.keywords || []).length); }).join(',');
         var hitC = _famCache && _famCache.get(cands);
         if (hitC && hitC.sig === sig) return hitC;
         var F = buildFamilies(cands);
+        // 🎓 배운 단서 — 가족 묶기(buildFamilies)엔 안 넣는다(사람 배치 몇 건이 형제 관계를 바꾸면 안 된다). 식별자로만.
+        if (learnedN) Object.keys(learned).forEach(function (t) {
+            var i = cands.findIndex(function (c) { return c.drive_file_id === learned[t]; });
+            if (i >= 0 && !F.idents[i][t]) F.idents[i][t] = 'learned';
+        });
         var owner = {};
         F.idents.forEach(function (m, i) { for (var k in m) owner[k] = (owner[k] === undefined) ? i : -1; });
         var famToks = {};
@@ -529,7 +585,8 @@
                     basis: 'conflict', reason: T('식별자는 한 곳(' + uniqHits[i1][0] + ')인데 다른 프로젝트 단어도 여럿 — 사람이 고른다', 'identifier points to one project but another project is also discussed — needs a person') });
             }
             return out({ decision: 'auto', target: cands[i1], candidates: [cands[i1]], basis: 'identifier',
-                reason: T('식별자 일치: ', 'identifier: ') + uniqHits[i1].slice(0, 3).join(', '), family: myFam });
+                reason: T('식별자 일치: ', 'identifier: ') + uniqHits[i1].slice(0, 3).join(', ')
+                    + (uniqHits[i1].some(function (t) { return idents[i1][t] === 'learned'; }) ? T(' (사람 배치에서 배운 단서)', ' (learned from a person)') : ''), family: myFam });
         }
         // ②-0 [2026-11-24 실측 — L7 Jackpot Wheel 결재 4장 충돌] 강한 단서가 한 후보에만 있으면 그 후보 — 키워드 **통째**
         //  = **관리번호(숫자 5자리+)나 모델명 통째**만. 키워드 통째는 강하다고 보지 않는다 — KONAMI 키워드 '1500R'(곡률 사양)이
@@ -868,7 +925,7 @@
             var sig = (key || norm((mailRaw && mailRaw.subject) || (task && task['업무명']) || '')) + '|' + fid;
             if (_placedSeen[sig] && Date.now() - _placedSeen[sig] < 10 * 60000) return false;
             _placedSeen[sig] = Date.now();
-            record({ type: 'placed', key: key, subj: normSubject(mailRaw && mailRaw.subject), from: senderEmail(mailRaw && mailRaw.sender),
+            record({ type: 'placed', key: key, subj: normSubject(mailRaw && mailRaw.subject), s: String((mailRaw && mailRaw.subject) || (task && task['업무명']) || '').slice(0, 200), from: senderEmail(mailRaw && mailRaw.sender),
                      fid: fid || '', fname: fname || '', how: how || 'auto',
                      routing: (task && task._routing) || null });
             // 기존 사슬(26 토픽 신호 → 48 NAS .eml 이동 → 61 로컬 근거 기록)을 **한 번** 부른다
@@ -882,7 +939,7 @@
     /** ⑥ 사람의 교정 — "그 프로젝트가 아니다" */
     window.mailRouteCorrect = function (fid, mailRaw, reason, toFid) {
         try {
-            record({ type: 'correct', key: window.mailKeyOf(mailRaw), subj: normSubject(mailRaw && mailRaw.subject),
+            record({ type: 'correct', key: window.mailKeyOf(mailRaw), subj: normSubject(mailRaw && mailRaw.subject), s: String((mailRaw && mailRaw.subject) || '').slice(0, 200),
                      from: senderEmail(mailRaw && mailRaw.sender), fid: fid || '', toFid: toFid || '', reason: reason || '' });
             if (window.mailEvidenceForget) window.mailEvidenceForget(fid || '', mailRaw || {});
             return true;
