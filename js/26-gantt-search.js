@@ -113,6 +113,9 @@
         //    🐛 [2026-09-12 추가수정] "이미 열려있는 채로 토글하면 안 바뀐다"는 그때 남겨둔 한계가
         //    실제로 재현 리포트로 들어와서, 아래 window._gsRefreshLang()을 추가하고 toggleLang()
         //    (js/04j-core-app-upload-utils-5.js)에서 호출하도록 연결함 — 이제 실시간 반영됨.
+        // 💊 [2026-11-24 "검색칸 통일성"] 크기·모양은 표 위 줄 공용 한 벌(js/04a `_UI_BOX`: 22px·둥근 11px·11px 글자)과 같게.
+        //    색은 그대로 테마색(_updateSearchBarColors 가 팔레트 바뀔 때 다시 칠한다).
+        var _GS_BOX = 'box-sizing:border-box;height:22px;border-radius:11px;font-size:11px;line-height:20px;vertical-align:middle;white-space:nowrap;';
         var _en = window._currentLang === 'en';
         var bar = document.createElement('div');
         bar.id = 'gantt-ai-searchbar';
@@ -125,24 +128,24 @@
             '  placeholder="' + (_en
                 ? 'Name·task·content·mail snippet  /  @project  /  #ai (all AI-registered)'
                 : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
-            '  style="flex:1;min-width:200px;padding:4px 10px;border-radius:6px;border:1px solid ' + c.inputBorder + ';' +
-            '  font-size:13px;outline:none;background:#fff;color:' + c.text + ';">' +
+            '  style="flex:1;min-width:200px;' + _GS_BOX + 'padding:0 10px;border:1px solid ' + c.inputBorder + ';' +
+            '  outline:none;background:#fff;color:' + c.text + ';">' +
             // 🐢 [2026-11-11] "타이핑할 때마다 바로 필터링되어 글 작성이 느려진다 — 딜레이를
             //    넣거나 검색 버튼을 두자" → [2026-11-11 2차] "디바운스는 쓰지 않는다 — 지금
             //    검색으로 실행한다". 그래서 타이핑만으론 전혀 안 돌고, 이 버튼이나 Enter 를
             //    눌러야만 검색이 적용된다(아래 input 리스너 참고).
             '<button id="gantt-search-now" title="' + (_en ? 'Search now (Enter)' : '지금 검색 (Enter)') + '"' +
-            '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">🔍</button>' +
+            '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">🔍</button>' +
             '<button id="gantt-search-prev" title="' + (_en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)') + '"' +
-            '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↑</button>' +
+            '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↑</button>' +
             '<button id="gantt-search-next" title="' + (_en ? 'Next result (Enter)' : '다음 결과 (Enter)') + '"' +
-            '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↓</button>' +
+            '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">↓</button>' +
             '<span id="gantt-ai-search-count" style="color:' + c.text + ';font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
             '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
             '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:' + c.text + ';"> ' +
             '<span id="gantt-ai-search-filtermode-label">' + (_en ? 'Hide non-matching' : '비매칭 숨기기') + '</span></label>' +
             '<button id="gantt-ai-search-clear" title="' + (_en ? 'Clear search (Esc)' : '검색 초기화 (Esc)') + '"' +
-            '  style="padding:4px 10px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:12px;cursor:pointer;color:' + c.text + ';">✕ ' + (_en ? 'Clear' : '초기화') + '</button>';
+            '  style="' + _GS_BOX + 'padding:0 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';cursor:pointer;color:' + c.text + ';">✕ ' + (_en ? 'Clear' : '초기화') + '</button>';
 
         container.insertBefore(bar, container.firstChild);
 

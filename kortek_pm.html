@@ -1148,7 +1148,7 @@
                  대체되어 더 이상 필요 없어짐(모든 열을 클릭 정렬 가능하고 오름차순/내림차순도 토글됨). -->
             <div style="position:relative; display:inline-flex; align-items:center;">
                 <input id="addr-search-input" type="text" placeholder="🔍 검색 (이름/부서/직함/이메일/전화 등)" data-i18n-placeholder="addr-search" oninput="window.filterAddressRows(this.value)"
-                    style="width:220px; padding:6px 28px 6px 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; box-sizing:border-box;">
+                    style="width:220px; height:31px; padding:0 28px 0 10px; border:1px solid #ccc; border-radius:16px; font-size:12px; box-sizing:border-box;">
                 <span id="addr-search-clear" onclick="document.getElementById('addr-search-input').value=''; window.filterAddressRows('');"
                     style="display:none; position:absolute; right:8px; cursor:pointer; color:#999; font-size:13px;">✕</span>
             </div>
@@ -1209,9 +1209,9 @@
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 10px;"></span>
             <input id="pl-search" type="text" oninput="window.plSearch(this.value)"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();window.plSearchNow();}"
-                style="width:170px; padding:6px 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; box-sizing:border-box; margin-right:4px;">
+                style="width:170px; height:31px; padding:0 10px; border:1px solid #ccc; border-radius:16px; font-size:12px; box-sizing:border-box; margin-right:4px;">
             <button id="pl-btn-search" class="concept-add-row-btn" onclick="window.plSearchNow()"
-                style="margin:0 6px 0 0; padding:6px 10px; border:none; border-radius:6px; white-space:nowrap;">🔍</button>
+                style="margin:0 6px 0 0; height:31px; box-sizing:border-box; padding:0 12px; display:inline-flex; align-items:center; border:none; border-radius:6px; white-space:nowrap;">🔍</button>
             <span id="pl-count" style="font-size:12px; color:#888; margin-right:8px;"></span>
             <div class="btn-group" style="margin-left:auto;">
                 <button id="pl-btn-check" class="concept-add-row-btn" onclick="window.plCheckAgainstProjects && window.plCheckAgainstProjects()" style="margin:0 4px 0 0; padding:6px 12px; border:none; border-radius:6px; font-size:13px; white-space:nowrap;"></button>
@@ -2749,7 +2749,7 @@
 
 <script src="js/27-topic-contamination.js?v=2026112461"></script>
 
-<script src="js/26-gantt-search.js?v=2026112461"></script>
+<script src="js/26-gantt-search.js?v=2026112462"></script>
 
 <script src="js/28-new-project-wizard.js?v=2026112461"></script>
 

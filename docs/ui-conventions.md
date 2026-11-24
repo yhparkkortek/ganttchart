@@ -225,6 +225,10 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 - ⚠️ 정적 HTML 에 둔 버튼(예 `#pl-btn-reset`)은 처음 그릴 때도 같은 값이 되도록 인라인 style 을 맞춰 두고,
   렌더 때 `el.style.cssText = _uiBtnStyle(...)` 로 다시 씌운다(값의 원본은 함수 하나).
 - 헤더(31px)와 표 위 줄(22px)은 **다른 층**이다 — 헤더 버튼을 22px 로, 표 위 줄을 31px 로 섞지 말 것.
+- 🔍 **검색칸도 자기 층을 따른다**(2026-11-24): 헤더 안 검색칸(Project list `#pl-search`·Address Book `#addr-search-input`)은
+  `height:31px; border-radius:16px; padding:0 10px` — 옆 헤더 버튼과 같은 키(전엔 28px 라 3px 어긋났다), 딸린 🔍 버튼도 31px.
+  간트 🔍 AI검색 바(js/26, 표 바로 위)는 22px·둥근 11px·11px 글자(`_GS_BOX`) — 단 **색은 테마색 그대로**
+  (`_updateSearchBarColors` 가 팔레트 바뀔 때 다시 칠한다; 공용 함수의 고정 파랑을 쓰면 그 갱신과 싸운다).
 
 #### 모달 크기 조절 / 이동 / 배경 조작
 - 위 구조(투명 래퍼 + `resize:both`)를 따르면 자동으로 적용됨
