@@ -1372,32 +1372,40 @@ window.alarmFormatContent = function(text) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🔍 [2026-11-24 사용자 요청] Summary 검색 — 다른 페이지와 **같은 규칙**(js/04a `_searchTokens`/
-//    `_searchMatchAll`/`_searchMatchAny`: 낱말 AND·공백/기호 무시).
-//    Summary 는 표 하나가 아니라 **입력 양식**(마일스톤·개요·모델 카드·멤버·주요자재…)이라 행을 숨기지 않고
-//    "페이지 안 찾기"로 한다 — 걸린 칸을 강조하고 ▲▼/Enter 로 하나씩 옮겨 가며 그 자리로 스크롤한다.
+// 🔍 [2026-11-24 사용자 요청] 페이지 안 찾기 — Summary · Document (양식 페이지 공용)
+//    다른 페이지와 **같은 규칙**(js/04a `_searchTokens`/`_searchMatchAll`/`_searchMatchAny`: 낱말 AND·공백/기호 무시).
+//    양식(입력칸·작은 표가 섞인 페이지)이라 행을 숨기지 않고 "페이지 안 찾기"로 한다 — 걸린 칸을 강조하고
+//    ▲▼/Enter 로 하나씩 옮겨 가며 그 자리로 스크롤한다.
 //    ⚠️ 아무것도 숨기지 않는다(저장이 입력칸을 읽으므로 화면 모양을 바꾸지 않는 게 가장 안전하다).
 //    묶음 단위: 표 안이면 **행(tr)** — 낱말이 그 행의 서로 다른 칸에 있어도 걸린다(다른 페이지와 같다).
-//    멤버 칸은 역할·이름·이메일 세 칸이 한 줄이라 그 셋을 한 묶음으로 본다. 그 밖은 칸 하나.
-//    다시 그려지는 부분(모델 카드·주요자재·진척 현황)은 바뀌면 다시 건다(감시기).
+//    Summary 멤버 칸은 역할·이름·이메일 세 칸이 한 줄이라 그 셋을 한 묶음으로 본다. 그 밖은 칸 하나.
+//    접혀서 안 보이는 칸은 세지 않는다(옮겨 가도 보여 줄 수 없다). 다시 그려지면 감시기로 다시 건다.
+//    페이지마다 다른 건 `PAGE_FIND_TARGETS`(데이터) 한 곳뿐 — 같은 꼴 페이지가 늘면 한 줄.
 // ─────────────────────────────────────────────────────────────────────────────
+window.PAGE_FIND_TARGETS = [
+    { key: 'sum', rootId: 'tab-summary', mount: 'header', skip: ['.concept-header-box', '#sum-history-box'],
+      ko: '🔍 Summary 에서 찾기', en: '🔍 Find in Summary' },
+    { key: 'doc', rootId: 'doc-page-body', mount: 'before', skip: [],
+      ko: '🔍 문서에서 찾기', en: '🔍 Find in document' }
+];
 (function () {
     var _en = function () { return window._currentLang === 'en'; };
-    var st = window._sumSearch = { term: '', groups: [], cur: -1 };
+    window._pageFind = window._pageFind || {};
 
-    function root() { return document.getElementById('tab-summary'); }
     function fieldText(el) {
         var tag = el.tagName;
         if (tag === 'SELECT') { var o = el.options && el.options[el.selectedIndex]; return o ? o.text : ''; }
         if (tag === 'INPUT' || tag === 'TEXTAREA') return el.value || '';
         return el.textContent || '';
     }
-    // 찾을 칸 모으기 — 입력칸 + 입력칸이 없는 글 칸(표 칸·라벨·소제목). 헤더·변경 이력·검색칸 자신은 뺀다.
-    function collect() {
-        var r = root(); if (!r) return [];
+    function shown(el) { return typeof el.getClientRects !== 'function' || el.getClientRects().length > 0; }
+    // 찾을 칸 모으기 — 입력칸 + 입력칸이 없는 글 칸(표 칸·라벨·소제목). 헤더·변경 이력·찾기칸 자신은 뺀다.
+    function collect(cfg, r) {
         var out = [];
         var skip = function (el) {
-            return el.closest('.concept-header-box') || el.closest('#sum-history-box') || el.closest('#sum-search-bar');
+            if (el.closest('#' + cfg.key + '-search-bar')) return true;
+            for (var i = 0; i < cfg.skip.length; i++) if (el.closest(cfg.skip[i])) return true;
+            return !shown(el);
         };
         r.querySelectorAll('input, textarea, select').forEach(function (el) {
             var ty = String(el.type || '').toLowerCase();
@@ -1406,8 +1414,9 @@ window.alarmFormatContent = function(text) {
             out.push(el);
         });
         r.querySelectorAll('td, th, label, h3').forEach(function (el) {
-            if (skip(el) || el.querySelector('input, textarea, select, td, th')) return;
+            if (el.querySelector('input, textarea, select, td, th')) return;
             if (!String(el.textContent || '').trim()) return;
+            if (skip(el)) return;
             out.push(el);
         });
         return out;
@@ -1426,92 +1435,112 @@ window.alarmFormatContent = function(text) {
         return el;
     }
 
-    function clear() {
-        var r = root(); if (!r) return;
-        r.querySelectorAll('.search-hit, .search-cur').forEach(function (el) { el.classList.remove('search-hit', 'search-cur'); });
-    }
-    function setCount() {
-        var c = document.getElementById('sum-search-count');
-        if (!c) return;
-        if (!String(st.term || '').trim()) { c.textContent = ''; return; }
-        c.textContent = st.groups.length ? ((st.cur + 1) + ' / ' + st.groups.length) : (_en() ? 'No match' : '없음');
-    }
-    function focusCur(scroll) {
-        var r = root(); if (!r) return;
-        r.querySelectorAll('.search-cur').forEach(function (el) { el.classList.remove('search-cur'); });
-        var g = st.groups[st.cur];
-        if (!g) { setCount(); return; }
-        g.hits.forEach(function (el) { el.classList.add('search-cur'); });
-        if (scroll && g.hits[0] && g.hits[0].scrollIntoView) g.hits[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-        setCount();
-    }
+    window._pageFindInstall = function (cfg) {
+        var st = window._pageFind[cfg.key] = window._pageFind[cfg.key] || { term: '', groups: [], cur: -1 };
+        var root = function () { return document.getElementById(cfg.rootId); };
+        var countEl = function () { return document.getElementById(cfg.key + '-search-count'); };
+        function clear() {
+            var r = root(); if (!r) return;
+            r.querySelectorAll('.search-hit, .search-cur').forEach(function (el) { el.classList.remove('search-hit', 'search-cur'); });
+        }
+        function setCount() {
+            var c = countEl(); if (!c) return;
+            if (!String(st.term || '').trim()) { c.textContent = ''; return; }
+            c.textContent = st.groups.length ? ((st.cur + 1) + ' / ' + st.groups.length) : (_en() ? 'No match' : '없음');
+        }
+        function focusCur(scroll) {
+            var r = root(); if (!r) return;
+            r.querySelectorAll('.search-cur').forEach(function (el) { el.classList.remove('search-cur'); });
+            var g = st.groups[st.cur];
+            if (!g) { setCount(); return; }
+            g.hits.forEach(function (el) { el.classList.add('search-cur'); });
+            if (scroll && g.hits[0] && g.hits[0].scrollIntoView) g.hits[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+            setCount();
+        }
+        st.apply = function (opts) {
+            opts = opts || {};
+            clear();
+            var toks = window._searchTokens ? window._searchTokens(st.term) : [];
+            st.groups = [];
+            var r = root();
+            if (!toks.length || !r) { st.cur = -1; setCount(); return; }
+            var map = new Map(), order = [];
+            collect(cfg, r).forEach(function (el) {
+                var key = groupKeyOf(el);
+                if (!map.has(key)) { map.set(key, []); order.push(key); }
+                map.get(key).push(el);
+            });
+            order.forEach(function (key) {
+                var els = map.get(key);
+                if (!window._searchMatchAll(els.map(fieldText).join(' \u0001 '), toks)) return;
+                var hits = els.filter(function (el) { return window._searchMatchAny(fieldText(el), toks); });
+                if (!hits.length) return;
+                hits.forEach(function (el) { el.classList.add('search-hit'); });
+                st.groups.push({ hits: hits });
+            });
+            if (opts.keepCur && st.cur >= 0 && st.cur < st.groups.length) focusCur(false);
+            else { st.cur = st.groups.length ? 0 : -1; focusCur(!opts.noScroll); }
+        };
+        st.step = function (d) {
+            if (!st.groups.length) return;
+            st.cur = (st.cur + d + st.groups.length) % st.groups.length;
+            focusCur(true);
+        };
 
-    window._sumSearchApply = function (opts) {
-        opts = opts || {};
-        clear();
-        var toks = window._searchTokens ? window._searchTokens(st.term) : [];
-        st.groups = [];
-        if (!toks.length) { st.cur = -1; setCount(); return; }
-        var map = new Map(), order = [];
-        collect().forEach(function (el) {
-            var key = groupKeyOf(el);
-            if (!map.has(key)) { map.set(key, []); order.push(key); }
-            map.get(key).push(el);
-        });
-        order.forEach(function (key) {
-            var els = map.get(key);
-            if (!window._searchMatchAll(els.map(fieldText).join(' \u0001 '), toks)) return;
-            var hits = els.filter(function (el) { return window._searchMatchAny(fieldText(el), toks); });
-            if (!hits.length) return;
-            hits.forEach(function (el) { el.classList.add('search-hit'); });
-            st.groups.push({ hits: hits });
-        });
-        if (opts.keepCur && st.cur >= 0 && st.cur < st.groups.length) focusCur(false);
-        else { st.cur = st.groups.length ? 0 : -1; focusCur(!opts.noScroll); }
-    };
-    window._sumSearchStep = function (d) {
-        if (!st.groups.length) return;
-        st.cur = (st.cur + d + st.groups.length) % st.groups.length;
-        focusCur(true);
-    };
-
-    function ensureBar() {
-        if (document.getElementById('sum-search-input')) return true;
-        var r = root(); if (!r) return false;
-        var hdr = r.querySelector('.concept-header-box');
-        if (!hdr) return false;
-        var bar = document.createElement('span');
-        bar.id = 'sum-search-bar';
-        bar.style.cssText = 'display:inline-flex; align-items:center; gap:4px; margin-left:12px; flex-shrink:0;';
-        var btn = 'height:31px; box-sizing:border-box; padding:0 8px; border:1px solid #cfe3e5; border-radius:6px; background:#fff; color:#00707d; cursor:pointer; font-size:12px;';
-        bar.innerHTML = '<input id="sum-search-input" type="search" autocomplete="off" style="width:200px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px; font-size:12px; outline:none;">'
-            + '<button type="button" id="sum-search-prev" style="' + btn + '">▲</button>'
-            + '<button type="button" id="sum-search-next" style="' + btn + '">▼</button>'
-            + '<span id="sum-search-count" style="font-size:12px; color:#888; white-space:nowrap; min-width:40px;"></span>';
-        var anchor = hdr.querySelector('.btn-group');
-        if (anchor) hdr.insertBefore(bar, anchor); else hdr.appendChild(bar);
-        var inp = document.getElementById('sum-search-input');
-        inp.placeholder = _en() ? '🔍 Find in Summary' : '🔍 Summary 에서 찾기';
+        // 찾기칸 — 헤더(31px) 또는 본문 바로 위(22px, 다시 그려지는 본문 **밖**)
+        if (document.getElementById(cfg.key + '-search-input')) return st;
+        var r0 = root(); if (!r0) return st;
+        var bar = document.createElement(cfg.mount === 'header' ? 'span' : 'div');
+        bar.id = cfg.key + '-search-bar';
+        var big = cfg.mount === 'header';
+        bar.style.cssText = big ? 'display:inline-flex; align-items:center; gap:4px; margin-left:12px; flex-shrink:0;'
+                                : 'display:flex; align-items:center; gap:4px; margin:0 0 6px 0;';
+        if (!big) bar.className = 'tbl-search-bar';
+        var h = big ? '31px' : '22px';
+        var btn = 'height:' + h + '; box-sizing:border-box; padding:0 8px; border:1px solid #cfe3e5; border-radius:6px; background:#fff; color:#00707d; cursor:pointer; font-size:12px; line-height:1;';
+        var inpSt = big ? 'width:200px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px;'
+                        : ('width:240px;' + (window._uiInputStyle ? window._uiInputStyle() : ''));
+        bar.innerHTML = '<input id="' + cfg.key + '-search-input" type="search" autocomplete="off" style="' + inpSt + ' font-size:12px; outline:none;">'
+            + '<button type="button" id="' + cfg.key + '-search-prev" style="' + btn + '">▲</button>'
+            + '<button type="button" id="' + cfg.key + '-search-next" style="' + btn + '">▼</button>'
+            + '<span id="' + cfg.key + '-search-count" style="font-size:12px; color:#888; white-space:nowrap; min-width:40px;"></span>';
+        if (big) {
+            var hdr = r0.querySelector('.concept-header-box');
+            if (!hdr) return st;
+            var anchor = hdr.querySelector('.btn-group');
+            if (anchor) hdr.insertBefore(bar, anchor); else hdr.appendChild(bar);
+        } else {
+            r0.parentNode.insertBefore(bar, r0);
+        }
+        var inp = document.getElementById(cfg.key + '-search-input');
+        inp.placeholder = _en() ? cfg.en : cfg.ko;
         inp.title = _en() ? 'Several words OK — Enter/▼ next, Shift+Enter/▲ previous' : '여러 낱말 가능 — Enter·▼ 다음, Shift+Enter·▲ 이전';
         var t = null;
-        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { st.term = inp.value; window._sumSearchApply(); }, 200); };
+        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { st.term = inp.value; st.apply(); }, 200); };
         inp.onkeydown = function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); window._sumSearchStep(e.shiftKey ? -1 : 1); }
-            else if (e.key === 'Escape' && inp.value) { inp.value = ''; st.term = ''; window._sumSearchApply(); }
+            if (e.key === 'Enter') { e.preventDefault(); st.step(e.shiftKey ? -1 : 1); }
+            else if (e.key === 'Escape' && inp.value) { inp.value = ''; st.term = ''; st.apply(); }
         };
-        document.getElementById('sum-search-prev').onclick = function () { window._sumSearchStep(-1); };
-        document.getElementById('sum-search-next').onclick = function () { window._sumSearchStep(1); };
+        document.getElementById(cfg.key + '-search-prev').onclick = function () { st.step(-1); };
+        document.getElementById(cfg.key + '-search-next').onclick = function () { st.step(1); };
         // 다시 그려지는 부분이 바뀌면 다시 건다(스크롤은 하지 않고 지금 위치 유지)
         if (window.MutationObserver) {
             var pending = false;
             new MutationObserver(function () {
                 if (pending || !String(st.term || '').trim()) return;
                 pending = true;
-                setTimeout(function () { pending = false; window._sumSearchApply({ keepCur: true, noScroll: true }); }, 50);
-            }).observe(r, { childList: true, subtree: true });
+                setTimeout(function () { pending = false; st.apply({ keepCur: true, noScroll: true }); }, 50);
+            }).observe(r0, { childList: true, subtree: true });
         }
-        return true;
+        return st;
+    };
+
+    function boot() {
+        window.PAGE_FIND_TARGETS.forEach(function (cfg) { window._pageFindInstall(cfg); });
+        // 옛 이름(Summary 전용이던 때) — 밖에서 부르는 곳이 있어도 그대로 듣게
+        var s = window._pageFind.sum;
+        if (s) { window._sumSearch = s; window._sumSearchApply = s.apply; window._sumSearchStep = s.step; }
     }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensureBar);
-    else ensureBar();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
 })();

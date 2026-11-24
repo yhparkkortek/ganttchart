@@ -2735,3 +2735,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 🔍 [2026-11-24] Weekly Report 화면 찾기(js/20) — 걸린 카드 글·문제점 칸 강조. */
 #weekly-report-page .search-hit { background-color:#fff3bf !important; }
+
+/* 🔍 [2026-11-24] Document 문서에서 찾기 — Summary 와 같은 설치기(js/22b _pageFindInstall). */
+#doc-page-body .search-hit { background-color:#fff3bf !important; }
+#doc-page-body .search-cur { outline:2px solid #f08c00 !important; outline-offset:-2px; }

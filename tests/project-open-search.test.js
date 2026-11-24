@@ -262,7 +262,7 @@ const reset = window._driveModalSearchState.q === '';
 // ── Summary(js/22b _sumSearchApply) — 페이지 안 찾기. 작은 가짜 DOM 나무 위에서 진짜 소스를 돌린다 ──
 {
   const s22b = fs.readFileSync(path.join(__dirname, '..', 'js', '22b-summary-mctable-core1.js'), 'utf8');
-  const sa = s22b.indexOf('// 🔍 [2026-11-24 사용자 요청] Summary 검색');
+  const sa = s22b.indexOf('// 🔍 [2026-11-24 사용자 요청] 페이지 안 찾기');
   if (sa < 0) { console.log('FAIL js/22b 소스 자르기'); process.exit(1); }
   // 아주 작은 DOM: tag/id/class 선택자와 쉼표 목록만
   const N = (tag, attrs, kids) => {
@@ -292,7 +292,13 @@ const reset = window._driveModalSearchState.q === '';
     N('div', { className: 'concept-grid' }, [memLabel, hwName, hwMail, fwLabel, fwName, fwMail]),
     N('table', {}, [N('tbody', {}, [matRow])]),
     N('div', { id: 'sum-history-box' }, [T('td', '조익현 수정함')])]);
-  const ids = { 'tab-summary': tab, 'sum-search-count': { textContent: '' }, 'sum-search-input': {} };   // 칸이 이미 있으면 설치기는 건너뛴다
+  // Document 본문(같은 설치기, 다른 뿌리) — 문서 표 한 줄 + 칸 + 접혀서 안 보이는 칸
+  const docRow = N('tr', {}, [T('td', 'MODEL NAME'), N('td', {}, [I('KTS320DPS01')])]);
+  const docHidden = I('숨은 KTS 값'); docHidden.getClientRects = () => [];
+  const docVisible = I('PROTO A 출고'); docVisible.getClientRects = () => [1];
+  const docBody = N('div', { id: 'doc-page-body' }, [N('table', {}, [N('tbody', {}, [docRow])]), docVisible, docHidden]);
+  const ids = { 'tab-summary': tab, 'sum-search-count': { textContent: '' }, 'sum-search-input': {},   // 칸이 이미 있으면 설치기는 건너뛴다
+                'doc-page-body': docBody, 'doc-search-count': { textContent: '' }, 'doc-search-input': {} };
   const W = { _currentLang: 'ko' }; new Function('window', helpers)(W);
   const doc = { readyState: 'complete', getElementById: id => ids[id] || null, createElement: () => N('span') };
   // ensureBar 는 헤더에 칸을 꽂으려다 btn-group 이 없으면 끝에 붙인다 — 그 칸은 시험에 안 쓴다
@@ -312,6 +318,13 @@ const reset = window._driveModalSearchState.q === '';
   chk(W._sumSearch.cur === 0, '[Summary] 끝에서 ▼ 는 처음으로');
   run('');
   chk(!memLabel.classList.has('search-hit') && !memLabel.classList.has('search-cur') && ids['sum-search-count'].textContent === '', '[Summary] 지우면 강조 원상복구');
+  // Document — 같은 설치기, 상태는 따로
+  const D = W._pageFind.doc;
+  const drun = q => { D.term = q; D.apply(); return D.groups.length; };
+  chk(drun('model kts320') === 1 && docRow.children[1].children[0].classList.has('search-hit'), '[Document] 표 행(라벨+값) AND');
+  chk(drun('proto a') === 1 && docVisible.classList.has('search-cur'), '[Document] 입력칸 찾고 지금 칸 표시');
+  chk(drun('kts') === 1 && !docHidden.classList.has('search-hit'), '[Document] 접혀서 안 보이는 칸은 세지 않음');
+  chk(ids['doc-search-count'].textContent === '1 / 1' && W._sumSearch.term === '', '[Document] 개수는 제 칸에만, Summary 상태와 섞이지 않음');
 }
 // ── JIRA 연결 이슈(js/70 viewRows) — 진짜 js/70 전체를 스텁 DOM 위에서 불러 돌린다 ──
 {
