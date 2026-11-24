@@ -1187,7 +1187,7 @@
                              mtime: Math.floor(Date.now() / 1000) }, parts.join('/'));
     }
 
-    /** 🗑 Drive `trashed:true` 의 NAS 판 — `Trash/<YYYYMMDD_HHMM>__<이름>` 으로 옮긴다(읽기→쓰기 확인→원본 삭제).
+    /** 🗑️ Drive `trashed:true` 의 NAS 판 — `Trash/<YYYYMMDD_HHMM>__<이름>` 으로 옮긴다(읽기→쓰기 확인→원본 삭제).
      *  `Trash` 는 `APP_NON_PROJECT_FOLDERS`(js/04a)에 있어 프로젝트 목록이 뒤지지 않는다. id 지도도 같이 옮겨
      *  옛 id 가 허공을 가리키지 않게 한다. */
     window.STORAGE_TRASH_DIR = window.STORAGE_TRASH_DIR || 'Trash';
@@ -1614,7 +1614,7 @@
                 }
                 var meta2 = {};
                 try { meta2 = JSON.parse(body); } catch (e) { /* ignore */ }
-                // 🗑 [2026-11-21 Drive 잔재 점검] `{trashed:true}` — Drive 의 "휴지통으로" 를 여기서 모르면 **200 을 돌려주고
+                // 🗑️ [2026-11-21 Drive 잔재 점검] `{trashed:true}` — Drive 의 "휴지통으로" 를 여기서 모르면 **200 을 돌려주고
                 //    아무것도 안 지웠다**(프로젝트 삭제 js/04b deleteProjectFlow · 중복 정리 _mergeDuplicateDriveFiles).
                 //    삭제가 성공으로 보이는데 파일은 남고, js/66 자가치유가 색인에 다시 살려 넣어 "삭제가 되돌아오는" 모양이 됐다.
                 //    NAS 엔 휴지통이 없으니 `Trash/<시각>__<이름>` 으로 옮긴다(영구 삭제가 아니다 — 사람이 되돌릴 수 있다).

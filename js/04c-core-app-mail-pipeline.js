@@ -2408,7 +2408,7 @@
                 infoWrap.style.cssText = 'flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:12px;';
                 infoWrap.innerHTML = '<div style="font-weight:bold; color:#333; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📜 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96; flex-shrink:0;">' + dateStr + '</div>';
                 const delBtn = document.createElement('button');
-                delBtn.textContent = _dmEn ? '🗑 Delete' : '🗑 삭제';
+                delBtn.textContent = _dmEn ? '🗑️ Delete' : '🗑️ 삭제';
                 delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;';
                 delBtn.onmouseover = function() { this.style.background = '#f5c2bd'; this.style.borderColor = '#e08f87'; };
                 delBtn.onmouseout  = function() { this.style.background = '#fbe4e2'; this.style.borderColor = '#eeb0ac'; };

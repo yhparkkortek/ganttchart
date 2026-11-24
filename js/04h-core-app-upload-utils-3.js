@@ -5156,7 +5156,7 @@ ${docsJson}`;
                     const _gmD = await _gmRes.json();
                     if (!_gmD.ok) throw new Error(_gmD.message || window._t('메일 조회 실패', 'Mail lookup failed'));
                     _gmRows = _gmD.mails || [];
-                    _gmReply = '🔎 **' + _gmWho + '** ' + window._t('관련 메일 ', 'related mail ')
+                    _gmReply = '🔍 **' + _gmWho + '** ' + window._t('관련 메일 ', 'related mail ')
                              + _gmRows.length + window._t('건', '') + ' (' + _gmD.from + ' ~ ' + window._t('오늘', 'today') + ')';
                     if (!_gmRows.length) _gmReply += '\n\n' + window._t('검색 결과가 없습니다.', 'No results.');
                 } catch (e) { _gmReply = '⚠️ ' + (e && e.message ? e.message : e); }
@@ -5265,7 +5265,7 @@ ${docsJson}`;
             window._renderGanttQaMessages(); input.focus(); return;
         }
 
-        // 🔎 [2026-11-02 신규, 사용자 요청] BOM 에서 찾은 부품 표 행 클릭 칩.
+        // 🔍 [2026-11-02 신규, 사용자 요청] BOM 에서 찾은 부품 표 행 클릭 칩.
         //    칩 목록은 js/40 `QA_ROW_CHIP_KINDS.bompart`(데이터), 동작은 js/56 — 여기는 그 값을
         //    받아 실행만 한다. SAP 조회 칩은 평문이라 이 블록에 안 오고 기존 조회 경로로 간다
         //    (`사용처`·`가격`은 bom_part 의 notKw 라 이 기능이 자기 질문으로 다시 집지 않는다).
@@ -8489,7 +8489,7 @@ ${docsJson}`;
         }
 
         // 🔀🚫🤖 [2026-10-01 신규] BOM 비교 (CS14) — "자재1 자재2 BOM 비교"
-        // 🔎🚫🤖 [2026-11-02 신규, 사용자 요청] "999001 제품에 사용된 패널명 확인해줘"
+        // 🔍🚫🤖 [2026-11-02 신규, 사용자 요청] "999001 제품에 사용된 패널명 확인해줘"
         //    BOM 을 **다단계로** 전개해 그 종류의 부품만 집어 준다(AI 안 씀 — 자재그룹으로 가른다).
         //    ⚠️ BOM 전개 블록(_aiFetchSapContext 의 bomMatch)보다 **먼저** 와야 한다. 안 그러면
         //       494행짜리 BOM 전체가 AI 에게 넘어가고, 사람이 물은 한 줄은 그 안에 묻힌다.
@@ -9426,7 +9426,7 @@ ${docsJson}`;
             }
         }
 
-        // 🔎 [2026-11-17 사용자 요청] "추론" 모드 + Tavily 키가 저장돼 있으면 AI를 부르기 전에
+        // 🔍 [2026-11-17 사용자 요청] "추론" 모드 + Tavily 키가 저장돼 있으면 AI를 부르기 전에
         //    먼저 직접 검색한다(월 1,000회 무료 — LLM 자체 그라운딩은 전부 유료 확인됐다,
         //    docs/ai-qa.md). 결과는 프롬프트에 텍스트로 붙여 기존 무료 LLM한테 넘긴다(RAG).
         //    키가 없거나 검색이 실패하면 조용히 넘어가고(기존처럼 Gemini 자체 그라운딩 시도로
@@ -9477,7 +9477,7 @@ ${docsJson}`;
             const stopWaitingHints = window._ganttQaStartWaitingHints ? window._ganttQaStartWaitingHints() : function() {};
             let result;
             try {
-                // 🔎 [2026-11-17 사용자 요청] "추론" 모드(범위 밖 즉답을 우회해 들어온 질문)에서는
+                // 🔍 [2026-11-17 사용자 요청] "추론" 모드(범위 밖 즉답을 우회해 들어온 질문)에서는
                 //    구글 웹 Gemini처럼 실시간 웹 검색(Grounding with Google Search)을 쓸 수 있게
                 //    opts.webSearch를 켠다 — Gemini 제공사일 때만 gas/Code.gs가 tools를 붙인다.
                 //    프로젝트/SAP 질문까지 켜면 매 호출마다 검색이 붙어 무료 한도를 더 빨리 태우므로
@@ -11592,7 +11592,7 @@ ${docsJson}`;
         }
     };
 
-    // 🗑 [2026-09-28 신규] 자주 쓰는 질문 개별 삭제 — 실패/불필요한 항목 제거
+    // 🗑️ [2026-09-28 신규] 자주 쓰는 질문 개별 삭제 — 실패/불필요한 항목 제거
     window._ganttQaLastFreqSelected = null;
     window._ganttQaDeleteFreqQuestion = function(sample) {
         if (!sample) return;
@@ -12113,7 +12113,7 @@ ${docsJson}`;
                             <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaLastFreqSelected=this.value; window._ganttQaFillQuestion(this.value); var _d=document.getElementById('gantt-qa-freq-del-btn'); if(_d){_d.style.display='inline-flex';_d.title=(window._currentLang==='en'?'Delete: ':'삭제: ')+this.value;} this.selectedIndex=0; }" style="flex:1; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
                                 <option value="">${_qEn ? '(select a question)' : '(질문 선택하기)'}</option>
                             </select>
-                            <button id="gantt-qa-freq-del-btn" onclick="window._ganttQaDeleteFreqQuestion(window._ganttQaLastFreqSelected)" title="${_qEn ? 'Delete this question from the list' : '이 질문을 목록에서 삭제'}" style="display:none; flex-shrink:0; align-items:center; justify-content:center; width:26px; height:26px; box-sizing:border-box; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';">🗑</button>
+                            <button id="gantt-qa-freq-del-btn" onclick="window._ganttQaDeleteFreqQuestion(window._ganttQaLastFreqSelected)" title="${_qEn ? 'Delete this question from the list' : '이 질문을 목록에서 삭제'}" style="display:none; flex-shrink:0; align-items:center; justify-content:center; width:26px; height:26px; box-sizing:border-box; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:5px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';">🗑️</button>
                         </div>
                         <!-- 🔗 [2026-11-23, 사용자 요청] 글자 선택→"AI 문답으로" 아이콘으로 여러 곳의
                              글을 "조합"하고 싶을 때를 위한 모드 토글. 기본(매번 새로운 글)은 꺼 두고,

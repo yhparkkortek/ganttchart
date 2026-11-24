@@ -1055,9 +1055,9 @@ window.deleteMember3Row = function(idx) {
         .sort(function(a, b) { return Number(a) - Number(b); })
         .map(function(k) { return { role: m3map[k].role || '', name: m3map[k].name || '', email: m3map[k].email || '' }; });
 
-    console.log('🗑 삭제 전 인원 수:', current.length, '삭제할 idx:', idx);
+    console.log('🗑️ 삭제 전 인원 수:', current.length, '삭제할 idx:', idx);
     current.splice(idx, 1);
-    console.log('🗑 삭제 후 인원 수:', current.length);
+    console.log('🗑️ 삭제 후 인원 수:', current.length);
 
     window.tabData.projectMembers3 = current;
     window.renderMember3Rows(current);
@@ -1219,7 +1219,7 @@ window.renderMaterialRows = function(rows, modelIdx) {
             ? '<td style="padding:4px 6px; border:1px solid #cfe3e5; background:' + _zebraBg + '; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
             : '<td style="padding:2px; border:1px solid #cfe3e5; background:' + _zebraBg + ';"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center; background:transparent; font-weight:bold;"></td>';
         // 💡 [2026-08-25 UX 개선] 예전엔 "삭제 버튼"이 맨 오른쪽 체크박스 칸에 있어서 눈에 잘 안 띈다는
-        //    지적이 있었음 — PANEL 행의 🔎(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
+        //    지적이 있었음 — PANEL 행의 🔍(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
         //    자유추가 행을 열 때 바로 보이는 "행 액션 버튼" 자리로 통일했다.
         const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ', ' + _mi + ')" title="' + (_matEn ? 'Delete this row' : '이 행 삭제') + '" style="flex-shrink:0; border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">－</button>';
         // 💡 [2026-08-25 신규 — Panel Compare 연동] PANEL 구분 행에 모델명이 적혀 있으면, 그 옆에
@@ -1241,9 +1241,9 @@ window.renderMaterialRows = function(rows, modelIdx) {
             + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;" '
             + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true, ' + _mi + '), ' + _mi + ');"' : '') + '>'
             + ((r.category === 'PANEL' && _hasSpecKey)
-                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔍</button>'
                 : ((_epRowType[r.category] && _hasSpecKey)
-                    ? '<button type="button" onclick="window.showElecPartSpecModal(' + escapeHtml(JSON.stringify(_epRowType[r.category])) + ', ' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Spec preview' : '스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+                    ? '<button type="button" onclick="window.showElecPartSpecModal(' + escapeHtml(JSON.stringify(_epRowType[r.category])) + ', ' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Spec preview' : '스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔍</button>'
                     : ''))
             + delBtn
             + '</div></td>';

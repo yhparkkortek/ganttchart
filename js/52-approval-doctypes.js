@@ -356,7 +356,7 @@
             return o;
         };
         if (one) return { forms: [pack(one)] };
-        // 🔎 [2026-10-27] 요청한 양식(form)이 있었는데 카탈로그에 없으면(= 칸 매핑 없음)도
+        // 🔍 [2026-10-27] 요청한 양식(form)이 있었는데 카탈로그에 없으면(= 칸 매핑 없음)도
         // "복사만 가능"으로 끝내지 않는다 — 프로젝트에 채울 정보가 있는지부터 보여준다
         // (사람이 "summary/spec 쪽만 보면 채울 수 있을 것 같은데" 물어본 것과 같은 요청).
         var scan = (form && window._apvProjectFactScan) ? window._apvProjectFactScan() : null;
@@ -411,7 +411,7 @@
             var g = await window._gwEnsureLogin(step);
             if (!g || !g.ok) return { ok: false, message: (g && g.message) || '그룹웨어 로그인이 필요합니다.' };
         }
-        step('🔎 "' + name + '" 양식의 최근 문서를 찾는 중입니다…');
+        step('🔍 "' + name + '" 양식의 최근 문서를 찾는 중입니다…');
         var latest = await window._apvLatestDocOf(name);
         if (!latest) {
             // 틀이 없으면 **지어내지 않는다** — 왜 못 했는지 그대로 말한다.

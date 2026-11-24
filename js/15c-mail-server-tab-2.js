@@ -263,7 +263,7 @@ window._msRenderKeywordSuggestList = function() {
             </div>
             <div style="flex-shrink:0; display:flex; gap:4px;">
                 <button data-idx="${i}" class="ms-kwsuggest-add-btn" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:5px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➕ 추가</button>
-                <button data-idx="${i}" class="ms-kwsuggest-del-btn" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="이 제안 무시" style="padding:5px 8px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
+                <button data-idx="${i}" class="ms-kwsuggest-del-btn" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="이 제안 무시" style="padding:5px 8px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑️</button>
             </div>
         </div>`;
     }).join('');
@@ -420,7 +420,7 @@ window._msRenderAddressSuggestList = function() {
             </div>
             <div style="flex-shrink:0; display:flex; gap:4px;">
                 <button data-idx="${i}" class="ms-addrsuggest-add-btn" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:5px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➕ 추가</button>
-                <button data-idx="${i}" class="ms-addrsuggest-del-btn" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="이 제안 무시" style="padding:5px 8px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
+                <button data-idx="${i}" class="ms-addrsuggest-del-btn" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="이 제안 무시" style="padding:5px 8px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑️</button>
             </div>
         </div>`;
     }).join('');
@@ -518,8 +518,8 @@ window._macRefreshLang = function() {
         'mac-collect-completed-desc':   { ko:'기본값(체크 해제)은 Summary 탭에서 "EOL"로 표시한 프로젝트를 새 메일 자동매칭에서 제외합니다(이미 끝난 프로젝트에 실수로 새 업무가 등록되는 걸 방지). 체크하면 EOL 프로젝트도 계속 매칭 대상에 포함됩니다. MP(EC) 프로젝트는 이 설정과 무관하게 항상 매칭 대상에 포함됩니다.',
                                            en:'By default (unchecked), projects marked "EOL" in the Summary tab are excluded from new mail auto-matching (prevents tasks being mistakenly added to already-finished projects). When checked, EOL projects stay included. MP(EC) projects are always included regardless of this setting.' },
         'mac-cleanup-auto-label':       { ko:'처리된 업무는 보관함에서 자동삭제',        en:'Auto-delete processed tasks from the inbox' },
-        'mac-cleanup-auto-desc':        { ko:'기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.',
-                                           en:'By default (unchecked), processed items (placed/sent, etc.) in the AI Task Inbox stay in the list until deleted with each row\'s 🗑. When checked, they disappear from the list automatically as soon as they\'re processed.' },
+        'mac-cleanup-auto-desc':        { ko:'기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑️로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.',
+                                           en:'By default (unchecked), processed items (placed/sent, etc.) in the AI Task Inbox stay in the list until deleted with each row\'s 🗑️. When checked, they disappear from the list automatically as soon as they\'re processed.' },
         'mac-topic-auto-disable-label': { ko:'🧠 토픽 프로파일 자동 생성 끄기',           en:'🧠 Turn off automatic topic profile generation' },
         'mac-topic-auto-disable-desc':  { ko:'체크하면 프로젝트 로드 시 및 AI 업무 누적 시 자동 토픽 프로파일 생성을 완전히 끕니다. 수동 생성(토픽 프로파일 뷰어 내 버튼)은 계속 사용할 수 있습니다. 무료 API 한도가 빠듯할 때 권장.',
                                            en:'When checked, automatic topic profile generation on project load and as AI tasks accumulate is fully disabled. Manual generation (the button inside the Topic Profile Viewer) still works. Recommended when your free API quota is tight.' },
@@ -533,8 +533,8 @@ window._macRefreshLang = function() {
         'mac-importance-label':         { ko:'중요도 헤더(Outlook 높음) 가산',           en:'Importance header (Outlook High)' },
         'mac-title-score-label':        { ko:'👤 직급별 점수',                           en:'👤 Score by Job Title' },
         'mac-sec-filter-label':         { ko:'🚫 자동폐기 필터',                         en:'🚫 Auto-discard Filters' },
-        'mac-filter-desc':              { ko:'완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.',
-                                           en:'During fully-automatic collection, a mail matching one of these rules is quietly discarded before the AI is even called (saves cost). You can also add a rule directly from the 🗑 Discarded / 👤 New Sender queue via "Add rule".' },
+        'mac-filter-desc':              { ko:'완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑️ 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.',
+                                           en:'During fully-automatic collection, a mail matching one of these rules is quietly discarded before the AI is even called (saves cost). You can also add a rule directly from the 🗑️ Discarded / 👤 New Sender queue via "Add rule".' },
         'mac-filter-subject-label':     { ko:'제목 키워드',                              en:'Subject Keywords' },
         'mac-filter-subject-add-btn':   { ko:'+ 추가',                                   en:'+ Add' },
         'mac-filter-noreply-label':     { ko:'발신자 패턴 (noreply 등)',                 en:'Sender Pattern (noreply, etc.)' },
@@ -607,7 +607,7 @@ window.openMailAutoConfigModal = async function(opts) {
                             <input id="mac-cleanup-auto" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
                             <span id="mac-cleanup-auto-label" style="flex:1;">처리된 업무는 보관함에서 자동삭제</span>
                         </label>
-                        <div id="mac-cleanup-auto-desc" style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.</div>
+                        <div id="mac-cleanup-auto-desc" style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑️로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.</div>
                         <!-- 💡 [무료 API 절약] 토픽 프로파일 자동 생성 완전 비활성화 옵션 -->
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-top:10px;">
                             <input id="mac-topic-auto-disable" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
@@ -687,7 +687,7 @@ window.openMailAutoConfigModal = async function(opts) {
                         <span id="mac-sec-filter-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
                     <div id="mac-sec-filter" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                        <div id="mac-filter-desc" style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
+                        <div id="mac-filter-desc" style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑️ 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
 
                         <div style="margin-bottom:10px;">
                             <div id="mac-filter-subject-label" style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">제목 키워드</div>
@@ -808,7 +808,7 @@ window._macAddKeywordRow = function(word, score) {
             style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
         <input class="mac-kw-score" type="number" value="${score}"
             style="width:64px; min-width:0; box-sizing:border-box; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-        <button onclick="this.parentElement.remove()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px; transition:background .15s, border-color .15s;">🗑</button>`;
+        <button onclick="this.parentElement.remove()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px; transition:background .15s, border-color .15s;">🗑️</button>`;
     box.appendChild(row);
 };
 
@@ -1146,7 +1146,7 @@ const AR = {
                 </div>
                 <button data-del-idx="${i}" title="목록에서 삭제"
                         style="flex-shrink:0; border:none; background:none; color:#bbb; cursor:pointer; font-size:13px; padding:2px 4px;"
-                        onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑</button>
+                        onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑️</button>
             </div>`;
         }).join('');
 

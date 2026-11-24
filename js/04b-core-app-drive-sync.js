@@ -704,7 +704,7 @@
             return;
         }
         // ② 최종 confirm — 삭제 대상 파일명을 명시하여 실수 방지 (타이핑 불필요)
-        // 🗑 [2026-11-21] 저장소별 문구 — NAS 는 어댑터가 `Trash/` 폴더로 옮긴다(영구 삭제 아님), Drive 는 휴지통(30일)
+        // 🗑️ [2026-11-21] 저장소별 문구 — NAS 는 어댑터가 `Trash/` 폴더로 옮긴다(영구 삭제 아님), Drive 는 휴지통(30일)
         const _isNas = window._storageMode && window._storageMode() === 'nas';
         const ok = confirm(_en
             ? `⚠️ Delete this project?\n\n📜 ${file.name}\n\n` + (_isNas ? 'The file will be moved to the NAS "Trash" folder (backups in Backups/ stay as they are).' : 'The file will be moved to Google Drive Trash (recoverable for 30 days).')

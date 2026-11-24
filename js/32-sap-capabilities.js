@@ -460,7 +460,7 @@
           needs: '담아둔 자재 + 오더 + 코스트센터', ex: '🧺 담기로 모은 뒤 "청구서 만들기"' },
         { id: 'bom', title: 'BOM 전개', titleEn: 'BOM explosion', tcode: 'ZPP033 / ZPP038', mode: 'read', verified: 'live',
           kw: ['bom', '구성품', '부품구성', '전개', 'explosion'], needs: '자재번호', ex: '502572 BOM 보여줘' },
-        // 🔎 [2026-11-02] "999001 제품에 사용된 패널명 확인해줘" — BOM 에서 **특정 부품 종류만** 집어 준다.
+        // 🔍 [2026-11-02] "999001 제품에 사용된 패널명 확인해줘" — BOM 에서 **특정 부품 종류만** 집어 준다.
         //    ⚠️ 반드시 다단계 전개다. 패널은 완제품 바로 아래가 아니라 5단계 아래에 있다(실측).
         //    부품 종류 어휘는 `BOM_PART_KINDS`(js/56, 데이터)에 따로 있다 — 여긴 "무엇이 쓰였나"라는 의도만 본다.
         { id: 'bom_part', title: 'BOM 부품 찾기', titleEn: 'Find a part in the BOM', tcode: 'ZPP033', mode: 'read', verified: 'live',

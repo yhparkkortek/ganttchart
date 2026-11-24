@@ -752,7 +752,7 @@
         window._refreshTopicProfileBadge();
         var ov = document.getElementById('tp-viewer-overlay');
         if (ov) ov.remove();
-        if (window.showToast) window.showToast(window._t('🗑 토픽 프로파일 전체 삭제 완료', '🗑 All topic profiles deleted'), 'info', 3000);
+        if (window.showToast) window.showToast(window._t('🗑️ 토픽 프로파일 전체 삭제 완료', '🗑️ All topic profiles deleted'), 'info', 3000);
     };
 
     // 💡 [2026-09-06 신규] 이미 저장돼 있는(구버전 프롬프트로 생성된) 프로파일에서 PROTO/TOOLING/METAL
@@ -883,7 +883,7 @@
         };
         hdr.appendChild(migrateBtn);
         var clearAllBtn = document.createElement('button');
-        clearAllBtn.textContent = _en ? '🗑 Delete All' : '🗑 전체 삭제';
+        clearAllBtn.textContent = _en ? '🗑️ Delete All' : '🗑️ 전체 삭제';
         // 💡 [2026-09-04] 헤더와 동일 배경색(#e7f3ff/#1971c2) + hover + 테두리 없음
         clearAllBtn.style.cssText = 'background:#e7f3ff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:#1971c2;padding:3px 10px;transition:background .15s;';
         clearAllBtn.addEventListener('mouseover', function() { this.style.background = '#cce0ff'; });
@@ -1006,7 +1006,7 @@
         var html = '<div id="' + _tpCardId(k) + '" data-tp-key="' + kAttr + '" style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
               '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + _tpEsc(projName) + _keyBadge + editBadge + '</span>' +
-              '<button data-tp-act="delprofile" title="' + (_en ? 'Delete this profile' : '이 프로파일 삭제') + '" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;white-space:nowrap;flex-shrink:0;">🗑 ' + (_en ? 'Delete' : '삭제') + '</button>' +
+              '<button data-tp-act="delprofile" title="' + (_en ? 'Delete this profile' : '이 프로파일 삭제') + '" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;white-space:nowrap;flex-shrink:0;">🗑️ ' + (_en ? 'Delete' : '삭제') + '</button>' +
               '<span style="font-size:10px;color:#aaa;white-space:nowrap;flex-shrink:0;">' + agoText + taskCountText + '</span>' +
             '</div>';
         if (!isCur) {

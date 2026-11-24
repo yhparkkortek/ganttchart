@@ -17,7 +17,7 @@
 // ⚠️⚠️ [2026-11-12 사용자 제보] 넷을 전부 자동으로 돌렸더니 모델끼리 이슈가 섞였다
 // (검색어 JQL `text ~`가 모델명 숫자 하나 겹치는 **다른 프로젝트** 이슈까지 끌어왔다 — 실측:
 // GABKJ를 연결했는데 GABKH·GABJO 이슈까지 표에 보임). → **자동은 ④(프로젝트 코드, 결정론)
-// 하나뿐**이고, ①②③은 출처 열 머리글의 🔍(2026-11-24 전엔 표 아래 "🔎 더 찾기" 버튼)를 사람이 눌러야 돈다(CLAUDE.md "결정론
+// 하나뿐**이고, ①②③은 출처 열 머리글의 🔍(2026-11-24 전엔 표 아래 "🔍 더 찾기" 버튼)를 사람이 눌러야 돈다(CLAUDE.md "결정론
 // 먼저" 그대로 — 느슨한 검색은 사람이 트리거할 때만). 네 소스는 **따로 조회한다**(한 JQL로
 // OR 하지 않음) — 메일 스캔은 존재하지 않는 키를 주워올 수 있는데, JIRA의 `key in (...)`는
 // 그중 하나라도 없으면 전체가 400으로 죽는다. 소스 하나가 깨져도 나머지는 멀쩡히 보여야 한다.
@@ -162,7 +162,7 @@
     //  팝업(체크박스 또는 포함검색)이 뜬다 — 전부 **클라이언트 사이드**: 지금 merge된
     //  `_lastRows`(원본, 필터 전)를 걸러서 다시 그릴 뿐 서버에 다시 묻지 않는다.
     // 🧮 [2026-11-24] 정렬·필터 상태를 **표마다** 따로 든다 — 이 탭의 연결 이슈 표(main)와
-    //    🔎 전체 이슈 검색 표(search)가 **같은 코드**(머리글·필터 팝업·토글)를 쓴다. 표마다
+    //    🔍 전체 이슈 검색 표(search)가 **같은 코드**(머리글·필터 팝업·토글)를 쓴다. 표마다
     //    복사해 두면 한쪽만 고쳐진다. onclick 문자열은 마지막 인자로 표 이름을 싣는다.
     var _tables = {};       // 이름 -> { cols, byKey, filters, sortCol, sortDir, rows(), render() }
     function tblState(name) { return _tables[name || 'main']; }
@@ -672,7 +672,7 @@
 
     window._jiraRefresh = function () { window._jiraOnTabShown(); };
 
-    // ── 🔎 전체 이슈 검색 (2026-11-23 사용자 요청) ──────────────────────────
+    // ── 🔍 전체 이슈 검색 (2026-11-23 사용자 요청) ──────────────────────────
     //  "노이즈·벤트·외관불량·신뢰성 등으로 — 나의 프로젝트와 유사한 이슈/해결책이
     //  있었는지 찾고 싶다(DFMA 참고)." 지금 연결된 프로젝트와 **무관하게 JIRA 전체**를
     //  뒤진다 — `pullKeyword()`(위)와 같은 JQL(`text ~`)이지만 그건 "이 프로젝트에
@@ -691,10 +691,10 @@
     window.JIRA_SEARCH_POLICY = window.JIRA_SEARCH_POLICY || {
         teamGroups: ['개발1팀', '개발2팀', '개발3팀', '개발4팀', '개발5팀', '개발6팀', '개발7팀'],
         teamStoreKey: 'gantt_jira_search_team_v1',  // 마지막으로 고른 팀(다음에 열 때 그대로)
-        // 🔎 [2026-11-24 사용자 요청] "이슈뿐 아니라 보고자·담당자·프로젝트… 가능한 모든 검색" — 검색 대상.
+        // 🔍 [2026-11-24 사용자 요청] "이슈뿐 아니라 보고자·담당자·프로젝트… 가능한 모든 검색" — 검색 대상.
         //    'all' 은 글자 검색 + 그 이름의 사람(보고자·담당자) + 그 이름의 프로젝트를 **OR** 로 한 번에.
         fields: [
-            { id: 'all', label: '🔎 전체', labelEn: '🔎 Everything' },
+            { id: 'all', label: '🔍 전체', labelEn: '🔍 Everything' },
             { id: 'text', label: '📝 내용(요약·설명·댓글)', labelEn: '📝 Text (summary/description/comments)' },
             { id: 'summary', label: '📌 요약만', labelEn: '📌 Summary only' },
             { id: 'reporter', label: '🙋 보고자', labelEn: '🙋 Reporter' },
@@ -859,7 +859,7 @@
             + ' display:flex; flex-direction:column;">'
             + '<div id="jira-search-drag" style="flex:0 0 auto; padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
             + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
-            + '<strong style="font-size:14px;">🔎 ' + T('전체 이슈 검색', 'Search all issues') + '</strong>'
+            + '<strong style="font-size:14px;">🔍 ' + T('전체 이슈 검색', 'Search all issues') + '</strong>'
             + '<span style="flex:1;"></span>'
             + '<button onclick="document.getElementById(\'jira-search-modal\').style.display=\'none\'"'
             + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
@@ -870,7 +870,7 @@
             + teamSel
             + fieldSel
             + '<input id="jira-search-q" placeholder="' + T('검색어 · 이름 · 프로젝트 · 이슈 키', 'Term · name · project · issue key') + '" style="' + inputSt + ' min-width:0;" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
-            + '<button onclick="window._jiraSearchRun()"' + btnHover + ' style="' + btnSt + ' font-weight:bold; flex-shrink:0;">🔎 ' + T('검색', 'Search') + '</button>'
+            + '<button onclick="window._jiraSearchRun()"' + btnHover + ' style="' + btnSt + ' font-weight:bold; flex-shrink:0;">🔍 ' + T('검색', 'Search') + '</button>'
             + '</div></div>'
             + '<div id="jira-search-sim" style="flex:0 0 auto; display:none; padding:0 14px 6px;"></div>'
             + '<div id="jira-search-body" style="padding:0 14px 14px; flex:1 1 auto; min-height:0; overflow:auto; font-size:12px;"></div>'
@@ -1290,7 +1290,7 @@
                 + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
                 + '<div style="padding:14px 16px; flex:1; min-height:0; overflow-y:auto; font-size:12px;">'
                 + '<div style="margin-bottom:10px; color:#777; line-height:1.5;">'
-                + T('지금 모델(위 배지)과 연결할 JIRA 이슈를 네 가지 방법으로 모읍니다 — 모델마다 따로 저장됩니다. 📁 프로젝트만 탭을 열 때 자동으로 조회되고, 나머지(🔗🔍📧)는 표 아래 "🔎 더 찾기" 버튼을 눌러야 돕니다(다른 모델 이슈가 섞이는 걸 막기 위한 안전장치).', 'Collects linked JIRA issues for the current model (badge above) four ways — saved separately per model. Only 📁 project auto-runs when the tab opens; the rest (🔗🔍📧) need the "🔎 Search these too" button below the table (a safeguard against pulling in another model\'s issues).')
+                + T('지금 모델(위 배지)과 연결할 JIRA 이슈를 네 가지 방법으로 모읍니다 — 모델마다 따로 저장됩니다. 📁 프로젝트만 탭을 열 때 자동으로 조회되고, 나머지(🔗🔍📧)는 표 아래 "🔍 더 찾기" 버튼을 눌러야 돕니다(다른 모델 이슈가 섞이는 걸 막기 위한 안전장치).', 'Collects linked JIRA issues for the current model (badge above) four ways — saved separately per model. Only 📁 project auto-runs when the tab opens; the rest (🔗🔍📧) need the "🔍 Search these too" button below the table (a safeguard against pulling in another model\'s issues).')
                 + '</div>'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">📁 ' + T('JIRA 프로젝트(코드 또는 이름 — 그 프로젝트 전체 이슈)', 'JIRA project (code or name — all its issues)') + '</label>'
                 + '<div style="display:flex; gap:6px; margin-bottom:4px;">'
@@ -1305,7 +1305,7 @@
                 + '<input id="jira-link-manual" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:10px;">'
                 + '<label style="display:block; margin-bottom:4px; color:#555;">🔍 ' + T('검색어(JQL text 검색, 비우면 모델명 사용)', 'Search keyword (JQL text search; blank uses the model name)') + '</label>'
                 + '<input id="jira-link-keyword" style="width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:6px;" placeholder="' + esc(defaultKeyword()) + '">'
-                + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 별도 입력 없이 함께 모이지만, 표 아래 "🔎 더 찾기"를 눌러야 조회됩니다 — 모델이 여럿이면 📁 프로젝트 코드를 등록해야 그 모델 것만 보입니다.', 'Issue numbers captured from mail need no extra input, but are only fetched when you click "🔎 Search these too" below the table — with multiple models, set the 📁 project code so only this model\'s issues show.') + '</div>'
+                + '<div style="font-size:11px; color:#999; margin-bottom:10px;">📧 ' + T('메일에서 캡처된 이슈번호는 별도 입력 없이 함께 모이지만, 표 아래 "🔍 더 찾기"를 눌러야 조회됩니다 — 모델이 여럿이면 📁 프로젝트 코드를 등록해야 그 모델 것만 보입니다.', 'Issue numbers captured from mail need no extra input, but are only fetched when you click "🔍 Search these too" below the table — with multiple models, set the 📁 project code so only this model\'s issues show.') + '</div>'
                 + '<div id="jira-link-status" style="display:none; font-size:11.5px; margin-bottom:8px; line-height:1.5;"></div>'
                 + '<div style="display:flex; justify-content:flex-end;">'
                 + '<button onclick="window._jiraSaveLinkSettings()"'
@@ -1535,7 +1535,7 @@
                 + '<div style="display:flex; align-items:baseline; gap:8px;">'
                 + '<div style="font-size:11px; color:#888; flex:1; min-width:0;">' + esc(c.author || '') + ' · ' + esc((c.created || '').slice(0, 16).replace('T', ' ')) + '</div>'
                 + '<a onclick="window._jiraEditComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#00707d; cursor:pointer; white-space:nowrap;">✏️ ' + T('수정', 'Edit') + '</a>'
-                + '<a onclick="window._jiraDeleteComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#a3281c; cursor:pointer; white-space:nowrap;">🗑 ' + T('삭제', 'Delete') + '</a>'
+                + '<a onclick="window._jiraDeleteComment(\'' + esc(key) + '\', ' + i + ')" style="font-size:11px; color:#a3281c; cursor:pointer; white-space:nowrap;">🗑️ ' + T('삭제', 'Delete') + '</a>'
                 + '</div>'
                 + '<div id="jira-comment-body-' + i + '" style="white-space:pre-wrap;">' + esc(c.body) + '</div></div>';
         }).join('');

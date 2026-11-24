@@ -257,7 +257,7 @@ window.renderPanelCompareTab = async function() {
                 <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">✏️</button>` : ''}
                     <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🔄</button>
-                    <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🗑</button>
+                    <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🗑️</button>
                     ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
                 </div>
             </th>`;
@@ -845,7 +845,7 @@ window._pcSaveNewPanel = async function() {
     if (window.showToast) window.showToast((_en ? '✅ Saved: ' : '✅ 저장 완료: ') + model, 'info');
 };
 
-// ─── Summary 주요자재 PANEL 행 🔎 버튼 → 패널 스펙 미리보기 모달 ───
+// ─── Summary 주요자재 PANEL 행 🔍 버튼 → 패널 스펙 미리보기 모달 ───
 // 💡 [2026-09-01 신규] codeHint(주요자재 표의 ktk pn, 보통 6자리 관리코드) — 검색에만 쓰고 비교표
 //    등록/재추출 등 "식별자"로는 절대 안 씀(식별자는 항상 entry.model 또는 사용자가 적은 description
 //    그대로 — ktk pn이 섞여 들어가면 이미 비교표에 있는 같은 패널을 "없음"으로 오판하거나, 비교표에
@@ -1267,7 +1267,7 @@ window._epPartNameOf = function(specs) {
 };
 
 // 💡 [2026-08-27 신규 — 안전장치] Summary 주요자재 설명칸에 "코드_이름"(예: 301782_KCB-02508B-60),
-//    "이름만"(예: MV315QHB-N41-A000), "코드만"(예: 303222) 중 무엇을 적어도 🔎가 라이브러리에서
+//    "이름만"(예: MV315QHB-N41-A000), "코드만"(예: 303222) 중 무엇을 적어도 🔍가 라이브러리에서
 //    찾아내도록 하는 범용 매처. 완전일치(대소문자·공백 차이 무시)를 먼저 시도하고, 실패하면 쿼리를
 //    "6자리 코드" + "나머지 이름"으로 쪼개 Item Code/Part Name 필드와 각각 대조한다.
 window._epNormalizeKey = function(s) {

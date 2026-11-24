@@ -181,7 +181,7 @@ window._dsPut = async function (folder, file, overwrite) {
 };
 
 /** 파일 하나 삭제 — 확인창·토스트 없는 맨 버전(프로그램적으로 쓰는 곳용, 예: 사진 교체/제거).
- *  사람이 직접 누르는 고르기 창의 🗑는 `_dsPickDelete`(확인창 포함)를 따로 쓴다. */
+ *  사람이 직접 누르는 고르기 창의 🗑️는 `_dsPickDelete`(확인창 포함)를 따로 쓴다. */
 window._dsDelete = function (folder, name) {
     if (window._dsInvalidateList) window._dsInvalidateList(folder);
     return _api('/doc/delete', {
@@ -204,7 +204,7 @@ window._dsUrlToDataUri = async function (url) {
     });
 };
 
-// ── 🔎 패널 PN → 사양서 ───────────────────────────────────────────────
+// ── 🔍 패널 PN → 사양서 ───────────────────────────────────────────────
 //    파일명이 곧 패널 PN이라(DV320FHM-NN0.pdf, LC430EQZ-SHM1.pdf) 따로 색인이 필요 없다.
 //    표기 차이(점·하이픈·공백·대소문자)는 무시하고 맞춘다 — "G101EVN01.0" ↔ "G101EVN010".
 function _pnKey(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
@@ -415,7 +415,7 @@ window._dsFindPanelSpecs = async function (pns, folder) {
         if (fk && !byKey[fk]) byKey[fk] = f.name;
     });
     var keys = Object.keys(byKey);
-    // 🔎 [2026-10-30] 몇 장이 걸렸는지도 같이 센다(_counts) — 부르는 쪽이 "여러 장이면 고르게"
+    // 🔍 [2026-10-30] 몇 장이 걸렸는지도 같이 센다(_counts) — 부르는 쪽이 "여러 장이면 고르게"
     //    할 수 있어야 한다. 값은 PN 으로만 찾으므로 `_counts` 키를 같이 담아도 안전하다.
     var counts = {};
     (pns || []).forEach(function (pn) {
@@ -442,7 +442,7 @@ window._dsFindPanelSpecs = async function (pns, folder) {
 };
 
 /**
- * 🔎 [2026-10-30] 키워드가 들어간 **모든** 파일. 사용자 지적:
+ * 🔍 [2026-10-30] 키워드가 들어간 **모든** 파일. 사용자 지적:
  *    "PARTS>PANEL 에서도 패널명 키워드가 들어간 파일은 모두 표시해줘."
  * 패널 하나에 데이터시트·도면·시험성적서·개정본이 여러 장 있는데, `_dsFindPanelSpec` 은
  * 처음 걸린 한 장만 돌려줘서 나머지는 **있는데도 없는 것처럼** 보였다.
@@ -722,7 +722,7 @@ window._dsOpenPicker = async function (opts) {
     var _fkeys = _dsPick.folders.map(function (x) { return x.f; });
     if (!_dsPick.folder || _fkeys.indexOf(_dsPick.folder) === -1) _dsPick.folder = _fkeys[0] || '';
     _dsRenderTabs();
-    // 🔎 [2026-10-30] 부르는 쪽이 검색어를 미리 넣을 수 있다 — "키워드가 들어간 파일은 모두
+    // 🔍 [2026-10-30] 부르는 쪽이 검색어를 미리 넣을 수 있다 — "키워드가 들어간 파일은 모두
     //    보여줘"(사용자 요청)를 새 창을 만들지 않고 이 창 하나로 끝내기 위해서다.
     var qEl = document.getElementById('ds-pick-q');
     if (qEl) qEl.value = _dsPick.q || '';
@@ -803,7 +803,7 @@ async function _dsLoadFolder() {
     } catch (e) { body.innerHTML = _dsErrHtml(e.message); }
 }
 
-// 🔎 [2026-10-30] 검색은 **글자 그대로**와 **기호를 뗀 모양** 둘 다로 본다.
+// 🔍 [2026-10-30] 검색은 **글자 그대로**와 **기호를 뗀 모양** 둘 다로 본다.
 //    사용자 지적: "파일명 키워드로 불러올 때, 키워드로 걸리는 파일은 모두 보여줘."
 //    사람이 치는 패널명·PN 은 하이픈·공백·대소문자가 제각각이라("AB-123" vs "AB123 사양서.pdf")
 //    글자 그대로만 보면 **있는 파일이 0건으로** 나왔다. 띄어 쓴 낱말은 모두 들어가야 한다(AND).
@@ -842,7 +842,7 @@ function _dsRenderList() {
                 + '<span style="font-size:11px; color:#aaa; flex-shrink:0;">' + _kb(f.size) + '</span>'
                 + '<span style="font-size:10.5px; color:#bbb; flex-shrink:0;">' + _esc(String(f.mtime || '').slice(0, 10)) + '</span>'
                 + '<button class="ds-open" title="' + _t('새 창에서 열기', 'Open in a new tab') + '" style="flex-shrink:0; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:5px; width:24px; height:24px; padding:0; cursor:pointer; font-size:11px;">↗</button>'
-                + '<button class="ds-del" title="' + _t('삭제(되돌릴 수 없음)', 'Delete (cannot be undone)') + '" style="flex-shrink:0; background:#fdeaea; border:1px solid #f3b7b7; color:#b42318; border-radius:5px; width:24px; height:24px; padding:0; cursor:pointer; font-size:11px;">🗑</button>'
+                + '<button class="ds-del" title="' + _t('삭제(되돌릴 수 없음)', 'Delete (cannot be undone)') + '" style="flex-shrink:0; background:#fdeaea; border:1px solid #f3b7b7; color:#b42318; border-radius:5px; width:24px; height:24px; padding:0; cursor:pointer; font-size:11px;">🗑️</button>'
                 + '</div>';
         }).join('');
     }
@@ -901,7 +901,7 @@ window._dsPickDelete = async function (folder, name) {
                      'Permanently delete "' + name + '" from the NAS? This cannot be undone.'))) return;
     try {
         await window._dsDelete(folder, name);
-        _toast('🗑 ' + name, 'info');
+        _toast('🗑️ ' + name, 'info');
         if (folder === _dsPick.folder) await _dsLoadFolder();
     } catch (e) { _toast('❌ ' + e.message, 'error', 6000); }
 };

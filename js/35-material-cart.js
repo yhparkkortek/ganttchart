@@ -290,7 +290,7 @@
                 + '<div style="padding:9px 15px; border-top:1px solid #eee; display:flex; gap:8px; flex:0 0 auto;">'
                 + '<button onclick="window._mcClear()" onmouseover="this.style.filter=\'brightness(.95)\'" onmouseout="this.style.filter=\'\'"'
                 + ' style="padding:8px 14px; background:#fdecea; color:#a3281c; border:1px solid #f0b4ad;'
-                + ' border-radius:6px; font-size:12px; cursor:pointer;">🗑 ' + T('비우기', 'Empty') + '</button>'
+                + ' border-radius:6px; font-size:12px; cursor:pointer;">🗑️ ' + T('비우기', 'Empty') + '</button>'
                 + '<span style="flex:1;"></span>'
                 + '<button id="matcart-submit" onclick="window._mcSubmit()" onmouseover="this.style.filter=\'brightness(.95)\'" onmouseout="this.style.filter=\'\'"'
                 + ' style="padding:8px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0;'

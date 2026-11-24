@@ -1322,7 +1322,7 @@ function mfRenderList(results) {
             </div>
             <button data-del-idx="${i}" title="목록에서 삭제"
                     style="flex-shrink:0; border:none; background:none; color:#bbb; cursor:pointer; font-size:13px; padding:2px 4px;"
-                    onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑</button>
+                    onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑️</button>
         </div>`;
     });
 

@@ -957,7 +957,7 @@
                                            : _t('연결된 도면이 없습니다 — PN을 확인하세요', 'No linked drawing — check the PN')) + '">📜</span>';
             } else if (c.type === 'panel') {
                 ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPanelCard(\'' + r._id + '\')"'
-                    + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔎</span>';
+                    + ' title="' + _esc(_t('패널 정보 — 앱 라이브러리 + NAS 사양서', 'Panel info — app library + NAS spec')) + '">🔍</span>';
             } else if (c.type === 'sap') {
                 ico = '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPnMenu(\'' + r._id + '\')"'
                     + ' title="' + _esc(_t('SAP 조회 · 프로젝트 열기', 'SAP lookup / open project')) + '">🏭</span>';
@@ -966,7 +966,7 @@
                     + ' title="' + _esc(_t('담당자 정보 · 이 담당자 제품만 보기', 'Owner info / filter by this owner')) + '">👤</span>' : '';
             } else if (String(c.type).indexOf('part:') === 0) {
                 ico = v ? '<span class="pl-ico" onclick="event.stopPropagation(); window.plOpenPartCard(\'' + r._id + '\',\'' + c.k + '\',\'' + String(c.type).slice(5) + '\')"'
-                    + ' title="' + _esc(_t('PARTS 라이브러리에서 보기', 'Open in PARTS library')) + '">🔎</span>' : '';
+                    + ' title="' + _esc(_t('PARTS 라이브러리에서 보기', 'Open in PARTS library')) + '">🔍</span>' : '';
             }
             // 아이콘이 있는 칸은 오른쪽에 자리를 비워 두고(padding-right) 그 자리에 아이콘을 고정한다.
             if (ico) { cls += ' pl-has-ico'; }
@@ -1592,7 +1592,7 @@
         var r = _rowById(id); if (!r) return;
         var v = String(r[k] || '').trim();
         var same = (D().rows || []).filter(function (x) { return String(x[k] || '').trim() === v; }).length;
-        _popup('🔎 ' + _esc(v), '<div id="pl-part-body" style="color:#888;">' + _t('불러오는 중…', 'Loading…') + '</div>');
+        _popup('🔍 ' + _esc(v), '<div id="pl-part-body" style="color:#888;">' + _t('불러오는 중…', 'Loading…') + '</div>');
         var html = '';
         try {
             var lib = window.loadElecPartLibrary ? await window.loadElecPartLibrary(type) : null;

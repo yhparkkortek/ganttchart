@@ -101,7 +101,7 @@
                 + fieldRow(T('언어', 'Language'), '<input id="saplogin-lang" maxlength="2" style="' + inputSt + '" value="KO">')
                 + '<div id="saplogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
                 + '<div style="display:flex; gap:8px;">'
-                + '<button onclick="window._sapLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<button onclick="window._sapLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑️ ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._sapLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._sapLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
@@ -120,7 +120,7 @@
                 + fieldRow(T('비밀번호', 'Password'), '<input id="gwlogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + '<div id="gwlogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
                 + '<div style="display:flex; gap:8px;">'
-                + '<button onclick="window._gwLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<button onclick="window._gwLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑️ ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._gwLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._gwLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
@@ -139,7 +139,7 @@
                 + fieldRow(T('비밀번호', 'Password'), '<input id="insalogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + '<div id="insalogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
                 + '<div style="display:flex; gap:8px;">'
-                + '<button onclick="window._insaLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<button onclick="window._insaLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑️ ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._insaLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._insaLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
@@ -160,7 +160,7 @@
                 + fieldRow(T('비밀번호', 'Password'), '<input id="jiralogin-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + '<div id="jiralogin-status" style="display:none; font-size:11.5px; margin:4px 0 10px; line-height:1.5; white-space:pre-wrap;"></div>'
                 + '<div style="display:flex; gap:8px;">'
-                + '<button onclick="window._jiraLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<button onclick="window._jiraLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑️ ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._jiraLoginTest()" style="' + btnSt + '">🔌 ' + T('로그인 테스트', 'Test login') + '</button>'
                 + '<button onclick="window._jiraLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
@@ -194,7 +194,7 @@
                 + fieldRow(T('비밀번호', 'Password'), '<input id="nasq-pw" type="password" autocomplete="new-password" style="' + inputSt + '">')
                 + fieldRow(T('NAS 주소', 'NAS address'),
                     '<input id="nasq-host" autocomplete="off" style="' + inputSt + '" placeholder="' + T('담당자가 알려준 주소', 'the address you were given') + '">')
-                // 🗑 [2026-11-09] `📄 기본설정 파일`·`📤 설정 코드 복사`·`설정 코드 붙여넣기` 삭제.
+                // 🗑️ [2026-11-09] `📄 기본설정 파일`·`📤 설정 코드 복사`·`설정 코드 붙여넣기` 삭제.
                 //    실측으로 **필요가 없다**: `/nas/setup` 은 주소·아이디·비밀번호만 받으면
                 //    앱 폴더를 스스로 찾고(`find_app_folder` — 이 NAS 에선 31곳을 4.0초에 훑어
                 //    **정확히 1곳**), 자료실 경로·포트·HTTPS 까지 거기서 만들어 쓴다.
@@ -256,7 +256,7 @@
                     + '<button onclick="window._nasPickRoot()" style="' + btnSt + ' padding:6px 10px;">📂 ' + T('찾기', 'Browse') + '</button>')
                 + '<div id="naslogin-cands" style="display:none; max-height:132px; overflow:auto; border:1px solid #e0e0e0; border-radius:6px; margin:-4px 0 10px; font-size:11.5px;"></div>'
                 + '<div style="display:flex; gap:8px;">'
-                + '<button onclick="window._nasLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑 ' + T('설정 삭제', 'Delete') + '</button>'
+                + '<button onclick="window._nasLoginDelete()" style="' + btnSt + ' background:#fdecea; color:#a3281c; border-color:#f0b4ad;">🗑️ ' + T('설정 삭제', 'Delete') + '</button>'
                 + '<span style="flex:1;"></span>'
                 + '<button onclick="window._nasLoginTest()" style="' + btnSt + '">🔌 ' + T('연결 테스트', 'Test') + '</button>'
                 + '<button onclick="window._nasLoginSave()" style="' + btnSt + ' font-weight:bold;">💾 ' + T('저장', 'Save') + '</button>'
@@ -390,7 +390,7 @@
             var d = await fetch(BASE + '/gw/login-config', { method: 'DELETE' }).then(function (r) { return r.json(); });
             document.getElementById('gwlogin-user').value = '';
             document.getElementById('gwlogin-pw').value = '';
-            gwStatus(d.ok ? ('🗑 ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
+            gwStatus(d.ok ? ('🗑️ ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
             window._gwLoginRefresh();
         } catch (e) {
             gwStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
@@ -469,7 +469,7 @@
             document.getElementById('insalogin-user').value = '';
             document.getElementById('insalogin-pw').value = '';
             _insaTried = false; _insaFailMsg = '';
-            insaStatus(d.ok ? ('🗑 ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
+            insaStatus(d.ok ? ('🗑️ ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
             window._insaLoginRefresh();
         } catch (e) {
             insaStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');
@@ -609,7 +609,7 @@
         }
         if (d && d.ok) { window._gwResetLoginGate(); return { ok: true, session: d.session }; }
 
-        // 🔎 서버까지 간 실패인가? 백엔드가 `retryable:true`를 주면 **자격증명을 보낸 적이
+        // 🔍 서버까지 간 실패인가? 백엔드가 `retryable:true`를 주면 **자격증명을 보낸 적이
         //    없는 실패**(크롬 미실행·로그인 화면 미도달·클릭 실패)라 잠금과 무관하다.
         var _safe = !!(d && d.retryable);
         _gwAutoFailMsg = (d && d.result === 'not_configured')
@@ -677,7 +677,7 @@
             window._sapAutoLoginOn = false;
             ['saplogin-sysname', 'saplogin-client', 'saplogin-user', 'saplogin-pw'].forEach(function (id) { document.getElementById(id).value = ''; });
             document.getElementById('saplogin-pw').placeholder = '';
-            setStatus('🗑 ' + T('삭제했습니다.', 'Deleted.'), 'ok');
+            setStatus('🗑️ ' + T('삭제했습니다.', 'Deleted.'), 'ok');
         } catch (e) {
             setStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
         }
@@ -1192,7 +1192,7 @@
             ['naslogin-host', 'naslogin-port', 'naslogin-user', 'naslogin-pw', 'naslogin-root']
                 .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
             await window._nasLoginRefresh();
-            nasStatus('🗑 ' + T('삭제했습니다.', 'Deleted.'), 'ok');
+            nasStatus('🗑️ ' + T('삭제했습니다.', 'Deleted.'), 'ok');
         } catch (e) {
             nasStatus('⚠️ ' + esc(e && e.message ? e.message : e), 'err');
         }
@@ -1273,7 +1273,7 @@
             document.getElementById('jiralogin-user').value = '';
             document.getElementById('jiralogin-pw').value = '';
             _jiraTried = false; _jiraFailMsg = '';
-            jiraStatus(d.ok ? ('🗑 ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
+            jiraStatus(d.ok ? ('🗑️ ' + d.message) : ('⚠️ ' + (d.message || '')), d.ok ? 'ok' : 'err');
             window._jiraLoginRefresh();
         } catch (e) {
             jiraStatus('⚠️ ' + T('백엔드에 연결하지 못했습니다.', 'Backend unreachable.'), 'err');

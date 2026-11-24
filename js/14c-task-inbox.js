@@ -15,7 +15,7 @@ window.TaskInbox = {
         try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
     },
     // 🐛 [2026-09-07 버그수정] "Setting the value of 'gantt_task_inbox' exceeded the quota" —
-    //    처리완료(배치됨/전송됨) 항목도 '보관' 모드(기본값)에선 사람이 하나씩 🗑로 지우기 전까진
+    //    처리완료(배치됨/전송됨) 항목도 '보관' 모드(기본값)에선 사람이 하나씩 🗑️로 지우기 전까진
     //    영원히 목록에 남고, 각 항목이 메일 원문(mailRaw.body2000, 최대 2000자)까지 그대로 들고
     //    있어서 자동처리로 오래 쌓이면 localStorage 용량(브라우저별 5~10MB)을 넘길 수 있었다.
     //    이 상태에서 setItem이 그대로 throw하면 이후의 모든 add/setStatus 호출(메일 자동처리 파이프라인
@@ -370,7 +370,7 @@ window.getCurrentL0List = function() {
 
 // 💡 [버그 수정] "▼ 상세 보기"로 펼친 상태는 지금까지 DOM(display:none/block)에만 있었는데,
 //    renderTaskInbox()는 목록 전체를 innerHTML로 통째로 새로 그리기 때문에, 버튼 하나(현재 Proj 전송/
-//    매칭 Proj 전송/🗑 등)를 눌러 목록이 다시 그려지는 순간 펼쳐놨던 상세 내용이 전부 접혀버렸음.
+//    매칭 Proj 전송/🗑️ 등)를 눌러 목록이 다시 그려지는 순간 펼쳐놨던 상세 내용이 전부 접혀버렸음.
 //    → 어떤 카드를 펼쳤는지 uid 기준으로 별도 기억해뒀다가, 다시 그릴 때 그 상태를 그대로 복원한다.
 window._ibExpandedUids = window._ibExpandedUids || new Set(); // 호환성 유지 (미사용)
 window._ibCollapsedUids = window._ibCollapsedUids || new Set(); // [2026-10-02] 기본 펼침 — 접은 카드만 추적
@@ -436,9 +436,9 @@ window._tiClearFilter = function() {
     window.renderTaskInbox();
 };
 
-// ⭐ [2026-09-23 신규] 요약에서 상태+프로젝트로 걸러낸 묶음을 통째로 지우는 버튼(🗑).
+// ⭐ [2026-09-23 신규] 요약에서 상태+프로젝트로 걸러낸 묶음을 통째로 지우는 버튼(🗑️).
 //    자동배치가 끝난 건들이 보관함에 수백 건씩 남아 "전체 479건" 같은 상태가 되는데, 프로젝트별로
-//    정리하려면 카드마다 🗑을 눌러야 했다. 선택된 프로젝트 칩 옆에서 한 번에 지운다.
+//    정리하려면 카드마다 🗑️을 눌러야 했다. 선택된 프로젝트 칩 옆에서 한 번에 지운다.
 //    ⚠️ 지우는 건 "보관함 기록"일 뿐 — 이미 간트차트에 배치된 업무 자체는 그대로 남는다.
 // 💡 확인창(confirm)은 쓰지 않는다(보관함 수동 작업 공통 규칙) — 대신 지운 묶음을 메모리에 들고
 //    있다가 요약에 [↩ 삭제 취소] 칩을 띄워 되돌릴 수 있게 한다(실수 복구 경로를 먼저 만들어 둠).
@@ -476,11 +476,11 @@ window._tiBulkDeleteFiltered = async function(status, project) {
         const _pending = status === '대기';
         window.showToast(_en
             ? (_pending
-                ? `🗑 Removed ${doomed.length} PENDING record(s) — these were not placed in any project. Use [↩ Undo delete] in the summary to restore.`
-                : `🗑 Removed ${doomed.length} inbox record(s) — use [↩ Undo delete] in the summary to restore. Tasks already placed in the Gantt chart are NOT affected.`)
+                ? `🗑️ Removed ${doomed.length} PENDING record(s) — these were not placed in any project. Use [↩ Undo delete] in the summary to restore.`
+                : `🗑️ Removed ${doomed.length} inbox record(s) — use [↩ Undo delete] in the summary to restore. Tasks already placed in the Gantt chart are NOT affected.`)
             : (_pending
-                ? `🗑 대기 기록 ${doomed.length}건 삭제 — 어느 프로젝트에도 배치되지 않았던 건입니다. 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다.`
-                : `🗑 보관함 기록 ${doomed.length}건 삭제 — 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다. 이미 간트차트에 배치된 업무는 그대로입니다.`),
+                ? `🗑️ 대기 기록 ${doomed.length}건 삭제 — 어느 프로젝트에도 배치되지 않았던 건입니다. 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다.`
+                : `🗑️ 보관함 기록 ${doomed.length}건 삭제 — 요약의 [↩ 삭제 취소]로 되돌릴 수 있습니다. 이미 간트차트에 배치된 업무는 그대로입니다.`),
             'info', 6000);
     }
     // ⭐ 드라이브 반영 결과는 따로 알린다(실패를 조용히 삼키면 "지웠는데 다시 생김"으로 돌아온다)
@@ -537,7 +537,7 @@ window._tiBuildSummaryHtml = function(items) {
                              : '이 ' + count + '건의 대기 기록을 지웁니다 — 아직 어느 프로젝트에도 배치되지 않은 업무라 같이 사라집니다 (직후 되돌리기 가능)')
                       : (_en ? 'Delete these ' + count + ' inbox records (tasks already placed in the Gantt chart are not affected)'
                              : '이 ' + count + '건의 보관함 기록을 지웁니다 (간트차트에 배치된 업무는 그대로)')}" ` +
-                  `style="margin-left:5px;padding:0 4px;border-radius:5px;cursor:pointer;color:#b1432f;background:#fbe4e2;border:1px solid #eeb0ac;font-size:10.5px;line-height:1.5;">🗑︎</span>`
+                  `style="margin-left:5px;padding:0 4px;border-radius:5px;cursor:pointer;color:#b1432f;background:#fbe4e2;border:1px solid #eeb0ac;font-size:10.5px;line-height:1.5;">🗑️︎</span>`
                 : '') +
             `</span>`;
     }
@@ -619,7 +619,7 @@ window._tiBuildSummaryHtml = function(items) {
         }
         const filterStatusLabel = _en ? (_TI_STATUS_LABEL_EN[filter.status] || filter.status) : filter.status;
         const filterLabel = filter.project ? `${filterStatusLabel} · ${filter.project}` : filterStatusLabel;
-        html += `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 ${_en ? 'Filtered' : '필터링 중'}: ${escapeHtml(filterLabel)}</span></div>`;
+        html += `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔍 ${_en ? 'Filtered' : '필터링 중'}: ${escapeHtml(filterLabel)}</span></div>`;
     }
     // ⭐ [2026-09-23] 방금 묶음 삭제한 게 있으면 되돌릴 길을 열어둔다(확인창 없이 지우므로 필수)
     if (window._tiUndoBuffer && window._tiUndoBuffer.items && window._tiUndoBuffer.items.length) {
@@ -886,8 +886,8 @@ window.renderTaskInbox = function() {
                      사람이 구분할 수 없고 필요한 건 "이 프로젝트가 아니다" 하나라 ♻️ 하나만 남긴다. 누르면 카드를 **지우지 않고**
                      지금 후보를 이 카드의 제외 목록(excludedFids)에 넣은 뒤 AI 없이 다시 판단한다(js/74 mailRouteRejudgeOne). -->
                 <button onclick="window.inboxQuickClassify('${it.uid}', '오매칭')" title="${_ibEn ? 'Wrong project — exclude it and judge again' : '오매칭 — 이 프로젝트가 아님 · 빼고 다시 판단'}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#f0fff4'; this.style.borderColor='#a3d9b5';" style="flex:0 0 31px; width:31px; font-size:13px; padding:0; height:31px; text-align:center; line-height:1; box-sizing:border-box; border:1px solid #a3d9b5; border-radius:6px; background:#f0fff4; color:#1a6b35; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">♻️</button>
-                <!-- 🗑 [2026-11-23 사용자 결정] 삭제 버튼은 남긴다 — 회사 공지처럼 프로젝트 업무가 아닌 메일을 한 건씩 지우는 길. 확인창 없이 바로 지우고 학습 기록('불필요')을 남긴다(기존 inboxQuickClassify '불필요' 경로 재사용). -->
-                <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Delete — not a project task (notice, etc.)' : '삭제 — 프로젝트 업무가 아님(공지 등)'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 31px; width:31px; font-size:13px; padding:0; height:31px; text-align:center; line-height:1; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
+                <!-- 🗑️ [2026-11-23 사용자 결정] 삭제 버튼은 남긴다 — 회사 공지처럼 프로젝트 업무가 아닌 메일을 한 건씩 지우는 길. 확인창 없이 바로 지우고 학습 기록('불필요')을 남긴다(기존 inboxQuickClassify '불필요' 경로 재사용). -->
+                <button onclick="window.inboxQuickClassify('${it.uid}', '불필요')" title="${_ibEn ? 'Delete — not a project task (notice, etc.)' : '삭제 — 프로젝트 업무가 아님(공지 등)'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 31px; width:31px; font-size:13px; padding:0; height:31px; text-align:center; line-height:1; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑️</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             ${_hasCand
@@ -2314,7 +2314,7 @@ window.inboxPlaceToCurrent = function(uid) {
 };
 
 // ─── 💡 [처리됨 정리 모드] 처리됨(대기 아닌 상태) 항목을 어떻게 다룰지 두 모드 ─────────────────
-//    - keep(처리됨 보관, 기본값): 지금까지 동작 그대로 — 처리돼도 목록에 남고, 사람이 각 행의 🗑로
+//    - keep(처리됨 보관, 기본값): 지금까지 동작 그대로 — 처리돼도 목록에 남고, 사람이 각 행의 🗑️로
 //      직접 훑어보고 지운다.
 //    - auto(처리됨 자동삭제): TaskInbox.setStatus()로 상태가 "대기"가 아닌 값(배치됨/자동배치됨/전송됨 등)으로
 //      바뀌는 그 순간 바로 목록에서 제거 — 직접 지울 필요 없이 처리 즉시 사라짐.
@@ -2575,7 +2575,7 @@ window.inboxCreateNewProjectFromPending = function(uid) {
 
 // ─── 💡 [버그 수정 2026-09-07, 2026-10-02 원클릭화, 2026-11-13 인라인화] 업무 보관함 카드의
 //    분류 삭제 — 사유(오매칭/중복/불필요)를 물어 학습 로그(gantt_ai_learning_v1)에 남긴 뒤
-//    지운다. 처음엔 🗑 버튼 → 팝업 → 사유 버튼 2단이었는데, 팝업 자체가 "한 번 더 거치는 클릭"
+//    지운다. 처음엔 🗑️ 버튼 → 팝업 → 사유 버튼 2단이었는데, 팝업 자체가 "한 번 더 거치는 클릭"
 //    이라 사용자 요청으로 **팝업을 없애고 카드 줄에 아이콘 3개를 바로 둔다**(❌오매칭/♻️중복/
 //    🚫불필요) — 그 아이콘을 누르면 바로 이 함수가 실행된다(모달 X). 아직 어느 프로젝트에도
 //    배치 전이라 globalData splice가 필요 없어(=Gantt 재배치 대상 드롭다운 불필요) Gantt 행
@@ -2595,8 +2595,8 @@ window.inboxQuickClassify = function(uid, reason) {
         const cands = ((cur.matchedProject && cur.matchedProject.candidates) || []).filter(function(c) { return c && c.drive_file_id; });
         if (!cands.length) {
             if (window.showToast) window.showToast(_en
-                ? '♻️ This card has no candidate project to exclude — use [📤 Other Proj] / [➕ New Proj], or 🗑 if it is not a project task.'
-                : '♻️ 이 카드엔 뺄 후보 프로젝트가 없습니다 — [📤 다른 Proj]·[➕ 새 Proj]로 보내거나, 프로젝트 업무가 아니면 🗑 로 지우세요.', 'warn', 6000);
+                ? '♻️ This card has no candidate project to exclude — use [📤 Other Proj] / [➕ New Proj], or 🗑️ if it is not a project task.'
+                : '♻️ 이 카드엔 뺄 후보 프로젝트가 없습니다 — [📤 다른 Proj]·[➕ 새 Proj]로 보내거나, 프로젝트 업무가 아니면 🗑️ 로 지우세요.', 'warn', 6000);
             return;
         }
         const ex = new Set(cur.excludedFids || []);
@@ -2655,7 +2655,7 @@ window.inboxQuickClassify = function(uid, reason) {
     window._ibCollapsedUids && window._ibCollapsedUids.delete(uid);
     window.TaskInbox.remove(uid);
     window.renderTaskInbox();
-    if (window.showToast) window.showToast(_en ? '🗑 Deleted — learning recorded' : '🗑 삭제했습니다 — 학습 데이터가 기록됐습니다', 'info');
+    if (window.showToast) window.showToast(_en ? '🗑️ Deleted — learning recorded' : '🗑️ 삭제했습니다 — 학습 데이터가 기록됐습니다', 'info');
     // ⭐ [2026-09-23] 단건 삭제도 3초 대기 없이 바로 드라이브까지 반영
     window.TaskInbox.syncNow().then(function(r) {
         if (r === 'failed' && window.showToast) {

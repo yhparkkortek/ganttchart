@@ -81,7 +81,7 @@
     window._psMode = mode;
 
     /**
-     * 🔎 보는 조건 — 담당자(PM) / 프로젝트 / 업무 담당자(보조) / 직접 기간.
+     * 🔍 보는 조건 — 담당자(PM) / 프로젝트 / 업무 담당자(보조) / 직접 기간.
      * ⚠️ 모달을 다시 그려도 살아 있어야 해서 localStorage 에 둔다(모듈 변수는 새로고침에 날아간다).
      *
      * 💡 [2026-11-11 사용자 요청] "개발3팀 > 프로젝트 담당자 > 프로젝트 선택" 흐름이 기본이다 —
@@ -890,7 +890,7 @@
             return '<div id="ps-period-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">' + b + '</div>';
         }
 
-        // 🔎 담당자(PM, 기본) · 프로젝트(PM 소속으로 캐스케이딩) · 업무 담당자(보조, 선택) —
+        // 🔍 담당자(PM, 기본) · 프로젝트(PM 소속으로 캐스케이딩) · 업무 담당자(보조, 선택) —
         //    선택지는 **그 앞 단계까지 거른** 목록에서 만든다(_psCollectFacts 참고).
         var F = filt();
         var sel = function (id, label, cur2, opts, allLabel, resetKeys, extraStyle) {
@@ -920,7 +920,7 @@
         }
         var lab = function (s) { return '<span style="font-size:11px; color:#666; white-space:nowrap;">' + esc(s) + '</span>'; };
         var slash = '<span style="color:#bbb;">/</span>';
-        var f2 = '<span style="font-size:11px; color:#888;">🔎</span>' +
+        var f2 = '<span style="font-size:11px; color:#888;">🔍</span>' +
              lab(T('프로젝트 담당자', 'Project owner')) +
              sel('pm', T('프로젝트 담당자', 'Project owner'), F.pm, (col && col.pms) || [], T('전체', 'All'), ['proj', 'who'], ' max-width:95px;') + slash +
              lab(T('프로젝트', 'Project')) +

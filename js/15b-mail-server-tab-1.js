@@ -1795,7 +1795,7 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
 
     let filterHtml = '';
     if (filter) {
-        filterHtml = `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 필터링 중: ${_msQEsc(filter.value)}</span></div>`;
+        filterHtml = `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔍 필터링 중: ${_msQEsc(filter.value)}</span></div>`;
     }
 
     // 💡 [2026-10-26 신규] "여긴 뭐고 언제 지워지나"를 매번 물어보지 않도록 안내 — 호버로만 보임(ℹ️).
@@ -1880,7 +1880,7 @@ window._msQueueTypeLabel = function(type) {
     const _en = window._currentLang === 'en';
     if (type === 'unmatched') return _en ? '📭 Unclassified Mail' : '📭 미분류 메일';
     if (type === 'newsender') return _en ? '👤 New Sender Mail' : '👤 신규발신자 메일';
-    if (type === 'discarded') return _en ? '🗑 Auto-discarded Mail' : '🗑 자동폐기 메일';
+    if (type === 'discarded') return _en ? '🗑️ Auto-discarded Mail' : '🗑️ 자동폐기 메일';
     return '';
 };
 
@@ -1902,7 +1902,7 @@ window._msRenderQueueModal = function(type) {
             const domain = (window._msParseSenderEmail(r.sender) || '').split('@')[1] || '';
             // 💡 [2026-08-24 버그 수정] 이 사각 아이콘 버튼들이 flex-centering 없이 UA 기본 정렬에만
             //    의존하고 있어서(width/height만 지정) 📧/🚫 아이콘이 중앙이 아니라 오른쪽으로 치우쳐
-            //    보였음(🗑는 우연히 괜찮아 보였을 뿐). display:inline-flex + align/justify-content:center로
+            //    보였음(🗑️는 우연히 괜찮아 보였을 뿐). display:inline-flex + align/justify-content:center로
             //    명시 중앙정렬하면 셋 다 동일하게 정중앙에 옴 — 실측(getBoundingClientRect)으로 좌우
             //    여백이 거의 동일해지는 것까지 확인함.
             const ruleBtn = (type === 'newsender' && domain)
@@ -1918,7 +1918,7 @@ window._msRenderQueueModal = function(type) {
                         title="사용자 의견을 참고해서 프로젝트 매칭 재분석 요청" style="display:inline-flex; align-items:center; justify-content:center; background:#e6f6ea; border:1px solid #a8dab8; color:#1f7a3d; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🔄</button>`
                 : '';
             // 🐛 [2026-10-21 버그수정, 실측 진단] 신규발신자·폐기 큐는 편도(one-way)였다 — 행 버튼이
-            //    📧보기/🚫차단/🗑삭제뿐이라, 잘못 걸러진 메일을 AI로 보낼 방법이 아예 없었다
+            //    📧보기/🚫차단/🗑️삭제뿐이라, 잘못 걸러진 메일을 AI로 보낼 방법이 아예 없었다
             //    (실측: 보류 67 + 폐기 112 = 179건이 분석기 앞에 도달조차 못 함. 같은 기간 분석된 건
             //    142건이니 걸러진 쪽이 더 많았다). 유일한 출구인 "주소록 일괄추가"(_msAddToAddressBook)도
             //    발신자를 주소록에 넣고 큐에서 지우기만 할 뿐 분석은 하지 않으며, ms_last_auto_fetch_at이
@@ -1945,7 +1945,7 @@ window._msRenderQueueModal = function(type) {
                     ${reanalyzeBtn}
                     <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
                         onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
-                        title="삭제" style="display:inline-flex; align-items:center; justify-content:center; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🗑</button>
+                        title="삭제" style="display:inline-flex; align-items:center; justify-content:center; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🗑️</button>
                 </div>
             </div>`;
         }).join('')
@@ -1983,7 +1983,7 @@ window._msRenderQueueModal = function(type) {
             const delBtn = e.target.closest('.ms-queue-del-btn');
             if (delBtn) {
                 const filename = delBtn.dataset.filename;
-                // 🗑📝 [2026-11-23 사용자 요청] 미분류 메일 삭제 시 "자동폐기 키워드로도 등록할지" 물어본다 —
+                // 🗑️📝 [2026-11-23 사용자 요청] 미분류 메일 삭제 시 "자동폐기 키워드로도 등록할지" 물어본다 —
                 //    신규발신자 큐의 🚫(도메인 차단)과 달리, 미분류는 발신 도메인이 보통 사내(kortek.co.kr)
                 //    라 도메인 차단이 안 맞는다 — 제목 키워드가 맞는 규칙이다. Cancel/빈칸이어도 삭제는 그대로 진행.
                 if (window._msQueueCurrentType === 'unmatched') {
@@ -2049,7 +2049,7 @@ window._msRenderQueueModal = function(type) {
             : (_msQEn ? '📇 Suggest Contacts' : '📇 주소록 제안');
     }
     const clearAllBtn = document.getElementById('ms-queue-clear-all-btn');
-    if (clearAllBtn) clearAllBtn.textContent = _msQEn ? '🗑 Clear All' : '🗑 일괄삭제';
+    if (clearAllBtn) clearAllBtn.textContent = _msQEn ? '🗑️ Clear All' : '🗑️ 일괄삭제';
     const filterBtn = document.getElementById('ms-queue-filter-btn');
     if (filterBtn) filterBtn.textContent = _msQEn ? '🚫 Auto-discard Filters' : '🚫 자동폐기 필터';
     const reanalyzeAllBtn = document.getElementById('ms-queue-reanalyze-all-btn');

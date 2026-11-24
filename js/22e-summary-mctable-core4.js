@@ -135,7 +135,7 @@ window.renderElecCompareTab = async function(type) {
                 <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">✏️</button>` : ''}
                     <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🔄</button>
-                    <button data-ep-remove="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🗑</button>
+                    <button data-ep-remove="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🗑️</button>
                     ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
                 </div>
             </th>`;
@@ -717,7 +717,7 @@ window._epRenderLibList = function(filterText) {
     // 💡 [2026-08-28 신규] "등록된 품목을 삭제할 방법이 없다"는 지적 — 지금까지는 이 목록에서 항목을
     //    클릭해 비교표에 "추가"만 할 수 있었고, 팀 공용 라이브러리(Drive) 자체에서 항목을 완전히 지우는
     //    UI가 없었다(window._epLibRemoveEntry 함수 자체는 있었지만 "이름 변경" 흐름에서만 내부적으로
-    //    쓰이고 있었음). 각 행에 🗑 삭제 버튼을 추가 — event.stopPropagation()으로 행 클릭(추가)과
+    //    쓰이고 있었음). 각 행에 🗑️ 삭제 버튼을 추가 — event.stopPropagation()으로 행 클릭(추가)과
     //    분리해서, 삭제 버튼만 눌렀을 때는 추가되지 않게 한다.
     list.innerHTML = filtered.map(function(p) {
         return `<div style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:12.5px; display:flex; justify-content:space-between; align-items:center;"
@@ -726,12 +726,12 @@ window._epRenderLibList = function(filterText) {
                 <b>${escapeHtml(window._epPartNameOf(p.specs) || p.model)}</b> <span style="color:#888;">${escapeHtml((p.specs && p.specs['Brand']) || '')}</span>
             </span>
             <span onclick="window.elecCompareAddFromLibrary(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))})" style="color:#2c5f8a; cursor:pointer; flex-shrink:0; margin-left:8px;">${_en ? '+ Add' : '+ 추가'}</span>
-            <button type="button" onclick="event.stopPropagation(); window._epDeleteLibEntry(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))});" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="${_en ? 'Permanently delete from the shared library' : '공용 라이브러리에서 완전히 삭제'}" style="flex-shrink:0; margin-left:6px; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer; padding:2px 6px; transition:background .15s, border-color .15s;">🗑</button>
+            <button type="button" onclick="event.stopPropagation(); window._epDeleteLibEntry(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))});" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="${_en ? 'Permanently delete from the shared library' : '공용 라이브러리에서 완전히 삭제'}" style="flex-shrink:0; margin-left:6px; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer; padding:2px 6px; transition:background .15s, border-color .15s;">🗑️</button>
         </div>`;
     }).join('');
 };
 
-// 💡 [2026-08-28 신규] 위 🗑 버튼의 실행부 — 공용 라이브러리(Drive)에서 항목을 완전히 삭제한다.
+// 💡 [2026-08-28 신규] 위 🗑️ 버튼의 실행부 — 공용 라이브러리(Drive)에서 항목을 완전히 삭제한다.
 //    되돌릴 수 없는 파괴적 동작이라 confirm으로 한 번 더 확인한다. 삭제 후에는 로컬 캐시(_epLibCache)와
 //    현재 프로젝트의 비교표 선택(selectedModels)에서도 같이 제거해서, 다시 불러오지 않아도 화면이
 //    바로 일치하게 만든다(이미 라이브러리에서 지워진 모델을 비교표가 계속 참조하면 "미추출"로 깨져 보임).
@@ -774,7 +774,7 @@ window._epDeleteLibEntry = async function(type, model) {
 
     const searchInput = document.getElementById('ep-add-search');
     window._epRenderLibList(searchInput ? searchInput.value : '');
-    if (window.showToast) window.showToast((_en ? '🗑 Deleted from library: ' : '🗑 라이브러리에서 삭제했습니다: ') + displayName, 'info');
+    if (window.showToast) window.showToast((_en ? '🗑️ Deleted from library: ' : '🗑️ 라이브러리에서 삭제했습니다: ') + displayName, 'info');
 };
 
 window._epHandleFileUpload = async function(input) {
@@ -1060,7 +1060,7 @@ window.showElecPinMapModal = async function(type, model) {
     bodyEl.innerHTML = html;
 };
 
-// ─── Summary 주요자재 CONVERTER 행 🔎 버튼 → 전기부품 스펙 미리보기 모달 (showPanelSpecModal과 동일 패턴) ───
+// ─── Summary 주요자재 CONVERTER 행 🔍 버튼 → 전기부품 스펙 미리보기 모달 (showPanelSpecModal과 동일 패턴) ───
 // 💡 [2026-09-01 신규] codeHint(ktk pn) — 검색에만 쓰고, "찾지 못했을 때"의 표시/재추출용 식별자로만
 //    보조적으로 쓴다(찾았을 때의 비교표 등록/핀맵 등은 이미 entry.model을 쓰고 있어서 그대로 안전함).
 window.showElecPartSpecModal = async function(type, model, codeHint) {

@@ -15,7 +15,7 @@
 //        ⚠️ 2026-11-05 에 인쇄 버튼 11개를 없애고 Ctrl+P 로 돌렸는데, 여기는 **출력이 기능 자체**라
 //           버튼을 둔다(사용자 요청). 누르면 하는 일은 `window.print()` 하나 —
 //           준비(`beforeprint`)는 기존 경로를 그대로 탄다.
-//     `📗 엑셀` / `📊 PPT`(가진 문서만) / `📁 NAS` 는 **옵션**이다.
+//     `📊 엑셀` / `📊 PPT`(가진 문서만) / `📁 NAS` 는 **옵션**이다.
 //
 //  ■ 서식이 곧 화면이고 곧 엑셀 (`DOC_FORMS`)
 //     구역 종류: fields · table · text · attach · milestones · members · spec · materials
@@ -40,7 +40,7 @@
     //   ⚠️ 그래서 회차는 **고르는 값이 아니라 적는 값**이다(기본값만 넣어 주고 자유 수정).
     //      거래선 어휘를 코드에 박으면 새 거래선마다 코드를 고쳐야 한다.
     window.DOC_SAMPLE_STAGES = window.DOC_SAMPLE_STAGES || ['PROTO A', 'PROTO B', 'PROTO C', 'ES', 'PP'];
-    // 🔎 그룹웨어에서 찾아 고를 양식 (데이터) — 영업이 개발로 발행하는 의뢰서.
+    // 🔍 그룹웨어에서 찾아 고를 양식 (데이터) — 영업이 개발로 발행하는 의뢰서.
     //   ⚠️ 양식 이름은 그룹웨어가 돌려주는 **그대로**다(실측). 다른 이름이 늘면 여기 한 줄.
     window.DOC_REQ_FORMS = window.DOC_REQ_FORMS || ['샘플/시제품 의뢰서', '기안서[시제품 제작의뢰서]'];
 
@@ -783,7 +783,7 @@
         var filled = [it.size, it.code, it.position, it.note].filter(Boolean).join(' ');
         if (filled && !confirm(_t('이 라벨을 지웁니다:\n\n' + filled, 'Delete this label?'))) return;
         list.splice(idx, 1);
-        // 🔎 찾기 결과는 자리(행 번호)로 저장돼 있어 — 지우면 뒤 칸들의 번호가 밀리므로 비운다
+        // 🔍 찾기 결과는 자리(행 번호)로 저장돼 있어 — 지우면 뒤 칸들의 번호가 밀리므로 비운다
         if (window._docLabelFindResult) {
             Object.keys(window._docLabelFindResult).forEach(function (k) {
                 if (k.indexOf(formId + '|') === 0) delete window._docLabelFindResult[k];
@@ -1050,7 +1050,7 @@
     //    충돌하지 않게). 끌 때 비율을 지킬지는 전역 체크(`_docLabelAspectLock`) 하나로 모달·표 둘 다 같이 쓴다.
     window._docLabelThumbSizeCache = window._docLabelThumbSizeCache || {};   // code -> {w,h} | null
     window._docLabelAspectLock = window._docLabelAspectLock !== false;       // 기본 켬
-    // 🗑 [2026-11-13, 사용자 결정] "기재내용 기능은 필요없으니 삭제" — Part No 등 고정 항목표
+    // 🗑️ [2026-11-13, 사용자 결정] "기재내용 기능은 필요없으니 삭제" — Part No 등 고정 항목표
     //    기능을 뺐다(도안 위 "표시"(드래그 핀)로 실제로 쓰고 있어 중복이었다). 예전에 저장된
     //    `it.fields`/`it.fieldsCustom` 값은 건드리지 않는다(화면에서만 빠진다).
     // 🗂️ [2026-11-13, 사용자 요청] "직접 만들어서 라벨 도안을 올리면 코드매칭해서 올리고, 다른
@@ -2557,7 +2557,7 @@
         var pickedStillThere = it && it.artFile && artGroup.some(function (g) { return g.name === it.artFile; });
         var artFile = pickedStillThere ? it.artFile : (code && window._docLabelArtIndex && window._docLabelArtIndex[code]);
         if (!artFile) {
-            _toast('⚠️ ' + _t('도안이 없습니다 — 먼저 🔎 로 찾아서 저장하세요.', 'No artwork yet — find and save one first.'), 'error');
+            _toast('⚠️ ' + _t('도안이 없습니다 — 먼저 🔍 로 찾아서 저장하세요.', 'No artwork yet — find and save one first.'), 'error');
             return;
         }
         window._docLabelArtModal = { formId: formId, idx: idx, code: code, artFile: artFile };
@@ -2858,7 +2858,7 @@
                     // ⠿ [2026-11-13, 사용자 요청] "마우스로 잡아서 위치 이동가능하도록 / 번호 순서
                     //    변경되도록" — 손잡이를 끌면 그 자리에 끼워 넣고 번호(N.)는 새 자리 기준으로
                     //    다시 매겨진다(순서 자체가 배열 순서라 따로 번호를 옮길 필요가 없다).
-                    // 🗑🗑 [2026-11-19, 사용자 요청] "각 행에 붙여둔 X 버튼도 삭제" — Delete 키로
+                    // 🗑️🗑️ [2026-11-19, 사용자 요청] "각 행에 붙여둔 X 버튼도 삭제" — Delete 키로
                     //    지금 선택된 표시를 지울 수 있게 되면서(⌨️ 키다운 핸들러), 줄마다 있던
                     //    ✕ 버튼은 더 안 둔다.
                     return '<div data-note-row data-note-idx2="' + ni + '" style="display:flex; align-items:flex-start; gap:4px; margin-top:2px;">'
@@ -2947,7 +2947,7 @@
             if (!isNaN(nidx)) window._docLabelNoteReorderDrag(handle, code, nidx);
         });
     };
-    // 🔎 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
+    // 🔍 6자리 라벨품목코드로 `C:\SAP_DMS\원자재승인원`(+`자재문서`) 안을 파일명 기준으로 찾는다
     //   — 그 폴더는 ZDMSR004 다운로드 결과라 이름 규칙이 제각각이다(`<code>.xlsx` ·
     //   `승인원_<code>_REV02.zip` · `<code>_설명_날짜_REV00.zip` 등). 공통점은 6자리 코드가
     //   파일명 어딘가에 토큰으로 있다는 것뿐이라, 서버(`/sap-label-search`)가 숫자 경계로
@@ -2966,7 +2966,7 @@
     window._docLabelFindAllowSap = window._docLabelFindAllowSap || {};   // key -> 코드 검색이었나(규격 검색엔 SAP 다시받기가 없다)
     var _docLabelRenderMatches = function (formId, idx, key, matches, partial, allowSapRefresh) {
         if (allowSapRefresh !== undefined) window._docLabelFindAllowSap[key] = allowSapRefresh;
-        var html = '🔎 ' + matches.length + _esc(_t('건 찾음', ' found')) + '<div class="doc-noprint"'
+        var html = '🔍 ' + matches.length + _esc(_t('건 찾음', ' found')) + '<div class="doc-noprint"'
                  + ' style="margin-top:4px; display:flex; flex-direction:column; gap:6px;">'
             + matches.map(function (m, mi) {
                 var skey = key + '|' + mi, st = window._docLabelImgState[skey];
@@ -3085,7 +3085,7 @@
         _toast('✅ ' + (res.message || _t('SAP 에서 받았습니다.', 'Fetched from SAP.')), 'success');
         await window._docLabelFind(formId, idx);   // 받은 뒤 같은 로컬 검색을 다시 돌려 찾는다
     };
-    // 🔎 [2026-11-12 7차] 코드뿐 아니라 **라벨규격**(예: "75 X 70")으로도 찾을 수 있다 — 실측
+    // 🔍 [2026-11-12 7차] 코드뿐 아니라 **라벨규격**(예: "75 X 70")으로도 찾을 수 있다 — 실측
     //    파일명에 치수가 공백 없이 그대로 들어 있다(`...SLV,75X70 (1).XLSX`). 코드/규격 둘 다
     //    같은 결과 렌더링(`_docLabelRenderMatches`)·같은 "SAP 에서 새로 받기" 흐름을 타게
     //    **공용 실행기 하나**로 모은다(검색 경로가 둘이어도 결과 처리는 한 곳).
@@ -3855,7 +3855,7 @@
         window._docState.revision = remain[Math.min(idx, remain.length - 1)] || 'R1';
         _markDirty();
         window._docRender();
-        _toast('🗑 ' + target + _t(' 리비전을 지웠습니다.', ' revision deleted.'), 'success');
+        _toast('🗑️ ' + target + _t(' 리비전을 지웠습니다.', ' revision deleted.'), 'success');
     };
     /** ▶◀ [2026-11-17 요청] 리비전 관리 패널 토글 — M.C `mcToggleUnitActions`와 같은 모양. */
     window._docRevToggleManage = function () {
@@ -4002,7 +4002,7 @@
         if (!r) return;
         var num = String(r.doc || '').trim();
         if (!num && !r.docId) {
-            _toast('⚠️ ' + _t('먼저 [🔎 그룹웨어에서 찾기]로 의뢰서를 고르세요.', 'Pick a document first.'), 'error');
+            _toast('⚠️ ' + _t('먼저 [🔍 그룹웨어에서 찾기]로 의뢰서를 고르세요.', 'Pick a document first.'), 'error');
             return;
         }
         _toast('🔗 ' + _t('그룹웨어에서 여는 중…', 'Opening…'), 'info');
@@ -5345,7 +5345,7 @@
                        + '<td><input type="text" class="doc-in" data-doc-hist="' + i + '|doc" value="' + _esc(r.doc || '') + '"'
                        + ' placeholder="' + _esc(_t('그룹웨어 문서번호', 'doc no.')) + '">'
                        + '<div class="doc-src doc-noprint">'
-                       + '<a href="#" onclick="window._docGwPick(' + i + ');return false;" style="color:#1971c2;">🔎 '
+                       + '<a href="#" onclick="window._docGwPick(' + i + ');return false;" style="color:#1971c2;">🔍 '
                        + _esc(_t('그룹웨어에서 찾기', 'find in groupware')) + '</a>'
                        + (r.docTitle ? ' <span style="opacity:.8;">' + _esc(r.docTitle) + '</span>' : '')
                        + '</div></td>'
@@ -5407,7 +5407,7 @@
                    + '<table style="display:none;">';
             } else if (s.kind === 'labelitems') {
                 // 🏷 [2026-11-12] 라벨 목록 — 개수가 모델마다 다르다(실측 3~5개) → 'check' kind 와
-                //    같은 add/del-row 로 받는다. 코드 옆 🔎 는 C:\SAP_DMS\원자재승인원 을 파일명으로
+                //    같은 add/del-row 로 받는다. 코드 옆 🔍 는 C:\SAP_DMS\원자재승인원 을 파일명으로
                 //    훑는 라우트(`/sap-label-search`)를 부른다(그 폴더는 이름 규칙이 들쭉날쭉해서
                 //    6자리 코드가 파일명 어딘가에 있다는 것만 믿고 찾는다).
                 // 🖼 [2026-11-12 2차] 원본 문서는 왼쪽 큰 칸에 **라벨 도안 이미지**가 박혀 있다
@@ -5552,7 +5552,7 @@
                             + ' box-sizing:border-box; color:#adb5bd; font-size:11px;">' + _esc(_t('도안 없음', 'no artwork')) + '</div>'
                             + '<div style="margin-top:3px;">' + uploadLink + '</div>' + artPickLink;
                     }
-                    // 🔎 [2026-11-12 10차, 사용자 요청] "도안 찾기" 글자는 지우고 아이콘만 남긴다 —
+                    // 🔍 [2026-11-12 10차, 사용자 요청] "도안 찾기" 글자는 지우고 아이콘만 남긴다 —
                     //    같은 아이콘을 **규격 칸**에도 달아, 코드를 몰라도 규격(예: "75 X 70")만으로
                     //    찾을 수 있게 한다(서버가 파일명에서 공백 무시 부분일치로 찾는다).
                     var _findIconBtn = 'padding:3px 6px; font-size:12px; line-height:1; cursor:pointer;'
@@ -5561,9 +5561,9 @@
                     // ⚠️⚠️ [2026-11-13, 사용자 신고] input+button 을 `white-space:nowrap` 으로 한 줄에
                     //    묶었더니(고정 폭 76~86px + 버튼) 좁아진 열(10%) 을 넘쳤다 — `flex-wrap:wrap` 으로
                     //    바꿔 모자라면 버튼이 **다음 줄로** 내려가게 한다(열 폭 자체는 절대 안 넘친다).
-                    // 🗑 [2026-11-13 3차, 사용자 요청] "X 버튼 열은 삭제하고 NO 숫자 열 상단으로" —
+                    // 🗑️ [2026-11-13 3차, 사용자 요청] "X 버튼 열은 삭제하고 NO 숫자 열 상단으로" —
                     //    전용 열 없애고 이 칸 안에서 ✕(위) · 번호(아래)로 쌓는다.
-                    // 🗑🗑 [2026-11-13 4차, 사용자 요청] "숫자 왼쪽으로 X 박스로 만들어서 배치해줘" —
+                    // 🗑️🗑️ [2026-11-13 4차, 사용자 요청] "숫자 왼쪽으로 X 박스로 만들어서 배치해줘" —
                     //    위아래 쌓기 대신 가로로 [✕ 박스] [번호] 로, ✕ 는 테두리 있는 작은 박스로.
                     // ⚠️ NO 숫자는 인쇄에도 남아야 하니 `<td>` 자체엔 doc-noprint 를 안 주고,
                     //    ✕ 버튼에만 준다(인쇄 땐 버튼만 사라지고 번호는 그대로).
@@ -5593,7 +5593,7 @@
                        + ' value="' + _esc(it.code || '') + '" placeholder="예: 124291"'
                        + ' style="font-size:11.5px; width:0; flex:1 1 64px; min-width:52px;">'
                        + '<button class="doc-noprint" title="' + _esc(_t('코드로 도안 찾기', 'Find artwork by code')) + '"'
-                       + ' onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔎</button>'
+                       + ' onclick="window._docLabelFind(\'' + _esc(form.id) + '\',' + i + ')" style="' + _findIconBtn + '">🔍</button>'
                        // 🤖 [2026-11-13, 사용자 요청] "코드를 넣지 않는 경우는 AI 문답 창을 띄워서 찾도록 유도"
                        + (it.code ? '' : '<a href="#" onclick="window._docLabelAskAiCode(\'' + _esc(form.id) + '\',' + i
                          + ');return false;" class="doc-noprint" title="' + _esc(_t('AI 문답으로 코드 찾기', 'Ask AI to find the code'))
@@ -5692,7 +5692,7 @@
                               }).join('')
                             + ' · <a href="#" onclick="window._docLabelAttachPick(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\');return false;" style="color:#000;">↺ '
                             + _esc(_t('도면 바꾸기', 'Replace drawing')) + '</a>'
-                            + ' · <a href="#" onclick="window._docLabelAttachReset(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\');return false;" style="color:#b1432f;">🗑 '
+                            + ' · <a href="#" onclick="window._docLabelAttachReset(\'' + _esc(form.id) + '\',\'' + _esc(scope2) + '\');return false;" style="color:#b1432f;">🗑️ '
                             + _esc(_t('지우기', 'Clear')) + '</a>')
                        + '</div>';
                 }
@@ -5865,7 +5865,7 @@
                        + ' cursor:pointer; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; font-weight:bold;">➕ '
                        + _esc(_t('직접 추가', 'Add manually')) + '</button>'
                        + '<button onclick="window._docOpticalClearAll(\'' + _esc(form.id) + '\')" style="padding:4px 10px; font-size:11.5px;'
-                       + ' cursor:pointer; border:1px solid #f0b4ad; background:#fdecea; color:#a3281c; border-radius:5px; font-weight:bold;">🗑 '
+                       + ' cursor:pointer; border:1px solid #f0b4ad; background:#fdecea; color:#a3281c; border-radius:5px; font-weight:bold;">🗑️ '
                        + _esc(_t('전체 삭제', 'Delete all')) + '</button>';
                 }
                 h += '<button onclick="window._docOpticalToggleAll()" style="padding:4px 10px; font-size:11.5px;'
@@ -6149,7 +6149,7 @@
         _markDirty(); window._docRender();
     };
 
-    // 🔎 그룹웨어에서 **이 프로젝트의** 샘플/시제품 의뢰서를 찾아 고른다.
+    // 🔍 그룹웨어에서 **이 프로젝트의** 샘플/시제품 의뢰서를 찾아 고른다.
     //   ⚠️ 찾는 법은 js/47 `_apvFindProjectDocs` **한 곳**이 정한다 — 여기서 다시 구현하지 않는다.
     //      (프로젝트 키워드로 거르는 규칙이 두 벌이 되면 한쪽만 고쳐진다)
     window._docGwPick = async function (rowIdx) {
@@ -6164,11 +6164,11 @@
                 return;
             }
         }
-        _toast('🔎 ' + _t('그룹웨어에서 의뢰서를 찾는 중…', 'Searching…'), 'info');
+        _toast('🔍 ' + _t('그룹웨어에서 의뢰서를 찾는 중…', 'Searching…'), 'info');
         var r;
         try { r = await window._apvFindProjectDocs(window.DOC_REQ_FORMS || []); }
         catch (e) { _toast('⚠️ ' + (e && e.message || e), 'error'); return; }
-        // 🔎 [2026-11-09 사용자 신고: "그룹웨어 조회 안되는데?"]
+        // 🔍 [2026-11-09 사용자 신고: "그룹웨어 조회 안되는데?"]
         //    못 찾았을 때 **그냥 끝내지 않는다**. 프로젝트 키워드(메일키워드·모델명)가 문서 제목과
         //    안 맞으면 0건이 나오는데, 그때 사람이 할 수 있는 일이 없었다.
         //    → 창은 열고, **직접 검색**할 수 있게 한다(검색어는 사람이 정한다).
@@ -6195,7 +6195,7 @@
                 + (term ? '&searchtype=title&keyword=' + encodeURIComponent(term)
                         : '&searchtype=formName&keyword=' + encodeURIComponent(forms[0] || ''));
         var body = document.getElementById('docgw-body');
-        if (body) body.innerHTML = '<div style="padding:16px; color:#868e96;">🔎 ' + _esc(_t('찾는 중…', 'Searching…')) + '</div>';
+        if (body) body.innerHTML = '<div style="padding:16px; color:#868e96;">🔍 ' + _esc(_t('찾는 중…', 'Searching…')) + '</div>';
         var docs = [];
         try {
             var res = await fetch(url);
@@ -6244,16 +6244,16 @@
         ov.style.display = 'flex';
         if (window.bringModalToFront) { try { window.bringModalToFront('docgw-overlay'); } catch (e) { /* 〃 */ } }
         document.getElementById('docgw-title').textContent =
-            '🔎 ' + _t('샘플/시제품 의뢰서', 'Sample request docs')
+            '🔍 ' + _t('샘플/시제품 의뢰서', 'Sample request docs')
             + (p.keyword ? ' — "' + p.keyword + '"' : '') + ' (' + p.docs.length + _t('건', '') + ')';
-        // 🔎 직접 검색 줄 — 프로젝트 키워드가 안 맞을 때 사람이 손으로 찾는다(막다른 길 방지).
+        // 🔍 직접 검색 줄 — 프로젝트 키워드가 안 맞을 때 사람이 손으로 찾는다(막다른 길 방지).
         var h = '<div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">'
               + '<input id="docgw-q" type="text" placeholder="'
               + _esc(_t('제목으로 검색 (비우고 [찾기] = 의뢰서 전체)', 'search by title')) + '"'
               + ' onkeydown="if(event.key===\'Enter\'){window._docGwSearch();}"'
               + ' style="flex:1; padding:4px 8px; border:1px solid #cfe3e5; border-radius:5px; font-size:12px;">'
               + '<button onclick="window._docGwSearch()" style="padding:4px 12px; font-size:12px; cursor:pointer;'
-              + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">🔎 '
+              + ' border:1px solid #a3d9e0; background:#e0f5f7; color:#00707d; border-radius:5px; font-weight:bold;">🔍 '
               + _esc(_t('찾기', 'Search')) + '</button></div>';
         if (p.scope === 'manual') {
             // ⚠️ 이건 **이 프로젝트 것만이 아니다** — 숨기면 남의 프로젝트 번호가 조용히 적힌다.
@@ -6300,7 +6300,7 @@
         // 출고 일자가 비어 있으면 **기안일로 채워 준다**(사람이 고칠 수 있다) — 보통 그 무렵이다.
         if (!list[p.rowIdx].date && d.draftedAt) list[p.rowIdx].date = String(d.draftedAt).slice(0, 10);
         _markDirty(); window._docGwClose(); window._docRender();
-        _toast('🔎 ' + (d.docNum || '') + _t(' 를 넣었습니다.', ' linked.'), 'success');
+        _toast('🔍 ' + (d.docNum || '') + _t(' 를 넣었습니다.', ' linked.'), 'success');
     };
 
     // ── 📁 NAS — 다른 페이지와 같은 자료실 탐색기 ────────────────────────
@@ -6778,7 +6778,7 @@
         return rows;
     };
 
-    // ── 📗📗 엑셀만 — 원본 문서처럼 제목띠·구역띠·표머리글·2단 라벨|값 에 색·테두리·병합을
+    // ── 📗📊 엑셀만 — 원본 문서처럼 제목띠·구역띠·표머리글·2단 라벨|값 에 색·테두리·병합을
     //    입힌다(.docx·화면은 그대로). 색은 js/42 와 같은 원칙으로 **현재 테마 팔레트**
     //    (`_cpXlsxRole`)에서 가져온다 — 팔레트를 바꾸면 이 엑셀도 같이 바뀐다.
     var _dxRole = function (k, fb) { try { return window._cpXlsxRole(k) || fb; } catch (e) { return fb; } };

@@ -120,7 +120,7 @@
             'ai-provider-mistral':      { ko:'Mistral (프랑스 AI, 무료)',             en:'Mistral (French AI, free)' },
             'ai-provider-glm':          { ko:'GLM (Zhipu AI, 중국·무료 보고됨)',       en:'GLM (Zhipu AI, China — free reported)' },
             'ai-provider-openai':       { ko:'OpenAI (GPT, 유료·카드등록 필요)',      en:'OpenAI (GPT, paid — card required)' },
-            'ai-set-sec-tavily-label':  { ko:'🔎 실시간 웹검색 (선택, Tavily)',       en:'🔎 Live web search (optional, Tavily)' },
+            'ai-set-sec-tavily-label':  { ko:'🔍 실시간 웹검색 (선택, Tavily)',       en:'🔍 Live web search (optional, Tavily)' },
             'ai-set-tavily-notice':     { ko:'💡 입력창 위 🏷 분류에서 "💡 추론"을 고른 질문(날씨 등 실시간 정보가 필요한 질문)에만 쓰입니다. 비워두면 이 기능 없이 예전처럼 동작합니다. 키 발급은 월 1,000회까지 무료(카드 등록 불필요)로 알려져 있습니다.',
                                           en:'💡 Only used for questions classified as "💡 General" in the 🏷 Type box above the input (ones needing live info, like weather). Leave it blank to keep working as before, without this feature. Signup is reported to be free up to 1,000 requests/month, no card required.' },
             'ai-set-sec-maxlen-label':  { ko:'🔢 AI 글자 수 설정',                    en:'🔢 AI Character Limits' },
@@ -286,14 +286,14 @@
                         </div>
                     </div>
 
-                    <!-- ══ 그룹1.5: 🔎 실시간 웹검색(선택, Tavily) — [2026-11-17 사용자 요청] LLM 자체
+                    <!-- ══ 그룹1.5: 🔍 실시간 웹검색(선택, Tavily) — [2026-11-17 사용자 요청] LLM 자체
                          그라운딩은 전부 유료라 확인됐다(docs/ai-qa.md) — 검색은 Tavily(월 1,000회
                          무료, 카드 불필요)로 직접 하고 결과 텍스트만 프롬프트에 붙여 기존 무료 LLM한테
                          넘긴다(RAG). "추론" 모드일 때만 쓰임 — 키가 없으면 이 기능 없이 예전처럼 동작 ══ -->
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; flex-shrink:0;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-tavily')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                            <span id="ai-set-sec-tavily-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔎 실시간 웹검색 (선택, Tavily)</span>
+                            <span id="ai-set-sec-tavily-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔍 실시간 웹검색 (선택, Tavily)</span>
                             <span id="ai-set-sec-tavily-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
                         <div id="ai-set-sec-tavily" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">

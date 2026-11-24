@@ -386,7 +386,7 @@
             if (!d.ok) throw new Error(d.error || T('알 수 없는 오류', 'unknown error'));
             list = d.materials || [];
             missing = d.missing || [];
-            if (!list.length) reply = '🔎 ' + T('자재 ' + mats.join(', ') + '의 ZMM009 조회 결과가 없습니다 — 자재번호를 확인해주세요.', 'No ZMM009 rows for ' + mats.join(', ') + ' — check the material numbers.');
+            if (!list.length) reply = '🔍 ' + T('자재 ' + mats.join(', ') + '의 ZMM009 조회 결과가 없습니다 — 자재번호를 확인해주세요.', 'No ZMM009 rows for ' + mats.join(', ') + ' — check the material numbers.');
         } catch (e) {
             reply = '⚠️ ' + T('SAP 자재 조회에 실패했습니다: ', 'SAP material lookup failed: ') + (e && e.message ? e.message : e);
         }
@@ -426,7 +426,7 @@
             if (!d.ok) throw new Error(d.error || T('알 수 없는 오류', 'unknown error'));
             var list = d.materials || [];
             if (!list.length) {
-                reply = '🔎 ' + T('자재내역 "' + pattern + '" 패턴에 매치되는 자재가 없습니다. 앞뒤에 *를 붙여 범위를 넓혀보세요(예: *' + pattern.replace(/\*/g, '') + '*).', 'No materials match "' + pattern + '". Try widening it with * on both sides.');
+                reply = '🔍 ' + T('자재내역 "' + pattern + '" 패턴에 매치되는 자재가 없습니다. 앞뒤에 *를 붙여 범위를 넓혀보세요(예: *' + pattern.replace(/\*/g, '') + '*).', 'No materials match "' + pattern + '". Try widening it with * on both sides.');
             } else {
                 reply = null; // 클릭 가능한 HTML 표로 대체
             }
@@ -447,7 +447,7 @@
             var _MAT_SHOW_CAP = 500;
             var shown = list.slice(0, _MAT_SHOW_CAP);
             cacheDesc(list);
-            var hdr = '<div style="font-size:12px; margin-bottom:6px;">🔎 '
+            var hdr = '<div style="font-size:12px; margin-bottom:6px;">🔍 '
                 + T('자재내역 "' + pattern + '" 패턴 매치 ' + list.length + '건', 'Description pattern "' + pattern + '" matched ' + list.length + ' material(s)')
                 + (list.length > shown.length ? ' ' + T('(화면엔 ' + _MAT_SHOW_CAP + '건만 표시 — 엑셀은 전체 포함)', ' (showing first ' + _MAT_SHOW_CAP + ' — Excel export includes all)') : '')
                 + '</div>'
@@ -566,7 +566,7 @@
     })(0);
 
     // ── 일반 추론용 가벼운 프롬프트(프로젝트 JSON을 싣지 않음) ────────────
-    // 🔎 [2026-11-17] searchResults(선택) — Tavily로 직접 검색한 결과([{title,url,content}]).
+    // 🔍 [2026-11-17] searchResults(선택) — Tavily로 직접 검색한 결과([{title,url,content}]).
     //    LLM 자체 그라운딩(전부 유료 확인됨, docs/ai-qa.md)과 달리, 검색은 04h가 미리 해서
     //    텍스트로 넘겨준다 — AI는 이 결과만 보고 답하고 지어내지 않는다(RAG).
     window._qaBuildGeneralPrompt = function (question, hist, searchResults) {

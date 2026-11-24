@@ -1514,7 +1514,7 @@
             <input type="number" id="bom-usd-rate" step="0.1" min="0.01" oninput="window._bomSetUsdRate(this)"
                    style="width:76px; margin:0 4px; font-size:12.5px; text-align:right; border:1px solid #cfe3e5; border-radius:6px; height:31px; box-sizing:border-box; padding:0 5px; color:#00707d; font-weight:bold;">
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 4px;"></span>
-            <button id="bom-toggle-btn" class="concept-add-row-btn" onclick="window.bomToggleAll()" title="하위 구성품 모두 접기" data-i18n-title="bom-toggle-all" style="margin:0; padding:6px 8px; min-width:auto; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12.5px; font-weight:bold; white-space:nowrap;">▸ 접기</button>
+            <button id="bom-toggle-btn" class="concept-add-row-btn" onclick="window.bomToggleAll()" title="하위 구성품 모두 접기" data-i18n-title="bom-toggle-all" style="margin:0; padding:6px 8px; min-width:auto; background:#e0f5f7; color:#00707d; border:none; border-radius:5px; font-size:12.5px; font-weight:bold; white-space:nowrap;">🔼 접기</button>
             <div class="btn-group"></div>
             <button id="bom-excel-btn" onclick="window.bomExportExcel()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="표에 보이는 BOM을 엑셀로 저장 (C:\SAP_DMS\SAP조회)" data-i18n-title="bom-excel" style="white-space:nowrap; margin-left:auto; margin-right:4px; padding:6px 8px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📊 엑셀 저장</button>
         </div>
@@ -1674,12 +1674,12 @@
             <span id="jira-tab-state" style="font-size:11.5px;"></span>
             <span style="flex:1;"></span>
             <div class="btn-group">
-                <!-- 🔎 [2026-11-23 사용자 요청] "노이즈·벤트·외관불량·신뢰성 등으로 — 나의
+                <!-- 🔍 [2026-11-23 사용자 요청] "노이즈·벤트·외관불량·신뢰성 등으로 — 나의
                      프로젝트와 유사한 이슈/해결책이 있었는지" — 지금 연결된 프로젝트와 무관하게
                      JIRA 전체를 검색한다(js/70 _jiraOpenSearchModal). -->
                 <button onclick="window._jiraOpenSearchModal && window._jiraOpenSearchModal()"
                     onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                    style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔎 전체 검색</button>
+                    style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔍 전체 검색</button>
                 <!-- 🆕 [2026-11-12 사용자 요청] "제일 중요한 신규 이슈 생성 기능" — 지금 모델의
                      📁 프로젝트 코드로 새 이슈를 만든다(js/70 _jiraOpenCreateModal). -->
                 <button onclick="window._jiraOpenCreateModal && window._jiraOpenCreateModal()"
@@ -2062,16 +2062,16 @@
 <script src="js/03-drive-modal-drag.js?v=2026112491"></script>
 
 <!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/04a-core-app-globals.js?v=2026112491"></script>
-<script src="js/04b-core-app-drive-sync.js?v=2026112491"></script>
-<script src="js/04c-core-app-mail-pipeline.js?v=2026112491"></script>
+<script src="js/04a-core-app-globals.js?v=2026112531"></script>
+<script src="js/04b-core-app-drive-sync.js?v=2026112531"></script>
+<script src="js/04c-core-app-mail-pipeline.js?v=2026112531"></script>
 <script src="js/04d-core-app-gantt-core.js?v=2026112491"></script>
 <script src="js/04e-core-app-undo-redo.js?v=2026112491"></script>
 <script src="js/04f-core-app-upload-utils-1.js?v=2026112491"></script>
-<script src="js/04g-core-app-upload-utils-2.js?v=2026112491"></script>
-<script src="js/04h-core-app-upload-utils-3.js?v=2026112491"></script>
-<script src="js/04i-core-app-upload-utils-4.js?v=2026112491"></script>
-<script src="js/04j-core-app-upload-utils-5.js?v=2026112471"></script>
+<script src="js/04g-core-app-upload-utils-2.js?v=2026112531"></script>
+<script src="js/04h-core-app-upload-utils-3.js?v=2026112531"></script>
+<script src="js/04i-core-app-upload-utils-4.js?v=2026112531"></script>
+<script src="js/04j-core-app-upload-utils-5.js?v=2026112531"></script>
 <script src="js/04k-core-app-filter-export.js?v=2026112491"></script>
 
 <script src="js/05-drive-sync-optimize.js?v=2026112491"></script>
@@ -2094,9 +2094,9 @@
 <script src="js/13-mobile-touch-timer.js?v=2026112491"></script>
 
 <!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/14a-ai-mail-analysis-1.js?v=2026112491"></script>
+<script src="js/14a-ai-mail-analysis-1.js?v=2026112531"></script>
 <script src="js/14b-ai-mail-analysis-2.js?v=2026112491"></script>
-<script src="js/14c-task-inbox.js?v=2026112511"></script>
+<script src="js/14c-task-inbox.js?v=2026112531"></script>
 <script src="js/14d-distribution-ledger.js?v=2026112491"></script>
 
 
@@ -2179,7 +2179,7 @@
                 </div>
                 <div id="inbox-subqueue-header" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
                 <!-- 💡 [2026-09-06] 각 큐를 "초기화"하는 버튼이 여기 따로 있었는데, 모달을 열면 안쪽
-                     하단에 있는 "🗑 일괄삭제" 버튼과 완전히 동일한 동작(_msQueueClearAll → 결국
+                     하단에 있는 "🗑️ 일괄삭제" 버튼과 완전히 동일한 동작(_msQueueClearAll → 결국
                      _msQueueDeleteAll과 같은 로직)이라 중복이었음 — 제거하고 모달 열기 버튼만 남김.
                      (예전엔 _macClearQueue를 여기서만 썼는데, 이제 호출부가 없어져 그 함수도 함께 정리함) -->
                 <!-- 💡 [2026-09-06 버그 수정] 3개 버튼 전부 호버 효과가 아예 없었음("신규발신자는 호버
@@ -2192,7 +2192,7 @@
                         <span id="inbox-newsender-label">👤 신규발신자</span> <span id="ms-newsender-count-2">0</span><span id="inbox-newsender-unit">건</span>
                     </button>
                     <button onclick="window.msShowDiscardedModal()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s, border-color .15s;">
-                        <span id="inbox-discarded-label">🗑 자동폐기</span> <span id="ms-discarded-count-2">0</span><span id="inbox-discarded-unit">건</span>
+                        <span id="inbox-discarded-label">🗑️ 자동폐기</span> <span id="ms-discarded-count-2">0</span><span id="inbox-discarded-unit">건</span>
                     </button>
                 </div>
                 <!-- [2026-10-21] 📦 미분류 백로그 일괄 정리 (js/44-backlog-consolidate.js) —
@@ -2670,9 +2670,9 @@
 </div>
 
 <!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
-<script src="js/15a-mail-attachment-tab.js?v=2026112491"></script>
-<script src="js/15b-mail-server-tab-1.js?v=2026112491"></script>
-<script src="js/15c-mail-server-tab-2.js?v=2026112491"></script>
+<script src="js/15a-mail-attachment-tab.js?v=2026112531"></script>
+<script src="js/15b-mail-server-tab-1.js?v=2026112531"></script>
+<script src="js/15c-mail-server-tab-2.js?v=2026112531"></script>
 
 
 
@@ -2731,9 +2731,9 @@
 <!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
 <script src="js/22a-summary-mctable-parse.js?v=2026112491"></script>
 <script src="js/22b-summary-mctable-core1.js?v=2026112491"></script>
-<script src="js/22c-summary-mctable-core2.js?v=2026112471"></script>
-<script src="js/22d-summary-mctable-core3.js?v=2026112491"></script>
-<script src="js/22e-summary-mctable-core4.js?v=2026112491"></script>
+<script src="js/22c-summary-mctable-core2.js?v=2026112531"></script>
+<script src="js/22d-summary-mctable-core3.js?v=2026112531"></script>
+<script src="js/22e-summary-mctable-core4.js?v=2026112531"></script>
 <script src="js/22f-address-book.js?v=2026112491"></script>
 <script src="js/22g-name-autocomplete.js?v=2026112491"></script>
 <script src="js/22h-brief-mc-common-1.js?v=2026112491"></script>
@@ -2745,7 +2745,7 @@
 
 <script src="js/25-ai-learning.js?v=2026112491"></script>
 
-<script src="js/26-topic-profile.js?v=2026112491"></script>
+<script src="js/26-topic-profile.js?v=2026112531"></script>
 
 <script src="js/27-topic-contamination.js?v=2026112491"></script>
 
@@ -2759,41 +2759,41 @@
 
 <script src="js/31-issue-report.js?v=2026112491"></script>
 
-<script src="js/32-sap-capabilities.js?v=2026112491"></script>
+<script src="js/32-sap-capabilities.js?v=2026112531"></script>
 
-<script src="js/33-qa-router.js?v=2026112491"></script>
+<script src="js/33-qa-router.js?v=2026112531"></script>
 
 <script src="js/34-storage-doctor.js?v=2026112491"></script>
-    <script src="js/35-material-cart.js?v=2026112491"></script>
-    <script src="js/36-sap-login.js?v=2026112491"></script>
+    <script src="js/35-material-cart.js?v=2026112531"></script>
+    <script src="js/36-sap-login.js?v=2026112531"></script>
     <script src="js/37-project-cache.js?v=2026112491"></script>
-    <script src="js/38-bom-tab.js?v=2026112491"></script>
+    <script src="js/38-bom-tab.js?v=2026112531"></script>
     <script src="js/39-groupware-calendar.js?v=2026112491"></script>
-    <script src="js/40-qa-tool-router.js?v=2026112491"></script>
+    <script src="js/40-qa-tool-router.js?v=2026112531"></script>
     <script src="js/41-qa-write-tools.js?v=2026112491"></script>
     <script src="js/42-page-excel-io.js?v=2026112491"></script>
     <script src="js/45-mc-import.js?v=2026112491"></script>
-    <script src="js/47-approval-compose.js?v=2026112491"></script>
+    <script src="js/47-approval-compose.js?v=2026112531"></script>
     <script src="js/43-briefspec-units.js?v=2026112491"></script>
     <script src="js/44-backlog-consolidate.js?v=2026112491"></script>
     <script src="js/46-model-name-builder.js?v=2026112491"></script>
-    <script src="js/48-doc-store.js?v=2026112504"></script>
-    <script src="js/49-panel-project-dict.js?v=2026112491"></script>
+    <script src="js/48-doc-store.js?v=2026112531"></script>
+    <script src="js/49-panel-project-dict.js?v=2026112531"></script>
     <script src="js/50-parts-category-pages.js?v=2026112491"></script>
     <script src="js/51-panel-lib-import.js?v=2026112491"></script>
     <script src="js/53-page-nas.js?v=2026112491"></script>
-    <script src="js/52-approval-doctypes.js?v=2026112491"></script>
+    <script src="js/52-approval-doctypes.js?v=2026112531"></script>
     <script src="js/54-mail-body-store.js?v=2026112491"></script>
-    <script src="js/55-project-list.js?v=2026112450"></script>
-    <!-- 🔎 BOM 에서 특정 부품 찾기(패널·터치…) — 사내 자점그룹표 R100 기반 -->
-    <script src="js/56-bom-part-lookup.js?v=2026112491"></script>
+    <script src="js/55-project-list.js?v=2026112531"></script>
+    <!-- 🔍 BOM 에서 특정 부품 찾기(패널·터치…) — 사내 자점그룹표 R100 기반 -->
+    <script src="js/56-bom-part-lookup.js?v=2026112531"></script>
     <!-- 🔀 저장소 어댑터(Drive ↔ 사내 NAS). 플래그 OFF 기본 — 아무것도 감싸지 않는다 -->
-    <script src="js/57-storage-adapter.js?v=2026112491"></script>
+    <script src="js/57-storage-adapter.js?v=2026112531"></script>
     <!-- 📦 Drive → NAS 일괄 이사. 미러는 "쓸 때만" 옮기므로 이게 한 번은 돌아야 한다 -->
-    <script src="js/59-daily-report.js?v=2026112491"></script>
+    <script src="js/59-daily-report.js?v=2026112531"></script>
     <script src="js/60-telegram-qa-bridge.js?v=2026112491"></script>
     <script src="js/61-mail-evidence.js?v=2026112491"></script>
-    <script src="js/62-period-summary.js?v=2026112491"></script>
+    <script src="js/62-period-summary.js?v=2026112531"></script>
     <script src="js/63-daily-draft-qa.js?v=2026112491"></script>
     <script src="js/64-user-switch.js?v=2026112491"></script>
     <script src="js/65-overdue-cleanup.js?v=2026112491"></script>
@@ -2801,8 +2801,8 @@
     <script src="js/66-doc-generate.js?v=2026112491"></script>
     <script src="js/68-doc-checksheets.js?v=2026112491"></script>
     <script src="js/69-resolution-spec.js?v=2026112491"></script>
-    <script src="js/70-jira-tab.js?v=2026112503"></script>
-    <script src="js/67-document-page.js?v=2026112491"></script>
+    <script src="js/70-jira-tab.js?v=2026112531"></script>
+    <script src="js/67-document-page.js?v=2026112531"></script>
     <script src="js/72-labelspec-import.js?v=2026112491"></script>
     <script src="js/64-qa-route-log.js?v=2026112491"></script>
     <script src="js/71-selection-to-ai.js?v=2026112491"></script>

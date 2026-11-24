@@ -728,7 +728,7 @@
         if (!btn) return;
         var st = window._bomStore();
         var anyCollapsed = !!(st && st._collapsed && Object.keys(st._collapsed).some(function (k) { return st._collapsed[k]; }));
-        btn.textContent = anyCollapsed ? _t('▾ 펼치기', '▾ Expand') : _t('▸ 접기', '▸ Collapse');
+        btn.textContent = anyCollapsed ? _t('🔽 펼치기', '🔽 Expand') : _t('🔼 접기', '🔼 Collapse');
         btn.title = anyCollapsed ? _t('하위 레벨 모두 펼치기', 'Expand all levels') : _t('하위 레벨 모두 접기', 'Collapse lower levels');
     };
 
@@ -1183,7 +1183,7 @@
         // 📍 [2026-11-05] "설치지점이 접혀 있어 안 보인다"는 안내 줄을 **일부러 넣지 않는다**(사용자 요청).
         //    사실관계: 설치지점은 레벨2(부품)에만 있고(실측 레벨1 61행 0건 / 레벨2 157행 140건)
         //    다단계는 기본 접힘이라 레벨1만 그려진다 — 접힘 62행 → Loc 0칸, 펼치면 219행 → 140칸.
-        //    한 번 안내를 붙였다가 뺐다: 머리글 바로 옆에 [▾ 펼치기] 버튼이 이미 있어서, 같은 말을
+        //    한 번 안내를 붙였다가 뺐다: 머리글 바로 옆에 [🔽 펼치기] 버튼이 이미 있어서, 같은 말을
         //    두 번 하는 줄이 된다. 다시 넣고 싶어지면 이 주석을 먼저 읽을 것.
         // 설치지점(EBORT) 연속 행이 주인을 못 찾은 경우 — 같은 "정렬이 걸렸다"의 다른 증상이다.
         // (전엔 전자부품 BOM에만 이 경고가 있었다 — 메인 탭은 값을 저장조차 안 했다.)

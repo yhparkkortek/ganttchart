@@ -1553,7 +1553,7 @@
             'inbox-subqueue-header':     { ko:'📬 미분류 / 신규발신자 / 자동폐기', en:'📬 Unclassified / New Senders / Auto-discarded' },
             'inbox-unmatched-label':     { ko:'📭 미분류',              en:'📭 Unclassified' },
             'inbox-newsender-label':     { ko:'👤 신규발신자',          en:'👤 New Sender' },
-            'inbox-discarded-label':     { ko:'🗑 자동폐기',            en:'🗑 Discarded' },
+            'inbox-discarded-label':     { ko:'🗑️ 자동폐기',            en:'🗑️ Discarded' },
             'inbox-unmatched-unit':      { ko:'건',                     en:'' },
             'inbox-newsender-unit':      { ko:'건',                     en:'' },
             'inbox-discarded-unit':      { ko:'건',                     en:'' },

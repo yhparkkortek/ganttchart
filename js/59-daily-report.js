@@ -1106,7 +1106,7 @@
         var hasContent = !!((doc.items || []).length || (doc.files || []).length || doc.next || doc.issue);
         var exempt = (window.DAILY_DAY_TYPES.filter(function (t) { return t.key === doc.dayType; })[0] || {}).exempt;
         if (hadContent && !hasContent && !exempt) {
-            // 🗑 [2026-11-09 신고] 보고를 **지우려고** 항목을 전부 뺀 사람이 여기서 막혔다.
+            // 🗑️ [2026-11-09 신고] 보고를 **지우려고** 항목을 전부 뺀 사람이 여기서 막혔다.
             //    게다가 안내가 "하나씩 지워주세요" 였는데, 하나씩 지운 그 **마지막 상태**가 바로
             //    이 상태라 빠져나갈 길이 없었다.
             //    ⚠️ 가드는 남긴다 — 이건 `project_index` 를 0건으로 덮어 날린 사고와 같은 모양이고,
@@ -1154,7 +1154,7 @@
     // ══════════════════════════════════════════════════════════════════════
 
     var _doc = null, _date = null;
-    // 🗑 지우기 — "이 창에서 사람이 비웠나" 와 "방금 지운 보고"(되돌리기용).
+    // 🗑️ 지우기 — "이 창에서 사람이 비웠나" 와 "방금 지운 보고"(되돌리기용).
     var _emptiedByUser = false, _deleted = null;
     // 📒 후보 목록을 좁혀 둔 프로젝트(빈 값 = 전체). 창을 열 때마다 푼다 —
     //    좁혀 둔 채로 다시 열면 "업무가 없다" 로 보여 사람이 까닭을 모른다.
@@ -1645,7 +1645,7 @@
         if (_doc.items[i]) { _doc.items[i].cat = String(v || '').trim(); saveDraftLocal(); render(); }
     };
     window._dailyField = function (k, v) { _doc[k] = v; saveDraftLocal(); };
-    // 🗑 사람이 **직접** 뺀 것만 표시한다 — 이 표시가 있어야 빈 저장(=지우기)이 통과한다.
+    // 🗑️ 사람이 **직접** 뺀 것만 표시한다 — 이 표시가 있어야 빈 저장(=지우기)이 통과한다.
     //    ⚠️ 낡은 초안이나 배경 경로가 비운 것은 이 표시를 못 얻는다(그래서 여전히 막힌다).
     window._dailyDropItem = function (i) { _doc.items.splice(i, 1); _emptiedByUser = true; saveDraftLocal(); render(); };
     window._dailyAdd = function (i) {
@@ -1686,7 +1686,7 @@
                 _deleted = res.prev;
                 _doc = emptyDoc(_date);
                 _emptiedByUser = false;
-                toast('🗑 ' + T('오늘 보고를 지웠습니다.', 'Deleted today\'s report.'), 'info', 6000);
+                toast('🗑️ ' + T('오늘 보고를 지웠습니다.', 'Deleted today\'s report.'), 'info', 6000);
             } else {
                 _doc = res;
                 _deleted = null;
@@ -2056,12 +2056,12 @@
      * [2026-11-05 요청] 칸을 업무마다로 옮겼으니 입력칸은 없앴다. 다만 **이미 적힌 글을
      * 안 보이게만 하면 지울 수도 없는 데이터**가 남는다 — 있을 때만 보여 주고 치울 수 있게 한다.
      */
-    /** 🗑 방금 지운 보고를 되살릴 띠 — 이 창을 닫으면 사라진다(그래서 "방금" 만 된다). */
+    /** 🗑️ 방금 지운 보고를 되살릴 띠 — 이 창을 닫으면 사라진다(그래서 "방금" 만 된다). */
     function deletedBandHtml() {
         if (!_deleted) return '';
         var n = ((_deleted.items || []).length);
         return '<div style="margin:0 0 10px; padding:8px 10px; border:1px dashed #a5c8f0; background:#f2f8ff; border-radius:6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
-                 '<span style="font-size:11.5px; color:#1a4f7a;">🗑 ' +
+                 '<span style="font-size:11.5px; color:#1a4f7a;">🗑️ ' +
                    esc(T('오늘 보고를 지웠습니다 (업무 ' + n + '건).', 'Deleted today\'s report (' + n + ' task(s)).')) + '</span>' +
                  '<button onclick="window.dailyUndoDelete()" style="padding:2px 9px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:5px; font-size:10.5px; font-weight:bold; cursor:pointer;">↩ ' +
                    esc(T('되돌리기', 'Undo')) + '</button>' +
@@ -2390,7 +2390,7 @@
         }
         var who = (people || []).map(function (p) { return [String(p.key || ''), String(p.name || p.key || '')]; });
         return '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">' +
-            '<span style="font-size:11.5px; color:#888;">🔎</span>' +
+            '<span style="font-size:11.5px; color:#888;">🔍</span>' +
             sel('who', T('담당자 전체', 'All people'), who, F.who || '') +
             sel('proj', T('프로젝트 전체', 'All projects'), Object.keys(projs).sort().map(function (k) { return [k, k]; }), F.proj || '') +
             sel('cat', T('구분 전체', 'All disciplines'), Object.keys(cats).sort().map(function (k) { return [k, k]; }), F.cat || '') +
@@ -3350,7 +3350,7 @@
         }
 
         var allPeople = people.slice();   // 선택지는 **필터 걸기 전** 목록에서 만든다
-        // 🔎 필터 — 사람·프로젝트·구분. 비어 있으면 전부.
+        // 🔍 필터 — 사람·프로젝트·구분. 비어 있으면 전부.
         var F = window._dailyFilter || (window._dailyFilter = { who: '', proj: '', cat: '' });
         var itemFiltered = !!(F.proj || F.cat);
         if (F.who) people = people.filter(function (p) { return String(p.key || '') === F.who; });

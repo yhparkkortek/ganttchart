@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// 🔎 56-bom-part-lookup.js — "이 제품에 쓰인 <부품> 뭐야?" (2026-11-02)
+// 🔍 56-bom-part-lookup.js — "이 제품에 쓰인 <부품> 뭐야?" (2026-11-02)
 //
 //   사용자 요청: "SAP에서 999001 제품에 사용된 (특정부품 정보)패널명 확인해줘".
 //   사람이 BOM 494행을 눈으로 훑어 패널을 찾는 일을 앱이 대신한다.
@@ -344,7 +344,7 @@
     /** 머리글 한 줄 — 칩 표와 마크다운 표가 **같은 글**을 쓴다(두 군데 적지 않는다). */
     window.bomPartLookupHeader = function (r) {
         var kindName = (window._currentLang === 'en') ? r.kind.en : r.kind.ko;
-        return '🔎 **' + r.material + '** ' + _t('에 사용된 ', ' — ') + kindName
+        return '🔍 **' + r.material + '** ' + _t('에 사용된 ', ' — ') + kindName
              + ' ' + r.hits.length + _t('건', '')
              + _t('  (BOM ' + r.total + '행 다단계 전개)', '  (multi-level BOM, ' + r.total + ' rows)');
     };

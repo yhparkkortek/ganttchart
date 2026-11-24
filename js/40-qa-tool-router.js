@@ -702,14 +702,14 @@
                 if (String(r.from || '').indexOf('@') >= 0) {
                     out.push({ label: '✉️ ' + t('답장 쓰기', 'Reply'), value: '__gwMailReply__' + r.id });
                 }
-                out.push({ label: '🔎 ' + t('이 보낸이 메일', 'From this sender'), value: '__gwMailFrom__' + r.id });
+                out.push({ label: '🔍 ' + t('이 보낸이 메일', 'From this sender'), value: '__gwMailFrom__' + r.id });
                 if ((window._qaMailSapNums ? window._qaMailSapNums(r) : []).length) {
                     out.push({ label: '🏭 ' + t('메일 속 자재/오더', 'SAP lookup'), value: '__gwMailSap__' + r.id, style: 'sap' });
                 }
                 return out;
             }
         },
-        // 🔎 [2026-11-02 신규, 사용자 요청 "부품 찾았으면 칩 버튼 기능 구현해줘"]
+        // 🔍 [2026-11-02 신규, 사용자 요청 "부품 찾았으면 칩 버튼 기능 구현해줘"]
         //    BOM 에서 찾은 부품 한 줄(js/56 `_bomPickParts` 의 행) → 다음에 할 일.
         //  ⚠️ 깊은 SAP 조회는 **기존 자재 메뉴**(js/04g `_sapSelectMaterial`)로 넘긴다 —
         //     BOM·재고·품목내역·문서·승인원·공급업체·구매정보·변경이력·🧺담기가 거기 다 있다.
@@ -1299,7 +1299,7 @@
             }
             for (var i = 0; i < wanted.length && calls.length < MAX_CALLS; i++) {
                 var tl = window._qaToolById(wanted[i].id);
-                onStep('🔎 ' + window._t((tl ? tl.title : wanted[i].id) + ' 조회 중...',
+                onStep('🔍 ' + window._t((tl ? tl.title : wanted[i].id) + ' 조회 중...',
                                          'Running ' + wanted[i].id + '...'));
                 var r = await window._qaRunTool(wanted[i].id, wanted[i].args);
                 steps.push(r);
