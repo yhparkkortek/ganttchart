@@ -1274,14 +1274,16 @@
         var all = (_psLast && _psLast.shown && _psLast.shown.rows) || [];
         var th = function (id, label, w) {
             var on = _psTbl.sort === id;
-            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:20; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
+            return '<th onclick="window._psTblSort(\'' + id + '\')" style="position:sticky; top:0; z-index:20; cursor:pointer; user-select:none; white-space:nowrap; padding:5px 6px; background:#eef6f7; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left;' + (w ? ' width:' + w + ';' : '') + '" title="' + esc(T('눌러서 정렬 (오름↔내림)', 'Click to sort (asc/desc)')) + '">' +
                    esc(label) + ' <span style="color:' + (on ? '#1971c2' : '#b8c4d0') + ';">' + (on ? (_psTbl.dir > 0 ? '▲' : '▼') : '↕') + '</span></th>';
         };
         var td = 'padding:5px 6px; border-right:1px solid #e3e8ee; border-bottom:1px solid #e3e8ee; vertical-align:top; font-size:12px;';
-        var body = rows.map(function (r) {
+        // 🦓 [2026-11-24] 다른 페이지와 같은 흰색 + 팔레트 제브라 — 색은 **tr** 에(td 에 칠하면
+        //    근거에서 돌아올 때 tr 에 거는 노란 깜빡임(flash)이 가려진다). 색은 styles.css / js/21.
+        var body = rows.map(function (r, vi) {
             var c = catOf(r.cat);
             var ai = all.indexOf(r);   // 돌아올 자리 — 정렬·필터가 바뀌어도 같은 행을 가리키게 원본 순번
-            return '<tr id="ps-row-' + ai + '" style="transition:background .4s;">' +
+            return '<tr id="ps-row-' + ai + '"' + (vi % 2 ? ' class="ps-zebra-b"' : '') + ' style="transition:background .4s;">' +
                 '<td style="' + td + ' text-align:center; padding:4px 3px;">' + pinBtnHtml(resolveGanttRows(r).rows, 'window._psPinRow(' + ai + ')') + '</td>' +
                 '<td style="' + td + ' white-space:nowrap;"><span style="padding:1px 7px; border-radius:9px; font-size:11px; font-weight:bold; color:' + c.color + '; background:' + c.bg + ';">' + esc(catName(r.cat)) + '</span></td>' +
                 '<td style="' + td + '" title="' + esc(r.projects.join('\n')) + '">' + (r.common ? '<span style="padding:1px 6px; border-radius:8px; background:#fff3bf; color:#8f5a00; font-size:11px; font-weight:bold;">🔗 ' + esc(rowProj(r)) + '</span>' : esc(r.projects[0] || '')) + '</td>' +
@@ -1292,9 +1294,9 @@
         }).join('');
         if (!rows.length) body = '<tr><td colspan="7" style="' + td + ' text-align:center; color:#999; padding:14px;">' + esc(all.length ? T('조건에 맞는 행이 없습니다', 'No rows match') : T('근거 있는 항목이 없었습니다 — 아래 사실 목록을 보세요', 'No grounded items')) + '</td></tr>';
         return '<table style="width:100%; border-collapse:separate; border-spacing:0; border-left:1px solid #cdd9e6; border-top:1px solid #cdd9e6; table-layout:auto; background:#fff;"><thead><tr>' +
-            '<th style="position:sticky; top:0; z-index:20; width:28px; padding:5px 3px; background:#e7eff8; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:center;" title="' + esc(T('핀셋(알람) — 간트 No. 칸의 막대와 같다. 열린 프로젝트의 업무만', 'Pin (alarm) — same as the Gantt pin bar; open project only')) + '">📌</th>' +
+            '<th style="position:sticky; top:0; z-index:20; width:28px; padding:5px 3px; background:#eef6f7; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:center;" title="' + esc(T('핀셋(알람) — 간트 No. 칸의 막대와 같다. 열린 프로젝트의 업무만', 'Pin (alarm) — same as the Gantt pin bar; open project only')) + '">📌</th>' +
             th('cat', T('분류', 'Type'), '74px') + th('proj', T('프로젝트', 'Project'), '') + th('who', T('업무 담당자', 'Assignee'), '') + th('date', T('날짜', 'Date'), '82px') + th('text', T('내용', 'Content'), '46%') +
-            '<th style="position:sticky; top:0; z-index:20; padding:5px 6px; background:#e7eff8; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
+            '<th style="position:sticky; top:0; z-index:20; padding:5px 6px; background:#eef6f7; color:#2c5f8a; border-right:1px solid #cdd9e6; border-bottom:1px solid #cdd9e6; font-size:11.5px; text-align:left; white-space:nowrap;">' + esc(T('근거', 'Source')) + '</th>' +
             '</tr></thead><tbody>' + body + '</tbody></table>' +
             '<div style="font-size:11px; color:#888; margin-top:4px;">' + esc(T(rows.length + ' / ' + all.length + '행', rows.length + ' / ' + all.length + ' rows')) + '</div>';
     }

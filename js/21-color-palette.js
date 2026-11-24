@@ -269,7 +269,9 @@ window._cpApplyLive = function(hex, skipSave) {
         // 📏 [2026-11-24 "표 머리글 통일"] 일일보고 하루 보기 표 — 목록에 없어 전역 회색(#f4f6f8)이 이겼다
         '#daily-report-page thead th',
         // 🦓 [2026-11-24] 주간보고 문제점 표 — 전역 회색(#f4f6f8)이었다
-        '#weekly-report-page thead th'
+        '#weekly-report-page thead th',
+        // 🦓 [2026-11-24] Project Review 표 — 머리글이 팔레트 밖 #e7eff8 이었다
+        '#psummary-page thead th'
     ];
     css += headerSelectors.join(', ') + ' { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
@@ -386,6 +388,8 @@ window._cpApplyLive = function(hex, skipSave) {
     //    🦓 [2026-11-24] 줄 배경은 다른 표와 같이 흰색/zebraB(사람 단위) — 보색 배경은 없앴다.
     css += '.daily-cat-cell { color: ' + gen.darkText + ' !important; }\n'
         + '#daily-report-page tr.daily-zebra-b > td, #weekly-report-page tr.wr-zebra-b > td { background: ' + gen.zebraB + ' !important; }\n'
+        // ⚠️ Project Review 제브라는 tr 에 칠하고 !important 를 안 붙인다 — 근거에서 돌아올 때 inline 깜빡임이 이겨야 한다
+        + '#psummary-page tr.ps-zebra-b { background: ' + gen.zebraB + '; }\n'
         + '.daily-none-txt { color: ' + gen.darkText + ' !important; }\n';
 
     // 📄 [2026-11-09] Document 페이지(js/67)의 문서 서식 — **클래스 기반**이라
