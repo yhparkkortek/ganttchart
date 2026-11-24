@@ -161,9 +161,11 @@
     //  열 머리글을 누르면 그 열 기준으로 정렬(오름/내림 토글), 🔽 아이콘을 누르면 필터
     //  팝업(체크박스 또는 포함검색)이 뜬다 — 전부 **클라이언트 사이드**: 지금 merge된
     //  `_lastRows`(원본, 필터 전)를 걸러서 다시 그릴 뿐 서버에 다시 묻지 않는다.
-    var _sortCol = 'updated';
-    var _sortDir = 'desc';
-    var _colFilters = {};   // colKey -> {값:true,...}(선택형) 또는 문자열(포함검색형)
+    // 🧮 [2026-11-24] 정렬·필터 상태를 **표마다** 따로 든다 — 이 탭의 연결 이슈 표(main)와
+    //    🔎 전체 이슈 검색 표(search)가 **같은 코드**(머리글·필터 팝업·토글)를 쓴다. 표마다
+    //    복사해 두면 한쪽만 고쳐진다. onclick 문자열은 마지막 인자로 표 이름을 싣는다.
+    var _tables = {};       // 이름 -> { cols, byKey, filters, sortCol, sortDir, rows(), render() }
+    function tblState(name) { return _tables[name || 'main']; }
     var _filterUnit = null; // 모델이 바뀔 때만 초기화(새로고침은 유지) — 아래 _jiraOnTabShown 참고
 
     var COLUMNS = [
@@ -187,12 +189,18 @@
     ];
     var COLUMNS_BY_KEY = {};
     COLUMNS.forEach(function (c) { COLUMNS_BY_KEY[c.key] = c; });
+    _tables.main = {
+        cols: COLUMNS, byKey: COLUMNS_BY_KEY, filters: {}, sortCol: 'updated', sortDir: 'desc',
+        rows: function () { return _lastRows; },
+        render: function () { renderFilteredSortedTable(); }
+    };
 
-    function uniqueColumnValues(colKey) {
-        var col = COLUMNS_BY_KEY[colKey];
+    function uniqueColumnValues(colKey, tbl) {
+        var S = tblState(tbl);
+        var col = S.byKey[colKey];
         var seen = {};
         var out = [];
-        _lastRows.forEach(function (it) {
+        S.rows().forEach(function (it) {
             if (col.multi) {
                 (col.getArray(it) || []).forEach(function (tag) { if (!seen[tag]) { seen[tag] = true; out.push(tag); } });
             } else {
@@ -204,10 +212,11 @@
         return out;
     }
 
-    function passesColFilters(it) {
-        for (var i = 0; i < COLUMNS.length; i++) {
-            var col = COLUMNS[i];
-            var f = _colFilters[col.key];
+    function passesColFilters(it, tbl) {
+        var S = tblState(tbl);
+        for (var i = 0; i < S.cols.length; i++) {
+            var col = S.cols[i];
+            var f = S.filters[col.key];
             if (!f) continue;
             if (col.type === 'text') {
                 var val = (col.get(it) || '').toString().toLowerCase();
@@ -223,24 +232,36 @@
         return true;
     }
 
+    // 원본 행에 지금의 필터·정렬을 입힌 "보이는 행" — 표 그리기는 이것만 받는다.
+    // sortCol 이 비어 있으면(null) **원래 순서 그대로**다(유사 이슈의 '비슷한 순' 같은 서버·코드
+    // 순서를 사람이 머리글을 누르기 전까지는 흩뜨리지 않는다).
+    function viewRows(tbl) {
+        var S = tblState(tbl);
+        var view = S.rows().filter(function (it) { return passesColFilters(it, tbl); });
+        var col = S.sortCol ? S.byKey[S.sortCol] : null;
+        if (!col) return view;
+        view.sort(function (a, b) {
+            var cmp;
+            if (col.type === 'number') cmp = (Number(col.get(a)) || 0) - (Number(col.get(b)) || 0);
+            else cmp = (col.get(a) || '').toString().localeCompare((col.get(b) || '').toString(), undefined, { numeric: true, sensitivity: 'base' });
+            return S.sortDir === 'asc' ? cmp : -cmp;
+        });
+        return view;
+    }
+
     // merge 결과(_lastRows, 원본)에 지금의 필터·정렬을 입혀 다시 그린다 — 열 머리글
     // 클릭이나 필터 체크박스가 바뀔 때마다 이것만 부르면 된다(서버 재조회 없음).
     function renderFilteredSortedTable() {
-        var view = _lastRows.filter(passesColFilters);
-        var col = COLUMNS_BY_KEY[_sortCol];
-        view.sort(function (a, b) {
-            var va = col ? (col.get(a) || '').toString() : '';
-            var vb = col ? (col.get(b) || '').toString() : '';
-            var cmp = va.localeCompare(vb, undefined, { numeric: true, sensitivity: 'base' });
-            return _sortDir === 'asc' ? cmp : -cmp;
-        });
-        renderTable(view, _lastNote);
+        renderTable(viewRows('main'), _lastNote);
     }
 
-    window._jiraSetSort = function (colKey) {
-        if (_sortCol === colKey) { _sortDir = (_sortDir === 'asc') ? 'desc' : 'asc'; }
-        else { _sortCol = colKey; _sortDir = (colKey === 'updated') ? 'desc' : 'asc'; }
-        renderFilteredSortedTable();
+    // 날짜·숫자 열은 처음 누르면 큰 것(최근)부터, 글자 열은 가나다/ABC 순부터
+    window._jiraSetSort = function (colKey, tbl) {
+        var S = tblState(tbl);
+        var col = S.byKey[colKey] || {};
+        if (S.sortCol === colKey) { S.sortDir = (S.sortDir === 'asc') ? 'desc' : 'asc'; }
+        else { S.sortCol = colKey; S.sortDir = (col.type === 'date' || col.type === 'number') ? 'desc' : 'asc'; }
+        S.render();
     };
 
     function colFilterBox() {
@@ -248,7 +269,8 @@
         if (box) return box;
         box = document.createElement('div');
         box.id = 'jira-colfilter-box';
-        box.style.cssText = 'position:fixed; z-index:9500; display:none; min-width:170px; max-width:260px; max-height:260px;'
+        // ⚠️ z-index 는 전체 검색 모달(9400)보다 위여야 한다 — 아래면 그 모달 표의 🔽 를 눌러도 팝업이 뒤에 숨는다
+        box.style.cssText = 'position:fixed; z-index:100500; display:none; min-width:170px; max-width:260px; max-height:260px;'
             + ' overflow-y:auto; border:1px solid #cfe3e5; border-radius:6px; background:#fff; box-shadow:0 4px 16px rgba(0,0,0,.18);'
             + ' font-size:12px; padding:8px;';
         document.body.appendChild(box);
@@ -260,111 +282,130 @@
         return box;
     }
 
-    function buildColFilterContent(colKey) {
-        var col = COLUMNS_BY_KEY[colKey];
+    // onclick 문자열 안에 넣는 인자 — 열 키·표 이름은 영문 고정값이라 따옴표만 감싼다
+    function qa(colKey, tbl) { return '\'' + colKey + '\', \'' + (tbl || 'main') + '\''; }
+
+    function buildColFilterContent(colKey, tbl) {
+        var S = tblState(tbl);
+        var col = S.byKey[colKey];
         if (!col) return '';
         if (col.type === 'text') {
-            var cur = _colFilters[colKey] || '';
+            var cur = S.filters[colKey] || '';
             return '<div style="margin-bottom:6px; color:#777;">' + esc(col.label) + ' (' + T('포함 검색', 'contains') + ')</div>'
-                + '<input type="text" value="' + esc(cur) + '" oninput="window._jiraApplyTextFilter(\'' + colKey + '\', this.value)"'
+                + '<input type="text" value="' + esc(cur) + '" oninput="window._jiraApplyTextFilter(' + qa(colKey, tbl) + ', this.value)"'
                 + ' style="width:100%; box-sizing:border-box; padding:5px 7px; border:1px solid #ccc; border-radius:5px; font-size:12px;"'
                 + ' placeholder="' + esc(T('검색어', 'search')) + '">'
-                + (cur ? ('<div style="text-align:right; margin-top:6px;"><button onclick="window._jiraApplyTextFilter(\'' + colKey + '\', \'\')"'
+                + (cur ? ('<div style="text-align:right; margin-top:6px;"><button onclick="window._jiraApplyTextFilter(' + qa(colKey, tbl) + ', \'\')"'
                     + ' style="border:none; background:none; color:#00707d; cursor:pointer; font-size:11px;">✕ ' + T('지우기', 'Clear') + '</button></div>') : '');
         }
-        var values = uniqueColumnValues(colKey);
-        var f = _colFilters[colKey];
+        var values = uniqueColumnValues(colKey, tbl);
+        var f = S.filters[colKey];
         var allChecked = !f;
         return '<div style="margin-bottom:6px; color:#777;">' + esc(col.label) + '</div>'
             + '<label style="display:flex; align-items:center; gap:6px; padding:3px 2px; border-bottom:1px solid #f0f0f0; margin-bottom:4px; cursor:pointer;">'
-            + '<input type="checkbox"' + (allChecked ? ' checked' : '') + ' onchange="window._jiraToggleAllColFilter(\'' + colKey + '\', this.checked)">'
+            + '<input type="checkbox"' + (allChecked ? ' checked' : '') + ' onchange="window._jiraToggleAllColFilter(' + qa(colKey, tbl) + ', this.checked)">'
             + '<b>' + T('전체', 'All') + '</b></label>'
             + values.map(function (v) {
                 var checked = allChecked || !!(f && f[v]);
                 var label = col.display ? col.display(v) : v;
                 return '<label style="display:flex; align-items:center; gap:6px; padding:3px 2px; cursor:pointer;">'
-                    + '<input type="checkbox" value="' + esc(v) + '"' + (checked ? ' checked' : '') + ' onchange="window._jiraToggleValueColFilter(\'' + colKey + '\', this.value, this.checked)">'
+                    + '<input type="checkbox" value="' + esc(v) + '"' + (checked ? ' checked' : '') + ' onchange="window._jiraToggleValueColFilter(' + qa(colKey, tbl) + ', this.value, this.checked)">'
                     + '<span>' + (label ? esc(label) : '<span style="color:#aaa;">(' + T('없음', 'none') + ')</span>') + '</span></label>';
             }).join('');
     }
 
-    function refreshOpenFilterBox(colKey) {
+    function refreshOpenFilterBox(colKey, tbl) {
         var box = document.getElementById('jira-colfilter-box');
-        if (box && box.style.display !== 'none' && box.dataset.col === colKey) box.innerHTML = buildColFilterContent(colKey);
+        if (box && box.style.display !== 'none' && box.dataset.col === colKey && box.dataset.tbl === (tbl || 'main')) {
+            box.innerHTML = buildColFilterContent(colKey, tbl);
+        }
     }
 
-    window._jiraToggleColFilter = function (el, colKey) {
+    window._jiraToggleColFilter = function (el, colKey, tbl) {
+        tbl = tbl || 'main';
         var box = colFilterBox();
-        var already = box.style.display !== 'none' && box.dataset.col === colKey;
+        var already = box.style.display !== 'none' && box.dataset.col === colKey && box.dataset.tbl === tbl;
         box.style.display = 'none';
         if (already) { box.dataset.col = ''; return; }
         box.dataset.col = colKey;
+        box.dataset.tbl = tbl;
         var r = el.getBoundingClientRect();
         box.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 270)) + 'px';
         box.style.top = (r.bottom + 4) + 'px';
-        box.innerHTML = buildColFilterContent(colKey);
+        box.innerHTML = buildColFilterContent(colKey, tbl);
         box.style.display = 'block';
     };
 
-    window._jiraApplyTextFilter = function (colKey, value) {
+    window._jiraApplyTextFilter = function (colKey, tbl, value) {
+        var S = tblState(tbl);
         value = (value || '').trim();
-        if (value) _colFilters[colKey] = value; else delete _colFilters[colKey];
-        renderFilteredSortedTable();
-        refreshOpenFilterBox(colKey);
+        if (value) S.filters[colKey] = value; else delete S.filters[colKey];
+        S.render();
+        // ⚠️ 포함검색 칸은 다시 그리지 않는다 — 다시 그리면 치던 칸에서 포커스가 날아간다
+        if (!value) refreshOpenFilterBox(colKey, tbl);
     };
 
-    window._jiraToggleAllColFilter = function (colKey, checked) {
-        if (checked) delete _colFilters[colKey];
-        else _colFilters[colKey] = {};
-        renderFilteredSortedTable();
-        refreshOpenFilterBox(colKey);
+    window._jiraToggleAllColFilter = function (colKey, tbl, checked) {
+        var S = tblState(tbl);
+        if (checked) delete S.filters[colKey];
+        else S.filters[colKey] = {};
+        S.render();
+        refreshOpenFilterBox(colKey, tbl);
     };
 
-    window._jiraToggleValueColFilter = function (colKey, value, checked) {
-        var values = uniqueColumnValues(colKey);
-        var f = _colFilters[colKey];
+    window._jiraToggleValueColFilter = function (colKey, tbl, value, checked) {
+        var S = tblState(tbl);
+        var values = uniqueColumnValues(colKey, tbl);
+        var f = S.filters[colKey];
         if (!f) { f = {}; values.forEach(function (v) { f[v] = true; }); }
         if (checked) f[value] = true; else delete f[value];
         var allOn = values.length > 0 && values.every(function (v) { return f[v]; });
-        if (allOn) delete _colFilters[colKey]; else _colFilters[colKey] = f;
-        renderFilteredSortedTable();
-        refreshOpenFilterBox(colKey);
+        if (allOn) delete S.filters[colKey]; else S.filters[colKey] = f;
+        S.render();
+        refreshOpenFilterBox(colKey, tbl);
     };
 
-    window._jiraClearAllFilters = function () {
-        _colFilters = {};
-        renderFilteredSortedTable();
+    window._jiraClearAllFilters = function (tbl) {
+        var S = tblState(tbl);
+        S.filters = {};
+        S.render();
         var box = document.getElementById('jira-colfilter-box');
         if (box) box.style.display = 'none';
     };
 
-    function sortArrow(colKey) {
-        if (_sortCol !== colKey) return '<span style="opacity:.3;">⇅</span>';
-        return _sortDir === 'asc' ? '▲' : '▼';
+    function sortArrow(colKey, tbl) {
+        var S = tblState(tbl);
+        if (S.sortCol !== colKey) return '<span style="opacity:.3;">⇅</span>';
+        return S.sortDir === 'asc' ? '▲' : '▼';
     }
 
-    function headerCell(colKey, widthPct, align) {
-        var col = COLUMNS_BY_KEY[colKey];
-        var filterActive = !!_colFilters[colKey];
+    function headerCell(colKey, widthPct, align, tbl) {
+        var S = tblState(tbl);
+        var col = S.byKey[colKey];
+        var filterActive = !!S.filters[colKey];
         return '<th style="padding:7px 8px; text-align:' + align + '; width:' + widthPct + '%; background:#eef6f7; border-bottom:2px solid #cfe3e5; white-space:nowrap;"'
             + (col.title ? (' title="' + esc(col.title) + '"') : '') + '>'
-            + '<span onclick="window._jiraSetSort(\'' + colKey + '\')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
-            + esc(col.label) + ' <span style="font-size:10px; color:#00707d;">' + sortArrow(colKey) + '</span></span>'
-            + ' <span data-jira-filter-btn onclick="window._jiraToggleColFilter(this, \'' + colKey + '\')"'
-            + ' style="cursor:pointer; font-size:11px; color:' + (filterActive ? '#00707d' : '#bbb') + ';" title="' + esc(T('필터', 'Filter')) + '">🔽</span>'
+            + '<span onclick="window._jiraSetSort(' + qa(colKey, tbl) + ')" style="cursor:pointer;" title="' + esc(T('클릭해서 정렬', 'Click to sort')) + '">'
+            + esc(col.label) + ' <span style="font-size:10px; color:#00707d;">' + sortArrow(colKey, tbl) + '</span></span>'
+            + (col.noFilter ? '' : (' <span data-jira-filter-btn onclick="window._jiraToggleColFilter(this, ' + qa(colKey, tbl) + ')"'
+                + ' style="cursor:pointer; font-size:11px; color:' + (filterActive ? '#00707d' : '#bbb') + ';" title="' + esc(T('필터', 'Filter')) + '">🔽</span>'))
             + '</th>';
+    }
+
+    // "N개 열에 필터 적용 중 · 전체 해제" 띠 — 두 표가 같은 모양을 쓴다
+    function filterBarHtml(tbl) {
+        var n = Object.keys(tblState(tbl).filters).length;
+        if (!n) return '';
+        return '<div style="padding:5px 8px; font-size:11px; color:#00707d; background:#eef6f7; border-top:1px solid #cfe3e5; display:flex; align-items:center; gap:8px;">'
+            + '🔽 ' + esc(T(n + '개 열에 필터 적용 중', n + ' column filter(s) active'))
+            + '<button onclick="window._jiraClearAllFilters(\'' + (tbl || 'main') + '\')" style="border:none; background:none; color:#a3281c; cursor:pointer; font-size:11px; text-decoration:underline;">'
+            + T('전체 해제', 'Clear all') + '</button></div>';
     }
 
     function renderTable(merged, note) {
         var box = document.getElementById('jira-table-wrap');
         if (!box) return;
-        var activeFilterCount = Object.keys(_colFilters).length;
-        var filterBar = activeFilterCount
-            ? ('<div style="padding:5px 8px; font-size:11px; color:#00707d; background:#eef6f7; border-top:1px solid #cfe3e5; display:flex; align-items:center; gap:8px;">'
-                + '🔽 ' + esc(T(activeFilterCount + '개 열에 필터 적용 중', activeFilterCount + ' column filter(s) active'))
-                + '<button onclick="window._jiraClearAllFilters()" style="border:none; background:none; color:#a3281c; cursor:pointer; font-size:11px; text-decoration:underline;">'
-                + T('전체 해제', 'Clear all') + '</button></div>')
-            : '';
+        var filterBar = filterBarHtml('main');
         if (!merged.length) {
             var emptyMsg;
             if (!note && _lastRows.length > 0) {
@@ -596,7 +637,7 @@
         // 프로젝트를 보는 것이라 이전 필터가 의미 없어지는 경우가 많다).
         var curUnit = jiraActiveUnit();
         if (curUnit !== _filterUnit) {
-            _sortCol = 'updated'; _sortDir = 'desc'; _colFilters = {};
+            _tables.main.sortCol = 'updated'; _tables.main.sortDir = 'desc'; _tables.main.filters = {};
             _filterUnit = curUnit;
         }
 
@@ -629,6 +670,61 @@
     //  AI 0회(JIRA 서버 전문검색 그대로) — 결정론 먼저(CLAUDE.md), 새 백엔드 라우트도
     //  없다(기존 `/jira/search`).
     var _searchHits = [];
+    var _searchTotal = 0;
+
+    // 👥 [2026-11-24 사용자 요청] 개발팀 필터 — JIRA 에 **부서 그룹**이 있다(실측 `개발1팀`~`개발7팀`,
+    //    `/rest/api/2/groups/picker`). 이슈의 '부서' 필드(customfield_10303·10400)는 **한 건도 안 쓰여**
+    //    (실측 0건) 쓸 수 없고, 대신 **담당자 또는 보고자가 그 그룹 사람**인 이슈로 서버에서 거른다
+    //    (`membersOf`). 그래서 50건 상한 안에서 거르는 게 아니라 **그 팀 것만 50건**이 온다.
+    //    ⚠️ 그룹 이름은 JIRA 에 있는 그대로 — 없는 이름을 넣으면 JQL 이 통째로 실패한다.
+    window.JIRA_SEARCH_POLICY = window.JIRA_SEARCH_POLICY || {
+        teamGroups: ['개발1팀', '개발2팀', '개발3팀', '개발4팀', '개발5팀', '개발6팀', '개발7팀'],
+        teamStoreKey: 'gantt_jira_search_team_v1'   // 마지막으로 고른 팀(다음에 열 때 그대로)
+    };
+    if (window.STORAGE_REGISTRY && !window.STORAGE_REGISTRY.some(function (r) { return r.key === window.JIRA_SEARCH_POLICY.teamStoreKey; })) {
+        window.STORAGE_REGISTRY.push({ key: window.JIRA_SEARCH_POLICY.teamStoreKey, label: 'JIRA 전체 검색 — 마지막으로 고른 개발팀',
+            labelEn: 'JIRA search — last chosen team', cls: 'cache', strategy: { type: 'drop' } });
+    }
+    function searchTeam() {
+        var el = document.getElementById('jira-search-team');
+        if (el) return el.value || '';
+        try { return localStorage.getItem(window.JIRA_SEARCH_POLICY.teamStoreKey) || ''; } catch (e) { return ''; }
+    }
+    function teamClause() {
+        var t = searchTeam().replace(/["\\]/g, '');
+        return t ? ' AND (assignee in membersOf("' + t + '") OR reporter in membersOf("' + t + '"))' : '';
+    }
+    window._jiraSearchTeamChanged = function () {
+        try { localStorage.setItem(window.JIRA_SEARCH_POLICY.teamStoreKey, searchTeam()); } catch (e) { /* 기억 못 해도 검색은 된다 */ }
+        if (_searchMode === 'similar' && _simBase) return window._jiraSimRun();
+        var q = ((document.getElementById('jira-search-q') || {}).value || '').trim();
+        if (q) return window._jiraSearchRun();
+    };
+
+    // 🔽 [2026-11-24 사용자 요청] 검색 표도 머리글 정렬(오름/내림)·필터 — 연결 이슈 표와 **같은 코드**
+    //    (_tables 위 "헤더 정렬·필터" 절). 처음엔 sortCol 이 비어 있어 **받은 순서 그대로**(유사 이슈는
+    //    '비슷한 순')이고, 사람이 머리글을 누를 때부터 바뀐다.
+    var SEARCH_COLUMNS = [
+        { key: 'match', label: T('일치', 'Match'), type: 'number', noFilter: true,
+          title: T('요약에 걸린 검색어 묶음 수', 'Number of term groups found in the summary'),
+          get: function (it) { return (it._sim && it._sim.score) || 0; } },
+        { key: 'project', label: T('프로젝트', 'Project'), type: 'select', get: function (it) { return (it.key || '').split('-')[0]; } },
+        { key: 'key', label: T('키', 'Key'), type: 'text', get: function (it) { return it.key || ''; } },
+        { key: 'summary', label: T('요약', 'Summary'), type: 'text', get: function (it) { return it.summary || ''; } },
+        { key: 'status', label: T('상태', 'Status'), type: 'select', get: function (it) { return it.status || ''; } },
+        { key: 'resolution', label: T('해결책', 'Resolution'), type: 'select', get: function (it) { return it.resolution || ''; } },
+        { key: 'assignee', label: T('담당자', 'Assignee'), type: 'select', get: function (it) { return it.assignee || ''; } },
+        { key: 'updated', label: T('수정일', 'Updated'), type: 'date', get: function (it) { return it.updated || ''; } }
+    ];
+    var SEARCH_COLUMNS_BY_KEY = {};
+    SEARCH_COLUMNS.forEach(function (c) { SEARCH_COLUMNS_BY_KEY[c.key] = c; });
+    _tables.search = {
+        cols: SEARCH_COLUMNS, byKey: SEARCH_COLUMNS_BY_KEY, filters: {}, sortCol: null, sortDir: 'desc',
+        rows: function () { return _searchHits; },
+        render: function () { _jiraRenderSearchResults(_searchTotal); }
+    };
+    // 새 검색을 하면 필터·정렬을 비운다 — 앞 검색의 담당자·프로젝트 값으로 거른 채 두면 새 결과가 통째로 안 보인다
+    function resetSearchView() { _tables.search.filters = {}; _tables.search.sortCol = null; _tables.search.sortDir = 'desc'; }
 
     window._jiraOpenSearchModal = function () {
         var wrap = document.getElementById('jira-search-modal');
@@ -638,25 +734,37 @@
             wrap.style.cssText = 'display:none; position:fixed; inset:0; z-index:9400; pointer-events:none; background:none;';
             document.body.appendChild(wrap);
         }
+        var P = window.JIRA_SEARCH_POLICY;
+        var curTeam = searchTeam();
+        var teamSel = '<select id="jira-search-team" onchange="window._jiraSearchTeamChanged()"'
+            + ' title="' + T('담당자 또는 보고자가 그 팀(JIRA 그룹)인 이슈만', 'Only issues whose assignee or reporter is in that team (JIRA group)') + '"'
+            + ' style="' + inputSt + ' flex:0 0 auto; width:auto;">'
+            + '<option value="">👥 ' + T('전체 팀', 'All teams') + '</option>'
+            + P.teamGroups.map(function (g) { return '<option value="' + esc(g) + '"' + (g === curTeam ? ' selected' : '') + '>' + esc(g) + '</option>'; }).join('')
+            + '</select>';
+        // ⚠️ 표가 상자 밖으로 넘치지 않게 — 상자는 `height` 로 잡고(크기 기억이 height 를 다시 줄 수 있다)
+        //    본문만 스크롤한다. flex 자식은 기본 min-height:auto 라 **min-height:0 이 없으면 안 줄어든다**
+        //    (docs/modal-ux.md "섹션을 더하면 모달이 조용히 잘린다"와 같은 함정).
         wrap.innerHTML =
             '<div id="jira-search-box" style="pointer-events:all; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);'
-            + ' width:min(760px,94vw); max-height:88vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
+            + ' width:min(860px,94vw); height:min(760px,88vh); max-height:94vh; background:#fff; box-shadow:0 8px 30px rgba(0,0,0,.3); border-radius:10px; overflow:hidden;'
             + ' display:flex; flex-direction:column;">'
-            + '<div id="jira-search-drag" style="padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
+            + '<div id="jira-search-drag" style="flex:0 0 auto; padding:13px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; color:#1971c2; border-radius:10px 10px 0 0;'
             + ' cursor:grab; display:flex; align-items:center; gap:8px;">'
             + '<strong style="font-size:14px;">🔎 ' + T('전체 이슈 검색', 'Search all issues') + '</strong>'
             + '<span style="flex:1;"></span>'
             + '<button onclick="document.getElementById(\'jira-search-modal\').style.display=\'none\'"'
             + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text);'
             + ' border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>'
-            + '<div style="padding:12px 14px 6px;">'
+            + '<div style="flex:0 0 auto; padding:12px 14px 6px;">'
             + '<div style="font-size:11px; color:#888; margin-bottom:6px;">' + T('지금 연결된 프로젝트와 상관없이 JIRA 전체에서 찾습니다 — 예: 노이즈, 번들림, 외관불량, 신뢰성 · 이슈 키(예: GABJO-2)를 넣으면 그 이슈와 비슷한 이슈를 찾습니다', 'Searches across all of JIRA, not just the linked project — e.g. noise, warping, cosmetic defect, reliability · enter an issue key (e.g. GABJO-2) to find issues similar to it') + '</div>'
             + '<div style="display:flex; gap:6px;">'
-            + '<input id="jira-search-q" placeholder="' + T('검색어 또는 이슈 키', 'Search term or issue key') + '" style="' + inputSt + '" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
+            + teamSel
+            + '<input id="jira-search-q" placeholder="' + T('검색어 또는 이슈 키', 'Search term or issue key') + '" style="' + inputSt + ' min-width:0;" onkeydown="if(event.key===\'Enter\')window._jiraSearchRun()">'
             + '<button onclick="window._jiraSearchRun()"' + btnHover + ' style="' + btnSt + ' font-weight:bold; flex-shrink:0;">🔎 ' + T('검색', 'Search') + '</button>'
             + '</div></div>'
-            + '<div id="jira-search-sim" style="display:none; padding:0 14px 6px;"></div>'
-            + '<div id="jira-search-body" style="padding:0 14px 14px; flex:1; min-height:0; overflow-y:auto; font-size:12px;"></div>'
+            + '<div id="jira-search-sim" style="flex:0 0 auto; display:none; padding:0 14px 6px;"></div>'
+            + '<div id="jira-search-body" style="padding:0 14px 14px; flex:1 1 auto; min-height:0; overflow:auto; font-size:12px;"></div>'
             + '</div>';
         wrap.style.display = 'block';
         if (window._makeDraggable) window._makeDraggable('jira-search-box', 'jira-search-drag');
@@ -676,15 +784,17 @@
         // 이슈 키를 넣었으면 "그 이슈와 비슷한 것" 찾기로 넘긴다(아래 유사 이슈 절)
         if (KEY_RE.test(q.toUpperCase())) { return window._jiraFindSimilar(q.toUpperCase()); }
         _searchMode = 'text';
+        resetSearchView();
         var simBox = document.getElementById('jira-search-sim');
         if (simBox) { simBox.style.display = 'none'; simBox.innerHTML = ''; }
         box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('검색 중...', 'Searching...') + '</div>';
         var safe = q.replace(/["\\]/g, '');
         try {
-            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('text ~ "' + safe + '*" ORDER BY updated DESC') + '&maxResults=50');
+            var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent('text ~ "' + safe + '*"' + teamClause() + ' ORDER BY updated DESC') + '&maxResults=50');
             if (!d || d.ok === false) { box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc((d && d.message) || T('검색 실패', 'Search failed')) + '</div>'; return; }
             _searchHits = d.issues || [];
-            _jiraRenderSearchResults(d.total || _searchHits.length);
+            _searchTotal = d.total || _searchHits.length;
+            _jiraRenderSearchResults(_searchTotal);
         } catch (e) {
             box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
         }
@@ -693,31 +803,30 @@
     function _jiraRenderSearchResults(total) {
         var box = document.getElementById('jira-search-body');
         if (!box) return;
-        if (!_searchHits.length) { box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('일치하는 이슈가 없습니다.', 'No matching issues.') + '</div>'; return; }
+        var team = searchTeam();
+        var teamNote = team ? ' · 👥 ' + T(team + ' 담당·보고 이슈만', 'only ' + team + ' assignee/reporter') : '';
+        if (!_searchHits.length) { box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('일치하는 이슈가 없습니다.', 'No matching issues.') + esc(teamNote) + '</div>'; return; }
         // 결과가 상한(50)에 걸렸으면 "전부"가 아니라는 걸 숨기지 않는다 — 검색어를 좁혀야
         // 더 보인다는 안내까지(CLAUDE.md "끊었으면 끊었다는 사실을 드러낼 것").
         var countNote = total > _searchHits.length
             ? T(total + '건 중 ' + _searchHits.length + '건 표시 — 검색어를 더 좁혀보세요', 'Showing ' + _searchHits.length + ' of ' + total + ' — try narrowing the search term')
             : T(_searchHits.length + '건', _searchHits.length + ' result(s)');
+        var view = viewRows('search');
+        if (view.length !== _searchHits.length) countNote += T(' · 필터 후 ' + view.length + '건', ' · ' + view.length + ' after filters');
         var sim = _searchMode === 'similar';
-        var th = function (label, w, align) {
-            return '<th style="padding:7px 8px; text-align:' + (align || 'left') + '; width:' + w + '%; border-bottom:2px solid #cfe3e5;">' + label + '</th>';
-        };
         var td = 'padding:7px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
-        box.innerHTML = '<div style="font-size:11px; color:#888; margin:6px 0;">' + esc(countNote) + '</div>'
-            + '<table class="concept-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
-            + '<thead><tr style="background:#eef6f7;">'
-            + (sim ? th(T('일치', 'Match'), 16) : '')
-            + th(T('프로젝트', 'Project'), sim ? 8 : 10)
-            + th(T('키', 'Key'), sim ? 10 : 12)
-            + th(T('요약', 'Summary'), sim ? 30 : 36)
-            + th(T('상태', 'Status'), 9, 'center')
+        var head = '<thead><tr style="background:#eef6f7;">'
+            + (sim ? headerCell('match', 16, 'left', 'search') : '')
+            + headerCell('project', sim ? 9 : 10, 'left', 'search')
+            + headerCell('key', sim ? 10 : 12, 'left', 'search')
+            + headerCell('summary', sim ? 26 : 32, 'left', 'search')
+            + headerCell('status', 9, 'center', 'search')
             // 🩹 "해결책·대책이 있었나"가 이 검색의 목적이라 해결책 열을 둔다 — 비어 있으면 대책이 댓글에 있을 수 있다(상세에서 확인)
-            + th(T('해결책', 'Resolution'), 10, 'center')
-            + th(T('담당자', 'Assignee'), sim ? 8 : 11, 'center')
-            + th(T('수정일', 'Updated'), sim ? 9 : 12, 'center')
-            + '</tr></thead><tbody>'
-            + _searchHits.map(function (it) {
+            + headerCell('resolution', 11, 'center', 'search')
+            + headerCell('assignee', sim ? 8 : 11, 'center', 'search')
+            + headerCell('updated', sim ? 11 : 15, 'center', 'search')
+            + '</tr></thead>';
+        var bodyRows = view.length ? view.map(function (it) {
                 var c = statusColor(it.status);
                 var proj = (it.key || '').split('-')[0];
                 var matchCell = '';
@@ -742,7 +851,17 @@
                     + '<td style="padding:7px 8px; text-align:center; color:#888;">' + esc((it.updated || '').slice(0, 10)) + '</td>'
                     + '</tr>';
             }).join('')
-            + '</tbody></table>';
+            : '<tr><td colspan="' + (sim ? 8 : 7) + '" style="padding:24px; text-align:center; color:#999;">'
+                + T('필터 조건에 맞는 이슈가 없습니다 — ', 'No issues match the current filters — ')
+                + '<button onclick="window._jiraClearAllFilters(\'search\')" style="border:none; background:none; color:#00707d; cursor:pointer; text-decoration:underline; font-size:12px;">'
+                + T('필터 초기화', 'clear filters') + '</button></td></tr>';
+        // ⚠️ 머리글은 스크롤해도 위에 붙어 있게(sticky) — 50줄을 내리다 보면 어느 열인지 잊는다
+        box.innerHTML = '<div style="font-size:11px; color:#888; margin:6px 0;">' + esc(countNote + teamNote) + '</div>'
+            + filterBarHtml('search')
+            + '<table class="concept-table jira-search-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:12.5px;">'
+            + head + '<tbody>' + bodyRows + '</tbody></table>';
+        var ths = box.querySelectorAll('thead th');
+        for (var i = 0; i < ths.length; i++) { ths[i].style.position = 'sticky'; ths[i].style.top = '0'; ths[i].style.zIndex = '2'; }
     }
 
     // ── 🔍 유사 이슈 찾기 (2026-11-23 사용자 요청) ──────────────────────────
@@ -930,7 +1049,7 @@
         box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('검색 중...', 'Searching...') + '</div>';
         var jqlStr = 'project != ' + _simBase.project + ' AND ('
             + q.map(function (w) { return 'text ~ "' + w.replace(/["\\]/g, '') + '*"'; }).join(' OR ')
-            + ') ORDER BY updated DESC';
+            + ')' + teamClause() + ' ORDER BY updated DESC';
         try {
             var d = await fetchJson(BASE + '/jira/search?jql=' + encodeURIComponent(jqlStr) + '&maxResults=' + window.JIRA_SIMILAR_POLICY.maxResults);
             if (!d || d.ok === false) { box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc((d && d.message) || T('검색 실패', 'Search failed')) + '</div>'; return; }
@@ -951,7 +1070,9 @@
                     || String(b.updated || '').localeCompare(String(a.updated || ''));
             });
             _searchHits = hits;
-            _jiraRenderSearchResults(d.total || hits.length);
+            _searchTotal = d.total || hits.length;
+            resetSearchView();
+            _jiraRenderSearchResults(_searchTotal);
         } catch (e) {
             box.innerHTML = '<div style="color:#a3281c; padding:16px;">⚠️ ' + esc(String(e && e.message || e)) + '</div>';
         }
