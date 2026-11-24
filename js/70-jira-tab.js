@@ -327,7 +327,7 @@
         box.id = 'jira-colfilter-box';
         // ⚠️ z-index 는 전체 검색 모달(9400)보다 위여야 한다 — 아래면 그 모달 표의 🔽 를 눌러도 팝업이 뒤에 숨는다
         box.style.cssText = 'position:fixed; z-index:100500; display:none; min-width:170px; max-width:260px; max-height:260px;'
-            + ' overflow-y:auto; border:1px solid #cfe3e5; border-radius:6px; background:#fff; box-shadow:0 4px 16px rgba(0,0,0,.18);'
+            + ' overflow-y:auto; border:1px solid #ced4da; border-radius:8px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.15);'
             + ' font-size:12px; padding:8px;';
         document.body.appendChild(box);
         document.addEventListener('click', function (e) {

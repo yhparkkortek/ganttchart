@@ -147,7 +147,7 @@
         popup.innerHTML = options.map(function(o) {
             const active = o.key === window._alarmView;
             return `<div onclick="window._switchAlarmView('${o.key}'); document.getElementById('alarm-view-dropdown').style.display='none';"
-                         style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;
+                         style="padding:7px 10px; cursor:pointer; border-radius:4px; font-size:12.5px; font-weight:bold; white-space:nowrap;
                                 background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
                          onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
                          onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}</div>`;
@@ -321,7 +321,7 @@
                 '<span style="margin-left:6px; font-size:10px; font-weight:normal; opacity:.7;">'
                 + (_ddEn ? 'basic' : '기본항목') + '</span>';
             return `<div onclick="window._switchElecView('${o.key}'); document.getElementById('elec-view-dropdown').style.display='none';"
-                         style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;
+                         style="padding:7px 10px; cursor:pointer; border-radius:4px; font-size:12.5px; font-weight:bold; white-space:nowrap;
                                 background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
                          onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
                          onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}${mark}</div>`;

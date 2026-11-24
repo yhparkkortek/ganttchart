@@ -4100,7 +4100,7 @@
         pop.innerHTML = _docOrderForms(window._docVisibleForms()).map(function (f) {
             var on = f.id === cur;
             return '<div data-doc-form-id="' + _esc(f.id) + '" onclick="window._docPick(\'' + _esc(f.id) + '\')"'
-                 + ' style="padding:8px 10px; cursor:grab; border-radius:4px; font-size:13px;'
+                 + ' style="padding:7px 10px; cursor:grab; border-radius:4px; font-size:12.5px;'
                  + ' font-weight:bold; white-space:nowrap; display:flex; align-items:center; gap:6px;'
                  + ' background:' + (on ? '#00707d' : 'transparent') + '; color:' + (on ? '#fff' : '#333') + ';"'
                  + ' onmouseover="if(this.style.background!==\'rgb(0, 112, 125)\') this.style.background=\'#f1f3f5\';"'
