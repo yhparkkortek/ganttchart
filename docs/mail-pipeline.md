@@ -692,3 +692,11 @@ AI 매칭(`_msBuildProjectMatchSection` → `_msResolveAiProjectMatch`)을 js/61
   ⚠️ 9/28 처럼 여러 단계가 동시에 시작하면(TOOLING 2ND·CERTIFICATION*·RELIABILITY TEST 1ST*) 가장 짧은 단계로 간다 — 날짜로는 맞지만 문서 종류로는 아닐 수 있다.
 - 이미 엉뚱한 단계에 들어간 **결재** 행은 js/75 바로잡기(⑤)가 열 때 옮긴다(메일 행은 사람이 옮겼을 수 있어 안 건드린다). STELLAR32 실데이터(메모리): 32행 → PROTO B* 19 · RELIABILITY 18, 재실행 0.
 - 검증 `node tests/l0-insert-pos.test.js` 9/9 — 옛 코드는 5-1~5-3 실패.
+
+## 🧑‍💼 인사 시스템 알림이 간트 업무로 들어가던 것 (2026-11-24 사용자 지적 "연장근로·근무계획은 왜 배치되나")
+- 범인은 결재 가져오기(js/75)가 아니라 **메일 자동배치**였다 — `admin@<사내 도메인>` 인사 시스템 알림(연장근로·근무계획 수정·근무변동계 승인, 시간연차 D-7/3/1 안내)이
+  사내 도메인이라 noreply 면제를 타고 들어와 AI 분석 → 자동배치됐다. 실측 17행: STELLAR32 14 · POLED 2 · 개발업무 1.
+- 막는 곳은 하나 — `_mailIsAutoNotice`(js/14b): 본문 표식 `MAIL_AUTO_NOTICE_MARKERS` + 새 **제목 표식** `MAIL_AUTO_NOTICE_SUBJECT_MARKERS`(신청문서가 최종 승인·신청문서가 반려·사용일 사전 안내), 데이터.
+  Stage0(js/15b)가 맨 앞에서 이걸 불러 **AI 분석 전에** 버린다(사유 `auto_notice`, 폐기 큐에 남음). 배치 직전 검사(buildMailTaskRow)도 같은 함수.
+- 실데이터 대조: 프로젝트 메일 행 2,858개 중 걸리는 건 이 17행 + 예전 Outlook 일정 갱신 2행(원래 막으려던 것) — 실제 업무 메일 0.
+- ⚠️ 이미 들어간 17행은 아직 그대로다(지우는 건 사람 확인 후).

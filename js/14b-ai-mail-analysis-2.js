@@ -508,10 +508,21 @@ window._mailFindDupByKey = function(key, gd) {
 //    끝나야 한다 — 코드에 정규식을 박지 않는다.
 window.MAIL_AUTO_NOTICE_MARKERS = [
     'Sent by Microsoft Exchange Online',
-    'has been automatically updated'
+    'has been automatically updated',
+    // 🧑‍💼 [2026-11-24 실측] 인사 시스템(admin@사내 도메인) 알림 — 연장근로·근무계획 수정·근무변동계 승인, 시간연차 D-7/3/1 안내.
+    //    사내 도메인이라 noreply 면제를 타고 들어와 AI 분석·자동배치까지 됐다(STELLAR32 14행·POLED 2·개발업무 1).
+    '경로 : 인사관리'
+];
+// 제목의 고정 문구(인사 시스템이 붙이는 꼬리) — 본문이 비거나 짧게 잘린 메일도 잡도록 제목도 본다.
+window.MAIL_AUTO_NOTICE_SUBJECT_MARKERS = [
+    '신청문서가 최종 승인',
+    '신청문서가 반려',
+    '사용일 사전 안내'
 ];
 window._mailIsAutoNotice = function(mailRaw) {
     const body = String((mailRaw && mailRaw.body2000) || '');
+    const subj = String((mailRaw && mailRaw.subject) || '');
+    if (subj && (window.MAIL_AUTO_NOTICE_SUBJECT_MARKERS || []).some(function(m) { return subj.indexOf(m) !== -1; })) return true;
     if (!body) return false;
     return window.MAIL_AUTO_NOTICE_MARKERS.some(function(marker) { return body.indexOf(marker) !== -1; });
 };

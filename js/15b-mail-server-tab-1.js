@@ -520,6 +520,11 @@ window._msGetWhitelistDomains = function() {
 
 // 반환: {action:'discard'|'new_sender'|'pass', reason:string}
 window._msStage0Filter = function(mail) {
+    // 🧑‍💼 [2026-11-24] 자동 알림(인사 시스템 승인·연차 안내, Outlook 일정 갱신)은 AI 분석 **전에** 버린다 — 판정은 js/14b
+    //    _mailIsAutoNotice 한 곳(데이터 MAIL_AUTO_NOTICE_*). 예전엔 배치 직전에만 봐서 AI 한도를 쓰고, 인사 알림은 아예 못 걸렀다.
+    if (window._mailIsAutoNotice && window._mailIsAutoNotice({ subject: mail.subject, body2000: mail.body })) {
+        return { action: 'discard', reason: 'auto_notice' };
+    }
     const rules = window._msGetFilterRules();
     const subject = (mail.subject || '').toLowerCase();
     for (const kw of rules.subjectKeywords) {
