@@ -101,6 +101,13 @@ for variant in ('base', 'touch'):
     slots_left = sum(1 for dr in d.element.body.iter(qn('wp:docPr')) if (dr.get('descr') or '').startswith('slot:'))
     check(slots_left == 0, '%s: 자리 그림이 남으면 안 된다(%d)' % (variant, slots_left))
     check('Picture img_block' in d.element.body.xml, '%s: img_block 그림이 들어가야' % variant)
+    # 덧그림 — 그림이 들어간 문단(img_block)의 덧그림은 남고, 그림이 빠진 문단(img_osdkey)의 덧그림 둘은 지워진다
+    #   (2026-11-24 실측: 그림 없이 남은 회색 사각형·빨간 점선 상자가 OSD 설명 글을 덮었다)
+    WSP = '{http://schemas.microsoft.com/office/word/2010/wordprocessingShape}wsp'
+    tpl_doc = Document(os.path.join(ROOT, 'templates', 'PRODUCT SPEC_양식%s.docx' % ('_TOUCH' if variant == 'touch' else '')))
+    n_tpl = sum(1 for _ in tpl_doc.element.body.iter(WSP))
+    n_out = sum(1 for _ in d.element.body.iter(WSP))
+    check(n_out == n_tpl - 2, '%s: 그림 빠진 자리의 덧그림만 지워져야 (양식 %d → %d)' % (variant, n_tpl, n_out))
 
 # ── 2. 원본 왕복 (인자로 원본을 준 경우만) ─────────────────────────────────────
 srcs = sys.argv[1:]

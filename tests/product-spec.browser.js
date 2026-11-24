@@ -163,6 +163,13 @@ window.__psTest = async function (opt) {
         var bl = ['blu.r4.c3', 'blu.r4.c4', 'blu.r4.c2', 'blu.r3.c3'].map(function (k) { return window.DOC_AUTO_HOOKS.ps(cB, k).v; });
         check(bl.join('|') === '26.5|27.8||', 'BLU 전력 Typ/Max 표시대로, 표시 없는 전압은 비움 (' + bl.join('|') + ')');
         delete pSp['Lamps Power Consumption']; delete pSp['Lamp Voltage'];
+        // 📄 PDF 로 본 뒤 고친 모양 둘 — 시야각 마지막 칸은 숫자만, 문단 안 Vendor Name 은 한 줄로
+        pSp['Viewing Angle (L/R/U/D)'] = '85/85/80/80 (Typ.) (CR≥10)';
+        var vm0 = window._plData.rows[0].panelMfr; window._plData.rows[0].panelMfr = 'VENDA\nVENDB';
+        var pV = window._psPayload();
+        check(pV.values['va.r3.c4'] === '80' && pV.values.panelVendor === 'VENDA / VENDB',
+              '시야각 숫자만·Vendor Name 한 줄 (' + pV.values['va.r3.c4'] + ' / ' + pV.values.panelVendor + ')');
+        window._plData.rows[0].panelMfr = vm0; delete pSp['Viewing Angle (L/R/U/D)'];
         // 🕒 타이밍 표 — 1열 패널 원래 해상도, 2·3열 같은 화면비 상세 블록, 4~6열 Established, 값은 표준 표
         pSp['Dot Resolution'] = '1920 (H) × 1080 (V)';
         var cT = window._dgCollect(), HT = window.DOC_AUTO_HOOKS.ps;

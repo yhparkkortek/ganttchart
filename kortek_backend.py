@@ -9879,6 +9879,37 @@ def _ps_image_bytes(item):
         return f.read()
 
 
+def _ps_drop_overlays(para):
+    """그림을 지운 문단에 남은 **덧그림**(그림 위에 얹은 도형 — 사각 테두리·화살표)을 지운다.
+    2026-11-24 실측: OSD 키 그림을 지우자 그 위에 얹혀 있던 회색 사각형·빨간 점선 상자가 남아 **아래 글을 덮었다**
+    (그림이 자리를 차지하던 게 사라져 글이 위로 올라온다). 그 문단에 그림(a:blip)이 하나라도 남아 있으면 손대지 않는다."""
+    from docx.oxml.ns import qn
+    if para is None:
+        return 0
+    blip_tag = '{%s}blip' % _PS_A
+    if any(True for _ in para.iter(blip_tag)):
+        return 0
+    mc_alt = '{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent'
+    n = 0
+    for dr in list(para.iter(qn('w:drawing'))):
+        top = dr
+        cur = dr.getparent()
+        while cur is not None and cur.tag != qn('w:r'):
+            if cur.tag == mc_alt:
+                top = cur
+            cur = cur.getparent()
+        parent = top.getparent()
+        if parent is not None:
+            parent.remove(top)
+            n += 1
+    for pict in list(para.iter(qn('w:pict'))):     # VML 대체 그림만 남은 경우
+        parent = pict.getparent()
+        if parent is not None:
+            parent.remove(pict)
+            n += 1
+    return n
+
+
 def _ps_fill_images(doc, images):
     """`slot:<열쇠>` 그림의 바이트만 바꾼다. 원래 상자(cx,cy) 안에 **비율을 지켜** 맞춘다 —
     같은 계열 사양서에서 불러온 그림이면 비율이 같아 원본과 똑같은 크기가 된다.
@@ -9910,9 +9941,13 @@ def _ps_fill_images(doc, images):
                     want = None
                 break
         if not blob:
+            para = dr.getparent()
+            while para is not None and para.tag != qn('w:p'):
+                para = para.getparent()
             run = dr.getparent()
             if run is not None:
                 run.remove(dr)
+            _ps_drop_overlays(para)
             removed.append(key)
             continue
         try:

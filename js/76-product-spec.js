@@ -205,7 +205,7 @@
         'parts.r1.c3': 'vendor', 'parts.r2.c3': 'vendor', 'parts.r3.c3': 'vendor', 'parts.r5.c3': 'vendor',
         'tgen.r2.c2': 'vendor',
         'parts.r4.c1': 'noneDash', 'parts.r5.c1': 'noneDash', 'parts.r5.c2': 'noneDash', 'parts.r2.c2': 'noneDash',
-        'tgen.r3.c2': 'noneDash'
+        'tgen.r3.c2': 'noneDash', panelVendor: 'oneLine'
     };
     // 제조사 이름 → 문서에 쓰는 짧은 이름(데이터). 표지 Vendor 칸이 좁아서 'KORTEK Corporation' 이 두 줄로
     //   접히면 표지가 길어져 **문서 전체가 한 쪽 밀린다**(실측 22→23쪽). 없는 이름은 그대로 둔다.
@@ -225,6 +225,8 @@
         rangeCd: function (v) { var r = _range(v); return r ? r + ' cd/m2' : v; },
         rangeCdTight: function (v) { var r = _range(v); return r ? r + 'cd/m2' : v; },
         xyOne: function (v) { return _stripXY(v); },
+        // 문단 안 칸은 한 줄로 — Project list 는 칸 안에 줄을 바꿔 적기도 한다('BOE⏎KTK'). 문서에선 둘째 줄이 들여쓰기 없이 떨어졌다
+        oneLine: function (v) { return String(v).split(/\s*\r?\n\s*/).filter(Boolean).join(' / '); },
         xyPair: function (v) {
             var m = String(v).match(/(\d*\.\d+)[^\d.]+(\d*\.\d+)/);
             return m ? 'x=' + m[1] + ', y=' + m[2] : v;
@@ -877,7 +879,9 @@
         va: function (ctx, a) {
             var rec = _libRec(ctx, 'panel');
             var v = rec && rec.specs['Viewing Angle (L/R/U/D)'];
-            return { v: _split(v, +a[0]), src: v ? 'PARTS ▸ PANEL' : '' };
+            // 숫자만 — 마지막 칸에 '89 (Typ.) (CR≥10)' 처럼 조건 글이 붙어 와 표 칸이 세 줄로 깨졌다(실측)
+            var sv = _split(v, +a[0]), nm = String(sv).match(/^\s*-?\d+(?:\.\d+)?/);
+            return { v: nm ? nm[0].trim() : sv, src: v ? 'PARTS ▸ PANEL' : '' };
         },
         lumYL: function (ctx) {
             var s = _specVal(ctx, SPEC.lv.slice(5).split('|'));
