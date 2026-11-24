@@ -2692,3 +2692,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     /* 📂 [2026-11-12] 화면에서 접어 둔 섹션도 인쇄·PDF 에는 전부 펼쳐서 찍는다 */
     #doc-page-body .doc-sec-wrap { display:block !important; }
 }
+
+/* 🔍 [2026-11-24] 주소록 검색 — 걸린 칸 강조(js/22f filterAddressRows). 색은 프로젝트 불러오기·Project list 의 <mark> 와 같다(js/04a _searchMarkHtml). */
+#address-table-body input.u-input.search-hit { background-color:#fff3bf !important; }

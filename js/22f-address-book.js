@@ -38,16 +38,26 @@ window._addrSearchTerm = '';
 window.filterAddressRows = function(term) {
     window._addrSearchTerm = term || '';
     const q = window._addrSearchTerm.trim().toLowerCase();
+    // 🔍 [2026-11-24 사용자 요청] 프로젝트 불러오기·Project list 와 **같은 검색 규칙**(js/04a 한 벌) —
+    //    띄어 쓴 낱말이 서로 다른 칸에 있어도 전부 있으면 걸리고("개발3팀 박" = 부서+이름),
+    //    공백·기호는 무시한다("010 1234" ↔ "010-1234"). 걸린 칸은 배경으로 강조(입력칸이라 글자 단위 <mark> 불가).
+    const toks = window._searchTokens ? window._searchTokens(q) : (q ? [q] : []);
     const rows = document.querySelectorAll('#address-table-body tr');
     let shown = 0;
     rows.forEach(function(tr) {
-        if (!q) { tr.style.display = ''; shown++; return; }
-        const haystack = Array.from(tr.querySelectorAll('input.u-input'))
-            .map(function(el) { return el.value || ''; })
-            .join(' ')
-            .toLowerCase();
-        const match = haystack.includes(q);
+        const inputs = Array.from(tr.querySelectorAll('input.u-input'));
+        if (!toks.length) {
+            tr.style.display = ''; shown++;
+            inputs.forEach(function(el) { el.classList.remove('search-hit'); });
+            return;
+        }
+        // 칸 사이 구분자는 기호 무시 규칙에 안 지워지는 글자로 — 옆 칸 끝·앞이 붙어 거짓 적중이 나지 않게
+        const haystack = inputs.map(function(el) { return el.value || ''; }).join(' \u0001 ');
+        const match = window._searchMatchAll ? window._searchMatchAll(haystack, toks) : haystack.toLowerCase().includes(q);
         tr.style.display = match ? '' : 'none';
+        inputs.forEach(function(el) {
+            el.classList.toggle('search-hit', !!(match && window._searchMatchAny && el.value && window._searchMatchAny(el.value, toks)));
+        });
         if (match) shown++;
     });
     const countEl = document.getElementById('addr-search-count');

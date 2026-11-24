@@ -111,4 +111,29 @@ const reset = window._driveModalSearchState.q === '';
   ].forEach(([q, want, label]) => { const got = ids(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Project list] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
   chk(Array.isArray(W._plSearchToks) && W._plSearchToks.join() === 'lnw,konami', '[Project list] 강조용 낱말을 남긴다');
 }
+// ── 주소록(js/22f) — 같은 규칙. filterAddressRows 를 진짜 소스에서 잘라 돌린다(DOM 만 스텁) ──
+{
+  const s22 = fs.readFileSync(path.join(__dirname, '..', 'js', '22f-address-book.js'), 'utf8');
+  const fa = s22.indexOf('window.filterAddressRows = function');
+  const fb = s22.indexOf('\n};', fa) + 3;
+  const mkInput = v => { const cls = new Set(); return { value: v, classList: { toggle: (c, on) => on ? cls.add(c) : cls.delete(c), remove: c => cls.delete(c), has: c => cls.has(c) } }; };
+  const people = [['박용훈', '개발3팀', 'yhpark@kortek.co.kr', '010-1234-5678'], ['임희철', '개발3팀', 'hc@kortek.co.kr', '010-2222-3333'], ['박지웅', '개발1팀', 'jw@kortek.co.kr', '']];
+  const trs = people.map(p => ({ style: {}, inputs: p.map(mkInput), querySelectorAll() { return this.inputs; } }));
+  const misc = { 'addr-search-count': { textContent: '' }, 'addr-search-clear': { style: {} } };
+  const W = {}; new Function('window', helpers)(W);
+  const doc = { querySelectorAll: () => trs, getElementById: id => misc[id] || null };
+  new Function('window', 'document', s22.slice(fa, fb))(W, doc);
+  const shownIdx = q => { W.filterAddressRows(q); return trs.map((t, i) => t.style.display === 'none' ? null : i).filter(i => i !== null).join(','); };
+  [['', '0,1,2', '빈 검색 = 전부'],
+   ['개발3팀 박', '0', '낱말 AND — 부서+이름(칸이 달라도)'],
+   ['01012345678', '0', '하이픈 뗀 전화번호'],
+   ['010 2222', '1', '전화 낱말 둘'],
+   ['개발1팀 임희철', '', 'AND 라 없음']
+  ].forEach(([q, want, label]) => { const got = shownIdx(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [주소록] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  W.filterAddressRows('개발3팀 박');
+  chk(trs[0].inputs[0].classList.has('search-hit') && trs[0].inputs[1].classList.has('search-hit') && !trs[0].inputs[2].classList.has('search-hit'), '[주소록] 걸린 칸만 강조(이름·부서, 이메일 아님)');
+  W.filterAddressRows('');
+  chk(!trs[0].inputs[0].classList.has('search-hit'), '[주소록] 검색 지우면 강조도 지움');
+  chk(misc['addr-search-count'].textContent === '', '[주소록] 검색 지우면 개수 표시 비움');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);
