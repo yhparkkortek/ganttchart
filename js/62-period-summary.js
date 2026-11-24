@@ -1008,7 +1008,7 @@
                       esc(T('이 기간 업무 ' + col.funnel.all + '건 → 프로젝트 담당자 조건 ' + col.funnel.pm + '건 → 프로젝트 조건 ' + col.funnel.proj + '건 → 업무 담당자·검색 조건 ' + col.funnel.out + '건',
                             col.funnel.all + ' in period → owner ' + col.funnel.pm + ' → project ' + col.funnel.proj + ' → assignee/search ' + col.funnel.out)) +
                       '<br><span style="color:#888;">' + esc(T('열린 프로젝트: ' + (col.funnel.open || '(없음)') + ' · 그 업무 ' + col.funnel.local + '건 — 조건을 바꾸거나 ↺ 로 해제하세요', 'Open project: ' + (col.funnel.open || '(none)') + ' · ' + col.funnel.local + ' tasks')) + '</span></div>'
-                    : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>'));
+                    : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 기간에 메일 분석으로 들어온 업무가 없습니다.', 'No mail-derived tasks in this period.')) + (P.includeNonMail ? '' : '<br>' + esc(T('(사람이 직접 적은 업무는 세지 않습니다 — PERIOD_SUMMARY.includeNonMail)', '(hand-typed tasks are not counted)'))) + '</div>'));
         } else {
             var byDate = {};
             col.facts.forEach(function (f) { (byDate[f.date] = byDate[f.date] || []).push(f); });

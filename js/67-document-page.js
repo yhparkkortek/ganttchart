@@ -3295,7 +3295,7 @@
         var needLoad = cur && window._docLabelNotesCache[cur.code] === undefined;
         var previewHtml;
         if (!cur) {
-            previewHtml = '<div style="padding:30px; color:#868e96;">' + _esc(_t('표시할 라벨이 없습니다.', 'No labels to show.')) + '</div>';
+            previewHtml = '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + _esc(_t('표시할 라벨이 없습니다.', 'No labels to show.')) + '</div>';
         } else if (needLoad) {
             previewHtml = '<div style="padding:30px; color:#868e96;">⏳ ' + _esc(_t('불러오는 중…', 'Loading…')) + '</div>';
             window._docLabelNotesLoad(cur.code).then(function () { _docLabelCrossProjectRender(); });
@@ -3315,7 +3315,7 @@
                       + _docLabelBoxMarkersHtml(boxes, false, cur.code)
                       + _docLabelCodeMarkersHtml(codes, false, cur.code)
                       + '</div>'
-                    : '<div style="color:#868e96; padding:30px;">' + _esc(_t('도안 이미지가 없습니다.', 'No artwork image.')) + '</div>');
+                    : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + _esc(_t('도안 이미지가 없습니다.', 'No artwork image.')) + '</div>');
         }
         ov.innerHTML = '<div id="doclabelcp-box" style="pointer-events:all; position:fixed; left:50%; top:8%;'
             + ' transform:translateX(-50%); width:min(520px,92vw); max-height:84vh; display:flex; flex-direction:column;'

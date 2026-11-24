@@ -206,7 +206,7 @@ window.renderAlarmTab = async function() {
     if (!items.length) {
         tbody.innerHTML = _isEn
             ? '<tr><td colspan="13" style="text-align:center; padding:40px; color:#aaa;">📌 No Gantt items with alarm configured.</td></tr>'
-            : '<tr><td colspan="13" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
+            : '<tr><td colspan="13" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
         return;
     }
 

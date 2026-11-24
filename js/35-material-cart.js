@@ -344,7 +344,7 @@
                 + (list.length > MAX ? '  ·  ' + T('예약 ', '') + Math.ceil(list.length / MAX) + T('건으로 분할', ' reservations') : '');
         }
         if (!list.length) {
-            body.innerHTML = '<div style="padding:30px 8px; text-align:center; color:#888; font-size:12.5px;">'
+            body.innerHTML = '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">'
                 + T('담아둔 자재가 없습니다.', 'The cart is empty.') + '<br><br>'
                 + T('자재를 조회한 뒤 결과에서 "🧺 담기"를 누르면 여기에 쌓입니다.', 'Look up a material and press "🧺 Add" in the result.')
                 + '</div>';

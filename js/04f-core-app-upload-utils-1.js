@@ -1187,7 +1187,7 @@ ${recentLogs}
         if (!r) {
             body.innerHTML = _en
                 ? '<div style="padding:36px 10px; text-align:center; color:#999; font-size:12px;">No summary generated yet.<br>Click the [🔄 Regenerate] button below to create an AI summary.</div>'
-                : '<div style="padding:36px 10px; text-align:center; color:#999; font-size:12px;">아직 생성한 요약이 없습니다.<br>아래 [🔄 다시 생성] 버튼을 눌러 AI 요약을 만들어보세요.</div>';
+                : '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">아직 생성한 요약이 없습니다.<br>아래 [🔄 다시 생성] 버튼을 눌러 AI 요약을 만들어보세요.</div>';
             return;
         }
         const d = r.dataSnapshot || { counts: {} };

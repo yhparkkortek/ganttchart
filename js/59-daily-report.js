@@ -3301,7 +3301,7 @@
                 '<div style="margin-bottom:9px; font-size:12.5px; color:#555;">' + esc(T('월 보기 — 칸을 누르면 그 날로 갑니다. 회색은 주말·공휴일입니다.',
                     'Month view — click a cell to open that day. Grey = weekend/holiday.')) + '</div>' +
                 '<div style="overflow-x:auto;"><table style="border-collapse:collapse;"><thead><tr style="background:#eef6f7;">' + th + '</tr></thead>' +
-                '<tbody>' + (trs || '<tr><td style="padding:16px; color:#aaa;">' + esc(T('이 달에 작성된 보고가 없습니다.', 'No reports this month.')) + '</td></tr>') + '</tbody></table></div>';
+                '<tbody>' + (trs || '<tr><td style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 달에 작성된 보고가 없습니다.', 'No reports this month.')) + '</td></tr>') + '</tbody></table></div>';
             return;
         }
 
@@ -3453,6 +3453,6 @@
                   return '<th style="padding:6px 8px; border:1px solid #cfe3e5; font-size:12.5px; font-weight:600; text-align:center; background:#eef6f7; color:#00707d;">' +
                          esc(window._currentLang === 'en' ? c.en : c.ko) + '</th>';
               }).join('') +
-            '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + DAY_COLS.length + '" style="padding:16px; text-align:center; color:#aaa; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
+            '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + DAY_COLS.length + '" style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(T('이 날짜에 작성된 보고가 없습니다.', 'No reports for this date.')) + '</td></tr>') + '</tbody></table>';
     };
 })();

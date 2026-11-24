@@ -922,7 +922,7 @@
         if (!box) return;
         var team = searchTeam();
         var teamNote = team ? ' · 👥 ' + T(team + ' 담당·보고 이슈만', 'only ' + team + ' assignee/reporter') : '';
-        if (!_searchHits.length) { box.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">' + T('일치하는 이슈가 없습니다.', 'No matching issues.') + esc(teamNote) + '</div>'; return; }
+        if (!_searchHits.length) { box.innerHTML = '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + T('일치하는 이슈가 없습니다.', 'No matching issues.') + esc(teamNote) + '</div>'; return; }
         // 결과가 상한(50)에 걸렸으면 "전부"가 아니라는 걸 숨기지 않는다 — 검색어를 좁혀야
         // 더 보인다는 안내까지(CLAUDE.md "끊었으면 끊었다는 사실을 드러낼 것").
         var countNote = total > _searchHits.length

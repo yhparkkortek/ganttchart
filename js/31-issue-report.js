@@ -331,7 +331,7 @@
         var cs = _state.clusters;
         var head = '<div style="font-size:12px; color:#666; margin-bottom:8px;">' +
             esc(t('이벤트 ', 'Events ')) + '<b>' + _state.events.length + '</b>' + esc(t('건 · 군집 ', ' · Clusters ')) + '<b>' + cs.length + '</b>' + esc(t('개 · 최근 ' + LOAD_MONTHS + '개월 · 갱신 ', ' · last ' + LOAD_MONTHS + ' months · loaded ')) + esc(fmt(_state.loadedAt)) + '</div>';
-        if (!cs.length) { body.innerHTML = head + '<div style="padding:30px; text-align:center; color:#999;">' + esc(t('수집된 이슈가 없습니다.', 'No issues collected yet.')) + '</div>'; return; }
+        if (!cs.length) { body.innerHTML = head + '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(t('수집된 이슈가 없습니다.', 'No issues collected yet.')) + '</div>'; return; }
         var rows = cs.map(function (c, i) {
             var resolvedBadge = c.resolved ? (c.recurred ? '<span style="background:#ffe3e3; color:#c92a2a; padding:1px 6px; border-radius:8px; font-size:10.5px; font-weight:bold;">🔁 ' + esc(t('재발', 'Recurred')) + '</span>' : '<span style="background:#d3f9d8; color:#2b8a3e; padding:1px 6px; border-radius:8px; font-size:10.5px;">✔ ' + esc(t('해결됨', 'Resolved')) + '</span>') : '';
             var react = Object.keys(c.reactions).map(function (k) { return k.replace('user_', '') + '×' + c.reactions[k]; }).join(' ');
@@ -514,7 +514,7 @@
         var body = document.getElementById('issue-rpt-body'); if (!body) return;
         var cs = _state.learn || [];
         var head = '<div style="font-size:12px; color:#666; margin-bottom:8px; line-height:1.5;">' + esc(t('지원하지 않는 SAP 요청 · 🚩 새 기능 요청 · 질문 분류 교정을 같은 종류끼리 묶어 수요순으로 보여줍니다. 구현하면 [구현됨]으로 표시하세요 — 그 뒤에도 같은 요청이 오면 🔁로 강조됩니다.', 'Unsupported SAP requests, feature requests and routing corrections grouped by intent. Mark Done after implementing; repeats afterwards are flagged.')) + '</div>';
-        if (!cs.length) { body.innerHTML = head + '<div style="padding:30px; text-align:center; color:#999;">' + esc(t('적립된 요청이 없습니다.', 'Nothing accumulated yet.')) + '</div>'; return; }
+        if (!cs.length) { body.innerHTML = head + '<div style="padding:24px 10px; text-align:center; color:#999; font-size:12.5px;">' + esc(t('적립된 요청이 없습니다.', 'Nothing accumulated yet.')) + '</div>'; return; }
         var rows = cs.map(function (c, i) {
             var lg = c.ledger || {}, st = lg.status || 'new';
             var opts = Object.keys(STATUS).map(function (k) { return '<option value="' + k + '"' + (k === st ? ' selected' : '') + '>' + esc(t(STATUS[k][0], STATUS[k][1])) + '</option>'; }).join('');
