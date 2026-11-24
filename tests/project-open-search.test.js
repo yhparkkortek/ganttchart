@@ -7,6 +7,12 @@ const b = src.indexOf('window.closeDriveModal = function');
 const bEnd = src.indexOf('\n    }', b) + 6;
 if (a < 0 || b < 0) { console.log('FAIL 소스 자르기'); process.exit(1); }
 const piece = src.slice(a, bEnd);
+// 🔍 2026-11-24 — 검색 규칙은 js/04a 한 벌(_searchMatchAll 등). 그 블록도 진짜 소스에서 잘라 온다.
+const srcA = fs.readFileSync(path.join(__dirname, '..', 'js', '04a-core-app-globals.js'), 'utf8');
+const hA = srcA.indexOf('    var _SEARCH_NOISE');
+const hB = srcA.indexOf('window._searchMarkHtml = function');
+if (hA < 0 || hB < 0) { console.log('FAIL 04a 소스 자르기'); process.exit(1); }
+const helpers = srcA.slice(hA, srcA.indexOf('\n    };', hB) + 7);
 
 const byId = {};
 function el(tag) {
@@ -28,6 +34,7 @@ const window = { _currentLang: 'ko', executeLoadFile: (id) => { window._opened =
 const escapeHtml = s => String(s);
 const setTimeout = (fn) => fn();   // 디바운스·포커스는 즉시
 const clearTimeout = () => {};
+new Function('window', helpers)(window);
 new Function('window', 'document', 'escapeHtml', 'setTimeout', 'clearTimeout', piece)(window, document, escapeHtml, setTimeout, clearTimeout);
 
 function vis() { const out = []; (function walk(n) { if (n.dataset && n.dataset.fileId) out.push(n.dataset.fileId); n.children.forEach(walk); })(list); return out.sort().join(","); }
@@ -80,4 +87,28 @@ inp.onkeydown({ key: 'Enter', stopPropagation() {} });
 window.closeDriveModal();
 const reset = window._driveModalSearchState.q === '';
 (reset ? pass++ : fail++); console.log((reset ? 'ok  ' : 'FAIL') + ' 닫으면 검색어 비움');
+// ── Project list(js/55) — 같은 규칙으로 행을 거르는가. _visibleRows 를 진짜 소스에서 잘라 돌린다 ──
+{
+  const s55 = fs.readFileSync(path.join(__dirname, '..', 'js', '55-project-list.js'), 'utf8');
+  const va = s55.indexOf('    var _visibleRows = function');
+  const vb = s55.indexOf('\n    };', va) + 7;
+  const body = s55.slice(va, vb) + '\nreturn _visibleRows;';
+  const rows = [
+    { _id: 'r1', no: 1, customer: 'LNW', model: 'OBSIDIAN27', inch: '27', pn: '1647180-13P50', pm: '박용훈' },
+    { _id: 'r2', no: 2, customer: 'LNW', model: 'STELLAR32', inch: '32', pn: '1641445-ALT1', pm: '임희철' },
+    { _id: 'r3', no: 3, customer: 'KONAMI', model: 'KGP-4', inch: '27', pn: '', pm: '박용훈' }];
+  const W = { PL_COLUMNS: ['no', 'customer', 'model', 'inch', 'pn', 'pm'].map(k => ({ k })) };
+  new Function('window', helpers)(W);
+  const view = { search: '', filters: {}, sort: {}, pins: [] };
+  const vis55 = new Function('window', 'D', '_view', '_colByKey', body)(W, () => ({ rows }), view, {});
+  const ids = q => { view.search = q; return vis55().map(r => r._id).sort().join(','); };
+  [['', 'r1,r2,r3', '빈 검색 = 전부'],
+   ['lnw 27', 'r1', '낱말 AND — 칸이 달라도(고객사+인치)'],
+   ['박용훈 27', 'r1,r3', '사람+인치'],
+   ['1647180 13p50', 'r1', '기호 무시'],
+   ['kgp4', 'r3', '하이픈 뗀 모양'],
+   ['lnw konami', '', 'AND 라 둘 다 있는 행 없음']
+  ].forEach(([q, want, label]) => { const got = ids(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Project list] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  chk(Array.isArray(W._plSearchToks) && W._plSearchToks.join() === 'lnw,konami', '[Project list] 강조용 낱말을 남긴다');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

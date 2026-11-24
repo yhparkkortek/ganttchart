@@ -2439,12 +2439,10 @@
                 String(v || '').split(/[,.，、\/]+/).forEach(function(n) { n = n.trim(); if (n && people.indexOf(n) === -1) people.push(n); });
             });
             const units = Array.isArray(e.units) ? e.units : [];
-            const toks = String(st.q).trim().toLowerCase().split(/\s+/).filter(Boolean);
+            const toks = window._searchTokens(st.q);
             const hl = function(s) {
                 const h = escapeHtml(String(s));
-                const low = String(s).toLowerCase();
-                return toks.some(function(t) { return low.indexOf(t) !== -1; })
-                    ? '<mark style="background:#fff3bf; color:inherit; padding:0 1px; border-radius:2px;">' + h + '</mark>' : h;
+                return window._searchMatchAny(s, toks) ? window._searchMarkHtml(h) : h;
             };
             const parts = [];
             if (units.length) parts.push('<span style="color:#1971c2;">🏷 ' + units.map(hl).join(' · ') + '</span>');
@@ -2518,14 +2516,9 @@
             vals.all = Object.keys(vals).map(function(k) { return vals[k]; }).join(' \u0001 ');
             _searchText[file.id] = vals;
         });
-        const _norm = function(s) { return String(s || '').toLowerCase().replace(/[\s\-_>\/.,()]+/g, ''); };
+        // 낱말 AND·기호 무시 — 규칙은 js/04a `_searchMatchAll` 한 벌(Project list 와 같다)
         function _matches(file, query, fieldKey) {
-            const tokens = String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-            if (!tokens.length) return true;
-            const hay = (_searchText[file.id] || {})[fieldKey] || '';
-            const hayN = _norm(hay);
-            // 낱말마다 AND — 글자 그대로 또는 기호·공백 뗀 모양으로(“LNW K43” ↔ “LNW>K43”)
-            return tokens.every(function(t) { return hay.indexOf(t) !== -1 || (_norm(t) && hayN.indexOf(_norm(t)) !== -1); });
+            return window._searchMatchAll((_searchText[file.id] || {})[fieldKey] || '', window._searchTokens(query));
         }
 
         let _searchBar = document.getElementById('drive-modal-search');

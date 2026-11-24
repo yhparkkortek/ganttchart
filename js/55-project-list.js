@@ -831,7 +831,12 @@
 
     // 보이는 행 — 검색 + 필터 + 정렬 + 고정(📌 맨 위)
     var _visibleRows = function () {
-        var q = String(_view.search || '').trim().toLowerCase();
+        // 🔍 [2026-11-24 사용자 요청] 프로젝트 불러오기와 **같은 검색 규칙**(js/04a `_searchMatchAll`) —
+        //    띄어 쓴 낱말이 전부 행 어딘가(칸이 달라도 됨)에 있어야 걸리고, 공백·기호는 무시한다.
+        //    예전엔 검색어 전체가 **한 칸에 글자 그대로** 있어야만 걸려 "LNW 27" 은 0건이었다.
+        var toks = window._searchTokens(_view.search);
+        window._plSearchToks = toks;          // 칸 강조(_plCellsHtml)가 같은 낱말을 쓴다
+        var q = toks.length ? 1 : 0;
         var fl = _view.filters || {};
         var rows = (D().rows || []).filter(function (r) {
             for (var k in fl) {
@@ -839,11 +844,13 @@
                 if (String(r[k] == null ? '' : r[k]).trim() !== fl[k]) return false;
             }
             if (!q) return true;
+            var hay = [];
             for (var i = 0; i < window.PL_COLUMNS.length; i++) {
                 var v = r[window.PL_COLUMNS[i].k];
-                if (v != null && String(v).toLowerCase().indexOf(q) !== -1) return true;
+                if (v != null && v !== '') hay.push(String(v));
             }
-            return false;
+            // 칸 사이 구분자는 기호 무시 규칙에 안 지워지는 글자로 — 지워지면 옆 칸 끝·앞이 붙어 거짓 적중이 난다
+            return window._searchMatchAll(hay.join(' \u0001 '), toks);
         });
         var s = _view.sort || {};
         if (s.k) {
@@ -915,6 +922,13 @@
         return { pinned: pinned, zebra: zebra, bg: pinned ? '#fff8e1' : (zebra ? _plCtx.P.zebraB : '#fff') };
     };
 
+    // 🔍 [2026-11-24] 검색 중이면 낱말이 걸린 칸의 값을 강조(프로젝트 불러오기와 같은 모양, js/04a)
+    //    판정은 잘리기 전 원래 값(v)으로, 감싸는 건 화면에 보이는 글(이미 escape 됨)로.
+    var _plHl = function (v, shownHtml) {
+        var toks = window._plSearchToks;
+        if (!toks || !toks.length || !v || !window._searchMatchAny) return shownHtml;
+        return window._searchMatchAny(v, toks) ? window._searchMarkHtml(shownHtml) : shownHtml;
+    };
     var _plCellsHtml = function (r, ri, m) {
         var cols = _plCtx.cols, leftOf = _plCtx.leftOf, P = _plCtx.P, rowBg = m.bg, pinned = m.pinned;
         return cols.map(function (c) {
@@ -975,7 +989,7 @@
             return '<td class="' + cls + '" data-id="' + r._id + '" data-k="' + c.k + '"'
                  + ((cut || ico) ? ' title="' + _esc(v || '') + '"' : '')
                  + ' style="' + sticky + extra + '">'
-                 + '<span class="pl-v">' + _esc(shown).replace(/\n/g, ' ') + '</span>' + ico + '</td>';
+                 + '<span class="pl-v">' + _plHl(v, _esc(shown).replace(/\n/g, ' ')) + '</span>' + ico + '</td>';
         }).join('');
     };
 
@@ -1241,7 +1255,7 @@
         var h2 = document.querySelector('#pl-header-box h2');
         if (h2) h2.textContent = '📒 ' + (en ? 'Project list' : 'Project list');
         var si = document.getElementById('pl-search');
-        if (si) si.placeholder = en ? '🔍 Search (all cells)' : '🔍 검색 (모든 칸)';
+        if (si) si.placeholder = en ? '🔍 Search all cells — several words OK' : '🔍 검색 — 모든 칸 · 여러 낱말';
         var sel = document.getElementById('pl-team');
         if (sel && !sel._plFilled) {
             sel._plFilled = true;
