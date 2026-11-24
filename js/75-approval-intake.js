@@ -45,7 +45,9 @@
         maxPerRun: 100,                // 한 번에 처리할 새 문서 상한 (2026-11-24 사용자 요청 25→100 — 90일 소급을 한 번에)
         firstDelaySec: 90,             // 앱을 연 뒤 첫 배경 스캔까지
         intervalMin: 120,              // 배경 스캔 간격(그룹웨어가 로그인돼 있을 때만)
-        skipForms: ['휴가', '연차', '반차', '근태', '경조', '조퇴', '외출'],  // 양식 이름에 이 말이 있으면 가져오지 않는다
+        // 양식 이름에 이 말이 있으면 가져오지 않는다 — 프로젝트와 무관한 개인 근무·인사 결재
+        //  (2026-11-24 사용자 지적 "연장근로·근무계획은 왜 배치되나" → 근무시간 계열 추가)
+        skipForms: ['휴가', '연차', '반차', '근태', '경조', '조퇴', '외출', '연장근로', '연장근무', '근무계획', '근무 계획', '시간외', '특근', '휴일근무', '당직'],
         seenMax: 4000,                 // 장부 상한(오래된 것부터 버린다)
         taskNameMax: 40,               // 업무명(카드 제목)에 쓰는 문서 제목 최대 글자 — 넘으면 '…' (전체 제목은 [출처] 에)
         // 🚫 [2026-11-24 실측] 메일용 "공통 건(회의록·로드맵) → 고객사 프로젝트 전부" 규칙(js/74 commonToCustomer)을 결재엔 안 쓴다.
@@ -580,10 +582,44 @@
                 });
             }
         }
+        // ⑤ 엉뚱한 단계에 들어간 결재 행(2026-11-24 실측 STELLAR32 — 단계 고르기 버그, js/14b pickL0SectionByDate 수정)
+        //    결재 행만 본다(오늘 이 기능이 넣은 것) — 사람이 손으로 옮겼을 수 있는 메일 행은 안 건드린다.
+        //    단계 날짜 범위는 **결재 행을 뺀** 표로 잰다(잘못 들어간 행이 그 단계의 범위를 늘려 놓았을 수 있다).
+        (function restage() {
+            var sectionOf = function (rows, idx) {
+                if (ci.devStage !== -1) return String(rows[idx][ci.devStage] || '').trim();
+                for (var u = idx; u >= 1; u--) { var x = rows[u]; if (x && x._level === 0) return String(x._origDev || x[ci.wbs] || '').trim(); }
+                return '';
+            };
+            var isApv = function (x) { return x && x._level !== 0 && x._mailRaw && x._mailRaw.approval && ci.start !== -1 && x[ci.start]; };
+            var base = gd.filter(function (x, i) { return i === 0 || !isApv(x); });
+            try { if (window.computeCalcDatesForRows) window.computeCalcDatesForRows(base.slice(1), ci); } catch (e) { return; }
+            var l0s = window.buildL0SectionInfo(base, ci);
+            var wrong = [];
+            for (var w = 1; w < gd.length; w++) {
+                if (!isApv(gd[w])) continue;
+                var want = window.pickL0SectionByDate(l0s, String(gd[w][ci.start]).slice(0, 10));
+                if (want && want !== '__END__' && want !== sectionOf(gd, w)) wrong.push(gd[w]);
+            }
+            if (!wrong.length) return;
+            wrong.forEach(function (x) { var at = gd.indexOf(x); if (at > 0) gd.splice(at, 1); });
+            try { if (window.computeCalcDatesForRows) window.computeCalcDatesForRows(gd.slice(1), ci); } catch (e) { /* 셀 값으로 비교 */ }
+            wrong.sort(function (a, b) { return String(a[ci.start]).localeCompare(String(b[ci.start])); });
+            wrong.forEach(function (x) {
+                var ds = String(x[ci.start]).slice(0, 10);
+                var L0 = window.pickL0SectionByDate(window.buildL0SectionInfo(gd, ci), ds) || '__END__';
+                var pos = window.computeL0InsertPos(gd, ci, L0, ds, true, x._mailRaw && x._mailRaw.date).pos;
+                if (L0 !== '__END__' && ci.devStage !== -1) x[ci.devStage] = L0;
+                var pv = (typeof parseDateValue === 'function') ? parseDateValue(ds) : null;
+                if (pv) x._calcStartTs = pv.ts;
+                gd.splice(pos, 0, x);
+                out.moved++;
+            });
+        })();
         if (!out.moved && !out.relinked && !out.renamed && !out.removed) return out;
         // 💬 [2026-11-24 사용자 요청 "쉬운 말로"] '자동배치 자리' 같은 내부 말 대신 무엇을 했는지만 — 화면 알림·수정이력 같은 문장
         var partsKo = [], partsEn = [];
-        if (out.moved) { partsKo.push('맨 위에 잘못 들어가 있던 업무 ' + out.moved + '건을 날짜에 맞는 단계로 옮겼습니다'); partsEn.push('moved ' + out.moved + ' tasks stuck at the top into the stage matching their date'); }
+        if (out.moved) { partsKo.push('날짜와 맞지 않는 자리에 있던 업무 ' + out.moved + '건을 날짜에 맞는 단계로 옮겼습니다'); partsEn.push('moved ' + out.moved + ' misplaced tasks into the stage matching their date'); }
         if (out.renamed) { partsKo.push('긴 결재 업무 이름 ' + out.renamed + '건을 짧게 줄였습니다'); partsEn.push('shortened ' + out.renamed + ' long approval task names'); }
         if (out.relinked) { partsKo.push('결재 링크 ' + out.relinked + '건을 한 줄로 정리했습니다'); partsEn.push('tidied ' + out.relinked + ' approval link lines'); }
         if (out.removed) { partsKo.push('다른 프로젝트 결재 문서 ' + out.removed + '건을 이 프로젝트에서 뺐습니다'); partsEn.push('removed ' + out.removed + ' approval rows that belong to another project'); }

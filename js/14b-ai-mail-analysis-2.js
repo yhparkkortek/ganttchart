@@ -773,8 +773,13 @@ window.pickL0SectionByDate = function(l0List, taskDateStr) {
         ? parseDateValue(taskDateStr).ts : null;
     if (!taskTs || !l0List || !l0List.length) return '__END__';
 
-    // 1순위: 업무 시작일이 날짜범위 안에 드는 구간
-    let matched = l0List.find(function(sec) { return sec.startTs && sec.endTs && taskTs >= sec.startTs && taskTs <= sec.endTs; });
+    // 1순위: 업무 시작일이 날짜범위 안에 드는 구간 — 여럿이면 **가장 늦게 시작한(=가장 구체적인)** 구간, 같으면 더 짧은 구간.
+    // 🐛 [2026-11-24 실측 STELLAR32] 예전엔 목록 순서상 **첫** 구간을 골랐다. 그런데 '샘플/시제품 의뢰서' 처럼 3/9~9/16 로
+    //    길게 걸친 단계가 위쪽에 있으면 3월~9월 날짜가 전부 거기로 빨려 들어갔다(9월 결재 14건이 3월 일정 사이에 꽂힘 —
+    //    같은 날짜를 품은 'PROTO B*' 가 있는데도). 메일 배치도 같은 함수를 쓴다.
+    const _inRange = l0List.filter(function(sec) { return sec.startTs && sec.endTs && taskTs >= sec.startTs && taskTs <= sec.endTs; });
+    _inRange.sort(function(a, b) { return (b.startTs - a.startTs) || ((a.endTs - a.startTs) - (b.endTs - b.startTs)); });
+    let matched = _inRange[0];
     // 2순위: 없으면 업무 시작일 이후 가장 가까운 시일에 시작하는 구간
     if (!matched) {
         const later = l0List.filter(function(sec) { return sec.startTs && sec.startTs >= taskTs; })
