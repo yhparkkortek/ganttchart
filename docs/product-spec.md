@@ -1,0 +1,72 @@
+# 📗 PRODUCT SPEC (제품 사양서, P03 Specification) — Document 페이지 (2026-11-24)
+
+사용자 요청: "PRODUCT SPEC 문서 만들어 봅시다" → "다른 문서들과 동일한 방식으로 원본 문서와 동일한
+정보를 앱에서 채우고(앱 정보를 자동채우기) 출력을 누르면 첨부와 동일한 문서가 나오도록".
+근거 원본: STELLAR 32 의 Topper·Upper·Lower 사양서 3개(V00, 2026-10-15) — **저장소에 넣지 않는다**.
+
+## 구조 — 원본 파일이 곧 양식
+
+| 조각 | 역할 |
+|---|---|
+| `tools/build-product-spec-template.py` | 실제 사양서 2개(터치 없음·있음)에서 **값 자리마다 표식 `{{칸}}`** 을 박은 빈 양식 + 칸 목록 JSON 을 만든다. 끝에 민감어 검사(값 모양 정규식)를 돌려 원본 값이 남으면 실패한다 |
+| `templates/PRODUCT SPEC_양식.docx` | 터치 장 없는 판(Topper 계열). Mechanical 에 GLASS 외형도 칸이 하나 더 있다 |
+| `templates/PRODUCT SPEC_양식_TOUCH.docx` | 터치 장(11. Touch Controller) 있는 판(Lower 계열) |
+| `templates/PRODUCT SPEC_schema.json` | 칸 목록 — 표(32)·문단(27)·그림(10)·머리글. 화면·채우기·불러오기가 **같은 목록**을 쓴다 |
+| `kortek_backend.py` `/doc/product-spec-docx` | 양식에 값·그림을 채워 돌려준다(읽기 전용, NAS 는 그림 읽기만) |
+| `kortek_backend.py` `/doc/product-spec-parse` | 기존 사양서(.docx)를 읽어 칸 값·그림·쪽 맞춤을 돌려준다(쓰지 않는다) |
+| `js/76-product-spec.js` | 서식 등록·앱 값 연결표 `PS_AUTO`(데이터)·불러오기·원본저장 |
+| `js/67` 입구 셋 | `DOC_AUTO_HOOKS.ps`(자동값) · `form.docxSave` · `form.importFile` — 서식에 그 함수가 있을 때만 탄다 |
+
+### 왜 양식이 두 개인가
+원본의 장 번호는 **손으로 고친 흔적**이 섞여 있다(Lower 의 `11.5 General TS Requirements`,
+`12. Incoming Inspection Standard`, Topper 의 `12.2 Outline Dimension` 은 자동 번호가 아니라 글자다).
+터치 장을 지웠다 넣었다 하면 번호가 어긋나므로, 원본 그대로인 두 판을 두고 `hasTouch`(YES/NO)로 고른다.
+
+### 그림 칸
+프로젝트 그림(전원 커넥터·블록도·A/D 보드·컨버터·OSD 키·OSD 메뉴·외형도·터치 보드·터치 도면)은
+**회색 자리 그림**으로 바꿔 두고 `wp:docPr descr="slot:<열쇠>"` 로 표시한다. 채울 때 **바이트만** 갈아
+끼우므로 자리·크기·덧그림(블록도 위 표시, OSD 키 위 빨간 상자)은 원본 그대로 남는다.
+그림이 없는 칸은 그 그림을 지운다(회색 상자가 인쇄되면 안 된다).
+회사 공통 정의 그림(시야각·응답속도·측정 장치·9점 균일도·온습도·불량 그림·RoHS·머리글 워터마크)은
+양식에 그대로 남긴다. 그림판 OLE 원본(편집용 바이너리 3MB)은 떼고 미리보기 그림만 남겼다.
+
+## 앱 값 연결 (`PS_AUTO`, js/76 — 데이터)
+출처를 앞에서부터 시도한다. 고객 요구인 Customer SPEC 이 PARTS 패널 라이브러리보다 먼저다.
+
+- 표지·머리글: Summary 모델 카드(지금 제품구분자) KTK PN·모델명, 고객 PN = **Project list `pn`** → 모델 카드 고객모델명
+- `SG PN` 머리글 낱말: 고객사 이름으로(`PS_CUST_PN_LABEL`, 데이터)
+- 부품 표: Project list(panel·panelMfr·adbd·adFw·bluDriver·tsp·touchCtrl·touchFw) → 주요자재 → PARTS 라이브러리 Brand
+- Scope 글·Features 1: 글 틀 `PS_TEXT` + 모델명·인치·지원 해상도 중 최대
+- 인증 CB/UL/CE/FCC: Project list 인증 칸
+- 패널 화면 사양 14줄: PARTS PANEL 라이브러리 항목 + 광학은 Customer SPEC
+- 시야각·BLU·절대 최대 정격: PARTS PANEL / 터치 표: PARTS TOUCH CTRL + Project list(touchFw·vidPid·glassType·airGap)
+- 개정 이력 표 R1~R5: **각 리비전에 적어 둔 값**을 읽어 온다(`window._docRevisionFields`), 날짜는 그 리비전의 ISSUE DATE
+- VCP 제목: `<고객사 앞부분> VCP Specification`
+
+앱에 **없는** 칸 — 전원 커넥터 PN·케이블, 타이밍 표(도트 클럭·싱크), A/D 보드 커넥터 표·핀배치 10장,
+컨버터 커넥터, OSD 메뉴 동작, VCP 표, 터치 기계·성능 일부. → **[📂 불러오기]** 로 기존 사양서를 읽어 채운다.
+
+## 불러오기 규칙
+- 앱이 아는 칸은 **앱 값이 이긴다**(앱 값이 비었을 때만 불러온 값). 빈 값은 저장하지 않는다.
+- 자리 맞추기는 **빈 줄을 뺀 "내용 요소" 순서**로 한다 — 같은 계열이라도 빈 줄 개수가 다르다
+  (실측: Upper 는 블록도가 커서 그 아래 빈 줄 4개를 지워 뒀다. 본문 번호로 읽었더니 공통 글 일치율이 15%).
+- 같이 가져오는 것: 그림 바이트 + **원래 크기(cx,cy)·떠 있는 그림 위치(ph,pv)** + **쪽 맞춤 빈 줄 수(layout)**.
+  이것들이 없으면 다른 원본의 그림이 양식 상자에 맞춰 줄고 쪽이 하나 밀렸다(실측).
+- 공통 글 **일치율**을 같이 돌려준다 — 90% 아래면 화면이 경고한다(다른 계열 문서일 수 있다).
+
+## 검증
+- `py -3 -I tests/test_product_spec_docx.py [원본.docx …]` — 가짜 0개(`app.test_client()`).
+  원본 없이: 합성 값 채우기·표식 잔류·선택 줄 삭제·여러 줄·터치 유무·그림 칸.
+  원본 있으면: 불러오기 → 채우기 → **원본과 글·그림 수·빈 줄까지 같은지**. 실측 Topper/Upper/Lower **48/48**.
+- 모양: 원본과 왕복본을 Word 로 PDF 변환해 쪽별 픽셀 비교 — 쪽 수 같음(20/20/22), 남은 차이는
+  쪽당 0.05% 이하(글꼴 안티에일리어싱), Upper 7쪽 공통 그림 1px 어긋남(양식이 Topper 기준이라).
+- `tests/product-spec.browser.js` → `await __psTest()` — 자동값·터치 켜기/끄기·다른 서식 렌더·불러오기 진짜 경로·
+  원본저장 payload·파일 이름. 31/31, 돌연변이 2종(자동값 출처 틀림 → 1건, 자동값 입구 끊기 → 17건) 확인.
+
+## 알려진 한계
+- 양식의 표 **행 수는 원본 그대로**(A/D 커넥터 10장 등) — 커넥터 구성이 전혀 다른 A/D 보드면 맞지 않는다.
+  그런 계열이 생기면 그 사양서로 양식을 하나 더 만든다(빌더에 원본만 바꿔 넣으면 된다).
+- 타이밍 표·핀배치는 앱에 원본 데이터가 없다(불러오기로만 채운다).
+- 새로 올린 그림은 양식 상자 안에 비율을 지켜 맞춘다(불러온 그림만 원래 크기 그대로).
+- ⚠️ **백엔드 재시작 전엔 404** — 화면이 "백엔드를 재시작해야" 라고 말한다.
+- ⚠️ 실제 프로젝트를 열고 NAS 업로드까지 끝까지 눌러 본 것은 아니다(합성 프로젝트 + 업로드는 막고 확인).

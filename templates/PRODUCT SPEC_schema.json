@@ -1,0 +1,4362 @@
+{
+ "version": 1,
+ "tables": {
+  "cover": {
+   "title": "Cover — KTK PN · Model · Customer PN",
+   "index": 0,
+   "when": "both",
+   "bodyIndex": 7,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "KTK PN"
+      },
+      {
+       "fixed": "KTK MODEL NAME"
+      },
+      {
+       "key": "custPnLabel"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cover.r1.c0"
+      },
+      {
+       "key": "cover.r1.c1"
+      },
+      {
+       "key": "cover.r1.c2"
+      }
+     ]
+    }
+   ]
+  },
+  "parts": {
+   "title": "Parts (Description · F/W · Vendor)",
+   "index": 1,
+   "when": "both",
+   "bodyIndex": 9,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Part Name"
+      },
+      {
+       "fixed": "Description"
+      },
+      {
+       "fixed": "Firmware version"
+      },
+      {
+       "fixed": "Vendor"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "LCD Panel"
+      },
+      {
+       "key": "parts.r1.c1"
+      },
+      {
+       "key": "parts.r1.c2"
+      },
+      {
+       "key": "parts.r1.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Scaler PCB Assy"
+      },
+      {
+       "key": "parts.r2.c1"
+      },
+      {
+       "key": "parts.r2.c2"
+      },
+      {
+       "key": "parts.r2.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "BLU CONVERTER"
+      },
+      {
+       "key": "parts.r3.c1"
+      },
+      {
+       "key": "parts.r3.c2"
+      },
+      {
+       "key": "parts.r3.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Touch Sensor"
+      },
+      {
+       "key": "parts.r4.c1"
+      },
+      {
+       "key": "parts.r4.c2"
+      },
+      {
+       "key": "parts.r4.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Touch Controller"
+      },
+      {
+       "key": "parts.r5.c1"
+      },
+      {
+       "key": "parts.r5.c2"
+      },
+      {
+       "key": "parts.r5.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "rev": {
+   "title": "Revision History",
+   "index": 2,
+   "when": "both",
+   "bodyIndex": 30,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Date"
+      },
+      {
+       "fixed": "Rev. No"
+      },
+      {
+       "fixed": "Page"
+      },
+      {
+       "fixed": "Summary"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "rev.r1.c0"
+      },
+      {
+       "key": "rev.r1.c1"
+      },
+      {
+       "key": "rev.r1.c2"
+      },
+      {
+       "key": "rev.r1.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "rev.r2.c0"
+      },
+      {
+       "key": "rev.r2.c1"
+      },
+      {
+       "key": "rev.r2.c2"
+      },
+      {
+       "key": "rev.r2.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "rev.r3.c0"
+      },
+      {
+       "key": "rev.r3.c1"
+      },
+      {
+       "key": "rev.r3.c2"
+      },
+      {
+       "key": "rev.r3.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "rev.r4.c0"
+      },
+      {
+       "key": "rev.r4.c1"
+      },
+      {
+       "key": "rev.r4.c2"
+      },
+      {
+       "key": "rev.r4.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "rev.r5.c0"
+      },
+      {
+       "key": "rev.r5.c1"
+      },
+      {
+       "key": "rev.r5.c2"
+      },
+      {
+       "key": "rev.r5.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "cert": {
+   "title": "International standard Certification",
+   "index": 3,
+   "when": "both",
+   "bodyIndex": 70,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "SAFETY"
+      },
+      {
+       "fixed": "EMC"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "CB_IEC 62368-1"
+      },
+      {
+       "fixed": "UL 62368-1"
+      },
+      {
+       "fixed": "CE"
+      },
+      {
+       "fixed": "FCC"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cert.r2.c0"
+      },
+      {
+       "key": "cert.r2.c1"
+      },
+      {
+       "key": "cert.r2.c2"
+      },
+      {
+       "key": "cert.r2.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "pwrpin": {
+   "title": "Input power connector pinout",
+   "index": 4,
+   "when": "both",
+   "bodyIndex": 84,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "PIN"
+      },
+      {
+       "fixed": "Pin Name"
+      },
+      {
+       "fixed": "PIN"
+      },
+      {
+       "fixed": "Pin Name"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "pwrpin.r1.c0"
+      },
+      {
+       "key": "pwrpin.r1.c1"
+      },
+      {
+       "key": "pwrpin.r1.c2"
+      },
+      {
+       "key": "pwrpin.r1.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "pwrpin.r2.c0"
+      },
+      {
+       "key": "pwrpin.r2.c1"
+      },
+      {
+       "key": "pwrpin.r2.c2"
+      },
+      {
+       "key": "pwrpin.r2.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "pwrpin.r3.c0"
+      },
+      {
+       "key": "pwrpin.r3.c1"
+      },
+      {
+       "key": "pwrpin.r3.c2"
+      },
+      {
+       "key": "pwrpin.r3.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "tim": {
+   "title": "Supply Video Timing Chart",
+   "index": 5,
+   "when": "both",
+   "bodyIndex": 92,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Priority"
+      },
+      {
+       "key": "tim.r0.c1"
+      },
+      {
+       "key": "tim.r0.c2"
+      },
+      {
+       "key": "tim.r0.c3"
+      },
+      {
+       "key": "tim.r0.c4"
+      },
+      {
+       "key": "tim.r0.c5"
+      },
+      {
+       "key": "tim.r0.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Resolution"
+      },
+      {
+       "key": "tim.r1.c1"
+      },
+      {
+       "key": "tim.r1.c2"
+      },
+      {
+       "key": "tim.r1.c3"
+      },
+      {
+       "key": "tim.r1.c4"
+      },
+      {
+       "key": "tim.r1.c5"
+      },
+      {
+       "key": "tim.r1.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "EDID Block"
+      },
+      {
+       "key": "tim.r2.c1"
+      },
+      {
+       "key": "tim.r2.c2"
+      },
+      {
+       "key": "tim.r2.c3"
+      },
+      {
+       "key": "tim.r2.c4"
+      },
+      {
+       "key": "tim.r2.c5"
+      },
+      {
+       "key": "tim.r2.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Dot Clock (Mhz)"
+      },
+      {
+       "key": "tim.r3.c1"
+      },
+      {
+       "key": "tim.r3.c2"
+      },
+      {
+       "key": "tim.r3.c3"
+      },
+      {
+       "key": "tim.r3.c4"
+      },
+      {
+       "key": "tim.r3.c5"
+      },
+      {
+       "key": "tim.r3.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "X"
+      },
+      {
+       "key": "tim.r4.c1"
+      },
+      {
+       "key": "tim.r4.c2"
+      },
+      {
+       "key": "tim.r4.c3"
+      },
+      {
+       "key": "tim.r4.c4"
+      },
+      {
+       "key": "tim.r4.c5"
+      },
+      {
+       "key": "tim.r4.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Hsync Start"
+      },
+      {
+       "key": "tim.r5.c1"
+      },
+      {
+       "key": "tim.r5.c2"
+      },
+      {
+       "key": "tim.r5.c3"
+      },
+      {
+       "key": "tim.r5.c4"
+      },
+      {
+       "key": "tim.r5.c5"
+      },
+      {
+       "key": "tim.r5.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Hsync End"
+      },
+      {
+       "key": "tim.r6.c1"
+      },
+      {
+       "key": "tim.r6.c2"
+      },
+      {
+       "key": "tim.r6.c3"
+      },
+      {
+       "key": "tim.r6.c4"
+      },
+      {
+       "key": "tim.r6.c5"
+      },
+      {
+       "key": "tim.r6.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "H Total"
+      },
+      {
+       "key": "tim.r7.c1"
+      },
+      {
+       "key": "tim.r7.c2"
+      },
+      {
+       "key": "tim.r7.c3"
+      },
+      {
+       "key": "tim.r7.c4"
+      },
+      {
+       "key": "tim.r7.c5"
+      },
+      {
+       "key": "tim.r7.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Y"
+      },
+      {
+       "key": "tim.r8.c1"
+      },
+      {
+       "key": "tim.r8.c2"
+      },
+      {
+       "key": "tim.r8.c3"
+      },
+      {
+       "key": "tim.r8.c4"
+      },
+      {
+       "key": "tim.r8.c5"
+      },
+      {
+       "key": "tim.r8.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Vsync Start"
+      },
+      {
+       "key": "tim.r9.c1"
+      },
+      {
+       "key": "tim.r9.c2"
+      },
+      {
+       "key": "tim.r9.c3"
+      },
+      {
+       "key": "tim.r9.c4"
+      },
+      {
+       "key": "tim.r9.c5"
+      },
+      {
+       "key": "tim.r9.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Vsync End"
+      },
+      {
+       "key": "tim.r10.c1"
+      },
+      {
+       "key": "tim.r10.c2"
+      },
+      {
+       "key": "tim.r10.c3"
+      },
+      {
+       "key": "tim.r10.c4"
+      },
+      {
+       "key": "tim.r10.c5"
+      },
+      {
+       "key": "tim.r10.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "V Total"
+      },
+      {
+       "key": "tim.r11.c1"
+      },
+      {
+       "key": "tim.r11.c2"
+      },
+      {
+       "key": "tim.r11.c3"
+      },
+      {
+       "key": "tim.r11.c4"
+      },
+      {
+       "key": "tim.r11.c5"
+      },
+      {
+       "key": "tim.r11.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "H POL."
+      },
+      {
+       "key": "tim.r12.c1"
+      },
+      {
+       "key": "tim.r12.c2"
+      },
+      {
+       "key": "tim.r12.c3"
+      },
+      {
+       "key": "tim.r12.c4"
+      },
+      {
+       "key": "tim.r12.c5"
+      },
+      {
+       "key": "tim.r12.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "V POL."
+      },
+      {
+       "key": "tim.r13.c1"
+      },
+      {
+       "key": "tim.r13.c2"
+      },
+      {
+       "key": "tim.r13.c3"
+      },
+      {
+       "key": "tim.r13.c4"
+      },
+      {
+       "key": "tim.r13.c5"
+      },
+      {
+       "key": "tim.r13.c6"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Refresh 60.000 Hz"
+      },
+      {
+       "key": "tim.r14.c1"
+      },
+      {
+       "key": "tim.r14.c2"
+      },
+      {
+       "key": "tim.r14.c3"
+      },
+      {
+       "key": "tim.r14.c4"
+      },
+      {
+       "key": "tim.r14.c5"
+      },
+      {
+       "key": "tim.r14.c6"
+      }
+     ]
+    }
+   ]
+  },
+  "scr": {
+   "title": "Screen Specification",
+   "index": 6,
+   "when": "both",
+   "bodyIndex": 106,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Item"
+      },
+      {
+       "fixed": "Specification"
+      },
+      {
+       "fixed": "Unit"
+      },
+      {
+       "fixed": "Remark"
+      },
+      {
+       "fixed": "Note"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Display Area"
+      },
+      {
+       "key": "scr.r1.c1"
+      },
+      {
+       "fixed": "mm"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Display Colors"
+      },
+      {
+       "key": "scr.r2.c1"
+      },
+      {
+       "fixed": "Color"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Number of Pixel"
+      },
+      {
+       "key": "scr.r3.c1"
+      },
+      {
+       "fixed": "Pixel"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Pixel Arrangement"
+      },
+      {
+       "key": "scr.r4.c1"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Pixel Pitch"
+      },
+      {
+       "key": "scr.r5.c1"
+      },
+      {
+       "fixed": "mm"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Display Mode"
+      },
+      {
+       "key": "scr.r6.c1"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Viewing Angle"
+      },
+      {
+       "key": "scr.r7.c1"
+      },
+      {
+       "fixed": "Degrees"
+      },
+      {
+       "fixed": "CR10"
+      },
+      {
+       "fixed": "①"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Contrast Ratio"
+      },
+      {
+       "key": "scr.r8.c1"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": "Center ofScreen"
+      },
+      {
+       "fixed": "② ④ ⑤"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Response Time"
+      },
+      {
+       "key": "scr.r9.c1"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": "Typ."
+      },
+      {
+       "fixed": "③"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "White Luminance"
+      },
+      {
+       "key": "scr.r10.c1"
+      },
+      {
+       "fixed": "cd/m2"
+      },
+      {
+       "fixed": "Center ofScreen"
+      },
+      {
+       "fixed": "④ ⑤"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Color Temp"
+      },
+      {
+       "key": "scr.r11.c1"
+      },
+      {
+       "fixed": "K"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Color Coordinate"
+      },
+      {
+       "key": "scr.r12.c1"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": "White"
+      },
+      {
+       "fixed": "± 0.015"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Color Gamut"
+      },
+      {
+       "key": "scr.r13.c1"
+      },
+      {
+       "fixed": "%"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Brightness Uniformity"
+      },
+      {
+       "key": "scr.r14.c1"
+      },
+      {
+       "fixed": "%"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": ""
+      }
+     ]
+    }
+   ]
+  },
+  "va": {
+   "title": "Viewing Angle",
+   "index": 7,
+   "when": "both",
+   "bodyIndex": 114,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Hor."
+      },
+      {
+       "fixed": "θL"
+      },
+      {
+       "fixed": "CR≥10(at center of screen)"
+      },
+      {
+       "fixed": "Right"
+      },
+      {
+       "key": "va.r0.c4"
+      },
+      {
+       "fixed": "Degree"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "θR"
+      },
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "Left"
+      },
+      {
+       "key": "va.r1.c4"
+      },
+      {
+       "fixed": "",
+       "merged": true
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Ver."
+      },
+      {
+       "fixed": "øH"
+      },
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "Up"
+      },
+      {
+       "key": "va.r2.c4"
+      },
+      {
+       "fixed": "",
+       "merged": true
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "øL"
+      },
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "Down"
+      },
+      {
+       "key": "va.r3.c4"
+      },
+      {
+       "fixed": "",
+       "merged": true
+      }
+     ]
+    }
+   ]
+  },
+  "blu": {
+   "title": "Back Light Unit",
+   "index": 8,
+   "when": "both",
+   "bodyIndex": 150,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Parameter"
+      },
+      {
+       "fixed": "Symbol"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": "Values"
+      },
+      {
+       "fixed": ""
+      },
+      {
+       "fixed": "Unit"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "Min."
+      },
+      {
+       "fixed": "Typ."
+      },
+      {
+       "fixed": "Max."
+      },
+      {
+       "fixed": "",
+       "merged": true
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "LED String Current"
+      },
+      {
+       "fixed": "Is"
+      },
+      {
+       "key": "blu.r2.c2"
+      },
+      {
+       "key": "blu.r2.c3"
+      },
+      {
+       "key": "blu.r2.c4"
+      },
+      {
+       "fixed": "mA"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "LED String Voltage"
+      },
+      {
+       "fixed": "Vs"
+      },
+      {
+       "key": "blu.r3.c2"
+      },
+      {
+       "key": "blu.r3.c3"
+      },
+      {
+       "key": "blu.r3.c4"
+      },
+      {
+       "fixed": "V"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Power Consumption"
+      },
+      {
+       "fixed": "P(per string)"
+      },
+      {
+       "key": "blu.r4.c2"
+      },
+      {
+       "key": "blu.r4.c3"
+      },
+      {
+       "key": "blu.r4.c4"
+      },
+      {
+       "fixed": "Watt"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "LED Life Time"
+      },
+      {
+       "fixed": "LED_LT"
+      },
+      {
+       "key": "blu.r5.c2"
+      },
+      {
+       "key": "blu.r5.c3"
+      },
+      {
+       "key": "blu.r5.c4"
+      },
+      {
+       "fixed": "Hrs"
+      }
+     ]
+    }
+   ]
+  },
+  "cie": {
+   "title": "CIE Coordinates (Color Chromaticity)",
+   "index": 9,
+   "when": "both",
+   "bodyIndex": 154,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Item"
+      },
+      {
+       "fixed": "Color chromaticity (CIE 1931)"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "fixed": "X(Typ.)"
+      },
+      {
+       "fixed": "Y(Typ.)"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "White"
+      },
+      {
+       "key": "cie.r2.c1"
+      },
+      {
+       "key": "cie.r2.c2"
+      }
+     ]
+    }
+   ]
+  },
+  "amr": {
+   "title": "Absolute rating of environment",
+   "index": 10,
+   "when": "both",
+   "bodyIndex": 161,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "ITEM"
+      },
+      {
+       "fixed": "Symbol"
+      },
+      {
+       "fixed": "Min"
+      },
+      {
+       "fixed": "Max"
+      },
+      {
+       "fixed": "Unit"
+      },
+      {
+       "fixed": "Note"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Storage temperature"
+      },
+      {
+       "fixed": "TSTG"
+      },
+      {
+       "key": "amr.r1.c2"
+      },
+      {
+       "key": "amr.r1.c3"
+      },
+      {
+       "fixed": "℃"
+      },
+      {
+       "fixed": "(1)"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "Operating temperature(Surface of Glass temperature)"
+      },
+      {
+       "fixed": "TOPR"
+      },
+      {
+       "key": "amr.r2.c2"
+      },
+      {
+       "key": "amr.r2.c3"
+      },
+      {
+       "fixed": "℃"
+      },
+      {
+       "fixed": "(1)"
+      }
+     ]
+    }
+   ]
+  },
+  "adc": {
+   "title": "A/D Board connection",
+   "index": 11,
+   "when": "both",
+   "bodyIndex": 183,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Symbol"
+      },
+      {
+       "fixed": "Description"
+      },
+      {
+       "fixed": "Parts Number"
+      },
+      {
+       "fixed": "Manufacture"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r1.c0"
+      },
+      {
+       "key": "adc.r1.c1"
+      },
+      {
+       "key": "adc.r1.c2"
+      },
+      {
+       "key": "adc.r1.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r2.c0"
+      },
+      {
+       "key": "adc.r2.c1"
+      },
+      {
+       "key": "adc.r2.c2"
+      },
+      {
+       "key": "adc.r2.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r3.c0"
+      },
+      {
+       "key": "adc.r3.c1"
+      },
+      {
+       "key": "adc.r3.c2"
+      },
+      {
+       "key": "adc.r3.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r4.c0"
+      },
+      {
+       "key": "adc.r4.c1"
+      },
+      {
+       "key": "adc.r4.c2"
+      },
+      {
+       "key": "adc.r4.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r5.c0"
+      },
+      {
+       "key": "adc.r5.c1"
+      },
+      {
+       "key": "adc.r5.c2"
+      },
+      {
+       "key": "adc.r5.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r6.c0"
+      },
+      {
+       "key": "adc.r6.c1"
+      },
+      {
+       "key": "adc.r6.c2"
+      },
+      {
+       "key": "adc.r6.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r7.c0"
+      },
+      {
+       "key": "adc.r7.c1"
+      },
+      {
+       "key": "adc.r7.c2"
+      },
+      {
+       "key": "adc.r7.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r8.c0"
+      },
+      {
+       "key": "adc.r8.c1"
+      },
+      {
+       "key": "adc.r8.c2"
+      },
+      {
+       "key": "adc.r8.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r9.c0"
+      },
+      {
+       "key": "adc.r9.c1"
+      },
+      {
+       "key": "adc.r9.c2"
+      },
+      {
+       "key": "adc.r9.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adc.r10.c0"
+      },
+      {
+       "key": "adc.r10.c1"
+      },
+      {
+       "key": "adc.r10.c2"
+      },
+      {
+       "key": "adc.r10.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "adp1": {
+   "title": "A/D connector 1",
+   "index": 12,
+   "when": "both",
+   "bodyIndex": 188,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp1.r1.c0"
+      },
+      {
+       "key": "adp1.r1.c1"
+      },
+      {
+       "key": "adp1.r1.c2"
+      },
+      {
+       "key": "adp1.r1.c3"
+      },
+      {
+       "key": "adp1.r1.c4"
+      },
+      {
+       "key": "adp1.r1.c5"
+      },
+      {
+       "key": "adp1.r1.c6"
+      },
+      {
+       "key": "adp1.r1.c7"
+      }
+     ]
+    }
+   ]
+  },
+  "adp2": {
+   "title": "A/D connector 2",
+   "index": 13,
+   "when": "both",
+   "bodyIndex": 191,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp2.r1.c0"
+      },
+      {
+       "key": "adp2.r1.c1"
+      },
+      {
+       "key": "adp2.r1.c2"
+      },
+      {
+       "key": "adp2.r1.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "adp3": {
+   "title": "A/D connector 3",
+   "index": 14,
+   "when": "both",
+   "bodyIndex": 194,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin No."
+      },
+      {
+       "fixed": "Symbol"
+      },
+      {
+       "fixed": "Description"
+      },
+      {
+       "fixed": "Pin No."
+      },
+      {
+       "fixed": "Symbol"
+      },
+      {
+       "fixed": "Description"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp3.r1.c0"
+      },
+      {
+       "key": "adp3.r1.c1"
+      },
+      {
+       "key": "adp3.r1.c2"
+      },
+      {
+       "key": "adp3.r1.c3"
+      },
+      {
+       "key": "adp3.r1.c4"
+      },
+      {
+       "key": "adp3.r1.c5"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp3.r2.c0"
+      },
+      {
+       "key": "adp3.r2.c1"
+      },
+      {
+       "key": "adp3.r2.c2"
+      },
+      {
+       "key": "adp3.r2.c3"
+      },
+      {
+       "key": "adp3.r2.c4"
+      },
+      {
+       "key": "adp3.r2.c5"
+      }
+     ]
+    }
+   ]
+  },
+  "adp4": {
+   "title": "A/D connector 4",
+   "index": 15,
+   "when": "both",
+   "bodyIndex": 197,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp4.r1.c0"
+      },
+      {
+       "key": "adp4.r1.c1"
+      },
+      {
+       "key": "adp4.r1.c2"
+      },
+      {
+       "key": "adp4.r1.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "adp5": {
+   "title": "A/D connector 5",
+   "index": 16,
+   "when": "both",
+   "bodyIndex": 200,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp5.r1.c0"
+      },
+      {
+       "key": "adp5.r1.c1"
+      },
+      {
+       "key": "adp5.r1.c2"
+      },
+      {
+       "key": "adp5.r1.c3"
+      },
+      {
+       "key": "adp5.r1.c4"
+      },
+      {
+       "key": "adp5.r1.c5"
+      },
+      {
+       "key": "adp5.r1.c6"
+      },
+      {
+       "key": "adp5.r1.c7"
+      }
+     ]
+    }
+   ]
+  },
+  "adp6": {
+   "title": "A/D connector 6",
+   "index": 17,
+   "when": "both",
+   "bodyIndex": 203,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp6.r1.c0"
+      },
+      {
+       "key": "adp6.r1.c1"
+      },
+      {
+       "key": "adp6.r1.c2"
+      },
+      {
+       "key": "adp6.r1.c3"
+      },
+      {
+       "key": "adp6.r1.c4"
+      },
+      {
+       "key": "adp6.r1.c5"
+      },
+      {
+       "key": "adp6.r1.c6"
+      },
+      {
+       "key": "adp6.r1.c7"
+      }
+     ]
+    }
+   ]
+  },
+  "adp7": {
+   "title": "A/D connector 7",
+   "index": 18,
+   "when": "both",
+   "bodyIndex": 206,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp7.r1.c0"
+      },
+      {
+       "key": "adp7.r1.c1"
+      },
+      {
+       "key": "adp7.r1.c2"
+      },
+      {
+       "key": "adp7.r1.c3"
+      },
+      {
+       "key": "adp7.r1.c4"
+      },
+      {
+       "key": "adp7.r1.c5"
+      },
+      {
+       "key": "adp7.r1.c6"
+      },
+      {
+       "key": "adp7.r1.c7"
+      }
+     ]
+    }
+   ]
+  },
+  "adp8": {
+   "title": "A/D connector 8",
+   "index": 19,
+   "when": "both",
+   "bodyIndex": 215,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r1.c0"
+      },
+      {
+       "key": "adp8.r1.c1"
+      },
+      {
+       "key": "adp8.r1.c2"
+      },
+      {
+       "key": "adp8.r1.c3"
+      },
+      {
+       "key": "adp8.r1.c4"
+      },
+      {
+       "key": "adp8.r1.c5"
+      },
+      {
+       "key": "adp8.r1.c6"
+      },
+      {
+       "key": "adp8.r1.c7"
+      },
+      {
+       "key": "adp8.r1.c8"
+      },
+      {
+       "key": "adp8.r1.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r2.c0"
+      },
+      {
+       "key": "adp8.r2.c1"
+      },
+      {
+       "key": "adp8.r2.c2"
+      },
+      {
+       "key": "adp8.r2.c3"
+      },
+      {
+       "key": "adp8.r2.c4"
+      },
+      {
+       "key": "adp8.r2.c5"
+      },
+      {
+       "key": "adp8.r2.c6"
+      },
+      {
+       "key": "adp8.r2.c7"
+      },
+      {
+       "key": "adp8.r2.c8"
+      },
+      {
+       "key": "adp8.r2.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r3.c0"
+      },
+      {
+       "key": "adp8.r3.c1"
+      },
+      {
+       "key": "adp8.r3.c2"
+      },
+      {
+       "key": "adp8.r3.c3"
+      },
+      {
+       "key": "adp8.r3.c4"
+      },
+      {
+       "key": "adp8.r3.c5"
+      },
+      {
+       "key": "adp8.r3.c6"
+      },
+      {
+       "key": "adp8.r3.c7"
+      },
+      {
+       "key": "adp8.r3.c8"
+      },
+      {
+       "key": "adp8.r3.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r4.c0"
+      },
+      {
+       "key": "adp8.r4.c1"
+      },
+      {
+       "key": "adp8.r4.c2"
+      },
+      {
+       "key": "adp8.r4.c3"
+      },
+      {
+       "key": "adp8.r4.c4"
+      },
+      {
+       "key": "adp8.r4.c5"
+      },
+      {
+       "key": "adp8.r4.c6"
+      },
+      {
+       "key": "adp8.r4.c7"
+      },
+      {
+       "key": "adp8.r4.c8"
+      },
+      {
+       "key": "adp8.r4.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r5.c0"
+      },
+      {
+       "key": "adp8.r5.c1"
+      },
+      {
+       "key": "adp8.r5.c2"
+      },
+      {
+       "key": "adp8.r5.c3"
+      },
+      {
+       "key": "adp8.r5.c4"
+      },
+      {
+       "key": "adp8.r5.c5"
+      },
+      {
+       "key": "adp8.r5.c6"
+      },
+      {
+       "key": "adp8.r5.c7"
+      },
+      {
+       "key": "adp8.r5.c8"
+      },
+      {
+       "key": "adp8.r5.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r6.c0"
+      },
+      {
+       "key": "adp8.r6.c1"
+      },
+      {
+       "key": "adp8.r6.c2"
+      },
+      {
+       "key": "adp8.r6.c3"
+      },
+      {
+       "key": "adp8.r6.c4"
+      },
+      {
+       "key": "adp8.r6.c5"
+      },
+      {
+       "key": "adp8.r6.c6"
+      },
+      {
+       "key": "adp8.r6.c7"
+      },
+      {
+       "key": "adp8.r6.c8"
+      },
+      {
+       "key": "adp8.r6.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r7.c0"
+      },
+      {
+       "key": "adp8.r7.c1"
+      },
+      {
+       "key": "adp8.r7.c2"
+      },
+      {
+       "key": "adp8.r7.c3"
+      },
+      {
+       "key": "adp8.r7.c4"
+      },
+      {
+       "key": "adp8.r7.c5"
+      },
+      {
+       "key": "adp8.r7.c6"
+      },
+      {
+       "key": "adp8.r7.c7"
+      },
+      {
+       "key": "adp8.r7.c8"
+      },
+      {
+       "key": "adp8.r7.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r8.c0"
+      },
+      {
+       "key": "adp8.r8.c1"
+      },
+      {
+       "key": "adp8.r8.c2"
+      },
+      {
+       "key": "adp8.r8.c3"
+      },
+      {
+       "key": "adp8.r8.c4"
+      },
+      {
+       "key": "adp8.r8.c5"
+      },
+      {
+       "key": "adp8.r8.c6"
+      },
+      {
+       "key": "adp8.r8.c7"
+      },
+      {
+       "key": "adp8.r8.c8"
+      },
+      {
+       "key": "adp8.r8.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r9.c0"
+      },
+      {
+       "key": "adp8.r9.c1"
+      },
+      {
+       "key": "adp8.r9.c2"
+      },
+      {
+       "key": "adp8.r9.c3"
+      },
+      {
+       "key": "adp8.r9.c4"
+      },
+      {
+       "key": "adp8.r9.c5"
+      },
+      {
+       "key": "adp8.r9.c6"
+      },
+      {
+       "key": "adp8.r9.c7"
+      },
+      {
+       "key": "adp8.r9.c8"
+      },
+      {
+       "key": "adp8.r9.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r10.c0"
+      },
+      {
+       "key": "adp8.r10.c1"
+      },
+      {
+       "key": "adp8.r10.c2"
+      },
+      {
+       "key": "adp8.r10.c3"
+      },
+      {
+       "key": "adp8.r10.c4"
+      },
+      {
+       "key": "adp8.r10.c5"
+      },
+      {
+       "key": "adp8.r10.c6"
+      },
+      {
+       "key": "adp8.r10.c7"
+      },
+      {
+       "key": "adp8.r10.c8"
+      },
+      {
+       "key": "adp8.r10.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp8.r11.c0"
+      },
+      {
+       "key": "adp8.r11.c1"
+      },
+      {
+       "key": "adp8.r11.c2"
+      },
+      {
+       "key": "adp8.r11.c3"
+      },
+      {
+       "key": "adp8.r11.c4"
+      },
+      {
+       "key": "adp8.r11.c5"
+      },
+      {
+       "key": "adp8.r11.c6"
+      },
+      {
+       "key": "adp8.r11.c7"
+      },
+      {
+       "key": "adp8.r11.c8"
+      },
+      {
+       "key": "adp8.r11.c9"
+      }
+     ]
+    }
+   ]
+  },
+  "adp9": {
+   "title": "A/D connector 9",
+   "index": 20,
+   "when": "both",
+   "bodyIndex": 218,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Signal"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r1.c0"
+      },
+      {
+       "key": "adp9.r1.c1"
+      },
+      {
+       "key": "adp9.r1.c2"
+      },
+      {
+       "key": "adp9.r1.c3"
+      },
+      {
+       "key": "adp9.r1.c4"
+      },
+      {
+       "key": "adp9.r1.c5"
+      },
+      {
+       "key": "adp9.r1.c6"
+      },
+      {
+       "key": "adp9.r1.c7"
+      },
+      {
+       "key": "adp9.r1.c8"
+      },
+      {
+       "key": "adp9.r1.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r2.c0"
+      },
+      {
+       "key": "adp9.r2.c1"
+      },
+      {
+       "key": "adp9.r2.c2"
+      },
+      {
+       "key": "adp9.r2.c3"
+      },
+      {
+       "key": "adp9.r2.c4"
+      },
+      {
+       "key": "adp9.r2.c5"
+      },
+      {
+       "key": "adp9.r2.c6"
+      },
+      {
+       "key": "adp9.r2.c7"
+      },
+      {
+       "key": "adp9.r2.c8"
+      },
+      {
+       "key": "adp9.r2.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r3.c0"
+      },
+      {
+       "key": "adp9.r3.c1"
+      },
+      {
+       "key": "adp9.r3.c2"
+      },
+      {
+       "key": "adp9.r3.c3"
+      },
+      {
+       "key": "adp9.r3.c4"
+      },
+      {
+       "key": "adp9.r3.c5"
+      },
+      {
+       "key": "adp9.r3.c6"
+      },
+      {
+       "key": "adp9.r3.c7"
+      },
+      {
+       "key": "adp9.r3.c8"
+      },
+      {
+       "key": "adp9.r3.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r4.c0"
+      },
+      {
+       "key": "adp9.r4.c1"
+      },
+      {
+       "key": "adp9.r4.c2"
+      },
+      {
+       "key": "adp9.r4.c3"
+      },
+      {
+       "key": "adp9.r4.c4"
+      },
+      {
+       "key": "adp9.r4.c5"
+      },
+      {
+       "key": "adp9.r4.c6"
+      },
+      {
+       "key": "adp9.r4.c7"
+      },
+      {
+       "key": "adp9.r4.c8"
+      },
+      {
+       "key": "adp9.r4.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r5.c0"
+      },
+      {
+       "key": "adp9.r5.c1"
+      },
+      {
+       "key": "adp9.r5.c2"
+      },
+      {
+       "key": "adp9.r5.c3"
+      },
+      {
+       "key": "adp9.r5.c4"
+      },
+      {
+       "key": "adp9.r5.c5"
+      },
+      {
+       "key": "adp9.r5.c6"
+      },
+      {
+       "key": "adp9.r5.c7"
+      },
+      {
+       "key": "adp9.r5.c8"
+      },
+      {
+       "key": "adp9.r5.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r6.c0"
+      },
+      {
+       "key": "adp9.r6.c1"
+      },
+      {
+       "key": "adp9.r6.c2"
+      },
+      {
+       "key": "adp9.r6.c3"
+      },
+      {
+       "key": "adp9.r6.c4"
+      },
+      {
+       "key": "adp9.r6.c5"
+      },
+      {
+       "key": "adp9.r6.c6"
+      },
+      {
+       "key": "adp9.r6.c7"
+      },
+      {
+       "key": "adp9.r6.c8"
+      },
+      {
+       "key": "adp9.r6.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r7.c0"
+      },
+      {
+       "key": "adp9.r7.c1"
+      },
+      {
+       "key": "adp9.r7.c2"
+      },
+      {
+       "key": "adp9.r7.c3"
+      },
+      {
+       "key": "adp9.r7.c4"
+      },
+      {
+       "key": "adp9.r7.c5"
+      },
+      {
+       "key": "adp9.r7.c6"
+      },
+      {
+       "key": "adp9.r7.c7"
+      },
+      {
+       "key": "adp9.r7.c8"
+      },
+      {
+       "key": "adp9.r7.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r8.c0"
+      },
+      {
+       "key": "adp9.r8.c1"
+      },
+      {
+       "key": "adp9.r8.c2"
+      },
+      {
+       "key": "adp9.r8.c3"
+      },
+      {
+       "key": "adp9.r8.c4"
+      },
+      {
+       "key": "adp9.r8.c5"
+      },
+      {
+       "key": "adp9.r8.c6"
+      },
+      {
+       "key": "adp9.r8.c7"
+      },
+      {
+       "key": "adp9.r8.c8"
+      },
+      {
+       "key": "adp9.r8.c9"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp9.r9.c0"
+      },
+      {
+       "key": "adp9.r9.c1"
+      },
+      {
+       "key": "adp9.r9.c2"
+      },
+      {
+       "key": "adp9.r9.c3"
+      },
+      {
+       "key": "adp9.r9.c4"
+      },
+      {
+       "key": "adp9.r9.c5"
+      },
+      {
+       "key": "adp9.r9.c6"
+      },
+      {
+       "key": "adp9.r9.c7"
+      },
+      {
+       "key": "adp9.r9.c8"
+      },
+      {
+       "key": "adp9.r9.c9"
+      }
+     ]
+    }
+   ]
+  },
+  "adp10": {
+   "title": "A/D connector 10",
+   "index": 21,
+   "when": "both",
+   "bodyIndex": 221,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Function"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Function"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Function"
+      },
+      {
+       "fixed": "Pin"
+      },
+      {
+       "fixed": "Function"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp10.r1.c0"
+      },
+      {
+       "key": "adp10.r1.c1"
+      },
+      {
+       "key": "adp10.r1.c2"
+      },
+      {
+       "key": "adp10.r1.c3"
+      },
+      {
+       "key": "adp10.r1.c4"
+      },
+      {
+       "key": "adp10.r1.c5"
+      },
+      {
+       "key": "adp10.r1.c6"
+      },
+      {
+       "key": "adp10.r1.c7"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp10.r2.c0"
+      },
+      {
+       "key": "adp10.r2.c1"
+      },
+      {
+       "key": "adp10.r2.c2"
+      },
+      {
+       "key": "adp10.r2.c3"
+      },
+      {
+       "key": "adp10.r2.c4"
+      },
+      {
+       "key": "adp10.r2.c5"
+      },
+      {
+       "key": "adp10.r2.c6"
+      },
+      {
+       "key": "adp10.r2.c7"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp10.r3.c0"
+      },
+      {
+       "key": "adp10.r3.c1"
+      },
+      {
+       "key": "adp10.r3.c2"
+      },
+      {
+       "key": "adp10.r3.c3"
+      },
+      {
+       "key": "adp10.r3.c4"
+      },
+      {
+       "key": "adp10.r3.c5"
+      },
+      {
+       "key": "adp10.r3.c6"
+      },
+      {
+       "key": "adp10.r3.c7"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp10.r4.c0"
+      },
+      {
+       "key": "adp10.r4.c1"
+      },
+      {
+       "key": "adp10.r4.c2"
+      },
+      {
+       "key": "adp10.r4.c3"
+      },
+      {
+       "key": "adp10.r4.c4"
+      },
+      {
+       "key": "adp10.r4.c5"
+      },
+      {
+       "key": "adp10.r4.c6"
+      },
+      {
+       "key": "adp10.r4.c7"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "adp10.r5.c0"
+      },
+      {
+       "key": "adp10.r5.c1"
+      },
+      {
+       "key": "adp10.r5.c2"
+      },
+      {
+       "key": "adp10.r5.c3"
+      },
+      {
+       "key": "adp10.r5.c4"
+      },
+      {
+       "key": "adp10.r5.c5"
+      },
+      {
+       "key": "adp10.r5.c6"
+      },
+      {
+       "key": "adp10.r5.c7"
+      }
+     ]
+    }
+   ]
+  },
+  "cvi": {
+   "title": "Converter Board Input Connector",
+   "index": 22,
+   "when": "both",
+   "bodyIndex": 231,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin No"
+      },
+      {
+       "fixed": "Symbol"
+      },
+      {
+       "fixed": "Description"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cvi.r1.c0"
+      },
+      {
+       "key": "cvi.r1.c1"
+      },
+      {
+       "key": "cvi.r1.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cvi.r2.c0"
+      },
+      {
+       "key": "cvi.r2.c1"
+      },
+      {
+       "key": "cvi.r2.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cvi.r3.c0"
+      },
+      {
+       "key": "cvi.r3.c1"
+      },
+      {
+       "key": "cvi.r3.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cvi.r4.c0"
+      },
+      {
+       "key": "cvi.r4.c1"
+      },
+      {
+       "key": "cvi.r4.c2"
+      }
+     ]
+    }
+   ]
+  },
+  "cvo": {
+   "title": "Converter Board Output Connector",
+   "index": 23,
+   "when": "both",
+   "bodyIndex": 234,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Pin No"
+      },
+      {
+       "fixed": "Symbol"
+      },
+      {
+       "fixed": "REMARK"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cvo.r1.c0"
+      },
+      {
+       "key": "cvo.r1.c1"
+      },
+      {
+       "key": "cvo.r1.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "cvo.r2.c0"
+      },
+      {
+       "key": "cvo.r2.c1"
+      },
+      {
+       "key": "cvo.r2.c2"
+      }
+     ]
+    }
+   ]
+  },
+  "osd": {
+   "title": "Function(OSD) Menu Actions",
+   "index": 24,
+   "when": "both",
+   "bodyIndex": 260,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "Item"
+      },
+      {
+       "fixed": "Description"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "osd.r1.c0"
+      },
+      {
+       "key": "osd.r1.c1"
+      },
+      {
+       "key": "osd.r1.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "key": "osd.r2.c1"
+      },
+      {
+       "key": "osd.r2.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "osd.r3.c0"
+      },
+      {
+       "key": "osd.r3.c1"
+      },
+      {
+       "key": "osd.r3.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "osd.r4.c0"
+      },
+      {
+       "key": "osd.r4.c1"
+      },
+      {
+       "key": "osd.r4.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "",
+       "merged": true
+      },
+      {
+       "key": "osd.r5.c1"
+      },
+      {
+       "key": "osd.r5.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "osd.r6.c0"
+      },
+      {
+       "key": "osd.r6.c1"
+      },
+      {
+       "key": "osd.r6.c2"
+      }
+     ]
+    }
+   ]
+  },
+  "vcp": {
+   "title": "VCP Specification",
+   "index": 25,
+   "when": "both",
+   "bodyIndex": 267,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "NO"
+      },
+      {
+       "fixed": "VCP Code"
+      },
+      {
+       "fixed": "VCP Code Name"
+      },
+      {
+       "fixed": "Range"
+      },
+      {
+       "fixed": "Description"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r1.c0"
+      },
+      {
+       "key": "vcp.r1.c1"
+      },
+      {
+       "key": "vcp.r1.c2"
+      },
+      {
+       "key": "vcp.r1.c3"
+      },
+      {
+       "key": "vcp.r1.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r2.c0"
+      },
+      {
+       "key": "vcp.r2.c1"
+      },
+      {
+       "key": "vcp.r2.c2"
+      },
+      {
+       "key": "vcp.r2.c3"
+      },
+      {
+       "key": "vcp.r2.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r3.c0"
+      },
+      {
+       "key": "vcp.r3.c1"
+      },
+      {
+       "key": "vcp.r3.c2"
+      },
+      {
+       "key": "vcp.r3.c3"
+      },
+      {
+       "key": "vcp.r3.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r4.c0"
+      },
+      {
+       "key": "vcp.r4.c1"
+      },
+      {
+       "key": "vcp.r4.c2"
+      },
+      {
+       "key": "vcp.r4.c3"
+      },
+      {
+       "key": "vcp.r4.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r5.c0"
+      },
+      {
+       "key": "vcp.r5.c1"
+      },
+      {
+       "key": "vcp.r5.c2"
+      },
+      {
+       "key": "vcp.r5.c3"
+      },
+      {
+       "key": "vcp.r5.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r6.c0"
+      },
+      {
+       "key": "vcp.r6.c1"
+      },
+      {
+       "key": "vcp.r6.c2"
+      },
+      {
+       "key": "vcp.r6.c3"
+      },
+      {
+       "key": "vcp.r6.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r7.c0"
+      },
+      {
+       "key": "vcp.r7.c1"
+      },
+      {
+       "key": "vcp.r7.c2"
+      },
+      {
+       "key": "vcp.r7.c3"
+      },
+      {
+       "key": "vcp.r7.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r8.c0"
+      },
+      {
+       "key": "vcp.r8.c1"
+      },
+      {
+       "key": "vcp.r8.c2"
+      },
+      {
+       "key": "vcp.r8.c3"
+      },
+      {
+       "key": "vcp.r8.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r9.c0"
+      },
+      {
+       "key": "vcp.r9.c1"
+      },
+      {
+       "key": "vcp.r9.c2"
+      },
+      {
+       "key": "vcp.r9.c3"
+      },
+      {
+       "key": "vcp.r9.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r10.c0"
+      },
+      {
+       "key": "vcp.r10.c1"
+      },
+      {
+       "key": "vcp.r10.c2"
+      },
+      {
+       "key": "vcp.r10.c3"
+      },
+      {
+       "key": "vcp.r10.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r11.c0"
+      },
+      {
+       "key": "vcp.r11.c1"
+      },
+      {
+       "key": "vcp.r11.c2"
+      },
+      {
+       "key": "vcp.r11.c3"
+      },
+      {
+       "key": "vcp.r11.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r12.c0"
+      },
+      {
+       "key": "vcp.r12.c1"
+      },
+      {
+       "key": "vcp.r12.c2"
+      },
+      {
+       "key": "vcp.r12.c3"
+      },
+      {
+       "key": "vcp.r12.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r13.c0"
+      },
+      {
+       "key": "vcp.r13.c1"
+      },
+      {
+       "key": "vcp.r13.c2"
+      },
+      {
+       "key": "vcp.r13.c3"
+      },
+      {
+       "key": "vcp.r13.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r14.c0"
+      },
+      {
+       "key": "vcp.r14.c1"
+      },
+      {
+       "key": "vcp.r14.c2"
+      },
+      {
+       "key": "vcp.r14.c3"
+      },
+      {
+       "key": "vcp.r14.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r15.c0"
+      },
+      {
+       "key": "vcp.r15.c1"
+      },
+      {
+       "key": "vcp.r15.c2"
+      },
+      {
+       "key": "vcp.r15.c3"
+      },
+      {
+       "key": "vcp.r15.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r16.c0"
+      },
+      {
+       "key": "vcp.r16.c1"
+      },
+      {
+       "key": "vcp.r16.c2"
+      },
+      {
+       "key": "vcp.r16.c3"
+      },
+      {
+       "key": "vcp.r16.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r17.c0"
+      },
+      {
+       "key": "vcp.r17.c1"
+      },
+      {
+       "key": "vcp.r17.c2"
+      },
+      {
+       "key": "vcp.r17.c3"
+      },
+      {
+       "key": "vcp.r17.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r18.c0"
+      },
+      {
+       "key": "vcp.r18.c1"
+      },
+      {
+       "key": "vcp.r18.c2"
+      },
+      {
+       "key": "vcp.r18.c3"
+      },
+      {
+       "key": "vcp.r18.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r19.c0"
+      },
+      {
+       "key": "vcp.r19.c1"
+      },
+      {
+       "key": "vcp.r19.c2"
+      },
+      {
+       "key": "vcp.r19.c3"
+      },
+      {
+       "key": "vcp.r19.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r20.c0"
+      },
+      {
+       "key": "vcp.r20.c1"
+      },
+      {
+       "key": "vcp.r20.c2"
+      },
+      {
+       "key": "vcp.r20.c3"
+      },
+      {
+       "key": "vcp.r20.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r21.c0"
+      },
+      {
+       "key": "vcp.r21.c1"
+      },
+      {
+       "key": "vcp.r21.c2"
+      },
+      {
+       "key": "vcp.r21.c3"
+      },
+      {
+       "key": "vcp.r21.c4"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "key": "vcp.r22.c0"
+      },
+      {
+       "key": "vcp.r22.c1"
+      },
+      {
+       "key": "vcp.r22.c2"
+      },
+      {
+       "key": "vcp.r22.c3"
+      },
+      {
+       "key": "vcp.r22.c4"
+      }
+     ]
+    }
+   ]
+  },
+  "tmech": {
+   "title": "Touch — Mechanical properties",
+   "index": 26,
+   "when": "touch",
+   "bodyIndex": 278,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "No"
+      },
+      {
+       "fixed": "Parameter"
+      },
+      {
+       "fixed": "Value"
+      },
+      {
+       "fixed": "Remark"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "1"
+      },
+      {
+       "fixed": "Width"
+      },
+      {
+       "key": "tmech.r1.c2"
+      },
+      {
+       "key": "tmech.r1.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "2"
+      },
+      {
+       "fixed": "Height"
+      },
+      {
+       "key": "tmech.r2.c2"
+      },
+      {
+       "key": "tmech.r2.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "3"
+      },
+      {
+       "fixed": "Thickness"
+      },
+      {
+       "key": "tmech.r3.c2"
+      },
+      {
+       "key": "tmech.r3.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "tperf": {
+   "title": "Touch — Performance",
+   "index": 27,
+   "when": "touch",
+   "bodyIndex": 282,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "No"
+      },
+      {
+       "fixed": "Parameter"
+      },
+      {
+       "fixed": "Value"
+      },
+      {
+       "fixed": "Remark"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "1"
+      },
+      {
+       "fixed": "Interface"
+      },
+      {
+       "key": "tperf.r1.c2"
+      },
+      {
+       "key": "tperf.r1.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "2"
+      },
+      {
+       "fixed": "Multi touch"
+      },
+      {
+       "key": "tperf.r2.c2"
+      },
+      {
+       "key": "tperf.r2.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "3"
+      },
+      {
+       "fixed": "Scan speed"
+      },
+      {
+       "key": "tperf.r3.c2"
+      },
+      {
+       "key": "tperf.r3.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "4"
+      },
+      {
+       "fixed": "Response time"
+      },
+      {
+       "key": "tperf.r4.c2"
+      },
+      {
+       "key": "tperf.r4.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "5"
+      },
+      {
+       "fixed": "Linearity"
+      },
+      {
+       "key": "tperf.r5.c2"
+      },
+      {
+       "key": "tperf.r5.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "6"
+      },
+      {
+       "fixed": "Accuracy"
+      },
+      {
+       "key": "tperf.r6.c2"
+      },
+      {
+       "key": "tperf.r6.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "7"
+      },
+      {
+       "fixed": "Accuracy at edge"
+      },
+      {
+       "key": "tperf.r7.c2"
+      },
+      {
+       "key": "tperf.r7.c3"
+      }
+     ]
+    }
+   ]
+  },
+  "tpwr": {
+   "title": "Touch — Power requirements",
+   "index": 28,
+   "when": "touch",
+   "bodyIndex": 286,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "No"
+      },
+      {
+       "fixed": "Parameter"
+      },
+      {
+       "fixed": "Value"
+      },
+      {
+       "fixed": "Remark"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "1"
+      },
+      {
+       "fixed": "Voltage"
+      },
+      {
+       "key": "tpwr.r1.c2"
+      },
+      {
+       "key": "tpwr.r1.c3"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "2"
+      },
+      {
+       "fixed": "Current"
+      },
+      {
+       "key": "tpwr.r2.c2"
+      },
+      {
+       "fixed": "",
+       "merged": true
+      }
+     ]
+    }
+   ]
+  },
+  "tgen": {
+   "title": "Touch — General TS Requirements",
+   "index": 29,
+   "when": "touch",
+   "bodyIndex": 296,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "No"
+      },
+      {
+       "fixed": "Requirement"
+      },
+      {
+       "fixed": "Notes"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "1"
+      },
+      {
+       "fixed": "Touch Technology"
+      },
+      {
+       "key": "tgen.r1.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "2"
+      },
+      {
+       "fixed": "Manufacturer"
+      },
+      {
+       "key": "tgen.r2.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "3"
+      },
+      {
+       "fixed": "Firmware"
+      },
+      {
+       "key": "tgen.r3.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "4"
+      },
+      {
+       "fixed": "Controller"
+      },
+      {
+       "key": "tgen.r4.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "5"
+      },
+      {
+       "fixed": "Etch"
+      },
+      {
+       "key": "tgen.r5.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "6"
+      },
+      {
+       "fixed": "VID & PID"
+      },
+      {
+       "key": "tgen.r6.c2"
+      }
+     ]
+    }
+   ]
+  },
+  "tcom": {
+   "title": "Touch — Controller Communication",
+   "index": 30,
+   "when": "touch",
+   "bodyIndex": 300,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "No"
+      },
+      {
+       "fixed": "Requirement"
+      },
+      {
+       "fixed": "Notes"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "1"
+      },
+      {
+       "fixed": "Hardware Interface"
+      },
+      {
+       "key": "tcom.r1.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "2"
+      },
+      {
+       "fixed": "Software Interface"
+      },
+      {
+       "key": "tcom.r2.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "3"
+      },
+      {
+       "fixed": "Connector"
+      },
+      {
+       "key": "tcom.r3.c2"
+      }
+     ]
+    }
+   ]
+  },
+  "tglass": {
+   "title": "Touch — Cover Glass Requirements",
+   "index": 31,
+   "when": "touch",
+   "bodyIndex": 304,
+   "rows": [
+    {
+     "cells": [
+      {
+       "fixed": "No"
+      },
+      {
+       "fixed": "Requirement"
+      },
+      {
+       "fixed": "Notes"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "1"
+      },
+      {
+       "fixed": "Cover Glass Type"
+      },
+      {
+       "key": "tglass.r1.c2"
+      }
+     ]
+    },
+    {
+     "cells": [
+      {
+       "fixed": "2"
+      },
+      {
+       "fixed": "AIR GAP"
+      },
+      {
+       "key": "tglass.r2.c2"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "paras": {
+  "issueDate": {
+   "bodyIndex": 18,
+   "label": "ISSUE DATE",
+   "prefix": "ISSUE DATE:\\s*",
+   "optional": false
+  },
+  "scope": {
+   "bodyIndex": 61,
+   "label": "Scope",
+   "prefix": null,
+   "optional": false
+  },
+  "feat1": {
+   "bodyIndex": 64,
+   "label": "Features 1",
+   "prefix": null,
+   "optional": true
+  },
+  "feat2": {
+   "bodyIndex": 65,
+   "label": "Features 2",
+   "prefix": null,
+   "optional": true
+  },
+  "feat3": {
+   "bodyIndex": 66,
+   "label": "Features 3",
+   "prefix": null,
+   "optional": true
+  },
+  "feat4": {
+   "bodyIndex": 67,
+   "label": "Features 4",
+   "prefix": null,
+   "optional": true
+  },
+  "pwrVoltage": {
+   "bodyIndex": 75,
+   "label": "Input power — Voltage",
+   "prefix": "Voltage\\s*:\\s*",
+   "optional": false
+  },
+  "pwrConsumption": {
+   "bodyIndex": 76,
+   "label": "Input power — Consumption",
+   "prefix": "Consumption\\s*:\\s*",
+   "optional": false
+  },
+  "pwrConnPn": {
+   "bodyIndex": 79,
+   "label": "Connector PN",
+   "prefix": "Connector PN\\s*:\\s*",
+   "optional": false
+  },
+  "pwrTermPn": {
+   "bodyIndex": 80,
+   "label": "Terminals PN",
+   "prefix": "Terminals PN\\s*:\\s*",
+   "optional": false
+  },
+  "pwrCable": {
+   "bodyIndex": 81,
+   "label": "Cable",
+   "prefix": "Cable\\s*:\\s*",
+   "optional": false
+  },
+  "panelVendor": {
+   "bodyIndex": 107,
+   "label": "Panel vendor name",
+   "prefix": "◎\\s*Vendor Name\\s*:\\s*",
+   "optional": false
+  },
+  "lumYL": {
+   "bodyIndex": 124,
+   "label": "Luminance of White (YL)",
+   "prefix": "YL\\s*=\\s*",
+   "optional": false
+  },
+  "ledBar": {
+   "bodyIndex": 151,
+   "label": "LED light bar",
+   "prefix": null,
+   "optional": false
+  },
+  "adH1": {
+   "bodyIndex": 187,
+   "label": "A/D connector 1 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH2": {
+   "bodyIndex": 190,
+   "label": "A/D connector 2 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH3": {
+   "bodyIndex": 193,
+   "label": "A/D connector 3 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH4": {
+   "bodyIndex": 196,
+   "label": "A/D connector 4 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH5": {
+   "bodyIndex": 199,
+   "label": "A/D connector 5 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH6": {
+   "bodyIndex": 202,
+   "label": "A/D connector 6 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH7": {
+   "bodyIndex": 205,
+   "label": "A/D connector 7 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH8": {
+   "bodyIndex": 214,
+   "label": "A/D connector 8 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH9": {
+   "bodyIndex": 217,
+   "label": "A/D connector 9 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "adH10": {
+   "bodyIndex": 220,
+   "label": "A/D connector 10 — title",
+   "prefix": null,
+   "optional": false
+  },
+  "convIn": {
+   "bodyIndex": 230,
+   "label": "Converter input connector",
+   "prefix": "Converter Board Input Connector\\s*",
+   "optional": false
+  },
+  "convOut": {
+   "bodyIndex": 233,
+   "label": "Converter output connector",
+   "prefix": "Converter Board Output Connector\\s*:\\s*",
+   "optional": false
+  },
+  "vcpTitle": {
+   "bodyIndex": 265,
+   "label": "VCP Specification — title",
+   "prefix": null,
+   "optional": false
+  }
+ },
+ "images": {
+  "img_pwrconn": {
+   "bodyIndex": 83,
+   "label": "Input power connector (photo)",
+   "when": "both",
+   "count": 1
+  },
+  "img_block": {
+   "bodyIndex": 96,
+   "label": "Block Diagram",
+   "when": "both",
+   "count": 1
+  },
+  "img_adbd": {
+   "bodyIndex": 181,
+   "label": "A/D Board connector and dimension",
+   "when": "both",
+   "count": 1
+  },
+  "img_conv": {
+   "bodyIndex": 228,
+   "label": "Converter Board Dimension",
+   "when": "both",
+   "count": 1
+  },
+  "img_osdkey": {
+   "bodyIndex": 241,
+   "label": "OSD Key Description",
+   "when": "both",
+   "count": 1
+  },
+  "img_osdmenu": {
+   "bodyIndex": 251,
+   "label": "OSD Menu Structure",
+   "when": "both",
+   "count": 1
+  },
+  "img_outline_glass": {
+   "bodyIndex": 356,
+   "label": "Outline Dimension (GLASS)",
+   "when": "base",
+   "count": 1
+  },
+  "img_outline": {
+   "bodyIndex": 393,
+   "label": "Outline Dimension",
+   "when": "both",
+   "count": 1,
+   "bodyIndexByVariant": {
+    "base": 393,
+    "touch": 401
+   }
+  },
+  "img_touchboard": {
+   "bodyIndex": 275,
+   "label": "Touch — Board Dimension",
+   "when": "touch",
+   "count": 1
+  },
+  "img_touchmech": {
+   "bodyIndex": 310,
+   "label": "Touch — Mechanical Drawing",
+   "when": "touch",
+   "count": 1
+  }
+ },
+ "header": {
+  "docRev": "Document revision No:\\s*(\\S+)",
+  "hdrKtkPn": "KTK PN:\\s*(\\S+)"
+ },
+ "labels": {
+  "custPnLabel": {
+   "table": 0,
+   "row": 0,
+   "col": 2
+  }
+ },
+ "groups": [
+  {
+   "title": "1. Cover · Revision",
+   "from": 0
+  },
+  {
+   "title": "2~4. Scope · Features · Certification",
+   "from": 59
+  },
+  {
+   "title": "5. Electrical Specification",
+   "from": 71
+  },
+  {
+   "title": "6. LCD Panel Specifications",
+   "from": 103
+  },
+  {
+   "title": "7. A/D Board",
+   "from": 172
+  },
+  {
+   "title": "8. Converter Board Specification",
+   "from": 222
+  },
+  {
+   "title": "9. User Interface",
+   "from": 236
+  },
+  {
+   "title": "10. VCP Specification",
+   "from": 264
+  },
+  {
+   "title": "11. Touch Controller",
+   "from": 270
+  },
+  {
+   "title": "Mechanical Specification",
+   "from": 355
+  }
+ ]
+}

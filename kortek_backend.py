@@ -7539,6 +7539,9 @@ _SELF_UPDATE_FILES = [
     'templates/라벨사양서_양식.xlsx',
     'templates/Sample Report_양식.docx',
     'templates/DR_발표자료_양식.pptx',
+    'templates/PRODUCT SPEC_양식.docx',
+    'templates/PRODUCT SPEC_양식_TOUCH.docx',
+    'templates/PRODUCT SPEC_schema.json',
 ]
 # ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
 # 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
@@ -9734,6 +9737,516 @@ def doc_stage_dr_pptx():
         name += '.pptx'
     return send_file(bio, as_attachment=True, download_name=name,
                      mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+
+
+# ── 📗 PRODUCT SPEC — 원본 .docx 를 그대로 양식으로 (2026-11-24) ───────────────────────
+#    양식은 `tools/build-product-spec-template.py` 가 실제 사양서 두 개(터치 없음/있음)에서
+#    **값 자리마다 표식(`{{칸}}`)을 박아** 만든다 — 쪽 나눔·번호 매김·글꼴은 원본 그대로다.
+#    그림 칸은 `wp:docPr descr="slot:<열쇠>"` 로 표시돼 있고 **바이트만** 갈아 끼운다(자리·
+#    크기·덧그림 상자는 원본 그대로). 칸 목록은 `templates/PRODUCT SPEC_schema.json` 하나 —
+#    화면(js/76)·채우기(여기)·불러오기(여기)가 같은 목록을 쓴다(두 벌이면 갈라진다).
+_PS_TEMPLATES = {
+    'base': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식.docx'),
+    'touch': os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_양식_TOUCH.docx'),
+}
+_PS_SCHEMA = os.path.join(BASE_DIR, 'templates', 'PRODUCT SPEC_schema.json')
+_PS_MARK_RE = re.compile(r'\{\{(\??)([A-Za-z0-9_.]+)\}\}')
+_PS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+_PS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+
+
+def _ps_load_schema():
+    with open(_PS_SCHEMA, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _ps_parts_xml(doc):
+    """채울 XML 덩어리 전부 — 본문 + 구역마다의 머리글·바닥글(같은 머리글을 여러 구역이 공유해도 한 번만)."""
+    from docx.oxml.ns import qn  # noqa: F401
+    els = [doc.element.body]
+    seen = set()
+    for sec in doc.sections:
+        for hf in (sec.header, sec.footer, sec.first_page_header, sec.first_page_footer,
+                   sec.even_page_header, sec.even_page_footer):
+            try:
+                el = hf._element
+            except Exception:
+                continue
+            if id(el) in seen:
+                continue
+            seen.add(id(el))
+            els.append(el)
+    return els
+
+
+def _ps_fill_text(doc, values):
+    """`{{칸}}` 을 값으로. ⚠️ 표식은 양식을 만들 때 **한 `w:t` 안에** 넣었다 — 그래서 run 서식이 그대로 남는다.
+    여러 줄 값은 같은 run 안에 줄바꿈(`w:br`)으로 넣는다. `{{?칸}}` 은 값이 비면 **문단째** 지운다(Features 같은 줄)."""
+    from docx.oxml.ns import qn
+    w_t = qn('w:t')
+    xml_space = '{http://www.w3.org/XML/1998/namespace}space'
+    drop_paras = []
+    for root in _ps_parts_xml(doc):
+        for t in list(root.iter(w_t)):
+            s = t.text or ''
+            if '{{' not in s:
+                continue
+            opt_empty = False
+
+            def rep(m):
+                nonlocal opt_empty
+                v = values.get(m.group(2))
+                v = '' if v is None else str(v)
+                if m.group(1) == '?' and not v.strip():
+                    opt_empty = True
+                return v
+            new = _PS_MARK_RE.sub(rep, s)
+            if opt_empty and not new.strip():
+                p = t
+                while p is not None and p.tag != qn('w:p'):
+                    p = p.getparent()
+                if p is not None:
+                    drop_paras.append(p)
+                continue
+            lines = new.replace('\r\n', '\n').split('\n')
+            t.text = lines[0]
+            t.set(xml_space, 'preserve')
+            # 📋 표 칸의 여러 줄은 **문단으로** 되살린다 — 원본 칸이 'Preferred' / 'Block' 처럼
+            #    문단 둘이었다(실측). 줄바꿈(w:br)으로 넣으면 모양은 비슷해도 같은 문서가 아니다.
+            p_el = t.getparent()
+            while p_el is not None and p_el.tag != qn('w:p'):
+                p_el = p_el.getparent()
+            if len(lines) > 1 and p_el is not None and p_el.getparent() is not None \
+                    and p_el.getparent().tag == qn('w:tc'):
+                import copy as _copy
+                anchor = p_el
+                for ln in lines[1:]:
+                    np_el = _copy.deepcopy(p_el)
+                    ts = list(np_el.iter(w_t))
+                    for k2, t2 in enumerate(ts):
+                        t2.text = ln if k2 == 0 else ''
+                        t2.set(xml_space, 'preserve')
+                    anchor.addnext(np_el)
+                    anchor = np_el
+                continue
+            if len(lines) > 1:
+                r = t.getparent()
+                at = list(r).index(t)
+                for ln in lines[1:]:
+                    br = r.makeelement(qn('w:br'), {})
+                    nt = r.makeelement(w_t, {})
+                    nt.text = ln
+                    nt.set(xml_space, 'preserve')
+                    r.insert(at + 1, br)
+                    r.insert(at + 2, nt)
+                    at += 2
+    for p in drop_paras:
+        par = p.getparent()
+        if par is not None:
+            par.remove(p)
+
+
+def _ps_image_bytes(item):
+    """그림 하나 — 프런트가 보낸 `{folder,name}`(NAS 첨부) 또는 `{b64}`(불러오기 미리보기)."""
+    import base64
+    if not isinstance(item, dict):
+        return None
+    if item.get('b64'):
+        try:
+            return base64.b64decode(item['b64'])
+        except Exception:
+            return None
+    folder = str(item.get('folder') or '')
+    name_f = _docstore_safe_name(item.get('name'))
+    if not folder or not name_f:
+        return None
+    path, err = _docstore_dir(folder)
+    if err:
+        return None
+    fp = os.path.join(path, name_f)
+    if not os.path.isfile(fp):
+        return None
+    with open(fp, 'rb') as f:
+        return f.read()
+
+
+def _ps_fill_images(doc, images):
+    """`slot:<열쇠>` 그림의 바이트만 바꾼다. 원래 상자(cx,cy) 안에 **비율을 지켜** 맞춘다 —
+    같은 계열 사양서에서 불러온 그림이면 비율이 같아 원본과 똑같은 크기가 된다.
+    그림이 없는 칸은 **그 그림을 지운다**(회색 자리 그림이 인쇄되면 안 된다). 반환: (채움, 지움)."""
+    from docx.oxml.ns import qn
+    filled, removed = [], []
+    for dr in list(doc.element.body.iter(qn('w:drawing'))):
+        docpr = dr.find('.//' + qn('wp:docPr'))
+        if docpr is None:
+            continue
+        descr = docpr.get('descr') or ''
+        if not descr.startswith('slot:'):
+            continue
+        key = descr[5:]
+        lst = images.get(key) or []
+        blob = None
+        want = None
+        pos = None
+        for it in (lst if isinstance(lst, list) else [lst]):
+            blob = _ps_image_bytes(it)
+            if blob:
+                pos = {k2: it.get(k2) for k2 in ('ph', 'pv') if isinstance(it.get(k2), int)}
+                # 📐 불러온 그림은 **원래 문서의 크기**(EMU)를 들고 온다 — 양식 상자는 다른 파일에서
+                #    만들어져 비율이 달라(실측 Upper 블록도가 절반 크기로 줄었다) 그대로 써야 같은 문서가 된다.
+                try:
+                    if int(it.get('cx') or 0) > 0 and int(it.get('cy') or 0) > 0:
+                        want = (int(it['cx']), int(it['cy']))
+                except Exception:
+                    want = None
+                break
+        if not blob:
+            run = dr.getparent()
+            if run is not None:
+                run.remove(dr)
+            removed.append(key)
+            continue
+        try:
+            rid, img = doc.part.get_or_add_image(io.BytesIO(blob))
+        except Exception:
+            run = dr.getparent()
+            if run is not None:
+                run.remove(dr)
+            removed.append(key)
+            continue
+        blip = dr.find('.//{%s}blip' % _PS_A)
+        blip.set('{%s}embed' % _PS_R, rid)
+        ext = dr.find('.//' + qn('wp:extent'))
+        try:
+            cx, cy = int(ext.get('cx')), int(ext.get('cy'))
+            pw, ph = img.px_width, img.px_height
+            ncx = ncy = 0
+            if want:
+                ncx, ncy = want
+            elif cx > 0 and cy > 0 and pw and ph:
+                scale = min(cx / float(pw), cy / float(ph))
+                ncx, ncy = int(pw * scale), int(ph * scale)
+            if ncx and ncy:
+                ext.set('cx', str(ncx))
+                ext.set('cy', str(ncy))
+                for a_ext in dr.iter('{%s}ext' % _PS_A):
+                    if a_ext.get('cx') is not None:
+                        a_ext.set('cx', str(ncx))
+                        a_ext.set('cy', str(ncy))
+        except Exception:
+            pass
+        for axis in ('H', 'V'):
+            pv = pos.get('p' + axis.lower()) if pos else None
+            po = dr.find('.//' + qn('wp:position' + axis) + '/' + qn('wp:posOffset'))
+            if pv is not None and po is not None:
+                po.text = str(int(pv))
+        docpr.set('descr', '')
+        docpr.set('name', 'Picture %s' % key)
+        filled.append(key)
+    return filled, removed
+
+
+@app.route('/doc/product-spec-docx', methods=['POST'])
+def doc_product_spec_docx():
+    """📗 PRODUCT SPEC 를 원본 양식 그대로 채워 돌려준다.
+    받는 것: `{ name, variant:'base'|'touch', values:{칸:값}, images:{img_*:[{folder,name}|{b64}]} }`
+    ⚠️ 읽기 전용 — NAS 에 쓰지 않는다(그림만 읽는다)."""
+    try:
+        from docx import Document
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'python-docx 가 없습니다: %s' % e}), 500
+    req = request.get_json(silent=True) or {}
+    variant = 'touch' if req.get('variant') == 'touch' else 'base'
+    tpl = _PS_TEMPLATES[variant]
+    if not os.path.exists(tpl):
+        return jsonify({'ok': False, 'error': '양식 파일을 찾을 수 없습니다 — 백엔드를 재시작해 주세요.'}), 404
+    values = req.get('values') or {}
+    images = req.get('images') or {}
+    if not isinstance(values, dict):
+        values = {}
+    if not isinstance(images, dict):
+        images = {}
+    try:
+        doc = Document(tpl)
+        # ⚠️ 빈 줄 맞추기를 **먼저** — 글 채우기가 빈 선택 줄(Features)을 지우면 내용 요소 수가 바뀐다.
+        layout_ok = _ps_apply_layout(doc, req.get('layout')) if req.get('layout') else None
+        _ps_fill_text(doc, values)
+        _ps_fill_images(doc, images)
+        cp = doc.core_properties
+        cp.title = 'TFT LCD MONITOR'
+        cp.author = str(req.get('author') or '')[:80]
+        cp.last_modified_by = cp.author
+        bio = io.BytesIO()
+        doc.save(bio)
+        bio.seek(0)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': '양식을 채우지 못했습니다: %s' % e}), 500
+    name = _docstore_safe_name(req.get('name') or 'PRODUCT SPEC') or 'PRODUCT SPEC'
+    if not name.lower().endswith('.docx'):
+        name += '.docx'
+    return send_file(bio, as_attachment=True, download_name=name,
+                     mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+
+def _ps_para_text(p_el):
+    from docx.oxml.ns import qn
+    return ''.join(t.text or '' for t in p_el.iter(qn('w:t')))
+
+
+def _ps_is_filler(el):
+    """쪽 맞춤용 **빈 줄** — 글·그림·구역 나눔·쪽 나눔이 없는 문단. 사람이 쪽을 맞추려고 넣고 뺀다
+    (실측: Upper 는 블록도가 커서 그 아래 빈 줄 4개를 지워 뒀다 — 빈 줄을 양식 그대로 두면 한 쪽이 밀린다)."""
+    from docx.oxml.ns import qn
+    if el.tag != qn('w:p'):
+        return False
+    if _ps_para_text(el).strip():
+        return False
+    for tag in ('w:drawing', 'w:object', 'w:pict', 'w:sectPr'):
+        if el.find('.//' + qn(tag)) is not None:
+            return False
+    for br in el.iter(qn('w:br')):
+        if br.get(qn('w:type')) == 'page':
+            return False
+    return True
+
+
+def _ps_layout_of(body_children):
+    """내용 요소마다 그 **앞에 있는 빈 줄 수** + 끝의 빈 줄 수. 내용 요소 = 빈 줄이 아닌 본문 요소."""
+    from docx.oxml.ns import qn
+    gaps, run = [], 0
+    for el in body_children:
+        if el.tag == qn('w:sectPr'):
+            continue
+        if _ps_is_filler(el):
+            run += 1
+            continue
+        gaps.append(run)
+        run = 0
+    gaps.append(run)
+    return gaps
+
+
+def _ps_apply_layout(doc, gaps):
+    """양식의 빈 줄 수를 `gaps` 에 맞춘다(불러온 원본의 쪽 맞춤 그대로). 모양이 안 맞으면(내용 요소 수가 다르면) 손대지 않는다."""
+    import copy as _copy
+    from docx.oxml.ns import qn
+    body = doc.element.body
+    kids = [el for el in body.iterchildren() if el.tag != qn('w:sectPr')]
+    groups, cur = [], []
+    contents = []
+    for el in kids:
+        if _ps_is_filler(el):
+            cur.append(el)
+        else:
+            groups.append(cur)
+            contents.append(el)
+            cur = []
+    groups.append(cur)
+    if not isinstance(gaps, list) or len(gaps) != len(groups):
+        return False
+    for k, fillers in enumerate(groups):
+        want = gaps[k]
+        try:
+            want = max(0, min(60, int(want)))
+        except Exception:
+            continue
+        have = len(fillers)
+        if have > want:
+            for el in fillers[want:]:
+                body.remove(el)
+        elif have < want:
+            proto = fillers[-1] if fillers else None
+            anchor_after = fillers[-1] if fillers else (contents[k - 1] if k > 0 else None)
+            for _ in range(want - have):
+                if proto is not None:
+                    ne = _copy.deepcopy(proto)
+                else:
+                    ne = body.makeelement(qn('w:p'), {})
+                if anchor_after is not None:
+                    anchor_after.addnext(ne)
+                else:
+                    body.insert(0, ne)
+                anchor_after = ne
+    return True
+
+
+def _ps_detect_variant(doc):
+    """터치 장('Touch Controller' 제목 문단)이 있으면 touch 판."""
+    from docx.oxml.ns import qn
+    for el in doc.element.body.iterchildren():
+        if el.tag == qn('w:p') and _ps_para_text(el).strip() == 'Touch Controller':
+            return 'touch'
+    return 'base'
+
+
+def _ps_parse(src_bytes):
+    """기존 사양서(.docx) → 칸 값·그림. 양식과 **같은 자리**(본문 몇 번째 요소·몇 번째 표의 몇 행 몇 열)에서 읽는다.
+    ⚠️ 구조가 다른 문서면 자리가 어긋난다 — 그래서 표식이 없는 문단(공통 글)을 양식과 맞대어 본
+    **일치율**을 같이 돌려준다(낮으면 화면이 경고한다). 맞추지 못한 칸은 `skipped` 로 드러낸다."""
+    import base64
+    from docx import Document
+    from docx.oxml.ns import qn
+    schema = _ps_load_schema()
+    src = Document(io.BytesIO(src_bytes))
+    variant = _ps_detect_variant(src)
+    tpl = Document(_PS_TEMPLATES[variant])
+    sb_all = list(src.element.body.iterchildren())
+    tb_all = list(tpl.element.body.iterchildren())
+    values, images, skipped = {}, {}, []
+
+    # 📍 자리 맞추기 — **빈 문단은 빼고** "내용 있는 요소"(표·글 문단·그림 문단)의 순서로 맞춘다.
+    #    ⚠️ 같은 계열 사양서라도 빈 줄 개수가 다르다(실측: Upper 가 Topper 보다 빈 줄이 많아
+    #       '본문 몇 번째 요소'로 읽으니 공통 글 일치율이 15% 로 떨어졌다).
+    def _is_content(el):
+        if el.tag == qn('w:tbl'):
+            return True
+        if el.tag != qn('w:p'):
+            return False
+        if _ps_para_text(el).strip():
+            return True
+        return el.find('.//' + qn('w:drawing')) is not None or el.find('.//' + qn('w:object')) is not None \
+            or el.find('.//' + qn('w:pict')) is not None
+    tpl_pos = {}
+    k = 0
+    for i, el in enumerate(tb_all):
+        if _is_content(el):
+            tpl_pos[i] = k
+            k += 1
+    sb = [el for el in sb_all if _is_content(el)]
+
+    def _src_at(tpl_index):
+        pos = tpl_pos.get(tpl_index)
+        return sb[pos] if pos is not None and pos < len(sb) else None
+
+    # 일치율 — 표식 없는 글 문단을 같은 자리끼리 비교
+    checked = same = 0
+    for i, el in enumerate(tb_all):
+        if el.tag != qn('w:p') or i not in tpl_pos:
+            continue
+        t = _ps_para_text(el).strip()
+        if not t or '{{' in t:
+            continue
+        checked += 1
+        s_el = _src_at(i)
+        if s_el is not None and s_el.tag == qn('w:p') and _ps_para_text(s_el).strip()[:40] == t[:40]:
+            same += 1
+
+    # 문단
+    for key, info in (schema.get('paras') or {}).items():
+        bi = info.get('bodyIndex')
+        s_el = _src_at(bi) if bi is not None else None
+        if s_el is None or s_el.tag != qn('w:p'):
+            skipped.append(key)
+            continue
+        text = _ps_para_text(s_el)
+        if info.get('prefix'):
+            lead = len(text) - len(text.lstrip())
+            m = re.match(info['prefix'], text[lead:])
+            if not m:
+                skipped.append(key)
+                continue
+            # ⚠️ 앞뒤 공백도 **그대로** — 원본 제목이 ' J1 : 4 Pin…' 처럼 앞에 한 칸을 둔 곳이 있다(실측, 잘랐더니 한 글자 밀렸다)
+            values[key] = text[lead + m.end():]
+        else:
+            values[key] = text
+
+    # 표
+    stables = src.tables
+    for prefix, info in (schema.get('tables') or {}).items():
+        if info.get('when') == 'touch' and variant != 'touch':
+            continue
+        ti = info.get('index')
+        if ti is None or ti >= len(stables):
+            skipped.append(prefix)
+            continue
+        st = stables[ti]
+        for r, row in enumerate(info.get('rows') or []):
+            for cell in row.get('cells') or []:
+                key = cell.get('key')
+                if not key:
+                    continue
+                m = re.match(r'^[A-Za-z0-9]+\.r(\d+)\.c(\d+)$', key)
+                if m:
+                    rr, cc = int(m.group(1)), int(m.group(2))
+                else:
+                    lab = (schema.get('labels') or {}).get(key) or {}
+                    rr, cc = lab.get('row'), lab.get('col')
+                try:
+                    values[key] = st.cell(rr, cc).text
+                except Exception:
+                    skipped.append(key)
+
+    # 머리글
+    for rx_key, rx in (schema.get('header') or {}).items():
+        for root in _ps_parts_xml(src)[1:]:
+            for p in root.iter(qn('w:p')):
+                m = re.search(rx, _ps_para_text(p))
+                if m:
+                    values[rx_key] = m.group(1).strip()
+                    break
+            if rx_key in values:
+                break
+
+    # 그림 — 같은 자리 문단의 그림(picture) 바이트
+    for key, info in (schema.get('images') or {}).items():
+        when = info.get('when')
+        if when in ('base', 'touch') and when != variant:
+            continue
+        bi = (info.get('bodyIndexByVariant') or {}).get(variant, info.get('bodyIndex'))
+        s_el = _src_at(bi) if bi is not None else None
+        if s_el is None:
+            skipped.append(key)
+            continue
+        got = None
+        for dr in s_el.iter(qn('w:drawing')):
+            gd = dr.find('.//{%s}graphicData' % _PS_A)
+            if gd is None or not gd.get('uri', '').endswith('/picture'):
+                continue
+            blip = dr.find('.//{%s}blip' % _PS_A)
+            rid = blip.get('{%s}embed' % _PS_R) if blip is not None else None
+            if rid and rid in src.part.rels:
+                part = src.part.rels[rid].target_part
+                got = {'b64': base64.b64encode(part.blob).decode('ascii'),
+                       'mime': part.content_type, 'ext': os.path.splitext(part.partname)[1].lstrip('.')}
+                ext_el = dr.find('.//' + qn('wp:extent'))
+                if ext_el is not None:
+                    got['cx'] = int(ext_el.get('cx') or 0)
+                    got['cy'] = int(ext_el.get('cy') or 0)
+                # 떠 있는 그림(anchor)은 **자리**도 — 같은 계열이라도 원본마다 조금씩 다르다(실측 Upper 외형도)
+                for axis in ('H', 'V'):
+                    po = dr.find('.//' + qn('wp:position' + axis) + '/' + qn('wp:posOffset'))
+                    if po is not None and (po.text or '').strip().lstrip('-').isdigit():
+                        got['p' + axis.lower()] = int(po.text.strip())
+                break
+        if got:
+            images[key] = got
+        else:
+            skipped.append(key)
+    # 📏 쪽 맞춤 빈 줄 — 원본과 양식의 내용 요소 수가 같을 때만 싣는다(아니면 양식 그대로 둔다)
+    layout = _ps_layout_of(list(src.element.body.iterchildren()))
+    if len(layout) != len(_ps_layout_of(tb_all)):
+        layout = None
+    return {'ok': True, 'variant': variant, 'values': values, 'images': images, 'skipped': skipped,
+            'layout': layout,
+            'align': {'checked': checked, 'same': same,
+                      'ratio': round(same / float(checked), 3) if checked else 0}}
+
+
+@app.route('/doc/product-spec-parse', methods=['POST'])
+def doc_product_spec_parse():
+    """📥 기존 PRODUCT SPEC(.docx)을 읽어 칸 값·그림을 돌려준다(쓰지 않는다 — 적용은 화면에서 사람이)."""
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'ok': False, 'error': '파일이 없습니다.'}), 400
+    data = f.read()
+    if not data[:2] == b'PK':
+        return jsonify({'ok': False, 'error': 'Word 문서(.docx)가 아닙니다.'}), 400
+    if not all(os.path.exists(p) for p in _PS_TEMPLATES.values()) or not os.path.exists(_PS_SCHEMA):
+        return jsonify({'ok': False, 'error': '양식 파일을 찾을 수 없습니다 — 백엔드를 재시작해 주세요.'}), 404
+    try:
+        return jsonify(_ps_parse(data))
+    except Exception as e:
+        return jsonify({'ok': False, 'error': '문서를 읽지 못했습니다: %s' % e}), 500
 
 
 @app.route('/doc/export-zip', methods=['POST'])

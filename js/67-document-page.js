@@ -584,6 +584,13 @@
             var revNum0 = Math.max(0, (parseInt(String(revNow0 || 'R1').slice(1), 10) || 1) - 1);
             return { v: (revNum0 < 10 ? '0' : '') + revNum0, src: _t('지금 보는 리비전', 'current revision') };
         }
+        // 🔌 [2026-11-24] 다른 파일이 붙이는 자동값 — `'<훅>:<칸>'` (js/76 PRODUCT SPEC 의 'ps:…').
+        //    서식마다 출처가 수십 가지라 여기 늘어놓지 않고 그 서식 파일이 데이터(`PS_AUTO`)로 들고 있다.
+        var hkAt = from.indexOf(':');
+        if (hkAt > 0 && window.DOC_AUTO_HOOKS && typeof window.DOC_AUTO_HOOKS[from.slice(0, hkAt)] === 'function') {
+            try { return window.DOC_AUTO_HOOKS[from.slice(0, hkAt)](ctx, from.slice(hkAt + 1)) || { v: '', src: '' }; }
+            catch (eHk) { return { v: '', src: '⚠️ ' + ((eHk && eHk.message) || eHk) }; }
+        }
         if (from.indexOf('mat:') === 0) {
             var p = from.split(':');
             var hit = (ctx.materials || []).filter(function (m) { return m.cat === p[1]; })[0];
@@ -717,6 +724,17 @@
     };
     var _hasOwn = function (id, key) {
         return Object.prototype.hasOwnProperty.call(_docData(id).fields, key);
+    };
+    // 🔌 [2026-11-24] 다른 서식 파일(js/76)이 읽는 입구 — 지금 리비전·모델의 문서 통 / 사람이 적은 값 /
+    //    **다른 리비전**에 적어 둔 값(개정 이력 표가 R1..R5 를 한꺼번에 보여 준다).
+    window._docDataOf = function (id) { return _docData(id); };
+    window._docFieldOwn = function (id, key) {
+        var f = _docData(id).fields;
+        return Object.prototype.hasOwnProperty.call(f, key) ? f[key] : undefined;
+    };
+    window._docRevisionFields = function (id, rev) {
+        var revs = _docContainer(id).revisions || {};
+        return (revs[rev] && revs[rev].fields) || null;
     };
     var _formById = function (id) {
         // ⚠️ 숨긴 서식도 **찾을 수 있어야 한다** — 출고 이력의 주인이 `proto-req` 이고,
@@ -6360,6 +6378,11 @@
             await window._labelSpecImportFile(file, form.id);
             return;
         }
+        // 🔌 [2026-11-24] 서식이 제 불러오기를 들고 있으면 그걸 쓴다(js/76 PRODUCT SPEC — 기존 사양서 .docx)
+        if (typeof form.importFile === 'function') {
+            await form.importFile(file);
+            return;
+        }
         if (window._docCanRead && !window._docCanRead(file.name)) {
             _toast('⚠️ ' + (window._docReadHint ? window._docReadHint(file.name)
                 : _t('이 종류는 아직 못 읽습니다.', 'Cannot read this type.')), 'error');
@@ -6585,6 +6608,12 @@
         var ctx = window._dgCollect(), opt = { stage: st.stage };
         var name = form.nameOf(ctx, opt).replace(/\.(pptx|xlsx|docx)$/i, '') + '.docx';
         _toast('⏳ ' + _t('원본 문서를 만드는 중…', 'Building…'), 'info');
+
+        // 🔌 [2026-11-24] 서식이 제 원본저장을 들고 있으면 그걸 쓴다(js/76 PRODUCT SPEC — 원본 .docx 양식 채우기).
+        //    true 를 돌려주면 끝(성공이든 실패 안내든 그 서식이 말했다).
+        if (typeof form.docxSave === 'function') {
+            if (await form.docxSave(ctx, name)) return;
+        }
 
         // 📑 [2026-11-19] Sample Report 는 **원본 .docx 양식**을 그대로 쓴다(표 19개·체크시트
         //    6장·사진 실제 삽입). 백엔드가 재시작 전이면(404) 기존 일반 `/doc/docx` 로 조용히
