@@ -930,7 +930,7 @@ button:disabled:not(.topbar-menu-item), input[type="button"]:disabled, input[typ
 /* 머리글은 **한 줄 고정** — 열이 90개라 두세 줄로 접히면 표가 세로로 뚱뚱해진다.
    글자는 줄임말(PL_SHORT)로 짧게 쓰고, 넘치면 …로 자르며, 원래 이름은 말풍선(title)에 있다. */
 .pl-table th {
-    position: sticky; top: 0; z-index: 4; background: #e0f5f7; color: #00707d;
+    position: sticky; top: 0; z-index: 4; background: #eef6f7; color: #00707d;   /* 2026-11-24: bg -> headerTint (다른 표와 같게) */
     border-bottom: 1px solid #a3d9e0; border-right: 1px solid #d9e9ec;
     padding: 6px; text-align: left; font-size: 11px; line-height: 1.2;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none;
