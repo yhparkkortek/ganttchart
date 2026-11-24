@@ -501,7 +501,9 @@
         });
         if (!codes.length) return { ok: true, matched: 0, total: 0 };
 
-        var CHUNK = 200;
+        // ⏱ [2026-11-24 실측] 200개씩이면 한 번 호출이 백엔드 제한 시간(90초)을 넘긴다 — 124개를 한 번에 보내니
+        //    타임아웃으로 보강이 통째로 실패했다(제조사·단가가 빈 BOM). 30개 = 16.6초 실측 → 40개씩(약 25초).
+        var CHUNK = 40;
         var byMat = {}, failed = 0;
         for (var i = 0; i < codes.length; i += CHUNK) {
             var part = codes.slice(i, i + CHUNK);
@@ -623,6 +625,9 @@
                 notes: prev.notes || {},      // 사람이 쓴 비고는 재조회해도 보존(구성부품번호 기준)
                 locations: prev.locations || {} // Location 정보도 재조회 후 보존
             };
+            // 💾 [2026-11-24 실측 버그] 저장할 변경으로 표시 — BOM 탭은 그동안 한 번도 표시하지 않아서, SAP 에서 새로 받은
+            //    BOM·적은 비고가 자동저장에서 빠졌다(저장 버튼을 직접 누를 때만 실렸다). 앱의 표시는 `_markNonGanttDirty`(js/04a).
+            if (window._markNonGanttDirty) window._markNonGanttDirty();
             window._bomSetStatus('', ''); // 직전 실패 메시지가 성공 후에도 남지 않도록 비운다
             window.bomRender();
             if (window.showToast) window.showToast(_t('BOM ' + parsed.rows.length + '건을 가져왔습니다.', 'Fetched ' + parsed.rows.length + ' BOM rows.'), 'success');
@@ -651,6 +656,7 @@
         st.notes = st.notes || {};
         if (el.value && el.value.trim()) st.notes[el.dataset.bomNote] = el.value;
         else delete st.notes[el.dataset.bomNote];
+        if (window._markNonGanttDirty) window._markNonGanttDirty();
     };
 
     window.bomSetLocation = function (el) {
@@ -661,6 +667,7 @@
         st.locations = st.locations || {};
         if (el.value && el.value.trim()) st.locations[el.dataset.bomLoc] = el.value;
         else delete st.locations[el.dataset.bomLoc];
+        if (window._markNonGanttDirty) window._markNonGanttDirty();
     };
 
     // 비고/Location 칸은 좁아서 긴 메모를 쓰기 어렵다 — 쓰는 동안만 넓은 입력창으로 띄우고(절대배치라
@@ -1405,6 +1412,7 @@
         st.notes = st.notes || {};
         if (el.value && el.value.trim()) st.notes[el.dataset.bomNote] = el.value;
         else delete st.notes[el.dataset.bomNote];
+        if (window._markNonGanttDirty) window._markNonGanttDirty();
     };
 
     window._elecBomSetLoc = function (el) {
@@ -1416,6 +1424,7 @@
         st.locations = st.locations || {};
         if (el.value && el.value.trim()) st.locations[el.dataset.bomLoc] = el.value;
         else delete st.locations[el.dataset.bomLoc];
+        if (window._markNonGanttDirty) window._markNonGanttDirty();
     };
 
     window._elecBomExportExcel = async function () {
@@ -1590,6 +1599,7 @@
                 notes: prev.notes || {},
                 locations: prev.locations || {}
             };
+            if (window._markNonGanttDirty) window._markNonGanttDirty();
             window._elecBomSetStatus('', '');
             window._elecBomRender();
             if (window.showToast) window.showToast(_t('BOM ' + parsed.rows.length + '건을 가져왔습니다.', 'Fetched ' + parsed.rows.length + ' BOM rows.'), 'success');
