@@ -9779,14 +9779,14 @@ ${docsJson}`;
             const ok = await window.saveGanttQaPromptToDrive(text);
             if (ok) {
                 localStorage.removeItem('gantt_qa_prompt_pending_push');
-                alert(window._t('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v', '✅ Improved prompt adopted and saved to Drive. (v') + window._ganttQaPromptVersion + ')');
+                window.showToast(window._t('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v', '✅ Improved prompt adopted and saved to Drive. (v') + window._ganttQaPromptVersion + ')', 'success', 4000);
             } else {
                 localStorage.setItem('gantt_qa_prompt_pending_push', '1');
                 alert(window._t('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.', '⚠️ Saved locally, but uploading to Drive failed. It will retry automatically on the next Drive connection.'));
             }
         } else {
             localStorage.setItem('gantt_qa_prompt_pending_push', '1');
-            alert(window._t('✅ 개선된 프롬프트가 채택되었습니다. (v', '✅ Improved prompt adopted. (v') + window._ganttQaPromptVersion + window._t(')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)', ')\n(Drive not connected — will sync to the shared team copy on next connection)'));
+            window.showToast(window._t('✅ 개선된 프롬프트가 채택되었습니다. (v', '✅ Improved prompt adopted. (v') + window._ganttQaPromptVersion + window._t(')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)', ')\n(Drive not connected — will sync to the shared team copy on next connection)'), 'success', 6000);
         }
         modal.style.display = 'none';
         if (document.getElementById('gantt-qa-prompt-textarea')) document.getElementById('gantt-qa-prompt-textarea').value = text;
@@ -12577,7 +12577,7 @@ ${docsJson}`;
         localStorage.removeItem('gantt_qa_prompt_logs');
         localStorage.removeItem('gantt_qa_prompt_versions');
         document.getElementById('gantt-qa-prompt-log-modal').style.display = 'none';
-        alert(window._t('✅ 이력이 삭제되었습니다.', '✅ History deleted.'));
+        window.showToast(window._t('✅ 이력이 삭제되었습니다.', '✅ History deleted.'), 'success', 3000);
     };
 
     // ═══════════════════════════════════════════════════════════

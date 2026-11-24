@@ -365,7 +365,7 @@
             await window._uploadDriveFile(driveToken, folderId, hashFileId, 'gantt_pw_sync.json',
                 JSON.stringify({ hash: newHash, updatedAt: new Date().toISOString() }));
 
-            alert(window._t('☁️ SMTP + Telegram 전체 설정이 새 비밀번호로 자동 업데이트 완료!', '☁️ All SMTP + Telegram settings auto-updated with the new password!'));
+            window.showToast(window._t('☁️ SMTP + Telegram 전체 설정이 새 비밀번호로 자동 업데이트 완료!', '☁️ All SMTP + Telegram settings auto-updated with the new password!'), 'success', 4000);
         } catch(e) {
             alert(window._t('⚠️ Drive 자동 업데이트 실패: ', '⚠️ Drive auto-update failed: ') + e.message + window._t('\n수동으로 [Drive에 암호화 저장]을 눌러주세요.', '\nPlease click [Save encrypted to Drive] manually.'));
         }

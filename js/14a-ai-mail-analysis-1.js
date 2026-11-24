@@ -1414,10 +1414,10 @@ window.savePrompt = async function() {
     // ✅ 드라이브 연동 시 팀 공용 파일에도 업로드
     if (window.isDriveConnected) {
         const ok = await window.savePromptToDrive(text);
-        alert(ok ? window._t('✅ 프롬프트가 저장되고, 팀 공용(드라이브)에도 반영되었습니다.', '✅ Prompt saved and synced to the shared team copy (Drive).')
-                  : window._t('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. (콘솔 로그 확인)', '⚠️ Saved locally, but uploading to Drive failed. (check console log)'));
+        window.showToast(ok ? window._t('✅ 프롬프트가 저장되고, 팀 공용(드라이브)에도 반영되었습니다.', '✅ Prompt saved and synced to the shared team copy (Drive).')
+                  : window._t('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. (콘솔 로그 확인)', '⚠️ Saved locally, but uploading to Drive failed. (check console log)'), (ok ? 'success' : 'warning'), 5000);
     } else {
-        alert(window._t('✅ 프롬프트가 이 PC에 저장되었습니다.\n⚠️ 드라이브 미연동 상태라 팀과 공유되지는 않습니다.', '✅ Prompt saved on this PC.\n⚠️ Drive is not connected, so it is not shared with the team.'));
+        window.showToast(window._t('✅ 프롬프트가 이 PC에 저장되었습니다.\n⚠️ 드라이브 미연동 상태라 팀과 공유되지는 않습니다.', '✅ Prompt saved on this PC.\n⚠️ Drive is not connected, so it is not shared with the team.'), 'warning', 6000);
     }
 };
 
@@ -1428,7 +1428,7 @@ window.resetPrompt = function() {
 
     localStorage.removeItem('gantt_mail_prompt');
     document.getElementById('prompt-edit-textarea').value = window._defaultPromptTemplate || '';
-    alert(window._t('✅ 기본 프롬프트로 초기화되었습니다.\n(초기화 전 프롬프트는 "변경 이력"에서 복원할 수 있습니다)', '✅ Reset to the default prompt.\n(The prompt from before the reset can be restored from "Change History")'));
+    window.showToast(window._t('✅ 기본 프롬프트로 초기화되었습니다.\n(초기화 전 프롬프트는 "변경 이력"에서 복원할 수 있습니다)', '✅ Reset to the default prompt.\n(The prompt from before the reset can be restored from "Change History")'), 'success', 6000);
 };
 
 // ── Phase 7: 다중 프로젝트 동시 등록 ─────────────────────────────────────

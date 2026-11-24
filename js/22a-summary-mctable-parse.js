@@ -1289,7 +1289,7 @@ window._runPasswordSyncPrompt = async function() {
                 body: JSON.stringify({ password: newPw.trim(), tg_encrypted: tgEnc, mail_encrypted: mailEnc })
             });
             window.refreshTgStatus(); window.loadTgMemberList();
-            alert(window._t('✅ 비밀번호 동기화 완료! SMTP + Telegram 설정도 자동 업데이트되었습니다.', '✅ Password synced! SMTP + Telegram settings were also updated automatically.'));
+            window.showToast(window._t('✅ 비밀번호 동기화 완료! SMTP + Telegram 설정도 자동 업데이트되었습니다.', '✅ Password synced! SMTP + Telegram settings were also updated automatically.'), 'success', 4000);
             window._pendingPwSync = null;
             return;
         }

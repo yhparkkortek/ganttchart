@@ -419,8 +419,8 @@ window.importAddressFromGroupware = async function() {
         window._addrSelectedRows = new Set();
         window.renderAddressTable();
         window.AddressBook.save(merged); // 공유 저장소(NAS) 동기화 — 디바운스 3초
-        alert('✅ ' + _t('그룹웨어 주소록 ' + gwList.length + '명을 반영했습니다(공유 저장소에도 자동 반영됩니다).',
-                         'Applied ' + gwList.length + ' contacts from the groupware directory (also synced to the shared store).'));
+        window.showToast('✅ ' + _t('그룹웨어 주소록 ' + gwList.length + '명을 반영했습니다(공유 저장소에도 자동 반영됩니다).',
+                         'Applied ' + gwList.length + ' contacts from the groupware directory (also synced to the shared store).'), 'success', 4000);
         return;
     }
 
@@ -505,7 +505,7 @@ window._abOpenVersion = async function(fileId, fileName) {
         window.renderAddressTable();
         window.AddressBook.save(list); // 공유 저장소(NAS)에도 반영 — 디바운스 3초
         if (window.showToast) window.showToast('✅ ' + _t(fileName + ' 을(를) 적용했습니다(' + list.length + '명).', 'Applied ' + fileName + ' (' + list.length + ' contacts).'), 'success', 6000);
-        else alert('✅ ' + _t(fileName + ' 을(를) 적용했습니다(' + list.length + '명).', 'Applied ' + fileName + ' (' + list.length + ' contacts).'));
+        else window.showToast('✅ ' + _t(fileName + ' 을(를) 적용했습니다(' + list.length + '명).', 'Applied ' + fileName + ' (' + list.length + ' contacts).'), 'success', 4000);
     } catch (e) {
         alert('❌ ' + _t('이전 버전을 여는 중 오류: ', 'Error opening the earlier version: ') + e.message);
     }

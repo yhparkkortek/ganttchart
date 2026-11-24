@@ -2416,9 +2416,9 @@
 
         if (window.collectTabData) window.collectTabData();
         if (window._checkAllRequiredFields) window._checkAllRequiredFields();
-        alert(window._t('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.', 'Actual dates were synced from the Gantt level-0 tasks.') + (planSynced
+        window.showToast(window._t('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.', 'Actual dates were synced from the Gantt level-0 tasks.') + (planSynced
             ? window._t('\n(저장된 "최초 계획(킥오프)" 기준으로 계획 일정도 함께 반영했습니다)', '\n(Plan dates were also synced from the saved "initial plan (kickoff)")')
-            : window._t('\n(저장된 "최초 계획(킥오프)"이 없어 계획 일정은 그대로 두었습니다 — 신규 프로젝트 등록 시에만 자동 저장됩니다)', '\n(No saved "initial plan (kickoff)" — plan dates were left unchanged; it is only auto-saved when a new project is registered)')));
+            : window._t('\n(저장된 "최초 계획(킥오프)"이 없어 계획 일정은 그대로 두었습니다 — 신규 프로젝트 등록 시에만 자동 저장됩니다)', '\n(No saved "initial plan (kickoff)" — plan dates were left unchanged; it is only auto-saved when a new project is registered)')), 'success', 6000);
     };
 
     function toggleTranslation(btn, encodedText, transMode, boldBrackets) {

@@ -931,8 +931,8 @@ window._macCompactIndex = async function() {
                            'Move the unmatched-cluster backlog out of the index into an archive file (App_Config/unmatchedClusters_archive.json)? Recommended only while cluster detection is off.'))) return;
     try {
         const r = await window.mailRoutingCompactIndex();
-        alert(r.ok ? window._t(`✅ 군집 ${r.moved}개를 분리했습니다 (${r.beforeKB}KB → ${r.afterKB}KB)`, `✅ Moved ${r.moved} clusters (${r.beforeKB}KB → ${r.afterKB}KB)`)
-                   : window._t('⚠️ 분리하지 않았습니다: ' + (r.reason || ''), '⚠️ Not compacted: ' + (r.reason || '')));
+        window.showToast(r.ok ? window._t(`✅ 군집 ${r.moved}개를 분리했습니다 (${r.beforeKB}KB → ${r.afterKB}KB)`, `✅ Moved ${r.moved} clusters (${r.beforeKB}KB → ${r.afterKB}KB)`)
+                   : window._t('⚠️ 분리하지 않았습니다: ' + (r.reason || ''), '⚠️ Not compacted: ' + (r.reason || '')), (r.ok ? 'success' : 'warning'), 5000);
     } catch (e) { alert('⚠️ ' + e.message); }
 };
 
@@ -1338,7 +1338,7 @@ const AR = {
 
         AR.render(tabKey);
         window.recalculateSchedules();
-        alert(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`));
+        window.showToast(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`), 'success', 3000);
     },
 
     // 💡 체크한 항목들을 Gantt에 등록하지 않고 "업무 보관함"으로 한 번에 이동

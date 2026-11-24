@@ -346,14 +346,14 @@ window.applyImprovedPrompt = async function() {
         const ok = await window.savePromptToDrive(text);
         if (ok) {
             localStorage.removeItem('gantt_mail_prompt_pending_push');
-            alert(_en ? '✅ Improved prompt adopted & saved to Drive. (v' + window._promptVersion + ')' : '✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._promptVersion + ')');
+            window.showToast(_en ? '✅ Improved prompt adopted & saved to Drive. (v' + window._promptVersion + ')' : '✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._promptVersion + ')', 'success', 4000);
         } else {
             localStorage.setItem('gantt_mail_prompt_pending_push', '1');
             alert(_en ? '⚠️ Adopted locally, but Drive upload failed. Will retry automatically next time Drive connects.' : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.');
         }
     } else {
         localStorage.setItem('gantt_mail_prompt_pending_push', '1');
-        alert(_en ? '✅ Improved prompt adopted. (v' + window._promptVersion + ')\n(Drive not connected — will sync to the team on next connect)' : '✅ 개선된 프롬프트가 채택되었습니다. (v' + window._promptVersion + ')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)');
+        window.showToast(_en ? '✅ Improved prompt adopted. (v' + window._promptVersion + ')\n(Drive not connected — will sync to the team on next connect)' : '✅ 개선된 프롬프트가 채택되었습니다. (v' + window._promptVersion + ')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)', 'success', 6000);
     }
     modal.style.display = 'none';
 };
@@ -448,7 +448,7 @@ window.clearPromptLogs = function() {
     localStorage.removeItem('gantt_prompt_logs');
     localStorage.removeItem('gantt_prompt_versions');
     document.getElementById('prompt-log-modal').style.display = 'none';
-    alert(window._t('✅ 이력이 삭제되었습니다.', '✅ History deleted.'));
+    window.showToast(window._t('✅ 이력이 삭제되었습니다.', '✅ History deleted.'), 'success', 3000);
 };
         
 // 💡 [2026-08-20][WBS 레벨 추정] AI의 wbs레벨 판단은 프롬프트에 뚜렷한 기준이 없어 3/4에만 몰리는
@@ -905,6 +905,6 @@ window.insertMailTask = function() {
     logChange(pos, -1, "없음", `메일 분석으로 추가: ${built.taskName}`);
     window.closeMailAnalyzer();
     window.recalculateSchedules();
-    alert(`✅ "${built.taskName}" 업무가 추가되었습니다!`);
+    window.showToast(`✅ "${built.taskName}" 업무가 추가되었습니다!`, 'success', 3000);
 };
 

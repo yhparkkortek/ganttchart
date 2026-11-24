@@ -1082,7 +1082,7 @@ window.clearGeminiCache = function() {
         const k = sessionStorage.key(i);
         if (k && k.startsWith('gemini_cache')) { sessionStorage.removeItem(k); count++; }
     }
-    alert(count > 0 ? `🗑️ 분석 캐시 ${count}건을 초기화했습니다.\n다음 분석부터는 새로 계산됩니다.` : '초기화할 캐시가 없습니다.');
+    window.showToast(count > 0 ? `🗑️ 분석 캐시 ${count}건을 초기화했습니다.\n다음 분석부터는 새로 계산됩니다.` : '초기화할 캐시가 없습니다.', (count > 0 ? 'success' : 'info'), 4000);
 };
 
 // 💡 완료일이 AI 분석/파일첨부 등 어떤 경로로 와도 공통 적용되는 기본값 로직
@@ -1505,7 +1505,7 @@ window.mfBatchInsert = async function() {
 
     mfRenderList(window._mfResults);
     window.recalculateSchedules();
-    alert(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`));
+    window.showToast(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`), 'success', 3000);
 };
 
 // 날짜체크 없이 직접 삽입

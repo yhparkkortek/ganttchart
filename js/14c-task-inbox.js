@@ -2367,7 +2367,7 @@ window.inboxCleanupStorage = function() {
     const KEEP_PENDING_RAW_MAX = window.TaskInbox.KEEP_PENDING_RAW_MAX;
     const stalePendingCount = Math.max(0, before.filter(function(it) { return it.status === '대기' && it.mailRaw && it.mailRaw.body2000; }).length - KEEP_PENDING_RAW_MAX);
     if (!strippedCount && doneCount <= 300 && !stalePendingCount) {
-        alert(_en ? 'Nothing to clean up — no bulky completed items found.' : '정리할 항목이 없습니다. (완료 항목에 남은 메일 원문이 없거나 이미 정리돼 있습니다)');
+        window.showToast(_en ? 'Nothing to clean up — no bulky completed items found.' : '정리할 항목이 없습니다. (완료 항목에 남은 메일 원문이 없거나 이미 정리돼 있습니다)', 'info', 4000);
         return;
     }
     const extra = stalePendingCount
