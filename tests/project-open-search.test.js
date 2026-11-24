@@ -398,4 +398,37 @@ const reset = window._driveModalSearchState.q === '';
   const pbody = pa < 0 ? '' : s20.slice(pa, s20.indexOf('\n  window.', pa + 10));
   chk(pa >= 0 && pbody.indexOf('wrClassifyTasks()') !== -1 && pbody.indexOf('_wrSearch') === -1, '[Weekly] PPT 출력은 분류를 새로 부르고 찾기 상태를 안 읽는다(화면만 거른다)');
 }
+// ── Calendar(js/24 calRender · 날짜 팝업) — 진짜 js/24 를 불러 진짜 그리기 함수를 돌린다(DOM·간트 행만 가짜) ──
+{
+  const s24 = fs.readFileSync(path.join(__dirname, '..', 'js', '24-calendar-tab.js'), 'utf8');
+  const noop = () => {};
+  const page = { innerHTML: '', parentNode: { insertBefore: noop }, querySelectorAll: () => [] };
+  const popBody = { innerHTML: '' }, popTitle = { textContent: '' }, overlay = { style: {} };
+  const ids = { 'cal-page': page, 'cal-search-input': {}, 'cal-search-count': { textContent: '' }, 'cal-header-label': { textContent: '' },
+                'cal-day-popup-overlay': overlay, 'cal-day-popup-body': popBody, 'cal-day-popup-title': popTitle };
+  const doc = { getElementById: id => ids[id] || null, querySelectorAll: () => [], querySelector: () => null, addEventListener: noop,
+                createElement: () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop } }), readyState: 'complete', body: {} };
+  const W = { addEventListener: noop, _currentLang: 'ko', localStorage: { getItem: () => null, setItem: noop }, _t: (k) => k };
+  new Function('window', helpers)(W);
+  const now = new Date(); const ts = d => new Date(now.getFullYear(), now.getMonth(), d).getTime();
+  const row = (name, content, status, d) => Object.assign([name, content, status], { _level: 4, _알림: true, _calcStartTs: ts(d), _calcPlanTs: ts(d) });
+  const gd = [['h'], row('HARNESS 검토', '40P 300mm', '진행', 5), row('EDID 수정', 'V1.02 배포', '완료', 12), row('Back cover 도금', '도금 불량', '지연', 20), row('EDID 재검토', 'V1.03', '진행', 12)];
+  new Function('window', 'document', 'globalData', 'colIdx', 'wrTaskName', 'escapeHtml', 'wrFormatMD', 'localStorage', 'setTimeout', s24)
+    (W, doc, gd, { content: 1, status: 2 }, r => r[0], s => String(s), () => '', W.localStorage, noop);
+  W.getSummaryAssignee = () => '박용훈'; W.calSyncLevelFilterUI = noop; W.calSyncTaskModeBtn = noop;
+  W.calState.year = now.getFullYear(); W.calState.month = now.getMonth(); W.calState.viewMode = 'month';
+  const show = q => { W._calSearchTerm = q; W.calRender(); const h = page.innerHTML;
+    return ['HARNESS', 'EDID 수정', 'EDID 재검토', 'Back cover'].filter(k => h.indexOf(k) !== -1).join('|') + ' #' + ids['cal-search-count'].textContent; };
+  [['', 'HARNESS|EDID 수정|EDID 재검토|Back cover #', '빈 검색 = 전부'],
+   ['harness 300mm', 'HARNESS #1 / 4건', '업무명+내용 AND'],
+   ['v1 02', 'EDID 수정 #1 / 4건', '기호 무시'],
+   ['박용훈 지연', 'Back cover #1 / 4건', '담당자+상태 AND'],
+   ['edid', 'EDID 수정|EDID 재검토 #2 / 4건', '같은 날 두 건 중 둘 다']
+  ].forEach(([q, want, label]) => { const got = show(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [Calendar] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  // 날짜 팝업도 달력에 보인 것과 같게
+  W._calSearchTerm = '완료';
+  const key12 = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-12';
+  W.calShowDayPopup(key12);
+  chk(popBody.innerHTML.indexOf('EDID 수정') !== -1 && popBody.innerHTML.indexOf('EDID 재검토') === -1, '[Calendar] 날짜 팝업 목록도 같은 찾기로 거른다');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

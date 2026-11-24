@@ -232,7 +232,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
         // 날짜 숫자 클릭 → 업무 목록을 버튼으로 표시
         const events = allEvents.filter(function(ev) {
             const dk1 = calTsToKey(ev.start), dk2 = calTsToKey(ev.end);
-            return dateKey >= dk1 && dateKey <= dk2;
+            return dateKey >= dk1 && dateKey <= dk2 && window._calSearchKeep(ev);   // 🔍 달력에 보인 것과 같게
         }).sort(function(a, b) { return a.start - b.start; });
         title.textContent = window._t('📅 ' + dateKey + ' 업무 (' + events.length + '건)', '📅 ' + dateKey + ' Tasks (' + events.length + ')');
         if (events.length === 0) {
@@ -519,6 +519,42 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
         + '</div>';
 }
 
+// ─── 🔍 [2026-11-24 사용자 요청] Calendar 찾기 — 다른 페이지와 **같은 규칙**(js/04a `_searchMatchAll`:
+//     낱말 AND·공백/기호 무시). 한 일정 = 업무명·상세내용·상태·담당자(그룹웨어는 장소·캘린더 이름까지).
+//     달력 칸과 날짜 팝업 목록이 같은 걸 거른다(`_calSearchKeep` 하나). 걸린 날만 남고, 개수를 적는다.
+//     찾기칸은 다시 그려지는 `#cal-page` **밖**(바로 위)에 한 번만 만든다 — 안에 두면 글자마다 커서가 날아간다.
+//     ⚠️ ICS 내보내기·동기화는 찾기와 무관하게 전부(calBuildEvents 를 따로 부른다).
+window._calSearchTerm = '';
+window._calSearchToks = function () {
+    return (window._calSearchTerm && window._searchTokens) ? window._searchTokens(window._calSearchTerm) : [];
+};
+window._calSearchKeep = function (ev) {
+    const toks = window._calSearchToks();
+    if (!toks.length) return true;
+    const hay = [ev.name, ev.content, ev.status, ev.assignee, ev.gwCalendar, ev.gwLocation]
+        .map(function (v) { return v == null ? '' : String(v); }).join(' \u0001 ');
+    return window._searchMatchAll(hay, toks);
+};
+function _calEnsureSearchBar() {
+    if (document.getElementById('cal-search-input')) return;
+    const page = document.getElementById('cal-page');
+    if (!page || !page.parentNode) return;
+    const bar = document.createElement('div');
+    bar.className = 'tbl-search-bar';
+    bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin:0 0 6px 0;';
+    bar.innerHTML = '<input id="cal-search-input" type="search" autocomplete="off" style="width:240px;'
+        + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
+        + '<span id="cal-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+    page.parentNode.insertBefore(bar, page);
+    const inp = bar.querySelector('input');
+    const en = window._currentLang === 'en';
+    inp.placeholder = en ? '🔍 Find — task, content, status…' : '🔍 찾기 — 업무·내용·상태…';
+    inp.title = en ? 'Several words OK — an event matches when all words appear in it' : '여러 낱말 가능 — 한 일정에 낱말이 모두 있으면 걸립니다';
+    let t = null;
+    inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { window._calSearchTerm = inp.value; window.calRender(); }, 200); };
+    inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._calSearchTerm = ''; window.calRender(); } };
+}
+
 window.calRender = function() {
     window.calSyncLevelFilterUI(); // 💡 [드롭다운화] 탭을 열 때마다 트리거 버튼 강조 상태를 현재 필터와 맞춤
     window.calSyncTaskModeBtn(); // 📌 핀셋/WBS 업무 토글 버튼도 매번 현재 모드와 맞춤
@@ -534,6 +570,23 @@ window.calRender = function() {
     // 🏢 [2026-10-16] 그룹웨어 일정 겹쳐보기(js/39) — 켜져 있을 때만 같은 맵에 끼워 넣는다.
     //    간트 업무와 달리 시작~종료 모든 날에 걸쳐 들어온다.
     if (window._gwMergeIntoCalendar) window._gwMergeIntoCalendar(eventsByDay);
+    // 🔍 [2026-11-24 사용자 요청] 찾기 — 간트 업무·그룹웨어 일정 모두 같은 규칙(js/04a)으로 거른다
+    _calEnsureSearchBar();
+    const _calToks = window._calSearchToks();
+    if (_calToks.length) {
+        let _shown = 0, _total = 0;
+        Object.keys(eventsByDay).forEach(function (k) {
+            _total += eventsByDay[k].length;
+            eventsByDay[k] = eventsByDay[k].filter(window._calSearchKeep);
+            _shown += eventsByDay[k].length;
+            if (!eventsByDay[k].length) delete eventsByDay[k];
+        });
+        const _c = document.getElementById('cal-search-count');
+        if (_c) _c.textContent = _shown + ' / ' + _total + (window._currentLang === 'en' ? '' : '건');
+    } else {
+        const _c = document.getElementById('cal-search-count');
+        if (_c) _c.textContent = '';
+    }
     const todayKey = calDateKey(new Date());
     const selectedEvent = (window.calState.selectedIdx !== null) ? events.find(function(ev) { return ev.idx === window.calState.selectedIdx; }) : null;
 
