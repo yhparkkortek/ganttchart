@@ -2751,6 +2751,8 @@ tr.jira-zebra-b { background: #e8f2f3; }
 
 /* 🔍 [2026-11-24] JIRA 연결 이슈 찾기(js/70 findAfterRender) — 걸린 칸 강조. */
 #jira-table-wrap td.search-hit { background-color:#fff3bf !important; }
+/* 2026-11-24 Alarm/Notice search (js/22i TBL_SEARCH_TABLES text:true) */
+#alarm-table-body td.search-hit, #notice-table-body td.search-hit { background-color:#fff3bf !important; }
 
 /* 🔍 [2026-11-24] Daily Report 하루 보기 찾기(js/59) — 걸린 칸 강조. */
 #daily-report-page td.search-hit { background-color:#fff3bf !important; }

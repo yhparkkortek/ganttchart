@@ -1105,7 +1105,13 @@ window.TBL_SEARCH_TABLES = [
       skipRow: /(^|\s)mc-summary-row(\s|$)/,
       ko: '🔍 검색 — TYPE·ITEM·GROUP·P/N·Spec·Note…', en: '🔍 Search — type, item, group, P/N, spec, note…' },
     { key: 'bs', tbodyId: 'briefspec-body',
-      ko: '🔍 검색 — 항목·값·Note…', en: '🔍 Search — item, value, note…' }
+      ko: '🔍 검색 — 항목·값·Note…', en: '🔍 Search — item, value, note…' },
+    // 🔔 [2026-11-24 사용자 요청] Alarm / Notice — 입력칸이 아니라 **글자 칸** 표라 `text:true`(칸 글자로 찾는다).
+    //    두 표가 한 탭 안에 헤더를 하나씩 따로 가져서 `hdrId` 로 자기 헤더를 집는다(안 주면 둘 다 Alarm 헤더에 붙는다).
+    { key: 'alarm', tbodyId: 'alarm-table-body', hdrId: 'alarm-header-box', text: true,
+      ko: '🔍 검색 — 업무명·담당자·수신인·메일…', en: '🔍 Search — task, owner, recipient, mail…' },
+    { key: 'notice', tbodyId: 'notice-table-body', hdrId: 'notice-header-box', text: true,
+      ko: '🔍 검색 — 제목·내용·기준일…', en: '🔍 Search — title, body, date…' }
 ];
 (function () {
     var _en = function () { return window._currentLang === 'en'; };
@@ -1125,12 +1131,23 @@ window.TBL_SEARCH_TABLES = [
         var rows = Array.prototype.slice.call(tbody.rows);
         rows.forEach(function (tr) {
             tr.classList.remove('parts-search-hide', 'parts-search-show');
-            Array.prototype.forEach.call(tr.querySelectorAll('input'), function (el) { el.classList.remove('search-hit'); });
+            Array.prototype.forEach.call(tr.querySelectorAll('input, td'), function (el) { el.classList.remove('search-hit'); });
         });
         if (!toks.length) { if (countEl) countEl.textContent = ''; return; }
         var total = 0, shown = 0;
         rows.forEach(function (tr) {
             if (cfg.skipRow && cfg.skipRow.test(tr.className || '')) { tr.classList.add('parts-search-hide'); return; }
+            if (cfg.text) {   // 글자 칸 표(Alarm/Notice) — 칸 하나짜리 안내 줄('없습니다')은 세지 않는다
+                var cells = Array.prototype.slice.call(tr.cells);
+                if (cells.length < 2) return;
+                total++;
+                var hitT = window._searchMatchAll(cells.map(function (c) { return c.textContent || ''; }).join(' \u0001 '), toks);
+                tr.classList.add(hitT ? 'parts-search-show' : 'parts-search-hide');
+                if (!hitT) return;
+                shown++;
+                cells.forEach(function (c) { if (window._searchMatchAny(c.textContent || '', toks)) c.classList.add('search-hit'); });
+                return;
+            }
             var inputs = Array.prototype.slice.call(tr.querySelectorAll('input[data-field]'));
             if (!inputs.length) return;                      // '첫 행 추가' 같은 안내 줄
             total++;
@@ -1150,7 +1167,7 @@ window.TBL_SEARCH_TABLES = [
         var tbody = document.getElementById(cfg.tbodyId);
         // 🔍 [2026-11-24 "검색 UI 를 헤더로"] 그 표가 든 탭의 헤더에 🔍 버튼(js/22b `_hdrFindWidget`)
         var wrapEl = tbody && tbody.closest ? tbody.closest('.concept-tab-wrap') : null;
-        var hdr = wrapEl ? wrapEl.querySelector('.concept-header-box') : null;
+        var hdr = cfg.hdrId ? document.getElementById(cfg.hdrId) : (wrapEl ? wrapEl.querySelector('.concept-header-box') : null);
         if (!tbody || !hdr || !window._hdrFindWidget) return false;
         var w = window._hdrFindWidget({ id: cfg.key + '-search-bar', inputId: cfg.key + '-search-input', countId: cfg.key + '-search-count',
             ko: cfg.ko, en: cfg.en,
