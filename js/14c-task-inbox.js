@@ -325,6 +325,13 @@ window.updateInboxBadge = function() {
 window.openTaskInbox = function() {
     if (window._ibRepairPendingDates) window._ibRepairPendingDates(); // ⭐ [2026-09-23] 열 때 '날짜확인필요' 항목을 메일 수신일로 보수
     window.closeAllTopbarMenus(); // ✅ 업무 보관함 열릴 때 업무 드롭다운 자동 닫기
+    // 👀 [2026-11-24 사용자 요청 "대기를 기본 보기로"] 열 때마다 '대기'만 걸러 보여준다(사람이 처리할 것만).
+    //    대기가 0장이면 빈 목록 대신 전체. '전체 N건' 을 누르면 예전처럼 전체보기. 값은 TI_DEFAULT_VIEW_STATUS(데이터, ''=전체).
+    {
+        const dv = (window.TI_DEFAULT_VIEW_STATUS != null) ? window.TI_DEFAULT_VIEW_STATUS : '대기';
+        const has = dv && window.TaskInbox.load().some(function(it) { return it && it.status === dv; });
+        window._tiFilter = has ? { status: dv, project: null } : null;
+    }
     window.renderTaskInbox();
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); // 💡 미분류/신규발신자 배지가 이제 여기 있음
     if (window.refreshInboxCleanupModeButton) window.refreshInboxCleanupModeButton(); // 💡 처리됨 자동삭제/보관 토글 버튼 상태 갱신
@@ -561,6 +568,14 @@ window._tiBuildSummaryHtml = function(items) {
               `font-size:11px;white-space:nowrap;cursor:${window._tiRejudgeBusy ? 'wait' : 'pointer'};border:1px solid #a5c8f0;${window._tiRejudgeBusy ? 'opacity:.7;' : ''}">` +
               (window._tiRejudgeBusy ? (_en ? '⏳ Re-judging…' : '⏳ 재판정 중…') : (_en ? '🧭 Re-judge' : '🧭 재판정')) + `</span>`
             : '') +
+        // 📋 [2026-11-24] 전자결재 가져오기 — 기안·결재·참조/열람 문서함의 새 문서를 메일과 같은 판정기로 배치(js/75, AI 0회)
+        (window.approvalIntakeRun
+            ? (function () { const _b = window._approvalIntakeBusy && window._approvalIntakeBusy();
+                return `<span class="ti-apvscan" title="${_en ? 'Fetch new groupware approval documents (drafted / to approve / cc) and place them like mail (no AI)' : '그룹웨어 기안·결재·참조/열람 문서함의 새 문서를 메일처럼 판정해 배치합니다 (AI 안 씀)'}" ` +
+                  `style="display:inline-block;background:#e8f4fd;color:#1a4f7a;border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
+                  `font-size:11px;white-space:nowrap;cursor:${_b ? 'wait' : 'pointer'};border:1px solid #a5c8f0;${_b ? 'opacity:.7;' : ''}">` +
+                  (_b ? (_en ? '⏳ Fetching approvals…' : '⏳ 결재 가져오는 중…') : (_en ? '📋 Fetch approvals' : '📋 결재 가져오기')) + `</span>`; })()
+            : '') +
         `</div>`;
 
     // 🆕 [2026-11-23] 새 프로젝트 제안 — 대기 카드 여러 장이 **어느 프로젝트에도 없는** 모델 코드·관리번호를
@@ -713,6 +728,7 @@ window.renderTaskInbox = function() {
                 }
                 if (e.target.closest('.ti-undo-del')) { window._tiUndoBulkDelete(); return; }
                 if (e.target.closest('.ti-rejudge')) { window._tiRejudgeNow(); return; }
+                if (e.target.closest('.ti-apvscan')) { if (window.approvalIntakeRun && !(window._approvalIntakeBusy && window._approvalIntakeBusy())) window.approvalIntakeRun({ manual: true }); return; }
                 const npEl = e.target.closest('.ti-newproj');
                 if (npEl) { window._tiNewProjectOpen(npEl.dataset.key); return; }
                 const npX = e.target.closest('.ti-newproj-x');

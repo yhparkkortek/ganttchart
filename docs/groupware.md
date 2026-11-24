@@ -1525,3 +1525,29 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 + 아이디가 메일 @앞부분과 일치 · ④ 브릿지 폴백이 같은 비밀번호를 돌려줌 ·
 ⑤ 메일 저장 → `syncedGroupware=true`에 gw 파일 생성 · ⑥ gw 저장 → `syncedMail=true`,
 메일 user가 `<아이디>@kortek.co.kr`, **host/port 보존** · ⑦ `/mail/decrypt`는 동기화를 부르지 않음.
+
+## 📋 전자결재 문서 → 프로젝트 배치 (js/75, 2026-11-24 1차)
+
+요청: "전자결재 문서를 Email 가져오는 것처럼 가져와서 프로젝트에 배치 — 기안·결재·참조/열람·수신 문서함 모두 스캔 또는 매일 확인".
+사용자 결정: **구성부터 하고 기능 확인하면서 다듬는다.**
+
+### 흐름
+1. 문서함 목록 — `/gw/approval/doclist?box=draft|approve|viewer` (기존 라우트, 읽기 전용). 임시저장(`tempsave`)은 제외.
+2. 장부(`localStorage.gantt_apv_intake_v1`, 문서 id)에 없는 문서만. 첫 실행은 `backfillDays`(30일) 소급, 그보다 오래된 건 '본 것'으로만 적는다.
+3. 메일 모양으로 바꿔 js/74 판정기에 넘긴다 — subject=문서 제목, body=양식·문서번호·기안부서, sender=기안자. **AI 0회.**
+4. 확정 → 보관함 카드(`source: 📋 전자결재(문서함 → 프로젝트)`, `mailRaw.key = apv_<id>`, `mailRaw.approval={id,docNum,formName,status,url,…}`) + `_msAutoPlaceNewInboxItem`(자동등록 모드 문턱 그대로). 형제 모두 배치는 `_msRegisterToProjectTargets`.
+   애매 → 보관함 대기(후보 붙음) · 후보 없음 → 카드 없이 장부에 `no_match`(휴가·공지성 결재가 보관함을 덮지 않게) · 제외 양식(`skipForms`) → `skip_form`.
+5. 간트 행: 업무명 `[결재] 제목`, 시작일=기안일, 완료 문서는 상태 완료, 상세내용에 `[핵심내용]`·원문 링크·`[출처]`.
+
+### 배경/수동
+- 앱을 열고 90초 뒤, 그 뒤 120분마다 — **그룹웨어가 이미 로그인돼 있을 때만**(`/gw/status`). 배경에서 로그인을 걸지 않는다.
+- 보관함 요약 줄 `📋 결재 가져오기` — 사람이 누르면 `_gwEnsureLogin`(1회 시도·재시도 금지) 후 스캔.
+- 점검: `approvalIntakeLog()`(최근 50건), 다시 소급: `approvalIntakeReset()`(카드 열쇠로 중복은 계속 막힌다).
+
+### 1차에서 안 한 것 (다듬을 거리)
+- **수신 문서함** — 그 화면이 부르는 API 를 아직 CDP 로 관찰하지 못했다. 관찰 후 gw_bridge `_APPR_BOXES` + `APPROVAL_INTAKE.boxes` 에 한 줄씩.
+- **본문 읽기** — `approval_read` 는 그룹웨어 탭을 문서로 이동시킨다(사람이 보던 화면이 바뀐다). 본문으로 판정을 높이려면 `GET /api/approval/document/{id}` 를 이동 없이 부르는 라우트가 필요(⚠️ `docBodyContent` 엔 결재선 서명까지 있다 — 판정용 텍스트만 뽑을 것).
+- **상태 변경 반영** — 장부엔 최신 상태를 적지만 이미 넣은 간트 행(진행→완료/반려)은 아직 안 고친다.
+- 실제 그룹웨어 문서로 판정 품질 미확인 — 제목에 모델명이 없는 결재는 `no_match` 로 많이 빠질 수 있다.
+
+검증 `tests/approval-intake.browser.js` 18/18 (가짜: fetch `/gw/*`·`_msLoadProjectIndex`·`_msAutoRegisterToProject`·`_msRegisterToProjectTargets`·`isAutoRegisterEnabled`·보관함/장부 임시 키).
