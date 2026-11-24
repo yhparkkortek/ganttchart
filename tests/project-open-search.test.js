@@ -136,4 +136,42 @@ const reset = window._driveModalSearchState.q === '';
   chk(!trs[0].inputs[0].classList.has('search-hit'), '[주소록] 검색 지우면 강조도 지움');
   chk(misc['addr-search-count'].textContent === '', '[주소록] 검색 지우면 개수 표시 비움');
 }
+// ── PARTS 비교표(js/50 _partsSearchApply) — 진짜 소스를 잘라 돌린다(DOM 만 스텁) ──
+{
+  const s50 = fs.readFileSync(path.join(__dirname, '..', 'js', '50-parts-category-pages.js'), 'utf8');
+  const pa = s50.indexOf('// 🔍 [2026-11-24 사용자 요청] PARTS 비교표 검색');
+  if (pa < 0) { console.log('FAIL js/50 소스 자르기'); process.exit(1); }
+  const cl = () => { const s = new Set(); return { add: (...c) => c.forEach(x => s.add(x)), remove: (...c) => c.forEach(x => s.delete(x)), has: c => s.has(c) }; };
+  const td = (text, inputVal) => ({ textContent: text, classList: cl(), querySelector: () => (inputVal != null ? { value: inputVal } : null) });
+  const tr = (className, cells) => ({ className, cells, classList: cl(), textContent: cells.map(c => c.textContent).join('') });
+  const rows = [
+    tr('pc-section-row', [td('[General]')]),
+    tr('', [td('Model'), td('LM270WQ1-SSA1'), td('M270DAN02.6'), td('', '')]),
+    tr('pc-p2-row', [td('Brand'), td('LG Display'), td('AUO'), td('', '')]),
+    tr('pc-section-row', [td('[Optical]')]),
+    tr('', [td('Brightness'), td('350'), td('400'), td('', '고휘도 확인')]),
+    tr('', [td('Contrast'), td('1000:1'), td('3000:1'), td('', '')])];
+  const tbody = { rows };
+  const view = { style: { display: 'flex' }, querySelector: () => tbody };
+  const ids = { 'parts-search-count': { textContent: '' } };
+  const W = { _currentLang: 'ko' }; new Function('window', helpers)(W);
+  const doc = { readyState: 'complete', getElementById: id => ids[id] || null, querySelectorAll: () => [view], createElement: () => ({}) };
+  new Function('window', 'document', 'setTimeout', 'clearTimeout', s50.slice(pa))(W, doc, f => f(), () => {});
+  const vis = q => { W._partsSearchTerm = q; W._partsSearchApply();
+    return rows.map((r, i) => r.classList.has('parts-search-hide') ? null : i).filter(i => i !== null).join(','); };
+  [['', '0,1,2,3,4,5', '빈 검색 = 전부(클래스 없음)'],
+   ['auo', '0,2', '값으로 — 구역 머리는 걸린 행이 있을 때만'],
+   ['lm270wq1 ssa1', '0,1', '기호 무시 + AND'],
+   ['brightness 400', '3,4', '라벨+값 AND'],
+   ['고휘도', '3,4', 'Note 입력칸 값도'],
+   ['optical', '3,4,5', '구역 이름이 걸리면 그 구역 전부'],
+   ['auo 3000', '', 'AND — 한 행에 둘 다 없음']
+  ].forEach(([q, want, label]) => { const got = vis(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [PARTS] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  vis('auo');
+  chk(rows[2].classList.has('parts-search-show'), '[PARTS] 접힌 2순위 행도 걸리면 보인다');
+  chk(rows[2].cells[2].classList.has('search-hit') && !rows[2].cells[1].classList.has('search-hit'), '[PARTS] 걸린 칸만 강조');
+  chk(ids['parts-search-count'].textContent === '1 / 4항목', '[PARTS] 개수 ' + ids['parts-search-count'].textContent);
+  vis('');
+  chk(!rows[2].classList.has('parts-search-show') && !rows[2].cells[2].classList.has('search-hit'), '[PARTS] 검색 지우면 클래스 원상복구');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);

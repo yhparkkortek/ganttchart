@@ -513,13 +513,15 @@ window._pcRenderLibList = function(filterText) {
     if (!list) return;
     const _en = window._currentLang === 'en';
     const lib = window._panelCompareLibCache || { panels: [] };
-    const terms = (filterText || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // 🔍 [2026-11-24] 낱말 AND + 공백·기호 무시 — 앱 공용 검색 규칙(js/04a _searchMatchAll)
+    const terms = window._searchTokens ? window._searchTokens(filterText) : (filterText || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
     // [2026-10-22] 예전엔 30개에서 잘랐다 — 146개를 넣고도 "목록에 안 올라온다"로 보였고,
     //    사용자 요청으로 **전부 보여준다**. 목록 칸은 스크롤되고, 행 하나가 가벼워서
     //    수백 개를 그려도 눈에 띄는 지연이 없다. 한참 더 커져서 느려지면 그때 가상 스크롤을 보면 된다.
     const filtered = (lib.panels || []).filter(function(p) {
         if (!terms.length) return true;
         const hay = window._pcLibSearchHaystack(p);
+        if (window._searchMatchAll) return window._searchMatchAll(hay, terms);
         return terms.every(function(t) { return hay.indexOf(t) !== -1; });
     });
     if (!filtered.length) {

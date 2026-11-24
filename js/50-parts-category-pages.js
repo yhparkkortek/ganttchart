@@ -173,3 +173,115 @@
         });
     };
 })();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔍 [2026-11-24 사용자 요청] PARTS 비교표 검색 — 프로젝트 불러오기·Project list·주소록과 **같은 규칙**
+//    (js/04a `_searchTokens`/`_searchMatchAll`/`_searchMatchAny` 한 벌: 띄어 쓴 낱말이 한 행의 서로 다른
+//    칸에 있어도 전부 있으면 걸림, 공백·기호 무시). 행 = 스펙 항목(라벨 + 부품별 값 + Note).
+//    ⚠️ 행을 지우지 않고 **클래스로만** 숨기고 보인다 — 접힌(2순위) 행의 인라인 display 를 건드리면
+//       🔽 펼치기/접기 상태가 망가진다. 검색을 지우면 클래스만 떼서 원래 상태로 돌아간다.
+//    ⚠️ 부품 구분이 런타임에 늘어나므로(복제 화면) 지금 보이는 `.elec-spec-view` 의 표를 그때그때 집는다.
+//    ⚠️ 검색칸 id 는 `eh-search` — `-btns` 로 끝나면 js/23·js/38 이 화면 전환 때 숨겨 버린다.
+// ─────────────────────────────────────────────────────────────────────────────
+(function () {
+    var _en = function () { return window._currentLang === 'en'; };
+    window._partsSearchTerm = '';
+
+    function ensureBox() {
+        if (document.getElementById('eh-search')) return;
+        var anchor = document.getElementById('eh-panel-btns');
+        if (!anchor || !anchor.parentNode) return;
+        var box = document.createElement('span');
+        box.id = 'eh-search';
+        box.style.cssText = 'display:inline-flex; align-items:center; gap:6px; margin-right:10px; flex-shrink:0;';
+        box.innerHTML =
+            '<input id="parts-search-input" type="search" autocomplete="off" '
+          + 'style="width:170px; height:31px; box-sizing:border-box; padding:0 12px; border:1px solid #ccc; border-radius:16px; font-size:12px; outline:none;">'
+          + '<span id="parts-search-count" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+        anchor.parentNode.insertBefore(box, anchor);
+        var inp = box.querySelector('input');
+        inp.placeholder = _en() ? '🔍 Search items · values' : '🔍 항목·값 검색';
+        inp.title = _en() ? 'Several words OK — a row matches when all words appear in it' : '여러 낱말 가능 — 한 항목 행에 낱말이 모두 있으면 걸립니다';
+        var t = null;
+        inp.oninput = function () {
+            clearTimeout(t);
+            t = setTimeout(function () { window._partsSearchTerm = inp.value; window._partsSearchApply(); }, 150);
+        };
+        inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; window._partsSearchTerm = ''; window._partsSearchApply(); } };
+    }
+
+    function visibleTbody() {
+        var views = document.querySelectorAll('.elec-spec-view');
+        for (var i = 0; i < views.length; i++) {
+            if (views[i].style.display !== 'none') return views[i].querySelector('table.concept-table tbody');
+        }
+        return null;
+    }
+    function cellText(td) {
+        var inp = td.querySelector('input, textarea');
+        return (td.textContent || '') + (inp ? ' ' + (inp.value || '') : '');
+    }
+    var isSection = function (tr) { return /(^|\s)(pc|ep)-section-row(\s|$)/.test(tr.className || ''); };
+
+    window._partsSearchApply = function () {
+        var tbody = visibleTbody();
+        var countEl = document.getElementById('parts-search-count');
+        if (!tbody) { if (countEl) countEl.textContent = ''; return; }
+        var toks = window._searchTokens ? window._searchTokens(window._partsSearchTerm) : [];
+        var rows = Array.prototype.slice.call(tbody.rows);
+        rows.forEach(function (tr) {
+            tr.classList.remove('parts-search-hide', 'parts-search-show');
+            Array.prototype.forEach.call(tr.cells, function (td) { td.classList.remove('search-hit'); });
+        });
+        if (!toks.length) { if (countEl) countEl.textContent = ''; return; }
+        var total = 0, shown = 0, sec = null, secHit = false, secHas = false;
+        var closeSection = function () { if (sec) sec.classList.add(secHas ? 'parts-search-show' : 'parts-search-hide'); };
+        rows.forEach(function (tr) {
+            if (isSection(tr)) {
+                closeSection();
+                sec = tr; secHas = false;
+                secHit = window._searchMatchAll(tr.textContent, toks);   // 구역 이름이 걸리면 그 구역 전부
+                return;
+            }
+            total++;
+            var cells = Array.prototype.slice.call(tr.cells);
+            var hit = secHit || window._searchMatchAll(cells.map(cellText).join(' \u0001 '), toks);
+            tr.classList.add(hit ? 'parts-search-show' : 'parts-search-hide');   // 접힌 2순위 행도 걸리면 보인다
+            if (hit) {
+                shown++; secHas = true;
+                cells.forEach(function (td) { if (window._searchMatchAny(cellText(td), toks)) td.classList.add('search-hit'); });
+            }
+        });
+        closeSection();
+        if (countEl) countEl.textContent = shown + ' / ' + total + (_en() ? '' : '항목');
+    };
+
+    // 다시 그려지면(구분 전환·추가·펼치기·언어 전환) 검색을 다시 건다 — 그리기는 async 라 끝난 뒤에
+    function after(name, fn) {
+        var orig = window[name];
+        if (typeof orig !== 'function' || orig._partsSearchWrapped) return;
+        var w = function () {
+            var r = orig.apply(this, arguments);
+            try {
+                if (r && typeof r.then === 'function') r.then(function () { fn(); }, function () {});
+                else fn();
+            } catch (e) { /* 검색 재적용 실패가 화면을 막지 않게 */ }
+            return r;
+        };
+        w._partsSearchWrapped = true;
+        window[name] = w;
+    }
+    function boot() {
+        ensureBox();
+        after('renderPanelCompareTab', window._partsSearchApply);
+        after('renderElecCompareTab', window._partsSearchApply);
+        after('_switchElecView', function () {
+            var b = document.getElementById('eh-search'); if (b) b.style.display = 'inline-flex';
+            window._partsSearchApply();
+        });
+        // BOM 화면에는 비교표가 없다 — 검색칸을 숨긴다(BOM 헤더는 여유가 7px 뿐이다)
+        after('_elecBomOpen', function () { var b = document.getElementById('eh-search'); if (b) b.style.display = 'none'; });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+})();

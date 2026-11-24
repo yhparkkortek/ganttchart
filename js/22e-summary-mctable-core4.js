@@ -709,7 +709,14 @@ window._epRenderLibList = function(filterText) {
     const lib = window._epLibCache[type] || { items: [] };
     const q = (filterText || '').trim().toLowerCase();
     // [2026-10-22] 상한 제거 — PANEL 목록과 같은 이유(자르면 "안 올라온다"로 보인다).
-    const filtered = (lib.items || []).filter(function(p) { return !q || (p.model || '').toLowerCase().indexOf(q) !== -1; });
+    // 🔍 [2026-11-24] 앱 공용 검색 규칙(js/04a) — 낱말 AND·공백/기호 무시. 예전엔 모델 키(코드_이름)만
+    //    글자 그대로 봐서, 화면에 보이는 부품명·브랜드로는 못 찾았다 → 셋을 같이 본다.
+    const toks = window._searchTokens ? window._searchTokens(q) : (q ? [q] : []);
+    const filtered = (lib.items || []).filter(function(p) {
+        if (!toks.length) return true;
+        const hay = [p.model, window._epPartNameOf ? window._epPartNameOf(p.specs) : '', (p.specs && p.specs['Brand']) || ''].join(' \u0001 ');
+        return window._searchMatchAll ? window._searchMatchAll(hay, toks) : hay.toLowerCase().indexOf(q) !== -1;
+    });
     if (!filtered.length) {
         list.innerHTML = `<div style="padding:8px; color:#999; font-size:12px;">${_en ? 'No matches in the library.' : '라이브러리에 일치하는 항목이 없습니다.'}</div>`;
         return;

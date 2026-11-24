@@ -2695,3 +2695,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 🔍 [2026-11-24] 주소록 검색 — 걸린 칸 강조(js/22f filterAddressRows). 색은 프로젝트 불러오기·Project list 의 <mark> 와 같다(js/04a _searchMarkHtml). */
 #address-table-body input.u-input.search-hit { background-color:#fff3bf !important; }
+
+/* 🔍 [2026-11-24] PARTS 비교표 검색(js/50 _partsSearchApply) — 행은 클래스로만 숨기고 보인다(접힌 2순위 행의 인라인 display 를 건드리지 않으려고). */
+.parts-search-hide { display:none !important; }
+.parts-search-show { display:table-row !important; }
+#tab-elecparts td.search-hit { background-color:#fff3bf !important; }
