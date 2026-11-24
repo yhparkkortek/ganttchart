@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-24a';
+    var RULE_V = '2026-11-24b';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -175,7 +175,10 @@
         var addPieces = function (k, src) {
             var words = String(k || '').split(/[^0-9A-Za-z가-힣.]+/).filter(Boolean);
             words.forEach(function (w) { if (norm(w).length >= 6 && !/^\d+$/.test(norm(w))) add(w, src + ':w'); });
-            for (var i = 0; i + 1 < words.length; i++) add(words[i] + words[i + 1], src + ':2');
+            // [2026-11-24] 첫 낱말이 고객사 이름이면 붙이지 않는다 — 'LnW>Obsidian' 의 'lnwobsidian' 이 제목 'LNW>Obsidian Digital Wheel'
+            //  에 걸려 Obsidian55 가 Digital Wheel 과 충돌했다(실측). 고객사+낱말은 가족 단서지 제품 식별자가 아니다.
+            //  단 뒤 낱말에 숫자가 있으면(AMUSNET 55J) 모델 식별자라 남긴다 — 다 빼면 Amusnet 55J 문서가 KONAMI 로 갔다(실측).
+            for (var i = 0; i + 1 < words.length; i++) { if (root && norm(words[i]) === root && !/\d/.test(words[i + 1])) continue; add(words[i] + words[i + 1], src + ':2'); }
         };
         add(c.model, 'model'); addPieces(c.model, 'model');
         (c.keywords || []).forEach(function (k) { add(k, 'kw'); if (!looksMaterialDesc(k)) addPieces(k, 'kw'); });

@@ -169,6 +169,10 @@ window.__mailRoutingTestBody = async function () {
     ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'K4', '4-22 3자 모델 코드(K43)로 그 프로젝트에 배치', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
     j = J(M('[LNW] K430 신규 문의', 'LNW K430 패널'), candsK, null);
     ok(!(j.target && j.target.drive_file_id === 'K4' && j.decision === 'auto'), '4-23 K430 안의 k43 은 걸리지 않는다(숫자 뒤 경계)', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id });
+    // [2026-11-24] 고객사+숫자 없는 낱말('LnW Obsidian' → lnwobsidian)은 식별자가 아니다 — 제목 'LNW>Obsidian Digital Wheel' 이 충돌했다(실측)
+    const candsO = cands.concat([C('O55', 'LnW_Obsidian_55.0.json', 'LnW Obsidian 55', 'LnW>Obsidian', '55', ['Obsidian55', '502444', 'Obsidian'])]);
+    j = J(M('LNW>Obsidian Digital Wheel 31.5">Proto.B 샘플 자료 전달건.', 'Obsidian Digital Wheel 샘플 자료 첨부'), candsO, null);
+    ok(j.decision === 'auto' && j.target && j.target.drive_file_id === 'D1', '4-24 고객사+낱말 조각(lnwobsidian)으로 충돌하지 않고 Digital Wheel 로', { d: j.decision, basis: j.basis, t: j.target && j.target.drive_file_id, r: j.reason });
     j = J(M('RE: New Traceability Requirements for Molded Plastic Components', 'LNW supplier reminder'), cands, null);
     ok(j.decision === 'auto' && j.basis === 'common_customer' && JSON.stringify(allOf(j)) === JSON.stringify(lnwIds.slice().sort()), '4-15 고객 전반 요구사항(Requirements) → LNW 프로젝트 전부', { d: j.decision, basis: j.basis, ids: allOf(j) });
 
