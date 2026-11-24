@@ -28,11 +28,16 @@
         enabled: true,
         offKey: 'gantt_apv_intake_off',          // '1' 이면 아무것도 안 한다
         storeKey: 'gantt_apv_intake_v1',
-        // 문서함 — gw_bridge `_APPR_BOXES` 의 열쇠. 임시저장(tempsave)은 아직 문서가 아니라 뺀다. 수신함은 주소 확인 후 추가.
+        // 문서함 — gw_bridge `_APPR_BOXES` 의 열쇠. 임시저장(tempsave)은 아직 문서가 아니라 뺀다.
+        // 📥 [2026-11-24] 수신 문서함 — 화면 코드에서 주소 확인(개인 doclist/reception · 부서 deptfolder/receive/<부서id>).
+        //    부서 수신함엔 열람 권한이 없는 문서가 섞여 온다(실측 40건 중 2건만 보임) → `readable:false` 는 건너뛴다.
+        //    ⚠️ 두 문서함은 **백엔드 재시작 뒤에** 열린다(gw_bridge 새 코드) — 그 전엔 '재시작 필요' 로 드러낸다.
         boxes: [
-            { key: 'draft',   label: '기안 문서함' },
-            { key: 'approve', label: '결재 문서함' },
-            { key: 'viewer',  label: '참조/열람 문서함' }
+            { key: 'draft',       label: '기안 문서함' },
+            { key: 'approve',     label: '결재 문서함' },
+            { key: 'viewer',      label: '참조/열람 문서함' },
+            { key: 'reception',   label: '수신 문서함' },
+            { key: 'deptreceive', label: '부서 수신함' }
         ],
         listLimit: 40,                 // 문서함마다 최근 몇 건을 보나(최신순)
         backfillDays: 30,              // 처음 켤 때 소급해서 가져올 기간 — 그보다 오래된 건 '본 것'으로만 표시
@@ -321,9 +326,16 @@
                     j = await fetch(BASE + '/gw/approval/doclist?box=' + encodeURIComponent(box.key) + '&limit=' + P.listLimit + '&duration=all')
                         .then(function (r) { return r.json(); });
                 } catch (e) { res.boxErrors.push(box.label + ': ' + e.message); continue; }
-                if (!j || !j.ok) { res.boxErrors.push(box.label + ': ' + ((j && j.message) || T('응답 없음', 'no response'))); continue; }
+                if (!j || !j.ok) {
+                    var msg = (j && j.message) || T('응답 없음', 'no response');
+                    // 구버전 백엔드는 새 문서함 이름을 모른다(ValueError 'box는 … 중 하나') — 고장이 아니라 재시작 대기
+                    if (/box는|box must/i.test(msg)) msg = T('백엔드 재시작 후 사용 가능', 'available after backend restart');
+                    res.boxErrors.push(box.label + ': ' + msg); continue;
+                }
                 (j.docs || []).forEach(function (d) {
                     if (!d || !d.id) return;
+                    // 열람 권한이 없는 문서(부서 수신함) — 제목이 가려져 판정할 게 없다. 장부에도 안 적는다(나중에 열리면 그때 본다).
+                    if (d.readable === false || /열람권한이 없는/.test(String(d.title || ''))) { res.unreadable = (res.unreadable || 0) + 1; return; }
                     res.looked++;
                     if (byId[d.id]) return;
                     byId[d.id] = 1;

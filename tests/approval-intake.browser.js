@@ -34,9 +34,12 @@ window.__approvalIntakeTest = async function () {
         viewer: [D('903', '연차 휴가 신청', '휴가신청서', '완료', 1),
                  D('904', '사무용품 구매', '구매품의서', '완료', 1),
                  D('906', 'STELLAR32 옛 문서', '기안서', '완료', 400),
-                 D('908', 'KGP-4 75" C EC PANEL 변경 검토', '업무협조전', '진행중', 1)]   // 크기 어긋남(KGP-4 는 55")
+                 D('908', 'KGP-4 75" C EC PANEL 변경 검토', '업무협조전', '진행중', 1)],   // 크기 어긋남(KGP-4 는 55")
+        reception: [D('901', 'STELLAR32 Proto B 시제품 제작의뢰', '기안서', '완료', 2)],                 // 다른 문서함과 같은 문서
+        deptreceive: [D('909', '열람권한이 없는 결재문서입니다.', '업무협조전', '접수', 1, { readable: false, drafterName: '-' }),
+                      D('910', 'STELLAR32 양산 장납 자재 선구매 요청서', '업무협조전', '완료', 1)]
     };
-    let gwOk = true, boxFail = '';
+    let gwOk = true, boxFail = '', boxFailMsg = '';
     const calls = { status: 0, list: [], place: [], extras: [] };
 
     // ── 가짜(경계) ─────────────────────────────────────────────────────────
@@ -64,7 +67,7 @@ window.__approvalIntakeTest = async function () {
         const J = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
         if (/\/gw\/status/.test(u)) { calls.status++; return J({ ok: gwOk }); }
         let m = /\/gw\/approval\/doclist\?box=(\w+)/.exec(u);
-        if (m) { calls.list.push(m[1]); if (boxFail === m[1]) return J({ ok: false, message: 'boom' }); return J({ ok: true, docs: (boxes[m[1]] || []).slice() }); }
+        if (m) { calls.list.push(m[1]); if (boxFail === m[1]) return J({ ok: false, message: boxFailMsg || 'boom' }); return J({ ok: true, docs: (boxes[m[1]] || []).slice() }); }
         return save.fetch.apply(this, arguments);
     };
     const inbox = () => window.TaskInbox.load();
@@ -79,8 +82,9 @@ window.__approvalIntakeTest = async function () {
 
         // ── 2. 첫 스캔 ─────────────────────────────────────────────────────
         r = await window.approvalIntakeRun({ manual: false, toast: false });
-        ok(calls.list.join(',') === 'draft,approve,viewer', '2-1 기안·결재·참조/열람 세 문서함을 부른다(임시저장 제외)', calls.list);
-        ok(r.looked === 8, '2-2 목록 8건을 봤다', r);
+        ok(calls.list.join(',') === 'draft,approve,viewer,reception,deptreceive', '2-1 기안·결재·참조/열람·수신·부서 수신 문서함을 부른다(임시저장 제외)', calls.list);
+        ok(r.looked === 10 && r.unreadable === 1, '2-2 목록 10건을 봤다 · 열람 권한 없는 부서 수신 문서 1건은 건너뜀', r);
+        ok(!card('909') && !!card('910') && calls.place.filter(p => p.fid === 'T1').length >= 2, '2-2b 부서 수신함의 읽을 수 있는 문서는 배치, 가려진 문서는 카드 없음', calls.place);
         const c901 = card('901');
         ok(!!c901 && calls.place.some(p => p.fid === 'T1'), '2-3 STELLAR32 문서 → 보관함 카드 + STELLAR32 프로젝트에 자동배치', { c901: !!c901, place: calls.place });
         ok(inbox().filter(it => it.mailRaw && it.mailRaw.key === 'apv_901').length === 1, '2-4 두 문서함에 있는 같은 문서는 카드 하나', inbox().map(i => i.mailRaw && i.mailRaw.key));
@@ -92,7 +96,7 @@ window.__approvalIntakeTest = async function () {
         ok(!card('903') && r.skippedForm === 1, '2-9 휴가신청서 양식은 가져오지 않는다', r);
         ok(!card('904') && r.noMatch === 1, '2-10 후보 없는 문서(사무용품)는 카드를 만들지 않는다', r);
         ok(!card('906') && r.old === 1, '2-11 소급 기간보다 오래된 문서는 가져오지 않는다', r);
-        ok(r.placed === 2 && r.pending === 2, '2-12 집계: 배치 2 · 대기 2', r);
+        ok(r.placed === 3 && r.pending === 2, '2-12 집계: 배치 3 · 대기 2', r);
         const c908 = card('908');
         ok(!!c908 && c908.status === '대기' && c908.matchedProject.routing.basis === 'size_mismatch' && !calls.place.some(p => p.fid === 'K1'), '2-13 📐 제목 크기(75")가 대상(KGP-4 55")과 다르면 자동배치 대신 대기', c908 && c908.matchedProject);
         const S = window._approvalSizesIn;
@@ -105,11 +109,15 @@ window.__approvalIntakeTest = async function () {
 
         // ── 4. 새 문서 + 한 문서함 오류 ─────────────────────────────────────
         boxes.draft.push(D('907', 'KGP-4 1500R 금형 수정 품의', '기안서', '진행중', 0));
-        boxFail = 'viewer';
+        boxFail = 'viewer';   // (구버전 백엔드 메시지 흉내는 4-3)
         r = await window.approvalIntakeRun({ manual: false, toast: false });
         ok(r.fresh === 1 && !!card('907') && calls.place.some(p => p.fid === 'K1'), '4-1 새로 생긴 KGP-4 문서만 처리 → KGP-4 에 배치(크기 55" 일치 문구 없음)', r);
         ok(r.boxErrors.length === 1 && /참조/.test(r.boxErrors[0]), '4-2 한 문서함이 실패해도 나머지는 돌고, 실패를 드러낸다', r.boxErrors);
-        boxFail = '';
+        // 4-3 구버전 백엔드(새 문서함 이름을 모름) — 고장이 아니라 '재시작 후 사용 가능' 으로 말한다
+        boxFail = 'deptreceive'; boxFailMsg = 'box는 draft / tempsave / approve / viewer / all 중 하나입니다.';
+        r = await window.approvalIntakeRun({ manual: false, toast: false });
+        ok(r.boxErrors.length === 1 && /재시작/.test(r.boxErrors[0]), '4-3 구버전 백엔드면 부서 수신함 오류를 "재시작 후 사용 가능" 으로 드러낸다', r.boxErrors);
+        boxFail = ''; boxFailMsg = '';
 
         // ── 5. 장부를 지워도 보관함 카드 열쇠로 중복이 막힌다 ────────────────────
         window.approvalIntakeReset();

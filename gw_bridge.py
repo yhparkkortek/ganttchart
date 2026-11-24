@@ -2497,7 +2497,48 @@ _APPR_BOXES = {
     'tempsave': ('임시 저장함', 'updatedAt'),
     'approve': ('결재 문서함', 'draftedAt'),
     'viewer': ('참조/열람 문서함', 'document.draftedAt'),
+    # 📥 [2026-11-24] 수신 문서함(개인) — 화면 코드 getBaseURL 실측: 개인 'approval/doclist/reception',
+    #    부서 'approval/deptfolder/receive/<deptId>' + '/all|waiting'. 정렬 열은 receivedAt(document.* 는 500).
+    'reception': ('수신 문서함', 'receivedAt'),
 }
+# 부서 수신함 — 경로가 doclist 가 아니라 deptfolder 이고 부서 id 가 필요하다(사이드 메뉴 deptFolders 의 useReception).
+#  ⚠️ 부서 수신함엔 **나에게 열람 권한이 없는 문서**가 섞여 온다 — 제목이 '열람권한이 없는 결재문서입니다.' 이고
+#     기안자가 '-' (실측 69건 중 2건만 보임). `readable` 로 표시해 넘기고, 걸러 쓰는 건 부르는 쪽 몫.
+_APPR_DEPT_RECEIVE = ('부서 수신함', 'receivedAt')
+
+
+def _appr_reception_dept_ids():
+    """수신함을 쓰는 내 부서 id 목록 — /api/approval/side 의 deptFolders(useReception=True)."""
+    side = (gw_get('/api/approval/side') or {}).get('data') or {}
+    out = []
+    def walk(fs):
+        for f in fs or []:
+            if f.get('useReception') and f.get('deptId') is not None:
+                out.append((f.get('deptId'), f.get('deptName') or ''))
+            walk(f.get('deptFolders'))
+    walk(side.get('deptFolders'))
+    return out
+
+
+def _appr_shape(d, box_label=None):
+    title = d.get('title') or ''
+    unreadable = (d.get('readable') is False) or ('열람권한이 없는' in title)
+    return {
+        'id': d.get('documentId') or d.get('id'),
+        'docNum': d.get('docNum') or '',
+        'formName': d.get('formName') or '',
+        'title': title,
+        'status': d.get('docStatusName') or d.get('docStatus') or '',
+        'apprStatus': d.get('apprStatusName') or '',
+        'drafterName': d.get('drafterName') or '',
+        'drafterDept': d.get('drafterDeptName') or '',
+        'draftedAt': d.get('draftedAt') or '',
+        'receivedAt': d.get('receivedAt') or '',
+        'attachCount': d.get('attachCount') or 0,
+        'currentUsers': d.get('currentActivityUsers') or '',
+        'readable': not unreadable,
+        'url': '%s/app/approval/document/%s' % (GW_ORIGIN, d.get('documentId') or d.get('id')),
+    }
 
 
 def approval_doclist(box='draft', limit=20, searchtype=None, keyword=None, duration='all'):
@@ -2512,6 +2553,27 @@ def approval_doclist(box='draft', limit=20, searchtype=None, keyword=None, durat
     영원히 0건이다(2026-10-21 제보: RD3-2610-050 을 draft 에서만 찾아 "없음"으로 답했다).
     그래서 box='all' 을 둔다 — 네 문서함을 모두 돌아 합친다. 문서번호 조회는 이걸 쓸 것."""
     b = str(box or 'draft').strip()
+    if b == 'deptreceive':
+        # 내 부서(들)의 수신함 — 부서마다 따로 부르고 합친다. 한 부서가 막혀도 나머지는 살린다.
+        from urllib.parse import quote
+        name, prop = _APPR_DEPT_RECEIVE
+        merged, errs, depts = [], [], _appr_reception_dept_ids()
+        for dept_id, dept_name in depts:
+            qs = ('/api/approval/deptfolder/receive/%s/all?page=0&offset=%d&property=%s&direction=desc'
+                  '&searchtype=%s&keyword=%s&fromDate=&toDate=&duration=%s'
+                  % (dept_id, int(limit), prop, quote(str(searchtype or ''), safe=''),
+                     quote(str(keyword or ''), safe=''), quote(str(duration or 'all'), safe='')))
+            try:
+                j = gw_get(qs, timeout=60)
+            except Exception as e:
+                errs.append('%s: %s' % (dept_name or dept_id, e))
+                continue
+            for d in (j or {}).get('data') or []:
+                x = _appr_shape(d)
+                x['receiverDept'] = dept_name
+                merged.append(x)
+        return {'box': b, 'boxName': name, 'total': len(merged), 'count': len(merged), 'docs': merged,
+                'depts': [n for _, n in depts], 'boxErrors': errs or None}
     if b == 'all':
         merged, seen = [], set()
         errs = []
@@ -2533,7 +2595,7 @@ def approval_doclist(box='draft', limit=20, searchtype=None, keyword=None, durat
                 'count': len(merged), 'docs': merged,
                 'boxErrors': errs or None}
     if b not in _APPR_BOXES:
-        raise ValueError("box는 %s / all 중 하나입니다." % ' / '.join(_APPR_BOXES))
+        raise ValueError("box는 %s / deptreceive / all 중 하나입니다." % ' / '.join(_APPR_BOXES))
     name, prop = _APPR_BOXES[b]
     from urllib.parse import quote
     qs = ('/api/approval/doclist/%s/all?page=0&offset=%d&property=%s&direction=desc'
@@ -2541,22 +2603,7 @@ def approval_doclist(box='draft', limit=20, searchtype=None, keyword=None, durat
           % (b, int(limit), prop, quote(str(searchtype or ''), safe=''),
              quote(str(keyword or ''), safe=''), quote(str(duration or 'all'), safe='')))
     j = gw_get(qs, timeout=60)
-    out = []
-    for d in (j or {}).get('data') or []:
-        out.append({
-            'id': d.get('documentId') or d.get('id'),
-            'docNum': d.get('docNum') or '',
-            'formName': d.get('formName') or '',
-            'title': d.get('title') or '',
-            'status': d.get('docStatusName') or d.get('docStatus') or '',
-            'apprStatus': d.get('apprStatusName') or '',
-            'drafterName': d.get('drafterName') or '',
-            'drafterDept': d.get('drafterDeptName') or '',
-            'draftedAt': d.get('draftedAt') or '',
-            'attachCount': d.get('attachCount') or 0,
-            'currentUsers': d.get('currentActivityUsers') or '',
-            'url': '%s/app/approval/document/%s' % (GW_ORIGIN, d.get('documentId') or d.get('id')),
-        })
+    out = [_appr_shape(d) for d in (j or {}).get('data') or []]
     page = (j or {}).get('page') or {}
     return {'box': b, 'boxName': name, 'total': page.get('total'),
             'count': len(out), 'docs': out}

@@ -1577,3 +1577,12 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
 - 실데이터 미리보기(쓰기 없음): 코드 있는 13건 → **자동 12**(STELLAR32 9 · SHUFFLER 4.3" 2 · 3.0" 1) · BOM 에 없음 1. 기안자가 담당자 칸에 전부 있었다.
   담당자 칸에 `김충식.김태홍` 처럼 점으로 이은 값이 있어 `.` 도 구분자로 본다.
 - 검증 `tests/approval-intake.browser.js` 28/28(7절 8건 — 가짜는 `gapi.client.drive.files.get` 경계) + 돌연변이(담당자 확인 끄기 → 7-3 만 실패).
+
+### 📥 수신 문서함 — 추가 (2026-11-24)
+- 주소는 **화면 코드에서** 찾았다(추측 아님) — 결재 목록 뷰의 `getBaseURL`: 개인 `approval/doclist/reception`, 부서 `approval/deptfolder/receive/<부서id>` + `/all|waiting`.
+  정렬 열은 `receivedAt`(`document.draftedAt` 은 500). 부서 id 는 `/api/approval/side` 의 `deptFolders[].useReception`(개발3팀 = 245).
+- gw_bridge: `box='reception'`(개인, `_APPR_BOXES` 에 추가 → `all` 에도 포함) · `box='deptreceive'`(내 부서들 합침, `depts` 반환). 응답에 `readable`·`receivedAt` 추가.
+- ⚠️ **부서 수신함엔 나에게 열람 권한이 없는 문서가 섞인다** — 제목이 `열람권한이 없는 결재문서입니다.`, 기안자 `-`(실측 40건 중 읽을 수 있는 건 2건). js/75 는 이걸 건너뛰고 장부에도 안 적는다(나중에 열리면 그때 본다).
+- 실측: 개인 수신함 1건 · 부서 수신함 읽을 수 있는 2건(`LNW Shuffler 4.3" … 선구매 요청서` · `LNW Landmark 18.5" … Z2 -> Z1`).
+- ⚠️ **백엔드 재시작 뒤에 열린다**(상시 프로세스가 옛 gw_bridge 를 들고 있다). 그 전엔 옛 백엔드가 `box는 … 중 하나` 를 주고, js/75 가 이를 '백엔드 재시작 후 사용 가능' 으로 바꿔 드러낸다. 팀원 PC 는 `/self-update` 후 재시작.
+- 검증: 실제 그룹웨어로 `approval_doclist` 직접 + `app.test_client()` 라우트 둘 다 · 하네스 30/30(수신·부서 수신 문서함, 가려진 문서 건너뛰기, 구버전 백엔드 문구).
