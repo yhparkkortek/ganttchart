@@ -62,7 +62,7 @@
     var P = window.MAIL_ROUTING_POLICY;
     // 판정 규칙 버전 — 카드의 routing.v 에 적는다. 배경 재판정은 같은 버전으로 이미 본 카드를 건너뛴다.
     //  ⚠️ 판정 규칙(식별자·가족·문턱)을 바꾸면 이 값을 올릴 것 — 안 올리면 옛 판정 카드가 배경에서 다시 안 보인다.
-    var RULE_V = '2026-11-24e';
+    var RULE_V = '2026-11-24f';
     window.MAIL_ROUTING_RULE_V = RULE_V;
     /** 카드의 사유 글에서 AI 사유만 — 재판정마다 '🧭 판정 · 🤖 (이전 사유 전체)' 로 겹겹이 길어지던 것(실측) */
     function aiReasonOnly(mb) {
@@ -126,7 +126,10 @@
         'digital', 'landscape', 'dimension', 'roadmap',
         // [2026-11-24 실측] 패널 제조사 — 여러 제품이 같은 패널사를 쓴다. Obsidian55 키워드 'CSOT' 가 Cosmic Upright 49" 결재 문서
         //  ('EC Panel(CSOT) + AD BD 변경')에 걸려 충돌했다. 3자 이하(BOE·AUO·INX)는 이미 길이 규칙에 걸린다.
-        'csot', 'innolux', 'tianma', 'sharp', 'samsung', 'lgdisplay'
+        'csot', 'innolux', 'tianma', 'sharp', 'samsung', 'lgdisplay',
+        // [2026-11-24 실측] 형태·곡률을 말하는 낱말 — KGP-4 키워드 'slim'·'1500R' 이 LNW Slim Slot 결재 4건·Amusnet 55J1500R 결재 3건을
+        //  KGP-4 로 끌고 갔다(메일도 같은 판정). 'curved' 는 위에 이미 있다. 곡률(R)은 흔한 값만 적는다.
+        'slim', 'narrow', 'ultraslim', 'thin', '1000r', '1500r', '1650r', '1800r', '2300r', '3000r', '4000r'
     ];
     var STOP = {}; window.MAIL_ROUTING_STOPWORDS.forEach(function (w) { STOP[norm(w)] = 1; });
     // [2026-11-23] 우리 회사 이름 — 서명·제목("> KORTEK")·주소에 **모든 메일**에 나온다. 고객/가족 단서로 쓰면

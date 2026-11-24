@@ -1613,3 +1613,11 @@ DELETE /api/calendar/{calendarId}/event/{eventId}   (본문 없음)
   → 결재 판정 동안만 그 규칙을 끈다(`noCommonFanout`, 메일 판정은 그대로) — 이제 이 문서는 L7 / Obsidian DW 31.5" 후보로 **대기**.
   → 이미 퍼진 행은 `cleanupPlacements`(데이터)로 열 때 뺀다 — L7 Jackpot Wheel 에만 남긴다.
 - 하네스 44/44.
+
+### 🧲 범용어 식별자 오배치(KGP-4) · 다시 판정 · 결재 전용 근거 제외 (2026-11-24)
+- KGP-4 키워드의 `slim`·`1500R` 이 식별자로 잡혀 LNW Slim Slot 결재 4건·Amusnet 55J1500R 3건이 KGP-4 로 갔다(메일도 같은 판정).
+  → js/74 `MAIL_ROUTING_STOPWORDS` 에 형태·곡률 낱말(`slim`·`narrow`·`1000r`~`4000r` 등), `MAIL_ROUTING_RULE_V` 2026-11-24f.
+- 정리 목록(`cleanupPlacements`, 데이터)에 `fromIds`(그 프로젝트에서만 뺀다 — 사람이 다른 곳에 두면 안 건드림)와 `rejudge`(다음 가져오기 때 **한 번** 장부·옛 카드를 무시하고 다시 판정) 추가.
+  KGP-4 오배치 8건 + 55C 소실로 사본 없이 사라진 결재 2건(`fromIds: []` = 어디서도 안 뺌).
+- 결재엔 `customer_inch`(고객사 + 그 고객사 유일 인치) 근거로 자동 배치하지 않는다(`waitBases`, 대기) — LNW Slim Slot BTN 15.6" 이 COSMIC UPRIGHT BTN 15.6" 로 가던 것. 메일은 그대로.
+- 실데이터 다시 판정(쓰기 없이): 55C 결재 2건 → 55C · Amusnet 55J 3건 → 55J · KONAMI 75" → 대기. 하네스 approval-intake 53/53, mail-routing 126/126.

@@ -59,8 +59,25 @@
         // 🧹 일회성 정리(데이터) — 위 규칙으로 잘못 퍼진 결재 행을 그 프로젝트를 열 때 뺀다. keepIds/keepModel 에 맞는 프로젝트엔 남긴다.
         cleanupPlacements: [
             { key: 'apv_218142', keepIds: ['1Y_eHKUWFxdKcqRI1XegFDZIu-teMuf6D'], keepModel: 'L7 Jackpot Wheel',
-              why: '[회의록] L7 Jackpot Wheel 31.5MVD 점검회의 — 회의록 공통 규칙으로 LNW 14곳에 퍼짐(2026-11-24)' }
+              why: '[회의록] L7 Jackpot Wheel 31.5MVD 점검회의 — 회의록 공통 규칙으로 LNW 14곳에 퍼짐(2026-11-24)' },
+            // 🧲 (같은 날) KGP-4 키워드의 범용어('slim'·'1500R')가 식별자로 잡혀 KGP-4 에 들어간 8건 — js/74 STOPWORDS 에 그 낱말을 넣었다.
+            //    fromIds = **그 프로젝트에서만** 뺀다(나중에 사람이 다른 곳에 두면 건드리지 않는다).
+            //    rejudge = 다음 결재 가져오기 때 **한 번** 다시 판정한다(장부·옛 보관함 카드를 무시) → Amusnet 은 AMUSNET 55J 로, 나머지는 판정대로.
+            { key: 'apv_214611', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'LNW SLIM SLOT 개발 완료 보고서 — slim' },
+            { key: 'apv_214658', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'LNW Slim Slot ECO — slim' },
+            { key: 'apv_214784', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'LNW Slim Slot FA 샘플 — slim' },
+            { key: 'apv_215137', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'LNW SLIM SLOT 환경 대응 — slim' },
+            { key: 'apv_216524', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'Amusnet 55J1500R ICE 샘플 — 1500R' },
+            { key: 'apv_216804', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'Amusnet 55J1500R 개발 의뢰 — 1500R' },
+            { key: 'apv_217288', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'Amusnet 55J(P)1500R 금형 — 1500R' },
+            { key: 'apv_222074', fromIds: ['185G159z0S0YYHoH0F4KJx2jdlrarwkGQ'], rejudge: true, why: 'KONAMI 75" C EC PANEL — 75" 인데 KGP-4 는 55"' },
+            // 🩹 AMUSNET 55C 소실(12:52 이름 충돌)로 행이 사라졌는데 복사할 사본이 없는 결재 — 다시 판정만(fromIds 빈 목록 = 어디서도 안 뺀다)
+            { key: 'apv_221969', fromIds: [], rejudge: true, why: '55C 소실로 사라진 결재 행 — 다시 가져오기' },
+            { key: 'apv_222465', fromIds: [], rejudge: true, why: '55C 소실로 사라진 결재 행 — 다시 가져오기' }
         ],
+        // 결재엔 쓰지 않을 판정 근거 — 자동 대신 대기. 'customer_inch'(고객사 + 그 고객사의 유일한 인치) 는 같은 인치의 **다른 제품**
+        // (실측 LNW SLIM SLOT BTN 15.6" → COSMIC UPRIGHT BTN 15.6")을 집는다. 메일 판정은 그대로(js/74).
+        waitBases: ['customer_inch'],
         // 📐 크기 가드(2026-11-24 실문서 120건 판정에서 찾음) — 제목에 크기가 적혀 있는데 대상 프로젝트 크기와 하나도 안 맞으면
         //    자동배치하지 않고 대기. 실측 오배치 3건: HORIZON 23.8" → 75" 프로젝트 · KGI>32TPR → 75" · KONAMI 75" → 55" KGP-4.
         //    단위 없는 숫자는 크기로 안 본다 — 단, 아래 접미어가 바로 붙으면 크기다(32TPR·75MVD).
@@ -443,6 +460,8 @@
             if (!cands.length) { res.skipped = 'no_candidates'; return finish(res, opts); }
 
             var store = loadStore();
+            var REJ = {};   // 정리 목록에서 '다시 판정'(rejudge) 으로 올린 문서 열쇠
+            (P.cleanupPlacements || []).forEach(function (c) { if (c && c.key && c.rejudge) REJ[c.key] = 1; });
             var firstRun = !store.firstRunAt;
             var now = Date.now();
             var cutoff = now - (firstRun ? P.backfillDays : P.maxAgeDays) * 86400000;
@@ -473,6 +492,8 @@
                     // 소급 기간을 늘리면(30→90) 예전에 '오래됨'으로만 적어 둔 문서가 새 기간 안에 들 수 있다 — 그건 다시 본다.
                     //  (안 그러면 기간을 늘려도 이미 한 번 돈 PC 에선 아무것도 안 바뀐다)
                     if (sv && sv.res === 'old' && docTs(d) >= now - P.backfillDays * 86400000) sv = null;
+                    // 🧲 잘못 배치돼 정리 목록에 '다시 판정'(rejudge)으로 올린 문서 — 한 번만 장부를 무시한다
+                    if (sv && REJ[keyOf(d)] && !sv.rejudged) sv = null;
                     if (sv) { sv.st = d.status || sv.st; return; }
                     fresh.push({ d: d, box: box.label });
                 });
@@ -483,13 +504,18 @@
             var done = 0, bi = null;   // bi: BOM 코드 색인 — 이번 실행에서 처음 필요할 때 한 번만 만든다
             for (var i = 0; i < fresh.length; i++) {
                 var d = fresh[i].d, boxLabel = fresh[i].box, ts = docTs(d);
-                var mark = function (r) { store.seen[d.id] = { at: new Date().toISOString(), st: d.status || '', res: r, box: boxLabel }; };
+                var mark = function (r) { store.seen[d.id] = { at: new Date().toISOString(), st: d.status || '', res: r, box: boxLabel, rejudged: !!REJ[keyOf(d)] || undefined }; };
                 if (ts && ts < cutoff) { res.old++; mark('old'); continue; }
                 if (isSkipForm(d)) { res.skippedForm++; mark('skip_form'); continue; }
                 if (done >= P.maxPerRun) break;   // 나머지는 다음 번에(장부에 안 적었으니 다시 보인다)
                 done++; res.fresh++;
                 var key = keyOf(d);
-                if (inInbox(key)) { res.dup++; mark('dup'); continue; }
+                if (REJ[key]) {
+                    // 다시 판정 — 옛(잘못된) 보관함 카드는 지운다(묘비를 남겨 다른 PC 에서도 사라진다). 한 문서에 카드가 둘이 되지 않게.
+                    try { window.TaskInbox.load().filter(function (it) { return it && it.mailRaw && it.mailRaw.key === key; })
+                              .forEach(function (it) { window.TaskInbox.remove(it.uid); }); } catch (e) { /* 카드 정리 실패는 판정을 막지 않는다 */ }
+                    res.rejudged = (res.rejudged || 0) + 1;
+                } else if (inInbox(key)) { res.dup++; mark('dup'); continue; }
 
                 var mail = mailOf(d), pre = null, jd = null, tag = null;
                 // 결재 판정 동안만 '공통 건 → 고객사 전부' 를 끈다(위 noCommonFanout). 메일 판정엔 영향 없게 바로 되돌린다.
@@ -503,6 +529,13 @@
                     // 자동 확정을 대기로 내린다 — 후보로는 남긴다(사람이 맞다고 보면 한 번에 보낼 수 있게)
                     jd = { candidates: [pre.target].concat(pre.extra || []), basis: 'size_mismatch', family: pre.family,
                            reason: T('제목 크기(' + sizesIn(mail.subject).join('/') + '")가 ' + (pre.target.model || '') + '(' + pre.target.inch + '") 와 다름 — 원래 판정: ', 'size in title differs from target — was: ') + pre.reason };
+                    pre = null;
+                    tag = waitTag(jd);
+                }
+                if (pre && (P.waitBases || []).indexOf(String(pre.basis || '').replace(/^subject_/, '')) !== -1) {
+                    // 결재엔 안 쓰는 근거(waitBases) — 후보는 남기고 대기로
+                    jd = { candidates: [pre.target].concat(pre.extra || []), basis: 'approval_' + String(pre.basis).replace(/^subject_/, ''), family: pre.family,
+                           reason: T('결재엔 이 근거로 자동 배치하지 않음 — ', 'not auto-placed for approvals — ') + pre.reason };
                     pre = null;
                     tag = waitTag(jd);
                 }
@@ -653,7 +686,9 @@
                 if (!kz) continue;
                 var rule = CL.filter(function (c) { return c.key === kz; })[0];
                 if (!rule) continue;
-                var keep = (rule.keepIds || []).indexOf(fidNow) !== -1 || (rule.keepModel && modelNow.indexOf(rule.keepModel) !== -1);
+                var keep = rule.fromIds
+                    ? rule.fromIds.indexOf(fidNow) === -1          // fromIds: 그 프로젝트에서만 뺀다(그 밖은 남긴다)
+                    : ((rule.keepIds || []).indexOf(fidNow) !== -1 || (rule.keepModel && modelNow.indexOf(rule.keepModel) !== -1));
                 if (keep || !fidNow) continue;   // 어느 프로젝트인지 모르면 지우지 않는다
                 gd.splice(z, 1); out.removed++;
             }

@@ -258,6 +258,17 @@ window.__approvalIntakeTest = async function () {
                     window.currentDriveFileId = '1Y_eHKUWFxdKcqRI1XegFDZIu-teMuf6D';
                     const b = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
                     ok(b.removed === 0 && globalData.length === 3, '11-3 지킬 프로젝트(L7)에선 남긴다', b);
+                    // 11-4/5 fromIds — 그 프로젝트에서만 뺀다(KGP-4 의 'slim'·'1500R' 오배치 정리)
+                    const svCL = window.APPROVAL_INTAKE.cleanupPlacements;
+                    window.APPROVAL_INTAKE.cleanupPlacements = [{ key: 'apv_x1', fromIds: ['KGP4_ID'] }, { key: 'apv_x2', fromIds: [] }];
+                    try {
+                        globalData = [head, L0, R2('apv_x1'), R2('apv_x2')]; window.currentDriveFileId = 'KGP4_ID';
+                        const e1 = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
+                        ok(e1.removed === 1 && globalData.length === 3 && globalData[2]._mailRaw.key === 'apv_x2', '11-4 fromIds 에 든 프로젝트에선 빼고, fromIds 가 빈 규칙은 아무 데서도 안 뺀다', e1);
+                        globalData = [head, L0, R2('apv_x1')]; window.currentDriveFileId = 'AMUSNET_ID';
+                        const e2 = await window.approvalRepairOpenProject({ noSave: true, silent: true, force: true });
+                        ok(e2.removed === 0 && globalData.length === 3, '11-5 다른 프로젝트(사람이 옮긴 곳)에선 그대로 둔다', e2);
+                    } finally { window.APPROVAL_INTAKE.cleanupPlacements = svCL; }
                 } finally { globalData = keep.gd; colIdx = keep.ci; window.recalculateSchedules = keep.recalc; window.renderGantt = keep.render; window.currentDriveFileId = null; }
             }
         }
@@ -315,6 +326,32 @@ window.__approvalIntakeTest = async function () {
                 await new Promise(r => setTimeout(r, 4600));
                 ok(calls10.length === 1 && calls10[0] === 'TEST_OPENED', '10 프로젝트를 열면(id 가 나중에 바뀌어도) 바로잡기가 한 번 돈다', calls10);
             } finally { window.approvalRepairOpenProject = svRepair; window.currentDriveFileId = null; }
+        }
+
+        // ── 13. 🧲 다시 판정(rejudge) 한 번 · 결재엔 안 쓰는 근거(waitBases) ──
+        {
+            const svCL = window.APPROVAL_INTAKE.cleanupPlacements, svWB = window.APPROVAL_INTAKE.waitBases;
+            try {
+                window.approvalIntakeReset();
+                boxes = { draft: [D('941', 'STELLAR32 재판정 대상', '기안서', '완료', 1)], approve: [], viewer: [], reception: [], deptreceive: [] };
+                await window.approvalIntakeRun({ manual: false, toast: false });            // 한 번 배치됨(카드 1장)
+                const before = inbox().filter(it => it.mailRaw && it.mailRaw.key === 'apv_941').length;
+                window.APPROVAL_INTAKE.cleanupPlacements = [{ key: 'apv_941', fromIds: [], rejudge: true }];
+                let r13 = await window.approvalIntakeRun({ manual: false, toast: false });
+                const after = inbox().filter(it => it.mailRaw && it.mailRaw.key === 'apv_941').length;
+                ok(before === 1 && r13.rejudged === 1 && after === 1, '13-1 다시 판정 대상은 장부·옛 카드를 무시하고 한 번 다시 판정(카드는 새것 하나만)', { before, after, r13 });
+                r13 = await window.approvalIntakeRun({ manual: false, toast: false });
+                ok(!r13.rejudged && r13.fresh === 0, '13-2 다시 판정은 한 번뿐 — 다음 실행엔 그대로 둔다', r13);
+                // waitBases — 판정 근거가 목록에 있으면 자동 대신 대기
+                window.approvalIntakeReset(); window.APPROVAL_INTAKE.cleanupPlacements = [];
+                window.APPROVAL_INTAKE.waitBases = ['identifier'];
+                boxes = { draft: [D('942', 'KGP-4 근거 시험', '기안서', '진행중', 1)], approve: [], viewer: [], reception: [], deptreceive: [] };
+                const p0 = calls.place.length;
+                await window.approvalIntakeRun({ manual: false, toast: false });
+                const c942 = card('942');
+                ok(!!c942 && c942.status === '대기' && /^approval_identifier$/.test(c942.matchedProject.routing.basis) && calls.place.length === p0,
+                   '13-3 결재엔 안 쓰는 근거(waitBases)면 자동 배치 대신 대기(후보는 남김)', c942 && c942.matchedProject);
+            } finally { window.APPROVAL_INTAKE.cleanupPlacements = svCL; window.APPROVAL_INTAKE.waitBases = svWB; }
         }
 
         // ── 6. 끄기 ─────────────────────────────────────────────────────────
