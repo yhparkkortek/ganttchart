@@ -146,9 +146,26 @@
     // ⚠️ 이 모드에서 `_collapsed` 키는 **행 인덱스가 아니라 레벨**이다(`bomToggleLevel`).
     //    트리 필터를 그대로 쓰면 레벨 2가 접혔을 때 **행 인덱스 2**가 접힌 것으로 읽혀 엉뚱한
     //    행이 엑셀에서 사라진다 — 화면과 엑셀이 조용히 어긋나는 그 사고(CLAUDE.md js/38 항목).
+    // 🔍 [2026-11-24 사용자 요청] BOM 검색 — 앱 공용 규칙(js/04a `_searchMatchAll`: 낱말 AND·공백/기호 무시).
+    //    검색은 **뷰 상태의 한 줄기**(`_bomVisibleWalk`/`_bomTreeRows`/`_bomLevelGroups` → `_bomVisibleRows`)
+    //    안에서 거른다 — 그래서 화면 렌더 2곳과 엑셀 2곳이 손 안 대고 같이 따라온다(따로 거르면 어긋난다).
+    //    낱말은 store 에 **열거 안 되는 속성**(`_searchToks`)으로 단다 — store 는 프로젝트 파일에 저장되므로
+    //    검색어가 파일에 실리면 안 된다(JSON.stringify 가 건너뛴다).
+    var _bomSearchToks = function (st) { return (st && st._searchToks) || []; };
+    var _bomRowHit = function (st, r) {
+        var toks = _bomSearchToks(st);
+        if (!toks.length) return true;
+        var hay = BOM_COLUMNS.map(function (c) { return c.loc ? _locOf(st, r) : (r[c.key] == null ? '' : r[c.key]); });
+        hay.push((st.notes && st.notes[r.IDNRK]) || '');
+        return window._searchMatchAll(hay.join(' \u0001 '), toks);
+    };
     window._bomLevelGroups = function (st) {
         var byLevel = {};
-        (st && st.rows || []).forEach(function (r) { (byLevel[r._level] = byLevel[r._level] || []).push(r); });
+        var searching = _bomSearchToks(st).length > 0;
+        (st && st.rows || []).forEach(function (r) {
+            if (searching && !_bomRowHit(st, r)) return;   // 계층이 깨진 모드는 모자 관계가 없으니 걸린 행만
+            (byLevel[r._level] = byLevel[r._level] || []).push(r);
+        });
         var levels = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
         return { byLevel: byLevel, levels: levels };
     };
@@ -164,6 +181,8 @@
     var _bomTreeRows = function (st) {
         if (!st || !st.rows) return [];
         if (!window._bomHierOk(st)) return _bomLevelBlockRows(st);
+        // 🔍 검색 중이면 아래 트리 걷기(_bomVisibleWalk)가 걸러 준 순서를 그대로 — 규칙을 두 벌로 두지 않는다
+        if (_bomSearchToks(st).length) return (_bomVisibleWalk(st) || []).map(function (x) { return x.row; });
         var collapsed = st._collapsed || {};
         var out = [], hidden = -1;
         st.rows.forEach(function (r, i) {
@@ -226,6 +245,23 @@
         if (sortCol) tree = _bomSortSiblings(tree, _bomRowComparator(st, sortCol));
         var collapsed = st._collapsed || {};
         var out = [];
+        // 🔍 검색 중: 걸린 부품 + 그 **상위 부품들**(어디에 쓰였는지 보이게)만 남기고, 접힘은 무시한다
+        //    (접힌 가지 안의 부품도 찾아야 한다). 검색을 지우면 접힘 상태는 그대로 돌아온다(안 건드림).
+        if (_bomSearchToks(st).length) {
+            var keep = function (n) {
+                var kids = n.children.filter(keep);
+                n._kept = kids;
+                return _bomRowHit(st, n.row) || kids.length > 0;
+            };
+            var roots = tree.filter(keep);
+            (function walkS(nodes) {
+                nodes.forEach(function (n) {
+                    out.push({ row: n.row, idx: n.idx, hasChild: n._kept.length > 0, collapsed: false });
+                    walkS(n._kept);
+                });
+            })(roots);
+            return out;
+        }
         (function walk(nodes) {
             nodes.forEach(function (n) {
                 var hasChild = n.children.length > 0;
@@ -1821,4 +1857,73 @@
             }).join('');
         sel.dataset.filled = '1';
     };
+
+    // ─── 🔍 [2026-11-24] BOM 검색칸 — BOM 탭과 PARTS ▸ BOM 두 곳 ───────────────────────
+    //    헤더는 여유가 7px 뿐이라(CLAUDE.md js/38) **표 위 줄**에 둔다(22px, `_uiInputStyle`).
+    //    거르는 일은 위 뷰 상태 줄기가 하고, 여기선 ① 입력칸 → store 낱말 ② 렌더 뒤 걸린 칸 강조·개수만.
+    var _BOM_SEARCH = {
+        bom:  { input: 'bom-search-input', count: 'bom-search-count', before: 'bom-meta', tbody: 'bom-body', store: function () { return window._bomStore(); } },
+        elec: { input: 'ep-bom-search-input', count: 'ep-bom-search-count', before: 'ep-bom-meta', tbody: 'ep-bom-body',
+                store: function () { return window._elecBomType ? window._elecBomGetStore(window._elecBomType) : null; } }
+    };
+    var _bomSearchEnsure = function (scope) {
+        var cfg = _BOM_SEARCH[scope];
+        if (document.getElementById(cfg.input)) return;
+        var anchor = document.getElementById(cfg.before);
+        if (!anchor || !anchor.parentNode) return;
+        var bar = document.createElement('div');
+        bar.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-shrink:0;';
+        bar.innerHTML = '<input id="' + cfg.input + '" type="search" autocomplete="off" style="width:220px;' + (window._uiInputStyle ? window._uiInputStyle() : '') + ' font-size:12px; outline:none;">'
+            + '<span id="' + cfg.count + '" style="font-size:12px; color:#888; white-space:nowrap;"></span>';
+        anchor.parentNode.insertBefore(bar, anchor);
+        var inp = bar.querySelector('input');
+        inp.placeholder = _t('🔍 부품 검색 — 코드·내역·자재그룹·비고…', '🔍 Search parts — code, description, group, note…');
+        inp.title = _t('여러 낱말 가능 — 한 부품 행에 낱말이 모두 있으면 걸리고, 그 상위 부품도 같이 보입니다. 엑셀도 이 결과대로 저장됩니다.',
+                       'Several words OK — a part matches when all words appear; its parents stay visible. Excel export follows this view.');
+        var t = null;
+        inp.oninput = function () { clearTimeout(t); t = setTimeout(function () { _sortRerender(scope); }, 150); };
+        inp.onkeydown = function (e) { if (e.key === 'Escape' && inp.value) { inp.value = ''; _sortRerender(scope); } };
+    };
+    var _bomSearchBefore = function (scope) {
+        _bomSearchEnsure(scope);
+        var cfg = _BOM_SEARCH[scope], st = cfg.store();
+        if (!st) return;
+        var inp = document.getElementById(cfg.input);
+        var toks = (inp && window._searchTokens) ? window._searchTokens(inp.value) : [];
+        // 열거 안 되는 속성 — store 가 저장될 때 검색어가 파일에 실리지 않게
+        Object.defineProperty(st, '_searchToks', { value: toks, enumerable: false, writable: true, configurable: true });
+    };
+    var _bomSearchAfter = function (scope) {
+        var cfg = _BOM_SEARCH[scope], st = cfg.store();
+        var countEl = document.getElementById(cfg.count);
+        var toks = _bomSearchToks(st);
+        if (countEl) {
+            if (!toks.length || !st || !st.rows) countEl.textContent = '';
+            else {
+                var n = st.rows.filter(function (r) { return _bomRowHit(st, r); }).length;
+                countEl.textContent = n + ' / ' + st.rows.length + _t('개 부품', ' parts');
+            }
+        }
+        var tbody = document.getElementById(cfg.tbody);
+        if (!tbody || !toks.length) return;
+        Array.prototype.forEach.call(tbody.querySelectorAll('td'), function (td) {
+            var inp = td.querySelector('input');
+            var txt = inp ? inp.value : td.textContent;
+            if (txt && window._searchMatchAny(txt, toks)) td.classList.add('search-hit');
+        });
+    };
+    var _bomWrapRender = function (name, scope) {
+        var orig = window[name];
+        if (typeof orig !== 'function') return;
+        window[name] = function () {
+            _bomSearchBefore(scope);
+            var r = orig.apply(this, arguments);
+            try { _bomSearchAfter(scope); } catch (e) { /* 강조 실패가 표를 막지 않게 */ }
+            return r;
+        };
+    };
+    _bomWrapRender('bomRender', 'bom');
+    _bomWrapRender('_elecBomRender', 'elec');
+    // 시험용 — 뷰 상태 줄기를 그대로 부른다
+    window._bomSearchInternals = { rowHit: _bomRowHit, walk: function (st) { return _bomVisibleWalk(st); } };
 })();

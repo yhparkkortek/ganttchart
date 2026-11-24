@@ -174,4 +174,37 @@ const reset = window._driveModalSearchState.q === '';
   vis('');
   chk(!rows[2].classList.has('parts-search-show') && !rows[2].cells[2].classList.has('search-hit'), '[PARTS] 검색 지우면 클래스 원상복구');
 }
+// ── BOM(js/38) — 검색은 뷰 상태 줄기(_bomVisibleRows) 안에서. 진짜 js/38 전체를 스텁 DOM 위에서 불러 돌린다 ──
+{
+  const s38 = fs.readFileSync(path.join(__dirname, '..', 'js', '38-bom-tab.js'), 'utf8');
+  const noop = () => {};
+  const el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop }, addEventListener: noop, appendChild: noop, querySelectorAll: () => [], querySelector: () => null, dataset: {} });
+  const doc = { getElementById: () => null, querySelectorAll: () => [], querySelector: () => null, addEventListener: noop, createElement: el, readyState: 'complete', body: el() };
+  const W = { addEventListener: noop, localStorage: { getItem: () => null, setItem: noop } };
+  new Function('window', helpers)(W);
+  new Function('window', 'document', 'localStorage', 'setTimeout', s38)(W, doc, W.localStorage, noop);
+  const R = (lv, code, desc, grp) => ({ _level: lv, IDNRK: code, OJTXP: desc, WGBEZ60: grp });
+  const st = { rows: [R(1, 'A100', 'MAIN BD ASSY', 'BD 반제품'), R(2, 'B200', 'PANEL 27 QHD', 'LCD/PANEL'), R(2, 'B201', 'HARNESS LVDS', 'HARNESS'),
+                      R(1, 'C300', 'TAPE SET', 'TAPE'), R(2, 'C301', 'TAPE CONDUCTIVE', 'TAPE')],
+               _collapsed: { 0: true }, notes: { C301: '도전 테이프 확인' }, locations: {} };
+  const setQ = q => Object.defineProperty(st, '_searchToks', { value: W._searchTokens(q), enumerable: false, writable: true, configurable: true });
+  const codes = q => { setQ(q); return W._bomVisibleRows(st).map(r => r.IDNRK).join(','); };
+  [['', 'A100,C300,C301', '검색 없음 = 접힘 그대로(A100 접힘)'],
+   ['panel', 'A100,B200', '접힌 가지 안도 찾고 상위 부품을 같이'],
+   ['harness lvds', 'A100,B201', '낱말 AND'],
+   ['tape', 'C300,C301', '상위·하위 둘 다 걸림'],
+   ['도전', 'C300,C301', '비고(notes)도 검색'],
+   ['b 200', 'A100,B200', '코드 낱말 둘'],
+   ['panel tape', '', 'AND — 한 부품에 둘 다 없음']
+  ].forEach(([q, want, label]) => { const got = codes(q); const ok = got === want; ok ? pass++ : fail++; console.log((ok ? 'ok  ' : 'FAIL') + ' [BOM] ' + label + ' → ' + got + (ok ? '' : ' (기대 ' + want + ')')); });
+  setQ('panel');
+  chk(JSON.stringify(st).indexOf('_searchToks') === -1, '[BOM] 검색어는 저장 파일에 실리지 않는다(열거 안 됨)');
+  st._sort = { key: 'IDNRK', dir: 'desc' };
+  chk(codes('tape') === 'C300,C301' && codes('') === 'C300,C301,A100', '[BOM] 정렬과 같이 — 형제끼리만 재배열');
+  st._sort = null;
+  // 계층이 깨진 응답(레벨 블록 모드)도 걸린 행만
+  const broken = { rows: [R(2, 'X1', 'PANEL A', ''), R(1, 'X2', 'TAPE', ''), R(3, 'X3', 'PANEL B', '')], _collapsed: {}, notes: {} };
+  Object.defineProperty(broken, '_searchToks', { value: W._searchTokens('panel'), enumerable: false, writable: true, configurable: true });
+  chk(W._bomVisibleRows(broken).map(r => r.IDNRK).join(',') === 'X1,X3', '[BOM] 계층 깨진 모드도 걸린 행만');
+}
 console.log(`\n${pass}/${pass + fail}`); process.exit(fail ? 1 : 0);
